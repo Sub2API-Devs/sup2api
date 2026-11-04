@@ -9,13 +9,14 @@
  * attribution: placement 21
  */
 import { isDiskless } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-4nwcj4sh.js:370-444 placement
 /**
  * 取 MCP 工具的有效权限上限（为 ask 时返回 ceiling）。
  */
-var mcpPermissionCeiling = (e) =>
-  e.mcpInfo?.effectiveMaxPermission === "ask"
+var mcpPermissionCeiling = (tool) =>
+  tool.mcpInfo?.effectiveMaxPermission === "ask"
     ? {
         ceiling: "ask",
       }
@@ -24,9 +25,9 @@ var mcpPermissionCeiling = (e) =>
 /**
  * 构造 matcher 的测试目标（工具名与权限上限）。
  */
-var matcherTestTarget = (e) => ({
-  tool: e.name,
-  ceiling: mcpPermissionCeiling(e).ceiling,
+var matcherTestTarget = (tool) => ({
+  tool: tool.name,
+  ceiling: mcpPermissionCeiling(tool).ceiling,
 });
 //@ chunk-4nwcj4sh.js:495-558 placement
 class MatcherGrammarError extends Error {
@@ -40,240 +41,256 @@ class MatcherGrammarError extends Error {
 /**
  * 匹配器语法使用的字符区间（数字、单词字符等）。
  */
-var DIGIT_RANGES = [[48, 57]];
-var WORD_CHAR_RANGES = [
-  [48, 57],
-  [65, 90],
-  [95, 95],
-  [97, 122],
-];
-var WHITESPACE_RANGES = [
-  [9, 13],
-  [32, 32],
-  [160, 160],
-  [5760, 5760],
-  [8192, 8202],
-  [8232, 8233],
-  [8239, 8239],
-  [8287, 8287],
-  [12288, 12288],
-  [65279, 65279],
-];
-var CHAR_CLASS_ESCAPES_2 = {
-  d: DIGIT_RANGES,
-  D: complementRanges(DIGIT_RANGES),
-  w: WORD_CHAR_RANGES,
-  W: complementRanges(WORD_CHAR_RANGES),
-  s: WHITESPACE_RANGES,
-  S: complementRanges(WHITESPACE_RANGES),
-};
-var DOT_RANGES = complementRanges([
-  [10, 10],
-  [13, 13],
-  [8232, 8233],
-]);
-var ESCAPABLE_PUNCTUATION_RE = /^[ -/:-@[-`{-~]$/;
-var QUANTIFIER_BRACES_RE = /^\{(\d+)(?:(,)(\d*))?\}/;
-var NAMED_GROUP_NAME_RE = /^([A-Za-z_$][\w$]*)>/;
-var CAPTURE_GROUP_RE = /\((?!\?)|\(\?<(?![=!])/;
-var NAMED_CAPTURE_GROUP_RE = /\(\?<(?![=!])/;
-var MAX_MATCHER_NODES = 100;
-var CHAR_CLASS_ESCAPES = 6;
-var REGEX_META_CHARS = "^$\\.*+?()[]{}|";
+var DIGIT_RANGES; // deferred: uses complementRanges of its import cycle while loading; runs once the cycle is complete
+var WORD_CHAR_RANGES;
+var WHITESPACE_RANGES;
+var CHAR_CLASS_ESCAPES;
+var DOT_RANGES;
+var ESCAPABLE_PUNCTUATION_RE;
+var QUANTIFIER_BRACES_RE;
+var NAMED_GROUP_NAME_RE;
+var CAPTURE_GROUP_RE;
+var NAMED_CAPTURE_GROUP_RE;
+var MAX_MATCHER_NODES;
+var NFA_STATE_MULTIPLIER;
+var REGEX_META_CHARS;
+deferInit("chunk-4nwcj4sh.js:558", () => {
+  DIGIT_RANGES = [[48, 57]];
+  WORD_CHAR_RANGES = [
+    [48, 57],
+    [65, 90],
+    [95, 95],
+    [97, 122],
+  ];
+  WHITESPACE_RANGES = [
+    [9, 13],
+    [32, 32],
+    [160, 160],
+    [5760, 5760],
+    [8192, 8202],
+    [8232, 8233],
+    [8239, 8239],
+    [8287, 8287],
+    [12288, 12288],
+    [65279, 65279],
+  ];
+  CHAR_CLASS_ESCAPES = {
+    d: DIGIT_RANGES,
+    D: complementRanges(DIGIT_RANGES),
+    w: WORD_CHAR_RANGES,
+    W: complementRanges(WORD_CHAR_RANGES),
+    s: WHITESPACE_RANGES,
+    S: complementRanges(WHITESPACE_RANGES),
+  };
+  DOT_RANGES = complementRanges([
+    [10, 10],
+    [13, 13],
+    [8232, 8233],
+  ]);
+  ESCAPABLE_PUNCTUATION_RE = /^[ -/:-@[-`{-~]$/;
+  QUANTIFIER_BRACES_RE = /^\{(\d+)(?:(,)(\d*))?\}/;
+  NAMED_GROUP_NAME_RE = /^([A-Za-z_$][\w$]*)>/;
+  CAPTURE_GROUP_RE = /\((?!\?)|\(\?<(?![=!])/;
+  NAMED_CAPTURE_GROUP_RE = /\(\?<(?![=!])/;
+  MAX_MATCHER_NODES = 100;
+  NFA_STATE_MULTIPLIER = 6;
+  REGEX_META_CHARS = "^$\\.*+?()[]{}|";
+});
 //@ chunk-4nwcj4sh.js:949-1066 placement
-function inRanges(e, n) {
-  let r = 0;
-  let i = e.length;
-  while (r < i) {
-    let o = (r + i) >> 1;
-    if (n > e[o][1]) r = o + 1;
-    else i = o;
+function inRanges(ranges, code) {
+  let low = 0;
+  let high = ranges.length;
+  while (low < high) {
+    let mid = (low + high) >> 1;
+    if (code > ranges[mid][1]) low = mid + 1;
+    else high = mid;
   }
-  return r < e.length && n >= e[r][0];
+  return low < ranges.length && code >= ranges[low][0];
 }
 //@ chunk-4nwcj4sh.js:1066-1179 placement
-function complementRanges(e) {
-  let n = [];
-  let r = 0;
-  for (let [i, o] of e) {
-    if (i > r) n.push([r, i - 1]);
-    r = o + 1;
+function complementRanges(ranges) {
+  let missing = [];
+  let cursor = 0;
+  for (let [start, end] of ranges) {
+    if (start > cursor) missing.push([cursor, start - 1]);
+    cursor = end + 1;
   }
-  if (r <= 65535) n.push([r, 65535]);
-  return n;
+  if (cursor <= 65535) missing.push([cursor, 65535]);
+  return missing;
 }
 //@ chunk-4nwcj4sh.js:1179-1337 placement
-function mergeRanges(e) {
-  let n = [];
-  for (let [r, i] of e.toSorted((o, y) => o[0] - y[0])) {
-    let last = n.at(-1);
-    if (last !== undefined && r <= last[1] + 1) last[1] = Math.max(last[1], i);
-    else n.push([r, i]);
+function mergeRanges(ranges) {
+  let merged = [];
+  for (let [start, end] of ranges.toSorted((a, b) => a[0] - b[0])) {
+    let last = merged.at(-1);
+    if (last !== undefined && start <= last[1] + 1) last[1] = Math.max(last[1], end);
+    else merged.push([start, end]);
   }
-  return n;
+  return merged;
 }
 //@ chunk-4nwcj4sh.js:1337-3450 placement
 /**
  * 解析钩子 matcher 语法中的序列/二选一结构
  */
-function parseMatcherSequence(e) {
-  let n = 0;
-  let r = 0;
-  let i = new Set();
-  function o(s) {
-    if (!e.startsWith(s, n)) return false;
-    n += s.length;
+function parseMatcherSequence(pattern) {
+  let index = 0;
+  let nodes = 0;
+  let groupNames = new Set();
+  function matchToken(token) {
+    if (!pattern.startsWith(token, index)) return false;
+    index += token.length;
     return true;
   }
-  function y() {
-    if (n >= e.length) throw new MatcherGrammarError("other");
-    return e.charCodeAt(n++);
+  function nextCode() {
+    if (index >= pattern.length) throw new MatcherGrammarError("other");
+    return pattern.charCodeAt(index++);
   }
-  function d() {
-    let s = [a()];
-    while (o("|")) s.push(a());
+  function parseEither() {
+    let options = [parseSequence()];
+    while (matchToken("|")) options.push(parseSequence());
     return {
       type: "either",
-      options: s,
+      options,
     };
   }
-  function a() {
-    let s = [];
-    while (n < e.length && e[n] !== "|" && e[n] !== ")") s.push(m());
+  function parseSequence() {
+    let items = [];
+    while (index < pattern.length && pattern[index] !== "|" && pattern[index] !== ")")
+      items.push(parseTerm());
     return {
       type: "sequence",
-      items: s,
+      items,
     };
   }
-  function m() {
-    if (o("^"))
+  function parseTerm() {
+    if (matchToken("^"))
       return {
         type: "start",
       };
-    if (o("$"))
+    if (matchToken("$"))
       return {
         type: "end",
       };
-    if (o("\\b"))
+    if (matchToken("\\b"))
       return {
         type: "boundary",
       };
-    if (o("\\B"))
+    if (matchToken("\\B"))
       return {
         type: "notBoundary",
       };
-    let s = h();
-    let l = 0;
-    let u = 1 / 0;
-    if (o("+")) l = 1;
-    else if (o("?")) u = 1;
-    else if (!o("*")) {
-      let x = e[n] === "{" ? QUANTIFIER_BRACES_RE.exec(e.slice(n)) : null;
-      if (x === null) return s;
-      n += x[0].length;
-      l = Number(x[1]);
-      if (x[2] === undefined) u = l;
-      else if (x[3] !== "") u = Number(x[3]);
-      if (u < l) throw new MatcherGrammarError("other");
+    let item = parseAtom();
+    let least = 0;
+    let most = 1 / 0;
+    if (matchToken("+")) least = 1;
+    else if (matchToken("?")) most = 1;
+    else if (!matchToken("*")) {
+      let quantifier = pattern[index] === "{" ? QUANTIFIER_BRACES_RE.exec(pattern.slice(index)) : null;
+      if (quantifier === null) return item;
+      index += quantifier[0].length;
+      least = Number(quantifier[1]);
+      if (quantifier[2] === undefined) most = least;
+      else if (quantifier[3] !== "") most = Number(quantifier[3]);
+      if (most < least) throw new MatcherGrammarError("other");
     }
-    o("?");
+    matchToken("?");
     return {
       type: "repeat",
-      item: s,
-      least: l,
-      most: u,
+      item,
+      least,
+      most,
     };
   }
-  function h() {
-    if (o("(")) return S();
-    if (o("."))
+  function parseAtom() {
+    if (matchToken("(")) return parseGroup();
+    if (matchToken("."))
       return {
         type: "set",
         set: DOT_RANGES,
       };
-    if (o("["))
+    if (matchToken("["))
       return {
         type: "set",
-        set: _(),
+        set: parseClass(),
       };
-    if (o("\\")) {
-      let s = k();
-      return typeof s === "number"
+    if (matchToken("\\")) {
+      let escaped = parseEscape();
+      return typeof escaped === "number"
         ? {
             type: "unit",
-            unit: s,
+            unit: escaped,
           }
         : {
             type: "set",
-            set: s,
+            set: escaped,
           };
     }
-    if (REGEX_META_CHARS.includes(e[n] ?? "")) throw new MatcherGrammarError("legacy_grammar");
+    if (REGEX_META_CHARS.includes(pattern[index] ?? "")) throw new MatcherGrammarError("legacy_grammar");
     return {
       type: "unit",
-      unit: y(),
+      unit: nextCode(),
     };
   }
-  function S() {
-    if (++r > MAX_MATCHER_NODES) throw new MatcherGrammarError("too_large");
-    let s;
-    if (o("?=")) s = false;
-    else if (o("?!")) s = true;
-    else if (o("?<=") || o("?<!")) throw new MatcherGrammarError("look_behind");
-    else if (o("?<")) {
-      let u = NAMED_GROUP_NAME_RE.exec(e.slice(n))?.[1];
-      if (u === undefined || i.has(u)) throw new MatcherGrammarError("other");
-      i.add(u);
-      n += u.length + 1;
-    } else if (e[n] === "?" && !o("?:")) throw new MatcherGrammarError("flags_group");
-    let l = d();
-    if (!o(")")) throw new MatcherGrammarError("other");
-    r--;
-    return s === undefined
-      ? l
+  function parseGroup() {
+    if (++nodes > MAX_MATCHER_NODES) throw new MatcherGrammarError("too_large");
+    let negated;
+    if (matchToken("?=")) negated = false;
+    else if (matchToken("?!")) negated = true;
+    else if (matchToken("?<=") || matchToken("?<!")) throw new MatcherGrammarError("look_behind");
+    else if (matchToken("?<")) {
+      let groupName = NAMED_GROUP_NAME_RE.exec(pattern.slice(index))?.[1];
+      if (groupName === undefined || groupNames.has(groupName)) throw new MatcherGrammarError("other");
+      groupNames.add(groupName);
+      index += groupName.length + 1;
+    } else if (pattern[index] === "?" && !matchToken("?:")) throw new MatcherGrammarError("flags_group");
+    let body = parseEither();
+    if (!matchToken(")")) throw new MatcherGrammarError("other");
+    nodes--;
+    return negated === undefined
+      ? body
       : {
           type: "look",
-          item: l,
-          isNegative: s,
+          item: body,
+          isNegative: negated,
         };
   }
-  function k(s = false) {
-    let l = y();
-    let u = String.fromCharCode(l);
-    if (Object.hasOwn(CHAR_CLASS_ESCAPES_2, u)) return CHAR_CLASS_ESCAPES_2[u];
-    if (!ESCAPABLE_PUNCTUATION_RE.test(u)) {
-      let x = u === "k" ? NAMED_CAPTURE_GROUP_RE : CAPTURE_GROUP_RE;
-      let p = !s && /[1-9k]/.test(u) && x.test(e);
-      throw new MatcherGrammarError(p ? "back_reference" : "escape");
+  function parseEscape(inClass = false) {
+    let code = nextCode();
+    let char = String.fromCharCode(code);
+    if (Object.hasOwn(CHAR_CLASS_ESCAPES, char)) return CHAR_CLASS_ESCAPES[char];
+    if (!ESCAPABLE_PUNCTUATION_RE.test(char)) {
+      let backRefPattern = char === "k" ? NAMED_CAPTURE_GROUP_RE : CAPTURE_GROUP_RE;
+      let isBackRef = !inClass && /[1-9k]/.test(char) && backRefPattern.test(pattern);
+      throw new MatcherGrammarError(isBackRef ? "back_reference" : "escape");
     }
-    return l;
+    return code;
   }
-  function _() {
-    let s = o("^");
-    let l = [];
-    while (!o("]")) {
-      let u = o("\\") ? k(true) : y();
-      let x = e[n] === "-" && e[n + 1] !== "]";
-      if (typeof u !== "number") {
-        if (x) throw new MatcherGrammarError("legacy_grammar");
-        l.push(...u);
+  function parseClass() {
+    let negated = matchToken("^");
+    let ranges = [];
+    while (!matchToken("]")) {
+      let member = matchToken("\\") ? parseEscape(true) : nextCode();
+      let isRange = pattern[index] === "-" && pattern[index + 1] !== "]";
+      if (typeof member !== "number") {
+        if (isRange) throw new MatcherGrammarError("legacy_grammar");
+        ranges.push(...member);
         continue;
       }
-      if (!x) {
-        l.push([u, u]);
+      if (!isRange) {
+        ranges.push([member, member]);
         continue;
       }
-      n++;
-      let p = o("\\") ? k(true) : y();
-      if (typeof p !== "number") throw new MatcherGrammarError("legacy_grammar");
-      if (p < u) throw new MatcherGrammarError("other");
-      l.push([u, p]);
+      index++;
+      let rangeEnd = matchToken("\\") ? parseEscape(true) : nextCode();
+      if (typeof rangeEnd !== "number") throw new MatcherGrammarError("legacy_grammar");
+      if (rangeEnd < member) throw new MatcherGrammarError("other");
+      ranges.push([member, rangeEnd]);
     }
-    return s ? complementRanges(mergeRanges(l)) : mergeRanges(l);
+    return negated ? complementRanges(mergeRanges(ranges)) : mergeRanges(ranges);
   }
-  let w = d();
-  if (n < e.length) throw new MatcherGrammarError("other");
-  return w;
+  let ast = parseEither();
+  if (index < pattern.length) throw new MatcherGrammarError("other");
+  return ast;
 }
 //@ chunk-4nwcj4sh.js:3450-3540 placement
 var OPCODES = {
@@ -303,18 +320,18 @@ function newProgram(room) {
   };
 }
 //@ chunk-4nwcj4sh.js:3652-3751 placement
-function emitOp(program, n, r = 0, i) {
+function emitOp(program, op, arg = 0, set) {
   spendProgramRoom(program.room);
-  program.to.push(r);
+  program.to.push(arg);
   program.other.push(0);
-  program.sets.push(i);
-  return program.ops.push(n) - 1;
+  program.sets.push(set);
+  return program.ops.push(op) - 1;
 }
 //@ chunk-4nwcj4sh.js:3751-4788 placement
 /**
  * 把匹配器语法树节点编译为匹配程序的指令（单元、集合、前瞻、分支等）。
  */
-function compileMatcherNode(node, program, r, i) {
+function compileMatcherNode(node, program, looks, reversed) {
   spendProgramRoom(program.room);
   let { ops, to, other } = program;
   switch (node.type) {
@@ -331,60 +348,61 @@ function compileMatcherNode(node, program, r, i) {
       emitOp(program, OPCODES[node.type]);
       return;
     case "look": {
-      let a = r.indexOf.get(node);
-      if (a === undefined) {
+      let lookIndex = looks.indexOf.get(node);
+      if (lookIndex === undefined) {
         let program_2 = newProgram(program.room);
-        compileMatcherNode(node.item, program_2, r, true);
+        compileMatcherNode(node.item, program_2, looks, true);
         emitOp(program_2, OPCODES.match);
-        a =
-          r.list.push({
+        lookIndex =
+          looks.list.push({
             places: program_2,
             isNegative: node.isNegative,
           }) - 1;
-        r.indexOf.set(node, a);
+        looks.indexOf.set(node, lookIndex);
       }
-      emitOp(program, OPCODES.look, a);
+      emitOp(program, OPCODES.look, lookIndex);
       return;
     }
     case "sequence":
-      for (let a of i ? node.items.toReversed() : node.items) compileMatcherNode(a, program, r, i);
+      for (let item of reversed ? node.items.toReversed() : node.items)
+        compileMatcherNode(item, program, looks, reversed);
       return;
     case "either": {
-      let a = [];
+      let jumps = [];
       for (let option of node.options.slice(0, -1)) {
-        let h = emitOp(program, OPCODES.split, ops.length + 1);
-        compileMatcherNode(option, program, r, i);
-        a.push(emitOp(program, OPCODES.jump));
-        other[h] = ops.length;
+        let splitOp = emitOp(program, OPCODES.split, ops.length + 1);
+        compileMatcherNode(option, program, looks, reversed);
+        jumps.push(emitOp(program, OPCODES.jump));
+        other[splitOp] = ops.length;
       }
-      compileMatcherNode(node.options.at(-1), program, r, i);
-      for (let m of a) to[m] = ops.length;
+      compileMatcherNode(node.options.at(-1), program, looks, reversed);
+      for (let jump of jumps) to[jump] = ops.length;
       return;
     }
     case "repeat": {
-      let a = ops.length;
+      let loopStart = ops.length;
       for (let j = 0; j < node.least; j++) {
-        a = ops.length;
-        compileMatcherNode(node.item, program, r, i);
+        loopStart = ops.length;
+        compileMatcherNode(node.item, program, looks, reversed);
       }
       if (node.most === 1 / 0) {
         if (node.least > 0) {
-          let S = emitOp(program, OPCODES.split, a);
-          other[S] = ops.length;
+          let splitOp = emitOp(program, OPCODES.split, loopStart);
+          other[splitOp] = ops.length;
           return;
         }
-        let h = emitOp(program, OPCODES.split, ops.length + 1);
-        compileMatcherNode(node.item, program, r, i);
-        emitOp(program, OPCODES.jump, h);
-        other[h] = ops.length;
+        let splitOp = emitOp(program, OPCODES.split, ops.length + 1);
+        compileMatcherNode(node.item, program, looks, reversed);
+        emitOp(program, OPCODES.jump, splitOp);
+        other[splitOp] = ops.length;
         return;
       }
-      let m = [];
+      let splits = [];
       for (let least = node.least; least < node.most; least++) {
-        m.push(emitOp(program, OPCODES.split, ops.length + 1));
-        compileMatcherNode(node.item, program, r, i);
+        splits.push(emitOp(program, OPCODES.split, ops.length + 1));
+        compileMatcherNode(node.item, program, looks, reversed);
       }
-      for (let h of m) other[h] = ops.length;
+      for (let splitOp of splits) other[splitOp] = ops.length;
     }
   }
 }
@@ -392,62 +410,62 @@ function compileMatcherNode(node, program, r, i) {
 /**
  * 以 NFA 模拟的方式执行编译后的 matcher 程序：逐字符推进状态集合，处理单元、字符集、行首/行尾、词边界与环视结果，返回是否匹配（或为环视填充每个位置的匹配表）。
  */
-function runMatcherProgram({ ops, to, other, sets }, input, y, captures) {
-  let a = new Int32Array(ops.length).fill(-1);
+function runMatcherProgram({ ops, to, other, sets }, input, looks, captures) {
+  let visited = new Int32Array(ops.length).fill(-1);
   let int32Array = new Int32Array(ops.length);
   let int32Array_2 = new Int32Array(ops.length);
-  let S = 0;
-  let k = 0;
-  let _ = captures === undefined ? 0 : input.length;
-  function w(s) {
-    if (a[s] !== _) {
-      a[s] = _;
-      int32Array[S++] = s;
+  let stackSize = 0;
+  let lookStackSize = 0;
+  let position = captures === undefined ? 0 : input.length;
+  function push(pc) {
+    if (visited[pc] !== position) {
+      visited[pc] = position;
+      int32Array[stackSize++] = pc;
     }
   }
   for (;;) {
-    while (k > 0) w(int32Array_2[--k]);
-    w(0);
-    let s = _ > 0 ? input.charCodeAt(_ - 1) : -1;
-    let l = _ < input.length ? input.charCodeAt(_) : -1;
-    let u = captures === undefined ? l : s;
-    let x = inRanges(WORD_CHAR_RANGES, s) !== inRanges(WORD_CHAR_RANGES, l);
-    while (S > 0) {
-      let p = int32Array[--S];
-      switch (ops[p]) {
+    while (lookStackSize > 0) push(int32Array_2[--lookStackSize]);
+    push(0);
+    let prevCode = position > 0 ? input.charCodeAt(position - 1) : -1;
+    let nextCode = position < input.length ? input.charCodeAt(position) : -1;
+    let code = captures === undefined ? nextCode : prevCode;
+    let atBoundary = inRanges(WORD_CHAR_RANGES, prevCode) !== inRanges(WORD_CHAR_RANGES, nextCode);
+    while (stackSize > 0) {
+      let pc = int32Array[--stackSize];
+      switch (ops[pc]) {
         case OPCODES.match:
           if (captures === undefined) return true;
-          captures[_] = 1;
+          captures[position] = 1;
           break;
         case OPCODES.unit:
-          if (u === to[p]) int32Array_2[k++] = p + 1;
+          if (code === to[pc]) int32Array_2[lookStackSize++] = pc + 1;
           break;
         case OPCODES.set:
-          if (inRanges(sets[p], u)) int32Array_2[k++] = p + 1;
+          if (inRanges(sets[pc], code)) int32Array_2[lookStackSize++] = pc + 1;
           break;
         case OPCODES.split:
-          w(other[p]);
-          w(to[p]);
+          push(other[pc]);
+          push(to[pc]);
           break;
         case OPCODES.jump:
-          w(to[p]);
+          push(to[pc]);
           break;
         case OPCODES.start:
-          if (s < 0) w(p + 1);
+          if (prevCode < 0) push(pc + 1);
           break;
         case OPCODES.end:
-          if (l < 0) w(p + 1);
+          if (nextCode < 0) push(pc + 1);
           break;
         case OPCODES.boundary:
         case OPCODES.notBoundary:
-          if (x === (ops[p] === OPCODES.boundary)) w(p + 1);
+          if (atBoundary === (ops[pc] === OPCODES.boundary)) push(pc + 1);
           break;
         default:
-          if (y[to[p]][_] === 1) w(p + 1);
+          if (looks[to[pc]][position] === 1) push(pc + 1);
       }
     }
-    if (u < 0) return false;
-    _ += captures === undefined ? 1 : -1;
+    if (code < 0) return false;
+    position += captures === undefined ? 1 : -1;
   }
 }
 //@ chunk-4nwcj4sh.js:5571-5808 placement
@@ -458,28 +476,28 @@ function compileMatcher(matcherSequence, left) {
   let program = newProgram({
     left,
   });
-  let i = {
+  let looks = {
     list: [],
     indexOf: new Map(),
   };
-  compileMatcherNode(matcherSequence, program, i, false);
+  compileMatcherNode(matcherSequence, program, looks, false);
   emitOp(program, OPCODES.match);
-  return (o) => {
-    let y = [];
-    for (let d of i.list) {
-      let uint8Array = new Uint8Array(o.length + 1);
-      runMatcherProgram(d.places, o, y, uint8Array);
-      y.push(d.isNegative ? uint8Array.map((uint8) => 1 - uint8) : uint8Array);
+  return (input) => {
+    let lookResults = [];
+    for (let look of looks.list) {
+      let uint8Array = new Uint8Array(input.length + 1);
+      runMatcherProgram(look.places, input, lookResults, uint8Array);
+      lookResults.push(look.isNegative ? uint8Array.map((uint8) => 1 - uint8) : uint8Array);
     }
-    return runMatcherProgram(program, o, y);
+    return runMatcherProgram(program, input, lookResults);
   };
 }
 //@ chunk-4nwcj4sh.js:5808-5920 placement
-function tryCompileMatcher(e) {
+function tryCompileMatcher(pattern) {
   try {
-    let n = CHAR_CLASS_ESCAPES * (e.length + 1);
+    let bound = NFA_STATE_MULTIPLIER * (pattern.length + 1);
     return {
-      test: compileMatcher(parseMatcherSequence(e), n),
+      test: compileMatcher(parseMatcherSequence(pattern), bound),
     };
   } catch (error) {
     if (error instanceof MatcherGrammarError) return error.kind;
@@ -487,9 +505,9 @@ function tryCompileMatcher(e) {
   }
 }
 //@ chunk-4nwcj4sh.js:5920-5981 placement
-function compileMatcherSafe(e) {
-  let n = tryCompileMatcher(e);
-  return typeof n === "object" ? n : undefined;
+function compileMatcherSafe(pattern) {
+  let result = tryCompileMatcher(pattern);
+  return typeof result === "object" ? result : undefined;
 }
 //@ chunk-4nwcj4sh.js:5981-6018 placement
 /**
@@ -505,33 +523,33 @@ var MAX_MATCHER_SET_SIZE = 16384;
  */
 class MatcherUnsupportableError extends Error {}
 //@ chunk-4nwcj4sh.js:6043-6183 placement
-function classifyUnreadableMatcher(e) {
-  if (e.length > MAX_MATCHER_LENGTH) return "too_long";
-  let n = compileMatcherSafe(e);
-  if (n !== undefined) return n;
+function classifyUnreadableMatcher(pattern) {
+  if (pattern.length > MAX_MATCHER_LENGTH) return "too_long";
+  let compiled = compileMatcherSafe(pattern);
+  if (compiled !== undefined) return compiled;
   try {
-    new RegExp(e);
+    new RegExp(pattern);
     return "not_read";
   } catch {
     return "invalid";
   }
 }
 //@ chunk-4nwcj4sh.js:6183-6631 placement
-function checkHookMatcherForCloud(e) {
-  if (!isDiskless()) return new RegExp(e);
-  let n = classifyUnreadableMatcher(e);
-  if (n === "invalid") throw SyntaxError("invalid hook matcher");
-  if (typeof n === "string")
+function checkHookMatcherForCloud(pattern) {
+  if (!isDiskless()) return new RegExp(pattern);
+  let compiled = classifyUnreadableMatcher(pattern);
+  if (compiled === "invalid") throw SyntaxError("invalid hook matcher");
+  if (typeof compiled === "string")
     throw new MatcherUnsupportableError(
       "This hook's matcher cannot be tested in a cloud session: it has to be rewritten.",
     );
   return {
-    test(r) {
-      if (r.length > MAX_MATCH_TARGET_CHARS)
+    test(target) {
+      if (target.length > MAX_MATCH_TARGET_CHARS)
         throw new MatcherUnsupportableError(
           `The name that this hook's matcher is tested against (for a tool call, the tool's name) has over ${MAX_MATCH_TARGET_CHARS} characters, more than a cloud session tests.`,
         );
-      return n.test(r);
+      return compiled.test(target);
     },
   };
 }

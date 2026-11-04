@@ -16,21 +16,22 @@ import { isNetworkPathAfterNormalize } from "./pathSanitize.js";
 import { logForDebugging } from "./debug.js";
 import { env } from "./env.js";
 import { getAttacherCaps } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-xh6k20xb.js:513-907 sole-consumer
 /**
  * 按平台给出"在文件管理器中显示文件"的命令：macOS open -R，Windows explorer /select，Linux 通过 dbus 调用 FileManager1.ShowItems。
  */
-function revealInFileManagerCommand(r, e) {
-  if (r === "macos")
+function revealInFileManagerCommand(platform, path) {
+  if (platform === "macos")
     return {
       command: "open",
-      args: ["-R", "--", e],
+      args: ["-R", "--", path],
     };
-  if (r === "windows")
+  if (platform === "windows")
     return {
       command: "explorer",
-      args: [`/select,${e}`],
+      args: [`/select,${path}`],
     };
   return {
     command: "dbus-send",
@@ -41,7 +42,7 @@ function revealInFileManagerCommand(r, e) {
       "--type=method_call",
       "/org/freedesktop/FileManager1",
       "org.freedesktop.FileManager1.ShowItems",
-      `array:string:${pathToFileURL(e).href.replaceAll(",", "%2C")}`,
+      `array:string:${pathToFileURL(path).href.replaceAll(",", "%2C")}`,
       "string:",
     ],
   };
@@ -50,25 +51,29 @@ function revealInFileManagerCommand(r, e) {
 /**
  * 允许在系统浏览器中打开的 URL 协议集合。
  */
-var BROWSER_EXEC_OPTIONS = {
-  useCwd: true,
-  useToolMemoryCgroup: false,
-};
-var ALLOWED_BROWSER_PROTOCOLS = new Set([
-  "https:",
-  "http:",
-  "vscode:",
-  "vscode-insiders:",
-  "cursor:",
-  "windsurf:",
-  "zed:",
-  "jetbrains:",
-  "idea:",
-  "slack:",
-  "linear:",
-  "notion:",
-  "figma:",
-]);
+var BROWSER_EXEC_OPTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ALLOWED_BROWSER_PROTOCOLS;
+deferInit("chunk-xh6k20xb.js:907", () => {
+  BROWSER_EXEC_OPTIONS = {
+    useCwd: true,
+    useToolMemoryCgroup: false,
+  };
+  ALLOWED_BROWSER_PROTOCOLS = new Set([
+    "https:",
+    "http:",
+    "vscode:",
+    "vscode-insiders:",
+    "cursor:",
+    "windsurf:",
+    "zed:",
+    "jetbrains:",
+    "idea:",
+    "slack:",
+    "linear:",
+    "notion:",
+    "figma:",
+  ]);
+});
 //@ chunk-xh6k20xb.js:1097-1315 fingerprint = validateUrl (1)
 /**
  * 校验 URL 格式与协议（http/https）。
@@ -95,8 +100,8 @@ function isValidBrowserUrl(url) {
 //@ chunk-xh6k20xb.js:1366-1468 fingerprint = openPath (0.359)
 async function openPath(path) {
   try {
-    let o = "xdg-open";
-    let { code } = await execFileNoThrow(o, [path], BROWSER_EXEC_OPTIONS);
+    let opener = "xdg-open";
+    let { code } = await execFileNoThrow(opener, [path], BROWSER_EXEC_OPTIONS);
     return code === 0;
   } catch (error) {
     return false;
@@ -106,20 +111,20 @@ async function openPath(path) {
 /**
  * 执行在文件管理器中显示文件的命令，返回是否成功。
  */
-async function revealInFileManager(r) {
+async function revealInFileManager(path) {
   try {
     let platform = getPlatform();
     if (platform === "macos") {
-      let { command, args } = revealInFileManagerCommand("macos", r);
+      let { command, args } = revealInFileManagerCommand("macos", path);
       let { code } = await execFileNoThrow(command, args);
       return code === 0;
     }
     if (platform === "windows") {
-      let { command, args } = revealInFileManagerCommand("windows", r);
+      let { command, args } = revealInFileManagerCommand("windows", path);
       let { exitCode } = await execFileNoThrow(command, args);
       return exitCode !== undefined;
     }
-    let { command, args } = revealInFileManagerCommand("linux", r);
+    let { command, args } = revealInFileManagerCommand("linux", path);
     let { code } = await execFileNoThrow(command, args);
     return code === 0;
   } catch (error) {
@@ -131,19 +136,19 @@ async function revealInFileManager(r) {
  * 处理终端里点击的链接：file: 链接在文件管理器中显示（排除远程主机与受限路径），其他只允许白名单协议并用浏览器打开。
  */
 async function openClickedLink(url) {
-  let e;
+  let parsed;
   try {
-    e = new URL(url);
+    parsed = new URL(url);
   } catch {
     return false;
   }
-  let protocol = e.protocol;
+  let protocol = parsed.protocol;
   if (protocol === "file:") {
-    if (e.host !== "") return false;
+    if (parsed.host !== "") return false;
     try {
-      let n = fileURLToPath(url);
-      if (isUntouchableSpelling(n) || isNetworkPathAfterNormalize(n)) return false;
-      return await revealInFileManager(n);
+      let filePath = fileURLToPath(url);
+      if (isUntouchableSpelling(filePath) || isNetworkPathAfterNormalize(filePath)) return false;
+      return await revealInFileManager(filePath);
     } catch {
       return false;
     }
@@ -190,8 +195,8 @@ async function openValidatedUrl(url) {
 /**
  * 打开 URL 并返回是否成功。
  */
-async function openValidatedUrlSucceeded(r) {
-  return (await openValidatedUrl(r)).ok;
+async function openValidatedUrlSucceeded(url) {
+  return (await openValidatedUrl(url)).ok;
 }
 //@ chunk-xh6k20xb.js:2491-2750 fingerprint = openBrowser (0.304)
 /**
@@ -200,14 +205,16 @@ async function openValidatedUrlSucceeded(r) {
 async function openBrowser(url) {
   try {
     let browser = getAttacherCaps()?.browser;
-    let o = browser !== undefined ? (browser ?? undefined) : env.BROWSER;
-    let n = "linux";
-    if (!o && getInstallationEnv())
+    let configuredBrowser = browser !== undefined ? (browser ?? undefined) : env.BROWSER;
+    let platform = "linux";
+    if (!configuredBrowser && getInstallationEnv())
       return {
         ok: false,
         reason: "no_display",
       };
-    return classifyImageError(await execFileNoThrow(o || "xdg-open", [url], BROWSER_EXEC_OPTIONS));
+    return classifyImageError(
+      await execFileNoThrow(configuredBrowser || "xdg-open", [url], BROWSER_EXEC_OPTIONS),
+    );
   } catch (error) {
     return {
       ok: false,

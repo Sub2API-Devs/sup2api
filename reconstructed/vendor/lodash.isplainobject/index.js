@@ -5,10 +5,10 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:14888-15499 cjs-fingerprint
-var require_lodash_isplainobject = x(function (cjsExports, cjsModule) {
+var require_lodash_isplainobject = __commonJS(function (cjsExports, cjsModule) {
   var objectTag = "[object Object]";
   function isHostObject(value) {
     var result = false;

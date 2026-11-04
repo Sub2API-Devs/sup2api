@@ -11,11 +11,11 @@
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   int,
-  u,
-  M,
+  objectSchema,
+  booleanSchema,
   zodStrictObject,
-  string,
-  SIi,
+  stringSchema,
+  base64Schema,
   literal,
   array,
   record,
@@ -46,109 +46,133 @@ import {
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { extractRestrictivePermissions } from "../../utils/permissions/permissionsLoader.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bwpc82tt.js:1363-2614 placement
 /**
  * home seed 包的版本、大小与结构上限，可移植设置键白名单，以及包（文件、设置、摘要）的 zod schema。
  */
-var HOME_PACK_VERSION = 1;
-var MAX_PACK_GENERATION = 2147483648;
-var MAX_PACK_BYTES = 8388608;
-var MAX_SETTINGS_DEPTH = 32;
-var MAX_SETTINGS_VALUES = 1e5;
-var MAX_PACK_PATH_LENGTH = 1024;
-var MAX_PACK_FILES = 4096;
-var MAX_JSON_NESTING = MAX_SETTINGS_DEPTH + 16;
-var FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
-var PORTABLE_SETTING_KEYS = new Set([
-  "language",
-  "outputStyle",
-  "attribution",
-  "includeCoAuthoredBy",
-  "includeGitInstructions",
-  "alwaysThinkingEnabled",
-  "showThinkingSummaries",
-  "permissions",
-]);
-var PORTABLE_ATTRIBUTION_KEYS = new Set(["commit", "pr", "sessionUrl", "commitTrailers"]);
-var PORTABLE_PERMISSION_KEYS = new Set(["allow", "deny", "ask"]);
-var MAX_SETTINGS_KEYS = 32;
-var MAX_SETTINGS_KEY_LENGTH = 64;
-var nonNegativeIntSchema = DoctorLazy(() => int().min(0));
-var countSchema = DoctorLazy(() => int().min(0).default(0));
-var packVersionSchema = DoctorLazy(() =>
-  u({
-    version: int(),
-  }),
-);
-var packGenerationSchema = DoctorLazy(() =>
-  u({
-    generation: int().min(1).max(MAX_PACK_GENERATION),
-  }),
-);
-var packSummarySchema = DoctorLazy(() =>
-  u({
-    withheldSensitive: countSchema(),
-    withheldReadDenied: countSchema(),
-    rulesUnreadable: M().default(false),
-    includesNotSent: countSchema(),
-    symlinksNotSent: countSchema(),
-    notDestinations: countSchema(),
-    overCap: countSchema(),
-    unreadable: countSchema(),
-    settingsKeysWithheld: countSchema(),
-    credentialTextsWithheld: countSchema(),
-    rulesCoveringDeviceTools: countSchema(),
-    droppedRules: u({
-      rooted: countSchema(),
-      device: countSchema(),
-      invalid: countSchema(),
+var HOME_PACK_VERSION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_PACK_GENERATION;
+var MAX_PACK_BYTES;
+var MAX_SETTINGS_DEPTH;
+var MAX_SETTINGS_VALUES;
+var MAX_PACK_PATH_LENGTH;
+var MAX_PACK_FILES;
+var MAX_JSON_NESTING;
+var FORBIDDEN_KEYS;
+var PORTABLE_SETTING_KEYS;
+var PORTABLE_ATTRIBUTION_KEYS;
+var PORTABLE_PERMISSION_KEYS;
+var MAX_SETTINGS_KEYS;
+var MAX_SETTINGS_KEY_LENGTH;
+var nonNegativeIntSchema;
+var countSchema;
+var packVersionSchema;
+var packGenerationSchema;
+var packSummarySchema;
+var packFileSchema;
+var homePackSchema;
+deferInit("chunk-bwpc82tt.js:1363", () => {
+  HOME_PACK_VERSION = 1;
+  MAX_PACK_GENERATION = 2147483648;
+  MAX_PACK_BYTES = 8388608;
+  MAX_SETTINGS_DEPTH = 32;
+  MAX_SETTINGS_VALUES = 1e5;
+  MAX_PACK_PATH_LENGTH = 1024;
+  MAX_PACK_FILES = 4096;
+  MAX_JSON_NESTING = MAX_SETTINGS_DEPTH + 16;
+  FORBIDDEN_KEYS = new Set(["__proto__", "constructor", "prototype"]);
+  PORTABLE_SETTING_KEYS = new Set([
+    "language",
+    "outputStyle",
+    "attribution",
+    "includeCoAuthoredBy",
+    "includeGitInstructions",
+    "alwaysThinkingEnabled",
+    "showThinkingSummaries",
+    "permissions",
+  ]);
+  PORTABLE_ATTRIBUTION_KEYS = new Set(["commit", "pr", "sessionUrl", "commitTrailers"]);
+  PORTABLE_PERMISSION_KEYS = new Set(["allow", "deny", "ask"]);
+  MAX_SETTINGS_KEYS = 32;
+  MAX_SETTINGS_KEY_LENGTH = 64;
+  nonNegativeIntSchema = DoctorLazy(() => int().min(0));
+  countSchema = DoctorLazy(() => int().min(0).default(0));
+  packVersionSchema = DoctorLazy(() =>
+    objectSchema({
+      version: int(),
+    }),
+  );
+  packGenerationSchema = DoctorLazy(() =>
+    objectSchema({
+      generation: int().min(1).max(MAX_PACK_GENERATION),
+    }),
+  );
+  packSummarySchema = DoctorLazy(() =>
+    objectSchema({
+      withheldSensitive: countSchema(),
+      withheldReadDenied: countSchema(),
+      rulesUnreadable: booleanSchema().default(false),
+      includesNotSent: countSchema(),
+      symlinksNotSent: countSchema(),
+      notDestinations: countSchema(),
       overCap: countSchema(),
-      credential: countSchema(),
-      credentialRestrictions: countSchema(),
-      guarded: countSchema(),
-    }).default(() => ({
-      rooted: 0,
-      device: 0,
-      invalid: 0,
-      overCap: 0,
-      credential: 0,
-      credentialRestrictions: 0,
-      guarded: 0,
-    })),
-  }),
-);
-var packFileSchema = DoctorLazy(() =>
-  zodStrictObject({
-    path: string().min(1).max(MAX_PACK_PATH_LENGTH),
-    size: nonNegativeIntSchema(),
-    sha256: string().regex(SHA256_HEX_RE),
-    content: SIi(),
-  }),
-);
-var homePackSchema = DoctorLazy(() =>
-  u({
-    version: literal(HOME_PACK_VERSION),
-    generation: int().min(1).max(MAX_PACK_GENERATION),
-    writtenAtMs: nonNegativeIntSchema(),
-    files: array(packFileSchema()).max(MAX_PACK_FILES),
-    settings: record(string(), unknown()).nullable(),
-    summary: packSummarySchema(),
-    forRunner: literal(true).optional(),
-  }),
-);
+      unreadable: countSchema(),
+      settingsKeysWithheld: countSchema(),
+      credentialTextsWithheld: countSchema(),
+      rulesCoveringDeviceTools: countSchema(),
+      droppedRules: objectSchema({
+        rooted: countSchema(),
+        device: countSchema(),
+        invalid: countSchema(),
+        overCap: countSchema(),
+        credential: countSchema(),
+        credentialRestrictions: countSchema(),
+        guarded: countSchema(),
+      }).default(() => ({
+        rooted: 0,
+        device: 0,
+        invalid: 0,
+        overCap: 0,
+        credential: 0,
+        credentialRestrictions: 0,
+        guarded: 0,
+      })),
+    }),
+  );
+  packFileSchema = DoctorLazy(() =>
+    zodStrictObject({
+      path: stringSchema().min(1).max(MAX_PACK_PATH_LENGTH),
+      size: nonNegativeIntSchema(),
+      sha256: stringSchema().regex(SHA256_HEX_RE),
+      content: base64Schema(),
+    }),
+  );
+  homePackSchema = DoctorLazy(() =>
+    objectSchema({
+      version: literal(HOME_PACK_VERSION),
+      generation: int().min(1).max(MAX_PACK_GENERATION),
+      writtenAtMs: nonNegativeIntSchema(),
+      files: array(packFileSchema()).max(MAX_PACK_FILES),
+      settings: record(stringSchema(), unknown()).nullable(),
+      summary: packSummarySchema(),
+      forRunner: literal(true).optional(),
+    }),
+  );
+});
 //@ chunk-bwpc82tt.js:2614-2795 placement
-function arePathsDisjoint(e) {
-  let mapped = e.map(normalizedPath);
-  let n = new Set(
-    mapped.flatMap((r) =>
-      r
+function arePathsDisjoint(paths) {
+  let mapped = paths.map(normalizedPath);
+  let ancestors = new Set(
+    mapped.flatMap((path) =>
+      path
         .split("/")
         .slice(0, -1)
-        .map((s, i, c) => c.slice(0, i + 1).join("/")),
+        .map((segment, index, parts) => parts.slice(0, index + 1).join("/")),
     ),
   );
-  return new Set(mapped).size === mapped.length && mapped.every((r) => !n.has(r));
+  return new Set(mapped).size === mapped.length && mapped.every((path) => !ancestors.has(path));
 }
 //@ chunk-bwpc82tt.js:2795-2851 placement
 /**
@@ -165,11 +189,11 @@ function packFileEntry(path, content) {
 /**
  * 检查文件大小列表是否在条数、单文件与总字节上限内。
  */
-function withinPackCaps(e) {
+function withinPackCaps(lengths) {
   return (
-    e.length <= MAX_WORKING_PATH_CHARS &&
-    e.every((t) => t <= MAX_WORKING_FILE_BYTES) &&
-    e.reduce((acc, n) => acc + n, 0) <= MAX_WORKING_FILE_TOTAL_BYTES
+    lengths.length <= MAX_WORKING_PATH_CHARS &&
+    lengths.every((length) => length <= MAX_WORKING_FILE_BYTES) &&
+    lengths.reduce((acc, limit) => acc + limit, 0) <= MAX_WORKING_FILE_TOTAL_BYTES
   );
 }
 //@ chunk-bwpc82tt.js:2937-2991 placement
@@ -177,7 +201,7 @@ function withinPackCaps(e) {
  * 检查文件条目是否都在上限内。
  */
 function filesWithinPackCaps(files) {
-  return withinPackCaps(files.map((t) => t.content.length));
+  return withinPackCaps(files.map((file) => file.content.length));
 }
 //@ chunk-bwpc82tt.js:2991-3290 placement
 /**
@@ -185,15 +209,15 @@ function filesWithinPackCaps(files) {
  */
 function capInventoryEntries(sorted) {
   let { kept, droppedOverCap } = sorted.reduce(
-    (acc, s) => {
+    (acc, entry) => {
       if (
         acc.kept.length < MAX_WORKING_PATH_CHARS &&
-        s.content.length <= MAX_WORKING_FILE_BYTES &&
-        acc.keptBytes + s.content.length <= MAX_WORKING_FILE_TOTAL_BYTES
+        entry.content.length <= MAX_WORKING_FILE_BYTES &&
+        acc.keptBytes + entry.content.length <= MAX_WORKING_FILE_TOTAL_BYTES
       ) {
-        acc.kept.push(s);
-        acc.keptBytes += s.content.length;
-      } else acc.droppedOverCap.push(s);
+        acc.kept.push(entry);
+        acc.keptBytes += entry.content.length;
+      } else acc.droppedOverCap.push(entry);
       return acc;
     },
     {
@@ -244,9 +268,9 @@ function encodeHomePack(pack) {
       forRunner: pack.forRunner,
     }),
   };
-  let r = homePackSchema().safeParse(packJson);
-  if (!r.success) throw Error("home pack is off its own schema");
-  let buffer = Buffer.from(jsonStringify(r.data));
+  let overCap = homePackSchema().safeParse(packJson);
+  if (!overCap.success) throw Error("home pack is off its own schema");
+  let buffer = Buffer.from(jsonStringify(overCap.data));
   if (buffer.length > MAX_PACK_BYTES) throw Error("home pack exceeds the row byte cap");
   return buffer;
 }
@@ -260,15 +284,15 @@ function decodeHomePack(bytes) {
       ok: false,
       reason: "oversize",
     };
-  let str = bytes.toString("utf8");
-  if (exceedsJsonNesting(str))
+  let text = bytes.toString("utf8");
+  if (exceedsJsonNesting(text))
     return {
       ok: false,
       reason: "malformed",
     };
-  let parsed = tryJsonParse(str);
-  let r = packVersionSchema().safeParse(parsed);
-  if (r.success && r.data.version !== HOME_PACK_VERSION)
+  let parsed = tryJsonParse(text);
+  let versionCheck = packVersionSchema().safeParse(parsed);
+  if (versionCheck.success && versionCheck.data.version !== HOME_PACK_VERSION)
     return {
       ok: false,
       reason: "unsupported_version",
@@ -283,27 +307,27 @@ function decodeHomePack(bytes) {
       ok: false,
       reason: "malformed",
     };
-  let s = homePackSchema().safeParse(parsed);
-  if (!s.success)
+  let validated = homePackSchema().safeParse(parsed);
+  if (!validated.success)
     return {
       ok: false,
       reason: "malformed",
     };
-  let pack = s.data;
+  let pack = validated.data;
   let filtered = pack.files.filter(isWorkingFilePath);
-  if (!arePathsDisjoint(filtered.map((h) => h.path)))
+  if (!arePathsDisjoint(filtered.map((file) => file.path)))
     return {
       ok: false,
       reason: "malformed",
     };
-  let filtered_2 = filtered.filter((h) => h.size <= MAX_WORKING_FILE_BYTES);
-  if (!withinPackCaps(filtered_2.map((h) => h.size)))
+  let filtered_2 = filtered.filter((file) => file.size <= MAX_WORKING_FILE_BYTES);
+  if (!withinPackCaps(filtered_2.map((file) => file.size)))
     return {
       ok: false,
       reason: "over_cap",
     };
   let mapped = filtered_2.map(decodePackFile);
-  let filtered_3 = mapped.filter((h) => h !== null);
+  let filtered_3 = mapped.filter((file) => file !== null);
   if (filtered_3.length !== mapped.length)
     return {
       ok: false,
@@ -338,12 +362,12 @@ function decodeHomePack(bytes) {
 /**
  * 只读取包的 generation 字段（超大或嵌套过深返回 null）。
  */
-function readHomePackGeneration(e) {
-  if (e.length > MAX_PACK_BYTES) return null;
-  let str = e.toString("utf8");
-  if (exceedsJsonNesting(str)) return null;
-  let n = packGenerationSchema().safeParse(tryJsonParse(str));
-  return n.success ? n.data.generation : null;
+function readHomePackGeneration(bytes) {
+  if (bytes.length > MAX_PACK_BYTES) return null;
+  let text = bytes.toString("utf8");
+  if (exceedsJsonNesting(text)) return null;
+  let generation = packGenerationSchema().safeParse(tryJsonParse(text));
+  return generation.success ? generation.data.generation : null;
 }
 //@ chunk-bwpc82tt.js:5764-6091 placement
 /**
@@ -352,9 +376,9 @@ function readHomePackGeneration(e) {
 function checkPortableSettings(settings) {
   if (settings === null) return "none";
   let filtered = Object.keys(settings).filter((key) => !FORBIDDEN_KEYS.has(key));
-  if (filtered.length > MAX_SETTINGS_KEYS || filtered.some((r) => r.length > MAX_SETTINGS_KEY_LENGTH))
+  if (filtered.length > MAX_SETTINGS_KEYS || filtered.some((key) => key.length > MAX_SETTINGS_KEY_LENGTH))
     return "over_bounds";
-  return filtered.every((r) => PORTABLE_SETTING_KEYS.has(r)) &&
+  return filtered.every((key) => PORTABLE_SETTING_KEYS.has(key)) &&
     hasOnlyAllowedKeys(settings.attribution, PORTABLE_ATTRIBUTION_KEYS) &&
     hasOnlyAllowedKeys(settings.permissions, PORTABLE_PERMISSION_KEYS) &&
     (!isPlainObject(settings.permissions) ||

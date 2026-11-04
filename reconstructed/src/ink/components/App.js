@@ -12,18 +12,18 @@ import { PureComponent_default } from "../../../vendor/react/cjs/react.productio
 import { EventEmitter } from "../events/emitter.js";
 import {
   createInputReaderState,
-  EventLoopLagWatcher,
   hasPendingInput,
   ESC_FLUSH_TIMEOUT_MS,
   flushInputReader,
   feedInputReader,
   splitEscPrefixedChunk,
-} from "../line-width-cache.js";
+} from "../stdinReader.js";
+import { EventLoopLagWatcher } from "../eventLoopLag.js";
 import { TerminalQuerier } from "../terminal-querier.js";
 import { createJediTermInputState, fixJediTermWheelInput } from "../wheelScroll.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { TerminalSizeContext, StdinContextAlias } from "../terminalModes.js";
-import { kp, KRr } from "../../../vendor/convert-to-spaces/dist/index.js";
+import { APP_CONTEXT, createContextLazy } from "../../../vendor/convert-to-spaces/dist/index.js";
 import {
   noopRetainFinePointer,
   noopCursorDeclaration,
@@ -64,6 +64,7 @@ import { finishSelection, hasSelection, clearSelection } from "../selection.js";
 import { pixelToCellPoint } from "./AppContext.js";
 import { readClipboard } from "../termio/osc.js";
 import { terminalDetector } from "../terminalColorSupport.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bzr73sfg.js:233477-233493 affinity
 var CLICK_SLOP_CELLS = 1;
@@ -72,428 +73,435 @@ var WINDOW_ACTIVATION_WINDOW_MS = 400;
 /**
  * Ink 根组件（类组件 InternalApp）：提供尺寸、AppContext、StdinContext、终端焦点、时钟等上下文；原始模式引用计数（打开时写括号粘贴/主题报告/焦点事件/扩展键模式并启动能力探测，关闭时复位）；stdin readable → 输入读取器（feedInputReader/flushInputReader）→ processKeysInBatch；鼠标点击/多击/悬停/拖动选区；Ctrl+Z 挂起与 SIGCONT 恢复；tmux pane 与单元格尺寸重探测；渲染错误时显示 ErrorOverview。
  */
-class App extends PureComponent_default {
-  static displayName = "InternalApp";
-  static getDerivedStateFromError(error) {
-    return {
-      error,
+let App; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:233493", () => {
+  App = class App extends PureComponent_default {
+    static displayName = "InternalApp";
+    static getDerivedStateFromError(error) {
+      return {
+        error,
+      };
+    }
+    state = {
+      error: undefined,
     };
-  }
-  state = {
-    error: undefined,
-  };
-  rawModeEnabledCount = 0;
-  internal_eventEmitter = new EventEmitter();
-  cancelExtendedKeysSettle;
-  owedReplyHold;
-  keyReader = createInputReaderState(performance.now());
-  incompleteEscapeTimer = null;
-  readArrivedAt = null;
-  loopWatch = new EventLoopLagWatcher();
-  watchLoop = () => this.loopWatch.watch();
-  querier = this.props.stdout.isTTY && this.props.stdin.isTTY ? new TerminalQuerier(this.props.stdout) : null;
-  lastClickTime = 0;
-  lastClickCol = -1;
-  lastClickRow = -1;
-  clickCount = 0;
-  pressIsWindowActivation = false;
-  windowActivationClickArmed = true;
-  lastActivationInputTime = Number.NEGATIVE_INFINITY;
-  pendingHyperlinkTimer = null;
-  pendingHyperlinkOpensInPanel = false;
-  lastHoverCol = -1;
-  lastHoverRow = -1;
-  pendingPastePress = null;
-  lastHoverOnTarget = false;
-  lastStdinTime = performance.now();
-  arrowWindow = [];
-  arrowWindowDir = "";
-  jediTermInput = createJediTermInputState();
-  emitJediTermScrollBug = () => this.internal_eventEmitter.emit("jediterm-scroll-bug");
-  isRawModeSupported() {
-    return this.props.stdin.isTTY;
-  }
-  render() {
-    return jsxProd_default(TerminalSizeContext.Provider, {
-      value: {
-        columns: this.props.terminalColumns,
-        rows: this.props.terminalRows,
-      },
-      children: jsxProd_default(kp.Provider, {
+    rawModeEnabledCount = 0;
+    internal_eventEmitter = new EventEmitter();
+    cancelExtendedKeysSettle;
+    owedReplyHold;
+    keyReader = createInputReaderState(performance.now());
+    incompleteEscapeTimer = null;
+    readArrivedAt = null;
+    loopWatch = new EventLoopLagWatcher();
+    watchLoop = () => this.loopWatch.watch();
+    querier =
+      this.props.stdout.isTTY && this.props.stdin.isTTY ? new TerminalQuerier(this.props.stdout) : null;
+    lastClickTime = 0;
+    lastClickCol = -1;
+    lastClickRow = -1;
+    clickCount = 0;
+    pressIsWindowActivation = false;
+    windowActivationClickArmed = true;
+    lastActivationInputTime = Number.NEGATIVE_INFINITY;
+    pendingHyperlinkTimer = null;
+    pendingHyperlinkOpensInPanel = false;
+    lastHoverCol = -1;
+    lastHoverRow = -1;
+    pendingPastePress = null;
+    lastHoverOnTarget = false;
+    lastStdinTime = performance.now();
+    arrowWindow = [];
+    arrowWindowDir = "";
+    jediTermInput = createJediTermInputState();
+    emitJediTermScrollBug = () => this.internal_eventEmitter.emit("jediterm-scroll-bug");
+    isRawModeSupported() {
+      return this.props.stdin.isTTY;
+    }
+    render() {
+      return jsxProd_default(TerminalSizeContext.Provider, {
         value: {
-          exit: this.handleExit,
-          focusManager: this.props.focusManager,
-          rootNode: this.props.rootNode,
-          dispatchPasteEvent: this.props.dispatchPasteEvent,
-          subscribeLayout: this.props.subscribeLayout,
-          subscribeFrames: this.props.subscribeFrames,
-          subscribeClicks: this.props.subscribeClicks,
-          subscribeHoverTracked: this.props.subscribeHoverTracked,
-          isHoverTracked: this.props.isHoverTracked,
-          retainFinePointer: this.props.retainFinePointer ?? noopRetainFinePointer,
-          watchLoop: this.watchLoop,
-          terminalImages: this.props.terminalImages,
+          columns: this.props.terminalColumns,
+          rows: this.props.terminalRows,
         },
-        children: jsxProd_default(StdinContextAlias.Provider, {
+        children: jsxProd_default(APP_CONTEXT.Provider, {
           value: {
-            stdin: this.props.stdin,
-            setRawMode: this.handleSetRawMode,
-            isRawModeSupported: this.isRawModeSupported(),
-            internal_eventEmitter: this.internal_eventEmitter,
-            internal_querier: this.querier,
-            internal_jediTermInput: this.jediTermInput,
+            exit: this.handleExit,
+            focusManager: this.props.focusManager,
+            rootNode: this.props.rootNode,
+            dispatchPasteEvent: this.props.dispatchPasteEvent,
+            subscribeLayout: this.props.subscribeLayout,
+            subscribeFrames: this.props.subscribeFrames,
+            subscribeClicks: this.props.subscribeClicks,
+            subscribeHoverTracked: this.props.subscribeHoverTracked,
+            isHoverTracked: this.props.isHoverTracked,
+            retainFinePointer: this.props.retainFinePointer ?? noopRetainFinePointer,
+            watchLoop: this.watchLoop,
+            terminalImages: this.props.terminalImages,
           },
-          children: jsxProd_default(TerminalFocusProvider, {
-            children: jsxProd_default(ClockProvider, {
-              children: jsxProd_default(KRr.Provider, {
-                value: this.props.onCursorDeclaration ?? noopCursorDeclaration,
-                children: jsxProd_default(InputNowContext.Provider, {
-                  value: this.inputNow,
-                  children: this.state.error
-                    ? jsxProd_default(ErrorOverview, {
-                        error: this.state.error,
-                      })
-                    : this.props.children,
+          children: jsxProd_default(StdinContextAlias.Provider, {
+            value: {
+              stdin: this.props.stdin,
+              setRawMode: this.handleSetRawMode,
+              isRawModeSupported: this.isRawModeSupported(),
+              internal_eventEmitter: this.internal_eventEmitter,
+              internal_querier: this.querier,
+              internal_jediTermInput: this.jediTermInput,
+            },
+            children: jsxProd_default(TerminalFocusProvider, {
+              children: jsxProd_default(ClockProvider, {
+                children: jsxProd_default(createContextLazy.Provider, {
+                  value: this.props.onCursorDeclaration ?? noopCursorDeclaration,
+                  children: jsxProd_default(InputNowContext.Provider, {
+                    value: this.inputNow,
+                    children: this.state.error
+                      ? jsxProd_default(ErrorOverview, {
+                          error: this.state.error,
+                        })
+                      : this.props.children,
+                  }),
                 }),
               }),
             }),
           }),
         }),
-      }),
-    });
-  }
-  componentDidMount() {
-    let rootNode = this.props.rootNode;
-    let _pendingRawModeDelta = rootNode._pendingRawModeDelta ?? 0;
-    rootNode._pendingRawModeDelta = 0;
-    for (let idx = 0; idx < _pendingRawModeDelta; idx++) this.handleSetRawMode(true);
-    for (let idx = 0; idx > _pendingRawModeDelta; idx--) this.handleSetRawMode(false);
-    rootNode.setRawMode = this.handleSetRawMode;
-  }
-  reprobeCellPixels() {
-    if (!(
-      this.querier !== null &&
-      this.rawModeEnabledCount > 0 &&
-      !this.hasReleasedTerminal &&
-      getTerminalCapabilities().now("mousePixels")
-    ))
-      return;
-    if (this.cellReprobe === "idle") {
-      this.cellReprobe = "asking";
-      this.runCellReprobe();
-    } else this.cellReprobe = "again";
-  }
-  cellReprobe = "idle";
-  tmuxPaneAsk = "idle";
-  isTmuxResendDue = false;
-  isTmuxRedrawDue = false;
-  refreshTmuxPane(n, u = false) {
-    let terminalProbeState = getTerminalProbeState();
-    let terminalCapabilities = getTerminalCapabilities();
-    let p = terminalCapabilities.now("kittyGraphics") || terminalCapabilities.now("itermImages");
-    if (
-      !env.TMUX ||
-      this.hasReleasedTerminal ||
-      this.props.terminalImages.size === 0 ||
-      (terminalProbeState.tmuxPane?.passthrough ?? "off") === "off" ||
-      !p
-    )
-      return;
-    this.isTmuxResendDue ||= n;
-    this.isTmuxRedrawDue ||= !n && !u;
-    if (this.tmuxPaneAsk !== "idle") {
-      this.tmuxPaneAsk = "again";
-      return;
-    }
-    this.tmuxPaneAsk = "asking";
-    terminalProbeState.isTmuxPaneAsked = true;
-    this.runTmuxPaneAsk();
-  }
-  tmuxPaneSilentAt = undefined;
-  refreshTmuxPaneForPicture() {
-    let tmuxPaneSilentAt = this.tmuxPaneSilentAt;
-    if (tmuxPaneSilentAt !== undefined && performance.now() - tmuxPaneSilentAt < TMUX_PANE_ASK_GRACE_MS)
-      return;
-    this.refreshTmuxPane(false, true);
-  }
-  async runTmuxPaneAsk() {
-    let tmuxPaneInfo = await queryTmuxPaneInfo();
-    let terminalProbeState = getTerminalProbeState();
-    if (this.tmuxPaneAsk === "again" && !this.hasReleasedTerminal) {
-      this.tmuxPaneAsk = "asking";
-      this.runTmuxPaneAsk();
-      return;
-    }
-    this.tmuxPaneAsk = "idle";
-    terminalProbeState.isTmuxPaneAsked = false;
-    let isTmuxResendDue = this.isTmuxResendDue;
-    let isTmuxRedrawDue = this.isTmuxRedrawDue;
-    this.isTmuxResendDue = false;
-    this.isTmuxRedrawDue = false;
-    if (this.hasReleasedTerminal) return;
-    let tmuxPane = terminalProbeState.tmuxPane;
-    let g = tmuxPaneInfo !== undefined && tmuxPane !== undefined;
-    let E =
-      tmuxPaneInfo !== undefined &&
-      tmuxPane !== undefined &&
-      (tmuxPaneInfo.pane.top !== tmuxPane.top ||
-        tmuxPaneInfo.pane.left !== tmuxPane.left ||
-        tmuxPaneInfo.pane.isPlaced !== tmuxPane.isPlaced);
-    if (tmuxPaneInfo !== undefined && tmuxPane !== undefined) {
-      terminalProbeState.tmuxPane = {
-        ...tmuxPaneInfo.pane,
-        passthrough: tmuxPane.passthrough,
-      };
-      terminalProbeState.tmuxPaneAnsweredAt = performance.now();
-      this.tmuxPaneSilentAt = undefined;
-    } else {
-      terminalProbeState.tmuxPaneAnsweredAt = undefined;
-      this.tmuxPaneSilentAt = performance.now();
-      this.isTmuxRedrawDue ||= isTmuxRedrawDue;
-    }
-    if (isTmuxResendDue) this.props.terminalImages.resendAll();
-    else if (g && (isTmuxRedrawDue || E)) this.props.terminalImages.redrawInline();
-    else if (g) this.props.terminalImages.requestDraw();
-  }
-  async runCellReprobe() {
-    if (this.querier) await reprobeCellSize(this.querier);
-    if (this.hasReleasedTerminal || !this.querier) return;
-    this.props.onCellPixels?.();
-    if (this.cellReprobe === "again") {
-      this.cellReprobe = "asking";
-      this.runCellReprobe();
-      return;
-    }
-    this.cellReprobe = "idle";
-  }
-  componentWillUnmount() {
-    this.appUnmounted = true;
-    this.props.rootNode.setRawMode = undefined;
-    if (this.props.stdout.isTTY) this.props.stdout.write(SHOW_CURSOR);
-    if (this.incompleteEscapeTimer) {
-      clearTimeout(this.incompleteEscapeTimer);
-      this.incompleteEscapeTimer = null;
-    }
-    if (this.pendingHyperlinkTimer) {
-      clearTimeout(this.pendingHyperlinkTimer);
-      this.pendingHyperlinkTimer = null;
-      this.pendingHyperlinkOpensInPanel = false;
-    }
-    if (this.owedReplyHold !== undefined) {
-      clearTimeout(this.owedReplyHold);
-      this.owedReplyHold = undefined;
-      setRawModeSafe(this.props.stdin, false);
-    }
-    if (this.isRawModeSupported()) while (this.rawModeEnabledCount > 0) this.handleSetRawMode(false);
-  }
-  componentDidCatch(n, u) {
-    reportRenderError(n, u);
-    this.handleExit(n);
-  }
-  handleSetRawMode = (isEnabled) => {
-    let { stdin } = this.props;
-    if (!this.isRawModeSupported())
-      if (stdin === process.stdin)
-        throw Error(`Raw mode is not supported on the current process.stdin, which Ink uses as input stream by default.
-Read about how to prevent this error on https://github.com/vadimdemedes/ink/#israwmodesupported`);
-      else
-        throw Error(`Raw mode is not supported on the stdin provided to Ink.
-Read about how to prevent this error on https://github.com/vadimdemedes/ink/#israwmodesupported`);
-    stdin.setEncoding("utf8");
-    if (isEnabled) {
-      if (this.rawModeEnabledCount === 0) {
-        stopCapturingEarlyInput();
-        if (this.owedReplyHold !== undefined) {
-          clearTimeout(this.owedReplyHold);
-          this.owedReplyHold = undefined;
-        }
-        this.props.onRawModeEnter?.();
-        stdin.ref();
-        setRawModeSafe(stdin, true);
-        stdin.addListener("readable", this.handleReadable);
-        this.querier?.setInputAttached(true);
-        if (getPlatform() === "windows") {
-          stdin.resume();
-          stdin.pause();
-        }
-        let { modes } = this.props;
-        this.props.stdout.write(
-          modes.set("bracketedPaste") + modes.set("themeReports") + modes.set("focusEvents"),
-        );
-        if (getPlatform() === "windows") this.props.stdout.write(DISABLE_WIN32_INPUT_MODE);
-        this.props.stdout.write(modes.set("extendedKeys"));
-        let terminalCapabilities = getTerminalCapabilities();
-        if (terminalCapabilities.get("extendedKeys").state === "pending")
-          this.cancelExtendedKeysSettle = terminalCapabilities.onSettle("extendedKeys", (p) => {
-            if (p && !this.hasReleasedTerminal) this.props.stdout.write(modes.reassertKeys());
-          });
-        if (env.CLAUDE_BG_BACKEND !== "daemon")
-          setImmediate(() => {
-            if (this.querier && !this.hasReleasedTerminal)
-              probeTerminalCapabilities(this.querier, getTerminalCapabilities());
-          });
-      }
-      this.rawModeEnabledCount++;
-      return;
-    }
-    if (this.rawModeEnabledCount <= 0) return;
-    if (--this.rawModeEnabledCount === 0) {
-      this.cancelExtendedKeysSettle?.();
-      this.cancelExtendedKeysSettle = undefined;
-      let { modes } = this.props;
-      this.props.stdout.write(
-        modes.reset("extendedKeys") +
-          modes.reset("focusEvents") +
-          modes.reset("themeReports") +
-          modes.reset("bracketedPaste"),
-      );
-      if (!getSecondRootError().get(this.props.stdout)?.isHandoffRawMode)
-        if (this.querier && this.querier.owed() > 0 && !this.appUnmounted) {
-          this.owedReplyHold = setTimeout(releaseOwedReplyHold, OWED_REPLY_HOLD_MS, this, stdin);
-          this.owedReplyHold.unref?.();
-        } else {
-          if (this.querier && this.querier.owed() > 0)
-            getSecondRootError().get(this.props.stdout)?.drainStdin();
-          setRawModeSafe(stdin, false);
-        }
-      this.querier?.setInputAttached(false);
-      stdin.removeListener("readable", this.handleReadable);
-      stdin.unref();
-    }
-  };
-  flushIncomplete = () => {
-    this.incompleteEscapeTimer = null;
-    if (!hasPendingInput(this.keyReader)) return;
-    if (this.props.stdin.readableLength > 0) {
-      this.incompleteEscapeTimer = setTimeout(this.flushIncomplete, ESC_FLUSH_TIMEOUT_MS);
-      return;
-    }
-    let startTime = performance.now();
-    this.applyKeysRead(flushInputReader(this.keyReader, startTime), startTime);
-  };
-  processInput = (chunk, now, isReadLate) => {
-    this.applyKeysRead(feedInputReader(this.keyReader, chunk, now, isReadLate), now);
-  };
-  applyKeysRead({ keys, reader, wakeAt }, m) {
-    this.keyReader = reader;
-    if (this.incompleteEscapeTimer) {
-      clearTimeout(this.incompleteEscapeTimer);
-      this.incompleteEscapeTimer = null;
-    }
-    if (wakeAt !== null)
-      this.incompleteEscapeTimer = setTimeout(this.flushIncomplete, Math.max(0, wakeAt - m));
-    if (keys.length > 0) {
-      if (keys.some(isKeyOrPaste)) this.props.onInputPriorityFrame();
-      let readArrivedAt = this.readArrivedAt;
-      this.readArrivedAt = Date.now();
-      try {
-        reconcilerAlias.discreteUpdates(processKeysInBatch, this, keys, false, undefined);
-      } finally {
-        this.readArrivedAt = readArrivedAt;
-      }
-    }
-  }
-  inputNow = () => this.readArrivedAt ?? Date.now();
-  handleReadable = () => {
-    let now = performance.now();
-    if (now - this.lastStdinTime > STDIN_IDLE_REASSERT_MS) this.props.onStdinResume?.();
-    this.lastStdinTime = now;
-    let u = this.loopWatch.isLate(now);
-    try {
-      let chunk;
-      while ((chunk = this.props.stdin.read()) !== null) this.processInput(chunk, now, u);
-    } catch (error) {
-      logError(withTelemetryMessage(toError(error), "stdin readable handler threw during input processing"));
-      let { stdin } = this.props;
-      if (this.rawModeEnabledCount > 0 && !stdin.listeners("readable").includes(this.handleReadable)) {
-        logForDebugging("handleReadable: re-attaching stdin readable listener after error recovery", {
-          level: "warn",
-        });
-        stdin.addListener("readable", this.handleReadable);
-      }
-    }
-  };
-  handleInput = (input) => {
-    if (input === "\x03" && this.props.exitOnCtrlC) this.handleExit();
-  };
-  handleExit = (error) => {
-    if (this.isRawModeSupported()) this.handleSetRawMode(false);
-    this.props.onExit(error);
-  };
-  attachProbeDeferred = false;
-  appUnmounted = false;
-  get hasReleasedTerminal() {
-    return (
-      this.appUnmounted ||
-      isTerminalShutdown() ||
-      getSecondRootError().get(this.props.stdout)?.hasUnmounted === true
-    );
-  }
-  handleTerminalFocus = (n) => {
-    let terminalFocus = getTerminalFocus();
-    if (!n || Date.now() - this.lastActivationInputTime >= WINDOW_ACTIVATION_WINDOW_MS)
-      this.windowActivationClickArmed = true;
-    useAwaySummary(n);
-    if (!n) this.props.onHoverLost?.();
-    if (n) this.refreshTmuxPane(true);
-    if (n && terminalFocus === "blurred") this.reprobeCellPixels();
-    if (n && terminalFocus === "blurred")
-      getSecondRootError().get(this.props.stdout)?.proactiveAtlasResetOnFocus();
-    if (
-      n &&
-      terminalFocus !== "focused" &&
-      env.CLAUDE_BG_BACKEND === "daemon" &&
-      this.querier &&
-      !this.attachProbeDeferred
-    ) {
-      this.attachProbeDeferred = true;
-      waitForAttachSettle().then(() => {
-        this.attachProbeDeferred = false;
-        if (this.querier && !this.hasReleasedTerminal) {
-          getTerminalProbeState().resetCapabilities();
-          probeTerminalCapabilities(this.querier, getTerminalCapabilities());
-        }
       });
     }
-  };
-  consumeWindowActivationLatch(lastActivationInputTime) {
-    this.lastActivationInputTime = lastActivationInputTime;
-    if (!this.windowActivationClickArmed) return false;
-    this.windowActivationClickArmed = false;
-    return true;
-  }
-  handleSuspend = () => {
-    if (!this.isRawModeSupported()) return;
-    let rawModeCountBeforeSuspend = this.rawModeEnabledCount;
-    if (this.props.stdout.isTTY)
-      this.props.stdout.write(SHOW_CURSOR + DISABLE_MOUSE_TRACKING + this.props.modes.suspend());
-    while (this.rawModeEnabledCount > 0) this.handleSetRawMode(false);
-    this.internal_eventEmitter.emit("suspend");
-    let interval = setInterval(() => {}, 1073741824);
-    let f = () => {
-      clearInterval(interval);
-      process.removeListener("SIGCONT", f);
-      if (this.hasReleasedTerminal) return;
-      for (let i = 0; i < rawModeCountBeforeSuspend; i++)
-        if (this.isRawModeSupported()) this.handleSetRawMode(true);
-      if (this.props.stdout.isTTY) {
-        let isScreenReaderEnabled = this.props.isScreenReaderEnabled ?? false;
-        this.props.stdout.write(
-          this.props.modes.resume() +
-            (env.CLAUDE_CODE_ACCESSIBILITY || isScreenReaderEnabled ? "" : HIDE_CURSOR),
-        );
-      }
-      this.internal_eventEmitter.emit("resume");
-    };
-    process.on("SIGCONT", f);
-    if (this.owedReplyHold !== undefined) {
-      getSecondRootError().get(this.props.stdout)?.drainStdin();
-      releaseOwedReplyHold(this, this.props.stdin);
+    componentDidMount() {
+      let rootNode = this.props.rootNode;
+      let _pendingRawModeDelta = rootNode._pendingRawModeDelta ?? 0;
+      rootNode._pendingRawModeDelta = 0;
+      for (let idx = 0; idx < _pendingRawModeDelta; idx++) this.handleSetRawMode(true);
+      for (let idx = 0; idx > _pendingRawModeDelta; idx--) this.handleSetRawMode(false);
+      rootNode.setRawMode = this.handleSetRawMode;
     }
-    resumeNonBlockingStdout();
-    process.kill(0, "SIGTSTP");
+    reprobeCellPixels() {
+      if (!(
+        this.querier !== null &&
+        this.rawModeEnabledCount > 0 &&
+        !this.hasReleasedTerminal &&
+        getTerminalCapabilities().now("mousePixels")
+      ))
+        return;
+      if (this.cellReprobe === "idle") {
+        this.cellReprobe = "asking";
+        this.runCellReprobe();
+      } else this.cellReprobe = "again";
+    }
+    cellReprobe = "idle";
+    tmuxPaneAsk = "idle";
+    isTmuxResendDue = false;
+    isTmuxRedrawDue = false;
+    refreshTmuxPane(resend, picture = false) {
+      let terminalProbeState = getTerminalProbeState();
+      let terminalCapabilities = getTerminalCapabilities();
+      let supportsImages =
+        terminalCapabilities.now("kittyGraphics") || terminalCapabilities.now("itermImages");
+      if (
+        !env.TMUX ||
+        this.hasReleasedTerminal ||
+        this.props.terminalImages.size === 0 ||
+        (terminalProbeState.tmuxPane?.passthrough ?? "off") === "off" ||
+        !supportsImages
+      )
+        return;
+      this.isTmuxResendDue ||= resend;
+      this.isTmuxRedrawDue ||= !resend && !picture;
+      if (this.tmuxPaneAsk !== "idle") {
+        this.tmuxPaneAsk = "again";
+        return;
+      }
+      this.tmuxPaneAsk = "asking";
+      terminalProbeState.isTmuxPaneAsked = true;
+      this.runTmuxPaneAsk();
+    }
+    tmuxPaneSilentAt = undefined;
+    refreshTmuxPaneForPicture() {
+      let tmuxPaneSilentAt = this.tmuxPaneSilentAt;
+      if (tmuxPaneSilentAt !== undefined && performance.now() - tmuxPaneSilentAt < TMUX_PANE_ASK_GRACE_MS)
+        return;
+      this.refreshTmuxPane(false, true);
+    }
+    async runTmuxPaneAsk() {
+      let tmuxPaneInfo = await queryTmuxPaneInfo();
+      let terminalProbeState = getTerminalProbeState();
+      if (this.tmuxPaneAsk === "again" && !this.hasReleasedTerminal) {
+        this.tmuxPaneAsk = "asking";
+        this.runTmuxPaneAsk();
+        return;
+      }
+      this.tmuxPaneAsk = "idle";
+      terminalProbeState.isTmuxPaneAsked = false;
+      let isTmuxResendDue = this.isTmuxResendDue;
+      let isTmuxRedrawDue = this.isTmuxRedrawDue;
+      this.isTmuxResendDue = false;
+      this.isTmuxRedrawDue = false;
+      if (this.hasReleasedTerminal) return;
+      let tmuxPane = terminalProbeState.tmuxPane;
+      let hasPaneInfo = tmuxPaneInfo !== undefined && tmuxPane !== undefined;
+      let paneMoved =
+        tmuxPaneInfo !== undefined &&
+        tmuxPane !== undefined &&
+        (tmuxPaneInfo.pane.top !== tmuxPane.top ||
+          tmuxPaneInfo.pane.left !== tmuxPane.left ||
+          tmuxPaneInfo.pane.isPlaced !== tmuxPane.isPlaced);
+      if (tmuxPaneInfo !== undefined && tmuxPane !== undefined) {
+        terminalProbeState.tmuxPane = {
+          ...tmuxPaneInfo.pane,
+          passthrough: tmuxPane.passthrough,
+        };
+        terminalProbeState.tmuxPaneAnsweredAt = performance.now();
+        this.tmuxPaneSilentAt = undefined;
+      } else {
+        terminalProbeState.tmuxPaneAnsweredAt = undefined;
+        this.tmuxPaneSilentAt = performance.now();
+        this.isTmuxRedrawDue ||= isTmuxRedrawDue;
+      }
+      if (isTmuxResendDue) this.props.terminalImages.resendAll();
+      else if (hasPaneInfo && (isTmuxRedrawDue || paneMoved)) this.props.terminalImages.redrawInline();
+      else if (hasPaneInfo) this.props.terminalImages.requestDraw();
+    }
+    async runCellReprobe() {
+      if (this.querier) await reprobeCellSize(this.querier);
+      if (this.hasReleasedTerminal || !this.querier) return;
+      this.props.onCellPixels?.();
+      if (this.cellReprobe === "again") {
+        this.cellReprobe = "asking";
+        this.runCellReprobe();
+        return;
+      }
+      this.cellReprobe = "idle";
+    }
+    componentWillUnmount() {
+      this.appUnmounted = true;
+      this.props.rootNode.setRawMode = undefined;
+      if (this.props.stdout.isTTY) this.props.stdout.write(SHOW_CURSOR);
+      if (this.incompleteEscapeTimer) {
+        clearTimeout(this.incompleteEscapeTimer);
+        this.incompleteEscapeTimer = null;
+      }
+      if (this.pendingHyperlinkTimer) {
+        clearTimeout(this.pendingHyperlinkTimer);
+        this.pendingHyperlinkTimer = null;
+        this.pendingHyperlinkOpensInPanel = false;
+      }
+      if (this.owedReplyHold !== undefined) {
+        clearTimeout(this.owedReplyHold);
+        this.owedReplyHold = undefined;
+        setRawModeSafe(this.props.stdin, false);
+      }
+      if (this.isRawModeSupported()) while (this.rawModeEnabledCount > 0) this.handleSetRawMode(false);
+    }
+    componentDidCatch(error, info) {
+      reportRenderError(error, info);
+      this.handleExit(error);
+    }
+    handleSetRawMode = (isEnabled) => {
+      let { stdin } = this.props;
+      if (!this.isRawModeSupported())
+        if (stdin === process.stdin)
+          throw Error(`Raw mode is not supported on the current process.stdin, which Ink uses as input stream by default.
+Read about how to prevent this error on https://github.com/vadimdemedes/ink/#israwmodesupported`);
+        else
+          throw Error(`Raw mode is not supported on the stdin provided to Ink.
+Read about how to prevent this error on https://github.com/vadimdemedes/ink/#israwmodesupported`);
+      stdin.setEncoding("utf8");
+      if (isEnabled) {
+        if (this.rawModeEnabledCount === 0) {
+          stopCapturingEarlyInput();
+          if (this.owedReplyHold !== undefined) {
+            clearTimeout(this.owedReplyHold);
+            this.owedReplyHold = undefined;
+          }
+          this.props.onRawModeEnter?.();
+          stdin.ref();
+          setRawModeSafe(stdin, true);
+          stdin.addListener("readable", this.handleReadable);
+          this.querier?.setInputAttached(true);
+          if (getPlatform() === "windows") {
+            stdin.resume();
+            stdin.pause();
+          }
+          let { modes } = this.props;
+          this.props.stdout.write(
+            modes.set("bracketedPaste") + modes.set("themeReports") + modes.set("focusEvents"),
+          );
+          if (getPlatform() === "windows") this.props.stdout.write(DISABLE_WIN32_INPUT_MODE);
+          this.props.stdout.write(modes.set("extendedKeys"));
+          let terminalCapabilities = getTerminalCapabilities();
+          if (terminalCapabilities.get("extendedKeys").state === "pending")
+            this.cancelExtendedKeysSettle = terminalCapabilities.onSettle("extendedKeys", (settled) => {
+              if (settled && !this.hasReleasedTerminal) this.props.stdout.write(modes.reassertKeys());
+            });
+          if (env.CLAUDE_BG_BACKEND !== "daemon")
+            setImmediate(() => {
+              if (this.querier && !this.hasReleasedTerminal)
+                probeTerminalCapabilities(this.querier, getTerminalCapabilities());
+            });
+        }
+        this.rawModeEnabledCount++;
+        return;
+      }
+      if (this.rawModeEnabledCount <= 0) return;
+      if (--this.rawModeEnabledCount === 0) {
+        this.cancelExtendedKeysSettle?.();
+        this.cancelExtendedKeysSettle = undefined;
+        let { modes } = this.props;
+        this.props.stdout.write(
+          modes.reset("extendedKeys") +
+            modes.reset("focusEvents") +
+            modes.reset("themeReports") +
+            modes.reset("bracketedPaste"),
+        );
+        if (!getSecondRootError().get(this.props.stdout)?.isHandoffRawMode)
+          if (this.querier && this.querier.owed() > 0 && !this.appUnmounted) {
+            this.owedReplyHold = setTimeout(releaseOwedReplyHold, OWED_REPLY_HOLD_MS, this, stdin);
+            this.owedReplyHold.unref?.();
+          } else {
+            if (this.querier && this.querier.owed() > 0)
+              getSecondRootError().get(this.props.stdout)?.drainStdin();
+            setRawModeSafe(stdin, false);
+          }
+        this.querier?.setInputAttached(false);
+        stdin.removeListener("readable", this.handleReadable);
+        stdin.unref();
+      }
+    };
+    flushIncomplete = () => {
+      this.incompleteEscapeTimer = null;
+      if (!hasPendingInput(this.keyReader)) return;
+      if (this.props.stdin.readableLength > 0) {
+        this.incompleteEscapeTimer = setTimeout(this.flushIncomplete, ESC_FLUSH_TIMEOUT_MS);
+        return;
+      }
+      let startTime = performance.now();
+      this.applyKeysRead(flushInputReader(this.keyReader, startTime), startTime);
+    };
+    processInput = (chunk, now, isReadLate) => {
+      this.applyKeysRead(feedInputReader(this.keyReader, chunk, now, isReadLate), now);
+    };
+    applyKeysRead({ keys, reader, wakeAt }, now) {
+      this.keyReader = reader;
+      if (this.incompleteEscapeTimer) {
+        clearTimeout(this.incompleteEscapeTimer);
+        this.incompleteEscapeTimer = null;
+      }
+      if (wakeAt !== null)
+        this.incompleteEscapeTimer = setTimeout(this.flushIncomplete, Math.max(0, wakeAt - now));
+      if (keys.length > 0) {
+        if (keys.some(isKeyOrPaste)) this.props.onInputPriorityFrame();
+        let readArrivedAt = this.readArrivedAt;
+        this.readArrivedAt = Date.now();
+        try {
+          reconcilerAlias.discreteUpdates(processKeysInBatch, this, keys, false, undefined);
+        } finally {
+          this.readArrivedAt = readArrivedAt;
+        }
+      }
+    }
+    inputNow = () => this.readArrivedAt ?? Date.now();
+    handleReadable = () => {
+      let now = performance.now();
+      if (now - this.lastStdinTime > STDIN_IDLE_REASSERT_MS) this.props.onStdinResume?.();
+      this.lastStdinTime = now;
+      let isLate = this.loopWatch.isLate(now);
+      try {
+        let chunk;
+        while ((chunk = this.props.stdin.read()) !== null) this.processInput(chunk, now, isLate);
+      } catch (error) {
+        logError(
+          withTelemetryMessage(toError(error), "stdin readable handler threw during input processing"),
+        );
+        let { stdin } = this.props;
+        if (this.rawModeEnabledCount > 0 && !stdin.listeners("readable").includes(this.handleReadable)) {
+          logForDebugging("handleReadable: re-attaching stdin readable listener after error recovery", {
+            level: "warn",
+          });
+          stdin.addListener("readable", this.handleReadable);
+        }
+      }
+    };
+    handleInput = (input) => {
+      if (input === "\x03" && this.props.exitOnCtrlC) this.handleExit();
+    };
+    handleExit = (error) => {
+      if (this.isRawModeSupported()) this.handleSetRawMode(false);
+      this.props.onExit(error);
+    };
+    attachProbeDeferred = false;
+    appUnmounted = false;
+    get hasReleasedTerminal() {
+      return (
+        this.appUnmounted ||
+        isTerminalShutdown() ||
+        getSecondRootError().get(this.props.stdout)?.hasUnmounted === true
+      );
+    }
+    handleTerminalFocus = (event) => {
+      let terminalFocus = getTerminalFocus();
+      if (!event || Date.now() - this.lastActivationInputTime >= WINDOW_ACTIVATION_WINDOW_MS)
+        this.windowActivationClickArmed = true;
+      useAwaySummary(event);
+      if (!event) this.props.onHoverLost?.();
+      if (event) this.refreshTmuxPane(true);
+      if (event && terminalFocus === "blurred") this.reprobeCellPixels();
+      if (event && terminalFocus === "blurred")
+        getSecondRootError().get(this.props.stdout)?.proactiveAtlasResetOnFocus();
+      if (
+        event &&
+        terminalFocus !== "focused" &&
+        env.CLAUDE_BG_BACKEND === "daemon" &&
+        this.querier &&
+        !this.attachProbeDeferred
+      ) {
+        this.attachProbeDeferred = true;
+        waitForAttachSettle().then(() => {
+          this.attachProbeDeferred = false;
+          if (this.querier && !this.hasReleasedTerminal) {
+            getTerminalProbeState().resetCapabilities();
+            probeTerminalCapabilities(this.querier, getTerminalCapabilities());
+          }
+        });
+      }
+    };
+    consumeWindowActivationLatch(lastActivationInputTime) {
+      this.lastActivationInputTime = lastActivationInputTime;
+      if (!this.windowActivationClickArmed) return false;
+      this.windowActivationClickArmed = false;
+      return true;
+    }
+    handleSuspend = () => {
+      if (!this.isRawModeSupported()) return;
+      let rawModeCountBeforeSuspend = this.rawModeEnabledCount;
+      if (this.props.stdout.isTTY)
+        this.props.stdout.write(SHOW_CURSOR + DISABLE_MOUSE_TRACKING + this.props.modes.suspend());
+      while (this.rawModeEnabledCount > 0) this.handleSetRawMode(false);
+      this.internal_eventEmitter.emit("suspend");
+      let interval = setInterval(() => {}, 1073741824);
+      let onSettle = () => {
+        clearInterval(interval);
+        process.removeListener("SIGCONT", onSettle);
+        if (this.hasReleasedTerminal) return;
+        for (let i = 0; i < rawModeCountBeforeSuspend; i++)
+          if (this.isRawModeSupported()) this.handleSetRawMode(true);
+        if (this.props.stdout.isTTY) {
+          let isScreenReaderEnabled = this.props.isScreenReaderEnabled ?? false;
+          this.props.stdout.write(
+            this.props.modes.resume() +
+              (env.CLAUDE_CODE_ACCESSIBILITY || isScreenReaderEnabled ? "" : HIDE_CURSOR),
+          );
+        }
+        this.internal_eventEmitter.emit("resume");
+      };
+      process.on("SIGCONT", onSettle);
+      if (this.owedReplyHold !== undefined) {
+        getSecondRootError().get(this.props.stdout)?.drainStdin();
+        releaseOwedReplyHold(this, this.props.stdin);
+      }
+      resumeNonBlockingStdout();
+      process.kill(0, "SIGTSTP");
+    };
   };
-}
+});
 //@ chunk-bzr73sfg.js:243685-243839 affinity
 /**
  * 输入项是否算用户操作（粘贴、按键、非悬停移动的鼠标），用于空闲计时与附着后静默期过滤。
@@ -649,11 +657,11 @@ function wheelKeyToCells(app, key) {
     row === undefined
   )
     return key;
-  let g = pixelToCellPoint(col, row, cellPixels);
+  let point = pixelToCellPoint(col, row, cellPixels);
   return {
     ...key,
-    col: g.col,
-    row: g.row,
+    col: point.col,
+    row: point.row,
   };
 }
 //@ chunk-bzr73sfg.js:246045-246114 layout
@@ -719,13 +727,13 @@ function handleMouseEvent(app, mouse) {
         finishSelection(selection);
         app.props.onSelectionChange();
       }
-      let A = col === app.lastHoverCol && row === app.lastHoverRow;
-      if (!A) {
+      let sameCell = col === app.lastHoverCol && row === app.lastHoverRow;
+      if (!sameCell) {
         app.lastHoverCol = col;
         app.lastHoverRow = row;
         app.props.onHoverAt(col, row);
       }
-      if (!A || (mouse.fine !== undefined && app.lastHoverOnTarget))
+      if (!sameCell || (mouse.fine !== undefined && app.lastHoverOnTarget))
         app.lastHoverOnTarget =
           app.props.onPointerHover?.(col, row, mouseMods(mouse.button), mouse.fine) ?? false;
       return;
@@ -801,12 +809,12 @@ function handleMouseEvent(app, mouse) {
   }
   finishSelection(selection);
   if (!hasSelection(selection) && selection.anchor) {
-    let T = app.props.onClickAt(col, row, app.pressIsWindowActivation, mouseMods(mouse.button));
-    if (T === "stray" || T === "repeat") {
+    let handled = app.props.onClickAt(col, row, app.pressIsWindowActivation, mouseMods(mouse.button));
+    if (handled === "stray" || handled === "repeat") {
       app.clickCount = 0;
       app.lastClickTime = 0;
     }
-    if (T === "unhandled" && !app.pressIsWindowActivation) {
+    if (handled === "unhandled" && !app.pressIsWindowActivation) {
       let url = app.props.getHyperlinkAt(col, row);
       if (
         url &&
@@ -866,12 +874,12 @@ function detectArrowBurst(app, items) {
     n: items.length,
   });
   while (arrowWindow.length > 0 && startTime - arrowWindow[0].t > ARROW_BURST_WINDOW_MS) arrowWindow.shift();
-  let g = 0;
-  for (let E of arrowWindow) g += E.n;
-  if (g >= ARROW_BURST_THRESHOLD) {
+  let total = 0;
+  for (let entry of arrowWindow) total += entry.n;
+  if (total >= ARROW_BURST_THRESHOLD) {
     app.internal_eventEmitter.emit("arrow-burst", {
       direction: first.name,
-      count: g,
+      count: total,
     });
     app.props.onStdinResume?.();
     arrowWindow.length = 0;

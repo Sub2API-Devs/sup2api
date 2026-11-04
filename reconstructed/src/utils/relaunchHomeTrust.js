@@ -35,10 +35,10 @@ async function relaunchHomeTrustEnv() {
 async function inheritsRelaunchHomeTrust() {
   let match = /^(\d{1,10}):(.{1,64})$/.exec(env.CLAUDE_CODE_RELAUNCH_HOME_TRUST ?? "");
   if (!match) return false;
-  let e = getPlatform() === "windows" ? process.ppid : process.pid;
-  if (Number(match[1]) !== e) return false;
+  let launcherPid = getPlatform() === "windows" ? process.ppid : process.pid;
+  if (Number(match[1]) !== launcherPid) return false;
   if (!isSameRealPath(getOriginalCwd(), homedir())) return false;
-  let processStartTime = await getProcessStartTimeAsync(e, {
+  let processStartTime = await getProcessStartTimeAsync(launcherPid, {
     skipCache: true,
   });
   return processStartTime !== undefined && processStartTime === match[2];

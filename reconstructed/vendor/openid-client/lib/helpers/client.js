@@ -5,7 +5,7 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_errors } from "../errors.js";
 import { require_assert } from "./assert.js";
 import { require_generators } from "./generators.js";
@@ -15,8 +15,8 @@ import { require_weak_cache } from "./weak_cache.js";
 import { require_merge } from "./merge.js";
 
 //@ chunk-1ny7cxrt.js:27454-30880 cjs-fingerprint
-var require_client = x(function (cjsExports, cjsModule) {
-  var jose = require("./chunk-2tyrgda4.js");
+var require_client = __commonJS(function (cjsExports, cjsModule) {
+  var jose = require("../../../jose/dist/node/esm/jwe/compact/CompactEncrypt.lazy.js");
   var { RPError } = require_errors();
   var { assertIssuerConfiguration } = require_assert();
   var { random } = require_generators();
@@ -116,10 +116,10 @@ var require_client = x(function (cjsExports, cjsModule) {
       case "client_secret_basic": {
         if (typeof this.client_secret !== "string")
           throw TypeError("client_secret_basic client authentication method requires a client_secret");
-        let o = `${formUrlEncode(this.client_id)}:${formUrlEncode(this.client_secret)}`;
+        let credentials = `${formUrlEncode(this.client_id)}:${formUrlEncode(this.client_secret)}`;
         return {
           headers: {
-            Authorization: `Basic ${Buffer.from(o).toString("base64")}`,
+            Authorization: `Basic ${Buffer.from(credentials).toString("base64")}`,
           },
         };
       }

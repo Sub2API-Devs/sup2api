@@ -16,17 +16,19 @@ import { logError } from "../../utils/log.js";
 var CLAUDECODE_EDITRESULT = "claudecode/editResult";
 var EDIT_RESULT_V1 = "1";
 //@ chunk-dfyz39v9.js:334-383 placement
-function asksForEditResult(o, meta) {
-  return o === FILE_EDIT_TOOL_NAME && isPlainObject(meta) && meta[CLAUDECODE_EDITRESULT] === EDIT_RESULT_V1;
+function asksForEditResult(args, meta) {
+  return (
+    args === FILE_EDIT_TOOL_NAME && isPlainObject(meta) && meta[CLAUDECODE_EDITRESULT] === EDIT_RESULT_V1
+  );
 }
 //@ chunk-dfyz39v9.js:383-605 placement
 /**
  * 为 mcp serve 的编辑结果附加 claudecode/editResult 元数据。
  */
-async function withEditResult(result, t) {
-  if (result.isError === true || t.subagentFrameResult === undefined) return result;
+async function withEditResult(result, meta) {
+  if (result.isError === true || meta.subagentFrameResult === undefined) return result;
   try {
-    if ((await t.subagentFrameResultHolds?.()) === false) return result;
+    if ((await meta.subagentFrameResultHolds?.()) === false) return result;
   } catch (error) {
     logError(error);
     return result;
@@ -35,7 +37,7 @@ async function withEditResult(result, t) {
     ...result,
     _meta: {
       ...result._meta,
-      [CLAUDECODE_EDITRESULT]: t.subagentFrameResult,
+      [CLAUDECODE_EDITRESULT]: meta.subagentFrameResult,
     },
   };
 }

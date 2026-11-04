@@ -8,14 +8,18 @@
  * pieces: chunk-aepeg2w5.js (7)
  * attribution: placement 7
  */
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_error_3 } from "../../../vendor/@anthropic-ai/bedrock-sdk/core/error.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { require_core } from "../../../vendor/@opentelemetry/core/build/src/index.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:659129-659148 placement
-var otelSdkModule = Re(require_error_3(), 1);
+var otelSdkModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:659129", () => {
+  otelSdkModule = __toESM(require_error_3(), 1);
+});
 //@ chunk-aepeg2w5.js:659185-659210 placement
 function isDisklessHost() {
   return isDiskless();
@@ -23,7 +27,10 @@ function isDisklessHost() {
 //@ chunk-aepeg2w5.js:659210-659254 placement
 var EXPORT_ENVIRONMENTS = ["dry_run", "test_mode", "production"];
 //@ chunk-aepeg2w5.js:659254-659272 placement
-var otelSdkLogsModule = Re(require_core(), 1);
+var otelSdkLogsModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:659254", () => {
+  otelSdkLogsModule = __toESM(require_core(), 1);
+});
 //@ chunk-aepeg2w5.js:659272-659303 placement
 /**
  * Anthropic 遥测导出器：环境列表（dry_run/test_mode/production）、失败计数包装与日志前缀。
@@ -41,12 +48,12 @@ class ExportFailureCounter {
   constructor(pipeline) {
     this.pipeline = pipeline;
   }
-  record(e) {
+  record(error) {
     this.count++;
-    this.last = e;
+    this.last = error;
     if (this.count === 1)
       logForDebugging(
-        `${TELEMETRY_LOG_PREFIX} ${this.pipeline} export failed (${e}). This is Anthropic's own telemetry pipeline, not your OTel collector; further failures are counted and summarised at shutdown.`,
+        `${TELEMETRY_LOG_PREFIX} ${this.pipeline} export failed (${error}). This is Anthropic's own telemetry pipeline, not your OTel collector; further failures are counted and summarised at shutdown.`,
       );
   }
   logSummary() {
@@ -61,28 +68,28 @@ class ExportFailureCounter {
 /**
  * 包装导出器：失败只记录，不影响调用方。
  */
-function wrapExporterFailures(e, n) {
-  let r = e.export.bind(e);
-  let s = e.forceFlush?.bind(e);
-  let h = e.shutdown.bind(e);
-  e.export = (y, S) =>
-    r(y, (w) => {
-      if (w.code !== otelSdkLogsModule.ExportResultCode.SUCCESS)
-        n.record(w.error?.message ?? "unknown error");
-      S({
+function wrapExporterFailures(exporter, summary) {
+  let originalExport = exporter.export.bind(exporter);
+  let originalForceFlush = exporter.forceFlush?.bind(exporter);
+  let originalShutdown = exporter.shutdown.bind(exporter);
+  exporter.export = (logs, callback) =>
+    originalExport(logs, (result) => {
+      if (result.code !== otelSdkLogsModule.ExportResultCode.SUCCESS)
+        summary.record(result.error?.message ?? "unknown error");
+      callback({
         code: otelSdkLogsModule.ExportResultCode.SUCCESS,
       });
     });
-  if (s)
-    e.forceFlush = async () => {
-      await s();
-      n.logSummary();
+  if (originalForceFlush)
+    exporter.forceFlush = async () => {
+      await originalForceFlush();
+      summary.logSummary();
     };
-  e.shutdown = async () => {
-    await h();
-    n.logSummary();
+  exporter.shutdown = async () => {
+    await originalShutdown();
+    summary.logSummary();
   };
-  return e;
+  return exporter;
 }
 export {
   TELEMETRY_LOG_PREFIX,

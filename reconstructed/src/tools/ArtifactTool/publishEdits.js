@@ -10,7 +10,7 @@
  */
 import { lstat } from "fs/promises";
 import { constants } from "fs";
-import { E, preprocess } from "../../../vendor/zod/v4/classic/schemas.js";
+import { numberSchema, preprocess } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isWellFormedString } from "../../utils/stringUtils.js";
 import { env } from "../../utils/env.js";
 import { detectLineEndingsForString as detectLineEndingsForString_2 } from "../../utils/fileRead.js";
@@ -62,20 +62,21 @@ import {
   clearPendingDiagnosticsForFile,
 } from "../../services/lsp/LSPDiagnosticRegistry.js";
 import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-y9np9srf.js:410-439 placement
 var MODEL_FACING_MESSAGE_KEY = "modelFacingMessage";
 //@ chunk-y9np9srf.js:439-475 placement
-function coercedNumberSchema(e = E()) {
-  return preprocess(coerceNumberString, e);
+function coercedNumberSchema(inner = numberSchema()) {
+  return preprocess(coerceNumberString, inner);
 }
 //@ chunk-y9np9srf.js:475-620 placement
 function coerceNumberString(offset) {
   if (typeof offset === "string") {
     let trimmed = offset.trim();
     if (/^[-+]?\d+(\.\d+)?$/.test(trimmed)) {
-      let t = Number(trimmed);
-      if (Number.isFinite(t)) return t;
+      let value = Number(trimmed);
+      if (Number.isFinite(value)) return value;
     }
   }
   return offset;
@@ -83,39 +84,39 @@ function coerceNumberString(offset) {
 //@ chunk-y9np9srf.js:620-631 placement
 var MAX_PUBLISH_EDITS = 64;
 //@ chunk-y9np9srf.js:631-1006 placement
-function applyFindReplace(e, n) {
-  let t = e;
-  for (let j = 0; j < n.length; j++) {
-    let { find, replace } = n[j];
+function applyFindReplace(text, edits) {
+  let current = text;
+  for (let j = 0; j < edits.length; j++) {
+    let { find, replace } = edits[j];
     if (!isWellFormedString(find) || !isWellFormedString(replace))
       return {
         ok: false,
         reason: "malformed",
         op: j,
       };
-    let d = find === "" ? -1 : t.indexOf(find);
-    if (d === -1)
+    let index = find === "" ? -1 : current.indexOf(find);
+    if (index === -1)
       return {
         ok: false,
         reason: "not_found",
         op: j,
       };
-    if (t.indexOf(find, d + 1) !== -1)
+    if (current.indexOf(find, index + 1) !== -1)
       return {
         ok: false,
         reason: "ambiguous",
         op: j,
       };
-    t = t.slice(0, d) + replace + t.slice(d + find.length);
+    current = current.slice(0, index) + replace + current.slice(index + find.length);
   }
-  if (t === e)
+  if (current === text)
     return {
       ok: false,
       reason: "noop",
     };
   return {
     ok: true,
-    content: t,
+    content: current,
   };
 }
 //@ chunk-y9np9srf.js:1006-1046 placement
@@ -131,19 +132,19 @@ function isPublishEditsEnabled() {
   return env.CLAUDE_CODE_ARTIFACT_PUBLISH_EDITS ?? true;
 }
 //@ chunk-y9np9srf.js:1109-2266 placement
-function publishEditsDescription(e) {
-  let n = e.core
+function publishEditsDescription(options) {
+  let lead = options.core
     ? "publish: small changes Claude makes to the file at `file_path` in this same call, instead of editing the file with Edit and publishing after."
     : "publish: small changes to make to the file at `file_path` in this same call, instead of editing the file with Edit and publishing after.";
-  let t = e.typesOn
+  let surfaces = options.typesOn
     ? " Use it on a page (add `url` to update an artifact from another conversation) or on one data file of an artifact made from a type (its `url`, with that file as `file_path`)."
     : " Use it on a page (add `url` to update an artifact from another conversation).";
-  let s = [...(e.typesOn ? ["`type_url`"] : []), ...(e.multiFileOn ? ["`files`"] : [])];
-  let o =
-    s.length === 0
+  let excluded = [...(options.typesOn ? ["`type_url`"] : []), ...(options.multiFileOn ? ["`files`"] : [])];
+  let excludedNote =
+    excluded.length === 0
       ? ""
-      : ` Not allowed with ${s.length === 1 ? s[0] : `${s.slice(0, -1).join(", ")} or ${s.at(-1)}`}.`;
-  return `${n}${t}${o} Each old_str is text copied exactly from the file as it now stands and must occur in it exactly once; new_str takes its place (empty deletes it). The edits apply in order, all or none: the file is published with them and then saved with them on disk, so it stays the source for later changes; on a miss nothing is changed or published, and the result says which edit failed and why.`;
+      : ` Not allowed with ${excluded.length === 1 ? excluded[0] : `${excluded.slice(0, -1).join(", ")} or ${excluded.at(-1)}`}.`;
+  return `${lead}${surfaces}${excludedNote} Each old_str is text copied exactly from the file as it now stands and must occur in it exactly once; new_str takes its place (empty deletes it). The edits apply in order, all or none: the file is published with them and then saved with them on disk, so it stays the source for later changes; on a miss nothing is changed or published, and the result says which edit failed and why.`;
 }
 //@ chunk-y9np9srf.js:2266-3621 placement
 /**
@@ -158,10 +159,10 @@ var PUBLISH_EDITS_AFTER_PUBLISH_HINT =
 var PUBLISH_EDITS_AFTER_EDITS_HINT =
   "Once that file has these edits too, the next small change to it can go as `edits` on a publish of the same file_path (old_str/new_str pairs copied exactly from the file as it then stands). To change several files, or to rewrite most of the page, Edit the files and publish them in the same response; if an Edit reports that it did not apply, correct it and publish again. If the file's text is no longer in this conversation, Read it first.";
 //@ chunk-y9np9srf.js:3621-3871 placement
-function validateEdits(e) {
-  let n = 0;
-  for (let j = 0; j < e.length; j++) {
-    let { old_str: oldStr, new_str: newStr } = e[j];
+function validateEdits(edits) {
+  let totalChars = 0;
+  for (let j = 0; j < edits.length; j++) {
+    let { old_str: oldStr, new_str: newStr } = edits[j];
     if (oldStr === "")
       return {
         reason: "empty_old_str",
@@ -172,8 +173,8 @@ function validateEdits(e) {
         reason: "malformed",
         edit: j,
       };
-    n += oldStr.length + newStr.length;
-    if (n > MAX_TOTAL_EDIT_CHARS)
+    totalChars += oldStr.length + newStr.length;
+    if (totalChars > MAX_TOTAL_EDIT_CHARS)
       return {
         reason: "too_large",
       };
@@ -184,115 +185,115 @@ function validateEdits(e) {
 /**
  * 把 publish 的 edits（old_str/new_str）应用到文件：必须唯一出现、大小与工作量受限，返回新内容或失败原因。
  */
-function applyPublishEdits(e, edits, t = {}) {
-  let s = validateEdits(edits);
-  if (s !== undefined)
+function applyPublishEdits(text, edits, options = {}) {
+  let invalid = validateEdits(edits);
+  if (invalid !== undefined)
     return {
       ok: false,
-      ...s,
+      ...invalid,
     };
-  if (edits.length * e.length > MAX_EDIT_WORK_CHARS)
+  if (edits.length * text.length > MAX_EDIT_WORK_CHARS)
     return {
       ok: false,
       reason: "too_much_work",
     };
-  let o = detectLineEndingsForString_2(e) === "CRLF";
-  let a = (l) =>
-    o
-      ? l.replaceAll(
+  let crlf = detectLineEndingsForString_2(text) === "CRLF";
+  let toLf = (value) =>
+    crlf
+      ? value.replaceAll(
           `\r
 `,
           `
 `,
         )
-      : l;
-  let d = a(e);
-  let mapped = edits.map((l) => ({
-    find: a(l.old_str),
-    replace: a(l.new_str),
+      : value;
+  let normalized = toLf(text);
+  let edits_2 = edits.map((edit) => ({
+    find: toLf(edit.old_str),
+    replace: toLf(edit.new_str),
   }));
-  let r = applyFindReplace(d, mapped);
-  if (!r.ok)
-    switch (r.reason) {
+  let result = applyFindReplace(normalized, edits_2);
+  if (!result.ok)
+    switch (result.reason) {
       case "noop":
         return {
           ok: false,
           reason: "noop",
         };
       case "ambiguous": {
-        let l = d;
-        for (let j = 0; j < r.op; j++) {
-          let { find, replace } = mapped[j];
-          let index = l.indexOf(find);
-          l = l.slice(0, index) + replace + l.slice(index + find.length);
+        let partial = normalized;
+        for (let j = 0; j < result.op; j++) {
+          let { find, replace } = edits_2[j];
+          let index = partial.indexOf(find);
+          partial = partial.slice(0, index) + replace + partial.slice(index + find.length);
         }
         return {
           ok: false,
           reason: "ambiguous",
-          edit: r.op,
-          count: countOccurrencesCapped(l, mapped[r.op].find),
+          edit: result.op,
+          count: countOccurrencesCapped(partial, edits_2[result.op].find),
         };
       }
       default:
         return {
           ok: false,
-          reason: r.reason,
-          edit: r.op,
+          reason: result.reason,
+          edit: result.op,
         };
     }
-  if (t.json === true && isValidJsonText(d) && !isValidJsonText(r.content))
+  if (options.json === true && isValidJsonText(normalized) && !isValidJsonText(result.content))
     return {
       ok: false,
       reason: "json_invalid",
     };
-  return o
+  return crlf
     ? {
-        ...r,
-        content: detectLineEndingsForString(r.content, "CRLF"),
+        ...result,
+        content: detectLineEndingsForString(result.content, "CRLF"),
       }
-    : r;
+    : result;
 }
 //@ chunk-y9np9srf.js:4560-4651 placement
 /**
  * 统计子串出现次数，最多数到上限为止。
  */
-function countOccurrencesCapped(e, find) {
-  let t = 0;
+function countOccurrencesCapped(text, find) {
+  let count = 0;
   for (
-    let index = e.indexOf(find);
-    index !== -1 && t < MAX_OCCURRENCE_SCAN;
-    index = e.indexOf(find, index + 1)
+    let index = text.indexOf(find);
+    index !== -1 && count < MAX_OCCURRENCE_SCAN;
+    index = text.indexOf(find, index + 1)
   )
-    t++;
-  return t;
+    count++;
+  return count;
 }
 //@ chunk-y9np9srf.js:4651-4701 placement
 /**
  * 文本能否解析为 JSON。
  */
-function isValidJsonText(e) {
+function isValidJsonText(text) {
   try {
-    jsonParse(e);
+    jsonParse(text);
     return true;
   } catch {
     return false;
   }
 }
 //@ chunk-y9np9srf.js:4701-5977 placement
-function describeEditFailure(e, n, t) {
-  switch (e.reason) {
+function describeEditFailure(failure, edits, pathLabel) {
+  switch (failure.reason) {
     case "empty_old_str":
-      return `edits[${e.edit}] old_str is empty`;
+      return `edits[${failure.edit}] old_str is empty`;
     case "malformed":
-      return `edits[${e.edit}] has a NUL character in new_str, or a broken character (an unpaired surrogate) in old_str or new_str`;
+      return `edits[${failure.edit}] has a NUL character in new_str, or a broken character (an unpaired surrogate) in old_str or new_str`;
     case "too_large":
       return `old_str and new_str add up to more than ${MAX_TOTAL_EDIT_CHARS} characters over all the edits; make a change that large with Edit and publish without edits`;
     case "too_much_work":
-      return `${n} edits on a file of ${t} characters is more than one publish call will apply; send at most ${Math.max(1, Math.floor(MAX_EDIT_WORK_CHARS / Math.max(1, t)))} edits per call for a file this size, over as many calls as the change needs`;
+      return `${edits} edits on a file of ${pathLabel} characters is more than one publish call will apply; send at most ${Math.max(1, Math.floor(MAX_EDIT_WORK_CHARS / Math.max(1, pathLabel)))} edits per call for a file this size, over as many calls as the change needs`;
     case "not_found":
-      return `edits[${e.edit}] old_str does not occur in the file`;
+      return `edits[${failure.edit}] old_str does not occur in the file`;
     case "ambiguous":
-      return `edits[${e.edit}] old_str occurs ${e.count >= MAX_OCCURRENCE_SCAN ? "at least " : ""}${e.count} times in the file; include more of the surrounding text so that it occurs once`;
+      return `edits[${failure.edit}] old_str occurs ${failure.count >= MAX_OCCURRENCE_SCAN ? "at least " : ""}${failure.count} times in the file; include more of the surrounding text so that it occurs once`;
     case "noop":
       return "the edits leave the file unchanged (it already reads that way); publish the file without edits if it should go out as it is";
     case "json_invalid":
@@ -303,45 +304,45 @@ function describeEditFailure(e, n, t) {
 /**
  * 编辑失败原因是否为「找不到」或「有多处匹配」。
  */
-function isNotFoundOrAmbiguousEdit(e) {
-  return e.reason === "not_found" || e.reason === "ambiguous";
+function isNotFoundOrAmbiguousEdit(failure) {
+  return failure.reason === "not_found" || failure.reason === "ambiguous";
 }
 //@ chunk-y9np9srf.js:6045-6435 placement
-function editsFailedMessage(e, edits, t, s) {
-  let o = `No edits were applied and nothing was published: ${describeEditFailure(e, edits.length, t.length)}.`;
-  if (!isNotFoundOrAmbiguousEdit(e)) return o;
-  let a = `${o} The file's current text follows; copy old_str from it exactly and send the publish again.
+function editsFailedMessage(failure, edits, content, budget) {
+  let lead = `No edits were applied and nothing was published: ${describeEditFailure(failure, edits.length, content.length)}.`;
+  if (!isNotFoundOrAmbiguousEdit(failure)) return lead;
+  let text = `${lead} The file's current text follows; copy old_str from it exactly and send the publish again.
 
-${t}`;
-  if (a.length <= s) return a;
-  return `${o} The file is too long to show here: Read the file at file_path, copy old_str from it exactly and send the publish again.`;
+${content}`;
+  if (text.length <= budget) return text;
+  return `${lead} The file is too long to show here: Read the file at file_path, copy old_str from it exactly and send the publish again.`;
 }
 //@ chunk-y9np9srf.js:6435-6482 placement
-function editsBaseKey(e) {
-  return `\x00edits-base\x00${e}`;
+function editsBaseKey(path) {
+  return `\x00edits-base\x00${path}`;
 }
 //@ chunk-y9np9srf.js:6482-6727 placement
 var EDIT_PERMISSION_ASK_TEXT =
   "Applying `edits` changes the file at file_path, and an Edit permission check requires approval here: nothing was published and the file is unchanged. Retry the publish so it can be asked, or Edit the file and publish it without edits.";
 //@ chunk-y9np9srf.js:6727-7994 placement
-function editsWrittenNote(editsApplied, n, editsNotWritten) {
-  let s = n === "page" ? "the published page" : "what was published";
+function editsWrittenNote(editsApplied, unitHint, editsNotWritten) {
+  let what = unitHint === "page" ? "the published page" : "what was published";
   if (editsNotWritten === undefined)
     return editsApplied === 1
-      ? `The edit was written to the file after it was published, so the file matches ${s}.`
-      : `The ${editsApplied} edits were written to the file after it was published, so the file matches ${s}.`;
-  let o = editsApplied === 1;
-  let a = `Published \u2014 ${n === "page" ? "the page" : "the artifact"} now has ${o ? "the edit" : `the ${editsApplied} edits`}, but the file at file_path does not`;
+      ? `The edit was written to the file after it was published, so the file matches ${what}.`
+      : `The ${editsApplied} edits were written to the file after it was published, so the file matches ${what}.`;
+  let part = editsApplied === 1;
+  let index = `Published \u2014 ${unitHint === "page" ? "the page" : "the artifact"} now has ${part ? "the edit" : `the ${editsApplied} edits`}, but the file at file_path does not`;
   if (editsNotWritten === "write_failed")
-    return `${a}: writing it back failed, and the file may be partly written. Read it before anything else, restore it to the published text (${s}, ${o ? "the edit" : "the edits"} included), and only then publish it again; publishing it as it is could put damaged content ${n === "page" ? "on the page" : "in the artifact"}.`;
-  return `${a} (${editsNotWritten === "changed_during_publish" ? "it changed on disk while the publish ran, so it was left as it is" : editsNotWritten === "not_writable" ? "it could not be opened for writing (read-only), so it was left as it is" : "it has other names on disk (a hard link), so it was left as it is"}). Apply the same ${o ? "edit" : "edits"} to that file with Edit before you publish it again${editsNotWritten === "hard_linked" ? ", and publish it without `edits` while it has other names" : ""}; publishing it as it is would revert ${o ? "it" : "them"}.`;
+    return `${index}: writing it back failed, and the file may be partly written. Read it before anything else, restore it to the published text (${what}, ${part ? "the edit" : "the edits"} included), and only then publish it again; publishing it as it is could put damaged content ${unitHint === "page" ? "on the page" : "in the artifact"}.`;
+  return `${index} (${editsNotWritten === "changed_during_publish" ? "it changed on disk while the publish ran, so it was left as it is" : editsNotWritten === "not_writable" ? "it could not be opened for writing (read-only), so it was left as it is" : "it has other names on disk (a hard link), so it was left as it is"}). Apply the same ${part ? "edit" : "edits"} to that file with Edit before you publish it again${editsNotWritten === "hard_linked" ? ", and publish it without `edits` while it has other names" : ""}; publishing it as it is would revert ${part ? "it" : "them"}.`;
 }
 //@ chunk-y9np9srf.js:7994-8234 placement
-function encodeLikeOriginal(e, n) {
-  if (e[0] === 255 && e[1] === 254)
-    return Buffer.concat([Buffer.from([255, 254]), Buffer.from(n, "utf16le")]);
-  let t = e[0] === 239 && e[1] === 187 && e[2] === 191;
-  return Buffer.concat([...(t ? [Buffer.from([239, 187, 191])] : []), Buffer.from(n, "utf8")]);
+function encodeLikeOriginal(sample, text) {
+  if (sample[0] === 255 && sample[1] === 254)
+    return Buffer.concat([Buffer.from([255, 254]), Buffer.from(text, "utf16le")]);
+  let hasBom = sample[0] === 239 && sample[1] === 187 && sample[2] === 191;
+  return Buffer.concat([...(hasBom ? [Buffer.from([239, 187, 191])] : []), Buffer.from(text, "utf8")]);
 }
 //@ chunk-8wvtd8sr.js:313449-313768 placement
 /**
@@ -354,129 +355,130 @@ function sameTurnEditFailedMessage(failedSameTurnEdit) {
 /**
  * 找出同一回复中先于本次发布、写同一文件且失败的 Edit/Write 调用对应的路径（之后成功的 Write 会覆盖），没有返回 null。
  */
-function findFailedSameTurnEdit(e, n) {
-  let sameTurnErroredToolUseIds = e.sameTurnErroredToolUseIds;
+function findFailedSameTurnEdit(context, paths) {
+  let sameTurnErroredToolUseIds = context.sameTurnErroredToolUseIds;
   if (sameTurnErroredToolUseIds === undefined || sameTurnErroredToolUseIds.size === 0) return null;
-  let r = new Map();
-  for (let h of e.sameTurnToolUses ?? [])
-    for (let y of h.message.content) {
+  let failedByPath = new Map();
+  for (let message of context.sameTurnToolUses ?? [])
+    for (let block of message.message.content) {
       if (
-        y.type !== "tool_use" ||
-        (y.name !== FILE_EDIT_TOOL_NAME && y.name !== FILE_WRITE_TOOL_NAME) ||
-        !isPlainObject(y.input)
+        block.type !== "tool_use" ||
+        (block.name !== FILE_EDIT_TOOL_NAME && block.name !== FILE_WRITE_TOOL_NAME) ||
+        !isPlainObject(block.input)
       )
         continue;
-      let p = y.input.file_path ?? y.input.path ?? y.input.file;
-      let w = typeof p === "string" ? expandPathOrNull(p) : null;
-      if (w === null || !n.includes(w)) continue;
-      if (sameTurnErroredToolUseIds.has(y.id)) r.set(w, true);
-      else if (y.name === FILE_WRITE_TOOL_NAME) r.set(w, false);
+      let rawPath = block.input.file_path ?? block.input.path ?? block.input.file;
+      let absolutePath = typeof rawPath === "string" ? expandPathOrNull(rawPath) : null;
+      if (absolutePath === null || !paths.includes(absolutePath)) continue;
+      if (sameTurnErroredToolUseIds.has(block.id)) failedByPath.set(absolutePath, true);
+      else if (block.name === FILE_WRITE_TOOL_NAME) failedByPath.set(absolutePath, false);
     }
-  return n.find((h) => r.get(h) === true) ?? null;
+  return paths.find((path) => failedByPath.get(path) === true) ?? null;
 }
 //@ chunk-8wvtd8sr.js:352268-352363 placement
 /**
  * 在拒绝消息后追加写说明，并给出遥测类别（默认 write_denied）。
  */
-function denyWithWriteNote(e, sad = "write_denied") {
+function denyWithWriteNote(decision, sad = "write_denied") {
   return {
     kind: "deny",
     decision: {
-      ...e,
-      message: e.message + NOTHING_PUBLISHED_NOTE,
+      ...decision,
+      message: decision.message + NOTHING_PUBLISHED_NOTE,
     },
     sad,
   };
 }
 //@ chunk-8wvtd8sr.js:352363-354927 placement
-async function checkPublishEditPermission(filePath, toolPermissionContext, context, r) {
-  let h = encodeControlChars(filePath);
+async function checkPublishEditPermission(filePath, toolPermissionContext, context, memoryPaths) {
+  let shownPath = encodeControlChars(filePath);
   let denyRuleForTool = getDenyRuleForTool(toolPermissionContext, FileEditTool);
   if (denyRuleForTool !== null)
     return denyWithWriteNote({
       behavior: "deny",
-      message: `Permission to edit ${h} has been denied, so it can't be published with edits.`,
+      message: `Permission to edit ${shownPath} has been denied, so it can't be published with edits.`,
       decisionReason: {
         type: "rule",
         rule: denyRuleForTool,
       },
     });
-  let p = {
+  let probeInput = {
     file_path: filePath,
     old_string: "a",
     new_string: "b",
     replace_all: false,
   };
-  let w = walkPermissionCheckPaths(filePath);
-  let tool = checkWritePermissionForTool(FileEditTool, p, toolPermissionContext, w);
-  if (tool.behavior === "deny") return denyWithWriteNote(tool);
-  let S = leafSymlinkWriteRefusal(filePath, w);
-  if (S !== null) return denyWithWriteNote(S);
-  if (w.spellings.some(isClaudeSettingsPath))
+  let walked = walkPermissionCheckPaths(filePath);
+  let writePermission = checkWritePermissionForTool(FileEditTool, probeInput, toolPermissionContext, walked);
+  if (writePermission.behavior === "deny") return denyWithWriteNote(writePermission);
+  let symlinkRefusal = leafSymlinkWriteRefusal(filePath, walked);
+  if (symlinkRefusal !== null) return denyWithWriteNote(symlinkRefusal);
+  if (walked.spellings.some(isClaudeSettingsPath))
     return denyWithWriteNote({
       behavior: "deny",
-      message: `Refusing to apply edits to ${h}: it is a Claude Code settings file. Edit it with Edit, then publish it without edits.`,
+      message: `Refusing to apply edits to ${shownPath}: it is a Claude Code settings file. Edit it with Edit, then publish it without edits.`,
       decisionReason: {
         type: "other",
         reason: "Claude Code settings file",
       },
     });
-  let R;
+  let stats;
   try {
-    R = await lstat(filePath);
+    stats = await lstat(filePath);
   } catch (error) {
     return denyWithWriteNote({
       behavior: "deny",
-      message: `Refusing to apply edits to ${h}: the file could not be examined (${getErrnoCode(error) ?? "error"}). Edit the file, then publish it without edits.`,
+      message: `Refusing to apply edits to ${shownPath}: the file could not be examined (${getErrnoCode(error) ?? "error"}). Edit the file, then publish it without edits.`,
       decisionReason: {
         type: "other",
         reason: "Write target not examined",
       },
     });
   }
-  if (!R.isFile())
+  if (!stats.isFile())
     return denyWithWriteNote({
       behavior: "deny",
-      message: `Refusing to apply edits to ${h}: it is not a regular file.`,
+      message: `Refusing to apply edits to ${shownPath}: it is not a regular file.`,
       decisionReason: {
         type: "other",
         reason: "Write target not a file",
       },
     });
-  if (R.nlink > 1)
+  if (stats.nlink > 1)
     return denyWithWriteNote({
       behavior: "deny",
-      message: `Refusing to apply edits to ${h}: the file has other names on disk (a hard link), and writing it in place would change them all. Edit the file, then publish it without edits.`,
+      message: `Refusing to apply edits to ${shownPath}: the file has other names on disk (a hard link), and writing it in place would change them all. Edit the file, then publish it without edits.`,
       decisionReason: {
         type: "other",
         reason: "Write target is a hard link",
       },
     });
-  if (isPerforceReadOnlyFile(R.mode))
+  if (isPerforceReadOnlyFile(stats.mode))
     return denyWithWriteNote({
       behavior: "deny",
-      message: `Refusing to apply edits to ${h}: ${PERFORCE_READ_ONLY_MESSAGE}`,
+      message: `Refusing to apply edits to ${shownPath}: ${PERFORCE_READ_ONLY_MESSAGE}`,
       decisionReason: {
         type: "other",
         reason: "Write target read-only",
       },
     });
-  let T = context === undefined ? null : checkWorktreeIsolation_2(filePath, context);
-  if (T !== null)
+  let isolationProblem = context === undefined ? null : checkWorktreeIsolation_2(filePath, context);
+  if (isolationProblem !== null)
     return denyWithWriteNote({
       behavior: "deny",
-      message: `Refusing to apply edits to ${h}: ${T}`,
+      message: `Refusing to apply edits to ${shownPath}: ${isolationProblem}`,
       decisionReason: {
         type: "other",
         reason: "Outside worktree isolation",
       },
     });
-  for (let L of r) {
-    let V = secretWarning(filePath, L) ?? lintMemoryFilePath(filePath, L, "interactive");
-    if (V !== null)
+  for (let memoryPath of memoryPaths) {
+    let memoryWarning =
+      secretWarning(filePath, memoryPath) ?? lintMemoryFilePath(filePath, memoryPath, "interactive");
+    if (memoryWarning !== null)
       return denyWithWriteNote({
         behavior: "deny",
-        message: `Refusing to apply edits to ${h}: ${V}`,
+        message: `Refusing to apply edits to ${shownPath}: ${memoryWarning}`,
         decisionReason: {
           type: "other",
           reason: "Memory file write check",
@@ -486,18 +488,22 @@ async function checkPublishEditPermission(filePath, toolPermissionContext, conte
   if (context !== undefined && hasEditPreToolHook(filePath, context))
     return denyWithWriteNote({
       behavior: "deny",
-      message: `Refusing to apply edits to ${h}: a hook is configured for file edits in this session, so a publish can't apply edits here. Edit the file, then publish it without edits.`,
+      message: `Refusing to apply edits to ${shownPath}: a hook is configured for file edits in this session, so a publish can't apply edits here. Edit the file, then publish it without edits.`,
       decisionReason: {
         type: "other",
         reason: "PreToolUse hook for file edits",
       },
     });
-  let fileEditPermissionOutcome = getFileEditPermissionOutcome(tool, toolPermissionContext, context);
+  let fileEditPermissionOutcome = getFileEditPermissionOutcome(
+    writePermission,
+    toolPermissionContext,
+    context,
+  );
   if (fileEditPermissionOutcome.kind === "unseen")
     return denyWithWriteNote(
       {
         behavior: "deny",
-        message: `Refusing to apply edits to ${h}: the automatic permission check that decides this publish cannot see the edits. Make the change with Edit, then publish the file without edits.`,
+        message: `Refusing to apply edits to ${shownPath}: the automatic permission check that decides this publish cannot see the edits. Make the change with Edit, then publish the file without edits.`,
         decisionReason: {
           type: "other",
           reason: "Automatic check cannot see the edits",
@@ -511,10 +517,11 @@ async function checkPublishEditPermission(filePath, toolPermissionContext, conte
 /**
  * 判断发布内嵌 edits 的询问能否交给自动模式分类器处理（安全检查可批准、工作目录类，或模型支持）。
  */
-function editAskClassifierRoutable(e, n, context) {
-  if (!isArbiterRole(getAutoModeClassifierRole(n.mode))) return false;
-  if (e?.type === "safetyCheck") return e.classifierApprovable || isClassifierRoutedCircuitBreaker(e);
-  if (e?.type === "workingDir") return true;
+function editAskClassifierRoutable(reason, toolPermissionContext, context) {
+  if (!isArbiterRole(getAutoModeClassifierRole(toolPermissionContext.mode))) return false;
+  if (reason?.type === "safetyCheck")
+    return reason.classifierApprovable || isClassifierRoutedCircuitBreaker(reason);
+  if (reason?.type === "workingDir") return true;
   if (context === undefined) return true;
   let mainLoopModel = getMainLoopModel(context);
   return classifyEditsEnabled(mainLoopModel) || shouldClassifyEdits(mainLoopModel);
@@ -523,20 +530,20 @@ function editAskClassifierRoutable(e, n, context) {
 /**
  * 判断在自动模式下对该文件的 Edit 是否会无需用户查看就放行（用于决定内嵌 edits 是否需要询问）。
  */
-function editWouldBeUnseen(e, toolPermissionContext, context) {
+function editWouldBeUnseen(filePath, toolPermissionContext, context) {
   if (!isArbiterRole(getAutoModeClassifierRole(toolPermissionContext.mode))) return false;
   if (getDenyRuleForTool(toolPermissionContext, FileEditTool) !== null) return false;
-  let r = walkPermissionCheckPaths(e);
+  let walked = walkPermissionCheckPaths(filePath);
   let tool = checkWritePermissionForTool(
     FileEditTool,
     {
-      file_path: e,
+      file_path: filePath,
       old_string: "a",
       new_string: "b",
       replace_all: false,
     },
     toolPermissionContext,
-    r,
+    walked,
   );
   return (
     tool.behavior !== "deny" &&
@@ -547,38 +554,42 @@ function editWouldBeUnseen(e, toolPermissionContext, context) {
 /**
  * 判断是否有会作用于该文件 Edit/Write 的 PreToolUse hook（含会话 hook 与 hooks 模块），用于决定发布内嵌 edits 时是否需要走 hook。
  */
-function hasEditPreToolHook(filePath, n) {
-  let sessionId = registerAgent(n, "PreToolUse", n.session.id);
-  let r = (toolName, toolInput) =>
+function hasEditPreToolHook(filePath, context) {
+  let sessionId = registerAgent(context, "PreToolUse", context.session.id);
+  let hookMatches = (toolName, toolInput) =>
     hasToolHookMatching({
       hookEvent: "PreToolUse",
       toolName,
       toolInput,
-      tools: n.options.tools,
-      toolAliases: n.options.toolAliases,
-      sessionHooks: n.sessionHooksRegistry,
+      tools: context.options.tools,
+      toolAliases: context.options.toolAliases,
+      sessionHooks: context.sessionHooksRegistry,
       sessionId,
       exceptInternal: true,
     });
   return (
-    r(FileEditTool.name, {
+    hookMatches(FileEditTool.name, {
       file_path: filePath,
       old_string: "",
       new_string: "",
     }) ||
-    r(FILE_WRITE_TOOL_NAME, {
+    hookMatches(FILE_WRITE_TOOL_NAME, {
       file_path: filePath,
       content: "",
     }) ||
-    hooksModuleMayCover(n, [FileEditTool.name, FILE_WRITE_TOOL_NAME])
+    hooksModuleMayCover(context, [FileEditTool.name, FILE_WRITE_TOOL_NAME])
   );
 }
 //@ chunk-8wvtd8sr.js:356238-356320 placement
 /**
  * 两类 errno：目标已消失（ELOOP/ENXIO/EISDIR）与不可写（EACCES/EPERM/EROFS）。
  */
-var GONE_ERRNOS = new Set(["ELOOP", "ENXIO", "EISDIR"]);
-var NOT_WRITABLE_ERRNOS = new Set(["EACCES", "EPERM", "EROFS"]);
+var GONE_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NOT_WRITABLE_ERRNOS;
+deferInit("chunk-8wvtd8sr.js:356238", () => {
+  GONE_ERRNOS = new Set(["ELOOP", "ENXIO", "EISDIR"]);
+  NOT_WRITABLE_ERRNOS = new Set(["EACCES", "EPERM", "EROFS"]);
+});
 //@ chunk-8wvtd8sr.js:356320-357363 placement
 /**
  * 把 edits 结果写回本地源文件：以读写方式打开，核对大小、inode 身份与内容哈希未变（否则 changed_during_publish），拒绝多硬链接，原地覆写并截断、fsync，返回 {kind, mtimeMs?}。
@@ -589,24 +600,24 @@ async function writeBackEditedFile(request) {
     let fileNoFollow = await openFileNoFollow(path, constants.O_RDWR | READ_LIMITS);
     if (!fileNoFollow.ok) {
       let { error } = fileNoFollow;
-      let S = error.kind === "fs" ? getErrnoCode(error.error) : error.kind;
-      if (error.kind === "absent" || (error.kind === "fs" && GONE_ERRNOS.has(S ?? "")))
+      let errnoCode = error.kind === "fs" ? getErrnoCode(error.error) : error.kind;
+      if (error.kind === "absent" || (error.kind === "fs" && GONE_ERRNOS.has(errnoCode ?? "")))
         return {
           kind: "changed_during_publish",
         };
-      if (error.kind === "fs" && NOT_WRITABLE_ERRNOS.has(S ?? ""))
+      if (error.kind === "fs" && NOT_WRITABLE_ERRNOS.has(errnoCode ?? ""))
         return {
           kind: "not_writable",
-          code: S,
+          code: errnoCode,
         };
       return {
         kind: "write_failed",
-        code: S,
+        code: errnoCode,
       };
     }
-    let w = fileNoFollow.value;
+    let handle = fileNoFollow.value;
     try {
-      let stats = await w.stat({
+      let stats = await handle.stat({
         bigint: true,
       });
       if (
@@ -617,7 +628,7 @@ async function writeBackEditedFile(request) {
         return {
           kind: "changed_during_publish",
         };
-      let exactBytes = await readExactBytes(w, read.size);
+      let exactBytes = await readExactBytes(handle, read.size);
       if (exactBytes === null || computeContentHash(exactBytes) !== read.sha256)
         return {
           kind: "changed_during_publish",
@@ -626,19 +637,19 @@ async function writeBackEditedFile(request) {
         return {
           kind: "hard_linked",
         };
-      let R = 0;
-      while (R < bytes.length) {
-        let { bytesWritten } = await w.write(bytes, R, bytes.length - R, R);
+      let offset = 0;
+      while (offset < bytes.length) {
+        let { bytesWritten } = await handle.write(bytes, offset, bytes.length - offset, offset);
         if (bytesWritten <= 0)
           return {
             kind: "write_failed",
             code: "short_write",
           };
-        R += bytesWritten;
+        offset += bytesWritten;
       }
-      await w.truncate(bytes.length);
-      await w.sync().catch(() => {});
-      let stats_2 = await w.stat();
+      await handle.truncate(bytes.length);
+      await handle.sync().catch(() => {});
+      let stats_2 = await handle.stat();
       onWritten?.(stats_2.mtimeMs);
       return {
         kind: "written",
@@ -650,7 +661,7 @@ async function writeBackEditedFile(request) {
         code: getErrnoCode(error),
       };
     } finally {
-      await w.close().catch(() => {});
+      await handle.close().catch(() => {});
     }
   });
 }
@@ -658,8 +669,13 @@ async function writeBackEditedFile(request) {
 /**
  * 为发布内嵌 edits 写回的文件记录文件历史检查点（失败只记调试日志）。
  */
-async function trackEditHistory(e, n, uuid) {
-  await fileHistoryTrackEdit(e.getFileHistoryState, e.applyFileHistoryOp, n, uuid).catch((error) => {
+async function trackEditHistory(toolUseContext, filePath, uuid) {
+  await fileHistoryTrackEdit(
+    toolUseContext.getFileHistoryState,
+    toolUseContext.applyFileHistoryOp,
+    filePath,
+    uuid,
+  ).catch((error) => {
     logForDebugging(
       `Artifact edits write-back: file history checkpoint failed (${getErrnoCode(error) ?? "error"})`,
     );
@@ -669,17 +685,17 @@ async function trackEditHistory(e, n, uuid) {
 /**
  * 写回文件后更新 readFileState（新内容与时间戳，保留部分视图标记）。
  */
-function refreshReadFileState(e, n, s, r) {
-  let h = e.readFileState.get(n);
-  e.readFileState.set(n, {
-    content: stripBomAndCarriageReturn(s),
-    timestamp: Math.floor(r),
+function refreshReadFileState(toolUseContext, filePath, content, timestamp) {
+  let existing = toolUseContext.readFileState.get(filePath);
+  toolUseContext.readFileState.set(filePath, {
+    content: stripBomAndCarriageReturn(content),
+    timestamp: Math.floor(timestamp),
     offset: undefined,
     limit: undefined,
-    ...(h?.isPartialView === true && {
+    ...(existing?.isPartialView === true && {
       isPartialView: true,
     }),
-    ...(!hasFullFileContent(h) && {
+    ...(!hasFullFileContent(existing) && {
       contentNotInModelContext: true,
     }),
   });
@@ -688,23 +704,23 @@ function refreshReadFileState(e, n, s, r) {
 /**
  * 发布内嵌 edits 改了文件后通知 LSP：清除该文件已送达/待送达的诊断，发送 change 与 save 通知，并记录文件修改。
  */
-function notifyLspOfEdit(e, n, s, r) {
+function notifyLspOfEdit(toolUseContext, filePath, oldContent, newContent) {
   let lspServerManager = getLspServerManager();
   if (lspServerManager) {
-    clearDeliveredDiagnosticsForFile(e.session, n);
-    clearPendingDiagnosticsForFile(e.session, n);
-    lspServerManager.changeFile(n, r).catch((error) => {
-      logForDebugging(`LSP: Failed to notify server of file change for ${n}: ${error.message}`, {
+    clearDeliveredDiagnosticsForFile(toolUseContext.session, filePath);
+    clearPendingDiagnosticsForFile(toolUseContext.session, filePath);
+    lspServerManager.changeFile(filePath, newContent).catch((error) => {
+      logForDebugging(`LSP: Failed to notify server of file change for ${filePath}: ${error.message}`, {
         level: "error",
       });
     });
-    lspServerManager.saveFile(n).catch((error) => {
-      logForDebugging(`LSP: Failed to notify server of file save for ${n}: ${error.message}`, {
+    lspServerManager.saveFile(filePath).catch((error) => {
+      logForDebugging(`LSP: Failed to notify server of file save for ${filePath}: ${error.message}`, {
         level: "error",
       });
     });
   }
-  lintMemoryWrite(n, s, r);
+  lintMemoryWrite(filePath, oldContent, newContent);
 }
 //@ chunk-8wvtd8sr.js:358086-358165 placement
 /**
@@ -717,13 +733,22 @@ function isRemoteDeviceMcpTool(tool) {
 /**
  * 可发布编辑模块对外暴露的注入槽（垫片、live 编辑、房间、处理器、提示词、quickstart 说明）。
  */
-var publishShimModule = null;
-var liveEditGateModule = null;
-var artifactRoomsModule = null;
-var artifactHandlersModuleSlot = null;
-var handlersPromptModule = null;
-var canonicalHandlerTargetModule = null;
-var quickstartNotesModule = require("./chunk-chsmq3nc.js");
+var publishShimModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+var liveEditGateModule;
+var artifactRoomsModule;
+var artifactHandlersModuleSlot;
+var handlersPromptModule;
+var canonicalHandlerTargetModule;
+var quickstartNotesModule;
+deferInit("chunk-8wvtd8sr.js:358165", () => {
+  publishShimModule = null;
+  liveEditGateModule = null;
+  artifactRoomsModule = null;
+  artifactHandlersModuleSlot = null;
+  handlersPromptModule = null;
+  canonicalHandlerTargetModule = null;
+  quickstartNotesModule = require("../../services/artifacts/quickstartNotes.js");
+});
 export {
   editAskClassifierRoutable,
   coerceNumberString,

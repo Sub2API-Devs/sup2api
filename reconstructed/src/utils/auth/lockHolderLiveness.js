@@ -21,14 +21,18 @@ import { logForDebugging } from "../debug.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { sleep } from "../sleep.js";
-import { string, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../env.js";
 import { registerCleanup } from "../cleanupRegistry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:314332-314368 placement
-var lockHolderSocketSlot = new HostScoped(() => ({
-  socket: undefined,
-}));
+var lockHolderSocketSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:314332", () => {
+  lockHolderSocketSlot = new HostScoped(() => ({
+    socket: undefined,
+  }));
+});
 //@ chunk-aepeg2w5.js:314663-314708 placement
 /**
  * 清空锁持有者对应的 socket 记录。
@@ -45,8 +49,8 @@ async function noopAsync() {}
 /**
  * 取标识末尾 20 个字符（用于日志）。
  */
-function tailOfId(e) {
-  return e.trim().slice(-20);
+function tailOfId(key) {
+  return key.trim().slice(-20);
 }
 //@ chunk-aepeg2w5.js:315082-315093 placement
 /**
@@ -57,43 +61,43 @@ var KILL_GROUP_TIMEOUT_MS = 500;
 /**
  * 杀死进程组（返回被杀 pid）。
  */
-function killProcessGroup(pid, n = "SIGKILL") {
+function killProcessGroup(pid, signal = "SIGKILL") {
   if (!Number.isInteger(pid) || pid <= 1) return Promise.resolve(new Set());
-  return killGroupAndDescendants(pid, n).catch(() => new Set());
+  return killGroupAndDescendants(pid, signal).catch(() => new Set());
 }
 //@ chunk-aepeg2w5.js:315216-315408 placement
-async function killGroupAndDescendants(e, n) {
-  let r = await listDescendantPids(e);
+async function killGroupAndDescendants(pid, signal) {
+  let descendants = await listDescendantPids(pid);
   try {
-    process.kill(-e, n);
+    process.kill(-pid, signal);
   } catch (error) {
     try {
-      process.kill(e, n);
+      process.kill(pid, signal);
     } catch {}
     if (getErrnoCode(error) !== "ESRCH") logKillError("group_kill", error);
   }
-  for (let s of r)
+  for (let childPid of descendants)
     try {
-      process.kill(s, n);
+      process.kill(childPid, signal);
     } catch {}
-  return r;
+  return descendants;
 }
 //@ chunk-aepeg2w5.js:315579-315775 placement
 /**
  * 进程启动时间未变时才发送信号。
  */
-async function killIfUnchanged(e, n) {
-  if (e.size === 0) return;
-  let r;
-  r = new Map();
-  for (let key of e.keys()) {
+async function killIfUnchanged(processes, signal) {
+  if (processes.size === 0) return;
+  let currentStarts;
+  currentStarts = new Map();
+  for (let key of processes.keys()) {
     let processStartTokenLinux = getProcessStartTokenLinuxSync(key);
-    if (processStartTokenLinux !== undefined) r.set(key, processStartTokenLinux);
+    if (processStartTokenLinux !== undefined) currentStarts.set(key, processStartTokenLinux);
   }
-  for (let [s, h] of e) {
-    if (r.get(s) !== h) continue;
+  for (let [pid, startToken] of processes) {
+    if (currentStarts.get(pid) !== startToken) continue;
     try {
-      process.kill(s, n);
+      process.kill(pid, signal);
     } catch {}
   }
 }
@@ -101,9 +105,9 @@ async function killIfUnchanged(e, n) {
 /**
  * 用 ps 读取进程启动时间。
  */
-async function readProcessStartTimes(e) {
-  let n = new Map();
-  let { stdout } = await execFileNoThrowWithCwd("ps", ["-o", "pid=", "-o", "lstart=", "-p", e.join(",")], {
+async function readProcessStartTimes(pids) {
+  let starts = new Map();
+  let { stdout } = await execFileNoThrowWithCwd("ps", ["-o", "pid=", "-o", "lstart=", "-p", pids.join(",")], {
     timeout: KILL_GROUP_TIMEOUT_MS,
     cwd: "/",
     env: {
@@ -117,27 +121,27 @@ async function readProcessStartTimes(e) {
   for (let line of stdout.split(`
 `)) {
     let match = line.match(/^\s*(\d+)\s+(\S.*\S)\s*$/);
-    if (match) n.set(Number(match[1]), match[2]);
+    if (match) starts.set(Number(match[1]), match[2]);
   }
-  return n;
+  return starts;
 }
 //@ chunk-aepeg2w5.js:316101-316826 placement
 /**
  * 列出进程的后代（可限定同会话）。
  */
 async function listDescendantPids(
-  e,
-  { sameSession: n } = {
+  pid,
+  { sameSession } = {
     sameSession: false,
   },
 ) {
   if (isDisklessSession()) return new Set();
-  let r;
+  let tableText;
   try {
-    r = await Promise.race([
-      readProcessTable(n),
+    tableText = await Promise.race([
+      readProcessTable(sameSession),
       new Promise((resolve) => {
-        let timer = setTimeout((P) => P(""), KILL_GROUP_TIMEOUT_MS, resolve);
+        let timer = setTimeout((resolve) => resolve(""), KILL_GROUP_TIMEOUT_MS, resolve);
         if (typeof timer === "object") timer.unref();
       }),
     ]);
@@ -145,43 +149,49 @@ async function listDescendantPids(
     logKillError("enum_spawn", error);
     return new Set();
   }
-  let s = new Map();
-  let h = new Map();
-  for (let line of r.split(`
+  let childrenByParent = new Map();
+  let sessionByPid = new Map();
+  for (let line of tableText.split(`
 `)) {
     let match = line.match(/^\s*(\d+)\s+(\d+)(?:\s+(\S+))?\s*$/);
     if (!match) continue;
-    let P = Number(match[1]);
-    let F = Number(match[2]);
-    if (match[3] !== undefined) h.set(P, match[3]);
-    let L = s.get(F);
-    if (L) L.push(P);
-    else s.set(F, [P]);
+    let childPid = Number(match[1]);
+    let parentPid = Number(match[2]);
+    if (match[3] !== undefined) sessionByPid.set(childPid, match[3]);
+    let children = childrenByParent.get(parentPid);
+    if (children) children.push(childPid);
+    else childrenByParent.set(parentPid, [childPid]);
   }
-  let y = h.get(e);
-  if (n && (y === undefined || new Set(h.values()).size < 2)) return new Set();
-  let S = new Set();
-  let w = [e];
-  while (w.length > 0) {
-    let R = w.shift();
-    for (let x of s.get(R) ?? [])
-      if (x > 1 && x !== e && x !== process.pid && !S.has(x) && (!n || h.get(x) === y)) {
-        S.add(x);
-        w.push(x);
+  let rootSession = sessionByPid.get(pid);
+  if (sameSession && (rootSession === undefined || new Set(sessionByPid.values()).size < 2)) return new Set();
+  let found = new Set();
+  let queue = [pid];
+  while (queue.length > 0) {
+    let current = queue.shift();
+    for (let childPid of childrenByParent.get(current) ?? [])
+      if (
+        childPid > 1 &&
+        childPid !== pid &&
+        childPid !== process.pid &&
+        !found.has(childPid) &&
+        (!sameSession || sessionByPid.get(childPid) === rootSession)
+      ) {
+        found.add(childPid);
+        queue.push(childPid);
       }
   }
-  return S;
+  return found;
 }
 //@ chunk-aepeg2w5.js:316826-317137 placement
 /**
  * 用 ps 读取 pid/ppid/会话表。
  */
-function readProcessTable(e) {
+function readProcessTable(sameSession) {
   return new Promise((resolve, reject) => {
-    let s;
+    let child;
     try {
-      let y = e ? ["-o", getPlatform() === "macos" ? "sess=" : "sid="] : [];
-      s = spawn("ps", ["-A", "-o", "pid=", "-o", "ppid=", ...y], {
+      let sessionArgs = sameSession ? ["-o", getPlatform() === "macos" ? "sess=" : "sid="] : [];
+      child = spawn("ps", ["-A", "-o", "pid=", "-o", "ppid=", ...sessionArgs], {
         cwd: "/",
         stdio: ["ignore", "pipe", "ignore"],
         windowsHide: true,
@@ -190,22 +200,22 @@ function readProcessTable(e) {
       reject(error);
       return;
     }
-    let h = "";
-    s.stdout?.on("data", (y) => (h += y));
-    s.once("error", reject);
-    s.once("close", () => resolve(h));
+    let output = "";
+    child.stdout?.on("data", (chunk) => (output += chunk));
+    child.once("error", reject);
+    child.once("close", () => resolve(output));
   });
 }
 //@ chunk-aepeg2w5.js:317137-317293 placement
-function logKillError(e, error) {
+function logKillError(stage, error) {
   try {
     let errnoCode = getErrnoCode(error);
-    let s = sanitizeErrnoForTelemetry(error);
-    logForDebugging(`killProcessTree ${e} failed: ${errnoCode ?? error}`);
+    let errnoToken = sanitizeErrnoForTelemetry(error);
+    logForDebugging(`killProcessTree ${stage} failed: ${errnoCode ?? error}`);
     logEvent("tengu_bash_tool_kill_error", {
-      stage: fromEnum(e),
-      ...(s && {
-        error_code: s,
+      stage: fromEnum(stage),
+      ...(errnoToken && {
+        error_code: errnoToken,
       }),
     });
   } catch {}
@@ -214,23 +224,28 @@ function logKillError(e, error) {
 /**
  * 用 Bun.ant.windowsProcessList 列出子进程。
  */
-function windowsChildProcesses(e) {
+function windowsChildProcesses(parentPid) {
   if (typeof Bun === "undefined" || typeof Bun.ant?.windowsProcessList !== "function") return;
   try {
-    let n = Bun.ant.windowsProcessList();
-    if (n === null) return;
-    let windowsProcessCreationTime = getWindowsProcessCreationTime(e);
-    let s = [];
-    for (let { pid, ppid, name: S } of n) {
-      if (ppid !== e) continue;
-      let w = windowsProcessCreationTime === undefined ? undefined : getWindowsProcessCreationTime(pid);
-      if (windowsProcessCreationTime === undefined || w === undefined || w >= windowsProcessCreationTime)
-        s.push({
+    let processes = Bun.ant.windowsProcessList();
+    if (processes === null) return;
+    let windowsProcessCreationTime = getWindowsProcessCreationTime(parentPid);
+    let children = [];
+    for (let { pid, ppid, name } of processes) {
+      if (ppid !== parentPid) continue;
+      let childStart =
+        windowsProcessCreationTime === undefined ? undefined : getWindowsProcessCreationTime(pid);
+      if (
+        windowsProcessCreationTime === undefined ||
+        childStart === undefined ||
+        childStart >= windowsProcessCreationTime
+      )
+        children.push({
           pid,
-          name: S,
+          name,
         });
     }
-    return s;
+    return children;
   } catch (error) {
     logForDebugging(`[win32-process-tree] toolhelp walk failed: ${error}`, {
       level: "error",
@@ -249,21 +264,21 @@ var TRANSIENT_WINDOWS_PIDS = 4;
  */
 function windowsProcessTree() {
   if (typeof Bun === "undefined" || typeof Bun.ant?.windowsProcessList !== "function") return;
-  let e;
+  let processes;
   try {
-    e = Bun.ant.windowsProcessList();
+    processes = Bun.ant.windowsProcessList();
   } catch (error) {
     logForDebugging(`[win32-process-tree] toolhelp walk failed: ${error}`, {
       level: "error",
     });
     return;
   }
-  if (e === null) return;
-  let mapped = e.map(({ pid, name: s }) => ({
+  if (processes === null) return;
+  let mapped = processes.map(({ pid, name }) => ({
     pid,
-    name: s,
+    name,
   }));
-  return [process.pid, TRANSIENT_WINDOWS_PIDS].every((r) => mapped.some(({ pid }) => pid === r))
+  return [process.pid, TRANSIENT_WINDOWS_PIDS].every((pid) => mapped.some(({ pid: pid_2 }) => pid_2 === pid))
     ? mapped
     : undefined;
 }
@@ -271,64 +286,72 @@ function windowsProcessTree() {
 /**
  * 用 PowerShell/CIM 列出子进程。
  */
-async function powershellChildProcesses(e, n, timeout) {
-  let s = await execFileNoThrowWithCwd(
-    n,
+async function powershellChildProcesses(parentPid, powershellPath, timeout) {
+  let result = await execFileNoThrowWithCwd(
+    powershellPath,
     [
       "-NoProfile",
       "-NonInteractive",
       "-OutputFormat",
       "Text",
       "-Command",
-      `$parent = Get-CimInstance Win32_Process -Filter 'ProcessId=${e}'; Get-CimInstance Win32_Process -Filter 'ParentProcessId=${e}' | Where-Object { $null -eq $parent -or $_.CreationDate -ge $parent.CreationDate } | ForEach-Object { [string]$_.ProcessId + '=' + $_.Name }`,
+      `$parent = Get-CimInstance Win32_Process -Filter 'ProcessId=${parentPid}'; Get-CimInstance Win32_Process -Filter 'ParentProcessId=${parentPid}' | Where-Object { $null -eq $parent -or $_.CreationDate -ge $parent.CreationDate } | ForEach-Object { [string]$_.ProcessId + '=' + $_.Name }`,
     ],
     {
       timeout,
     },
   );
-  if (s.code !== 0) return;
-  let h = [];
-  for (let line of s.stdout.split(/\r?\n/)) {
+  if (result.code !== 0) return;
+  let children = [];
+  for (let line of result.stdout.split(/\r?\n/)) {
     let match = /^(\d+)=(.+)$/.exec(line.trim());
     if (match)
-      h.push({
+      children.push({
         pid: Number(match[1]),
         name: match[2],
       });
   }
-  return h;
+  return children;
 }
 //@ chunk-aepeg2w5.js:318597-318924 placement
 /**
  * 等待 Windows 上出现指定名字的子进程。
  */
-async function waitForWindowsChild(e, n, { powershellPath, timeoutMs = 2000, pollMs = 50 }) {
-  if (getPlatform() !== "windows" || !Number.isInteger(e) || e <= 0) return;
-  let lower = n.toLowerCase();
-  let S = Date.now() + timeoutMs;
+async function waitForWindowsChild(
+  parentPid,
+  processName,
+  { powershellPath, timeoutMs = 2000, pollMs = 50 },
+) {
+  if (getPlatform() !== "windows" || !Number.isInteger(parentPid) || parentPid <= 0) return;
+  let lower = processName.toLowerCase();
+  let deadline = Date.now() + timeoutMs;
   for (;;) {
     let found = (
-      windowsChildProcesses(e) ??
-      (await powershellChildProcesses(e, powershellPath, Math.max(pollMs, S - Date.now())))
-    )?.find((x) => x.name.toLowerCase() === lower);
+      windowsChildProcesses(parentPid) ??
+      (await powershellChildProcesses(parentPid, powershellPath, Math.max(pollMs, deadline - Date.now())))
+    )?.find((childProcess) => childProcess.name.toLowerCase() === lower);
     if (found !== undefined) return found.pid;
-    if (Date.now() + pollMs >= S) return;
+    if (Date.now() + pollMs >= deadline) return;
     await sleep(pollMs);
   }
 }
 //@ chunk-aepeg2w5.js:318924-319056 placement
-var WINDOWS_SHELL_EXES = new Set([
-  "cmd.exe",
-  "powershell.exe",
-  "pwsh.exe",
-  "bash.exe",
-  "sh.exe",
-  "python.exe",
-  "pythonw.exe",
-  "aws.exe",
-  "node.exe",
-]);
-var WINDOWS_PROCESS_LIST_TIMEOUT_MS = 1500;
+var WINDOWS_SHELL_EXES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WINDOWS_PROCESS_LIST_TIMEOUT_MS;
+deferInit("chunk-aepeg2w5.js:318924", () => {
+  WINDOWS_SHELL_EXES = new Set([
+    "cmd.exe",
+    "powershell.exe",
+    "pwsh.exe",
+    "bash.exe",
+    "sh.exe",
+    "python.exe",
+    "pythonw.exe",
+    "aws.exe",
+    "node.exe",
+  ]);
+  WINDOWS_PROCESS_LIST_TIMEOUT_MS = 1500;
+});
 //@ chunk-aepeg2w5.js:319056-319830 placement
 /**
  * 带超时与中止的操作封装。
@@ -341,8 +364,8 @@ class TimedOperation {
   #o = () => void this.#i("abort");
   #s;
   #a;
-  constructor(e, { timeoutMs, signal }) {
-    this.#t = e;
+  constructor(child, { timeoutMs, signal }) {
+    this.#t = child;
     this.#r = signal;
     this.#a = registerCleanup(() => this.#i("shutdown"));
     this.#s = setTimeout(() => void this.#i("timeout"), timeoutMs);
@@ -360,11 +383,11 @@ class TimedOperation {
     this.#a();
     this.#r?.removeEventListener("abort", this.#o);
   }
-  #i(e) {
-    return (this.#e ??= this.#u(e));
+  #i(reason) {
+    return (this.#e ??= this.#u(reason));
   }
-  async #u(e) {
-    this.#n = e;
+  async #u(reason) {
+    this.#n = reason;
     this.#t.stdout?.destroy();
     this.#t.stderr?.destroy();
     let pid = this.#t.pid;
@@ -385,23 +408,23 @@ class TimedOperation {
   }
 }
 //@ chunk-aepeg2w5.js:319830-319951 placement
-async function terminateProcessTree(e, pid) {
-  let r = await listDescendantProcesses(pid);
-  for (let s of r.reverse())
+async function terminateProcessTree(child, pid) {
+  let descendants = await listDescendantProcesses(pid);
+  for (let pid of descendants.reverse())
     try {
-      process.kill(s, "SIGTERM");
+      process.kill(pid, "SIGTERM");
     } catch {}
-  e.kill("SIGTERM");
+  child.kill("SIGTERM");
 }
 //@ chunk-aepeg2w5.js:319951-320035 placement
 /**
  * 列出全部后代进程（Windows 与其他平台分别处理）。
  */
-async function listDescendantProcesses(e) {
+async function listDescendantProcesses(pid) {
   return getPlatform() === "windows"
-    ? windowsDescendants(e)
+    ? windowsDescendants(pid)
     : [
-        ...(await listDescendantPids(e, {
+        ...(await listDescendantPids(pid, {
           sameSession: true,
         })),
       ];
@@ -410,23 +433,35 @@ async function listDescendantProcesses(e) {
 /**
  * Windows 上列出全部后代进程。
  */
-async function windowsDescendants(e) {
-  let n = Date.now() + WINDOWS_PROCESS_LIST_TIMEOUT_MS;
-  let r = join(env.SYSTEMROOT || "C:\\Windows", "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
-  let s = new Set();
-  let h = [e];
-  while (h.length > 0) {
-    let timeout = n - Date.now();
+async function windowsDescendants(rootPid) {
+  let deadline = Date.now() + WINDOWS_PROCESS_LIST_TIMEOUT_MS;
+  let powershellPath = join(
+    env.SYSTEMROOT || "C:\\Windows",
+    "System32",
+    "WindowsPowerShell",
+    "v1.0",
+    "powershell.exe",
+  );
+  let found = new Set();
+  let queue = [rootPid];
+  while (queue.length > 0) {
+    let timeout = deadline - Date.now();
     if (timeout <= 0) break;
-    let S = h.shift();
-    let w = windowsChildProcesses(S) ?? (await powershellChildProcesses(S, r, timeout));
-    for (let { pid, name: x } of w ?? [])
-      if (WINDOWS_SHELL_EXES.has(x.toLowerCase()) && pid !== e && pid !== process.pid && !s.has(pid)) {
-        s.add(pid);
-        h.push(pid);
+    let current = queue.shift();
+    let children =
+      windowsChildProcesses(current) ?? (await powershellChildProcesses(current, powershellPath, timeout));
+    for (let { pid, name } of children ?? [])
+      if (
+        WINDOWS_SHELL_EXES.has(name.toLowerCase()) &&
+        pid !== rootPid &&
+        pid !== process.pid &&
+        !found.has(pid)
+      ) {
+        found.add(pid);
+        queue.push(pid);
       }
   }
-  return [...s];
+  return [...found];
 }
 export {
   tailOfId,

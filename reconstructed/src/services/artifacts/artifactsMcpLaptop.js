@@ -43,7 +43,7 @@ import { registerCliOwnedConfig, isCliOwnedConfig } from "../mcp/cliOwnedClients
 import { OAUTH_BETA_HEADER } from "../../constants/oauth.js";
 import { BLOCKED_TOOL_POLICY } from "../mcp/blockedServers.js";
 import { artifactsMcpInCloudSession } from "./artifactsMcpTools.js";
-import { wS } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { buildFrameHeaders } from "./frameApi.js";
 import { FRAME_CLIENT_HEADERS } from "./artifactMcpWire.js";
 import { isByocEnvironment } from "../../utils/remoteEnvironment.js";
@@ -104,9 +104,9 @@ var ACCEPTED_ERROR_CODES = new Set([
 /**
  * 遥测失败不影响调用
  */
-function safelyRecordAnalytics(e) {
+function safelyRecordAnalytics(event) {
   try {
-    e();
+    event();
   } catch (error) {
     logError(
       withTelemetryMessage(
@@ -120,70 +120,75 @@ function safelyRecordAnalytics(e) {
 /**
  * 包装发布动作并记遥测
  */
-async function withPublishAnalytics(toolName, r, o, s) {
-  if (!ARTIFACT_ACTIONS.has(toolName)) return s();
-  let p = toolName === "create_from_type";
-  let u = () => ({
-    is_redeploy: !isCreateAction(toolName, r()),
+async function withPublishAnalytics(actionName, getInput, call, context) {
+  if (!ARTIFACT_ACTIONS.has(actionName)) return context();
+  let isCreateFromType = actionName === "create_from_type";
+  let baseFields = () => ({
+    is_redeploy: !isCreateAction(actionName, getInput()),
     ...LAPTOP_PUBLISH_ANALYTICS,
   });
-  let d;
+  let result;
   try {
-    d = await s();
+    result = await context();
   } catch (error) {
     safelyRecordAnalytics(() => {
-      if (o()) return;
-      let _ = error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS;
-      let y = !_
+      if (call()) return;
+      let isToolCallError = error instanceof McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS;
+      let statusText = !isToolCallError
         ? undefined
         : error.message === "not found"
           ? "404"
           : /^[a-z_]+ failed \(HTTP (\d{3})\): /m.exec(error.message)?.[1];
-      let h = y === undefined ? undefined : Number(y);
-      if (p) {
-        if (!_) logFeatureBad("artifact_create_from_type", "request_error", LAPTOP_PUBLISH_ANALYTICS);
-        else if (h === undefined)
+      let statusCode = statusText === undefined ? undefined : Number(statusText);
+      if (isCreateFromType) {
+        if (!isToolCallError)
+          logFeatureBad("artifact_create_from_type", "request_error", LAPTOP_PUBLISH_ANALYTICS);
+        else if (statusCode === undefined)
           logFeatureBad("artifact_create_from_type", "mcp_tool_error", LAPTOP_PUBLISH_ANALYTICS);
         else
           logFeatureBad(
             "artifact_create_from_type",
-            h === 404 ? "not_found" : h === 403 ? "denied" : `status_${h}`,
+            statusCode === 404 ? "not_found" : statusCode === 403 ? "denied" : `status_${statusCode}`,
             {
-              status: h,
+              status: statusCode,
               ...LAPTOP_PUBLISH_ANALYTICS,
             },
           );
         return;
       }
-      let S = u();
+      let fields = baseFields();
       if (error instanceof McpToolFileInputRejectedError)
         logFeatureBad(
           "artifact_publish",
           ACCEPTED_ERROR_CODES.has(error.code) || error.code.startsWith("model_")
             ? `attach_refused_${error.code}`
             : `attach_failed_${error.code}`,
-          S,
+          fields,
         );
-      else if (!_) logFeatureBad("artifact_publish", "request_error", S);
-      else if (h === undefined) logFeatureBad("artifact_publish", "deploy_failed", S);
+      else if (!isToolCallError) logFeatureBad("artifact_publish", "request_error", fields);
+      else if (statusCode === undefined) logFeatureBad("artifact_publish", "deploy_failed", fields);
       else
         logFeatureBad(
           "artifact_publish",
-          h === 403 ? "publish_denied" : h === 404 && S.is_redeploy ? "slug_gone" : "deploy_failed",
+          statusCode === 403
+            ? "publish_denied"
+            : statusCode === 404 && fields.is_redeploy
+              ? "slug_gone"
+              : "deploy_failed",
           {
-            ...S,
-            deploy_status: h,
+            ...fields,
+            deploy_status: statusCode,
           },
         );
     });
     throw error;
   }
   safelyRecordAnalytics(() => {
-    if (publishedArtifactFromResult(d.data) === null) return;
-    if (p) logFeatureOk("artifact_create_from_type", LAPTOP_PUBLISH_ANALYTICS);
-    else logFeatureOk("artifact_publish", u());
+    if (publishedArtifactFromResult(result.data) === null) return;
+    if (isCreateFromType) logFeatureOk("artifact_create_from_type", LAPTOP_PUBLISH_ANALYTICS);
+    else logFeatureOk("artifact_publish", baseFields());
   });
-  return d;
+  return result;
 }
 //@ chunk-g62cc56z.js:3142-3306 placement
 /**
@@ -205,19 +210,19 @@ function laptopStates() {
   return artifactsMcpLaptopStates.of(getRootSession().host);
 }
 //@ chunk-g62cc56z.js:3343-3561 placement
-function buildArtifactsMcpLaptopEntry(e) {
-  let laptopEntry = buildLaptopEntry(e, null);
-  let o = laptopStates();
-  o.laterBuild = {
+function buildArtifactsMcpLaptopEntry(entry) {
+  let laptopEntry = buildLaptopEntry(entry, null);
+  let states = laptopStates();
+  states.laterBuild = {
     kind: "closed",
   };
   if (laptopEntry.skip === undefined) return laptopEntry.entry;
   if (LAPTOP_SKIP_SILENT_REASONS.has(laptopEntry.skip)) {
-    o.laterBuild = {
+    states.laterBuild = {
       kind: "waiting",
       startup: laptopEntry,
     };
-    o.loginsCompleted = {
+    states.loginsCompleted = {
       count: 0,
       account: currentAccountKey(),
     };
@@ -226,22 +231,22 @@ function buildArtifactsMcpLaptopEntry(e) {
   return null;
 }
 //@ chunk-g62cc56z.js:3561-4036 placement
-function buildArtifactsMcpLaptopEntryAfterStart(e) {
-  let r = laptopStates();
-  let { laterBuild } = r;
+function buildArtifactsMcpLaptopEntryAfterStart(entry) {
+  let states = laptopStates();
+  let { laterBuild } = states;
   if (laterBuild.kind === "closed") return null;
   if (!isArtifactsMcpLaptopLoginCompleted()) return "waiting";
-  let laptopEntry = buildLaptopEntry(e, laterBuild.kind === "built" ? laterBuild.entry : null);
+  let laptopEntry = buildLaptopEntry(entry, laterBuild.kind === "built" ? laterBuild.entry : null);
   if (laptopEntry.skip !== undefined && LAPTOP_SKIP_SILENT_REASONS.has(laptopEntry.skip)) return "waiting";
   if (laterBuild.kind === "built") return laptopEntry.entry ?? null;
   if (laptopEntry.skip !== undefined) {
-    r.laterBuild = {
+    states.laterBuild = {
       kind: "closed",
     };
     logLaptopEntrySkip(laptopEntry, true);
     return null;
   }
-  r.laterBuild = {
+  states.laterBuild = {
     kind: "built",
     entry: laptopEntry.entry,
   };
@@ -252,18 +257,18 @@ function buildArtifactsMcpLaptopEntryAfterStart(e) {
   return laptopEntry.entry;
 }
 //@ chunk-g62cc56z.js:4036-4160 placement
-function noteLoginsCompletedForArtifactsMcpLaptopEntry(loginCompleted, r) {
-  let o = laptopStates();
-  if (loginCompleted > o.loginsCompleted.count)
-    o.loginsCompleted = {
+function noteLoginsCompletedForArtifactsMcpLaptopEntry(loginCompleted, login) {
+  let states = laptopStates();
+  if (loginCompleted > states.loginsCompleted.count)
+    states.loginsCompleted = {
       count: loginCompleted,
-      account: r === "as_it_completed" ? currentAccountKey() : null,
+      account: login === "as_it_completed" ? currentAccountKey() : null,
     };
 }
 //@ chunk-g62cc56z.js:4160-4234 placement
 function isArtifactsMcpLaptopLoginCompleted() {
-  let e = currentAccountKey();
-  return e !== null && e === laptopStates().loginsCompleted.account;
+  let accountKey = currentAccountKey();
+  return accountKey !== null && accountKey === laptopStates().loginsCompleted.account;
 }
 //@ chunk-g62cc56z.js:4234-4287 placement
 function mayBuildArtifactsMcpLaptopEntryAfterStart() {
@@ -289,9 +294,10 @@ function currentAccountKey() {
  * 记录未加入 Artifacts MCP 服务的原因
  */
 function logLaptopEntrySkip({ skip, part, agentCloudSession }, afterStart) {
-  let p = part === "growthbook_off" ? "feature_flag_off" : part;
+  let mapped = part === "growthbook_off" ? "feature_flag_off" : part;
   switch (
-    (logForDebugging(`Artifacts MCP server not added: ${skip}${p === undefined ? "" : ` (${p})`}`), skip)
+    (logForDebugging(`Artifacts MCP server not added: ${skip}${mapped === undefined ? "" : ` (${mapped})`}`),
+    skip)
   ) {
     case "threw":
     case "remote_session":
@@ -319,35 +325,41 @@ function logLaptopEntrySkip({ skip, part, agentCloudSession }, afterStart) {
 /**
  * 构造本机 Artifacts MCP 服务条目或给出跳过原因
  */
-function buildLaptopEntry({ toolPermissionContext, configuredNames, fixedServerSet, allowedByPolicy }, p) {
+function buildLaptopEntry(
+  { toolPermissionContext, configuredNames, fixedServerSet, allowedByPolicy },
+  permissionContext,
+) {
   try {
-    let u = laptopEntrySkipReason(toolPermissionContext, configuredNames, fixedServerSet);
-    if (u.skip !== undefined) return u;
-    if (u.stubDir !== undefined) {
-      let _ = {
-        ...buildSelfStdioServerConfig(u.stubDir, getEvalReadRoots(getOriginalCwd(), toolPermissionContext)),
+    let skipReason = laptopEntrySkipReason(toolPermissionContext, configuredNames, fixedServerSet);
+    if (skipReason.skip !== undefined) return skipReason;
+    if (skipReason.stubDir !== undefined) {
+      let config = {
+        ...buildSelfStdioServerConfig(
+          skipReason.stubDir,
+          getEvalReadRoots(getOriginalCwd(), toolPermissionContext),
+        ),
         scope: "dynamic",
       };
-      if (!allowedByPolicy(CLAUDE_ARTIFACTS, _))
+      if (!allowedByPolicy(CLAUDE_ARTIFACTS, config))
         return {
           skip: "org_mcp_policy",
         };
-      if (p !== null)
+      if (permissionContext !== null)
         return {
-          entry: p,
+          entry: permissionContext,
         };
-      let y = registerCliOwnedConfig(_);
-      laptopStates().built.add(y);
+      let registered = registerCliOwnedConfig(config);
+      laptopStates().built.add(registered);
       return {
         entry: {
           name: CLAUDE_ARTIFACTS,
-          config: y,
+          config: registered,
         },
       };
     }
-    let d = {
+    let config2 = {
       type: "http",
-      url: u.url,
+      url: skipReason.url,
       headers: {
         "anthropic-beta": OAUTH_BETA_HEADER,
       },
@@ -356,31 +368,31 @@ function buildLaptopEntry({ toolPermissionContext, configuredNames, fixedServerS
         ...BLOCKED_TOOL_POLICY,
       },
     };
-    if (!allowedByPolicy(CLAUDE_ARTIFACTS, d))
+    if (!allowedByPolicy(CLAUDE_ARTIFACTS, config2))
       return {
         skip: "org_mcp_policy",
       };
-    if (p !== null)
+    if (permissionContext !== null)
       return {
-        entry: p,
+        entry: permissionContext,
       };
-    let n = registerCliOwnedConfig(d, {
+    let registered2 = registerCliOwnedConfig(config2, {
       firstPartyServer: {
         id: ARTIFACTS_SERVER_ID,
-        allowsFileUpload: () => !isArtifactToolBlocked() && allowedByPolicy(CLAUDE_ARTIFACTS, d),
+        allowsFileUpload: () => !isArtifactToolBlocked() && allowedByPolicy(CLAUDE_ARTIFACTS, config2),
       },
       resolveBearerToken: resolveLaptopBearer,
       withheldBearerRefusal: artifactsMcpInCloudSession()
         ? "Artifacts request not sent: this session can no longer use Artifacts. A permission rule or policy stops it, or its own token no longer works."
         : "Artifacts request not sent: this session can no longer use Artifacts with its login. In a terminal, check /login, /permissions and /config.",
-      requestHeaders: () => wS(buildFrameHeaders(), FRAME_CLIENT_HEADERS),
+      requestHeaders: () => pickAlias(buildFrameHeaders(), FRAME_CLIENT_HEADERS),
     });
-    laptopStates().built.add(n);
+    laptopStates().built.add(registered2);
     emitArtifactStartupTelemetry(() => logFeatureOk("artifact_mcp_laptop_entry"));
     return {
       entry: {
         name: CLAUDE_ARTIFACTS,
-        config: n,
+        config: registered2,
       },
     };
   } catch {
@@ -399,10 +411,10 @@ function laptopEntrySkipReason(toolPermissionContext, configuredNames, fixedServ
     return {
       skip: "remote_session",
     };
-  let s = artifactsMcpInCloudSession();
-  if (s) {
-    let _ = require("./chunk-qqpq16dc.js");
-    if (_.relayIsOnlyRoute() || !_.agentSessionMaySendDirect())
+  let cloudSession = artifactsMcpInCloudSession();
+  if (cloudSession) {
+    let mod = require("./frameRelay.js");
+    if (mod.relayIsOnlyRoute() || !mod.agentSessionMaySendDirect())
       return {
         skip: "remote_session",
       };
@@ -419,12 +431,12 @@ function laptopEntrySkipReason(toolPermissionContext, configuredNames, fixedServ
     return {
       skip: "managed_or_strict_mcp_config",
       part: fixedServerSet,
-      agentCloudSession: s,
+      agentCloudSession: cloudSession,
     };
   if (isBareMode() || isCustomizationDisabled("mcpAutoDiscovered"))
     return {
       skip: "safe_or_bare_mode",
-      agentCloudSession: s,
+      agentCloudSession: cloudSession,
     };
   if (!isArtifactToolEnabled())
     return {
@@ -432,7 +444,7 @@ function laptopEntrySkipReason(toolPermissionContext, configuredNames, fixedServ
       part: hasAnyGatewayCredential()
         ? (artifactToolWithholdingGate() ?? (isArtifactAdminAllowed() ? "not_found" : "admin_policy"))
         : "login",
-      agentCloudSession: s,
+      agentCloudSession: cloudSession,
     };
   let denyRules = getDenyRules(toolPermissionContext);
   if (
@@ -456,7 +468,7 @@ function laptopEntrySkipReason(toolPermissionContext, configuredNames, fixedServ
         ) === null
           ? "tools_list"
           : "deny_rule",
-      agentCloudSession: s,
+      agentCloudSession: cloudSession,
     };
   let artifactPublishStubDir = getArtifactPublishStubDir();
   if (artifactPublishStubDir !== null)
@@ -467,10 +479,10 @@ function laptopEntrySkipReason(toolPermissionContext, configuredNames, fixedServ
       : {
           stubDir: artifactPublishStubDir,
         };
-  let d = policyDenyKind("allow_cobalt_plinth");
-  if (d !== null)
+  let denyKind = policyDenyKind("allow_cobalt_plinth");
+  if (denyKind !== null)
     return {
-      skip: `org_policy_${d}`,
+      skip: `org_policy_${denyKind}`,
     };
   if (!hasApiClient())
     return {
@@ -480,22 +492,22 @@ function laptopEntrySkipReason(toolPermissionContext, configuredNames, fixedServ
     return {
       skip: "dev_frame_override",
     };
-  let n;
+  let reason;
   try {
-    n = new URL(frameBaseUrl());
+    reason = new URL(frameBaseUrl());
   } catch {
     return {
       skip: "base_not_first_party",
     };
   }
   if (
-    n.protocol !== "https:" ||
-    n.username !== "" ||
-    n.password !== "" ||
-    n.pathname !== "/" ||
-    n.search !== "" ||
-    n.hash !== "" ||
-    !isFirstPartyAnthropicHost(n.href)
+    reason.protocol !== "https:" ||
+    reason.username !== "" ||
+    reason.password !== "" ||
+    reason.pathname !== "/" ||
+    reason.search !== "" ||
+    reason.hash !== "" ||
+    !isFirstPartyAnthropicHost(reason.href)
   )
     return {
       skip: "base_not_first_party",
@@ -505,16 +517,18 @@ function laptopEntrySkipReason(toolPermissionContext, configuredNames, fixedServ
       skip: "name_taken",
     };
   return {
-    url: new URL(ARTIFACTS_MCP_PATH, n.origin).href,
+    url: new URL(ARTIFACTS_MCP_PATH, reason.origin).href,
   };
 }
 //@ chunk-g62cc56z.js:7485-7563 placement
-function isArtifactsMcpLaptopEntry(e) {
-  return typeof e === "object" && e !== null && laptopStates().built.has(e) && isCliOwnedConfig(e);
+function isArtifactsMcpLaptopEntry(entry) {
+  return (
+    typeof entry === "object" && entry !== null && laptopStates().built.has(entry) && isCliOwnedConfig(entry)
+  );
 }
 //@ chunk-g62cc56z.js:7563-7640 placement
-function artifactsMcpLaptopToolOverridesFor(e) {
-  if (!isArtifactsMcpLaptopEntry(e)) return {};
+function artifactsMcpLaptopToolOverridesFor(entry) {
+  if (!isArtifactsMcpLaptopEntry(entry)) return {};
   return {
     skipAggregateToolResultBudget: true,
   };
@@ -523,138 +537,150 @@ function artifactsMcpLaptopToolOverridesFor(e) {
 /**
  * 本机 Artifacts MCP 服务条目：决定是否添加、包装发布动作并记遥测。
  */
-function wrapArtifactsMcpLaptopPublishing(e, r) {
-  let toolName = r.mcpInfo?.toolName;
+function wrapArtifactsMcpLaptopPublishing(entry, tool) {
+  let toolName = tool.mcpInfo?.toolName;
   if (
     toolName === undefined ||
     !(ARTIFACT_ACTIONS.has(toolName) || toolName === DELETE_ARTIFACT) ||
-    !(isArtifactsMcpLaptopEntry(e) || isOwnCcrMcpServer(e))
+    !(isArtifactsMcpLaptopEntry(entry) || isOwnCcrMcpServer(entry))
   )
     return;
   if (ARTIFACT_ACTIONS.has(toolName))
-    Object.assign(r, {
+    Object.assign(tool, {
       preserveToolUseResultInSubagents: true,
     });
-  let s = r.call;
-  r.call = async (p, u, d, n, _, y) => {
+  let originalCall = tool.call;
+  tool.call = async (input, context, canUseTool, message, onProgress, extra) => {
     let liveState = getLiveState();
     let { accountEpoch, conversationEpoch } = liveState;
-    let A = await withPublishAnalytics(
+    let result = await withPublishAnalytics(
       toolName,
       () => {
-        let content = n?.message?.content;
-        let C = Array.isArray(content)
-          ? content.find((O) => O.type === "tool_use" && O.id === u.toolUseId)
+        let content = message?.message?.content;
+        let toolContent = Array.isArray(content)
+          ? content.find((block) => block.type === "tool_use" && block.id === context.toolUseId)
           : undefined;
-        return C?.type === "tool_use" ? C.input : p;
+        return toolContent?.type === "tool_use" ? toolContent.input : input;
       },
-      () => u.abortController.signal.aborted,
-      () => s.call(r, p, u, d, n, _, y),
+      () => context.abortController.signal.aborted,
+      () => originalCall.call(tool, input, context, canUseTool, message, onProgress, extra),
     );
     if (toolName === DELETE_ARTIFACT) {
       try {
-        let k = deletedSlugFromResult(A.data);
-        if (k !== null && isPlainObject(p) && p.slug === k)
-          lazyWritersSlot.loaded()?.forgetArtifactDeletedThroughMcp(u, k);
+        let deletedSlug = deletedSlugFromResult(result.data);
+        if (deletedSlug !== null && isPlainObject(input) && input.slug === deletedSlug)
+          lazyWritersSlot.loaded()?.forgetArtifactDeletedThroughMcp(context, deletedSlug);
       } catch (error) {
         logFeatureBad("artifact_mcp_laptop_publish_row", "forget_threw");
         logError(error);
       }
-      return A;
+      return result;
     }
     let liveState_2 = getLiveState();
     if (liveState_2.accountEpoch !== accountEpoch || liveState_2.conversationEpoch !== conversationEpoch)
-      return A;
-    let T;
+      return result;
+    let publishResult;
     try {
-      T = publishedArtifactFromResult(A.data);
+      publishResult = publishedArtifactFromResult(result.data);
     } catch (error) {
       logFeatureBad("artifact_mcp_laptop_publish_row", "threw");
       logError(error);
-      return A;
+      return result;
     }
-    if (T === null) {
+    if (publishResult === null) {
       logFeatureSad("artifact_mcp_laptop_publish_row", "unlisted");
-      return A;
+      return result;
     }
-    let I = isArtifactsMcpLaptopEntry(e);
-    recordOwnPublishedSlug(u, T, toolName, p, I, shareFieldsFromResult(A.data).read === "owner");
-    if (!I) return A;
+    let isLaptopEntry = isArtifactsMcpLaptopEntry(entry);
+    recordOwnPublishedSlug(
+      context,
+      publishResult,
+      toolName,
+      input,
+      isLaptopEntry,
+      shareFieldsFromResult(result.data).read === "owner",
+    );
+    if (!isLaptopEntry) return result;
     let arm = writersArmSlot.arm;
     if (arm === null) {
       logFeatureSad("artifact_mcp_laptop_publish_row", "no_wake_arm");
-      return A;
+      return result;
     }
-    let M = false;
+    let alreadyRecorded = false;
     try {
-      let { version, ...C } = T;
-      M = arm(u, toolName === "create_from_type" ? C : T);
+      let { version, ...withoutVersion } = publishResult;
+      alreadyRecorded = arm(context, toolName === "create_from_type" ? withoutVersion : publishResult);
     } catch (error) {
       logFeatureBad("artifact_mcp_laptop_publish_row", "wake_threw");
       logError(error);
     }
-    return M !== false && Array.isArray(A.data)
+    return alreadyRecorded !== false && Array.isArray(result.data)
       ? {
-          ...A,
+          ...result,
           data: [
-            ...A.data,
+            ...result.data,
             {
               type: "text",
-              text: WAKE_LINES[M],
+              text: WAKE_LINES[alreadyRecorded],
             },
           ],
         }
-      : A;
+      : result;
   };
 }
 //@ chunk-g62cc56z.js:8926-9697 placement
 /**
  * 记录本会话发布的 artifact
  */
-function recordOwnPublishedSlug(e, r, toolName, s, p, u) {
+function recordOwnPublishedSlug(context, result, actionName, input, toolUseId, isCreate) {
   try {
     let ownPublishedSlugs = getLiveState().ownPublishedSlugs;
-    let n = ownPublishedSlugs.get(r.slug);
-    if (!u && n !== undefined)
-      ownPublishedSlugs.set(r.slug, {
-        env: n.env,
+    let existing = ownPublishedSlugs.get(result.slug);
+    if (!isCreate && existing !== undefined)
+      ownPublishedSlugs.set(result.slug, {
+        env: existing.env,
       });
     if (
-      p &&
-      u &&
-      toolName !== "create_from_type" &&
-      toolName !== "copy_file" &&
-      !isDelegatedObservationContext(e.agentContext) &&
-      isStrictHumanTurn(e.messages)
+      toolUseId &&
+      isCreate &&
+      actionName !== "create_from_type" &&
+      actionName !== "copy_file" &&
+      !isDelegatedObservationContext(context.agentContext) &&
+      isStrictHumanTurn(context.messages)
     )
-      ownPublishedSlugs.set(r.slug, {
-        env: r.env,
+      ownPublishedSlugs.set(result.slug, {
+        env: result.env,
         byPerson: true,
       });
-    let _ = isCreateAction(toolName, s);
-    if (_ && toolName !== "create_from_type" && p && !isDelegatedObservationContext(e.agentContext))
-      getLiveState().ownCreatedSlugs.set(r.slug, {
-        env: r.env,
+    let createAction = isCreateAction(actionName, input);
+    if (
+      createAction &&
+      actionName !== "create_from_type" &&
+      toolUseId &&
+      !isDelegatedObservationContext(context.agentContext)
+    )
+      getLiveState().ownCreatedSlugs.set(result.slug, {
+        env: result.env,
         wrotePage: true,
       });
-    let y = lazyWritersSlot.loaded();
-    if (y === null) {
+    let writers = lazyWritersSlot.loaded();
+    if (writers === null) {
       logFeatureSad("artifact_mcp_laptop_publish_row", "no_writer");
       return;
     }
-    let h = y.addOpenedFrameRow(e, r, r.title, {
+    let added = writers.addOpenedFrameRow(context, result, result.title, {
       mcpPublished: true,
     });
     logFeatureOk("artifact_mcp_laptop_publish_row");
-    y.surfacePublishedArtifact(
-      e,
-      y.derivePublishContext(e).hasInteractiveUI && e.agentId === undefined,
+    writers.surfacePublishedArtifact(
+      context,
+      writers.derivePublishContext(context).hasInteractiveUI && context.agentId === undefined,
       {
-        slug: r.slug,
-        url: artifactViewerUrlFor(r),
+        slug: result.slug,
+        url: artifactViewerUrlFor(result),
       },
-      !_,
-      (S) => y.markFrameOpenOutcome(e, h.rowKey, S),
+      !createAction,
+      (outcome) => writers.markFrameOpenOutcome(context, added.rowKey, outcome),
     );
   } catch (error) {
     logFeatureBad("artifact_mcp_laptop_publish_row", "threw");
@@ -688,7 +714,7 @@ function isArtifactToolBlocked() {
       {
         name: ARTIFACT_TOOL_NAME,
       },
-      loadAllPermissionRulesFromDisk().filter((e) => e.ruleBehavior === "deny"),
+      loadAllPermissionRulesFromDisk().filter((rule) => rule.ruleBehavior === "deny"),
     ) !== null
   );
 }
@@ -702,4 +728,12 @@ export {
   isArtifactsMcpLaptopLoginCompleted,
   buildArtifactsMcpLaptopEntryAfterStart,
   noteLoginsCompletedForArtifactsMcpLaptopEntry,
+  CLOUD_UNWOKEN_LINE,
+  CLOUD_WAKE_LINE,
+  LOCAL_WAKE_LINE,
+  artifactsMcpLaptopStates,
+  artifactsMcpLaptopToolOverridesFor,
+  buildArtifactsMcpLaptopEntry,
+  isArtifactsMcpLaptopEntry,
+  wrapArtifactsMcpLaptopPublishing,
 };

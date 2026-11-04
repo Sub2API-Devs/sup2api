@@ -54,7 +54,7 @@ import {
 import { readLauncherStartAtClaim } from "../utils/auth/launcherHostLogin.js";
 import { resetCoworkCloudCache, isCoworkCloudEntrypoint } from "../utils/settings/mdm/wslRegistry.js";
 import { readMdmSnapshot, replaceMdmSetting } from "../utils/settings/mdm/settings.js";
-import { setMdmReadOutcomes } from "../utils/settings/managedPluginTiers.js";
+import { setMdmReadOutcomes } from "../utils/settings/mdm/mdmLoader.js";
 import { resetDebugCaches, logForDebugging } from "../utils/debug.js";
 import { startupCcrEnv } from "../tasks/RemoteAgentTask/remoteAgentKinds.js";
 import { waitForSessionIngressToken } from "../cli/transports/sessionIngressToken.js";
@@ -74,75 +74,75 @@ import { BACKGROUND_ALLOWED_ENV_NAMES } from "../cli/forwardedFlags.js";
 /**
  * 从 socket 读取一次备用进程认领请求（JSON 行）。
  */
-function readSpareClaim(e, r, claimAuth) {
+function readSpareClaim(port, onListening, claimAuth) {
   return new Promise((resolve, reject) => {
-    let E = (error) => {
+    let fail = (error) => {
       server.close();
       reject(error);
     };
-    let server = createServer((o) => {
-      let c = "";
-      o.setEncoding("utf8");
-      o.on("data", (f) => {
-        c += f;
-        if (claimAuth && c.length > 8388608) {
-          o.destroy();
+    let server = createServer((request) => {
+      let body = "";
+      request.setEncoding("utf8");
+      request.on("data", (chunk) => {
+        body += chunk;
+        if (claimAuth && body.length > 8388608) {
+          request.destroy();
           return;
         }
-        let index = c.indexOf(`
+        let index = body.indexOf(`
 `);
         if (index < 0) return;
         if (claimAuth) {
-          let s;
+          let claim;
           try {
-            s = jsonParse(c.slice(0, index));
+            claim = jsonParse(body.slice(0, index));
           } catch {
-            s = undefined;
+            claim = undefined;
           }
-          if (!s || !timingSafeEqualStrings(s.auth, claimAuth)) {
-            o.destroy();
+          if (!claim || !timingSafeEqualStrings(claim.auth, claimAuth)) {
+            request.destroy();
             return;
           }
           server.close();
-          resolve(s);
+          resolve(claim);
           return;
         }
         server.close();
         try {
-          resolve(jsonParse(c.slice(0, index)));
+          resolve(jsonParse(body.slice(0, index)));
         } catch (error) {
           reject(error);
         }
       });
-      o.on("error", claimAuth ? () => o.destroy() : E);
+      request.on("error", claimAuth ? () => request.destroy() : fail);
     });
-    server.on("error", E);
-    if (r)
+    server.on("error", fail);
+    if (onListening)
       server.once("listening", () => {
         try {
-          r();
+          onListening();
         } catch (error) {
-          E(error);
+          fail(error);
         }
       });
-    server.listen(e);
+    server.listen(port);
   });
 }
 //@ chunk-snmzf59g.js:1787-3095 placement
 /**
  * 备用后台进程被认领时应用 cwd、会话 id、环境变量等并计时。
  */
-async function applySpareClaim(e, r, m) {
+async function applySpareClaim(claim, launchContext, claimAuth) {
   let startTime = performance.now();
-  let p = await canonicalizePath(e.cwd, undefined);
-  processChdir(p);
-  let E = {
-    originalCwd: p,
-    projectRoot: p,
-    cwd: p,
+  let claimedCwd = await canonicalizePath(claim.cwd, undefined);
+  processChdir(claimedCwd);
+  let projectContext = {
+    originalCwd: claimedCwd,
+    projectRoot: claimedCwd,
+    cwd: claimedCwd,
   };
-  if (e.sessionId) switchSession(identityAgentId(e.sessionId), "spare_claim", null, E);
-  else setSessionProject(E);
+  if (claim.sessionId) switchSession(identityAgentId(claim.sessionId), "spare_claim", null, projectContext);
+  else setSessionProject(projectContext);
   invalidateCommandNames();
   clearProjectPathForConfigCache();
   resetTrustDialogAcceptedCache();
@@ -151,8 +151,8 @@ async function applySpareClaim(e, r, m) {
   addStartupContext({
     warm_spare_claimed: 1,
   });
-  let n = isEnvTruthy(e.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST);
-  if (n) {
+  let isHostManaged = isEnvTruthy(claim.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST);
+  if (isHostManaged) {
     for (let key of Object.keys(process.env))
       if (
         (isProviderManagedEnvVar(key) ||
@@ -163,15 +163,15 @@ async function applySpareClaim(e, r, m) {
       )
         delete process.env[key];
   }
-  if (isRemoteLikeEnv(e.env)) purgeHostOwnedChromeVars();
+  if (isRemoteLikeEnv(claim.env)) purgeHostOwnedChromeVars();
   delete process.env.ANTHROPIC_AUTH_TOKEN;
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
   env.unset("CLAUDE_CODE_CONFIG_WATCH_EVENTS");
   env.unset("CLAUDE_BG_SOCK_ADMIT_SILENT_PEERS");
-  let { kept, dropped } = filterInvalidEnvEntries(e.env);
-  let f =
-    n &&
+  let { kept, dropped } = filterInvalidEnvEntries(claim.env);
+  let restoredEnv =
+    isHostManaged &&
     putBackTransport(
       launchViewAtClaim(getLatchedPreSettingsEnvSnapshot() ?? {}, Object.keys(kept), kept),
       isTraceOrCertEnvVar,
@@ -184,15 +184,15 @@ async function applySpareClaim(e, r, m) {
     replaceMdmSetting(mdm, hkcu, wslInherits, whereAsked);
     setMdmReadOutcomes(readOutcomes);
   }
-  process.argv = [process.argv[0], process.argv[1], ...e.argv];
+  process.argv = [process.argv[0], process.argv[1], ...claim.argv];
   invalidateCommandNames();
   resetDebugCaches();
   if (dropped.length > 0) warnUnappliedEnv(dropped);
-  m?.();
+  claimAuth?.();
   rechooseGlobalConfigFreshnessWatcher();
   startupCcrEnv.reset();
   let startTime_2 = performance.now();
-  await waitForSessionIngressToken(e.argv);
+  await waitForSessionIngressToken(claim.argv);
   recordPhase("spare_claim_token_file_wait_ms", performance.now() - startTime_2, startTime_2);
   resetFdCredentialState();
   resetEnvDerivedAuthCaches();
@@ -203,10 +203,10 @@ async function applySpareClaim(e, r, m) {
     preserveLoggedExposures: true,
   });
   resetUserData();
-  if (resetPreSettingsEnvSnapshotForClaim(Object.keys(kept), kept) || f) clearCACertsCache();
+  if (resetPreSettingsEnvSnapshotForClaim(Object.keys(kept), kept) || restoredEnv) clearCACertsCache();
   clearProxyCache();
   configureGlobalAgents();
-  let { main } = await r;
+  let { main } = await launchContext;
   recordPhase("spare_claim_apply_ms", performance.now() - startTime, startTime);
   await main();
 }
@@ -217,18 +217,18 @@ var SPARE_POOL_SIZE = 8;
  * 警告未能应用到后台会话的环境变量。
  */
 function warnUnappliedEnv(dropped) {
-  dropped.slice(0, SPARE_POOL_SIZE).forEach(({ name: r, problem }) => {
+  dropped.slice(0, SPARE_POOL_SIZE).forEach(({ name, problem }) => {
     logForDebugging(
-      `[bg-spare] environment variable ${describeEnvEntryName(r)} was not applied to this background session: ${ENV_ENTRY_PROBLEM_TEXT[problem]}. Programs it starts will not see it.`,
+      `[bg-spare] environment variable ${describeEnvEntryName(name)} was not applied to this background session: ${ENV_ENTRY_PROBLEM_TEXT[problem]}. Programs it starts will not see it.`,
       {
         level: "warn",
       },
     );
   });
   if (dropped.length > SPARE_POOL_SIZE) {
-    let r = dropped.length - SPARE_POOL_SIZE;
+    let omittedCount = dropped.length - SPARE_POOL_SIZE;
     logForDebugging(
-      `[bg-spare] \u2026and ${r} more environment ${plural(r, "variable was", "variables were")} not applied.`,
+      `[bg-spare] \u2026and ${omittedCount} more environment ${plural(omittedCount, "variable was", "variables were")} not applied.`,
       {
         level: "warn",
       },
@@ -236,10 +236,10 @@ function warnUnappliedEnv(dropped) {
   }
   logEvent("tengu_bg_claim_env_dropped", {
     dropped: dropped.length,
-    nul_in_value: count(dropped, (r) => r.problem === "nul-in-value"),
-    invalid_name: count(dropped, (r) => r.problem === "invalid-name"),
-    non_string_value: count(dropped, (r) => r.problem === "non-string-value"),
-    name_classes: fromEnumArr(uniq(dropped.map((r) => classifyEnvVar(r.name)))),
+    nul_in_value: count(dropped, (entry) => entry.problem === "nul-in-value"),
+    invalid_name: count(dropped, (entry) => entry.problem === "invalid-name"),
+    non_string_value: count(dropped, (entry) => entry.problem === "non-string-value"),
+    name_classes: fromEnumArr(uniq(dropped.map((entry) => classifyEnvVar(entry.name)))),
   });
 }
 //@ chunk-snmzf59g.js:3715-3993 placement

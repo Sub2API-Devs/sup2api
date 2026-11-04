@@ -14,6 +14,7 @@ import { persistsTransport, isBridgeEnvironment } from "../utils/remoteEnvironme
 import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
 import { toError } from "../utils/errors.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-zggwwdc2.js:409-874 placement
 /**
@@ -24,10 +25,10 @@ class TransportState {
   transportPersists = undefined;
   hostedWorker = false;
   hostOwnedLocalStdin = false;
-  setActive(r) {
-    this.active = r;
-    this.transportPersists = r?.persistsOutboundFrames;
-    this.hostedWorker = r?.isHostedWorker === true;
+  setActive(host) {
+    this.active = host;
+    this.transportPersists = host?.persistsOutboundFrames;
+    this.hostedWorker = host?.isHostedWorker === true;
     this.hostOwnedLocalStdin = false;
   }
   remoteBridgeLive = null;
@@ -37,17 +38,20 @@ class TransportState {
   markLocalTransport() {
     this.transportPersists = false;
   }
-  markHeadlessStart(r) {
-    this.hostOwnedLocalStdin = !r.sdkUrl && r.readsProcessStdin && !isRemoteRelayed();
+  markHeadlessStart(host) {
+    this.hostOwnedLocalStdin = !host.sdkUrl && host.readsProcessStdin && !isRemoteRelayed();
   }
 }
 //@ chunk-zggwwdc2.js:874-899 placement
-var transportStateByHost = new SessionRootSlot(() => new TransportState());
+var transportStateByHost; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-zggwwdc2.js:874", () => {
+  transportStateByHost = new SessionRootSlot(() => new TransportState());
+});
 //@ chunk-zggwwdc2.js:899-993 placement
-function isTransportBacked(r) {
+function isTransportBacked(host) {
   return persistsTransport({
-    hostedWorker: isHostedWorker(r),
-    transportPersists: transportStateByHost.of(r).transportPersists,
+    hostedWorker: isHostedWorker(host),
+    transportPersists: transportStateByHost.of(host).transportPersists,
   });
 }
 //@ chunk-zggwwdc2.js:993-1056 placement
@@ -55,54 +59,60 @@ function mayTransportPersist(session) {
   return isHostedWorker(session) || transportStateByHost.of(session).transportPersists !== false;
 }
 //@ chunk-zggwwdc2.js:1056-1159 placement
-function isLocalStdinOnly(r) {
-  let e = transportStateByHost.of(r);
-  return e.hostOwnedLocalStdin && e.transportPersists === false && !isHostedWorker(r) && !isRemoteRelayed();
+function isLocalStdinOnly(host) {
+  let state = transportStateByHost.of(host);
+  return (
+    state.hostOwnedLocalStdin &&
+    state.transportPersists === false &&
+    !isHostedWorker(host) &&
+    !isRemoteRelayed()
+  );
 }
 //@ chunk-zggwwdc2.js:1159-1220 placement
 function isPersistentVsCodeTransport(session) {
   return isBridgeEnvironment() && transportStateByHost.of(session).transportPersists === true;
 }
 //@ chunk-zggwwdc2.js:1220-1298 placement
-function isHostedWorker(r) {
-  return r.host.launchOptions.diskless() || transportStateByHost.of(r).hostedWorker;
+function isHostedWorker(host) {
+  return host.host.launchOptions.diskless() || transportStateByHost.of(host).hostedWorker;
 }
 //@ chunk-zggwwdc2.js:1298-1354 placement
 function isBridgeOrTransport(session) {
   return isTransportBacked(session) || transportStateByHost.of(session).bridgeMayBeLive();
 }
 //@ chunk-zggwwdc2.js:1354-1394 placement
-function statusesForTransport(r, e) {
-  return isTransportBacked(r) ? minimalStatuses(e) : e;
+function statusesForTransport(host, statuses) {
+  return isTransportBacked(host) ? minimalStatuses(statuses) : statuses;
 }
 //@ chunk-zggwwdc2.js:1394-1461 placement
-function minimalStatuses(r) {
-  return r.map((e) => ({
-    name: e.name,
-    status: e.status,
+function minimalStatuses(statuses) {
+  return statuses.map((status) => ({
+    name: status.name,
+    status: status.status,
   }));
 }
 //@ chunk-zggwwdc2.js:1461-1497 placement
-function emptyIfTransport(r, e) {
-  return isTransportBacked(r) ? [] : e;
+function emptyIfTransport(host, value) {
+  return isTransportBacked(host) ? [] : value;
 }
 //@ chunk-zggwwdc2.js:1497-1688 placement
-function orderForTransport(session, e, s, i = "last") {
+function orderForTransport(session, preferred, candidates, fallback = "last") {
   try {
-    if (!isTransportBacked(session)) return i === "first" ? [e, ...s] : [...s, e];
-    for (let o of s)
-      logForDebugging(`error_during_execution detail: ${o}`, {
+    if (!isTransportBacked(session))
+      return fallback === "first" ? [preferred, ...candidates] : [...candidates, preferred];
+    for (let candidate of candidates)
+      logForDebugging(`error_during_execution detail: ${candidate}`, {
         level: "error",
       });
-    return [e];
+    return [preferred];
   } catch (error) {
     logError(toError(error));
-    return [e];
+    return [preferred];
   }
 }
 //@ chunk-zggwwdc2.js:1688-1725 placement
-function pickForTransport(r, e, s) {
-  return isTransportBacked(r) ? s : e;
+function pickForTransport(host, items, fallback) {
+  return isTransportBacked(host) ? fallback : items;
 }
 export {
   transportStateByHost,

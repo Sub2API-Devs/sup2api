@@ -5,11 +5,11 @@
  * pieces: chunk-dxsqk077.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_fast_deep_equal } from "../../../fast-deep-equal/index.js";
 
 //@ chunk-dxsqk077.js:953-1101 cjs-fingerprint
-var require_equal = x(function (cjsExports) {
+var require_equal = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

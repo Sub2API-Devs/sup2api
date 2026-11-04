@@ -39,4 +39,4 @@ function registerWorkflowAuthoringSkill() {
     },
   });
 }
-export { renderWorkflowAuthoringSkillBody };
+export { renderWorkflowAuthoringSkillBody, registerWorkflowAuthoringSkill };

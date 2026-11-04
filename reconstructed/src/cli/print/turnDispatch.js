@@ -8,11 +8,12 @@
  * pieces: chunk-e6aww6q8.js (1), chunk-tyg7f3ek.js (6)
  * attribution: placement 7
  */
+import { count, uniq } from "../../utils/collections.js";
+import { canBatchWith } from "../print.js";
 import { hasTurnAttribution } from "./userFrameIntake.js";
 import { isPassiveOrAttachedCommand } from "../../utils/messages/messagePredicates.js";
 import { collectDeclaredPollEvents } from "../../utils/pollEvents.js";
 import { resolveTaskNotificationOrigin } from "../../utils/backgroundSessionResume.js";
-import { uniq, count } from "../../utils/collections.js";
 import { HeadlessHeapCensus, HeadlessUploadsCensus } from "./headlessCensus.js";
 import { cliError_2 } from "../exit.js";
 import { createAbortController, unwrapAbortReason, userAbortReason } from "../../utils/abortController.js";
@@ -33,9 +34,13 @@ import { areAttachmentFilesArriving, waitForAttachmentFiles } from "../../bridge
 import { isTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../../tools/ToolSearchTool/prompt.js";
 import { DoctorLazy } from "../handlers/util.js";
-import { looseObject, array, E, string } from "../../../vendor/zod/v4/classic/schemas.js";
-import { canBatchWith } from "../print.js";
+import { looseObject, array, numberSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:554048-554106 placement
+function hasBatchableQueuedPrompt(messageQueue) {
+  return count(messageQueue.getCommandQueueSnapshot(), canBatchWith);
+}
 //@ chunk-tyg7f3ek.js:256443-256543 placement
 function isBusy({ running, runPhase, mainThreadQueueLength }) {
   return (running && runPhase !== "waiting_for_agents") || mainThreadQueueLength > 0;
@@ -45,88 +50,101 @@ function isBusyOrClosed({ running, runPhase, inputClosed }) {
   return (running && runPhase !== "waiting_for_agents") || inputClosed;
 }
 //@ chunk-tyg7f3ek.js:256631-259614 placement
-function buildTurnDispatchInfo(e, n) {
-  let filtered = n
-    .flatMap((s) => [...(s.mergedSendUuids ?? []), ...(s.uuid !== undefined ? [s.uuid] : [])])
-    .filter((s) => s !== e.uuid);
+function buildTurnDispatchInfo(command, members) {
+  let filtered = members
+    .flatMap((member) => [
+      ...(member.mergedSendUuids ?? []),
+      ...(member.uuid !== undefined ? [member.uuid] : []),
+    ])
+    .filter((uuid) => uuid !== command.uuid);
   return {
-    uuid: e.uuid,
-    userMessageUuids: n.flatMap((s) => [
-      ...(s.isMeta ? [] : (s.mergedSendUuids ?? [])),
-      ...(s.sendsOfItsCompactedTurn ?? []),
-      ...(hasTurnAttribution(s)
-        ? [s.uuid]
-        : s.resumedTurnUserMessageUuid !== undefined
-          ? [s.resumedTurnUserMessageUuid]
+    uuid: command.uuid,
+    userMessageUuids: members.flatMap((member) => [
+      ...(member.isMeta ? [] : (member.mergedSendUuids ?? [])),
+      ...(member.sendsOfItsCompactedTurn ?? []),
+      ...(hasTurnAttribution(member)
+        ? [member.uuid]
+        : member.resumedTurnUserMessageUuid !== undefined
+          ? [member.resumedTurnUserMessageUuid]
           : []),
     ]),
     mergedSendUuids: filtered.length > 0 ? filtered : undefined,
-    alsoLeftToThisReRun: n.find((s) => s.alsoLeftToThisReRun !== undefined)?.alsoLeftToThisReRun,
-    resumedTurnOpenerUuid: n.find((s) => s.resumedTurnOpenerVouched === true)?.resumedTurnUserMessageUuid,
-    isMeta: e.isMeta,
-    resumeReason: n.find((s) => s.resumeReason !== undefined)?.resumeReason,
-    uuidIsClientEventUuid: (n.findLast((s) => s.uuid) ?? e).turnAttributionKey !== undefined,
-    shouldQuery: e.shouldQuery,
-    queryHeldForNextTurn: e.queryHeldForNextTurn,
-    skipAttachments: isPassiveOrAttachedCommand(e) || undefined,
-    pollEventDelivery: e.mode === "poll-event" || undefined,
-    pollEventProvenance: e.mode === "poll-event" ? [e.pollEvent?.provenance ?? null] : undefined,
-    pollEventDeclared: collectDeclaredPollEvents([e]),
+    alsoLeftToThisReRun: members.find((member) => member.alsoLeftToThisReRun !== undefined)
+      ?.alsoLeftToThisReRun,
+    resumedTurnOpenerUuid: members.find((member) => member.resumedTurnOpenerVouched === true)
+      ?.resumedTurnUserMessageUuid,
+    isMeta: command.isMeta,
+    resumeReason: members.find((member) => member.resumeReason !== undefined)?.resumeReason,
+    uuidIsClientEventUuid:
+      (members.findLast((member) => member.uuid) ?? command).turnAttributionKey !== undefined,
+    shouldQuery: command.shouldQuery,
+    queryHeldForNextTurn: command.queryHeldForNextTurn,
+    skipAttachments: isPassiveOrAttachedCommand(command) || undefined,
+    pollEventDelivery: command.mode === "poll-event" || undefined,
+    pollEventProvenance: command.mode === "poll-event" ? [command.pollEvent?.provenance ?? null] : undefined,
+    pollEventDeclared: collectDeclaredPollEvents([command]),
     ...false,
-    skipSkillPermissionReset: e.mode === "poll-event" || e.pollEmptyDispatch === true || undefined,
-    pollEmptyDispatch: e.pollEmptyDispatch === true || undefined,
-    skipSubmissionHooks: e.mode === "poll-event" || e.skipSubmissionHooks || undefined,
-    inputMode: e.mode === "bash" && e.clientBashCommand === true ? "bash" : undefined,
+    skipSkillPermissionReset:
+      command.mode === "poll-event" || command.pollEmptyDispatch === true || undefined,
+    pollEmptyDispatch: command.pollEmptyDispatch === true || undefined,
+    skipSubmissionHooks: command.mode === "poll-event" || command.skipSubmissionHooks || undefined,
+    inputMode: command.mode === "bash" && command.clientBashCommand === true ? "bash" : undefined,
     clientBashCommandCwd:
-      e.mode === "bash" && e.clientBashCommand === true ? e.clientBashCommandCwd : undefined,
-    stopHookActive: e.stopHookActive,
-    fileAttachments: e.fileAttachments,
-    inlinedImagePaths: e.inlinedImagePaths,
-    imageFileUuids: e.imageFileUuids,
-    savedFiles: n.flatMap((s) => s.savedFiles ?? []),
-    withdrawnFileUuids: n.flatMap((s) => s.withdrawnFileUuids ?? []),
-    stampThreadState: e.stampThreadState,
-    frameTiming: e.frameTiming,
-    skipSlashCommands: e.skipSlashCommands,
-    bridgeOrigin: e.bridgeOrigin,
-    localStdinOrigin: e.localStdinOrigin,
-    sessionChannelPersonTyped: e.sessionChannelPersonTyped,
-    ownWordUuids: n.filter((s) => s.ownWord === true).map((s) => s.uuid ?? s.stopKey),
-    hostInitiator: e.hostInitiator,
-    inboundOrigin: e.inboundOrigin,
-    toolsUsed: e.toolsUsed,
-    modelScheduledOrigin: e.modelScheduledOrigin,
-    wakeupSource: e.wakeupSource,
-    artifactCommentTurn: e.artifactCommentTurn,
-    origin: resolveTaskNotificationOrigin(e.origin, e.mode, e.runId),
-    clientPlatform: e.clientPlatform,
-    disallowedTools: uniq(n.flatMap((s) => s.disallowedTools ?? [])),
-    clientDisallowedTools: n.some((s) => s.replacesDisallowedTools)
-      ? uniq(n.flatMap((s) => (s.replacesDisallowedTools ? (s.disallowedTools ?? []) : [])))
+      command.mode === "bash" && command.clientBashCommand === true
+        ? command.clientBashCommandCwd
+        : undefined,
+    stopHookActive: command.stopHookActive,
+    fileAttachments: command.fileAttachments,
+    inlinedImagePaths: command.inlinedImagePaths,
+    imageFileUuids: command.imageFileUuids,
+    savedFiles: members.flatMap((member) => member.savedFiles ?? []),
+    withdrawnFileUuids: members.flatMap((member) => member.withdrawnFileUuids ?? []),
+    stampThreadState: command.stampThreadState,
+    frameTiming: command.frameTiming,
+    skipSlashCommands: command.skipSlashCommands,
+    bridgeOrigin: command.bridgeOrigin,
+    localStdinOrigin: command.localStdinOrigin,
+    sessionChannelPersonTyped: command.sessionChannelPersonTyped,
+    ownWordUuids: members
+      .filter((member) => member.ownWord === true)
+      .map((member) => member.uuid ?? member.stopKey),
+    hostInitiator: command.hostInitiator,
+    inboundOrigin: command.inboundOrigin,
+    toolsUsed: command.toolsUsed,
+    modelScheduledOrigin: command.modelScheduledOrigin,
+    wakeupSource: command.wakeupSource,
+    artifactCommentTurn: command.artifactCommentTurn,
+    origin: resolveTaskNotificationOrigin(command.origin, command.mode, command.runId),
+    clientPlatform: command.clientPlatform,
+    disallowedTools: uniq(members.flatMap((member) => member.disallowedTools ?? [])),
+    clientDisallowedTools: members.some((member) => member.replacesDisallowedTools)
+      ? uniq(
+          members.flatMap((member) => (member.replacesDisallowedTools ? (member.disallowedTools ?? []) : [])),
+        )
       : undefined,
     keepsDisallowedTools:
-      (n.length > 0 &&
-        n.every(
-          (s) =>
-            s.disallowedTools === undefined &&
-            (s.mode === "task-notification" ||
-              s.wakeupSource !== undefined ||
-              s.keepsDisallowedTools === true),
+      (members.length > 0 &&
+        members.every(
+          (member) =>
+            member.disallowedTools === undefined &&
+            (member.mode === "task-notification" ||
+              member.wakeupSource !== undefined ||
+              member.keepsDisallowedTools === true),
         )) ||
       undefined,
-    verifiedSlackHumanTurn: e.verifiedSlackHumanTurn,
-    projectsUserTurn: e.projectsUserTurn,
-    emailSenderTurn: e.emailSenderTurn,
-    textNotTyped: e.textNotTyped,
-    ownFilePaths: e.ownFilePaths,
-    noPersonArrived: e.noPersonArrived,
-    hearthRelayRows: e.hearthRelayRows,
-    hearthRelayThreadTs: e.hearthRelayThreadTs,
-    hearthRelayMessageIds: e.hearthRelayMessageIds,
-    taskDelivery: e.taskDelivery,
-    orphanedPermission: e.orphanedPermission,
-    handedOffTurn: e.handedOffTurn,
-    handedOffTurnUserMessageUuids: e.handedOffTurnUserMessageUuids,
+    verifiedSlackHumanTurn: command.verifiedSlackHumanTurn,
+    projectsUserTurn: command.projectsUserTurn,
+    emailSenderTurn: command.emailSenderTurn,
+    textNotTyped: command.textNotTyped,
+    ownFilePaths: command.ownFilePaths,
+    noPersonArrived: command.noPersonArrived,
+    hearthRelayRows: command.hearthRelayRows,
+    hearthRelayThreadTs: command.hearthRelayThreadTs,
+    hearthRelayMessageIds: command.hearthRelayMessageIds,
+    taskDelivery: command.taskDelivery,
+    orphanedPermission: command.orphanedPermission,
+    handedOffTurn: command.handedOffTurn,
+    handedOffTurnUserMessageUuids: command.handedOffTurnUserMessageUuids,
   };
 }
 //@ chunk-tyg7f3ek.js:259614-265770 placement
@@ -203,7 +221,7 @@ class TurnDispatcher {
     this.drainSdkEvents = drainSdkEvents;
     this.deferredToolUse = deferredToolUse;
     this.takeErrorRowBehind = takeErrorRowBehind;
-    this.inTurnScope = (ie, Se) => cliError_2(() => inTurnScope(ie, Se));
+    this.inTurnScope = (command, batch) => cliError_2(() => inTurnScope(command, batch));
     this.onTurnStart = onTurnStart;
     this.onFrame = onFrame;
     this.teeFrame = teeFrame;
@@ -212,130 +230,134 @@ class TurnDispatcher {
     this.afterTurnFinally = afterTurnFinally;
     this.pendingMcpServerCount = pendingMcpServerCount;
   }
-  arm(e) {
+  arm(batch) {
     let abortController = createAbortController();
-    let r = abortController.abort.bind(abortController);
-    abortController.abort = (s) => {
+    let abort = abortController.abort.bind(abortController);
+    abortController.abort = (reason) => {
       if (
         this.drain.abortController === abortController &&
-        unwrapAbortReason(s) === "remote-cancel" &&
+        unwrapAbortReason(reason) === "remote-cancel" &&
         !(this.drain.sendNowCutTurn && !abortController.signal.aborted)
       )
         this.drain.stopReachedTurn = true;
-      r(s);
+      abort(reason);
     };
     this.drain.abortController = abortController;
     this.drain.turnUnderWay = true;
     this.drain.stopReachedTurn = false;
     this.drain.sendNowCutTurn = false;
-    this.drain.noteTurnStarted(this.drain.intentBatchInFlight ? e.members : []);
+    this.drain.noteTurnStarted(this.drain.intentBatchInFlight ? batch.members : []);
     this.drain.pendingDispatchUuids = [];
     this.drain.pendingDispatchKeys = [];
-    if (this.prewaitLatch.consumeAtArm(e.members, this.drain.intentBatchInFlight))
+    if (this.prewaitLatch.consumeAtArm(batch.members, this.drain.intentBatchInFlight))
       abortController.abort(userAbortReason("remote-cancel"));
     return abortController;
   }
   async run({ batch, input, tools, intake, turnStartClock, inPlaceOfFirstRequest }) {
     let { command, members } = batch;
-    let w = {
+    let context = {
       command,
       members,
       input,
       refused: inPlaceOfFirstRequest !== undefined,
     };
-    let P = Symbol("headless turn");
-    let L;
+    let busyToken = Symbol("headless turn");
+    let aborted;
     let terminalReason;
     let result;
-    let G = false;
-    let Z = {
+    let promptCheckCut = false;
+    let putBack = {
       count: 0,
       uuids: new Set(),
     };
-    let re = 0;
-    await this.inTurnScope(w, async () => {
-      let Ae = false;
-      let Ue = 0;
+    let compactions = 0;
+    await this.inTurnScope(context, async () => {
+      let sawRetry = false;
+      let retryStatus = 0;
       let totalAPIDuration = getTotalAPIDuration();
-      let nt = this.messages().length;
+      let startLength = this.messages().length;
       let mcpPendingAtStart = this.pendingMcpServerCount?.();
-      let Se = 0;
-      let me = 0;
-      this.onTurnStart?.(w);
+      let plainDeltasDirect = 0;
+      let plainDeltasNormal = 0;
+      this.onTurnStart?.(context);
       this.turnOutcome.startTurn(attributionKeyOrUndefined(messageTurnAttributionKey(command)));
-      setForegroundTurnBusy(true, P);
+      setForegroundTurnBusy(true, busyToken);
       this.messageQueue.setInFlightDrainBatch(members);
       if (this.drain.drainingHandoff?.command === command) this.drain.drainingHandoff.running = true;
       try {
-        let Me =
+        let refusedPrompt =
           inPlaceOfFirstRequest === undefined
             ? undefined
             : members.find((member) => member.mode === "prompt" && member.resumeReason !== undefined);
         let turnDispatchInfo = buildTurnDispatchInfo(command, members);
-        let He = {
+        let turnContext = {
           ...turnDispatchInfo,
-          ...(Me !== undefined && {
-            ...buildTurnDispatchInfo(Me, [Me]),
+          ...(refusedPrompt !== undefined && {
+            ...buildTurnDispatchInfo(refusedPrompt, [refusedPrompt]),
             userMessageUuids: turnDispatchInfo.userMessageUuids,
             disallowedTools: turnDispatchInfo.disallowedTools,
             clientDisallowedTools: turnDispatchInfo.clientDisallowedTools,
             keepsDisallowedTools: turnDispatchInfo.keepsDisallowedTools,
           }),
           abortController: this.drain.abortController,
-          onCommandTakenIn: (We, St) => this.drain.noteTakenIn(We, St),
+          onCommandTakenIn: (uuid, answersClient) => this.drain.noteTakenIn(uuid, answersClient),
           onPromptCheckInterrupted: () => {
-            G = true;
+            promptCheckCut = true;
           },
           turnStartClock,
           emitPlainDelta:
             this.plainDeltasNeedOnlyEmit === undefined
               ? undefined
-              : (We) => {
+              : (frame) => {
                   if (!this.plainDeltasNeedOnlyEmit?.()) return false;
-                  this.emit(passModelFallback(We));
-                  Se++;
+                  this.emit(passModelFallback(frame));
+                  plainDeltasDirect++;
                   return true;
                 },
           inPlaceOfFirstRequest,
-          refusedPromptIsStoredAlready: Me !== undefined,
+          refusedPromptIsStoredAlready: refusedPrompt !== undefined,
           errorRowBehindRefusedPrompt:
-            Me?.uuid === undefined ? undefined : this.takeErrorRowBehind?.(Me.uuid),
+            refusedPrompt?.uuid === undefined ? undefined : this.takeErrorRowBehind?.(refusedPrompt.uuid),
           deferredToolUse:
             command.handedOffTurn !== undefined || inPlaceOfFirstRequest !== undefined
               ? undefined
               : this.deferredToolUse?.(),
         };
         turnStartClock.enter("engine_setup");
-        let Xe = this.engine();
-        for await (let We of Xe.submitMessage(Me === undefined ? input : Me.value, He)) {
-          if (We.type === "system" && We.subtype === "compact_boundary") {
-            re++;
-            nt = this.messages().length;
+        let engine = this.engine();
+        for await (let frame of engine.submitMessage(
+          refusedPrompt === undefined ? input : refusedPrompt.value,
+          turnContext,
+        )) {
+          if (frame.type === "system" && frame.subtype === "compact_boundary") {
+            compactions++;
+            startLength = this.messages().length;
           }
-          this.onFrame?.(We, w);
-          if (this.plainDeltasNeedOnlyEmit !== undefined && isTextOrJsonDeltaEvent(We)) me++;
-          if (We.type === "system" && We.subtype === "api_retry") {
-            Ae = true;
-            Ue = Math.max(Ue, We.error_status ?? 0);
+          this.onFrame?.(frame, context);
+          if (this.plainDeltasNeedOnlyEmit !== undefined && isTextOrJsonDeltaEvent(frame))
+            plainDeltasNormal++;
+          if (frame.type === "system" && frame.subtype === "api_retry") {
+            sawRetry = true;
+            retryStatus = Math.max(retryStatus, frame.error_status ?? 0);
           }
           if (
-            We.type === "assistant" &&
-            We.parent_tool_use_id === null &&
-            We.message.model !== SYNTHETIC_MODEL &&
-            We.message.model !== this.lastReportedServedModel
+            frame.type === "assistant" &&
+            frame.parent_tool_use_id === null &&
+            frame.message.model !== SYNTHETIC_MODEL &&
+            frame.message.model !== this.lastReportedServedModel
           ) {
-            this.lastReportedServedModel = We.message.model;
+            this.lastReportedServedModel = frame.message.model;
             this.io.sessionState.notifyMetadataChanged({
-              last_served_model: We.message.model,
+              last_served_model: frame.message.model,
             });
           }
-          if (We.type === "result") {
+          if (frame.type === "result") {
             this.drain.turnUnderWay = false;
-            L = this.drain.abortController?.signal.aborted ?? false;
-            intake.noteTurnEnded(L, command, We);
-            terminalReason = We.terminal_reason;
-            if (G && this.drain.abortController)
-              Z = countUnsentBatchMessages({
+            aborted = this.drain.abortController?.signal.aborted ?? false;
+            intake.noteTurnEnded(aborted, command, frame);
+            terminalReason = frame.terminal_reason;
+            if (promptCheckCut && this.drain.abortController)
+              putBack = countUnsentBatchMessages({
                 batch,
                 turnSignal: this.drain.abortController.signal,
                 isStopped: this.drain.stopReachedTurn,
@@ -343,51 +365,54 @@ class TurnDispatcher {
                 conversation: this.messages(),
                 messageQueue: this.messageQueue,
               });
-            let St = Z.count > 0;
-            if (!St) result = We;
-            let wt =
-              We.subtype === "error_during_execution" && (isAbortedTerminalReason(We.terminal_reason) || L);
-            let Lt = We.subtype === "error_during_execution" ? getAutoModeUnavailableStopNotice() : undefined;
-            let pn = Lt !== undefined;
+            let hasPutBack = putBack.count > 0;
+            if (!hasPutBack) result = frame;
+            let terminated =
+              frame.subtype === "error_during_execution" &&
+              (isAbortedTerminalReason(frame.terminal_reason) || aborted);
+            let stopNotice =
+              frame.subtype === "error_during_execution" ? getAutoModeUnavailableStopNotice() : undefined;
+            let hasStopNotice = stopNotice !== undefined;
             if (this.turnOutcome.turnInFlight) {
               logEvent("tengu_sdk_result", {
-                subtype: wt ? lit("terminated") : fromEnum(We.subtype),
-                is_error: We.is_error,
-                num_turns: We.num_turns,
-                duration_ms: We.duration_ms,
+                subtype: terminated ? lit("terminated") : fromEnum(frame.subtype),
+                is_error: frame.is_error,
+                num_turns: frame.num_turns,
+                duration_ms: frame.duration_ms,
                 duration_api_ms: getTotalAPIDuration() - totalAPIDuration,
-                saw_retry: Ae,
-                saw_compact: re > 0,
-                retry_status: Ae ? Ue : undefined,
-                api_error_status: We.subtype === "success" ? (We.api_error_status ?? undefined) : undefined,
+                saw_retry: sawRetry,
+                saw_compact: compactions > 0,
+                retry_status: sawRetry ? retryStatus : undefined,
+                api_error_status:
+                  frame.subtype === "success" ? (frame.api_error_status ?? undefined) : undefined,
                 user_message_uuid: sanitizeMarkName(this.turnOutcome.userMessageUuid),
-                ...countMcpToolCallsSince(this.messages(), nt, tools),
+                ...countMcpToolCallsSince(this.messages(), startLength, tools),
                 turn_index: this.sdkResultTurnIndex++,
                 mcp_pending_at_start: mcpPendingAtStart,
                 mcp_pending_at_end: this.pendingMcpServerCount?.(),
                 installed_mods: this.turnOutcome.installedModsSeen(),
                 ...droppedDebugOutputTotals(),
                 ...(this.plainDeltasNeedOnlyEmit !== undefined && {
-                  plain_deltas_sent_directly: Se,
-                  plain_deltas_sent_normally: me,
+                  plain_deltas_sent_directly: plainDeltasDirect,
+                  plain_deltas_sent_normally: plainDeltasNormal,
                 }),
               });
               this.turnOutcome.endTurn();
             }
             if (
-              We.is_error &&
-              (!wt ||
-                pn ||
+              frame.is_error &&
+              (!terminated ||
+                hasStopNotice ||
                 (this.io.isRemoteTransport() &&
                   unwrapAbortReason(this.drain.abortController?.signal.reason) === "shutdown"))
             )
               publishFailedSummary(
                 this.io.sessionState,
-                Lt !== undefined
-                  ? minimalUnavailableNotice(Lt)
-                  : We.subtype === "success"
-                    ? We.result
-                    : We.errors[0],
+                stopNotice !== undefined
+                  ? minimalUnavailableNotice(stopNotice)
+                  : frame.subtype === "success"
+                    ? frame.result
+                    : frame.errors[0],
               );
             if (areAttachmentFilesArriving() && !isTerminalShutdown())
               await waitForAttachmentFiles(
@@ -396,94 +421,101 @@ class TurnDispatcher {
                   atTurnEnd: true,
                 },
               );
-            We.queued_turn_count =
+            frame.queued_turn_count =
               this.drain.endSessionRequested || this.stopping()
                 ? 0
                 : hasBatchableQueuedPrompt(this.messageQueue);
-            for (let Mn of this.drainSdkEvents()) this.emit(Mn);
-            let _n = St ? undefined : this.onResult(We, w);
-            if (_n !== undefined) await _n;
+            for (let event of this.drainSdkEvents()) this.emit(event);
+            let pending = hasPutBack ? undefined : this.onResult(frame, context);
+            if (pending !== undefined) await pending;
           } else {
-            for (let wt of this.drainSdkEvents()) this.emit(wt);
-            let St = passModelFallback(We);
-            this.teeFrame?.(St);
-            this.emit(St);
+            for (let event of this.drainSdkEvents()) this.emit(event);
+            let outFrame = passModelFallback(frame);
+            this.teeFrame?.(outFrame);
+            this.emit(outFrame);
           }
         }
       } finally {
         this.drain.turnUnderWay = false;
-        setForegroundTurnBusy(false, P);
+        setForegroundTurnBusy(false, busyToken);
         if (this.drain.drainingHandoff?.command === command) this.drain.drainingHandoff = undefined;
         this.messageQueue.clearInFlightDrainBatch(members);
         this.messageQueue.settleTaken({
           turnEnded: true,
         });
-        this.afterTurnFinally?.(w);
+        this.afterTurnFinally?.(context);
         this.heapCensus.afterTurn();
         this.uploadsCensus.afterTurn();
       }
     });
     return {
-      abortedAtResult: L,
+      abortedAtResult: aborted,
       terminalReason,
       result,
-      putBack: Z.uuids,
-      compactions: re,
+      putBack: putBack.uuids,
+      compactions,
     };
   }
 }
 //@ chunk-tyg7f3ek.js:265770-266188 placement
-function countMcpToolCallsSince(e, n, tools) {
-  let s = 0;
-  let h = 0;
-  let y = 0;
-  let S = new Set(tools.filter((R) => R.mcpInfo && !R.name.startsWith("mcp__")).map((R) => R.name));
-  for (let R = n; R < e.length; R++) {
-    let w = e[R];
-    if (w?.type !== "assistant") continue;
-    for (let P of w.message.content) {
-      if (P.type !== "tool_use") continue;
-      s++;
-      if (P.name.startsWith("mcp__") || S.has(P.name)) h++;
-      else if (P.name === TOOL_SEARCH_TOOL_NAME) y++;
+function countMcpToolCallsSince(messages, start, tools) {
+  let toolUseCount = 0;
+  let mcpCalls = 0;
+  let toolSearchCalls = 0;
+  let mcpNames = new Set(
+    tools.filter((tool) => tool.mcpInfo && !tool.name.startsWith("mcp__")).map((tool) => tool.name),
+  );
+  for (let index = start; index < messages.length; index++) {
+    let row = messages[index];
+    if (row?.type !== "assistant") continue;
+    for (let block of row.message.content) {
+      if (block.type !== "tool_use") continue;
+      toolUseCount++;
+      if (block.name.startsWith("mcp__") || mcpNames.has(block.name)) mcpCalls++;
+      else if (block.name === TOOL_SEARCH_TOOL_NAME) toolSearchCalls++;
     }
   }
   return {
-    tool_use_count: s,
-    mcp_tool_calls: h,
-    toolsearch_calls: y,
-    builtin_tool_calls: s - h - y,
+    tool_use_count: toolUseCount,
+    mcp_tool_calls: mcpCalls,
+    toolsearch_calls: toolSearchCalls,
+    builtin_tool_calls: toolUseCount - mcpCalls - toolSearchCalls,
   };
 }
 //@ chunk-tyg7f3ek.js:266188-266540 placement
 /**
  * 回合派发常量：最大年龄 24 小时、批量提示 id 长度 64、UUID 正则、续跑载荷 schema（starts/new_frames）与空对象 schema。
  */
-var TURN_DISPATCH_CONSTANTS = 10;
-var TURN_DISPATCH_MAX_AGE_MS = 86400000;
-var MAX_BATCHED_PROMPT_ID_CHARS = 64;
-var $0 = Object.freeze({
-  waitMs: 5000,
-  spentWaitMs: 5000,
-  storeWaitMs: 1e4,
-  lookMs: 100,
-  readSpacingMs: 1000,
-  readLostMs: 30000,
+var TURN_DISPATCH_CONSTANTS; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var TURN_DISPATCH_MAX_AGE_MS;
+var MAX_BATCHED_PROMPT_ID_CHARS;
+var TURN_DISPATCH_WAITS;
+var UUID_HEX_PATTERN;
+var turnDispatchContinuationSchema;
+var emptyObjectSchema;
+deferInit("chunk-tyg7f3ek.js:266188", () => {
+  TURN_DISPATCH_CONSTANTS = 10;
+  TURN_DISPATCH_MAX_AGE_MS = 86400000;
+  MAX_BATCHED_PROMPT_ID_CHARS = 64;
+  TURN_DISPATCH_WAITS = Object.freeze({
+    waitMs: 5000,
+    spentWaitMs: 5000,
+    storeWaitMs: 1e4,
+    lookMs: 100,
+    readSpacingMs: 1000,
+    readLostMs: 30000,
+  });
+  UUID_HEX_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  turnDispatchContinuationSchema = DoctorLazy(() =>
+    looseObject({
+      starts: array(numberSchema().int().nonnegative().max(Number.MAX_SAFE_INTEGER))
+        .max(TURN_DISPATCH_CONSTANTS)
+        .optional(),
+      new_frames: array(stringSchema()).optional(),
+    }),
+  );
+  emptyObjectSchema = DoctorLazy(() => looseObject({}));
 });
-var UUID_HEX_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-var turnDispatchContinuationSchema = DoctorLazy(() =>
-  looseObject({
-    starts: array(E().int().nonnegative().max(Number.MAX_SAFE_INTEGER))
-      .max(TURN_DISPATCH_CONSTANTS)
-      .optional(),
-    new_frames: array(string()).optional(),
-  }),
-);
-var emptyObjectSchema = DoctorLazy(() => looseObject({}));
-//@ chunk-e6aww6q8.js:554048-554106 placement
-function hasBatchableQueuedPrompt(messageQueue) {
-  return count(messageQueue.getCommandQueueSnapshot(), canBatchWith);
-}
 export {
   turnDispatchContinuationSchema,
   MAX_BATCHED_PROMPT_ID_CHARS,
@@ -493,7 +525,7 @@ export {
   isBusy,
   TURN_DISPATCH_CONSTANTS,
   TURN_DISPATCH_MAX_AGE_MS,
-  $0,
+  TURN_DISPATCH_WAITS,
   emptyObjectSchema,
   UUID_HEX_PATTERN,
 };

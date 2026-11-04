@@ -8,7 +8,7 @@
  * pieces: chunk-ejntaqp9.js (5)
  * attribution: placement 5
  */
-import { init_react_production, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { createSignal } from "../../utils/signal.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { createReducerStore } from "../../utils/killRing.js";
@@ -31,15 +31,15 @@ class FleetOwnersStore {
   #i = 0;
   #e = 0;
   getSnapshot = () => this.#o;
-  subscribe = (e) => this.#n.subscribe(e);
-  #r(e) {
-    let t = this.#o;
-    let r = {
-      ...t,
-      ...e,
+  subscribe = (listener) => this.#n.subscribe(listener);
+  #r(patch) {
+    let previous = this.#o;
+    let next = {
+      ...previous,
+      ...patch,
     };
-    if (r.entries === t.entries && r.loading === t.loading) return;
-    this.#o = r;
+    if (next.entries === previous.entries && next.loading === previous.loading) return;
+    this.#o = next;
     this.#n.emit();
   }
   get pending() {
@@ -59,17 +59,17 @@ class FleetOwnersStore {
       });
     return this.#e;
   }
-  endLoad(e) {
-    if (e !== this.#e) return;
+  endLoad(token) {
+    if (token !== this.#e) return;
     this.#e = 0;
     this.#r({
       loading: false,
     });
   }
-  setEntries(e) {
+  setEntries(entries) {
     this.#t = true;
     this.#r({
-      entries: e.length === 0 ? EMPTY_OWNERS : e,
+      entries: entries.length === 0 ? EMPTY_OWNERS : entries,
     });
   }
   get known() {
@@ -102,23 +102,23 @@ function createFleetViewHost() {
  * FleetView 附着会话所有者的 hook。
  */
 function useAttachFleetOwners({ selection, view, attach, editor, deleteConfirm }, { clock, groupsEnabled }) {
-  P(() => {
-    let d = selection.attachView({
+  useEffect(() => {
+    let selectionDetach = selection.attachView({
       clock,
       onError: editor.setError,
     });
-    let p = view.attachView({
+    let viewDetach = view.attachView({
       groupsEnabled,
     });
-    let c = attach.attachView();
-    let h = editor.attachView();
-    let S = deleteConfirm.attachView();
+    let attachDetach = attach.attachView();
+    let editorDetach = editor.attachView();
+    let deleteDetach = deleteConfirm.attachView();
     return () => {
-      S();
-      h();
-      c();
-      p();
-      d();
+      deleteDetach();
+      editorDetach();
+      attachDetach();
+      viewDetach();
+      selectionDetach();
     };
   }, [selection, view, attach, editor, deleteConfirm, clock]);
 }

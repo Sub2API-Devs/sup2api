@@ -5,14 +5,14 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_scan } from "./scan.js";
 import { require_parse } from "./parse.js";
 import { require_utils } from "./utils.js";
 import { require_constants } from "./constants.js";
 
 //@ chunk-fq0cr76a.js:317963-320219 cjs-fingerprint
-var require_picomatch = x(function (cjsExports, cjsModule) {
+var require_picomatch = __commonJS(function (cjsExports, cjsModule) {
   var scan = require_scan();
   var parse = require_parse();
   var utils = require_utils();
@@ -103,8 +103,8 @@ var require_picomatch = x(function (cjsExports, cjsModule) {
       output,
     };
   };
-  picomatch.matchBase = (input, glob, r) =>
-    (glob instanceof RegExp ? glob : picomatch.makeRe(glob, r)).test(utils.basename(input));
+  picomatch.matchBase = (input, glob, options) =>
+    (glob instanceof RegExp ? glob : picomatch.makeRe(glob, options)).test(utils.basename(input));
   picomatch.isMatch = (str, patterns, options) => picomatch(patterns, options)(str);
   picomatch.parse = (pattern, options) => {
     if (Array.isArray(pattern)) return pattern.map((p) => picomatch.parse(p, options));

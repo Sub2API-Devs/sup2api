@@ -42,8 +42,8 @@ var FINALIZE_TIMEOUTS_MS = {
   noData: 1500,
 };
 //@ chunk-a5nx0r17.js:829-927 layout
-function formatStatusBucket(status, o, d) {
-  return typeof status === "number" && Number.isInteger(status) && status >= o && status <= d
+function formatStatusBucket(status, minStatus, maxStatus) {
+  return typeof status === "number" && Number.isInteger(status) && status >= minStatus && status <= maxStatus
     ? String(status)
     : "unknown";
 }
@@ -60,7 +60,7 @@ var HELLO_TIMEOUT_MS = 1500;
 async function probeVoiceConnectivity() {
   if (isEssentialTrafficOnly() || isTelemetryDisabled()) return "skipped_privacy";
   try {
-    let e = await axios_default.get(`${getOauthConfig().BASE_API_URL}/api/hello`, {
+    let response = await axios_default.get(`${getOauthConfig().BASE_API_URL}/api/hello`, {
       headers: {
         "User-Agent": getUserAgent(),
       },
@@ -68,8 +68,10 @@ async function probeVoiceConnectivity() {
       validateStatus: () => true,
       maxRedirects: 0,
     });
-    let o = formatStatusBucket(e.status, 100, 599);
-    return e.headers["cf-mitigated"] !== undefined ? `cf_mitigated_${o}` : `http_${o}`;
+    let statusBucket = formatStatusBucket(response.status, 100, 599);
+    return response.headers["cf-mitigated"] !== undefined
+      ? `cf_mitigated_${statusBucket}`
+      : `http_${statusBucket}`;
   } catch (error) {
     let code = axios_default.isAxiosError(error) ? error.code : undefined;
     return code === "ECONNABORTED" || code === "ETIMEDOUT" ? "timeout" : "fetch_failed";
@@ -99,23 +101,23 @@ var MAX_KEYTERMS_HEADER_CHARS = 1024;
  * 清洗并去重关键词，拼成不超过 1024 字符的 x-config-keyterms 头。
  */
 function formatKeytermsHeader(keyterms) {
-  let o = new Set();
-  let d = [];
-  let u = 0;
+  let seen = new Set();
+  let kept = [];
+  let usedChars = 0;
   for (let keyterm of keyterms) {
     let trimmed = keyterm
       .replace(/,/g, " ")
       .replace(/[^\x20-\x7E]/g, "")
       .replace(/\s+/g, " ")
       .trim();
-    if (!trimmed || o.has(trimmed)) continue;
-    let E = trimmed.length + (d.length > 0 ? 1 : 0);
-    if (u + E > MAX_KEYTERMS_HEADER_CHARS) break;
-    o.add(trimmed);
-    d.push(trimmed);
-    u += E;
+    if (!trimmed || seen.has(trimmed)) continue;
+    let entryChars = trimmed.length + (kept.length > 0 ? 1 : 0);
+    if (usedChars + entryChars > MAX_KEYTERMS_HEADER_CHARS) break;
+    seen.add(trimmed);
+    kept.push(trimmed);
+    usedChars += entryChars;
   }
-  return d.join(",");
+  return kept.join(",");
 }
 //@ chunk-a5nx0r17.js:1841-1861 layout
 function getVoiceStreamBaseUrlOverride() {
@@ -165,20 +167,20 @@ async function connectVoiceStream(callbacks, options, credentials) {
     "anthropic-client-platform": getClientPlatform(),
   };
   if (options?.keyterms?.length) {
-    let r = formatKeytermsHeader(options.keyterms);
-    if (r) headers["x-config-keyterms"] = r;
+    let keytermsHeader = formatKeytermsHeader(options.keyterms);
+    if (keytermsHeader) headers["x-config-keyterms"] = keytermsHeader;
   }
   let webSocketTLSOptions = getWebSocketTLSOptions(undefined);
-  let P = {
+  let wsOptions = {
     headers,
     proxy: getWebSocketProxyUrl(url),
     tls: webSocketTLSOptions || undefined,
   };
   guardTestWebSocket(url, ws);
-  let ws_2 = new ws(url, P);
+  let ws_2 = new ws(url, wsOptions);
   let keepaliveTimer = null;
   let connected = false;
-  let I = false;
+  let openedOnce = false;
   let finalized = false;
   let finalizing = false;
   let upgradeRejected = false;
@@ -249,7 +251,7 @@ async function connectVoiceStream(callbacks, options, credentials) {
   ws_2.on("open", () => {
     logForDebugging("[voice_stream] WebSocket connected");
     connected = true;
-    I = true;
+    openedOnce = true;
     logForDebugging("[voice_stream] Sending initial KeepAlive");
     ws_2.send(KEEPALIVE_MSG);
     keepaliveTimer = setInterval(
@@ -265,12 +267,12 @@ async function connectVoiceStream(callbacks, options, credentials) {
     callbacks.onReady(connection);
   });
   let lastTranscriptText = "";
-  function A(raw) {
+  function promoteInterim(raw) {
     if (!lastTranscriptText) return;
     logForDebugging(`[voice_stream] Promoting unreported interim to final (${raw})`);
-    let c = lastTranscriptText;
+    let pendingText = lastTranscriptText;
     lastTranscriptText = "";
-    callbacks.onTranscript(c, true);
+    callbacks.onTranscript(pendingText, true);
   }
   ws_2.on("message", (raw) => {
     let text = raw.toString();
@@ -306,14 +308,14 @@ async function connectVoiceStream(callbacks, options, credentials) {
       case "TranscriptError": {
         let desc = msg.description ?? msg.error_code ?? "unknown transcription error";
         logForDebugging(`[voice_stream] TranscriptError: ${desc}`);
-        A("TranscriptError");
+        promoteInterim("TranscriptError");
         if (!finalizing) callbacks.onError(desc);
         break;
       }
       case "error": {
         let errorDetail = msg.message ?? `unstructured error frame (keys: ${Object.keys(msg).join(", ")})`;
         logForDebugging(`[voice_stream] Server error: ${errorDetail}`);
-        A("server error");
+        promoteInterim("server error");
         if (!finalizing) callbacks.onError(errorDetail);
         break;
       }
@@ -329,12 +331,12 @@ async function connectVoiceStream(callbacks, options, credentials) {
       clearInterval(keepaliveTimer);
       keepaliveTimer = null;
     }
-    A("ws close");
+    promoteInterim("ws close");
     resolveFinalize?.("ws_close");
     if (!finalizing && !upgradeRejected && code !== 1000 && code !== 1005)
       callbacks.onError(
         `Connection closed: code ${String(code)}${reasonStr ? ` \u2014 ${reasonStr}` : ""}`,
-        I
+        openedOnce
           ? undefined
           : {
               connectFailureCode: `ws_closed_${formatStatusBucket(code, 1000, 4999)}`,
@@ -367,11 +369,11 @@ async function connectVoiceStream(callbacks, options, credentials) {
     logForDebugging(`[voice_stream] WebSocket error: ${err.message}`, {
       level: "error",
     });
-    A("ws error");
+    promoteInterim("ws error");
     if (!finalizing)
       callbacks.onError(
         `Voice stream connection error: ${err.message}`,
-        I
+        openedOnce
           ? undefined
           : {
               connectFailureCode: `ws_error_${errorCodeLabel(err)}`,

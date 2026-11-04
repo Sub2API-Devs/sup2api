@@ -9,7 +9,7 @@
  * attribution: placement 19
  */
 import { HooksError } from "./hooksErrors.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   dropWithholders,
   createWithholdingTable,
@@ -23,7 +23,7 @@ import { reportPluginProblem } from "./hooksWorkerClient.js";
 import { dispatchHookCall } from "./hookDispatch.js";
 import { CORE_ORIGIN, matchesEventPattern } from "./eventPatterns.js";
 import { coreInterfaceTable_2 } from "./api/agentToolOps.js";
-import { subscribe } from "../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
+import { subscribe as subscribe_2 } from "../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
 import { reportChainFailure } from "./dispatch/chain.js";
 import { UI_ENV_SITE_RULES } from "./sites/siteRules.js";
 import { errorMessage } from "../../utils/errors.js";
@@ -32,51 +32,53 @@ import {
   findHookMemberByName,
   logHookLoadFailure,
 } from "./hooksModuleLoader.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4053473-4053647 placement
 /**
  * 生成"插件: engine.create failed (原因)"错误（去掉原因里重复的插件名前缀）。
  */
-function engineCreateFailedError(name, n) {
-  let r = `${name}: `;
-  let reason = n?.reason;
-  let h = reason?.startsWith(r) === true ? reason.slice(r.length) : reason;
+function engineCreateFailedError(name, failure) {
+  let prefix = `${name}: `;
+  let reason = failure?.reason;
+  let reasonText = reason?.startsWith(prefix) === true ? reason.slice(prefix.length) : reason;
   return new HooksError(
-    `${name}: ${n?.stage ?? "engine.create"} failed` + (h === undefined ? "" : ` (${h})`),
+    `${name}: ${failure?.stage ?? "engine.create"} failed` +
+      (reasonText === undefined ? "" : ` (${reasonText})`),
   );
 }
 //@ chunk-e6aww6q8.js:4053647-4053662 placement
 /**
  * 原样返回
  */
-var identityValue = (e) => e;
+var identityValue = (value) => value;
 //@ chunk-e6aww6q8.js:4053662-4053677 placement
 /**
  * 原样返回
  */
-var identityResult = (e) => e;
+var identityResult = (value) => value;
 //@ chunk-e6aww6q8.js:4053677-4053738 placement
 /**
  * 数组逐项相等
  */
 var sameArray = (methods, methods_2) =>
-  methods.length === methods_2.length && methods.every((r, s) => r === methods_2[s]);
+  methods.length === methods_2.length && methods.every((method, index) => method === methods_2[index]);
 //@ chunk-e6aww6q8.js:4053738-4053837 placement
 /**
  * 接口签名相同
  */
-var sameInterfaceSignature = (e, n) =>
-  e.owner === n.owner && sameArray(e.methods, n.methods) && sameArray(e.withheldBy ?? [], n.withheldBy ?? []);
+var sameInterfaceSignature = (a, b) =>
+  a.owner === b.owner && sameArray(a.methods, b.methods) && sameArray(a.withheldBy ?? [], b.withheldBy ?? []);
 //@ chunk-e6aww6q8.js:4053837-4054082 placement
-function markWithheld(e, crashedWithholders, r) {
-  let merged = Object.assign(Object.create(null), e);
-  for (let h of r)
-    for (let y of crashedWithholders.get(h) ?? []) {
-      let S = Object.hasOwn(merged, y) ? merged[y] : undefined;
-      if (S !== undefined && !(S.withheldBy ?? []).includes(h))
-        merged[y] = {
-          ...S,
-          withheldBy: [...(S.withheldBy ?? []), h],
+function markWithheld(table, crashedWithholders, unloadedNames) {
+  let merged = Object.assign(Object.create(null), table);
+  for (let withholder of unloadedNames)
+    for (let noun of crashedWithholders.get(withholder) ?? []) {
+      let entry = Object.hasOwn(merged, noun) ? merged[noun] : undefined;
+      if (entry !== undefined && !(entry.withheldBy ?? []).includes(withholder))
+        merged[noun] = {
+          ...entry,
+          withheldBy: [...(entry.withheldBy ?? []), withholder],
         };
     }
   return merged;
@@ -85,43 +87,48 @@ function markWithheld(e, crashedWithholders, r) {
 /**
  * 去掉已卸载者的扣留
  */
-var dropUnloadedWithholders = (e, n) =>
-  xr(e, (r) => dropWithholders(r, new Set((r.withheldBy ?? []).filter((s) => !n.includes(s)))));
+var dropUnloadedWithholders = (table, liveNames) =>
+  import_mapValues(table, (value) =>
+    dropWithholders(value, new Set((value.withheldBy ?? []).filter((name) => !liveNames.includes(name)))),
+  );
 //@ chunk-e6aww6q8.js:4054171-4054399 placement
 /**
  * hooks worker 在操作中死亡时丢弃待提交项并记录，返回 true。
  */
-function abandonIfWorkerDied(e, n, r) {
-  let died = e.state.environmentHost?.died;
+function abandonIfWorkerDied(state, modules, stage) {
+  let died = state.state.environmentHost?.died;
   if (died === undefined) return false;
   logForDebugging(
-    `${r} abandoned: the hooks worker died during it (${died}); the respawn reloads the declared set`,
+    `${stage} abandoned: the hooks worker died during it (${died}); the respawn reloads the declared set`,
     {
       level: "error",
     },
   );
-  for (let h of n) h.discard();
+  for (let loadedModule of modules) loadedModule.discard();
   return true;
 }
 //@ chunk-e6aww6q8.js:4054399-4054713 placement
-var iOe = Object.freeze({
-  uncalled:
-    "answered with no next(e) call that reached the engine, which withholds every noun added beneath it",
-  failed: "answered after its next(e) failed, which withholds every noun added beneath it",
-  pending: "answered before its next(e) settled, which withholds every noun added beneath it",
+var UNCALLED_NEXT_REFUSALS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4054399", () => {
+  UNCALLED_NEXT_REFUSALS = Object.freeze({
+    uncalled:
+      "answered with no next(e) call that reached the engine, which withholds every noun added beneath it",
+    failed: "answered after its next(e) failed, which withholds every noun added beneath it",
+    pending: "answered before its next(e) settled, which withholds every noun added beneath it",
+  });
 });
 //@ chunk-e6aww6q8.js:4054713-4054829 placement
 var PROTO_NOUN_REFUSAL =
   "engine.create added $.__proto__; that name cannot be a noun (a step that copies $ by assignment loses it)";
 //@ chunk-e6aww6q8.js:4054829-4054985 placement
-function dropProtoNoun(loaded, n) {
-  if (!Object.hasOwn(n, PROTO_KEY)) return n;
+function dropProtoNoun(loaded, nouns) {
+  if (!Object.hasOwn(nouns, PROTO_KEY)) return nouns;
   let joined = [PROTO_NOUN_REFUSAL, loaded.name, loaded.environmentId].join(" ");
   if (!toldRefusals.has(joined)) {
     toldRefusals.add(joined);
     reportPluginProblem(loaded.name, PROTO_NOUN_REFUSAL);
   }
-  return filterEntriesToNullProto(n, () => true);
+  return filterEntriesToNullProto(nouns, () => true);
 }
 //@ chunk-e6aww6q8.js:4054985-4055124 placement
 var USER_TIER_FOLD_NOTE =
@@ -130,54 +137,55 @@ var USER_TIER_FOLD_NOTE =
 /**
  * 折叠多个插件的 engine.create 结果，处理插件新增或扣留的 $ 名称冲突。
  */
-function foldEngineCreateHooks(e) {
-  let { loaded, index, hooking, beneath, withheld, owners, userPlugins, ousted, failed } = e;
-  function q(Z) {
-    failed.set(loaded.name, Z);
-    return new HooksError(Z);
+function foldEngineCreateHooks(options) {
+  let { loaded, index, hooking, beneath, withheld, owners, userPlugins, ousted, failed } = options;
+  function fail(reason) {
+    failed.set(loaded.name, reason);
+    return new HooksError(reason);
   }
   return {
     name: loaded.name,
     tier: loaded.tier,
-    async run(Z, Se, { call: ke, floors }) {
-      let Ee;
-      let uncalled = iOe.uncalled;
-      let Ie = await dispatchHookCall({
+    async run(e, ctx, { call, floors }) {
+      let nextResult;
+      let uncalled = UNCALLED_NEXT_REFUSALS.uncalled;
+      let result = await dispatchHookCall({
         members: [loaded],
         event: "engine.create",
-        e: Z,
-        call: async (nt, pt, Et) => {
-          uncalled = iOe.pending;
-          let yt = await ke(nt, pt, Et).catch((error) => {
-            uncalled = iOe.failed;
+        e,
+        call: async (value, ctx, floors) => {
+          uncalled = UNCALLED_NEXT_REFUSALS.pending;
+          let secondNext = await call(value, ctx, floors).catch((error) => {
+            uncalled = UNCALLED_NEXT_REFUSALS.failed;
             throw error;
           });
-          Ee = identityResult(yt);
-          return yt;
+          nextResult = identityResult(secondNext);
+          return secondNext;
         },
-        signal: Se.signal,
+        signal: ctx.signal,
         hookOrigin: undefined,
-        origin: Se.origin,
+        origin: ctx.origin,
         floors,
       });
-      if (Ie === undefined) return Ie;
-      let Me = dropProtoNoun(loaded, identityResult(Ie));
-      let We = loaded.tier === "user";
-      if (Ee === undefined && We) throw q(`${loaded.name}: engine.create ${uncalled}${USER_TIER_FOLD_NOTE}`);
-      if (Ee === undefined && index < hooking.length - 1) withheld.end(loaded.name);
-      let lt = Ee ?? beneath;
-      let merged = Object.assign(Object.create(null), Me);
-      for (let [key, value] of Object.entries(lt)) {
-        let Et = !Object.hasOwn(Me, key);
-        if (Et && We && value.owner === loaded.name && value.withheldBy !== undefined) {
+      if (result === undefined) return result;
+      let nouns = dropProtoNoun(loaded, identityResult(result));
+      let isUserTier = loaded.tier === "user";
+      if (nextResult === undefined && isUserTier)
+        throw fail(`${loaded.name}: engine.create ${uncalled}${USER_TIER_FOLD_NOTE}`);
+      if (nextResult === undefined && index < hooking.length - 1) withheld.end(loaded.name);
+      let baseTable = nextResult ?? beneath;
+      let merged = Object.assign(Object.create(null), nouns);
+      for (let [key, value] of Object.entries(baseTable)) {
+        let isNewNoun = !Object.hasOwn(nouns, key);
+        if (isNewNoun && isUserTier && value.owner === loaded.name && value.withheldBy !== undefined) {
           merged[key] = value;
           continue;
         }
-        if (Et && We)
-          throw q(
+        if (isNewNoun && isUserTier)
+          throw fail(
             `${loaded.name}: engine.create withheld $.${key}, added by ` + value.owner + USER_TIER_FOLD_NOTE,
           );
-        if (Et) {
+        if (isNewNoun) {
           withheld.withhold(key, loaded.name);
           merged[key] = {
             owner: value.owner,
@@ -186,27 +194,27 @@ function foldEngineCreateHooks(e) {
           };
         }
       }
-      for (let [key, value] of Object.entries(Me)) {
-        let Et = Object.hasOwn(lt, key) ? lt[key] : undefined;
-        if (Et !== undefined && sameInterfaceSignature(Et, value)) continue;
-        let gt = Et?.withheldBy?.filter((Yt) => Yt !== loaded.name) ?? [];
-        let At = owners.get(key);
-        if (Et !== undefined && gt.length > 0 && At === loaded.name) {
-          merged[key] = Et;
+      for (let [key, value] of Object.entries(nouns)) {
+        let existing = Object.hasOwn(baseTable, key) ? baseTable[key] : undefined;
+        if (existing !== undefined && sameInterfaceSignature(existing, value)) continue;
+        let otherWithholders = existing?.withheldBy?.filter((name) => name !== loaded.name) ?? [];
+        let owner = owners.get(key);
+        if (existing !== undefined && otherWithholders.length > 0 && owner === loaded.name) {
+          merged[key] = existing;
           continue;
         }
-        let It = !We && At !== undefined && userPlugins.has(At);
-        if (It && !ousted.has(At))
-          ousted.set(At, {
+        let belongsToUser = !isUserTier && owner !== undefined && userPlugins.has(owner);
+        if (belongsToUser && !ousted.has(owner))
+          ousted.set(owner, {
             by: loaded.name,
-            reason: `${At}: engine.create added $.${key}, which ${loaded.name} returns too; a name both return is the seated plugin's`,
-            replaced: `${loaded.name}: engine.create replaced $.${key}, added by ${At}; to change what a method does, hook the method`,
+            reason: `${owner}: engine.create added $.${key}, which ${loaded.name} returns too; a name both return is the seated plugin's`,
+            replaced: `${loaded.name}: engine.create replaced $.${key}, added by ${owner}; to change what a method does, hook the method`,
           });
-        if (At !== undefined && At !== loaded.name && !It) {
-          let Yt = gt.length > 0 || Et === undefined;
-          throw q(
-            `${loaded.name}: engine.create replaced $.${key}, added by ${At}` +
-              (Yt ? ` (withheld by ${gt.at(-1) ?? withheld.endedBy()})` : "") +
+        if (owner !== undefined && owner !== loaded.name && !belongsToUser) {
+          let isUnowned = otherWithholders.length > 0 || existing === undefined;
+          throw fail(
+            `${loaded.name}: engine.create replaced $.${key}, added by ${owner}` +
+              (isUnowned ? ` (withheld by ${otherWithholders.at(-1) ?? withheld.endedBy()})` : "") +
               "; to change what a method does, hook the method",
           );
         }
@@ -217,28 +225,28 @@ function foldEngineCreateHooks(e) {
   };
 }
 //@ chunk-e6aww6q8.js:4056993-4057563 placement
-function reportEngineFoldResult(e) {
-  let { table, suppressed, hooking, built } = e;
+function reportEngineFoldResult(result) {
+  let { table, suppressed, hooking, built } = result;
   let mapped = Object.entries(table)
-    .filter(([, { owner: w, withheldBy: L }]) => w !== CORE_ORIGIN && L === undefined)
-    .map(([key, { owner: L, methods: G }]) => `$.${key} (${L}: ${G.join(", ") || "no methods"})`);
+    .filter(([, { owner, withheldBy }]) => owner !== CORE_ORIGIN && withheldBy === undefined)
+    .map(([key, { owner: noun, methods }]) => `$.${key} (${noun}: ${methods.join(", ") || "no methods"})`);
   let mapped_2 = Object.entries(suppressed).map(([key, value]) =>
     key === "*"
-      ? `${value} ended the fold without next (${hooking.length - 1 - hooking.findIndex((q) => q.name === value)} step(s) inside it never ran)`
+      ? `${value} ended the fold without next (${hooking.length - 1 - hooking.findIndex((item) => item.name === value)} step(s) inside it never ran)`
       : `$.${key} suppressed by ${value}`,
   );
   logForDebugging(
-    `engine.create: ${mapped.length === 0 ? "no plugin-provided interfaces" : mapped.join("; ")}${mapped_2.length === 0 ? "" : `; ${mapped_2.join("; ")}`}; $ built for ${built.map((w) => w.name).join(",") || "nobody"}`,
+    `engine.create: ${mapped.length === 0 ? "no plugin-provided interfaces" : mapped.join("; ")}${mapped_2.length === 0 ? "" : `; ${mapped_2.join("; ")}`}; $ built for ${built.map((line) => line.name).join(",") || "nobody"}`,
   );
 }
 //@ chunk-e6aww6q8.js:4057563-4057862 placement
-function warnMissingWithholders(carried, n, r) {
+function warnMissingWithholders(carried, newTable, liveNames) {
   for (let [key, value] of Object.entries(carried ?? {})) {
-    let y = Object.hasOwn(n, key) ? n[key] : undefined;
-    for (let S of value.withheldBy ?? [])
-      if (!r.includes(S) && !(y?.withheldBy ?? []).includes(S))
+    let entry = Object.hasOwn(newTable, key) ? newTable[key] : undefined;
+    for (let withholder of value.withheldBy ?? [])
+      if (!liveNames.includes(withholder) && !(entry?.withheldBy ?? []).includes(withholder))
         logForDebugging(
-          `hooks worker respawn: ${S}, which withheld $.${key}, did not come back; the withholding held until now`,
+          `hooks worker respawn: ${withholder}, which withheld $.${key}, did not come back; the withholding held until now`,
           {
             level: "warn",
           },
@@ -249,20 +257,20 @@ function warnMissingWithholders(carried, n, r) {
 /**
  * 在 engine.create 钩子链上构建插件可见的 $ 对象；失败时说明哪个插件的哪一步出错。
  */
-async function buildEngineApi(e, n, r = {}) {
-  let { endedBy, carried } = r;
-  let { beneath = coreInterfaceTable_2(), owned = {} } = r;
-  let order = r.order ?? n.map((Se) => Se.name);
-  let L = [...n];
-  let G;
+async function buildEngineApi(ctx, modules, options = {}) {
+  let { endedBy, carried } = options;
+  let { beneath = coreInterfaceTable_2(), owned = {} } = options;
+  let order = options.order ?? modules.map((loadedHook) => loadedHook.name);
+  let building = [...modules];
+  let retry;
   let userPlugins = new Set(
-    [...e.state.knownArgs.values(), ...n.map((Se) => Se.args)].flatMap((Se) =>
-      Se.tier === "user" ? [Se.pluginName] : [],
+    [...ctx.state.knownArgs.values(), ...modules.map((loadedHook) => loadedHook.args)].flatMap((args) =>
+      args.tier === "user" ? [args.pluginName] : [],
     ),
   );
-  let died = e.state.environmentHost?.died;
-  e.state.building = L;
-  e.state.buildFailures.clear();
+  let died = ctx.state.environmentHost?.died;
+  ctx.state.building = building;
+  ctx.state.buildFailures.clear();
   try {
     for (;;) {
       let withholdingTable = createWithholdingTable({
@@ -270,30 +278,31 @@ async function buildEngineApi(e, n, r = {}) {
         endedBy,
         order,
       });
-      e.state.stagedBefore = e.state.staged;
-      e.state.staged = withholdingTable;
-      let ke = [];
-      let we = subscribe((At) => {
-        if (At.event === "engine.create")
-          ke.push({
-            reason: At.reason,
-            hook: At.plugin,
-            kind: At.skip?.kind,
+      ctx.state.stagedBefore = ctx.state.staged;
+      ctx.state.staged = withholdingTable;
+      let skips = [];
+      let unsubscribe = subscribe_2((event) => {
+        if (event.event === "engine.create")
+          skips.push({
+            reason: event.reason,
+            hook: event.plugin,
+            kind: event.skip?.kind,
           });
       });
-      for (let At of e.state.refusalsLogged)
-        if (L.some((Yt) => At.startsWith(`${Yt.name}:`))) e.state.refusalsLogged.delete(At);
-      let Ee = new Map(Object.entries(owned));
-      let Ae = new Map();
-      let Ie = new Map();
-      for (let key of Object.keys(coreInterfaceTable_2())) Ee.set(key, CORE_ORIGIN);
-      for (let [key, value] of Object.entries(beneath)) Ee.set(key, value.owner);
-      let filtered = L.filter((At) => At.hooks("engine.create"));
-      let We;
+      for (let loggedKey of ctx.state.refusalsLogged)
+        if (building.some((secondModule) => loggedKey.startsWith(`${secondModule.name}:`)))
+          ctx.state.refusalsLogged.delete(loggedKey);
+      let ownerByNoun = new Map(Object.entries(owned));
+      let ousted = new Map();
+      let failed = new Map();
+      for (let key of Object.keys(coreInterfaceTable_2())) ownerByNoun.set(key, CORE_ORIGIN);
+      for (let [key, value] of Object.entries(beneath)) ownerByNoun.set(key, value.owner);
+      let filtered = building.filter((loadedHook) => loadedHook.hooks("engine.create"));
+      let folded;
       try {
-        We = await reportChainFailure({
+        folded = await reportChainFailure({
           e: {
-            plugins: L.map((At) => At.name),
+            plugins: building.map((loadedHook) => loadedHook.name),
           },
           handlers: [
             ...filtered.map((loaded, index) =>
@@ -303,10 +312,10 @@ async function buildEngineApi(e, n, r = {}) {
                 hooking: filtered,
                 beneath,
                 withheld: withholdingTable,
-                owners: Ee,
+                owners: ownerByNoun,
                 userPlugins,
-                ousted: Ae,
-                failed: Ie,
+                ousted,
+                failed,
               }),
             ),
             {
@@ -319,159 +328,163 @@ async function buildEngineApi(e, n, r = {}) {
           site: UI_ENV_SITE_RULES["engine.create"],
         });
       } catch (error) {
-        let It = `outside any plugin's hook: ${errorMessage(error)}`;
-        logForDebugging(`engine.create failed ${It}; nothing built`, {
+        let reason = `outside any plugin's hook: ${errorMessage(error)}`;
+        logForDebugging(`engine.create failed ${reason}; nothing built`, {
           level: "error",
         });
-        for (let Yt of L) {
-          e.state.buildFailures.set(Yt.name, {
+        for (let loadedHook of building) {
+          ctx.state.buildFailures.set(loadedHook.name, {
             stage: "engine.create",
-            reason: It,
+            reason,
           });
-          Yt.discard();
+          loadedHook.discard();
         }
         return [];
       } finally {
-        we();
+        unsubscribe();
       }
-      if (died === undefined && abandonIfWorkerDied(e, L, "the build")) return [];
-      let lt = G;
-      G = undefined;
-      if (lt !== undefined) {
-        let { persons, ousting } = lt;
-        let found = lt.modules.find((pn) => pn.name === ousting.by);
-        let qt = Ie.get(ousting.by);
-        let Zt =
-          ke.find((pn) => pn.hook === ousting.by) ??
-          (qt === undefined
+      if (died === undefined && abandonIfWorkerDied(ctx, building, "the build")) return [];
+      let secondRetry = retry;
+      retry = undefined;
+      if (secondRetry !== undefined) {
+        let { persons, ousting } = secondRetry;
+        let found = secondRetry.modules.find((loadedHook) => loadedHook.name === ousting.by);
+        let failure = failed.get(ousting.by);
+        let skip =
+          skips.find((skip) => skip.hook === ousting.by) ??
+          (failure === undefined
             ? undefined
             : {
-                reason: qt,
+                reason: failure,
                 hook: ousting.by,
                 kind: "threw",
               });
         try {
-          reportUnmatchedHookRegistrations(ousting.by, found?.patterns ?? [], identityResult(We));
+          reportUnmatchedHookRegistrations(ousting.by, found?.patterns ?? [], identityResult(folded));
         } catch {
-          Zt ??= {
+          skip ??= {
             reason: ousting.replaced,
             hook: ousting.by,
             kind: "threw",
           };
         }
-        let any = lt.modules.some((pn) => pn.name === persons);
-        if (Zt === undefined && !any) {
-          e.state.buildFailures.set(persons, {
+        let any = secondRetry.modules.some((loadedHook) => loadedHook.name === persons);
+        if (skip === undefined && !any) {
+          ctx.state.buildFailures.set(persons, {
             stage: "engine.create",
             reason: ousting.reason,
           });
-          for (let pn of lt.modules) pn.discard();
+          for (let loadedHook of secondRetry.modules) loadedHook.discard();
           return [];
         }
-        beneath = lt.beneath;
-        owned = lt.owned;
-        if (Zt === undefined) {
-          beneath = filterEntriesToNullProto(beneath, (pn) => pn.owner !== persons);
-          owned = filterEntriesToNullProto(owned, (pn) => pn !== persons);
+        beneath = secondRetry.beneath;
+        owned = secondRetry.owned;
+        if (skip === undefined) {
+          beneath = filterEntriesToNullProto(beneath, (noun) => noun.owner !== persons);
+          owned = filterEntriesToNullProto(owned, (noun) => noun !== persons);
         }
-        ke.unshift(
-          Zt ?? {
+        skips.unshift(
+          skip ?? {
             reason: ousting.reason,
             hook: persons,
             kind: "shape",
           },
         );
-        L = lt.modules;
-        e.state.building = L;
+        building = secondRetry.modules;
+        ctx.state.building = building;
       }
-      let filtered_2 = [...Ae].filter(
-        ([At]) => L.some((It) => It.name === At) || !n.some((It) => It.name === At),
+      let filtered_2 = [...ousted].filter(
+        ([name]) =>
+          building.some((loadedHook) => loadedHook.name === name) ||
+          !modules.some((loadedHook) => loadedHook.name === name),
       );
-      let [nt] = filtered_2;
-      if (lt === undefined && nt !== undefined && ke.length === 0 && Ie.size === 0) {
-        let [At, It] = nt;
-        let Yt = new Set(filtered_2.flatMap(([qt, Zt]) => (Zt.by === It.by ? [qt] : [])));
-        G = {
-          persons: At,
-          ousting: It,
-          modules: L,
+      let [ousting] = filtered_2;
+      if (secondRetry === undefined && ousting !== undefined && skips.length === 0 && failed.size === 0) {
+        let [persons, secondOusting] = ousting;
+        let names = new Set(
+          filtered_2.flatMap(([name, oust]) => (oust.by === secondOusting.by ? [name] : [])),
+        );
+        retry = {
+          persons,
+          ousting: secondOusting,
+          modules: building,
           beneath,
           owned,
         };
-        L = L.filter((qt) => !Yt.has(qt.name));
-        beneath = filterEntriesToNullProto(beneath, (qt) => !Yt.has(qt.owner));
-        owned = filterEntriesToNullProto(owned, (qt) => !Yt.has(qt));
-        e.state.building = L;
+        building = building.filter((loadedHook) => !names.has(loadedHook.name));
+        beneath = filterEntriesToNullProto(beneath, (noun) => !names.has(noun.owner));
+        owned = filterEntriesToNullProto(owned, (noun) => !names.has(noun));
+        ctx.state.building = building;
         continue;
       }
-      let reason = ke[0]?.reason;
+      let reason = skips[0]?.reason;
       if (reason === undefined) {
-        let At = identityResult(We);
-        let It = [];
-        for (let pn of L)
+        let table = identityResult(folded);
+        let built = [];
+        for (let loadedHook of building)
           try {
-            reportUnmatchedHookRegistrations(pn.name, pn.patterns, At);
-            await pn.build(At, withholdingTable.suppressed());
-            It.push(pn);
-            e.state.unloadedSteps.delete(pn.name);
+            reportUnmatchedHookRegistrations(loadedHook.name, loadedHook.patterns, table);
+            await loadedHook.build(table, withholdingTable.suppressed());
+            built.push(loadedHook);
+            ctx.state.unloadedSteps.delete(loadedHook.name);
           } catch (error) {
-            let hn = errorMessage(error);
+            let message = errorMessage(error);
             logForDebugging(
-              `hooks module ${pn.label} could not build $: ${hn}; unloaded, its withholdings kept while it is declared`,
+              `hooks module ${loadedHook.label} could not build $: ${message}; unloaded, its withholdings kept while it is declared`,
               {
                 level: "error",
               },
             );
-            e.state.buildFailures.set(pn.name, {
+            ctx.state.buildFailures.set(loadedHook.name, {
               stage: "the $ build",
-              reason: hn,
+              reason: message,
             });
-            pn.discard();
+            loadedHook.discard();
           }
-        if (died === undefined && abandonIfWorkerDied(e, L, "the build")) return [];
-        let filtered_2 = [...e.state.crashedWithholders.keys()].filter(
-          (key) => !L.some((no) => no.name === key),
+        if (died === undefined && abandonIfWorkerDied(ctx, building, "the build")) return [];
+        let unloadedNames = [...ctx.state.crashedWithholders.keys()].filter(
+          (key) => !building.some((loadedHook) => loadedHook.name === key),
         );
-        let Zt = dropUnloadedWithholders(markWithheld(At, e.state.crashedWithholders, filtered_2), [
-          ...(r.order ?? L.map((pn) => pn.name)),
-          ...filtered_2,
-        ]);
+        let tableWithWithheld = dropUnloadedWithholders(
+          markWithheld(table, ctx.state.crashedWithholders, unloadedNames),
+          [...(options.order ?? building.map((loadedHook) => loadedHook.name)), ...unloadedNames],
+        );
         let suppressed = withholdingTable.suppressed();
         reportEngineFoldResult({
-          table: Zt,
+          table: tableWithWithheld,
           suppressed,
           hooking: filtered,
-          built: It,
+          built,
         });
         warnMissingWithholders(
           carried,
-          Zt,
-          It.map((pn) => pn.name),
+          tableWithWithheld,
+          built.map((loadedHook) => loadedHook.name),
         );
-        recordFoldResult(e.state, {
-          table: Zt,
+        recordFoldResult(ctx.state, {
+          table: tableWithWithheld,
           endedBy: withholdingTable.endedBy(),
-          owners: Object.fromEntries(Ee),
+          owners: Object.fromEntries(ownerByNoun),
         });
         updateWithholdingRecords(
-          e.state,
-          Zt,
-          L.map((pn) => pn.name),
+          ctx.state,
+          tableWithWithheld,
+          building.map((loadedHook) => loadedHook.name),
         );
-        return It;
+        return built;
       }
-      let hookMemberByName = findHookMemberByName(L, ke);
+      let hookMemberByName = findHookMemberByName(building, skips);
       if (!hookMemberByName) {
-        let At = `the failed hook ${ke[0]?.hook} is not a module being built`;
-        logForDebugging(`engine.create: ${At}; nothing built`, {
+        let reason = `the failed hook ${skips[0]?.hook} is not a module being built`;
+        logForDebugging(`engine.create: ${reason}; nothing built`, {
           level: "error",
         });
-        for (let It of L) {
-          e.state.buildFailures.set(It.name, {
+        for (let loadedHook of building) {
+          ctx.state.buildFailures.set(loadedHook.name, {
             stage: "engine.create",
-            reason: At,
+            reason,
           });
-          It.discard();
+          loadedHook.discard();
         }
         return [];
       }
@@ -482,12 +495,12 @@ async function buildEngineApi(e, n, r = {}) {
           level: "error",
         },
       );
-      e.state.buildFailures.set(hookMemberByName.name, {
+      ctx.state.buildFailures.set(hookMemberByName.name, {
         stage: "engine.create",
         reason,
       });
-      if (ke[0]?.kind === "threw" || ke[0]?.kind === "shape")
-        e.state.unloadedSteps.set(hookMemberByName.name, {
+      if (skips[0]?.kind === "threw" || skips[0]?.kind === "shape")
+        ctx.state.unloadedSteps.set(hookMemberByName.name, {
           args: hookMemberByName.args,
           shown: hookMemberByName.shown,
           order,
@@ -495,13 +508,13 @@ async function buildEngineApi(e, n, r = {}) {
         });
       hookMemberByName.discard();
       withholdingTable.lift(hookMemberByName.name);
-      L = L.filter((At) => At !== hookMemberByName);
-      e.state.building = L;
+      building = building.filter((loadedHook) => loadedHook !== hookMemberByName);
+      ctx.state.building = building;
     }
   } finally {
-    e.state.building = undefined;
-    e.state.staged = undefined;
-    e.state.stagedBefore = undefined;
+    ctx.state.building = undefined;
+    ctx.state.staged = undefined;
+    ctx.state.stagedBefore = undefined;
   }
 }
 //@ chunk-e6aww6q8.js:4061998-4062042 placement
@@ -515,9 +528,9 @@ var REFOLD_EVENTS = ["engine.create", "plugin.register"];
  */
 var findReloadTriggerEvent = ({ live, scans }) =>
   REFOLD_EVENTS.find(
-    (r) =>
-      live?.hooks(r) === true ||
-      scans.some((scan) => scan.hooks.some((hook) => matchesEventPattern(hook, r))),
+    (event) =>
+      live?.hooks(event) === true ||
+      scans.some((scan) => scan.hooks.some((hook) => matchesEventPattern(hook, event))),
   );
 //@ chunk-e6aww6q8.js:4062142-4062208 placement
 /**

@@ -8,7 +8,13 @@
  * pieces: chunk-74n7apcd.js (5)
  * attribution: placement 1, fingerprint 4
  */
-import { init_react_production, y, R, ce, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { sequential } from "../../utils/sequential.js";
 import { useScrollViewportSize, useHasScrollViewport } from "../../components/ScrollViewportContext.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -70,21 +76,21 @@ function resumeHelpMessage(result) {
 }
 //@ chunk-74n7apcd.js:19188-21375 fingerprint = ResumeCommand (0.67)
 function ResumeCommand({ onDone, onResume }) {
-  let [logs, setLogs] = y([]);
-  let [worktreePaths, setWorktreePaths] = y([]);
-  let [loading, setLoading] = y(true);
-  let [resuming, setResuming] = y(false);
-  let [showAllProjects, setShowAllProjects] = y(false);
+  let [logs, setLogs] = useState([]);
+  let [worktreePaths, setWorktreePaths] = useState([]);
+  let [loading, setLoading] = useState(true);
+  let [resuming, setResuming] = useState(false);
+  let [showAllProjects, setShowAllProjects] = useState(false);
   let { rows } = useScrollViewportSize(useTerminalSize());
   let insideModal = useHasScrollViewport();
   let { storageV5 } = useTheme_2();
-  let currentSessionId = useSession((p) => p.id);
-  let F = R(false);
-  let q = R(false);
-  let allLogsRef = R(null);
-  let W = R(false);
-  let D = R(0);
-  let loadLogs = ce(
+  let currentSessionId = useSession((appState) => appState.id);
+  let unmountedRef = useRef(false);
+  let selectingRef = useRef(false);
+  let allLogsRef = useRef(null);
+  let loadingMoreRef = useRef(false);
+  let logCountRef = useRef(0);
+  let loadLogs = useCallback(
     async (allProjects, paths) => {
       setLoading(true);
       allLogsRef.current = null;
@@ -92,13 +98,13 @@ function ResumeCommand({ onDone, onResume }) {
         let allLogs = allProjects
           ? await loadAllProjectsMessageLogsProgressive(undefined, undefined, storageV5)
           : await loadSameRepoMessageLogsProgressive(paths, undefined, undefined, storageV5);
-        if (F.current) return;
+        if (unmountedRef.current) return;
         allLogsRef.current = allLogs;
         let resumable = filterResumableSessions(allLogs.logs, getSessionId());
-        D.current = resumable.length;
+        logCountRef.current = resumable.length;
         setLogs(resumable);
       } catch (_err) {
-        if (F.current) return;
+        if (unmountedRef.current) return;
         onDone("Failed to load conversations");
       } finally {
         setLoading(false);
@@ -106,51 +112,51 @@ function ResumeCommand({ onDone, onResume }) {
     },
     [onDone, storageV5],
   );
-  P(() => {
+  useEffect(() => {
     async function init() {
       let paths = await getWorktreePaths(getOriginalCwd());
-      if (F.current) return;
+      if (unmountedRef.current) return;
       setWorktreePaths(paths);
       loadLogs(false, paths);
     }
     init();
   }, [loadLogs]);
-  let z = ce(
-    (p) => {
-      if (W.current) return;
-      let c = allLogsRef.current;
-      if (!c || c.nextIndex >= c.allStatLogs.length) return;
-      W.current = true;
-      let I = false;
-      enrichLogs(c.allStatLogs, c.nextIndex, p, storageV5)
-        .then((v) => {
-          if (allLogsRef.current !== c || F.current) return;
-          c.nextIndex = v.nextIndex;
-          let T = filterResumableSessions(v.logs, getSessionId());
-          if (T.length > 0) {
-            let ee = D.current;
-            sortLogs(T).forEach((J, se) => {
-              J.value = ee + se;
+  let loadMoreLogs = useCallback(
+    (setLogsArg) => {
+      if (loadingMoreRef.current) return;
+      let allLogs = allLogsRef.current;
+      if (!allLogs || allLogs.nextIndex >= allLogs.allStatLogs.length) return;
+      loadingMoreRef.current = true;
+      let needsAnotherLoad = false;
+      enrichLogs(allLogs.allStatLogs, allLogs.nextIndex, setLogsArg, storageV5)
+        .then((enriched) => {
+          if (allLogsRef.current !== allLogs || unmountedRef.current) return;
+          allLogs.nextIndex = enriched.nextIndex;
+          let newLogs = filterResumableSessions(enriched.logs, getSessionId());
+          if (newLogs.length > 0) {
+            let baseValue = logCountRef.current;
+            sortLogs(newLogs).forEach((logEntry, offset) => {
+              logEntry.value = baseValue + offset;
             });
-            setLogs((J) => J.concat(T));
-            D.current += T.length;
-          } else if (c.nextIndex < c.allStatLogs.length) I = true;
+            setLogs((previousLogs) => previousLogs.concat(newLogs));
+            logCountRef.current += newLogs.length;
+          } else if (allLogs.nextIndex < allLogs.allStatLogs.length) needsAnotherLoad = true;
         })
         .finally(() => {
-          W.current = false;
-          if (I) z(p);
+          loadingMoreRef.current = false;
+          if (needsAnotherLoad) loadMoreLogs(setLogsArg);
         });
     },
     [storageV5],
   );
-  let onToggleAllProjects = ce(() => {
+  let onToggleAllProjects = useCallback(() => {
     let newValue = !showAllProjects;
     setShowAllProjects(newValue);
     loadLogs(newValue, worktreePaths);
   }, [showAllProjects, loadLogs, worktreePaths]);
   async function handleSelect(log) {
-    if (q.current) return;
-    q.current = true;
+    if (selectingRef.current) return;
+    selectingRef.current = true;
     let sessionId = normalizeUuidOrNull(getSessionIdFromLog(log));
     if (!sessionId) {
       onDone("Failed to resume conversation");
@@ -164,16 +170,16 @@ function ResumeCommand({ onDone, onResume }) {
             storageV5,
           })
         : log;
-      if (F.current) return;
+      if (unmountedRef.current) return;
       crossProjectCheck = await checkCrossProjectResume(fullLog, showAllProjects, worktreePaths);
-      if (F.current) return;
+      if (unmountedRef.current) return;
       if (crossProjectCheck) {
         let raw = await setClipboard(crossProjectCheck);
-        if (F.current) return;
+        if (unmountedRef.current) return;
         if (raw) process.stdout.write(raw);
       }
     } catch (error) {
-      if (F.current) return;
+      if (unmountedRef.current) return;
       logError(withTelemetryMessage(toError(error), "resume command: handleSelect failed"));
       onDone("Failed to resume conversation");
       return;
@@ -199,7 +205,7 @@ function ResumeCommand({ onDone, onResume }) {
     onResume(sessionId, fullLog, "slash_command_picker");
   }
   function handleCancel() {
-    F.current = true;
+    unmountedRef.current = true;
     onDone("Resume cancelled", {
       display: "system",
     });
@@ -232,7 +238,7 @@ function ResumeCommand({ onDone, onResume }) {
     onCancel: handleCancel,
     onSelect: handleSelect,
     onLogsChanged: () => loadLogs(showAllProjects, worktreePaths),
-    onLoadMore: z,
+    onLoadMore: loadMoreLogs,
     showAllProjects,
     onToggleAllProjects,
   });
@@ -257,18 +263,18 @@ var call = async (onDone, context, args) => {
         ),
     });
   let onResume = async (sessionId, log, entrypoint) => {
-    let backgroundSessionHolder = await findBackgroundSessionHolder(sessionId, context.storageV5);
-    if (backgroundSessionHolder) {
+    let holder = await findBackgroundSessionHolder(sessionId, context.storageV5);
+    if (holder) {
       let logDisplayTitle = getLogDisplayTitle(log);
-      let S = liveBackgroundJobId(backgroundSessionHolder, {
+      let jobId = liveBackgroundJobId(holder, {
         replacesProcess: false,
       });
-      if (S !== undefined && context.attachLiveBackgroundSession?.(S)) {
+      if (jobId !== undefined && context.attachLiveBackgroundSession?.(jobId)) {
         logFeatureOk("resume_live_background_open", {
           entrypoint: lit("slash_command"),
         });
         onDone(
-          `Opening ${quoteTitleForBackgroundNotice(logDisplayTitle)}, running in the background (${S})`,
+          `Opening ${quoteTitleForBackgroundNotice(logDisplayTitle)}, running in the background (${jobId})`,
           {
             display: "system",
           },
@@ -277,7 +283,7 @@ var call = async (onDone, context, args) => {
       }
       logFeatureSad(
         "resume_live_background_open",
-        S === undefined
+        jobId === undefined
           ? "not_openable"
           : context.attachLiveBackgroundSession
             ? "attach_refused"
@@ -286,7 +292,7 @@ var call = async (onDone, context, args) => {
       onDone(
         formatSessionRunningInBackground({
           title: logDisplayTitle,
-          holder: backgroundSessionHolder,
+          holder,
           canFork: false,
         }),
         {
@@ -333,7 +339,7 @@ var call = async (onDone, context, args) => {
   if (maybeSessionId) {
     let matchingLogs = logs
       .filter((log) => getSessionIdFromLog(log) === maybeSessionId)
-      .sort((i, L) => L.modified.getTime() - i.modified.getTime());
+      .sort((leftLog, rightLog) => rightLog.modified.getTime() - leftLog.modified.getTime());
     if (matchingLogs.length > 0) {
       let log = matchingLogs[0];
       let fullLog = isLiteLog(log)
@@ -344,31 +350,31 @@ var call = async (onDone, context, args) => {
       onResume(maybeSessionId, fullLog, "slash_command_session_id");
       return null;
     }
-    let a = await getLastSessionLog(maybeSessionId, undefined, context.storageV5).then(
+    let loadResult = await getLastSessionLog(maybeSessionId, undefined, context.storageV5).then(
       (log) => ({
         log,
       }),
       (error) => {
-        let L = win32EbadfHelp(error);
-        if (L === undefined) throw error;
+        let ebadfSentence = win32EbadfHelp(error);
+        if (ebadfSentence === undefined) throw error;
         logForDebugging(`/resume: session load failed (${getErrnoCode(error)}): ${errorMessage(error)}`, {
           level: "error",
         });
         return {
-          ebadfSentence: L,
+          ebadfSentence,
         };
       },
     );
-    if ("ebadfSentence" in a) {
-      let i = `Failed to resume: ${a.ebadfSentence}`;
+    if ("ebadfSentence" in loadResult) {
+      let failureMessage = `Failed to resume: ${loadResult.ebadfSentence}`;
       return jsxProd_default(AddDirError, {
-        message: i,
+        message: failureMessage,
         args: arg,
-        onDone: () => onDone(i),
+        onDone: () => onDone(failureMessage),
       });
     }
-    if (a.log) {
-      onResume(maybeSessionId, a.log, "slash_command_session_id");
+    if (loadResult.log) {
+      onResume(maybeSessionId, loadResult.log, "slash_command_session_id");
       return null;
     }
   }
@@ -416,3 +422,4 @@ var call = async (onDone, context, args) => {
     onDone: () => onDone(message),
   });
 };
+export { call, filterResumableSessions };

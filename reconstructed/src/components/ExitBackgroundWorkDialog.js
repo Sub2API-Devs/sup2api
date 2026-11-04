@@ -14,7 +14,7 @@ import {
   jsxProd_default,
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { logEvent } from "../services/analytics/index.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useScrollViewportSize, useHasScrollViewport } from "./ScrollViewportContext.js";
@@ -23,11 +23,15 @@ import { Dialog } from "./design-system/Dialog.js";
 import { OverflowHint } from "./CtrlOToExpand.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { ModelSelector } from "./agents/ModelSelector.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1690353-1690357 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1690353", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1690357-1690522 placement
-function renderBackgroundWorkItem(bn, Go) {
+function renderBackgroundWorkItem(item, key) {
   return jsxProd_default_2(
     Box,
     {
@@ -35,40 +39,40 @@ function renderBackgroundWorkItem(bn, Go) {
       children: [
         jsxProd_default(Text, {
           bold: true,
-          children: bn.label,
+          children: item.label,
         }),
-        bn.detail
+        item.detail
           ? jsxProd_default_2(Text, {
               dimColor: true,
-              children: [" \xB7 ", bn.detail],
+              children: [" \xB7 ", item.detail],
             })
           : null,
       ],
     },
-    Go,
+    key,
   );
 }
 //@ chunk-18hwfzwa.js:1690522-1692920 placement
 function ExitBackgroundWorkDialog(props) {
-  let $ = w(52);
+  let $ = useMemoCache(52);
   let { items, onExit, onCancel, onBackground } = props;
-  let Re;
+  let logChoiceCached;
   if ($[0] !== items.length) {
-    Re = function He(Be) {
+    logChoiceCached = function logChoice(choice) {
       logEvent("tengu_exit_background_work_prompt", {
         item_count: items.length,
-        chose_exit: Be === "exit",
-        chose_background: Be === "background",
+        chose_exit: choice === "exit",
+        chose_background: choice === "background",
       });
     };
     $[0] = items.length;
-    $[1] = Re;
-  } else Re = $[1];
-  let He = Re;
-  let We;
-  if ($[2] !== He || $[3] !== onBackground || $[4] !== onCancel || $[5] !== onExit) {
-    We = function Xe(ze) {
-      switch ((He(ze), ze)) {
+    $[1] = logChoiceCached;
+  } else logChoiceCached = $[1];
+  let recordChoice = logChoiceCached;
+  let changeCached;
+  if ($[2] !== recordChoice || $[3] !== onBackground || $[4] !== onCancel || $[5] !== onExit) {
+    changeCached = function handleChange(value) {
+      switch ((recordChoice(value), value)) {
         case "exit": {
           return onExit();
         }
@@ -80,128 +84,128 @@ function ExitBackgroundWorkDialog(props) {
         }
       }
     };
-    $[2] = He;
+    $[2] = recordChoice;
     $[3] = onBackground;
     $[4] = onCancel;
     $[5] = onExit;
-    $[6] = We;
-  } else We = $[6];
-  let onChange = We;
-  let rt;
-  if ($[7] !== He || $[8] !== onCancel) {
-    rt = function kt() {
-      He("stay");
+    $[6] = changeCached;
+  } else changeCached = $[6];
+  let onChange = changeCached;
+  let cancelCached;
+  if ($[7] !== recordChoice || $[8] !== onCancel) {
+    cancelCached = function handleCancel() {
+      recordChoice("stay");
       onCancel();
     };
-    $[7] = He;
+    $[7] = recordChoice;
     $[8] = onCancel;
-    $[9] = rt;
-  } else rt = $[9];
-  let kt = rt;
+    $[9] = cancelCached;
+  } else cancelCached = $[9];
+  let onCancelHandler = cancelCached;
   let terminalSize = useTerminalSize();
   let { rows } = useScrollViewportSize(terminalSize);
   let hasScrollViewport = useHasScrollViewport();
-  let Et;
+  let viewportRows;
   if ($[10] !== hasScrollViewport || $[11] !== rows) {
-    Et = !hasScrollViewport && isFullscreenActive() ? Math.floor(rows / 2) : rows;
+    viewportRows = !hasScrollViewport && isFullscreenActive() ? Math.floor(rows / 2) : rows;
     $[10] = hasScrollViewport;
     $[11] = rows;
-    $[12] = Et;
-  } else Et = $[12];
-  let Dt = Et;
-  let Lt = (onBackground ? 13 : 12) - 0;
-  let max = Math.max(1, Dt - Lt);
-  let Xt;
-  let io;
+    $[12] = viewportRows;
+  } else viewportRows = $[12];
+  let availableRows = viewportRows;
+  let chromeRows = (onBackground ? 13 : 12) - 0;
+  let max = Math.max(1, availableRows - chromeRows);
+  let ListBox;
+  let DialogComponent;
   let subtitle;
   let onCancel_2;
   let exitOnCtrlCD;
   let flexDirection;
   let gap;
   let paddingLeft;
-  let Bo;
+  let itemElements;
   let title;
-  if ($[13] !== kt || $[14] !== items || $[15] !== max) {
+  if ($[13] !== onCancelHandler || $[14] !== items || $[15] !== max) {
     let sliced = items.slice(0, max);
-    io = Dialog;
+    DialogComponent = Dialog;
     title = "Background work is running";
     subtitle = "The following will stop when you exit:";
-    onCancel_2 = kt;
+    onCancel_2 = onCancelHandler;
     exitOnCtrlCD = true;
-    Xt = Box;
+    ListBox = Box;
     flexDirection = "column";
     gap = 0;
     paddingLeft = 0;
-    Bo = sliced.map(renderBackgroundWorkItem);
-    $[13] = kt;
+    itemElements = sliced.map(renderBackgroundWorkItem);
+    $[13] = onCancelHandler;
     $[14] = items;
     $[15] = max;
-    $[16] = Xt;
-    $[17] = io;
+    $[16] = ListBox;
+    $[17] = DialogComponent;
     $[18] = subtitle;
     $[19] = onCancel_2;
     $[20] = exitOnCtrlCD;
     $[21] = flexDirection;
     $[22] = gap;
     $[23] = paddingLeft;
-    $[24] = Bo;
+    $[24] = itemElements;
     $[25] = title;
   } else {
-    Xt = $[16];
-    io = $[17];
+    ListBox = $[16];
+    DialogComponent = $[17];
     subtitle = $[18];
     onCancel_2 = $[19];
     exitOnCtrlCD = $[20];
     flexDirection = $[21];
     gap = $[22];
     paddingLeft = $[23];
-    Bo = $[24];
+    itemElements = $[24];
     title = $[25];
   }
   const count = items.length - max;
-  let Wo;
+  let overflowHint;
   if ($[26] !== count) {
-    Wo = jsxProd_default(OverflowHint, {
+    overflowHint = jsxProd_default(OverflowHint, {
       count,
       unit: "item",
     });
     $[26] = count;
-    $[27] = Wo;
-  } else Wo = $[27];
-  let mn;
+    $[27] = overflowHint;
+  } else overflowHint = $[27];
+  let listElement;
   if (
-    $[28] !== Xt ||
-    $[29] !== Wo ||
+    $[28] !== ListBox ||
+    $[29] !== overflowHint ||
     $[30] !== flexDirection ||
     $[31] !== gap ||
     $[32] !== paddingLeft ||
-    $[33] !== Bo
+    $[33] !== itemElements
   ) {
-    mn = jsxProd_default_2(Xt, {
+    listElement = jsxProd_default_2(ListBox, {
       flexDirection,
       gap,
       paddingLeft,
-      children: [Bo, Wo],
+      children: [itemElements, overflowHint],
     });
-    $[28] = Xt;
-    $[29] = Wo;
+    $[28] = ListBox;
+    $[29] = overflowHint;
     $[30] = flexDirection;
     $[31] = gap;
     $[32] = paddingLeft;
-    $[33] = Bo;
-    $[34] = mn;
-  } else mn = $[34];
-  let Cn;
+    $[33] = itemElements;
+    $[34] = listElement;
+  } else listElement = $[34];
+  let exitOption;
   if ($[35] === MEMO_CACHE_SENTINEL) {
-    Cn = {
+    exitOption = {
       label: "Exit and stop tasks",
       value: "exit",
     };
-    $[35] = Cn;
-  } else Cn = $[35];
-  let No;
+    $[35] = exitOption;
+  } else exitOption = $[35];
+  let backgroundOptions;
   if ($[36] !== onBackground) {
-    No = onBackground
+    backgroundOptions = onBackground
       ? [
           {
             label: "Move to background and exit",
@@ -210,60 +214,63 @@ function ExitBackgroundWorkDialog(props) {
         ]
       : [];
     $[36] = onBackground;
-    $[37] = No;
-  } else No = $[37];
-  let vo;
+    $[37] = backgroundOptions;
+  } else backgroundOptions = $[37];
+  let stayOption;
   if ($[38] === MEMO_CACHE_SENTINEL) {
-    vo = {
+    stayOption = {
       label: "Stay",
       value: "stay",
     };
-    $[38] = vo;
-  } else vo = $[38];
+    $[38] = stayOption;
+  } else stayOption = $[38];
   let options;
-  if ($[39] !== No) {
-    options = [Cn, ...No, vo];
-    $[39] = No;
+  if ($[39] !== backgroundOptions) {
+    options = [exitOption, ...backgroundOptions, stayOption];
+    $[39] = backgroundOptions;
     $[40] = options;
   } else options = $[40];
-  let kn;
+  let selectorElement;
   if ($[41] !== onChange || $[42] !== options) {
-    kn = jsxProd_default(ModelSelector, {
+    selectorElement = jsxProd_default(ModelSelector, {
       options,
       onChange,
     });
     $[41] = onChange;
     $[42] = options;
-    $[43] = kn;
-  } else kn = $[43];
-  let Fn;
+    $[43] = selectorElement;
+  } else selectorElement = $[43];
+  let dialogElement;
   if (
-    $[44] !== io ||
+    $[44] !== DialogComponent ||
     $[45] !== subtitle ||
     $[46] !== onCancel_2 ||
     $[47] !== exitOnCtrlCD ||
-    $[48] !== mn ||
-    $[49] !== kn ||
+    $[48] !== listElement ||
+    $[49] !== selectorElement ||
     $[50] !== title
   ) {
-    Fn = jsxProd_default_2(io, {
+    dialogElement = jsxProd_default_2(DialogComponent, {
       title,
       subtitle,
       onCancel: onCancel_2,
       exitOnCtrlCD,
-      children: [mn, kn],
+      children: [listElement, selectorElement],
     });
-    $[44] = io;
+    $[44] = DialogComponent;
     $[45] = subtitle;
     $[46] = onCancel_2;
     $[47] = exitOnCtrlCD;
-    $[48] = mn;
-    $[49] = kn;
+    $[48] = listElement;
+    $[49] = selectorElement;
     $[50] = title;
-    $[51] = Fn;
-  } else Fn = $[51];
-  return Fn;
+    $[51] = dialogElement;
+  } else dialogElement = $[51];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:1693038-1693042 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1693038", () => {
+  init_react_production();
+});
 export { ExitBackgroundWorkDialog };

@@ -5,18 +5,18 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
-import { require_core as require_core_2 } from "../../../@smithy/core/dist-cjs/index.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
+import { require_core as require_core_3 } from "../../../@smithy/core/dist-cjs/index.js";
 import { require_util_endpoints } from "../../util-endpoints/dist-cjs/index.js";
-import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
-import { require_core } from "../../core/dist-cjs/index.js";
+import { require_protocol_http as require_protocol_http_3 } from "../../../@smithy/protocol-http/dist-cjs/index.js";
+import { require_core_2 } from "../../core/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:111841-115054 cjs-fingerprint
-var require_middleware_user_agent = x(function (cjsExports) {
-  var core = require_core_2();
+var require_middleware_user_agent = __commonJS(function (cjsExports) {
+  var core = require_core_3();
   var utilEndpoints = require_util_endpoints();
-  var protocolHttp = require_protocol_http();
-  var core$1 = require_core();
+  var protocolHttp = require_protocol_http_3();
+  var core$1 = require_core_2();
   var DEFAULT_UA_APP_ID = undefined;
   function isValidUserAgentAppId(appId) {
     if (appId === undefined) return true;

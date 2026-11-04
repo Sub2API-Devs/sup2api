@@ -31,12 +31,12 @@ function connectGithubUrl() {
   return `${getOauthConfig().CLAUDE_AI_ORIGIN}/connect-github`;
 }
 //@ chunk-pemtjbn7.js:2852-3122 placement
-function githubNotConnectedMessage(o = "this repository") {
+function githubNotConnectedMessage(subject = "this repository") {
   let githubUrl = connectGithubUrl();
-  let s = isWebSetupOfferable()
+  let advice = isWebSetupOfferable()
     ? `Run /web-setup to connect with your GitHub CLI login, or connect on the web at ${githubUrl}`
     : `Connect it on the web at ${githubUrl}`;
-  return `GitHub isn't connected to your Claude account, so ${o} can't be cloned in the cloud. ${s}`;
+  return `GitHub isn't connected to your Claude account, so ${subject} can't be cloned in the cloud. ${advice}`;
 }
 //@ chunk-pemtjbn7.js:3122-3367 placement = web (0.749)
 /**
@@ -54,4 +54,10 @@ var webSetupCommandDefinition = {
   },
 };
 var webSetupCommand = webSetupCommandDefinition;
-export { githubNotConnectedMessage, isWebSetupEnabled, isWebSetupOfferable, connectGithubUrl };
+export {
+  githubNotConnectedMessage,
+  isWebSetupEnabled,
+  isWebSetupOfferable,
+  connectGithubUrl,
+  webSetupCommand,
+};

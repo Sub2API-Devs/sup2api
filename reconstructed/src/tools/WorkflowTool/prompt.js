@@ -61,7 +61,7 @@ The canonical multi-stage pattern \u2014 pipeline by default, each dimension ver
  * Workflow 工具的脚本 API 文档（阶段、模型、effort、agent 调用参数）
  */
 function WORKFLOW_SCRIPT_API_DOC() {
-  let e = env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE || getWorkflowSubagentModel() !== undefined;
+  let modelPinned = env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE || getWorkflowSubagentModel() !== undefined;
   return `# Workflow authoring reference
 
 A workflow structures work across many agents \u2014 to be comprehensive (decompose and cover in parallel), to be confident (independent perspectives and adversarial checks before committing), or to take on scale one context can't hold (migrations, audits, broad sweeps). The script is where you encode that structure: what fans out, what verifies, what synthesizes.
@@ -95,10 +95,10 @@ Every script must begin with \`export const meta = {...}\`:
   const flaky = await agent('grep CI logs for retry markers', {schema: FLAKY_SCHEMA})
   ...
 
-The \`meta\` object must be a PURE LITERAL \u2014 no variables, function calls, spreads, or template interpolation. Required fields: \`name\`, \`description\`. Optional: \`whenToUse\` (shown in the workflow list), \`phases\`. Use the SAME phase titles in meta.phases as in phase() calls \u2014 titles are matched exactly; a phase() call with no matching meta entry just gets its own progress group.${e ? "" : " Add `model` to a phase entry when that phase uses a specific model override."}
+The \`meta\` object must be a PURE LITERAL \u2014 no variables, function calls, spreads, or template interpolation. Required fields: \`name\`, \`description\`. Optional: \`whenToUse\` (shown in the workflow list), \`phases\`. Use the SAME phase titles in meta.phases as in phase() calls \u2014 titles are matched exactly; a phase() call with no matching meta entry just gets its own progress group.${modelPinned ? "" : " Add `model` to a phase entry when that phase uses a specific model override."}
 
 Script body hooks:
-- agent(prompt: string, opts?: {label?: string, phase?: string, schema?: object,${e ? "" : " model?: string,"} effort?: string, isolation?: ${ISOLATION_TYPE_LITERAL}, agentType?: string}): Promise<any> \u2014 spawn a subagent. Without schema, returns its final text as a string. With schema (a JSON Schema), the subagent is forced to call a StructuredOutput tool and agent() returns the validated object \u2014 no parsing needed. Returns null if the user skips the agent mid-run or the subagent dies on a terminal API error after retries (filter with .filter(Boolean)). opts.label overrides the display label. opts.phase explicitly assigns this agent to a progress group (use this inside pipeline()/parallel() stages to avoid races on the global phase() state \u2014 same phase string \u2192 same group box).${e ? "" : " opts.model overrides the model for this agent call. Default to omitting it \u2014 the agent inherits the main-loop model (the resolved session model), which is almost always correct. Only set it when you're highly confident a different tier fits the task; when unsure, omit."} opts.effort overrides the reasoning effort for this agent call ('low' | 'medium' | 'high' | 'xhigh' | 'max') \u2014 omit to ${getSubagentEffortOverride() === undefined ? "inherit the session effort" : "use the configured subagent default"}; use 'low' for cheap mechanical stages and higher tiers only for the hardest verify/judge stages. opts.isolation: 'worktree' runs the agent in a fresh git worktree \u2014 EXPENSIVE (~200-500ms setup + disk per agent), use ONLY when agents mutate files in parallel and would otherwise conflict; the worktree is auto-removed if unchanged.${GATED_WORKTREE_NOTE} opts.agentType uses a custom subagent type (e.g. 'general-purpose', 'code-reviewer') instead of the default workflow subagent \u2014 resolved from the same registry as the Agent tool; composes with schema (the custom agent's system prompt gets a StructuredOutput instruction appended).
+- agent(prompt: string, opts?: {label?: string, phase?: string, schema?: object,${modelPinned ? "" : " model?: string,"} effort?: string, isolation?: ${ISOLATION_TYPE_LITERAL}, agentType?: string}): Promise<any> \u2014 spawn a subagent. Without schema, returns its final text as a string. With schema (a JSON Schema), the subagent is forced to call a StructuredOutput tool and agent() returns the validated object \u2014 no parsing needed. Returns null if the user skips the agent mid-run or the subagent dies on a terminal API error after retries (filter with .filter(Boolean)). opts.label overrides the display label. opts.phase explicitly assigns this agent to a progress group (use this inside pipeline()/parallel() stages to avoid races on the global phase() state \u2014 same phase string \u2192 same group box).${modelPinned ? "" : " opts.model overrides the model for this agent call. Default to omitting it \u2014 the agent inherits the main-loop model (the resolved session model), which is almost always correct. Only set it when you're highly confident a different tier fits the task; when unsure, omit."} opts.effort overrides the reasoning effort for this agent call ('low' | 'medium' | 'high' | 'xhigh' | 'max') \u2014 omit to ${getSubagentEffortOverride() === undefined ? "inherit the session effort" : "use the configured subagent default"}; use 'low' for cheap mechanical stages and higher tiers only for the hardest verify/judge stages. opts.isolation: 'worktree' runs the agent in a fresh git worktree \u2014 EXPENSIVE (~200-500ms setup + disk per agent), use ONLY when agents mutate files in parallel and would otherwise conflict; the worktree is auto-removed if unchanged.${GATED_WORKTREE_NOTE} opts.agentType uses a custom subagent type (e.g. 'general-purpose', 'code-reviewer') instead of the default workflow subagent \u2014 resolved from the same registry as the Agent tool; composes with schema (the custom agent's system prompt gets a StructuredOutput instruction appended).
 - pipeline(items, stage1, stage2, ...): Promise<any[]> \u2014 run each item through all stages independently, NO barrier between stages. Item A can be in stage 3 while item B is still in stage 1. This is the DEFAULT for multi-stage work. Wall-clock = slowest single-item chain, not sum-of-slowest-per-stage. Every stage callback receives (prevResult, originalItem, index) \u2014 use originalItem/index in later stages to label work without threading context through stage 1's return value. A stage that throws drops that item to \`null\` and skips its remaining stages.
 - parallel(thunks: Array<() => Promise<any>>): Promise<any[]> \u2014 run tasks concurrently. This is a BARRIER: awaits all thunks before returning. A thunk that throws (or whose agent errors) resolves to \`null\` in the result array \u2014 the call itself never rejects, so \`.filter(Boolean)\` before using the results. Use ONLY when you genuinely need all results together.
 - log(message: string): void \u2014 emit a progress message to the user (shown as a narrator line above the progress tree)
@@ -203,13 +203,13 @@ var LOAD_AUTHORING_SKILL_HINT = `Before writing a script, load the \`${WORKFLOW_
 /**
  * 按是否加载作者技能拼出 Workflow 工具描述。
  */
-function workflowToolDescription(e, s = false) {
-  let t = s ? WORKFLOW_TOOL_DESCRIPTION_2 : WORKFLOW_TOOL_DESCRIPTION;
-  return e
-    ? `${t}
+function workflowToolDescription(loadsSkill, lean = false) {
+  let descriptionText = lean ? WORKFLOW_TOOL_DESCRIPTION_2 : WORKFLOW_TOOL_DESCRIPTION;
+  return loadsSkill
+    ? `${descriptionText}
 
 ${LOAD_AUTHORING_SKILL_HINT}`
-    : `${t}
+    : `${descriptionText}
 
 ${WORKFLOW_SCRIPT_API_DOC()}`;
 }

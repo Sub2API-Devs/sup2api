@@ -19,37 +19,37 @@ import { onCwdChanged } from "../../utils/hooks/fileChangedWatcher.js";
 import { logError } from "../../utils/log.js";
 
 //@ chunk-1mqwyc6a.js:11848-12627 placement
-function createCallDirectoryScope(i, c) {
-  let cwd = getSessionProject(i).cwd;
-  let e = i.withProject({
+function createCallDirectoryScope(session, callerGone) {
+  let cwd = getSessionProject(session).cwd;
+  let scopedSession = session.withProject({
     cwd,
   });
-  permissionCheckedCwds.of(e).set(e, cwd);
-  let s = e.subscribe(() => {
-    if (e.project?.cwd !== cwd) permissionCheckedCwds.of(e).set(e, "");
+  permissionCheckedCwds.of(scopedSession).set(scopedSession, cwd);
+  let projectCwdSubscription = scopedSession.subscribe(() => {
+    if (scopedSession.project?.cwd !== cwd) permissionCheckedCwds.of(scopedSession).set(scopedSession, "");
   });
-  let n = false;
-  let a = i.subscribe(() => {
-    n ||= i.project?.cwd !== cwd;
+  let cwdMovedMeanwhile = false;
+  let sessionSubscription = session.subscribe(() => {
+    cwdMovedMeanwhile ||= session.project?.cwd !== cwd;
   });
   return {
-    session: e,
-    run: (r) => runInRemoteCallFrameMain(getSessionProject(e).cwd, r),
-    bind: (r) => () => runInRemoteCallFrameMain(getSessionProject(e).cwd, r),
+    session: scopedSession,
+    run: (run) => runInRemoteCallFrameMain(getSessionProject(scopedSession).cwd, run),
+    bind: (run) => () => runInRemoteCallFrameMain(getSessionProject(scopedSession).cwd, run),
     [Symbol.dispose]() {
-      a();
-      s();
-      let cwd_2 = getSessionProject(e).cwd;
-      if (cwd_2 === cwd || c.aborted) return;
-      if (n) {
+      sessionSubscription();
+      projectCwdSubscription();
+      let cwd_2 = getSessionProject(scopedSession).cwd;
+      if (cwd_2 === cwd || callerGone.aborted) return;
+      if (cwdMovedMeanwhile) {
         logForDebugging(
-          `MCP server: a call ended in ${cwd_2}, but another call moved the working directory meanwhile, so the next call starts in ${i.project?.cwd}`,
+          `MCP server: a call ended in ${cwd_2}, but another call moved the working directory meanwhile, so the next call starts in ${session.project?.cwd}`,
         );
         logFeatureSad("mcp_serve_call_directory", "moved_meanwhile");
         return;
       }
       try {
-        setCwd(cwd_2, i);
+        setCwd(cwd_2, session);
       } catch (error) {
         logForDebugging(
           `MCP server: the directory a call ended in could not be adopted, so the next call starts in ${cwd}: ${errorMessage(error)}`,
@@ -63,3 +63,4 @@ function createCallDirectoryScope(i, c) {
     },
   };
 }
+export { createCallDirectoryScope };

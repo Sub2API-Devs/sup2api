@@ -11,9 +11,9 @@
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   looseObject,
-  string,
-  M,
-  u,
+  stringSchema,
+  booleanSchema,
+  objectSchema,
   array,
   zodStrictObject,
   _enum,
@@ -64,17 +64,17 @@ import { toolMatchesName } from "../../Tool.js";
 //@ chunk-zw5xhxkf.js:5270-5474 placement
 var pluginSearchRowSchema = DoctorLazy(() =>
   looseObject({
-    id: string(),
-    name: string(),
-    display_name: string().nullish(),
-    description: string().nullish(),
-    enabled: M().nullish(),
-    presents_as: string().nullish(),
-    installation_preference: string().nullish(),
+    id: stringSchema(),
+    name: stringSchema(),
+    display_name: stringSchema().nullish(),
+    description: stringSchema().nullish(),
+    enabled: booleanSchema().nullish(),
+    presents_as: stringSchema().nullish(),
+    installation_preference: stringSchema().nullish(),
   }),
 );
 var pluginSearchResponseSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     results: array(pluginSearchRowSchema()),
   }),
 );
@@ -122,14 +122,14 @@ async function checkPluginSearchAllowed(feature, needsPluginsScope, session, cli
   return "send";
 }
 //@ chunk-zw5xhxkf.js:6334-7335 placement
-async function searchPluginsOrSkills(e, keywords, session, client) {
-  let feature = e === SKILL_SEARCH_PATH ? "skill_search" : "plugin_search";
-  if ((await checkPluginSearchAllowed(feature, e === PLUGIN_SEARCH_PATH, session, client)) === "skip")
+async function searchPluginsOrSkills(path, keywords, session, client) {
+  let feature = path === SKILL_SEARCH_PATH ? "skill_search" : "plugin_search";
+  if ((await checkPluginSearchAllowed(feature, path === PLUGIN_SEARCH_PATH, session, client)) === "skip")
     return [];
-  let h = e === PLUGIN_SEARCH_PATH && env.CLAUDE_CODE_CCR_SURFACE === "tag";
-  let a = await apiClient.post(
-    e,
-    h
+  let useTagMarketplaces = path === PLUGIN_SEARCH_PATH && env.CLAUDE_CODE_CCR_SURFACE === "tag";
+  let response = await apiClient.post(
+    path,
+    useTagMarketplaces
       ? {
           keywords,
           included_default_marketplaces: ["claude-tag-plugins"],
@@ -144,34 +144,38 @@ async function searchPluginsOrSkills(e, keywords, session, client) {
       credentials: client,
     },
   );
-  if (!a.ok)
+  if (!response.ok)
     throw Error(
-      a.reason === "no-auth"
+      response.reason === "no-auth"
         ? "Not authenticated with a claude.ai account."
-        : `search route unavailable: ${a.reason}`,
+        : `search route unavailable: ${response.reason}`,
     );
-  if (a.status >= 400) {
-    let y = errorEnvelopeSchema().safeParse(a.data);
-    let T = y.success
-      ? `search route ${a.status} ${y.data.error.type ?? "error_envelope_no_type"}${y.data.error.message ? `: ${y.data.error.message}` : ""}`
-      : `search route ${a.status}`;
-    if (y.success && (a.status === 403 || (a.status === 404 && y.data.error.type === "not_found_error"))) {
-      logForDebugging(`[plugin-skill-search] degraded to empty: ${T}`, {
+  if (response.status >= 400) {
+    let errorEnvelope = errorEnvelopeSchema().safeParse(response.data);
+    let errorText = errorEnvelope.success
+      ? `search route ${response.status} ${errorEnvelope.data.error.type ?? "error_envelope_no_type"}${errorEnvelope.data.error.message ? `: ${errorEnvelope.data.error.message}` : ""}`
+      : `search route ${response.status}`;
+    if (
+      errorEnvelope.success &&
+      (response.status === 403 ||
+        (response.status === 404 && errorEnvelope.data.error.type === "not_found_error"))
+    ) {
+      logForDebugging(`[plugin-skill-search] degraded to empty: ${errorText}`, {
         level: "error",
       });
       logFeatureSad(feature, "not_entitled");
       return [];
     }
-    throw Error(T);
+    throw Error(errorText);
   }
-  let S = pluginSearchResponseSchema().safeParse(a.data);
-  if (!S.success) throw Error("malformed search response");
-  logFeatureOk(e === SKILL_SEARCH_PATH ? "skill_search" : "plugin_search");
-  return S.data.results;
+  let parsed = pluginSearchResponseSchema().safeParse(response.data);
+  if (!parsed.success) throw Error("malformed search response");
+  logFeatureOk(path === SKILL_SEARCH_PATH ? "skill_search" : "plugin_search");
+  return parsed.data.results;
 }
 //@ chunk-zw5xhxkf.js:7335-8335 placement
-async function fetchPluginDetails(e, session, client) {
-  let filtered = uniq(e).filter(isTaggedMarketplaceId);
+async function fetchPluginDetails(pluginIds, session, client) {
+  let filtered = uniq(pluginIds).filter(isTaggedMarketplaceId);
   if (filtered.length === 0)
     return {
       found: [],
@@ -184,52 +188,61 @@ async function fetchPluginDetails(e, session, client) {
       unchecked: filtered,
       skippedNoScope: true,
     };
-  let r = [];
-  let h = [];
+  let found = [];
+  let unchecked = [];
   await Promise.all(
-    filtered.map(async (a) => {
+    filtered.map(async (pluginId) => {
       try {
-        let S = await apiClient.get(`${PLUGINS_API_PATH}${encodeURIComponent(a)}`, {
+        let response = await apiClient.get(`${PLUGINS_API_PATH}${encodeURIComponent(pluginId)}`, {
           auth: "teleport-org",
           timeout: PLUGIN_SEARCH_TIMEOUT_MS,
           signal: session,
           credentials: client,
         });
-        if (!S.ok) {
-          logForDebugging(`[plugin-skill-search] plugin detail not sent: ${S.reason}`);
-          h.push(a);
+        if (!response.ok) {
+          logForDebugging(`[plugin-skill-search] plugin detail not sent: ${response.reason}`);
+          unchecked.push(pluginId);
           return;
         }
-        if (S.status >= 400) {
-          if (!(errorEnvelopeSchema().safeParse(S.data).success && S.status === 404)) {
-            logForDebugging(`[plugin-skill-search] plugin detail for ${a} returned HTTP ${S.status}`, {
-              level: "error",
-            });
-            h.push(a);
+        if (response.status >= 400) {
+          if (!(errorEnvelopeSchema().safeParse(response.data).success && response.status === 404)) {
+            logForDebugging(
+              `[plugin-skill-search] plugin detail for ${pluginId} returned HTTP ${response.status}`,
+              {
+                level: "error",
+              },
+            );
+            unchecked.push(pluginId);
           }
           return;
         }
-        let y = pluginSearchRowSchema().safeParse(S.data);
-        if (!y.success || y.data.id !== a) {
-          logForDebugging(`[plugin-skill-search] plugin detail for ${a} did not parse as that plugin`, {
-            level: "error",
-          });
-          h.push(a);
+        let parsedRow = pluginSearchRowSchema().safeParse(response.data);
+        if (!parsedRow.success || parsedRow.data.id !== pluginId) {
+          logForDebugging(
+            `[plugin-skill-search] plugin detail for ${pluginId} did not parse as that plugin`,
+            {
+              level: "error",
+            },
+          );
+          unchecked.push(pluginId);
           return;
         }
-        r.push(y.data);
+        found.push(parsedRow.data);
       } catch (error) {
         if (isAbortError(error) || session?.aborted) throw error;
-        logForDebugging(`[plugin-skill-search] plugin detail for ${a} failed: ${errorMessage(error)}`, {
-          level: "error",
-        });
-        h.push(a);
+        logForDebugging(
+          `[plugin-skill-search] plugin detail for ${pluginId} failed: ${errorMessage(error)}`,
+          {
+            level: "error",
+          },
+        );
+        unchecked.push(pluginId);
       }
     }),
   );
   return {
-    found: r,
-    unchecked: h,
+    found,
+    unchecked,
     skippedNoScope: false,
   };
 }
@@ -237,8 +250,8 @@ async function fetchPluginDetails(e, session, client) {
 /**
  * 在插件目录里按关键词搜索（run 实现）。
  */
-async function searchPluginsCatalog(keywords, n, s) {
-  return searchPluginsOrSkills(PLUGIN_SEARCH_PATH, keywords, n, s);
+async function searchPluginsCatalog(keywords, signal, credentials) {
+  return searchPluginsOrSkills(PLUGIN_SEARCH_PATH, keywords, signal, credentials);
 }
 //@ chunk-zw5xhxkf.js:8377-8419 placement
 /**
@@ -248,33 +261,36 @@ async function searchSkillsCatalog(keywords, signal, credentials) {
   return searchPluginsOrSkills(SKILL_SEARCH_PATH, keywords, signal, credentials);
 }
 //@ chunk-zw5xhxkf.js:8419-8561 placement
-function logSearchFetchFailed(e, error) {
-  logForDebugging(`[plugin-skill-search] ${e} failed: ${errorMessage(error)}`, {
+function logSearchFetchFailed(kind, error) {
+  logForDebugging(`[plugin-skill-search] ${kind} failed: ${errorMessage(error)}`, {
     level: "error",
   });
-  logFeatureBad(e === "plugin" ? "plugin_search" : "skill_search", "fetch_failed");
+  logFeatureBad(kind === "plugin" ? "plugin_search" : "skill_search", "fetch_failed");
 }
 //@ chunk-zw5xhxkf.js:8561-8789 placement
-async function readPluginManifest(e, n, s) {
-  if (!isSessionRefsSyncEnabled(e)) return null;
+async function readPluginManifest(session, signal, feature) {
+  if (!isSessionRefsSyncEnabled(session)) return null;
   if (isPluginsSyncVetoed()) return [];
-  let l = await raceWithAbortSignal(
-    sessionSkillManifestSlot.of(e).fetch(),
-    n,
+  let manifestResult = await raceWithAbortSignal(
+    sessionSkillManifestSlot.of(session).fetch(),
+    signal,
     () => new AbortError("plugin manifest read aborted"),
   );
-  if (!l.ok) {
-    logFeatureBad(s, "manifest_failed");
-    throw new PluginSkillSearchUnavailableError(`manifest ${l.reason}`);
+  if (!manifestResult.ok) {
+    logFeatureBad(feature, "manifest_failed");
+    throw new PluginSkillSearchUnavailableError(`manifest ${manifestResult.reason}`);
   }
-  return l.plugins;
+  return manifestResult.plugins;
 }
 //@ chunk-zw5xhxkf.js:8789-8926 placement
 var keywordsSchema = DoctorLazy(() =>
-  array(string().min(1).max(64)).min(1).max(8).describe("Keyword phrases describing the user's intent."),
+  array(stringSchema().min(1).max(64))
+    .min(1)
+    .max(8)
+    .describe("Keyword phrases describing the user's intent."),
 );
 var listResultSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     results: array(pluginSearchRowSchema()),
   }),
 );
@@ -282,31 +298,31 @@ var listResultSchema = DoctorLazy(() =>
 /**
  * 把工具结果序列化成 tool_result 内容块（JSON）。
  */
-function jsonResultBlock(e, toolUseId) {
+function jsonResultBlock(result, toolUseId) {
   return {
     tool_use_id: toolUseId,
     type: "tool_result",
-    content: jsonStringify(e),
+    content: jsonStringify(result),
   };
 }
 //@ chunk-zw5xhxkf.js:8996-9044 placement
 /**
  * 把输入里的关键词数组渲染成逗号分隔文本。
  */
-function renderKeywords(e) {
-  return (e.keywords ?? []).join(", ");
+function renderKeywords(input) {
+  return (input.keywords ?? []).join(", ");
 }
 //@ chunk-zw5xhxkf.js:9044-9085 placement
 /**
  * 渲染 contextLabel，缺省空串。
  */
-function renderContextLabel(e) {
-  return e.contextLabel ?? "";
+function renderContextLabel(input) {
+  return input.contextLabel ?? "";
 }
 //@ chunk-zw5xhxkf.js:9085-9208 placement
 var listInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    keywords: array(string().min(1).max(64))
+    keywords: array(stringSchema().min(1).max(64))
       .max(8)
       .optional()
       .describe("Optional filter; omit to list everything."),
@@ -316,27 +332,27 @@ var listInputSchema = DoctorLazy(() =>
 /**
  * 判断名称或描述是否包含任意关键词（忽略大小写）。
  */
-function matchesAnyKeyword(e, n) {
-  let lower = e.toLowerCase();
-  return n.some((l) => lower.includes(l.toLowerCase()));
+function matchesAnyKeyword(text, keywords) {
+  let lower = text.toLowerCase();
+  return keywords.some((keyword) => lower.includes(keyword.toLowerCase()));
 }
 //@ chunk-zw5xhxkf.js:9295-9410 placement
-function filterByKeywords(e, keywords) {
-  if (!keywords?.length) return e;
-  return e.filter(
-    (s) =>
-      matchesAnyKeyword(s.name, keywords) ||
-      (s.description ? matchesAnyKeyword(s.description, keywords) : false),
+function filterByKeywords(rows, keywords) {
+  if (!keywords?.length) return rows;
+  return rows.filter(
+    (row) =>
+      matchesAnyKeyword(row.name, keywords) ||
+      (row.description ? matchesAnyKeyword(row.description, keywords) : false),
   );
 }
 //@ chunk-zw5xhxkf.js:9410-10045 placement
 /**
  * 构造"列出插件/技能"只读工具（可按关键词过滤，延迟加载）：调用 fetch 获取目录，按需记录目录行，返回 {results}。
  */
-function buildCatalogListTool(e) {
+function buildCatalogListTool(spec) {
   return buildTool({
-    name: e.name,
-    searchHint: `list ${e.subject}`,
+    name: spec.name,
+    searchHint: `list ${spec.subject}`,
     backgrounding: "never",
     maxResultSizeChars: 50000,
     shouldDefer: true,
@@ -349,22 +365,22 @@ function buildCatalogListTool(e) {
     isEnabled: isPluginSkillToolEnabled,
     isConcurrencySafe: () => true,
     isReadOnly: () => true,
-    description: async () => `List ${e.subject}, optionally filtered by keyword.`,
-    prompt: async () => e.prompt,
-    create(n) {
+    description: async () => `List ${spec.subject}, optionally filtered by keyword.`,
+    prompt: async () => spec.prompt,
+    create(toolContext) {
       return {
-        async call(s, l) {
-          let response = await e.fetch(l.signal, n.credentials, n.session);
-          if (e.recordsCatalogRows) n.toolState.get(RecentItemsCache).remember(response);
+        async call(input, callOptions) {
+          let rows = await spec.fetch(callOptions.signal, toolContext.credentials, toolContext.session);
+          if (spec.recordsCatalogRows) toolContext.toolState.get(RecentItemsCache).remember(rows);
           return {
             data: {
-              results: filterByKeywords(response, s.keywords),
+              results: filterByKeywords(rows, input.keywords),
             },
           };
         },
       };
     },
-    mapToolResultToToolResultBlockParam: e.mapToolResultToToolResultBlockParam,
+    mapToolResultToToolResultBlockParam: spec.mapToolResultToToolResultBlockParam,
     renderToolUseMessage: renderKeywords,
   });
 }
@@ -378,37 +394,37 @@ var ListPluginsTool = buildCatalogListTool({
   name: LISTPLUGINS,
   subject: LIST_PLUGINS_TOOL,
   recordsCatalogRows: true,
-  async fetch(e, credentials, s) {
-    let pluginManifest = await readPluginManifest(s, e, "plugin_list");
+  async fetch(signal, credentials, session) {
+    let pluginManifest = await readPluginManifest(session, signal, "plugin_list");
     if (pluginManifest !== null) {
       logFeatureOk("plugin_list");
-      return pluginManifest.map((h) => ({
-        id: h.id,
-        name: h.name,
-        description: h.description || null,
+      return pluginManifest.map((plugin) => ({
+        id: plugin.id,
+        name: plugin.name,
+        description: plugin.description || null,
         enabled: true,
       }));
     }
-    let r = await listAccountPlugins({
-      signal: e,
+    let listResult = await listAccountPlugins({
+      signal,
       credentials,
     });
-    if (!r.success) {
-      if (isSyncRefusal(r)) {
+    if (!listResult.success) {
+      if (isSyncRefusal(listResult)) {
         logForDebugging(
-          `[plugin-skill-list] degraded to empty: list-plugins ${r.status ?? r.kind} ${r.error}`,
+          `[plugin-skill-list] degraded to empty: list-plugins ${listResult.status ?? listResult.kind} ${listResult.error}`,
           {
             level: "error",
           },
         );
-        logFeatureSad("plugin_list", r.kind === "no_scope" ? "no_plugins_scope" : "not_entitled");
+        logFeatureSad("plugin_list", listResult.kind === "no_scope" ? "no_plugins_scope" : "not_entitled");
         return [];
       }
       logFeatureBad("plugin_list", "fetch_failed");
-      throw new PluginSkillSearchUnavailableError(r.error);
+      throw new PluginSkillSearchUnavailableError(listResult.error);
     }
     logFeatureOk("plugin_list");
-    return r.plugins.map((plugin) => ({
+    return listResult.plugins.map((plugin) => ({
       id: plugin.pluginId,
       name: plugin.name,
       description: plugin.description || null,
@@ -426,7 +442,7 @@ var SKILL_SHARE_NOTE =
 var SuggestPluginInstallTool = buildCatalogListTool({
   name: LISTSKILLS,
   subject: "the user's enabled claude.ai skills",
-  async fetch(e, credentials) {
+  async fetch(signal, credentials) {
     let orgSkillsListWithRetry = await fetchOrgSkillsListWithRetry({
       credentials,
     });
@@ -454,17 +470,17 @@ var SuggestPluginInstallTool = buildCatalogListTool({
   },
   prompt:
     "List the user's enabled claude.ai skills. Call this when the user asks what skills they have. Pass keywords to filter to a topic; omit to list all. To recommend skills they do NOT have yet, use SuggestSkills when it is among your tools; otherwise use SearchSkills and relay the relevant results in text instead.",
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
       content: jsonStringify(
-        e.results.length > 0
+        result.results.length > 0
           ? {
               note: SKILL_SHARE_NOTE,
-              results: e.results,
+              results: result.results,
             }
-          : e,
+          : result,
       ),
     };
   },
@@ -479,13 +495,13 @@ var suggestTriggerSchema = DoctorLazy(() =>
 );
 var pluginSuggestionSchema = DoctorLazy(() =>
   zodStrictObject({
-    pluginId: string().min(1).max(256),
-    pluginName: string().min(1).max(256),
-    description: string().max(1024),
+    pluginId: stringSchema().min(1).max(256),
+    pluginName: stringSchema().min(1).max(256),
+    description: stringSchema().max(1024),
     skills: array(
-      u({
-        name: string().max(256),
-        description: string().max(1024).optional(),
+      objectSchema({
+        name: stringSchema().max(256),
+        description: stringSchema().max(1024).optional(),
       }),
     )
       .max(32)
@@ -494,7 +510,7 @@ var pluginSuggestionSchema = DoctorLazy(() =>
 );
 var suggestPluginsOutputSchema = DoctorLazy(() =>
   zodStrictObject({
-    contextLabel: string().max(128).describe("Short header tying the suggestion to the user request."),
+    contextLabel: stringSchema().max(128).describe("Short header tying the suggestion to the user request."),
     plugins: array(pluginSuggestionSchema())
       .min(1)
       .max(16)
@@ -503,16 +519,16 @@ var suggestPluginsOutputSchema = DoctorLazy(() =>
   }),
 );
 var suggestPluginsResultSchema = DoctorLazy(() =>
-  u({
-    contextLabel: string(),
+  objectSchema({
+    contextLabel: stringSchema(),
     plugins: array(
-      u({
-        pluginId: string(),
-        pluginName: string(),
-        description: string(),
+      objectSchema({
+        pluginId: stringSchema(),
+        pluginName: stringSchema(),
+        description: stringSchema(),
       }),
     ),
-    note: string(),
+    note: stringSchema(),
     trigger: SUGGEST_PLUGINS_TOOL().optional(),
   }),
 );
@@ -570,41 +586,41 @@ var MAX_SUGGESTED_PLUGIN_DESCRIPTION_CHARS = 1024;
 /**
  * 把模型建议的插件 id 转成推荐卡片：查目录得到显示名与描述（截断），丢弃未知/技能/不可安装/未核验的 id 并计数，返回卡片数据与给模型的说明。
  */
-function buildSuggestCard(e, n, s = new Set()) {
-  let l = [];
+function buildSuggestCard(input, cache, uncheckedIds = new Set()) {
+  let plugins = [];
   let counts = {
     carded: 0,
     unknown: 0,
     skills: 0,
     unchecked: 0,
   };
-  for (let plugin of e.plugins) {
-    let a = n.get(plugin.pluginId);
-    let S = a?.display_name || a?.name;
-    if (!a || !S) {
-      counts[s.has(plugin.pluginId) ? "unchecked" : "unknown"]++;
+  for (let plugin of input.plugins) {
+    let row = cache.get(plugin.pluginId);
+    let displayName = row?.display_name || row?.name;
+    if (!row || !displayName) {
+      counts[uncheckedIds.has(plugin.pluginId) ? "unchecked" : "unknown"]++;
       continue;
     }
-    if (a.presents_as === "skill") {
+    if (row.presents_as === "skill") {
       counts.skills++;
       continue;
     }
-    if (a.installation_preference === "not_available") {
+    if (row.installation_preference === "not_available") {
       counts.unknown++;
       continue;
     }
     counts.carded++;
-    l.push({
+    plugins.push({
       pluginId: plugin.pluginId,
-      pluginName: truncateToLength(S, MAX_SUGGESTED_PLUGIN_NAME_CHARS),
-      description: truncateToLength(a.description ?? "", MAX_SUGGESTED_PLUGIN_DESCRIPTION_CHARS),
+      pluginName: truncateToLength(displayName, MAX_SUGGESTED_PLUGIN_NAME_CHARS),
+      description: truncateToLength(row.description ?? "", MAX_SUGGESTED_PLUGIN_DESCRIPTION_CHARS),
     });
   }
   return {
-    contextLabel: e.contextLabel,
-    plugins: l,
+    contextLabel: input.contextLabel,
+    plugins,
     note: suggestCardNote(counts),
-    trigger: e.trigger,
+    trigger: input.trigger,
     counts,
   };
 }
@@ -628,52 +644,58 @@ var renderPluginSuggestCard = buildTool({
   isReadOnly: () => true,
   description: async () => "Render an inline plugin install card from SearchPlugins results.",
   prompt: async () => {
-    let e = isSuggestionToolLoadedUpFront() ? SUGGEST_INSTALL_PROMPT_ALT : SUGGEST_INSTALL_PROMPT;
+    let basePrompt = isSuggestionToolLoadedUpFront() ? SUGGEST_INSTALL_PROMPT_ALT : SUGGEST_INSTALL_PROMPT;
     return isCcsTenantOnly()
-      ? `${e}
+      ? `${basePrompt}
 
 ${HOST_MAY_NOT_DRAW_CARD_NOTE}`
-      : e;
+      : basePrompt;
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async call(n, s) {
-        let l = e.toolState.get(RecentItemsCache);
-        let filtered = n.plugins.map((plugin) => plugin.pluginId).filter((w) => l.get(w) === undefined);
-        let h = new Set();
-        let a = false;
-        if (filtered.length > 0 && isSortedSuggestionEnabled()) {
-          let pluginDetails = await fetchPluginDetails(filtered, s.signal, e.credentials);
-          l.remember(pluginDetails.found);
-          h = new Set(pluginDetails.unchecked);
-          a = pluginDetails.skippedNoScope;
+      async call(input, callOptions) {
+        let cache = toolContext.toolState.get(RecentItemsCache);
+        let pluginIds = input.plugins
+          .map((plugin) => plugin.pluginId)
+          .filter((pluginId) => cache.get(pluginId) === undefined);
+        let uncheckedIds = new Set();
+        let skippedNoScope = false;
+        if (pluginIds.length > 0 && isSortedSuggestionEnabled()) {
+          let pluginDetails = await fetchPluginDetails(
+            pluginIds,
+            callOptions.signal,
+            toolContext.credentials,
+          );
+          cache.remember(pluginDetails.found);
+          uncheckedIds = new Set(pluginDetails.unchecked);
+          skippedNoScope = pluginDetails.skippedNoScope;
         }
-        let { counts, ...y } = buildSuggestCard(n, l, h);
-        let T = {
+        let { counts, ...card } = buildSuggestCard(input, cache, uncheckedIds);
+        let logFields = {
           carded_count: counts.carded,
           unknown_count: counts.unknown,
           skill_count: counts.skills,
           unchecked_count: counts.unchecked,
-          uncached_count: filtered.length,
-          ...(n.trigger && {
-            trigger: fromEnum(n.trigger),
+          uncached_count: pluginIds.length,
+          ...(input.trigger && {
+            trigger: fromEnum(input.trigger),
           }),
         };
-        if (!a)
+        if (!skippedNoScope)
           if (counts.unchecked > 0 && counts.carded === 0)
-            logFeatureSad("plugin_suggest", "catalog_unchecked", T);
-          else logFeatureOk("plugin_suggest", T);
+            logFeatureSad("plugin_suggest", "catalog_unchecked", logFields);
+          else logFeatureOk("plugin_suggest", logFields);
         return {
-          data: y,
+          data: card,
         };
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: jsonStringify(e),
+      content: jsonStringify(result),
     };
   },
   renderToolUseMessage: renderContextLabel,
@@ -684,7 +706,7 @@ var TENGU_SADDLE_LANTERN = "tengu_saddle_lantern";
  * 惰性加载特性开关模块（require("./chunk-6df1d6re.js")）。
  */
 function featureFlagsModule() {
-  return require("./chunk-6df1d6re.js");
+  return require("../../services/analytics/ATIS_REQUEST_HEADER.lazy.js");
 }
 //@ chunk-zw5xhxkf.js:17891-17969 placement
 /**
@@ -747,9 +769,9 @@ function readSuggestRolloutSetting() {
 function isSuggestRolloutEnabled() {
   let sessionFeatureValues = getSessionFeatureValues();
   if (sessionFeatureValues.suggestRolloutEnabled === undefined) {
-    let { value: n, source } = suggestRolloutFlag();
-    if (source === "fallback") return n;
-    sessionFeatureValues.suggestRolloutEnabled = n;
+    let { value: flagValue, source } = suggestRolloutFlag();
+    if (source === "fallback") return flagValue;
+    sessionFeatureValues.suggestRolloutEnabled = flagValue;
   }
   return sessionFeatureValues.suggestRolloutEnabled;
 }
@@ -761,11 +783,11 @@ _registerSuggestRolloutPinReader(isSuggestRolloutEnabled);
  */
 var SUGGEST_SKILLS_TOOL = DoctorLazy(() =>
   zodStrictObject({
-    keywords: array(string().min(1).max(64))
+    keywords: array(stringSchema().min(1).max(64))
       .min(1)
       .max(8)
       .describe("Topic keywords from the user's request."),
-    contextLabel: string().max(128).optional(),
+    contextLabel: stringSchema().max(128).optional(),
     trigger: suggestTriggerSchema(),
   }),
 );
@@ -793,7 +815,7 @@ var SuggestSkillsTool = buildTool({
   isReadOnly: () => true,
   description: async () => "Render a card of standalone skills the user can add (not yet enabled).",
   prompt: async () => {
-    let e = isSuggestionRolloutEnabled()
+    let basePrompt = isSuggestionRolloutEnabled()
       ? `Render a card of standalone skills the user can add \u2014 org, shared, or Anthropic skills not yet enabled.
 
 Call this when the task is one a skill could make repeatable \u2014 drafting in a house style, reviews against a playbook, a recurring workflow \u2014 and nothing enabled covers it; the user does not need to ask about skills. Also when they ask for recommendations, or when ListSkills returned zero matches. Use ListSkills for skills they already have.
@@ -805,25 +827,25 @@ Pass keywords drawn from the task itself, and set trigger ('proactive' when you 
 
 Always pass keywords from the user's request (you may set trigger: 'user_asked'). The result may be empty.`;
     return isCcsTenantOnly()
-      ? `${e}
+      ? `${basePrompt}
 
 ${HOST_MAY_NOT_DRAW_CARD_NOTE}`
-      : e;
+      : basePrompt;
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async call(n, s) {
+      async call(input, callOptions) {
         try {
           return {
             data: {
-              results: (await searchSkillsCatalog(n.keywords, s.signal, e.credentials)).filter(
-                (h) => h.enabled !== true,
-              ),
-              trigger: n.trigger,
+              results: (
+                await searchSkillsCatalog(input.keywords, callOptions.signal, toolContext.credentials)
+              ).filter((skill) => skill.enabled !== true),
+              trigger: input.trigger,
             },
           };
         } catch (error) {
-          if (isAbortError(error) || s.signal.aborted) throw error;
+          if (isAbortError(error) || callOptions.signal.aborted) throw error;
           if (error instanceof PluginSkillSearchUnavailableError) throw error;
           logSearchFetchFailed("skill", error);
           throw new PluginSkillSearchUnavailableError(
@@ -846,14 +868,14 @@ var suggestSkillsInputSchema = DoctorLazy(() =>
   }),
 );
 //@ chunk-zw5xhxkf.js:21009-22074 placement
-function makeCatalogSearchTool(e) {
+function makeCatalogSearchTool(spec) {
   return buildTool({
-    name: e.name,
-    searchHint: `discover claude.ai ${e.noun}s by keyword`,
+    name: spec.name,
+    searchHint: `discover claude.ai ${spec.noun}s by keyword`,
     backgrounding: "never",
     maxResultSizeChars: 50000,
     get shouldDefer() {
-      return !(e.loadedUpFront?.() ?? false);
+      return !(spec.loadedUpFront?.() ?? false);
     },
     get inputSchema() {
       return suggestSkillsInputSchema();
@@ -864,45 +886,47 @@ function makeCatalogSearchTool(e) {
     isEnabled: isPluginSkillToolEnabled,
     isConcurrencySafe: () => true,
     isReadOnly: () => true,
-    description: async () => e.description,
+    description: async () => spec.description,
     prompt: async ({ tools }) => {
-      let upFrontPrompt = e.upFrontPrompt;
+      let upFrontPrompt = spec.upFrontPrompt;
       return upFrontPrompt !== undefined &&
-        e.loadedUpFront?.() &&
+        spec.loadedUpFront?.() &&
         tools.some((tool) => toolMatchesName(tool, upFrontPrompt.requiresTool))
         ? upFrontPrompt.text
-        : e.prompt;
+        : spec.prompt;
     },
-    create(n) {
+    create(toolContext) {
       return {
-        async call(s, l) {
+        async call(input, callOptions) {
           try {
-            let [r, h] = await Promise.all([
-              e.run(s.keywords, l.signal, n.credentials),
-              e.noun === "plugin" ? readPluginManifest(n.session, l.signal, "plugin_search") : null,
+            let [results, manifest] = await Promise.all([
+              spec.run(input.keywords, callOptions.signal, toolContext.credentials),
+              spec.noun === "plugin"
+                ? readPluginManifest(toolContext.session, callOptions.signal, "plugin_search")
+                : null,
             ]);
-            if (e.noun === "plugin") n.toolState.get(RecentItemsCache).remember(r);
-            if (h === null)
+            if (spec.noun === "plugin") toolContext.toolState.get(RecentItemsCache).remember(results);
+            if (manifest === null)
               return {
                 data: {
-                  results: r,
+                  results,
                 },
               };
-            let a = new Set(h.map((S) => S.id));
+            let enabledIds = new Set(manifest.map((plugin) => plugin.id));
             return {
               data: {
-                results: r.map((S) => ({
-                  ...S,
-                  enabled: a.has(S.id),
+                results: results.map((result) => ({
+                  ...result,
+                  enabled: enabledIds.has(result.id),
                 })),
               },
             };
           } catch (error) {
-            if (isAbortError(error) || l.signal.aborted) throw error;
+            if (isAbortError(error) || callOptions.signal.aborted) throw error;
             if (error instanceof PluginSkillSearchUnavailableError) throw error;
-            logSearchFetchFailed(e.noun, error);
+            logSearchFetchFailed(spec.noun, error);
             throw new PluginSkillSearchUnavailableError(
-              `${e.noun} search is unavailable right now; please try again.`,
+              `${spec.noun} search is unavailable right now; please try again.`,
             );
           }
         },
@@ -985,3 +1009,4 @@ var PLUGIN_SKILL_TOOLS = [
   ListPluginsTool,
   SuggestPluginInstallTool,
 ];
+export { PLUGIN_SKILL_SAFE_TOOL_NAMES, PLUGIN_SKILL_TOOLS };

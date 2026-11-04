@@ -25,10 +25,10 @@ import {
 import { logForDebugging } from "./debug.js";
 import { WindowsToWSLConverter } from "./idePathConversion.js";
 import { env } from "./env.js";
-import { Ph } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { sniffImageMediaType } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
 import { webpMaxBytesIfOn } from "./imageWebp.js";
-import { MODEL_COPY_IMAGE_BYTES } from "./truncateGraphemes.js";
+import { MODEL_COPY_IMAGE_BYTES } from "./mediaLimits.js";
 
 //@ chunk-n770a3wm.js:783-1027 placement
 /**
@@ -42,41 +42,41 @@ var CLIPBOARD_PATH_COMMANDS = {
 };
 //@ chunk-n770a3wm.js:1027-3646 fingerprint = getClipboardCommands (0.376)
 /**
- * 各平台剪贴板图片命令表：macOS osascript（PNGf）、Windows/WSL PowerShell、Linux xclip/wl-paste，以及截图临时文件名。
+ * 官方行为，保留：getClipboardCommands 末行 return {commands: commands.linux || commands.linux, …}，三元退化成同一分支，darwin/win32 两张命令表构造后从不返回；另有一个声明后未使用的空串。
  */
 function getClipboardCommands() {
-  let o = claudeTempDir();
+  let tempDir = claudeTempDir();
   let screenshotFilename = "claude_cli_latest_screenshot.png";
   let tempPaths = {
-    darwin: join(o, "claude_cli_latest_screenshot.png"),
-    linux: join(o, "claude_cli_latest_screenshot.png"),
-    win32: join(o, "claude_cli_latest_screenshot.png"),
+    darwin: join(tempDir, "claude_cli_latest_screenshot.png"),
+    linux: join(tempDir, "claude_cli_latest_screenshot.png"),
+    win32: join(tempDir, "claude_cli_latest_screenshot.png"),
   };
   let linux = tempPaths.linux || tempPaths.linux;
-  let r = shellQuoteArgs([linux]);
-  let f = `set fp to open for access POSIX file ${`"${linux.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`} with write permission`;
-  let c = "";
-  let u = getPlatform() === "wsl";
-  let d =
+  let quotedPath = shellQuoteArgs([linux]);
+  let appleScriptFileRef = `set fp to open for access POSIX file ${`"${linux.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`} with write permission`;
+  let unusedEmpty = "";
+  let isWsl = getPlatform() === "wsl";
+  let unusedPowershellPath =
     '"$(command -v powershell.exe 2>/dev/null || echo /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe)"';
-  let y = u
+  let wslCheckSuffix = isWsl
     ? ` || "$(command -v powershell.exe 2>/dev/null || echo /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe)" -NoProfile -NonInteractive -Sta -Command 'Add-Type -AssemblyName System.Windows.Forms; if (-not [System.Windows.Forms.Clipboard]::ContainsImage()) { exit 1 }' 2>/dev/null`
     : "";
-  let v = u
-    ? ` 2>/dev/null || "$(command -v powershell.exe 2>/dev/null || echo /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe)" -NoProfile -NonInteractive -Sta -Command 'Add-Type -AssemblyName System.Windows.Forms; $i = [System.Windows.Forms.Clipboard]::GetImage(); if ($null -eq $i) { exit 1 }; $ms = New-Object System.IO.MemoryStream; $i.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); [Convert]::ToBase64String($ms.ToArray())' 2>/dev/null | tr -d '\\r' | base64 -d > ${r}`
+  let wslSaveSuffix = isWsl
+    ? ` 2>/dev/null || "$(command -v powershell.exe 2>/dev/null || echo /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe)" -NoProfile -NonInteractive -Sta -Command 'Add-Type -AssemblyName System.Windows.Forms; $i = [System.Windows.Forms.Clipboard]::GetImage(); if ($null -eq $i) { exit 1 }; $ms = New-Object System.IO.MemoryStream; $i.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); [Convert]::ToBase64String($ms.ToArray())' 2>/dev/null | tr -d '\\r' | base64 -d > ${quotedPath}`
     : "";
   let commands = {
     darwin: {
       checkImage: "osascript -e 'the clipboard as \xABclass PNGf\xBB'",
-      saveImage: `osascript -e 'set png_data to (the clipboard as \xABclass PNGf\xBB)' -e ${shellQuoteArgs([f])} -e 'write png_data to fp' -e 'close access fp'`,
+      saveImage: `osascript -e 'set png_data to (the clipboard as \xABclass PNGf\xBB)' -e ${shellQuoteArgs([appleScriptFileRef])} -e 'write png_data to fp' -e 'close access fp'`,
       getPath: CLIPBOARD_PATH_COMMANDS.darwin,
-      deleteFile: `rm -f -- ${r}`,
+      deleteFile: `rm -f -- ${quotedPath}`,
     },
     linux: {
-      checkImage: `xclip -selection clipboard -t TARGETS -o 2>/dev/null | grep -E "image/(png|jpeg|jpg|gif|webp|bmp)" || wl-paste -l 2>/dev/null | grep -E "image/(png|jpeg|jpg|gif|webp|bmp)"${y}`,
-      saveImage: `xclip -selection clipboard -t image/png -o > ${r} 2>/dev/null || wl-paste --type image/png > ${r} 2>/dev/null || xclip -selection clipboard -t image/bmp -o > ${r} 2>/dev/null || wl-paste --type image/bmp > ${r}${v}`,
+      checkImage: `xclip -selection clipboard -t TARGETS -o 2>/dev/null | grep -E "image/(png|jpeg|jpg|gif|webp|bmp)" || wl-paste -l 2>/dev/null | grep -E "image/(png|jpeg|jpg|gif|webp|bmp)"${wslCheckSuffix}`,
+      saveImage: `xclip -selection clipboard -t image/png -o > ${quotedPath} 2>/dev/null || wl-paste --type image/png > ${quotedPath} 2>/dev/null || xclip -selection clipboard -t image/bmp -o > ${quotedPath} 2>/dev/null || wl-paste --type image/bmp > ${quotedPath}${wslSaveSuffix}`,
       getPath: CLIPBOARD_PATH_COMMANDS.linux,
-      deleteFile: `rm -f -- ${r}`,
+      deleteFile: `rm -f -- ${quotedPath}`,
     },
     win32: {
       checkImage: [
@@ -105,13 +105,13 @@ function getClipboardCommands() {
   };
 }
 //@ chunk-n770a3wm.js:3646-3755 layout
-async function runClipboardCommand(e) {
-  if (typeof e === "string")
-    return safeExecShell(e, {
+async function runClipboardCommand(command) {
+  if (typeof command === "string")
+    return safeExecShell(command, {
       reject: false,
     });
-  let [o, ...a] = e;
-  return safeExecFile(o, a, {
+  let [file, ...args] = command;
+  return safeExecFile(file, args, {
     reject: false,
   });
 }
@@ -126,16 +126,16 @@ async function isClipboardImageUnsupported() {
 /**
  * 从剪贴板读取图片：执行平台命令保存到临时文件，读取并转 base64，返回 {base64, mediaType, dimensions}；失败记录 clipboard_read 错误类型。
  */
-async function getImageFromClipboard(e) {
-  let o;
+async function getImageFromClipboard(options) {
+  let clipboard;
   try {
-    o = getClipboardCommands();
+    clipboard = getClipboardCommands();
   } catch (e) {
     logError(e);
     logFeatureBad("clipboard_read", "construct_failed");
     return null;
   }
-  let { commands, screenshotPath } = o;
+  let { commands, screenshotPath } = clipboard;
   try {
     if ((await runClipboardCommand(commands.checkImage)).exitCode !== 0) return null;
     await getFsImplementation().mkdir(dirname(screenshotPath), {
@@ -148,7 +148,7 @@ async function getImageFromClipboard(e) {
     let imageBuffer = await getFsImplementation().readFileBytes(screenshotPath);
     if (imageBuffer.length >= 2 && imageBuffer[0] === 66 && imageBuffer[1] === 77)
       imageBuffer = await (await loadImageDecoder())(imageBuffer).png().toBuffer();
-    let resized = await maybeResizeAndDownsampleImageBuffer(imageBuffer, imageBuffer.length, "png", e, {
+    let resized = await maybeResizeAndDownsampleImageBuffer(imageBuffer, imageBuffer.length, "png", options, {
       directWebpMaxBytes: configuredDirectWebpMaxBytes(),
     });
     let base64Image = resized.buffer.toString("base64");
@@ -221,7 +221,7 @@ function asImageFilePath(text) {
 /**
  * 从粘贴的文件路径读取图片：去引号/转义、权限检查（可能 refused）、空文件警告，返回图片数据或 null。
  */
-async function tryReadImageFromPath(text, clipboardPlatform, a) {
+async function tryReadImageFromPath(text, clipboardPlatform, readFile) {
   let cleanedPath = asImageFilePath(text);
   if (!cleanedPath) return null;
   let imagePath = cleanedPath;
@@ -229,10 +229,10 @@ async function tryReadImageFromPath(text, clipboardPlatform, a) {
     imagePath = await new WindowsToWSLConverter(env.WSL_DISTRO_NAME).toLocalPath(imagePath);
   let imageBuffer;
   try {
-    if (isAbsolute(imagePath)) imageBuffer = await a(imagePath);
+    if (isAbsolute(imagePath)) imageBuffer = await readFile(imagePath);
     else {
       let clipboardPath = await getImagePathFromClipboard();
-      if (clipboardPath && imagePath === basename(clipboardPath)) imageBuffer = await a(clipboardPath);
+      if (clipboardPath && imagePath === basename(clipboardPath)) imageBuffer = await readFile(clipboardPath);
     }
   } catch (error) {
     logForDebugging(
@@ -253,14 +253,14 @@ async function tryReadImageFromPath(text, clipboardPlatform, a) {
   }
   if (imageBuffer.length >= 2 && imageBuffer[0] === 66 && imageBuffer[1] === 77)
     imageBuffer = await (await loadImageDecoder())(imageBuffer).png().toBuffer();
-  let p = Ph(imageBuffer);
-  if (p === null) {
+  let mediaType = sniffImageMediaType(imageBuffer);
+  if (mediaType === null) {
     logForDebugging(`Pasted path has image extension but content is not a supported image: ${imagePath}`, {
       level: "warn",
     });
     return null;
   }
-  let ext = p.split("/")[1] || "png";
+  let ext = mediaType.split("/")[1] || "png";
   let resized = await maybeResizeAndDownsampleImageBuffer(
     imageBuffer,
     imageBuffer.length,
@@ -286,9 +286,9 @@ function looksLikeBinaryText(clipboard) {
   if (clipboard.includes("\x00")) return true;
   let sliced = clipboard.slice(0, 4096);
   if (sliced.length < 32) return false;
-  let a = 0;
-  for (let n of sliced) if (n === "\uFFFD") a++;
-  return a / sliced.length > 0.05;
+  let replacementCount = 0;
+  for (let char of sliced) if (char === "\uFFFD") replacementCount++;
+  return replacementCount / sliced.length > 0.05;
 }
 //@ chunk-n770a3wm.js:6253-6293 placement
 function configuredDirectWebpMaxBytes() {

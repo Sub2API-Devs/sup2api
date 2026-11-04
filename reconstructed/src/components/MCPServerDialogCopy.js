@@ -8,7 +8,7 @@
  * pieces: chunk-20skp6hd.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
   jsxProd_default_2,
@@ -18,7 +18,7 @@ import { Text, Link } from "../ink/components/Text.js";
 
 //@ chunk-20skp6hd.js:1144-1427 fingerprint = MCPServerDialogCopy (0.356)
 function MCPServerDialogCopy() {
-  let $ = w(1);
+  let $ = useMemoCache(1);
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t0 = jsxProd_default_2(Text, {

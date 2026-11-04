@@ -14,9 +14,11 @@ import { logFeatureOk, logFeatureSad, logFeatureBad } from "../services/analytic
 //@ chunk-6vnxsn99.js:21583-21749 placement
 class ControlRequestTimeoutError extends Error {
   subtype;
-  constructor(e, n) {
-    super(`control_request '${e}' got no response after ${n / 1000}s \u2014 the worker may still apply it`);
-    this.subtype = e;
+  constructor(subtype, timeoutMs) {
+    super(
+      `control_request '${subtype}' got no response after ${timeoutMs / 1000}s \u2014 the worker may still apply it`,
+    );
+    this.subtype = subtype;
   }
 }
 //@ chunk-6vnxsn99.js:21749-21868 placement
@@ -48,25 +50,25 @@ function classifyControlRequestError(error) {
 /**
  * 执行异步函数并记成功/中止/失败遥测。旧版名 abortSpeculation 为错配。
  */
-async function withOutcomeTelemetry(e, n) {
+async function withOutcomeTelemetry(event, run) {
   try {
-    let r = await n();
-    logFeatureOk(e);
-    return r;
+    let result = await run();
+    logFeatureOk(event);
+    return result;
   } catch (error) {
-    if (error instanceof AbortError) logFeatureSad(e, "aborted");
-    else logFeatureBad(e, classifyControlRequestError(error));
+    if (error instanceof AbortError) logFeatureSad(event, "aborted");
+    else logFeatureBad(event, classifyControlRequestError(error));
     throw error;
   }
 }
 //@ chunk-6vnxsn99.js:22391-22659 placement
 function controlResponseError(response) {
   if (response.subtype === "error" && typeof response.error === "string") return Error(response.error);
-  let n =
+  let reason =
     response.subtype === "error"
       ? "non-string error"
       : `subtype ${typeof response.subtype === "string" ? "unrecognized" : typeof response.subtype}`;
-  return Error(`Malformed control_response from worker (${n})`);
+  return Error(`Malformed control_response from worker (${reason})`);
 }
 export {
   controlResponseError,

@@ -15,7 +15,7 @@ import {
   errorMessage,
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../../utils/errors.js";
-import { string, u, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logError } from "../../utils/log.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { isRefillableInput } from "../../utils/messageQueueManager.js";
@@ -82,18 +82,23 @@ import { FABLE_OVERAGE_CONSENT_DIALOG } from "../../services/api/overageConsent.
 import { AUTO_MODE_SERVER_FALLBACK, ENUM_PROMPT } from "../../components/nudges/nudgeIds.js";
 import { toBridgeSlashCommands, getCommandName } from "../../commands.js";
 import { dropSyncedNameClashes } from "../../utils/commandPredicates.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { bridgeHostState } from "../../bridge/bridgeHostState.js";
 import { ContextUsageEstimateReporter } from "./resumeTurnBoundaries.js";
 
 //@ chunk-0sfjpx19.js:34121-34784 placement
-function pickQueuedMessageToMove(commandQueue, n, messageQueue, s) {
-  let index = commandQueue.findIndex((w) => w.uuid !== undefined && n.has(w.uuid) && w.priority !== "now");
-  let y = commandQueue[index];
-  let uuid = y?.uuid;
-  if (y === undefined || uuid === undefined) return null;
-  let priority = y.priority === "later" ? "later" : "next";
-  if (y.drainOnly === true && y.promptSubmitted !== undefined)
+function pickQueuedMessageToMove(commandQueue, movingUuids, messageQueue, agentId) {
+  let index = commandQueue.findIndex(
+    (queuedMessage) =>
+      queuedMessage.uuid !== undefined &&
+      movingUuids.has(queuedMessage.uuid) &&
+      queuedMessage.priority !== "now",
+  );
+  let candidate = commandQueue[index];
+  let uuid = candidate?.uuid;
+  if (candidate === undefined || uuid === undefined) return null;
+  let priority = candidate.priority === "later" ? "later" : "next";
+  if (candidate.drainOnly === true && candidate.promptSubmitted !== undefined)
     return {
       head: "ended_by_hook",
       uuid,
@@ -101,17 +106,25 @@ function pickQueuedMessageToMove(commandQueue, n, messageQueue, s) {
     };
   let sliced = commandQueue.slice(0, index);
   if (
-    commandQueue.some((w) => w.screeningPending === true && w.agentId === s) ||
+    commandQueue.some(
+      (queuedMessage) => queuedMessage.screeningPending === true && queuedMessage.agentId === agentId,
+    ) ||
     messageQueue.isFoldInFlight(uuid) ||
     messageQueue.isMidTurnFoldSuspended() ||
-    sliced.some((w) => w.priority === "now" && w.agentId === s)
+    sliced.some((earlierMessage) => earlierMessage.priority === "now" && earlierMessage.agentId === agentId)
   )
     return {
       head: "not_ready",
       uuid,
       priority,
     };
-  if (sliced.some((w) => w.agentId === s && (w.mode === "prompt" || w.mode === "bash")))
+  if (
+    sliced.some(
+      (earlierMessage) =>
+        earlierMessage.agentId === agentId &&
+        (earlierMessage.mode === "prompt" || earlierMessage.mode === "bash"),
+    )
+  )
     return {
       head: "behind_earlier",
       uuid,
@@ -141,11 +154,11 @@ class LowLatencySubmitQueue {
   #g = 0;
   #u = 0;
   #h = false;
-  constructor(e) {
-    this.#t = e;
+  constructor(deps) {
+    this.#t = deps;
   }
   sendQueuedNow = () => {
-    let e = false;
+    let didSchedule = false;
     this.#a(() => {
       if (this.#h) return;
       let { messageQueue, turn } = this.#t;
@@ -153,42 +166,49 @@ class LowLatencySubmitQueue {
         this.#s();
         return;
       }
-      let s = agentIdOrMain(turn.agentId);
-      for (let y of messageQueue.getCommandQueueSnapshot())
+      let agentId = agentIdOrMain(turn.agentId);
+      for (let queuedMessage of messageQueue.getCommandQueueSnapshot())
         if (
-          y.uuid !== undefined &&
-          y.agentId === s &&
-          y.mode === "prompt" &&
-          isRefillableInput(y) &&
-          !this.#e.has(y.uuid)
+          queuedMessage.uuid !== undefined &&
+          queuedMessage.agentId === agentId &&
+          queuedMessage.mode === "prompt" &&
+          isRefillableInput(queuedMessage) &&
+          !this.#e.has(queuedMessage.uuid)
         )
-          this.#e.set(y.uuid, {
+          this.#e.set(queuedMessage.uuid, {
             outcome: "undecided",
             raisedFrom: null,
           });
       if (this.#e.size === 0) return;
-      let head = pickQueuedMessageToMove(messageQueue.getCommandQueue(), this.#e, messageQueue, s)?.head;
+      let head = pickQueuedMessageToMove(
+        messageQueue.getCommandQueue(),
+        this.#e,
+        messageQueue,
+        agentId,
+      )?.head;
       if (head === "behind_earlier" || head === "ended_by_hook") {
         this.#s();
         return;
       }
-      e = true;
+      didSchedule = true;
       this.#d = false;
       this.#l = false;
       if (this.#f.length === 0) this.#f = [messageQueue.subscribe(this.#S), turn.guard.subscribe(this.#C)];
       if (this.#n === null) this.#y(0);
     });
-    return e;
+    return didSchedule;
   };
   moveHolders() {
     this.#a(() => {
       let { turn, transcript, taskRegistry } = this.#t;
       if (this.#h || !isLocalTurnRunning(turn) || isBackgroundTasksOff()) return;
-      let s = dropTextInBriefTurns(transcript.getSnapshot());
+      let liveToolUseIds = dropTextInBriefTurns(transcript.getSnapshot());
       let values = Object.values(taskRegistry.all());
       toolUseIdsToMoveToBackground(
-        runningForegroundShellsFor(values, s, turn.agentId),
-        foregroundAgentTasksInSet(values, s, turn.agentId).filter((y) => isToolUseMarkedAgentOrTask(s, y)),
+        runningForegroundShellsFor(values, liveToolUseIds, turn.agentId),
+        foregroundAgentTasksInSet(values, liveToolUseIds, turn.agentId).filter((agentTask) =>
+          isToolUseMarkedAgentOrTask(liveToolUseIds, agentTask),
+        ),
         taskRegistry,
       );
     });
@@ -197,9 +217,9 @@ class LowLatencySubmitQueue {
     this.#h = true;
     this.#a(() => this.#s());
   }
-  #y(e) {
+  #y(delayMs) {
     this.#n?.();
-    this.#n = this.#t.clock.setTimeout(this.#v, e);
+    this.#n = this.#t.clock.setTimeout(this.#v, delayMs);
   }
   #i() {
     this.#n?.();
@@ -211,7 +231,7 @@ class LowLatencySubmitQueue {
   }
   #s() {
     this.#i();
-    for (let e of this.#f.splice(0)) e();
+    for (let unsubscribe of this.#f.splice(0)) unsubscribe();
     this.#w();
     this.#e.clear();
     this.#m = false;
@@ -223,26 +243,28 @@ class LowLatencySubmitQueue {
     if (this.#e.size > 0) this.#y(MOVED_RESULT_HOLD_MS);
   }
   #w() {
-    for (let [e, n] of this.#e)
-      if (n.raisedFrom !== null) {
-        let raisedFrom = n.raisedFrom;
-        n.raisedFrom = null;
-        this.#t.messageQueue.demoteFromNow(e, raisedFrom);
+    for (let [messageUuid, moveState] of this.#e)
+      if (moveState.raisedFrom !== null) {
+        let raisedFrom = moveState.raisedFrom;
+        moveState.raisedFrom = null;
+        this.#t.messageQueue.demoteFromNow(messageUuid, raisedFrom);
       }
   }
   #b() {
-    let e = new Set(this.#t.messageQueue.getCommandQueueSnapshot().map((n) => n.uuid));
-    for (let [n, r] of this.#e) {
-      if (e.has(n)) continue;
-      this.#e.delete(n);
-      if (this.#t.messageQueue.isFoldInFlight(n)) this.#l = true;
-      if (r.outcome !== "undecided" && r.outcome !== "delivered_early")
-        logFeatureSad(this.#t.featureName, r.outcome);
+    let liveUuids = new Set(
+      this.#t.messageQueue.getCommandQueueSnapshot().map((queuedMessage) => queuedMessage.uuid),
+    );
+    for (let [messageUuid, moveState] of this.#e) {
+      if (liveUuids.has(messageUuid)) continue;
+      this.#e.delete(messageUuid);
+      if (this.#t.messageQueue.isFoldInFlight(messageUuid)) this.#l = true;
+      if (moveState.outcome !== "undecided" && moveState.outcome !== "delivered_early")
+        logFeatureSad(this.#t.featureName, moveState.outcome);
     }
   }
   #S = () => {
     this.#a(() => {
-      let [e] = this.#e.keys();
+      let [previousFirstUuid] = this.#e.keys();
       this.#b();
       if (this.#e.size === 0) {
         this.#s();
@@ -252,8 +274,9 @@ class LowLatencySubmitQueue {
         this.#i();
         return;
       }
-      let [n] = this.#e.keys();
-      if (n !== e && (this.#n !== null || this.#t.turn.guard.isActive)) this.#y(0);
+      let [currentFirstUuid] = this.#e.keys();
+      if (currentFirstUuid !== previousFirstUuid && (this.#n !== null || this.#t.turn.guard.isActive))
+        this.#y(0);
     });
   };
   #C = () => {
@@ -273,9 +296,9 @@ class LowLatencySubmitQueue {
       this.#A();
     });
   };
-  #a(e) {
+  #a(callback) {
     try {
-      e();
+      callback();
     } catch (error) {
       logError(error);
       if (!this.#m) {
@@ -291,51 +314,56 @@ class LowLatencySubmitQueue {
       this.#s();
       return;
     }
-    let y = pickQueuedMessageToMove(
+    let picked = pickQueuedMessageToMove(
       messageQueue.getCommandQueue(),
       this.#e,
       messageQueue,
       agentIdOrMain(turn.agentId),
     );
-    let _ = y === null ? undefined : this.#e.get(y.uuid);
+    let pickedState = picked === null ? undefined : this.#e.get(picked.uuid);
     let snapshot = transcript.getSnapshot();
-    let k = dropTextInBriefTurns(snapshot);
+    let liveToolUseIds = dropTextInBriefTurns(snapshot);
     let values = Object.values(taskRegistry.all());
-    let tasks = runningForegroundShellsFor(values, k, turn.agentId);
-    let T = turn.guard.isActive && [...this.#e.values()].some((V) => V.raisedFrom !== null);
-    if (T && !isBackgroundTasksOff()) {
-      backgroundShellsToDeliverMessage(tasks, taskRegistry);
-      this.#u = k.size > 0 ? this.#u + 1 : 0;
+    let liveShells = runningForegroundShellsFor(values, liveToolUseIds, turn.agentId);
+    let hasRaisedHolders =
+      turn.guard.isActive && [...this.#e.values()].some((moveState) => moveState.raisedFrom !== null);
+    if (hasRaisedHolders && !isBackgroundTasksOff()) {
+      backgroundShellsToDeliverMessage(liveShells, taskRegistry);
+      this.#u = liveToolUseIds.size > 0 ? this.#u + 1 : 0;
       if (turn.endsUnmovableShells && this.#u > GRACE_POLL_TICKS)
-        for (let V of isTurnRunning(values, k, tasks, turn.agentId)) killTask(V.id, taskRegistry);
+        for (let task of isTurnRunning(values, liveToolUseIds, liveShells, turn.agentId))
+          killTask(task.id, taskRegistry);
     }
-    if (y === null || _ === undefined) {
-      if (T) this.#c();
+    if (picked === null || pickedState === undefined) {
+      if (hasRaisedHolders) this.#c();
       else this.#i();
       return;
     }
-    let { head, uuid, priority } = y;
-    let G = foregroundAgentTasksInSet(values, k, turn.agentId);
-    let filtered = (foregroundCallRegistrySlots.peek(session)?.list() ?? []).filter((V) =>
-      setHasToolUseId(k, V.toolUseId),
+    let { head, uuid, priority } = picked;
+    let agentTasks = foregroundAgentTasksInSet(values, liveToolUseIds, turn.agentId);
+    let calls = (foregroundCallRegistrySlots.peek(session)?.list() ?? []).filter((call) =>
+      setHasToolUseId(liveToolUseIds, call.toolUseId),
     );
-    let P = isBackgroundTasksOff();
-    let U = P ? [] : tasks;
-    let L = P ? [] : G.filter((V) => isToolUseMarkedAgentOrTask(k, V));
+    let backgroundingDisabled = isBackgroundTasksOff();
+    let movableShells = backgroundingDisabled ? [] : liveShells;
+    let movableAgentTasks = backgroundingDisabled
+      ? []
+      : agentTasks.filter((agentTask) => isToolUseMarkedAgentOrTask(liveToolUseIds, agentTask));
     let evidence = turn.readEvidence();
     let last = snapshot.at(-1);
-    for (let V of this.#r) if (!k.has(V)) this.#r.delete(V);
-    let Q = {
+    for (let toolUseId of this.#r) if (!liveToolUseIds.has(toolUseId)) this.#r.delete(toolUseId);
+    let decisionInput = {
       head,
       hasFoldTakenPrompt: this.#l,
       isLocalTurnActive: turn.guard.isActive,
       isLocalTurnRunning: isLocalTurnRunning(turn),
       isHeldByDialog: evidence.isHeldByDialog,
-      holderCount: tasks.length + G.length + filtered.length,
-      unmovableHolderCount: (P ? tasks.length : 0) + (G.length - L.length),
-      isExecuting: evidence.isToolCallStarting || k.size > 0,
+      holderCount: liveShells.length + agentTasks.length + calls.length,
+      unmovableHolderCount:
+        (backgroundingDisabled ? liveShells.length : 0) + (agentTasks.length - movableAgentTasks.length),
+      isExecuting: evidence.isToolCallStarting || liveToolUseIds.size > 0,
       isAwaitingMovedResult: this.#r.size > 0,
-      isBackgroundingDisabled: P,
+      isBackgroundingDisabled: backgroundingDisabled,
       isCompacting: evidence.isCompacting,
       isUnmovableGraceOver: this.#o >= GRACE_POLL_TICKS,
       isMainRequestInFlight:
@@ -347,39 +375,41 @@ class LowLatencySubmitQueue {
         isActivityReasonActive("api_call") &&
         getMainLoopRefcount() > 0,
     };
-    let ne = decideQueuedPromptAction(Q);
-    let z = `${ne.action}${ne.action === "wait" ? ` ${ne.reason}` : ""} head=${head} holders=${Q.holderCount} executing=${Q.isExecuting}`;
-    if (z !== this.#p) {
-      this.#p = z;
-      logForDebugging(`[low-latency-submit] ${z} agent=${turn.agentId ?? "main"}`);
+    let decision = decideQueuedPromptAction(decisionInput);
+    let traceLine = `${decision.action}${decision.action === "wait" ? ` ${decision.reason}` : ""} head=${head} holders=${decisionInput.holderCount} executing=${decisionInput.isExecuting}`;
+    if (traceLine !== this.#p) {
+      this.#p = traceLine;
+      logForDebugging(`[low-latency-submit] ${traceLine} agent=${turn.agentId ?? "main"}`);
     }
-    switch (ne.action) {
+    switch (decision.action) {
       case "stand_by":
         this.#i();
         return;
       case "wait":
-        this.#o = ne.reason === "unmovable_grace" ? this.#o + 1 : 0;
-        if (ne.reason === "moved_result" && ++this.#g >= MAX_MOVED_RESULT_WAITS) this.#r.clear();
-        if (ne.reason !== "not_ready" && _.outcome === "undecided") _.outcome = ne.reason;
+        this.#o = decision.reason === "unmovable_grace" ? this.#o + 1 : 0;
+        if (decision.reason === "moved_result" && ++this.#g >= MAX_MOVED_RESULT_WAITS) this.#r.clear();
+        if (decision.reason !== "not_ready" && pickedState.outcome === "undecided")
+          pickedState.outcome = decision.reason;
         this.#c();
         return;
       case "background": {
-        let outcome = _.outcome;
-        _.outcome = "delivered_early";
-        let j = toolUseIdsToMoveToBackground(U, L, taskRegistry);
-        let pe = j.length;
-        let me = backgroundForegroundCalls(filtered);
-        pe += me;
-        if (me > 0) j.push(...filtered.map((ce) => ce.toolUseId));
+        let outcome = pickedState.outcome;
+        pickedState.outcome = "delivered_early";
+        let movedToolUseIds = toolUseIdsToMoveToBackground(movableShells, movableAgentTasks, taskRegistry);
+        let movedCount = movedToolUseIds.length;
+        let backgroundedCallCount = backgroundForegroundCalls(calls);
+        movedCount += backgroundedCallCount;
+        if (backgroundedCallCount > 0) movedToolUseIds.push(...calls.map((movedCall) => movedCall.toolUseId));
         if (this.#e.size > 0) {
           this.#g = 0;
-          for (let ce of j) if (ce !== undefined) this.#r.add(ce);
+          for (let movedToolUseId of movedToolUseIds)
+            if (movedToolUseId !== undefined) this.#r.add(movedToolUseId);
         }
-        if (pe === 0) {
-          _.outcome = outcome === "undecided" ? "nothing_moved" : outcome;
-          if (Q.isUnmovableGraceOver) {
-            if (P) this.#_(_);
-            else this.#k(_, uuid, priority);
+        if (movedCount === 0) {
+          pickedState.outcome = outcome === "undecided" ? "nothing_moved" : outcome;
+          if (decisionInput.isUnmovableGraceOver) {
+            if (backgroundingDisabled) this.#_(pickedState);
+            else this.#k(pickedState, uuid, priority);
             return;
           }
           if (this.#e.size > 0) this.#o++;
@@ -391,29 +421,29 @@ class LowLatencySubmitQueue {
         return;
       }
       case "interrupt":
-        this.#k(_, uuid, priority);
+        this.#k(pickedState, uuid, priority);
         return;
       case "cancel":
-        this.#_(_);
+        this.#_(pickedState);
     }
   }
-  #_(e) {
+  #_(moveState) {
     let { interruptForSubmit } = this.#t.turn;
     if (interruptForSubmit === undefined) {
-      if (e.outcome === "undecided") e.outcome = "nothing_moved";
+      if (moveState.outcome === "undecided") moveState.outcome = "nothing_moved";
     } else {
-      if (e.outcome !== "delivered_early") e.outcome = "fell_back_to_cancel";
+      if (moveState.outcome !== "delivered_early") moveState.outcome = "fell_back_to_cancel";
       interruptForSubmit();
     }
     this.#i();
   }
-  #k(e, n, raisedFrom) {
+  #k(moveState, messageUuid, raisedFrom) {
     this.#o = 0;
     this.#u = 0;
-    e.raisedFrom = raisedFrom;
-    if (!this.#t.messageQueue.promoteToNow(n)) e.raisedFrom = null;
-    else if (e.outcome !== "delivered_early") {
-      e.outcome = "delivered_early";
+    moveState.raisedFrom = raisedFrom;
+    if (!this.#t.messageQueue.promoteToNow(messageUuid)) moveState.raisedFrom = null;
+    else if (moveState.outcome !== "delivered_early") {
+      moveState.outcome = "delivered_early";
       logFeatureOk(this.#t.featureName);
     }
     this.#c();
@@ -424,31 +454,35 @@ function agentIdOrMain(agentId) {
   return agentId ?? mainAgentId();
 }
 //@ chunk-0sfjpx19.js:39787-39949 placement
-function runningForegroundShellsFor(e, n, agentId) {
-  return e
-    .filter((s) => isForegroundShellOf(s, agentId))
+function runningForegroundShellsFor(allTasks, liveToolUseIds, agentId) {
+  return allTasks
+    .filter((task) => isForegroundShellOf(task, agentId))
     .filter(
-      (s) =>
-        s.status === "running" &&
-        ((s.caller === "inner" && s.toolUseId?.includes(PREAMBLE_TASK_SUFFIX) === true) ||
-          isForegroundShellFromCaller(s, agentId)) &&
-        setHasToolUseId(n, firstLineOfToolUseId(s)),
+      (task) =>
+        task.status === "running" &&
+        ((task.caller === "inner" && task.toolUseId?.includes(PREAMBLE_TASK_SUFFIX) === true) ||
+          isForegroundShellFromCaller(task, agentId)) &&
+        setHasToolUseId(liveToolUseIds, firstLineOfToolUseId(task)),
     );
 }
 //@ chunk-0sfjpx19.js:39949-40030 placement
-function foregroundAgentTasksInSet(e, n, agentId) {
-  return e.filter((s) => isForegroundAgentTask(s, agentId)).filter((s) => setHasToolUseId(n, s.toolUseId));
+function foregroundAgentTasksInSet(allTasks, liveToolUseIds, parentAgentId) {
+  return allTasks
+    .filter((task) => isForegroundAgentTask(task, parentAgentId))
+    .filter((task) => setHasToolUseId(liveToolUseIds, task.toolUseId));
 }
 //@ chunk-0sfjpx19.js:40030-40114 placement
-function isToolUseMarkedAgentOrTask(e, { toolUseId }) {
-  let r = toolUseId === undefined ? undefined : e.get(toolUseId);
-  return r === AGENT || r === TASK;
+function isToolUseMarkedAgentOrTask(marks, { toolUseId }) {
+  let mark = toolUseId === undefined ? undefined : marks.get(toolUseId);
+  return mark === AGENT || mark === TASK;
 }
 //@ chunk-0sfjpx19.js:40114-40213 placement
-function toolUseIdsToMoveToBackground(tasks, n, taskRegistry) {
+function toolUseIdsToMoveToBackground(tasks, agentTasks, taskRegistry) {
   return [
     ...backgroundShellsToDeliverMessage(tasks, taskRegistry).map(firstLineOfToolUseId),
-    ...n.filter((s) => moveAgentToBackground(s.id, taskRegistry)).map((s) => s.toolUseId),
+    ...agentTasks
+      .filter((agentTask) => moveAgentToBackground(agentTask.id, taskRegistry))
+      .map((agentTask) => agentTask.toolUseId),
   ];
 }
 //@ chunk-0sfjpx19.js:40213-40293 placement
@@ -456,34 +490,42 @@ function isLocalTurnRunning(turn) {
   return turn.guard.isRunning && turn.abortController?.signal.aborted === false;
 }
 //@ chunk-0sfjpx19.js:40293-40360 placement
-function firstLineOfToolUseId(e) {
-  return e.toolUseId === undefined ? undefined : stripPreambleSuffix(e.toolUseId);
+function firstLineOfToolUseId(task) {
+  return task.toolUseId === undefined ? undefined : stripPreambleSuffix(task.toolUseId);
 }
 //@ chunk-0sfjpx19.js:40360-40921 placement
-function isTurnRunning(e, n, r, agentId) {
-  let any = [...n.values()].some(isExactReplToolName);
-  let filtered = e.filter(isLocalAgent).filter((b) => b.status === "running" && !b.isBackgrounded);
-  let _ = new Set(
+function isTurnRunning(allTasks, liveToolUseIds, exemptShells, agentId) {
+  let any = [...liveToolUseIds.values()].some(isExactReplToolName);
+  let filtered = allTasks
+    .filter(isLocalAgent)
+    .filter((agent) => agent.status === "running" && !agent.isBackgrounded);
+  let descendantAgentIds = new Set(
     filtered
-      .filter((b) => b.parentAgentId === agentId && (any || setHasToolUseId(n, b.toolUseId)))
-      .map((b) => b.agentId),
+      .filter(
+        (agent) =>
+          agent.parentAgentId === agentId && (any || setHasToolUseId(liveToolUseIds, agent.toolUseId)),
+      )
+      .map((agent) => agent.agentId),
   );
-  for (let b = -1; b !== _.size;) {
-    b = _.size;
-    for (let k of filtered) if (k.parentAgentId !== undefined && _.has(k.parentAgentId)) _.add(k.agentId);
+  for (let previousCount = -1; previousCount !== descendantAgentIds.size;) {
+    previousCount = descendantAgentIds.size;
+    for (let agent of filtered)
+      if (agent.parentAgentId !== undefined && descendantAgentIds.has(agent.parentAgentId))
+        descendantAgentIds.add(agent.agentId);
   }
-  return e.filter(isLocalShellTask).filter((b) => {
-    let k = isForegroundShellFromCaller(b, agentId) || r.includes(b);
-    let w = isForegroundTask(b);
-    if (b.status !== "running" || !w || k) return false;
-    if (b.agentId !== agentId) return b.agentId !== undefined && _.has(b.agentId);
-    let { toolUseId } = b;
-    return any || (toolUseId !== undefined && setHasToolUseId(n, firstLineOf(toolUseId, ":")));
+  return allTasks.filter(isLocalShellTask).filter((shellTask) => {
+    let isExempt = isForegroundShellFromCaller(shellTask, agentId) || exemptShells.includes(shellTask);
+    let isForeground = isForegroundTask(shellTask);
+    if (shellTask.status !== "running" || !isForeground || isExempt) return false;
+    if (shellTask.agentId !== agentId)
+      return shellTask.agentId !== undefined && descendantAgentIds.has(shellTask.agentId);
+    let { toolUseId } = shellTask;
+    return any || (toolUseId !== undefined && setHasToolUseId(liveToolUseIds, firstLineOf(toolUseId, ":")));
   });
 }
 //@ chunk-0sfjpx19.js:40921-40966 placement
-function setHasToolUseId(e, toolUseId) {
-  return toolUseId !== undefined && e.has(toolUseId);
+function setHasToolUseId(toolUseIdSet, toolUseId) {
+  return toolUseId !== undefined && toolUseIdSet.has(toolUseId);
 }
 //@ chunk-0sfjpx19.js:40966-41040 placement
 /**
@@ -497,61 +539,62 @@ function isRetryableAgentError(error) {
   );
 }
 //@ chunk-0sfjpx19.js:41040-41910 placement
-async function deliverQueuedNow(e, taskRegistry, r) {
-  let s = isHeldByPlugin();
-  let h = drainPendingMessages(e, taskRegistry);
-  let y = ({ origin, userInitiatedAt }) =>
+async function deliverQueuedNow(agentId, taskRegistry, resume) {
+  let heldByPlugin = isHeldByPlugin();
+  let pendingMessages = drainPendingMessages(agentId, taskRegistry);
+  let isDeliverable = ({ origin, userInitiatedAt }) =>
     userInitiatedAt !== undefined ||
     origin === undefined ||
     origin.kind === "human" ||
     origin.kind === "observer" ||
     ((origin.kind === "coordinator" || origin.kind === "peer") && origin.plugin === undefined);
-  let _ = s ? h.find(y) : h[0];
-  if (_ === undefined) {
-    queuePendingMessage(e, h, taskRegistry);
-    if (h.length > 0)
-      holdQueuedInput(() => getTaskRunState().agentStrandedMessages.emit(e), undefined, "stays");
+  let chosenMessage = heldByPlugin ? pendingMessages.find(isDeliverable) : pendingMessages[0];
+  if (chosenMessage === undefined) {
+    queuePendingMessage(agentId, pendingMessages, taskRegistry);
+    if (pendingMessages.length > 0)
+      holdQueuedInput(() => getTaskRunState().agentStrandedMessages.emit(agentId), undefined, "stays");
     return;
   }
-  let filtered = h.filter((S) => S !== _);
-  let k = hasUserInitiatedPending(taskRegistry.get(e), h);
-  queuePendingMessage(e, filtered, taskRegistry);
-  let w;
+  let filtered = pendingMessages.filter((message) => message !== chosenMessage);
+  let userInitiated = hasUserInitiatedPending(taskRegistry.get(agentId), pendingMessages);
+  queuePendingMessage(agentId, filtered, taskRegistry);
+  let resumeResult;
   try {
-    w = await r(_, k);
+    resumeResult = await resume(chosenMessage, userInitiated);
   } catch (error) {
-    let T = [_, ...drainPendingMessages(e, taskRegistry)];
+    let remainingMessages = [chosenMessage, ...drainPendingMessages(agentId, taskRegistry)];
     if (isRetryableAgentError(error)) {
-      queuePendingMessage(e, T, taskRegistry);
+      queuePendingMessage(agentId, remainingMessages, taskRegistry);
       throw error;
     }
-    let D = hasUserInitiatedPending(taskRegistry.get(e), T);
+    let requeuedUserInitiated = hasUserInitiatedPending(taskRegistry.get(agentId), remainingMessages);
     if (
       error instanceof AgentStoppedByUserError &&
-      D &&
-      canReceiveNotification(taskRegistry.get(e), {
+      requeuedUserInitiated &&
+      canReceiveNotification(taskRegistry.get(agentId), {
         userInitiated: true,
       })
     ) {
-      queuePendingMessage(e, T, taskRegistry);
+      queuePendingMessage(agentId, remainingMessages, taskRegistry);
       throw new AgentResumeTransientError(
-        `a message the user typed for agent ${e} arrived while a resume their stop refused was in flight; retrying with it`,
+        `a message the user typed for agent ${agentId} arrived while a resume their stop refused was in flight; retrying with it`,
       );
     }
-    let E =
+    let undeliverable =
       error instanceof ResumeAgentStateError ||
-      !canReceiveNotification(taskRegistry.get(e), {
-        userInitiated: D,
+      !canReceiveNotification(taskRegistry.get(agentId), {
+        userInitiated: requeuedUserInitiated,
       });
-    if (!E) queuePendingMessage(e, T, taskRegistry);
-    getTaskRunState().agentResumeFailed.emit(e, {
+    if (!undeliverable) queuePendingMessage(agentId, remainingMessages, taskRegistry);
+    getTaskRunState().agentResumeFailed.emit(agentId, {
       error,
-      undeliverable: E ? T : [],
-      terminal: E,
+      undeliverable: undeliverable ? remainingMessages : [],
+      terminal: undeliverable,
     });
     throw error;
   }
-  if (isResumeDenied(w)) dropDeniedResumeMessages(e, taskRegistry, [_, ...filtered], w);
+  if (isResumeDenied(resumeResult))
+    dropDeniedResumeMessages(agentId, taskRegistry, [chosenMessage, ...filtered], resumeResult);
 }
 //@ chunk-0sfjpx19.js:41910-41937 placement
 /**
@@ -564,14 +607,14 @@ var RESUME_BACKOFF_CAP_MS = 60000;
 /**
  * 指数退避加抖动：延迟取 min(上限, 基数×2^(n−1))，结果在其一半到全值之间随机。
  */
-function jitteredBackoffMs(e, random = Math.random) {
-  let min = Math.min(RESUME_BACKOFF_CAP_MS, RESUME_BACKOFF_BASE_MS * 2 ** Math.max(0, e - 1));
+function jitteredBackoffMs(attempt, random = Math.random) {
+  let min = Math.min(RESUME_BACKOFF_CAP_MS, RESUME_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt - 1));
   return Math.round(min / 2 + (random() * min) / 2);
 }
 //@ chunk-0sfjpx19.js:42039-42116 placement
 var realTimers = {
-  setTimeout: (e, n) => setTimeout(e, n),
-  clearTimeout: (e) => clearTimeout(e),
+  setTimeout: (fn, delayMs) => setTimeout(fn, delayMs),
+  clearTimeout: (timer) => clearTimeout(timer),
 };
 //@ chunk-0sfjpx19.js:42116-43567 placement
 /**
@@ -584,98 +627,100 @@ function createStrandedResumeRetrier({
   timers = realTimers,
   random = Math.random,
 }) {
-  let y = new Map();
-  let _ = false;
-  let b = (S) => {
-    let timer = y.get(S)?.timer;
+  let pendingRetries = new Map();
+  let disposed = false;
+  let clearRetry = (agentId) => {
+    let timer = pendingRetries.get(agentId)?.timer;
     if (timer !== undefined) timers.clearTimeout(timer);
-    y.delete(S);
+    pendingRetries.delete(agentId);
   };
-  let k = async (S) => {
+  let attemptDelivery = async (agentId) => {
     try {
-      await deliverQueuedNow(S, taskRegistry, (T, D) => resume(S, T, D));
-      b(S);
+      await deliverQueuedNow(agentId, taskRegistry, (message, userInitiated) =>
+        resume(agentId, message, userInitiated),
+      );
+      clearRetry(agentId);
     } catch (error) {
-      let D = y.get(S);
-      b(S);
+      let previousRetry = pendingRetries.get(agentId);
+      clearRetry(agentId);
       if (!isRetryableAgentError(error)) throw error;
-      let E = {
-        attempt: (D?.attempt ?? 0) + 1,
-        transient: (D?.transient ?? 0) + (error instanceof AgentResumeTransientError ? 1 : 0),
+      let retryState = {
+        attempt: (previousRetry?.attempt ?? 0) + 1,
+        transient: (previousRetry?.transient ?? 0) + (error instanceof AgentResumeTransientError ? 1 : 0),
       };
-      if (E.transient > MAX_TRANSIENT_RESUME_RETRIES) {
-        getTaskRunState().agentResumeFailed.emit(S, {
+      if (retryState.transient > MAX_TRANSIENT_RESUME_RETRIES) {
+        getTaskRunState().agentResumeFailed.emit(agentId, {
           error,
-          undeliverable: drainPendingMessages(S, taskRegistry),
+          undeliverable: drainPendingMessages(agentId, taskRegistry),
           terminal: true,
         });
         throw new ResumeAgentStateError(
           `still failing after ${MAX_TRANSIENT_RESUME_RETRIES} retries: ${errorMessage(error)}`,
         );
       }
-      let N = jitteredBackoffMs(E.attempt, random);
+      let delayMs = jitteredBackoffMs(retryState.attempt, random);
       logForDebugging(
-        `stranded resume of ${S} retries in ${N}ms (attempt ${E.attempt}, ${E.transient}/${MAX_TRANSIENT_RESUME_RETRIES} transient): ${errorMessage(error)}`,
+        `stranded resume of ${agentId} retries in ${delayMs}ms (attempt ${retryState.attempt}, ${retryState.transient}/${MAX_TRANSIENT_RESUME_RETRIES} transient): ${errorMessage(error)}`,
       );
-      E.timer = timers.setTimeout(() => {
-        E.timer = undefined;
-        let G = taskRegistry.get(S);
-        if (isLocalAgent(G) && G.pendingMessages.length === 0) {
-          b(S);
+      retryState.timer = timers.setTimeout(() => {
+        retryState.timer = undefined;
+        let agent = taskRegistry.get(agentId);
+        if (isLocalAgent(agent) && agent.pendingMessages.length === 0) {
+          clearRetry(agentId);
           return;
         }
-        if (!isLocalAgent(G)) {
-          b(S);
-          let L = new ResumeAgentStateError(
-            `Agent ${S} was evicted before its stranded resume retry ran; nothing further will be delivered from its queue.`,
+        if (!isLocalAgent(agent)) {
+          clearRetry(agentId);
+          let evictionError = new ResumeAgentStateError(
+            `Agent ${agentId} was evicted before its stranded resume retry ran; nothing further will be delivered from its queue.`,
           );
-          getTaskRunState().agentResumeFailed.emit(S, {
-            error: L,
+          getTaskRunState().agentResumeFailed.emit(agentId, {
+            error: evictionError,
             undeliverable: [],
             terminal: true,
           });
-          onFailed(S, L);
+          onFailed(agentId, evictionError);
           return;
         }
-        let userInitiated = hasUserInitiatedPending(G);
-        let { stoppedByUser, status } = G;
+        let userInitiated = hasUserInitiatedPending(agent);
+        let { stoppedByUser, status } = agent;
         if (
-          !canReceiveNotification(G, {
+          !canReceiveNotification(agent, {
             userInitiated,
           })
         ) {
-          b(S);
-          let L =
+          clearRetry(agentId);
+          let refusalError =
             stoppedByUser === true
-              ? new AgentStoppedByUserError(`Agent ${S} was stopped by the user and won't be resumed.`)
-              : new ResumeAgentStateError(`Agent ${S} is ${status} and cannot take queued messages.`);
-          getTaskRunState().agentResumeFailed.emit(S, {
-            error: L,
-            undeliverable: drainPendingMessages(S, taskRegistry),
+              ? new AgentStoppedByUserError(`Agent ${agentId} was stopped by the user and won't be resumed.`)
+              : new ResumeAgentStateError(`Agent ${agentId} is ${status} and cannot take queued messages.`);
+          getTaskRunState().agentResumeFailed.emit(agentId, {
+            error: refusalError,
+            undeliverable: drainPendingMessages(agentId, taskRegistry),
             terminal: true,
           });
-          onFailed(S, L);
+          onFailed(agentId, refusalError);
           return;
         }
-        w(S);
-      }, N);
-      y.set(S, E);
+        dispatch(agentId);
+      }, delayMs);
+      pendingRetries.set(agentId, retryState);
       throw error;
     }
   };
-  let w = async (S) => {
-    if (_) return;
+  let dispatch = async (agentId) => {
+    if (disposed) return;
     try {
-      await k(S);
+      await attemptDelivery(agentId);
     } catch (error) {
-      onFailed(S, error);
+      onFailed(agentId, error);
     }
   };
   return {
-    dispatch: w,
+    dispatch,
     dispose: () => {
-      _ = true;
-      for (let key of [...y.keys()]) b(key);
+      disposed = true;
+      for (let key of [...pendingRetries.keys()]) clearRetry(key);
     },
   };
 }
@@ -683,51 +728,57 @@ function createStrandedResumeRetrier({
 /**
  * 判断消息是否为"只含结果"的任务通知（排除纯工具调用的用户消息）。
  */
-function isResultOnlyTaskNotification(e) {
-  return neverFalse(e);
+function isResultOnlyTaskNotification(message) {
+  return neverFalse(message);
 }
 //@ chunk-0sfjpx19.js:43597-44358 placement
-function buildTaskNotificationText(e, tasks) {
-  if (!tasks || e.length === 0) return [];
-  let r = new Map();
-  let s = new Map();
-  for (let h of e) {
-    if (!h.agentId || !(h.mode === "task-notification" || isResultOnlyTaskNotification(h))) continue;
-    let y = r.get(h.agentId);
-    if (!y) {
-      let task = tasks[h.agentId];
+function buildTaskNotificationText(allMessages, tasks) {
+  if (!tasks || allMessages.length === 0) return [];
+  let tasksByAgent = new Map();
+  let notificationsByAgent = new Map();
+  for (let notification of allMessages) {
+    if (
+      !notification.agentId ||
+      !(notification.mode === "task-notification" || isResultOnlyTaskNotification(notification))
+    )
+      continue;
+    let task = tasksByAgent.get(notification.agentId);
+    if (!task) {
+      let task_2 = tasks[notification.agentId];
       if (
-        !isBackgroundedSubagent(task) ||
-        !hasCompletedWithFindings(task) ||
-        task.finalizing ||
-        task.resuming
+        !isBackgroundedSubagent(task_2) ||
+        !hasCompletedWithFindings(task_2) ||
+        task_2.finalizing ||
+        task_2.resuming
       )
         continue;
-      y = task;
-      r.set(h.agentId, y);
+      task = task_2;
+      tasksByAgent.set(notification.agentId, task);
     }
-    let _ = s.get(h.agentId) ?? [];
-    if (h.mode === "task-notification") _.push(h);
-    s.set(h.agentId, _);
+    let notifications = notificationsByAgent.get(notification.agentId) ?? [];
+    if (notification.mode === "task-notification") notifications.push(notification);
+    notificationsByAgent.set(notification.agentId, notifications);
   }
-  return Array.from(s, ([h, y]) => {
-    let filtered = y.filter((w) => typeof w.value === "string" && w.value);
-    let mapped = filtered.map((w) => String(w.value));
-    let k = uniq(filtered.flatMap((w) => w.toolsUsed ?? []));
+  return Array.from(notificationsByAgent, ([agentId, notifications]) => {
+    let filtered = notifications.filter(
+      (notification) => typeof notification.value === "string" && notification.value,
+    );
+    let mapped = filtered.map((notification) => String(notification.value));
+    let toolsUsed = uniq(filtered.flatMap((notification) => notification.toolsUsed ?? []));
     return {
-      agentId: h,
+      agentId,
       prompt: mapped.join(`
 
 `),
-      consumedCommands: y,
-      resultsOnly: y.length === 0,
-      origin: notificationOriginForResults(y),
-      ...(k.length > 0 && {
-        toolsUsed: k,
+      consumedCommands: notifications,
+      resultsOnly: notifications.length === 0,
+      origin: notificationOriginForResults(notifications),
+      ...(toolsUsed.length > 0 && {
+        toolsUsed,
       }),
-      noticeLengths: mapped.map((w) => w.length),
-      noticeOwn: filtered.map((w) => isTaskNotificationOrigin(w.origin, undefined)),
-      noticeRunIds: filtered.map((w) => w.runId ?? null),
+      noticeLengths: mapped.map((promptText) => promptText.length),
+      noticeOwn: filtered.map((notification) => isTaskNotificationOrigin(notification.origin, undefined)),
+      noticeRunIds: filtered.map((notification) => notification.runId ?? null),
     };
   });
 }
@@ -740,8 +791,9 @@ var SESSION_TASK_NOTIFICATION_ORIGIN = {
   producer: "session-task",
 };
 //@ chunk-0sfjpx19.js:44446-44521 placement
-function notificationOriginForResults(e) {
-  return e.length > 0 && e.every((n) => isTaskNotificationOrigin(n.origin, undefined))
+function notificationOriginForResults(notifications) {
+  return notifications.length > 0 &&
+    notifications.every((notification) => isTaskNotificationOrigin(notification.origin, undefined))
     ? SESSION_TASK_NOTIFICATION_ORIGIN
     : TASK_NOTIFICATION_ORIGIN;
 }
@@ -752,28 +804,32 @@ function notificationOriginForResults(e) {
 function createDeliveredResultsTracker() {
   let weakSet = new WeakSet();
   return {
-    note(n, r) {
-      for (let s of resultOnlyMessagesOfAgent(n, r)) weakSet.add(s);
+    note(allMessages, agentId) {
+      for (let message of resultOnlyMessagesOfAgent(allMessages, agentId)) weakSet.add(message);
     },
-    holds(n, r) {
-      let s = resultOnlyMessagesOfAgent(n, r.agentId);
-      return r.resultsOnly && s.length > 0 && s.every((h) => weakSet.has(h));
+    holds(allMessages, result) {
+      let agentMessages = resultOnlyMessagesOfAgent(allMessages, result.agentId);
+      return (
+        result.resultsOnly &&
+        agentMessages.length > 0 &&
+        agentMessages.every((message) => weakSet.has(message))
+      );
     },
   };
 }
 //@ chunk-0sfjpx19.js:44694-44755 placement
-function resultOnlyMessagesOfAgent(e, n) {
-  return e.filter((r) => r.agentId === n && isResultOnlyTaskNotification(r));
+function resultOnlyMessagesOfAgent(messages, agentId) {
+  return messages.filter((message) => message.agentId === agentId && isResultOnlyTaskNotification(message));
 }
 //@ chunk-0sfjpx19.js:44755-44767 placement
 var SLACK_CONNECT_DIALOGS_CACHE = null;
 //@ chunk-0sfjpx19.js:44767-44968 placement
-function isSdkHostOrigin(kind, n) {
+function isSdkHostOrigin(kind, originKind) {
   if (kind === REFUSAL_FALLBACK_DIALOG.kind || kind === FABLE_OVERAGE_CONSENT_DIALOG.kind) return true;
-  if (kind === AUTO_MODE_SERVER_FALLBACK) return n === "sdk_host";
-  if (kind === ENUM_PROMPT) return n === "sdk_host";
+  if (kind === AUTO_MODE_SERVER_FALLBACK) return originKind === "sdk_host";
+  if (kind === ENUM_PROMPT) return originKind === "sdk_host";
   return (
-    n === "sdk_host" &&
+    originKind === "sdk_host" &&
     SLACK_CONNECT_DIALOGS_CACHE !== null &&
     SLACK_CONNECT_DIALOGS_CACHE.slackConnectDialogs.some(
       (slackConnectDialog) => slackConnectDialog.kind === kind,
@@ -789,39 +845,41 @@ function logBridgeInitializeCommands(commands) {
   return bridgeSlashCommands;
 }
 //@ chunk-0sfjpx19.js:45109-45348 placement
-function commandNamesForBridge(e, n, r) {
-  let s = dropSyncedNameClashes(e, [...n, ...r]);
-  if (n.length === 0) return s;
-  let h = new Set(s.map((b) => b.name));
-  let y = new Set(s.map(getCommandName));
-  let mapped = Ji(n, "name")
-    .filter((b) => !h.has(b.name))
-    .map((b) =>
-      b.isMcp && y.has(getCommandName(b))
+function commandNamesForBridge(commands, extraCommands, syncedCommands) {
+  let merged = dropSyncedNameClashes(commands, [...extraCommands, ...syncedCommands]);
+  if (extraCommands.length === 0) return merged;
+  let takenNames = new Set(merged.map((command) => command.name));
+  let takenCommandNames = new Set(merged.map(getCommandName));
+  let mapped = uniqByExport(extraCommands, "name")
+    .filter((command) => !takenNames.has(command.name))
+    .map((command) =>
+      command.isMcp && takenCommandNames.has(getCommandName(command))
         ? {
-            ...b,
+            ...command,
             isHidden: true,
           }
-        : b,
+        : command,
     );
-  return [...s, ...mapped];
+  return [...merged, ...mapped];
 }
 //@ chunk-0sfjpx19.js:45348-45722 placement
-function buildBridgeInitializeCommands(e, n) {
-  let r = bridgeHostState();
-  let s = r.replHandle ?? r.sdkHostedHandle;
-  if (!s || s.outboundOnly) return;
-  if (r.contextUsageMirror === undefined) {
-    let h = new ContextUsageEstimateReporter((contextUsage) => {
-      let _ = r.replHandle ?? r.sdkHostedHandle;
-      if (r.contextUsageMirror === h && _ && !_.outboundOnly)
-        _.reportMetadata({
+function buildBridgeInitializeCommands(usage, turnEndAt) {
+  let bridgeHost = bridgeHostState();
+  let bridgeHandle = bridgeHost.replHandle ?? bridgeHost.sdkHostedHandle;
+  if (!bridgeHandle || bridgeHandle.outboundOnly) return;
+  if (bridgeHost.contextUsageMirror === undefined) {
+    let reporter = new ContextUsageEstimateReporter((contextUsage) => {
+      let bridgeHandle = bridgeHost.replHandle ?? bridgeHost.sdkHostedHandle;
+      if (bridgeHost.contextUsageMirror === reporter && bridgeHandle && !bridgeHandle.outboundOnly)
+        bridgeHandle.reportMetadata({
           context_usage: contextUsage,
         });
     });
-    r.contextUsageMirror = h;
+    bridgeHost.contextUsageMirror = reporter;
   }
-  return n ? r.contextUsageMirror.reportAtTurnEnd(e, n) : r.contextUsageMirror.report(e);
+  return turnEndAt
+    ? bridgeHost.contextUsageMirror.reportAtTurnEnd(usage, turnEndAt)
+    : bridgeHost.contextUsageMirror.report(usage);
 }
 export {
   LowLatencySubmitQueue,

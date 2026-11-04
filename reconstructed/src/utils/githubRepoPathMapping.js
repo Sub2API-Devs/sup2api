@@ -27,20 +27,20 @@ async function updateGithubRepoPathMapping(storageV5) {
       return;
     }
     let cwd = getOriginalCwd();
-    let s = findGitRoot(cwd) ?? cwd;
+    let gitRoot = findGitRoot(cwd) ?? cwd;
     let currentPath;
     try {
-      currentPath = identity(await realpath(s));
+      currentPath = identity(await realpath(gitRoot));
     } catch {
-      currentPath = s;
+      currentPath = gitRoot;
     }
     let repoKey = repo.toLowerCase();
-    let p = getGlobalConfig().githubRepoPaths?.[repoKey] ?? [];
-    if (p[0] === currentPath) {
+    let trackedPaths = getGlobalConfig().githubRepoPaths?.[repoKey] ?? [];
+    if (trackedPaths[0] === currentPath) {
       logForDebugging(`Path ${currentPath} already tracked for repo ${repoKey}`);
       return;
     }
-    let withoutCurrent = p.filter((c) => c !== currentPath);
+    let withoutCurrent = trackedPaths.filter((path) => path !== currentPath);
     let updatedPaths = [currentPath, ...withoutCurrent];
     await saveGlobalConfig(
       (current) => ({

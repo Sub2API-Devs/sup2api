@@ -268,7 +268,7 @@ var memo = {
   },
 };
 //@ chunk-7vp249v4.js:47625-47649 esm-layout
-function yn() {
+function createMemoizer() {
   return memo;
 }
 //@ chunk-7vp249v4.js:47649-47724 esm-fingerprint
@@ -276,4 +276,4 @@ function isBackEdge(ctx, value) {
   let backEdges = ctx[STATE]?.backEdges;
   return backEdges !== undefined && isRef(value) && backEdges.has(value);
 }
-export { yn };
+export { createMemoizer };

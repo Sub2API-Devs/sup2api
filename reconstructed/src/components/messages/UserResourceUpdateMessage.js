@@ -9,14 +9,24 @@
  * attribution: fingerprint 3, file-last-pair 1
  */
 import { sep } from "path";
+import { formatUri_2, getBaseName, homeDirectory } from "../../utils/errorStackSanitize.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { REFRESH_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
-import { formatUri_2, getBaseName, homeDirectory } from "../../utils/errorStackSanitize.js";
+import { REFRESH_GLYPH } from "../../constants/figures.js";
 
+//@ chunk-sycgf9xs.js:1336-1535 file-last-pair
+function UserResourceUpdateMessage(t0) {
+  let resourceUri = t0;
+  if (resourceUri.startsWith("file://")) resourceUri = resourceUri.slice(7);
+  if (formatUri_2(resourceUri)) return getBaseName(resourceUri);
+  if (resourceUri.startsWith("/snapshot/")) resourceUri = resourceUri.slice(10);
+  let homeDir = homeDirectory();
+  if (homeDir && resourceUri.startsWith(homeDir + sep)) resourceUri = "~" + resourceUri.slice(homeDir.length);
+  return resourceUri;
+}
 //@ chunk-ah34pb7m.js:117725-118030 fingerprint = _temp (0.644)
 /**
  * MCP 资源/轮询更新的一行：服务器名、格式化后的 URI（或目标）与原因。
@@ -85,16 +95,6 @@ function formatUri(uri) {
     return parts[parts.length - 1] || path;
   }
   if (uri.length > 40) return uri.slice(0, 39) + "\u2026";
-  return uri;
-}
-//@ chunk-sycgf9xs.js:1336-1535 file-last-pair
-function UserResourceUpdateMessage(t0) {
-  let uri = t0;
-  if (uri.startsWith("file://")) uri = uri.slice(7);
-  if (formatUri_2(uri)) return getBaseName(uri);
-  if (uri.startsWith("/snapshot/")) uri = uri.slice(10);
-  let r = homeDirectory();
-  if (r && uri.startsWith(r + sep)) uri = "~" + uri.slice(r.length);
   return uri;
 }
 export { parseUpdates, renderResourceUpdateRow, UserResourceUpdateMessage };

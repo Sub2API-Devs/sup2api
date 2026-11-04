@@ -10,7 +10,7 @@
  */
 import { join, dirname, posix, resolve } from "path";
 import { mkdir, writeFile, realpath } from "fs/promises";
-import { Ar } from "../../../runtime/bun-runtime.js";
+import { __export } from "../../../runtime/bun-runtime.js";
 import {
   publishRequestHash,
   listAccountMarketplaces,
@@ -61,7 +61,7 @@ import { logFeatureBadAsync, logFeatureOkAsync } from "../analytics/featureTelem
  */
 var pluginPublishNamespace = {};
 //@ chunk-wm1cd8qt.js:13263-13296 placement
-Ar(pluginPublishNamespace, {
+__export(pluginPublishNamespace, {
   default: () => pluginPublishNamespace,
   run: () => runPluginPublish,
 });
@@ -69,17 +69,18 @@ Ar(pluginPublishNamespace, {
 /**
  * 判断发布请求是否与给定摘要匹配。
  */
-var isPlanForDigest = (e, r) => "plan" in e && publishRequestHash(e) === r.digest;
+var isPlanForDigest = (candidate, approval) =>
+  "plan" in candidate && publishRequestHash(candidate) === approval.digest;
 //@ chunk-wm1cd8qt.js:13433-13591 placement
-async function writeDraftManifestFs(e) {
-  let r = join(e.root, PLUGIN_MANIFEST_PATH);
-  await mkdir(dirname(r), {
+async function writeDraftManifestFs(publishFolder) {
+  let manifestPath = join(publishFolder.root, PLUGIN_MANIFEST_PATH);
+  await mkdir(dirname(manifestPath), {
     recursive: true,
   }).catch(() => {
     return;
   });
-  return (await isDirectoryOrFalse(dirname(r)))
-    ? writeFile(r, e.draft, {
+  return (await isDirectoryOrFalse(dirname(manifestPath)))
+    ? writeFile(manifestPath, publishFolder.draft, {
         flag: "wx",
       }).then(
         () => true,
@@ -89,54 +90,58 @@ async function writeDraftManifestFs(e) {
 }
 //@ chunk-wm1cd8qt.js:13620-13630 placement
 /**
- * 发布文件的只读权限（0444）。
+ * 发布草稿文件的权限位 0o644（420）：文件由发布流程写出，只允许属主写。
  */
 var FILE_MODE_READONLY = 420;
 //@ chunk-wm1cd8qt.js:13630-13789 placement
-async function writeDraftManifestAnchored(e, r) {
-  let o = identityPath_2(PLUGIN_MANIFEST_PATH);
+async function writeDraftManifestAnchored(treeAnchor, publishFolder) {
+  let manifestPath = identityPath_2(PLUGIN_MANIFEST_PATH);
   try {
-    await e.mkdirp(posix.dirname(o));
-    await e.create(o, Buffer.from(r.draft), FILE_MODE_READONLY);
+    await treeAnchor.mkdirp(posix.dirname(manifestPath));
+    await treeAnchor.create(manifestPath, Buffer.from(publishFolder.draft), FILE_MODE_READONLY);
     return true;
   } catch {
     return false;
   } finally {
-    await e.close();
+    await treeAnchor.close();
   }
 }
 //@ chunk-wm1cd8qt.js:13789-14005 placement
 async function writeDraftManifest(publishFolder) {
-  let { openTreeAnchor } = await import("./chunk-ejkghqj9.js");
-  let o = await openTreeAnchor(await lazyDeviceTreeHost(), {
+  let { openTreeAnchor } = await import("../../utils/fsAnchor/treeAnchor.js");
+  let treeAnchor = await openTreeAnchor(await lazyDeviceTreeHost(), {
     gitRoot: publishFolder.root,
     realRoot: publishFolder.root,
   }).catch(() => {
     return;
   });
-  if (o === undefined) return false;
-  return !("unavailable" in o)
-    ? writeDraftManifestAnchored(o, publishFolder)
+  if (treeAnchor === undefined) return false;
+  return !("unavailable" in treeAnchor)
+    ? writeDraftManifestAnchored(treeAnchor, publishFolder)
     : writeDraftManifestFs(publishFolder);
 }
 //@ chunk-wm1cd8qt.js:14005-14302 placement
-async function preparePublishPlan(e, r) {
-  let publishFolder = await resolvePublishFolder(e.folder, e.description);
-  let publishFolder_2 = await preparePublishFolder(e, r.organization);
-  let i = isPlanForDigest(publishFolder_2, r) && publishFolder.kind === "needs-manifest";
-  if (i && !r.drafts) return refusalResult("changed");
-  let p = i && (await writeDraftManifest(publishFolder));
-  if (i && !p) return refusalResult("unwritten");
-  let n = p ? await preparePublishFolder(e, r.organization) : publishFolder_2;
-  return isPlanForDigest(n, r) || "kind" in n ? n : refusalResult("changed");
+async function preparePublishPlan(input, approval) {
+  let publishFolder = await resolvePublishFolder(input.folder, input.description);
+  let candidate = await preparePublishFolder(input, approval.organization);
+  let needsDraft = isPlanForDigest(candidate, approval) && publishFolder.kind === "needs-manifest";
+  if (needsDraft && !approval.drafts) return refusalResult("changed");
+  let draftWritten = needsDraft && (await writeDraftManifest(publishFolder));
+  if (needsDraft && !draftWritten) return refusalResult("unwritten");
+  let finalFolder = draftWritten ? await preparePublishFolder(input, approval.organization) : candidate;
+  return isPlanForDigest(finalFolder, approval) || "kind" in finalFolder
+    ? finalFolder
+    : refusalResult("changed");
 }
 //@ chunk-wm1cd8qt.js:14302-14385 placement
 /**
  * 读取文件并校验内容哈希。
  */
-async function readVerifiedFile(root, r, o) {
-  let publishFile = await openPublishFile(root, r);
-  return publishFile !== undefined && computeContentHash(publishFile) === o ? publishFile : undefined;
+async function readVerifiedFile(root, filePath, expectedHash) {
+  let publishFile = await openPublishFile(root, filePath);
+  return publishFile !== undefined && computeContentHash(publishFile) === expectedHash
+    ? publishFile
+    : undefined;
 }
 //@ chunk-wm1cd8qt.js:14385-14397 placement
 var ZIP_ATTR_MASK = 65535;
@@ -159,8 +164,10 @@ var zipAttributes = (mode) => ({
 /**
  * 生成 zip 条目键值对。
  */
-function zipEntryPair(e, r) {
-  return e !== undefined && r !== undefined ? [[e.path, [r, zipAttributes(e.mode)]]] : [];
+function zipEntryPair(indexFile, content) {
+  return indexFile !== undefined && content !== undefined
+    ? [[indexFile.path, [content, zipAttributes(indexFile.mode)]]]
+    : [];
 }
 //@ chunk-wm1cd8qt.js:14524-14533 placement
 /**
@@ -173,11 +180,11 @@ var ZIP_COMPRESSION_LEVEL = 6;
  */
 var ZIP_FIXED_MTIME = "1980-01-01T00:00:00";
 //@ chunk-wm1cd8qt.js:14562-14766 placement
-async function buildPublishArchive(e) {
-  let { zipSync } = await import("./chunk-9t1jcaah.js");
+async function buildPublishArchive(plan) {
+  let { zipSync } = await import("../../../vendor/fflate/esm/index.mjs");
   let allListed = await readAllListed(
-    e.listing.files,
-    (i) => readVerifiedFile(e.root, i, e.hashes[i.path]),
+    plan.listing.files,
+    (file) => readVerifiedFile(plan.root, file, plan.hashes[file.path]),
     zipEntryPair,
   );
   return "missed" in allListed
@@ -188,106 +195,109 @@ async function buildPublishArchive(e) {
       });
 }
 //@ chunk-wm1cd8qt.js:14766-15004 placement
-async function submitPublishArchive(e) {
-  let mySubmissions = await fetchMySubmissions(e);
-  if (!Array.isArray(mySubmissions)) return stoppedOrResult(e, mySubmissions, "nothing");
-  let o = await listAccountMarketplaces(e);
-  if (typeof o !== "string") return stoppedOrResult(e, o, "nothing");
-  let s = await uploadOrReplace(o, e);
-  return "kind" in s
-    ? stoppedOrResult(e, s, "uploading")
-    : setPluginInstallPreference(e, await waitForContentScan(e, s), mySubmissions);
+async function submitPublishArchive(request) {
+  let mySubmissions = await fetchMySubmissions(request);
+  if (!Array.isArray(mySubmissions)) return stoppedOrResult(request, mySubmissions, "nothing");
+  let marketplaces = await listAccountMarketplaces(request);
+  if (typeof marketplaces !== "string") return stoppedOrResult(request, marketplaces, "nothing");
+  let upload = await uploadOrReplace(marketplaces, request);
+  return "kind" in upload
+    ? stoppedOrResult(request, upload, "uploading")
+    : setPluginInstallPreference(request, await waitForContentScan(request, upload), mySubmissions);
 }
 //@ chunk-wm1cd8qt.js:15004-15186 placement
-async function uploadPublishArchive(plan, r) {
+async function uploadPublishArchive(plan, approval) {
   let archive = await unreadableOnError(buildPublishArchive(plan));
   if ("kind" in archive) return archive;
   if ("missed" in archive) return fileChangedOutcome(archive);
   return archive.length > MAX_PUBLISH_BYTES
     ? refusalResult("too-large")
-    : submitPublishArchive(withArchive(archive, plan, r)).catch((error) =>
+    : submitPublishArchive(withArchive(archive, plan, approval)).catch((error) =>
         refusalResult("failed", [errorMessage(error)]),
       );
 }
 //@ chunk-wm1cd8qt.js:15186-15311 placement
-async function runPublishPlan(e, r, signal) {
-  let publishPlan = await preparePublishPlan(e, r);
+async function runPublishPlan(input, approval, signal) {
+  let publishPlan = await preparePublishPlan(input, approval);
   return "kind" in publishPlan
     ? publishPlan
     : uploadPublishArchive(publishPlan.plan, {
-        organization: r.organization,
-        mode: e.mode,
+        organization: approval.organization,
+        mode: input.mode,
         signal,
       });
 }
 //@ chunk-wm1cd8qt.js:15311-15532 placement
-async function publishWithOrganization(e, r) {
-  let { refusal, organization, shown } = r;
+async function publishWithOrganization(input, context) {
+  let { refusal, organization, shown } = context;
   if (refusal !== undefined) return refusalResult(refusal);
   if (organization === undefined) return refusalResult(organizationAvailability());
   return shown !== undefined
     ? runPublishPlan(
-        normalizePublishInput(e),
+        normalizePublishInput(input),
         {
           digest: shown,
-          drafts: r.drafts,
+          drafts: context.drafts,
           organization,
         },
-        r.signal,
+        context.signal,
       )
     : refusalResult("nobody-to-ask");
 }
 //@ chunk-wm1cd8qt.js:15532-15700 placement
-function questionChangedRefusal(e, r) {
-  let o = r.question !== undefined && hashPublishInput(r.question) !== e?.question;
-  let s = r.shown !== undefined && hashCanonical(r.shown) !== e?.lines;
-  return e !== undefined && (o || s) ? "other-question" : undefined;
+function questionChangedRefusal(previous, next) {
+  let questionChanged = next.question !== undefined && hashPublishInput(next.question) !== previous?.question;
+  let linesChanged = next.shown !== undefined && hashCanonical(next.shown) !== previous?.lines;
+  return previous !== undefined && (questionChanged || linesChanged) ? "other-question" : undefined;
 }
 //@ chunk-wm1cd8qt.js:15700-15894 placement
-function showPublishStoppedMessage(e, r) {
-  if (!(e.kind === "refused" && e.refusal.kind === "stopped")) return;
-  logForDebugging(`plugin publish: stopped: ${e.refusal.details.join(" ")}`);
-  r.appendSystemMessage?.(
+function showPublishStoppedMessage(result, ui) {
+  if (!(result.kind === "refused" && result.refusal.kind === "stopped")) return;
+  logForDebugging(`plugin publish: stopped: ${result.refusal.details.join(" ")}`);
+  ui.appendSystemMessage?.(
     createInformationalSystemMessage(
-      publishResultLines(e).join(`
+      publishResultLines(result).join(`
 `),
       "warning",
     ),
   );
 }
 //@ chunk-wm1cd8qt.js:15966-16081 placement
-async function publishWriteDenied(e, r, o) {
-  let s = resolve(getCwd(), e.path);
-  return r && hasPublishDenyRule([s, await realpath(s).catch(() => s)], o) ? "write-denied" : undefined;
+async function publishWriteDenied(input, checkRules, ui) {
+  let absPath = resolve(getCwd(), input.path);
+  return checkRules && hasPublishDenyRule([absPath, await realpath(absPath).catch(() => absPath)], ui)
+    ? "write-denied"
+    : undefined;
 }
 //@ chunk-wm1cd8qt.js:16081-16511 placement
 /**
  * 插件发布入口：取出该工具调用之前展示给用户的摘要，依次检查开关、认证、问题是否变化、读规则与写拒绝规则，确定组织后执行发布；被停止时向会话追加提示，并记录 plugin_publish 特性状态。
  */
-async function runPluginPublish(e, r, o) {
-  let s = sessionScopedMapsSlot.of(o.session);
-  let i = s.get(r.toolUseId ?? "");
-  let shown = i?.digest;
-  s.delete(r.toolUseId ?? "");
-  let p = i?.drafts === true;
-  let n =
-    publishFlagState(e, o) ??
+async function runPluginPublish(input, call, ui) {
+  let approvals = sessionScopedMapsSlot.of(ui.session);
+  let previousApproval = approvals.get(call.toolUseId ?? "");
+  let shown = previousApproval?.digest;
+  approvals.delete(call.toolUseId ?? "");
+  let draftsAllowed = previousApproval?.drafts === true;
+  let refusal =
+    publishFlagState(input, ui) ??
     getAuthUnavailableReason() ??
-    questionChangedRefusal(i, e) ??
-    (await checkPublishReadRules(e, o))?.refusal.kind ??
-    (await publishWriteDenied(e, p, o));
-  let organization = await ensureOrganization(n);
-  let m = await publishWithOrganization(e, {
+    questionChangedRefusal(previousApproval, input) ??
+    (await checkPublishReadRules(input, ui))?.refusal.kind ??
+    (await publishWriteDenied(input, draftsAllowed, ui));
+  let organization = await ensureOrganization(refusal);
+  let result = await publishWithOrganization(input, {
     shown,
-    drafts: p,
+    drafts: draftsAllowed,
     organization,
-    refusal: n,
-    signal: r.signal,
+    refusal,
+    signal: call.signal,
   });
-  let f = m.kind === "refused" ? explainUnreadable(m, o) : m;
-  showPublishStoppedMessage(f, o);
-  await (f.kind === "refused"
-    ? logFeatureBadAsync("plugin_publish", f.refusal.kind)
+  let finalResult = result.kind === "refused" ? explainUnreadable(result, ui) : result;
+  showPublishStoppedMessage(finalResult, ui);
+  await (finalResult.kind === "refused"
+    ? logFeatureBadAsync("plugin_publish", finalResult.refusal.kind)
     : logFeatureOkAsync("plugin_publish"));
-  return f;
+  return finalResult;
 }
+export { pluginPublishNamespace, runPluginPublish };

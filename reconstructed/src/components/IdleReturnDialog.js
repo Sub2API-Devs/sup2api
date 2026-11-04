@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: fingerprint 1, file-local 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { formatTokens } from "../utils/format.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
@@ -21,7 +21,7 @@ import { Dialog } from "./design-system/Dialog.js";
 
 //@ chunk-18hwfzwa.js:1196896-1198240 fingerprint = IdleReturnDialog (0.463)
 function IdleReturnDialog(props) {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let {
     sessionAgeMinutes: idleMinutes,
     estimatedTokens: totalInputTokens,
@@ -62,36 +62,36 @@ function IdleReturnDialog(props) {
   const label = hasPrecomputedSummary
     ? "Resume from summary (instant, recommended)"
     : "Resume from summary (recommended)";
-  let At;
+  let summaryOption;
   if ($[7] !== label) {
-    At = {
+    summaryOption = {
       value: "compact",
       label,
     };
     $[7] = label;
-    $[8] = At;
-  } else At = $[8];
-  let It;
-  let Ot;
+    $[8] = summaryOption;
+  } else summaryOption = $[8];
+  let continueOption;
+  let neverOption;
   if ($[9] === MEMO_CACHE_SENTINEL) {
-    It = {
+    continueOption = {
       value: "continue",
       label: "Resume full session as-is",
     };
-    Ot = {
+    neverOption = {
       value: "never",
       label: "Don't ask me again",
     };
-    $[9] = It;
-    $[10] = Ot;
+    $[9] = continueOption;
+    $[10] = neverOption;
   } else {
-    It = $[9];
-    Ot = $[10];
+    continueOption = $[9];
+    neverOption = $[10];
   }
   let options;
-  if ($[11] !== At) {
-    options = [At, It, Ot];
-    $[11] = At;
+  if ($[11] !== summaryOption) {
+    options = [summaryOption, continueOption, neverOption];
+    $[11] = summaryOption;
     $[12] = options;
   } else options = $[12];
   let onChange;
@@ -100,24 +100,24 @@ function IdleReturnDialog(props) {
     $[13] = onDone;
     $[14] = onChange;
   } else onChange = $[14];
-  let oo;
+  let selector;
   if ($[15] !== options || $[16] !== onChange) {
-    oo = jsxProd_default(ModelSelector, {
+    selector = jsxProd_default(ModelSelector, {
       options,
       onChange,
     });
     $[15] = options;
     $[16] = onChange;
-    $[17] = oo;
-  } else oo = $[17];
+    $[17] = selector;
+  } else selector = $[17];
   let t10;
-  if ($[18] !== oo || $[19] !== title || $[20] !== onCancel) {
+  if ($[18] !== selector || $[19] !== title || $[20] !== onCancel) {
     t10 = jsxProd_default_2(Dialog, {
       title,
       onCancel,
-      children: [t5, oo],
+      children: [t5, selector],
     });
-    $[18] = oo;
+    $[18] = selector;
     $[19] = title;
     $[20] = onCancel;
     $[21] = t10;
@@ -133,7 +133,7 @@ function formatIdleDuration(minutes) {
     return remainingMinutes === 0 ? `${hours}h` : `${hours}h ${remainingMinutes}m`;
   }
   let floored = Math.floor(hours / 24);
-  let L = hours % 24;
-  return L === 0 ? `${floored}d` : `${floored}d ${L}h`;
+  let remainingHours = hours % 24;
+  return remainingHours === 0 ? `${floored}d` : `${floored}d ${remainingHours}h`;
 }
 export { IdleReturnDialog };

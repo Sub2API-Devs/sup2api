@@ -32,16 +32,16 @@ var TASK_ID_PREFIXES = {
 };
 var TASK_ID_ALPHABET = "0123456789abcdefghijklmnopqrstuvwxyz";
 //@ chunk-c0cahhqh.js:1298-1430 placement
-function isTaskIdOfType(e, taskId) {
-  let s = TASK_ID_PREFIXES[e];
+function isTaskIdOfType(taskType, taskId) {
+  let prefix = TASK_ID_PREFIXES[taskType];
   return (
-    s !== undefined &&
+    prefix !== undefined &&
     taskId.length === 9 &&
-    taskId.startsWith(s) &&
+    taskId.startsWith(prefix) &&
     taskId
-      .slice(s.length)
+      .slice(prefix.length)
       .split("")
-      .every((a) => TASK_ID_ALPHABET.includes(a))
+      .every((char) => TASK_ID_ALPHABET.includes(char))
   );
 }
 //@ chunk-c0cahhqh.js:1583-1674 callgraph-witnessed = generateTaskId (0)

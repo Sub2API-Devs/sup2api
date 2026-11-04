@@ -12,22 +12,42 @@ import { join, resolve, basename } from "path";
 import { lstat } from "fs/promises";
 import { hostname } from "os";
 import { randomUUID } from "crypto";
-import { DoctorLazy } from "../cli/handlers/util.js";
-import { string, u, literal } from "../../vendor/zod/v4/classic/schemas.js";
-import { logError } from "../utils/log.js";
+import { BridgeFatalError, isExpiredErrorType, createBridgeApiClient } from "./bridgeApi.js";
+import {
+  BRIDGE_LOGIN_INSTRUCTION,
+  WORK_STATE_QUEUED,
+  SANDBOX_SETTING_HINT,
+  BRIDGE_LOGIN_ERROR,
+} from "./types.js";
 import { logForDebugging } from "../utils/debug.js";
+import { filterSharedEnvironment, collectHostProfileIfShared } from "../utils/toolchainDetection.js";
+import {
+  errorMessage,
+  withTelemetryMessage,
+  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+  sanitizeErrorName,
+  classifyAxiosError,
+  sanitizedOAuthErrorTypeForTelemetry,
+  isENOENT,
+  getErrnoCode,
+} from "../utils/errors.js";
+import { logEvent } from "../services/analytics/index.js";
+import { lit, fromEnum, fromEnumOpt } from "../services/analytics/safeMetadata.js";
+import {
+  logFeatureSad,
+  logFeatureBad,
+  logFeatureOk,
+  logFeatureBadAsync,
+} from "../services/analytics/featureTelemetry.js";
+import { logForDiagnosticsNoPII } from "../utils/diagLogs.js";
+import { logError } from "../utils/log.js";
+import { import_sortedIndex_2 } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { DoctorLazy } from "../cli/handlers/util.js";
+import { stringSchema, objectSchema, literal } from "../../vendor/zod/v4/classic/schemas.js";
 import { sleep, backoffDelayMs, systemClock } from "../utils/sleep.js";
 import { SSEFrameBuffer } from "../cli/transports/SSETransport.js";
 import { jsonParseRaw } from "../utils/slowOperations.js";
 import { BoundedUUIDSet } from "./bridgeMessaging.js";
-import { logEvent } from "../services/analytics/index.js";
-import { fromEnum, fromEnumOpt, lit } from "../services/analytics/safeMetadata.js";
-import {
-  logFeatureOk,
-  logFeatureBad,
-  logFeatureSad,
-  logFeatureBadAsync,
-} from "../services/analytics/featureTelemetry.js";
 import {
   isBridgeRcChildRestartResumeEnabled,
   isBridgeEnvReregisterEnabled,
@@ -40,33 +60,15 @@ import {
 } from "./bridgeGates.js";
 import { sessionIdBody, toInfraSessionId, toCompatSessionId, validateBridgeId } from "./sessionIdCompat.js";
 import { MAX_POINTER_ACTIVE_SESSION_IDS } from "./bridgePointer.js";
-import { BridgeFatalError, isExpiredErrorType, createBridgeApiClient } from "./bridgeApi.js";
-import {
-  errorMessage,
-  withTelemetryMessage,
-  TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-  sanitizeErrorName,
-  classifyAxiosError,
-  sanitizedOAuthErrorTypeForTelemetry,
-  isENOENT,
-  getErrnoCode,
-} from "../utils/errors.js";
 import { readBridgeSessionTags, fetchBridgeSessionTags } from "./sessionTags.js";
 import { createCapacityWake } from "./capacityWake.js";
 import { getPollIntervalConfig } from "./pollConfig.js";
 import { createTokenRefreshScheduler } from "./jwtUtils.js";
-import { logForDiagnosticsNoPII } from "../utils/diagLogs.js";
 import { formatDuration, truncateToWidth } from "../utils/format.js";
 import { plural } from "../utils/stringUtils.js";
 import { connectedBridgePolicyRefusal } from "./bridgeEntitlement.js";
 import { isLovelyUmbrellaOn } from "../utils/settings/settingsSourceTrust.js";
 import { onPolicyVerdictChanged } from "../services/policyLimits/policyState.js";
-import {
-  BRIDGE_LOGIN_INSTRUCTION,
-  WORK_STATE_QUEUED,
-  SANDBOX_SETTING_HINT,
-  BRIDGE_LOGIN_ERROR,
-} from "./types.js";
 import {
   isBridgeFirstParty,
   classifyBridgeSessionRoles,
@@ -114,10 +116,9 @@ import { processWrapperError } from "../utils/processWrapper.js";
 import { lockCurrentVersion } from "../utils/nativeInstaller/installer.js";
 import { setAttestationFilterPolicy } from "./deviceAttestation.js";
 import { env } from "../utils/env.js";
-import { collectHostProfileIfShared, filterSharedEnvironment } from "../utils/toolchainDetection.js";
 import { createBridgeLogger } from "./bridgeUI.js";
 import { wrapAnsi } from "../ink/wrapAnsi.js";
-import { WARNING_GLYPH } from "../utils/permissions/autoModeRulesPrompt.js";
+import { WARNING_GLYPH } from "../constants/figures.js";
 import { sequential } from "../utils/sequential.js";
 import { resolveDaemonOwner } from "./ownerPin.js";
 import { getLaunchCommand } from "../utils/deepLink/registerProtocol.js";
@@ -128,8 +129,369 @@ import { drainRegisteredWriteQueues } from "../utils/settings/writeQueues.js";
 import { processChdir } from "../utils/fsOperations.js";
 import { REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE } from "./remoteControlPolicy.js";
 import { stripInvisibleChars } from "../utils/invisibleChars.js";
-import { En } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-3nztfxrw.js:44430-44564 fingerprint = formatDelay (0.486)
+function formatDelay(ms) {
+  if (ms < 1000) return `${ms}ms`;
+  if (ms % 60000 === 0) return `${ms / 60000}min`;
+  return ms % 1000 === 0 ? `${ms / 1000}s` : `${(ms / 1000).toFixed(1)}s`;
+}
+//@ chunk-b30925fy.js:10731-10769 placement
+/**
+ * 错误是否标记为可抑制（suppressible）。
+ */
+function isSuppressibleError(error) {
+  return error.suppressible;
+}
+//@ chunk-b30925fy.js:10769-10996 placement
+/**
+ * 错误分类给遥测：auth_failed / http_error / no_token / request_failed。
+ */
+function classifyApiError(error) {
+  if (error instanceof BridgeFatalError) return error.status === 401 ? "auth_failed" : "http_error";
+  if (error instanceof Error) {
+    if (error.message === BRIDGE_LOGIN_INSTRUCTION) return "no_token";
+    if ("status" in error && typeof error.status === "number") return "http_error";
+  }
+  return "request_failed";
+}
+//@ chunk-b30925fy.js:10996-11165 placement = extractErrorTypeFromData (1)
+/**
+ * 取响应体里的 error.type。
+ */
+function extractErrorTypeFromData(data) {
+  if (data && typeof data === "object") {
+    if (
+      "error" in data &&
+      data.error &&
+      typeof data.error === "object" &&
+      "type" in data.error &&
+      typeof data.error.type === "string"
+    )
+      return data.error.type;
+  }
+  return;
+}
+//@ chunk-b30925fy.js:11165-11237 layout
+/**
+ * environment secret 续期参数：最少剩余 1 小时才续期，提前量为有效期的 1/10（夹在 15 分钟到 1 天之间）再加最多 25% 抖动。
+ */
+var RENEW_MAX_ATTEMPTS = 3;
+var RENEW_MAX_JITTER_PCT = 20;
+var MIN_RENEW_LEAD_MS = 60000;
+var RENEW_ONE_HOUR_MS = 3600000;
+var MIN_RENEW_BEFORE_MS = 900000;
+var MAX_RENEW_BEFORE_MS = 86400000;
+var RENEW_JITTER_FRACTION = 0.25;
+var MIN_RENEWABLE_LIFETIME_MS = 3600000;
+//@ chunk-b30925fy.js:11237-11408 fingerprint = addJitter (0.694)
+/**
+ * 根据 expires_in 计算带抖动的续期时间点；剩余不足 1 小时返回 undefined。
+ */
+function computeSecretRenewAt(expiresInSeconds, now = Date.now(), random = Math.random) {
+  if (
+    typeof expiresInSeconds !== "number" ||
+    !Number.isFinite(expiresInSeconds) ||
+    expiresInSeconds * 1000 < MIN_RENEWABLE_LIFETIME_MS
+  )
+    return;
+  let lifetimeMs = expiresInSeconds * 1000;
+  let renewBeforeMs =
+    Math.min(Math.max(lifetimeMs / 10, MIN_RENEW_BEFORE_MS), MAX_RENEW_BEFORE_MS) *
+    (1 + RENEW_JITTER_FRACTION * random());
+  return now + lifetimeMs - renewBeforeMs;
+}
+//@ chunk-b30925fy.js:11408-11447 layout
+var RENEW_RETRY_MIN_MS = 300000;
+var RENEW_RETRY_MAX_MS = 3600000;
+var RENEW_RETRY_LIMIT = 3;
+var RENEW_FAILURE_LIMIT = 5;
+//@ chunk-b30925fy.js:11447-14560 placement
+/**
+ * 环境通告变化、密钥即将过期或轮询 401 时重新注册环境（[bridge:poll]）。
+ */
+async function reregisterEnvironment({
+  api,
+  config,
+  environmentId,
+  activeSessions,
+  attempt,
+  trigger,
+  signal,
+}) {
+  if (trigger === "tool_host_advert_changed")
+    logForDebugging(
+      `[bridge:poll] What this environment advertises changed; re-registering environment ${environmentId} (attempt ${attempt})`,
+    );
+  else if (trigger === "proactive")
+    logForDebugging(
+      `[bridge:poll] Environment secret expires soon; re-registering environment ${environmentId} to renew it (attempt ${attempt})`,
+      {
+        level: "info",
+      },
+    );
+  else
+    logForDebugging(
+      `[bridge:poll] Poll returned ${trigger === "poll_401" ? 401 : 404}; re-registering environment ${environmentId} (attempt ${attempt}/${RENEW_MAX_ATTEMPTS})`,
+      {
+        level: "warn",
+      },
+    );
+  let registeredEnvironment;
+  let toolHostAdvert;
+  try {
+    let { hostProfile, ...configWithoutHostProfile } = config;
+    let sharedHostProfile = await filterSharedEnvironment(hostProfile);
+    config.hostProfile = sharedHostProfile;
+    let toolHostAdvert_2 = config.getToolHostAdvert?.();
+    toolHostAdvert = toolHostAdvert_2;
+    registeredEnvironment = await api.registerBridgeEnvironment(
+      {
+        ...configWithoutHostProfile,
+        ...(sharedHostProfile && {
+          hostProfile: sharedHostProfile,
+        }),
+        ...(toolHostAdvert_2 && {
+          getToolHostAdvert: () => toolHostAdvert_2,
+        }),
+        reuseEnvironmentId: environmentId,
+      },
+      signal,
+    );
+  } catch (error) {
+    let fatalStatus =
+      error instanceof Error && error.message === BRIDGE_LOGIN_INSTRUCTION ? 401 : fatalClientStatus(error);
+    let isFatal = fatalStatus !== undefined;
+    logForDebugging(
+      `[bridge:poll] Re-registration of ${environmentId} ${isFatal ? "rejected" : "failed transiently"}: ${errorMessage(error)}`,
+      {
+        level: isFatal ? "error" : "warn",
+      },
+    );
+    if (
+      !isFatal &&
+      toolHostAdvert !== undefined &&
+      toolHostAdvert.kind !== "unknown" &&
+      !isSameAdvertState(toolHostAdvert, config.registeredToolHostAdvert)
+    )
+      config.registeredToolHostAdvert = "unconfirmed";
+    if (signal.aborted)
+      return {
+        outcome: "transient",
+      };
+    logEvent("tengu_bridge_env_reregister", {
+      attempt,
+      outcome: isFatal ? lit("register_rejected") : lit("register_transient"),
+      trigger: fromEnum(trigger),
+    });
+    if (fatalStatus !== undefined) {
+      if (trigger === "tool_host_advert_changed")
+        logFeatureSad("bridge_env_reregister", "advert_register_rejected");
+      else if (trigger === "proactive") logFeatureSad("bridge_env_reregister", "proactive_register_rejected");
+      else logFeatureBad("bridge_env_reregister", "register_rejected");
+      return {
+        outcome: "fatal",
+        reason: "register_rejected",
+        status: fatalStatus,
+        message: errorMessage(error),
+      };
+    }
+    return {
+      outcome: "transient",
+      retryAfterMs: retryAfterMsOf(error),
+    };
+  }
+  if (registeredEnvironment.environment_id !== environmentId) {
+    logForDebugging(
+      `[bridge:poll] Re-registration returned ${registeredEnvironment.environment_id}, not ${environmentId}; not adopting it`,
+      {
+        level: "warn",
+      },
+    );
+    logEvent("tengu_bridge_env_reregister", {
+      attempt,
+      outcome: lit("replaced"),
+      trigger: fromEnum(trigger),
+    });
+    if (trigger === "tool_host_advert_changed") logFeatureSad("bridge_env_reregister", "advert_replaced");
+    else if (trigger === "proactive") logFeatureSad("bridge_env_reregister", "proactive_replaced");
+    else logFeatureBad("bridge_env_reregister", "replaced");
+    await api.deregisterEnvironment(registeredEnvironment.environment_id).catch((error) =>
+      logForDebugging(
+        `[bridge:poll] Failed to delete replacement environment ${registeredEnvironment.environment_id}: ${errorMessage(error)}`,
+        {
+          level: "warn",
+        },
+      ),
+    );
+    return {
+      outcome: "fatal",
+      reason: "replaced",
+    };
+  }
+  classifyAdvertChange(config, toolHostAdvert, true);
+  let sessionIds = [...activeSessions.keys()];
+  logEvent("tengu_bridge_env_reregister", {
+    attempt,
+    outcome: lit("reregistered"),
+    active_sessions: sessionIds.length,
+    trigger: fromEnum(trigger),
+  });
+  logForDiagnosticsNoPII("info", "bridge_env_reregistered", {
+    attempt,
+    active_sessions: sessionIds.length,
+    trigger,
+  });
+  if (trigger === "proactive") {
+    logForDebugging(`[bridge:poll] Environment ${environmentId} re-registered in place; secret renewed`, {
+      level: "info",
+    });
+    return {
+      outcome: "reregistered",
+      environmentSecret: registeredEnvironment.environment_secret,
+      ...(registeredEnvironment.environment_secret_expires_in !== undefined && {
+        environmentSecretExpiresIn: registeredEnvironment.environment_secret_expires_in,
+      }),
+      pendingRequeues: [],
+    };
+  }
+  logForDebugging(
+    `[bridge:poll] Environment ${environmentId} re-registered in place; re-queuing ${sessionIds.length} session(s)`,
+    {
+      level: "info",
+    },
+  );
+  let pendingRequeues = [];
+  for (let sessionId of sessionIds) {
+    if (signal.aborted) break;
+    if (!activeSessions.has(sessionId)) continue;
+    if ((await describeReregisterOutcome(api, environmentId, sessionId, signal)) !== "done")
+      pendingRequeues.push(sessionId);
+  }
+  return {
+    outcome: "reregistered",
+    environmentSecret: registeredEnvironment.environment_secret,
+    ...(registeredEnvironment.environment_secret_expires_in !== undefined && {
+      environmentSecretExpiresIn: registeredEnvironment.environment_secret_expires_in,
+    }),
+    pendingRequeues,
+  };
+}
+//@ chunk-b30925fy.js:14560-15121 placement
+async function describeAdvertChange({ api, config, environmentId, activeSessions, pacing, signal }) {
+  let outcome;
+  try {
+    let advert = config.getToolHostAdvert?.();
+    if (advert === undefined || advert.kind === "unknown") return;
+    if (isSameAdvertState(advert, config.registeredToolHostAdvert)) {
+      pacing.failures = 0;
+      return;
+    }
+    let waitMs = pacing.notBefore - Date.now();
+    if (waitMs > 0 && waitMs <= RENEW_ONE_HOUR_MS) return;
+    outcome = await reregisterEnvironment({
+      api,
+      config,
+      environmentId,
+      activeSessions,
+      attempt: pacing.failures + 1,
+      trigger: "tool_host_advert_changed",
+      signal,
+    });
+  } catch (error) {
+    if (!signal.aborted) logError(error);
+  }
+  let reregistered = outcome?.outcome === "reregistered" ? outcome : undefined;
+  pacing.failures = reregistered ? 0 : pacing.failures + 1;
+  pacing.notBefore = Date.now() + Math.min(MIN_RENEW_LEAD_MS * 2 ** pacing.failures, RENEW_ONE_HOUR_MS);
+  return reregistered;
+}
+//@ chunk-b30925fy.js:15121-15422 placement
+function classifyAdvertChange(config, toolHostAdvert, forceUnknown) {
+  if (toolHostAdvert === undefined || (toolHostAdvert.kind === "unknown" && forceUnknown)) return;
+  let registeredToolHostAdvert = config.registeredToolHostAdvert;
+  let normalizedAdvert =
+    toolHostAdvert.kind === "advertise"
+      ? {
+          kind: "advertise",
+          advert: toolHostAdvert.advert,
+        }
+      : {
+          kind: "withdraw",
+        };
+  config.registeredToolHostAdvert = normalizedAdvert;
+  if (
+    !isSameAdvertState(
+      normalizedAdvert,
+      registeredToolHostAdvert ?? {
+        kind: "withdraw",
+      },
+    )
+  )
+    logEvent("tengu_bridge_tool_host_advert", {
+      advertised: normalizedAdvert.kind === "advertise",
+    });
+}
+//@ chunk-b30925fy.js:15422-15701 placement
+async function describeReregisterOutcome(trackedApi, environmentId, sessionId, signal) {
+  try {
+    await trackedApi.reconnectSession(environmentId, sessionId, signal);
+    return "done";
+  } catch (error) {
+    let isFatal = hasFatalClientStatus(error);
+    logForDebugging(
+      `[bridge:poll] reconnectSession(${sessionId}) after re-registration ${isFatal ? "rejected" : "failed transiently"}: ${errorMessage(error)}`,
+      {
+        level: "warn",
+      },
+    );
+    if (isFatal) return "done";
+    return signal.aborted ? "aborted" : "retry";
+  }
+}
+//@ chunk-b30925fy.js:15701-15847 placement
+function isSameAdvertState(advert, registeredToolHostAdvert) {
+  if (registeredToolHostAdvert === undefined || registeredToolHostAdvert === "unconfirmed") return false;
+  return advert.kind === "advertise" && registeredToolHostAdvert.kind === "advertise"
+    ? import_sortedIndex_2(advert.advert, registeredToolHostAdvert.advert)
+    : advert.kind === registeredToolHostAdvert.kind;
+}
+//@ chunk-b30925fy.js:15847-15969 placement
+/**
+ * 错误对象中的 retryAfterMs。
+ */
+function retryAfterMsOf(error) {
+  return error &&
+    typeof error === "object" &&
+    "retryAfterMs" in error &&
+    typeof error.retryAfterMs === "number"
+    ? error.retryAfterMs
+    : undefined;
+}
+//@ chunk-b30925fy.js:15969-16006 placement
+/**
+ * 判断 API 错误是否带致命客户端状态（fatalClientStatus 有值即为致命，决定是否停止重试）。
+ */
+function hasFatalClientStatus(error) {
+  return fatalClientStatus(error) !== undefined;
+}
+//@ chunk-b30925fy.js:16006-16207 placement
+function fatalClientStatus(error) {
+  if (error instanceof BridgeFatalError) return error.status;
+  if (
+    error &&
+    typeof error === "object" &&
+    "status" in error &&
+    typeof error.status === "number" &&
+    error.status >= 400 &&
+    error.status < 500 &&
+    error.status !== 408 &&
+    error.status !== 429
+  )
+    return error.status;
+  return;
+}
 //@ chunk-wbbfk060.js:19719-19899 sole-consumer
 var BRIDGE_WATCH_DEADLINE_MS = 210000;
 var WATCH_CONNECT_DEADLINE_MS = 30000;
@@ -149,67 +511,72 @@ var WATCH_RETRY_AFTER_CAP_MS = 600000;
 var WATCH_MAX_PENDING_SSE_CHARS = 1048576;
 var PRINTABLE_TOKEN_RE = /^[\x21-\x7e]{1,4096}$/;
 //@ chunk-wbbfk060.js:19899-19962 sole-consumer
-function clockSnapshot(e) {
+function clockSnapshot(clock) {
   return {
-    wall: e.now(),
-    monotonic: e.monotonicNow(),
+    wall: clock.now(),
+    monotonic: clock.monotonicNow(),
   };
 }
 //@ chunk-wbbfk060.js:19962-20308 sole-consumer
 /**
  * 桥会话响应 schema（字符串长度上限、可空字段）。
  */
-var BoundedStringSchema = DoctorLazy(() => string().max(256));
-var OptionalBoundedString = DoctorLazy(() =>
-  BoundedStringSchema()
-    .nullish()
-    .transform((e) => e ?? undefined),
-);
-var BridgeSessionSchema = DoctorLazy(() =>
-  u({
-    id: BoundedStringSchema().min(1),
-    environment_id: OptionalBoundedString(),
-    status: OptionalBoundedString(),
-    worker_status: OptionalBoundedString(),
-    last_event_at: OptionalBoundedString(),
-    external_metadata: u({
-      tool_host_status: u({
-        state: literal("requested"),
-        environment_id: BoundedStringSchema().min(1),
-        requested_at: BoundedStringSchema().min(1),
+var BoundedStringSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var OptionalBoundedString;
+var BridgeSessionSchema;
+deferInit("chunk-wbbfk060.js:19962", () => {
+  BoundedStringSchema = DoctorLazy(() => stringSchema().max(256));
+  OptionalBoundedString = DoctorLazy(() =>
+    BoundedStringSchema()
+      .nullish()
+      .transform((value) => value ?? undefined),
+  );
+  BridgeSessionSchema = DoctorLazy(() =>
+    objectSchema({
+      id: BoundedStringSchema().min(1),
+      environment_id: OptionalBoundedString(),
+      status: OptionalBoundedString(),
+      worker_status: OptionalBoundedString(),
+      last_event_at: OptionalBoundedString(),
+      external_metadata: objectSchema({
+        tool_host_status: objectSchema({
+          state: literal("requested"),
+          environment_id: BoundedStringSchema().min(1),
+          requested_at: BoundedStringSchema().min(1),
+        })
+          .optional()
+          .catch(undefined),
       })
         .optional()
         .catch(undefined),
-    })
-      .optional()
-      .catch(undefined),
-  }),
-);
+    }),
+  );
+});
 //@ chunk-wbbfk060.js:20308-24495 sole-consumer
 /**
  * 维护 off/连接中/已连接等状态，状态变化回调 onStateChange；每次尝试带代号与中止控制器， 失败按 HTTP 状态决定结束或在退避后重试；用墙钟与单调钟的差检测休眠。
  */
-function createBridgeWatcher(e) {
-  let { api, clock, random } = e;
+function createBridgeWatcher(options) {
+  let { api, clock, random } = options;
   let watchState = "off";
   let attemptGeneration = 0;
   let attemptAbort;
-  let j;
-  let ne;
-  let W;
-  let Q = {
+  let tickTimer;
+  let attemptTimer;
+  let resumeToken;
+  let lastFrameAt = {
     wall: 0,
     monotonic: 0,
   };
-  let me = Q;
-  let se = -1 / 0;
-  let Z;
-  function elapsedSince(E) {
-    return Math.max(clock.now() - E.wall, clock.monotonicNow() - E.monotonic);
+  let lastSyncAt = lastFrameAt;
+  let nextConnectAllowedAt = -1 / 0;
+  let connectedAtMono;
+  function elapsedSince(snapshot) {
+    return Math.max(clock.now() - snapshot.wall, clock.monotonicNow() - snapshot.monotonic);
   }
-  let be = WATCH_SESSION_LIFETIME_MIN_MS;
-  let Oe = 0;
-  let G = 0;
+  let sessionLifetimeMs = WATCH_SESSION_LIFETIME_MIN_MS;
+  let backoffAttempts = 0;
+  let startFailureCount = 0;
   function callSafely(onDroppedFrame) {
     try {
       onDroppedFrame();
@@ -217,41 +584,41 @@ function createBridgeWatcher(e) {
       logError(error);
     }
   }
-  function q(E, B) {
-    if (E !== watchState) {
-      logForDebugging(`[bridge:watch] ${watchState} -> ${E}${B ? ` after ${B}` : ""}`);
-      watchState = E;
-      callSafely(() => e.onStateChange(E, B));
+  function setState(nextState, reason) {
+    if (nextState !== watchState) {
+      logForDebugging(`[bridge:watch] ${watchState} -> ${nextState}${reason ? ` after ${reason}` : ""}`);
+      watchState = nextState;
+      callSafely(() => options.onStateChange(nextState, reason));
     }
   }
   function cancelAttempt() {
     attemptGeneration++;
     attemptAbort?.abort();
     attemptAbort = undefined;
-    j?.();
-    ne?.();
-    j = ne = undefined;
+    tickTimer?.();
+    attemptTimer?.();
+    tickTimer = attemptTimer = undefined;
   }
-  function scheduleNextAttempt(E) {
-    let B = Number.isFinite(E) ? E : WATCH_BACKOFF_CAP_MS;
-    logForDebugging(`[bridge:watch] next attempt in ${Math.round(B / 1000)}s`);
-    ne = clock.setTimeout(X, B, {
+  function scheduleNextAttempt(delayMs) {
+    let safeDelayMs = Number.isFinite(delayMs) ? delayMs : WATCH_BACKOFF_CAP_MS;
+    logForDebugging(`[bridge:watch] next attempt in ${Math.round(safeDelayMs / 1000)}s`);
+    attemptTimer = clock.setTimeout(startAttempt, safeDelayMs, {
       unref: true,
     });
   }
-  function X() {
+  function startAttempt() {
     cancelAttempt();
-    let E = attemptGeneration;
+    let generation = attemptGeneration;
     let abortController = new AbortController();
     attemptAbort = abortController;
-    Q = me = clockSnapshot(clock);
-    be =
+    lastFrameAt = lastSyncAt = clockSnapshot(clock);
+    sessionLifetimeMs =
       WATCH_SESSION_LIFETIME_MIN_MS +
       random() * (WATCH_SESSION_LIFETIME_MAX_MS - WATCH_SESSION_LIFETIME_MIN_MS);
-    K(E);
-    Be(E, abortController.signal)
+    armTickTimer(generation);
+    runAttempt(generation, abortController.signal)
       .catch((error) => {
-        if (E !== attemptGeneration)
+        if (generation !== attemptGeneration)
           return {
             end: "network",
           };
@@ -265,30 +632,30 @@ function createBridgeWatcher(e) {
           end: "network",
         };
       })
-      .then((ee) => {
-        if (E === attemptGeneration) Ee(ee);
+      .then((endReason) => {
+        if (generation === attemptGeneration) endAttempt(endReason);
       })
       .catch(logError);
-    q("connecting");
+    setState("connecting");
   }
-  function K(E) {
-    j = clock.setTimeout(
+  function armTickTimer(generation) {
+    tickTimer = clock.setTimeout(
       () => {
-        if (E !== attemptGeneration) return;
-        let B = elapsedSince(Q);
-        if (B > 2 * WATCH_SILENCE_TIMEOUT_MS)
-          Ee({
+        if (generation !== attemptGeneration) return;
+        let silentMs = elapsedSince(lastFrameAt);
+        if (silentMs > 2 * WATCH_SILENCE_TIMEOUT_MS)
+          endAttempt({
             end: "slept",
           });
-        else if (B > WATCH_SILENCE_TIMEOUT_MS)
-          Ee({
+        else if (silentMs > WATCH_SILENCE_TIMEOUT_MS)
+          endAttempt({
             end: watchState === "connected" ? "silent" : "connect_timeout",
           });
-        else if (elapsedSince(me) > be)
-          Ee({
+        else if (elapsedSince(lastSyncAt) > sessionLifetimeMs)
+          endAttempt({
             end: "no_sync",
           });
-        else K(E);
+        else armTickTimer(generation);
       },
       WATCH_TICK_INTERVAL_MS,
       {
@@ -296,119 +663,119 @@ function createBridgeWatcher(e) {
       },
     );
   }
-  async function Be(E, signal) {
-    let ee = {
+  async function runAttempt(generation, signal) {
+    let networkEnd = {
       end: "network",
     };
-    let accessToken = await e.getAccessToken();
-    if (E !== attemptGeneration) return ee;
+    let accessToken = await options.getAccessToken();
+    if (generation !== attemptGeneration) return networkEnd;
     if (!accessToken)
       return {
         end: "auth",
       };
-    let Re = W === undefined ? 1 / 0 : clock.now() - W.at;
-    if (!(Re >= 0 && Re < BRIDGE_WATCH_DEADLINE_MS)) {
-      let h = se - clock.monotonicNow();
-      if (h > 0)
-        await sleep(h, signal, {
+    let tokenAgeMs = resumeToken === undefined ? 1 / 0 : clock.now() - resumeToken.at;
+    if (!(tokenAgeMs >= 0 && tokenAgeMs < BRIDGE_WATCH_DEADLINE_MS)) {
+      let waitMs = nextConnectAllowedAt - clock.monotonicNow();
+      if (waitMs > 0)
+        await sleep(waitMs, signal, {
           clock,
         });
-      if (E !== attemptGeneration) return ee;
-      Q = clockSnapshot(clock);
-      W = undefined;
-      se = clock.monotonicNow() + WATCH_CONNECT_DEADLINE_MS * (1 + 0.5 * random());
-      let L = await api.mintResumeToken(accessToken, signal);
-      if (E !== attemptGeneration) return ee;
-      if (L.status !== 200)
-        return L.status === 404 || L.status === 410
+      if (generation !== attemptGeneration) return networkEnd;
+      lastFrameAt = clockSnapshot(clock);
+      resumeToken = undefined;
+      nextConnectAllowedAt = clock.monotonicNow() + WATCH_CONNECT_DEADLINE_MS * (1 + 0.5 * random());
+      let minted = await api.mintResumeToken(accessToken, signal);
+      if (generation !== attemptGeneration) return networkEnd;
+      if (minted.status !== 200)
+        return minted.status === 404 || minted.status === 410
           ? {
               end: "http_unexpected",
             }
-          : classifyWatchHttpStatus(L.status, L.retryAfterMs);
-      if (L.resumeToken === undefined || !PRINTABLE_TOKEN_RE.test(L.resumeToken))
+          : classifyWatchHttpStatus(minted.status, minted.retryAfterMs);
+      if (minted.resumeToken === undefined || !PRINTABLE_TOKEN_RE.test(minted.resumeToken))
         return {
           end: "resume_token_unusable",
         };
-      W = {
-        value: L.resumeToken,
+      resumeToken = {
+        value: minted.resumeToken,
         at: clock.now(),
       };
     }
-    if (W === undefined) return ee;
-    let le = await api.open(accessToken, W.value, signal);
-    if (E !== attemptGeneration) {
-      le.body?.destroy();
-      return ee;
+    if (resumeToken === undefined) return networkEnd;
+    let opened = await api.open(accessToken, resumeToken.value, signal);
+    if (generation !== attemptGeneration) {
+      opened.body?.destroy();
+      return networkEnd;
     }
-    if (le.status !== 200)
-      return le.status === 410 && clock.now() - W.at < 30000
+    if (opened.status !== 200)
+      return opened.status === 410 && clock.now() - resumeToken.at < 30000
         ? {
             end: "http_unexpected",
           }
-        : classifyWatchHttpStatus(le.status, le.retryAfterMs);
-    return le.body === undefined
+        : classifyWatchHttpStatus(opened.status, opened.retryAfterMs);
+    return opened.body === undefined
       ? {
           end: "not_event_stream",
         }
-      : fe(le.body, signal, E);
+      : consumeStream(opened.body, signal, generation);
   }
-  function fe(body, B, ee) {
+  function consumeStream(body, signal, generation) {
     return new Promise((resolve) => {
-      let Re = new SSEFrameBuffer();
-      let le = () => {
+      let frameBuffer = new SSEFrameBuffer();
+      let onAbort = () => {
         body.destroy();
       };
-      let h = (end) => {
-        B.removeEventListener("abort", le);
+      let finish = (end) => {
+        signal.removeEventListener("abort", onAbort);
         body.destroy();
         resolve({
           end,
         });
       };
-      B.addEventListener("abort", le, {
+      signal.addEventListener("abort", onAbort, {
         once: true,
       });
-      body.on("data", (L) => {
-        if (ee !== attemptGeneration) return;
-        Q = clockSnapshot(clock);
-        for (let te of Re.push(L)) {
-          if (ee !== attemptGeneration) return;
-          if (te.event === "sync") ze(te.id);
-          else if (te.event === "added" || te.event === "changed") Ke(te.data);
+      body.on("data", (chunk) => {
+        if (generation !== attemptGeneration) return;
+        lastFrameAt = clockSnapshot(clock);
+        for (let frame of frameBuffer.push(chunk)) {
+          if (generation !== attemptGeneration) return;
+          if (frame.event === "sync") onSync(frame.id);
+          else if (frame.event === "added" || frame.event === "changed") onSessionFrame(frame.data);
         }
-        if (Re.pendingChars > WATCH_MAX_PENDING_SSE_CHARS) h("oversized_frame");
+        if (frameBuffer.pendingChars > WATCH_MAX_PENDING_SSE_CHARS) finish("oversized_frame");
       });
-      body.on("error", () => h("network"));
-      body.on("end", () => h("closed"));
-      body.on("close", () => h("closed"));
+      body.on("error", () => finish("network"));
+      body.on("end", () => finish("closed"));
+      body.on("close", () => finish("closed"));
     });
   }
-  function ze(id) {
+  function onSync(id) {
     if (id === undefined || !PRINTABLE_TOKEN_RE.test(id)) {
-      callSafely(e.onDroppedFrame);
+      callSafely(options.onDroppedFrame);
       return;
     }
-    me = clockSnapshot(clock);
-    W = {
+    lastSyncAt = clockSnapshot(clock);
+    resumeToken = {
       value: id,
-      at: me.wall,
+      at: lastSyncAt.wall,
     };
     if (watchState !== "connected") {
-      Z = clock.monotonicNow();
-      G = 0;
-      q("connected");
+      connectedAtMono = clock.monotonicNow();
+      startFailureCount = 0;
+      setState("connected");
     }
   }
-  function Ke(E) {
-    let B;
+  function onSessionFrame(rawData) {
+    let parsedJson;
     try {
-      B = jsonParseRaw(E ?? "");
+      parsedJson = jsonParseRaw(rawData ?? "");
     } catch {
-      B = undefined;
+      parsedJson = undefined;
     }
-    let ee = BridgeSessionSchema().safeParse(B);
-    if (!ee.success) {
-      callSafely(e.onDroppedFrame);
+    let parsed = BridgeSessionSchema().safeParse(parsedJson);
+    if (!parsed.success) {
+      callSafely(options.onDroppedFrame);
       return;
     }
     let {
@@ -416,11 +783,11 @@ function createBridgeWatcher(e) {
       worker_status: workerStatus,
       last_event_at: lastEventAt,
       external_metadata: externalMetadata,
-    } = ee.data;
+    } = parsed.data;
     let toolHostStatus = externalMetadata?.tool_host_status;
-    let te = {
-      sessionId: ee.data.id,
-      environmentId: ee.data.environment_id,
+    let frameInfo = {
+      sessionId: parsed.data.id,
+      environmentId: parsed.data.environment_id,
       archived: /(^|_)archived$/i.test(status ?? ""),
       fingerprint: `${status} ${workerStatus} ${lastEventAt}`,
       ...(toolHostStatus && {
@@ -430,65 +797,72 @@ function createBridgeWatcher(e) {
         },
       }),
     };
-    callSafely(() => e.onFrame(te));
+    callSafely(() => options.onFrame(frameInfo));
   }
-  function Ee(E) {
-    let B = watchState === "connected" && Z !== undefined ? clock.monotonicNow() - Z : undefined;
-    let ce =
-      (E.end === "closed" || E.end === "network") && elapsedSince(Q) > 2 * WATCH_SILENCE_TIMEOUT_MS
+  function endAttempt(result) {
+    let healthyMs =
+      watchState === "connected" && connectedAtMono !== undefined
+        ? clock.monotonicNow() - connectedAtMono
+        : undefined;
+    let endKind =
+      (result.end === "closed" || result.end === "network") &&
+      elapsedSince(lastFrameAt) > 2 * WATCH_SILENCE_TIMEOUT_MS
         ? "slept"
-        : E.end === "closed" && B === undefined
+        : result.end === "closed" && healthyMs === undefined
           ? "closed_before_sync"
-          : E.end;
-    let Re = B !== undefined && B >= WATCH_HEALTHY_SESSION_MS;
+          : result.end;
+    let wasHealthy = healthyMs !== undefined && healthyMs >= WATCH_HEALTHY_SESSION_MS;
     cancelAttempt();
-    if (Re) Oe = 0;
-    let le;
-    switch (ce) {
+    if (wasHealthy) backoffAttempts = 0;
+    let delayMs;
+    switch (endKind) {
       case "not_offered":
-        return He(ce, WATCH_PARK_FALLBACK_MS);
+        return parkWatcher(endKind, WATCH_PARK_FALLBACK_MS);
       case "auth":
-        return He(ce, WATCH_PARK_AUTH_FAILED_MS);
+        return parkWatcher(endKind, WATCH_PARK_AUTH_FAILED_MS);
       case "http_unexpected":
       case "resume_token_unusable":
       case "not_event_stream":
       case "oversized_frame":
-        W = undefined;
-        if (++G >= WATCH_MAX_START_FAILURES) return He(ce, WATCH_PARK_FALLBACK_MS);
-        le = x(true);
+        resumeToken = undefined;
+        if (++startFailureCount >= WATCH_MAX_START_FAILURES)
+          return parkWatcher(endKind, WATCH_PARK_FALLBACK_MS);
+        delayMs = backoffMs(true);
         break;
       case "slept":
-        le = 0;
+        delayMs = 0;
         break;
       case "closed":
       case "network":
       case "silent":
       case "no_sync":
-        le = Re ? random() * WATCH_JITTER_AFTER_HEALTHY_MS : x();
+        delayMs = wasHealthy ? random() * WATCH_JITTER_AFTER_HEALTHY_MS : backoffMs();
         break;
       case "token_expired":
-        W = undefined;
-        le = x();
+        resumeToken = undefined;
+        delayMs = backoffMs();
         break;
       case "rate_limited":
       case "closed_before_sync":
       case "connect_timeout":
       case "http_retryable":
-        le = x();
+        delayMs = backoffMs();
         break;
     }
-    let h = E.retryAfterMs || (ce === "rate_limited" ? WATCH_RATE_LIMIT_RETRY_MS : 0);
-    scheduleNextAttempt(Math.max(le, Math.min(h, WATCH_RETRY_AFTER_CAP_MS) * (1 + 0.5 * random())));
-    q("backoff", ce);
+    let retryAfterMs = result.retryAfterMs || (endKind === "rate_limited" ? WATCH_RATE_LIMIT_RETRY_MS : 0);
+    scheduleNextAttempt(
+      Math.max(delayMs, Math.min(retryAfterMs, WATCH_RETRY_AFTER_CAP_MS) * (1 + 0.5 * random())),
+    );
+    setState("backoff", endKind);
   }
-  function He(E, B) {
-    scheduleNextAttempt(B * (0.5 + random()));
-    q("parked", E);
+  function parkWatcher(reason, parkMs) {
+    scheduleNextAttempt(parkMs * (0.5 + random()));
+    setState("parked", reason);
   }
-  function x(E = false) {
-    if (!E) Oe++;
+  function backoffMs(freshStart = false) {
+    if (!freshStart) backoffAttempts++;
     return backoffDelayMs({
-      attempt: E ? 1 / 0 : Oe,
+      attempt: freshStart ? 1 / 0 : backoffAttempts,
       baseMs: WATCH_BACKOFF_BASE_MS,
       capMs: WATCH_BACKOFF_CAP_MS,
       jitter: {
@@ -500,11 +874,11 @@ function createBridgeWatcher(e) {
   }
   return {
     start() {
-      if (watchState === "off") X();
+      if (watchState === "off") startAttempt();
     },
     stop() {
       cancelAttempt();
-      q("off");
+      setState("off");
     },
     get state() {
       return watchState;
@@ -555,11 +929,11 @@ var SLEEP_GAP_WINDOW = {
   retry: 4500,
 };
 //@ chunk-wbbfk060.js:24919-25026 sole-consumer
-function isSleepGap(e, s) {
+function isSleepGap(previous, next) {
   return (
-    e !== undefined &&
-    [s.wall - e.wall, s.monotonic - e.monotonic].some(
-      (S) => S >= SLEEP_GAP_WINDOW.from && S < SLEEP_GAP_WINDOW.to,
+    previous !== undefined &&
+    [next.wall - previous.wall, next.monotonic - previous.monotonic].some(
+      (gap) => gap >= SLEEP_GAP_WINDOW.from && gap < SLEEP_GAP_WINDOW.to,
     )
   );
 }
@@ -607,30 +981,30 @@ function createPollCounters() {
   };
 }
 //@ chunk-wbbfk060.js:25746-26020 sole-consumer
-function createAskBackoff(e) {
-  let s = () => ({
+function createAskBackoff(now) {
+  let makeEntry = () => ({
     waitMs: ASK_BASE_WAIT_MS,
     startedAt: -1 / 0,
   });
-  let S = {
-    frame: s(),
-    own: s(),
+  let entries = {
+    frame: makeEntry(),
+    own: makeEntry(),
   };
   return {
-    mayStart: (P) => e() - S[P].startedAt >= S[P].waitMs,
-    started(P) {
-      S[P].startedAt = e();
+    mayStart: (source) => now() - entries[source].startedAt >= entries[source].waitMs,
+    started(source) {
+      entries[source].startedAt = now();
     },
-    endedBarren(P) {
-      S[P].waitMs = Math.min(2 * S[P].waitMs, ASK_MAX_WAIT_MS);
+    endedBarren(source) {
+      entries[source].waitMs = Math.min(2 * entries[source].waitMs, ASK_MAX_WAIT_MS);
     },
-    forgive(P) {
-      S[P].waitMs = ASK_BASE_WAIT_MS;
+    forgive(source) {
+      entries[source].waitMs = ASK_BASE_WAIT_MS;
     },
     reset() {
-      S = {
-        frame: s(),
-        own: s(),
+      entries = {
+        frame: makeEntry(),
+        own: makeEntry(),
       };
     },
   };
@@ -639,243 +1013,254 @@ function createAskBackoff(e) {
 /**
  * 已连接（或最近连上）用 connectedMs，否则 fallbackMs，提供工具主机时上限 30 秒； 外部事件可把下次轮询提前并唤醒，记录各原因的轮询与有工作次数。
  */
-function createWorkPoller(e) {
-  let { random } = e;
-  let S = () => e.clock.monotonicNow();
+function createWorkPoller(options) {
+  let { random } = options;
+  let now = () => options.clock.monotonicNow();
   let pollerState = "off";
-  let U;
-  let w;
-  let H;
-  let j = false;
-  let ne = false;
-  let W = -1 / 0;
-  let Q = "start_or_wake";
-  let me = -1 / 0;
-  let se;
-  let Z;
-  let askBackoff = createAskBackoff(S);
-  let be = new Map();
+  let lastWatchEnd;
+  let connectedSince;
+  let lastConnectedAt;
+  let loggedConnected = false;
+  let everConnected = false;
+  let nextPollAt = -1 / 0;
+  let nextPollCause = "start_or_wake";
+  let lastPollAt = -1 / 0;
+  let lastSessionEndAt;
+  let ladder;
+  let askBackoff = createAskBackoff(now);
+  let lastFingerprintBySession = new Map();
   let seenWorkIds = new BoundedUUIDSet(64);
   let counters = createPollCounters();
-  let ve = S();
-  function isWithin(x, E) {
-    return x !== undefined && S() - x < E;
+  let countersWindowStart = now();
+  function isWithin(atMs, windowMs) {
+    return atMs !== undefined && now() - atMs < windowMs;
   }
   function isConnectedRecently() {
-    return pollerState === "connected" || isWithin(H, CONNECTED_GRACE_MS);
+    return pollerState === "connected" || isWithin(lastConnectedAt, CONNECTED_GRACE_MS);
   }
   function pollIntervalMs() {
-    let { connectedMs, fallbackMs } = e.intervals();
-    let B = isConnectedRecently() ? connectedMs : fallbackMs;
-    return e.servesToolHosts() ? Math.min(B, TOOL_HOST_POLL_MAX_MS) : B;
+    let { connectedMs, fallbackMs } = options.intervals();
+    let intervalMs = isConnectedRecently() ? connectedMs : fallbackMs;
+    return options.servesToolHosts() ? Math.min(intervalMs, TOOL_HOST_POLL_MAX_MS) : intervalMs;
   }
-  function setNextPoll(x, E) {
-    W = x;
-    Q = E;
+  function setNextPoll(atMs, cause) {
+    nextPollAt = atMs;
+    nextPollCause = cause;
   }
-  function pullNextPollEarlier(x, E) {
-    if (x < W) {
-      setNextPoll(x, E);
-      e.wake();
+  function pullNextPollEarlier(atMs, cause) {
+    if (atMs < nextPollAt) {
+      setNextPoll(atMs, cause);
+      options.wake();
     }
   }
-  function Be(x, E) {
-    if (W <= S()) W = 1 / 0;
-    pullNextPollEarlier(x, E);
+  function bumpNextPoll(atMs, cause) {
+    if (nextPollAt <= now()) nextPollAt = 1 / 0;
+    pullNextPollEarlier(atMs, cause);
   }
-  function fe() {
-    let x = S();
-    let { baseMs, afterSessionEndWindowMs } = e.intervals();
-    if (isWithin(se, afterSessionEndWindowMs))
-      setNextPoll(x + Math.max(POLL_MIN_INTERVAL_MS, baseMs), "after_session_end");
+  function scheduleRegularPoll() {
+    let scheduleNow = now();
+    let { baseMs, afterSessionEndWindowMs } = options.intervals();
+    if (isWithin(lastSessionEndAt, afterSessionEndWindowMs))
+      setNextPoll(scheduleNow + Math.max(POLL_MIN_INTERVAL_MS, baseMs), "after_session_end");
     else
       setNextPoll(
-        x + Math.max(pollIntervalMs() * (1 - POLL_JITTER_RATIO + 2 * POLL_JITTER_RATIO * random()), baseMs),
+        scheduleNow +
+          Math.max(pollIntervalMs() * (1 - POLL_JITTER_RATIO + 2 * POLL_JITTER_RATIO * random()), baseMs),
         isConnectedRecently() ? "connected" : "fallback",
       );
   }
-  function ze() {
-    let x = Z?.startedAt ?? -1 / 0;
-    let found = POLL_BACKOFF_LADDER_MS.find((B) => x + B > S());
-    return found === undefined ? undefined : x + found;
+  function ladderDueAt() {
+    let startedAt = ladder?.startedAt ?? -1 / 0;
+    let found = POLL_BACKOFF_LADDER_MS.find((step) => startedAt + step > now());
+    return found === undefined ? undefined : startedAt + found;
   }
-  function Ke(x) {
+  function expectPoll(source) {
     if (pollerState === "off") return;
-    if (!e.hasRoom()) {
-      Z = undefined;
+    if (!options.hasRoom()) {
+      ladder = undefined;
       return;
     }
-    if (Z !== undefined && (Z.source !== "free" || x === "free")) return;
-    if (x !== "free") {
-      if (!askBackoff.mayStart(x)) {
-        let ce = `asks_too_soon_${ASK_OUTCOME_COUNTER_NAMES[x]}`;
-        counters[ce]++;
+    if (ladder !== undefined && (ladder.source !== "free" || source === "free")) return;
+    if (source !== "free") {
+      if (!askBackoff.mayStart(source)) {
+        let tooSoonCounter = `asks_too_soon_${ASK_OUTCOME_COUNTER_NAMES[source]}`;
+        counters[tooSoonCounter]++;
         return;
       }
-      askBackoff.started(x);
+      askBackoff.started(source);
     }
-    let E = ASK_OUTCOME_COUNTER_NAMES[x];
-    let B = `ladders_${E}`;
-    counters[B]++;
-    Z = {
-      startedAt: S(),
-      source: x,
-      cause: E,
+    let cause = ASK_OUTCOME_COUNTER_NAMES[source];
+    let ladderCounter = `ladders_${cause}`;
+    counters[ladderCounter]++;
+    ladder = {
+      startedAt: now(),
+      source,
+      cause,
     };
-    Be(Z.startedAt + (POLL_BACKOFF_LADDER_MS[0] ?? 0), E);
+    bumpNextPoll(ladder.startedAt + (POLL_BACKOFF_LADDER_MS[0] ?? 0), cause);
   }
-  function Ee(x) {
-    if (x && Z !== undefined && Z.source !== "free") askBackoff.endedBarren(Z.source);
-    Z = undefined;
+  function endLadder(barren) {
+    if (barren && ladder !== undefined && ladder.source !== "free") askBackoff.endedBarren(ladder.source);
+    ladder = undefined;
   }
-  function He(x) {
-    let E = S();
-    if (w !== undefined) {
-      counters.connected_ms += E - w;
-      w = E;
+  function flushSummary(state) {
+    let flushedAt = now();
+    if (connectedSince !== undefined) {
+      counters.connected_ms += flushedAt - connectedSince;
+      connectedSince = flushedAt;
     }
-    let B = U;
+    let lastEnd = lastWatchEnd;
     logEvent("tengu_bridge_watch_summary", {
       ...counters,
       connected_ms: Math.round(counters.connected_ms),
-      window_ms: Math.round(E - ve),
-      state: fromEnum(x),
-      last_end: fromEnumOpt(B),
+      window_ms: Math.round(flushedAt - countersWindowStart),
+      state: fromEnum(state),
+      last_end: fromEnumOpt(lastEnd),
     });
     counters = createPollCounters();
-    ve = E;
-    if (x === "connected") U = undefined;
+    countersWindowStart = flushedAt;
+    if (state === "connected") lastWatchEnd = undefined;
   }
   return {
     governs() {
       return pollerState !== "off";
     },
-    onWatchState(x, E) {
-      let B = S();
-      let ee = pollerState;
-      pollerState = x;
-      U = E ?? U;
-      if (w !== undefined) {
-        counters.connected_ms += B - w;
-        w = undefined;
+    onWatchState(state, reason) {
+      let stateAt = now();
+      let previousState = pollerState;
+      pollerState = state;
+      lastWatchEnd = reason ?? lastWatchEnd;
+      if (connectedSince !== undefined) {
+        counters.connected_ms += stateAt - connectedSince;
+        connectedSince = undefined;
       }
-      switch (x) {
+      switch (state) {
         case "connected":
           counters.connects++;
-          w = B;
-          H = undefined;
-          if (j || !ne) logFeatureOk("bridge_sessions_watch");
-          j = false;
-          ne = true;
+          connectedSince = stateAt;
+          lastConnectedAt = undefined;
+          if (loggedConnected || !everConnected) logFeatureOk("bridge_sessions_watch");
+          loggedConnected = false;
+          everConnected = true;
           break;
         case "connecting":
-          if (ee === "connected" || ee === "off") H = B;
-          if (ee === "off") {
+          if (previousState === "connected" || previousState === "off") lastConnectedAt = stateAt;
+          if (previousState === "off") {
             counters = createPollCounters();
-            ve = B;
-            Ke("free");
+            countersWindowStart = stateAt;
+            expectPoll("free");
           }
           counters.connect_attempts++;
           break;
         case "backoff":
-          if (ee === "connected") H = B;
-          if (E === "slept") {
-            Z = undefined;
+          if (previousState === "connected") lastConnectedAt = stateAt;
+          if (reason === "slept") {
+            ladder = undefined;
             askBackoff.reset();
-            Ke("free");
+            expectPoll("free");
           }
           break;
         case "parked":
-          H = undefined;
-          logFeatureBad("bridge_sessions_watch", E ?? "unknown");
+          lastConnectedAt = undefined;
+          logFeatureBad("bridge_sessions_watch", reason ?? "unknown");
           break;
         case "off":
-          He(ee);
-          H = se = Z = U = undefined;
+          flushSummary(previousState);
+          lastConnectedAt = lastSessionEndAt = ladder = lastWatchEnd = undefined;
           askBackoff.reset();
-          j = false;
-          e.wake();
+          loggedConnected = false;
+          options.wake();
           break;
       }
     },
-    onFrame(x) {
-      let toolHostRequest = x.toolHostRequest;
-      let B = `${x.sessionId} ${toolHostRequest?.requestedAt}`;
-      if (e.servesToolHosts() && toolHostRequest?.environmentId === e.environmentId && !seenWorkIds.has(B)) {
+    onFrame(frame) {
+      let toolHostRequest = frame.toolHostRequest;
+      let workKey = `${frame.sessionId} ${toolHostRequest?.requestedAt}`;
+      if (
+        options.servesToolHosts() &&
+        toolHostRequest?.environmentId === options.environmentId &&
+        !seenWorkIds.has(workKey)
+      ) {
         counters.frames_tool_host_request++;
-        seenWorkIds.add(B);
-        Ke("frame");
+        seenWorkIds.add(workKey);
+        expectPoll("frame");
       }
-      if (x.environmentId !== e.environmentId) return;
+      if (frame.environmentId !== options.environmentId) return;
       counters.frames_this_environment++;
-      let ee = be.get(x.sessionId) === x.fingerprint;
-      be.delete(x.sessionId);
-      be.set(x.sessionId, x.fingerprint);
-      for (let key of be.keys()) {
-        if (be.size <= MAX_QUEUED_WORK_ITEMS) break;
-        be.delete(key);
+      let isRepeat = lastFingerprintBySession.get(frame.sessionId) === frame.fingerprint;
+      lastFingerprintBySession.delete(frame.sessionId);
+      lastFingerprintBySession.set(frame.sessionId, frame.fingerprint);
+      for (let key of lastFingerprintBySession.keys()) {
+        if (lastFingerprintBySession.size <= MAX_QUEUED_WORK_ITEMS) break;
+        lastFingerprintBySession.delete(key);
       }
-      if (!ee && !x.archived && !e.isRunningHere(x.sessionId)) Ke("frame");
+      if (!isRepeat && !frame.archived && !options.isRunningHere(frame.sessionId)) expectPoll("frame");
     },
     onDroppedFrame() {
       counters.frames_dropped++;
     },
     expectWork() {
-      Ke("own");
+      expectPoll("own");
     },
-    noteSessionEnd(x) {
+    noteSessionEnd(bump) {
       if (pollerState === "off") return;
-      se = S();
-      if (ze() === undefined) Z = undefined;
-      let E = se + random() * Math.max(POLL_MIN_INTERVAL_MS, e.intervals().baseMs);
-      if (Q === "after_session_end" && W > se) return;
-      if (x) Be(E, "after_session_end");
-      else pullNextPollEarlier(E, "after_session_end");
-      let B = ze();
-      if (Z !== undefined && B !== undefined) pullNextPollEarlier(B, Z.cause);
+      lastSessionEndAt = now();
+      if (ladderDueAt() === undefined) ladder = undefined;
+      let nextAtMs = lastSessionEndAt + random() * Math.max(POLL_MIN_INTERVAL_MS, options.intervals().baseMs);
+      if (nextPollCause === "after_session_end" && nextPollAt > lastSessionEndAt) return;
+      if (bump) bumpNextPoll(nextAtMs, "after_session_end");
+      else pullNextPollEarlier(nextAtMs, "after_session_end");
+      let ladderAt = ladderDueAt();
+      if (ladder !== undefined && ladderAt !== undefined) pullNextPollEarlier(ladderAt, ladder.cause);
     },
     noteHeartbeatOk() {
       askBackoff.forgive("own");
     },
     pollCause() {
-      if (!isWithin(ve, LONG_IDLE_RESET_MS)) He(pollerState);
-      if (!j && !isConnectedRecently()) {
-        j = true;
+      if (!isWithin(countersWindowStart, LONG_IDLE_RESET_MS)) flushSummary(pollerState);
+      if (!loggedConnected && !isConnectedRecently()) {
+        loggedConnected = true;
         counters.fallbacks++;
-        if (pollerState !== "parked") logFeatureSad("bridge_sessions_watch", U ?? "never_connected");
+        if (pollerState !== "parked")
+          logFeatureSad("bridge_sessions_watch", lastWatchEnd ?? "never_connected");
         pullNextPollEarlier(
-          Math.max(S() + random() * pollIntervalMs(), me + pollIntervalMs() * (1 - POLL_JITTER_RATIO)),
+          Math.max(
+            now() + random() * pollIntervalMs(),
+            lastPollAt + pollIntervalMs() * (1 - POLL_JITTER_RATIO),
+          ),
           "fallback",
         );
       }
-      if (W > S()) return;
-      return Q;
+      if (nextPollAt > now()) return;
+      return nextPollCause;
     },
-    polled(x, E) {
-      let B = S();
-      me = B;
-      let ee = `polls_${x}`;
-      switch ((counters[ee]++, logForDebugging(`[bridge:watch] poll (${x}): ${E}`), E)) {
+    polled(state, outcome) {
+      let polledAt = now();
+      lastPollAt = polledAt;
+      let pollCounter = `polls_${state}`;
+      switch (
+        (counters[pollCounter]++, logForDebugging(`[bridge:watch] poll (${state}): ${outcome}`), outcome)
+      ) {
         case "new_work":
         case "redelivery":
         case "other_work": {
-          let Re = `polls_with_work_${x}`;
-          counters[Re]++;
-          if (x === "connected" && pollerState === "connected" && Z === undefined)
+          let workCounter = `polls_with_work_${state}`;
+          counters[workCounter]++;
+          if (state === "connected" && pollerState === "connected" && ladder === undefined)
             logEvent("tengu_bridge_watch_miss", {
-              work: fromEnum(E),
+              work: fromEnum(outcome),
             });
-          if (E === "new_work") {
+          if (outcome === "new_work") {
             askBackoff.reset();
-            if (Z !== undefined) Z.source = "free";
-          } else Ee(true);
-          setNextPoll(B, "after_work");
+            if (ladder !== undefined) ladder.source = "free";
+          } else endLadder(true);
+          setNextPoll(polledAt, "after_work");
           return;
         }
         case "refused":
         case "timed_out":
-          counters[E === "refused" ? "failed_other" : "failed_timed_out"]++;
-          Ee(true);
+          counters[outcome === "refused" ? "failed_other" : "failed_timed_out"]++;
+          endLadder(true);
           break;
         case "unreachable":
           counters.failed_unreachable++;
@@ -883,17 +1268,17 @@ function createWorkPoller(e) {
         case "empty":
           break;
       }
-      fe();
-      if (Z === undefined) return;
-      let ce = ze();
-      if (ce === undefined) Ee(true);
-      else if (ce < W) setNextPoll(ce, Z.cause);
+      scheduleRegularPoll();
+      if (ladder === undefined) return;
+      let ladderAt = ladderDueAt();
+      if (ladderAt === undefined) endLadder(true);
+      else if (ladderAt < nextPollAt) setNextPoll(ladderAt, ladder.cause);
     },
     msUntilDue() {
-      return Math.max(0, W - S());
+      return Math.max(0, nextPollAt - now());
     },
     longestGapMs() {
-      return Math.ceil(Math.max(pollIntervalMs() * (1 + POLL_JITTER_RATIO), e.intervals().baseMs));
+      return Math.ceil(Math.max(pollIntervalMs() * (1 + POLL_JITTER_RATIO), options.intervals().baseMs));
     },
   };
 }
@@ -904,11 +1289,11 @@ function isRcChildRestartResumeEnabled() {
 //@ chunk-wbbfk060.js:29823-30032 sole-consumer
 function projectThreadPointer(sessionCompatIds, parkedProjectThreadIds) {
   if (sessionCompatIds.size === 0 && parkedProjectThreadIds.size === 0) return;
-  let S = new Set([...sessionCompatIds].map(sessionIdBody));
+  let activeBodies = new Set([...sessionCompatIds].map(sessionIdBody));
   return {
     projectThreadSessionIds: [...sessionCompatIds].slice(0, MAX_POINTER_ACTIVE_SESSION_IDS),
     parkedProjectThreadSessionIds: [...parkedProjectThreadIds]
-      .filter((P) => !S.has(sessionIdBody(P)))
+      .filter((sessionId) => !activeBodies.has(sessionIdBody(sessionId)))
       .slice(0, MAX_POINTER_ACTIVE_SESSION_IDS),
   };
 }
@@ -919,48 +1304,48 @@ var PROJECT_THREAD_REQUEUE_TIMEOUT_MS = 60000;
 /**
  * 通过 bridge/reconnect 重新排队项目线程会话（超时、致命错误丢弃）。
  */
-async function requeueProjectThreadSessions(e, environmentId, S, signal) {
-  let U = {
+async function requeueProjectThreadSessions(api, environmentId, sessionIds, signal) {
+  let counts = {
     requeued: 0,
     dropped: 0,
     deferred: 0,
   };
-  let w = [];
-  let H = signal
+  let unattempted = [];
+  let deadlineSignal = signal
     ? AbortSignal.any([signal, AbortSignal.timeout(PROJECT_THREAD_REQUEUE_TIMEOUT_MS)])
     : AbortSignal.timeout(PROJECT_THREAD_REQUEUE_TIMEOUT_MS);
-  let j = 0;
-  async function ne() {
-    while (j < S.length) {
-      let W = S[j++];
-      if (H.aborted) {
-        w.push(W);
+  let nextIndex = 0;
+  async function worker() {
+    while (nextIndex < sessionIds.length) {
+      let sessionId = sessionIds[nextIndex++];
+      if (deadlineSignal.aborted) {
+        unattempted.push(sessionId);
         continue;
       }
-      let infraSessionId = toInfraSessionId(W);
-      let me = infraSessionId === W ? [W] : [W, infraSessionId];
-      let se = [];
-      let Z = false;
-      for (let M of me)
+      let infraSessionId = toInfraSessionId(sessionId);
+      let candidateIds = infraSessionId === sessionId ? [sessionId] : [sessionId, infraSessionId];
+      let errors = [];
+      let reconnected = false;
+      for (let candidateId of candidateIds)
         try {
-          await e.reconnectSession(environmentId, M, H);
-          Z = true;
+          await api.reconnectSession(environmentId, candidateId, deadlineSignal);
+          reconnected = true;
           break;
         } catch (error) {
-          se.push(error);
+          errors.push(error);
         }
-      if (Z) {
-        U.requeued++;
-        logForDebugging(`[bridge:init] project thread session ${W} re-queued via bridge/reconnect`);
-      } else if (se.every((M) => M instanceof BridgeFatalError)) {
-        U.dropped++;
+      if (reconnected) {
+        counts.requeued++;
+        logForDebugging(`[bridge:init] project thread session ${sessionId} re-queued via bridge/reconnect`);
+      } else if (errors.every((error) => error instanceof BridgeFatalError)) {
+        counts.dropped++;
         logForDebugging(
-          `[bridge:init] project thread session ${W} no longer resumable: ${errorMessage(se[0])}`,
+          `[bridge:init] project thread session ${sessionId} no longer resumable: ${errorMessage(errors[0])}`,
         );
       } else {
-        U.deferred++;
+        counts.deferred++;
         logForDebugging(
-          `[bridge:init] project thread session ${W} reconnect transient failure; the server re-queues it on the member's next message`,
+          `[bridge:init] project thread session ${sessionId} reconnect transient failure; the server re-queues it on the member's next message`,
           {
             level: "warn",
           },
@@ -971,14 +1356,14 @@ async function requeueProjectThreadSessions(e, environmentId, S, signal) {
   await Promise.all(
     Array.from(
       {
-        length: Math.min(MAX_PROJECT_THREAD_REQUEUES, S.length),
+        length: Math.min(MAX_PROJECT_THREAD_REQUEUES, sessionIds.length),
       },
-      ne,
+      worker,
     ),
   );
   return {
-    ...U,
-    unattempted: w,
+    ...counts,
+    unattempted,
   };
 }
 //@ chunk-wbbfk060.js:30893-31061 fingerprint = DEFAULT_BACKOFF (1)
@@ -1070,90 +1455,90 @@ async function runBridgeLoop(
       once: true,
     });
   let loopSignal = controller.signal;
-  async function fetchSessionRecordWithRetry(n) {
-    let A = {
+  async function fetchSessionRecordWithRetry(sessionId) {
+    let readOptions = {
       baseUrl: config.apiBaseUrl,
       getAccessToken,
     };
-    let bridgeSessionTags = await readBridgeSessionTags(n, A);
+    let bridgeSessionTags = await readBridgeSessionTags(sessionId, readOptions);
     if (bridgeSessionTags !== null || loopSignal.aborted) return bridgeSessionTags;
     await sleep(2000, loopSignal);
     if (loopSignal.aborted) return null;
-    return readBridgeSessionTags(n, A);
+    return readBridgeSessionTags(sessionId, readOptions);
   }
-  let Oe = {
+  let refreshHold = {
     inFlight: undefined,
   };
   let currentEnvironmentSecret = environmentSecret;
   let secretRenewAt = computeSecretRenewAt(secretExpiresIn);
   let secretExpiresAt = expiresInToDeadline(secretExpiresIn);
-  let re = false;
-  let N = 0;
-  let X = false;
+  let reregisterOwnsSecret = false;
+  let renewalAttempt = 0;
+  let renewLoginUnreadable = false;
   let reregisterAttempts = 0;
-  let Be;
+  let reregisterTrigger;
   let pendingCleanups = [];
-  let ze;
-  let Ke = false;
-  let Ee = false;
-  let He = 0;
+  let lastPauseLoggedAt;
+  let reregisterTransientSeen = false;
+  let pendingReregisterEvent = false;
+  let reregisterEventAttempt = 0;
   let activeSessions = new Map();
-  function E(n) {
-    currentEnvironmentSecret = n.environmentSecret;
-    secretRenewAt = computeSecretRenewAt(n.environmentSecretExpiresIn);
-    secretExpiresAt = expiresInToDeadline(n.environmentSecretExpiresIn);
-    Ee = true;
-    He = reregisterAttempts;
-    let A = new Map(activeSessions);
+  function applyReregistration(result) {
+    currentEnvironmentSecret = result.environmentSecret;
+    secretRenewAt = computeSecretRenewAt(result.environmentSecretExpiresIn);
+    secretExpiresAt = expiresInToDeadline(result.environmentSecretExpiresIn);
+    pendingReregisterEvent = true;
+    reregisterEventAttempt = reregisterAttempts;
+    let previousSessions = new Map(activeSessions);
     activeSessions.clear();
-    for (let pendingRequeue of n.pendingRequeues)
-      activeSessions.set(pendingRequeue, (A.get(pendingRequeue) ?? 0) + 1);
+    for (let pendingRequeue of result.pendingRequeues)
+      activeSessions.set(pendingRequeue, (previousSessions.get(pendingRequeue) ?? 0) + 1);
   }
   let pacing = {
     failures: 0,
     notBefore: 0,
   };
-  let pendingRequeues = new Map((config.initialSessionRequeues ?? []).map((n) => [n, 0]));
-  let ce = false;
-  let settleRequeue = (n, A) => {
-    let _ = sessionIdBody(n);
-    let v = false;
+  let pendingRequeues = new Map((config.initialSessionRequeues ?? []).map((sessionId) => [sessionId, 0]));
+  let requeueFailed = false;
+  let settleRequeue = (sessionId, failed) => {
+    let body = sessionIdBody(sessionId);
+    let found = false;
     for (let key of [...pendingRequeues.keys()])
-      if (sessionIdBody(key) === _) {
+      if (sessionIdBody(key) === body) {
         pendingRequeues.delete(key);
-        v = true;
+        found = true;
       }
-    if (!v) return;
-    if (A) ce = true;
+    if (!found) return;
+    if (failed) requeueFailed = true;
     if (pendingRequeues.size === 0)
-      if (ce) logFeatureSad("bridge_shutdown_requeue", "requeue_dropped");
+      if (requeueFailed) logFeatureSad("bridge_shutdown_requeue", "requeue_dropped");
       else logFeatureOk("bridge_shutdown_requeue");
   };
-  let le = false;
+  let sessionFailedRecently = false;
   let sessionStartTimes = new Map();
-  let L = (n) => {
-    let A = sessionIdBody(n);
-    for (let key of sessionStartTimes.keys()) if (sessionIdBody(key) === A) return true;
+  let hasStartedSession = (sessionId) => {
+    let body = sessionIdBody(sessionId);
+    for (let key of sessionStartTimes.keys()) if (sessionIdBody(key) === body) return true;
     return false;
   };
   let sessionWorkIds = new Set();
   let sessionCompatIds = new Set();
   let parkedProjectThreadIds = new Set(config.parkedProjectThreadSessionIds);
   let sessionIngressTokens = new Set();
-  let Ce = new BoundedUUIDSet(64);
-  for (let n of [
+  let knownSessionBodies = new BoundedUUIDSet(64);
+  for (let sessionId of [
     ...(config.parkedProjectThreadSessionIds ?? []),
     ...(config.boundedResumeSessionIds ?? []),
     ...(config.initialSessionRequeues ?? []),
     ...(config.carriedSessionIds ?? []),
   ])
-    Ce.add(sessionIdBody(n));
+    knownSessionBodies.add(sessionIdBody(sessionId));
   let sessionTimers = new Set();
-  let Ie = parkedProjectThreadIds.size > 0;
-  let st = new Set((config.boundedResumeSessionIds ?? []).map(sessionIdBody));
-  function mt(sessionId, A) {
+  let servesProjectThread = parkedProjectThreadIds.size > 0;
+  let boundedResumeBodies = new Set((config.boundedResumeSessionIds ?? []).map(sessionIdBody));
+  function markSessionBusy(sessionId, busy) {
     let size = sessionWorkIds.size;
-    if (A) sessionWorkIds.add(sessionId);
+    if (busy) sessionWorkIds.add(sessionId);
     else sessionWorkIds.delete(sessionId);
     if (sessionWorkIds.size !== size) config.onBusyChange?.(sessionWorkIds.size);
   }
@@ -1162,24 +1547,26 @@ async function runBridgeLoop(
   let timedOutSessions = new Map();
   let titledSessions = new Map();
   let completedWorkIds_2 = new Set();
-  let pt = new BoundedUUIDSet(64);
+  let unsupportedModeWorkIds = new BoundedUUIDSet(64);
   let sessionHeartbeatState = new Map();
-  let qe = new Set();
-  let Se = new Set();
-  let ke = new Set();
+  let failedSessionIds = new Set();
+  let keptWorktreePaths = new Set();
+  let titleSettledSessions = new Set();
   let sessionTitleCandidates = new Map();
-  let Ge;
-  let Qe = initialSessionId ? toCompatSessionId(initialSessionId) : undefined;
-  if (Qe && initialSessionTitle) sessionTitleCandidates.set(Qe, new Set([initialSessionTitle]));
-  let Ae = 0;
-  let lt = new Map();
+  let titleWriteCoalescer;
+  let initialCompatSessionId = initialSessionId ? toCompatSessionId(initialSessionId) : undefined;
+  if (initialCompatSessionId && initialSessionTitle)
+    sessionTitleCandidates.set(initialCompatSessionId, new Set([initialSessionTitle]));
+  let spawnEpochCounter = 0;
+  let sessionSpawnEpochs = new Map();
   let capacityWake = createCapacityWake(loopSignal);
   let capacityWake_2 = createCapacityWake(loopSignal);
   let watchScheduler = createWorkPoller({
     clock: systemClock,
     random: () => Math.random(),
     environmentId,
-    isRunningHere: (n) => L(n) || sessionIdBody(n) === Xt,
+    isRunningHere: (sessionId) =>
+      hasStartedSession(sessionId) || sessionIdBody(sessionId) === currentPollSessionBody,
     servesToolHosts: () =>
       config.toolHostHandler !== undefined && config.getToolHostAdvert?.().kind !== "withdraw",
     hasRoom: () => sessionStartTimes.size < config.maxSessions,
@@ -1214,49 +1601,49 @@ async function runBridgeLoop(
   });
   let trackedApi = {
     ...api,
-    async reconnectSession(...n) {
+    async reconnectSession(...args) {
       try {
-        await api.reconnectSession(...n);
+        await api.reconnectSession(...args);
       } finally {
         watchScheduler.expectWork();
       }
     },
   };
-  function Gt(delay) {
+  function respectWatchDelay(delay) {
     return watchScheduler.governs() ? Math.max(delay, watchScheduler.msUntilDue()) : delay;
   }
-  function vt(n) {
-    if (!n) return "empty";
-    let id = n.data?.id;
-    if (typeof n.id !== "string" || typeof id !== "string") return "refused";
-    if (n.data.type !== "session") return "other_work";
-    if (L(id)) return "redelivery";
-    Xt = sessionIdBody(id);
-    let _ = recentWorkIds.has(n.id);
-    recentWorkIds.delete(n.id);
-    recentWorkIds.set(n.id, systemClock.monotonicNow());
+  function classifyWork(work) {
+    if (!work) return "empty";
+    let id = work.data?.id;
+    if (typeof work.id !== "string" || typeof id !== "string") return "refused";
+    if (work.data.type !== "session") return "other_work";
+    if (hasStartedSession(id)) return "redelivery";
+    currentPollSessionBody = sessionIdBody(id);
+    let seenBefore = recentWorkIds.has(work.id);
+    recentWorkIds.delete(work.id);
+    recentWorkIds.set(work.id, systemClock.monotonicNow());
     for (let key of recentWorkIds.keys()) {
       if (recentWorkIds.size <= 256) break;
       recentWorkIds.delete(key);
     }
-    return _ ? "redelivery" : "new_work";
+    return seenBefore ? "redelivery" : "new_work";
   }
-  async function heartbeatActiveWorkItems(n = 0, A) {
-    let _ = false;
-    let v = false;
-    let y = false;
+  async function heartbeatActiveWorkItems(minAgeMs = 0, onlySessionIds) {
+    let anyOk = false;
+    let anyTransient = false;
+    let anyFatal = false;
     let authFailedSessions = [];
-    for (let [sessionId, F] of sessionStartTimes) {
+    for (let [sessionId, handle] of sessionStartTimes) {
       let workId = sessionWorktrees.get(sessionId);
-      let ingressToken = F.accessToken;
+      let ingressToken = handle.accessToken;
       if (!workId || !ingressToken) continue;
-      if (n > 0 && !Wt(sessionId, n)) continue;
-      if (A !== undefined && !A.has(sessionId)) continue;
-      let Pe = clockSnapshot(systemClock);
+      if (minAgeMs > 0 && !isHeartbeatStale(sessionId, minAgeMs)) continue;
+      if (onlySessionIds !== undefined && !onlySessionIds.has(sessionId)) continue;
+      let heartbeatAt = clockSnapshot(systemClock);
       try {
         await trackedApi.heartbeatWork(environmentId, workId, ingressToken);
-        _ = true;
-        heartbeatTokens.set(sessionId, Pe);
+        anyOk = true;
+        heartbeatTokens.set(sessionId, heartbeatAt);
       } catch (err) {
         logForDebugging(
           `[bridge:heartbeat] Failed for sessionId=${sessionId} workId=${workId}: ${errorMessage(err)}`,
@@ -1267,14 +1654,18 @@ async function runBridgeLoop(
             error_type: lit(err.status === 401 || err.status === 403 ? "auth_failed" : "fatal"),
           });
           if (err.status === 401 || err.status === 403) authFailedSessions.push(sessionId);
-          else y = true;
-        } else v = true;
+          else anyFatal = true;
+        } else anyTransient = true;
       }
     }
     for (let sessionId of authFailedSessions) {
-      let F = cn.get(sessionId) ?? -1 / 0;
-      if (watchScheduler.governs() && systemClock.monotonicNow() - F < REGISTER_RETRY_DEFAULT_MS) continue;
-      cn.set(sessionId, systemClock.monotonicNow());
+      let lastAuthRetryAt = lastAuthRetryAtBySession.get(sessionId) ?? -1 / 0;
+      if (
+        watchScheduler.governs() &&
+        systemClock.monotonicNow() - lastAuthRetryAt < REGISTER_RETRY_DEFAULT_MS
+      )
+        continue;
+      lastAuthRetryAtBySession.set(sessionId, systemClock.monotonicNow());
       logger.logVerbose(`Session ${sessionId} token expired \u2014 re-queuing via bridge/reconnect`);
       try {
         await trackedApi.reconnectSession(environmentId, sessionId);
@@ -1292,72 +1683,72 @@ async function runBridgeLoop(
         });
       }
     }
-    if (y) return "fatal";
+    if (anyFatal) return "fatal";
     if (authFailedSessions.length > 0) return "auth_failed";
-    if (_) watchScheduler.noteHeartbeatOk();
-    if (!_ || (v && watchScheduler.governs())) return "failed";
+    if (anyOk) watchScheduler.noteHeartbeatOk();
+    if (!anyOk || (anyTransient && watchScheduler.governs())) return "failed";
     return "ok";
   }
-  async function Vt(n = 0, A) {
-    Ft = systemClock.monotonicNow();
-    if (A === undefined) Ve = Ft;
-    let _ = await heartbeatActiveWorkItems(n, A);
-    jt = _ !== "ok";
-    return _;
+  async function heartbeatSessions(minAgeMs = 0, onlySessionIds) {
+    lastHeartbeatAttemptAt = systemClock.monotonicNow();
+    if (onlySessionIds === undefined) lastHeartbeatAttemptWall = lastHeartbeatAttemptAt;
+    let result = await heartbeatActiveWorkItems(minAgeMs, onlySessionIds);
+    heartbeatFailed = result !== "ok";
+    return result;
   }
-  function Wt(n, A) {
-    return Date.now() - (heartbeatTokens.get(n)?.wall ?? 0) >= A;
+  function isHeartbeatStale(sessionId, minAgeMs) {
+    return Date.now() - (heartbeatTokens.get(sessionId)?.wall ?? 0) >= minAgeMs;
   }
-  function dn() {
-    return getPollIntervalConfig().non_exclusive_heartbeat_interval_ms > 0 || oe > 0;
+  function heartbeatsEnabled() {
+    return getPollIntervalConfig().non_exclusive_heartbeat_interval_ms > 0 || lastHeartbeatOkAt > 0;
   }
-  async function Nt() {
-    if ((await Vt()) === "ok") oe = Date.now();
+  async function heartbeatNow() {
+    if ((await heartbeatSessions()) === "ok") lastHeartbeatOkAt = Date.now();
   }
-  async function zt() {
-    for (let [n, A] of pendingRequeues) {
+  async function drainRequeues() {
+    for (let [sessionId, attempts] of pendingRequeues) {
       if (loopSignal.aborted) return;
-      if (L(n)) {
-        settleRequeue(n, false);
+      if (hasStartedSession(sessionId)) {
+        settleRequeue(sessionId, false);
         continue;
       }
-      let _ = await describeReregisterOutcome(trackedApi, environmentId, n, loopSignal);
-      if (_ === "aborted") return;
-      if (_ === "done") settleRequeue(n, false);
-      else if (A + 1 >= RENEW_FAILURE_LIMIT) {
+      let outcome = await describeReregisterOutcome(trackedApi, environmentId, sessionId, loopSignal);
+      if (outcome === "aborted") return;
+      if (outcome === "done") settleRequeue(sessionId, false);
+      else if (attempts + 1 >= RENEW_FAILURE_LIMIT) {
         logForDebugging(
-          `[bridge:poll] Giving up startup re-queue of sessionId=${n} after ${RENEW_FAILURE_LIMIT} attempts`,
+          `[bridge:poll] Giving up startup re-queue of sessionId=${sessionId} after ${RENEW_FAILURE_LIMIT} attempts`,
           {
             level: "warn",
           },
         );
-        settleRequeue(n, true);
-      } else pendingRequeues.set(n, A + 1);
+        settleRequeue(sessionId, true);
+      } else pendingRequeues.set(sessionId, attempts + 1);
     }
-    for (let [n, A] of activeSessions) {
+    for (let [sessionId, attempts] of activeSessions) {
       if (loopSignal.aborted) return;
-      if (!sessionStartTimes.has(n)) {
-        activeSessions.delete(n);
+      if (!sessionStartTimes.has(sessionId)) {
+        activeSessions.delete(sessionId);
         continue;
       }
-      let _ = await describeReregisterOutcome(trackedApi, environmentId, n, loopSignal);
-      if (_ === "aborted") return;
-      if (_ === "done") activeSessions.delete(n);
-      else if (A + 1 >= RENEW_FAILURE_LIMIT) {
-        activeSessions.delete(n);
+      let outcome = await describeReregisterOutcome(trackedApi, environmentId, sessionId, loopSignal);
+      if (outcome === "aborted") return;
+      if (outcome === "done") activeSessions.delete(sessionId);
+      else if (attempts + 1 >= RENEW_FAILURE_LIMIT) {
+        activeSessions.delete(sessionId);
         logForDebugging(
-          `[bridge:poll] Giving up re-queuing sessionId=${n} after ${RENEW_FAILURE_LIMIT} attempts; left to token refresh`,
+          `[bridge:poll] Giving up re-queuing sessionId=${sessionId} after ${RENEW_FAILURE_LIMIT} attempts; left to token refresh`,
           {
             level: "warn",
           },
         );
         logEvent("tengu_bridge_env_reregister", {
-          requeue_attempts: A + 1,
+          requeue_attempts: attempts + 1,
           outcome: lit("requeue_dropped"),
-          trigger: Be,
+          trigger: reregisterTrigger,
         });
         logFeatureSad("bridge_env_reregister", "requeue_dropped");
-      } else activeSessions.set(n, A + 1);
+      } else activeSessions.set(sessionId, attempts + 1);
     }
   }
   let tokenRefresh = getAccessToken
@@ -1378,30 +1769,30 @@ async function runBridgeLoop(
     : null;
   let loopStartTime = Date.now();
   let pendingCleanups_2 = new Set();
-  let Dt = 0;
+  let nextHeartbeatAt = 0;
   async function trackCleanup(pollConfig) {
     let {
       non_exclusive_heartbeat_interval_ms: nonExclusiveHeartbeatIntervalMs,
       multisession_poll_interval_ms_at_capacity: multisessionPollIntervalMsAtCapacity,
     } = pollConfig;
-    let v = capacityWake.signal();
+    let cap = capacityWake.signal();
     if (nonExclusiveHeartbeatIntervalMs > 0) {
-      if (Date.now() >= Dt) {
+      if (Date.now() >= nextHeartbeatAt) {
         await heartbeatActiveWorkItems();
-        Dt = Date.now() + nonExclusiveHeartbeatIntervalMs;
+        nextHeartbeatAt = Date.now() + nonExclusiveHeartbeatIntervalMs;
       }
-      let y =
+      let wakeAt =
         multisessionPollIntervalMsAtCapacity > 0
-          ? Math.min(Dt, Date.now() + multisessionPollIntervalMsAtCapacity)
-          : Dt;
-      await sleep(Math.max(0, y - Date.now()), v.signal);
+          ? Math.min(nextHeartbeatAt, Date.now() + multisessionPollIntervalMsAtCapacity)
+          : nextHeartbeatAt;
+      await sleep(Math.max(0, wakeAt - Date.now()), cap.signal);
     } else if (multisessionPollIntervalMsAtCapacity > 0)
-      await sleep(multisessionPollIntervalMsAtCapacity, v.signal);
-    v.cleanup();
+      await sleep(multisessionPollIntervalMsAtCapacity, cap.signal);
+    cap.cleanup();
   }
-  function trackBackgroundOp(n) {
-    pendingCleanups_2.add(n);
-    n.finally(() => pendingCleanups_2.delete(n));
+  function trackBackgroundOp(operation) {
+    pendingCleanups_2.add(operation);
+    operation.finally(() => pendingCleanups_2.delete(operation));
   }
   let connBackoffMs = 0;
   let generalBackoffMs = 0;
@@ -1409,17 +1800,17 @@ async function runBridgeLoop(
   let generalErrorStart = null;
   let lastPollErrorTime = null;
   let heartbeatTokens = new Map();
-  let oe = 0;
-  let jt = false;
-  let Ft = -1 / 0;
-  let Ve = -1 / 0;
-  let cn = new Map();
+  let lastHeartbeatOkAt = 0;
+  let heartbeatFailed = false;
+  let lastHeartbeatAttemptAt = -1 / 0;
+  let lastHeartbeatAttemptWall = -1 / 0;
+  let lastAuthRetryAtBySession = new Map();
   let recentWorkIds = new Map();
-  let Xt;
+  let currentPollSessionBody;
   let statusUpdateTimer = null;
-  let Je = false;
+  let idleStatusShown = false;
   let gaveUp = false;
-  let un;
+  let policyRefusal;
   logForDebugging(
     `[bridge:work] Starting poll loop spawnMode=${config.spawnMode} maxSessions=${config.maxSessions} environmentId=${environmentId}`,
   );
@@ -1437,13 +1828,13 @@ async function runBridgeLoop(
       if (act) logger.updateSessionActivity(timedOutSessions.get(sid) ?? sid, act);
     }
     if (sessionStartTimes.size === 0) {
-      if (!Je) {
-        Je = true;
+      if (!idleStatusShown) {
+        idleStatusShown = true;
         logger.updateIdleStatus();
       }
       return;
     }
-    Je = false;
+    idleStatusShown = false;
     let [sessionId, handle] = [...sessionStartTimes.entries()].pop();
     let startTime = completedWorkIds.get(sessionId);
     if (!startTime) return;
@@ -1473,26 +1864,27 @@ async function runBridgeLoop(
   function onSessionDone(sessionId, startTime, handle) {
     return (rawStatus) => {
       let workId = sessionWorktrees.get(sessionId);
-      let R = sessionCompatIds.has(sessionId);
+      let wasProjectThreadChild = sessionCompatIds.has(sessionId);
       sessionStartTimes.delete(sessionId);
       sessionCompatIds.delete(sessionId);
-      if (R && rawStatus === "idle") parkedProjectThreadIds.add(sessionId);
-      mt(sessionId, false);
+      if (wasProjectThreadChild && rawStatus === "idle") parkedProjectThreadIds.add(sessionId);
+      markSessionBusy(sessionId, false);
       completedWorkIds.delete(sessionId);
       sessionWorktrees.delete(sessionId);
       titledSessions.get(sessionId)?.stop();
       titledSessions.delete(sessionId);
-      let r = timedOutSessions.get(sessionId) ?? sessionId;
+      let loggedSessionId = timedOutSessions.get(sessionId) ?? sessionId;
       timedOutSessions.delete(sessionId);
-      logger.removeSession(r);
-      ke.delete(r);
-      Ge?.forget(r);
-      if (r === Qe && initialSessionTitle) sessionTitleCandidates.set(r, new Set([initialSessionTitle]));
-      else sessionTitleCandidates.delete(r);
-      lt.delete(sessionId);
+      logger.removeSession(loggedSessionId);
+      titleSettledSessions.delete(loggedSessionId);
+      titleWriteCoalescer?.forget(loggedSessionId);
+      if (loggedSessionId === initialCompatSessionId && initialSessionTitle)
+        sessionTitleCandidates.set(loggedSessionId, new Set([initialSessionTitle]));
+      else sessionTitleCandidates.delete(loggedSessionId);
+      sessionSpawnEpochs.delete(sessionId);
       tokenRefresh?.cancel(sessionId);
       capacityWake.wake();
-      cn.delete(sessionId);
+      lastAuthRetryAtBySession.delete(sessionId);
       let timer = recentWorkIds.get(workId ?? "");
       if (timer === undefined || systemClock.monotonicNow() - timer >= REGISTER_RETRY_MAX_MS) {
         recentWorkIds.delete(workId ?? "");
@@ -1505,7 +1897,7 @@ async function runBridgeLoop(
       logEvent("tengu_bridge_session_done", {
         status: fromEnum(rawStatus),
         duration_ms: durationMs,
-        project_thread: R,
+        project_thread: wasProjectThreadChild,
       });
       logForDiagnosticsNoPII("info", "bridge_session_done", {
         status: rawStatus,
@@ -1513,26 +1905,31 @@ async function runBridgeLoop(
       });
       logger.clearStatus();
       stopStatusUpdates();
-      let ae =
+      let lastStderr =
         handle.lastStderr.length > 0
           ? handle.lastStderr.join(`
 `)
           : undefined;
-      let Pe;
+      let failureMessage;
       switch (rawStatus) {
         case "completed":
           logger.logSessionComplete(sessionId, durationMs);
           break;
         case "failed":
           if (!loopSignal.aborted) {
-            Pe = ae ?? "Process exited with error";
-            logger.logSessionFailed(sessionId, Pe);
-            if (!ae || Pe.includes("transport closed"))
-              logForDebugging(`Bridge session failed: ${Pe}`, {
+            failureMessage = lastStderr ?? "Process exited with error";
+            logger.logSessionFailed(sessionId, failureMessage);
+            if (!lastStderr || failureMessage.includes("transport closed"))
+              logForDebugging(`Bridge session failed: ${failureMessage}`, {
                 level: "error",
               });
             else
-              logError(withTelemetryMessage(Error(`Bridge session failed: ${Pe}`), "Bridge session failed"));
+              logError(
+                withTelemetryMessage(
+                  Error(`Bridge session failed: ${failureMessage}`),
+                  "Bridge session failed",
+                ),
+              );
           }
           break;
         case "interrupted":
@@ -1555,18 +1952,18 @@ async function runBridgeLoop(
           ),
         );
       }
-      let De = rawStatus === "failed" && !loopSignal.aborted && !gaveUp;
-      if (De) {
-        qe.add(sessionId);
-        le = true;
+      let failedNotShuttingDown = rawStatus === "failed" && !loopSignal.aborted && !gaveUp;
+      if (failedNotShuttingDown) {
+        failedSessionIds.add(sessionId);
+        sessionFailedRecently = true;
       }
       let wt = sessionHeartbeatState.get(sessionId);
       if (wt) {
         sessionHeartbeatState.delete(sessionId);
         if (rawStatus === "idle") logger.logStatus(`kept worktree ${wt.worktreePath} \xB7 session idle`);
-        else if (De) {
+        else if (failedNotShuttingDown) {
           logger.logStatus(`kept worktree ${wt.worktreePath} \xB7 session crashed`);
-          if (Pe?.includes("transport closed")) Se.add(wt.worktreePath);
+          if (failureMessage?.includes("transport closed")) keptWorktreePaths.add(wt.worktreePath);
         } else
           trackBackgroundOp(
             cleanupSessionWorktree(wt, logger, {
@@ -1580,7 +1977,7 @@ async function runBridgeLoop(
           if (rawStatus === "completed")
             trackBackgroundOp(
               trackedApi
-                .archiveSession(r)
+                .archiveSession(loggedSessionId)
                 .catch((err) =>
                   logger.logVerbose(`Failed to archive session ${sessionId}: ${errorMessage(err)}`),
                 ),
@@ -1597,21 +1994,22 @@ async function runBridgeLoop(
     };
   }
   if (!initialSessionId) startStatusUpdates();
-  function Sn() {
-    let size = qe.size;
+  function reportOfflineCleanup() {
+    let size = failedSessionIds.size;
     logger.logStatus(
       size > 0
         ? `${size} ${plural(size, "session")} ended while this machine was offline \u2014 the environment was cleaned up on the server and can't be resumed.`
         : "This environment was cleaned up while the machine was offline and can't be resumed.",
     );
-    if (Se.size > 0) logger.logStatus(`Your work is safe \u2014 worktrees kept: ${[...Se].join(", ")}`);
+    if (keptWorktreePaths.size > 0)
+      logger.logStatus(`Your work is safe \u2014 worktrees kept: ${[...keptWorktreePaths].join(", ")}`);
     logger.logStatus("Run `claude remote-control` to start a fresh environment.");
   }
-  function pn(err) {
+  function classifyReregisterTrigger(err) {
     if (
       err.status === 404 &&
       !isExpiredErrorType(err.errorType) &&
-      !(le && sessionStartTimes.size === 0) &&
+      !(sessionFailedRecently && sessionStartTimes.size === 0) &&
       isBridgeEnvReregisterEnabled()
     )
       return "poll_404";
@@ -1619,24 +2017,25 @@ async function runBridgeLoop(
       return "poll_401";
     return;
   }
-  let { startBackgroundPolling } = await import("./chunk-qchbrsbw.js");
+  let { startBackgroundPolling } =
+    await import("../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js");
   startBackgroundPolling();
-  let It = () => {
+  let shutdownOnPolicyRefusal = () => {
     if (loopSignal.aborted || gaveUp) return;
-    let n = connectedBridgePolicyRefusal(false);
-    if (n === null) return;
-    un = n;
+    let refusal = connectedBridgePolicyRefusal(false);
+    if (refusal === null) return;
+    policyRefusal = refusal;
     gaveUp = true;
     controller.abort();
     try {
-      logger.logStatus(n.detail);
+      logger.logStatus(refusal.detail);
       logForDebugging(
-        `[bridge:policy] Org policy now refuses Remote Control (${n.policy}: ${n.kind}); shutting down`,
+        `[bridge:policy] Org policy now refuses Remote Control (${refusal.policy}: ${refusal.kind}); shutting down`,
       );
       logEvent("tengu_bridge_policy_teardown", {
         lane: lit("standalone"),
-        policy: fromEnum(n.policy),
-        deny_kind: fromEnum(n.kind),
+        policy: fromEnum(refusal.policy),
+        deny_kind: fromEnum(refusal.kind),
         outbound_only: false,
       });
     } catch (error) {
@@ -1646,111 +2045,125 @@ async function runBridgeLoop(
       logError(error);
     }
   };
-  let vn = isLovelyUmbrellaOn()
+  let unsubscribePolicy = isLovelyUmbrellaOn()
     ? () => {}
     : onPolicyVerdictChanged(() => {
-        queueMicrotask(It);
+        queueMicrotask(shutdownOnPolicyRefusal);
       });
-  if (!isLovelyUmbrellaOn()) It();
-  function nn() {
+  if (!isLovelyUmbrellaOn()) shutdownOnPolicyRefusal();
+  function isSecretRenewDue() {
     return (
-      !re &&
+      !reregisterOwnsSecret &&
       secretRenewAt !== undefined &&
       Date.now() >= secretRenewAt &&
       isBridgeEnvReregisterEnabled() &&
       isBridgeEnvSecretProactiveRenewalEnabled()
     );
   }
-  async function kn() {
-    N++;
-    if (X) {
-      X = false;
+  async function renewEnvironmentSecret() {
+    renewalAttempt++;
+    if (renewLoginUnreadable) {
+      renewLoginUnreadable = false;
       pollOptions?.forgetTokenReads();
     }
     logger.logVerbose("Renewing this computer's Remote Control credential before it expires");
-    let n = await reregisterEnvironment({
+    let result = await reregisterEnvironment({
       api: trackedApi,
       config,
       environmentId,
       activeSessions: sessionStartTimes,
-      attempt: N,
+      attempt: renewalAttempt,
       trigger: "proactive",
       signal: loopSignal,
     });
-    if (n.outcome === "reregistered") {
-      currentEnvironmentSecret = n.environmentSecret;
-      secretRenewAt = computeSecretRenewAt(n.environmentSecretExpiresIn);
-      secretExpiresAt = expiresInToDeadline(n.environmentSecretExpiresIn);
-      Be = lit("proactive");
-      Ee = true;
-      He = N;
+    if (result.outcome === "reregistered") {
+      currentEnvironmentSecret = result.environmentSecret;
+      secretRenewAt = computeSecretRenewAt(result.environmentSecretExpiresIn);
+      secretExpiresAt = expiresInToDeadline(result.environmentSecretExpiresIn);
+      reregisterTrigger = lit("proactive");
+      pendingReregisterEvent = true;
+      reregisterEventAttempt = renewalAttempt;
       logger.logVerbose("Remote Control credential renewed.");
       return;
     }
     if (loopSignal.aborted) return;
-    let A =
-      n.outcome === "fatal" && n.reason === "register_rejected" && n.message === BRIDGE_LOGIN_INSTRUCTION;
-    let _ =
-      n.outcome === "fatal" &&
-      n.reason === "register_rejected" &&
-      n.status === 401 &&
-      (A || pollOptions?.classifyFailedOAuthRefresh() === "unreachable");
-    if (n.outcome === "transient" || ((n.reason === "replaced" || _) && N < RENEW_RETRY_LIMIT)) {
+    let loginUnreadable =
+      result.outcome === "fatal" &&
+      result.reason === "register_rejected" &&
+      result.message === BRIDGE_LOGIN_INSTRUCTION;
+    let authUnreachable =
+      result.outcome === "fatal" &&
+      result.reason === "register_rejected" &&
+      result.status === 401 &&
+      (loginUnreadable || pollOptions?.classifyFailedOAuthRefresh() === "unreachable");
+    if (
+      result.outcome === "transient" ||
+      ((result.reason === "replaced" || authUnreachable) && renewalAttempt < RENEW_RETRY_LIMIT)
+    ) {
       let max = Math.max(
         RENEW_RETRY_MIN_MS,
-        Math.min(n.outcome === "transient" ? (n.retryAfterMs ?? 0) : 0, RENEW_RETRY_MAX_MS),
+        Math.min(result.outcome === "transient" ? (result.retryAfterMs ?? 0) : 0, RENEW_RETRY_MAX_MS),
       );
       secretRenewAt = Date.now() + max * (1 + 0.25 * Math.random());
-      X = A;
+      renewLoginUnreadable = loginUnreadable;
       logger.logVerbose(
         `Could not renew the Remote Control credential yet. The current one still works; trying again in about ${Math.ceil((secretRenewAt - Date.now()) / 60000)} minutes.`,
       );
       return;
     }
     secretRenewAt = undefined;
-    if (!(n.reason === "register_rejected" && n.status === 401 && (A || !_)))
+    if (!(
+      result.reason === "register_rejected" &&
+      result.status === 401 &&
+      (loginUnreadable || !authUnreachable)
+    ))
       logger.logVerbose(
         "Could not renew the Remote Control credential. It keeps working until it expires, and Remote Control will try again then.",
       );
     else {
-      let R = A || !pollOptions ? undefined : await pollOptions.tokenOrigin();
-      let r = "claude.ai did not accept the sign-in it uses";
-      let F = "Run `claude /login` to sign in again.";
-      if (A) {
-        r = "it could not read a saved sign-in";
-        F = "If you are signed out, run `claude /login`.";
-      } else if (R === undefined) F = "If you are signed out, run `claude /login`.";
-      else if (R === "env" || R === "fd") F = "Start Remote Control again with a valid sign-in token.";
-      else if (R === "none") r = "its saved sign-in was refused or could not be read";
-      let D;
+      let tokenOrigin = loginUnreadable || !pollOptions ? undefined : await pollOptions.tokenOrigin();
+      let failureReasonText = "claude.ai did not accept the sign-in it uses";
+      let fixHint = "Run `claude /login` to sign in again.";
+      if (loginUnreadable) {
+        failureReasonText = "it could not read a saved sign-in";
+        fixHint = "If you are signed out, run `claude /login`.";
+      } else if (tokenOrigin === undefined) fixHint = "If you are signed out, run `claude /login`.";
+      else if (tokenOrigin === "env" || tokenOrigin === "fd")
+        fixHint = "Start Remote Control again with a valid sign-in token.";
+      else if (tokenOrigin === "none")
+        failureReasonText = "its saved sign-in was refused or could not be read";
+      let keepWorkingText;
       if (secretExpiresAt !== undefined && secretExpiresAt <= Date.now())
-        D = "The connection's credential has already expired, so it stops unless the next try can sign in.";
+        keepWorkingText =
+          "The connection's credential has already expired, so it stops unless the next try can sign in.";
       else {
-        let ae =
+        let remainingMinutes =
           secretExpiresAt === undefined ? undefined : Math.round((secretExpiresAt - Date.now()) / 60000);
-        let Pe;
-        if (ae === undefined) Pe = "until its credential expires";
-        else if (ae < 5) Pe = "for a few more minutes";
-        else if (ae < 90) Pe = `for about ${ae} minutes`;
-        else Pe = `for about ${Math.round(ae / 60)} hours`;
-        D = `The connection keeps working ${Pe}; if it still cannot sign in then, it stops.`;
+        let stillWorkingText;
+        if (remainingMinutes === undefined) stillWorkingText = "until its credential expires";
+        else if (remainingMinutes < 5) stillWorkingText = "for a few more minutes";
+        else if (remainingMinutes < 90) stillWorkingText = `for about ${remainingMinutes} minutes`;
+        else stillWorkingText = `for about ${Math.round(remainingMinutes / 60)} hours`;
+        keepWorkingText = `The connection keeps working ${stillWorkingText}; if it still cannot sign in then, it stops.`;
       }
-      logger.logWarning(`Remote Control could not renew this computer's connection: ${r}. ${F} ${D}`);
+      logger.logWarning(
+        `Remote Control could not renew this computer's connection: ${failureReasonText}. ${fixHint} ${keepWorkingText}`,
+      );
     }
-    let y;
-    if (n.reason === "replaced") y = "server kept returning a different environment id";
-    else if (_) y = "register got a 401 that did not prove the login dead";
-    else y = `register refused with ${n.status}`;
+    let giveUpReason;
+    if (result.reason === "replaced") giveUpReason = "server kept returning a different environment id";
+    else if (authUnreachable) giveUpReason = "register got a 401 that did not prove the login dead";
+    else giveUpReason = `register refused with ${result.status}`;
     logForDebugging(
-      `[bridge:poll] Giving up the planned renewal of the environment secret (${y}); the current secret works until it expires, then the poll-401 lane handles it`,
+      `[bridge:poll] Giving up the planned renewal of the environment secret (${giveUpReason}); the current secret works until it expires, then the poll-401 lane handles it`,
       {
         level: "warn",
       },
     );
   }
-  let xt = false;
+  let watcherStartErrorLogged = false;
   while (!loopSignal.aborted) {
-    Xt = undefined;
+    currentPollSessionBody = undefined;
     startBackgroundPolling();
     let pollConfig = getPollIntervalConfig();
     try {
@@ -1762,51 +2175,51 @@ async function runBridgeLoop(
       )
         sessionsWatcher?.start();
       else sessionsWatcher?.stop();
-      xt = false;
+      watcherStartErrorLogged = false;
     } catch (error) {
       sessionsWatcher?.stop();
-      if (!xt) {
-        xt = true;
+      if (!watcherStartErrorLogged) {
+        watcherStartErrorLogged = true;
         logError(error);
       }
     }
-    if (nn()) {
-      await kn();
+    if (isSecretRenewDue()) {
+      await renewEnvironmentSecret();
       continue;
     }
     try {
-      let A = watchScheduler.governs() && sessionStartTimes.size < config.maxSessions;
-      let _ = A
+      let watchGoverns = watchScheduler.governs() && sessionStartTimes.size < config.maxSessions;
+      let pollIntervalMs = watchGoverns
         ? watchScheduler.longestGapMs()
         : sessionStartTimes.size >= config.maxSessions
           ? pollConfig.multisession_poll_interval_ms_at_capacity
           : sessionStartTimes.size > 0
             ? pollConfig.multisession_poll_interval_ms_partial_capacity
             : pollConfig.multisession_poll_interval_ms_not_at_capacity;
-      let v = A ? watchScheduler.pollCause() : undefined;
-      let y = !A || v !== undefined;
-      let R = null;
-      if (y) {
-        jt = false;
-        let I = (Ne) => {
-          if (v !== undefined && !loopSignal.aborted) watchScheduler.polled(v, Ne);
+      let pollCause = watchGoverns ? watchScheduler.pollCause() : undefined;
+      let shouldPoll = !watchGoverns || pollCause !== undefined;
+      let polledWork = null;
+      if (shouldPoll) {
+        heartbeatFailed = false;
+        let notePollOutcome = (outcome) => {
+          if (pollCause !== undefined && !loopSignal.aborted) watchScheduler.polled(pollCause, outcome);
         };
         try {
-          R = await trackedApi.pollForWork(
+          polledWork = await trackedApi.pollForWork(
             environmentId,
             currentEnvironmentSecret,
             loopSignal,
             pollConfig.reclaim_older_than_ms,
-            _,
+            pollIntervalMs,
           );
         } catch (error) {
-          I(classifyConnectFailure(error));
+          notePollOutcome(classifyConnectFailure(error));
           throw error;
         }
-        I(vt(R));
+        notePollOutcome(classifyWork(polledWork));
       }
-      let r = R;
-      if (y) {
+      let work = polledWork;
+      if (shouldPoll) {
         if (connErrorStart !== null || generalErrorStart !== null) {
           let disconnectedMs = Date.now() - (connErrorStart ?? generalErrorStart ?? Date.now());
           logger.logReconnected(disconnectedMs);
@@ -1814,32 +2227,32 @@ async function runBridgeLoop(
           logEvent("tengu_bridge_reconnected", {
             disconnected_ms: disconnectedMs,
           });
-          Je = false;
+          idleStatusShown = false;
         }
         connBackoffMs = 0;
         generalBackoffMs = 0;
         connErrorStart = null;
         generalErrorStart = null;
         lastPollErrorTime = null;
-        le = false;
-        if (Ee) {
-          Ee = false;
+        sessionFailedRecently = false;
+        if (pendingReregisterEvent) {
+          pendingReregisterEvent = false;
           logEvent("tengu_bridge_env_reregister", {
-            attempt: He,
+            attempt: reregisterEventAttempt,
             outcome: lit("recovered"),
-            trigger: Be,
+            trigger: reregisterTrigger,
           });
           logFeatureOk("bridge_env_reregister");
-          N = 0;
+          renewalAttempt = 0;
         }
         reregisterAttempts = 0;
-        Ke = false;
-        re = false;
+        reregisterTransientSeen = false;
+        reregisterOwnsSecret = false;
       }
-      if (!r) {
+      if (!work) {
         for (let key of heartbeatTokens.keys()) if (!sessionStartTimes.has(key)) heartbeatTokens.delete(key);
-        if (y && (activeSessions.size > 0 || pendingRequeues.size > 0)) await zt();
-        let I = await describeAdvertChange({
+        if (shouldPoll && (activeSessions.size > 0 || pendingRequeues.size > 0)) await drainRequeues();
+        let advertOutcome = await describeAdvertChange({
           api: trackedApi,
           config,
           environmentId,
@@ -1847,9 +2260,9 @@ async function runBridgeLoop(
           pacing,
           signal: loopSignal,
         });
-        if (I) {
-          Be = lit("tool_host_advert_changed");
-          E(I);
+        if (advertOutcome) {
+          reregisterTrigger = lit("tool_host_advert_changed");
+          applyReregistration(advertOutcome);
           watchScheduler.expectWork();
         }
         if (sessionStartTimes.size >= config.maxSessions) {
@@ -1861,27 +2274,27 @@ async function runBridgeLoop(
             });
             let pollDeadline = atCapMs > 0 ? Date.now() + atCapMs : null;
             let hbResult = "ok";
-            let kt = 0;
+            let heartbeatCycles = 0;
             while (
               !loopSignal.aborted &&
               sessionStartTimes.size >= config.maxSessions &&
               (pollDeadline === null || Date.now() < pollDeadline) &&
-              !nn()
+              !isSecretRenewDue()
             ) {
               let hbConfig = getPollIntervalConfig();
               if (hbConfig.non_exclusive_heartbeat_interval_ms <= 0) break;
               let cap = capacityWake.signal();
-              if (Date.now() >= Dt) {
+              if (Date.now() >= nextHeartbeatAt) {
                 hbResult = await heartbeatActiveWorkItems();
                 if (hbResult === "auth_failed" || hbResult === "fatal") {
                   cap.cleanup();
                   break;
                 }
-                Dt = Date.now() + hbConfig.non_exclusive_heartbeat_interval_ms;
-                kt++;
+                nextHeartbeatAt = Date.now() + hbConfig.non_exclusive_heartbeat_interval_ms;
+                heartbeatCycles++;
               }
               let min = Math.min(
-                Dt,
+                nextHeartbeatAt,
                 pollDeadline ?? 1 / 0,
                 secretRenewAt !== undefined && secretRenewAt > Date.now() ? secretRenewAt : 1 / 0,
               );
@@ -1897,17 +2310,17 @@ async function runBridgeLoop(
                     ? "capacity_changed"
                     : pollDeadline !== null && Date.now() >= pollDeadline
                       ? "poll_due"
-                      : nn()
+                      : isSecretRenewDue()
                         ? "secret_renewal_due"
                         : "config_disabled";
             logEvent("tengu_bridge_heartbeat_mode_exited", {
               reason: fromEnum(exitReason),
-              heartbeat_cycles: kt,
+              heartbeat_cycles: heartbeatCycles,
               active_sessions: sessionStartTimes.size,
             });
             if (exitReason === "poll_due")
               logForDebugging(
-                `[bridge:poll] Heartbeat poll_due after ${kt} cycles \u2014 falling through to pollForWork`,
+                `[bridge:poll] Heartbeat poll_due after ${heartbeatCycles} cycles \u2014 falling through to pollForWork`,
               );
             if (hbResult === "auth_failed" || hbResult === "fatal") {
               let cap = capacityWake.signal();
@@ -1921,47 +2334,60 @@ async function runBridgeLoop(
           }
         } else {
           let nonExclusiveHeartbeatIntervalMs = pollConfig.non_exclusive_heartbeat_interval_ms;
-          let ue = nonExclusiveHeartbeatIntervalMs > 0 ? nonExclusiveHeartbeatIntervalMs : oe > 0 ? 60000 : 0;
-          let Ze = oe > 0;
-          let kt = clockSnapshot(systemClock);
+          let heartbeatMinAgeMs =
+            nonExclusiveHeartbeatIntervalMs > 0
+              ? nonExclusiveHeartbeatIntervalMs
+              : lastHeartbeatOkAt > 0
+                ? 60000
+                : 0;
+          let useTokenAges = lastHeartbeatOkAt > 0;
+          let gapSnapshot = clockSnapshot(systemClock);
           let filtered = [...sessionStartTimes.keys()].filter((key) =>
-            Ze ? Wt(key, ue) : Date.now() - oe >= ue,
+            useTokenAges
+              ? isHeartbeatStale(key, heartbeatMinAgeMs)
+              : Date.now() - lastHeartbeatOkAt >= heartbeatMinAgeMs,
           );
-          let Et =
-            jt && kt.monotonic - Ve < REGISTER_RETRY_MIN_MS
-              ? filtered.filter((at) => isSleepGap(heartbeatTokens.get(at), kt))
+          let eligible =
+            heartbeatFailed && gapSnapshot.monotonic - lastHeartbeatAttemptWall < REGISTER_RETRY_MIN_MS
+              ? filtered.filter((sessionId) => isSleepGap(heartbeatTokens.get(sessionId), gapSnapshot))
               : filtered;
-          if (ue > 0 && Et.length > 0 && (!jt || kt.monotonic - Ft >= SLEEP_GAP_WINDOW.retry)) {
-            let at = Ze && Et.length < filtered.length ? new Set(Et) : undefined;
-            let sn = await Vt(Ze ? ue : 0, at);
+          if (
+            heartbeatMinAgeMs > 0 &&
+            eligible.length > 0 &&
+            (!heartbeatFailed || gapSnapshot.monotonic - lastHeartbeatAttemptAt >= SLEEP_GAP_WINDOW.retry)
+          ) {
+            let onlySet = useTokenAges && eligible.length < filtered.length ? new Set(eligible) : undefined;
+            let heartbeatResult = await heartbeatSessions(useTokenAges ? heartbeatMinAgeMs : 0, onlySet);
             if (
-              at !== undefined &&
-              sn === "ok" &&
-              [...sessionStartTimes.keys()].some((key) => !at.has(key) && Wt(key, ue))
+              onlySet !== undefined &&
+              heartbeatResult === "ok" &&
+              [...sessionStartTimes.keys()].some(
+                (key) => !onlySet.has(key) && isHeartbeatStale(key, heartbeatMinAgeMs),
+              )
             )
-              await Vt(ue);
-            if (sn === "ok" && !Ze) oe = Date.now();
+              await heartbeatSessions(heartbeatMinAgeMs);
+            if (heartbeatResult === "ok" && !useTokenAges) lastHeartbeatOkAt = Date.now();
           }
-          let Lt =
+          let idlePollIntervalMs =
             sessionStartTimes.size > 0
               ? pollConfig.multisession_poll_interval_ms_partial_capacity
               : pollConfig.multisession_poll_interval_ms_not_at_capacity;
           if (watchScheduler.governs()) {
             let cap = capacityWake_2.signal();
-            await sleep(Math.min(Lt, watchScheduler.msUntilDue()), cap.signal);
+            await sleep(Math.min(idlePollIntervalMs, watchScheduler.msUntilDue()), cap.signal);
             cap.cleanup();
-          } else await sleep(Lt, loopSignal);
+          } else await sleep(idlePollIntervalMs, loopSignal);
         }
         continue;
       }
-      let F = sessionStartTimes.size >= config.maxSessions;
-      let D = async () => {
-        if (F) await trackCleanup(pollConfig);
+      let atCapacity = sessionStartTimes.size >= config.maxSessions;
+      let cleanupIfAtCapacity = async () => {
+        if (atCapacity) await trackCleanup(pollConfig);
       };
-      if (r.data?.mode != null) {
-        if (config.toolHostHandler !== undefined && r.data.mode === "tool_use") {
+      if (work.data?.mode != null) {
+        if (config.toolHostHandler !== undefined && work.data.mode === "tool_use") {
           try {
-            await config.toolHostHandler.handle(r, {
+            await config.toolHostHandler.handle(work, {
               environmentId,
               environmentSecret: currentEnvironmentSecret,
               signal: loopSignal,
@@ -1974,99 +2400,103 @@ async function runBridgeLoop(
               ),
             );
           }
-          if (!F) await sleep(1000, loopSignal);
-        } else if (!pt.has(r.id)) {
-          pt.add(r.id);
-          let I = hashIdForLog(r.id);
+          if (!atCapacity) await sleep(1000, loopSignal);
+        } else if (!unsupportedModeWorkIds.has(work.id)) {
+          unsupportedModeWorkIds.add(work.id);
+          let workLogId = hashIdForLog(work.id);
           logForDebugging(
-            `[bridge:work] Stopping work item with an unsupported mode workId=${I} sessionId=${hashIdForLog(r.data.id)}`,
+            `[bridge:work] Stopping work item with an unsupported mode workId=${workLogId} sessionId=${hashIdForLog(work.data.id)}`,
           );
           logEvent("tengu_bridge_work_mode_unsupported", {});
           trackBackgroundOp(
             stopWorkWithRetry(
               trackedApi,
               environmentId,
-              r.id,
+              work.id,
               currentEnvironmentSecret,
               logger,
               backoff.stopWorkBaseDelayMs,
-              I,
+              workLogId,
             ),
           );
-        } else if (!F) await sleep(1000, loopSignal);
-        await D();
+        } else if (!atCapacity) await sleep(1000, loopSignal);
+        await cleanupIfAtCapacity();
         continue;
       }
-      if (completedWorkIds_2.has(r.id) && r.state === WORK_STATE_QUEUED && !sessionTimers.has(r.id)) {
-        completedWorkIds_2.delete(r.id);
+      if (
+        completedWorkIds_2.has(work.id) &&
+        work.state === WORK_STATE_QUEUED &&
+        !sessionTimers.has(work.id)
+      ) {
+        completedWorkIds_2.delete(work.id);
         logForDebugging(
-          `[bridge:work] Previously completed workId=${r.id} was re-queued by the server, handling as new work`,
+          `[bridge:work] Previously completed workId=${work.id} was re-queued by the server, handling as new work`,
         );
       }
-      if (completedWorkIds_2.has(r.id)) {
-        logForDebugging(`[bridge:work] Skipping already-completed workId=${r.id} state=${r.state}`);
-        if (F) await trackCleanup(pollConfig);
+      if (completedWorkIds_2.has(work.id)) {
+        logForDebugging(`[bridge:work] Skipping already-completed workId=${work.id} state=${work.state}`);
+        if (atCapacity) await trackCleanup(pollConfig);
         else await sleep(1000, loopSignal);
         continue;
       }
-      let ae;
+      let workSecret;
       try {
-        ae = decodeWorkSecret(r.secret);
+        workSecret = decodeWorkSecret(work.secret);
       } catch (err) {
         let errMsg = errorMessage(err);
-        logger.logError(`Failed to decode work secret for workId=${r.id}: ${errMsg}`);
+        logger.logError(`Failed to decode work secret for workId=${work.id}: ${errMsg}`);
         logEvent("tengu_bridge_work_secret_failed", {});
-        if (r.data.type === "session") logFeatureBad("bridge_work_pickup", "secret_decode_failed");
-        completedWorkIds_2.add(r.id);
+        if (work.data.type === "session") logFeatureBad("bridge_work_pickup", "secret_decode_failed");
+        completedWorkIds_2.add(work.id);
         trackBackgroundOp(
           stopWorkWithRetry(
             trackedApi,
             environmentId,
-            r.id,
+            work.id,
             currentEnvironmentSecret,
             logger,
             backoff.stopWorkBaseDelayMs,
           ),
         );
-        await D();
+        await cleanupIfAtCapacity();
         continue;
       }
       let ackWork = async () => {
-        logForDebugging(`[bridge:work] Acknowledging workId=${r.id}`);
+        logForDebugging(`[bridge:work] Acknowledging workId=${work.id}`);
         try {
-          await trackedApi.acknowledgeWork(environmentId, r.id, ae.session_ingress_token);
+          await trackedApi.acknowledgeWork(environmentId, work.id, workSecret.session_ingress_token);
         } catch (err) {
-          logForDebugging(`[bridge:work] Acknowledge failed workId=${r.id}: ${errorMessage(err)}`);
+          logForDebugging(`[bridge:work] Acknowledge failed workId=${work.id}: ${errorMessage(err)}`);
         }
       };
-      let De = (sessionId) => {
-        if (pollConfig.non_exclusive_heartbeat_interval_ms <= 0 && oe === 0) return;
-        let Ne = clockSnapshot(systemClock);
-        heartbeatTokens.set(sessionId, Ne);
-        oe = Date.now();
+      let seedHeartbeat = (sessionId) => {
+        if (pollConfig.non_exclusive_heartbeat_interval_ms <= 0 && lastHeartbeatOkAt === 0) return;
+        let heartbeatStamp = clockSnapshot(systemClock);
+        heartbeatTokens.set(sessionId, heartbeatStamp);
+        lastHeartbeatOkAt = Date.now();
         trackBackgroundOp(
           trackedApi
-            .heartbeatWork(environmentId, r.id, ae.session_ingress_token)
+            .heartbeatWork(environmentId, work.id, workSecret.session_ingress_token)
             .then(() => logFeatureOk("bridge_work_heartbeat"))
             .catch((error) => {
               logFeatureSad("bridge_work_heartbeat", "initial_failed");
               logForDebugging(
-                `[bridge:work] Initial heartbeat failed workId=${r.id}: ${errorMessage(error)}`,
+                `[bridge:work] Initial heartbeat failed workId=${work.id}: ${errorMessage(error)}`,
               );
-              if (!(error instanceof BridgeFatalError) && heartbeatTokens.get(sessionId) === Ne)
+              if (!(error instanceof BridgeFatalError) && heartbeatTokens.get(sessionId) === heartbeatStamp)
                 heartbeatTokens.delete(sessionId);
             }),
         );
       };
-      let workType = r.data.type;
-      switch (r.data.type) {
+      let workType = work.data.type;
+      switch (work.data.type) {
         case "healthcheck":
           await ackWork();
           logForDebugging("[bridge:work] Healthcheck received");
           logger.logVerbose("Healthcheck received");
           break;
         case "session": {
-          let sessionId = r.data.id;
+          let sessionId = work.data.id;
           try {
             validateBridgeId(sessionId, "session_id");
           } catch {
@@ -2079,73 +2509,76 @@ async function runBridgeLoop(
           if (existingHandle) {
             activeSessions.delete(sessionId);
             settleRequeue(sessionId, false);
-            existingHandle.updateAccessToken(ae.session_ingress_token);
-            titledSessions.get(sessionId)?.updateAccessToken(ae.session_ingress_token);
-            sessionWorktrees.set(sessionId, r.id);
-            tokenRefresh?.schedule(sessionId, ae.session_ingress_token);
+            existingHandle.updateAccessToken(workSecret.session_ingress_token);
+            titledSessions.get(sessionId)?.updateAccessToken(workSecret.session_ingress_token);
+            sessionWorktrees.set(sessionId, work.id);
+            tokenRefresh?.schedule(sessionId, workSecret.session_ingress_token);
             logForDebugging(
-              `[bridge:work] Updated access token for existing sessionId=${sessionId} workId=${r.id}`,
+              `[bridge:work] Updated access token for existing sessionId=${sessionId} workId=${work.id}`,
             );
             await ackWork();
-            De(sessionId);
+            seedHeartbeat(sessionId);
             break;
           }
           if (sessionStartTimes.size >= config.maxSessions) {
             logForDebugging(
-              `[bridge:work] At capacity (${sessionStartTimes.size}/${config.maxSessions}), cannot spawn new session for workId=${r.id}`,
+              `[bridge:work] At capacity (${sessionStartTimes.size}/${config.maxSessions}), cannot spawn new session for workId=${work.id}`,
             );
-            let pe = false;
-            if (!sessionIngressTokens.has(r.id)) {
+            let capacityFreed = false;
+            if (!sessionIngressTokens.has(work.id)) {
               let sessionId_2 = toCompatSessionId(sessionId);
-              let dt = !Ce.has(sessionIdBody(sessionId));
-              let nt = dt
+              let tagsUnknown = !knownSessionBodies.has(sessionIdBody(sessionId));
+              let sessionTags = tagsUnknown
                 ? await fetchBridgeSessionTags(sessionId_2, {
                     baseUrl: config.apiBaseUrl,
                     getAccessToken,
                   })
                 : null;
-              if (!dt || nt !== null) sessionIngressTokens.add(r.id);
-              let ft = nt?.createdAtMs === undefined ? undefined : Date.now() - nt.createdAtMs;
+              if (!tagsUnknown || sessionTags !== null) sessionIngressTokens.add(work.id);
+              let sessionAgeMs =
+                sessionTags?.createdAtMs === undefined ? undefined : Date.now() - sessionTags.createdAtMs;
               if (loopSignal.aborted);
-              else if (sessionStartTimes.size < config.maxSessions) pe = true;
+              else if (sessionStartTimes.size < config.maxSessions) capacityFreed = true;
               else if (
-                nt !== null &&
-                ft !== undefined &&
-                ft >= 0 &&
-                ft < STATUS_UPDATE_INTERVAL_MS &&
-                classifyBridgeSessionRoles(nt.tags).projectThreadChild
+                sessionTags !== null &&
+                sessionAgeMs !== undefined &&
+                sessionAgeMs >= 0 &&
+                sessionAgeMs < STATUS_UPDATE_INTERVAL_MS &&
+                classifyBridgeSessionRoles(sessionTags.tags).projectThreadChild
               ) {
                 logger.logError(
                   `Declined session ${sessionId_2}: already running ${sessionStartTimes.size} of ${config.maxSessions} sessions.`,
                 );
                 logFeatureBad("bridge_work_pickup", "at_capacity_declined");
-                sessionTimers.add(r.id);
-                completedWorkIds_2.add(r.id);
+                sessionTimers.add(work.id);
+                completedWorkIds_2.add(work.id);
                 trackBackgroundOp(
                   stopWorkWithRetry(
                     trackedApi,
                     environmentId,
-                    r.id,
+                    work.id,
                     currentEnvironmentSecret,
                     logger,
                     backoff.stopWorkBaseDelayMs,
                   )
-                    .then(() => Promise.all([import("./chunk-3eyvtwsv.js"), getAccessToken?.()]))
-                    .then(([{ markBridgeSessionRefusedAtCapacity: wt }, Kt]) =>
-                      wt(sessionId_2, config.machineName, {
+                    .then(() => Promise.all([import("./createSession.js"), getAccessToken?.()]))
+                    .then(([{ markBridgeSessionRefusedAtCapacity: refuseAtCapacity }, accessToken]) =>
+                      refuseAtCapacity(sessionId_2, config.machineName, {
                         baseUrl: config.apiBaseUrl,
-                        ...(Kt && {
-                          getAccessToken: () => Kt,
+                        ...(accessToken && {
+                          getAccessToken: () => accessToken,
                         }),
                       }),
                     )
-                    .then((wt) => (wt === "landed" ? trackedApi.archiveSession(sessionId_2) : undefined))
+                    .then((archiveResult) =>
+                      archiveResult === "landed" ? trackedApi.archiveSession(sessionId_2) : undefined,
+                    )
                     .catch((error) =>
                       logger.logVerbose(
                         `Could not end declined session ${sessionId_2}: ${errorMessage(error)}`,
                       ),
                     )
-                    .finally(() => sessionTimers.delete(r.id)),
+                    .finally(() => sessionTimers.delete(work.id)),
                 );
               } else
                 logFeatureSad("bridge_work_pickup", "at_capacity", {
@@ -2153,30 +2586,34 @@ async function runBridgeLoop(
                   max_sessions: config.maxSessions,
                 });
             }
-            if (!pe) break;
+            if (!capacityFreed) break;
           }
           await ackWork();
-          De(sessionId);
-          sessionIngressTokens.delete(r.id);
+          seedHeartbeat(sessionId);
+          sessionIngressTokens.delete(work.id);
           let spawnStartTime = Date.now();
           let compatSessionId = toCompatSessionId(sessionId);
-          let Ze;
+          let sessionRecord;
           if (machineLaneVersionRefusal() !== null) {
-            let sessionRecordWithRetry = await fetchSessionRecordWithRetry(compatSessionId);
-            if (sessionRecordWithRetry === null && loopSignal.aborted) break;
-            let ge = machineLaneVersionRefusal();
-            if (ge?.reason === "floor_unanswered" && isMachineLaneWork(sessionRecordWithRetry, ge)) {
+            let tags = await fetchSessionRecordWithRetry(compatSessionId);
+            if (tags === null && loopSignal.aborted) break;
+            let versionRefusal = machineLaneVersionRefusal();
+            if (versionRefusal?.reason === "floor_unanswered" && isMachineLaneWork(tags, versionRefusal)) {
               logForDebugging(
-                `[bridge:work] Holding sessionId=${sessionId} workId=${r.id}: version floor not received, refreshing flags`,
+                `[bridge:work] Holding sessionId=${sessionId} workId=${work.id}: version floor not received, refreshing flags`,
               );
-              ge = await machineLaneVersionRefusalAfterHold(ge, loopSignal, Oe);
+              versionRefusal = await machineLaneVersionRefusalAfterHold(
+                versionRefusal,
+                loopSignal,
+                refreshHold,
+              );
               if (loopSignal.aborted) {
-                completedWorkIds_2.add(r.id);
+                completedWorkIds_2.add(work.id);
                 trackBackgroundOp(
                   stopWorkWithRetry(
                     trackedApi,
                     environmentId,
-                    r.id,
+                    work.id,
                     currentEnvironmentSecret,
                     logger,
                     backoff.stopWorkBaseDelayMs,
@@ -2185,27 +2622,27 @@ async function runBridgeLoop(
                 break;
               }
               logForDebugging(
-                `[bridge:work] Held sessionId=${sessionId} workId=${r.id}: ${ge?.reason ?? "admitted"}`,
+                `[bridge:work] Held sessionId=${sessionId} workId=${work.id}: ${versionRefusal?.reason ?? "admitted"}`,
               );
-              if (ge === null) logFeatureSad("bridge_machine_lane_floor", "held_then_admitted");
+              if (versionRefusal === null) logFeatureSad("bridge_machine_lane_floor", "held_then_admitted");
             }
-            if (ge !== null && isMachineLaneWork(sessionRecordWithRetry, ge)) {
+            if (versionRefusal !== null && isMachineLaneWork(tags, versionRefusal)) {
               logger.logError(
-                sessionRecordWithRetry === null
-                  ? `Declined session ${compatSessionId}: its record could not be read. ${ge.message}`
-                  : `Declined session ${compatSessionId}: ${ge.message}`,
+                tags === null
+                  ? `Declined session ${compatSessionId}: its record could not be read. ${versionRefusal.message}`
+                  : `Declined session ${compatSessionId}: ${versionRefusal.message}`,
               );
               logFeatureBad(
                 "bridge_machine_lane_floor",
-                sessionRecordWithRetry === null ? `session_unread_${ge.reason}` : ge.reason,
+                tags === null ? `session_unread_${versionRefusal.reason}` : versionRefusal.reason,
               );
               logFeatureBad("bridge_work_pickup", "version_floor");
-              completedWorkIds_2.add(r.id);
+              completedWorkIds_2.add(work.id);
               trackBackgroundOp(
                 stopWorkWithRetry(
                   trackedApi,
                   environmentId,
-                  r.id,
+                  work.id,
                   currentEnvironmentSecret,
                   logger,
                   backoff.stopWorkBaseDelayMs,
@@ -2213,15 +2650,15 @@ async function runBridgeLoop(
               );
               break;
             }
-            Ze = sessionRecordWithRetry;
+            sessionRecord = tags;
           }
           let sessionUrl = buildCCRv2SdkUrl(config.apiBaseUrl, sessionId);
-          let yt;
+          let workerEpoch;
           for (let attempt = 1; attempt <= REGISTER_WORKER_MAX_ATTEMPTS; attempt++)
             try {
-              yt = await registerWorker(sessionUrl, ae.session_ingress_token);
+              workerEpoch = await registerWorker(sessionUrl, workSecret.session_ingress_token);
               logForDebugging(
-                `[bridge:session] CCR v2: registered worker sessionId=${sessionId} epoch=${yt} attempt=${attempt}`,
+                `[bridge:session] CCR v2: registered worker sessionId=${sessionId} epoch=${workerEpoch} attempt=${attempt}`,
               );
               logFeatureOk("bridge_register_worker", {
                 attempt,
@@ -2230,12 +2667,12 @@ async function runBridgeLoop(
             } catch (err) {
               let errMsg = errorMessage(err);
               let { kind, status } = classifyAxiosError(err);
-              let wt = status === undefined || status === 408 || status === 429 || status >= 500;
-              if (attempt < REGISTER_WORKER_MAX_ATTEMPTS && wt && !loopSignal.aborted) {
+              let retryable = status === undefined || status === 408 || status === 429 || status >= 500;
+              if (attempt < REGISTER_WORKER_MAX_ATTEMPTS && retryable && !loopSignal.aborted) {
                 logForDebugging(
                   `[bridge:session] CCR v2: registerWorker attempt ${attempt} failed, retrying: ${errMsg}`,
                 );
-                if (attempt === 1 && sessionStartTimes.size > 0 && dn()) await Nt();
+                if (attempt === 1 && sessionStartTimes.size > 0 && heartbeatsEnabled()) await heartbeatNow();
                 await sleep(
                   backoffDelayMs({
                     attempt,
@@ -2250,12 +2687,12 @@ async function runBridgeLoop(
                 if (!loopSignal.aborted) continue;
               }
               if (loopSignal.aborted) {
-                completedWorkIds_2.add(r.id);
+                completedWorkIds_2.add(work.id);
                 trackBackgroundOp(
                   stopWorkWithRetry(
                     trackedApi,
                     environmentId,
-                    r.id,
+                    work.id,
                     currentEnvironmentSecret,
                     logger,
                     backoff.stopWorkBaseDelayMs,
@@ -2274,12 +2711,12 @@ async function runBridgeLoop(
                 logError(
                   withTelemetryMessage(Error(`registerWorker failed: ${errMsg}`), "registerWorker failed"),
                 );
-              completedWorkIds_2.add(r.id);
+              completedWorkIds_2.add(work.id);
               trackBackgroundOp(
                 stopWorkWithRetry(
                   trackedApi,
                   environmentId,
-                  r.id,
+                  work.id,
                   currentEnvironmentSecret,
                   logger,
                   backoff.stopWorkBaseDelayMs,
@@ -2287,22 +2724,25 @@ async function runBridgeLoop(
               );
               break;
             }
-          if (yt === undefined) break;
+          if (workerEpoch === undefined) break;
           let spawnModeAtDecision = config.spawnMode;
-          let Et = isBridgeServerSessionConfigEnabled();
-          let Lt = Et && ae.worktree === true;
-          let at = spawnModeAtDecision === "worktree";
-          if (Lt && !at) {
-            at = hasWorktreeCreateHook() || findGitRootRecheckingNegative(config.dir) !== null;
-            if (!at)
+          let serverConfigEnabled = isBridgeServerSessionConfigEnabled();
+          let worktreeRequestedFromServer = serverConfigEnabled && workSecret.worktree === true;
+          let useWorktree = spawnModeAtDecision === "worktree";
+          if (worktreeRequestedFromServer && !useWorktree) {
+            useWorktree = hasWorktreeCreateHook() || findGitRootRecheckingNegative(config.dir) !== null;
+            if (!useWorktree)
               logger.logStatus(
                 `session ${sessionId} asked for a worktree \xB7 ${config.dir} is not a git repository, running there`,
               );
           }
           let sessionDir = config.dir;
-          let En = false;
+          let usedAdHocWorktree = false;
           let worktreeCreateMs = 0;
-          if (at && (initialSessionId === undefined || !sameSessionId(sessionId, initialSessionId))) {
+          if (
+            useWorktree &&
+            (initialSessionId === undefined || !sameSessionId(sessionId, initialSessionId))
+          ) {
             let wtStart = Date.now();
             try {
               let agentWorktree = await createAgentWorktree(`bridge-${safeFilenameId(sessionId)}`, {
@@ -2319,7 +2759,7 @@ async function runBridgeLoop(
                 sessionDir: agentWorktree.sessionDir,
               });
               sessionDir = agentWorktree.worktreePath;
-              En = !agentWorktree.hookBased;
+              usedAdHocWorktree = !agentWorktree.hookBased;
               logForDebugging(
                 `[bridge:session] Created worktree for sessionId=${sessionId} at ${agentWorktree.worktreePath}`,
               );
@@ -2330,12 +2770,12 @@ async function runBridgeLoop(
                 level: "error",
               });
               logFeatureBad("bridge_work_pickup", "worktree_create_failed");
-              completedWorkIds_2.add(r.id);
+              completedWorkIds_2.add(work.id);
               trackBackgroundOp(
                 stopWorkWithRetry(
                   trackedApi,
                   environmentId,
-                  r.id,
+                  work.id,
                   currentEnvironmentSecret,
                   logger,
                   backoff.stopWorkBaseDelayMs,
@@ -2344,25 +2784,33 @@ async function runBridgeLoop(
               break;
             }
           }
-          let Zn;
+          let sourceDir;
           logForDebugging(`[bridge:session] Spawning sessionId=${sessionId} sdkUrl=${sessionUrl}`);
-          let On = ++Ae;
-          lt.set(sessionId, On);
-          let Tn = 0;
-          let Bn = false;
-          let er = false;
-          er = isRcChildRestartResumeEnabled();
-          if (config.spawnMode !== "single-session") Tn = getBridgeRcChildIdleExitMs();
-          Bn = Boolean(ae.auto_mode_environment?.length) && Et;
-          let tr = hasBridgeChildFeatureEnabled("spawn") || Tn > 0 || er || Bn;
-          let Wn = tr ? (Ze !== undefined ? Ze : await fetchSessionRecordWithRetry(compatSessionId)) : null;
-          if (tr && Wn === null && loopSignal.aborted) {
-            completedWorkIds_2.add(r.id);
+          let spawnEpoch = ++spawnEpochCounter;
+          sessionSpawnEpochs.set(sessionId, spawnEpoch);
+          let idleExitAfterMs = 0;
+          let hasAutoModeEnvironment = false;
+          let rcChildRestartResume = false;
+          rcChildRestartResume = isRcChildRestartResumeEnabled();
+          if (config.spawnMode !== "single-session") idleExitAfterMs = getBridgeRcChildIdleExitMs();
+          hasAutoModeEnvironment = Boolean(workSecret.auto_mode_environment?.length) && serverConfigEnabled;
+          let needsSessionTags =
+            hasBridgeChildFeatureEnabled("spawn") ||
+            idleExitAfterMs > 0 ||
+            rcChildRestartResume ||
+            hasAutoModeEnvironment;
+          let sessionRecordForRoles = needsSessionTags
+            ? sessionRecord !== undefined
+              ? sessionRecord
+              : await fetchSessionRecordWithRetry(compatSessionId)
+            : null;
+          if (needsSessionTags && sessionRecordForRoles === null && loopSignal.aborted) {
+            completedWorkIds_2.add(work.id);
             trackBackgroundOp(
               stopWorkWithRetry(
                 trackedApi,
                 environmentId,
-                r.id,
+                work.id,
                 currentEnvironmentSecret,
                 logger,
                 backoff.stopWorkBaseDelayMs,
@@ -2370,78 +2818,80 @@ async function runBridgeLoop(
             );
             break;
           }
-          let compatSessionId_2 = classifyBridgeSessionRoles(Wn);
+          let compatSessionId_2 = classifyBridgeSessionRoles(sessionRecordForRoles);
           let { rcChild, projectThreadChild } = compatSessionId_2;
-          let idleExitAfterMs = Tn > 0 && projectThreadChild ? Tn : 0;
+          let idleExitAfterMs_2 = idleExitAfterMs > 0 && projectThreadChild ? idleExitAfterMs : 0;
           let dropAutoModeEnvironment;
-          if (Bn && !projectThreadChild)
-            dropAutoModeEnvironment = Wn === null ? "session_tags_unread" : "session_untagged";
-          let Nn = await applyBridgeServerConfig(ae, {
+          if (hasAutoModeEnvironment && !projectThreadChild)
+            dropAutoModeEnvironment =
+              sessionRecordForRoles === null ? "session_tags_unread" : "session_untagged";
+          let serverConfig = await applyBridgeServerConfig(workSecret, {
             sessionId,
             apiBaseUrl: config.apiBaseUrl,
-            enabled: Et,
+            enabled: serverConfigEnabled,
             dropAutoModeEnvironment,
           });
-          let modelArgs = Nn === undefined ? carriedModelArgs(ae.claude_code_args) : [];
-          let sr = st.has(sessionIdBody(sessionId));
+          let modelArgs = serverConfig === undefined ? carriedModelArgs(workSecret.claude_code_args) : [];
+          let boundResumedTurn = boundedResumeBodies.has(sessionIdBody(sessionId));
           let spawnResult = safeSpawn(
             sessionSpawner,
             {
               sessionId,
               sdkUrl: sessionUrl,
-              accessToken: ae.session_ingress_token,
-              workerEpoch: yt,
-              serverConfig: Nn,
+              accessToken: workSecret.session_ingress_token,
+              workerEpoch,
+              serverConfig,
               modelArgs,
               roles: compatSessionId_2,
-              boundResumedTurn: sr,
-              idleExitAfterMs,
-              ...(Zn !== undefined && {
-                sourceDir: Zn,
+              boundResumedTurn,
+              idleExitAfterMs: idleExitAfterMs_2,
+              ...(sourceDir !== undefined && {
+                sourceDir,
               }),
               onActivity: (text) => {
                 switch (text.type) {
                   case "tool_start":
                   case "text":
-                    mt(sessionId, true);
+                    markSessionBusy(sessionId, true);
                     break;
                   case "result":
                   case "error":
-                    mt(sessionId, false);
+                    markSessionBusy(sessionId, false);
                     break;
                 }
               },
               onFirstUserMessage: (text) => {
-                if (ke.has(compatSessionId)) return;
-                ke.add(compatSessionId);
-                let ge = truncateToWidth(text.replace(/\s+/g, " ").trim(), TITLE_MAX_CHARS);
-                logger.setSessionTitle(compatSessionId, ge);
-                logForDebugging(`[bridge:title] derived title for ${compatSessionId}: ${ge}`);
-                import("./chunk-3eyvtwsv.js")
+                if (titleSettledSessions.has(compatSessionId)) return;
+                titleSettledSessions.add(compatSessionId);
+                let derivedTitle = truncateToWidth(text.replace(/\s+/g, " ").trim(), TITLE_MAX_CHARS);
+                logger.setSessionTitle(compatSessionId, derivedTitle);
+                logForDebugging(`[bridge:title] derived title for ${compatSessionId}: ${derivedTitle}`);
+                import("./createSession.js")
                   .then(async ({ getBridgeSession }) => {
-                    Ge ??= createTitleWriteCoalescer({
-                      isOwnTitle: (wt, Kt) => sessionTitleCandidates.get(wt)?.has(Kt) ?? false,
-                      onRemoteTitleAdopted: (wt, Kt) => logger.setSessionTitle(wt, Kt),
+                    titleWriteCoalescer ??= createTitleWriteCoalescer({
+                      isOwnTitle: (sessionId, title) =>
+                        sessionTitleCandidates.get(sessionId)?.has(title) ?? false,
+                      onRemoteTitleAdopted: (sessionId, title) => logger.setSessionTitle(sessionId, title),
                     });
                     let bridgeSession = await getBridgeSession(compatSessionId, {
                       baseUrl: config.apiBaseUrl,
                     });
-                    if (bridgeSession === null || lt.get(sessionId) !== On) return;
+                    if (bridgeSession === null || sessionSpawnEpochs.get(sessionId) !== spawnEpoch) return;
                     let wt = sessionTitleCandidates.get(compatSessionId);
                     if (
                       bridgeSession.title &&
                       !wt?.has(bridgeSession.title) &&
-                      !Ge.hasSent(compatSessionId, bridgeSession.title)
+                      !titleWriteCoalescer.hasSent(compatSessionId, bridgeSession.title)
                     ) {
                       logger.setSessionTitle(compatSessionId, bridgeSession.title);
-                      Ge.noteRemoteTitle(compatSessionId, bridgeSession.title);
+                      titleWriteCoalescer.noteRemoteTitle(compatSessionId, bridgeSession.title);
                       logForDebugging(
                         `[bridge:title] remote rename for ${compatSessionId}: ${bridgeSession.title}`,
                       );
                       return;
                     }
-                    sessionTitleCandidates.set(compatSessionId, (wt ?? new Set()).add(ge));
-                    await Ge.update(compatSessionId, ge, {
+                    sessionTitleCandidates.set(compatSessionId, (wt ?? new Set()).add(derivedTitle));
+                    await titleWriteCoalescer.update(compatSessionId, derivedTitle, {
                       baseUrl: config.apiBaseUrl,
                     });
                   })
@@ -2457,7 +2907,7 @@ async function runBridgeLoop(
           if (typeof spawnResult === "string") {
             logger.logError(`Failed to spawn session ${sessionId}: ${spawnResult}`);
             logFeatureBad("bridge_work_pickup", "spawn_failed");
-            trackBackgroundOp(cleanupServerConfigDir(Nn));
+            trackBackgroundOp(cleanupServerConfigDir(serverConfig));
             let worktree = sessionHeartbeatState.get(sessionId);
             if (worktree) {
               sessionHeartbeatState.delete(sessionId);
@@ -2468,12 +2918,12 @@ async function runBridgeLoop(
                 }),
               );
             }
-            completedWorkIds_2.add(r.id);
+            completedWorkIds_2.add(work.id);
             trackBackgroundOp(
               stopWorkWithRetry(
                 trackedApi,
                 environmentId,
-                r.id,
+                work.id,
                 currentEnvironmentSecret,
                 logger,
                 backoff.stopWorkBaseDelayMs,
@@ -2489,37 +2939,37 @@ async function runBridgeLoop(
             active_sessions: sessionStartTimes.size,
             spawn_mode: fromEnum(spawnModeAtDecision),
             in_worktree: sessionHeartbeatState.has(sessionId),
-            worktree_requested: Lt,
+            worktree_requested: worktreeRequestedFromServer,
             spawn_duration_ms: spawnDurationMs,
             worktree_create_ms: worktreeCreateMs,
             rc_child: rcChild,
             project_thread: projectThreadChild,
-            resumed_turn: sr,
+            resumed_turn: boundResumedTurn,
             inProtectedNamespace: isEvalBuild(),
             ...cooAttributes(),
           });
           logForDiagnosticsNoPII("info", "bridge_session_started", {
             spawn_mode: spawnModeAtDecision,
             in_worktree: sessionHeartbeatState.has(sessionId),
-            worktree_requested: Lt,
+            worktree_requested: worktreeRequestedFromServer,
             spawn_duration_ms: spawnDurationMs,
             worktree_create_ms: worktreeCreateMs,
           });
           sessionStartTimes.set(sessionId, handle);
-          Ce.add(sessionIdBody(sessionId));
+          knownSessionBodies.add(sessionIdBody(sessionId));
           for (let parkedProjectThreadId of parkedProjectThreadIds)
             if (sessionIdBody(parkedProjectThreadId) === sessionIdBody(sessionId))
               parkedProjectThreadIds.delete(parkedProjectThreadId);
           if (projectThreadChild) {
             sessionCompatIds.add(sessionId);
-            Ie = true;
+            servesProjectThread = true;
           }
           settleRequeue(sessionId, false);
           config.onSessionServiced?.(sessionId);
-          sessionWorktrees.set(sessionId, r.id);
+          sessionWorktrees.set(sessionId, work.id);
           timedOutSessions.set(sessionId, compatSessionId);
-          qe.delete(sessionId);
-          Se.delete(sessionDir);
+          failedSessionIds.delete(sessionId);
+          keptWorktreePaths.delete(sessionDir);
           let startTime = Date.now();
           completedWorkIds.set(sessionId, startTime);
           logger.logSessionStart(sessionId, `Session ${sessionId}`);
@@ -2542,10 +2992,15 @@ async function runBridgeLoop(
           logger.setAttached(compatSessionId);
           fetchSessionTitle(compatSessionId, config.apiBaseUrl)
             .then((title) => {
-              if (title && lt.get(sessionId) === On && !ke.has(compatSessionId)) {
+              if (
+                title &&
+                sessionSpawnEpochs.get(sessionId) === spawnEpoch &&
+                !titleSettledSessions.has(compatSessionId)
+              ) {
                 logger.setSessionTitle(compatSessionId, title);
                 logForDebugging(`[bridge:title] server title for ${compatSessionId}: ${title}`);
-                if (!sessionTitleCandidates.get(compatSessionId)?.has(title)) ke.add(compatSessionId);
+                if (!sessionTitleCandidates.get(compatSessionId)?.has(title))
+                  titleSettledSessions.add(compatSessionId);
               }
             })
             .catch((err) =>
@@ -2553,7 +3008,7 @@ async function runBridgeLoop(
                 level: "error",
               }),
             );
-          tokenRefresh?.schedule(sessionId, ae.session_ingress_token);
+          tokenRefresh?.schedule(sessionId, workSecret.session_ingress_token);
           handle.done.then(onSessionDone(sessionId, startTime, handle));
           break;
         }
@@ -2562,89 +3017,93 @@ async function runBridgeLoop(
           logForDebugging(`[bridge:work] Unknown work type: ${workType}, skipping`);
           break;
       }
-      if (F) await trackCleanup(pollConfig);
+      if (atCapacity) await trackCleanup(pollConfig);
     } catch (error) {
       if (loopSignal.aborted) break;
       if (error instanceof BridgeFatalError) {
-        let v = pn(error);
-        let y;
-        if (v !== undefined) {
-          Be = fromEnum(v);
-          re = true;
+        let fatalReregisterTrigger = classifyReregisterTrigger(error);
+        let reregisterOutcome;
+        if (fatalReregisterTrigger !== undefined) {
+          reregisterTrigger = fromEnum(fatalReregisterTrigger);
+          reregisterOwnsSecret = true;
           let now = Date.now();
           while (pendingCleanups.length > 0 && pendingCleanups[0] < now - 3600000) pendingCleanups.shift();
           while (pendingCleanups.length > 0 && pendingCleanups.at(-1) > now) pendingCleanups.pop();
           if (
-            v === "poll_401" &&
+            fatalReregisterTrigger === "poll_401" &&
             reregisterAttempts < RENEW_MAX_ATTEMPTS &&
             pendingCleanups.length >= RENEW_MAX_JITTER_PCT
           ) {
-            let F = pendingCleanups[0] + 3600000 + Math.random() * backoff.connCapMs;
-            if (ze === undefined || now - ze >= 3600000) {
-              ze = now;
-              let max = Math.max(1, Math.ceil((F - now) / 60000));
-              let ae = max === 1 ? "minute" : "minutes";
+            let pausedUntil = pendingCleanups[0] + 3600000 + Math.random() * backoff.connCapMs;
+            if (lastPauseLoggedAt === undefined || now - lastPauseLoggedAt >= 3600000) {
+              lastPauseLoggedAt = now;
+              let max = Math.max(1, Math.ceil((pausedUntil - now) / 60000));
+              let minuteWord = max === 1 ? "minute" : "minutes";
               logForDebugging(
-                `[bridge:poll] Pausing re-registration of environment ${environmentId}: ${pendingCleanups.length} re-registrations after poll 401s in the last hour (the hourly cap); resuming in about ${max} ${ae}`,
+                `[bridge:poll] Pausing re-registration of environment ${environmentId}: ${pendingCleanups.length} re-registrations after poll 401s in the last hour (the hourly cap); resuming in about ${max} ${minuteWord}`,
                 {
                   level: "warn",
                 },
               );
               logger.logWarning(
-                `The server keeps rejecting this computer's Remote Control credential, so Remote Control will wait about ${max} ${ae} before renewing it again. New sessions can't start here until the server accepts it.`,
+                `The server keeps rejecting this computer's Remote Control credential, so Remote Control will wait about ${max} ${minuteWord} before renewing it again. New sessions can't start here until the server accepts it.`,
               );
               logEvent("tengu_bridge_env_reregister", {
                 attempt: reregisterAttempts,
                 outcome: lit("paused"),
-                trigger: fromEnum(v),
+                trigger: fromEnum(fatalReregisterTrigger),
               });
               logFeatureSad("bridge_env_reregister", "paused");
             }
-            if (sessionStartTimes.size > 0 && dn()) await Nt();
+            if (sessionStartTimes.size > 0 && heartbeatsEnabled()) await heartbeatNow();
             await sleep(
-              jitterDelay(Math.min(Math.max(F - now, backoff.connInitialMs), backoff.connCapMs)),
+              jitterDelay(Math.min(Math.max(pausedUntil - now, backoff.connInitialMs), backoff.connCapMs)),
               loopSignal,
             );
             continue;
           }
           if (reregisterAttempts < RENEW_MAX_ATTEMPTS) {
             reregisterAttempts++;
-            if (v === "poll_401") pendingCleanups.push(now);
+            if (fatalReregisterTrigger === "poll_401") pendingCleanups.push(now);
             logger.logVerbose(
-              `${v === "poll_401" ? "This environment's Remote Control credential expired or was rejected; renewing it" : "Server no longer has this environment \u2014 re-registering"} (attempt ${reregisterAttempts}/${RENEW_MAX_ATTEMPTS})`,
+              `${fatalReregisterTrigger === "poll_401" ? "This environment's Remote Control credential expired or was rejected; renewing it" : "Server no longer has this environment \u2014 re-registering"} (attempt ${reregisterAttempts}/${RENEW_MAX_ATTEMPTS})`,
             );
-            let F = await reregisterEnvironment({
+            let reregisterResult = await reregisterEnvironment({
               api: trackedApi,
               config,
               environmentId,
               activeSessions: sessionStartTimes,
               attempt: reregisterAttempts,
-              trigger: v,
+              trigger: fatalReregisterTrigger,
               signal: loopSignal,
             });
-            if (F.outcome === "reregistered") E(F);
+            if (reregisterResult.outcome === "reregistered") applyReregistration(reregisterResult);
             if (loopSignal.aborted) break;
-            if (F.outcome === "fatal") y = F;
+            if (reregisterResult.outcome === "fatal") reregisterOutcome = reregisterResult;
             else {
-              if (F.outcome === "transient") Ke = true;
+              if (reregisterResult.outcome === "transient") reregisterTransientSeen = true;
               logger.logVerbose(
-                F.outcome === "reregistered"
+                reregisterResult.outcome === "reregistered"
                   ? "Environment re-registered; resuming poll."
                   : "Re-registration failed; retrying after backoff.",
               );
-              if (v === "poll_401" && sessionStartTimes.size > 0 && dn()) await Nt();
+              if (fatalReregisterTrigger === "poll_401" && sessionStartTimes.size > 0 && heartbeatsEnabled())
+                await heartbeatNow();
               watchScheduler.expectWork();
               await sleep(
                 Math.max(
                   jitterDelay(
-                    (v === "poll_401"
+                    (fatalReregisterTrigger === "poll_401"
                       ? Math.max(
                           backoff.connInitialMs,
                           backoff.reregister401BackoffFloorMs ?? SHUTDOWN_GRACE_MS,
                         )
                       : backoff.connInitialMs) * reregisterAttempts,
                   ),
-                  Math.min(F.outcome === "transient" ? (F.retryAfterMs ?? 0) : 0, backoff.connCapMs),
+                  Math.min(
+                    reregisterResult.outcome === "transient" ? (reregisterResult.retryAfterMs ?? 0) : 0,
+                    backoff.connCapMs,
+                  ),
                 ),
                 loopSignal,
               );
@@ -2660,45 +3119,45 @@ async function runBridgeLoop(
             logEvent("tengu_bridge_env_reregister", {
               attempt: reregisterAttempts,
               outcome: lit("gave_up"),
-              trigger: fromEnum(v),
+              trigger: fromEnum(fatalReregisterTrigger),
             });
             logFeatureBad("bridge_env_reregister", "gave_up");
-            y = {
+            reregisterOutcome = {
               reason: "gave_up",
-              preserve: v === "poll_401" && Ke,
+              preserve: fatalReregisterTrigger === "poll_401" && reregisterTransientSeen,
             };
           }
         }
-        let preserve = y?.reason === "gave_up" && y.preserve;
+        let preserve = reregisterOutcome?.reason === "gave_up" && reregisterOutcome.preserve;
         gaveUp = !preserve;
         if (preserve) controller.abort();
         if (error.status !== 401 && isExpiredErrorType(error.errorType))
           logger.logStatus(withReconnectHint(error.message));
         else if (
-          v === "poll_401" &&
-          y !== undefined &&
-          !(y.reason === "register_rejected" && y.status === 401)
+          fatalReregisterTrigger === "poll_401" &&
+          reregisterOutcome !== undefined &&
+          !(reregisterOutcome.reason === "register_rejected" && reregisterOutcome.status === 401)
         ) {
-          let r;
-          switch (y.reason) {
+          let fatalMessage;
+          switch (reregisterOutcome.reason) {
             case "register_rejected":
-              r = `Remote Control stopped: the server refused to reconnect this computer. ${y.message}`;
+              fatalMessage = `Remote Control stopped: the server refused to reconnect this computer. ${reregisterOutcome.message}`;
               break;
             case "replaced":
-              r =
+              fatalMessage =
                 "Remote Control could not renew this environment's credential: the server issued a new environment instead. Restart `claude remote-control` to start fresh.";
               break;
             case "gave_up":
-              r = `Remote Control could not renew this environment's credential after repeated attempts.${preserve && config.preserveOnShutdown ? "" : " Restart `claude remote-control` to start fresh."}`;
+              fatalMessage = `Remote Control could not renew this environment's credential after repeated attempts.${preserve && config.preserveOnShutdown ? "" : " Restart `claude remote-control` to start fresh."}`;
               break;
           }
-          logger.logError(r);
+          logger.logError(fatalMessage);
           logForDebugging(`[bridge:work] Fatal bridge error: ${error.message}`, {
             level: "error",
           });
         } else if (isSuppressibleError(error))
           logForDebugging(`[bridge:work] Suppressed 403 error: ${error.message}`);
-        else if (isEnvironmentGoneError(error) && qe.size > 0) Sn();
+        else if (isEnvironmentGoneError(error) && failedSessionIds.size > 0) reportOfflineCleanup();
         else {
           logger.logError(error.message);
           logForDebugging(`[bridge:work] Fatal bridge error: ${error.message}`, {
@@ -2734,12 +3193,12 @@ async function runBridgeLoop(
         lastPollErrorTime = now;
         if (!connErrorStart) connErrorStart = now;
         let elapsed = now - connErrorStart;
-        let R = Ie && isRcChildRestartResumeEnabled();
-        if (elapsed >= backoff.connGiveUpMs && R)
+        let keepRetryingForProjectThread = servesProjectThread && isRcChildRestartResumeEnabled();
+        if (elapsed >= backoff.connGiveUpMs && keepRetryingForProjectThread)
           logger.logVerbose(
             `Server unreachable for ${Math.round(elapsed / 60000)} minutes; still retrying while a project thread session is being served`,
           );
-        if (elapsed >= backoff.connGiveUpMs && !R) {
+        if (elapsed >= backoff.connGiveUpMs && !keepRetryingForProjectThread) {
           logger.logError(`Server unreachable for ${Math.round(elapsed / 60000)} minutes, giving up.`);
           logEvent("tengu_bridge_poll_give_up", {
             error_type: lit("connection"),
@@ -2759,10 +3218,10 @@ async function runBridgeLoop(
           : backoff.connInitialMs;
         let delay = jitterDelay(connBackoffMs);
         logger.logVerbose(
-          `Connection error, retrying in ${formatMs(Gt(delay))} (${Math.round(elapsed / 1000)}s elapsed): ${errMsg}`,
+          `Connection error, retrying in ${formatMs(respectWatchDelay(delay))} (${Math.round(elapsed / 1000)}s elapsed): ${errMsg}`,
         );
-        logger.updateReconnectingStatus(formatMs(Gt(delay)), formatDuration(elapsed));
-        if (getPollIntervalConfig().non_exclusive_heartbeat_interval_ms > 0) await Vt();
+        logger.updateReconnectingStatus(formatMs(respectWatchDelay(delay)), formatDuration(elapsed));
+        if (getPollIntervalConfig().non_exclusive_heartbeat_interval_ms > 0) await heartbeatSessions();
         await sleep(delay, loopSignal);
       } else {
         let now = Date.now();
@@ -2781,12 +3240,12 @@ async function runBridgeLoop(
         lastPollErrorTime = now;
         if (!generalErrorStart) generalErrorStart = now;
         let elapsed = now - generalErrorStart;
-        let R = Ie && isRcChildRestartResumeEnabled();
-        if (elapsed >= backoff.generalGiveUpMs && R)
+        let keepRetryingForProjectThread = servesProjectThread && isRcChildRestartResumeEnabled();
+        if (elapsed >= backoff.generalGiveUpMs && keepRetryingForProjectThread)
           logger.logVerbose(
             `Persistent errors for ${Math.round(elapsed / 60000)} minutes; still retrying while a project thread session is being served`,
           );
-        if (elapsed >= backoff.generalGiveUpMs && !R) {
+        if (elapsed >= backoff.generalGiveUpMs && !keepRetryingForProjectThread) {
           logger.logError(`Persistent errors for ${Math.round(elapsed / 60000)} minutes, giving up.`);
           logEvent("tengu_bridge_poll_give_up", {
             error_type: lit("general"),
@@ -2806,15 +3265,15 @@ async function runBridgeLoop(
           : backoff.generalInitialMs;
         let delay = jitterDelay(generalBackoffMs);
         logger.logVerbose(
-          `Poll failed, retrying in ${formatMs(Gt(delay))} (${Math.round(elapsed / 1000)}s elapsed): ${errMsg}`,
+          `Poll failed, retrying in ${formatMs(respectWatchDelay(delay))} (${Math.round(elapsed / 1000)}s elapsed): ${errMsg}`,
         );
-        logger.updateReconnectingStatus(formatMs(Gt(delay)), formatDuration(elapsed));
-        if (getPollIntervalConfig().non_exclusive_heartbeat_interval_ms > 0) await Vt();
+        logger.updateReconnectingStatus(formatMs(respectWatchDelay(delay)), formatDuration(elapsed));
+        if (getPollIntervalConfig().non_exclusive_heartbeat_interval_ms > 0) await heartbeatSessions();
         await sleep(delay, loopSignal);
       }
     }
   }
-  vn();
+  unsubscribePolicy();
   sessionsWatcher?.stop();
   stopStatusUpdates();
   logger.clearStatus({
@@ -2830,24 +3289,27 @@ async function runBridgeLoop(
     loop_duration_ms: loopDurationMs,
   });
   let sessionsToArchive = new Set(sessionStartTimes.keys());
-  if (initialSessionId && ![...qe].some((n) => sameSessionId(n, initialSessionId)))
+  if (
+    initialSessionId &&
+    ![...failedSessionIds].some((failedSessionId) => sameSessionId(failedSessionId, initialSessionId))
+  )
     sessionsToArchive.add(initialSessionId);
   let compatIdSnapshot = new Map(timedOutSessions);
   await (async () => {
     if (sessionStartTimes.size === 0 && pendingRequeues.size === 0) return;
-    let n =
+    let shutdownCause =
       config.persistActiveSessionsOnShutdown && config.preserveOnShutdown && !gaveUp && config.ownsPointer
         ? await config.awaitShutdownCause?.()
         : null;
-    if (n !== "upgrade" && n !== "reload" && n !== "yield") return;
+    if (shutdownCause !== "upgrade" && shutdownCause !== "reload" && shutdownCause !== "yield") return;
     let {
       readBridgePointer,
       writeBridgePointer,
       MAX_POINTER_ACTIVE_SESSION_IDS,
       PERSISTED_SESSION_RESUME_WINDOW_MS,
       isPersistedStampFresh,
-    } = await import("./chunk-8z86ydvk.js");
-    await (config.enqueuePointerWrite ?? ((F) => F()))(async () => {
+    } = await import("./bridgePointer.js");
+    await (config.enqueuePointerWrite ?? ((runWrite) => runWrite()))(async () => {
       let bridgePointer = await readBridgePointer(
         config.dir,
         {
@@ -2856,26 +3318,26 @@ async function runBridgeLoop(
         config.storageV5,
       );
       if (!bridgePointer) return;
-      let { ageMs, ...ae } = bridgePointer;
-      let Pe = [...sessionStartTimes.keys()];
+      let { ageMs, ...pointerFields } = bridgePointer;
+      let sessionIds = [...sessionStartTimes.keys()];
       let now = Date.now();
       let initialSessionRequeuesPersistedAt = config.initialSessionRequeuesPersistedAt;
-      let Ne =
+      let liveSessionIds =
         initialSessionRequeuesPersistedAt !== undefined &&
         isPersistedStampFresh(initialSessionRequeuesPersistedAt, now, PERSISTED_SESSION_RESUME_WINDOW_MS)
-          ? [...pendingRequeues.keys()].filter((key) => !L(key))
+          ? [...pendingRequeues.keys()].filter((key) => !hasStartedSession(key))
           : [];
       await writeBridgePointer(
         config.dir,
         {
-          ...ae,
+          ...pointerFields,
           activeSessionIds: [
-            ...Pe.filter((xe) => sessionWorkIds.has(xe)),
-            ...Ne,
-            ...Pe.filter((xe) => !sessionWorkIds.has(xe)),
+            ...sessionIds.filter((sessionId) => sessionWorkIds.has(sessionId)),
+            ...liveSessionIds,
+            ...sessionIds.filter((sessionId) => !sessionWorkIds.has(sessionId)),
           ].slice(0, MAX_POINTER_ACTIVE_SESSION_IDS),
           activeSessionIdsPersistedAt:
-            Ne.length > 0 && initialSessionRequeuesPersistedAt !== undefined
+            liveSessionIds.length > 0 && initialSessionRequeuesPersistedAt !== undefined
               ? Math.min(now, initialSessionRequeuesPersistedAt)
               : now,
         },
@@ -2884,7 +3346,7 @@ async function runBridgeLoop(
     });
   })();
   if (config.preserveOnShutdown && !gaveUp && config.ownsPointer && isRcChildRestartResumeEnabled()) {
-    let n =
+    let result =
       projectThreadPointer(sessionCompatIds, parkedProjectThreadIds) ??
       (config.parkedProjectThreadSessionIds
         ? {
@@ -2892,15 +3354,17 @@ async function runBridgeLoop(
             parkedProjectThreadSessionIds: [],
           }
         : undefined);
-    if (n !== undefined) {
-      let { readBridgePointer, writeBridgePointer } = await import("./chunk-8z86ydvk.js");
-      let v = config.enqueuePointerWrite ?? ((r) => r());
+    if (result !== undefined) {
+      let { readBridgePointer, writeBridgePointer } = await import("./bridgePointer.js");
+      let writePointer = config.enqueuePointerWrite ?? ((runWrite) => runWrite());
       let parkedProjectThreadSessionIdsPersistedAt =
         config.parkedProjectThreadSessionIdsPersistedAt !== undefined &&
-        (config.parkedProjectThreadSessionIds ?? []).some((r) => parkedProjectThreadIds.has(r))
+        (config.parkedProjectThreadSessionIds ?? []).some((sessionId) =>
+          parkedProjectThreadIds.has(sessionId),
+        )
           ? config.parkedProjectThreadSessionIdsPersistedAt
           : Date.now();
-      await v(async () => {
+      await writePointer(async () => {
         let bridgePointer = await readBridgePointer(
           config.dir,
           {
@@ -2910,23 +3374,23 @@ async function runBridgeLoop(
           config.storageV5,
         );
         if (!bridgePointer) return;
-        let { ageMs, ...D } = bridgePointer;
+        let { ageMs, ...pointerFields } = bridgePointer;
         await writeBridgePointer(
           config.dir,
           {
-            ...D,
-            ...(n.projectThreadSessionIds.length > 0 && {
-              projectThreadSessionIds: n.projectThreadSessionIds,
+            ...pointerFields,
+            ...(result.projectThreadSessionIds.length > 0 && {
+              projectThreadSessionIds: result.projectThreadSessionIds,
               projectThreadSessionIdsPersistedAt: Date.now(),
             }),
-            parkedProjectThreadSessionIds: n.parkedProjectThreadSessionIds,
+            parkedProjectThreadSessionIds: result.parkedProjectThreadSessionIds,
             parkedProjectThreadSessionIdsPersistedAt,
           },
           config.storageV5,
         );
       });
       logForDebugging(
-        `[bridge:shutdown] remembered ${n.projectThreadSessionIds.length} live and ${n.parkedProjectThreadSessionIds.length} parked project thread session(s) for the next run`,
+        `[bridge:shutdown] remembered ${result.projectThreadSessionIds.length} live and ${result.parkedProjectThreadSessionIds.length} parked project thread session(s) for the next run`,
       );
     }
   }
@@ -2960,7 +3424,7 @@ async function runBridgeLoop(
     );
     let timeout = new AbortController();
     await Promise.race([
-      Promise.allSettled([...sessionStartTimes.values()].map((v) => v.done)),
+      Promise.allSettled([...sessionStartTimes.values()].map((sessionHandle) => sessionHandle.done)),
       sleep(backoff.shutdownGraceMs ?? 30000, timeout.signal),
     ]);
     timeout.abort();
@@ -2994,8 +3458,8 @@ async function runBridgeLoop(
     logForDebugging(
       `[bridge:shutdown] Skipping archive+deregister to allow resume (env ${environmentId}, spawnMode ${config.spawnMode})`,
     );
-    let n = await config.awaitShutdownCause?.();
-    if (n !== "upgrade" && n !== "reload")
+    let shutdownCause = await config.awaitShutdownCause?.();
+    if (shutdownCause !== "upgrade" && shutdownCause !== "reload")
       try {
         await trackedApi.markEnvironmentOffline(environmentId, currentEnvironmentSecret);
         logForDebugging("[bridge:shutdown] Environment marked offline");
@@ -3026,29 +3490,32 @@ async function runBridgeLoop(
     logger.logVerbose(`Failed to deregister environment: ${errorMessage(err)}`);
   }
   if (config.ownsPointer) {
-    let { clearBridgePointer } = await import("./chunk-8z86ydvk.js");
-    await (config.enqueuePointerWrite ?? ((_) => _()))(async () => {
+    let { clearBridgePointer } = await import("./bridgePointer.js");
+    await (config.enqueuePointerWrite ?? ((runWrite) => runWrite()))(async () => {
       config.pointerCleared = true;
       await clearBridgePointer(config.dir, config.storageV5);
     });
   }
   logger.logVerbose("Environment offline.");
-  return un;
+  return policyRefusal;
 }
 //@ chunk-wbbfk060.js:67919-68060 fingerprint = CONNECTION_ERROR_CODES (0.751)
 /**
  * 视为"连不上服务器"的 Node 错误码集合（ECONNREFUSED、ECONNRESET、ETIMEDOUT…ERR_PROXY_TUNNEL）。
  */
-var CONNECTION_ERROR_CODES = new Set([
-  "ECONNREFUSED",
-  "ECONNRESET",
-  "ETIMEDOUT",
-  "ECONNABORTED",
-  "ENETUNREACH",
-  "EHOSTUNREACH",
-  "ERR_SOCKET_CLOSED",
-  "ERR_PROXY_TUNNEL",
-]);
+var CONNECTION_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wbbfk060.js:67919", () => {
+  CONNECTION_ERROR_CODES = new Set([
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ETIMEDOUT",
+    "ECONNABORTED",
+    "ENETUNREACH",
+    "EHOSTUNREACH",
+    "ERR_SOCKET_CLOSED",
+    "ERR_PROXY_TUNNEL",
+  ]);
+});
 //@ chunk-wbbfk060.js:68060-68173 layout = isConnectionError (1)
 /**
  * 错误码是否属于 CONNECTION_ERROR_CODES。
@@ -3146,12 +3613,12 @@ async function tryRegisterEnvironment({ register, interactive, onFailure }) {
       typeof error.retryAfterMs === "number"
         ? error.retryAfterMs
         : 0;
-    let H =
+    let waitMs =
       !interactive && status !== undefined
         ? Math.max(Math.min(retryAfterMs, REREGISTER_MAX_BACKOFF_MS), jitterDelay(REREGISTER_MIN_BACKOFF_MS))
         : 0;
-    await onFailure(error, H);
-    if (H > 0) await sleep(H);
+    await onFailure(error, waitMs);
+    if (waitMs > 0) await sleep(waitMs);
     return;
   }
 }
@@ -3225,13 +3692,13 @@ async function stopWorkWithRetry(
  * 会话结束后清理 worktree：有未提交改动、领先提交或 checkout 移动时保留并提示，否则移除（removed / left_in_place / failed）。
  */
 async function cleanupSessionWorktree(worktree, logger, options) {
-  let P = {
+  let cleanState = {
     dirty: false,
     commitsAhead: 0,
     gitError: false,
   };
   let changeState;
-  if (options?.force) changeState = P;
+  if (options?.force) changeState = cleanState;
   else if (worktree.hookBased && worktree.headCommit === undefined)
     changeState = (await lstat(join(worktree.worktreePath, ".git")).then(
       () => true,
@@ -3242,22 +3709,22 @@ async function cleanupSessionWorktree(worktree, logger, options) {
           commitsAhead: 0,
           gitError: true,
         }
-      : P;
+      : cleanState;
   else changeState = await getAgentWorktreeChanges(worktree.worktreePath, worktree.headCommit);
   let { dirty, commitsAhead, gitError, checkoutMoved, checkFailed } = changeState;
   if (dirty || commitsAhead > 0 || checkoutMoved === true) {
-    let me = `${commitsAhead} ${plural(commitsAhead, "commit")}`;
-    let se = gitError
+    let commitsText = `${commitsAhead} ${plural(commitsAhead, "commit")}`;
+    let keepReason = gitError
       ? "git error checking changes"
       : checkFailed
         ? "could not check for changes"
         : dirty && commitsAhead > 0
-          ? `uncommitted changes \xB7 ${me}`
+          ? `uncommitted changes \xB7 ${commitsText}`
           : dirty
             ? "uncommitted changes"
-            : me;
+            : commitsText;
     if (worktree.gitRoot) await unlockAgentWorktree(worktree.worktreePath, worktree.gitRoot);
-    logger.logStatus(`kept worktree ${worktree.worktreePath} \xB7 ${se}`);
+    logger.logStatus(`kept worktree ${worktree.worktreePath} \xB7 ${keepReason}`);
     logForDebugging(
       `[bridge:worktree] kept ${worktree.worktreePath} dirty=${dirty} commitsAhead=${commitsAhead} gitError=${!!gitError} checkFailed=${!!checkFailed}`,
     );
@@ -3472,23 +3939,23 @@ var TITLE_MAX_CHARS = 80;
  * 取恢复会话所需的认证上下文：access token、是否用 v2 会话 CRUD、组织 UUID（v1 时）、trusted device token。
  */
 async function getUnarchiveAuthContext(credentials) {
-  let s =
+  let accessToken =
     isStorageV5Enabled() && credentials !== undefined
       ? await getBridgeAccessTokenAsync(credentials)
       : getBridgeAccessToken();
-  if (!s) return null;
-  let S = isCcrV2SessionCrudEnabled();
+  if (!accessToken) return null;
+  let useV2 = isCcrV2SessionCrudEnabled();
   let orgUUID;
-  if (!S) {
-    let { getOrganizationUUID } = await import("./chunk-appaeyg7.js");
+  if (!useV2) {
+    let { getOrganizationUUID } = await import("../services/oauth/client.js");
     orgUUID = (await getOrganizationUUID()) ?? undefined;
   }
   let trustedDeviceToken = await getTrustedDeviceToken().catch(() => {
     return;
   });
   return {
-    accessToken: s,
-    useV2: S,
+    accessToken,
+    useV2,
     orgUUID,
     trustedDeviceToken,
   };
@@ -3503,19 +3970,20 @@ function firstByte(data) {
  */
 async function unarchiveBridgeSessionIfNeeded(sessionId, baseUrl, credentials) {
   try {
-    let { getFeatureValue_CACHED_MAY_BE_STALE } = await import("./chunk-6df1d6re.js");
+    let { getFeatureValue_CACHED_MAY_BE_STALE } =
+      await import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js");
     if (!getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_unarchive_on_resume", true)) return false;
     let unarchiveAuthContext = await getUnarchiveAuthContext(credentials);
     if (!unarchiveAuthContext) return false;
     let { accessToken, useV2, orgUUID, trustedDeviceToken } = unarchiveAuthContext;
-    let { unarchiveCodeSession } = await import("./chunk-g9dw262t.js");
-    let Q = await unarchiveCodeSession(baseUrl, accessToken, sessionId, 1e4, {
+    let { unarchiveCodeSession } = await import("./codeSessionApi.js");
+    let unarchiveStatus = await unarchiveCodeSession(baseUrl, accessToken, sessionId, 1e4, {
       useV2,
       orgUUID,
       trustedDeviceToken,
     });
-    if (Q === "untrusted_device") {
-      let me = await withUntrustedDeviceRecovery(
+    if (unarchiveStatus === "untrusted_device") {
+      let retriedStatus = await withUntrustedDeviceRecovery(
         trustedDeviceToken,
         (trustedDeviceToken) =>
           unarchiveCodeSession(baseUrl, accessToken, sessionId, 1e4, {
@@ -3525,24 +3993,27 @@ async function unarchiveBridgeSessionIfNeeded(sessionId, baseUrl, credentials) {
           }),
         credentials,
       );
-      if (me !== undefined) Q = me;
+      if (retriedStatus !== undefined) unarchiveStatus = retriedStatus;
     }
-    if (typeof Q === "number" && Q < 300) {
+    if (typeof unarchiveStatus === "number" && unarchiveStatus < 300) {
       logFeatureOk("bridge_session_unarchive");
       logForDebugging(
-        `[bridge:init] Unarchived reaped session ${sessionId} before reattach (status=${String(Q)})`,
+        `[bridge:init] Unarchived reaped session ${sessionId} before reattach (status=${String(unarchiveStatus)})`,
       );
       return true;
     }
-    if (Q === 409) {
+    if (unarchiveStatus === 409) {
       logForDebugging(
         `[bridge:init] Session ${sessionId} already active (unarchived by another client) \u2014 resuming without a mutation to compensate`,
       );
       return false;
     }
-    logFeatureBad("bridge_session_unarchive", typeof Q === "number" ? `http_${Q}` : Q);
+    logFeatureBad(
+      "bridge_session_unarchive",
+      typeof unarchiveStatus === "number" ? `http_${unarchiveStatus}` : unarchiveStatus,
+    );
     logForDebugging(
-      `[bridge:init] Unarchive of reaped session ${sessionId} failed (status=${String(Q)}) \u2014 keeping prior reattach behavior`,
+      `[bridge:init] Unarchive of reaped session ${sessionId} failed (status=${String(unarchiveStatus)}) \u2014 keeping prior reattach behavior`,
       {
         level: "warn",
       },
@@ -3560,7 +4031,7 @@ async function unarchiveBridgeSessionIfNeeded(sessionId, baseUrl, credentials) {
 }
 //@ chunk-wbbfk060.js:77203-77332 fingerprint = fetchSessionTitle (0.67)
 async function fetchSessionTitle(compatSessionId, baseUrl) {
-  let { getBridgeSession } = await import("./chunk-3eyvtwsv.js");
+  let { getBridgeSession } = await import("./createSession.js");
   return (
     (
       await getBridgeSession(compatSessionId, {
@@ -3577,33 +4048,45 @@ function startPointerRefreshTimer(
   writeBridgePointer,
   ownProcStartAsync,
   dir,
-  P,
+  record,
   storageV5,
   signal,
-  H,
-  j,
+  queue,
+  stampWindowMs,
   isPersistedStampFresh,
-  W,
+  isCleared,
 ) {
   let interval = setInterval(
-    (me, se, Z, M, be, Oe, G, ve, q, re) =>
-      void se().then((procStart) =>
-        G(() => {
-          if (Oe.aborted || re()) return Promise.resolve(false);
+    (
+      writePointer,
+      ownProcStart,
+      pointerDir,
+      pointer,
+      storage,
+      acSignal,
+      enqueue,
+      windowMs,
+      isFresh,
+      isClearedFn,
+    ) =>
+      void ownProcStart().then((procStart) =>
+        enqueue(() => {
+          if (acSignal.aborted || isClearedFn()) return Promise.resolve(false);
           if (
-            M.activeSessionIds !== undefined &&
-            (M.activeSessionIdsPersistedAt === undefined || !q(M.activeSessionIdsPersistedAt, Date.now(), ve))
+            pointer.activeSessionIds !== undefined &&
+            (pointer.activeSessionIdsPersistedAt === undefined ||
+              !isFresh(pointer.activeSessionIdsPersistedAt, Date.now(), windowMs))
           ) {
-            delete M.activeSessionIds;
-            delete M.activeSessionIdsPersistedAt;
+            delete pointer.activeSessionIds;
+            delete pointer.activeSessionIdsPersistedAt;
           }
-          return me(
-            Z,
+          return writePointer(
+            pointerDir,
             {
-              ...M,
+              ...pointer,
               procStart,
             },
-            be,
+            storage,
           );
         }),
       ),
@@ -3611,13 +4094,13 @@ function startPointerRefreshTimer(
     writeBridgePointer,
     ownProcStartAsync,
     dir,
-    P,
+    record,
     storageV5,
     signal,
-    H,
-    j,
+    queue,
+    stampWindowMs,
     isPersistedStampFresh,
-    W,
+    isCleared,
   );
   interval.unref?.();
   return interval;
@@ -3637,13 +4120,13 @@ async function bridgeMain(args, storageV5, credentials) {
     console.error(`Error: ${parsed.error}`);
     process.exit(1);
   }
-  let U = processWrapperError();
-  if (U) {
+  let launcherError = processWrapperError();
+  if (launcherError) {
     logFeatureBad("agent_launcher", "remote_control_refused");
     console.error(
-      `Error: ${U} \u2014 Remote Control sessions are not started unwrapped; fix the launcher, then retry`,
+      `Error: ${launcherError} \u2014 Remote Control sessions are not started unwrapped; fix the launcher, then retry`,
     );
-    let { exitAfterAnalyticsFlush } = await import("./chunk-kahpc3cs.js");
+    let { exitAfterAnalyticsFlush } = await import("../cli/exit.js");
     return exitAfterAnalyticsFlush(1);
   }
   lockCurrentVersion();
@@ -3670,11 +4153,11 @@ async function bridgeMain(args, storageV5, credentials) {
   if (sessionNamePrefix) process.env.CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX = sessionNamePrefix;
   let resumeSessionId = parsedSessionId;
   let pointerDir;
-  let Be = [];
+  let boundedResumeIds = [];
   if (permissionMode !== undefined) {
-    let { PERMISSION_MODES, PERMISSION_MODE_MANUAL_ALIAS } = await import("./chunk-k6t7e4cb.js");
+    let { PERMISSION_MODES, PERMISSION_MODE_MANUAL_ALIAS } = await import("../types/permissions.js");
     if (!PERMISSION_MODES.includes(permissionMode)) {
-      let mapped = PERMISSION_MODES.map((r) => (r === "default" ? PERMISSION_MODE_MANUAL_ALIAS : r));
+      let mapped = PERMISSION_MODES.map((mode) => (mode === "default" ? PERMISSION_MODE_MANUAL_ALIAS : mode));
       console.error(`Error: Invalid permission mode '${permissionMode}'. Valid modes: ${mapped.join(", ")}`);
       process.exit(1);
     }
@@ -3689,26 +4172,28 @@ async function bridgeMain(args, storageV5, credentials) {
     process.exit(1);
   }
   let dir = resolve(".");
-  let { enableConfigs, checkHasTrustDialogAccepted } = await import("./chunk-eesswvbz.js");
+  let { enableConfigs, checkHasTrustDialogAccepted } = await import("../utils/config.js");
   await enableConfigs();
-  let { initSinks } = await import("./chunk-19b0wnnf.js");
+  let { initSinks } = await import("../utils/sinks.js");
   initSinks();
-  let { setOriginalCwd, setCwdState, isHomeDirectorySession } = await import("./chunk-nj7t53r7.js");
+  let { setOriginalCwd, setCwdState, isHomeDirectorySession } = await import("../bootstrap/state.js");
   setOriginalCwd(dir);
   setCwdState(dir);
   if (!checkHasTrustDialogAccepted()) {
-    let { canPromptForWorkspaceTrust, offerBridgeWorkspaceTrust } = await import("./chunk-p3rkx9n6.js");
-    let y = await offerBridgeWorkspaceTrust({
+    let { canPromptForWorkspaceTrust, offerBridgeWorkspaceTrust } =
+      await import("./canPromptForWorkspaceTrust.lazy.js");
+    let trustResult = await offerBridgeWorkspaceTrust({
       dir,
       isHomeDir: isHomeDirectorySession(),
       canPrompt: canPromptForWorkspaceTrust(),
       storageV5,
     });
-    if (!y.trusted) {
-      console.error(y.message);
+    if (!trustResult.trusted) {
+      console.error(trustResult.message);
       process.exit(1);
     }
-    let { resetGrowthBook, initializeGrowthBook } = await import("./chunk-6df1d6re.js");
+    let { resetGrowthBook, initializeGrowthBook } =
+      await import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js");
     resetGrowthBook({
       preservePendingExposures: true,
     });
@@ -3722,7 +4207,7 @@ async function bridgeMain(args, storageV5, credentials) {
     });
   }
   if (chrome === true) {
-    let { getChromeServerPolicyRefusal } = await import("./chunk-5t6stktg.js");
+    let { getChromeServerPolicyRefusal } = await import("../utils/claudeInChrome/serverPolicy.js");
     let chromeServerPolicyRefusal = getChromeServerPolicyRefusal();
     if (chromeServerPolicyRefusal !== null) {
       console.error(`Error: ${chromeServerPolicyRefusal} Start Remote Control without --chrome.`);
@@ -3734,29 +4219,29 @@ async function bridgeMain(args, storageV5, credentials) {
     checkAndRefreshOAuthTokenIfNeeded,
     waitForInFlightOAuthRefresh,
     OAUTH_REFRESH_EXIT_WAIT_CAP_MS,
-  } = await import("./chunk-7v0gj88m.js");
+  } = await import("../utils/auth.js");
   let { getBridgeAccessToken, getBridgeAccessTokenAsync, getBridgeBaseUrl } =
-    await import("./chunk-prxvet9q.js");
+    await import("./bridgeConfig.js");
   let useAsyncAuth = isStorageV5Enabled() && credentials !== undefined;
   if (!(useAsyncAuth ? await getBridgeAccessTokenAsync(credentials) : getBridgeAccessToken())) {
     console.error(BRIDGE_LOGIN_ERROR);
     process.exit(1);
   }
   let { getGlobalConfig, saveGlobalConfig, getCurrentProjectConfig, saveCurrentProjectConfig } =
-    await import("./chunk-eesswvbz.js");
+    await import("../utils/config.js");
   if (!getGlobalConfig().remoteDialogSeen) {
     let readline = await import("readline");
     let rl = readline.createInterface({
       input: process.stdin,
       output: process.stdout,
     });
-    let y = isBridgeProjectsHintEnabled()
+    let projectsHint = isBridgeProjectsHintEnabled()
       ? `Open the Code tab in the Claude mobile app, visit claude.ai/code in a browser,
 or ask Claude to work in this folder from one of your projects on claude.ai.`
       : "Open the Code tab in the Claude mobile app, or visit claude.ai/code in a browser.";
     console.log(`
 Take this session with you and pick up right where you left off on any device.
-${y}
+${projectsHint}
 
 The session keeps running on this machine. Use your other devices as a remote
 control. Press Ctrl+C to stop.
@@ -3775,7 +4260,7 @@ control. Press Ctrl+C to stop.
     }, storageV5);
   }
   if (continueSession) {
-    let { readBridgePointerAcrossWorktrees, BRIDGE_POINTER_TTL_MS } = await import("./chunk-8z86ydvk.js");
+    let { readBridgePointerAcrossWorktrees, BRIDGE_POINTER_TTL_MS } = await import("./bridgePointer.js");
     let found = await readBridgePointerAcrossWorktrees(dir, storageV5, {
       projectThreadResume: isRcChildRestartResumeEnabled(),
     });
@@ -3791,7 +4276,7 @@ control. Press Ctrl+C to stop.
     let fromWt = pointerDir_2 !== dir ? ` from worktree ${pointerDir_2}` : "";
     console.error(`Resuming session ${pointer.sessionId} (${ageStr} ago)${fromWt}\u2026`);
     resumeSessionId = pointer.sessionId;
-    if (pointer.ageMs > BRIDGE_POINTER_TTL_MS) Be.push(pointer.sessionId);
+    if (pointer.ageMs > BRIDGE_POINTER_TTL_MS) boundedResumeIds.push(pointer.sessionId);
     pointerDir = pointerDir_2;
   }
   let baseUrl = getBridgeBaseUrl();
@@ -3801,10 +4286,10 @@ control. Press Ctrl+C to stop.
   }
   let sessionIngressUrl = baseUrl;
   let { snapshotGitEvidenceForBridge, findGitRoot, redactGitRemoteCredentials } =
-    await import("./chunk-rqvep8jc.js");
-  let { hasWorktreeCreateHook } = await import("./chunk-zpcme3sa.js");
-  let Ot = findGitRoot(dir) !== null;
-  let worktreeAvailable = hasWorktreeCreateHook() || Ot;
+    await import("../utils/git.js");
+  let { hasWorktreeCreateHook } = await import("../utils/hooks/worktreeHooks.js");
+  let isGitRepo = findGitRoot(dir) !== null;
+  let worktreeAvailable = hasWorktreeCreateHook() || isGitRepo;
   let savedSpawnMode = getCurrentProjectConfig().remoteControlSpawnMode;
   if (savedSpawnMode === "worktree" && !worktreeAvailable) {
     console.error(
@@ -3883,19 +4368,19 @@ Spawn mode for this project:
     );
   let maxSessions = effectiveSpawnMode === "single-session" ? 1 : (parsedCapacity ?? SPAWN_SESSIONS_DEFAULT);
   let createSessionInDir = parsedCreateSessionInDir ?? true;
-  let _e;
-  let Ge;
-  let Qe;
-  let Ae;
-  let lt;
-  let ct = [];
-  let Bt;
+  let requestedEnvironmentId;
+  let priorSessionId;
+  let carriedSessionIds;
+  let carriedSessionIdsAt;
+  let freshProjectThreadIds;
+  let freshParkedThreadIds = [];
+  let parkedThreadIdsAt;
   let projectThreadSessionIdsPersistedAt;
-  let Mt;
-  let Te = false;
-  let Gt = false;
-  let vt;
-  let Ct = false;
+  let pointerEnvironmentId;
+  let resumeArchived = false;
+  let unarchivedOk = false;
+  let adoptedSessionId;
+  let pointerWriterRunning = false;
   if (!resumeSessionId && createSessionInDir) {
     let {
       readBridgePointer,
@@ -3904,7 +4389,7 @@ Spawn mode for this project:
       isPersistedStampFresh,
       freshProjectThreadSessionIds,
       freshParkedProjectThreadSessionIds,
-    } = await import("./chunk-8z86ydvk.js");
+    } = await import("./bridgePointer.js");
     let bridgePointer = await readBridgePointer(
       dir,
       {
@@ -3913,20 +4398,21 @@ Spawn mode for this project:
       storageV5,
     );
     if (bridgePointer) {
-      let { isProcessRunning, isSameProcessAsync } = await import("./chunk-v19g02mx.js");
+      let { isProcessRunning, isSameProcessAsync } =
+        await import("../utils/captureProcessStartTimeAsync.lazy.js");
       if (
         bridgePointer.pid !== undefined &&
         bridgePointer.pid !== process.pid &&
         isProcessRunning(bridgePointer.pid) &&
         (await isSameProcessAsync(bridgePointer.pid, bridgePointer.procStart))
       ) {
-        Ct = true;
+        pointerWriterRunning = true;
         logForDebugging(
           `[bridge:init] Pointer writer pid ${bridgePointer.pid} still running; registering a fresh env and deferring pointer write`,
         );
       } else if (bridgePointer.source === "standalone") {
-        _e = bridgePointer.environmentId;
-        if (bridgePointer.ageMs <= BRIDGE_POINTER_TTL_MS) Ge = bridgePointer.sessionId;
+        requestedEnvironmentId = bridgePointer.environmentId;
+        if (bridgePointer.ageMs <= BRIDGE_POINTER_TTL_MS) priorSessionId = bridgePointer.sessionId;
         if (
           bridgePointer.activeSessionIdsPersistedAt !== undefined &&
           isPersistedStampFresh(
@@ -3935,16 +4421,16 @@ Spawn mode for this project:
             PERSISTED_SESSION_RESUME_WINDOW_MS,
           )
         ) {
-          Qe = bridgePointer.activeSessionIds;
-          Ae = bridgePointer.activeSessionIdsPersistedAt;
+          carriedSessionIds = bridgePointer.activeSessionIds;
+          carriedSessionIdsAt = bridgePointer.activeSessionIdsPersistedAt;
         }
         if (isRcChildRestartResumeEnabled()) {
-          lt = freshProjectThreadSessionIds(bridgePointer, Date.now());
-          ct = freshParkedProjectThreadSessionIds(bridgePointer, Date.now());
-          Bt = bridgePointer.parkedProjectThreadSessionIdsPersistedAt;
+          freshProjectThreadIds = freshProjectThreadSessionIds(bridgePointer, Date.now());
+          freshParkedThreadIds = freshParkedProjectThreadSessionIds(bridgePointer, Date.now());
+          parkedThreadIdsAt = bridgePointer.parkedProjectThreadSessionIdsPersistedAt;
         }
         logForDebugging(
-          `[bridge:init] Found prior environment ${_e} in pointer (ageMs=${bridgePointer.ageMs}); requesting reuse on registration`,
+          `[bridge:init] Found prior environment ${requestedEnvironmentId} in pointer (ageMs=${bridgePointer.ageMs}); requesting reuse on registration`,
         );
       }
     }
@@ -3956,25 +4442,25 @@ Spawn mode for this project:
     process.exit(1);
   }
   let hostProfileIfShared = collectHostProfileIfShared();
-  let Wt = allowUnattendedToolCalls
-    ? await (await import("./chunk-vpsq1tp7.js")).writeUnattendedRunGrant()
+  let unattendedGrant = allowUnattendedToolCalls
+    ? await (await import("../services/remoteTools/unattendedRunGrant.js")).writeUnattendedRunGrant()
     : undefined;
-  if (allowUnattendedToolCalls && Wt === undefined) {
+  if (allowUnattendedToolCalls && unattendedGrant === undefined) {
     console.error(
       "Error: --allow-unattended-tool-calls could not write to ~/.claude/state. Start it from your own terminal; a sandbox cannot write there.",
     );
     process.exit(1);
   }
-  let dn =
+  let toolHostStartup =
     effectiveSpawnMode === "single-session"
       ? undefined
-      : import("./chunk-qh5wq2v1.js")
+      : import("../remote/tools/startForegroundToolHost.lazy.js")
           .then(({ startForegroundToolHost }) =>
             startForegroundToolHost({
               dir,
               credentials,
               hasAccessToken: () => Boolean(getBridgeAccessToken()),
-              unattendedGrant: Wt?.token,
+              unattendedGrant: unattendedGrant?.token,
               ...(guest !== undefined && {
                 guest,
               }),
@@ -3993,7 +4479,7 @@ Spawn mode for this project:
               ),
             );
             logFeatureSad("bridge_tool_host_foreground", "start_failed");
-            Wt?.remove();
+            unattendedGrant?.remove();
             if (allowUnattendedToolCalls)
               console.error(
                 "Cloud sessions cannot use this folder: --allow-unattended-tool-calls could not start. Remote Control runs without it.",
@@ -4002,11 +4488,11 @@ Spawn mode for this project:
           });
   let { branch, gitRepoUrl, defaultBranch } = await snapshotGitEvidenceForBridge();
   let machineName = hostname();
-  let { getOrCreateRemoteControlMachineId } = await import("./chunk-eesswvbz.js");
+  let { getOrCreateRemoteControlMachineId } = await import("../utils/config.js");
   let machineId = await getOrCreateRemoteControlMachineId(storageV5);
   let bridgeId = randomUUID();
-  let { handleOAuth401Error, getClaudeAIOAuthTokenOriginAsync } = await import("./chunk-7v0gj88m.js");
-  let { classifyFailedOAuthRefresh } = await import("./chunk-h0sbtey6.js");
+  let { handleOAuth401Error, getClaudeAIOAuthTokenOriginAsync } = await import("../utils/auth.js");
+  let { classifyFailedOAuthRefresh } = await import("./oauthRefreshFailure.js");
   let api = createBridgeApiClient({
     baseUrl,
     getAccessToken: getBridgeAccessToken,
@@ -4022,20 +4508,20 @@ Spawn mode for this project:
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
     onDebug: logForDebugging,
-    onAuth401: (_) => handleOAuth401Error(_, credentials, storageV5),
+    onAuth401: (accessToken) => handleOAuth401Error(accessToken, credentials, storageV5),
     getTrustedDeviceToken,
     untrustedDevice: {
-      recover: async (_) => {
-        let v = await recoverFromUntrustedDevice(_, credentials);
+      recover: async (deviceToken) => {
+        let recoveredToken = await recoverFromUntrustedDevice(deviceToken, credentials);
         sayHeldAutomaticEnrollmentNoticeOnStderr();
-        return v;
+        return recoveredToken;
       },
       hint: untrustedDeviceHint,
     },
     useCcrV2SessionCrud: isCcrV2SessionCrudEnabled,
   });
-  let Le = _e;
-  let tt;
+  let resumeEnvironmentId = requestedEnvironmentId;
+  let conflictingPointer;
   if (resumeSessionId) {
     let {
       readBridgePointer,
@@ -4043,10 +4529,10 @@ Spawn mode for this project:
       isPersistedStampFresh,
       freshProjectThreadSessionIds,
       freshParkedProjectThreadSessionIds,
-    } = await import("./chunk-8z86ydvk.js");
-    let F = pointerDir ?? dir;
+    } = await import("./bridgePointer.js");
+    let pointerDirForResume = pointerDir ?? dir;
     let bridgePointer = await readBridgePointer(
-      F,
+      pointerDirForResume,
       {
         noClear: true,
         projectThreadResume: isRcChildRestartResumeEnabled(),
@@ -4054,23 +4540,24 @@ Spawn mode for this project:
       storageV5,
     );
     if (bridgePointer?.pid !== undefined && bridgePointer.pid !== process.pid) {
-      let { isProcessRunning, isSameProcessAsync } = await import("./chunk-v19g02mx.js");
+      let { isProcessRunning, isSameProcessAsync } =
+        await import("../utils/captureProcessStartTimeAsync.lazy.js");
       if (
         isProcessRunning(bridgePointer.pid) &&
         (await isSameProcessAsync(bridgePointer.pid, bridgePointer.procStart))
       ) {
         if (sameSessionId(bridgePointer.sessionId, resumeSessionId)) {
           console.error(
-            `Error: Session ${resumeSessionId} is already being served by another \`claude remote-control\` instance (pid ${bridgePointer.pid}) in ${F}. Use that terminal, or stop it first.`,
+            `Error: Session ${resumeSessionId} is already being served by another \`claude remote-control\` instance (pid ${bridgePointer.pid}) in ${pointerDirForResume}. Use that terminal, or stop it first.`,
           );
           process.exit(1);
         }
-        Ct = true;
-        tt = bridgePointer;
+        pointerWriterRunning = true;
+        conflictingPointer = bridgePointer;
       }
     }
     if (
-      !Ct &&
+      !pointerWriterRunning &&
       bridgePointer?.source === "standalone" &&
       bridgePointer.activeSessionIds?.length &&
       bridgePointer.activeSessionIdsPersistedAt !== undefined &&
@@ -4079,18 +4566,23 @@ Spawn mode for this project:
         Date.now(),
         PERSISTED_SESSION_RESUME_WINDOW_MS,
       ) &&
-      F === dir
+      pointerDirForResume === dir
     ) {
-      _e = bridgePointer.environmentId;
-      Qe = bridgePointer.activeSessionIds;
-      Ae = bridgePointer.activeSessionIdsPersistedAt;
+      requestedEnvironmentId = bridgePointer.environmentId;
+      carriedSessionIds = bridgePointer.activeSessionIds;
+      carriedSessionIdsAt = bridgePointer.activeSessionIdsPersistedAt;
     }
-    if (!Ct && bridgePointer?.source === "standalone" && F === dir && isRcChildRestartResumeEnabled()) {
-      lt = freshProjectThreadSessionIds(bridgePointer, Date.now());
-      ct = freshParkedProjectThreadSessionIds(bridgePointer, Date.now());
-      Bt = bridgePointer.parkedProjectThreadSessionIdsPersistedAt;
+    if (
+      !pointerWriterRunning &&
+      bridgePointer?.source === "standalone" &&
+      pointerDirForResume === dir &&
+      isRcChildRestartResumeEnabled()
+    ) {
+      freshProjectThreadIds = freshProjectThreadSessionIds(bridgePointer, Date.now());
+      freshParkedThreadIds = freshParkedProjectThreadSessionIds(bridgePointer, Date.now());
+      parkedThreadIdsAt = bridgePointer.parkedProjectThreadSessionIdsPersistedAt;
       projectThreadSessionIdsPersistedAt = bridgePointer.projectThreadSessionIdsPersistedAt;
-      Mt = bridgePointer.environmentId;
+      pointerEnvironmentId = bridgePointer.environmentId;
     }
     try {
       validateBridgeId(resumeSessionId, "sessionId");
@@ -4105,16 +4597,16 @@ Spawn mode for this project:
       storageV5,
     });
     clearOAuthTokenCache();
-    let { getBridgeSessionOrStatus } = await import("./chunk-3eyvtwsv.js");
-    let Pe = useAsyncAuth ? await getBridgeAccessTokenAsync(credentials) : undefined;
+    let { getBridgeSessionOrStatus } = await import("./createSession.js");
+    let presetAccessToken = useAsyncAuth ? await getBridgeAccessTokenAsync(credentials) : undefined;
     let { session, notFound } = await getBridgeSessionOrStatus(resumeSessionId, {
       baseUrl,
-      getAccessToken: useAsyncAuth ? () => Pe : getBridgeAccessToken,
+      getAccessToken: useAsyncAuth ? () => presetAccessToken : getBridgeAccessToken,
       credentials,
     });
     if (!session) {
       if (notFound && pointerDir) {
-        let { clearBridgePointer } = await import("./chunk-8z86ydvk.js");
+        let { clearBridgePointer } = await import("./bridgePointer.js");
         await clearBridgePointer(pointerDir, storageV5);
       }
       console.error(
@@ -4126,7 +4618,7 @@ Spawn mode for this project:
     }
     if (!session.environment_id) {
       if (pointerDir) {
-        let { clearBridgePointer } = await import("./chunk-8z86ydvk.js");
+        let { clearBridgePointer } = await import("./bridgePointer.js");
         await clearBridgePointer(pointerDir, storageV5);
       }
       console.error(
@@ -4134,17 +4626,19 @@ Spawn mode for this project:
       );
       process.exit(1);
     }
-    Le = session.environment_id;
-    if (tt && Le === tt.environmentId) {
+    resumeEnvironmentId = session.environment_id;
+    if (conflictingPointer && resumeEnvironmentId === conflictingPointer.environmentId) {
       console.error(
-        `Error: Environment ${Le} is already being served by another \`claude remote-control\` instance (pid ${tt.pid}) in ${pointerDir ?? dir}. Use that terminal, or stop it first.`,
+        `Error: Environment ${resumeEnvironmentId} is already being served by another \`claude remote-control\` instance (pid ${conflictingPointer.pid}) in ${pointerDir ?? dir}. Use that terminal, or stop it first.`,
       );
       process.exit(1);
     }
-    Te = session.status === "archived";
-    logForDebugging(`[bridge:init] Resuming session ${resumeSessionId} on environment ${Le}`);
+    resumeArchived = session.status === "archived";
+    logForDebugging(
+      `[bridge:init] Resuming session ${resumeSessionId} on environment ${resumeEnvironmentId}`,
+    );
   }
-  let toolHostSetup = await dn;
+  let toolHostSetup = await toolHostStartup;
   logForDebugging(
     `[bridge:init] offering this folder to cloud sessions: ${toolHostSetup?.getToolHostAdvert().kind ?? "not started"}`,
   );
@@ -4160,7 +4654,7 @@ Spawn mode for this project:
     bridgeId,
     workerType: "claude_code",
     environmentId: randomUUID(),
-    reuseEnvironmentId: Le,
+    reuseEnvironmentId: resumeEnvironmentId,
     hostProfile: await hostProfileIfShared,
     apiBaseUrl: baseUrl,
     sessionIngressUrl,
@@ -4170,12 +4664,12 @@ Spawn mode for this project:
     getToolHostAdvert: toolHostSetup?.getToolHostAdvert,
   };
   logForDebugging(
-    `[bridge:init] bridgeId=${bridgeId}${Le ? ` reuseEnvironmentId=${Le}` : ""} dir=${dir} branch=${branch} gitRepoUrl=${redactGitRemoteCredentials(gitRepoUrl)} machine=${machineName}`,
+    `[bridge:init] bridgeId=${bridgeId}${resumeEnvironmentId ? ` reuseEnvironmentId=${resumeEnvironmentId}` : ""} dir=${dir} branch=${branch} gitRepoUrl=${redactGitRemoteCredentials(gitRepoUrl)} machine=${machineName}`,
   );
   logForDebugging(`[bridge:init] apiBaseUrl=${baseUrl} sessionIngressUrl=${sessionIngressUrl}`);
   if (debugFile) logForDebugging(`[bridge:init] debugFile=${debugFile}`);
   let toolHostAdvert = bridgeConfig.getToolHostAdvert?.();
-  let Ft = await tryRegisterEnvironment({
+  let registration = await tryRegisterEnvironment({
     register: () =>
       api.registerBridgeEnvironment({
         ...bridgeConfig,
@@ -4184,62 +4678,65 @@ Spawn mode for this project:
         }),
       }),
     interactive: process.stdin.isTTY === true,
-    onFailure: async (_, v) => {
+    onFailure: async (error, exitDelayMs) => {
       logEvent("tengu_bridge_registration_failed", {
-        status: _ instanceof BridgeFatalError ? _.status : undefined,
+        status: error instanceof BridgeFatalError ? error.status : undefined,
       });
       await logFeatureBadAsync("remote_control_entry", "registration_failed");
-      let y =
-        _ instanceof BridgeFatalError && _.status === 404
+      let failureText =
+        error instanceof BridgeFatalError && error.status === 404
           ? "Remote Control environments are not available for your account."
-          : _ instanceof BridgeFatalError && _.status !== 401 && isExpiredErrorType(_.errorType)
-            ? `Error: ${withReconnectHint(_.message)}`
-            : `Error: ${errorMessage(_)}`;
+          : error instanceof BridgeFatalError && error.status !== 401 && isExpiredErrorType(error.errorType)
+            ? `Error: ${withReconnectHint(error.message)}`
+            : `Error: ${errorMessage(error)}`;
       console.error(
-        v > 0
-          ? `${y}
-Exiting in about ${Math.round(v / 1000)} seconds.`
-          : y,
+        exitDelayMs > 0
+          ? `${failureText}
+Exiting in about ${Math.round(exitDelayMs / 1000)} seconds.`
+          : failureText,
       );
-      let { flushAnalyticsBeforeExit } = await import("./chunk-kahpc3cs.js");
+      let { flushAnalyticsBeforeExit } = await import("../cli/exit.js");
       await flushAnalyticsBeforeExit();
     },
   });
-  if (!Ft) process.exit(1);
+  if (!registration) process.exit(1);
   let {
     environment_id: environmentId,
     environment_secret: environmentSecret,
     environment_secret_expires_in: environmentSecretExpiresIn,
-  } = Ft;
-  classifyAdvertChange(bridgeConfig, toolHostAdvert, environmentId === Le);
-  if (_e && !resumeSessionId)
-    if (environmentId !== _e) {
-      logForDebugging(`Bridge env reuse mismatch: requested ${_e}, backend returned ${environmentId}.`, {
-        level: "warn",
-      });
+  } = registration;
+  classifyAdvertChange(bridgeConfig, toolHostAdvert, environmentId === resumeEnvironmentId);
+  if (requestedEnvironmentId && !resumeSessionId)
+    if (environmentId !== requestedEnvironmentId) {
+      logForDebugging(
+        `Bridge env reuse mismatch: requested ${requestedEnvironmentId}, backend returned ${environmentId}.`,
+        {
+          level: "warn",
+        },
+      );
       console.warn(
         "Warning: Could not reuse the previous environment. Existing claude.ai/code sessions from the previous run will not reconnect.",
       );
-      let { clearBridgePointer } = await import("./chunk-8z86ydvk.js");
+      let { clearBridgePointer } = await import("./bridgePointer.js");
       await clearBridgePointer(dir, storageV5);
     } else {
-      let { writeBridgePointer, readBridgePointer } = await import("./chunk-8z86ydvk.js");
-      let { ownProcStartAsync } = await import("./chunk-v19g02mx.js");
+      let { writeBridgePointer, readBridgePointer } = await import("./bridgePointer.js");
+      let { ownProcStartAsync } = await import("../utils/captureProcessStartTimeAsync.lazy.js");
       bridgeConfig.preserveOnShutdown = await writeBridgePointer(
         dir,
         {
-          sessionId: Ge ?? "",
+          sessionId: priorSessionId ?? "",
           environmentId,
           source: "standalone",
           pid: process.pid,
           procStart: await ownProcStartAsync(),
-          ...(Qe?.length && {
-            activeSessionIds: Qe,
-            activeSessionIdsPersistedAt: Ae,
+          ...(carriedSessionIds?.length && {
+            activeSessionIds: carriedSessionIds,
+            activeSessionIdsPersistedAt: carriedSessionIdsAt,
           }),
-          ...(ct.length > 0 && {
-            parkedProjectThreadSessionIds: ct,
-            parkedProjectThreadSessionIdsPersistedAt: Bt,
+          ...(freshParkedThreadIds.length > 0 && {
+            parkedProjectThreadSessionIds: freshParkedThreadIds,
+            parkedProjectThreadSessionIdsPersistedAt: parkedThreadIdsAt,
           }),
         },
         storageV5,
@@ -4263,24 +4760,29 @@ Exiting in about ${Math.round(v / 1000)} seconds.`
           process.exit(1);
         }
       }
-      vt = Ge;
-      if (vt) {
-        let infraSessionId = toInfraSessionId(vt);
-        let r = infraSessionId === vt ? [vt] : [vt, infraSessionId];
-        let F = false;
-        let D = [];
-        for (let ae of r)
+      adoptedSessionId = priorSessionId;
+      if (adoptedSessionId) {
+        let infraSessionId = toInfraSessionId(adoptedSessionId);
+        let candidateIds =
+          infraSessionId === adoptedSessionId ? [adoptedSessionId] : [adoptedSessionId, infraSessionId];
+        let reconnected = false;
+        let reconnectErrors = [];
+        for (let candidateId of candidateIds)
           try {
-            await api.reconnectSession(environmentId, ae);
-            logForDebugging(`[bridge:init] Adopted session ${ae} re-queued via bridge/reconnect`);
-            F = true;
+            await api.reconnectSession(environmentId, candidateId);
+            logForDebugging(`[bridge:init] Adopted session ${candidateId} re-queued via bridge/reconnect`);
+            reconnected = true;
             break;
           } catch (err) {
-            D.push(err);
-            logForDebugging(`[bridge:init] reconnectSession(${ae}) failed: ${errorMessage(err)}`);
+            reconnectErrors.push(err);
+            logForDebugging(`[bridge:init] reconnectSession(${candidateId}) failed: ${errorMessage(err)}`);
           }
-        if (!F)
-          if (D.length > 0 && D.every((ae) => ae instanceof BridgeFatalError)) vt = undefined;
+        if (!reconnected)
+          if (
+            reconnectErrors.length > 0 &&
+            reconnectErrors.every((error) => error instanceof BridgeFatalError)
+          )
+            adoptedSessionId = undefined;
           else
             logForDebugging(
               "[bridge:init] reconnectSession transient failure; session will be picked up passively once its lease expires",
@@ -4289,20 +4791,20 @@ Exiting in about ${Math.round(v / 1000)} seconds.`
               },
             );
       }
-      if (lt?.length) {
-        Be.push(...lt);
-        let R = await requeueProjectThreadSessions(api, environmentId, lt);
+      if (freshProjectThreadIds?.length) {
+        boundedResumeIds.push(...freshProjectThreadIds);
+        let requeueResult = await requeueProjectThreadSessions(api, environmentId, freshProjectThreadIds);
         logForDebugging(
-          `[bridge:init] project thread sessions: ${R.requeued} re-queued, ${R.dropped} ended, ${R.deferred} left to the next message`,
+          `[bridge:init] project thread sessions: ${requeueResult.requeued} re-queued, ${requeueResult.dropped} ended, ${requeueResult.deferred} left to the next message`,
         );
       }
     }
-  bridgeConfig.boundedResumeSessionIds = Be;
-  let Xt;
+  bridgeConfig.boundedResumeSessionIds = boundedResumeIds;
+  let resumedSessionId;
   if (resumeSessionId)
-    if (Le && environmentId !== Le) {
+    if (resumeEnvironmentId && environmentId !== resumeEnvironmentId) {
       logForDebugging(
-        `Bridge resume env mismatch: requested ${Le}, backend returned ${environmentId}. Falling back to fresh session.`,
+        `Bridge resume env mismatch: requested ${resumeEnvironmentId}, backend returned ${environmentId}. Falling back to fresh session.`,
         {
           level: "error",
         },
@@ -4311,16 +4813,18 @@ Exiting in about ${Math.round(v / 1000)} seconds.`
         `Warning: Could not resume session ${resumeSessionId} \u2014 its environment has expired. Creating a fresh session instead.`,
       );
     } else {
-      if (Te) Gt = await unarchiveBridgeSessionIfNeeded(resumeSessionId, baseUrl, credentials);
+      if (resumeArchived)
+        unarchivedOk = await unarchiveBridgeSessionIfNeeded(resumeSessionId, baseUrl, credentials);
       let infraResumeId = toInfraSessionId(resumeSessionId);
-      let v = infraResumeId === resumeSessionId ? [resumeSessionId] : [resumeSessionId, infraResumeId];
+      let candidates =
+        infraResumeId === resumeSessionId ? [resumeSessionId] : [resumeSessionId, infraResumeId];
       let reconnected = false;
       let lastReconnectErr;
-      for (let candidateId of v)
+      for (let candidateId of candidates)
         try {
           await api.reconnectSession(environmentId, candidateId);
           logForDebugging(`[bridge:init] Session ${candidateId} re-queued via bridge/reconnect`);
-          Xt = resumeSessionId;
+          resumedSessionId = resumeSessionId;
           reconnected = true;
           bridgeConfig.preserveOnShutdown = true;
           bridgeConfig.ownsPointer = false;
@@ -4330,23 +4834,25 @@ Exiting in about ${Math.round(v / 1000)} seconds.`
           logForDebugging(`[bridge:init] reconnectSession(${candidateId}) failed: ${errorMessage(err)}`);
         }
       if (!reconnected) {
-        let r = lastReconnectErr;
-        let isFatal = r instanceof BridgeFatalError;
-        if (Gt && isFatal)
+        let reconnectError = lastReconnectErr;
+        let isFatal = reconnectError instanceof BridgeFatalError;
+        if (unarchivedOk && isFatal)
           await logFeatureBadAsync("bridge_session_unarchive", "abandoned_after_fatal_reconnect");
         if (pointerDir && isFatal) {
-          let { clearBridgePointer } = await import("./chunk-8z86ydvk.js");
+          let { clearBridgePointer } = await import("./bridgePointer.js");
           await clearBridgePointer(pointerDir, storageV5);
         }
         console.error(
           isFatal
-            ? r instanceof BridgeFatalError && r.status !== 401 && isExpiredErrorType(r.errorType)
-              ? `Error: ${withReconnectHint(r.message)}`
-              : `Error: ${errorMessage(r)}`
-            : `Error: Failed to reconnect session ${resumeSessionId}: ${errorMessage(r)}
+            ? reconnectError instanceof BridgeFatalError &&
+              reconnectError.status !== 401 &&
+              isExpiredErrorType(reconnectError.errorType)
+              ? `Error: ${withReconnectHint(reconnectError.message)}`
+              : `Error: ${errorMessage(reconnectError)}`
+            : `Error: Failed to reconnect session ${resumeSessionId}: ${errorMessage(reconnectError)}
 The session may still be resumable \u2014 try running the same command again.`,
         );
-        let { exitAfterAnalyticsFlush } = await import("./chunk-kahpc3cs.js");
+        let { exitAfterAnalyticsFlush } = await import("../cli/exit.js");
         await exitAfterAnalyticsFlush(1);
       }
     }
@@ -4381,10 +4887,13 @@ The session may still be resumable \u2014 try running the same command again.`,
       api,
       logger: spawner,
     });
-    let _ = await toolHostSetup.startupNotice();
-    if (_ !== undefined) {
-      let v = wrapAnsi(_.unattended ? `${WARNING_GLYPH}  ${_.text}` : _.text, process.stdout.columns || 80);
-      console.log(`${_.unattended ? sequential.yellow(v) : v}
+    let startupNotice = await toolHostSetup.startupNotice();
+    if (startupNotice !== undefined) {
+      let noticeText = wrapAnsi(
+        startupNotice.unattended ? `${WARNING_GLYPH}  ${startupNotice.text}` : startupNotice.text,
+        process.stdout.columns || 80,
+      );
+      console.log(`${startupNotice.unattended ? sequential.yellow(noticeText) : noticeText}
 `);
     }
     if (bridgeConfig.toolHostHandler === undefined)
@@ -4407,31 +4916,31 @@ The session may still be resumable \u2014 try running the same command again.`,
     onActivity: (sessionId, activity) => {
       logForDebugging(`[bridge:activity] sessionId=${sessionId} ${activity.type} ${activity.summary}`);
     },
-    onChildWarning: (_, v) => spawner.logWarning(`${v} (${_})`),
+    onChildWarning: (childName, warning) => spawner.logWarning(`${warning} (${childName})`),
     ownerIdentity,
   });
-  let { parseGitHubRepository } = await import("./chunk-zqrznfbt.js");
+  let { parseGitHubRepository } = await import("../utils/detectRepository.js");
   let ownerRepo = gitRepoUrl ? parseGitHubRepository(gitRepoUrl) : null;
   let repoName = ownerRepo ? ownerRepo.split("/").pop() : basename(dir);
-  spawner.setRepoInfo(repoName, Ot ? branch : "");
+  spawner.setRepoInfo(repoName, isGitRepo ? branch : "");
   let toggleAvailable = effectiveSpawnMode !== "single-session" && worktreeAvailable;
   if (toggleAvailable) spawner.setSpawnModeDisplay(effectiveSpawnMode);
   let onStdinData = (data) => {
-    let v = firstByte(data);
-    if (v === 3 || v === 4) {
+    let keyCode = firstByte(data);
+    if (keyCode === 3 || keyCode === 4) {
       process.emit("SIGINT");
       return;
     }
-    if (v === 120) {
+    if (keyCode === 120) {
       toolHostSetup?.disconnectKey();
       return;
     }
     toolHostSetup?.cancelDisconnect();
-    if (v === 32) {
+    if (keyCode === 32) {
       spawner.toggleQr();
       return;
     }
-    if (v === 119) {
+    if (keyCode === 119) {
       if (!toggleAvailable) return;
       let newMode = bridgeConfig.spawnMode === "same-dir" ? "worktree" : "same-dir";
       bridgeConfig.spawnMode = newMode;
@@ -4453,7 +4962,7 @@ The session may still be resumable \u2014 try running the same command again.`,
       return;
     }
   };
-  let { markPrintModeSignalHandlersRegistered } = await import("./chunk-r3wdn2dp.js");
+  let { markPrintModeSignalHandlersRegistered } = await import("../utils/gracefulShutdown.js");
   if (process.stdin.isTTY) {
     setRawModeSafe(process.stdin, true);
     process.stdin.resume();
@@ -4471,7 +4980,7 @@ The session may still be resumable \u2014 try running the same command again.`,
     logForDebugging("[bridge:shutdown] SIGTERM received, shutting down");
     controller.abort();
   };
-  let kn = () => {
+  let onSighup = () => {
     logForDebugging("[bridge:shutdown] SIGHUP received, shutting down");
     spawner.detachTerminal();
     process.stdin.off("data", onStdinData);
@@ -4481,29 +4990,29 @@ The session may still be resumable \u2014 try running the same command again.`,
   markPrintModeSignalHandlersRegistered();
   process.on("SIGINT", onSigint);
   process.on("SIGTERM", onSigterm);
-  process.on("SIGHUP", kn);
-  let initialSessionId = Xt ?? vt ?? null;
+  process.on("SIGHUP", onSighup);
+  let initialSessionId = resumedSessionId ?? adoptedSessionId ?? null;
   let initialSessionTitle;
-  if (createSessionInDir && !Xt && !vt) {
-    let _ = name ?? `${getBridgeSessionNamePrefix()}-${randomWordSlug()}`;
-    let { createBridgeSession } = await import("./chunk-3eyvtwsv.js");
+  if (createSessionInDir && !resumedSessionId && !adoptedSessionId) {
+    let title = name ?? `${getBridgeSessionNamePrefix()}-${randomWordSlug()}`;
+    let { createBridgeSession } = await import("./createSession.js");
     try {
-      let y = useAsyncAuth ? await getBridgeAccessTokenAsync(credentials) : undefined;
+      let presetToken = useAsyncAuth ? await getBridgeAccessTokenAsync(credentials) : undefined;
       initialSessionId = await createBridgeSession({
         environmentId,
-        title: _,
+        title,
         gitRepoUrl,
         branch,
         defaultBranch,
         signal: controller.signal,
         baseUrl,
-        getAccessToken: useAsyncAuth ? () => y : getBridgeAccessToken,
+        getAccessToken: useAsyncAuth ? () => presetToken : getBridgeAccessToken,
         credentials,
         permissionMode,
         tags: [REMOTE_CONTROL_CLI],
       });
       if (initialSessionId) {
-        if (!name) initialSessionTitle = _;
+        if (!name) initialSessionTitle = title;
         logForDebugging(`[bridge:init] Created initial session ${initialSessionId}`);
       }
     } catch (err) {
@@ -4511,38 +5020,42 @@ The session may still be resumable \u2014 try running the same command again.`,
     }
   }
   let pointerRefreshTimer = null;
-  let yn =
-    initialSessionId ?? (bridgeConfig.preserveOnShutdown ? (Ge ?? "") : createSessionInDir ? "" : null);
-  if (ct.length > 0 && environmentId === (resumeSessionId ? Mt : _e)) {
-    bridgeConfig.parkedProjectThreadSessionIds = ct;
-    bridgeConfig.parkedProjectThreadSessionIdsPersistedAt = Bt;
+  let pointerSessionId =
+    initialSessionId ??
+    (bridgeConfig.preserveOnShutdown ? (priorSessionId ?? "") : createSessionInDir ? "" : null);
+  if (
+    freshParkedThreadIds.length > 0 &&
+    environmentId === (resumeSessionId ? pointerEnvironmentId : requestedEnvironmentId)
+  ) {
+    bridgeConfig.parkedProjectThreadSessionIds = freshParkedThreadIds;
+    bridgeConfig.parkedProjectThreadSessionIdsPersistedAt = parkedThreadIdsAt;
   }
   let pointerRecord = null;
-  if (yn !== null && !Ct) {
+  if (pointerSessionId !== null && !pointerWriterRunning) {
     let {
       writeBridgePointer,
       createBridgePointerWriteQueue,
       PERSISTED_SESSION_RESUME_WINDOW_MS,
       isPersistedStampFresh,
-    } = await import("./chunk-8z86ydvk.js");
-    let { ownProcStartAsync } = await import("./chunk-v19g02mx.js");
-    let bridgePointerWriteQueue = createBridgePointerWriteQueue();
-    bridgeConfig.enqueuePointerWrite = bridgePointerWriteQueue;
+    } = await import("./bridgePointer.js");
+    let { ownProcStartAsync } = await import("../utils/captureProcessStartTimeAsync.lazy.js");
+    let queue = createBridgePointerWriteQueue();
+    bridgeConfig.enqueuePointerWrite = queue;
     pointerRecord = {
-      sessionId: yn,
+      sessionId: pointerSessionId,
       environmentId,
       source: "standalone",
       pid: process.pid,
       procStart: await ownProcStartAsync(),
-      ...(environmentId === _e &&
-        Qe?.length && {
-          activeSessionIds: Qe,
-          activeSessionIdsPersistedAt: Ae,
+      ...(environmentId === requestedEnvironmentId &&
+        carriedSessionIds?.length && {
+          activeSessionIds: carriedSessionIds,
+          activeSessionIdsPersistedAt: carriedSessionIdsAt,
         }),
       ...(resumeSessionId &&
-        environmentId === Mt &&
-        lt?.length && {
-          projectThreadSessionIds: lt,
+        environmentId === pointerEnvironmentId &&
+        freshProjectThreadIds?.length && {
+          projectThreadSessionIds: freshProjectThreadIds,
           projectThreadSessionIdsPersistedAt,
         }),
       ...(bridgeConfig.parkedProjectThreadSessionIds && {
@@ -4560,36 +5073,41 @@ The session may still be resumable \u2014 try running the same command again.`,
         pointerRecord,
         storageV5,
         controller.signal,
-        bridgePointerWriteQueue,
+        queue,
         PERSISTED_SESSION_RESUME_WINDOW_MS,
         isPersistedStampFresh,
         () => bridgeConfig.pointerCleared === true,
       );
     }
   }
-  let n = bridgeConfig.enqueuePointerWrite ?? ((_) => _());
-  if (bridgeConfig.ownsPointer && pointerRecord !== null && environmentId === _e && Qe?.length) {
-    let _ = pointerRecord;
-    let v = Qe;
-    let { writeBridgePointer } = await import("./chunk-8z86ydvk.js");
-    bridgeConfig.onSessionServiced = (R) => {
-      if (_.activeSessionIds === undefined) {
-        v = [];
+  let enqueueWrite = bridgeConfig.enqueuePointerWrite ?? ((task) => task());
+  if (
+    bridgeConfig.ownsPointer &&
+    pointerRecord !== null &&
+    environmentId === requestedEnvironmentId &&
+    carriedSessionIds?.length
+  ) {
+    let record = pointerRecord;
+    let carriedIds = carriedSessionIds;
+    let { writeBridgePointer } = await import("./bridgePointer.js");
+    bridgeConfig.onSessionServiced = (sessionId) => {
+      if (record.activeSessionIds === undefined) {
+        carriedIds = [];
         return;
       }
-      let r = sessionIdBody(R);
-      let filtered = v.filter((ae) => sessionIdBody(ae) !== r);
-      if (filtered.length === v.length) return;
-      v = filtered;
-      if (filtered.length > 0) _.activeSessionIds = filtered;
+      let body = sessionIdBody(sessionId);
+      let filtered = carriedIds.filter((id) => sessionIdBody(id) !== body);
+      if (filtered.length === carriedIds.length) return;
+      carriedIds = filtered;
+      if (filtered.length > 0) record.activeSessionIds = filtered;
       else {
-        delete _.activeSessionIds;
-        delete _.activeSessionIdsPersistedAt;
+        delete record.activeSessionIds;
+        delete record.activeSessionIdsPersistedAt;
       }
-      let D = {
-        ..._,
+      let nextRecord = {
+        ...record,
       };
-      n(() => writeBridgePointer(bridgeConfig.dir, D, storageV5));
+      enqueueWrite(() => writeBridgePointer(bridgeConfig.dir, nextRecord, storageV5));
     };
   }
   try {
@@ -4603,8 +5121,8 @@ The session may still be resumable \u2014 try running the same command again.`,
         ? spawner
         : {
             ...spawner,
-            printBanner: (_, v) => {
-              spawner.printBanner(_, v);
+            printBanner: (config, environmentId) => {
+              spawner.printBanner(config, environmentId);
               toolHostSetup.bannerDrawn();
             },
           },
@@ -4642,18 +5160,18 @@ The session may still be resumable \u2014 try running the same command again.`,
   } finally {
     await toolHostSetup?.stopHelpers();
     toolHostSetup?.stop();
-    await Wt?.remove();
+    await unattendedGrant?.remove();
     if (pointerRefreshTimer !== null) clearInterval(pointerRefreshTimer);
     process.off("SIGINT", onSigint);
     process.off("SIGTERM", onSigterm);
-    process.off("SIGHUP", kn);
+    process.off("SIGHUP", onSighup);
     process.stdin.off("data", onStdinData);
     if (process.stdin.isTTY) setRawModeSafe(process.stdin, false);
     process.stdin.pause();
   }
   await waitForInFlightOAuthRefresh(OAUTH_REFRESH_EXIT_WAIT_CAP_MS);
   await drainRegisteredWriteQueues();
-  let { flushAnalyticsBeforeExit } = await import("./chunk-kahpc3cs.js");
+  let { flushAnalyticsBeforeExit } = await import("../cli/exit.js");
   await flushAnalyticsBeforeExit({
     waitForOAuthRefresh: false,
   });
@@ -4699,55 +5217,57 @@ function policyDenialError(kind, detail) {
  */
 async function runBridgeHeadless(opts, signal) {
   let { dir, log } = opts;
-  let U = processWrapperError();
-  if (U)
+  let launcherError = processWrapperError();
+  if (launcherError)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${U} \u2014 Remote Control sessions are not started unwrapped; the worker retries once the launcher is fixed`,
+      `${launcherError} \u2014 Remote Control sessions are not started unwrapped; the worker retries once the launcher is fixed`,
       "Remote Control worker refused: corporate launcher unresolvable (transient)",
     );
   processChdir(dir);
-  let { setOriginalCwd, setCwdState, isHomeDirectorySession } = await import("./chunk-nj7t53r7.js");
+  let { setOriginalCwd, setCwdState, isHomeDirectorySession } = await import("../bootstrap/state.js");
   setOriginalCwd(dir);
   setCwdState(dir);
-  let { enableConfigs, checkHasTrustDialogAccepted } = await import("./chunk-eesswvbz.js");
+  let { enableConfigs, checkHasTrustDialogAccepted } = await import("../utils/config.js");
   await enableConfigs();
-  let { initSinks } = await import("./chunk-19b0wnnf.js");
+  let { initSinks } = await import("../utils/sinks.js");
   initSinks();
-  let { getSettingsWithErrors } = await import("./chunk-0crvnfjy.js");
+  let { getSettingsWithErrors } = await import("../utils/settings/settings.lazy.js");
   if (getSettingsWithErrors().settings.disableRemoteControl === true)
     throw new BridgeHeadlessPermanentError(REMOTE_CONTROL_DISABLED_BY_POLICY_MESSAGE);
-  let { composePolicyLimitsClient, primePolicyLimitsCache } = await import("./chunk-qchbrsbw.js");
+  let { composePolicyLimitsClient, primePolicyLimitsCache } =
+    await import("../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js");
   composePolicyLimitsClient({
     storageV5: opts.storageV5,
     credentials: opts.credentials,
   });
   await primePolicyLimitsCache(opts.storageV5);
-  let { loadPolicyLimits } = await import("./chunk-qchbrsbw.js");
-  let { policyDeniedReason, policyDenyKind } = await import("./chunk-sbc4zy7a.js");
+  let { loadPolicyLimits } = await import("../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js");
+  let { policyDeniedReason, policyDenyKind } =
+    await import("../services/policyLimits/CLIENT_POLICY_KEYS.lazy.js");
   await loadPolicyLimits();
-  let G = policyDenialError(
+  let policyError = policyDenialError(
     policyDenyKind("allow_remote_control"),
     policyDeniedReason("allow_remote_control", "Remote Control", "is"),
   );
-  if (G) throw G;
+  if (policyError) throw policyError;
   if (!checkHasTrustDialogAccepted()) {
-    let Se = stripInvisibleChars(dir);
+    let dirLabel = stripInvisibleChars(dir);
     throw new BridgeHeadlessPermanentError(
       isHomeDirectorySession()
-        ? `Workspace not trusted: ${Se} is the home directory, whose trust is never saved \u2014 running \`claude\` there first won't help. Run Remote Control from a project directory instead.`
-        : `Workspace not trusted: ${Se}. Run \`claude\` in that directory first to accept the trust dialog.`,
+        ? `Workspace not trusted: ${dirLabel} is the home directory, whose trust is never saved \u2014 running \`claude\` there first won't help. Run Remote Control from a project directory instead.`
+        : `Workspace not trusted: ${dirLabel}. Run \`claude\` in that directory first to accept the trust dialog.`,
     );
   }
   if (!opts.getAccessToken()) throw Error(BRIDGE_LOGIN_ERROR);
-  let { getBridgeBaseUrl } = await import("./chunk-prxvet9q.js");
+  let { getBridgeBaseUrl } = await import("./bridgeConfig.js");
   let baseUrl = getBridgeBaseUrl();
   if (baseUrl.startsWith("http://") && !baseUrl.includes("localhost") && !baseUrl.includes("127.0.0.1"))
     throw new BridgeHeadlessPermanentError(
       "Remote Control base URL uses HTTP. Only HTTPS or localhost HTTP is allowed.",
     );
   let sessionIngressUrl = baseUrl;
-  let { snapshotGitEvidenceForBridge, findGitRoot } = await import("./chunk-rqvep8jc.js");
-  let { hasWorktreeCreateHook } = await import("./chunk-zpcme3sa.js");
+  let { snapshotGitEvidenceForBridge, findGitRoot } = await import("../utils/git.js");
+  let { hasWorktreeCreateHook } = await import("../utils/hooks/worktreeHooks.js");
   if (opts.spawnMode === "worktree") {
     if (!(hasWorktreeCreateHook() || findGitRoot(dir) !== null))
       throw new BridgeHeadlessPermanentError(
@@ -4757,18 +5277,18 @@ async function runBridgeHeadless(opts, signal) {
   let hostProfileIfShared = collectHostProfileIfShared(signal);
   let { branch, gitRepoUrl, defaultBranch } = await snapshotGitEvidenceForBridge();
   let machineName = hostname();
-  let { getOrCreateRemoteControlMachineId } = await import("./chunk-eesswvbz.js");
+  let { getOrCreateRemoteControlMachineId } = await import("../utils/config.js");
   let machineId = await getOrCreateRemoteControlMachineId(opts.storageV5);
   let bridgeId = randomUUID();
   let requestedEnvironmentId;
-  let ee = false;
-  let ce = [];
-  let Re;
-  let le;
+  let pointerWriterRunning = false;
+  let carriedSessionIds = [];
+  let carriedSessionIdsAt;
+  let freshProjectThreadIds;
   let projectThreadSessionIdsPersistedAt;
-  let L = [];
+  let freshParkedThreadIds = [];
   let parkedProjectThreadSessionIdsPersistedAt;
-  let je = [];
+  let carriedThreadIds = [];
   {
     let {
       readBridgePointer,
@@ -4776,7 +5296,7 @@ async function runBridgeHeadless(opts, signal) {
       isPersistedStampFresh,
       freshProjectThreadSessionIds,
       freshParkedProjectThreadSessionIds,
-    } = await import("./chunk-8z86ydvk.js");
+    } = await import("./bridgePointer.js");
     let pointer = await readBridgePointer(
       dir,
       {
@@ -4785,14 +5305,15 @@ async function runBridgeHeadless(opts, signal) {
       opts.storageV5,
     );
     if (pointer) {
-      let { isProcessRunning, isSameProcessAsync } = await import("./chunk-v19g02mx.js");
+      let { isProcessRunning, isSameProcessAsync } =
+        await import("../utils/captureProcessStartTimeAsync.lazy.js");
       if (
         pointer.pid !== undefined &&
         pointer.pid !== process.pid &&
         isProcessRunning(pointer.pid) &&
         (await isSameProcessAsync(pointer.pid, pointer.procStart))
       ) {
-        ee = true;
+        pointerWriterRunning = true;
         log(
           `pointer writer pid ${pointer.pid} still running; registering fresh env, deferring pointer write`,
         );
@@ -4807,12 +5328,12 @@ async function runBridgeHeadless(opts, signal) {
             PERSISTED_SESSION_RESUME_WINDOW_MS,
           )
         ) {
-          ce = pointer.activeSessionIds ?? [];
-          Re = pointer.activeSessionIdsPersistedAt;
+          carriedSessionIds = pointer.activeSessionIds ?? [];
+          carriedSessionIdsAt = pointer.activeSessionIdsPersistedAt;
         }
         if (isRcChildRestartResumeEnabled()) {
-          le = freshProjectThreadSessionIds(pointer, Date.now());
-          L = freshParkedProjectThreadSessionIds(pointer, Date.now());
+          freshProjectThreadIds = freshProjectThreadSessionIds(pointer, Date.now());
+          freshParkedThreadIds = freshParkedProjectThreadSessionIds(pointer, Date.now());
           parkedProjectThreadSessionIdsPersistedAt = pointer.parkedProjectThreadSessionIdsPersistedAt;
           projectThreadSessionIdsPersistedAt = pointer.projectThreadSessionIdsPersistedAt;
         }
@@ -4889,53 +5410,55 @@ async function runBridgeHeadless(opts, signal) {
     heartbeat_interval_ms: getPollIntervalConfig().non_exclusive_heartbeat_interval_ms,
     headless: true,
   });
-  let st = [];
-  let mt = [];
-  if (environmentId === requestedEnvironmentId && le?.length) {
-    let Se = new Set(ce.map(sessionIdBody));
-    let filtered = le.filter((Ge) => !Se.has(sessionIdBody(Ge)));
-    bridgeConfig.boundedResumeSessionIds = filtered;
-    let _e = await requeueProjectThreadSessions(api, environmentId, filtered, signal);
-    je = _e.unattempted;
+  let unreachedCarriedIds = [];
+  let retryCarriedIds = [];
+  if (environmentId === requestedEnvironmentId && freshProjectThreadIds?.length) {
+    let carriedBodies = new Set(carriedSessionIds.map(sessionIdBody));
+    let sessionIds = freshProjectThreadIds.filter(
+      (sessionId) => !carriedBodies.has(sessionIdBody(sessionId)),
+    );
+    bridgeConfig.boundedResumeSessionIds = sessionIds;
+    let requeueResult = await requeueProjectThreadSessions(api, environmentId, sessionIds, signal);
+    carriedThreadIds = requeueResult.unattempted;
     log(
-      `project thread sessions: ${_e.requeued} re-queued, ${_e.dropped} ended, ${_e.deferred} left to the next message, ${_e.unattempted.length} carried`,
+      `project thread sessions: ${requeueResult.requeued} re-queued, ${requeueResult.dropped} ended, ${requeueResult.deferred} left to the next message, ${requeueResult.unattempted.length} carried`,
     );
     logEvent("tengu_bridge_project_thread_requeue", {
-      requested: filtered.length,
-      requeued: _e.requeued,
-      dropped: _e.dropped,
-      deferred: _e.deferred,
-      unattempted: _e.unattempted.length,
+      requested: sessionIds.length,
+      requeued: requeueResult.requeued,
+      dropped: requeueResult.dropped,
+      deferred: requeueResult.deferred,
+      unattempted: requeueResult.unattempted.length,
     });
   }
-  if (environmentId === requestedEnvironmentId && L.length > 0) {
-    bridgeConfig.parkedProjectThreadSessionIds = L;
+  if (environmentId === requestedEnvironmentId && freshParkedThreadIds.length > 0) {
+    bridgeConfig.parkedProjectThreadSessionIds = freshParkedThreadIds;
     bridgeConfig.parkedProjectThreadSessionIdsPersistedAt = parkedProjectThreadSessionIdsPersistedAt;
   }
-  if (environmentId === requestedEnvironmentId && ce.length > 0) {
-    bridgeConfig.carriedSessionIds = ce;
-    log(`re-queuing ${ce.length} session(s) interrupted by the previous shutdown`);
-    let Se = false;
-    for (let [ke, _e] of ce.entries()) {
+  if (environmentId === requestedEnvironmentId && carriedSessionIds.length > 0) {
+    bridgeConfig.carriedSessionIds = carriedSessionIds;
+    log(`re-queuing ${carriedSessionIds.length} session(s) interrupted by the previous shutdown`);
+    let aborted = false;
+    for (let [index, sessionId] of carriedSessionIds.entries()) {
       if (signal.aborted) {
-        Se = true;
-        st = ce.slice(ke);
+        aborted = true;
+        unreachedCarriedIds = carriedSessionIds.slice(index);
         break;
       }
-      let Ge = await describeReregisterOutcome(api, environmentId, _e, signal);
-      log(`re-queue ${_e}: ${Ge}`);
-      if (Ge === "aborted") {
-        Se = true;
-        st = ce.slice(ke);
+      let outcome = await describeReregisterOutcome(api, environmentId, sessionId, signal);
+      log(`re-queue ${sessionId}: ${outcome}`);
+      if (outcome === "aborted") {
+        aborted = true;
+        unreachedCarriedIds = carriedSessionIds.slice(index);
         break;
       }
-      if (Ge === "retry") mt.push(_e);
+      if (outcome === "retry") retryCarriedIds.push(sessionId);
     }
-    if (!Se && mt.length === 0) logFeatureOk("bridge_shutdown_requeue");
-  } else if (ce.length > 0) logFeatureBad("bridge_shutdown_requeue", "env_reuse_declined");
-  if (mt.length > 0 || st.length > 0) {
-    bridgeConfig.initialSessionRequeues = [...st, ...mt];
-    bridgeConfig.initialSessionRequeuesPersistedAt = Re;
+    if (!aborted && retryCarriedIds.length === 0) logFeatureOk("bridge_shutdown_requeue");
+  } else if (carriedSessionIds.length > 0) logFeatureBad("bridge_shutdown_requeue", "env_reuse_declined");
+  if (retryCarriedIds.length > 0 || unreachedCarriedIds.length > 0) {
+    bridgeConfig.initialSessionRequeues = [...unreachedCarriedIds, ...retryCarriedIds];
+    bridgeConfig.initialSessionRequeuesPersistedAt = carriedSessionIdsAt;
   }
   let spawner = createHeadlessBridgeLogger(log);
   try {
@@ -4962,13 +5485,13 @@ async function runBridgeHeadless(opts, signal) {
     verbose: false,
     permissionMode: opts.permissionMode,
     onDebug: log,
-    onChildWarning: (Se, ke) => spawner.logWarning(`${ke} (${Se})`),
+    onChildWarning: (childName, warning) => spawner.logWarning(`${warning} (${childName})`),
     ownerIdentity,
   });
   spawner.printBanner(bridgeConfig, environmentId);
   let initialSessionId;
   if (opts.createSessionOnStart) {
-    let { createBridgeSession } = await import("./chunk-3eyvtwsv.js");
+    let { createBridgeSession } = await import("./createSession.js");
     try {
       let sid = await createBridgeSession({
         environmentId,
@@ -4990,8 +5513,8 @@ async function runBridgeHeadless(opts, signal) {
       log(`session pre-creation failed (non-fatal): ${errorMessage(err)}`);
     }
   }
-  let pt = null;
-  if (!ee) {
+  let pointerTimer = null;
+  if (!pointerWriterRunning) {
     if (requestedEnvironmentId && environmentId !== requestedEnvironmentId)
       log(
         `env reuse mismatch: requested ${requestedEnvironmentId}, backend returned ${environmentId}; existing sessions will not reconnect`,
@@ -5001,20 +5524,20 @@ async function runBridgeHeadless(opts, signal) {
       createBridgePointerWriteQueue,
       PERSISTED_SESSION_RESUME_WINDOW_MS,
       isPersistedStampFresh,
-    } = await import("./chunk-8z86ydvk.js");
-    let { ownProcStartAsync } = await import("./chunk-v19g02mx.js");
-    let Ae = {
+    } = await import("./bridgePointer.js");
+    let { ownProcStartAsync } = await import("../utils/captureProcessStartTimeAsync.lazy.js");
+    let pointerRecord = {
       sessionId: initialSessionId ?? "",
       environmentId,
       source: "standalone",
       pid: process.pid,
       procStart: await ownProcStartAsync(),
-      ...(st.length > 0 && {
-        activeSessionIds: st,
-        activeSessionIdsPersistedAt: Re,
+      ...(unreachedCarriedIds.length > 0 && {
+        activeSessionIds: unreachedCarriedIds,
+        activeSessionIdsPersistedAt: carriedSessionIdsAt,
       }),
-      ...(je.length > 0 && {
-        projectThreadSessionIds: je,
+      ...(carriedThreadIds.length > 0 && {
+        projectThreadSessionIds: carriedThreadIds,
         projectThreadSessionIdsPersistedAt,
       }),
       ...(bridgeConfig.parkedProjectThreadSessionIds && {
@@ -5022,15 +5545,15 @@ async function runBridgeHeadless(opts, signal) {
         parkedProjectThreadSessionIdsPersistedAt: bridgeConfig.parkedProjectThreadSessionIdsPersistedAt,
       }),
     };
-    bridgeConfig.preserveOnShutdown = await writeBridgePointer(dir, Ae, opts.storageV5);
+    bridgeConfig.preserveOnShutdown = await writeBridgePointer(dir, pointerRecord, opts.storageV5);
     bridgeConfig.ownsPointer = bridgeConfig.preserveOnShutdown;
     if (bridgeConfig.preserveOnShutdown) {
       bridgeConfig.enqueuePointerWrite = createBridgePointerWriteQueue();
-      pt = startPointerRefreshTimer(
+      pointerTimer = startPointerRefreshTimer(
         writeBridgePointer,
         ownProcStartAsync,
         dir,
-        Ae,
+        pointerRecord,
         opts.storageV5,
         signal,
         bridgeConfig.enqueuePointerWrite,
@@ -5040,9 +5563,9 @@ async function runBridgeHeadless(opts, signal) {
       );
     }
   }
-  let We;
+  let loopResult;
   try {
-    We = await runBridgeLoop(
+    loopResult = await runBridgeLoop(
       bridgeConfig,
       environmentId,
       environmentSecret,
@@ -5057,10 +5580,10 @@ async function runBridgeHeadless(opts, signal) {
       secretExpiresIn,
     );
   } finally {
-    if (pt) clearInterval(pt);
+    if (pointerTimer) clearInterval(pointerTimer);
   }
-  let qe = We && policyDenialError(We.kind, We.detail);
-  if (qe) throw qe;
+  let headlessPolicyError = loopResult && policyDenialError(loopResult.kind, loopResult.detail);
+  if (headlessPolicyError) throw headlessPolicyError;
 }
 //@ chunk-wbbfk060.js:107907-108740 fingerprint = createHeadlessBridgeLogger (0.953)
 function createHeadlessBridgeLogger(log) {
@@ -5075,7 +5598,7 @@ function createHeadlessBridgeLogger(log) {
     logSessionFailed: (id, err) => log(`session failed ${id}: ${err}`),
     logStatus: log,
     logVerbose: log,
-    logError: (S) => log(`error: ${S}`),
+    logError: (message) => log(`error: ${message}`),
     logWarning: (ms) => log(`warning: ${ms}`),
     logReconnected: (ms) => log(`reconnected after ${ms}ms`),
     addSession: (id, _url) => log(`session attached ${id}`),
@@ -5097,366 +5620,9 @@ function createHeadlessBridgeLogger(log) {
     detachTerminal: noop,
   };
 }
-//@ chunk-b30925fy.js:10731-10769 placement
-/**
- * 错误是否标记为可抑制（suppressible）。
- */
-function isSuppressibleError(error) {
-  return error.suppressible;
-}
-//@ chunk-b30925fy.js:10769-10996 placement
-/**
- * 错误分类给遥测：auth_failed / http_error / no_token / request_failed。
- */
-function classifyApiError(error) {
-  if (error instanceof BridgeFatalError) return error.status === 401 ? "auth_failed" : "http_error";
-  if (error instanceof Error) {
-    if (error.message === BRIDGE_LOGIN_INSTRUCTION) return "no_token";
-    if ("status" in error && typeof error.status === "number") return "http_error";
-  }
-  return "request_failed";
-}
-//@ chunk-b30925fy.js:10996-11165 placement = extractErrorTypeFromData (1)
-/**
- * 取响应体里的 error.type。
- */
-function extractErrorTypeFromData(data) {
-  if (data && typeof data === "object") {
-    if (
-      "error" in data &&
-      data.error &&
-      typeof data.error === "object" &&
-      "type" in data.error &&
-      typeof data.error.type === "string"
-    )
-      return data.error.type;
-  }
-  return;
-}
-//@ chunk-b30925fy.js:11165-11237 layout
-/**
- * environment secret 续期参数：最少剩余 1 小时才续期，提前量为有效期的 1/10（夹在 15 分钟到 1 天之间）再加最多 25% 抖动。
- */
-var RENEW_MAX_ATTEMPTS = 3;
-var RENEW_MAX_JITTER_PCT = 20;
-var MIN_RENEW_LEAD_MS = 60000;
-var RENEW_ONE_HOUR_MS = 3600000;
-var MIN_RENEW_BEFORE_MS = 900000;
-var MAX_RENEW_BEFORE_MS = 86400000;
-var RENEW_JITTER_FRACTION = 0.25;
-var MIN_RENEWABLE_LIFETIME_MS = 3600000;
-//@ chunk-b30925fy.js:11237-11408 fingerprint = addJitter (0.694)
-/**
- * 根据 expires_in 计算带抖动的续期时间点；剩余不足 1 小时返回 undefined。
- */
-function computeSecretRenewAt(expiresInSeconds, now = Date.now(), random = Math.random) {
-  if (
-    typeof expiresInSeconds !== "number" ||
-    !Number.isFinite(expiresInSeconds) ||
-    expiresInSeconds * 1000 < MIN_RENEWABLE_LIFETIME_MS
-  )
-    return;
-  let y = expiresInSeconds * 1000;
-  let v =
-    Math.min(Math.max(y / 10, MIN_RENEW_BEFORE_MS), MAX_RENEW_BEFORE_MS) *
-    (1 + RENEW_JITTER_FRACTION * random());
-  return now + y - v;
-}
-//@ chunk-b30925fy.js:11408-11447 layout
-var RENEW_RETRY_MIN_MS = 300000;
-var RENEW_RETRY_MAX_MS = 3600000;
-var RENEW_RETRY_LIMIT = 3;
-var RENEW_FAILURE_LIMIT = 5;
-//@ chunk-b30925fy.js:11447-14560 placement
-/**
- * 环境通告变化、密钥即将过期或轮询 401 时重新注册环境（[bridge:poll]）。
- */
-async function reregisterEnvironment({
-  api,
-  config,
-  environmentId,
-  activeSessions,
-  attempt,
-  trigger,
-  signal,
-}) {
-  if (trigger === "tool_host_advert_changed")
-    logForDebugging(
-      `[bridge:poll] What this environment advertises changed; re-registering environment ${environmentId} (attempt ${attempt})`,
-    );
-  else if (trigger === "proactive")
-    logForDebugging(
-      `[bridge:poll] Environment secret expires soon; re-registering environment ${environmentId} to renew it (attempt ${attempt})`,
-      {
-        level: "info",
-      },
-    );
-  else
-    logForDebugging(
-      `[bridge:poll] Poll returned ${trigger === "poll_401" ? 401 : 404}; re-registering environment ${environmentId} (attempt ${attempt}/${RENEW_MAX_ATTEMPTS})`,
-      {
-        level: "warn",
-      },
-    );
-  let h;
-  let R;
-  try {
-    let { hostProfile, ...i } = config;
-    let o = await filterSharedEnvironment(hostProfile);
-    config.hostProfile = o;
-    let toolHostAdvert = config.getToolHostAdvert?.();
-    R = toolHostAdvert;
-    h = await api.registerBridgeEnvironment(
-      {
-        ...i,
-        ...(o && {
-          hostProfile: o,
-        }),
-        ...(toolHostAdvert && {
-          getToolHostAdvert: () => toolHostAdvert,
-        }),
-        reuseEnvironmentId: environmentId,
-      },
-      signal,
-    );
-  } catch (error) {
-    let i =
-      error instanceof Error && error.message === BRIDGE_LOGIN_INSTRUCTION ? 401 : fatalClientStatus(error);
-    let o = i !== undefined;
-    logForDebugging(
-      `[bridge:poll] Re-registration of ${environmentId} ${o ? "rejected" : "failed transiently"}: ${errorMessage(error)}`,
-      {
-        level: o ? "error" : "warn",
-      },
-    );
-    if (
-      !o &&
-      R !== undefined &&
-      R.kind !== "unknown" &&
-      !isSameAdvertState(R, config.registeredToolHostAdvert)
-    )
-      config.registeredToolHostAdvert = "unconfirmed";
-    if (signal.aborted)
-      return {
-        outcome: "transient",
-      };
-    logEvent("tengu_bridge_env_reregister", {
-      attempt,
-      outcome: o ? lit("register_rejected") : lit("register_transient"),
-      trigger: fromEnum(trigger),
-    });
-    if (i !== undefined) {
-      if (trigger === "tool_host_advert_changed")
-        logFeatureSad("bridge_env_reregister", "advert_register_rejected");
-      else if (trigger === "proactive") logFeatureSad("bridge_env_reregister", "proactive_register_rejected");
-      else logFeatureBad("bridge_env_reregister", "register_rejected");
-      return {
-        outcome: "fatal",
-        reason: "register_rejected",
-        status: i,
-        message: errorMessage(error),
-      };
-    }
-    return {
-      outcome: "transient",
-      retryAfterMs: retryAfterMsOf(error),
-    };
-  }
-  if (h.environment_id !== environmentId) {
-    logForDebugging(
-      `[bridge:poll] Re-registration returned ${h.environment_id}, not ${environmentId}; not adopting it`,
-      {
-        level: "warn",
-      },
-    );
-    logEvent("tengu_bridge_env_reregister", {
-      attempt,
-      outcome: lit("replaced"),
-      trigger: fromEnum(trigger),
-    });
-    if (trigger === "tool_host_advert_changed") logFeatureSad("bridge_env_reregister", "advert_replaced");
-    else if (trigger === "proactive") logFeatureSad("bridge_env_reregister", "proactive_replaced");
-    else logFeatureBad("bridge_env_reregister", "replaced");
-    await api.deregisterEnvironment(h.environment_id).catch((error) =>
-      logForDebugging(
-        `[bridge:poll] Failed to delete replacement environment ${h.environment_id}: ${errorMessage(error)}`,
-        {
-          level: "warn",
-        },
-      ),
-    );
-    return {
-      outcome: "fatal",
-      reason: "replaced",
-    };
-  }
-  classifyAdvertChange(config, R, true);
-  let k = [...activeSessions.keys()];
-  logEvent("tengu_bridge_env_reregister", {
-    attempt,
-    outcome: lit("reregistered"),
-    active_sessions: k.length,
-    trigger: fromEnum(trigger),
-  });
-  logForDiagnosticsNoPII("info", "bridge_env_reregistered", {
-    attempt,
-    active_sessions: k.length,
-    trigger,
-  });
-  if (trigger === "proactive") {
-    logForDebugging(`[bridge:poll] Environment ${environmentId} re-registered in place; secret renewed`, {
-      level: "info",
-    });
-    return {
-      outcome: "reregistered",
-      environmentSecret: h.environment_secret,
-      ...(h.environment_secret_expires_in !== undefined && {
-        environmentSecretExpiresIn: h.environment_secret_expires_in,
-      }),
-      pendingRequeues: [],
-    };
-  }
-  logForDebugging(
-    `[bridge:poll] Environment ${environmentId} re-registered in place; re-queuing ${k.length} session(s)`,
-    {
-      level: "info",
-    },
-  );
-  let S = [];
-  for (let r of k) {
-    if (signal.aborted) break;
-    if (!activeSessions.has(r)) continue;
-    if ((await describeReregisterOutcome(api, environmentId, r, signal)) !== "done") S.push(r);
-  }
-  return {
-    outcome: "reregistered",
-    environmentSecret: h.environment_secret,
-    ...(h.environment_secret_expires_in !== undefined && {
-      environmentSecretExpiresIn: h.environment_secret_expires_in,
-    }),
-    pendingRequeues: S,
-  };
-}
-//@ chunk-b30925fy.js:14560-15121 placement
-async function describeAdvertChange({ api, config, environmentId, activeSessions, pacing, signal }) {
-  let T;
-  try {
-    let toolHostAdvert = config.getToolHostAdvert?.();
-    if (toolHostAdvert === undefined || toolHostAdvert.kind === "unknown") return;
-    if (isSameAdvertState(toolHostAdvert, config.registeredToolHostAdvert)) {
-      pacing.failures = 0;
-      return;
-    }
-    let k = pacing.notBefore - Date.now();
-    if (k > 0 && k <= RENEW_ONE_HOUR_MS) return;
-    T = await reregisterEnvironment({
-      api,
-      config,
-      environmentId,
-      activeSessions,
-      attempt: pacing.failures + 1,
-      trigger: "tool_host_advert_changed",
-      signal,
-    });
-  } catch (error) {
-    if (!signal.aborted) logError(error);
-  }
-  let h = T?.outcome === "reregistered" ? T : undefined;
-  pacing.failures = h ? 0 : pacing.failures + 1;
-  pacing.notBefore = Date.now() + Math.min(MIN_RENEW_LEAD_MS * 2 ** pacing.failures, RENEW_ONE_HOUR_MS);
-  return h;
-}
-//@ chunk-b30925fy.js:15121-15422 placement
-function classifyAdvertChange(e, n, p) {
-  if (n === undefined || (n.kind === "unknown" && p)) return;
-  let registeredToolHostAdvert = e.registeredToolHostAdvert;
-  let u =
-    n.kind === "advertise"
-      ? {
-          kind: "advertise",
-          advert: n.advert,
-        }
-      : {
-          kind: "withdraw",
-        };
-  e.registeredToolHostAdvert = u;
-  if (
-    !isSameAdvertState(
-      u,
-      registeredToolHostAdvert ?? {
-        kind: "withdraw",
-      },
-    )
-  )
-    logEvent("tengu_bridge_tool_host_advert", {
-      advertised: u.kind === "advertise",
-    });
-}
-//@ chunk-b30925fy.js:15422-15701 placement
-async function describeReregisterOutcome(trackedApi, environmentId, p, y) {
-  try {
-    await trackedApi.reconnectSession(environmentId, p, y);
-    return "done";
-  } catch (error) {
-    let v = hasFatalClientStatus(error);
-    logForDebugging(
-      `[bridge:poll] reconnectSession(${p}) after re-registration ${v ? "rejected" : "failed transiently"}: ${errorMessage(error)}`,
-      {
-        level: "warn",
-      },
-    );
-    if (v) return "done";
-    return y.aborted ? "aborted" : "retry";
-  }
-}
-//@ chunk-b30925fy.js:15701-15847 placement
-function isSameAdvertState(e, registeredToolHostAdvert) {
-  if (registeredToolHostAdvert === undefined || registeredToolHostAdvert === "unconfirmed") return false;
-  return e.kind === "advertise" && registeredToolHostAdvert.kind === "advertise"
-    ? En(e.advert, registeredToolHostAdvert.advert)
-    : e.kind === registeredToolHostAdvert.kind;
-}
-//@ chunk-b30925fy.js:15847-15969 placement
-/**
- * 错误对象中的 retryAfterMs。
- */
-function retryAfterMsOf(e) {
-  return e && typeof e === "object" && "retryAfterMs" in e && typeof e.retryAfterMs === "number"
-    ? e.retryAfterMs
-    : undefined;
-}
-//@ chunk-b30925fy.js:15969-16006 placement
-/**
- * 判断 API 错误是否带致命客户端状态（fatalClientStatus 有值即为致命，决定是否停止重试）。
- */
-function hasFatalClientStatus(e) {
-  return fatalClientStatus(e) !== undefined;
-}
-//@ chunk-b30925fy.js:16006-16207 placement
-function fatalClientStatus(e) {
-  if (e instanceof BridgeFatalError) return e.status;
-  if (
-    e &&
-    typeof e === "object" &&
-    "status" in e &&
-    typeof e.status === "number" &&
-    e.status >= 400 &&
-    e.status < 500 &&
-    e.status !== 408 &&
-    e.status !== 429
-  )
-    return e.status;
-  return;
-}
 //@ chunk-0knprqgt.js:13682-13722 fingerprint = isConnectionError (1)
 function isCodeSegment(err) {
   return err.kind === "code";
-}
-//@ chunk-3nztfxrw.js:44430-44564 fingerprint = formatDelay (0.486)
-function formatDelay(ms) {
-  if (ms < 1000) return `${ms}ms`;
-  if (ms % 60000 === 0) return `${ms / 60000}min`;
-  return ms % 1000 === 0 ? `${ms / 1000}s` : `${(ms / 1000).toFixed(1)}s`;
 }
 export {
   isCodeSegment,
@@ -5465,4 +5631,7 @@ export {
   hasFatalClientStatus,
   classifyApiError,
   extractErrorTypeFromData,
+  BridgeHeadlessPermanentError,
+  bridgeMain,
+  runBridgeHeadless,
 };

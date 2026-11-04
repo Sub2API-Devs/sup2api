@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:1578-2022 cjs-fingerprint
-var require_bit_buffer = x(function (cjsExports, cjsModule) {
+var require_bit_buffer = __commonJS(function (cjsExports, cjsModule) {
   function BitBuffer() {
     this.buffer = [];
     this.length = 0;

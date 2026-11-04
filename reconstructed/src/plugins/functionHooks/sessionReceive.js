@@ -9,33 +9,36 @@
  * attribution: placement 18
  */
 import { dropHopChain } from "../../utils/peerMessageHeaders.js";
-import { pu } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
+import { subscribe } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { TEAM_LEAD } from "../../utils/swarm/constants.js";
 import { HooksError } from "./hooksErrors.js";
 import { hasModuleHookingSite } from "../hooksModules/loadedModuleFilters.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { pluginsMatchingEvent } from "./hookDispatch.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:71511-71595 placement
 /**
  * 拼接文本块
  */
-var joinTextBlocks = (e, n) =>
-  e.flatMap((r) => (r.type === "text" && r.text !== undefined ? [r.text] : [])).join(n);
+var joinTextBlocks = (blocks, separator) =>
+  blocks
+    .flatMap((block) => (block.type === "text" && block.text !== undefined ? [block.text] : []))
+    .join(separator);
 //@ chunk-e6aww6q8.js:71595-71739 placement
 function receivedText(origin, content) {
-  let s = origin.kind === "peer" ? dropHopChain : (y) => y;
+  let clean = origin.kind === "peer" ? dropHopChain : (text) => text;
   return typeof content === "string"
-    ? s(content)
+    ? clean(content)
     : joinTextBlocks(
-        content.map((y) =>
-          y.type === "text"
+        content.map((block) =>
+          block.type === "text"
             ? {
-                ...y,
-                text: s(y.text),
+                ...block,
+                text: clean(block.text),
               }
-            : y,
+            : block,
         ),
         `
 `,
@@ -80,31 +83,31 @@ function agentMessageOrigin(origin) {
  * 代理消息接收槽：有接收器时经 session.receive 钩子处理，可被消费或改写后入队。
  */
 function createDeliveryReceiverSlot() {
-  let e = pu();
+  let receiverSlot = subscribe();
   return {
-    setDeliveryReceiver: e.set,
-    receiveAgentMessage: async (origin, r, s) => {
-      let h = e.get();
-      if (!h)
+    setDeliveryReceiver: receiverSlot.set,
+    receiveAgentMessage: async (origin, content, agentId) => {
+      let receiver = receiverSlot.get();
+      if (!receiver)
         return {
-          text: r,
+          text: content,
         };
-      let y = await h({
+      let outcome = await receiver({
         origin,
-        content: r,
-        ...(s !== undefined && {
-          agentId: s,
+        content,
+        ...(agentId !== undefined && {
+          agentId,
         }),
       });
-      if (y.consumed !== undefined)
+      if (outcome.consumed !== undefined)
         return {
-          consumed: y.consumed,
+          consumed: outcome.consumed,
         };
-      using queueing = y.queueing;
+      using queueing = outcome.queueing;
       queueing.queued();
-      let { content } = y;
+      let { content: content_2 } = outcome;
       return {
-        text: typeof content === "string" ? content : r,
+        text: typeof content_2 === "string" ? content_2 : content,
       };
     },
   };
@@ -113,25 +116,34 @@ function createDeliveryReceiverSlot() {
 /**
  * 投递接收槽
  */
-var deliveryReceiverSlot = createDeliveryReceiverSlot();
+var deliveryReceiverSlot; // deferred: uses createDeliveryReceiverSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:72503", () => {
+  deliveryReceiverSlot = createDeliveryReceiverSlot();
+});
 //@ chunk-e6aww6q8.js:72517-72663 placement
 /**
  * 队友邮箱消息的来源：已验证且来自 team-lead 为 coordinator，否则 peer，附带插件与队友名。
  */
-function teammateMessageOrigin(e, n) {
+function teammateMessageOrigin(message, isVerified) {
   return {
-    kind: n && e.from === TEAM_LEAD ? "coordinator" : "peer",
-    ...(e.from_plugin !== undefined && {
-      plugin: e.from_plugin,
+    kind: isVerified && message.from === TEAM_LEAD ? "coordinator" : "peer",
+    ...(message.from_plugin !== undefined && {
+      plugin: message.from_plugin,
     }),
-    teammate: e.from,
-    isVerified: n,
+    teammate: message.from,
+    isVerified,
   };
 }
 //@ chunk-e6aww6q8.js:72663-72695 placement
-var receiveAgentMessage = deliveryReceiverSlot.receiveAgentMessage;
+var receiveAgentMessage; // deferred: uses deliveryReceiverSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:72663", () => {
+  receiveAgentMessage = deliveryReceiverSlot.receiveAgentMessage;
+});
 //@ chunk-e6aww6q8.js:72695-72727 placement
-var setDeliveryReceiver = deliveryReceiverSlot.setDeliveryReceiver;
+var setDeliveryReceiver; // deferred: uses deliveryReceiverSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:72695", () => {
+  setDeliveryReceiver = deliveryReceiverSlot.setDeliveryReceiver;
+});
 //@ chunk-e6aww6q8.js:72727-72799 placement
 /**
  * 执行核心步骤
@@ -140,16 +152,16 @@ var performCoreStep = (coreHandoff) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
-  run: (n) => coreHandoff.perform(n),
+  run: (request) => coreHandoff.perform(request),
 });
 //@ chunk-e6aww6q8.js:72799-72985 placement
 /**
  * 等待钩子链要么把事件传到核心（arrived），要么直接作答（answered），后者释放核心。
  */
-async function awaitArrivalOrAnswer(coreHandoff, n) {
+async function awaitArrivalOrAnswer(coreHandoff, hookAnswer) {
   await Promise.race([
     coreHandoff.arrived,
-    n.then(
+    hookAnswer.then(
       () => {
         return;
       },
@@ -164,57 +176,60 @@ async function awaitArrivalOrAnswer(coreHandoff, n) {
     };
   coreHandoff[Symbol.dispose]();
   return {
-    answered: await n,
+    answered: await hookAnswer,
   };
 }
 //@ chunk-e6aww6q8.js:72985-73305 placement
 /**
  * 核心交接器：perform 记录到达的参数并返回结果 Promise，done/failed 结算，dispose 以给定消息失败。
  */
-function createCoreHandoff(e) {
+function createCoreHandoff(disposeMessage) {
   let deferred = Promise.withResolvers();
   let deferred_2 = Promise.withResolvers();
-  let s = false;
-  let h = false;
+  let hasArrived = false;
+  let isDone = false;
   deferred_2.promise.catch(() => {
     return;
   });
-  function y(S) {
-    if (!h) {
-      h = true;
-      deferred_2.reject(S);
+  function fail(error) {
+    if (!isDone) {
+      isDone = true;
+      deferred_2.reject(error);
     }
   }
   return {
-    perform(S) {
-      if (!s) {
-        s = true;
-        deferred.resolve(S);
+    perform(request) {
+      if (!hasArrived) {
+        hasArrived = true;
+        deferred.resolve(request);
       }
       return deferred_2.promise;
     },
     arrived: deferred.promise,
-    hasArrived: () => s,
-    done(S) {
-      if (!h) {
-        h = true;
-        deferred_2.resolve(S);
+    hasArrived: () => hasArrived,
+    done(result) {
+      if (!isDone) {
+        isDone = true;
+        deferred_2.resolve(result);
       }
     },
-    failed: y,
+    failed: fail,
     [Symbol.dispose]() {
-      y(new HooksError(e));
+      fail(new HooksError(disposeMessage));
     },
   };
 }
 //@ chunk-e6aww6q8.js:73305-73380 placement
-var p_t = Object.freeze({
-  queued: () => {
-    return;
-  },
-  [Symbol.dispose]: () => {
-    return;
-  },
+var KEEP_QUEUED_READY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:73305", () => {
+  KEEP_QUEUED_READY = Object.freeze({
+    queued: () => {
+      return;
+    },
+    [Symbol.dispose]: () => {
+      return;
+    },
+  });
 });
 //@ chunk-e6aww6q8.js:73380-73484 placement
 function replaceTextContent(content, text) {
@@ -225,29 +240,29 @@ function replaceTextContent(content, text) {
           type: "text",
           text,
         },
-        ...content.filter((s) => s.type !== "text"),
+        ...content.filter((block) => block.type !== "text"),
       ];
 }
 //@ chunk-e6aww6q8.js:73484-74082 placement
 /**
  * 运行 session.receive 钩子链，钩子消费的消息不再入队。
  */
-async function dispatchSessionReceiveHooks(e) {
-  let { origin, content, event, agentId } = e;
-  let y = {
+async function dispatchSessionReceiveHooks(request) {
+  let { origin, content, event, agentId } = request;
+  let facts = {
     origin,
     ...(agentId !== undefined && {
       agentId,
     }),
   };
-  if (!hasModuleHookingSite("session.receive", y))
+  if (!hasModuleHookingSite("session.receive", facts))
     return {
       content,
-      queueing: p_t,
+      queueing: KEEP_QUEUED_READY,
     };
-  let S = receivedText(origin, content);
+  let text = receivedText(origin, content);
   let coreHandoff = createCoreHandoff(RECEIVE_NOT_QUEUED_MESSAGE);
-  let L = await awaitArrivalOrAnswer(
+  let outcome = await awaitArrivalOrAnswer(
     coreHandoff,
     NO_CORE_AT_CHAIN_BOTTOM("session.receive", {
       core: {
@@ -255,7 +270,7 @@ async function dispatchSessionReceiveHooks(e) {
       },
     })({
       origin,
-      text: S,
+      text,
       ...(event !== undefined && {
         event,
       }),
@@ -264,25 +279,28 @@ async function dispatchSessionReceiveHooks(e) {
       }),
     }),
   );
-  if (!L.arrived) {
-    let consumed = L.answered.consumed ?? DELIVERY_NOT_PASSED;
+  if (!outcome.arrived) {
+    let consumed = outcome.answered.consumed ?? DELIVERY_NOT_PASSED;
     logForDebugging(
       `session.receive (${origin.kind}): consumed by a hook (${consumed}; hooked by ` +
-        pluginsMatchingEvent("session.receive", y).join("+") +
+        pluginsMatchingEvent("session.receive", facts).join("+") +
         "); not queued",
     );
     return {
       consumed,
     };
   }
-  let { arrived } = L;
+  let { arrived } = outcome;
   return {
-    content: arrived.text === S ? content : replaceTextContent(content, arrived.text),
+    content: arrived.text === text ? content : replaceTextContent(content, arrived.text),
     queueing: queuedDelivery(coreHandoff, arrived),
   };
 }
 //@ chunk-e6aww6q8.js:74082-74091 placement
-setDeliveryReceiver(dispatchSessionReceiveHooks);
+// deferred: uses setDeliveryReceiver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:74082", () => {
+  setDeliveryReceiver(dispatchSessionReceiveHooks);
+});
 export {
   dispatchSessionReceiveHooks,
   createCoreHandoff,

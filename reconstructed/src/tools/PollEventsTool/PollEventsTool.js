@@ -12,11 +12,11 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
   union,
-  u,
+  objectSchema,
   literal,
   _enum,
-  string,
-  E,
+  stringSchema,
+  numberSchema,
   array,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
@@ -66,20 +66,20 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 var emptyObjectSchema = DoctorLazy(() => zodStrictObject({}));
 var mediaBlockSchema = DoctorLazy(() =>
   union([
-    u({
+    objectSchema({
       type: literal("image"),
-      source: u({
+      source: objectSchema({
         type: literal("base64"),
         media_type: _enum(["image/jpeg", "image/png", "image/gif", "image/webp"]),
-        data: string(),
+        data: stringSchema(),
       }),
     }),
-    u({
+    objectSchema({
       type: literal("document"),
-      source: u({
+      source: objectSchema({
         type: literal("base64"),
         media_type: literal("application/pdf"),
-        data: string(),
+        data: stringSchema(),
       }),
     }),
   ]),
@@ -89,22 +89,22 @@ var mediaBlockSchema = DoctorLazy(() =>
  * PollEvents 的输出 schema（渲染后的信封、事件数、剩余唤醒数、媒体）。
  */
 var POLL_EVENTS_OUTPUT_SCHEMA = DoctorLazy(() =>
-  u({
-    content: string().describe(`Rendered event envelopes, or "${NO_PENDING_EVENTS_TEXT}"`),
-    eventCount: E().int().describe("Number of events delivered in this result"),
-    remainingWakeCount: E()
+  objectSchema({
+    content: stringSchema().describe(`Rendered event envelopes, or "${NO_PENDING_EVENTS_TEXT}"`),
+    eventCount: numberSchema().int().describe("Number of events delivered in this result"),
+    remainingWakeCount: numberSchema()
       .int()
       .describe("Wake events still queued after this chunk; they follow in the next delivery"),
     media: array(array(mediaBlockSchema()))
       .optional()
       .describe("Each delivered event's images and documents, 1:1 with the events. Absent when none has any"),
-    toolsUsed: array(string()).optional(),
+    toolsUsed: array(stringSchema()).optional(),
     ...{},
     provenance: array(
-      u({
+      objectSchema({
         authority: _enum(PEER_AUTHORITIES),
-        senderId: string().optional(),
-        senderText: string().optional(),
+        senderId: stringSchema().optional(),
+        senderText: stringSchema().optional(),
       }).nullable(),
     ).optional(),
     declared: array(pollEventSchema().nullable()).optional(),
@@ -136,23 +136,23 @@ var PollTool = buildTool({
     return "Wait for pending harness events";
   },
   async prompt() {
-    let e = declaredKindsPrompt(eventDeclarations());
-    return e === undefined
+    let kindsText = declaredKindsPrompt(eventDeclarations());
+    return kindsText === undefined
       ? POLL_IDLE_DESCRIPTION_FULL
-      : buildPollDescription(POLL_IDLE_DESCRIPTION, undefined, e);
+      : buildPollDescription(POLL_IDLE_DESCRIPTION, undefined, kindsText);
   },
   isTransparentWrapper() {
     return false;
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: prependAttachmentsToText(e.content, e.media),
+      content: prependAttachmentsToText(result.content, result.media),
     };
   },
-  stripForStorage(e) {
-    return e;
+  stripForStorage(result) {
+    return result;
   },
   renderToolUseMessage() {
     return "";
@@ -160,20 +160,20 @@ var PollTool = buildTool({
   extractSearchText() {
     return "";
   },
-  create(e) {
-    let { agentId, messageQueue, toolState, taskRegistry, unlayeredPermissions } = e;
+  create(toolContext) {
+    let { agentId, messageQueue, toolState, taskRegistry, unlayeredPermissions } = toolContext;
     return {
-      async call(I, M) {
-        let { signal, parentMessage, onProgress } = M;
-        let W = undefined;
+      async call(input, callOptions) {
+        let { signal, parentMessage, onProgress } = callOptions;
+        let unused = undefined;
         if (agentId !== undefined)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             "Poll is available on the main thread only",
             "Poll refused for this agent",
           );
-        let k = MAIN;
-        let P = messageQueue;
-        if (!P.tryBeginPollCall(undefined)) {
+        let mainAgent = MAIN;
+        let queue = messageQueue;
+        if (!queue.tryBeginPollCall(undefined)) {
           logPollCallEnd("duplicate_call", 0, 0);
           return {
             data: {
@@ -183,13 +183,13 @@ var PollTool = buildTool({
             },
           };
         }
-        let x = false;
-        let s = false;
-        let z;
+        let unusedFlagOne = false;
+        let unusedFlagTwo = false;
+        let waitResult;
         try {
           let now = Date.now();
-          let L = await waitForPollEvents(P, signal, undefined, {
-            messages: e.messages,
+          let pollResult = await waitForPollEvents(queue, signal, undefined, {
+            messages: toolContext.messages,
             ...pollWaitOptions({
               ingress: getPollEventIngress(),
               permissionMode: unlayeredPermissions().mode,
@@ -200,11 +200,15 @@ var PollTool = buildTool({
             liveTasks: () => [],
             ...false,
           });
-          let { endReason, ...y } = L;
-          logPollCallEnd(endReason, Date.now() - now, endReason === "delivered" ? y.data.eventCount : 0);
-          return y;
+          let { endReason, ...delivery } = pollResult;
+          logPollCallEnd(
+            endReason,
+            Date.now() - now,
+            endReason === "delivered" ? delivery.data.eventCount : 0,
+          );
+          return delivery;
         } finally {
-          P.endPollCall(undefined);
+          queue.endPollCall(undefined);
         }
       },
     };
@@ -214,15 +218,15 @@ var PollTool = buildTool({
 /**
  * 一次 poll 的最长等待时间：缓存 TTL 减去余量。
  */
-function maxPollWaitMs(e) {
-  return Math.min(e ?? CACHE_TTL_5M_MS, CACHE_TTL_5M_MS) - PRINT_POLL_GRACE_MS;
+function maxPollWaitMs(cacheTtlMs) {
+  return Math.min(cacheTtlMs ?? CACHE_TTL_5M_MS, CACHE_TTL_5M_MS) - PRINT_POLL_GRACE_MS;
 }
 //@ chunk-b5fpmtr5.js:14319-14468 placement
 /**
  * PollEvents 的等待参数（evals 只等自身工作、等待时长取缓存 TTL）。
  */
-function pollWaitOptions(e) {
-  let { ingress, permissionMode, cacheTtlMs } = e;
+function pollWaitOptions(options) {
+  let { ingress, permissionMode, cacheTtlMs } = options;
   return {
     ownWorkOnly: ingress === "evals" || false,
     inputClosed: false,
@@ -231,35 +235,38 @@ function pollWaitOptions(e) {
   };
 }
 //@ chunk-b5fpmtr5.js:14468-15884 placement
-async function waitForPollEvents(e, signal, d, m) {
-  let { ownWorkOnly, inputClosed, liveTasks, waitMs, idleWaitMs, agentId } = m;
-  let j = agentId ?? MAIN;
+async function waitForPollEvents(queue, signal, unusedPlacement, options) {
+  let { ownWorkOnly, inputClosed, liveTasks, waitMs, idleWaitMs, agentId } = options;
+  let waitAgentId = agentId ?? MAIN;
   let now = Date.now();
-  let k = () =>
-    (ownWorkOnly || (inputClosed && e.pollEventAdmissionsPending() === 0)) &&
+  let hasNothingToWaitFor = () =>
+    (ownWorkOnly || (inputClosed && queue.pollEventAdmissionsPending() === 0)) &&
     true &&
     liveTasks().length === 0;
   let min = Math.min(waitMs, maxPollWaitMs(null));
-  function x() {
+  function alwaysFalse() {
     return false;
   }
   for (;;) {
     if (signal.aborted) return emptyPollResult("aborted");
-    let { commands, remainingWakeCount } = e.drainPollEventChunk(agentId);
+    let { commands, remainingWakeCount } = queue.drainPollEventChunk(agentId);
     if (commands.length > 0) {
       let mapped = commands.map(getPollEventEnvelope);
       let declaredPollEvents = collectDeclaredPollEvents(commands);
       logFeatureOk("poll_event_delivery");
       checkTurnIdsConsistent(commands);
       settleDeliveredEvents(commands);
-      let r = listUnreadableToolsUsed(getConversationToolsUsed().names(), m.messages?.() ?? []);
+      let unreadableTools = listUnreadableToolsUsed(
+        getConversationToolsUsed().names(),
+        options.messages?.() ?? [],
+      );
       return {
         data: {
-          content: buildPollEventDelivery(mapped, remainingWakeCount, r),
+          content: buildPollEventDelivery(mapped, remainingWakeCount, unreadableTools),
           eventCount: commands.length,
           remainingWakeCount,
-          ...(r.length > 0 && {
-            toolsUsed: r,
+          ...(unreadableTools.length > 0 && {
+            toolsUsed: unreadableTools,
           }),
           ...(commands.some((command) => command.pollEvent?.media !== undefined) && {
             media: commands.map((command) => command.pollEvent?.media ?? []),
@@ -272,11 +279,11 @@ async function waitForPollEvents(e, signal, d, m) {
         endReason: "delivered",
       };
     }
-    if (hasPendingPollWork(e, x(), agentId))
+    if (hasPendingPollWork(queue, alwaysFalse(), agentId))
       return emptyPollResult(
-        hasPendingPollWork(e, true, agentId) ? "queued_input" : "queued_input_for_turn_end",
+        hasPendingPollWork(queue, true, agentId) ? "queued_input" : "queued_input_for_turn_end",
       );
-    if (k())
+    if (hasNothingToWaitFor())
       return inputClosed && !ownWorkOnly
         ? {
             data: {
@@ -287,27 +294,28 @@ async function waitForPollEvents(e, signal, d, m) {
             endReason: "nothing_to_wait_for_input_closed",
           }
         : emptyPollResult("nothing_to_wait_for");
-    let D = Date.now() - now;
-    let R = [];
-    let L = R.length > 0 ? [] : liveTasks();
-    if (D >= waitMs);
-    let h = R.length === 0 && L.length === 0;
-    if (h && idleWaitMs !== undefined && D >= idleWaitMs)
+    let elapsedMs = Date.now() - now;
+    let pendingCommands = [];
+    let runningTasks = pendingCommands.length > 0 ? [] : liveTasks();
+    if (elapsedMs >= waitMs);
+    let nothingRunning = pendingCommands.length === 0 && runningTasks.length === 0;
+    if (nothingRunning && idleWaitMs !== undefined && elapsedMs >= idleWaitMs)
       return emptyPollResult("wait_limit_nothing_running");
     await new Promise((resolve) => {
-      let i = h ? idleWaitMs : hasPendingPollWork(e, false, agentId) ? min : waitMs;
-      let r = i !== undefined ? setTimeout(_, Math.max(0, i - D)) : undefined;
-      function _() {
-        if (r !== undefined) clearTimeout(r);
-        v();
-        N();
-        signal.removeEventListener("abort", _);
+      let sleepMs = nothingRunning ? idleWaitMs : hasPendingPollWork(queue, false, agentId) ? min : waitMs;
+      let timer = sleepMs !== undefined ? setTimeout(wake, Math.max(0, sleepMs - elapsedMs)) : undefined;
+      function wake() {
+        if (timer !== undefined) clearTimeout(timer);
+        unsubscribe();
+        noopUnsubscribe();
+        signal.removeEventListener("abort", wake);
         resolve();
       }
-      let v = e.subscribe(_);
-      let N = () => {};
-      signal.addEventListener("abort", _);
-      if (signal.aborted || hasPendingPollWork(e, x(), agentId) || k()) _();
+      let unsubscribe = queue.subscribe(wake);
+      let noopUnsubscribe = () => {};
+      signal.addEventListener("abort", wake);
+      if (signal.aborted || hasPendingPollWork(queue, alwaysFalse(), agentId) || hasNothingToWaitFor())
+        wake();
     });
   }
 }
@@ -315,27 +323,29 @@ async function waitForPollEvents(e, signal, d, m) {
 /**
  * 队列中是否有需要唤醒 PollEvents 的命令。
  */
-function hasPendingPollWork(e, t, agentId) {
+function hasPendingPollWork(queue, allowLater, agentId) {
   if (agentId !== undefined)
     return (
-      !e.isMidTurnFoldSuspended() &&
-      filterQueuedCommandsForThread(e.getCommandsByMaxPriority("next"), {
+      !queue.isMidTurnFoldSuspended() &&
+      filterQueuedCommandsForThread(queue.getCommandsByMaxPriority("next"), {
         isMainThread: false,
         currentAgentId: agentId,
       }).length > 0
     );
-  let m = e.isMidTurnFoldSuspended();
-  let b = t && !m;
+  let foldSuspended = queue.isMidTurnFoldSuspended();
+  let canDrainLater = allowLater && !foldSuspended;
   return (
-    e.peek(
-      (l) => isActiveMainAgentCommand(l) && !(b && l.priority === "later" && l.mode !== "poll-event"),
+    queue.peek(
+      (command) =>
+        isActiveMainAgentCommand(command) &&
+        !(canDrainLater && command.priority === "later" && command.mode !== "poll-event"),
     ) !== undefined ||
-    (m
-      ? !isTerminalShutdown() && e.peek(isPassiveMainAgentCommand) !== undefined
-      : filterQueuedCommandsForThread(e.getCommandsByMaxPriority("next"), {
+    (foldSuspended
+      ? !isTerminalShutdown() && queue.peek(isPassiveMainAgentCommand) !== undefined
+      : filterQueuedCommandsForThread(queue.getCommandsByMaxPriority("next"), {
           isMainThread: true,
           currentAgentId: undefined,
-        }).some((l) => l.drainOnly !== true && l.screeningPending !== true))
+        }).some((command) => command.drainOnly !== true && command.screeningPending !== true))
   );
 }
 //@ chunk-b5fpmtr5.js:16327-16414 placement
@@ -363,3 +373,4 @@ function logPollCallEnd(endReason, waitedMs, deliveredEventCount) {
     deliveredEventCount,
   });
 }
+export { PollTool };

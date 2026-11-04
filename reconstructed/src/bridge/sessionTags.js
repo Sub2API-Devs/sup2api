@@ -24,21 +24,21 @@ async function readBridgeSessionTags(sessionId, options) {
  */
 async function fetchBridgeSessionTags(sessionId, options) {
   try {
-    let s = options.getAccessToken ? await options.getAccessToken() : undefined;
-    let { getBridgeSessionOrStatus } = await import("./chunk-3eyvtwsv.js");
+    let accessToken = options.getAccessToken ? await options.getAccessToken() : undefined;
+    let { getBridgeSessionOrStatus } = await import("./createSession.js");
     let { session } = await getBridgeSessionOrStatus(sessionId, {
       baseUrl: options.baseUrl,
-      ...(s && {
-        getAccessToken: () => s,
+      ...(accessToken && {
+        getAccessToken: () => accessToken,
       }),
       credentials: options.credentials,
       useV2: true,
     });
     if (!session || !Array.isArray(session.tags)) return null;
-    let a = typeof session.created_at === "string" ? Date.parse(session.created_at) : Number.NaN;
+    let createdAtMs = typeof session.created_at === "string" ? Date.parse(session.created_at) : Number.NaN;
     return {
       tags: session.tags,
-      createdAtMs: Number.isNaN(a) ? undefined : a,
+      createdAtMs: Number.isNaN(createdAtMs) ? undefined : createdAtMs,
     };
   } catch (error) {
     logForDebugging(`[bridge:session] session tag read failed: ${errorMessage(error)}`, {

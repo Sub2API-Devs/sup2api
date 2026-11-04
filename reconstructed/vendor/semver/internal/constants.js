@@ -5,10 +5,10 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bwbq4xvm.js:1410-1748 cjs-fingerprint
-var require_constants = x(function (cjsExports, cjsModule) {
+var require_constants = __commonJS(function (cjsExports, cjsModule) {
   var MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER || 9007199254740991;
   var RELEASE_TYPES = ["major", "premajor", "minor", "preminor", "patch", "prepatch", "prerelease"];
   cjsModule.exports = {

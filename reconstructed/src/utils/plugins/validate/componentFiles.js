@@ -12,10 +12,10 @@ import * as pathModule from "path";
 import { isUtf8 } from "buffer";
 import { appendAll, makeFinding, extractToolInputForTelemetry, readPluginFileSafe } from "./helpers.js";
 import {
-  MAX_HOOK_SUGGESTIONS,
-  MAX_COMMAND_LENGTH,
-  PLUGIN_VALIDATION_ISSUES,
-  HOOK_EVENT_NAME_SET,
+  MAX_LISTED_MODULE_FILES,
+  MAX_LISTED_TRAVERSALS,
+  PLUGIN_MANIFEST_PATH,
+  HOOK_EVENT_NAMES,
 } from "./validatePluginDirectory.js";
 import { toArray, hasPathTraversal } from "./readmeAndListing.js";
 import { isPlainObject } from "../../isPlainObject.js";
@@ -28,147 +28,157 @@ import { isPositiveSafeInteger, isValidMcpOAuthConfig } from "../../../services/
 /**
  * 读取并校验插件的 MCP 配置（.mcp.json 与 manifest.mcpServers 引用的文件）和 hooks 文件：不可读、JSON 语法错、 结构错误、路径穿越都记发现项；同时记录是否连接远程服务（http/sse/ws MCP 或 http 钩子）。
  */
-async function checkComponentFiles(e, n, t) {
-  let r = {
+async function checkComponentFiles(rootDir, manifest, findings) {
+  let remoteFlags = {
     connectsToRemote: false,
   };
-  let s = new Map();
-  let o = {
+  let fileCache = new Map();
+  let leftOutFiles = {
     mcp: new Set(),
     hooks: new Set(),
   };
-  let a = [];
-  let l = [];
-  let d = {
+  let unusable = [];
+  let hooksModuleFiles = [];
+  let traversalCounts = {
     mcp: 0,
     hooks: 0,
   };
-  let f = async (c, h, y) => {
-    let m = s.get(c);
-    if (m === undefined) {
-      if (y !== undefined && y.left-- <= 0) {
-        o[h].add(c);
+  let readJsonComponent = async (relPath, kind, budget) => {
+    let cached = fileCache.get(relPath);
+    if (cached === undefined) {
+      if (budget !== undefined && budget.left-- <= 0) {
+        leftOutFiles[kind].add(relPath);
         return;
       }
-      m = await readJsonComponentFile(e, c);
-      s.set(c, m);
+      cached = await readJsonComponentFile(rootDir, relPath);
+      fileCache.set(relPath, cached);
     }
-    if (m.unread !== undefined) appendAll(t, unreadFileFindings(c, h, m.unread));
-    if (m.invalid === "syntax")
-      a.push({
-        file: c,
+    if (cached.unread !== undefined) appendAll(findings, unreadFileFindings(relPath, kind, cached.unread));
+    if (cached.invalid === "syntax")
+      unusable.push({
+        file: relPath,
         reason: "is not valid JSON",
         todo: "Fix the JSON.",
-        rule: h === "mcp" ? "MCPJSON_UNPARSEABLE" : "HOOKS_JSON_INVALID",
+        rule: kind === "mcp" ? "MCPJSON_UNPARSEABLE" : "HOOKS_JSON_INVALID",
       });
-    else if (m.invalid !== undefined) t.push(jsonInvalidFinding(c, h, m.invalid));
-    return m.parsed;
+    else if (cached.invalid !== undefined) findings.push(jsonInvalidFinding(relPath, kind, cached.invalid));
+    return cached.parsed;
   };
-  let p = {
-    left: MAX_HOOK_SUGGESTIONS,
+  let mcpBudget = {
+    left: MAX_LISTED_MODULE_FILES,
   };
-  let S = {
-    left: MAX_HOOK_SUGGESTIONS,
+  let hooksBudget = {
+    left: MAX_LISTED_MODULE_FILES,
   };
-  let b = (c, h) => {
-    let y = checkMcpConfigShape(c, h);
-    if (y !== undefined) {
-      t.push(y);
+  let collectMcpEntries = (relPath, parsed) => {
+    let shapeFinding = checkMcpConfigShape(relPath, parsed);
+    if (shapeFinding !== undefined) {
+      findings.push(shapeFinding);
       return [];
     }
-    return listValidMcpServerEntries(h);
+    return listValidMcpServerEntries(parsed);
   };
-  let I = new Map();
-  let M = (c) => {
-    I.delete(c.name);
-    I.set(c.name, c);
+  let mcpServersByName = new Map();
+  let addServer = (server) => {
+    mcpServersByName.delete(server.name);
+    mcpServersByName.set(server.name, server);
   };
-  for (let c of b(MCP_JSON_RELATIVE_PATH, await f(MCP_JSON_RELATIVE_PATH, "mcp"))) M(c);
-  let array = toArray(n.mcpServers);
-  let C = new Map();
-  for (let [c, h] of array.entries()) {
-    let y = normalizeJsonRefPath(h);
-    if (y !== undefined) C.set(y, c);
+  for (let server of collectMcpEntries(
+    MCP_JSON_RELATIVE_PATH,
+    await readJsonComponent(MCP_JSON_RELATIVE_PATH, "mcp"),
+  ))
+    addServer(server);
+  let array = toArray(manifest.mcpServers);
+  let firstRefIndex = new Map();
+  for (let [index, spec] of array.entries()) {
+    let refPath = normalizeJsonRefPath(spec);
+    if (refPath !== undefined) firstRefIndex.set(refPath, index);
   }
-  for (let [c, h] of array.entries()) {
-    if (isPlainObject(h)) {
-      for (let key of Object.keys(h).sort()) {
-        let v = h[key];
-        if (isPlainObject(v) && isValidMcpServerConfig(v))
-          M({
+  for (let [index, spec] of array.entries()) {
+    if (isPlainObject(spec)) {
+      for (let key of Object.keys(spec).sort()) {
+        let config = spec[key];
+        if (isPlainObject(config) && isValidMcpServerConfig(config))
+          addServer({
             name: key,
-            config: v,
+            config,
           });
       }
       continue;
     }
-    if (typeof h === "string" && hasPathTraversal(h)) {
-      if (d.mcp++ >= MAX_COMMAND_LENGTH) continue;
-      t.push(
+    if (typeof spec === "string" && hasPathTraversal(spec)) {
+      if (traversalCounts.mcp++ >= MAX_LISTED_TRAVERSALS) continue;
+      findings.push(
         makeFinding(
           "PATH_TRAVERSAL",
-          PLUGIN_VALIDATION_ISSUES,
-          Array.isArray(n.mcpServers) ? `mcpServers[${c}]` : "mcpServers",
-          `Path contains ".." which could be a path traversal attempt: ${extractToolInputForTelemetry(h, 200)}`,
+          PLUGIN_MANIFEST_PATH,
+          Array.isArray(manifest.mcpServers) ? `mcpServers[${index}]` : "mcpServers",
+          `Path contains ".." which could be a path traversal attempt: ${extractToolInputForTelemetry(spec, 200)}`,
         ),
       );
       continue;
     }
-    let y = normalizeJsonRefPath(h);
-    if (y !== undefined && C.get(y) === c) for (let m of b(y, await f(y, "mcp", p))) M(m);
+    let refPath = normalizeJsonRefPath(spec);
+    if (refPath !== undefined && firstRefIndex.get(refPath) === index)
+      for (let server of collectMcpEntries(refPath, await readJsonComponent(refPath, "mcp", mcpBudget)))
+        addServer(server);
   }
-  for (let c of I.values()) markRemoteMcpServer(r, c);
-  let P = (c, h) => {
-    if (h === undefined) return;
-    let y = checkHooksFileShape(h);
-    if (y !== undefined)
-      a.push({
-        file: c,
-        ...y,
+  for (let server of mcpServersByName.values()) markRemoteMcpServer(remoteFlags, server);
+  let handleHooksFile = (relPath, parsed) => {
+    if (parsed === undefined) return;
+    let shapeProblem = checkHooksFileShape(parsed);
+    if (shapeProblem !== undefined)
+      unusable.push({
+        file: relPath,
+        ...shapeProblem,
       });
-    if (isPlainObject(h)) {
-      markRemoteHooks(r, h.hooks);
-      if (y === undefined && Array.isArray(h.modules) && h.modules.some((m) => typeof m === "string"))
-        l.push(c);
+    if (isPlainObject(parsed)) {
+      markRemoteHooks(remoteFlags, parsed.hooks);
+      if (
+        shapeProblem === undefined &&
+        Array.isArray(parsed.modules) &&
+        parsed.modules.some((moduleSpec) => typeof moduleSpec === "string")
+      )
+        hooksModuleFiles.push(relPath);
     }
   };
-  P(HOOKS_HOOKS_JSON, await f(HOOKS_HOOKS_JSON, "hooks"));
-  let x = new Set([HOOKS_HOOKS_JSON]);
-  for (let [c, h] of toArray(n.hooks).entries()) {
-    if (isPlainObject(h)) {
-      markRemoteHooks(r, h);
+  handleHooksFile(HOOKS_HOOKS_JSON, await readJsonComponent(HOOKS_HOOKS_JSON, "hooks"));
+  let seenHooksFiles = new Set([HOOKS_HOOKS_JSON]);
+  for (let [index, spec] of toArray(manifest.hooks).entries()) {
+    if (isPlainObject(spec)) {
+      markRemoteHooks(remoteFlags, spec);
       continue;
     }
-    if (typeof h === "string" && h.includes("..")) {
-      if (d.hooks++ >= MAX_COMMAND_LENGTH) continue;
-      t.push({
+    if (typeof spec === "string" && spec.includes("..")) {
+      if (traversalCounts.hooks++ >= MAX_LISTED_TRAVERSALS) continue;
+      findings.push({
         ...makeFinding(
           "PATH_TRAVERSAL",
-          PLUGIN_VALIDATION_ISSUES,
-          `hooks[${c}]`,
-          `Path contains ".." which could be a path traversal attempt: ${h}`,
+          PLUGIN_MANIFEST_PATH,
+          `hooks[${index}]`,
+          `Path contains ".." which could be a path traversal attempt: ${spec}`,
         ),
         fix: null,
       });
       continue;
     }
-    let y = normalizeComponentFileRef(h);
-    if (y !== undefined && !x.has(y)) {
-      x.add(y);
-      P(y, await f(y, "hooks", S));
+    let refPath = normalizeComponentFileRef(spec);
+    if (refPath !== undefined && !seenHooksFiles.has(refPath)) {
+      seenHooksFiles.add(refPath);
+      handleHooksFile(refPath, await readJsonComponent(refPath, "hooks", hooksBudget));
     }
   }
   return {
-    ...r,
+    ...remoteFlags,
     leftOut: {
-      mcp: [...o.mcp],
-      hooks: [...o.hooks],
+      mcp: [...leftOutFiles.mcp],
+      hooks: [...leftOutFiles.hooks],
     },
-    unusable: a,
-    hooksModuleFiles: l,
+    unusable,
+    hooksModuleFiles,
     traversalsNotListed: {
-      mcp: Math.max(0, d.mcp - MAX_COMMAND_LENGTH),
-      hooks: Math.max(0, d.hooks - MAX_COMMAND_LENGTH),
+      mcp: Math.max(0, traversalCounts.mcp - MAX_LISTED_TRAVERSALS),
+      hooks: Math.max(0, traversalCounts.hooks - MAX_LISTED_TRAVERSALS),
     },
   };
 }
@@ -176,36 +186,40 @@ async function checkComponentFiles(e, n, t) {
 /**
  * hooks 文件结构校验（modules、description、surface、hooks 包装）。
  */
-function checkHooksFileShape(e) {
-  if (!isPlainObject(e))
+function checkHooksFileShape(parsed) {
+  if (!isPlainObject(parsed))
     return {
       reason: "is read as a hooks file and is not a JSON object",
       todo: 'Write it as {"hooks": {}}, with the hook events inside the inner braces.',
       rule: "HOOKS_SCHEMA_INVALID",
     };
-  let modules = e.modules;
+  let modules = parsed.modules;
   if (
-    Object.hasOwn(e, "modules") &&
-    !(Array.isArray(modules) && modules.length <= 1 && modules.every((s) => typeof s === "string"))
+    Object.hasOwn(parsed, "modules") &&
+    !(
+      Array.isArray(modules) &&
+      modules.length <= 1 &&
+      modules.every((moduleSpec) => typeof moduleSpec === "string")
+    )
   )
     return {
       reason: 'has a "modules" that is not a list of at most one string',
       todo: 'Write "modules" as a list that holds the path of one hooks module, or remove it.',
       rule: "HOOKS_SCHEMA_INVALID",
     };
-  if (Object.hasOwn(e, "description") && typeof e.description !== "string")
+  if (Object.hasOwn(parsed, "description") && typeof parsed.description !== "string")
     return {
       reason: 'has a "description" that is not a string',
       todo: 'Make "description" a string, or remove it.',
       rule: "HOOKS_SCHEMA_INVALID",
     };
-  if (Object.hasOwn(e, "surface"))
+  if (Object.hasOwn(parsed, "surface"))
     return {
       reason: 'has a "surface" key',
       todo: 'Remove "surface" from the hooks file.',
       rule: "HOOKS_SCHEMA_INVALID",
     };
-  if (!Object.hasOwn(e, "hooks")) {
+  if (!Object.hasOwn(parsed, "hooks")) {
     if (Array.isArray(modules) && modules.length > 0) return;
     return {
       reason: 'is read as a hooks file and has no "hooks" key',
@@ -213,14 +227,14 @@ function checkHooksFileShape(e) {
       rule: "HOOKS_MISSING_WRAPPER",
     };
   }
-  let hooks = e.hooks;
+  let hooks = parsed.hooks;
   if (!isPlainObject(hooks))
     return {
       reason: 'has a "hooks" that is not an object',
       todo: 'Make "hooks" an object that maps each hook event to a list.',
       rule: "HOOKS_SCHEMA_INVALID",
     };
-  let found = Object.keys(hooks).find((key) => HOOK_EVENT_NAME_SET.has(key) && !Array.isArray(hooks[key]));
+  let found = Object.keys(hooks).find((key) => HOOK_EVENT_NAMES.has(key) && !Array.isArray(hooks[key]));
   return found === undefined
     ? undefined
     : {
@@ -233,13 +247,13 @@ function checkHooksFileShape(e) {
 /**
  * MCP/hooks 文件 JSON 无效（BOM、非 UTF-8、过深）的发现项。
  */
-function jsonInvalidFinding(e, n, invalid) {
+function jsonInvalidFinding(relPath, kind, invalid) {
   let { error, fix } = JSON_ENCODING_PROBLEMS[invalid];
-  if (n === "mcp")
+  if (kind === "mcp")
     return {
       ...makeFinding(
         "MCPJSON_UNPARSEABLE",
-        e,
+        relPath,
         "json",
         `Invalid JSON syntax: ${error}. The loader skips this file, so none of its servers are configured.`,
       ),
@@ -248,30 +262,30 @@ function jsonInvalidFinding(e, n, invalid) {
   return {
     ...makeFinding(
       "HOOKS_JSON_INVALID",
-      e,
+      relPath,
       "json",
       `Invalid JSON syntax: ${error}. At runtime this breaks the entire plugin load.`,
     ),
-    fix: e === HOOKS_HOOKS_JSON ? `${fix} A broken hooks.json fails the whole plugin.` : fix,
+    fix: relPath === HOOKS_HOOKS_JSON ? `${fix} A broken hooks.json fails the whole plugin.` : fix,
   };
 }
 //@ chunk-5aas12zq.js:36781-37110 placement
 /**
  * MCP 配置须是对象，mcpServers 须是对象。
  */
-function checkMcpConfigShape(e, n) {
-  if (n === undefined) return;
-  if (!isPlainObject(n))
+function checkMcpConfigShape(relPath, parsed) {
+  if (parsed === undefined) return;
+  if (!isPlainObject(parsed))
     return makeFinding(
       "MCPJSON_UNPARSEABLE",
-      e,
+      relPath,
       "root",
       'MCP config must be a JSON object ({"mcpServers": {...}} or a bare {name: config} map).',
     );
-  return "mcpServers" in n && !isPlainObject(n.mcpServers)
+  return "mcpServers" in parsed && !isPlainObject(parsed.mcpServers)
     ? makeFinding(
         "MCPJSON_UNPARSEABLE",
-        e,
+        relPath,
         "mcpServers",
         "mcpServers must be an object mapping server names to configs.",
       )
@@ -281,13 +295,13 @@ function checkMcpConfigShape(e, n) {
 /**
  * MCP/hooks 文件未读（过大、链接、非普通文件）的发现项。
  */
-function unreadFileFindings(e, n, unread) {
-  if (n === "mcp")
+function unreadFileFindings(relPath, kind, unread) {
+  if (kind === "mcp")
     return [
       {
         ...makeFinding(
           "MCP_FILE_UNREAD",
-          e,
+          relPath,
           "file",
           unread.why === "too-large"
             ? `MCP config is larger than ${ONE_MIB} bytes and was not read. The loader reads it anyway, so none of its servers were checked.`
@@ -299,24 +313,24 @@ function unreadFileFindings(e, n, unread) {
             : "Ship the config as a regular file inside the plugin.",
       },
     ];
-  if (e !== HOOKS_HOOKS_JSON)
+  if (relPath !== HOOKS_HOOKS_JSON)
     return [
       {
         ...makeFinding(
           "HOOKS_FILE_UNREAD",
-          e,
+          relPath,
           "hooks",
           `This hooks file is a symlink, goes through one, is not a regular file, or is larger than ${ONE_MIB} bytes, and was not read. The plugin loader reads it anyway and would run these hooks unscreened, so the directory refuses them.`,
         ),
         fix: "Ship the hooks file as a regular file under the size cap.",
       },
     ];
-  let r = unread.refusedAt?.segment === 0;
-  if (r && unread.refusedAt?.isLink !== true) return [];
-  let s =
+  let isRootLink = unread.refusedAt?.segment === 0;
+  if (isRootLink && unread.refusedAt?.isLink !== true) return [];
+  let reason =
     unread.why === "too-large"
       ? "hooks.json is past the size cap and was not read"
-      : r
+      : isRootLink
         ? "The hooks directory is a symlink and was not read"
         : "hooks.json is not a regular file (a symlink, a FIFO, a directory)";
   return [
@@ -325,7 +339,7 @@ function unreadFileFindings(e, n, unread) {
         "HOOKS_FILE_UNREAD",
         HOOKS_HOOKS_JSON,
         "hooks",
-        `${s} \u2014 hooks are read without following symlinks and are capped at ${ONE_MIB} bytes. The plugin loader has neither limit and would run these hooks unscreened, so the directory refuses them.`,
+        `${reason} \u2014 hooks are read without following symlinks and are capped at ${ONE_MIB} bytes. The plugin loader has neither limit and would run these hooks unscreened, so the directory refuses them.`,
       ),
       fix: "Ship hooks/hooks.json as a regular file under the size cap.",
     },
@@ -335,19 +349,20 @@ function unreadFileFindings(e, n, unread) {
 var MCP_JSON_RELATIVE_PATH = ".mcp.json";
 var HOOKS_HOOKS_JSON = "hooks/hooks.json";
 //@ chunk-5aas12zq.js:38576-38672 placement
-function normalizeRelativeComponentPath(e) {
-  let replaced = pathModule.posix.normalize(e.slice(2)).replace(/^\/+|\/+$/g, "");
+function normalizeRelativeComponentPath(ref) {
+  let replaced = pathModule.posix.normalize(ref.slice(2)).replace(/^\/+|\/+$/g, "");
   return replaced === "" ? "." : replaced;
 }
 //@ chunk-5aas12zq.js:38672-38769 placement
-function normalizeComponentFileRef(e) {
-  if (typeof e !== "string" || !e.startsWith("./") || e.includes("..")) return;
-  return normalizeRelativeComponentPath(e);
+function normalizeComponentFileRef(ref) {
+  if (typeof ref !== "string" || !ref.startsWith("./") || ref.includes("..")) return;
+  return normalizeRelativeComponentPath(ref);
 }
 //@ chunk-5aas12zq.js:38769-38888 placement
-function normalizeJsonRefPath(e) {
-  if (typeof e !== "string" || !e.startsWith("./") || !e.endsWith(".json") || e.includes("..")) return;
-  return normalizeRelativeComponentPath(e);
+function normalizeJsonRefPath(ref) {
+  if (typeof ref !== "string" || !ref.startsWith("./") || !ref.endsWith(".json") || ref.includes(".."))
+    return;
+  return normalizeRelativeComponentPath(ref);
 }
 //@ chunk-5aas12zq.js:38888-39335 placement
 /**
@@ -370,39 +385,39 @@ var JSON_ENCODING_PROBLEMS = {
 var MAX_JSON_DEPTH = 64;
 //@ chunk-5aas12zq.js:39335-39503 placement
 function detectJsonEncodingProblem(bytes) {
-  let n;
-  if (bytes[0] === 239 && bytes[1] === 187 && bytes[2] === 191) n = "bom";
-  else if (!isUtf8(bytes)) n = "not-utf8";
-  else if (exceedsJsonDepth(bytes, MAX_JSON_DEPTH)) n = "too-deep";
-  return n === undefined
+  let kind;
+  if (bytes[0] === 239 && bytes[1] === 187 && bytes[2] === 191) kind = "bom";
+  else if (!isUtf8(bytes)) kind = "not-utf8";
+  else if (exceedsJsonDepth(bytes, MAX_JSON_DEPTH)) kind = "too-deep";
+  return kind === undefined
     ? undefined
     : {
-        kind: n,
-        ...JSON_ENCODING_PROBLEMS[n],
+        kind,
+        ...JSON_ENCODING_PROBLEMS[kind],
       };
 }
 //@ chunk-5aas12zq.js:39503-39716 placement
-function exceedsJsonDepth(e, n) {
-  let t = 0;
-  let r = false;
-  let s = false;
-  for (let o of e)
-    if (r) {
-      if (s) s = false;
-      else if (o === 92) s = true;
-      else if (o === 34) r = false;
-    } else if (o === 34) r = true;
-    else if (o === 123 || o === 91) {
-      if (++t > n) return true;
-    } else if ((o === 125 || o === 93) && t > 0) t--;
+function exceedsJsonDepth(bytes, maxDepth) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let byte of bytes)
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (byte === 92) escaped = true;
+      else if (byte === 34) inString = false;
+    } else if (byte === 34) inString = true;
+    else if (byte === 123 || byte === 91) {
+      if (++depth > maxDepth) return true;
+    } else if ((byte === 125 || byte === 93) && depth > 0) depth--;
   return false;
 }
 //@ chunk-5aas12zq.js:39716-40120 placement
 /**
  * 安全读组件 JSON 文件并解析。
  */
-async function readJsonComponentFile(e, n) {
-  let pluginFile = await readPluginFileSafe(e, n, ONE_MIB);
+async function readJsonComponentFile(rootDir, relPath) {
+  let pluginFile = await readPluginFileSafe(rootDir, relPath, ONE_MIB);
   if (!pluginFile.found)
     return {
       parsed: undefined,
@@ -441,74 +456,77 @@ async function readJsonComponentFile(e, n) {
 /**
  * listValidMcpServerEntries：接受 {mcpServers:{…}} 或裸对象，按名排序，只返回通过 isValidMcpServerConfig 的 {name, config}。
  */
-function listValidMcpServerEntries(e) {
-  if (!isPlainObject(e)) return [];
-  let mcpServers = e.mcpServers;
+function listValidMcpServerEntries(parsed) {
+  if (!isPlainObject(parsed)) return [];
+  let mcpServers = parsed.mcpServers;
   if (mcpServers !== undefined && !isPlainObject(mcpServers)) return [];
-  let t = isPlainObject(mcpServers) ? mcpServers : e;
-  let r = [];
-  for (let key of Object.keys(t).sort()) {
-    let o = t[key];
-    if (isPlainObject(o) && isValidMcpServerConfig(o))
-      r.push({
+  let serverMap = isPlainObject(mcpServers) ? mcpServers : parsed;
+  let entries = [];
+  for (let key of Object.keys(serverMap).sort()) {
+    let config = serverMap[key];
+    if (isPlainObject(config) && isValidMcpServerConfig(config))
+      entries.push({
         name: key,
-        config: o,
+        config,
       });
   }
-  return r;
+  return entries;
 }
 //@ chunk-5aas12zq.js:40319-41509 sole-consumer
 /**
  * isValidMcpServerConfig：不依赖 zod 的手写配置校验，按 type 检查 stdio/sse/http/streamable-http/ws/sse-ide/ws-ide/sdk/claudeai-proxy 必需字段与 timeout/alwaysLoad/oauth/tools/toolPermissions 形状。
  */
-function isValidMcpServerConfig(e) {
-  let n = (r) =>
-    r === undefined || (isPlainObject(r) && Object.values(r).every((s) => typeof s === "string"));
-  let t =
-    (e.timeout === undefined || isPositiveSafeInteger(e.timeout)) &&
-    (e.alwaysLoad === undefined || typeof e.alwaysLoad === "boolean");
-  switch (e.type) {
+function isValidMcpServerConfig(config) {
+  let isStringMap = (value) =>
+    value === undefined ||
+    (isPlainObject(value) && Object.values(value).every((entryValue) => typeof entryValue === "string"));
+  let commonFieldsValid =
+    (config.timeout === undefined || isPositiveSafeInteger(config.timeout)) &&
+    (config.alwaysLoad === undefined || typeof config.alwaysLoad === "boolean");
+  switch (config.type) {
     case undefined:
     case "stdio":
       return (
-        typeof e.command === "string" &&
-        e.command !== "" &&
-        (e.args === undefined || (Array.isArray(e.args) && e.args.every((arg) => typeof arg === "string"))) &&
-        n(e.env) &&
-        t
+        typeof config.command === "string" &&
+        config.command !== "" &&
+        (config.args === undefined ||
+          (Array.isArray(config.args) && config.args.every((arg) => typeof arg === "string"))) &&
+        isStringMap(config.env) &&
+        commonFieldsValid
       );
     case "sse":
     case "http":
     case "streamable-http":
       return (
-        typeof e.url === "string" &&
-        n(e.headers) &&
-        (e.headersHelper === undefined || typeof e.headersHelper === "string") &&
-        t &&
-        (e.discoveryCache === undefined || typeof e.discoveryCache === "boolean") &&
-        (e.oauth === undefined || isValidMcpOAuthConfig(e.oauth)) &&
-        (e.tools === undefined || (Array.isArray(e.tools) && e.tools.every(isValidToolPolicyEntry))) &&
-        (e.toolPermissions === undefined ||
-          (isPlainObject(e.toolPermissions) &&
-            Object.values(e.toolPermissions).every(
+        typeof config.url === "string" &&
+        isStringMap(config.headers) &&
+        (config.headersHelper === undefined || typeof config.headersHelper === "string") &&
+        commonFieldsValid &&
+        (config.discoveryCache === undefined || typeof config.discoveryCache === "boolean") &&
+        (config.oauth === undefined || isValidMcpOAuthConfig(config.oauth)) &&
+        (config.tools === undefined ||
+          (Array.isArray(config.tools) && config.tools.every(isValidToolPolicyEntry))) &&
+        (config.toolPermissions === undefined ||
+          (isPlainObject(config.toolPermissions) &&
+            Object.values(config.toolPermissions).every(
               (toolPermission) =>
                 typeof toolPermission === "string" && ["allow", "ask", "blocked"].includes(toolPermission),
             )))
       );
     case "ws":
       return (
-        typeof e.url === "string" &&
-        n(e.headers) &&
-        (e.headersHelper === undefined || typeof e.headersHelper === "string") &&
-        t
+        typeof config.url === "string" &&
+        isStringMap(config.headers) &&
+        (config.headersHelper === undefined || typeof config.headersHelper === "string") &&
+        commonFieldsValid
       );
     case "sse-ide":
     case "ws-ide":
-      return typeof e.url === "string" && typeof e.ideName === "string";
+      return typeof config.url === "string" && typeof config.ideName === "string";
     case "sdk":
-      return typeof e.name === "string";
+      return typeof config.name === "string";
     case "claudeai-proxy":
-      return typeof e.url === "string" && typeof e.id === "string";
+      return typeof config.url === "string" && typeof config.id === "string";
     default:
       return false;
   }
@@ -517,13 +535,13 @@ function isValidMcpServerConfig(e) {
 /**
  * isValidToolPolicyEntry：{name, permission_policy?: always_allow|always_ask|always_deny}。
  */
-function isValidToolPolicyEntry(e) {
+function isValidToolPolicyEntry(entry) {
   return (
-    isPlainObject(e) &&
-    typeof e.name === "string" &&
-    (e.permission_policy === undefined ||
-      (typeof e.permission_policy === "string" &&
-        ["always_allow", "always_ask", "always_deny"].includes(e.permission_policy)))
+    isPlainObject(entry) &&
+    typeof entry.name === "string" &&
+    (entry.permission_policy === undefined ||
+      (typeof entry.permission_policy === "string" &&
+        ["always_allow", "always_ask", "always_deny"].includes(entry.permission_policy)))
   );
 }
 export { detectJsonEncodingProblem, checkComponentFiles };

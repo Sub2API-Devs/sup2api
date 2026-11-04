@@ -113,13 +113,13 @@ var toFile = function (path, text, opts, cb) {
   if (arguments.length < 3 && !canPromise()) throw Error("Too few arguments provided");
   let params = checkParams(text, opts, cb);
   let type = params.opts.type || getTypeFromFilename(path);
-  let u = getRendererFromType(type).renderToFile.bind(null, path);
-  return render(u, text, params);
+  let renderToFile = getRendererFromType(type).renderToFile.bind(null, path);
+  return render(renderToFile, text, params);
 };
 var toFileStream = function (stream, text, opts) {
   if (arguments.length < 2) throw Error("Too few arguments provided");
   let params = checkParams(text, opts, stream.emit.bind(stream, "error"));
-  let s = getRendererFromType("png").renderToFileStream.bind(null, stream);
-  render(s, text, params);
+  let renderToFileStream = getRendererFromType("png").renderToFileStream.bind(null, stream);
+  render(renderToFileStream, text, params);
 };
-export { toString, create };
+export { toString, create, toCanvas, toDataURL, toBuffer, toFile, toFileStream };

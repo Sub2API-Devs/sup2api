@@ -8,7 +8,7 @@
  * pieces: chunk-qh0448cn.js (4)
  * attribution: placement 2, fingerprint 1, affinity 1
  */
-import { init_react_production, y, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { userCheckoutSpawnTerms, stashToCleanState } from "../utils/teleport.js";
 import { getFileStatus } from "../utils/git.js";
 import { buildGitEnvForRepo } from "../utils/git/gitDirResolution.js";
@@ -25,19 +25,26 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { Dialog } from "./design-system/Dialog.js";
 import { HintText } from "./design-system/HintText.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-qh0448cn.js:1233-1237 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qh0448cn.js:1233", () => {
+  init_react_production();
+});
 //@ chunk-qh0448cn.js:1237-1241 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qh0448cn.js:1237", () => {
+  init_react_production();
+});
 //@ chunk-qh0448cn.js:1241-3194 fingerprint = TeleportStash (0.597)
 function TeleportStash({ onStashAndContinue, onCancel, cancelQuits }) {
-  let [gitFileStatus, setGitFileStatus] = y(null);
+  let [gitFileStatus, setGitFileStatus] = useState(null);
   let changedFiles = gitFileStatus !== null ? [...gitFileStatus.tracked, ...gitFileStatus.untracked] : [];
-  let [loading, setLoading] = y(true);
-  let [stashing, setStashing] = y(false);
-  let [error, setError] = y(null);
-  P(() => {
+  let [loading, setLoading] = useState(true);
+  let [stashing, setStashing] = useState(false);
+  let [error, setError] = useState(null);
+  useEffect(() => {
     (async () => {
       try {
         let { cwd } = userCheckoutSpawnTerms();
@@ -122,14 +129,14 @@ function TeleportStash({ onStashAndContinue, onCancel, cancelQuits }) {
       ],
     });
   let showFileCount = changedFiles.length > 8;
-  let g = stashing && !cancelQuits;
+  let blockCancelWhileStashing = stashing && !cancelQuits;
   return jsxProd_default_2(
     Dialog,
     {
       title: "Working directory has changes",
-      onCancel: g ? noop : onCancel,
-      exitOnCtrlCD: cancelQuits || g,
-      inputGuide: g ? "Teleport continues when the stash finishes\u2026" : undefined,
+      onCancel: blockCancelWhileStashing ? noop : onCancel,
+      exitOnCtrlCD: cancelQuits || blockCancelWhileStashing,
+      inputGuide: blockCancelWhileStashing ? "Teleport continues when the stash finishes\u2026" : undefined,
       children: [
         jsxProd_default(Text, {
           children: "Teleport will switch git branches. The following changes were found:",
@@ -176,7 +183,7 @@ function TeleportStash({ onStashAndContinue, onCancel, cancelQuits }) {
             }),
       ],
     },
-    g ? "stashing" : "asking",
+    blockCancelWhileStashing ? "stashing" : "asking",
   );
 }
 //@ chunk-qh0448cn.js:3194-3209 affinity

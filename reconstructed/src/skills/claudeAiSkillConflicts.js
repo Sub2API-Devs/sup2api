@@ -34,28 +34,28 @@ import { estimateSkillListingTokens } from "./loadSkillsDir.js";
 /**
  * 判断技能覆盖状态是否被锁定及来源：策略/flag 设置、保留名（不可调用模型）、作者声明仅用户可调用、插件；无锁定返回 undefined。
  */
-function getLockedSkillOverride(e) {
-  let n = skillOverrideWithSource(e);
-  if (n) {
-    let t = e.source === "plugin" ? getSkillOverrideState(e) : n.value;
+function getLockedSkillOverride(skill) {
+  let override = skillOverrideWithSource(skill);
+  if (override) {
+    let value = skill.source === "plugin" ? getSkillOverrideState(skill) : override.value;
     return {
-      value: t,
-      source: t !== n.value ? "plugin" : n.source === "policySettings" ? "policy" : "flag",
+      value,
+      source: value !== override.value ? "plugin" : override.source === "policySettings" ? "policy" : "flag",
     };
   }
-  if (!isNotProtoKey(e.name))
+  if (!isNotProtoKey(skill.name))
     return {
-      value: e.disableModelInvocation ? "user-invocable-only" : "on",
+      value: skill.disableModelInvocation ? "user-invocable-only" : "on",
       source: "reserved-name",
     };
-  if (e.disableModelInvocation)
+  if (skill.disableModelInvocation)
     return {
       value: "user-invocable-only",
       source: "author",
     };
-  if (e.source === "plugin")
+  if (skill.source === "plugin")
     return {
-      value: getSkillOverrideState(e),
+      value: getSkillOverrideState(skill),
       source: "plugin",
     };
   return;
@@ -64,21 +64,27 @@ function getLockedSkillOverride(e) {
 /**
  * 从项目/用户（MCP 技能还看别名；同步技能还看本地设置的裸名）设置的 skillOverrides 里读取某技能的覆盖值。
  */
-function getLowerTierSkillOverride(e, { skipLocalBareKey: n = false } = {}) {
-  if (e.loadedFrom === "mcp") {
-    let a = [e.name, ...qualifiedOverrideNames(e)];
-    for (let y of ["projectSettings", "userSettings"]) {
-      if (!isSettingSourceEnabled(y)) continue;
-      let m = strongestOverride_2(getSettingsForSource(y)?.skillOverrides, a);
-      if (m !== undefined) return m;
+function getLowerTierSkillOverride(command, { skipLocalBareKey = false } = {}) {
+  if (command.loadedFrom === "mcp") {
+    let names = [command.name, ...qualifiedOverrideNames(command)];
+    for (let source of ["projectSettings", "userSettings"]) {
+      if (!isSettingSourceEnabled(source)) continue;
+      let override = strongestOverride_2(getSettingsForSource(source)?.skillOverrides, names);
+      if (override !== undefined) return override;
     }
     return;
   }
-  let t = (a) => (isSettingSourceEnabled(a) ? getSettingsForSource(a)?.skillOverrides : undefined);
-  let o = (a) => ownLookup(t("projectSettings"), a) ?? ownLookup(t("userSettings"), a);
-  let i = bareSkillName(e);
-  let f = n ? undefined : ownLookup(getSettingsForSource("localSettings")?.skillOverrides, i);
-  return o(e.name) ?? (i != null ? (f ?? o(i)) : undefined);
+  let overridesFor = (source) =>
+    isSettingSourceEnabled(source) ? getSettingsForSource(source)?.skillOverrides : undefined;
+  let lookupTiers = (name) =>
+    ownLookup(overridesFor("projectSettings"), name) ?? ownLookup(overridesFor("userSettings"), name);
+  let bareName = bareSkillName(command);
+  let localOverride = skipLocalBareKey
+    ? undefined
+    : ownLookup(getSettingsForSource("localSettings")?.skillOverrides, bareName);
+  return (
+    lookupTiers(command.name) ?? (bareName != null ? (localOverride ?? lookupTiers(bareName)) : undefined)
+  );
 }
 //@ chunk-ygke3hz8.js:1645-1728 placement = filterMcpPromptsByServer (0.787)
 function commandBelongsToServer(commands, serverName) {
@@ -110,9 +116,9 @@ function getSkillSourceLabel({ source, loadedFrom, pluginInfo }) {
 /**
  * 给出 claude.ai 同步技能对外显示的名字（命令名可用时用命令名）。
  */
-function claudeAiSkillDisplayName(e) {
-  let n = syncedSkillUnqualifiedAlias(e);
-  return n !== undefined && getCommandName(e) === n ? n : e.name;
+function claudeAiSkillDisplayName(command) {
+  let alias = syncedSkillUnqualifiedAlias(command);
+  return alias !== undefined && getCommandName(command) === alias ? alias : command.name;
 }
 //@ chunk-ygke3hz8.js:2045-4103 placement
 /**
@@ -131,10 +137,11 @@ function describeSyncedSkillConflicts(commands, allCommands) {
       continue;
     let bareName = printableText(unqualifiedName);
     let exactMatch = findCommand(unqualifiedName, filtered);
-    let O = foldName(unqualifiedName);
-    let v = (g) => [g.name, getCommandName(g), ...(g.aliases ?? [])];
-    let C = (g) => v(g).find((R) => foldName(R) === O);
-    let holder = exactMatch ?? filtered.find((g) => C(g));
+    let foldedName = foldName(unqualifiedName);
+    let namesOf = (command) => [command.name, getCommandName(command), ...(command.aliases ?? [])];
+    let findFoldMatch = (command) =>
+      namesOf(command).find((candidateName) => foldName(candidateName) === foldedName);
+    let holder = exactMatch ?? filtered.find((command) => findFoldMatch(command));
     if (!holder) {
       conflicts.push({
         bare: bareName,
@@ -145,29 +152,33 @@ function describeSyncedSkillConflicts(commands, allCommands) {
       });
       continue;
     }
-    let p = holder.type === "prompt" ? holder : undefined;
-    let k = p?.skillRoot !== undefined ? "skill" : `command file ${printableText(holder.name)}.md`;
+    let promptHolder = holder.type === "prompt" ? holder : undefined;
+    let kindText =
+      promptHolder?.skillRoot !== undefined ? "skill" : `command file ${printableText(holder.name)}.md`;
     let holderDescription;
     let userAdvice = "";
-    let h = false;
+    let needsNameLine = false;
     if (holder.kind === "workflow") holderDescription = "a workflow";
     else if (holder.loadedFrom === "plugin") holderDescription = "a command from a plugin";
     else
       switch (isBuiltinCommandSource(holder)) {
         case "user": {
-          let g = p?.skillRoot !== undefined ? ` in ${printableText(tildify(p.skillRoot))}` : "";
-          holderDescription = `your own ${k}${g}`;
-          h = holder.loadedFrom === "skills";
-          userAdvice = h
+          let rootSuffix =
+            promptHolder?.skillRoot !== undefined
+              ? ` in ${printableText(tildify(promptHolder.skillRoot))}`
+              : "";
+          holderDescription = `your own ${kindText}${rootSuffix}`;
+          needsNameLine = holder.loadedFrom === "skills";
+          userAdvice = needsNameLine
             ? " Rename it (folder and SKILL.md name) or delete it to use the claude.ai one."
             : " Rename or delete it to use the claude.ai one.";
           break;
         }
         case "project":
-          holderDescription = `this project's ${k}`;
+          holderDescription = `this project's ${kindText}`;
           break;
         case "managed":
-          holderDescription = `a ${k} your organization manages`;
+          holderDescription = `a ${kindText} your organization manages`;
           break;
         case "plugin":
           holderDescription = "a command from a plugin";
@@ -187,34 +198,36 @@ function describeSyncedSkillConflicts(commands, allCommands) {
         default:
           holderDescription = "another command";
       }
-    let w = `/${printableText(C(holder) ?? holder.name)}`;
+    let holderSlash = `/${printableText(findFoldMatch(holder) ?? holder.name)}`;
     let sentence =
       exactMatch !== undefined
         ? `/${bareName} runs ${holderDescription}${userAdvice ? `.${userAdvice}` : ", not your claude.ai skill."}`
-        : `/${bareName} is too close to ${w}, ${holderDescription}${userAdvice ? `.${userAdvice}` : ", so your claude.ai skill can't use it."}`;
+        : `/${bareName} is too close to ${holderSlash}, ${holderDescription}${userAdvice ? `.${userAdvice}` : ", so your claude.ai skill can't use it."}`;
     conflicts.push({
       bare: bareName,
       sentence,
       held: true,
       userCanFree: userAdvice !== "",
-      renameNeedsNameLine: h,
+      renameNeedsNameLine: needsNameLine,
     });
   }
   if (conflicts.length === 0) return;
   if (conflicts.length === 1) return conflicts[0].sentence;
-  let i = conflicts.every((conflict) => conflict.held)
+  let takenPhrase = conflicts.every((conflict) => conflict.held)
     ? "are taken by other commands"
     : "are taken by other commands or unavailable in this session";
-  let f = `${formatSlashList(conflicts)} ${i}, so they don't run your claude.ai skills.`;
-  let filtered_2 = conflicts.filter((conflict) => conflict.userCanFree);
-  if (filtered_2.length === 0) return f;
-  let y = filtered_2.some((l) => l.renameNeedsNameLine) ? "Rename (folder and SKILL.md name)" : "Rename";
-  let m = filtered_2.length === 1 ? "one" : "ones";
-  return `${f} ${y} or delete your own ${formatSlashList(filtered_2)} to use the claude.ai ${m}.`;
+  let summarySentence = `${formatSlashList(conflicts)} ${takenPhrase}, so they don't run your claude.ai skills.`;
+  let conflicts_2 = conflicts.filter((conflict) => conflict.userCanFree);
+  if (conflicts_2.length === 0) return summarySentence;
+  let renameVerb = conflicts_2.some((conflict) => conflict.renameNeedsNameLine)
+    ? "Rename (folder and SKILL.md name)"
+    : "Rename";
+  let onesWord = conflicts_2.length === 1 ? "one" : "ones";
+  return `${summarySentence} ${renameVerb} or delete your own ${formatSlashList(conflicts_2)} to use the claude.ai ${onesWord}.`;
 }
 //@ chunk-ygke3hz8.js:4103-4301 placement
-function formatSlashList(e) {
-  let mapped = e.map((t) => `/${t.bare}`);
+function formatSlashList(conflicts) {
+  let mapped = conflicts.map((conflict) => `/${conflict.bare}`);
   if (mapped.length === 1) return mapped[0];
   if (mapped.length <= 4) return `${mapped.slice(0, -1).join(", ")} and ${mapped.at(-1)}`;
   return `${mapped.slice(0, 3).join(", ")} and ${mapped.length - 3} more`;
@@ -223,20 +236,20 @@ function formatSlashList(e) {
 /**
  * 列出可配置的技能并排序：按估算 token 降序（可选），否则按来源标签再按名字。
  */
-function sortSkillsForListing(commands, { sortByTokens: n = false } = {}) {
+function sortSkillsForListing(commands, { sortByTokens = false } = {}) {
   let filtered = commands.filter(isSkillCommand);
-  if (n) {
-    let o = new Map(filtered.map((i) => [i, estimateSkillListingTokens(i)]));
+  if (sortByTokens) {
+    let tokenCounts = new Map(filtered.map((command) => [command, estimateSkillListingTokens(command)]));
     return filtered.sort(
-      (i, f) =>
-        (o.get(f) ?? 0) - (o.get(i) ?? 0) ||
-        claudeAiSkillDisplayName(i).localeCompare(claudeAiSkillDisplayName(f)),
+      (left, right) =>
+        (tokenCounts.get(right) ?? 0) - (tokenCounts.get(left) ?? 0) ||
+        claudeAiSkillDisplayName(left).localeCompare(claudeAiSkillDisplayName(right)),
     );
   }
   return filtered.sort(
-    (o, i) =>
-      getSkillSourceLabel(o).localeCompare(getSkillSourceLabel(i)) ||
-      claudeAiSkillDisplayName(o).localeCompare(claudeAiSkillDisplayName(i)),
+    (left, right) =>
+      getSkillSourceLabel(left).localeCompare(getSkillSourceLabel(right)) ||
+      claudeAiSkillDisplayName(left).localeCompare(claudeAiSkillDisplayName(right)),
   );
 }
 //@ chunk-ygke3hz8.js:4563-4656 placement
@@ -250,36 +263,36 @@ function localSkillOverrides() {
 /**
  * 构建技能覆盖判断的上下文：本地覆盖、较低层级的同名技能与被锁定的技能。
  */
-function buildSkillOverrideContext(e, localOverrides = localSkillOverrides()) {
-  let t = new Map();
-  let o = new Map();
-  for (let i of e) {
-    let lowerTierSkillOverride = getLowerTierSkillOverride(i);
-    if (lowerTierSkillOverride) t.set(i.name, lowerTierSkillOverride);
-    let lockedSkillOverride = getLockedSkillOverride(i);
-    if (lockedSkillOverride) o.set(i, lockedSkillOverride);
+function buildSkillOverrideContext(commands, localOverrides = localSkillOverrides()) {
+  let lowerTier = new Map();
+  let locked = new Map();
+  for (let command of commands) {
+    let lowerTierSkillOverride = getLowerTierSkillOverride(command);
+    if (lowerTierSkillOverride) lowerTier.set(command.name, lowerTierSkillOverride);
+    let lockedSkillOverride = getLockedSkillOverride(command);
+    if (lockedSkillOverride) locked.set(command, lockedSkillOverride);
   }
   return {
     localOverrides,
-    lowerTier: t,
-    locked: o,
+    lowerTier,
+    locked,
   };
 }
 //@ chunk-ygke3hz8.js:4827-5019 placement
 /**
  * 计算每个技能当前生效的覆盖值：锁定值 > 本地覆盖 > 低层设置 > on。
  */
-function getEffectiveSkillStates(e, n) {
-  let t = Object.create(null);
-  for (let o of e) {
-    if (Object.hasOwn(t, o.name)) continue;
-    t[o.name] =
-      n.locked.get(o)?.value ??
-      commandBelongsToServer(o, n.localOverrides) ??
-      n.lowerTier.get(o.name) ??
+function getEffectiveSkillStates(commands, context) {
+  let states = Object.create(null);
+  for (let command of commands) {
+    if (Object.hasOwn(states, command.name)) continue;
+    states[command.name] =
+      context.locked.get(command)?.value ??
+      commandBelongsToServer(command, context.localOverrides) ??
+      context.lowerTier.get(command.name) ??
       "on";
   }
-  return t;
+  return states;
 }
 //@ chunk-ygke3hz8.js:5019-6089 placement
 /**
@@ -287,71 +300,75 @@ function getEffectiveSkillStates(e, n) {
  */
 function diffSkillOverrides(commands, desired, context) {
   let { localOverrides, lowerTier, locked } = context;
-  let a = new Set(Array.from(locked.keys(), (r) => r.name));
-  let y = new Set(a);
+  let lockedNames = new Set(Array.from(locked.keys(), (command) => command.name));
+  let seenNames = new Set(lockedNames);
   let diff = Object.create(null);
   let writes = 0;
   let effectiveChanged = 0;
   for (let command of commands) {
-    if (y.has(command.name)) continue;
-    y.add(command.name);
-    let u = ownLookup(desired, command.name) ?? "on";
-    let O = lowerTier.get(command.name) ?? "on";
-    let v = commandBelongsToServer(command, localOverrides) ?? O;
+    if (seenNames.has(command.name)) continue;
+    seenNames.add(command.name);
+    let desiredState = ownLookup(desired, command.name) ?? "on";
+    let tierDefault = lowerTier.get(command.name) ?? "on";
+    let currentState = commandBelongsToServer(command, localOverrides) ?? tierDefault;
     if (command.loadedFrom === "mcp") {
-      if (u === v) continue;
-      let p = false;
-      let k = u === O ? undefined : u;
-      if (k !== ownLookup(localOverrides, command.name) || Object.hasOwn(diff, command.name)) {
-        diff[command.name] = k;
-        p = true;
+      if (desiredState === currentState) continue;
+      let didWrite = false;
+      let newValue = desiredState === tierDefault ? undefined : desiredState;
+      if (newValue !== ownLookup(localOverrides, command.name) || Object.hasOwn(diff, command.name)) {
+        diff[command.name] = newValue;
+        didWrite = true;
       }
-      for (let c of qualifiedOverrideNames(command)) {
-        if (ownLookup(localOverrides, c) === undefined) continue;
+      for (let qualifiedName of qualifiedOverrideNames(command)) {
+        if (ownLookup(localOverrides, qualifiedName) === undefined) continue;
         for (let command_2 of commands) {
           if (
             command_2.name === command.name ||
             command_2.loadedFrom !== "mcp" ||
-            !qualifiedOverrideNames(command_2).includes(c) ||
+            !qualifiedOverrideNames(command_2).includes(qualifiedName) ||
             Object.hasOwn(diff, command_2.name)
           )
             continue;
-          let h = commandBelongsToServer(command_2, localOverrides);
+          let otherState = commandBelongsToServer(command_2, localOverrides);
           if (
-            (a.has(command_2.name) ||
+            (lockedNames.has(command_2.name) ||
               (ownLookup(desired, command_2.name) ?? "on") ===
-                (h ?? lowerTier.get(command_2.name) ?? "on")) &&
-            h !== undefined
+                (otherState ?? lowerTier.get(command_2.name) ?? "on")) &&
+            otherState !== undefined
           )
-            diff[command_2.name] = h;
+            diff[command_2.name] = otherState;
         }
-        diff[c] = undefined;
-        p = true;
+        diff[qualifiedName] = undefined;
+        didWrite = true;
       }
-      if (p) writes++;
+      if (didWrite) writes++;
       effectiveChanged++;
       continue;
     }
-    let C = command.loadedFrom === "syncedSkills" ? bareSkillName(command) : undefined;
-    if (C != null && ownLookup(localOverrides, C) !== undefined && u !== v) {
-      let p =
+    let bareKey = command.loadedFrom === "syncedSkills" ? bareSkillName(command) : undefined;
+    if (
+      bareKey != null &&
+      ownLookup(localOverrides, bareKey) !== undefined &&
+      desiredState !== currentState
+    ) {
+      let baseTier =
         getLowerTierSkillOverride(command, {
           skipLocalBareKey: true,
         }) ?? "on";
-      let k = u === p ? undefined : u;
-      if (k !== ownLookup(localOverrides, command.name)) diff[command.name] = k;
-      diff[C] = undefined;
+      let storedValue = desiredState === baseTier ? undefined : desiredState;
+      if (storedValue !== ownLookup(localOverrides, command.name)) diff[command.name] = storedValue;
+      diff[bareKey] = undefined;
       writes++;
       effectiveChanged++;
       continue;
     }
-    if (command.loadedFrom === "syncedSkills" && u === v) continue;
-    let d = u === O ? undefined : u;
-    if (d !== ownLookup(localOverrides, command.name)) {
-      diff[command.name] = d;
+    if (command.loadedFrom === "syncedSkills" && desiredState === currentState) continue;
+    let storedValue = desiredState === tierDefault ? undefined : desiredState;
+    if (storedValue !== ownLookup(localOverrides, command.name)) {
+      diff[command.name] = storedValue;
       writes++;
     }
-    if (u !== v) effectiveChanged++;
+    if (desiredState !== currentState) effectiveChanged++;
   }
   return {
     diff,

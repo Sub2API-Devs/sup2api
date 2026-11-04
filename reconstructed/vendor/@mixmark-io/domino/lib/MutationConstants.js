@@ -5,10 +5,10 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:107818-107912 cjs-fingerprint
-var require_MutationConstants = x(function (cjsExports, cjsModule) {
+var require_MutationConstants = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     VALUE: 1,
     ATTR: 2,

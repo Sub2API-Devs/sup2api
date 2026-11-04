@@ -13,10 +13,10 @@ import { hasLink } from "../../utils/hasLink.js";
 import { isHookRegistrationPending } from "../../utils/plugins/loadPluginHooks.js";
 
 //@ chunk-8zzqbk6w.js:299-412 placement
-function isUnknownPluginSpawnedAgent(o) {
+function isUnknownPluginSpawnedAgent(toolUseContext) {
   return (
-    o.hookCaller === undefined &&
-    o.pluginUnnamed === true &&
+    toolUseContext.hookCaller === undefined &&
+    toolUseContext.pluginUnnamed === true &&
     (getPluginRegistry().loadedModules.some((loadedModule) => !hasLink(loadedModule)) ||
       isHookRegistrationPending())
   );

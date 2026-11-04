@@ -60,8 +60,8 @@ function isSuggestionBackOffActive() {
 /**
  * 记录一次提示建议是否被使用：使用则清零并结束退避，否则累计连续未使用次数，达阈值时写入全局配置。
  */
-function recordSuggestionOutcome(e, storageV5, promptSuggestion) {
-  if (e) {
+function recordSuggestionOutcome(used, storageV5, promptSuggestion) {
+  if (used) {
     if (promptSuggestion) promptSuggestion.unusedInARow = 0;
     endSuggestionBackOff(storageV5, false);
     return;
@@ -77,21 +77,21 @@ function recordSuggestionOutcome(e, storageV5, promptSuggestion) {
 /**
  * 用户在 /config 里重新打开提示建议时调用：清零连续未使用计数，并以 via_config_toggle=true 结束退避（走可靠写入与结束事件）。
  */
-function endBackOffFromConfigToggle(e, promptSuggestionRun) {
+function endBackOffFromConfigToggle(storageV5, promptSuggestionRun) {
   if (promptSuggestionRun) promptSuggestionRun.unusedInARow = 0;
-  endSuggestionBackOff(e, true);
+  endSuggestionBackOff(storageV5, true);
 }
 //@ chunk-a6fbv34e.js:993-1143 placement
 function logPromptSuggestionBackOff(storageV5) {
   if (!isBackOffNoticeUnclaimed(getGlobalConfig()) || !isSuggestionBackOffActive()) return false;
   saveGlobalConfig(
-    (o) =>
-      isBackOffNoticeUnclaimed(o)
+    (config) =>
+      isBackOffNoticeUnclaimed(config)
         ? {
-            ...o,
+            ...config,
             promptSuggestionUnusedStreak: NOTICE_CLAIMED_STREAK,
           }
-        : o,
+        : config,
     storageV5,
   );
   logFeatureOk("prompt_suggestion_back_off_notice");
@@ -101,21 +101,21 @@ function logPromptSuggestionBackOff(storageV5) {
 /**
  * 结束提示建议退避：清零连续未使用计数，若原本处于退避则可靠写入并上报结束事件。
  */
-function endSuggestionBackOff(e, viaConfigToggle) {
+function endSuggestionBackOff(storageV5, viaConfigToggle) {
   let unusedStreak = getUnusedStreak(getGlobalConfig());
   if (unusedStreak === 0) return;
   if (!isSuggestionBackOffActive()) {
-    saveGlobalConfig(clearUnusedStreak, e);
+    saveGlobalConfig(clearUnusedStreak, storageV5);
     return;
   }
-  let c = {
+  let fields = {
     was_notice_claimed: unusedStreak === NOTICE_CLAIMED_STREAK,
     via_config_toggle: viaConfigToggle,
   };
-  saveGlobalConfigDurably(clearUnusedStreak, e)
-    .then((u) => {
-      if (u) logFeatureOk("prompt_suggestion_back_off_end", c);
-      else logFeatureSad("prompt_suggestion_back_off_end", "reset_unconfirmed", c);
+  saveGlobalConfigDurably(clearUnusedStreak, storageV5)
+    .then((saved) => {
+      if (saved) logFeatureOk("prompt_suggestion_back_off_end", fields);
+      else logFeatureSad("prompt_suggestion_back_off_end", "reset_unconfirmed", fields);
     })
     .catch((error) =>
       logForDebugging(`Prompt suggestion back-off: could not log the end event: ${error}`, {
@@ -124,31 +124,31 @@ function endSuggestionBackOff(e, viaConfigToggle) {
     );
 }
 //@ chunk-a6fbv34e.js:1490-1560 placement
-function clearUnusedStreak(e) {
-  return getUnusedStreak(e) === 0
-    ? e
+function clearUnusedStreak(config) {
+  return getUnusedStreak(config) === 0
+    ? config
     : {
-        ...e,
+        ...config,
         promptSuggestionUnusedStreak: 0,
       };
 }
 //@ chunk-a6fbv34e.js:1560-1629 placement
-function setUnusedStreakToThreshold(e) {
-  return getUnusedStreak(e) >= UNUSED_STREAK_THRESHOLD
-    ? e
+function setUnusedStreakToThreshold(config) {
+  return getUnusedStreak(config) >= UNUSED_STREAK_THRESHOLD
+    ? config
     : {
-        ...e,
+        ...config,
         promptSuggestionUnusedStreak: UNUSED_STREAK_THRESHOLD,
       };
 }
 //@ chunk-a6fbv34e.js:1629-1673 placement
-function isBackOffNoticeUnclaimed(e) {
-  let unusedStreak = getUnusedStreak(e);
+function isBackOffNoticeUnclaimed(config) {
+  let unusedStreak = getUnusedStreak(config);
   return unusedStreak >= UNUSED_STREAK_THRESHOLD && unusedStreak !== NOTICE_CLAIMED_STREAK;
 }
 //@ chunk-a6fbv34e.js:1673-1775 placement
-function getUnusedStreak(globalConfig) {
-  let promptSuggestionUnusedStreak = globalConfig.promptSuggestionUnusedStreak;
+function getUnusedStreak(config) {
+  let promptSuggestionUnusedStreak = config.promptSuggestionUnusedStreak;
   return typeof promptSuggestionUnusedStreak === "number" && Number.isFinite(promptSuggestionUnusedStreak)
     ? promptSuggestionUnusedStreak
     : 0;

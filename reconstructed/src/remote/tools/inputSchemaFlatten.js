@@ -26,27 +26,27 @@ var SCHEMA_PASSTHROUGH_KEYS = [
   "title",
 ];
 //@ chunk-g54kbxqw.js:11267-11463 placement
-function resolveSchemaRef(e, n) {
-  let $ref = e.$ref;
-  if (typeof $ref !== "string") return e;
+function resolveSchemaRef(schema, root) {
+  let $ref = schema.$ref;
+  if (typeof $ref !== "string") return schema;
   let match = /^#\/(\$defs|definitions)\/([^/]+)$/.exec($ref);
-  if (match === null) return e;
-  let h = n[match[1]];
-  if (!isPlainObject_2(h)) return e;
-  let y = h[match[2]];
-  return isPlainObject_2(y) ? y : e;
+  if (match === null) return schema;
+  let defs = root[match[1]];
+  if (!isPlainObject_2(defs)) return schema;
+  let resolved = defs[match[2]];
+  return isPlainObject_2(resolved) ? resolved : schema;
 }
 //@ chunk-g54kbxqw.js:11463-11517 placement
-function dedupeResolvedSchemaRefs(e, n) {
-  return uniq(e.map((s) => (isPlainObject_2(s) ? resolveSchemaRef(s, n) : s)));
+function dedupeResolvedSchemaRefs(schemas, root) {
+  return uniq(schemas.map((schema) => (isPlainObject_2(schema) ? resolveSchemaRef(schema, root) : schema)));
 }
 //@ chunk-g54kbxqw.js:11517-11752 placement
-function describeSchemaVariantFields(e) {
-  if (!isPlainObject_2(e)) return null;
-  let required = e.required;
-  if (Array.isArray(required) && required.length > 0 && required.every((r) => typeof r === "string"))
+function describeSchemaVariantFields(schema) {
+  if (!isPlainObject_2(schema)) return null;
+  let required = schema.required;
+  if (Array.isArray(required) && required.length > 0 && required.every((field) => typeof field === "string"))
     return required.join(", ");
-  let properties = e.properties;
+  let properties = schema.properties;
   if (isPlainObject_2(properties)) {
     let keys = Object.keys(properties);
     if (keys.length > 0) return keys.join(", ");
@@ -57,83 +57,89 @@ function describeSchemaVariantFields(e) {
 /**
  * 把含 anyOf/oneOf/allOf 的工具输入 JSON Schema 拍平为单个对象（用于远程工具声明），附加约束说明。
  */
-function flattenInputSchema(e) {
-  if (!isPlainObject_2(e))
+function flattenInputSchema(schema) {
+  if (!isPlainObject_2(schema))
     return {
       outcome: "unchanged",
     };
-  let filtered = SCHEMA_COMBINATOR_KEYS.filter((s) => s in e);
-  if (filtered.length === 0)
+  let combinators = SCHEMA_COMBINATOR_KEYS.filter((key) => key in schema);
+  if (combinators.length === 0)
     return {
       outcome: "unchanged",
     };
   try {
-    let s = Object.create(null);
-    let r = (properties) => {
-      if (!isPlainObject_2(properties)) return;
-      for (let [key, value] of Object.entries(properties))
-        if (SAFE_SCHEMA_KEY_RE.test(key) && !(key in s) && isPlainObject_2(value)) s[key] = value;
+    let properties = Object.create(null);
+    let absorbProperties = (properties_2) => {
+      if (!isPlainObject_2(properties_2)) return;
+      for (let [key, value] of Object.entries(properties_2))
+        if (SAFE_SCHEMA_KEY_RE.test(key) && !(key in properties) && isPlainObject_2(value))
+          properties[key] = value;
     };
-    r(e.properties);
-    for (let w of filtered) {
-      let P = e[w];
-      if (!Array.isArray(P))
+    absorbProperties(schema.properties);
+    for (let combinator of combinators) {
+      let branches = schema[combinator];
+      if (!Array.isArray(branches))
         return {
           outcome: "drop",
-          reason: `input schema has top-level ${w} that is not an array`,
+          reason: `input schema has top-level ${combinator} that is not an array`,
         };
-      for (let L of dedupeResolvedSchemaRefs(P, e)) if (isPlainObject_2(L)) r(L.properties);
+      for (let branch of dedupeResolvedSchemaRefs(branches, schema))
+        if (isPlainObject_2(branch)) absorbProperties(branch.properties);
     }
-    let h = new Set();
-    let y = (required) => {
-      if (!Array.isArray(required)) return;
-      for (let P of required) if (typeof P === "string" && P in s) h.add(P);
+    let required = new Set();
+    let absorbRequired = (required_2) => {
+      if (!Array.isArray(required_2)) return;
+      for (let name of required_2) if (typeof name === "string" && name in properties) required.add(name);
     };
-    y(e.required);
-    let allOf = e.allOf;
+    absorbRequired(schema.required);
+    let allOf = schema.allOf;
     if (Array.isArray(allOf)) {
-      for (let w of dedupeResolvedSchemaRefs(allOf, e)) if (isPlainObject_2(w)) y(w.required);
+      for (let branch of dedupeResolvedSchemaRefs(allOf, schema))
+        if (isPlainObject_2(branch)) absorbRequired(branch.required);
     }
-    let C = filtered.includes("anyOf") || filtered.includes("oneOf");
-    let R = {
+    let isVariantChoice = combinators.includes("anyOf") || combinators.includes("oneOf");
+    let flattened = {
       type: "object",
-      properties: s,
-      required: [...h],
+      properties,
+      required: [...required],
     };
-    for (let w of SCHEMA_PASSTHROUGH_KEYS) if (w in e) R[w] = e[w];
-    let note = combinatorConstraintNote(filtered, e, C);
-    if (!("additionalProperties" in e)) R.additionalProperties = true;
+    for (let key of SCHEMA_PASSTHROUGH_KEYS) if (key in schema) flattened[key] = schema[key];
+    let note = combinatorConstraintNote(combinators, schema, isVariantChoice);
+    if (!("additionalProperties" in schema)) flattened.additionalProperties = true;
     return {
       outcome: "normalized",
-      schema: R,
+      schema: flattened,
       note,
-      combinators: filtered,
+      combinators,
     };
   } catch {
     return {
       outcome: "drop",
-      reason: `input schema uses top-level ${filtered.join("/")} and could not be normalized`,
+      reason: `input schema uses top-level ${combinators.join("/")} and could not be normalized`,
     };
   }
 }
 //@ chunk-g54kbxqw.js:12773-13300 placement
-function combinatorConstraintNote(e, n, s) {
-  if (!s)
+function combinatorConstraintNote(combinators, schema, isVariantChoice) {
+  if (!isVariantChoice)
     return "Input constraint: all listed parameters apply together (flattened from a JSON Schema allOf).";
-  let r = e.includes("oneOf") ? "oneOf" : "anyOf";
-  let h = n[r];
-  let y = Array.isArray(h)
+  let combinator = combinators.includes("oneOf") ? "oneOf" : "anyOf";
+  let branches = schema[combinator];
+  let groups = Array.isArray(branches)
     ? uniq(
-        dedupeResolvedSchemaRefs(h, n)
+        dedupeResolvedSchemaRefs(branches, schema)
           .map(describeSchemaVariantFields)
-          .filter((R) => R !== null),
+          .filter((fields) => fields !== null),
       )
     : [];
-  let k = r === "oneOf" ? "Provide parameters for exactly one of" : "Provide parameters for at least one of";
-  if (y.length === 0)
-    return `Input constraint: ${k} the documented parameter groups (flattened from a JSON Schema ${r}).`;
-  let joined = y.map((R) => `(${R})`).join(" or ");
-  return `Input constraint: ${k}: ${joined}.`;
+  let requirementText =
+    combinator === "oneOf"
+      ? "Provide parameters for exactly one of"
+      : "Provide parameters for at least one of";
+  if (groups.length === 0)
+    return `Input constraint: ${requirementText} the documented parameter groups (flattened from a JSON Schema ${combinator}).`;
+  let joined = groups.map((group) => `(${group})`).join(" or ");
+  return `Input constraint: ${requirementText}: ${joined}.`;
 }
 //@ chunk-g54kbxqw.js:13300-13342 placement
 function joinDescription(note, description) {

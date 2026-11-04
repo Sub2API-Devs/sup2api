@@ -45,7 +45,8 @@ import { getSkillUsageScore } from "../../utils/suggestions/skillUsageTracking.j
 import { getContextWindow } from "../../utils/model/configs.js";
 import { roughTokenCountEstimation } from "../../services/tokenEstimation.js";
 import { memorySkillCommands } from "../../services/memorySync/memorySkills.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:959430-959509 fingerprint = formatCommandDescription (1)
 /**
@@ -72,20 +73,24 @@ function getSkillDescMaxChars() {
 /**
  * skill 列表的字符预算：SLASH_COMMAND_TOOL_CHAR_BUDGET 环境变量优先；否则上下文窗口 × 4 字符/token × skillListingBudgetFraction（默认 1%），未配置时可被 GrowthBook tengu_typed_pebble 抬高（上限 100000）。
  */
-function getCharBudget(e, n = CHARS_PER_TOKEN_2) {
+function getCharBudget(contextWindowTokens, charsPerToken = CHARS_PER_TOKEN_2) {
   let numberWithSeparators = parseNumberWithSeparators(process.env.SLASH_COMMAND_TOOL_CHAR_BUDGET);
   if (numberWithSeparators) return numberWithSeparators;
   let skillListingBudgetFraction = getInitialSettings_2().skillListingBudgetFraction;
-  let h =
-    (e ?? DEFAULT_CONTEXT_TOKENS) * n * (skillListingBudgetFraction ?? DEFAULT_SKILL_LISTING_BUDGET_FRACTION);
-  let y =
+  let fractionBudget =
+    (contextWindowTokens ?? DEFAULT_CONTEXT_TOKENS) *
+    charsPerToken *
+    (skillListingBudgetFraction ?? DEFAULT_SKILL_LISTING_BUDGET_FRACTION);
+  let pinnedBudget =
     skillListingBudgetFraction === undefined && isClaudeAiChatCowork()
       ? getFeatureValue_SESSION_PINNED("tengu_typed_pebble", 0)
       : 0;
   return Math.max(
     1,
-    Math.floor(h),
-    typeof y === "number" && Number.isInteger(y) ? Math.min(y, MAX_REMOTE_SKILL_BUDGET) : 0,
+    Math.floor(fractionBudget),
+    typeof pinnedBudget === "number" && Number.isInteger(pinnedBudget)
+      ? Math.min(pinnedBudget, MAX_REMOTE_SKILL_BUDGET)
+      : 0,
   );
 }
 //@ chunk-e6aww6q8.js:2297882-2297967 file-local
@@ -96,7 +101,10 @@ function getCommandDescription(cmd) {
   return cmd.whenToUse ? `${cmd.description} - ${cmd.whenToUse}` : cmd.description;
 }
 //@ chunk-e6aww6q8.js:2297967-2297987 layout
-var skillDigestCache = new WeakMap();
+var skillDigestCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2297967", () => {
+  skillDigestCache = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:2297987-2298194 layout
 /**
  * skill 名+描述的 16 位哈希（缓存于 WeakMap），用于判断列表是否变化。
@@ -104,8 +112,9 @@ var skillDigestCache = new WeakMap();
 function getSkillListingDigest(cmd) {
   let commandName = getCommandName_2(cmd);
   let commandDescription = getCommandDescription(cmd);
-  let s = skillDigestCache.get(cmd);
-  if (s !== undefined && s.name === commandName && s.description === commandDescription) return s.digest;
+  let cached = skillDigestCache.get(cmd);
+  if (cached !== undefined && cached.name === commandName && cached.description === commandDescription)
+    return cached.digest;
   let sliced = computeContentHash(JSON.stringify([commandName, commandDescription])).slice(0, 16);
   skillDigestCache.set(cmd, {
     name: commandName,
@@ -118,14 +127,14 @@ function getSkillListingDigest(cmd) {
 /**
  * skill 列表显示名：短名与全名不同且短名唯一指向它时显示 "全名 (短名)"。
  */
-function getSkillListingLabel(e, n) {
-  let commandName = getCommandName_2(e);
-  return commandName === e.name ||
-    e.name.endsWith(`:${commandName}`) ||
+function getSkillListingLabel(command, allCommands) {
+  let commandName = getCommandName_2(command);
+  return commandName === command.name ||
+    command.name.endsWith(`:${commandName}`) ||
     !isUnicodeIdentifier(commandName) ||
-    findCommand(commandName, n)?.name !== e.name
-    ? e.name
-    : `${e.name} (${commandName})`;
+    findCommand(commandName, allCommands)?.name !== command.name
+    ? command.name
+    : `${command.name} (${commandName})`;
 }
 //@ chunk-e6aww6q8.js:2298327-2298390 layout
 function isBundledPromptSkill(cmd) {
@@ -135,81 +144,87 @@ function isBundledPromptSkill(cmd) {
 /**
  * 分析 skill 列表预算：返回是否装得下、需截断描述的 skill、总字符等（供 /context 等统计）。
  */
-function analyzeSkillListingBudget(e, n, contextWindow, s, h = CHARS_PER_TOKEN_2) {
-  let charBudget = getCharBudget(contextWindow, h);
+function analyzeSkillListingBudget(
+  commands,
+  usageScore,
+  contextWindow,
+  nameOnlySet,
+  charsPerToken = CHARS_PER_TOKEN_2,
+) {
+  let charBudget = getCharBudget(contextWindow, charsPerToken);
   let budgetFromEnv = parseNumberWithSeparators(process.env.SLASH_COMMAND_TOOL_CHAR_BUDGET) > 0;
   let skillDescMaxChars = getSkillDescMaxChars();
-  let L = [];
-  let max = Math.max(0, e.length - 1);
-  let mapped = e.map((Me) => {
-    if (s?.has(Me.name)) {
-      let Je = Me.name.length;
-      max += Je + 2;
+  let capped = [];
+  let max = Math.max(0, commands.length - 1);
+  let mapped = commands.map((command) => {
+    if (nameOnlySet?.has(command.name)) {
+      let nameLength = command.name.length;
+      max += nameLength + 2;
       return {
-        cmd: Me,
-        nameLength: Je,
+        cmd: command,
+        nameLength,
         descLen: 0,
-        entryLen: Je + 2,
+        entryLen: nameLength + 2,
       };
     }
-    let We = getSkillListingLabel(Me, e).length;
-    let commandDescription = getCommandDescription(Me);
+    let labelLength = getSkillListingLabel(command, commands).length;
+    let commandDescription = getCommandDescription(command);
     let min = Math.min(commandDescription.length, skillDescMaxChars);
     if (commandDescription.length > skillDescMaxChars)
-      L.push({
-        name: Me.name,
+      capped.push({
+        name: command.name,
         rawLen: commandDescription.length,
       });
-    max += We + 4 + commandDescription.length;
+    max += labelLength + 4 + commandDescription.length;
     return {
-      cmd: Me,
-      nameLength: We,
+      cmd: command,
+      nameLength: labelLength,
       descLen: min,
-      entryLen: We + 4 + min,
+      entryLen: labelLength + 4 + min,
     };
   });
-  L.sort((Me, We) => We.rawLen - Me.rawLen);
-  let cappedSkills = L.map((Me) => Me.name);
-  let Se = mapped.reduce((acc, We) => acc + We.entryLen, 0) + Math.max(0, mapped.length - 1);
-  if (Se <= charBudget)
+  capped.sort((left, right) => right.rawLen - left.rawLen);
+  let cappedSkills = capped.map((entry) => entry.name);
+  let totalChars = mapped.reduce((acc, entry) => acc + entry.entryLen, 0) + Math.max(0, mapped.length - 1);
+  if (totalChars <= charBudget)
     return {
       cappedSkills,
       budgetMode: "fits",
       budgetTruncatedSkills: [],
-      totalChars: Se,
+      totalChars,
       rawTotalChars: max,
       budget: charBudget,
       budgetFromEnv,
-      bytesPerToken: h,
+      bytesPerToken: charsPerToken,
     };
-  let ke = (Me) => isBundledPromptSkill(Me.cmd) || s?.has(Me.cmd.name);
-  let filtered = mapped.filter((Me) => !ke(Me));
-  let Ee =
-    mapped.reduce((acc, We) => acc + (ke(We) ? We.entryLen : We.nameLength + 2), 0) +
+  let isFixedEntry = (entry) => isBundledPromptSkill(entry.cmd) || nameOnlySet?.has(entry.cmd.name);
+  let filtered = mapped.filter((entry) => !isFixedEntry(entry));
+  let fixedChars =
+    mapped.reduce((acc, entry) => acc + (isFixedEntry(entry) ? entry.entryLen : entry.nameLength + 2), 0) +
     Math.max(0, mapped.length - 1);
-  let Ae = charBudget - Ee;
-  filtered.sort((Me, We) => n(We.cmd) - n(Me.cmd));
-  let Ie = [];
-  for (let Me of filtered) {
-    let We = Me.entryLen - (Me.nameLength + 2);
-    if (We <= Ae) Ae -= We;
-    else Ie.push(Me);
+  let remainingChars = charBudget - fixedChars;
+  filtered.sort((left, right) => usageScore(right.cmd) - usageScore(left.cmd));
+  let truncatedEntries = [];
+  for (let entry of filtered) {
+    let descCost = entry.entryLen - (entry.nameLength + 2);
+    if (descCost <= remainingChars) remainingChars -= descCost;
+    else truncatedEntries.push(entry);
   }
-  Ie.sort((Me, We) => We.descLen - Me.descLen);
+  truncatedEntries.sort((left, right) => right.descLen - left.descLen);
   return {
     cappedSkills,
     budgetMode: "priority",
-    budgetTruncatedSkills: Ie.map((Me) => Me.cmd.name),
-    totalChars: Se,
+    budgetTruncatedSkills: truncatedEntries.map((entry) => entry.cmd.name),
+    totalChars,
     rawTotalChars: max,
     budget: charBudget,
     budgetFromEnv,
-    bytesPerToken: h,
+    bytesPerToken: charsPerToken,
   };
 }
 //@ chunk-e6aww6q8.js:2299616-2299697 layout
-function truncateSkillDescription(e) {
-  let desc = getCommandDescription(e);
+function truncateSkillDescription(command) {
+  let desc = getCommandDescription(command);
   let skillDescMaxChars = getSkillDescMaxChars();
   return desc.length > skillDescMaxChars ? desc.slice(0, skillDescMaxChars - 1) + "\u2026" : desc;
 }
@@ -217,25 +232,31 @@ function truncateSkillDescription(e) {
 /**
  * 把 skill 列表格式化成 "- 名字: 描述" 行；超预算时保留打包 skill 与 name-only 项的全文，其余按优先级在剩余预算内保留描述、超出的只留名字，并记 tengu_skill_descriptions_truncated。
  */
-function formatCommandsWithinBudget(newSkills, n, contextWindowTokens, s, h = newSkills) {
+function formatCommandsWithinBudget(
+  newSkills,
+  usageScore,
+  contextWindowTokens,
+  charsPerToken,
+  allCommands = newSkills,
+) {
   if (newSkills.length === 0) return "";
-  let budget = getCharBudget(contextWindowTokens, s);
-  let S = new Set();
-  let fullEntries = newSkills.map((Ie, Me) => {
-    if (getSkillOverrideState(Ie) === "name-only") {
-      S.add(Me);
-      let ze = `- ${Ie.name}`;
+  let budget = getCharBudget(contextWindowTokens, charsPerToken);
+  let fixedIndices = new Set();
+  let fullEntries = newSkills.map((command, index) => {
+    if (getSkillOverrideState(command) === "name-only") {
+      fixedIndices.add(index);
+      let nameOnlyLine = `- ${command.name}`;
       return {
-        cmd: Ie,
-        nameOnly: ze,
-        full: ze,
+        cmd: command,
+        nameOnly: nameOnlyLine,
+        full: nameOnlyLine,
       };
     }
-    let We = `- ${getSkillListingLabel(Ie, h)}`;
+    let labelLine = `- ${getSkillListingLabel(command, allCommands)}`;
     return {
-      cmd: Ie,
-      nameOnly: We,
-      full: `${We}: ${truncateSkillDescription(Ie)}`,
+      cmd: command,
+      nameOnly: labelLine,
+      full: `${labelLine}: ${truncateSkillDescription(command)}`,
     };
   });
   let fullTotal = fullEntries.reduce((sum, e) => sum + bunStringWidth(e.full), 0) + (fullEntries.length - 1);
@@ -248,28 +269,31 @@ function formatCommandsWithinBudget(newSkills, n, contextWindowTokens, s, h = ne
       level: "warn",
     },
   );
-  let bundledIndices = new Set(S);
+  let bundledIndices = new Set(fixedIndices);
   for (let i = 0; i < newSkills.length; i++) {
     let cmd = newSkills[i];
     if (cmd.type === "prompt" && cmd.source === "bundled") bundledIndices.add(i);
   }
-  let filtered = newSkills.map((Ie, Me) => Me).filter((i) => !bundledIndices.has(i));
+  let filtered = newSkills.map((command, index) => index).filter((i) => !bundledIndices.has(i));
   if (filtered.length === 0)
     return fullEntries.map((e) => e.full).join(`
 `);
-  let Z = (Ie) => bunStringWidth(fullEntries[Ie].nameOnly);
-  let Se = (Ie) => bunStringWidth(fullEntries[Ie].full);
-  let ke =
-    newSkills.reduce((sum, Me, We) => sum + (bundledIndices.has(We) ? Se(We) : Z(We)), 0) +
+  let nameOnlyWidth = (index) => bunStringWidth(fullEntries[index].nameOnly);
+  let fullWidth = (index) => bunStringWidth(fullEntries[index].full);
+  let baselineChars =
+    newSkills.reduce(
+      (sum, command, index) => sum + (bundledIndices.has(index) ? fullWidth(index) : nameOnlyWidth(index)),
+      0,
+    ) +
     (newSkills.length - 1);
-  let we = budget - ke;
-  let Ee = new Set();
-  filtered.sort((sum, cmd) => n(newSkills[cmd]) - n(newSkills[sum]));
-  for (let Ie of filtered) {
-    let Me = Se(Ie) - Z(Ie);
-    if (Me <= we) {
-      Ee.add(Ie);
-      we -= Me;
+  let remainingChars = budget - baselineChars;
+  let keptFullIndices = new Set();
+  filtered.sort((sum, cmd) => usageScore(newSkills[cmd]) - usageScore(newSkills[sum]));
+  for (let index of filtered) {
+    let descCost = fullWidth(index) - nameOnlyWidth(index);
+    if (descCost <= remainingChars) {
+      keptFullIndices.add(index);
+      remainingChars -= descCost;
     }
   }
   let fixedChars = fullEntries.reduce(
@@ -281,12 +305,14 @@ function formatCommandsWithinBudget(newSkills, n, contextWindowTokens, s, h = ne
     budget,
     full_total: fullTotal,
     truncation_mode: lit_2("priority"),
-    kept_full_count: Ee.size,
-    collapsed_count: filtered.length - Ee.size,
+    kept_full_count: keptFullIndices.size,
+    collapsed_count: filtered.length - keptFullIndices.size,
     fixed_count: bundledIndices.size,
     fixed_chars: fixedChars,
   });
-  return fullEntries.map((cmd, i) => (bundledIndices.has(i) || Ee.has(i) ? cmd.full : cmd.nameOnly)).join(`
+  return fullEntries.map((cmd, i) =>
+    bundledIndices.has(i) || keptFullIndices.has(i) ? cmd.full : cmd.nameOnly,
+  ).join(`
 `);
 }
 //@ chunk-e6aww6q8.js:2301072-2303177 layout
@@ -306,68 +332,77 @@ In a coordinator session, the coordinator's own use of this tool is read-only: i
 /**
  * Skill 工具 prompt：lean 模式用短版，否则 SKILL_TOOL_PROMPT；协调者模式追加"协调者调用只读加载"说明。
  */
-async function getSkillToolPrompt(e = {}) {
-  let n = leanRewriteOf(e) ? SKILL_TOOL_DESCRIPTION : SKILL_TOOL_PROMPT;
-  return isCoordinatorMode_2() ? n + SKILL_TOOL_COORDINATOR_ADDENDUM : n;
+async function getSkillToolPrompt(options = {}) {
+  let basePrompt = leanRewriteOf(options) ? SKILL_TOOL_DESCRIPTION : SKILL_TOOL_PROMPT;
+  return isCoordinatorMode_2() ? basePrompt + SKILL_TOOL_COORDINATOR_ADDENDUM : basePrompt;
 }
 //@ chunk-e6aww6q8.js:2303242-2303366 fingerprint = getSkillToolInfo (1)
 /**
  * 统计 skill 总数与可进入列表的数量（analyzeContext 使用）。
  */
-async function getSkillToolInfo(cwd, n, r) {
-  let agentCommands = dropSyncedNameClashes(await getSkillToolCommands(cwd, r), n);
-  let h = filterCommandsByAllowlist(agentCommands, getSessionSkillAllowlist());
+async function getSkillToolInfo(cwd, hiddenCommands, storageV5) {
+  let agentCommands = dropSyncedNameClashes(await getSkillToolCommands(cwd, storageV5), hiddenCommands);
+  let allowlisted = filterCommandsByAllowlist(agentCommands, getSessionSkillAllowlist());
   return {
     totalCommands: agentCommands.length,
-    includedCommands: h.length,
+    includedCommands: allowlisted.length,
   };
 }
 //@ chunk-e6aww6q8.js:2314569-2314915 placement
 /**
  * 估算每个技能在技能列表中占用的 token 数（考虑仅显示名称、预算截断与描述长度上限）。
  */
-function skillListingTokenCounts(included, n, r) {
-  let s = bytesPerTokenForModel(r);
-  let h = bytesPerTokenForModel(n);
-  let y = new Set(included.filter((q) => getSkillOverrideState(q) === "name-only").map((q) => q.name));
-  let S = analyzeSkillListingBudget(
-    included,
-    (q) => getSkillUsageScore(q.name),
-    getContextWindow(r, getSdkBetas()),
-    y,
-    s,
+function skillListingTokenCounts(commands, countModel, budgetModel) {
+  let budgetCharsPerToken = bytesPerTokenForModel(budgetModel);
+  let countCharsPerToken = bytesPerTokenForModel(countModel);
+  let nameOnlyNames = new Set(
+    commands
+      .filter((command) => getSkillOverrideState(command) === "name-only")
+      .map((command) => command.name),
   );
-  let w = new Set(S.budgetTruncatedSkills);
+  let budgetInfo = analyzeSkillListingBudget(
+    commands,
+    (command) => getSkillUsageScore(command.name),
+    getContextWindow(budgetModel, getSdkBetas()),
+    nameOnlyNames,
+    budgetCharsPerToken,
+  );
+  let truncatedNames = new Set(budgetInfo.budgetTruncatedSkills);
   let skillDescMaxChars = getSkillDescMaxChars();
-  let G = new Map();
-  for (let q of included) {
-    let skillListingLabel = getSkillListingLabel(q, included);
-    let Se = y.has(q.name)
-      ? `- ${q.name}`
-      : w.has(q.name)
+  let tokensByName = new Map();
+  for (let command of commands) {
+    let skillListingLabel = getSkillListingLabel(command, commands);
+    let line = nameOnlyNames.has(command.name)
+      ? `- ${command.name}`
+      : truncatedNames.has(command.name)
         ? `- ${skillListingLabel}`
-        : `- ${skillListingLabel}: ${getCommandDescription(q).slice(0, skillDescMaxChars)}`;
-    G.set(q.name, roughTokenCountEstimation(Se, h));
+        : `- ${skillListingLabel}: ${getCommandDescription(command).slice(0, skillDescMaxChars)}`;
+    tokensByName.set(command.name, roughTokenCountEstimation(line, countCharsPerToken));
   }
-  return G;
+  return tokensByName;
 }
 //@ chunk-e6aww6q8.js:2314915-2315166 placement
 /**
  * 合并技能列表的各来源（本地、内置、MCP），去重后得到全集，并按会话技能白名单得到实际包含的集合。
  */
-async function mergedSkillListing(e, n, r) {
-  let skillToolCommands = await getSkillToolCommands(getProjectRootOrNull(), r);
-  let h = hiddenCommandsWhenSlashDisabled(e);
-  let filtered = memorySkillCommands().filter((G) => !G.disableModelInvocation && !isHiddenFromModel(G));
-  let S = dropSyncedClashes(skillToolCommands, e);
-  let w = dedupeBundledSkills(
-    h.length > 0
-      ? dropShadowedFallbackSkills(Ji([...S, ...filtered, ...h], "name"))
-      : Ji([...S, ...filtered], "name"),
+async function mergedSkillListing(options, includeHidden, storageV5) {
+  let skillToolCommands = await getSkillToolCommands(getProjectRootOrNull(), storageV5);
+  let hiddenCommands = hiddenCommandsWhenSlashDisabled(options);
+  let filtered = memorySkillCommands().filter(
+    (command) => !command.disableModelInvocation && !isHiddenFromModel(command),
   );
-  let included = n === undefined ? filterCommandsByAllowlist(w, getSessionSkillAllowlist()) : w;
+  let skillCommands = dropSyncedClashes(skillToolCommands, options);
+  let mergedCommands = dedupeBundledSkills(
+    hiddenCommands.length > 0
+      ? dropShadowedFallbackSkills(uniqByExport([...skillCommands, ...filtered, ...hiddenCommands], "name"))
+      : uniqByExport([...skillCommands, ...filtered], "name"),
+  );
+  let included =
+    includeHidden === undefined
+      ? filterCommandsByAllowlist(mergedCommands, getSessionSkillAllowlist())
+      : mergedCommands;
   return {
-    merged: w,
+    merged: mergedCommands,
     included,
   };
 }

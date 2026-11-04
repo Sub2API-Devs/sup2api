@@ -33,6 +33,7 @@ import {
 import { toApprovalLabel } from "../../utils/permissions/approvalPayloadSerialization.js";
 import { registerSandboxPermissionCallback } from "../../hooks/useSwarmPermissionPoller.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:412092-415122 placement
 /**
@@ -40,8 +41,8 @@ import { init_react_production } from "../../../vendor/react/cjs/react.productio
  */
 class SandboxStartup {
   #e;
-  constructor(h) {
-    this.#e = h;
+  constructor(options) {
+    this.#e = options;
   }
   start() {
     let { store, setAppState, isRemoteSession } = this.#e;
@@ -65,38 +66,38 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       logForDebugging(`sandbox disabled: ${sandboxUnavailableReason}`, {
         level: "warn",
       });
-    let ee = sandboxUnavailableReason ? undefined : SandboxManager.getMaskCredentialWarning();
-    if (ee)
-      logForDebugging(`sandbox: ${ee}`, {
+    let credentialWarning = sandboxUnavailableReason ? undefined : SandboxManager.getMaskCredentialWarning();
+    if (credentialWarning)
+      logForDebugging(`sandbox: ${credentialWarning}`, {
         level: "warn",
       });
-    if (sandboxUnavailableReason || ee) {
+    if (sandboxUnavailableReason || credentialWarning) {
       logSetupIssues("sandbox", 1);
-      setAppState((Be) => {
-        if (Be.setupIssues.sandboxIssueCount === 1) return Be;
+      setAppState((state) => {
+        if (state.setupIssues.sandboxIssueCount === 1) return state;
         return {
-          ...Be,
+          ...state,
           setupIssues: {
-            ...Be.setupIssues,
+            ...state.setupIssues,
             sandboxIssueCount: 1,
           },
         };
       });
     }
-    let ke =
+    let retryWarning =
       sandboxUnavailableReason && !isRemoteSession ? SandboxManager.getSandboxSetUpAgainWarning() : undefined;
-    if (ke !== undefined)
-      setAppState((Be) =>
-        Be.setupIssues.securityWarnings.some((securityWarning) => securityWarning.text === ke)
-          ? Be
+    if (retryWarning !== undefined)
+      setAppState((state) =>
+        state.setupIssues.securityWarnings.some((securityWarning) => securityWarning.text === retryWarning)
+          ? state
           : {
-              ...Be,
+              ...state,
               setupIssues: {
-                ...Be.setupIssues,
+                ...state.setupIssues,
                 securityWarnings: [
-                  ...Be.setupIssues.securityWarnings,
+                  ...state.setupIssues.securityWarnings,
                   {
-                    text: ke,
+                    text: retryWarning,
                   },
                 ],
               },
@@ -111,61 +112,65 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       stop: createDependencyWatcher(
         [store],
         () => [SandboxManager.isSandboxingEnabled(), SandboxManager.getSandboxRestartWarning()],
-        (Be, He) => {
-          if (He !== undefined) {
-            setAppState((We) =>
-              We.setupIssues.securityWarnings.some((securityWarning) => securityWarning.text === He)
-                ? We
+        (existing, warningText) => {
+          if (warningText !== undefined) {
+            setAppState((state) =>
+              state.setupIssues.securityWarnings.some(
+                (securityWarning) => securityWarning.text === warningText,
+              )
+                ? state
                 : {
-                    ...We,
+                    ...state,
                     setupIssues: {
-                      ...We.setupIssues,
+                      ...state.setupIssues,
                       securityWarnings: [
-                        ...We.setupIssues.securityWarnings,
+                        ...state.setupIssues.securityWarnings,
                         {
-                          text: He,
+                          text: warningText,
                         },
                       ],
                     },
                   },
             );
             return () => {
-              setAppState((We) => ({
-                ...We,
+              setAppState((state) => ({
+                ...state,
                 setupIssues: {
-                  ...We.setupIssues,
-                  securityWarnings: We.setupIssues.securityWarnings.filter(
-                    (securityWarning) => securityWarning.text !== He,
+                  ...state.setupIssues,
+                  securityWarnings: state.setupIssues.securityWarnings.filter(
+                    (securityWarning) => securityWarning.text !== warningText,
                   ),
                 },
               }));
             };
           }
-          if (!Be) return;
-          if (ke !== undefined)
-            setAppState((We) =>
-              We.setupIssues.securityWarnings.some((securityWarning) => securityWarning.text === ke)
+          if (!existing) return;
+          if (retryWarning !== undefined)
+            setAppState((state) =>
+              state.setupIssues.securityWarnings.some(
+                (securityWarning) => securityWarning.text === retryWarning,
+              )
                 ? {
-                    ...We,
+                    ...state,
                     setupIssues: {
-                      ...We.setupIssues,
-                      securityWarnings: We.setupIssues.securityWarnings.filter(
-                        (securityWarning) => securityWarning.text !== ke,
+                      ...state.setupIssues,
+                      securityWarnings: state.setupIssues.securityWarnings.filter(
+                        (securityWarning) => securityWarning.text !== retryWarning,
                       ),
                     },
                   }
-                : We,
+                : state,
             );
           SandboxManager.initialize(this.ask)
             .then(() => {
               let profileReadSecurityWarnings = SandboxManager.getProfileReadSecurityWarnings();
               if (profileReadSecurityWarnings.length === 0) return;
-              setAppState((ze) => ({
-                ...ze,
+              setAppState((state) => ({
+                ...state,
                 setupIssues: {
-                  ...ze.setupIssues,
+                  ...state.setupIssues,
                   securityWarnings: [
-                    ...ze.setupIssues.securityWarnings.filter(
+                    ...state.setupIssues.securityWarnings.filter(
                       (securityWarning) => !profileReadSecurityWarnings.includes(securityWarning.text),
                     ),
                     ...profileReadSecurityWarnings.map((text) => ({
@@ -186,7 +191,7 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
       refused: false,
     };
   }
-  ask = async (h) => {
+  ask = async (request) => {
     let { store, storageV5, credentials, scope, getMessages } = this.#e;
     let state = store.getState();
     let { mode, isBypassPermissionsModeAvailable } = state.toolPermissionContext;
@@ -197,14 +202,14 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
         return false;
       case "classify":
         if (areCommandNetworkListsOffered()) return commandDomainDenyReason();
-        let ze = sandboxHostDenyReason();
-        if (ze !== undefined) return ze;
+        let denyReason = sandboxHostDenyReason();
+        if (denyReason !== undefined) return denyReason;
         return scope
           .sandboxClassifierVerdicts()
-          .getOrClassify(h.host, h.port, conversationSnapshot(getMessages()), () =>
+          .getOrClassify(request.host, request.port, conversationSnapshot(getMessages()), () =>
             classifySandboxNetworkHost(
-              h.host,
-              h.port,
+              request.host,
+              request.port,
               getMessages(),
               scope.computeTools(),
               state.toolPermissionContext,
@@ -218,15 +223,15 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
             ),
           );
       case "ask":
-        return this.#t(h, undefined);
+        return this.#t(request, undefined);
     }
   };
-  async #t(h, expiry) {
+  async #t(request, expiry) {
     let { setAppState, storageV5, networkPrompts } = this.#e;
     if (isAgentSwarmsEnabled() && isTeammateContextReady()) {
-      if (isMisleadingConsentHost(h.host)) {
+      if (isMisleadingConsentHost(request.host)) {
         logForDebugging(
-          `[sandbox] Refusing to forward a worker ask for a host srt would re-spell: ${toApprovalLabel(h.host) ?? "(unshowable)"}`,
+          `[sandbox] Refusing to forward a worker ask for a host srt would re-spell: ${toApprovalLabel(request.host) ?? "(unshowable)"}`,
           {
             level: "warn",
           },
@@ -234,33 +239,39 @@ Error: sandbox required but unavailable: ${sandboxUnavailableReason}
         return false;
       }
       let requestId = generateSandboxRequestId();
-      if (!(await sendSandboxPermissionRequestViaMailbox(h.host, requestId, undefined, storageV5)))
-        return networkPrompts.ask(h, {
+      if (!(await sendSandboxPermissionRequestViaMailbox(request.host, requestId, undefined, storageV5)))
+        return networkPrompts.ask(request, {
           forwardToBridge: false,
           expiry,
         });
       return new Promise((resolve) => {
         registerSandboxPermissionCallback({
           requestId,
-          host: h.host,
+          host: request.host,
           resolve,
         });
-        setAppState((He) => ({
-          ...He,
+        setAppState((state) => ({
+          ...state,
           pendingSandboxRequest: {
             requestId,
-            host: h.host,
+            host: request.host,
           },
         }));
       });
     }
-    return networkPrompts.ask(h, {
+    return networkPrompts.ask(request, {
       expiry,
     });
   }
 }
 //@ chunk-18hwfzwa.js:415122-415126 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:415122", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:415164-415168 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:415164", () => {
+  init_react_production();
+});
 export { SandboxStartup };

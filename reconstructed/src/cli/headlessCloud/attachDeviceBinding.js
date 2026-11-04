@@ -33,8 +33,8 @@ import { NOT_HELD_LEASE } from "../../services/remoteTools/lease.js";
 /**
  * 附着远程会话时解析设备绑定。
  */
-async function resolveAttachDeviceBinding(e) {
-  let i = e.session.then(
+async function resolveAttachDeviceBinding(options) {
+  let sessionResult = options.session.then(
     (session) => ({
       read: true,
       session,
@@ -44,48 +44,54 @@ async function resolveAttachDeviceBinding(e) {
       error,
     }),
   );
-  if (!(await (e.isEnabled ?? isDeviceIdentityEnabled)().catch(() => false)))
+  if (!(await (options.isEnabled ?? isDeviceIdentityEnabled)().catch(() => false)))
     return {
       status: "disabled",
     };
-  let o = await i;
-  if (!o.read) return attachBindingUnreadable("session_unreadable", o.error);
-  if (o.session.archived)
+  let loaded = await sessionResult;
+  if (!loaded.read) return attachBindingUnreadable("session_unreadable", loaded.error);
+  if (loaded.session.archived)
     return {
       status: "disabled",
     };
-  if (o.session.boundDeviceId === undefined) {
-    let r = await (
-      e.readUnboundCreateReason ??
-      ((A) => unboundCreateReason(A, isKnownDeviceBindingRefusal, productionUnboundCreatesDeps(e.storageV5)))
-    )(e.sessionId).catch(() => {
+  if (loaded.session.boundDeviceId === undefined) {
+    let unboundReason = await (
+      options.readUnboundCreateReason ??
+      ((sessionId) =>
+        unboundCreateReason(
+          sessionId,
+          isKnownDeviceBindingRefusal,
+          productionUnboundCreatesDeps(options.storageV5),
+        ))
+    )(options.sessionId).catch(() => {
       return;
     });
     logEvent("tengu_device_bind_attach", {
       outcome: lit("session_unbound"),
-      created_here: r !== undefined,
+      created_here: unboundReason !== undefined,
     });
-    return r === undefined
+    return unboundReason === undefined
       ? {
           status: "not_applicable",
         }
       : {
           status: "created_unbound",
-          reason: r,
+          reason: unboundReason,
         };
   }
-  let s;
+  let isEgressAllowed;
   try {
-    s = (e.isEgressAllowed ?? isDeviceBindingAllowed)();
+    isEgressAllowed = (options.isEgressAllowed ?? isDeviceBindingAllowed)();
   } catch {
-    s = false;
+    isEgressAllowed = false;
   }
-  if (!s) return unboundAtAttach("egress");
-  let n = await (e.getAccount?.() ?? resolveCurrentDeviceBinding(e.credentials));
-  if (n.status === "missing") return unboundAtAttach("account");
-  if (n.status === "mismatch") return unboundAtAttach("account_mismatch");
-  let l = await (
-    e.loadLocalDevice?.(n.accountUuid) ?? resolveRegisteredDevice(n.accountUuid, e.credentials)
+  if (!isEgressAllowed) return unboundAtAttach("egress");
+  let account = await (options.getAccount?.() ?? resolveCurrentDeviceBinding(options.credentials));
+  if (account.status === "missing") return unboundAtAttach("account");
+  if (account.status === "mismatch") return unboundAtAttach("account_mismatch");
+  let localDevice = await (
+    options.loadLocalDevice?.(account.accountUuid) ??
+    resolveRegisteredDevice(account.accountUuid, options.credentials)
   ).then(
     (held) => ({
       read: true,
@@ -96,11 +102,11 @@ async function resolveAttachDeviceBinding(e) {
       error,
     }),
   );
-  if (!l.read) return attachBindingUnreadable("local_device_unreadable", l.error);
-  if (l.held === undefined) return unboundAtAttach("no_device_here");
-  let lower = l.held.rowPk.toLowerCase();
-  if (lower !== o.session.boundDeviceId.toLowerCase()) return unboundAtAttach("other_device");
-  let { toolHostLink } = o.session;
+  if (!localDevice.read) return attachBindingUnreadable("local_device_unreadable", localDevice.error);
+  if (localDevice.held === undefined) return unboundAtAttach("no_device_here");
+  let lower = localDevice.held.rowPk.toLowerCase();
+  if (lower !== loaded.session.boundDeviceId.toLowerCase()) return unboundAtAttach("other_device");
+  let { toolHostLink } = loaded.session;
   logEvent("tengu_device_bind_attach", {
     outcome: lit("bound"),
     tool_host_link: fromEnum(toolHostLink),
@@ -109,29 +115,29 @@ async function resolveAttachDeviceBinding(e) {
   return {
     status: "bound",
     deviceId: lower,
-    held: l.held,
+    held: localDevice.held,
     toolHostLink,
   };
 }
 //@ chunk-x1rd87x0.js:2064-2220 placement
-function sessionBindingFields(e) {
+function sessionBindingFields(session) {
   return {
-    archived: e.session_status === "archived",
-    boundDeviceId: e.bound_device_uuid,
-    toolHostLink: deviceBindingState(e.tool_host_status, e.device_bind_posture),
+    archived: session.session_status === "archived",
+    boundDeviceId: session.bound_device_uuid,
+    toolHostLink: deviceBindingState(session.tool_host_status, session.device_bind_posture),
   };
 }
 //@ chunk-x1rd87x0.js:2220-2426 placement
 async function rereadBoundDevice(
-  e,
-  { isEnabled: i = isDeviceIdentityEnabled, isEgressAllowed: o = isDeviceBindingAllowed } = {},
+  sessionPromise,
+  { isEnabled = isDeviceIdentityEnabled, isEgressAllowed = isDeviceBindingAllowed } = {},
 ) {
-  e.catch(() => {});
-  if (!(await i().catch(() => false))) return;
-  let { archived, boundDeviceId } = await e;
+  sessionPromise.catch(() => {});
+  if (!(await isEnabled().catch(() => false))) return;
+  let { archived, boundDeviceId } = await sessionPromise;
   if (archived) return;
   try {
-    return o() ? boundDeviceId : undefined;
+    return isEgressAllowed() ? boundDeviceId : undefined;
   } catch {
     return;
   }
@@ -139,14 +145,14 @@ async function rereadBoundDevice(
 //@ chunk-x1rd87x0.js:2426-2488 placement
 function pullsBackToThisMachine(binding) {
   return binding.then(
-    (i) => i.status === "bound",
+    (binding) => binding.status === "bound",
     () => false,
   );
 }
 //@ chunk-x1rd87x0.js:2488-2574 placement
 function boundDeviceOf(binding) {
   return binding.then(
-    (i) => (i.status === "bound" ? i.deviceId : undefined),
+    (binding) => (binding.status === "bound" ? binding.deviceId : undefined),
     () => {
       return;
     },
@@ -155,7 +161,7 @@ function boundDeviceOf(binding) {
 //@ chunk-x1rd87x0.js:2574-2656 placement
 function boundDeviceKeyOf(binding) {
   return binding.then(
-    (i) => (i.status === "bound" ? i.held : undefined),
+    (binding) => (binding.status === "bound" ? binding.held : undefined),
     () => {
       return;
     },
@@ -173,13 +179,13 @@ function getBindingOwnership({ viewerOnly, binding }) {
       };
 }
 //@ chunk-x1rd87x0.js:2785-3058 placement
-async function sessionStillBoundTo(e, i) {
+async function sessionStillBoundTo(deviceId, readSession) {
   try {
-    let o = await i();
+    let session = await readSession();
     return (
-      o.session_status !== "archived" &&
-      typeof o.bound_device_uuid === "string" &&
-      o.bound_device_uuid.toLowerCase() === e.toLowerCase()
+      session.session_status !== "archived" &&
+      typeof session.bound_device_uuid === "string" &&
+      session.bound_device_uuid.toLowerCase() === deviceId.toLowerCase()
     );
   } catch (error) {
     logForDebugging(
@@ -197,7 +203,7 @@ async function servedToolsForAttach({
   repositoryTrust,
   readSession,
 }) {
-  return (await import("./chunk-012rhzq5.js")).servedToolsAttachOptions({
+  return (await import("../../remote/tools/servedToolsAttachOptions.lazy.js")).servedToolsAttachOptions({
     owner: binding.then(
       (binding) => {
         let bindingOwnership = getBindingOwnership({
@@ -222,169 +228,185 @@ async function servedToolsForAttach({
     }),
     stillBound: () =>
       binding.then(
-        (v) => (v.status === "bound" ? sessionStillBoundTo(v.deviceId, readSession) : undefined),
+        (bindingState) =>
+          bindingState.status === "bound"
+            ? sessionStillBoundTo(bindingState.deviceId, readSession)
+            : undefined,
         () => {
           return;
         },
       ),
-    plumbing: (await import("./chunk-2s19t0f2.js")).servedSessionPlumbing(sessionId),
+    plumbing: (
+      await import("../../services/remoteTools/servedSessionPlumbing.lazy.js")
+    ).servedSessionPlumbing(sessionId),
   });
 }
 //@ chunk-x1rd87x0.js:3561-3811 placement
 var SETTINGS_NOT_KEPT_REFUSAL =
   "This session can run tools on this computer, so Claude Code must first keep a copy of this folder's settings, and it could not. Check free disk space and that ~/.claude/state can be written, then attach again; add --debug to see the cause.";
 //@ chunk-x1rd87x0.js:3811-4706 placement
-function keepSettingsBesideAHelper(e, i = {}) {
-  let o = {
+function keepSettingsBesideAHelper(bindingPromise, options = {}) {
+  let disabledStatus = {
     status: "disabled",
   };
-  let s = (u, p) => logForDebugging(`[remote-tools] ${u}: ${p}`);
-  let n = [];
-  let l = (u) => {
-    let p = n ?? [];
-    n = undefined;
-    p.forEach(([_, D]) => {
+  let debugLog = (what, detail) => logForDebugging(`[remote-tools] ${what}: ${detail}`);
+  let pendingNotices = [];
+  let flushNotices = (notify) => {
+    let queued = pendingNotices ?? [];
+    pendingNotices = undefined;
+    queued.forEach(([message, kind]) => {
       try {
-        u(_, D);
+        notify(message, kind);
       } catch {
-        s(_, D);
+        debugLog(message, kind);
       }
     });
   };
-  let onNotice = i.onNotice ?? s;
-  let h = false;
-  let r;
-  let A;
-  let S = e
+  let onNotice = options.onNotice ?? debugLog;
+  let isEnded = false;
+  let hold;
+  let cleanup;
+  let keptPromise = bindingPromise
     .catch((error) => {
       logForDebugging(`[deviceBind] attach binding failed unexpectedly: ${errorMessage(error)}`);
-      return o;
+      return disabledStatus;
     })
-    .then(async (u) => {
-      if (u.status !== "bound" || isKnownBindingState(u.toolHostLink)) return u;
-      if (h) return o;
-      let p = i.loadHoldSettings
-        ? await i.loadHoldSettings()
-        : (await import("./chunk-xnr5zsa8.js")).holdSettingsBesideAHelper;
-      if (h) return o;
-      r = p((_, D) => (n ? void n.push([_, D]) : onNotice(_, D)));
-      A = registerCleanup(async () => r?.end());
-      l(onNotice);
-      return u;
-    });
-  S.then(
-    () => {
-      if (r !== undefined) logFeatureOk("attach_settings_held_beside_helper");
-    },
-    (error) => {
-      logFeatureBad("attach_settings_held_beside_helper", "hold_failed");
-      l(s);
-      logForDebugging(
-        `[deviceBind] attach could not hold the settings beside the session's helper: ${errorMessage(error)}`,
+    .then(async (bindingState) => {
+      if (bindingState.status !== "bound" || isKnownBindingState(bindingState.toolHostLink))
+        return bindingState;
+      if (isEnded) return disabledStatus;
+      let holdSettings = options.loadHoldSettings
+        ? await options.loadHoldSettings()
+        : (await import("../../utils/settings/holdSettingsBesideAHelper.lazy.js")).holdSettingsBesideAHelper;
+      if (isEnded) return disabledStatus;
+      hold = holdSettings((message, kind) =>
+        pendingNotices ? void pendingNotices.push([message, kind]) : onNotice(message, kind),
       );
-    },
-  ).catch(() => {});
+      cleanup = registerCleanup(async () => hold?.end());
+      flushNotices(onNotice);
+      return bindingState;
+    });
+  keptPromise
+    .then(
+      () => {
+        if (hold !== undefined) logFeatureOk("attach_settings_held_beside_helper");
+      },
+      (error) => {
+        logFeatureBad("attach_settings_held_beside_helper", "hold_failed");
+        flushNotices(debugLog);
+        logForDebugging(
+          `[deviceBind] attach could not hold the settings beside the session's helper: ${errorMessage(error)}`,
+        );
+      },
+    )
+    .catch(() => {});
   return {
-    binding: S.catch(() => o),
-    kept: S.then(
+    binding: keptPromise.catch(() => disabledStatus),
+    kept: keptPromise.then(
       () => true,
       () => false,
     ),
     end: () => {
-      h = true;
-      A?.();
-      r?.end();
+      isEnded = true;
+      cleanup?.();
+      hold?.end();
     },
   };
 }
 //@ chunk-x1rd87x0.js:4706-5841 placement
-function registerAttachedDevice(e) {
-  let i = e.binding.catch((error) => {
+function registerAttachedDevice(options) {
+  let started = options.binding.catch((error) => {
     logForDebugging(`[deviceBind] attach binding failed unexpectedly: ${errorMessage(error)}`);
     return {
       status: "disabled",
     };
   });
-  let o = false;
-  let s;
-  i.then((n) => {
-    if (o || n.status !== "bound" || !isKnownBindingState(n.toolHostLink)) return;
-    s = (e.startRegistration ?? startDeviceRegistration)({
-      sessionId: e.sessionId,
-      getAccessToken: e.getAccessToken,
-      orgUuid: e.orgUuid,
-      getDeviceId: () => n.deviceId,
-      cloudClient: e.cloudClient,
-      storageV5: e.storageV5,
-      ...(e.dirSync !== undefined && {
-        dirSync: e.dirSync,
-      }),
-      ...(e.folderRelation !== undefined && {
-        folderRelation: e.folderRelation,
-      }),
-      ...(e.onNotice && {
-        onNotice: e.onNotice,
-      }),
-      ...(e.servedSettingsChanged && {
-        servedSettingsChanged: e.servedSettingsChanged,
-      }),
-      ...(e.deviceMcpQuestion && {
-        deviceMcpQuestion: e.deviceMcpQuestion,
-      }),
+  let isStopped = false;
+  let registration;
+  started
+    .then((value) => {
+      if (isStopped || value.status !== "bound" || !isKnownBindingState(value.toolHostLink)) return;
+      registration = (options.startRegistration ?? startDeviceRegistration)({
+        sessionId: options.sessionId,
+        getAccessToken: options.getAccessToken,
+        orgUuid: options.orgUuid,
+        getDeviceId: () => value.deviceId,
+        cloudClient: options.cloudClient,
+        storageV5: options.storageV5,
+        ...(options.dirSync !== undefined && {
+          dirSync: options.dirSync,
+        }),
+        ...(options.folderRelation !== undefined && {
+          folderRelation: options.folderRelation,
+        }),
+        ...(options.onNotice && {
+          onNotice: options.onNotice,
+        }),
+        ...(options.servedSettingsChanged && {
+          servedSettingsChanged: options.servedSettingsChanged,
+        }),
+        ...(options.deviceMcpQuestion && {
+          deviceMcpQuestion: options.deviceMcpQuestion,
+        }),
+      });
+    })
+    .catch((error) => {
+      logForDebugging(`[deviceBind] attach could not start the device registration: ${errorMessage(error)}`);
     });
-  }).catch((error) => {
-    logForDebugging(`[deviceBind] attach could not start the device registration: ${errorMessage(error)}`);
-  });
   return {
-    announceSettled: (n) => s?.announceSettled(n),
-    serving: i.then(() => s?.serving),
-    notice: i.then((n) =>
-      n.status === "unbound"
+    announceSettled: (settled) => registration?.announceSettled(settled),
+    serving: started.then(() => registration?.serving),
+    notice: started.then((bindingState) =>
+      bindingState.status === "unbound"
         ? {
-            text: isDeviceRevokedError(n.reason),
+            text: isDeviceRevokedError(bindingState.reason),
             toast: true,
           }
-        : n.status === "created_unbound"
+        : bindingState.status === "created_unbound"
           ? {
-              text: formatUnboundSessionNotice(n.reason),
+              text: formatUnboundSessionNotice(bindingState.reason),
               toast: true,
             }
-          : n.status === "bound" && e.toolServingOn && !isKnownBindingState(n.toolHostLink)
-            ? getDeviceBindingStatusNotice(n.toolHostLink)
+          : bindingState.status === "bound" &&
+              options.toolServingOn &&
+              !isKnownBindingState(bindingState.toolHostLink)
+            ? getDeviceBindingStatusNotice(bindingState.toolHostLink)
             : undefined,
     ),
     stop: async () => {
-      o = true;
-      await s?.stop();
+      isStopped = true;
+      await registration?.stop();
     },
-    heldServedCall: (n) => s?.heldServedCall(n) ?? NOT_HELD_LEASE,
+    heldServedCall: (call) => registration?.heldServedCall(call) ?? NOT_HELD_LEASE,
   };
 }
 //@ chunk-x1rd87x0.js:5841-5961 placement
-function unboundAtAttach(e) {
+function unboundAtAttach(reason) {
   logEvent("tengu_device_bind_attach", {
-    outcome: fromEnum(e),
+    outcome: fromEnum(reason),
   });
-  logFeatureSad("device_bind_attach", e);
+  logFeatureSad("device_bind_attach", reason);
   return {
     status: "unbound",
-    reason: e,
+    reason,
   };
 }
 //@ chunk-x1rd87x0.js:5961-6221 placement
 /**
  * 附着时读不到会话绑定，记遥测并按未绑定处理
  */
-function attachBindingUnreadable(e, error) {
+function attachBindingUnreadable(reason, error) {
   logEvent("tengu_device_bind_attach", {
-    outcome: fromEnum(e),
+    outcome: fromEnum(reason),
   });
-  if (e === "session_unreadable") logFeatureSad("device_bind_attach", e);
-  else logFeatureBad("device_bind_attach", e);
-  logForDebugging(`[deviceBind] attach could not check the session's binding (${e}): ${errorMessage(error)}`);
+  if (reason === "session_unreadable") logFeatureSad("device_bind_attach", reason);
+  else logFeatureBad("device_bind_attach", reason);
+  logForDebugging(
+    `[deviceBind] attach could not check the session's binding (${reason}): ${errorMessage(error)}`,
+  );
   return {
     status: "unbound",
-    reason: e,
+    reason,
   };
 }
 export {
@@ -397,4 +419,6 @@ export {
   boundDeviceOf,
   registerAttachedDevice,
   SETTINGS_NOT_KEPT_REFUSAL,
+  rereadBoundDevice,
+  servedToolsForAttach,
 };

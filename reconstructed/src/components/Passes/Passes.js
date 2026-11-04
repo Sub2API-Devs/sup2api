@@ -8,23 +8,23 @@
  * pieces: chunk-aa3cndeh.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { TEARDROP_ASTERISK } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { TEARDROP_ASTERISK } from "../../constants/figures.js";
 
 //@ chunk-aa3cndeh.js:9694-10490 fingerprint = Passes (0.499)
 function Passes(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { pass } = props;
   if (!pass.isAvailable) {
-    let l;
+    let boxElement;
     if ($[0] === MEMO_CACHE_SENTINEL) {
-      l = jsxProd_default_2(Box, {
+      boxElement = jsxProd_default_2(Box, {
         flexDirection: "column",
         marginRight: 1,
         children: [
@@ -42,24 +42,24 @@ function Passes(props) {
           }),
         ],
       });
-      $[0] = l;
-    } else l = $[0];
-    return l;
+      $[0] = boxElement;
+    } else boxElement = $[0];
+    return boxElement;
   }
-  let l;
+  let textElement;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    l = jsxProd_default(Text, {
+    textElement = jsxProd_default(Text, {
       children: "\u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510",
     });
-    $[1] = l;
-  } else l = $[1];
-  let m;
+    $[1] = textElement;
+  } else textElement = $[1];
+  let contentElement;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    m = jsxProd_default_2(Box, {
+    contentElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginRight: 1,
       children: [
-        l,
+        textElement,
         jsxProd_default_2(Text, {
           children: [
             " ) CC ",
@@ -75,8 +75,8 @@ function Passes(props) {
         }),
       ],
     });
-    $[2] = m;
-  } else m = $[2];
-  return m;
+    $[2] = contentElement;
+  } else contentElement = $[2];
+  return contentElement;
 }
 export { Passes };

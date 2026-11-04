@@ -9,15 +9,22 @@
  * attribution: placement 4, fingerprint 1, facade-exports 10, affinity 1
  */
 import { hostname } from "os";
-import { isStoredLoginRefused } from "../utils/auth/storedLoginRefused.js";
+import { isGrowthBookEnabled } from "../services/analytics/growthbook.js";
+import { env } from "../utils/env.js";
+import { getPrivacyLevel } from "../utils/privacyLevel.js";
+import { isFeedbackSurveyOtelOn } from "../utils/hostEnvironment.js";
+import { getBearerPlan } from "../bootstrap/state.js";
 import {
+  getOauthAccountInfo_2,
   getClaudeAIOAuthTokens,
+  getClaudeAIOAuthTokenFingerprint,
   isClaudeAISubscriber,
   isClaudeAISubscriberAsync,
   getClaudeAIOAuthTokensAsync,
-  getOauthAccountInfo_2,
-  getClaudeAIOAuthTokenFingerprint,
 } from "../utils/auth.js";
+import { BEARER_PLAN_REFRESH_MS } from "./bridgeEnabled.js";
+import { SSH_PLACEHOLDER } from "../utils/subprocessEnv.js";
+import { isStoredLoginRefused } from "../utils/auth/storedLoginRefused.js";
 import { isFirstPartyProvider } from "../utils/model/providers.js";
 import { loginToHandOn } from "../utils/auth/launcherHostLogin.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
@@ -27,73 +34,10 @@ import {
   recoverHostSessionsBearer,
 } from "../utils/hostSessionsBearer.js";
 import { getOauthConfig } from "../constants/oauth.js";
-import { isGrowthBookEnabled } from "../services/analytics/growthbook.js";
-import { env } from "../utils/env.js";
-import { getPrivacyLevel } from "../utils/privacyLevel.js";
-import { isFeedbackSurveyOtelOn } from "../utils/hostEnvironment.js";
-import { getBearerPlan } from "../bootstrap/state.js";
-import { BEARER_PLAN_REFRESH_MS } from "./bridgeEnabled.js";
-import { SSH_PLACEHOLDER } from "../utils/subprocessEnv.js";
 
-//@ chunk-wp3fcgm5.js:527-548 facade-exports
-function getBridgeTokenOverride() {
+//@ chunk-hqdsrzb2.js:425-446 facade-exports
+function getBridgeBaseUrlOverride() {
   return;
-}
-//@ chunk-wp3fcgm5.js:548-657 facade-exports
-function isBridgeFileLoginRefused(e = getBridgeBaseUrlOverride(), n) {
-  if (getBridgeTokenOverride() !== undefined) return false;
-  return (
-    isStoredLoginRefused(e) ||
-    (n !== undefined && n !== getClaudeAIOAuthTokens()?.accessToken && isStoredLoginRefused(e, true))
-  );
-}
-//@ chunk-wp3fcgm5.js:657-758 facade-exports
-function getBridgeAccessToken() {
-  let bridgeTokenOverride = getBridgeTokenOverride();
-  if (bridgeTokenOverride !== undefined) return bridgeTokenOverride;
-  if (!isFirstPartyProvider() || !isClaudeAISubscriber()) return;
-  return loginToHandOn(getClaudeAIOAuthTokens())?.accessToken;
-}
-//@ chunk-wp3fcgm5.js:758-915 facade-exports
-async function getBridgeAccessTokenAsync(e) {
-  if (!(isStorageV5Enabled() && e !== undefined)) return getBridgeAccessToken();
-  let bridgeTokenOverride = getBridgeTokenOverride();
-  if (bridgeTokenOverride !== undefined) return bridgeTokenOverride;
-  if (!isFirstPartyProvider() || !(await isClaudeAISubscriberAsync(e))) return;
-  return loginToHandOn(await getClaudeAIOAuthTokensAsync(e))?.accessToken;
-}
-//@ chunk-wp3fcgm5.js:915-995 facade-exports
-function getBridgeSessionsAccessToken() {
-  let bridgeAccessToken = getBridgeAccessToken();
-  if (bridgeAccessToken === undefined || getBridgeTokenOverride() !== undefined) return bridgeAccessToken;
-  return readHostSessionsBearer() ?? bridgeAccessToken;
-}
-//@ chunk-wp3fcgm5.js:995-1094 facade-exports
-async function getBridgeSessionsAccessTokenAsync(credentials) {
-  let bridgeAccessToken = await getBridgeAccessTokenAsync(credentials);
-  if (bridgeAccessToken === undefined || getBridgeTokenOverride() !== undefined) return bridgeAccessToken;
-  return (await ensureHostSessionsBearer()) ?? bridgeAccessToken;
-}
-//@ chunk-wp3fcgm5.js:1094-1195 facade-exports
-async function bridgeSessionsAccessTokenAfter401(e, credentials, r = false) {
-  if ((await recoverHostSessionsBearer(e, r ? "withheld" : "refused")) === "not_held") return;
-  return getBridgeSessionsAccessTokenAsync(credentials);
-}
-//@ chunk-wp3fcgm5.js:1195-1240 facade-exports = getTeamMemorySyncEndpoint (1)
-function getBridgeBaseUrl() {
-  return getBridgeBaseUrlOverride() ?? getOauthConfig().BASE_API_URL;
-}
-//@ chunk-wp3fcgm5.js:1240-1350 facade-exports
-function getBridgeSessionNamePrefix() {
-  let e = process.env.CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX || hostname();
-  return slugifyBridgeSessionName(e) || "remote-control";
-}
-//@ chunk-wp3fcgm5.js:1350-1437 affinity
-function slugifyBridgeSessionName(e) {
-  return e
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }
 //@ chunk-71c4j971.js:2819-2899 placement
 function isGrowthBookUnavailableOnNoTelemetry() {
@@ -140,9 +84,68 @@ function getBridgeAccessToken_2() {
     return null;
   }
 }
-//@ chunk-hqdsrzb2.js:425-446 facade-exports
-function getBridgeBaseUrlOverride() {
+//@ chunk-wp3fcgm5.js:527-548 facade-exports
+function getBridgeTokenOverride() {
   return;
+}
+//@ chunk-wp3fcgm5.js:548-657 facade-exports
+function isBridgeFileLoginRefused(baseUrl = getBridgeBaseUrlOverride(), token) {
+  if (getBridgeTokenOverride() !== undefined) return false;
+  return (
+    isStoredLoginRefused(baseUrl) ||
+    (token !== undefined &&
+      token !== getClaudeAIOAuthTokens()?.accessToken &&
+      isStoredLoginRefused(baseUrl, true))
+  );
+}
+//@ chunk-wp3fcgm5.js:657-758 facade-exports
+function getBridgeAccessToken() {
+  let bridgeTokenOverride = getBridgeTokenOverride();
+  if (bridgeTokenOverride !== undefined) return bridgeTokenOverride;
+  if (!isFirstPartyProvider() || !isClaudeAISubscriber()) return;
+  return loginToHandOn(getClaudeAIOAuthTokens())?.accessToken;
+}
+//@ chunk-wp3fcgm5.js:758-915 facade-exports
+async function getBridgeAccessTokenAsync(credentials) {
+  if (!(isStorageV5Enabled() && credentials !== undefined)) return getBridgeAccessToken();
+  let bridgeTokenOverride = getBridgeTokenOverride();
+  if (bridgeTokenOverride !== undefined) return bridgeTokenOverride;
+  if (!isFirstPartyProvider() || !(await isClaudeAISubscriberAsync(credentials))) return;
+  return loginToHandOn(await getClaudeAIOAuthTokensAsync(credentials))?.accessToken;
+}
+//@ chunk-wp3fcgm5.js:915-995 facade-exports
+function getBridgeSessionsAccessToken() {
+  let bridgeAccessToken = getBridgeAccessToken();
+  if (bridgeAccessToken === undefined || getBridgeTokenOverride() !== undefined) return bridgeAccessToken;
+  return readHostSessionsBearer() ?? bridgeAccessToken;
+}
+//@ chunk-wp3fcgm5.js:995-1094 facade-exports
+async function getBridgeSessionsAccessTokenAsync(credentials) {
+  let bridgeAccessToken = await getBridgeAccessTokenAsync(credentials);
+  if (bridgeAccessToken === undefined || getBridgeTokenOverride() !== undefined) return bridgeAccessToken;
+  return (await ensureHostSessionsBearer()) ?? bridgeAccessToken;
+}
+//@ chunk-wp3fcgm5.js:1094-1195 facade-exports
+async function bridgeSessionsAccessTokenAfter401(credentials, credentials_2, withheld = false) {
+  if ((await recoverHostSessionsBearer(credentials, withheld ? "withheld" : "refused")) === "not_held")
+    return;
+  return getBridgeSessionsAccessTokenAsync(credentials_2);
+}
+//@ chunk-wp3fcgm5.js:1195-1240 facade-exports = getTeamMemorySyncEndpoint (1)
+function getBridgeBaseUrl() {
+  return getBridgeBaseUrlOverride() ?? getOauthConfig().BASE_API_URL;
+}
+//@ chunk-wp3fcgm5.js:1240-1350 facade-exports
+function getBridgeSessionNamePrefix() {
+  let namePrefix = process.env.CLAUDE_REMOTE_CONTROL_SESSION_NAME_PREFIX || hostname();
+  return slugifyBridgeSessionName(namePrefix) || "remote-control";
+}
+//@ chunk-wp3fcgm5.js:1350-1437 affinity
+function slugifyBridgeSessionName(name) {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 export {
   isGrowthBookUnavailableOnNoTelemetry,

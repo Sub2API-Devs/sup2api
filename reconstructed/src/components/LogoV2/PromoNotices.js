@@ -8,7 +8,7 @@
  * pieces: chunk-ag5x7vhf.js (10)
  * attribution: placement 10
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { recordSubscriptionNoticeShown } from "../../hooks/notifs/useCanSwitchToExistingSubscription.js";
 import { useNoticeImpression } from "./CondensedLogo.js";
@@ -35,40 +35,41 @@ import { isPolicyAllowed } from "../../services/policyLimits/policyEvidence.js";
 import { ALLOW_PROMO_OFFERS } from "../../utils/planTiers.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:87709-88134 placement
 function SubscriptionSwitchNotice(props) {
-  let T = w(5);
+  let $ = useMemoCache(5);
   let { subscriptionType } = props;
   let { storageV5 } = useTheme_2();
-  let k;
-  if (T[0] !== storageV5) {
-    k = () => recordSubscriptionNoticeShown(storageV5);
-    T[0] = storageV5;
-    T[1] = k;
-  } else k = T[1];
-  useNoticeImpression("subscription-switch", k);
-  let I;
-  if (T[2] === MEMO_CACHE_SENTINEL) {
-    I = jsxProd_default_2(Text, {
+  let onShown;
+  if ($[0] !== storageV5) {
+    onShown = () => recordSubscriptionNoticeShown(storageV5);
+    $[0] = storageV5;
+    $[1] = onShown;
+  } else onShown = $[1];
+  useNoticeImpression("subscription-switch", onShown);
+  let loginHint;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    loginHint = jsxProd_default_2(Text, {
       color: "text",
       dimColor: true,
       children: [" ", "\xB7 /login to activate"],
     });
-    T[2] = I;
-  } else I = T[2];
-  let D;
-  if (T[3] !== subscriptionType) {
-    D = jsxProd_default(Box, {
+    $[2] = loginHint;
+  } else loginHint = $[2];
+  let notice;
+  if ($[3] !== subscriptionType) {
+    notice = jsxProd_default(Box, {
       children: jsxProd_default_2(Text, {
         color: "suggestion",
-        children: ["Use your existing Claude ", subscriptionType, " plan with Claude Code", I],
+        children: ["Use your existing Claude ", subscriptionType, " plan with Claude Code", loginHint],
       }),
     });
-    T[3] = subscriptionType;
-    T[4] = D;
-  } else D = T[4];
-  return D;
+    $[3] = subscriptionType;
+    $[4] = notice;
+  } else notice = $[4];
+  return notice;
 }
 //@ chunk-ag5x7vhf.js:88134-88169 placement
 var PROMO_CREDIT_NOTICE_ID = "promo-credit";
@@ -77,9 +78,9 @@ var PROMO_FRESH_WINDOW_MS = 604800000;
 /**
  * 判断促销额度是否还有剩余：未过重置时间，且剩余金额 > 0（有金额字段时）或用量 < 100%。
  */
-function hasRemainingPromoCredit(wattleEmber, h) {
+function hasRemainingPromoCredit(wattleEmber, nowMs) {
   if (!wattleEmber) return false;
-  if (wattleEmber.resets_at !== null && !isBeforeTimestamp(wattleEmber.resets_at, h)) return false;
+  if (wattleEmber.resets_at !== null && !isBeforeTimestamp(wattleEmber.resets_at, nowMs)) return false;
   if (wattleEmber.remaining_dollars != null) return wattleEmber.remaining_dollars > 0;
   return wattleEmber.utilization !== null && wattleEmber.utilization < 100;
 }
@@ -96,7 +97,7 @@ function getPromoLoginKey() {
 /**
  * 判断是否满足促销额度提示的基本条件：从未展示过、企业订阅者且有 profile 权限、第一方提供商、非后台/队友/远程/桥接重连会话。
  */
-function isPromoCreditNoticeEligible(m) {
+function isPromoCreditNoticeEligible(session) {
   return (
     (getGlobalConfig().seenNotifications?.[PROMO_CREDIT] ?? 0) === 0 &&
     isClaudeAISubscriber() &&
@@ -104,7 +105,7 @@ function isPromoCreditNoticeEligible(m) {
     hasProfileScope() &&
     getAPIProvider() === "firstParty" &&
     getPromoLoginKey() !== null &&
-    !isSessionRestored(m.host) &&
+    !isSessionRestored(session.host) &&
     !isActingAsBgJob() &&
     getTeammateAgentId() === undefined &&
     !getIsRemoteMode() &&
@@ -121,20 +122,20 @@ function shouldShowPromoCreditNotice(session) {
   let answer = promoCreditCheck?.answer;
   if (promoCreditCheck?.login !== getPromoLoginKey() || !answer?.open) return false;
   let now = Date.now();
-  let k = now - answer.atMs;
+  let ageMs = now - answer.atMs;
   return (
-    k >= 0 &&
-    k < PROMO_FRESH_WINDOW_MS &&
+    ageMs >= 0 &&
+    ageMs < PROMO_FRESH_WINDOW_MS &&
     (answer.endsAt === null || isBeforeTimestamp(answer.endsAt, now)) &&
     isPolicyAllowed(ALLOW_PROMO_OFFERS)
   );
 }
 //@ chunk-ag5x7vhf.js:88863-89004 placement
 function markPromoCreditSeen(storageV5) {
-  saveGlobalConfig((h) => {
-    let seenNotifications = h.seenNotifications ?? {};
+  saveGlobalConfig((config) => {
+    let seenNotifications = config.seenNotifications ?? {};
     return {
-      ...h,
+      ...config,
       seenNotifications: {
         ...seenNotifications,
         [PROMO_CREDIT]: (seenNotifications[PROMO_CREDIT] ?? 0) + 1,
@@ -145,18 +146,18 @@ function markPromoCreditSeen(storageV5) {
 }
 //@ chunk-ag5x7vhf.js:89004-89375 placement
 function PromoCreditNotice() {
-  let h = w(3);
+  let $ = useMemoCache(3);
   let { storageV5 } = useTheme_2();
-  let x;
-  if (h[0] !== storageV5) {
-    x = () => markPromoCreditSeen(storageV5);
-    h[0] = storageV5;
-    h[1] = x;
-  } else x = h[1];
-  useNoticeImpression(PROMO_CREDIT_NOTICE_ID, x);
-  let k;
-  if (h[2] === MEMO_CACHE_SENTINEL) {
-    k = jsxProd_default(Box, {
+  let onShown;
+  if ($[0] !== storageV5) {
+    onShown = () => markPromoCreditSeen(storageV5);
+    $[0] = storageV5;
+    $[1] = onShown;
+  } else onShown = $[1];
+  useNoticeImpression(PROMO_CREDIT_NOTICE_ID, onShown);
+  let notice;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    notice = jsxProd_default(Box, {
       children: jsxProd_default_2(Text, {
         color: "suggestion",
         children: [
@@ -170,17 +171,20 @@ function PromoCreditNotice() {
         ],
       }),
     });
-    h[2] = k;
-  } else k = h[2];
-  return k;
+    $[2] = notice;
+  } else notice = $[2];
+  return notice;
 }
 //@ chunk-ag5x7vhf.js:89375-89440 placement
-function isBeforeTimestamp(m, h) {
-  let timestamp = Date.parse(m);
-  return !Number.isNaN(timestamp) && h < timestamp;
+function isBeforeTimestamp(timestamp, nowMs) {
+  let timestamp_2 = Date.parse(timestamp);
+  return !Number.isNaN(timestamp_2) && nowMs < timestamp_2;
 }
 //@ chunk-ag5x7vhf.js:89440-89444 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:89440", () => {
+  init_react_production();
+});
 export {
   PROMO_CREDIT_NOTICE_ID,
   shouldShowPromoCreditNotice,

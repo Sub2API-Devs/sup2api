@@ -46,15 +46,15 @@ function readBgSessionPermissionRules() {
   try {
     let parsed = JSON.parse(CLAUDE_BG_SESSION_PERMISSION_RULES);
     if (!Array.isArray(parsed.allow) || !Array.isArray(parsed.deny)) return;
-    let n = Array.isArray(parsed.addDirs)
+    let addDirs = Array.isArray(parsed.addDirs)
       ? parsed.addDirs.filter((addDir) => typeof addDir === "string")
       : undefined;
     return {
       allow: parsed.allow,
       deny: parsed.deny,
-      ...(n !== undefined &&
-        n.length > 0 && {
-          addDirs: n,
+      ...(addDirs !== undefined &&
+        addDirs.length > 0 && {
+          addDirs,
         }),
     };
   } catch {
@@ -70,9 +70,9 @@ function takeRelaunchAddDirs() {
   if (CLAUDE_RELAUNCH_SESSION_ADD_DIRS === undefined) return;
   env.unset("CLAUDE_RELAUNCH_SESSION_ADD_DIRS");
   try {
-    let o = jsonParse(CLAUDE_RELAUNCH_SESSION_ADD_DIRS);
-    if (!Array.isArray(o)) return;
-    let filtered = o.filter((r) => typeof r === "string");
+    let parsedDirs = jsonParse(CLAUDE_RELAUNCH_SESSION_ADD_DIRS);
+    if (!Array.isArray(parsedDirs)) return;
+    let filtered = parsedDirs.filter((dir) => typeof dir === "string");
     return filtered.length > 0 ? filtered : undefined;
   } catch {
     return;
@@ -82,24 +82,24 @@ function takeRelaunchAddDirs() {
 /**
  * 应用后台会话（bg）、基础工具、转录 GC、工具结果落盘等启动选项。
  */
-async function applySessionLaunchOptions(e) {
+async function applySessionLaunchOptions(options) {
   if (env.CLAUDE_BG_MEMORY_TOGGLED_OFF === "1" && env.CLAUDE_CODE_SESSION_KIND === "bg")
     setMemoryToggledOff(true);
-  if (e.baseTools && !env.CLAUDE_CODE_REMOTE && env.CLAUDE_CODE_SESSION_KIND !== "bg") {
-    if (hasRunnerToolSpec(e.baseTools)) enableWizardOperatorTools();
+  if (options.baseTools && !env.CLAUDE_CODE_REMOTE && env.CLAUDE_CODE_SESSION_KIND !== "bg") {
+    if (hasRunnerToolSpec(options.baseTools)) enableWizardOperatorTools();
   }
   let toolPermissionContext = await initializeToolPermissionContext({
-    allowedToolsCli: e.allowedTools,
-    disallowedToolsCli: e.disallowedTools,
-    baseToolsCli: e.baseTools,
+    allowedToolsCli: options.allowedTools,
+    disallowedToolsCli: options.disallowedTools,
+    baseToolsCli: options.baseTools,
     getAllBaseTools,
-    restricted: e.restricted,
-    permissionMode: e.permissionMode,
-    allowDangerouslySkipPermissions: e.allowDangerouslySkipPermissions,
-    addDirs: e.addDirs,
+    restricted: options.restricted,
+    permissionMode: options.permissionMode,
+    allowDangerouslySkipPermissions: options.allowDangerouslySkipPermissions,
+    addDirs: options.addDirs,
     bgSessionPermissionRules: readBgSessionPermissionRules(),
     relaunchSessionAddDirs: takeRelaunchAddDirs(),
-    storageV5: e.storageV5,
+    storageV5: options.storageV5,
   });
   let toolPermissionContext_2 = toolPermissionContext.toolPermissionContext;
   let {
@@ -111,33 +111,33 @@ async function applySessionLaunchOptions(e) {
   } = toolPermissionContext;
   noteRemovalWaiverRules(toolPermissionContext_2);
   holdRemovalWaiverOnAskAdjudicator(undefined);
-  let y = checkBypassPermissionsEnv(toolPermissionContext_2);
-  if (y !== undefined)
+  let bypassCheck = checkBypassPermissionsEnv(toolPermissionContext_2);
+  if (bypassCheck !== undefined)
     securityWarnings.push({
-      text: y,
+      text: bypassCheck,
     });
-  let M = new Set(antBuiltinDenyRules());
+  let builtinDeny = new Set(antBuiltinDenyRules());
   publishLaunchPermissions(toolPermissionContext_2, toolPermissionContext.inheritedSessionDirectories, {
-    disallowedTools: splitRuleList(e.disallowedTools).filter((E) => !M.has(E)),
-    tools: e.baseTools ?? [],
+    disallowedTools: splitRuleList(options.disallowedTools).filter((rule) => !builtinDeny.has(rule)),
+    tools: options.baseTools ?? [],
   });
   if (toolPermissionContext.inheritedSessionDirectories.length > 0) {
     let additionalDirectoriesForClaudeMd = getAdditionalDirectoriesForClaudeMd();
-    let w = new Set(additionalDirectoriesForClaudeMd.map((A) => identity(resolve(A))));
+    let claudeMdDirs = new Set(additionalDirectoriesForClaudeMd.map((dir) => identity(resolve(dir))));
     let filtered = toolPermissionContext.inheritedSessionDirectories.filter(
-      (inheritedSessionDirectory) => !w.has(identity(resolve(inheritedSessionDirectory))),
+      (inheritedSessionDirectory) => !claudeMdDirs.has(identity(resolve(inheritedSessionDirectory))),
     );
     if (filtered.length > 0)
       setAdditionalDirectoriesForClaudeMd([...additionalDirectoriesForClaudeMd, ...filtered]);
   }
   latchPlanAutoModeAtLaunch();
-  if (e.permissionMode === "auto")
+  if (options.permissionMode === "auto")
     toolPermissionContext_2 = stripDangerousPermissionsForAutoMode(toolPermissionContext_2);
-  if (e.permissionMode === "plan") {
-    let E = activatePlanAutoMode(toolPermissionContext_2);
-    if (E)
+  if (options.permissionMode === "plan") {
+    let planModeContext = activatePlanAutoMode(toolPermissionContext_2);
+    if (planModeContext)
       toolPermissionContext_2 = {
-        ...E,
+        ...planModeContext,
         prePlanMode: "default",
       };
   }
@@ -154,12 +154,13 @@ async function applySessionLaunchOptions(e) {
   };
 }
 //@ chunk-3wek6r2k.js:12913-12945 placement
-function shouldPrefetchUserContext(e) {
-  return e && isRemoteCoworkSession();
+function shouldPrefetchUserContext(options) {
+  return options && isRemoteCoworkSession();
 }
 //@ chunk-3wek6r2k.js:12945-13001 placement
-function prefetchUserContext(e, o, storageV5, credentials) {
-  if (shouldPrefetchUserContext(o)) getOrBuildUserContext(e, storageV5, credentials).catch(() => {});
+function prefetchUserContext(options, storageV5, storageV5_2, credentials) {
+  if (shouldPrefetchUserContext(storageV5))
+    getOrBuildUserContext(options, storageV5_2, credentials).catch(() => {});
 }
 //@ chunk-3wek6r2k.js:13001-13131 placement
 function enableTranscriptLocalGc({ sdkUrl, isNonInteractiveSession }) {
@@ -177,16 +178,16 @@ function setToolResultCopyMode({ sdkUrl, isNonInteractiveSession }) {
     setToolResultCopiesOnDisk(env.CLAUDE_CODE_TRANSCRIPT_SLIM_TOOL_RESULTS ? "slim" : "counted");
 }
 //@ chunk-3wek6r2k.js:13288-13368 placement
-function unavailableReason(e) {
-  return e.kind === "unavailable" && e.reason !== "mcp" ? e.reason : undefined;
+function unavailableReason(reason) {
+  return reason.kind === "unavailable" && reason.reason !== "mcp" ? reason.reason : undefined;
 }
 //@ chunk-3wek6r2k.js:13368-13428 placement
-function cloudUnavailableReason(e, o) {
-  return o.explicitCloudLaunch ? undefined : unavailableReason(e);
+function cloudUnavailableReason(caps, options) {
+  return options.explicitCloudLaunch ? undefined : unavailableReason(caps);
 }
 export {
-  unavailableReason,
   shouldPrefetchUserContext,
+  unavailableReason,
   prefetchUserContext,
   applySessionLaunchOptions,
   enableTranscriptLocalGc,

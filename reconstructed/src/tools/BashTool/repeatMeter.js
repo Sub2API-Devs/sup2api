@@ -20,7 +20,7 @@ import { FILE_WRITE_TOOL_NAME } from "../FileWriteTool/prompt.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { env } from "../../utils/env.js";
 import { logError } from "../../utils/log.js";
-import { string, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { getTotalLinesAdded, getTotalLinesRemoved } from "../../bootstrap/state.js";
@@ -35,88 +35,114 @@ import { SPLIT_MAX_LEN } from "../../utils/bash/commands.js";
 import { getParserModule } from "../../utils/bash/bashParser.js";
 import { classifyBashCommand } from "./commandClassification.js";
 import { errorMessage } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:610670-611839 placement
 /**
  * 重复命令统计的常量与辅助集合：保留的文本哈希数、语句数上限、遥测计数封顶、视为中性的工具、敏感工具、只读管道命令、写文件类命令与重定向集合等。
  */
-var REPEATABLE_READ_COMMANDS = 500;
-var MAX_REPEAT_TEXT_HASHES = 8;
-var MAX_REPEAT_STATEMENTS = 20;
-var MAX_REPORTED_COUNTS = 1000;
-var MAX_REPORTED_LINES = 1e5;
-var MAX_REPORTED_SECONDS = 86400;
-var MAX_REPORTED_BYTES = 1073741824;
-var LARGE_OUTPUT_COMMANDS = new Set([
-  TODO_WRITE_TOOL_NAME,
-  TASK_CREATE_TOOL_NAME,
-  TASK_UPDATE_TOOL_NAME,
-  TASKSTOP,
-  EXITPLANMODE,
-  SKILL,
-]);
-var SENSITIVE_TOOLS = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME]);
-var READ_PIPE_COMMANDS = new Set([
-  "tail",
-  "head",
-  "grep",
-  "egrep",
-  "fgrep",
-  "rg",
-  "sed",
-  "awk",
-  "gawk",
-  "wc",
-  "cut",
-  "sort",
-  "uniq",
-  "tr",
-  "column",
-  "nl",
-  "jq",
-  "tee",
-  "less",
-  "more",
-  "cat",
-]);
-var AWK_FILTER_RE = /^-[if]|system|getline|[>|]/;
-var WRITE_FLAG_PATTERNS = {
-  sed: /^(-[A-Za-z]*i|--in-place)/,
-  sort: /^(-[A-Za-z]*o|--output)/,
-  awk: AWK_FILTER_RE,
-  gawk: AWK_FILTER_RE,
-};
-var NOOP_COMMANDS = new Set(["echo", "true", "false"]);
-var SHELL_STATE_COMMANDS = new Set([
-  "cd",
-  "pushd",
-  "popd",
-  "source",
-  ".",
-  "set",
-  "shopt",
-  "ulimit",
-  "umask",
-  "alias",
-  "unalias",
-  "exit",
-  "return",
-]);
-var DECLARATION_NODE_TYPES = new Set([
-  "declaration_command",
-  "unset_command",
-  "variable_assignment",
-  "variable_assignments",
-]);
-var ACTIVATE_SCRIPT_RE = /(^|\/)activate(\.\w+)?$/;
-var FORMAT_WRITE_FLAG_RE =
-  /^(--fix.*|--write|-w|-i|--in-place|--apply.*|--unsafe-fixes|-a|-A|--autocorrect.*|-F|-u|-update|--update.*|--snapshot-update|--force-regen|--bless|--accept|[A-Z0-9_]*(UPDATE|ACCEPT|BLESS|REGEN|OVERWRITE|RECORD)[A-Z0-9_]*=.*|(.*[-_:/])?(fix|fmt|format|write)([-_:].*)?|(.*\/)?(black|isort|rustfmt|autopep8|yapf|pre-commit))$/;
-var DRY_RUN_FLAG_RE_2 = /^(--check.*|--diff|--dry-run)$/;
-var CD_TEXT_RE = /\b(cd|pushd|popd)\b/;
-var COMMAND_SUBSTITUTION_RE = /[`]|[$<>]\(/;
-var OUTPUT_REDIRECT_NODE_TYPES = new Set([">", ">>", ">&", "&>", "&>>", ">|"]);
-var CHAIN_NODE_TYPES = new Set(["&&", "||", ";", "&"]);
-var SHELL_SAFE_ARG_RE = /^[\w@%+=:,./][\w@%+=:,./ -]*$/;
+var REPEATABLE_READ_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_REPEAT_TEXT_HASHES;
+var MAX_REPEAT_STATEMENTS;
+var MAX_REPORTED_COUNTS;
+var MAX_REPORTED_LINES;
+var MAX_REPORTED_SECONDS;
+var MAX_REPORTED_BYTES;
+var LARGE_OUTPUT_COMMANDS;
+var SENSITIVE_TOOLS;
+var READ_PIPE_COMMANDS;
+var AWK_FILTER_RE;
+var WRITE_FLAG_PATTERNS;
+var NOOP_COMMANDS;
+var SHELL_STATE_COMMANDS;
+var DECLARATION_NODE_TYPES;
+var ACTIVATE_SCRIPT_RE;
+var FORMAT_WRITE_FLAG_RE;
+var DRY_RUN_FLAG_RE_2;
+var CD_TEXT_RE;
+var COMMAND_SUBSTITUTION_RE;
+var OUTPUT_REDIRECT_NODE_TYPES;
+var CHAIN_NODE_TYPES;
+var SHELL_SAFE_ARG_RE;
+deferInit("chunk-s61vbvea.js:610670", () => {
+  REPEATABLE_READ_COMMANDS = 500;
+  MAX_REPEAT_TEXT_HASHES = 8;
+  MAX_REPEAT_STATEMENTS = 20;
+  MAX_REPORTED_COUNTS = 1000;
+  MAX_REPORTED_LINES = 1e5;
+  MAX_REPORTED_SECONDS = 86400;
+  MAX_REPORTED_BYTES = 1073741824;
+  LARGE_OUTPUT_COMMANDS = new Set([
+    TODO_WRITE_TOOL_NAME,
+    TASK_CREATE_TOOL_NAME,
+    TASK_UPDATE_TOOL_NAME,
+    TASKSTOP,
+    EXITPLANMODE,
+    SKILL,
+  ]);
+  SENSITIVE_TOOLS = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME]);
+  READ_PIPE_COMMANDS = new Set([
+    "tail",
+    "head",
+    "grep",
+    "egrep",
+    "fgrep",
+    "rg",
+    "sed",
+    "awk",
+    "gawk",
+    "wc",
+    "cut",
+    "sort",
+    "uniq",
+    "tr",
+    "column",
+    "nl",
+    "jq",
+    "tee",
+    "less",
+    "more",
+    "cat",
+  ]);
+  AWK_FILTER_RE = /^-[if]|system|getline|[>|]/;
+  WRITE_FLAG_PATTERNS = {
+    sed: /^(-[A-Za-z]*i|--in-place)/,
+    sort: /^(-[A-Za-z]*o|--output)/,
+    awk: AWK_FILTER_RE,
+    gawk: AWK_FILTER_RE,
+  };
+  NOOP_COMMANDS = new Set(["echo", "true", "false"]);
+  SHELL_STATE_COMMANDS = new Set([
+    "cd",
+    "pushd",
+    "popd",
+    "source",
+    ".",
+    "set",
+    "shopt",
+    "ulimit",
+    "umask",
+    "alias",
+    "unalias",
+    "exit",
+    "return",
+  ]);
+  DECLARATION_NODE_TYPES = new Set([
+    "declaration_command",
+    "unset_command",
+    "variable_assignment",
+    "variable_assignments",
+  ]);
+  ACTIVATE_SCRIPT_RE = /(^|\/)activate(\.\w+)?$/;
+  FORMAT_WRITE_FLAG_RE =
+    /^(--fix.*|--write|-w|-i|--in-place|--apply.*|--unsafe-fixes|-a|-A|--autocorrect.*|-F|-u|-update|--update.*|--snapshot-update|--force-regen|--bless|--accept|[A-Z0-9_]*(UPDATE|ACCEPT|BLESS|REGEN|OVERWRITE|RECORD)[A-Z0-9_]*=.*|(.*[-_:/])?(fix|fmt|format|write)([-_:].*)?|(.*\/)?(black|isort|rustfmt|autopep8|yapf|pre-commit))$/;
+  DRY_RUN_FLAG_RE_2 = /^(--check.*|--diff|--dry-run)$/;
+  CD_TEXT_RE = /\b(cd|pushd|popd)\b/;
+  COMMAND_SUBSTITUTION_RE = /[`]|[$<>]\(/;
+  OUTPUT_REDIRECT_NODE_TYPES = new Set([">", ">>", ">&", "&>", "&>>", ">|"]);
+  CHAIN_NODE_TYPES = new Set(["&&", "||", ";", "&"]);
+  SHELL_SAFE_ARG_RE = /^[\w@%+=:,./][\w@%+=:,./ -]*$/;
+});
 //@ chunk-s61vbvea.js:611839-615870 placement
 /**
  * 跟踪重复执行的只读 Bash 命令（tail/grep 等），用于提示改用后台或 Monitor
@@ -130,41 +156,44 @@ class BashRepeatMeter {
   #o = 0;
   #a = 0;
   #c = 0;
-  begin(e) {
-    return safeRepeatMeter(() => this.#r(e), new BashRepeatMeter_2(this, undefined, {}, [0, 0, 0, 0], false));
+  begin(call) {
+    return safeRepeatMeter(
+      () => this.#r(call),
+      new BashRepeatMeter_2(this, undefined, {}, [0, 0, 0, 0], false),
+    );
   }
-  #r(e) {
-    let n = getTotalLinesAdded() + getTotalLinesRemoved();
-    this.#t += n < this.#n ? n : n - this.#n;
-    this.#n = n;
-    let { toolUseId, messages } = e;
+  #r(call) {
+    let lineDelta = getTotalLinesAdded() + getTotalLinesRemoved();
+    this.#t += lineDelta < this.#n ? lineDelta : lineDelta - this.#n;
+    this.#n = lineDelta;
+    let { toolUseId, messages } = call;
     if (toolUseId === undefined || messages.length === 0) {
       this.#a++;
       return new BashRepeatMeter_2(this, undefined, {}, this.#s(), true);
     }
-    let { command, description, timeout, run_in_background: runInBackground, ...R } = e.input;
-    let x = commandShapeKey(command, e.cwd, e.isReadOnly);
-    let any = x.some((ie) => ie.heavy && !ie.onlyOnFailure);
-    let j = [
-      e.agentId ?? "",
+    let { command, description, timeout, run_in_background: runInBackground, ...restInput } = call.input;
+    let shapes = commandShapeKey(command, call.cwd, call.isReadOnly);
+    let any = shapes.some((shape) => shape.heavy && !shape.onlyOnFailure);
+    let scopeKeyParts = [
+      call.agentId ?? "",
       jsonStringify({
-        ...R,
-        dangerouslyDisableSandbox: R.dangerouslyDisableSandbox === true,
+        ...restInput,
+        dangerouslyDisableSandbox: restInput.dangerouslyDisableSandbox === true,
         ...false,
       }),
     ];
     let countsAtStart = this.#s();
-    let [L, q, Q, Z] = countsAtStart;
-    let ee = 0;
-    let ae = 0;
-    let se = [];
-    let re = 0;
-    let he;
-    for (let ie of x.length > 0
-      ? x
+    let [runsAtStart, failuresAtStart, heavyRunsAtStart, wastedAtStart] = countsAtStart;
+    let runsLeft = 0;
+    let failuresLeft = 0;
+    let repeatedShapes = [];
+    let wastedLeft = 0;
+    let earliestRecord;
+    for (let shape of shapes.length > 0
+      ? shapes
       : [
           {
-            place: e.cwd,
+            place: call.cwd,
             stem: command.trim(),
             text: command.trim(),
             heavy: false,
@@ -174,41 +203,42 @@ class BashRepeatMeter {
             goesOnRunning: false,
           },
         ]) {
-      let Ee = !ie.onlyOnFailure && (!any || ie.heavy);
-      let Ie = bunHashOf([...j, ie.place, ie.stem].join("\x00"));
-      let ke = bunHashOf(ie.text);
-      let Me = Ee ? this.#e.get(Ie) : undefined;
-      if (Me !== undefined) {
-        let We = Me.backgroundCommandsAtStart + this.#a + this.#c;
-        let nt = {
-          earlier: Me,
-          sameText: Me.textHashes.includes(ke),
-          lines: L - Me.linesChanged,
-          writes: q - Me.possibleWrites + We + ee,
-          checks: Q - Me.testsAndLints + ae,
-          unseen: Z - Me.unseenWrites + We + ee + ae,
+      let shouldCount = !shape.onlyOnFailure && (!any || shape.heavy);
+      let scopeKey = bunHashOf([...scopeKeyParts, shape.place, shape.stem].join("\x00"));
+      let textKey = bunHashOf(shape.text);
+      let earlier = shouldCount ? this.#e.get(scopeKey) : undefined;
+      if (earlier !== undefined) {
+        let backgroundAtStart = earlier.backgroundCommandsAtStart + this.#a + this.#c;
+        let record = {
+          earlier,
+          sameText: earlier.textHashes.includes(textKey),
+          lines: runsAtStart - earlier.linesChanged,
+          writes: failuresAtStart - earlier.possibleWrites + backgroundAtStart + runsLeft,
+          checks: heavyRunsAtStart - earlier.testsAndLints + failuresLeft,
+          unseen: wastedAtStart - earlier.unseenWrites + backgroundAtStart + runsLeft + failuresLeft,
         };
-        if (nt.lines + nt.writes === 0) re++;
+        if (record.lines + record.writes === 0) wastedLeft++;
         if (
-          he === undefined ||
-          nt.lines + nt.writes < he.lines + he.writes ||
-          (nt.lines + nt.writes === he.lines + he.writes && nt.checks < he.checks)
+          earliestRecord === undefined ||
+          record.lines + record.writes < earliestRecord.lines + earliestRecord.writes ||
+          (record.lines + record.writes === earliestRecord.lines + earliestRecord.writes &&
+            record.checks < earliestRecord.checks)
         )
-          he = nt;
+          earliestRecord = record;
       }
-      if (ie.testsOrLints) ae++;
-      else if (x.length > 0) ee++;
-      if (Ee)
-        se.push({
-          key: Ie,
-          textHash: ke,
-          writes: ee,
-          checks: ae,
-          ranOnlyIf: ie.ranOnlyIf,
+      if (shape.testsOrLints) failuresLeft++;
+      else if (shapes.length > 0) runsLeft++;
+      if (shouldCount)
+        repeatedShapes.push({
+          key: scopeKey,
+          textHash: textKey,
+          writes: runsLeft,
+          checks: failuresLeft,
+          ranOnlyIf: shape.ranOnlyIf,
         });
     }
-    let earlier = he?.earlier;
-    let ce =
+    let earlier = earliestRecord?.earlier;
+    let earlierMessageIdx =
       earlier === undefined
         ? -1
         : messages.findLastIndex(
@@ -217,46 +247,46 @@ class BashRepeatMeter {
               !message.isVirtual &&
               Array.isArray(message.message.content) &&
               message.message.content.some(
-                (Ee) =>
-                  Ee.type === "tool_result" &&
-                  Ee.tool_use_id === earlier.toolUseId &&
+                (contentBlock) =>
+                  contentBlock.type === "tool_result" &&
+                  contentBlock.tool_use_id === earlier.toolUseId &&
                   (earlier.outputPersisted
-                    ? Ee.content !== TOOL_RESULT_CLEARED_MESSAGE
-                    : isContentAlreadyCompacted(Ee.content)),
+                    ? contentBlock.content !== TOOL_RESULT_CLEARED_MESSAGE
+                    : isContentAlreadyCompacted(contentBlock.content)),
               ),
           );
-    let we = new BashRepeatMeter_2(
+    let meter = new BashRepeatMeter_2(
       this,
       {
-        pieces: se,
-        writes: ee,
-        checks: ae,
-        goesOnRunning: x.some((ie) => ie.goesOnRunning),
+        pieces: repeatedShapes,
+        writes: runsLeft,
+        checks: failuresLeft,
+        goesOnRunning: shapes.some((shape) => shape.goesOnRunning),
         toolUseId,
         startsInBackground: runInBackground === true,
         backgroundCommandsAtStart: count(
-          Object.values(e.taskRegistry.all()),
-          (ie) => isLocalShellTask(ie) && ie.isBackgrounded && ie.status === "running",
+          Object.values(call.taskRegistry.all()),
+          (task) => isLocalShellTask(task) && task.isBackgrounded && task.status === "running",
         ),
       },
       {
-        repeat: he !== undefined,
-        compared_statements: se.length,
-        unchanged_repeats: re,
-        ...(he !== undefined && {
-          same_text_as_earlier_call: he.sameText,
+        repeat: earliestRecord !== undefined,
+        compared_statements: repeatedShapes.length,
+        unchanged_repeats: wastedLeft,
+        ...(earliestRecord !== undefined && {
+          same_text_as_earlier_call: earliestRecord.sameText,
           seconds_since_that_call: Math.min(
-            Math.max(0, Math.round((Date.now() - he.earlier.returnedAt) / 1000)),
+            Math.max(0, Math.round((Date.now() - earliestRecord.earlier.returnedAt) / 1000)),
             MAX_REPORTED_SECONDS,
           ),
-          ...((he.lines > 0 || he.unseen === 0) && {
-            lines_changed_since_that_call: Math.min(he.lines, MAX_REPORTED_LINES),
+          ...((earliestRecord.lines > 0 || earliestRecord.unseen === 0) && {
+            lines_changed_since_that_call: Math.min(earliestRecord.lines, MAX_REPORTED_LINES),
           }),
-          possible_writes_since_that_call: Math.min(he.writes, MAX_REPORTED_COUNTS),
-          tests_and_lints_since_that_call: Math.min(he.checks, MAX_REPORTED_COUNTS),
-          ...(ce >= 0 && {
+          possible_writes_since_that_call: Math.min(earliestRecord.writes, MAX_REPORTED_COUNTS),
+          tests_and_lints_since_that_call: Math.min(earliestRecord.checks, MAX_REPORTED_COUNTS),
+          ...(earlierMessageIdx >= 0 && {
             new_message_since_that_call: messages
-              .slice(ce + 1)
+              .slice(earlierMessageIdx + 1)
               .some((message) =>
                 message.type === "attachment"
                   ? message.attachment.type === "queued_command"
@@ -265,33 +295,33 @@ class BashRepeatMeter {
                     !message.isVirtual &&
                     !(
                       Array.isArray(message.message.content) &&
-                      message.message.content.some((Ee) => Ee.type === "tool_result")
+                      message.message.content.some((contentBlock) => contentBlock.type === "tool_result")
                     ),
               ),
           }),
-          earlier_call_outcome: fromEnum(he.earlier.outcome),
-          earlier_result_in_context: ce >= 0,
+          earlier_call_outcome: fromEnum(earliestRecord.earlier.outcome),
+          earlier_result_in_context: earlierMessageIdx >= 0,
         }),
       },
       countsAtStart,
-      ee + ae > 0,
+      runsLeft + failuresLeft > 0,
     );
-    if (we.countedAsRunning) this.#a++;
-    return we;
+    if (meter.countedAsRunning) this.#a++;
+    return meter;
   }
   #s() {
     return [this.#t, this.#i, this.#l, this.#o];
   }
-  noteOtherToolCall(e, n) {
+  noteOtherToolCall(toolCall, countIt) {
     safeRepeatMeter(() => {
       if (
-        !n ||
-        e.name === BASH_TOOL_NAME ||
-        SENSITIVE_TOOLS.has(e.underlyingV1ToolName ?? e.name) ||
-        LARGE_OUTPUT_COMMANDS.has(e.name)
+        !countIt ||
+        toolCall.name === BASH_TOOL_NAME ||
+        SENSITIVE_TOOLS.has(toolCall.underlyingV1ToolName ?? toolCall.name) ||
+        LARGE_OUTPUT_COMMANDS.has(toolCall.name)
       )
         return;
-      if (e.name === NOTEBOOK_EDIT_TOOL_NAME) this.#t++;
+      if (toolCall.name === NOTEBOOK_EDIT_TOOL_NAME) this.#t++;
       else {
         this.#i++;
         this.#o++;
@@ -302,136 +332,140 @@ class BashRepeatMeter {
     this.#e.clear();
     this.#c = 0;
   }
-  settle(e) {
-    safeRepeatMeter(() => this.#u(e), undefined);
+  settle(info) {
+    safeRepeatMeter(() => this.#u(info), undefined);
   }
-  #u(e) {
-    let { call: n, outcome, mayHaveWritten, linesWritten } = e;
-    if (e.countedAsRunning) this.#a--;
-    let y = outcome !== undefined || mayHaveWritten;
-    let S = y ? (n?.checks ?? 0) : 0;
-    let w = y ? (n?.writes ?? (mayHaveWritten ? 1 : 0)) : 0;
-    let R = w + S > 0 && !e.diffTaken ? 1 : 0;
+  #u(info) {
+    let { call, outcome, mayHaveWritten, linesWritten } = info;
+    if (info.countedAsRunning) this.#a--;
+    let didWork = outcome !== undefined || mayHaveWritten;
+    let checks = didWork ? (call?.checks ?? 0) : 0;
+    let writes = didWork ? (call?.writes ?? (mayHaveWritten ? 1 : 0)) : 0;
+    let unseen = writes + checks > 0 && !info.diffTaken ? 1 : 0;
     this.#t += linesWritten;
-    this.#i += w;
-    this.#l += S;
-    this.#o += R;
-    if (y && n?.goesOnRunning) this.#c++;
-    if (n === undefined || outcome === undefined) return;
-    let [x, P, j, G] = e.countsAtStart;
-    let filtered = n.pieces.filter((piece) =>
-      outcome === "succeeded" && e.exitedZero
+    this.#i += writes;
+    this.#l += checks;
+    this.#o += unseen;
+    if (didWork && call?.goesOnRunning) this.#c++;
+    if (call === undefined || outcome === undefined) return;
+    let [linesAtStart, writesAtStart, checksAtStart, unseenAtStart] = info.countsAtStart;
+    let filtered = call.pieces.filter((piece) =>
+      outcome === "succeeded" && info.exitedZero
         ? piece.ranOnlyIf !== "unknown"
         : piece.ranOnlyIf === undefined &&
           (outcome === "succeeded" || outcome === "failed" || piece.writes + piece.checks <= 1),
     );
-    for (let q of filtered) {
-      let Q = q.writes === n.writes && q.checks === n.checks;
-      let Z = this.#e.get(q.key)?.textHashes.filter((textHash) => textHash !== q.textHash) ?? [];
-      this.#e.delete(q.key);
-      this.#e.set(q.key, {
-        textHashes: [...Z, q.textHash].slice(-MAX_REPEAT_TEXT_HASHES),
-        toolUseId: n.toolUseId,
+    for (let piece of filtered) {
+      let isPrimaryPiece = piece.writes === call.writes && piece.checks === call.checks;
+      let otherTextHashes =
+        this.#e.get(piece.key)?.textHashes.filter((textHash) => textHash !== piece.textHash) ?? [];
+      this.#e.delete(piece.key);
+      this.#e.set(piece.key, {
+        textHashes: [...otherTextHashes, piece.textHash].slice(-MAX_REPEAT_TEXT_HASHES),
+        toolUseId: call.toolUseId,
         returnedAt: Date.now(),
-        linesChanged: x + (Q ? linesWritten : 0),
-        possibleWrites: P + q.writes,
-        testsAndLints: j + q.checks,
-        unseenWrites: G + (Q ? R : 0),
-        backgroundCommandsAtStart: n.backgroundCommandsAtStart,
+        linesChanged: linesAtStart + (isPrimaryPiece ? linesWritten : 0),
+        possibleWrites: writesAtStart + piece.writes,
+        testsAndLints: checksAtStart + piece.checks,
+        unseenWrites: unseenAtStart + (isPrimaryPiece ? unseen : 0),
+        backgroundCommandsAtStart: call.backgroundCommandsAtStart,
         outcome,
-        outputPersisted: e.outputPersisted,
+        outputPersisted: info.outputPersisted,
       });
     }
     while (this.#e.size > REPEATABLE_READ_COMMANDS) this.#e.delete(this.#e.keys().next().value ?? "");
   }
 }
 //@ chunk-s61vbvea.js:615870-616862 placement
-class BashRepeatMeter_2 {
-  meter;
-  call;
-  fields;
-  countsAtStart;
-  countedAsRunning;
-  outcome;
-  exitedZero = false;
-  outputPersisted = false;
-  mayHaveWritten = false;
-  linesWritten = 0;
-  diffTaken = false;
-  constructor(meter, call, fields, countsAtStart, countedAsRunning) {
-    this.meter = meter;
-    this.call = call;
-    this.fields = fields;
-    this.countsAtStart = countsAtStart;
-    this.countedAsRunning = countedAsRunning;
-  }
-  ended(e, n, r) {
-    this.outputPersisted = r;
-    this.exitedZero = e.code === 0;
-    this.outcome =
-      e.backgroundTaskId !== undefined
-        ? this.call?.startsInBackground
-          ? "started_in_background"
-          : e.timedOutAfterMs !== undefined
-            ? "moved_to_background_at_timeout"
-            : "moved_to_background"
-        : e.timedOut
-          ? "killed_at_timeout"
-          : e.interrupted
-            ? "interrupted"
-            : n
-              ? "failed"
-              : "succeeded";
-    return {
-      ...this.fields,
-      ...(e.outputFileSize !== undefined && {
-        output_total_bytes: Math.min(e.outputFileSize, MAX_REPORTED_BYTES),
-        output_persisted: r,
-      }),
-    };
-  }
-  sawEditDiff(e, n) {
-    if (!n || e?.unavailable || e?.shared || e?.skipped) return;
-    this.diffTaken = true;
-    this.linesWritten = safeRepeatMeter(
-      () =>
-        (e?.files ?? []).reduce(
-          (acc, s) =>
-            acc +
-            Math.max(
-              1,
-              count(
-                s.hunks.flatMap((hunk) => hunk.lines),
-                (h) => h.startsWith("+") || h.startsWith("-"),
+let BashRepeatMeter_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:615870", () => {
+  BashRepeatMeter_2 = class BashRepeatMeter_2 {
+    meter;
+    call;
+    fields;
+    countsAtStart;
+    countedAsRunning;
+    outcome;
+    exitedZero = false;
+    outputPersisted = false;
+    mayHaveWritten = false;
+    linesWritten = 0;
+    diffTaken = false;
+    constructor(meter, call, fields, countsAtStart, countedAsRunning) {
+      this.meter = meter;
+      this.call = call;
+      this.fields = fields;
+      this.countsAtStart = countsAtStart;
+      this.countedAsRunning = countedAsRunning;
+    }
+    ended(result, failed, outputPersisted) {
+      this.outputPersisted = outputPersisted;
+      this.exitedZero = result.code === 0;
+      this.outcome =
+        result.backgroundTaskId !== undefined
+          ? this.call?.startsInBackground
+            ? "started_in_background"
+            : result.timedOutAfterMs !== undefined
+              ? "moved_to_background_at_timeout"
+              : "moved_to_background"
+          : result.timedOut
+            ? "killed_at_timeout"
+            : result.interrupted
+              ? "interrupted"
+              : failed
+                ? "failed"
+                : "succeeded";
+      return {
+        ...this.fields,
+        ...(result.outputFileSize !== undefined && {
+          output_total_bytes: Math.min(result.outputFileSize, MAX_REPORTED_BYTES),
+          output_persisted: outputPersisted,
+        }),
+      };
+    }
+    sawEditDiff(editDiff, hasDiff) {
+      if (!hasDiff || editDiff?.unavailable || editDiff?.shared || editDiff?.skipped) return;
+      this.diffTaken = true;
+      this.linesWritten = safeRepeatMeter(
+        () =>
+          (editDiff?.files ?? []).reduce(
+            (acc, file) =>
+              acc +
+              Math.max(
+                1,
+                count(
+                  file.hunks.flatMap((hunk) => hunk.lines),
+                  (line) => line.startsWith("+") || line.startsWith("-"),
+                ),
               ),
-            ),
-          e?.moreFiles ?? 0,
-        ),
-      1,
-    );
-  }
-  [Symbol.dispose]() {
-    this.meter.settle(this);
-  }
-}
+            editDiff?.moreFiles ?? 0,
+          ),
+        1,
+      );
+    }
+    [Symbol.dispose]() {
+      this.meter.settle(this);
+    }
+  };
+});
 //@ chunk-s61vbvea.js:616862-619381 placement
 /**
  * 从 Bash AST 计算命令形状键，用于重复命令计数
  */
 function commandShapeKey(command, cwd, isReadOnly) {
-  let s = command.length <= SPLIT_MAX_LEN ? (getParserModule()?.parse(command) ?? null) : null;
-  let h = [];
-  for (let L of s?.type === "program" ? flattenStatements(s) : [])
-    if (CHAIN_NODE_TYPES.has(L.type)) {
-      if (h.length > 0) h.at(-1).then = L.type;
-    } else if (L.type.endsWith("_redirect")) h.at(-1)?.redirects.push(L);
+  let astRoot = command.length <= SPLIT_MAX_LEN ? (getParserModule()?.parse(command) ?? null) : null;
+  let statements = [];
+  for (let node of astRoot?.type === "program" ? flattenStatements(astRoot) : [])
+    if (CHAIN_NODE_TYPES.has(node.type)) {
+      if (statements.length > 0) statements.at(-1).then = node.type;
+    } else if (node.type.endsWith("_redirect")) statements.at(-1)?.redirects.push(node);
     else
-      h.push({
-        node: L,
+      statements.push({
+        node,
         redirects: [],
         then: ";",
       });
-  if (h.length === 0 || h.length > MAX_REPEAT_STATEMENTS)
+  if (statements.length === 0 || statements.length > MAX_REPEAT_STATEMENTS)
     return [
       {
         place: cwd,
@@ -444,185 +478,203 @@ function commandShapeKey(command, cwd, isReadOnly) {
         goesOnRunning: false,
       },
     ];
-  let y = cwd;
-  let S = false;
-  let w = [];
-  let R = h.slice(0, -1).findLastIndex(({ then: L }) => L !== "&&") + 1;
-  let lastIndex = h.findLastIndex(
-    ({ node, then: q }, Q) => node.text === "wait" && q !== "&" && [";", "&"].includes(h[Q - 1]?.then ?? ""),
+  let currentCwd = cwd;
+  let sawCd = false;
+  let cdTrail = [];
+  let conditionalStart = statements.slice(0, -1).findLastIndex(({ then: thenType }) => thenType !== "&&") + 1;
+  let lastIndex = statements.findLastIndex(
+    ({ node, then: thenType }, idx) =>
+      node.text === "wait" && thenType !== "&" && [";", "&"].includes(statements[idx - 1]?.then ?? ""),
   );
-  let P = false;
-  let j = false;
-  let G = [];
-  for (let [L, { node: q, redirects: Q, then: Z }] of h.entries()) {
-    let joined = [q, ...Q].map((Re) => Re.text).join(" ");
-    let ae = h[L - 1]?.then;
-    if (ae !== "&&") {
-      P = false;
-      j = false;
+  let afterHeavy = false;
+  let afterLightWork = false;
+  let shapes = [];
+  for (let [idx, { node, redirects, then: thenType }] of statements.entries()) {
+    let joined = [node, ...redirects].map((part) => part.text).join(" ");
+    let previousThen = statements[idx - 1]?.then;
+    if (previousThen !== "&&") {
+      afterHeavy = false;
+      afterLightWork = false;
     }
-    let [se, ...re] = q.type === "redirected_statement" ? q.children : [q];
-    let any = [...re, ...Q].some(isFileOutputRedirect);
-    let Se = false;
+    let [commandNode, ...otherChildren] = node.type === "redirected_statement" ? node.children : [node];
+    let any = [...otherChildren, ...redirects].some(isFileOutputRedirect);
+    let counted = false;
     if (
-      se !== undefined &&
-      (DECLARATION_NODE_TYPES.has(se.type) || SHELL_STATE_COMMANDS.has(getCommandBaseName(se)))
+      commandNode !== undefined &&
+      (DECLARATION_NODE_TYPES.has(commandNode.type) ||
+        SHELL_STATE_COMMANDS.has(getCommandBaseName(commandNode)))
     ) {
-      let [Re, Ne, ...Je] = se.children;
-      let lt =
-        Ne?.type === "raw_string" ||
-        (Ne?.type === "string" &&
-          Ne.children.every((child) => child.type === '"' || child.type === "string_content"));
-      let Ae = lt ? Ne?.text.slice(1, -1) : Ne?.text;
-      let included = ["cd", "pushd", "popd"].includes(Re?.text ?? "");
+      let [commandName, argNode, ...restNodes] = commandNode.children;
+      let isQuotedArg =
+        argNode?.type === "raw_string" ||
+        (argNode?.type === "string" &&
+          argNode.children.every((child) => child.type === '"' || child.type === "string_content"));
+      let argText = isQuotedArg ? argNode?.text.slice(1, -1) : argNode?.text;
+      let included = ["cd", "pushd", "popd"].includes(commandName?.text ?? "");
       if (
-        Re?.text === "cd" &&
-        !S &&
+        commandName?.text === "cd" &&
+        !sawCd &&
         !any &&
-        Z !== "||" &&
-        Z !== "&" &&
-        ae !== "||" &&
-        Je.length === 0 &&
-        (lt || Ne?.type === "word") &&
-        Ae !== undefined &&
-        SHELL_SAFE_ARG_RE.test(Ae)
+        thenType !== "||" &&
+        thenType !== "&" &&
+        previousThen !== "||" &&
+        restNodes.length === 0 &&
+        (isQuotedArg || argNode?.type === "word") &&
+        argText !== undefined &&
+        SHELL_SAFE_ARG_RE.test(argText)
       ) {
-        y = resolve(y, Ae);
+        currentCwd = resolve(currentCwd, argText);
         continue;
       }
-      if (Z !== "&") {
-        w.push(joined);
-        S ||= included;
-        Se = true;
+      if (thenType !== "&") {
+        cdTrail.push(joined);
+        sawCd ||= included;
+        counted = true;
       }
       if (
-        Z !== "&" &&
+        thenType !== "&" &&
         !any &&
         !COMMAND_SUBSTITUTION_RE.test(joined) &&
-        ((Re?.text !== "source" && Re?.text !== ".") || ACTIVATE_SCRIPT_RE.test(Ae ?? ""))
+        ((commandName?.text !== "source" && commandName?.text !== ".") ||
+          ACTIVATE_SCRIPT_RE.test(argText ?? ""))
       )
         continue;
     }
-    let ce = new Set(String(classifyBashCommand(q.text).bash_command_kinds).split(","));
-    let we = ce.has("builds") || ce.has("installs_packages");
-    let ie = !we && (ce.has("runs_tests") || ce.has("lints"));
-    let Ee = we || ie;
+    let kinds = new Set(String(classifyBashCommand(node.text).bash_command_kinds).split(","));
+    let isHeavy = kinds.has("builds") || kinds.has("installs_packages");
+    let isCheck = !isHeavy && (kinds.has("runs_tests") || kinds.has("lints"));
+    let isHeavyOrCheck = isHeavy || isCheck;
     if (
-      !Ee &&
+      !isHeavyOrCheck &&
       !any &&
-      ((NOOP_COMMANDS.has(getCommandBaseName(q)) && !COMMAND_SUBSTITUTION_RE.test(q.text)) ||
-        isReadOnly(q.text))
+      ((NOOP_COMMANDS.has(getCommandBaseName(node)) && !COMMAND_SUBSTITUTION_RE.test(node.text)) ||
+        isReadOnly(node.text))
     ) {
-      if (CD_TEXT_RE.test(q.text)) {
-        w.push(joined);
-        S = true;
+      if (CD_TEXT_RE.test(node.text)) {
+        cdTrail.push(joined);
+        sawCd = true;
       }
-      j = true;
+      afterLightWork = true;
       continue;
     }
-    let [Ie, ...ke] = statementParts(q, !Ee);
-    let Me = Ie?.type === "pipeline" ? Ie.children : Ie ? [Ie] : [];
-    let We = Me.length;
-    while (We >= 3) {
-      let Re = Me[We - 1];
-      let commandBaseName = getCommandBaseName(Re);
-      let Je = Object.hasOwn(WRITE_FLAG_PATTERNS, commandBaseName)
+    let [parts0, ...restParts] = statementParts(node, !isHeavyOrCheck);
+    let pipelineParts = parts0?.type === "pipeline" ? parts0.children : parts0 ? [parts0] : [];
+    let keepCount = pipelineParts.length;
+    while (keepCount >= 3) {
+      let lastPart = pipelineParts[keepCount - 1];
+      let commandBaseName = getCommandBaseName(lastPart);
+      let writeFlagPattern = Object.hasOwn(WRITE_FLAG_PATTERNS, commandBaseName)
         ? WRITE_FLAG_PATTERNS[commandBaseName]
         : undefined;
       if (
         !READ_PIPE_COMMANDS.has(commandBaseName) ||
-        getCommandNode(Re)?.children.some((child) => Je?.test(child.text))
+        getCommandNode(lastPart)?.children.some((child) => writeFlagPattern?.test(child.text))
       )
         break;
-      We -= 2;
+      keepCount -= 2;
     }
-    if (!Ee && We === 1 && Me.length > 1 && isReadOnly(Me[0].text)) We = Me.length;
+    if (!isHeavyOrCheck && keepCount === 1 && pipelineParts.length > 1 && isReadOnly(pipelineParts[0].text))
+      keepCount = pipelineParts.length;
     let joined_2 = [
-      ...Me.slice(0, We - 1),
-      ...Me.slice(We - 1, We).flatMap((Re) => statementParts(Re, !Ee)),
-      ...ke,
-      ...Q.filter((Re) => !isOutputRedirect(Re) || (!Ee && isFileOutputRedirect(Re))),
+      ...pipelineParts.slice(0, keepCount - 1),
+      ...pipelineParts
+        .slice(keepCount - 1, keepCount)
+        .flatMap((part) => statementParts(part, !isHeavyOrCheck)),
+      ...restParts,
+      ...redirects.filter(
+        (redirect) => !isOutputRedirect(redirect) || (!isHeavyOrCheck && isFileOutputRedirect(redirect)),
+      ),
     ]
-      .map((Re) => Re.text)
-      .concat(Z === "&" ? ["&"] : [])
+      .map((part) => part.text)
+      .concat(thenType === "&" ? ["&"] : [])
       .join(" ");
     let parts = joined_2.split(/\s+/);
-    G.push({
-      place: [y, ...w].join("\x00"),
+    shapes.push({
+      place: [currentCwd, ...cdTrail].join("\x00"),
       stem: joined_2,
       text: joined,
-      heavy: Ee,
+      heavy: isHeavyOrCheck,
       testsOrLints:
-        ie &&
-        (!parts.some((Re) => FORMAT_WRITE_FLAG_RE.test(Re)) ||
-          parts.some((Re) => DRY_RUN_FLAG_RE_2.test(Re))),
-      onlyOnFailure: ae === "||",
-      ranOnlyIf: P ? (L >= R ? "the line exited 0" : "unknown") : j ? "light work succeeded" : undefined,
-      goesOnRunning: Z === "&" && L > lastIndex,
+        isCheck &&
+        (!parts.some((part) => FORMAT_WRITE_FLAG_RE.test(part)) ||
+          parts.some((part) => DRY_RUN_FLAG_RE_2.test(part))),
+      onlyOnFailure: previousThen === "||",
+      ranOnlyIf: afterHeavy
+        ? idx >= conditionalStart
+          ? "the line exited 0"
+          : "unknown"
+        : afterLightWork
+          ? "light work succeeded"
+          : undefined,
+      goesOnRunning: thenType === "&" && idx > lastIndex,
     });
-    P ||= Ee;
-    j = true;
-    if (!Se && q.type !== "subshell" && CD_TEXT_RE.test(q.text)) {
-      w.push(joined);
-      S = true;
+    afterHeavy ||= isHeavyOrCheck;
+    afterLightWork = true;
+    if (!counted && node.type !== "subshell" && CD_TEXT_RE.test(node.text)) {
+      cdTrail.push(joined);
+      sawCd = true;
     }
   }
-  return G;
+  return shapes;
 }
 //@ chunk-s61vbvea.js:619381-619504 placement
-function safeRepeatMeter(e, n) {
+function safeRepeatMeter(fn, fallback) {
   try {
-    return e();
+    return fn();
   } catch (error) {
     logForDebugging(`Bash repeat meter: ${errorMessage(error)}`);
     logError(Error("The Bash repeat meter threw"));
-    return n;
+    return fallback;
   }
 }
 //@ chunk-s61vbvea.js:619504-619721 placement
-function flattenStatements(e) {
-  switch (e.type) {
+function flattenStatements(node) {
+  switch (node.type) {
     case "program":
     case "list":
-      return e.children.flatMap(flattenStatements);
+      return node.children.flatMap(flattenStatements);
     case "comment":
       return [];
     case "redirected_statement":
-      return e.children[0]?.type === "list" ? e.children.flatMap(flattenStatements) : [e];
+      return node.children[0]?.type === "list" ? node.children.flatMap(flattenStatements) : [node];
     default:
-      return [e];
+      return [node];
   }
 }
 //@ chunk-s61vbvea.js:619721-619806 placement
 /**
  * 判断重定向节点是否是输出到文件的重定向。
  */
-function isOutputRedirect(e) {
-  return e.type === "file_redirect" && e.children.some((child) => OUTPUT_REDIRECT_NODE_TYPES.has(child.type));
+function isOutputRedirect(node) {
+  return (
+    node.type === "file_redirect" && node.children.some((child) => OUTPUT_REDIRECT_NODE_TYPES.has(child.type))
+  );
 }
 //@ chunk-s61vbvea.js:619806-619946 placement
-function isFileOutputRedirect(e) {
-  let text = e.children.at(-1)?.text ?? "";
+function isFileOutputRedirect(redirect) {
+  let text = redirect.children.at(-1)?.text ?? "";
   return (
-    isOutputRedirect(e) &&
+    isOutputRedirect(redirect) &&
     text !== "/dev/null" &&
-    !(e.children.some((child) => child.type === ">&") && /^(\d+|-)$/.test(text))
+    !(redirect.children.some((child) => child.type === ">&") && /^(\d+|-)$/.test(text))
   );
 }
 //@ chunk-s61vbvea.js:619946-620047 placement
-function statementParts(e, n) {
-  return e.type !== "redirected_statement"
-    ? [e]
-    : e.children.filter((child) => !isOutputRedirect(child) || (n && isFileOutputRedirect(child)));
+function statementParts(node, keepFileRedirects) {
+  return node.type !== "redirected_statement"
+    ? [node]
+    : node.children.filter(
+        (child) => !isOutputRedirect(child) || (keepFileRedirects && isFileOutputRedirect(child)),
+      );
 }
 //@ chunk-s61vbvea.js:620047-620152 placement
-function getCommandNode(e) {
-  let n = e.type === "redirected_statement" ? e.children[0] : e;
-  return n?.type === "command" ? n : undefined;
+function getCommandNode(node) {
+  let commandNode = node.type === "redirected_statement" ? node.children[0] : node;
+  return commandNode?.type === "command" ? commandNode : undefined;
 }
 //@ chunk-s61vbvea.js:620152-620272 placement
-function getCommandBaseName(e) {
-  let text = getCommandNode(e)?.children.find((child) => child.type === "command_name")?.text;
+function getCommandBaseName(node) {
+  let text = getCommandNode(node)?.children.find((child) => child.type === "command_name")?.text;
   return text?.slice(text.lastIndexOf("/") + 1) ?? "";
 }
 export { BashRepeatMeter };

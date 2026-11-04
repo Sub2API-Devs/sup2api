@@ -32,47 +32,54 @@ import { readFlagWithOverride } from "../analytics/flagOverrides.js";
 /**
  * 在沙箱中用 git update-ref --stdin 删除旧检查点引用。
  */
-async function deleteRefsInSandbox(i, cwd, r, s) {
+async function deleteRefsInSandbox(refs, cwd, sandbox, options) {
   if (SandboxManager.getConfig() === undefined) throw Error("the sandbox has not started");
   await SandboxManager.ensureInitializedForWrap();
-  let u = gitExe();
-  let safeGitInvocation = buildSafeGitInvocation(u, [...GIT_SAFE_GLOBAL_ARGS, "update-ref", "--stdin"], s);
+  let gitPath = gitExe();
+  let safeGitInvocation = buildSafeGitInvocation(
+    gitPath,
+    [...GIT_SAFE_GLOBAL_ARGS, "update-ref", "--stdin"],
+    options,
+  );
   let filesystem = SandboxManager.getConfig()?.filesystem;
   if (safeGitInvocation === null || filesystem === undefined)
     throw Error("git could not be made ready for the sandbox");
-  let n = wrapWithSeccompExec(
-    shellQuoteArgs(["/usr/bin/env", "-u", "GIT_CONFIG_COUNT", u, ...safeGitInvocation.args]),
+  let wrapped = wrapWithSeccompExec(
+    shellQuoteArgs(["/usr/bin/env", "-u", "GIT_CONFIG_COUNT", gitPath, ...safeGitInvocation.args]),
   );
-  let R = await SandboxManager.wrapWithSandbox(n, "/bin/sh", {
+  let quoteSafe = await SandboxManager.wrapWithSandbox(wrapped, "/bin/sh", {
     filesystem: {
-      allowWrite: [r],
-      denyWrite: [...getDefaultWritePaths().filter((l) => !l.startsWith("/dev/")), ...filesystem.denyWrite],
+      allowWrite: [sandbox],
+      denyWrite: [
+        ...getDefaultWritePaths().filter((quotedArgs) => !quotedArgs.startsWith("/dev/")),
+        ...filesystem.denyWrite,
+      ],
       denyRead: filesystem.denyRead,
-      allowRead: [...(filesystem.allowRead ?? []), r],
+      allowRead: [...(filesystem.allowRead ?? []), sandbox],
     },
     allowNestedUserNamespaces: false,
   });
-  if (R === n) throw Error("the sandbox cannot confine commands here, so git did not run");
-  let _;
+  if (quoteSafe === wrapped) throw Error("the sandbox cannot confine commands here, so git did not run");
+  let command;
   try {
-    _ = await openSelfExeForSeccomp();
-    let l = await execFileNoThrowWithCwd("/bin/sh", ["-c", R], {
+    command = await openSelfExeForSeccomp();
+    let input = await execFileNoThrowWithCwd("/bin/sh", ["-c", quoteSafe], {
       cwd,
       env: safeGitInvocation.env,
-      inheritFd: _,
-      input: i
+      inheritFd: command,
+      input: refs
         .map(
-          (C) => `option no-deref
-delete ${C}
+          (result) => `option no-deref
+delete ${result}
 `,
         )
         .join(""),
       timeout: GIT_COMMAND_TIMEOUT_MS,
       waitForExitAfterKill: true,
     });
-    if (l.code !== 0) {
+    if (input.code !== 0) {
       logForDebugging(
-        `[rateLimitCheckpoint] git update-ref in the sandbox exited ${l.code}: ${l.stderr.trim()}`,
+        `[rateLimitCheckpoint] git update-ref in the sandbox exited ${input.code}: ${input.stderr.trim()}`,
         {
           level: "warn",
         },
@@ -83,7 +90,7 @@ delete ${C}
     try {
       SandboxManager.cleanupAfterCommand();
     } finally {
-      if (_ !== undefined) await promisify(close)(_);
+      if (command !== undefined) await promisify(close)(command);
     }
   }
 }
@@ -91,42 +98,42 @@ delete ${C}
 /**
  * 删除过期的检查点引用（沙箱开启时走沙箱）。
  */
-async function pruneOldCheckpointRefs(cwd, o, r, s, remoteHostSessionCount) {
-  let p = await s(
+async function pruneOldCheckpointRefs(cwd, gitDir, keepRef, git, options) {
+  let listResult = await git(
     ["for-each-ref", "--format=%(refname)%00%(committerdate:unix)%00%(symref)", `${REFS_CLAUDE_CHECKPOINT}*`],
     {
       cwd,
     },
   );
-  if (p.code !== 0) return;
+  if (listResult.code !== 0) return;
   let floored = Math.floor(Date.now() / 1000);
-  let n = [];
-  for (let line of p.stdout.split(`
+  let staleRefs = [];
+  for (let line of listResult.stdout.split(`
 `)) {
-    let [_, l, C] = line.split("\x00");
+    let [refName, committedAt, symrefTarget] = line.split("\x00");
     if (
-      _ === undefined ||
-      _ === r ||
-      !_.startsWith(REFS_CLAUDE_CHECKPOINT) ||
-      (C !== undefined && C.length > 0)
+      refName === undefined ||
+      refName === keepRef ||
+      !refName.startsWith(REFS_CLAUDE_CHECKPOINT) ||
+      (symrefTarget !== undefined && symrefTarget.length > 0)
     )
       continue;
-    let b = floored - Number(l);
-    if (!Number.isFinite(b) || b < CHECKPOINT_INDEX_MAX_AGE_SECONDS) continue;
-    n.push(_);
+    let ageSeconds = floored - Number(committedAt);
+    if (!Number.isFinite(ageSeconds) || ageSeconds < CHECKPOINT_INDEX_MAX_AGE_SECONDS) continue;
+    staleRefs.push(refName);
   }
-  if (n.length === 0) return;
+  if (staleRefs.length === 0) return;
   if (
     SandboxManager.isSandboxingEnabled() &&
     readFlagWithOverride(TENGU_COPPER_SLUICE, {
       safe: true,
     })
   ) {
-    await deleteRefsInSandbox(n, cwd, o, remoteHostSessionCount);
+    await deleteRefsInSandbox(staleRefs, cwd, gitDir, options);
     return;
   }
-  for (let R of n)
-    await s(["update-ref", "--no-deref", "-d", R], {
+  for (let refName of staleRefs)
+    await git(["update-ref", "--no-deref", "-d", refName], {
       cwd,
     });
 }
@@ -134,53 +141,60 @@ async function pruneOldCheckpointRefs(cwd, o, r, s, remoteHostSessionCount) {
 /**
  * 生成检查点说明 markdown（恢复命令与 todo 列表）。
  */
-function buildCheckpointNote(i) {
-  let o = [
+function buildCheckpointNote(note) {
+  let lines = [
     "# Claude Code \u2014 resume checkpoint",
     "",
-    `Session: ${i.sessionId}`,
+    `Session: ${note.sessionId}`,
     `Written: ${new Date().toISOString()}`,
-    `Trigger: ${i.trigger === "near_limit" ? "near-limit" : "rate-limited"}`,
-    `Ref with your in-progress files: ${i.ref}`,
+    `Trigger: ${note.trigger === "near_limit" ? "near-limit" : "rate-limited"}`,
+    `Ref with your in-progress files: ${note.ref}`,
     "",
     "## To resume",
     "",
-    `    claude --resume ${i.sessionId}`,
+    `    claude --resume ${note.sessionId}`,
     "",
     "(or open Claude Code in this directory and run /resume)",
     "",
     "## Plan (from TodoWrite state)",
     "",
   ];
-  if (i.todos.length === 0) o.push("No task list was active; see transcript via the resume command above.");
+  if (note.todos.length === 0)
+    lines.push("No task list was active; see transcript via the resume command above.");
   else {
-    let r;
-    let s;
-    for (let u of i.todos)
-      if (u.status === "completed") o.push(`- [x] ${sanitizeCheckpointLine(u.content)}`);
-      else if (u.status === "in_progress") {
-        let p = sanitizeCheckpointLine(u.activeForm);
-        o.push(`- [>] ${p}    \u2190 current step`);
-        s ??= p;
+    let nextTodo;
+    let currentTodo;
+    for (let todo of note.todos)
+      if (todo.status === "completed") lines.push(`- [x] ${sanitizeCheckpointLine(todo.content)}`);
+      else if (todo.status === "in_progress") {
+        let activeText = sanitizeCheckpointLine(todo.activeForm);
+        lines.push(`- [>] ${activeText}    \u2190 current step`);
+        currentTodo ??= activeText;
       } else {
-        let p = sanitizeCheckpointLine(u.content);
-        o.push(`- [ ] ${p}`);
-        r ??= p;
+        let pendingText = sanitizeCheckpointLine(todo.content);
+        lines.push(`- [ ] ${pendingText}`);
+        nextTodo ??= pendingText;
       }
-    o.push("", "## What's next", "");
-    o.push(r !== undefined ? r : s !== undefined ? `finish: ${s}` : "All tasks completed.");
+    lines.push("", "## What's next", "");
+    lines.push(
+      nextTodo !== undefined
+        ? nextTodo
+        : currentTodo !== undefined
+          ? `finish: ${currentTodo}`
+          : "All tasks completed.",
+    );
   }
-  o.push(
+  lines.push(
     "",
     "---",
     "",
     "Don't want these changes? Resume this session (above), then run",
     "`/rewind` to roll back the turn's tool edits (bash-made changes",
-    `excluded). ${i.ref} holds a full snapshot until this session's`,
+    `excluded). ${note.ref} holds a full snapshot until this session's`,
     "next checkpoint, or for up to ~2 weeks.",
     "",
   );
-  return o.join(`
+  return lines.join(`
 `);
 }
 export { buildCheckpointNote, pruneOldCheckpointRefs };

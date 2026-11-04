@@ -24,11 +24,11 @@ import { resetRemoteSettingsSyncCache } from "../../services/cloudSessions/eligi
 /**
  * 快速路径恢复网关认证（CA 证书、mTLS、托管环境）。
  */
-async function restoreGatewayAuthForFastPath(e, t) {
+async function restoreGatewayAuthForFastPath(session, shouldWarn) {
   applyExtraCACertsFromConfig();
   await Promise.all([loadExtraCACerts(), loadMTLSClientMaterial()]);
   setGatewayRequiredByHostPolicyReader(withoutHostManagedProviderVars);
-  await restoreGatewayAuth(e, t);
+  await restoreGatewayAuth(session, shouldWarn);
   if (getGatewayAuth() || isGatewayRequiredByHostPolicy()) resetRemoteSettingsSyncCache();
 }
 export { restoreGatewayAuthForFastPath };

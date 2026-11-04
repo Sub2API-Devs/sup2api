@@ -27,244 +27,8 @@ import { logForDebugging } from "./debug.js";
 import { getAPIProvider, isActualFirstPartyAnthropicBaseUrl } from "./model/providers.js";
 import { isGatewayUrlAllowed } from "../services/gateway/constants.js";
 import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
+import { runDeferredInits } from "../../runtime/deferred-init.js";
 
-//@ chunk-aepeg2w5.js:592522-592568 placement
-/**
- * 在指定 workload 的 AsyncLocalStorage 中运行回调，用于生成带 workload 的 User-Agent。
- */
-function withWorkloadStorage(e, msg) {
-  return workloadStorage.run(e, () => cliError_2(msg));
-}
-//@ chunk-aepeg2w5.js:592568-593403 facade-exports = getUserAgent (0.584)
-/**
- * API 请求 User-Agent：claude-cli/<版本> (external, <entrypoint>[, agent-sdk/<CLAUDE_AGENT_SDK_VERSION>][, client-app/<CLAUDE_AGENT_SDK_CLIENT_APP>][, workload/<workload>])，entrypoint 默认 cli。
- */
-function getUserAgent(e) {
-  let n = (e?.ownEntrypoint ? undefined : getEntrypointOnRequests()) ?? env.CLAUDE_CODE_ENTRYPOINT ?? "cli";
-  let r = process.env.CLAUDE_AGENT_SDK_VERSION ? `, agent-sdk/${process.env.CLAUDE_AGENT_SDK_VERSION}` : "";
-  let clientApp = env.CLAUDE_AGENT_SDK_CLIENT_APP ? `, client-app/${env.CLAUDE_AGENT_SDK_CLIENT_APP}` : "";
-  let workload = getWorkload();
-  let y = workload ? `, workload/${workload}` : "";
-  return `claude-cli/${
-    {
-      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-      PACKAGE_URL: "@anthropic-ai/claude-code",
-      README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
-      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-      DD_SOURCEMAP_GROUP: "default",
-    }.VERSION
-  } (external, ${n}${r}${clientApp}${y})`;
-}
-//@ chunk-aepeg2w5.js:593403-594216 facade-exports = getMCPUserAgent (0.567)
-/**
- * MCP 请求的 User-Agent（claude-code/<版本>，带 agent-sdk/client-app 后缀）。
- */
-function getMCPUserAgent() {
-  let parts = [];
-  let n = getEntrypointOnRequests() ?? env.CLAUDE_CODE_ENTRYPOINT;
-  if (n) parts.push(n);
-  if (process.env.CLAUDE_AGENT_SDK_VERSION) parts.push(`agent-sdk/${process.env.CLAUDE_AGENT_SDK_VERSION}`);
-  if (env.CLAUDE_AGENT_SDK_CLIENT_APP) parts.push(`client-app/${env.CLAUDE_AGENT_SDK_CLIENT_APP}`);
-  let suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
-  return `claude-code/${
-    {
-      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
-      PACKAGE_URL: "@anthropic-ai/claude-code",
-      README_URL: "https://code.claude.com/docs/en/overview",
-      VERSION: "2.1.316",
-      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
-      BUILD_TIME: "2026-10-30T23:28:13Z",
-      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
-      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
-      DD_SOURCEMAP_GROUP: "default",
-    }.VERSION
-  }${suffix}`;
-}
-//@ chunk-aepeg2w5.js:594216-594294 facade-exports = getWebFetchUserAgent (1)
-/**
- * WebFetch 用 UA：Claude-User (claude-code/<版本>; +https://support.anthropic.com/)。
- */
-function getWebFetchUserAgent() {
-  return `Claude-User (${claudeCodeUserAgent()}; +https://support.anthropic.com/)`;
-}
-//@ chunk-aepeg2w5.js:594294-594774 facade-exports
-/**
- * WIF（workload identity federation，profile 来源）时取联合身份令牌作为认证头。
- */
-async function getAuthHeadersAsync(e = {}) {
-  if (!getAnthropicApiKeySafe() && shouldUseWIFAuth())
-    try {
-      let { getWIFCredentials, getWIFTokenCache } = await import("./chunk-7k61ne1e.js");
-      let [wifTokenCache, wifCredentials] = await Promise.all([getWIFTokenCache(), getWIFCredentials()]);
-      if (wifTokenCache !== null)
-        return {
-          headers: {
-            ...wifCredentials?.extraHeaders,
-            Authorization: `Bearer ${await wifTokenCache.getToken()}`,
-            "anthropic-beta": OAUTH_BETA_HEADER,
-          },
-        };
-    } catch (error) {
-      logForDebugging(
-        `WIF auth header resolution failed: ${error instanceof Error ? error.message : String(error)}`,
-        {
-          level: "error",
-        },
-      );
-      return {
-        headers: {},
-        error: error instanceof Error ? error.message : String(error),
-        reasonCode: "wif_error",
-      };
-    }
-  return getAuthHeaders(e);
-}
-//@ chunk-aepeg2w5.js:594774-595468 facade-exports = getAuthHeaders (0.621)
-/**
- * Anthropic 自有 API（profile、remote settings、sessions 等）的认证头：第三方提供方返回错误；订阅用户用 Bearer OAuth + oauth-2025-04-20 beta；网关不可用；否则 x-api-key，可选回退 ANTHROPIC_AUTH_TOKEN Bearer。
- */
-function getAuthHeaders(e = {}) {
-  if (isUsing3PServices())
-    return {
-      headers: {},
-      error: "Anthropic auth not used on third-party providers",
-      reasonCode: "third_party",
-    };
-  if (isClaudeAISubscriber()) {
-    let oauthTokens = getClaudeAIOAuthTokens();
-    if (!oauthTokens?.accessToken)
-      return {
-        headers: {},
-        error: "No OAuth token available",
-        reasonCode: "no_oauth_token",
-      };
-    return {
-      headers: {
-        Authorization: `Bearer ${oauthTokens.accessToken}`,
-        "anthropic-beta": OAUTH_BETA_HEADER,
-      },
-    };
-  }
-  if (getAPIProvider() === "gateway")
-    return {
-      headers: {},
-      error: "Not available when using a Cloud gateway",
-      reasonCode: "gateway",
-    };
-  let apiKey = getAnthropicApiKeySafe();
-  if (!apiKey) {
-    let envBearerFallbackFor = e.envBearerFallbackFor;
-    let s = envBearerFallbackFor ? effectiveAuthTokenEnv() : undefined;
-    if (
-      s &&
-      envBearerFallbackFor &&
-      isActualFirstPartyAnthropicBaseUrl() &&
-      isGatewayUrlAllowed(envBearerFallbackFor) &&
-      !env.ANTHROPIC_UNIX_SOCKET
-    )
-      return {
-        headers: {
-          Authorization: `Bearer ${s}`,
-        },
-      };
-    return {
-      headers: {},
-      error: "No API key available",
-      reasonCode: "no_api_key",
-    };
-  }
-  return {
-    headers: {
-      "x-api-key": apiKey,
-    },
-  };
-}
-//@ chunk-aepeg2w5.js:595468-595593 facade-exports
-async function countOAuth401Recovery(e, n) {
-  let recoveries = e?.recoveries;
-  if (!recoveries) return n();
-  recoveries.begun++;
-  recoveries.running++;
-  try {
-    return await n();
-  } finally {
-    recoveries.running--;
-  }
-}
-//@ chunk-aepeg2w5.js:595593-595643 facade-exports
-function oauthRefreshLatchStamp(recoveries) {
-  return recoveries.running > 0 ? undefined : recoveries.begun;
-}
-//@ chunk-aepeg2w5.js:595643-595702 facade-exports
-function restoreOAuthRefreshLatch(e, n) {
-  if (n === e.recoveries.begun) e.attempted = false;
-}
-//@ chunk-aepeg2w5.js:595702-596653 facade-exports
-async function withOAuth401Retry(e, n) {
-  let r;
-  if (n?.gateToSessionOAuthCredential) {
-    let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
-    let authHeaders = await getAuthHeadersAsync();
-    r =
-      claudeAIOAuthTokens?.accessToken &&
-      claudeAIOAuthTokens.refreshToken &&
-      authHeaders.headers.Authorization === `Bearer ${claudeAIOAuthTokens.accessToken}`
-        ? claudeAIOAuthTokens.accessToken
-        : undefined;
-  }
-  try {
-    return await e();
-  } catch (error) {
-    if (!axios_default.isAxiosError(error)) throw error;
-    let status = error.response?.status;
-    if (
-      !(
-        status === 401 ||
-        (n?.also403Revoked &&
-          status === 403 &&
-          typeof error.response?.data === "string" &&
-          error.response.data.includes("OAuth token has been revoked"))
-      ) ||
-      n?.signal?.aborted
-    )
-      throw error;
-    if (n?.gateToSessionOAuthCredential) {
-      if (!r) throw error;
-      let accessToken = getClaudeAIOAuthTokens()?.accessToken;
-      if (accessToken && accessToken !== r) return await e();
-      let oauthRefreshLatch = n.oauthRefreshLatch;
-      if (oauthRefreshLatch?.attempted) throw error;
-      if (oauthRefreshLatch) oauthRefreshLatch.attempted = true;
-      let onForcedRefreshOutcome = n.onForcedRefreshOutcome;
-      let P = false;
-      await countOAuth401Recovery(oauthRefreshLatch, () =>
-        handleOAuth401Error(r, n?.credentials, undefined, {
-          onForcedRefreshOutcome:
-            oauthRefreshLatch || onForcedRefreshOutcome
-              ? (L) => {
-                  P = true;
-                  if (oauthRefreshLatch && TOKEN_REFRESH_OUTCOMES_BEFORE_POST.has(L))
-                    oauthRefreshLatch.attempted = false;
-                  onForcedRefreshOutcome?.(L);
-                }
-              : undefined,
-        }),
-      );
-      if (!P) onForcedRefreshOutcome?.(undefined);
-      let accessToken_2 = getClaudeAIOAuthTokens()?.accessToken;
-      if (!accessToken_2 || accessToken_2 === r) throw error;
-      return await e();
-    }
-    let accessToken = getClaudeAIOAuthTokens()?.accessToken;
-    if (!accessToken) throw error;
-    await handleOAuth401Error(accessToken, n?.credentials);
-    return await e();
-  }
-}
 //@ chunk-zs9sd2e8.js:191-715 placement
 /**
  * 返回 claude-code/<版本> 形式的 User-Agent。
@@ -285,8 +49,8 @@ function claudeCodeUserAgent() {
   }`;
 }
 //@ chunk-zs9sd2e8.js:715-1361 facade-exports
-function getClientPlatform(e = process.env.CLAUDE_CODE_ENTRYPOINT) {
-  switch (e) {
+function getClientPlatform(entrypoint = process.env.CLAUDE_CODE_ENTRYPOINT) {
+  switch (entrypoint) {
     case "claude-vscode":
       return "claude_code_vscode";
     case "remote":
@@ -343,41 +107,282 @@ function setAiAgentEnv() {
   )
     process.env.AI_AGENT = aiAgentEnvValue("harness");
 }
+//@ chunk-aepeg2w5.js:592522-592568 placement
+/**
+ * 在指定 workload 的 AsyncLocalStorage 中运行回调，用于生成带 workload 的 User-Agent。
+ */
+function withWorkloadStorage(storage, msg) {
+  return workloadStorage.run(storage, () => cliError_2(msg));
+}
+//@ chunk-aepeg2w5.js:592568-593403 facade-exports = getUserAgent (0.584)
+/**
+ * API 请求 User-Agent：claude-cli/<版本> (external, <entrypoint>[, agent-sdk/<CLAUDE_AGENT_SDK_VERSION>][, client-app/<CLAUDE_AGENT_SDK_CLIENT_APP>][, workload/<workload>])，entrypoint 默认 cli。
+ */
+function getUserAgent(options) {
+  let entrypoint =
+    (options?.ownEntrypoint ? undefined : getEntrypointOnRequests()) ?? env.CLAUDE_CODE_ENTRYPOINT ?? "cli";
+  let sdkSuffix = process.env.CLAUDE_AGENT_SDK_VERSION
+    ? `, agent-sdk/${process.env.CLAUDE_AGENT_SDK_VERSION}`
+    : "";
+  let clientApp = env.CLAUDE_AGENT_SDK_CLIENT_APP ? `, client-app/${env.CLAUDE_AGENT_SDK_CLIENT_APP}` : "";
+  let workload = getWorkload();
+  let workloadSuffix = workload ? `, workload/${workload}` : "";
+  return `claude-cli/${
+    {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    }.VERSION
+  } (external, ${entrypoint}${sdkSuffix}${clientApp}${workloadSuffix})`;
+}
+//@ chunk-aepeg2w5.js:593403-594216 facade-exports = getMCPUserAgent (0.567)
+/**
+ * MCP 请求的 User-Agent（claude-code/<版本>，带 agent-sdk/client-app 后缀）。
+ */
+function getMCPUserAgent() {
+  let parts = [];
+  let entrypoint = getEntrypointOnRequests() ?? env.CLAUDE_CODE_ENTRYPOINT;
+  if (entrypoint) parts.push(entrypoint);
+  if (process.env.CLAUDE_AGENT_SDK_VERSION) parts.push(`agent-sdk/${process.env.CLAUDE_AGENT_SDK_VERSION}`);
+  if (env.CLAUDE_AGENT_SDK_CLIENT_APP) parts.push(`client-app/${env.CLAUDE_AGENT_SDK_CLIENT_APP}`);
+  let suffix = parts.length > 0 ? ` (${parts.join(", ")})` : "";
+  return `claude-code/${
+    {
+      ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
+      PACKAGE_URL: "@anthropic-ai/claude-code",
+      README_URL: "https://code.claude.com/docs/en/overview",
+      VERSION: "2.1.316",
+      FEEDBACK_CHANNEL: "https://github.com/anthropics/claude-code/issues",
+      BUILD_TIME: "2026-10-30T23:28:13Z",
+      GIT_SHA: "cd7ceb459c6864567b16a11f60101b24421475c1",
+      HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
+      DD_SOURCEMAP_GROUP: "default",
+    }.VERSION
+  }${suffix}`;
+}
+//@ chunk-aepeg2w5.js:594216-594294 facade-exports = getWebFetchUserAgent (1)
+/**
+ * WebFetch 用 UA：Claude-User (claude-code/<版本>; +https://support.anthropic.com/)。
+ */
+function getWebFetchUserAgent() {
+  return `Claude-User (${claudeCodeUserAgent()}; +https://support.anthropic.com/)`;
+}
+//@ chunk-aepeg2w5.js:594294-594774 facade-exports
+/**
+ * WIF（workload identity federation，profile 来源）时取联合身份令牌作为认证头。
+ */
+async function getAuthHeadersAsync(options = {}) {
+  if (!getAnthropicApiKeySafe() && shouldUseWIFAuth())
+    try {
+      let { getWIFCredentials, getWIFTokenCache } =
+        await import("../../vendor/@anthropic-ai/sdk/lib/credentials/TokenCache.lazy.js");
+      let [wifTokenCache, wifCredentials] = await Promise.all([getWIFTokenCache(), getWIFCredentials()]);
+      if (wifTokenCache !== null)
+        return {
+          headers: {
+            ...wifCredentials?.extraHeaders,
+            Authorization: `Bearer ${await wifTokenCache.getToken()}`,
+            "anthropic-beta": OAUTH_BETA_HEADER,
+          },
+        };
+    } catch (error) {
+      logForDebugging(
+        `WIF auth header resolution failed: ${error instanceof Error ? error.message : String(error)}`,
+        {
+          level: "error",
+        },
+      );
+      return {
+        headers: {},
+        error: error instanceof Error ? error.message : String(error),
+        reasonCode: "wif_error",
+      };
+    }
+  return getAuthHeaders(options);
+}
+//@ chunk-aepeg2w5.js:594774-595468 facade-exports = getAuthHeaders (0.621)
+/**
+ * Anthropic 自有 API（profile、remote settings、sessions 等）的认证头：第三方提供方返回错误；订阅用户用 Bearer OAuth + oauth-2025-04-20 beta；网关不可用；否则 x-api-key，可选回退 ANTHROPIC_AUTH_TOKEN Bearer。
+ */
+function getAuthHeaders(options = {}) {
+  if (isUsing3PServices())
+    return {
+      headers: {},
+      error: "Anthropic auth not used on third-party providers",
+      reasonCode: "third_party",
+    };
+  if (isClaudeAISubscriber()) {
+    let oauthTokens = getClaudeAIOAuthTokens();
+    if (!oauthTokens?.accessToken)
+      return {
+        headers: {},
+        error: "No OAuth token available",
+        reasonCode: "no_oauth_token",
+      };
+    return {
+      headers: {
+        Authorization: `Bearer ${oauthTokens.accessToken}`,
+        "anthropic-beta": OAUTH_BETA_HEADER,
+      },
+    };
+  }
+  if (getAPIProvider() === "gateway")
+    return {
+      headers: {},
+      error: "Not available when using a Cloud gateway",
+      reasonCode: "gateway",
+    };
+  let apiKey = getAnthropicApiKeySafe();
+  if (!apiKey) {
+    let envBearerFallbackFor = options.envBearerFallbackFor;
+    let fallbackBearer = envBearerFallbackFor ? effectiveAuthTokenEnv() : undefined;
+    if (
+      fallbackBearer &&
+      envBearerFallbackFor &&
+      isActualFirstPartyAnthropicBaseUrl() &&
+      isGatewayUrlAllowed(envBearerFallbackFor) &&
+      !env.ANTHROPIC_UNIX_SOCKET
+    )
+      return {
+        headers: {
+          Authorization: `Bearer ${fallbackBearer}`,
+        },
+      };
+    return {
+      headers: {},
+      error: "No API key available",
+      reasonCode: "no_api_key",
+    };
+  }
+  return {
+    headers: {
+      "x-api-key": apiKey,
+    },
+  };
+}
+//@ chunk-aepeg2w5.js:595468-595593 facade-exports
+async function countOAuth401Recovery(latch, fn) {
+  let recoveries = latch?.recoveries;
+  if (!recoveries) return fn();
+  recoveries.begun++;
+  recoveries.running++;
+  try {
+    return await fn();
+  } finally {
+    recoveries.running--;
+  }
+}
+//@ chunk-aepeg2w5.js:595593-595643 facade-exports
+function oauthRefreshLatchStamp(recoveries) {
+  return recoveries.running > 0 ? undefined : recoveries.begun;
+}
+//@ chunk-aepeg2w5.js:595643-595702 facade-exports
+function restoreOAuthRefreshLatch(options, begunCount) {
+  if (begunCount === options.recoveries.begun) options.attempted = false;
+}
+//@ chunk-aepeg2w5.js:595702-596653 facade-exports
+async function withOAuth401Retry(fn, options) {
+  let gatedAccessToken;
+  if (options?.gateToSessionOAuthCredential) {
+    let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
+    let authHeaders = await getAuthHeadersAsync();
+    gatedAccessToken =
+      claudeAIOAuthTokens?.accessToken &&
+      claudeAIOAuthTokens.refreshToken &&
+      authHeaders.headers.Authorization === `Bearer ${claudeAIOAuthTokens.accessToken}`
+        ? claudeAIOAuthTokens.accessToken
+        : undefined;
+  }
+  try {
+    return await fn();
+  } catch (error) {
+    if (!axios_default.isAxiosError(error)) throw error;
+    let status = error.response?.status;
+    if (
+      !(
+        status === 401 ||
+        (options?.also403Revoked &&
+          status === 403 &&
+          typeof error.response?.data === "string" &&
+          error.response.data.includes("OAuth token has been revoked"))
+      ) ||
+      options?.signal?.aborted
+    )
+      throw error;
+    if (options?.gateToSessionOAuthCredential) {
+      if (!gatedAccessToken) throw error;
+      let accessToken = getClaudeAIOAuthTokens()?.accessToken;
+      if (accessToken && accessToken !== gatedAccessToken) return await fn();
+      let oauthRefreshLatch = options.oauthRefreshLatch;
+      if (oauthRefreshLatch?.attempted) throw error;
+      if (oauthRefreshLatch) oauthRefreshLatch.attempted = true;
+      let onForcedRefreshOutcome = options.onForcedRefreshOutcome;
+      let outcomeReported = false;
+      await countOAuth401Recovery(oauthRefreshLatch, () =>
+        handleOAuth401Error(gatedAccessToken, options?.credentials, undefined, {
+          onForcedRefreshOutcome:
+            oauthRefreshLatch || onForcedRefreshOutcome
+              ? (outcome) => {
+                  outcomeReported = true;
+                  if (oauthRefreshLatch && TOKEN_REFRESH_OUTCOMES_BEFORE_POST.has(outcome))
+                    oauthRefreshLatch.attempted = false;
+                  onForcedRefreshOutcome?.(outcome);
+                }
+              : undefined,
+        }),
+      );
+      if (!outcomeReported) onForcedRefreshOutcome?.(undefined);
+      let accessToken_2 = getClaudeAIOAuthTokens()?.accessToken;
+      if (!accessToken_2 || accessToken_2 === gatedAccessToken) throw error;
+      return await fn();
+    }
+    let accessToken = getClaudeAIOAuthTokens()?.accessToken;
+    if (!accessToken) throw error;
+    await handleOAuth401Error(accessToken, options?.credentials);
+    return await fn();
+  }
+}
 //@ chunk-bvbc7k4d.js:191-204 placement
 /**
  * 排空响应体的默认超时（毫秒）。
  */
 var DEFAULT_DRAIN_TIMEOUT_MS = 3000;
 //@ chunk-bvbc7k4d.js:204-243 placement
-function cancelBody(t) {
-  t.cancel().catch(() => {});
+function cancelBody(body) {
+  body.cancel().catch(() => {});
 }
 //@ chunk-bvbc7k4d.js:243-552 placement
 /**
  * 读完并丢弃响应体（可设字节上限与超时，超过时取消读取），用于释放连接。
  */
-async function drainResponseBody(t, { maxBytes: o = 65536, timeoutMs: i } = {}) {
-  let e;
+async function drainResponseBody(response, { maxBytes = 65536, timeoutMs } = {}) {
+  let timeoutHandle;
   try {
-    let reader = t.body?.getReader();
+    let reader = response.body?.getReader();
     if (!reader) return;
-    if (i !== undefined) {
-      e = setTimeout(cancelBody, i, reader);
-      e.unref?.();
+    if (timeoutMs !== undefined) {
+      timeoutHandle = setTimeout(cancelBody, timeoutMs, reader);
+      timeoutHandle.unref?.();
     }
-    let r = o;
+    let remaining = maxBytes;
     for (;;) {
-      let { done: a, value: c } = await reader.read();
-      if (a) return;
-      r -= c.byteLength;
-      if (r < 0) {
+      let { done, value: chunk } = await reader.read();
+      if (done) return;
+      remaining -= chunk.byteLength;
+      if (remaining < 0) {
         await reader.cancel();
         return;
       }
     }
   } catch {
   } finally {
-    if (e !== undefined) clearTimeout(e);
+    if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
   }
 }
 //@ chunk-9vvvg0d3.js:24960-25161 fingerprint = withOAuth401Retry (0.79)
@@ -394,6 +399,10 @@ function withOAuth401Retry_2(error) {
     error.response.data.includes("OAuth token has been revoked")
   );
 }
+
+// The import cycle this module closes (3677 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/utils/http.js");
 export {
   drainResponseBody,
   getClientPlatform,

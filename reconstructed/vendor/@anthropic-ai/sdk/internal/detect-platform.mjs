@@ -135,6 +135,6 @@ var normalizePlatform = (platform) => {
   if (platform) return `Other:${platform}`;
   return "Unknown";
 };
-var H;
-var jur = () => H ?? (H = getPlatformProperties());
-export { jur, isRunningInBrowser };
+var platformCache;
+var getPlatform = () => platformCache ?? (platformCache = getPlatformProperties());
+export { getPlatform, isRunningInBrowser };

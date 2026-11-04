@@ -20,10 +20,13 @@ var INVISIBLE_CHARS_RE = /[\p{Cf}\p{Cs}\p{Zl}\p{Zp}\p{Variation_Selector}]+/gu;
 /**
  * 清洗后台任务描述：去 ANSI/不可见字符、压缩空白并按显示宽度截断。
  */
-function cleanTaskDescription(n) {
-  let e = n === undefined ? "" : collapseWhitespace(stripAnsi(n).replace(INVISIBLE_CHARS_RE, " "));
-  return e === ""
+function cleanTaskDescription(description) {
+  let cleaned =
+    description === undefined
+      ? ""
+      : collapseWhitespace(stripAnsi(description).replace(INVISIBLE_CHARS_RE, " "));
+  return cleaned === ""
     ? undefined
-    : truncateToWidth(truncateToLength(e, MAX_DESCRIPTION_INPUT_CHARS), MAX_DESCRIPTION_DISPLAY_CHARS);
+    : truncateToWidth(truncateToLength(cleaned, MAX_DESCRIPTION_INPUT_CHARS), MAX_DESCRIPTION_DISPLAY_CHARS);
 }
 export { cleanTaskDescription };

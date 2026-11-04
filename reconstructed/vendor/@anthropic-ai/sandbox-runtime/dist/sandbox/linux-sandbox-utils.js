@@ -22,14 +22,14 @@ import {
   getDangerousDirectories,
   normalizeCaseForComparison,
   isAbsenceErrno,
-  xwn,
+  workingDirectory,
   nameLocation,
-  zot,
+  coversChildPath,
   normalizePathForSandbox,
   isSymlinkOutsideBoundary,
   properAncestors,
   encodeSandboxedCommand,
-  ITt,
+  orDefault,
   buildPosixGitSafeDirEnv,
   generateProxyEnvVars,
 } from "./sandbox-utils.js";
@@ -38,9 +38,10 @@ import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 import { ripGrep, RipgrepError } from "../utils/ripgrep.js";
 import { quote } from "../utils/shell-quote.js";
 import { whichSync } from "../utils/which.js";
-import { vor } from "./generate-seccomp-filter.js";
+import { getApplySeccompBinaryPath } from "./generate-seccomp-filter.js";
 import { readNamesOf, writeNamesOf } from "./path-entries.js";
 import { buildJavaToolOptions } from "./java-proxy-agent.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-fq0cr76a.js:723589-723598 esm-layout
 var DEFAULT_MANDATORY_DENY_SEARCH_DEPTH = 3;
@@ -142,12 +143,15 @@ function findFirstNonExistentComponent(targetPath) {
 //@ chunk-fq0cr76a.js:724867-724874 esm-layout
 var MountPointKind;
 //@ chunk-fq0cr76a.js:724874-724980 esm-fingerprint
-(function (MountPointKind) {
-  MountPointKind.File = "file";
-  MountPointKind.Directory = "directory";
-  MountPointKind.Held = "held";
-  MountPointKind.Unmakeable = "unmakeable";
-})(MountPointKind || (MountPointKind = {}));
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:724874", () => {
+  (function (MountPointKind) {
+    MountPointKind.File = "file";
+    MountPointKind.Directory = "directory";
+    MountPointKind.Held = "held";
+    MountPointKind.Unmakeable = "unmakeable";
+  })(MountPointKind || (MountPointKind = {}));
+});
 //@ chunk-fq0cr76a.js:724980-725007 esm-fingerprint
 var O_PATH = 2097152;
 var V9FS_MAGIC = 16914839;
@@ -200,11 +204,14 @@ function makeableMountPoint(dest, wanted) {
 //@ chunk-fq0cr76a.js:725796-725803 esm-layout
 var DotGitKind;
 //@ chunk-fq0cr76a.js:725803-725887 esm-fingerprint
-(function (DotGitKind) {
-  DotGitKind.Directory = "directory";
-  DotGitKind.File = "file";
-  DotGitKind.Absent = "absent";
-})(DotGitKind || (DotGitKind = {}));
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:725803", () => {
+  (function (DotGitKind) {
+    DotGitKind.Directory = "directory";
+    DotGitKind.File = "file";
+    DotGitKind.Absent = "absent";
+  })(DotGitKind || (DotGitKind = {}));
+});
 //@ chunk-fq0cr76a.js:725887-725987 esm-fingerprint
 function dotGitKindAt(dotGitPath) {
   try {
@@ -333,8 +340,11 @@ async function linuxGetMandatoryDenyPaths(
   return [...new Set(denyPaths)];
 }
 //@ chunk-fq0cr76a.js:727833-727851 esm-layout
-var bwrapMountPoints = new Set();
+var bwrapMountPoints; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
 var emptyMountSourceDir;
+deferInit("chunk-fq0cr76a.js:727833", () => {
+  bwrapMountPoints = new Set();
+});
 //@ chunk-fq0cr76a.js:727851-728223 esm-fingerprint
 function ensureEmptyMountSourceDir() {
   if (emptyMountSourceDir !== undefined) {
@@ -425,11 +435,18 @@ function maxArgStrlen() {
   return linuxMaxArgStrlen;
 }
 //@ chunk-fq0cr76a.js:729578-729650 esm-fingerprint
-var ARG_HEADROOM_BYTES = 4096;
-var BWRAP_MAX_ARGS = 9000;
-var BWRAP_ARGS_FD = 9;
-var O_TMPFILE = 4194304 | fsModule_2.constants.O_DIRECTORY;
-var bwrapArgsFds = new Set();
+var ARG_HEADROOM_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BWRAP_MAX_ARGS;
+var BWRAP_ARGS_FD;
+var O_TMPFILE;
+var bwrapArgsFds;
+deferInit("chunk-fq0cr76a.js:729578", () => {
+  ARG_HEADROOM_BYTES = 4096;
+  BWRAP_MAX_ARGS = 9000;
+  BWRAP_ARGS_FD = 9;
+  O_TMPFILE = 4194304 | fsModule_2.constants.O_DIRECTORY;
+  bwrapArgsFds = new Set();
+});
 //@ chunk-fq0cr76a.js:729650-729702 esm-fingerprint
 function bwrapArgsProfilePath(fd) {
   return `/proc/${process.pid}/fd/${fd}`;
@@ -557,21 +574,21 @@ function renderBwrapInvocation(bwrapBinary, bwrapArgs, mounts) {
 var activeSandboxCount = 0;
 var forcedCleanups = 0;
 var exitHandlerRegistered = false;
-var JR = false;
+var cleanupInstalled = false;
 //@ chunk-fq0cr76a.js:732580-732600 esm-layout
-function ZE() {
+function markExitCleanupNeeded() {
   exitHandlerRegistered = true;
 }
 //@ chunk-fq0cr76a.js:732600-732678 esm-fingerprint
-function A8() {
-  if (JR) return;
+function registerExitCleanupHandler() {
+  if (cleanupInstalled) return;
   process.on("exit", () => {
-    ZE();
+    markExitCleanupNeeded();
     cleanupBwrapMountPoints({
       force: true,
     });
   });
-  JR = true;
+  cleanupInstalled = true;
 }
 //@ chunk-fq0cr76a.js:732678-733667 esm-fingerprint
 function cleanupBwrapMountPoints(opts) {
@@ -650,7 +667,7 @@ function checkLinuxDependencies(opts) {
   if (socatPath) {
     if (!isExecutable(socatPath)) errors.push(`socat not executable at ${socatPath}`);
   } else if (whichSync("socat") === null) errors.push("socat not installed");
-  if (!seccompConfig?.argv0 && vor(seccompConfig?.applyPath) === null)
+  if (!seccompConfig?.argv0 && getApplySeccompBinaryPath(seccompConfig?.applyPath) === null)
     warnings.push("seccomp not available - unix socket access not restricted");
   let uid0Error = uid0SandboxError({
     euid: process.geteuid?.(),
@@ -666,8 +683,12 @@ function checkLinuxDependencies(opts) {
   };
 }
 //@ chunk-fq0cr76a.js:734347-734373 esm-fingerprint
-var MIN_COMMAND_VERSION = "0.5.0";
-var commandVersionCache = new Map();
+var MIN_COMMAND_VERSION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var commandVersionCache;
+deferInit("chunk-fq0cr76a.js:734347", () => {
+  MIN_COMMAND_VERSION = "0.5.0";
+  commandVersionCache = new Map();
+});
 //@ chunk-fq0cr76a.js:734373-734622 esm-fingerprint
 /**
  * 同步执行 cmd --version 取版本号（缓存）。
@@ -719,7 +740,10 @@ function uid0SandboxError({ euid, hasSetfcap, bwrap }) {
     : `${CAP_SETFCAP_MISSING_MESSAGE} (bubblewrap: ${refusal})`;
 }
 //@ chunk-fq0cr76a.js:735306-735321 esm-layout
-var uid0UserNamespaceProbes = new Map();
+var uid0UserNamespaceProbes; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:735306", () => {
+  uid0UserNamespaceProbes = new Map();
+});
 //@ chunk-fq0cr76a.js:735321-735642 esm-fingerprint
 function probeUid0UserNamespace(bwrap) {
   let cached = uid0UserNamespaceProbes.get(bwrap);
@@ -849,7 +873,10 @@ function helperEnvironmentPrefix(allowNestedUserNamespaces) {
   return `${NESTED_USERNS_ENV}=${allowNestedUserNamespaces ? "1" : "0"} `;
 }
 //@ chunk-fq0cr76a.js:737441-737456 esm-layout
-var disableUsernsProbes = new Map();
+var disableUsernsProbes; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:737441", () => {
+  disableUsernsProbes = new Map();
+});
 //@ chunk-fq0cr76a.js:737456-737792 esm-fingerprint
 function bwrapCanDisableUserns(bwrap) {
   let cached = disableUsernsProbes.get(bwrap);
@@ -880,7 +907,7 @@ function resolveApplySeccompPrefix(applyPath, argv0) {
     if (!applyPath) throw Error("seccompConfig.argv0 requires seccompConfig.applyPath");
     return `ARGV0=${quote([argv0])} ${quote([applyPath])} `;
   }
-  let binary = vor(applyPath);
+  let binary = getApplySeccompBinaryPath(applyPath);
   return binary ? `${quote([binary])} ` : undefined;
 }
 //@ chunk-fq0cr76a.js:737982-738725 esm-fingerprint
@@ -912,7 +939,7 @@ function buildSandboxCommand(
 ) {
   let shellPath = shell || "bash";
   let socat = quote([socatPath ?? "socat"]);
-  let w = "fork,reuseaddr,backlog=4096";
+  let socatListenOptions = "fork,reuseaddr,backlog=4096";
   let relay = (port, socketPath) =>
     `{ ${socat} TCP6-LISTEN:${port},ipv6only=0,fork,reuseaddr,backlog=4096 UNIX-CONNECT:${socketPath} || exec ${socat} TCP4-LISTEN:${port},fork,reuseaddr,backlog=4096 UNIX-CONNECT:${socketPath}; } >/dev/null 2>&1 &`;
   let socatCommands = [
@@ -1067,7 +1094,7 @@ async function generateFilesystemArgs(
   abortSignal,
 ) {
   let args = [];
-  let startedIn = xwn();
+  let startedIn = workingDirectory();
   let allowedWritePaths = [];
   let denyWriteArgs = [];
   let mandatoryDenyArgsStart = 1 / 0;
@@ -1114,7 +1141,7 @@ async function generateFilesystemArgs(
     allowedWritePaths.some((allowedPath) => isAtOrUnder(candidatePath, allowedPath));
   let meetsAnyAllowedWritePath = (candidatePath) =>
     isWithinAnyAllowedWritePath(candidatePath) ||
-    allowedWritePaths.some((allowedPath) => zot(allowedPath, candidatePath));
+    allowedWritePaths.some((allowedPath) => coversChildPath(allowedPath, candidatePath));
   let isAllowedWriteRoot = (candidatePath) => allowedWritePaths.includes(candidatePath);
   let readAllowPathsMemo;
   let readAllowPaths = () =>
@@ -1188,7 +1215,11 @@ async function generateFilesystemArgs(
       for (let child of children) {
         if (KERNEL_TOP_LEVEL_DIRS.includes(`/${child}`)) continue;
         let childLocation = canonicalForm("/" + child);
-        if (readExceptionsTo(isCredential).some(($s) => isAtOrUnder(childLocation, nameLocationOf($s)))) {
+        if (
+          readExceptionsTo(isCredential).some((allowEntry) =>
+            isAtOrUnder(childLocation, nameLocationOf(allowEntry)),
+          )
+        ) {
           logForDebugging_2(`[Sandbox Linux] Root deny expansion skips /${child}: covered by allowRead`);
           continue;
         }
@@ -1307,7 +1338,7 @@ async function generateFilesystemArgs(
         abortSignal,
       )),
     ];
-    if (xwn() !== startedIn) throw new WorkingDirectoryChanged();
+    if (workingDirectory() !== startedIn) throw new WorkingDirectoryChanged();
     let seenDenyWrite = new Set();
     let denyPathAncestors = new Set();
     for (let pathPattern of denyPaths) {
@@ -1345,7 +1376,7 @@ async function generateFilesystemArgs(
         !vetoInputs.usable ||
         vetoInputs.allowedWritePathsBothForms.some(
           (writePath) =>
-            zot(writePath, denyDir) &&
+            coversChildPath(writePath, denyDir) &&
             vetoInputs.prospectiveReadDenyTmpfsDirsBothForms.some((tmpfsDir) =>
               isAtOrUnder(writePath, tmpfsDir),
             ),
@@ -1360,12 +1391,12 @@ async function generateFilesystemArgs(
     };
     let readOnlyDenyDirs = [...readOnlyDenyDirSpellings.keys()];
     let uncoveredWritePaths = allowedWritePaths.filter(
-      (allowedPath) => !readOnlyDenyDirs.some((denyDir) => zot(allowedPath, denyDir)),
+      (allowedPath) => !readOnlyDenyDirs.some((denyDir) => coversChildPath(allowedPath, denyDir)),
     );
     let coveredBySafeReadOnlyDenyDir = (candidate) => {
       let covered = false;
       for (let denyDir of readOnlyDenyDirs) {
-        if (!zot(candidate, denyDir)) continue;
+        if (!coversChildPath(candidate, denyDir)) continue;
         if (coveringDirIsUnsafe(denyDir)) {
           if (denyDir === "/") {
             let vetoInputs = getStubSkipVetoInputs();
@@ -1419,7 +1450,7 @@ async function generateFilesystemArgs(
       if (kind === MountPointKind.Unmakeable) unmakeableDenyDests.add(dest);
       else {
         bwrapMountPoints.add(dest);
-        A8();
+        registerExitCleanupHandler();
       }
       return {
         dest,
@@ -1497,7 +1528,7 @@ async function generateFilesystemArgs(
           continue;
         }
         for (let buried of allowedWritePaths)
-          if (zot(buried, normalizedPath))
+          if (coversChildPath(buried, normalizedPath))
             logForDebugging_2(
               `[Sandbox Linux] Write deny ${normalizedPath} covers allowed write path ${buried}; ${buried} will be read-only`,
               {
@@ -1691,7 +1722,7 @@ async function generateFilesystemArgs(
     if (rawDest !== dest) emittedDenyWriteDests.push(rawDest);
   }
   for (let unit of readDenyTmpfsUnits) {
-    let reExposingDest = emittedDenyWriteDests.find((dest) => zot(unit.landing, dest));
+    let reExposingDest = emittedDenyWriteDests.find((dest) => coversChildPath(unit.landing, dest));
     if (reExposingDest !== undefined) {
       logForDebugging_2(
         `[Sandbox Linux] Re-applying denyRead tmpfs re-exposed by denyWrite bind: ${unit.landing}`,
@@ -1772,7 +1803,7 @@ async function wrapCommandWithSandboxLinux(params) {
     return command;
   activeSandboxCount++;
   let countedAfter = forcedCleanups;
-  let attributionKey = encodeSandboxedCommand(ITt(command, commandId));
+  let attributionKey = encodeSandboxedCommand(orDefault(command, commandId));
   let bwrapArgs = ["--new-session", "--die-with-parent"];
   let applySeccompPrefix;
   try {
@@ -1937,17 +1968,17 @@ async function wrapCommandWithSandboxLinux(params) {
   }
 }
 //@ chunk-yf82ynbr.js:10481-10512 esm-fingerprint
-var Be = ["/proc", "/sys", "/dev"];
+var sandboxPaths = ["/proc", "/sys", "/dev"];
 export {
   capabilityArgs,
   processHasBoundingCapability,
   CAP_SETFCAP,
-  ZE,
+  markExitCleanupNeeded,
   linuxGetCwdMandatoryDenyPaths,
   initializeLinuxNetworkBridge,
   checkLinuxDependencies,
   wrapCommandWithSandboxLinux,
   WorkingDirectoryChanged,
   cleanupBwrapMountPoints,
-  Be,
+  sandboxPaths,
 };

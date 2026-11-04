@@ -27,8 +27,15 @@ import {
   setInferenceProfileBackingModel,
 } from "../../bootstrap/state.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-jhrww53q.js:73703-73797 fingerprint = BEDROCK_REGION_PREFIXES (0.782)
+/**
+ * ANTHROPIC_BEDROCK_REGION_PREFIX 的可选值。
+ */
+var BEDROCK_REGION_PREFIXES = ["us", "eu", "apac", "jp", "au", "us-gov", "global"];
+var BEDROCK_REGION_PREFIX_ENV_VALUES = ["us", "eu", "apac", "jp", "au", "global"];
 //@ chunk-aepeg2w5.js:130738-131314 fingerprint = getBedrockInferenceProfiles (0.734)
 /**
  * 分页列出 SYSTEM_DEFINED 推理配置文件（ListInferenceProfilesCommand，8 秒超时）。
@@ -36,7 +43,7 @@ import { Re } from "../../../runtime/bun-runtime.js";
 async function getBedrockInferenceProfiles_2() {
   let [client, { ListInferenceProfilesCommand }] = await Promise.all([
     createBedrockClient(),
-    import("./chunk-0dmzgg46.js"),
+    import("../../../vendor/@aws-sdk/client-bedrock/dist-cjs/index.js"),
   ]);
   let allProfiles = [];
   let nextToken;
@@ -72,34 +79,34 @@ async function getBedrockInferenceProfiles_2() {
 /**
  * profile id 中含模型 id，且其后不是继续的版本数字（避免 4-5 匹配 4-50）。
  */
-function containsModelIdAtBoundary(e, n) {
-  let r = 0;
+function containsModelIdAtBoundary(text, modelId) {
+  let fromIndex = 0;
   for (;;) {
-    let index = e.indexOf(n, r);
+    let index = text.indexOf(modelId, fromIndex);
     if (index === -1) return false;
-    if (!/^(?:\d|-\d{1,2}(?!\d))/.test(e.slice(index + n.length))) return true;
-    r = index + 1;
+    if (!/^(?:\d|-\d{1,2}(?!\d))/.test(text.slice(index + modelId.length))) return true;
+    fromIndex = index + 1;
   }
 }
 //@ chunk-aepeg2w5.js:131458-131582 file-local
 /**
  * 在 profile 列表里找包含模型 id 的项，优先指定区域前缀。
  */
-function findFirstMatch(e, firstParty, bedrockRegionPrefix) {
-  if (bedrockRegionPrefix) {
-    let found = e.find(
-      (h) => h.startsWith(`${bedrockRegionPrefix}.`) && containsModelIdAtBoundary(h, firstParty),
+function findFirstMatch(profiles, modelId, regionPrefix) {
+  if (regionPrefix) {
+    let found = profiles.find(
+      (profile) => profile.startsWith(`${regionPrefix}.`) && containsModelIdAtBoundary(profile, modelId),
     );
     if (found) return found;
   }
-  return e.find((s) => containsModelIdAtBoundary(s, firstParty)) ?? null;
+  return profiles.find((profile) => containsModelIdAtBoundary(profile, modelId)) ?? null;
 }
 //@ chunk-aepeg2w5.js:131582-132484 fingerprint = createBedrockClient (0.612)
 /**
  * 创建 Bedrock 控制面客户端（区域、ANTHROPIC_BEDROCK_BASE_URL 端点、代理配置；CLAUDE_CODE_SKIP_BEDROCK_AUTH 时跳过签名）。
  */
 async function createBedrockClient() {
-  let { BedrockClient } = await import("./chunk-0dmzgg46.js");
+  let { BedrockClient } = await import("../../../vendor/@aws-sdk/client-bedrock/dist-cjs/index.js");
   let awsRegion = await resolveAwsRegion();
   let skipAuth = env.CLAUDE_CODE_SKIP_BEDROCK_AUTH;
   let awsClientProxyConfig = await getAWSClientProxyConfig({
@@ -143,7 +150,7 @@ async function createBedrockClient() {
           sessionToken: cachedCredentials.sessionToken,
         };
       else if (!env.CLAUDE_CODE_SKIP_AWS_CRED_CACHE)
-        clientConfig.credentials = async (S) => (await getDefaultAwsProviderChain(awsRegion))(S);
+        clientConfig.credentials = async (options) => (await getDefaultAwsProviderChain(awsRegion))(options);
     }
   }
   return new BedrockClient(clientConfig);
@@ -153,7 +160,8 @@ async function createBedrockClient() {
  * 创建 Bedrock Runtime 客户端（同上，bedrock-runtime 端点）。
  */
 async function createBedrockRuntimeClient() {
-  let { BedrockRuntimeClient } = await import("./chunk-nbmkwhd6.js");
+  let { BedrockRuntimeClient } =
+    await import("../../../vendor/@aws-sdk/client-bedrock-runtime/dist-cjs/index.js");
   let awsRegion = await resolveAwsRegion();
   let skipAuth = env.CLAUDE_CODE_SKIP_BEDROCK_AUTH;
   let awsClientProxyConfig = await getAWSClientProxyConfig({
@@ -197,7 +205,7 @@ async function createBedrockRuntimeClient() {
           sessionToken: cachedCredentials.sessionToken,
         };
       else if (!env.CLAUDE_CODE_SKIP_AWS_CRED_CACHE)
-        clientConfig.credentials = async (S) => (await getDefaultAwsProviderChain(awsRegion))(S);
+        clientConfig.credentials = async (options) => (await getDefaultAwsProviderChain(awsRegion))(options);
     }
   }
   return new BedrockRuntimeClient(clientConfig);
@@ -206,32 +214,32 @@ async function createBedrockRuntimeClient() {
 /**
  * 取 Bedrock 推理配置的底层模型（缓存）。
  */
-function getInferenceProfileBackingModel(e) {
+function getInferenceProfileBackingModel(modelId) {
   if (getAPIProvider() !== "bedrock") return Promise.resolve(null);
-  let profileId = stripAnyVersatileSuffix(e);
+  let profileId = stripAnyVersatileSuffix(modelId);
   let inferenceProfileBackingModels = getProviderState().providerCache.inferenceProfileBackingModels;
-  let s = inferenceProfileBackingModels.get(profileId);
-  if (s === undefined) {
-    s = getInferenceProfileBackingModel_2(profileId);
-    inferenceProfileBackingModels.set(profileId, s);
+  let pending = inferenceProfileBackingModels.get(profileId);
+  if (pending === undefined) {
+    pending = getInferenceProfileBackingModel_2(profileId);
+    inferenceProfileBackingModels.set(profileId, pending);
   }
-  return s;
+  return pending;
 }
 //@ chunk-aepeg2w5.js:133823-133890 placement
 /**
  * 判断字符串是否包含 application-inference-profile（未解析的推理配置）。
  */
-function isInferenceProfileArn(e) {
-  return e.includes("application-inference-profile");
+function isInferenceProfileArn(arn) {
+  return arn.includes("application-inference-profile");
 }
 //@ chunk-aepeg2w5.js:133890-133950 placement
 /**
  * 是否为未解析的推理配置 ARN。
  */
-function isUnresolvedInferenceProfile(e) {
+function isUnresolvedInferenceProfile(modelId) {
   return (
-    isInferenceProfileArn(e) &&
-    typeof getInferenceProfileBackingModelCached(stripAnyVersatileSuffix(e)) !== "string"
+    isInferenceProfileArn(modelId) &&
+    typeof getInferenceProfileBackingModelCached(stripAnyVersatileSuffix(modelId)) !== "string"
   );
 }
 //@ chunk-aepeg2w5.js:133950-134434 fingerprint = getInferenceProfileBackingModel (0.641)
@@ -239,11 +247,11 @@ function isUnresolvedInferenceProfile(e) {
  * 查询推理配置文件背后的模型 id（GetInferenceProfileCommand，取第一个 modelArn 的最后一段）。
  */
 async function getInferenceProfileBackingModel_2(profileId) {
-  let n = null;
+  let backingModel = null;
   try {
     let [bedrockClient, { GetInferenceProfileCommand }] = await Promise.all([
       createBedrockClient(),
-      import("./chunk-0dmzgg46.js"),
+      import("../../../vendor/@aws-sdk/client-bedrock/dist-cjs/index.js"),
     ]);
     let modelArn = (
       await bedrockClient.send(
@@ -257,7 +265,7 @@ async function getInferenceProfileBackingModel_2(profileId) {
     ).models?.[0]?.modelArn;
     if (modelArn) {
       let lastSlashIndex = modelArn.lastIndexOf("/");
-      n = lastSlashIndex >= 0 ? modelArn.substring(lastSlashIndex + 1) : modelArn;
+      backingModel = lastSlashIndex >= 0 ? modelArn.substring(lastSlashIndex + 1) : modelArn;
     }
   } catch (error) {
     logForDebugging(
@@ -267,9 +275,9 @@ async function getInferenceProfileBackingModel_2(profileId) {
       },
     );
   }
-  setInferenceProfileBackingModel(profileId, n);
-  clearModelBetas((r) => stripAnyVersatileSuffix(r) === profileId);
-  return n;
+  setInferenceProfileBackingModel(profileId, backingModel);
+  clearModelBetas((modelId) => stripAnyVersatileSuffix(modelId) === profileId);
+  return backingModel;
 }
 //@ chunk-aepeg2w5.js:134434-134484 fingerprint = isFoundationModel (1)
 /**
@@ -312,12 +320,12 @@ function withBedrockRegionPrefix(modelId, prefix) {
 /**
  * AWS 区域对应的 Bedrock 区域组。
  */
-function bedrockRegionGroup(e) {
-  let n = e ?? "";
-  if (n.startsWith("us-gov-")) return "us-gov";
-  if (n.startsWith("us-")) return "us";
-  if (n.startsWith("eu-")) return "eu";
-  if (n.startsWith("ap-")) return "apac";
+function bedrockRegionGroup(region) {
+  let name = region ?? "";
+  if (name.startsWith("us-gov-")) return "us-gov";
+  if (name.startsWith("us-")) return "us";
+  if (name.startsWith("eu-")) return "eu";
+  if (name.startsWith("ap-")) return "apac";
   return "global";
 }
 //@ chunk-aepeg2w5.js:134994-135102 placement
@@ -330,32 +338,31 @@ function getBedrockRegionPrefix(awsRegion) {
 }
 //@ chunk-aepeg2w5.js:135102-135238 placement
 async function loadNoAuthSigner() {
-  let e = await import("./chunk-ayrvc8dg.js").then((m) => Re(m.default, 1));
-  return e.NoAuthSigner ?? e.default?.NoAuthSigner;
+  let signerModule = await import("../../../vendor/@smithy/core/index.js").then((loaded) =>
+    __toESM(loaded.default, 1),
+  );
+  return signerModule.NoAuthSigner ?? signerModule.default?.NoAuthSigner;
 }
 //@ chunk-aepeg2w5.js:135238-135262 placement
 /**
  * 模型 id 的恒等转换（此构建不做归一）。
  */
-function identityModelId(e) {
-  return e;
+function identityModelId(modelId) {
+  return modelId;
 }
 //@ chunk-aepeg2w5.js:135262-135324 placement
-var regExp_2 = new RegExp(`^(?:${BEDROCK_REGION_PREFIXES.join("|")})\\.(anthropic\\..+)$`);
+var regExp_2; // deferred: uses BEDROCK_REGION_PREFIXES of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:135262", () => {
+  regExp_2 = new RegExp(`^(?:${BEDROCK_REGION_PREFIXES.join("|")})\\.(anthropic\\..+)$`);
+});
 //@ chunk-aepeg2w5.js:135324-135402 placement
 /**
  * 生成模型 id 的 Bedrock 区域变体列表。
  */
-function bedrockRegionVariants(e) {
-  let n = regExp_2.exec(e)?.[1] ?? e;
-  return [n, ...BEDROCK_REGION_PREFIXES.map((r) => `${r}.${n}`)];
+function bedrockRegionVariants(region) {
+  let normalizedRegion = regExp_2.exec(region)?.[1] ?? region;
+  return [normalizedRegion, ...BEDROCK_REGION_PREFIXES.map((prefix) => `${prefix}.${normalizedRegion}`)];
 }
-//@ chunk-jhrww53q.js:73703-73797 fingerprint = BEDROCK_REGION_PREFIXES (0.782)
-/**
- * ANTHROPIC_BEDROCK_REGION_PREFIX 的可选值。
- */
-var BEDROCK_REGION_PREFIXES = ["us", "eu", "apac", "jp", "au", "us-gov", "global"];
-var BEDROCK_REGION_PREFIX_ENV_VALUES = ["us", "eu", "apac", "jp", "au", "global"];
 export {
   identityModelId,
   getInferenceProfileBackingModel,

@@ -8,7 +8,7 @@
  * pieces: chunk-yxcx2jtr.js (2)
  * attribution: affinity 1, callgraph-witnessed 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -22,26 +22,26 @@ import { PromptInputHelpMenu } from "../PromptInput/PromptInputHelpMenu.js";
 var GENERAL_COLUMN_WIDTH = 44;
 //@ chunk-yxcx2jtr.js:15540-16345 callgraph-witnessed = General (0.291)
 function General() {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { rows } = useTerminalSize();
-  let a = rows < GENERAL_COLUMN_WIDTH;
-  const paddingY = a ? 0 : 1;
-  const gap = a ? 0 : 1;
-  let m;
+  let isNarrow = rows < GENERAL_COLUMN_WIDTH;
+  const paddingY = isNarrow ? 0 : 1;
+  const gap = isNarrow ? 0 : 1;
+  let introText;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    m = jsxProd_default(Box, {
+    introText = jsxProd_default(Box, {
       flexShrink: 0,
       children: jsxProd_default(Text, {
         children:
           "Claude understands your codebase, makes edits with your permission, and executes commands \u2014 right from your terminal.",
       }),
     });
-    $[0] = m;
-  } else m = $[0];
-  let o;
-  if ($[1] !== a) {
-    o =
-      !a &&
+    $[0] = introText;
+  } else introText = $[0];
+  let powerupHint;
+  if ($[1] !== isNarrow) {
+    powerupHint =
+      !isNarrow &&
       jsxProd_default(Box, {
         children: jsxProd_default_2(Text, {
           dimColor: true,
@@ -55,12 +55,12 @@ function General() {
           ],
         }),
       });
-    $[1] = a;
-    $[2] = o;
-  } else o = $[2];
-  let l;
+    $[1] = isNarrow;
+    $[2] = powerupHint;
+  } else powerupHint = $[2];
+  let shortcutsBox;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    l = jsxProd_default_2(Box, {
+    shortcutsBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
         jsxProd_default(Box, {
@@ -76,21 +76,21 @@ function General() {
         }),
       ],
     });
-    $[3] = l;
-  } else l = $[3];
-  let u;
-  if ($[4] !== paddingY || $[5] !== gap || $[6] !== o) {
-    u = jsxProd_default_2(Box, {
+    $[3] = shortcutsBox;
+  } else shortcutsBox = $[3];
+  let page;
+  if ($[4] !== paddingY || $[5] !== gap || $[6] !== powerupHint) {
+    page = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingY,
       gap,
-      children: [m, o, l],
+      children: [introText, powerupHint, shortcutsBox],
     });
     $[4] = paddingY;
     $[5] = gap;
-    $[6] = o;
-    $[7] = u;
-  } else u = $[7];
-  return u;
+    $[6] = powerupHint;
+    $[7] = page;
+  } else page = $[7];
+  return page;
 }
 export { General };

@@ -9,7 +9,7 @@
  * attribution: sole-consumer 4, fingerprint 1
  */
 import { logForDebugging } from "../debug.js";
-import { string, u } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, objectSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession, isDiskless } from "../../bootstrap/state.js";
 import { env } from "../env.js";
@@ -32,6 +32,7 @@ import { safeJoinLines } from "../stringUtils.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { getMaxOutputLength } from "../shell/outputLimits.js";
 import { readFileRange as readFileRange_2 } from "../fsOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:252979-253013 sole-consumer
 var MEMORY_LIMIT_BYTES = 8388608;
@@ -45,31 +46,31 @@ class TaskOutputRegistry {
   #e = new Map();
   #t = new Map();
   #n = null;
-  register(e) {
-    this.#e.set(e.taskId, e);
+  register(entry) {
+    this.#e.set(entry.taskId, entry);
   }
-  unregister(e) {
-    this.#e.delete(e);
+  unregister(taskId) {
+    this.#e.delete(taskId);
   }
-  registeredInstance(e) {
-    return this.#e.get(e);
+  registeredInstance(taskId_2) {
+    return this.#e.get(taskId_2);
   }
-  startPolling(e) {
-    this.#t.set(e.taskId, e);
+  startPolling(poller) {
+    this.#t.set(poller.taskId, poller);
     if (!this.#n) {
       this.#n = setInterval(() => this.#o(), SIZE_CHECK_INTERVAL_MS);
       this.#n.unref();
     }
   }
-  stopPolling(e) {
-    this.#t.delete(e);
+  stopPolling(poller_2) {
+    this.#t.delete(poller_2);
     if (this.#t.size === 0 && this.#n) {
       clearInterval(this.#n);
       this.#n = null;
     }
   }
   #o() {
-    for (let [, e] of this.#t) e.pollProgress();
+    for (let [, poller_3] of this.#t) poller_3.pollProgress();
   }
   reset() {
     if (this.#n) clearInterval(this.#n);
@@ -79,7 +80,10 @@ class TaskOutputRegistry {
   }
 }
 //@ chunk-e6aww6q8.js:253502-253529 sole-consumer
-var taskOutputRegistryByHost = new HostScoped(() => new TaskOutputRegistry());
+var taskOutputRegistryByHost; // deferred: uses TaskOutputRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:253502", () => {
+  taskOutputRegistryByHost = new HostScoped(() => new TaskOutputRegistry());
+});
 //@ chunk-e6aww6q8.js:253529-253568 sole-consumer
 function taskOutputRegistry() {
   return taskOutputRegistryByHost.of(getRootSession().host);
@@ -119,14 +123,14 @@ class TaskOutput {
   get path() {
     return this.#e ?? getTaskOutputPath(this.taskId);
   }
-  static startPolling(e) {
-    let n = taskOutputRegistry();
-    let r = n.registeredInstance(e);
-    if (!r || !r.#l) return;
-    n.startPolling(r);
+  static startPolling(options) {
+    let progress = taskOutputRegistry();
+    let chunk = progress.registeredInstance(options);
+    if (!chunk || !chunk.#l) return;
+    progress.startPolling(chunk);
   }
-  static stopPolling(e) {
-    taskOutputRegistry().stopPolling(e);
+  static stopPolling(text) {
+    taskOutputRegistry().stopPolling(text);
   }
   pollProgress() {
     if (!this.#l) return;
@@ -138,7 +142,7 @@ class TaskOutput {
           return;
         }
         let pos = content.length;
-        let h = 0;
+        let handle = 0;
         let n100 = 0;
         let lineCount = 0;
         while (pos > 0) {
@@ -148,7 +152,7 @@ class TaskOutput {
             pos - 1,
           );
           lineCount++;
-          if (lineCount === 5) h = pos <= 0 ? 0 : pos + 1;
+          if (lineCount === 5) handle = pos <= 0 ? 0 : pos + 1;
           if (lineCount === 100) n100 = pos <= 0 ? 0 : pos + 1;
         }
         let totalLines =
@@ -157,7 +161,7 @@ class TaskOutput {
             : Math.max(this.#s, Math.round((bytesTotal / bytesRead) * lineCount));
         this.#s = totalLines;
         this.#a = bytesTotal;
-        this.#l(content.slice(h), content.slice(n100), totalLines, bytesTotal, bytesRead < bytesTotal);
+        this.#l(content.slice(handle), content.slice(n100), totalLines, bytesTotal, bytesRead < bytesTotal);
       },
       () => {},
     );
@@ -185,7 +189,7 @@ class TaskOutput {
     else this.#t += data;
   }
   #S(data) {
-    let s = 0;
+    let state = 0;
     let lines = [];
     let extractedBytes = 0;
     let pos = data.length;
@@ -196,7 +200,7 @@ class TaskOutput {
         pos - 1,
       );
       if (prev === -1) break;
-      s++;
+      state++;
       if (lines.length < 100 && extractedBytes < 4096) {
         let lineLen = pos - prev - 1;
         if (lineLen > 0 && lineLen <= 4096 - extractedBytes) {
@@ -209,7 +213,7 @@ class TaskOutput {
       }
       pos = prev;
     }
-    this.#s += s;
+    this.#s += state;
     for (let i = lines.length - 1; i >= 0; i--) this.#i.add(lines[i]);
     if (this.#l && lines.length > 0) {
       let recent = this.#i.getRecent(5);
@@ -247,8 +251,8 @@ class TaskOutput {
     if (stdoutChunk) this.#o.append(stdoutChunk);
     if (stderrChunk) this.#o.append(`[stderr] ${stderrChunk}`);
   }
-  async getStdout(e) {
-    if (this.stdoutToFile) return this.#p(e ?? getMaxOutputLength());
+  async getStdout(event) {
+    if (this.stdoutToFile) return this.#p(event ?? getMaxOutputLength());
     if (this.#o) {
       let recent = this.#i.getRecent(5);
       let tail = safeJoinLines(
@@ -266,20 +270,22 @@ Output truncated (${sizeKB}KB total). Full output saved to: ${this.path}`;
       return tail ? tail + notice : notice.trimStart();
     }
     if (this.#r) {
-      let r = `
+      let output = `
 Output truncated (${Math.round(this.#a / 1024)}KB total): later output was discarded because this session writes no files.`;
-      return this.#t ? this.#t + r : r.trimStart();
+      return this.#t ? this.#t + output : output.trimStart();
     }
     return this.#t;
   }
-  async #p(e) {
+  async #p(value) {
     try {
       let taskOutputForRead = await openTaskOutputForRead(this.path);
       if (taskOutputForRead === null) {
         logForDebugging(`TaskOutput.#readStdoutFromFile: ${this.path} is gone (ENOENT)`);
         return this.#h("ENOENT");
       }
-      let result = await readFileRange_2(taskOutputForRead, 0, e).finally(() => taskOutputForRead.close());
+      let result = await readFileRange_2(taskOutputForRead, 0, value).finally(() =>
+        taskOutputForRead.close(),
+      );
       if (!result) {
         this.#u = true;
         return "";
@@ -294,8 +300,8 @@ Output truncated (${Math.round(this.#a / 1024)}KB total): later output was disca
       return this.#h(code);
     }
   }
-  #h(e) {
-    return `<bash output unavailable: output file ${this.path} could not be read (${e}). This usually means another Claude Code process in the same project deleted it during startup cleanup.>`;
+  #h(onProgress) {
+    return `<bash output unavailable: output file ${this.path} could not be read (${onProgress}). This usually means another Claude Code process in the same project deleted it during startup cleanup.>`;
   }
   getStderr() {
     if (this.#o) return "";

@@ -93,7 +93,7 @@ async function generateUnifiedSuggestions(
   showOnEmpty_2,
 ) {
   if (!mcpResources && !showOnEmpty) return [];
-  let [fileSuggestions, He] = await Promise.all([
+  let [fileSuggestions, agentSuggestions] = await Promise.all([
     generateFileSuggestions(query, mcpResources, showOnEmpty, showOnEmpty_2),
     Promise.resolve(generateAgentSuggestions(agents, mcpResources, showOnEmpty)),
   ]);
@@ -119,10 +119,10 @@ async function generateUnifiedSuggestions(
   let mapped = Object.values(mcpResourceTemplates)
     .flat()
     .filter(
-      (At) =>
+      (template) =>
         !isMcpAppResource({
-          uri: At.uriTemplate,
-          mimeType: At.mimeType,
+          uri: template.uriTemplate,
+          mimeType: template.mimeType,
         }),
     )
     .map((resource) => ({
@@ -134,10 +134,10 @@ async function generateUnifiedSuggestions(
       name: resource.name || resource.uriTemplate,
     }));
   if (!mcpResources)
-    return [...fileSources, ...mcpSources, ...mapped, ...He]
+    return [...fileSources, ...mcpSources, ...mapped, ...agentSuggestions]
       .slice(0, MAX_UNIFIED_SUGGESTIONS)
       .map(createSuggestionFromSource);
-  let nonFileSources = [...mcpSources, ...mapped, ...He];
+  let nonFileSources = [...mcpSources, ...mapped, ...agentSuggestions];
   let scoredResults = [];
   for (let fileSource of fileSources)
     scoredResults.push({
@@ -178,14 +178,14 @@ async function generateUnifiedSuggestions(
       limit: MAX_UNIFIED_SUGGESTIONS,
     });
     for (let result of fuseResults) {
-      let Et = result.item.type === "mcp_resource" ? 0.15 : 0;
+      let typeBoost = result.item.type === "mcp_resource" ? 0.15 : 0;
       scoredResults.push({
         source: result.item,
-        score: (result.score ?? 0.5) + Et,
+        score: (result.score ?? 0.5) + typeBoost,
       });
     }
   }
-  scoredResults.sort((At, It) => At.score - It.score);
+  scoredResults.sort((a, b) => a.score - b.score);
   return scoredResults
     .slice(0, MAX_UNIFIED_SUGGESTIONS)
     .map((scoredResult) => scoredResult.source)

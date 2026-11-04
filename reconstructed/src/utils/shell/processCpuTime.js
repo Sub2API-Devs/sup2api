@@ -29,6 +29,7 @@ import { logError } from "../log.js";
 import { identity as identity_2 } from "../identity.js";
 import { isCcsTenant } from "../../bootstrap/state.js";
 import { getCpuacctDir, readCpuUsageSeconds } from "./cpuReport.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:245160-245207 placement
 /**
@@ -42,37 +43,37 @@ function killOnInterruptWhenNoBackground() {
   return isBackgroundTasksOff() && getFeatureValue_CACHED_MAY_BE_STALE(TENGU_ZIPPY_HARBOR, false);
 }
 //@ chunk-e6aww6q8.js:245245-245987 placement
-function readProcessResourceUsage(e) {
+function readProcessResourceUsage(processObject) {
   try {
     if (getPlatform() === "windows") return;
-    let found = Object.getOwnPropertySymbols(Object.getPrototypeOf(e)).find(
-      (S) => S.description === "kHandle",
+    let found = Object.getOwnPropertySymbols(Object.getPrototypeOf(processObject)).find(
+      (symbol) => symbol.description === "kHandle",
     );
-    let r = found === undefined ? undefined : Reflect.get(e, found);
+    let handle = found === undefined ? undefined : Reflect.get(processObject, found);
     if (
-      typeof r !== "object" ||
-      r === null ||
-      !("resourceUsage" in r) ||
-      typeof r.resourceUsage !== "function"
+      typeof handle !== "object" ||
+      handle === null ||
+      !("resourceUsage" in handle) ||
+      typeof handle.resourceUsage !== "function"
     )
       return;
-    let s = r.resourceUsage();
+    let usage = handle.resourceUsage();
     if (
-      typeof s !== "object" ||
-      s === null ||
-      !("cpuTime" in s) ||
-      typeof s.cpuTime !== "object" ||
-      s.cpuTime === null ||
-      !("user" in s.cpuTime) ||
-      !("system" in s.cpuTime)
+      typeof usage !== "object" ||
+      usage === null ||
+      !("cpuTime" in usage) ||
+      typeof usage.cpuTime !== "object" ||
+      usage.cpuTime === null ||
+      !("user" in usage.cpuTime) ||
+      !("system" in usage.cpuTime)
     )
       return;
-    let h = Number(s.cpuTime.user) / 1000;
-    let y = Number(s.cpuTime.system) / 1000;
-    return Number.isFinite(h) && Number.isFinite(y) && h + y > 0
+    let userMs = Number(usage.cpuTime.user) / 1000;
+    let systemMs = Number(usage.cpuTime.system) / 1000;
+    return Number.isFinite(userMs) && Number.isFinite(systemMs) && userMs + systemMs > 0
       ? {
-          userMs: h,
-          systemMs: y,
+          userMs,
+          systemMs,
         }
       : undefined;
   } catch (error) {
@@ -86,20 +87,27 @@ function readProcessResourceUsage(e) {
 /**
  * 进程 CPU 统计常量：采样次数、扫描预算、进程数上限、可忽略的错误码与后台任务正则。
  */
-var CPU_SAMPLE_COUNT = 10;
-var PROC_SCAN_BUDGET_MS = 250;
-var MAX_PROC_ENTRIES = 2000;
-var IGNORED_PROC_ERRNOS = new Set(["ENOENT", "ESRCH", "EACCES", "EPERM"]);
-var BACKGROUND_JOB_RE = /(?:^|[^&><|\\])&(?:\s|$|[;)}'"`])|\bset\s+-(?:m\b|o\s+monitor\b)/;
+var CPU_SAMPLE_COUNT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PROC_SCAN_BUDGET_MS;
+var MAX_PROC_ENTRIES;
+var IGNORED_PROC_ERRNOS;
+var BACKGROUND_JOB_RE;
+deferInit("chunk-e6aww6q8.js:246042", () => {
+  CPU_SAMPLE_COUNT = 10;
+  PROC_SCAN_BUDGET_MS = 250;
+  MAX_PROC_ENTRIES = 2000;
+  IGNORED_PROC_ERRNOS = new Set(["ENOENT", "ESRCH", "EACCES", "EPERM"]);
+  BACKGROUND_JOB_RE = /(?:^|[^&><|\\])&(?:\s|$|[;)}'"`])|\bset\s+-(?:m\b|o\s+monitor\b)/;
+});
 //@ chunk-e6aww6q8.js:246190-246225 placement
 function isBackgroundJobCommand(command) {
   return BACKGROUND_JOB_RE.test(command);
 }
 //@ chunk-e6aww6q8.js:246275-246352 placement
-function pushToGroup(e, n, pid) {
-  let s = e.get(n);
-  if (s === undefined) e.set(n, [pid]);
-  else s.push(pid);
+function pushToGroup(groups, groupId, pid) {
+  let group = groups.get(groupId);
+  if (group === undefined) groups.set(groupId, [pid]);
+  else group.push(pid);
 }
 //@ chunk-e6aww6q8.js:246352-247010 placement
 /**
@@ -155,17 +163,17 @@ function readProcCpuTime(pid, budgetMs = PROC_SCAN_BUDGET_MS, maxProcesses = MAX
       (latest.ticksOf.has(pid) && !latest.childrenOf.get(process.pid)?.includes(pid))
     )
       return;
-    let y = new Set();
-    let S = [pid, ...(latest.ledBy.get(pid) ?? [])];
-    let w;
-    for (let L = S.pop(); L !== undefined; L = S.pop()) {
-      if (y.has(L)) continue;
-      y.add(L);
-      let G = latest.ticksOf.get(L);
-      if (G !== undefined) w = (w ?? 0) + G;
-      S.push(...(latest.childrenOf.get(L) ?? []));
+    let seen = new Set();
+    let pending = [pid, ...(latest.ledBy.get(pid) ?? [])];
+    let totalTicks;
+    for (let currentPid = pending.pop(); currentPid !== undefined; currentPid = pending.pop()) {
+      if (seen.has(currentPid)) continue;
+      seen.add(currentPid);
+      let ticks = latest.ticksOf.get(currentPid);
+      if (ticks !== undefined) totalTicks = (totalTicks ?? 0) + ticks;
+      pending.push(...(latest.childrenOf.get(currentPid) ?? []));
     }
-    return w === undefined ? undefined : w * CPU_SAMPLE_COUNT;
+    return totalTicks === undefined ? undefined : totalTicks * CPU_SAMPLE_COUNT;
   } catch (error) {
     if (isSyscallError(error) && error.code !== "EMFILE") {
       logForDebugging(
@@ -178,33 +186,36 @@ function readProcCpuTime(pid, budgetMs = PROC_SCAN_BUDGET_MS, maxProcesses = MAX
   }
 }
 //@ chunk-e6aww6q8.js:247793-247951 placement
-var cpuWindowState = identity_2(
-  {
-    open: 0,
-    opened: 0,
-    noWindowSince: undefined,
-    noWindow: {
-      cpuMs: 0,
-      wallMs: 0,
+var cpuWindowState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:247793", () => {
+  cpuWindowState = identity_2(
+    {
+      open: 0,
+      opened: 0,
+      noWindowSince: undefined,
+      noWindow: {
+        cpuMs: 0,
+        wallMs: 0,
+      },
     },
-  },
-  (e) => {
-    e.open = 0;
-    e.opened = 0;
-    e.noWindowSince = undefined;
-    e.noWindow = {
-      cpuMs: 0,
-      wallMs: 0,
-    };
-  },
-);
+    (state) => {
+      state.open = 0;
+      state.opened = 0;
+      state.noWindowSince = undefined;
+      state.noWindow = {
+        cpuMs: 0,
+        wallMs: 0,
+      };
+    },
+  );
+});
 //@ chunk-e6aww6q8.js:247951-248149 placement
-function updateNoWindowSpan(e, n) {
-  if (e !== undefined && cpuWindowState.noWindowSince !== undefined) {
-    cpuWindowState.noWindow.cpuMs += Math.max(0, e.cpuMs - cpuWindowState.noWindowSince.cpuMs);
-    cpuWindowState.noWindow.wallMs += e.atMs - cpuWindowState.noWindowSince.atMs;
+function updateNoWindowSpan(lastSample, hasWindow) {
+  if (lastSample !== undefined && cpuWindowState.noWindowSince !== undefined) {
+    cpuWindowState.noWindow.cpuMs += Math.max(0, lastSample.cpuMs - cpuWindowState.noWindowSince.cpuMs);
+    cpuWindowState.noWindow.wallMs += lastSample.atMs - cpuWindowState.noWindowSince.atMs;
   }
-  cpuWindowState.noWindowSince = n ? e : undefined;
+  cpuWindowState.noWindowSince = hasWindow ? lastSample : undefined;
 }
 //@ chunk-e6aww6q8.js:248149-248283 placement
 /**
@@ -241,9 +252,9 @@ function openCpuWindow(cpuAccountJoin) {
   if (cpuacctDirForMetering === undefined) return;
   let joined = posix.join(cpuacctDirForMetering, "cpuacct.usage");
   let cpuUsageSeconds = readCpuUsageSeconds(joined);
-  let h;
+  let taskListEmpty;
   try {
-    h = readFileSync(posix.join(cpuacctDirForMetering, "tasks"), "utf8") === "";
+    taskListEmpty = readFileSync(posix.join(cpuacctDirForMetering, "tasks"), "utf8") === "";
   } catch {}
   if (cpuWindowState.open === 0)
     updateNoWindowSpan(
@@ -261,8 +272,8 @@ function openCpuWindow(cpuAccountJoin) {
     usageFile: joined,
     join: cpuUsageSeconds === undefined ? "uncertain" : cpuAccountJoin,
     openedAtMs: cpuUsageSeconds ?? 0,
-    sharedAtOpen: cpuWindowState.open > 1 || h !== true,
-    onlyLeftRunningAtOpen: cpuWindowState.open === 1 && h === false,
+    sharedAtOpen: cpuWindowState.open > 1 || taskListEmpty !== true,
+    onlyLeftRunningAtOpen: cpuWindowState.open === 1 && taskListEmpty === false,
     sequence: cpuWindowState.opened,
     closed: false,
     held: false,
@@ -277,18 +288,18 @@ function markCpuWindowHeld(cpuAccountWindow) {
 /**
  * 释放 CPU 计量窗口；最后一个窗口关闭时开始记录无窗口期间。
  */
-function releaseCpuWindow(e, n) {
-  e.held = false;
-  if (!e.closed || e.released) return;
-  e.released = true;
+function releaseCpuWindow(cpuWindow, finalSeconds) {
+  cpuWindow.held = false;
+  if (!cpuWindow.closed || cpuWindow.released) return;
+  cpuWindow.released = true;
   cpuWindowState.open--;
   if (cpuWindowState.open === 0) {
-    let r = n ?? readCpuUsageSeconds(e.usageFile);
+    let endSeconds = finalSeconds ?? readCpuUsageSeconds(cpuWindow.usageFile);
     cpuWindowState.noWindowSince =
-      r === undefined
+      endSeconds === undefined
         ? undefined
         : {
-            cpuMs: r,
+            cpuMs: endSeconds,
             atMs: performance.now(),
           };
   }
@@ -300,34 +311,35 @@ function releaseCpuWindow(e, n) {
 function closeCpuWindow(cpuAccountWindow) {
   if (cpuAccountWindow.closed) return;
   cpuAccountWindow.closed = true;
-  let n = cpuAccountWindow.join === "certain" ? readCpuUsageSeconds(cpuAccountWindow.usageFile) : undefined;
-  let r = cpuWindowState.opened !== cpuAccountWindow.sequence;
-  if (!cpuAccountWindow.held) releaseCpuWindow(cpuAccountWindow, n);
-  return n === undefined
+  let endSeconds =
+    cpuAccountWindow.join === "certain" ? readCpuUsageSeconds(cpuAccountWindow.usageFile) : undefined;
+  let reopened = cpuWindowState.opened !== cpuAccountWindow.sequence;
+  if (!cpuAccountWindow.held) releaseCpuWindow(cpuAccountWindow, endSeconds);
+  return endSeconds === undefined
     ? undefined
     : {
-        cpuMs: Math.max(0, n - cpuAccountWindow.openedAtMs),
-        shared: cpuAccountWindow.sharedAtOpen || r,
-        sharedWithLeftRunningOnly: cpuAccountWindow.onlyLeftRunningAtOpen && !r,
+        cpuMs: Math.max(0, endSeconds - cpuAccountWindow.openedAtMs),
+        shared: cpuAccountWindow.sharedAtOpen || reopened,
+        sharedWithLeftRunningOnly: cpuAccountWindow.onlyLeftRunningAtOpen && !reopened,
       };
 }
 //@ chunk-e6aww6q8.js:249328-249472 placement
 /**
  * 读取 /proc/<pid>/stat 中的父进程、进程组、启动标记与是否已退出。
  */
-function readProcessInfo(e) {
-  let n;
+function readProcessInfo(pid) {
+  let statContent;
   try {
-    n = readFileSync(`/proc/${e}/stat`, "utf8");
+    statContent = readFileSync(`/proc/${pid}/stat`, "utf8");
   } catch {
     return;
   }
   return {
-    pid: e,
-    ppid: statPpid(n),
-    pgrp: statPgrp(n),
-    startToken: procStatField(n),
-    exited: isMinorFaultField(statState(n)),
+    pid,
+    ppid: statPpid(statContent),
+    pgrp: statPgrp(statContent),
+    startToken: procStatField(statContent),
+    exited: isMinorFaultField(statState(statContent)),
   };
 }
 //@ chunk-e6aww6q8.js:249472-249701 placement
@@ -335,28 +347,33 @@ function readProcessInfo(e) {
  * 列出 /proc 中所有进程的信息（需确认 /proc/self 指向本进程）。
  */
 function listProcessInfos() {
-  let e;
+  let names;
   try {
     if (readlinkSync("/proc/self") !== String(process.pid)) return;
-    e = readdirSync("/proc");
+    names = readdirSync("/proc");
   } catch {
     return;
   }
-  let n = [];
-  for (let r of e) {
-    if (!/^\d+$/.test(r)) continue;
-    let processInfo = readProcessInfo(Number(r));
-    if (processInfo !== undefined) n.push(processInfo);
+  let processInfos = [];
+  for (let name of names) {
+    if (!/^\d+$/.test(name)) continue;
+    let processInfo = readProcessInfo(Number(name));
+    if (processInfo !== undefined) processInfos.push(processInfo);
   }
-  return n.length > 0 ? n : undefined;
+  return processInfos.length > 0 ? processInfos : undefined;
 }
 //@ chunk-e6aww6q8.js:249701-249765 placement
-var UNLISTED_SHELL_GRACE_MS = 250;
-var SWEEP_WAIT_STEP_MS = 10;
-var int32Array = new Int32Array(new SharedArrayBuffer(4));
+var UNLISTED_SHELL_GRACE_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SWEEP_WAIT_STEP_MS;
+var int32Array;
+deferInit("chunk-e6aww6q8.js:249701", () => {
+  UNLISTED_SHELL_GRACE_MS = 250;
+  SWEEP_WAIT_STEP_MS = 10;
+  int32Array = new Int32Array(new SharedArrayBuffer(4));
+});
 //@ chunk-e6aww6q8.js:249765-249805 placement
-function sleepBlocking(e) {
-  Atomics.wait(int32Array, 0, 0, e);
+function sleepBlocking(timeoutMs) {
+  Atomics.wait(int32Array, 0, 0, timeoutMs);
 }
 //@ chunk-e6aww6q8.js:249805-249874 placement
 function isExitSweepEnabled() {
@@ -367,9 +384,9 @@ function isExitSweepEnabled() {
   }
 }
 //@ chunk-e6aww6q8.js:249874-249937 placement
-function tryKillProcess(e, n) {
+function tryKillProcess(pid, signal) {
   try {
-    return process.kill(e, n);
+    return process.kill(pid, signal);
   } catch {
     return false;
   }

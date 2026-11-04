@@ -9,7 +9,15 @@
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, M, u, _enum, E, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  booleanSchema,
+  objectSchema,
+  _enum,
+  numberSchema,
+  array,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { setupProposalSchema, PROJECT_ICONS_HINT } from "../../services/projects/setupProposalSchema.js";
 
 //@ chunk-dz3q485w.js:70470-73709 placement
@@ -19,19 +27,19 @@ import { setupProposalSchema, PROJECT_ICONS_HINT } from "../../services/projects
 var MAX_PROJECT_NAME_CHARS = 200;
 var continueInProjectsInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    project_name: string()
+    project_name: stringSchema()
       .min(1)
       .max(MAX_PROJECT_NAME_CHARS)
       .describe(
         "Name for the new project \u2014 normally the repository or folder name the skill reported. Kept to one line of at most 46 characters.",
       ),
-    project_id: string()
+    project_id: stringSchema()
       .max(160)
       .optional()
       .describe(
         "Only when /send-to-project named an existing Claude Project to send to: its id as the command gave it, unchanged. Omit to create a new project.",
       ),
-    attach_git_remote: M().describe(
+    attach_git_remote: booleanSchema().describe(
       "Add this folder\u2019s GitHub origin as the project\u2019s repository. The tool reads the remote from git itself; pass false when the folder has no GitHub origin or the user said not to add it.",
     ),
     proposal: setupProposalSchema().describe(
@@ -40,28 +48,28 @@ var continueInProjectsInputSchema = DoctorLazy(() =>
   }),
 );
 var continueInProjectsOutputSchema = DoctorLazy(() =>
-  u({
-    created: M().describe(
+  objectSchema({
+    created: booleanSchema().describe(
       "Whether the call went through: a project was created (mode 'new') or the existing project was reached (mode 'existing'; savedToMemory and handedOff say what landed there). False means nothing was created or sent; see reason and mayExist.",
     ),
-    reason: string().optional(),
-    mayExist: M().optional(),
-    projectId: string().optional(),
-    projectName: string().optional(),
-    projectUrl: string().optional(),
-    attachedRepo: string().nullable().optional(),
-    appInstallPending: M().optional(),
+    reason: stringSchema().optional(),
+    mayExist: booleanSchema().optional(),
+    projectId: stringSchema().optional(),
+    projectName: stringSchema().optional(),
+    projectUrl: stringSchema().optional(),
+    attachedRepo: stringSchema().nullable().optional(),
+    appInstallPending: booleanSchema().optional(),
     mode: _enum(["new", "existing"]).optional(),
-    savedToMemory: M().optional(),
-    memoryOmitted: M().optional(),
-    handedOff: M().optional(),
-    setupSubmitted: M().optional(),
-    setupUncertain: M().optional(),
-    threadsOnCard: E().optional(),
+    savedToMemory: booleanSchema().optional(),
+    memoryOmitted: booleanSchema().optional(),
+    handedOff: booleanSchema().optional(),
+    setupSubmitted: booleanSchema().optional(),
+    setupUncertain: booleanSchema().optional(),
+    threadsOnCard: numberSchema().optional(),
     message: _enum(["sent", "uncertain", "not_sent"]).nullable().optional(),
-    openedInBrowser: M().optional(),
-    browserOpenPending: M().optional(),
-    notes: array(string()).optional(),
+    openedInBrowser: booleanSchema().optional(),
+    browserOpenPending: booleanSchema().optional(),
+    notes: array(stringSchema()).optional(),
   }),
 );
 export { continueInProjectsInputSchema, continueInProjectsOutputSchema };

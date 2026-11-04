@@ -15,38 +15,42 @@ import { needsDirectDelivery } from "./messageProvenance.js";
 /**
  * 生成"队列是否忙"判断函数。
  */
-function createQueueBusyCheck(messageQueue, n, signal) {
+function createQueueBusyCheck(messageQueue, getTranscript, signal) {
   return () => {
     if (signal?.aborted === true) return;
-    let a = n();
+    let transcript = getTranscript();
     return messageQueue.getCommandQueueSnapshot().some(isBusyCommand) ||
-      messageQueue.someSubmissionInFlight((r) => isPendingBusyCommand(r, a)) ||
+      messageQueue.someSubmissionInFlight((command) => isPendingBusyCommand(command, transcript)) ||
       (signal === undefined
         ? messageQueue.getInFlightDrainBatchStanding() !== "appended" &&
-          messageQueue.someInFlightDrainCommand((r) => isPendingBusyCommand(r, a))
+          messageQueue.someInFlightDrainCommand((command) => isPendingBusyCommand(command, transcript))
         : messageQueue.getInFlightDrainBatchStanding() === "passed-over" &&
           messageQueue.someInFlightDrainCommand(isBusyCommand))
       ? undefined
-      : a;
+      : transcript;
   };
 }
 //@ chunk-2jaaccg7.js:606-696 placement
-function isPendingBusyCommand(e, n) {
-  return isBusyCommand(e) && (e.uuid === undefined || n.findLast((t) => t.uuid === e.uuid) === undefined);
+function isPendingBusyCommand(command, transcript) {
+  return (
+    isBusyCommand(command) &&
+    (command.uuid === undefined ||
+      transcript.findLast((message) => message.uuid === command.uuid) === undefined)
+  );
 }
 //@ chunk-2jaaccg7.js:696-973 placement
-function isBusyCommand(e) {
-  if (!isMainAgentCommand(e)) return false;
-  switch (e.mode) {
+function isBusyCommand(command) {
+  if (!isMainAgentCommand(command)) return false;
+  switch (command.mode) {
     case "task-notification":
       return false;
     case "poll-event": {
-      let authority = e.pollEvent?.provenance?.authority;
+      let authority = command.pollEvent?.provenance?.authority;
       return authority !== undefined && authority !== "peer-agent" && authority !== "world-event";
     }
     case "prompt":
     case "bash":
-      return needsDirectDelivery(e);
+      return needsDirectDelivery(command);
     case "orphaned-permission":
       return true;
   }

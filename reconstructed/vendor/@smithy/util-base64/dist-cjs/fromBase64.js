@@ -5,11 +5,11 @@
  * pieces: chunk-wr8v03d0.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_util_buffer_from } from "../../util-buffer-from/dist-cjs/index.js";
 
 //@ chunk-wr8v03d0.js:877-1251 cjs-fingerprint
-var require_fromBase64 = x(function (cjsExports) {
+var require_fromBase64 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

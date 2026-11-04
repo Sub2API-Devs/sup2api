@@ -5,11 +5,11 @@
  * pieces: chunk-b7dyevzy.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_error } from "./error.js";
 
 //@ chunk-b7dyevzy.js:707-1889 cjs-fingerprint
-var require_argument = x(function (cjsExports) {
+var require_argument = __commonJS(function (cjsExports) {
   var { InvalidArgumentError } = require_error();
   class Argument {
     constructor(name, description) {

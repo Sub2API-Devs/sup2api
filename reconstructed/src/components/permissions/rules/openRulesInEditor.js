@@ -12,11 +12,11 @@ import { join } from "path";
 import { randomBytes } from "crypto";
 import { open } from "fs/promises";
 import { constants } from "fs";
-import { init_react_production, y, R } from "../../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useRef } from "../../../../vendor/react/cjs/react.production.js";
 import { claudeTempDir } from "../../../utils/tempDir.js";
 import { AUTO_MODE_BUILTINS } from "../../../utils/teleport/autoModeDumps.js";
 import { openFileInExternalEditor, resolveEditorCommand, getShortEditorName } from "../../../utils/editor.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { MAX_DISPLAY_UNITS } from "../../../utils/permissions/approvalPayloadSerialization.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import {
@@ -30,21 +30,24 @@ import { Text } from "../../../ink/components/Text.js";
 //@ chunk-p2qwpk2k.js:49860-49864 placement
 init_react_production();
 //@ chunk-p2qwpk2k.js:49999-50031 placement
-function toBulletLine(dt) {
-  return `- ${dt}`;
+function toBulletLine(text) {
+  return `- ${text}`;
 }
 //@ chunk-p2qwpk2k.js:50031-50260 placement
-async function writeBuiltinRulesFile(h, i) {
-  let filePath = join(claudeTempDir(), `${AUTO_MODE_BUILTINS}${h}-${randomBytes(8).toString("hex")}.md`);
-  let a = await open(
+async function writeBuiltinRulesFile(section, text) {
+  let filePath = join(
+    claudeTempDir(),
+    `${AUTO_MODE_BUILTINS}${section}-${randomBytes(8).toString("hex")}.md`,
+  );
+  let handle = await open(
     filePath,
     constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
     384,
   );
   try {
-    await a.writeFile(i, "utf8");
+    await handle.writeFile(text, "utf8");
   } finally {
-    await a.close();
+    await handle.close();
   }
   return {
     opened: openFileInExternalEditor(filePath),
@@ -56,20 +59,20 @@ async function writeBuiltinRulesFile(h, i) {
  * 把规则写到文件并用 $VISUAL/$EDITOR 打开
  */
 function openRulesInEditor(section) {
-  let f = w(5);
-  let [i, m] = y(null);
-  let a = R(false);
-  let g;
-  if (f[0] !== section) {
-    g = (v) => {
-      if (a.current) {
+  let $ = useMemoCache(5);
+  let [errorMessage, setErrorMessage] = useState(null);
+  let inFlightRef = useRef(false);
+  let openEditor;
+  if ($[0] !== section) {
+    openEditor = (text) => {
+      if (inFlightRef.current) {
         return;
       }
-      a.current = true;
-      writeBuiltinRulesFile(section, v)
-        .then((x) => {
-          let { opened, path } = x;
-          m(
+      inFlightRef.current = true;
+      writeBuiltinRulesFile(section, text)
+        .then((result) => {
+          let { opened, path } = result;
+          setErrorMessage(
             opened
               ? `opening ${path}`
               : resolveEditorCommand()
@@ -78,35 +81,37 @@ function openRulesInEditor(section) {
           );
         })
         .catch((error) => {
-          m(`could not write the file: ${error instanceof Error ? error.message : String(error)}`);
+          setErrorMessage(
+            `could not write the file: ${error instanceof Error ? error.message : String(error)}`,
+          );
         })
         .finally(() => {
-          a.current = false;
+          inFlightRef.current = false;
         });
     };
-    f[0] = section;
-    f[1] = g;
-  } else g = f[1];
-  let b = g;
-  let x;
-  if (f[2] !== b || f[3] !== i) {
-    x = [i, b];
-    f[2] = b;
-    f[3] = i;
-    f[4] = x;
-  } else x = f[4];
-  return x;
+    $[0] = section;
+    $[1] = openEditor;
+  } else openEditor = $[1];
+  let openEditorFn = openEditor;
+  let state;
+  if ($[2] !== openEditorFn || $[3] !== errorMessage) {
+    state = [errorMessage, openEditorFn];
+    $[2] = openEditorFn;
+    $[3] = errorMessage;
+    $[4] = state;
+  } else state = $[4];
+  return state;
 }
 //@ chunk-p2qwpk2k.js:50753-51445 placement = UltrareviewOverageDialog (0.349)
 function UltrareviewOverageDialog(props) {
-  let g = w(13);
+  let $ = useMemoCache(13);
   let { entry, onCancel } = props;
-  let [a, f] = openRulesInEditor(entry.section);
+  let [editor, openEditor] = openRulesInEditor(entry.section);
   if (entry.text.length <= MAX_DISPLAY_UNITS) {
     return null;
   }
   let options;
-  if (g[0] === MEMO_CACHE_SENTINEL) {
+  if ($[0] === MEMO_CACHE_SENTINEL) {
     options = [
       {
         label: `View the full text in editor${getShortEditorName() ? ` (${getShortEditorName()})` : ""}`,
@@ -117,51 +122,51 @@ function UltrareviewOverageDialog(props) {
         value: "cancel",
       },
     ];
-    g[0] = options;
-  } else options = g[0];
+    $[0] = options;
+  } else options = $[0];
   let onChange;
-  if (g[1] !== entry.text || g[2] !== f || g[3] !== onCancel) {
+  if ($[1] !== entry.text || $[2] !== openEditor || $[3] !== onCancel) {
     onChange = (value) => {
-      if (value === "editor") f(entry.text);
+      if (value === "editor") openEditor(entry.text);
       else onCancel();
     };
-    g[1] = entry.text;
-    g[2] = f;
-    g[3] = onCancel;
-    g[4] = onChange;
-  } else onChange = g[4];
-  let c;
-  if (g[5] !== onCancel || g[6] !== onChange) {
-    c = jsxProd_default(ModelSelector, {
+    $[1] = entry.text;
+    $[2] = openEditor;
+    $[3] = onCancel;
+    $[4] = onChange;
+  } else onChange = $[4];
+  let modelSelectorElement;
+  if ($[5] !== onCancel || $[6] !== onChange) {
+    modelSelectorElement = jsxProd_default(ModelSelector, {
       options,
       onChange,
       onCancel,
     });
-    g[5] = onCancel;
-    g[6] = onChange;
-    g[7] = c;
-  } else c = g[7];
-  let M;
-  if (g[8] !== a) {
-    M =
-      a !== null &&
+    $[5] = onCancel;
+    $[6] = onChange;
+    $[7] = modelSelectorElement;
+  } else modelSelectorElement = $[7];
+  let handleCancel;
+  if ($[8] !== editor) {
+    handleCancel =
+      editor !== null &&
       jsxProd_default(Text, {
         dimColor: true,
         wrap: "wrap-trim",
-        children: a,
+        children: editor,
       });
-    g[8] = a;
-    g[9] = M;
-  } else M = g[9];
-  let b;
-  if (g[10] !== c || g[11] !== M) {
-    b = jsxProd_default_2(Fragment, {
-      children: [c, M],
+    $[8] = editor;
+    $[9] = handleCancel;
+  } else handleCancel = $[9];
+  let fragmentElement;
+  if ($[10] !== modelSelectorElement || $[11] !== handleCancel) {
+    fragmentElement = jsxProd_default_2(Fragment, {
+      children: [modelSelectorElement, handleCancel],
     });
-    g[10] = c;
-    g[11] = M;
-    g[12] = b;
-  } else b = g[12];
-  return b;
+    $[10] = modelSelectorElement;
+    $[11] = handleCancel;
+    $[12] = fragmentElement;
+  } else fragmentElement = $[12];
+  return fragmentElement;
 }
 export { UltrareviewOverageDialog, openRulesInEditor, toBulletLine };

@@ -8,9 +8,16 @@
  * pieces: chunk-4t8fx0s8.js (36), chunk-5nte8cwj.js (1)
  * attribution: sole-consumer 23, fingerprint 3, layout 8, affinity 1, file-local 1, placement 1
  */
+import { buildDesktopDeepLink } from "../../utils/desktopDeepLink.js";
 import { getSessionsSinceTipShown } from "./tipHistory.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { record, string, unknown, u, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  record,
+  stringSchema,
+  unknown,
+  objectSchema,
+  _enum,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { supportsHyperlinks } from "../../ink/supports-hyperlinks.js";
 import { createHyperlink } from "../../utils/hyperlink.js";
 import { getClaudeCodeMcpConfigs, doesEnterpriseMcpConfigExist, hasManagedMcpPolicy } from "../mcp/config.js";
@@ -104,7 +111,7 @@ import {
   isTranscriptPersistenceDisabled,
   isCustomTitleEnabled,
 } from "../../utils/sessionStorage.js";
-import { LEFT_ARROW, UP_ARROW, DOWN_ARROW } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { LEFT_ARROW, UP_ARROW, DOWN_ARROW } from "../../constants/figures.js";
 import { isFleetBackgroundAllowed } from "../../utils/backgroundHandoff.js";
 import { env } from "../../utils/env.js";
 import {
@@ -176,14 +183,22 @@ import {
   getAPIProvider,
   isFirstPartyAnthropicBaseUrl,
 } from "../../utils/model/providers.js";
-import { buildDesktopDeepLink } from "../../utils/desktopDeepLink.js";
 
+//@ chunk-5nte8cwj.js:1501-1546 placement
+/**
+ * 是否能构造出桌面深链（构造失败为 false）。
+ */
+async function hasDesktopDeepLink() {
+  return (await buildDesktopDeepLink()) !== null;
+}
 //@ chunk-4t8fx0s8.js:13854-13907 sole-consumer
 /**
  * 给定 id 列表里，除当前提示外是否有仍在冷却期内（展示过的会话数不足）的提示。
  */
-function anyRecentTipShown(e, n, s) {
-  return e.some((r) => r !== n && getSessionsSinceTipShown(r) < s);
+function anyRecentTipShown(tipIds, tipId, cooldownSessions) {
+  return tipIds.some(
+    (otherTipId) => otherTipId !== tipId && getSessionsSinceTipShown(otherTipId) < cooldownSessions,
+  );
 }
 //@ chunk-4t8fx0s8.js:13907-14961 sole-consumer
 /**
@@ -205,26 +220,27 @@ var YOUTUBE_SEARCH_REGEX = /^\?v=[\w-]+$/;
 var URL_PATHNAME_REGEX = /^\/[\w./-]*$/;
 var URL_HASH_REGEX = /^(#[\w-]+)?$/;
 var CONTROL_CHAR_REGEX = /\p{Cc}/u;
-var contentLinkSchema = DoctorLazy(() => record(string(), unknown()).nullable());
+var contentLinkSchema = DoctorLazy(() => record(stringSchema(), unknown()).nullable());
 var contentLinkUrlSchema = DoctorLazy(() =>
-  u({
-    url: string().refine((e) => {
-      let n = URL.parse(e);
+  objectSchema({
+    url: stringSchema().refine((rawUrl) => {
+      let parsedUrl = URL.parse(rawUrl);
       return (
-        n !== null &&
-        !CONTROL_CHAR_REGEX.test(e) &&
-        n.protocol === "https:" &&
-        LINK_HOSTS_WITH_VIDEO.includes(n.hostname) &&
-        URL_PATHNAME_REGEX.test(n.pathname) &&
-        !n.pathname.includes("..") &&
-        URL_HASH_REGEX.test(n.hash) &&
-        (n.hostname === "www.youtube.com"
-          ? n.pathname === "/watch" && YOUTUBE_SEARCH_REGEX.test(n.search)
-          : n.search === "" &&
-            (n.hostname !== "claude.com" || DOC_PATH_PREFIXES.some((s) => `${n.pathname}/`.startsWith(s)))) &&
-        n.username === "" &&
-        n.password === "" &&
-        n.port === ""
+        parsedUrl !== null &&
+        !CONTROL_CHAR_REGEX.test(rawUrl) &&
+        parsedUrl.protocol === "https:" &&
+        LINK_HOSTS_WITH_VIDEO.includes(parsedUrl.hostname) &&
+        URL_PATHNAME_REGEX.test(parsedUrl.pathname) &&
+        !parsedUrl.pathname.includes("..") &&
+        URL_HASH_REGEX.test(parsedUrl.hash) &&
+        (parsedUrl.hostname === "www.youtube.com"
+          ? parsedUrl.pathname === "/watch" && YOUTUBE_SEARCH_REGEX.test(parsedUrl.search)
+          : parsedUrl.search === "" &&
+            (parsedUrl.hostname !== "claude.com" ||
+              DOC_PATH_PREFIXES.some((prefix) => `${parsedUrl.pathname}/`.startsWith(prefix)))) &&
+        parsedUrl.username === "" &&
+        parsedUrl.password === "" &&
+        parsedUrl.port === ""
       );
     }),
     label: _enum(CONTENT_LINK_LABELS),
@@ -250,20 +266,20 @@ var HOOKS_TIP_INPUT_TOKENS = 150000;
 /**
  * 支持超链接时，为提示文字追加从配置表取得的内容链接（白名单域名加 utm 参数），以"· 链接"形式附在句尾。
  */
-function appendContentLink(e, n, s) {
-  let r = supportsHyperlinks() ? getContentLink(e, s.session.host) : undefined;
-  if (r === undefined) return n;
-  let a = new URL(r.url);
-  if (TRUSTED_LINK_HOSTS.includes(a.hostname)) {
-    a.searchParams.set("utm_source", "claude_code");
-    a.searchParams.set("utm_medium", "tip");
-    a.searchParams.set("utm_campaign", CONTENT_LINK_TIPS_2);
-    a.searchParams.set("utm_content", e);
+function appendContentLink(tipId, text, context) {
+  let link = supportsHyperlinks() ? getContentLink(tipId, context.session.host) : undefined;
+  if (link === undefined) return text;
+  let url = new URL(link.url);
+  if (TRUSTED_LINK_HOSTS.includes(url.hostname)) {
+    url.searchParams.set("utm_source", "claude_code");
+    url.searchParams.set("utm_medium", "tip");
+    url.searchParams.set("utm_campaign", CONTENT_LINK_TIPS_2);
+    url.searchParams.set("utm_content", tipId);
   }
-  let hyperlink = createHyperlink(a.toString(), CONTENT_LINK_LABEL_TEXT[r.label], {
-    themeName: s.theme,
+  let hyperlink = createHyperlink(url.toString(), CONTENT_LINK_LABEL_TEXT[link.label], {
+    themeName: context.theme,
   });
-  return `${n.replace(/\.$/, "")} \xB7 ${hyperlink}`;
+  return `${text.replace(/\.$/, "")} \xB7 ${hyperlink}`;
 }
 //@ chunk-4t8fx0s8.js:15343-15787 sole-consumer
 /**
@@ -285,9 +301,9 @@ class TipHostState {
     return this.mcpServersConfigured;
   }
   claimInvalidLinkReport() {
-    let e = !this.invalidLinkReported;
+    let isFirst = !this.invalidLinkReported;
     this.invalidLinkReported = true;
-    return e;
+    return isFirst;
   }
   forget() {
     this.mcpServersConfigured = undefined;
@@ -298,7 +314,7 @@ class TipHostState {
 /**
  * 按宿主缓存的提示状态，以及一组"内容链接"提示（hooks、MCP、mods、长会话 /context、auto 模式、团队工作方式），各带触发条件。
  */
-var tipHostStateByHost = new HostScoped(() => identity(new TipHostState(), (e) => e.forget()));
+var tipHostStateByHost = new HostScoped(() => identity(new TipHostState(), (state) => state.forget()));
 var CONTENT_LINK_TIPS = [
   getRelevantTips({
     id: "content-link-hooks",
@@ -315,7 +331,7 @@ var CONTENT_LINK_TIPS = [
   getRelevantTips({
     id: "content-link-mcp",
     text: "Connect Claude to your tools and data with MCP",
-    isTriggered: async (e) =>
+    isTriggered: async (context) =>
       getGlobalConfig().numStartups > AUTO_MODE_STARTUPS &&
       !isRemoteSessionAvailable() &&
       !isCustomizationDisabled("mcpAutoDiscovered") &&
@@ -323,15 +339,15 @@ var CONTENT_LINK_TIPS = [
       !doesEnterpriseMcpConfigExist() &&
       !hasManagedMcpPolicy() &&
       getEverConnectedClaudeAiMcpSet().size === 0 &&
-      ![...(e.toolsUsed ?? [])].some((n) => mcpInfoFromString(n)) &&
-      !(await tipHostStateByHost.of(e.session.host).hasMcpServersConfigured(e.storageV5)),
+      ![...(context.toolsUsed ?? [])].some((toolName) => mcpInfoFromString(toolName)) &&
+      !(await tipHostStateByHost.of(context.session.host).hasMcpServersConfigured(context.storageV5)),
   }),
   getRelevantTips({
     id: "content-link-mods",
     text: "Change how Claude Code looks and behaves with a mod",
     isTriggered: () => {
       let settings_DEPRECATED = getSettings_DEPRECATED();
-      let n =
+      let hasCustomization =
         settings_DEPRECATED.statusLine !== undefined ||
         hasConfiguredHooks() ||
         Object.entries(settings_DEPRECATED.enabledPlugins ?? {}).some(
@@ -341,7 +357,7 @@ var CONTENT_LINK_TIPS = [
         getSettingsForSource("policySettings")?.pluginConfigs?.[DEFAULT_SECURITY_SEAT_PLUGIN]?.options
           ?.allowManagedModsOnly;
       return (
-        n &&
+        hasCustomization &&
         !isRemoteSessionAvailable() &&
         (allowManagedModsOnly === undefined || allowManagedModsOnly === false) &&
         areHooksModulesActive()
@@ -369,17 +385,19 @@ var CONTENT_LINK_TIPS = [
   }),
 ];
 //@ chunk-4t8fx0s8.js:17070-17363 sole-consumer
-function getContentLink(e, host) {
-  let s = contentLinkSchema().safeParse(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_ENUMERATED_LOCKET, null));
-  let r = contentLinkUrlSchema().safeParse(s.data?.[e]);
-  if (!s.success || !r.success) {
-    logForDebugging(`Ignoring an invalid content link for tip ${e}`, {
+function getContentLink(tipId, host) {
+  let tableResult = contentLinkSchema().safeParse(
+    getFeatureValue_CACHED_MAY_BE_STALE(TENGU_ENUMERATED_LOCKET, null),
+  );
+  let linkResult = contentLinkUrlSchema().safeParse(tableResult.data?.[tipId]);
+  if (!tableResult.success || !linkResult.success) {
+    logForDebugging(`Ignoring an invalid content link for tip ${tipId}`, {
       level: "warn",
     });
     if (tipHostStateByHost.of(host).claimInvalidLinkReport())
-      logFeatureSad("tips_content_link_table", s.success ? "invalid_entry" : "invalid_table");
+      logFeatureSad("tips_content_link_table", tableResult.success ? "invalid_entry" : "invalid_table");
   }
-  return r.data;
+  return linkResult.data;
 }
 //@ chunk-4t8fx0s8.js:17363-17420 sole-consumer
 /**
@@ -395,11 +413,11 @@ function getRelevantTips({ id, text, advertisedCommand, isTriggered }) {
     cooldownSessions: DEFAULT_COOLDOWN_SESSIONS,
     maxLifetimeShows: DEFAULT_MAX_LIFETIME_SHOWS,
     advertisedCommand,
-    content: async (a) => appendContentLink(id, text, a),
-    isRelevant: async (a) =>
+    content: async (context) => appendContentLink(id, text, context),
+    isRelevant: async (context) =>
       supportsHyperlinks() &&
-      (await isTriggered(a)) &&
-      getContentLink(id, a.session.host) !== undefined &&
+      (await isTriggered(context)) &&
+      getContentLink(id, context.session.host) !== undefined &&
       !anyRecentTipShown(CONTENT_LINK_TIP_IDS, id, CONTENT_LINK_COOLDOWN_SESSIONS),
   };
 }
@@ -416,68 +434,76 @@ class TipSessionCache {
   desktopInstalled = undefined;
   ghAuthStatus = undefined;
   failedTipIds = new Set();
-  getKnownMarketplaces(e) {
-    this.knownMarketplaces ??= loadKnownMarketplacesSafe(e);
+  getKnownMarketplaces(storageV5) {
+    this.knownMarketplaces ??= loadKnownMarketplacesSafe(storageV5);
     return this.knownMarketplaces;
   }
-  getMarketplacePluginTips(e) {
-    this.marketplacePluginTips ??= this.loadMarketplacePluginTips(e);
+  getMarketplacePluginTips(storageV5) {
+    this.marketplacePluginTips ??= this.loadMarketplacePluginTips(storageV5);
     return this.marketplacePluginTips;
   }
-  async loadMarketplacePluginTips(e) {
-    let n = new Set(getPluginSuggestionMarketplaces());
-    if (n.size === 0) return [];
-    return this.buildMarketplacePluginTips(n, await this.getKnownMarketplaces(e), e);
+  async loadMarketplacePluginTips(storageV5) {
+    let marketplaces = new Set(getPluginSuggestionMarketplaces());
+    if (marketplaces.size === 0) return [];
+    return this.buildMarketplacePluginTips(
+      marketplaces,
+      await this.getKnownMarketplaces(storageV5),
+      storageV5,
+    );
   }
-  async buildMarketplacePluginTips(e, n, s) {
-    let r = [];
-    for (let a of e) {
-      let g = n[a];
-      if (!g) continue;
-      if (a !== CLAUDE_PLUGINS_OFFICIAL && !isMarketplaceSourceDeclaredByPolicy(a, g.source)) {
+  async buildMarketplacePluginTips(marketplaces, knownMarketplaces, storageV5) {
+    let tips = [];
+    for (let marketplace of marketplaces) {
+      let known = knownMarketplaces[marketplace];
+      if (!known) continue;
+      if (
+        marketplace !== CLAUDE_PLUGINS_OFFICIAL &&
+        !isMarketplaceSourceDeclaredByPolicy(marketplace, known.source)
+      ) {
         logForDebugging(
-          `Skipping plugin suggestion tips for marketplace "${a}": its registered source is not declared in managed settings (extraKnownMarketplaces or strictKnownMarketplaces)`,
+          `Skipping plugin suggestion tips for marketplace "${marketplace}": its registered source is not declared in managed settings (extraKnownMarketplaces or strictKnownMarketplaces)`,
         );
         continue;
       }
-      let S = await getMarketplaceCacheOnly(a, s).catch(() => null);
-      if (!S) continue;
-      for (let plugin of S.plugins) {
+      let cache = await getMarketplaceCacheOnly(marketplace, storageV5).catch(() => null);
+      if (!cache) continue;
+      for (let plugin of cache.plugins) {
         let relevance = plugin.relevance;
-        let b = hasRelevanceSignals(plugin.name, relevance);
-        if (!b) continue;
+        let hasSignals = hasRelevanceSignals(plugin.name, relevance);
+        if (!hasSignals) continue;
         if (
-          a === CLAUDE_PLUGINS_OFFICIAL &&
+          marketplace === CLAUDE_PLUGINS_OFFICIAL &&
           externalTips.some((externalTip) => externalTip.id === `${plugin.name}-plugin`)
         )
           continue;
-        let D =
+        let topic =
           relevance?.topic ??
           plugin.name
             .split("-")
-            .map((h) => (h ? h.charAt(0).toUpperCase() + h.slice(1) : h))
+            .map((word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word))
             .join("-");
         let id =
-          a === CLAUDE_PLUGINS_OFFICIAL
+          marketplace === CLAUDE_PLUGINS_OFFICIAL
             ? `${MARKETPLACE_PLUGIN_TIP_PREFIX}${plugin.name}`
-            : `${MARKETPLACE_PLUGIN_TIP_PREFIX}${plugin.name}@${a}`;
-        r.push({
+            : `${MARKETPLACE_PLUGIN_TIP_PREFIX}${plugin.name}@${marketplace}`;
+        tips.push({
           id,
-          pluginId: `${plugin.name}@${a}`,
+          pluginId: `${plugin.name}@${marketplace}`,
           advertisedCommand: "plugin",
           priority: 1,
           providerAgnostic: true,
           cooldownSessions: 3,
-          content: async (h) => {
-            let le = color("suggestion", h.theme);
-            return `Working with ${D}? Install the ${plugin.name} plugin:
-${le(`/plugin install ${plugin.name}@${a}`)}`;
+          content: async (context) => {
+            let accent = color("suggestion", context.theme);
+            return `Working with ${topic}? Install the ${plugin.name} plugin:
+${accent(`/plugin install ${plugin.name}@${marketplace}`)}`;
           },
-          isRelevant: async (h) => shouldSuggestOfficialPlugin(this, plugin.name, h, b, a),
+          isRelevant: async (context) =>
+            shouldSuggestOfficialPlugin(this, plugin.name, context, hasSignals, marketplace),
         });
       }
     }
-    return r;
+    return tips;
   }
   getDesktopInstalled() {
     this.desktopInstalled ??= hasDesktopDeepLink();
@@ -489,39 +515,45 @@ ${le(`/plugin install ${plugin.name}@${a}`)}`;
     });
     return this.ghAuthStatus;
   }
-  countSessionsOnce(e) {
+  countSessionsOnce(storageV5) {
     if (this.sessionCountInFlight !== undefined) return this.sessionCountInFlight;
-    let n = countConcurrentSessions(e).finally(() => {
-      if (this.sessionCountInFlight === n) this.sessionCountInFlight = undefined;
+    let pending = countConcurrentSessions(storageV5).finally(() => {
+      if (this.sessionCountInFlight === pending) this.sessionCountInFlight = undefined;
     });
-    this.sessionCountInFlight = n;
-    return n;
+    this.sessionCountInFlight = pending;
+    return pending;
   }
 }
 //@ chunk-4t8fx0s8.js:19564-19588 layout
 var tipRegistryStateByHost = new HostScoped(() => new TipSessionCache());
 //@ chunk-4t8fx0s8.js:19588-19716 layout
-function countSessionsCached(e) {
-  if (isStorageV5Enabled() && e?.storageV5 !== undefined)
-    return tipRegistryStateByHost.of(e.session.host).countSessionsOnce(e.storageV5);
-  return countConcurrentSessions(e?.storageV5);
+function countSessionsCached(context) {
+  if (isStorageV5Enabled() && context?.storageV5 !== undefined)
+    return tipRegistryStateByHost.of(context.session.host).countSessionsOnce(context.storageV5);
+  return countConcurrentSessions(context?.storageV5);
 }
 //@ chunk-4t8fx0s8.js:19716-19893 layout
 /**
  * 是否推荐安装某官方插件：官方市场已登记、插件未安装且未被托管设置管理、并有推荐理由。
  */
-async function shouldSuggestOfficialPlugin(e, n, s, r, a = CLAUDE_PLUGINS_OFFICIAL) {
-  if (!(await e.getKnownMarketplaces(s.storageV5))[a]) return false;
-  if (isPluginInstalled(`${n}@${a}`)) return false;
-  if (isPluginBlockedByPolicy(`${n}@${a}`)) return false;
-  return (await matchRelevanceSignal(r, s)) !== null;
+async function shouldSuggestOfficialPlugin(
+  cache,
+  pluginName,
+  context,
+  relevance,
+  marketplace = CLAUDE_PLUGINS_OFFICIAL,
+) {
+  if (!(await cache.getKnownMarketplaces(context.storageV5))[marketplace]) return false;
+  if (isPluginInstalled(`${pluginName}@${marketplace}`)) return false;
+  if (isPluginBlockedByPolicy(`${pluginName}@${marketplace}`)) return false;
+  return (await matchRelevanceSignal(relevance, context)) !== null;
 }
 //@ chunk-4t8fx0s8.js:19893-20015 layout
-async function hasUserDefinedCustomization(e, storageV5) {
+async function hasUserDefinedCustomization(customizationKind, storageV5) {
   try {
-    return (await loadMarkdownFilesCached(e, getCwd(), storageV5)).length > 0;
+    return (await loadMarkdownFilesCached(customizationKind, getCwd(), storageV5)).length > 0;
   } catch (error) {
-    logForDebugging(`hasUserDefined(${e}) failed: ${error}`);
+    logForDebugging(`hasUserDefined(${customizationKind}) failed: ${error}`);
     return false;
   }
 }
@@ -546,14 +578,15 @@ var FRONTEND_DEV_SERVER_COMMANDS = new Set([
   "browser-sync",
 ]);
 //@ chunk-4t8fx0s8.js:20247-20420 fingerprint = isMarketplacePluginRelevant (0.708)
-function isMarketplacePluginRelevant(e) {
-  let { bashTools, readFileState } = e ?? {};
+function isMarketplacePluginRelevant(context) {
+  let { bashTools, readFileState } = context ?? {};
   if (bashTools) {
     for (let bashTool of bashTools) if (FRONTEND_DEV_SERVER_COMMANDS.has(bashTool)) return true;
   }
   if (readFileState) {
-    let r = pluginRelevanceRoots();
-    for (let a of remoteFileStateKeys(readFileState)) if (FRONTEND_FILE_PATTERN.test(a) && !r(a)) return true;
+    let isPluginRoot = pluginRelevanceRoots();
+    for (let fileKey of remoteFileStateKeys(readFileState))
+      if (FRONTEND_FILE_PATTERN.test(fileKey) && !isPluginRoot(fileKey)) return true;
   }
   return false;
 }
@@ -566,19 +599,19 @@ var DESKTOP_IOS_SIMULATOR = "desktop-ios-simulator";
 var DESKTOP_TIP_MIN_SESSIONS = 15;
 var DESKTOP_TIP_MAX_SHOWS = 5;
 //@ chunk-4t8fx0s8.js:20464-20620 sole-consumer
-function isIosSimulatorTipRelevant(e) {
+function isIosSimulatorTipRelevant(context) {
   if (!isDesktopCommandEnabled() || getPlatform() !== "macos") return false;
   if (!isClaudeAISubscriber() || hasComplianceTaint("hipaa")) return false;
-  if (!e.devIntents?.has("ios_app")) return false;
+  if (!context.devIntents?.has("ios_app")) return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_magical_pixel", false);
 }
 //@ chunk-4t8fx0s8.js:20620-20751 sole-consumer
-function enterpriseOnlyNote(e) {
+function enterpriseOnlyNote(ctx) {
   return `available in Claude for Enterprise \xB7 ${createHyperlink(
     "https://clau.de/enterprise",
     "Learn more",
     {
-      themeName: e.theme,
+      themeName: ctx.theme,
     },
   )}`;
 }
@@ -593,8 +626,8 @@ var C4E_TIP_COOLDOWN = 5;
 /**
  * c4e 系列提示最近是否展示过。
  */
-function anyC4eTipRecentlyShown(e) {
-  return anyRecentTipShown(C4E_TIP_IDS, e, C4E_TIP_COOLDOWN);
+function anyC4eTipRecentlyShown(tipId) {
+  return anyRecentTipShown(C4E_TIP_IDS, tipId, C4E_TIP_COOLDOWN);
 }
 //@ chunk-4t8fx0s8.js:20856-20931 sole-consumer
 /**
@@ -606,8 +639,8 @@ var WORKFLOW_SIZE_TIP_COOLDOWN = 12;
 /**
  * workflow-size 提示最近是否展示过。
  */
-function anyWorkflowSizeTipRecentlyShown(e) {
-  return anyRecentTipShown(WORKFLOW_SIZE_TIP_IDS, e, WORKFLOW_SIZE_TIP_COOLDOWN);
+function anyWorkflowSizeTipRecentlyShown(tipId) {
+  return anyRecentTipShown(WORKFLOW_SIZE_TIP_IDS, tipId, WORKFLOW_SIZE_TIP_COOLDOWN);
 }
 //@ chunk-4t8fx0s8.js:20963-21022 sole-consumer
 /**
@@ -619,8 +652,8 @@ var ARTIFACT_TIP_COOLDOWN = 5;
 /**
  * artifact 提示最近是否展示过。
  */
-function anyArtifactTipRecentlyShown(e) {
-  return anyRecentTipShown(ARTIFACT_TIP_IDS, e, ARTIFACT_TIP_COOLDOWN);
+function anyArtifactTipRecentlyShown(tipId) {
+  return anyRecentTipShown(ARTIFACT_TIP_IDS, tipId, ARTIFACT_TIP_COOLDOWN);
 }
 //@ chunk-4t8fx0s8.js:21055-21070 sole-consumer
 var GITHUB_TIP_COOLDOWN_SESSIONS = 10;
@@ -659,21 +692,23 @@ function getAllTips() {
 /**
  * 判断给定 id 是否属于外部或额外提示。
  */
-function isKnownTipId(e) {
-  return externalTips.some((externalTip) => externalTip.id === e) || EXTRA_TIPS.some((n) => n.id === e);
+function isKnownTipId(tipId) {
+  return (
+    externalTips.some((externalTip) => externalTip.id === tipId) || EXTRA_TIPS.some((tip) => tip.id === tipId)
+  );
 }
 //@ chunk-4t8fx0s8.js:21405-21649 sole-consumer
 /**
  * 判断提示要推广的内置命令在当前会话是否可用（远程模式下先按远程过滤）；找不到命令时，非远程视为可用。
  */
 async function isAdvertisedCommandAvailable(advertisedCommand) {
-  let { filterCommandsForRemoteMode, getBuiltinCommands } = await import("./chunk-aeccp9b6.js");
-  let r = isRemoteSessionAvailable();
-  let filtered = (r ? filterCommandsForRemoteMode(getBuiltinCommands()) : getBuiltinCommands()).filter(
-    (S) => S.name === advertisedCommand || S.aliases?.includes(advertisedCommand),
+  let { filterCommandsForRemoteMode, getBuiltinCommands } = await import("../../commands.js");
+  let isRemote = isRemoteSessionAvailable();
+  let filtered = (isRemote ? filterCommandsForRemoteMode(getBuiltinCommands()) : getBuiltinCommands()).filter(
+    (command) => command.name === advertisedCommand || command.aliases?.includes(advertisedCommand),
   );
-  if (filtered.length === 0) return !r;
-  return filtered.some((S) => meetsAvailabilityRequirement(S) && isCommandEnabled(S));
+  if (filtered.length === 0) return !isRemote;
+  return filtered.some((command) => meetsAvailabilityRequirement(command) && isCommandEnabled(command));
 }
 //@ chunk-4t8fx0s8.js:21649-44371 fingerprint = externalTips (0.568)
 /**
@@ -683,21 +718,21 @@ var externalTips = [
   {
     id: "team-artifacts",
     priority: 4,
-    content: async (e) => {
-      let n = await listUnseenTeamArtifacts(e.session, e.storageV5).catch((error) => {
+    content: async (ctx) => {
+      let unseen = await listUnseenTeamArtifacts(ctx.session, ctx.storageV5).catch((error) => {
         logFeatureSad(
           "tips_team_artifact_show",
           error instanceof Error ? "content_scan_error" : "content_unknown_error",
         );
         return [];
       });
-      if (n.length === 0) return "";
-      logTeamArtifactTipShown(n);
-      markTeamArtifactsSeen(e.session, e.storageV5);
-      return formatTeamArtifactTip(n);
+      if (unseen.length === 0) return "";
+      logTeamArtifactTipShown(unseen);
+      markTeamArtifactsSeen(ctx.session, ctx.storageV5);
+      return formatTeamArtifactTip(unseen);
     },
     cooldownSessions: 1,
-    isRelevant: async (e) => hasUnseenTeamArtifacts(e.session, e.storageV5),
+    isRelevant: async (ctx) => hasUnseenTeamArtifacts(ctx.session, ctx.storageV5),
   },
   {
     id: "fotw-campaign",
@@ -705,15 +740,16 @@ var externalTips = [
     content: async () => {
       let promoCampaign = parsePromoCampaign();
       if (!promoCampaign?.command) return "";
-      let n = promoCreditAmount();
-      if (!n) return "";
-      let s = formatCurrency(n.amountMinorUnits, n.currency, "fit");
-      let r = promoCampaign.tipBlurb
+      let credit = promoCreditAmount();
+      if (!credit) return "";
+      let priceLabel = formatCurrency(credit.amountMinorUnits, credit.currency, "fit");
+      let commandLabel = promoCampaign.tipBlurb
         ? `/${promoCampaign.command} ${promoCampaign.tipBlurb}`
         : `/${promoCampaign.command}`;
-      let a = promoCampaign.tips?.[tipLifetimeShownCount("fotw-campaign") % promoCampaign.tips.length] ?? "";
-      if (a) return `${a} Try it for ${s} in usage credits.`;
-      return `${promoCampaign.titleLabel ?? "Feature of the week:"} ${r}. Try it for ${s} in usage credits.`;
+      let blurb =
+        promoCampaign.tips?.[tipLifetimeShownCount("fotw-campaign") % promoCampaign.tips.length] ?? "";
+      if (blurb) return `${blurb} Try it for ${priceLabel} in usage credits.`;
+      return `${promoCampaign.titleLabel ?? "Feature of the week:"} ${commandLabel}. Try it for ${priceLabel} in usage credits.`;
     },
     cooldownSessions: 1,
     isRelevant: async () => canClaimPromoCredit(),
@@ -724,13 +760,13 @@ var externalTips = [
     content: async () => {
       let promoCampaign = parsePromoCampaign();
       if (!promoCampaign?.command) return "";
-      let n =
+      let blurb =
         promoCampaign.tips?.[tipLifetimeShownCount("fotw-campaign-upsell") % promoCampaign.tips.length] ?? "";
-      if (n) return n;
-      let s = promoCampaign.tipBlurb
+      if (blurb) return blurb;
+      let commandLabel = promoCampaign.tipBlurb
         ? `/${promoCampaign.command} ${promoCampaign.tipBlurb}`
         : `/${promoCampaign.command}`;
-      return `${promoCampaign.titleLabel ?? "Feature of the week:"} ${s}.`;
+      return `${promoCampaign.titleLabel ?? "Feature of the week:"} ${commandLabel}.`;
     },
     cooldownSessions: 1,
     isRelevant: async () => shouldShowPromoUpsell(),
@@ -739,8 +775,8 @@ var externalTips = [
     id: "powerup-onboarding",
     priority: 3,
     providerAgnostic: true,
-    content: async (e) =>
-      `New to Claude Code? Run ${color("suggestion", e.theme)("/powerup")} for a quick interactive tutorial`,
+    content: async (ctx) =>
+      `New to Claude Code? Run ${color("suggestion", ctx.theme)("/powerup")} for a quick interactive tutorial`,
     cooldownSessions: 1,
     async isRelevant() {
       let globalConfig = getGlobalConfig();
@@ -764,11 +800,11 @@ var externalTips = [
     id: "plan-mode-for-complex-tasks",
     priority: 2,
     providerAgnostic: true,
-    content: async (e) =>
+    content: async (ctx) =>
       appendContentLink(
         "plan-mode-for-complex-tasks",
         `Use Plan Mode to prepare for a complex request before making changes. Press ${getShortcutDisplay("chat:cycleMode", "Chat", "shift+tab")} twice to enable.`,
-        e,
+        ctx,
       ),
     cooldownSessions: 5,
     isRelevant: async () => {
@@ -802,8 +838,12 @@ var externalTips = [
   {
     id: "git-worktrees",
     providerAgnostic: true,
-    content: async (e) =>
-      appendContentLink("git-worktrees", "Use git worktrees to run multiple Claude sessions in parallel.", e),
+    content: async (ctx) =>
+      appendContentLink(
+        "git-worktrees",
+        "Use git worktrees to run multiple Claude sessions in parallel.",
+        ctx,
+      ),
     cooldownSessions: 10,
     isRelevant: async () => {
       try {
@@ -820,10 +860,10 @@ var externalTips = [
     content: async () =>
       "Running multiple Claude sessions? Use /color and /rename to tell them apart at a glance.",
     cooldownSessions: 10,
-    isRelevant: async (e) => {
+    isRelevant: async (ctx) => {
       if (colorCommand.isHidden) return false;
       if (getCurrentSessionAgentColor()) return false;
-      return (await countSessionsCached(e)) >= 2;
+      return (await countSessionsCached(ctx)) >= 2;
     },
   },
   {
@@ -832,22 +872,22 @@ var externalTips = [
     providerAgnostic: true,
     maxLifetimeShows: 5,
     cooldownSessions: 1,
-    content: async (e) => {
-      let n = color("suggestion", e.theme);
+    content: async (ctx) => {
+      let paint = color("suggestion", ctx.theme);
       return appendContentLink(
         "agents-view-multiclauding",
-        `Running multiple Claude sessions? Press ${n(LEFT_ARROW)} on an empty prompt to see them all in one place`,
-        e,
+        `Running multiple Claude sessions? Press ${paint(LEFT_ARROW)} on an empty prompt to see them all in one place`,
+        ctx,
       );
     },
-    isRelevant: async (e) => {
+    isRelevant: async (ctx) => {
       if (!isFleetBackgroundAllowed()) return false;
       if (isTranscriptPersistenceDisabled()) return false;
       let globalConfig = getGlobalConfig();
       if (globalConfig.leftArrowOpensAgents === false) return false;
       if (isBgSession()) return false;
       if (globalConfig.hasOpenedAgentsView || globalConfig.hasUsedAgentsFleet) return false;
-      return (await countSessionsCached(e)) >= 2;
+      return (await countSessionsCached(ctx)) >= 2;
     },
   },
   {
@@ -912,8 +952,8 @@ var externalTips = [
   {
     id: "memory-command",
     providerAgnostic: true,
-    content: async (e) =>
-      appendContentLink("memory-command", "Use /memory to view and manage Claude memory", e),
+    content: async (ctx) =>
+      appendContentLink("memory-command", "Use /memory to view and manage Claude memory", ctx),
     cooldownSessions: 15,
     advertisedCommand: "memory",
     async isRelevant() {
@@ -945,11 +985,11 @@ var externalTips = [
   {
     id: "status-line",
     providerAgnostic: true,
-    content: async (e) =>
+    content: async (ctx) =>
       appendContentLink(
         "status-line",
         "Use /statusline to set up a custom status line that will display beneath the input box",
-        e,
+        ctx,
       ),
     cooldownSessions: 25,
     advertisedCommand: "statusline",
@@ -1007,25 +1047,25 @@ var externalTips = [
   },
   {
     id: "install-github-app",
-    content: async (e) =>
+    content: async (ctx) =>
       appendContentLink(
         "install-github-app",
         "Run /install-github-app to tag @claude right from your Github issues and PRs",
-        e,
+        ctx,
       ),
     cooldownSessions: 10,
     advertisedCommand: "install-github-app",
     async isRelevant() {
       if (getGlobalConfig().githubActionSetupCount) return false;
       let cachedRemoteHost = getCachedRemoteHost();
-      let n = cachedRemoteHost ? getGitHostKind(cachedRemoteHost) : null;
-      return n !== "gitlab" && n !== "bitbucket";
+      let hostKind = cachedRemoteHost ? getGitHostKind(cachedRemoteHost) : null;
+      return hostKind !== "gitlab" && hostKind !== "bitbucket";
     },
   },
   {
     id: "install-slack-app",
-    content: async (e) =>
-      appendContentLink("install-slack-app", "Run /install-slack-app to use Claude in Slack", e),
+    content: async (ctx) =>
+      appendContentLink("install-slack-app", "Run /install-slack-app to use Claude in Slack", ctx),
     cooldownSessions: 10,
     advertisedCommand: "install-slack-app",
     isRelevant: async () => !getGlobalConfig().slackAppInstallCount,
@@ -1036,14 +1076,14 @@ var externalTips = [
       "Using a Slack MCP? With Claude Tag you can @Claude directly in Slack \u2014 run /install-slack-app or share claude.com/product/tag with your org owner",
     cooldownSessions: 10,
     advertisedCommand: "install-slack-app",
-    isRelevant: async (e) => {
+    isRelevant: async (ctx) => {
       try {
         if (!isClaudeAISubscriber()) return false;
         if (getGlobalConfig().slackAppInstallCount) return false;
         let { servers } = await getClaudeCodeMcpConfigs(
           {},
           {
-            storageV5: e?.storageV5,
+            storageV5: ctx?.storageV5,
           },
         );
         return Object.keys(servers).some((key) => key.toLowerCase().includes("slack"));
@@ -1055,11 +1095,11 @@ var externalTips = [
   {
     id: "permissions",
     providerAgnostic: true,
-    content: async (e) =>
+    content: async (ctx) =>
       appendContentLink(
         "permissions",
         "Use /permissions to pre-approve and pre-deny bash, edit, and MCP tools",
-        e,
+        ctx,
       ),
     cooldownSessions: 10,
     advertisedCommand: "permissions",
@@ -1091,11 +1131,11 @@ var externalTips = [
   {
     id: "double-esc-code-restore",
     providerAgnostic: true,
-    content: async (e) =>
+    content: async (ctx) =>
       appendContentLink(
         "double-esc-code-restore",
         "Double-tap esc to rewind the code and/or conversation to a previous point in time",
-        e,
+        ctx,
       ),
     cooldownSessions: 10,
     isRelevant: async () => fileHistoryEnabled(),
@@ -1117,31 +1157,31 @@ var externalTips = [
   {
     id: "custom-commands",
     providerAgnostic: true,
-    content: async (e) =>
+    content: async (ctx) =>
       appendContentLink(
         "custom-commands",
         "Create skills by adding .md files to .claude/skills/ in your project or ~/.claude/skills/ for skills that work in any project",
-        e,
+        ctx,
       ),
     cooldownSessions: 15,
-    async isRelevant(e) {
+    async isRelevant(ctx) {
       let config = getGlobalConfig();
       return (
         !isCustomizationDisabled("skills") &&
         config.numStartups > 10 &&
-        !(await hasUserDefinedCustomization("skills", e?.storageV5))
+        !(await hasUserDefinedCustomization("skills", ctx?.storageV5))
       );
     },
   },
   {
     id: "shift-tab",
     providerAgnostic: true,
-    async content(e) {
-      let n = UNBIND_EXAMPLE() ?? "shift+tab";
+    async content(ctx) {
+      let cycleKey = UNBIND_EXAMPLE() ?? "shift+tab";
       return appendContentLink(
         "shift-tab",
-        `Hit ${n} to cycle between manual mode, auto-accept edit mode, and plan mode`,
-        e,
+        `Hit ${cycleKey} to cycle between manual mode, auto-accept edit mode, and plan mode`,
+        ctx,
       );
     },
     cooldownSessions: 10,
@@ -1172,55 +1212,55 @@ var externalTips = [
   {
     id: "agent-flag",
     providerAgnostic: true,
-    content: async (e) =>
+    content: async (ctx) =>
       appendContentLink(
         "agent-flag",
         "Use --agent <agent_name> to directly start a conversation with a subagent",
-        e,
+        ctx,
       ),
     cooldownSessions: 15,
-    async isRelevant(e) {
+    async isRelevant(ctx) {
       let config = getGlobalConfig();
       return (
         !isCustomizationDisabled("agents") &&
         config.numStartups > 5 &&
-        (await hasUserDefinedCustomization("agents", e?.storageV5))
+        (await hasUserDefinedCustomization("agents", ctx?.storageV5))
       );
     },
   },
   {
     id: "desktop-app",
     advertisedCommand: "desktop",
-    content: async (e) =>
-      `Run Claude Code locally or remotely using the Claude desktop app \xB7 run ${color("suggestion", e.theme)("/desktop")}`,
+    content: async (ctx) =>
+      `Run Claude Code locally or remotely using the Claude desktop app \xB7 run ${color("suggestion", ctx.theme)("/desktop")}`,
     cooldownSessions: 15,
-    isRelevant: async (e) =>
+    isRelevant: async (ctx) =>
       isDesktopCommandEnabled() &&
       !is1PApiCustomerOnFirstParty() &&
-      !(await tipRegistryStateByHost.of(e.session.host).getDesktopInstalled()),
+      !(await tipRegistryStateByHost.of(ctx.session.host).getDesktopInstalled()),
   },
   {
     id: "desktop-third-party",
     providerAgnostic: true,
-    content: async (e) =>
+    content: async (ctx) =>
       `Run Claude Code in the Claude desktop app with your cloud provider or LLM gateway \xB7 ${createHyperlink(
         "https://clau.de/desktop-3p",
         "clau.de/desktop-3p",
         {
-          themeName: e.theme,
+          themeName: ctx.theme,
         },
       )}`,
     cooldownSessions: 15,
-    isRelevant: async (e) =>
+    isRelevant: async (ctx) =>
       isDesktopCommandEnabled() &&
       isThirdPartyProvider() &&
-      !(await tipRegistryStateByHost.of(e.session.host).getDesktopInstalled()),
+      !(await tipRegistryStateByHost.of(ctx.session.host).getDesktopInstalled()),
   },
   {
     id: "desktop-shortcut",
     advertisedCommand: "desktop",
-    content: async (e) =>
-      `Continue your session in Claude Code Desktop with ${color("suggestion", e.theme)("/desktop")}`,
+    content: async (ctx) =>
+      `Continue your session in Claude Code Desktop with ${color("suggestion", ctx.theme)("/desktop")}`,
     cooldownSessions: 15,
     isRelevant: async () => isDesktopCommandEnabled() && getDesktopUpsellConfig().enable_shortcut_tip,
   },
@@ -1228,19 +1268,19 @@ var externalTips = [
     id: "desktop-contextual",
     advertisedCommand: "desktop",
     priority: 1,
-    content: async (e) => {
-      let n = color("suggestion", e.theme);
-      if (await tipRegistryStateByHost.of(e.session.host).getDesktopInstalled())
-        return `Working on UI? See a live preview in Claude Code Desktop \xB7 run ${n("/desktop")}`;
-      return `Working on UI? Claude Code Desktop has live preview and inline images \xB7 ${n("clau.de/desktop")}`;
+    content: async (ctx) => {
+      let paint = color("suggestion", ctx.theme);
+      if (await tipRegistryStateByHost.of(ctx.session.host).getDesktopInstalled())
+        return `Working on UI? See a live preview in Claude Code Desktop \xB7 run ${paint("/desktop")}`;
+      return `Working on UI? Claude Code Desktop has live preview and inline images \xB7 ${paint("clau.de/desktop")}`;
     },
     cooldownSessions: 15,
-    isRelevant: async (e) => {
+    isRelevant: async (ctx) => {
       if (!isDesktopCommandEnabled()) return false;
       if (!getDesktopUpsellConfig().enable_contextual_tip) return false;
-      if (!isMarketplacePluginRelevant(e)) return false;
+      if (!isMarketplacePluginRelevant(ctx)) return false;
       return !(
-        isIosSimulatorTipRelevant(e) &&
+        isIosSimulatorTipRelevant(ctx) &&
         getSessionsSinceTipShown(DESKTOP_IOS_SIMULATOR) >= DESKTOP_TIP_MIN_SESSIONS &&
         tipLifetimeShownCount(DESKTOP_IOS_SIMULATOR) < DESKTOP_TIP_MAX_SHOWS
       );
@@ -1250,27 +1290,27 @@ var externalTips = [
     id: DESKTOP_IOS_SIMULATOR,
     advertisedCommand: "desktop",
     priority: 1,
-    content: async (e) =>
-      `In Claude Code Desktop, each session gets its own iOS Simulator pane, where Claude tests your app, fixes what it finds, and checks again. \xB7 run ${color("suggestion", e.theme)("/desktop")}`,
+    content: async (ctx) =>
+      `In Claude Code Desktop, each session gets its own iOS Simulator pane, where Claude tests your app, fixes what it finds, and checks again. \xB7 run ${color("suggestion", ctx.theme)("/desktop")}`,
     cooldownSessions: DESKTOP_TIP_MIN_SESSIONS,
     maxLifetimeShows: DESKTOP_TIP_MAX_SHOWS,
-    isRelevant: async (e) => isIosSimulatorTipRelevant(e),
+    isRelevant: async (ctx) => isIosSimulatorTipRelevant(ctx),
   },
   {
     id: "claude-design-contextual",
     priority: 1,
-    content: async (e) =>
+    content: async (ctx) =>
       `Use Claude Design to mock up screens before you build \xB7 ${createHyperlink(
         "https://claude.ai/design?utm_source=claude_code&utm_medium=tip&utm_campaign=tengu_cedar_plume",
         "claude.ai/design",
         {
-          themeName: e.theme,
+          themeName: ctx.theme,
         },
       )}`,
     cooldownSessions: 15,
-    isRelevant: async (e) => {
+    isRelevant: async (ctx) => {
       if (!isClaudeAISubscriber()) return false;
-      if (!isMarketplacePluginRelevant(e)) return false;
+      if (!isMarketplacePluginRelevant(ctx)) return false;
       return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cedar_plume", false);
     },
   },
@@ -1278,14 +1318,18 @@ var externalTips = [
     id: "claude-design-command",
     advertisedCommand: "design",
     priority: 1,
-    content: async (e) =>
-      `Working on UI? Run ${color("suggestion", e.theme)("/design")} to mock up a few directions before you build`,
+    content: async (ctx) =>
+      `Working on UI? Run ${color("suggestion", ctx.theme)("/design")} to mock up a few directions before you build`,
     cooldownSessions: 15,
-    isRelevant: async (e) => {
-      if (!isMarketplacePluginRelevant(e)) return false;
+    isRelevant: async (ctx) => {
+      if (!isMarketplacePluginRelevant(ctx)) return false;
       if (isBundledSkillGatedOff(DESIGN)) return false;
-      let n = await import("./chunk-ykkf1x45.js");
-      if (n.isArtifactTypeAliasEnabled() && !n.orgAllowsArtifactTypeAlias(n.DESIGN_TYPE_ALIAS)) return false;
+      let aliasModule = await import("../../skills/bundled/artifactTypeAlias.js");
+      if (
+        aliasModule.isArtifactTypeAliasEnabled() &&
+        !aliasModule.orgAllowsArtifactTypeAlias(aliasModule.DESIGN_TYPE_ALIAS)
+      )
+        return false;
       return isDesignSyncEnabled();
     },
   },
@@ -1326,36 +1370,37 @@ var externalTips = [
     priority: 1,
     cooldownSessions: GITHUB_TIP_COOLDOWN_SESSIONS,
     maxLifetimeShows: GITHUB_TIP_MAX_SHOWS,
-    content: async (e) =>
-      `Run ${color("suggestion", e.theme)("/web-setup")} to use cloud sessions with the GitHub account gh is signed in to`,
-    isRelevant: async (e) => {
+    content: async (ctx) =>
+      `Run ${color("suggestion", ctx.theme)("/web-setup")} to use cloud sessions with the GitHub account gh is signed in to`,
+    isRelevant: async (ctx) => {
       if (getIsNonInteractiveSession() || !isClaudeAISubscriber() || !isWebSetupEnabled()) return false;
       let cachedRemoteHost = getCachedRemoteHost();
-      let s = cachedRemoteHost ? getGitHostKind(cachedRemoteHost) : null;
-      if (s === "gitlab" || s === "bitbucket") return false;
+      let hostKind = cachedRemoteHost ? getGitHostKind(cachedRemoteHost) : null;
+      if (hostKind === "gitlab" || hostKind === "bitbucket") return false;
       if (
         tipLifetimeShownCount("web-setup-github") >= GITHUB_TIP_MAX_SHOWS ||
         getSessionsSinceTipShown("web-setup-github") < GITHUB_TIP_COOLDOWN_SESSIONS
       )
         return false;
-      if ((await tipRegistryStateByHost.of(e.session.host).getGhAuthStatus()).status !== "authenticated")
+      if ((await tipRegistryStateByHost.of(ctx.session.host).getGhAuthStatus()).status !== "authenticated")
         return false;
       return (
-        GITHUB_CONNECTION_STATUS_CACHE.of(e.session.host).peek(e.credentials, e.storageV5) === "not_connected"
+        GITHUB_CONNECTION_STATUS_CACHE.of(ctx.session.host).peek(ctx.credentials, ctx.storageV5) ===
+        "not_connected"
       );
     },
   },
   {
     id: "remote-control",
-    content: async (e) => {
-      let n = color("suggestion", e.theme);
+    content: async (ctx) => {
+      let paint = color("suggestion", ctx.theme);
       return `Control this session from ${createHyperlink(
         "https://claude.com/download#mobile",
         "the Claude mobile app",
         {
-          themeName: e.theme,
+          themeName: ctx.theme,
         },
-      )} \xB7 run ${n("/remote-control")}`;
+      )} \xB7 run ${paint("/remote-control")}`;
     },
     cooldownSessions: 15,
     isRelevant: async () =>
@@ -1363,14 +1408,14 @@ var externalTips = [
   },
   {
     id: "remote-control-next-surface",
-    content: async (e) => {
-      let [n, s, r] =
+    content: async (ctx) => {
+      let [href, linkText, suffix] =
         getUntriedRemoteSurface() === "web"
           ? ["https://claude.ai/code", "claude.ai/code", " on any browser"]
           : ["https://claude.com/download#mobile", "the Claude mobile app", ""];
-      return `You can also drive this session from ${createHyperlink(n, s, {
-        themeName: e.theme,
-      })}${r}`;
+      return `You can also drive this session from ${createHyperlink(href, linkText, {
+        themeName: ctx.theme,
+      })}${suffix}`;
     },
     cooldownSessions: 15,
     maxLifetimeShows: 3,
@@ -1382,8 +1427,8 @@ var externalTips = [
   },
   {
     id: "push-notif",
-    content: async (e) =>
-      `Get pinged on your phone when long tasks finish \xB7 enable push notifications in ${color("suggestion", e.theme)("/config")}`,
+    content: async (ctx) =>
+      `Get pinged on your phone when long tasks finish \xB7 enable push notifications in ${color("suggestion", ctx.theme)("/config")}`,
     cooldownSessions: 15,
     isRelevant: async () => isPushUpsellEligible(),
   },
@@ -1418,7 +1463,7 @@ var externalTips = [
     content: async () => FOCUS_ON_TIP,
     cooldownSessions: C4E_TIP_COOLDOWN_SESSIONS,
     advertisedCommand: "focus",
-    isRelevant: async (e) => {
+    isRelevant: async (ctx) => {
       if (!isFullscreenEnvEnabled() || getInitialSettings_2().viewMode !== undefined || isFocusModeEnabled())
         return false;
       if (
@@ -1430,7 +1475,7 @@ var externalTips = [
         case "holdout":
           return false;
         case "after_long_turn":
-          return (e.lastTurnToolUseCount ?? 0) >= FOCUS_TIP_MAX;
+          return (ctx.lastTurnToolUseCount ?? 0) >= FOCUS_TIP_MAX;
         default:
           return true;
       }
@@ -1444,8 +1489,8 @@ var externalTips = [
     cooldownSessions: 15,
     maxLifetimeShows: 3,
     advertisedCommand: "config",
-    isRelevant: async (e) =>
-      (e.explanationRequestCount ?? 0) >= TIP_SHOW_LIMIT &&
+    isRelevant: async (ctx) =>
+      (ctx.explanationRequestCount ?? 0) >= TIP_SHOW_LIMIT &&
       !isRemoteSessionAvailable() &&
       isSettingSourceEnabled("localSettings") &&
       getSettingsForSource("flagSettings")?.outputStyle === undefined &&
@@ -1454,8 +1499,8 @@ var externalTips = [
   },
   {
     id: "console-api-key",
-    content: async (e) =>
-      `Build your AI product with Claude API. Run ${color("suggestion", e.theme)("/claude-api")} to get started`,
+    content: async (ctx) =>
+      `Build your AI product with Claude API. Run ${color("suggestion", ctx.theme)("/claude-api")} to get started`,
     cooldownSessions: 15,
     isRelevant: async () => {
       if (!isClaudeAISubscriber() || !isMaxSubscriber()) return false;
@@ -1469,8 +1514,8 @@ var externalTips = [
   },
   {
     id: "c4e-desktop",
-    content: async (e) =>
-      `Run Claude Code locally or remotely using the Claude desktop app \u2014 ${enterpriseOnlyNote(e)}`,
+    content: async (ctx) =>
+      `Run Claude Code locally or remotely using the Claude desktop app \u2014 ${enterpriseOnlyNote(ctx)}`,
     cooldownSessions: 15,
     isRelevant: async () => {
       if (!is1PApiCustomerOnFirstParty() || anyC4eTipRecentlyShown("c4e-desktop")) return false;
@@ -1479,15 +1524,15 @@ var externalTips = [
   },
   {
     id: "c4e-remote-sessions",
-    content: async (e) =>
-      `Run tasks in the cloud while you keep coding locally \u2014 ${enterpriseOnlyNote(e)}`,
+    content: async (ctx) =>
+      `Run tasks in the cloud while you keep coding locally \u2014 ${enterpriseOnlyNote(ctx)}`,
     cooldownSessions: 15,
     isRelevant: async () => is1PApiCustomerOnFirstParty() && !anyC4eTipRecentlyShown("c4e-remote-sessions"),
   },
   {
     id: "c4e-ultrareview",
-    content: async (e) =>
-      `/ultrareview runs a deep, multi-agent review of your changes \u2014 ${enterpriseOnlyNote(e)}`,
+    content: async (ctx) =>
+      `/ultrareview runs a deep, multi-agent review of your changes \u2014 ${enterpriseOnlyNote(ctx)}`,
     cooldownSessions: 15,
     advertisedCommand: "ultrareview",
     isRelevant: async () => is1PApiCustomerOnFirstParty() && !anyC4eTipRecentlyShown("c4e-ultrareview"),
@@ -1496,16 +1541,19 @@ var externalTips = [
     id: "ultrareview-awareness",
     priority: 1,
     cooldownSessions: 8,
-    content: async (e) => {
-      let n = color("suggestion", e.theme);
-      let s = ultrareviewQuota();
-      let r = s !== null && s.reviews_remaining > 0 ? ` \u2014 ${freeReviewsBadge(s.reviews_remaining)}` : "";
-      return `Run ${n("/ultrareview")} for a cloud-based multi-agent review that finds and verifies bugs in your branch${r}`;
+    content: async (ctx) => {
+      let paint = color("suggestion", ctx.theme);
+      let quota = ultrareviewQuota();
+      let badge =
+        quota !== null && quota.reviews_remaining > 0
+          ? ` \u2014 ${freeReviewsBadge(quota.reviews_remaining)}`
+          : "";
+      return `Run ${paint("/ultrareview")} for a cloud-based multi-agent review that finds and verifies bugs in your branch${badge}`;
     },
-    isRelevant: async (e) => {
+    isRelevant: async (ctx) => {
       if (!isUltrareviewSurfaceOn("startup_tip")) return false;
       if (hasRunUltrareview()) return false;
-      refreshUltrareviewQuota(e.credentials);
+      refreshUltrareviewQuota(ctx.credentials);
       return true;
     },
   },
@@ -1517,24 +1565,24 @@ var externalTips = [
     cooldownSessions: 2,
     async isRelevant() {
       let config = getGlobalConfig();
-      let s = getUserSpecifiedModelSetting() === "opusplan";
+      let isOpusPlan = getUserSpecifiedModelSetting() === "opusplan";
       let daysSinceLastUse = config.lastPlanModeUse
         ? (Date.now() - config.lastPlanModeUse) / 86400000
         : 1 / 0;
-      return s && daysSinceLastUse > 3;
+      return isOpusPlan && daysSinceLastUse > 3;
     },
   },
   {
     id: "frontend-design-plugin",
     priority: 1,
     providerAgnostic: true,
-    content: async (e) => `Working with HTML/CSS? Install the frontend-design plugin:
-${color("suggestion", e.theme)(`/plugin install frontend-design@${CLAUDE_PLUGINS_OFFICIAL}`)}`,
+    content: async (ctx) => `Working with HTML/CSS? Install the frontend-design plugin:
+${color("suggestion", ctx.theme)(`/plugin install frontend-design@${CLAUDE_PLUGINS_OFFICIAL}`)}`,
     cooldownSessions: 3,
     maxLifetimeShows: 3,
     advertisedCommand: "plugin",
-    isRelevant: async (e) =>
-      shouldSuggestOfficialPlugin(tipRegistryStateByHost.of(e.session.host), "frontend-design", e, {
+    isRelevant: async (ctx) =>
+      shouldSuggestOfficialPlugin(tipRegistryStateByHost.of(ctx.session.host), "frontend-design", ctx, {
         filesRead: ["**/*.html", "**/*.css", "**/*.htm"],
       }),
   },
@@ -1542,8 +1590,8 @@ ${color("suggestion", e.theme)(`/plugin install frontend-design@${CLAUDE_PLUGINS
   {
     id: "subagent-fanout-nudge",
     providerAgnostic: true,
-    content: async (e) =>
-      `Say ${color("suggestion", e.theme)('"fan out subagents"')} and Claude sends a team. Each one digs deep so nothing gets missed.`,
+    content: async (ctx) =>
+      `Say ${color("suggestion", ctx.theme)('"fan out subagents"')} and Claude sends a team. Each one digs deep so nothing gets missed.`,
     cooldownSessions: 3,
     isRelevant: async () => !isClaudeAISubscriber(),
   },
@@ -1552,30 +1600,30 @@ ${color("suggestion", e.theme)(`/plugin install frontend-design@${CLAUDE_PLUGINS
     providerAgnostic: true,
     advertisedCommand: "config",
     priority: 1,
-    content: async (e) => {
-      let n = color("suggestion", e.theme);
-      return `You can control how big a workflow is just by prompting. Try ${n('"use a small workflow, 5 agents max"')}, or set a default with ${n("Dynamic workflow size")} in ${n("/config")}.`;
+    content: async (ctx) => {
+      let paint = color("suggestion", ctx.theme);
+      return `You can control how big a workflow is just by prompting. Try ${paint('"use a small workflow, 5 agents max"')}, or set a default with ${paint("Dynamic workflow size")} in ${paint("/config")}.`;
     },
     cooldownSessions: 5,
-    isRelevant: async (e) =>
+    isRelevant: async (ctx) =>
       isWorkflowsAvailable() &&
       !hasWorkflowSizeSetting() &&
-      (e?.toolsUsed?.has(WORKFLOW_TOOL_NAME) ?? false) &&
+      (ctx?.toolsUsed?.has(WORKFLOW_TOOL_NAME) ?? false) &&
       !anyWorkflowSizeTipRecentlyShown("workflow-size-prompting"),
   },
   {
     id: "workflow-size-prompting-ambient",
     providerAgnostic: true,
     advertisedCommand: "config",
-    content: async (e) => {
-      let n = color("suggestion", e.theme);
-      return `You can control how big a workflow is just by prompting. Ask for a small workflow, cap it with ${n('"use at most 5 agents"')}, or set a default with ${n("Dynamic workflow size")} in ${n("/config")}.`;
+    content: async (ctx) => {
+      let paint = color("suggestion", ctx.theme);
+      return `You can control how big a workflow is just by prompting. Ask for a small workflow, cap it with ${paint('"use at most 5 agents"')}, or set a default with ${paint("Dynamic workflow size")} in ${paint("/config")}.`;
     },
     cooldownSessions: 12,
-    isRelevant: async (e) =>
+    isRelevant: async (ctx) =>
       isWorkflowsAvailable() &&
       !hasWorkflowSizeSetting() &&
-      !(e?.toolsUsed?.has(WORKFLOW_TOOL_NAME) ?? false) &&
+      !(ctx?.toolsUsed?.has(WORKFLOW_TOOL_NAME) ?? false) &&
       !anyWorkflowSizeTipRecentlyShown("workflow-size-prompting-ambient"),
   },
   {
@@ -1593,12 +1641,12 @@ ${color("suggestion", e.theme)(`/plugin install frontend-design@${CLAUDE_PLUGINS
   {
     id: "code-review-low-fast",
     providerAgnostic: true,
-    content: async (e) => {
-      let n = color("suggestion", e.theme);
+    content: async (ctx) => {
+      let paint = color("suggestion", ctx.theme);
       return appendContentLink(
         "code-review-low-fast",
-        `For a fast, cheap code review, try ${n("/code-review low")}. It runs the built-in skill at its lightest effort level.`,
-        e,
+        `For a fast, cheap code review, try ${paint("/code-review low")}. It runs the built-in skill at its lightest effort level.`,
+        ctx,
       );
     },
     cooldownSessions: 8,
@@ -1617,26 +1665,26 @@ ${color("suggestion", e.theme)(`/plugin install frontend-design@${CLAUDE_PLUGINS
     id: "plugin-disuse-review",
     providerAgnostic: true,
     advertisedCommand: "plugin",
-    content: async (e) => {
-      let n = color("suggestion", e.theme);
+    content: async (ctx) => {
+      let paint = color("suggestion", ctx.theme);
       let disusedPlugins = await computeDisusedPlugins();
-      let r = disusedPlugins[0];
-      if (!r) return "";
+      let oldest = disusedPlugins[0];
+      if (!oldest) return "";
       if (disusedPlugins.length === 1)
-        return `You haven't used the ${sequential.bold(r.name)} plugin lately. Disable it with ${n("/plugin")} to free up context and speed up startup.`;
-      return `You have ${disusedPlugins.length} plugins you haven't used lately. Disable them with ${n("/plugin")} to free up context and speed up startup.`;
+        return `You haven't used the ${sequential.bold(oldest.name)} plugin lately. Disable it with ${paint("/plugin")} to free up context and speed up startup.`;
+      return `You have ${disusedPlugins.length} plugins you haven't used lately. Disable them with ${paint("/plugin")} to free up context and speed up startup.`;
     },
     cooldownSessions: 30,
     isRelevant: async () => (await computeDisusedPlugins()).length > 0,
   },
   {
     id: "goal-command-nudge",
-    content: async (e) => {
-      let n = color("suggestion", e.theme);
+    content: async (ctx) => {
+      let paint = color("suggestion", ctx.theme);
       return appendContentLink(
         "goal-command-nudge",
-        `Set an objective with ${n("/goal")} \u2014 Claude keeps working until it's met`,
-        e,
+        `Set an objective with ${paint("/goal")} \u2014 Claude keeps working until it's met`,
+        ctx,
       );
     },
     cooldownSessions: 3,
@@ -1670,8 +1718,8 @@ ${color("suggestion", e.theme)(`/plugin install frontend-design@${CLAUDE_PLUGINS
   {
     id: "team-onboarding-share",
     advertisedCommand: "team-onboarding",
-    content: async (e) =>
-      `Run ${color("suggestion", e.theme)("/team-onboarding")} to turn your Claude usage into an onboarding guide \u2014 share it with your team in one link`,
+    content: async (ctx) =>
+      `Run ${color("suggestion", ctx.theme)("/team-onboarding")} to turn your Claude usage into an onboarding guide \u2014 share it with your team in one link`,
     cooldownSessions: 5,
     async isRelevant() {
       let globalConfig = getGlobalConfig();
@@ -1688,35 +1736,41 @@ ${color("suggestion", e.theme)(`/plugin install frontend-design@${CLAUDE_PLUGINS
 ];
 var EXTRA_TIPS = [];
 //@ chunk-4t8fx0s8.js:44371-44645 layout
-async function isTipRelevantSafe(e, n) {
-  let s = "tip advertisedCommand check threw";
+async function isTipRelevantSafe(tip, ctx) {
+  let failureMessage = "tip advertisedCommand check threw";
   try {
-    if (e.advertisedCommand !== undefined && !(await isAdvertisedCommandAvailable(e.advertisedCommand)))
+    if (tip.advertisedCommand !== undefined && !(await isAdvertisedCommandAvailable(tip.advertisedCommand)))
       return false;
-    s = "tip isRelevant threw";
-    return await e.isRelevant(n);
+    failureMessage = "tip isRelevant threw";
+    return await tip.isRelevant(ctx);
   } catch (error) {
-    tipRegistryStateByHost.of(n.session.host).failedTipIds.add(e.id);
-    logError(withTelemetryMessage(toError(error), s));
+    tipRegistryStateByHost.of(ctx.session.host).failedTipIds.add(tip.id);
+    logError(withTelemetryMessage(toError(error), failureMessage));
     return false;
   }
 }
 //@ chunk-4t8fx0s8.js:44645-45162 file-local
-async function getCustomTips(e) {
-  let n = tipRegistryStateByHost.of(e.session.host);
-  let { tips, trustedCount } = await loadCustomTips(e.session.host);
-  let filtered = tips.filter((c) => getSessionsSinceTipShown(c.id) >= c.cooldownSessions);
+async function getCustomTips(ctx) {
+  let state = tipRegistryStateByHost.of(ctx.session.host);
+  let { tips, trustedCount } = await loadCustomTips(ctx.session.host);
+  let filtered = tips.filter((tip) => getSessionsSinceTipShown(tip.id) >= tip.cooldownSessions);
   if (trustedCount > 0 && excludesDefaultTips()) return filtered;
-  let g = [...externalTips, ...EXTRA_TIPS, ...(await n.getMarketplacePluginTips(e.storageV5))];
-  let S = !isFirstPartyApiBackend();
-  let filtered_2 = g.filter((c) => !n.failedTipIds.has(c.id));
-  let k = S ? filtered_2.filter((c) => c.providerAgnostic) : filtered_2;
-  let isRelevant = await Promise.all(k.map((c) => isTipRelevantSafe(c, e)));
+  let builtinTips = [
+    ...externalTips,
+    ...EXTRA_TIPS,
+    ...(await state.getMarketplacePluginTips(ctx.storageV5)),
+  ];
+  let restrictThirdParty = !isFirstPartyApiBackend();
+  let filtered_2 = builtinTips.filter((tip) => !state.failedTipIds.has(tip.id));
+  let candidates = restrictThirdParty ? filtered_2.filter((tip) => tip.providerAgnostic) : filtered_2;
+  let isRelevant = await Promise.all(candidates.map((tip) => isTipRelevantSafe(tip, ctx)));
   return [
-    ...k
+    ...candidates
       .filter((content, index) => isRelevant[index])
-      .filter((c) => getSessionsSinceTipShown(c.id) >= c.cooldownSessions)
-      .filter((c) => c.maxLifetimeShows === undefined || tipLifetimeShownCount(c.id) < c.maxLifetimeShows),
+      .filter((tip) => getSessionsSinceTipShown(tip.id) >= tip.cooldownSessions)
+      .filter(
+        (tip) => tip.maxLifetimeShows === undefined || tipLifetimeShownCount(tip.id) < tip.maxLifetimeShows,
+      ),
     ...filtered,
   ];
 }
@@ -1736,10 +1790,16 @@ function isThirdPartyProvider() {
       return !isFirstPartyAnthropicBaseUrl();
   }
 }
-//@ chunk-5nte8cwj.js:1501-1546 placement
-/**
- * 是否能构造出桌面深链（构造失败为 false）。
- */
-async function hasDesktopDeepLink() {
-  return (await buildDesktopDeepLink()) !== null;
-}
+export {
+  MARKETPLACE_PLUGIN_TIP_PREFIX,
+  TipSessionCache,
+  getExternalTips,
+  getExtraTips,
+  isAdvertisedCommandAvailable,
+  getAllTips,
+  getCustomTips,
+  isMarketplacePluginRelevant,
+  isKnownTipId,
+  isTipRelevantSafe,
+  tipRegistryStateByHost,
+};

@@ -28,7 +28,7 @@ import { claudeCommand } from "../../utils/worktreeResumeHint.js";
 import { errorMessage } from "../../utils/errors.js";
 
 //@ chunk-4vq0yytw.js:12058-16442 fingerprint = registerMcpAddCommand (0.821)
-function registerMcpAddCommand(mcp, p) {
+function registerMcpAddCommand(mcp, register) {
   mcp
     .command("add <name> <commandOrUrl> [args...]")
     .description(
@@ -71,10 +71,10 @@ Examples:
       ).hideHelp(!isXaaEnabled()),
     )
     .action(
-      p(async (s, e, t, o, options) => {
-        let actualCommand = t;
-        let actualArgs = o;
-        if (!e)
+      register(async (name, urlOrCommand, command, args, options) => {
+        let actualCommand = command;
+        let actualArgs = args;
+        if (!urlOrCommand)
           cliError(`Error: Server name is required.
 Usage: claude mcp add <name> <command> [args...]`);
         else if (!actualCommand)
@@ -109,9 +109,9 @@ Usage: claude mcp add <name> <command> [args...]`);
             looksLikeUrl,
           });
           if (transport === "sse" || transport === "http") {
-            let m = transport === "sse" ? "SSE" : "HTTP";
+            let transportLabel = transport === "sse" ? "SSE" : "HTTP";
             if (!actualCommand)
-              return cliErrorAfterAnalyticsFlush(`Error: URL is required for ${m} transport.`);
+              return cliErrorAfterAnalyticsFlush(`Error: URL is required for ${transportLabel} transport.`);
             let headers = options.header ? parseHeaders(options.header) : undefined;
             let callbackPort = options.callbackPort ? parseIntLoose(options.callbackPort) : undefined;
             if (
@@ -133,7 +133,8 @@ Usage: claude mcp add <name> <command> [args...]`);
                     }),
                   }
                 : undefined;
-            let { readClientSecret, saveMcpClientSecret } = require("./chunk-asne9cp8.js").mcpAuthModule();
+            let { readClientSecret, saveMcpClientSecret } =
+              require("../../services/mcp/emitTripwireEvent.lazy.js").mcpAuthModule();
             let clientSecret =
               options.clientSecret && options.clientId ? await readClientSecret() : undefined;
             let serverConfig =
@@ -150,16 +151,16 @@ Usage: claude mcp add <name> <command> [args...]`);
                     headers,
                     oauth,
                   };
-            await addMcpConfig(e, serverConfig, scope, s);
+            await addMcpConfig(urlOrCommand, serverConfig, scope, name);
             if (clientSecret) {
-              let y = await saveMcpClientSecret(e, serverConfig, clientSecret);
-              if (!y.success)
+              let secretResult = await saveMcpClientSecret(urlOrCommand, serverConfig, clientSecret);
+              if (!secretResult.success)
                 process.stderr
-                  .write(`Server added, but the client secret could not be stored${y.warning ? ` (${y.warning})` : ""}. Re-run with --client-secret once secure storage is available.
+                  .write(`Server added, but the client secret could not be stored${secretResult.warning ? ` (${secretResult.warning})` : ""}. Re-run with --client-secret once secure storage is available.
 `);
             }
             process.stdout
-              .write(`Added ${m} MCP server ${e} with URL: ${redactUrlsInText(actualCommand)} to ${scope} config
+              .write(`Added ${transportLabel} MCP server ${urlOrCommand} with URL: ${redactUrlsInText(actualCommand)} to ${scope} config
 `);
             if (headers)
               process.stdout.write(`Headers: ${jsonStringify(redactSecrets_3(headers), null, 2)}
@@ -169,17 +170,17 @@ Usage: claude mcp add <name> <command> [args...]`);
               process.stderr
                 .write(`Warning: --client-id, --client-secret, --callback-port, and --xaa are only supported for HTTP/SSE transports and will be ignored for stdio.
 `);
-            let m = looksLikeUrl ? redactUrlsInText(actualCommand) : actualCommand;
+            let redactedCommand = looksLikeUrl ? redactUrlsInText(actualCommand) : actualCommand;
             if (!transportExplicit && looksLikeUrl) {
               process.stderr.write(`
-Warning: The command "${m}" looks like a URL, but is being interpreted as a stdio server as --transport was not specified.
+Warning: The command "${redactedCommand}" looks like a URL, but is being interpreted as a stdio server as --transport was not specified.
 `);
-              let h = claudeCommand("mcp add --transport http", e);
-              let P = claudeCommand("mcp add --transport sse", e);
-              if (h && P) {
-                process.stderr.write(`If this is an HTTP server, use: ${h} ${m}
+              let httpCommand = claudeCommand("mcp add --transport http", urlOrCommand);
+              let sseCommand = claudeCommand("mcp add --transport sse", urlOrCommand);
+              if (httpCommand && sseCommand) {
+                process.stderr.write(`If this is an HTTP server, use: ${httpCommand} ${redactedCommand}
 `);
-                process.stderr.write(`If this is an SSE server, use: ${P} ${m}
+                process.stderr.write(`If this is an SSE server, use: ${sseCommand} ${redactedCommand}
 `);
               } else
                 process.stderr.write(`If this is a remote server, re-run with --transport http (or sse).
@@ -187,7 +188,7 @@ Warning: The command "${m}" looks like a URL, but is being interpreted as a stdi
             }
             let env = parseEnvVars(options.env);
             await addMcpConfig(
-              e,
+              urlOrCommand,
               {
                 type: "stdio",
                 command: actualCommand,
@@ -195,10 +196,10 @@ Warning: The command "${m}" looks like a URL, but is being interpreted as a stdi
                 env,
               },
               scope,
-              s,
+              name,
             );
             process.stdout
-              .write(`Added stdio MCP server ${e} with command: ${m} ${actualArgs.join(" ")} to ${scope} config
+              .write(`Added stdio MCP server ${urlOrCommand} with command: ${redactedCommand} ${actualArgs.join(" ")} to ${scope} config
 `);
           }
           return cliOkAfterAnalyticsFlush(`File modified: ${describeMcpConfigFilePath(scope)}`);

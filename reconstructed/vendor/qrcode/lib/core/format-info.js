@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:11234-11429 cjs-fingerprint
-var require_format_info = x(function (cjsExports) {
+var require_format_info = __commonJS(function (cjsExports) {
   var Utils = require_utils();
   var G15_BCH = Utils.getBCHDigit(1335);
   cjsExports.getEncodedBits = function (errorCorrectionLevel, mask) {

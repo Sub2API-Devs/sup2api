@@ -8,7 +8,7 @@
  * pieces: chunk-rehfzw2n.js (10)
  * attribution: placement 10
  */
-import { Ar } from "../../../runtime/bun-runtime.js";
+import { __export } from "../../../runtime/bun-runtime.js";
 import { isSameConfigDir } from "../envUtils.js";
 import { credentialsStoreFor } from "../secureStorage/credentialsFileStore.js";
 import { getSettingsForSource, getSettingsForSourceTightenOnly } from "../settings/settings.js";
@@ -36,7 +36,7 @@ import { unsettledBy } from "../../daemon/workerEnding.js";
  */
 var emptyDefaultExport = {};
 //@ chunk-rehfzw2n.js:703-899 placement
-Ar(emptyDefaultExport, {
+__export(emptyDefaultExport, {
   default: () => emptyDefaultExport,
   earlyCredentialsOf: () => earlyCredentialsOf,
   hostProxyAuthConfigured: () => hostProxyAuthConfigured,
@@ -46,9 +46,9 @@ Ar(emptyDefaultExport, {
   signInRestored: () => signInRestored,
 });
 //@ chunk-rehfzw2n.js:899-983 placement
-function earlyCredentialsOf(e) {
-  return e?.backend !== undefined && isSameConfigDir(e.configHome)
-    ? credentialsStoreFor(e?.backend)
+function earlyCredentialsOf(sessionInfo) {
+  return sessionInfo?.backend !== undefined && isSameConfigDir(sessionInfo.configHome)
+    ? credentialsStoreFor(sessionInfo?.backend)
     : undefined;
 }
 //@ chunk-rehfzw2n.js:983-1338 placement
@@ -81,14 +81,14 @@ var PROXY_HELPER_SKIPPED_NOTE = `a proxy helper set by this project is not run b
 `;
 //@ chunk-rehfzw2n.js:1409-1613 placement
 function hostProxyAuthConfigured() {
-  let e = isProviderManagedByHost();
-  let r =
-    e &&
+  let providerManagedByHost = isProviderManagedByHost();
+  let projectHelperConfigured =
+    providerManagedByHost &&
     Boolean(process.stderr.isTTY) &&
     (getSettingsForSource("projectSettings")?.proxyAuthHelper !== undefined ||
       getSettingsForSource("localSettings")?.proxyAuthHelper !== undefined);
-  if (e) _setProxyAuthHelperConfig(personProxyAuthHelper());
-  if (r) process.stderr.write(PROXY_HELPER_SKIPPED_NOTE);
+  if (providerManagedByHost) _setProxyAuthHelperConfig(personProxyAuthHelper());
+  if (projectHelperConfigured) process.stderr.write(PROXY_HELPER_SKIPPED_NOTE);
 }
 //@ chunk-rehfzw2n.js:1613-1670 placement
 /**
@@ -98,9 +98,9 @@ var PROXY_HELPER_REFUSED_MESSAGE = "Error: the proxy setting named above is refu
 //@ chunk-rehfzw2n.js:1670-1768 placement
 function proxyAgentsInstalled() {
   let proxyUrlWithSource = getProxyUrlWithSource();
-  let r = proxyUrlWithSource !== undefined && !parseProxyUrl(proxyUrlWithSource.value);
+  let proxyRefused = proxyUrlWithSource !== undefined && !parseProxyUrl(proxyUrlWithSource.value);
   configureGlobalAgents();
-  return r
+  return proxyRefused
     ? {
         reason: PROXY_HELPER_REFUSED_MESSAGE,
         kind: "lasting",
@@ -108,20 +108,28 @@ function proxyAgentsInstalled() {
     : null;
 }
 //@ chunk-rehfzw2n.js:1768-1852 placement
-function signInRestored(e) {
-  let r = Boolean(process.stderr.isTTY) || !getIsNonInteractiveSession();
-  return restoreGatewayAuthForFastPath(earlyCredentialsOf(e), () => r);
+function signInRestored(sessionInfo) {
+  let shouldWarn = Boolean(process.stderr.isTTY) || !getIsNonInteractiveSession();
+  return restoreGatewayAuthForFastPath(earlyCredentialsOf(sessionInfo), () => shouldWarn);
 }
 //@ chunk-rehfzw2n.js:1852-2065 placement
-async function sessionFactsRestored(e) {
-  let r = await Promise.resolve()
+async function sessionFactsRestored(sessionInfo) {
+  let sessionError = await Promise.resolve()
     .then(applyExtraCACertsFromConfig)
     .then(() => Promise.all([loadExtraCACerts(), loadMTLSClientMaterial()]))
     .then(loadHostCredentials)
     .then(hostProxyAuthConfigured)
-    .then(() => signInRestored(e))
+    .then(() => signInRestored(sessionInfo))
     .then(() => null, unsettledBy);
-  let t = await Promise.resolve().then(proxyAgentsInstalled).catch(unsettledBy);
-  return r ?? t;
+  let proxyError = await Promise.resolve().then(proxyAgentsInstalled).catch(unsettledBy);
+  return sessionError ?? proxyError;
 }
-export { sessionFactsRestored };
+export {
+  sessionFactsRestored,
+  emptyDefaultExport,
+  earlyCredentialsOf,
+  hostProxyAuthConfigured,
+  personProxyAuthHelper,
+  proxyAgentsInstalled,
+  signInRestored,
+};

@@ -8,12 +8,12 @@
  * pieces: chunk-sx9xc5ee.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../../../../vendor/react/compiler-runtime.js";
-import { Qr, y } from "../../../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
+import { use, useState } from "../../../../../vendor/react/cjs/react.production.js";
 import { useWizard } from "../../../wizard/useWizard.js";
 import {
   MAX_PROFILE_OPTIONS,
-  isBedrockRegion,
+  isBedrockProfileName,
   toProfileOption,
   MANUAL_PROFILE_VALUE,
 } from "../../../providerSetup/bedrock/bedrockVerify.js";
@@ -36,44 +36,44 @@ import { ErrorText } from "../../../ErrorText.js";
 
 //@ chunk-sx9xc5ee.js:16242-19292 callgraph-fingerprint = MethodStep (0.275)
 function MethodStep(props) {
-  let $ = w(52);
+  let $ = useMemoCache(52);
   let { profilesPromise } = props;
-  let c = Qr(profilesPromise);
+  let profiles = use(profilesPromise);
   let { goBack, goToStep, updateWizardData, wizardData } = useWizard();
-  let h = c.length > MAX_PROFILE_OPTIONS;
-  let B;
-  if ($[0] !== c || $[1] !== wizardData.awsProfile) {
-    B = wizardData.awsProfile && !c.includes(wizardData.awsProfile);
-    $[0] = c;
+  let tooManyProfiles = profiles.length > MAX_PROFILE_OPTIONS;
+  let missingProfileCached;
+  if ($[0] !== profiles || $[1] !== wizardData.awsProfile) {
+    missingProfileCached = wizardData.awsProfile && !profiles.includes(wizardData.awsProfile);
+    $[0] = profiles;
     $[1] = wizardData.awsProfile;
-    $[2] = B;
-  } else B = $[2];
-  let p = Boolean(B);
-  let [A, E] = y(c.length === 0 || h || p);
-  let k;
-  if ($[3] !== c || $[4] !== h) {
-    k = h ? c.find(isBedrockRegion) : undefined;
-    $[3] = c;
-    $[4] = h;
-    $[5] = k;
-  } else k = $[5];
-  let f = k;
-  let [C, v] = y(wizardData.awsProfile ?? f ?? "");
-  let [T, _] = y(C.length);
-  let [D, W] = y(null);
-  let G;
-  if ($[6] !== A) {
-    G = {
+    $[2] = missingProfileCached;
+  } else missingProfileCached = $[2];
+  let manualMode = Boolean(missingProfileCached);
+  let [isManual, setIsManual] = useState(profiles.length === 0 || tooManyProfiles || manualMode);
+  let defaultProfileCached;
+  if ($[3] !== profiles || $[4] !== tooManyProfiles) {
+    defaultProfileCached = tooManyProfiles ? profiles.find(isBedrockProfileName) : undefined;
+    $[3] = profiles;
+    $[4] = tooManyProfiles;
+    $[5] = defaultProfileCached;
+  } else defaultProfileCached = $[5];
+  let defaultProfile = defaultProfileCached;
+  let [profileName, setProfileName] = useState(wizardData.awsProfile ?? defaultProfile ?? "");
+  let [cursorOffset, setCursorOffset] = useState(profileName.length);
+  let [errorText, setErrorText] = useState(null);
+  let keybindingOptions;
+  if ($[6] !== isManual) {
+    keybindingOptions = {
       context: "Settings",
-      isActive: A,
+      isActive: isManual,
     };
-    $[6] = A;
-    $[7] = G;
-  } else G = $[7];
-  useKeybinding("confirm:no", goBack, G);
-  let X;
+    $[6] = isManual;
+    $[7] = keybindingOptions;
+  } else keybindingOptions = $[7];
+  useKeybinding("confirm:no", goBack, keybindingOptions);
+  let chooseProfileCached;
   if ($[8] !== goToStep || $[9] !== updateWizardData) {
-    X = (awsProfile) => {
+    chooseProfileCached = (awsProfile) => {
       updateWizardData({
         awsProfile,
       });
@@ -81,62 +81,62 @@ function MethodStep(props) {
     };
     $[8] = goToStep;
     $[9] = updateWizardData;
-    $[10] = X;
-  } else X = $[10];
-  let U = X;
-  if (!A) {
-    const H = c.length;
-    let F;
-    if ($[11] !== c.length) {
-      F = plural(c.length, "profile");
-      $[11] = c.length;
-      $[12] = F;
-    } else F = $[12];
-    let V;
-    if ($[13] !== c.length || $[14] !== F) {
-      V = jsxProd_default_2(Text, {
+    $[10] = chooseProfileCached;
+  } else chooseProfileCached = $[10];
+  let chooseProfile = chooseProfileCached;
+  if (!isManual) {
+    const profileCount = profiles.length;
+    let profileNoun;
+    if ($[11] !== profiles.length) {
+      profileNoun = plural(profiles.length, "profile");
+      $[11] = profiles.length;
+      $[12] = profileNoun;
+    } else profileNoun = $[12];
+    let foundText;
+    if ($[13] !== profiles.length || $[14] !== profileNoun) {
+      foundText = jsxProd_default_2(Text, {
         dimColor: true,
-        children: ["Found ", H, " ", F, " in ~/.aws/config and ~/.aws/credentials."],
+        children: ["Found ", profileCount, " ", profileNoun, " in ~/.aws/config and ~/.aws/credentials."],
       });
-      $[13] = c.length;
-      $[14] = F;
-      $[15] = V;
-    } else V = $[15];
+      $[13] = profiles.length;
+      $[14] = profileNoun;
+      $[15] = foundText;
+    } else foundText = $[15];
     let options;
-    if ($[16] !== c) {
-      const mapped = c.map(toProfileOption);
-      let I;
+    if ($[16] !== profiles) {
+      const mapped = profiles.map(toProfileOption);
+      let manualOption;
       if ($[18] === MEMO_CACHE_SENTINEL) {
-        I = {
+        manualOption = {
           label: "Type a different name\u2026",
           value: MANUAL_PROFILE_VALUE,
         };
-        $[18] = I;
-      } else I = $[18];
-      options = [...mapped, I];
-      $[16] = c;
+        $[18] = manualOption;
+      } else manualOption = $[18];
+      options = [...mapped, manualOption];
+      $[16] = profiles;
       $[17] = options;
     } else options = $[17];
     let defaultValue;
-    if ($[19] !== c || $[20] !== wizardData.awsProfile) {
+    if ($[19] !== profiles || $[20] !== wizardData.awsProfile) {
       defaultValue =
-        wizardData.awsProfile && c.includes(wizardData.awsProfile) ? wizardData.awsProfile : undefined;
-      $[19] = c;
+        wizardData.awsProfile && profiles.includes(wizardData.awsProfile) ? wizardData.awsProfile : undefined;
+      $[19] = profiles;
       $[20] = wizardData.awsProfile;
       $[21] = defaultValue;
     } else defaultValue = $[21];
     let onChange;
-    if ($[22] !== U) {
+    if ($[22] !== chooseProfile) {
       onChange = (value) => {
-        if (value === MANUAL_PROFILE_VALUE) E(true);
-        else U(value);
+        if (value === MANUAL_PROFILE_VALUE) setIsManual(true);
+        else chooseProfile(value);
       };
-      $[22] = U;
+      $[22] = chooseProfile;
       $[23] = onChange;
     } else onChange = $[23];
-    let L;
+    let selectorElement;
     if ($[24] !== goBack || $[25] !== onChange || $[26] !== options || $[27] !== defaultValue) {
-      L = jsxProd_default(ModelSelector, {
+      selectorElement = jsxProd_default(ModelSelector, {
         options,
         defaultValue,
         onChange,
@@ -146,40 +146,40 @@ function MethodStep(props) {
       $[25] = onChange;
       $[26] = options;
       $[27] = defaultValue;
-      $[28] = L;
-    } else L = $[28];
-    let J;
-    if ($[29] !== L || $[30] !== V) {
-      J = jsxProd_default(WizardDialogLayout, {
+      $[28] = selectorElement;
+    } else selectorElement = $[28];
+    let listLayout;
+    if ($[29] !== selectorElement || $[30] !== foundText) {
+      listLayout = jsxProd_default(WizardDialogLayout, {
         subtitle: "AWS profile",
         children: jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
-          children: [V, L],
+          children: [foundText, selectorElement],
         }),
       });
-      $[29] = L;
-      $[30] = V;
-      $[31] = J;
-    } else J = $[31];
-    return J;
+      $[29] = selectorElement;
+      $[30] = foundText;
+      $[31] = listLayout;
+    } else listLayout = $[31];
+    return listLayout;
   }
-  let H;
-  if ($[32] !== U || $[33] !== C) {
-    H = () => {
-      let trimmed = C.trim();
+  let submitCached;
+  if ($[32] !== chooseProfile || $[33] !== profileName) {
+    submitCached = () => {
+      let trimmed = profileName.trim();
       if (!trimmed) {
-        W("Profile name is required");
+        setErrorText("Profile name is required");
         return;
       }
-      W(null);
-      U(trimmed);
+      setErrorText(null);
+      chooseProfile(trimmed);
     };
-    $[32] = U;
-    $[33] = C;
-    $[34] = H;
-  } else H = $[34];
-  let onSubmit = H;
+    $[32] = chooseProfile;
+    $[33] = profileName;
+    $[34] = submitCached;
+  } else submitCached = $[34];
+  let onSubmit = submitCached;
   let footerText;
   if ($[35] === MEMO_CACHE_SENTINEL) {
     footerText = jsxProd_default_2(Byline, {
@@ -198,88 +198,88 @@ function MethodStep(props) {
     });
     $[35] = footerText;
   } else footerText = $[35];
-  let V;
+  let nameHint;
   if ($[36] === MEMO_CACHE_SENTINEL) {
-    V = jsxProd_default(Text, {
+    nameHint = jsxProd_default(Text, {
       children: "The name from ~/.aws/config (after [profile \u2026]).",
     });
-    $[36] = V;
-  } else V = $[36];
-  let M;
-  if ($[37] !== f || $[38] !== c.length || $[39] !== h) {
-    M =
-      h &&
+    $[36] = nameHint;
+  } else nameHint = $[36];
+  let tooManyText;
+  if ($[37] !== defaultProfile || $[38] !== profiles.length || $[39] !== tooManyProfiles) {
+    tooManyText =
+      tooManyProfiles &&
       jsxProd_default_2(Text, {
         dimColor: true,
         children: [
           "Found ",
-          c.length,
+          profiles.length,
           " profiles \u2014 too many to list.",
-          f && ` Prepopulated with "${f}".`,
+          defaultProfile && ` Prepopulated with "${defaultProfile}".`,
         ],
       });
-    $[37] = f;
-    $[38] = c.length;
-    $[39] = h;
-    $[40] = M;
-  } else M = $[40];
-  let K;
+    $[37] = defaultProfile;
+    $[38] = profiles.length;
+    $[39] = tooManyProfiles;
+    $[40] = tooManyText;
+  } else tooManyText = $[40];
+  let ssoHint;
   if ($[41] === MEMO_CACHE_SENTINEL) {
-    K = jsxProd_default(Text, {
+    ssoHint = jsxProd_default(Text, {
       dimColor: true,
       children: "If this is an SSO profile, run `aws sso login --profile NAME` first.",
     });
-    $[41] = K;
-  } else K = $[41];
-  let I;
-  if ($[42] !== T || $[43] !== onSubmit || $[44] !== C) {
-    I = jsxProd_default(Box, {
+    $[41] = ssoHint;
+  } else ssoHint = $[41];
+  let inputElement;
+  if ($[42] !== cursorOffset || $[43] !== onSubmit || $[44] !== profileName) {
+    inputElement = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(TextInput, {
-        value: C,
-        onChange: v,
+        value: profileName,
+        onChange: setProfileName,
         onSubmit,
         placeholder: "my-bedrock-profile",
         columns: 60,
-        cursorOffset: T,
-        onChangeCursorOffset: _,
+        cursorOffset,
+        onChangeCursorOffset: setCursorOffset,
         focus: true,
         showCursor: true,
       }),
     });
-    $[42] = T;
+    $[42] = cursorOffset;
     $[43] = onSubmit;
-    $[44] = C;
-    $[45] = I;
-  } else I = $[45];
-  let L;
-  if ($[46] !== D) {
-    L =
-      D &&
+    $[44] = profileName;
+    $[45] = inputElement;
+  } else inputElement = $[45];
+  let errorElement;
+  if ($[46] !== errorText) {
+    errorElement =
+      errorText &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(ErrorText, {
-          error: D,
+          error: errorText,
         }),
       });
-    $[46] = D;
-    $[47] = L;
-  } else L = $[47];
-  let J;
-  if ($[48] !== I || $[49] !== L || $[50] !== M) {
-    J = jsxProd_default(WizardDialogLayout, {
+    $[46] = errorText;
+    $[47] = errorElement;
+  } else errorElement = $[47];
+  let manualLayout;
+  if ($[48] !== inputElement || $[49] !== errorElement || $[50] !== tooManyText) {
+    manualLayout = jsxProd_default(WizardDialogLayout, {
       subtitle: "AWS profile name",
       footerText,
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [V, M, K, I, L],
+        children: [nameHint, tooManyText, ssoHint, inputElement, errorElement],
       }),
     });
-    $[48] = I;
-    $[49] = L;
-    $[50] = M;
-    $[51] = J;
-  } else J = $[51];
-  return J;
+    $[48] = inputElement;
+    $[49] = errorElement;
+    $[50] = tooManyText;
+    $[51] = manualLayout;
+  } else manualLayout = $[51];
+  return manualLayout;
 }
 export { MethodStep };

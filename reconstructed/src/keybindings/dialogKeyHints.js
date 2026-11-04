@@ -10,18 +10,18 @@
  */
 import {
   init_react_production,
-  qt,
-  Se,
-  y,
-  P,
-  Q,
-  R,
-  ce,
-  zt,
-  l5o,
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useCallback,
+  useLayoutEffect,
+  useId,
 } from "../../vendor/react/cjs/react.production.js";
 import { useKeybindingContext } from "./KeybindingContext.js";
-import { kp } from "../../vendor/convert-to-spaces/dist/index.js";
+import { APP_CONTEXT } from "../../vendor/convert-to-spaces/dist/index.js";
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../ink/components/Text.js";
@@ -33,11 +33,18 @@ import { bunStringWidth } from "../ink/stringWidth.js";
 import { getFocusManager, isDescendantOf } from "../ink/focus.js";
 import { BaseBox } from "../ink/components/Box.js";
 import { jsonStringify } from "../utils/slowOperations.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-thjvqmbc.js:963-967 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-thjvqmbc.js:963", () => {
+  init_react_production();
+});
 //@ chunk-thjvqmbc.js:967-971 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-thjvqmbc.js:967", () => {
+  init_react_production();
+});
 //@ chunk-thjvqmbc.js:971-3093 placement
 var DIALOG_ACTION_HINTS = {
   "confirm:yes": {
@@ -184,12 +191,18 @@ function dialogActionHint(action) {
   return DIALOG_ACTION_HINTS[action];
 }
 //@ chunk-thjvqmbc.js:3180-3184 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-thjvqmbc.js:3180", () => {
+  init_react_production();
+});
 //@ chunk-thjvqmbc.js:3184-3199 placement
 /**
  * 对话框作用域上下文
  */
-var DialogScopeContext = qt(null);
+var DialogScopeContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-thjvqmbc.js:3184", () => {
+  DialogScopeContext = createContext(null);
+});
 //@ chunk-thjvqmbc.js:3199-3313 placement
 var MAX_DIALOG_HINTS = 4;
 var PAIRED_HINT_ACTIONS = [
@@ -212,27 +225,27 @@ function DialogKeyHints({
   format,
 }) {
   let keybindingContext = useKeybindingContext();
-  let { focusManager, rootNode } = Se(kp);
-  let u = Se(DialogScopeContext);
-  let [D, I] = y(0);
-  P(() => {
+  let { focusManager, rootNode } = useContext(APP_CONTEXT);
+  let dialogScope = useContext(DialogScopeContext);
+  let [version, bumpVersion] = useState(0);
+  useEffect(() => {
     if (!keybindingContext || !focusManager) return;
-    let C = () => I((v) => v + 1);
-    let B = focusManager.subscribe(C);
-    let T = keybindingContext.keyHandlerRegistry.scopesChanged.subscribe(C);
-    C();
+    let onChange = () => bumpVersion((version) => version + 1);
+    let unsubFocus = focusManager.subscribe(onChange);
+    let unsubScopes = keybindingContext.keyHandlerRegistry.scopesChanged.subscribe(onChange);
+    onChange();
     return () => {
-      B();
-      T();
+      unsubFocus();
+      unsubScopes();
     };
   }, [keybindingContext, focusManager]);
-  let A = Q(
+  let hints = useMemo(
     () =>
       collectKeyHints({
         ctx: keybindingContext,
         activeElement: focusManager?.activeElement ?? null,
         boundaryNode: boundary ? boundary.current : (rootNode ?? null),
-        rendered: boundary ? u : null,
+        rendered: boundary ? dialogScope : null,
         order,
         omit,
         max,
@@ -240,23 +253,36 @@ function DialogKeyHints({
         terse,
         format,
       }),
-    [keybindingContext, focusManager, boundary, rootNode, u, order, omit, max, maxWidth, terse, format, D],
+    [
+      keybindingContext,
+      focusManager,
+      boundary,
+      rootNode,
+      dialogScope,
+      order,
+      omit,
+      max,
+      maxWidth,
+      terse,
+      format,
+      version,
+    ],
   );
-  let L = R(null);
-  P(() => {
-    let C = A.fellBack ? "fell_back" : A.hadEntryWithoutDescription ? "no_description" : "ok";
-    if (C === L.current) return;
-    let B = L.current === null;
-    L.current = C;
-    if (B && C === "fell_back") return;
-    if (C === "ok") logFeatureOk("keybinding_auto_hints");
-    else logFeatureSad("keybinding_auto_hints", C);
-  }, [A.fellBack, A.hadEntryWithoutDescription]);
-  if (A.fellBack) return fallback;
+  let lastStatusRef = useRef(null);
+  useEffect(() => {
+    let status = hints.fellBack ? "fell_back" : hints.hadEntryWithoutDescription ? "no_description" : "ok";
+    if (status === lastStatusRef.current) return;
+    let isFirst = lastStatusRef.current === null;
+    lastStatusRef.current = status;
+    if (isFirst && status === "fell_back") return;
+    if (status === "ok") logFeatureOk("keybinding_auto_hints");
+    else logFeatureSad("keybinding_auto_hints", status);
+  }, [hints.fellBack, hints.hadEntryWithoutDescription]);
+  if (hints.fellBack) return fallback;
   return jsxProd_default(Text, {
     dimColor: true,
     italic: true,
-    children: A.text,
+    children: hints.text,
   });
 }
 //@ chunk-thjvqmbc.js:4186-6015 placement
@@ -272,121 +298,129 @@ function collectKeyHints({
   terse,
   format,
 }) {
-  let H = {
+  let emptyResult = {
     fellBack: true,
     text: "",
     hadEntryWithoutDescription: false,
   };
-  if (!ctx) return H;
-  let u = [];
-  let D = false;
+  if (!ctx) return emptyResult;
+  let entries = [];
+  let hitBoundary = false;
   let depth = 0;
-  let A = boundaryNode === null ? undefined : (activeElement ?? undefined);
-  while (A) {
-    let isBoundary = A === boundaryNode;
-    let d = ctx.keyHandlerRegistry.decls.get(A);
-    if (d) collectScopeHintEntries(u, d, depth, isBoundary);
+  let node = boundaryNode === null ? undefined : (activeElement ?? undefined);
+  while (node) {
+    let isBoundary = node === boundaryNode;
+    let decls = ctx.keyHandlerRegistry.decls.get(node);
+    if (decls) collectScopeHintEntries(entries, decls, depth, isBoundary);
     if (isBoundary) {
-      D = true;
+      hitBoundary = true;
       break;
     }
-    A = A.parentNode;
+    node = node.parentNode;
     depth++;
   }
-  if (!D) {
-    if (!rendered) return H;
-    let o = rendered.chain.length - 1;
+  if (!hitBoundary) {
+    if (!rendered) return emptyResult;
+    let lastChainIndex = rendered.chain.length - 1;
     let chain = rendered.chain;
-    for (let h of rendered.below[o]?.values() ?? [])
-      if (h.claimFocus && h.chain.length > chain.length) chain = h.chain;
-    u = [];
-    for (let k = chain.length - 1; k >= o; k--) {
-      let G = chain[k];
-      if (G) collectScopeHintEntries(u, G, chain.length - 1 - k, k === o);
+    for (let layer of rendered.below[lastChainIndex]?.values() ?? [])
+      if (layer.claimFocus && layer.chain.length > chain.length) chain = layer.chain;
+    entries = [];
+    for (let k = chain.length - 1; k >= lastChainIndex; k--) {
+      let scope = chain[k];
+      if (scope) collectScopeHintEntries(entries, scope, chain.length - 1 - k, k === lastChainIndex);
     }
   }
-  if (!u.some((o) => !o.isBoundary)) return H;
-  let L = new Set(omit ?? []);
-  let bindings = parseBindings(DEFAULT_BINDINGS);
+  if (!entries.some((entry) => !entry.isBoundary)) return emptyResult;
+  let omitted = new Set(omit ?? []);
+  let defaultBindings = parseBindings(DEFAULT_BINDINGS);
   let hadEntryWithoutDescription = false;
-  let T = [];
-  for (let o of u) {
-    if (L.has(o.action) || !o.scope) continue;
-    let d = pickDisplayChord(o.action, o.scope, ctx.bindings, bindings);
-    if (!d) continue;
-    let h = o.hint ?? dialogActionHint(o.action)?.description;
-    if (!h) {
+  let candidates = [];
+  for (let entry of entries) {
+    if (omitted.has(entry.action) || !entry.scope) continue;
+    let chord = pickDisplayChord(entry.action, entry.scope, ctx.bindings, defaultBindings);
+    if (!chord) continue;
+    let description = entry.hint ?? dialogActionHint(entry.action)?.description;
+    if (!description) {
       hadEntryWithoutDescription = true;
       continue;
     }
-    T.push({
-      action: o.action,
-      description: h,
-      chord: chordToString(d),
-      depth: o.depth,
+    candidates.push({
+      action: entry.action,
+      description,
+      chord: chordToString(chord),
+      depth: entry.depth,
     });
   }
-  let v = new Map();
-  (order ?? []).forEach((o, d) => v.set(o, d));
-  let Y = new Set();
-  let M = [];
-  for (let o of T) {
-    if (Y.has(o.description)) continue;
-    Y.add(o.description);
-    let flattened = PAIRED_HINT_ACTIONS.find((k) => k.some((X) => X === o.action))?.flatMap(
-      (k) => T.find((X) => X.action === k && X.description === o.description) ?? [],
+  let orderIndex = new Map();
+  (order ?? []).forEach((action, index) => orderIndex.set(action, index));
+  let seenDescriptions = new Set();
+  let hints = [];
+  for (let candidate of candidates) {
+    if (seenDescriptions.has(candidate.description)) continue;
+    seenDescriptions.add(candidate.description);
+    let flattened = PAIRED_HINT_ACTIONS.find((pair) =>
+      pair.some((action) => action === candidate.action),
+    )?.flatMap(
+      (action) =>
+        candidates.find((match) => match.action === action && match.description === candidate.description) ??
+        [],
     );
-    let G = flattened?.length === 2 ? flattened : [o];
-    M.push({
-      order: Math.min(...G.map((k) => v.get(k.action) ?? 1 / 0)),
+    let group = flattened?.length === 2 ? flattened : [candidate];
+    hints.push({
+      order: Math.min(...group.map((item) => orderIndex.get(item.action) ?? 1 / 0)),
       text: formatShortcutHint({
-        chord: G.map((k) => k.chord),
-        action: o.description,
+        chord: group.map((item) => item.chord),
+        action: candidate.description,
         terse,
         format,
       }),
-      depth: o.depth,
+      depth: candidate.depth,
     });
   }
-  M.sort((o, d) => {
-    if (o.order !== d.order) return o.order - d.order;
-    return o.depth - d.depth;
+  hints.sort((left, right) => {
+    if (left.order !== right.order) return left.order - right.order;
+    return left.depth - right.depth;
   });
-  let U = " \xB7 ";
-  let F = bunStringWidth(U);
-  let c = 0;
-  let m = [];
+  let separator = " \xB7 ";
+  let separatorWidth = bunStringWidth(separator);
+  let reservedWidth = 0;
+  let visible = [];
   for (;;) {
-    m = [];
-    let o = 0;
-    for (let G of M) {
-      if (m.length >= max) break;
-      let k = (m.length === 0 ? 0 : F) + bunStringWidth(G.text);
-      if (maxWidth !== undefined && o + k + c > maxWidth && m.length > 0) break;
-      m.push(G.text);
-      o += k;
+    visible = [];
+    let lineWidth = 0;
+    for (let hint of hints) {
+      if (visible.length >= max) break;
+      let extraWidth = (visible.length === 0 ? 0 : separatorWidth) + bunStringWidth(hint.text);
+      if (maxWidth !== undefined && lineWidth + extraWidth + reservedWidth > maxWidth && visible.length > 0)
+        break;
+      visible.push(hint.text);
+      lineWidth += extraWidth;
     }
-    let d = M.length - m.length;
-    if (maxWidth === undefined || d === 0) break;
-    let h = bunStringWidth(`${U}+${d} more`);
-    if (h <= c) break;
-    c = h;
+    let hiddenCount = hints.length - visible.length;
+    if (maxWidth === undefined || hiddenCount === 0) break;
+    let moreWidth = bunStringWidth(`${separator}+${hiddenCount} more`);
+    if (moreWidth <= reservedWidth) break;
+    reservedWidth = moreWidth;
   }
-  if (m.length === 0) return H;
-  let N = M.length - m.length;
+  if (visible.length === 0) return emptyResult;
+  let hiddenCount = hints.length - visible.length;
   return {
     fellBack: false,
-    text: N > 0 ? `${m.join(U)}${U}+${N} more` : m.join(U),
+    text:
+      hiddenCount > 0
+        ? `${visible.join(separator)}${separator}+${hiddenCount} more`
+        : visible.join(separator),
     hadEntryWithoutDescription,
   };
 }
 //@ chunk-thjvqmbc.js:6015-6171 placement
-function collectScopeHintEntries(i, { scope, entriesRef }, depth, isBoundary) {
-  for (let b of entriesRef.current) {
-    if (!b.action) continue;
-    i.push({
-      action: b.action,
-      hint: b.hint,
+function collectScopeHintEntries(out, { scope, entriesRef }, depth, isBoundary) {
+  for (let entry of entriesRef.current) {
+    if (!entry.action) continue;
+    out.push({
+      action: entry.action,
+      hint: entry.hint,
       scope,
       depth,
       isBoundary,
@@ -394,7 +428,10 @@ function collectScopeHintEntries(i, { scope, entriesRef }, depth, isBoundary) {
   }
 }
 //@ chunk-thjvqmbc.js:6171-6175 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-thjvqmbc.js:6171", () => {
+  init_react_production();
+});
 //@ chunk-thjvqmbc.js:6175-7625 placement
 /**
  * 注册对话框作用域的按键绑定，可抢占、吞掉其他按键或获取焦点。
@@ -412,110 +449,110 @@ function useDialogKeybindings({
   flexShrink,
   children,
 }) {
-  let u = R(null);
+  let nodeRef = useRef(null);
   let keybindingContext = useKeybindingContext();
-  let I = R([]);
-  I.current = active ? bindings : [];
-  let onAction = ce((c) => runMatchingKeyEntry(c, I.current), []);
-  let L = dialogHintsKey(scope, active, preemptive, swallowAll, I.current);
-  let C = active && preemptive && Boolean(scope);
-  let B = C && swallowAll;
-  zt(() => {
+  let entriesRef = useRef([]);
+  entriesRef.current = active ? bindings : [];
+  let onAction = useCallback((action) => runMatchingKeyEntry(action, entriesRef.current), []);
+  let hintsKey = dialogHintsKey(scope, active, preemptive, swallowAll, entriesRef.current);
+  let isPreemptive = active && preemptive && Boolean(scope);
+  let swallowsAll = isPreemptive && swallowAll;
+  useLayoutEffect(() => {
     if (!keybindingContext) return;
-    let c = u.current;
-    if (!c) return;
+    let node = nodeRef.current;
+    if (!node) return;
     let {
       decls,
       scopesChanged,
       preemptiveScopes,
       swallowAll: swallowAll_2,
     } = keybindingContext.keyHandlerRegistry;
-    let d = {
+    let decl = {
       scope,
       active,
       preemptive,
       swallowAll,
-      entriesRef: I,
+      entriesRef,
     };
-    decls.set(c, d);
-    if (C && scope) {
+    decls.set(node, decl);
+    if (isPreemptive && scope) {
       addRefCount(preemptiveScopes, scope);
-      if (B) addRefCount(swallowAll_2, scope);
+      if (swallowsAll) addRefCount(swallowAll_2, scope);
     }
     scopesChanged.emit();
     return () => {
-      decls.delete(c);
-      if (C && scope) {
+      decls.delete(node);
+      if (isPreemptive && scope) {
         releaseRefCount(preemptiveScopes, scope);
-        if (B) releaseRefCount(swallowAll_2, scope);
+        if (swallowsAll) releaseRefCount(swallowAll_2, scope);
       }
       scopesChanged.emit();
     };
-  }, [keybindingContext, scope, C, B, L]);
-  let T = Se(DialogScopeContext);
-  let v = l5o();
-  let [Y] = y(() => new Map());
-  let M = Q(
+  }, [keybindingContext, scope, isPreemptive, swallowsAll, hintsKey]);
+  let dialogScope = useContext(DialogScopeContext);
+  let nodeId = useId();
+  let [belowMap] = useState(() => new Map());
+  let scopeChain = useMemo(
     () => ({
       chain: [
-        ...(T?.chain ?? []),
+        ...(dialogScope?.chain ?? []),
         {
           scope,
-          entriesRef: I,
+          entriesRef,
         },
       ],
-      below: [...(T?.below ?? []), Y],
+      below: [...(dialogScope?.below ?? []), belowMap],
     }),
-    [T, scope, Y],
+    [dialogScope, scope, belowMap],
   );
-  for (let c of T?.below ?? [])
-    c.set(v, {
-      chain: M.chain,
+  for (let target of dialogScope?.below ?? [])
+    target.set(nodeId, {
+      chain: scopeChain.chain,
       claimFocus,
     });
-  P(() => {
-    let below = T?.below ?? [];
-    for (let m of below)
-      m.set(v, {
-        chain: M.chain,
+  useEffect(() => {
+    let below = dialogScope?.below ?? [];
+    for (let map of below)
+      map.set(nodeId, {
+        chain: scopeChain.chain,
         claimFocus,
       });
     return () => {
-      for (let m of below) m.delete(v);
+      for (let map of below) map.delete(nodeId);
     };
-  }, [T, v, M, claimFocus]);
-  zt(() => {
+  }, [dialogScope, nodeId, scopeChain, claimFocus]);
+  useLayoutEffect(() => {
     if (!claimFocus) return;
-    let c = u.current;
-    if (!c) return;
-    let focusManager = getFocusManager(c);
-    let N = false;
-    let W = () => {
-      if (N) return;
-      let o = u.current;
-      if (!o) return;
+    let node = nodeRef.current;
+    if (!node) return;
+    let focusManager = getFocusManager(node);
+    let hasAutofocusedRef = false;
+    let ensureFocus = () => {
+      if (hasAutofocusedRef) return;
+      let current = nodeRef.current;
+      if (!current) return;
       let activeElement = focusManager.activeElement;
-      if (activeElement && isDescendantOf(activeElement, o)) return;
-      N = true;
+      if (activeElement && isDescendantOf(activeElement, current)) return;
+      hasAutofocusedRef = true;
       try {
-        focusManager.focus(o);
+        focusManager.focus(current);
       } finally {
-        N = false;
+        hasAutofocusedRef = false;
       }
     };
-    focusManager.pushAutoFocusFallback(c);
-    W();
-    return focusManager.subscribe(W);
+    focusManager.pushAutoFocusFallback(node);
+    ensureFocus();
+    return focusManager.subscribe(ensureFocus);
   }, [claimFocus]);
-  let U = R(false);
-  zt(() => {
+  let isMountedRef = useRef(false);
+  useLayoutEffect(() => {
     return;
   }, [scope, claimFocus, keybindingContext]);
-  let ref_2 = ce(
-    (c) => {
-      u.current = c;
-      if (typeof ref === "function") ref(c);
-      else if (ref) ref.current = c;
+  let ref_2 = useCallback(
+    (node) => {
+      nodeRef.current = node;
+      if (typeof ref === "function") ref(node);
+      else if (ref) ref.current = node;
     },
     [ref],
   );
@@ -528,18 +565,18 @@ function useDialogKeybindings({
     flexDirection,
     flexShrink,
     children: jsxProd_default(DialogScopeContext, {
-      value: M,
+      value: scopeChain,
       children,
     }),
   });
 }
 //@ chunk-thjvqmbc.js:7625-7781 placement
-function runMatchingKeyEntry(i, l) {
-  for (let a of l) {
-    if (a.action !== i.action) continue;
-    if (a.chordOnly && !i.isChordCompletion) continue;
-    if (a.run() === false) continue;
-    i.consume();
+function runMatchingKeyEntry(keyEntry, candidates) {
+  for (let handler of candidates) {
+    if (handler.action !== keyEntry.action) continue;
+    if (handler.chordOnly && !keyEntry.isChordCompletion) continue;
+    if (handler.run() === false) continue;
+    keyEntry.consume();
     return;
   }
 }
@@ -547,28 +584,31 @@ function runMatchingKeyEntry(i, l) {
 /**
  * 计数 +1
  */
-function addRefCount(i, scope) {
-  i.set(scope, (i.get(scope) ?? 0) + 1);
+function addRefCount(refCounts, scope) {
+  refCounts.set(scope, (refCounts.get(scope) ?? 0) + 1);
 }
 //@ chunk-thjvqmbc.js:7823-7898 placement
 /**
  * 计数 −1，归零时删除
  */
-function releaseRefCount(i, scope) {
-  let a = (i.get(scope) ?? 0) - 1;
-  if (a <= 0) i.delete(scope);
-  else i.set(scope, a);
+function releaseRefCount(refCounts, scope) {
+  let nextCount = (refCounts.get(scope) ?? 0) - 1;
+  if (nextCount <= 0) refCounts.delete(scope);
+  else refCounts.set(scope, nextCount);
 }
 //@ chunk-thjvqmbc.js:7898-8004 placement
-function dialogHintsKey(scope, active, preemptive, swallowAll, x) {
+function dialogHintsKey(scope, active, preemptive, swallowAll, entries) {
   return jsonStringify([
     scope ?? "",
     active,
     preemptive,
     swallowAll,
-    x.map((b) => [b.action ?? "", b.hint ?? "", Boolean(b.chordOnly)]),
+    entries.map((entry) => [entry.action ?? "", entry.hint ?? "", Boolean(entry.chordOnly)]),
   ]);
 }
 //@ chunk-thjvqmbc.js:8004-8008 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-thjvqmbc.js:8004", () => {
+  init_react_production();
+});
 export { useDialogKeybindings, DialogKeyHints };

@@ -5,23 +5,22 @@
  * pieces: chunk-82d8c88w.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_safe_buffer } from "../../safe-buffer/index.js";
 import { require_data_stream } from "./data-stream.js";
 import { require_jwa } from "../../jwa/index.js";
 import { require_tostring } from "./tostring.js";
 
 //@ chunk-82d8c88w.js:7773-9091 cjs-fingerprint
-var require_sign_stream = x(function (cjsExports, cjsModule) {
-  var ar = require_safe_buffer().Buffer;
+var require_sign_stream = __commonJS(function (cjsExports, cjsModule) {
+  var BufferCtor = require_safe_buffer().Buffer;
   var DataStream = require_data_stream();
   var jwa = require_jwa();
   var Stream = importMetaRequire("stream");
   var toString = require_tostring();
   var util = importMetaRequire("util");
   function base64url(string, encoding) {
-    return ar
-      .from(string, encoding)
+    return BufferCtor.from(string, encoding)
       .toString("base64")
       .replace(/=/g, "")
       .replace(/\+/g, "-")
@@ -35,11 +34,11 @@ var require_sign_stream = x(function (cjsExports, cjsModule) {
   }
   function jwsSign(opts) {
     var { header, payload } = opts;
-    var n = opts.secret || opts.privateKey;
+    var algorithm = opts.secret || opts.privateKey;
     var encoding = opts.encoding;
     var algo = jwa(header.alg);
     var securedInput = jwsSecuredInput(header, payload, encoding);
-    var signature = algo.sign(securedInput, n);
+    var signature = algo.sign(securedInput, algorithm);
     return util.format("%s.%s", securedInput, signature);
   }
   function SignStream(opts) {

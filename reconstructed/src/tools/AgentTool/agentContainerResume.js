@@ -62,20 +62,20 @@ class CutOffAgentCallError extends Error {
  */
 class ResumedAgentCallRegistry {
   #e = new Map();
-  adopt(n, agentId, resume) {
-    this.#e.set(n, {
+  adopt(toolUseId, agentId, resume) {
+    this.#e.set(toolUseId, {
       agentId,
       resume,
     });
   }
-  take(n) {
-    let e = n === undefined ? undefined : this.#e.get(n);
-    if (n !== undefined && e !== undefined)
-      this.#e.set(n, {
-        ...e,
+  take(toolUseId) {
+    let entry = toolUseId === undefined ? undefined : this.#e.get(toolUseId);
+    if (toolUseId !== undefined && entry !== undefined)
+      this.#e.set(toolUseId, {
+        ...entry,
         resume: undefined,
       });
-    return e;
+    return entry;
   }
 }
 //@ chunk-0tkmvwy0.js:8309-10369 placement
@@ -87,40 +87,42 @@ async function resolveResumedAgentCall({ agentId, resume }, toolUseContext) {
     throw new CutOffAgentCallError(
       `This call stood for agent ${agentId}, which stopped when the container was restarted. This call does not resume it and launched nothing. Send agent ${agentId} a message, or launch a new agent, if you still need the work.`,
     );
-  let f;
+  let resumeOutcome;
   try {
-    f = await resume(toolUseContext);
+    resumeOutcome = await resume(toolUseContext);
   } catch (error) {
     if (toolUseContext.abortController.signal.aborted) throw error;
     if (isResumedInlineRunError(error)) {
-      let message = `The container was restarted and agent ${agentId} was resumed. ${isAbortError(error) ? `Agent ${agentId} was stopped before it finished` : `Agent ${agentId} failed while running: ${errorMessage(error)}`}`;
-      let Y = toolUseContext.taskRegistry.get(agentId);
-      if (!isLocalAgent(Y)) throw new CutOffAgentCallError(message);
+      let cutOffMessage = `The container was restarted and agent ${agentId} was resumed. ${isAbortError(error) ? `Agent ${agentId} was stopped before it finished` : `Agent ${agentId} failed while running: ${errorMessage(error)}`}`;
+      let agentTask = toolUseContext.taskRegistry.get(agentId);
+      if (!isLocalAgent(agentTask)) throw new CutOffAgentCallError(cutOffMessage);
       let messages = toolUseContext.taskRegistry.getTranscript(agentId)?.messages ?? [];
-      let we;
+      let recoveredRun;
       try {
-        we = recoverFromSyncAgentError(toError(error), messages);
+        recoveredRun = recoverFromSyncAgentError(toError(error), messages);
       } catch (error_2) {
         if (error_2 !== error) logError(error_2);
-        throw new CutOffAgentCallError(message);
+        throw new CutOffAgentCallError(cutOffMessage);
       }
       return {
         status: "completed",
         report: await buildAgentHandback(
           finalizeAgentTool(
-            we.history.filter((be) => be.type !== "assistant" || !be.isApiErrorMessage),
+            recoveredRun.history.filter(
+              (message) => message.type !== "assistant" || !message.isApiErrorMessage,
+            ),
             agentId,
             {
-              prompt: Y.prompt,
-              resolvedAgentModel: Y.model ?? "",
-              startTime: Y.startTime,
-              agentType: Y.agentType,
-              callerCanContinueAgents: Y.ownerCanContinueAgents,
-              persistedToolResultFiles: Y.webFetchSavedFiles,
+              prompt: agentTask.prompt,
+              resolvedAgentModel: agentTask.model ?? "",
+              startTime: agentTask.startTime,
+              agentType: agentTask.agentType,
+              callerCanContinueAgents: agentTask.ownerCanContinueAgents,
+              persistedToolResultFiles: agentTask.webFetchSavedFiles,
               priorForeignArtifactContent: resumedInlineRunHadPriorForeignContent(error),
               isBuiltInAgent: false,
               isAsync: true,
-              agentDepth: Y.spawnDepth ?? 1,
+              agentDepth: agentTask.spawnDepth ?? 1,
             },
             {
               suppressTelemetry: true,
@@ -130,9 +132,9 @@ async function resolveResumedAgentCall({ agentId, resume }, toolUseContext) {
           {
             agentId,
             agentMessages: messages,
-            agentType: agentTypeForAnalytics_GATE_EVALUATED(Y.agentType, false),
+            agentType: agentTypeForAnalytics_GATE_EVALUATED(agentTask.agentType, false),
             child: "agent",
-            cutoffNote: partialResultPreamble(message),
+            cutoffNote: partialResultPreamble(cutOffMessage),
             tools: resumedInlineRunReviewTools(error, agentId) ?? toolUseContext.options.tools,
             toolUseContext,
           },
@@ -145,28 +147,28 @@ async function resolveResumedAgentCall({ agentId, resume }, toolUseContext) {
       );
     throw error;
   }
-  if (f.deniedByPlugin !== undefined)
+  if (resumeOutcome.deniedByPlugin !== undefined)
     throw new CutOffAgentCallError(
-      `Agent ${agentId} stopped when the container was restarted and was not resumed: ${f.deniedByPlugin}`,
+      `Agent ${agentId} stopped when the container was restarted and was not resumed: ${resumeOutcome.deniedByPlugin}`,
     );
-  if (f.movedRunEnded !== undefined)
+  if (resumeOutcome.movedRunEnded !== undefined)
     return {
       status: "async_launched",
       agentId,
-      description: f.description,
-      outputFile: f.outputFile ?? "",
+      description: resumeOutcome.description,
+      outputFile: resumeOutcome.outputFile ?? "",
     };
-  let y = toolUseContext.taskRegistry.get(agentId);
-  let _ = isLocalAgent(y) ? y.result : undefined;
-  if (_ === undefined)
+  let agentTask = toolUseContext.taskRegistry.get(agentId);
+  let agentResult = isLocalAgent(agentTask) ? agentTask.result : undefined;
+  if (agentResult === undefined)
     throw new CutOffAgentCallError(
-      f.alreadyCompleted
+      resumeOutcome.alreadyCompleted
         ? `Agent ${agentId} had finished when the container was restarted, but its report was lost with the restart. It was not run again. Send it a message to ask for its report.`
         : `Agent ${agentId} was resumed after the container was restarted and ended without a report.`,
     );
   return {
     status: "completed",
-    report: prependHarnessNote(_, toolUseContext),
+    report: prependHarnessNote(agentResult, toolUseContext),
   };
 }
 //@ chunk-0tkmvwy0.js:10369-10674 placement
@@ -182,18 +184,19 @@ function restoreCanContinueAgent(previousResult, nextResult) {
     nextResult.status === "remote_launched"
   )
     return nextResult;
-  let s = false;
+  let canContinueAgent = false;
   switch (previousResult.status) {
     case "completed":
     case "async_launched":
-      s = previousResult.canContinueAgent;
+      canContinueAgent = previousResult.canContinueAgent;
       break;
     case "remote_launched":
       break;
   }
   return {
     ...nextResult,
-    canContinueAgent: s === false || nextResult.canContinueAgent === false ? false : s,
+    canContinueAgent:
+      canContinueAgent === false || nextResult.canContinueAgent === false ? false : canContinueAgent,
   };
 }
 //@ chunk-0tkmvwy0.js:10674-11077 placement
@@ -223,13 +226,15 @@ function getSubagentBudgetNote(querySource) {
     "tengu_streamed_bumblebee_text",
     env.CLAUDE_CODE_STREAMED_BUMBLEBEE_TEXT,
   );
-  let f = typeof clientOrDefaultValue === "string" && clientOrDefaultValue.trim() !== "";
-  let y = f ? clientOrDefaultValue.trim() : SUBAGENT_BUDGET_NOTES[getCalmMochiScope()];
+  let hasConfiguredWording = typeof clientOrDefaultValue === "string" && clientOrDefaultValue.trim() !== "";
+  let template = hasConfiguredWording
+    ? clientOrDefaultValue.trim()
+    : SUBAGENT_BUDGET_NOTES[getCalmMochiScope()];
   logEvent("tengu_streamed_bumblebee_applied", {
     budget: totalTokensReminderMode,
-    isConfiguredWording: f,
+    isConfiguredWording: hasConfiguredWording,
   });
-  return y.replaceAll("{N}", totalTokensReminderMode.toLocaleString("en-US"));
+  return template.replaceAll("{N}", totalTokensReminderMode.toLocaleString("en-US"));
 }
 export {
   ResumedAgentCallRegistry,

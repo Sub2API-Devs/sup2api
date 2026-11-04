@@ -8,8 +8,11 @@
  * pieces: chunk-cc2xzzcg.js (1), chunk-d62reftv.js (7)
  * attribution: placement 8
  */
-import { init_react_production, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { spawnForkFromDirective } from "../../tools/AgentTool/forkDirective.js";
+import { evaluateAskingNoHost, getPermissionModeCycle } from "../../utils/permissions/permissions.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
+import { CIRCLE_MARK_GLYPH } from "../../constants/figures.js";
+import { init_react_production, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   COORDINATOR_FORK_REFUSAL,
   deriveBackgroundSeed,
@@ -20,9 +23,8 @@ import { isSafeMode, isBareMode } from "../../utils/envUtils.js";
 import { getForkRestrictedLaunchConfig } from "../../bootstrap/state.js";
 import { FORK_RESTRICTED_LAUNCH_FLAGS_DESCRIPTION } from "../../utils/sessionConfigFlags.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
-import { getPermissionModeCycle, evaluateAskingNoHost } from "../../utils/permissions/permissions.js";
 import { promptProactivityLevel } from "../../utils/proactivityLevel.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
@@ -44,26 +46,57 @@ import { logError } from "../../utils/log.js";
 import { errorMessage } from "../../utils/errors.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Text } from "../../ink/components/Text.js";
-import { spawnForkFromDirective } from "../../tools/AgentTool/forkDirective.js";
-import { CIRCLE_MARK_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
 
+//@ chunk-cc2xzzcg.js:12628-13025 placement
+/**
+ * /fork <directive> 命令：按指令派生分叉子代理；无参数时提示用法，协调者模式或首轮之前不可用，成功后报告分叉名与 agentId 末四位。
+ */
+var callFork = async (onDone, context, args) => {
+  let directive = args.trim();
+  if (!directive) {
+    onDone("Usage: /fork \\<directive\\>", {
+      display: "system",
+    });
+    return null;
+  }
+  let forkFromDirective = await spawnForkFromDirective(
+    directive,
+    context,
+    context.canUseTool ?? evaluateAskingNoHost,
+  );
+  if (!forkFromDirective) {
+    onDone(
+      isCoordinatorMode_2()
+        ? "Forking is not available in coordinator sessions. Use /branch instead."
+        : "Cannot fork before the first conversation turn",
+      {
+        display: "system",
+      },
+    );
+    return null;
+  }
+  onDone(`${CIRCLE_MARK_GLYPH} forked ${forkFromDirective.name} (${forkFromDirective.agentId.slice(-4)})`, {
+    display: "system",
+  });
+  return null;
+};
 //@ chunk-d62reftv.js:15768-15772 placement
 init_react_production();
 //@ chunk-d62reftv.js:15772-15812 placement
-function selectSessionEffort(ce) {
-  return ce.sessionEffort;
+function selectSessionEffort(state) {
+  return state.sessionEffort;
 }
 //@ chunk-d62reftv.js:15812-15889 placement
-function selectToolPermissionContextAdditionalWorkingDirectories(he) {
-  return he.toolPermissionContext.additionalWorkingDirectories;
+function selectToolPermissionContextAdditionalWorkingDirectories(state) {
+  return state.toolPermissionContext.additionalWorkingDirectories;
 }
 //@ chunk-d62reftv.js:15889-15954 placement = createGetAppStateWithAllowedTools (1)
 function getAlwaysAllowRules(appState) {
   return appState.toolPermissionContext.alwaysAllowRules;
 }
 //@ chunk-d62reftv.js:15954-16018 placement
-function selectToolPermissionContextAlwaysDenyRules(ye) {
-  return ye.toolPermissionContext.alwaysDenyRules;
+function selectToolPermissionContextAlwaysDenyRules(state) {
+  return state.toolPermissionContext.alwaysDenyRules;
 }
 //@ chunk-d62reftv.js:16018-16747 placement
 /**
@@ -103,49 +136,49 @@ var forkCommandCall = async (onDone, context, args) => {
 };
 //@ chunk-d62reftv.js:16747-18564 placement
 function ForkSessionFlow(props) {
-  let $ = w(14);
+  let $ = useMemoCache(14);
   let { onDone, prompt, seed, messages } = props;
-  let appState = useAppState(selectSessionEffort);
-  let appState_2 = useAppState(getPermissionModeCycle);
-  let appState_3 = useAppState(promptProactivityLevel);
-  let appState_4 = useAppState(selectToolPermissionContextAdditionalWorkingDirectories);
-  let appState_5 = useAppState(getAlwaysAllowRules);
-  let appState_6 = useAppState(selectToolPermissionContextAlwaysDenyRules);
+  let effortLevel = useAppState(selectSessionEffort);
+  let permissionMode = useAppState(getPermissionModeCycle);
+  let appState = useAppState(promptProactivityLevel);
+  let addedDirs = useAppState(selectToolPermissionContextAdditionalWorkingDirectories);
+  let allowRules = useAppState(getAlwaysAllowRules);
+  let denyRules = useAppState(selectToolPermissionContextAlwaysDenyRules);
   let { storageV5 } = useTheme_2();
-  let U = R(false);
-  let K;
-  let q;
+  let busy = useRef(false);
+  let error;
+  let content;
   if (
-    $[0] !== appState_4 ||
-    $[1] !== appState_5 ||
-    $[2] !== appState_6 ||
+    $[0] !== addedDirs ||
+    $[1] !== allowRules ||
+    $[2] !== denyRules ||
     $[3] !== messages ||
     $[4] !== onDone ||
-    $[5] !== appState_2 ||
-    $[6] !== appState_3 ||
+    $[5] !== permissionMode ||
+    $[6] !== appState ||
     $[7] !== prompt ||
     $[8] !== seed ||
-    $[9] !== appState ||
+    $[9] !== effortLevel ||
     $[10] !== storageV5
   ) {
-    K = () => {
-      if (U.current) {
+    error = () => {
+      if (busy.current) {
         return;
       }
-      U.current = true;
+      busy.current = true;
       (async () => {
         let backgroundFork = await spawnBackgroundFork(
           seed,
           prompt || null,
-          appState,
-          appState_2,
-          appState_4,
-          appState_5,
-          appState_6,
+          effortLevel,
+          permissionMode,
+          addedDirs,
+          allowRules,
+          denyRules,
           "fork_session",
           messages,
           {
-            proactivityLevel: appState_3,
+            proactivityLevel: appState,
             keepParent: true,
             taskFreeInFlight: {
               tasks: 0,
@@ -177,24 +210,24 @@ function ForkSessionFlow(props) {
           ? normalizeStatusSegments(redactSecrets(collapseWhitespace(backgroundFork.name)))
           : undefined;
         let state = prompt ? SESSION_RUNNING_LABEL : SESSION_WAITING_PROMPT_LABEL;
-        let H = backgroundFork.relocatedTo
+        let whereLabel = backgroundFork.relocatedTo
           ? "runs in the origin tree"
           : backgroundFork.editsIn === "this-tree"
             ? "edits this checkout"
             : undefined;
-        let ue = offerDedupeKey({
+        let dedupeKey = offerDedupeKey({
           state,
           name,
           id: backgroundFork.short,
-          chips: H ? [H] : [],
+          chips: whereLabel ? [whereLabel] : [],
         });
-        let z = isCrossSessionMessagingEnabled()
+        let isolationNote = isCrossSessionMessagingEnabled()
           ? `The fork runs as its own separate session \u2014 nothing it does arrives in this conversation, and it does not see what happens here after the fork point. If you need to coordinate with it, it appears in the ${LISTAGENTS} listing as '${redactSecrets(collapseWhitespace(backgroundFork.rosterName))}' (it may be renamed later) and ${SENDMESSAGE} can message it there; it can message this session the same way.`
           : undefined;
-        onDone(ue, {
+        onDone(dedupeKey, {
           display: "system",
-          ...(z !== undefined && {
-            metaMessages: [z],
+          ...(isolationNote !== undefined && {
+            metaMessages: [isolationNote],
           }),
         });
       })().catch((error) => {
@@ -203,77 +236,45 @@ function ForkSessionFlow(props) {
         onDone(`Couldn't fork: ${errorMessage(error)}. This session is unaffected; try again.`);
       });
     };
-    q = [
-      appState_4,
-      appState_5,
-      appState_6,
-      appState,
+    content = [
+      addedDirs,
+      allowRules,
+      denyRules,
+      effortLevel,
       messages,
       onDone,
-      appState_2,
-      appState_3,
+      permissionMode,
+      appState,
       prompt,
       seed,
       storageV5,
     ];
-    $[0] = appState_4;
-    $[1] = appState_5;
-    $[2] = appState_6;
+    $[0] = addedDirs;
+    $[1] = allowRules;
+    $[2] = denyRules;
     $[3] = messages;
     $[4] = onDone;
-    $[5] = appState_2;
-    $[6] = appState_3;
+    $[5] = permissionMode;
+    $[6] = appState;
     $[7] = prompt;
     $[8] = seed;
-    $[9] = appState;
+    $[9] = effortLevel;
     $[10] = storageV5;
-    $[11] = K;
-    $[12] = q;
+    $[11] = error;
+    $[12] = content;
   } else {
-    K = $[11];
-    q = $[12];
+    error = $[11];
+    content = $[12];
   }
-  P(K, q);
-  let Y;
+  useEffect(error, content);
+  let footer;
   if ($[13] === MEMO_CACHE_SENTINEL) {
-    Y = jsxProd_default(Text, {
+    footer = jsxProd_default(Text, {
       dimColor: true,
       children: "Forking\u2026",
     });
-    $[13] = Y;
-  } else Y = $[13];
-  return Y;
+    $[13] = footer;
+  } else footer = $[13];
+  return footer;
 }
-//@ chunk-cc2xzzcg.js:12628-13025 placement
-/**
- * /fork <directive> 命令：按指令派生分叉子代理；无参数时提示用法，协调者模式或首轮之前不可用，成功后报告分叉名与 agentId 末四位。
- */
-var callFork = async (onDone, context, args) => {
-  let directive = args.trim();
-  if (!directive) {
-    onDone("Usage: /fork \\<directive\\>", {
-      display: "system",
-    });
-    return null;
-  }
-  let forkFromDirective = await spawnForkFromDirective(
-    directive,
-    context,
-    context.canUseTool ?? evaluateAskingNoHost,
-  );
-  if (!forkFromDirective) {
-    onDone(
-      isCoordinatorMode_2()
-        ? "Forking is not available in coordinator sessions. Use /branch instead."
-        : "Cannot fork before the first conversation turn",
-      {
-        display: "system",
-      },
-    );
-    return null;
-  }
-  onDone(`${CIRCLE_MARK_GLYPH} forked ${forkFromDirective.name} (${forkFromDirective.agentId.slice(-4)})`, {
-    display: "system",
-  });
-  return null;
-};
+export { forkCommandCall, callFork };

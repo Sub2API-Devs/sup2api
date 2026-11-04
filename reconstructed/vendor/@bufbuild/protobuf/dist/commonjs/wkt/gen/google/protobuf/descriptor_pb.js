@@ -5,13 +5,13 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../../../../runtime/bun-runtime.js";
 import { require_boot } from "../../../../../cjs/codegenv2/boot.js";
 import { require_message } from "../../../../../cjs/codegenv2/message.js";
 import { require_enum } from "../../../../../cjs/codegenv2/enum.js";
 
 //@ chunk-fq0cr76a.js:378745-410280 cjs-require-graph
-var require_descriptor_pb = x(function (cjsExports) {
+var require_descriptor_pb = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

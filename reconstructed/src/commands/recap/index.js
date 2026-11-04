@@ -18,6 +18,7 @@ var recapCommandDefinition = {
   description: "Generate a one-line session recap now",
   supportsNonInteractive: true,
   thinClientDispatch: "post-text",
-  load: () => import("./chunk-z9nn3hxt.js"),
+  load: () => import("./call.lazy.js"),
 };
 var recapCommand = recapCommandDefinition;
+export { recapCommand };

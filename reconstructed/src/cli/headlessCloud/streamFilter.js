@@ -31,10 +31,17 @@ import {
   applySetupEvent,
 } from "../../services/cloudSessions/setupProgress.js";
 import { extractInboundAttachments } from "../../bridge/inboundAttachments.js";
-import { qt, Uo, Bo, xo, No } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import {
+  OMITTED_UNSUPPORTED_CONTENT,
+  documentBlockSchema,
+  textBlockSchema,
+  OMITTED_DOCUMENT_PLACEHOLDER,
+  SUPPORTED_IMAGE_MIME_TYPES,
+} from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { sessionIdBody } from "../../bridge/sessionIdCompat.js";
 import { HEADLESS_FEATURE_NAMES } from "./headlessFeatures.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fe6rs39h.js:44698-45093 placement
 /**
@@ -73,20 +80,23 @@ function isForwardedMessageType(type) {
   return Object.hasOwn(STREAM_FRAME_TYPE_FILTER, type) ? STREAM_FRAME_TYPE_FILTER[type] : undefined;
 }
 //@ chunk-fe6rs39h.js:45148-45361 placement
-var HELD_SYSTEM_SUBTYPES = new Set([
-  "synced_file_changed",
-  "mcp_auth_required",
-  "tunnel_stream_interrupted",
-  "composer_notice",
-  "composer_notice_dismissed",
-  "workflow_launch",
-  "queued_notification",
-  "heartbeat_probe",
-  "classifier_verdict",
-]);
+var HELD_SYSTEM_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fe6rs39h.js:45148", () => {
+  HELD_SYSTEM_SUBTYPES = new Set([
+    "synced_file_changed",
+    "mcp_auth_required",
+    "tunnel_stream_interrupted",
+    "composer_notice",
+    "composer_notice_dismissed",
+    "workflow_launch",
+    "queued_notification",
+    "heartbeat_probe",
+    "classifier_verdict",
+  ]);
+});
 //@ chunk-fe6rs39h.js:45361-45457 placement
-function isTransientStreamMessage(e) {
-  return e.type === "stream_event" || (e.type === "system" && e.subtype === "thinking_tokens");
+function isTransientStreamMessage(frame) {
+  return frame.type === "stream_event" || (frame.type === "system" && frame.subtype === "thinking_tokens");
 }
 //@ chunk-fe6rs39h.js:45457-45712 placement
 class BoundedUuidSet {
@@ -95,16 +105,16 @@ class BoundedUuidSet {
   constructor(ceiling) {
     this.ceiling = ceiling;
   }
-  add(e) {
-    if (this.uuids.has(e)) return;
+  add(value) {
+    if (this.uuids.has(value)) return;
     if (this.uuids.size >= this.ceiling) {
-      let n = this.uuids.values().next().value;
-      if (n !== undefined) this.uuids.delete(n);
+      let oldest = this.uuids.values().next().value;
+      if (oldest !== undefined) this.uuids.delete(oldest);
     }
-    this.uuids.add(e);
+    this.uuids.add(value);
   }
-  has(e) {
-    return this.uuids.has(e);
+  has(uuid) {
+    return this.uuids.has(uuid);
   }
 }
 //@ chunk-fe6rs39h.js:45712-56002 placement
@@ -183,77 +193,81 @@ class CloudStreamFilter {
       resultsBeforeInit: this.resultsBeforeInitCount,
     };
   }
-  handle(e, n) {
-    let s = stripProtoKey(e);
-    if (s !== e) {
+  handle(frame, meta) {
+    let sanitized = stripProtoKey(frame);
+    if (sanitized !== frame) {
       this.protoMembersDroppedCount++;
       logForDebugging(
-        `[headlessCloudClient] dropped a __proto__ member on a ${sanitizeCloudText(truncateToLength(s.type, 40))} frame from source=${sanitizeCloudText(truncateToLength(n.source ?? "unknown", 40))}`,
+        `[headlessCloudClient] dropped a __proto__ member on a ${sanitizeCloudText(truncateToLength(sanitized.type, 40))} frame from source=${sanitizeCloudText(truncateToLength(meta.source ?? "unknown", 40))}`,
         {
           level: "warn",
         },
       );
     }
-    let r = stripApiErrorOrigin(s);
-    let h = identity(r);
-    if (h !== r) {
+    let tagged = stripApiErrorOrigin(sanitized);
+    let withoutReservedTags = identity(tagged);
+    if (withoutReservedTags !== tagged) {
       this.reservedTagsDroppedCount++;
       logForDebugging(
-        `[headlessCloudClient] dropped a tag that a session may not set, on a ${sanitizeCloudText(truncateToLength(h.type, 40))} frame from source=${sanitizeCloudText(truncateToLength(n.source ?? "unknown", 40))}`,
+        `[headlessCloudClient] dropped a tag that a session may not set, on a ${sanitizeCloudText(truncateToLength(withoutReservedTags.type, 40))} frame from source=${sanitizeCloudText(truncateToLength(meta.source ?? "unknown", 40))}`,
         {
           level: "warn",
         },
       );
     }
-    if (h.type === "system" && h.subtype === "cloud_session_delta") {
+    if (withoutReservedTags.type === "system" && withoutReservedTags.subtype === "cloud_session_delta") {
       this.cloudSessionKeysDroppedCount++;
       return true;
     }
-    let y = stripCloudSessionKey(h);
-    if (y !== h) {
+    let clean = stripCloudSessionKey(withoutReservedTags);
+    if (clean !== withoutReservedTags) {
       this.cloudSessionKeysDroppedCount++;
       logForDebugging(
-        `[headlessCloudClient] dropped a cloud_session key on a ${sanitizeCloudText(truncateToLength(y.type, 40))} frame from source=${sanitizeCloudText(truncateToLength(n.source ?? "unknown", 40))}`,
+        `[headlessCloudClient] dropped a cloud_session key on a ${sanitizeCloudText(truncateToLength(clean.type, 40))} frame from source=${sanitizeCloudText(truncateToLength(meta.source ?? "unknown", 40))}`,
         {
           level: "warn",
         },
       );
     }
-    if (y.type === "env_manager_log") {
-      this.reduceBootstrap(y);
+    if (clean.type === "env_manager_log") {
+      this.reduceBootstrap(clean);
       return true;
     }
-    let S = isForwardedMessageType(y.type);
-    if (S === undefined) {
-      this.noteUnknownFrame(y.type, n.source);
+    let isForwarded = isForwardedMessageType(clean.type);
+    if (isForwarded === undefined) {
+      this.noteUnknownFrame(clean.type, meta.source);
       return false;
     }
-    if (y.type !== "user" && !isTransientStreamMessage(y) && n.source === "worker") {
-      this.adoptWorkerSessionId(y);
-      if (this.entry === "attach" && this.holdingForInit && (y.type === "assistant" || y.type === "result"))
+    if (clean.type !== "user" && !isTransientStreamMessage(clean) && meta.source === "worker") {
+      this.adoptWorkerSessionId(clean);
+      if (
+        this.entry === "attach" &&
+        this.holdingForInit &&
+        (clean.type === "assistant" || clean.type === "result")
+      )
         this.releaseHeld();
       if (this.entry === "create" && this.workerUps === 0) {
-        let w = this.ports.clock.now();
-        this.lastWorkerUpAt = w;
+        let now = this.ports.clock.now();
+        this.lastWorkerUpAt = now;
         this.initSinceWorkerUp = false;
-        this.bootCountedByFrameAt = w;
+        this.bootCountedByFrameAt = now;
         this.noteWorkerUp(this.bootstrap?.sessionMode ?? undefined);
       }
       this.signalWorkerReady("worker_frame");
     }
     if (
-      y.type === "assistant" ||
-      y.type === "stream_event" ||
-      y.type === "tool_progress" ||
-      (y.type === "system" && y.subtype === "status" && y.status === "requesting")
+      clean.type === "assistant" ||
+      clean.type === "stream_event" ||
+      clean.type === "tool_progress" ||
+      (clean.type === "system" && clean.subtype === "status" && clean.status === "requesting")
     )
       this.ports.onTurnInFlight?.();
-    switch (y.type) {
+    switch (clean.type) {
       case "system":
-        if (y.subtype === "init") {
+        if (clean.subtype === "init") {
           this.initCount += 1;
           this.initSinceWorkerUp = true;
-          let workerEpoch = readWorkerEpoch(y);
+          let workerEpoch = readWorkerEpoch(clean);
           this.ports.onWorkerInit?.({
             ordinal: this.initCount,
             sessionId: this.stamped,
@@ -261,7 +275,7 @@ class CloudStreamFilter {
               workerEpoch,
             }),
           });
-          this.emitInit(y);
+          this.emitInit(clean);
           return true;
         }
         break;
@@ -269,17 +283,22 @@ class CloudStreamFilter {
         this.turnCount += 1;
         this.ports.onTurnEnded?.();
         this.narrateAfterReady = false;
-        let w = this.entry === "create" && this.holdingForInit && n.source === "worker";
-        if (w) {
+        let isCreateBeforeInit = this.entry === "create" && this.holdingForInit && meta.source === "worker";
+        if (isCreateBeforeInit) {
           this.resultsBeforeInitCount++;
           this.releaseHeld();
         }
-        if (S) this.emitAfterInit(filterResultErrors(y));
-        if ((this.entry === "attach" || w) && this.initCount === 0 && n.source === "worker" && !this.closed)
+        if (isForwarded) this.emitAfterInit(filterResultErrors(clean));
+        if (
+          (this.entry === "attach" || isCreateBeforeInit) &&
+          this.initCount === 0 &&
+          meta.source === "worker" &&
+          !this.closed
+        )
           this.holdingForInit = true;
         return true;
       case "user":
-        this.handleUserFrame(y, n.source);
+        this.handleUserFrame(clean, meta.source);
         return true;
       case "stream_event":
         if (!this.ports.includePartialMessages) return true;
@@ -287,39 +306,39 @@ class CloudStreamFilter {
       default:
         break;
     }
-    if (S) this.emitAfterInit(y);
+    if (isForwarded) this.emitAfterInit(clean);
     return true;
   }
-  noteUnknownFrame(e, n) {
-    let s = HELD_SYSTEM_SUBTYPES.has(e);
-    if (s) this.serviceEventsDroppedCount++;
+  noteUnknownFrame(type, source) {
+    let isServiceEvent = HELD_SYSTEM_SUBTYPES.has(type);
+    if (isServiceEvent) this.serviceEventsDroppedCount++;
     else this.unknownFramesDroppedCount++;
     logForDebugging(
-      `[headlessCloudClient] dropped a ${sanitizeCloudText(truncateToLength(e, 40))} ${s ? "service event" : "frame this build does not write"}, from source=${sanitizeCloudText(truncateToLength(n ?? "unknown", 40))}`,
-      s
+      `[headlessCloudClient] dropped a ${sanitizeCloudText(truncateToLength(type, 40))} ${isServiceEvent ? "service event" : "frame this build does not write"}, from source=${sanitizeCloudText(truncateToLength(source ?? "unknown", 40))}`,
+      isServiceEvent
         ? undefined
         : {
             level: "warn",
           },
     );
   }
-  handleUserFrame(e, n) {
-    let s =
-      typeof e.uuid === "string"
-        ? this.ports.outbound.streamEcho(e.uuid, e.message?.content)
+  handleUserFrame(frame, source) {
+    let echo =
+      typeof frame.uuid === "string"
+        ? this.ports.outbound.streamEcho(frame.uuid, frame.message?.content)
         : {
             verdict: "not_own",
           };
-    switch (s.verdict) {
+    switch (echo.verdict) {
       case "claim":
         this.emitAfterInit(
-          s.sent === undefined
+          echo.sent === undefined
             ? {
-                ...e,
+                ...frame,
                 isReplay: true,
                 session_id: this.stamped,
               }
-            : scopeKey(this.stamped, e.uuid, s.sent),
+            : scopeKey(this.stamped, frame.uuid, echo.sent),
           {
             synthesized: true,
             ownEcho: true,
@@ -327,12 +346,12 @@ class CloudStreamFilter {
         );
         return;
       case "consume":
-        this.emittedUuids.add(e.uuid.toLowerCase());
-        logForDebugging(`[headlessCloudClient] consumed our own echo of ${String(e.uuid)}`);
+        this.emittedUuids.add(frame.uuid.toLowerCase());
+        logForDebugging(`[headlessCloudClient] consumed our own echo of ${String(frame.uuid)}`);
         return;
       case "peer":
         this.emitAfterInit(
-          this.projectPeer(e, {
+          this.projectPeer(frame, {
             keepUuid: false,
           }),
           {
@@ -344,33 +363,34 @@ class CloudStreamFilter {
       case "not_own":
         break;
     }
-    if (n === "worker" || hasToolResultContent(e)) {
-      let S = mapToolResultImages(e.tool_use_result, e.message);
+    if (source === "worker" || hasToolResultContent(frame)) {
+      let mapped = mapToolResultImages(frame.tool_use_result, frame.message);
       this.emitAfterInit(
-        S === e.tool_use_result
-          ? e
+        mapped === frame.tool_use_result
+          ? frame
           : {
-              ...e,
-              tool_use_result: S,
+              ...frame,
+              tool_use_result: mapped,
             },
       );
       return;
     }
-    let r = typeof e.uuid === "string" ? e.uuid.toLowerCase() : "";
-    let h =
-      r !== "" &&
-      (this.emittedUuids.has(r) || this.emittedPeerUuids.has(r) || this.ports.outbound.wasTaken(r));
-    let y = this.projectPeer(e, {
-      keepUuid: !h,
+    let uuid = typeof frame.uuid === "string" ? frame.uuid.toLowerCase() : "";
+    let isKnown =
+      uuid !== "" &&
+      (this.emittedUuids.has(uuid) || this.emittedPeerUuids.has(uuid) || this.ports.outbound.wasTaken(uuid));
+    let projected = this.projectPeer(frame, {
+      keepUuid: !isKnown,
     });
-    if ("uuid" in y && typeof y.uuid === "string") this.emittedPeerUuids.add(y.uuid.toLowerCase());
-    this.emitAfterInit(y, {
+    if ("uuid" in projected && typeof projected.uuid === "string")
+      this.emittedPeerUuids.add(projected.uuid.toLowerCase());
+    this.emitAfterInit(projected, {
       peer: true,
       synthesized: true,
     });
   }
-  projectPeer(e, { keepUuid }) {
-    let { prompt, omitted, omittedToolUse, documentsAsText } = userMessageForHost(e, {
+  projectPeer(frame, { keepUuid }) {
+    let { prompt, omitted, omittedToolUse, documentsAsText } = userMessageForHost(frame, {
       keepUuid,
       sessionId: this.stamped,
     });
@@ -379,16 +399,16 @@ class CloudStreamFilter {
     this.peerToolUseOmitted = this.peerToolUseOmitted || omittedToolUse;
     return prompt;
   }
-  writeOwnEcho(e, { duplicate: n = false } = {}) {
-    this.emitAfterInit(e, {
+  writeOwnEcho(echo, { duplicate: isDuplicate = false } = {}) {
+    this.emitAfterInit(echo, {
       synthesized: true,
       ownEcho: true,
-      sessionPast: n,
+      sessionPast: isDuplicate,
     });
   }
-  rememberEmittedUuid(e) {
-    if (!isTransientStreamMessage(e) && "uuid" in e && typeof e.uuid === "string")
-      this.emittedUuids.add(e.uuid.toLowerCase());
+  rememberEmittedUuid(frame) {
+    if (!isTransientStreamMessage(frame) && "uuid" in frame && typeof frame.uuid === "string")
+      this.emittedUuids.add(frame.uuid.toLowerCase());
   }
   close() {
     if (this.pendingDelta !== null) {
@@ -403,62 +423,69 @@ class CloudStreamFilter {
     let heldForInit = this.heldForInit;
     this.heldForInit = [];
     this.peerHeldForInit = 0;
-    heldForInit.forEach((s) =>
+    heldForInit.forEach((held) =>
       this.ports.emit(
-        s.type === "user" && this.synthesizedHeld.has(s)
+        held.type === "user" && this.synthesizedHeld.has(held)
           ? {
-              ...s,
+              ...held,
               session_id: this.stamped,
             }
-          : s,
+          : held,
       ),
     );
     this.synthesizedHeld.clear();
-    let n = this.peerFramesDroppedBeforeInitCount - this.peerDropsTold;
-    if (n > 0) {
-      this.peerDropsTold += n;
+    let dropped = this.peerFramesDroppedBeforeInitCount - this.peerDropsTold;
+    if (dropped > 0) {
+      this.peerDropsTold += dropped;
       this.ports.emit(
         cloudInformationalMessage(
           this.stamped,
           "warning",
-          `This client kept only ${MAX_KEPT_PEER_MESSAGES} of the messages that other clients of this session sent while it waited for the session to start, and dropped ${n} more. Claude may read them all.`,
+          `This client kept only ${MAX_KEPT_PEER_MESSAGES} of the messages that other clients of this session sent while it waited for the session to start, and dropped ${dropped} more. Claude may read them all.`,
         ),
       );
     }
   }
-  startCcCountsAsWorkerUp(e) {
+  startCcCountsAsWorkerUp(now) {
     return (
       this.lastWorkerUpAt === null ||
       this.initSinceWorkerUp ||
-      e - this.lastWorkerUpAt >= WORKER_READY_WINDOW_MS
+      now - this.lastWorkerUpAt >= WORKER_READY_WINDOW_MS
     );
   }
-  noteWorkerUp(e) {
+  noteWorkerUp(sessionMode) {
     this.workerUps += 1;
     this.ports.onWorkerUp?.({
       generation: this.workerUps,
-      ...(e !== undefined && {
-        sessionMode: e,
+      ...(sessionMode !== undefined && {
+        sessionMode,
       }),
     });
   }
-  signalWorkerReady(e) {
+  signalWorkerReady(reason) {
     if (this.workerReady) return;
     this.workerReady = true;
-    this.ports.onWorkerReady(e);
+    this.ports.onWorkerReady(reason);
   }
   emitAfterInit(
-    e,
-    { peer: n = false, synthesized: s = false, ownEcho: r = false, sessionPast: h = false } = {},
+    frame,
+    {
+      peer: isPeer = false,
+      synthesized: isSynthesized = false,
+      ownEcho: isOwnEcho = false,
+      sessionPast: isSessionPast = false,
+    } = {},
   ) {
-    if (!n) this.rememberEmittedUuid(e);
-    let y = (e.type === "system" && e.subtype === "informational") || (this.entry === "attach" && (!r || h));
-    if (!this.holdingForInit || y) {
-      this.ports.emit(e);
+    if (!isPeer) this.rememberEmittedUuid(frame);
+    let canPass =
+      (frame.type === "system" && frame.subtype === "informational") ||
+      (this.entry === "attach" && (!isOwnEcho || isSessionPast));
+    if (!this.holdingForInit || canPass) {
+      this.ports.emit(frame);
       return;
     }
-    if (isTransientStreamMessage(e)) return;
-    if (n) {
+    if (isTransientStreamMessage(frame)) return;
+    if (isPeer) {
       if (this.peerHeldForInit >= MAX_KEPT_PEER_MESSAGES) {
         this.peerFramesDroppedBeforeInitCount += 1;
         return;
@@ -466,37 +493,37 @@ class CloudStreamFilter {
       this.peerHeldForInit += 1;
     } else if (this.heldForInit.length - this.peerHeldForInit >= MAX_HELD_PEER_MESSAGES) {
       this.releaseHeld();
-      this.ports.emit(e);
+      this.ports.emit(frame);
       return;
     }
-    this.heldForInit.push(e);
-    if (s) this.synthesizedHeld.add(e);
+    this.heldForInit.push(frame);
+    if (isSynthesized) this.synthesizedHeld.add(frame);
     this.maxHeldForInit = Math.max(this.maxHeldForInit, this.heldForInit.length);
   }
-  emitInit(e) {
-    let n = this.ports.cloudSession();
-    let s = n === undefined ? undefined : normalizeCloudSessionInfo(n);
-    this.rememberEmittedUuid(e);
+  emitInit(frame) {
+    let info = this.ports.cloudSession();
+    let normalized = info === undefined ? undefined : normalizeCloudSessionInfo(info);
+    this.rememberEmittedUuid(frame);
     this.cancelPendingDelta();
-    if (s !== undefined) this.lastBlock = entriesToStringMap(s);
+    if (normalized !== undefined) this.lastBlock = entriesToStringMap(normalized);
     this.ports.emit({
-      ...e,
-      ...(e.capabilities !== undefined && {
-        capabilities: e.capabilities.filter(
+      ...frame,
+      ...(frame.capabilities !== undefined && {
+        capabilities: frame.capabilities.filter(
           (capability) => !CLOUD_LOCAL_CONTROL_TYPES.has(capability) && true,
         ),
       }),
-      cloud_session: s,
+      cloud_session: normalized,
     });
-    this.writeSummaryFrom(s);
+    this.writeSummaryFrom(normalized);
     if (this.holdingForInit) this.releaseHeld();
   }
   noteCloudSessionChanged() {
     if (this.closed || (this.initCount === 0 && this.lastBlock === null)) return;
-    let e = this.ports.clock.now();
-    let since = this.pendingDelta?.since ?? e;
+    let now = this.ports.clock.now();
+    let since = this.pendingDelta?.since ?? now;
     this.pendingDelta?.cancel();
-    let max = Math.max(0, Math.min(STREAM_FILTER_LIMITS, since + STREAM_FILTER_SLACK_MS - e));
+    let max = Math.max(0, Math.min(STREAM_FILTER_LIMITS, since + STREAM_FILTER_SLACK_MS - now));
     this.pendingDelta = {
       since,
       cancel: this.ports.clock.setTimeout(() => {
@@ -510,58 +537,61 @@ class CloudStreamFilter {
     this.pendingDelta = null;
   }
   writeDelta() {
-    let e = this.ports.cloudSession();
-    if (e === undefined || this.lastBlock === null) return;
-    let n = normalizeCloudSessionInfo(e);
-    let s = entriesToStringMap(n);
+    let info = this.ports.cloudSession();
+    if (info === undefined || this.lastBlock === null) return;
+    let normalized = normalizeCloudSessionInfo(info);
+    let next = entriesToStringMap(normalized);
     let lastBlock = this.lastBlock;
-    let filtered = uniq([...lastBlock.keys(), ...s.keys()]).filter((y) => lastBlock.get(y) !== s.get(y));
+    let filtered = uniq([...lastBlock.keys(), ...next.keys()]).filter(
+      (key) => lastBlock.get(key) !== next.get(key),
+    );
     if (filtered.length === 0) return;
-    this.lastBlock = s;
+    this.lastBlock = next;
     this.deltaSeq += 1;
     this.ports.emit({
       type: "system",
       subtype: "cloud_session_delta",
       seq: this.deltaSeq,
       changed: filtered,
-      cloud_session: n,
+      cloud_session: normalized,
       uuid: randomUUID(),
       session_id: this.stamped,
     });
   }
   offerSummary() {
     if (this.summaryWritten || this.initCount === 0) return;
-    let e = this.ports.cloudSession();
-    if (e !== undefined) this.writeSummaryFrom(normalizeCloudSessionInfo(e));
+    let info = this.ports.cloudSession();
+    if (info !== undefined) this.writeSummaryFrom(normalizeCloudSessionInfo(info));
   }
-  writeSummaryFrom(e) {
-    if (this.summaryWritten || e === undefined) return;
-    let n = this.ports.summaryLine?.(e);
-    if (n !== undefined && n !== "") {
+  writeSummaryFrom(info) {
+    if (this.summaryWritten || info === undefined) return;
+    let line = this.ports.summaryLine?.(info);
+    if (line !== undefined && line !== "") {
       this.summaryWritten = true;
-      this.ports.emit(cloudInformationalMessage(this.stamped, "notice", n));
+      this.ports.emit(cloudInformationalMessage(this.stamped, "notice", line));
     }
   }
-  adoptWorkerSessionId(e) {
-    if (e.type === "user" || !("session_id" in e)) return;
-    let n = normalizeUuidOrNull(e.session_id) === null ? null : e.session_id.toLowerCase();
-    if (n === null || n === this.stamped.toLowerCase()) return;
+  adoptWorkerSessionId(frame) {
+    if (frame.type === "user" || !("session_id" in frame)) return;
+    let sessionId = normalizeUuidOrNull(frame.session_id) === null ? null : frame.session_id.toLowerCase();
+    if (sessionId === null || sessionId === this.stamped.toLowerCase()) return;
     this.sessionIdChangeCount += 1;
-    this.stamped = n;
-    this.ports.onWorkerSessionId(n);
+    this.stamped = sessionId;
+    this.ports.onWorkerSessionId(sessionId);
   }
-  reduceBootstrap(e) {
-    let n = this.ports.clock.now();
-    let setupStepFields = readSetupStepFields(e);
+  reduceBootstrap(event) {
+    let now = this.ports.clock.now();
+    let setupStepFields = readSetupStepFields(event);
     if (
       setupStepFields.stepId === "start_cc" &&
       setupStepFields.stepStatus === "completed" &&
-      !isStaleTimestamp(e, n)
+      !isStaleTimestamp(event, now)
     ) {
-      let k = this.bootCountedByFrameAt !== null && n - this.bootCountedByFrameAt < WORKER_READY_WINDOW_MS;
+      let alreadyBooted =
+        this.bootCountedByFrameAt !== null && now - this.bootCountedByFrameAt < WORKER_READY_WINDOW_MS;
       this.bootCountedByFrameAt = null;
-      if (!k && this.startCcCountsAsWorkerUp(n)) {
-        this.lastWorkerUpAt = n;
+      if (!alreadyBooted && this.startCcCountsAsWorkerUp(now)) {
+        this.lastWorkerUpAt = now;
         this.initSinceWorkerUp = false;
         this.noteWorkerUp(this.bootstrap?.sessionMode ?? undefined);
       }
@@ -574,20 +604,21 @@ class CloudStreamFilter {
     )
       this.releaseHeld();
     if (this.workerReady && !this.narrateAfterReady) return;
-    let r = this.bootstrap !== null && this.bootstrap.hasStructuredSteps && !this.bootstrap.terminal;
-    if (this.workerReady && !r && isStaleTimestamp(e, n)) return;
-    let h = this.bootstrap !== null;
-    let y =
+    let isStructured =
+      this.bootstrap !== null && this.bootstrap.hasStructuredSteps && !this.bootstrap.terminal;
+    if (this.workerReady && !isStructured && isStaleTimestamp(event, now)) return;
+    let hadBootstrap = this.bootstrap !== null;
+    let previous =
       this.bootstrap ??
       createSetupProgress(this.connectEpoch, {
         wake: this.entry === "attach",
       });
-    let S = applySetupEvent(y, e, "", n, this.connectEpoch);
-    this.bootstrap = S;
-    this.ports.onProvisioning?.(S, h ? y : null);
-    if (S.terminal || S.steps.some((step) => step.status === "failed")) this.narrateAfterReady = false;
+    let next = applySetupEvent(previous, event, "", now, this.connectEpoch);
+    this.bootstrap = next;
+    this.ports.onProvisioning?.(next, hadBootstrap ? previous : null);
+    if (next.terminal || next.steps.some((step) => step.status === "failed")) this.narrateAfterReady = false;
     if (this.workerReady) return;
-    let { stepId, stepStatus } = readSetupStepFields(e);
+    let { stepId, stepStatus } = readSetupStepFields(event);
     if (stepId !== null && stepStatus === "failed") {
       this.releaseHeld();
       this.ports.outbound.failQueued("the cloud container failed to start", "step_failed");
@@ -598,36 +629,38 @@ class CloudStreamFilter {
   }
 }
 //@ chunk-fe6rs39h.js:56002-56627 placement
-function userMessageForHost(e, { keepUuid, sessionId }) {
-  let r = keepUuid && typeof e.uuid === "string" ? normalizeUuidOrNull(e.uuid) : null;
-  let h = extractInboundAttachments(e).length;
-  let y = flattenContentForHost(h > 0 && e.message?.content === undefined ? "" : e.message?.content);
+function userMessageForHost(message, { keepUuid, sessionId }) {
+  let keptUuid = keepUuid && typeof message.uuid === "string" ? normalizeUuidOrNull(message.uuid) : null;
+  let toolUses = extractInboundAttachments(message).length;
+  let projected = flattenContentForHost(
+    toolUses > 0 && message.message?.content === undefined ? "" : message.message?.content,
+  );
   let content =
-    h === 0
-      ? y.content
+    toolUses === 0
+      ? projected.content
       : [
-          ...(typeof y.content !== "string"
-            ? y.content
-            : y.content === ""
+          ...(typeof projected.content !== "string"
+            ? projected.content
+            : projected.content === ""
               ? []
               : [
                   {
                     type: "text",
-                    text: y.content,
+                    text: projected.content,
                   },
                 ]),
           {
             type: "text",
-            text: `[${h} ${h === 1 ? "file" : "files"} attached by another client omitted]`,
+            text: `[${toolUses} ${toolUses === 1 ? "file" : "files"} attached by another client omitted]`,
           },
         ];
-  let omitted = y.omitted + h;
-  let { omittedToolUse, documentsAsText } = y;
+  let omitted = projected.omitted + toolUses;
+  let { omittedToolUse, documentsAsText } = projected;
   return {
     prompt: {
       type: "user",
-      ...(r !== null && {
-        uuid: r,
+      ...(keptUuid !== null && {
+        uuid: keptUuid,
       }),
       session_id: sessionId,
       message: {
@@ -635,8 +668,8 @@ function userMessageForHost(e, { keepUuid, sessionId }) {
         content,
       },
       parent_tool_use_id: null,
-      ...(isIsoTimestamp(e.timestamp) && {
-        timestamp: e.timestamp,
+      ...(isIsoTimestamp(message.timestamp) && {
+        timestamp: message.timestamp,
       }),
     },
     omitted,
@@ -645,52 +678,53 @@ function userMessageForHost(e, { keepUuid, sessionId }) {
   };
 }
 //@ chunk-fe6rs39h.js:56983-58336 placement
-function flattenContentForHost(e) {
-  if (typeof e === "string")
+function flattenContentForHost(content) {
+  if (typeof content === "string")
     return {
-      content: e,
+      content,
       omitted: 0,
       omittedToolUse: false,
       documentsAsText: 0,
     };
-  if (!Array.isArray(e))
+  if (!Array.isArray(content))
     return {
       content: [
         {
           type: "text",
-          text: qt,
+          text: OMITTED_UNSUPPORTED_CONTENT,
         },
       ],
       omitted: 1,
-      omittedToolUse: isToolUseBlock(e),
+      omittedToolUse: isToolUseBlock(content),
       documentsAsText: 0,
     };
-  let n = e;
-  let omittedToolUse = n.some(isToolUseBlock);
-  let mapped = n.map((S) => {
-    if (typeof S !== "object" || S === null || !("type" in S) || S.type !== "document") return null;
-    let w = Uo().safeParse(S);
-    if (!w.success) return null;
-    let { source } = w.data;
-    let title = w.data.title ?? "";
-    let context = w.data.context ?? "";
+  let omittedContent = content;
+  let omittedToolUse = omittedContent.some(isToolUseBlock);
+  let mapped = omittedContent.map((blocks) => {
+    if (typeof blocks !== "object" || blocks === null || !("type" in blocks) || blocks.type !== "document")
+      return null;
+    let block = documentBlockSchema().safeParse(blocks);
+    if (!block.success) return null;
+    let { source } = block.data;
+    let title = block.data.title ?? "";
+    let context = block.data.context ?? "";
     let content = source.type === "content" && typeof source.content !== "string" ? source.content : [];
-    if (!content.every((L) => Bo().safeParse(L).success)) return null;
-    let P =
+    if (!content.every((parsed) => textBlockSchema().safeParse(parsed).success)) return null;
+    let docSource =
       source.type === "text"
         ? source.data
         : typeof source.content === "string"
           ? source.content
-          : content.map((L) => L.text).join(`
+          : content.map((nested) => nested.text).join(`
 `);
     let joined = [
-      xo,
+      OMITTED_DOCUMENT_PLACEHOLDER,
       ...(title === "" ? [] : [`title: ${title}`]),
       ...(context === "" ? [] : [`context: ${context}`]),
-      P,
+      docSource,
     ].join(`
 `);
-    return [title, context, P, joined].some((content) =>
+    return [title, context, docSource, joined].some((content) =>
       hasToolResultContent({
         message: {
           content,
@@ -700,76 +734,76 @@ function flattenContentForHost(e) {
       ? null
       : joined;
   });
-  let flattened = n.flatMap((S, w) => {
-    if (typeof S !== "object" || S === null || !("type" in S)) return [];
-    if (S.type === "text" && "text" in S && typeof S.text === "string")
+  let flattened = omittedContent.flatMap((text, kept) => {
+    if (typeof text !== "object" || text === null || !("type" in text)) return [];
+    if (text.type === "text" && "text" in text && typeof text.text === "string")
       return [
         {
           type: "text",
-          text: S.text,
+          text: text.text,
         },
       ];
-    let R = mapped[w];
-    if (typeof R === "string")
+    let converted = mapped[kept];
+    if (typeof converted === "string")
       return [
         {
           type: "text",
-          text: R,
+          text: converted,
         },
       ];
-    let k = S.type === "image" ? base64ImageSource(S) : null;
-    return k === null
+    let image = text.type === "image" ? base64ImageSource(text) : null;
+    return image === null
       ? []
       : [
           {
             type: "image",
-            source: k,
+            source: image,
           },
         ];
   });
-  if (hasSplitTextMatch(n) || hasSplitTextMatch(flattened))
+  if (hasSplitTextMatch(omittedContent) || hasSplitTextMatch(flattened))
     return {
       content: [
         {
           type: "text",
-          text: qt,
+          text: OMITTED_UNSUPPORTED_CONTENT,
         },
       ],
-      omitted: n.length,
+      omitted: omittedContent.length,
       omittedToolUse,
       documentsAsText: 0,
     };
-  let y = n.length - flattened.length;
+  let dropped = omittedContent.length - flattened.length;
   return {
     content:
-      y > 0
+      dropped > 0
         ? [
             ...flattened,
             {
               type: "text",
-              text: qt,
+              text: OMITTED_UNSUPPORTED_CONTENT,
             },
           ]
         : flattened,
-    omitted: y,
+    omitted: dropped,
     omittedToolUse,
-    documentsAsText: count(mapped, (S) => S !== null),
+    documentsAsText: count(mapped, (keptBlock) => keptBlock !== null),
   };
 }
 //@ chunk-fe6rs39h.js:58336-58421 placement
-function isToolUseBlock(e) {
-  return typeof e === "object" && e !== null && "type" in e && e.type === "tool_use";
+function isToolUseBlock(block) {
+  return typeof block === "object" && block !== null && "type" in block && block.type === "tool_use";
 }
 //@ chunk-fe6rs39h.js:58421-58649 placement = extractErrorTypeFromData (1)
 function hasSplitTextMatch(data) {
-  let flattened = data.flatMap((s) =>
-    typeof s === "object" &&
-    s !== null &&
-    "type" in s &&
-    s.type === "text" &&
-    "text" in s &&
-    typeof s.text === "string"
-      ? [s.text]
+  let flattened = data.flatMap((block) =>
+    typeof block === "object" &&
+    block !== null &&
+    "type" in block &&
+    block.type === "text" &&
+    "text" in block &&
+    typeof block.text === "string"
+      ? [block.text]
       : [],
   );
   return (
@@ -779,34 +813,36 @@ function hasSplitTextMatch(data) {
       `
 `,
       " ",
-    ].some((s) =>
+    ].some((separator) =>
       hasToolResultContent({
         message: {
-          content: flattened.join(s),
+          content: flattened.join(separator),
         },
       }),
     )
   );
 }
 //@ chunk-fe6rs39h.js:58649-58940 placement
-function base64ImageSource(e) {
-  let source = "source" in e ? e.source : undefined;
+function base64ImageSource(source) {
+  let source_2 = "source" in source ? source.source : undefined;
   if (
-    typeof source !== "object" ||
-    source === null ||
-    !("type" in source) ||
-    source.type !== "base64" ||
-    !("data" in source) ||
-    typeof source.data !== "string"
+    typeof source_2 !== "object" ||
+    source_2 === null ||
+    !("type" in source_2) ||
+    source_2.type !== "base64" ||
+    !("data" in source_2) ||
+    typeof source_2.data !== "string"
   )
     return null;
-  let found = No.find((r) => "media_type" in source && source.media_type === r);
+  let found = SUPPORTED_IMAGE_MIME_TYPES.find(
+    (mediaType) => "media_type" in source_2 && source_2.media_type === mediaType,
+  );
   return found === undefined
     ? null
     : {
         type: "base64",
         media_type: found,
-        data: source.data,
+        data: source_2.data,
       };
 }
 //@ chunk-fe6rs39h.js:58940-59086 placement
@@ -819,49 +855,51 @@ function isIsoTimestamp(timestamp) {
   );
 }
 //@ chunk-fe6rs39h.js:59086-59181 placement
-function stripProtoKey(e) {
-  if (!Object.hasOwn(e, "__proto__")) return e;
-  let { ["__proto__"]: n, ...s } = e;
-  return s;
+function stripProtoKey(frame) {
+  if (!Object.hasOwn(frame, "__proto__")) return frame;
+  let { ["__proto__"]: proto, ...rest } = frame;
+  return rest;
 }
 //@ chunk-fe6rs39h.js:59181-59280 placement
-function stripCloudSessionKey(e) {
-  if (!Object.hasOwn(e, "cloud_session")) return e;
-  let { cloud_session: cloudSession, ...s } = e;
-  return s;
+function stripCloudSessionKey(frame) {
+  if (!Object.hasOwn(frame, "cloud_session")) return frame;
+  let { cloud_session: cloudSession, ...session } = frame;
+  return session;
 }
 //@ chunk-fe6rs39h.js:59280-59318 placement
 /**
  * 原样返回输入（只为解构 tag 字段做类型检查）的恒等函数。
  */
-function identity(e) {
-  let { tag } = e;
-  return e;
+function identity(tag) {
+  let { tag: tag_2 } = tag;
+  return tag;
 }
 //@ chunk-fe6rs39h.js:59318-59410 placement
-function entriesToStringMap(e) {
+function entriesToStringMap(object) {
   return new Map(
-    Object.entries(e).flatMap(([key, value]) => (value === undefined ? [] : [[key, jsonStringify(value)]])),
+    Object.entries(object).flatMap(([key, value]) =>
+      value === undefined ? [] : [[key, jsonStringify(value)]],
+    ),
   );
 }
 //@ chunk-fe6rs39h.js:59410-61114 placement
-function normalizeCloudSessionInfo(e) {
-  let id = e.id.startsWith("cse_") ? `session_${sessionIdBody(e.id)}` : e.id;
-  let directorySync = e.directory_sync;
+function normalizeCloudSessionInfo(info) {
+  let id = info.id.startsWith("cse_") ? `session_${sessionIdBody(info.id)}` : info.id;
+  let directorySync = info.directory_sync;
   return {
-    ...e,
+    ...info,
     id,
     device:
-      e.device.status === "unbound"
+      info.device.status === "unbound"
         ? {
-            ...e.device,
-            reason: clipCloudLine(e.device.reason),
-            message: clipCloudLine(e.device.message),
+            ...info.device,
+            reason: clipCloudLine(info.device.reason),
+            message: clipCloudLine(info.device.message),
           }
         : {
-            ...e.device,
-            ...(e.device.display_name !== undefined && {
-              display_name: clipCloudLine(e.device.display_name),
+            ...info.device,
+            ...(info.device.display_name !== undefined && {
+              display_name: clipCloudLine(info.device.display_name),
             }),
           },
     directory_sync: {
@@ -893,77 +931,77 @@ function normalizeCloudSessionInfo(e) {
       file_mode: directorySync.file_mode,
       file_mode_source: directorySync.file_mode_source,
     },
-    ...(e.host !== undefined && {
+    ...(info.host !== undefined && {
       host: {
-        handle: clipCloudLine(e.host.handle),
-        working_dir: clipCloudLine(e.host.working_dir),
-        platform: clipCloudLine(e.host.platform),
-        ...(e.host.cli_version !== undefined && {
-          cli_version: clipCloudLine(e.host.cli_version),
+        handle: clipCloudLine(info.host.handle),
+        working_dir: clipCloudLine(info.host.working_dir),
+        platform: clipCloudLine(info.host.platform),
+        ...(info.host.cli_version !== undefined && {
+          cli_version: clipCloudLine(info.host.cli_version),
         }),
       },
     }),
-    ...(e.serving !== undefined && {
+    ...(info.serving !== undefined && {
       serving: {
-        state: e.serving.state,
-        ...(e.serving.reason !== undefined && {
-          reason: e.serving.reason,
+        state: info.serving.state,
+        ...(info.serving.reason !== undefined && {
+          reason: info.serving.reason,
         }),
-        policy: e.serving.policy,
-        channel: e.serving.channel,
+        policy: info.serving.policy,
+        channel: info.serving.channel,
       },
     }),
-    ...(e.calls !== undefined && {
+    ...(info.calls !== undefined && {
       calls: {
-        live: e.calls.live.map((r) => ({
-          call_id: r.call_id,
-          tool: clipCloudLine(r.tool),
-          state: r.state,
-          since: r.since,
-          ...(r.ask_id !== undefined && {
-            ask_id: r.ask_id,
+        live: info.calls.live.map((call) => ({
+          call_id: call.call_id,
+          tool: clipCloudLine(call.tool),
+          state: call.state,
+          since: call.since,
+          ...(call.ask_id !== undefined && {
+            ask_id: call.ask_id,
           }),
-          ...(r.lapses_at !== undefined && {
-            lapses_at: r.lapses_at,
+          ...(call.lapses_at !== undefined && {
+            lapses_at: call.lapses_at,
           }),
-          ...(r.classifier_eligible !== undefined && {
-            classifier_eligible: r.classifier_eligible,
+          ...(call.classifier_eligible !== undefined && {
+            classifier_eligible: call.classifier_eligible,
           }),
         })),
-        recent: e.calls.recent.map((r) => ({
-          call_id: r.call_id,
-          tool: clipCloudLine(r.tool),
-          ended: r.ended,
-          ...(r.code !== undefined && {
-            code: clipCloudLine(r.code),
+        recent: info.calls.recent.map((call) => ({
+          call_id: call.call_id,
+          tool: clipCloudLine(call.tool),
+          ended: call.ended,
+          ...(call.code !== undefined && {
+            code: clipCloudLine(call.code),
           }),
-          at: r.at,
+          at: call.at,
         })),
       },
     }),
-    ...(e.notices !== undefined && {
-      notices: e.notices.slice(-CLOUD_SHORT_LIST_MAX).map((notice) => ({
+    ...(info.notices !== undefined && {
+      notices: info.notices.slice(-CLOUD_SHORT_LIST_MAX).map((notice) => ({
         key: clipCloudLine(notice.key),
         text: clipCloudLine(notice.text),
       })),
     }),
-    ...pickFeatureReports(e),
+    ...pickFeatureReports(info),
   };
 }
 //@ chunk-fe6rs39h.js:61114-61449 placement
-function pickFeatureReports(e) {
-  let n = e;
+function pickFeatureReports(feature) {
+  let info = feature;
   return Object.fromEntries(
-    HEADLESS_FEATURE_NAMES.flatMap((s) => {
-      let r = n[s];
-      if (typeof r !== "object" || r === null) return [];
-      let { state, source, reason, message } = r;
+    HEADLESS_FEATURE_NAMES.flatMap((entry) => {
+      let state = info[entry];
+      if (typeof state !== "object" || state === null) return [];
+      let { state: state_2, source, reason, message } = state;
       return [
         [
-          s,
+          entry,
           {
-            ...(typeof state === "string" && {
-              state: clipCloudLine(state),
+            ...(typeof state_2 === "string" && {
+              state: clipCloudLine(state_2),
             }),
             ...(typeof source === "string" && {
               source: clipCloudLine(source),
@@ -981,23 +1019,23 @@ function pickFeatureReports(e) {
   );
 }
 //@ chunk-fe6rs39h.js:61449-61543 placement
-function stripApiErrorOrigin(e) {
-  if (!("api_error_origin" in e)) return e;
-  let { api_error_origin: apiErrorOrigin, ...s } = e;
-  return s;
+function stripApiErrorOrigin(origin) {
+  if (!("api_error_origin" in origin)) return origin;
+  let { api_error_origin: apiErrorOrigin, ...rest } = origin;
+  return rest;
 }
 //@ chunk-fe6rs39h.js:61543-61774 placement
-function filterResultErrors(e) {
-  if (e.type !== "result" || !("errors" in e)) return e;
-  let errors = e.errors;
-  if (!Array.isArray(errors)) return e;
-  let filtered = errors.filter(
+function filterResultErrors(errors) {
+  if (errors.type !== "result" || !("errors" in errors)) return errors;
+  let errors_2 = errors.errors;
+  if (!Array.isArray(errors_2)) return errors;
+  let filtered = errors_2.filter(
     (error) => !(typeof error === "string" && error.startsWith("[ede_diagnostic]")),
   );
-  return filtered.length === errors.length
-    ? e
+  return filtered.length === errors_2.length
+    ? errors
     : {
-        ...e,
+        ...errors,
         errors: filtered,
       };
 }

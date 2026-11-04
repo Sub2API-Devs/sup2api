@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (15)
  * attribution: placement 15
  */
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { REVIEW_DIALOG_WIDTH, REVIEW_HEADER_ROWS } from "../AutoModeSetupReview.js";
 import {
   jsxProd_default,
@@ -16,7 +16,7 @@ import {
   Fragment,
 } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../../ink/components/Text.js";
-import { init_react_production, y } from "../../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../../../vendor/react/cjs/react.production.js";
 import { wrapText } from "../../../ink/wrap-text.js";
 import { hasVisibleText } from "../../../utils/permissions/approvalPayloadSerialization.js";
 import { formatOverflowHint, truncateToWidth, truncateToWidthNoEllipsis } from "../../../utils/format.js";
@@ -27,70 +27,77 @@ import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
 import { FittedOfferBody } from "../../AutocompactOfferDialog.js";
 import { useDialogKeybindings } from "../../../keybindings/dialogKeyHints.js";
-import { UP_ARROW, DOWN_ARROW } from "../../../utils/permissions/autoModeRulesPrompt.js";
+import { UP_ARROW, DOWN_ARROW } from "../../../constants/figures.js";
 import { useShortcutDisplay } from "../../../keybindings/useKeybindingDisplay.js";
 import { formatShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { DiffFrame } from "../../FileEditToolDiff.js";
 import { Blockquote } from "../../Blockquote.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1320936-1321702 placement
 function sandboxHostsSummary(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { hosts } = props;
   if (hosts === undefined || hosts.length === 0) {
     return null;
   }
-  let D = hosts[0];
-  let ee;
-  if ($[0] !== D) {
-    ee = D.length > REVIEW_DIALOG_WIDTH ? `\u2026${D.slice(D.length - (REVIEW_DIALOG_WIDTH - 1))}` : D;
-    $[0] = D;
-    $[1] = ee;
-  } else ee = $[1];
-  let ke;
-  if ($[2] !== hosts || $[3] !== ee) {
-    ke = [ee];
-    let min = Math.min(ke[0].length + 2, REVIEW_DIALOG_WIDTH / 2);
+  let primaryHost = hosts[0];
+  let primaryHostLabel;
+  if ($[0] !== primaryHost) {
+    primaryHostLabel =
+      primaryHost.length > REVIEW_DIALOG_WIDTH
+        ? `\u2026${primaryHost.slice(primaryHost.length - (REVIEW_DIALOG_WIDTH - 1))}`
+        : primaryHost;
+    $[0] = primaryHost;
+    $[1] = primaryHostLabel;
+  } else primaryHostLabel = $[1];
+  let visibleHosts;
+  if ($[2] !== hosts || $[3] !== primaryHostLabel) {
+    visibleHosts = [primaryHostLabel];
+    let min = Math.min(visibleHosts[0].length + 2, REVIEW_DIALOG_WIDTH / 2);
     for (const host of hosts.slice(1)) {
-      if (ke.length >= REVIEW_HEADER_ROWS) {
+      if (visibleHosts.length >= REVIEW_HEADER_ROWS) {
         break;
       }
       if (min + host.length > REVIEW_DIALOG_WIDTH) {
         continue;
       }
-      ke.push(host);
+      visibleHosts.push(host);
       min = min + (host.length + 2);
     }
     $[2] = hosts;
-    $[3] = ee;
-    $[4] = ke;
-  } else ke = $[4];
-  let He = hosts.length - ke.length;
-  const children = ke.join(", ");
-  let ze;
+    $[3] = primaryHostLabel;
+    $[4] = visibleHosts;
+  } else visibleHosts = $[4];
+  let hiddenHostCount = hosts.length - visibleHosts.length;
+  const children = visibleHosts.join(", ");
+  let hostsText;
   if ($[5] !== children) {
-    ze = jsxProd_default(Text, {
+    hostsText = jsxProd_default(Text, {
       bold: true,
       children,
     });
     $[5] = children;
-    $[6] = ze;
-  } else ze = $[6];
-  const Xe = He > 0 ? ` (+${He} more, ${hosts.length} in all)` : "";
-  let rt;
-  if ($[7] !== ze || $[8] !== Xe) {
-    rt = jsxProd_default_2(Text, {
-      children: ["Also lets this command reach, beyond the sandbox allowlist:", " ", ze, Xe],
+    $[6] = hostsText;
+  } else hostsText = $[6];
+  const moreSuffix = hiddenHostCount > 0 ? ` (+${hiddenHostCount} more, ${hosts.length} in all)` : "";
+  let summaryText;
+  if ($[7] !== hostsText || $[8] !== moreSuffix) {
+    summaryText = jsxProd_default_2(Text, {
+      children: ["Also lets this command reach, beyond the sandbox allowlist:", " ", hostsText, moreSuffix],
     });
-    $[7] = ze;
-    $[8] = Xe;
-    $[9] = rt;
-  } else rt = $[9];
-  return rt;
+    $[7] = hostsText;
+    $[8] = moreSuffix;
+    $[9] = summaryText;
+  } else summaryText = $[9];
+  return summaryText;
 }
 //@ chunk-18hwfzwa.js:1321702-1321706 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1321702", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1321706-1321734 placement
 var GUTTER_WIDTH = 2;
 var GUTTER_WIDTH_FULL = 8;
@@ -100,8 +107,8 @@ var MIN_COMMAND_LINES = 10;
 /**
  * 按宽度折行并去掉空行后，把命令限制在固定行数内，最后一行拼上 "+N lines" 提示。
  */
-function truncateCommandForDisplay(description, x) {
-  let max = Math.max(MIN_COMMAND_LINES, x);
+function truncateCommandForDisplay(description, columns) {
+  let max = Math.max(MIN_COMMAND_LINES, columns);
   let filtered = wrapText(
     description
       .split(
@@ -118,20 +125,20 @@ function truncateCommandForDisplay(description, x) {
 `,
     )
     .map((line) => line.trimEnd())
-    .filter((We) => hasVisibleText(We));
+    .filter((line) => hasVisibleText(line));
   if (filtered.length <= MAX_COMMAND_LINES)
     return filtered.join(`
 `);
-  let ee = filtered.length - MAX_COMMAND_LINES;
-  let ke = formatOverflowHint(ee, "line");
-  let Re = bunStringWidth(ke) <= max ? ke : `${ELLIPSIS} +${ee}`;
-  let Be = max - bunStringWidth(Re) - 1;
-  let He = filtered[MAX_COMMAND_LINES - 1] ?? "";
+  let overflowCount = filtered.length - MAX_COMMAND_LINES;
+  let overflowHint = formatOverflowHint(overflowCount, "line");
+  let fittedHint = bunStringWidth(overflowHint) <= max ? overflowHint : `${ELLIPSIS} +${overflowCount}`;
+  let lastLineBudget = max - bunStringWidth(fittedHint) - 1;
+  let lastLine = filtered[MAX_COMMAND_LINES - 1] ?? "";
   return [
     ...filtered.slice(0, MAX_COMMAND_LINES - 1),
-    Be < 1
-      ? truncateToWidth(Re, max)
-      : `${bunStringWidth(He) <= Be ? He : truncateToWidthNoEllipsis(He, Be)} ${Re}`,
+    lastLineBudget < 1
+      ? truncateToWidth(fittedHint, max)
+      : `${bunStringWidth(lastLine) <= lastLineBudget ? lastLine : truncateToWidthNoEllipsis(lastLine, lastLineBudget)} ${fittedHint}`,
   ].join(`
 `);
 }
@@ -143,42 +150,42 @@ function isNotYesNo(text) {
 /**
  * 已选定答案后把除 yes/no 外的选项置为 disabled；输入型选项把已填内容拼进标签。
  */
-function freezeOptionsAfterAnswer(h, fieldLeftOpen) {
+function freezeOptionsAfterAnswer(options, fieldLeftOpen) {
   return fieldLeftOpen === undefined
-    ? h
-    : h.map((D) => {
-        if (!isNotYesNo(D.value)) return D;
-        if (D.type !== "input" || D.value === fieldLeftOpen)
+    ? options
+    : options.map((option) => {
+        if (!isNotYesNo(option.value)) return option;
+        if (option.type !== "input" || option.value === fieldLeftOpen)
           return {
-            ...D,
+            ...option,
             disabled: true,
           };
-        let labelValueSeparator = D.labelValueSeparator ?? ", ";
-        let initialValue = D.initialValue ?? "";
+        let labelValueSeparator = option.labelValueSeparator ?? ", ";
+        let initialValue = option.initialValue ?? "";
         return {
-          value: D.value,
+          value: option.value,
           disabled: true,
           label:
             initialValue === ""
-              ? D.label
-              : typeof D.label === "string"
-                ? `${D.label}${labelValueSeparator}${initialValue}`
+              ? option.label
+              : typeof option.label === "string"
+                ? `${option.label}${labelValueSeparator}${initialValue}`
                 : jsxProd_default_2(Fragment, {
-                    children: [D.label, labelValueSeparator, initialValue],
+                    children: [option.label, labelValueSeparator, initialValue],
                   }),
         };
       });
 }
 //@ chunk-18hwfzwa.js:1322474-1323827 placement
 function CommandDisplay(props) {
-  let $ = w(24);
+  let $ = useMemoCache(24);
   let { commandDisplay, description, refinedPrefix } = props;
-  let [ee] = y(currentToolPermissionContext);
+  let [permissionContext] = useState(currentToolPermissionContext);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let columns = useTerminalSize().columns;
-  let He;
+  let contentKey;
   if ($[0] !== commandDisplay || $[1] !== description || $[2] !== refinedPrefix) {
-    He = {
+    contentKey = {
       commandDisplay,
       description,
       refinedPrefix,
@@ -186,108 +193,108 @@ function CommandDisplay(props) {
     $[0] = commandDisplay;
     $[1] = description;
     $[2] = refinedPrefix;
-    $[3] = He;
-  } else He = $[3];
-  let contentKey = He;
-  let ze = !isScreenReaderEnabled && ee;
-  const isActive = ee && commandDisplay.kind === "full";
-  let rt;
-  if ($[4] !== contentKey || $[5] !== ze || $[6] !== isActive) {
-    rt = {
+    $[3] = contentKey;
+  } else contentKey = $[3];
+  let contentKey_2 = contentKey;
+  let isCut = !isScreenReaderEnabled && permissionContext;
+  const isActive = permissionContext && commandDisplay.kind === "full";
+  let bodyOptions;
+  if ($[4] !== contentKey_2 || $[5] !== isCut || $[6] !== isActive) {
+    bodyOptions = {
       isActive,
-      isCut: ze,
-      contentKey,
+      isCut,
+      contentKey: contentKey_2,
     };
-    $[4] = contentKey;
-    $[5] = ze;
+    $[4] = contentKey_2;
+    $[5] = isCut;
     $[6] = isActive;
-    $[7] = rt;
-  } else rt = $[7];
-  let kt = FittedOfferBody(commandDisplay.kind === "full" ? commandDisplay.text : "", rt);
-  let [At, It] = y();
-  let Ot;
-  if ($[8] !== At) {
-    Ot = At !== undefined && isNotYesNo(At) ? At : null;
-    $[8] = At;
-    $[9] = Ot;
-  } else Ot = $[9];
-  let Et = Ot;
-  let [Dt, Lt] = y();
-  if (kt.isHeldForGood && Dt === undefined) Lt(Et);
-  let run = kt.showNextRows;
-  let Xt;
+    $[7] = bodyOptions;
+  } else bodyOptions = $[7];
+  let body = FittedOfferBody(commandDisplay.kind === "full" ? commandDisplay.text : "", bodyOptions);
+  let [noteValue, setNoteValue] = useState();
+  let currentNote;
+  if ($[8] !== noteValue) {
+    currentNote = noteValue !== undefined && isNotYesNo(noteValue) ? noteValue : null;
+    $[8] = noteValue;
+    $[9] = currentNote;
+  } else currentNote = $[9];
+  let note = currentNote;
+  let [leftOpenField, setLeftOpenField] = useState();
+  if (body.isHeldForGood && leftOpenField === undefined) setLeftOpenField(note);
+  let run = body.showNextRows;
+  let moreBindings;
   if ($[10] !== run) {
-    Xt = [
+    moreBindings = [
       {
         action: "app:toggleTranscript",
         run,
       },
     ];
     $[10] = run;
-    $[11] = Xt;
-  } else Xt = $[11];
-  let moreBindings = Xt;
-  let so;
-  if ($[12] !== kt.columns || $[13] !== description || $[14] !== ze) {
-    so = ze ? truncateCommandForDisplay(description, kt.columns - 2) : description;
-    $[12] = kt.columns;
+    $[11] = moreBindings;
+  } else moreBindings = $[11];
+  let moreBindings_2 = moreBindings;
+  let displayDescription;
+  if ($[12] !== body.columns || $[13] !== description || $[14] !== isCut) {
+    displayDescription = isCut ? truncateCommandForDisplay(description, body.columns - 2) : description;
+    $[12] = body.columns;
     $[13] = description;
-    $[14] = ze;
-    $[15] = so;
-  } else so = $[15];
-  let description_2 = so;
+    $[14] = isCut;
+    $[15] = displayDescription;
+  } else displayDescription = $[15];
+  let description_2 = displayDescription;
   let reasonColumns = Math.max(
     1,
     commandDisplay.kind !== "full"
       ? columns - GUTTER_WIDTH_FULL
-      : kt.columns - (commandDisplay.needsGutter ? 0 : GUTTER_WIDTH),
+      : body.columns - (commandDisplay.needsGutter ? 0 : GUTTER_WIDTH),
   );
-  const fieldLeftOpen = !kt.isStandingHeld ? undefined : Dt !== undefined ? Dt : Et;
-  let bo;
+  const fieldLeftOpen = !body.isStandingHeld ? undefined : leftOpenField !== undefined ? leftOpenField : note;
+  let fitted;
   if (
-    $[16] !== kt ||
-    $[17] !== ze ||
-    $[18] !== ee ||
-    $[19] !== moreBindings ||
+    $[16] !== body ||
+    $[17] !== isCut ||
+    $[18] !== permissionContext ||
+    $[19] !== moreBindings_2 ||
     $[20] !== reasonColumns ||
     $[21] !== description_2 ||
     $[22] !== fieldLeftOpen
   ) {
-    bo = {
-      isFitted: ee,
-      isCut: ze,
+    fitted = {
+      isFitted: permissionContext,
+      isCut,
       reasonColumns,
-      moreBindings,
-      body: kt,
+      moreBindings: moreBindings_2,
+      body,
       description: description_2,
-      noteFocus: It,
+      noteFocus: setNoteValue,
       fieldLeftOpen,
     };
-    $[16] = kt;
-    $[17] = ze;
-    $[18] = ee;
-    $[19] = moreBindings;
+    $[16] = body;
+    $[17] = isCut;
+    $[18] = permissionContext;
+    $[19] = moreBindings_2;
     $[20] = reasonColumns;
     $[21] = description_2;
     $[22] = fieldLeftOpen;
-    $[23] = bo;
-  } else bo = $[23];
-  return bo;
+    $[23] = fitted;
+  } else fitted = $[23];
+  return fitted;
 }
 //@ chunk-18hwfzwa.js:1323827-1324156 placement
 /**
  * 内容被裁剪时包一层快捷键（展开更多），未裁剪原样返回子节点。
  */
 function FittedBodyKeybindings(props) {
-  let $ = w(4);
+  let $ = useMemoCache(4);
   let { fitted, children } = props;
   if (!fitted.isFitted) {
     return children;
   }
   const active = fitted.body.hiddenRows > 0 || fitted.body.hiddenAbove > 0;
-  let ke;
+  let bodyElement;
   if ($[0] !== children || $[1] !== fitted.moreBindings || $[2] !== active) {
-    ke = jsxProd_default(useDialogKeybindings, {
+    bodyElement = jsxProd_default(useDialogKeybindings, {
       bindings: fitted.moreBindings,
       active,
       flexDirection: "column",
@@ -296,9 +303,9 @@ function FittedBodyKeybindings(props) {
     $[0] = children;
     $[1] = fitted.moreBindings;
     $[2] = active;
-    $[3] = ke;
-  } else ke = $[3];
-  return ke;
+    $[3] = bodyElement;
+  } else bodyElement = $[3];
+  return bodyElement;
 }
 //@ chunk-18hwfzwa.js:1324156-1324166 placement
 var MIN_HINT_GAP = 6;
@@ -307,10 +314,10 @@ var MIN_HINT_GAP = 6;
  * 生成 "+N lines / N above" 隐藏行提示，按可用列宽依次尝试长短版本，剩余宽度够时再拼上操作提示。
  */
 function formatHiddenRowsHint({ hiddenRows, hiddenAbove, hint, columns }) {
-  let ee = formatOverflowHint(hiddenRows, "line");
-  let ke =
+  let rowsHint = formatOverflowHint(hiddenRows, "line");
+  let candidates =
     hiddenAbove === 0
-      ? [ee]
+      ? [rowsHint]
       : hiddenRows === 0
         ? [
             `${formatOverflowHint(hiddenAbove, "line")} above`,
@@ -318,17 +325,21 @@ function formatHiddenRowsHint({ hiddenRows, hiddenAbove, hint, columns }) {
             `${UP_ARROW}${hiddenAbove}`,
           ]
         : [
-            `${ee}, +${hiddenAbove} above`,
+            `${rowsHint}, +${hiddenAbove} above`,
             `${ELLIPSIS} +${hiddenRows}, +${hiddenAbove} above`,
             `${UP_ARROW}${hiddenAbove} ${DOWN_ARROW}${hiddenRows}`,
           ];
-  let Re = ke.find((He) => bunStringWidth(He) <= columns) ?? truncateToWidth(ke.at(-1) ?? ee, columns);
-  let Be = columns - bunStringWidth(Re) - 1;
-  return Be < MIN_HINT_GAP || hint === "" ? Re : `${Re} ${truncateToWidth(hint, Be)}`;
+  let baseHint =
+    candidates.find((candidate) => bunStringWidth(candidate) <= columns) ??
+    truncateToWidth(candidates.at(-1) ?? rowsHint, columns);
+  let hintBudget = columns - bunStringWidth(baseHint) - 1;
+  return hintBudget < MIN_HINT_GAP || hint === ""
+    ? baseHint
+    : `${baseHint} ${truncateToWidth(hint, hintBudget)}`;
 }
 //@ chunk-18hwfzwa.js:1324506-1325050 placement
 function SeeMoreHint(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { body } = props;
   let chord = useShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");
   let { hiddenRows, hiddenAbove } = body;
@@ -356,17 +367,17 @@ function SeeMoreHint(props) {
     $[3] = chord;
     $[4] = children;
   } else children = $[4];
-  let Be;
+  let hintElement;
   if ($[5] !== children) {
-    Be = jsxProd_default(Text, {
+    hintElement = jsxProd_default(Text, {
       dimColor: true,
       wrap: "truncate-end",
       children,
     });
     $[5] = children;
-    $[6] = Be;
-  } else Be = $[6];
-  return Be;
+    $[6] = hintElement;
+  } else hintElement = $[6];
+  return hintElement;
 }
 //@ chunk-18hwfzwa.js:1325050-1325527 placement
 /**
@@ -408,7 +419,10 @@ function CommandPreviewFrame({ commandDisplay, fitted, inset = 1 }) {
   });
 }
 //@ chunk-18hwfzwa.js:1325527-1325531 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1325527", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1325531-1325586 placement
 var AUTO_MODE_TIP_TEXT = "\xB7 auto mode handles these prompts for you";
 //@ chunk-18hwfzwa.js:1325586-1325769 placement
@@ -416,16 +430,16 @@ var AUTO_MODE_TIP_TEXT = "\xB7 auto mode handles these prompts for you";
  * 渲染"自动模式可替你处理这些提示"的粗体提示。
  */
 function AutoModeTip() {
-  let $ = w(1);
-  let x;
+  let $ = useMemoCache(1);
+  let tipElement;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    x = jsxProd_default(Text, {
+    tipElement = jsxProd_default(Text, {
       bold: true,
       children: 'Tip: auto mode handles these prompts for you \u2014 choose "switch to auto mode" below',
     });
-    $[0] = x;
-  } else x = $[0];
-  return x;
+    $[0] = tipElement;
+  } else tipElement = $[0];
+  return tipElement;
 }
 export {
   CommandDisplay,

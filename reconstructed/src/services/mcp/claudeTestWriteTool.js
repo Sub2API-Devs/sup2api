@@ -12,12 +12,13 @@ import { MCP_CLAUDE_TEST_WRITE, regExp_17 } from "../../plugins/bundled/claudeTe
 import { renderToolUseMessage_3 } from "../../tools/MCPTool/UI.js";
 
 //@ chunk-e6aww6q8.js:4678621-4678802 placement = mergeClients (1)
-function mergeClients_2(e) {
-  if (e === null || typeof e !== "object" || !("name" in e) || !("text" in e)) return null;
-  let { name: n, text } = e;
-  return typeof n === "string" && typeof text === "string"
+function mergeClients_2(candidate) {
+  if (candidate === null || typeof candidate !== "object" || !("name" in candidate) || !("text" in candidate))
+    return null;
+  let { name: draftName, text } = candidate;
+  return typeof draftName === "string" && typeof text === "string"
     ? {
-        name: n,
+        name: draftName,
         text,
       }
     : null;
@@ -32,16 +33,16 @@ function claudeTestWriteToolOverrides() {
     userFacingName() {
       return "Write Claude Test draft";
     },
-    renderToolUseMessage(e, n) {
-      if (n.verbose) return renderToolUseMessage_3(e, n);
-      if (typeof e.name !== "string") return "";
-      return regExp_17.test(e.name)
-        ? e.name
+    renderToolUseMessage(input, context) {
+      if (context.verbose) return renderToolUseMessage_3(input, context);
+      if (typeof input.name !== "string") return "";
+      return regExp_17.test(input.name)
+        ? input.name
         : renderToolUseMessage_3(
             {
-              name: e.name,
+              name: input.name,
             },
-            n,
+            context,
           );
     },
   };

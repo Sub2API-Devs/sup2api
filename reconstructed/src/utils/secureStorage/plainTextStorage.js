@@ -19,6 +19,7 @@ import { getErrnoCode } from "../errors.js";
 import { writeFileAtomic } from "../atomicPublishWrite.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { HostScoped } from "../hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-b29hdd5e.js:2212-2218 placement
 var plainTextStoragePromise;
@@ -50,14 +51,14 @@ function getStoragePathIfDiskful() {
 //@ chunk-b29hdd5e.js:2500-2553 layout
 var PLAINTEXT_STORAGE_WARNING = "Warning: Storing credentials in plaintext.";
 //@ chunk-b29hdd5e.js:2553-2692 layout
-function classifyReadErrorLenient(e, r) {
-  if (e === "ENOENT" || e === "EISDIR" || e === "ENOTDIR") return null;
-  if ((e === "EACCES" || e === "EPERM") && r !== "win32") return null;
+function classifyReadErrorLenient(code, platform) {
+  if (code === "ENOENT" || code === "EISDIR" || code === "ENOTDIR") return null;
+  if ((code === "EACCES" || code === "EPERM") && platform !== "win32") return null;
   return READ_FAILED;
 }
 //@ chunk-b29hdd5e.js:2692-2736 layout
-function classifyReadErrorStrict(e, r) {
-  return e === "ENOENT" ? null : READ_FAILED;
+function classifyReadErrorStrict(code, platform) {
+  return code === "ENOENT" ? null : READ_FAILED;
 }
 //@ chunk-b29hdd5e.js:2736-3475 layout
 /**
@@ -75,7 +76,7 @@ var fileCredentialBackend = {
       return null;
     }
   },
-  async readStrict(e) {
+  async readStrict(strict) {
     let { storagePath } = getStoragePath();
     let data;
     try {
@@ -83,12 +84,12 @@ var fileCredentialBackend = {
         encoding: "utf8",
       });
     } catch (error) {
-      return (e ? classifyReadErrorStrict : classifyReadErrorLenient)(getErrnoCode(error), "linux");
+      return (strict ? classifyReadErrorStrict : classifyReadErrorLenient)(getErrnoCode(error), "linux");
     }
     try {
       return jsonParse(data);
     } catch {
-      if (e) return READ_FAILED;
+      if (strict) return READ_FAILED;
       return null;
     }
   },
@@ -132,10 +133,10 @@ var disklessCredentialBackend = {
   remove: async () => true,
 };
 //@ chunk-b29hdd5e.js:3475-3651 layout
-function storeReadToValue(e) {
-  switch (e.state) {
+function storeReadToValue(result) {
+  switch (result.state) {
     case "present":
-      return e.data;
+      return result.data;
     case "absent":
     case "corrupt":
       return null;
@@ -143,7 +144,7 @@ function storeReadToValue(e) {
     case "read-failed":
       return READ_FAILED;
     default: {
-      let r = e;
+      let unexpected = result;
       return READ_FAILED;
     }
   }
@@ -152,34 +153,37 @@ function storeReadToValue(e) {
 /**
  * 宿主托管凭据存储后端：读写走宿主提供的 readCredentials/writeCredentials/deleteCredentials，并维护本地副本与代数。
  */
-function createHostStoreBackend(e) {
+function createHostStoreBackend(store) {
   return {
     async read() {
       let storagePathIfDiskful = getStoragePathIfDiskful();
       let storeCopyState = getStoreCopyState();
       let generation = storeCopyState.generation;
-      let o = await trackStoreOp(e.readCredentials(), storeCopyState);
-      recordStoreRead(storeCopyState, o, storagePathIfDiskful, generation);
-      return o.state === "present" ? o.data : null;
+      let read = await trackStoreOp(store.readCredentials(), storeCopyState);
+      recordStoreRead(storeCopyState, read, storagePathIfDiskful, generation);
+      return read.state === "present" ? read.data : null;
     },
-    async readStrict(r) {
+    async readStrict(strict) {
       let storagePathIfDiskful = getStoragePathIfDiskful();
       let storeCopyState = getStoreCopyState();
       let generation = storeCopyState.generation;
-      let s = await trackStoreOp(r ? e.readCredentials() : e.readCredentialsStrict(), storeCopyState);
-      recordStoreRead(storeCopyState, s, storagePathIfDiskful, generation);
-      if (r) return s.state === "present" ? s.data : s.state === "absent" ? null : READ_FAILED;
-      return storeReadToValue(s);
+      let read = await trackStoreOp(
+        strict ? store.readCredentials() : store.readCredentialsStrict(),
+        storeCopyState,
+      );
+      recordStoreRead(storeCopyState, read, storagePathIfDiskful, generation);
+      if (strict) return read.state === "present" ? read.data : read.state === "absent" ? null : READ_FAILED;
+      return storeReadToValue(read);
     },
-    async write(r) {
+    async write(data) {
       let storagePathIfDiskful = getStoragePathIfDiskful();
       let storeCopyState = getStoreCopyState();
       let generation = storeCopyState.generation;
-      let s = await trackStoreOp(e.writeCredentials(r), storeCopyState);
-      if (s.state === "written" && generation === storeCopyState.generation)
-        setStoreCopy(storeCopyState, storagePathIfDiskful, jsonStringify(r));
+      let result = await trackStoreOp(store.writeCredentials(data), storeCopyState);
+      if (result.state === "written" && generation === storeCopyState.generation)
+        setStoreCopy(storeCopyState, storagePathIfDiskful, jsonStringify(data));
       else invalidateStoreCopy(storeCopyState);
-      return s.state === "written"
+      return result.state === "written"
         ? {
             success: true,
             warning: PLAINTEXT_STORAGE_WARNING,
@@ -192,18 +196,18 @@ function createHostStoreBackend(e) {
       let storagePathIfDiskful = getStoragePathIfDiskful();
       let storeCopyState = getStoreCopyState();
       let generation = storeCopyState.generation;
-      let o = await trackStoreOp(e.deleteCredentials(), storeCopyState);
-      if (o.state === "deleted" && generation === storeCopyState.generation)
+      let result = await trackStoreOp(store.deleteCredentials(), storeCopyState);
+      if (result.state === "deleted" && generation === storeCopyState.generation)
         setStoreCopy(storeCopyState, storagePathIfDiskful, null);
       else invalidateStoreCopy(storeCopyState);
-      return o.state === "deleted";
+      return result.state === "deleted";
     },
   };
 }
 //@ chunk-b29hdd5e.js:4385-4449 layout
-async function trackStoreOp(e, storeCopyState) {
+async function trackStoreOp(promise, storeCopyState) {
   try {
-    return await e;
+    return await promise;
   } catch (error) {
     invalidateStoreCopy(storeCopyState);
     throw error;
@@ -215,7 +219,10 @@ class StoreCopyState {
   generation = 0;
 }
 //@ chunk-b29hdd5e.js:4482-4505 layout
-var STORE_COPY_PER_HOST = new HostScoped(() => new StoreCopyState());
+var STORE_COPY_PER_HOST; // deferred: uses StoreCopyState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-b29hdd5e.js:4482", () => {
+  STORE_COPY_PER_HOST = new HostScoped(() => new StoreCopyState());
+});
 //@ chunk-b29hdd5e.js:4505-4540 layout
 function getStoreCopyState() {
   return STORE_COPY_PER_HOST.of(getRootSession().host);
@@ -229,14 +236,14 @@ function setStoreCopy(storeCopyState, storagePath, text) {
   storeCopyState.generation++;
 }
 //@ chunk-b29hdd5e.js:4603-4832 layout
-function recordStoreRead(storeCopyState, r, storagePathIfDiskful, generation) {
+function recordStoreRead(storeCopyState, read, storagePathIfDiskful, generation) {
   if (generation !== storeCopyState.generation) {
     invalidateStoreCopy(storeCopyState);
     return;
   }
-  switch (r.state) {
+  switch (read.state) {
     case "present":
-      setStoreCopy(storeCopyState, storagePathIfDiskful, jsonStringify(r.data));
+      setStoreCopy(storeCopyState, storagePathIfDiskful, jsonStringify(read.data));
       return;
     case "absent":
     case "corrupt":
@@ -247,24 +254,24 @@ function recordStoreRead(storeCopyState, r, storagePathIfDiskful, generation) {
       invalidateStoreCopy(storeCopyState);
       return;
     default: {
-      let o = r;
+      let unexpected = read;
       invalidateStoreCopy(storeCopyState);
     }
   }
 }
 //@ chunk-b29hdd5e.js:4832-4875 layout
-function invalidateStoreCopy(e) {
-  e.copy = undefined;
-  e.generation++;
+function invalidateStoreCopy(state) {
+  state.copy = undefined;
+  state.generation++;
 }
 //@ chunk-b29hdd5e.js:4875-4897 layout
 function invalidatePlainTextStoreCopy() {
   invalidateStoreCopy(getStoreCopyState());
 }
 //@ chunk-b29hdd5e.js:4897-4947 layout
-function getCredentialBackend(e) {
-  return isStorageV5Enabled() && e !== undefined
-    ? createHostStoreBackend(e)
+function getCredentialBackend(store) {
+  return isStorageV5Enabled() && store !== undefined
+    ? createHostStoreBackend(store)
     : isDiskless()
       ? disklessCredentialBackend
       : fileCredentialBackend;
@@ -276,10 +283,11 @@ function getCredentialBackend(e) {
 var plainTextStorage = {
   name: "plaintext",
   osGuarded: false,
-  read(e) {
+  read(options) {
     let storagePathIfDiskful = getStoragePathIfDiskful();
     try {
-      let copy = isStorageV5Enabled() && e?.fromStoreCopy === true ? getStoreCopyState().copy : undefined;
+      let copy =
+        isStorageV5Enabled() && options?.fromStoreCopy === true ? getStoreCopyState().copy : undefined;
       if (copy !== undefined && copy.storagePath === storagePathIfDiskful) {
         if (copy.text === null) return null;
         return JSON.parse(copy.text);
@@ -296,20 +304,20 @@ var plainTextStorage = {
   invalidateCache() {
     invalidatePlainTextStoreCopy();
   },
-  readAsync(e) {
-    return getCredentialBackend(e).read();
+  readAsync(store) {
+    return getCredentialBackend(store).read();
   },
-  readAsyncStrict(e, r) {
-    return getCredentialBackend(e).readStrict(r?.unreadableFileAs === "failure");
+  readAsyncStrict(store, options) {
+    return getCredentialBackend(store).readStrict(options?.unreadableFileAs === "failure");
   },
-  mutate(e, r) {
-    return mutateSecureStorage(plainTextStorage, e, r);
+  mutate(mutate, options) {
+    return mutateSecureStorage(plainTextStorage, mutate, options);
   },
-  update(e, r) {
-    return getCredentialBackend(r).write(e);
+  update(data, store) {
+    return getCredentialBackend(store).write(data);
   },
-  delete(e) {
-    return getCredentialBackend(e).remove();
+  delete(store) {
+    return getCredentialBackend(store).remove();
   },
 };
 export {

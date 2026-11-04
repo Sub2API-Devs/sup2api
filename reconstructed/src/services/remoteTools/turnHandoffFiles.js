@@ -47,45 +47,52 @@ import { readHandleBounded } from "../../utils/fsSafety/boundOpen.js";
  * 回合交接时，按文件名刷新先前放到 home 目录的文件：对名字被新文件占用的条目，读取上传目录里对应的新内容（校验哈希）原子替换，或在内容未变时移除，并记事件。
  */
 async function refreshFilesPlacedByName(files, byteLimit = COPIED_BYTES_LIMIT) {
-  let e = filesPlacedByNameRegistry();
+  let registry = filesPlacedByNameRegistry();
   if (!hasConflictingPlacedFile(files) || !isFilePersistenceEnabled()) return;
   let startTime = performance.now();
-  let r = new Map();
-  for (let { fileUuid, name: i } of files) {
-    let d = nfc(i);
-    r.set(d, (r.get(d) ?? new Map()).set(fileUuid.toLowerCase(), fileUuid));
+  let byName = new Map();
+  for (let { fileUuid, name } of files) {
+    let normalizedName = nfc(name);
+    byName.set(
+      normalizedName,
+      (byName.get(normalizedName) ?? new Map()).set(fileUuid.toLowerCase(), fileUuid),
+    );
   }
-  let s = {};
-  let f = 0;
-  let c;
-  for (let [name, i] of r) {
-    let row = e.get(name);
-    if (row === undefined || (i.size === 1 && i.has(row.fileUuid))) continue;
-    e.delete(name);
-    let [fileUuid] = i.size === 1 && !row.ambiguous ? i.values() : [];
-    let u;
+  let outcomeCounts = {};
+  let copiedBytes = 0;
+  let lastErrorCode;
+  for (let [name, byUuid] of byName) {
+    let row = registry.get(name);
+    if (row === undefined || (byUuid.size === 1 && byUuid.has(row.fileUuid))) continue;
+    registry.delete(name);
+    let [fileUuid] = byUuid.size === 1 && !row.ambiguous ? byUuid.values() : [];
+    let outcome;
     try {
-      let p = await refreshPlacedFile(name, row, fileUuid, byteLimit - f);
-      u = p.outcome;
-      f += p.bytes;
+      let refresh = await refreshPlacedFile(name, row, fileUuid, byteLimit - copiedBytes);
+      outcome = refresh.outcome;
+      copiedBytes += refresh.bytes;
     } catch (error) {
-      c = sanitizeErrnoForTelemetry(error) ?? lit("unknown");
-      u = "failed";
-      if (!e.has(name) && e.size < PLACED_BY_NAME_LIMITS) e.set(name, row);
+      lastErrorCode = sanitizeErrnoForTelemetry(error) ?? lit("unknown");
+      outcome = "failed";
+      if (!registry.has(name) && registry.size < PLACED_BY_NAME_LIMITS) registry.set(name, row);
     }
-    s[u] = (s[u] ?? 0) + 1;
+    outcomeCounts[outcome] = (outcomeCounts[outcome] ?? 0) + 1;
   }
   await loadFilesPlacedByName();
-  let l = {
+  let fields = {
     duration_ms: Math.round(performance.now() - startTime),
-    approx_copied_bytes: Number(f.toPrecision(2)),
-    ...identityMap(s, (n, i) => `files_${i}`),
-    ...(c !== undefined && {
-      last_error_code: c,
+    approx_copied_bytes: Number(copiedBytes.toPrecision(2)),
+    ...identityMap(outcomeCounts, (count, outcome) => `files_${outcome}`),
+    ...(lastErrorCode !== undefined && {
+      last_error_code: lastErrorCode,
     }),
   };
-  logEvent("tengu_turn_handoff_files_by_name_refresh", l);
-  logForDiagnosticsNoPII(c !== undefined ? "warn" : "info", "turn_handoff_files_by_name_refresh", l);
+  logEvent("tengu_turn_handoff_files_by_name_refresh", fields);
+  logForDiagnosticsNoPII(
+    lastErrorCode !== undefined ? "warn" : "info",
+    "turn_handoff_files_by_name_refresh",
+    fields,
+  );
 }
 //@ chunk-648dqenp.js:6951-7697 placement
 /**
@@ -151,9 +158,9 @@ async function refreshPlacedFile(name, row, fileUuid, byteLimit) {
 }
 //@ chunk-648dqenp.js:7697-7815 placement
 async function removeIfStillPlaced(row) {
-  let t = await checkPlacedFileUnchanged(row);
-  if (typeof t === "string") return t;
-  return (await removeIfUnchanged(row.path, t)) ? undefined : "left_changed";
+  let fingerprint = await checkPlacedFileUnchanged(row);
+  if (typeof fingerprint === "string") return fingerprint;
+  return (await removeIfUnchanged(row.path, fingerprint)) ? undefined : "left_changed";
 }
 //@ chunk-648dqenp.js:7815-8336 placement
 /**
@@ -186,3 +193,4 @@ async function checkPlacedFileUnchanged(row) {
     await handle.close();
   }
 }
+export { refreshFilesPlacedByName };

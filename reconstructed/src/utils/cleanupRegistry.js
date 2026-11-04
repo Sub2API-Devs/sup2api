@@ -12,47 +12,53 @@ import { logForDebugging } from "./debug.js";
 import { HostScoped } from "./hostScoped.js";
 import { onProcessRootHost } from "../bootstrap/state.js";
 import { parseDebugFilter } from "./debugFilter.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-cgr0tezp.js:15337-15479 placement
-function toCleanupFn(e) {
-  if (typeof e === "function") return e;
-  if (Symbol.asyncDispose in e) return () => e[Symbol.asyncDispose]();
-  return () => e[Symbol.dispose]();
+function toCleanupFn(disposable) {
+  if (typeof disposable === "function") return disposable;
+  if (Symbol.asyncDispose in disposable) return () => disposable[Symbol.asyncDispose]();
+  return () => disposable[Symbol.dispose]();
 }
 //@ chunk-cgr0tezp.js:15479-15927 placement
 /**
  * 清理函数注册表（注册、按序执行）。
  */
-class CleanupRegistry {
-  #e = new Set();
-  #t = false;
-  get drainStarted() {
-    return this.#t;
-  }
-  register(e) {
-    let cleanupFn = toCleanupFn(e);
-    this.#e.add(cleanupFn);
-    let r = () => {
-      this.#e.delete(cleanupFn);
-    };
-    return Object.assign(r, {
-      [Symbol.dispose]: r,
-    });
-  }
-  async drain() {
-    this.#t = true;
-    let list = Array.from(this.#e);
-    this.#e.clear();
-    let found = (await Promise.allSettled(list.map(async (i) => i()))).find((i) => i.status === "rejected");
-    if (found !== undefined) throw found.reason;
-  }
-  async [Symbol.asyncDispose]() {
-    await this.drain();
-  }
-  get sizeForTesting() {
-    return this.#e.size;
-  }
-}
+let CleanupRegistry; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-cgr0tezp.js:15479", () => {
+  CleanupRegistry = class CleanupRegistry {
+    #e = new Set();
+    #t = false;
+    get drainStarted() {
+      return this.#t;
+    }
+    register(disposable) {
+      let cleanupFn = toCleanupFn(disposable);
+      this.#e.add(cleanupFn);
+      let unregister = () => {
+        this.#e.delete(cleanupFn);
+      };
+      return Object.assign(unregister, {
+        [Symbol.dispose]: unregister,
+      });
+    }
+    async drain() {
+      this.#t = true;
+      let list = Array.from(this.#e);
+      this.#e.clear();
+      let found = (await Promise.allSettled(list.map(async (cleanupFn) => cleanupFn()))).find(
+        (settledResult) => settledResult.status === "rejected",
+      );
+      if (found !== undefined) throw found.reason;
+    }
+    async [Symbol.asyncDispose]() {
+      await this.drain();
+    }
+    get sizeForTesting() {
+      return this.#e.size;
+    }
+  };
+});
 //@ chunk-cgr0tezp.js:15927-15997 placement
 /**
  * 清理与退出前刷写的注册表集合（含各自等待表）。
@@ -66,7 +72,10 @@ class CleanupRegistries {
 /**
  * 按宿主隔离的清理注册表集合。
  */
-var cleanupRegistriesByHost = new HostScoped(() => new CleanupRegistries());
+var cleanupRegistriesByHost; // deferred: uses CleanupRegistries of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cgr0tezp.js:15997", () => {
+  cleanupRegistriesByHost = new HostScoped(() => new CleanupRegistries());
+});
 //@ chunk-cgr0tezp.js:16022-16050 placement
 /**
  * 取出进程根的清理注册表集合。
@@ -83,8 +92,8 @@ var CLEANUP_TIMEOUT_MS = 2000;
 /**
  * 注册退出时清理函数。
  */
-function registerCleanup(e) {
-  return getCleanupRegistries().cleanup.register(e);
+function registerCleanup(disposable) {
+  return getCleanupRegistries().cleanup.register(disposable);
 }
 //@ chunk-cgr0tezp.js:16110-16158 placement
 /**
@@ -104,20 +113,20 @@ function isCleanupStarted() {
 /**
  * 注册退出前刷新函数（可指定最长等待）。
  */
-function registerPreExitFlush(e, n) {
+function registerPreExitFlush(flushFn, mayWaitMs) {
   let { preExitFlush, preExitFlushWaits } = getCleanupRegistries();
-  let s = preExitFlush.register(e);
-  if (n !== undefined)
-    preExitFlushWaits.set(e, {
-      mayWaitMs: n,
-      unregister: s,
+  let unregisterFlush = preExitFlush.register(flushFn);
+  if (mayWaitMs !== undefined)
+    preExitFlushWaits.set(flushFn, {
+      mayWaitMs,
+      unregister: unregisterFlush,
     });
-  let o = () => {
-    preExitFlushWaits.delete(e);
-    s();
+  let dispose = () => {
+    preExitFlushWaits.delete(flushFn);
+    unregisterFlush();
   };
-  return Object.assign(o, {
-    [Symbol.dispose]: o,
+  return Object.assign(dispose, {
+    [Symbol.dispose]: dispose,
   });
 }
 //@ chunk-cgr0tezp.js:16406-16504 placement
@@ -125,7 +134,10 @@ function registerPreExitFlush(e, n) {
  * 返回所有退出前刷写中最长的等待时长。
  */
 function maxPreExitFlushWaitMs() {
-  return Math.max(0, ...Array.from(getCleanupRegistries().preExitFlushWaits.values(), (e) => e.mayWaitMs));
+  return Math.max(
+    0,
+    ...Array.from(getCleanupRegistries().preExitFlushWaits.values(), (entry) => entry.mayWaitMs),
+  );
 }
 //@ chunk-cgr0tezp.js:16504-16641 placement
 /**
@@ -133,13 +145,13 @@ function maxPreExitFlushWaitMs() {
  */
 async function drainPreExitFlushes_2() {
   let { preExitFlushWaits } = getCleanupRegistries();
-  let n = new CleanupRegistry();
-  preExitFlushWaits.forEach(({ unregister }, i) => {
+  let registry = new CleanupRegistry();
+  preExitFlushWaits.forEach(({ unregister }, flushFn) => {
     unregister();
-    n.register(i);
+    registry.register(flushFn);
   });
   preExitFlushWaits.clear();
-  await n.drain();
+  await registry.drain();
 }
 //@ chunk-cgr0tezp.js:16641-16733 placement
 /**
@@ -153,22 +165,25 @@ async function drainPreExitFlushes() {
 //@ chunk-cgr0tezp.js:16733-16857 placement
 class DebugFilterCache {
   parsed = new Map();
-  lookup(e) {
-    return this.parsed.get(e);
+  lookup(filterString) {
+    return this.parsed.get(filterString);
   }
-  remember(e, n) {
-    this.parsed.set(e, n);
+  remember(filterString, value) {
+    this.parsed.set(filterString, value);
   }
   reset() {
     this.parsed.clear();
   }
 }
 //@ chunk-cgr0tezp.js:16857-16871 placement
-var debugFilterCache = new DebugFilterCache();
+var debugFilterCache; // deferred: uses DebugFilterCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cgr0tezp.js:16857", () => {
+  debugFilterCache = new DebugFilterCache();
+});
 //@ chunk-cgr0tezp.js:16871-16966 placement
 function parseDebugFilterCached(filterString) {
-  let n = debugFilterCache.lookup(filterString);
-  if (n !== undefined) return n;
+  let cached = debugFilterCache.lookup(filterString);
+  if (cached !== undefined) return cached;
   let debugFilter = parseDebugFilter(filterString);
   debugFilterCache.remember(filterString, debugFilter);
   return debugFilter;

@@ -19,88 +19,102 @@ import { birthTimeSalt } from "../../windowsPathNames.js";
 /**
  * 判断 git 目录布局未被篡改（无 fault）。
  */
-async function isGitLayoutUntampered(layout, n) {
-  return (await gitLayoutFaultOf(layout, n)) === null;
+async function isGitLayoutUntampered(layout, probes) {
+  return (await gitLayoutFaultOf(layout, probes)) === null;
 }
 //@ chunk-s61vbvea.js:234349-234401 placement
 /**
  * 取 git 目录布局检查的 fault 原因。
  */
-async function gitLayoutFaultOf(layout, n) {
-  return (await inspectGitDirShape(layout, n)).fault;
+async function gitLayoutFaultOf(layout, probes) {
+  return (await inspectGitDirShape(layout, probes)).fault;
 }
 //@ chunk-s61vbvea.js:234401-235968 placement
-async function inspectGitDirShape(e, n, r = () => () => {}) {
-  let s = {
+async function inspectGitDirShape(layout, probePaths, span = () => () => {}) {
+  let counters = {
     "git-dir-look-objects": 0,
     "git-dir-look-refs": 0,
   };
-  let h = async (re, he) => {
-    let Se = r(re);
+  let withSpan = async (spanName, fn) => {
+    let endSpan = span(spanName);
     try {
-      return await he((ce) => {
-        s[re] += ce;
+      return await fn((count) => {
+        counters[spanName] += count;
       });
     } finally {
-      Se();
+      endSpan();
     }
   };
-  let { gitDir, commonDir } = e;
-  let [commonDirFile, R, x, P, j, G, L, q, Q, ...Z] = await Promise.all([
+  let { gitDir, commonDir } = layout;
+  let [
+    commonDirFile,
+    refsKind,
+    objectsKind,
+    reftableKind,
+    packedRefsKind,
+    objectsPlain,
+    refDirsEmpty,
+    headKind,
+    logsKinds,
+    ...probeKinds
+  ] = await Promise.all([
     readCommonDirFile(gitDir),
     probeEntryKind(join(commonDir, "refs")),
     probeEntryKind(join(commonDir, "objects")),
     probeEntryKind(join(commonDir, "reftable")),
     probePathKind(commonDir, ["packed-refs"]),
-    h("git-dir-look-objects", (re) => inspectObjectsDir(commonDir, re)),
-    h("git-dir-look-refs", (re) => areRefDirsEmpty(commonDir, re)),
+    withSpan("git-dir-look-objects", (count) => inspectObjectsDir(commonDir, count)),
+    withSpan("git-dir-look-refs", (count) => areRefDirsEmpty(commonDir, count)),
     probeEntryKind(join(gitDir, "HEAD")),
     Promise.all([
       probePathKind(gitDir, ["logs", "HEAD"]),
-      ...n.map((re) => probePathKind(commonDir, ["logs", ...re.split("/")])),
+      ...probePaths.map((probePath) => probePathKind(commonDir, ["logs", ...probePath.split("/")])),
     ]),
-    ...["info", "pack"].map((re) =>
-      probeEntryKind(join(commonDir, "objects", re)).then((he) => (he === "directory" ? "absent" : "other")),
+    ...["info", "pack"].map((dirName) =>
+      probeEntryKind(join(commonDir, "objects", dirName)).then((kind) =>
+        kind === "directory" ? "absent" : "other",
+      ),
     ),
-    hasAlternates(commonDir).then((re) => (re ? "other" : "absent")),
-    ...n.map((re) => probePathKind(commonDir, re.split("/"))),
+    hasAlternates(commonDir).then((hasAlternates) => (hasAlternates ? "other" : "absent")),
+    ...probePaths.map((probePath) => probePathKind(commonDir, probePath.split("/"))),
   ]);
-  let ee = e.storeStamps === undefined ? undefined : await objectsDirFingerprint(commonDir);
-  let ae = (re) => re === "absent" || re === "file";
+  let storeStamps = layout.storeStamps === undefined ? undefined : await objectsDirFingerprint(commonDir);
+  let isPlain = (kind) => kind === "absent" || kind === "file";
   return {
     fault:
       [
-        ["work_tree_replaced", !(await workTreeReplacedSinceRecorded(e))],
+        ["work_tree_replaced", !(await workTreeReplacedSinceRecorded(layout))],
         [
           "git_dir_replaced",
-          (e.gitDirId === undefined || e.gitDirId === (await getFileIdentity_2(gitDir))) &&
-            (e.commonDirId === undefined || e.commonDirId === (await getFileIdentity_2(commonDir))) &&
-            (ee === undefined || ee.objects === e.storeStamps?.objects),
+          (layout.gitDirId === undefined || layout.gitDirId === (await getFileIdentity_2(gitDir))) &&
+            (layout.commonDirId === undefined ||
+              layout.commonDirId === (await getFileIdentity_2(commonDir))) &&
+            (storeStamps === undefined || storeStamps.objects === layout.storeStamps?.objects),
         ],
-        ["git_dir_head_not_plain", q === "file"],
-        ["git_dir_packed_refs_not_plain", ae(j)],
-        ["git_dir_refs_not_plain", L],
-        ["git_dir_logs_not_plain", Q.every(ae)],
+        ["git_dir_head_not_plain", headKind === "file"],
+        ["git_dir_packed_refs_not_plain", isPlain(packedRefsKind)],
+        ["git_dir_refs_not_plain", refDirsEmpty],
+        ["git_dir_logs_not_plain", logsKinds.every(isPlain)],
         [
           "git_dir_tampered",
           resolveCommonDir(commonDirFile, gitDir) === commonDir &&
-            R === "directory" &&
-            x === "directory" &&
-            P === "absent" &&
-            Z.every(ae),
+            refsKind === "directory" &&
+            objectsKind === "directory" &&
+            reftableKind === "absent" &&
+            probeKinds.every(isPlain),
         ],
-        ["git_dir_objects_not_plain", G],
+        ["git_dir_objects_not_plain", objectsPlain],
         [
           "git_dir_objects_changed",
-          ee === undefined ||
-            (ee.info === e.storeStamps?.info &&
-              ee.pack === e.storeStamps?.pack &&
-              ee.alternates === e.storeStamps?.alternates &&
-              ee.httpAlternates === e.storeStamps?.httpAlternates),
+          storeStamps === undefined ||
+            (storeStamps.info === layout.storeStamps?.info &&
+              storeStamps.pack === layout.storeStamps?.pack &&
+              storeStamps.alternates === layout.storeStamps?.alternates &&
+              storeStamps.httpAlternates === layout.storeStamps?.httpAlternates),
         ],
-      ].find(([, re]) => !re)?.[0] ?? null,
-    objectEntries: s["git-dir-look-objects"],
-    refEntries: s["git-dir-look-refs"],
+      ].find(([, ok]) => !ok)?.[0] ?? null,
+    objectEntries: counters["git-dir-look-objects"],
+    refEntries: counters["git-dir-look-refs"],
   };
 }
 //@ chunk-s61vbvea.js:235968-235981 placement
@@ -109,40 +123,45 @@ async function inspectGitDirShape(e, n, r = () => () => {}) {
  */
 var MAX_PLACEMENT_FILE_BYTES = 4096;
 //@ chunk-s61vbvea.js:235981-236024 placement
-function hasReplacementChar(e) {
-  return e.includes("\uFFFD");
+function hasReplacementChar(text) {
+  return text.includes("\uFFFD");
 }
 //@ chunk-s61vbvea.js:236024-236746 placement
-async function inspectObjectsDir(commonDir, n) {
-  let r = async (s, h) => {
-    let y = await readdir(s).catch((error) => (getErrnoCode(error) === "ENOENT" ? [] : null));
-    if (y === null || y.some(hasReplacementChar)) return false;
-    n(y.length);
+async function inspectObjectsDir(commonDir, countDir) {
+  let scanDir = async (dirPath, allowDirs) => {
+    let names = await readdir(dirPath).catch((error) => (getErrnoCode(error) === "ENOENT" ? [] : null));
+    if (names === null || names.some(hasReplacementChar)) return false;
+    countDir(names.length);
     return (
       await Promise.all(
-        y.map((w) =>
-          lstat(join(s, w)).then(
-            (R) => (R.isFile() || (R.isDirectory() && (h || w === "multi-pack-index.d")) ? "file" : "other"),
+        names.map((name) =>
+          lstat(join(dirPath, name)).then(
+            (stats) =>
+              stats.isFile() || (stats.isDirectory() && (allowDirs || name === "multi-pack-index.d"))
+                ? "file"
+                : "other",
             (error) => (getErrnoCode(error) === "ENOENT" ? "absent" : "other"),
           ),
         ),
       )
-    ).every((w) => w !== "other");
+    ).every((kind) => kind !== "other");
   };
   try {
-    let s = await readdir(join(commonDir, "objects"));
-    n(s.length);
-    let results = await Promise.all(s.map((w) => probeEntryKind(join(commonDir, "objects", w))));
+    let names = await readdir(join(commonDir, "objects"));
+    countDir(names.length);
+    let results = await Promise.all(names.map((name) => probeEntryKind(join(commonDir, "objects", name))));
     if (
-      s.some(hasReplacementChar) ||
-      !results.every((w) => w === "directory" || w === "file" || w === "absent")
+      names.some(hasReplacementChar) ||
+      !results.every((kind) => kind === "directory" || kind === "file" || kind === "absent")
     )
       return false;
-    let filtered = s.filter((w, R) => results[R] === "directory");
+    let filtered = names.filter((name, index) => results[index] === "directory");
     if (filtered.length > MAX_PLACEMENT_FILE_BYTES) return false;
     return (
       await Promise.all(
-        filtered.map((w) => r(join(commonDir, "objects", w), !/^(?:pack|[0-9a-f]{2})$/i.test(w))),
+        filtered.map((name) =>
+          scanDir(join(commonDir, "objects", name), !/^(?:pack|[0-9a-f]{2})$/i.test(name)),
+        ),
       )
     ).every(Boolean);
   } catch {
@@ -150,13 +169,13 @@ async function inspectObjectsDir(commonDir, n) {
   }
 }
 //@ chunk-s61vbvea.js:236746-236989 placement
-async function statFingerprint(e) {
+async function statFingerprint(paths) {
   let results = await Promise.all(
-    e.map((r) =>
-      stat(r, {
+    paths.map((path) =>
+      stat(path, {
         bigint: true,
       }).then(
-        (s) => `${s.dev}:${s.ino}:${s.ctimeNs}:${s.mtimeNs}:${s.size}`,
+        (stats) => `${stats.dev}:${stats.ino}:${stats.ctimeNs}:${stats.mtimeNs}:${stats.size}`,
         (error) => (["ENOENT", "ENOTDIR"].includes(getErrnoCode(error) ?? "") ? "absent" : null),
       ),
     ),
@@ -168,31 +187,31 @@ async function statFingerprint(e) {
  * objects、info、pack 与 alternates 文件的指纹。
  */
 async function objectsDirFingerprint(commonDir) {
-  let n = (...R) =>
-    lstat(join(commonDir, "objects", ...R), {
+  let statObjectsEntry = (...segments) =>
+    lstat(join(commonDir, "objects", ...segments), {
       bigint: true,
     });
-  let r = (...R) =>
-    n(...R).then(
-      (x) => `${x.dev}:${x.ino}:${x.ctimeNs}:${x.mtimeNs}:${x.size}`,
+  let fingerprint = (...segments) =>
+    statObjectsEntry(...segments).then(
+      (stats) => `${stats.dev}:${stats.ino}:${stats.ctimeNs}:${stats.mtimeNs}:${stats.size}`,
       () => "absent",
     );
-  let [s, h, y, S, w] = await Promise.all([
-    n().then(
-      (R) => `${R.dev}:${R.ino}`,
+  let [objects, info, pack, alternates, httpAlternates] = await Promise.all([
+    statObjectsEntry().then(
+      (stats) => `${stats.dev}:${stats.ino}`,
       () => "absent",
     ),
-    r("info"),
-    r("pack"),
-    r("info", ALTERNATES_FILE_NAMES[0]),
-    r("info", ALTERNATES_FILE_NAMES[1]),
+    fingerprint("info"),
+    fingerprint("pack"),
+    fingerprint("info", ALTERNATES_FILE_NAMES[0]),
+    fingerprint("info", ALTERNATES_FILE_NAMES[1]),
   ]);
   return {
-    objects: s,
-    info: h,
-    pack: y,
-    alternates: S,
-    httpAlternates: w,
+    objects,
+    info,
+    pack,
+    alternates,
+    httpAlternates,
   };
 }
 //@ chunk-s61vbvea.js:237354-237754 placement
@@ -206,8 +225,8 @@ var SEED_ADMIN_REFUSALS = {
 /**
  * 判断配置项中是否有来自 reftable 后端的取值。
  */
-function hasReftableOrigin(e, n) {
-  return e.some(({ value: r, origin }) => r === "reftable" && n(origin));
+function hasReftableOrigin(entries, isOwnConfig) {
+  return entries.some(({ value, origin }) => value === "reftable" && isOwnConfig(origin));
 }
 //@ chunk-s61vbvea.js:237829-237869 placement
 var ALTERNATES_FILE_NAMES = ["alternates", "http-alternates"];
@@ -215,19 +234,19 @@ var ALTERNATES_FILE_NAMES = ["alternates", "http-alternates"];
 /**
  * reftable 或借用对象（alternates）的仓库布局。
  */
-async function detectUnsupportedLayout(e) {
-  if ((await probeEntryKind(join(e, "reftable"))) !== "absent") return "reftable";
-  return (await hasAlternates(e)) ? "borrowed_objects" : null;
+async function detectUnsupportedLayout(commonDir) {
+  if ((await probeEntryKind(join(commonDir, "reftable"))) !== "absent") return "reftable";
+  return (await hasAlternates(commonDir)) ? "borrowed_objects" : null;
 }
 //@ chunk-s61vbvea.js:237992-238259 placement
-async function hasAlternates(e) {
+async function hasAlternates(commonDir) {
   return (
     await Promise.all(
-      ALTERNATES_FILE_NAMES.map(async (r) => {
-        let s = await probePathKind(e, ["objects", "info", r]);
-        if (s !== "file") return s !== "absent";
-        let h = await lstat(join(e, "objects", "info", r)).catch(() => null);
-        return !(h !== null && h.isFile() && h.nlink === 1 && h.size === 0);
+      ALTERNATES_FILE_NAMES.map(async (fileName) => {
+        let kind = await probePathKind(commonDir, ["objects", "info", fileName]);
+        if (kind !== "file") return kind !== "absent";
+        let stats = await lstat(join(commonDir, "objects", "info", fileName)).catch(() => null);
+        return !(stats !== null && stats.isFile() && stats.nlink === 1 && stats.size === 0);
       }),
     )
   ).some(Boolean);
@@ -239,12 +258,12 @@ async function hasAlternates(e) {
 async function areRefDirsEmpty(commonDir, projectRoot) {
   return (
     await Promise.all(
-      ["heads", "tags", "remotes"].map(async (s) => {
-        let h = await probeEntryKind(join(commonDir, "refs", s));
+      ["heads", "tags", "remotes"].map(async (refDir) => {
+        let kind = await probeEntryKind(join(commonDir, "refs", refDir));
         return (
-          h === "absent" ||
-          h === "file" ||
-          (h === "directory" && (await normalizeSource_2(join(commonDir, "refs", s), projectRoot)))
+          kind === "absent" ||
+          kind === "file" ||
+          (kind === "directory" && (await normalizeSource_2(join(commonDir, "refs", refDir), projectRoot)))
         );
       }),
     )
@@ -252,17 +271,17 @@ async function areRefDirsEmpty(commonDir, projectRoot) {
 }
 //@ chunk-s61vbvea.js:238476-238713 placement = normalizeSource (1)
 async function normalizeSource_2(source, projectRoot) {
-  let r = await listDirRawNames(source);
-  if (r === null) return false;
-  projectRoot(r.length);
+  let entries = await listDirRawNames(source);
+  if (entries === null) return false;
+  projectRoot(entries.length);
   return (
     await Promise.all(
-      r.map(async (h) => {
-        let y = await probeEntryKind(h);
-        return y === "file" || (y === "absent" && typeof h === "string")
+      entries.map(async (entryPath) => {
+        let kind = await probeEntryKind(entryPath);
+        return kind === "file" || (kind === "absent" && typeof entryPath === "string")
           ? true
-          : y === "directory"
-            ? normalizeSource_2(h, projectRoot)
+          : kind === "directory"
+            ? normalizeSource_2(entryPath, projectRoot)
             : false;
       }),
     )
@@ -275,40 +294,41 @@ async function normalizeSource_2(source, projectRoot) {
 async function listDirRawNames(source) {
   try {
     if (typeof source === "string") {
-      let r = await readdir(source).catch((error) => (getErrnoCode(error) === "ENOENT" ? [] : null));
-      if (r === null || !r.some(hasReplacementChar)) return r?.map((s) => join(source, s)) ?? null;
+      let names = await readdir(source).catch((error) => (getErrnoCode(error) === "ENOENT" ? [] : null));
+      if (names === null || !names.some(hasReplacementChar))
+        return names?.map((name) => join(source, name)) ?? null;
     }
     let buffer = Buffer.concat([Buffer.from(source), Buffer.from(sep)]);
     return (
       await readdir(source, {
         encoding: "buffer",
       })
-    ).map((r) => Buffer.concat([buffer, r]));
+    ).map((name) => Buffer.concat([buffer, name]));
   } catch {
     return null;
   }
 }
 //@ chunk-s61vbvea.js:239019-239209 placement
-async function probeEntryKind(e) {
+async function probeEntryKind(filePath) {
   try {
-    let n = await lstat(e);
-    return n.isDirectory() ? "directory" : n.isFile() && n.nlink === 1 ? "file" : "other";
+    let stats = await lstat(filePath);
+    return stats.isDirectory() ? "directory" : stats.isFile() && stats.nlink === 1 ? "file" : "other";
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "other";
   }
 }
 //@ chunk-s61vbvea.js:239209-239490 placement
-async function statDotGit(e) {
+async function statDotGit(launchDir) {
   try {
-    let n = await lstat(join(e, ".git"), {
+    let stats = await lstat(join(launchDir, ".git"), {
       bigint: true,
     });
-    return n.isDirectory()
+    return stats.isDirectory()
       ? {
           kind: "directory",
-          id: `${n.dev}:${n.ino}`,
-          born: birthTimeSalt(n),
+          id: `${stats.dev}:${stats.ino}`,
+          born: birthTimeSalt(stats),
         }
       : {
           kind: "not_a_directory",

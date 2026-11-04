@@ -6,8 +6,8 @@
  * attribution: esm-fingerprint 5
  */
 import { isNodeLike } from "../util/checkEnvironment.js";
-import { et } from "../pipelineRequest.js";
-import { rt } from "../util/concat.js";
+import { createHttpHeaders } from "../pipelineRequest.js";
+import { stringToUint8Array } from "../util/concat.js";
 
 //@ chunk-mrx6y2r5.js:48001-48025 esm-fingerprint
 var formDataPolicyName = "formDataPolicy";
@@ -33,7 +33,7 @@ function formDataPolicy() {
       if (request.formData) {
         let contentType = request.headers.get("Content-Type");
         if (contentType && contentType.indexOf("application/x-www-form-urlencoded") !== -1)
-          request.body = qm(request.formData);
+          request.body = getFormDataString(request.formData);
         else await prepareFormData(request.formData, request);
         request.formData = undefined;
       }
@@ -42,7 +42,7 @@ function formDataPolicy() {
   };
 }
 //@ chunk-mrx6y2r5.js:48477-48661 esm-fingerprint
-function qm(formData) {
+function getFormDataString(formData) {
   let urlSearchParams = new URLSearchParams();
   for (let [key, value] of Object.entries(formData))
     if (Array.isArray(value)) for (let subValue of value) urlSearchParams.append(key, subValue.toString());
@@ -62,10 +62,10 @@ async function prepareFormData(formData, request) {
     for (let value of Array.isArray(values) ? values : [values])
       if (typeof value === "string")
         parts.push({
-          headers: et({
+          headers: createHttpHeaders({
             "Content-Disposition": `form-data; name="${fieldName}"`,
           }),
-          body: rt(value, "utf-8"),
+          body: stringToUint8Array(value, "utf-8"),
         });
       else if (value === undefined || value === null || typeof value !== "object")
         throw Error(
@@ -73,7 +73,7 @@ async function prepareFormData(formData, request) {
         );
       else {
         let fileName = value.name || "blob";
-        let headers = et();
+        let headers = createHttpHeaders();
         headers.set("Content-Disposition", `form-data; name="${fieldName}"; filename="${fileName}"`);
         headers.set("Content-Type", value.type || "application/octet-stream");
         parts.push({

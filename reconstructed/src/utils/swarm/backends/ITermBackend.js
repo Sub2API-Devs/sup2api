@@ -125,16 +125,16 @@ class ITermBackend {
       releaseLock();
     }
   }
-  async sendCommandToPane(paneId, s, _useExternalSession) {
+  async sendCommandToPane(paneId, command, _useExternalSession) {
     try {
-      assertNoControlChars(s);
+      assertNoControlChars(command);
     } catch (error) {
       logFeatureBad("swarm_pane_spawn", "swarm_pane_command_control_chars");
       throw error;
     }
     let args = paneId ? ["-s", paneId] : [];
     await runIt2(["session", "send", ...args, "\x15"]);
-    let result = await runIt2(["session", "run", ...args, s]);
+    let result = await runIt2(["session", "run", ...args, command]);
     if (result.code !== 0)
       throw new SwarmPaneError(`Failed to send command to iTerm2 pane ${paneId}: ${result.stderr}`);
   }
@@ -149,3 +149,4 @@ class ITermBackend {
     return result.code === 0;
   }
 }
+export { ITermBackend };

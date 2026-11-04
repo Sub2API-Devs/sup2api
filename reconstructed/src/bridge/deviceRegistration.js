@@ -9,80 +9,112 @@
  * attribution: placement 38
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { looseObject, string, u, unknown, E } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  looseObject,
+  stringSchema,
+  objectSchema,
+  unknown,
+  numberSchema,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import { jsonParse } from "../utils/slowOperations.js";
 import { truncateToLength, firstLineOf } from "../utils/stringUtils.js";
 import { env } from "../utils/env.js";
 import { stripControlChars } from "../utils/stripControlChars.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-efc34qfz.js:417-1012 placement
 /**
  * 设备连接的心跳、超时、重连常量。
  */
-var DEVICE_PROTOCOL_VERSION = 2;
-var DEVICE_HEARTBEAT_FRAME = '{"type":"hb"}';
-var HANDSHAKE_TIMEOUT_MS = 15000;
-var RECONNECT_BACKOFF_BASE_MS = 1000;
-var RECONNECT_BACKOFF_CAP_MS = 30000;
-var MAX_DEVICE_RECONNECT_ATTEMPTS = 100;
-var DEVICE_STABLE_QUALIFY_MS = 1e4;
-var WS_CLOSE_CODE_SUPERSEDED = 4000;
-var _ = 5000;
-var STALENESS_MARGIN_MS = 20000;
-var CONTENTION_RETRY_LONG_MS = 300000;
-var RECONNECT_JITTER_RATIO = 0.2;
-var DEVICE = "device";
-var REANNOUNCE_DELAYS_MS = {
-  tools_settled: 250,
-  tools_changed: 5000,
-  connected_stale: 250,
-};
-var DEFAULT_DEVICE_TIMINGS = {
-  hbIntervalMs: 1e4,
-  stalenessMs: 25000,
-  rpcTimeoutMs: 60000,
-};
-var DEVICE_TIMING_BOUNDS = {
-  hbIntervalMs: {
-    min: 2000,
-    max: 120000,
-  },
-  stalenessMs: {
-    min: 5000,
-    max: 600000,
-  },
-  rpcTimeoutMs: {
-    min: 5000,
-    max: 600000,
-  },
-};
-var PONG_TIMEOUT_SLACK_MS = 6000;
-var STALENESS_PONG_MARGIN_MS = 1000;
-var y = Object.freeze([
-  "no_credential",
-  "user_mismatch",
-  "upstream_401",
-  "upstream_403",
-  "upstream_4xx",
-  "upstream_529",
-  "upstream_error",
-  "network_error",
-  "malformed_response",
-  "duplicate_device_id",
-  "device_name_in_use",
-  "device_session_limit",
-]);
+var DEVICE_PROTOCOL_VERSION; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DEVICE_HEARTBEAT_FRAME;
+var HANDSHAKE_TIMEOUT_MS;
+var RECONNECT_BACKOFF_BASE_MS;
+var RECONNECT_BACKOFF_CAP_MS;
+var MAX_DEVICE_RECONNECT_ATTEMPTS;
+var DEVICE_STABLE_QUALIFY_MS;
+var WS_CLOSE_CODE_SUPERSEDED;
+var SLOT_CONTENTION_FAST_RETRY_MS;
+var STALENESS_MARGIN_MS;
+var CONTENTION_RETRY_LONG_MS;
+var RECONNECT_JITTER_RATIO;
+var DEVICE;
+var REANNOUNCE_DELAYS_MS;
+var DEFAULT_DEVICE_TIMINGS;
+var DEVICE_TIMING_BOUNDS;
+var PONG_TIMEOUT_SLACK_MS;
+var STALENESS_PONG_MARGIN_MS;
+var DEVICE_ERROR_CODES;
+deferInit("chunk-efc34qfz.js:417", () => {
+  DEVICE_PROTOCOL_VERSION = 2;
+  DEVICE_HEARTBEAT_FRAME = '{"type":"hb"}';
+  HANDSHAKE_TIMEOUT_MS = 15000;
+  RECONNECT_BACKOFF_BASE_MS = 1000;
+  RECONNECT_BACKOFF_CAP_MS = 30000;
+  MAX_DEVICE_RECONNECT_ATTEMPTS = 100;
+  DEVICE_STABLE_QUALIFY_MS = 1e4;
+  WS_CLOSE_CODE_SUPERSEDED = 4000;
+  SLOT_CONTENTION_FAST_RETRY_MS = 5000;
+  STALENESS_MARGIN_MS = 20000;
+  CONTENTION_RETRY_LONG_MS = 300000;
+  RECONNECT_JITTER_RATIO = 0.2;
+  DEVICE = "device";
+  REANNOUNCE_DELAYS_MS = {
+    tools_settled: 250,
+    tools_changed: 5000,
+    connected_stale: 250,
+  };
+  DEFAULT_DEVICE_TIMINGS = {
+    hbIntervalMs: 1e4,
+    stalenessMs: 25000,
+    rpcTimeoutMs: 60000,
+  };
+  DEVICE_TIMING_BOUNDS = {
+    hbIntervalMs: {
+      min: 2000,
+      max: 120000,
+    },
+    stalenessMs: {
+      min: 5000,
+      max: 600000,
+    },
+    rpcTimeoutMs: {
+      min: 5000,
+      max: 600000,
+    },
+  };
+  PONG_TIMEOUT_SLACK_MS = 6000;
+  STALENESS_PONG_MARGIN_MS = 1000;
+  DEVICE_ERROR_CODES = Object.freeze([
+    "no_credential",
+    "user_mismatch",
+    "upstream_401",
+    "upstream_403",
+    "upstream_4xx",
+    "upstream_529",
+    "upstream_error",
+    "network_error",
+    "malformed_response",
+    "duplicate_device_id",
+    "device_name_in_use",
+    "device_session_limit",
+  ]);
+});
 //@ chunk-efc34qfz.js:1012-1103 placement
 function normalizeDeviceErrorCode(reason) {
   if (typeof reason !== "string" || reason.length === 0) return;
-  return y.includes(reason) ? reason : "unknown";
+  return DEVICE_ERROR_CODES.includes(reason) ? reason : "unknown";
 }
 //@ chunk-efc34qfz.js:1103-1206 placement
 /**
  * 错误码为 duplicate_device_id / device_name_in_use / device_session_limit 之一时为真（不应重试的身份冲突）。
  */
-function isDeviceIdentityConflict(e) {
-  return e === "duplicate_device_id" || e === "device_name_in_use" || e === "device_session_limit";
+function isDeviceIdentityConflict(errorCode) {
+  return (
+    errorCode === "duplicate_device_id" ||
+    errorCode === "device_name_in_use" ||
+    errorCode === "device_session_limit"
+  );
 }
 //@ chunk-efc34qfz.js:1206-1393 placement
 /**
@@ -95,22 +127,22 @@ var TOOL_META_KEYS = {
   requiresUserInteraction: "anthropic/requiresUserInteraction",
 };
 //@ chunk-efc34qfz.js:1393-1669 placement
-function buildConnectMessage(e) {
-  let n = e.deviceId !== undefined && e.deviceId !== "";
+function buildConnectMessage(options) {
+  let hasDeviceId = options.deviceId !== undefined && options.deviceId !== "";
   return {
     type: "connect",
-    oauth_token: e.oauthToken,
-    tools: e.tools,
+    oauth_token: options.oauthToken,
+    tools: options.tools,
     rtb_protocol_version: DEVICE_PROTOCOL_VERSION,
     hb_capable: true,
     cancel_capable: true,
-    ...(n && {
-      device_id: e.deviceId,
+    ...(hasDeviceId && {
+      device_id: options.deviceId,
     }),
-    ...(n &&
-      e.sessionId !== undefined &&
-      e.sessionId !== "" && {
-        session_id: e.sessionId,
+    ...(hasDeviceId &&
+      options.sessionId !== undefined &&
+      options.sessionId !== "" && {
+        session_id: options.sessionId,
       }),
   };
 }
@@ -118,153 +150,174 @@ function buildConnectMessage(e) {
 /**
  * 设备通道帧解析用的常量与 schema：长度上限、帧外壳 schema（type 可选）、connected 帧（协议版本与心跳计时）和 error 帧（reason/status/error，解析失败置空）。
  */
-var MAX_FRAME_TYPE_CHARS = 64;
-var MAX_ERROR_DETAIL_CHARS = 1024;
-var deviceFrameEnvelopeSchema = DoctorLazy(() =>
-  looseObject({
-    type: string().optional(),
-  }),
-);
-var connectedFrameSchema = DoctorLazy(() =>
-  u({
-    rtb_protocol_version: unknown().optional(),
-    hb_supported: unknown().optional(),
-    timings: unknown().optional(),
-  }).transform((e) => ({
-    protocolVersion: negotiateProtocolVersion(e.rtb_protocol_version, e.hb_supported),
-    timings: parseDeviceTimings(e.timings),
-  })),
-);
-var errorFrameSchema = DoctorLazy(() =>
-  u({
-    reason: string().optional().catch(undefined),
-    status: E().optional().catch(undefined),
-    error: string().optional().catch(undefined),
-  }),
-);
+var MAX_FRAME_TYPE_CHARS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_ERROR_DETAIL_CHARS;
+var deviceFrameEnvelopeSchema;
+var connectedFrameSchema;
+var errorFrameSchema;
+deferInit("chunk-efc34qfz.js:1669", () => {
+  MAX_FRAME_TYPE_CHARS = 64;
+  MAX_ERROR_DETAIL_CHARS = 1024;
+  deviceFrameEnvelopeSchema = DoctorLazy(() =>
+    looseObject({
+      type: stringSchema().optional(),
+    }),
+  );
+  connectedFrameSchema = DoctorLazy(() =>
+    objectSchema({
+      rtb_protocol_version: unknown().optional(),
+      hb_supported: unknown().optional(),
+      timings: unknown().optional(),
+    }).transform((frame) => ({
+      protocolVersion: negotiateProtocolVersion(frame.rtb_protocol_version, frame.hb_supported),
+      timings: parseDeviceTimings(frame.timings),
+    })),
+  );
+  errorFrameSchema = DoctorLazy(() =>
+    objectSchema({
+      reason: stringSchema().optional().catch(undefined),
+      status: numberSchema().optional().catch(undefined),
+      error: stringSchema().optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-efc34qfz.js:2043-2670 placement
 function parseDeviceFrame(text) {
-  let n;
+  let parsed;
   try {
-    n = jsonParse(text);
+    parsed = jsonParse(text);
   } catch {
     return {
       kind: "ignored",
     };
   }
-  if (typeof n === "object" && n !== null) {
-    if (Object.prototype.hasOwnProperty.call(n, "__proto__")) delete n.__proto__;
+  if (typeof parsed === "object" && parsed !== null) {
+    if (Object.prototype.hasOwnProperty.call(parsed, "__proto__")) delete parsed.__proto__;
   }
-  let t = deviceFrameEnvelopeSchema().safeParse(n);
-  if (!t.success)
+  let envelope = deviceFrameEnvelopeSchema().safeParse(parsed);
+  if (!envelope.success)
     return {
       kind: "ignored",
     };
-  let r = t.data;
-  let s = r.type;
-  if (s === undefined)
+  let frame = envelope.data;
+  let frameType = frame.type;
+  if (frameType === undefined)
     return {
       kind: "rpc",
-      message: r,
+      message: frame,
     };
-  if (typeof s !== "string")
+  if (typeof frameType !== "string")
     return {
       kind: "ignored",
     };
-  switch (s) {
+  switch (frameType) {
     case "connected":
       return {
         kind: "connected",
-        ...connectedFrameSchema().parse(r),
+        ...connectedFrameSchema().parse(frame),
       };
     case "hb_ack":
       return {
         kind: "hb_ack",
       };
     case "error": {
-      let a = errorFrameSchema().parse(r);
+      let errorFrame = errorFrameSchema().parse(frame);
       return {
         kind: "error",
-        reason: normalizeDeviceErrorCode(a.reason),
-        status: a.status,
-        detail: a.error === undefined ? undefined : truncateToLength(a.error, MAX_ERROR_DETAIL_CHARS),
+        reason: normalizeDeviceErrorCode(errorFrame.reason),
+        status: errorFrame.status,
+        detail:
+          errorFrame.error === undefined
+            ? undefined
+            : truncateToLength(errorFrame.error, MAX_ERROR_DETAIL_CHARS),
       };
     }
     default:
       return {
         kind: "unknown",
-        frameType: truncateToLength(s, MAX_FRAME_TYPE_CHARS),
+        frameType: truncateToLength(frameType, MAX_FRAME_TYPE_CHARS),
       };
   }
 }
 //@ chunk-efc34qfz.js:2670-2773 placement
 function negotiateProtocolVersion(rtbProtocolVersion, hbSupported) {
-  let t =
+  let reportedVersion =
     typeof rtbProtocolVersion === "number" && Number.isInteger(rtbProtocolVersion) && rtbProtocolVersion >= 0
       ? rtbProtocolVersion
       : 0;
-  return Math.max(t, hbSupported === true ? 1 : 0);
+  return Math.max(reportedVersion, hbSupported === true ? 1 : 0);
 }
 //@ chunk-efc34qfz.js:2773-2995 placement
 function parseDeviceTimings(timings) {
-  let n = typeof timings === "object" && timings !== null && !Array.isArray(timings) ? timings : {};
+  let object = typeof timings === "object" && timings !== null && !Array.isArray(timings) ? timings : {};
   return {
-    hbIntervalMs: clampDeviceTiming(n.hb_interval_ms, "hbIntervalMs"),
-    stalenessMs: clampDeviceTiming(n.staleness_ms, "stalenessMs"),
-    rpcTimeoutMs: clampDeviceTiming(n.rpc_timeout_ms, "rpcTimeoutMs"),
+    hbIntervalMs: clampDeviceTiming(object.hb_interval_ms, "hbIntervalMs"),
+    stalenessMs: clampDeviceTiming(object.staleness_ms, "stalenessMs"),
+    rpcTimeoutMs: clampDeviceTiming(object.rpc_timeout_ms, "rpcTimeoutMs"),
   };
 }
 //@ chunk-efc34qfz.js:2995-3142 placement
-function clampDeviceTiming(e, n) {
-  if (typeof e !== "number" || !Number.isFinite(e) || e <= 0) return DEFAULT_DEVICE_TIMINGS[n];
-  let { min, max } = DEVICE_TIMING_BOUNDS[n];
-  return Math.round(Math.min(Math.max(e, min), max));
+function clampDeviceTiming(value, fieldName) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0)
+    return DEFAULT_DEVICE_TIMINGS[fieldName];
+  let { min, max } = DEVICE_TIMING_BOUNDS[fieldName];
+  return Math.round(Math.min(Math.max(value, min), max));
 }
 //@ chunk-efc34qfz.js:3142-3412 placement
-function describeDeviceError(e) {
+function describeDeviceError(timings) {
   let min = Math.min(
-    e.hbIntervalMs,
-    Math.max(Math.floor(e.stalenessMs / 2), DEVICE_TIMING_BOUNDS.hbIntervalMs.min),
+    timings.hbIntervalMs,
+    Math.max(Math.floor(timings.stalenessMs / 2), DEVICE_TIMING_BOUNDS.hbIntervalMs.min),
   );
   return {
     keepaliveIntervalMs: min,
-    pongTimeoutMs: Math.max(2 * min + PONG_TIMEOUT_SLACK_MS, e.stalenessMs + STALENESS_PONG_MARGIN_MS),
-    rotateDrainMaxMs: e.rpcTimeoutMs,
-    slotContentionFastAttempts: Math.ceil((e.stalenessMs + STALENESS_MARGIN_MS) / _),
+    pongTimeoutMs: Math.max(2 * min + PONG_TIMEOUT_SLACK_MS, timings.stalenessMs + STALENESS_PONG_MARGIN_MS),
+    rotateDrainMaxMs: timings.rpcTimeoutMs,
+    slotContentionFastAttempts: Math.ceil(
+      (timings.stalenessMs + STALENESS_MARGIN_MS) / SLOT_CONTENTION_FAST_RETRY_MS,
+    ),
   };
 }
 //@ chunk-efc34qfz.js:3412-3562 placement
 /**
  * 设备注册断线重连的等待时间：已有成功连接时按次数选短/长基准加抖动；否则指数退避（1.5^n，有上限）乘 0.5–1 随机因子。
  */
-function computeReconnectDelayMs(e, n, slotContentionFastAttempts, random = Math.random) {
-  if (n > 0) {
-    let s = n <= slotContentionFastAttempts ? _ : CONTENTION_RETRY_LONG_MS;
-    let a = 1 - RECONNECT_JITTER_RATIO + random() * (2 * RECONNECT_JITTER_RATIO);
-    return Math.round(s * a);
+function computeReconnectDelayMs(
+  attempt,
+  slotContentionCount,
+  slotContentionFastAttempts,
+  random = Math.random,
+) {
+  if (slotContentionCount > 0) {
+    let baseMs =
+      slotContentionCount <= slotContentionFastAttempts
+        ? SLOT_CONTENTION_FAST_RETRY_MS
+        : CONTENTION_RETRY_LONG_MS;
+    let jitterFactor = 1 - RECONNECT_JITTER_RATIO + random() * (2 * RECONNECT_JITTER_RATIO);
+    return Math.round(baseMs * jitterFactor);
   }
   return Math.round(
-    Math.min(RECONNECT_BACKOFF_BASE_MS * 1.5 ** e, RECONNECT_BACKOFF_CAP_MS) * (0.5 + random() * 0.5),
+    Math.min(RECONNECT_BACKOFF_BASE_MS * 1.5 ** attempt, RECONNECT_BACKOFF_CAP_MS) * (0.5 + random() * 0.5),
   );
 }
 //@ chunk-efc34qfz.js:3562-3677 placement
 /**
  * 转小写、非字母数字换成 -、去首尾 -，截到 n 个字符。
  */
-function slugifyName(e, n) {
-  return e
+function slugifyName(name, maxLength) {
+  return name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+/, "")
-    .slice(0, n)
+    .slice(0, maxLength)
     .replace(/-+$/, "");
 }
 //@ chunk-efc34qfz.js:3677-3717 placement
 /**
  * 把用户给的机器名规范成 slug（截断到 48），空时回退为 "device"。
  */
-function deviceSlugOrFallback(e, n = 48) {
-  return slugifyName(e, n) || DEVICE;
+function deviceSlugOrFallback(name, maxLength = 48) {
+  return slugifyName(name, maxLength) || DEVICE;
 }
 //@ chunk-efc34qfz.js:3717-3778 placement
 /**
@@ -284,27 +337,32 @@ function canRunToolsOnThisMachine() {
 /**
  * 工具输入里的机器字段名 "_host" 与随行元数据键 "_host_context"。
  */
-var HOST_TOOL_INPUT_FIELD = "_host";
-var HOST_CONTEXT_META_FIELD = "_host_context";
-var weakMap = new WeakMap();
+var HOST_TOOL_INPUT_FIELD; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var HOST_CONTEXT_META_FIELD;
+var weakMap;
+deferInit("chunk-efc34qfz.js:3804", () => {
+  HOST_TOOL_INPUT_FIELD = "_host";
+  HOST_CONTEXT_META_FIELD = "_host_context";
+  weakMap = new WeakMap();
+});
 //@ chunk-efc34qfz.js:3853-3891 placement
 /**
  * 把 host 上下文记到 WeakMap 并原样返回输入对象，供后续 $Fe 取回。
  */
-function rememberHostContext(e, n) {
-  weakMap.set(e, n);
-  return e;
+function rememberHostContext(session, context) {
+  weakMap.set(session, context);
+  return session;
 }
 //@ chunk-efc34qfz.js:3891-3953 placement
 /**
  * 取随工具调用携带的 host 上下文元数据（{_host_context: …}，没有时返回空对象）。
  */
-function hostContextMeta(e) {
-  let n = weakMap.get(e);
-  return n === undefined
+function hostContextMeta(session) {
+  let context = weakMap.get(session);
+  return context === undefined
     ? {}
     : {
-        [HOST_CONTEXT_META_FIELD]: n,
+        [HOST_CONTEXT_META_FIELD]: context,
       };
 }
 //@ chunk-efc34qfz.js:3953-4053 placement
@@ -319,48 +377,53 @@ var MAX_MACHINE_NAME_CHARS = 40;
 /**
  * 判断是否合法的非保留机器 slug。
  */
-function isValidMachineSlug(e) {
-  return !isReservedMachineNameExact(e) && MACHINE_SLUG_PATTERN.test(e);
+function isValidMachineSlug(slug) {
+  return !isReservedMachineNameExact(slug) && MACHINE_SLUG_PATTERN.test(slug);
 }
 //@ chunk-efc34qfz.js:4094-4113 placement
 var OFFLINE_SUFFIX = " (offline)";
 //@ chunk-efc34qfz.js:4113-4158 placement
-function isPrintableAscii(e) {
-  return /^[\x20-\x7e]+$/.test(e);
+function isPrintableAscii(text) {
+  return /^[\x20-\x7e]+$/.test(text);
 }
 //@ chunk-efc34qfz.js:4158-4306 placement
 /**
  * 把用户给的机器名规范成 slug：去掉 "(offline)" 后缀、取第一段、slugify；非法或空返回 undefined。
  */
-function normalizeMachineName(e) {
-  let trimmed = e.trim();
-  if (!isPrintableAscii(trimmed)) return;
-  let t = trimmed.toLowerCase().endsWith(OFFLINE_SUFFIX) ? trimmed.slice(0, -OFFLINE_SUFFIX.length) : trimmed;
-  let r = slugifyName(firstLineOf(t, "."), MAX_MACHINE_NAME_CHARS);
-  return r === "" ? undefined : r;
+function normalizeMachineName(name) {
+  let text = name.trim();
+  if (!isPrintableAscii(text)) return;
+  let base = text.toLowerCase().endsWith(OFFLINE_SUFFIX) ? text.slice(0, -OFFLINE_SUFFIX.length) : text;
+  let slug = slugifyName(firstLineOf(base, "."), MAX_MACHINE_NAME_CHARS);
+  return slug === "" ? undefined : slug;
 }
 //@ chunk-efc34qfz.js:4306-4484 placement
 /**
  * 判断工具输入里的机器名是否指向 n：完全相等为真，保留名/本机别名为假，否则比较规范化 slug。
  */
-function machineNameMatches(e, name) {
-  let trimmed = e.trim();
-  if (!isPrintableAscii(trimmed)) return false;
-  let lower = trimmed.toLowerCase();
+function machineNameMatches(candidate, name) {
+  let text = candidate.trim();
+  if (!isPrintableAscii(text)) return false;
+  let lower = text.toLowerCase();
   if (isReservedMachineNameExact(lower)) return false;
   if (lower === name) return true;
   if (isValidMachineSlug(lower)) return false;
-  let s = normalizeMachineName(trimmed);
-  return s !== undefined && !isReservedMachineNameExact(s) && s === normalizeMachineName(name);
+  let normalized = normalizeMachineName(text);
+  return (
+    normalized !== undefined &&
+    !isReservedMachineNameExact(normalized) &&
+    normalized === normalizeMachineName(name)
+  );
 }
 //@ chunk-efc34qfz.js:4484-4566 placement
 /**
  * 判断给定机器名（或其规范化形式）是否落在保留名里。
  */
-function isReservedMachineName(e) {
-  let n = normalizeMachineName(e);
+function isReservedMachineName(name) {
+  let normalized = normalizeMachineName(name);
   return (
-    isReservedMachineNameExact(e.trim().toLowerCase()) || (n !== undefined && isReservedMachineNameExact(n))
+    isReservedMachineNameExact(name.trim().toLowerCase()) ||
+    (normalized !== undefined && isReservedMachineNameExact(normalized))
   );
 }
 //@ chunk-efc34qfz.js:4566-4635 placement
@@ -374,8 +437,8 @@ function currentMachineLabel() {
 /**
  * 精确判断机器名是否为保留名（container/this-machine）。
  */
-function isReservedMachineNameExact(e) {
-  return RESERVED_MACHINE_NAMES.some((n) => n === e);
+function isReservedMachineNameExact(name) {
+  return RESERVED_MACHINE_NAMES.some((reserved) => reserved === name);
 }
 //@ chunk-efc34qfz.js:4676-5092 placement
 /**
@@ -384,7 +447,7 @@ function isReservedMachineNameExact(e) {
 function attachedMachineInputField() {
   return canRunToolsOnThisMachine()
     ? {
-        [HOST_TOOL_INPUT_FIELD]: string()
+        [HOST_TOOL_INPUT_FIELD]: stringSchema()
           .optional()
           .describe(
             "Optional. Name of an attached machine to run this tool call on; omit it to run in this session's own environment (the default). Use only a name this session listed as attached; the result says where it ran. Choose per call by which machine the command or file path concerns; the attached-machines note says what lives where and which are reachable now.",
@@ -398,25 +461,25 @@ var MAX_MACHINE_LABEL_CHARS = 40;
 /**
  * 从工具输入里拆出 _host 字段：返回 {requested, input}，requested 为去空白后的机器名（空或保留名为 undefined），input 为去掉该字段的输入。
  */
-function splitHostField(e) {
-  let { [HOST_TOOL_INPUT_FIELD]: n, ...t } = e;
-  if (typeof n !== "string")
+function splitHostField(input) {
+  let { [HOST_TOOL_INPUT_FIELD]: hostField, ...rest } = input;
+  if (typeof hostField !== "string")
     return {
       requested: undefined,
-      input: e,
+      input,
     };
-  let trimmed = n.trim();
+  let trimmed = hostField.trim();
   return {
     requested: trimmed === "" || isReservedMachineNameExact(trimmed) ? undefined : trimmed,
-    input: t,
+    input: rest,
   };
 }
 //@ chunk-efc34qfz.js:5256-5369 placement
 /**
  * 权限对话框用：返回请求的机器名，以及（设备工具已启用且是附着机器时）实际运行的机器。
  */
-function getRequestedMachineForPrompt(e) {
-  let requested = splitHostField(e).requested;
+function getRequestedMachineForPrompt(input) {
+  let requested = splitHostField(input).requested;
   return {
     requestedMachine: requested,
     runsOnMachine:
@@ -429,8 +492,8 @@ function getRequestedMachineForPrompt(e) {
 /**
  * 把机器名取首行并截断到 40 列，用于提示文案。
  */
-function machineLabelForMessage(e) {
-  return truncateToLength(stripControlChars(e), MAX_MACHINE_LABEL_CHARS);
+function machineLabelForMessage(name) {
+  return truncateToLength(stripControlChars(name), MAX_MACHINE_LABEL_CHARS);
 }
 //@ chunk-efc34qfz.js:5403-5518 placement
 /**
@@ -450,23 +513,23 @@ function remoteToolCallsDisabledMessage() {
 /**
  * 判断工具输入里是否带了 _host 字段。
  */
-function hasHostField(e) {
-  return readHostField(e) !== undefined;
+function hasHostField(input) {
+  return readHostField(input) !== undefined;
 }
 //@ chunk-efc34qfz.js:5677-5743 placement
 /**
  * 取工具输入里请求的目标机器名并做有界截断；未指定时返回 undefined。
  */
-function requestedMachineLabel(e) {
-  let hostField = readHostField(e);
+function requestedMachineLabel(input) {
+  let hostField = readHostField(input);
   return hostField === undefined ? undefined : machineLabelForMessage(hostField) || undefined;
 }
 //@ chunk-efc34qfz.js:5743-5896 placement
-function readHostField(e) {
-  if (typeof e !== "object" || e === null || !(HOST_TOOL_INPUT_FIELD in e)) return;
-  let n = e[HOST_TOOL_INPUT_FIELD];
-  if (typeof n !== "string") return;
-  let trimmed = n.trim();
+function readHostField(input) {
+  if (typeof input !== "object" || input === null || !(HOST_TOOL_INPUT_FIELD in input)) return;
+  let value = input[HOST_TOOL_INPUT_FIELD];
+  if (typeof value !== "string") return;
+  let trimmed = value.trim();
   return trimmed === "" || isReservedMachineNameExact(trimmed) ? undefined : trimmed;
 }
 export {

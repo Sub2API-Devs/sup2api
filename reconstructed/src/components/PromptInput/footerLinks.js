@@ -16,7 +16,7 @@ import { truncateToWidth } from "../../utils/format.js";
 import { errorMessage } from "../../utils/errors.js";
 import { normalizeFullWidthSpace } from "../../utils/stringUtils.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
-import { SS } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { partitionAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { ALLOWED_BROWSER_PROTOCOLS } from "../../utils/browser.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getSecuritySensitiveSetting } from "../../utils/settings/settings.js";
@@ -24,65 +24,76 @@ import { logError } from "../../utils/log.js";
 import { normalizeMessages, isToolResultMessage, isInterruptMessage } from "../../utils/messages.js";
 import { messageSnippet } from "../../screens/repl/sessionRehydration.js";
 import { isMidTurnInterjectionMessage } from "../../utils/messagePredicates.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:334726-334777 placement
-var MAX_UNKEYED_FOOTER_LINKS = 5;
-var MAX_SCANNED_LINKS = MAX_UNKEYED_FOOTER_LINKS * 4;
-var MAX_PATTERN_MATCHES = MAX_SCANNED_LINKS * 10;
-var MAX_FOOTER_LABEL_WIDTH = 28;
-var MAX_FOOTER_URL_LENGTH = MAX_REPO_URL_CHARS;
-var SLOW_PATTERN_WARN_MS = 50;
+var MAX_UNKEYED_FOOTER_LINKS; // deferred: uses REPO_NAME_PATTERN (../../utils/detectRepository.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_SCANNED_LINKS;
+var MAX_PATTERN_MATCHES;
+var MAX_FOOTER_LABEL_WIDTH;
+var MAX_FOOTER_URL_LENGTH;
+var SLOW_PATTERN_WARN_MS;
+deferInit("chunk-18hwfzwa.js:334726", () => {
+  MAX_UNKEYED_FOOTER_LINKS = 5;
+  MAX_SCANNED_LINKS = MAX_UNKEYED_FOOTER_LINKS * 4;
+  MAX_PATTERN_MATCHES = MAX_SCANNED_LINKS * 10;
+  MAX_FOOTER_LABEL_WIDTH = 28;
+  MAX_FOOTER_URL_LENGTH = MAX_REPO_URL_CHARS;
+  SLOW_PATTERN_WARN_MS = 50;
+});
 //@ chunk-18hwfzwa.js:334777-335072 placement
-function setKeyedFooterLink(footerLinks, x, D) {
-  let found = footerLinks.find((ee) => ee.key === x);
-  if (D === null) return found ? footerLinks.filter((ee) => ee.key !== x) : footerLinks;
+function setKeyedFooterLink(footerLinks, key, link) {
+  let found = footerLinks.find((state) => state.key === key);
+  if (link === null) return found ? footerLinks.filter((state) => state.key !== key) : footerLinks;
   if (
     found &&
-    found.url === D.url &&
-    found.dedupUrl === D.dedupUrl &&
-    found.label === D.label &&
-    found.prefix === D.prefix &&
-    found.color === D.color
+    found.url === link.url &&
+    found.dedupUrl === link.dedupUrl &&
+    found.label === link.label &&
+    found.prefix === link.prefix &&
+    found.color === link.color
   )
     return footerLinks;
   return [
     {
-      ...D,
-      key: x,
+      ...link,
+      key,
     },
-    ...footerLinks.filter((ee) => ee.key !== x && (ee.key !== undefined || !isSameFooterLink(ee, D))),
+    ...footerLinks.filter(
+      (state) => state.key !== key && (state.key !== undefined || !isSameFooterLink(state, link)),
+    ),
   ];
 }
 //@ chunk-18hwfzwa.js:335072-336957 placement
-function scanFooterLinks(h, x) {
-  if (!h || h.length === 0 || !x) return [];
-  let D = footerLinkMatcher.of(getRootSession().host);
-  let L = [];
-  for (let ee of h) {
-    if (ee.type !== "regex") continue;
-    let { pattern, url, label } = ee;
+function scanFooterLinks(links, text) {
+  if (!links || links.length === 0 || !text) return [];
+  let matcher = footerLinkMatcher.of(getRootSession().host);
+  let results = [];
+  for (let link of links) {
+    if (link.type !== "regex") continue;
+    let { pattern, url, label } = link;
     if (
       typeof pattern !== "string" ||
       typeof url !== "string" ||
       (label !== undefined && typeof label !== "string")
     ) {
-      D.warnUnreadableRegexEntry(`${typeof pattern}/${typeof url}/${typeof label}`);
+      matcher.warnUnreadableRegexEntry(`${typeof pattern}/${typeof url}/${typeof label}`);
       continue;
     }
-    let He = D.compiledRegex(pattern);
-    if (!He) continue;
-    let We = D.templatePin(url);
-    if (We === null) continue;
-    D.warnUnknownPlaceholders(pattern, url, label);
-    let ze = 0;
-    let Xe = [];
-    let rt = false;
-    let kt = false;
-    let At = false;
+    let regex = matcher.compiledRegex(pattern);
+    if (!regex) continue;
+    let pinnedOrigin = matcher.templatePin(url);
+    if (pinnedOrigin === null) continue;
+    matcher.warnUnknownPlaceholders(pattern, url, label);
+    let matchCount = 0;
+    let matches = [];
+    let warnedOrigin = false;
+    let warnedLength = false;
+    let warnedLabel = false;
     let startTime = performance.now();
     try {
-      for (let Et of x.matchAll(He)) {
-        if (++ze > MAX_PATTERN_MATCHES) {
+      for (let match of text.matchAll(regex)) {
+        if (++matchCount > MAX_PATTERN_MATCHES) {
           logForDebugging(
             `[footerLinks] pattern ${pattern} exceeded ${MAX_PATTERN_MATCHES} matches in one scan; stopping (newest matches beyond the ceiling are not collected)`,
             {
@@ -92,17 +103,17 @@ function scanFooterLinks(h, x) {
           logFeatureSad("repl_footer_links", "scan_ceiling");
           break;
         }
-        Xe.push(Et);
-        if (Xe.length > MAX_SCANNED_LINKS) Xe.shift();
+        matches.push(match);
+        if (matches.length > MAX_SCANNED_LINKS) matches.shift();
       }
-      for (let Et of Xe) {
-        let groups = Et.groups ?? {};
-        let Lt = fillFooterLinkTemplate(url, groups);
-        if (Lt !== null && Lt.length > MAX_FOOTER_URL_LENGTH) {
-          if (!kt) {
-            kt = true;
+      for (let match of matches) {
+        let groups = match.groups ?? {};
+        let filledUrl = fillFooterLinkTemplate(url, groups);
+        if (filledUrl !== null && filledUrl.length > MAX_FOOTER_URL_LENGTH) {
+          if (!warnedLength) {
+            warnedLength = true;
             logForDebugging(
-              `[footerLinks] dropping over-length url (${Lt.length} > ${MAX_FOOTER_URL_LENGTH} chars) for pattern ${pattern}`,
+              `[footerLinks] dropping over-length url (${filledUrl.length} > ${MAX_FOOTER_URL_LENGTH} chars) for pattern ${pattern}`,
               {
                 level: "warn",
               },
@@ -111,30 +122,30 @@ function scanFooterLinks(h, x) {
           }
           continue;
         }
-        let oo = Lt === null ? null : tryParseUrl(Lt);
-        if (Lt === null || !oo || urlOrigin(oo) !== We) {
-          if (!rt) {
-            rt = true;
+        let parsedUrl = filledUrl === null ? null : tryParseUrl(filledUrl);
+        if (filledUrl === null || !parsedUrl || urlOrigin(parsedUrl) !== pinnedOrigin) {
+          if (!warnedOrigin) {
+            warnedOrigin = true;
             logForDebugging(
-              `[footerLinks] dropping ${Lt === null ? "dot-segment" : oo ? "origin-shifted" : "unparseable"} url for pattern ${pattern}`,
+              `[footerLinks] dropping ${filledUrl === null ? "dot-segment" : parsedUrl ? "origin-shifted" : "unparseable"} url for pattern ${pattern}`,
               {
                 level: "warn",
               },
             );
             logFeatureSad(
               "repl_footer_links",
-              Lt === null ? "dot_segment_url" : oo ? "origin_shifted" : "unparseable_url",
+              filledUrl === null ? "dot_segment_url" : parsedUrl ? "origin_shifted" : "unparseable_url",
             );
           }
           continue;
         }
-        let Xt = truncateToWidth(
-          stripControlChars(label ? fillTemplatePlaceholders(label, groups) : Et[0]).trim(),
+        let labelText = truncateToWidth(
+          stripControlChars(label ? fillTemplatePlaceholders(label, groups) : match[0]).trim(),
           MAX_FOOTER_LABEL_WIDTH,
         );
-        if (Xt === "") {
-          if (!At) {
-            At = true;
+        if (labelText === "") {
+          if (!warnedLabel) {
+            warnedLabel = true;
             logForDebugging(`[footerLinks] dropping match with empty label for pattern ${pattern}`, {
               level: "warn",
             });
@@ -142,11 +153,11 @@ function scanFooterLinks(h, x) {
           }
           continue;
         }
-        L.push({
-          index: Et.index ?? 0,
+        results.push({
+          index: match.index ?? 0,
           match: {
-            url: Lt,
-            label: Xt,
+            url: filledUrl,
+            label: labelText,
           },
         });
       }
@@ -156,13 +167,13 @@ function scanFooterLinks(h, x) {
       });
       logFeatureSad("repl_footer_links", "regex_exec_failed");
     }
-    let Ot = performance.now() - startTime;
-    if (Ot > SLOW_PATTERN_WARN_MS)
-      logForDebugging(`[footerLinks] slow pattern (${Math.round(Ot)}ms): ${pattern}`, {
+    let elapsedMs = performance.now() - startTime;
+    if (elapsedMs > SLOW_PATTERN_WARN_MS)
+      logForDebugging(`[footerLinks] slow pattern (${Math.round(elapsedMs)}ms): ${pattern}`, {
         level: "warn",
       });
   }
-  return L.sort((ee, ke) => ee.index - ke.index).map((ee) => ee.match);
+  return results.sort((left, right) => left.index - right.index).map((entry) => entry.match);
 }
 //@ chunk-18hwfzwa.js:336957-337032 placement
 var TEMPLATE_PLACEHOLDER_RE = /\{([^{}]+)\}/g;
@@ -170,34 +181,36 @@ var NAMED_GROUP_RE = /\(\?<([^>=!][^>]*)>/g;
 var DOT_SEGMENT_RE = /^(?:\.|%2e){1,2}$/i;
 //@ chunk-18hwfzwa.js:337032-337232 placement
 function fillFooterLinkTemplate(url, groups) {
-  let replaced = url.replace(TEMPLATE_PLACEHOLDER_RE, (ke, Re) =>
-    encodeURIComponent(normalizeFullWidthSpace(Object.hasOwn(groups, Re) ? (groups[Re] ?? "") : "")),
+  let replaced = url.replace(TEMPLATE_PLACEHOLDER_RE, (placeholder, name) =>
+    encodeURIComponent(normalizeFullWidthSpace(Object.hasOwn(groups, name) ? (groups[name] ?? "") : "")),
   );
-  let L = replaced.search(/[?#]/);
-  return (L === -1 ? replaced : replaced.slice(0, L)).split(/[/\\]/).some((ke) => DOT_SEGMENT_RE.test(ke))
+  let queryIndex = replaced.search(/[?#]/);
+  return (queryIndex === -1 ? replaced : replaced.slice(0, queryIndex))
+    .split(/[/\\]/)
+    .some((segment) => DOT_SEGMENT_RE.test(segment))
     ? null
     : replaced;
 }
 //@ chunk-18hwfzwa.js:337232-337259 placement
 var CONTROL_CHAR_RE = /[\x00-\x1f\x7f]/g;
 //@ chunk-18hwfzwa.js:337259-337304 placement
-function stripControlChars(h) {
-  return stripAnsi(h).replace(CONTROL_CHAR_RE, "");
+function stripControlChars(label) {
+  return stripAnsi(label).replace(CONTROL_CHAR_RE, "");
 }
 //@ chunk-18hwfzwa.js:337304-337381 placement
 function fillTemplatePlaceholders(label, groups) {
-  return label.replace(TEMPLATE_PLACEHOLDER_RE, (D, L) =>
-    Object.hasOwn(groups, L) ? (groups[L] ?? "") : "",
+  return label.replace(TEMPLATE_PLACEHOLDER_RE, (match, name) =>
+    Object.hasOwn(groups, name) ? (groups[name] ?? "") : "",
   );
 }
 //@ chunk-18hwfzwa.js:337381-337458 placement
-function urlOrigin(h) {
-  return h.origin !== "null" ? h.origin : `${h.protocol}//${h.host}`;
+function urlOrigin(url) {
+  return url.origin !== "null" ? url.origin : `${url.protocol}//${url.host}`;
 }
 //@ chunk-18hwfzwa.js:337458-337515 placement
-function tryParseUrl(h) {
+function tryParseUrl(url) {
   try {
-    return new URL(h);
+    return new URL(url);
   } catch {
     return null;
   }
@@ -208,28 +221,33 @@ function tryParseUrl(h) {
  */
 function mergeScannedFooterLinks(links, scanned) {
   if (scanned.length === 0) return links;
-  let [keyed, unkeyed] = SS(links, (Be) => Be.key !== undefined);
+  let [keyed, unkeyed] = partitionAlias(links, (state) => state.key !== undefined);
   let added = [];
-  for (let Be of scanned) {
-    if (added.some((He) => isSameFooterLink(He, Be)) || keyed.some((He) => isSameFooterLink(He, Be)))
+  for (let scannedLink of scanned) {
+    if (
+      added.some((existing) => isSameFooterLink(existing, scannedLink)) ||
+      keyed.some((keyedLink) => isSameFooterLink(keyedLink, scannedLink))
+    )
       continue;
-    added.push(Be);
+    added.push(scannedLink);
   }
   if (added.length === 0) return links;
-  let filtered = unkeyed.filter((Be) => !added.some((He) => isSameFooterLink(He, Be)));
+  let filtered = unkeyed.filter(
+    (unkeyedLink) => !added.some((addedLink) => isSameFooterLink(addedLink, unkeyedLink)),
+  );
   let merged = [...keyed, ...[...added, ...filtered].slice(0, MAX_UNKEYED_FOOTER_LINKS)];
   if (
     merged.length === links.length &&
-    merged.every((Be, He) => {
-      let We = links[He];
+    merged.every((link, index) => {
+      let previous = links[index];
       return (
-        Be === We ||
-        (Be.url === We.url &&
-          Be.dedupUrl === We.dedupUrl &&
-          Be.label === We.label &&
-          Be.prefix === We.prefix &&
-          Be.key === We.key &&
-          Be.color === We.color)
+        link === previous ||
+        (link.url === previous.url &&
+          link.dedupUrl === previous.dedupUrl &&
+          link.label === previous.label &&
+          link.prefix === previous.prefix &&
+          link.key === previous.key &&
+          link.color === previous.color)
       );
     })
   )
@@ -237,12 +255,12 @@ function mergeScannedFooterLinks(links, scanned) {
   return merged;
 }
 //@ chunk-18hwfzwa.js:338025-338149 placement
-function isSameFooterLink(h, x) {
+function isSameFooterLink(link, other) {
   return (
-    h.url === x.url ||
-    h.url === x.dedupUrl ||
-    h.dedupUrl === x.url ||
-    (h.dedupUrl !== undefined && h.dedupUrl === x.dedupUrl)
+    link.url === other.url ||
+    link.url === other.dedupUrl ||
+    link.dedupUrl === other.url ||
+    (link.dedupUrl !== undefined && link.dedupUrl === other.dedupUrl)
   );
 }
 //@ chunk-18hwfzwa.js:338149-339651 placement
@@ -251,122 +269,125 @@ class FooterLinkMatcher {
   warnedPlaceholderConfigs = new Set();
   pinByTemplate = new Map();
   regexByPattern = new Map();
-  warnUnreadableRegexEntry(h) {
-    if (this.warnedUnreadableShapes.has(h)) return;
+  warnUnreadableRegexEntry(shape) {
+    if (this.warnedUnreadableShapes.has(shape)) return;
     logForDebugging(
-      `[footerLinks] skipping a 'regex' entry with non-string fields (pattern/url/label types: ${h}); the entry is preserved in settings`,
+      `[footerLinks] skipping a 'regex' entry with non-string fields (pattern/url/label types: ${shape}); the entry is preserved in settings`,
       {
         level: "warn",
       },
     );
     logFeatureSad("repl_footer_links", "unreadable_entry");
-    this.warnedUnreadableShapes.add(h);
+    this.warnedUnreadableShapes.add(shape);
   }
-  warnUnknownPlaceholders(h, x, D) {
-    let L = `${h}\x00${x}\x00${D ?? ""}`;
-    if (this.warnedPlaceholderConfigs.has(L)) return;
-    let ee = new Set([...h.matchAll(NAMED_GROUP_RE)].map((Re) => Re[1]));
-    let ke = `${x}
-${D ?? ""}`;
-    for (let [, Re] of ke.matchAll(TEMPLATE_PLACEHOLDER_RE))
-      if (Re !== undefined && !ee.has(Re))
+  warnUnknownPlaceholders(pattern, urlTemplate, labelTemplate) {
+    let configKey = `${pattern}\x00${urlTemplate}\x00${labelTemplate ?? ""}`;
+    if (this.warnedPlaceholderConfigs.has(configKey)) return;
+    let groupNames = new Set([...pattern.matchAll(NAMED_GROUP_RE)].map((match) => match[1]));
+    let templates = `${urlTemplate}
+${labelTemplate ?? ""}`;
+    for (let [, name] of templates.matchAll(TEMPLATE_PLACEHOLDER_RE))
+      if (name !== undefined && !groupNames.has(name))
         logForDebugging(
-          `[footerLinks] template references {${Re}} but pattern ${h} has no such named capture group`,
+          `[footerLinks] template references {${name}} but pattern ${pattern} has no such named capture group`,
           {
             level: "warn",
           },
         );
-    this.warnedPlaceholderConfigs.add(L);
+    this.warnedPlaceholderConfigs.add(configKey);
   }
-  templatePin(h) {
-    if (this.pinByTemplate.has(h)) return this.pinByTemplate.get(h) ?? null;
-    let x = tryParseUrl(h.replace(TEMPLATE_PLACEHOLDER_RE, "x"));
-    if (!x || !ALLOWED_BROWSER_PROTOCOLS.has(x.protocol)) {
+  templatePin(template) {
+    if (this.pinByTemplate.has(template)) return this.pinByTemplate.get(template) ?? null;
+    let parsed = tryParseUrl(template.replace(TEMPLATE_PLACEHOLDER_RE, "x"));
+    if (!parsed || !ALLOWED_BROWSER_PROTOCOLS.has(parsed.protocol)) {
       logForDebugging(
-        `[footerLinks] url template "${h}" must have a literal origin with an allowlisted scheme (e.g. https://host/...); skipping`,
+        `[footerLinks] url template "${template}" must have a literal origin with an allowlisted scheme (e.g. https://host/...); skipping`,
         {
           level: "warn",
         },
       );
       logFeatureSad("repl_footer_links", "bad_url_template");
-      this.pinByTemplate.set(h, null);
+      this.pinByTemplate.set(template, null);
       return null;
     }
-    let D = urlOrigin(x);
-    this.pinByTemplate.set(h, D);
-    return D;
+    let origin = urlOrigin(parsed);
+    this.pinByTemplate.set(template, origin);
+    return origin;
   }
-  compiledRegex(h) {
-    if (this.regexByPattern.has(h)) return this.regexByPattern.get(h) ?? null;
-    let x = null;
+  compiledRegex(pattern) {
+    if (this.regexByPattern.has(pattern)) return this.regexByPattern.get(pattern) ?? null;
+    let regex = null;
     try {
-      x = new RegExp(h, "g");
+      regex = new RegExp(pattern, "g");
     } catch (error) {
-      logForDebugging(`[footerLinks] invalid pattern ${h}: ${errorMessage(error)}`, {
+      logForDebugging(`[footerLinks] invalid pattern ${pattern}: ${errorMessage(error)}`, {
         level: "warn",
       });
       logFeatureSad("repl_footer_links", "invalid_pattern");
     }
-    this.regexByPattern.set(h, x);
-    return x;
+    this.regexByPattern.set(pattern, regex);
+    return regex;
   }
 }
 //@ chunk-18hwfzwa.js:339651-339678 placement
-var footerLinkMatcher = new HostScoped(() => new FooterLinkMatcher());
+var footerLinkMatcher; // deferred: uses FooterLinkMatcher of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:339651", () => {
+  footerLinkMatcher = new HostScoped(() => new FooterLinkMatcher());
+});
 //@ chunk-18hwfzwa.js:339678-339709 placement
 var MAX_SESSION_TEXT_CHARS = 8192;
 var LINK_SCAN_TEXT_LIMIT = 65536;
 var LINK_SCAN_MESSAGE_LIMIT = 256;
 //@ chunk-18hwfzwa.js:339709-339789 placement
 function getFooterLinksRegexes() {
-  let h = getSecuritySensitiveSetting("footerLinksRegexes").flat();
-  return h.length > 0 ? h : undefined;
+  let regexes = getSecuritySensitiveSetting("footerLinksRegexes").flat();
+  return regexes.length > 0 ? regexes : undefined;
 }
 //@ chunk-18hwfzwa.js:339789-340112 placement
 /**
  * 会话恢复时重新计算页脚链接：按当前正则过滤，与原列表完全相同时返回 null。
  */
-function rehydrateFooterLinks(h, footerLinks) {
+function rehydrateFooterLinks(messages, footerLinks) {
   let footerLinksRegexes = getFooterLinksRegexes();
-  let filtered = footerLinks.filter((ke) => ke.key !== undefined);
-  let ee =
+  let filtered = footerLinks.filter((state) => state.key !== undefined);
+  let rehydrated =
     !footerLinksRegexes || footerLinksRegexes.length === 0
       ? filtered
-      : rescanFooterLinks(h, footerLinksRegexes, filtered);
+      : rescanFooterLinks(messages, footerLinksRegexes, filtered);
   if (
-    footerLinks.length === ee.length &&
-    footerLinks.every((ke, Re) => {
-      let Be = ee[Re];
+    footerLinks.length === rehydrated.length &&
+    footerLinks.every((link, index) => {
+      let next = rehydrated[index];
       return (
-        Be !== undefined &&
-        ke.url === Be.url &&
-        ke.dedupUrl === Be.dedupUrl &&
-        ke.label === Be.label &&
-        ke.prefix === Be.prefix &&
-        ke.key === Be.key &&
-        ke.color === Be.color
+        next !== undefined &&
+        link.url === next.url &&
+        link.dedupUrl === next.dedupUrl &&
+        link.label === next.label &&
+        link.prefix === next.prefix &&
+        link.key === next.key &&
+        link.color === next.color
       );
     })
   )
     return null;
-  return ee;
+  return rehydrated;
 }
 //@ chunk-18hwfzwa.js:340112-340411 placement
-function updateFooterLinks(snapshot, setAppState) {
+function updateFooterLinks(messages, setAppState) {
   try {
-    let footerLinksRegexes = getFooterLinksRegexes();
-    if (!footerLinksRegexes || footerLinksRegexes.length === 0) return;
-    let L = recentTextForLinkScan(getMessagesAfterLastRealUserPrompt(snapshot));
-    let scanned = L ? scanFooterLinks(footerLinksRegexes, L).reverse() : [];
+    let links = getFooterLinksRegexes();
+    if (!links || links.length === 0) return;
+    let recentText = recentTextForLinkScan(getMessagesAfterLastRealUserPrompt(messages));
+    let scanned = recentText ? scanFooterLinks(links, recentText).reverse() : [];
     if (scanned.length === 0) return;
     logFeatureOk("repl_footer_links");
-    setAppState((ke) => {
-      let Re = mergeScannedFooterLinks(ke.footerLinks, scanned);
-      return Re === ke.footerLinks
-        ? ke
+    setAppState((state) => {
+      let nextLinks = mergeScannedFooterLinks(state.footerLinks, scanned);
+      return nextLinks === state.footerLinks
+        ? state
         : {
-            ...ke,
-            footerLinks: Re,
+            ...state,
+            footerLinks: nextLinks,
           };
     });
   } catch (error) {
@@ -375,53 +396,56 @@ function updateFooterLinks(snapshot, setAppState) {
   }
 }
 //@ chunk-18hwfzwa.js:340411-340524 placement
-function rescanFooterLinks(h, footerLinksRegexes, links = []) {
-  if (!footerLinksRegexes || footerLinksRegexes.length === 0) return links;
-  let L = recentTextForLinkScan(h);
-  if (!L) return links;
-  return mergeScannedFooterLinks(links, scanFooterLinks(footerLinksRegexes, L).reverse());
+function rescanFooterLinks(messages, links, links_2 = []) {
+  if (!links || links.length === 0) return links_2;
+  let recentText = recentTextForLinkScan(messages);
+  if (!recentText) return links_2;
+  return mergeScannedFooterLinks(links_2, scanFooterLinks(links, recentText).reverse());
 }
 //@ chunk-18hwfzwa.js:340524-340801 placement
-function recentTextForLinkScan(h) {
-  let x = "";
-  let D = 0;
+function recentTextForLinkScan(inputText) {
+  let text = "";
+  let messageCount = 0;
   for (
-    let idx = h.length - 1;
-    idx >= 0 && x.length < LINK_SCAN_TEXT_LIMIT && D < LINK_SCAN_MESSAGE_LIMIT;
+    let idx = inputText.length - 1;
+    idx >= 0 && text.length < LINK_SCAN_TEXT_LIMIT && messageCount < LINK_SCAN_MESSAGE_LIMIT;
     idx--
   ) {
-    let ee = h[idx];
-    if (!messageTextForLinkScan(ee)) continue;
-    D++;
-    let ke = [];
-    for (let Re of normalizeMessages([ee], true)) {
-      let Be = messageSnippet(Re);
-      if (Be) ke.push(Be);
+    let message = inputText[idx];
+    if (!messageTextForLinkScan(message)) continue;
+    messageCount++;
+    let snippets = [];
+    for (let normalized of normalizeMessages([message], true)) {
+      let snippet = messageSnippet(normalized);
+      if (snippet) snippets.push(snippet);
     }
-    if (ke.length > 0) {
-      let joined = ke.join(`
+    if (snippets.length > 0) {
+      let joined = snippets.join(`
 `);
-      x = x
+      text = text
         ? joined +
           `
 ` +
-          x
+          text
         : joined;
     }
   }
-  return x.length > LINK_SCAN_TEXT_LIMIT ? x.slice(-LINK_SCAN_TEXT_LIMIT) : x;
+  return text.length > LINK_SCAN_TEXT_LIMIT ? text.slice(-LINK_SCAN_TEXT_LIMIT) : text;
 }
 //@ chunk-18hwfzwa.js:340801-341166 placement
-function messageTextForLinkScan(h) {
-  if (h.type === "assistant")
-    return Array.isArray(h.message.content) && h.message.content.some((x) => x.type === "text");
-  if (h.type === "user") {
-    if (h.isMeta || !Array.isArray(h.message.content)) return false;
-    return h.message.content.some(
-      (x) =>
-        x.type === "tool_result" &&
-        (typeof x.content === "string" ||
-          (Array.isArray(x.content) && x.content.some((D) => D.type === "text"))),
+function messageTextForLinkScan(inputText) {
+  if (inputText.type === "assistant")
+    return (
+      Array.isArray(inputText.message.content) &&
+      inputText.message.content.some((template) => template.type === "text")
+    );
+  if (inputText.type === "user") {
+    if (inputText.isMeta || !Array.isArray(inputText.message.content)) return false;
+    return inputText.message.content.some(
+      (groups) =>
+        groups.type === "tool_result" &&
+        (typeof groups.content === "string" ||
+          (Array.isArray(groups.content) && groups.content.some((link) => link.type === "text"))),
     );
   }
   return false;
@@ -430,19 +454,19 @@ function messageTextForLinkScan(h) {
 /**
  * 从末尾找最后一条真实用户输入（非 meta、非 tool_result、非中断文本、非插话前缀），返回其后的消息。旧版名 getAutoModeFullInstructions 为错配。
  */
-function getMessagesAfterLastRealUserPrompt(h) {
-  for (let idx = h.length - 1; idx >= 0; idx--) {
-    let D = h[idx];
+function getMessagesAfterLastRealUserPrompt(messages) {
+  for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let message = messages[idx];
     if (
-      D.type === "user" &&
-      !D.isMeta &&
-      !isToolResultMessage(D) &&
-      !isInterruptMessage(D) &&
-      !isMidTurnInterjectionMessage(D)
+      message.type === "user" &&
+      !message.isMeta &&
+      !isToolResultMessage(message) &&
+      !isInterruptMessage(message) &&
+      !isMidTurnInterjectionMessage(message)
     )
-      return h.slice(idx + 1);
+      return messages.slice(idx + 1);
   }
-  return h.slice();
+  return messages.slice();
 }
 export {
   MAX_SESSION_TEXT_CHARS,

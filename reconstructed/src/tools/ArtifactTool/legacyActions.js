@@ -53,28 +53,28 @@ var LEGACY_ACTION_RESPELLINGS = [
 //@ chunk-p98twse2.js:22170-22300 placement
 function respellLegacyActions(message) {
   let match = STALE_GUARD_CONTENT_HEADER_LINE_RE.exec(message);
-  let t = match === null ? message.length : match.index;
-  let sliced = message.slice(0, t);
-  for (let [f, h] of LEGACY_ACTION_RESPELLINGS) sliced = sliced.replace(f, h);
-  return sliced + message.slice(t);
+  let cutIndex = match === null ? message.length : match.index;
+  let sliced = message.slice(0, cutIndex);
+  for (let [pattern, replacement] of LEGACY_ACTION_RESPELLINGS) sliced = sliced.replace(pattern, replacement);
+  return sliced + message.slice(cutIndex);
 }
 //@ chunk-p98twse2.js:22300-22404 placement
-function omitAction(e) {
-  if (typeof e !== "object" || e === null || !("action" in e)) return e;
-  let { action, ...t } = e;
-  return t;
+function omitAction(input) {
+  if (typeof input !== "object" || input === null || !("action" in input)) return input;
+  let { action, ...rest } = input;
+  return rest;
 }
 //@ chunk-p98twse2.js:22404-22487 placement
 /**
  * 把旧动作相关的拒绝文案改写后返回。
  */
-function respellLegacyDenial(e) {
-  return e !== undefined && e.behavior === "deny"
+function respellLegacyDenial(decision) {
+  return decision !== undefined && decision.behavior === "deny"
     ? {
-        ...e,
-        message: respellLegacyActions(e.message),
+        ...decision,
+        message: respellLegacyActions(decision.message),
       }
-    : e;
+    : decision;
 }
 //@ chunk-p98twse2.js:22487-23430 placement
 /**
@@ -96,210 +96,214 @@ var LEGACY_ACTION_UNAVAILABLE = {
 };
 var LEGACY_EXTRA_KEYS = new Set(["body"]);
 //@ chunk-p98twse2.js:23430-23583 placement
-function legacyActionRefusal(e) {
-  let i = e ?? "publish";
-  if (zodEnumFieldIncludes(inputSchema().shape.action, i)) return null;
-  return Object.hasOwn(LEGACY_ACTION_UNAVAILABLE, i)
-    ? LEGACY_ACTION_UNAVAILABLE[i]
-    : `action "${i}" is not available in this session`;
+function legacyActionRefusal(action) {
+  let name = action ?? "publish";
+  if (zodEnumFieldIncludes(inputSchema().shape.action, name)) return null;
+  return Object.hasOwn(LEGACY_ACTION_UNAVAILABLE, name)
+    ? LEGACY_ACTION_UNAVAILABLE[name]
+    : `action "${name}" is not available in this session`;
 }
 //@ chunk-p98twse2.js:23583-26618 placement
-function adaptLegacyArtifactTool(artifactToolCore, i = {}) {
-  let t = isArtifactToolsetSplit;
-  let s = artifactToolCore;
-  let f =
-    (n) =>
-    (r, ...d) =>
-      s[n].call(artifactToolCore, t() ? expandArtifactAction(r) : r, ...d);
-  let h = (n) =>
-    s[n] === undefined
+function adaptLegacyArtifactTool(artifactToolCore, toolCore = {}) {
+  let isSplit = isArtifactToolsetSplit;
+  let core = artifactToolCore;
+  let bindMember =
+    (memberName) =>
+    (rawInput, ...rest) =>
+      core[memberName].call(artifactToolCore, isSplit() ? expandArtifactAction(rawInput) : rawInput, ...rest);
+  let memberIfPresent = (memberName) =>
+    core[memberName] === undefined
       ? {}
       : {
-          [n]: f(n),
+          [memberName]: bindMember(memberName),
         };
-  let y = {
+  let adapter = {
     get inputSchema() {
-      return t() ? artifactInputSchemaWithLegacyActions() : s.inputSchema;
+      return isSplit() ? artifactInputSchemaWithLegacyActions() : core.inputSchema;
     },
     get inputJSONSchema() {
-      return t() ? toolInputJsonSchema(artifactInputSchemaLazy()) : s.inputJSONSchema;
+      return isSplit() ? toolInputJsonSchema(artifactInputSchemaLazy()) : core.inputJSONSchema;
     },
     streamedInputRepairExemptKeys() {
-      let n = s.streamedInputRepairExemptKeys?.();
-      return t() ? new Set([...(n ?? []), ...LEGACY_EXTRA_KEYS]) : n;
+      let keys = core.streamedInputRepairExemptKeys?.();
+      return isSplit() ? new Set([...(keys ?? []), ...LEGACY_EXTRA_KEYS]) : keys;
     },
-    prompt(n, ...r) {
-      return t() ? Promise.resolve(corePrompt(n?.tools)) : s.prompt.call(artifactToolCore, n, ...r);
+    prompt(options, ...rest) {
+      return isSplit()
+        ? Promise.resolve(corePrompt(options?.tools))
+        : core.prompt.call(artifactToolCore, options, ...rest);
     },
-    isConcurrencySafe: f("isConcurrencySafe"),
-    isReadOnly: f("isReadOnly"),
-    ...h("isDestructive"),
-    ...h("ignoresWholeToolAllowRule"),
-    ...h("suppressesAlwaysAllowRule"),
-    ...h("getPath"),
-    toAutoClassifierInput: f("toAutoClassifierInput"),
-    ...h("staleServerClassifierContext"),
-    description: f("description"),
-    ...h("getToolUseSummary"),
-    ...(s.permissionCheckFailureDecision !== undefined && {
-      permissionCheckFailureDecision(rawInput, ...r) {
-        let context = r[0];
-        let u = t();
-        let l = u ? expandArtifactAction(rawInput) : rawInput;
+    isConcurrencySafe: bindMember("isConcurrencySafe"),
+    isReadOnly: bindMember("isReadOnly"),
+    ...memberIfPresent("isDestructive"),
+    ...memberIfPresent("ignoresWholeToolAllowRule"),
+    ...memberIfPresent("suppressesAlwaysAllowRule"),
+    ...memberIfPresent("getPath"),
+    toAutoClassifierInput: bindMember("toAutoClassifierInput"),
+    ...memberIfPresent("staleServerClassifierContext"),
+    description: bindMember("description"),
+    ...memberIfPresent("getToolUseSummary"),
+    ...(core.permissionCheckFailureDecision !== undefined && {
+      permissionCheckFailureDecision(rawInput, ...rest) {
+        let context = rest[0];
+        let isSplitNow = isSplit();
+        let expanded = isSplitNow ? expandArtifactAction(rawInput) : rawInput;
         let toolPermissionContext = getToolPermissionContext(context);
-        let O = {
-          name: s.name,
-          ruleContentField: s.ruleContentField,
+        let toolRef = {
+          name: core.name,
+          ruleContentField: core.ruleContentField,
         };
         return legacyCheckPermissions(
-          s.name,
+          core.name,
           () => {
-            let R = s.permissionCheckFailureDecision.call(artifactToolCore, l, ...r);
-            return u ? respellLegacyDenial(mapUpdatedInput(R, collapseArtifactAction)) : R;
+            let result = core.permissionCheckFailureDecision.call(artifactToolCore, expanded, ...rest);
+            return isSplitNow ? respellLegacyDenial(mapUpdatedInput(result, collapseArtifactAction)) : result;
           },
-          l,
+          expanded,
           rawInput,
           context,
-          i.ruleTargetInput,
+          toolCore.ruleTargetInput,
           {
-            deny: artifactDataRule(toolPermissionContext, O, l, "deny"),
-            ask: () => artifactDataRule(toolPermissionContext, O, l, "ask"),
+            deny: artifactDataRule(toolPermissionContext, toolRef, expanded, "deny"),
+            ask: () => artifactDataRule(toolPermissionContext, toolRef, expanded, "ask"),
           },
         );
       },
     }),
-    async checkPermissions(n, ...r) {
-      let d = r[0];
-      let u = t();
-      let l = u ? expandArtifactAction(n) : n;
-      if (u) {
-        let g = legacyActionRefusal(actionNameOf(l));
-        if (g !== null)
+    async checkPermissions(rawInput, ...rest) {
+      let ctx = rest[0];
+      let splitNow = isSplit();
+      let expandedInput = splitNow ? expandArtifactAction(rawInput) : rawInput;
+      if (splitNow) {
+        let rest = legacyActionRefusal(actionNameOf(expandedInput));
+        if (rest !== null)
           return {
             behavior: "deny",
-            message: g,
+            message: rest,
             decisionReason: {
               type: "other",
-              reason: g,
+              reason: rest,
             },
           };
       }
-      let _ = u ? l : collapseArtifactAction(n);
-      let O = _ !== n;
-      let R = u ? _ : omitAction(_);
-      let S = {
-        name: s.name,
-        ruleContentField: s.ruleContentField,
+      let context = splitNow ? expandedInput : collapseArtifactAction(rawInput);
+      let collapsed = context !== rawInput;
+      let collapsedInput = splitNow ? context : omitAction(context);
+      let target = {
+        name: core.name,
+        ruleContentField: core.ruleContentField,
       };
-      let toolPermissionContext = getToolPermissionContext(d);
-      let T =
-        (O ? matchToolRule(toolPermissionContext, S, R, "deny") : null) ??
-        artifactDataRule(toolPermissionContext, S, l, "deny");
-      if (T)
+      let toolPermissionContext = getToolPermissionContext(ctx);
+      let expanded =
+        (collapsed ? matchToolRule(toolPermissionContext, target, collapsedInput, "deny") : null) ??
+        artifactDataRule(toolPermissionContext, target, expandedInput, "deny");
+      if (expanded)
         return {
           behavior: "deny",
-          message: `Permission to use ${S.name} has been denied by your rule ${formatRuleForDisplay(T)}.`,
+          message: `Permission to use ${target.name} has been denied by your rule ${formatRuleForDisplay(expanded)}.`,
           decisionReason: {
             type: "rule",
-            rule: T,
+            rule: expanded,
           },
         };
-      let N = await s.checkPermissions.call(artifactToolCore, l, ...r);
-      let v = u ? respellLegacyDenial(mapUpdatedInput(N, collapseArtifactAction)) : N;
-      if (v.behavior !== "deny") {
-        let g =
-          (O ? matchToolRule(toolPermissionContext, S, R, "ask") : null) ??
-          artifactDataRule(toolPermissionContext, S, l, "ask") ??
-          legacyAskRule(d, l, i.ruleTargetInput);
-        if (g)
-          return v.behavior === "ask"
+      let decision = await core.checkPermissions.call(artifactToolCore, expandedInput, ...rest);
+      let isSplitAgain = splitNow
+        ? respellLegacyDenial(mapUpdatedInput(decision, collapseArtifactAction))
+        : decision;
+      if (isSplitAgain.behavior !== "deny") {
+        let permissionFresh =
+          (collapsed ? matchToolRule(toolPermissionContext, target, collapsedInput, "ask") : null) ??
+          artifactDataRule(toolPermissionContext, target, expandedInput, "ask") ??
+          legacyAskRule(ctx, expandedInput, toolCore.ruleTargetInput);
+        if (permissionFresh)
+          return isSplitAgain.behavior === "ask"
             ? {
-                ...v,
-                matchedAskRule: g,
+                ...isSplitAgain,
+                matchedAskRule: permissionFresh,
               }
             : {
                 behavior: "ask",
-                message: await s.description.call(artifactToolCore, l, ...r),
+                message: await core.description.call(artifactToolCore, expandedInput, ...rest),
                 decisionReason: {
                   type: "rule",
-                  rule: g,
+                  rule: permissionFresh,
                 },
-                ...("updatedInput" in v &&
-                  v.updatedInput !== undefined && {
-                    updatedInput: v.updatedInput,
+                ...("updatedInput" in isSplitAgain &&
+                  isSplitAgain.updatedInput !== undefined && {
+                    updatedInput: isSplitAgain.updatedInput,
                   }),
               };
       }
-      return v;
+      return isSplitAgain;
     },
-    ...(s.validateInput !== undefined && {
-      async validateInput(n, ...r) {
-        if (!t()) return s.validateInput.call(artifactToolCore, n, ...r);
-        let d = expandArtifactAction(n);
-        let u = actionNameOf(d);
-        let l = legacyActionRefusal(u);
-        if (l !== null)
+    ...(core.validateInput !== undefined && {
+      async validateInput(legacyRefusal, ...refusal) {
+        if (!isSplit()) return core.validateInput.call(artifactToolCore, legacyRefusal, ...refusal);
+        let permissionInput = expandArtifactAction(legacyRefusal);
+        let ask = actionNameOf(permissionInput);
+        let askRule = legacyActionRefusal(ask);
+        if (askRule !== null)
           return {
             result: false,
-            message: l,
+            message: askRule,
             errorCode: 8,
           };
-        if (u !== undefined && isLegacyArtifactAction(u))
+        if (ask !== undefined && isLegacyArtifactAction(ask))
           logEvent("tengu_artifact_legacy_verb", {
-            verb: fromEnum(u),
+            verb: fromEnum(ask),
             disposition: lit("served"),
           });
-        let _ = await s.validateInput.call(artifactToolCore, d, ...r);
-        return _.result
-          ? _
+        let validateResult = await core.validateInput.call(artifactToolCore, permissionInput, ...refusal);
+        return validateResult.result
+          ? validateResult
           : {
-              ..._,
-              message: respellLegacyActions(_.message),
+              ...validateResult,
+              message: respellLegacyActions(validateResult.message),
             };
       },
     }),
-    async call(n, ...r) {
-      if (!t()) return s.call.call(artifactToolCore, n, ...r);
-      let d = expandArtifactAction(n);
-      let u = legacyActionRefusal(actionNameOf(d));
-      if (u !== null) throw new ArtifactInputError(u, "core_verb_unavailable");
+    async call(callInput, ...rest) {
+      if (!isSplit()) return core.call.call(artifactToolCore, callInput, ...rest);
+      let expanded = expandArtifactAction(callInput);
+      let refusal = legacyActionRefusal(actionNameOf(expanded));
+      if (refusal !== null) throw new ArtifactInputError(refusal, "core_verb_unavailable");
       try {
-        return await s.call.call(artifactToolCore, d, ...r);
+        return await core.call.call(artifactToolCore, expanded, ...rest);
       } catch (error) {
         if (error instanceof ArtifactInputError) error.message = respellLegacyActions(error.message);
         throw error;
       }
     },
-    hookMatcherFamilyNames(n) {
-      let r = dataToolEquivalent(s, n);
-      return r === undefined ? [] : [r.tool.name];
+    hookMatcherFamilyNames(toolName) {
+      let equivalent = dataToolEquivalent(core, toolName);
+      return equivalent === undefined ? [] : [equivalent.tool.name];
     },
-    coerceInput(n) {
-      let r = actionNameOf(n);
-      if (t()) {
-        if (r !== undefined && ADVANCED_ACTIONS.includes(r)) {
-          let d = collapseArtifactAction(n);
-          return d === n
+    coerceInput(input) {
+      let actionName = actionNameOf(input);
+      if (isSplit()) {
+        if (actionName !== undefined && ADVANCED_ACTIONS.includes(actionName)) {
+          let collapsedInput = collapseArtifactAction(input);
+          return collapsedInput === input
             ? null
             : {
-                input: d,
-                shapeClass: `artifact_legacy_verb_${r}`,
+                input: collapsedInput,
+                shapeClass: `artifact_legacy_verb_${actionName}`,
               };
         }
       } else {
-        let d = expandArtifactAction(n);
-        if (d !== n)
+        let expandedInput = expandArtifactAction(input);
+        if (expandedInput !== input)
           return {
-            input: d,
-            shapeClass: `artifact_core_verb_${r ?? "publish"}`,
+            input: expandedInput,
+            shapeClass: `artifact_core_verb_${actionName ?? "publish"}`,
           };
       }
-      return s.coerceInput?.call(artifactToolCore, n) ?? null;
+      return core.coerceInput?.call(artifactToolCore, input) ?? null;
     },
   };
   return Object.defineProperties(
     Object.defineProperties({}, Object.getOwnPropertyDescriptors(artifactToolCore)),
-    Object.getOwnPropertyDescriptors(y),
+    Object.getOwnPropertyDescriptors(adapter),
   );
 }
 export { adaptLegacyArtifactTool };

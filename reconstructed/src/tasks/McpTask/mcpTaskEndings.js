@@ -15,6 +15,7 @@ import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { regExp } from "../../utils/xmlTags.js";
 import { safeIdentifierOrUndefined } from "../../utils/safeIdentifier.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-r7bynxfq.js:377-2517 placement
 /**
@@ -27,83 +28,83 @@ class McpTaskEndingsStore {
   #s = 0;
   #i = false;
   #o = false;
-  savesWith(e) {
-    this.#n = e;
+  savesWith(saver) {
+    this.#n = saver;
   }
-  hold(e, ending, deleteFile) {
+  hold(registryId, ending, deleteFile) {
     if (this.#n?.isOn()) {
-      this.#t.delete(e);
-      this.#e.set(e, {
+      this.#t.delete(registryId);
+      this.#e.set(registryId, {
         ending,
         deleteFile,
         lostAtHold: this.#n.lostSoFar(),
       });
     }
   }
-  forget(e) {
-    this.#e.delete(e);
-    this.#t.delete(e);
+  forget(registryId) {
+    this.#e.delete(registryId);
+    this.#t.delete(registryId);
   }
-  withdraw(e) {
-    let n = [];
-    for (let [s, { ending: i, deleteFile: d }] of this.#e)
-      if (i.toolUseId !== undefined && e(i.toolUseId)) {
-        let r = this.#t.has(s);
-        this.forget(s);
-        d(r);
-        n.push(s);
+  withdraw(matchesToolUseId) {
+    let removed = [];
+    for (let [id, { ending, deleteFile }] of this.#e)
+      if (ending.toolUseId !== undefined && matchesToolUseId(ending.toolUseId)) {
+        let wasSeen = this.#t.has(id);
+        this.forget(id);
+        deleteFile(wasSeen);
+        removed.push(id);
         logForDebugging(
-          `MCP task endings: a rewind removes the call that started task ${s}, so its saved ending is being deleted`,
+          `MCP task endings: a rewind removes the call that started task ${id}, so its saved ending is being deleted`,
         );
       }
-    return n;
+    return removed;
   }
   get isConversationSaved() {
     return this.#n?.isOn() ?? false;
   }
-  isHeld(e) {
-    return this.#e.has(e);
+  isHeld(registryId) {
+    return this.#e.has(registryId);
   }
-  look(e, n) {
+  look(messages, count) {
     if (this.#e.size === 0) return;
     let sessionId = getSessionId();
-    let i = new Map();
-    for (let j = 0; j < n; j++) {
-      let msg = e[j];
-      let o = stickyPromptRunId(msg);
-      if (o !== undefined) {
-        let a = this.#e.get(o);
-        if (a?.ending.sessionId === sessionId && a.ending.runId === getTaskNotificationRunId(msg))
-          i.set(o, msg.uuid);
-      } else if (i.size === 0) continue;
-      else if (msg.type === "system" && msg.subtype === "compact_boundary") i.clear();
-      else if (countToolCallsSince(msg)) {
-        for (let [a, u] of i) this.#t.set(a, [u, msg.uuid]);
-        i.clear();
+    let firstSeenUuid = new Map();
+    for (let j = 0; j < count; j++) {
+      let message = messages[j];
+      let runId = stickyPromptRunId(message);
+      if (runId !== undefined) {
+        let entry = this.#e.get(runId);
+        if (entry?.ending.sessionId === sessionId && entry.ending.runId === getTaskNotificationRunId(message))
+          firstSeenUuid.set(runId, message.uuid);
+      } else if (firstSeenUuid.size === 0) continue;
+      else if (message.type === "system" && message.subtype === "compact_boundary") firstSeenUuid.clear();
+      else if (countToolCallsSince(message)) {
+        for (let [id, uuid] of firstSeenUuid) this.#t.set(id, [uuid, message.uuid]);
+        firstSeenUuid.clear();
       }
     }
     this.#s++;
-    return (d) => {
+    return (onSaved) => {
       this.#s--;
-      if (d) this.#a();
+      if (onSaved) this.#a();
       else this.#d([...this.#e.keys()]);
     };
   }
   #r() {
     if (this.#s > 0) return [];
-    let e = [];
-    for (let [n, s] of this.#t) {
-      let i = this.#e.get(n);
-      if (i !== undefined) e.push([n, i, s]);
+    let ready = [];
+    for (let [id, uuiids] of this.#t) {
+      let entry = this.#e.get(id);
+      if (entry !== undefined) ready.push([id, entry, uuiids]);
     }
-    return e;
+    return ready;
   }
-  #d(e) {
-    for (let n of e) {
-      this.#e.delete(n);
-      this.#t.delete(n);
+  #d(ids) {
+    for (let id of ids) {
+      this.#e.delete(id);
+      this.#t.delete(id);
       logForDebugging(
-        `MCP task endings: part of the conversation may not have been saved, so the saved ending of task ${n} is left for the next resume`,
+        `MCP task endings: part of the conversation may not have been saved, so the saved ending of task ${id} is left for the next resume`,
         {
           level: "warn",
         },
@@ -111,22 +112,22 @@ class McpTaskEndingsStore {
     }
   }
   async #a() {
-    let e = this.#n;
-    if (e === undefined) return;
+    let saver = this.#n;
+    if (saver === undefined) return;
     if (this.#i) {
       this.#o = true;
       return;
     }
     this.#i = true;
     try {
-      for (let n = this.#r(); n.length > 0; n = this.#r()) {
+      for (let batch = this.#r(); batch.length > 0; batch = this.#r()) {
         this.#o = false;
-        let s = await e.save(n.flatMap(([, , o]) => o)).catch(() => false);
-        let i = e.lostSoFar();
-        let filtered = n.filter(([o, a]) => this.#e.get(o) === a);
-        let filtered_2 = filtered.filter(([, o]) => o.lostAtHold === i);
-        this.#d(filtered.filter(([, o]) => o.lostAtHold !== i).map(([o]) => o));
-        if (!s) {
+        let didSave = await saver.save(batch.flatMap(([, , uuids]) => uuids)).catch(() => false);
+        let lostSoFar = saver.lostSoFar();
+        let filtered = batch.filter(([id, entry]) => this.#e.get(id) === entry);
+        let filtered_2 = filtered.filter(([, entry]) => entry.lostAtHold === lostSoFar);
+        this.#d(filtered.filter(([, entry]) => entry.lostAtHold !== lostSoFar).map(([id]) => id));
+        if (!didSave) {
           if (this.#o) continue;
           if (filtered_2.length > 0)
             logForDebugging(
@@ -134,12 +135,12 @@ class McpTaskEndingsStore {
             );
           return;
         }
-        for (let [o, a] of filtered_2) {
-          this.#e.delete(o);
-          this.#t.delete(o);
-          a.deleteFile(true);
+        for (let [id, entry] of filtered_2) {
+          this.#e.delete(id);
+          this.#t.delete(id);
+          entry.deleteFile(true);
           logForDebugging(
-            `MCP task endings: the model has read the notification of task ${o}, so its saved ending is being deleted`,
+            `MCP task endings: the model has read the notification of task ${id}, so its saved ending is being deleted`,
           );
         }
       }
@@ -151,9 +152,9 @@ class McpTaskEndingsStore {
   }
 }
 //@ chunk-r7bynxfq.js:2517-2706 placement = countToolCallsSince (1)
-function countToolCallsSince(e) {
-  if (e.type !== "assistant" || e.message.model === SYNTHETIC_MODEL) return false;
-  let { content } = e.message;
+function countToolCallsSince(message) {
+  if (message.type !== "assistant" || message.message.model === SYNTHETIC_MODEL) return false;
+  let { content } = message.message;
   return (
     Array.isArray(content) &&
     content.some((block) => block.type === "tool_use" || (block.type === "text" && block.text.trim() !== ""))
@@ -163,7 +164,10 @@ function countToolCallsSince(e) {
 /**
  * 按会话保存的 MCP 任务结束记录。
  */
-var mcpTaskEndingsSlots = new SessionRootSlot(() => new McpTaskEndingsStore());
+var mcpTaskEndingsSlots; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-r7bynxfq.js:2706", () => {
+  mcpTaskEndingsSlots = new SessionRootSlot(() => new McpTaskEndingsStore());
+});
 //@ chunk-r7bynxfq.js:2732-2793 placement
 /**
  * 会话是否已保存。
@@ -175,9 +179,9 @@ function isConversationSaved() {
 /**
  * 暂存 MCP 任务结束记录（异常吞掉）。
  */
-function holdMcpTaskEnding(registryId, n, s) {
+function holdMcpTaskEnding(registryId, ending, deleteFile) {
   try {
-    mcpTaskEndingsSlots.peek(getRootSession())?.hold(registryId, n, s);
+    mcpTaskEndingsSlots.peek(getRootSession())?.hold(registryId, ending, deleteFile);
   } catch (error) {
     logError(error);
   }
@@ -190,14 +194,14 @@ function forgetMcpTaskEnding(registryId) {
   mcpTaskEndingsSlots.peek(getRootSession())?.forget(registryId);
 }
 //@ chunk-r7bynxfq.js:2900-3023 placement
-function lookMcpTaskEndings(messages, n, session) {
+function lookMcpTaskEndings(messages, count, session) {
   try {
-    let i = mcpTaskEndingsSlots.peek(session ?? getRootSession())?.look(messages, n);
+    let lookup = mcpTaskEndingsSlots.peek(session ?? getRootSession())?.look(messages, count);
     return (
-      i &&
-      ((d) => {
+      lookup &&
+      ((onSaved) => {
         try {
-          i(d);
+          lookup(onSaved);
         } catch (error) {
           logError(error);
         }
@@ -237,10 +241,13 @@ function getStickyPromptText(message) {
       ? message.attachment.prompt
       : undefined;
   let content = message.type === "user" ? message.message?.content : undefined;
-  let s = Array.isArray(content) ? content[0] : content;
-  if (typeof s === "string") return s;
-  return typeof s === "object" && s !== null && "text" in s && typeof s.text === "string"
-    ? s.text
+  let firstBlock = Array.isArray(content) ? content[0] : content;
+  if (typeof firstBlock === "string") return firstBlock;
+  return typeof firstBlock === "object" &&
+    firstBlock !== null &&
+    "text" in firstBlock &&
+    typeof firstBlock.text === "string"
+    ? firstBlock.text
     : undefined;
 }
 export {

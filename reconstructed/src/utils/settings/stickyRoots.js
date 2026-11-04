@@ -23,28 +23,38 @@ import { SETTING_SOURCES } from "./constants.js";
 /**
  * 计算粘性根目录：启动目录、同步根与额外目录（含真实路径），有非绝对路径时退化为根目录。
  */
-function stickyRootsFor(e) {
-  let filtered = [e.launchDir, e.launchDirReal, e.syncRoot, e.syncRootReal, ...(e.extra ?? [])].filter(
-    (r) => r !== undefined,
-  );
-  return filtered.some((r) => !isAbsolutePlatformPath(r)) ? [POSIX_SEP_2] : uniq(filtered);
+function stickyRootsFor(roots) {
+  let filtered = [
+    roots.launchDir,
+    roots.launchDirReal,
+    roots.syncRoot,
+    roots.syncRootReal,
+    ...(roots.extra ?? []),
+  ].filter((root) => root !== undefined);
+  return filtered.some((root) => !isAbsolutePlatformPath(root)) ? [POSIX_SEP_2] : uniq(filtered);
 }
 //@ chunk-s61vbvea.js:308615-308674 placement
 /**
  * anyPairMatches：任一两两匹配。
  */
-function anyPairMatches(e, n) {
-  return e.some((r) => n.some((s) => isSameCommandPath(r, s)));
+function anyPairMatches(leftPaths, rightPaths) {
+  return leftPaths.some((leftPath) => rightPaths.some((rightPath) => isSameCommandPath(leftPath, rightPath)));
 }
 //@ chunk-s61vbvea.js:308674-308853 placement = setCwdState (0.757)
-function pathsOverlapForPlatform(e, n) {
-  let r =
+function pathsOverlapForPlatform(leftPaths, rightPaths) {
+  let normalizePath =
     getPlatform_2() === "windows"
-      ? (s) => stripWin32DevicePrefix(s).toLowerCase()
+      ? (path) => stripWin32DevicePrefix(path).toLowerCase()
       : getPlatform_2() === "macos"
-        ? (s) => s.normalize("NFC").toLowerCase()
-        : (s) => s;
-  return e.some((s) => n.some((h) => isAbsolutePlatformPath(h) && isPathUnderForPlatform(r(s), r(h))));
+        ? (path) => path.normalize("NFC").toLowerCase()
+        : (path) => path;
+  return leftPaths.some((leftPath) =>
+    rightPaths.some(
+      (rightPath) =>
+        isAbsolutePlatformPath(rightPath) &&
+        isPathUnderForPlatform(normalizePath(leftPath), normalizePath(rightPath)),
+    ),
+  );
 }
 //@ chunk-s61vbvea.js:308853-308896 placement
 var REPO_DIR_SETTING_SOURCES = ["projectSettings", "localSettings"];
@@ -60,62 +70,72 @@ async function collectStickyRoots({
   commonRoots,
   scopeRoots,
 }) {
-  let x = new Map();
-  let P = new Set();
-  for (let q of SETTING_SOURCES) {
-    let Q = scopeSettingsFile(q);
-    if (Q !== null) {
-      let Z = [Q];
-      await realpath(Q).then(
-        (ee) => Z.push(ee),
+  let pathsByScope = new Map();
+  let unresolvedScopes = new Set();
+  for (let scope of SETTING_SOURCES) {
+    let filePath = scopeSettingsFile(scope);
+    if (filePath !== null) {
+      let spellings = [filePath];
+      await realpath(filePath).then(
+        (realPath) => spellings.push(realPath),
         () => {
-          if (q !== "policySettings") P.add(q);
+          if (scope !== "policySettings") unresolvedScopes.add(scope);
         },
       );
-      x.set(q, Z);
+      pathsByScope.set(scope, spellings);
     }
   }
-  let j = (q, Q) => anyPairMatches(x.get(q) ?? [], Q);
-  let G = (q) => {
-    pinnedScopes.add(q);
-    let Q = pinnedRoots.get(q);
-    if (Q === undefined) {
-      Q = scopeRoots(q, reachBaseline.get(q) ?? []);
-      pinnedRoots.set(q, Q);
+  let scopeOverlaps = (scope, roots) => anyPairMatches(pathsByScope.get(scope) ?? [], roots);
+  let pinScope = (scope) => {
+    pinnedScopes.add(scope);
+    let roots = pinnedRoots.get(scope);
+    if (roots === undefined) {
+      roots = scopeRoots(scope, reachBaseline.get(scope) ?? []);
+      pinnedRoots.set(scope, roots);
     }
-    for (let Z of Q) stickyRoots.add(Z);
+    for (let root of roots) stickyRoots.add(root);
   };
-  for (let q of [...baseRoots, ...commonRoots()]) stickyRoots.add(q);
-  for (let q of SETTING_SOURCES)
-    if (pinnedScopes.has(q) || REPO_DIR_SETTING_SOURCES.includes(q) || P.has(q)) G(q);
-  let L = new Set();
+  for (let root of [...baseRoots, ...commonRoots()]) stickyRoots.add(root);
+  for (let scope of SETTING_SOURCES)
+    if (pinnedScopes.has(scope) || REPO_DIR_SETTING_SOURCES.includes(scope) || unresolvedScopes.has(scope))
+      pinScope(scope);
+  let placedScopes = new Set();
   for (;;) {
-    let q = () => SETTING_SOURCES.filter((ae) => !pinnedScopes.has(ae) && !L.has(ae));
-    for (let ae = true; ae;) {
-      ae = false;
-      let se = [...stickyRoots, ...[...pinnedScopes].flatMap((pinnedScope) => scopeRoots(pinnedScope, null))];
-      for (let re of q())
-        if (j(re, [...se, ...scopeRoots(re, reachBaseline.get(re) ?? [])])) {
-          G(re);
-          ae = true;
+    let unplacedScopes = () =>
+      SETTING_SOURCES.filter((scope) => !pinnedScopes.has(scope) && !placedScopes.has(scope));
+    for (let foundNew = true; foundNew;) {
+      foundNew = false;
+      let currentRoots = [
+        ...stickyRoots,
+        ...[...pinnedScopes].flatMap((pinnedScope) => scopeRoots(pinnedScope, null)),
+      ];
+      for (let scope of unplacedScopes())
+        if (scopeOverlaps(scope, [...currentRoots, ...scopeRoots(scope, reachBaseline.get(scope) ?? [])])) {
+          pinScope(scope);
+          foundNew = true;
         }
     }
-    let Q = q();
-    if (Q.length === 0) return [...stickyRoots];
-    let Z = new Map(Q.map((ae) => [ae, scopeRoots(ae, null)]));
-    let filtered = Q.filter(
-      (ae) =>
-        !Q.some(
-          (se) => se !== ae && j(ae, [...(Z.get(se) ?? []), ...scopeRoots(se, reachBaseline.get(se) ?? [])]),
+    let unplaced = unplacedScopes();
+    if (unplaced.length === 0) return [...stickyRoots];
+    let rootsByScope = new Map(unplaced.map((scope) => [scope, scopeRoots(scope, null)]));
+    let filtered = unplaced.filter(
+      (candidate) =>
+        !unplaced.some(
+          (other) =>
+            other !== candidate &&
+            scopeOverlaps(candidate, [
+              ...(rootsByScope.get(other) ?? []),
+              ...scopeRoots(other, reachBaseline.get(other) ?? []),
+            ]),
         ),
     );
     if (filtered.length === 0) {
-      for (let ae of Q) G(ae);
+      for (let scope of unplaced) pinScope(scope);
       return [...stickyRoots];
     }
-    for (let ae of filtered) {
-      L.add(ae);
-      for (let se of Z.get(ae) ?? []) stickyRoots.add(se);
+    for (let scope of filtered) {
+      placedScopes.add(scope);
+      for (let root of rootsByScope.get(scope) ?? []) stickyRoots.add(root);
     }
   }
 }

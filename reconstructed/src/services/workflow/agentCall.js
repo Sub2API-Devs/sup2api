@@ -203,34 +203,44 @@ import { resolveProactivityOptions } from "../../utils/proactivityLevel.js";
 import { getMainLoopModel } from "../../utils/model/model.js";
 import { addToTotalSessionCost } from "../../cost-tracker.js";
 import { archiveRemoteSession } from "../../utils/teleport/api.js";
+import { deferInit, beginDeferredInits } from "../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ./runScript.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/services/workflow/runScript.js");
 //@ chunk-41w44bgm.js:40004-40076 placement
 /**
  * 合法的工作流运行 id 原样写入遥测，否则走兜底清洗。
  */
-function sanitizeWorkflowRunId(workflowRunId) {
-  return /^wf_[0-9a-f]{8}-[0-9a-f]{3}$/.test(workflowRunId)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(workflowRunId)
-    : shortHash(workflowRunId);
+function sanitizeWorkflowRunId(runId) {
+  return /^wf_[0-9a-f]{8}-[0-9a-f]{3}$/.test(runId)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(runId)
+    : shortHash(runId);
 }
 //@ chunk-41w44bgm.js:40076-40127 placement
 /**
  * 按 CPU 数推算默认并发（限制在 2–16）。
  */
-function defaultAgentConcurrency(e) {
-  return Math.min(16, Math.max(2, e - 2));
+function defaultAgentConcurrency(parallelSlots) {
+  return Math.min(16, Math.max(2, parallelSlots - 2));
 }
 //@ chunk-41w44bgm.js:40127-40436 placement
 /**
  * 工作流 agent() 的并发与调用上限：默认并发按 CPU 数推算（可由 CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS 覆盖），另一并发上限 50，调用总数上限 1000 及其报错文案。
  */
-var DEFAULT_MAX_CONCURRENT_AGENTS = defaultAgentConcurrency(availableParallelism());
-var AGENT_CONCURRENCY_CEILING = 50;
-var AGENT_CALL_CAP = 1000;
-var AGENT_CALL_CAP_MESSAGE =
-  `Workflow agent() call cap reached (${AGENT_CALL_CAP}). This usually means a loop using budget.remaining() never terminates because ` +
-  "no token budget was set \u2014 remaining() returns Infinity when budget.total is null. " +
-  "Add a hard iteration cap to the loop, or pass a token budget.";
+var DEFAULT_MAX_CONCURRENT_AGENTS; // deferred: uses defaultAgentConcurrency of its import cycle while loading; runs once the cycle is complete
+var AGENT_CONCURRENCY_CEILING;
+var AGENT_CALL_CAP;
+var AGENT_CALL_CAP_MESSAGE;
+deferInit("chunk-41w44bgm.js:40127", () => {
+  DEFAULT_MAX_CONCURRENT_AGENTS = defaultAgentConcurrency(availableParallelism());
+  AGENT_CONCURRENCY_CEILING = 50;
+  AGENT_CALL_CAP = 1000;
+  AGENT_CALL_CAP_MESSAGE =
+    `Workflow agent() call cap reached (${AGENT_CALL_CAP}). This usually means a loop using budget.remaining() never terminates because ` +
+    "no token budget was set \u2014 remaining() returns Infinity when budget.total is null. " +
+    "Add a hard iteration cap to the loop, or pass a token budget.";
+});
 //@ chunk-41w44bgm.js:40436-40518 placement
 class WorkflowAgentCapError extends Error {
   constructor() {
@@ -240,9 +250,9 @@ class WorkflowAgentCapError extends Error {
 }
 //@ chunk-41w44bgm.js:40518-40795 placement
 class WorkflowBudgetExceededError extends Error {
-  constructor(e, total) {
+  constructor(used, total) {
     super(
-      `Workflow token budget exceeded (${e.toLocaleString()} / ${total.toLocaleString()} output tokens). Stopping further agent() calls. In-flight agents will complete; their results are preserved.`,
+      `Workflow token budget exceeded (${used.toLocaleString()} / ${total.toLocaleString()} output tokens). Stopping further agent() calls. In-flight agents will complete; their results are preserved.`,
     );
     this.name = "WorkflowBudgetExceededError";
   }
@@ -250,9 +260,9 @@ class WorkflowBudgetExceededError extends Error {
 //@ chunk-41w44bgm.js:40795-40806 placement
 var MAX_PREVIEW_VALUE_CHARS = 400;
 //@ chunk-41w44bgm.js:40806-40933 placement
-function previewAgentValue(e) {
-  if (e == null) return;
-  let trimmed = (typeof e === "string" ? e : jsonStringify(e)).trim();
+function previewAgentValue(value) {
+  if (value == null) return;
+  let trimmed = (typeof value === "string" ? value : jsonStringify(value)).trim();
   if (!trimmed) return;
   return trimmed.length > MAX_PREVIEW_VALUE_CHARS
     ? truncateToLength(trimmed, MAX_PREVIEW_VALUE_CHARS) + "\u2026"
@@ -314,11 +324,11 @@ var WORKFLOW_STRUCTURED_SUBAGENT_DEFINITION = {
 };
 var MAX_STALLED_AGENT_RETRIES = 5;
 //@ chunk-41w44bgm.js:43660-43848 placement
-function recordStalledAgent(e, n, r) {
-  e.push(r.replyLost ? "reply lost" : (r.stalledReason ?? "stalled"));
-  n.maxContextTokens = Math.max(n.maxContextTokens, r.tokens);
-  n.toolCalls += r.toolCalls;
-  n.durationMs += r.durationMs;
+function recordStalledAgent(reasons, totals, stalled) {
+  reasons.push(stalled.replyLost ? "reply lost" : (stalled.stalledReason ?? "stalled"));
+  totals.maxContextTokens = Math.max(totals.maxContextTokens, stalled.tokens);
+  totals.toolCalls += stalled.toolCalls;
+  totals.durationMs += stalled.durationMs;
 }
 //@ chunk-41w44bgm.js:43848-43861 placement
 /**
@@ -333,65 +343,65 @@ function createWorkflowAgentRuntime(
   context,
   canUseTool,
   emitProgress,
-  h,
-  T,
-  y,
-  A,
-  L,
-  j,
+  toolUseId,
+  description,
+  initialPhases,
+  budget,
+  journal,
+  resumeCache,
   workflowName,
   invokingRequestId,
   parentPromptId,
-  me,
-  We,
+  onUsageLimitChange,
+  numberedLabels,
 ) {
-  let G = 0;
-  let ce = async (U) => ({
-    v: await U,
+  let agentCount = 0;
+  let awaitValue = async (promise) => ({
+    v: await promise,
   });
-  let E = (U, ...ee) => U(...ee);
-  let s = (U) => clone(U);
-  let S = (U) => U;
-  let w = (U) => U;
-  let P = (U, ee) => {
+  let callFn = (fn, ...args) => fn(...args);
+  let copyValue = (value) => clone(value);
+  let hostCopyFn = (value) => value;
+  let passthrough = (value) => value;
+  let safeGet = (target, key) => {
     try {
-      return U === null || U === undefined ? undefined : U[ee];
+      return target === null || target === undefined ? undefined : target[key];
     } catch {
       return;
     }
   };
-  let V = {
+  let rootCallKey = {
     prev: "",
   };
-  let N = Object.freeze({
+  let frozenRootCallKey = Object.freeze({
     prev: "",
   });
-  let se = new AsyncLocalStorage();
-  let q = false;
-  let ue = {
-    inSlot: (U, ee) => ee(),
+  let callKeyStorage = new AsyncLocalStorage();
+  let journalHitSeen = false;
+  let noopSlot = {
+    inSlot: (slot, callback) => callback(),
     join: () => {},
   };
-  function Ee(U) {
-    let ee = se.getStore();
-    if (!L || ee === N) return ue;
-    let Q = ee ?? V;
-    let prev = Q.prev;
-    Q.prev = childCallKey(prev, U, "fork");
-    let Je = [];
+  function createCallKeyScope(toolUseId) {
+    let store = callKeyStorage.getStore();
+    if (!journal || store === frozenRootCallKey) return noopSlot;
+    let current = store ?? rootCallKey;
+    let prev = current.prev;
+    current.prev = childCallKey(prev, toolUseId, "fork");
+    let slotKeys = [];
     return {
-      inSlot: (Re, Te) => {
-        let it = {
-          prev: childCallKey(prev, U, Re),
+      inSlot: (slotIndex, fn) => {
+        let slotState = {
+          prev: childCallKey(prev, toolUseId, slotIndex),
         };
-        Je[Re] = it;
-        return se.run(it, Te);
+        slotKeys[slotIndex] = slotState;
+        return callKeyStorage.run(slotState, fn);
       },
       join: () => {
-        Q.prev = childCallKey(
-          Q.prev,
-          U,
-          Array.from(Je, (Re) => Re?.prev ?? ""),
+        current.prev = childCallKey(
+          current.prev,
+          toolUseId,
+          Array.from(slotKeys, (slotState) => slotState?.prev ?? ""),
         );
       },
     };
@@ -399,44 +409,47 @@ function createWorkflowAgentRuntime(
   let flagWithOverride = readFlagWithOverride(WORKFLOW_JOURNAL_HOST_COPY_FLAG, {
     safe: true,
   });
-  let ut = false;
-  let Tt = false;
-  let Wt = false;
-  let ye = [];
-  let gt = false;
-  let Ut = new Map();
-  let $t = new Set();
-  let jt = (U, ee) => {
-    let Q = Ut.get(U);
-    if (Q === undefined) {
-      Q = new Set();
-      Ut.set(U, Q);
+  let capWarned = false;
+  let budgetWarned = false;
+  let limitWaitersWarned = false;
+  let logLines = [];
+  let foreignArtifactSeen = false;
+  let toolsUsedByAgent = new Map();
+  let usedConversationTools = new Set();
+  let recordAgentTool = (agentId, toolName) => {
+    let tools = toolsUsedByAgent.get(agentId);
+    if (tools === undefined) {
+      tools = new Set();
+      toolsUsedByAgent.set(agentId, tools);
     }
-    Q.add(readableToolName(ee));
+    tools.add(readableToolName(toolName));
   };
-  let kt = (U) => [...(Ut.get(U ?? "") ?? [])].filter((ee) => getConversationToolsUsed().has(ee));
-  let $e;
-  let Se = (prompt) =>
-    gt && !prompt.includes(ARTIFACT_CONTENT_AUTHORED_TAG)
+  let toolsUsedFor = (agentId) =>
+    [...(toolsUsedByAgent.get(agentId ?? "") ?? [])].filter((toolName) =>
+      getConversationToolsUsed().has(toolName),
+    );
+  let remoteBlockGate;
+  let preambleFor = (prompt) =>
+    foreignArtifactSeen && !prompt.includes(ARTIFACT_CONTENT_AUTHORED_TAG)
       ? `
 
 ${relayedWorkflowPreamble(true).trimEnd()}`
       : "";
   let weakSet = new WeakSet();
-  function Ie(U, { log }) {
-    let Q = truncateMiddle(U);
-    ye.push(Q);
+  function logLine(message, { log }) {
+    let truncated = truncateMiddle(message);
+    logLines.push(truncated);
     if (log)
       emitProgress({
         type: "progress",
         toolUseID: "workflow_log",
         data: {
           type: "workflow_log",
-          message: Q,
+          message: truncated,
         },
       });
   }
-  let tn = new UsageLimitWaiter({
+  let limitWaiter = new UsageLimitWaiter({
     signal: context.abortController?.signal,
     log: (message) =>
       emitProgress({
@@ -447,13 +460,13 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
           message,
         },
       }),
-    onChange: (U) => me?.(U),
+    onChange: (state) => onUsageLimitChange?.(state),
     storageV5: context.storageV5,
   });
-  let zt = limitConcurrency(1, createAgentWorktree);
-  let An;
-  function Cn() {
-    An ??= (async () => {
+  let worktreeGate = limitConcurrency(1, createAgentWorktree);
+  let branchCheckPromise;
+  function ensureBranchPushed() {
+    branchCheckPromise ??= (async () => {
       let cwd = getCwd();
       let branch = await getBranch(cwd);
       if (branch === "HEAD") return;
@@ -468,52 +481,52 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
       });
       return;
     })();
-    return An;
+    return branchCheckPromise;
   }
-  let kn = new Set();
-  function fn(U) {
-    return (ee, Q) => {
-      let Le = `${U}\x00${ee}\x00${Q}`;
-      if (kn.has(Le)) return;
-      kn.add(Le);
+  let warnedModelNotices = new Set();
+  function makeModelNotice(tag) {
+    return (model, reason) => {
+      let noticeKey = `${tag}\x00${model}\x00${reason}`;
+      if (warnedModelNotices.has(noticeKey)) return;
+      warnedModelNotices.add(noticeKey);
       emitProgress({
         type: "progress",
         toolUseID: "workflow_log",
         data: {
           type: "workflow_log",
-          message: `[${U}] ${formatModelRestrictedNotice(ee, Q)}`,
+          message: `[${tag}] ${formatModelRestrictedNotice(model, reason)}`,
         },
       });
     };
   }
-  function Kt() {
-    if (G < AGENT_CALL_CAP) return;
-    if (!ut) {
-      ut = true;
+  function enforceAgentCap() {
+    if (agentCount < AGENT_CALL_CAP) return;
+    if (!capWarned) {
+      capWarned = true;
       logEvent("tengu_workflow_agent_cap_exceeded", {
-        agentCount: G,
+        agentCount,
       });
     }
     throw new WorkflowAgentCapError();
   }
-  function yn() {
-    if (A?.total == null || A.total <= 0) return;
-    let turnSpent = A.getTurnSpent();
-    if (turnSpent < A.total) return;
-    if (!Tt) {
-      Tt = true;
+  function enforceBudget() {
+    if (budget?.total == null || budget.total <= 0) return;
+    let used = budget.getTurnSpent();
+    if (used < budget.total) return;
+    if (!budgetWarned) {
+      budgetWarned = true;
       logEvent("tengu_workflow_budget_cap_exceeded", {
-        spent: turnSpent,
-        budget: A.total,
-        agentCount: G,
+        spent: used,
+        budget: budget.total,
+        agentCount,
       });
     }
-    throw new WorkflowBudgetExceededError(turnSpent, A.total);
+    throw new WorkflowBudgetExceededError(used, budget.total);
   }
-  let ks = 0;
-  let no;
-  let Ko = new Map();
-  let Y = {
+  let phaseSeq = 0;
+  let currentPhaseTitle;
+  let phases = new Map();
+  let agentContext = {
     ...context,
     options: {
       ...context.options,
@@ -524,96 +537,108 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
     setToolPermissionContext: () => {},
     setSessionToolPermissionContext: context.setSessionToolPermissionContext,
   };
-  function Rn(model) {
+  function resolveAgentModel(model) {
     if (model) return model;
     let workflowSubagentModel = getWorkflowSubagentModel();
     if (workflowSubagentModel !== undefined) return workflowSubagentModel;
     let defaultSubagentModel = getDefaultSubagentModel();
-    return defaultSubagentModel !== "inherit" ? defaultSubagentModel : Y.options.mainLoopModel;
+    return defaultSubagentModel !== "inherit" ? defaultSubagentModel : agentContext.options.mainLoopModel;
   }
-  function Go(U, kind) {
-    let Q = truncateMiddle(U);
-    let Le = Ko.get(Q);
-    if (Le == null) {
-      Le = {
-        index: ++ks,
+  function phaseEntryFor(title, kind) {
+    let truncatedTitle = truncateMiddle(title);
+    let entry = phases.get(truncatedTitle);
+    if (entry == null) {
+      entry = {
+        index: ++phaseSeq,
         kind,
         announced: false,
-        title: Q,
+        title: truncatedTitle,
       };
-      Ko.set(Q, Le);
+      phases.set(truncatedTitle, entry);
     }
-    return Le;
+    return entry;
   }
-  function ys(U, kind) {
-    return Go(U, kind).index;
+  function phaseIndexOf(title, kind) {
+    return phaseEntryFor(title, kind).index;
   }
-  function Mn(U) {
-    let ee = Go(U);
-    if (!ee.announced) {
-      ee.announced = true;
+  function announcePhase(title) {
+    let entry = phaseEntryFor(title);
+    if (!entry.announced) {
+      entry.announced = true;
       emitProgress({
         type: "progress",
-        toolUseID: `workflow_phase_${ee.index}`,
+        toolUseID: `workflow_phase_${entry.index}`,
         data: {
           type: "workflow_phase",
-          index: ee.index,
-          title: ee.title,
-          kind: ee.kind,
+          index: entry.index,
+          title: entry.title,
+          kind: entry.kind,
         },
       });
     }
-    return ee.index;
+    return entry.index;
   }
-  for (let U of y ?? []) Mn(U);
-  let phase = sealPrototype((U) => {
-    no = describeLogArg(U);
-    Mn(no);
+  for (let title of initialPhases ?? []) announcePhase(title);
+  let phase = sealPrototype((phase) => {
+    currentPhaseTitle = describeLogArg(phase);
+    announcePhase(currentPhaseTitle);
   });
-  let qo = env.CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS ?? DEFAULT_MAX_CONCURRENT_AGENTS;
+  let maxConcurrentAgents = env.CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS ?? DEFAULT_MAX_CONCURRENT_AGENTS;
   if (env.CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS !== undefined)
-    logForDebugging(`workflow: concurrent agent gate = ${qo} (CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS)`);
-  let Ss = limitConcurrency(qo, vs);
-  let _s = limitConcurrency(AGENT_CONCURRENCY_CEILING, As);
-  async function On({ idx, promptStr, label, ownPhaseTitle, ownPhaseIndex, opts, queuedAt, provenanceOn }) {
-    let toolPermissionContext = getToolPermissionContext(Y);
+    logForDebugging(
+      `workflow: concurrent agent gate = ${maxConcurrentAgents} (CLAUDE_CODE_WORKFLOW_MAX_CONCURRENT_AGENTS)`,
+    );
+  let agentGate = limitConcurrency(maxConcurrentAgents, queueEntry);
+  let ceilingGate = limitConcurrency(AGENT_CONCURRENCY_CEILING, runAgentTask);
+  async function reviewGateBlocks({
+    idx,
+    promptStr,
+    label,
+    ownPhaseTitle,
+    ownPhaseIndex,
+    opts,
+    queuedAt,
+    provenanceOn,
+  }) {
+    let toolPermissionContext = getToolPermissionContext(agentContext);
     if (toolPermissionContext.mode !== "auto") return false;
     let messages;
-    let ze;
+    let schemaJson;
     if (opts?.schema != null) {
-      let at = [];
-      let et = new Set();
-      let lt = MAX_SCHEMA_NODES_2;
-      let Be = 0;
+      let ancestors = [];
+      let seenObjs = new Set();
+      let nodeBudget = MAX_SCHEMA_NODES_2;
+      let charCount = 0;
       try {
-        let json = JSON.stringify(opts.schema, function (ve, Xe) {
-          if (--lt < 0) throw Error("output schema expansion exceeds the node budget");
-          let Ke = typeof Xe === "bigint" ? Xe.toString() : Xe;
-          Be += ve.length + (typeof Ke === "string" ? Ke.length : 0);
-          if (Be > MAX_UNREVIEWED_SCHEMA_CHARS) throw Error("output schema too large to classify");
-          if (Ke !== null && typeof Ke === "object") {
-            while (at.length > 0 && at.at(-1) !== this) et.delete(at.pop());
-            if (et.has(Ke)) return "[Circular]";
-            at.push(Ke);
-            et.add(Ke);
+        let json = JSON.stringify(opts.schema, function (replacerKey, replacerValue) {
+          if (--nodeBudget < 0) throw Error("output schema expansion exceeds the node budget");
+          let normalizedValue = typeof replacerValue === "bigint" ? replacerValue.toString() : replacerValue;
+          charCount +=
+            replacerKey.length + (typeof normalizedValue === "string" ? normalizedValue.length : 0);
+          if (charCount > MAX_UNREVIEWED_SCHEMA_CHARS) throw Error("output schema too large to classify");
+          if (normalizedValue !== null && typeof normalizedValue === "object") {
+            while (ancestors.length > 0 && ancestors.at(-1) !== this) seenObjs.delete(ancestors.pop());
+            if (seenObjs.has(normalizedValue)) return "[Circular]";
+            ancestors.push(normalizedValue);
+            seenObjs.add(normalizedValue);
           }
-          return Ke;
+          return normalizedValue;
         });
         if (json !== undefined && json.length > MAX_UNREVIEWED_SCHEMA_CHARS) {
-          Be = json.length;
+          charCount = json.length;
           throw Error("output schema too large to classify");
         }
         messages = json || undefined;
       } catch {
-        ze =
-          Be > MAX_UNREVIEWED_SCHEMA_CHARS
+        schemaJson =
+          charCount > MAX_UNREVIEWED_SCHEMA_CHARS
             ? "output schema too large for the safety classifier"
             : "output schema could not be serialized for the safety classifier";
       }
     }
-    let st = isSchemaTooLargeToSkipReview(messages);
-    if (provenanceOn && !st && ze === undefined) return false;
-    let ie = (reason) => {
+    let schemaTooLarge = isSchemaTooLargeToSkipReview(messages);
+    if (provenanceOn && !schemaTooLarge && schemaJson === undefined) return false;
+    let blockedResult = (reason) => {
       logEvent("tengu_auto_mode_decision", {
         decision: fromEnum("blocked"),
         toolName: fromEnum(TASK),
@@ -627,7 +652,7 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
       };
     };
     let reason =
-      ze ??
+      schemaJson ??
       (provenanceOn
         ? isClassifierSideCallRetired("workflow_schema")
           ? `output schema is over ${MAX_UNREVIEWED_SCHEMA_CHARS_2} characters, too large to pass unreviewed in auto mode, so this agent was not started; shorten the schema`
@@ -635,8 +660,8 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
         : isClassifierSideCallRetired("workflow_prompt")
           ? AUTO_MODE_CLASSIFIER_OFF_MESSAGE
           : undefined);
-    let Ce = reason
-      ? ie(reason)
+    let reviewResult = reason
+      ? blockedResult(reason)
       : await reviewWorkflowAgentDispatch({
           prompt: promptStr,
           schemaJson: messages,
@@ -646,21 +671,21 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
           parentTools: context.options.tools,
           rootToolSurface: context.rootToolSurface,
           toolPermissionContext,
-          abortSignal: Y.abortController.signal,
+          abortSignal: agentContext.abortController.signal,
           dispatchAgentId: context.agentId,
           storageV5: context.storageV5,
           credentials: context.credentials,
         }).catch((error) => {
-          if (!Y.abortController?.signal.aborted) logError(error);
-          if (!st || Y.abortController?.signal.aborted) return null;
-          return ie("classifier error; output schema too large to pass unreviewed");
+          if (!agentContext.abortController?.signal.aborted) logError(error);
+          if (!schemaTooLarge || agentContext.abortController?.signal.aborted) return null;
+          return blockedResult("classifier error; output schema too large to pass unreviewed");
         });
-    if (Y.abortController?.signal.aborted) throw Error("Workflow aborted");
-    if (!Ce) return false;
-    let ct = Ce.unreviewed
-      ? `[${label}] blocked: ${Ce.reason}`
-      : `[${label}] blocked by safety classifier: ${Ce.reason}`;
-    Ie(ct, {
+    if (agentContext.abortController?.signal.aborted) throw Error("Workflow aborted");
+    if (!reviewResult) return false;
+    let blockedMessage = reviewResult.unreviewed
+      ? `[${label}] blocked: ${reviewResult.reason}`
+      : `[${label}] blocked by safety classifier: ${reviewResult.reason}`;
+    logLine(blockedMessage, {
       log: false,
     });
     emitProgress({
@@ -675,10 +700,10 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
         agentType: opts?.agentType != null ? String(opts.agentType) : undefined,
         isolation:
           opts?.isolation === "worktree" || opts?.isolation === "remote" ? opts.isolation : undefined,
-        model: Rn(opts?.model),
+        model: resolveAgentModel(opts?.model),
         state: "error",
         blocked: true,
-        error: ct,
+        error: blockedMessage,
         queuedAt,
         promptPreview: previewAgentValue(promptStr),
         lastProgressAt: Date.now(),
@@ -687,44 +712,44 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
     return true;
   }
   let weakMap = new WeakMap();
-  let agent = sealPrototype(async (U, ee, Q, Le, Je) => {
-    let agentContext = context.agentContext;
-    let Te = Q instanceof AbortSignal ? Q : undefined;
-    let it = Je instanceof AbortSignal ? Je : undefined;
-    let Ne = se.getStore();
-    let Me = Ne ?? V;
-    let ze = Le instanceof WorkflowJournalStub || Ne === N;
-    let st;
-    if (ee !== null && typeof ee === "object" && !isUntrustedObject(ee)) {
-      let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(ee, "schema");
-      let He =
+  let agent = sealPrototype(async (optsInput, signalA, maybeAbortHandlers, thirdArg, maybeSignalB) => {
+    let agentContext_2 = context.agentContext;
+    let abortSignal = maybeAbortHandlers instanceof AbortSignal ? maybeAbortHandlers : undefined;
+    let secondSignal = maybeSignalB instanceof AbortSignal ? maybeSignalB : undefined;
+    let callKeyStore = callKeyStorage.getStore();
+    let callKeyState = callKeyStore ?? rootCallKey;
+    let suppressJournal = thirdArg instanceof WorkflowJournalStub || callKeyStore === frozenRootCallKey;
+    let schemaObj;
+    if (signalA !== null && typeof signalA === "object" && !isUntrustedObject(signalA)) {
+      let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(signalA, "schema");
+      let schemaDescriptor =
         ownPropertyDescriptor && "value" in ownPropertyDescriptor ? ownPropertyDescriptor.value : undefined;
-      if (He !== null && typeof He === "object") st = He;
+      if (schemaDescriptor !== null && typeof schemaDescriptor === "object") schemaObj = schemaDescriptor;
     }
-    let ie = hostCopy(S(ee));
-    if (ie && st !== undefined) {
-      let oe = weakMap.get(st);
-      if (oe === undefined) {
-        oe = hostCopy(S(st));
-        weakMap.set(st, oe);
+    let opts = hostCopy(hostCopyFn(signalA));
+    if (opts && schemaObj !== undefined) {
+      let cachedSchemaCopy = weakMap.get(schemaObj);
+      if (cachedSchemaCopy === undefined) {
+        cachedSchemaCopy = hostCopy(hostCopyFn(schemaObj));
+        weakMap.set(schemaObj, cachedSchemaCopy);
       }
-      ie.schema = oe;
+      opts.schema = cachedSchemaCopy;
     }
-    let St =
+    let forcedModelReason =
       getWorkflowSubagentModel() !== undefined
         ? "CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL is set"
         : env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE
           ? "CLAUDE_CODE_SUBAGENT_MODEL_FORCE is on"
           : undefined;
-    if (ie?.model !== undefined && St !== undefined) {
-      logForDebugging(`Workflow agent model "${ie.model}" ignored: ${St}`);
-      ie.model = undefined;
+    if (opts?.model !== undefined && forcedModelReason !== undefined) {
+      logForDebugging(`Workflow agent model "${opts.model}" ignored: ${forcedModelReason}`);
+      opts.model = undefined;
     }
-    if (Y.abortController?.signal.aborted) return new Promise(() => {});
+    if (agentContext.abortController?.signal.aborted) return new Promise(() => {});
     try {
-      Kt();
-      yn();
-      let disallowedTools = ie?.disallowedTools;
+      enforceAgentCap();
+      enforceBudget();
+      let disallowedTools = opts?.disallowedTools;
       if (disallowedTools !== undefined) {
         if (
           !Array.isArray(disallowedTools) ||
@@ -743,14 +768,17 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
               ". Refusing the spawn rather than running it un-narrowed.",
             "agent() opts.disallowedTools malformed \u2014 spawn refused",
           );
-        if (ie !== undefined)
-          ie.disallowedTools = disallowedTools.length === 0 ? undefined : uniq(disallowedTools).sort();
+        if (opts !== undefined)
+          opts.disallowedTools = disallowedTools.length === 0 ? undefined : uniq(disallowedTools).sort();
       }
-      let bashCommandClamp = ie?.bashCommandClamp;
+      let bashCommandClamp = opts?.bashCommandClamp;
       if (bashCommandClamp !== undefined) {
         if (
           !Array.isArray(bashCommandClamp) ||
-          bashCommandClamp.some((pt) => typeof pt !== "string" || pt === "" || pt !== pt.trim())
+          bashCommandClamp.some(
+            (clampEntry) =>
+              typeof clampEntry !== "string" || clampEntry === "" || clampEntry !== clampEntry.trim(),
+          )
         )
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             "agent() opts.bashCommandClamp must be an array of non-empty strings; got " +
@@ -760,9 +788,9 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
               ". Refusing the spawn rather than running it un-clamped.",
             "agent() bashCommandClamp malformed \u2014 spawn refused",
           );
-        let Qe = bashCommandClamp.length === 0 ? undefined : uniq(bashCommandClamp).sort();
-        for (let pt of Qe ?? []) {
-          let { toolName, ruleContent } = permissionRuleValueFromString(pt);
+        let clampRules = bashCommandClamp.length === 0 ? undefined : uniq(bashCommandClamp).sort();
+        for (let clampRule of clampRules ?? []) {
+          let { toolName, ruleContent } = permissionRuleValueFromString(clampRule);
           if (
             toolName !== BASH_TOOL_NAME ||
             ruleContent === undefined ||
@@ -770,7 +798,7 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
             ruleContent !== ruleContent.trim()
           )
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `agent() opts.bashCommandClamp entry '${pt}' must be a '${BASH_TOOL_NAME}(<command or prefix>)' permission rule (tool name case-sensitive, non-empty content with no leading/trailing whitespace inside the parens); it parses to tool '${toolName}'` +
+              `agent() opts.bashCommandClamp entry '${clampRule}' must be a '${BASH_TOOL_NAME}(<command or prefix>)' permission rule (tool name case-sensitive, non-empty content with no leading/trailing whitespace inside the parens); it parses to tool '${toolName}'` +
                 (ruleContent === undefined || ruleContent === ""
                   ? " with no rule content"
                   : ruleContent !== ruleContent.trim()
@@ -780,104 +808,125 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
               "agent() opts.bashCommandClamp inert entry \u2014 spawn refused",
             );
         }
-        if (ie !== undefined) ie.bashCommandClamp = Qe;
+        if (opts !== undefined) opts.bashCommandClamp = clampRules;
       }
     } catch (error) {
       await sleep(0);
       throw error;
     }
-    let Ce = ++G;
-    let ct = describeLogArg(U);
-    let at =
-      ie?.label != null
-        ? String(ie.label).replace(/\s+/g, " ").trim()
-        : We
-          ? `agent ${Ce}`
-          : truncateToLength(ct, 60).replace(/\s+/g, " ").trim();
-    let et = ie?.phase != null ? String(ie.phase) : no;
-    let lt = et != null ? Mn(et) : undefined;
-    let Be = ie?.stallMs != null ? Number(ie.stallMs) : getAsyncAgentStallTimeoutMs();
-    let promptPreview = previewAgentValue(ct);
-    let ve;
-    let Xe;
-    let Ke = false;
-    if (L && !ze) {
-      ve = agentCallKey(ct, ie, Me.prev);
-      Me.prev = ve;
-      let oe = q ? undefined : j?.results.get(ve);
-      if (oe !== undefined) {
-        if (j?.replaced.has(ve))
-          Me.prev = hashReplacedContent(ve, typeof oe.agentId === "string" ? oe.agentId : "");
-        if (oe.foreignArtifactContent) gt = true;
-        if (Array.isArray(oe.toolsUsed)) {
-          for (let pt of oe.toolsUsed)
-            if (typeof pt === "string")
-              $t.add(getConversationToolsUsed().has(pt) ? pt : UNREADABLE_TOOLS_USED_BEFORE_SUMMARY);
+    let agentIndex = ++agentCount;
+    let promptText = describeLogArg(optsInput);
+    let label =
+      opts?.label != null
+        ? String(opts.label).replace(/\s+/g, " ").trim()
+        : numberedLabels
+          ? `agent ${agentIndex}`
+          : truncateToLength(promptText, 60).replace(/\s+/g, " ").trim();
+    let phaseTitle = opts?.phase != null ? String(opts.phase) : currentPhaseTitle;
+    let phaseIndex = phaseTitle != null ? announcePhase(phaseTitle) : undefined;
+    let stallMs = opts?.stallMs != null ? Number(opts.stallMs) : getAsyncAgentStallTimeoutMs();
+    let promptPreview = previewAgentValue(promptText);
+    let callKey;
+    let agentId;
+    let respawnHint = false;
+    if (journal && !suppressJournal) {
+      callKey = agentCallKey(promptText, opts, callKeyState.prev);
+      callKeyState.prev = callKey;
+      let cachedResult = journalHitSeen ? undefined : resumeCache?.results.get(callKey);
+      if (cachedResult !== undefined) {
+        if (resumeCache?.replaced.has(callKey))
+          callKeyState.prev = hashReplacedContent(
+            callKey,
+            typeof cachedResult.agentId === "string" ? cachedResult.agentId : "",
+          );
+        if (cachedResult.foreignArtifactContent) foreignArtifactSeen = true;
+        if (Array.isArray(cachedResult.toolsUsed)) {
+          for (let toolName of cachedResult.toolsUsed)
+            if (typeof toolName === "string")
+              usedConversationTools.add(
+                getConversationToolsUsed().has(toolName) ? toolName : UNREADABLE_TOOLS_USED_BEFORE_SUMMARY,
+              );
         }
         emitProgress({
           type: "progress",
-          toolUseID: `workflow_agent_${Ce}_cached`,
+          toolUseID: `workflow_agent_${agentIndex}_cached`,
           data: {
             type: "workflow_agent",
-            index: Ce,
-            label: at,
-            phaseIndex: lt,
-            phaseTitle: et,
-            agentId: oe.agentId,
-            model: Rn(ie?.model),
+            index: agentIndex,
+            label,
+            phaseIndex,
+            phaseTitle,
+            agentId: cachedResult.agentId,
+            model: resolveAgentModel(opts?.model),
             state: "done",
             startedAt: Date.now(),
             lastProgressAt: Date.now(),
             cached: true,
-            resultPreview: previewAgentValue(oe.result),
+            resultPreview: previewAgentValue(cachedResult.result),
             promptPreview,
           },
         });
-        return s(oe.result);
+        return copyValue(cachedResult.result);
       }
-      let He = j?.started.get(ve);
-      if (!(!q && He !== undefined && He.length > 0 && !j?.failed.has(ve) && !j?.demoted.has(ve))) q = true;
-      Ke = j !== undefined && (j.results.has(ve) || j.demoted.has(ve) || j.failed.has(ve));
-      if (He && He.length > 0)
+      let startedAttempts = resumeCache?.started.get(callKey);
+      if (!(
+        !journalHitSeen &&
+        startedAttempts !== undefined &&
+        startedAttempts.length > 0 &&
+        !resumeCache?.failed.has(callKey) &&
+        !resumeCache?.demoted.has(callKey)
+      ))
+        journalHitSeen = true;
+      respawnHint =
+        resumeCache !== undefined &&
+        (resumeCache.results.has(callKey) ||
+          resumeCache.demoted.has(callKey) ||
+          resumeCache.failed.has(callKey));
+      if (startedAttempts && startedAttempts.length > 0)
         logEvent("tengu_workflow_journal_started_hit_respawn", {
-          attempts: He.length,
+          attempts: startedAttempts.length,
         });
     }
-    let cn = false;
-    let nn = (oe) => {
-      cn = true;
-      Xe = oe;
-      if (!L || ve === undefined) return;
-      L.append({
-        type: "started",
-        key: ve,
-        agentId: oe,
-        ...truncateProgressFields(at, et),
-      }).catch((error) =>
-        logForDebugging(`workflow journal started-append failed: ${error}`, {
-          level: "warn",
-        }),
-      );
+    let started = false;
+    let onAgentStarted = (newAgentId) => {
+      started = true;
+      agentId = newAgentId;
+      if (!journal || callKey === undefined) return;
+      journal
+        .append({
+          type: "started",
+          key: callKey,
+          agentId: newAgentId,
+          ...truncateProgressFields(label, phaseTitle),
+        })
+        .catch((error) =>
+          logForDebugging(`workflow journal started-append failed: ${error}`, {
+            level: "warn",
+          }),
+        );
     };
-    let At = async () => {
-      if (!L || !ve || Y.abortController?.signal.aborted || it?.aborted) return;
-      await L.append({
-        type: "failed",
-        key: ve,
-        agentId: Xe ?? "",
-      }).catch((error) =>
-        logForDebugging(`workflow journal failed-append failed: ${error}`, {
-          level: "warn",
-        }),
-      );
+    let markFailed = async () => {
+      if (!journal || !callKey || agentContext.abortController?.signal.aborted || secondSignal?.aborted)
+        return;
+      await journal
+        .append({
+          type: "failed",
+          key: callKey,
+          agentId: agentId ?? "",
+        })
+        .catch((error) =>
+          logForDebugging(`workflow journal failed-append failed: ${error}`, {
+            level: "warn",
+          }),
+        );
     };
-    let Bt = async (oe) => {
-      if (oe === null) await At();
-      if (L && ve && oe !== null) {
-        let result = oe;
+    let finishAgent = async (result) => {
+      if (result === null) await markFailed();
+      if (journal && callKey && result !== null) {
+        let result_2 = result;
         if (flagWithOverride)
           try {
-            result = hostCopy(S(oe));
+            result_2 = hostCopy(hostCopyFn(result));
           } catch (error) {
             logForDebugging(
               `workflow journal: did not save an agent() result, so a resumed run will re-run from this call: ${describeThrownValue(error).msg}`,
@@ -885,65 +934,69 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
                 level: "warn",
               },
             );
-            await At();
-            return oe;
+            await markFailed();
+            return result;
           }
-        else if (typeof oe === "object") {
-          await At();
-          return oe;
+        else if (typeof result === "object") {
+          await markFailed();
+          return result;
         }
-        await L.append({
-          type: "result",
-          key: ve,
-          agentId: Xe ?? "",
-          result,
-          ...(gt && {
-            foreignArtifactContent: true,
-          }),
-          ...(kt(Xe).length > 0 && {
-            toolsUsed: kt(Xe),
-          }),
-        }).catch((error) =>
-          logForDebugging(`workflow journal result-append failed: ${error}`, {
-            level: "warn",
-          }),
-        );
-        if (Ke && Me.prev === ve) Me.prev = hashReplacedContent(ve, Xe ?? "");
+        await journal
+          .append({
+            type: "result",
+            key: callKey,
+            agentId: agentId ?? "",
+            result: result_2,
+            ...(foreignArtifactSeen && {
+              foreignArtifactContent: true,
+            }),
+            ...(toolsUsedFor(agentId).length > 0 && {
+              toolsUsed: toolsUsedFor(agentId),
+            }),
+          })
+          .catch((error) =>
+            logForDebugging(`workflow journal result-append failed: ${error}`, {
+              level: "warn",
+            }),
+          );
+        if (respawnHint && callKeyState.prev === callKey)
+          callKeyState.prev = hashReplacedContent(callKey, agentId ?? "");
       }
-      return oe;
+      return result;
     };
     let now = Date.now();
-    let Gt = () =>
+    let emitQueued = () =>
       emitProgress({
         type: "progress",
-        toolUseID: `workflow_agent_${Ce}_queued`,
+        toolUseID: `workflow_agent_${agentIndex}_queued`,
         data: {
           type: "workflow_agent",
-          index: Ce,
-          label: at,
-          phaseIndex: lt,
-          phaseTitle: et,
-          agentType: ie?.agentType != null ? String(ie.agentType) : undefined,
-          isolation: ie?.isolation === "worktree" || ie?.isolation === "remote" ? ie.isolation : undefined,
-          model: Rn(ie?.model),
+          index: agentIndex,
+          label,
+          phaseIndex,
+          phaseTitle,
+          agentType: opts?.agentType != null ? String(opts.agentType) : undefined,
+          isolation:
+            opts?.isolation === "worktree" || opts?.isolation === "remote" ? opts.isolation : undefined,
+          model: resolveAgentModel(opts?.model),
           state: "start",
           queuedAt: now,
           promptPreview,
           lastProgressAt: now,
         },
       });
-    let Vt = (error) => {
-      if (cn || Y.abortController?.signal.aborted) return;
+    let onQueuedAbort = (error) => {
+      if (started || agentContext.abortController?.signal.aborted) return;
       emitProgress({
         type: "progress",
-        toolUseID: `workflow_agent_${Ce}_queued`,
+        toolUseID: `workflow_agent_${agentIndex}_queued`,
         data: {
           type: "workflow_agent",
-          index: Ce,
-          label: at,
-          phaseIndex: lt,
-          phaseTitle: et,
-          model: Rn(ie?.model),
+          index: agentIndex,
+          label,
+          phaseIndex,
+          phaseTitle,
+          model: resolveAgentModel(opts?.model),
           state: "error",
           error: error instanceof Error ? error.message : String(error),
           queuedAt: now,
@@ -952,132 +1005,164 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
         },
       });
     };
-    if (ie?.isolation === "remote") throw Error("agent({isolation:'remote'}) is not available in this build");
-    Gt();
+    if (opts?.isolation === "remote")
+      throw Error("agent({isolation:'remote'}) is not available in this build");
+    emitQueued();
     try {
-      return await Bt(await Ss(Ce, ct, at, et, lt, Be, ie, nn, now, agentContext, Te));
+      return await finishAgent(
+        await agentGate(
+          agentIndex,
+          promptText,
+          label,
+          phaseTitle,
+          phaseIndex,
+          stallMs,
+          opts,
+          onAgentStarted,
+          now,
+          agentContext_2,
+          abortSignal,
+        ),
+      );
     } catch (error) {
-      Vt(error);
-      await At();
-      if (Y.abortController?.signal.aborted) return new Promise(() => {});
+      onQueuedAbort(error);
+      await markFailed();
+      if (agentContext.abortController?.signal.aborted) return new Promise(() => {});
       throw error;
     }
   });
-  async function Zo({ idx, promptStr, label, agent, model, permissionMode, evalSignal }) {
-    let agentContext = context.agentContext;
-    let Ne = typeof model === "string" ? model : undefined;
-    let Me = await runAgentSpawnHooks(
+  async function spawnAgentWithHooks({ idx, promptStr, label, agent, model, permissionMode, evalSignal }) {
+    let agentContext_2 = context.agentContext;
+    let modelOverrideArg = typeof model === "string" ? model : undefined;
+    let spawnHookResult = await runAgentSpawnHooks(
       {
         tool_use_id: context.toolUseId ?? "",
-        prompt: We ? "(withheld: this workflow run does not share its script)" : promptStr,
+        prompt: numberedLabels ? "(withheld: this workflow run does not share its script)" : promptStr,
         description: label,
         agent,
         agents: [],
-        model: Ne,
-        parentModel: getMainLoopModel_2(Y),
-        parentAgentId: isMainAgent(agentContext) ? undefined : agentContext?.agentId,
+        model: modelOverrideArg,
+        parentModel: getMainLoopModel_2(agentContext),
+        parentAgentId: isMainAgent(agentContext_2) ? undefined : agentContext_2?.agentId,
         permissionMode,
         background: false,
         fork: false,
         name: undefined,
         cwd: undefined,
         workflow: Object.freeze({
-          runId: h ?? "",
+          runId: toolUseId ?? "",
           agentIndex: idx,
         }),
-        signal: AbortSignal.any([Y.abortController?.signal, evalSignal].filter((st) => st !== undefined)),
-        origin: Y.hookOrigin,
+        signal: AbortSignal.any(
+          [agentContext.abortController?.signal, evalSignal].filter((signal) => signal !== undefined),
+        ),
+        origin: agentContext.hookOrigin,
       },
       eventCallersFor,
     ).catch((error) => {
       if (evalSignal?.aborted) return;
       throw error;
     });
-    let ze = Y.abortController?.signal.aborted === true;
-    if (ze || Me === undefined || evalSignal?.aborted) {
-      Me?.starting?.[Symbol.dispose]();
-      if (ze) throw Error("Workflow aborted");
+    let aborted = agentContext.abortController?.signal.aborted === true;
+    if (aborted || spawnHookResult === undefined || evalSignal?.aborted) {
+      spawnHookResult?.starting?.[Symbol.dispose]();
+      if (aborted) throw Error("Workflow aborted");
       return null;
     }
-    if (Me.deny !== undefined) {
-      if (!Wt) {
-        Wt = true;
+    if (spawnHookResult.deny !== undefined) {
+      if (!limitWaitersWarned) {
+        limitWaitersWarned = true;
         logFeatureBad("subagent_launch", "workflow_spawn_denied_by_hook");
       }
       await sleep(0);
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Workflow agent spawn denied by a plugin: ${Me.deny}`,
+        `Workflow agent spawn denied by a plugin: ${spawnHookResult.deny}`,
         "Workflow agent spawn denied by a plugin",
       );
     }
     return {
-      starting: Me.starting,
-      prompt: We ? promptStr : Me.spawn.prompt,
-      model: Me.spawn.model === Ne || env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE ? model : Me.spawn.model,
-      isRewritten: Me.isRewritten,
+      starting: spawnHookResult.starting,
+      prompt: numberedLabels ? promptStr : spawnHookResult.spawn.prompt,
+      model:
+        spawnHookResult.spawn.model === modelOverrideArg || env.CLAUDE_CODE_SUBAGENT_MODEL_FORCE
+          ? model
+          : spawnHookResult.spawn.model,
+      isRewritten: spawnHookResult.isRewritten,
     };
   }
-  async function vs(U, ee, Q, Le, Je, Re, Te, it, queuedAt, Me, ze) {
-    await tn.whenClear();
-    if (Y.abortController?.signal.aborted) throw Error("Workflow aborted");
-    if (ze?.aborted) return null;
-    let st = truncateProgressFields(Q, Le);
-    yn();
-    let ie = isPromptProvenanceEnabled();
+  async function queueEntry(
+    idx,
+    promptStr,
+    label,
+    ownPhaseTitle,
+    ownPhaseIndex,
+    opts,
+    queuedAt,
+    provenanceOn,
+    queuedAt_2,
+    gate,
+    slot,
+  ) {
+    await limitWaiter.whenClear();
+    if (agentContext.abortController?.signal.aborted) throw Error("Workflow aborted");
+    if (slot?.aborted) return null;
+    let progressFields = truncateProgressFields(label, ownPhaseTitle);
+    enforceBudget();
+    let provenanceEnabled = isPromptProvenanceEnabled();
     if (
-      await On({
-        idx: U,
-        promptStr: ee,
-        label: Q,
-        ownPhaseTitle: Le,
-        ownPhaseIndex: Je,
-        opts: Te,
-        queuedAt,
-        provenanceOn: ie,
+      await reviewGateBlocks({
+        idx,
+        promptStr,
+        label,
+        ownPhaseTitle,
+        ownPhaseIndex,
+        opts: queuedAt,
+        queuedAt: queuedAt_2,
+        provenanceOn: provenanceEnabled,
       })
     )
       return null;
-    let St;
-    if (Te?.agentType != null) {
-      let R = String(Te.agentType);
-      let activeAgents = Y.options.agentDefinitions.activeAgents;
-      let toolPermissionContext = getToolPermissionContext(Y);
-      let ge = await filterDispatchableAgents(activeAgents, toolPermissionContext, AGENT);
-      let found = ge.find((Ae) => Ae.agentType === R);
-      if (!found) {
-        let found = activeAgents.find((activeAgent) => activeAgent.agentType === R);
-        let nt = found ? findDenyRuleWithContent(toolPermissionContext, AGENT, R) : null;
-        if (nt)
+    let requestedAgentType;
+    if (queuedAt?.agentType != null) {
+      let agentType = String(queuedAt.agentType);
+      let activeAgents = agentContext.options.agentDefinitions.activeAgents;
+      let toolPermissionContext = getToolPermissionContext(agentContext);
+      let dispatchable = await filterDispatchableAgents(activeAgents, toolPermissionContext, AGENT);
+      let agent = dispatchable.find((agent) => agent.agentType === agentType);
+      if (!agent) {
+        let agent = activeAgents.find((activeAgent) => activeAgent.agentType === agentType);
+        let denyRule = agent ? findDenyRuleWithContent(toolPermissionContext, AGENT, agentType) : null;
+        if (denyRule)
           throw Error(
-            `agent({agentType}): '${R}' is denied by permission rule '${AGENT}(${R})' from ${nt.source}.`,
+            `agent({agentType}): '${agentType}' is denied by permission rule '${AGENT}(${agentType})' from ${denyRule.source}.`,
           );
-        if (found && isAgentToolPoolDenied(found, toolPermissionContext))
+        if (agent && isAgentToolPoolDenied(agent, toolPermissionContext))
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `agent({agentType}): ${agentToolPoolDeniedMessage(R)}`,
+            `agent({agentType}): ${agentToolPoolDeniedMessage(agentType)}`,
             "workflow agent(): agent type unavailable, tool pool denied",
           );
         throw Error(
-          `agent({agentType}): agent type '${R}' not found. Available agents: ${ge.map((yt) => yt.agentType).join(", ")}`,
+          `agent({agentType}): agent type '${agentType}' not found. Available agents: ${dispatchable.map((type) => type.agentType).join(", ")}`,
         );
       }
       let disallowedTools = [
-        ...(found.disallowedTools ?? []),
+        ...(agent.disallowedTools ?? []),
         ...(WORKFLOW_SUBAGENT_DEFINITION.disallowedTools ?? []),
       ];
-      let Ze = Te.schema ? WORKFLOW_STRUCTURED_OUTPUT_NOTE : WORKFLOW_SUBAGENT_VERBATIM_NOTE;
+      let schemaNote = queuedAt.schema ? WORKFLOW_STRUCTURED_OUTPUT_NOTE : WORKFLOW_SUBAGENT_VERBATIM_NOTE;
       let tools =
-        Te.schema && !parseWildcardAgentTypes(found.tools)
-          ? [...(found.tools ?? []), STRUCTUREDOUTPUT]
-          : found.tools;
-      St = {
-        ...withSystemPromptSuffix(found, Ze),
+        queuedAt.schema && !parseWildcardAgentTypes(agent.tools)
+          ? [...(agent.tools ?? []), STRUCTUREDOUTPUT]
+          : agent.tools;
+      requestedAgentType = {
+        ...withSystemPromptSuffix(agent, schemaNote),
         disallowedTools,
         tools,
       };
     }
-    let Ce;
-    if (Te?.schema) {
-      let syntheticOutputTool = createSyntheticOutputTool(Te.schema);
+    let syntheticOutput;
+    if (queuedAt?.schema) {
+      let syntheticOutputTool = createSyntheticOutputTool(queuedAt.schema);
       if ("error" in syntheticOutputTool || syntheticOutputTool.unsatisfiable) await sleep(0);
       if ("error" in syntheticOutputTool)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1085,11 +1170,11 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
           "Workflow agent({schema}) invalid JSON Schema",
         );
       if (syntheticOutputTool.unsatisfiable) {
-        let Pe = `agent({schema}) received an unusable JSON Schema \u2014 ${checkSchemaSatisfiable(syntheticOutputTool.unsatisfiable)}`;
+        let schemaProblem = `agent({schema}) received an unusable JSON Schema \u2014 ${checkSchemaSatisfiable(syntheticOutputTool.unsatisfiable)}`;
         let { message } = syntheticOutputTool.unsatisfiable;
         if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_workflow_schema_lint_enforce", true))
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `${Pe}: ${message}. The subagent was not started \u2014 fix the schema and call agent() again.`,
+            `${schemaProblem}: ${message}. The subagent was not started \u2014 fix the schema and call agent() again.`,
             "Workflow agent({schema}) unsatisfiable JSON Schema",
           );
         if (!weakSet.has(syntheticOutputTool)) {
@@ -1099,31 +1184,35 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
             toolUseID: "workflow_log",
             data: {
               type: "workflow_log",
-              message: `[${Q}] warning: ${Pe}: ${message}`,
+              message: `[${label}] warning: ${schemaProblem}: ${message}`,
             },
           });
         }
       }
-      Ce = syntheticOutputTool.tool;
+      syntheticOutput = syntheticOutputTool.tool;
     }
-    let ct = St ?? (Ce ? WORKFLOW_STRUCTURED_SUBAGENT_DEFINITION : WORKFLOW_SUBAGENT_DEFINITION);
-    let at = parseEffortValue(Te?.effort) ?? getDefaultSubagentEffort(ct, Y.permissionLayers);
-    let et =
-      at !== undefined
+    let agentOpts =
+      requestedAgentType ??
+      (syntheticOutput ? WORKFLOW_STRUCTURED_SUBAGENT_DEFINITION : WORKFLOW_SUBAGENT_DEFINITION);
+    let effort =
+      parseEffortValue(queuedAt?.effort) ??
+      getDefaultSubagentEffort(agentOpts, agentContext.permissionLayers);
+    let agentOptsWithEffort =
+      effort !== undefined
         ? {
-            ...ct,
-            effort: at,
+            ...agentOpts,
+            effort,
           }
-        : ct;
-    let disallowedTools = Te?.disallowedTools;
-    let bashCommandClamp = Te?.bashCommandClamp;
-    let ve =
+        : agentOpts;
+    let disallowedTools = queuedAt?.disallowedTools;
+    let bashCommandClamp = queuedAt?.bashCommandClamp;
+    let mcpServers =
       (disallowedTools !== undefined && disallowedTools.length > 0) ||
       (bashCommandClamp !== undefined && bashCommandClamp.length > 0)
         ? {
-            ...et,
+            ...agentOptsWithEffort,
             disallowedTools: [
-              ...(et.disallowedTools ?? []),
+              ...(agentOptsWithEffort.disallowedTools ?? []),
               ...(disallowedTools ?? []),
               REPL_TOOL_NAME,
               ...(bashCommandClamp !== undefined && bashCommandClamp.length > 0
@@ -1131,54 +1220,64 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
                 : []),
             ],
           }
-        : et;
-    await waitForCoordinatorSubagentMcpServers(() => Y.getAppState().mcp);
-    let appState = Y.getAppState();
-    let toolPermissionContext = getToolPermissionContext(Y);
-    let filtered = Y.options.tools.filter(isMcpTool);
-    let nn = Y.options.toolCatalog.assembleToolPool(
+        : agentOptsWithEffort;
+    await waitForCoordinatorSubagentMcpServers(() => agentContext.getAppState().mcp);
+    let appState = agentContext.getAppState();
+    let toolPermissionContext = getToolPermissionContext(agentContext);
+    let filtered = agentContext.options.tools.filter(isMcpTool);
+    let toolPool = agentContext.options.toolCatalog.assembleToolPool(
       toolPermissionContext,
       excludeCoordinatorCommsMcpTools(appState.mcp.tools.concat(filtered)),
       {
         skipReplFilter: true,
-        machineMcpTools: bridgeToolsOf(Y),
+        machineMcpTools: bridgeToolsOf(agentContext),
       },
     );
-    let At = (R) =>
-      resolveAgentTools(ve, R, false, false, false, getAgentDepth(Me) + 1, memoryModeForSession(Y).mode);
-    let Bt = (R) => {
+    let deniedToolNames = (name) =>
+      resolveAgentTools(
+        mcpServers,
+        name,
+        false,
+        false,
+        false,
+        getAgentDepth(gate) + 1,
+        memoryModeForSession(agentContext).mode,
+      );
+    let removeDenied = (deniedName) => {
       let filtered = filterToolsByDenyRules(
         [GlobTool, GrepTool, ...enabledToolsForAliases([GrepTool.name, GlobTool.name])],
         toolPermissionContext,
-      ).filter((we) => !R.some((ge) => toolMatchesName(ge, we.name)));
-      return filtered.length > 0 ? [...R, ...filtered] : R;
+      ).filter((tool) => !deniedName.some((deniedName) => toolMatchesName(deniedName, tool.name)));
+      return filtered.length > 0 ? [...deniedName, ...filtered] : deniedName;
     };
-    let dt = nn;
+    let filteredPool = toolPool;
     if (disallowedTools !== undefined && disallowedTools.length > 0) {
       if (
         hasEmbeddedSearchTools() &&
-        !At(dt).resolvedTools.some((resolvedTool) => toolMatchesName(resolvedTool, BASH_TOOL_NAME))
+        !deniedToolNames(filteredPool).resolvedTools.some((resolvedTool) =>
+          toolMatchesName(resolvedTool, BASH_TOOL_NAME),
+        )
       )
-        dt = Bt(dt);
-      let R = flattenToolNameList(ve.mcpServers);
-      let Pe = (we) => {
-        if (we.length === 0) return;
-        let ge = `mcp__${we}`;
-        let pe = probeAgentToolPool(ge, dt, R);
-        if (pe === null) return;
-        switch (pe.kind) {
+        filteredPool = removeDenied(filteredPool);
+      let mcpNames = flattenToolNameList(mcpServers.mcpServers);
+      let probeServer = (serverName) => {
+        if (serverName.length === 0) return;
+        let mcpToolName = `mcp__${serverName}`;
+        let probeResult = probeAgentToolPool(mcpToolName, filteredPool, mcpNames);
+        if (probeResult === null) return;
+        switch (probeResult.kind) {
           case "pool-server":
           case "declared-server":
-            return ge;
+            return mcpToolName;
           case "slip":
-            return pe.correctedSpelling;
+            return probeResult.correctedSpelling;
           case "unmatched":
             return;
         }
       };
       for (let disallowedTool of disallowedTools) {
         let disallowedToolsFilter = buildDisallowedToolsFilter([disallowedTool]);
-        if (dt.some((Ae) => disallowedToolsFilter.isToolDisallowed(Ae))) continue;
+        if (filteredPool.some((tool) => disallowedToolsFilter.isToolDisallowed(tool))) continue;
         let { toolName } = permissionRuleValueFromString(disallowedTool);
         if (toolName !== toolName.trim() || /[\s()]/.test(toolName.trim())) {
           await sleep(0);
@@ -1189,8 +1288,8 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
           );
         }
         {
-          let Ae = /^mcp__/i.test(toolName) ? mcpInfoFromString(`mcp__${toolName.slice(5)}`) : null;
-          if (/^mcp__/i.test(toolName) && Ae === null) {
+          let mcpInfo = /^mcp__/i.test(toolName) ? mcpInfoFromString(`mcp__${toolName.slice(5)}`) : null;
+          if (/^mcp__/i.test(toolName) && mcpInfo === null) {
             await sleep(0);
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               `agent() opts.disallowedTools entry '${disallowedTool}' cannot match ` +
@@ -1199,25 +1298,30 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
               "agent() opts.disallowedTools empty mcp server segment \u2014 spawn refused",
             );
           }
-          if (Ae !== null && Ae.serverName.includes("*") && Ae.serverName !== "*") {
-            let nt = Pe(Ae.serverName.replace(/\*+/g, ""));
+          if (mcpInfo !== null && mcpInfo.serverName.includes("*") && mcpInfo.serverName !== "*") {
+            let probe = probeServer(mcpInfo.serverName.replace(/\*+/g, ""));
             await sleep(0);
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               `agent() opts.disallowedTools entry '${disallowedTool}' cannot match ` +
                 "any tool \u2014 server names take no wildcard. Use " +
-                (nt !== undefined ? `'${nt}' for that server's tools, or ` : "") +
+                (probe !== undefined ? `'${probe}' for that server's tools, or ` : "") +
                 "'mcp__*' for every MCP server's tools. Refusing the spawn rather than running it un-narrowed.",
               "agent() opts.disallowedTools wildcard mcp server \u2014 spawn refused",
             );
           }
-          if (Ae !== null && Ae.toolName !== undefined && Ae.toolName !== "*" && Ae.toolName.includes("*")) {
-            let nt = Pe(Ae.serverName);
+          if (
+            mcpInfo !== null &&
+            mcpInfo.toolName !== undefined &&
+            mcpInfo.toolName !== "*" &&
+            mcpInfo.toolName.includes("*")
+          ) {
+            let probe = probeServer(mcpInfo.serverName);
             await sleep(0);
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               `agent() opts.disallowedTools entry '${disallowedTool}' cannot match ` +
                 "any tool \u2014 tool names take no wildcard. " +
-                (nt !== undefined
-                  ? `Use '${nt}' to deny all of that server's tools, or enumerate exact tool names. `
+                (probe !== undefined
+                  ? `Use '${probe}' to deny all of that server's tools, or enumerate exact tool names. `
                   : "Enumerate exact tool names, or use 'mcp__*' to deny every MCP server's tools. ") +
                 "Refusing the spawn rather than running it un-narrowed.",
               "agent() opts.disallowedTools wildcard mcp tool \u2014 spawn refused",
@@ -1238,44 +1342,50 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
           );
         }
         if (toolName === SKILL) continue;
-        if (Ce !== undefined && toolName === STRUCTUREDOUTPUT) continue;
+        if (syntheticOutput !== undefined && toolName === STRUCTUREDOUTPUT) continue;
         let lower = toolName.toLowerCase();
-        let Ze =
-          dt
-            .flatMap((Ae) => [Ae.name, getToolNameForPermissionCheck(Ae)])
-            .find((Ae) => Ae.toLowerCase() === lower) ??
+        let toolNames =
+          filteredPool
+            .flatMap((tool) => [tool.name, getToolNameForPermissionCheck(tool)])
+            .find((tool) => tool.toLowerCase() === lower) ??
           (lower === SKILL.toLowerCase() ? SKILL : undefined) ??
-          (Ce !== undefined && lower === STRUCTUREDOUTPUT.toLowerCase() ? STRUCTUREDOUTPUT : undefined);
-        let qe = probeAgentToolPool(toolName, dt, R);
-        if (qe?.kind === "declared-server") {
-          let Ae = mcpInfoFromString(toolName);
-          if (!(!qe.verifiable && Ze !== undefined && mcpInfoFromString(Ze)?.serverName === Ae?.serverName)) {
+          (syntheticOutput !== undefined && lower === STRUCTUREDOUTPUT.toLowerCase()
+            ? STRUCTUREDOUTPUT
+            : undefined);
+        let probeResult = probeAgentToolPool(toolName, filteredPool, mcpNames);
+        if (probeResult?.kind === "declared-server") {
+          let mcpInfo = mcpInfoFromString(toolName);
+          if (!(
+            !probeResult.verifiable &&
+            toolNames !== undefined &&
+            mcpInfoFromString(toolNames)?.serverName === mcpInfo?.serverName
+          )) {
             logForDebugging(
-              `workflow agent(): disallowedTools mcp entry '${toolName}' covers this agent's declared frontmatter MCP server '${qe.declaredSpelling}' \u2014 those tools connect at ` +
+              `workflow agent(): disallowedTools mcp entry '${toolName}' covers this agent's declared frontmatter MCP server '${probeResult.declaredSpelling}' \u2014 those tools connect at ` +
                 "spawn, after this check, and the deny is applied to them then" +
-                (qe.verifiable ? "" : " (a full tool-name entry cannot be verified here)"),
+                (probeResult.verifiable ? "" : " (a full tool-name entry cannot be verified here)"),
             );
             continue;
           }
         }
-        if (Ze !== undefined) {
+        if (toolNames !== undefined) {
           await sleep(0);
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             `agent() opts.disallowedTools entry '${disallowedTool}'` +
               (toolName !== disallowedTool ? ` (parsed tool name '${toolName}')` : "") +
-              ` does not match any tool, but '${Ze}' exists \u2014 ` +
+              ` does not match any tool, but '${toolNames}' exists \u2014 ` +
               "tool names are case-sensitive. Refusing the spawn rather than running it with this deny silently dropped.",
             "agent() opts.disallowedTools case-mismatched entry \u2014 spawn refused",
           );
         }
-        if (qe !== null) {
-          if (qe.kind === "pool-server") continue;
-          if (qe.kind === "slip") {
+        if (probeResult !== null) {
+          if (probeResult.kind === "pool-server") continue;
+          if (probeResult.kind === "slip") {
             await sleep(0);
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               `agent() opts.disallowedTools entry '${disallowedTool}'` +
                 (toolName !== disallowedTool ? ` (parsed tool name '${toolName}')` : "") +
-                ` cannot match as written, but '${qe.correctedSpelling}' would \u2014 deny entries ` +
+                ` cannot match as written, but '${probeResult.correctedSpelling}' would \u2014 deny entries ` +
                 "must match the normalized server spelling exactly, mcp__ prefix and case included. Refusing the spawn rather than running it with this deny silently dropped.",
               "agent() opts.disallowedTools mismatched mcp entry \u2014 spawn refused",
             );
@@ -1293,7 +1403,10 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
         );
       }
     }
-    if (Ce !== undefined && buildDisallowedToolsFilter(ve.disallowedTools).isToolDisallowed(Ce)) {
+    if (
+      syntheticOutput !== undefined &&
+      buildDisallowedToolsFilter(mcpServers.disallowedTools).isToolDisallowed(syntheticOutput)
+    ) {
       await sleep(0);
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `agent() schema mode needs the ${STRUCTUREDOUTPUT} tool, ` +
@@ -1303,12 +1416,12 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
       );
     }
     if (bashCommandClamp !== undefined && bashCommandClamp.length > 0 && hasEmbeddedSearchTools())
-      dt = Bt(dt);
+      filteredPool = removeDenied(filteredPool);
     if (bashCommandClamp !== undefined && bashCommandClamp.length > 0) {
-      let toolAliases = getToolPermissionContext(Y).toolAliases;
-      let toolAliases_2 = Y.options.toolAliases;
+      let toolAliases = getToolPermissionContext(agentContext).toolAliases;
+      let toolAliases_2 = agentContext.options.toolAliases;
       let found = [BASH_TOOL_NAME, MONITOR, POWERSHELL_TOOL_NAME].find(
-        (ge) => toolAliases?.[ge] !== undefined || toolAliases_2?.[ge] !== undefined,
+        (aliasKey) => toolAliases?.[aliasKey] !== undefined || toolAliases_2?.[aliasKey] !== undefined,
       );
       if (found !== undefined) {
         await sleep(0);
@@ -1323,7 +1436,9 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
     if (
       bashCommandClamp !== undefined &&
       bashCommandClamp.length > 0 &&
-      !At(dt).resolvedTools.some((resolvedTool) => toolMatchesName(resolvedTool, BASH_TOOL_NAME))
+      !deniedToolNames(filteredPool).resolvedTools.some((resolvedTool) =>
+        toolMatchesName(resolvedTool, BASH_TOOL_NAME),
+      )
     ) {
       await sleep(0);
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -1333,183 +1448,193 @@ ${relayedWorkflowPreamble(true).trimEnd()}`
         "agent() bashCommandClamp with no Bash in resolved pool \u2014 spawn refused",
       );
     }
-    let Gt = dt;
-    let Vt = Ce ? [...Gt.filter((R) => !toolMatchesName(R, STRUCTUREDOUTPUT)), Ce] : Gt;
-    let oe = await Zo({
-      idx: U,
-      promptStr: ee,
-      label: Q,
-      agent: ve,
-      model: Te?.model,
+    let agentTools = filteredPool;
+    let structuredOutputTool = syntheticOutput
+      ? [...agentTools.filter((tool) => !toolMatchesName(tool, STRUCTUREDOUTPUT)), syntheticOutput]
+      : agentTools;
+    let spawnResult = await spawnAgentWithHooks({
+      idx,
+      promptStr,
+      label,
+      agent: mcpServers,
+      model: queuedAt?.model,
       permissionMode: toolPermissionContext.mode,
-      evalSignal: ze,
+      evalSignal: slot,
     });
-    if (oe === null) return null;
-    using starting = oe.starting;
-    let { prompt, model, isRewritten } = oe;
+    if (spawnResult === null) return null;
+    using starting = spawnResult.starting;
+    let { prompt, model, isRewritten } = spawnResult;
     if (
-      prompt !== ee &&
-      (await On({
-        idx: U,
+      prompt !== promptStr &&
+      (await reviewGateBlocks({
+        idx,
         promptStr: prompt,
-        label: Q,
-        ownPhaseTitle: Le,
-        ownPhaseIndex: Je,
-        opts: Te,
-        queuedAt,
-        provenanceOn: ie,
+        label,
+        ownPhaseTitle,
+        ownPhaseIndex,
+        opts: queuedAt,
+        queuedAt: queuedAt_2,
+        provenanceOn: provenanceEnabled,
       }))
     )
       return null;
     let agentModel = getAgentModel(
-      getExploreAgentModel(ve, Y.options.mainLoopModel),
-      Y.options.mainLoopModel,
+      getExploreAgentModel(mcpServers, agentContext.options.mainLoopModel),
+      agentContext.options.mainLoopModel,
       model,
       toolPermissionContext.mode,
       undefined,
       {
-        inWorkflowRun: h !== undefined,
+        inWorkflowRun: toolUseId !== undefined,
       },
     );
-    let er = toolPermissionContext.mode === "auto";
-    let wt = Ce === undefined && isSerializedArbiter(toolPermissionContext.mode);
-    let ft = Ce !== undefined && isArbiterStructuredOutputReviewOn(toolPermissionContext.mode);
-    let Yt = null;
-    if (Te?.isolation === "worktree" && isWebFetchAgent(ve))
+    let isAutoMode = toolPermissionContext.mode === "auto";
+    let isArbiterMode = syntheticOutput === undefined && isSerializedArbiter(toolPermissionContext.mode);
+    let structuredOutputReview =
+      syntheticOutput !== undefined && isArbiterStructuredOutputReviewOn(toolPermissionContext.mode);
+    let ownerKey = null;
+    if (queuedAt?.isolation === "worktree" && isWebFetchAgent(mcpServers))
       logForDebugging(
         "[web-fetch agent] isolation:'worktree' ignored; the built-in web-fetch agent always runs as a local agent",
       );
-    else if (Te?.isolation === "worktree") {
-      let R = h ? `${h}-${U}` : `wf-${U}`;
-      Yt = await zt(R, {
-        storageV5: Y.storageV5,
-        credentials: Y.credentials,
+    else if (queuedAt?.isolation === "worktree") {
+      let callKeyLabel = toolUseId ? `${toolUseId}-${idx}` : `wf-${idx}`;
+      ownerKey = await worktreeGate(callKeyLabel, {
+        storageV5: agentContext.storageV5,
+        credentials: agentContext.credentials,
       });
     }
-    let worktreePath = Yt?.worktreePath;
-    let ro = ie ? classifyWorkflowRequestSource(context.messages, context.agentId) : null;
-    let so = ro?.kind === "relay" ? userRequestFraming(ro) : null;
-    let nr = `${!ie ? prompt : ro?.kind === "automated" ? automatedTriggerFramingWithContext(prompt) : withHarnessFraming(prompt)}${Se(prompt)}`;
-    let xn = Yt
-      ? `${nr}
+    let worktreePath = ownerKey?.worktreePath;
+    let requestSource = provenanceEnabled
+      ? classifyWorkflowRequestSource(context.messages, context.agentId)
+      : null;
+    let framing = requestSource?.kind === "relay" ? userRequestFraming(requestSource) : null;
+    let framedPrompt = `${!provenanceEnabled ? prompt : requestSource?.kind === "automated" ? automatedTriggerFramingWithContext(prompt) : withHarnessFraming(prompt)}${preambleFor(prompt)}`;
+    let ownerPath = ownerKey
+      ? `${framedPrompt}
 
 ---
-You are running in an isolated git worktree at \`${flattenForFraming(Yt.worktreePath)}\` (a separate working copy of the repo). Changes you make here do NOT affect the main working directory (\`${flattenForFraming(getCwd())}\`) or other agents. Work normally \u2014 the worktree will be cleaned up automatically if you made no changes, or preserved for review if you did.`
-      : nr;
-    let _t = 0;
-    let ht = 0;
-    let Nt = 0;
+You are running in an isolated git worktree at \`${flattenForFraming(ownerKey.worktreePath)}\` (a separate working copy of the repo). Changes you make here do NOT affect the main working directory (\`${flattenForFraming(getCwd())}\`) or other agents. Work normally \u2014 the worktree will be cleaned up automatically if you made no changes, or preserved for review if you did.`
+      : framedPrompt;
+    let retryCount = 0;
+    let backgroundCount = 0;
+    let otherCount = 0;
     let startedAt = Date.now();
     let promptPreview = previewAgentValue(prompt);
     let joined = [
       agentModel ?? "",
-      String(ve.effort ?? getEffortValue(Y) ?? ""),
-      ve.agentType,
-      Vt.map((R) => R.name).join(","),
-      Te?.schema ? jsonStringify(Te.schema) : "",
+      String(mcpServers.effort ?? getEffortValue(agentContext) ?? ""),
+      mcpServers.agentType,
+      structuredOutputTool.map((toolNameList) => toolNameList.name).join(","),
+      queuedAt?.schema ? jsonStringify(queuedAt.schema) : "",
       worktreePath ?? getCwd(),
     ].join(`
 `);
-    let io;
-    async function xs(R, Pe, we, attempt, pe) {
+    let step;
+    async function runAgentAttempt(agentOptions, signal, abortSignal, attempt, attemptNumber) {
       let agentId = makeSaltedName();
-      it(agentId);
+      provenanceOn(agentId);
       starting.started({
         agentId,
         model: agentModel,
       });
-      let Ze = {
+      let agentProgress = {
         agentId,
-        parentAgentId: isMainAgent(Me) ? undefined : Me?.agentId,
-        depth: getAgentDepth(Me) + 1,
+        parentAgentId: isMainAgent(gate) ? undefined : gate?.agentId,
+        depth: getAgentDepth(gate) + 1,
         parentSessionId: getParentSessionId(),
         agentType: "subagent",
-        subagentName: ve.agentType,
-        workflowRunId: h,
+        subagentName: mcpServers.agentType,
+        workflowRunId: toolUseId,
         workflowName,
-        workflowWaitsOutUsageLimit: (Z) => tn.wouldWait(Z),
+        workflowWaitsOutUsageLimit: (model) => limitWaiter.wouldWait(model),
         isAsync: false,
-        isBuiltIn: isBuiltInAgent(ve),
+        isBuiltIn: isBuiltInAgent(mcpServers),
         isBackgroundAgent: true,
         invokingRequestId,
         invocationKind: "spawn",
         invocationEmitted: false,
         parentPromptId,
       };
-      let toolUseID = `workflow_agent_${U}_${agentId}`;
-      let Ae;
-      let nt;
-      let yt;
-      let lo = new Map();
-      let Ps = new Map();
+      let toolUseID = `workflow_agent_${idx}_${agentId}`;
+      let modelOverride;
+      let permissionMode;
+      let progressData;
+      let firstSeenAt = new Map();
+      let lastProgressAt = new Map();
       let fallbackModel;
       let model_2 = agentModel;
-      let cr = agentModel ? stripAnyVersatileSuffix(agentModel) : undefined;
-      let Ht = (state, Ue) =>
+      let agentModelName = agentModel ? stripAnyVersatileSuffix(agentModel) : undefined;
+      let onState = (state, newState) =>
         emitProgress({
           type: "progress",
           toolUseID,
           data: {
             type: "workflow_agent",
-            index: U,
-            label: we,
-            phaseIndex: Je,
-            phaseTitle: Le,
+            index: idx,
+            label: abortSignal,
+            phaseIndex: ownPhaseIndex,
+            phaseTitle: ownPhaseTitle,
             agentId,
-            agentType: St?.agentType,
-            isolation: Yt ? "worktree" : undefined,
+            agentType: requestedAgentType?.agentType,
+            isolation: ownerKey ? "worktree" : undefined,
             model: agentModel,
             fallbackModel,
             state,
             startedAt,
-            queuedAt,
+            queuedAt: queuedAt_2,
             attempt,
-            lastAttemptReason: pe === "rate_limited" ? "throttled" : pe,
-            lastToolName: Ae,
-            lastToolSummary: nt,
+            lastAttemptReason: attemptNumber === "rate_limited" ? "throttled" : attemptNumber,
+            lastToolName: modelOverride,
+            lastToolSummary: permissionMode,
             promptPreview,
-            promptFramed: ie,
+            promptFramed: provenanceEnabled,
             lastProgressAt: Date.now(),
-            ...Ue,
+            ...newState,
           },
         });
       let abortController = new AbortController();
-      let signal = Y.abortController?.signal;
-      let pr = () => abortController.abort(new DOMException("workflow-abort", "AbortError"));
-      signal?.addEventListener("abort", pr);
-      if (signal?.aborted) abortController.abort(new DOMException("workflow-abort", "AbortError"));
-      let fo = () => abortController.abort(new DOMException("user-skip", "AbortError"));
-      ze?.addEventListener("abort", fo);
-      if (ze?.aborted) fo();
-      let mn;
-      let mr = 0;
-      let min = Math.min(Re * 0.1, 1000);
-      let co = () => {
-        mn?.clear();
-        if (Re > 0)
-          mn = setMonotonicTimeout(abortStalled.bind(undefined, abortController), Re, R.host.clock, {
-            unref: false,
-          });
+      let signal_2 = agentContext.abortController?.signal;
+      let abortWorkflow = () => abortController.abort(new DOMException("workflow-abort", "AbortError"));
+      signal_2?.addEventListener("abort", abortWorkflow);
+      if (signal_2?.aborted) abortController.abort(new DOMException("workflow-abort", "AbortError"));
+      let skipAgent = () => abortController.abort(new DOMException("user-skip", "AbortError"));
+      slot?.addEventListener("abort", skipAgent);
+      if (slot?.aborted) skipAgent();
+      let lastAgentResult;
+      let skippedCount = 0;
+      let min = Math.min(opts * 0.1, 1000);
+      let onAbort = () => {
+        lastAgentResult?.clear();
+        if (opts > 0)
+          lastAgentResult = setMonotonicTimeout(
+            abortStalled.bind(undefined, abortController),
+            opts,
+            agentOptions.host.clock,
+            {
+              unref: false,
+            },
+          );
       };
-      let Sn = new Set();
-      let Is = emptyWorkflowToolUseTracker();
-      let gr = () => {
-        if (Sn.size === 0 && mn === undefined) co();
+      let announcedPhases = new Set();
+      let toolUseTracker = emptyWorkflowToolUseTracker();
+      let onPhase = () => {
+        if (announcedPhases.size === 0 && lastAgentResult === undefined) onAbort();
       };
-      let wr = () => {
-        if (Sn.size > 0) return;
+      let onLog = () => {
+        if (announcedPhases.size > 0) return;
         let now = Date.now();
-        if (now - mr < min) return;
-        mr = now;
-        co();
+        if (now - skippedCount < min) return;
+        skippedCount = now;
+        onAbort();
       };
-      let In = {
-        ...Y,
+      let logFn = {
+        ...agentContext,
         abortController,
         ...(bashCommandClamp !== undefined &&
           bashCommandClamp.length > 0 && {
             permissionLayers: [
-              ...(Y.permissionLayers ?? []),
+              ...(agentContext.permissionLayers ?? []),
               {
                 kind: "bash_command_clamp",
                 rules: bashCommandClamp,
@@ -1519,877 +1644,948 @@ You are running in an isolated git worktree at \`${flattenForFraming(Yt.worktree
       };
       rebaseHookOriginForAgent(
         {
-          toolUseContext: In,
+          toolUseContext: logFn,
         },
         isRewritten,
       );
-      Ht(
+      onState(
         "start",
-        _t || ht
+        retryCount || backgroundCount
           ? {
-              tokens: _t,
-              toolCalls: ht,
+              tokens: retryCount,
+              toolCalls: backgroundCount,
             }
           : undefined,
       );
-      co();
-      let hr;
-      let Ge;
-      let po = new Map();
-      let mo;
-      let go = false;
-      let wo = new Map();
-      let ho = false;
-      let sn = er ? [] : undefined;
-      let Ln = (Z) => {
-        if (Z) gt = true;
+      onAbort();
+      let lastAgentEntry;
+      let agentStart;
+      let callKeyCache = new Map();
+      let currentResult;
+      let journalHitUsed = false;
+      let callKeyState = new Map();
+      let journalSuppressed = false;
+      let blockedAgents = isAutoMode ? [] : undefined;
+      let onAgentResult = (result) => {
+        if (result) foreignArtifactSeen = true;
       };
-      Ln(
-        Pe.includes(ARTIFACT_CONTENT_AUTHORED_TAG) || (so?.includes(ARTIFACT_CONTENT_AUTHORED_TAG) ?? false),
+      onAgentResult(
+        signal.includes(ARTIFACT_CONTENT_AUTHORED_TAG) ||
+          (framing?.includes(ARTIFACT_CONTENT_AUTHORED_TAG) ?? false),
       );
-      let Lt;
-      let Dt = 0;
-      let bt = 0;
-      let Qi = (Z, Ue = true) => {
-        let Ot = () => false;
-        let le = (Xt) => [...((Xt === undefined ? undefined : lo.get(Xt)?.values()) ?? [])];
-        let xt = (Xt) => le(Xt).some((Ns) => Ot(Ns.phase));
-        let Tr = (Xt) => le(Xt).length > 0;
-        let Eo =
-          (Z !== undefined && xt(Z) ? Z : undefined) ??
-          [...lo.keys()].findLast(xt) ??
-          (Z !== undefined && Tr(Z) ? Z : undefined) ??
-          [...lo.keys()].findLast(Tr);
-        let Ao = Eo === undefined ? [...Ps.entries()].at(-1) : undefined;
-        let vr = le(Eo);
-        let Vn = vr.findLast((Xt) => Ot(Xt.phase)) ?? vr.at(-1);
-        let Tn =
-          Vn !== undefined
+      let nextIdx;
+      let agentSeq = 0;
+      let toolCallsDelta = 0;
+      let reportProgress = (preferredPhase, shouldEmit = true) => {
+        let isHiddenPhase = () => false;
+        let entriesForPhase = (phaseTitle) => [
+          ...((phaseTitle === undefined ? undefined : firstSeenAt.get(phaseTitle)?.values()) ?? []),
+        ];
+        let hasVisibleEntry = (phaseTitle) =>
+          entriesForPhase(phaseTitle).some((entry) => isHiddenPhase(entry.phase));
+        let hasAnyEntry = (phaseTitle) => entriesForPhase(phaseTitle).length > 0;
+        let phaseTitle =
+          (preferredPhase !== undefined && hasVisibleEntry(preferredPhase) ? preferredPhase : undefined) ??
+          [...firstSeenAt.keys()].findLast(hasVisibleEntry) ??
+          (preferredPhase !== undefined && hasAnyEntry(preferredPhase) ? preferredPhase : undefined) ??
+          [...firstSeenAt.keys()].findLast(hasAnyEntry);
+        let lastProgressEntry = phaseTitle === undefined ? [...lastProgressAt.entries()].at(-1) : undefined;
+        let phaseEntries = entriesForPhase(phaseTitle);
+        let visibleEntry =
+          phaseEntries.findLast((entry) => isHiddenPhase(entry.phase)) ?? phaseEntries.at(-1);
+        let progress =
+          visibleEntry !== undefined
             ? {
-                id: Eo,
-                name: Vn.name,
-                summary: describeWorkflowStep(Vn.input, Vn.name) || undefined,
+                id: phaseTitle,
+                name: visibleEntry.name,
+                summary: describeWorkflowStep(visibleEntry.input, visibleEntry.name) || undefined,
               }
-            : Ao !== undefined
+            : lastProgressEntry !== undefined
               ? {
-                  id: Ao[0],
-                  ...Ao[1],
+                  id: lastProgressEntry[0],
+                  ...lastProgressEntry[1],
                 }
               : undefined;
-        yt = Tn?.id;
-        if (Tn?.name === Ae && Tn?.summary === nt) return;
-        Ae = Tn?.name;
-        nt = Tn?.summary;
-        if (Ue)
-          Ht("progress", {
-            tokens: _t + Dt,
-            toolCalls: ht + bt,
+        progressData = progress?.id;
+        if (progress?.name === modelOverride && progress?.summary === permissionMode) return;
+        modelOverride = progress?.name;
+        permissionMode = progress?.summary;
+        if (shouldEmit)
+          onState("progress", {
+            tokens: retryCount + agentSeq,
+            toolCalls: backgroundCount + toolCallsDelta,
           });
       };
-      let ln = 0;
-      let _n = 0;
+      let structuredOutputCalls = 0;
+      let structuredOutputFailures = 0;
       let lastStructuredOutputInput;
-      let Dn;
-      let kr = new Set();
-      let $n = new Map();
+      let lastStructuredOutputError;
+      let structuredOutputIds = new Set();
+      let structuredOutputReviewRecords = new Map();
       let deliveredId;
-      let yo = 0;
+      let responseNumber = 0;
       let lastOtherToolCallAt = 0;
       let MAX_STRUCTURED_OUTPUT_RETRIES_2 =
         env.MAX_STRUCTURED_OUTPUT_RETRIES ?? MAX_STRUCTURED_OUTPUT_RETRIES;
       let now = Date.now();
-      let Nn = isWebFetchAgent(ve) ? defaultToolResultsStorage() : undefined;
+      let webFetchSavedFiles = isWebFetchAgent(mcpServers) ? defaultToolResultsStorage() : undefined;
       try {
-        T?.(agentId, abortController);
-        await runWithCwdOverride(Ze, async () => {
-          for await (let Z of runAgent({
-            agentDefinition: wt ? withSystemPromptSuffix(ve, WORKFLOW_HANDBACK_NOTE) : ve,
-            turnPrompt: Pe,
+        description?.(agentId, abortController);
+        await runWithCwdOverride(agentProgress, async () => {
+          for await (let record of runAgent({
+            agentDefinition: isArbiterMode
+              ? withSystemPromptSuffix(mcpServers, WORKFLOW_HANDBACK_NOTE)
+              : mcpServers,
+            turnPrompt: signal,
             promptMessages:
-              so === null
+              framing === null
                 ? [
                     createUserMessage({
-                      content: Pe,
+                      content: signal,
                     }),
                   ]
                 : [
                     createUserMessage({
-                      content: so,
+                      content: framing,
                     }),
                     createUserMessage({
-                      content: Pe,
+                      content: signal,
                     }),
                   ],
-            toolUseContext: In,
-            session: R,
+            toolUseContext: logFn,
+            session: agentOptions,
             canUseTool,
             isAsync: false,
-            querySource: getQuerySourceForAgent(ve.agentType, isBuiltInAgent(ve)),
-            spawnedBySkill: Y.options.spawnedBySkill ?? Y.options.activeSkill,
-            spawnedByForkedSkill: Y.options.spawnedByForkedSkill,
-            availableTools: Vt,
-            requiresStructuredOutput: Ce !== undefined,
-            structuredOutputIsHandback: ft,
-            ...(wt && {
+            querySource: getQuerySourceForAgent(mcpServers.agentType, isBuiltInAgent(mcpServers)),
+            spawnedBySkill: agentContext.options.spawnedBySkill ?? agentContext.options.activeSkill,
+            spawnedByForkedSkill: agentContext.options.spawnedByForkedSkill,
+            availableTools: structuredOutputTool,
+            requiresStructuredOutput: syntheticOutput !== undefined,
+            structuredOutputIsHandback: structuredOutputReview,
+            ...(isArbiterMode && {
               handbackOptIn: true,
-              handbackTool: createSubagentHandbackTool(agentId, (Ue) => {
-                if (Ge === undefined) {
-                  Ge = Ue;
+              handbackTool: createSubagentHandbackTool(agentId, (handback) => {
+                if (agentStart === undefined) {
+                  agentStart = handback;
                   return true;
                 }
                 if (
-                  (Ge.review === null && Ue.review !== null) ||
-                  (Ge.review === undefined && Ue.review?.kind === "flagged")
+                  (agentStart.review === null && handback.review !== null) ||
+                  (agentStart.review === undefined && handback.review?.kind === "flagged")
                 )
-                  Ge = {
-                    ...Ge,
-                    review: Ue.review,
-                    noVerdict: Ue.noVerdict,
+                  agentStart = {
+                    ...agentStart,
+                    review: handback.review,
+                    noVerdict: handback.noVerdict,
                   };
                 return false;
               }),
               callerDeliveredReport: () =>
-                Ge === undefined
+                agentStart === undefined
                   ? undefined
                   : [
-                      ...(Ge.review ? [Ge.review.warning] : []),
-                      ...(Ge.noVerdict ? [structuredOutputUnjudgedWarning(Ge.noVerdict).warning] : []),
-                      sanitizeSubagentOutput(Ge.message).sanitized,
+                      ...(agentStart.review ? [agentStart.review.warning] : []),
+                      ...(agentStart.noVerdict
+                        ? [structuredOutputUnjudgedWarning(agentStart.noVerdict).warning]
+                        : []),
+                      sanitizeSubagentOutput(agentStart.message).sanitized,
                     ].join(`
 
 `),
             }),
-            transcriptSubdir: h ? `${WORKFLOW_TRANSCRIPT_SUBDIR}/${h}` : undefined,
-            spawnedByWorkflowRunId: h,
-            description: st.label,
-            workflowPhase: st.phase,
+            transcriptSubdir: toolUseId ? `${WORKFLOW_TRANSCRIPT_SUBDIR}/${toolUseId}` : undefined,
+            spawnedByWorkflowRunId: toolUseId,
+            description: progressFields.label,
+            workflowPhase: progressFields.phase,
             override: {
               agentId,
-              agentContext: Ze,
+              agentContext: agentProgress,
             },
-            persistedToolResultFiles: Nn,
+            persistedToolResultFiles: webFetchSavedFiles,
             model,
-            onModelRestricted: fn(Q),
-            onQueryProgress: wr,
+            onModelRestricted: makeModelNotice(label),
+            onQueryProgress: onLog,
             worktreePath,
           })) {
-            if (Z.type === "attachment" && Z.attachment.type === "structured_output") {
-              Lt = Z.attachment.data;
-              deliveredId = Z.attachment.toolUseID;
+            if (record.type === "attachment" && record.attachment.type === "structured_output") {
+              nextIdx = record.attachment.data;
+              deliveredId = record.attachment.toolUseID;
               continue;
             }
-            if (Z.type === "attachment") Ln(containsUntrustedArtifactContent(Z));
-            if (Z.type === "api_metrics") {
-              if (Z.event.type === "start") io?.responded();
+            if (record.type === "attachment") onAgentResult(containsUntrustedArtifactContent(record));
+            if (record.type === "api_metrics") {
+              if (record.event.type === "start") step?.responded();
               continue;
             }
-            if (Z.type === "query_model_change") {
-              model_2 = Z.toModel;
+            if (record.type === "query_model_change") {
+              model_2 = record.toModel;
               continue;
             }
-            if (Z.type === "set_in_progress_tool_use_ids") {
-              if (Z.op.action === "remove") {
-                for (let id of Z.op.ids) Sn.delete(id);
-                gr();
+            if (record.type === "set_in_progress_tool_use_ids") {
+              if (record.op.action === "remove") {
+                for (let id of record.op.ids) announcedPhases.delete(id);
+                onPhase();
               }
               continue;
             }
-            if (Z.type === "user") {
-              sn?.push(Z);
-              Ln(containsUntrustedArtifactContent(Z));
-              let Ue = [];
-              if (Array.isArray(Z.message.content))
-                for (let le of Z.message.content) {
-                  if (le.type !== "tool_result") continue;
-                  let xt = wo.get(le.tool_use_id);
-                  wo.delete(le.tool_use_id);
-                  if (xt !== undefined && !Ue.includes(xt)) Ue.push(xt);
+            if (record.type === "user") {
+              blockedAgents?.push(record);
+              onAgentResult(containsUntrustedArtifactContent(record));
+              let handbackRecords = [];
+              if (Array.isArray(record.message.content))
+                for (let block of record.message.content) {
+                  if (block.type !== "tool_result") continue;
+                  let record = callKeyState.get(block.tool_use_id);
+                  callKeyState.delete(block.tool_use_id);
+                  if (record !== undefined && !handbackRecords.includes(record)) handbackRecords.push(record);
                 }
-              for (let le of toolsUsedForSummary([...Ue, Z])) jt(agentId, le);
-              let content = Z.message.content;
+              for (let toolName of toolsUsedForSummary([...handbackRecords, record]))
+                recordAgentTool(agentId, toolName);
+              let content = record.message.content;
               if (Array.isArray(content)) {
-                for (let le of content)
-                  if (typeof le === "object" && le?.type === "tool_result") {
-                    Sn.delete(le.tool_use_id);
-                    settleWorkflowToolUse(Is, le.tool_use_id, Z.isVirtual === true, le.is_error === true);
-                    if (kr.delete(le.tool_use_id) && le.is_error) {
-                      _n++;
-                      Dn = extractToolErrorExcerpt(le.content) ?? Dn;
+                for (let block of content)
+                  if (typeof block === "object" && block?.type === "tool_result") {
+                    announcedPhases.delete(block.tool_use_id);
+                    settleWorkflowToolUse(
+                      toolUseTracker,
+                      block.tool_use_id,
+                      record.isVirtual === true,
+                      block.is_error === true,
+                    );
+                    if (structuredOutputIds.delete(block.tool_use_id) && block.is_error) {
+                      structuredOutputFailures++;
+                      lastStructuredOutputError =
+                        extractToolErrorExcerpt(block.content) ?? lastStructuredOutputError;
                     }
                   }
-                gr();
-                if (_n > 0 && _n >= MAX_STRUCTURED_OUTPUT_RETRIES_2 && Lt === undefined) {
-                  let le = Dn === undefined ? "" : ` \u2014 last StructuredOutput error: ${Dn}`;
+                onPhase();
+                if (
+                  structuredOutputFailures > 0 &&
+                  structuredOutputFailures >= MAX_STRUCTURED_OUTPUT_RETRIES_2 &&
+                  nextIdx === undefined
+                ) {
+                  let errorNote =
+                    lastStructuredOutputError === undefined
+                      ? ""
+                      : ` \u2014 last StructuredOutput error: ${lastStructuredOutputError}`;
                   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                     `agent({schema}): StructuredOutput retry cap (${MAX_STRUCTURED_OUTPUT_RETRIES_2}) exceeded \u2014 ` +
-                      `${_n} failed ${plural(_n, "call")} with no valid output` +
-                      le,
+                      `${structuredOutputFailures} failed ${plural(structuredOutputFailures, "call")} with no valid output` +
+                      errorNote,
                     "Workflow agent({schema}) StructuredOutput retry cap exceeded",
                   );
                 }
               }
               continue;
             }
-            if (Z.type === "assistant") {
-              if (Z.streamWatchdogGaveUp) {
+            if (record.type === "assistant") {
+              if (record.streamWatchdogGaveUp) {
                 logForDebugging(
-                  `workflow agent [${we}] ended with "${extractTextContent_2(Z.message.content, " ")}"; treating it as a stall`,
+                  `workflow agent [${abortSignal}] ended with "${extractTextContent_2(record.message.content, " ")}"; treating it as a stall`,
                   {
                     level: "warn",
                   },
                 );
-                ho = true;
+                journalSuppressed = true;
                 let dOMException = new DOMException("stalled", "AbortError");
                 abortController.abort(dOMException);
                 throw dOMException;
               }
-              hr = Z;
-              if (!Z.isApiErrorMessage && Z.message.id !== mo) {
-                mo = Z.message.id;
-                go = false;
-                yo++;
+              lastAgentEntry = record;
+              if (!record.isApiErrorMessage && record.message.id !== currentResult) {
+                currentResult = record.message.id;
+                journalHitUsed = false;
+                responseNumber++;
               }
-              for (let le of Z.message.content) {
-                if (le.type === "tool_use") wo.set(le.id, Z);
-                if (le.type === "tool_use" && le.name === SUBAGENTHANDBACK && agentContract(agentId) === true)
-                  po.set(le.id, Z.message.id);
+              for (let block of record.message.content) {
+                if (block.type === "tool_use") callKeyState.set(block.id, record);
+                if (
+                  block.type === "tool_use" &&
+                  block.name === SUBAGENTHANDBACK &&
+                  agentContract(agentId) === true
+                )
+                  callKeyCache.set(block.id, record.message.id);
                 else if (
-                  le.type === "tool_use" ||
-                  le.type === "server_tool_use" ||
-                  le.type === "mcp_tool_use"
+                  block.type === "tool_use" ||
+                  block.type === "server_tool_use" ||
+                  block.type === "mcp_tool_use"
                 ) {
-                  go = true;
-                  if (le.type !== "tool_use" || le.name !== STRUCTUREDOUTPUT) lastOtherToolCallAt = yo;
+                  journalHitUsed = true;
+                  if (block.type !== "tool_use" || block.name !== STRUCTUREDOUTPUT)
+                    lastOtherToolCallAt = responseNumber;
                 }
               }
-              sn?.push(Z);
-              Ln(containsUntrustedArtifactContent(Z));
-              for (let le of Z.message.content)
-                if (le.type === "tool_use" || le.type === "server_tool_use")
-                  jt(agentId, canonicalToolName(le.name.trim()));
-              if (!Z.isApiErrorMessage) {
-                io?.responded();
+              blockedAgents?.push(record);
+              onAgentResult(containsUntrustedArtifactContent(record));
+              for (let block of record.message.content)
+                if (block.type === "tool_use" || block.type === "server_tool_use")
+                  recordAgentTool(agentId, canonicalToolName(block.name.trim()));
+              if (!record.isApiErrorMessage) {
+                step?.responded();
                 let usage =
-                  Z.isUnmetered === true ? undefined : finalContextTokensFromLastResponse(Z.message.usage);
-                if (usage) Dt = getTokenCountFromUsage(usage);
-                let model = Z.message.model;
-                if (model && cr && isForeignModelMessage(Z, cr)) fallbackModel = model;
+                  record.isUnmetered === true
+                    ? undefined
+                    : finalContextTokensFromLastResponse(record.message.usage);
+                if (usage) agentSeq = getTokenCountFromUsage(usage);
+                let model = record.message.model;
+                if (model && agentModelName && isForeignModelMessage(record, agentModelName))
+                  fallbackModel = model;
               }
-              let Ue = 0;
-              let Ot = 0;
-              for (let le of Z.message.content) {
-                if (le.type !== "tool_use") continue;
-                let xt = false;
-                Ue++;
-                if (xt) Ot++;
-                Sn.add(le.id);
-                Ae = le.name;
-                nt = describeWorkflowStep(le.input, le.name) || undefined;
-                yt = le.id;
-                if (le.name === STRUCTUREDOUTPUT) {
-                  ln++;
-                  lastStructuredOutputInput = le.input;
-                  kr.add(le.id);
-                  if (ft && !$n.has(le.id))
-                    $n.set(le.id, {
-                      response: Z,
-                      written: clone(le.input),
-                      responseNumber: yo,
+              let toolUseCount = 0;
+              let skippedToolUseCount = 0;
+              for (let block of record.message.content) {
+                if (block.type !== "tool_use") continue;
+                let isSkipped = false;
+                toolUseCount++;
+                if (isSkipped) skippedToolUseCount++;
+                announcedPhases.add(block.id);
+                modelOverride = block.name;
+                permissionMode = describeWorkflowStep(block.input, block.name) || undefined;
+                progressData = block.id;
+                if (block.name === STRUCTUREDOUTPUT) {
+                  structuredOutputCalls++;
+                  lastStructuredOutputInput = block.input;
+                  structuredOutputIds.add(block.id);
+                  if (structuredOutputReview && !structuredOutputReviewRecords.has(block.id))
+                    structuredOutputReviewRecords.set(block.id, {
+                      response: record,
+                      written: clone(block.input),
+                      responseNumber,
                     });
-                  if (Lt !== undefined && ln > 2) {
+                  if (nextIdx !== undefined && structuredOutputCalls > 2) {
                     abortController.abort("stalled");
                     break;
                   }
                 }
               }
-              bt += Ue - Ot;
-              if (Ue > 0) {
-                mn?.clear();
-                mn = undefined;
-              } else wr();
-              Ht("progress", {
-                tokens: _t + Dt,
-                toolCalls: ht + bt,
+              toolCallsDelta += toolUseCount - skippedToolUseCount;
+              if (toolUseCount > 0) {
+                lastAgentResult?.clear();
+                lastAgentResult = undefined;
+              } else onLog();
+              onState("progress", {
+                tokens: retryCount + agentSeq,
+                toolCalls: backgroundCount + toolCallsDelta,
               });
             }
           }
         });
       } catch (error) {
-        let Ue = abortController.signal.aborted
+        let abortReason = abortController.signal.aborted
           ? unwrapAbortReason(abortController.signal.reason)
           : undefined;
-        if (Ue === "stalled" || Ue === "user-retry") {
-          if (Ue === "stalled" && Lt !== undefined) {
-            let Ot = Date.now() - now;
-            Ht("done", {
-              tokens: _t + Dt,
-              toolCalls: ht + bt,
-              durationMs: Nt + Ot,
-              resultPreview: previewAgentValue(Lt),
+        if (abortReason === "stalled" || abortReason === "user-retry") {
+          if (abortReason === "stalled" && nextIdx !== undefined) {
+            let stalledElapsedMs = Date.now() - now;
+            onState("done", {
+              tokens: retryCount + agentSeq,
+              toolCalls: backgroundCount + toolCallsDelta,
+              durationMs: otherCount + stalledElapsedMs,
+              resultPreview: previewAgentValue(nextIdx),
             });
-            adoptSubagentPublishArmsAsync(agentId, In);
+            adoptSubagentPublishArmsAsync(agentId, logFn);
             return {
-              structured: Lt,
+              structured: nextIdx,
               text: "",
-              agentMessages: sn,
-              toolReportReview: ft
+              agentMessages: blockedAgents,
+              toolReportReview: structuredOutputReview
                 ? await judgeStructuredOutputVerdict({
-                    calls: $n,
+                    calls: structuredOutputReviewRecords,
                     deliveredId,
-                    delivered: Lt,
+                    delivered: nextIdx,
                     lastOtherToolCallAt,
-                    context: Y,
+                    context: agentContext,
                   })
                 : undefined,
-              tokens: Dt,
-              toolCalls: bt,
+              tokens: agentSeq,
+              toolCalls: toolCallsDelta,
               stalled: false,
               skipped: false,
-              durationMs: Ot,
+              durationMs: stalledElapsedMs,
               stopReason: undefined,
               outputTokens: undefined,
-              structuredOutputAttempts: ln,
+              structuredOutputAttempts: structuredOutputCalls,
               lastStructuredOutputInput,
             };
           }
-          Ht("error", {
+          onState("error", {
             error:
-              Ue === "stalled"
-                ? ho
+              abortReason === "stalled"
+                ? journalSuppressed
                   ? "reply lost \u2014 the response stream went silent and Claude Code gave up waiting for it"
-                  : `stalled \u2014 no progress for ${Re}ms`
+                  : `stalled \u2014 no progress for ${opts}ms`
                 : "retry requested by user",
-            tokens: _t + Dt,
-            toolCalls: ht + bt,
-            durationMs: Nt + (Date.now() - now),
+            tokens: retryCount + agentSeq,
+            toolCalls: backgroundCount + toolCallsDelta,
+            durationMs: otherCount + (Date.now() - now),
           });
           return {
             structured: undefined,
             text: "",
-            agentMessages: sn,
-            tokens: Dt,
-            toolCalls: bt,
+            agentMessages: blockedAgents,
+            tokens: agentSeq,
+            toolCalls: toolCallsDelta,
             stalled: true,
-            stalledReason: Ue,
-            replyLost: Ue === "stalled" && ho,
+            stalledReason: abortReason,
+            replyLost: abortReason === "stalled" && journalSuppressed,
             skipped: false,
             durationMs: Date.now() - now,
             stopReason: undefined,
             outputTokens: undefined,
-            structuredOutputAttempts: ln,
+            structuredOutputAttempts: structuredOutputCalls,
             lastStructuredOutputInput,
           };
         }
-        if (Ue === "user-skip") {
-          Ht("error", {
+        if (abortReason === "user-skip") {
+          onState("error", {
             error: "skipped by user",
             skipped: true,
-            tokens: _t + Dt,
-            toolCalls: ht + bt,
-            durationMs: Nt + (Date.now() - now),
+            tokens: retryCount + agentSeq,
+            toolCalls: backgroundCount + toolCallsDelta,
+            durationMs: otherCount + (Date.now() - now),
           });
           return {
             structured: undefined,
             text: "",
-            agentMessages: sn,
-            tokens: Dt,
-            toolCalls: bt,
+            agentMessages: blockedAgents,
+            tokens: agentSeq,
+            toolCalls: toolCallsDelta,
             stalled: false,
             skipped: true,
             durationMs: Date.now() - now,
             stopReason: undefined,
             outputTokens: undefined,
-            structuredOutputAttempts: ln,
+            structuredOutputAttempts: structuredOutputCalls,
             lastStructuredOutputInput,
           };
         }
-        Ht("error", {
+        onState("error", {
           error: error instanceof Error ? error.message : String(error),
-          tokens: _t + Dt,
-          toolCalls: ht + bt,
-          durationMs: Nt + (Date.now() - now),
+          tokens: retryCount + agentSeq,
+          toolCalls: backgroundCount + toolCallsDelta,
+          durationMs: otherCount + (Date.now() - now),
         });
         throw error;
       } finally {
-        mn?.clear();
-        signal?.removeEventListener("abort", pr);
-        ze?.removeEventListener("abort", fo);
-        T?.(agentId, null);
+        lastAgentResult?.clear();
+        signal_2?.removeEventListener("abort", abortWorkflow);
+        slot?.removeEventListener("abort", skipAgent);
+        description?.(agentId, null);
       }
-      let Mt = hr;
-      let So =
-        Ge?.message ??
-        (Mt
+      let lastEntry = lastAgentEntry;
+      let finalText =
+        agentStart?.message ??
+        (lastEntry
           ? extractTextContent_2(
-              Mt.message.content,
+              lastEntry.message.content,
               `
 `,
             )
           : "");
-      let _o = Mt?.isApiErrorMessage === true && Ge === undefined;
-      let br = Ge?.toolUseId === undefined ? undefined : po.get(Ge.toolUseId);
-      let Ls = Boolean(br) && br === mo && !go;
-      if (agentContract(agentId) && !_o)
-        if (Ge === undefined)
+      let endedWithApiError = lastEntry?.isApiErrorMessage === true && agentStart === undefined;
+      let handbackResponseId =
+        agentStart?.toolUseId === undefined ? undefined : callKeyCache.get(agentStart.toolUseId);
+      let handbackUsedInLastResponse =
+        Boolean(handbackResponseId) && handbackResponseId === currentResult && !journalHitUsed;
+      if (agentContract(agentId) && !endedWithApiError)
+        if (agentStart === undefined)
           logFeatureSad(
             "workflow_handback_tool",
-            po.size > 0 ? "handback_call_refused" : So === "" ? "no_final_text" : "plain_text_ending",
+            callKeyCache.size > 0
+              ? "handback_call_refused"
+              : finalText === ""
+                ? "no_final_text"
+                : "plain_text_ending",
           );
         else
           logFeatureOk("workflow_handback_tool", {
-            flagged: Ge.review?.kind === "flagged",
+            flagged: agentStart.review?.kind === "flagged",
           });
-      let qt;
-      if (_o)
-        qt = truncateClassifierReason(
-          sanitizeSubagentOutput(So, {
+      let outputText;
+      if (endedWithApiError)
+        outputText = truncateClassifierReason(
+          sanitizeSubagentOutput(finalText, {
             prependMarker: false,
           }).sanitized,
         );
       else {
-        qt = sanitizeSubagentOutput(So).sanitized;
-        if (Nn)
-          qt = `${qt}
+        outputText = sanitizeSubagentOutput(finalText).sanitized;
+        if (webFetchSavedFiles)
+          outputText = `${outputText}
 
-${webFetchHarnessNote(Nn)}`;
+${webFetchHarnessNote(webFetchSavedFiles)}`;
       }
-      let usage = Mt?.message.usage;
+      let usage = lastEntry?.message.usage;
       let outputTokens = usage && typeof usage.output_tokens === "number" ? usage.output_tokens : undefined;
-      let jn = Date.now() - now;
-      let usage_2 = Mt?.isUnmetered === true ? undefined : Mt?.message.usage;
-      let vo = Dt || getTokenCountFromUsage(finalContextTokensFromLastResponse(usage_2) ?? EMPTY_USAGE);
-      let tokens = _t + vo;
-      if (!isApiErrorDisplayMessage(Mt) || Ge !== undefined) adoptSubagentPublishArmsAsync(agentId, In);
-      if (Mt !== undefined && _o) {
-        let Z = qt || "API error";
+      let elapsedMs = Date.now() - now;
+      let usage_2 = lastEntry?.isUnmetered === true ? undefined : lastEntry?.message.usage;
+      let agentTokens =
+        agentSeq || getTokenCountFromUsage(finalContextTokensFromLastResponse(usage_2) ?? EMPTY_USAGE);
+      let tokens = retryCount + agentTokens;
+      if (!isApiErrorDisplayMessage(lastEntry) || agentStart !== undefined)
+        adoptSubagentPublishArmsAsync(agentId, logFn);
+      if (lastEntry !== undefined && endedWithApiError) {
+        let errorText = outputText || "API error";
         let apiError =
-          Mt.error === "rate_limit"
+          lastEntry.error === "rate_limit"
             ? {
                 kind: "rate_limit",
-                text: Z,
+                text: errorText,
                 model: model_2,
-                quotaLimits: Mt.quotaLimits,
+                quotaLimits: lastEntry.quotaLimits,
               }
             : {
                 kind: "other",
-                text: Z,
+                text: errorText,
               };
-        Ht("error", {
-          error: Z,
+        onState("error", {
+          error: errorText,
           tokens,
-          toolCalls: ht + bt,
-          durationMs: Nt + jn,
+          toolCalls: backgroundCount + toolCallsDelta,
+          durationMs: otherCount + elapsedMs,
         });
         return {
-          structured: Lt,
-          text: qt,
-          agentMessages: sn,
+          structured: nextIdx,
+          text: outputText,
+          agentMessages: blockedAgents,
           apiError,
-          tokens: vo,
-          toolCalls: bt,
+          tokens: agentTokens,
+          toolCalls: toolCallsDelta,
           stalled: false,
           skipped: false,
-          durationMs: jn,
-          stopReason: Mt.message.stop_reason,
+          durationMs: elapsedMs,
+          stopReason: lastEntry.message.stop_reason,
           outputTokens,
-          structuredOutputAttempts: ln,
+          structuredOutputAttempts: structuredOutputCalls,
           lastStructuredOutputInput,
         };
       }
-      Ht("done", {
+      onState("done", {
         tokens,
-        toolCalls: ht + bt,
-        durationMs: Nt + jn,
-        resultPreview: previewAgentValue(Ce ? Lt : qt),
+        toolCalls: backgroundCount + toolCallsDelta,
+        durationMs: otherCount + elapsedMs,
+        resultPreview: previewAgentValue(syntheticOutput ? nextIdx : outputText),
       });
       return {
-        structured: Lt,
-        text: qt,
-        agentMessages: sn,
+        structured: nextIdx,
+        text: outputText,
+        agentMessages: blockedAgents,
         toolReportReview:
-          Ge !== undefined
-            ? Ge.review === null && !Ls
+          agentStart !== undefined
+            ? agentStart.review === null && !handbackUsedInLastResponse
               ? undefined
-              : Ge.review
-            : ft
+              : agentStart.review
+            : structuredOutputReview
               ? await judgeStructuredOutputVerdict({
-                  calls: $n,
+                  calls: structuredOutputReviewRecords,
                   deliveredId,
-                  delivered: Lt,
+                  delivered: nextIdx,
                   lastOtherToolCallAt,
-                  context: Y,
+                  context: agentContext,
                 })
               : undefined,
-        ...(Ge?.noVerdict !== undefined && {
-          toolReportUnjudged: structuredOutputUnjudgedWarning(Ge.noVerdict),
+        ...(agentStart?.noVerdict !== undefined && {
+          toolReportUnjudged: structuredOutputUnjudgedWarning(agentStart.noVerdict),
         }),
-        ...(Ge !== undefined && {
+        ...(agentStart !== undefined && {
           toolReportAgentId: agentId,
         }),
-        tokens: vo,
-        toolCalls: bt,
+        tokens: agentTokens,
+        toolCalls: toolCallsDelta,
         stalled: false,
         skipped: false,
-        durationMs: jn,
-        stopReason: Mt?.message.stop_reason,
+        durationMs: elapsedMs,
+        stopReason: lastEntry?.message.stop_reason,
         outputTokens,
-        structuredOutputAttempts: ln,
+        structuredOutputAttempts: structuredOutputCalls,
         lastStructuredOutputInput,
-        webFetchSavedFiles: Nn,
+        webFetchSavedFiles,
       };
     }
-    let sr = 0;
-    function Pn(R, Pe, we, ge) {
-      let pe = Y.session.withProject({
+    let rateLimitRetries = 0;
+    function runAttemptInWorktree(ownerPath, attemptLabel, baseAttemptNumber, attemptKind) {
+      let projectSession = agentContext.session.withProject({
         cwd: worktreePath,
       });
-      return resolveFromCwd(getSessionProject(pe).cwd, () => xs(pe, R, Pe, we + sr, ge));
+      return resolveFromCwd(getSessionProject(projectSession).cwd, () =>
+        runAgentAttempt(
+          projectSession,
+          ownerPath,
+          attemptLabel,
+          baseAttemptNumber + rateLimitRetries,
+          attemptKind,
+        ),
+      );
     }
-    let Wn;
-    async function ao(R, Pe) {
-      function we(pe, re) {
+    let limitFailureNote;
+    async function waitOutRateLimit(result, attemptLabel) {
+      function reportQueued(result, extra) {
         emitProgress({
           type: "progress",
-          toolUseID: `workflow_agent_${U}_queued`,
+          toolUseID: `workflow_agent_${idx}_queued`,
           data: {
             type: "workflow_agent",
-            index: U,
-            label: Q,
-            phaseIndex: Je,
-            phaseTitle: Le,
-            agentType: St?.agentType,
-            isolation: Yt ? "worktree" : undefined,
+            index: idx,
+            label,
+            phaseIndex: ownPhaseIndex,
+            phaseTitle: ownPhaseTitle,
+            agentType: requestedAgentType?.agentType,
+            isolation: ownerKey ? "worktree" : undefined,
             model: agentModel,
             queuedAt: Date.now(),
-            tokens: _t + pe.tokens,
-            toolCalls: ht + pe.toolCalls,
+            tokens: retryCount + result.tokens,
+            toolCalls: backgroundCount + result.toolCalls,
             promptPreview,
-            promptFramed: ie,
+            promptFramed: provenanceEnabled,
             lastProgressAt: Date.now(),
-            ...re,
+            ...extra,
           },
         });
       }
-      let ge = R;
-      while (ge.apiError?.kind === "rate_limit") {
-        let error = ge.apiError.text;
-        let joined = tn.join(ge.apiError.quotaLimits);
+      let current = result;
+      while (current.apiError?.kind === "rate_limit") {
+        let error = current.apiError.text;
+        let joined = limitWaiter.join(current.apiError.quotaLimits);
         if (joined.outcome === "declined") {
-          Wn = joined.failureNote;
-          return ge;
+          limitFailureNote = joined.failureNote;
+          return current;
         }
         if (joined.outcome === "aborted") throw Error("Workflow aborted");
-        we(ge, {
+        reportQueued(current, {
           state: "start",
         });
         let ended = await joined.ended;
         if (ended === "aborted") throw Error("Workflow aborted");
         if (ended === "revoked") {
-          Wn = "usage-limit wait turned off";
-          we(ge, {
+          limitFailureNote = "usage-limit wait turned off";
+          reportQueued(current, {
             state: "error",
             error,
-            durationMs: Nt + ge.durationMs,
+            durationMs: otherCount + current.durationMs,
           });
-          return ge;
+          return current;
         }
-        if (ze?.aborted) return ge;
-        _t += ge.tokens;
-        ht += ge.toolCalls;
-        Nt += ge.durationMs;
+        if (slot?.aborted) return current;
+        retryCount += current.tokens;
+        backgroundCount += current.toolCalls;
+        otherCount += current.durationMs;
         startedAt = Date.now();
-        sr++;
-        ge = await ir(() => Pn(xn, `${Q}${USAGE_LIMIT_SUFFIX}`, Pe, "rate_limited"));
+        rateLimitRetries++;
+        current = await withWarmupGate(() =>
+          runAttemptInWorktree(ownerPath, `${label}${USAGE_LIMIT_SUFFIX}`, attemptLabel, "rate_limited"),
+        );
       }
-      return ge;
+      return current;
     }
-    async function ir(R) {
-      let Pe = await currentWarmupGate().enter(joined, {
+    async function withWarmupGate(fn) {
+      let gate = await currentWarmupGate().enter(joined, {
         capMs: prefixStaggerMs(),
-        signal: Y.abortController?.signal,
+        signal: agentContext.abortController?.signal,
       });
-      io = Pe;
-      if (Pe.waitedMs > 0)
+      step = gate;
+      if (gate.waitedMs > 0)
         logForDebugging(
-          `workflow agent [${Q}] held ${Pe.waitedMs}ms for a same-prefix sibling's first response (prompt-cache warm-up)`,
+          `workflow agent [${label}] held ${gate.waitedMs}ms for a same-prefix sibling's first response (prompt-cache warm-up)`,
         );
       try {
-        return await R();
+        return await fn();
       } finally {
-        Pe.done();
+        gate.done();
       }
     }
-    let ar;
-    let It = [];
-    let bn = {
+    let rateLimitDenial;
+    let stallReasons = [];
+    let lostTotals = {
       maxContextTokens: 0,
       toolCalls: 0,
       durationMs: 0,
     };
-    let lr = 0;
-    let pn;
-    let ur = false;
+    let restartCount = 0;
+    let outcome;
+    let threw = false;
     try {
-      let R = await ir(() => Pn(xn, Q, 1));
-      R = await ao(R, 1);
-      let Pe = (re) =>
-        !re.stalled &&
-        !re.skipped &&
-        re.stopReason == null &&
-        re.structured === undefined &&
-        (re.outputTokens ?? 1 / 0) < 50 &&
-        re.durationMs > Math.min(Re * 0.5, MAX_AGENT_DURATION_WATCHDOG_MS);
-      let we = Pe(R);
-      if (we) {
+      let current = await withWarmupGate(() => runAttemptInWorktree(ownerPath, label, 1));
+      current = await waitOutRateLimit(current, 1);
+      let isDegradedResponse = (result) =>
+        !result.stalled &&
+        !result.skipped &&
+        result.stopReason == null &&
+        result.structured === undefined &&
+        (result.outputTokens ?? 1 / 0) < 50 &&
+        result.durationMs > Math.min(opts * 0.5, MAX_AGENT_DURATION_WATCHDOG_MS);
+      let wasDegraded = isDegradedResponse(current);
+      if (wasDegraded) {
         emitProgress({
           type: "progress",
           toolUseID: "workflow_log",
           data: {
             type: "workflow_log",
             message:
-              `[${Q}] throttled response (no stop_reason, ${R.outputTokens ?? "?"} output tokens in ${Math.round(R.durationMs / 1000)}s) \u2014 ` +
+              `[${label}] throttled response (no stop_reason, ${current.outputTokens ?? "?"} output tokens in ${Math.round(current.durationMs / 1000)}s) \u2014 ` +
               "sleeping 45s before retry",
           },
         });
-        await sleep(45000, Y.abortController?.signal, {
+        await sleep(45000, agentContext.abortController?.signal, {
           throwOnAbort: true,
         });
-        _t += R.tokens;
-        ht += R.toolCalls;
-        Nt += R.durationMs;
-        R = await ao(await Pn(xn, `${Q} (throttle-retry)`, 2, "throttled"), 2);
-        if (Pe(R))
+        retryCount += current.tokens;
+        backgroundCount += current.toolCalls;
+        otherCount += current.durationMs;
+        current = await waitOutRateLimit(
+          await runAttemptInWorktree(ownerPath, `${label} (throttle-retry)`, 2, "throttled"),
+          2,
+        );
+        if (isDegradedResponse(current))
           emitProgress({
             type: "progress",
             toolUseID: "workflow_log",
             data: {
               type: "workflow_log",
-              message: `[${Q}] throttle-retry also degraded \u2014 ` + "giving up on throttle backoff",
+              message: `[${label}] throttle-retry also degraded \u2014 ` + "giving up on throttle backoff",
             },
           });
       }
-      for (let idx = 1; R.stalled && !we && idx <= MAX_STALLED_AGENT_RETRIES; idx++) {
-        recordStalledAgent(It, bn, R);
-        if (Y.abortController?.signal.aborted) throw Error("Workflow aborted");
-        lr++;
-        let stalledReason = R.stalledReason ?? "stalled";
-        let qe =
+      for (let idx = 1; current.stalled && !wasDegraded && idx <= MAX_STALLED_AGENT_RETRIES; idx++) {
+        recordStalledAgent(stallReasons, lostTotals, current);
+        if (agentContext.abortController?.signal.aborted) throw Error("Workflow aborted");
+        restartCount++;
+        let stalledReason = current.stalledReason ?? "stalled";
+        let stallText =
           stalledReason === "user-retry"
             ? "retry requested by user"
-            : R.replyLost
+            : current.replyLost
               ? "lost its reply (Claude Code gave up waiting on a silent response stream)"
               : "stalled (no progress)";
-        let Ae = "";
-        if (stalledReason === "stalled" && R.structuredOutputAttempts > 0 && R.structured === undefined) {
-          let nt = jsonStringify(R.lastStructuredOutputInput);
-          let yt = nt.length > 300 ? truncateToLength(nt, 300) + "\u2026" : nt;
-          Ae = ` \u2014 ${R.structuredOutputAttempts} StructuredOutput validation ${plural(R.structuredOutputAttempts, "failure")} (last input: ${yt})`;
+        let extraNote = "";
+        if (
+          stalledReason === "stalled" &&
+          current.structuredOutputAttempts > 0 &&
+          current.structured === undefined
+        ) {
+          let inputJson = jsonStringify(current.lastStructuredOutputInput);
+          let shortInput = inputJson.length > 300 ? truncateToLength(inputJson, 300) + "\u2026" : inputJson;
+          extraNote = ` \u2014 ${current.structuredOutputAttempts} StructuredOutput validation ${plural(current.structuredOutputAttempts, "failure")} (last input: ${shortInput})`;
         }
         emitProgress({
           type: "progress",
           toolUseID: "workflow_log",
           data: {
             type: "workflow_log",
-            message: `[stall] agent "${Q}" ${qe} after ${Math.round(R.durationMs / 1000)}s${Ae} \u2014 retrying (${idx}/${MAX_STALLED_AGENT_RETRIES})`,
+            message: `[stall] agent "${label}" ${stallText} after ${Math.round(current.durationMs / 1000)}s${extraNote} \u2014 retrying (${idx}/${MAX_STALLED_AGENT_RETRIES})`,
           },
         });
-        _t += R.tokens;
-        ht += R.toolCalls;
-        Nt += R.durationMs;
-        R = await ao(await Pn(xn, `${Q} (retry ${idx})`, idx + 1, stalledReason), idx + 1);
+        retryCount += current.tokens;
+        backgroundCount += current.toolCalls;
+        otherCount += current.durationMs;
+        current = await waitOutRateLimit(
+          await runAttemptInWorktree(ownerPath, `${label} (retry ${idx})`, idx + 1, stalledReason),
+          idx + 1,
+        );
       }
-      if (R.stalled) recordStalledAgent(It, bn, R);
-      pn = R.skipped
+      if (current.stalled) recordStalledAgent(stallReasons, lostTotals, current);
+      outcome = current.skipped
         ? "skipped"
-        : R.stalled
-          ? we
+        : current.stalled
+          ? wasDegraded
             ? "stalled_after_throttle"
             : "retries_exhausted"
-          : R.apiError
+          : current.apiError
             ? "api_error"
             : "completed";
-      if (R.skipped) return null;
-      if (R.stalled) {
-        let re = It.length;
-        let all = It.every((yt) => yt === "user-retry");
-        let all_2 = It.every((yt) => yt === "stalled");
-        let all_3 = It.every((yt) => yt === "reply lost");
-        let nt =
-          R.stalledReason !== "user-retry" && R.structuredOutputAttempts > 0 && R.structured === undefined
-            ? ` \u2014 ${R.structuredOutputAttempts} StructuredOutput validation ${plural(R.structuredOutputAttempts, "failure")} on the last attempt`
+      if (current.skipped) return null;
+      if (current.stalled) {
+        let attemptCount = stallReasons.length;
+        let all = stallReasons.every((reason) => reason === "user-retry");
+        let all_2 = stallReasons.every((reason) => reason === "stalled");
+        let all_3 = stallReasons.every((reason) => reason === "reply lost");
+        let structuredNote =
+          current.stalledReason !== "user-retry" &&
+          current.structuredOutputAttempts > 0 &&
+          current.structured === undefined
+            ? ` \u2014 ${current.structuredOutputAttempts} StructuredOutput validation ${plural(current.structuredOutputAttempts, "failure")} on the last attempt`
             : "";
         throw Error(
           all
-            ? `agent abandoned: user requested retry on all ${re} attempts`
+            ? `agent abandoned: user requested retry on all ${attemptCount} attempts`
             : all_2
-              ? `agent stalled on all ${re} attempts (no progress for ${Re}ms each)${nt}`
+              ? `agent stalled on all ${attemptCount} attempts (no progress for ${opts}ms each)${structuredNote}`
               : all_3
-                ? `agent lost its reply on all ${re} attempts (Claude Code gave up waiting on a silent response stream each time)${nt}`
-                : `agent abandoned after ${re} attempts (${It.join(" \u2192 ")})${nt}`,
+                ? `agent lost its reply on all ${attemptCount} attempts (Claude Code gave up waiting on a silent response stream each time)${structuredNote}`
+                : `agent abandoned after ${attemptCount} attempts (${stallReasons.join(" \u2192 ")})${structuredNote}`,
         );
       }
-      if (R.apiError?.kind === "rate_limit" && R.apiError.quotaLimits)
-        ar = {
-          model: R.apiError.model,
-          limits: R.apiError.quotaLimits,
+      if (current.apiError?.kind === "rate_limit" && current.apiError.quotaLimits)
+        rateLimitDenial = {
+          model: current.apiError.model,
+          limits: current.apiError.quotaLimits,
         };
-      if (R.apiError) {
-        let re =
-          Wn === undefined || R.apiError.kind !== "rate_limit"
-            ? `[${Q}] failed: ${R.apiError.text}`
-            : `[${Q}] failed: ${Wn}: ${R.apiError.text}`;
-        Ie(re, {
+      if (current.apiError) {
+        let failureLine =
+          limitFailureNote === undefined || current.apiError.kind !== "rate_limit"
+            ? `[${label}] failed: ${current.apiError.text}`
+            : `[${label}] failed: ${limitFailureNote}: ${current.apiError.text}`;
+        logLine(failureLine, {
           log: true,
         });
         return null;
       }
-      let ge =
-        Ce && R.structured !== undefined
-          ? sanitizeStructuredOutput(R.structured, {
+      let structuredResult =
+        syntheticOutput && current.structured !== undefined
+          ? sanitizeStructuredOutput(current.structured, {
               reservedKeys: ["webFetchSavedFiles"],
             })
           : undefined;
-      let toolPermissionContext = getToolPermissionContext(Y);
-      if (toolPermissionContext.mode === "auto" || R.toolReportReview || R.toolReportUnjudged) {
-        let re = await classifyHandoffIfNeeded({
-          child: Ce ? "workflow_object" : "workflow_text",
+      let toolPermissionContext = getToolPermissionContext(agentContext);
+      if (toolPermissionContext.mode === "auto" || current.toolReportReview || current.toolReportUnjudged) {
+        let verdict = await classifyHandoffIfNeeded({
+          child: syntheticOutput ? "workflow_object" : "workflow_text",
           childAgentId: undefined,
           checkpoint: false,
           handback:
-            R.toolReportReview === undefined ? undefined : R.toolReportReview === null ? "send" : "flagged",
-          agentMessages: R.agentMessages ?? [],
-          inheritedVerifiedHumanTurns: buildVerifiedHumanTurns(Y),
-          tools: Vt,
+            current.toolReportReview === undefined
+              ? undefined
+              : current.toolReportReview === null
+                ? "send"
+                : "flagged",
+          agentMessages: current.agentMessages ?? [],
+          inheritedVerifiedHumanTurns: buildVerifiedHumanTurns(agentContext),
+          tools: structuredOutputTool,
           rootToolSurface: context.rootToolSurface,
           toolPermissionContext,
-          abortSignal: Y.abortController.signal,
-          agentType: agentTypeForAnalyticsFromDefinition(ve),
-          totalToolUseCount: ht + R.toolCalls,
-          finalResultText: Ce ? (ge !== undefined ? jsonStringify(ge.value) : undefined) : R.text,
-          agentId: Y.agentId,
-          storageV5: Y.storageV5,
-          credentials: Y.credentials,
+          abortSignal: agentContext.abortController.signal,
+          agentType: agentTypeForAnalyticsFromDefinition(mcpServers),
+          totalToolUseCount: backgroundCount + current.toolCalls,
+          finalResultText: syntheticOutput
+            ? structuredResult !== undefined
+              ? jsonStringify(structuredResult.value)
+              : undefined
+            : current.text,
+          agentId: agentContext.agentId,
+          storageV5: agentContext.storageV5,
+          credentials: agentContext.credentials,
         }).catch((error) => {
-          if (Y.abortController.signal.aborted) return R.toolReportUnjudged ?? null;
+          if (agentContext.abortController.signal.aborted) return current.toolReportUnjudged ?? null;
           logError(error);
           return {
             warning: buildSubagentClassifierUnavailableNote(""),
             kind: "unavailable",
           };
         });
-        let Ze = re === null ? toolPermissionContext.mode !== "auto" : re.kind === "unavailable";
-        let qe = R.toolReportReview ?? (Ze ? (R.toolReportUnjudged ?? re) : re);
-        if (qe && qe.kind !== "unavailable" && R.toolReportAgentId !== undefined)
-          flagAgentContract(R.toolReportAgentId);
-        if (qe) {
-          if (Ce) {
-            let Ae = `[${Q}] ${qe.warning}`;
-            Ie(Ae, {
+        let isUnavailable =
+          verdict === null ? toolPermissionContext.mode !== "auto" : verdict.kind === "unavailable";
+        let review =
+          current.toolReportReview ?? (isUnavailable ? (current.toolReportUnjudged ?? verdict) : verdict);
+        if (review && review.kind !== "unavailable" && current.toolReportAgentId !== undefined)
+          flagAgentContract(current.toolReportAgentId);
+        if (review) {
+          if (syntheticOutput) {
+            let line = `[${label}] ${review.warning}`;
+            logLine(line, {
               log: true,
             });
           } else {
-            R.text = `${qe.warning}
+            current.text = `${review.warning}
 
-${R.text}`;
-            if (qe.kind !== "unavailable") {
-              let Ae = `[${Q}] ${qe.warning}`;
-              Ie(Ae, {
+${current.text}`;
+            if (review.kind !== "unavailable") {
+              let line = `[${label}] ${review.warning}`;
+              logLine(line, {
                 log: true,
               });
             }
           }
         }
       }
-      if (Ce) {
-        if (ge === undefined)
+      if (syntheticOutput) {
+        if (structuredResult === undefined)
           throw Error(
             "agent({schema}): subagent completed without calling StructuredOutput (after in-conversation nudge)",
           );
-        let re = ge.value;
-        if (ge.droppedReservedKeys > 0)
+        let structured = structuredResult.value;
+        if (structuredResult.droppedReservedKeys > 0)
           emitProgress({
             type: "progress",
             toolUseID: "workflow_log",
             data: {
               type: "workflow_log",
-              message: `[${Q}] Dropped a "webFetchSavedFiles" key the agent put in its structured output \u2014 that key is reserved for the harness's own record of files ${WEBFETCH} saved, and the agent cannot supply it.`,
+              message: `[${label}] Dropped a "webFetchSavedFiles" key the agent put in its structured output \u2014 that key is reserved for the harness's own record of files ${WEBFETCH} saved, and the agent cannot supply it.`,
             },
           });
-        if (ge.reportable.length > 0)
+        if (structuredResult.reportable.length > 0)
           emitProgress({
             type: "progress",
             toolUseID: "workflow_log",
             data: {
               type: "workflow_log",
-              message: `[${Q}] ${flaggedOutputNotice(ge.reportable)} (Matched in the string values or key names of the agent's structured output; neutralized there in place.)`,
+              message: `[${label}] ${flaggedOutputNotice(structuredResult.reportable)} (Matched in the string values or key names of the agent's structured output; neutralized there in place.)`,
             },
           });
-        if (R.webFetchSavedFiles) {
-          let Ze = isPlainObject(re);
+        if (current.webFetchSavedFiles) {
+          let isObject = isPlainObject(structured);
           emitProgress({
             type: "progress",
             toolUseID: "workflow_log",
             data: {
               type: "workflow_log",
-              message: `[${Q}] ${webFetchHarnessNote(R.webFetchSavedFiles)}${Ze ? "" : " (The agent's structured result is not an object, so this record is not attached to it as webFetchSavedFiles \u2014 this log line is its only carrier.)"}`,
+              message: `[${label}] ${webFetchHarnessNote(current.webFetchSavedFiles)}${isObject ? "" : " (The agent's structured result is not an object, so this record is not attached to it as webFetchSavedFiles \u2014 this log line is its only carrier.)"}`,
             },
           });
-          if (Ze)
-            return s({
-              ...re,
+          if (isObject)
+            return copyValue({
+              ...structured,
               webFetchSavedFiles: {
-                dirs: [...R.webFetchSavedFiles.dirs],
-                paths: [...R.webFetchSavedFiles.paths],
+                dirs: [...current.webFetchSavedFiles.dirs],
+                paths: [...current.webFetchSavedFiles.paths],
               },
             });
         }
-        return s(re);
+        return copyValue(structured);
       }
-      return R.text;
+      return current.text;
     } catch (error) {
-      ur = true;
+      threw = true;
       throw error;
     } finally {
-      $e = ar;
-      if (Yt) {
-        let { worktreePath, worktreeBranch, headCommit, gitRoot, hookBased } = Yt;
+      remoteBlockGate = rateLimitDenial;
+      if (ownerKey) {
+        let { worktreePath, worktreeBranch, headCommit, gitRoot, hookBased } = ownerKey;
         try {
           if (!hookBased && headCommit && !(await hasWorktreeChanges(worktreePath, headCommit)))
             await removeAgentWorktree(worktreePath, worktreeBranch, gitRoot, false, "workflow_tool");
           else if (gitRoot) await unlockAgentWorktree(worktreePath, gitRoot);
         } catch {}
       }
-      if (It.length > 0)
+      if (stallReasons.length > 0)
         try {
-          let signal = Y.abortController?.signal;
-          let Pe = !ur
-            ? (pn ?? "error")
-            : pn === "retries_exhausted" || pn === "stalled_after_throttle"
-              ? pn
+          let signal = agentContext.abortController?.signal;
+          let finalOutcome = !threw
+            ? (outcome ?? "error")
+            : outcome === "retries_exhausted" || outcome === "stalled_after_throttle"
+              ? outcome
               : signal?.aborted
                 ? unwrapAbortReason(signal.reason) === "background"
                   ? "backgrounded"
                   : "aborted"
-                : pn === "completed"
+                : outcome === "completed"
                   ? "failed_after_rerun"
                   : "error";
-          let we = isDiskless() ? undefined : connectionSetupFacts();
+          let connectionFacts = isDiskless() ? undefined : connectionSetupFacts();
           logEvent("tengu_workflow_agent_stall_retries", {
-            workflow_run_id: h === undefined ? undefined : sanitizeWorkflowRunId(h),
-            agent_type: agentTypeForAnalyticsFromDefinition(ve),
-            restarts: lr,
-            stalled_attempts: count(It, (ge) => ge === "stalled"),
-            reply_lost_attempts: count(It, (ge) => ge === "reply lost"),
-            user_retry_attempts: count(It, (ge) => ge === "user-retry"),
-            outcome: fromEnum(Pe),
-            max_lost_context_tokens: bn.maxContextTokens,
-            lost_tool_calls: bn.toolCalls,
-            lost_duration_ms: bn.durationMs,
-            stall_window_ms: Re,
-            api_provider: fromEnumOpt(we?.provider),
-            base_url: fromEnumOpt(we?.base_url),
-            base_url_gateway: fromEnumOpt(we?.base_url_gateway),
-            https_proxy: we?.https_proxy,
+            workflow_run_id: toolUseId === undefined ? undefined : sanitizeWorkflowRunId(toolUseId),
+            agent_type: agentTypeForAnalyticsFromDefinition(mcpServers),
+            restarts: restartCount,
+            stalled_attempts: count(stallReasons, (reason) => reason === "stalled"),
+            reply_lost_attempts: count(stallReasons, (reason) => reason === "reply lost"),
+            user_retry_attempts: count(stallReasons, (reason) => reason === "user-retry"),
+            outcome: fromEnum(finalOutcome),
+            max_lost_context_tokens: lostTotals.maxContextTokens,
+            lost_tool_calls: lostTotals.toolCalls,
+            lost_duration_ms: lostTotals.durationMs,
+            stall_window_ms: opts,
+            api_provider: fromEnumOpt(connectionFacts?.provider),
+            base_url: fromEnumOpt(connectionFacts?.base_url),
+            base_url_gateway: fromEnumOpt(connectionFacts?.base_url_gateway),
+            https_proxy: connectionFacts?.https_proxy,
           });
         } catch (error) {
           logForDebugging(`tengu_workflow_agent_stall_retries was not sent: ${errorMessage(error)}`, {
@@ -2398,149 +2594,158 @@ ${R.text}`;
         }
     }
   }
-  function Es(U) {
-    if (U === "bubble") return;
-    if (U === "bypassPermissions") return "auto";
-    return U;
+  function normalizeProactivity(mode) {
+    if (mode === "bubble") return;
+    if (mode === "bypassPermissions") return "auto";
+    return mode;
   }
-  async function As(U, ee, Q, Le, Je, Re, queuedAt, it) {
-    let signal = Y.abortController?.signal;
+  async function runAgentTask(idx, promptStr, label, phaseTitle, phaseIndex, opts, queuedAt, onAgentStarted) {
+    let signal = agentContext.abortController?.signal;
     if (signal?.aborted) throw Error("Workflow aborted");
-    yn();
-    let Me = isPromptProvenanceEnabled();
+    enforceBudget();
+    let provenanceOn = isPromptProvenanceEnabled();
     if (
-      await On({
-        idx: U,
-        promptStr: ee,
-        label: Q,
-        ownPhaseTitle: Le,
-        ownPhaseIndex: Je,
-        opts: Re,
+      await reviewGateBlocks({
+        idx,
+        promptStr,
+        label,
+        ownPhaseTitle: phaseTitle,
+        ownPhaseIndex: phaseIndex,
+        opts,
         queuedAt,
-        provenanceOn: Me,
+        provenanceOn,
       })
     )
       return null;
-    let ze = await Zo({
-      idx: U,
-      promptStr: ee,
-      label: Q,
+    let spawnOutcome = await spawnAgentWithHooks({
+      idx,
+      promptStr,
+      label,
       agent: WORKFLOW_SUBAGENT_DEFINITION,
-      model: Re.model,
-      permissionMode: getToolPermissionContext(Y).mode,
+      model: opts.model,
+      permissionMode: getToolPermissionContext(agentContext).mode,
       evalSignal: undefined,
     });
-    if (ze === null) return null;
-    using starting = ze.starting;
-    let { prompt, model } = ze;
+    if (spawnOutcome === null) return null;
+    using starting = spawnOutcome.starting;
+    let { prompt, model } = spawnOutcome;
     if (
-      prompt !== ee &&
-      (await On({
-        idx: U,
+      prompt !== promptStr &&
+      (await reviewGateBlocks({
+        idx,
         promptStr: prompt,
-        label: Q,
-        ownPhaseTitle: Le,
-        ownPhaseIndex: Je,
-        opts: Re,
+        label,
+        ownPhaseTitle: phaseTitle,
+        ownPhaseIndex: phaseIndex,
+        opts,
         queuedAt,
-        provenanceOn: Me,
+        provenanceOn,
       }))
     )
       return null;
     let saltedName = makeSaltedName();
     let now = Date.now();
     let promptPreview = previewAgentValue(prompt);
-    let et;
-    let lt = (state, Ke) =>
+    let remoteSessionId;
+    let emitRemoteProgress = (state, extra) =>
       emitProgress({
         type: "progress",
-        toolUseID: `workflow_agent_${U}_${saltedName}`,
+        toolUseID: `workflow_agent_${idx}_${saltedName}`,
         data: {
           type: "workflow_agent",
-          index: U,
-          label: Q,
-          phaseIndex: Je,
-          phaseTitle: Le,
+          index: idx,
+          label,
+          phaseIndex,
+          phaseTitle,
           agentId: saltedName,
           isolation: "remote",
-          remoteSessionId: et,
+          remoteSessionId,
           state,
           startedAt: now,
           queuedAt,
           promptPreview,
           lastProgressAt: Date.now(),
-          ...Ke,
+          ...extra,
         },
       });
     let abortController = new AbortController();
-    let Et = () => abortController.abort(new DOMException("workflow-abort", "AbortError"));
-    signal?.addEventListener("abort", Et);
+    let abortWorkflow = () => abortController.abort(new DOMException("workflow-abort", "AbortError"));
+    signal?.addEventListener("abort", abortWorkflow);
     if (signal?.aborted) abortController.abort(new DOMException("workflow-abort", "AbortError"));
-    lt("start");
-    it(saltedName);
-    let ve;
+    emitRemoteProgress("start");
+    onAgentStarted(saltedName);
+    let creationFailure;
     try {
-      T?.(saltedName, abortController);
-      let toolPermissionContext = getToolPermissionContext(Y);
-      let { proactivityLevel } = Y.getAppState();
-      let cn = cycleAllTeammateModes(
+      description?.(saltedName, abortController);
+      let toolPermissionContext = getToolPermissionContext(agentContext);
+      let { proactivityLevel } = agentContext.getAppState();
+      let proactivityMode = cycleAllTeammateModes(
         toolPermissionContext.mode,
         proactivityLevel,
         hasLeftProactivityBaseline(toolPermissionContext),
       );
-      let nn =
+      let agentModel =
         model || getWorkflowSubagentModel() !== undefined || getDefaultSubagentModel() !== "inherit"
-          ? getAgentModel(undefined, Y.options.mainLoopModel, model, toolPermissionContext.mode, fn(Q), {
-              inWorkflowRun: h !== undefined,
-            })
+          ? getAgentModel(
+              undefined,
+              agentContext.options.mainLoopModel,
+              model,
+              toolPermissionContext.mode,
+              makeModelNotice(label),
+              {
+                inWorkflowRun: toolUseId !== undefined,
+              },
+            )
           : undefined;
-      let At = Me ? classifyWorkflowRequestSource(context.messages, context.agentId) : null;
-      let Bt = At?.kind === "relay" ? userRequestFraming(At) : null;
+      let requestSource = provenanceOn
+        ? classifyWorkflowRequestSource(context.messages, context.agentId)
+        : null;
+      let requestFraming = requestSource?.kind === "relay" ? userRequestFraming(requestSource) : null;
       if (
         prompt.includes(ARTIFACT_CONTENT_AUTHORED_TAG) ||
-        (Bt?.includes(ARTIFACT_CONTENT_AUTHORED_TAG) ?? false)
+        (requestFraming?.includes(ARTIFACT_CONTENT_AUTHORED_TAG) ?? false)
       )
-        gt = true;
+        foreignArtifactSeen = true;
       let initialMessage =
-        (!Me
+        (!provenanceOn
           ? prompt
-          : At?.kind === "automated"
+          : requestSource?.kind === "automated"
             ? automatedTriggerFramingWithContext(prompt)
-            : (Bt !== null
-                ? Bt +
+            : (requestFraming !== null
+                ? requestFraming +
                   `
 
 `
-                : "") + withHarnessFraming(prompt)) + Se(prompt);
-      let Gt = await teleportToRemote({
+                : "") + withHarnessFraming(prompt)) + preambleFor(prompt);
+      let remoteSession = await teleportToRemote({
         initialMessage,
         source: "workflow_remote_agent",
         tags: [WORKFLOW_REMOTE_AGENT],
-        description: Q,
-        branchName: await Cn(),
-        ...resolveProactivityOptions(Es(cn), proactivityLevel),
-        model: nn,
+        description: label,
+        branchName: await ensureBranchPushed(),
+        ...resolveProactivityOptions(normalizeProactivity(proactivityMode), proactivityLevel),
+        model: agentModel,
         signal: abortController.signal,
-        onBundleFail: (wt) => {
-          ve = wt;
+        onBundleFail: (reason) => {
+          creationFailure = reason;
         },
-        onCreateFail: (wt) => {
-          ve = wt;
+        onCreateFail: (reason) => {
+          creationFailure = reason;
         },
-        storageV5: Y.storageV5,
-        credentials: Y.credentials,
+        storageV5: agentContext.storageV5,
+        credentials: agentContext.credentials,
       });
-      if (!Gt) throw Error(ve ?? "Failed to create cloud session");
-      et = Gt.id;
+      if (!remoteSession) throw Error(creationFailure ?? "Failed to create cloud session");
+      remoteSessionId = remoteSession.id;
       starting.started({
         agentId: saltedName,
-        model: nn ?? getMainLoopModel(),
+        model: agentModel ?? getMainLoopModel(),
       });
-      lt("progress");
+      emitRemoteProgress("progress");
       let { text, structuredOutput, resultSubtype, usage, modelUsage, toolCalls } =
-        await awaitRemoteSessionResult(et, abortController.signal, Y.credentials);
+        await awaitRemoteSessionResult(remoteSessionId, abortController.signal, agentContext.credentials);
       let sanitized = sanitizeSubagentOutput(text).sanitized;
-      if (text.includes(ARTIFACT_CONTENT_AUTHORED_TAG)) gt = true;
+      if (text.includes(ARTIFACT_CONTENT_AUTHORED_TAG)) foreignArtifactSeen = true;
       for (let [key, value] of Object.entries(modelUsage ?? {}))
         addToTotalSessionCost(
           value.costUSD,
@@ -2564,39 +2769,41 @@ ${R.text}`;
           },
           key,
         );
-      if (Re.schema && structuredOutput === undefined) {
-        let wt =
+      if (opts.schema && structuredOutput === undefined) {
+        let missingOutputReason =
           resultSubtype === "error_max_structured_output_retries"
             ? "the cloud agent called StructuredOutput but no attempt produced a surviving valid output (failed schema validation, or retracted by a model fallback)"
             : resultSubtype && resultSubtype !== "success"
               ? `the cloud agent turn ended with result subtype '${resultSubtype}'`
               : "the cloud agent never called the StructuredOutput tool";
-        throw Error(`agent({isolation:'remote', schema}) completed without structured output: ${wt}.`);
+        throw Error(
+          `agent({isolation:'remote', schema}) completed without structured output: ${missingOutputReason}.`,
+        );
       }
-      lt("done", {
+      emitRemoteProgress("done", {
         tokens: usage ? getTokenCountFromUsage(usage) : 0,
         toolCalls,
         durationMs: Date.now() - now,
-        resultPreview: previewAgentValue(Re.schema ? structuredOutput : sanitized),
+        resultPreview: previewAgentValue(opts.schema ? structuredOutput : sanitized),
       });
-      if (Re.schema) return s(structuredOutput);
-      if (getToolPermissionContext(Y).mode === "auto" && sanitized) {
-        let wt = await classifyHandoffIfNeeded({
+      if (opts.schema) return copyValue(structuredOutput);
+      if (getToolPermissionContext(agentContext).mode === "auto" && sanitized) {
+        let review = await classifyHandoffIfNeeded({
           child: "workflow_remote",
           childAgentId: undefined,
           checkpoint: false,
           agentMessages: [],
-          inheritedVerifiedHumanTurns: buildVerifiedHumanTurns(Y),
+          inheritedVerifiedHumanTurns: buildVerifiedHumanTurns(agentContext),
           tools: context.options.tools,
           rootToolSurface: context.rootToolSurface,
-          toolPermissionContext: getToolPermissionContext(Y),
+          toolPermissionContext: getToolPermissionContext(agentContext),
           abortSignal: abortController.signal,
           agentType: lit(WORKFLOW_SUBAGENT_TYPE),
           totalToolUseCount: toolCalls,
           finalResultText: sanitized,
-          agentId: Y.agentId,
-          storageV5: Y.storageV5,
-          credentials: Y.credentials,
+          agentId: agentContext.agentId,
+          storageV5: agentContext.storageV5,
+          credentials: agentContext.credentials,
         }).catch((error) => {
           if (abortController.signal.aborted) return null;
           logError(error);
@@ -2605,130 +2812,136 @@ ${R.text}`;
             kind: "unavailable",
           };
         });
-        if (wt) {
-          if (wt.kind !== "unavailable") {
-            let ft = `[${Q}] ${wt.warning}`;
-            Ie(ft, {
+        if (review) {
+          if (review.kind !== "unavailable") {
+            let line = `[${label}] ${review.warning}`;
+            logLine(line, {
               log: true,
             });
           }
-          return `${wt.warning}
+          return `${review.warning}
 
 ${sanitized}`;
         }
       }
       return sanitized;
     } catch (error) {
-      if (et) archiveRemoteSession(et).catch(() => {});
+      if (remoteSessionId) archiveRemoteSession(remoteSessionId).catch(() => {});
       if (unwrapAbortReason(abortController.signal.reason) === "user-skip") {
-        lt("error", {
+        emitRemoteProgress("error", {
           error: "skipped by user",
           skipped: true,
           durationMs: Date.now() - now,
         });
         return null;
       }
-      lt("error", {
+      emitRemoteProgress("error", {
         error: error instanceof Error ? error.message : String(error),
         durationMs: Date.now() - now,
       });
       throw error;
     } finally {
-      signal?.removeEventListener("abort", Et);
-      T?.(saltedName, null);
+      signal?.removeEventListener("abort", abortWorkflow);
+      description?.(saltedName, null);
     }
   }
-  let parallel = sealPrototype(async (U) => {
-    if (Y.abortController?.signal.aborted) return new Promise(() => {});
-    let ee = Ee("parallel");
+  let parallel = sealPrototype(async (fns) => {
+    if (agentContext.abortController?.signal.aborted) return new Promise(() => {});
+    let callKeyScope = createCallKeyScope("parallel");
     await sleep(0);
-    if (!Array.isArray(U)) throw TypeError("parallel() expects an array of functions");
-    let Q = snapshotArrayAcrossVm(w(U));
-    if (Q.length === 0) return s([]);
-    Kt();
-    yn();
-    for (let Te of Q)
-      if (typeof Te !== "function")
+    if (!Array.isArray(fns)) throw TypeError("parallel() expects an array of functions");
+    let fnSnapshot = snapshotArrayAcrossVm(passthrough(fns));
+    if (fnSnapshot.length === 0) return copyValue([]);
+    enforceAgentCap();
+    enforceBudget();
+    for (let fn of fnSnapshot)
+      if (typeof fn !== "function")
         throw TypeError(
           "parallel() expects an array of functions, not promises. Wrap each call: () => agent(...)",
         );
     let settled = await Promise.allSettled(
-      Q.map((Te, it) => {
+      fnSnapshot.map((fn, index) => {
         try {
-          return ee.inSlot(it, () => ce(E(Te)));
+          return callKeyScope.inSlot(index, () => awaitValue(callFn(fn)));
         } catch (error) {
           return Promise.reject(error);
         }
       }),
     );
-    ee.join();
-    let Je = 0;
-    let mapped = settled.map((Te, it) => {
-      if (Te.status === "fulfilled") return Te.value.v;
-      let { name: Ne, msg } = describeThrownValue(Te.reason);
-      if (Ne === "WorkflowBudgetExceededError") {
-        Je++;
+    callKeyScope.join();
+    let droppedCount = 0;
+    let mapped = settled.map((settled, index) => {
+      if (settled.status === "fulfilled") return settled.value.v;
+      let { name, msg } = describeThrownValue(settled.reason);
+      if (name === "WorkflowBudgetExceededError") {
+        droppedCount++;
         return null;
       }
-      let ze = `parallel[${it}] failed: ${msg}`;
-      Ie(ze, {
+      let failureLine = `parallel[${index}] failed: ${msg}`;
+      logLine(failureLine, {
         log: true,
       });
       return null;
     });
-    if (Je > 0) ye.push(`parallel: ${Je} ${plural(Je, "slot")} dropped \u2014 token budget exceeded`);
-    return s(mapped);
+    if (droppedCount > 0)
+      logLines.push(
+        `parallel: ${droppedCount} ${plural(droppedCount, "slot")} dropped \u2014 token budget exceeded`,
+      );
+    return copyValue(mapped);
   });
-  let pipeline = sealPrototype(async (U, ...ee) => {
-    if (Y.abortController?.signal.aborted) return new Promise(() => {});
-    let Q = Ee("pipeline");
+  let pipeline = sealPrototype(async (items, ...stages) => {
+    if (agentContext.abortController?.signal.aborted) return new Promise(() => {});
+    let callKeyScope = createCallKeyScope("pipeline");
     await sleep(0);
-    if (!Array.isArray(U)) throw TypeError("pipeline() expects an array as the first argument");
-    let Le = snapshotArrayAcrossVm(w(U));
-    let Je = snapshotArrayAcrossVm(ee);
-    if (Le.length === 0) return s([]);
-    Kt();
-    yn();
-    for (let Ne of Je)
-      if (typeof Ne !== "function")
+    if (!Array.isArray(items)) throw TypeError("pipeline() expects an array as the first argument");
+    let itemSnapshot = snapshotArrayAcrossVm(passthrough(items));
+    let stageSnapshot = snapshotArrayAcrossVm(stages);
+    if (itemSnapshot.length === 0) return copyValue([]);
+    enforceAgentCap();
+    enforceBudget();
+    for (let stage of stageSnapshot)
+      if (typeof stage !== "function")
         throw TypeError("pipeline() stages must be functions: pipeline(items, item => ..., result => ...)");
     let settled = await Promise.allSettled(
-      Le.map((Ne, Me) =>
-        Q.inSlot(Me, async () => {
-          let ze = await ce(Ne);
-          for (let st of Je) {
-            if (ze.v === null) break;
-            ze = await ce(E(st, ze.v, Ne, Me));
+      itemSnapshot.map((item, index) =>
+        callKeyScope.inSlot(index, async () => {
+          let itemValue = await awaitValue(item);
+          for (let stage of stageSnapshot) {
+            if (itemValue.v === null) break;
+            itemValue = await awaitValue(callFn(stage, itemValue.v, item, index));
           }
-          return ze;
+          return itemValue;
         }),
       ),
     );
-    Q.join();
-    let Te = 0;
-    let mapped = settled.map((Ne, Me) => {
-      if (Ne.status === "fulfilled") return Ne.value.v;
-      let { name: ze, msg } = describeThrownValue(Ne.reason);
-      if (ze === "WorkflowBudgetExceededError") {
-        Te++;
+    callKeyScope.join();
+    let droppedCount = 0;
+    let mapped = settled.map((settled, index) => {
+      if (settled.status === "fulfilled") return settled.value.v;
+      let { name, msg } = describeThrownValue(settled.reason);
+      if (name === "WorkflowBudgetExceededError") {
+        droppedCount++;
         return null;
       }
-      let ie = `pipeline[${Me}] failed: ${msg}`;
-      Ie(ie, {
+      let failureLine = `pipeline[${index}] failed: ${msg}`;
+      logLine(failureLine, {
         log: true,
       });
       return null;
     });
-    if (Te > 0) ye.push(`pipeline: ${Te} ${plural(Te, "slot")} dropped \u2014 token budget exceeded`);
-    return s(mapped);
+    if (droppedCount > 0)
+      logLines.push(
+        `pipeline: ${droppedCount} ${plural(droppedCount, "slot")} dropped \u2014 token budget exceeded`,
+      );
+    return copyValue(mapped);
   });
-  let log = sealPrototype((U) => {
+  let log = sealPrototype((value) => {
     emitProgress({
       type: "progress",
       toolUseID: "workflow_log",
       data: {
         type: "workflow_log",
-        message: describeLogArg(U),
+        message: describeLogArg(value),
       },
     });
   });
@@ -2738,32 +2951,35 @@ ${sanitized}`;
     pipeline,
     log,
     phase,
-    resolvePhase: Mn,
-    reservePhase: ys,
-    recordFailure: (U) =>
-      Ie(U, {
+    resolvePhase: announcePhase,
+    reservePhase: phaseIndexOf,
+    recordFailure: (message) =>
+      logLine(message, {
         log: false,
       }),
-    getAgentCount: () => G,
-    getFailures: () => ye,
-    getForeignArtifactContent: () => gt,
-    getToolsUsed: () => (isSillyShoreGateOn() ? uniq([...[...Ut.keys()].flatMap(kt), ...$t]) : []),
+    getAgentCount: () => agentCount,
+    getFailures: () => logLines,
+    getForeignArtifactContent: () => foreignArtifactSeen,
+    getToolsUsed: () =>
+      isSillyShoreGateOn()
+        ? uniq([...[...toolsUsedByAgent.keys()].flatMap(toolsUsedFor), ...usedConversationTools])
+        : [],
     takeUsageLimitDenial: () => {
-      let U = $e;
-      $e = undefined;
-      return U;
+      let denial = remoteBlockGate;
+      remoteBlockGate = undefined;
+      return denial;
     },
-    bindVMAwait: (U) => {
-      ce = U.settle;
-      E = U.call;
-      s = U.clone;
-      S = U.sanitize;
-      w = U.snapshot;
-      P = U.getProp;
+    bindVMAwait: (vms) => {
+      awaitValue = vms.settle;
+      callFn = vms.call;
+      copyValue = vms.clone;
+      hostCopyFn = vms.sanitize;
+      passthrough = vms.snapshot;
+      safeGet = vms.getProp;
     },
-    sanitizeVMValue: (U) => S(U),
-    getVMProp: (U, ee) => P(U, ee),
-    withLanesInert: (U) => se.run(N, U),
+    sanitizeVMValue: (value) => hostCopyFn(value),
+    getVMProp: (target, key) => safeGet(target, key),
+    withLanesInert: (fn) => callKeyStorage.run(frozenRootCallKey, fn),
   };
 }
 export { createWorkflowAgentRuntime, sanitizeWorkflowRunId };

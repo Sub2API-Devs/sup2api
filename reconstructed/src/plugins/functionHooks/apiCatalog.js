@@ -124,7 +124,7 @@ import {
   interfaceCallBehind,
   createPromptTextApi,
   checkPromptSectionArgs,
-  aEt,
+  EMPTY_PROMPT_DRAFT,
 } from "./promptApi.js";
 import { audioSpeakOp } from "./audioApi.js";
 import { mcpCallForPlugin, mcpConnectForPlugin } from "./mcpApi.js";
@@ -191,31 +191,32 @@ import {
   stateSetForPlugin,
 } from "./api/state.js";
 import { settingsSourceProblem, settingsReadInputOf, settingsRead } from "./api/settingsRead.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4017450-4017557 placement = getPlanPhase4Section (0.353)
 /**
  * 插件提供的文本被截断时（按插件/字段去重）提示一次。旧版名 getPlanPhase4Section 为错配。
  */
-function warnPluginTextTruncated(e) {
-  let { plugin, spelling, what } = e;
+function warnPluginTextTruncated(info) {
+  let { plugin, spelling, what } = info;
   tellOnce({
     key: ["cut", pluginToastScopeKey(plugin), spelling, what].join(" "),
     lead: plugin,
-    text: describeTruncation(e),
+    text: describeTruncation(info),
   });
 }
 //@ chunk-e6aww6q8.js:4017557-4017764 placement
 /**
  * 插件文本超过 2000 字符时提示：终端只显示前 2000，远程前 10000。
  */
-function warnIfPluginTextTooLong(plugin, spelling, r) {
-  if (r !== undefined && r.length > MAX_DISPLAY_UNITS)
+function warnIfPluginTextTooLong(plugin, spelling, text) {
+  if (text !== undefined && text.length > MAX_DISPLAY_UNITS)
     warnPluginTextTruncated({
       plugin,
       spelling,
       what: "a text",
       name: undefined,
-      length: r.length,
+      length: text.length,
       kept: `is drawn up to its first ${MAX_DISPLAY_UNITS} on the terminal, its first ${MAX_UI_LOG_CHARS} on a remote surface`,
     });
 }
@@ -223,29 +224,36 @@ function warnIfPluginTextTooLong(plugin, spelling, r) {
 /**
  * 包装插件文本回调：先交给处理函数再检查长度。
  */
-var makePluginTextHandler = (spelling, uiToastOp) => (r, s) => {
-  uiToastOp(r, s.plugin);
-  warnIfPluginTextTooLong(s.plugin, spelling, r.text);
+var makePluginTextHandler = (spelling, uiToastOp) => (args, ctx) => {
+  uiToastOp(args, ctx.plugin);
+  warnIfPluginTextTooLong(ctx.plugin, spelling, args.text);
   return Promise.resolve(undefined);
 };
 //@ chunk-e6aww6q8.js:4017849-4018111 placement
-var describeLongToolDescription = (plugin, { name: n, description }, s, h) => ({
+var describeLongToolDescription = (plugin, { name, description }, max, limit) => ({
   plugin,
   spelling: "tool.register",
   what: "the description",
-  name: n,
+  name,
   length: description.length,
   kept:
-    `reaches the model up to its first ${s}` +
-    (h > s ? ` characters, or its first ${h} once the model loads the tool through tool search` : ""),
+    `reaches the model up to its first ${max}` +
+    (limit > max
+      ? ` characters, or its first ${limit} once the model loads the tool through tool search`
+      : ""),
 });
 //@ chunk-e6aww6q8.js:4018111-4018249 placement
-function warnLongToolDescription({ plugin, isBuiltin }, r) {
-  let s = maxDescriptionLength();
-  if (r.description.length <= s) return;
-  let y = describeLongToolDescription(plugin, r, s, maxDescriptionLength(r.isDeferred !== false));
-  if (isBuiltin) describeTruncation(y);
-  else warnPluginTextTruncated(y);
+function warnLongToolDescription({ plugin, isBuiltin }, tool) {
+  let maxLength = maxDescriptionLength();
+  if (tool.description.length <= maxLength) return;
+  let message = describeLongToolDescription(
+    plugin,
+    tool,
+    maxLength,
+    maxDescriptionLength(tool.isDeferred !== false),
+  );
+  if (isBuiltin) describeTruncation(message);
+  else warnPluginTextTruncated(message);
 }
 //@ chunk-e6aww6q8.js:4018249-4018401 placement
 function warnLongSpeakText(plugin, text) {
@@ -265,15 +273,15 @@ function warnLongSpeakText(plugin, text) {
  */
 var MAX_CATALOG_TEXT = 65536;
 //@ chunk-e6aww6q8.js:4018415-4018620 placement
-function warnLargeInputSchema(plugin, { name: n, inputSchema }) {
-  let { length: s } = jsonStringify(inputSchema ?? {});
-  if (s > MAX_CATALOG_TEXT)
+function warnLargeInputSchema(plugin, { name, inputSchema }) {
+  let { length } = jsonStringify(inputSchema ?? {});
+  if (length > MAX_CATALOG_TEXT)
     warnPluginTextTruncated({
       plugin,
       spelling: "tool.register",
       what: "the input schema",
-      name: n,
-      length: s,
+      name,
+      length,
       kept: "rides whole on every request the session sends",
     });
 }
@@ -281,26 +289,27 @@ function warnLargeInputSchema(plugin, { name: n, inputSchema }) {
 /**
  * 截断并加省略号
  */
-var clipHintText = (e, n) => (e.length <= n ? e : `${truncateToLength(e, n)}\u2026`);
+var clipHintText = (text, maxLength) =>
+  text.length <= maxLength ? text : `${truncateToLength(text, maxLength)}\u2026`;
 //@ chunk-e6aww6q8.js:4018668-4018724 placement
 /**
  * 截断 title/description
  */
-var clipPaneFields = (e) => ({
-  ...e,
-  description: clipHintText(e.description, MAX_KEPT_TEXT_CHARS),
+var clipPaneFields = (pane) => ({
+  ...pane,
+  description: clipHintText(pane.description, MAX_KEPT_TEXT_CHARS),
 });
 //@ chunk-e6aww6q8.js:4018724-4018924 placement
-function warnLongTexts({ plugin, spelling, name: r, texts }) {
+function warnLongTexts({ plugin, spelling, name, texts }) {
   for (let [key, value] of Object.entries(texts)) {
-    let { length: S } = value ?? "";
-    if (S > MAX_KEPT_TEXT_CHARS)
+    let { length } = value ?? "";
+    if (length > MAX_KEPT_TEXT_CHARS)
       warnPluginTextTruncated({
         plugin,
         spelling,
         what: key,
-        name: r,
-        length: S,
+        name,
+        length,
         kept: `is kept up to its first ${MAX_KEPT_TEXT_CHARS}`,
       });
   }
@@ -309,45 +318,53 @@ function warnLongTexts({ plugin, spelling, name: r, texts }) {
 /**
  * 记录并提示（每插件每方法一次）某 $ 调用被丢弃及原因。
  */
-function reportDroppedApiCall(plugin, n, r) {
-  let s = `$.${n} dropped: ${r}`;
-  logForDebugging(`${plugin}: ${s}`, {
+function reportDroppedApiCall(plugin, op, reason) {
+  let message = `$.${op} dropped: ${reason}`;
+  logForDebugging(`${plugin}: ${message}`, {
     level: "warn",
   });
   tellOnce({
-    key: ["dropped", pluginToastScopeKey(plugin), n].join(" "),
+    key: ["dropped", pluginToastScopeKey(plugin), op].join(" "),
     lead: plugin,
-    text: s,
+    text: message,
   });
 }
 //@ chunk-e6aww6q8.js:4019059-4019090 placement
 /**
  * 先登记再返回
  */
-function withRegisteredTool(e, n) {
-  n();
-  return e;
+function withRegisteredTool(value, finish) {
+  finish();
+  return value;
 }
 //@ chunk-e6aww6q8.js:4019090-4019228 placement
-var STOPPED_TOAST_TEXT = "Stopped: type a message to continue; a mod cannot resume work after Stop";
-var stopToastState = identity_2(
-  {
-    stops: new WeakSet(),
-  },
-  (e) => {
-    e.stops = new WeakSet();
-  },
-);
+var STOPPED_TOAST_TEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var stopToastState;
+deferInit("chunk-e6aww6q8.js:4019090", () => {
+  STOPPED_TOAST_TEXT = "Stopped: type a message to continue; a mod cannot resume work after Stop";
+  stopToastState = identity_2(
+    {
+      stops: new WeakSet(),
+    },
+    (state) => {
+      state.stops = new WeakSet();
+    },
+  );
+});
 //@ chunk-e6aww6q8.js:4019228-4019375 placement
 /**
  * 会话被用户 Stop 后，某插件试图继续工作时弹一次提示（每次停止只弹一次）。
  */
-function toastStoppedOnce(e) {
-  let n = pluginInputHoldSlot.get();
-  let r = currentSurfaceBinding();
-  if (!(n !== undefined && r !== undefined && n.session.deref() === r) || stopToastState.stops.has(n)) return;
-  stopToastState.stops.add(n);
-  r.toast(e, STOPPED_TOAST_TEXT);
+function toastStoppedOnce(ctx) {
+  let hold = pluginInputHoldSlot.get();
+  let binding = currentSurfaceBinding();
+  if (
+    !(hold !== undefined && binding !== undefined && hold.session.deref() === binding) ||
+    stopToastState.stops.has(hold)
+  )
+    return;
+  stopToastState.stops.add(hold);
+  binding.toast(ctx, STOPPED_TOAST_TEXT);
 }
 //@ chunk-e6aww6q8.js:4019375-4019397 placement
 var SUBSCRIBEPR = "SubscribePR";
@@ -373,126 +390,145 @@ What does NOT arrive: per-suite CI successes, new pushes to the PR branch, and m
 /**
  * 可在云会话运行的工具
  */
-var REMOTE_CAPABLE_TOOLS = new Set([
-  MONITOR,
-  CRON_CREATE_TOOL_NAME,
-  SCHEDULE_WAKEUP_TOOL_NAME,
-  REMOTETRIGGER,
-  PROPOSEGOAL,
-  REPL_TOOL_NAME,
-]);
-var SHELL_TOOLS = new Set([BASH_TOOL_NAME, POWERSHELL_TOOL_NAME]);
+var REMOTE_CAPABLE_TOOLS; // deferred: uses CRON_CREATE_TOOL_NAME (../../tools/ScheduleCronTool/prompt.js) of its import cycle while loading; runs once the cycle is complete
+var SHELL_TOOLS;
+deferInit("chunk-e6aww6q8.js:4022344", () => {
+  REMOTE_CAPABLE_TOOLS = new Set([
+    MONITOR,
+    CRON_CREATE_TOOL_NAME,
+    SCHEDULE_WAKEUP_TOOL_NAME,
+    REMOTETRIGGER,
+    PROPOSEGOAL,
+    REPL_TOOL_NAME,
+  ]);
+  SHELL_TOOLS = new Set([BASH_TOOL_NAME, POWERSHELL_TOOL_NAME]);
+});
 //@ chunk-e6aww6q8.js:4022403-4022621 placement
-function isArtifactSubscribeCall(e, n) {
-  let { action } = n;
-  if (e === ARTIFACT_TOOL_NAME_2) {
-    let s = (action === undefined || action === "publish") && n.asset === true;
-    return (isPublishShapedArtifactAction_2(n) && !s) || action === "watch" || action === "resume_replies";
+function isArtifactSubscribeCall(tool, input) {
+  let { action } = input;
+  if (tool === ARTIFACT_TOOL_NAME_2) {
+    let isPublishLike = (action === undefined || action === "publish") && input.asset === true;
+    return (
+      (isPublishShapedArtifactAction_2(input) && !isPublishLike) ||
+      action === "watch" ||
+      action === "resume_replies"
+    );
   }
   return (
-    e === ARTIFACT_COMMENTS_TOOL_NAME &&
+    tool === ARTIFACT_COMMENTS_TOOL_NAME &&
     action === "watch" &&
-    (n.replies === true || (n.on !== false && n.url !== undefined))
+    (input.replies === true || (input.on !== false && input.url !== undefined))
   );
 }
 //@ chunk-e6aww6q8.js:4022621-4023199 placement
-var SUBSCRIBE_API_CATALOG = (e, n) => (r, s) => {
-  let h = e(r.tool);
-  let y = toolInputOf(r);
-  let runInBackground = y.run_in_background;
-  let w = runInBackground === true || runInBackground === "true";
-  let L = h === SUBSCRIBEPR && y.action !== "unsubscribe";
-  let q =
-    REMOTE_CAPABLE_TOOLS.has(h) || (SHELL_TOOLS.has(h) && w) || L || isArtifactSubscribeCall(h, y)
-      ? submitHoldRefusal(s, "$.tool.call")
+var SUBSCRIBE_API_CATALOG = (catalogOf, site) => (event, ctx) => {
+  let op = catalogOf(event.tool);
+  let input = toolInputOf(event);
+  let runInBackground = input.run_in_background;
+  let isBackground = runInBackground === true || runInBackground === "true";
+  let catalog = op === SUBSCRIBEPR && input.action !== "unsubscribe";
+  let refused =
+    REMOTE_CAPABLE_TOOLS.has(op) ||
+    (SHELL_TOOLS.has(op) && isBackground) ||
+    catalog ||
+    isArtifactSubscribeCall(op, input)
+      ? submitHoldRefusal(ctx, "$.tool.call")
       : undefined;
-  if (q !== undefined) runIgnoringAbort(() => toastStoppedOnce(s.plugin));
-  let Z = isArtifactSubscribeCall(h, y)
+  if (refused !== undefined) runIgnoringAbort(() => toastStoppedOnce(ctx.plugin));
+  let error = isArtifactSubscribeCall(op, input)
     ? "a page publish, a watch or a resume of replies arms a watch on the page"
-    : L
+    : catalog
       ? "a subscription's events would arrive as input"
-      : h === REPL_TOOL_NAME
+      : op === REPL_TOOL_NAME
         ? "a script of it can start an agent, which nothing inside it holds"
         : "it starts background work, a schedule or a goal";
-  return q === undefined
-    ? n(r, s)
+  return refused === undefined
+    ? site(event, ctx)
     : Promise.resolve({
-        deny: `${h} was not run: ${Z}, and ${q}`,
+        deny: `${op} was not run: ${error}, and ${refused}`,
       });
 };
 //@ chunk-e6aww6q8.js:4023199-4023440 placement
-var Wat = Object.freeze({
-  [AGENT]: "runs the Agent tool: that is $.agent.spawn",
-  [ASKUSERQUESTION]: "runs the AskUserQuestion tool: that is $.ui.ask",
-  [WORKFLOW_TOOL_NAME]:
-    "runs the Workflow tool, whose agents run outside the at-once bound on spawns: $.agent.spawn is the door",
+var TOOL_CALL_DESCRIPTIONS; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4023199", () => {
+  TOOL_CALL_DESCRIPTIONS = Object.freeze({
+    [AGENT]: "runs the Agent tool: that is $.agent.spawn",
+    [ASKUSERQUESTION]: "runs the AskUserQuestion tool: that is $.ui.ask",
+    [WORKFLOW_TOOL_NAME]:
+      "runs the Workflow tool, whose agents run outside the at-once bound on spawns: $.agent.spawn is the door",
+  });
 });
 //@ chunk-e6aww6q8.js:4023440-4023739 placement
 /**
  * $.tool.call 的 check/run 表项：参数须为 {tool, ...args}，部分工具不允许，run 调用工具并转换结果。
  */
-var TOOL_CALL_API = {
-  check: (e) => {
-    if (!isPlainObject_5(e) || typeof e.tool !== "string" || String(e.tool) === "")
-      return "takes the event's input: { tool, ...args }";
-    let r = findTool(currentSurfaceBinding()?.tools() ?? [], e.tool)?.name ?? e.tool;
-    return Object.hasOwn(Wat, r) ? Wat[r] : undefined;
-  },
-  run: SUBSCRIBE_API_CATALOG(
-    (e) => findTool(currentSurfaceBinding()?.tools() ?? [], e)?.name ?? e,
-    async (e, n) => stripErrorFlag(await toolCallForPlugin(e, n)),
-  ),
-};
+var TOOL_CALL_API; // deferred: uses SUBSCRIBE_API_CATALOG of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4023440", () => {
+  TOOL_CALL_API = {
+    check: (input) => {
+      if (!isPlainObject_5(input) || typeof input.tool !== "string" || String(input.tool) === "")
+        return "takes the event's input: { tool, ...args }";
+      let problem = findTool(currentSurfaceBinding()?.tools() ?? [], input.tool)?.name ?? input.tool;
+      return Object.hasOwn(TOOL_CALL_DESCRIPTIONS, problem) ? TOOL_CALL_DESCRIPTIONS[problem] : undefined;
+    },
+    run: SUBSCRIBE_API_CATALOG(
+      (a) => findTool(currentSurfaceBinding()?.tools() ?? [], a)?.name ?? a,
+      async (b, toolName) => stripErrorFlag(await toolCallForPlugin(b, toolName)),
+    ),
+  };
+});
 //@ chunk-e6aww6q8.js:4023739-4023936 placement
 var TOOL_CHECK_API = {
-  check: (e) =>
-    typeof e?.tool !== "string" || e.tool === "" || !isPlainObject_5(e.input)
+  check: (input) =>
+    typeof input?.tool !== "string" || input.tool === "" || !isPlainObject_5(input.input)
       ? "takes { tool, input } (the tool's name and its arguments, an object)"
       : undefined,
-  run: (e, n) =>
+  run: (a, b) =>
     toolCheckForPlugin(
       {
-        tool: e.tool,
-        input: e.input,
+        tool: a.tool,
+        input: a.input,
       },
-      n,
+      b,
     ),
 };
 //@ chunk-e6aww6q8.js:4023936-4024001 placement
 /**
  * 绑定工具名的 check/run
  */
-var toolScopedOp = (e, n, run) => ({
-  check: (s) => (!isPlainObject_5(s) || s.tool !== e ? n : undefined),
+var toolScopedOp = (tool, problem, run) => ({
+  check: (input) => (!isPlainObject_5(input) || input.tool !== tool ? problem : undefined),
   run,
 });
 //@ chunk-e6aww6q8.js:4024001-4024606 placement
 var UI_NOTICE_API_CATALOG = {
-  check: (e) => {
-    if (typeof e?.tool_use_id !== "string" || e.tool_use_id === "")
+  check: (input) => {
+    if (typeof input?.tool_use_id !== "string" || input.tool_use_id === "")
       return "takes the tool_use_id of an open call";
-    return e.text === undefined ? undefined : checkTextArg(e.text);
+    return input.text === undefined ? undefined : checkTextArg(input.text);
   },
-  run: (e, n) => {
-    let r = checkToolCallOwner(e.tool_use_id, n.plugin);
-    if (r !== undefined) {
-      reportDroppedApiCall(n.plugin, "ui.notice", r);
-      return Promise.reject(new HooksError(`${n.plugin}: $.ui.notice: ${e.tool_use_id} refused: ` + r));
+  run: (input, b) => {
+    let base = checkToolCallOwner(input.tool_use_id, b.plugin);
+    if (base !== undefined) {
+      reportDroppedApiCall(b.plugin, "ui.notice", base);
+      return Promise.reject(
+        new HooksError(`${b.plugin}: $.ui.notice: ${input.tool_use_id} refused: ` + base),
+      );
     }
-    let { text } = e;
-    let h = text === undefined;
+    let { text } = input;
+    let problem = text === undefined;
     setPluginNotice(
-      e.tool_use_id,
-      h
+      input.tool_use_id,
+      problem
         ? undefined
         : {
-            plugin: n.plugin,
+            plugin: b.plugin,
             text,
           },
     );
     if ((text ?? "").length > MAX_DISPLAY_UNITS)
       warnPluginTextTruncated({
-        plugin: n.plugin,
+        plugin: b.plugin,
         spelling: "ui.notice",
         what: "a text",
         name: undefined,
@@ -506,181 +542,187 @@ var UI_NOTICE_API_CATALOG = {
 /**
  * 插件 $.model.* 等接口的目录项：名字、参数形状说明与遥测事件名。
  */
-var MODEL_API_CATALOG = (e) =>
+var MODEL_API_CATALOG = (runtime) =>
   freezeObject({
     "model.complete": {
       check: checkModelCompleteArgs,
-      run: (n, r) => modelCompleteForPlugin(n, ...telemetryCallArgs(r, "plugin_model_complete")),
+      run: (args, ctx) => modelCompleteForPlugin(args, ...telemetryCallArgs(ctx, "plugin_model_complete")),
     },
     "model.classify": {
-      check: (n) =>
-        typeof n?.text !== "string" || !Array.isArray(n.labels) ? "takes { text, labels }" : undefined,
-      run: (n, r) =>
+      check: (args) =>
+        typeof args?.text !== "string" || !Array.isArray(args.labels) ? "takes { text, labels }" : undefined,
+      run: (args, ctx) =>
         classifyWithModel({
-          pluginName: r.plugin,
-          complete: (s) => modelCompleteForPlugin(s, ...telemetryCallArgs(r, "plugin_model_classify")),
+          pluginName: ctx.plugin,
+          complete: (request) =>
+            modelCompleteForPlugin(request, ...telemetryCallArgs(ctx, "plugin_model_classify")),
           defaultModel: getSmallFastModel(),
-          text: n.text,
-          labels: n.labels,
-          options: n.options,
+          text: args.text,
+          labels: args.labels,
+          options: args.options,
         }),
     },
     "model.fork": {
-      check: (n) =>
-        typeof n?.prompt !== "string" || n.prompt.trim() === ""
+      check: (args) =>
+        typeof args?.prompt !== "string" || args.prompt.trim() === ""
           ? "takes { prompt } (a non-empty prompt)"
           : undefined,
-      run: (n, r) => modelForkForPlugin(n, r.plugin, telemetryNamesForPlugin(r), r.signal),
+      run: (args, ctx) => modelForkForPlugin(args, ctx.plugin, telemetryNamesForPlugin(ctx), ctx.signal),
     },
-    "audio.play": AUDIO_PLAY_API(e),
+    "audio.play": AUDIO_PLAY_API(runtime),
     "audio.speak": {
-      async run(n, r) {
-        let s = await audioSpeakOp(n, r.plugin, r.signal);
-        warnLongSpeakText(r.plugin, n.text);
-        return s;
+      async run(args, ctx) {
+        let result = await audioSpeakOp(args, ctx.plugin, ctx.signal);
+        warnLongSpeakText(ctx.plugin, args.text);
+        return result;
       },
     },
     "mcp.call": {
-      check: (n) =>
-        typeof n?.server !== "string" ||
-        typeof n.tool !== "string" ||
-        (n.args !== undefined && !isPlainObject_5(n.args))
+      check: (args) =>
+        typeof args?.server !== "string" ||
+        typeof args.tool !== "string" ||
+        (args.args !== undefined && !isPlainObject_5(args.args))
           ? "takes { server, tool, args? }"
           : undefined,
       run: mcpCallForPlugin,
     },
     "mcp.connect": {
-      check: (n) => pluginNameOrFallback(n?.server, "takes { server } (a non-empty string)"),
+      check: (args) => pluginNameOrFallback(args?.server, "takes { server } (a non-empty string)"),
       run: mcpConnectForPlugin,
     },
     "interface.call": {
-      check: (n) => {
-        if (typeof n?.name !== "string" || typeof n.method !== "string" || !Array.isArray(n.args))
+      check: (args) => {
+        if (typeof args?.name !== "string" || typeof args.method !== "string" || !Array.isArray(args.args))
           return "takes { owner, name, method, args }";
-        return n.args.length > 1 ? "takes one input, its event's e" : undefined;
+        return args.args.length > 1 ? "takes one input, its event's e" : undefined;
       },
-      run: (n, r) => explainApiNotAvailable(e, interfaceCallBehind(r), n),
+      run: (args, ctx) => explainApiNotAvailable(runtime, interfaceCallBehind(ctx), args),
     },
     "session.cwd": {
-      run: (n, r) => sessionInfoOp(r.plugin, r.cwd).then((s) => s.cwd),
+      run: (args, ctx) => sessionInfoOp(ctx.plugin, ctx.cwd).then((info) => info.cwd),
     },
     "session.root": {
-      run: (n, r) => sessionInfoOp(r.plugin).then((s) => s.root),
+      run: (args, ctx) => sessionInfoOp(ctx.plugin).then((info) => info.root),
     },
     "session.model": {
-      run: (n, r) => sessionInfoOp(r.plugin).then((s) => s.model),
+      run: (args, ctx) => sessionInfoOp(ctx.plugin).then((info) => info.model),
     },
     "session.turns": {
-      run: (n, r) => sessionTurnsOp(r.plugin),
+      run: (args, ctx) => sessionTurnsOp(ctx.plugin),
     },
     "session.id": {
-      run: (n, r) => sessionInfoOp(r.plugin).then((s) => s.id),
+      run: (args, ctx) => sessionInfoOp(ctx.plugin).then((info) => info.id),
     },
     "session.messages": {
       check: validateAgentIdArg,
-      run: (n, r) => sessionMessagesOp(n ?? {}, r.plugin),
+      run: (args, ctx) => sessionMessagesOp(args ?? {}, ctx.plugin),
     },
     "session.repo": {
-      run: (n, r) => sessionRepoOp(r.cwd),
+      run: (args, ctx) => sessionRepoOp(ctx.cwd),
     },
     "session.surface": {
-      run: (n, r) => sessionSurfaceOp(r.plugin),
+      run: (args, ctx) => sessionSurfaceOp(ctx.plugin),
     },
     "session.surfaces": {
-      run: (n, r) => sessionSurfacesOp(r.plugin),
+      run: (args, ctx) => sessionSurfacesOp(ctx.plugin),
     },
     "session.authorize": SESSION_AUTHORIZE,
-    "session.identity": sessionIdentityApi(e),
+    "session.identity": sessionIdentityApi(runtime),
     "session.usage": {
-      check: (n) => validateBreakdownArg(n),
-      run: (n, r) => sessionUsageOp(n ?? {}, r.plugin),
+      check: (args) => validateBreakdownArg(args),
+      run: (args, ctx) => sessionUsageOp(args ?? {}, ctx.plugin),
     },
     "session.version": {
       run: () => hostVersionInfo(),
     },
     "session.compact": {
-      check: (n, r) => {
-        let turnHeld = r.turnHeld;
+      check: (args, ctx) => {
+        let turnHeld = ctx.turnHeld;
         if (turnHeld)
           return `called from a ${turnHeld} hook, it would compact under the turn this hook is holding; call it from a later event (turn.complete)`;
-        return isObjectArg(n?.instructions) ? "takes { instructions } (a string)" : undefined;
+        return isObjectArg(args?.instructions) ? "takes { instructions } (a string)" : undefined;
       },
-      run: (n, r) => sessionCompactForPlugin(n, r.plugin, r.origin),
+      run: (args, ctx) => sessionCompactForPlugin(args, ctx.plugin, ctx.origin),
     },
     "session.send": {
-      check: (n) => checkSessionSendArgs(n),
-      run: (n, r) =>
-        sessionSendForPlugin(n, r, {
+      check: (args) => checkSessionSendArgs(args),
+      run: (args, ctx) =>
+        sessionSendForPlugin(args, ctx, {
           run: toolCallForPlugin,
           findLive: findLivePeerBySessionId,
         }),
     },
     "session.append": {
-      check: (n) => checkSessionAppendArgs(n),
-      run: (n, r) => sessionAppendOp(n, r),
+      check: (args) => checkSessionAppendArgs(args),
+      run: (args, ctx) => sessionAppendOp(args, ctx),
     },
     "turn.abort": {
-      check: (n) => pluginNameOrFallback(n?.turnId, "takes { turnId } (the id turn.start carried)"),
-      run: (n, r) => turnAbortOp(n, r.plugin),
+      check: (args) => pluginNameOrFallback(args?.turnId, "takes { turnId } (the id turn.start carried)"),
+      run: (args, ctx) => turnAbortOp(args, ctx.plugin),
     },
     "flag.value": FLAG_VALUE_API,
     "prompt.submit": {
-      check: (n, r) => {
-        let s = submitWaitHazard(r.turnHeld);
-        if (s !== undefined) return s;
-        if (typeof n?.text !== "string" || n.text.trim() === "") return "takes { text } (a non-empty prompt)";
-        let y = isSlashCommandText(n.text);
-        let S = n.asUser !== undefined && typeof n.asUser !== "boolean";
-        if (y)
+      check: (args, ctx) => {
+        let problem = submitWaitHazard(ctx.turnHeld);
+        if (problem !== undefined) return problem;
+        if (typeof args?.text !== "string" || args.text.trim() === "")
+          return "takes { text } (a non-empty prompt)";
+        let isSlashCommand = isSlashCommandText(args.text);
+        let isBadAsUser = args.asUser !== undefined && typeof args.asUser !== "boolean";
+        if (isSlashCommand)
           return "submits a prompt to the model; a text beginning with / would run a command as the user; run one with $.command.run({ command })";
-        if (S) return "takes { asUser } as a boolean";
-        warnOversizedPluginText(r.plugin, "prompt.submit", n.text.length);
+        if (isBadAsUser) return "takes { asUser } as a boolean";
+        warnOversizedPluginText(ctx.plugin, "prompt.submit", args.text.length);
         return;
       },
-      run: dedupeSessionStartCalls("prompt.submit", (n, r) => promptSubmitForPlugin(n, r.plugin, r)),
+      run: dedupeSessionStartCalls("prompt.submit", (args, ctx) =>
+        promptSubmitForPlugin(args, ctx.plugin, ctx),
+      ),
     },
     "prompt.read": PROMPT_BOX_READ,
     "prompt.media": ATTACHMENT_READ_API,
     "prompt.fill": createPromptTextApi(
       "prompt.fill",
-      (n) =>
-        checkPromptSectionArgs(n.mode) ?? checkDecorations(n.decorations) ?? checkCursorInteger(n.cursor),
-      async (n, r) => {
-        let s = await promptFillOp({
-          ...n,
-          ...(r.answersPress !== undefined && {
-            answersPress: r.answersPress,
+      (args) =>
+        checkPromptSectionArgs(args.mode) ??
+        checkDecorations(args.decorations) ??
+        checkCursorInteger(args.cursor),
+      async (args, ctx) => {
+        let fill = await promptFillOp({
+          ...args,
+          ...(ctx.answersPress !== undefined && {
+            answersPress: ctx.answersPress,
           }),
         });
-        let h = await promptBoxForPlugin(r, e.knownArgs.get(r.plugin)?.scan, "prompt.fill");
+        let box = await promptBoxForPlugin(ctx, runtime.knownArgs.get(ctx.plugin)?.scan, "prompt.fill");
         return {
-          isFilled: s.isFilled,
-          ...(s.refusal === undefined
+          isFilled: fill.isFilled,
+          ...(fill.refusal === undefined
             ? {}
             : {
-                refusal: s.refusal,
+                refusal: fill.refusal,
               }),
-          text: h.text,
-          cursor: h.cursor,
+          text: box.text,
+          cursor: box.cursor,
         };
       },
     ),
     "prompt.paint": {
-      check: (n) => checkDecorationsArgs(n?.text, n?.decorations),
-      run: async (n, r) => {
+      check: (args) => checkDecorationsArgs(args?.text, args?.decorations),
+      run: async (args, ctx) => {
         let promptBoxForPlugin = await readPromptBoxForPlugin(
-          r,
-          e.knownArgs.get(r.plugin)?.scan,
+          ctx,
+          runtime.knownArgs.get(ctx.plugin)?.scan,
           "prompt.paint",
         );
-        let { isPainted } = decorationsUnchanged(n, promptBoxForPlugin)
-          ? await promptPaintOp(n, r.plugin)
+        let { isPainted } = decorationsUnchanged(args, promptBoxForPlugin)
+          ? await promptPaintOp(args, ctx.plugin)
           : {
               isPainted: false,
             };
-        let { text, cursor } = promptBoxForPlugin ?? aEt;
+        let { text, cursor } = promptBoxForPlugin ?? EMPTY_PROMPT_DRAFT;
         return {
-          isPainted: isPainted && !hasOtherPromptRead(r.plugin),
+          isPainted: isPainted && !hasOtherPromptRead(ctx.plugin),
           text,
           cursor,
         };
@@ -688,81 +730,83 @@ var MODEL_API_CATALOG = (e) =>
     },
     "prompt.suggest": createPromptTextApi(
       "prompt.suggest",
-      (n) =>
-        typeof n.text === "string" && n.text.trim() === "" ? "takes a non-empty suggestion" : undefined,
+      (args) =>
+        typeof args.text === "string" && args.text.trim() === "" ? "takes a non-empty suggestion" : undefined,
       promptSuggestOp,
     ),
     "prompt.compose": promptComposeForPlugin,
     "tool.list": {
-      run: (n, r) => toolListOp(r.plugin),
+      run: (args, ctx) => toolListOp(ctx.plugin),
     },
     "tool.call": TOOL_CALL_API,
     "tool.check": TOOL_CHECK_API,
     "agent.spawn": toolScopedOp(
       AGENT,
       "takes the Agent tool's input",
-      wrapAgentSpawnOp(dedupeSessionStartCalls("agent.spawn", (n, r) => e.budgets.spawns.spawn(n, r))),
+      wrapAgentSpawnOp(
+        dedupeSessionStartCalls("agent.spawn", (args, ctx) => runtime.budgets.spawns.spawn(args, ctx)),
+      ),
     ),
-    "ui.ask": toolScopedOp(ASKUSERQUESTION, "takes the AskUserQuestion tool's input", (n, r) =>
-      toolCallForPlugin(n, r),
+    "ui.ask": toolScopedOp(ASKUSERQUESTION, "takes the AskUserQuestion tool's input", (args, ctx) =>
+      toolCallForPlugin(args, ctx),
     ),
     "tool.register": {
-      check: (n) => {
-        let isDeferred = n?.isDeferred;
-        let s = isDeferred !== undefined && typeof isDeferred !== "boolean";
+      check: (args) => {
+        let isDeferred = args?.isDeferred;
+        let isBadDeferred = isDeferred !== undefined && typeof isDeferred !== "boolean";
         return (
-          validateToolRegistration(n) ??
-          checkInputSchema(n?.inputSchema) ??
-          (s ? "isDeferred is true or false" : undefined)
+          validateToolRegistration(args) ??
+          checkInputSchema(args?.inputSchema) ??
+          (isBadDeferred ? "isDeferred is true or false" : undefined)
         );
       },
-      run: async (n, r) =>
-        withRegisteredTool(await toolRegisterForPlugin(n, r.plugin), () => {
+      run: async (args, ctx) =>
+        withRegisteredTool(await toolRegisterForPlugin(args, ctx.plugin), () => {
           warnLongToolDescription(
             {
-              plugin: r.plugin,
-              isBuiltin: isOfficialMarketplace(e, r),
+              plugin: ctx.plugin,
+              isBuiltin: isOfficialMarketplace(runtime, ctx),
             },
-            n,
+            args,
           );
-          warnLargeInputSchema(r.plugin, n);
+          warnLargeInputSchema(ctx.plugin, args);
         }),
     },
     "command.list": {
-      run: (n, r) => listCommandsForPlugin(r.plugin),
+      run: (args, ctx) => listCommandsForPlugin(ctx.plugin),
     },
     "command.register": {
-      check: (n) => {
-        let argumentHint = n?.argumentHint;
-        let immediate = n?.immediate;
-        let h = immediate !== undefined && typeof immediate !== "boolean";
+      check: (args) => {
+        let argumentHint = args?.argumentHint;
+        let immediate = args?.immediate;
+        let isBadImmediate = immediate !== undefined && typeof immediate !== "boolean";
         return (
-          validateToolRegistration(n) ??
+          validateToolRegistration(args) ??
           (isObjectArg(argumentHint) ? "argumentHint is a string" : undefined) ??
-          (h ? "immediate is true or false" : undefined) ??
-          checkTextArg(n?.description) ??
+          (isBadImmediate ? "immediate is true or false" : undefined) ??
+          checkTextArg(args?.description) ??
           (argumentHint === undefined ? undefined : checkTextArg(argumentHint))
         );
       },
-      run: async (n, r) => {
-        let argumentHint = n.argumentHint;
+      run: async (args, ctx) => {
+        let argumentHint = args.argumentHint;
         return withRegisteredTool(
           await commandRegisterForPlugin(
             {
-              ...clipPaneFields(n),
+              ...clipPaneFields(args),
               ...(argumentHint !== undefined && {
                 argumentHint: clipHintText(argumentHint, MAX_KEPT_TEXT_CHARS),
               }),
             },
-            r.plugin,
+            ctx.plugin,
           ),
           () =>
             warnLongTexts({
-              plugin: r.plugin,
+              plugin: ctx.plugin,
               spelling: "command.register",
-              name: n.name,
+              name: args.name,
               texts: {
-                "the description": n.description,
+                "the description": args.description,
                 "the argumentHint": argumentHint,
               },
             }),
@@ -770,115 +814,116 @@ var MODEL_API_CATALOG = (e) =>
       },
     },
     "command.run": {
-      check: (n, r) => {
-        let turnHeld = r.turnHeld;
+      check: (args, ctx) => {
+        let turnHeld = ctx.turnHeld;
         if (turnHeld === "command.run")
           return "called from a command.run hook, it would wait on the turn this hook is holding; answer { text } instead, or run it from a later event (turn.complete)";
         if (turnHeld)
           return `called from a ${turnHeld} hook, it would wait on the turn this hook is holding; run it from a later event (turn.complete)`;
         if (
-          typeof n?.command !== "string" ||
-          n.command === "" ||
-          (n.args !== undefined && typeof n.args !== "string")
+          typeof args?.command !== "string" ||
+          args.command === "" ||
+          (args.args !== undefined && typeof args.args !== "string")
         )
           return "takes { command, args? } (the name without the slash)";
-        warnOversizedPluginText(r.plugin, "command.run", (n.args ?? "").length);
+        warnOversizedPluginText(ctx.plugin, "command.run", (args.args ?? "").length);
         return;
       },
-      run: dedupeSessionStartCalls("command.run", (n, r) => commandRunForPlugin(n, r.plugin, r)),
+      run: dedupeSessionStartCalls("command.run", (args, ctx) => commandRunForPlugin(args, ctx.plugin, ctx)),
     },
     "config.list": {
-      run: (n, r) => describeConfigRowsList(r.plugin, r.origin),
+      run: (args, ctx) => describeConfigRowsList(ctx.plugin, ctx.origin),
     },
     "config.set": CONFIG_SET_API,
     "telemetry.log": TELEMETRY_LOG_API,
     "telemetry.mark": TELEMETRY_MARK_API,
     "agent.list": {
-      run: (n, r) => listAgentsForPlugin(r.plugin),
+      run: (args, ctx) => listAgentsForPlugin(ctx.plugin),
     },
     "agent.register": {
-      check: (n) => {
-        let prompt = n?.prompt;
-        let s = typeof prompt === "string" && prompt.trim() !== "";
+      check: (args) => {
+        let prompt = args?.prompt;
+        let hasPrompt = typeof prompt === "string" && prompt.trim() !== "";
         return (
-          validateToolRegistration(n) ??
-          checkTextArg(n?.description) ??
-          (s ? undefined : "prompt is a non-empty string")
+          validateToolRegistration(args) ??
+          checkTextArg(args?.description) ??
+          (hasPrompt ? undefined : "prompt is a non-empty string")
         );
       },
-      run: async (n, r) =>
+      run: async (args, ctx) =>
         withRegisteredTool(
           await registerAgentForPlugin(
-            clipPaneFields(n),
-            requireCallingEnvironment(e, r, {
+            clipPaneFields(args),
+            requireCallingEnvironment(runtime, ctx, {
               op: "agent.register",
               feature: "plugin_function_hooks_register_agent",
             }),
           ),
           () =>
             warnLongTexts({
-              plugin: r.plugin,
+              plugin: ctx.plugin,
               spelling: "agent.register",
-              name: n.name,
+              name: args.name,
               texts: {
-                "the description": n.description,
+                "the description": args.description,
               },
             }),
         ),
     },
     "ui.toast": {
-      check: (n) => {
-        let r = n?.timeoutMs !== undefined && !isPositiveIntUpTo(n.timeoutMs, CALL_TIMEOUT_MS);
+      check: (args) => {
+        let isBadTimeout =
+          args?.timeoutMs !== undefined && !isPositiveIntUpTo(args.timeoutMs, CALL_TIMEOUT_MS);
         return (
-          checkTextArg(n?.text) ??
-          (r ? `timeoutMs is a whole number of ms, 1 to ${CALL_TIMEOUT_MS}` : undefined)
+          checkTextArg(args?.text) ??
+          (isBadTimeout ? `timeoutMs is a whole number of ms, 1 to ${CALL_TIMEOUT_MS}` : undefined)
         );
       },
       run: makePluginTextHandler("ui.toast", uiToastOp),
     },
     "ui.status": {
-      check: (n) => (n?.text === undefined ? undefined : checkTextArg(n.text)),
-      run: makePluginTextHandler("ui.status", (n, r) => uiStatusOp(n.text, r)),
+      check: (args) => (args?.text === undefined ? undefined : checkTextArg(args.text)),
+      run: makePluginTextHandler("ui.status", (args, ctx) => uiStatusOp(args.text, ctx)),
     },
     "ui.log": {
-      check: (n) => checkTextArg(n?.text) ?? checkUiLogTarget(n?.to),
-      run: (n, r) => {
-        let s = n.to === "debug";
-        if (s) logUiLogToDebug(r.plugin, n.text);
-        else uiLog(r.plugin, n.text);
-        warnIfPluginTextTooLong(r.plugin, "ui.log", s ? undefined : n.text);
+      check: (args) => checkTextArg(args?.text) ?? checkUiLogTarget(args?.to),
+      run: (args, ctx) => {
+        let isDebugTarget = args.to === "debug";
+        if (isDebugTarget) logUiLogToDebug(ctx.plugin, args.text);
+        else uiLog(ctx.plugin, args.text);
+        warnIfPluginTextTooLong(ctx.plugin, "ui.log", isDebugTarget ? undefined : args.text);
         return Promise.resolve(undefined);
       },
     },
     "ui.notice": UI_NOTICE_API_CATALOG,
     "ui.invalidate": {
-      check: (n) =>
-        n?.event === "ui.render" ||
-        n?.event === "prompt.section" ||
-        n?.event === "prompt.context" ||
-        n?.event === "prompt.attachment" ||
-        n?.event === "tool.describe" ||
-        n?.event === "command.describe" ||
-        n?.event === "config.describe"
+      check: (args) =>
+        args?.event === "ui.render" ||
+        args?.event === "prompt.section" ||
+        args?.event === "prompt.context" ||
+        args?.event === "prompt.attachment" ||
+        args?.event === "tool.describe" ||
+        args?.event === "command.describe" ||
+        args?.event === "config.describe"
           ? undefined
           : 'takes "ui.render", "prompt.section", "prompt.context", "prompt.attachment", "tool.describe", "command.describe" or "config.describe"',
-      run: (n, r) => {
-        let event = n.event;
+      run: (args, ctx) => {
+        let event = args.event;
         switch (event) {
           case "ui.render":
-            e.budgets.renders.invalidate(r.plugin);
+            runtime.budgets.renders.invalidate(ctx.plugin);
             break;
           case "command.describe":
-            onHookReleased(r.turnHeld);
+            onHookReleased(ctx.turnHeld);
             break;
           case "config.describe":
-            onConfigHookReleased(r.turnHeld);
+            onConfigHookReleased(ctx.turnHeld);
             break;
           case "prompt.section":
           case "prompt.context":
           case "prompt.attachment":
           case "tool.describe":
-            e.pendingInvalidations.add(event);
+            runtime.pendingInvalidations.add(event);
             break;
         }
         return Promise.resolve(undefined);
@@ -886,56 +931,56 @@ var MODEL_API_CATALOG = (e) =>
     },
     "ui.open": {
       check: validatePaneOptions,
-      run: (n, r) =>
+      run: (args, ctx) =>
         Promise.resolve(
           refuseUnplacedOpen(
             withRegisteredTool(
               openPane(
                 {
-                  ...n,
-                  title: clipHintText(n.title ?? n.id, MAX_KEPT_TEXT_CHARS),
+                  ...args,
+                  title: clipHintText(args.title ?? args.id, MAX_KEPT_TEXT_CHARS),
                 },
-                r.plugin,
-                isPersonInitiated(r),
+                ctx.plugin,
+                isPersonInitiated(ctx),
               ),
               () =>
                 warnLongTexts({
-                  plugin: r.plugin,
+                  plugin: ctx.plugin,
                   spelling: "ui.open",
-                  name: n.id,
+                  name: args.id,
                   texts: {
-                    "the title": n.title,
+                    "the title": args.title,
                   },
                 }),
             ),
-            r.plugin,
+            ctx.plugin,
           ),
         ),
     },
     "ui.close": {
       check: checkPaneOrigin,
-      run: (n) => {
-        dropPane(n.id);
+      run: (args) => {
+        dropPane(args.id);
         return Promise.resolve(undefined);
       },
     },
     "ui.panes": {
-      run: (n, r) => Promise.resolve(unplacedWhenNoSurface(listPluginPanes(r.plugin))),
+      run: (args, ctx) => Promise.resolve(unplacedWhenNoSurface(listPluginPanes(ctx.plugin))),
     },
     "ui.place": {
-      check: (n) => checkPaneId(n?.id),
-      run: (n, r) => uiPlaceRowForPlugin(n, r, placedRowsRefusal()),
+      check: (args) => checkPaneId(args?.id),
+      run: (args, ctx) => uiPlaceRowForPlugin(args, ctx, placedRowsRefusal()),
     },
     "ui.selection": {
       run: readSelectionPromise,
     },
     "ui.scroll": {
       check: checkUiScrollArgs,
-      run: async (n, r) => withSurfaceReason(await uiScrollOp(n, r)),
+      run: async (args, ctx) => withSurfaceReason(await uiScrollOp(args, ctx)),
     },
     "ui.focus": {
       check: checkUiFocusArgs,
-      run: async (n, r) => withSurfaceReason(await uiFocusOp(n, r)),
+      run: async (args, ctx) => withSurfaceReason(await uiFocusOp(args, ctx)),
     },
     "ui.copy": {
       check: checkNotifyArgs,
@@ -953,9 +998,11 @@ var MODEL_API_CATALOG = (e) =>
     },
     "ui.blit": {
       check: checkRasterPaintArgs,
-      run: async (n, r) => {
-        let s = hasImageSource(n);
-        return withSurfaceReason(s ? await IMAGE_ELEMENT_LIMITS(n, r) : await checkMountedRaster(n, r));
+      run: async (args, ctx) => {
+        let hasSource = hasImageSource(args);
+        return withSurfaceReason(
+          hasSource ? await IMAGE_ELEMENT_LIMITS(args, ctx) : await checkMountedRaster(args, ctx),
+        );
       },
     },
     "fs.read": FS_READ_OP,
@@ -964,63 +1011,63 @@ var MODEL_API_CATALOG = (e) =>
     "fs.exists": {
       check: checkPathArg,
       raise: getErrnoPath,
-      run: (n, r) =>
+      run: (args, ctx) =>
         refuseFsAccess(
           {
             event: "exists",
-            path: n.path,
+            path: args.path,
           },
-          r.plugin,
-          r.cwd,
-        ).then((s) => s === true),
+          ctx.plugin,
+          ctx.cwd,
+        ).then((exists) => exists === true),
     },
     "fs.stat": FS_STAT_API,
     "fs.ancestors": FS_ANCESTORS_API,
     "store.get": {
       check: checkKeyArg,
-      run: (n, r) =>
+      run: (args, ctx) =>
         storeEventQueued(
           {
             event: "get",
-            key: n.key,
+            key: args.key,
           },
-          storageIdOf(e, r.plugin),
+          storageIdOf(runtime, ctx.plugin),
         ),
     },
     "store.set": {
       check: checkValueJson,
-      run: (n, r) =>
+      run: (args, ctx) =>
         storeEventQueued(
           {
             event: "set",
-            key: n.key,
-            value: n.value,
+            key: args.key,
+            value: args.value,
           },
-          storageIdOf(e, r.plugin),
+          storageIdOf(runtime, ctx.plugin),
         ).then(() => {
           return;
         }),
     },
     "store.delete": {
       check: checkKeyArg,
-      run: (n, r) =>
+      run: (args, ctx) =>
         storeEventQueued(
           {
             event: "delete",
-            key: n.key,
+            key: args.key,
           },
-          storageIdOf(e, r.plugin),
+          storageIdOf(runtime, ctx.plugin),
         ).then(() => {
           return;
         }),
     },
     "store.keys": {
-      run: (n, r) =>
+      run: (args, ctx) =>
         storeEventQueued(
           {
             event: "keys",
           },
-          storageIdOf(e, r.plugin),
+          storageIdOf(runtime, ctx.plugin),
         ),
     },
     "state.get": {
@@ -1038,50 +1085,53 @@ var MODEL_API_CATALOG = (e) =>
     "clock.sleep": CLOCK_METHOD,
     "clock.after": CLOCK_METHOD,
     "clock.every": CLOCK_METHOD,
-    "http.fetch": HTTP_FETCH_API(e),
+    "http.fetch": HTTP_FETCH_API(runtime),
     "process.run": {
       check: validateSpawnInit,
       run: bindPluginCall(processSpawnForPlugin),
     },
     "settings.read": {
-      check: (n) => settingsSourceProblem(n?.source),
+      check: (args) => settingsSourceProblem(args?.source),
       stamp: settingsReadInputOf,
-      run: (n) => settingsRead(n),
+      run: (args) => settingsRead(args),
     },
     "env.get": {
       check: checkEnvSetArgs,
       run: envGetCore,
     },
-    "env.set": ENV_SET_API(e),
+    "env.set": ENV_SET_API(runtime),
   });
 //@ chunk-e6aww6q8.js:4033320-4033389 placement
-var vZr = Object.freeze({
-  "process.spawn": {
-    check: validateExecArgs,
-    stream: bindPluginCall(processRunForPlugin),
-  },
+var PROCESS_SPAWN_API; // deferred: uses bindPluginCall (./apiDispatch.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4033320", () => {
+  PROCESS_SPAWN_API = Object.freeze({
+    "process.spawn": {
+      check: validateExecArgs,
+      stream: bindPluginCall(processRunForPlugin),
+    },
+  });
 });
 //@ chunk-e6aww6q8.js:4033389-4033525 placement
 /**
  * 判断调用链来源里是否有插件属于给定环境集合。
  */
-function isOriginFromEnvironment(e, { hookOrigin = [] }, r) {
-  return e.environments.some((environment) => {
-    let h = r(environment);
-    if (h === undefined) return false;
-    return hookOrigin.some((y) => originPlugin(y) === h);
+function isOriginFromEnvironment(origin, { hookOrigin = [] }, lookup) {
+  return origin.environments.some((environment) => {
+    let name = lookup(environment);
+    if (name === undefined) return false;
+    return hookOrigin.some((originEntry) => originPlugin(originEntry) === name);
   });
 }
 //@ chunk-e6aww6q8.js:4033525-4033577 placement
 /**
  * command.run/prompt.submit
  */
-var isHumanInitiatedSite = (e) => e === "command.run" || e === "prompt.submit";
+var isHumanInitiatedSite = (site) => site === "command.run" || site === "prompt.submit";
 export {
   toastStoppedOnce,
   isOriginFromEnvironment,
   reportDroppedApiCall,
   isHumanInitiatedSite,
   MODEL_API_CATALOG,
-  vZr,
+  PROCESS_SPAWN_API,
 };

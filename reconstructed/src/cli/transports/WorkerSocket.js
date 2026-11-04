@@ -93,11 +93,11 @@ class WorkerSocket {
   async open({ url, headers, signal, openSse }) {
     if (!this.isOff) {
       signal.throwIfAborted();
-      let h = await this.dialOnce(url, headers, signal);
-      if (typeof h !== "string") return h;
+      let helloResult = await this.dialOnce(url, headers, signal);
+      if (typeof helloResult !== "string") return helloResult;
       if (!this.isOff)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `worker socket: ended without CCR's opening message (${h})`,
+          `worker socket: ended without CCR's opening message (${helloResult})`,
           "worker socket: ended without CCR's opening message",
         );
       signal.throwIfAborted();
@@ -105,30 +105,30 @@ class WorkerSocket {
     this.owesSse = false;
     return openSse();
   }
-  carry(e, n, r) {
-    let s = WORKER_EVENT_PATH_KINDS.get(e);
-    return s === undefined || this.isOff ? undefined : this.carryOn(s, n, r);
+  carry(path, body, timeoutMs) {
+    let kind = WORKER_EVENT_PATH_KINDS.get(path);
+    return kind === undefined || this.isOff ? undefined : this.carryOn(kind, body, timeoutMs);
   }
-  async carryOn(e, n, r) {
+  async carryOn(id, body, timeoutMs) {
     while (!this.isOff) {
       let connection = this.connection;
-      if (!connection?.greeted || connection.unanswered.has(e) || this.renewal) {
+      if (!connection?.greeted || connection.unanswered.has(id) || this.renewal) {
         let { promise, resolve } = Promise.withResolvers();
-        let k = this.changed.subscribe(resolve);
+        let unsubscribe = this.changed.subscribe(resolve);
         await promise;
-        k();
+        unsubscribe();
         continue;
       }
-      let h = await this.send(connection, e, n, r);
-      if (h !== "ended") return h;
+      let outcome = await this.send(connection, id, body, timeoutMs);
+      if (outcome !== "ended") return outcome;
     }
     return;
   }
-  beat(e, n, r) {
+  beat(id, timeoutMs, onReply) {
     let connection = this.connection;
     if (this.isOff || !connection?.greeted || this.renewal || connection.beat) return;
-    let h = connection.lastId + 1;
-    let socketFrame = buildSocketFrame(connection, h, "heartbeat", e);
+    let beatId = connection.lastId + 1;
+    let socketFrame = buildSocketFrame(connection, beatId, "heartbeat", id);
     if (Buffer.byteLength(socketFrame) > this.maxMessageBytes) return;
     try {
       connection.socket?.send(socketFrame);
@@ -139,38 +139,39 @@ class WorkerSocket {
       this.end(connection, "send_threw");
       return;
     }
-    connection.lastId = h;
+    connection.lastId = beatId;
     let { promise, resolve } = Promise.withResolvers();
-    let P = false;
-    let O = this.clock.setTimeout(
+    let answered = false;
+    let retryTimer = this.clock.setTimeout(
       () => {
-        P = true;
+        answered = true;
         resolve(undefined);
       },
-      Math.min(HEARTBEAT_INTERVAL_MS, n / 3),
+      Math.min(HEARTBEAT_INTERVAL_MS, timeoutMs / 3),
     );
-    let A = this.clock.setTimeout(() => this.end(connection, "heartbeat_unanswered"), n);
+    let giveUpTimer = this.clock.setTimeout(() => this.end(connection, "heartbeat_unanswered"), timeoutMs);
     connection.beat = {
-      id: h,
-      answer: (x) => {
+      id: beatId,
+      answer: (reply) => {
         connection.beat = undefined;
-        O();
-        A();
-        if (x === undefined || !(x.ok || HEARTBEAT_REFUSED_STATUSES.has(x.status))) resolve(undefined);
-        else if (!P) resolve(x);
-        else if (x.ok) r(x);
+        retryTimer();
+        giveUpTimer();
+        if (reply === undefined || !(reply.ok || HEARTBEAT_REFUSED_STATUSES.has(reply.status)))
+          resolve(undefined);
+        else if (!answered) resolve(reply);
+        else if (reply.ok) onReply(reply);
       },
     };
     return promise;
   }
-  whenQuiet(e, n = false) {
+  whenQuiet(renew, isForNewToken = false) {
     if (!this.connection?.unanswered.size && !this.connection?.beat) {
-      this.runNow(e, n);
+      this.runNow(renew, isForNewToken);
       return;
     }
     this.renewal = {
-      renew: e,
-      isForNewToken: n || (this.renewal?.isForNewToken ?? false),
+      renew,
+      isForNewToken: isForNewToken || (this.renewal?.isForNewToken ?? false),
       cancelTimer:
         this.renewal?.cancelTimer ?? this.clock.setTimeout(() => this.runRenewal(), RENEWAL_INTERVAL_MS),
     };
@@ -189,14 +190,14 @@ class WorkerSocket {
     }
     this.changed.emit();
   }
-  runNow(e, n) {
+  runNow(run, forNewToken) {
     let connection = this.connection;
-    let s = n && connection?.greeted === true;
-    if (s) connection.isForNewToken = true;
+    let markedForToken = forNewToken && connection?.greeted === true;
+    if (markedForToken) connection.isForNewToken = true;
     try {
-      e();
+      run();
     } finally {
-      if (s && !connection.ended) connection.isForNewToken = false;
+      if (markedForToken && !connection.ended) connection.isForNewToken = false;
     }
   }
   usePostFromNowOn() {
@@ -204,14 +205,18 @@ class WorkerSocket {
     if (this.connection) this.end(this.connection, "shutdown");
     this.changed.emit();
   }
-  dialOnce(e, n, r) {
+  dialOnce(url, headers, signal) {
     let { promise, resolve } = Promise.withResolvers();
-    let y = () =>
+    let onAbort = () =>
       this.end(
-        S,
-        r.reason === dOMException ? "stream_silent" : r.reason === dOMException_2 ? "renewed" : "aborted",
+        connection,
+        signal.reason === dOMException
+          ? "stream_silent"
+          : signal.reason === dOMException_2
+            ? "renewed"
+            : "aborted",
       );
-    let S = {
+    let connection = {
       socket: undefined,
       dialedAtMs: this.clock.monotonicNow(),
       greeted: false,
@@ -225,17 +230,17 @@ class WorkerSocket {
       beat: undefined,
       isForNewToken: false,
       frames: undefined,
-      cancelHelloTimer: this.clock.setTimeout(() => this.end(S, "no_hello"), HELLO_TIMEOUT_MS),
+      cancelHelloTimer: this.clock.setTimeout(() => this.end(connection, "no_hello"), HELLO_TIMEOUT_MS),
       settleOpen: resolve,
-      unwatchAbort: () => r.removeEventListener("abort", y),
+      unwatchAbort: () => signal.removeEventListener("abort", onAbort),
     };
-    r.addEventListener("abort", y, {
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
-    this.connection = S;
+    this.connection = connection;
     this.dials++;
     try {
-      S.offeredCompression = !this.isCompressionOff && this.mayCompress(e);
+      connection.offeredCompression = !this.isCompressionOff && this.mayCompress(url);
     } catch (error) {
       logError(
         Error("WorkerSocket: could not decide whether to offer compression, so this dial does not offer it", {
@@ -244,60 +249,63 @@ class WorkerSocket {
       );
     }
     try {
-      let k = e;
-      if (S.offeredCompression) {
-        let P = new URL(e);
-        P.searchParams.set(
+      let socketUrl = url;
+      if (connection.offeredCompression) {
+        let parsedUrl = new URL(url);
+        parsedUrl.searchParams.set(
           WORKER_CAPABILITIES,
-          [...P.searchParams.getAll(WORKER_CAPABILITIES), WORKER_SOCKET_PAD_1].join(","),
+          [...parsedUrl.searchParams.getAll(WORKER_CAPABILITIES), WORKER_SOCKET_PAD_1].join(","),
         );
-        k = P.href;
+        socketUrl = parsedUrl.href;
       }
-      S.socket = this.dial(k.replace(/^http/, "ws"), n, S.offeredCompression);
+      connection.socket = this.dial(socketUrl.replace(/^http/, "ws"), headers, connection.offeredCompression);
     } catch (error) {
       logForDebugging(`WorkerSocket: the dial threw: ${errorMessage(error)}`, {
         level: "error",
       });
-      this.end(S, "dial_threw");
+      this.end(connection, "dial_threw");
       return promise;
     }
-    S.socket.onmessage = (k) => this.take(S, k.data);
-    S.socket.onerror = () => this.end(S, "socket_error");
-    S.socket.onclose = (k) => this.end(S, `closed_${k.code}`);
+    connection.socket.onmessage = (message) => this.take(connection, message.data);
+    connection.socket.onerror = () => this.end(connection, "socket_error");
+    connection.socket.onclose = (event) => this.end(connection, `closed_${event.code}`);
     return promise;
   }
-  send(e, n, r, s) {
-    let h = e.lastId + 1;
-    let socketFrame = buildSocketFrame(e, h, n, r);
+  send(connection, id, body, timeoutMs) {
+    let frameId = connection.lastId + 1;
+    let socketFrame = buildSocketFrame(connection, frameId, id, body);
     if (Buffer.byteLength(socketFrame) > this.maxMessageBytes) return Promise.resolve(undefined);
-    if (!this.endsUnaccepted.has(n)) this.endsUnaccepted.set(n, 0);
+    if (!this.endsUnaccepted.has(id)) this.endsUnaccepted.set(id, 0);
     try {
-      e.socket?.send(socketFrame);
+      connection.socket?.send(socketFrame);
     } catch (error) {
       logForDebugging(`WorkerSocket: send() threw: ${errorMessage(error)}`, {
         level: "error",
       });
-      this.end(e, "send_threw");
+      this.end(connection, "send_threw");
       return Promise.resolve("ended");
     }
-    e.lastId = h;
+    connection.lastId = frameId;
     let { promise, resolve } = Promise.withResolvers();
-    e.unanswered.set(n, {
-      id: h,
+    connection.unanswered.set(id, {
+      id: frameId,
       settle: resolve,
-      cancelTimer: this.clock.setTimeout(() => this.end(e, "batch_unanswered"), s + RENEWAL_INTERVAL_MS),
+      cancelTimer: this.clock.setTimeout(
+        () => this.end(connection, "batch_unanswered"),
+        timeoutMs + RENEWAL_INTERVAL_MS,
+      ),
     });
     return promise;
   }
-  take(e, n) {
+  take(connection, raw) {
     try {
-      let workerEventFrame = parseWorkerEventFrame(n);
-      if (!e.greeted) this.takeHello(e, workerEventFrame?.hello);
-      else if (workerEventFrame?.ack) this.takeAck(e, workerEventFrame.ack);
+      let workerEventFrame = parseWorkerEventFrame(raw);
+      if (!connection.greeted) this.takeHello(connection, workerEventFrame?.hello);
+      else if (workerEventFrame?.ack) this.takeAck(connection, workerEventFrame.ack);
       else if (workerEventFrame?.event)
-        e.frames?.enqueue(this.encoder.encode(encodeSseEvents(workerEventFrame.event)));
+        connection.frames?.enqueue(this.encoder.encode(encodeSseEvents(workerEventFrame.event)));
       else if (workerEventFrame?.keep_alive)
-        e.frames?.enqueue(
+        connection.frames?.enqueue(
           this.encoder.encode(`:keepalive
 
 `),
@@ -310,27 +318,27 @@ class WorkerSocket {
       logForDebugging(`WorkerSocket: handling a message threw: ${errorMessage(error)}`, {
         level: "error",
       });
-      this.end(e, "message_handler_threw");
+      this.end(connection, "message_handler_threw");
     }
   }
-  takeHello(e, n) {
-    if (n === undefined) {
-      this.end(e, "no_hello");
+  takeHello(connection, hello) {
+    if (hello === undefined) {
+      this.end(connection, "no_hello");
       return;
     }
-    if (n.mode !== "socket") {
-      this.end(e, "told_sse_and_post");
+    if (hello.mode !== "socket") {
+      this.end(connection, "told_sse_and_post");
       return;
     }
-    let extensions = e.socket?.extensions ?? "";
-    let [s, ...h] = extensions.split(";").map((S) => S.trim());
+    let extensions = connection.socket?.extensions ?? "";
+    let [mode, ...streams] = extensions.split(";").map((part) => part.trim());
     if (
       extensions !== "" &&
       !(
-        s === "permessage-deflate" &&
-        h.every((S) => WORKER_EVENT_STREAMS.test(S)) &&
-        h.includes("client_no_context_takeover") &&
-        h.includes("server_no_context_takeover")
+        mode === "permessage-deflate" &&
+        streams.every((stream) => WORKER_EVENT_STREAMS.test(stream)) &&
+        streams.includes("client_no_context_takeover") &&
+        streams.includes("server_no_context_takeover")
       )
     ) {
       logForDebugging(
@@ -340,147 +348,149 @@ class WorkerSocket {
         },
       );
       this.isCompressionOff = true;
-      this.end(e, "deflate_keeps_context");
+      this.end(connection, "deflate_keeps_context");
       return;
     }
     let response = new Response(
       new ReadableStream({
         start: (frames) => {
-          e.frames = frames;
+          connection.frames = frames;
         },
       }),
       {
         status: 200,
-        headers: buildStreamResponseHeaders(n),
+        headers: buildStreamResponseHeaders(hello),
       },
     );
-    e.greeted = true;
-    e.isCompressed = extensions !== "";
-    e.cancelHelloTimer();
+    connection.greeted = true;
+    connection.isCompressed = extensions !== "";
+    connection.cancelHelloTimer();
     this.hasHadHello = true;
     this.dialsWithoutHello = 0;
-    this.maxMessageBytes = n.max_message_bytes ?? DEFAULT_MAX_MESSAGE_BYTES;
+    this.maxMessageBytes = hello.max_message_bytes ?? DEFAULT_MAX_MESSAGE_BYTES;
     logForDebugging(
-      `WorkerSocket: open, ${Math.round(this.clock.monotonicNow() - e.dialedAtMs)} ms after the dial${e.isCompressed ? ", compressed" : ""}`,
+      `WorkerSocket: open, ${Math.round(this.clock.monotonicNow() - connection.dialedAtMs)} ms after the dial${connection.isCompressed ? ", compressed" : ""}`,
     );
-    e.settleOpen(response);
+    connection.settleOpen(response);
     this.changed.emit();
   }
-  takeAck(e, n) {
-    let { beat } = e;
-    if (beat?.id === n.id) {
-      let s = workerReplyToResponse(n, "heartbeat");
-      beat.answer(s);
-      if (s.status === 401 || s.status === 403) this.end(e, "heartbeat_401_403");
-      else if (e.unanswered.size === 0) this.runRenewal();
+  takeAck(connection, ack) {
+    let { beat } = connection;
+    if (beat?.id === ack.id) {
+      let ackResponse = workerReplyToResponse(ack, "heartbeat");
+      beat.answer(ackResponse);
+      if (ackResponse.status === 401 || ackResponse.status === 403) this.end(connection, "heartbeat_401_403");
+      else if (connection.unanswered.size === 0) this.runRenewal();
       return;
     }
-    for (let [s, h] of e.unanswered) {
-      if (h.id !== n.id) continue;
-      let y = workerReplyToResponse(n, s);
-      e.unanswered.delete(s);
-      h.cancelTimer();
-      h.settle(y);
-      if (y.ok) this.endsUnaccepted.delete(s);
-      if (y.status < 500) {
-        e.hasAnswered = true;
-        e.serverErrors.delete(s);
-        if (y.status === 401 || y.status === 403) this.end(e, "batch_401_403");
+    for (let [id, pending] of connection.unanswered) {
+      if (pending.id !== ack.id) continue;
+      let response = workerReplyToResponse(ack, id);
+      connection.unanswered.delete(id);
+      pending.cancelTimer();
+      pending.settle(response);
+      if (response.ok) this.endsUnaccepted.delete(id);
+      if (response.status < 500) {
+        connection.hasAnswered = true;
+        connection.serverErrors.delete(id);
+        if (response.status === 401 || response.status === 403) this.end(connection, "batch_401_403");
       } else {
-        let S = (e.serverErrors.get(s) ?? 0) + 1;
-        e.serverErrors.set(s, S);
-        if (S >= MAX_BATCH_SERVER_ERRORS) this.end(e, "batch_5xx");
+        let serverErrors = (connection.serverErrors.get(id) ?? 0) + 1;
+        connection.serverErrors.set(id, serverErrors);
+        if (serverErrors >= MAX_BATCH_SERVER_ERRORS) this.end(connection, "batch_5xx");
       }
-      if (e.unanswered.size === 0 && !e.beat) this.runRenewal();
+      if (connection.unanswered.size === 0 && !connection.beat) this.runRenewal();
       this.changed.emit();
       return;
     }
   }
-  end(e, n) {
-    if (e.ended) return;
-    e.ended = true;
+  end(connection, reason) {
+    if (connection.ended) return;
+    connection.ended = true;
     this.renewal?.cancelTimer();
     this.renewal = undefined;
-    e.cancelHelloTimer();
-    e.unwatchAbort();
-    if (this.connection === e) this.connection = undefined;
-    let r = this.clock.monotonicNow() - e.dialedAtMs;
-    this.lastSocketServed = e.hasAnswered || r >= SOCKET_UNSERVED_TIMEOUT_MS;
-    let s = n === "aborted" || n === "renewed" || n === "shutdown" || n === "closed_1013";
-    if (e.isForNewToken || (n === "deflate_keeps_context" && e.offeredCompression));
-    else if (e.greeted) {
-      for (let [S, k] of this.endsUnaccepted) this.endsUnaccepted.set(S, k + 1);
+    connection.cancelHelloTimer();
+    connection.unwatchAbort();
+    if (this.connection === connection) this.connection = undefined;
+    let ageMs = this.clock.monotonicNow() - connection.dialedAtMs;
+    this.lastSocketServed = connection.hasAnswered || ageMs >= SOCKET_UNSERVED_TIMEOUT_MS;
+    let closeNote =
+      reason === "aborted" || reason === "renewed" || reason === "shutdown" || reason === "closed_1013";
+    if (connection.isForNewToken || (reason === "deflate_keeps_context" && connection.offeredCompression));
+    else if (connection.greeted) {
+      for (let [reason, count] of this.endsUnaccepted) this.endsUnaccepted.set(reason, count + 1);
       if (
-        e.isCompressed &&
-        (this.endsUnaccepted.size > 0 || n === "closed_1009" || (!s && !this.lastSocketServed))
+        connection.isCompressed &&
+        (this.endsUnaccepted.size > 0 || reason === "closed_1009" || (!closeNote && !this.lastSocketServed))
       )
         this.isCompressionOff = true;
-    } else if (n !== "told_sse_and_post") {
+    } else if (reason !== "told_sse_and_post") {
       this.dialsWithoutHello++;
-      this.isCompressionOff ||= e.offeredCompression;
+      this.isCompressionOff ||= connection.offeredCompression;
     }
-    let h = this.isOff
+    let onNewToken = this.isOff
       ? undefined
-      : n === "told_sse_and_post"
+      : reason === "told_sse_and_post"
         ? "told"
         : this.dialsWithoutHello >= (this.hasHadHello ? MAX_REDIALS_WITHOUT_HELLO : MAX_DIALS_WITHOUT_HELLO)
           ? "no_hello"
           : Math.max(0, ...this.endsUnaccepted.values()) >= MAX_UNACCEPTED_ENDS
             ? "batch_stuck"
             : undefined;
-    if (h !== undefined) {
+    if (onNewToken !== undefined) {
       this.isOff = true;
       this.owesSse = true;
     }
-    let y = e.unanswered.size + (e.beat ? 1 : 0);
-    for (let S of e.unanswered.values()) {
-      S.cancelTimer();
-      S.settle("ended");
+    let outstanding = connection.unanswered.size + (connection.beat ? 1 : 0);
+    for (let pending of connection.unanswered.values()) {
+      pending.cancelTimer();
+      pending.settle("ended");
     }
-    e.unanswered.clear();
-    e.beat?.answer(undefined);
-    e.settleOpen(n);
+    connection.unanswered.clear();
+    connection.beat?.answer(undefined);
+    connection.settleOpen(reason);
     this.changed.emit();
     try {
-      if (e.socket) {
-        e.socket.onmessage = null;
-        e.socket.onerror = null;
-        e.socket.onclose = null;
-        e.socket.close(1000);
-        e.socket.terminate?.();
+      if (connection.socket) {
+        connection.socket.onmessage = null;
+        connection.socket.onerror = null;
+        connection.socket.onclose = null;
+        connection.socket.close(1000);
+        connection.socket.terminate?.();
       }
-      e.frames?.close();
+      connection.frames?.close();
       logForDebugging(
-        `WorkerSocket: ended (${n}), unanswered batches and heartbeats: ${y}${h === undefined ? "" : `; fell back to SSE and POST (${h})`}`,
+        `WorkerSocket: ended (${reason}), unanswered batches and heartbeats: ${outstanding}${onNewToken === undefined ? "" : `; fell back to SSE and POST (${onNewToken})`}`,
       );
-      let S = {
-        greeted: e.greeted,
-        offered_compression: e.offeredCompression,
-        compressed: e.isCompressed,
-        age_ms: Math.round(r),
+      let logFields = {
+        greeted: connection.greeted,
+        offered_compression: connection.offeredCompression,
+        compressed: connection.isCompressed,
+        age_ms: Math.round(ageMs),
         dial: this.dials,
-        requests: e.lastId,
-        unanswered: y,
-        fell_back: h !== undefined,
-        ...(h !== undefined && {
-          fallback_reason: fromEnum(h),
+        requests: connection.lastId,
+        unanswered: outstanding,
+        fell_back: onNewToken !== undefined,
+        ...(onNewToken !== undefined && {
+          fallback_reason: fromEnum(onNewToken),
         }),
       };
-      if (e.greeted && h === undefined && s) logFeatureOk("ccr_worker_socket", S);
-      else logFeatureSad("ccr_worker_socket", n, S);
+      if (connection.greeted && onNewToken === undefined && closeNote)
+        logFeatureOk("ccr_worker_socket", logFields);
+      else logFeatureSad("ccr_worker_socket", reason, logFields);
     } catch {}
   }
 }
 //@ chunk-z4g2ta8k.js:67720-67804 placement
-function buildSocketFrame(e, n, r, s) {
-  let h = `{"id":${n},"${r}":${s}}`;
-  return e.isCompressed ? appendWatermark(h) : h;
+function buildSocketFrame(connection, id, kind, body) {
+  let frame = `{"id":${id},"${kind}":${body}}`;
+  return connection.isCompressed ? appendWatermark(frame) : frame;
 }
 //@ chunk-z4g2ta8k.js:67804-67901 placement
-function parseWorkerEventFrame(e) {
-  if (typeof e !== "string") return;
+function parseWorkerEventFrame(payload) {
+  if (typeof payload !== "string") return;
   try {
-    return workerEventFrameSchema().safeParse(jsonParse(e)).data;
+    return workerEventFrameSchema().safeParse(jsonParse(payload)).data;
   } catch {
     return;
   }
@@ -489,14 +499,14 @@ function parseWorkerEventFrame(e) {
 /**
  * 把 WorkerSocket 收到的应答帧还原为 HTTP Response：无错误时返回指定字段的 JSON（缺失则 500），有错误时按 status（限 400–599）并带 retry-after、x-ccr-conflict-reason 头。
  */
-function workerReplyToResponse(e, n) {
-  let { error } = e;
+function workerReplyToResponse(connection, reply) {
+  let { error } = connection;
   if (error === undefined)
-    return e[n] === undefined
+    return connection[reply] === undefined
       ? new Response(null, {
           status: 500,
         })
-      : new Response(jsonStringify(e[n]), {
+      : new Response(jsonStringify(connection[reply]), {
           status: 200,
         });
   let { status = 500 } = error;
@@ -519,46 +529,48 @@ function workerReplyToResponse(e, n) {
 /**
  * 按服务端返回的元数据构造 SSE 响应头：content-type、date、保活间隔等。
  */
-function buildStreamResponseHeaders(e) {
+function buildStreamResponseHeaders(connection) {
   let headers = new Headers({
     "content-type": "text/event-stream",
   });
-  if (e.server_time !== undefined) headers.set("date", e.server_time);
-  if (e.keep_alive_interval_seconds !== undefined)
-    headers.set(X_CCR_SSE_KEEPALIVE_INTERVAL_SECONDS, String(e.keep_alive_interval_seconds));
-  if (e.session_writers !== undefined) headers.set(X_CCR_SESSION_WRITERS, e.session_writers);
-  if (e.attestation_policy !== undefined) headers.set(X_CCR_ATTESTATION_POLICY, e.attestation_policy);
+  if (connection.server_time !== undefined) headers.set("date", connection.server_time);
+  if (connection.keep_alive_interval_seconds !== undefined)
+    headers.set(X_CCR_SSE_KEEPALIVE_INTERVAL_SECONDS, String(connection.keep_alive_interval_seconds));
+  if (connection.session_writers !== undefined)
+    headers.set(X_CCR_SESSION_WRITERS, connection.session_writers);
+  if (connection.attestation_policy !== undefined)
+    headers.set(X_CCR_ATTESTATION_POLICY, connection.attestation_policy);
   return headers;
 }
 //@ chunk-z4g2ta8k.js:68689-68918 placement
 function encodeSseEvents(event) {
-  let n = "";
+  let text = "";
   for (let [key, value] of Object.entries(event)) {
     if (!/^\w+$/.test(key)) continue;
-    let h = key === "client_event" ? sequenceNumReplySchema().safeParse(value).data : undefined;
-    let y =
-      h === undefined
+    let reply = key === "client_event" ? sequenceNumReplySchema().safeParse(value).data : undefined;
+    let body =
+      reply === undefined
         ? ""
-        : `id: ${h.sequence_num}
+        : `id: ${reply.sequence_num}
 `;
-    n += `event: ${key}
-${y}data: ${jsonStringify(value)}
+    text += `event: ${key}
+${body}data: ${jsonStringify(value)}
 
 `;
   }
-  return n;
+  return text;
 }
 //@ chunk-z4g2ta8k.js:68918-69084 placement
 /**
  * 用 Bun WebSocket 打开 worker 连接；wss 时套用 WebSocket 代理与 TLS 选项。
  */
-function openWorkerWebSocket(e, headers, perMessageDeflate) {
-  let s = e.startsWith("wss:");
-  return new globalThis.WebSocket(e, {
+function openWorkerWebSocket(url, headers, perMessageDeflate) {
+  let isSecure = url.startsWith("wss:");
+  return new globalThis.WebSocket(url, {
     headers,
     perMessageDeflate,
-    proxy: s ? getWebSocketProxyUrl(e) : undefined,
-    tls: s ? getWebSocketTLSOptions(undefined) || undefined : undefined,
+    proxy: isSecure ? getWebSocketProxyUrl(url) : undefined,
+    tls: isSecure ? getWebSocketTLSOptions(undefined) || undefined : undefined,
   });
 }
 export { WorkerSocket, openWorkerWebSocket };

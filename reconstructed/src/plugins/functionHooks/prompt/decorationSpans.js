@@ -10,55 +10,60 @@
  */
 
 //@ chunk-s61vbvea.js:16183-16208 placement
-var PP = Object.freeze([]);
+var EMPTY_SPANS = Object.freeze([]);
 //@ chunk-s61vbvea.js:16208-16288 placement
 /**
  * 平移装饰段
  */
-var shiftSpans = (text, n) =>
-  text.spans.reduce((acc, span) => acc - Math.max(0, Math.min(n, span.end) - span.start), n);
+var shiftSpans = (text, cursor) =>
+  text.spans.reduce((acc, span) => acc - Math.max(0, Math.min(cursor, span.end) - span.start), cursor);
 //@ chunk-s61vbvea.js:16288-16390 placement
 /**
  * 把装饰段整体平移 n 个位置（空列表返回共享的冻结空数组）。
  */
-function offsetDecorations(e, n) {
-  let r = e.length === 0;
-  let mapped = e.map((h) => ({
-    ...h,
-    start: h.start + n,
-    end: h.end + n,
+function offsetDecorations(decorations, delta) {
+  let isEmpty = decorations.length === 0;
+  let mapped = decorations.map((decoration) => ({
+    ...decoration,
+    start: decoration.start + delta,
+    end: decoration.end + delta,
   }));
-  return r ? PP : mapped;
+  return isEmpty ? EMPTY_SPANS : mapped;
 }
 //@ chunk-s61vbvea.js:16390-16502 placement
 /**
  * 把草稿中的位置换算为显示文本中的位置（加上之前各虚拟文本段的长度）。
  */
-var draftToDisplayOffset = (e, n, r) =>
-  e.spans
-    .filter((span) => (r === "after" ? span.run.start <= n : span.run.start < n))
-    .reduce((acc, span) => acc + span.end - span.start, n);
+var draftToDisplayOffset = (layout, cursor, boundary) =>
+  layout.spans
+    .filter((span) => (boundary === "after" ? span.run.start <= cursor : span.run.start < cursor))
+    .reduce((acc, span) => acc + span.end - span.start, cursor);
 //@ chunk-s61vbvea.js:16502-16761 placement
 /**
  * 把草稿与带 virtualText 的装饰段合成显示文本，并给出每段在显示文本中的区间。
  */
-function buildVirtualTextLayout(e, n) {
-  let r = 0;
-  let spans = n.map((h) => {
-    let start = h.start + r;
-    r += (h.virtualText ?? "").length;
+function buildVirtualTextLayout(draft, decorations) {
+  let offset = 0;
+  let spans = decorations.map((decoration) => {
+    let start = decoration.start + offset;
+    offset += (decoration.virtualText ?? "").length;
     return {
       start,
-      end: h.start + r,
-      run: h,
+      end: decoration.start + offset,
+      run: decoration,
     };
   });
   return {
-    draft: e,
+    draft,
     text:
-      n.map((h, y) => e.slice(n[y - 1]?.start ?? 0, h.start) + (h.virtualText ?? "")).join("") +
-      e.slice(n.at(-1)?.start ?? 0),
+      decorations
+        .map(
+          (decoration, index) =>
+            draft.slice(decorations[index - 1]?.start ?? 0, decoration.start) +
+            (decoration.virtualText ?? ""),
+        )
+        .join("") + draft.slice(decorations.at(-1)?.start ?? 0),
     spans,
   };
 }
-export { PP, buildVirtualTextLayout, offsetDecorations, shiftSpans, draftToDisplayOffset };
+export { EMPTY_SPANS, buildVirtualTextLayout, offsetDecorations, shiftSpans, draftToDisplayOffset };

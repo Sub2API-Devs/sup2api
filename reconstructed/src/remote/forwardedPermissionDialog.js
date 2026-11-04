@@ -10,9 +10,9 @@
  */
 import { relative } from "path";
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
-import { INVALID_TOOL_NAME_TEXT } from "../utils/deepFreezePlainData.js";
+import { INVALID_TOOL_NAME_TEXT } from "../components/permissions/consentRows.js";
 import { findTool } from "../services/api/deferredToolsState.js";
-import { record, string, unknown } from "../../vendor/zod/v4/classic/schemas.js";
+import { record, stringSchema, unknown } from "../../vendor/zod/v4/classic/schemas.js";
 import {
   uniqueDisplayNames,
   stripUnsafeChars,
@@ -52,9 +52,13 @@ import { REMOTE_READ_MAX_BYTES } from "../services/remoteTools/remoteFileRead.js
 import { PERMISSION_RULE_SOURCES } from "../utils/permissions/permissions.js";
 import { stripNonPrintable } from "../utils/truncateGraphemes.js";
 import { stripAnsi } from "../utils/stripAnsi.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:226114-226118 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:226114", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:226118-226480 placement
 /**
  * 转发来的权限请求无法在本终端展示时的三段文案：概括、短版、等待用户按 esc 的完整版。
@@ -67,64 +71,69 @@ var REMOTE_PERMISSION_UNSHOWABLE_WAITING =
   "The remote session is waiting for an answer to a permission question that this terminal cannot show. Nothing else can answer it. Press esc to stop the turn.";
 //@ chunk-18hwfzwa.js:226480-226568 placement
 function getStubToolForForwardedPermission(toolName, toolRegistry) {
-  let D = typeof toolName === "string" ? toolName : INVALID_TOOL_NAME_TEXT;
-  let tool = findTool(toolRegistry, D);
+  let resolvedName = typeof toolName === "string" ? toolName : INVALID_TOOL_NAME_TEXT;
+  let tool = findTool(toolRegistry, resolvedName);
   if (tool) return tool;
-  return makeStubToolForPermissionUI(D);
+  return makeStubToolForPermissionUI(resolvedName);
 }
 //@ chunk-18hwfzwa.js:226568-226591 placement
 var MAX_PREVIEW_PARAM_LENGTH = 200000;
 var MAX_PREVIEW_PARAM_ENTRIES = 1e4;
 //@ chunk-18hwfzwa.js:226591-227988 placement
-function makeStubToolForPermissionUI(h) {
-  function x(D) {
-    throw Error(`Stub tool ${h}.${D} called \u2014 stub exists only for permission UI rendering.`);
+function makeStubToolForPermissionUI(toolName) {
+  function throwStubCalled(method) {
+    throw Error(
+      `Stub tool ${toolName}.${method} called \u2014 stub exists only for permission UI rendering.`,
+    );
   }
   return {
-    name: h,
-    isMcp: h.startsWith("mcp__"),
+    name: toolName,
+    isMcp: toolName.startsWith("mcp__"),
     isReadOnly: () => false,
     isConcurrencySafe: () => false,
     isEnabled: () => false,
-    inputSchema: record(string(), unknown()),
+    inputSchema: record(stringSchema(), unknown()),
     maxResultSizeChars: 0,
-    userFacingName: () => h,
+    userFacingName: () => toolName,
     description: async () => "",
-    prompt: async () => x("prompt"),
-    call: async () => x("call"),
-    checkPermissions: async () => x("checkPermissions"),
+    prompt: async () => throwStubCalled("prompt"),
+    call: async () => throwStubCalled("call"),
+    checkPermissions: async () => throwStubCalled("checkPermissions"),
     toAutoClassifierInput: () => "",
-    mapToolResultToToolResultBlockParam: (D, toolUseId) => ({
+    mapToolResultToToolResultBlockParam: (result, toolUseId) => ({
       type: "tool_result",
       tool_use_id: toolUseId,
       content: "",
     }),
-    renderToolUseMessage: (D) => {
-      let entries = Object.entries(D);
+    renderToolUseMessage: (input) => {
+      let entries = Object.entries(input);
       if (entries.length === 0) return "";
       if (entries.length > 3) throw Error("stub preview cannot render all parameters completely");
-      for (let [ke, Re] of entries)
+      for (let [key, value] of entries)
         if (
-          ke.length > MAX_PREVIEW_PARAM_LENGTH ||
-          (typeof Re === "string" && Re.length > MAX_PREVIEW_PARAM_LENGTH) ||
-          (Array.isArray(Re) && Re.length > MAX_PREVIEW_PARAM_ENTRIES) ||
-          (typeof Re === "object" &&
-            Re !== null &&
-            !Array.isArray(Re) &&
-            Object.keys(Re).length > MAX_PREVIEW_PARAM_ENTRIES)
+          key.length > MAX_PREVIEW_PARAM_LENGTH ||
+          (typeof value === "string" && value.length > MAX_PREVIEW_PARAM_LENGTH) ||
+          (Array.isArray(value) && value.length > MAX_PREVIEW_PARAM_ENTRIES) ||
+          (typeof value === "object" &&
+            value !== null &&
+            !Array.isArray(value) &&
+            Object.keys(value).length > MAX_PREVIEW_PARAM_ENTRIES)
         )
           throw Error("stub preview cannot render an over-bound parameter");
-      let ee = uniqueDisplayNames(entries.map(([ke]) => ke));
+      let uniqueNames = uniqueDisplayNames(entries.map(([key]) => key));
       return entries
-        .map(([ke, Re]) => {
-          let Be = typeof Re === "string" ? null : jsonStringify(Re);
-          if (Be !== null && Be.length > MAX_PREVIEW_PARAM_LENGTH)
+        .map(([key, value]) => {
+          let json = typeof value === "string" ? null : jsonStringify(value);
+          if (json !== null && json.length > MAX_PREVIEW_PARAM_LENGTH)
             throw Error("stub preview cannot render an over-bound parameter");
-          let He = typeof Re === "string" ? stripUnsafeChars(Re) : Be;
-          if (markBrokenSequences(He) !== He || markBrokenSequences(ke) !== ke)
+          let displayText = typeof value === "string" ? stripUnsafeChars(value) : json;
+          if (markBrokenSequences(displayText) !== displayText || markBrokenSequences(key) !== key)
             throw Error("stub preview cannot render a parameter whose display would drop code points");
-          let We = typeof Re === "string" ? jsonStringify(markBrokenSequences(He)) : sanitizeForDisplay(Be);
-          return `${ee.get(ke) ?? jsonStringify(sanitizeForDisplay(ke))}: ${We}`;
+          let renderedValue =
+            typeof value === "string"
+              ? jsonStringify(markBrokenSequences(displayText))
+              : sanitizeForDisplay(json);
+          return `${uniqueNames.get(key) ?? jsonStringify(sanitizeForDisplay(key))}: ${renderedValue}`;
         })
         .join(", ");
     },
@@ -134,79 +143,83 @@ function makeStubToolForPermissionUI(h) {
 /**
  * 把云会话/远端 worker 发来的 can_use_tool 请求还原成本地权限对话框：找到同名工具或生成 stub 工具，渲染参数，无法渲染时提示 "deny unless expected"。
  */
-async function buildForwardedPermissionDialog(h) {
-  let tool = h.tool;
-  let D = {
-    ...h,
-    description: typeof h.description === "string" ? h.description : "",
+async function buildForwardedPermissionDialog(args) {
+  let tool = args.tool;
+  let withText = {
+    ...args,
+    description: typeof args.description === "string" ? args.description : "",
   };
-  let L = typeof h.input === "object" && h.input !== null && !Array.isArray(h.input);
-  let ee = {
-    ...D,
+  let inputIsObject = typeof args.input === "object" && args.input !== null && !Array.isArray(args.input);
+  let withRacer = {
+    ...withText,
     hasExternalRacer: true,
   };
-  if (!L)
+  if (!inputIsObject)
     return {
       dialog: PERMISSION_PROMPT_DIALOG,
       descriptor: {
-        ...buildPermissionPromptPayload(ee),
+        ...buildPermissionPromptPayload(withRacer),
         toolUseRenderFailed: true,
         renderedToolUseMessage: "parameters could not be rendered \u2014 deny unless expected",
       },
     };
-  let ke = classifyBashCommand(tool);
-  let Re = ke?.dialog.kind === BROWSER_PERMISSION_CARD.kind && h.permissionResult.defaultToNo === true;
-  if (ke !== undefined && !Re)
+  let bashClassification = classifyBashCommand(tool);
+  let isBrowserDenied =
+    bashClassification?.dialog.kind === BROWSER_PERMISSION_CARD.kind &&
+    args.permissionResult.defaultToNo === true;
+  if (bashClassification !== undefined && !isBrowserDenied)
     return {
-      dialog: ke.dialog,
-      descriptor: ke.build(ee),
+      dialog: bashClassification.dialog,
+      descriptor: bashClassification.build(withRacer),
     };
   if (isFileTool(tool)) {
-    let toolInputPath = getToolInputPath(tool, h.input);
+    let toolInputPath = getToolInputPath(tool, args.input);
     if (toolInputPath !== null) {
-      let He =
-        h.remoteWorkspace === true && isFileWriteOrEditTool(tool) && !h.signal?.aborted
+      let heldCall =
+        args.remoteWorkspace === true && isFileWriteOrEditTool(tool) && !args.signal?.aborted
           ? lookupForwardedTool({
-              lookup: h.heldServedCall,
+              lookup: args.heldServedCall,
               tool,
-              toolUseId: h.toolUseID,
-              input: h.input,
+              toolUseId: args.toolUseID,
+              input: args.input,
               filePath: toolInputPath,
             })
           : undefined;
-      let We = async () =>
+      let buildRemoteFileDescriptor = async () =>
         buildFilePermissionDescriptor({
-          ...D,
+          ...withText,
           filePath: toolInputPath,
-          remoteWorkspace: h.remoteWorkspace === true,
+          remoteWorkspace: args.remoteWorkspace === true,
           remoteOldContent:
-            h.remoteWorkspace === true && isAutoDenyKind(tool) && !h.signal?.aborted
+            args.remoteWorkspace === true && isAutoDenyKind(tool) && !args.signal?.aborted
               ? await readRemoteFileForPreview(toolInputPath)
               : undefined,
         });
-      let ze = () =>
+      let buildPlainFileDescriptor = () =>
         buildFilePermissionDescriptor({
-          ...D,
+          ...withText,
           filePath: toolInputPath,
           remoteWorkspace: true,
           remoteOldContent: undefined,
         });
       try {
         let { descriptor, outcome } =
-          He === undefined
+          heldCall === undefined
             ? {
-                descriptor: hasHostField(h.input) ? await ze() : await We(),
+                descriptor: hasHostField(args.input)
+                  ? await buildPlainFileDescriptor()
+                  : await buildRemoteFileDescriptor(),
                 outcome: undefined,
               }
-            : He.preview === "local"
+            : heldCall.preview === "local"
               ? await localPreviewForHeldCall({
-                  args: D,
+                  args: withText,
                   filePath: toolInputPath,
-                  startCwd: He.startCwd,
+                  startCwd: heldCall.startCwd,
                 })
               : {
-                  descriptor: await ze(),
-                  outcome: He,
+                  descriptor: await buildPlainFileDescriptor(),
+                  outcome: heldCall,
                 };
         if (outcome !== undefined) logServedPreview(tool, outcome);
         return {
@@ -217,7 +230,7 @@ async function buildForwardedPermissionDialog(h) {
         return {
           dialog: PERMISSION_PROMPT_DIALOG,
           descriptor: {
-            ...buildPermissionPromptPayload(ee),
+            ...buildPermissionPromptPayload(withRacer),
             toolUseRenderFailed: true,
             renderedToolUseMessage: "parameters could not be rendered \u2014 deny unless expected",
           },
@@ -229,14 +242,14 @@ async function buildForwardedPermissionDialog(h) {
     return {
       dialog: BASH_PERMISSION_CARD,
       descriptor: buildBashPermissionPayload({
-        ...D,
+        ...withText,
         classifierState: "none",
-        toolPermissionContext: h.toolPermissionContext,
+        toolPermissionContext: args.toolPermissionContext,
       }),
     };
   return {
     dialog: PERMISSION_PROMPT_DIALOG,
-    descriptor: buildPermissionPromptPayload(ee),
+    descriptor: buildPermissionPromptPayload(withRacer),
   };
 }
 //@ chunk-18hwfzwa.js:229560-229598 placement
@@ -244,22 +257,22 @@ function isFileWriteOrEditTool(tool) {
   return tool === FileWriteTool || tool === FileEditTool;
 }
 //@ chunk-18hwfzwa.js:229598-229892 placement
-function lookupForwardedTool(h) {
-  if (h.lookup === undefined || !hasHostField(h.input) || !isViolinWoodEnabledCached()) return;
+function lookupForwardedTool(args) {
+  if (args.lookup === undefined || !hasHostField(args.input) || !isViolinWoodEnabledCached()) return;
   try {
-    let x = h.lookup({
-      toolUseId: h.toolUseId,
-      toolName: h.tool.name,
-      input: h.input,
+    let held = args.lookup({
+      toolUseId: args.toolUseId,
+      toolName: args.tool.name,
+      input: args.input,
     });
-    return x.held
+    return held.held
       ? {
           preview: "local",
-          startCwd: x.startCwd,
+          startCwd: held.startCwd,
         }
       : {
           preview: "remote",
-          reason: x.reason,
+          reason: held.reason,
         };
   } catch (error) {
     logError(error);
@@ -270,30 +283,30 @@ function lookupForwardedTool(h) {
   }
 }
 //@ chunk-18hwfzwa.js:229892-230676 placement
-async function localPreviewForHeldCall(h) {
-  let x = expandPath(h.filePath, String(h.startCwd));
-  let D = {
-    ...h.args,
+async function localPreviewForHeldCall(args) {
+  let expandedPath = expandPath(args.filePath, String(args.startCwd));
+  let localArgs = {
+    ...args.args,
     input: {
-      ...h.args.input,
-      file_path: x,
+      ...args.args.input,
+      file_path: expandedPath,
     },
   };
   try {
     return {
       descriptor: {
         ...(await buildFilePermissionDescriptor({
-          ...D,
-          filePath: x,
+          ...localArgs,
+          filePath: expandedPath,
           remoteWorkspace: false,
         })),
-        input: h.args.input,
-        subtitle: stripInvisibleChars_3(relative(h.startCwd, x)),
-        workingDir: h.startCwd,
+        input: args.args.input,
+        subtitle: stripInvisibleChars_3(relative(args.startCwd, expandedPath)),
+        workingDir: args.startCwd,
       },
       outcome: {
         preview: "local",
-        startCwd: h.startCwd,
+        startCwd: args.startCwd,
       },
     };
   } catch (error) {
@@ -303,27 +316,27 @@ async function localPreviewForHeldCall(h) {
         level: "error",
       },
     );
-    let ee = {
+    let remoteDescriptor = {
       ...(await buildFilePermissionDescriptor({
-        ...D,
-        filePath: x,
+        ...localArgs,
+        filePath: expandedPath,
         remoteWorkspace: true,
         remoteOldContent: undefined,
       })),
-      input: h.args.input,
+      input: args.args.input,
     };
     let errnoCode = getErrnoCode(error);
     return {
       descriptor:
-        ee.content.kind === "no-changes" && errnoCode !== undefined
+        remoteDescriptor.content.kind === "no-changes" && errnoCode !== undefined
           ? {
-              ...ee,
+              ...remoteDescriptor,
               content: {
                 kind: "no-changes",
                 message: `This machine could not read the file (${errnoCode}) \u2014 approving will attempt the write anyway.`,
               },
             }
-          : ee,
+          : remoteDescriptor,
       outcome: {
         preview: "remote",
         reason: "local_read_failed",
@@ -345,7 +358,7 @@ var REMOTE_READ_FILE_TIMEOUT_MS = 1e4;
 async function readRemoteFileForPreview(toolInputPath) {
   if (!hasRemoteCap("fileRead")) return;
   try {
-    let x = await withTimeout(
+    let response = await withTimeout(
       getRemoteCaps().sendControlRequest({
         subtype: "read_file",
         path: toolInputPath,
@@ -354,14 +367,17 @@ async function readRemoteFileForPreview(toolInputPath) {
       REMOTE_READ_FILE_TIMEOUT_MS,
       "remote read_file timed out",
     );
-    if (x.truncated === true) return;
-    return x.contents;
+    if (response.truncated === true) return;
+    return response.contents;
   } catch (error) {
-    let D = error instanceof Error ? error.message : String(error);
-    if (D.includes("ENOENT") || D.includes("no such file")) return null;
-    logForDebugging(`buildForwardedPermissionDialog: remote read_file failed for ${toolInputPath}: ${D}`, {
-      level: "error",
-    });
+    let errorText = error instanceof Error ? error.message : String(error);
+    if (errorText.includes("ENOENT") || errorText.includes("no such file")) return null;
+    logForDebugging(
+      `buildForwardedPermissionDialog: remote read_file failed for ${toolInputPath}: ${errorText}`,
+      {
+        level: "error",
+      },
+    );
     return;
   }
 }
@@ -370,8 +386,8 @@ function isPermissionRuleSource(source) {
   return PERMISSION_RULE_SOURCES.includes(source);
 }
 //@ chunk-18hwfzwa.js:231302-231334 placement
-function toPrintablePermissionText(h) {
-  return stripNonPrintable(stripAnsi(h));
+function toPrintablePermissionText(text) {
+  return stripNonPrintable(stripAnsi(text));
 }
 export {
   toPrintablePermissionText,

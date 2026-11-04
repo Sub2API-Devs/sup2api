@@ -8,20 +8,102 @@
  * pieces: chunk-ah34pb7m.js (4), chunk-hg2zbde4.js (1), chunk-kxyd0g16.js (1), chunk-q466qetm.js (1)
  * attribution: fingerprint 5, placement 1, callgraph-witnessed 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import {
-  jsxProd_default_2,
-  jsxProd_default,
-} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Text, Box } from "../../ink/components/Text.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
-import { MessageResponse } from "../../components/MessageResponse.js";
-import { extractTag } from "../../utils/messages.js";
-import { FallbackToolUseErrorMessage } from "../../components/FallbackToolUseErrorMessage.js";
 import { getSymbolAtPosition } from "./symbolContext.js";
 import { getDisplayPath } from "../../utils/file.js";
+import { extractTag } from "../../utils/messages.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { MessageResponse } from "../../components/MessageResponse.js";
+import { Text, Box } from "../../ink/components/Text.js";
+import { FallbackToolUseErrorMessage } from "../../components/FallbackToolUseErrorMessage.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 
+//@ chunk-hg2zbde4.js:1720-2980 fingerprint = userFacingName (1)
+/**
+ * LSP 工具名 "LSP" 与工具描述（九种操作说明、行列 1 基）。
+ */
+var LSP_TOOL_NAME = "LSP";
+var LSP_TOOL_DESCRIPTION = `Interact with Language Server Protocol (LSP) servers to get code intelligence features.
+
+Supported operations:
+- goToDefinition: Find where a symbol is defined
+- findReferences: Find all references to a symbol
+- hover: Get hover information (documentation, type info) for a symbol
+- documentSymbol: Get all symbols (functions, classes, variables) in a document
+- workspaceSymbol: Search for symbols matching a query across the entire workspace
+- goToImplementation: Find implementations of an interface or abstract method
+- prepareCallHierarchy: Get call hierarchy item at a position (functions/methods)
+- incomingCalls: Find all functions/methods that call the function at a position
+- outgoingCalls: Find all functions/methods called by the function at a position
+
+All operations require:
+- filePath: The file to operate on
+- line: The line number (1-based, as shown in editors)
+- character: The character offset (1-based, as shown in editors)
+
+The workspaceSymbol operation also takes:
+- query: The symbol name or partial name to search for. Always provide it \u2014 most language servers return no results for an empty query.
+
+Note: LSP servers must be configured for the file type. If no server is available, an error will be returned.`;
+//@ chunk-kxyd0g16.js:105186-105853 fingerprint = renderToolUseMessage (1)
+/**
+ * LSP 调用渲染：位置类操作显示光标处符号名与路径，其余显示操作名与参数。
+ */
+function renderToolUseMessage(input, { verbose }) {
+  if (!input.operation) return null;
+  let parts = [];
+  if (
+    (input.operation === "goToDefinition" ||
+      input.operation === "findReferences" ||
+      input.operation === "hover" ||
+      input.operation === "goToImplementation") &&
+    input.filePath &&
+    input.line !== undefined &&
+    input.character !== undefined
+  ) {
+    let symbol = getSymbolAtPosition(input.filePath, input.line - 1, input.character - 1);
+    let displayPath = verbose ? input.filePath : getDisplayPath(input.filePath);
+    if (symbol) {
+      parts.push(`operation: "${input.operation}"`);
+      parts.push(`symbol: "${symbol}"`);
+      parts.push(`in: "${displayPath}"`);
+    } else {
+      parts.push(`operation: "${input.operation}"`);
+      parts.push(`file: "${displayPath}"`);
+      parts.push(`position: ${input.line}:${input.character}`);
+    }
+    return parts.join(", ");
+  }
+  parts.push(`operation: "${input.operation}"`);
+  if (input.filePath) {
+    let displayPath = verbose ? input.filePath : getDisplayPath(input.filePath);
+    parts.push(`file: "${displayPath}"`);
+  }
+  return parts.join(", ");
+}
+//@ chunk-q466qetm.js:9184-9415 callgraph-witnessed = renderToolUseErrorMessage (0.509)
+function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
+  if (
+    !verbose &&
+    toolDenialKind !== "permission-rule" &&
+    typeof result === "string" &&
+    extractTag(result, "tool_use_error")
+  )
+    return jsxProd_default(MessageResponse, {
+      children: jsxProd_default(Text, {
+        color: "error",
+        children: "Error editing notebook",
+      }),
+    });
+  return jsxProd_default(FallbackToolUseErrorMessage, {
+    result,
+    verbose,
+  });
+}
 //@ chunk-ah34pb7m.js:18778-19318 fingerprint = OPERATION_LABELS (1)
 var OPERATION_LABELS = {
   goToDefinition: {
@@ -64,7 +146,7 @@ var OPERATION_LABELS = {
 };
 //@ chunk-ah34pb7m.js:19318-20567 fingerprint = LSPResultSummary (0.7)
 function LSPResultSummary(props) {
-  let $ = w(24);
+  let $ = useMemoCache(24);
   let { operation, resultCount, fileCount, content, verbose } = props;
   let t1;
   if ($[0] !== operation) {
@@ -227,92 +309,11 @@ function renderToolResultMessage_4(output, _progressMessages, { verbose }) {
     }),
   });
 }
-//@ chunk-hg2zbde4.js:1720-2980 fingerprint = userFacingName (1)
-/**
- * LSP 工具名 "LSP" 与工具描述（九种操作说明、行列 1 基）。
- */
-var LSP_TOOL_NAME = "LSP";
-var LSP_TOOL_DESCRIPTION = `Interact with Language Server Protocol (LSP) servers to get code intelligence features.
-
-Supported operations:
-- goToDefinition: Find where a symbol is defined
-- findReferences: Find all references to a symbol
-- hover: Get hover information (documentation, type info) for a symbol
-- documentSymbol: Get all symbols (functions, classes, variables) in a document
-- workspaceSymbol: Search for symbols matching a query across the entire workspace
-- goToImplementation: Find implementations of an interface or abstract method
-- prepareCallHierarchy: Get call hierarchy item at a position (functions/methods)
-- incomingCalls: Find all functions/methods that call the function at a position
-- outgoingCalls: Find all functions/methods called by the function at a position
-
-All operations require:
-- filePath: The file to operate on
-- line: The line number (1-based, as shown in editors)
-- character: The character offset (1-based, as shown in editors)
-
-The workspaceSymbol operation also takes:
-- query: The symbol name or partial name to search for. Always provide it \u2014 most language servers return no results for an empty query.
-
-Note: LSP servers must be configured for the file type. If no server is available, an error will be returned.`;
-//@ chunk-kxyd0g16.js:105186-105853 fingerprint = renderToolUseMessage (1)
-/**
- * LSP 调用渲染：位置类操作显示光标处符号名与路径，其余显示操作名与参数。
- */
-function renderToolUseMessage(input, { verbose }) {
-  if (!input.operation) return null;
-  let parts = [];
-  if (
-    (input.operation === "goToDefinition" ||
-      input.operation === "findReferences" ||
-      input.operation === "hover" ||
-      input.operation === "goToImplementation") &&
-    input.filePath &&
-    input.line !== undefined &&
-    input.character !== undefined
-  ) {
-    let symbol = getSymbolAtPosition(input.filePath, input.line - 1, input.character - 1);
-    let displayPath = verbose ? input.filePath : getDisplayPath(input.filePath);
-    if (symbol) {
-      parts.push(`operation: "${input.operation}"`);
-      parts.push(`symbol: "${symbol}"`);
-      parts.push(`in: "${displayPath}"`);
-    } else {
-      parts.push(`operation: "${input.operation}"`);
-      parts.push(`file: "${displayPath}"`);
-      parts.push(`position: ${input.line}:${input.character}`);
-    }
-    return parts.join(", ");
-  }
-  parts.push(`operation: "${input.operation}"`);
-  if (input.filePath) {
-    let displayPath = verbose ? input.filePath : getDisplayPath(input.filePath);
-    parts.push(`file: "${displayPath}"`);
-  }
-  return parts.join(", ");
-}
-//@ chunk-q466qetm.js:9184-9415 callgraph-witnessed = renderToolUseErrorMessage (0.509)
-function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
-  if (
-    !verbose &&
-    toolDenialKind !== "permission-rule" &&
-    typeof result === "string" &&
-    extractTag(result, "tool_use_error")
-  )
-    return jsxProd_default(MessageResponse, {
-      children: jsxProd_default(Text, {
-        color: "error",
-        children: "Error editing notebook",
-      }),
-    });
-  return jsxProd_default(FallbackToolUseErrorMessage, {
-    result,
-    verbose,
-  });
-}
 export {
   LSP_TOOL_NAME,
   renderToolResultMessage_4,
   renderToolUseErrorMessage_2,
   LSP_TOOL_DESCRIPTION,
   renderToolUseMessage,
+  renderToolUseErrorMessage,
 };

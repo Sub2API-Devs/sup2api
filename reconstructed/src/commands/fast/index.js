@@ -43,7 +43,7 @@ var fastNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-vr5qyyg8.js"),
+  load: () => import("./call.lazy.js"),
 };
 var fastCommand = fastCommandDefinition;
 export { fastCommand, fastNonInteractiveCommand };

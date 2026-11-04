@@ -102,74 +102,76 @@ import { refuseDynamicImport, scanHooksFile } from "../moduleScan.js";
 import { identity } from "../../../utils/identity.js";
 import { createValueSlot } from "../../../utils/valueSlot.js";
 import { SubAgentContext } from "../../../components/CtrlOToExpand.js";
-import { createVmRealm, vUe } from "./vmRealm.js";
+import { createVmRealm, NO_IMPORT_OPTIONS } from "./vmRealm.js";
 import { lookupPathTable } from "../../../utils/pathTable.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:303344-303523 placement
 function createArgumentTracker(cloneIn) {
   let weakSet = new WeakSet();
   return {
-    argumentFor: (r) => {
-      let n = cloneIn(r);
-      if (typeof n === "object" && n !== null) weakSet.add(n);
-      return n;
+    argumentFor: (value) => {
+      let clone = cloneIn(value);
+      if (typeof clone === "object" && clone !== null) weakSet.add(clone);
+      return clone;
     },
-    isDelivered: (r) => typeof r === "object" && r !== null && weakSet.has(r),
+    isDelivered: (value) => typeof value === "object" && value !== null && weakSet.has(value),
   };
 }
 //@ chunk-4121qate.js:303523-303590 placement
 /**
  * 转发的流式操作
  */
-var forwardedStreamOps = (e, o) =>
+var forwardedStreamOps = (request, send) =>
   forwardGenerator({
-    next: () => o(e, "next"),
-    return: () => o(e, "return"),
+    next: () => send(request, "next"),
+    return: () => send(request, "return"),
   });
 //@ chunk-4121qate.js:303590-303711 placement
 /**
  * 环境缺少宿主流式操作时，返回一个立即抛错的流式结果。
  */
-var noStreamingOps = (e) =>
+var noStreamingOps = (apiName) =>
   teeGeneratorResult(
     (async function* () {
-      throw new HooksError(`$.${e}: this environment was made without the host's streaming ops`);
+      throw new HooksError(`$.${apiName}: this environment was made without the host's streaming ops`);
     })(),
   );
 //@ chunk-4121qate.js:303711-303782 placement
 /**
  * 缓存的 ui.resolve 答案
  */
-function cachedResolveAnswer(weakMap, o) {
-  return typeof o === "object" && o !== null ? weakMap.get(o) : undefined;
+function cachedResolveAnswer(weakMap, request) {
+  return typeof request === "object" && request !== null ? weakMap.get(request) : undefined;
 }
 //@ chunk-4121qate.js:303782-304112 placement
 /**
  * 按 (surface, component) 缓存 ui.resolve 答案的 VM 副本，未命中时按 surface 构造默认值。
  */
-function createSurfaceAnswerCache(e) {
-  let o = new Map();
-  let r = new Map();
+function createSurfaceAnswerCache(build) {
+  let byKey = new Map();
+  let bySurface = new Map();
   return {
-    read(n) {
-      let s = o.get(uiElementKey(n));
-      if (s !== undefined) return s;
-      let i = r.get(n.surface) ?? e(elementBuildersFor(n.surface), n.surface);
-      r.set(n.surface, i);
-      return i;
+    read(request) {
+      let cached = byKey.get(uiElementKey(request));
+      if (cached !== undefined) return cached;
+      let builders =
+        bySurface.get(request.surface) ?? build(elementBuildersFor(request.surface), request.surface);
+      bySurface.set(request.surface, builders);
+      return builders;
     },
-    store(n) {
-      let s = new Map();
-      o.clear();
-      for (let { surface, component, answer } of n) {
-        let a = s.get(answer) ?? e(answer, surface);
-        s.set(answer, a);
-        o.set(
+    store(entries) {
+      let byAnswer = new Map();
+      byKey.clear();
+      for (let { surface, component, answer } of entries) {
+        let built = byAnswer.get(answer) ?? build(answer, surface);
+        byAnswer.set(answer, built);
+        byKey.set(
           uiElementKey({
             surface,
             component,
           }),
-          a,
+          built,
         );
       }
     },
@@ -177,30 +179,31 @@ function createSurfaceAnswerCache(e) {
 }
 //@ chunk-4121qate.js:304112-304264 placement
 var stampEnvironmentAcrossAwait =
-  (stamp, o = () => stamp?.environmentId ?? 0) =>
-  async (r) => {
-    function n() {
-      if (stamp) Atomics.store(stamp.view, STAMP_CURRENT_CALL_SLOT, o());
+  (stamp, current = () => stamp?.environmentId ?? 0) =>
+  async (promise) => {
+    function storeStamp() {
+      if (stamp) Atomics.store(stamp.view, STAMP_CURRENT_CALL_SLOT, current());
     }
-    n();
-    queueMicrotask(n);
+    storeStamp();
+    queueMicrotask(storeStamp);
     try {
-      return await r;
+      return await promise;
     } finally {
-      n();
+      storeStamp();
     }
   };
 //@ chunk-4121qate.js:304264-304514 placement
-var createSignalRelay = (pluginName, makers) => (r) => {
-  if (r === undefined || r === null) return;
-  if (!isAbortSignalLike(r)) throw new HooksError(`${pluginName}: options.signal must be an AbortSignal`);
+var createSignalRelay = (pluginName, makers) => (signal) => {
+  if (signal === undefined || signal === null) return;
+  if (!isAbortSignalLike(signal))
+    throw new HooksError(`${pluginName}: options.signal must be an AbortSignal`);
   let abortController = new AbortController();
   let unlink = makers.relaySignal(
-    r,
-    nullPrototypeFunction((name, p) => {
-      let f = new HooksError(p);
-      f.name = name;
-      abortController.abort(f);
+    signal,
+    nullPrototypeFunction((name, errorName) => {
+      let error = new HooksError(errorName);
+      error.name = name;
+      abortController.abort(error);
     }),
   );
   return {
@@ -210,87 +213,97 @@ var createSignalRelay = (pluginName, makers) => (r) => {
 };
 //@ chunk-4121qate.js:304514-304756 placement
 var runWithEnvironmentStamp =
-  (stamp, o = () => stamp?.environmentId ?? 0) =>
-  (r) => {
-    if (!stamp) return r();
+  (stamp, current = () => stamp?.environmentId ?? 0) =>
+  (fn) => {
+    if (!stamp) return fn();
     let { view, environmentId } = stamp;
-    let i = Atomics.load(view, STAMP_ENVIRONMENT_SLOT);
+    let previousEnvironment = Atomics.load(view, STAMP_ENVIRONMENT_SLOT);
     Atomics.store(view, STAMP_ENVIRONMENT_SLOT, environmentId);
-    Atomics.store(view, STAMP_CURRENT_CALL_SLOT, o());
+    Atomics.store(view, STAMP_CURRENT_CALL_SLOT, current());
     try {
-      return r();
+      return fn();
     } finally {
-      Atomics.store(view, STAMP_ENVIRONMENT_SLOT, i);
-      Atomics.store(view, STAMP_CURRENT_CALL_SLOT, i === 0 ? o() : i);
+      Atomics.store(view, STAMP_ENVIRONMENT_SLOT, previousEnvironment);
+      Atomics.store(
+        view,
+        STAMP_CURRENT_CALL_SLOT,
+        previousEnvironment === 0 ? current() : previousEnvironment,
+      );
     }
   };
 //@ chunk-4121qate.js:304756-304980 placement
 /**
  * 把宿主异步迭代器桥接为 VM 内的流对象（next/return/result 都经包装与克隆）。
  */
-function createVmStreamBridge({ vmStream, wrapMethod, cloneIn }, n = (s) => s) {
-  let s = (i) =>
+function createVmStreamBridge({ vmStream, wrapMethod, cloneIn }, unwrap = (step) => step) {
+  let cloneStep = (step) =>
     cloneIn({
-      done: i.done === true,
-      value: i.value,
+      done: step.done === true,
+      value: step.value,
     });
-  return (i) =>
+  return (generator) =>
     vmStream(
-      wrapMethod(async () => s(await n(i.next()))),
-      wrapMethod(async () => s(await n(i.return(undefined)))),
-      wrapMethod(async () => cloneIn(await n(getStreamResultPromise(i)))),
+      wrapMethod(async () => cloneStep(await unwrap(generator.next()))),
+      wrapMethod(async () => cloneStep(await unwrap(generator.return(undefined)))),
+      wrapMethod(async () => cloneIn(await unwrap(getStreamResultPromise(generator)))),
     );
 }
 //@ chunk-4121qate.js:304980-305044 placement
 /**
  * 取参数里的 surface
  */
-function surfaceOfArg(e) {
-  let surface = (isPlainObject(e) ? e : {}).surface;
+function surfaceOfArg(arg) {
+  let surface = (isPlainObject(arg) ? arg : {}).surface;
   return isUiElementTypeName(surface) ? surface : undefined;
 }
 //@ chunk-4121qate.js:305066-305414 placement
 /**
  * 在 VM 中创建元素构造器表（包装宿主构造器并标记名字）。
  */
-function createVmElementTable(e) {
-  let { context, wrapMethod, cloneIn, pluginName, vmClone } = e;
-  let p = vmModule_2.runInContext(withUseStrict(VM_ELEMENT_TABLE_SOURCE), context);
+function createVmElementTable(options) {
+  let { context, wrapMethod, cloneIn, pluginName, vmClone } = options;
+  let buildTable = vmModule_2.runInContext(withUseStrict(VM_ELEMENT_TABLE_SOURCE), context);
   let withheldElementWarner = createWithheldElementWarner(pluginName);
-  return (a, m) => {
-    if (!isPlainObject(a)) return vmClone(a);
-    let filtered = Object.keys(a)
+  return (table, pluginName) => {
+    if (!isPlainObject(table)) return vmClone(table);
+    let filtered = Object.keys(table)
       .filter(isElementType_2)
-      .filter((key) => functionNameMarks.nameOf(a[key]) === key);
-    let u = p(
-      Object.entries(buildElementTable(a, (l) => wrapMethod((y) => cloneIn(l(y))), withheldElementWarner(m))),
+      .filter((key) => functionNameMarks.nameOf(table[key]) === key);
+    let built = buildTable(
+      Object.entries(
+        buildElementTable(
+          table,
+          (builder) => wrapMethod((props) => cloneIn(builder(props))),
+          withheldElementWarner(pluginName),
+        ),
+      ),
       filtered,
     );
-    for (let l of filtered) {
-      let y = u[l];
-      if (typeof y === "function") functionNameMarks.mark(y, l);
+    for (let typeName of filtered) {
+      let builder = built[typeName];
+      if (typeof builder === "function") functionNameMarks.mark(builder, typeName);
     }
-    return u;
+    return built;
   };
 }
 //@ chunk-4121qate.js:305414-305428 placement
 /**
  * 原样返回
  */
-var keepValueFn = (e) => e;
+var keepValueFn = (fn) => fn;
 //@ chunk-4121qate.js:305428-305940 placement
 /**
  * 创建钩子轨迹克隆器：把轨迹条目克隆到 VM 中（缓存并冻结）。
  */
-function createTraceCloner(e) {
-  let { vmClone, cloneIn } = e;
-  let n = Object.freeze(vmClone([]));
+function createTraceCloner(options) {
+  let { vmClone, cloneIn } = options;
+  let emptyTrace = Object.freeze(vmClone([]));
   let weakMap = new WeakMap();
-  function i(p) {
-    let f = weakMap.get(p);
-    if (f !== undefined) return f;
-    let { index, plugin, tier, event, outcome, reason, ms } = p;
-    let x = Object.freeze(
+  function cloneStep(step) {
+    let clonedStep = weakMap.get(step);
+    if (clonedStep !== undefined) return clonedStep;
+    let { index, plugin, tier, event, outcome, reason, ms } = step;
+    let cloned = Object.freeze(
       Object.assign(
         vmClone({
           index,
@@ -306,28 +319,28 @@ function createTraceCloner(e) {
           ms,
         }),
         {
-          received: cloneIn(p.received),
-          returned: p.returned === undefined ? undefined : cloneIn(p.returned),
+          received: cloneIn(step.received),
+          returned: step.returned === undefined ? undefined : cloneIn(step.returned),
         },
       ),
     );
-    weakMap.set(p, x);
-    return x;
+    weakMap.set(step, cloned);
+    return cloned;
   }
-  return (p) => {
-    if (p.length === 0) return n;
-    let f = vmClone([]);
-    for (let [a, m] of p.entries()) f[a] = i(m);
-    return Object.freeze(f);
+  return (steps) => {
+    if (steps.length === 0) return emptyTrace;
+    let out = vmClone([]);
+    for (let [index, step] of steps.entries()) out[index] = cloneStep(step);
+    return Object.freeze(out);
   };
 }
 //@ chunk-4121qate.js:305940-305997 placement
 /**
  * 克隆失败时的文本
  */
-function cloneErrorText(e) {
+function cloneErrorText(value) {
   try {
-    clone(e);
+    clone(value);
     return "";
   } catch (error) {
     return errorMessage(error);
@@ -337,73 +350,81 @@ function cloneErrorText(e) {
 /**
  * 检查值能否离开 VM 边界，不能则抛 HooksError（特定拒绝标记为栈溢出类）。
  */
-function checkLeavingValue(bare, o, r) {
-  let n = bare.leavingRefusal(o);
-  if (n !== undefined) {
-    let s = new HooksError(r(n));
-    throw n === STACK_NESTING_TOO_DEEP_MESSAGE ? addWeakSetTag(s) : s;
+function checkLeavingValue(bare, value, message) {
+  let refusal = bare.leavingRefusal(value);
+  if (refusal !== undefined) {
+    let error = new HooksError(message(refusal));
+    throw refusal === STACK_NESTING_TOO_DEEP_MESSAGE ? addWeakSetTag(error) : error;
   }
-  return o;
+  return value;
 }
 //@ chunk-4121qate.js:306109-306691 placement
 /**
  * 按所有者逐项复制对象条目到 VM。
  */
-function copyOwnedEntries(e, vmClone, blamedWalk) {
-  if (!(typeof e === "object" && e !== null && !isUntrustedObject(e) && !Array.isArray(e))) return vmClone(e);
-  let s = e;
-  let keys = Object.keys(s);
-  let mapped = keys.map((m) => Reflect.getOwnPropertyDescriptor(s, m));
-  if (!mapped.every((m) => m !== undefined && "value" in m)) return vmClone(e);
-  let a = Object(vmClone({}));
-  blamedWalk((m, c, u) => {
-    for (let [l, y] of keys.entries()) {
-      let g = mapped[l]?.value;
-      let T =
-        typeof g === "object" && g !== null && !isUntrustedObject(g)
-          ? Reflect.getOwnPropertyDescriptor(g, "owner")?.value
+function copyOwnedEntries(entries, vmClone, blamedWalk) {
+  if (!(
+    typeof entries === "object" &&
+    entries !== null &&
+    !isUntrustedObject(entries) &&
+    !Array.isArray(entries)
+  ))
+    return vmClone(entries);
+  let record = entries;
+  let keys = Object.keys(record);
+  let mapped = keys.map((key) => Reflect.getOwnPropertyDescriptor(record, key));
+  if (!mapped.every((descriptor) => descriptor !== undefined && "value" in descriptor))
+    return vmClone(entries);
+  let out = Object(vmClone({}));
+  blamedWalk((descend, visit, finish) => {
+    for (let [index, key] of keys.entries()) {
+      let value = mapped[index]?.value;
+      let owner =
+        typeof value === "object" && value !== null && !isUntrustedObject(value)
+          ? Reflect.getOwnPropertyDescriptor(value, "owner")?.value
           : undefined;
-      if (y !== "__proto__")
-        c(T, () => {
+      if (key !== "__proto__")
+        visit(owner, () => {
           let ownPropertyDescriptor = Reflect.getOwnPropertyDescriptor(
             Object(
               vmClone({
-                entry: g,
+                entry: value,
               }),
             ),
             "entry",
           );
-          if (ownPropertyDescriptor !== undefined) Reflect.defineProperty(a, y, ownPropertyDescriptor);
+          if (ownPropertyDescriptor !== undefined) Reflect.defineProperty(out, key, ownPropertyDescriptor);
           return ownPropertyDescriptor?.value;
         });
     }
-    u(() => a);
+    finish(() => out);
   });
-  return a;
+  return out;
 }
 //@ chunk-4121qate.js:306691-307138 placement
 /**
  * 逐项复制 record 条目到 VM。
  */
-function copyRecordEntries(e, leavingAnswer, r) {
-  let n = r(e) && valueKindOf(e) === "record";
-  let s = n ? Object.keys(e) : [];
-  let mapped = s.map((a) => Reflect.getOwnPropertyDescriptor(e, a));
-  if (!(n && mapped.every((a) => a !== undefined && "value" in a))) return leavingAnswer(e);
-  let f = Object(leavingAnswer({}));
-  for (let [a, m] of s.entries()) {
-    let c = mapped[a]?.value;
-    r(typeof c === "object" && c !== null ? c : undefined);
-    let u = Object(
+function copyRecordEntries(record, leavingAnswer, blamedWalk) {
+  let isRecord = blamedWalk(record) && valueKindOf(record) === "record";
+  let keys = isRecord ? Object.keys(record) : [];
+  let mapped = keys.map((key) => Reflect.getOwnPropertyDescriptor(record, key));
+  if (!(isRecord && mapped.every((descriptor) => descriptor !== undefined && "value" in descriptor)))
+    return leavingAnswer(record);
+  let out = Object(leavingAnswer({}));
+  for (let [index, key] of keys.entries()) {
+    let value = mapped[index]?.value;
+    blamedWalk(typeof value === "object" && value !== null ? value : undefined);
+    let answer = Object(
       leavingAnswer({
-        [m]: c,
+        [key]: value,
       }),
     );
-    if (typeof u === "function") return u;
-    let ownPropertyDescriptor = Reflect.getOwnPropertyDescriptor(u, m);
-    if (ownPropertyDescriptor !== undefined) Reflect.defineProperty(f, m, ownPropertyDescriptor);
+    if (typeof answer === "function") return answer;
+    let ownPropertyDescriptor = Reflect.getOwnPropertyDescriptor(answer, key);
+    if (ownPropertyDescriptor !== undefined) Reflect.defineProperty(out, key, ownPropertyDescriptor);
   }
-  return f;
+  return out;
 }
 //@ chunk-4121qate.js:307138-311328 placement
 /**
@@ -414,17 +435,17 @@ async function createHooksEngine({ bare, args, host, bounds = {}, loaded, isInst
   let {
     stamp,
     signal,
-    framed = (w, A) => A(),
+    framed = (request, run) => run(),
     hostStream = noStreamingOps,
     blamedFor,
     blamedWalk = probeHookCallback,
   } = bounds;
-  let y = false;
-  let g = () => blamedFor?.() ?? stamp?.environmentId ?? 0;
-  let x = runWithEnvironmentStamp(stamp, g);
-  let T = stampEnvironmentAcrossAwait(stamp, g);
-  let h = new Map();
-  let v = 0;
+  let isUnloaded = false;
+  let currentEntry = () => blamedFor?.() ?? stamp?.environmentId ?? 0;
+  let stamped = runWithEnvironmentStamp(stamp, currentEntry);
+  let stampedAcrossAwait = stampEnvironmentAcrossAwait(stamp, currentEntry);
+  let timers = new Map();
+  let timerId = 0;
   let {
     globals,
     context,
@@ -446,77 +467,82 @@ async function createHooksEngine({ bare, args, host, bounds = {}, loaded, isInst
     vmIterate,
     isGeneratorHook,
   } = bare;
-  async function Te(w, A, F) {
-    if (y) throw envUnloadedError(pluginName);
+  async function iterateOnce(generator, value, arg) {
+    if (isUnloaded) throw envUnloadedError(pluginName);
     try {
-      let se = await x(() => vmIterate(w, A, F));
+      let step = await stamped(() => vmIterate(generator, value, arg));
       return {
-        ...se,
-        value: vmClone(se.value),
+        ...step,
+        value: vmClone(step.value),
       };
     } catch (error) {
       throw fromEnvironment(error);
     }
   }
-  let iterate = (w) => forwardedStreamOps(w, Te);
-  let Y = args.isLeavingUncopied !== true;
+  let iterate = (generator) => forwardedStreamOps(generator, iterateOnce);
+  let copiesLeaving = args.isLeavingUncopied !== true;
   let { argumentFor, isDelivered } = createArgumentTracker(cloneIn);
-  let fe = (w) => (Y ? x(() => leavingCopy(w)) : w);
-  function Ee(w, A) {
-    let se =
-      A === "engine.create" && stamp !== undefined && typeof w === "object" && w !== null ? w : undefined;
-    return se === undefined ? leavingAnswer(w) : blamedWalk((_e) => copyRecordEntries(se, leavingAnswer, _e));
+  let copyLeaving = (value) => (copiesLeaving ? stamped(() => leavingCopy(value)) : value);
+  function copyAnswer(value, event) {
+    let record =
+      event === "engine.create" && stamp !== undefined && typeof value === "object" && value !== null
+        ? value
+        : undefined;
+    return record === undefined
+      ? leavingAnswer(value)
+      : blamedWalk((walk) => copyRecordEntries(record, leavingAnswer, walk));
   }
-  let leaving = (w, A) =>
-    Y
+  let leaving = (value, event) =>
+    copiesLeaving
       ? checkLeavingValue(
           bare,
-          x(() => Ee(w, A)),
+          stamped(() => copyAnswer(value, event)),
           answerNotPlainData,
         )
-      : w;
-  let Pe = (w, A) => checkLeavingValue(bare, fe(A), (F) => argsNotPlainData(w, F));
-  function Oe(w) {
-    if (!Y || isDelivered(w)) return w;
-    let A = checkLeavingValue(bare, fe(w), nextNotPlainData);
-    if (typeof A === "function" && typeof w !== "function")
-      throw new HooksError(nextNotPlainData(cloneErrorText(A)));
-    x(() => freezeOwn(w));
-    return A;
+      : value;
+  let copyForArguments = (op, value) =>
+    checkLeavingValue(bare, copyLeaving(value), (text) => argsNotPlainData(op, text));
+  function copyForNext(value) {
+    if (!copiesLeaving || isDelivered(value)) return value;
+    let copied = checkLeavingValue(bare, copyLeaving(value), nextNotPlainData);
+    if (typeof copied === "function" && typeof value !== "function")
+      throw new HooksError(nextNotPlainData(cloneErrorText(copied)));
+    stamped(() => freezeOwn(value));
+    return copied;
   }
-  let vmStreamBridge = createVmStreamBridge(bare, T);
-  function De(w, A) {
-    if (y) throw envUnloadedError(pluginName);
+  let vmStreamBridge = createVmStreamBridge(bare, stampedAcrossAwait);
+  function invokeSync(fn, arg) {
+    if (isUnloaded) throw envUnloadedError(pluginName);
     try {
-      return x(() => cloneIn(vmCall(w, cloneIn(A))));
+      return stamped(() => cloneIn(vmCall(fn, cloneIn(arg))));
     } catch (error) {
       throw fromEnvironment(error);
     }
   }
-  function ft(w, A, ...F) {
-    if (y) throw envUnloadedError(pluginName);
+  function applySync(fn, thisArg, ...args) {
+    if (isUnloaded) throw envUnloadedError(pluginName);
     try {
-      return x(() => vmApply(w, A, ...F));
+      return stamped(() => vmApply(fn, thisArg, ...args));
     } catch (error) {
       throw fromEnvironment(error);
     }
   }
-  let yt = async (w, A, F) => {
-    if (y) throw envUnloadedError(pluginName);
-    let se;
+  let invokeAsync = async (fn, args, thisArg) => {
+    if (isUnloaded) throw envUnloadedError(pluginName);
+    let result;
     try {
-      se = x(() => (F === undefined ? vmCall(w, ...A) : vmApply(F, w, ...A)));
+      result = stamped(() => (thisArg === undefined ? vmCall(fn, ...args) : vmApply(thisArg, fn, ...args)));
     } catch (error) {
       throw fromEnvironment(error);
     }
     try {
-      return (await vmSettle(se)).v;
+      return (await vmSettle(result)).v;
     } catch (error) {
       throw fromEnvironment(error);
     }
   };
   let signalRelay = createSignalRelay(pluginName, makers);
-  let vmElementTable = createVmElementTable({
+  let build = createVmElementTable({
     context,
     wrapMethod,
     cloneIn,
@@ -527,118 +553,118 @@ async function createHooksEngine({ bare, args, host, bounds = {}, loaded, isInst
     vmClone,
     cloneIn,
   });
-  let surfaceAnswerCache = createSurfaceAnswerCache(vmElementTable);
+  let surfaceAnswerCache = createSurfaceAnswerCache(build);
   let weakMap = new WeakMap();
-  function W(op, error) {
-    let F = intoEnvironment(error);
-    if (typeof F !== "object" || !F) return F;
-    weakMap.set(F, {
+  function toHostError(op, error) {
+    let hostError = intoEnvironment(error);
+    if (typeof hostError !== "object" || !hostError) return hostError;
+    weakMap.set(hostError, {
       plugin: pluginName,
       op,
       message: errorMessage(error),
     });
-    return y ? tagError(F, weakMap.get(F)) : F;
+    return isUnloaded ? tagError(hostError, weakMap.get(hostError)) : hostError;
   }
-  let host_2 = vmAsyncWrap(async (...w) => {
-    let [A, F, se] = w;
-    let ue;
+  let host_2 = vmAsyncWrap(async (...args) => {
+    let [op, arg, signal] = args;
+    let relayed;
     try {
-      ue = signalRelay(se);
-      return vmClone(await T(host(A, Pe(A, F), ue?.signal)));
+      relayed = signalRelay(signal);
+      return vmClone(await stampedAcrossAwait(host(op, copyForArguments(op, arg), relayed?.signal)));
     } catch (error) {
-      throw W(A, error);
+      throw toHostError(op, error);
     } finally {
-      ue?.unlink();
+      relayed?.unlink();
     }
   });
-  let hostStream_2 = (...w) => {
-    let [A, F, se] = w;
-    let ue = signalRelay(se);
-    let _e = hostStream(A, Pe(A, F), ue?.signal);
-    async function* Fe() {
+  let hostStream_2 = (...args) => {
+    let [op, arg, signal] = args;
+    let relayed = signalRelay(signal);
+    let sourceStream = hostStream(op, copyForArguments(op, arg), relayed?.signal);
+    async function* forwarded() {
       try {
-        return yield* _e;
+        return yield* sourceStream;
       } catch (error) {
-        throw y ? tagError(error, tagPayload(pluginName, A, errorMessage(error))) : error;
+        throw isUnloaded ? tagError(error, tagPayload(pluginName, op, errorMessage(error))) : error;
       } finally {
-        ue?.unlink();
+        relayed?.unlink();
       }
     }
     return vmStreamBridge(
-      onGeneratorReturn(teeGeneratorResult(Fe), () => {
-        _e.return(undefined).catch(() => {
+      onGeneratorReturn(teeGeneratorResult(forwarded), () => {
+        sourceStream.return(undefined).catch(() => {
           return;
         });
       }),
     );
   };
-  function Be(w) {
-    let A = w ? "setInterval" : "setTimeout";
+  function makeTimer(isRepeating) {
+    let apiName = isRepeating ? "setInterval" : "setTimeout";
     return nullPrototypeFunction(
-      wrapMethod((F, se, ...ue) => {
-        if (typeof F !== "function") throw new HooksError(`${pluginName}: ${A} takes a function`);
-        if (y) throw new HooksError(`${pluginName}: ${A}: its environment was unloaded`);
-        let _e = isFiniteNonNegativeNumber(se) ? se : 0;
-        let Fe = ++v;
-        let Ue = keepValueFn({
+      wrapMethod((fn, delayMs, ...args) => {
+        if (typeof fn !== "function") throw new HooksError(`${pluginName}: ${apiName} takes a function`);
+        if (isUnloaded) throw new HooksError(`${pluginName}: ${apiName}: its environment was unloaded`);
+        let delay = isFiniteNonNegativeNumber(delayMs) ? delayMs : 0;
+        let id = ++timerId;
+        let timer = keepValueFn({
           pluginName,
-          api: A,
-          invoke: (Gl, Vl) => {
+          api: apiName,
+          invoke: (fn, args) => {
             markScrollActivity(stamp?.view);
-            return yt(Gl, Vl);
+            return invokeAsync(fn, args);
           },
-          fn: F,
-          args: ue,
+          fn,
+          args,
         });
-        let handle = w
-          ? setInterval(runTimerCallback, _e, Ue)
-          : setTimeout(fireTimerOnce, _e, {
-              timers: h,
-              id: Fe,
-              fire: Ue,
+        let handle = isRepeating
+          ? setInterval(runTimerCallback, delay, timer)
+          : setTimeout(fireTimerOnce, delay, {
+              timers,
+              id,
+              fire: timer,
             });
-        h.set(Fe, {
+        timers.set(id, {
           handle,
-          repeat: w,
+          repeat: isRepeating,
         });
-        return Fe;
+        return id;
       }),
     );
   }
-  let le = nullPrototypeFunction(
-    wrapMethod((w) => {
-      if (typeof w !== "number") return;
-      let A = h.get(w);
-      if (A) {
-        h.delete(w);
-        clearTimerHandle(A);
+  let clearTimer = nullPrototypeFunction(
+    wrapMethod((id) => {
+      if (typeof id !== "number") return;
+      let timer = timers.get(id);
+      if (timer) {
+        timers.delete(id);
+        clearTimerHandle(timer);
       }
     }),
   );
   if (isInstallingGlobals)
     Object.assign(globals, {
-      setTimeout: Be(false),
-      setInterval: Be(true),
-      clearTimeout: le,
-      clearInterval: le,
+      setTimeout: makeTimer(false),
+      setInterval: makeTimer(true),
+      clearTimeout: clearTimer,
+      clearInterval: clearTimer,
       console: createVmConsole(wrapMethod, `[${pluginName}]`),
     });
   let args_2 = {
     ...args,
     options: vmClone(args.options),
   };
-  signal?.addEventListener("abort", ze, {
+  signal?.addEventListener("abort", markUnloaded, {
     once: true,
   });
-  let Xe;
+  let activation;
   try {
-    Xe = await registerHooksModule({
-      loaded: await loaded(x),
+    activation = await registerHooksModule({
+      loaded: await loaded(stamped),
       args: args_2,
       host: host_2,
       hostStream: hostStream_2,
       resolvedTable: surfaceAnswerCache.read,
-      invoke: yt,
+      invoke: invokeAsync,
       iterate,
       streamIn: vmStreamBridge,
       isGeneratorHook,
@@ -649,82 +675,84 @@ async function createHooksEngine({ bare, args, host, bounds = {}, loaded, isInst
         let { signal, abort } = makers.makeSignal();
         return {
           signal,
-          abort: (F) => x(() => abort(intoEnvironment(F))),
+          abort: (reason) => stamped(() => abort(intoEnvironment(reason))),
         };
       },
       copyMatcher,
-      stamped: x,
+      stamped,
       framed,
     });
     if (signal?.aborted === true) throw new HooksError(`${pluginName}: unloaded while its module loaded`);
   } catch (error) {
-    ze();
+    markUnloaded();
     throw error;
   }
-  function ze() {
-    y = true;
-    for (let w of h.values()) clearTimerHandle(w);
-    h.clear();
+  function markUnloaded() {
+    isUnloaded = true;
+    for (let timer of timers.values()) clearTimerHandle(timer);
+    timers.clear();
   }
-  function Je(w) {
-    let A = pickErrorState(w);
+  function hookCallFor(input) {
+    let errorState = pickErrorState(input);
     let { signal, abort } = makers.makeSignal();
-    forwardAbort(w.signal, {
-      abort: (ue) => x(() => abort(intoEnvironment(ue))),
+    forwardAbort(input.signal, {
+      abort: (reason) => stamped(() => abort(intoEnvironment(reason))),
     });
     return {
       signal,
-      is: nullPrototypeFunction(wrapMethod(w.is)),
-      event: w.event,
-      origin: cloneIn(w.origin),
-      trace: wrapMethod(() => traceCloner(w.trace)),
-      budget: wrapMethod(() => cloneIn(w.budget)),
-      caught: A && {
-        ...A,
-        error: cloneIn(A.error),
+      is: nullPrototypeFunction(wrapMethod(input.is)),
+      event: input.event,
+      origin: cloneIn(input.origin),
+      trace: wrapMethod(() => traceCloner(input.trace)),
+      budget: wrapMethod(() => cloneIn(input.budget)),
+      caught: errorState && {
+        ...errorState,
+        error: cloneIn(errorState.error),
       },
     };
   }
   return {
-    activation: Xe,
-    invoke: yt,
-    invokeSync: De,
-    applyIn: ft,
+    activation,
+    invoke: invokeAsync,
+    invokeSync,
+    applyIn: applySync,
     cloneIn,
     argumentFor,
     freezeForNext: deepFreezeInPlace,
     leaving,
-    nextFor: (w, A) => {
-      let F = A === "ui.resolve";
-      let ue =
-        A === "engine.create" && stamp !== undefined
-          ? (Fe) => x(() => copyOwnedEntries(Fe, vmClone, blamedWalk))
+    nextFor: (next, event) => {
+      let isResolve = event === "ui.resolve";
+      let copyAnswer =
+        event === "engine.create" && stamp !== undefined
+          ? (value) => stamped(() => copyOwnedEntries(value, vmClone, blamedWalk))
           : vmClone;
-      let _e = (Fe, Ue) => (F ? vmElementTable(Fe, surfaceOfArg(Ue)) : ue(Fe));
+      let finishCopy = (value, event) => (isResolve ? build(value, surfaceOfArg(event)) : copyAnswer(value));
       return freezeHookCall({
-        ...Je(w),
-        call: wrapMethod(async (Fe) => {
-          let Ue = Oe(Fe);
-          return _e(await T(w(Ue)), Ue);
+        ...hookCallFor(next),
+        call: wrapMethod(async (value) => {
+          let copied = copyForNext(value);
+          return finishCopy(await stampedAcrossAwait(next(copied)), copied);
         }),
-        to: wrapMethod(async (Fe, ...Ue) => {
-          let or = Oe(Fe);
-          return _e(await T(callNextWith(or, w, Ue.map(vmClone))), or);
+        to: wrapMethod(async (value, ...args) => {
+          let copied = copyForNext(value);
+          return finishCopy(await stampedAcrossAwait(callNextWith(copied, next, args.map(vmClone))), copied);
         }),
       });
     },
-    streamNextFor: (w) =>
+    streamNextFor: (stream) =>
       makeHookCall({
-        ...Je(w),
-        call: wrapMethod((A) => vmStreamBridge(w(vmClone(A)))),
-        to: wrapMethod((A, ...F) => vmStreamBridge(forwardNext(vmClone(A), w, F.map(vmClone)))),
+        ...hookCallFor(stream),
+        call: wrapMethod((value) => vmStreamBridge(stream(vmClone(value)))),
+        to: wrapMethod((value, ...args) =>
+          vmStreamBridge(forwardNext(vmClone(value), stream, args.map(vmClone))),
+        ),
       }),
     storeResolved: surfaceAnswerCache.store,
     dispose: () => {
-      ze();
-      Xe.dispose();
+      markUnloaded();
+      activation.dispose();
     },
-    opFailureOf: (w) => cachedResolveAnswer(weakMap, w),
+    opFailureOf: (error) => cachedResolveAnswer(weakMap, error),
     ownsValue: vmOwns,
   };
 }
@@ -732,10 +760,10 @@ async function createHooksEngine({ bare, args, host, bounds = {}, loaded, isInst
 /**
  * 文件模块引用
  */
-var fileModuleRef = (e) => ({
-  url: pathToFileURL(e).href,
-  dir: dirname(e),
-  file: e,
+var fileModuleRef = (path) => ({
+  url: pathToFileURL(path).href,
+  dir: dirname(path),
+  file: path,
 });
 //@ chunk-4121qate.js:311566-311851 placement
 var IMPORT_REFUSAL_SOURCE = `(() => {
@@ -758,82 +786,91 @@ var runImportRefusal = (context) => vmModule_2.runInContext(withUseStrict(IMPORT
 /**
  * 长度+内容拼接
  */
-var prefixedSource = (e, o) => `${o.length}:${o}${e.length}:${e}`;
+var prefixedSource = (text, prefix) => `${prefix.length}:${prefix}${text.length}:${text}`;
 //@ chunk-4121qate.js:311971-312038 placement
 /**
  * 导入路径 → 文件
  */
 var importFileMap = (links) =>
-  new Map(links.map((o) => [prefixedSource(o.spelled, resolve(o.from)), o.file]));
+  new Map(links.map((link) => [prefixedSource(link.spelled, resolve(link.from)), link.file]));
 //@ chunk-4121qate.js:312038-312089 placement
 /**
  * 文件 → 源码
  */
-var fileSourceMap = (linked) => new Map(linked.map((o) => [o.file, o.source]));
+var fileSourceMap = (linked) => new Map(linked.map((file) => [file.file, file.source]));
 //@ chunk-4121qate.js:312089-314364 placement
 /**
  * 链接钩子模块及其导入（处理栈溢出、错误状态）
  */
-function linkHooksModule(e) {
-  let { args, context, stamped, evaluateOptions, isScanned } = e;
+function linkHooksModule(options) {
+  let { args, context, stamped, evaluateOptions, isScanned } = options;
   let { pluginName, pluginRoot } = args;
-  let root = resolve(pluginRoot);
-  let m = new Map();
-  let c = new Map();
-  let u = new Set();
+  let resolvedPluginRoot = resolve(pluginRoot);
+  let modules = new Map();
+  let sources = new Map();
+  let loadedFiles = new Set();
   let importModuleDynamically = runImportRefusal(context);
-  let y = new vmModule_2.SourceTextModule(STATE_RESOURCE, {
+  let stateModule = new vmModule_2.SourceTextModule(STATE_RESOURCE, {
     context,
     identifier: CLAUDE_CODE,
     importModuleDynamically,
   });
-  let g = fileSourceMap(args.linked);
-  let x = importFileMap(args.links);
-  async function T(normalized, L) {
-    if (normalized === CLAUDE_CODE) return y;
-    let B = e.virtual?.get(normalized);
-    if (B) return B;
-    if (!isDotRelativePath(normalized))
-      throw bareImportError(pluginName, normalized, relative(root, L.identifier) || L.identifier);
-    let j = x.get(prefixedSource(normalized, resolve(L.identifier)));
-    let N = j === undefined ? undefined : g.get(j);
-    if (j !== undefined && N !== undefined) return V(j, N);
+  let sourcesByFile = fileSourceMap(args.linked);
+  let filesByImportKey = importFileMap(args.links);
+  async function moduleFor(specifier, referent) {
+    if (specifier === CLAUDE_CODE) return stateModule;
+    let virtual = options.virtual?.get(specifier);
+    if (virtual) return virtual;
+    if (!isDotRelativePath(specifier))
+      throw bareImportError(
+        pluginName,
+        specifier,
+        relative(resolvedPluginRoot, referent.identifier) || referent.identifier,
+      );
+    let linkedFile = filesByImportKey.get(prefixedSource(specifier, resolve(referent.identifier)));
+    let linkedSource = linkedFile === undefined ? undefined : sourcesByFile.get(linkedFile);
+    if (linkedFile !== undefined && linkedSource !== undefined)
+      return moduleForFile(linkedFile, linkedSource);
     if (args.sealed === true)
-      throw bareImportError(pluginName, normalized, relative(root, L.identifier) || L.identifier);
+      throw bareImportError(
+        pluginName,
+        specifier,
+        relative(resolvedPluginRoot, referent.identifier) || referent.identifier,
+      );
     let hooksImport = await resolveHooksImport(
       {
-        spelled: normalized,
-        importer: L.identifier,
-        root,
+        spelled: specifier,
+        importer: referent.identifier,
+        root: resolvedPluginRoot,
         pluginName,
       },
-      g,
+      sourcesByFile,
       new Map(),
     );
-    g.set(hooksImport.file, hooksImport.source);
-    u.add(hooksImport.file);
-    return V(hooksImport.file, hooksImport.source);
+    sourcesByFile.set(hooksImport.file, hooksImport.source);
+    loadedFiles.add(hooksImport.file);
+    return moduleForFile(hooksImport.file, hooksImport.source);
   }
-  let h = new Map();
-  function v(S) {
-    if (S.status === "unlinked")
-      h.set(
-        S.identifier,
-        R(S).then(() => stamped(() => S.evaluate(evaluateOptions))),
+  let evaluations = new Map();
+  function evaluateModule(sourceModule) {
+    if (sourceModule.status === "unlinked")
+      evaluations.set(
+        sourceModule.identifier,
+        linkModule(sourceModule).then(() => stamped(() => sourceModule.evaluate(evaluateOptions))),
       );
-    return h.get(S.identifier);
+    return evaluations.get(sourceModule.identifier);
   }
-  async function R(S) {
-    let L = new Set([S.identifier]);
+  async function linkModule(sourceModule) {
+    let seenIdentifiers = new Set([sourceModule.identifier]);
     try {
-      await S.link(async (B, j) => {
-        let N = await T(B, j);
-        L.add(N.identifier);
-        return N;
+      await sourceModule.link(async (specifier, referrer) => {
+        let imported = await moduleFor(specifier, referrer);
+        seenIdentifiers.add(imported.identifier);
+        return imported;
       });
     } catch (error) {
       if (!isStackOverflowError(error)) throw error;
-      let j = new vmModule_2.SyntheticModule(
+      let stackStub = new vmModule_2.SyntheticModule(
         [],
         () => {
           return;
@@ -842,70 +879,75 @@ function linkHooksModule(e) {
           context,
         },
       );
-      for (let [N, ae] of c)
+      for (let [file, source] of sources)
         try {
-          if (L.has(N))
-            await new vmModule_2.SourceTextModule(ae, {
+          if (seenIdentifiers.has(file))
+            await new vmModule_2.SourceTextModule(source, {
               context,
-            }).link(() => j);
+            }).link(() => stackStub);
         } catch (error_2) {
-          if (isStackOverflowError(error_2)) throw stackExhaustedError(pluginName, root, N, error);
+          if (isStackOverflowError(error_2))
+            throw stackExhaustedError(pluginName, resolvedPluginRoot, file, error);
         }
       throw new HooksError(
-        `${pluginName}: ${relative(root, S.identifier)}: the engine ran out of stack linking the file and its imports (code nested too deep, or a chain of imports too long): ${error.message}`,
+        `${pluginName}: ${relative(resolvedPluginRoot, sourceModule.identifier)}: the engine ran out of stack linking the file and its imports (code nested too deep, or a chain of imports too long): ${error.message}`,
       );
     }
   }
-  function I(S) {
-    if (S.status === "errored") throw S.error;
-    if (S.status === "linked") {
-      let L = stamped(() => S.evaluate(evaluateOptions));
-      h.set(S.identifier, L);
-      return L;
+  function evaluateLinked(sourceModule) {
+    if (sourceModule.status === "errored") throw sourceModule.error;
+    if (sourceModule.status === "linked") {
+      let evaluation = stamped(() => sourceModule.evaluate(evaluateOptions));
+      evaluations.set(sourceModule.identifier, evaluation);
+      return evaluation;
     }
     return;
   }
-  let V = (S, L) => m.get(S) ?? Q(S, L);
-  function Q(file, L) {
-    let B = !isScanned || u.has(file);
-    let j;
+  let moduleForFile = (file, source) => modules.get(file) ?? buildModule(file, source);
+  function buildModule(file, sourceText) {
+    let shouldScan = !isScanned || loadedFiles.has(file);
+    let transpiled;
     try {
-      j = transpileHooksSource(file, L);
+      transpiled = transpileHooksSource(file, sourceText);
     } catch (error) {
-      throw !B && error instanceof HooksError
-        ? new HooksError(`${pluginName}: ${relative(root, file)} does not compile: ` + error.message)
+      throw !shouldScan && error instanceof HooksError
+        ? new HooksError(
+            `${pluginName}: ${relative(resolvedPluginRoot, file)} does not compile: ` + error.message,
+          )
         : error;
     }
-    let N = rewriteClientModulePaths(j, file, root);
-    let ae = B ? refuseDynamicImport(scanHooksFile(file, N, pluginName)) : undefined;
-    if (ae !== undefined) throw ae;
+    let rewritten = rewriteClientModulePaths(transpiled, file, resolvedPluginRoot);
+    let refusal = shouldScan ? refuseDynamicImport(scanHooksFile(file, rewritten, pluginName)) : undefined;
+    if (refusal !== undefined) throw refusal;
     try {
-      let te = new vmModule_2.SourceTextModule(N, {
+      let sourceModule = new vmModule_2.SourceTextModule(rewritten, {
         context,
         identifier: file,
-        initializeImportMeta: (Ne) => {
-          Object.assign(Ne, fileModuleRef(file));
+        initializeImportMeta: (importMeta) => {
+          Object.assign(importMeta, fileModuleRef(file));
         },
         importModuleDynamically,
       });
-      m.set(file, te);
-      c.set(file, N);
-      return te;
+      modules.set(file, sourceModule);
+      sources.set(file, rewritten);
+      return sourceModule;
     } catch (error) {
-      throw isStackOverflowError(error) ? stackExhaustedError(pluginName, root, file, error) : error;
+      throw isStackOverflowError(error)
+        ? stackExhaustedError(pluginName, resolvedPluginRoot, file, error)
+        : error;
     }
   }
   return {
-    async load(S, L) {
-      let B = resolve(S);
-      g.set(B, L);
-      let j = V(B, L);
-      await v(j);
-      await I(j);
-      let namespace = j.namespace;
+    async load(path, source) {
+      let file = resolve(path);
+      sourcesByFile.set(file, source);
+      let entryModule = moduleForFile(file, source);
+      await evaluateModule(entryModule);
+      await evaluateLinked(entryModule);
+      let namespace = entryModule.namespace;
       if (Reflect.ownKeys(namespace).includes("then"))
         throw new HooksError(
-          `${pluginName}: ${relative(root, B)} exports the name "then" (its own, or through an export *), which no entry module may: rename the export`,
+          `${pluginName}: ${relative(resolvedPluginRoot, file)} exports the name "then" (its own, or through an export *), which no entry module may: rename the export`,
         );
       return namespace;
     },
@@ -919,47 +961,51 @@ function isStackOverflowError(error) {
   return (
     types.isNativeError(error) &&
     error.name === "RangeError" &&
-    STACK_OVERFLOW_MESSAGES.some((o) => o === error.message)
+    STACK_OVERFLOW_MESSAGES.some((message) => message === error.message)
   );
 }
 //@ chunk-4121qate.js:314459-314597 placement
-function stackExhaustedError(pluginName, o, r, error) {
+function stackExhaustedError(pluginName, pluginRoot, path, error) {
   return new HooksError(
-    `${pluginName}: ${relative(o, r)}: the engine ran out of stack loading the file (code nested too deep): ${error.message}`,
+    `${pluginName}: ${relative(pluginRoot, path)}: the engine ran out of stack loading the file (code nested too deep): ${error.message}`,
   );
 }
 //@ chunk-4121qate.js:314597-314655 placement
 /**
  * 链接并加载模块
  */
-var linkAndLoadModule = (e) => linkHooksModule(e).load(e.args.modulePath, e.args.source);
+var linkAndLoadModule = (options) =>
+  linkHooksModule(options).load(options.args.modulePath, options.args.source);
 //@ chunk-4121qate.js:314655-314691 placement
 /**
  * 插件环境槽
  */
-var pluginEnvSlot = identity(createValueSlot(), (e) => e.set(undefined));
+var pluginEnvSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:314655", () => {
+  pluginEnvSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-4121qate.js:314691-314721 placement
 /**
  * 取插件的环境
  */
-var envForPlugin = (e) => pluginEnvSlot.get()?.get(e);
+var envForPlugin = (pluginName) => pluginEnvSlot.get()?.get(pluginName);
 //@ chunk-4121qate.js:314721-314946 placement
 /**
  * 为插件 hooks 模块创建环境：优先使用登记的测试工厂，否则新建 VM 上下文并加载、链接模块后创建 engine。
  */
-function createHooksEnvironment(e, o, r = {}) {
-  let n = envForPlugin(o.modulePath);
-  if (n) return n(o, e, r);
-  let vmContext = createVmContext(o.pluginRoot);
+function createHooksEnvironment(host, args, bounds = {}) {
+  let customEnv = envForPlugin(args.modulePath);
+  if (customEnv) return customEnv(args, host, bounds);
+  let vmContext = createVmContext(args.pluginRoot);
   return createHooksEngine({
     bare: vmContext,
-    args: o,
-    host: e,
-    bounds: r,
+    args,
+    host,
+    bounds,
     isInstallingGlobals: true,
     loaded: (stamped) =>
       linkAndLoadModule({
-        args: o,
+        args,
         context: vmContext.context,
         isScanned: true,
         stamped,
@@ -970,55 +1016,61 @@ function createHooksEnvironment(e, o, r = {}) {
 /**
  * 执行函数并在之后恢复共享视图中的环境戳。
  */
-function runPreservingStamp(stamp, o) {
-  let r = stamp === undefined ? 0 : Atomics.load(stamp, STAMP_CURRENT_CALL_SLOT);
+function runPreservingStamp(stamp, fn) {
+  let previous = stamp === undefined ? 0 : Atomics.load(stamp, STAMP_CURRENT_CALL_SLOT);
   try {
-    return o();
+    return fn();
   } finally {
-    if (stamp) Atomics.store(stamp, STAMP_CURRENT_CALL_SLOT, r);
+    if (stamp) Atomics.store(stamp, STAMP_CURRENT_CALL_SLOT, previous);
   }
 }
 //@ chunk-4121qate.js:315055-315083 placement
 /**
  * 是否已登记环境
  */
-var hasRegisteredEnv = (modulePath) => envForPlugin(modulePath) !== undefined;
+var hasRegisteredEnv = (pluginName) => envForPlugin(pluginName) !== undefined;
 //@ chunk-4121qate.js:315083-315313 placement
-function rejectionMessage(e) {
-  if (!e) return "a rejection that is not an Error";
-  if (isUntrustedObject(e)) return "a rejection that is not plain data";
-  let o = Object.getOwnPropertyDescriptor(e, "message")?.value;
-  return typeof o === "string" ? o : rejectionMessage(Object.getPrototypeOf(e));
+function rejectionMessage(error) {
+  if (!error) return "a rejection that is not an Error";
+  if (isUntrustedObject(error)) return "a rejection that is not plain data";
+  let message = Object.getOwnPropertyDescriptor(error, "message")?.value;
+  return typeof message === "string" ? message : rejectionMessage(Object.getPrototypeOf(error));
 }
 //@ chunk-4121qate.js:315313-315395 placement
 /**
  * 拒绝值转文本
  */
-function rejectionText(e) {
-  return typeof e !== "object" && typeof e !== "function" ? String(e) : rejectionMessage(e);
+function rejectionText(error) {
+  return typeof error !== "object" && typeof error !== "function" ? String(error) : rejectionMessage(error);
 }
 //@ chunk-4121qate.js:315395-315438 placement
-var Bl = Object.freeze({
-  strings: false,
-  wasm: false,
+var CAPABILITY_OPTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:315395", () => {
+  CAPABILITY_OPTIONS = Object.freeze({
+    strings: false,
+    wasm: false,
+  });
 });
 //@ chunk-4121qate.js:315438-315480 placement
-var Ul = Object.freeze({
-  codeGeneration: Bl,
+var COMPILE_OPTIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:315438", () => {
+  COMPILE_OPTIONS = Object.freeze({
+    codeGeneration: CAPABILITY_OPTIONS,
+  });
 });
 //@ chunk-4121qate.js:315480-315570 placement
 /**
  * 新建 VM 宿主上下文
  */
 function newVmHostContext() {
-  let e = nullPrototypeObject();
-  let o = SubAgentContext(e, Ul);
-  patchErrorHasInstance(o);
-  patchProtoSetter(o);
-  createVmRealm(o, vUe);
+  let sandbox = nullPrototypeObject();
+  let context = SubAgentContext(sandbox, COMPILE_OPTIONS);
+  patchErrorHasInstance(context);
+  patchProtoSetter(context);
+  createVmRealm(context, NO_IMPORT_OPTIONS);
   return {
-    sandbox: e,
-    context: o,
+    sandbox,
+    context,
   };
 }
 //@ chunk-4121qate.js:315592-315640 placement
@@ -1034,36 +1086,38 @@ var runInVmWithTrace = (context, intoEnvironment) =>
 /**
  * 执行函数期间把调用栈戳写入共享视图，结束后恢复原值。
  */
-function runWithStackStamps(stamp, o, r) {
-  if (!stamp) return r();
-  let n = stamp.length - STAMP_CALLER_STACK_START;
+function runWithStackStamps(stamp, entries, fn) {
+  if (!stamp) return fn();
+  let slots = stamp.length - STAMP_CALLER_STACK_START;
   let list = Array.from(
     {
-      length: n,
+      length: slots,
     },
-    (i, p) => Atomics.load(stamp, STAMP_CALLER_STACK_START + p),
+    (unused, index) => Atomics.load(stamp, STAMP_CALLER_STACK_START + index),
   );
-  for (let i = 0; i < n; i++) Atomics.store(stamp, STAMP_CALLER_STACK_START + i, o[i] ?? 0);
+  for (let index = 0; index < slots; index++)
+    Atomics.store(stamp, STAMP_CALLER_STACK_START + index, entries[index] ?? 0);
   try {
-    return r();
+    return fn();
   } finally {
-    for (let [i, p] of list.entries()) Atomics.store(stamp, STAMP_CALLER_STACK_START + i, p);
+    for (let [index, slot] of list.entries()) Atomics.store(stamp, STAMP_CALLER_STACK_START + index, slot);
   }
 }
 //@ chunk-4121qate.js:315877-316014 placement
 /**
  * 未被 await 的 $ 调用失败时的消息："<插件>: $.<op> (not awaited): <原因>"。
  */
-function unawaitedOpMessage(e) {
-  let o = `${e.plugin}: `;
-  let { message } = e;
-  return `${e.plugin}: $.${e.op} (not awaited): ${message.startsWith(o) ? message.slice(o.length) : message}`;
+function unawaitedOpMessage(payload) {
+  let prefix = `${payload.plugin}: `;
+  let { message } = payload;
+  return `${payload.plugin}: $.${payload.op} (not awaited): ${message.startsWith(prefix) ? message.slice(prefix.length) : message}`;
 }
 //@ chunk-4121qate.js:316014-316052 placement
 /**
  * 命中 user 子句
  */
-var matchesUserClause = (e, o) => o.length <= MAX_MATCHER_CHARS && testRegExpMatcher(e, o);
+var matchesUserClause = (pattern, clause) =>
+  clause.length <= MAX_MATCHER_CHARS && testRegExpMatcher(pattern, clause);
 //@ chunk-4121qate.js:316052-316247 placement
 /**
  * 判断某事件是否命中插件扫描时声明的 next.to user 子句（模式与 matcher 都匹配）。

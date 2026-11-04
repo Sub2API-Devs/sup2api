@@ -31,9 +31,10 @@ function parseHostManifests(field, serverNames) {
     };
   for (let serverName of serverNames) {
     if (!Object.hasOwn(field, serverName)) continue;
-    let n = field[serverName];
-    let initializeResult = isPlainObject(n) ? n.initializeResult : undefined;
-    let toolsListResult = isPlainObject(n) && n.toolsListResult !== null ? n.toolsListResult : undefined;
+    let entry = field[serverName];
+    let initializeResult = isPlainObject(entry) ? entry.initializeResult : undefined;
+    let toolsListResult =
+      isPlainObject(entry) && entry.toolsListResult !== null ? entry.toolsListResult : undefined;
     if (isPlainObject(initializeResult) && (toolsListResult === undefined || isPlainObject(toolsListResult)))
       manifests.set(
         serverName,
@@ -60,7 +61,7 @@ var NOTIFICATIONS_TOOLS_LIST_CHANGED = "notifications/tools/list_changed";
 /**
  * 判断消息是否为 tools/list_changed 通知（无 id）。
  */
-function isToolListChangedNotification(e) {
-  return isPlainObject(e) && !("id" in e) && e.method === NOTIFICATIONS_TOOLS_LIST_CHANGED;
+function isToolListChangedNotification(message) {
+  return isPlainObject(message) && !("id" in message) && message.method === NOTIFICATIONS_TOOLS_LIST_CHANGED;
 }
 export { parseHostManifests, isToolListChangedNotification };

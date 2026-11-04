@@ -18,25 +18,25 @@ import { stripControlChars, stripControlChars_2 } from "../../utils/stripControl
 import { foldSenderDisplayBrackets, inboxSenderProvenanceCaption } from "../../bridge/sessionInbox.js";
 
 //@ chunk-w3kk5zb6.js:4750-5746 placement
-function InboxReadResult(o) {
-  if (!o.ok)
+function InboxReadResult(result) {
+  if (!result.ok)
     return jsxProd_default(MessageResponse, {
       height: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: `Inbox read failed \xB7 ${stripControlChars(o.reason) || "error"}`,
+        children: `Inbox read failed \xB7 ${stripControlChars(result.reason) || "error"}`,
       }),
     });
-  let l =
-    foldSenderDisplayBrackets(stripControlChars(o.sender_display)) ||
-    stripControlChars(o.sender_kind) ||
+  let senderDisplay =
+    foldSenderDisplayBrackets(stripControlChars(result.sender_display)) ||
+    stripControlChars(result.sender_kind) ||
     "unknown sender";
-  let c = o.source === "slack" ? " via Slack" : "";
-  let children = `[${inboxSenderProvenanceCaption(o.sender_kind)}]`;
-  let m = o.sender_kind === "rc_owner";
-  let t = stripControlChars(o.slack_permalink);
-  let i = stripControlChars(o.received_at);
-  let trimmed = o.attachments_prefix?.trim();
+  let sourceSuffix = result.source === "slack" ? " via Slack" : "";
+  let children = `[${inboxSenderProvenanceCaption(result.sender_kind)}]`;
+  let isOwner = result.sender_kind === "rc_owner";
+  let permalink = stripControlChars(result.slack_permalink);
+  let receivedAt = stripControlChars(result.received_at);
+  let trimmed = result.attachments_prefix?.trim();
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default_2(Box, {
       flexDirection: "column",
@@ -46,7 +46,7 @@ function InboxReadResult(o) {
           children: [
             jsxProd_default(Box, {
               flexShrink: 0,
-              children: m
+              children: isOwner
                 ? jsxProd_default(Text, {
                     color: "permission",
                     children,
@@ -62,7 +62,7 @@ function InboxReadResult(o) {
               paddingLeft: 1,
               children: jsxProd_default(Text, {
                 wrap: "wrap",
-                children: `Inbox message from ${l}${c}:`,
+                children: `Inbox message from ${senderDisplay}${sourceSuffix}:`,
               }),
             }),
           ],
@@ -83,17 +83,18 @@ function InboxReadResult(o) {
           paddingLeft: 1,
           children: jsxProd_default(Text, {
             wrap: "wrap",
-            children: stripControlChars_2(o.body),
+            children: stripControlChars_2(result.body),
           }),
         }),
-        t || i
+        permalink || receivedAt
           ? jsxProd_default(Text, {
               dimColor: true,
               wrap: "wrap",
-              children: [i && `received ${i}`, t].filter(Boolean).join(" \xB7 "),
+              children: [receivedAt && `received ${receivedAt}`, permalink].filter(Boolean).join(" \xB7 "),
             })
           : null,
       ],
     }),
   });
 }
+export { InboxReadResult };

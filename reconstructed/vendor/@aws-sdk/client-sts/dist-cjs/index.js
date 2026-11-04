@@ -5,13 +5,13 @@
  * pieces: chunk-heg39xxp.js (46)
  * attribution: esm-fingerprint 28, esm-layout 18
  */
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_schema } from "../../../@smithy/core/dist-cjs/submodules/schema/index.js";
 import { require_client } from "../../../@smithy/core/dist-cjs/submodules/client/index.js";
 import { require_middleware_endpoint } from "../../../@smithy/middleware-endpoint/dist-cjs/index.js";
 
 //@ chunk-heg39xxp.js:1681-2144 esm-fingerprint
-var V = (options) =>
+var resolveClientEndpointParameters = (options) =>
   Object.assign(options, {
     useDualstackEndpoint: options.useDualstackEndpoint ?? false,
     useFipsEndpoint: options.useFipsEndpoint ?? false,
@@ -41,9 +41,9 @@ var commonParams = {
   },
 };
 //@ chunk-heg39xxp.js:14920-14935 esm-layout
-var schema = Re(require_schema());
+var schema = __toESM(require_schema());
 //@ chunk-heg39xxp.js:14935-14951 esm-layout
-var import_client_6 = Re(require_client());
+var import_client_6 = __toESM(require_client());
 //@ chunk-heg39xxp.js:14951-15052 esm-fingerprint
 class STSServiceException$1 extends import_client_6.ServiceException {
   constructor(options) {
@@ -208,7 +208,7 @@ class SessionDurationEscalationException$1 extends STSServiceException$1 {
   }
 }
 //@ chunk-heg39xxp.js:17412-17571 esm-layout
-var et = [
+var ExpiredTokenException = [
   -3,
   "com.amazonaws.sts",
   "ExpiredTokenException",
@@ -221,7 +221,7 @@ var et = [
   [0],
 ];
 //@ chunk-heg39xxp.js:17571-17631 esm-fingerprint
-schema.TypeRegistry.for("com.amazonaws.sts").registerError(et, ExpiredTokenException$1);
+schema.TypeRegistry.for("com.amazonaws.sts").registerError(ExpiredTokenException, ExpiredTokenException$1);
 //@ chunk-heg39xxp.js:17631-17804 esm-layout
 var ExpiredTradeInTokenException = [
   -3,
@@ -241,10 +241,17 @@ schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   ExpiredTradeInTokenException$1,
 );
 //@ chunk-heg39xxp.js:17864-18022 esm-layout
-var ot = [3, "com.amazonaws.sts", "GetCallerIdentityRequest", 0, [], []];
-var nt = [3, "com.amazonaws.sts", "GetCallerIdentityResponse", 0, ["UserId", "Account", "Arn"], [0, 0, 0]];
+var GetCallerIdentityRequest = [3, "com.amazonaws.sts", "GetCallerIdentityRequest", 0, [], []];
+var GetCallerIdentityResponse = [
+  3,
+  "com.amazonaws.sts",
+  "GetCallerIdentityResponse",
+  0,
+  ["UserId", "Account", "Arn"],
+  [0, 0, 0],
+];
 //@ chunk-heg39xxp.js:18022-18190 esm-layout
-var st = [
+var IDPCommunicationErrorException = [
   -3,
   "com.amazonaws.sts",
   "IDPCommunicationErrorException",
@@ -257,7 +264,10 @@ var st = [
   [0],
 ];
 //@ chunk-heg39xxp.js:18190-18250 esm-fingerprint
-schema.TypeRegistry.for("com.amazonaws.sts").registerError(st, IDPCommunicationErrorException$1);
+schema.TypeRegistry.for("com.amazonaws.sts").registerError(
+  IDPCommunicationErrorException,
+  IDPCommunicationErrorException$1,
+);
 //@ chunk-heg39xxp.js:18250-18408 esm-layout
 var IDPRejectedClaimException = [
   -3,
@@ -385,7 +395,7 @@ schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   PackedPolicyTooLargeException$1,
 );
 //@ chunk-heg39xxp.js:19909-20072 esm-layout
-var ut = [
+var RegionDisabledException = [
   -3,
   "com.amazonaws.sts",
   "RegionDisabledException",
@@ -398,7 +408,10 @@ var ut = [
   [0],
 ];
 //@ chunk-heg39xxp.js:20072-20132 esm-fingerprint
-schema.TypeRegistry.for("com.amazonaws.sts").registerError(ut, RegionDisabledException$1);
+schema.TypeRegistry.for("com.amazonaws.sts").registerError(
+  RegionDisabledException,
+  RegionDisabledException$1,
+);
 //@ chunk-heg39xxp.js:20132-20317 esm-layout
 var SessionDurationEscalationException = [
   -3,
@@ -418,14 +431,24 @@ schema.TypeRegistry.for("com.amazonaws.sts").registerError(
   SessionDurationEscalationException$1,
 );
 //@ chunk-heg39xxp.js:20377-20463 esm-layout
-var _t = [-3, "smithy.ts.sdk.synthetic.com.amazonaws.sts", "STSServiceException", 0, [], []];
+var STSServiceException = [-3, "smithy.ts.sdk.synthetic.com.amazonaws.sts", "STSServiceException", 0, [], []];
 //@ chunk-heg39xxp.js:20463-20547 esm-fingerprint
-schema.TypeRegistry.for("smithy.ts.sdk.synthetic.com.amazonaws.sts").registerError(_t, STSServiceException$1);
+schema.TypeRegistry.for("smithy.ts.sdk.synthetic.com.amazonaws.sts").registerError(
+  STSServiceException,
+  STSServiceException$1,
+);
 //@ chunk-heg39xxp.js:20547-20614 esm-layout
-var GetCallerIdentity = [9, "com.amazonaws.sts", "GetCallerIdentity", 0, () => ot, () => nt];
+var GetCallerIdentity = [
+  9,
+  "com.amazonaws.sts",
+  "GetCallerIdentity",
+  0,
+  () => GetCallerIdentityRequest,
+  () => GetCallerIdentityResponse,
+];
 //@ chunk-heg39xxp.js:20614-20642 esm-layout
-var import_middleware_endpoint_2 = Re(require_middleware_endpoint());
-var import_client_7 = Re(require_client());
+var import_middleware_endpoint_2 = __toESM(require_middleware_endpoint());
+var import_client_7 = __toESM(require_client());
 //@ chunk-heg39xxp.js:20642-20901 esm-fingerprint
 class AssumeRoleWithWebIdentityCommand extends import_client_7.Command.classBuilder()
   .ep(commonParams)
@@ -438,4 +461,4 @@ class AssumeRoleWithWebIdentityCommand extends import_client_7.Command.classBuil
   .n("STSClient", "GetCallerIdentityCommand")
   .sc(GetCallerIdentity)
   .build() {}
-export { V };
+export { resolveClientEndpointParameters, AssumeRoleWithWebIdentityCommand };

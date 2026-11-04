@@ -5,10 +5,10 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-m4p5zn6n.js:5816-6175 cjs-fingerprint
-var require_enoent = x(function (cjsExports, cjsModule) {
+var require_enoent = __commonJS(function (cjsExports, cjsModule) {
   function notFoundError(original, syscall) {
     return Object.assign(Error(`${syscall} ${original.command} ENOENT`), {
       code: "ENOENT",

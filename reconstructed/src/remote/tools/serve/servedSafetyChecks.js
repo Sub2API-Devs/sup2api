@@ -48,22 +48,22 @@ import { GLOB_TOOL_NAME } from "../../../tools/GlobTool/prompt.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
 
 //@ chunk-tr0s0d0k.js:35380-35874 placement
-function credentialRuleKind(e) {
-  if (e.ruleValue.toolName === BASH_TOOL_NAME || e.ruleValue.toolName === POWERSHELL_TOOL_NAME)
+function credentialRuleKind(rule) {
+  if (rule.ruleValue.toolName === BASH_TOOL_NAME || rule.ruleValue.toolName === POWERSHELL_TOOL_NAME)
     return "keychain";
-  let ruleContent = e.ruleValue.ruleContent ?? "";
-  let o = credentialPathRules();
+  let ruleContent = rule.ruleValue.ruleContent ?? "";
+  let credentialRules = credentialPathRules();
   if (
     claudeStateGlobs([
-      ...o,
-      ...secondRootMounts().flatMap(({ mountPoint }) => prefixRuleLiterals(mountPoint, o)),
+      ...credentialRules,
+      ...secondRootMounts().flatMap(({ mountPoint }) => prefixRuleLiterals(mountPoint, credentialRules)),
     ]).includes(ruleContent)
   )
     return "personal_credential";
   if (/\/daemon\/dispatch\/\*\*$/.test(ruleContent)) return "exec_ingest";
   if (/\/Library\/Keychains\/\*\*$/.test(ruleContent)) return "keychain_files";
   if (/\/Microsoft\/(?:Credentials|Vault|Protect)\/\*\*$/.test(ruleContent)) return "credential_store_files";
-  return e.ruleValue.toolName === FILE_EDIT_TOOL_NAME ? "write" : "read";
+  return rule.ruleValue.toolName === FILE_EDIT_TOOL_NAME ? "write" : "read";
 }
 //@ chunk-tr0s0d0k.js:35874-35905 placement
 var TENGU_REACTIVE_ZEPHYR = "tengu_reactive_zephyr";
@@ -85,33 +85,33 @@ function mayNotAnswer(why) {
   };
 }
 //@ chunk-tr0s0d0k.js:35995-36120 placement
-function hookAskKind(e) {
-  return e.decisionReason?.type === "hook" && e.decisionReason.heldForServedCall === true
+function hookAskKind(decision) {
+  return decision.decisionReason?.type === "hook" && decision.decisionReason.heldForServedCall === true
     ? "hook_held"
     : "hook_forced_ask";
 }
 //@ chunk-tr0s0d0k.js:36120-36213 placement
-function unanswerableAskKind(e, n) {
-  if (e.behavior !== "ask") return "other";
-  return n ? hookAskKind(e) : "unresolved_shell_write";
+function unanswerableAskKind(decision, forcedByHook) {
+  if (decision.behavior !== "ask") return "other";
+  return forcedByHook ? hookAskKind(decision) : "unresolved_shell_write";
 }
 //@ chunk-tr0s0d0k.js:36213-36342 placement
-function safeTelemetryValue(e, n) {
+function safeTelemetryValue(fallback, compute) {
   try {
-    return n();
+    return compute();
   } catch (error) {
     logError(
       Error("a served call's telemetry value could not be worked out", {
         cause: error,
       }),
     );
-    return e;
+    return fallback;
   }
 }
 //@ chunk-tr0s0d0k.js:36342-36489 placement
-function unattendedStanceKind(e) {
+function unattendedStanceKind(stanceValue) {
   return safeTelemetryValue("other", () => {
-    if (e !== "own_record") return e === "conveyed" ? "conveyed_stance" : "other";
+    if (stanceValue !== "own_record") return stanceValue === "conveyed" ? "conveyed_stance" : "other";
     return autoModeRefusedHere() ? "auto_refused" : "consent";
   });
 }
@@ -133,12 +133,14 @@ function safetyCheckKind(safetyCheckReason) {
   );
 }
 //@ chunk-tr0s0d0k.js:36906-37180 placement
-function servedVerdictKind(e) {
+function servedVerdictKind(verdicts) {
   return safeTelemetryValue("other", () => {
-    if (!e.first.may) return e.first.why;
-    if (e.vetoed) return e.ownCheck === "block" ? "own_check_block" : "own_check_silence";
-    if (!e.afterCheck.may) return e.afterCheck.why;
-    return PATH_SENSITIVE_TOOLS.has(e.tool.name) || e.tool.isMcp === true ? "none" : "tool_not_answerable";
+    if (!verdicts.first.may) return verdicts.first.why;
+    if (verdicts.vetoed) return verdicts.ownCheck === "block" ? "own_check_block" : "own_check_silence";
+    if (!verdicts.afterCheck.may) return verdicts.afterCheck.why;
+    return PATH_SENSITIVE_TOOLS.has(verdicts.tool.name) || verdicts.tool.isMcp === true
+      ? "none"
+      : "tool_not_answerable";
   });
 }
 //@ chunk-tr0s0d0k.js:37180-37668 placement
@@ -172,10 +174,10 @@ function ownCheckMessage(ownCheck) {
   }
 }
 //@ chunk-tr0s0d0k.js:37800-37903 placement
-function joinSentences(e, n) {
-  let o = e.trimEnd();
-  if (o === "") return n;
-  return `${/[.!?\u2026]$/.test(o) ? o : `${o}.`} ${n}`;
+function joinSentences(first, second) {
+  let trimmed = first.trimEnd();
+  if (trimmed === "") return second;
+  return `${/[.!?\u2026]$/.test(trimmed) ? trimmed : `${trimmed}.`} ${second}`;
 }
 //@ chunk-tr0s0d0k.js:37903-37978 placement
 function classifierBudgetMs(legDeadlineAt) {
@@ -183,28 +185,28 @@ function classifierBudgetMs(legDeadlineAt) {
   return Math.min(SAFETY_CHECK_BUDGET_MS, legDeadlineAt - Date.now() - SAFETY_CHECK_MARGIN_MS);
 }
 //@ chunk-tr0s0d0k.js:37978-38828 placement
-async function runServedSafetyCheck(e) {
+async function runServedSafetyCheck(params) {
   let now = Date.now();
-  let o = await classifyServedCall(e, e.capMs);
-  let { judged, blockCategory, failure } = o;
-  let u = 1;
-  if (e.again !== undefined && o.mayPass)
+  let firstPass = await classifyServedCall(params, params.capMs);
+  let { judged, blockCategory, failure } = firstPass;
+  let attempts = 1;
+  if (params.again !== undefined && firstPass.mayPass)
     try {
-      let _ = classifierBudgetMs(e.again.legDeadlineAt);
-      if (_ >= MIN_SAFETY_CHECK_BUDGET_MS) {
-        u = 2;
-        let S = await classifyServedCall(e, _);
-        judged = S.judged;
-        blockCategory = S.blockCategory;
-        failure = S.failure;
+      let budgetMs = classifierBudgetMs(params.again.legDeadlineAt);
+      if (budgetMs >= MIN_SAFETY_CHECK_BUDGET_MS) {
+        attempts = 2;
+        let secondPass = await classifyServedCall(params, budgetMs);
+        judged = secondPass.judged;
+        blockCategory = secondPass.blockCategory;
+        failure = secondPass.failure;
       }
     } catch (error) {
-      if (!e.stopSignal.aborted && !isAbortError(error)) logError(error);
+      if (!params.stopSignal.aborted && !isAbortError(error)) logError(error);
     }
-  let p = Date.now() - now;
+  let elapsedMs = Date.now() - now;
   logEvent("tengu_remote_tool_serve", {
     op: lit("second_check"),
-    call_id: sanitizeMarkName(e.callId),
+    call_id: sanitizeMarkName(params.callId),
     mode: lit("enforce"),
     verdict: fromEnum(judged.verdict),
     why: fromEnumOpt(judged.verdict === "no_verdict" ? judged.why : undefined),
@@ -214,58 +216,58 @@ async function runServedSafetyCheck(e) {
     error_kind:
       failure?.errorKind === undefined ? undefined : sanitizedMachineReasonForTelemetry(failure.errorKind),
     http_status: failure?.httpStatus,
-    duration_ms: p,
-    tool: sanitizeToolNameForAnalytics(e.tool.name),
-    attempts: e.again === undefined ? undefined : u,
-    overlapped_hold: e.again?.besideHold,
+    duration_ms: elapsedMs,
+    tool: sanitizeToolNameForAnalytics(params.tool.name),
+    attempts: params.again === undefined ? undefined : attempts,
+    overlapped_hold: params.again?.besideHold,
   });
   if (judged.verdict !== "block")
     return {
       ...judged,
-      ms: p,
+      ms: elapsedMs,
     };
-  let h = isReactiveSafetyCheckEnabled()
-    ? SERVED_SAFETY_CONSTANTS.find((_) => _ === blockCategory)
+  let knownKind = isReactiveSafetyCheckEnabled()
+    ? SERVED_SAFETY_CONSTANTS.find((kind) => kind === blockCategory)
     : undefined;
   return {
     verdict: "block",
-    ...(h !== undefined && {
-      kind: h,
+    ...(knownKind !== undefined && {
+      kind: knownKind,
     }),
-    ms: p,
+    ms: elapsedMs,
   };
 }
 //@ chunk-tr0s0d0k.js:38828-40102 placement
-async function classifyServedCall(e, n) {
-  let o;
-  let r = false;
+async function classifyServedCall(params, budgetMs) {
+  let judged;
+  let mayPass = false;
   let blockCategory;
   let failure;
-  if (n < MIN_SAFETY_CHECK_BUDGET_MS)
-    o = {
+  if (budgetMs < MIN_SAFETY_CHECK_BUDGET_MS)
+    judged = {
       verdict: "no_verdict",
       why: "no_budget",
     };
   else {
-    let combinedAbortSignal = createCombinedAbortSignal(e.stopSignal, {
-      timeoutMs: n,
+    let combinedAbortSignal = createCombinedAbortSignal(params.stopSignal, {
+      timeoutMs: budgetMs,
       refTimer: true,
     });
     try {
-      let action = formatActionForClassifier(e.tool.name, e.input);
-      if (compactActionForTools(action, [e.tool]) === "")
-        o = {
+      let action = formatActionForClassifier(params.tool.name, params.input);
+      if (compactActionForTools(action, [params.tool]) === "")
+        judged = {
           verdict: "no_verdict",
           why: "not_run",
         };
       else {
-        let h = await classifyYoloAction(
+        let classification = await classifyYoloAction(
           [],
           action,
-          [e.tool],
+          [params.tool],
           {
-            ...e.permissionContext,
-            alwaysDenyRules: servedCredentialDenyRules(e.permissionContext),
+            ...params.permissionContext,
+            alwaysDenyRules: servedCredentialDenyRules(params.permissionContext),
           },
           combinedAbortSignal.signal,
           {
@@ -273,78 +275,78 @@ async function classifyServedCall(e, n) {
             recordPresumed: false,
             onlyBuiltInContext: true,
             judgesServedCall: true,
-            servedSessionMode: e.serviceWrittenSessionMode,
+            servedSessionMode: params.serviceWrittenSessionMode,
           },
         );
-        let _ = timeoutOrStopReason(combinedAbortSignal.signal, e.stopSignal);
-        let S =
-          h.unavailable === true &&
-          h.transcriptTooLong !== true &&
-          h.refusedBySafeguard !== true &&
-          h.failureMode === undefined;
-        if (_ !== undefined) {
-          o = {
+        let stopOrTimeout = timeoutOrStopReason(combinedAbortSignal.signal, params.stopSignal);
+        let plainTimeout =
+          classification.unavailable === true &&
+          classification.transcriptTooLong !== true &&
+          classification.refusedBySafeguard !== true &&
+          classification.failureMode === undefined;
+        if (stopOrTimeout !== undefined) {
+          judged = {
             verdict: "no_verdict",
-            why: _,
+            why: stopOrTimeout,
           };
-          r = _ === "timeout" && S;
-        } else if (h.classifierRan === false)
-          o = {
+          mayPass = stopOrTimeout === "timeout" && plainTimeout;
+        } else if (classification.classifierRan === false)
+          judged = {
             verdict: "no_verdict",
             why: "not_run",
           };
         else if (
-          h.unavailable === true ||
-          h.transcriptTooLong === true ||
-          h.refusedBySafeguard === true ||
-          h.failureMode !== undefined
+          classification.unavailable === true ||
+          classification.transcriptTooLong === true ||
+          classification.refusedBySafeguard === true ||
+          classification.failureMode !== undefined
         ) {
-          o = {
+          judged = {
             verdict: "no_verdict",
             why: "unavailable",
           };
           failure = {
-            errorKind: h.errorKind,
-            httpStatus: h.httpStatus,
+            errorKind: classification.errorKind,
+            httpStatus: classification.httpStatus,
           };
-          r =
-            S &&
-            h.retryAfterMs === undefined &&
-            isTransientClassifierError(h.errorKind) &&
-            h.errorKind?.endsWith("_no_retry") !== true;
+          mayPass =
+            plainTimeout &&
+            classification.retryAfterMs === undefined &&
+            isTransientClassifierError(classification.errorKind) &&
+            classification.errorKind?.endsWith("_no_retry") !== true;
         } else {
-          o = {
-            verdict: h.shouldBlock === false ? "allow" : "block",
+          judged = {
+            verdict: classification.shouldBlock === false ? "allow" : "block",
           };
-          blockCategory = h.category;
+          blockCategory = classification.category;
         }
       }
     } catch (error) {
-      let h = timeoutOrStopReason(combinedAbortSignal.signal, e.stopSignal);
-      if (h === undefined) logError(error);
-      o = {
+      let stopOrTimeout = timeoutOrStopReason(combinedAbortSignal.signal, params.stopSignal);
+      if (stopOrTimeout === undefined) logError(error);
+      judged = {
         verdict: "no_verdict",
-        why: h ?? "threw",
+        why: stopOrTimeout ?? "threw",
       };
-      r = h === "timeout";
+      mayPass = stopOrTimeout === "timeout";
     } finally {
       combinedAbortSignal.cleanup();
     }
   }
   return {
-    judged: o,
-    mayPass: r,
+    judged,
+    mayPass,
     blockCategory,
     failure,
   };
 }
 //@ chunk-tr0s0d0k.js:40102-40204 placement
 function servedCredentialDenyRules(permissionContext) {
-  let n = new Set(permissionContext.alwaysDenyRules[HOST_CREDENTIAL_RULE_SOURCE]);
+  let hostRules = new Set(permissionContext.alwaysDenyRules[HOST_CREDENTIAL_RULE_SOURCE]);
   return {
     [HOST_CREDENTIAL_RULE_SOURCE]: defaultCredentialDenyRules()
       .map(formatPermissionRule)
-      .filter((o) => n.has(o)),
+      .filter((ruleString) => hostRules.has(ruleString)),
   };
 }
 //@ chunk-tr0s0d0k.js:40204-40284 placement
@@ -364,31 +366,32 @@ var DEFENSE_IN_DEPTH_REASONS = new Set([
   "Kernel-resolved path prefix (/.vol etc.) glob pattern detected (defense-in-depth check)",
 ]);
 //@ chunk-tr0s0d0k.js:40826-40940 placement
-function isDefenseInDepthAsk(e) {
+function isDefenseInDepthAsk(decision) {
   return (
-    e.behavior === "ask" &&
-    e.decisionReason?.type === "safetyCheck" &&
-    DEFENSE_IN_DEPTH_REASONS.has(e.decisionReason.reason)
+    decision.behavior === "ask" &&
+    decision.decisionReason?.type === "safetyCheck" &&
+    DEFENSE_IN_DEPTH_REASONS.has(decision.decisionReason.reason)
   );
 }
 //@ chunk-tr0s0d0k.js:40940-41226 placement
-function readsNetworkPath(e, n, toolPermissionContext) {
-  if (typeof e.getPath !== "function") return false;
-  let path = e.getPath(n);
+function readsNetworkPath(tool, input, toolPermissionContext) {
+  if (typeof tool.getPath !== "function") return false;
+  let path = tool.getPath(input);
   let pathsForPermissionCheck = getPathsForPermissionCheck(path);
-  if (checkReadNetworkPathSafety(e, n, toolPermissionContext, pathsForPermissionCheck) === null) return false;
+  if (checkReadNetworkPathSafety(tool, input, toolPermissionContext, pathsForPermissionCheck) === null)
+    return false;
   let trustedNetworkDirectories = toolPermissionContext.trustedNetworkDirectories;
-  let u = [
+  let paths = [
     path,
     ...pathsForPermissionCheck,
-    ...(e.name === GLOB_TOOL_NAME && typeof n.pattern === "string" ? [n.pattern] : []),
+    ...(tool.name === GLOB_TOOL_NAME && typeof input.pattern === "string" ? [input.pattern] : []),
   ];
   return (
-    u.some(
-      (p) =>
-        isUntrustedAutomountPath(p, trustedNetworkDirectories) ||
-        isUntrustedUncPath(p, trustedNetworkDirectories),
-    ) || !u.some((p) => hasSuspiciousWindowsPathPattern(p, trustedNetworkDirectories))
+    paths.some(
+      (path) =>
+        isUntrustedAutomountPath(path, trustedNetworkDirectories) ||
+        isUntrustedUncPath(path, trustedNetworkDirectories),
+    ) || !paths.some((path) => hasSuspiciousWindowsPathPattern(path, trustedNetworkDirectories))
   );
 }
 //@ chunk-tr0s0d0k.js:41226-41271 placement = handleAutoModeTransition (0.799)
@@ -396,16 +399,16 @@ function isAutoOrPlanMode(sessionMode) {
   return sessionMode === "auto" || sessionMode === "plan";
 }
 //@ chunk-tr0s0d0k.js:41271-41592 placement
-function classifyCcrContainerAsk(e) {
-  if (e.callerKind !== "ccr_container") return;
-  if (e.attested === true) return "attested";
-  return e.attested === false &&
-    isAutoOrPlanMode(e.sessionMode) &&
-    e.askedInMode === e.sessionMode &&
-    e.classifierEligible &&
-    !e.autoModeRefusedHere &&
-    (e.sessionMode !== "plan" || e.planClaimBackedHere) &&
-    (PATH_SENSITIVE_TOOLS.has(e.toolName) || e.isServedMcpTool)
+function classifyCcrContainerAsk(facts) {
+  if (facts.callerKind !== "ccr_container") return;
+  if (facts.attested === true) return "attested";
+  return facts.attested === false &&
+    isAutoOrPlanMode(facts.sessionMode) &&
+    facts.askedInMode === facts.sessionMode &&
+    facts.classifierEligible &&
+    !facts.autoModeRefusedHere &&
+    (facts.sessionMode !== "plan" || facts.planClaimBackedHere) &&
+    (PATH_SENSITIVE_TOOLS.has(facts.toolName) || facts.isServedMcpTool)
     ? "auto_arm"
     : undefined;
 }

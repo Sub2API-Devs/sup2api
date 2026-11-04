@@ -24,35 +24,43 @@ import { getMainLoopModel } from "./model.js";
 import { has1mSuffix } from "./contextWindow1m.js";
 import { append1mSuffixIfMissing } from "./planModeModel.js";
 import { setMainLoopCanonical } from "./telemetryModelName.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:458354-458375 placement
 /**
  * claude-3 系列旧模型前缀集合。
  */
-var PDF_SUPPORTED_MODELS = new Set(isPDFSupported());
+var PDF_SUPPORTED_MODELS; // deferred: uses isPDFSupported (../pdfUtils.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:458354", () => {
+  PDF_SUPPORTED_MODELS = new Set(isPDFSupported());
+});
 //@ chunk-aepeg2w5.js:458375-458444 placement
-function isRecognizedCanonical(e) {
-  let n = strip1mSuffix(e);
-  return getCatalogEntry(n) !== undefined || PDF_SUPPORTED_MODELS.has(n) || n === CLAUDE_MYTHOS_PREVIEW;
+function isRecognizedCanonical(modelId) {
+  let stripped = strip1mSuffix(modelId);
+  return (
+    getCatalogEntry(stripped) !== undefined ||
+    PDF_SUPPORTED_MODELS.has(stripped) ||
+    stripped === CLAUDE_MYTHOS_PREVIEW
+  );
 }
 //@ chunk-aepeg2w5.js:458444-458490 placement
-function isRecognizedModel(e, n = getCanonicalName(e)) {
-  return isRecognizedCanonical(n) || neverRecognizedByOverride(e, n);
+function isRecognizedModel(modelId, canonical = getCanonicalName(modelId)) {
+  return isRecognizedCanonical(canonical) || neverRecognizedByOverride(modelId, canonical);
 }
 //@ chunk-aepeg2w5.js:458490-458516 placement
-function neverRecognizedByOverride(e, n) {
+function neverRecognizedByOverride(modelId, canonical) {
   return false;
 }
 //@ chunk-aepeg2w5.js:458516-458656 placement
 /**
  * 在模型覆盖表中查找值等于该模型的条目，返回其可识别的规范名。
  */
-function findOverrideCanonicalName(e, n) {
-  if (e === undefined) return;
-  for (let [key, value] of Object.entries(e)) {
-    if (!sameModelSpelling(value, n)) continue;
-    let h = firstPartyNameToCanonical(key);
-    if (isRecognizedModel(h, h) || hasDescribableCatalogModel(h)) return h;
+function findOverrideCanonicalName(overrides, modelId) {
+  if (overrides === undefined) return;
+  for (let [key, value] of Object.entries(overrides)) {
+    if (!sameModelSpelling(value, modelId)) continue;
+    let canonical = firstPartyNameToCanonical(key);
+    if (isRecognizedModel(canonical, canonical) || hasDescribableCatalogModel(canonical)) return canonical;
   }
   return;
 }
@@ -68,48 +76,53 @@ function getSettingsModelOverrides() {
   }
 }
 //@ chunk-aepeg2w5.js:458715-458827 placement
-function getCanonicalName(e, n) {
-  let canonicalModelName = resolveCanonicalModelName(e, n);
-  if (n?.identity === true || isRecognizedCanonical(canonicalModelName)) return canonicalModelName;
-  let mappedModel = resolveMappedModel(e);
-  if (mappedModel === e) return canonicalModelName;
-  return resolveCanonicalModelName(mappedModel, n);
+function getCanonicalName(modelId, options) {
+  let canonicalModelName = resolveCanonicalModelName(modelId, options);
+  if (options?.identity === true || isRecognizedCanonical(canonicalModelName)) return canonicalModelName;
+  let modelId_2 = resolveMappedModel(modelId);
+  if (modelId_2 === modelId) return canonicalModelName;
+  return resolveCanonicalModelName(modelId_2, options);
 }
 //@ chunk-aepeg2w5.js:458827-459079 placement
-function resolveCanonicalModelName(e, n) {
-  let overrideCanonicalName = findOverrideCanonicalName(n?.overridesMap ?? getSettingsModelOverrides(), e);
-  if (overrideCanonicalName === undefined && n?.overridesMap === undefined) {
+function resolveCanonicalModelName(modelId, options) {
+  let overrideCanonicalName = findOverrideCanonicalName(
+    options?.overridesMap ?? getSettingsModelOverrides(),
+    modelId,
+  );
+  if (overrideCanonicalName === undefined && options?.overridesMap === undefined) {
     let pairedPolicyModelOverrides = getPairedPolicyModelOverrides();
-    overrideCanonicalName = findOverrideCanonicalName(pairedPolicyModelOverrides, e);
+    overrideCanonicalName = findOverrideCanonicalName(pairedPolicyModelOverrides, modelId);
   }
   if (overrideCanonicalName !== undefined) return overrideCanonicalName;
-  if (!n?.deterministic && e.includes("application-inference-profile")) {
-    let inferenceProfileBackingModel = getInferenceProfileBackingModelCached(stripAnyVersatileSuffix(e));
+  if (!options?.deterministic && modelId.includes("application-inference-profile")) {
+    let inferenceProfileBackingModel = getInferenceProfileBackingModelCached(
+      stripAnyVersatileSuffix(modelId),
+    );
     if (inferenceProfileBackingModel) return firstPartyNameToCanonical(inferenceProfileBackingModel);
   }
-  return firstPartyNameToCanonical(e);
+  return firstPartyNameToCanonical(modelId);
 }
 //@ chunk-aepeg2w5.js:459079-459175 placement = resolveSkillModelOverride (0.834)
 /**
  * 模型规范名（[1m] 变体时同时返回带 [1m] 的形式），默认用当前主模型。
  */
 function mainModelOverrideKeys(skillModel, currentModel) {
-  let r = skillModel ?? getMainLoopModel();
-  let s = strip1mSuffix(
-    getCanonicalName(r, {
+  let baseModel = skillModel ?? getMainLoopModel();
+  let canonical = strip1mSuffix(
+    getCanonicalName(baseModel, {
       ...currentModel,
       identity: true,
     }),
   );
-  return has1mSuffix(r) ? [`${s}[1m]`, s] : [s];
+  return has1mSuffix(baseModel) ? [`${canonical}[1m]`, canonical] : [canonical];
 }
 //@ chunk-aepeg2w5.js:459175-459221 placement
 /**
  * 按身份规范化并去掉 [1m] 的模型 id（比较/计价/缓存键用）。
  */
-function strippedCanonicalName(e) {
+function strippedCanonicalName(modelId) {
   return strip1mSuffix(
-    getCanonicalName(e, {
+    getCanonicalName(modelId, {
       identity: true,
     }),
   );
@@ -118,9 +131,9 @@ function strippedCanonicalName(e) {
 /**
  * 规范化模型 id，原来带 [1m] 而规范名不带时补回 [1m]。
  */
-function canonicalNameKeeping1m(model, n) {
+function canonicalNameKeeping1m(model, options) {
   let canonicalName = getCanonicalName(model, {
-    ...n,
+    ...options,
     identity: true,
   });
   return has1mSuffix(model) && !has1mSuffix(canonicalName)
@@ -143,14 +156,17 @@ function hookModelMatchKey(toModel) {
 /**
  * 是否 catalog 已知模型。
  */
-function isRecognizedModelKey(e) {
-  return isRecognizedCanonical(e);
+function isRecognizedModelKey(key) {
+  return isRecognizedCanonical(key);
 }
 //@ chunk-aepeg2w5.js:459400-459417 placement
 /**
  * 注册当前主模型规范键的取值函数（顶层副作用语句）。
  */
-setMainLoopCanonical(() => strippedCanonicalName(getMainLoopModel()));
+// deferred: uses setMainLoopCanonical (./telemetryModelName.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:459400", () => {
+  setMainLoopCanonical(() => strippedCanonicalName(getMainLoopModel()));
+});
 export {
   getCanonicalName,
   getSettingsModelOverrides,

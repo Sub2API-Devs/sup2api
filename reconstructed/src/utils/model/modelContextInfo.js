@@ -32,60 +32,62 @@ import { modelSupportsThinking, isThinkingAlwaysOn, modelRejectsDisabledThinking
 import { modelSupportsTemperature } from "../betas.js";
 
 //@ chunk-e6aww6q8.js:962673-962745 placement
-function contextFieldValue(e, subscriptionType) {
-  if (subscriptionType && Object.hasOwn(e, subscriptionType)) return e[subscriptionType];
-  return e.default;
+function contextFieldValue(bySubscription, subscriptionType) {
+  if (subscriptionType && Object.hasOwn(bySubscription, subscriptionType))
+    return bySubscription[subscriptionType];
+  return bySubscription.default;
 }
 //@ chunk-e6aww6q8.js:962745-963014 placement
 /**
  * 解析按入口与订阅类型区分的窗口配置值（数字或对象）。
  */
-function resolveSurfaceWindow(e) {
-  if (typeof e === "number") return e;
-  if (typeof e !== "object" || e === null || Array.isArray(e)) return;
-  let { surfaces, ...r } = e;
+function resolveSurfaceWindow(config) {
+  if (typeof config === "number") return config;
+  if (typeof config !== "object" || config === null || Array.isArray(config)) return;
+  let { surfaces, ...base } = config;
   let subscriptionType = getSubscriptionType();
-  let h = getAutoCompactWindowSurface() ?? env.CLAUDE_CODE_ENTRYPOINT;
-  let y = h && surfaces && Object.hasOwn(surfaces, h) ? surfaces[h] : undefined;
-  if (y) {
-    let S = contextFieldValue(y, subscriptionType);
-    if (S !== undefined) return S;
+  let surfaceKey = getAutoCompactWindowSurface() ?? env.CLAUDE_CODE_ENTRYPOINT;
+  let surfaceValue =
+    surfaceKey && surfaces && Object.hasOwn(surfaces, surfaceKey) ? surfaces[surfaceKey] : undefined;
+  if (surfaceValue) {
+    let resolved = contextFieldValue(surfaceValue, subscriptionType);
+    if (resolved !== undefined) return resolved;
   }
-  return contextFieldValue(r, subscriptionType);
+  return contextFieldValue(base, subscriptionType);
 }
 //@ chunk-e6aww6q8.js:963014-963384 placement
 /**
  * 从客户端数据（rowan_thicket 与另一来源）中读取某模型的自动压缩窗口（按入口/订阅类型解析、限制在合法范围内），并返回后者是否替换默认值。
  */
 function getClientDataAutoCompactWindow(canonical) {
-  let n = (surfaceWindow) =>
+  let validWindow = (surfaceWindow) =>
     typeof surfaceWindow === "number" &&
     Number.isInteger(surfaceWindow) &&
     surfaceWindow >= TRANSPORT_LABELS &&
     surfaceWindow <= GLOBAL_CONFIG_FIELD_KINDS
       ? surfaceWindow
       : null;
-  let r = (y) => {
-    if (typeof y !== "object" || y === null || Array.isArray(y))
+  let readSource = (source) => {
+    if (typeof source !== "object" || source === null || Array.isArray(source))
       return {
         window: null,
         present: false,
       };
-    if (!Object.hasOwn(y, canonical))
+    if (!Object.hasOwn(source, canonical))
       return {
         window: null,
         present: false,
       };
     return {
-      window: n(resolveSurfaceWindow(y[canonical])),
+      window: validWindow(resolveSurfaceWindow(source[canonical])),
       present: true,
     };
   };
-  let s = r(cachedClientDataForContext()?.rowan_thicket);
-  let h = r(autoCompactWindowsCache());
+  let cached = readSource(cachedClientDataForContext()?.rowan_thicket);
+  let current = readSource(autoCompactWindowsCache());
   return {
-    window: s.window ?? h.window,
-    replacesDefault: h.present,
+    window: cached.window ?? current.window,
+    replacesDefault: current.present,
   };
 }
 //@ chunk-e6aww6q8.js:963384-963936 placement

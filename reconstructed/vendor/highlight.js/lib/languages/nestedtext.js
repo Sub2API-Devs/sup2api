@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:308874-309437 cjs-fingerprint
-var require_nestedtext = x(function (cjsExports, cjsModule) {
+var require_nestedtext = __commonJS(function (cjsExports, cjsModule) {
   function nestedtext(hljs) {
     let NESTED = {
       match: [/^\s*(?=\S)/, /[^:]+/, /:\s*/, /$/],

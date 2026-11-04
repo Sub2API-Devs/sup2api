@@ -138,14 +138,14 @@ function isFirstPartyEndpointHost() {
 /**
  * 第一方提供方下按 tengu_bright_dragonfly 判断本地分类器是否关闭（交接审阅时只看含 handoffs 的取值）；策略缓存缺失或实验 beta 被禁用时为 false。
  */
-function isLocalClassifierSwitchedOff({ handoffReview: e = false } = {}) {
+function isLocalClassifierSwitchedOff({ handoffReview = false } = {}) {
   try {
     if (!isFirstPartyProvider()) return false;
     let enumFlag = readEnumFlag(TENGU_BRIGHT_DRAGONFLY, {
       safe: "off",
       others: ["direct", "all", "direct_and_handoffs", "all_and_handoffs"],
     });
-    if (enumFlag === "off" || (e && (enumFlag === "direct" || enumFlag === "all"))) return false;
+    if (enumFlag === "off" || (handoffReview && (enumFlag === "direct" || enumFlag === "all"))) return false;
     if (
       isPolicyLimitsCacheMissing() ||
       (areExperimentalBetasDisabled() &&
@@ -216,20 +216,20 @@ function isDriftingValleyOn() {
 /**
  * 判断是否把"禁用实验 beta"开关搁置以便使用服务端分类器（直连第一方、用户未关闭、策略缓存存在等）；结果缓存，peek 时不写缓存。
  */
-function isBetasSwitchSetAside({ peek: e = false } = {}) {
+function isBetasSwitchSetAside({ peek = false } = {}) {
   if (isHipaaOrg()) return false;
   let sessionFeatureValues = getSessionFeatureValues();
   if (
     sessionFeatureValues.betasSwitchSetAside === true &&
     (!isDriftingValleyOn() || isPolicyLimitsCacheMissing())
   ) {
-    if (!e) sessionFeatureValues.betasSwitchSetAside = false;
+    if (!peek) sessionFeatureValues.betasSwitchSetAside = false;
     return false;
   }
   if (sessionFeatureValues.betasSwitchSetAside !== undefined) return sessionFeatureValues.betasSwitchSetAside;
-  let r = false;
+  let setAside = false;
   try {
-    r =
+    setAside =
       env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS &&
       !env.CLAUDE_CODE_SIMULATE_PROXY_USAGE &&
       env.ANTHROPIC_UNIX_SOCKET === undefined &&
@@ -240,8 +240,8 @@ function isBetasSwitchSetAside({ peek: e = false } = {}) {
   } catch (error) {
     logError(toError(error));
   }
-  if (!e) sessionFeatureValues.betasSwitchSetAside = r;
-  return r;
+  if (!peek) sessionFeatureValues.betasSwitchSetAside = setAside;
+  return setAside;
 }
 //@ chunk-e6aww6q8.js:1025412-1025650 placement
 function getApiRouteKind() {
@@ -260,25 +260,26 @@ function getApiRouteKind() {
 /**
  * 本地分类器被关闭或该侧调用在 tengu_radiant_fern 列表中时视为已退役（每种记一次日志）；调用方豁免时返回 false。
  */
-function isClassifierSideCallRetired(e, alwaysFalseLocal) {
+function isClassifierSideCallRetired(sideCallName, alwaysFalseLocal) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_radiant_fern", []);
-  let s = isLocalClassifierSwitchedOff();
+  let localSwitchedOff = isLocalClassifierSwitchedOff();
   if (
     !(
-      s ||
-      (Array.isArray(featureValue_CACHED_MAY_BE_STALE) && featureValue_CACHED_MAY_BE_STALE.includes(e))
+      localSwitchedOff ||
+      (Array.isArray(featureValue_CACHED_MAY_BE_STALE) &&
+        featureValue_CACHED_MAY_BE_STALE.includes(sideCallName))
     ) ||
     alwaysFalseLocal?.() === true
   )
     return false;
   let sessionFeatureValues = getSessionFeatureValues();
   sessionFeatureValues.retiredClassifierSideCallsLogged ??= new Set();
-  if (!sessionFeatureValues.retiredClassifierSideCallsLogged.has(e)) {
-    sessionFeatureValues.retiredClassifierSideCallsLogged.add(e);
+  if (!sessionFeatureValues.retiredClassifierSideCallsLogged.has(sideCallName)) {
+    sessionFeatureValues.retiredClassifierSideCallsLogged.add(sideCallName);
     logFeatureBad(
       "auto_mode_side_calls_retired",
-      e,
-      s
+      sideCallName,
+      localSwitchedOff
         ? {
             localClassifierSwitchedOff: true,
           }
@@ -298,8 +299,8 @@ function neverTrue() {
 /**
  * setTimeoutWithCancel：定时器并返回取消函数；TIMER_MARGIN_MS：定时器余量（同一声明共 2 个绑定）。
  */
-var setTimeoutWithCancel = (e, n) => {
-  let timer = setTimeout(e, n);
+var setTimeoutWithCancel = (fn, delayMs) => {
+  let timer = setTimeout(fn, delayMs);
   return () => clearTimeout(timer);
 };
 var TIMER_MARGIN_MS = 10;

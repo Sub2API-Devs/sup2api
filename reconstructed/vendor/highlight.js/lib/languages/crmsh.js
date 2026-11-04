@@ -5,16 +5,16 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:87064-88643 cjs-fingerprint
-var require_crmsh = x(function (cjsExports, cjsModule) {
+var require_crmsh = __commonJS(function (cjsExports, cjsModule) {
   function crmsh(hljs) {
     let COMMANDS =
       "group clone ms master location colocation order fencing_topology rsc_ticket acl_target acl_group user role tag xml";
     let PROPERTY_SETS = "property rsc_defaults op_defaults";
-    let s = "params meta operations op rule attributes utilization";
-    let o =
+    let KEYWORDS = "params meta operations op rule attributes utilization";
+    let OPERATORS =
       "read write deny defined not_defined in_range date spec in ref reference attribute type xpath version and or lt gt tag lte gte eq ne \\";
     let TYPES = "number string";
     let LITERALS = "Master Started Slave Stopped start promote demote stop monitor true false";
@@ -23,7 +23,7 @@ var require_crmsh = x(function (cjsExports, cjsModule) {
       aliases: ["crm", "pcmk"],
       case_insensitive: true,
       keywords: {
-        keyword: "params meta operations op rule attributes utilization " + o + " number string",
+        keyword: "params meta operations op rule attributes utilization " + OPERATORS + " number string",
         literal: "Master Started Slave Stopped start promote demote stop monitor true false",
       },
       contains: [

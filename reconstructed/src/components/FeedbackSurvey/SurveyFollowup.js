@@ -8,7 +8,12 @@
  * pieces: chunk-18hwfzwa.js (9)
  * attribution: placement 9
  */
-import { init_react_production, y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { useInputClock } from "../../ink/components/Input.js";
@@ -26,45 +31,54 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { TextInput } from "../TextInput.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { uiSignals } from "../../state/uiSignals.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:990745-990749 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:990745", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:990749-991285 placement
 /**
  * 按字符上限约束一次文本编辑：比较新旧文本的公共前后缀，只截断插入部分；返回新文本和光标处理（pass/keep/新位置）。
  */
-function clampTextEdit(h, x, D) {
-  let list = Array.from(x);
-  if (list.length <= D)
+function clampTextEdit(previous, next, maxLength) {
+  let list = Array.from(next);
+  if (list.length <= maxLength)
     return {
-      text: x,
+      text: next,
       caret: "pass",
     };
-  let list_2 = Array.from(h);
-  let ke = 0;
-  while (ke < list_2.length && ke < list.length && list_2[ke] === list[ke]) ke++;
-  let Re = 0;
+  let list_2 = Array.from(previous);
+  let prefixLength = 0;
   while (
-    Re < list_2.length - ke &&
-    Re < list.length - ke &&
-    list_2[list_2.length - 1 - Re] === list[list.length - 1 - Re]
+    prefixLength < list_2.length &&
+    prefixLength < list.length &&
+    list_2[prefixLength] === list[prefixLength]
   )
-    Re++;
-  let Be = ke + Re;
-  let max = Math.max(0, D - Be);
-  let sliced = list.slice(ke, list.length - Re);
-  if (sliced.length > max && Be < list_2.length)
+    prefixLength++;
+  let suffixLength = 0;
+  while (
+    suffixLength < list_2.length - prefixLength &&
+    suffixLength < list.length - prefixLength &&
+    list_2[list_2.length - 1 - suffixLength] === list[list.length - 1 - suffixLength]
+  )
+    suffixLength++;
+  let cut = prefixLength + suffixLength;
+  let max = Math.max(0, maxLength - cut);
+  let sliced = list.slice(prefixLength, list.length - suffixLength);
+  if (sliced.length > max && cut < list_2.length)
     return {
-      text: h,
+      text: previous,
       caret: "keep",
     };
   let sliced_2 = sliced.slice(0, max);
-  let joined = [...list.slice(0, ke), ...sliced_2].join("");
-  let text = joined + list.slice(list.length - Re).join("");
+  let joined = [...list.slice(0, prefixLength), ...sliced_2].join("");
+  let text = joined + list.slice(list.length - suffixLength).join("");
   return sliced_2.length === 0
     ? {
         text,
@@ -82,8 +96,8 @@ var FOLLOWUP_AUTO_DISMISS_MS = 1500;
 /**
  * 函数 collapseToSingleLine（换行与制表符替换为空格）。
  */
-function collapseToSingleLine(h) {
-  return stripAnsi(h)
+function collapseToSingleLine(text) {
+  return stripAnsi(text)
     .replace(/\r\n|\r|\n/g, " ")
     .replaceAll("\t", " ");
 }
@@ -91,103 +105,105 @@ function collapseToSingleLine(h) {
 function SurveyFollowup({ onResolve, question, maxChars, autoDismissAfterMs, turnInProgress = false }) {
   let clock = useClock();
   let inputClock = useInputClock();
-  let [Be, He] = y("");
-  let [We, ze] = y(0);
+  let [text, setText] = useState("");
+  let [cursorOffset, setCursorOffset] = useState(0);
   let { columns } = useTerminalSize();
-  let rt = R(false);
-  let kt = R(Date.now());
+  let resolvedRef = useRef(false);
+  let mountedAtRef = useRef(Date.now());
   useRegisterOverlay("survey-followup");
-  let At = (Ro) => {
-    if (rt.current) return;
-    rt.current = true;
-    onResolve(Ro);
+  let resolve = (value) => {
+    if (resolvedRef.current) return;
+    resolvedRef.current = true;
+    onResolve(value);
   };
-  let It = () => isWithinRecentInput(inputClock, kt.current, FOLLOWUP_RECENT_INPUT_MS);
-  let [Ot, Et] = y(false);
-  let [Dt, Lt] = y(null);
+  let isWithinRecentInputGuard = () =>
+    isWithinRecentInput(inputClock, mountedAtRef.current, FOLLOWUP_RECENT_INPUT_MS);
+  let [isTurnActive, setIsTurnActive] = useState(false);
+  let [exitKeyHint, setExitKeyHint] = useState(null);
   useTimeout(
     () =>
-      At({
+      resolve({
         text: null,
         method: "timeout",
       }),
-    Ot ? null : autoDismissAfterMs,
+    isTurnActive ? null : autoDismissAfterMs,
     [autoDismissAfterMs],
   );
-  P(() => {
+  useEffect(() => {
     if (turnInProgress && textRef.current.trim() === "")
-      At({
+      resolve({
         text: null,
         method: "turn_yield",
       });
   });
-  let oo = R(null);
+  let vimTimerRef = useRef(null);
   let session = useSession();
-  P(
+  useEffect(
     () => () => {
-      oo.current?.();
+      vimTimerRef.current?.();
       setPromptVimMode(session, false);
     },
     [session],
   );
-  let textRef = R("");
-  let so = R(0);
-  let po = R(null);
-  let [, ao] = y(0);
-  let onChange = (Ro) => {
-    let Ho = collapseToSingleLine(Ro);
-    let Io = clampTextEdit(textRef.current, Ho, maxChars);
-    po.current = Io.caret === "pass" ? null : Io.caret === "keep" ? so.current : Io.caret;
-    if (Io.caret !== "pass" || Ho !== Ro) ao((mn) => mn + 1);
-    let text = Io.text;
+  let textRef = useRef("");
+  let cursorOffsetRef = useRef(0);
+  let pendingCaretRef = useRef(null);
+  let [, setTextVersion] = useState(0);
+  let onChange = (nextText) => {
+    let singleLine = collapseToSingleLine(nextText);
+    let edit = clampTextEdit(textRef.current, singleLine, maxChars);
+    pendingCaretRef.current =
+      edit.caret === "pass" ? null : edit.caret === "keep" ? cursorOffsetRef.current : edit.caret;
+    if (edit.caret !== "pass" || singleLine !== nextText) setTextVersion((version) => version + 1);
+    let text = edit.text;
     textRef.current = text;
-    He(text);
-    if (Ro.trim().length > 0 && !It()) Et(true);
+    setText(text);
+    if (nextText.trim().length > 0 && !isWithinRecentInputGuard()) setIsTurnActive(true);
     setPromptVimMode(session, true);
-    oo.current?.();
-    oo.current = clock.setTimeout(() => {
-      oo.current = null;
+    vimTimerRef.current?.();
+    vimTimerRef.current = clock.setTimeout(() => {
+      vimTimerRef.current = null;
       setPromptVimMode(session, false);
     }, FOLLOWUP_AUTO_DISMISS_MS);
   };
   usePreDispatchKeyHandler((input, key) => {
     if (!key.escape) return;
-    if (!It()) {
+    if (!isWithinRecentInputGuard()) {
       if (textRef.current.trim() !== "") {
-        He("");
+        setText("");
         textRef.current = "";
-        ze(0);
-        so.current = 0;
-        po.current = null;
-        ao((Io) => Io + 1);
+        setCursorOffset(0);
+        cursorOffsetRef.current = 0;
+        pendingCaretRef.current = null;
+        setTextVersion((version) => version + 1);
         return true;
       }
-      At({
+      resolve({
         text: null,
         method: "escape",
       });
     }
     return true;
   });
-  let onSubmit = (Ro) => {
-    if (It()) {
-      ao((Io) => Io + 1);
+  let onSubmit = (submittedText) => {
+    if (isWithinRecentInputGuard()) {
+      setTextVersion((version) => version + 1);
       return;
     }
     let trimmed = textRef.current.trim();
     if (trimmed === "")
-      At({
+      resolve({
         text: null,
         method: "enter_empty",
       });
     else
-      At({
+      resolve({
         text: truncateCodePoints(trimmed, maxChars),
         method: "enter",
       });
   };
-  let Ao = Array.from(Be).length;
-  let Bo = Ao >= maxChars;
+  let charCount = Array.from(text).length;
+  let isAtLimit = charCount >= maxChars;
   return jsxProd_default_2(Box, {
     flexDirection: "column",
     marginTop: 1,
@@ -211,29 +227,29 @@ function SurveyFollowup({ onResolve, question, maxChars, autoDismissAfterMs, tur
       jsxProd_default(Box, {
         marginLeft: 2,
         children: jsxProd_default(TextInput, {
-          value: Be,
+          value: text,
           onChange,
           onSubmit,
           columns: Math.min(Math.max(columns - 4, 20), 120),
-          cursorOffset: We,
-          onChangeCursorOffset: (Ro) => {
-            let Ho = po.current ?? Ro;
-            po.current = null;
-            so.current = Ho;
-            ze(Ho);
+          cursorOffset,
+          onChangeCursorOffset: (nextOffset) => {
+            let caretOffset = pendingCaretRef.current ?? nextOffset;
+            pendingCaretRef.current = null;
+            cursorOffsetRef.current = caretOffset;
+            setCursorOffset(caretOffset);
           },
           focus: true,
           showCursor: true,
           multiline: false,
           inputFilter: collapseToSingleLine,
           onExit: () => {
-            if (!It())
-              At({
+            if (!isWithinRecentInputGuard())
+              resolve({
                 text: null,
                 method: "escape",
               });
           },
-          onExitMessage: (Ro, Ho) => Lt(Ro ? (Ho ?? "Ctrl-C") : null),
+          onExitMessage: (exitState, keyName) => setExitKeyHint(exitState ? (keyName ?? "Ctrl-C") : null),
         }),
       }),
       jsxProd_default(Box, {
@@ -243,33 +259,33 @@ function SurveyFollowup({ onResolve, question, maxChars, autoDismissAfterMs, tur
           children: [
             jsxProd_default(KeyboardShortcutHint, {
               chord: "enter",
-              action: Be.trim() ? "send" : "skip",
+              action: text.trim() ? "send" : "skip",
             }),
             " \xB7 ",
             jsxProd_default(KeyboardShortcutHint, {
               chord: "escape",
-              action: Be.trim() ? "clear" : "skip",
+              action: text.trim() ? "clear" : "skip",
             }),
-            Dt &&
+            exitKeyHint &&
               jsxProd_default_2(Fragment, {
                 children: [
                   "  ",
                   jsxProd_default(Text, {
                     color: "warning",
                     children: jsxProd_default(KeyboardShortcutHint, {
-                      chord: Dt === "Ctrl-D" ? "ctrl+d" : "ctrl+c",
+                      chord: exitKeyHint === "Ctrl-D" ? "ctrl+d" : "ctrl+c",
                       action: "again to skip",
                     }),
                   }),
                 ],
               }),
-            Be.length > 0 &&
+            text.length > 0 &&
               jsxProd_default_2(Fragment, {
                 children: [
                   "  ",
                   jsxProd_default_2(Text, {
-                    color: Bo ? "warning" : undefined,
-                    children: [Ao, "/", maxChars],
+                    color: isAtLimit ? "warning" : undefined,
+                    children: [charCount, "/", maxChars],
                   }),
                 ],
               }),

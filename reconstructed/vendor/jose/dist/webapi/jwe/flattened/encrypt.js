@@ -5,20 +5,20 @@
  * pieces: chunk-5h78gfwc.js (1)
  * attribution: esm-fingerprint 1
  */
-import { assertNotSet, Ze } from "../../lib/helpers.js";
-import { JWEInvalid, JOSENotSupported } from "../../../node/esm/util/errors.js";
+import { assertNotSet, unusedSymbol } from "../../lib/helpers.js";
+import { JWEInvalid_2, JOSENotSupported_2 } from "../../../node/esm/util/errors.js";
 import { isDisjoint } from "../../lib/type_checks.js";
-import { N } from "../../lib/options.js";
+import { validateCrit } from "../../lib/options.js";
 import { checkKeyType } from "../../lib/check_key_type.js";
 import { normalizeKey } from "../../lib/normalize_key.js";
 import { encryptKeyManagement } from "../../lib/key_management.js";
 import { encode_2 } from "../../util/base64url.js";
 import { encode, concat } from "../../lib/buffer_utils.js";
-import { Wt } from "../../lib/deflate.js";
+import { deflate } from "../../lib/deflate.js";
 import { encrypt } from "../../lib/content_encryption.js";
 
 //@ chunk-5h78gfwc.js:35279-37807 esm-fingerprint
-class Re {
+class FlattenedEncrypt {
   #e;
   #t;
   #r;
@@ -67,11 +67,11 @@ class Re {
   }
   async encrypt(key, options) {
     if (!this.#t && !this.#n && !this.#r)
-      throw new JWEInvalid(
+      throw new JWEInvalid_2(
         "either setProtectedHeader, setUnprotectedHeader, or sharedUnprotectedHeader must be called before #encrypt()",
       );
     if (!isDisjoint(this.#t, this.#n, this.#r))
-      throw new JWEInvalid(
+      throw new JWEInvalid_2(
         "JWE Protected, JWE Shared Unprotected and JWE Per-Recipient Header Parameter names must be disjoint",
       );
     let joseHeader = {
@@ -79,18 +79,18 @@ class Re {
       ...this.#n,
       ...this.#r,
     };
-    N(JWEInvalid, new Map(), options?.crit, this.#t, joseHeader);
+    validateCrit(JWEInvalid_2, new Map(), options?.crit, this.#t, joseHeader);
     if (joseHeader.zip !== undefined && joseHeader.zip !== "DEF")
-      throw new JOSENotSupported('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value.');
+      throw new JOSENotSupported_2('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value.');
     if (joseHeader.zip !== undefined && !this.#t?.zip)
-      throw new JWEInvalid(
+      throw new JWEInvalid_2(
         'JWE "zip" (Compression Algorithm) Header Parameter MUST be in a protected header.',
       );
     let { alg, enc } = joseHeader;
     if (typeof alg !== "string" || !alg)
-      throw new JWEInvalid('JWE "alg" (Algorithm) Header Parameter missing or invalid');
+      throw new JWEInvalid_2('JWE "alg" (Algorithm) Header Parameter missing or invalid');
     if (typeof enc !== "string" || !enc)
-      throw new JWEInvalid('JWE "enc" (Encryption Algorithm) Header Parameter missing or invalid');
+      throw new JWEInvalid_2('JWE "enc" (Encryption Algorithm) Header Parameter missing or invalid');
     let encryptedKey;
     if (this.#o && (alg === "dir" || alg === "ECDH-ES"))
       throw TypeError(`setContentEncryptionKey cannot be called with JWE "alg" (Algorithm) Header ${alg}`);
@@ -101,7 +101,7 @@ class Re {
       let k = await normalizeKey(key, alg);
       ({ cek, encryptedKey, parameters } = await encryptKeyManagement(alg, enc, k, this.#o, this.#i));
       if (parameters)
-        if (options && Ze in options) {
+        if (options && unusedSymbol in options) {
           if (!this.#n) this.setUnprotectedHeader(parameters);
           else
             this.#n = {
@@ -133,8 +133,8 @@ class Re {
     } else additionalData = protectedHeaderB;
     let plaintext = this.#e;
     if (joseHeader.zip === "DEF")
-      plaintext = await Wt(plaintext).catch((cause) => {
-        throw new JWEInvalid("Failed to compress plaintext", {
+      plaintext = await deflate(plaintext).catch((cause) => {
+        throw new JWEInvalid_2("Failed to compress plaintext", {
           cause,
         });
       });
@@ -152,4 +152,4 @@ class Re {
     return jwe;
   }
 }
-export { Re };
+export { FlattenedEncrypt };

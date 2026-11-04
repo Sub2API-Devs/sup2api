@@ -23,14 +23,14 @@ import { isZincHarborOn } from "../plugins/functionHooks/inputHold.js";
 import { stopTask } from "../components/tasks/stopTask.js";
 
 //@ chunk-18hwfzwa.js:440816-440861 fingerprint = stepTeammateSelection (0.345)
-function stepTeammateSelection(No) {
-  return No.viewSelectionMode;
+function stepTeammateSelection(state) {
+  return state.viewSelectionMode;
 }
 //@ chunk-18hwfzwa.js:1438068-1438659 fingerprint = useBackgroundTaskNavigation (0.49)
 function useBackgroundTaskNavigation({ inputOwnsEscape, isTranscriptScreen, isPanelOpen }) {
   let appStoreDirect = useAppStoreDirect();
-  let viewSelectionMode = useAppState((Xe) => Xe.viewSelectionMode);
-  let viewingAgentTaskId = useAppState((Xe) => Xe.viewingAgentTaskId);
+  let viewSelectionMode = useAppState((state) => state.viewSelectionMode);
+  let viewingAgentTaskId = useAppState((state) => state.viewingAgentTaskId);
   let setAppState = useSetAppState();
   let taskRegistry = useSetVoiceState();
   let setAppState_2 = useSession();
@@ -41,20 +41,20 @@ function useBackgroundTaskNavigation({ inputOwnsEscape, isTranscriptScreen, isPa
       if (event.name === "escape" && viewSelectionMode === "viewing-agent") {
         if (inputOwnsEscape) return;
         event.preventDefault();
-        let rt = viewingAgentTaskId;
-        if (rt) {
-          let kt = appStoreDirect.getState().tasks[rt];
-          if (isInProcessTeammateTask(kt) && kt.status === "running") {
-            interruptTeammateWork(kt);
+        let viewingTaskId = viewingAgentTaskId;
+        if (viewingTaskId) {
+          let task = appStoreDirect.getState().tasks[viewingTaskId];
+          if (isInProcessTeammateTask(task) && task.status === "running") {
+            interruptTeammateWork(task);
             return;
           }
-          if (isLocalAgent(kt) && (kt.status === "running" || hasCompletedWithFindings(kt))) {
-            if (interruptBackgroundSubagent(kt.id, taskRegistry)) return;
-            if (isZincHarborOn() && hasCompletedWithFindings(kt)) {
+          if (isLocalAgent(task) && (task.status === "running" || hasCompletedWithFindings(task))) {
+            if (interruptBackgroundSubagent(task.id, taskRegistry)) return;
+            if (isZincHarborOn() && hasCompletedWithFindings(task)) {
               exitTeammateView(setAppState);
               return;
             }
-            stopTask(kt, taskRegistry, setAppState, {
+            stopTask(task, taskRegistry, setAppState, {
               session: setAppState_2,
               storageV5,
             });

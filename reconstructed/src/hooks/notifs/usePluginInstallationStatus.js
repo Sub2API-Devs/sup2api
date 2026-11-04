@@ -9,25 +9,25 @@
  * attribution: callgraph-fingerprint 1
  */
 import { useNotifications } from "../../context/notifications.js";
-import { P } from "../../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 
 //@ chunk-18hwfzwa.js:433650-433876 callgraph-fingerprint = usePluginInstallationStatus (0.338)
-function usePluginInstallationStatus(h, x, D, L, ee) {
+function usePluginInstallationStatus(noticeKey, priority, status, renderStatus, options) {
   let { addNotification, removeNotification } = useNotifications();
-  P(() => {
-    if (D === null) {
-      removeNotification(h);
+  useEffect(() => {
+    if (status === null) {
+      removeNotification(noticeKey);
       return;
     }
     addNotification({
-      key: h,
-      kind: ee?.kind ?? "warning",
-      color: ee?.color,
-      wrap: ee?.wrap,
-      priority: x,
+      key: noticeKey,
+      kind: options?.kind ?? "warning",
+      color: options?.color,
+      wrap: options?.wrap,
+      priority,
       pinned: true,
-      jsx: L(D),
+      jsx: renderStatus(status),
     });
-  }, [D, h, x, L, ee, addNotification, removeNotification]);
+  }, [status, noticeKey, priority, renderStatus, options, addNotification, removeNotification]);
 }
 export { usePluginInstallationStatus };

@@ -21,15 +21,15 @@ function proactivityLevelIfActive(proactivityLevel) {
 /**
  * promptProactivityLevel：提示词中的主动性等级。
  */
-function promptProactivityLevel(e) {
-  return proactivityLevelIfActive(e.proactivityLevel);
+function promptProactivityLevel(context) {
+  return proactivityLevelIfActive(context.proactivityLevel);
 }
 //@ chunk-kavwfxwg.js:311-417 placement
-function resolveProactivityOptions(e, proactivityLevel) {
-  let i = proactivityLevelIfActive(proactivityLevel);
+function resolveProactivityOptions(permissionMode, proactivityLevel) {
+  let level = proactivityLevelIfActive(proactivityLevel);
   return {
-    permissionMode: e ?? (i === undefined ? undefined : "default"),
-    proactivityLevel: i,
+    permissionMode: permissionMode ?? (level === undefined ? undefined : "default"),
+    proactivityLevel: level,
   };
 }
 export { resolveProactivityOptions, promptProactivityLevel, proactivityLevelIfActive };

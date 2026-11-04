@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (9)
  * attribution: placement 8, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default_2,
@@ -22,60 +22,61 @@ import { getPythonApiInstructions } from "./backends/it2Setup.js";
 import { StatusIcon } from "../../components/design-system/StatusIcon.js";
 import { renderPlainText } from "../../components/ultraplan/UltraplanLaunchDialog.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1264443-1265953 placement
 /**
  * iTerm2 原生分屏队友所需的 it2 CLI 安装提示：选项为用包管理器安装、改用 tmux（可用时）或取消。
  */
 function It2InstallPrompt(props) {
-  let $ = w(18);
+  let $ = useMemoCache(18);
   let { packageManager, tmuxAvailable, onInstall, onUseTmux, onCancel, refuseInput } = props;
   const description = packageManager
     ? `Uses ${packageManager} to install the it2 CLI tool`
     : "Requires Python (uvx, pipx, or pip)";
-  let We;
+  let installOption;
   if ($[0] !== description) {
-    We = {
+    installOption = {
       label: "Install it2 now",
       value: "install",
       description,
     };
     $[0] = description;
-    $[1] = We;
-  } else We = $[1];
-  let ze;
-  if ($[2] !== We || $[3] !== tmuxAvailable) {
-    ze = [We];
+    $[1] = installOption;
+  } else installOption = $[1];
+  let options;
+  if ($[2] !== installOption || $[3] !== tmuxAvailable) {
+    options = [installOption];
     if (tmuxAvailable) {
-      let Xe;
+      let tmuxOption;
       if ($[5] === MEMO_CACHE_SENTINEL) {
-        Xe = {
+        tmuxOption = {
           label: "Use tmux instead",
           value: "tmux",
           description: "Opens teammates in a separate tmux session",
         };
-        $[5] = Xe;
-      } else Xe = $[5];
-      ze.push(Xe);
+        $[5] = tmuxOption;
+      } else tmuxOption = $[5];
+      options.push(tmuxOption);
     }
-    let Xe;
+    let cancelOption;
     if ($[6] === MEMO_CACHE_SENTINEL) {
-      Xe = {
+      cancelOption = {
         label: "Cancel",
         value: "cancel",
         description: "Skip teammate spawning for now",
       };
-      $[6] = Xe;
-    } else Xe = $[6];
-    ze.push(Xe);
-    $[2] = We;
+      $[6] = cancelOption;
+    } else cancelOption = $[6];
+    options.push(cancelOption);
+    $[2] = installOption;
     $[3] = tmuxAvailable;
-    $[4] = ze;
-  } else ze = $[4];
-  let Xe;
-  let rt;
+    $[4] = options;
+  } else options = $[4];
+  let leadText;
+  let detailText;
   if ($[7] === MEMO_CACHE_SENTINEL) {
-    Xe = jsxProd_default_2(Text, {
+    leadText = jsxProd_default_2(Text, {
       children: [
         "To use native iTerm2 split panes for teammates, you need the",
         " ",
@@ -86,20 +87,20 @@ function It2InstallPrompt(props) {
         " CLI tool.",
       ],
     });
-    rt = jsxProd_default(Text, {
+    detailText = jsxProd_default(Text, {
       dimColor: true,
       children: "This enables teammates to appear as split panes within your current window.",
     });
-    $[7] = Xe;
-    $[8] = rt;
+    $[7] = leadText;
+    $[8] = detailText;
   } else {
-    Xe = $[7];
-    rt = $[8];
+    leadText = $[7];
+    detailText = $[8];
   }
   let onChange;
   if ($[9] !== onCancel || $[10] !== onInstall || $[11] !== onUseTmux) {
-    onChange = (At) => {
-      It: switch (At) {
+    onChange = (selectedValue) => {
+      It: switch (selectedValue) {
         case "install": {
           onInstall();
           break It;
@@ -118,21 +119,21 @@ function It2InstallPrompt(props) {
     $[11] = onUseTmux;
     $[12] = onChange;
   } else onChange = $[12];
-  let Ot;
-  if ($[13] !== onCancel || $[14] !== ze || $[15] !== refuseInput || $[16] !== onChange) {
-    Ot = jsxProd_default_2(Box, {
+  let dialog;
+  if ($[13] !== onCancel || $[14] !== options || $[15] !== refuseInput || $[16] !== onChange) {
+    dialog = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
-        Xe,
-        rt,
+        leadText,
+        detailText,
         jsxProd_default(Box, {
           marginTop: 1,
           children: jsxProd_default(ModelSelector, {
             refuseInput,
             hideIndexes: true,
             selectedValue: NO_COMMITTED_ROW,
-            options: ze,
+            options,
             onChange,
             onCancel,
           }),
@@ -140,138 +141,138 @@ function It2InstallPrompt(props) {
       ],
     });
     $[13] = onCancel;
-    $[14] = ze;
+    $[14] = options;
     $[15] = refuseInput;
     $[16] = onChange;
-    $[17] = Ot;
-  } else Ot = $[17];
-  return Ot;
+    $[17] = dialog;
+  } else dialog = $[17];
+  return dialog;
 }
 //@ chunk-18hwfzwa.js:1265953-1266381 placement
 /**
  * it2 安装进行中界面：显示转圈和所用的包管理器。
  */
 function It2Installing(props) {
-  let D = w(6);
+  let $ = useMemoCache(6);
   let { packageManager } = props;
-  let L;
-  if (D[0] === MEMO_CACHE_SENTINEL) {
-    L = jsxProd_default(Spinner, {});
-    D[0] = L;
-  } else L = D[0];
-  let ee;
-  if (D[1] !== packageManager) {
-    ee = jsxProd_default_2(Box, {
+  let spinner;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    spinner = jsxProd_default(Spinner, {});
+    $[0] = spinner;
+  } else spinner = $[0];
+  let installingRow;
+  if ($[1] !== packageManager) {
+    installingRow = jsxProd_default_2(Box, {
       children: [
-        L,
+        spinner,
         jsxProd_default_2(Text, {
           children: [" Installing it2 using ", packageManager, "\u2026"],
         }),
       ],
     });
-    D[1] = packageManager;
-    D[2] = ee;
-  } else ee = D[2];
-  let ke;
-  if (D[3] === MEMO_CACHE_SENTINEL) {
-    ke = jsxProd_default(Text, {
+    $[1] = packageManager;
+    $[2] = installingRow;
+  } else installingRow = $[2];
+  let waitText;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    waitText = jsxProd_default(Text, {
       dimColor: true,
       children: "This may take a moment.",
     });
-    D[3] = ke;
-  } else ke = D[3];
-  let Re;
-  if (D[4] !== ee) {
-    Re = jsxProd_default_2(Box, {
+    $[3] = waitText;
+  } else waitText = $[3];
+  let elements;
+  if ($[4] !== installingRow) {
+    elements = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [ee, ke],
+      children: [installingRow, waitText],
     });
-    D[4] = ee;
-    D[5] = Re;
-  } else Re = D[5];
-  return Re;
+    $[4] = installingRow;
+    $[5] = elements;
+  } else elements = $[5];
+  return elements;
 }
 //@ chunk-18hwfzwa.js:1266381-1268003 fingerprint = It2SetupPrompt (0.535)
 /**
  * it2 安装失败界面：显示错误与手动安装命令，选项为重试、改用 tmux（tmux 可用时）、取消。
  */
 function It2SetupPrompt(props) {
-  let He = w(23);
+  let $ = useMemoCache(23);
   let { error, packageManager, tmuxAvailable, onRetry, onUseTmux, onCancel, refuseInput } = props;
-  let We;
-  if (He[0] === MEMO_CACHE_SENTINEL) {
-    We = {
+  let retryOption;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    retryOption = {
       label: "Try again",
       value: "retry",
       description: "Retry the installation",
     };
-    He[0] = We;
-  } else We = He[0];
-  let ze;
-  if (He[1] !== tmuxAvailable) {
-    ze = [We];
+    $[0] = retryOption;
+  } else retryOption = $[0];
+  let options;
+  if ($[1] !== tmuxAvailable) {
+    options = [retryOption];
     if (tmuxAvailable) {
-      let Xe;
-      if (He[3] === MEMO_CACHE_SENTINEL) {
-        Xe = {
+      let tmuxOption;
+      if ($[3] === MEMO_CACHE_SENTINEL) {
+        tmuxOption = {
           label: "Use tmux instead",
           value: "tmux",
           description: "Falls back to tmux for teammate panes",
         };
-        He[3] = Xe;
-      } else Xe = He[3];
-      ze.push(Xe);
+        $[3] = tmuxOption;
+      } else tmuxOption = $[3];
+      options.push(tmuxOption);
     }
-    let Xe;
-    if (He[4] === MEMO_CACHE_SENTINEL) {
-      Xe = {
+    let cancelOption;
+    if ($[4] === MEMO_CACHE_SENTINEL) {
+      cancelOption = {
         label: "Cancel",
         value: "cancel",
         description: "Skip teammate spawning for now",
       };
-      He[4] = Xe;
-    } else Xe = He[4];
-    ze.push(Xe);
-    He[1] = tmuxAvailable;
-    He[2] = ze;
-  } else ze = He[2];
-  let Xe;
-  if (He[5] === MEMO_CACHE_SENTINEL) {
-    Xe = jsxProd_default(Text, {
+      $[4] = cancelOption;
+    } else cancelOption = $[4];
+    options.push(cancelOption);
+    $[1] = tmuxAvailable;
+    $[2] = options;
+  } else options = $[2];
+  let failureText;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    failureText = jsxProd_default(Text, {
       color: "error",
       children: "Installation failed",
     });
-    He[5] = Xe;
-  } else Xe = He[5];
-  let rt;
-  if (He[6] !== error) {
-    rt =
+    $[5] = failureText;
+  } else failureText = $[5];
+  let errorText;
+  if ($[6] !== error) {
+    errorText =
       error &&
       jsxProd_default(Text, {
         dimColor: true,
         children: error,
       });
-    He[6] = error;
-    He[7] = rt;
-  } else rt = He[7];
-  const kt =
+    $[6] = error;
+    $[7] = errorText;
+  } else errorText = $[7];
+  const manualCommand =
     packageManager === "uvx"
       ? "uv tool install it2"
       : packageManager === "pipx"
         ? "pipx install it2"
         : "pip install --user it2";
-  let At;
-  if (He[8] !== kt) {
-    At = jsxProd_default_2(Text, {
+  let manualHint;
+  if ($[8] !== manualCommand) {
+    manualHint = jsxProd_default_2(Text, {
       dimColor: true,
-      children: ["You can try installing manually:", " ", kt],
+      children: ["You can try installing manually:", " ", manualCommand],
     });
-    He[8] = kt;
-    He[9] = At;
-  } else At = He[9];
+    $[8] = manualCommand;
+    $[9] = manualHint;
+  } else manualHint = $[9];
   let onChange;
-  if (He[10] !== onCancel || He[11] !== onRetry || He[12] !== onUseTmux) {
+  if ($[10] !== onCancel || $[11] !== onRetry || $[12] !== onUseTmux) {
     onChange = (value) => {
       Et: switch (value) {
         case "retry": {
@@ -287,61 +288,61 @@ function It2SetupPrompt(props) {
         }
       }
     };
-    He[10] = onCancel;
-    He[11] = onRetry;
-    He[12] = onUseTmux;
-    He[13] = onChange;
-  } else onChange = He[13];
-  let Dt;
-  if (He[14] !== onCancel || He[15] !== ze || He[16] !== refuseInput || He[17] !== onChange) {
-    Dt = jsxProd_default(Box, {
+    $[10] = onCancel;
+    $[11] = onRetry;
+    $[12] = onUseTmux;
+    $[13] = onChange;
+  } else onChange = $[13];
+  let selector;
+  if ($[14] !== onCancel || $[15] !== options || $[16] !== refuseInput || $[17] !== onChange) {
+    selector = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(ModelSelector, {
         refuseInput,
         hideIndexes: true,
         selectedValue: NO_COMMITTED_ROW,
-        options: ze,
+        options,
         onChange,
         onCancel,
       }),
     });
-    He[14] = onCancel;
-    He[15] = ze;
-    He[16] = refuseInput;
-    He[17] = onChange;
-    He[18] = Dt;
-  } else Dt = He[18];
-  let Lt;
-  if (He[19] !== rt || He[20] !== At || He[21] !== Dt) {
-    Lt = jsxProd_default_2(Box, {
+    $[14] = onCancel;
+    $[15] = options;
+    $[16] = refuseInput;
+    $[17] = onChange;
+    $[18] = selector;
+  } else selector = $[18];
+  let elements;
+  if ($[19] !== errorText || $[20] !== manualHint || $[21] !== selector) {
+    elements = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [Xe, rt, At, Dt],
+      children: [failureText, errorText, manualHint, selector],
     });
-    He[19] = rt;
-    He[20] = At;
-    He[21] = Dt;
-    He[22] = Lt;
-  } else Lt = He[22];
-  return Lt;
+    $[19] = errorText;
+    $[20] = manualHint;
+    $[21] = selector;
+    $[22] = elements;
+  } else elements = $[22];
+  return elements;
 }
 //@ chunk-18hwfzwa.js:1268003-1268531 placement
 /**
  * it2 安装成功的提示界面。
  */
 function It2InstalledSuccess() {
-  let $ = w(6);
-  let x;
+  let $ = useMemoCache(6);
+  let RootBox;
   let flexDirection;
   let gap;
-  let ee;
-  let ke;
+  let successText;
+  let instructionsBox;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     let pythonApiInstructions = getPythonApiInstructions();
-    x = Box;
+    RootBox = Box;
     flexDirection = "column";
     gap = 1;
-    ee = jsxProd_default_2(Text, {
+    successText = jsxProd_default_2(Text, {
       color: "success",
       children: [
         jsxProd_default(StatusIcon, {
@@ -351,31 +352,31 @@ function It2InstalledSuccess() {
         "it2 installed successfully",
       ],
     });
-    ke = jsxProd_default(Box, {
+    instructionsBox = jsxProd_default(Box, {
       flexDirection: "column",
       marginTop: 1,
       children: pythonApiInstructions.map(renderPlainText),
     });
-    $[0] = x;
+    $[0] = RootBox;
     $[1] = flexDirection;
     $[2] = gap;
-    $[3] = ee;
-    $[4] = ke;
+    $[3] = successText;
+    $[4] = instructionsBox;
   } else {
-    x = $[0];
+    RootBox = $[0];
     flexDirection = $[1];
     gap = $[2];
-    ee = $[3];
-    ke = $[4];
+    successText = $[3];
+    instructionsBox = $[4];
   }
-  let Be;
+  let elements;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    Be = jsxProd_default_2(x, {
+    elements = jsxProd_default_2(RootBox, {
       flexDirection,
       gap,
       children: [
-        ee,
-        ke,
+        successText,
+        instructionsBox,
         jsxProd_default(Box, {
           marginTop: 1,
           children: jsxProd_default(Text, {
@@ -385,16 +386,16 @@ function It2InstalledSuccess() {
         }),
       ],
     });
-    $[5] = Be;
-  } else Be = $[5];
-  return Be;
+    $[5] = elements;
+  } else elements = $[5];
+  return elements;
 }
 //@ chunk-18hwfzwa.js:1268531-1268695 placement
 function It2Verifying() {
-  let $ = w(1);
-  let x;
+  let $ = useMemoCache(1);
+  let elements;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    x = jsxProd_default_2(Box, {
+    elements = jsxProd_default_2(Box, {
       children: [
         jsxProd_default(Spinner, {}),
         jsxProd_default(Text, {
@@ -402,16 +403,16 @@ function It2Verifying() {
         }),
       ],
     });
-    $[0] = x;
-  } else x = $[0];
-  return x;
+    $[0] = elements;
+  } else elements = $[0];
+  return elements;
 }
 //@ chunk-18hwfzwa.js:1268695-1268987 placement
 function It2SplitPaneReady() {
-  let $ = w(1);
-  let x;
+  let $ = useMemoCache(1);
+  let elements;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    x = jsxProd_default_2(Box, {
+    elements = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
         jsxProd_default_2(Text, {
@@ -430,80 +431,80 @@ function It2SplitPaneReady() {
         }),
       ],
     });
-    $[0] = x;
-  } else x = $[0];
-  return x;
+    $[0] = elements;
+  } else elements = $[0];
+  return elements;
 }
 //@ chunk-18hwfzwa.js:1268987-1270661 placement
 function It2SetupError(props) {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let { error, tmuxAvailable, onRetry, onUseTmux, onCancel, refuseInput } = props;
-  let He;
+  let retryOption;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    He = {
+    retryOption = {
       label: "Try again",
       value: "retry",
       description: "Verify the connection again",
     };
-    $[0] = He;
-  } else He = $[0];
-  let We;
+    $[0] = retryOption;
+  } else retryOption = $[0];
+  let options;
   if ($[1] !== tmuxAvailable) {
-    We = [He];
+    options = [retryOption];
     if (tmuxAvailable) {
-      let ze;
+      let tmuxOption;
       if ($[3] === MEMO_CACHE_SENTINEL) {
-        ze = {
+        tmuxOption = {
           label: "Use tmux instead",
           value: "tmux",
           description: "Falls back to tmux for teammate panes",
         };
-        $[3] = ze;
-      } else ze = $[3];
-      We.push(ze);
+        $[3] = tmuxOption;
+      } else tmuxOption = $[3];
+      options.push(tmuxOption);
     }
-    let ze;
+    let cancelOption;
     if ($[4] === MEMO_CACHE_SENTINEL) {
-      ze = {
+      cancelOption = {
         label: "Cancel",
         value: "cancel",
         description: "Skip teammate spawning for now",
       };
-      $[4] = ze;
-    } else ze = $[4];
-    We.push(ze);
+      $[4] = cancelOption;
+    } else cancelOption = $[4];
+    options.push(cancelOption);
     $[1] = tmuxAvailable;
-    $[2] = We;
-  } else We = $[2];
-  let ze;
+    $[2] = options;
+  } else options = $[2];
+  let failureText;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    ze = jsxProd_default(Text, {
+    failureText = jsxProd_default(Text, {
       color: "error",
       children: "Verification failed",
     });
-    $[5] = ze;
-  } else ze = $[5];
-  let Xe;
+    $[5] = failureText;
+  } else failureText = $[5];
+  let errorText;
   if ($[6] !== error) {
-    Xe =
+    errorText =
       error &&
       jsxProd_default(Text, {
         dimColor: true,
         children: error,
       });
     $[6] = error;
-    $[7] = Xe;
-  } else Xe = $[7];
-  let rt;
+    $[7] = errorText;
+  } else errorText = $[7];
+  let makeSureText;
   if ($[8] === MEMO_CACHE_SENTINEL) {
-    rt = jsxProd_default(Text, {
+    makeSureText = jsxProd_default(Text, {
       children: "Make sure:",
     });
-    $[8] = rt;
-  } else rt = $[8];
-  let kt;
+    $[8] = makeSureText;
+  } else makeSureText = $[8];
+  let checklist;
   if ($[9] === MEMO_CACHE_SENTINEL) {
-    kt = jsxProd_default_2(Box, {
+    checklist = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingLeft: 2,
       children: [
@@ -515,12 +516,12 @@ function It2SetupError(props) {
         }),
       ],
     });
-    $[9] = kt;
-  } else kt = $[9];
+    $[9] = checklist;
+  } else checklist = $[9];
   let onChange;
   if ($[10] !== onCancel || $[11] !== onRetry || $[12] !== onUseTmux) {
-    onChange = (It) => {
-      Ot: switch (It) {
+    onChange = (value) => {
+      Ot: switch (value) {
         case "retry": {
           onRetry();
           break Ot;
@@ -539,42 +540,48 @@ function It2SetupError(props) {
     $[12] = onUseTmux;
     $[13] = onChange;
   } else onChange = $[13];
-  let Et;
-  if ($[14] !== onCancel || $[15] !== We || $[16] !== refuseInput || $[17] !== onChange) {
-    Et = jsxProd_default(Box, {
+  let selector;
+  if ($[14] !== onCancel || $[15] !== options || $[16] !== refuseInput || $[17] !== onChange) {
+    selector = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(ModelSelector, {
         refuseInput,
         hideIndexes: true,
         selectedValue: NO_COMMITTED_ROW,
-        options: We,
+        options,
         onChange,
         onCancel,
       }),
     });
     $[14] = onCancel;
-    $[15] = We;
+    $[15] = options;
     $[16] = refuseInput;
     $[17] = onChange;
-    $[18] = Et;
-  } else Et = $[18];
-  let Dt;
-  if ($[19] !== Xe || $[20] !== Et) {
-    Dt = jsxProd_default_2(Box, {
+    $[18] = selector;
+  } else selector = $[18];
+  let elements;
+  if ($[19] !== errorText || $[20] !== selector) {
+    elements = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [ze, Xe, rt, kt, Et],
+      children: [failureText, errorText, makeSureText, checklist, selector],
     });
-    $[19] = Xe;
-    $[20] = Et;
-    $[21] = Dt;
-  } else Dt = $[21];
-  return Dt;
+    $[19] = errorText;
+    $[20] = selector;
+    $[21] = elements;
+  } else elements = $[21];
+  return elements;
 }
 //@ chunk-18hwfzwa.js:1270661-1270665 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1270661", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1270665-1270669 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1270665", () => {
+  init_react_production();
+});
 export {
   It2InstallPrompt,
   It2Installing,

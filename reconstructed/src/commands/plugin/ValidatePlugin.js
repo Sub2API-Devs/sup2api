@@ -8,7 +8,7 @@
  * pieces: chunk-vrb44rx7.js (4)
  * attribution: sole-consumer 2, affinity 1, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { resolveValidateTarget, sanitizeForDisplay } from "../../utils/plugins/validatePlugin.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { plural } from "../../utils/stringUtils.js";
@@ -16,27 +16,27 @@ import { logError } from "../../utils/log.js";
 import { formatAdviceLines, readmeAdviceFor } from "../../services/plugins/pluginReadmeAdvice.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
-import { P } from "../../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 
 //@ chunk-vrb44rx7.js:214694-214725 sole-consumer
-function withTrailingNewline(ae) {
-  return `${ae}
+function withTrailingNewline(text) {
+  return `${text}
 `;
 }
 //@ chunk-vrb44rx7.js:214725-214759 sole-consumer
-function succeededResult(Se) {
-  return Se.success;
+function succeededResult(result) {
+  return result.success;
 }
 //@ chunk-vrb44rx7.js:214759-214803 affinity
-function hasWarnings(kt) {
-  return kt.warnings.length > 0;
+function hasWarnings(result) {
+  return result.warnings.length > 0;
 }
 //@ chunk-vrb44rx7.js:214803-217501 fingerprint = ValidatePlugin (0.654)
 function ValidatePlugin(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { onComplete, path } = props;
   let t1;
   let t2;
@@ -71,7 +71,7 @@ Or from the command line:
         }
         try {
           let { manifest, contents, resolvedPath, pluginRoot } = await resolveValidateTarget(path);
-          let V = manifest ? [manifest, ...contents] : contents;
+          let files = manifest ? [manifest, ...contents] : contents;
           let output = manifest
             ? `Validating ${manifest.fileType} manifest: ${manifest.filePath}
 
@@ -79,7 +79,7 @@ Or from the command line:
             : `Validating components in: ${resolvedPath}
 
 `;
-          for (const result of V) {
+          for (const result of files) {
             if (result !== manifest)
               output =
                 output +
@@ -133,29 +133,34 @@ Or from the command line:
 `;
             }
           }
-          let me = await import("./chunk-5aas12zq.js");
-          let ne = me.directoryChecksRoot({
+          let lintModule =
+            await import("../../utils/plugins/validate/DIRECTORY_CHECKS_COULD_NOT_RUN.lazy.js");
+          let root = lintModule.directoryChecksRoot({
             pluginRoot,
             manifest,
             resolvedPath,
           });
-          if (ne !== null) {
-            let he;
+          if (root !== null) {
+            let lintResult;
             try {
-              let Oe = await me.lintPluginForDirectory(ne);
-              he =
-                Oe === null
+              let lint = await lintModule.lintPluginForDirectory(root);
+              lintResult =
+                lint === null
                   ? []
-                  : me.formatDirectoryReport(ne, Oe, "claude plugin validate <path> --profile directory");
+                  : lintModule.formatDirectoryReport(
+                      root,
+                      lint,
+                      "claude plugin validate <path> --profile directory",
+                    );
             } catch (error) {
-              let rt = error;
-              logError(rt);
-              he = me.formatDirectoryChecksFailure(ne);
+              let failure = error;
+              logError(failure);
+              lintResult = lintModule.formatDirectoryChecksFailure(root);
             }
-            if (he.length > 0)
+            if (lintResult.length > 0)
               output =
                 output +
-                (he.join(`
+                (lintResult.join(`
 `) +
                   `
 `);
@@ -165,10 +170,10 @@ Or from the command line:
             formatAdviceLines(await readmeAdviceFor(path, manifest, contents))
               .map(withTrailingNewline)
               .join("");
-          if (V.every(succeededResult)) {
+          if (files.every(succeededResult)) {
             output =
               output +
-              (V.some(hasWarnings)
+              (files.some(hasWarnings)
                 ? `${figures_default.tick} Validation passed with warnings
 `
                 : `${figures_default.tick} Validation passed
@@ -204,7 +209,7 @@ Or from the command line:
     t1 = $[2];
     t2 = $[3];
   }
-  P(t1, t2);
+  useEffect(t1, t2);
   let t3;
   if ($[4] === MEMO_CACHE_SENTINEL) {
     t3 = jsxProd_default(Box, {

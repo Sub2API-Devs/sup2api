@@ -154,7 +154,7 @@ import {
   DEVICE_BIND_REFUSAL_REASONS,
 } from "./teleport/cloudLaunch.js";
 import { getRemoteSessionUrl } from "../constants/product.js";
-import { reportSignerLoadFailure, INTERRUPT_REMOTE_EVENT } from "./telemetry/memorySummary.js";
+import { reportSignerLoadFailure } from "./telemetry/clientEventUploader.js";
 import {
   checkGate_CACHED_OR_BLOCKING,
   getFeatureValueWithSource_CACHED_MAY_BE_STALE,
@@ -238,6 +238,7 @@ import { getMainLoopModel } from "./model/model.js";
 import { getModelPickerEffortDefault } from "./effort.js";
 import { isAnthropicRepo } from "./github/anthropicRepos.js";
 import { toCompatSessionId } from "../bridge/sessionIdCompat.js";
+import { INTERRUPT_REMOTE_EVENT } from "./telemetry/memorySummary.js";
 import { getTrustedDeviceToken } from "../bridge/trustedDevice.js";
 import { subscribeGithubPullRequest } from "../bridge/githubPrSubscription.js";
 
@@ -286,18 +287,22 @@ async function fetchFromOrigin(branch) {
     ? [...GIT_SAFE_GLOBAL_ARGS, "fetch", SAFE_UPLOAD_PACK_ARG_2, "origin", `${branch}:${branch}`]
     : [...GIT_SAFE_GLOBAL_ARGS, "fetch", SAFE_UPLOAD_PACK_ARG_2, "origin"];
   let repoRootOrCwd = getRepoRootOrCwd();
-  let s = {
+  let execOptions = {
     cwd: repoRootOrCwd,
     ...(await getGitSshEnv(repoRootOrCwd)),
   };
-  let { code: fetchCode, stderr: fetchStderr } = await execFileNoThrowWithCwd(gitExe(), fetchArgs, s);
+  let { code: fetchCode, stderr: fetchStderr } = await execFileNoThrowWithCwd(
+    gitExe(),
+    fetchArgs,
+    execOptions,
+  );
   if (fetchCode !== 0)
     if (branch && fetchStderr.includes("refspec")) {
       logForDebugging(`Specific branch fetch failed, trying to fetch ref: ${branch}`);
       let { code: refFetchCode, stderr: refFetchStderr } = await execFileNoThrowWithCwd(
         gitExe(),
         [...GIT_SAFE_GLOBAL_ARGS, "fetch", SAFE_UPLOAD_PACK_ARG_2, "origin", branch],
-        s,
+        execOptions,
       );
       if (refFetchCode !== 0)
         logForDebugging(`Failed to fetch from remote origin: ${refFetchStderr}`, {
@@ -311,14 +316,14 @@ async function fetchFromOrigin(branch) {
 //@ chunk-e6aww6q8.js:1942776-1943374 fingerprint = ensureUpstreamIsSet (1)
 async function ensureUpstreamIsSet(branchName) {
   let repoRootOrCwd = getRepoRootOrCwd();
-  let r = {
+  let execOptions = {
     cwd: repoRootOrCwd,
     env: buildGitEnvForRepo(repoRootOrCwd),
   };
   let { code: upstreamCheckCode } = await execFileNoThrowWithCwd(
     gitExe(),
     [...GIT_SAFE_GLOBAL_ARGS, "rev-parse", "--abbrev-ref", `${branchName}@{upstream}`],
-    r,
+    execOptions,
   );
   if (upstreamCheckCode === 0) {
     logForDebugging(`Branch '${branchName}' already has upstream set`);
@@ -327,14 +332,14 @@ async function ensureUpstreamIsSet(branchName) {
   let { code: remoteCheckCode } = await execFileNoThrowWithCwd(
     gitExe(),
     [...GIT_SAFE_GLOBAL_ARGS, "rev-parse", "--verify", `origin/${branchName}`],
-    r,
+    execOptions,
   );
   if (remoteCheckCode === 0) {
     logForDebugging(`Setting upstream for '${branchName}' to 'origin/${branchName}'`);
     let { code: setUpstreamCode, stderr: setUpstreamStderr } = await execFileNoThrowWithCwd(
       gitExe(),
       [...GIT_SAFE_GLOBAL_ARGS, "branch", "--set-upstream-to", `origin/${branchName}`, branchName],
-      r,
+      execOptions,
     );
     if (setUpstreamCode !== 0)
       logForDebugging(`Failed to set upstream for '${branchName}': ${setUpstreamStderr}`);
@@ -366,13 +371,14 @@ function userCheckoutSpawnTerms() {
 /**
  * teleport 前把工作区 stash 到干净状态：先检查被 assume-unchanged/被文件夹替换的已跟踪路径（存在则拒绝，避免 stash 丢数据），再 add 未跟踪文件并 git stash push。
  */
-async function stashToCleanState(e, { cwd, env }) {
-  let s = await listChangedTrackedFiles(cwd, env);
-  if (s.kind === "failed" || !s.isAssumeUnchangedListed) {
-    let cause = s.kind === "failed" ? s.cause : "assume_unchanged_listing";
-    let errno = s.kind === "failed" && s.cause === "path_read" ? s.errno : undefined;
+async function stashToCleanState(options, { cwd, env }) {
+  let changedFiles = await listChangedTrackedFiles(cwd, env);
+  if (changedFiles.kind === "failed" || !changedFiles.isAssumeUnchangedListed) {
+    let cause = changedFiles.kind === "failed" ? changedFiles.cause : "assume_unchanged_listing";
+    let errno =
+      changedFiles.kind === "failed" && changedFiles.cause === "path_read" ? changedFiles.errno : undefined;
     logForDebugging(
-      s.kind === "failed"
+      changedFiles.kind === "failed"
         ? `[teleport] nothing was stashed: could not check for folders in place of tracked files (${cause}${errno === undefined ? "" : ` ${errno}`})`
         : "[teleport] the files marked assume-unchanged were not checked for folders in their place: git could not list them",
       {
@@ -386,21 +392,24 @@ async function stashToCleanState(e, { cwd, env }) {
       }),
     });
   }
-  if (s.kind === "failed") return false;
-  let { replaced } = s;
+  if (changedFiles.kind === "failed") return false;
+  let { replaced } = changedFiles;
   if (replaced[0] !== undefined) {
     logEvent("tengu_teleport_stash_refused", {
       entries_replaced_by_folders: replaced.length,
     });
-    let w = truncatePathMiddle(replaceControlChars(Buffer.from(replaced[0], "latin1").toString()), 100);
-    let L = replaced.length - 1;
-    let G =
-      L === 0
-        ? `Nothing was stashed: "${w}" is now a folder in place of a tracked file or link, and stashing could delete what's in it for good. Commit the change or move the folder somewhere else, then try again.`
-        : `Nothing was stashed: "${w}" and ${L} other ${plural(L, "path")} are now folders in place of tracked files or links, and stashing could delete what's in them for good. Commit the change or move the folders somewhere else, then try again.`;
+    let listResult = truncatePathMiddle(
+      replaceControlChars(Buffer.from(replaced[0], "latin1").toString()),
+      100,
+    );
+    let status = replaced.length - 1;
+    let stashResult =
+      status === 0
+        ? `Nothing was stashed: "${listResult}" is now a folder in place of a tracked file or link, and stashing could delete what's in it for good. Commit the change or move the folder somewhere else, then try again.`
+        : `Nothing was stashed: "${listResult}" and ${status} other ${plural(status, "path")} are now folders in place of tracked files or links, and stashing could delete what's in them for good. Commit the change or move the folders somewhere else, then try again.`;
     throw new TeleportOperationError(
-      G,
-      sequential.red(`${G}
+      stashResult,
+      sequential.red(`${stashResult}
 `),
     );
   }
@@ -419,7 +428,7 @@ async function stashToCleanState(e, { cwd, env }) {
   }
   let { code } = await execFileNoThrowWithCwd(
     gitExe(),
-    [...GIT_SAFE_GLOBAL_ARGS, "stash", "push", "--message", e],
+    [...GIT_SAFE_GLOBAL_ARGS, "stash", "push", "--message", options],
     {
       cwd,
       preserveOutputOnError: false,
@@ -429,28 +438,32 @@ async function stashToCleanState(e, { cwd, env }) {
   return code === 0;
 }
 //@ chunk-e6aww6q8.js:1945237-1945804 fingerprint = checkoutBranch (1)
-async function checkoutBranch(branchName, n) {
-  let r = await execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "checkout", branchName, "--"], n);
-  if (r.code !== 0) {
-    logForDebugging(`Local checkout failed, trying to checkout from origin: ${r.stderr}`);
-    r = await execFileNoThrowWithCwd(
+async function checkoutBranch(branchName, execOptions) {
+  let result = await execFileNoThrowWithCwd(
+    gitExe(),
+    [...GIT_SAFE_GLOBAL_ARGS, "checkout", branchName, "--"],
+    execOptions,
+  );
+  if (result.code !== 0) {
+    logForDebugging(`Local checkout failed, trying to checkout from origin: ${result.stderr}`);
+    result = await execFileNoThrowWithCwd(
       gitExe(),
       [...GIT_SAFE_GLOBAL_ARGS, "checkout", "-b", branchName, "--track", `origin/${branchName}`, "--"],
-      n,
+      execOptions,
     );
   }
-  if (r.code !== 0) {
-    logForDebugging(`Remote checkout with -b failed, trying without -b: ${r.stderr}`);
-    r = await execFileNoThrowWithCwd(
+  if (result.code !== 0) {
+    logForDebugging(`Remote checkout with -b failed, trying without -b: ${result.stderr}`);
+    result = await execFileNoThrowWithCwd(
       gitExe(),
       [...GIT_SAFE_GLOBAL_ARGS, "checkout", "--track", `origin/${branchName}`, "--"],
-      n,
+      execOptions,
     );
   }
-  if (r.code !== 0) {
+  if (result.code !== 0) {
     logEvent("tengu_teleport_error_branch_checkout_failed", {});
     throw new TeleportOperationError(
-      `Failed to checkout branch '${branchName}': ${r.stderr}`,
+      `Failed to checkout branch '${branchName}': ${result.stderr}`,
       sequential.red(`Failed to checkout branch '${branchName}'
 `),
     );
@@ -471,8 +484,8 @@ async function getCurrentBranch() {
   return currentBranch.trim();
 }
 //@ chunk-e6aww6q8.js:1945931-1945969 facade-exports
-function deserializeRemoteSessionLog(e) {
-  return markRemoteSourced(deserializeToMessages(e, true));
+function deserializeRemoteSessionLog(log) {
+  return markRemoteSourced(deserializeToMessages(log, true));
 }
 //@ chunk-e6aww6q8.js:1945969-1946379 facade-exports = processMessagesForTeleportResume (0)
 function processMessagesForTeleportResume(log, branchError, environmentKind) {
@@ -548,58 +561,58 @@ async function validateSessionRepository(sessionData) {
     };
   }
   let sessionParsed = parseGitRemote(gitSource.url);
-  let y = sessionParsed
+  let sessionRepoSlug = sessionParsed
     ? `${sessionParsed.owner}/${sessionParsed.name}`
     : parseGitHubRepository(gitSource.url);
-  if (!y)
+  if (!sessionRepoSlug)
     return {
       status: "no_repo_required",
     };
-  logForDebugging(`Session is for repository: ${y}, current repo: ${currentRepo ?? "none"}`);
+  logForDebugging(`Session is for repository: ${sessionRepoSlug}, current repo: ${currentRepo ?? "none"}`);
   if (!currentRepo) {
     if (findGitRoot(getCwd())) {
       let remoteUrl = await resolveRemoteUrl(getCwd());
-      let G = remoteUrl ? parseRepoSlug(remoteUrl) : null;
-      let q = remoteUrl
+      let currentRepoParsed = remoteUrl ? parseRepoSlug(remoteUrl) : null;
+      let rawRemoteUrl = remoteUrl
         ? stripVTControlCharacters(redactGitRemoteCredentials(remoteUrl) ?? "")
             .replace(/[\r\n]+/g, " ")
             .slice(0, 200) || undefined
         : undefined;
-      if (G) {
-        let Z = `${G.owner}/${G.name}`;
-        if (Z.toLowerCase() === y.toLowerCase())
+      if (currentRepoParsed) {
+        let currentRepoSlug = `${currentRepoParsed.owner}/${currentRepoParsed.name}`;
+        if (currentRepoSlug.toLowerCase() === sessionRepoSlug.toLowerCase())
           return {
             status: "host_unverified",
-            sessionRepo: y,
+            sessionRepo: sessionRepoSlug,
             sessionHost: sessionParsed?.host,
-            currentRepo: Z,
-            rawRemoteUrl: q,
+            currentRepo: currentRepoSlug,
+            rawRemoteUrl,
           };
         return {
           status: "mismatch",
-          sessionRepo: y,
-          currentRepo: Z,
+          sessionRepo: sessionRepoSlug,
+          currentRepo: currentRepoSlug,
           sessionHost: sessionParsed?.host,
-          rawRemoteUrl: q,
+          rawRemoteUrl,
         };
       }
-      if (q)
+      if (rawRemoteUrl)
         return {
           status: "not_in_repo",
-          sessionRepo: y,
+          sessionRepo: sessionRepoSlug,
           sessionHost: sessionParsed?.host,
           currentRepo: null,
-          rawRemoteUrl: q,
+          rawRemoteUrl,
         };
     }
     return {
       status: "not_in_repo",
-      sessionRepo: y,
+      sessionRepo: sessionRepoSlug,
       sessionHost: sessionParsed?.host,
       currentRepo: null,
     };
   }
-  let repoMatch = currentRepo.toLowerCase() === y.toLowerCase();
+  let repoMatch = currentRepo.toLowerCase() === sessionRepoSlug.toLowerCase();
   let hostMatch =
     !currentParsed ||
     !sessionParsed ||
@@ -607,40 +620,40 @@ async function validateSessionRepository(sessionData) {
   if (repoMatch && hostMatch)
     return {
       status: "match",
-      sessionRepo: y,
+      sessionRepo: sessionRepoSlug,
       currentRepo,
     };
   if (sessionParsed) {
     let pushRemoteUrl = await resolvePushRemoteUrl(getCwd());
-    let G = pushRemoteUrl ? parseGitRemote(pushRemoteUrl) : null;
+    let pushRemote = pushRemoteUrl ? parseGitRemote(pushRemoteUrl) : null;
     if (
-      G &&
-      portlessHost(G.host.toLowerCase()) === portlessHost(sessionParsed.host.toLowerCase()) &&
-      `${G.owner}/${G.name}`.toLowerCase() === y.toLowerCase()
+      pushRemote &&
+      portlessHost(pushRemote.host.toLowerCase()) === portlessHost(sessionParsed.host.toLowerCase()) &&
+      `${pushRemote.owner}/${pushRemote.name}`.toLowerCase() === sessionRepoSlug.toLowerCase()
     )
       return {
         status: "match",
-        sessionRepo: y,
-        currentRepo: `${G.owner}/${G.name}`,
+        sessionRepo: sessionRepoSlug,
+        currentRepo: `${pushRemote.owner}/${pushRemote.name}`,
       };
   }
   return {
     status: "mismatch",
-    sessionRepo: y,
+    sessionRepo: sessionRepoSlug,
     currentRepo,
     sessionHost: sessionParsed?.host,
     currentHost: currentParsed?.host,
   };
 }
 //@ chunk-e6aww6q8.js:1948437-1948699 facade-exports
-function formatRepoMismatchDisplay(e) {
-  let n =
-    e.sessionHost &&
-    e.currentHost &&
-    portlessHost(e.sessionHost).toLowerCase() !== portlessHost(e.currentHost).toLowerCase();
+function formatRepoMismatchDisplay(mismatch) {
+  let hostsDiffer =
+    mismatch.sessionHost &&
+    mismatch.currentHost &&
+    portlessHost(mismatch.sessionHost).toLowerCase() !== portlessHost(mismatch.currentHost).toLowerCase();
   return {
-    sessionDisplay: n ? `${e.sessionHost}/${e.sessionRepo}` : e.sessionRepo,
-    currentDisplay: n ? `${e.currentHost}/${e.currentRepo}` : e.currentRepo,
+    sessionDisplay: hostsDiffer ? `${mismatch.sessionHost}/${mismatch.sessionRepo}` : mismatch.sessionRepo,
+    currentDisplay: hostsDiffer ? `${mismatch.currentHost}/${mismatch.currentRepo}` : mismatch.currentRepo,
   };
 }
 //@ chunk-e6aww6q8.js:1948699-1950938 facade-exports = teleportResumeCodeSession (0.74)
@@ -650,11 +663,11 @@ function formatRepoMismatchDisplay(e) {
 async function teleportResumeCodeSession(sessionId, onProgress) {
   if (!isFirstPartyProvider())
     throw Error("Cloud sessions are only available on the first-party Anthropic API provider.");
-  let r = policyDeniedReason("allow_remote_sessions", "Cloud sessions", "are");
-  if (r) {
+  let deniedReason = policyDeniedReason("allow_remote_sessions", "Cloud sessions", "are");
+  if (deniedReason) {
     logOrgPolicyDenied("allow_remote_sessions", "cloud_session");
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      r,
+      deniedReason,
       "allow_remote_sessions policy denied",
     );
   }
@@ -665,15 +678,15 @@ async function teleportResumeCodeSession(sessionId, onProgress) {
     );
   logForDebugging(`Resuming code session ID: ${sessionId}`);
   try {
-    let s = isConsoleProfileSessionsCredential();
-    let accessToken = await sessionsApiAccessToken(s);
+    let result = isConsoleProfileSessionsCredential();
+    let accessToken = await sessionsApiAccessToken(result);
     if (!accessToken) {
       logEvent("tengu_teleport_resume_error", {
         error_type: lit_2("no_access_token"),
       });
       throw Error(cloudSessionsSignInRefusal());
     }
-    let orgUUID = await sessionsApiOrganizationUUID(s);
+    let orgUUID = await sessionsApiOrganizationUUID(result);
     if (!orgUUID) {
       logEvent("tengu_teleport_resume_error", {
         error_type: lit_2("no_org_uuid"),
@@ -701,13 +714,13 @@ async function teleportResumeCodeSession(sessionId, onProgress) {
           repoValidation.sessionHost && !isGithubDotCom(repoValidation.sessionHost)
             ? `${repoValidation.sessionHost}/${repoValidation.sessionRepo}`
             : repoValidation.sessionRepo;
-        let G = repoValidation.rawRemoteUrl
+        let message = repoValidation.rawRemoteUrl
           ? `
 Couldn't parse your git remote: ${repoValidation.rawRemoteUrl}`
           : "";
         throw new TeleportOperationError(
-          `You must run claude --teleport ${sessionId} from a checkout of ${notInRepoDisplay}.${G}`,
-          sequential.red(`You must run claude --teleport ${sessionId} from a checkout of ${sequential.bold(notInRepoDisplay)}.${G}
+          `You must run claude --teleport ${sessionId} from a checkout of ${notInRepoDisplay}.${message}`,
+          sequential.red(`You must run claude --teleport ${sessionId} from a checkout of ${sequential.bold(notInRepoDisplay)}.${message}
 `),
         );
       }
@@ -736,7 +749,7 @@ This repo is ${sequential.bold(currentDisplay)}.
         throw Error(`Unhandled repo validation status: ${_exhaustive}`);
       }
     }
-    return await teleportFromSessionsAPI(sessionId, orgUUID, accessToken, s, onProgress, sessionData);
+    return await teleportFromSessionsAPI(sessionId, orgUUID, accessToken, result, onProgress, sessionData);
   } catch (error) {
     if (error instanceof TeleportOperationError) throw error;
     let err = toError(error);
@@ -754,14 +767,14 @@ This repo is ${sequential.bold(currentDisplay)}.
   }
 }
 //@ chunk-e6aww6q8.js:1950938-1951179 facade-exports = handleTeleportPrerequisites (0.836)
-async function handleTeleportPrerequisites(e, n, r) {
-  let teleportErrors = await getTeleportErrors(undefined, n);
+async function handleTeleportPrerequisites(root, showErrors, options) {
+  let teleportErrors = await getTeleportErrors(undefined, showErrors);
   if (teleportErrors.size > 0) {
     logEvent("tengu_teleport_errors_detected", {
       error_types: fromEnumArr([...teleportErrors]),
-      errors_ignored: fromEnumArr([...n]),
+      errors_ignored: fromEnumArr([...showErrors]),
     });
-    await r(e, n);
+    await options(root, showErrors);
     logEvent("tengu_teleport_errors_resolved", {
       error_types: fromEnumArr([...teleportErrors]),
     });
@@ -769,32 +782,32 @@ async function handleTeleportPrerequisites(e, n, r) {
   return teleportErrors.size > 0;
 }
 //@ chunk-e6aww6q8.js:1951179-1951567 layout
-function logCloudSessionLink(id, source, r, s, storageV5) {
+function logCloudSessionLink(id, source, createInfo, options, storageV5) {
   logEvent("tengu_ccr_session_link", {
     ccr_session_id: sanitizeMarkName(id),
     source: fromEnum(source),
-    create_endpoint: fromEnum(s.endpoint),
-    grouped: s.grouped,
-    create_effort_level: fromEnumOpt(s.effortLevel),
+    create_endpoint: fromEnum(options.endpoint),
+    grouped: options.grouped,
+    create_effort_level: fromEnumOpt(options.effortLevel),
   });
-  if (r.project && !getCurrentProjectConfig().hasUsedRemoteSession)
+  if (createInfo.project && !getCurrentProjectConfig().hasUsedRemoteSession)
     saveCurrentProjectConfig(
-      (y) =>
-        y.hasUsedRemoteSession
-          ? y
+      (storage) =>
+        storage.hasUsedRemoteSession
+          ? storage
           : {
-              ...y,
+              ...storage,
               hasUsedRemoteSession: true,
             },
       storageV5,
     );
-  if (r.global && !getGlobalConfig().hasRemoteEnvironment)
+  if (createInfo.global && !getGlobalConfig().hasRemoteEnvironment)
     saveGlobalConfig(
-      (y) =>
-        y.hasRemoteEnvironment
-          ? y
+      (note) =>
+        note.hasRemoteEnvironment
+          ? note
           : {
-              ...y,
+              ...note,
               hasRemoteEnvironment: true,
             },
       storageV5,
@@ -833,9 +846,9 @@ function cloudCreateRefusal() {
   return null;
 }
 //@ chunk-e6aww6q8.js:1952392-1952694 layout
-function normalizeApiErrorType(e) {
-  if (typeof e !== "string" || e === "") return;
-  switch (e) {
+function normalizeApiErrorType(errorType) {
+  if (typeof errorType !== "string" || errorType === "") return;
+  switch (errorType) {
     case "authentication_error":
     case "invalid_request_error":
     case "permission_error":
@@ -845,17 +858,17 @@ function normalizeApiErrorType(e) {
     case "billing_error":
     case "overloaded_error":
     case "request_too_large":
-      return e;
+      return errorType;
     default:
       return "other";
   }
 }
 //@ chunk-e6aww6q8.js:1952694-1953275 layout
-function normalizeCreateSessionError(reason) {
-  if (typeof reason !== "string" || reason === "") return;
-  let n = noEnvironmentOverride(reason);
-  if (n !== undefined) return n;
-  switch (reason) {
+function normalizeCreateSessionError(request) {
+  if (typeof request !== "string" || request === "") return;
+  let override = noEnvironmentOverride(request);
+  if (override !== undefined) return override;
+  switch (request) {
     case "github_repo_access_denied":
     case "environment_not_found":
     case "monorepo_source_required":
@@ -870,116 +883,120 @@ function normalizeCreateSessionError(reason) {
     case "public_grouping_default_agent_deleted":
     case "public_grouping_default_agent_invalid":
     case "builtin_tools_unavailable":
-      return reason;
+      return request;
     default:
       return "other";
   }
 }
 //@ chunk-e6aww6q8.js:1953275-1953318 layout
-function environmentLabelOrKind(e, n) {
-  return singleTokenText(e, "") || safeTokenText(n);
+function environmentLabelOrKind(label, fallback) {
+  return singleTokenText(label, "") || safeTokenText(fallback);
 }
 //@ chunk-e6aww6q8.js:1953318-1953681 layout
-function formatEnvironmentRepoMismatch(e, n, r) {
-  return e
-    ? `This repository needs the environment set up for it, but "${n}" was selected. Select that environment instead, or run from a different repository.`
-    : `The selected environment "${n}" only accepts the repository it is set up for, but the source was ${r}. Run this from a checkout of that repository, or select a different environment.`;
+function formatEnvironmentRepoMismatch(needsSetup, environmentName, extra) {
+  return needsSetup
+    ? `This repository needs the environment set up for it, but "${environmentName}" was selected. Select that environment instead, or run from a different repository.`
+    : `The selected environment "${environmentName}" only accepts the repository it is set up for, but the source was ${extra}. Run this from a checkout of that repository, or select a different environment.`;
 }
 //@ chunk-e6aww6q8.js:1953681-1955574 facade-exports
-async function teleportToRemoteWithErrorHandling(root, n) {
-  let s = await handleTeleportPrerequisites(root, new Set(["needsGitStash"]), n.showTeleportErrors);
-  let h;
-  let y;
-  let S = [];
+async function teleportToRemoteWithErrorHandling(root, options) {
+  let prereq = await handleTeleportPrerequisites(
+    root,
+    new Set(["needsGitStash"]),
+    options.showTeleportErrors,
+  );
+  let failReason;
+  let failMessage;
+  let notices = [];
   let failDetail;
-  let L = await teleportToRemote({
-    initialMessage: n.description,
-    initialMessageUuid: n.descriptionUuid,
-    signal: n.signal,
-    source: n.source,
-    personAskedForSession: n.personAskedForSession,
-    branchName: n.branchName,
-    branchFromHead: n.branchFromHead,
-    explicitRef: n.explicitRef,
-    permissionMode: n.permissionMode,
-    isModeFromSettings: n.isModeFromSettings,
-    proactivityLevel: n.proactivityLevel,
-    effort: n.effort,
-    isEffortFromSettings: n.isEffortFromSettings,
-    disallowedTools: n.disallowedTools,
-    builtinTools: n.builtinTools,
-    model: n.model,
-    title: n.title,
-    environmentVariables: n.environmentVariables,
-    appendSystemPrompt: n.appendSystemPrompt,
-    poolId: n.poolId,
-    chosenEnvironment: n.chosenEnvironment,
-    reuseOutcomeBranch: n.reuseOutcomeBranch,
-    correlationId: n.correlationId,
-    persistentVolume: n.persistentVolume,
-    persistentVolumeFromSessionId: n.persistentVolumeFromSessionId,
-    monorepo: n.monorepo,
-    noMonorepo: n.noMonorepo,
-    noMonorepoAsksTheService: n.noMonorepoAsksTheService,
-    personal: n.personal,
-    sessionGroupingId: n.sessionGroupingId,
-    deviceBinding: n.deviceBinding,
-    connectedSession: n.connectedSession,
+  let session = await teleportToRemote({
+    initialMessage: options.description,
+    initialMessageUuid: options.descriptionUuid,
+    signal: options.signal,
+    source: options.source,
+    personAskedForSession: options.personAskedForSession,
+    branchName: options.branchName,
+    branchFromHead: options.branchFromHead,
+    explicitRef: options.explicitRef,
+    permissionMode: options.permissionMode,
+    isModeFromSettings: options.isModeFromSettings,
+    proactivityLevel: options.proactivityLevel,
+    effort: options.effort,
+    isEffortFromSettings: options.isEffortFromSettings,
+    disallowedTools: options.disallowedTools,
+    builtinTools: options.builtinTools,
+    model: options.model,
+    title: options.title,
+    environmentVariables: options.environmentVariables,
+    appendSystemPrompt: options.appendSystemPrompt,
+    poolId: options.poolId,
+    chosenEnvironment: options.chosenEnvironment,
+    reuseOutcomeBranch: options.reuseOutcomeBranch,
+    correlationId: options.correlationId,
+    persistentVolume: options.persistentVolume,
+    persistentVolumeFromSessionId: options.persistentVolumeFromSessionId,
+    monorepo: options.monorepo,
+    noMonorepo: options.noMonorepo,
+    noMonorepoAsksTheService: options.noMonorepoAsksTheService,
+    personal: options.personal,
+    sessionGroupingId: options.sessionGroupingId,
+    deviceBinding: options.deviceBinding,
+    connectedSession: options.connectedSession,
     ...{},
-    hasApprovedCopy: n.hasApprovedCopy,
-    storageV5: n.storageV5,
-    credentials: n.credentials,
+    hasApprovedCopy: options.hasApprovedCopy,
+    storageV5: options.storageV5,
+    credentials: options.credentials,
     allowBundle: true,
-    firstUpload: n.firstUpload,
-    staysAttached: n.staysAttached,
-    deferInitialMessage: n.deferInitialMessage,
-    forwardHomeSettings: n.forwardHomeSettings,
-    ...(n.homeSettingsConsent && {
-      homeSettingsConsent: n.homeSettingsConsent,
+    firstUpload: options.firstUpload,
+    staysAttached: options.staysAttached,
+    deferInitialMessage: options.deferInitialMessage,
+    forwardHomeSettings: options.forwardHomeSettings,
+    ...(options.homeSettingsConsent && {
+      homeSettingsConsent: options.homeSettingsConsent,
     }),
-    onProgress: n.onProgress,
-    onBundleFail: (G, q) => {
-      switch (q) {
+    onProgress: options.onProgress,
+    onBundleFail: (message, phase) => {
+      switch (phase) {
         case "env_create":
-          h = "env_create_failed";
+          failReason = "env_create_failed";
           break;
         case "bundle":
-          h = "bundle_failed";
+          failReason = "bundle_failed";
           break;
         default: {
-          let Z = q;
+          let unknownPhase = phase;
         }
       }
-      y = G;
+      failMessage = message;
       process.stderr.write(`
-${G}
+${message}
 `);
     },
-    onBundleNotice: (G) => {
-      S.push(G);
+    onBundleNotice: (noticeText) => {
+      notices.push(noticeText);
       process.stderr.write(`
-${G}
+${noticeText}
 `);
     },
-    onCreateFail: (G, q, Z) => {
-      h = q;
-      y = G;
-      failDetail = Z;
+    onCreateFail: (failureText, failureReason, failureDetail) => {
+      failReason = failureReason;
+      failMessage = failureText;
+      failDetail = failureDetail;
       process.stderr.write(`
-${G}
+${failureText}
 `);
     },
   });
-  if (L)
+  if (session)
     return {
       ok: true,
-      session: L,
-      notices: S,
+      session,
+      notices,
     };
   return {
     ok: false,
-    failReason: h ?? (n.signal.aborted ? "aborted" : "unknown"),
-    failMessage: y,
+    failReason: failReason ?? (options.signal.aborted ? "aborted" : "unknown"),
+    failMessage,
     failDetail,
   };
 }
@@ -987,29 +1004,29 @@ ${G}
 /**
  * 从 Sessions API 拉取远程会话的事件日志并转换为本地消息。
  */
-async function teleportFromSessionsAPI(sessionId, orgUUID, accessToken, s, onProgress, session) {
+async function teleportFromSessionsAPI(sessionId, orgUUID, accessToken, options, onProgress, session) {
   let startTime = Date.now();
   try {
     logForDebugging(`[teleport] Starting fetch for session: ${sessionId}`);
     onProgress?.("fetching_logs");
     let logsStartTime = Date.now();
-    let L;
-    if (s) L = undefined;
+    let logs;
+    if (options) logs = undefined;
     else if (isPersistentRemoteSessionEnabled()) {
-      let { readStoredTrustedDeviceToken } = await import("./chunk-3kb57csj.js");
-      L = await readStoredTrustedDeviceToken();
-    } else L = (await trustedDeviceHeaders())["X-Trusted-Device-Token"];
-    let logs = await checkAdminRequestEligibility(sessionId, accessToken, orgUUID, L);
-    if (logs === null) {
+      let { readStoredTrustedDeviceToken } = await import("../bridge/trustedDevice.js");
+      logs = await readStoredTrustedDeviceToken();
+    } else logs = (await trustedDeviceHeaders())["X-Trusted-Device-Token"];
+    let logs_2 = await checkAdminRequestEligibility(sessionId, accessToken, orgUUID, logs);
+    if (logs_2 === null) {
       logForDebugging("[teleport] v2 endpoint returned null, trying session-ingress");
-      logs = await getSessionLogsViaOAuth(sessionId, accessToken, orgUUID);
+      logs_2 = await getSessionLogsViaOAuth(sessionId, accessToken, orgUUID);
     }
     logForDebugging(`[teleport] Session logs fetched in ${Date.now() - logsStartTime}ms`);
-    if (logs === null) throw Error("Failed to fetch session logs");
+    if (logs_2 === null) throw Error("Failed to fetch session logs");
     let filterStartTime = Date.now();
-    let messages = logs.filter((entry) => isTranscriptMessage(entry) && !entry.isSidechain);
+    let messages = logs_2.filter((entry) => isTranscriptMessage(entry) && !entry.isSidechain);
     logForDebugging(
-      `[teleport] Filtered ${logs.length} entries to ${messages.length} messages in ${Date.now() - filterStartTime}ms`,
+      `[teleport] Filtered ${logs_2.length} entries to ${messages.length} messages in ${Date.now() - filterStartTime}ms`,
     );
     onProgress?.("fetching_branch");
     let branch = session ? getBranchFromSession(session) : undefined;
@@ -1039,149 +1056,155 @@ ${sequential.dim("Run /status in Claude Code to check your account.")}`,
   }
 }
 //@ chunk-e6aww6q8.js:1956933-1959369 facade-exports
-async function awaitRemoteSessionResult(e, signal, credentials) {
+async function awaitRemoteSessionResult(options, signal, credentials) {
   if (!isFirstPartyProvider())
     throw Error("Cloud sessions are only available on the first-party Anthropic API provider.");
-  let s = 1000;
-  let h = 1800000;
-  let y = 5;
-  let S = 10;
-  let w = 3;
-  let L = null;
-  let G;
-  let q;
-  let Z = 0;
-  let Se = 0;
-  let ke = 0;
-  let we = 0;
-  let Ee;
-  let Ae = false;
+  let pollIntervalMs = 1000;
+  let timeoutMs = 1800000;
+  let maxIdlePolls = 5;
+  let maxFetchFailures = 10;
+  let maxUnanswerablePolls = 3;
+  let lastEventId = null;
+  let lastAssistantEvent;
+  let resultEvent;
+  let toolCallCount = 0;
+  let idlePolls = 0;
+  let fetchFailures = 0;
+  let unanswerablePolls = 0;
+  let pendingQuestion;
+  let isArchived = false;
   let now = Date.now();
-  while (Date.now() - now < h) {
+  while (Date.now() - now < timeoutMs) {
     if (signal?.aborted) throw Error("Workflow aborted");
-    let ze = await pollRemoteSessionEvents(e, L, {
+    let pollResult = await pollRemoteSessionEvents(options, lastEventId, {
       credentials,
     });
-    L = ze.lastEventId;
-    for (let newEvent of ze.newEvents)
+    lastEventId = pollResult.lastEventId;
+    for (let newEvent of pollResult.newEvents)
       if (newEvent.type === "assistant") {
-        G = newEvent;
-        for (let Je of newEvent.message.content) if (Je.type === "tool_use") Z++;
-      } else if (newEvent.type === "result") q = newEvent;
-    if (ze.sessionStatus === "archived") {
-      Ae = true;
+        lastAssistantEvent = newEvent;
+        for (let contentBlock of newEvent.message.content)
+          if (contentBlock.type === "tool_use") toolCallCount++;
+      } else if (newEvent.type === "result") resultEvent = newEvent;
+    if (pollResult.sessionStatus === "archived") {
+      isArchived = true;
       break;
     }
-    if (ze.sessionStatus === "requires_action") {
-      let pendingAction = ze.pendingAction;
+    if (pollResult.sessionStatus === "requires_action") {
+      let pendingAction = pollResult.pendingAction;
       let now = Date.now();
       if (pendingAction?.name === MCP_ELICITATION_DIALOG_TOOL) {
-        we = 0;
-        if (Ee === undefined || Ee.requestId !== pendingAction.request_id)
-          Ee = {
+        unanswerablePolls = 0;
+        if (pendingQuestion === undefined || pendingQuestion.requestId !== pendingAction.request_id)
+          pendingQuestion = {
             requestId: pendingAction.request_id,
             firstSeenAt: now,
           };
-        else if (now - Ee.firstSeenAt >= MCP_QUESTION_GRACE_MS)
+        else if (now - pendingQuestion.firstSeenAt >= MCP_QUESTION_GRACE_MS)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Cloud session ${e} has shown an unanswered MCP server question for more than ${MCP_QUESTION_GRACE_MS / 60000} min, and nothing on this machine can answer it, so this run stopped waiting for it. If that server needs to ask the user things, run this agent locally rather than as a cloud session.`,
+            `Cloud session ${options} has shown an unanswered MCP server question for more than ${MCP_QUESTION_GRACE_MS / 60000} min, and nothing on this machine can answer it, so this run stopped waiting for it. If that server needs to ask the user things, run this agent locally rather than as a cloud session.`,
             "gave up waiting on a cloud session parked on an MCP server question",
           );
       } else {
-        if (pendingAction === undefined) we++;
-        if (pendingAction !== undefined || we >= w)
+        if (pendingAction === undefined) unanswerablePolls++;
+        if (pendingAction !== undefined || unanswerablePolls >= maxUnanswerablePolls)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Cloud session ${e} is waiting for input that nothing on this machine can give (a permission prompt, a question, or some other dialog). If it is a permission prompt, make sure the cloud agent's allowed_tools cover the tool, or use a permission mode that doesn't prompt; if it is a question, tell the agent in its prompt not to ask one.`,
+            `Cloud session ${options} is waiting for input that nothing on this machine can give (a permission prompt, a question, or some other dialog). If it is a permission prompt, make sure the cloud agent's allowed_tools cover the tool, or use a permission mode that doesn't prompt; if it is a question, tell the agent in its prompt not to ask one.`,
             "gave up on a cloud session parked on a prompt nothing here answers",
           );
       }
-    } else if (ze.sessionStatus !== undefined) {
-      we = 0;
-      Ee = undefined;
+    } else if (pollResult.sessionStatus !== undefined) {
+      unanswerablePolls = 0;
+      pendingQuestion = undefined;
     }
-    if (ze.sessionStatus === undefined) {
-      ke++;
-      if (ke >= S)
+    if (pollResult.sessionStatus === undefined) {
+      fetchFailures++;
+      if (fetchFailures >= maxFetchFailures)
         throw Error(
-          `Cloud session ${e}: fetchSession failed ${S} times in a row (last error: ${ze.metadataFetchError ?? "unknown"}). Bailing instead of polling to the 30-min timeout.`,
+          `Cloud session ${options}: fetchSession failed ${maxFetchFailures} times in a row (last error: ${pollResult.metadataFetchError ?? "unknown"}). Bailing instead of polling to the 30-min timeout.`,
         );
-    } else ke = 0;
-    if (ze.sessionStatus === "idle" && ze.newEvents.length === 0) {
-      Se++;
-      if (Se >= y) {
-        Ae = true;
+    } else fetchFailures = 0;
+    if (pollResult.sessionStatus === "idle" && pollResult.newEvents.length === 0) {
+      idlePolls++;
+      if (idlePolls >= maxIdlePolls) {
+        isArchived = true;
         break;
       }
-    } else Se = 0;
-    await sleep(s, signal);
+    } else idlePolls = 0;
+    await sleep(pollIntervalMs, signal);
   }
-  if (!Ae)
+  if (!isArchived)
     throw Error(
-      `Cloud session ${e} timed out after ${h / 60000} min` +
-        (Ee !== undefined ? ", still waiting for someone to answer an MCP server's question" : ""),
+      `Cloud session ${options} timed out after ${timeoutMs / 60000} min` +
+        (pendingQuestion !== undefined
+          ? ", still waiting for someone to answer an MCP server's question"
+          : ""),
     );
   let text =
-    G && G.type === "assistant"
+    lastAssistantEvent && lastAssistantEvent.type === "assistant"
       ? extractTextContent_2(
-          G.message.content,
+          lastAssistantEvent.message.content,
           `
 `,
         )
       : "";
-  let We = q && q.type === "result" ? q : undefined;
+  let resultMessage = resultEvent && resultEvent.type === "result" ? resultEvent : undefined;
   return {
     text,
-    structuredOutput: We?.subtype === "success" ? We.structured_output : undefined,
-    resultSubtype: We?.subtype,
-    usage: We?.usage,
-    totalCostUsd: We?.total_cost_usd,
-    modelUsage: We?.modelUsage,
-    numTurns: We?.num_turns,
-    toolCalls: Z,
+    structuredOutput: resultMessage?.subtype === "success" ? resultMessage.structured_output : undefined,
+    resultSubtype: resultMessage?.subtype,
+    usage: resultMessage?.usage,
+    totalCostUsd: resultMessage?.total_cost_usd,
+    modelUsage: resultMessage?.modelUsage,
+    numTurns: resultMessage?.num_turns,
+    toolCalls: toolCallCount,
   };
 }
 //@ chunk-e6aww6q8.js:1959369-1960745 layout
-function buildInitialControlEvents(e) {
-  let n = [];
-  if (e.thinking && (e.thinking.maxThinkingTokens !== undefined || e.thinking.display !== undefined))
-    n.push({
+function buildInitialControlEvents(options) {
+  let events = [];
+  if (
+    options.thinking &&
+    (options.thinking.maxThinkingTokens !== undefined || options.thinking.display !== undefined)
+  )
+    events.push({
       type: "event",
       data: {
         type: "control_request",
         request_id: `set-thinking-${randomUUID()}`,
         request: {
           subtype: "set_max_thinking_tokens",
-          ...(e.thinking.maxThinkingTokens !== undefined && {
-            max_thinking_tokens: e.thinking.maxThinkingTokens,
+          ...(options.thinking.maxThinkingTokens !== undefined && {
+            max_thinking_tokens: options.thinking.maxThinkingTokens,
           }),
-          ...(e.thinking.display !== undefined && {
-            thinking_display: e.thinking.display,
+          ...(options.thinking.display !== undefined && {
+            thinking_display: options.thinking.display,
           }),
         },
       },
     });
-  if (e.proactivityLevel)
-    n.push({
+  if (options.proactivityLevel)
+    events.push({
       type: "event",
       data: {
         type: "control_request",
         request_id: `set-level-${randomUUID()}`,
         request: {
           subtype: "set_proactivity_level",
-          level: e.proactivityLevel,
+          level: options.proactivityLevel,
           offer_bypass: false,
         },
       },
     });
-  if (e.permissionMode)
-    n.push(
-      setModeControlEvent(e.permissionMode, {
-        ultraplan: e.ultraplan,
-        isFromSettings: e.isModeFromSettings,
+  if (options.permissionMode)
+    events.push(
+      setModeControlEvent(options.permissionMode, {
+        ultraplan: options.ultraplan,
+        isFromSettings: options.isModeFromSettings,
       }),
     );
   if (!getIsNonInteractiveSession() && isFocusModeEnabled())
-    n.push({
+    events.push({
       type: "event",
       data: {
         type: "control_request",
@@ -1196,7 +1219,7 @@ function buildInitialControlEvents(e) {
     });
   let configuredAdvisorModel = getConfiguredAdvisorModel();
   if (configuredAdvisorModel)
-    n.push({
+    events.push({
       type: "event",
       data: {
         type: "control_request",
@@ -1209,28 +1232,30 @@ function buildInitialControlEvents(e) {
         },
       },
     });
-  if (e.title)
-    n.push({
+  if (options.title)
+    events.push({
       type: "event",
-      data: buildRenameSessionRequest(e.title),
+      data: buildRenameSessionRequest(options.title),
     });
   if (
-    typeof e.initialMessage === "string" ? e.initialMessage : e.initialMessage && e.initialMessage.length > 0
+    typeof options.initialMessage === "string"
+      ? options.initialMessage
+      : options.initialMessage && options.initialMessage.length > 0
   )
-    n.push({
+    events.push({
       type: "event",
       data: {
-        uuid: e.initialMessageUuid ?? randomUUID(),
+        uuid: options.initialMessageUuid ?? randomUUID(),
         session_id: "",
         type: "user",
         parent_tool_use_id: null,
         message: {
           role: "user",
-          content: e.initialMessage,
+          content: options.initialMessage,
         },
       },
     });
-  return n;
+  return events;
 }
 //@ chunk-e6aww6q8.js:1960745-1961200 layout
 /**
@@ -1264,7 +1289,7 @@ function buildRemoteSessionConfig(options) {
 }
 //@ chunk-e6aww6q8.js:1961200-1961357 layout
 function deferredFirstPrompt(initialControlEvents, initialMessage) {
-  let uuid = initialControlEvents.find((s) => s.data.type === "user")?.data.uuid;
+  let uuid = initialControlEvents.find((event) => event.data.type === "user")?.data.uuid;
   return initialMessage !== null && typeof uuid === "string"
     ? {
         content: initialMessage,
@@ -1275,11 +1300,11 @@ function deferredFirstPrompt(initialControlEvents, initialMessage) {
 }
 //@ chunk-e6aww6q8.js:1961357-1961522 layout
 function builtinToolsFirstPrompt(options, initialMessage) {
-  let r =
+  let hasMessage =
     typeof initialMessage === "string"
       ? initialMessage !== ""
       : initialMessage !== null && initialMessage.length > 0;
-  return (options.builtinTools?.length ?? 0) > 0 && r && initialMessage
+  return (options.builtinTools?.length ?? 0) > 0 && hasMessage && initialMessage
     ? {
         content: initialMessage,
         uuid: options.initialMessageUuid ?? randomUUID(),
@@ -1287,14 +1312,14 @@ function builtinToolsFirstPrompt(options, initialMessage) {
     : undefined;
 }
 //@ chunk-e6aww6q8.js:1961522-1962589 layout
-async function createRemoteSession(e) {
-  let { options, sessionId, held, createEndpoint, signal, bound, pool } = e;
+async function createRemoteSession(request) {
+  let { options, sessionId, held, createEndpoint, signal, bound, pool } = request;
   if ((options.builtinTools ?? []).length === 0)
     return {
       ok: true,
       withheld: undefined,
     };
-  if (isDeduplicatedCreateResponse(e.responseData)) {
+  if (isDeduplicatedCreateResponse(request.responseData)) {
     logBuiltinToolsCreate("earlier_session", pool);
     options.onCreateFail?.(
       duplicateSessionMessage({
@@ -1311,7 +1336,7 @@ async function createRemoteSession(e) {
       ok: false,
     };
   }
-  let G = async () => ({
+  let archiveAndDescribe = async () => ({
     archived: await archiveRemoteSession(sessionId),
     sessionUrl: getRemoteSessionUrl(sessionId),
   });
@@ -1328,38 +1353,38 @@ async function createRemoteSession(e) {
       ok: true,
       withheld: {
         ...held,
-        ...((bound || e.firstPromptDeferred) && {
+        ...((bound || request.firstPromptDeferred) && {
           followsPermissionMode: true,
         }),
-        ...(!e.followsUploads &&
-          !e.firstPromptDeferred && {
+        ...(!request.followsUploads &&
+          !request.firstPromptDeferred && {
             heldOnlyForToolsCheck: true,
           }),
       },
     };
   }
   if (signal.aborted) {
-    await G();
+    await archiveAndDescribe();
     throw new AbortError_2();
   }
-  let q = await raceWithAbortSignal(
+  let sendResult = await raceWithAbortSignal(
     sendEventToRemoteSession(sessionId, held.content, {
       uuid: held.uuid,
     }),
     signal,
     () => new AbortError_2(),
   ).catch(async (error) => {
-    await G();
+    await archiveAndDescribe();
     throw error;
   });
-  let Z = classifyPromptSendResult(q);
-  if (Z.kind !== "sent") {
-    let Se = await G();
+  let sendOutcome = classifyPromptSendResult(sendResult);
+  if (sendOutcome.kind !== "sent") {
+    let archivedSession = await archiveAndDescribe();
     if (signal.aborted) throw new AbortError_2();
-    logBuiltinToolsCreate(`prompt_${Z.kind}`, pool);
-    options.onCreateFail?.(archiveCloudSession(Z, Se), "first_prompt_not_sent", {
+    logBuiltinToolsCreate(`prompt_${sendOutcome.kind}`, pool);
+    options.onCreateFail?.(archiveCloudSession(sendOutcome, archivedSession), "first_prompt_not_sent", {
       endpoint: createEndpoint,
-      sessionArchived: Se.archived,
+      sessionArchived: archivedSession.archived,
     });
     return {
       ok: false,
@@ -1375,14 +1400,14 @@ async function createRemoteSession(e) {
 /**
  * 远程会话带内置工具时检查设备绑定前提（cnn）：不满足则记录结果、调用 onCreateFail 并返回 true（终止创建）。
  */
-function refuseBuiltinToolsCreate(options, n) {
-  let r =
+function refuseBuiltinToolsCreate(options, environmentKind) {
+  let outcome =
     (options.builtinTools?.length ?? 0) > 0
-      ? unsupportedEnvironmentOutcome(n, options.deviceBinding?.abandonsUnbound === true)
+      ? unsupportedEnvironmentOutcome(environmentKind, options.deviceBinding?.abandonsUnbound === true)
       : null;
-  if (r === null) return false;
-  logBuiltinToolsCreate(r.outcome, n === "self_hosted_pool");
-  options.onCreateFail?.(r.message, `builtin_tools_${r.outcome}`);
+  if (outcome === null) return false;
+  logBuiltinToolsCreate(outcome.outcome, environmentKind === "self_hosted_pool");
+  options.onCreateFail?.(outcome.message, `builtin_tools_${outcome.outcome}`);
   return true;
 }
 //@ chunk-e6aww6q8.js:1962818-1962944 layout
@@ -1400,40 +1425,40 @@ function buildRenameSessionRequest(title) {
 /**
  * 绑定设备的远程会话创建后，用设备事件签名器发送 rename_session 控制请求固定标题，记 tengu_device_bind_title_latched。
  */
-async function latchBoundSessionTitle(id, title, r, credentials, h) {
+async function latchBoundSessionTitle(sessionId, title, deviceUUID, credentials, options) {
   let eventSigner =
-    r === undefined
+    deviceUUID === undefined
       ? undefined
-      : import("./chunk-pesgm5d3.js").then(
-          ({ deviceEventSignerFor }) => deviceEventSignerFor(r, credentials, h),
+      : import("../bridge/clientEventSigner.js").then(
+          ({ deviceEventSignerFor }) => deviceEventSignerFor(deviceUUID, credentials, options),
           reportSignerLoadFailure,
         );
-  let S = await sendControlRequestToRemoteSession(id, buildRenameSessionRequest(title), {
+  let result = await sendControlRequestToRemoteSession(sessionId, buildRenameSessionRequest(title), {
     eventSigner,
   }).catch((error) => ({
     ok: false,
     reason: errorMessage(error),
   }));
   logEvent("tengu_device_bind_title_latched", {
-    success: S.ok,
+    success: result.ok,
   });
-  if (!S.ok) logForDebugging(`[deviceBind] rename_session after bound create failed: ${S.reason}`);
+  if (!result.ok) logForDebugging(`[deviceBind] rename_session after bound create failed: ${result.reason}`);
 }
 //@ chunk-e6aww6q8.js:1963280-1963434 layout
 function extractTextContent(initialMessage) {
   if (typeof initialMessage === "string") return initialMessage;
   if (!initialMessage) return "";
   return initialMessage
-    .filter((n) => n.type === "text" && typeof n.text === "string")
-    .map((n) => n.text)
+    .filter((block) => block.type === "text" && typeof block.text === "string")
+    .map((textBlock) => textBlock.text)
     .join(" ");
 }
 //@ chunk-e6aww6q8.js:1963434-1963685 layout
 async function isDriftingTwilightEnabled() {
   try {
     if (!DEVICE_BINDING_CREATE_ENABLED) return await checkGate_CACHED_OR_BLOCKING(TENGU_DRIFTING_TWILIGHT);
-    let e = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_DRIFTING_TWILIGHT, true);
-    if (e.source !== "fallback") return e.value !== false;
+    let gate = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_DRIFTING_TWILIGHT, true);
+    if (gate.source !== "fallback") return gate.value !== false;
     return (await getDynamicConfig_BLOCKS_ON_INIT(TENGU_DRIFTING_TWILIGHT, true)) !== false;
   } catch (error) {
     logForDebugging(
@@ -1447,39 +1472,48 @@ function launchReadsOnlyTags() {
   return;
 }
 //@ chunk-e6aww6q8.js:1963707-1964119 layout
-async function prepareDeviceBinding(deviceBinding, n, r, s, correlationId, credentials, S, w) {
+async function prepareDeviceBinding(
+  deviceBinding,
+  endpoint,
+  poolId,
+  correlationId_2,
+  correlationId,
+  credentials,
+  gateValue,
+  isConsoleProfile,
+) {
   if (!deviceBinding) return;
-  if (n !== "v1alpha2") return skipDeviceBinding("endpoint");
-  if (r && isCcpoolId(r)) return skipDeviceBinding("pool");
-  if (s === "byoc" || s === "bridge") return skipDeviceBinding("environment");
+  if (endpoint !== "v1alpha2") return skipDeviceBinding("endpoint");
+  if (poolId && isCcpoolId(poolId)) return skipDeviceBinding("pool");
+  if (correlationId_2 === "byoc" || correlationId_2 === "bridge") return skipDeviceBinding("environment");
   if (correlationId) return skipDeviceBinding("correlation");
-  if (w) return skipDeviceBinding("profile");
-  let { prepareDeviceBinder } = await import("./chunk-f13hjmxp.js");
+  if (isConsoleProfile) return skipDeviceBinding("profile");
+  let { prepareDeviceBinder } = await import("../bridge/deviceBinder.js");
   return prepareDeviceBinder({
     orgUuid: deviceBinding.orgUuid,
     accountUuid: deviceBinding.accountUuid,
     credentials,
     confirmReenroll: deviceBinding.confirmReenroll,
-    isEnabled: () => S,
+    isEnabled: () => gateValue,
   });
 }
 //@ chunk-e6aww6q8.js:1964119-1964192 layout
-function skipDeviceBinding(e) {
+function skipDeviceBinding(reason) {
   logEvent("tengu_device_bind_skipped", {
-    reason: fromEnum(e),
+    reason: fromEnum(reason),
   });
-  return err_2(e);
+  return err_2(reason);
 }
 //@ chunk-e6aww6q8.js:1964192-1964431 layout
-function reportDeviceBindOutcome(deviceBinding, n, id, storageV5) {
-  if (!deviceBinding || !n) return;
-  if (n.ok) deviceBinding.onBound?.(n.value);
+function reportDeviceBindOutcome(deviceBinding, result, id, storageV5) {
+  if (!deviceBinding || !result) return;
+  if (result.ok) deviceBinding.onBound?.(result.value);
   else {
-    deviceBinding.onUnbound?.(n.error);
-    if (classifyDeviceBindingBlocker(n.error))
-      import("./chunk-wbmm3v80.js").then(
+    deviceBinding.onUnbound?.(result.error);
+    if (classifyDeviceBindingBlocker(result.error))
+      import("../bridge/deviceUnboundCreates.js").then(
         ({ rememberUnboundCreate, productionUnboundCreatesDeps }) =>
-          rememberUnboundCreate(id, n.error, productionUnboundCreatesDeps(storageV5)),
+          rememberUnboundCreate(id, result.error, productionUnboundCreatesDeps(storageV5)),
         () => {
           return;
         },
@@ -1500,13 +1534,15 @@ var DEVICE_BIND_REFUSAL_REASONS_2 = [
   "invalid_target_device_id",
 ];
 //@ chunk-e6aww6q8.js:1964655-1964694 layout
-function isDeviceBindRefusalReason(e) {
-  return DEVICE_BIND_REFUSAL_REASONS_2.includes(e);
+function isDeviceBindRefusalReason(reason) {
+  return DEVICE_BIND_REFUSAL_REASONS_2.includes(reason);
 }
 //@ chunk-e6aww6q8.js:1964694-1964847 layout
-function getDeviceBindRefusal(e) {
-  let error = e?.error;
-  let filtered = [error?.resource, error?.reason].filter((s) => typeof s === "string" && s.length > 0);
+function getDeviceBindRefusal(response) {
+  let error = response?.error;
+  let filtered = [error?.resource, error?.reason].filter(
+    (value) => typeof value === "string" && value.length > 0,
+  );
   if (filtered.length === 0) return;
   return filtered.find(isDeviceBindRefusalReason) ?? "other";
 }
@@ -1516,8 +1552,8 @@ function deviceBindFailureKind(status, deviceBindRefusal) {
   return status === 404 ? "device_unknown" : "create_refused";
 }
 //@ chunk-e6aww6q8.js:1964950-1965052 layout
-function getBoundDeviceUuid(e) {
-  let boundDeviceUuid = e?.session?.bound_device_uuid;
+function getBoundDeviceUuid(response) {
+  let boundDeviceUuid = response?.session?.bound_device_uuid;
   return typeof boundDeviceUuid === "string" ? boundDeviceUuid.toLowerCase() : undefined;
 }
 //@ chunk-e6aww6q8.js:1965052-1965967 layout
@@ -1547,8 +1583,9 @@ async function createWithDeviceBinding(request) {
     dropped_env_vars: drops.envVars,
     dropped_events: drops.events.length,
   });
-  let L = [...(drops.envVars ? ["environment_variables"] : []), ...drops.events];
-  if (L.length > 0) logForDebugging(`[deviceBind] bound create dropped ${L.join(", ")}`);
+  let droppedItems = [...(drops.envVars ? ["environment_variables"] : []), ...drops.events];
+  if (droppedItems.length > 0)
+    logForDebugging(`[deviceBind] bound create dropped ${droppedItems.join(", ")}`);
   let securityAsk = await planTrustedDeviceProof();
   let deferFirstPrompt = callerSendsFirstPrompt && isTrustedDeviceProofActive(securityAsk);
   if (deferFirstPrompt)
@@ -1573,16 +1610,17 @@ async function createWithDeviceBinding(request) {
  */
 async function postWithRepoTrustRetry(post, buildBody, proofHeaders, trust, refusalOut) {
   if (trust.kind !== "send" || refusalOut.refusal !== undefined) return post(buildBody(), proofHeaders);
-  let y = await post(buildBody(true), {
+  let response = await post(buildBody(true), {
     ...proofHeaders,
     ...trust.proofHeaders,
   });
-  if (y.status < 400 || y.status >= 500 || isCloudLaunchError(y.data)) return y;
-  let S = requestRepositoriesTrusted(y.data);
-  if (S === "unnamed" && proofHeaders !== undefined && requestSecurityTier(y.data) !== "refused") return y;
-  refusalOut.refusal = S;
+  if (response.status < 400 || response.status >= 500 || isCloudLaunchError(response.data)) return response;
+  let proofs = requestRepositoriesTrusted(response.data);
+  if (proofs === "unnamed" && proofHeaders !== undefined && requestSecurityTier(response.data) !== "refused")
+    return response;
+  refusalOut.refusal = proofs;
   logForDebugging(
-    `[deviceBind] the create that carried repositories_trusted got ${y.status} (${S}); repeating it without the field`,
+    `[deviceBind] the create that carried repositories_trusted got ${response.status} (${proofs}); repeating it without the field`,
   );
   return post(buildBody(), proofHeaders);
 }
@@ -1598,9 +1636,9 @@ async function postBoundCreate({ buildBody, post }, bindState) {
     readFlagWithOverride(TENGU_BUZZING_RIVER, {
       safe: false,
     })
-      ? await import("./chunk-j2e9tjav.js").then(
-          (Ae) =>
-            Ae.createSeedSealer({
+      ? await import("./teleport/seedAttestation.js").then(
+          (seedSealerModule) =>
+            seedSealerModule.createSeedSealer({
               attestation,
               key: held.key,
               sample: buildBody(attestation, undefined, firstPromptDeferred),
@@ -1614,29 +1652,34 @@ async function postBoundCreate({ buildBody, post }, bindState) {
   let refusalOut = {};
   let response = await postWithRepoTrustRetry(
     post,
-    (Ae) => {
-      let body = buildBody(attestation, ask.kind === "ask" ? true : undefined, firstPromptDeferred, Ae);
+    (includeTrust) => {
+      let body = buildBody(
+        attestation,
+        ask.kind === "ask" ? true : undefined,
+        firstPromptDeferred,
+        includeTrust,
+      );
       return sealBody?.(body) ?? body;
     },
     ask.kind === "ask" ? ask.proofHeaders : undefined,
     trust,
     refusalOut,
   );
-  let Se;
+  let refusalTier;
   if (
     ask.kind === "ask" &&
     response.status >= 400 &&
     response.status < 500 &&
     !isCloudLaunchError(response.data)
   ) {
-    Se = requestSecurityTier(response.data);
+    refusalTier = requestSecurityTier(response.data);
     logForDebugging(
-      `[deviceBind] the create that asked for the elevated tier got ${response.status} (${Se}); repeating the bound create without the ask`,
+      `[deviceBind] the create that asked for the elevated tier got ${response.status} (${refusalTier}); repeating the bound create without the ask`,
     );
     response = await postWithRepoTrustRetry(
       post,
-      (Ae) => {
-        let body = buildBody(attestation, undefined, firstPromptDeferred, Ae);
+      (includeTrust) => {
+        let body = buildBody(attestation, undefined, firstPromptDeferred, includeTrust);
         return sealBody?.(body) ?? body;
       },
       undefined,
@@ -1648,11 +1691,11 @@ async function postBoundCreate({ buildBody, post }, bindState) {
     if (ask.kind === "no_token") logSecurityTierOutcome("skipped_no_token");
     else if (ask.kind === "ask")
       logSecurityTierOutcome(
-        Se ?? (securityTierOfResponse(response.data) === "elevated" ? "honored" : "not_honored"),
+        refusalTier ?? (securityTierOfResponse(response.data) === "elevated" ? "honored" : "not_honored"),
       );
     if (trust.kind === "not_sent") logTrustedRepositoriesOutcome(trust);
     else if (trust.kind === "send") {
-      let Ae =
+      let trustOutcome =
         refusalOut.refusal === undefined
           ? {
               kind: "sent",
@@ -1663,9 +1706,9 @@ async function postBoundCreate({ buildBody, post }, bindState) {
               covers: trust.covers,
               refusal: refusalOut.refusal,
             };
-      logTrustedRepositoriesOutcome(Ae);
+      logTrustedRepositoriesOutcome(trustOutcome);
       logForDebugging(
-        `[deviceBind] repositories_trusted on the create that made the session: ${Ae.kind} (covers the ${trust.covers})`,
+        `[deviceBind] repositories_trusted on the create that made the session: ${trustOutcome.kind} (covers the ${trust.covers})`,
       );
     }
     if (getBoundDeviceUuid(response.data) === attestation.deviceUUID.toLowerCase()) {
@@ -1713,8 +1756,8 @@ async function postBoundCreate({ buildBody, post }, bindState) {
   logForDebugging(
     `[deviceBind] create refused the binding (${response.status}${deviceBindRefusal ? ` ${deviceBindRefusal}` : ""})`,
   );
-  let we = response.status === 404 && binder ? await reregisterDevice(binder) : undefined;
-  if (we?.ok) {
+  let reregistered = response.status === 404 && binder ? await reregisterDevice(binder) : undefined;
+  if (reregistered?.ok) {
     logForDebugging("[deviceBind] registered again as a different device row; repeating the bound create");
     return postBoundCreate(
       {
@@ -1725,17 +1768,17 @@ async function postBoundCreate({ buildBody, post }, bindState) {
         ask,
         trust,
         firstPromptDeferred,
-        ...we.value,
+        ...reregistered.value,
       },
     );
   }
   logForDebugging("[deviceBind] retrying the create unbound");
-  let Ee = await post(buildBody(undefined));
-  if (Ee.status === 200 || Ee.status === 201)
-    logFeatureSad("device_bind_session", we?.error ?? deviceBindRefusal ?? "create_refused");
+  let unboundResponse = await post(buildBody(undefined));
+  if (unboundResponse.status === 200 || unboundResponse.status === 201)
+    logFeatureSad("device_bind_session", reregistered?.error ?? deviceBindRefusal ?? "create_refused");
   return {
-    response: Ee,
-    bind: err_2(we?.error ?? deviceBindFailureKind(response.status, deviceBindRefusal)),
+    response: unboundResponse,
+    bind: err_2(reregistered?.error ?? deviceBindFailureKind(response.status, deviceBindRefusal)),
     attested: false,
     firstPromptDeferred: false,
   };
@@ -1745,20 +1788,20 @@ async function postBoundCreate({ buildBody, post }, bindState) {
  * 设备绑定被拒后重新注册设备：得到同一设备行时放弃；否则签名生成证明，返回证明与持有状态。
  */
 async function reregisterDevice(binder) {
-  let n = await binder.reregister();
-  if (!n.ok) return n;
-  if (n.value.deviceUUID === binder.deviceUUID) {
+  let result = await binder.reregister();
+  if (!result.ok) return result;
+  if (result.value.deviceUUID === binder.deviceUUID) {
     logForDebugging(
       "[deviceBind] registering again returned the same device row the create refused; nothing new to try",
     );
     return err_2(undefined);
   }
-  let r = await n.value.sign();
-  return r === undefined
+  let rid = await result.value.sign();
+  return rid === undefined
     ? err_2("sign")
     : ok_2({
-        attestation: r,
-        held: n.value.held,
+        attestation: rid,
+        held: result.value.held,
       });
 }
 //@ chunk-e6aww6q8.js:1969140-1969577 layout
@@ -1776,12 +1819,12 @@ async function runCreateHomeSeed({
   storageV5,
 }) {
   try {
-    let { runHomeSeed } = await import("./chunk-6qze3ysr.js");
+    let { runHomeSeed } = await import("../services/homeSeed/runHomeSeed.js");
     return runHomeSeed({
       sessionId,
       plan: planning.then(
-        (G) =>
-          G ?? {
+        (homeSeedPlan) =>
+          homeSeedPlan ?? {
             kind: "none",
             reason: "failed",
           },
@@ -1808,7 +1851,7 @@ function describedTarget({ branch, commit }, name) {
   return branch !== null ? `${name}/${printableText(branch)}` : `commit ${commit.slice(0, 12)}`;
 }
 //@ chunk-e6aww6q8.js:1969671-1969698 layout
-function emptyRequestOptions(e, n) {
+function emptyRequestOptions(options, extra) {
   return {};
 }
 //@ chunk-e6aww6q8.js:1969698-1970617 layout
@@ -1816,12 +1859,12 @@ function emptyRequestOptions(e, n) {
  * 打包上传前解析 Read 规则与沙箱设置，得出哪些文件内容需要扣留（withholdFor）、哪些永不读取（neverReadFor）；规则不可读时提示并只上传已提交内容。
  */
 function resolveBundleReadRules(withholding, warn, countFromOutsideRoot) {
-  let s = withholding ? collectLaunchRules() : null;
-  let isCredentialListCountedFromOutsideRoot = s !== null && countFromOutsideRoot;
-  let { withholdFor, neverReadFor, rulesUnreadable, unreadableSettingsFiles } = s
+  let launchRules = withholding ? collectLaunchRules() : null;
+  let isCredentialListCountedFromOutsideRoot = launchRules !== null && countFromOutsideRoot;
+  let { withholdFor, neverReadFor, rulesUnreadable, unreadableSettingsFiles } = launchRules
     ? classifySyncedFileSensitivity(
         resolveUploadFilterRules({
-          launchRules: s,
+          launchRules,
         }),
         {
           isCredentialListCountedFromOutsideRoot,
@@ -1838,154 +1881,164 @@ function resolveBundleReadRules(withholding, warn, countFromOutsideRoot) {
     withholding,
     ...{},
   });
-  if (!s)
+  if (!launchRules)
     return {
       neverReadFor,
     };
   if (rulesUnreadable) {
-    let G = settingsReadErrorsSuffix(unreadableSettingsFiles);
-    let q =
-      G === ""
+    let readErrorsSuffix = settingsReadErrorsSuffix(unreadableSettingsFiles);
+    let unreadableMessage =
+      readErrorsSuffix === ""
         ? "A settings file has errors, so your Read rules and sandbox settings could not all be read (see /status)"
-        : `Your Read rules and sandbox settings could not all be read${G}`;
+        : `Your Read rules and sandbox settings could not all be read${readErrorsSuffix}`;
     warn?.(
-      `${q}: uncommitted file contents are left out of this upload; the cloud session starts from what is committed.`,
+      `${unreadableMessage}: uncommitted file contents are left out of this upload; the cloud session starts from what is committed.`,
     );
   }
   return {
     withholdFor,
-    neverReadFor: classifySyncedFileSensitivity(s, {
+    neverReadFor: classifySyncedFileSensitivity(launchRules, {
       onlyAsLaunched: true,
     }).neverReadFor,
   };
 }
 //@ chunk-e6aww6q8.js:1970617-1970795 layout
-function launchRuleSensitivity(e) {
+function launchRuleSensitivity(withholding) {
   try {
     return classifySyncedFileSensitivity(collectLaunchRules(), {
       onlyAsLaunched: true,
     });
   } catch (error) {
     logError(error);
-    let r = async () => () => true;
+    let noopFactory = async () => () => true;
     return {
-      withholdFor: r,
-      neverReadFor: r,
+      withholdFor: noopFactory,
+      neverReadFor: noopFactory,
       rulesUnreadable: true,
       unreadableSettingsFiles: [],
     };
   }
 }
 //@ chunk-e6aww6q8.js:1970795-1970855 layout
-function noBundleReadRefusal(e, n) {
+function noBundleReadRefusal(withholding, countFromOutsideRoot) {
   return {
     refusal: null,
     notRuledOutBy: undefined,
   };
 }
 //@ chunk-e6aww6q8.js:1970855-1973070 layout
-async function uploadGitBundleForSession(e, n, r, s = null, h = "session") {
+async function uploadGitBundleForSession(
+  options,
+  capability,
+  rules,
+  previousCapture = null,
+  purpose = "session",
+) {
   let {
     createAndUploadGitBundle,
     explainPreviousCaptureRetired,
     handBackDecision,
     previousCaptureServes,
     unsupportedLayoutNotice,
-  } = await import("./chunk-g3ge6yrz.js");
-  let q = noBundleReadRefusal(n.cwd ?? getCwd(), h);
-  if (q.refusal !== null) return q.refusal;
-  let Z = {
-    ...n,
-    notRuledOutBy: q.notRuledOutBy,
+  } = await import("./teleport/gitBundle.js");
+  let refusalCheck = noBundleReadRefusal(capability.cwd ?? getCwd(), purpose);
+  if (refusalCheck.refusal !== null) return refusalCheck.refusal;
+  let hardenedCapability = {
+    ...capability,
+    notRuledOutBy: refusalCheck.notRuledOutBy,
   };
-  let Se = await createAndUploadGitBundle(e, Z);
+  let bundleResult = await createAndUploadGitBundle(options, hardenedCapability);
   if (
-    Z.hardenForDeviceSessions === true ||
-    Se.success ||
-    Se.failReason !== "unsupported_layout" ||
-    r === null ||
-    Z.signal?.aborted
+    hardenedCapability.hardenForDeviceSessions === true ||
+    bundleResult.success ||
+    bundleResult.failReason !== "unsupported_layout" ||
+    rules === null ||
+    hardenedCapability.signal?.aborted
   )
-    return Se;
+    return bundleResult;
   if (!previousCaptureServes()) {
     logEvent("tengu_ccr_bundle_upload", {
       outcome: lit_2("fallback_retired"),
-      layout_kind: fromEnum(Se.layoutKind),
-      github_start_obstacle: fromEnumOpt(s?.kind),
-      ...(Se.gitFileKind !== undefined && {
-        git_file_kind: fromEnum(Se.gitFileKind),
+      layout_kind: fromEnum(bundleResult.layoutKind),
+      github_start_obstacle: fromEnumOpt(previousCapture?.kind),
+      ...(bundleResult.gitFileKind !== undefined && {
+        git_file_kind: fromEnum(bundleResult.gitFileKind),
       }),
     });
     logFeatureBad("teleport_git_bundle_upload", "fallback_retired");
     return {
       success: false,
-      error: `${Se.error} ${explainPreviousCaptureRetired(s)}`,
+      error: `${bundleResult.error} ${explainPreviousCaptureRetired(previousCapture)}`,
       failReason: "refused",
     };
   }
-  let ke = await handBackDecision(Z.cwd, Z.signal, Z.withholdFor);
-  if (Z.signal?.aborted) {
-    if (ke.kind === "proceed") await ke.pinnedIndex?.dispose();
-    return Se;
+  let handBack = await handBackDecision(
+    hardenedCapability.cwd,
+    hardenedCapability.signal,
+    hardenedCapability.withholdFor,
+  );
+  if (hardenedCapability.signal?.aborted) {
+    if (handBack.kind === "proceed") await handBack.pinnedIndex?.dispose();
+    return bundleResult;
   }
-  if (ke.kind === "refused") {
-    let Ee = !ke.indexCopied
+  if (handBack.kind === "refused") {
+    let refusalOutcome = !handBack.indexCopied
       ? "fallback_refused_index_copy"
-      : ke.gitlinks > 0
+      : handBack.gitlinks > 0
         ? "fallback_refused_gitlink"
-        : ke.named > 0
+        : handBack.named > 0
           ? "fallback_refused_credential_named"
-          : ke.unexamined > 0
+          : handBack.unexamined > 0
             ? "fallback_refused_index_mode"
             : "fallback_refused_unlisted";
     logEvent("tengu_ccr_bundle_upload", {
-      outcome: fromEnum(Ee),
-      layout_kind: fromEnum(Se.layoutKind),
+      outcome: fromEnum(refusalOutcome),
+      layout_kind: fromEnum(bundleResult.layoutKind),
       legacy_bundle: true,
-      credential_named_wip: ke.named,
-      credential_named_added: ke.added,
-      refused_unexamined: ke.unexamined,
-      registered_gitlinks: ke.gitlinks,
-      ...(ke.indexCopyCause !== undefined && {
-        index_copy_cause: fromEnum(ke.indexCopyCause),
+      credential_named_wip: handBack.named,
+      credential_named_added: handBack.added,
+      refused_unexamined: handBack.unexamined,
+      registered_gitlinks: handBack.gitlinks,
+      ...(handBack.indexCopyCause !== undefined && {
+        index_copy_cause: fromEnum(handBack.indexCopyCause),
       }),
     });
     logFeatureBad(
       "teleport_git_bundle_upload",
-      Ee === "fallback_refused_credential_named" ? "uncommitted_credentials" : Ee,
+      refusalOutcome === "fallback_refused_credential_named" ? "uncommitted_credentials" : refusalOutcome,
     );
     return {
       success: false,
-      error: `${Se.error} ${ke.sentence}`,
+      error: `${bundleResult.error} ${handBack.sentence}`,
       failReason: "uncommitted_credentials",
     };
   }
-  let we;
+  let legacyResult;
   try {
     logEvent("tengu_ccr_bundle_upload", {
       outcome: lit_2("fallback_legacy_capture"),
-      layout_kind: fromEnum(Se.layoutKind),
-      ...(Se.gitFileKind !== undefined && {
-        git_file_kind: fromEnum(Se.gitFileKind),
+      layout_kind: fromEnum(bundleResult.layoutKind),
+      ...(bundleResult.gitFileKind !== undefined && {
+        git_file_kind: fromEnum(bundleResult.gitFileKind),
       }),
       legacy_bundle: true,
     });
-    r?.(unsupportedLayoutNotice(Se.layoutKind));
-    we = await createAndUploadGitBundle(e, {
-      ...Z,
+    rules?.(unsupportedLayoutNotice(bundleResult.layoutKind));
+    legacyResult = await createAndUploadGitBundle(options, {
+      ...hardenedCapability,
       hardenForDeviceSessions: false,
       refuseCredentialNamedInStash: true,
-      pinnedIndexFile: ke.pinnedIndex?.path,
+      pinnedIndexFile: handBack.pinnedIndex?.path,
     });
   } finally {
-    await ke.pinnedIndex?.dispose();
+    await handBack.pinnedIndex?.dispose();
   }
-  return !we.success && we.failReason === "uncommitted_credentials"
+  return !legacyResult.success && legacyResult.failReason === "uncommitted_credentials"
     ? {
-        ...we,
-        error: `${Se.error} ${we.error.replace(/^Not uploading this working tree: /, "It is not uploaded the previous way either (that way keeps nothing back): ")}`,
+        ...legacyResult,
+        error: `${bundleResult.error} ${legacyResult.error.replace(/^Not uploading this working tree: /, "It is not uploaded the previous way either (that way keeps nothing back): ")}`,
       }
-    : we;
+    : legacyResult;
 }
 //@ chunk-e6aww6q8.js:1973070-1973156 layout
 async function getCloudSessionAccessToken(credentials, storageV5) {
@@ -1996,8 +2049,8 @@ async function getCloudSessionAccessToken(credentials, storageV5) {
   return (await ensureHostSessionsBearer()) ?? getAccessTokenWithCcrFallback();
 }
 //@ chunk-e6aww6q8.js:1973156-1973235 layout
-async function hasRecoveredBearer(e, n) {
-  return (await recoverHostSessionsBearer(e, n ? "withheld" : "refused")) !== "not_held";
+async function hasRecoveredBearer(heldToken, withheld) {
+  return (await recoverHostSessionsBearer(heldToken, withheld ? "withheld" : "refused")) !== "not_held";
 }
 //@ chunk-e6aww6q8.js:1973235-2009090 facade-exports = teleportToRemote (0.247)
 /**
@@ -2005,37 +2058,39 @@ async function hasRecoveredBearer(e, n) {
  */
 async function teleportToRemote(options) {
   let { initialMessage, signal } = options;
-  let s = options.cwd ?? getCwd();
+  let cwdPath = options.cwd ?? getCwd();
   let h = false;
   let y = false;
-  let S = [];
-  let w = S.length === 0 ? options.tags : [...(options.tags ?? []), ...S];
-  let L = options.connectedSession === undefined ? undefined : Promise.resolve(options.connectedSession);
-  let G = () => (L ??= sensitivePathGateEnabled());
-  let q;
-  let Z = () => (q ??= G().then((Zt) => isProjectSessionBindable(Zt, undefined)));
-  let Se;
-  let ke = () => (Se ??= false);
+  let extraTags = [];
+  let tags = extraTags.length === 0 ? options.tags : [...(options.tags ?? []), ...extraTags];
+  let connectedSessionPromise =
+    options.connectedSession === undefined ? undefined : Promise.resolve(options.connectedSession);
+  let gatePromise = () => (connectedSessionPromise ??= sensitivePathGateEnabled());
+  let bindablePromise;
+  let isBindable = () =>
+    (bindablePromise ??= gatePromise().then((gateValue) => isProjectSessionBindable(gateValue, undefined)));
+  let seenValue;
+  let alwaysFalse = () => (seenValue ??= false);
   let we;
-  let Ee = () => {
+  let unreachable = () => {
     throw Error("unreachable");
   };
-  let Ae = async () => false;
-  let Ie;
-  let Me = () =>
-    (Ie ??= isViolinWoodEnabled()
+  let alwaysFalseAsync = async () => false;
+  let woodValue;
+  let isViolinWood = () =>
+    (woodValue ??= isViolinWoodEnabled()
       .catch(() => false)
-      .then(async (Zt) => Zt || (await G())));
-  let We = async () => true;
-  let ze = policyDeniedReason("allow_remote_sessions", "Cloud sessions", "are");
-  if (ze) {
+      .then(async (woodZt) => woodZt || (await gatePromise())));
+  let alwaysTrueAsync = async () => true;
+  let policyDenied = policyDeniedReason("allow_remote_sessions", "Cloud sessions", "are");
+  if (policyDenied) {
     logOrgPolicyDenied("allow_remote_sessions", "cloud_session");
-    options.onCreateFail?.(ze, "policy_denied");
+    options.onCreateFail?.(policyDenied, "policy_denied");
     return null;
   }
-  let lt = cloudCreateRefusal();
-  if (lt !== null) {
-    options.onCreateFail?.(lt.message, lt.reason);
+  let cloudRefusal = cloudCreateRefusal();
+  if (cloudRefusal !== null) {
+    options.onCreateFail?.(cloudRefusal.message, cloudRefusal.reason);
     return null;
   }
   if (options.builtinTools?.length === 0) {
@@ -2055,62 +2110,62 @@ async function teleportToRemote(options) {
     return null;
   }
   let { deletedHereNotice, leftOutNotice, probeRepoBundleSize, repositorySetBundleSwitches } =
-    await import("./chunk-g3ge6yrz.js");
-  let yt = null;
+    await import("./teleport/gitBundle.js");
+  let uploadedBundle = null;
   let gt = null;
   let At = [];
-  let It = false;
-  let Yt = null;
-  let qt = false;
+  let bundleKept = false;
+  let seedBundle = null;
+  let created = false;
   try {
     options.onProgress?.({
       kind: "checking",
-      ...(findGitRoot(s) === null && {
+      ...(findGitRoot(cwdPath) === null && {
         folder: true,
       }),
     });
-    let Zt = false;
-    let rn = options.poolId ?? options.chosenEnvironment?.environment_id;
-    let pn =
-      rn !== undefined
+    let noGit = false;
+    let poolId = options.poolId ?? options.chosenEnvironment?.environment_id;
+    let selection =
+      poolId !== undefined
         ? {
-            id: rn,
+            id: poolId,
             source: undefined,
             ignoredUntrustedPool: undefined,
           }
-        : Zt
+        : noGit
           ? {
               id: undefined,
               source: undefined,
               ignoredUntrustedPool: undefined,
             }
           : getEnvironmentSelectionInfo();
-    let no = null;
+    let unusedNull = null;
     let hn = null;
-    let ho = isCcpoolId(options.environmentId ? options.environmentId : pn.id);
-    let Kn =
-      (Object.keys(options.environmentVariables ?? {}).length === 0 && (await G())) ||
+    let isPool = isCcpoolId(options.environmentId ? options.environmentId : selection.id);
+    let endpoint =
+      (Object.keys(options.environmentVariables ?? {}).length === 0 && (await gatePromise())) ||
       ((options.source === "ultrareview" || options.source === "ultraplan") &&
         (await checkGate_CACHED_OR_BLOCKING(TENGU_WOVEN_HARBOR))) ||
-      (ho && (await isDriftingTwilightEnabled()))
+      (isPool && (await isDriftingTwilightEnabled()))
         ? "v1alpha2"
         : "v1";
-    if (options.sessionGroupingId && Kn !== "v1alpha2") {
+    if (options.sessionGroupingId && endpoint !== "v1alpha2") {
       options.onCreateFail?.(
         "--project requires the new session-create endpoint, which isn't enabled for your account yet \u2014 no session was created.",
         "project_not_enabled",
         {
-          endpoint: Kn,
+          endpoint,
         },
       );
       return null;
     }
-    if (options.agentId && Kn !== "v1alpha2") {
+    if (options.agentId && endpoint !== "v1alpha2") {
       options.onCreateFail?.(
         "Dispatching into a Kindling project requires the new session-create endpoint, which isn't enabled for your account yet \u2014 no session was created.",
         "agent_not_enabled",
         {
-          endpoint: Kn,
+          endpoint,
         },
       );
       return null;
@@ -2120,7 +2175,7 @@ async function teleportToRemote(options) {
         "--project cannot be combined with a device-bound session yet \u2014 no session was created.",
         "device_bind_project_unsupported",
         {
-          endpoint: Kn,
+          endpoint,
         },
       );
       return null;
@@ -2130,7 +2185,7 @@ async function teleportToRemote(options) {
         "An agent-owned session cannot be combined with a device-bound session yet \u2014 no session was created.",
         "device_bind_agent_unsupported",
         {
-          endpoint: Kn,
+          endpoint,
         },
       );
       return null;
@@ -2142,16 +2197,16 @@ async function teleportToRemote(options) {
     ) {
       logBuiltinToolsCreate("bound_prompt_not_deferred");
       options.onCreateFail?.(CLOUD_LAUNCH_TOOL_ERRORS, "device_bind_tools_prompt_unsupported", {
-        endpoint: Kn,
+        endpoint,
       });
       return null;
     }
-    let Xn;
-    let fo;
-    let profile = isConsoleProfileSessionsCredential();
-    if (profile) {
+    let sessionToken;
+    let bundleToken;
+    let usesConsoleProfileCredentials = isConsoleProfileSessionsCredential();
+    if (usesConsoleProfileCredentials) {
       try {
-        Xn = await resolveConsoleProfileBearer({
+        sessionToken = await resolveConsoleProfileBearer({
           credentials: options.credentials,
           signIn: options.personAskedForSession === true,
         });
@@ -2163,60 +2218,60 @@ async function teleportToRemote(options) {
         options.onCreateFail?.(error.message, "console_profile_refused");
         return null;
       }
-      fo = Xn;
+      bundleToken = sessionToken;
     } else {
-      Xn = await getCloudSessionAccessToken(options.credentials, options.storageV5);
-      fo = getAccessTokenWithCcrFallback();
+      sessionToken = await getCloudSessionAccessToken(options.credentials, options.storageV5);
+      bundleToken = getAccessTokenWithCcrFallback();
     }
-    let isStoredLogin = !profile;
-    if (!Xn || !fo) {
-      let ma =
+    let isStoredLogin = !usesConsoleProfileCredentials;
+    if (!sessionToken || !bundleToken) {
+      let tokenError =
         "Cloud sessions require a claude.ai login. Run /login to authenticate." +
         (env.CLAUDE_CODE_REMOTE
           ? ` (in CCR: env=${env.CLAUDE_CODE_OAUTH_TOKEN ? "set" : "unset"}, fd=${env.CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR ? "set" : "unset"})`
           : "");
-      logError(Error(ma));
-      options.onCreateFail?.(ma, "no_access_token");
+      logError(Error(tokenError));
+      options.onCreateFail?.(tokenError, "no_access_token");
       return null;
     }
-    let vn = await sessionsApiOrganizationUUID(profile);
-    if (!vn) {
-      let ma =
+    let orgUUID = await sessionsApiOrganizationUUID(usesConsoleProfileCredentials);
+    if (!orgUUID) {
+      let orgError =
         "Unable to get organization UUID for cloud session creation" +
         (env.CLAUDE_CODE_REMOTE
           ? ` (in CCR: CLAUDE_CODE_ORGANIZATION_UUID=${env.CLAUDE_CODE_ORGANIZATION_UUID ? "set" : "unset"})`
           : "");
-      logError(Error(ma));
-      options.onCreateFail?.(ma, "no_org_uuid");
+      logError(Error(orgError));
+      options.onCreateFail?.(orgError, "no_org_uuid");
       return null;
     }
-    let co = {
+    let envVars = {
       ...options.environmentVariables,
     };
-    delete co.CLAUDE_CODE_OAUTH_TOKEN;
-    delete co.CLAUDE_CODE_SESSIONS_OAUTH_TOKEN;
+    delete envVars.CLAUDE_CODE_OAUTH_TOKEN;
+    delete envVars.CLAUDE_CODE_SESSIONS_OAUTH_TOKEN;
     if (options.environmentId) {
       let referralEligibility = fetchReferralEligibility_2(
-        Kn,
-        Xn,
-        vn,
-        profile,
+        endpoint,
+        sessionToken,
+        orgUUID,
+        usesConsoleProfileCredentials,
         () => getCloudSessionAccessToken(options.credentials, options.storageV5),
         hasRecoveredBearer,
       );
       if (refuseBuiltinToolsCreate(options, undefined)) return null;
-      let qd = null;
-      let Gd = null;
+      let source = null;
+      let seedFileId = null;
       if (options.useBundle) {
-        let withholding = await Me();
-        let Zh = {
-          oauthToken: fo,
+        let withholding = await isViolinWood();
+        let bundleConfig = {
+          oauthToken: bundleToken,
           isStoredLogin,
           sessionId: getSessionId(),
           baseUrl: getOauthConfig().BASE_API_URL,
         };
-        let vp = await uploadGitBundleForSession(
-          Zh,
+        let bundleResult = await uploadGitBundleForSession(
+          bundleConfig,
           {
             signal,
             baseRef: options.bundleBaseRef,
@@ -2224,44 +2279,49 @@ async function teleportToRemote(options) {
             currentBranchOnly: withholding,
             ...(withholding && {
               hardenForDeviceSessions: true,
-              startsInProject: await We(),
+              startsInProject: await alwaysTrueAsync(),
             }),
-            ...resolveBundleReadRules(withholding, options.onBundleNotice, withholding && (await Ae())),
+            ...resolveBundleReadRules(
+              withholding,
+              options.onBundleNotice,
+              withholding && (await alwaysFalseAsync()),
+            ),
           },
           options.onBundleNotice,
           null,
           options.source === "ultrareview" ? "review" : "session",
         );
-        if (vp.success)
-          Yt = {
-            fileId: vp.fileId,
-            config: Zh,
+        if (bundleResult.success)
+          seedBundle = {
+            fileId: bundleResult.fileId,
+            config: bundleConfig,
           };
         if (signal.aborted) throw new AbortError_2();
-        if (!vp.success) {
-          logForDebugging(`Bundle upload failed: ${vp.error}`, {
+        if (!bundleResult.success) {
+          logForDebugging(`Bundle upload failed: ${bundleResult.error}`, {
             level: "error",
           });
-          if (vp.failReason !== "too_large") options.onBundleFail?.(vp.error, "bundle");
+          if (bundleResult.failReason !== "too_large") options.onBundleFail?.(bundleResult.error, "bundle");
           return null;
         }
-        Gd = vp.fileId;
-        if (vp.leftOut?.length)
+        seedFileId = bundleResult.fileId;
+        if (bundleResult.leftOut?.length)
           options.onBundleNotice?.(
-            leftOutNotice(vp.leftOut, {
+            leftOutNotice(bundleResult.leftOut, {
               readRules: withholding,
             }),
           );
-        if (vp.deletedHere?.length) options.onBundleNotice?.(deletedHereNotice(vp.deletedHere));
+        if (bundleResult.deletedHere?.length)
+          options.onBundleNotice?.(deletedHereNotice(bundleResult.deletedHere));
         logEvent("tengu_teleport_bundle_mode", {
-          size_bytes: vp.bundleSizeBytes,
-          scope: fromEnum(vp.scope),
-          has_wip: vp.hasWip,
+          size_bytes: bundleResult.bundleSizeBytes,
+          scope: fromEnum(bundleResult.scope),
+          has_wip: bundleResult.hasWip,
           current_branch_only: withholding,
           reason: lit_2("explicit_env_bundle"),
         });
       } else if (options.sourceUrl)
-        qd = {
+        source = {
           type: "git_repository",
           url: options.sourceUrl,
           revision: options.branchName,
@@ -2269,13 +2329,13 @@ async function teleportToRemote(options) {
       else if (!options.agentId) {
         let orgUUID = await detectCurrentRepositoryWithHost();
         if (orgUUID && !isNestedGitLabProject(orgUUID))
-          qd = {
+          source = {
             type: "git_repository",
             url: `https://${orgUUID.host}/${orgUUID.owner}/${orgUUID.name}`,
             revision: options.branchName,
           };
       }
-      let vu = options.title || options.description || REMOTE_TASK_TITLE;
+      let titleText = options.title || options.description || REMOTE_TASK_TITLE;
       let initialControlEvents = buildInitialControlEvents({
         initialMessage,
         initialMessageUuid: options.initialMessageUuid,
@@ -2287,26 +2347,26 @@ async function teleportToRemote(options) {
       });
       let prepared = await prepareDeviceBinding(
         options.deviceBinding,
-        Kn,
+        endpoint,
         options.environmentId,
         undefined,
         options.correlationId,
         options.credentials,
-        G(),
-        profile,
+        gatePromise(),
+        usesConsoleProfileCredentials,
       );
-      let h_ = environmentSelector(options.environmentId);
+      let selector = environmentSelector(options.environmentId);
       let buildBody = (deviceBinding, requestElevatedTier, deferFirstPrompt) =>
-        Kn === "v1alpha2"
+        endpoint === "v1alpha2"
           ? buildSessionCreateBody({
-              title: vu,
-              worker: h_,
+              title: titleText,
+              worker: selector,
               events: initialControlEvents,
-              sources: qd ? [qd] : [],
+              sources: source ? [source] : [],
               outcomes: [],
               model: options.model,
-              seedBundleFileId: Gd ?? undefined,
-              environmentVariables: co,
+              seedBundleFileId: seedFileId ?? undefined,
+              environmentVariables: envVars,
               appendSystemPrompt: options.appendSystemPrompt,
               customSystemPrompt: options.customSystemPrompt,
               appendSubagentSystemPrompt: options.appendSubagentSystemPrompt,
@@ -2316,7 +2376,7 @@ async function teleportToRemote(options) {
               allowedTools: options.allowedTools,
               disallowedTools: options.disallowedTools,
               outputSchema: options.outputSchema,
-              tags: w,
+              tags,
               sessionGroupingId: options.sessionGroupingId,
               agentId: options.agentId,
               correlationId: options.correlationId,
@@ -2325,15 +2385,15 @@ async function teleportToRemote(options) {
               deferFirstPrompt,
             })
           : {
-              title: vu,
+              title: titleText,
               events: initialControlEvents,
               session_context: {
-                sources: qd ? [qd] : [],
-                ...(Gd && {
-                  seed_bundle_file_id: Gd,
+                sources: source ? [source] : [],
+                ...(seedFileId && {
+                  seed_bundle_file_id: seedFileId,
                 }),
                 outcomes: [],
-                environment_variables: co,
+                environment_variables: envVars,
                 ...(options.model && {
                   model: options.model,
                 }),
@@ -2348,18 +2408,18 @@ async function teleportToRemote(options) {
                   correlation_id: options.correlationId,
                 }),
               },
-              ...h_,
-              ...(w && {
-                tags: w,
+              ...selector,
+              ...(tags && {
+                tags,
               }),
             };
       logForDebugging(
-        `[teleportToRemote] explicit env ${options.environmentId}, ${Object.keys(co).length} env vars, ${Gd ? "source=bundle" : `source=${qd?.url ?? "none"}@${options.branchName ?? "default"}`}`,
+        `[teleportToRemote] explicit env ${options.environmentId}, ${Object.keys(envVars).length} env vars, ${seedFileId ? "source=bundle" : `source=${source?.url ?? "none"}@${options.branchName ?? "default"}`}`,
       );
       if (signal.aborted) throw new AbortError_2();
       let {
         response,
-        bind: Ah,
+        bind: createResult,
         held,
         attested,
         firstPromptDeferred,
@@ -2368,109 +2428,122 @@ async function teleportToRemote(options) {
         buildBody,
         drops: summarizeSessionCreateBody({
           events: initialControlEvents,
-          environmentVariables: co,
+          environmentVariables: envVars,
         }),
         callerSendsFirstPrompt: options.deferInitialMessage === true,
         attaches: {
-          anything: qd !== null || Gd !== null,
+          anything: source !== null || seedFileId !== null,
           launchCheckout: null,
         },
-        post: (Yc, Zh) =>
-          ensureTrustedDevice(referralEligibility, Zh, (headers) =>
-            axios_default.post(referralEligibility.url, Yc, {
+        post: (postBody, bindState) =>
+          ensureTrustedDevice(referralEligibility, bindState, (headers) =>
+            axios_default.post(referralEligibility.url, postBody, {
               headers,
               signal,
-              validateStatus: ($T) => $T < 500,
+              validateStatus: (status) => status < 500,
             }),
           ),
       });
-      qt = isSuccessStatus(response.status);
+      created = isSuccessStatus(response.status);
       if (response.status !== 200 && response.status !== 201) {
         let url = `CreateSession ${response.status}: ${jsonStringify(response.data)}`;
-        let Zh = response.data;
-        if ([401, 403, 429].includes(response.status) || Zh?.error?.reason === "github_repo_access_denied")
+        let errorData = response.data;
+        if (
+          [401, 403, 429].includes(response.status) ||
+          errorData?.error?.reason === "github_repo_access_denied"
+        )
           logForDebugging(`[teleportToRemote] ${url}`, {
             level: "error",
           });
         else {
-          let $T = (OE) => (OE && /^[a-z][a-z0-9_]*$/.test(OE) ? OE : undefined);
-          logError(Error(`[type=${$T(Zh?.error?.type)},reason=${$T(Zh?.error?.reason)}] ${url}`));
+          let token = (rawToken) => (rawToken && /^[a-z][a-z0-9_]*$/.test(rawToken) ? rawToken : undefined);
+          logError(
+            Error(`[type=${token(errorData?.error?.type)},reason=${token(errorData?.error?.reason)}] ${url}`),
+          );
         }
-        let vp = cloudErrorMessage(response, Zh?.error?.message);
+        let errorText = cloudErrorMessage(response, errorData?.error?.message);
         options.onCreateFail?.(
-          (options.sessionGroupingId && projectNotFoundMessage(options.sessionGroupingId, Zh?.error)) ||
+          (options.sessionGroupingId &&
+            projectNotFoundMessage(options.sessionGroupingId, errorData?.error)) ||
             (await explainUntrustedDeviceRefusal(response, referralEligibility)) ||
-            loginRejectedMessage(response.status, vp.message) ||
-            vp.message ||
-            vp.statusLine,
+            loginRejectedMessage(response.status, errorText.message) ||
+            errorText.message ||
+            errorText.statusLine,
           "create_request_failed",
           {
             status: response.status,
-            serverType: normalizeApiErrorType(Zh?.error?.type),
-            serverReason: normalizeCreateSessionError(Zh?.error?.reason),
-            endpoint: Kn,
-            messageHidden: vp.messageHidden,
+            serverType: normalizeApiErrorType(errorData?.error?.type),
+            serverReason: normalizeCreateSessionError(errorData?.error?.reason),
+            endpoint,
+            messageHidden: errorText.messageHidden,
           },
         );
         return null;
       }
-      let _S = sessionIdFromCreateResponse(Kn, response.data);
-      if (!_S.ok) {
-        let Yc = CREATE_SESSION_FAILURES[_S.error];
-        logError(withTelemetryMessage(Error(`${Yc.logLead}: ${jsonStringify(response.data)}`), Yc.telemetry));
-        options.onCreateFail?.(Yc.message, Yc.reason);
+      let sessionResult = sessionIdFromCreateResponse(endpoint, response.data);
+      if (!sessionResult.ok) {
+        let createFailure = CREATE_SESSION_FAILURES[sessionResult.error];
+        logError(
+          withTelemetryMessage(
+            Error(`${createFailure.logLead}: ${jsonStringify(response.data)}`),
+            createFailure.telemetry,
+          ),
+        );
+        options.onCreateFail?.(createFailure.message, createFailure.reason);
         return null;
       }
-      let bS = _S.value;
+      let session = sessionResult.value;
       options.onProgress?.({
         kind: "session_exists",
-        sessionId: bS.id,
+        sessionId: session.id,
       });
       logCloudSessionLink(
-        bS.id,
+        session.id,
         options.source,
         {
           project: false,
           global: false,
         },
         {
-          endpoint: Kn,
+          endpoint,
           grouped: options.sessionGroupingId != null,
         },
         options.storageV5,
       );
-      reportDeviceBindOutcome(options.deviceBinding, Ah, bS.id, options.storageV5);
+      reportDeviceBindOutcome(options.deviceBinding, createResult, session.id, options.storageV5);
       if (attested && options.title)
         latchBoundSessionTitle(
-          bS.id,
+          session.id,
           options.title,
-          Ah?.ok ? Ah.value : undefined,
+          createResult?.ok ? createResult.value : undefined,
           options.credentials,
-          Ah?.ok ? held : undefined,
+          createResult?.ok ? held : undefined,
         );
-      let nk = firstPromptDeferred ? deferredFirstPrompt(initialControlEvents, initialMessage) : undefined;
+      let withheldMessage = firstPromptDeferred
+        ? deferredFirstPrompt(initialControlEvents, initialMessage)
+        : undefined;
       return {
-        id: bS.id,
-        title: sessionTitleOf(bS, vu),
-        ...(nk && {
-          withheldInitialMessage: nk,
+        id: session.id,
+        title: sessionTitleOf(session, titleText),
+        ...(withheldMessage && {
+          withheldInitialMessage: withheldMessage,
         }),
         ...(options.maxTurns !== undefined && {
-          maxTurnsConfirmed: acceptsMaxTurns(Kn, bS, options.maxTurns),
+          maxTurnsConfirmed: acceptsMaxTurns(endpoint, session, options.maxTurns),
         }),
       };
     }
-    if (pn.ignoredUntrustedPool)
+    if (selection.ignoredUntrustedPool)
       logForDebugging(
-        `Ignoring self-hosted environment default ${pn.ignoredUntrustedPool.id} from ${pn.ignoredUntrustedPool.source} \u2014 environment placement is only honoured from user/policy/flag settings. Run /remote-env to set your environment.`,
+        `Ignoring self-hosted environment default ${selection.ignoredUntrustedPool.id} from ${selection.ignoredUntrustedPool.source} \u2014 environment placement is only honoured from user/policy/flag settings. Run /remote-env to set your environment.`,
         {
           level: "warn",
         },
       );
-    let id = pn.id;
-    let ko = isCcpoolId(id);
-    if (ko && options.poolId === undefined)
-      fetchSelfHostedPools(Xn, options.credentials).then(
+    let id = selection.id;
+    let isPoolEnv = isCcpoolId(id);
+    if (isPoolEnv && options.poolId === undefined)
+      fetchSelfHostedPools(sessionToken, options.credentials).then(
         (selfHostedPools) => {
           if (
             selfHostedPools.length > 0 &&
@@ -2488,34 +2561,34 @@ async function teleportToRemote(options) {
             level: "warn",
           }),
       );
-    let un = options.description || extractTextContent(initialMessage);
-    let ao = !un && (await G());
-    let $o;
-    let yo = () =>
-      ($o ??=
+    let promptText = options.description || extractTextContent(initialMessage);
+    let needsTitlePolicy = !promptText && (await gatePromise());
+    let titlePromise;
+    let resolveTitle = () =>
+      (titlePromise ??=
         options.title && options.reuseOutcomeBranch
           ? Promise.resolve({
               title: options.title,
               branchName: options.reuseOutcomeBranch,
             })
-          : ao
+          : needsTitlePolicy
             ? Promise.resolve(DEFAULT_BACKGROUND_TASK_TITLE)
             : checkSessionTitlePolicyTaint(
-                un || DEFAULT_BACKGROUND_TASK_TITLE.title,
+                promptText || DEFAULT_BACKGROUND_TASK_TITLE.title,
                 signal,
                 options.credentials,
               ));
-    if ((options.builtinTools?.length ?? 0) === 0) yo();
+    if ((options.builtinTools?.length ?? 0) === 0) resolveTitle();
     logForDebugging("[teleport] phase: env-select");
-    let Ho = ko
+    let environments = isPoolEnv
       ? []
       : options.chosenEnvironment !== undefined
         ? [options.chosenEnvironment]
-        : await fetchEnvironments(Xn, options.storageV5, options.credentials);
+        : await fetchEnvironments(sessionToken, options.storageV5, options.credentials);
     if (signal.aborted) throw new AbortError_2();
-    if (!ko && Ho.length === 0 && !Zt)
+    if (!isPoolEnv && environments.length === 0 && !noGit)
       try {
-        Ho = [await createDefaultCloudEnvironment(undefined, signal, Xn)];
+        environments = [await createDefaultCloudEnvironment(undefined, signal, sessionToken)];
         logForDebugging("[teleportToRemote] Auto-created default cloud env");
       } catch (error) {
         if (signal.aborted) throw new AbortError_2();
@@ -2529,103 +2602,133 @@ async function teleportToRemote(options) {
         return null;
       }
     logForDebugging(
-      `Available environments: ${Ho.map((ma) => `${ma.environment_id} (${ma.name}, ${ma.kind})`).join(", ")}`,
+      `Available environments: ${environments.map((environment) => `${environment.environment_id} (${environment.name}, ${environment.kind})`).join(", ")}`,
     );
-    let rr = id;
-    let br = rr ? Ho.find((ma) => ma.environment_id === rr) : undefined;
-    let first = findFirst(Ho, (ma) => ma.kind === "anthropic_cloud");
-    if (!ko && options.useDefaultEnvironment && !br && !first) {
+    let defaultEnvId = id;
+    let defaultEnvironment = defaultEnvId
+      ? environments.find((environment) => environment.environment_id === defaultEnvId)
+      : undefined;
+    let first = findFirst(environments, (environment) => environment.kind === "anthropic_cloud");
+    if (!isPoolEnv && options.useDefaultEnvironment && !defaultEnvironment && !first) {
       logForDebugging(
-        `No configured default or anthropic_cloud in env list (${Ho.length} envs); retrying fetchEnvironments`,
+        `No configured default or anthropic_cloud in env list (${environments.length} envs); retrying fetchEnvironments`,
       );
-      Ho = await fetchEnvironments(Xn, options.storageV5, options.credentials);
+      environments = await fetchEnvironments(sessionToken, options.storageV5, options.credentials);
       if (signal.aborted) throw new AbortError_2();
-      br = rr ? Ho.find((ma) => ma.environment_id === rr) : undefined;
-      first = findFirst(Ho, (ma) => ma.kind === "anthropic_cloud");
-      if (!br && !first) {
-        let joined = Ho.map(
-          (Gd) => `"${environmentLabelOrKind(Gd.name, Gd.environment_id)}" (${safeTokenText(Gd.kind)})`,
-        ).join(", ");
-        let qd = `No configured default or anthropic_cloud environment available after retry (got: ${joined.length > 1500 ? `${Ho.length} environments` : joined}${rr ? `; configured default ${safeTokenText(rr)} not in list` : ""})`;
+      defaultEnvironment = defaultEnvId
+        ? environments.find((environment) => environment.environment_id === defaultEnvId)
+        : undefined;
+      first = findFirst(environments, (environment) => environment.kind === "anthropic_cloud");
+      if (!defaultEnvironment && !first) {
+        let joined = environments
+          .map(
+            (environment) =>
+              `"${environmentLabelOrKind(environment.name, environment.environment_id)}" (${safeTokenText(environment.kind)})`,
+          )
+          .join(", ");
+        let noDefaultEnvMessage = `No configured default or anthropic_cloud environment available after retry (got: ${joined.length > 1500 ? `${environments.length} environments` : joined}${defaultEnvId ? `; configured default ${safeTokenText(defaultEnvId)} not in list` : ""})`;
         logForDebugging(
-          `[teleportToRemote] ${qd}. Silent byoc fallthrough would launch into a dead env \u2014 fail fast instead. Environments as received (name, id, kind): ${jsonStringify(Ho.map((Gd) => [Gd.name, Gd.environment_id, Gd.kind]))}`,
+          `[teleportToRemote] ${noDefaultEnvMessage}. Silent byoc fallthrough would launch into a dead env \u2014 fail fast instead. Environments as received (name, id, kind): ${jsonStringify(environments.map((environment) => [environment.name, environment.environment_id, environment.kind]))}`,
           {
             level: "error",
           },
         );
-        options.onCreateFail?.(qd, "no_default_env");
+        options.onCreateFail?.(noDefaultEnvMessage, "no_default_env");
         return null;
       }
     }
-    let _r = ko ? undefined : br || undefined || first || Ho.find((ma) => ma.kind !== "bridge") || Ho[0];
-    if (!_r && !ko) {
+    let selectedEnvironment = isPoolEnv
+      ? undefined
+      : defaultEnvironment ||
+        undefined ||
+        first ||
+        environments.find((environment) => environment.kind !== "bridge") ||
+        environments[0];
+    if (!selectedEnvironment && !isPoolEnv) {
       logError(Error("No environments available for session creation"));
       options.onCreateFail?.("No environments available for session creation", "no_environments");
       return null;
     }
-    if (rr && _r) {
-      let ma = _r.environment_id === rr;
+    if (defaultEnvId && selectedEnvironment) {
+      let isConfiguredDefault = selectedEnvironment.environment_id === defaultEnvId;
       logForDebugging(
-        ma
-          ? `Using the configured default environment: ${rr}`
-          : `Configured default environment ${rr} not found, using the fallback`,
+        isConfiguredDefault
+          ? `Using the configured default environment: ${defaultEnvId}`
+          : `Configured default environment ${defaultEnvId} not found, using the fallback`,
       );
     }
-    let Cr = ko ? rr : _r.environment_id;
+    let environmentId = isPoolEnv ? defaultEnvId : selectedEnvironment.environment_id;
     logForDebugging(
-      _r ? `Selected environment: ${Cr} (${_r.name}, ${_r.kind})` : `Selected environment: ${Cr}`,
+      selectedEnvironment
+        ? `Selected environment: ${environmentId} (${selectedEnvironment.name}, ${selectedEnvironment.kind})`
+        : `Selected environment: ${environmentId}`,
     );
-    if (refuseBuiltinToolsCreate(options, options.agentId ? undefined : ko ? "self_hosted_pool" : _r?.kind))
+    if (
+      refuseBuiltinToolsCreate(
+        options,
+        options.agentId ? undefined : isPoolEnv ? "self_hosted_pool" : selectedEnvironment?.kind,
+      )
+    )
       return null;
-    let Vr = environmentLabelOrKind(options.chosenEnvironment === undefined ? _r?.name : undefined, Cr);
-    yo();
-    let Oo = null;
-    let jr = null;
-    let Or = null;
-    let Io = "all";
+    let environmentLabel = environmentLabelOrKind(
+      options.chosenEnvironment === undefined ? selectedEnvironment?.name : undefined,
+      environmentId,
+    );
+    resolveTitle();
+    let repoSource = null;
+    let repoSlug = null;
+    let bundleFileId = null;
+    let bundleScope = "all";
     let gitSource = null;
     let seedBundleFileId = null;
     if (options.sourceUrl)
-      Oo = {
+      repoSource = {
         type: "git_repository",
         url: options.sourceUrl,
         revision: options.branchName,
       };
     logForDebugging("[teleport] phase: branch-detect");
-    let Es = Oo || options.agentId || Zt ? null : await detectCurrentRepositoryWithHost(options.cwd);
-    let Nr = Es && isNestedGitLabProject(Es) ? null : Es;
-    if (Es && !Nr)
+    let detectedRepo =
+      repoSource || options.agentId || noGit ? null : await detectCurrentRepositoryWithHost(options.cwd);
+    let repo = detectedRepo && isNestedGitLabProject(detectedRepo) ? null : detectedRepo;
+    if (detectedRepo && !repo)
       logForDebugging("[teleportToRemote] nested GitLab project \u2014 not sent as a git source");
-    let Is = false;
+    let githubAvailable = false;
     let gitSource_2 = null;
-    let as = false;
-    let Vi = false;
+    let transient = false;
+    let notConnected = false;
     let gitOutcome = null;
-    let Wi = options.sourceUrl ? "explicit_source_url" : options.agentId ? "agent_defaults" : "no_git_at_all";
-    let cwd = findGitRoot(s);
-    let wa = ko || _r?.kind === "byoc";
-    let hr = wa || false;
-    let mi =
-      wa ||
+    let sourceReason = options.sourceUrl
+      ? "explicit_source_url"
+      : options.agentId
+        ? "agent_defaults"
+        : "no_git_at_all";
+    let gitRoot = findGitRoot(cwdPath);
+    let isSelfHosted = isPoolEnv || selectedEnvironment?.kind === "byoc";
+    let byocEnv = isSelfHosted || false;
+    let isSelfHostedEnv =
+      isSelfHosted ||
       selfHostedEnvironmentKind({
-        environment_kind: _r?.kind,
+        environment_kind: selectedEnvironment?.kind,
       }) !== null;
-    let Ha = options.reuseOutcomeBranch ? "--on-branch" : "--ref";
-    let CCR_FORCE_BUNDLE = options.allowBundle && !hr && !options.agentId && env.CCR_FORCE_BUNDLE;
-    let nr =
+    let refFlag = options.reuseOutcomeBranch ? "--on-branch" : "--ref";
+    let CCR_FORCE_BUNDLE = options.allowBundle && !byocEnv && !options.agentId && env.CCR_FORCE_BUNDLE;
+    let bundleEnabled =
       options.allowBundle &&
-      !hr &&
+      !byocEnv &&
       !options.agentId &&
-      cwd !== null &&
+      gitRoot !== null &&
       (env.CCR_ENABLE_BUNDLE || (await checkGate_CACHED_OR_BLOCKING("tengu_ccr_bundle_seed_enabled")));
-    let Ti =
-      options.allowBundle && !hr && !options.agentId && cwd !== null ? repositorySetBundleSwitches() : [];
-    if (Ti.length > 0)
+    let repoBundleSwitches =
+      options.allowBundle && !byocEnv && !options.agentId && gitRoot !== null
+        ? repositorySetBundleSwitches()
+        : [];
+    if (repoBundleSwitches.length > 0)
       options.onBundleNotice?.(
-        `${Ti.join(", ")} in this repository\u2019s .claude/settings files ${Ti.length === 1 ? "is" : "are"} ignored there: how a cloud start is seeded from this machine is the machine owner\u2019s setting (shell environment or ~/.claude/settings.json), never a repository\u2019s.`,
+        `${repoBundleSwitches.join(", ")} in this repository\u2019s .claude/settings files ${repoBundleSwitches.length === 1 ? "is" : "are"} ignored there: how a cloud start is seeded from this machine is the machine owner\u2019s setting (shell environment or ~/.claude/settings.json), never a repository\u2019s.`,
       );
     let seedBundleFileId_2 = null;
-    let _i = {
+    let folderPlan = {
       folderRoot: null,
       optedIn: false,
       insideAnotherCheckout: false,
@@ -2637,21 +2740,21 @@ async function teleportToRemote(options) {
       pathMisread: false,
       noteForClaude: null,
     };
-    let { folderRoot, optedIn } = _i;
-    let fi =
+    let { folderRoot, optedIn } = folderPlan;
+    let forwardHomeSettings =
       options.staysAttached === true &&
-      (await G()) &&
+      (await gatePromise()) &&
       options.forwardHomeSettings !== false &&
-      !hr &&
+      !byocEnv &&
       !options.agentId &&
       homeSettingsForwardingFeature(options.homeSettingsConsent).enabledNow() &&
       isForwardModeEffective(options.homeSettingsConsent);
-    let Ri = fi && !mi;
-    let withRunnerPack = Ri && isRemoteHomeSettingsDisabled();
-    let Di = Ri && isLaunchConsentBlocked(options.homeSettingsConsent);
-    let yr =
-      Ri && (!Di || optedIn || folderRoot !== null)
-        ? import("./chunk-cx5g5sgv.js")
+    let homeSeedEnabled = forwardHomeSettings && !isSelfHostedEnv;
+    let withRunnerPack = homeSeedEnabled && isRemoteHomeSettingsDisabled();
+    let launchConsentBlocked = homeSeedEnabled && isLaunchConsentBlocked(options.homeSettingsConsent);
+    let homeSeedPlanPromise =
+      homeSeedEnabled && (!launchConsentBlocked || optedIn || folderRoot !== null)
+        ? import("../services/homeSeed/planHomeSeed.js")
             .then(({ planHomeSeed }) =>
               planHomeSeed({
                 signal,
@@ -2662,354 +2765,377 @@ async function teleportToRemote(options) {
             )
             .catch(() => null)
         : null;
-    let Kr;
-    let Li =
+    let defaultBranchName;
+    let fromHeadBranch =
       options.branchFromHead === true &&
       options.branchName !== undefined &&
       options.explicitRef === undefined;
-    let Qs = cwd !== null && (await Me()) ? await readLaunchGitLayout(cwd, signal, await We()) : undefined;
+    let launchLayout =
+      gitRoot !== null && (await isViolinWood())
+        ? await readLaunchGitLayout(gitRoot, signal, await alwaysTrueAsync())
+        : undefined;
     if (signal.aborted) throw new AbortError_2();
     let Hi = undefined;
-    let Xa = null;
+    let pinnedAppCheck = null;
     let now = Date.now();
-    let Bs =
-      Nr && !CCR_FORCE_BUNDLE && !wa && isGithubDotCom(Nr.host)
-        ? (Xa ?? checkGithubAppInstalled(Nr.owner, Nr.name, signal))
+    let appCheckPromise =
+      repo && !CCR_FORCE_BUNDLE && !isSelfHosted && isGithubDotCom(repo.host)
+        ? (pinnedAppCheck ?? checkGithubAppInstalled(repo.owner, repo.name, signal))
         : null;
-    let Ca = (ma) => Bs !== null && !optedIn && ma !== "HEAD";
-    let tu = async (ma) => {
-      if (!Nr || Bs === null) return null;
-      let qd = await Bs;
-      if (!qd.appInstalled || ma === qd.defaultBranch) return null;
+    let shouldAskGithub = (branch) => appCheckPromise !== null && !optedIn && branch !== "HEAD";
+    let askGithubBranch = async (branch) => {
+      if (!repo || appCheckPromise === null) return null;
+      let appCheck = await appCheckPromise;
+      if (!appCheck.appInstalled || branch === appCheck.defaultBranch) return null;
       let min = Math.min(GITHUB_APP_CHECK_TIMEOUT_MS, GITHUB_APP_CHECK_TIMEOUT_MS - (Date.now() - now));
       if (min < MIN_RESYNC_BUDGET_MS) {
         logForDebugging(
-          `[teleportToRemote] GitHub not asked about branch ${ma}: only ${Math.max(0, min)} ms of the GitHub App preflight's 15 s was left`,
+          `[teleportToRemote] GitHub not asked about branch ${branch}: only ${Math.max(0, min)} ms of the GitHub App preflight's 15 s was left`,
         );
         return null;
       }
-      let sc = (
+      let lookUpBranch = (
         await askGithubBranchExists({
-          owner: Nr.owner,
-          name: Nr.name,
-          branches: [ma],
+          owner: repo.owner,
+          name: repo.name,
+          branches: [branch],
           timeoutMs: min,
           signal,
           credentials: options.credentials,
         })
-      )(ma);
-      if (sc === "no")
+      )(branch);
+      if (lookUpBranch === "no")
         logForDebugging(
-          `[teleportToRemote] GitHub has no branch ${ma}: the start is looked up again without its remote-tracking ref, unless the search for a pushed commit had already failed`,
+          `[teleportToRemote] GitHub has no branch ${branch}: the start is looked up again without its remote-tracking ref, unless the search for a pushed commit had already failed`,
         );
-      return sc;
+      return lookUpBranch;
     };
-    let pd =
-      cwd !== null && Nr && !wa && !CCR_FORCE_BUNDLE && (optedIn || Li)
+    let remoteLookup =
+      gitRoot !== null && repo && !isSelfHosted && !CCR_FORCE_BUNDLE && (optedIn || fromHeadBranch)
         ? await resolveRemote(
-            cwd,
-            Qs === undefined ? undefined : await screenedGitEnvForReach(Qs, cwd, signal, await We()),
+            gitRoot,
+            launchLayout === undefined
+              ? undefined
+              : await screenedGitEnvForReach(launchLayout, gitRoot, signal, await alwaysTrueAsync()),
           )
         : null;
-    let ga = 0;
-    let Hl = null;
-    let hd =
-      Li && cwd !== null && pd !== null
-        ? async (ma) =>
+    let searchTries = 0;
+    let createdFrom = null;
+    let startResolver =
+      fromHeadBranch && gitRoot !== null && remoteLookup !== null
+        ? async (branch) =>
             resolveStartWithGithub({
               lookUp: async ({ remoteLacksBranch }) => {
-                Hl = null;
+                createdFrom = null;
                 return checkBranchPushed({
-                  gitRoot: cwd,
-                  remoteName: pd.name,
-                  branch: ma,
-                  nameContaining: Nr ? !isGithubDotCom(Nr.host) : false,
+                  gitRoot,
+                  remoteName: remoteLookup.name,
+                  branch,
+                  nameContaining: repo ? !isGithubDotCom(repo.host) : false,
                   countAhead: true,
-                  sessionRoot: Qs === undefined ? undefined : cwd,
-                  sessionReach: Qs,
-                  ...(Qs !== undefined && {
-                    startsInProject: await We(),
+                  sessionRoot: launchLayout === undefined ? undefined : gitRoot,
+                  sessionReach: launchLayout,
+                  ...(launchLayout !== undefined && {
+                    startsInProject: await alwaysTrueAsync(),
                   }),
                   ...(remoteLacksBranch && {
-                    staleBranch: ma,
+                    staleBranch: branch,
                   }),
                   signal,
-                  onSearchAmongAllRefs: (Gd) => {
-                    ga += Gd;
+                  onSearchAmongAllRefs: (count) => {
+                    searchTries += count;
                   },
-                  onCreation: (Gd) => {
-                    Hl = Gd;
+                  onCreation: (creation) => {
+                    createdFrom = creation;
                   },
                 });
               },
-              ask: Ca(ma) ? () => tu(ma) : null,
+              ask: shouldAskGithub(branch) ? () => askGithubBranch(branch) : null,
             })
         : null;
-    let Sd = (start) =>
+    let isOwnStartGood = (start) =>
       start.kind === "pushed_ancestor" &&
-      (!Nr || isGithubDotCom(Nr.host) || start.branch !== null || start.containedIn !== undefined);
-    let Ld =
-      Li && options.branchName !== undefined && !optedIn
+      (!repo || isGithubDotCom(repo.host) || start.branch !== null || start.containedIn !== undefined);
+    let launchBranch =
+      fromHeadBranch && options.branchName !== undefined && !optedIn
         ? recordedOriginalBranch(options.branchName)
         : options.branchName;
-    let vs =
-      hd !== null && cwd !== null && options.branchName !== undefined && !optedIn
-        ? await branchForTeleport(cwd, options.branchName)
-        : Ld;
+    let branchToLookUp =
+      startResolver !== null && gitRoot !== null && options.branchName !== undefined && !optedIn
+        ? await branchForTeleport(gitRoot, options.branchName)
+        : launchBranch;
     let now_2 = Date.now();
-    let gd = hd !== null && vs !== undefined && vs !== Ld ? await hd(vs) : null;
-    let start = gd?.start ?? null;
-    let Eu = start !== null && (start.kind === "on_remote" || Sd(start));
-    let Uc = Eu ? vs : Ld;
-    let Kc = Eu ? gd : hd !== null && Ld !== undefined ? await hd(Ld) : null;
-    let start_2 = Kc?.start ?? null;
-    let Qm = start_2 === null ? null : Date.now() - now_2;
-    let wr = Li && pd === null && Qs !== undefined && !!Nr && !wa && !CCR_FORCE_BUNDLE;
-    if (wr)
+    let lookUpStart =
+      startResolver !== null && branchToLookUp !== undefined && branchToLookUp !== launchBranch
+        ? await startResolver(branchToLookUp)
+        : null;
+    let start = lookUpStart?.start ?? null;
+    let startGood = start !== null && (start.kind === "on_remote" || isOwnStartGood(start));
+    let startBranch = startGood ? branchToLookUp : launchBranch;
+    let runResult = startGood
+      ? lookUpStart
+      : startResolver !== null && launchBranch !== undefined
+        ? await startResolver(launchBranch)
+        : null;
+    let start_2 = runResult?.start ?? null;
+    let startMs = start_2 === null ? null : Date.now() - now_2;
+    let remoteUnresolved =
+      fromHeadBranch &&
+      remoteLookup === null &&
+      launchLayout !== undefined &&
+      !!repo &&
+      !isSelfHosted &&
+      !CCR_FORCE_BUNDLE;
+    if (remoteUnresolved)
       logForDebugging(
         "[teleportToRemote] the screened remote look-up answered nothing, so the start was not resolved. One possible cause: its git applies no personal git file, so a checkout that git takes for another account\u2019s counts as safe only when the system file says so (git config --system --add safe.directory <path>).",
         {
           level: "warn",
         },
       );
-    let zs = start_2 !== null && Sd(start_2) ? start_2 : null;
+    let goodStart = start_2 !== null && isOwnStartGood(start_2) ? start_2 : null;
     if (signal.aborted) throw new AbortError_2();
-    let li = null;
+    let layoutPromise = null;
     if (signal.aborted) throw new AbortError_2();
-    if (Nr && !CCR_FORCE_BUNDLE) {
-      if (wa) {
-        Is = true;
-        Wi = "byoc_env_skip_preflight";
-      } else if (isGithubDotCom(Nr.host)) {
-        let ma = await (Bs ?? checkGithubAppInstalled(Nr.owner, Nr.name, signal));
-        Is = ma.appInstalled;
-        gitSource_2 = ma.defaultBranch;
-        as = ma.transient;
-        Vi = ma.linkedAccountAccess === "github_not_connected";
-        gitOutcome = Is
+    if (repo && !CCR_FORCE_BUNDLE) {
+      if (isSelfHosted) {
+        githubAvailable = true;
+        sourceReason = "byoc_env_skip_preflight";
+      } else if (isGithubDotCom(repo.host)) {
+        let appCheck = await (appCheckPromise ?? checkGithubAppInstalled(repo.owner, repo.name, signal));
+        githubAvailable = appCheck.appInstalled;
+        gitSource_2 = appCheck.defaultBranch;
+        transient = appCheck.transient;
+        notConnected = appCheck.linkedAccountAccess === "github_not_connected";
+        gitOutcome = githubAvailable
           ? null
           : {
-              ...GITHUB_PRECONDITION_ERRORS(ma),
-              httpStatus: ma.httpStatus,
+              ...GITHUB_PRECONDITION_ERRORS(appCheck),
+              httpStatus: appCheck.httpStatus,
             };
-        Wi = Is ? "github_preflight_ok" : "github_preflight_failed";
+        sourceReason = githubAvailable ? "github_preflight_ok" : "github_preflight_failed";
       } else {
-        Is = true;
-        Wi = "ghes_optimistic";
+        githubAvailable = true;
+        sourceReason = "ghes_optimistic";
       }
-    } else if (CCR_FORCE_BUNDLE) Wi = "forced_bundle";
-    else if (cwd && !options.agentId) Wi = "no_github_remote";
-    let nl = null;
+    } else if (CCR_FORCE_BUNDLE) sourceReason = "forced_bundle";
+    else if (gitRoot && !options.agentId) sourceReason = "no_github_remote";
+    let githubPreflight = null;
     if (signal.aborted) throw new AbortError_2();
     if (gitOutcome !== null)
       logFeatureSad("cloud_github_preflight", `${gitOutcome.kind}_${gitOutcome.httpStatus ?? "none"}`);
-    else if (Wi === "github_preflight_ok") logFeatureOk("cloud_github_preflight");
-    let Tl = gitOutcome;
-    let kd =
-      Tl === null
+    else if (sourceReason === "github_preflight_ok") logFeatureOk("cloud_github_preflight");
+    let preflightFailure = gitOutcome;
+    let preflightFields =
+      preflightFailure === null
         ? {}
         : {
-            github_preflight_failure: fromEnum(Tl.kind),
-            ...(Tl.httpStatus !== null && {
-              github_preflight_http_status: Tl.httpStatus,
+            github_preflight_failure: fromEnum(preflightFailure.kind),
+            ...(preflightFailure.httpStatus !== null && {
+              github_preflight_http_status: preflightFailure.httpStatus,
             }),
           };
-    let na = {
+    let titlePlan = {
       engine: "none",
       reason: "not_opted_in",
     };
-    let em = null;
-    let Ac = undefined;
-    let tp = undefined;
-    let Yh = null;
-    let Ef = null;
-    let np = null;
-    let Rf = null;
-    let ap = false;
-    let al = null;
-    let mf = null;
-    let rg = () => {
-      let ma = mf;
-      let pinnedCommit = np?.pinnedCommit;
-      return zs !== null &&
-        ma?.kind === "pushed_ancestor" &&
-        ma.commit !== zs.commit &&
-        (pinnedCommit === undefined || pinnedCommit === ma.commit)
-        ? ma
+    let settingsPlan = null;
+    let xxAc = undefined;
+    let xxTp = undefined;
+    let xxYh = null;
+    let pinnedCommit = null;
+    let xxNp = null;
+    let xxRf = null;
+    let xxAp = false;
+    let xxAl = null;
+    let bestStart = null;
+    let pinnedStart = () => {
+      let best = bestStart;
+      let pinnedCommit = xxNp?.pinnedCommit;
+      return goodStart !== null &&
+        best?.kind === "pushed_ancestor" &&
+        best.commit !== goodStart.commit &&
+        (pinnedCommit === undefined || pinnedCommit === best.commit)
+        ? best
         : null;
     };
-    let uh = null;
-    let Kf = null;
-    let ch = (ma, qd) => {};
-    let uS =
-      Nr && !isGithubDotCom(Nr.host)
+    let xxUh = null;
+    let xxKf = null;
+    let noopNotify = (notice, detail) => {};
+    let explicitRefBlock =
+      repo && !isGithubDotCom(repo.host)
         ? {
             reason: "other_host",
           }
         : options.explicitRef !== undefined
           ? {
               reason: "explicit_ref",
-              flag: Ha,
+              flag: refFlag,
             }
           : null;
-    let Ks = async () => null;
-    if (!Is && !nr && Nr) Is = true;
-    let kl = null;
-    let Yd = null;
-    let xc = null;
-    let Ip = Es ? getGitHostKind(Es.host) : null;
-    let Gc = Ip === "gitlab" ? "GitLab" : Ip === "bitbucket" ? "Bitbucket" : null;
-    let oc = undefined;
-    let hp = false;
-    let Pg = "not_asked";
+    let noSeedPlan = async () => null;
+    if (!githubAvailable && !bundleEnabled && repo) githubAvailable = true;
+    let xxKl = null;
+    let revisionText = null;
+    let detachedInfo = null;
+    let hostKind = detectedRepo ? getGitHostKind(detectedRepo.host) : null;
+    let forgeName = hostKind === "gitlab" ? "GitLab" : hostKind === "bitbucket" ? "Bitbucket" : null;
+    let xxOc = undefined;
+    let xxHp = false;
+    let githubAsked = "not_asked";
     let savedNo = undefined?.savedNo;
-    let dy = false;
-    let aI = savedNo !== undefined && true;
-    let uI = false;
-    let cS = undefined;
-    let mae = null;
-    let Bx = false;
-    let E5 = false;
-    let gae = false;
-    let gW = false;
-    let IW = undefined;
-    let Tw = true;
-    let XF = nr && (optedIn || !gae);
-    let Ux = null;
-    let xT = null;
+    let xxDy = false;
+    let xxAI = savedNo !== undefined && true;
+    let xxUI = false;
+    let xxCS = undefined;
+    let xxMae = null;
+    let xxBx = false;
+    let xxE5 = false;
+    let xxGae = false;
+    let xxGW = false;
+    let xxIW = undefined;
+    let advisesPush = true;
+    let seedAllowed = bundleEnabled && (optedIn || !xxGae);
+    let branchText = null;
+    let shortStartText = null;
     if (
       start_2?.kind === "none" &&
-      Is &&
-      Nr &&
-      (XF || (nr && (Gc !== null || false))) &&
-      Yh === null &&
-      em === null
+      githubAvailable &&
+      repo &&
+      (seedAllowed || (bundleEnabled && (forgeName !== null || false))) &&
+      xxYh === null &&
+      settingsPlan === null
     ) {
-      Is = false;
-      Wi = "branch_not_on_remote";
+      githubAvailable = false;
+      sourceReason = "branch_not_on_remote";
     }
-    if (Is && Nr) {
-      let { host, owner, name } = Nr;
-      Kr ??= Uc ?? (await getDefaultBranch());
-      let vu = Kr;
-      if (zs !== null && pd !== null) {
-        let sc = rg() ?? zs;
-        let fc = isGithubDotCom(host) ? null : (sc.branch ?? sc.containedIn ?? null);
-        vu = fc ?? sc.commit;
-        Yd = fc !== null ? printableText(fc) : describedTarget(sc, pd.name);
-        Ux = describeBranchStartability({
-          branch: Kr,
-          start: sc,
-          remoteName: pd.name,
+    if (githubAvailable && repo) {
+      let { host, owner, name } = repo;
+      defaultBranchName ??= startBranch ?? (await getDefaultBranch());
+      let targetRevision = defaultBranchName;
+      if (goodStart !== null && remoteLookup !== null) {
+        let startPoint = pinnedStart() ?? goodStart;
+        let startBranchName = isGithubDotCom(host)
+          ? null
+          : (startPoint.branch ?? startPoint.containedIn ?? null);
+        targetRevision = startBranchName ?? startPoint.commit;
+        revisionText =
+          startBranchName !== null
+            ? printableText(startBranchName)
+            : describedTarget(startPoint, remoteLookup.name);
+        branchText = describeBranchStartability({
+          branch: defaultBranchName,
+          start: startPoint,
+          remoteName: remoteLookup.name,
           host,
-          byName: fc,
-          carried: optedIn && fc === null,
-          advisesPush: Tw,
+          byName: startBranchName,
+          carried: optedIn && startBranchName === null,
+          advisesPush,
         });
-        kl = Ux;
-        xT = {
+        xxKl = branchText;
+        shortStartText = {
           line: describeBranchStartability({
-            branch: Kr,
-            start: sc,
-            remoteName: pd.name,
+            branch: defaultBranchName,
+            start: startPoint,
+            remoteName: remoteLookup.name,
             host,
-            byName: fc,
+            byName: startBranchName,
             carried: false,
             advisesPush: false,
           }),
         };
       } else if (
         start_2?.kind === "not_on_remote" ||
-        (start_2?.kind === "pushed_ancestor" && zs === null && Kr !== "HEAD")
+        (start_2?.kind === "pushed_ancestor" && goodStart === null && defaultBranchName !== "HEAD")
       ) {
-        vu =
+        targetRevision =
           gitSource_2 ??
           (start_2.kind === "not_on_remote" ? start_2.defaultBranch : null) ??
           (await getDefaultBranch());
-        Yd = printableText(vu);
-        kl = branchNotOnRemoteMessage({
-          branch: Kr,
+        revisionText = printableText(targetRevision);
+        xxKl = branchNotOnRemoteMessage({
+          branch: defaultBranchName,
           host,
-          revision: vu,
-          advisesPush: Tw,
-          goneFromGithub: Kc?.github === "no",
+          revision: targetRevision,
+          advisesPush,
+          goneFromGithub: runResult?.github === "no",
         });
-        xT = {
+        shortStartText = {
           line: branchNotOnRemoteMessage({
-            branch: Kr,
+            branch: defaultBranchName,
             host,
-            revision: vu,
+            revision: targetRevision,
             advisesPush: false,
           }),
         };
       } else if (start_2?.kind === "none") {
-        vu = gitSource_2 ?? start_2.defaultBranch ?? (await getDefaultBranch());
-        let sc = printableText(vu);
-        Yd = sc;
-        xc = {
-          defaultBranch: sc,
-          branch: Kr === "HEAD" ? null : printableText(Kr),
-          remote: pd === null ? null : printableText(pd.name),
+        targetRevision = gitSource_2 ?? start_2.defaultBranch ?? (await getDefaultBranch());
+        let fallbackRevisionText = printableText(targetRevision);
+        revisionText = fallbackRevisionText;
+        detachedInfo = {
+          defaultBranch: fallbackRevisionText,
+          branch: defaultBranchName === "HEAD" ? null : printableText(defaultBranchName),
+          remote: remoteLookup === null ? null : printableText(remoteLookup.name),
         };
-        kl = `${Kr === "HEAD" ? "This detached HEAD" : `Branch ${printableText(Kr)}`} shares no history with ${pd?.name ?? "the remote"} as last fetched here, so the cloud session starts from ${sc} instead; commits and changes that exist only on this machine are not in it.`;
+        xxKl = `${defaultBranchName === "HEAD" ? "This detached HEAD" : `Branch ${printableText(defaultBranchName)}`} shares no history with ${remoteLookup?.name ?? "the remote"} as last fetched here, so the cloud session starts from ${fallbackRevisionText} instead; commits and changes that exist only on this machine are not in it.`;
       } else if (
         start_2?.kind === "on_remote" &&
         start_2.aheadCount !== undefined &&
         start_2.aheadCount > 0 &&
-        pd !== null
+        remoteLookup !== null
       ) {
-        Ux = branchAheadOfRemoteMessage({
-          branch: Kr,
+        branchText = branchAheadOfRemoteMessage({
+          branch: defaultBranchName,
           aheadCount: start_2.aheadCount,
-          remoteName: pd.name,
-          advisesPush: Tw,
+          remoteName: remoteLookup.name,
+          advisesPush,
         });
-        kl = Ux;
-        xT = {
+        xxKl = branchText;
+        shortStartText = {
           line: branchAheadOfRemoteMessage({
-            branch: Kr,
+            branch: defaultBranchName,
             aheadCount: start_2.aheadCount,
-            remoteName: pd.name,
+            remoteName: remoteLookup.name,
             advisesPush: false,
           }),
         };
-      } else if (wr && !optedIn) {
-        let sc = isGithubDotCom(host) ? "GitHub" : host;
-        let fc = Kr === "HEAD";
-        kl = `${fc ? `This checkout is on a detached HEAD, and no remote of it could be read, so its commit could not be looked for on ${sc}. The cloud session was asked to start from HEAD as ${sc} has it, its default branch.` : `Whether branch ${printableText(Kr)} is on ${sc} could not be checked, because no remote of this checkout could be read. The cloud session was asked to start from it by name.`}${Tw ? ` ${fc ? "To start from your work, push it" : "If it is not there, push your work"} to a branch and start a new session from that branch.` : ""}`;
+      } else if (remoteUnresolved && !optedIn) {
+        let forgeLabel = isGithubDotCom(host) ? "GitHub" : host;
+        let detachedHead = defaultBranchName === "HEAD";
+        xxKl = `${detachedHead ? `This checkout is on a detached HEAD, and no remote of it could be read, so its commit could not be looked for on ${forgeLabel}. The cloud session was asked to start from HEAD as ${forgeLabel} has it, its default branch.` : `Whether branch ${printableText(defaultBranchName)} is on ${forgeLabel} could not be checked, because no remote of this checkout could be read. The cloud session was asked to start from it by name.`}${advisesPush ? ` ${detachedHead ? "To start from your work, push it" : "If it is not there, push your work"} to a branch and start a new session from that branch.` : ""}`;
       }
       if (options.reuseOutcomeBranch) {
         let envCcrOnBranchDefaultGuard = process.env.CCR_ON_BRANCH_DEFAULT_GUARD;
-        let fc =
+        let guardedMode =
           env.CCR_ON_BRANCH_DEFAULT_GUARD ??
           (envCcrOnBranchDefaultGuard != null && String(envCcrOnBranchDefaultGuard).trim()
             ? "enforce"
             : (await checkGate_CACHED_OR_BLOCKING("tengu_on_branch_default_guard_observe").catch(() => false))
               ? "observe"
               : "enforce");
-        if (fc !== "off") {
-          let h_ = gitSource_2 ?? (await getDefaultBranchIfKnown(options.cwd));
-          if (h_ === null)
+        if (guardedMode !== "off") {
+          let defaultBranchIfKnown = gitSource_2 ?? (await getDefaultBranchIfKnown(options.cwd));
+          if (defaultBranchIfKnown === null)
             logForDebugging(
               "[teleportToRemote] reuse-outcome-branch collision guard: default branch unknown (no preflight answer, origin/HEAD " +
                 `unresolved) \u2014 failing open for '${options.reuseOutcomeBranch}'`,
             );
-          else if (options.reuseOutcomeBranch === h_) {
-            let Rh = options.explicitRef === options.reuseOutcomeBranch;
-            let Af = options.source === "autofix_pr";
+          else if (options.reuseOutcomeBranch === defaultBranchIfKnown) {
+            let explicitBranch = options.explicitRef === options.reuseOutcomeBranch;
+            let isAutofix = options.source === "autofix_pr";
             logEvent("tengu_teleport_on_branch_default_guard", {
-              mode: fromEnum(fc),
+              mode: fromEnum(guardedMode),
               source: fromEnum(options.source),
               evidence: fromEnum(gitSource_2 !== null ? "preflight" : "local_symref"),
-              arm: fromEnum(wa ? "pool" : "managed"),
+              arm: fromEnum(isSelfHosted ? "pool" : "managed"),
             });
-            if (wa)
+            if (isSelfHosted)
               logForDebugging(
                 `[teleportToRemote] reuse-outcome-branch collision guard (pool arm): '${options.reuseOutcomeBranch}' is the ` +
                   "repository's default branch \u2014 allowed on self-hosted " +
                   "pools; emitted for policy telemetry only",
               );
-            else if (fc === "observe")
+            else if (guardedMode === "observe")
               logForDebugging(
                 `[teleportToRemote] reuse-outcome-branch collision guard (observe): '${options.reuseOutcomeBranch}' is the ` +
                   "repository's default branch \u2014 would deny; proceeding " +
@@ -3017,16 +3143,16 @@ async function teleportToRemote(options) {
               );
             else {
               options.onCreateFail?.(
-                (Rh
+                (explicitBranch
                   ? `--on-branch ${printableStatusText(options.reuseOutcomeBranch)} targets `
-                  : Af
+                  : isAutofix
                     ? `This pull request's head branch '${singleTokenText(options.reuseOutcomeBranch)}' is `
                     : `The requested outcome branch '${singleTokenText(options.reuseOutcomeBranch)}' is `) +
                   "the repository's default branch, which this environment's runner cannot reuse as its work branch (its git checkout -b fails on a name the clone already has). " +
-                  (Rh
+                  (explicitBranch
                     ? `Use --ref ${printableStatusText(options.reuseOutcomeBranch)} to base the ` +
                       "session on it and let it push to a fresh claude/\u2026 branch."
-                    : Af
+                    : isAutofix
                       ? "Autofix can monitor this PR from a self-hosted (BYOC) default environment, whose runner tolerates reusing the default branch."
                       : "Use a non-default branch."),
                 "outcome_branch_is_default",
@@ -3037,108 +3163,116 @@ async function teleportToRemote(options) {
         }
       }
       logForDebugging(
-        `[teleportToRemote] Git source: ${host}/${owner}/${name}, revision: ${vu ?? "none"}${Ef === null ? "" : ` pinned at ${Ef}`}`,
+        `[teleportToRemote] Git source: ${host}/${owner}/${name}, revision: ${targetRevision ?? "none"}${pinnedCommit === null ? "" : ` pinned at ${pinnedCommit}`}`,
       );
-      Oo = {
+      repoSource = {
         type: "git_repository",
         url: `https://${host}/${owner}/${name}`,
-        revision: Ef ?? vu,
+        revision: pinnedCommit ?? targetRevision,
         ...(options.reuseOutcomeBranch && {
           allow_unrestricted_git_push: true,
         }),
       };
-      jr = `${owner}/${name}`;
+      repoSlug = `${owner}/${name}`;
     }
-    let cLe = null;
-    let MT = null;
-    let JF = null;
-    let hae = false;
-    if (!Oo && !wa && options.explicitRef) {
-      let ma = CCR_FORCE_BUNDLE
+    let xxCle = null;
+    let xxMT = null;
+    let xxJF = null;
+    let xxHae = false;
+    if (!repoSource && !isSelfHosted && options.explicitRef) {
+      let noGitReason = CCR_FORCE_BUNDLE
         ? "CCR_FORCE_BUNDLE is set"
-        : Nr
-          ? as
+        : repo
+          ? transient
             ? "the GitHub App preflight failed transiently (network or service hiccup)"
             : "the GitHub App is not set up for this repository"
           : "no GitHub remote was detected in this directory";
-      let qd = XF ? "be seeded from your local working tree" : "start with an empty sandbox";
-      let Gd = XF ? `drop ${Ha} to seed from local HEAD` : `drop ${Ha} to start with an empty sandbox`;
-      let vu = `${Ha} ${printableStatusText(options.explicitRef)} cannot be honored: `;
+      let seedOrEmpty = seedAllowed
+        ? "be seeded from your local working tree"
+        : "start with an empty sandbox";
+      let dropFlagAdvice = seedAllowed
+        ? `drop ${refFlag} to seed from local HEAD`
+        : `drop ${refFlag} to start with an empty sandbox`;
+      let refusalPrefix = `${refFlag} ${printableStatusText(options.explicitRef)} cannot be honored: `;
       options.onCreateFail?.(
-        Vi
-          ? `${vu}${githubNotConnectedMessage()} \u2014 or ${Gd} instead.`
-          : `${vu}${ma}, so the session would ${qd} instead. ` +
-              (!Es
+        notConnected
+          ? `${refusalPrefix}${githubNotConnectedMessage()} \u2014 or ${dropFlagAdvice} instead.`
+          : `${refusalPrefix}${noGitReason}, so the session would ${seedOrEmpty} instead. ` +
+              (!detectedRepo
                 ? ""
-                : as
+                : transient
                   ? "Retry in a moment, or "
-                  : Gc
-                    ? `Cloud sessions can't clone from ${Gc} yet \u2014 `
+                  : forgeName
+                    ? `Cloud sessions can't clone from ${forgeName} yet \u2014 `
                     : "Set up the GitHub integration at https://claude.ai/code, or ") +
-              `${Gd}.`,
+              `${dropFlagAdvice}.`,
         options.reuseOutcomeBranch ? "on_branch_no_git_source" : "explicit_ref_no_git_source",
         {
-          preflightTransient: as,
+          preflightTransient: transient,
         },
       );
       return null;
     }
     if (signal.aborted) throw new AbortError_2();
-    let Xh = true;
+    let firstPromptSent = true;
     if (signal.aborted) throw new AbortError_2();
     let firstUpload = options.firstUpload;
-    let fI = false;
-    let ZF = options.cwd === undefined ? cwd : null;
-    let CC = !Oo && nr;
-    let pLe = null;
-    let fE = null;
-    let e$ = null;
-    let _E = null;
-    let Sae = false;
-    let mLe = null;
-    let R5 = null;
-    if (CC) {
+    let firstUploadDone = false;
+    let bundleCwd = options.cwd === undefined ? gitRoot : null;
+    let shouldBundle = !repoSource && bundleEnabled;
+    let xxPLe = null;
+    let xxFE = null;
+    let warningText = null;
+    let warningText2 = null;
+    let xxSae = false;
+    let bundleNotice2 = null;
+    let xxR5 = null;
+    if (shouldBundle) {
       logForDebugging("[teleport] phase: bundle-upload");
-      logForDebugging(`[teleportToRemote] Bundling (reason: ${Wi})`);
+      logForDebugging(`[teleportToRemote] Bundling (reason: ${sourceReason})`);
       logEvent("tengu_teleport_bundle_started", {
-        reason: fromEnum(Wi),
+        reason: fromEnum(sourceReason),
       });
       options.onProgress?.({
         kind: "bundling",
         rerouted: false,
       });
       gitSource = Date.now();
-      let environments = await Me();
-      let Gd = {
-        oauthToken: fo,
+      let environments = await isViolinWood();
+      let bundleConfig2 = {
+        oauthToken: bundleToken,
         isStoredLogin,
         sessionId: getSessionId(),
         baseUrl: getOauthConfig().BASE_API_URL,
       };
-      let vu = await uploadGitBundleForSession(
-        Gd,
+      let bundleUpload = await uploadGitBundleForSession(
+        bundleConfig2,
         {
           signal,
-          ...(ZF !== null && {
-            cwd: ZF,
+          ...(bundleCwd !== null && {
+            cwd: bundleCwd,
           }),
           currentBranchOnly: environments,
           ...(environments && {
             hardenForDeviceSessions: true,
-            startsInProject: await We(),
+            startsInProject: await alwaysTrueAsync(),
           }),
-          ...resolveBundleReadRules(environments, options.onBundleNotice, environments && (await Ae())),
-          onBundled: (sc) =>
+          ...resolveBundleReadRules(
+            environments,
+            options.onBundleNotice,
+            environments && (await alwaysFalseAsync()),
+          ),
+          onBundled: (onBundled) =>
             options.onProgress?.({
               kind: "bundled",
-              ...sc,
+              ...onBundled,
             }),
         },
-        MT === null ? options.onBundleNotice : null,
-        Gc
+        xxMT === null ? options.onBundleNotice : null,
+        forgeName
           ? {
               kind: "other_forge",
-              forge: Gc,
+              forge: forgeName,
             }
           : CCR_FORCE_BUNDLE
             ? {
@@ -3146,15 +3280,15 @@ async function teleportToRemote(options) {
               }
             : null,
       );
-      if (vu.success)
-        Yt = {
-          fileId: vu.fileId,
-          config: Gd,
+      if (bundleUpload.success)
+        seedBundle = {
+          fileId: bundleUpload.fileId,
+          config: bundleConfig2,
         };
       if (signal.aborted) throw new AbortError_2();
-      if (!vu.success) {
-        let { failReason, error } = vu;
-        let advice = "advice" in vu ? vu.advice : undefined;
+      if (!bundleUpload.success) {
+        let { failReason, error } = bundleUpload;
+        let advice = "advice" in bundleUpload ? bundleUpload.advice : undefined;
         if (failReason === "uncommitted_credentials" || failReason === "git_dir_tampered") {
           logForDebugging(`Bundle refused: ${error}`, {
             level: "error",
@@ -3166,109 +3300,114 @@ async function teleportToRemote(options) {
           logForDebugging(`Bundle upload failed: ${error}`, {
             level: "error",
           });
-          let Rh = !Es
+          let bundleErrorText = !detectedRepo
             ? ""
-            : Wi === "branch_not_on_remote"
-              ? `. This branch shares no history with the remote as last fetched here${Tw ? "; push it to start from GitHub instead" : ""}`
-              : Vi
+            : sourceReason === "branch_not_on_remote"
+              ? `. This branch shares no history with the remote as last fetched here${advisesPush ? "; push it to start from GitHub instead" : ""}`
+              : notConnected
                 ? `. ${githubNotConnectedMessage()}`
-                : as
+                : transient
                   ? ". The GitHub App preflight failed transiently (network or service hiccup) \u2014 retry in a moment to start from GitHub instead"
-                  : Gc
-                    ? `. Cloud sessions can't clone from ${Gc} yet, so an upload is the only way to start one from this repository`
+                  : forgeName
+                    ? `. Cloud sessions can't clone from ${forgeName} yet, so an upload is the only way to start one from this repository`
                     : ". A cloud session can start from GitHub instead if the Claude GitHub App has access to this repository: https://claude.ai/code";
-          let Af;
+          let failureText;
           switch (failReason) {
             case "empty_repo":
-              Af = advice === undefined ? error : `${error}. ${advice}`;
+              failureText = advice === undefined ? error : `${error}. ${advice}`;
               break;
             case "too_large":
-              Af = `${error}${Rh}`;
+              failureText = `${error}${bundleErrorText}`;
               break;
             case "git_error":
-              Af = `Failed to create git bundle (${error})${Rh}`;
+              failureText = `Failed to create git bundle (${error})${bundleErrorText}`;
               break;
             case "stash_failed":
             case "no_changes":
             case "unsupported_layout":
             case "refused":
-              Af = error;
+              failureText = error;
               break;
             case "not_a_repo":
-              Af = error;
+              failureText = error;
               break;
             case "upload_failed":
-              Af = `Could not upload repo bundle (${error})${Rh}`;
+              failureText = `Could not upload repo bundle (${error})${bundleErrorText}`;
               break;
             case undefined:
-              Af = `Bundle upload failed: ${error}${Rh}`;
+              failureText = `Bundle upload failed: ${error}${bundleErrorText}`;
               break;
             default: {
-              let Ah = failReason;
-              Af = `Bundle upload failed: ${error}`;
+              let xxAh = failReason;
+              failureText = `Bundle upload failed: ${error}`;
             }
           }
-          options.onBundleFail?.(Af, "bundle");
+          options.onBundleFail?.(failureText, "bundle");
           return null;
         }
       } else {
-        Or = vu.fileId;
-        Io = vu.scope;
-        if (vu.leftOut?.length)
+        bundleFileId = bundleUpload.fileId;
+        bundleScope = bundleUpload.scope;
+        if (bundleUpload.leftOut?.length)
           options.onBundleNotice?.(
-            leftOutNotice(vu.leftOut, {
+            leftOutNotice(bundleUpload.leftOut, {
               readRules: environments,
               ofThisUploadOnly: false,
             }),
           );
-        if (vu.deletedHere?.length) options.onBundleNotice?.(deletedHereNotice(vu.deletedHere));
+        if (bundleUpload.deletedHere?.length)
+          options.onBundleNotice?.(deletedHereNotice(bundleUpload.deletedHere));
         logEvent("tengu_teleport_bundle_mode", {
-          size_bytes: vu.bundleSizeBytes,
-          scope: fromEnum(vu.scope),
-          has_wip: vu.hasWip,
+          size_bytes: bundleUpload.bundleSizeBytes,
+          scope: fromEnum(bundleUpload.scope),
+          has_wip: bundleUpload.hasWip,
           current_branch_only: environments,
           ...{},
-          reason: fromEnum(Wi),
+          reason: fromEnum(sourceReason),
         });
       }
     }
-    let t$ = null;
-    let hI = null;
-    let DW = null;
-    let LW = DW === null ? folderRoot : null;
-    let HW = DW !== null && Di ? null : yr;
-    let C5 = fi && isLaunchConsentBlocked(options.homeSettingsConsent);
-    let AC = fi && (!C5 || optedIn || folderRoot !== null) && !(DW !== null && C5);
-    let wE = R5 ?? DW?.noteForClaude ?? hI ?? _i.noteForClaude;
-    let Gx =
-      wE === null
+    let xxT = null;
+    let xxHI = null;
+    let eventSeed = null;
+    let folderSeed = eventSeed === null ? folderRoot : null;
+    let homeSeedPlan = eventSeed !== null && launchConsentBlocked ? null : homeSeedPlanPromise;
+    let consentBlocked = forwardHomeSettings && isLaunchConsentBlocked(options.homeSettingsConsent);
+    let packAllowed =
+      forwardHomeSettings &&
+      (!consentBlocked || optedIn || folderRoot !== null) &&
+      !(eventSeed !== null && consentBlocked);
+    let homeNote = xxR5 ?? eventSeed?.noteForClaude ?? xxHI ?? folderPlan.noteForClaude;
+    let appendedPrompt =
+      homeNote === null
         ? options.appendSystemPrompt
-        : [options.appendSystemPrompt, wE].filter((env) => env !== undefined).join(`
+        : [options.appendSystemPrompt, homeNote].filter((env) => env !== undefined).join(`
 
 `);
-    let verdict = (li === null ? null : await li)?.verdict;
-    let n$ = verdict?.reason === "probe_failed" && verdict.storeLookAhead === "not_plain";
+    let verdict = (layoutPromise === null ? null : await layoutPromise)?.verdict;
+    let probeStoreUnreadable = verdict?.reason === "probe_failed" && verdict.storeLookAhead === "not_plain";
     if (signal.aborted) throw new AbortError_2();
-    let qx = Oo !== null && Yd !== null ? Yd : Kr;
-    let BW = Ef !== null;
-    let yI = null;
-    let gLe = Rf;
-    let A5 = al;
-    let kae = Oo !== null && rg() !== null;
-    let bae = Hl;
-    let hLe = em ?? undefined;
+    let revisionAsked = repoSource !== null && revisionText !== null ? revisionText : defaultBranchName;
+    let hasPinnedCommit = pinnedCommit !== null;
+    let xxYI = null;
+    let xxGLe = xxRf;
+    let xxA5 = xxAl;
+    let pinnedNearer = repoSource !== null && pinnedStart() !== null;
+    let createdFrom2 = createdFrom;
+    let planKind = settingsPlan ?? undefined;
     let kind = start_2?.kind ?? null;
     let kind_2 = start?.kind ?? null;
-    let github = Kc?.github ?? null;
-    let nP = false;
+    let github = runResult?.github ?? null;
+    let xxNP = false;
     let cause = start_2?.kind === "unknown" ? start_2.cause : null;
-    let M5 = start_2?.kind === "not_on_remote" ? start_2.searchFailure : (Kc?.failedSearch ?? null);
-    let yLe = false;
-    let PE = false;
+    let searchFailure =
+      start_2?.kind === "not_on_remote" ? start_2.searchFailure : (runResult?.failedSearch ?? null);
+    let xxYLE = false;
+    let xxPE = false;
     logEvent("tengu_teleport_source_decision", {
-      reason: fromEnum(Wi),
-      ...(Wi === "github_preflight_failed" && kd),
-      path: lit_2(Oo ? "github" : Or ? "bundle" : "empty"),
+      reason: fromEnum(sourceReason),
+      ...(sourceReason === "github_preflight_failed" && preflightFields),
+      path: lit_2(repoSource ? "github" : bundleFileId ? "bundle" : "empty"),
       ...{},
       ...{},
       ...{},
@@ -3288,42 +3427,42 @@ async function teleportToRemote(options) {
       ...(github !== null && {
         checkout_start_github: fromEnum(github),
       }),
-      ...(M5 !== null && {
-        checkout_start_search_failure: fromEnum(M5),
+      ...(searchFailure !== null && {
+        checkout_start_search_failure: fromEnum(searchFailure),
       }),
       ...(start_2?.kind === "pushed_ancestor" &&
         start_2.fromOwnRefs === true && {
           checkout_start_own_refs_only: true,
         }),
-      ...(kae && {
+      ...(pinnedNearer && {
         checkout_start_pinned_nearer: true,
       }),
-      ...(Qm !== null && {
-        checkout_start_ms: Qm,
+      ...(startMs !== null && {
+        checkout_start_ms: startMs,
       }),
-      ...(ga > 0 && {
-        checkout_start_tries: ga,
+      ...(searchTries > 0 && {
+        checkout_start_tries: searchTries,
       }),
-      ...(bae !== null && {
-        checkout_start_created_from: fromEnum(bae),
+      ...(createdFrom2 !== null && {
+        checkout_start_created_from: fromEnum(createdFrom2),
       }),
       ...(cause !== null && {
         checkout_start_unknown: fromEnum(cause),
       }),
-      ...(wr && {
+      ...(remoteUnresolved && {
         checkout_start: lit_2("remote_unresolved"),
       }),
       ...(kind_2 !== null && {
         checkout_start_own: fromEnum(kind_2),
-        checkout_start_own_taken: Eu,
+        checkout_start_own_taken: startGood,
       }),
-      ...(Ld !== options.branchName && {
+      ...(launchBranch !== options.branchName && {
         launch_branch_not_as_handed: true,
       }),
       ...emptyBindingFacts(),
       ...{},
-      ...(zs !== null && {
-        checkout_start_ahead: zs.aheadCount,
+      ...(goodStart !== null && {
+        checkout_start_ahead: goodStart.aheadCount,
       }),
       ...(start_2?.kind === "on_remote" &&
         start_2.aheadCount !== undefined && {
@@ -3332,13 +3471,13 @@ async function teleportToRemote(options) {
       ...{},
       ...{},
       ...{},
-      ...emptyRequestOptions(mf, uh),
+      ...emptyRequestOptions(bestStart, xxUh),
       ...{},
       ...{},
       ...{},
-      ...(cwd !== null &&
-        Oo === null &&
-        Es === null &&
+      ...(gitRoot !== null &&
+        repoSource === null &&
+        detectedRepo === null &&
         repoDetectionGuards().blocked() && {
           trust_unconfirmed: true,
         }),
@@ -3350,100 +3489,102 @@ async function teleportToRemote(options) {
       ...{},
       ...{},
     });
-    let O5 = false;
-    let wae = false;
-    if (!Oo && !Or) {
-      if (wa && !options.agentId && !O5) {
-        let ma = options.explicitRef
-          ? ` \u2014 so ${Ha} ${printableStatusText(options.explicitRef)} cannot be honored`
+    let xxO5 = false;
+    let xxWae = false;
+    if (!repoSource && !bundleFileId) {
+      if (isSelfHosted && !options.agentId && !xxO5) {
+        let noticeText = options.explicitRef
+          ? ` \u2014 so ${refFlag} ${printableStatusText(options.explicitRef)} cannot be honored`
           : "";
-        let Gd = `${`The selected environment "${Vr}"`} requires a git source, but no GitHub remote was detected${ma}. Check that \`git remote get-url origin\` returns a GitHub URL.`;
-        logForDebugging(`[teleportToRemote] ${Gd} (byoc env, sourceReason=${Wi})`, {
+        let byocError = `${`The selected environment "${environmentLabel}"`} requires a git source, but no GitHub remote was detected${noticeText}. Check that \`git remote get-url origin\` returns a GitHub URL.`;
+        logForDebugging(`[teleportToRemote] ${byocError} (byoc env, sourceReason=${sourceReason})`, {
           level: "error",
         });
-        options.onCreateFail?.(Gd, "byoc_no_git_source");
+        options.onCreateFail?.(byocError, "byoc_no_git_source");
         return null;
       }
-      if (yt === null && t$ === null) {
+      if (uploadedBundle === null && xxT === null) {
         logForDebugging(
           "[teleportToRemote] No repository detected \u2014 session will have an empty sandbox",
         );
-        if (!options.agentId && !O5) {
-          let mayTakeFolder = cwd === null ? _i.mayTakeFolder : false;
-          let qd = null;
-          wae = false;
+        if (!options.agentId && !xxO5) {
+          let mayTakeFolder = gitRoot === null ? folderPlan.mayTakeFolder : false;
+          let xxQD = null;
+          xxWae = false;
           options.onBundleNotice?.(
-            e$ ??
-              _E ??
-              (fE !== null && !repoDetectionGuards().blocked()
-                ? fE
+            warningText ??
+              warningText2 ??
+              (xxFE !== null && !repoDetectionGuards().blocked()
+                ? xxFE
                 : describeNoRepositoryReason(
-                    cwd === null
+                    gitRoot === null
                       ? "no_git"
                       : repoDetectionGuards().blocked()
                         ? "trust_unconfirmed"
                         : "no_github_repository",
                   )),
-            fE !== null ? "warning" : undefined,
+            xxFE !== null ? "warning" : undefined,
           );
         }
       }
     }
     logForDebugging("[teleport] phase: title-await");
-    let retried = await yo();
+    let retried = await resolveTitle();
     if (signal.aborted) throw new AbortError_2();
     let title = options.title || retried.title;
-    let Tae = options.reuseOutcomeBranch || retried.branchName;
-    let i$ =
-      jr === null
+    let outcomeBranch = options.reuseOutcomeBranch || retried.branchName;
+    let outcomeReference =
+      repoSlug === null
         ? null
         : {
             type: "git_repository",
             git_info: {
               type: "github",
-              repo: jr,
-              branches: [Tae],
+              repo: repoSlug,
+              branches: [outcomeBranch],
             },
           };
     let referralEligibility = fetchReferralEligibility_2(
-      Kn,
-      Xn,
-      vn,
-      profile,
+      endpoint,
+      sessionToken,
+      orgUUID,
+      usesConsoleProfileCredentials,
       () => getCloudSessionAccessToken(options.credentials, options.storageV5),
       hasRecoveredBearer,
     );
-    let L5 = false;
-    if (kl !== null && Oo !== null && true) options.onBundleNotice?.(kl, nP ? "warning" : undefined);
-    let Rae = L5 && Kn === "v1alpha2";
-    let SLe = false;
-    let t1 = options.ultraplan ? `ultraplan: ${title}` : title;
-    let i1 = builtinToolsFirstPrompt(options, initialMessage);
-    let N5 = optedIn || LW !== null || HW !== null;
-    let l$ =
-      i1 ??
-      (options.deferInitialMessage === true && initialMessage !== null && N5
+    let xxL5 = false;
+    if (xxKl !== null && repoSource !== null && true)
+      options.onBundleNotice?.(xxKl, xxNP ? "warning" : undefined);
+    let outcomeIsSeed = xxL5 && endpoint === "v1alpha2";
+    let xxSLe = false;
+    let titledText = options.ultraplan ? `ultraplan: ${title}` : title;
+    let firstPromptParts = builtinToolsFirstPrompt(options, initialMessage);
+    let attachesSeed = optedIn || folderSeed !== null || homeSeedPlan !== null;
+    let deferredPrompt =
+      firstPromptParts ??
+      (options.deferInitialMessage === true && initialMessage !== null && attachesSeed
         ? {
             content: initialMessage,
             uuid: options.initialMessageUuid ?? randomUUID(),
           }
         : undefined);
     let initialControlEvents = buildInitialControlEvents({
-      initialMessage: l$ ? null : initialMessage,
+      initialMessage: deferredPrompt ? null : initialMessage,
       initialMessageUuid: options.initialMessageUuid,
-      permissionMode: mi && options.isModeFromSettings === true ? undefined : options.permissionMode,
+      permissionMode:
+        isSelfHostedEnv && options.isModeFromSettings === true ? undefined : options.permissionMode,
       isModeFromSettings: options.isModeFromSettings,
       proactivityLevel: options.proactivityLevel,
       ultraplan: options.ultraplan,
       title: options.title,
       thinking: options.thinking,
     });
-    let u$ = options.model ?? getMainLoopModel();
+    let model = options.model ?? getMainLoopModel();
     let modelPickerEffortDefault = getModelPickerEffortDefault(
-      u$,
-      mi && options.isEffortFromSettings === true ? undefined : options.effort,
+      model,
+      isSelfHostedEnv && options.isEffortFromSettings === true ? undefined : options.effort,
     );
-    let modelPickerEffortDefault_2 = getModelPickerEffortDefault(u$, options.effort);
+    let modelPickerEffortDefault_2 = getModelPickerEffortDefault(model, options.effort);
     options.onProgress?.({
       kind: "creating",
     });
@@ -3452,31 +3593,31 @@ async function teleportToRemote(options) {
         ? seedBundleFileId_2.binder
         : await prepareDeviceBinding(
             options.deviceBinding,
-            Kn,
-            Cr,
-            _r?.kind,
+            endpoint,
+            environmentId,
+            selectedEnvironment?.kind,
             options.correlationId,
             options.credentials,
-            G(),
-            profile,
+            gatePromise(),
+            usesConsoleProfileCredentials,
           );
     let persistentVolumeFromSessionId = options.persistentVolumeFromSessionId;
-    let buildBody = (ma, requestElevatedTier, deferFirstPrompt, repositoriesTrusted) => {
-      let sc = options.deviceBinding !== undefined && ma === undefined;
-      let fc =
-        Kn === "v1alpha2"
+    let buildBody = (deviceBinding, requestElevatedTier, deferFirstPrompt, repositoriesTrusted) => {
+      let isFreshBind = options.deviceBinding !== undefined && deviceBinding === undefined;
+      let body =
+        endpoint === "v1alpha2"
           ? buildSessionCreateBody({
-              title: t1,
-              worker: environmentSelector(Cr),
+              title: titledText,
+              worker: environmentSelector(environmentId),
               events: initialControlEvents,
-              sources: Oo ? [Oo] : [],
-              outcomes: i$ ? [i$] : [],
-              model: u$,
+              sources: repoSource ? [repoSource] : [],
+              outcomes: outcomeReference ? [outcomeReference] : [],
+              model,
               effortLevel: modelPickerEffortDefault,
-              seedBundleFileId: Or ?? undefined,
+              seedBundleFileId: bundleFileId ?? undefined,
               reuseOutcomeBranches: Boolean(options.reuseOutcomeBranch),
-              environmentVariables: co,
-              appendSystemPrompt: Gx,
+              environmentVariables: envVars,
+              appendSystemPrompt: appendedPrompt,
               customSystemPrompt: options.customSystemPrompt,
               appendSubagentSystemPrompt: options.appendSubagentSystemPrompt,
               fallbackModel: options.fallbackModel,
@@ -3486,38 +3627,38 @@ async function teleportToRemote(options) {
               disallowedTools: options.disallowedTools,
               builtinTools: options.builtinTools,
               outputSchema: options.outputSchema,
-              tags: w,
+              tags,
               sessionGroupingId: options.sessionGroupingId,
               agentId: options.agentId,
               correlationId: options.correlationId,
               persistentVolume: options.persistentVolume,
               persistentVolumeFromSessionId,
-              deviceBinding: ma,
+              deviceBinding,
               requestElevatedTier,
               deferFirstPrompt,
               repositoriesTrusted,
             })
           : {
-              title: t1,
+              title: titledText,
               events: initialControlEvents,
               session_context: {
-                sources: Oo ? [Oo] : [],
-                ...(Or && {
-                  seed_bundle_file_id: Or,
+                sources: repoSource ? [repoSource] : [],
+                ...(bundleFileId && {
+                  seed_bundle_file_id: bundleFileId,
                 }),
-                outcomes: i$ ? [i$] : [],
-                model: u$,
+                outcomes: outcomeReference ? [outcomeReference] : [],
+                model,
                 ...(modelPickerEffortDefault && {
                   effort_level: modelPickerEffortDefault,
                 }),
                 ...(options.reuseOutcomeBranch && {
                   reuse_outcome_branches: true,
                 }),
-                ...(Object.keys(co).length > 0 && {
-                  environment_variables: co,
+                ...(Object.keys(envVars).length > 0 && {
+                  environment_variables: envVars,
                 }),
-                ...(Gx && {
-                  append_system_prompt: Gx,
+                ...(appendedPrompt && {
+                  append_system_prompt: appendedPrompt,
                 }),
                 ...buildRemoteSessionConfig(options),
                 ...(options.outputSchema && {
@@ -3527,16 +3668,16 @@ async function teleportToRemote(options) {
                   correlation_id: options.correlationId,
                 }),
               },
-              ...environmentSelector(Cr),
+              ...environmentSelector(environmentId),
               ...noopSessionTag(options.persistentVolume, persistentVolumeFromSessionId),
-              ...(w && {
-                tags: w,
+              ...(tags && {
+                tags,
               }),
             };
       logForDebugging(
-        `Creating session with payload: ${jsonStringify(redactSessionCreateBody(fc), null, 2)}`,
+        `Creating session with payload: ${jsonStringify(redactSessionCreateBody(body), null, 2)}`,
       );
-      return fc;
+      return body;
     };
     if (signal.aborted) throw new AbortError_2();
     options.onProgress?.({
@@ -3548,186 +3689,200 @@ async function teleportToRemote(options) {
       buildBody,
       drops: summarizeSessionCreateBody({
         events: initialControlEvents,
-        environmentVariables: co,
+        environmentVariables: envVars,
       }),
       callerSendsFirstPrompt: options.deferInitialMessage === true,
       attaches: {
-        anything: Oo !== null || Or !== null || optedIn || LW !== null,
+        anything: repoSource !== null || bundleFileId !== null || optedIn || folderSeed !== null,
         launchCheckout:
-          cwd !== null && Oo !== null && Nr !== null && Or === null
+          gitRoot !== null && repoSource !== null && repo !== null && bundleFileId === null
             ? {
-                root: cwd,
+                root: gitRoot,
                 covers: "remote",
               }
-            : ZF !== null && Oo === null && Or !== null && !optedIn && LW === null
+            : bundleCwd !== null &&
+                repoSource === null &&
+                bundleFileId !== null &&
+                !optedIn &&
+                folderSeed === null
               ? {
-                  root: ZF,
+                  root: bundleCwd,
                   covers: "bundle",
                 }
               : null,
       },
-      post: (ma, qd) =>
-        ensureTrustedDevice(referralEligibility, qd, (env) =>
-          axios_default.post(referralEligibility.url, ma, {
+      post: (postBody, bindState) =>
+        ensureTrustedDevice(referralEligibility, bindState, (env) =>
+          axios_default.post(referralEligibility.url, postBody, {
             headers: env,
             signal,
-            validateStatus: (vu) => vu < 500,
+            validateStatus: (status) => status < 500,
           }),
         ),
     };
-    let HS = await createWithDeviceBinding(request);
-    let g$ = null;
-    if (g$ !== null) {
-      options.onBundleNotice?.(g$);
+    let createResult2 = await createWithDeviceBinding(request);
+    let retryNotice = null;
+    if (retryNotice !== null) {
+      options.onBundleNotice?.(retryNotice);
       persistentVolumeFromSessionId = undefined;
       if (signal.aborted) throw new AbortError_2();
-      HS = await createWithDeviceBinding(request);
+      createResult2 = await createWithDeviceBinding(request);
     }
-    let { response, bind: vw, held, attested, firstPromptDeferred } = HS;
+    let { response, bind, held, attested, firstPromptDeferred } = createResult2;
     logForDebugging(`[teleport] phase: POST-response status=${response.status}`);
-    qt = isSuccessStatus(response.status);
-    let F5 = vw?.ok === true ? held : undefined;
-    let Aae = Rae && (options.deviceBinding === undefined || attested);
+    created = isSuccessStatus(response.status);
+    let bindToken = bind?.ok === true ? held : undefined;
+    let attestationNeeded = outcomeIsSeed && (options.deviceBinding === undefined || attested);
     if (!(response.status === 200 || response.status === 201)) {
-      let ma = `API request failed with status ${response.status}: ${response.statusText}
+      let statusText = `API request failed with status ${response.status}: ${response.statusText}
 
 Response data: ${jsonStringify(response.data, null, 2)}`;
-      let qd = response.data;
-      let env = qd?.error?.type;
-      let reason = qd?.error?.reason;
-      let message = qd?.error?.message;
-      let fc = Oo ? parseGitRemote(Oo.url) : null;
-      let h_ = fc
-        ? singleTokenOrPlaceholder(`${fc.owner}/${fc.name}`)
-        : Or
+      let errorData2 = response.data;
+      let errorType = errorData2?.error?.type;
+      let reason = errorData2?.error?.reason;
+      let message = errorData2?.error?.message;
+      let gitParsed = repoSource ? parseGitRemote(repoSource.url) : null;
+      let sourceLabel = gitParsed
+        ? singleTokenOrPlaceholder(`${gitParsed.owner}/${gitParsed.name}`)
+        : bundleFileId
           ? "a seed bundle (no git source)"
-          : Oo
-            ? singleTokenOrPlaceholder(Oo.url)
+          : repoSource
+            ? singleTokenOrPlaceholder(repoSource.url)
             : "no source";
-      let Rh = fc !== null && isAnthropicRepo(fc);
-      let Af = normalizeCreateSessionError(reason);
+      let isAnthropicRepo_2 = gitParsed !== null && isAnthropicRepo(gitParsed);
+      let normalizedReason = normalizeCreateSessionError(reason);
       let Ah = false;
-      let k_ =
+      let repoMismatch =
         (typeof message === "string" &&
           message.includes("source repository configuration is not permitted for this environment")) ||
-        Af === "monorepo_source_required" ||
-        Af === "monorepo_env_required" ||
+        normalizedReason === "monorepo_source_required" ||
+        normalizedReason === "monorepo_env_required" ||
         (response.status === 400 &&
           !reason &&
-          env === "invalid_request_error" &&
-          !wa &&
-          Oo !== null &&
-          !Or &&
-          Rh &&
+          errorType === "invalid_request_error" &&
+          !isSelfHosted &&
+          repoSource !== null &&
+          !bundleFileId &&
+          isAnthropicRepo_2 &&
           typeof message === "string" &&
           /^the request was invalid\.?$/i.test(message));
       if (
         [401, 403, 429].includes(response.status) ||
         reason === "github_repo_access_denied" ||
-        isCloudLaunchError(qd) ||
-        k_ ||
+        isCloudLaunchError(errorData2) ||
+        repoMismatch ||
         false ||
         noEnvironmentOverride(reason) !== undefined
       )
-        logForDebugging(ma, {
+        logForDebugging(statusText, {
           level: "error",
         });
       else {
-        let Yc = (env) => (env && /^[a-z][a-z0-9_]*$/.test(env) ? env : undefined);
-        let Zh = "";
-        logError(Error(`[type=${Yc(env)},reason=${Yc(reason)},isByocEnv=${wa}] ${ma}`));
+        let token = (env) => (env && /^[a-z][a-z0-9_]*$/.test(env) ? env : undefined);
+        let xxZh = "";
+        logError(
+          Error(`[type=${token(errorType)},reason=${token(reason)},isByocEnv=${isSelfHosted}] ${statusText}`),
+        );
       }
-      let FT = cloudErrorMessage(response, message);
-      let Jh =
+      let cloudError = cloudErrorMessage(response, message);
+      let refusalText =
         (await explainUntrustedDeviceRefusal(response, referralEligibility)) ||
-        loginRejectedMessage(response.status, FT.message) ||
-        FT.message ||
-        FT.statusLine;
-      if (k_) Jh = formatEnvironmentRepoMismatch(Rh, Vr, h_);
-      if (_r?.kind === "bridge" && response.status === 403) {
-        let { readUntrustedDeviceRefusal } = await import("./chunk-g9dw262t.js");
+        loginRejectedMessage(response.status, cloudError.message) ||
+        cloudError.message ||
+        cloudError.statusLine;
+      if (repoMismatch)
+        refusalText = formatEnvironmentRepoMismatch(isAnthropicRepo_2, environmentLabel, sourceLabel);
+      if (selectedEnvironment?.kind === "bridge" && response.status === 403) {
+        let { readUntrustedDeviceRefusal } = await import("../bridge/codeSessionApi.js");
         if (readUntrustedDeviceRefusal(response.data)?.kind === "unrecognized")
-          Jh = `Choose a cloud environment with /remote-env: "${Vr}" is a Remote Control environment and refused this session. If none is listed, create one at ${ENV_SETUP_ONBOARDING_URL}.`;
+          refusalText = `Choose a cloud environment with /remote-env: "${environmentLabel}" is a Remote Control environment and refused this session. If none is listed, create one at ${ENV_SETUP_ONBOARDING_URL}.`;
       }
-      let _S = options.sessionGroupingId && projectNotFoundMessage(options.sessionGroupingId, qd?.error);
-      if ((options.builtinTools?.length ?? 0) > 0 && isCloudLaunchError(qd))
-        logBuiltinToolsCreate("unavailable", ko);
-      let bS = (isCloudLaunchError(qd) && DEVICE_BIND_REFUSAL_REASONS) || _S || Jh;
-      let serverType = normalizeApiErrorType(env);
-      options.onCreateFail?.(bS, "create_request_failed", {
+      let groupingMessage =
+        options.sessionGroupingId && projectNotFoundMessage(options.sessionGroupingId, errorData2?.error);
+      if ((options.builtinTools?.length ?? 0) > 0 && isCloudLaunchError(errorData2))
+        logBuiltinToolsCreate("unavailable", isPoolEnv);
+      let createFailureMessage =
+        (isCloudLaunchError(errorData2) && DEVICE_BIND_REFUSAL_REASONS) || groupingMessage || refusalText;
+      let serverType = normalizeApiErrorType(errorType);
+      options.onCreateFail?.(createFailureMessage, "create_request_failed", {
         status: response.status,
         serverType,
-        serverReason: Af,
-        endpoint: Kn,
-        messageHidden: FT.messageHidden,
+        serverReason: normalizedReason,
+        endpoint,
+        messageHidden: cloudError.messageHidden,
       });
       return null;
     }
-    let $5 = sessionIdFromCreateResponse(Kn, response.data);
-    if (!$5.ok) {
-      let ma = CREATE_SESSION_FAILURES[$5.error];
+    let sessionIdResult = sessionIdFromCreateResponse(endpoint, response.data);
+    if (!sessionIdResult.ok) {
+      let createFailure2 = CREATE_SESSION_FAILURES[sessionIdResult.error];
       logError(
         withTelemetryMessage(
           Error(`Cannot determine session ID from API response: ${jsonStringify(response.data)}`),
-          ma.telemetry,
+          createFailure2.telemetry,
         ),
       );
-      options.onCreateFail?.(ma.message, ma.reason);
+      options.onCreateFail?.(createFailure2.message, createFailure2.reason);
       return null;
     }
-    let Zk = $5.value;
+    let session = sessionIdResult.value;
     options.onProgress?.({
       kind: "session_exists",
-      sessionId: Zk.id,
+      sessionId: session.id,
     });
-    let f1 = null;
-    let xae = Aae && true && !(vw !== undefined && !vw.ok);
-    let Uy = null;
-    if (Uy !== null) options.onBundleNotice?.(Uy);
-    let p_ = SLe && attested;
-    let B5 = async (ma, env = null) => {};
-    let U5 = (env) =>
-      raceWithAbortSignal(B5(false, env), signal, () => new AbortError_2()).catch((error) => {
+    let xxF1 = null;
+    let canLatch = attestationNeeded && true && !(bind !== undefined && !bind.ok);
+    let xxUy = null;
+    if (xxUy !== null) options.onBundleNotice?.(xxUy);
+    let homeSeedAttested = xxSLe && attested;
+    let postSeed = async (withHomeSeed, env = null) => {};
+    let seedWithAbort = (env) =>
+      raceWithAbortSignal(postSeed(false, env), signal, () => new AbortError_2()).catch((error) => {
         if (!isAbortError(error)) logError(error);
       });
     let remoteSession = await createRemoteSession({
       options,
-      createEndpoint: Kn,
+      createEndpoint: endpoint,
       responseData: response.data,
-      sessionId: Zk.id,
-      held: i1,
-      bound: vw?.ok === true,
+      sessionId: session.id,
+      held: firstPromptParts,
+      bound: bind?.ok === true,
       firstPromptDeferred,
-      followsUploads: N5,
-      pool: ko,
+      followsUploads: attachesSeed,
+      pool: isPoolEnv,
       signal,
     });
     if (!remoteSession.ok) return null;
-    logForDebugging(`Successfully created remote session: ${Zk.id}`);
-    if (yt === null)
+    logForDebugging(`Successfully created remote session: ${session.id}`);
+    if (uploadedBundle === null)
       options.onProgress?.({
         kind: "created",
       });
-    let j5 = () =>
+    let logLink = () =>
       logCloudSessionLink(
-        Zk.id,
+        session.id,
         options.source,
         {
-          project: Oo !== null && Wi !== "github_preflight_failed" && true,
-          global: Or === null && yt === null && fE === null && e$ === null && _E === null,
+          project: repoSource !== null && sourceReason !== "github_preflight_failed" && true,
+          global:
+            bundleFileId === null &&
+            uploadedBundle === null &&
+            xxFE === null &&
+            warningText === null &&
+            warningText2 === null,
         },
         {
-          endpoint: Kn,
+          endpoint,
           grouped: options.sessionGroupingId != null,
           effortLevel: modelPickerEffortDefault,
         },
         options.storageV5,
       );
-    if (yI?.kind !== "seed" || yI.cloudCheckoutOrigin.kind !== "created_empty") j5();
-    let Qh = null;
-    let bLe = (ma) => (Qh ??= archiveRemoteSession(Zk.id, ma));
+    if (xxYI?.kind !== "seed" || xxYI.cloudCheckoutOrigin.kind !== "created_empty") logLink();
+    let xxQh = null;
+    let archiveOnce = (seedOrArchiveKind) => (xxQh ??= archiveRemoteSession(session.id, seedOrArchiveKind));
     if (false)
-      switch (yI.kind) {
+      switch (xxYI.kind) {
         case "seed":
           if (Rh !== null && Af !== null)
             switch (Jh.kind) {
@@ -3738,100 +3893,110 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
         case "not_armed":
         default:
       }
-    reportDeviceBindOutcome(options.deviceBinding, vw, Zk.id, options.storageV5);
+    reportDeviceBindOutcome(options.deviceBinding, bind, session.id, options.storageV5);
     if (attested && options.title)
-      latchBoundSessionTitle(Zk.id, options.title, vw?.ok ? vw.value : undefined, options.credentials, F5);
-    let MI = null;
-    if (MI !== null) {
-      logFeatureSad("ccr_home_seed", MI);
-      logFeatureSad("ccr_home_seed_create_upload", MI);
+      latchBoundSessionTitle(
+        session.id,
+        options.title,
+        bind?.ok ? bind.value : undefined,
+        options.credentials,
+        bindToken,
+      );
+    let homeSeedFailure = null;
+    if (homeSeedFailure !== null) {
+      logFeatureSad("ccr_home_seed", homeSeedFailure);
+      logFeatureSad("ccr_home_seed_create_upload", homeSeedFailure);
     }
-    let p1 = selfHostedEnvironmentKind(Zk);
-    let W5 = false;
-    let OI = HW !== null && p1 !== null && !W5;
-    let rP = OI ? "self_hosted_runner" : MI;
-    let k$ =
+    let envKind = selfHostedEnvironmentKind(session);
+    let xxW5 = false;
+    let packKept = homeSeedPlan !== null && envKind !== null && !xxW5;
+    let settingsUnsent = packKept ? "self_hosted_runner" : homeSeedFailure;
+    let modeKept =
       options.isModeFromSettings !== true
         ? undefined
-        : mi
+        : isSelfHostedEnv
           ? "not_sent"
-          : p1 !== null
+          : envKind !== null
             ? "not_pushed"
             : undefined;
-    if (p1 !== null && (OI || W5 || k$ === "not_pushed"))
+    if (envKind !== null && (packKept || xxW5 || modeKept === "not_pushed"))
       logEvent("tengu_settings_kept_from_runner", {
-        known_by: fromEnum(p1),
-        is_pack_kept: OI,
+        known_by: fromEnum(envKind),
+        is_pack_kept: packKept,
         ...false,
-        is_mode_kept: k$ === "not_pushed",
+        is_mode_kept: modeKept === "not_pushed",
         is_effort_kept: false,
         is_named_at_launch: false,
       });
     if (
-      mi &&
-      !wa &&
-      (AC ||
+      isSelfHostedEnv &&
+      !isSelfHosted &&
+      (packAllowed ||
         (options.isModeFromSettings === true && options.permissionMode !== undefined) ||
         modelPickerEffortDefault_2 !== modelPickerEffortDefault)
     )
       logEvent("tengu_settings_kept_from_runner", {
         known_by: fromEnum("unlisted_kind"),
-        is_pack_kept: AC,
+        is_pack_kept: packAllowed,
         ...false,
         is_mode_kept: options.isModeFromSettings === true && options.permissionMode !== undefined,
         is_effort_kept: modelPickerEffortDefault_2 !== modelPickerEffortDefault,
         is_named_at_launch: true,
       });
-    let ME = OI ? "self_hosted_runner" : MI !== null ? "no_project_files" : null;
-    let G5 =
-      ME !== null
+    let settingsPackReason = packKept
+      ? "self_hosted_runner"
+      : homeSeedFailure !== null
+        ? "no_project_files"
+        : null;
+    let homeSeedPromise =
+      settingsPackReason !== null
         ? Promise.resolve({
             kind: "none",
-            reason: ME,
+            reason: settingsPackReason,
           })
-        : HW;
-    let II =
-      G5 === null
+        : homeSeedPlan;
+    let homeSeedResult =
+      homeSeedPromise === null
         ? undefined
         : await runCreateHomeSeed({
-            sessionId: Zk.id,
-            planning: G5,
-            boundDeviceUuid: vw?.ok ? vw.value : undefined,
-            held: F5,
+            sessionId: session.id,
+            planning: homeSeedPromise,
+            boundDeviceUuid: bind?.ok ? bind.value : undefined,
+            held: bindToken,
             launchConsent: options.homeSettingsConsent,
             signal,
             credentials: options.credentials,
             storageV5: options.storageV5,
           });
-    let JS = i1
+    let withheldInitialMessage = firstPromptParts
       ? remoteSession.withheld
       : firstPromptDeferred
-        ? l$
+        ? deferredPrompt
           ? {
-              ...l$,
+              ...deferredPrompt,
               followsPermissionMode: true,
             }
           : deferredFirstPrompt(initialControlEvents, initialMessage)
-        : l$;
+        : deferredPrompt;
     return {
-      id: Zk.id,
-      title: sessionTitleOf(Zk, t1),
-      ...(JS && {
-        withheldInitialMessage: JS,
+      id: session.id,
+      title: sessionTitleOf(session, titledText),
+      ...(withheldInitialMessage && {
+        withheldInitialMessage,
       }),
-      ...(II && {
-        homeSeed: II,
+      ...(homeSeedResult && {
+        homeSeed: homeSeedResult,
       }),
-      ...(rP !== null && {
-        settingsPackUnsent: rP,
+      ...(settingsUnsent !== null && {
+        settingsPackUnsent: settingsUnsent,
       }),
       ...(options.maxTurns !== undefined && {
-        maxTurnsConfirmed: acceptsMaxTurns(Kn, Zk, options.maxTurns),
+        maxTurnsConfirmed: acceptsMaxTurns(endpoint, session, options.maxTurns),
       }),
-      ...(k$ !== undefined && {
-        settingsModeOnRunner: k$,
+      ...(modeKept !== undefined && {
+        settingsModeOnRunner: modeKept,
       }),
-      ...(f1 !== null && {
+      ...(xxF1 !== null && {
         chosenEnvironmentMoved: true,
       }),
       ...false,
@@ -3840,10 +4005,10 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
       ...false,
       ...false,
       ...false,
-      ...(Oo === null &&
-        Or === null &&
-        LW === null &&
-        yt === null &&
+      ...(repoSource === null &&
+        bundleFileId === null &&
+        folderSeed === null &&
+        uploadedBundle === null &&
         !options.agentId && {
           startedEmpty: true,
         }),
@@ -3855,23 +4020,27 @@ Response data: ${jsonStringify(response.data, null, 2)}`;
       logForDebugging(`Remote session create aborted: ${err.message}`);
       return null;
     }
-    let pn = isExpectedApiError(error);
-    if (pn)
+    let xxPn = isExpectedApiError(error);
+    if (xxPn)
       logForDebugging(`Remote session create failed (network): ${err.message}`, {
         level: "error",
       });
     else logError(withTelemetryMessage(toError(err), "Remote session create failed"));
-    let no = err.message.trimEnd() || getErrnoCode(err) || err.name;
-    let hn = printableMultiline(no, `the error ${MESSAGE_NOT_SHOWN_NOTE}`);
-    if (hn !== no && !pn)
-      logForDebugging(`Remote session create failed, not shown: ${no}`, {
+    let errorText2 = err.message.trimEnd() || getErrnoCode(err) || err.name;
+    let shownError = printableMultiline(errorText2, `the error ${MESSAGE_NOT_SHOWN_NOTE}`);
+    if (shownError !== errorText2 && !xxPn)
+      logForDebugging(`Remote session create failed, not shown: ${errorText2}`, {
         level: "error",
       });
-    options.onCreateFail?.(`Cloud session create failed: ${hn}`, pn ? "network_error" : "exception");
+    options.onCreateFail?.(
+      `Cloud session create failed: ${shownError}`,
+      xxPn ? "network_error" : "exception",
+    );
     return null;
   } finally {
-    if (yt !== null && !It) options.firstUpload?.discard(yt).catch((error) => logError(error));
-    if (Yt !== null && !qt) await discardUploadedSeedBundle(Yt);
+    if (uploadedBundle !== null && !bundleKept)
+      options.firstUpload?.discard(uploadedBundle).catch((error) => logError(error));
+    if (seedBundle !== null && !created) await discardUploadedSeedBundle(seedBundle);
   }
 }
 //@ chunk-e6aww6q8.js:2009090-2009127 layout
@@ -3882,20 +4051,22 @@ function isSuccessStatus(status) {
 /**
  * 向远程会话发送 interrupt 控制请求（中断当前回合）。
  */
-async function interruptRemoteSession(e, timeout = 1e4) {
+async function interruptRemoteSession(sessionId, timeout = 1e4) {
   if (!isFirstPartyProvider()) {
-    logForDebugging(`[interruptRemoteSession] ${e} skipped: non-first-party provider`);
+    logForDebugging(`[interruptRemoteSession] ${sessionId} skipped: non-first-party provider`);
     return false;
   }
-  let r = isConsoleProfileSessionsCredential();
-  let s = r ? null : await ensureHostSessionsBearer();
-  let h = r ? await sessionsApiAccessToken(r) : getAccessTokenWithCcrFallback();
-  if (!(s ?? h)) return false;
+  let isConsoleProfile = isConsoleProfileSessionsCredential();
+  let hostBearer = isConsoleProfile ? null : await ensureHostSessionsBearer();
+  let accessToken = isConsoleProfile
+    ? await sessionsApiAccessToken(isConsoleProfile)
+    : getAccessTokenWithCcrFallback();
+  if (!(hostBearer ?? accessToken)) return false;
   try {
-    let compatSessionId = toCompatSessionId(e);
+    let compatSessionId = toCompatSessionId(sessionId);
     if (!/^session_[A-Za-z0-9_-]+$/.test(compatSessionId)) return false;
-    let w = await sessionsApiOrganizationUUID(r);
-    if (!w) return false;
+    let orgUuid = await sessionsApiOrganizationUUID(isConsoleProfile);
+    if (!orgUuid) return false;
     let { url, body } = sessionEventsUrl(
       getOauthConfig().BASE_API_URL,
       compatSessionId,
@@ -3910,14 +4081,14 @@ async function interruptRemoteSession(e, timeout = 1e4) {
       isCcrV2SendEventsEnabled(),
     );
     let trustedDeviceToken = await getTrustedDeviceToken();
-    let Z = await resendOnHeldBearer401(
-      s,
-      (Se) =>
+    let response = await resendOnHeldBearer401(
+      hostBearer,
+      (bearer) =>
         axios_default.post(url, body, {
           headers: {
-            ...getOAuthRequestHeaders(bearerToSend(Se, h)),
+            ...getOAuthRequestHeaders(bearerToSend(bearer, accessToken)),
             "anthropic-beta": CCR_BYOC_BETA,
-            "x-organization-uuid": w,
+            "x-organization-uuid": orgUuid,
             ...(trustedDeviceToken && {
               "X-Trusted-Device-Token": trustedDeviceToken,
             }),
@@ -3929,14 +4100,16 @@ async function interruptRemoteSession(e, timeout = 1e4) {
         waitForHost: false,
       },
     );
-    if (Z.status >= 200 && Z.status < 300) {
-      logForDebugging(`[interruptRemoteSession] interrupted ${e}`);
+    if (response.status >= 200 && response.status < 300) {
+      logForDebugging(`[interruptRemoteSession] interrupted ${sessionId}`);
       return true;
     }
-    logForDebugging(`[interruptRemoteSession] ${e} failed ${Z.status}: ${jsonStringify(Z.data)}`);
+    logForDebugging(
+      `[interruptRemoteSession] ${sessionId} failed ${response.status}: ${jsonStringify(response.data)}`,
+    );
     return false;
   } catch (error) {
-    logForDebugging(`[interruptRemoteSession] ${e} failed: ${errorMessage(error)}`, {
+    logForDebugging(`[interruptRemoteSession] ${sessionId} failed: ${errorMessage(error)}`, {
       level: "error",
     });
     return false;
@@ -3955,8 +4128,8 @@ function subscribeRemoteSessionToPR(sessionId, repo, prNumber) {
   });
 }
 //@ chunk-18hwfzwa.js:1459225-1459274 fingerprint = teleportToRemoteWithErrorHandling (0.308)
-function teleportToRemoteWithErrorHandling_2(ur) {
-  return ur.initialMessage !== null;
+function teleportToRemoteWithErrorHandling_2(options) {
+  return options.initialMessage !== null;
 }
 export {
   teleportResumeCodeSession,
@@ -3975,4 +4148,8 @@ export {
   RESTRICTED_SESSION_CLOUD_REFUSAL,
   userCheckoutSpawnTerms,
   stashToCleanState,
+  deserializeRemoteSessionLog,
+  interruptRemoteSession,
+  teleportFromSessionsAPI,
+  validateGitState,
 };

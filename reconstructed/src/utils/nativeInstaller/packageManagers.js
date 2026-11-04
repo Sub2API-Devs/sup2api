@@ -20,6 +20,7 @@ import { compactEnvObject } from "../safeObject.js";
 import { logForDebugging } from "../debug.js";
 import { HostScoped } from "../hostScoped.js";
 import { execFileNoThrow } from "../execFileNoThrow.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-x4gcvpxy.js:565-574 placement
 /**
@@ -47,9 +48,9 @@ async function readEmbeddedInfoPlist(execPath) {
           "__info_plist\x00\x00\x00\x00"
         )
           continue;
-        let f = Buffer.alloc(Number(loadCommands.readBigUInt64LE(sectionOffset + 40)));
-        await fd.read(f, 0, f.length, loadCommands.readUInt32LE(sectionOffset + 48));
-        return f;
+        let plistBytes = Buffer.alloc(Number(loadCommands.readBigUInt64LE(sectionOffset + 40)));
+        await fd.read(plistBytes, 0, plistBytes.length, loadCommands.readUInt32LE(sectionOffset + 48));
+        return plistBytes;
       }
     }
     return null;
@@ -62,9 +63,9 @@ async function readEmbeddedInfoPlist(execPath) {
  * （误归 deepLink）在 XDG data 下建 ClaudeCode.app：写内嵌 Info.plist、把当前可执行文件硬链接为 Contents/MacOS/claude，返回路径；失败返回 null。
  */
 async function ensureMacAppBundleLink() {
-  let s = join(getXDGDataHome(), "claude");
+  let appDir = join(getXDGDataHome(), "claude");
   if (!isRunningFromVersionsDir()) return null;
-  let macosDir = join(s, "ClaudeCode.app", "Contents", "MacOS");
+  let macosDir = join(appDir, "ClaudeCode.app", "Contents", "MacOS");
   let appBinaryPath = join(macosDir, "claude");
   try {
     let infoPlist = await readEmbeddedInfoPlist(process.execPath);
@@ -103,15 +104,15 @@ async function detectHomebrew() {
     (env.CLAUDE_PTY_HOST_NO_STABLE_PATH === "1" || env.CLAUDE_CODE_DISABLE_BG_STABLE_PATH
       ? null
       : await ensureMacAppBundleLink()) ?? process.execPath;
-  let t = [
+  let argv = [
     ...(isStandaloneExecutable() ? [execPath] : [execPath, process.argv[1]]),
     ...process.argv.slice(2),
   ];
-  let r = compactEnvObject(process.env);
-  r.CLAUDE_BG_TCC_DISCLAIMED = "1";
-  delete r.CLAUDE_PTY_HOST_NO_STABLE_PATH;
+  let cleanEnv = compactEnvObject(process.env);
+  cleanEnv.CLAUDE_BG_TCC_DISCLAIMED = "1";
+  delete cleanEnv.CLAUDE_PTY_HOST_NO_STABLE_PATH;
   try {
-    process.execve(execPath, t, r, {
+    process.execve(execPath, argv, cleanEnv, {
       macDisclaimResponsibility: true,
     });
   } catch {}
@@ -157,17 +158,17 @@ class getPackageManager_2 {
   detectApk() {
     return (this.apk ??= this.ownsExecutable(["alpine"], "apk", ["info", "--who-owns"]));
   }
-  async ownsExecutable(families, n, a) {
+  async ownsExecutable(families, binary, ownArgs) {
     if (this.sources.platform() !== "linux") return false;
     let osRelease = await this.getOsRelease();
     if (osRelease && !isDistroFamily(osRelease, families)) return false;
-    let r = await this.sources.execFileNoThrow(n, [...a, this.sources.execPath()], {
+    let result = await this.sources.execFileNoThrow(binary, [...ownArgs, this.sources.execPath()], {
       timeout: 5000,
       useCwd: false,
       useToolMemoryCgroup: false,
     });
-    if (r.code === 0 && r.stdout) {
-      logForDebugging(`Detected ${n} installation: ${r.stdout.trim()}`);
+    if (result.code === 0 && result.stdout) {
+      logForDebugging(`Detected ${binary} installation: ${result.stdout.trim()}`);
       return true;
     }
     return false;
@@ -187,10 +188,10 @@ class getPackageManager_2 {
   }
   detectWinget() {
     if (this.sources.platform() !== "windows") return false;
-    let e = this.sources.execPath();
-    for (let n of [/Microsoft[/\\]WinGet[/\\]Packages/i, /Microsoft[/\\]WinGet[/\\]Links/i])
-      if (n.test(e)) {
-        logForDebugging(`Detected winget installation: ${e}`);
+    let execPath = this.sources.execPath();
+    for (let pattern of [/Microsoft[/\\]WinGet[/\\]Packages/i, /Microsoft[/\\]WinGet[/\\]Links/i])
+      if (pattern.test(execPath)) {
+        logForDebugging(`Detected winget installation: ${execPath}`);
         return true;
       }
     return false;
@@ -227,13 +228,16 @@ class getPackageManager_2 {
   }
 }
 //@ chunk-hntsfzas.js:4839-4993 fingerprint = getOsRelease (0.424)
-var getOsRelease = new HostScoped(
-  () =>
-    new getPackageManager_2({
-      platform: getPlatform,
-      readOsRelease: () => readFile("/etc/os-release", "utf8"),
-      execFileNoThrow,
-      execPath: () => process.execPath || process.argv[0] || "",
-    }),
-);
-export { getOsRelease, detectHomebrew };
+var osReleaseClientPerHost; // deferred: uses getPackageManager_2 of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hntsfzas.js:4839", () => {
+  osReleaseClientPerHost = new HostScoped(
+    () =>
+      new getPackageManager_2({
+        platform: getPlatform,
+        readOsRelease: () => readFile("/etc/os-release", "utf8"),
+        execFileNoThrow,
+        execPath: () => process.execPath || process.argv[0] || "",
+      }),
+  );
+});
+export { osReleaseClientPerHost, detectHomebrew };

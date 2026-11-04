@@ -5,12 +5,12 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:372714-373395 cjs-fingerprint
-var require_prolog = x(function (cjsExports, cjsModule) {
+var require_prolog = __commonJS(function (cjsExports, cjsModule) {
   function prolog(hljs) {
-    let t = {
+    let ATOM = {
       begin: /[a-z][A-Za-z0-9_]*/,
       relevance: 0,
     };
@@ -35,7 +35,7 @@ var require_prolog = x(function (cjsExports, cjsModule) {
       begin: /\[/,
       end: /\]/,
     };
-    let o = {
+    let COMMENT = {
       className: "comment",
       begin: /%/,
       end: /$/,
@@ -56,14 +56,14 @@ var require_prolog = x(function (cjsExports, cjsModule) {
       begin: /0'\\s/,
     };
     let inner = [
-      t,
+      ATOM,
       VAR,
       PARENTED,
       {
         begin: /:-/,
       },
       LIST,
-      o,
+      COMMENT,
       hljs.C_BLOCK_COMMENT_MODE,
       hljs.QUOTE_STRING_MODE,
       hljs.APOS_STRING_MODE,

@@ -17,3 +17,4 @@ import { callLegacyFeedbackDialog } from "../feedback/feedback.js";
 async function runShareCommand(onDone, context, args, invokedName) {
   return callLegacyFeedbackDialog(onDone, context, args, invokedName === "share" ? "/share" : "/bug");
 }
+export { runShareCommand };

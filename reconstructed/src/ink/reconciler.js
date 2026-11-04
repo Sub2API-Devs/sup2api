@@ -5,9 +5,11 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/reconciler.ts
- * pieces: chunk-bzr73sfg.js (10), chunk-cg2r2hy6.js (1)
- * attribution: fingerprint 6, layout 2, placement 3
+ * pieces: chunk-bzr73sfg.js (11), chunk-cg2r2hy6.js (1)
+ * attribution: placement 4, fingerprint 6, layout 2
  */
+import { __toESM } from "../../runtime/bun-runtime.js";
+import { require_react_reconciler_production } from "../../vendor/react-reconciler/cjs/react-reconciler.production.js";
 import {
   clearYogaNodeReferences,
   setStyleAndApplyLayout,
@@ -25,10 +27,15 @@ import {
 } from "./dom.js";
 import { RAW_MODE_HANDLER_PROPS, EVENT_HANDLER_PROPS } from "./events/event-handlers.js";
 import { Dispatcher } from "./events/dispatcher.js";
-import { ReactReconcilerModule } from "./line-width-cache.js";
 import { withTelemetryMessage } from "../utils/errors.js";
 import { getFocusManager, getRootNode } from "./focus.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-bzr73sfg.js:175309-175327 placement
+var ReactReconcilerModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:175309", () => {
+  ReactReconcilerModule = __toESM(require_react_reconciler_production(), 1);
+});
 //@ chunk-bzr73sfg.js:195131-195212 fingerprint = cleanupYogaNode (1)
 /**
  * 释放节点的 yoga 子树：解除测量函数、清 yogaNode 引用、freeRecursive。
@@ -56,7 +63,7 @@ function setEventHandler(node, key, value) {
 function hasRawModeHandler(node) {
   let _eventHandlers = node._eventHandlers;
   if (!_eventHandlers) return false;
-  for (let f of RAW_MODE_HANDLER_PROPS) if (_eventHandlers[f] != null) return true;
+  for (let propName of RAW_MODE_HANDLER_PROPS) if (_eventHandlers[propName] != null) return true;
   return false;
 }
 //@ chunk-bzr73sfg.js:195395-195504 placement
@@ -151,162 +158,168 @@ function formatOwnerChain(fiber) {
 /**
  * Ink 的 React reconciler（react-reconciler 宿主配置，mutation 模式、主渲染器）与事件分发器。要点：createInstance 时 <Box> 不能嵌在 <Text> 里、ink-text 嵌套变 ink-virtual-text；文字必须在 <Text> 内（报错信息带组件所有者链）；commitUpdate 只把变化的属性写回 DOM（样式差量写进 yoga）；hide/unhideInstance 用 display:none；resetAfterCommit 记录提交耗时并触发 onComputeLayout + onRender；更新优先级由 dispatcher 按当前事件类型决定；autoFocus 在 commitMount 时聚焦；挂上键盘/粘贴/滚轮处理器时同步 stdin 原始模式引用。
  */
-var dispatcher = new Dispatcher((n, u, f, m, p) => reconciler.discreteUpdates(n, u, f, m, p));
-var reconciler = ReactReconcilerModule.default({
-  getRootHostContext: () => ({
-    isInsideText: false,
-  }),
-  prepareForCommit: () => null,
-  preparePortalMount: () => null,
-  clearContainer: () => false,
-  resetAfterCommit(n) {
-    let scrollCommitStartedAt = n.scrollCommitStartedAt;
-    n.lastCommitMs = scrollCommitStartedAt === undefined ? 0 : performance.now() - scrollCommitStartedAt;
-    n.scrollCommitStartedAt = undefined;
-    n.layoutStale = false;
-    if (typeof n.onComputeLayout === "function") n.onComputeLayout();
-    n.onRender?.();
-  },
-  getChildHostContext(parentHostContext, type) {
-    let previousIsInsideText = parentHostContext.isInsideText;
-    let isInsideText = type === "ink-text" || type === "ink-virtual-text" || type === "ink-link";
-    if (previousIsInsideText === isInsideText) return parentHostContext;
-    return {
-      isInsideText,
-    };
-  },
-  shouldSetTextContent: () => false,
-  createInstance(originalType, newProps, root, hostContext, internalHandle) {
-    if (hostContext.isInsideText && originalType === "ink-box")
-      throw Error(`<Box> can't be nested inside <Text> component${formatOwnerChain(internalHandle)}`);
-    let type = originalType === "ink-text" && hostContext.isInsideText ? "ink-virtual-text" : originalType;
-    let node = createNode(type, root.yogaNode?.config);
-    for (let [key, value] of Object.entries(newProps)) applyProp(node, key, value);
-    syncRawModeRef(node, root);
-    if (root.debugRepaints) node.debugOwnerChain = getOwnerChain(internalHandle);
-    return node;
-  },
-  createTextInstance(text, _root, hostContext, fiber) {
-    if (!hostContext.isInsideText) {
-      let p = formatOwnerChain(fiber);
-      throw withTelemetryMessage(
-        Error(`Text string "${text}" must be rendered inside <Text> component${p}`),
-        `Text string "<redacted: ${text.length} chars>" must be rendered inside <Text> component${p}`,
-      );
-    }
-    return createTextNode(text);
-  },
-  resetTextContent() {},
-  hideTextInstance(node) {
-    setTextNodeValue(node, "");
-  },
-  unhideTextInstance(node, text) {
-    setTextNodeValue(node, text);
-  },
-  getPublicInstance: (instance) => instance,
-  hideInstance(node) {
-    node.isHidden = true;
-    node.yogaNode?.setDisplay(1);
-    markDirty(node);
-  },
-  unhideInstance(node) {
-    node.isHidden = false;
-    node.yogaNode?.setDisplay(0);
-    markDirty(node);
-  },
-  appendInitialChild: appendChildNode,
-  appendChild: appendChildNode,
-  insertBefore: insertBeforeNode,
-  finalizeInitialChildren(_node, _type, props) {
-    return props.autoFocus === true;
-  },
-  commitMount(node) {
-    getFocusManager(node).handleAutoFocus(node);
-  },
-  isPrimaryRenderer: true,
-  supportsMutation: true,
-  supportsPersistence: false,
-  supportsHydration: false,
-  scheduleTimeout: setTimeout,
-  cancelTimeout: clearTimeout,
-  noTimeout: -1,
-  getCurrentUpdatePriority: () => dispatcher.currentUpdatePriority,
-  beforeActiveInstanceBlur() {},
-  afterActiveInstanceBlur() {},
-  detachDeletedInstance() {},
-  getInstanceFromNode: () => null,
-  prepareScopeUpdate() {},
-  getInstanceFromScope: () => null,
-  appendChildToContainer: appendChildNode,
-  insertInContainerBefore: insertBeforeNode,
-  removeChildFromContainer: removeChildAndCleanup,
-  commitUpdate(node, _type, oldProps, newProps) {
-    let props = diffProps(oldProps, newProps);
-    let style = false;
-    if (props)
-      for (let [key, value] of Object.entries(props)) {
-        if (key === "style") {
-          setStyleAndApplyLayout(node, value);
-          continue;
-        }
-        if (key === "textStyles") {
-          setTextStyles(node, value);
-          continue;
-        }
-        if (key === "accessibility") {
-          setAccessibility(node, value);
-          continue;
-        }
-        if (EVENT_HANDLER_PROPS.has(key)) {
-          setEventHandler(node, key, value);
-          if (RAW_MODE_HANDLER_PROPS.has(key)) style = true;
-          continue;
-        }
-        setAttribute(node, key, value);
+var dispatcher; // deferred: uses Dispatcher (./events/dispatcher.js) of its import cycle while loading; runs once the cycle is complete
+var reconciler;
+var reconcilerAlias;
+deferInit("chunk-bzr73sfg.js:196478", () => {
+  dispatcher = new Dispatcher((fn, a, b, c, d) => reconciler.discreteUpdates(fn, a, b, c, d));
+  reconciler = ReactReconcilerModule.default({
+    getRootHostContext: () => ({
+      isInsideText: false,
+    }),
+    prepareForCommit: () => null,
+    preparePortalMount: () => null,
+    clearContainer: () => false,
+    resetAfterCommit(container) {
+      let scrollCommitStartedAt = container.scrollCommitStartedAt;
+      container.lastCommitMs =
+        scrollCommitStartedAt === undefined ? 0 : performance.now() - scrollCommitStartedAt;
+      container.scrollCommitStartedAt = undefined;
+      container.layoutStale = false;
+      if (typeof container.onComputeLayout === "function") container.onComputeLayout();
+      container.onRender?.();
+    },
+    getChildHostContext(parentHostContext, type) {
+      let previousIsInsideText = parentHostContext.isInsideText;
+      let isInsideText = type === "ink-text" || type === "ink-virtual-text" || type === "ink-link";
+      if (previousIsInsideText === isInsideText) return parentHostContext;
+      return {
+        isInsideText,
+      };
+    },
+    shouldSetTextContent: () => false,
+    createInstance(originalType, newProps, root, hostContext, internalHandle) {
+      if (hostContext.isInsideText && originalType === "ink-box")
+        throw Error(`<Box> can't be nested inside <Text> component${formatOwnerChain(internalHandle)}`);
+      let type = originalType === "ink-text" && hostContext.isInsideText ? "ink-virtual-text" : originalType;
+      let node = createNode(type, root.yogaNode?.config);
+      for (let [key, value] of Object.entries(newProps)) applyProp(node, key, value);
+      syncRawModeRef(node, root);
+      if (root.debugRepaints) node.debugOwnerChain = getOwnerChain(internalHandle);
+      return node;
+    },
+    createTextInstance(text, _root, hostContext, fiber) {
+      if (!hostContext.isInsideText) {
+        let fiberOwner = formatOwnerChain(fiber);
+        throw withTelemetryMessage(
+          Error(`Text string "${text}" must be rendered inside <Text> component${fiberOwner}`),
+          `Text string "<redacted: ${text.length} chars>" must be rendered inside <Text> component${fiberOwner}`,
+        );
       }
-    if (style) syncRawModeRef(node, getRootNode(node));
-    if (props?.autoFocus === true) getFocusManager(node).handleAutoFocus(node);
-  },
-  commitTextUpdate(node, _oldText, newText) {
-    setTextNodeValue(node, newText);
-  },
-  removeChild: removeChildAndCleanup,
-  maySuspendCommit() {
-    return false;
-  },
-  preloadInstance() {
-    return true;
-  },
-  startSuspendingCommit() {},
-  suspendInstance() {},
-  waitForCommitToBeReady() {
-    return null;
-  },
-  NotPendingTransition: null,
-  HostTransitionContext: {
-    $$typeof: Symbol.for("react.context"),
-    _currentValue: null,
-  },
-  setCurrentUpdatePriority(newPriority) {
-    dispatcher.setCurrentUpdatePriority(newPriority);
-  },
-  resolveUpdatePriority() {
-    return dispatcher.resolveEventPriority();
-  },
-  resetFormInstance() {},
-  requestPostPaintCallback() {},
-  shouldAttemptEagerTransition() {
-    return false;
-  },
-  trackSchedulerEvent() {},
-  resolveEventType() {
-    return dispatcher.currentEvent?.type ?? null;
-  },
-  resolveEventTimeStamp() {
-    return dispatcher.currentEvent?.timeStamp ?? -1.1;
-  },
+      return createTextNode(text);
+    },
+    resetTextContent() {},
+    hideTextInstance(node) {
+      setTextNodeValue(node, "");
+    },
+    unhideTextInstance(node, text) {
+      setTextNodeValue(node, text);
+    },
+    getPublicInstance: (instance) => instance,
+    hideInstance(node) {
+      node.isHidden = true;
+      node.yogaNode?.setDisplay(1);
+      markDirty(node);
+    },
+    unhideInstance(node) {
+      node.isHidden = false;
+      node.yogaNode?.setDisplay(0);
+      markDirty(node);
+    },
+    appendInitialChild: appendChildNode,
+    appendChild: appendChildNode,
+    insertBefore: insertBeforeNode,
+    finalizeInitialChildren(_node, _type, props) {
+      return props.autoFocus === true;
+    },
+    commitMount(node) {
+      getFocusManager(node).handleAutoFocus(node);
+    },
+    isPrimaryRenderer: true,
+    supportsMutation: true,
+    supportsPersistence: false,
+    supportsHydration: false,
+    scheduleTimeout: setTimeout,
+    cancelTimeout: clearTimeout,
+    noTimeout: -1,
+    getCurrentUpdatePriority: () => dispatcher.currentUpdatePriority,
+    beforeActiveInstanceBlur() {},
+    afterActiveInstanceBlur() {},
+    detachDeletedInstance() {},
+    getInstanceFromNode: () => null,
+    prepareScopeUpdate() {},
+    getInstanceFromScope: () => null,
+    appendChildToContainer: appendChildNode,
+    insertInContainerBefore: insertBeforeNode,
+    removeChildFromContainer: removeChildAndCleanup,
+    commitUpdate(node, _type, oldProps, newProps) {
+      let props = diffProps(oldProps, newProps);
+      let style = false;
+      if (props)
+        for (let [key, value] of Object.entries(props)) {
+          if (key === "style") {
+            setStyleAndApplyLayout(node, value);
+            continue;
+          }
+          if (key === "textStyles") {
+            setTextStyles(node, value);
+            continue;
+          }
+          if (key === "accessibility") {
+            setAccessibility(node, value);
+            continue;
+          }
+          if (EVENT_HANDLER_PROPS.has(key)) {
+            setEventHandler(node, key, value);
+            if (RAW_MODE_HANDLER_PROPS.has(key)) style = true;
+            continue;
+          }
+          setAttribute(node, key, value);
+        }
+      if (style) syncRawModeRef(node, getRootNode(node));
+      if (props?.autoFocus === true) getFocusManager(node).handleAutoFocus(node);
+    },
+    commitTextUpdate(node, _oldText, newText) {
+      setTextNodeValue(node, newText);
+    },
+    removeChild: removeChildAndCleanup,
+    maySuspendCommit() {
+      return false;
+    },
+    preloadInstance() {
+      return true;
+    },
+    startSuspendingCommit() {},
+    suspendInstance() {},
+    waitForCommitToBeReady() {
+      return null;
+    },
+    NotPendingTransition: null,
+    HostTransitionContext: {
+      $$typeof: Symbol.for("react.context"),
+      _currentValue: null,
+    },
+    setCurrentUpdatePriority(newPriority) {
+      dispatcher.setCurrentUpdatePriority(newPriority);
+    },
+    resolveUpdatePriority() {
+      return dispatcher.resolveEventPriority();
+    },
+    resetFormInstance() {},
+    requestPostPaintCallback() {},
+    shouldAttemptEagerTransition() {
+      return false;
+    },
+    trackSchedulerEvent() {},
+    resolveEventType() {
+      return dispatcher.currentEvent?.type ?? null;
+    },
+    resolveEventTimeStamp() {
+      return dispatcher.currentEvent?.timeStamp ?? -1.1;
+    },
+  });
+  reconcilerAlias = reconciler;
 });
-var reconcilerAlias = reconciler;
 //@ chunk-cg2r2hy6.js:48603-48738 fingerprint
 /**
  * 包装桥句柄的 teardown，使其同时拆掉标题同步/在线状态等辅助对象；句柄为空时直接拆辅助对象。
@@ -316,10 +329,10 @@ function wrapTeardownWithPresence(handle, getPresence) {
     getPresence()?.teardown();
     return null;
   }
-  let p = handle.teardown.bind(handle);
-  handle.teardown = async (o) => {
+  let originalTeardown = handle.teardown.bind(handle);
+  handle.teardown = async (options) => {
     getPresence()?.teardown();
-    await p(o);
+    await originalTeardown(options);
   };
   return handle;
 }

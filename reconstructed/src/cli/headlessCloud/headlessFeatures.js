@@ -35,42 +35,42 @@ var HEADLESS_FEATURE_NAMES = ["settings", "hooks", "plugins", "tools"];
 /**
  * 并发调用每个无头特性挂接函数（settings/hooks/plugins/tools），单个失败只记日志不影响其他特性。
  */
-async function attachHeadlessFeatures(features, n) {
+async function attachHeadlessFeatures(features, factories) {
   return (
     await Promise.all(
-      features.map((r) =>
+      features.map((context) =>
         Promise.resolve()
-          .then(() => r(n))
+          .then(() => context(factories))
           .catch((error) => {
             logForDebugging(
-              `[headlessFeatures] a feature did not attach (${n.trigger}): ${errorMessage(error)}`,
+              `[headlessFeatures] a feature did not attach (${factories.trigger}): ${errorMessage(error)}`,
             );
             logHeadlessFeatureError(error);
             return;
           }),
       ),
     )
-  ).flatMap((r) => (r === undefined ? [] : [r]));
+  ).flatMap((feature) => (feature === undefined ? [] : [feature]));
 }
 //@ chunk-fe6rs39h.js:4526-4736 placement
-function mergeFeatureHooks(e, n) {
-  return n.reduce(
-    (acc, h) =>
-      Object.entries(h).reduce((acc, [S, w]) => {
-        if (typeof w !== "function") return acc;
-        let R = acc[S];
-        acc[S] =
-          R === undefined
-            ? w
-            : (...k) => {
-                let I = R(...k);
-                runFeatureCallbackSafely(() => w(...k));
-                return I;
+function mergeFeatureHooks(base, layer) {
+  return layer.reduce(
+    (acc, groups) =>
+      Object.entries(groups).reduce((acc, [name, fn]) => {
+        if (typeof fn !== "function") return acc;
+        let previous = acc[name];
+        acc[name] =
+          previous === undefined
+            ? fn
+            : (...args) => {
+                let result = previous(...args);
+                runFeatureCallbackSafely(() => fn(...args));
+                return result;
               };
         return acc;
       }, acc),
     {
-      ...e,
+      ...base,
     },
   );
 }
@@ -81,30 +81,32 @@ function mergeFeatureHooks(e, n) {
 class HeadlessFeatureHandles {
   attached = [];
   replied = false;
-  adopt(e) {
-    this.attached = [...this.attached, ...e];
+  adopt(features) {
+    this.attached = [...this.attached, ...features];
   }
   handles() {
     return this.attached;
   }
   homeSeed() {
-    return this.attached.find((e) => e.homeSeed !== undefined)?.homeSeed;
+    return this.attached.find((feature) => feature.homeSeed !== undefined)?.homeSeed;
   }
   statusFeeds() {
-    return this.attached.flatMap((e) => (e.status === undefined ? [] : [e.status]));
+    return this.attached.flatMap((feature) => (feature.status === undefined ? [] : [feature.status]));
   }
-  callbacks(e) {
+  callbacks(feature) {
     return mergeFeatureHooks(
-      e,
-      this.attached.flatMap((n) => (n.sessionCallbacks === undefined ? [] : [n.sessionCallbacks])),
+      feature,
+      this.attached.flatMap((feature) =>
+        feature.sessionCallbacks === undefined ? [] : [feature.sessionCallbacks],
+      ),
     );
   }
   reports() {
     return Object.fromEntries(
-      this.attached.flatMap((e) => {
-        if (e.report === undefined) return [];
+      this.attached.flatMap((feature) => {
+        if (feature.report === undefined) return [];
         try {
-          return [[e.feature, e.report()]];
+          return [[feature.feature, feature.report()]];
         } catch (error) {
           logHeadlessFeatureError(error);
           return [];
@@ -112,84 +114,84 @@ class HeadlessFeatureHandles {
       }),
     );
   }
-  noteSession(e) {
-    this.each((n) => n.onSession?.(e));
+  noteSession(error) {
+    this.each((session) => session.onSession?.(error));
   }
-  noteStreamConnected(e) {
-    this.each((n) => n.onStreamConnected?.(e));
+  noteStreamConnected(feature) {
+    this.each((streamFeature) => streamFeature.onStreamConnected?.(feature));
   }
   async noteHostSleep() {
-    await this.settled(this.attached, (e) => e.onHostSleep?.());
+    await this.settled(this.attached, (feature) => feature.onHostSleep?.());
   }
   noteHostWake() {
-    let e = false;
-    this.each((n) => {
-      e = n.onHostWake?.() === true || e;
+    let woke = false;
+    this.each((feature) => {
+      woke = feature.onHostWake?.() === true || woke;
     });
-    return e;
+    return woke;
   }
   noteWorkerLive() {
-    this.each((e) => e.onWorkerLive?.());
+    this.each((feature) => feature.onWorkerLive?.());
   }
-  noteWorkerInit(e) {
-    this.each((n) => n.onWorkerInit?.(e));
+  noteWorkerInit(feature) {
+    this.each((initFeature) => initFeature.onWorkerInit?.(feature));
   }
-  noteWorkerUp(e) {
-    this.each((n) => n.onWorkerUp?.(e));
+  noteWorkerUp(feature) {
+    this.each((turnFeature) => turnFeature.onWorkerUp?.(feature));
   }
   noteTurnInFlight() {
-    this.each((e) => e.onTurnInFlight?.());
+    this.each((features) => features.onTurnInFlight?.());
   }
   noteTurnEnded() {
-    this.each((e) => e.onTurnEnded?.());
+    this.each((feature) => feature.onTurnEnded?.());
   }
   sendWait() {
-    let filtered = this.attached.filter((n) => n.beforeSend !== undefined);
+    let filtered = this.attached.filter((feature) => feature.beforeSend !== undefined);
     if (filtered.length === 0) return null;
     return async () => {
-      await this.settled(filtered, (n) => n.beforeSend?.());
+      await this.settled(filtered, (feature) => feature.beforeSend?.());
     };
   }
-  noteSessionCleared(e) {
-    this.each((n) => n.onSessionCleared?.(e));
+  noteSessionCleared(session) {
+    this.each((feature) => feature.onSessionCleared?.(session));
   }
-  noteMessageSent(e) {
-    this.each((n) => n.onMessageSent?.(e));
+  noteMessageSent(feature) {
+    this.each((replyFeature) => replyFeature.onMessageSent?.(feature));
   }
-  noteReply(e) {
+  noteReply(reply) {
     if (this.replied) return;
     this.replied = true;
-    this.each((n) => n.afterFirstReply?.(e));
+    this.each((feature) => feature.afterFirstReply?.(reply));
   }
-  async dispose(e = {}) {
+  async dispose(options = {}) {
     let attached = this.attached;
     this.attached = [];
-    await this.settled(attached, (s) => s.dispose?.(e));
+    await this.settled(attached, (feature) => feature.dispose?.(options));
   }
-  settled(e, n) {
+  settled(features, fn) {
     return Promise.all(
-      e.map((s) =>
+      features.map((feature) =>
         Promise.resolve()
-          .then(() => n(s))
+          .then(() => fn(feature))
           .catch((error) => logHeadlessFeatureError(error)),
       ),
     );
   }
-  each(e) {
-    this.attached.forEach((n) => runFeatureCallbackSafely(() => e(n)));
+  each(fn) {
+    this.attached.forEach((feature) => runFeatureCallbackSafely(() => fn(feature)));
   }
-  onEachSettled(e) {
-    this.each((n) => n.onSettled?.(() => runFeatureCallbackSafely(e)));
+  onEachSettled(fn) {
+    this.each((feature) => feature.onSettled?.(() => runFeatureCallbackSafely(fn)));
   }
-  onEachReportChanged(e) {
-    this.each((n) => n.onReportChanged?.(() => runFeatureCallbackSafely(e)));
+  onEachReportChanged(fn) {
+    this.each((feature) => feature.onReportChanged?.(() => runFeatureCallbackSafely(fn)));
   }
 }
 //@ chunk-fe6rs39h.js:6533-6622 placement
-function runFeatureCallbackSafely(e) {
+function runFeatureCallbackSafely(fn) {
   try {
-    let n = e();
-    if (n instanceof Promise) n.catch((error) => logHeadlessFeatureError(error));
+    let result = fn();
+    if (result instanceof Promise) result.catch((error) => logHeadlessFeatureError(error));
   } catch (error) {
     logHeadlessFeatureError(error);
   }

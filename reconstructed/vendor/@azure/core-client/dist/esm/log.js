@@ -5,8 +5,8 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Pt } from "../../../logger/dist/esm/index.js";
+import { createClientLogger_2 } from "../../../logger/dist/esm/index.js";
 
 //@ chunk-mrx6y2r5.js:79630-79655 esm-fingerprint
-var logger_3 = Pt("core-client");
+var logger_3 = createClientLogger_2("core-client");
 export { logger_3 };

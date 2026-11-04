@@ -19,19 +19,23 @@ import { logForDebugging } from "../debug.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { getFileReader } from "../fileStore.js";
 import { isENOENT } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hntsfzas.js:1385-1581 placement
-var updateResultSchema = DoctorLazy(() =>
-  create({
-    timestamp: create_2(),
-    path: create_26(["npm-global", "npm-local", "native"]),
-    outcome: create_26(["success", "failed"]),
-    status: create_2(),
-    version_from: create_2(),
-    version_to: create_2().nullable(),
-    error_code: create_2().nullable(),
-  }),
-);
+var updateResultSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hntsfzas.js:1385", () => {
+  updateResultSchema = DoctorLazy(() =>
+    create({
+      timestamp: create_2(),
+      path: create_26(["npm-global", "npm-local", "native"]),
+      outcome: create_26(["success", "failed"]),
+      status: create_2(),
+      version_from: create_2(),
+      version_to: create_2().nullable(),
+      error_code: create_2().nullable(),
+    }),
+  );
+});
 //@ chunk-hntsfzas.js:1581-1636 placement
 function lastUpdateResultPath() {
   return join(getClaudeConfigDir(), ".last-update-result.json");
@@ -41,20 +45,20 @@ function lastUpdateResultStorageKey() {
   return STORAGE_SPACES.state("last-update-result");
 }
 //@ chunk-hntsfzas.js:1687-1984 placement
-async function recordUpdateResult(e, storageV5) {
+async function recordUpdateResult(result, storageV5) {
   if (isStorageV5Enabled() && storageV5) {
-    let a = await storageV5.write(lastUpdateResultStorageKey(), jsonStringify(e), {
+    let writeResult = await storageV5.write(lastUpdateResultStorageKey(), jsonStringify(result), {
       mode: 438 & ~process.umask(),
     });
-    if (!a.ok)
-      logForDebugging(`Failed to record update result: ${a.error.code}`, {
+    if (!writeResult.ok)
+      logForDebugging(`Failed to record update result: ${writeResult.error.code}`, {
         level: "error",
       });
     return;
   }
   if (isDiskless()) return;
   try {
-    await getFileReader().atomicWrite(lastUpdateResultPath(), jsonStringify(e));
+    await getFileReader().atomicWrite(lastUpdateResultPath(), jsonStringify(result));
   } catch (error) {
     logForDebugging(`Failed to record update result: ${error}`, {
       level: "error",
@@ -63,22 +67,22 @@ async function recordUpdateResult(e, storageV5) {
 }
 //@ chunk-hntsfzas.js:1984-2441 placement
 async function readUpdateResult(storageV5) {
-  let n;
+  let text;
   if (isStorageV5Enabled() && storageV5) {
-    let a = await storageV5.read([lastUpdateResultStorageKey()]);
-    if (!a.ok) {
-      logForDebugging(`Failed to read update result: ${a.error.code}`, {
+    let readResult = await storageV5.read([lastUpdateResultStorageKey()]);
+    if (!readResult.ok) {
+      logForDebugging(`Failed to read update result: ${readResult.error.code}`, {
         level: "error",
       });
       return null;
     }
-    let o = a.value.items[0];
-    if (!o.found) return null;
-    n = Buffer.from(o.value).toString("utf8");
+    let item = readResult.value.items[0];
+    if (!item.found) return null;
+    text = Buffer.from(item.value).toString("utf8");
   } else {
     if (isDiskless()) return null;
     try {
-      n = await getFileReader().read(lastUpdateResultPath());
+      text = await getFileReader().read(lastUpdateResultPath());
     } catch (error) {
       if (!isENOENT(error))
         logForDebugging(`Failed to read update result: ${error}`, {
@@ -88,8 +92,8 @@ async function readUpdateResult(storageV5) {
     }
   }
   try {
-    let a = updateResultSchema().safeParse(jsonParse(n));
-    return a.success ? a.data : null;
+    let parsed = updateResultSchema().safeParse(jsonParse(text));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }

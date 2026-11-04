@@ -8,8 +8,13 @@
  * pieces: chunk-6bvzpeaf.js (7)
  * attribution: placement 7
  */
-import { init_react_production, y, R, P } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   isGateBlocking,
   jitteredRetryMs,
@@ -36,15 +41,15 @@ import { getBaseRenderOptions } from "../utils/renderOptions.js";
 //@ chunk-6bvzpeaf.js:15544-15548 placement
 init_react_production();
 //@ chunk-6bvzpeaf.js:15548-15590 placement
-function withChecking(tn) {
+function withChecking(state) {
   return {
-    ...tn,
+    ...state,
     checking: true,
   };
 }
 //@ chunk-6bvzpeaf.js:15590-15655 placement
-function delayWithCleanup(a, u) {
-  let timer = setTimeout(a, u);
+function delayWithCleanup(callback, delayMs) {
+  let timer = setTimeout(callback, delayMs);
   return () => clearTimeout(timer);
 }
 //@ chunk-6bvzpeaf.js:15655-18970 placement
@@ -52,61 +57,61 @@ function delayWithCleanup(a, u) {
  * 组织配置门拦截时显示的屏幕，支持重试
  */
 function OrgConfigBlockedScreen(props) {
-  let t = w(65);
+  let $ = useMemoCache(65);
   let { initial, pending, retry, onDone, rung, onRung, schedule, random } = props;
   let rung_2 = rung === undefined ? 0 : rung;
-  let c = schedule === undefined ? delayWithCleanup : schedule;
+  let schedule_ = schedule === undefined ? delayWithCleanup : schedule;
   const checking = pending !== null;
-  let A;
-  if (t[0] !== initial || t[1] !== rung_2 || t[2] !== checking) {
-    A = {
+  let initialState;
+  if ($[0] !== initial || $[1] !== rung_2 || $[2] !== checking) {
+    initialState = {
       evaluation: initial,
       checking,
       rung: rung_2,
     };
-    t[0] = initial;
-    t[1] = rung_2;
-    t[2] = checking;
-    t[3] = A;
-  } else A = t[3];
-  let [te, oe] = y(A);
-  let { evaluation, checking: checking_2, rung: rung_3 } = te;
-  let E = R(false);
-  let ve;
-  let Re;
-  if (t[4] !== onRung || t[5] !== rung_3) {
-    ve = () => {
+    $[0] = initial;
+    $[1] = rung_2;
+    $[2] = checking;
+    $[3] = initialState;
+  } else initialState = $[3];
+  let [screenState, setScreenState] = useState(initialState);
+  let { evaluation, checking: checking_2, rung: rung_3 } = screenState;
+  let finishedRef = useRef(false);
+  let onRungEffect;
+  let onRungDeps;
+  if ($[4] !== onRung || $[5] !== rung_3) {
+    onRungEffect = () => {
       onRung?.(rung_3);
     };
-    Re = [rung_3, onRung];
-    t[4] = onRung;
-    t[5] = rung_3;
-    t[6] = ve;
-    t[7] = Re;
+    onRungDeps = [rung_3, onRung];
+    $[4] = onRung;
+    $[5] = rung_3;
+    $[6] = onRungEffect;
+    $[7] = onRungDeps;
   } else {
-    ve = t[6];
-    Re = t[7];
+    onRungEffect = $[6];
+    onRungDeps = $[7];
   }
-  P(ve, Re);
-  let Ce;
-  if (t[8] !== onDone) {
-    Ce = (Xe, Ye) => {
-      let Se = Ye ? 1 : 0;
-      oe(withChecking);
-      Xe.then(
-        (Oe) => {
-          if (E.current) {
+  useEffect(onRungEffect, onRungDeps);
+  let runCheck;
+  if ($[8] !== onDone) {
+    runCheck = (checkPromise, advanceRung) => {
+      let rungStep = advanceRung ? 1 : 0;
+      setScreenState(withChecking);
+      checkPromise.then(
+        (result) => {
+          if (finishedRef.current) {
             return;
           }
-          if (!isGateBlocking(Oe.decision)) {
-            E.current = true;
+          if (!isGateBlocking(result.decision)) {
+            finishedRef.current = true;
             onDone("passed");
             return;
           }
-          oe((Ze) => ({
-            evaluation: Oe,
+          setScreenState((prev) => ({
+            evaluation: result,
             checking: false,
-            rung: Ze.rung + Se,
+            rung: prev.rung + rungStep,
           }));
         },
         (error) => {
@@ -116,111 +121,117 @@ function OrgConfigBlockedScreen(props) {
               "org-config gate: the blocked screen's retry rejected",
             ),
           );
-          if (E.current) {
+          if (finishedRef.current) {
             return;
           }
-          oe((be) => ({
-            ...be,
+          setScreenState((prev) => ({
+            ...prev,
             checking: false,
-            rung: be.rung + Se,
+            rung: prev.rung + rungStep,
           }));
         },
       );
     };
-    t[8] = onDone;
-    t[9] = Ce;
-  } else Ce = t[9];
-  let D = Ce;
-  let Ee;
-  if (t[10] !== checking_2 || t[11] !== retry || t[12] !== D) {
-    Ee = (nn) => {
-      if (checking_2 || E.current) {
+    $[8] = onDone;
+    $[9] = runCheck;
+  } else runCheck = $[9];
+  let runCheckStable = runCheck;
+  let onRetry;
+  if ($[10] !== checking_2 || $[11] !== retry || $[12] !== runCheckStable) {
+    onRetry = (advanceRung) => {
+      if (checking_2 || finishedRef.current) {
         return;
       }
-      D(retry(), nn);
+      runCheckStable(retry(), advanceRung);
     };
-    t[10] = checking_2;
-    t[11] = retry;
-    t[12] = D;
-    t[13] = Ee;
-  } else Ee = t[13];
-  let h = Ee;
-  let Pe = R(false);
-  let De;
-  let Ge;
-  if (t[14] !== pending || t[15] !== D) {
-    De = () => {
-      if (pending !== null && !Pe.current) {
-        Pe.current = true;
-        D(pending, false);
+    $[10] = checking_2;
+    $[11] = retry;
+    $[12] = runCheckStable;
+    $[13] = onRetry;
+  } else onRetry = $[13];
+  let retryHandler = onRetry;
+  let pendingStartedRef = useRef(false);
+  let pendingEffect;
+  let pendingDeps;
+  if ($[14] !== pending || $[15] !== runCheckStable) {
+    pendingEffect = () => {
+      if (pending !== null && !pendingStartedRef.current) {
+        pendingStartedRef.current = true;
+        runCheckStable(pending, false);
       }
     };
-    Ge = [pending, D];
-    t[14] = pending;
-    t[15] = D;
-    t[16] = De;
-    t[17] = Ge;
+    pendingDeps = [pending, runCheckStable];
+    $[14] = pending;
+    $[15] = runCheckStable;
+    $[16] = pendingEffect;
+    $[17] = pendingDeps;
   } else {
-    De = t[16];
-    Ge = t[17];
+    pendingEffect = $[16];
+    pendingDeps = $[17];
   }
-  P(De, Ge);
+  useEffect(pendingEffect, pendingDeps);
   let verdict = evaluation.decision.verdict;
-  let f = jitteredRetryMs(rung_3, random);
-  let Be;
-  if (t[18] !== checking_2 || t[19] !== f || t[20] !== h || t[21] !== c || t[22] !== verdict) {
-    Be = () => {
-      if (verdict !== "blocked" || checking_2 || f === undefined) {
+  let retryDelayMs = jitteredRetryMs(rung_3, random);
+  let autoRetryEffect;
+  if (
+    $[18] !== checking_2 ||
+    $[19] !== retryDelayMs ||
+    $[20] !== retryHandler ||
+    $[21] !== schedule_ ||
+    $[22] !== verdict
+  ) {
+    autoRetryEffect = () => {
+      if (verdict !== "blocked" || checking_2 || retryDelayMs === undefined) {
         return;
       }
-      return c(() => h(true), f);
+      return schedule_(() => retryHandler(true), retryDelayMs);
     };
-    t[18] = checking_2;
-    t[19] = f;
-    t[20] = h;
-    t[21] = c;
-    t[22] = verdict;
-    t[23] = Be;
-  } else Be = t[23];
-  let _e;
+    $[18] = checking_2;
+    $[19] = retryDelayMs;
+    $[20] = retryHandler;
+    $[21] = schedule_;
+    $[22] = verdict;
+    $[23] = autoRetryEffect;
+  } else autoRetryEffect = $[23];
+  let autoRetryDeps;
   if (
-    t[24] !== checking_2 ||
-    t[25] !== f ||
-    t[26] !== h ||
-    t[27] !== rung_3 ||
-    t[28] !== c ||
-    t[29] !== verdict
+    $[24] !== checking_2 ||
+    $[25] !== retryDelayMs ||
+    $[26] !== retryHandler ||
+    $[27] !== rung_3 ||
+    $[28] !== schedule_ ||
+    $[29] !== verdict
   ) {
-    _e = [verdict, checking_2, rung_3, f, c, h];
-    t[24] = checking_2;
-    t[25] = f;
-    t[26] = h;
-    t[27] = rung_3;
-    t[28] = c;
-    t[29] = verdict;
-    t[30] = _e;
-  } else _e = t[30];
-  P(Be, _e);
-  let xe;
-  if (t[31] !== evaluation.decision) {
-    xe = isGateRefusalFinal(evaluation.decision);
-    t[31] = evaluation.decision;
-    t[32] = xe;
-  } else xe = t[32];
-  let re = xe;
+    autoRetryDeps = [verdict, checking_2, rung_3, retryDelayMs, schedule_, retryHandler];
+    $[24] = checking_2;
+    $[25] = retryDelayMs;
+    $[26] = retryHandler;
+    $[27] = rung_3;
+    $[28] = schedule_;
+    $[29] = verdict;
+    $[30] = autoRetryDeps;
+  } else autoRetryDeps = $[30];
+  useEffect(autoRetryEffect, autoRetryDeps);
+  let isFinalRefusal;
+  if ($[31] !== evaluation.decision) {
+    isFinalRefusal = isGateRefusalFinal(evaluation.decision);
+    $[31] = evaluation.decision;
+    $[32] = isFinalRefusal;
+  } else isFinalRefusal = $[32];
+  let isFinalRefusal_2 = isFinalRefusal;
   const label = checking_2 ? "Checking\u2026" : "Retry now";
-  let K;
-  if (t[33] !== label) {
-    K = {
+  let retryOption;
+  if ($[33] !== label) {
+    retryOption = {
       label,
       value: "retry",
     };
-    t[33] = label;
-    t[34] = K;
-  } else K = t[34];
-  let L;
-  if (t[35] !== re) {
-    L = re
+    $[33] = label;
+    $[34] = retryOption;
+  } else retryOption = $[34];
+  let signInOptions;
+  if ($[35] !== isFinalRefusal_2) {
+    signInOptions = isFinalRefusal_2
       ? [
           {
             label: "Sign in again (claude auth login)",
@@ -228,109 +239,109 @@ function OrgConfigBlockedScreen(props) {
           },
         ]
       : [];
-    t[35] = re;
-    t[36] = L;
-  } else L = t[36];
-  let Te;
-  if (t[37] === MEMO_CACHE_SENTINEL) {
-    Te = {
+    $[35] = isFinalRefusal_2;
+    $[36] = signInOptions;
+  } else signInOptions = $[36];
+  let quitOption;
+  if ($[37] === MEMO_CACHE_SENTINEL) {
+    quitOption = {
       label: "Quit",
       value: "quit",
     };
-    t[37] = Te;
-  } else Te = t[37];
-  let Fe;
-  if (t[38] !== K || t[39] !== L) {
-    Fe = [K, ...L, Te];
-    t[38] = K;
-    t[39] = L;
-    t[40] = Fe;
-  } else Fe = t[40];
-  let options = Fe;
+    $[37] = quitOption;
+  } else quitOption = $[37];
+  let options;
+  if ($[38] !== retryOption || $[39] !== signInOptions) {
+    options = [retryOption, ...signInOptions, quitOption];
+    $[38] = retryOption;
+    $[39] = signInOptions;
+    $[40] = options;
+  } else options = $[40];
+  let options_2 = options;
   let onCancel;
-  if (t[41] !== onDone) {
+  if ($[41] !== onDone) {
     onCancel = () => {
-      E.current = true;
+      finishedRef.current = true;
       onDone("quit");
     };
-    t[41] = onDone;
-    t[42] = onCancel;
-  } else onCancel = t[42];
-  let V;
-  if (t[43] !== evaluation.message) {
-    V = jsxProd_default(Text, {
+    $[41] = onDone;
+    $[42] = onCancel;
+  } else onCancel = $[42];
+  let messageText;
+  if ($[43] !== evaluation.message) {
+    messageText = jsxProd_default(Text, {
       children: evaluation.message,
     });
-    t[43] = evaluation.message;
-    t[44] = V;
-  } else V = t[44];
-  let z;
-  if (t[45] !== checking_2 || t[46] !== f || t[47] !== evaluation.decision.verdict) {
-    z =
+    $[43] = evaluation.message;
+    $[44] = messageText;
+  } else messageText = $[44];
+  let statusText;
+  if ($[45] !== checking_2 || $[46] !== retryDelayMs || $[47] !== evaluation.decision.verdict) {
+    statusText =
       evaluation.decision.verdict === "blocked" &&
       jsxProd_default(Text, {
         dimColor: true,
         children: checking_2
           ? "Checking again\u2026"
-          : f === undefined
+          : retryDelayMs === undefined
             ? "Automatic retries have stopped. Choose Retry now to check again."
-            : `Retrying automatically in ${Math.round(f / 1000)}s.`,
+            : `Retrying automatically in ${Math.round(retryDelayMs / 1000)}s.`,
       });
-    t[45] = checking_2;
-    t[46] = f;
-    t[47] = evaluation.decision.verdict;
-    t[48] = z;
-  } else z = t[48];
+    $[45] = checking_2;
+    $[46] = retryDelayMs;
+    $[47] = evaluation.decision.verdict;
+    $[48] = statusText;
+  } else statusText = $[48];
   let onCancel_2;
-  if (t[49] !== onDone) {
+  if ($[49] !== onDone) {
     onCancel_2 = () => {
-      E.current = true;
+      finishedRef.current = true;
       onDone("quit");
     };
-    t[49] = onDone;
-    t[50] = onCancel_2;
-  } else onCancel_2 = t[50];
+    $[49] = onDone;
+    $[50] = onCancel_2;
+  } else onCancel_2 = $[50];
   let onChange;
-  if (t[51] !== onDone || t[52] !== h) {
-    onChange = (Ie) => {
-      if (Ie === "retry") {
-        h(false);
+  if ($[51] !== onDone || $[52] !== retryHandler) {
+    onChange = (value) => {
+      if (value === "retry") {
+        retryHandler(false);
         return;
       }
-      E.current = true;
-      onDone(Ie === "sign_in" ? "sign_in" : "quit");
+      finishedRef.current = true;
+      onDone(value === "sign_in" ? "sign_in" : "quit");
     };
-    t[51] = onDone;
-    t[52] = h;
-    t[53] = onChange;
-  } else onChange = t[53];
-  let X;
-  if (t[54] !== options || t[55] !== onCancel_2 || t[56] !== onChange) {
-    X = jsxProd_default(ModelSelector, {
-      options,
+    $[51] = onDone;
+    $[52] = retryHandler;
+    $[53] = onChange;
+  } else onChange = $[53];
+  let selector;
+  if ($[54] !== options_2 || $[55] !== onCancel_2 || $[56] !== onChange) {
+    selector = jsxProd_default(ModelSelector, {
+      options: options_2,
       onCancel: onCancel_2,
       onChange,
     });
-    t[54] = options;
-    t[55] = onCancel_2;
-    t[56] = onChange;
-    t[57] = X;
-  } else X = t[57];
+    $[54] = options_2;
+    $[55] = onCancel_2;
+    $[56] = onChange;
+    $[57] = selector;
+  } else selector = $[57];
   let children;
-  if (t[58] !== V || t[59] !== z || t[60] !== X) {
+  if ($[58] !== messageText || $[59] !== statusText || $[60] !== selector) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [V, z, X],
+      children: [messageText, statusText, selector],
     });
-    t[58] = V;
-    t[59] = z;
-    t[60] = X;
-    t[61] = children;
-  } else children = t[61];
-  let He;
-  if (t[62] !== onCancel || t[63] !== children) {
-    He = jsxProd_default(Box, {
+    $[58] = messageText;
+    $[59] = statusText;
+    $[60] = selector;
+    $[61] = children;
+  } else children = $[61];
+  let dialog;
+  if ($[62] !== onCancel || $[63] !== children) {
+    dialog = jsxProd_default(Box, {
       flexDirection: "column",
       children: jsxProd_default(Dialog, {
         title: "Claude Code can't start this session yet",
@@ -338,23 +349,25 @@ function OrgConfigBlockedScreen(props) {
         children,
       }),
     });
-    t[62] = onCancel;
-    t[63] = children;
-    t[64] = He;
-  } else He = t[64];
-  return He;
+    $[62] = onCancel;
+    $[63] = children;
+    $[64] = dialog;
+  } else dialog = $[64];
+  return dialog;
 }
 //@ chunk-6bvzpeaf.js:18970-19110 placement
-function trackRetry(a, u) {
-  let o = u().then((d) => {
-    a.latest = d;
-    return d;
+function trackRetry(tracker, runRequest) {
+  let request = runRequest().then((result) => {
+    tracker.latest = result;
+    return result;
   });
-  a.inFlight = o;
-  o.finally(() => {
-    if (a.inFlight === o) a.inFlight = null;
-  }).catch(() => {});
-  return o;
+  tracker.inFlight = request;
+  request
+    .finally(() => {
+      if (tracker.inFlight === request) tracker.inFlight = null;
+    })
+    .catch(() => {});
+  return request;
 }
 //@ chunk-6bvzpeaf.js:19110-19253 placement
 function renderBlockedScreen({ track, retry, onDone }) {
@@ -373,19 +386,19 @@ function renderBlockedScreen({ track, retry, onDone }) {
 /**
  * 组织配置门拦截时显示阻断屏：先等待待处理的安全对话框，然后渲染可重试的阻断屏，重试结果写入跟踪状态，结束时回调。
  */
-var showOrgConfigBlockedScreen = async (latest, u, o) => {
+var showOrgConfigBlockedScreen = async (latest, readLatest, options) => {
   let secondRootError = getSecondRootError();
-  let i = {
+  let track = {
     latest,
     inFlight: null,
     rung: 0,
   };
-  let F = () => trackRetry(i, u);
-  let k = pendingPreReplSecurityDialog();
-  if (k !== null) {
-    await k.catch(() => {});
+  let retry = () => trackRetry(track, readLatest);
+  let pendingDialog = pendingPreReplSecurityDialog();
+  if (pendingDialog !== null) {
+    await pendingDialog.catch(() => {});
     try {
-      i.latest = await u();
+      track.latest = await readLatest();
     } catch (error) {
       logError(
         new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -394,12 +407,12 @@ var showOrgConfigBlockedScreen = async (latest, u, o) => {
         ),
       );
     }
-    if (!isGateBlocking(i.latest.decision)) return "passed";
+    if (!isGateBlocking(track.latest.decision)) return "passed";
   }
-  if (o?.retryNow === true && k === null) F().catch(() => {});
-  let I = secondRootError.has(process.stdout);
+  if (options?.retryNow === true && pendingDialog === null) retry().catch(() => {});
+  let ownsSecondRoot = secondRootError.has(process.stdout);
   let promise = new Promise((resolve) => {
-    let c = false;
+    let isDone = false;
     (async () => {
       let { rerender, unmount, waitUntilExit } = await render(
         jsxProd_default(
@@ -407,14 +420,14 @@ var showOrgConfigBlockedScreen = async (latest, u, o) => {
           {
             children: jsxProd_default(OrgConfigConsentHost, {
               children: jsxProd_default(renderBlockedScreen, {
-                track: i,
-                retry: F,
-                onDone: (te) => {
-                  if (c) return;
-                  c = true;
-                  resolve(te);
+                track,
+                retry,
+                onDone: (answer) => {
+                  if (isDone) return;
+                  isDone = true;
+                  resolve(answer);
                   rerender(null);
-                  if (!I) unmount();
+                  if (!ownsSecondRoot) unmount();
                 },
               }),
             }),
@@ -424,8 +437,8 @@ var showOrgConfigBlockedScreen = async (latest, u, o) => {
         getBaseRenderOptions(false),
       );
       await waitUntilExit();
-      if (!c) {
-        c = true;
+      if (!isDone) {
+        isDone = true;
         logError(Error("Org-config blocking screen exited without an answer"));
         resolve("failed");
       }
@@ -436,12 +449,13 @@ var showOrgConfigBlockedScreen = async (latest, u, o) => {
           "org-config gate: the blocked screen threw",
         ),
       );
-      if (!c) {
-        c = true;
+      if (!isDone) {
+        isDone = true;
         resolve("failed");
       }
     });
   });
-  if (!I) secondRootError.claimForStandaloneRender(promise);
+  if (!ownsSecondRoot) secondRootError.claimForStandaloneRender(promise);
   return promise;
 };
+export { showOrgConfigBlockedScreen };

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:494607-496224 cjs-fingerprint
-var require_tp = x(function (cjsExports, cjsModule) {
+var require_tp = __commonJS(function (cjsExports, cjsModule) {
   function tp(hljs) {
     let TPID = {
       className: "number",

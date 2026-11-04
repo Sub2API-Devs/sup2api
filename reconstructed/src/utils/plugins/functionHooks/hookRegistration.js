@@ -30,12 +30,16 @@ function hasPendingHookRegistration() {
 /**
  * 对比快照：快照时注册未知、当前仍未知、或注册代次/已加载模块变化且有相关钩子时返回 true；出错保守返回 true。
  */
-function hasHookRegistrationChanged(r) {
+function hasHookRegistrationChanged(snapshot) {
   try {
     let pluginRegistry = getPluginRegistry();
-    let e = pluginRegistry.hookRegistrationEpoch !== r.epoch || pluginRegistry.loadedModules !== r.modules;
+    let changed =
+      pluginRegistry.hookRegistrationEpoch !== snapshot.epoch ||
+      pluginRegistry.loadedModules !== snapshot.modules;
     return (
-      r.wasUnknown || hasPendingHookRegistration() || (e && areHooksEnabled() && hasManagedPluginsSafe())
+      snapshot.wasUnknown ||
+      hasPendingHookRegistration() ||
+      (changed && areHooksEnabled() && hasManagedPluginsSafe())
     );
   } catch (error) {
     logError(toError(error));

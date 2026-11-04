@@ -29,16 +29,24 @@ function webSearchRefillsPerHour({ refillsByDefault }) {
   let CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR = env.CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR;
   if (CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR !== undefined) return CLAUDE_CODE_WEB_SEARCH_REFILLS_PER_HOUR;
   if (!refillsByDefault) return 0;
-  let { getFeatureValue_CACHED_MAY_BE_STALE } = require("./chunk-6df1d6re.js");
+  let {
+    getFeatureValue_CACHED_MAY_BE_STALE,
+  } = require("../../services/analytics/ATIS_REQUEST_HEADER.lazy.js");
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
     TENGU_MEMOIZED_TURTLE,
     DEFAULT_HOURLY_REFILLS,
   );
-  let s =
+  let featureValue =
     typeof featureValue_CACHED_MAY_BE_STALE === "string" && /^\d+$/.test(featureValue_CACHED_MAY_BE_STALE)
       ? Number(featureValue_CACHED_MAY_BE_STALE)
       : featureValue_CACHED_MAY_BE_STALE;
-  if (typeof s === "number" && Number.isInteger(s) && s >= 0 && s <= MAX_HOURLY_REFILLS) return s;
+  if (
+    typeof featureValue === "number" &&
+    Number.isInteger(featureValue) &&
+    featureValue >= 0 &&
+    featureValue <= MAX_HOURLY_REFILLS
+  )
+    return featureValue;
   logForDebugging(
     `WebSearch budget: ignoring the served ${TENGU_MEMOIZED_TURTLE} value ${jsonStringify(featureValue_CACHED_MAY_BE_STALE)} (not an integer from 0 to ${MAX_HOURLY_REFILLS}); using ${DEFAULT_HOURLY_REFILLS} refills per hour`,
     {
@@ -57,52 +65,52 @@ var REFILL_PERIOD_MS = 3600000;
  * 会话级 WebSearch 次数预算（令牌桶）：上限 CLAUDE_CODE_MAX_WEB_SEARCHES_PER_SESSION，每小时按配置回填。
  */
 function createWebSearchBudget({ refillsByDefault, now = () => Date.now() }) {
-  let r = 0;
-  let o = 0;
-  let s = now();
-  let a = webSearchRefillsPerHour({
+  let consumed = 0;
+  let accruedMs = 0;
+  let lastTickMs = now();
+  let refillsPerHourValue = webSearchRefillsPerHour({
     refillsByDefault,
   });
-  function u() {
-    let h = now();
-    let p = webSearchRefillsPerHour({
+  function refill() {
+    let nowMs = now();
+    let currentPerHour = webSearchRefillsPerHour({
       refillsByDefault,
     });
-    let min = Math.min(p, a);
-    a = p;
-    let max = Math.max(0, h - s);
-    s = h;
-    if (r === 0) {
-      o = 0;
+    let min = Math.min(currentPerHour, refillsPerHourValue);
+    refillsPerHourValue = currentPerHour;
+    let max = Math.max(0, nowMs - lastTickMs);
+    lastTickMs = nowMs;
+    if (consumed === 0) {
+      accruedMs = 0;
       return;
     }
-    o += max * min;
-    let floored = Math.floor(o / REFILL_PERIOD_MS);
-    if (floored >= r) {
-      r = 0;
-      o = 0;
+    accruedMs += max * min;
+    let floored = Math.floor(accruedMs / REFILL_PERIOD_MS);
+    if (floored >= consumed) {
+      consumed = 0;
+      accruedMs = 0;
       return;
     }
-    r -= floored;
-    o -= floored * REFILL_PERIOD_MS;
+    consumed -= floored;
+    accruedMs -= floored * REFILL_PERIOD_MS;
   }
   return {
     tryConsume() {
-      u();
-      if (r >= maxWebSearchesPerSession()) return false;
-      r++;
+      refill();
+      if (consumed >= maxWebSearchesPerSession()) return false;
+      consumed++;
       return true;
     },
     msUntilNextCall() {
-      u();
-      let h = r - maxWebSearchesPerSession();
-      if (h < 0) return 0;
-      if (a === 0) return 1 / 0;
-      let p = (h + 1) * REFILL_PERIOD_MS - o;
-      return Math.max(1, Math.ceil(p / a));
+      refill();
+      let overCount = consumed - maxWebSearchesPerSession();
+      if (overCount < 0) return 0;
+      if (refillsPerHourValue === 0) return 1 / 0;
+      let waitMs = (overCount + 1) * REFILL_PERIOD_MS - accruedMs;
+      return Math.max(1, Math.ceil(waitMs / refillsPerHourValue));
     },
     refillsPerHour() {
-      return a;
+      return refillsPerHourValue;
     },
   };
 }

@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (13)
  * attribution: placement 13
  */
-import { init_react_production, Se } from "../../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useContext } from "../../../../vendor/react/cjs/react.production.js";
 import { isConsentRow, parseConsentSuggestions } from "../consentRows.js";
 import { SKILL } from "../../../tools/SkillTool/skillToolNames.js";
 import { plainDisplay } from "../../../utils/permissions/approvalPayloadSerialization.js";
@@ -19,28 +19,32 @@ import {
 import { Text } from "../../../ink/components/Text.js";
 import { stripInvisibleChars as stripInvisibleChars_3 } from "../../../utils/invisibleChars.js";
 import { getSkillDigestRule } from "../../../utils/permissions/classifierApprovalRules.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { permissionTitleRef } from "../PermissionRequestTitle.js";
 import { DialogStoreContext } from "../../../state/dialogQueue.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1406026-1406030 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1406026", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1406030-1406562 placement
 /**
  * 把 Skill 权限选项转换为结果：yes、精确规则、前缀规则、no（带反馈）。
  */
-function skillChoiceToResult(h, payload, D, L) {
-  switch (h) {
+function skillChoiceToResult(choice, payload, rows, feedback) {
+  switch (choice) {
     case "yes":
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        ...(L && {
-          feedback: L,
+        ...(feedback && {
+          feedback,
         }),
       };
     case "yes-exact": {
-      if (D.exactRow === null || !isConsentRow(D.exactRow))
+      if (rows.exactRow === null || !isConsentRow(rows.exactRow))
         return {
           behavior: "allow",
           updatedInput: payload.input,
@@ -48,11 +52,11 @@ function skillChoiceToResult(h, payload, D, L) {
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        permissionUpdates: D.exactRow.applies,
+        permissionUpdates: rows.exactRow.applies,
       };
     }
     case "yes-prefix": {
-      if (D.prefixRow === null || !isConsentRow(D.prefixRow))
+      if (rows.prefixRow === null || !isConsentRow(rows.prefixRow))
         return {
           behavior: "allow",
           updatedInput: payload.input,
@@ -60,14 +64,14 @@ function skillChoiceToResult(h, payload, D, L) {
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        permissionUpdates: D.prefixRow.applies,
+        permissionUpdates: rows.prefixRow.applies,
       };
     }
     case "no":
       return {
         behavior: "deny",
-        ...(L && {
-          feedback: L,
+        ...(feedback && {
+          feedback,
         }),
       };
   }
@@ -79,9 +83,14 @@ function skillChoiceToResult(h, payload, D, L) {
 function getSkillCommandPrefix(skill) {
   let index = skill.indexOf(" ");
   if (index <= 0) return null;
-  let D = skill.substring(0, index);
-  if ((D.startsWith("/") ? D.substring(1) : D) === "" || D.includes("*") || D.includes(":")) return null;
-  return D;
+  let prefix = skill.substring(0, index);
+  if (
+    (prefix.startsWith("/") ? prefix.substring(1) : prefix) === "" ||
+    prefix.includes("*") ||
+    prefix.includes(":")
+  )
+    return null;
+  return prefix;
 }
 //@ chunk-18hwfzwa.js:1406742-1407254 placement
 /**
@@ -104,24 +113,24 @@ function buildSkillExactRule(payload, originalCwd) {
     ],
     {
       displayedTypes: SKILL_RULE_UPDATE_TYPES,
-      renderLabel: (D) => {
-        let L = D.length === 1 ? D[0] : undefined;
+      renderLabel: (updates) => {
+        let update = updates.length === 1 ? updates[0] : undefined;
         if (
-          L === undefined ||
-          L.type !== "addRules" ||
-          L.rules.length !== 1 ||
-          L.rules[0]?.toolName !== SKILL ||
-          L.rules[0]?.ruleContent !== payload.skill
+          update === undefined ||
+          update.type !== "addRules" ||
+          update.rules.length !== 1 ||
+          update.rules[0]?.toolName !== SKILL ||
+          update.rules[0]?.ruleContent !== payload.skill
         )
           return null;
-        let ee = plainDisplay(payload.skill);
-        if (ee === null) return null;
+        let skillDisplay = plainDisplay(payload.skill);
+        if (skillDisplay === null) return null;
         return jsxProd_default_2(Text, {
           children: [
             "Yes, and don't ask again for ",
             jsxProd_default(Text, {
               bold: true,
-              children: ee.display,
+              children: skillDisplay.display,
             }),
             " ",
             "in ",
@@ -158,25 +167,25 @@ function buildSkillPrefixRule(payload, originalCwd) {
     ],
     {
       displayedTypes: SKILL_RULE_UPDATE_TYPES,
-      renderLabel: (L) => {
-        let ee = L.length === 1 ? L[0] : undefined;
+      renderLabel: (updates) => {
+        let update = updates.length === 1 ? updates[0] : undefined;
         if (
-          ee === undefined ||
-          ee.type !== "addRules" ||
-          ee.rules.length !== 1 ||
-          ee.rules[0]?.toolName !== SKILL ||
-          ee.rules[0]?.ruleContent !== `${skillCommandPrefix}:*`
+          update === undefined ||
+          update.type !== "addRules" ||
+          update.rules.length !== 1 ||
+          update.rules[0]?.toolName !== SKILL ||
+          update.rules[0]?.ruleContent !== `${skillCommandPrefix}:*`
         )
           return null;
-        let ke = plainDisplay(skillCommandPrefix);
-        if (ke === null) return null;
+        let prefixDisplay = plainDisplay(skillCommandPrefix);
+        if (prefixDisplay === null) return null;
         return jsxProd_default_2(Text, {
           children: [
             "Yes, and don't ask again for",
             " ",
             jsxProd_default(Text, {
               bold: true,
-              children: `${ke.display}:*`,
+              children: `${prefixDisplay.display}:*`,
             }),
             " commands in",
             " ",
@@ -207,29 +216,32 @@ function resolveSkillDisplay(payload) {
     forwardedMcpSkill === undefined
   )
     return;
-  let sliced = skillDigestRule?.slice(0, -72);
-  let ke = permissionResult.metadata?.command.name;
-  let Re = (We) => We !== undefined && plainDisplay(We) === null;
-  let Be =
-    ke === undefined &&
+  let name = skillDigestRule?.slice(0, -72);
+  let calledName = permissionResult.metadata?.command.name;
+  let isUnprintableName = (name) => name !== undefined && plainDisplay(name) === null;
+  let isWithoutSkill =
+    calledName === undefined &&
     ((forwardedMcpSkill !== undefined && forwardedMcpSkill.name === undefined) ||
-      Re(forwardedMcpSkill?.name) ||
-      Re(sliced));
-  let He = Be ? "" : (ke ?? sliced ?? forwardedMcpSkill?.name ?? "");
+      isUnprintableName(forwardedMcpSkill?.name) ||
+      isUnprintableName(name));
+  let skillName = isWithoutSkill ? "" : (calledName ?? name ?? forwardedMcpSkill?.name ?? "");
   return {
-    name: He,
-    versionRule: ke !== undefined && ke === sliced ? skillDigestRule : undefined,
-    isWithoutSkill: Be,
-    calledAs: ke !== undefined || He === "" ? undefined : getCalledAsLabel(payload.input.skill, He),
+    name: skillName,
+    versionRule: calledName !== undefined && calledName === name ? skillDigestRule : undefined,
+    isWithoutSkill,
+    calledAs:
+      calledName !== undefined || skillName === ""
+        ? undefined
+        : getCalledAsLabel(payload.input.skill, skillName),
   };
 }
 //@ chunk-18hwfzwa.js:1408328-1408473 placement
-function getCalledAsLabel(skill, x) {
+function getCalledAsLabel(skill, skillName) {
   if (typeof skill !== "string") return null;
   let trimmed = skill.trim();
-  let L = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
-  if (L === x) return;
-  return plainDisplay(L)?.display ?? null;
+  let normalizedSkill = trimmed.startsWith("/") ? trimmed.slice(1) : trimmed;
+  if (normalizedSkill === skillName) return;
+  return plainDisplay(normalizedSkill)?.display ?? null;
 }
 //@ chunk-18hwfzwa.js:1408473-1408534 placement
 var TERMINAL_TOO_SHORT_HINT = "Make the terminal taller to approve.";
@@ -256,28 +268,31 @@ var SKILL_ASK_REVEAL_KEYS = {
  * 返回当前对话框在对话框存储中的技能询问展开记忆（无对话框上下文时为 undefined）。
  */
 function useSkillAskRevealMemory() {
-  let $ = w(3);
-  let h = Se(permissionTitleRef);
-  let x = Se(DialogStoreContext);
-  let L;
-  if ($[0] !== x || $[1] !== h) {
-    L =
-      h === null || x === null
+  let $ = useMemoCache(3);
+  let titleRef = useContext(permissionTitleRef);
+  let dialogStore = useContext(DialogStoreContext);
+  let revealApi;
+  if ($[0] !== dialogStore || $[1] !== titleRef) {
+    revealApi =
+      titleRef === null || dialogStore === null
         ? undefined
         : {
-            has: (ee) => x.hasRevealed(h, SKILL_ASK_REVEAL_KEYS[ee]),
-            keep: (ke) => {
-              x.firstReveal(h, SKILL_ASK_REVEAL_KEYS[ke]);
+            has: (key) => dialogStore.hasRevealed(titleRef, SKILL_ASK_REVEAL_KEYS[key]),
+            keep: (key) => {
+              dialogStore.firstReveal(titleRef, SKILL_ASK_REVEAL_KEYS[key]);
             },
           };
-    $[0] = x;
-    $[1] = h;
-    $[2] = L;
-  } else L = $[2];
-  return L;
+    $[0] = dialogStore;
+    $[1] = titleRef;
+    $[2] = revealApi;
+  } else revealApi = $[2];
+  return revealApi;
 }
 //@ chunk-18hwfzwa.js:1408975-1409005 placement
-var SKILL_RULE_UPDATE_TYPES = new Set(["addRules"]);
+var SKILL_RULE_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1408975", () => {
+  SKILL_RULE_UPDATE_TYPES = new Set(["addRules"]);
+});
 export {
   getSkillCommandPrefix,
   resolveSkillDisplay,

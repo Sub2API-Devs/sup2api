@@ -8,6 +8,10 @@
  * pieces: chunk-fe6rs39h.js (5), chunk-v38s9gp2.js (3)
  * attribution: placement 8
  */
+import { isViolinWoodEnabledCached } from "../../services/analytics/violinGates.js";
+import { neverTrue } from "../../utils/permissions/sensitivePaths.js";
+import { logEvent } from "../../services/analytics/index.js";
+import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../../utils/debug.js";
 import {
   errorMessage,
@@ -18,15 +22,42 @@ import { getSessionRequestConfig, UntrustedDeviceTokenError } from "../../remote
 import { sleep } from "../../utils/sleep.js";
 import { untrustedDeviceHint } from "../../bridge/trustedDevice.js";
 import { fetchLatestEvents } from "../../assistant/sessionHistory.js";
-import { isViolinWoodEnabledCached } from "../../services/analytics/violinGates.js";
-import { neverTrue } from "../../utils/permissions/sensitivePaths.js";
-import { logEvent } from "../../services/analytics/index.js";
-import { fromEnum } from "../../services/analytics/safeMetadata.js";
 
+//@ chunk-v38s9gp2.js:334-368 placement
+/**
+ * 判断是否启用会话记录位置查询（violinWood 特性开或某开关为真）。
+ */
+function isSessionRecordLookupEnabled() {
+  return isViolinWoodEnabledCached() || neverTrue();
+}
+//@ chunk-v38s9gp2.js:368-564 placement
+/**
+ * 把会话记录的位置描述映射为状态值（elsewhere、here_only、nowhere、not_looked、unknown）。
+ */
+function describeSessionRecordWhere(lookup) {
+  switch (lookup.kind) {
+    case "elsewhere":
+      return "elsewhere";
+    case "nowhere":
+      return lookup.hasOwnSessionRecord ? "here_only" : "nowhere";
+    case "unknown":
+      return lookup.why === "not_looked" ? "not_looked" : "unknown";
+  }
+}
+//@ chunk-v38s9gp2.js:564-653 placement
+/**
+ * 记录 tengu_remote_attach_record_lookup 事件：查询结果与入口点。
+ */
+function logAttachRecordLookup(lookup, entryPoint) {
+  logEvent("tengu_remote_attach_record_lookup", {
+    outcome: fromEnum(lookup),
+    entry_point: fromEnum(entryPoint),
+  });
+}
 //@ chunk-fe6rs39h.js:160409-160659 placement
 async function readRetentionCutoff() {
   try {
-    let { getCutoffDate } = await import("./chunk-xdz4h5jb.js");
+    let { getCutoffDate } = await import("../../utils/cleanup.js");
     let cutoffDate = getCutoffDate();
     return cutoffDate === null
       ? {
@@ -46,15 +77,15 @@ async function readRetentionCutoff() {
   }
 }
 //@ chunk-fe6rs39h.js:160659-161214 placement
-async function findLocalSessionRecord(e, n, s, r, h, y, S, w) {
-  if (y === undefined || !isSessionRecordLookupEnabled())
+async function findLocalSessionRecord(sessionId, a, b, c, root, deviceId, credentials, storage) {
+  if (deviceId === undefined || !isSessionRecordLookupEnabled())
     return {
       handle: undefined,
       why: "not_looked",
     };
   try {
-    let { findSessionRecordElsewhere } = await import("./chunk-dmh8arxx.js");
-    let sessionRecordElsewhere = await findSessionRecordElsewhere(e, h);
+    let { findSessionRecordElsewhere } = await import("../../utils/findSessionRecordElsewhere.lazy.js");
+    let sessionRecordElsewhere = await findSessionRecordElsewhere(sessionId, root);
     switch (sessionRecordElsewhere.kind) {
       case "elsewhere":
         return {
@@ -89,25 +120,25 @@ async function findLocalSessionRecord(e, n, s, r, h, y, S, w) {
   }
 }
 //@ chunk-fe6rs39h.js:161214-161609 placement
-async function latestStreamPosition(compatSessionId, credentials, s, r) {
-  let latestSequenceNum = s.latestSequenceNum;
-  let y =
+async function latestStreamPosition(sessionRecordId, credentials, options, recoverProof) {
+  let latestSequenceNum = options.latestSequenceNum;
+  let readPosition =
     latestSequenceNum !== undefined
       ? latestSequenceNum
-      : r
+      : recoverProof
         ? () =>
-            getSessionRequestConfig(compatSessionId, credentials, {
+            getSessionRequestConfig(sessionRecordId, credentials, {
               recoverDeviceProof: true,
             }).then(readNewestEventSequence)
-        : await getSessionRequestConfig(compatSessionId, credentials).then(
+        : await getSessionRequestConfig(sessionRecordId, credentials).then(
             (sessionRequestConfig) => () => readNewestEventSequence(sessionRequestConfig),
           );
-  return y()
+  return readPosition()
     .catch(async (error) => {
       if (error instanceof UntrustedDeviceTokenError) throw error;
       logForDebugging(`[headlessCloud] stream position unreadable, retrying once: ${errorMessage(error)}`);
-      await sleep(s.positionRetryMs ?? SESSION_POSITION_RETRY_MS);
-      return y();
+      await sleep(options.positionRetryMs ?? SESSION_POSITION_RETRY_MS);
+      return readPosition();
     })
     .catch((error) => {
       throw error instanceof UntrustedDeviceTokenError
@@ -124,45 +155,14 @@ async function readNewestEventSequence(sessionRequestConfig) {
     reportFeatureHealth: false,
   });
   if (latestEvents === null) throw Error("the session history could not be read");
-  let s = latestEvents.newestSequenceNum ?? latestEvents.events.at(-1)?.sequenceNum;
-  if (s) return s;
+  let sequenceNum = latestEvents.newestSequenceNum ?? latestEvents.events.at(-1)?.sequenceNum;
+  if (sequenceNum) return sequenceNum;
   if (latestEvents.events.length > 0 || latestEvents.hasMore || (latestEvents.droppedRows ?? 0) > 0)
     throw Error("the newest event could not be read");
   return 0;
 }
 //@ chunk-fe6rs39h.js:161924-161935 placement
 var SESSION_POSITION_RETRY_MS = 500;
-//@ chunk-v38s9gp2.js:334-368 placement
-/**
- * 判断是否启用会话记录位置查询（violinWood 特性开或某开关为真）。
- */
-function isSessionRecordLookupEnabled() {
-  return isViolinWoodEnabledCached() || neverTrue();
-}
-//@ chunk-v38s9gp2.js:368-564 placement
-/**
- * 把会话记录的位置描述映射为状态值（elsewhere、here_only、nowhere、not_looked、unknown）。
- */
-function describeSessionRecordWhere(e) {
-  switch (e.kind) {
-    case "elsewhere":
-      return "elsewhere";
-    case "nowhere":
-      return e.hasOwnSessionRecord ? "here_only" : "nowhere";
-    case "unknown":
-      return e.why === "not_looked" ? "not_looked" : "unknown";
-  }
-}
-//@ chunk-v38s9gp2.js:564-653 placement
-/**
- * 记录 tengu_remote_attach_record_lookup 事件：查询结果与入口点。
- */
-function logAttachRecordLookup(e, o) {
-  logEvent("tengu_remote_attach_record_lookup", {
-    outcome: fromEnum(e),
-    entry_point: fromEnum(o),
-  });
-}
 export {
   isSessionRecordLookupEnabled,
   describeSessionRecordWhere,

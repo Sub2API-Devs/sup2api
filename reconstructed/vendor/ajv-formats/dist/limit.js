@@ -5,12 +5,12 @@
  * pieces: chunk-zykv69v4.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_ajv } from "../../ajv/dist/ajv.js";
 import { require_codegen_2 as require_codegen } from "../../ajv/dist/compile/codegen/index.js";
 
 //@ chunk-zykv69v4.js:8167-9708 cjs-fingerprint
-var require_limit = x(function (cjsExports) {
+var require_limit = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -53,14 +53,14 @@ var require_limit = x(function (cjsExports) {
     error,
     code(cxt) {
       let { gen, data, schemaCode, keyword, it } = cxt;
-      let { opts, self: u } = it;
+      let { opts, self: ajv } = it;
       if (!opts.validateFormats) return;
-      let fCxt = new ajv_1.KeywordCxt(it, u.RULES.all.format.definition, "format");
+      let fCxt = new ajv_1.KeywordCxt(it, ajv.RULES.all.format.definition, "format");
       if (fCxt.$data) validate$DataFormat();
       else validateFormat();
       function validate$DataFormat() {
         let fmts = gen.scopeValue("formats", {
-          ref: u.formats,
+          ref: ajv.formats,
           code: opts.code.formats,
         });
         let fmt = gen.const("fmt", codegen_1._`${fmts}[${fCxt.schemaCode}]`);
@@ -75,7 +75,7 @@ var require_limit = x(function (cjsExports) {
       }
       function validateFormat() {
         let format = fCxt.schema;
-        let fmtDef = u.formats[format];
+        let fmtDef = ajv.formats[format];
         if (!fmtDef || fmtDef === true) return;
         if (typeof fmtDef != "object" || fmtDef instanceof RegExp || typeof fmtDef.compare != "function")
           throw Error(`"${keyword}": format "${format}" does not define "compare" function`);

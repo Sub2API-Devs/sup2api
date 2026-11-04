@@ -9,7 +9,7 @@
  * attribution: placement 8
  */
 import { truncateToLength } from "../../utils/stringUtils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -26,8 +26,8 @@ import { MAX_LINES_THRESHOLD } from "../../utils/messages/textLineCount.js";
 /**
  * 把空串替换成空格，避免渲染时塌陷。
  */
-function blankIfEmpty(C) {
-  return C === "" ? " " : C;
+function blankIfEmpty(text) {
+  return text === "" ? " " : text;
 }
 //@ chunk-x5e9ztk0.js:6606-6664 placement
 /**
@@ -47,17 +47,17 @@ function unwrapToolUseError(result) {
     : result;
 }
 //@ chunk-x5e9ztk0.js:6746-6799 placement
-function _(o) {
-  return o.length > MEMORY_PREVIEW_MAX_LINE_CHARS
-    ? `${truncateToLength(o, MEMORY_PREVIEW_MAX_LINE_CHARS)}\u2026`
-    : o;
+function _(line) {
+  return line.length > MEMORY_PREVIEW_MAX_LINE_CHARS
+    ? `${truncateToLength(line, MEMORY_PREVIEW_MAX_LINE_CHARS)}\u2026`
+    : line;
 }
 //@ chunk-x5e9ztk0.js:6799-7342 placement
 /**
  * 渲染多行文本（非 verbose 时截到 maxLines 并处理每行），超出部分显示"… +N more lines"；实际用于 Memory 工具读取结果。
  */
 function QuotedLines(props) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   let { lines, verbose, maxLines, color } = props;
   let shownLines;
   if ($[0] !== lines || $[1] !== maxLines || $[2] !== verbose) {
@@ -67,21 +67,21 @@ function QuotedLines(props) {
     $[2] = verbose;
     $[3] = shownLines;
   } else shownLines = $[3];
-  let m = shownLines;
-  let hiddenCount = lines.length - m.length;
+  let visibleLines = shownLines;
+  let hiddenCount = lines.length - visibleLines.length;
   let body;
-  if ($[4] !== color || $[5] !== m) {
+  if ($[4] !== color || $[5] !== visibleLines) {
     body =
-      m.length > 0
+      visibleLines.length > 0
         ? jsxProd_default(Text, {
             color,
             dimColor: color === undefined,
-            children: m.map(blankIfEmpty).join(`
+            children: visibleLines.map(blankIfEmpty).join(`
 `),
           })
         : null;
     $[4] = color;
-    $[5] = m;
+    $[5] = visibleLines;
     $[6] = body;
   } else body = $[6];
   let moreLine;
@@ -96,35 +96,38 @@ function QuotedLines(props) {
     $[7] = hiddenCount;
     $[8] = moreLine;
   } else moreLine = $[8];
-  let v;
+  let content;
   if ($[9] !== body || $[10] !== moreLine) {
-    v = jsxProd_default_2(Fragment, {
+    content = jsxProd_default_2(Fragment, {
       children: [body, moreLine],
     });
     $[9] = body;
     $[10] = moreLine;
-    $[11] = v;
-  } else v = $[11];
-  return v;
+    $[11] = content;
+  } else content = $[11];
+  return content;
 }
 //@ chunk-x5e9ztk0.js:7342-7479 placement
-function isLongMemoryRead(o) {
-  if (o?.outcome !== "ok" || typeof o.content !== "string") return false;
-  let t = quoteLines(o.content);
-  return t.length > MEMORY_PREVIEW_MAX_LINES || t.some((i) => i.length > MEMORY_PREVIEW_MAX_LINE_CHARS);
+function isLongMemoryRead(result) {
+  if (result?.outcome !== "ok" || typeof result.content !== "string") return false;
+  let lines = quoteLines(result.content);
+  return (
+    lines.length > MEMORY_PREVIEW_MAX_LINES ||
+    lines.some((line) => line.length > MEMORY_PREVIEW_MAX_LINE_CHARS)
+  );
 }
 //@ chunk-x5e9ztk0.js:7479-7680 placement
-function renderMemoryReadResult(o, t, { verbose }) {
-  if (o.outcome !== "ok") return null;
+function renderMemoryReadResult(result, progressMessages, { verbose }) {
+  if (result.outcome !== "ok") return null;
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
         jsxProd_default(Text, {
-          children: formatWriteResult(o),
+          children: formatWriteResult(result),
         }),
         jsxProd_default(QuotedLines, {
-          lines: quoteLines(o.content ?? ""),
+          lines: quoteLines(result.content ?? ""),
           verbose,
           maxLines: MEMORY_PREVIEW_MAX_LINES,
         }),
@@ -139,11 +142,11 @@ function renderToolUseErrorMessage(result, { verbose }) {
       result,
       verbose,
     });
-  let i = unwrapToolUseError(result);
-  let index = i.indexOf(`
+  let unwrapped = unwrapToolUseError(result);
+  let index = unwrapped.indexOf(`
 `);
-  let children = replaceControlChars(index === -1 ? i : i.slice(0, index));
-  let lines = index === -1 ? [] : quoteLines(i.slice(index + 1));
+  let children = replaceControlChars(index === -1 ? unwrapped : unwrapped.slice(0, index));
+  let lines = index === -1 ? [] : quoteLines(unwrapped.slice(index + 1));
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default_2(Box, {
       flexDirection: "column",
@@ -162,3 +165,4 @@ function renderToolUseErrorMessage(result, { verbose }) {
     }),
   });
 }
+export { isLongMemoryRead, renderMemoryReadResult, renderToolUseErrorMessage };

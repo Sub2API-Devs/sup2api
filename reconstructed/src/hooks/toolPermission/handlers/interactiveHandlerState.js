@@ -12,8 +12,8 @@
 //@ chunk-w1sz837t.js:191-202 placement
 var interactiveHandlerState = null;
 //@ chunk-w1sz837t.js:202-222 placement
-function setInteractiveHandlerHost(r) {
-  interactiveHandlerState = r;
+function setInteractiveHandlerHost(host) {
+  interactiveHandlerState = host;
 }
 //@ chunk-w1sz837t.js:222-246 placement
 function getInteractiveHandlerHost() {

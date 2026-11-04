@@ -8,9 +8,19 @@
  * pieces: chunk-583vs41k.js (20), chunk-e6aww6q8.js (1)
  * attribution: sole-consumer 14, callgraph-witnessed 1, affinity 3, fingerprint 3
  */
-import { init_react_production, R, ce, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../../services/projects/threadRows.js";
+import { getTokenUsage } from "../../utils/tokens.js";
+import { hasNoUsage } from "../../services/compact/autoCompact.js";
+import { isToolUseStop, countClearedToolUses } from "../../utils/messages/usageAndStopReason.js";
+import {
+  init_react_production,
+  useRef,
+  useCallback,
+  useState,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import { useAppStoreDirect } from "../../state/AppState.js";
 import {
   createLeftArrowGestureState,
@@ -33,7 +43,7 @@ import { setClipboard } from "../../ink/termio/osc.js";
 import { stripMemoryTags } from "../../services/orgMemory/promptIndex.js";
 import { createUserMessage, createAssistantMessage } from "../../utils/messages.js";
 import { isCoordinatorMode_2 } from "../../coordinator/coordinatorMode.js";
-import { CIRCLE_MARK_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { CIRCLE_MARK_GLYPH } from "../../constants/figures.js";
 import { errorMessage } from "../../utils/errors.js";
 import { createAbortController } from "../../utils/abortController.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -41,11 +51,7 @@ import { getActiveAgentForInput } from "../../state/selectors.js";
 import { parseThinClientReply } from "../../cli/thinClient.js";
 import { parseApiRetryStatus } from "../../entrypoints/sdk/coreSchemas.js";
 import { runSideQuestion } from "../../utils/sideQuestion.js";
-import {
-  sanitizeDisplayText,
-  MARKDOWN_BREAK_CHARS,
-  MAX_MARKDOWN_SAFE_LENGTH,
-} from "../../utils/resultError.js";
+import { sanitizeDisplayText, MARKDOWN_BREAK_RE, MAX_MARKDOWN_SAFE_LENGTH } from "../../utils/resultError.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -60,7 +66,7 @@ import { KeyboardShortcutHint } from "../../components/design-system/KeyboardSho
 import { SideQuestionAgentsPill } from "../../components/PromptInput/AgentsPill.js";
 import { wasDetachedSinceAttach } from "../../utils/attachStamp.js";
 import { removeQueuedByFilter, getCommandQueue, enqueueCommand } from "../../utils/messageQueueManager.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { StatusIcon } from "../../components/design-system/StatusIcon.js";
 import { LinkifiedText } from "../../components/rateLimit/usageCreditsOffer.js";
@@ -74,134 +80,158 @@ import { getSystemPrompt } from "../../constants/prompts.js";
 import { getOrBuildUserContext, getCachedSystemContext } from "../../context.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
 import { saveGlobalConfig } from "../../utils/config.js";
-import { isCompactBoundaryMessage as isCompactBoundaryMessage_3 } from "../../services/projects/threadRows.js";
-import { getTokenUsage } from "../../utils/tokens.js";
-import { hasNoUsage } from "../../services/compact/autoCompact.js";
-import { isToolUseStop, countClearedToolUses } from "../../utils/messages/usageAndStopReason.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:1536810-1537121 fingerprint = stripInProgressAssistantMessage (0.622)
+function stripInProgressAssistantMessage(messages) {
+  for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let message = messages[idx];
+    if (message && isCompactBoundaryMessage_3(message)) return 0;
+    let usage = message?.type === "assistant" ? getTokenUsage(message) : undefined;
+    if (message?.type !== "assistant" || !usage) continue;
+    if (hasNoUsage(usage)) continue;
+    if (
+      !message.message.context_management &&
+      (message.message.stop_reason === null || isToolUseStop(messages, idx))
+    )
+      continue;
+    return countClearedToolUses(message.message.context_management);
+  }
+  return 0;
+}
 //@ chunk-583vs41k.js:14325-14329 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-583vs41k.js:14325", () => {
+  init_react_production();
+});
 //@ chunk-583vs41k.js:14329-14618 sole-consumer
 /**
  * CHROME_ROWS：同旧版。
  */
-var TRANSCRIPT_START_UNAVAILABLE =
-  "[The start of this agent's transcript, with its prompt, is not available.]";
-var CHROME_ROWS = 5;
-var OUTER_CHROME_ROWS = 6;
-var SCROLL_LINES = 3;
-var MAX_BTW_TRANSCRIPT_ROWS = 5;
-var BTW_RESPONSE_SCHEMA = DoctorLazy(() =>
-  u({
-    response: string().nullable(),
-    synthetic: unknown()
-      .optional()
-      .transform((i) => i === true),
-    refusal_fallback: u({
-      original_model: string(),
-      fallback_model: string(),
-      content: string(),
-    })
-      .optional()
-      .catch(undefined),
-  }),
-);
+var TRANSCRIPT_START_UNAVAILABLE; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CHROME_ROWS;
+var OUTER_CHROME_ROWS;
+var SCROLL_LINES;
+var MAX_BTW_TRANSCRIPT_ROWS;
+var BTW_RESPONSE_SCHEMA;
+deferInit("chunk-583vs41k.js:14329", () => {
+  TRANSCRIPT_START_UNAVAILABLE = "[The start of this agent's transcript, with its prompt, is not available.]";
+  CHROME_ROWS = 5;
+  OUTER_CHROME_ROWS = 6;
+  SCROLL_LINES = 3;
+  MAX_BTW_TRANSCRIPT_ROWS = 5;
+  BTW_RESPONSE_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      response: stringSchema().nullable(),
+      synthetic: unknown()
+        .optional()
+        .transform((value) => value === true),
+      refusal_fallback: objectSchema({
+        original_model: stringSchema(),
+        fallback_model: stringSchema(),
+        content: stringSchema(),
+      })
+        .optional()
+        .catch(undefined),
+    }),
+  );
+});
 //@ chunk-583vs41k.js:14618-22270 callgraph-witnessed = BtwSideQuestion (0.187)
 function BtwSideQuestion({ question, initialResponse, initialFallbackNotice, inFlight, context, onDone }) {
-  let v = R(false);
-  let k = ce(
-    (a, I) => {
-      v.current = true;
-      onDone(a, I);
+  let doneRef = useRef(false);
+  let finish = useCallback(
+    (reason, detail) => {
+      doneRef.current = true;
+      onDone(reason, detail);
     },
     [onDone],
   );
-  let [x, D] = y(initialResponse ?? null);
-  let [ee, _] = y(false);
-  let [F, L] = y(initialFallbackNotice ?? null);
-  let [M, Je] = y(null);
-  let [Ye, ue] = y(null);
-  let [Ze, tt] = y(0);
+  let [response, setResponse] = useState(initialResponse ?? null);
+  let [synthetic, setSynthetic] = useState(false);
+  let [fallbackNotice, setFallbackNotice] = useState(initialFallbackNotice ?? null);
+  let [error, setError] = useState(null);
+  let [retry, setRetry] = useState(null);
+  let [tick, setTick] = useState(0);
   let btwHistory = context.session.btwHistory;
   let appStoreDirect = useAppStoreDirect();
-  let [O, rt] = y(() =>
+  let [transcript, setTranscript] = useState(() =>
     initialResponse !== undefined
       ? btwHistory.exchanges.slice(0, -1)
       : btwHistory.exchanges.filter((exchange) => exchange !== inFlight?.landed),
   );
-  let W = R(O);
-  let z = R(false);
-  let [Fe, Me] = y(false);
-  let E = R(null);
-  let [K, Ne] = y(null);
-  let [state] = y(createLeftArrowGestureState);
-  let [Q, de] = y(null);
-  let G = R(false);
-  let te = R(inFlight ?? null);
-  let [He] = y(() => ({}));
-  let re = R(initialResponse === undefined ? "pending" : "answered");
-  let scrollRef = R(null);
-  let me = () => {
-    E.current = null;
-    Ne(null);
+  let exchangesRef = useRef(transcript);
+  let forking = useRef(false);
+  let [forkBusy, setForkBusy] = useState(false);
+  let olderOffset = useRef(null);
+  let [selectedIndex, setSelectedIndex] = useState(null);
+  let [state] = useState(createLeftArrowGestureState);
+  let [hint, setHint] = useState(null);
+  let steppedAside = useRef(false);
+  let currentQuestion = useRef(inFlight ?? null);
+  let [landedRef] = useState(() => ({}));
+  let resultState = useRef(initialResponse === undefined ? "pending" : "answered");
+  let scrollRef = useRef(null);
+  let resetScroll = () => {
+    olderOffset.current = null;
+    setSelectedIndex(null);
     scrollRef.current?.scrollTo(0);
   };
-  let [pe, Le] = y(0);
+  let [copied, setCopied] = useState(0);
   let { rows, columns } = useScrollViewportSize(useTerminalSize());
   let remoteCaps = getRemoteCaps();
-  let ge = isBgSession() && !remoteCaps;
-  let he = ge && !alwaysFalseBackgroundConfirm();
-  useInterval(() => tt((a) => a + 1), x || M ? null : 80);
-  useTimeout(() => Le(0), pe ? 2000 : null, [pe]);
-  useTimeout(() => de(null), Q ? LEFT_ARROW_ARM_WINDOW_MS : null, [Q]);
-  let ne = ce(() => {
-    if (v.current) return;
-    switch (re.current) {
+  let bgSession = isBgSession() && !remoteCaps;
+  let leftArrowHint = bgSession && !alwaysFalseBackgroundConfirm();
+  useInterval(() => setTick((n) => n + 1), response || error ? null : 80);
+  useTimeout(() => setCopied(0), copied ? 2000 : null, [copied]);
+  useTimeout(() => setHint(null), hint ? LEFT_ARROW_ARM_WINDOW_MS : null, [hint]);
+  let stepAside = useCallback(() => {
+    if (doneRef.current) return;
+    switch (resultState.current) {
       case "pending":
-        G.current = true;
-        if (te.current) {
-          btwHistory.setInFlight(te.current);
-          armSideQuestionReopen(btwHistory, te.current, true);
+        steppedAside.current = true;
+        if (currentQuestion.current) {
+          btwHistory.setInFlight(currentQuestion.current);
+          armSideQuestionReopen(btwHistory, currentQuestion.current, true);
         }
         break;
       case "answered":
-        armSideQuestionReopen(btwHistory, He, true);
+        armSideQuestionReopen(btwHistory, landedRef, true);
         break;
       case "nothing":
         break;
     }
-    k(undefined, {
+    finish(undefined, {
       display: "skip",
     });
-  }, [btwHistory, k, He]);
-  function we(a, I = false) {
-    let f = W.current.length;
-    let min = Math.min(f, MAX_BTW_TRANSCRIPT_ROWS);
-    let m = E.current === null ? 0 : f - E.current;
-    let H = a === "older" ? 1 : -1;
-    let V = I ? (m + H + min + 1) % (min + 1) : Math.min(Math.max(m + H, 0), min);
-    if (V === m) return;
-    E.current = V === 0 ? null : f - V;
-    Ne(E.current);
+  }, [btwHistory, finish, landedRef]);
+  function move(direction, wrap = false) {
+    let count = exchangesRef.current.length;
+    let min = Math.min(count, MAX_BTW_TRANSCRIPT_ROWS);
+    let offset = olderOffset.current === null ? 0 : count - olderOffset.current;
+    let step = direction === "older" ? 1 : -1;
+    let next = wrap ? (offset + step + min + 1) % (min + 1) : Math.min(Math.max(offset + step, 0), min);
+    if (next === offset) return;
+    olderOffset.current = next === 0 ? null : count - next;
+    setSelectedIndex(olderOffset.current);
     scrollRef.current?.scrollTo(0);
   }
-  P(() => {
-    if (!ge) return;
-    let a = !isUnattendedOrBgSession();
-    let I = onAttacherCapsChange(() => {
-      let f = !isUnattendedOrBgSession();
-      if (a && !f && !z.current) ne();
-      a = f;
+  useEffect(() => {
+    if (!bgSession) return;
+    let wasBg = !isUnattendedOrBgSession();
+    let unsubscribe = onAttacherCapsChange(() => {
+      let isBg = !isUnattendedOrBgSession();
+      if (wasBg && !isBg && !forking.current) stepAside();
+      wasBg = isBg;
     });
-    if (!a && !z.current) ne();
-    return I;
-  }, [ge, ne]);
-  function st(event) {
-    if (z.current) {
+    if (!wasBg && !forking.current) stepAside();
+    return unsubscribe;
+  }, [bgSession, stepAside]);
+  function event(event) {
+    if (forking.current) {
       event.preventDefault();
       return;
     }
-    let I = E.current !== null ? W.current[E.current]?.response : x;
+    let text = olderOffset.current !== null ? exchangesRef.current[olderOffset.current]?.response : response;
     if (
       event.key === "escape" ||
       event.key === "return" ||
@@ -209,44 +239,48 @@ function BtwSideQuestion({ question, initialResponse, initialFallbackNotice, inF
       (event.ctrl && (event.key === "c" || event.key === "d"))
     ) {
       event.preventDefault();
-      k(undefined, {
+      finish(undefined, {
         display: "skip",
       });
       return;
     }
     if ((event.key === "[" || event.key === "]") && !event.ctrl && !event.meta) {
       event.preventDefault();
-      we(event.key === "[" ? "older" : "newer");
+      move(event.key === "[" ? "older" : "newer");
       return;
     }
     if (event.name === "tab" && !event.ctrl && !event.meta) {
       event.preventDefault();
-      we(event.shift ? "newer" : "older", true);
+      move(event.shift ? "newer" : "older", true);
       return;
     }
     if (event.name === "left" || event.name === "right") {
       event.preventDefault();
       if (event.shift && !(event.ctrl || event.meta || event.fn || event.superKey)) {
-        we(event.name === "left" ? "older" : "newer");
+        move(event.name === "left" ? "older" : "newer");
         return;
       }
-      if (he && event.name === "left" && !(event.ctrl || event.meta || event.fn || event.superKey)) {
+      if (
+        leftArrowHint &&
+        event.name === "left" &&
+        !(event.ctrl || event.meta || event.fn || event.superKey)
+      ) {
         let now = Date.now();
         let decision = decideLeftArrowGesture(state, now, event.soloKeypress);
         switch (
           (applyLeftArrowGesture(state, decision, now), logLeftArrowGesture(decision, now, state), decision)
         ) {
           case "fire":
-            ne();
+            stepAside();
             sendDetachRequest();
             return;
           case "arm":
-            de({
+            setHint({
               text: LEFT_ARROW_BACK_HINT,
             });
             return;
           case "attach-arm":
-            de({
+            setHint({
               text: LEFT_ARROW_DETACH_HINT,
             });
             return;
@@ -258,80 +292,91 @@ function BtwSideQuestion({ question, initialResponse, initialFallbackNotice, inF
       }
       return;
     }
-    if (event.key === "x" && !event.ctrl && !event.meta && W.current.length > 0) {
+    if (event.key === "x" && !event.ctrl && !event.meta && exchangesRef.current.length > 0) {
       event.preventDefault();
-      let f = new Set(W.current);
-      btwHistory.replace(btwHistory.exchanges.filter((exchange) => !f.has(exchange)));
-      W.current = [];
-      rt([]);
-      me();
+      let set = new Set(exchangesRef.current);
+      btwHistory.replace(btwHistory.exchanges.filter((exchange) => !set.has(exchange)));
+      exchangesRef.current = [];
+      setTranscript([]);
+      resetScroll();
       return;
     }
-    if (event.key === "c" && !event.ctrl && !event.meta && I) {
+    if (event.key === "c" && !event.ctrl && !event.meta && text) {
       event.preventDefault();
-      setClipboard(stripMemoryTags(I)).then((f) => {
-        if (f) process.stdout.write(f);
+      setClipboard(stripMemoryTags(text)).then((msg) => {
+        if (msg) process.stdout.write(msg);
       });
-      Le((f) => f + 1);
+      setCopied((n) => n + 1);
       return;
     }
-    if (event.key === "f" && !event.ctrl && !event.meta && x && !ee && !remoteCaps && E.current === null) {
+    if (
+      event.key === "f" &&
+      !event.ctrl &&
+      !event.meta &&
+      response &&
+      !synthetic &&
+      !remoteCaps &&
+      olderOffset.current === null
+    ) {
       event.preventDefault();
-      z.current = true;
-      Me(true);
+      forking.current = true;
+      setForkBusy(true);
       let extraMessages = [
         createUserMessage({
           content: question,
         }),
         createAssistantMessage({
-          content: F
-            ? `\u26A0 ${F}
+          content: fallbackNotice
+            ? `\u26A0 ${fallbackNotice}
 
-${x}`
-            : x,
+${response}`
+            : response,
         }),
       ];
-      let T = () => {
-        z.current = false;
-        Me(false);
+      let stopFork = () => {
+        forking.current = false;
+        setForkBusy(false);
       };
       if (!isCoordinatorMode_2())
-        Promise.all([import("./chunk-7xjkha9c.js"), import("./chunk-rd4xtrpj.js")])
-          .then(([{ spawnForkFromDirective: m }, { hasPermissionsToUseTool: H }]) =>
-            m(question, context, context.canUseTool ?? H, {
+        Promise.all([
+          import("../../tools/AgentTool/forkDirective.js"),
+          import("../../utils/permissions/permissions.js"),
+        ])
+          .then(([{ spawnForkFromDirective: spawnFork }, { hasPermissionsToUseTool: hasPerm }]) =>
+            spawnFork(question, context, context.canUseTool ?? hasPerm, {
               extraMessages,
               forkOrigin: "btw",
             }),
           )
-          .then((m) => {
-            if (m)
-              k(`${CIRCLE_MARK_GLYPH} forked ${m.name} (${m.agentId.slice(-4)})`, {
+          .then((forked) => {
+            if (forked)
+              finish(`${CIRCLE_MARK_GLYPH} forked ${forked.name} (${forked.agentId.slice(-4)})`, {
                 display: "system",
               });
             else {
-              T();
-              k("Cannot fork before the first conversation turn", {
+              stopFork();
+              finish("Cannot fork before the first conversation turn", {
                 display: "system",
               });
             }
           })
           .catch((error) => {
-            T();
-            k(`Failed to fork: ${errorMessage(error)}`);
+            stopFork();
+            finish(`Failed to fork: ${errorMessage(error)}`);
           });
       else
-        import("./chunk-khj4kcw5.js")
+        import("../branch/branchAndResume.lazy.js")
           .then(({ branchAndResume }) =>
-            branchAndResume(context, k, {
+            branchAndResume(context, finish, {
               customTitle: oneLineText(`btw: ${question}`, 80),
               extraMessages,
-            }).then((H) => {
-              if (!H) T();
+            }).then((branched) => {
+              if (!branched) stopFork();
             }),
           )
           .catch((error) => {
-            T();
-            k(`Failed to branch conversation: ${errorMessage(error)}`);
+            stopFork();
+            finish(`Failed to branch conversation: ${errorMessage(error)}`);
           });
       return;
     }
@@ -344,28 +389,28 @@ ${x}`
       scrollRef.current?.scrollBy(SCROLL_LINES);
     }
   }
-  P(() => {
+  useEffect(() => {
     if (initialResponse !== undefined) return;
     let abortController = createAbortController();
     let inFlight_2 = btwHistory.inFlight;
-    let f = inFlight ?? (inFlight_2?.question === question ? inFlight_2 : undefined);
+    let adopted = inFlight ?? (inFlight_2?.question === question ? inFlight_2 : undefined);
     let fetchResponse = () => {};
-    let m = f ?? {
+    let questionState = adopted ?? {
       question,
       settled: new Promise((resolve) => {
         fetchResponse = resolve;
       }),
       abort: () => abortController.abort(),
     };
-    te.current = m;
-    m.onRetry = ue;
-    if (f?.retry && f.retry.retryAt > Date.now()) ue(f.retry);
-    if (G.current) {
-      btwHistory.setInFlight(m);
-      armSideQuestionReopen(btwHistory, m, true);
+    currentQuestion.current = questionState;
+    questionState.onRetry = setRetry;
+    if (adopted?.retry && adopted.retry.retryAt > Date.now()) setRetry(adopted.retry);
+    if (steppedAside.current) {
+      btwHistory.setInFlight(questionState);
+      armSideQuestionReopen(btwHistory, questionState, true);
     }
-    logForDebugging(`[btw] panel mounted: ${f ? "adopting the running side question" : "asking"}`);
-    async function H() {
+    logForDebugging(`[btw] panel mounted: ${adopted ? "adopting the running side question" : "asking"}`);
+    async function ask() {
       let remoteCaps = getRemoteCaps();
       if (remoteCaps && !isRemoteControlChannelAvailable())
         return {
@@ -379,7 +424,7 @@ ${x}`
         activeAgentForInput.type === "named_agent" && activeAgentForInput.task.agentType !== "main-session"
           ? activeAgentForInput.task
           : undefined;
-      let B = remoteCaps
+      let reply = remoteCaps
         ? parseThinClientReply(
             "side_question",
             BTW_RESPONSE_SCHEMA(),
@@ -390,12 +435,12 @@ ${x}`
               },
               {
                 signal: abortController.signal,
-                onProgress: (Se) => {
+                onProgress: (progress) => {
                   if (abortController.signal.aborted) return;
-                  let apiRetryStatus = parseApiRetryStatus(Se);
+                  let apiRetryStatus = parseApiRetryStatus(progress);
                   if (apiRetryStatus) {
-                    m.retry = apiRetryStatus;
-                    m.onRetry?.(apiRetryStatus);
+                    questionState.retry = apiRetryStatus;
+                    questionState.onRetry?.(apiRetryStatus);
                   }
                 },
               },
@@ -409,130 +454,134 @@ ${x}`
               task && (state.transcripts[task.id]?.messages ?? []),
             ),
             parentController: abortController,
-            onRetry: (Se) => {
+            onRetry: (status) => {
               if (abortController.signal.aborted) return;
-              scheduleRetry(m, Se);
+              scheduleRetry(questionState, status);
             },
           });
       if (abortController.signal.aborted) return null;
-      if (B === null)
+      if (reply === null)
         return {
           error: "The remote session sent a reply this version can't display",
         };
-      if (!B.response) return toBtwResult(B.response);
-      let We =
-        !remoteCaps && "refusalFallback" in B
-          ? B.refusalFallback
-          : "refusal_fallback" in B && B.refusal_fallback && typeof B.refusal_fallback.content === "string"
+      if (!reply.response) return toBtwResult(reply.response);
+      let fallback =
+        !remoteCaps && "refusalFallback" in reply
+          ? reply.refusalFallback
+          : "refusal_fallback" in reply &&
+              reply.refusal_fallback &&
+              typeof reply.refusal_fallback.content === "string"
             ? {
-                originalModel: B.refusal_fallback.original_model,
-                fallbackModel: B.refusal_fallback.fallback_model,
-                content: sanitizeDisplayText(B.refusal_fallback.content, {
-                  drop: MARKDOWN_BREAK_CHARS,
+                originalModel: reply.refusal_fallback.original_model,
+                fallbackModel: reply.refusal_fallback.fallback_model,
+                content: sanitizeDisplayText(reply.refusal_fallback.content, {
+                  drop: MARKDOWN_BREAK_RE,
                   maxCodeUnits: MAX_MARKDOWN_SAFE_LENGTH,
                 }),
               }
             : undefined;
-      if (remoteCaps && !B.synthetic) context.session.btwHistory.append(question, B.response, We?.content);
-      return toBtwResult(B.response, B.synthetic, We?.content);
+      if (remoteCaps && !reply.synthetic)
+        context.session.btwHistory.append(question, reply.response, fallback?.content);
+      return toBtwResult(reply.response, reply.synthetic, fallback?.content);
     }
-    async function V() {
-      let g;
-      if (f) {
-        g = await f.settled;
-        btwHistory.clearInFlight(f);
+    async function run() {
+      let result;
+      if (adopted) {
+        result = await adopted.settled;
+        btwHistory.clearInFlight(adopted);
       } else {
         try {
-          g = await H();
+          result = await ask();
         } catch (error) {
-          g = abortController.signal.aborted ? null : toBtwError(error);
+          result = abortController.signal.aborted ? null : toBtwError(error);
         }
         logForDebugging(
-          `[btw] side question settled: ${g === null ? "cancelled" : "error" in g ? "error" : "answer"}${G.current ? " (panel had stepped aside)" : ""}`,
+          `[btw] side question settled: ${result === null ? "cancelled" : "error" in result ? "error" : "answer"}${steppedAside.current ? " (panel had stepped aside)" : ""}`,
         );
-        if (g !== null && "response" in g && !g.synthetic) m.landed = btwHistory.exchanges.at(-1);
-        fetchResponse(g);
-        btwHistory.clearInFlight(m);
+        if (result !== null && "response" in result && !result.synthetic)
+          questionState.landed = btwHistory.exchanges.at(-1);
+        fetchResponse(result);
+        btwHistory.clearInFlight(questionState);
       }
-      if (g === null) return;
-      if ("error" in g) {
-        lt(g.error);
+      if (result === null) return;
+      if ("error" in result) {
+        fail(result.error);
         return;
       }
-      me();
-      D(g.response);
-      _(g.synthetic);
-      if (g.fallbackNotice) L(g.fallbackNotice);
-      if (g.synthetic) Ue("came back synthetic");
-      else re.current = "answered";
+      resetScroll();
+      setResponse(result.response);
+      setSynthetic(result.synthetic);
+      if (result.fallbackNotice) setFallbackNotice(result.fallbackNotice);
+      if (result.synthetic) syntheticDone("came back synthetic");
+      else resultState.current = "answered";
     }
-    function Ue(g) {
-      re.current = "nothing";
-      if (G.current) {
-        releaseBtwReopen(btwHistory, m);
-        logForDebugging(`[btw] side question ${g} after the panel stepped aside`, {
+    function syntheticDone(why) {
+      resultState.current = "nothing";
+      if (steppedAside.current) {
+        releaseBtwReopen(btwHistory, questionState);
+        logForDebugging(`[btw] side question ${why} after the panel stepped aside`, {
           level: "warn",
         });
       }
     }
-    function lt(error) {
-      Ue("failed");
-      me();
-      Je(error);
+    function fail(error) {
+      syntheticDone("failed");
+      resetScroll();
+      setError(error);
     }
-    V();
+    run();
     return () => {
-      if (m.onRetry === ue) m.onRetry = undefined;
-      if (G.current) return;
-      if (v.current) {
-        m.abort();
-        btwHistory.clearInFlight(m);
-        releaseBtwReopen(btwHistory, m);
+      if (questionState.onRetry === setRetry) questionState.onRetry = undefined;
+      if (steppedAside.current) return;
+      if (doneRef.current) {
+        questionState.abort();
+        btwHistory.clearInFlight(questionState);
+        releaseBtwReopen(btwHistory, questionState);
         return;
       }
-      if (re.current === "pending") {
+      if (resultState.current === "pending") {
         logForDebugging("[btw] panel torn down undismissed; question handed on");
-        btwHistory.setInFlight(m);
+        btwHistory.setInFlight(questionState);
       }
     };
   }, [question, context, btwHistory, initialResponse, inFlight, appStoreDirect]);
-  let sliced = O.slice(-MAX_BTW_TRANSCRIPT_ROWS);
-  let se = O.length - sliced.length;
-  let N = K !== null ? O[K] : null;
-  let it = sliced.length + (se > 0 ? 1 : 0);
+  let sliced = transcript.slice(-MAX_BTW_TRANSCRIPT_ROWS);
+  let earlier = transcript.length - sliced.length;
+  let selected = selectedIndex !== null ? transcript[selectedIndex] : null;
+  let rowCount = sliced.length + (earlier > 0 ? 1 : 0);
   let max = Math.max(20, columns - 7);
-  let maxContentHeight = Math.max(5, rows - CHROME_ROWS - OUTER_CHROME_ROWS - it);
+  let maxContentHeight = Math.max(5, rows - CHROME_ROWS - OUTER_CHROME_ROWS - rowCount);
   return jsxProd_default_2(Box, {
     flexDirection: "column",
     paddingLeft: 2,
     marginTop: 1,
     tabIndex: 0,
     autoFocus: true,
-    onKeyDown: st,
+    onKeyDown: event,
     children: [
-      se > 0 &&
+      earlier > 0 &&
         jsxProd_default_2(Text, {
           dimColor: true,
-          children: ["(+", se, " earlier /btw)"],
+          children: ["(+", earlier, " earlier /btw)"],
         }),
-      sliced.map((a, I) => {
-        let f = se + I;
+      sliced.map((exchange, index) => {
+        let rowIndex = earlier + index;
         return jsxProd_default_2(
           Text,
           {
-            dimColor: K !== f,
-            bold: K === f,
-            children: ["/btw ", oneLineText(a.question, max)],
+            dimColor: selectedIndex !== rowIndex,
+            bold: selectedIndex === rowIndex,
+            children: ["/btw ", oneLineText(exchange.question, max)],
           },
-          f,
+          rowIndex,
         );
       }),
       jsxProd_default_2(Text, {
         children: [
           jsxProd_default_2(Text, {
-            color: N ? undefined : "warning",
-            bold: !N,
-            dimColor: !!N,
+            color: selected ? undefined : "warning",
+            bold: !selected,
+            dimColor: !!selected,
             children: ["/btw", " "],
           }),
           jsxProd_default(Text, {
@@ -550,59 +599,59 @@ ${x}`
           flexDirection: "column",
           flexGrow: 1,
           stickyScroll: false,
-          children: N
+          children: selected
             ? jsxProd_default_2(Fragment, {
                 children: [
-                  N.fallbackNotice &&
+                  selected.fallbackNotice &&
                     jsxProd_default(BtwNoticeLine, {
-                      notice: N.fallbackNotice,
+                      notice: selected.fallbackNotice,
                     }),
                   jsxProd_default(MarkdownText_2, {
-                    children: N.response,
+                    children: selected.response,
                   }),
                 ],
               })
-            : M
+            : error
               ? jsxProd_default(ErrorText, {
-                  error: M,
+                  error,
                 })
-              : x
+              : response
                 ? jsxProd_default_2(Fragment, {
                     children: [
-                      F &&
+                      fallbackNotice &&
                         jsxProd_default(BtwNoticeLine, {
-                          notice: F,
+                          notice: fallbackNotice,
                         }),
                       jsxProd_default(MarkdownText_2, {
-                        children: x,
+                        children: response,
                       }),
                     ],
                   })
                 : jsxProd_default(BtwAnsweringStatus, {
-                    frame: Ze,
-                    retry: Ye,
+                    frame: tick,
+                    retry,
                   }),
         }),
       }),
       jsxProd_default_2(Box, {
         marginTop: 1,
         children: [
-          Fe
+          forkBusy
             ? jsxProd_default(Text, {
                 dimColor: true,
                 children: "Forking\u2026",
               })
-            : Q
+            : hint
               ? jsxProd_default(Text, {
                   dimColor: true,
-                  children: Q.text,
+                  children: hint.text,
                 })
               : jsxProd_default_2(Text, {
                   dimColor: true,
                   children: [
                     jsxProd_default_2(Byline, {
                       children: [
-                        O.length > 0
+                        transcript.length > 0
                           ? jsxProd_default(KeyboardShortcutHint, {
                               chord: ["shift+left", "shift+right"],
                               format: {
@@ -612,13 +661,13 @@ ${x}`
                               },
                               action: "browse",
                             })
-                          : (N || x || M) &&
+                          : (selected || response || error) &&
                             jsxProd_default(KeyboardShortcutHint, {
                               chord: ["up", "down"],
                               action: "scroll",
                             }),
-                        (N || x) &&
-                          (pe > 0
+                        (selected || response) &&
+                          (copied > 0
                             ? jsxProd_default(Text, {
                                 color: "success",
                                 children: "Copied to clipboard",
@@ -627,15 +676,15 @@ ${x}`
                                 chord: "c",
                                 action: "copy",
                               })),
-                        x &&
-                          !ee &&
+                        response &&
+                          !synthetic &&
                           !remoteCaps &&
-                          K === null &&
+                          selectedIndex === null &&
                           jsxProd_default(KeyboardShortcutHint, {
                             chord: "f",
                             action: "fork",
                           }),
-                        O.length > 0 &&
+                        transcript.length > 0 &&
                           jsxProd_default(KeyboardShortcutHint, {
                             chord: "x",
                             action: "clear history",
@@ -646,23 +695,23 @@ ${x}`
                         }),
                       ],
                     }),
-                    he && " \xB7 ",
+                    leftArrowHint && " \xB7 ",
                   ],
                 }),
-          !Fe && !Q && he && jsxProd_default(SideQuestionAgentsPill, {}),
+          !forkBusy && !hint && leftArrowHint && jsxProd_default(SideQuestionAgentsPill, {}),
         ],
       }),
     ],
   });
 }
 //@ chunk-583vs41k.js:22270-22356 affinity
-function scheduleRetry(i, l) {
-  let c = {
-    ...l,
-    retryAt: Date.now() + l.retryInMs,
+function scheduleRetry(retryCount, entry) {
+  let next = {
+    ...entry,
+    retryAt: Date.now() + entry.retryInMs,
   };
-  i.retry = c;
-  i.onRetry?.(c);
+  retryCount.retry = next;
+  retryCount.onRetry?.(next);
 }
 //@ chunk-583vs41k.js:22356-22478 affinity
 function toBtwResult(response, synthetic, content) {
@@ -679,9 +728,9 @@ function toBtwResult(response, synthetic, content) {
   };
 }
 //@ chunk-583vs41k.js:22478-22538 affinity
-function toBtwError(i) {
+function toBtwError(error) {
   return {
-    error: errorMessage(i) || "Failed to get response",
+    error: errorMessage(error) || "Failed to get response",
   };
 }
 //@ chunk-583vs41k.js:22538-22577 sole-consumer
@@ -689,10 +738,10 @@ function isUnattendedOrBgSession() {
   return isUnattendedBgSession() || (isBgSession() && wasDetachedSinceAttach());
 }
 //@ chunk-583vs41k.js:22577-22736 sole-consumer
-function reopenSideQuestionPanel(i) {
-  i.clearPendingReopen();
-  for (let l of i.pendingBesidesTop()) armSideQuestionReopen(i, l);
-  if (i.reopenNow()) {
+function reopenSideQuestionPanel(history) {
+  history.clearPendingReopen();
+  for (let entry of history.pendingBesidesTop()) armSideQuestionReopen(history, entry);
+  if (history.reopenNow()) {
     removeQueuedByFilter(isBtwCommand);
     return;
   }
@@ -703,8 +752,8 @@ function reopenSideQuestionPanel(i) {
   });
 }
 //@ chunk-583vs41k.js:22736-22822 sole-consumer
-function releaseBtwReopen(btwHistory, l) {
-  btwHistory.clearPendingReopen(l);
+function releaseBtwReopen(btwHistory, entry) {
+  btwHistory.clearPendingReopen(entry);
   if (!btwHistory.inFlight && btwHistory.exchanges.length === 0) removeQueuedByFilter(isBtwCommand);
 }
 //@ chunk-583vs41k.js:22822-22920 sole-consumer
@@ -717,37 +766,37 @@ var BTW_QUEUED_COMMAND = {
   },
 };
 //@ chunk-583vs41k.js:22920-23011 sole-consumer
-function isBtwCommand(i) {
+function isBtwCommand(command) {
   return (
-    i.value === BTW_QUEUED_COMMAND.value &&
-    i.mode === BTW_QUEUED_COMMAND.mode &&
-    i.origin?.kind === BTW_QUEUED_COMMAND.origin.kind
+    command.value === BTW_QUEUED_COMMAND.value &&
+    command.mode === BTW_QUEUED_COMMAND.mode &&
+    command.origin?.kind === BTW_QUEUED_COMMAND.origin.kind
   );
 }
 //@ chunk-583vs41k.js:23011-23199 sole-consumer
-function armSideQuestionReopen(btwHistory, l, c = isUnattendedOrBgSession()) {
-  btwHistory.armReopen(l, () =>
+function armSideQuestionReopen(history, entry, isUnattended = isUnattendedOrBgSession()) {
+  history.armReopen(entry, () =>
     onAttacherCapsChange(() => {
-      if (wasDetachedSinceAttach()) btwHistory.reopenAway = true;
+      if (wasDetachedSinceAttach()) history.reopenAway = true;
       if (isUnattendedBgSession()) {
-        btwHistory.reopenAway = true;
+        history.reopenAway = true;
         return;
       }
-      if (btwHistory.reopenAway) {
-        btwHistory.reopenAway = false;
-        queueMicrotask(() => reopenSideQuestionPanel(btwHistory));
+      if (history.reopenAway) {
+        history.reopenAway = false;
+        queueMicrotask(() => reopenSideQuestionPanel(history));
       }
     }),
   );
-  if (c) btwHistory.reopenAway = true;
+  if (isUnattended) history.reopenAway = true;
 }
 //@ chunk-583vs41k.js:23199-23485 sole-consumer
 function BtwNoticeLine(props) {
-  let c = w(3);
+  let $ = useMemoCache(3);
   let { notice } = props;
-  let h;
-  if (c[0] === MEMO_CACHE_SENTINEL) {
-    h = jsxProd_default(Text, {
+  let content;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    content = jsxProd_default(Text, {
       color: "warning",
       bold: true,
       children: jsxProd_default(StatusIcon, {
@@ -755,14 +804,14 @@ function BtwNoticeLine(props) {
         withSpace: true,
       }),
     });
-    c[0] = h;
-  } else h = c[0];
-  let b;
-  if (c[1] !== notice) {
-    b = jsxProd_default_2(Box, {
+    $[0] = content;
+  } else content = $[0];
+  let footer;
+  if ($[1] !== notice) {
+    footer = jsxProd_default_2(Box, {
       marginBottom: 1,
       children: [
-        h,
+        content,
         jsxProd_default(LinkifiedText, {
           color: "warning",
           bold: true,
@@ -770,97 +819,97 @@ function BtwNoticeLine(props) {
         }),
       ],
     });
-    c[1] = notice;
-    c[2] = b;
-  } else b = c[2];
-  return b;
+    $[1] = notice;
+    $[2] = footer;
+  } else footer = $[2];
+  return footer;
 }
 //@ chunk-583vs41k.js:23485-23544 sole-consumer
-function oneLineText(question, l) {
-  return truncateToWidth(question.replace(/\s+/g, " ").trim(), l);
+function oneLineText(question, entry) {
+  return truncateToWidth(question.replace(/\s+/g, " ").trim(), entry);
 }
 //@ chunk-583vs41k.js:23844-24804 sole-consumer
 /**
  * /btw 回答中的状态行：无重试时显示 spinner + "Answering…"；重试中显示错误类别、倒计时秒数与第几次/共几次。
  */
 function BtwAnsweringStatus(props) {
-  let h = w(19);
+  let $ = useMemoCache(19);
   let { frame, retry } = props;
   if (!retry) {
-    let b;
-    if (h[0] !== frame) {
-      b = jsxProd_default(SpinnerGlyph, {
+    let content;
+    if ($[0] !== frame) {
+      content = jsxProd_default(SpinnerGlyph, {
         frame,
         messageColor: "warning",
       });
-      h[0] = frame;
-      h[1] = b;
-    } else b = h[1];
-    let C;
-    if (h[2] === MEMO_CACHE_SENTINEL) {
-      C = jsxProd_default(Text, {
+      $[0] = frame;
+      $[1] = content;
+    } else content = $[1];
+    let statusLine;
+    if ($[2] === MEMO_CACHE_SENTINEL) {
+      statusLine = jsxProd_default(Text, {
         color: "warning",
         children: "Answering\u2026",
       });
-      h[2] = C;
-    } else C = h[2];
-    let v;
-    if (h[3] !== b) {
-      v = jsxProd_default_2(Box, {
-        children: [b, C],
+      $[2] = statusLine;
+    } else statusLine = $[2];
+    let footer;
+    if ($[3] !== content) {
+      footer = jsxProd_default_2(Box, {
+        children: [content, statusLine],
       });
-      h[3] = b;
-      h[4] = v;
-    } else v = h[4];
-    return v;
+      $[3] = content;
+      $[4] = footer;
+    } else footer = $[4];
+    return footer;
   }
   let max = Math.max(0, Math.ceil((retry.retryAt - Date.now()) / 1000));
-  let b;
-  if (h[5] !== frame) {
-    b = jsxProd_default(SpinnerGlyph, {
+  let retryLine;
+  if ($[5] !== frame) {
+    retryLine = jsxProd_default(SpinnerGlyph, {
       frame,
       messageColor: "warning",
     });
-    h[5] = frame;
-    h[6] = b;
-  } else b = h[6];
+    $[5] = frame;
+    $[6] = retryLine;
+  } else retryLine = $[6];
   let children;
-  if (h[7] !== retry.status) {
+  if ($[7] !== retry.status) {
     children = describeRetryStatus(retry.status);
-    h[7] = retry.status;
-    h[8] = children;
-  } else children = h[8];
-  let v;
-  if (h[9] !== children) {
-    v = jsxProd_default(Text, {
+    $[7] = retry.status;
+    $[8] = children;
+  } else children = $[8];
+  let errorLine;
+  if ($[9] !== children) {
+    errorLine = jsxProd_default(Text, {
       color: "warning",
       children,
     });
-    h[9] = children;
-    h[10] = v;
-  } else v = h[10];
-  let x;
-  if (h[11] !== max || h[12] !== retry.maxRetries || h[13] !== retry.retryAttempt) {
-    x = jsxProd_default_2(Text, {
+    $[9] = children;
+    $[10] = errorLine;
+  } else errorLine = $[10];
+  let hint;
+  if ($[11] !== max || $[12] !== retry.maxRetries || $[13] !== retry.retryAttempt) {
+    hint = jsxProd_default_2(Text, {
       dimColor: true,
       children: [" \xB7 retrying in ", max, "s \xB7 attempt ", retry.retryAttempt, "/", retry.maxRetries],
     });
-    h[11] = max;
-    h[12] = retry.maxRetries;
-    h[13] = retry.retryAttempt;
-    h[14] = x;
-  } else x = h[14];
-  let D;
-  if (h[15] !== b || h[16] !== v || h[17] !== x) {
-    D = jsxProd_default_2(Box, {
-      children: [b, v, x],
+    $[11] = max;
+    $[12] = retry.maxRetries;
+    $[13] = retry.retryAttempt;
+    $[14] = hint;
+  } else hint = $[14];
+  let details;
+  if ($[15] !== retryLine || $[16] !== errorLine || $[17] !== hint) {
+    details = jsxProd_default_2(Box, {
+      children: [retryLine, errorLine, hint],
     });
-    h[15] = b;
-    h[16] = v;
-    h[17] = x;
-    h[18] = D;
-  } else D = h[18];
-  return D;
+    $[15] = retryLine;
+    $[16] = errorLine;
+    $[17] = hint;
+    $[18] = details;
+  } else details = $[18];
+  return details;
 }
 //@ chunk-583vs41k.js:24804-24966 sole-consumer
 function describeRetryStatus(status) {
@@ -877,28 +926,28 @@ function describeRetryStatus(status) {
   }
 }
 //@ chunk-583vs41k.js:24966-26103 fingerprint = buildCacheSafeParams (0.457)
-async function buildCacheSafeParams(i, l) {
-  let messages = i.messages;
-  if (l) {
-    let x = [];
-    let D = null;
-    let mapped = l.map((_) => {
-      let origin = _.type === "user" ? _.origin : undefined;
+async function buildCacheSafeParams(context, transcript) {
+  let messages = context.messages;
+  if (transcript) {
+    let kept = [];
+    let carry = null;
+    let mapped = transcript.map((message) => {
+      let origin = message.type === "user" ? message.origin : undefined;
       if (
-        _.type !== "user" ||
-        _.isMeta === true ||
+        message.type !== "user" ||
+        message.isMeta === true ||
         origin === undefined ||
         origin.kind === "human" ||
         origin.kind === "auto-continuation" ||
         origin.kind === "task-notification"
       )
-        return _;
-      let { content } = _.message;
+        return message;
+      let { content } = message.message;
       return {
-        ..._,
+        ...message,
         isMeta: true,
         message: {
-          ..._.message,
+          ...message.message,
           content:
             typeof content === "string"
               ? classifyNonUserMessageSource(content, origin)
@@ -906,25 +955,25 @@ async function buildCacheSafeParams(i, l) {
                   {
                     type: "text",
                     text: classifyNonUserMessageSource(
-                      content.flatMap((M) => (M.type === "text" ? [M.text] : [])).join(`
+                      content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join(`
 `),
                       origin,
                     ),
                   },
-                  ...content.filter((M) => M.type === "image"),
+                  ...content.filter((block) => block.type === "image"),
                 ],
         },
       };
     });
-    for (let _ of mapped) {
-      x.push(_);
-      D = applyPreservedMessages(x, _, D);
+    for (let message of mapped) {
+      kept.push(message);
+      carry = applyPreservedMessages(kept, message, carry);
     }
-    messages = D ? [...x, ...D.preserved] : x;
+    messages = carry ? [...kept, ...carry.preserved] : kept;
   }
   let forkContextMessages = isAwaitingReply(messages);
   if (
-    l &&
+    transcript &&
     forkContextMessages.find(
       (forkContextMessage) => forkContextMessage.type === "user" || forkContextMessage.type === "assistant",
     )?.type !== "user"
@@ -941,22 +990,22 @@ async function buildCacheSafeParams(i, l) {
       systemPrompt: saved.systemPrompt,
       userContext: saved.userContext,
       systemContext: saved.systemContext,
-      toolUseContext: i,
+      toolUseContext: context,
       forkContextMessages,
-      advisorModel: i.getAdvisorSetting(),
+      advisorModel: context.getAdvisorSetting(),
     };
-  let [systemPrompt, v, cachedSystemContext] = await Promise.all([
-    getSystemPrompt(i.options.tools, i.options.mainLoopModel),
-    getOrBuildUserContext(i.session, i.storageV5, i.credentials),
-    getCachedSystemContext(i.session, i.options.cacheBreakerPhrase),
+  let [systemPrompt, userContext, cachedSystemContext] = await Promise.all([
+    getSystemPrompt(context.options.tools, context.options.mainLoopModel),
+    getOrBuildUserContext(context.session, context.storageV5, context.credentials),
+    getCachedSystemContext(context.session, context.options.cacheBreakerPhrase),
   ]);
   return {
     systemPrompt: asSystemPrompt(systemPrompt),
-    userContext: v,
+    userContext,
     systemContext: cachedSystemContext,
-    toolUseContext: i,
+    toolUseContext: context,
     forkContextMessages,
-    advisorModel: i.getAdvisorSetting(),
+    advisorModel: context.getAdvisorSetting(),
   };
 }
 //@ chunk-583vs41k.js:26103-26780 fingerprint = call (0.574)
@@ -1031,54 +1080,41 @@ function shouldReopenSideQuestion() {
 async function askSideQuestion(question, context) {
   let btwHistory = context.session.btwHistory;
   let abortController = createAbortController();
-  let b = () => {};
-  let C = {
+  let resolve = () => {};
+  let questionState = {
     question,
-    settled: new Promise((resolve) => {
-      b = resolve;
+    settled: new Promise((resolve_2) => {
+      resolve = resolve_2;
     }),
     abort: () => abortController.abort(),
   };
-  btwHistory.setInFlight(C);
-  armSideQuestionReopen(btwHistory, C);
-  let v;
+  btwHistory.setInFlight(questionState);
+  armSideQuestionReopen(btwHistory, questionState);
+  let result;
   try {
-    let k = await runSideQuestion({
+    let answer = await runSideQuestion({
       question,
       cacheSafeParams: await buildCacheSafeParams(context, undefined),
       parentController: abortController,
-      onRetry: (x) => scheduleRetry(C, x),
+      onRetry: (status) => scheduleRetry(questionState, status),
     });
-    v = abortController.signal.aborted
+    result = abortController.signal.aborted
       ? null
-      : toBtwResult(k.response, k.synthetic, k.refusalFallback?.content);
+      : toBtwResult(answer.response, answer.synthetic, answer.refusalFallback?.content);
   } catch (error) {
-    v = abortController.signal.aborted ? null : toBtwError(error);
+    result = abortController.signal.aborted ? null : toBtwError(error);
   }
-  if (v !== null && "response" in v && !v.synthetic) C.landed = btwHistory.exchanges.at(-1);
-  b(v);
-  btwHistory.clearInFlight(C);
-  if (C.landed) return;
-  releaseBtwReopen(btwHistory, C);
+  if (result !== null && "response" in result && !result.synthetic)
+    questionState.landed = btwHistory.exchanges.at(-1);
+  resolve(result);
+  btwHistory.clearInFlight(questionState);
+  if (questionState.landed) return;
+  releaseBtwReopen(btwHistory, questionState);
   logForDebugging(
-    `[btw] unwatched side question ${v === null ? "was cancelled" : "error" in v ? "failed" : "came back synthetic"}`,
+    `[btw] unwatched side question ${result === null ? "was cancelled" : "error" in result ? "failed" : "came back synthetic"}`,
     {
       level: "warn",
     },
   );
 }
-//@ chunk-e6aww6q8.js:1536810-1537121 fingerprint = stripInProgressAssistantMessage (0.622)
-function stripInProgressAssistantMessage(messages) {
-  for (let idx = messages.length - 1; idx >= 0; idx--) {
-    let r = messages[idx];
-    if (r && isCompactBoundaryMessage_3(r)) return 0;
-    let s = r?.type === "assistant" ? getTokenUsage(r) : undefined;
-    if (r?.type !== "assistant" || !s) continue;
-    if (hasNoUsage(s)) continue;
-    if (!r.message.context_management && (r.message.stop_reason === null || isToolUseStop(messages, idx)))
-      continue;
-    return countClearedToolUses(r.message.context_management);
-  }
-  return 0;
-}
-export { stripInProgressAssistantMessage };
+export { stripInProgressAssistantMessage, call };

@@ -5,16 +5,16 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-s82q9s4x.js:25637-26116 cjs-fingerprint
-var require_applicability = x(function (cjsExports) {
+var require_applicability = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.shouldUseRule = cjsExports.shouldUseGroup = cjsExports.schemaHasRulesForType = undefined;
-  function schemaHasRulesForType({ schema, self: t }, type) {
-    let group = t.RULES.types[type];
+  function schemaHasRulesForType({ schema, self: ajvInstance }, type) {
+    let group = ajvInstance.RULES.types[type];
     return group && group !== true && shouldUseGroup(schema, group);
   }
   cjsExports.schemaHasRulesForType = schemaHasRulesForType;

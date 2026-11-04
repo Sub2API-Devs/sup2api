@@ -8,7 +8,13 @@
  * pieces: chunk-4r7nqnx2.js (1), chunk-4v9zy7gn.js (3)
  * attribution: fingerprint 2, placement 1, layout 1
  */
-import { init_react_production, y, R, P, ce } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+  useCallback,
+} from "../../../vendor/react/cjs/react.production.js";
 import { OAuthService } from "../../services/oauth/index.js";
 import { useCopyUrl, CopiedUrlHint, CopyUrlFallbackHint } from "../../components/CopyUrlHint.js";
 import { useClock } from "../../ink/components/ClockContext.js";
@@ -35,30 +41,32 @@ import { FocusColumn } from "../../components/design-system/FocusColumn.js";
 import { Box, Text, Link } from "../../ink/components/Text.js";
 import { OAuthStatusPanel } from "./OptionalActionsSetupStep.js";
 
+//@ chunk-4r7nqnx2.js:5057-5096 fingerprint = PASTE_HERE_MSG (1)
+var PASTE_HERE_MSG = "Paste code here if prompted > ";
 //@ chunk-4v9zy7gn.js:34294-34298 placement
 init_react_production();
 //@ chunk-4v9zy7gn.js:34298-34338 layout = PASTE_HERE_MSG (1)
 var PASTE_HERE_MSG_2 = "Paste code here if prompted > ";
 //@ chunk-4v9zy7gn.js:34338-37793 fingerprint = OAuthFlowStep (0.659)
 function OAuthFlowStep({ onSuccess, onCancel }) {
-  let [oauthStatus, setOAuthStatus] = y({
+  let [oauthStatus, setOAuthStatus] = useState({
     state: "starting",
   });
-  let [oauthService] = y(() => new OAuthService());
-  let [pastedCode, setPastedCode] = y("");
-  let [v, A] = y(0);
-  let [showPastePrompt, setShowPastePrompt] = y(false);
+  let [oauthService] = useState(() => new OAuthService());
+  let [pastedCode, setPastedCode] = useState("");
+  let [tick, setTick] = useState(0);
+  let [showPastePrompt, setShowPastePrompt] = useState(false);
   let {
     copiedVia,
     copy: urlCopied,
     reset,
   } = useCopyUrl(oauthStatus.state === "waiting_for_login" ? oauthStatus.url : null);
   let clock = useClock();
-  let timersRef = R(new Set());
-  let urlCopiedTimerRef = R(new AbortController());
-  P(() => {
-    let F = urlCopiedTimerRef.current;
-    return () => F.abort();
+  let timersRef = useRef(new Set());
+  let urlCopiedTimerRef = useRef(new AbortController());
+  useEffect(() => {
+    let copiedTimer = urlCopiedTimerRef.current;
+    return () => copiedTimer.abort();
   }, []);
   let terminalSize = useTerminalSize();
   let textInputColumns = Math.max(50, terminalSize.columns - PASTE_HERE_MSG_2.length - 4);
@@ -67,7 +75,7 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
     e.preventDefault();
     if (e.key === "return" && oauthStatus.toRetry) {
       setPastedCode("");
-      A(0);
+      setTick(0);
       setOAuthStatus({
         state: "about_to_retry",
         nextState: oauthStatus.toRetry,
@@ -77,7 +85,7 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
   async function handleSubmitCode(value, url) {
     if (!value.trim()) {
       setPastedCode("");
-      A(0);
+      setTick(0);
       return;
     }
     try {
@@ -110,14 +118,14 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
       });
     }
   }
-  let startOAuth = ce(async () => {
+  let startOAuth = useCallback(async () => {
     timersRef.current.forEach((timer) => timer());
     timersRef.current.clear();
-    let F = validateForceLoginMethod(true);
-    if (!F.valid) {
+    let validation = validateForceLoginMethod(true);
+    if (!validation.valid) {
       setOAuthStatus({
         state: "error",
-        message: `${F.message} This step creates a long-lived Claude.ai subscription token, which this policy does not permit \u2014 use an API key instead.`,
+        message: `${validation.message} This step creates a long-lived Claude.ai subscription token, which this policy does not permit \u2014 use an API key instead.`,
       });
       return;
     }
@@ -142,11 +150,11 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
       setOAuthStatus({
         state: "processing",
       });
-      let D = await mintApiKeyIfAllowed({
+      let minted = await mintApiKeyIfAllowed({
         accessToken: result.accessToken,
         minted: result,
       });
-      if (!D.ok) throw new OrgConfigLoginRefusedError(D.message, D.evaluation);
+      if (!minted.ok) throw new OrgConfigLoginRefusedError(minted.message, minted.evaluation);
       if (urlCopiedTimerRef.current.signal.aborted) {
         await describeWithheldMint(result, "withheld mint");
         return;
@@ -162,14 +170,15 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
       );
     } catch (err_0) {
       let errorMessage_2 = errorMessage(err_0);
-      let Y = err_0 instanceof OrgConfigLoginRefusedError && err_0.evaluation.decision.verdict === "refused";
+      let isOrgRefused =
+        err_0 instanceof OrgConfigLoginRefusedError && err_0.evaluation.decision.verdict === "refused";
       setOAuthStatus({
         state: "error",
         message: errorMessage_2,
         ...(err_0 instanceof OrgConfigLoginRefusedError && {
           verbatim: true,
         }),
-        ...(!Y && {
+        ...(!isOrgRefused && {
           toRetry: {
             state: "starting",
           },
@@ -183,7 +192,7 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
       });
     }
   }, [clock, oauthService, onSuccess, reset]);
-  P(() => {
+  useEffect(() => {
     if (oauthStatus.state === "starting") startOAuth();
   }, [oauthStatus.state, startOAuth]);
   useTimeout(
@@ -195,13 +204,13 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
     },
     oauthStatus.state === "about_to_retry" ? 500 : null,
   );
-  P(() => {
+  useEffect(() => {
     if (/^c+$/.test(pastedCode) && oauthStatus.state === "waiting_for_login" && showPastePrompt) {
       setPastedCode("");
       urlCopied(oauthStatus.url);
     }
   }, [pastedCode, oauthStatus, showPastePrompt, urlCopied]);
-  P(() => {
+  useEffect(() => {
     let timers = timersRef.current;
     return () => {
       oauthService.cleanup();
@@ -301,8 +310,8 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
           showPastePrompt,
           pastedCode,
           setPastedCode,
-          cursorOffset: v,
-          setCursorOffset: A,
+          cursorOffset: tick,
+          setCursorOffset: setTick,
           textInputColumns,
           onSubmitCode: handleSubmitCode,
         }),
@@ -310,6 +319,4 @@ function OAuthFlowStep({ onSuccess, onCancel }) {
     ],
   });
 }
-//@ chunk-4r7nqnx2.js:5057-5096 fingerprint = PASTE_HERE_MSG (1)
-var PASTE_HERE_MSG = "Paste code here if prompted > ";
 export { PASTE_HERE_MSG, PASTE_HERE_MSG_2, OAuthFlowStep };

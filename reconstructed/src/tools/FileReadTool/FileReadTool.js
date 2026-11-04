@@ -11,19 +11,28 @@
 import "path";
 import * as pathModule_2 from "path";
 import "path";
-import { extname, win32, posix } from "path";
+import { posix, extname, win32 } from "path";
 import { readdir, readFile, open } from "fs/promises";
 import { constants } from "fs";
+import { consumePermissionStash } from "../../utils/fsSafety/atomicWriteStaging.js";
+import {
+  walkPermissionCheckPaths,
+  permissionCheckSpellings,
+  getFsImplementation,
+  readHandleUpTo,
+} from "../../utils/fsOperations.js";
+import { encodeControlChars } from "../../utils/sanitization.js";
+import { unresolvablePathMessage } from "../../utils/invisibleChars.js";
 import { getToolResultFromCell, readNotebook, NOTEBOOK_TOO_LARGE_HINT } from "../../utils/notebook.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { env } from "../../utils/env.js";
 import {
-  MAX_PDF_PAGES_PER_READ,
+  MAX_PDF_PAGES_PER_READ as MAX_PDF_PAGES_PER_READ_2,
   mediaLimitsForRoute,
   MODEL_COPY_IMAGE_BYTES,
   MAX_PDF_PAGES_PER_TURN,
   imageTileCount,
-} from "../../utils/truncateGraphemes.js";
+} from "../../utils/mediaLimits.js";
 import {
   FILE_READ_TOOL_NAME,
   isImageOrPdfExtension,
@@ -40,23 +49,23 @@ import {
 import { getClaudeConfigDirOrNull } from "../../utils/envUtils.js";
 import {
   imageMediaTypeSchema,
-  Ph,
+  sniffImageMediaType,
   fileReadInputSchema,
 } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import {
   discriminatedUnion,
-  u,
+  objectSchema,
   literal,
-  string,
-  E,
-  M,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
   array,
-  qne,
+  anySchema,
   unknown,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { bY } from "../../../vendor/zod/v4/core/core.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { INVALID } from "../../../vendor/zod/v4/core/core.js";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { escapeXmlInline, isRemoteOnlyCheck } from "../../utils/permissions/checkRegistry.js";
 import { clipText } from "../../remote/tools/protocolSchemas.js";
 import { plural, countCharInString } from "../../utils/stringUtils.js";
@@ -117,12 +126,6 @@ import {
   checkReadPermissionForTool,
   matchingRuleForInput,
 } from "../../utils/permissions/filesystem.js";
-import {
-  walkPermissionCheckPaths,
-  readHandleUpTo,
-  getFsImplementation,
-  permissionCheckSpellings,
-} from "../../utils/fsOperations.js";
 import { getPlatform } from "../../utils/platform.js";
 import { rejectNullBytes, rejectTrailingWhitespace } from "../../utils/filePathValidation.js";
 import { DENIED_DIRECTORY_ERROR } from "../FileEditTool/constants.js";
@@ -152,7 +155,6 @@ import { discoverSkillsForPath } from "../../skills/loadSkillsDir.js";
 import { getLiveState } from "../../services/liveReplica/liveReplica.js";
 import { getFileExtensionForAnalytics } from "../../services/analytics/metadata.js";
 import { separateCopyHint } from "../../utils/remoteTools/folderSync.js";
-import { encodeControlChars } from "../../utils/sanitization.js";
 import { memoryFreshnessNote } from "../../memdir/memoryAge.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { statViaStorage, classifySavedOutputPath } from "./savedOutputPaths.js";
@@ -200,25 +202,147 @@ import { BASH_TOOL_NAME } from "../BashTool/toolName.js";
 import { webpMaxBytesIfOn, chooseImageEncoding } from "../../utils/imageWebp.js";
 import { logError } from "../../utils/log.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { unresolvablePathMessage } from "../../utils/invisibleChars.js";
-import { consumePermissionStash } from "../../utils/fsSafety/atomicWriteStaging.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-847rdpmn.js:4662-4810 placement
+/**
+ * 读取权限检查时记录的路径拼写（无记录时重新遍历），并标出是否有未解析的路径。
+ */
+function readPermissionSpellings(session, filePath) {
+  let stashedSpellings = consumePermissionStash(session, filePath, "read");
+  if (stashedSpellings !== undefined)
+    return {
+      spellings: stashedSpellings,
+      unresolved: false,
+    };
+  let walkResult = walkPermissionCheckPaths(filePath);
+  return {
+    spellings: permissionCheckSpellings(walkResult),
+    unresolved: walkResult.unresolved,
+  };
+}
+//@ chunk-qg0af0yq.js:8349-8629 placement
+/**
+ * 任一路径拼写是设备/进程文件（/dev/zero、/proc/*\/environ 等）时返回拒绝文案；无法解析路径时也拒绝。
+ */
+function getDevicePathRefusal(filePath, spellingsInfo) {
+  if (spellingsInfo.spellings.some((spelling) => isBlockedDevicePath(spelling)))
+    return `Cannot read '${encodeControlChars(filePath)}': this path names a device or process file that this tool does not read.`;
+  return spellingsInfo.unresolved
+    ? `${unresolvablePathMessage(filePath)}, so it cannot be told apart from a device or process file that this tool does not read.`
+    : undefined;
+}
+//@ chunk-qg0af0yq.js:8629-9202 fingerprint = BLOCKED_DEVICE_PATHS (0.808)
+/**
+ * 被拒读的设备路径集合（/dev/zero、/dev/random、/dev/stdin、/dev/tty、/proc/kmsg、/dev/fd/0-2 等）及相关正则。
+ */
+var BLOCKED_DEVICE_PATHS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PROC_ROOT_PREFIX_RE;
+var PROC_TASK_PREFIX_RE;
+var PROC_SELF_CWD_RE;
+var PROC_FD_TRAVERSAL_RE;
+var OTHER_PROCESS_FD_RE;
+var TTY_DEVICE_RE;
+var MAX_PROC_PREFIX_STRIP_ROUNDS;
+deferInit("chunk-qg0af0yq.js:8629", () => {
+  BLOCKED_DEVICE_PATHS = new Set([
+    "/dev/zero",
+    "/dev/random",
+    "/dev/urandom",
+    "/dev/full",
+    "/dev/stdin",
+    "/dev/tty",
+    "/dev/console",
+    "/proc/kmsg",
+    "/dev/stdout",
+    "/dev/stderr",
+    "/dev/fd/0",
+    "/dev/fd/1",
+    "/dev/fd/2",
+  ]);
+  PROC_ROOT_PREFIX_RE = /^\/proc\/[^/]+\/root(?=\/)/;
+  PROC_TASK_PREFIX_RE = /^(\/proc\/[^/]+)\/task\/[^/]+(?=\/)/;
+  PROC_SELF_CWD_RE = new RegExp(`^/proc/(?:self|${process.pid})/cwd(?=/)`);
+  PROC_FD_TRAVERSAL_RE =
+    /^\/proc\/[^/]+\/cwd\/|^\/proc\/[^/]+\/fd\/\d+\/|^\/dev\/fd\/\d+\/|^\/dev\/(?:stdin|stdout|stderr)\/|^\/proc\/[^/]+\/map_files(\/|$)/;
+  OTHER_PROCESS_FD_RE = new RegExp(`^/proc/(?!self/|${process.pid}/)[^/]+/fd/\\d+$`);
+  TTY_DEVICE_RE = /^\/dev\/(?:pts\/(?:\d+|ptmx)|ptmx|tty[^/]*)$/;
+  MAX_PROC_PREFIX_STRIP_ROUNDS = 8;
+});
+//@ chunk-qg0af0yq.js:9202-9673 fingerprint = isBlockedDevicePath (0.964)
+/**
+ * 路径是否为会阻塞或泄露的设备/进程文件：规范化后匹配黑名单、tty、fd 穿越、其他进程 fd、/proc/<pid>/(environ|cmdline|mem|...)，并剥离 /proc/<pid>/root、task 前缀循环判断（最多 8 轮）。
+ */
+function isBlockedDevicePath(filePath) {
+  let normalized = posix.normalize(filePath);
+  for (let i = 0; ; i++) {
+    if (PROC_SELF_CWD_RE.test(normalized))
+      normalized = posix.normalize(normalized.replace(PROC_SELF_CWD_RE, () => getFsImplementation().cwd()));
+    if (
+      BLOCKED_DEVICE_PATHS.has(normalized) ||
+      TTY_DEVICE_RE.test(normalized) ||
+      PROC_FD_TRAVERSAL_RE.test(normalized) ||
+      OTHER_PROCESS_FD_RE.test(normalized) ||
+      (normalized.startsWith("/proc/") &&
+        (normalized.endsWith("/fd/0") || normalized.endsWith("/fd/1") || normalized.endsWith("/fd/2"))) ||
+      /^\/proc\/[^/]+\/(environ|cmdline|auxv|maps|smaps|smaps_rollup|numa_maps|pagemap|mem|stat|statm|status|syscall|stack)$/.test(
+        normalized,
+      )
+    )
+      return true;
+    let replaced = normalized.replace(PROC_ROOT_PREFIX_RE, "").replace(PROC_TASK_PREFIX_RE, "$1");
+    if (replaced === normalized) return false;
+    if (i >= MAX_PROC_PREFIX_STRIP_ROUNDS) return true;
+    normalized = replaced;
+  }
+}
+//@ chunk-q7gky7a4.js:813-1174 facade-exports = MaxFileReadTokenExceededError (0.91)
+/**
+ * 文件内容 token 数超过上限的错误（带 tokenCount/maxTokens，消息建议用 offset/limit 或搜索）。
+ */
+class MaxFileReadTokenExceededError extends Error {
+  tokenCount;
+  maxTokens;
+  constructor(tokenCount, maxTokens, allowLargeHint = "") {
+    super(
+      `File content (${tokenCount} tokens) exceeds maximum allowed tokens (${maxTokens}). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.${allowLargeHint}`,
+    );
+    this.tokenCount = tokenCount;
+    this.maxTokens = maxTokens;
+    this.name = "MaxFileReadTokenExceededError";
+  }
+}
+//@ chunk-mvvq2nx1.js:7393-7497 fingerprint = IMAGE_EXTENSIONS (0.878)
+/**
+ * 把图片格式映射为编码输出格式：jpg/jpeg 为 jpeg、webp 为 webp、其余为 png。
+ */
+function toEncoderFormat(mimeSubtype) {
+  switch (mimeSubtype) {
+    case "jpeg":
+    case "jpg":
+      return "jpeg";
+    case "webp":
+      return "webp";
+    default:
+      return "png";
+  }
+}
 //@ chunk-e6aww6q8.js:3155422-3155659 placement
 function buildNotebookToolResult(cells, toolUseId) {
   let flattened = cells.flatMap(getToolResultFromCell);
   return {
     tool_use_id: toolUseId,
     type: "tool_result",
-    content: flattened.reduce((acc, h) => {
-      if (acc.length === 0) return [h];
+    content: flattened.reduce((acc, cellBlock) => {
+      if (acc.length === 0) return [cellBlock];
       let last = acc.at(-1);
-      if (last && last.type === "text" && h.type === "text") {
+      if (last && last.type === "text" && cellBlock.type === "text") {
         last.text +=
           `
-` + h.text;
+` + cellBlock.text;
         return acc;
       }
-      acc.push(h);
+      acc.push(cellBlock);
       return acc;
     }, []),
   };
@@ -227,12 +351,17 @@ function buildNotebookToolResult(cells, toolUseId) {
 /**
  * 启用 PDF 页数限制的消息 token 阈值（167000）与每轮默认页数上限 300。
  */
-var PDF_MAX_TOKENS_THRESHOLD = 167000;
-var DEFAULT_MAX_PDF_PAGES_PER_TURN = 300;
-var pdfPageStateByRoot = new SessionRootSlot(() => ({
-  last: undefined,
-  pagesThisTurn: 0,
-}));
+var PDF_MAX_TOKENS_THRESHOLD; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var DEFAULT_MAX_PDF_PAGES_PER_TURN;
+var pdfPageStateByRoot;
+deferInit("chunk-e6aww6q8.js:3158356", () => {
+  PDF_MAX_TOKENS_THRESHOLD = 167000;
+  DEFAULT_MAX_PDF_PAGES_PER_TURN = 300;
+  pdfPageStateByRoot = new SessionRootSlot(() => ({
+    last: undefined,
+    pagesThisTurn: 0,
+  }));
+});
 //@ chunk-e6aww6q8.js:3158427-3158462 placement
 /**
  * 记录最近一次 PDF 页数限制，供本轮页数统计使用。
@@ -244,52 +373,52 @@ function rememberPdfPageLimits(session, last) {
 /**
  * 把本轮已读 PDF 页数清零（新回合开始时）。
  */
-function resetPdfPagesThisTurn(e) {
-  let n = pdfPageStateByRoot.peek(e);
-  if (n !== undefined) n.pagesThisTurn = 0;
+function resetPdfPagesThisTurn(session) {
+  let pdfState = pdfPageStateByRoot.peek(session);
+  if (pdfState !== undefined) pdfState.pagesThisTurn = 0;
 }
 //@ chunk-e6aww6q8.js:3158528-3158597 placement
 /**
  * 把本次读取的 PDF 页数累加到本轮计数。
  */
-function addPdfPagesThisTurn(session, n) {
-  let r = pdfPageStateByRoot.peek(session);
-  if (r !== undefined) r.pagesThisTurn += n;
+function addPdfPagesThisTurn(session, pageCount) {
+  let pdfState = pdfPageStateByRoot.peek(session);
+  if (pdfState !== undefined) pdfState.pagesThisTurn += pageCount;
 }
 //@ chunk-e6aww6q8.js:3158597-3158953 placement
 /**
  * PDF 每条消息页数限制启用时返回每消息/每轮的页数上限与已用页数，否则 undefined。
  */
-function getPdfPageLimits(session, sameTurnToolUses) {
-  let r = pdfPageStateByRoot.peek(session);
-  let last = r?.last;
+function getPdfPageLimits(session, messages) {
+  let pdfState = pdfPageStateByRoot.peek(session);
+  let last = pdfState?.last;
   if (
-    r === undefined ||
+    pdfState === undefined ||
     last === undefined ||
     !last.enabled ||
     !last.enforced ||
     !(last.threshold <= PDF_MAX_TOKENS_THRESHOLD)
   )
     return;
-  let h = env.CLAUDE_CODE_FILE_READ_MAX_PDF_PAGES_PER_MESSAGE;
-  if (h === undefined || h >= MAX_PDF_PAGES_PER_READ) return;
+  let pagesPerMessageEnv = env.CLAUDE_CODE_FILE_READ_MAX_PDF_PAGES_PER_MESSAGE;
+  if (pagesPerMessageEnv === undefined || pagesPerMessageEnv >= MAX_PDF_PAGES_PER_READ_2) return;
   return {
-    pagesPerMessage: h,
-    pagesThisMessage: countPdfPagesInMessages(sameTurnToolUses, h),
+    pagesPerMessage: pagesPerMessageEnv,
+    pagesThisMessage: countPdfPagesInMessages(messages, pagesPerMessageEnv),
     pagesPerTurn: env.CLAUDE_CODE_FILE_READ_MAX_PDF_PAGES_PER_TURN ?? DEFAULT_MAX_PDF_PAGES_PER_TURN,
-    pagesThisTurn: r.pagesThisTurn,
+    pagesThisTurn: pdfState.pagesThisTurn,
   };
 }
 //@ chunk-e6aww6q8.js:3158953-3159330 placement
 /**
  * 统计消息中 Read 工具读取 PDF 指定页的总页数（不超过上限时累加）。
  */
-function countPdfPagesInMessages(e, n) {
-  let r = 0;
-  for (let s of e ?? [])
-    for (let h of s.message.content) {
-      if (h.type !== "tool_use" || h.name !== FILE_READ_TOOL_NAME) continue;
-      let input = h.input;
+function countPdfPagesInMessages(messages, limit) {
+  let pages = 0;
+  for (let message of messages ?? [])
+    for (let block of message.message.content) {
+      if (block.type !== "tool_use" || block.name !== FILE_READ_TOOL_NAME) continue;
+      let input = block.input;
       if (
         typeof input !== "object" ||
         input === null ||
@@ -301,10 +430,10 @@ function countPdfPagesInMessages(e, n) {
       )
         continue;
       let pdfPageRange = parsePDFPageRange(input.pages);
-      let w = pdfPageRange === null ? 0 : pdfPageRange.lastPage - pdfPageRange.firstPage + 1;
-      if (r + w <= n) r += w;
+      let blockPages = pdfPageRange === null ? 0 : pdfPageRange.lastPage - pdfPageRange.firstPage + 1;
+      if (pages + blockPages <= limit) pages += blockPages;
     }
-  return r;
+  return pages;
 }
 //@ chunk-e6aww6q8.js:3159330-3159937 layout
 /**
@@ -374,12 +503,15 @@ async function getScreenshotPathIdentities(filePath, spellings) {
 /**
  * 把每个已批准的路径拼写换成备用截图文件名（同目录）。
  */
-function mapSpellingsToAlternatePath(e, alternateScreenshotPath) {
+function mapSpellingsToAlternatePath(spellings, alternateScreenshotPath) {
   let filename = pathModule_2.basename(alternateScreenshotPath);
-  return e.map((s) => pathModule_2.join(pathModule_2.dirname(s), filename));
+  return spellings.map((spelling) => pathModule_2.join(pathModule_2.dirname(spelling), filename));
 }
 //@ chunk-e6aww6q8.js:3160175-3160209 file-local
-var THIN_SPACE = String.fromCharCode(8239);
+var THIN_SPACE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3160175", () => {
+  THIN_SPACE = String.fromCharCode(8239);
+});
 //@ chunk-e6aww6q8.js:3160209-3160397 layout
 /**
  * macOS 截图文件名在 "AM/PM.png" 前用普通空格或 U+202F 窄空格，返回另一种空格的路径；不匹配返回 undefined。
@@ -408,83 +540,89 @@ function detectSessionFileType(filePath) {
 function makeFileReadOutputSchema(cells) {
   let imageMediaTypes = imageMediaTypeSchema();
   return discriminatedUnion("type", [
-    u({
+    objectSchema({
       type: literal("text"),
-      file: u({
-        filePath: string().describe("The path to the file that was read"),
-        content: string().describe("The content of the file"),
-        numLines: E().describe("Number of lines in the returned content"),
-        startLine: E().describe("The starting line number"),
-        totalLines: E().describe("Total number of lines in the file"),
-        truncatedByTokenCap: M()
+      file: objectSchema({
+        filePath: stringSchema().describe("The path to the file that was read"),
+        content: stringSchema().describe("The content of the file"),
+        numLines: numberSchema().describe("Number of lines in the returned content"),
+        startLine: numberSchema().describe("The starting line number"),
+        totalLines: numberSchema().describe("Total number of lines in the file"),
+        truncatedByTokenCap: booleanSchema()
           .optional()
           .describe(
             "True when a whole-file read was auto-paginated because it exceeded the token cap (the content is a partial first page). A programmatic signal for internal consumers; survives output reconstruction (unlike the render-time banner).",
           ),
       }),
-      artifactRead: u({
-        slug: string(),
-        ver: string(),
+      artifactRead: objectSchema({
+        slug: stringSchema(),
+        ver: stringSchema(),
       })
         .optional()
         .describe(
           "Set when this Read completed a saved Artifact source file: the Artifact and the version of it that now counts as viewed.",
         ),
     }),
-    u({
+    objectSchema({
       type: literal("image"),
-      file: u({
-        base64: string().describe("Base64-encoded image data"),
+      file: objectSchema({
+        base64: stringSchema().describe("Base64-encoded image data"),
         type: imageMediaTypes.describe("The MIME type of the image"),
-        originalSize: E().describe("Original file size in bytes"),
-        dimensions: u({
-          originalWidth: E().optional().describe("Original image width in pixels"),
-          originalHeight: E().optional().describe("Original image height in pixels"),
-          displayWidth: E().optional().describe("Displayed image width in pixels (after resizing)"),
-          displayHeight: E().optional().describe("Displayed image height in pixels (after resizing)"),
+        originalSize: numberSchema().describe("Original file size in bytes"),
+        dimensions: objectSchema({
+          originalWidth: numberSchema().optional().describe("Original image width in pixels"),
+          originalHeight: numberSchema().optional().describe("Original image height in pixels"),
+          displayWidth: numberSchema()
+            .optional()
+            .describe("Displayed image width in pixels (after resizing)"),
+          displayHeight: numberSchema()
+            .optional()
+            .describe("Displayed image height in pixels (after resizing)"),
         })
           .optional()
           .describe("Image dimension info for coordinate mapping"),
       }),
     }),
-    u({
+    objectSchema({
       type: literal("notebook"),
-      file: u({
-        filePath: string().describe("The path to the notebook file"),
+      file: objectSchema({
+        filePath: stringSchema().describe("The path to the notebook file"),
         cells,
       }),
     }),
-    u({
+    objectSchema({
       type: literal("pdf"),
-      file: u({
-        filePath: string().describe("The path to the PDF file"),
-        base64: string().describe("Base64-encoded PDF data"),
-        originalSize: E().describe("Original file size in bytes"),
+      file: objectSchema({
+        filePath: stringSchema().describe("The path to the PDF file"),
+        base64: stringSchema().describe("Base64-encoded PDF data"),
+        originalSize: numberSchema().describe("Original file size in bytes"),
       }),
     }),
-    u({
+    objectSchema({
       type: literal("parts"),
-      file: u({
-        filePath: string().describe("The path to the PDF file"),
-        originalSize: E().describe("Original file size in bytes"),
-        count: E().describe("Number of pages extracted"),
-        outputDir: string().describe("Directory containing extracted page images"),
+      file: objectSchema({
+        filePath: stringSchema().describe("The path to the PDF file"),
+        originalSize: numberSchema().describe("Original file size in bytes"),
+        count: numberSchema().describe("Number of pages extracted"),
+        outputDir: stringSchema().describe("Directory containing extracted page images"),
       }),
-      firstPage: E()
+      firstPage: numberSchema()
         .optional()
         .describe(
           "Document page number of the first extracted page (1 when no range was requested); labels the page images in the model-facing tool_result",
         ),
-      totalPages: E()
+      totalPages: numberSchema()
         .optional()
         .describe(
           "@internal Number of pages in the document. Set only when the call named no page range and the PDF was too long to read whole, so only its first pages were extracted",
         ),
       pages: array(
-        u({
-          base64: string().describe("Base64-encoded page image; empty when the page could not be processed"),
+        objectSchema({
+          base64: stringSchema().describe(
+            "Base64-encoded page image; empty when the page could not be processed",
+          ),
           mediaType: imageMediaTypes.describe("The MIME type of the image"),
-          error: string()
+          error: stringSchema()
             .optional()
             .describe("Why the page could not be processed as an image; set only when base64 is empty"),
         }),
@@ -494,10 +632,10 @@ function makeFileReadOutputSchema(cells) {
           "Extracted page images, in page order. Present only transiently in-process: the page image bytes are delivered solely as image blocks in the model-facing tool_result content and are not retained on the tool_use_result, so this key is absent on the emitted/persisted result",
         ),
     }),
-    u({
+    objectSchema({
       type: literal("file_unchanged"),
-      file: u({
-        filePath: string().describe("The path to the file"),
+      file: objectSchema({
+        filePath: stringSchema().describe("The path to the file"),
       }),
       source: literal("seeded")
         .optional()
@@ -508,93 +646,108 @@ function makeFileReadOutputSchema(cells) {
   ]);
 }
 //@ chunk-e6aww6q8.js:3164693-3164860 layout
-var fileReadOutputSchema = DoctorLazy(() =>
-  makeFileReadOutputSchema(array(qne()).describe("Array of notebook cells")),
-);
-var PRIMITIVE_TYPEOF_NAMES = new Set(["string", "number", "boolean"]);
-var BASE64_PREFIX_RE = /^(?:[^A-Za-z0-9+/_=-]*[A-Za-z0-9+/_=-]){0,16}/;
-var MAX_NOTEBOOK_FIELD_LENGTH = 64;
+var fileReadOutputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var PRIMITIVE_TYPEOF_NAMES;
+var BASE64_PREFIX_RE;
+var MAX_NOTEBOOK_FIELD_LENGTH;
+deferInit("chunk-e6aww6q8.js:3164693", () => {
+  fileReadOutputSchema = DoctorLazy(() =>
+    makeFileReadOutputSchema(array(anySchema()).describe("Array of notebook cells")),
+  );
+  PRIMITIVE_TYPEOF_NAMES = new Set(["string", "number", "boolean"]);
+  BASE64_PREFIX_RE = /^(?:[^A-Za-z0-9+/_=-]*[A-Za-z0-9+/_=-]){0,16}/;
+  MAX_NOTEBOOK_FIELD_LENGTH = 64;
+});
 //@ chunk-e6aww6q8.js:3164860-3165052 layout
-function flattenToCommaString(e) {
-  let n = [];
-  let r = [e];
-  while (r.length > 0) {
-    let s = r.pop();
-    if (Array.isArray(s) && s.length > 0) for (let idx = s.length - 1; idx >= 0; idx--) r.push(s[idx]);
-    else n.push(s === null ? "" : String(s));
+function flattenToCommaString(value) {
+  let parts = [];
+  let stack = [value];
+  while (stack.length > 0) {
+    let item = stack.pop();
+    if (Array.isArray(item) && item.length > 0)
+      for (let idx = item.length - 1; idx >= 0; idx--) stack.push(item[idx]);
+    else parts.push(item === null ? "" : String(item));
   }
-  return n.join(",");
+  return parts.join(",");
 }
 //@ chunk-e6aww6q8.js:3165052-3165853 layout
-var crossProcessNotebookCellsSchema = DoctorLazy(() => {
-  let e = unknown().transform((r, s) => {
-    if (r === null || PRIMITIVE_TYPEOF_NAMES.has(typeof r)) return r;
-    try {
-      if (r !== undefined) return [flattenToCommaString(r)];
-    } catch {}
-    s.addIssue({
-      code: "custom",
-      message: "Missing, or no text can be made of it.",
+var crossProcessNotebookCellsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var fileReadOutputSchemaAcrossProcesses;
+deferInit("chunk-e6aww6q8.js:3165052", () => {
+  crossProcessNotebookCellsSchema = DoctorLazy(() => {
+    let textField = unknown().transform((value, ctx) => {
+      if (value === null || PRIMITIVE_TYPEOF_NAMES.has(typeof value)) return value;
+      try {
+        if (value !== undefined) return [flattenToCommaString(value)];
+      } catch {}
+      ctx.addIssue({
+        code: "custom",
+        message: "Missing, or no text can be made of it.",
+      });
+      return INVALID;
     });
-    return bY;
+    let imageField = objectSchema({
+      image_data: stringSchema(),
+      media_type: imageMediaTypeSchema(),
+    }).transform((imageOutput) =>
+      sniffImageMediaType(Buffer.from(BASE64_PREFIX_RE.exec(imageOutput.image_data)[0], "base64")) === null
+        ? undefined
+        : imageOutput,
+    );
+    return array(
+      objectSchema({
+        cellType: textField.optional(),
+        source: stringSchema(),
+        execution_count: textField
+          .optional()
+          .catch(undefined)
+          .transform((count) => (String(count).length > MAX_NOTEBOOK_FIELD_LENGTH ? undefined : count)),
+        cell_id: textField,
+        language: textField.optional(),
+        outputs: array(
+          objectSchema({
+            output_type: stringSchema().refine(
+              (outputType) => outputType.length <= MAX_NOTEBOOK_FIELD_LENGTH,
+            ),
+            text: stringSchema().optional(),
+            image: imageField.nullish(),
+          }).nullable(),
+        ).optional(),
+      }).transform((cell) => (cell.cellType === "code" ? cell : omitAlias(cell, ["language"]))),
+    );
   });
-  let n = u({
-    image_data: string(),
-    media_type: imageMediaTypeSchema(),
-  }).transform((r) =>
-    Ph(Buffer.from(BASE64_PREFIX_RE.exec(r.image_data)[0], "base64")) === null ? undefined : r,
-  );
-  return array(
-    u({
-      cellType: e.optional(),
-      source: string(),
-      execution_count: e
-        .optional()
-        .catch(undefined)
-        .transform((r) => (String(r).length > MAX_NOTEBOOK_FIELD_LENGTH ? undefined : r)),
-      cell_id: e,
-      language: e.optional(),
-      outputs: array(
-        u({
-          output_type: string().refine((r) => r.length <= MAX_NOTEBOOK_FIELD_LENGTH),
-          text: string().optional(),
-          image: n.nullish(),
-        }).nullable(),
-      ).optional(),
-    }).transform((r) => (r.cellType === "code" ? r : Uo(r, ["language"]))),
+  fileReadOutputSchemaAcrossProcesses = DoctorLazy(() =>
+    makeFileReadOutputSchema(crossProcessNotebookCellsSchema())
+      .refine((output) => output.type !== "file_unchanged")
+      .transform((output) => (output.type === "text" ? omitAlias(output, ["artifactRead"]) : output)),
   );
 });
-var fileReadOutputSchemaAcrossProcesses = DoctorLazy(() =>
-  makeFileReadOutputSchema(crossProcessNotebookCellsSchema())
-    .refine((e) => e.type !== "file_unchanged")
-    .transform((e) => (e.type === "text" ? Uo(e, ["artifactRead"]) : e)),
-);
 //@ chunk-e6aww6q8.js:3165853-3165961 layout
-function withResultFilePath(e, filePath) {
-  return typeof e.file === "object" && "filePath" in e.file
+function withResultFilePath(result, filePath) {
+  return typeof result.file === "object" && "filePath" in result.file
     ? {
-        ...e,
+        ...result,
         file: {
-          ...e.file,
+          ...result.file,
           filePath,
         },
       }
-    : e;
+    : result;
 }
 //@ chunk-e6aww6q8.js:3165961-3166167 layout
-function sanitizePartsResultFromAnotherProcess(e) {
-  if (e.type !== "parts") return e;
-  let n = (r) => escapeXmlInline(clipText(r, 2000));
+function sanitizePartsResultFromAnotherProcess(result) {
+  if (result.type !== "parts") return result;
+  let sanitizeText = (text) => escapeXmlInline(clipText(text, 2000));
   return {
-    ...e,
+    ...result,
     file: {
-      ...e.file,
-      outputDir: n(e.file.outputDir),
+      ...result.file,
+      outputDir: sanitizeText(result.file.outputDir),
     },
-    pages: e.pages?.map((page) => ({
+    pages: result.pages?.map((page) => ({
       ...page,
       ...(page.error !== undefined && {
-        error: n(page.error),
+        error: sanitizeText(page.error),
       }),
     })),
   };
@@ -603,14 +756,14 @@ function sanitizePartsResultFromAnotherProcess(e) {
 function stripPdfPageImages(output) {
   if (typeof output !== "object" || output === null || output.type !== "parts" || output.pages === undefined)
     return output;
-  let { pages, ...r } = output;
-  return r;
+  let { pages, ...rest } = output;
+  return rest;
 }
 //@ chunk-e6aww6q8.js:3166290-3167545 layout
 /**
  * 解析并检查 pages 参数：只接受单页或单区间；上下文满过一次后按每消息/每轮 PDF 页数预算拒绝（错误码 17/18）；超过每请求 20 页拒绝（8）。
  */
-function validatePdfPagesParam(pagesParam, n) {
+function validatePdfPagesParam(pagesParam, pdfLimits) {
   let pageRange = parsePDFPageRange(pagesParam);
   if (!pageRange)
     return {
@@ -619,9 +772,11 @@ function validatePdfPagesParam(pagesParam, n) {
       errorCode: 7,
     };
   let requestedPageCount =
-    pageRange.lastPage === 1 / 0 ? MAX_PDF_PAGES_PER_READ + 1 : pageRange.lastPage - pageRange.firstPage + 1;
-  if (n !== undefined) {
-    let { pagesPerMessage, pagesThisMessage, pagesPerTurn, pagesThisTurn } = n;
+    pageRange.lastPage === 1 / 0
+      ? MAX_PDF_PAGES_PER_READ_2 + 1
+      : pageRange.lastPage - pageRange.firstPage + 1;
+  if (pdfLimits !== undefined) {
+    let { pagesPerMessage, pagesThisMessage, pagesPerTurn, pagesThisTurn } = pdfLimits;
     if (pagesThisTurn + Math.min(requestedPageCount, pagesPerMessage) > pagesPerTurn)
       return {
         ok: false,
@@ -635,10 +790,10 @@ function validatePdfPagesParam(pagesParam, n) {
         errorCode: 17,
       };
   }
-  if (requestedPageCount > MAX_PDF_PAGES_PER_READ)
+  if (requestedPageCount > MAX_PDF_PAGES_PER_READ_2)
     return {
       ok: false,
-      message: `Page range "${pagesParam}" exceeds maximum of ${MAX_PDF_PAGES_PER_READ} pages per request. Please use a smaller range.`,
+      message: `Page range "${pagesParam}" exceeds maximum of ${MAX_PDF_PAGES_PER_READ_2} pages per request. Please use a smaller range.`,
       errorCode: 8,
     };
   return {
@@ -730,364 +885,378 @@ function createReadCallContext(toolContext, callInfo) {
 /**
  * 本地调用且上下文已压缩过时返回本轮 PDF 页数预算，否则 undefined。
  */
-function getPdfPageBudget(e) {
-  return e.remoteCall === undefined && hasNoUserPromptSinceCompact(e.messages())
-    ? getPdfPageLimits(e.session, e.sameTurnToolUses)
+function getPdfPageBudget(context) {
+  return context.remoteCall === undefined && hasNoUserPromptSinceCompact(context.messages())
+    ? getPdfPageLimits(context.session, context.sameTurnToolUses)
     : undefined;
 }
 //@ chunk-e6aww6q8.js:3168772-3174590 facade-exports = FileReadTool (0.519)
 /**
  * Read 工具定义（name "Read"）。读文本/图片/PDF/notebook；validateInput 查空字节、不稳定路径、pages 合法性与预算、Read deny、二进制扩展名、设备文件、远程 PDF 预算；checkPermissions 走 checkReadPermissionForTool 并在 macOS 暂存截图备用路径身份；maxResultSizeChars 为 Infinity。
  */
-var FileReadTool = buildTool({
-  name: FILE_READ_TOOL_NAME,
-  ruleContentField: "file_path",
-  searchHint: "read files, images, PDFs, notebooks",
-  remoteExecution: {
-    supported: true,
-    decidingInputFields: ["file_path", "offset", "limit", "pages", "allow_large"],
-  },
-  backgrounding: "never",
-  maxResultSizeChars: 1 / 0,
-  strict: true,
-  async description() {
-    return DESCRIPTION;
-  },
-  async prompt({ model, leanPrompt, leanRewrite }) {
-    return renderPromptTemplate(
-      model,
-      isTabReadSeparationEnabled() ? TAB_AWARE_LINE_FORMAT_INSTRUCTION : LINE_FORMAT_INSTRUCTION,
-      leanPrompt,
-      leanRewrite,
-    );
-  },
-  get inputSchema() {
-    return fileReadInputSchema();
-  },
-  coerceInput: normalizeReadInputAliases,
-  get outputSchema() {
-    return fileReadOutputSchema();
-  },
-  get outputSchemaAcrossProcesses() {
-    return fileReadOutputSchemaAcrossProcesses();
-  },
-  fromAnotherProcess(e, n) {
-    let data = sanitizePartsResultFromAnotherProcess(withResultFilePath(e, String(n.file_path ?? "")));
-    if (data.type === "text" && data.file.truncatedByTokenCap === true)
-      setCachedReadingLimit(data, buildReadTruncationNotice(data.file));
-    let s =
-      data.type === "image" && data.file.dimensions ? createImageMetadataText(data.file.dimensions) : null;
-    return {
-      data,
-      ...(s !== null && {
-        newMessages: [
-          createUserMessage({
-            content: s,
-            isMeta: true,
-          }),
-        ],
-      }),
-    };
-  },
-  userFacingName: userFacingName_3,
-  getToolUseSummary: getToolUseSummary_5,
-  getActivityDescription(e) {
-    let toolUseSummary = getToolUseSummary_5(e);
-    return toolUseSummary ? `Reading ${toolUseSummary}` : "Reading file";
-  },
-  isConcurrencySafe() {
-    return true;
-  },
-  isReadOnly() {
-    return true;
-  },
-  toAutoClassifierInput(e) {
-    let n = remoteRoutingCandidate(e);
-    return n === undefined
-      ? e.file_path
-      : {
-          file_path: e.file_path,
-          [HOST_TOOL_INPUT_FIELD]: n,
-          ...hostContextMeta(e),
-        };
-  },
-  suppressesAllPermissionUpdates(e) {
-    return hasHostField(e);
-  },
-  isSearchOrReadCommand() {
-    return {
-      isSearch: false,
-      isRead: true,
-    };
-  },
-  getPath({ file_path: filePath }) {
-    return filePath || (isRemoteOnlyCheck(FILE_READ_TOOL_NAME) ? "" : getCwd());
-  },
-  backfillObservableInput(e) {
-    if (typeof e.file_path === "string" && !isRemoteOnlyCheck(FILE_READ_TOOL_NAME))
-      e.file_path = expandStablePath(e.file_path);
-  },
-  async preparePermissionMatcher({ file_path }) {
-    return (pattern) => matchesPathRule(pattern, file_path);
-  },
-  extractSearchText() {
-    return "";
-  },
-  stripForCreation: stripPdfPageImages,
-  restoreTransientForRemap: restoreTransientPdfFields,
-  stripForStorage(output) {
-    if (typeof output !== "object" || output === null) return output;
-    if (output.type === "parts") return stripPdfPageImages(output);
-    if (typeof output.file !== "object" || output.file === null) return output;
-    switch (output.type) {
-      case "text":
-        if (output.file.content === "") return output;
-        return {
-          ...output,
-          file: {
-            ...output.file,
-            content: "",
-          },
-        };
-      case "image":
-        if (output.file.base64 === "") return output;
-        return {
-          ...output,
-          file: {
-            ...output.file,
-            base64: "",
-          },
-        };
-      case "pdf":
-        if (output.file.base64 === "") return output;
-        return {
-          ...output,
-          file: {
-            ...output.file,
-            base64: "",
-          },
-        };
-      case "notebook": {
-        let { cells } = output.file;
-        if (!Array.isArray(cells) || cells.length === 0 || cells[0] == null) return output;
-        return {
-          ...output,
-          file: {
-            ...output.file,
-            cells: Array(cells.length),
-          },
-        };
-      }
-      default:
-        return output;
-    }
-  },
-  create(toolContext) {
-    return {
-      async checkPermissions(n, callInfo) {
-        let callContext = createReadCallContext(toolContext, callInfo);
-        let h = expandStablePath(n.file_path);
-        let y = walkPermissionCheckPaths(h);
-        let spellings = y.spellings;
-        callContext.session.writePermissionStash.stash(callContext.toolUseId, h, spellings, "read");
-        if (getPlatform() === "macos" && callContext.toolUseId !== undefined) {
-          let { own, alt } = await getScreenshotPathIdentities(h, spellings);
-          let writePermissionStash = callContext.session.writePermissionStash;
-          writePermissionStash.stashIdentity(callContext.toolUseId, h, own);
-          if (alt) writePermissionStash.stashIdentity(callContext.toolUseId, alt.path, alt.identity);
-        }
-        return checkReadPermissionForTool(FileReadTool, n, callContext.permissions(), y);
-      },
-      async validateInput(n, callInfo) {
-        let readCallContext = createReadCallContext(toolContext, callInfo);
-        let { file_path: filePath, pages } = n;
-        if (canRunToolsOnThisMachine() && hasHostField(n))
-          return {
-            result: false,
-            message: hostFieldNotForwardedMessage(),
-            errorCode: 14,
+var FileReadTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3168772", () => {
+  FileReadTool = buildTool({
+    name: FILE_READ_TOOL_NAME,
+    ruleContentField: "file_path",
+    searchHint: "read files, images, PDFs, notebooks",
+    remoteExecution: {
+      supported: true,
+      decidingInputFields: ["file_path", "offset", "limit", "pages", "allow_large"],
+    },
+    backgrounding: "never",
+    maxResultSizeChars: 1 / 0,
+    strict: true,
+    async description() {
+      return DESCRIPTION;
+    },
+    async prompt({ model, leanPrompt, leanRewrite }) {
+      return renderPromptTemplate(
+        model,
+        isTabReadSeparationEnabled() ? TAB_AWARE_LINE_FORMAT_INSTRUCTION : LINE_FORMAT_INSTRUCTION,
+        leanPrompt,
+        leanRewrite,
+      );
+    },
+    get inputSchema() {
+      return fileReadInputSchema();
+    },
+    coerceInput: normalizeReadInputAliases,
+    get outputSchema() {
+      return fileReadOutputSchema();
+    },
+    get outputSchemaAcrossProcesses() {
+      return fileReadOutputSchemaAcrossProcesses();
+    },
+    fromAnotherProcess(result, input) {
+      let data = sanitizePartsResultFromAnotherProcess(
+        withResultFilePath(result, String(input.file_path ?? "")),
+      );
+      if (data.type === "text" && data.file.truncatedByTokenCap === true)
+        setCachedReadingLimit(data, buildReadTruncationNotice(data.file));
+      let imageMetadata =
+        data.type === "image" && data.file.dimensions ? createImageMetadataText(data.file.dimensions) : null;
+      return {
+        data,
+        ...(imageMetadata !== null && {
+          newMessages: [
+            createUserMessage({
+              content: imageMetadata,
+              isMeta: true,
+            }),
+          ],
+        }),
+      };
+    },
+    userFacingName: userFacingName_3,
+    getToolUseSummary: getToolUseSummary_5,
+    getActivityDescription(input) {
+      let toolUseSummary = getToolUseSummary_5(input);
+      return toolUseSummary ? `Reading ${toolUseSummary}` : "Reading file";
+    },
+    isConcurrencySafe() {
+      return true;
+    },
+    isReadOnly() {
+      return true;
+    },
+    toAutoClassifierInput(input) {
+      let hostRouting = remoteRoutingCandidate(input);
+      return hostRouting === undefined
+        ? input.file_path
+        : {
+            file_path: input.file_path,
+            [HOST_TOOL_INPUT_FIELD]: hostRouting,
+            ...hostContextMeta(input),
           };
-        let S = rejectNullBytes(FILE_READ_TOOL_NAME, [["file_path", filePath]]);
-        if (S) return S;
-        let w = rejectTrailingWhitespace(FILE_READ_TOOL_NAME, [["file_path", filePath]]);
-        if (w) return w;
-        if (pages !== undefined) {
-          let ke = validatePdfPagesParam(
-            pages,
-            isDocumentExtension(pathModule_2.extname(filePath))
-              ? getPdfPageBudget(readCallContext)
-              : undefined,
+    },
+    suppressesAllPermissionUpdates(input) {
+      return hasHostField(input);
+    },
+    isSearchOrReadCommand() {
+      return {
+        isSearch: false,
+        isRead: true,
+      };
+    },
+    getPath({ file_path: filePath }) {
+      return filePath || (isRemoteOnlyCheck(FILE_READ_TOOL_NAME) ? "" : getCwd());
+    },
+    backfillObservableInput(input) {
+      if (typeof input.file_path === "string" && !isRemoteOnlyCheck(FILE_READ_TOOL_NAME))
+        input.file_path = expandStablePath(input.file_path);
+    },
+    async preparePermissionMatcher({ file_path }) {
+      return (pattern) => matchesPathRule(pattern, file_path);
+    },
+    extractSearchText() {
+      return "";
+    },
+    stripForCreation: stripPdfPageImages,
+    restoreTransientForRemap: restoreTransientPdfFields,
+    stripForStorage(output) {
+      if (typeof output !== "object" || output === null) return output;
+      if (output.type === "parts") return stripPdfPageImages(output);
+      if (typeof output.file !== "object" || output.file === null) return output;
+      switch (output.type) {
+        case "text":
+          if (output.file.content === "") return output;
+          return {
+            ...output,
+            file: {
+              ...output.file,
+              content: "",
+            },
+          };
+        case "image":
+          if (output.file.base64 === "") return output;
+          return {
+            ...output,
+            file: {
+              ...output.file,
+              base64: "",
+            },
+          };
+        case "pdf":
+          if (output.file.base64 === "") return output;
+          return {
+            ...output,
+            file: {
+              ...output.file,
+              base64: "",
+            },
+          };
+        case "notebook": {
+          let { cells } = output.file;
+          if (!Array.isArray(cells) || cells.length === 0 || cells[0] == null) return output;
+          return {
+            ...output,
+            file: {
+              ...output.file,
+              cells: Array(cells.length),
+            },
+          };
+        }
+        default:
+          return output;
+      }
+    },
+    create(toolContext) {
+      return {
+        async checkPermissions(input, callInfo) {
+          let callContext = createReadCallContext(toolContext, callInfo);
+          let stablePath = expandStablePath(input.file_path);
+          let pathSpellings = walkPermissionCheckPaths(stablePath);
+          let spellings = pathSpellings.spellings;
+          callContext.session.writePermissionStash.stash(
+            callContext.toolUseId,
+            stablePath,
+            spellings,
+            "read",
           );
-          if (!ke.ok)
+          if (getPlatform() === "macos" && callContext.toolUseId !== undefined) {
+            let { own, alt } = await getScreenshotPathIdentities(stablePath, spellings);
+            let writePermissionStash = callContext.session.writePermissionStash;
+            writePermissionStash.stashIdentity(callContext.toolUseId, stablePath, own);
+            if (alt) writePermissionStash.stashIdentity(callContext.toolUseId, alt.path, alt.identity);
+          }
+          return checkReadPermissionForTool(FileReadTool, input, callContext.permissions(), pathSpellings);
+        },
+        async validateInput(input, callInfo) {
+          let context = createReadCallContext(toolContext, callInfo);
+          let { file_path: filePath, pages } = input;
+          if (canRunToolsOnThisMachine() && hasHostField(input))
             return {
               result: false,
-              message: ke.message,
-              errorCode: ke.errorCode,
+              message: hostFieldNotForwardedMessage(),
+              errorCode: 14,
             };
-        }
-        let absolutePath = expandStablePath(filePath);
-        let G = matchingRuleForInput(absolutePath, readCallContext.permissions(), "read", "deny");
-        if (G !== null)
-          return {
-            result: false,
-            message: DENIED_DIRECTORY_ERROR,
-            errorCode: 1,
-            deniedByPermissionRule: true,
-            denyRule: G,
-          };
-        if (isUncOrDevicePath(absolutePath))
+          let nullByteRefusal = rejectNullBytes(FILE_READ_TOOL_NAME, [["file_path", filePath]]);
+          if (nullByteRefusal) return nullByteRefusal;
+          let trailingWhitespaceRefusal = rejectTrailingWhitespace(FILE_READ_TOOL_NAME, [
+            ["file_path", filePath],
+          ]);
+          if (trailingWhitespaceRefusal) return trailingWhitespaceRefusal;
+          if (pages !== undefined) {
+            let pagesValidation = validatePdfPagesParam(
+              pages,
+              isDocumentExtension(pathModule_2.extname(filePath)) ? getPdfPageBudget(context) : undefined,
+            );
+            if (!pagesValidation.ok)
+              return {
+                result: false,
+                message: pagesValidation.message,
+                errorCode: pagesValidation.errorCode,
+              };
+          }
+          let absolutePath = expandStablePath(filePath);
+          let denyRule = matchingRuleForInput(absolutePath, context.permissions(), "read", "deny");
+          if (denyRule !== null)
+            return {
+              result: false,
+              message: DENIED_DIRECTORY_ERROR,
+              errorCode: 1,
+              deniedByPermissionRule: true,
+              denyRule,
+            };
+          if (isUncOrDevicePath(absolutePath))
+            return {
+              result: true,
+            };
+          let lower = pathModule_2.extname(absolutePath).toLowerCase();
+          if (hasBinaryExtension(absolutePath) && !isImageOrPdfExtension(absolutePath))
+            return {
+              result: false,
+              message: `This tool cannot read binary files. The file appears to be a binary ${lower} file. Use a skill for this file type if one is available, or a shell command or script that can read the format.`,
+              errorCode: 4,
+            };
+          let devicePathRefusal = getDevicePathRefusal(filePath, {
+            spellings: [absolutePath],
+            unresolved: false,
+          });
+          if (devicePathRefusal !== undefined)
+            return {
+              result: false,
+              message: devicePathRefusal,
+              errorCode: 9,
+            };
+          if (context.remoteCall !== undefined && isDocumentExtension(lower)) {
+            let mediaLimits = mediaLimitsForRoute(context.remoteCall.origin.transport);
+            let pagesValidation = pages === undefined ? undefined : validatePdfPagesParam(pages);
+            let requestedPageCount =
+              pagesValidation !== undefined && pagesValidation.ok
+                ? pagesValidation.range.lastPage - pagesValidation.range.firstPage + 1
+                : 0;
+            let wholePdfRefused = pages === undefined && mediaLimits.wholePdfMaxRawBytes === 0;
+            if (wholePdfRefused || requestedPageCount > mediaLimits.pdfMaxPagesPerRead)
+              return {
+                result: false,
+                message: `${wholePdfRefused ? "A whole PDF cannot be returned from this machine to the calling session" : `${pages} is too many pages to return from this machine in one call`}. Use the pages parameter with at most ${mediaLimits.pdfMaxPagesPerRead} pages per call (for example pages: 1-3, which come back as images), or read the file where the session runs.`,
+                errorCode: 16,
+              };
+          }
           return {
             result: true,
           };
-        let lower = pathModule_2.extname(absolutePath).toLowerCase();
-        if (hasBinaryExtension(absolutePath) && !isImageOrPdfExtension(absolutePath))
+        },
+        async call(input, callInfo) {
+          let context = createReadCallContext(toolContext, callInfo);
+          return readFileToolCall(input, context, callInfo.parentMessage);
+        },
+      };
+    },
+    mapToolResultToToolResultBlockParam(output, toolUseId) {
+      switch (output.type) {
+        case "image":
           return {
-            result: false,
-            message: `This tool cannot read binary files. The file appears to be a binary ${lower} file. Use a skill for this file type if one is available, or a shell command or script that can read the format.`,
-            errorCode: 4,
-          };
-        let devicePathRefusal = getDevicePathRefusal(filePath, {
-          spellings: [absolutePath],
-          unresolved: false,
-        });
-        if (devicePathRefusal !== undefined)
-          return {
-            result: false,
-            message: devicePathRefusal,
-            errorCode: 9,
-          };
-        if (readCallContext.remoteCall !== undefined && isDocumentExtension(lower)) {
-          let ke = mediaLimitsForRoute(readCallContext.remoteCall.origin.transport);
-          let we = pages === undefined ? undefined : validatePdfPagesParam(pages);
-          let Ee = we !== undefined && we.ok ? we.range.lastPage - we.range.firstPage + 1 : 0;
-          let Ae = pages === undefined && ke.wholePdfMaxRawBytes === 0;
-          if (Ae || Ee > ke.pdfMaxPagesPerRead)
-            return {
-              result: false,
-              message: `${Ae ? "A whole PDF cannot be returned from this machine to the calling session" : `${pages} is too many pages to return from this machine in one call`}. Use the pages parameter with at most ${ke.pdfMaxPagesPerRead} pages per call (for example pages: 1-3, which come back as images), or read the file where the session runs.`,
-              errorCode: 16,
-            };
-        }
-        return {
-          result: true,
-        };
-      },
-      async call(n, callInfo) {
-        let context = createReadCallContext(toolContext, callInfo);
-        return readFileToolCall(n, context, callInfo.parentMessage);
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(output, toolUseId) {
-    switch (output.type) {
-      case "image":
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "base64",
-                data: output.file.base64,
-                media_type: output.file.type,
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content: [
+              {
+                type: "image",
+                source: {
+                  type: "base64",
+                  data: output.file.base64,
+                  media_type: output.file.type,
+                },
               },
-            },
-          ],
-        };
-      case "notebook":
-        return buildNotebookToolResult(output.file.cells, toolUseId);
-      case "pdf": {
-        let r = `PDF file read: ${output.file.filePath} (${formatFileSize(output.file.originalSize)})`;
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          content: output.file.base64
-            ? [
-                {
-                  type: "text",
-                  text: r,
-                },
-                {
-                  type: "document",
-                  source: {
-                    type: "base64",
-                    media_type: "application/pdf",
-                    data: output.file.base64,
+            ],
+          };
+        case "notebook":
+          return buildNotebookToolResult(output.file.cells, toolUseId);
+        case "pdf": {
+          let headerText = `PDF file read: ${output.file.filePath} (${formatFileSize(output.file.originalSize)})`;
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content: output.file.base64
+              ? [
+                  {
+                    type: "text",
+                    text: headerText,
                   },
-                },
-              ]
-            : r,
-        };
-      }
-      case "parts": {
-        let r =
-          `PDF pages extracted: ${output.file.count} page(s) from ${output.file.filePath} (${formatFileSize(output.file.originalSize)})` +
-          (output.totalPages === undefined
-            ? ""
-            : `. This PDF has ${output.totalPages} pages. These are pages 1-${output.file.count}. Use the pages parameter to read other pages (e.g., pages: "${output.file.count + 1}-${Math.min(2 * output.file.count, output.totalPages)}").`);
-        let pages = output.pages ?? [];
-        let firstPage = output.firstPage ?? 1;
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          content: pages.length
-            ? [
-                {
-                  type: "text",
-                  text: r,
-                },
-                ...pages.map((page, S) =>
-                  page.base64
-                    ? {
-                        type: "image",
-                        source: {
-                          type: "base64",
-                          data: page.base64,
-                          media_type: page.mediaType,
+                  {
+                    type: "document",
+                    source: {
+                      type: "base64",
+                      media_type: "application/pdf",
+                      data: output.file.base64,
+                    },
+                  },
+                ]
+              : headerText,
+          };
+        }
+        case "parts": {
+          let headerText =
+            `PDF pages extracted: ${output.file.count} page(s) from ${output.file.filePath} (${formatFileSize(output.file.originalSize)})` +
+            (output.totalPages === undefined
+              ? ""
+              : `. This PDF has ${output.totalPages} pages. These are pages 1-${output.file.count}. Use the pages parameter to read other pages (e.g., pages: "${output.file.count + 1}-${Math.min(2 * output.file.count, output.totalPages)}").`);
+          let pages = output.pages ?? [];
+          let firstPage = output.firstPage ?? 1;
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content: pages.length
+              ? [
+                  {
+                    type: "text",
+                    text: headerText,
+                  },
+                  ...pages.map((page, pageIndex) =>
+                    page.base64
+                      ? {
+                          type: "image",
+                          source: {
+                            type: "base64",
+                            data: page.base64,
+                            media_type: page.mediaType,
+                          },
+                        }
+                      : {
+                          type: "text",
+                          text: `[Page ${firstPage + pageIndex} could not be processed as an image${page.error ? `: ${page.error}` : ""}]`,
                         },
-                      }
-                    : {
-                        type: "text",
-                        text: `[Page ${firstPage + S} could not be processed as an image${page.error ? `: ${page.error}` : ""}]`,
-                      },
-                ),
-              ]
-            : r,
-        };
+                  ),
+                ]
+              : headerText,
+          };
+        }
+        case "file_unchanged":
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content:
+              output.source === "seeded"
+                ? getSeededFileUnchangedMessage(output.file.filePath)
+                : getFileUnchangedMessage(),
+          };
+        case "text": {
+          let content;
+          if (output.file.content)
+            content =
+              memoryFileFreshnessPrefix(output) +
+              addLineNumbers({
+                ...output.file,
+                tabAwareSeparator: isTabReadSeparationEnabled(),
+              });
+          else if (output.file.numLines >= 1 && output.file.totalLines > 1)
+            content = memoryFileFreshnessPrefix(output) + formatNumberedLine("", output.file.startLine, "\t");
+          else if (output.file.numLines >= 1 || output.file.totalLines === 0)
+            content =
+              "<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>";
+          else
+            content = `<system-reminder>Warning: the file exists but is shorter than the provided offset (${output.file.startLine}). The file has ${output.file.totalLines} lines.</system-reminder>`;
+          return {
+            tool_use_id: toolUseId,
+            type: "tool_result",
+            content: content + formatTrailingResultNotes(output),
+          };
+        }
       }
-      case "file_unchanged":
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          content:
-            output.source === "seeded"
-              ? getSeededFileUnchangedMessage(output.file.filePath)
-              : getFileUnchangedMessage(),
-        };
-      case "text": {
-        let r;
-        if (output.file.content)
-          r =
-            memoryFileFreshnessPrefix(output) +
-            addLineNumbers({
-              ...output.file,
-              tabAwareSeparator: isTabReadSeparationEnabled(),
-            });
-        else if (output.file.numLines >= 1 && output.file.totalLines > 1)
-          r = memoryFileFreshnessPrefix(output) + formatNumberedLine("", output.file.startLine, "\t");
-        else if (output.file.numLines >= 1 || output.file.totalLines === 0)
-          r = "<system-reminder>Warning: the file exists but the contents are empty.</system-reminder>";
-        else
-          r = `<system-reminder>Warning: the file exists but is shorter than the provided offset (${output.file.startLine}). The file has ${output.file.totalLines} lines.</system-reminder>`;
-        return {
-          tool_use_id: toolUseId,
-          type: "tool_result",
-          content: r + formatTrailingResultNotes(output),
-        };
-      }
-    }
-  },
+    },
+  });
 });
 //@ chunk-e6aww6q8.js:3174590-3177290 layout
 /**
@@ -1101,7 +1270,7 @@ async function readFileToolCall(
   let { readFileState, fileReadingLimits } = context;
   let filePath_2 = expandStablePath(filePath);
   let writePermissionStash = context.session.writePermissionStash;
-  let Z = writePermissionStash.holds(context.toolUseId, filePath_2, "read");
+  let hasStashedRead = writePermissionStash.holds(context.toolUseId, filePath_2, "read");
   let checkedIdentity = writePermissionStash.takeIdentity(context.toolUseId, filePath_2);
   let alternateScreenshotPath = getAlternateScreenshotPath(filePath_2);
   let checkedIdentity_2 =
@@ -1116,7 +1285,7 @@ async function readFileToolCall(
       devicePathRefusal,
       "Read refused by the device guard",
     );
-  if (!Z && getPlatform() === "macos") {
+  if (!hasStashedRead && getPlatform() === "macos") {
     let { own, alt } = await getScreenshotPathIdentities(filePath_2, spellings);
     checkedIdentity = own;
     checkedIdentity_2 = alt?.identity;
@@ -1124,12 +1293,12 @@ async function readFileToolCall(
   let defaultFileReadingLimits = getDefaultFileReadingLimits();
   let maxSizeBytes = fileReadingLimits?.maxSizeBytes ?? defaultFileReadingLimits.maxSizeBytes;
   let maxTokens = fileReadingLimits?.maxTokens ?? defaultFileReadingLimits.maxTokens;
-  let lt = () =>
+  let roomInfo = () =>
     computeAllowLargeRoom(context, parentMessage, {
       maxSizeBytes,
       maxTokens,
     });
-  let allowLarge_2 = allowLarge ? lt() : undefined;
+  let allowLarge_2 = allowLarge ? roomInfo() : undefined;
   if (fileReadingLimits !== undefined)
     logEvent("tengu_file_read_limits_override", {
       hasMaxTokens: fileReadingLimits.maxTokens !== undefined,
@@ -1170,13 +1339,13 @@ async function readFileToolCall(
     nestedMemoryAttachmentTriggers.push(fullFilePath);
   let pendingHandoverRead =
     context.remoteCall === undefined ? getLiveState().pendingHandoverReads.get(fullFilePath) : undefined;
-  let Yt = (Zt) => {
+  let isHandoverCopy = (mtimeMs) => {
     let agentId = context.agentId ?? "main";
     return (
       pendingHandoverRead !== undefined &&
       !pendingHandoverRead.completedBy.has(agentId) &&
       !pendingHandoverRead.unrecordableBy.has(agentId) &&
-      Math.floor(Zt) === pendingHandoverRead.mtimeMs
+      Math.floor(mtimeMs) === pendingHandoverRead.mtimeMs
     );
   };
   if (
@@ -1187,8 +1356,8 @@ async function readFileToolCall(
     limit === undefined
   )
     try {
-      let seededFileMtime = await getSeededFileMtime(fullFilePath, context.storageV5);
-      if (seededFileMtime === dedupEntry.timestamp && !Yt(seededFileMtime)) {
+      let mtimeMs = await getSeededFileMtime(fullFilePath, context.storageV5);
+      if (mtimeMs === dedupEntry.timestamp && !isHandoverCopy(mtimeMs)) {
         let fileExtensionForAnalytics = getFileExtensionForAnalytics(fullFilePath);
         logEvent("tengu_file_read_dedup", {
           source: lit_2("seeded"),
@@ -1215,8 +1384,8 @@ async function readFileToolCall(
   ) {
     if (dedupEntry.offset === offset && dedupEntry.limit === limit)
       try {
-        let fileModificationTime = await getFileModificationTimeAsync(fullFilePath);
-        if (fileModificationTime === dedupEntry.timestamp && !Yt(fileModificationTime)) {
+        let mtimeMs = await getFileModificationTimeAsync(fullFilePath);
+        if (mtimeMs === dedupEntry.timestamp && !isHandoverCopy(mtimeMs)) {
           let fileExtensionForAnalytics = getFileExtensionForAnalytics(fullFilePath);
           logEvent("tengu_file_read_dedup", {
             ...(fileExtensionForAnalytics !== undefined && {
@@ -1234,7 +1403,7 @@ async function readFileToolCall(
         }
       } catch {}
   }
-  let qt = {
+  let readRequest = {
     file_path: filePath,
     fullFilePath,
     ext,
@@ -1243,7 +1412,7 @@ async function readFileToolCall(
     pages,
     maxSizeBytes,
     maxTokens,
-    room: lt,
+    room: roomInfo,
     allowLarge: allowLarge_2,
     context,
     messageId: parentMessage?.message.id,
@@ -1252,7 +1421,7 @@ async function readFileToolCall(
   };
   try {
     return await callInnerWithFileHandle({
-      ...qt,
+      ...readRequest,
       resolvedFilePath: fullFilePath,
     });
   } catch (error) {
@@ -1261,7 +1430,7 @@ async function readFileToolCall(
       if (alternateScreenshotPath)
         try {
           return await callInnerWithFileHandle({
-            ...qt,
+            ...readRequest,
             resolvedFilePath: alternateScreenshotPath,
             approvedPaths: mapSpellingsToAlternatePath(spellings, alternateScreenshotPath),
             checkedIdentity: checkedIdentity_2,
@@ -1270,13 +1439,13 @@ async function readFileToolCall(
           if (!isENOENT(error)) throw error;
         }
       let similarFile = await findSimilarFile(fullFilePath);
-      let hn = await normalizePathForComparison(fullFilePath);
-      let ho = `File does not exist. ${FILE_NOT_FOUND_CWD_NOTE} ${getCwd()}.`;
-      if (hn) ho += ` Did you mean ${hn}?`;
-      else if (similarFile) ho += ` Did you mean ${similarFile}?`;
-      ho += separateCopyHint(FileReadTool, fullFilePath, context);
+      let normalizedPath = await normalizePathForComparison(fullFilePath);
+      let notFoundMessage = `File does not exist. ${FILE_NOT_FOUND_CWD_NOTE} ${getCwd()}.`;
+      if (normalizedPath) notFoundMessage += ` Did you mean ${normalizedPath}?`;
+      else if (similarFile) notFoundMessage += ` Did you mean ${similarFile}?`;
+      notFoundMessage += separateCopyHint(FileReadTool, fullFilePath, context);
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        encodeControlChars(ho),
+        encodeControlChars(notFoundMessage),
         "File does not exist",
       );
     }
@@ -1284,7 +1453,10 @@ async function readFileToolCall(
   }
 }
 //@ chunk-e6aww6q8.js:3177290-3177310 layout
-var memoryFileMtimeByResult = new WeakMap();
+var memoryFileMtimeByResult; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3177290", () => {
+  memoryFileMtimeByResult = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:3177310-3177380 file-local
 /**
  * 结果是记忆文件时返回基于 mtime 的新鲜度说明前缀。
@@ -1295,19 +1467,23 @@ function memoryFileFreshnessPrefix(data) {
   return memoryFreshnessNote(mtimeMs);
 }
 //@ chunk-e6aww6q8.js:3177380-3177416 layout
-var artifactCoverageNoteByResult = new WeakMap();
-var notTextNoteByResult = new WeakMap();
+var artifactCoverageNoteByResult; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var notTextNoteByResult;
+deferInit("chunk-e6aww6q8.js:3177380", () => {
+  artifactCoverageNoteByResult = new WeakMap();
+  notTextNoteByResult = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:3177416-3177514 layout
 /**
  * 把非文本说明、artifact 覆盖说明附加到文本结果末尾。
  */
 function formatTrailingResultNotes(output) {
   return [notTextNoteByResult.get(output), artifactCoverageNoteByResult.get(output)]
-    .filter((n) => n !== undefined)
+    .filter((note) => note !== undefined)
     .map(
-      (n) => `
+      (note) => `
 
-${n}`,
+${note}`,
     )
     .join("");
 }
@@ -1315,14 +1491,14 @@ ${n}`,
 /**
  * 取启动预置文件（CLAUDE.md 等）的 mtime；storageV5 下经存储接口 stat。
  */
-async function getSeededFileMtime(fullFilePath, storageV5) {
+async function getSeededFileMtime(filePath, storage) {
   if (isRemoteOnlyCheck(FILE_READ_TOOL_NAME)) throw Error("seeded file not on this machine");
-  if (isStorageV5Enabled() && storageV5 !== undefined) {
-    let r = await statViaStorage(fullFilePath, storageV5);
-    if (r === undefined) throw Error("seeded file not stat-able through the storage interface");
-    if (r !== "unserved") return r;
+  if (isStorageV5Enabled() && storage !== undefined) {
+    let statResult = await statViaStorage(filePath, storage);
+    if (statResult === undefined) throw Error("seeded file not stat-able through the storage interface");
+    if (statResult !== "unserved") return statResult;
   }
-  return getFileModificationTimeAsync(fullFilePath);
+  return getFileModificationTimeAsync(filePath);
 }
 //@ chunk-e6aww6q8.js:3177761-3177785 layout
 var CONTEXT_ROOM_SAFETY_FACTOR = 0.7;
@@ -1332,36 +1508,42 @@ var ALLOW_LARGE_BYTES_PER_TOKEN_FACTOR = 3;
 /**
  * 本轮剩余可用上下文 token：(阈值 - max(当前用量, held) - claimed) × 0.7，不小于 0。
  */
-function allowLargeRoomTokens(e, n) {
-  let r = Math.max(n, e.held()) + e.claimed();
-  return Math.max(0, Math.floor((e.threshold - r) * CONTEXT_ROOM_SAFETY_FACTOR));
+function allowLargeRoomTokens(room, usedTokens) {
+  let occupiedTokens = Math.max(usedTokens, room.held()) + room.claimed();
+  return Math.max(0, Math.floor((room.threshold - occupiedTokens) * CONTEXT_ROOM_SAFETY_FACTOR));
 }
 //@ chunk-e6aww6q8.js:3177893-3178311 layout
 /**
  * allow_large 时计算放宽额度：本地且有 contextRoom 时，若剩余 token 大于默认上限，则提高 maxTokens 与 maxSizeBytes（按每 token 字节数 ×3）。
  */
-function computeAllowLargeRoom(context, n, r) {
-  let s = context.contextRoom();
-  if (s === undefined || context.remoteCall !== undefined || context.inputFromAnotherMachine === true)
+function computeAllowLargeRoom(context, parentMessage, limits) {
+  let room = context.contextRoom();
+  if (room === undefined || context.remoteCall !== undefined || context.inputFromAnotherMachine === true)
     return {
       roomTokens: undefined,
       raised: undefined,
     };
-  let usage = n?.message.usage;
-  let y = usage ? getTokenCountFromUsage_5(usage) : undefined;
-  let S = y && getTokenCountFromUsage_2_2(y) > 0 ? getTokenCountFromUsage_2_2(y) + y.output_tokens : 0;
-  let w = allowLargeRoomTokens(s, S);
-  if (w <= r.maxTokens)
+  let usage = parentMessage?.message.usage;
+  let usageTokens = usage ? getTokenCountFromUsage_5(usage) : undefined;
+  let usedTokens =
+    usageTokens && getTokenCountFromUsage_2_2(usageTokens) > 0
+      ? getTokenCountFromUsage_2_2(usageTokens) + usageTokens.output_tokens
+      : 0;
+  let roomTokens = allowLargeRoomTokens(room, usedTokens);
+  if (roomTokens <= limits.maxTokens)
     return {
-      roomTokens: w,
+      roomTokens,
       raised: undefined,
     };
   let { bytesPerToken } = getModelContextInfo(context.model());
   return {
-    roomTokens: w,
+    roomTokens,
     raised: {
-      maxTokens: w,
-      maxSizeBytes: Math.max(r.maxSizeBytes, w * bytesPerToken * ALLOW_LARGE_BYTES_PER_TOKEN_FACTOR),
+      maxTokens: roomTokens,
+      maxSizeBytes: Math.max(
+        limits.maxSizeBytes,
+        roomTokens * bytesPerToken * ALLOW_LARGE_BYTES_PER_TOKEN_FACTOR,
+      ),
     },
   };
 }
@@ -1369,16 +1551,16 @@ function computeAllowLargeRoom(context, n, r) {
 /**
  * 记 tengu_file_read_allow_large 事件（结果、是否放宽、roomTokens、扩展名）。
  */
-function logAllowLargeOutcome(e, outcome, r, s) {
+function logAllowLargeOutcome(room, outcome, sizeFields, ext) {
   logEvent("tengu_file_read_allow_large", {
     outcome,
-    lifted: e.raised !== undefined,
-    ...(e.roomTokens !== undefined && {
-      roomTokens: e.roomTokens,
+    lifted: room.raised !== undefined,
+    ...(room.roomTokens !== undefined && {
+      roomTokens: room.roomTokens,
     }),
-    ...r,
-    ...(s !== undefined && {
-      ext: s,
+    ...sizeFields,
+    ...(ext !== undefined && {
+      ext,
     }),
   });
 }
@@ -1386,11 +1568,11 @@ function logAllowLargeOutcome(e, outcome, r, s) {
 /**
  * 根据剩余上下文与是否已用 allow_large，选择附在超限错误后的提示（可用 allow_large 重试/即使放宽也放不下/此处不可用）。
  */
-function getAllowLargeHint(e, optedIn, r) {
-  if (e.roomTokens === undefined) return optedIn ? ALLOW_LARGE_UNAVAILABLE_HINT : "";
-  if (optedIn || e.raised === undefined) return ALLOW_LARGE_NO_ROOM_HINT;
-  return (r.bytes === undefined || r.bytes <= e.raised.maxSizeBytes) &&
-    (r.tokens === undefined || r.tokens <= e.raised.maxTokens)
+function getAllowLargeHint(room, optedIn, size) {
+  if (room.roomTokens === undefined) return optedIn ? ALLOW_LARGE_UNAVAILABLE_HINT : "";
+  if (optedIn || room.raised === undefined) return ALLOW_LARGE_NO_ROOM_HINT;
+  return (size.bytes === undefined || size.bytes <= room.raised.maxSizeBytes) &&
+    (size.tokens === undefined || size.tokens <= room.raised.maxTokens)
     ? ALLOW_LARGE_RETRY_HINT
     : ALLOW_LARGE_NO_ROOM_HINT;
 }
@@ -1399,62 +1581,72 @@ function getAllowLargeHint(e, optedIn, r) {
  * 把文件过大、选区过大、token 超限三类错误重建为附带 allow_large 提示的同类错误，并在已 opt-in 时记事件。
  */
 function attachAllowLargeHintToSizeError(error, { room, optedIn, readMaxSizeBytes, ext }) {
-  let y;
-  let S;
-  let w;
+  let enrichedError;
+  let sizeFields;
+  let roomFn;
   if (error instanceof FileTooLargeError && error.maxSizeBytes === readMaxSizeBytes) {
-    w = room();
-    y = new FileTooLargeError(
+    roomFn = room();
+    enrichedError = new FileTooLargeError(
       error.sizeInBytes,
       error.maxSizeBytes,
-      getAllowLargeHint(w, optedIn, {
+      getAllowLargeHint(roomFn, optedIn, {
         bytes: error.sizeInBytes,
       }),
     );
-    S = {
+    sizeFields = {
       totalBytes: error.sizeInBytes,
     };
   } else if (error instanceof SelectedRangeTooLargeError) {
-    w = room();
-    y = new SelectedRangeTooLargeError(
+    roomFn = room();
+    enrichedError = new SelectedRangeTooLargeError(
       error.selectedBytes,
       error.maxSelectedBytes,
-      getAllowLargeHint(w, optedIn, {
+      getAllowLargeHint(roomFn, optedIn, {
         bytes: error.selectedBytes,
       }),
     );
-    S = {
+    sizeFields = {
       totalBytes: error.selectedBytes,
     };
   } else if (error instanceof MaxFileReadTokenExceededError) {
-    w = room();
-    y = new MaxFileReadTokenExceededError(
+    roomFn = room();
+    enrichedError = new MaxFileReadTokenExceededError(
       error.tokenCount,
       error.maxTokens,
-      getAllowLargeHint(w, optedIn, {
+      getAllowLargeHint(roomFn, optedIn, {
         tokens: error.tokenCount,
       }),
     );
-    S = {
+    sizeFields = {
       tokens: error.tokenCount,
     };
   } else return error;
   if (optedIn) {
-    let L = w.roomTokens === undefined ? "unavailable" : "too_large";
-    logAllowLargeOutcome(w, fromEnum(L), S, ext);
+    let outcome = roomFn.roomTokens === undefined ? "unavailable" : "too_large";
+    logAllowLargeOutcome(roomFn, fromEnum(outcome), sizeFields, ext);
   }
-  return y;
+  return enrichedError;
 }
 //@ chunk-e6aww6q8.js:3179273-3179557 facade-exports
 /**
  * 校验内容 token 数：粗估不超过上限 1/4 直接通过；字符数超过上限×128 直接抛 MaxFileReadTokenExceededError；否则调用 token 计数 API，超限抛错。
  */
-async function validateContentTokens(content, ext, maxTokens, credentials, h = false, y = false) {
+async function validateContentTokens(
+  content,
+  ext,
+  maxTokens,
+  credentials,
+  skipCharCheck = false,
+  requireExact = false,
+) {
   let maxTokens_2 = maxTokens ?? getDefaultFileReadingLimits().maxTokens;
-  let w = roughTokenCountEstimationForFileType(content, ext);
-  let estimatedTokens = y && w ? Math.max(w, Math.ceil(Buffer.byteLength(content) / MIN_BYTES_PER_TOKEN)) : w;
+  let textTokenEstimate = roughTokenCountEstimationForFileType(content, ext);
+  let estimatedTokens =
+    requireExact && textTokenEstimate
+      ? Math.max(textTokenEstimate, Math.ceil(Buffer.byteLength(content) / MIN_BYTES_PER_TOKEN))
+      : textTokenEstimate;
   if (!estimatedTokens || estimatedTokens <= maxTokens_2 / 4) return estimatedTokens || undefined;
-  if (!h && content.length > maxTokens_2 * MAX_CHARS_PER_TOKEN)
+  if (!skipCharCheck && content.length > maxTokens_2 * MAX_CHARS_PER_TOKEN)
     throw new MaxFileReadTokenExceededError(estimatedTokens, maxTokens_2);
   let exactTokens =
     (await timeAttachment("token_count", () => countTextTokensWithAPI(content, credentials))) ??
@@ -1481,27 +1673,27 @@ function createImageResponse(buffer, mediaType, originalSize, dimensions) {
 /**
  * 记 cli_pdf_read 诊断日志（请求方式、渲染结果、文件字节、页数、耗时）。
  */
-function logPdfReadDiagnostics(e, n) {
+function logPdfReadDiagnostics(startedAtMs, diagnostics) {
   logForDiagnosticsNoPII("info", "cli_pdf_read", {
-    request: n.request,
-    render: n.render,
-    outcome: n.outcome,
-    file_bytes: n.fileBytes,
-    document_pages: n.documentPages,
-    pages_rendered: n.pagesRendered,
-    duration_ms: Date.now() - e,
+    request: diagnostics.request,
+    render: diagnostics.render,
+    outcome: diagnostics.outcome,
+    file_bytes: diagnostics.fileBytes,
+    document_pages: diagnostics.documentPages,
+    pages_rendered: diagnostics.pagesRendered,
+    duration_ms: Date.now() - startedAtMs,
   });
 }
 //@ chunk-e6aww6q8.js:3179887-3180093 facade-exports
 /**
  * 页数未知的 PDF 是否要求 pages：文件大于 GrowthBook tengu_immutable_tide 阈值、pdfinfo 不是因退出码失败、且 pdftoppm 可用。
  */
-async function isUncountedPDFOverWholeReadCap(e, pdfinfoFailure) {
+async function isUncountedPDFOverWholeReadCap(pdfByteSize, pdfinfoFailure) {
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_immutable_tide", 0);
   if (
     typeof featureValue_CACHED_MAY_BE_STALE !== "number" ||
     !(featureValue_CACHED_MAY_BE_STALE > 0) ||
-    e <= featureValue_CACHED_MAY_BE_STALE
+    pdfByteSize <= featureValue_CACHED_MAY_BE_STALE
   )
     return false;
   if (
@@ -1522,11 +1714,11 @@ function toPdfExtractionError(error) {
       error.message,
       `PDF extraction failed (${error.reason})`,
     );
-  let n = Error(error.message);
+  let bareError = Error(error.message);
   return error.category === undefined || error.site === undefined
-    ? n
+    ? bareError
     : withTelemetryMessage(
-        n,
+        bareError,
         `pdf unknown (site=${error.site}, exit=${error.exitCode ?? "none"}, category=${error.category})`,
       );
 }
@@ -1564,17 +1756,17 @@ async function callInnerWithFileHandle(readArgs) {
       );
     throw error;
   } finally {
-    let h = openedFile?.close();
+    let closePromise = openedFile?.close();
     if (readArgs.context.signal.aborted || readArgs.context.pdfRenderSignal?.aborted === true)
-      h?.catch(() => {});
-    else await h;
+      closePromise?.catch(() => {});
+    else await closePromise;
   }
 }
 //@ chunk-e6aww6q8.js:3180791-3190604 fingerprint = callInner (0.38)
 /**
  * 按类型读取：.ipynb 读 notebook 单元；图片扩展名或无扩展名但魔数是图片走 readImageWithTokenBudget；PDF 做页提取或整份读取；其他用 readFileInRange 读文本，token 超限时整文件读取自动分页并附 [Truncated: PARTIAL view] 说明，最后写 readFileState。
  */
-async function callInner(e) {
+async function callInner(readArgs) {
   let {
     file_path: filePath,
     fullFilePath,
@@ -1591,16 +1783,16 @@ async function callInner(e) {
     messageId,
     io,
     totalPages,
-  } = e;
+  } = readArgs;
   let { readFileState } = context;
   if (isNotebookPath(resolvedFilePath)) {
     let cells = await readNotebook((await io()).handle);
     let cellsJson = jsonStringify(cells);
     let cellsJsonBytes = Buffer.byteLength(cellsJson);
     if (cellsJsonBytes > maxSizeBytes) {
-      let Ho = NOTEBOOK_TOO_LARGE_HINT();
+      let notebookHint = NOTEBOOK_TOO_LARGE_HINT();
       throw Error(
-        `Notebook content (${formatFileSize(cellsJsonBytes)}) exceeds maximum allowed size (${formatFileSize(maxSizeBytes)}). ${Ho}`,
+        `Notebook content (${formatFileSize(cellsJsonBytes)}) exceeds maximum allowed size (${formatFileSize(maxSizeBytes)}). ${notebookHint}`,
       );
     }
     await validateContentTokens(cellsJson, ext, maxTokens, context.credentials);
@@ -1631,21 +1823,21 @@ async function callInner(e) {
       data,
     };
   }
-  let Ie = imageLimitsForModel(context.mainLoopModel());
-  let Me = false;
+  let imageLimits = imageLimitsForModel(context.mainLoopModel());
+  let isImageByMagic = false;
   if (ext === "")
     try {
       if ((await (await io()).handle.stat()).isFile()) {
         let handleUpTo = await readHandleUpTo((await io()).handle, 16, "file");
-        Me = Ph(handleUpTo) !== null;
+        isImageByMagic = sniffImageMediaType(handleUpTo) !== null;
       }
     } catch {}
-  if (IMAGE_EXTENSIONS.has(ext) || Me) {
+  if (IMAGE_EXTENSIONS.has(ext) || isImageByMagic) {
     let imageWithTokenBudget = await readImageWithTokenBudget(
       await io(),
       maxTokens,
       undefined,
-      Ie,
+      imageLimits,
       context.remoteCall === undefined
         ? MODEL_COPY_IMAGE_BYTES
         : mediaLimitsForRoute(context.remoteCall.origin.transport).imageMaxRawBytes,
@@ -1661,15 +1853,15 @@ async function callInner(e) {
       filePath: fullFilePath,
       content: imageWithTokenBudget.file.base64,
     });
-    let un = imageWithTokenBudget.file.dimensions
+    let imageMetadata = imageWithTokenBudget.file.dimensions
       ? createImageMetadataText(imageWithTokenBudget.file.dimensions)
       : null;
     return {
       data: imageWithTokenBudget,
-      ...(un && {
+      ...(imageMetadata && {
         newMessages: [
           createUserMessage({
-            content: un,
+            content: imageMetadata,
             isMeta: true,
           }),
         ],
@@ -1679,13 +1871,13 @@ async function callInner(e) {
   if (isDocumentExtension(ext)) {
     let now = Date.now();
     if (pages !== undefined) {
-      let br = validatePdfPagesParam(pages, getPdfPageBudget(context));
-      if (!br.ok)
+      let pagesValidation = validatePdfPagesParam(pages, getPdfPageBudget(context));
+      if (!pagesValidation.ok)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          br.message,
+          pagesValidation.message,
           "Invalid or oversized PDF pages parameter",
         );
-      let range = br.range;
+      let range = pagesValidation.range;
       if (context.remoteCall === undefined)
         addPdfPagesThisTurn(context.session, range.lastPage - range.firstPage + 1);
       let { ioPath, handle } = await io();
@@ -1701,11 +1893,11 @@ async function callInner(e) {
           context.storageV5,
         );
       } catch (error) {
-        let zo = error instanceof AbortError_2 ? "aborted" : "threw";
+        let renderOutcome = error instanceof AbortError_2 ? "aborted" : "threw";
         logPdfReadDiagnostics(now, {
           request: "page_range",
-          render: zo,
-          outcome: zo,
+          render: renderOutcome,
+          outcome: renderOutcome,
           fileBytes: null,
           documentPages: totalPages ?? null,
           pagesRendered: null,
@@ -1743,7 +1935,7 @@ async function callInner(e) {
         filePath: fullFilePath,
         content: `PDF pages ${pages}`,
       });
-      let Cr =
+      let pageData =
         context.storageV5 !== undefined
           ? await readPdfExtractedPages(
               context.storageV5,
@@ -1752,7 +1944,7 @@ async function callInner(e) {
             )
           : await (async () => {
               let imageFiles = (await readdir(pageExtraction.data.file.outputDir))
-                .filter((rs) => rs.endsWith(".jpg"))
+                .filter((fileName) => fileName.endsWith(".jpg"))
                 .sort();
               return Promise.all(
                 imageFiles.map((imageFile) =>
@@ -1762,11 +1954,11 @@ async function callInner(e) {
             })();
       let pages_2 = (
         await Promise.all(
-          Cr.map((data) =>
+          pageData.map((data) =>
             maybeResizeAndDownsampleImageBlock({
               data,
               mediaType: "jpeg",
-              limits: Ie,
+              limits: imageLimits,
             }),
           ),
         )
@@ -1784,12 +1976,12 @@ async function callInner(e) {
               }),
             },
       );
-      let { v5SidecarScope, ...Or } = pageExtraction.data;
+      let { v5SidecarScope, ...pagesResult } = pageExtraction.data;
       return {
         data: {
-          ...Or,
+          ...pagesResult,
           file: {
-            ...Or.file,
+            ...pagesResult.file,
             filePath: resolvedFilePath,
           },
           firstPage: range.firstPage,
@@ -1800,20 +1992,20 @@ async function callInner(e) {
         },
       };
     }
-    let ko =
+    let mediaLimits =
       context.remoteCall === undefined ? undefined : mediaLimitsForRoute(context.remoteCall.origin.transport);
-    let pdfMaxPagesPerRead = ko?.pdfMaxPagesPerRead ?? MAX_PDF_PAGES_PER_READ;
-    let ao = await io();
-    let stats = await ao.handle.stat();
-    let pdfInfo = await getPdfPageCount(ao.ioPath, {
-      handle: ao.handle,
+    let pdfMaxPagesPerRead = mediaLimits?.pdfMaxPagesPerRead ?? MAX_PDF_PAGES_PER_READ_2;
+    let ioHandle = await io();
+    let stats = await ioHandle.handle.stat();
+    let pdfInfo = await getPdfPageCount(ioHandle.ioPath, {
+      handle: ioHandle.handle,
       size: stats.size,
       signal: context.signal,
     });
     if (pdfInfo.pageCount !== null && pdfInfo.pageCount > MAX_PDF_PAGES_PER_TURN) {
       if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_misty_sunbeam", false))
         return callInner({
-          ...e,
+          ...readArgs,
           pages: `1-${Math.min(MAX_PDF_PAGES_PER_TURN, pdfMaxPagesPerRead)}`,
           totalPages: pdfInfo.pageCount,
         });
@@ -1830,17 +2022,17 @@ async function callInner(e) {
         reason: "page_count_unknown",
         message: `This PDF's page count is unknown (${describePdfinfoFailure(pdfInfo.pdfinfoFailure)}). At ${formatFileSize(stats.size)} it may be too long to read whole. Use the pages parameter to read specific page ranges (e.g., pages: "1-5"). Maximum ${pdfMaxPagesPerRead} pages per request.`,
       });
-    if (ko !== undefined && stats.size > ko.wholePdfMaxRawBytes) {
-      let br = `This PDF (${formatFileSize(stats.size)}) is larger than can be returned whole from this machine to the calling session (at most ${formatFileSize(ko.wholePdfMaxRawBytes)}). Use the pages parameter with at most ${ko.pdfMaxPagesPerRead} pages per call (for example pages: 1-3, which come back as images), or read the file where the session runs.`;
+    if (mediaLimits !== undefined && stats.size > mediaLimits.wholePdfMaxRawBytes) {
+      let tooLargeMessage = `This PDF (${formatFileSize(stats.size)}) is larger than can be returned whole from this machine to the calling session (at most ${formatFileSize(mediaLimits.wholePdfMaxRawBytes)}). Use the pages parameter with at most ${mediaLimits.pdfMaxPagesPerRead} pages per call (for example pages: 1-3, which come back as images), or read the file where the session runs.`;
       context.remoteCall?.onToolVerdict?.(
         {
           kind: "refused",
           code: "invalid_request",
         },
-        br,
+        tooLargeMessage,
       );
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        br,
+        tooLargeMessage,
         "Served whole-PDF read over the transport budget",
       );
     }
@@ -1854,13 +2046,13 @@ async function callInner(e) {
         pagesRendered: null,
       });
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Reading full PDFs is not supported with this model. Use a newer model (Sonnet 3.5 v2 or later), or use the pages parameter to read specific page ranges (e.g., pages: "1-5", maximum ${MAX_PDF_PAGES_PER_READ} pages per request). Page extraction requires poppler-utils: install with \`brew install poppler\` on macOS or \`apt-get install poppler-utils\` on Debian/Ubuntu.`,
+        `Reading full PDFs is not supported with this model. Use a newer model (Sonnet 3.5 v2 or later), or use the pages parameter to read specific page ranges (e.g., pages: "1-5", maximum ${MAX_PDF_PAGES_PER_READ_2} pages per request). Page extraction requires poppler-utils: install with \`brew install poppler\` on macOS or \`apt-get install poppler-utils\` on Debian/Ubuntu.`,
         "PDF unsupported on current model",
       );
     }
     let pdfReadResult;
     try {
-      pdfReadResult = await readPDF(ao.handle, ao.ioPath);
+      pdfReadResult = await readPDF(ioHandle.handle, ioHandle.ioPath);
     } catch (error) {
       logPdfReadDiagnostics(now, {
         request: "whole_file",
@@ -1881,7 +2073,7 @@ async function callInner(e) {
       pagesRendered: null,
     });
     if (!pdfReadResult.success) throw toPdfExtractionError(pdfReadResult.error);
-    let rr = {
+    let pdfResult = {
       ...pdfReadResult.data,
       file: {
         ...pdfReadResult.data.file,
@@ -1892,25 +2084,25 @@ async function callInner(e) {
       operation: "read",
       tool: "FileReadTool",
       filePath: fullFilePath,
-      content: rr.file.base64,
+      content: pdfResult.file.base64,
     });
     return {
-      data: rr,
+      data: pdfResult,
     };
   }
   let maxSizeBytes_2 = allowLarge?.raised?.maxSizeBytes ?? maxSizeBytes;
   let maxTokens_2 = allowLarge?.raised?.maxTokens ?? maxTokens;
-  let fileExtensionForAnalytics = getFileExtensionForAnalytics(fullFilePath);
-  let Je = {
+  let ext_2 = getFileExtensionForAnalytics(fullFilePath);
+  let allowLargeContext = {
     room,
     optedIn: allowLarge !== undefined,
     readMaxSizeBytes: maxSizeBytes_2,
-    ext: fileExtensionForAnalytics,
+    ext: ext_2,
   };
-  let nt = offset === 0 ? 0 : offset - 1;
+  let offsetIndex = offset === 0 ? 0 : offset - 1;
   let rangeRead = await readFileInRange(
     resolvedFilePath,
-    nt,
+    offsetIndex,
     limit,
     limit === undefined ? maxSizeBytes_2 : undefined,
     context.signal,
@@ -1923,27 +2115,27 @@ async function callInner(e) {
           handle: (await io()).handle,
         },
   ).catch((error) => {
-    throw attachAllowLargeHintToSizeError(error, Je);
+    throw attachAllowLargeHintToSizeError(error, allowLargeContext);
   });
   let { lineCount, totalLines, totalBytes, readBytes, mtimeMs } = rangeRead;
   let sessionFileType = getAgentOutputTaskId(fullFilePath);
-  let qt = sessionFileType !== null ? context.taskRegistry.get(sessionFileType) : undefined;
+  let task = sessionFileType !== null ? context.taskRegistry.get(sessionFileType) : undefined;
   let textContent =
-    qt && isLocalShellTask(qt)
+    task && isLocalShellTask(task)
       ? consumeClaudeCodeHints(rangeRead.content, {
-          command: qt.command,
+          command: task.command,
           pendingHint: context.session.pendingHint,
           isMainThread: !context.agentId,
           surface: "file_read",
         })
       : rangeRead.content;
-  let rn = textContent;
+  let content = textContent;
   let numLines = lineCount;
   let limit_2 = limit;
   let truncationBanner;
-  let ho = false;
+  let truncated = false;
   let tokenCount;
-  let Kn = (offset ?? 1) <= 1 && limit === undefined && pages === undefined;
+  let isWholeFileRead = (offset ?? 1) <= 1 && limit === undefined && pages === undefined;
   try {
     tokenCount = await validateContentTokens(
       allowLarge?.raised
@@ -1956,7 +2148,7 @@ async function callInner(e) {
       ext,
       maxTokens_2,
       context.credentials,
-      Kn,
+      isWholeFileRead,
       allowLarge?.raised !== undefined,
     );
     if (allowLarge?.raised && tokenCount !== undefined) {
@@ -1965,19 +2157,19 @@ async function callInner(e) {
       context.contextRoom()?.claim(tokenCount);
     }
   } catch (error) {
-    if (error instanceof MaxFileReadTokenExceededError && Kn) {
+    if (error instanceof MaxFileReadTokenExceededError && isWholeFileRead) {
       tokenCount = error.tokenCount;
       let allowLargeHint = getAllowLargeHint(room(), allowLarge !== undefined, {
         tokens: error.tokenCount,
       });
-      let un =
+      let sizeDescription =
         allowLarge?.raised && error.maxTokens > maxTokens
           ? `${ALLOW_LARGE_PARAM} had room for ${error.maxTokens} tokens this turn`
           : `cap ${maxTokens}`;
       let lines = textContent.split(`
 `);
       let max = Math.max(0.5, textContent.length / Math.max(1, error.tokenCount));
-      let yo = (Hr) => Hr.length / max;
+      let tokensFor = (text) => text.length / max;
       let max_2 = Math.max(
         1,
         Math.min(
@@ -1985,44 +2177,44 @@ async function callInner(e) {
           Math.floor(((lines.length * maxTokens) / Math.max(1, error.tokenCount)) * 0.85),
         ),
       );
-      let joined = lines.slice(0, max_2).join(`
+      let text = lines.slice(0, max_2).join(`
 `);
       for (let idx = 0; idx < 6; idx++) {
-        if (yo(joined) <= maxTokens || max_2 <= 1) break;
+        if (tokensFor(text) <= maxTokens || max_2 <= 1) break;
         max_2 = Math.max(1, Math.floor(max_2 * 0.7));
-        joined = lines.slice(0, max_2).join(`
+        text = lines.slice(0, max_2).join(`
 `);
       }
-      if (yo(joined) > maxTokens || joined.trim() === "") {
+      if (tokensFor(text) > maxTokens || text.trim() === "") {
         let max_2 = Math.max(1, Math.floor(maxTokens * max * 0.85));
         for (let idx = 0; idx < 6; idx++) {
-          joined = textContent.slice(0, max_2);
-          if (yo(joined) <= maxTokens) break;
+          text = textContent.slice(0, max_2);
+          if (tokensFor(text) <= maxTokens) break;
           max_2 = Math.max(1, Math.floor(max_2 * 0.7));
         }
-        let code = joined.charCodeAt(joined.length - 1);
-        if (code >= 55296 && code <= 56319) joined = joined.slice(0, -1);
-        ho = true;
+        let code = text.charCodeAt(text.length - 1);
+        if (code >= 55296 && code <= 56319) text = text.slice(0, -1);
+        truncated = true;
       }
-      rn = joined;
-      numLines = ho
+      content = text;
+      numLines = truncated
         ? countCharInString(
-            joined,
+            text,
             `
 `,
           ) + 1
         : max_2;
       limit_2 = numLines;
       truncationBanner =
-        !ho && numLines < totalLines
+        !truncated && numLines < totalLines
           ? TRUNCATED_PARTIAL_VIEW_PREFIX +
-            `${fullFilePath}: showing lines 1-${numLines} of ${totalLines} total (${error.tokenCount} tokens, ${un}). Call ${FILE_READ_TOOL_NAME} with offset=${numLines + 1} limit=${numLines} for the next page, or ${GREP_TOOL_NAME} to find a specific section.${allowLargeHint} Do NOT answer from this page alone if the answer may be further in the file.]`
+            `${fullFilePath}: showing lines 1-${numLines} of ${totalLines} total (${error.tokenCount} tokens, ${sizeDescription}). Call ${FILE_READ_TOOL_NAME} with offset=${numLines + 1} limit=${numLines} for the next page, or ${GREP_TOOL_NAME} to find a specific section.${allowLargeHint} Do NOT answer from this page alone if the answer may be further in the file.]`
           : TRUNCATED_PARTIAL_VIEW_PREFIX +
-            `${fullFilePath}: showing the first ${joined.length} of ${textContent.length} characters (${error.tokenCount} tokens, ${un}); this file has very long lines and cannot be paginated by line. Use ${GREP_TOOL_NAME} to find a specific section, or ${FILE_READ_TOOL_NAME} with offset/limit to page through it.${allowLargeHint} Do NOT answer from this excerpt alone if the answer may be elsewhere in the file.]`;
-    } else throw attachAllowLargeHintToSizeError(error, Je);
+            `${fullFilePath}: showing the first ${text.length} of ${textContent.length} characters (${error.tokenCount} tokens, ${sizeDescription}); this file has very long lines and cannot be paginated by line. Use ${GREP_TOOL_NAME} to find a specific section, or ${FILE_READ_TOOL_NAME} with offset/limit to page through it.${allowLargeHint} Do NOT answer from this excerpt alone if the answer may be elsewhere in the file.]`;
+    } else throw attachAllowLargeHintToSizeError(error, allowLargeContext);
   }
   readFileState.set(fullFilePath, {
-    content: rn,
+    content,
     timestamp: Math.floor(mtimeMs),
     offset,
     limit: limit_2,
@@ -2033,23 +2225,24 @@ async function callInner(e) {
   let nestedMemoryAttachmentTriggers = context.nestedMemoryAttachmentTriggers;
   if (nestedMemoryAttachmentTriggers && !nestedMemoryAttachmentTriggers.includes(fullFilePath))
     nestedMemoryAttachmentTriggers.push(fullFilePath);
-  let fo;
-  let To;
-  let bo;
+  let artifactRead;
+  let artifactCoverageNote;
+  let commitHandoverRead;
   if (context.remoteCall === undefined && getLiveState().pendingHandoverReads.has(fullFilePath)) {
-    let { prepareHandoverRead, describeHandoverCoverage } = await import("./chunk-4jdhvqss.js");
+    let { prepareHandoverRead, describeHandoverCoverage } =
+      await import("../../services/artifacts/handoverRead.js");
     let handoverRead = await prepareHandoverRead(fullFilePath, context, messageId, {
-      firstLine: nt,
-      lineCount: ho ? numLines - 1 : numLines,
+      firstLine: offsetIndex,
+      lineCount: truncated ? numLines - 1 : numLines,
       totalLines,
       mtimeMs,
     });
-    fo = handoverRead.artifactRead;
+    artifactRead = handoverRead.artifactRead;
     if (handoverRead.remaining !== undefined)
-      To = `[This file is the saved source of artifact ${handoverRead.remaining.slug} at version ${handoverRead.remaining.ver} (${describeHandoverCoverage(handoverRead.remaining)}); that version counts as viewed only once you have Read every line of it.]`;
-    bo = () => {
-      let ao = handoverRead.commit();
-      if (ao !== undefined) textResult.artifactRead = ao;
+      artifactCoverageNote = `[This file is the saved source of artifact ${handoverRead.remaining.slug} at version ${handoverRead.remaining.ver} (${describeHandoverCoverage(handoverRead.remaining)}); that version counts as viewed only once you have Read every line of it.]`;
+    commitHandoverRead = () => {
+      let artifactReadResult = handoverRead.commit();
+      if (artifactReadResult !== undefined) textResult.artifactRead = artifactReadResult;
       else if (textResult.artifactRead !== undefined) delete textResult.artifactRead;
     };
   }
@@ -2057,7 +2250,7 @@ async function callInner(e) {
     type: "text",
     file: {
       filePath,
-      content: rn,
+      content,
       numLines,
       startLine: truncationBanner !== undefined ? Math.max(1, offset) : offset,
       totalLines,
@@ -2065,12 +2258,12 @@ async function callInner(e) {
         truncatedByTokenCap: true,
       }),
     },
-    ...(fo && {
-      artifactRead: fo,
+    ...(artifactRead && {
+      artifactRead,
     }),
   };
   if (isAutoMemFilePath(fullFilePath)) memoryFileMtimeByResult.set(textResult, mtimeMs);
-  if (To !== undefined) artifactCoverageNoteByResult.set(textResult, To);
+  if (artifactCoverageNote !== undefined) artifactCoverageNoteByResult.set(textResult, artifactCoverageNote);
   if (rangeRead.notText !== undefined)
     notTextNoteByResult.set(textResult, fileReadEncodingNote(rangeRead.notText));
   if (truncationBanner !== undefined) setCachedReadingLimit(textResult, truncationBanner);
@@ -2078,20 +2271,20 @@ async function callInner(e) {
     operation: "read",
     tool: "FileReadTool",
     filePath: fullFilePath,
-    content: rn,
+    content,
   });
   let analyticsExt = detectSessionFileType(fullFilePath);
   logEvent("tengu_session_file_read", {
     totalLines,
     readLines: numLines,
     totalBytes,
-    readBytes: truncationBanner !== undefined ? Buffer.byteLength(rn, "utf8") : readBytes,
+    readBytes: truncationBanner !== undefined ? Buffer.byteLength(content, "utf8") : readBytes,
     offset,
     ...(limit !== undefined && {
       limit,
     }),
-    ...(fileExtensionForAnalytics !== undefined && {
-      ext: fileExtensionForAnalytics,
+    ...(ext_2 !== undefined && {
+      ext: ext_2,
     }),
     ...(messageId !== undefined && {
       messageID: sanitizeMarkName(messageId),
@@ -2114,12 +2307,12 @@ async function callInner(e) {
           tokens: tokenCount,
         }),
       },
-      fileExtensionForAnalytics,
+      ext_2,
     );
   return {
     data: textResult,
-    ...(bo && {
-      afterResultCommitted: bo,
+    ...(commitHandoverRead && {
+      afterResultCommitted: commitHandoverRead,
     }),
   };
 }
@@ -2130,94 +2323,114 @@ var IMAGE_STREAM_CHUNK_BYTES = 65536;
 /**
  * 读取图片字节：句柄或路径，可指定最大字节数。
  */
-async function readImageBytes(e, n, r) {
-  if (typeof e !== "string") {
-    if (n === undefined) return readImageBytesFromHandle(e.handle, e.ioPath, r);
-    let stats = await e.handle.stat();
-    return stats.isFile() ? (await readHandleBounded(e.handle, n, stats.size)).bytes : Buffer.alloc(0);
+async function readImageBytes(source, maxBytes, signal) {
+  if (typeof source !== "string") {
+    if (maxBytes === undefined) return readImageBytesFromHandle(source.handle, source.ioPath, signal);
+    let stats = await source.handle.stat();
+    return stats.isFile()
+      ? (await readHandleBounded(source.handle, maxBytes, stats.size)).bytes
+      : Buffer.alloc(0);
   }
-  if (n !== undefined) return getFsImplementation().readFileBytes(e, n);
-  await using s = await open(e, constants.O_RDONLY | READ_LIMITS);
-  return await readImageBytesFromHandle(s, e, undefined);
+  if (maxBytes !== undefined) return getFsImplementation().readFileBytes(source, maxBytes);
+  await using fileHandle = await open(source, constants.O_RDONLY | READ_LIMITS);
+  return await readImageBytesFromHandle(fileHandle, source, undefined);
 }
 //@ chunk-e6aww6q8.js:3190936-3191756 layout
 /**
  * 从句柄读图片：普通文件超过上限直接拒绝；管道/设备按块读取到上限，超过则报错。
  */
-async function readImageBytesFromHandle(e, n, r) {
-  let stats = await e.stat();
+async function readImageBytesFromHandle(handle, ioPath, signal) {
+  let stats = await handle.stat();
   if (stats.isFile()) {
-    let L =
+    let readResult =
       stats.size > MAX_IMAGE_READ_BYTES
         ? undefined
-        : await readHandleBounded(e, MAX_IMAGE_READ_BYTES, stats.size);
-    if (L === undefined || L.overLimit)
+        : await readHandleBounded(handle, MAX_IMAGE_READ_BYTES, stats.size);
+    if (readResult === undefined || readResult.overLimit)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `File is too large to read as an image (the limit is ${formatFileSize(MAX_IMAGE_READ_BYTES)}): ${n}. If it is an image, resize it or export a smaller copy, then read that.`,
+        `File is too large to read as an image (the limit is ${formatFileSize(MAX_IMAGE_READ_BYTES)}): ${ioPath}. If it is an image, resize it or export a smaller copy, then read that.`,
         "File over the image read limit",
       );
-    return L.bytes;
+    return readResult.bytes;
   }
-  let h = [];
-  let y = Buffer.alloc(0);
-  let S = 0;
-  let w = 0;
-  while (w <= MAX_IMAGE_READ_BYTES) {
-    if (r?.aborted) throw new AbortError_2();
-    if (S === y.length) {
-      y = Buffer.allocUnsafe(Math.min(Math.max(w, IMAGE_STREAM_CHUNK_BYTES), MAX_IMAGE_READ_BYTES + 1 - w));
-      h.push(y);
-      S = 0;
+  let chunks = [];
+  let chunk = Buffer.alloc(0);
+  let chunkFill = 0;
+  let totalBytes = 0;
+  while (totalBytes <= MAX_IMAGE_READ_BYTES) {
+    if (signal?.aborted) throw new AbortError_2();
+    if (chunkFill === chunk.length) {
+      chunk = Buffer.allocUnsafe(
+        Math.min(Math.max(totalBytes, IMAGE_STREAM_CHUNK_BYTES), MAX_IMAGE_READ_BYTES + 1 - totalBytes),
+      );
+      chunks.push(chunk);
+      chunkFill = 0;
     }
-    let L = e.read(y, S, y.length - S, null);
-    let { bytesRead } = await (r === undefined ? L : raceWithAbortSignal(L, r, () => new AbortError_2()));
+    let readPromise = handle.read(chunk, chunkFill, chunk.length - chunkFill, null);
+    let { bytesRead } = await (signal === undefined
+      ? readPromise
+      : raceWithAbortSignal(readPromise, signal, () => new AbortError_2()));
     if (bytesRead === 0) break;
-    S += bytesRead;
-    w += bytesRead;
+    chunkFill += bytesRead;
+    totalBytes += bytesRead;
   }
-  if (w > MAX_IMAGE_READ_BYTES)
+  if (totalBytes > MAX_IMAGE_READ_BYTES)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Cannot read this as an image: ${n} is a pipe or a device, not a regular file, and it sent more than ${formatFileSize(MAX_IMAGE_READ_BYTES)} without ending.`,
+      `Cannot read this as an image: ${ioPath} is a pipe or a device, not a regular file, and it sent more than ${formatFileSize(MAX_IMAGE_READ_BYTES)} without ending.`,
       "Image stream over the read limit",
     );
-  return Buffer.concat(h, w);
+  return Buffer.concat(chunks, totalBytes);
 }
 //@ chunk-e6aww6q8.js:3191756-3193372 facade-exports = readImageWithTokenBudget (0.561)
 /**
  * 按 token 预算读取图片：校验非空与魔数，按模型限制缩放/重编码，超出字节上限再压缩；估算 token 超出上限时压缩到 token 限制，失败则降为 400x400 JPEG。
  */
 async function readImageWithTokenBudget(
-  e,
+  source,
   maxTokens = getDefaultFileReadingLimits().maxTokens,
-  r,
-  s,
-  h = MODEL_COPY_IMAGE_BYTES,
-  y = true,
-  S,
+  maxBytes,
+  imageLimits,
+  maxRawBytes = MODEL_COPY_IMAGE_BYTES,
+  allowDirectWebp = true,
+  signal,
 ) {
-  let w = typeof e === "string" ? e : e.ioPath;
-  let imageBuffer = await readImageBytes(e, r, S);
+  let labelPath = typeof source === "string" ? source : source.ioPath;
+  let imageBuffer = await readImageBytes(source, maxBytes, signal);
   let originalSize = imageBuffer.length;
   if (originalSize === 0)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Image file is empty: ${w}`,
+      `Image file is empty: ${labelPath}`,
       "Image file is empty",
     );
-  let detectedMediaType = Ph(imageBuffer);
+  let detectedMediaType = sniffImageMediaType(imageBuffer);
   if (detectedMediaType === null)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `File has an image extension but its content is not a valid PNG/JPEG/GIF/WebP. Detected: ${detectHtmlDocument(imageBuffer)}. This usually means a download saved an error/login page instead of the image. Use \`file "${w}"\` to confirm, or read it as text with ${BASH_TOOL_NAME} (e.g. \`head -c 500\`).`,
+      `File has an image extension but its content is not a valid PNG/JPEG/GIF/WebP. Detected: ${detectHtmlDocument(imageBuffer)}. This usually means a download saved an error/login page instead of the image. Use \`file "${labelPath}"\` to confirm, or read it as text with ${BASH_TOOL_NAME} (e.g. \`head -c 500\`).`,
       "Image extension but invalid magic bytes",
     );
   let detectedFormat = detectedMediaType.split("/")[1] || "png";
   let result;
   try {
-    let resized = await maybeResizeAndDownsampleImageBuffer(imageBuffer, originalSize, detectedFormat, s, {
-      directWebpMaxBytes: y ? webpMaxBytesIfOn(h) : undefined,
-    });
+    let resized = await maybeResizeAndDownsampleImageBuffer(
+      imageBuffer,
+      originalSize,
+      detectedFormat,
+      imageLimits,
+      {
+        directWebpMaxBytes: allowDirectWebp ? webpMaxBytesIfOn(maxRawBytes) : undefined,
+      },
+    );
     let buffer = resized.buffer;
-    if (buffer.length > h) buffer = await compressToJpegUnderBytes(resized.buffer, h, resized.mediaType);
-    buffer = await chooseImageEncoding(imageBuffer, resized.buffer, buffer, h, y, resized.losslessWebp);
+    if (buffer.length > maxRawBytes)
+      buffer = await compressToJpegUnderBytes(resized.buffer, maxRawBytes, resized.mediaType);
+    buffer = await chooseImageEncoding(
+      imageBuffer,
+      resized.buffer,
+      buffer,
+      maxRawBytes,
+      allowDirectWebp,
+      resized.losslessWebp,
+    );
     result = createImageResponse(
       buffer,
       detectImageFormatFromBuffer(buffer).slice(6),
@@ -2236,15 +2449,15 @@ async function readImageWithTokenBudget(
   let dimensions = result.file.dimensions;
   let displayWidth = dimensions?.displayWidth;
   let displayHeight = dimensions?.displayHeight;
-  let Ae;
-  if (displayWidth && displayHeight) Ae = imageTileCount(displayWidth, displayHeight);
+  let tileCount;
+  if (displayWidth && displayHeight) tileCount = imageTileCount(displayWidth, displayHeight);
   else {
     let webpHeader = parseWebpHeader(imageBuffer);
-    Ae = webpHeader
+    tileCount = webpHeader
       ? imageTileCount(webpHeader.width, webpHeader.height)
-      : imageTileCount(s.maxWidth, s.maxHeight);
+      : imageTileCount(imageLimits.maxWidth, imageLimits.maxHeight);
   }
-  if (Ae > maxTokens)
+  if (tileCount > maxTokens)
     try {
       let compressed = await compressImageBufferWithTokenLimit(imageBuffer, maxTokens, detectedMediaType);
       return {
@@ -2257,7 +2470,7 @@ async function readImageWithTokenBudget(
       };
     } catch (error) {
       logForDebugging(
-        `Image compression failed for ${w}: ${error instanceof Error ? error.message : String(error)}`,
+        `Image compression failed for ${labelPath}: ${error instanceof Error ? error.message : String(error)}`,
         {
           level: "error",
         },
@@ -2277,7 +2490,7 @@ async function readImageWithTokenBudget(
         return createImageResponse(fallbackBuffer, "jpeg", originalSize);
       } catch (error) {
         logForDebugging(
-          `Fallback image compression failed for ${w}: ${error instanceof Error ? error.message : String(error)}`,
+          `Fallback image compression failed for ${labelPath}: ${error instanceof Error ? error.message : String(error)}`,
           {
             level: "error",
           },
@@ -2286,119 +2499,6 @@ async function readImageWithTokenBudget(
       }
     }
   return result;
-}
-//@ chunk-qg0af0yq.js:8349-8629 placement
-/**
- * 任一路径拼写是设备/进程文件（/dev/zero、/proc/*\/environ 等）时返回拒绝文案；无法解析路径时也拒绝。
- */
-function getDevicePathRefusal(filePath, n) {
-  if (n.spellings.some((spelling) => isBlockedDevicePath(spelling)))
-    return `Cannot read '${encodeControlChars(filePath)}': this path names a device or process file that this tool does not read.`;
-  return n.unresolved
-    ? `${unresolvablePathMessage(filePath)}, so it cannot be told apart from a device or process file that this tool does not read.`
-    : undefined;
-}
-//@ chunk-qg0af0yq.js:8629-9202 fingerprint = BLOCKED_DEVICE_PATHS (0.808)
-/**
- * 被拒读的设备路径集合（/dev/zero、/dev/random、/dev/stdin、/dev/tty、/proc/kmsg、/dev/fd/0-2 等）及相关正则。
- */
-var BLOCKED_DEVICE_PATHS = new Set([
-  "/dev/zero",
-  "/dev/random",
-  "/dev/urandom",
-  "/dev/full",
-  "/dev/stdin",
-  "/dev/tty",
-  "/dev/console",
-  "/proc/kmsg",
-  "/dev/stdout",
-  "/dev/stderr",
-  "/dev/fd/0",
-  "/dev/fd/1",
-  "/dev/fd/2",
-]);
-var PROC_ROOT_PREFIX_RE = /^\/proc\/[^/]+\/root(?=\/)/;
-var PROC_TASK_PREFIX_RE = /^(\/proc\/[^/]+)\/task\/[^/]+(?=\/)/;
-var PROC_SELF_CWD_RE = new RegExp(`^/proc/(?:self|${process.pid})/cwd(?=/)`);
-var PROC_FD_TRAVERSAL_RE =
-  /^\/proc\/[^/]+\/cwd\/|^\/proc\/[^/]+\/fd\/\d+\/|^\/dev\/fd\/\d+\/|^\/dev\/(?:stdin|stdout|stderr)\/|^\/proc\/[^/]+\/map_files(\/|$)/;
-var OTHER_PROCESS_FD_RE = new RegExp(`^/proc/(?!self/|${process.pid}/)[^/]+/fd/\\d+$`);
-var TTY_DEVICE_RE = /^\/dev\/(?:pts\/(?:\d+|ptmx)|ptmx|tty[^/]*)$/;
-var MAX_PROC_PREFIX_STRIP_ROUNDS = 8;
-//@ chunk-qg0af0yq.js:9202-9673 fingerprint = isBlockedDevicePath (0.964)
-/**
- * 路径是否为会阻塞或泄露的设备/进程文件：规范化后匹配黑名单、tty、fd 穿越、其他进程 fd、/proc/<pid>/(environ|cmdline|mem|...)，并剥离 /proc/<pid>/root、task 前缀循环判断（最多 8 轮）。
- */
-function isBlockedDevicePath(filePath) {
-  let normalized = posix.normalize(filePath);
-  for (let i = 0; ; i++) {
-    if (PROC_SELF_CWD_RE.test(normalized))
-      normalized = posix.normalize(normalized.replace(PROC_SELF_CWD_RE, () => getFsImplementation().cwd()));
-    if (
-      BLOCKED_DEVICE_PATHS.has(normalized) ||
-      TTY_DEVICE_RE.test(normalized) ||
-      PROC_FD_TRAVERSAL_RE.test(normalized) ||
-      OTHER_PROCESS_FD_RE.test(normalized) ||
-      (normalized.startsWith("/proc/") &&
-        (normalized.endsWith("/fd/0") || normalized.endsWith("/fd/1") || normalized.endsWith("/fd/2"))) ||
-      /^\/proc\/[^/]+\/(environ|cmdline|auxv|maps|smaps|smaps_rollup|numa_maps|pagemap|mem|stat|statm|status|syscall|stack)$/.test(
-        normalized,
-      )
-    )
-      return true;
-    let replaced = normalized.replace(PROC_ROOT_PREFIX_RE, "").replace(PROC_TASK_PREFIX_RE, "$1");
-    if (replaced === normalized) return false;
-    if (i >= MAX_PROC_PREFIX_STRIP_ROUNDS) return true;
-    normalized = replaced;
-  }
-}
-//@ chunk-847rdpmn.js:4662-4810 placement
-/**
- * 读取权限检查时记录的路径拼写（无记录时重新遍历），并标出是否有未解析的路径。
- */
-function readPermissionSpellings(context, n) {
-  let r = consumePermissionStash(context, n, "read");
-  if (r !== undefined)
-    return {
-      spellings: r,
-      unresolved: false,
-    };
-  let s = walkPermissionCheckPaths(n);
-  return {
-    spellings: permissionCheckSpellings(s),
-    unresolved: s.unresolved,
-  };
-}
-//@ chunk-mvvq2nx1.js:7393-7497 fingerprint = IMAGE_EXTENSIONS (0.878)
-/**
- * 把图片格式映射为编码输出格式：jpg/jpeg 为 jpeg、webp 为 webp、其余为 png。
- */
-function toEncoderFormat(e) {
-  switch (e) {
-    case "jpeg":
-    case "jpg":
-      return "jpeg";
-    case "webp":
-      return "webp";
-    default:
-      return "png";
-  }
-}
-//@ chunk-q7gky7a4.js:813-1174 facade-exports = MaxFileReadTokenExceededError (0.91)
-/**
- * 文件内容 token 数超过上限的错误（带 tokenCount/maxTokens，消息建议用 offset/limit 或搜索）。
- */
-class MaxFileReadTokenExceededError extends Error {
-  tokenCount;
-  maxTokens;
-  constructor(e, maxTokens, allowLargeHint = "") {
-    super(
-      `File content (${e} tokens) exceeds maximum allowed tokens (${maxTokens}). Use offset and limit parameters to read specific portions of the file, or search for specific content instead of reading the whole file.${allowLargeHint}`,
-    );
-    this.tokenCount = e;
-    this.maxTokens = maxTokens;
-    this.name = "MaxFileReadTokenExceededError";
-  }
 }
 export {
   FileReadTool,

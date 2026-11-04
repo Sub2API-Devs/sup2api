@@ -73,19 +73,20 @@ import { VERSIONED_MODEL_RE } from "../toolErrors.js";
 import { getDefaultSonnetBuiltin } from "./modelOptions.js";
 import { getProviderState } from "./providerCaches.js";
 import { BEDROCK_REGION_PREFIXES } from "./bedrock.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:444410-444950 placement
 /**
  * 被限制模型的同族默认。
  */
-function familyDefaultFor(e) {
+function familyDefaultFor(model) {
   let modelEntitlementDenySet = getModelEntitlementDenySet();
   if (
-    !(modelEntitlementDenySet.size > 0 && isModelDenied(e, modelEntitlementDenySet)) &&
-    !isBlockedByManagedModelPolicySafe(e)
+    !(modelEntitlementDenySet.size > 0 && isModelDenied(model, modelEntitlementDenySet)) &&
+    !isBlockedByManagedModelPolicySafe(model)
   )
     return null;
-  let s = [
+  let familyDefaults = [
     {
       family: "opus",
       model: getDefaultOpusModel(),
@@ -99,52 +100,57 @@ function familyDefaultFor(e) {
       model: getDefaultHaikuModel(),
     },
   ];
-  let canonicalName = getCanonicalName(parseUserSpecifiedModel(e));
-  let index = s.findIndex((R) => canonicalName.includes(R.family));
-  let S = index !== -1 ? index : isFableFamilyOrPinnedModel(parseUserSpecifiedModel(e)) ? 0 : 1;
-  for (let { family, model } of s.slice(S)) {
+  let canonicalName = getCanonicalName(parseUserSpecifiedModel(model));
+  let index = familyDefaults.findIndex((entry) => canonicalName.includes(entry.family));
+  let startIndex = index !== -1 ? index : isFableFamilyOrPinnedModel(parseUserSpecifiedModel(model)) ? 0 : 1;
+  for (let { family, model } of familyDefaults.slice(startIndex)) {
     if (isModelAllowed(model)) return model;
-    let P = newestAllowedInFamilyForProvider(family);
-    if (P !== null) return P;
+    let newer = newestAllowedInFamilyForProvider(family);
+    if (newer !== null) return newer;
   }
-  if (!isBlockedByManagedModelPolicySafe(e)) return null;
-  let w = availableModelsFamilies();
-  if (w === null)
+  if (!isBlockedByManagedModelPolicySafe(model)) return null;
+  let listedModel = availableModelsFamilies();
+  if (listedModel === null)
     logForDebugging(
-      `managed settings (deniedModels or an exact-match availableModels) block the default model ${e} and every model it could fall back to`,
+      `managed settings (deniedModels or an exact-match availableModels) block the default model ${model} and every model it could fall back to`,
       {
         level: "warn",
       },
     );
-  return w;
+  return listedModel;
 }
 //@ chunk-aepeg2w5.js:444950-445402 placement
 /**
  * 托管 availableModels 中的模型族。
  */
 function availableModelsFamilies() {
-  let e;
-  let n;
+  let allowlist;
+  let exactMatch;
   try {
     let settingsForSource = getSettingsForSource("policySettings");
-    e = settingsForSource?.availableModels;
-    n = settingsForSource?.availableModelsMatch === "exact";
+    allowlist = settingsForSource?.availableModels;
+    exactMatch = settingsForSource?.availableModelsMatch === "exact";
   } catch {
     return null;
   }
-  for (let r of e ?? []) {
-    let s = strip1mSuffix(r.trim().toLowerCase());
-    if (s === "") continue;
-    let replaced = s.replace(/^claude-/, "");
-    let y = isBaseModelKey(s) ? s : n && isBaseModelKey(replaced) ? replaced : null;
-    if (y !== null) {
-      let w = newestAllowedInFamilyForProvider(y);
-      if (w !== null) return w;
+  for (let entry of allowlist ?? []) {
+    let lower = strip1mSuffix(entry.trim().toLowerCase());
+    if (lower === "") continue;
+    let replaced = lower.replace(/^claude-/, "");
+    let familyKey = isBaseModelKey(lower) ? lower : exactMatch && isBaseModelKey(replaced) ? replaced : null;
+    if (familyKey !== null) {
+      let newer = newestAllowedInFamilyForProvider(familyKey);
+      if (newer !== null) return newer;
       continue;
     }
-    if (isModelKeyAlias(s) || s === "default") continue;
-    let S = parseModelId(s) !== null ? s : parseModelId(`claude-${s}`) !== null ? `claude-${s}` : r.trim();
-    if (isOpaqueModelId(S) && isModelAllowed(S)) return S;
+    if (isModelKeyAlias(lower) || lower === "default") continue;
+    let candidate =
+      parseModelId(lower) !== null
+        ? lower
+        : parseModelId(`claude-${lower}`) !== null
+          ? `claude-${lower}`
+          : entry.trim();
+    if (isOpaqueModelId(candidate) && isModelAllowed(candidate)) return candidate;
   }
   return null;
 }
@@ -152,9 +158,9 @@ function availableModelsFamilies() {
 /**
  * isBlockedByManagedModelPolicy 的安全包装（异常按受限处理）。
  */
-function isBlockedByManagedModelPolicySafe(e) {
+function isBlockedByManagedModelPolicySafe(model) {
   try {
-    return isBlockedByManagedModelPolicy(e);
+    return isBlockedByManagedModelPolicy(model);
   } catch {
     return true;
   }
@@ -163,9 +169,9 @@ function isBlockedByManagedModelPolicySafe(e) {
 /**
  * isModelDeniedByManagedSettings 的安全包装（异常按拒绝处理）。
  */
-function isModelDeniedByManagedSafe(e) {
+function isModelDeniedByManagedSafe(model) {
   try {
-    return isModelDeniedByManagedSettings(e);
+    return isModelDeniedByManagedSettings(model);
   } catch {
     return true;
   }
@@ -174,9 +180,9 @@ function isModelDeniedByManagedSafe(e) {
 /**
  * 同上，但异常按未拒绝处理。
  */
-function isModelDeniedByManagedFalse(e) {
+function isModelDeniedByManagedFalse(model) {
   try {
-    return isModelDeniedByManagedSettings(e);
+    return isModelDeniedByManagedSettings(model);
   } catch {
     return false;
   }
@@ -185,16 +191,16 @@ function isModelDeniedByManagedFalse(e) {
 /**
  * 判断模型是否在权益允许范围内。
  */
-function isModelEntitled(e) {
+function isModelEntitled(model) {
   let modelEntitlementDenySet = getModelEntitlementDenySet();
-  return !(modelEntitlementDenySet.size > 0 && isModelDenied(e, modelEntitlementDenySet));
+  return !(modelEntitlementDenySet.size > 0 && isModelDenied(model, modelEntitlementDenySet));
 }
 //@ chunk-aepeg2w5.js:445602-445939 placement
 function getEnvDefaultModel() {
   let initialEnvDefaultModel = getInitialEnvDefaultModel();
-  let n = initialEnvDefaultModel === undefined ? env.ANTHROPIC_DEFAULT_MODEL : initialEnvDefaultModel;
-  if (n == null) return null;
-  let lower = n.trim().toLowerCase();
+  let candidate = initialEnvDefaultModel === undefined ? env.ANTHROPIC_DEFAULT_MODEL : initialEnvDefaultModel;
+  if (candidate == null) return null;
+  let lower = candidate.trim().toLowerCase();
   if (lower === "default" || lower === "inherit") return null;
   if (isModeDependentModelSetting(strip1mSuffix(lower))) return null;
   if (isOpusFableAdvisorSetting(lower)) return null;
@@ -203,9 +209,9 @@ function getEnvDefaultModel() {
     getSettings_DEPRECATED()?.enforceAvailableModels === true
   )
     return null;
-  if (!isModelAllowed(n)) return null;
-  if (isUnavailableModel(n)) return null;
-  return n;
+  if (!isModelAllowed(candidate)) return null;
+  if (isUnavailableModel(candidate)) return null;
+  return candidate;
 }
 //@ chunk-aepeg2w5.js:445939-445999 placement
 function isEnvDefaultModelGoverning() {
@@ -254,237 +260,259 @@ function envDefaultModel_2() {
 /**
  * 结合 availableModels 与强制策略解析可用模型。
  */
-function resolveAvailableModels(e, envFamily, concreteBaseline) {
-  let s = getSettings_DEPRECATED() || {};
-  let { availableModels, enforceAvailableModels } = s;
-  let S = {};
+function resolveAvailableModels(model, envFamily, concreteBaseline) {
+  let settings = getSettings_DEPRECATED() || {};
+  let { availableModels, enforceAvailableModels } = settings;
+  let overridesMap = {};
   let modelEnforcementState = getModelEnforcementState();
   if (modelEnforcementState.state === "refused") return null;
   let cascadeTrusted = modelEnforcementState.state === "inactive" && modelEnforcementState.cascadeTrusted;
   if (modelEnforcementState.state === "active") {
     availableModels = modelEnforcementState.allowlist;
     enforceAvailableModels = true;
-    S = modelEnforcementState.overridesMap;
+    overridesMap = modelEnforcementState.overridesMap;
   } else if (!modelEnforcementState.cascadeTrusted) return null;
   if (!enforceAvailableModels) return null;
-  if (cascadeTrusted && Object.keys(S).length === 0 && s.modelOverrides) S = s.modelOverrides;
+  if (cascadeTrusted && Object.keys(overridesMap).length === 0 && settings.modelOverrides)
+    overridesMap = settings.modelOverrides;
   if (!availableModels || availableModels.length === 0) return null;
-  let x = {
-    overridesMap: S,
+  let resolutionOptions = {
+    overridesMap,
     envFreeAliasResolution: true,
     allowlist: availableModels,
   };
-  let P = {
-    overridesMap: S,
+  let suffixOptions = {
+    overridesMap,
   };
-  let F = (Me) => {
-    let xe = firstPartyNameToCanonical(strip1mSuffix(Me));
-    for (let [key, value] of Object.entries(S))
-      if (firstPartyNameToCanonical(strip1mSuffix(key)) === xe) return value;
+  let mappedValueFor = (modelId) => {
+    let canonical = firstPartyNameToCanonical(strip1mSuffix(modelId));
+    for (let [key, value] of Object.entries(overridesMap))
+      if (firstPartyNameToCanonical(strip1mSuffix(key)) === canonical) return value;
     return;
   };
-  let L = (Me, xe) => {
-    let Ie = strip1mSuffix(Me);
-    if (xe?.isConcreteEntry) return Me;
-    let De = F(Ie);
-    if (!De?.trim()) return Me;
-    De = De.trim();
+  let adoptEntry = (entry, options) => {
+    let strippedEntry = strip1mSuffix(entry);
+    if (options?.isConcreteEntry) return entry;
+    let mapped = mappedValueFor(strippedEntry);
+    if (!mapped?.trim()) return entry;
+    mapped = mapped.trim();
     {
-      let lower = strip1mSuffix(De).trim().toLowerCase();
-      let qe = has1mSuffix_2(De);
-      let Mt = isModelKeyAlias(lower) ? resolveBuiltinAlias(lower) : null;
-      if (Mt !== null) De = qe ? append1mSuffixIfMissing(Mt) : Mt;
+      let lower = strip1mSuffix(mapped).trim().toLowerCase();
+      let had1m = has1mSuffix_2(mapped);
+      let builtin = isModelKeyAlias(lower) ? resolveBuiltinAlias(lower) : null;
+      if (builtin !== null) mapped = had1m ? append1mSuffixIfMissing(builtin) : builtin;
       else {
-        let Wt = lower.startsWith("claude-") ? lower : `claude-${lower}`;
-        if (isLegacyOpusFirstParty(Wt) && usesFirstPartyModelIds()) {
+        let opusKey = lower.startsWith("claude-") ? lower : `claude-${lower}`;
+        if (isLegacyOpusFirstParty(opusKey) && usesFirstPartyModelIds()) {
           let defaultOpusBuiltin = getDefaultOpusBuiltin(getRawModelStrings());
-          De = qe ? append1mSuffixIfMissing(defaultOpusBuiltin) : defaultOpusBuiltin;
+          mapped = had1m ? append1mSuffixIfMissing(defaultOpusBuiltin) : defaultOpusBuiltin;
         }
       }
     }
-    if (isUnavailableModel(strip1mSuffix(De))) {
-      let Ue = `enforceAvailableModels: the managed modelOverrides target "${De}" is server-unavailable; using the unmapped candidate`;
-      if (!warnedEnforcementMessages().has(Ue)) {
-        warnedEnforcementMessages().add(Ue);
-        logForDebugging(Ue, {
+    if (isUnavailableModel(strip1mSuffix(mapped))) {
+      let warning = `enforceAvailableModels: the managed modelOverrides target "${mapped}" is server-unavailable; using the unmapped candidate`;
+      if (!warnedEnforcementMessages().has(warning)) {
+        warnedEnforcementMessages().add(warning);
+        logForDebugging(warning, {
           level: "warn",
         });
       }
-      return Me;
+      return entry;
     }
-    if (Ie !== Me) return eligible1mSuffixTarget(De, P) ? append1mSuffixIfMissing(De) : strip1mTag(De);
-    if (has1mSuffix_2(De) && !eligible1mSuffixTarget(De, P)) return strip1mTag(De);
-    return De;
+    if (strippedEntry !== entry)
+      return eligible1mSuffixTarget(mapped, suffixOptions)
+        ? append1mSuffixIfMissing(mapped)
+        : strip1mTag(mapped);
+    if (has1mSuffix_2(mapped) && !eligible1mSuffixTarget(mapped, suffixOptions)) return strip1mTag(mapped);
+    return mapped;
   };
-  let G = null;
-  let j = null;
-  let ee = String(e);
-  let q = strip1mSuffix(ee.trim().toLowerCase());
-  let Q = has1mSuffix_2(e);
-  let re = q.startsWith("claude-") ? q : `claude-${q}`;
-  let se = isLegacyOpusFirstParty(re) ? getDefaultOpusBuiltin(getRawModelStrings()) : resolveBuiltinAlias(q);
-  if (se !== null) {
-    let xe =
-      q !== ee.trim().toLowerCase() && eligible1mSuffixTarget(se, P)
-        ? append1mSuffixIfMissing(se)
-        : strip1mSuffix(se);
-    let userSpecifiedModel = parseUserSpecifiedModel(ee);
-    if (strip1mSuffix(userSpecifiedModel) !== strip1mSuffix(se)) G = xe;
-    if (isModelAllowed(xe, x))
-      if (strip1mSuffix(userSpecifiedModel) !== strip1mSuffix(se)) {
-        if (!isUnavailableModel(xe)) return L(xe);
-        j = xe;
+  let steered = null;
+  let unavailableSteered = null;
+  let rawModel = String(model);
+  let requestedLower = strip1mSuffix(rawModel.trim().toLowerCase());
+  let requestedHad1m = has1mSuffix_2(model);
+  let requestedKey = requestedLower.startsWith("claude-") ? requestedLower : `claude-${requestedLower}`;
+  let requestedBuiltin = isLegacyOpusFirstParty(requestedKey)
+    ? getDefaultOpusBuiltin(getRawModelStrings())
+    : resolveBuiltinAlias(requestedLower);
+  if (requestedBuiltin !== null) {
+    let candidate =
+      requestedLower !== rawModel.trim().toLowerCase() &&
+      eligible1mSuffixTarget(requestedBuiltin, suffixOptions)
+        ? append1mSuffixIfMissing(requestedBuiltin)
+        : strip1mSuffix(requestedBuiltin);
+    let userSpecifiedModel = parseUserSpecifiedModel(rawModel);
+    if (strip1mSuffix(userSpecifiedModel) !== strip1mSuffix(requestedBuiltin)) steered = candidate;
+    if (isModelAllowed(candidate, resolutionOptions))
+      if (strip1mSuffix(userSpecifiedModel) !== strip1mSuffix(requestedBuiltin)) {
+        if (!isUnavailableModel(candidate)) return adoptEntry(candidate);
+        unavailableSteered = candidate;
       } else return null;
   } else {
     let rawModelStrings = getRawModelStrings();
     let tierEnvTable = getTierEnvTable(rawModelStrings);
     if (envFamily !== undefined) {
       if (envFamily !== null) {
-        let found = tierEnvTable.find(([qe]) => qe === envFamily);
+        let found = tierEnvTable.find(([tier]) => tier === envFamily);
         if (found === undefined) throw Error(`steeringVarTable has no row for tier family "${envFamily}"`);
-        let De = found[3];
-        let Ue = De();
-        if (typeof Ue === "string" && strip1mSuffix(Ue).toLowerCase() !== q) {
-          let qe = De();
-          G = Q && eligible1mSuffixTarget(qe, P) ? append1mSuffixIfMissing(qe) : qe;
+        let getter = found[3];
+        let tierModel = getter();
+        if (typeof tierModel === "string" && strip1mSuffix(tierModel).toLowerCase() !== requestedLower) {
+          let steeredModel = getter();
+          steered =
+            requestedHad1m && eligible1mSuffixTarget(steeredModel, suffixOptions)
+              ? append1mSuffixIfMissing(steeredModel)
+              : steeredModel;
         }
       }
       if (
         envFamily === null &&
         concreteBaseline !== undefined &&
-        strip1mSuffix(concreteBaseline).toLowerCase() !== q
+        strip1mSuffix(concreteBaseline).toLowerCase() !== requestedLower
       )
-        G = concreteBaseline;
+        steered = concreteBaseline;
     } else {
-      let Ie = (() => {
-        for (let [, , Ue, qe] of tierEnvTable) {
-          let Mt = qe();
-          if (typeof Mt === "string" && strip1mSuffix(Mt).toLowerCase() === q) return Ue;
+      let matchedTierIndex = (() => {
+        for (let [, , tierIndex, getter] of tierEnvTable) {
+          let tierModel = getter();
+          if (typeof tierModel === "string" && strip1mSuffix(tierModel).toLowerCase() === requestedLower)
+            return tierIndex;
         }
         return null;
       })();
-      let De = tierEnvTable;
-      for (let [, Ue, qe, Mt] of De) {
-        if (Ue === undefined || strip1mSuffix(Ue.trim().toLowerCase()) !== q) continue;
-        if (Ie !== null && Ie <= qe) continue;
+      let rows = tierEnvTable;
+      for (let [, tierCanonical, tierIndex, getter] of rows) {
+        if (
+          tierCanonical === undefined ||
+          strip1mSuffix(tierCanonical.trim().toLowerCase()) !== requestedLower
+        )
+          continue;
+        if (matchedTierIndex !== null && matchedTierIndex <= tierIndex) continue;
         {
-          let Wt = Mt();
-          G = Q && eligible1mSuffixTarget(Wt, P) ? append1mSuffixIfMissing(Wt) : Wt;
+          let tierModel = getter();
+          steered =
+            requestedHad1m && eligible1mSuffixTarget(tierModel, suffixOptions)
+              ? append1mSuffixIfMissing(tierModel)
+              : tierModel;
         }
         break;
       }
     }
-    if (isModelAllowed(e, x)) return null;
+    if (isModelAllowed(model, resolutionOptions)) return null;
   }
-  let Se = [];
-  if (j !== null) {
-    let Me = j;
-    Se.push({
-      entry: Me,
-      adopt: () => L(Me),
+  let skipped = [];
+  if (unavailableSteered !== null) {
+    let entry = unavailableSteered;
+    skipped.push({
+      entry,
+      adopt: () => adoptEntry(entry),
     });
   }
   for (let availableModel of availableModels) {
     let trimmed = availableModel.trim();
     if (!trimmed) continue;
     let lower = trimmed.toLowerCase();
-    let De = strip1mSuffix(lower);
-    let builtinAlias = resolveBuiltinAlias(De);
+    let stripped = strip1mSuffix(lower);
+    let builtinAlias = resolveBuiltinAlias(stripped);
     if (builtinAlias !== null) {
-      let It =
-        lower !== De && eligible1mSuffixTarget(builtinAlias, P)
+      let candidate =
+        lower !== stripped && eligible1mSuffixTarget(builtinAlias, suffixOptions)
           ? append1mSuffixIfMissing(builtinAlias)
           : builtinAlias;
-      if (isOpaqueModelId(It) && isModelAllowed(It, x)) {
-        if (!isUnavailableModel(It)) return L(It);
-        Se.push({
+      if (isOpaqueModelId(candidate) && isModelAllowed(candidate, resolutionOptions)) {
+        if (!isUnavailableModel(candidate)) return adoptEntry(candidate);
+        skipped.push({
           entry: trimmed,
-          adopt: () => L(It),
+          adopt: () => adoptEntry(candidate),
         });
       }
       continue;
     }
-    let qe = strip1mSuffix(lower);
-    let Mt = qe.startsWith("claude-") ? qe : `claude-${qe}`;
-    if (isLegacyOpusFirstParty(Mt) && usesFirstPartyModelIds()) {
+    let lowerStripped = strip1mSuffix(lower);
+    let key = lowerStripped.startsWith("claude-") ? lowerStripped : `claude-${lowerStripped}`;
+    if (isLegacyOpusFirstParty(key) && usesFirstPartyModelIds()) {
       let defaultOpusBuiltin = getDefaultOpusBuiltin(getRawModelStrings());
-      let qt =
-        lower !== qe && eligible1mSuffixTarget(defaultOpusBuiltin, P)
+      let candidate =
+        lower !== lowerStripped && eligible1mSuffixTarget(defaultOpusBuiltin, suffixOptions)
           ? append1mSuffixIfMissing(defaultOpusBuiltin)
           : defaultOpusBuiltin;
-      if (!isUnavailableModel(qt)) return L(qt);
-      Se.push({
+      if (!isUnavailableModel(candidate)) return adoptEntry(candidate);
+      skipped.push({
         entry: trimmed,
-        adopt: () => L(qt),
+        adopt: () => adoptEntry(candidate),
       });
       continue;
     }
-    let Wt = getAPIProvider() !== "foundry" && !lower.startsWith("claude-") && VERSIONED_MODEL_RE.test(lower);
-    let un = Wt || (getAPIProvider() !== "foundry" && lower.startsWith("claude-"));
-    let userSpecifiedModel = parseUserSpecifiedModel(Wt ? `claude-${lower}` : un ? lower : trimmed);
-    let lower_2 = strip1mSuffix(userSpecifiedModel).toLowerCase();
+    let needsPrefix =
+      getAPIProvider() !== "foundry" && !lower.startsWith("claude-") && VERSIONED_MODEL_RE.test(lower);
+    let isFirstPartyShape = needsPrefix || (getAPIProvider() !== "foundry" && lower.startsWith("claude-"));
+    let modelId = parseUserSpecifiedModel(
+      needsPrefix ? `claude-${lower}` : isFirstPartyShape ? lower : trimmed,
+    );
+    let lower_2 = strip1mSuffix(modelId).toLowerCase();
     if (
-      un &&
+      isFirstPartyShape &&
       !/[-@]\d{8}$/.test(lower_2) &&
       firstPartyNameToCanonical(lower_2) !== normalizeDottedVersion(lower_2)
     )
       continue;
-    if (!isOpaqueModelId(userSpecifiedModel)) continue;
-    let isConcreteEntry = !un || /[-@]\d{8}$/.test(lower_2);
-    if (isModelAllowed(userSpecifiedModel, x)) {
-      let Ke = () => {
-        let It = strip1mTag(userSpecifiedModel);
-        if (It !== userSpecifiedModel)
-          return L(eligible1mSuffixTarget(userSpecifiedModel, P) ? userSpecifiedModel : It, {
+    if (!isOpaqueModelId(modelId)) continue;
+    let isConcreteEntry = !isFirstPartyShape || /[-@]\d{8}$/.test(lower_2);
+    if (isModelAllowed(modelId, resolutionOptions)) {
+      let adopt = () => {
+        let strippedModel = strip1mTag(modelId);
+        if (strippedModel !== modelId)
+          return adoptEntry(eligible1mSuffixTarget(modelId, suffixOptions) ? modelId : strippedModel, {
             isConcreteEntry,
           });
-        return L(userSpecifiedModel, {
+        return adoptEntry(modelId, {
           isConcreteEntry,
         });
       };
-      if (!isUnavailableModel(userSpecifiedModel)) return Ke();
-      Se.push({
+      if (!isUnavailableModel(modelId)) return adopt();
+      skipped.push({
         entry: trimmed,
-        adopt: Ke,
+        adopt,
       });
     }
   }
-  let ae = G !== null ? F(G) : undefined;
-  let ie =
-    ae !== undefined && strip1mSuffix(ae).trim().toLowerCase() === strip1mSuffix(e).trim().toLowerCase();
-  let Z =
-    G !== null
-      ? ie
+  let mappedSteered = steered !== null ? mappedValueFor(steered) : undefined;
+  let isAdminMapped =
+    mappedSteered !== undefined &&
+    strip1mSuffix(mappedSteered).trim().toLowerCase() === strip1mSuffix(model).trim().toLowerCase();
+  let reason =
+    steered !== null
+      ? isAdminMapped
         ? "tier default is the admin-mapped value \u2014 pinning its canonical builtin (the policy mapping re-applies at the exit)"
         : "user steering detected \u2014 pinning the env-free tier builtin (policy-mapped if applicable)"
       : "keeping the tier default";
-  let ce = isFirstPartyApiBackend() ? undefined : Se[0];
-  let fe =
-    ce !== undefined
+  let firstSkipped = isFirstPartyApiBackend() ? undefined : skipped[0];
+  let choiceReason =
+    firstSkipped !== undefined
       ? "using the first of them (off the first-party API the published document does not move the Default outside the list)"
-      : Z;
-  let Ae =
-    Se.length > 0
-      ? `enforceAvailableModels: no availableModels entry survived; ${Se.length} entr${Se.length === 1 ? "y was" : "ies were"} allowed but skipped as server-unavailable (${Se.map((Me) => Me.entry).join(", ")}); ${fe}`
-      : `enforceAvailableModels: no availableModels entry expands to an allowed model; ${Z}`;
-  if (!warnedEnforcementMessages().has(Ae)) {
-    warnedEnforcementMessages().add(Ae);
-    logForDebugging(Ae, {
+      : reason;
+  let warning =
+    skipped.length > 0
+      ? `enforceAvailableModels: no availableModels entry survived; ${skipped.length} entr${skipped.length === 1 ? "y was" : "ies were"} allowed but skipped as server-unavailable (${skipped.map((entry) => entry.entry).join(", ")}); ${choiceReason}`
+      : `enforceAvailableModels: no availableModels entry expands to an allowed model; ${reason}`;
+  if (!warnedEnforcementMessages().has(warning)) {
+    warnedEnforcementMessages().add(warning);
+    logForDebugging(warning, {
       level: "warn",
     });
   }
-  if (ce !== undefined) return ce.adopt();
-  return G !== null ? L(G) : null;
+  if (firstSkipped !== undefined) return firstSkipped.adopt();
+  return steered !== null ? adoptEntry(steered) : null;
 }
 //@ chunk-aepeg2w5.js:450425-450565 placement = getFastModeModel (0.455)
 /**
  * 判断别名解析出的模型是否应加 [1m]：旧模型或非 claude- 前缀按规则；opus 在第一方时看 isOpus1mMergeEnabled。旧版名 getFastModeModel 为错配，应归 utils/model/model.ts。
  */
-function eligible1mSuffixTarget(e, n) {
-  if (isKnownNon1mTarget(e, n)) return false;
-  let r = firstPartyNameToCanonical(strip1mTag(e).trim());
-  if (!r.startsWith("claude-")) return true;
-  return r.includes("opus") && usesFirstPartyModelIds() ? isOpus1mMergeEnabled() : true;
+function eligible1mSuffixTarget(model, options) {
+  if (isKnownNon1mTarget(model, options)) return false;
+  let canonical = firstPartyNameToCanonical(strip1mTag(model).trim());
+  if (!canonical.startsWith("claude-")) return true;
+  return canonical.includes("opus") && usesFirstPartyModelIds() ? isOpus1mMergeEnabled() : true;
 }
 //@ chunk-aepeg2w5.js:450565-450738 placement = modelMatchesVersionPrefix (0.776)
 /**
@@ -493,8 +521,8 @@ function eligible1mSuffixTarget(e, n) {
 function isKnownNon1mTarget(model, entry) {
   let trimmed = model.trim();
   let trimmed_2 = strip1mTag(trimmed).trim();
-  let h = firstPartyNameToCanonical(trimmed_2);
-  if (h.startsWith("claude-")) return isLegacyNo1mModel(h);
+  let canonical = firstPartyNameToCanonical(trimmed_2);
+  if (canonical.startsWith("claude-")) return isLegacyNo1mModel(canonical);
   if (isLegacyNo1mModel(getCanonicalName(trimmed_2, entry))) return true;
   return (
     trimmed_2 !== trimmed && entry?.overridesMap === undefined && isLegacyNo1mModel(getCanonicalName(trimmed))
@@ -504,11 +532,11 @@ function isKnownNon1mTarget(model, entry) {
 /**
  * [族, ANTHROPIC_DEFAULT_*_MODEL 值, 序号, 内置默认取值函数]（haiku/sonnet/opus）。
  */
-function getTierEnvTable(rawModelStrings) {
+function getTierEnvTable(modelStrings) {
   return [
-    ["haiku", env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 0, () => defaultHaikuModel(rawModelStrings)],
-    ["sonnet", env.ANTHROPIC_DEFAULT_SONNET_MODEL, 1, () => getDefaultSonnetBuiltin(rawModelStrings)],
-    ["opus", env.ANTHROPIC_DEFAULT_OPUS_MODEL, 2, () => getDefaultOpusBuiltin(rawModelStrings)],
+    ["haiku", env.ANTHROPIC_DEFAULT_HAIKU_MODEL, 0, () => defaultHaikuModel(modelStrings)],
+    ["sonnet", env.ANTHROPIC_DEFAULT_SONNET_MODEL, 1, () => getDefaultSonnetBuiltin(modelStrings)],
+    ["opus", env.ANTHROPIC_DEFAULT_OPUS_MODEL, 2, () => getDefaultOpusBuiltin(modelStrings)],
   ];
 }
 //@ chunk-aepeg2w5.js:450923-450975 placement
@@ -524,16 +552,16 @@ function warnedEnforcementMessages() {
  */
 function getModelEnforcementState() {
   try {
-    let filtered = getFatalAdminPolicyLoadErrors().filter((S) => !isPermissionDeniedPolicyError(S));
+    let filtered = getFatalAdminPolicyLoadErrors().filter((error) => !isPermissionDeniedPolicyError(error));
     let settingsForSource = getSettingsForSource("policySettings");
-    let r = (S) => {
+    let warnAboutFailedSource = (tierSurvives) => {
       if (!settingsForSource || filtered.length === 0) return;
-      let w = S
+      let warning = tierSurvives
         ? "enforceAvailableModels: an admin policy source failed to load; enforcing the surviving admin tier (the failed source may carry a different policy \u2014 fix it to restore full coverage)"
         : "enforceAvailableModels: an admin policy source failed to load and the surviving admin tier carries no model policy \u2014 model enforcement is OFF; the failed source may have carried it";
-      if (!warnedEnforcementMessages().has(w)) {
-        warnedEnforcementMessages().add(w);
-        logForDebugging(w, {
+      if (!warnedEnforcementMessages().has(warning)) {
+        warnedEnforcementMessages().add(warning);
+        logForDebugging(warning, {
           level: "warn",
         });
       }
@@ -591,30 +619,30 @@ function getModelEnforcementState() {
           },
         );
       }
-      r(false);
+      warnAboutFailedSource(false);
       return {
         state: "inactive",
         cascadeTrusted: false,
       };
     }
     if (enforceAvailableModels !== true || availableModels === undefined || availableModels.length === 0) {
-      r(false);
+      warnAboutFailedSource(false);
       return {
         state: "inactive",
         cascadeTrusted: false,
       };
     }
-    r(true);
+    warnAboutFailedSource(true);
     return {
       state: "active",
       allowlist: availableModels,
       overridesMap: modelOverrides ?? getPairedPolicyModelOverrides() ?? {},
     };
   } catch (error) {
-    let n = `enforceAvailableModels: policy-tier settings read failed; refusing cascade-trust mode: ${error instanceof Error ? error.message : String(error)}`;
-    if (!warnedEnforcementMessages().has(n)) {
-      warnedEnforcementMessages().add(n);
-      logForDebugging(n, {
+    let warning = `enforceAvailableModels: policy-tier settings read failed; refusing cascade-trust mode: ${error instanceof Error ? error.message : String(error)}`;
+    if (!warnedEnforcementMessages().has(warning)) {
+      warnedEnforcementMessages().add(warning);
+      logForDebugging(warning, {
         level: "warn",
       });
     }
@@ -624,63 +652,63 @@ function getModelEnforcementState() {
   }
 }
 //@ chunk-aepeg2w5.js:453361-453647 placement
-function isModelAllowedUnderActiveEnforcement(e) {
+function isModelAllowedUnderActiveEnforcement(model) {
   let modelEnforcementState = getModelEnforcementState();
   if (modelEnforcementState.state === "refused") return false;
   if (modelEnforcementState.state === "inactive") return null;
-  let r = {
+  let options = {
     allowlist: modelEnforcementState.allowlist,
     overridesMap: modelEnforcementState.overridesMap,
     envFreeAliasResolution: true,
   };
-  if (!isModelAllowed(e, r)) return false;
-  let trimmed = strip1mSuffix(e.trim().toLowerCase()).trim();
+  if (!isModelAllowed(model, options)) return false;
+  let trimmed = strip1mSuffix(model.trim().toLowerCase()).trim();
   return (
     !(
       isModelKeyAlias(trimmed) ||
       isServedExpandedSpelling(trimmed) ||
       (usesFirstPartyModelIds() && isLegacyOpusFirstParty(trimmed))
-    ) || aliasExpansionPermitted(trimmed, r)
+    ) || aliasExpansionPermitted(trimmed, options)
   );
 }
 //@ chunk-aepeg2w5.js:453647-453724 placement
-function isModelAdmittedByAvailableModels(e) {
+function isModelAdmittedByAvailableModels(model) {
   return (
-    isModelAllowedUnderActiveEnforcement(e) ??
-    (isModelAllowed(e, {
+    isModelAllowedUnderActiveEnforcement(model) ??
+    (isModelAllowed(model, {
       skipEntitlementDenyOverlay: true,
     }) ||
-      isExemptDefaultResolvingPick(e))
+      isExemptDefaultResolvingPick(model))
   );
 }
 //@ chunk-aepeg2w5.js:453724-453773 placement
-function isPermittedByOrgModelPolicy(e) {
+function isPermittedByOrgModelPolicy(model) {
   return (
-    (isModelAllowedUnderActiveEnforcement(e) ?? isModelAllowed(e)) &&
-    !isModelDenied(e, getModelEntitlementDenySet())
+    (isModelAllowedUnderActiveEnforcement(model) ?? isModelAllowed(model)) &&
+    !isModelDenied(model, getModelEntitlementDenySet())
   );
 }
 //@ chunk-aepeg2w5.js:453773-453844 placement
-function isDefaultMainLoopModel(e) {
+function isDefaultMainLoopModel(model) {
   return (
-    strip1mSuffix(parseUserSpecifiedModel(e)).toLowerCase() ===
+    strip1mSuffix(parseUserSpecifiedModel(model)).toLowerCase() ===
     strip1mSuffix(getDefaultMainLoopModel()).toLowerCase()
   );
 }
 //@ chunk-aepeg2w5.js:453844-453964 placement
-function isExemptDefaultResolvingPick(e) {
-  let n = strip1mSuffix(e.trim().toLowerCase());
-  if (isModeDependentModelSetting(n)) return false;
-  if (isBlockedByManagedModelPolicySafe(e)) return false;
-  if (n === "best") return false;
-  return isDefaultMainLoopModel(e);
+function isExemptDefaultResolvingPick(model) {
+  let lower = strip1mSuffix(model.trim().toLowerCase());
+  if (isModeDependentModelSetting(lower)) return false;
+  if (isBlockedByManagedModelPolicySafe(model)) return false;
+  if (lower === "best") return false;
+  return isDefaultMainLoopModel(model);
 }
 //@ chunk-aepeg2w5.js:453964-454094 placement
-function isWindowSilentDefaultPick(e) {
-  if (!isExemptDefaultResolvingPick(e)) return false;
-  let lower = e.trim().toLowerCase();
+function isWindowSilentDefaultPick(model) {
+  if (!isExemptDefaultResolvingPick(model)) return false;
+  let lower = model.trim().toLowerCase();
   return (
-    parseUserSpecifiedModel(e).toLowerCase() === getDefaultMainLoopModel().toLowerCase() ||
+    parseUserSpecifiedModel(model).toLowerCase() === getDefaultMainLoopModel().toLowerCase() ||
     (isModelKeyAlias(lower) && lower === strip1mSuffix(lower))
   );
 }
@@ -688,20 +716,23 @@ function isWindowSilentDefaultPick(e) {
 /**
  * 别名展开成内置默认模型（小写）；旧 Opus 4/4.1 在重映射时展开成最新 Opus。
  */
-function resolveModelAliasEnvFree(e) {
-  let n = strip1mSuffix(e);
-  let builtinAlias = resolveBuiltinAlias(n);
+function resolveModelAliasEnvFree(alias) {
+  let stripped = strip1mSuffix(alias);
+  let builtinAlias = resolveBuiltinAlias(stripped);
   if (builtinAlias !== null) return builtinAlias.toLowerCase();
-  let resolvedModel = n.startsWith("claude-") ? n : `claude-${n}`;
+  let resolvedModel = stripped.startsWith("claude-") ? stripped : `claude-${stripped}`;
   if (usesFirstPartyModelIds() && isLegacyOpusFirstParty(resolvedModel))
     return getDefaultOpusBuiltin(getRawModelStrings()).toLowerCase();
   return null;
 }
 //@ chunk-aepeg2w5.js:454270-454338 placement
-var regExp_29 = new RegExp(`^((${BEDROCK_REGION_PREFIXES.join("|")})\\.)?(anthropic\\.|claude-)`);
+var regExp_29; // deferred: uses BEDROCK_REGION_PREFIXES (./bedrock.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:454270", () => {
+  regExp_29 = new RegExp(`^((${BEDROCK_REGION_PREFIXES.join("|")})\\.)?(anthropic\\.|claude-)`);
+});
 //@ chunk-aepeg2w5.js:454338-454481 placement
-function isOpaqueModelId(e) {
-  let lower = e.toLowerCase();
+function isOpaqueModelId(modelId) {
+  let lower = modelId.toLowerCase();
   if (regExp_29.test(lower)) return true;
   if (lower.startsWith("arn:aws:bedrock:")) return true;
   if (getAPIProvider() === "foundry") return true;

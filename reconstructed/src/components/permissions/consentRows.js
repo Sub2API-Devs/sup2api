@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-0e8j1zzj.js (27)
- * attribution: placement 27
+ * pieces: chunk-0e8j1zzj.js (27), chunk-xkyzvvf1.js (1)
+ * attribution: placement 28
  */
 import { isRuleRoundTripStable } from "../../utils/permissions/PermissionUpdate.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
@@ -20,17 +20,12 @@ import {
 import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
 import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
 import {
-  INVALID_TOOL_NAME_TEXT,
-  identityFreeze4,
-  identityFreeze3,
-  mintDisplayedUpdates,
-} from "../../utils/deepFreezePlainData.js";
-import {
   permissionRuleValueFromString,
   hasWildcard,
   unescapeRuleContent_2,
 } from "../../utils/permissions/permissionRuleParser.js";
 import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
+import { identityFreeze4, identityFreeze3, mintDisplayedUpdates } from "../../utils/deepFreezePlainData.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -43,23 +38,29 @@ import { formatPathList } from "./shellPermissionHelpers.js";
 import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { hu } from "../../../vendor/zod/v4/classic/schemas.js";
+import { custom } from "../../../vendor/zod/v4/classic/schemas.js";
 import { permissionUpdateSchema } from "../../utils/hooks/hookSpecificOutput.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-xkyzvvf1.js:227-257 placement
+/**
+ * 无效工具名使用的占位文本。
+ */
+var INVALID_TOOL_NAME_TEXT = "(invalid tool name)";
 //@ chunk-0e8j1zzj.js:2881-2910 placement
-function isStorableRuleValue(o) {
-  return isRuleRoundTripStable(o);
+function isStorableRuleValue(value) {
+  return isRuleRoundTripStable(value);
 }
 //@ chunk-0e8j1zzj.js:2910-3356 placement = extractRules (0.859)
 /**
  * 过滤外部传入的更新列表：addRules 只保留形状合法且可存储的规则，其他类型原样保留。
  */
 function filterValidAddRules(updates) {
-  let t = [];
+  let kept = [];
   for (let update of updates) {
     if (update === null || typeof update !== "object") continue;
     if (update.type !== "addRules") {
-      t.push(update);
+      kept.push(update);
       continue;
     }
     if (!Array.isArray(update.rules)) continue;
@@ -77,21 +78,27 @@ function filterValidAddRules(updates) {
             })),
     );
     if (filtered.length > 0)
-      t.push({
+      kept.push({
         ...update,
         rules: filtered,
       });
   }
-  return t;
+  return kept;
 }
 //@ chunk-0e8j1zzj.js:3356-3421 placement
 /**
  * 导出值：同一声明里的多个绑定：MAX_CONSENT_RULE_WIDTH（64：同意行规则宽度）；MAX_CONSENT_SUGGESTION_WIDTH（160：建议规则宽度上限）；INLINE_DESTINATIONS（可内联展示的规则去向）。
  */
-var CONSENT_ROW_LIMITS = 8;
-var MAX_CONSENT_RULE_WIDTH = 64;
-var MAX_CONSENT_SUGGESTION_WIDTH = 160;
-var INLINE_DESTINATIONS = new Set(["localSettings", "session"]);
+var CONSENT_ROW_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_CONSENT_RULE_WIDTH;
+var MAX_CONSENT_SUGGESTION_WIDTH;
+var INLINE_DESTINATIONS;
+deferInit("chunk-0e8j1zzj.js:3356", () => {
+  CONSENT_ROW_LIMITS = 8;
+  MAX_CONSENT_RULE_WIDTH = 64;
+  MAX_CONSENT_SUGGESTION_WIDTH = 160;
+  INLINE_DESTINATIONS = new Set(["localSettings", "session"]);
+});
 //@ chunk-0e8j1zzj.js:3421-4155 placement
 /**
  * 从权限更新建议中筛出可展示的“始终允许”规则行（限目标来源、类型与数量）。
@@ -102,21 +109,21 @@ function consentRuleRows(
   labelPredicate,
   displayedDestinations = INLINE_DESTINATIONS,
 ) {
-  let filtered = filterValidAddRules(updates).filter((i) => {
-    if (!displayedTypes.has(i.type)) return false;
+  let filtered = filterValidAddRules(updates).filter((update) => {
+    if (!displayedTypes.has(update.type)) return false;
     if (
-      (i.type === "addRules" || i.type === "replaceRules" || i.type === "removeRules") &&
-      i.behavior !== "allow"
+      (update.type === "addRules" || update.type === "replaceRules" || update.type === "removeRules") &&
+      update.behavior !== "allow"
     )
       return false;
-    return i.destination !== undefined && displayedDestinations.has(i.destination);
+    return update.destination !== undefined && displayedDestinations.has(update.destination);
   });
-  let u = [];
-  for (let i of filtered) {
-    if (i.type !== "addRules") {
-      if (i.type === "addDirectories") {
-        if (!Array.isArray(i.directories)) continue;
-        let filtered = i.directories.filter(
+  let allowed = [];
+  for (let version of filtered) {
+    if (version.type !== "addRules") {
+      if (version.type === "addDirectories") {
+        if (!Array.isArray(version.directories)) continue;
+        let filtered = version.directories.filter(
           (directory) =>
             typeof directory === "string" &&
             directory.trim() !== "" &&
@@ -124,17 +131,17 @@ function consentRuleRows(
             fitsLabelLimit(directory),
         );
         if (filtered.length === 0) continue;
-        u.push({
-          ...i,
+        allowed.push({
+          ...version,
           directories: filtered,
         });
         continue;
       }
-      u.push(i);
+      allowed.push(version);
       continue;
     }
-    if (i.rules === undefined) continue;
-    let filtered = i.rules.filter((rule) =>
+    if (version.rules === undefined) continue;
+    let filtered = version.rules.filter((rule) =>
       fitsLabelLimit(
         formatPermissionRule({
           toolName: rule.toolName,
@@ -144,73 +151,78 @@ function consentRuleRows(
         }),
       ),
     );
-    let k = labelPredicate === undefined ? filtered : filtered.filter(labelPredicate);
-    if (k.length > 0)
-      u.push({
-        ...i,
-        rules: k,
+    let allowedRules = labelPredicate === undefined ? filtered : filtered.filter(labelPredicate);
+    if (allowedRules.length > 0)
+      allowed.push({
+        ...version,
+        rules: allowedRules,
       });
   }
-  return u;
+  return allowed;
 }
 //@ chunk-0e8j1zzj.js:4155-4228 placement
 /**
  * 导出值：DISPLAYED_UPDATE_TYPES（只展示 addRules 更新）。
  */
-var CONSENT_UPDATE_TYPES = new Set(["addRules", "addDirectories"]);
-var DISPLAYED_UPDATE_TYPES = new Set(["addRules"]);
+var CONSENT_UPDATE_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DISPLAYED_UPDATE_TYPES;
+deferInit("chunk-0e8j1zzj.js:4155", () => {
+  CONSENT_UPDATE_TYPES = new Set(["addRules", "addDirectories"]);
+  DISPLAYED_UPDATE_TYPES = new Set(["addRules"]);
+});
 //@ chunk-0e8j1zzj.js:4228-4319 placement
-function isUnsafeRuleText(o) {
+function isUnsafeRuleText(ruleText) {
   return (
-    o.trim() !== o ||
-    o === "" ||
-    hasDisplayUnsafeChar(o) ||
-    stripNonPrintable(o) !== o ||
-    /[\t\n]/.test(o) ||
-    bunStringWidth(o) === 0
+    ruleText.trim() !== ruleText ||
+    ruleText === "" ||
+    hasDisplayUnsafeChar(ruleText) ||
+    stripNonPrintable(ruleText) !== ruleText ||
+    /[\t\n]/.test(ruleText) ||
+    bunStringWidth(ruleText) === 0
   );
 }
 //@ chunk-0e8j1zzj.js:4319-4523 placement
 function isRuleableToolName(toolName) {
   if (toolName === INVALID_TOOL_NAME_TEXT) return false;
   if (isUnsafeRuleText(toolName)) return false;
-  let t = permissionRuleValueFromString(
+  let ruleValue = permissionRuleValueFromString(
     formatPermissionRule({
       toolName,
     }),
   );
-  if (t.toolName !== toolName || t.ruleContent !== undefined) return false;
+  if (ruleValue.toolName !== toolName || ruleValue.ruleContent !== undefined) return false;
   if (hasWildcard(toolName)) return false;
-  let d = mcpInfoFromString(toolName);
-  if (d !== null && !d.toolName) return false;
+  let mcpInfo = mcpInfoFromString(toolName);
+  if (mcpInfo !== null && !mcpInfo.toolName) return false;
   return true;
 }
 //@ chunk-0e8j1zzj.js:4523-4622 placement
-function titleFromRule(o) {
-  if (typeof o !== "string" || o.trim() === "" || bunStringWidth(o) === 0 || !fitsLabelLimit(o)) return null;
-  return identityFreeze4(o);
+function titleFromRule(rule) {
+  if (typeof rule !== "string" || rule.trim() === "" || bunStringWidth(rule) === 0 || !fitsLabelLimit(rule))
+    return null;
+  return identityFreeze4(rule);
 }
 //@ chunk-0e8j1zzj.js:4622-4945 placement
-function joinBoldNames(o) {
-  switch (o.length) {
+function joinBoldNames(names) {
+  switch (names.length) {
     case 0:
       return "";
     case 1:
       return jsxProd_default(Text, {
         bold: true,
-        children: o[0],
+        children: names[0],
       });
     case 2:
       return jsxProd_default_2(Text, {
         children: [
           jsxProd_default(Text, {
             bold: true,
-            children: o[0],
+            children: names[0],
           }),
           " and ",
           jsxProd_default(Text, {
             bold: true,
-            children: o[1],
+            children: names[1],
           }),
         ],
       });
@@ -219,122 +231,130 @@ function joinBoldNames(o) {
         children: [
           jsxProd_default(Text, {
             bold: true,
-            children: o.slice(0, -1).join(", "),
+            children: names.slice(0, -1).join(", "),
           }),
           ", and",
           " ",
           jsxProd_default(Text, {
             bold: true,
-            children: o.slice(-1)[0],
+            children: names.slice(-1)[0],
           }),
         ],
       });
   }
 }
 //@ chunk-0e8j1zzj.js:5290-5390 placement
-function normalizeRulePath(ruleContent) {
+function normalizeRulePath(rulePath) {
   return unescapeRuleContent_2(
-    (ruleContent?.replace(/\/\*\*$/, "") || "").replace(/^\.\//, "").replace(/^\/\//, "/"),
+    (rulePath?.replace(/\/\*\*$/, "") || "").replace(/^\.\//, "").replace(/^\/\//, "/"),
   );
 }
 //@ chunk-0e8j1zzj.js:5390-5478 placement
-function stripTrailingWildcard(ruleContent) {
-  if (!ruleContent) return "";
-  return ruleContent.endsWith(":*") || ruleContent.endsWith(" *") ? ruleContent.slice(0, -2) : ruleContent;
+function stripTrailingWildcard(ruleText) {
+  if (!ruleText) return "";
+  return ruleText.endsWith(":*") || ruleText.endsWith(" *") ? ruleText.slice(0, -2) : ruleText;
 }
 //@ chunk-0e8j1zzj.js:5478-5644 placement
-function ruleMatchesTool(o, t, stripBashRedirections) {
-  if (o.toolName === t) {
-    let c = stripTrailingWildcard(o.ruleContent);
-    if (!c) return false;
-    return Boolean(stripBashRedirections ? stripBashRedirections(c) : c);
+function ruleMatchesTool(rule, toolName, stripBashRedirections) {
+  if (rule.toolName === toolName) {
+    let trimmedContent = stripTrailingWildcard(rule.ruleContent);
+    if (!trimmedContent) return false;
+    return Boolean(stripBashRedirections ? stripBashRedirections(trimmedContent) : trimmedContent);
   }
-  if (o.toolName === FILE_READ_TOOL_NAME) return Boolean(normalizeRulePath(o.ruleContent));
+  if (rule.toolName === FILE_READ_TOOL_NAME) return Boolean(normalizeRulePath(rule.ruleContent));
   return false;
 }
 //@ chunk-0e8j1zzj.js:5644-5743 placement
-function safeDisplayText(o) {
-  return o !== undefined &&
-    stripNonPrintable(o) === o &&
-    !/[\t\n\u2028\u2029]/.test(o) &&
-    !hasDisplayUnsafeChar(o)
-    ? identityFreeze3(o)
+function safeDisplayText(text) {
+  return text !== undefined &&
+    stripNonPrintable(text) === text &&
+    !/[\t\n\u2028\u2029]/.test(text) &&
+    !hasDisplayUnsafeChar(text)
+    ? identityFreeze3(text)
     : undefined;
 }
 //@ chunk-0e8j1zzj.js:5743-5772 placement
-function consentRowLabel(o) {
-  return listLabel(o);
+function consentRowLabel(value) {
+  return listLabel(value);
 }
 //@ chunk-0e8j1zzj.js:5772-7696 placement
-function parseSuggestionRows(o, t, stripBashRedirections, c) {
-  if (!Array.isArray(o)) return null;
-  if (o.length > MAX_CONSENT_RULE_WIDTH) return null;
-  if (o.some((b) => b === null || typeof b !== "object")) return null;
-  let flattened = o.filter((b) => b.type === "addRules").flatMap((b) => b.rules || []);
-  let flattened_2 = o
-    .filter((b) => b.type === "addDirectories")
-    .flatMap((b) => (Array.isArray(b.directories) ? b.directories : []));
+function parseSuggestionRows(suggestions, toolName, stripBashRedirections, machineLabel) {
+  if (!Array.isArray(suggestions)) return null;
+  if (suggestions.length > MAX_CONSENT_RULE_WIDTH) return null;
+  if (suggestions.some((entry) => entry === null || typeof entry !== "object")) return null;
+  let flattened = suggestions
+    .filter((suggestion) => suggestion.type === "addRules")
+    .flatMap((suggestion) => suggestion.rules || []);
+  let flattened_2 = suggestions
+    .filter((suggestion) => suggestion.type === "addDirectories")
+    .flatMap((suggestion) => (Array.isArray(suggestion.directories) ? suggestion.directories : []));
   if (
     flattened.some(
-      (b) =>
-        b === null ||
-        typeof b !== "object" ||
-        typeof b.toolName !== "string" ||
-        (b.ruleContent !== undefined && typeof b.ruleContent !== "string"),
+      (rule) =>
+        rule === null ||
+        typeof rule !== "object" ||
+        typeof rule.toolName !== "string" ||
+        (rule.ruleContent !== undefined && typeof rule.ruleContent !== "string"),
     )
   )
     return null;
   if (flattened.length + flattened_2.length > CONSENT_ROW_LIMITS) return null;
-  let filtered = flattened.filter((b) => b.toolName === FILE_READ_TOOL_NAME);
-  let filtered_2 = flattened.filter((b) => b.toolName === t);
+  let filtered = flattened.filter((rule) => rule.toolName === FILE_READ_TOOL_NAME);
+  let filtered_2 = flattened.filter((rule) => rule.toolName === toolName);
   if (
     flattened_2.some(
-      (b) => typeof b !== "string" || b.trim() === "" || bunStringWidth(b) === 0 || !fitsLabelLimit(b),
+      (directory) =>
+        typeof directory !== "string" ||
+        directory.trim() === "" ||
+        bunStringWidth(directory) === 0 ||
+        !fitsLabelLimit(directory),
     )
   )
     return null;
-  let k = uniq(flattened_2);
-  let f = uniq(
-    filtered.flatMap((b) => (b.ruleContent && normalizeRulePath(b.ruleContent) ? b.ruleContent : [])),
+  let uniqueDirectories = uniq(flattened_2);
+  let uniqueReadPaths = uniq(
+    filtered.flatMap((rule) =>
+      rule.ruleContent && normalizeRulePath(rule.ruleContent) ? rule.ruleContent : [],
+    ),
   );
-  if (f.some((b) => !fitsLabelLimit(b))) return null;
-  let g = uniq(
-    filtered_2.flatMap((b) => {
-      if (!b.ruleContent) return [];
-      return stripTrailingWildcard(b.ruleContent) ? [b.ruleContent] : [];
+  if (uniqueReadPaths.some((path) => !fitsLabelLimit(path))) return null;
+  let uniqueToolPaths = uniq(
+    filtered_2.flatMap((rule) => {
+      if (!rule.ruleContent) return [];
+      return stripTrailingWildcard(rule.ruleContent) ? [rule.ruleContent] : [];
     }),
   );
-  if (g.some((b) => !fitsLabelLimit(b))) return null;
-  let M = disambiguateLabels(g, (b) => {
-    let E = stripTrailingWildcard(b) || b;
-    return consentRowLabel(stripBashRedirections ? stripBashRedirections(E) : E);
+  if (uniqueToolPaths.some((path) => !fitsLabelLimit(path))) return null;
+  let toolLabels = disambiguateLabels(uniqueToolPaths, (path) => {
+    let strippedPath = stripTrailingWildcard(path) || path;
+    return consentRowLabel(stripBashRedirections ? stripBashRedirections(strippedPath) : strippedPath);
   });
-  let N = disambiguateLabels([...f, ...k], (b) =>
-    f.includes(b) ? consentRowLabel(normalizeRulePath(b)) : consentRowLabel(b),
+  let allLabels = disambiguateLabels([...uniqueReadPaths, ...uniqueDirectories], (path) =>
+    uniqueReadPaths.includes(path) ? consentRowLabel(normalizeRulePath(path)) : consentRowLabel(path),
   );
-  let sliced = N.slice(0, f.length);
-  let sliced_2 = N.slice(f.length);
-  if (bunStringWidth([...M, ...sliced, ...sliced_2].join(" and ")) > MAX_CONSENT_SUGGESTION_WIDTH)
+  let sliced = allLabels.slice(0, uniqueReadPaths.length);
+  let sliced_2 = allLabels.slice(uniqueReadPaths.length);
+  if (bunStringWidth([...toolLabels, ...sliced, ...sliced_2].join(" and ")) > MAX_CONSENT_SUGGESTION_WIDTH)
     return null;
-  let v = k.length > 0;
-  let I = sliced.length > 0;
-  let L = M.length > 0;
-  if (I && !v && !L)
+  let hasDirectories = uniqueDirectories.length > 0;
+  let hasReads = sliced.length > 0;
+  let hasTools = toolLabels.length > 0;
+  if (hasReads && !hasDirectories && !hasTools)
     return jsxProd_default_2(Text, {
       children: ["Yes, allow reading from ", formatPathList(sliced), " from this project"],
     });
-  if (v && !I && !L)
+  if (hasDirectories && !hasReads && !hasTools)
     return jsxProd_default_2(Text, {
       children: ["Yes, and always allow access to ", formatPathList(sliced_2), " from this project"],
     });
-  if (L && !v && !I)
+  if (hasTools && !hasDirectories && !hasReads)
     return jsxProd_default_2(Text, {
       children: [
         "Yes, and don't ask again for ",
-        joinBoldNames(M),
+        joinBoldNames(toolLabels),
         " commands",
         " ",
-        c === undefined
+        machineLabel === undefined
           ? jsxProd_default_2(Fragment, {
               children: [
                 "in",
@@ -350,39 +370,49 @@ function parseSuggestionRows(o, t, stripBashRedirections, c) {
                 "on ",
                 jsxProd_default(Text, {
                   bold: true,
-                  children: c,
+                  children: machineLabel,
                 }),
               ],
             }),
       ],
     });
-  if ((v || I) && !L) {
-    let b = [...sliced_2, ...sliced];
+  if ((hasDirectories || hasReads) && !hasTools) {
+    let allPaths = [...sliced_2, ...sliced];
     return jsxProd_default_2(Text, {
-      children: ["Yes, and always allow access to ", formatPathList(b), " from this project"],
+      children: ["Yes, and always allow access to ", formatPathList(allPaths), " from this project"],
     });
   }
-  if ((v || I) && L) {
-    let b = [...sliced_2, ...sliced];
-    if (b.length === 1 && M.length === 1)
+  if ((hasDirectories || hasReads) && hasTools) {
+    let allPaths = [...sliced_2, ...sliced];
+    if (allPaths.length === 1 && toolLabels.length === 1)
       return jsxProd_default_2(Text, {
         children: [
           "Yes, and allow access to ",
-          formatPathList(b),
+          formatPathList(allPaths),
           " and",
           " ",
-          joinBoldNames(M),
+          joinBoldNames(toolLabels),
           " commands",
         ],
       });
     return jsxProd_default_2(Text, {
-      children: ["Yes, and allow ", formatPathList(b), " access and", " ", joinBoldNames(M), " commands"],
+      children: [
+        "Yes, and allow ",
+        formatPathList(allPaths),
+        " access and",
+        " ",
+        joinBoldNames(toolLabels),
+        " commands",
+      ],
     });
   }
   return null;
 }
 //@ chunk-0e8j1zzj.js:7696-7735 placement
-var CONSENT_ROW_MINT_TOKEN = Symbol("ConsentRow mint token");
+var CONSENT_ROW_MINT_TOKEN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0e8j1zzj.js:7696", () => {
+  CONSENT_ROW_MINT_TOKEN = Symbol("ConsentRow mint token");
+});
 //@ chunk-0e8j1zzj.js:7735-7978 placement
 /**
  * 同意选项行：只能由 consentRows 工厂（私有令牌）构造，冻结的 {node, applies}；ConsentRow.is 用私有字段判定实例。
@@ -391,101 +421,116 @@ class ConsentRow {
   #e = true;
   node;
   applies;
-  constructor(o, node, applies) {
-    if (o !== CONSENT_ROW_MINT_TOKEN)
+  constructor(token, node, applies) {
+    if (token !== CONSENT_ROW_MINT_TOKEN)
       throw Error("ConsentRow may only be constructed by the consentRows factories");
     this.node = node;
     this.applies = applies;
     Object.freeze(this);
   }
-  static is(o) {
-    return typeof o === "object" && o !== null && #e in o;
+  static is(candidate) {
+    return typeof candidate === "object" && candidate !== null && #e in candidate;
   }
 }
 //@ chunk-0e8j1zzj.js:7978-8009 placement
 /**
  * 导出值：ConsentRowSchema（同意行的 schema）。
  */
-var isConsentRow = ConsentRow.is;
-var ConsentRowSchema = DoctorLazy(() => hu(isConsentRow));
+var isConsentRow; // deferred: uses ConsentRow of its import cycle while loading; runs once the cycle is complete
+var ConsentRowSchema;
+deferInit("chunk-0e8j1zzj.js:7978", () => {
+  isConsentRow = ConsentRow.is;
+  ConsentRowSchema = DoctorLazy(() => custom(isConsentRow));
+});
 //@ chunk-0e8j1zzj.js:8009-8180 placement
-function parsePermissionUpdates(o) {
-  if (o.length > MAX_CONSENT_RULE_WIDTH) return null;
-  let t = [];
-  for (let d of o) {
-    let c;
+function parsePermissionUpdates(updates) {
+  if (updates.length > MAX_CONSENT_RULE_WIDTH) return null;
+  let rows = [];
+  for (let count of updates) {
+    let update;
     try {
-      c = permissionUpdateSchema().safeParse(d);
+      update = permissionUpdateSchema().safeParse(count);
     } catch {
       return null;
     }
-    if (!c.success) return null;
-    t.push(c.data);
+    if (!update.success) return null;
+    rows.push(update.data);
   }
-  return mintDisplayedUpdates(t);
+  return mintDisplayedUpdates(rows);
 }
 //@ chunk-0e8j1zzj.js:8180-9079 placement
 /**
  * 把 SDK 传来的权限建议数组校验并转成授权选项行，非法时返回 null。
  */
-function parseConsentSuggestions(o, t) {
-  if (!Array.isArray(o)) return null;
-  let d;
+function parseConsentSuggestions(suggestions, options) {
+  if (!Array.isArray(suggestions)) return null;
+  let length;
   try {
-    d = o.length;
+    length = suggestions.length;
   } catch {
     return null;
   }
-  if (typeof d !== "number" || !Number.isSafeInteger(d) || d < 0 || d > MAX_CONSENT_RULE_WIDTH) return null;
-  let c = 0;
-  let m = [];
-  for (let idx = 0; idx < d; idx++)
+  if (
+    typeof length !== "number" ||
+    !Number.isSafeInteger(length) ||
+    length < 0 ||
+    length > MAX_CONSENT_RULE_WIDTH
+  )
+    return null;
+  let totalRules = 0;
+  let updates = [];
+  for (let idx = 0; idx < length; idx++)
     try {
-      let g = o[idx];
-      let M =
-        g !== null && typeof g === "object"
+      let entry = suggestions[idx];
+      let clone =
+        entry !== null && typeof entry === "object"
           ? {
-              ...g,
+              ...entry,
             }
-          : g;
-      let N = false;
-      if (M !== null && typeof M === "object") {
-        let x = M;
-        for (let A of ["rules", "directories"]) {
-          let T = x[A];
-          if (!Array.isArray(T)) continue;
-          let v = T.length;
-          if (typeof v !== "number" || !Number.isSafeInteger(v) || v < 0) {
-            N = true;
+          : entry;
+      let skipEntry = false;
+      if (clone !== null && typeof clone === "object") {
+        let entry = clone;
+        for (let field of ["rules", "directories"]) {
+          let list = entry[field];
+          if (!Array.isArray(list)) continue;
+          let listLength = list.length;
+          if (typeof listLength !== "number" || !Number.isSafeInteger(listLength) || listLength < 0) {
+            skipEntry = true;
             break;
           }
-          c += v;
-          if (c > MAX_CONSENT_RULE_WIDTH * CONSENT_ROW_LIMITS) return null;
-          let I = [];
-          for (let idx = 0; idx < v; idx++) I.push(T[idx]);
-          x[A] = I;
+          totalRules += listLength;
+          if (totalRules > MAX_CONSENT_RULE_WIDTH * CONSENT_ROW_LIMITS) return null;
+          let copy = [];
+          for (let idx = 0; idx < listLength; idx++) copy.push(list[idx]);
+          entry[field] = copy;
         }
       }
-      if (N) continue;
-      m.push(M);
+      if (skipEntry) continue;
+      updates.push(clone);
     } catch {}
-  let u = [];
-  for (let f of m) {
-    let g;
+  let parsed = [];
+  for (let entry of updates) {
+    let result;
     try {
-      g = permissionUpdateSchema().safeParse(f);
+      result = permissionUpdateSchema().safeParse(entry);
     } catch {
       continue;
     }
-    if (g.success) u.push(g.data);
+    if (result.success) parsed.push(result.data);
   }
-  if (u.length === 0) return null;
-  let i = consentRuleRows(u, t.displayedTypes, t.labelPredicate, t.displayedDestinations);
-  if (i.length === 0) return null;
-  let h = mintDisplayedUpdates(i);
-  let k = t.renderLabel(h);
-  if (k == null || typeof k === "boolean" || k === "") return null;
-  return new ConsentRow(CONSENT_ROW_MINT_TOKEN, k, h);
+  if (parsed.length === 0) return null;
+  let consentRows = consentRuleRows(
+    parsed,
+    options.displayedTypes,
+    options.labelPredicate,
+    options.displayedDestinations,
+  );
+  if (consentRows.length === 0) return null;
+  let displayedUpdates = mintDisplayedUpdates(consentRows);
+  let label = options.renderLabel(displayedUpdates);
+  if (label == null || typeof label === "boolean" || label === "") return null;
+  return new ConsentRow(CONSENT_ROW_MINT_TOKEN, label, displayedUpdates);
 }
 //@ chunk-0e8j1zzj.js:9079-9454 placement
 var PERMISSION_MODE_LABELS = {
@@ -497,24 +542,28 @@ var PERMISSION_MODE_LABELS = {
   bypassPermissions: "BYPASS PERMISSIONS (no further prompts)",
 };
 //@ chunk-0e8j1zzj.js:9454-9992 placement
-function modeSwitchRow(o, t) {
-  if (o === "bypassPermissions" && t?.isBypassPermissionsModeAvailable === false) return null;
+function modeSwitchRow(mode, options) {
+  if (mode === "bypassPermissions" && options?.isBypassPermissionsModeAvailable === false) return null;
   let permissionUpdates = parsePermissionUpdates([
     {
       type: "setMode",
       destination: "session",
-      mode: o,
+      mode,
     },
   ]);
   if (permissionUpdates === null) throw Error("setModeRow: schema rejected a designed setMode update");
-  if (t?.labelVariant === "plan-keep-context") {
-    let c =
-      o === "acceptEdits" ? "Yes, auto-accept edits" : o === "default" ? "Yes, manually approve edits" : null;
-    if (c !== null)
+  if (options?.labelVariant === "plan-keep-context") {
+    let label =
+      mode === "acceptEdits"
+        ? "Yes, auto-accept edits"
+        : mode === "default"
+          ? "Yes, manually approve edits"
+          : null;
+    if (label !== null)
       return new ConsentRow(
         CONSENT_ROW_MINT_TOKEN,
         jsxProd_default(Text, {
-          children: c,
+          children: label,
         }),
         permissionUpdates,
       );
@@ -526,7 +575,7 @@ function modeSwitchRow(o, t) {
         "Yes, and switch to ",
         jsxProd_default(Text, {
           bold: true,
-          children: PERMISSION_MODE_LABELS[o],
+          children: PERMISSION_MODE_LABELS[mode],
         }),
         " for this session",
       ],
@@ -537,30 +586,36 @@ function modeSwitchRow(o, t) {
 //@ chunk-0e8j1zzj.js:9992-10587 placement
 function parseModeSuggestions(directories) {
   if (!Array.isArray(directories)) return null;
-  let t;
+  let directoryCount;
   try {
-    t = directories.length;
+    directoryCount = directories.length;
   } catch {
     return null;
   }
-  if (typeof t !== "number" || !Number.isSafeInteger(t) || t < 0 || t > MAX_CONSENT_RULE_WIDTH) return null;
-  let d = [];
-  for (let i = 0; i < t; i++)
+  if (
+    typeof directoryCount !== "number" ||
+    !Number.isSafeInteger(directoryCount) ||
+    directoryCount < 0 ||
+    directoryCount > MAX_CONSENT_RULE_WIDTH
+  )
+    return null;
+  let dirList = [];
+  for (let dir = 0; dir < directoryCount; dir++)
     try {
-      let h = directories[i];
-      let k = titleFromRule(h);
-      if (k !== null) d.push(k);
+      let directory = directories[dir];
+      let label = titleFromRule(directory);
+      if (label !== null) dirList.push(label);
     } catch {}
-  let c = uniq(d);
-  if (c.length === 0) return null;
-  if (c.length > CONSENT_ROW_LIMITS) return null;
-  let m = uniqueLabels(c, (i) => listLabel(i));
-  if (bunStringWidth(m.join(", ")) > MAX_CONSENT_SUGGESTION_WIDTH) return null;
+  let uniqueDirs = uniq(dirList);
+  if (uniqueDirs.length === 0) return null;
+  if (uniqueDirs.length > CONSENT_ROW_LIMITS) return null;
+  let labels = uniqueLabels(uniqueDirs, (dir) => listLabel(dir));
+  if (bunStringWidth(labels.join(", ")) > MAX_CONSENT_SUGGESTION_WIDTH) return null;
   let permissionUpdates = parsePermissionUpdates([
     {
       type: "addDirectories",
       destination: "session",
-      directories: c,
+      directories: uniqueDirs,
     },
   ]);
   if (permissionUpdates === null) return null;
@@ -571,7 +626,7 @@ function parseModeSuggestions(directories) {
         "Yes, and always allow access to ",
         jsxProd_default(Text, {
           bold: true,
-          children: m.join(", "),
+          children: labels.join(", "),
         }),
         " for this session",
       ],
@@ -580,20 +635,20 @@ function parseModeSuggestions(directories) {
   );
 }
 //@ chunk-0e8j1zzj.js:10587-11216 placement
-function directoryRow(editablePrefixSeed, editablePrefix, d) {
+function directoryRow(editablePrefixSeed, editablePrefix, toolName) {
   if (typeof editablePrefixSeed !== "string" || safeDisplayText(editablePrefixSeed) !== editablePrefixSeed)
     return null;
   if (typeof editablePrefix !== "string") return null;
   let trimmed = editablePrefix.trim();
   if (trimmed === "" || safeDisplayText(trimmed) !== trimmed) return null;
   if (trimmed === "*") {
-    if (!isRuleableToolName(d)) return null;
+    if (!isRuleableToolName(toolName)) return null;
     let permissionUpdates = parsePermissionUpdates([
       {
         type: "addRules",
         rules: [
           {
-            toolName: d,
+            toolName,
           },
         ],
         behavior: "allow",
@@ -603,14 +658,14 @@ function directoryRow(editablePrefixSeed, editablePrefix, d) {
     if (permissionUpdates === null) return null;
     return new ConsentRow(
       CONSENT_ROW_MINT_TOKEN,
-      `Yes, and don\u2019t ask again for any ${d} command`,
+      `Yes, and don\u2019t ask again for any ${toolName} command`,
       permissionUpdates,
     );
   }
   if (
-    !isRuleableToolName(d) ||
+    !isRuleableToolName(toolName) ||
     !isStorableRuleValue({
-      toolName: d,
+      toolName,
       ruleContent: trimmed,
     })
   )
@@ -620,7 +675,7 @@ function directoryRow(editablePrefixSeed, editablePrefix, d) {
       type: "addRules",
       rules: [
         {
-          toolName: d,
+          toolName,
           ruleContent: trimmed,
         },
       ],
@@ -639,39 +694,43 @@ function directoryRow(editablePrefixSeed, editablePrefix, d) {
 /**
  * 导出值：EMPTY_DISPLAYED_UPDATES（空的已展示更新列表（非空断言））。
  */
-var AUTO_MODE_ROW_LABELS = {
-  workflow: "Yes, and switch to auto mode",
-  "exit-plan-resume": "Yes, and use auto mode",
-};
-var EMPTY_DISPLAYED_UPDATES = (() => {
-  let permissionUpdates = parsePermissionUpdates([]);
-  if (permissionUpdates === null) throw Error("NO_DISPLAYED_UPDATES: empty intake rejected");
-  return permissionUpdates;
-})();
+var AUTO_MODE_ROW_LABELS; // deferred: uses parsePermissionUpdates of its import cycle while loading; runs once the cycle is complete
+var EMPTY_DISPLAYED_UPDATES;
+deferInit("chunk-0e8j1zzj.js:11216", () => {
+  AUTO_MODE_ROW_LABELS = {
+    workflow: "Yes, and switch to auto mode",
+    "exit-plan-resume": "Yes, and use auto mode",
+  };
+  EMPTY_DISPLAYED_UPDATES = (() => {
+    let permissionUpdates = parsePermissionUpdates([]);
+    if (permissionUpdates === null) throw Error("NO_DISPLAYED_UPDATES: empty intake rejected");
+    return permissionUpdates;
+  })();
+});
 //@ chunk-0e8j1zzj.js:11416-11460 placement
-function autoModeRow(o) {
-  return new ConsentRow(CONSENT_ROW_MINT_TOKEN, AUTO_MODE_ROW_LABELS[o], EMPTY_DISPLAYED_UPDATES);
+function autoModeRow(variant) {
+  return new ConsentRow(CONSENT_ROW_MINT_TOKEN, AUTO_MODE_ROW_LABELS[variant], EMPTY_DISPLAYED_UPDATES);
 }
 //@ chunk-0e8j1zzj.js:11460-11902 placement
-function combineRows(o, ...t) {
-  let d = [o, ...t];
-  for (let u of d)
-    if (!isConsentRow(u)) throw Error("combineRows accepts only constructor-produced ConsentRows");
-  let flattened = d.flatMap((u) => [...u.applies]);
-  if (flattened.length > MAX_CONSENT_RULE_WIDTH)
+function combineRows(first, ...rest) {
+  let rows = [first, ...rest];
+  for (let row of rows)
+    if (!isConsentRow(row)) throw Error("combineRows accepts only constructor-produced ConsentRows");
+  let updates = rows.flatMap((row) => [...row.applies]);
+  if (updates.length > MAX_CONSENT_RULE_WIDTH)
     throw Error("combineRows: combined updates exceed the display intake cap");
-  let permissionUpdates = parsePermissionUpdates(flattened);
+  let permissionUpdates = parsePermissionUpdates(updates);
   if (permissionUpdates === null) throw Error("combineRows: schema rejected already-minted updates");
   return new ConsentRow(
     CONSENT_ROW_MINT_TOKEN,
     jsxProd_default(Text, {
-      children: d.map((u, i) =>
+      children: rows.map((row, index) =>
         jsxProd_default_2(
           Text,
           {
-            children: [i > 0 ? "; " : "", u.node],
+            children: [index > 0 ? "; " : "", row.node],
           },
-          i,
+          index,
         ),
       ),
     }),
@@ -687,6 +746,7 @@ export {
   isRuleableToolName,
   autoModeRow,
   ConsentRowSchema,
+  INVALID_TOOL_NAME_TEXT,
   AUTO_MODE_ROW_LABELS,
   ruleMatchesTool,
   CONSENT_UPDATE_TYPES,

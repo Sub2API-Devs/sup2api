@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:244617-246122 cjs-fingerprint
-var require_lisp = x(function (cjsExports, cjsModule) {
+var require_lisp = __commonJS(function (cjsExports, cjsModule) {
   function lisp(hljs) {
     let LITERAL = {
       className: "literal",

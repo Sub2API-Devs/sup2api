@@ -8,7 +8,7 @@
  * pieces: chunk-0j11jfmy.js (27)
  * attribution: placement 27
  */
-import { x, Ar } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
 import { CC_PLUGIN_TIPS, loadTipRegistryModule, tipSeatSlots } from "../../../services/tips/orgTips.js";
 import { cleanMessagesForLogging_2 } from "../../../utils/sessionStorage.js";
 import { loadCustomTips, excludesDefaultTips } from "../../../services/tips/spinnerTipsOverride.js";
@@ -27,8 +27,8 @@ import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugi
 /**
  * tips 插件扫描清单。
  */
-var TIPS_MANIFEST = x(function (Lo, b) {
-  b.exports = {
+var TIPS_MANIFEST = __commonJS(function (requireFn, moduleObject) {
+  moduleObject.exports = {
     scan: {
       hooks: ["session.start"],
       calls: ["env.get", "settings.read"],
@@ -46,7 +46,7 @@ var TIPS_MANIFEST = x(function (Lo, b) {
  */
 var EMPTY_HOOKS_TIPS = {};
 //@ chunk-0j11jfmy.js:3820-4021 placement
-Ar(EMPTY_HOOKS_TIPS, {
+__export(EMPTY_HOOKS_TIPS, {
   PLUGIN_DESCRIPTION: () => TIPS_DESCRIPTION,
   PLUGIN_NAME: () => CC_PLUGIN_TIPS,
   default: () => EMPTY_HOOKS_TIPS,
@@ -64,7 +64,7 @@ Ar(EMPTY_HOOKS_TIPS, {
  */
 var TIPS_HOOK_MODULE = {};
 //@ chunk-0j11jfmy.js:4030-4366 placement
-Ar(TIPS_HOOK_MODULE, {
+__export(TIPS_HOOK_MODULE, {
   COMMAND_CHECK_THREW_MESSAGE: () => ERR_ADVERTISED_COMMAND,
   CONTENT_THREW_MESSAGE: () => ERR_TIP_CONTENT,
   INTERNAL_USER_TYPE: () => cleanMessagesForLogging_2,
@@ -82,78 +82,78 @@ Ar(TIPS_HOOK_MODULE, {
   showNextTip: () => showSpinnerTip,
 });
 //@ chunk-0j11jfmy.js:4366-4804 placement
-var toTipRecord = (e, o) => ({
-  id: e.id,
-  cooldownSessions: e.cooldownSessions,
-  ...(e.maxLifetimeShows !== undefined && {
-    maxLifetimeShows: e.maxLifetimeShows,
+var toTipRecord = (tip, context) => ({
+  id: tip.id,
+  cooldownSessions: tip.cooldownSessions,
+  ...(tip.maxLifetimeShows !== undefined && {
+    maxLifetimeShows: tip.maxLifetimeShows,
   }),
-  ...(e.priority !== undefined && {
-    priority: e.priority,
+  ...(tip.priority !== undefined && {
+    priority: tip.priority,
   }),
-  ...(e.label !== undefined && {
-    label: e.label,
+  ...(tip.label !== undefined && {
+    label: tip.label,
   }),
-  ...(e.advertisedCommand !== undefined && {
-    advertisedCommand: e.advertisedCommand,
+  ...(tip.advertisedCommand !== undefined && {
+    advertisedCommand: tip.advertisedCommand,
   }),
-  providerAgnostic: e.providerAgnostic === true,
-  isRelevant: () => e.isRelevant(o),
+  providerAgnostic: tip.providerAgnostic === true,
+  isRelevant: () => tip.isRelevant(context),
   content: () =>
-    e.content({
-      session: o.session,
-      theme: o.theme,
-      storageV5: o.storageV5,
+    tip.content({
+      session: context.session,
+      theme: context.theme,
+      storageV5: context.storageV5,
     }),
 });
 //@ chunk-0j11jfmy.js:4804-5654 placement
 /**
  * 在 session.start 注册 Spinner 提示（CLAUDE_CODE_FORCE_TIP_ID 强制显示）。
  */
-function registerSpinnerTips(session, o) {
-  let r = o.context();
-  let s = o.storageV5();
-  let f = new Map();
-  function m(tips) {
-    for (let p of tips) f.set(p.id, p);
+function registerSpinnerTips(session, hooks) {
+  let tipContext = hooks.context();
+  let storageV5 = hooks.storageV5();
+  let tipById = new Map();
+  function remember(tips) {
+    for (let tip of tips) tipById.set(tip.id, tip);
     return tips;
   }
   return {
     candidates: async () => {
       let { getBuiltInTips, tipSessionCaches } = loadTipRegistryModule();
-      return m([
+      return remember([
         ...getBuiltInTips(),
-        ...(await tipSessionCaches.of(session).getMarketplacePluginTips(r.storageV5)),
-      ]).map((a) => toTipRecord(a, r));
+        ...(await tipSessionCaches.of(session).getMarketplacePluginTips(tipContext.storageV5)),
+      ]).map((tip) => toTipRecord(tip, tipContext));
     },
     orgTips: async () => {
       let { tips, trustedCount } = await loadCustomTips(session);
       return {
-        tips: m(tips).map((a) => toTipRecord(a, r)),
+        tips: remember(tips).map((tip) => toTipRecord(tip, tipContext)),
         trustedCount,
       };
     },
     isDefaultSuppressed: () => excludesDefaultTips(),
     isFirstPartyBackend: () => isFirstPartyApiBackend(),
-    isCommandOffered: (i) => loadTipRegistryModule().advertisedCommandIsOffered(i),
-    sessionsSinceShown: (i) => getSessionsSinceTipShown(i),
-    lifetimeShown: (i) => tipLifetimeShownCount(i),
-    hasFailed: (i) => loadTipRegistryModule().tipSessionCaches.of(session).failedTipIds.has(i),
-    markFailed: (i) => {
-      loadTipRegistryModule().tipSessionCaches.of(session).failedTipIds.add(i);
+    isCommandOffered: (command) => loadTipRegistryModule().advertisedCommandIsOffered(command),
+    sessionsSinceShown: (tipId) => getSessionsSinceTipShown(tipId),
+    lifetimeShown: (tipId) => tipLifetimeShownCount(tipId),
+    hasFailed: (tipId) => loadTipRegistryModule().tipSessionCaches.of(session).failedTipIds.has(tipId),
+    markFailed: (tipId) => {
+      loadTipRegistryModule().tipSessionCaches.of(session).failedTipIds.add(tipId);
     },
-    show: (i) => {
-      o.show(i);
+    show: (tipId) => {
+      hooks.show(tipId);
     },
-    record: (i) => {
-      let p = f.get(i);
-      if (p !== undefined) {
-        logForDebugging(`tips plugin: showing spinner tip ${i}`);
-        recordShownTip(p, "spinner", s);
+    record: (tipId) => {
+      let tip = tipById.get(tipId);
+      if (tip !== undefined) {
+        logForDebugging(`tips plugin: showing spinner tip ${tipId}`);
+        recordShownTip(tip, "spinner", storageV5);
       }
     },
-    report: (i, p) => {
-      logError(withTelemetryMessage(toError(i), p));
+    report: (error, message) => {
+      logError(withTelemetryMessage(toError(error), message));
     },
   };
 }
@@ -164,9 +164,9 @@ function registerSpinnerTips(session, o) {
 function spinnerTipHost() {
   let { host } = getRootSession();
   return {
-    install: (o) => {
-      tipSeatSlots.of(host).install((r) => {
-        o(registerSpinnerTips(host, r));
+    install: (onSeat) => {
+      tipSeatSlots.of(host).install((slot) => {
+        onSeat(registerSpinnerTips(host, slot));
       });
     },
   };
@@ -175,9 +175,9 @@ function spinnerTipHost() {
 /**
  * 包一层 register
  */
-var tipsHooksModule = (e) => ({
-  register: (o) => {
-    e.registerHooks(o, spinnerTipHost());
+var tipsHooksModule = (host) => ({
+  register: (on) => {
+    host.registerHooks(on, spinnerTipHost());
   },
 });
 //@ chunk-0j11jfmy.js:5796-5805 placement
@@ -217,12 +217,12 @@ var ERR_IS_RELEVANT = "tip isRelevant threw";
 /**
  * 读取提示内容，失败时标记并上报。
  */
-async function loadTipContent(e, o) {
+async function loadTipContent(session, tip) {
   try {
-    return await o.content();
+    return await tip.content();
   } catch (error) {
-    e.markFailed(o.id);
-    e.report(error, ERR_TIP_CONTENT);
+    session.markFailed(tip.id);
+    session.report(error, ERR_TIP_CONTENT);
     return "";
   }
 }
@@ -230,13 +230,13 @@ async function loadTipContent(e, o) {
 /**
  * 提示是否适用（广告的命令可用且 isRelevant 为真），失败视为不适用。
  */
-async function isTipRelevant(e, o) {
-  if (!(await isAdvertisedCommandOffered(e, o))) return false;
+async function isTipRelevant(host, tip) {
+  if (!(await isAdvertisedCommandOffered(host, tip))) return false;
   try {
-    return await o.isRelevant();
+    return await tip.isRelevant();
   } catch (error) {
-    e.markFailed(o.id);
-    e.report(error, ERR_IS_RELEVANT);
+    host.markFailed(tip.id);
+    host.report(error, ERR_IS_RELEVANT);
     return false;
   }
 }
@@ -244,13 +244,13 @@ async function isTipRelevant(e, o) {
 /**
  * 提示引用的命令是否可用。
  */
-async function isAdvertisedCommandOffered(e, o) {
-  if (o.advertisedCommand === undefined) return true;
+async function isAdvertisedCommandOffered(host, tip) {
+  if (tip.advertisedCommand === undefined) return true;
   try {
-    return await e.isCommandOffered(o.advertisedCommand);
+    return await host.isCommandOffered(tip.advertisedCommand);
   } catch (error) {
-    e.markFailed(o.id);
-    e.report(error, ERR_ADVERTISED_COMMAND);
+    host.markFailed(tip.id);
+    host.report(error, ERR_ADVERTISED_COMMAND);
     return false;
   }
 }
@@ -258,30 +258,32 @@ async function isAdvertisedCommandOffered(e, o) {
 /**
  * 读取提示开关与（内部用户）强制提示 id。
  */
-async function readTipSettings(e) {
-  let o = await e.settings();
-  let s = (await e.userType()) === cleanMessagesForLogging_2 ? await e.forcedTipId() : undefined;
+async function readTipSettings(host) {
+  let settings = await host.settings();
+  let forcedId = (await host.userType()) === cleanMessagesForLogging_2 ? await host.forcedTipId() : undefined;
   return {
-    isEnabled: o.spinnerTipsEnabled !== false,
-    forcedId: s === undefined || s === "" ? undefined : s,
+    isEnabled: settings.spinnerTipsEnabled !== false,
+    forcedId: forcedId === undefined || forcedId === "" ? undefined : forcedId,
   };
 }
 //@ chunk-0j11jfmy.js:6703-7293 placement
-async function pickSpinnerTip(e, forcedId) {
-  let r = await e.candidates();
-  let s = forcedId === undefined ? undefined : r.find((n) => n.id === forcedId);
-  if (s !== undefined) return [s];
-  let f = await e.orgTips();
-  let filtered = f.tips.filter((tip) => e.sessionsSinceShown(tip.id) >= tip.cooldownSessions);
-  if (f.trustedCount > 0 && e.isDefaultSuppressed()) return filtered;
-  let filtered_2 = r.filter((n) => !e.hasFailed(n.id));
-  let p = e.isFirstPartyBackend() ? filtered_2 : filtered_2.filter((n) => n.providerAgnostic);
-  let results = await Promise.all(p.map((n) => isTipRelevant(e, n)));
+async function pickSpinnerTip(host, forcedId) {
+  let candidates = await host.candidates();
+  let forced = forcedId === undefined ? undefined : candidates.find((tip) => tip.id === forcedId);
+  if (forced !== undefined) return [forced];
+  let org = await host.orgTips();
+  let filtered = org.tips.filter((tip) => host.sessionsSinceShown(tip.id) >= tip.cooldownSessions);
+  if (org.trustedCount > 0 && host.isDefaultSuppressed()) return filtered;
+  let filtered_2 = candidates.filter((tip) => !host.hasFailed(tip.id));
+  let eligible = host.isFirstPartyBackend() ? filtered_2 : filtered_2.filter((tip) => tip.providerAgnostic);
+  let results = await Promise.all(eligible.map((tip) => isTipRelevant(host, tip)));
   return [
-    ...p
-      .filter((n, U) => results[U] === true)
-      .filter((n) => e.sessionsSinceShown(n.id) >= n.cooldownSessions)
-      .filter((n) => n.maxLifetimeShows === undefined || e.lifetimeShown(n.id) < n.maxLifetimeShows),
+    ...eligible
+      .filter((tip, index) => results[index] === true)
+      .filter((tip) => host.sessionsSinceShown(tip.id) >= tip.cooldownSessions)
+      .filter(
+        (tip) => tip.maxLifetimeShows === undefined || host.lifetimeShown(tip.id) < tip.maxLifetimeShows,
+      ),
     ...filtered,
   ];
 }
@@ -289,69 +291,71 @@ async function pickSpinnerTip(e, forcedId) {
 /**
  * 选最久未显示的提示（相同时按优先级）。
  */
-function pickLeastRecentTip(e, o) {
-  if (o.length <= 1) return o[0];
-  return o
-    .map((s) => ({
-      tip: s,
-      sessions: e.sessionsSinceShown(s.id),
+function pickLeastRecentTip(host, tips) {
+  if (tips.length <= 1) return tips[0];
+  return tips
+    .map((tip) => ({
+      tip,
+      sessions: host.sessionsSinceShown(tip.id),
     }))
-    .toSorted((s, f) =>
-      s.sessions === f.sessions ? (f.tip.priority ?? 0) - (s.tip.priority ?? 0) : f.sessions - s.sessions,
+    .toSorted((a, b) =>
+      a.sessions === b.sessions ? (b.tip.priority ?? 0) - (a.tip.priority ?? 0) : b.sessions - a.sessions,
     )[0]?.tip;
 }
 //@ chunk-0j11jfmy.js:7512-7576 placement
 /**
  * 选本回合提示
  */
-var pickTurnTip = async (e, tipSettings) =>
-  tipSettings.isEnabled ? pickLeastRecentTip(e, await pickSpinnerTip(e, tipSettings.forcedId)) : undefined;
+var pickTurnTip = async (host, tipSettings) =>
+  tipSettings.isEnabled
+    ? pickLeastRecentTip(host, await pickSpinnerTip(host, tipSettings.forcedId))
+    : undefined;
 //@ chunk-0j11jfmy.js:7576-7789 placement
 /**
  * 选择并显示本回合的旋转提示，记录已显示。
  */
-async function showSpinnerTip(e, o) {
+async function showSpinnerTip(spinner, ctx) {
   try {
-    let r = await pickTurnTip(e, await readTipSettings(o));
-    let s = r === undefined ? "" : await loadTipContent(e, r);
-    if (r === undefined || s === "") {
-      e.show(undefined);
+    let tip = await pickTurnTip(spinner, await readTipSettings(ctx));
+    let text = tip === undefined ? "" : await loadTipContent(spinner, tip);
+    if (tip === undefined || text === "") {
+      spinner.show(undefined);
       return;
     }
-    e.show({
-      text: s,
-      label: r.label,
+    spinner.show({
+      text,
+      label: tip.label,
     });
-    e.record(r.id);
+    spinner.record(tip.id);
   } catch (error) {
-    e.show(undefined);
-    e.report(error, ERR_SPINNER_TIP);
+    spinner.show(undefined);
+    spinner.report(error, ERR_SPINNER_TIP);
   }
 }
 //@ chunk-0j11jfmy.js:7789-8033 placement
 /**
  * 注册 session.start 钩子：交互式会话安装提示选择器。
  */
-function registerTipsHooks(e, o) {
-  if (o === undefined) return;
-  e("session.start", (r, s, f) => {
-    if (s.isInteractive)
-      o.install((m) => {
-        showSpinnerTip(m, {
-          settings: () => r.settings.read(),
-          userType: () => r.env.get("USER_TYPE"),
-          forcedTipId: () => r.env.get("CLAUDE_CODE_FORCE_TIP_ID"),
+function registerTipsHooks(register, plugin) {
+  if (plugin === undefined) return;
+  register("session.start", (ctx, turn, proceed) => {
+    if (turn.isInteractive)
+      plugin.install((spinner) => {
+        showSpinnerTip(spinner, {
+          settings: () => ctx.settings.read(),
+          userType: () => ctx.env.get("USER_TYPE"),
+          forcedTipId: () => ctx.env.get("CLAUDE_CODE_FORCE_TIP_ID"),
         });
       });
-    return f(s);
+    return proceed(turn);
   });
 }
 //@ chunk-0j11jfmy.js:8033-8059 placement
 /**
  * 注册提示钩子
  */
-function registerTipsHooksOnce(e) {
-  registerTipsHooks(e, undefined);
+function registerTipsHooksOnce(register) {
+  registerTipsHooks(register, undefined);
 }
 //@ chunk-0j11jfmy.js:8059-8158 placement
 /**
@@ -366,3 +370,14 @@ var registerTipsPlugin = () =>
       TIPS_MANIFEST(),
     ),
   });
+export {
+  TIPS_DESCRIPTION,
+  EMPTY_HOOKS_TIPS,
+  tipsHooksModule,
+  registerSpinnerTips,
+  isTipsModOn,
+  TIPS_DEFAULT_OFF,
+  registerTipsPlugin,
+  toTipRecord,
+  spinnerTipHost,
+};

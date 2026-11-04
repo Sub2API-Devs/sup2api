@@ -84,14 +84,14 @@ async function loadOutputStyleFromFile(filePath, pluginName) {
 /**
  * 加载所有启用插件的输出样式（output-styles/ 或 manifest.outputStyles 下的 markdown），缓存在全局 outputStyles。
  */
-function loadPluginOutputStyles(e) {
+function loadPluginOutputStyles(storageV5) {
   let pluginRegistry = getPluginRegistry();
   pluginRegistry.outputStyles ??= (async () => {
-    let { enabled, errors } = await loadAllPluginsCacheOnly(e);
+    let { enabled, errors } = await loadAllPluginsCacheOnly(storageV5);
     let allStyles = [];
     if (errors.length > 0)
       logForDebugging(`Plugin loading errors: ${errors.map((e) => pluginErrorText(e)).join(", ")}`);
-    let y = null;
+    let failureKind = null;
     for (let plugin of enabled) {
       let loadedPaths = new Set();
       if (plugin.outputStylesPath)
@@ -103,7 +103,7 @@ function loadPluginOutputStyles(e) {
               `Loaded ${styles.length} output styles from plugin ${plugin.name} default directory`,
             );
         } catch (error) {
-          y = "plugin_load_output_styles_dir_failed";
+          failureKind = "plugin_load_output_styles_dir_failed";
           logForDebugging(
             `Failed to load output styles from plugin ${plugin.name} default directory: ${error}`,
             {
@@ -132,7 +132,7 @@ function loadPluginOutputStyles(e) {
               }
             }
           } catch (error) {
-            y = "plugin_load_output_styles_path_failed";
+            failureKind = "plugin_load_output_styles_path_failed";
             logForDebugging(
               `Failed to load output styles from plugin ${plugin.name} custom path ${stylePath}: ${error}`,
               {
@@ -142,7 +142,7 @@ function loadPluginOutputStyles(e) {
           }
     }
     logForDebugging(`Total plugin output styles loaded: ${allStyles.length}`);
-    if (y) logFeatureBad("plugin_load_output_styles", y);
+    if (failureKind) logFeatureBad("plugin_load_output_styles", failureKind);
     else logFeatureOk("plugin_load_output_styles");
     return allStyles;
   })();

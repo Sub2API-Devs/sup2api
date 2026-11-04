@@ -27,8 +27,8 @@ var ANTHROPIC_SERIF_RESOURCE = __cc_resource_1;
 /**
  * 缓存的字体 @font-face CSS。
  */
-var fontFacesState = identity({}, (e) => {
-  delete e.faces;
+var fontFacesState = identity({}, (state) => {
+  delete state.faces;
 });
 //@ chunk-cq05wh48.js:511-622 placement
 function embeddedFontFaces() {
@@ -42,9 +42,9 @@ function embeddedFontFaces() {
   }
 }
 //@ chunk-cq05wh48.js:622-837 placement
-function fontFaceCss(e, t, r) {
-  let str = readEmbeddedSync(r, import.meta.dirname).toString("base64");
-  return `@font-face{font-family:"${e}";src:url(data:font/woff2;base64,${str}) format("woff2");font-weight:${t};font-style:normal;font-display:swap}`;
+function fontFaceCss(fontFamily, fontWeight, fontPath) {
+  let str = readEmbeddedSync(fontPath, import.meta.dirname).toString("base64");
+  return `@font-face{font-family:"${fontFamily}";src:url(data:font/woff2;base64,${str}) format("woff2");font-weight:${fontWeight};font-style:normal;font-display:swap}`;
 }
 //@ chunk-cq05wh48.js:837-6077 placement
 var BROKEN_LINK_PIXELGRAM = {
@@ -647,36 +647,37 @@ var CHECKMARK_PIXELGRAM = {
   ],
 };
 //@ chunk-cq05wh48.js:13172-14023 placement
-function renderPixelgramSvg(e, t) {
-  let { width, height, frameRate, frames } = e;
-  let { cell, color, passes, until = "end" } = t;
-  let rest = frames[e.rest] === undefined ? 0 : e.rest;
-  let index = e.sequence.lastIndexOf(rest);
-  let l = until === "rest" && index >= 0 ? e.sequence.slice(0, index + 1) : e.sequence;
-  let g = `<svg class="pixelgram" viewBox="0 0 ${width} ${height}" width="${width * cell}" height="${height * cell}" fill="${color}" shape-rendering="crispEdges" aria-hidden="true">`;
-  let f = pixelRowsToPath(frames[rest] ?? []);
-  if (l.length < 2 || frames.length < 2) return `${g}<path d="${f}"/></svg>`;
-  let F = `${Number((l.length / frameRate).toFixed(4))}s`;
+function renderPixelgramSvg(animation, options) {
+  let { width, height, frameRate, frames } = animation;
+  let { cell, color, passes, until = "end" } = options;
+  let rest = frames[animation.rest] === undefined ? 0 : animation.rest;
+  let index = animation.sequence.lastIndexOf(rest);
+  let sequence = until === "rest" && index >= 0 ? animation.sequence.slice(0, index + 1) : animation.sequence;
+  let openTag = `<svg class="pixelgram" viewBox="0 0 ${width} ${height}" width="${width * cell}" height="${height * cell}" fill="${color}" shape-rendering="crispEdges" aria-hidden="true">`;
+  let restPath = pixelRowsToPath(frames[rest] ?? []);
+  if (sequence.length < 2 || frames.length < 2) return `${openTag}<path d="${restPath}"/></svg>`;
+  let duration = `${Number((sequence.length / frameRate).toFixed(4))}s`;
   let joined = frames
-    .map((frame, c) => {
-      if (c !== rest && !l.includes(c)) return "";
-      let joined = l.map((J) => (J === c ? 1 : 0)).join(";");
-      let R = c === rest ? "" : ' fill-opacity="0"';
-      return `<path d="${pixelRowsToPath(frame)}"${R}><animate attributeName="fill-opacity" calcMode="discrete" begin="0s" dur="${F}" repeatCount="${passes}" values="${joined}"/></path>`;
+    .map((frame, frameIndex) => {
+      if (frameIndex !== rest && !sequence.includes(frameIndex)) return "";
+      let joined = sequence.map((stepFrame) => (stepFrame === frameIndex ? 1 : 0)).join(";");
+      let hiddenAttr = frameIndex === rest ? "" : ' fill-opacity="0"';
+      return `<path d="${pixelRowsToPath(frame)}"${hiddenAttr}><animate attributeName="fill-opacity" calcMode="discrete" begin="0s" dur="${duration}" repeatCount="${passes}" values="${joined}"/></path>`;
     })
     .join("");
-  return `${g}<g class="moving">${joined}</g><path class="resting" display="none" d="${f}"/></svg>`;
+  return `${openTag}<g class="moving">${joined}</g><path class="resting" display="none" d="${restPath}"/></svg>`;
 }
 //@ chunk-cq05wh48.js:14023-14139 placement
 var REDUCED_MOTION_CSS =
   "@media (prefers-reduced-motion:reduce){.pixelgram .moving{display:none}.pixelgram .resting{display:inline}}";
 //@ chunk-cq05wh48.js:14139-14278 placement
 function pixelRowsToPath(frame) {
-  let t = "";
-  frame.forEach((r, n) => {
-    for (let i of r.matchAll(/#+/g)) t += `M${i.index} ${n}h${i[0].length}v1h-${i[0].length}z`;
+  let pathData = "";
+  frame.forEach((row, rowIndex) => {
+    for (let run of row.matchAll(/#+/g))
+      pathData += `M${run.index} ${rowIndex}h${run[0].length}v1h-${run[0].length}z`;
   });
-  return t;
+  return pathData;
 }
 export {
   renderPixelgramSvg,

@@ -35,13 +35,18 @@ import {
 } from "../utils/entrypointKinds.js";
 import { CLAUDE_AI_INFERENCE_SCOPE } from "./oauth.js";
 import { isEnvDefinedFalsy } from "../utils/envUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-3b05zaw0.js:529-600 placement
 /**
  * 网关计费头字段的条件之一：会话固定在网关（未 unpin）、JWT/ANTHROPIC_AUTH_TOKEN 的 aud 指向网关，或网关地址已确认。
  */
-function hasGatewayIdentity(e) {
-  return isGatewayAuthPinned(e) || isGatewayToken(e?.jwt ?? env.ANTHROPIC_AUTH_TOKEN) || noteGatewaySettled();
+function hasGatewayIdentity(gatewayAuth) {
+  return (
+    isGatewayAuthPinned(gatewayAuth) ||
+    isGatewayToken(gatewayAuth?.jwt ?? env.ANTHROPIC_AUTH_TOKEN) ||
+    noteGatewaySettled()
+  );
 }
 //@ chunk-3b05zaw0.js:600-743 placement
 /**
@@ -53,16 +58,25 @@ var ATTRIBUTION_PROJECT_ID_RE = /^claude_proj_(?:staging_|local_)?01[1-9A-HJ-NP-
 /**
  * 订阅用户且归属头可发（第一方直连、非远程、未关）。
  */
-function isSubscriberAttributionEligible(e) {
-  return e.isSubscriber && canSendSubscriberAttribution();
+function isSubscriberAttributionEligible(agentContext) {
+  return agentContext.isSubscriber && canSendSubscriberAttribution();
 }
 //@ chunk-3b05zaw0.js:786-2921 callgraph-witnessed = getAttributionHeader (0.295)
 /**
  * 生成计费归属头文本 "x-anthropic-billing-header: cc_version=<版本>.<3位指纹>; cc_entrypoint=<入口>;"，按条件追加 cch=00000（第一方 OAuth 或 vertex，发送前由原生层替换）、cc_workload、cc_is_subagent、cc_prev_req、cc_prompt_id、cc_turn_origin、cc_prompt_index/cc_turn_index、cc_gateway、cc_project、cc_prev_msg 等字段；CLAUDE_CODE_ATTRIBUTION_HEADER 为假值时返回空串。
  */
-function getAttributionHeader(fingerprint, agentContext, c, p, d, T, o) {
+function getAttributionHeader(
+  fingerprint,
+  agentContext,
+  previousRequestId,
+  promptId,
+  turnOrigin,
+  turnPosition,
+  extraContext,
+) {
   let apiProvider = getAPIProvider();
-  if (!(o?.ignoreEnvOptOut === true && isFirstPartyDirectApi()) && isAttributionHeaderDisabled()) return "";
+  if (!(extraContext?.ignoreEnvOptOut === true && isFirstPartyDirectApi()) && isAttributionHeaderDisabled())
+    return "";
   let version = `${
     {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -76,72 +90,78 @@ function getAttributionHeader(fingerprint, agentContext, c, p, d, T, o) {
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION
   }.${fingerprint}`;
-  let h = getEntrypointOnRequests() ?? process.env.CLAUDE_CODE_ENTRYPOINT ?? "unknown";
-  let U =
+  let entrypoint = getEntrypointOnRequests() ?? process.env.CLAUDE_CODE_ENTRYPOINT ?? "unknown";
+  let cchSegment =
     (apiProvider === "firstParty" && isFirstPartyAnthropicBaseUrl()) || apiProvider === "vertex"
       ? " cch=00000;"
       : "";
   let workload = getWorkload();
-  let x = workload ? ` cc_workload=${workload};` : "";
-  let D = isSubagentContext(agentContext) && !agentContext.isMainSession ? " cc_is_subagent=true;" : "";
-  let w =
-    c !== undefined &&
-    /^req_[A-Za-z0-9_-]{1,36}$/.test(c) &&
+  let workloadSegment = workload ? ` cc_workload=${workload};` : "";
+  let subagentSegment =
+    isSubagentContext(agentContext) && !agentContext.isMainSession ? " cc_is_subagent=true;" : "";
+  let prevRequestSegment =
+    previousRequestId !== undefined &&
+    /^req_[A-Za-z0-9_-]{1,36}$/.test(previousRequestId) &&
     apiProvider === "firstParty" &&
     isFirstPartyAnthropicBaseUrl()
-      ? ` cc_prev_req=${c};`
+      ? ` cc_prev_req=${previousRequestId};`
       : "";
-  let v =
-    p !== undefined &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(p) &&
+  let promptIdSegment =
+    promptId !== undefined &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(promptId) &&
     apiProvider === "firstParty" &&
     isFirstPartyAnthropicBaseUrl()
-      ? ` cc_prompt_id=${p};`
+      ? ` cc_prompt_id=${promptId};`
       : "";
-  let k =
-    typeof d === "string" &&
-    /^[a-z][a-z_]{0,31}$/.test(d) &&
+  let turnOriginSegment =
+    typeof turnOrigin === "string" &&
+    /^[a-z][a-z_]{0,31}$/.test(turnOrigin) &&
     apiProvider === "firstParty" &&
     isFirstPartyAnthropicBaseUrl()
-      ? ` cc_turn_origin=${d};`
+      ? ` cc_turn_origin=${turnOrigin};`
       : "";
-  let promptIndex = T?.promptIndex;
-  let turnIndex = T?.turnIndex;
-  let j =
+  let promptIndex = turnPosition?.promptIndex;
+  let turnIndex = turnPosition?.turnIndex;
+  let turnIndexSegment =
     isIntInRange(promptIndex, 0) &&
     isIntInRange(turnIndex, 1) &&
     apiProvider === "firstParty" &&
     isFirstPartyAnthropicBaseUrl()
       ? ` cc_prompt_index=${promptIndex}; cc_turn_index=${turnIndex};`
       : "";
-  let a = apiProvider === "gateway" ? getGatewayAuth() : null;
-  let A = (apiProvider === "gateway" || configuredApiProxyHost() !== undefined) && hasGatewayIdentity(a);
-  let _ = a?.url ?? env.ANTHROPIC_BASE_URL;
-  let L =
-    (_ !== undefined && (!URL.canParse(_) || isVouchedHostSetMember(hostOf(new URL(_))))) ||
-    (a?.hostVerdict !== undefined && "vouched" in a.hostVerdict);
-  let H = (apiProvider === "gateway" || A) && !L ? ` cc_gateway=${A ? "1" : "env"};` : "";
-  let attributionProject = o?.attributionProject;
-  let q =
+  let gatewayAuth = apiProvider === "gateway" ? getGatewayAuth() : null;
+  let hasGatewayIdentityFlag =
+    (apiProvider === "gateway" || configuredApiProxyHost() !== undefined) && hasGatewayIdentity(gatewayAuth);
+  let gatewayUrl = gatewayAuth?.url ?? env.ANTHROPIC_BASE_URL;
+  let hostVouched =
+    (gatewayUrl !== undefined &&
+      (!URL.canParse(gatewayUrl) || isVouchedHostSetMember(hostOf(new URL(gatewayUrl))))) ||
+    (gatewayAuth?.hostVerdict !== undefined && "vouched" in gatewayAuth.hostVerdict);
+  let gatewaySegment =
+    (apiProvider === "gateway" || hasGatewayIdentityFlag) && !hostVouched
+      ? ` cc_gateway=${hasGatewayIdentityFlag ? "1" : "env"};`
+      : "";
+  let attributionProject = extraContext?.attributionProject;
+  let projectSegment =
     attributionProject !== undefined &&
     ATTRIBUTION_PROJECT_ID_RE.test(attributionProject.taggedId) &&
     ATTRIBUTION_PROJECT_SOURCE_SET.has(attributionProject.source) &&
     canSendSubscriberAttribution()
       ? ` cc_project=${attributionProject.taggedId}; cc_project_src=${attributionProject.source};`
       : "";
-  let messageId = o?.responseBeforeCompaction?.messageId;
-  let promptIndex_2 = o?.responseBeforeCompaction?.turnPosition?.promptIndex;
-  let turnIndex_2 = o?.responseBeforeCompaction?.turnPosition?.turnIndex;
-  let R = apiProvider === "firstParty" && isFirstPartyAnthropicBaseUrl();
-  let Y =
-    messageId !== undefined && /^msg_[A-Za-z0-9_]{1,64}$/.test(messageId) && R
+  let messageId = extraContext?.responseBeforeCompaction?.messageId;
+  let promptIndex_2 = extraContext?.responseBeforeCompaction?.turnPosition?.promptIndex;
+  let turnIndex_2 = extraContext?.responseBeforeCompaction?.turnPosition?.turnIndex;
+  let isFirstPartyDirect = apiProvider === "firstParty" && isFirstPartyAnthropicBaseUrl();
+  let prevMsgSegment =
+    messageId !== undefined && /^msg_[A-Za-z0-9_]{1,64}$/.test(messageId) && isFirstPartyDirect
       ? ` cc_prev_msg=${messageId};`
       : "";
-  let B =
-    isIntInRange(promptIndex_2, 0) && isIntInRange(turnIndex_2, 1) && R
+  let prevTurnSegment =
+    isIntInRange(promptIndex_2, 0) && isIntInRange(turnIndex_2, 1) && isFirstPartyDirect
       ? ` cc_prev_prompt_index=${promptIndex_2}; cc_prev_turn_index=${turnIndex_2};`
       : "";
-  let header = `x-anthropic-billing-header: cc_version=${version}; cc_entrypoint=${h};${U}${x}${D}${w}${v}${k}${j}${H}${q}${Y}${B}`;
+  let header = `x-anthropic-billing-header: cc_version=${version}; cc_entrypoint=${entrypoint};${cchSegment}${workloadSegment}${subagentSegment}${prevRequestSegment}${promptIdSegment}${turnOriginSegment}${turnIndexSegment}${gatewaySegment}${projectSegment}${prevMsgSegment}${prevTurnSegment}`;
   logForDebugging(`attribution header ${header}`);
   return header;
 }
@@ -223,21 +243,23 @@ function applyEntrypointOnRequestsEnv() {
 /**
  * Anthropic 认证开启且 OAuth scope 含 user:inference。
  */
-function hasInferenceScope(e) {
-  return e.anthropicAuthEnabled && Boolean(e.oauthScopes?.includes(CLAUDE_AI_INFERENCE_SCOPE));
+function hasInferenceScope(tokenScope) {
+  return (
+    tokenScope.anthropicAuthEnabled && Boolean(tokenScope.oauthScopes?.includes(CLAUDE_AI_INFERENCE_SCOPE))
+  );
 }
 //@ chunk-3b05zaw0.js:4036-4164 layout
 /**
  * 订阅用户用 OAuth access token（authToken），否则用 apiKey。
  */
-function getAuthCredentialsForClient(e) {
-  if (e.isSubscriber)
+function getAuthCredentialsForClient(auth) {
+  if (auth.isSubscriber)
     return {
       apiKey: null,
-      authToken: e.oauthAccessToken ?? null,
+      authToken: auth.oauthAccessToken ?? null,
     };
   return {
-    apiKey: e.apiKey,
+    apiKey: auth.apiKey,
     authToken: null,
   };
 }
@@ -245,8 +267,8 @@ function getAuthCredentialsForClient(e) {
 /**
  * 整数且在 [min, 1e7] 内（用于 prompt/turn 序号校验）。
  */
-function isIntInRange(e, r) {
-  return typeof e === "number" && Number.isInteger(e) && e >= r && e <= 1e7;
+function isIntInRange(value, min) {
+  return typeof value === "number" && Number.isInteger(value) && value >= min && value <= 1e7;
 }
 //@ chunk-3b05zaw0.js:4242-4314 layout
 /**
@@ -275,23 +297,33 @@ function isAttributionHeaderDisabled() {
 /**
  * 归属项目来源白名单的 Set。
  */
-var ATTRIBUTION_PROJECT_SOURCE_SET = new Set(ATTRIBUTION_PROJECT_SOURCES);
+var ATTRIBUTION_PROJECT_SOURCE_SET; // deferred: uses ATTRIBUTION_PROJECT_SOURCES of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3b05zaw0.js:4434", () => {
+  ATTRIBUTION_PROJECT_SOURCE_SET = new Set(ATTRIBUTION_PROJECT_SOURCES);
+});
 //@ chunk-w5ndchqs.js:2709-2972 fingerprint = DEFAULT_PREFIX (0.5)
 /**
  * 身份行（system 第 2 块）："You are Claude Code, Anthropic's official CLI for Claude."；Ue 为 Agent SDK 内运行的 CLI 版本，Ie 为 "You are a Claude agent, built on Anthropic's Claude Agent SDK."；J 为三者集合。
  */
-var DEFAULT_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
-var AGENT_SDK_CLAUDE_CODE_PRESET_PREFIX =
-  "You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.";
-var AGENT_SDK_PREFIX = "You are a Claude agent, built on Anthropic's Claude Agent SDK.";
-var CLI_SYSPROMPT_PREFIXES = [DEFAULT_PREFIX, AGENT_SDK_CLAUDE_CODE_PRESET_PREFIX, AGENT_SDK_PREFIX];
-var CLI_SYSPROMPT_PREFIX_SET = new Set(CLI_SYSPROMPT_PREFIXES);
+var DEFAULT_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var AGENT_SDK_CLAUDE_CODE_PRESET_PREFIX;
+var AGENT_SDK_PREFIX;
+var CLI_SYSPROMPT_PREFIXES;
+var CLI_SYSPROMPT_PREFIX_SET;
+deferInit("chunk-w5ndchqs.js:2709", () => {
+  DEFAULT_PREFIX = "You are Claude Code, Anthropic's official CLI for Claude.";
+  AGENT_SDK_CLAUDE_CODE_PRESET_PREFIX =
+    "You are Claude Code, Anthropic's official CLI for Claude, running within the Claude Agent SDK.";
+  AGENT_SDK_PREFIX = "You are a Claude agent, built on Anthropic's Claude Agent SDK.";
+  CLI_SYSPROMPT_PREFIXES = [DEFAULT_PREFIX, AGENT_SDK_CLAUDE_CODE_PRESET_PREFIX, AGENT_SDK_PREFIX];
+  CLI_SYSPROMPT_PREFIX_SET = new Set(CLI_SYSPROMPT_PREFIXES);
+});
 //@ chunk-w5ndchqs.js:2972-3004 layout
 /**
  * 文本是否为三条身份行之一。
  */
-function isCliSyspromptPrefix(e) {
-  return CLI_SYSPROMPT_PREFIX_SET.has(e);
+function isCliSyspromptPrefix(text) {
+  return CLI_SYSPROMPT_PREFIX_SET.has(text);
 }
 //@ chunk-w5ndchqs.js:3004-3172 fingerprint = getCLISyspromptPrefix (0.887)
 /**
@@ -309,8 +341,8 @@ function getCLISyspromptPrefix(options) {
 export {
   useLocalProjectsEntrypoint,
   applyEntrypointOnRequestsEnv,
-  getCLISyspromptPrefix,
   getAttributionHeader,
+  getCLISyspromptPrefix,
   isCliSyspromptPrefix,
   hasInferenceScope,
   getAuthCredentialsForClient,

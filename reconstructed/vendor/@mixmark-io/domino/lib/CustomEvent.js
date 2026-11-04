@@ -5,17 +5,17 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Event } from "./Event.js";
 
 //@ chunk-vwj6ccer.js:76243-76397 cjs-require-graph
-var require_CustomEvent = x(function (cjsExports, cjsModule) {
+var require_CustomEvent = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = CustomEvent;
-  var g0 = require_Event();
+  var EventModule = require_Event();
   function CustomEvent(type, dictionary) {
-    g0.call(this, type, dictionary);
+    EventModule.call(this, type, dictionary);
   }
-  CustomEvent.prototype = Object.create(g0.prototype, {
+  CustomEvent.prototype = Object.create(EventModule.prototype, {
     constructor: {
       value: CustomEvent,
     },

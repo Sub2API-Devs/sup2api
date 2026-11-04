@@ -26,25 +26,27 @@ function makeLocalOwnPublishesStore() {
   return localValueSlot(EMPTY_OWN_PUBLISHES);
 }
 //@ chunk-06y4szbn.js:31632-32020 placement
-function recordOwnPublish(ownPublishes, slug, version, s = {}) {
+function recordOwnPublish(ownPublishes, slug, version, extra = {}) {
   if (!VER_SHAPE.test(version)) return;
-  ownPublishes.set((h) => {
-    let b = h.ownVers[slug] ?? [];
-    let y = h.mergedVers?.[slug] ?? [];
-    let included = b.includes(version);
-    let included_2 = y.includes(version);
-    if (included && (s.merged !== true || included_2)) return h;
-    let R = included ? b : [...b, version].slice(-MAX_OWN_VERSIONS);
-    let filtered = (s.merged === true && !included_2 ? [...y, version] : y).filter((k) => R.includes(k));
+  ownPublishes.set((state) => {
+    let ownVers = state.ownVers[slug] ?? [];
+    let mergedVers = state.mergedVers?.[slug] ?? [];
+    let included = ownVers.includes(version);
+    let included_2 = mergedVers.includes(version);
+    if (included && (extra.merged !== true || included_2)) return state;
+    let nextVers = included ? ownVers : [...ownVers, version].slice(-MAX_OWN_VERSIONS);
+    let filtered = (extra.merged === true && !included_2 ? [...mergedVers, version] : mergedVers).filter(
+      (listedVer) => nextVers.includes(listedVer),
+    );
     return {
-      ...h,
+      ...state,
       ownVers: {
-        ...h.ownVers,
-        [slug]: R,
+        ...state.ownVers,
+        [slug]: nextVers,
       },
-      ...((h.mergedVers?.[slug] !== undefined || filtered.length > 0) && {
+      ...((state.mergedVers?.[slug] !== undefined || filtered.length > 0) && {
         mergedVers: {
-          ...h.mergedVers,
+          ...state.mergedVers,
           [slug]: filtered,
         },
       }),
@@ -52,61 +54,64 @@ function recordOwnPublish(ownPublishes, slug, version, s = {}) {
   });
 }
 //@ chunk-06y4szbn.js:32020-32083 placement
-function isOwnPublishedVer(ownPublishes, n, r) {
-  return ownPublishes.get().ownVers[n]?.includes(r) ?? false;
+function isOwnPublishedVer(ownPublishes, slug, ver) {
+  return ownPublishes.get().ownVers[slug]?.includes(ver) ?? false;
 }
 //@ chunk-06y4szbn.js:32083-32194 placement
-function isVouchedOwnVer(ownPublishes, slug, ver) {
-  let s = ownPublishes.get();
-  return (s.ownVers[slug]?.includes(ver) ?? false) && !(s.mergedVers?.[slug]?.includes(ver) ?? false);
+function isVouchedOwnVer(ownPublishes, artifactSlug, ver) {
+  let state = ownPublishes.get();
+  return (
+    (state.ownVers[artifactSlug]?.includes(ver) ?? false) &&
+    !(state.mergedVers?.[artifactSlug]?.includes(ver) ?? false)
+  );
 }
 //@ chunk-06y4szbn.js:32194-32252 placement
-function hasOwnPublished(ownPublishes, n) {
-  return (ownPublishes.get().ownVers[n]?.length ?? 0) > 0;
+function hasOwnPublished(ownPublishes, slug) {
+  return (ownPublishes.get().ownVers[slug]?.length ?? 0) > 0;
 }
 //@ chunk-06y4szbn.js:32252-32326 placement
-async function withPublishInFlight(ownPublishes, slug, r) {
+async function withPublishInFlight(ownPublishes, slug, run) {
   markPublishInFlight(ownPublishes, slug);
   try {
-    return await r();
+    return await run();
   } finally {
     clearPublishInFlight(ownPublishes, slug);
   }
 }
 //@ chunk-06y4szbn.js:32326-32415 placement
-function markPublishInFlight(e, n) {
-  e.set((r) => ({
-    ...r,
+function markPublishInFlight(ownPublishes, slug) {
+  ownPublishes.set((state) => ({
+    ...state,
     inFlight: {
-      ...r.inFlight,
-      [n]: (r.inFlight[n] ?? 0) + 1,
+      ...state.inFlight,
+      [slug]: (state.inFlight[slug] ?? 0) + 1,
     },
   }));
 }
 //@ chunk-06y4szbn.js:32415-32595 placement
-function clearPublishInFlight(e, n) {
-  e.set((r) => {
-    let s = r.inFlight[n] ?? 0;
-    if (s === 0) return r;
-    if (s === 1) {
-      let { [n]: h, ...b } = r.inFlight;
+function clearPublishInFlight(ownPublishes, slug) {
+  ownPublishes.set((state) => {
+    let count = state.inFlight[slug] ?? 0;
+    if (count === 0) return state;
+    if (count === 1) {
+      let { [slug]: removed, ...rest } = state.inFlight;
       return {
-        ...r,
-        inFlight: b,
+        ...state,
+        inFlight: rest,
       };
     }
     return {
-      ...r,
+      ...state,
       inFlight: {
-        ...r.inFlight,
-        [n]: s - 1,
+        ...state.inFlight,
+        [slug]: count - 1,
       },
     };
   });
 }
 //@ chunk-06y4szbn.js:32595-32646 placement
-function isPublishInFlight(ownPublishes, n) {
-  return (ownPublishes.get().inFlight[n] ?? 0) > 0;
+function isPublishInFlight(ownPublishes, slug) {
+  return (ownPublishes.get().inFlight[slug] ?? 0) > 0;
 }
 export {
   withPublishInFlight,
@@ -119,4 +124,5 @@ export {
   markPublishInFlight,
   clearPublishInFlight,
   makeOwnPublishesStore,
+  makeLocalOwnPublishesStore,
 };

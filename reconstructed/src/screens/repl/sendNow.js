@@ -34,8 +34,8 @@ var BIDI_CONTROL_RE = /[\u202A-\u202E\u2066-\u2069]/g;
  */
 function ideFileLabel(filePath) {
   let index = filePath.lastIndexOf("/");
-  let D = index >= 0 ? index : filePath.lastIndexOf("\\");
-  let sliced = filePath.slice(D + 1);
+  let slashIndex = index >= 0 ? index : filePath.lastIndexOf("\\");
+  let sliced = filePath.slice(slashIndex + 1);
   return collapseWhitespace(stripAnsiSequences(toWellFormedString(sliced)).replace(BIDI_CONTROL_RE, ""));
 }
 //@ chunk-18hwfzwa.js:120490-120521 placement
@@ -51,16 +51,16 @@ function hasSendNowBinding() {
 /**
  * chat:sendNow 快捷键显示文本。
  */
-function sendNowShortcut(h, x) {
-  let actionChords = getActionChords("chat:sendNow", "Chat", h);
-  let L =
-    (x ? undefined : actionChords.findLast((actionChord) => !hasShortcutKey(actionChord))) ??
+function sendNowShortcut(uiSession, plainOnly) {
+  let actionChords = getActionChords("chat:sendNow", "Chat", uiSession);
+  let chord =
+    (plainOnly ? undefined : actionChords.findLast((actionChord) => !hasShortcutKey(actionChord))) ??
     actionChords.at(-1);
-  return L ? chordToString(L) : "";
+  return chord ? chordToString(chord) : "";
 }
 //@ chunk-18hwfzwa.js:120741-120821 placement
 function hasShortcutKey(actionChord) {
-  return actionChord.some((x) => x.super || (x.key === "enter" && (x.ctrl || x.shift)));
+  return actionChord.some((part) => part.super || (part.key === "enter" && (part.ctrl || part.shift)));
 }
 //@ chunk-18hwfzwa.js:1474487-1474644 placement = call (0.304)
 function call_4(onDone, context) {
@@ -78,9 +78,9 @@ function call_4(onDone, context) {
 /**
  * 立即发送排队消息（打断当前回合）并记录遥测。
  */
-function sendQueuedNow(h) {
+function sendQueuedNow(turn) {
   if (!isQueuedSendNowEnabled()) return false;
-  switch (interruptForSendNow(h)) {
+  switch (interruptForSendNow(turn)) {
     case "cancelled":
       logFeatureOk("input_send_queued_now");
       return true;
@@ -95,15 +95,15 @@ function sendQueuedNow(h) {
 /**
  * 立即发送键：能不取消回合就直接投递，否则打断回合。
  */
-function handleSendNowKey(h) {
-  let x = isSendNowKeyEnabled();
-  if (x && canSendNow(h) && h.deliverWithoutCancel()) {
+function handleSendNowKey(turn) {
+  let keyEnabled = isSendNowKeyEnabled();
+  if (keyEnabled && canSendNow(turn) && turn.deliverWithoutCancel()) {
     logFeatureOk("input_send_now_key");
     return true;
   }
-  switch (interruptForSendNow(h)) {
+  switch (interruptForSendNow(turn)) {
     case "cancelled":
-      if (x) logFeatureSad("input_send_now_key", "fell_back_to_cancel");
+      if (keyEnabled) logFeatureSad("input_send_now_key", "fell_back_to_cancel");
       else logFeatureOk("input_send_now_key");
       return true;
     case "no_live_controller":
@@ -114,8 +114,12 @@ function handleSendNowKey(h) {
   }
 }
 //@ chunk-18hwfzwa.js:1475195-1475284 placement
-function canSendNow(h) {
-  return (h.mode ?? "prompt") === "prompt" && h.turn.guard.isActive && hasRefillableMainAgentCommand(h.queue);
+function canSendNow(input) {
+  return (
+    (input.mode ?? "prompt") === "prompt" &&
+    input.turn.guard.isActive &&
+    hasRefillableMainAgentCommand(input.queue)
+  );
 }
 //@ chunk-18hwfzwa.js:1475284-1475438 placement
 /**

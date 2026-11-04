@@ -11,6 +11,7 @@
 import { isInCloudSession } from "./RemoteAgentTask.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { isSelfAddressableSessionId } from "../../bridge/sessionIdCompat.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-2vae0cjf.js:263-775 placement
 /**
@@ -52,7 +53,10 @@ class StartupCcrEnvironment {
 /**
  * 启动 CCR 环境单例。
  */
-var startupCcrEnv = new StartupCcrEnvironment();
+var startupCcrEnv; // deferred: uses StartupCcrEnvironment of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-2vae0cjf.js:775", () => {
+  startupCcrEnv = new StartupCcrEnvironment();
+});
 //@ chunk-2vae0cjf.js:788-872 placement
 /**
  * 取会话入口地址，未设置时回退到 ANTHROPIC_BASE_URL。
@@ -74,7 +78,7 @@ function bridgeMcpCarrierRole() {
 //@ chunk-2vae0cjf.js:1200-1329 placement
 function selfSessionIds() {
   return [process.env.CLAUDE_CODE_REMOTE_SESSION_ID, process.env.CLAUDE_CODE_SESSION_ID].filter(
-    (e) => e !== undefined && isSelfAddressableSessionId(e),
+    (sessionId) => sessionId !== undefined && isSelfAddressableSessionId(sessionId),
   );
 }
 //@ chunk-2vae0cjf.js:1329-1500 placement

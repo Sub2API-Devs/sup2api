@@ -10,7 +10,13 @@
  */
 import { figSpecRegistryByHost } from "../../../utils/Shell.js";
 import { useHost } from "../../../context/session.js";
-import { Q, y, R, ce, P } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  useMemo,
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+} from "../../../../vendor/react/cjs/react.production.js";
 import {
   serializeApprovalPayload,
   MAX_PAYLOAD_UNITS,
@@ -86,50 +92,59 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
   let command = figSpecRegistryByHost.of(useHost());
   let command_2 = payload.command;
   let decisionReason = payload.permissionResult.decisionReason;
-  let Re = Q(
+  let commandDisplay = useMemo(
     () =>
       serializeApprovalPayload(payload.input.command, {
         maxUnits: MAX_PAYLOAD_UNITS,
       }),
     [payload.input.command],
   );
-  let Be = Re.kind === "withheld" || typeof payload.input.command !== "string";
-  let [He, We] = y();
+  let isCommandWithheld = commandDisplay.kind === "withheld" || typeof payload.input.command !== "string";
+  let [refinedPrefix, setRefinedPrefix] = useState();
   let toolPermissionContext = CommandDisplay({
-    commandDisplay: Re,
+    commandDisplay,
     description: payload.description,
-    refinedPrefix: He,
+    refinedPrefix,
   });
-  let Xe = Be || !toolPermissionContext.body.offersStanding;
+  let isStandingUnavailable = isCommandWithheld || !toolPermissionContext.body.offersStanding;
   let isStandingHeld = toolPermissionContext.body.isStandingHeld;
-  let { requestedMachine, runsOnMachine } = Q(
+  let { requestedMachine, runsOnMachine } = useMemo(
     () => getRequestedMachineForPrompt(payload.input),
     [payload.input],
   );
-  let It = findSafetyCheckReason(decisionReason, (pr) => !pr.classifierApprovable) !== undefined;
-  let Ot = payload.permissionResult.inPlaceOfClassifier === true;
-  let Et =
+  let hasNonApprovableCheck =
+    findSafetyCheckReason(decisionReason, (safetyCheck) => !safetyCheck.classifierApprovable) !== undefined;
+  let hideIndexes = payload.permissionResult.inPlaceOfClassifier === true;
+  let oneTimeOnly =
     payload.isAskCappedByOrg ||
-    Ot ||
+    hideIndexes ||
     payload.permissionResult.oneTimeAnswersOnly === true ||
     isRemoteOrPluginAgent(payload.requestSource);
-  let Dt = It || Et;
-  let Lt = requestedMachine !== undefined;
-  let oo = Q(
+  let noStanding = hasNonApprovableCheck || oneTimeOnly;
+  let runsRemote = requestedMachine !== undefined;
+  let suggestions = useMemo(
     () =>
-      Be || Et
+      isCommandWithheld || oneTimeOnly
         ? null
         : parseBashConsentSuggestions(
-            It
+            hasNonApprovableCheck
               ? filterAddDirectoriesUpdates(payload.permissionResult.suggestions)
               : payload.permissionResult.suggestions,
-            Lt ? (runsOnMachine ?? "the attached computer") : undefined,
+            runsRemote ? (runsOnMachine ?? "the attached computer") : undefined,
           ),
-    [Be, Et, It, payload.permissionResult.suggestions, Lt, runsOnMachine],
+    [
+      isCommandWithheld,
+      oneTimeOnly,
+      hasNonApprovableCheck,
+      payload.permissionResult.suggestions,
+      runsRemote,
+      runsOnMachine,
+    ],
   );
-  let Xt = Xe ? null : oo;
-  let io = !Dt && !Xe && runsOnMachine !== undefined && Xt === null;
-  let toolName = Q(() => sanitizeToolNameForAnalytics(payload.toolName), [payload.toolName]);
+  let suggestionsRow = isStandingUnavailable ? null : suggestions;
+  let standingUnavailable =
+    !noStanding && !isStandingUnavailable && runsOnMachine !== undefined && suggestionsRow === null;
+  let toolName = useMemo(() => sanitizeToolNameForAnalytics(payload.toolName), [payload.toolName]);
   let {
     acceptFeedback,
     rejectFeedback,
@@ -146,15 +161,15 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
     feedbackTypeOf: ShowInIDEPrompt,
     toolName,
     isMcp: payload.isMcp,
-    initialFocusedType: Ot ? "reject" : "accept",
+    initialFocusedType: hideIndexes ? "reject" : "accept",
   });
-  let Cn = KillAgentsConfirm(payload.requestSource);
-  let No = decisionReason?.type === "subcommandResults";
-  let [vo, Yo] = y(() => {
-    if (Be) return;
-    if (No) {
-      let backendBashRules = extractRules([...(oo?.applies ?? [])]).filter(
-        (Ir) => Ir.toolName === BASH_TOOL_NAME && Ir.ruleContent,
+  let killAgentsNotice = KillAgentsConfirm(payload.requestSource);
+  let hasSubcommandResults = decisionReason?.type === "subcommandResults";
+  let [editablePrefix, setEditablePrefix] = useState(() => {
+    if (isCommandWithheld) return;
+    if (hasSubcommandResults) {
+      let backendBashRules = extractRules([...(suggestions?.applies ?? [])]).filter(
+        (rule) => rule.toolName === BASH_TOOL_NAME && rule.ruleContent,
       );
       if (backendBashRules.length === 1) return safeDisplayText(backendBashRules[0].ruleContent);
       if (backendBashRules.length > 1) return;
@@ -165,32 +180,32 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
     if (one) return safeDisplayText(`${one} *`);
     return safeDisplayText(command_2);
   });
-  let hasUserEditedPrefix = R(undefined);
-  let Fn = R(false);
-  if (!Fn.current) {
-    Fn.current = true;
-    hasUserEditedPrefix.current = safeDisplayText(vo);
+  let hasUserEditedPrefix = useRef(undefined);
+  let seededRef = useRef(false);
+  if (!seededRef.current) {
+    seededRef.current = true;
+    hasUserEditedPrefix.current = safeDisplayText(editablePrefix);
   }
-  let bn = R(false);
-  let onEditablePrefixChange = ce((value) => {
-    bn.current = true;
-    Yo(value);
+  let userEditedRef = useRef(false);
+  let onEditablePrefixChange = useCallback((value) => {
+    userEditedRef.current = true;
+    setEditablePrefix(value);
   }, []);
-  P(() => {
-    if (No || Be) return;
+  useEffect(() => {
+    if (hasSubcommandResults || isCommandWithheld) return;
     let cancelled = false;
     getCompoundCommandPrefixesStatic_2(command, command_2, () => false)
       .then(async (subcmd) => {
-        if (cancelled || bn.current) return;
+        if (cancelled || userEditedRef.current) return;
         if (subcmd.length === 0 || !subcmd[0]) return;
-        let ur = await stripEnvVarPrefix(command_2, subcmd[0]);
-        if (cancelled || bn.current) return;
-        if (!startsWithBareShell(ur)) {
-          let Ir = safeDisplayText(`${subcmd[0]} *`);
-          if (Ir !== undefined) {
-            hasUserEditedPrefix.current = Ir;
-            Yo(Ir);
-            We(Ir);
+        let strippedCommand = await stripEnvVarPrefix(command_2, subcmd[0]);
+        if (cancelled || userEditedRef.current) return;
+        if (!startsWithBareShell(strippedCommand)) {
+          let nextPrefix = safeDisplayText(`${subcmd[0]} *`);
+          if (nextPrefix !== undefined) {
+            hasUserEditedPrefix.current = nextPrefix;
+            setEditablePrefix(nextPrefix);
+            setRefinedPrefix(nextPrefix);
           }
         }
       })
@@ -198,16 +213,16 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
     return () => {
       cancelled = true;
     };
-  }, [command, command_2, No, Be]);
+  }, [command, command_2, hasSubcommandResults, isCommandWithheld]);
   let {
     destructiveWarning: destructiveWarning_0,
     sandboxingEnabled: sandboxingEnabled_0,
     isSandboxed: isSandboxed_0,
-  } = Q(() => {
-    let pr = typeof payload.input.command === "string" ? payload.input.command : command_2;
+  } = useMemo(() => {
+    let commandText = typeof payload.input.command === "string" ? payload.input.command : command_2;
     let destructiveWarning =
-      !Be && getFeatureValue_CACHED_MAY_BE_STALE("tengu_destructive_command_warning", false)
-        ? getDestructiveTargetWarning(pr)
+      !isCommandWithheld && getFeatureValue_CACHED_MAY_BE_STALE("tengu_destructive_command_warning", false)
+        ? getDestructiveTargetWarning(commandText)
         : null;
     let sandboxingEnabled = SandboxManager.isSandboxingEnabled();
     let isSandboxed =
@@ -221,54 +236,58 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
       sandboxingEnabled,
       isSandboxed,
     };
-  }, [command_2, payload.input, payload.requestSource, Be, requestedMachine]);
+  }, [command_2, payload.input, payload.requestSource, isCommandWithheld, requestedMachine]);
   let { offered, canOfferAutoMode, enableAutoMode } = useSettingsErrors(payload.requestSource);
-  let _o =
+  let isAskRuleDriven =
     isAskRuleDrivenReason(decisionReason) ||
     payload.permissionResult.matchedAskRule?.ruleBehavior === "ask" ||
     decisionReason?.type === "hook";
-  let cn = canOfferAutoMode && !_o;
-  let unaryEvent = Q(
+  let showAutoModeOption = canOfferAutoMode && !isAskRuleDriven;
+  let unaryEvent = useMemo(
     () =>
       powershellToolUseOptions_2({
-        suggestionsRow: Xt,
-        hasBackendSuggestions: !Xe && !Dt && !Lt && (payload.permissionResult.suggestions?.length ?? 0) > 0,
+        suggestionsRow,
+        hasBackendSuggestions:
+          !isStandingUnavailable &&
+          !noStanding &&
+          !runsRemote &&
+          (payload.permissionResult.suggestions?.length ?? 0) > 0,
         decisionReason,
         onRejectFeedbackChange: setRejectFeedback,
         onAcceptFeedbackChange: setAcceptFeedback,
         yesInputMode: acceptInputMode,
         noInputMode: rejectInputMode,
-        editablePrefix: Xe || Dt || Lt ? undefined : vo,
+        editablePrefix: isStandingUnavailable || noStanding || runsRemote ? undefined : editablePrefix,
         onEditablePrefixChange,
-        showEnableAutoModeOption: !Xe && !Dt && !Lt && cn,
+        showEnableAutoModeOption: !isStandingUnavailable && !noStanding && !runsRemote && showAutoModeOption,
         enableAutoModeDescription: !offered ? AUTO_MODE_TIP_TEXT : undefined,
       }),
     [
-      Xt,
-      Xe,
-      Dt,
-      Lt,
+      suggestionsRow,
+      isStandingUnavailable,
+      noStanding,
+      runsRemote,
       payload.permissionResult.suggestions,
       decisionReason,
       acceptInputMode,
       rejectInputMode,
-      vo,
+      editablePrefix,
       onEditablePrefixChange,
       offered,
-      cn,
+      showAutoModeOption,
     ],
   );
-  let existingAllowDescriptions = Q(
-    () => (Ot ? preferValueFirst(unaryEvent, "no") : unaryEvent),
-    [Ot, unaryEvent],
+  let existingAllowDescriptions = useMemo(
+    () => (hideIndexes ? preferValueFirst(unaryEvent, "no") : unaryEvent),
+    [hideIndexes, unaryEvent],
   );
   let fieldLeftOpen = toolPermissionContext.fieldLeftOpen;
-  let options = Q(
+  let options = useMemo(
     () => freezeOptionsAfterAnswer(existingAllowDescriptions, fieldLeftOpen),
     [existingAllowDescriptions, fieldLeftOpen],
   );
   let refusableAnswer = useRefusableAnswer(
-    ce(
+    useCallback(
       (prev) => {
         if (!wouldTakeAnswer() || (isStandingHeld && isNotYesNo(prev))) return false;
         logEvent("tengu_permission_request_option_selected", {
@@ -278,7 +297,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
           let trimmedPrefix = acceptFeedback.trim();
           logSubmitted("accept", trimmedPrefix);
           answer(
-            bashToolUseOptions("yes", payload, Xt, {
+            bashToolUseOptions("yes", payload, suggestionsRow, {
               feedback: trimmedPrefix || undefined,
             }),
           );
@@ -288,7 +307,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
           let trimmedDescription = rejectFeedback.trim();
           logSubmitted("reject", trimmedDescription);
           answer(
-            bashToolUseOptions("no", payload, Xt, {
+            bashToolUseOptions("no", payload, suggestionsRow, {
               feedback: trimmedDescription || undefined,
             }),
           );
@@ -296,8 +315,8 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
         }
         if (prev === "yes-prefix-edited") {
           answer(
-            bashToolUseOptions("yes-prefix-edited", payload, Xt, {
-              editablePrefix: vo,
+            bashToolUseOptions("yes-prefix-edited", payload, suggestionsRow, {
+              editablePrefix,
               editablePrefixSeed: hasUserEditedPrefix.current,
             }),
           );
@@ -305,20 +324,20 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
         }
         if (prev === "yes-enable-auto-mode") {
           enableAutoMode(!offered ? "bash_permission_prompt_upsell" : "workflow_permission_prompt");
-          answer(bashToolUseOptions("yes", payload, Xt));
+          answer(bashToolUseOptions("yes", payload, suggestionsRow));
           return;
         }
-        answer(bashToolUseOptions(prev, payload, Xt));
+        answer(bashToolUseOptions(prev, payload, suggestionsRow));
       },
       [
         answer,
         wouldTakeAnswer,
         isStandingHeld,
         payload,
-        Xt,
+        suggestionsRow,
         acceptFeedback,
         rejectFeedback,
-        vo,
+        editablePrefix,
         logSubmitted,
         enableAutoMode,
         offered,
@@ -327,40 +346,47 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
     ),
   );
   let defaultFocusValue =
-    refusableAnswer.refused === null ? undefined : refusableAnswer.refused === "yes" && !Ot ? "yes" : "no";
-  let onCancel = ce(() => {
+    refusableAnswer.refused === null
+      ? undefined
+      : refusableAnswer.refused === "yes" && !hideIndexes
+        ? "yes"
+        : "no";
+  let onCancel = useCallback(() => {
     if (!wouldTakeAnswer()) return;
     logEscape();
     answer({
       behavior: "deny",
     });
   }, [answer, wouldTakeAnswer, logEscape]);
-  let subtitle = Q(
-    () => (cn && !Xe && !Dt && !Lt ? jsxProd_default(AutoModeTip, {}) : undefined),
-    [cn, Xe, Dt, Lt],
+  let subtitle = useMemo(
+    () =>
+      showAutoModeOption && !isStandingUnavailable && !noStanding && !runsRemote
+        ? jsxProd_default(AutoModeTip, {})
+        : undefined,
+    [showAutoModeOption, isStandingUnavailable, noStanding, runsRemote],
   );
-  let dr =
+  let runLabel =
     runsOnMachine !== undefined
       ? `runs on ${runsOnMachine}`
       : sandboxingEnabled_0 && !isSandboxed_0
         ? "unsandboxed"
         : undefined;
-  let or = toolPermissionContext.isFitted ? 0 : 1;
+  let inset = toolPermissionContext.isFitted ? 0 : 1;
   return jsxProd_default(FittedBodyKeybindings, {
     fitted: toolPermissionContext,
     children: jsxProd_default_2(PermissionDialog_2, {
       title: toolPermissionContext.isFitted
         ? "Run command"
-        : dr === undefined
+        : runLabel === undefined
           ? "Bash command"
-          : `Bash command (${dr})`,
+          : `Bash command (${runLabel})`,
       subtitle,
       innerPaddingX: 0,
       requestSource: payload.requestSource,
       frame: toolPermissionContext.isFitted
         ? {
             onCancel,
-            titleSuffix: dr,
+            titleSuffix: runLabel,
             hints: [
               hintNode &&
                 jsxProd_default(
@@ -375,14 +401,14 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
                   },
                   "amend",
                 ),
-              Cn,
+              killAgentsNotice,
             ],
           }
         : undefined,
       children: [
         jsxProd_default(Box, {
           flexDirection: "column",
-          paddingX: or,
+          paddingX: inset,
           children: jsxProd_default(Blockquote, {
             multiline: needsGutter(toolPermissionContext.description),
             children: jsxProd_default(Text, {
@@ -392,13 +418,13 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
           }),
         }),
         jsxProd_default(CommandPreviewFrame, {
-          commandDisplay: Re,
+          commandDisplay,
           fitted: toolPermissionContext,
-          inset: or,
+          inset,
         }),
         jsxProd_default_2(Box, {
           flexDirection: "column",
-          paddingX: or,
+          paddingX: inset,
           children: [
             payload.networkAllowHosts !== undefined &&
               payload.networkAllowHosts.length > 0 &&
@@ -411,7 +437,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
             jsxProd_default(PermissionRuleExplanation, {
               permissionResult: payload.permissionResult,
               toolType: "command",
-              rowBudget: toolPermissionContext.isCut || Ot ? MAX_EXPLANATION_LINES : undefined,
+              rowBudget: toolPermissionContext.isCut || hideIndexes ? MAX_EXPLANATION_LINES : undefined,
               rowColumns: toolPermissionContext.isCut ? toolPermissionContext.reasonColumns : undefined,
             }),
             destructiveWarning_0 &&
@@ -426,7 +452,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
               jsxProd_default(Text, {
                 children: "Do you want to proceed?",
               }),
-            io &&
+            standingUnavailable &&
               jsxProd_default(Text, {
                 dimColor: true,
                 children: ASK_FIRST_REASON_TEXTS["card.standing_unavailable"]({
@@ -438,15 +464,16 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
               ModelSelector,
               {
                 defaultFocusValue,
-                hideIndexes: Ot,
+                hideIndexes,
                 selectedValue: NO_COMMITTED_ROW,
                 options,
                 inlineDescriptions: true,
-                onChange: (pr) => (isStandingHeld && isNotYesNo(pr) ? false : refusableAnswer.answer(pr)),
+                onChange: (choice) =>
+                  isStandingHeld && isNotYesNo(choice) ? false : refusableAnswer.answer(choice),
                 onCancel,
-                onFocus: (pr) => {
-                  toolPermissionContext.noteFocus(pr);
-                  handleFocus(pr);
+                onFocus: (choice) => {
+                  toolPermissionContext.noteFocus(choice);
+                  handleFocus(choice);
                 },
                 onInputModeToggle: handleInputModeToggle,
               },
@@ -461,7 +488,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
             paddingX: 1,
             children: jsxProd_default(Text, {
               dimColor: true,
-              wrap: Cn ? "truncate" : undefined,
+              wrap: killAgentsNotice ? "truncate" : undefined,
               children: jsxProd_default_2(Byline, {
                 children: [
                   jsxProd_default(KeyboardShortcutHint, {
@@ -469,7 +496,7 @@ function BashPermissionRequestInner({ payload, answer, wouldTakeAnswer }) {
                     action: "cancel",
                   }),
                   hintNode,
-                  Cn,
+                  killAgentsNotice,
                 ],
               }),
             }),
@@ -498,4 +525,4 @@ async function BashPermissionRequest(onDone, context) {
     promptVisibleBelow: context.isMidTurn === true,
   });
 }
-export { BashPermissionRequestInner };
+export { BashPermissionRequestInner, BashPermissionRequest };

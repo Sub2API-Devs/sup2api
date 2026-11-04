@@ -28,7 +28,7 @@ function isDreamTask(task) {
  */
 function registerDreamTask(taskRegistry, options) {
   let id = generateTaskId("dream");
-  let y = {
+  let taskState = {
     ...createTaskStateBase(id, "dream", "dreaming"),
     type: "dream",
     status: "running",
@@ -43,7 +43,7 @@ function registerDreamTask(taskRegistry, options) {
       storageV5: options.storageV5,
     }),
   };
-  taskRegistry.register(y);
+  taskRegistry.register(taskState);
   return id;
 }
 //@ chunk-rsht1tdj.js:7029-7346 fingerprint = addDreamTurn (0.953)
@@ -88,10 +88,10 @@ function completeDreamTask(taskId, taskRegistry) {
 var DreamTask = {
   name: "DreamTask",
   type: "dream",
-  async kill(e, r) {
+  async kill(taskId, taskRegistry) {
     let priorMtime;
     let storageV5;
-    r.update(e, (task) => {
+    taskRegistry.update(taskId, (task) => {
       if (task.status !== "running") return task;
       task.abortController?.abort();
       priorMtime = task.priorMtime;
@@ -105,7 +105,7 @@ var DreamTask = {
       };
     });
     if (priorMtime !== undefined) {
-      emitTaskNotification(e, "stopped", {
+      emitTaskNotification(taskId, "stopped", {
         skipTranscript: true,
         ambient: true,
       });
@@ -118,10 +118,10 @@ var DreamTask = {
  * 把运行中的 dream 任务置为给定终态（failed 等）并发 ambient 通知。
  */
 function failDreamTask(taskId, taskRegistry, status) {
-  let u = false;
+  let didFail = false;
   taskRegistry.update(taskId, (task) => {
     if (task.status !== "running") return task;
-    u = true;
+    didFail = true;
     return {
       ...task,
       status,
@@ -130,7 +130,7 @@ function failDreamTask(taskId, taskRegistry, status) {
       abortController: undefined,
     };
   });
-  if (u)
+  if (didFail)
     emitTaskNotification(taskId, status, {
       skipTranscript: true,
       ambient: true,

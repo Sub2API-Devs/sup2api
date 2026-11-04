@@ -8,7 +8,7 @@
  * pieces: chunk-4v9zy7gn.js (2)
  * attribution: placement 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { WorkerBadge } from "../../components/permissions/WorkerBadge.js";
@@ -16,15 +16,15 @@ import { init_react_production } from "../../../vendor/react/cjs/react.productio
 
 //@ chunk-4v9zy7gn.js:27429-27555 placement
 function CheckingGhCliStep() {
-  let I = w(1);
-  let i;
-  if (I[0] === MEMO_CACHE_SENTINEL) {
-    i = jsxProd_default(WorkerBadge, {
+  let $ = useMemoCache(1);
+  let content;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    content = jsxProd_default(WorkerBadge, {
       message: "Checking GitHub CLI installation\u2026",
     });
-    I[0] = i;
-  } else i = I[0];
-  return i;
+    $[0] = content;
+  } else content = $[0];
+  return content;
 }
 //@ chunk-4v9zy7gn.js:27555-27559 placement
 init_react_production();

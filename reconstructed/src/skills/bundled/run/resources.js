@@ -43,3 +43,4 @@ var RUN_EXAMPLE_FILES = {
   "examples/server.md": examplesServer,
   "examples/tui.md": examplesTui,
 };
+export { RUN_EXAMPLE_FILES, RUN_SKILL_MD };

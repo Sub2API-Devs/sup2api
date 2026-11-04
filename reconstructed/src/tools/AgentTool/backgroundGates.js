@@ -14,27 +14,32 @@ import { isBackgroundTasksDisabled } from "./AgentTool.js";
 import { isInProcessTeammate } from "../../utils/teammate.js";
 import { env } from "../../utils/env.js";
 import { isBareMode } from "../../utils/envUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-apw2zhyn.js:370-968 placement
 /**
  * 后台 Bash 通知状态（回复结束后停止等）及相关提示文案。
  */
-var backgroundBashNoticeState = identity(
-  {
-    work: null,
-    text: null,
-    stopsAfterReply: false,
-    sentBashTextStops: null,
-  },
-  (e) => {
-    e.work = null;
-    e.text = null;
-    e.stopsAfterReply = false;
-    e.sentBashTextStops = null;
-  },
-);
-var BACKGROUND_COMMAND_STOP_NOTICE =
-  "In this session, once your reply ends and until the user writes again, you may not be told when a background command ends, and a few minutes later the command is likely stopped along with every other process left running here; run in the foreground, with a long enough `timeout`, any command that must finish and can finish within the foreground maximum, and otherwise tell the user it will likely be stopped a few minutes after your reply.";
+var backgroundBashNoticeState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BACKGROUND_COMMAND_STOP_NOTICE;
+deferInit("chunk-apw2zhyn.js:370", () => {
+  backgroundBashNoticeState = identity(
+    {
+      work: null,
+      text: null,
+      stopsAfterReply: false,
+      sentBashTextStops: null,
+    },
+    (state) => {
+      state.work = null;
+      state.text = null;
+      state.stopsAfterReply = false;
+      state.sentBashTextStops = null;
+    },
+  );
+  BACKGROUND_COMMAND_STOP_NOTICE =
+    "In this session, once your reply ends and until the user writes again, you may not be told when a background command ends, and a few minutes later the command is likely stopped along with every other process left running here; run in the foreground, with a long enough `timeout`, any command that must finish and can finish within the foreground maximum, and otherwise tell the user it will likely be stopped a few minutes after your reply.";
+});
 //@ chunk-apw2zhyn.js:968-993 placement
 /**
  * 设置后台 bash 通知的工作探测函数。
@@ -70,10 +75,10 @@ function hasBackgroundBashStopAfterReply() {
 /**
  * 记录已发送的后台停止提示。
  */
-function noteBackgroundStopNoticeSent(e) {
-  if (e !== undefined)
+function noteBackgroundStopNoticeSent(text) {
+  if (text !== undefined)
     backgroundBashNoticeState.sentBashTextStops =
-      (backgroundBashNoticeState.sentBashTextStops ?? true) && e.includes(BACKGROUND_COMMAND_STOP_NOTICE);
+      (backgroundBashNoticeState.sentBashTextStops ?? true) && text.includes(BACKGROUND_COMMAND_STOP_NOTICE);
 }
 //@ chunk-apw2zhyn.js:1268-1315 placement
 /**

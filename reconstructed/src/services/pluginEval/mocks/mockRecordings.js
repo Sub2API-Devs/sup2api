@@ -12,7 +12,7 @@ import { createHash } from "crypto";
 import path from "path";
 import { readdir } from "fs/promises";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, unknown, string, _enum } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, unknown, stringSchema, _enum } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { jsonStringify } from "../../../utils/slowOperations.js";
 import { canonicalJsonStringify } from "../canonicalJson.js";
 import { safeParseJSON } from "../../../utils/json.js";
@@ -26,23 +26,25 @@ import { openNoFollow_2 } from "../../../utils/fsSafety/hardenedRead.js";
  */
 var MAX_MOCK_RECORDING_BYTES = 262144;
 var mockRecordingSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     input: unknown(),
-    output: string(),
+    output: stringSchema(),
     verdict: _enum(["ok", "tool_error", "abort"]),
-    recordedAt: string(),
-    model: string().nullable(),
+    recordedAt: stringSchema(),
+    model: stringSchema().nullable(),
   }),
 );
 //@ chunk-qchp9vrd.js:19931-20237 placement
 function hashMockCallArgs({ server, tool, input, mockHash, prompt, history }) {
-  let w = createHash("sha256")
+  let historyHash = createHash("sha256")
     .update(
-      history.map((y) => jsonStringify([y.tool, canonicalJsonStringify(y.input), y.verdict, y.output])).join(`
+      history.map((entry) =>
+        jsonStringify([entry.tool, canonicalJsonStringify(entry.input), entry.verdict, entry.output]),
+      ).join(`
 `),
     )
     .digest("hex");
-  let b = createHash("sha256")
+  let promptHash = createHash("sha256")
     .update(
       prompt.replaceAll(
         `\r
@@ -53,28 +55,31 @@ function hashMockCallArgs({ server, tool, input, mockHash, prompt, history }) {
     )
     .digest("hex");
   return createHash("sha256")
-    .update([server, tool, canonicalJsonStringify(input), mockHash, b, w].join(" "))
+    .update([server, tool, canonicalJsonStringify(input), mockHash, promptHash, historyHash].join(" "))
     .digest("hex");
 }
 //@ chunk-qchp9vrd.js:20237-20396 placement
-function mockRecordingFileName(e, n) {
-  if (!/^[A-Za-z0-9_-]+$/.test(e) || !/^[0-9a-f]+$/.test(n))
+function mockRecordingFileName(toolName, inputHash) {
+  if (!/^[A-Za-z0-9_-]+$/.test(toolName) || !/^[0-9a-f]+$/.test(inputHash))
     throw Error("recording name components must be plain segments");
-  return `${e}-${n}.json`;
+  return `${toolName}-${inputHash}.json`;
 }
 //@ chunk-qchp9vrd.js:20396-20696 placement
-async function readMockRecording(replayDir, tool, r, pinned) {
-  let s = mockRecordingFileName(tool, r);
-  let h = pinned[s];
-  if (h === undefined) return null;
-  let mockReplayRecording = await loadMockReplayRecording(replayDir, s);
-  if (mockReplayRecording === null || createHash("sha256").update(mockReplayRecording).digest("hex") !== h)
+async function readMockRecording(replayDir, toolName, keyPart, pinned) {
+  let fileName = mockRecordingFileName(toolName, keyPart);
+  let expectedHash = pinned[fileName];
+  if (expectedHash === undefined) return null;
+  let mockReplayRecording = await loadMockReplayRecording(replayDir, fileName);
+  if (
+    mockReplayRecording === null ||
+    createHash("sha256").update(mockReplayRecording).digest("hex") !== expectedHash
+  )
     return null;
-  let b = mockRecordingSchema().safeParse(safeParseJSON(mockReplayRecording.toString("utf8"), false));
-  return b.success && b.data.output.length <= MOCK_OUTPUT_MAX_CHARS
+  let parsed = mockRecordingSchema().safeParse(safeParseJSON(mockReplayRecording.toString("utf8"), false));
+  return parsed.success && parsed.data.output.length <= MOCK_OUTPUT_MAX_CHARS
     ? {
-        verdict: b.data.verdict,
-        text: b.data.output,
+        verdict: parsed.data.verdict,
+        text: parsed.data.output,
       }
     : null;
 }
@@ -82,56 +87,61 @@ async function readMockRecording(replayDir, tool, r, pinned) {
 /**
  * 加载 mocks/ 下的回放录制，同一调用多份时只取第一份并提示。
  */
-async function loadMockReplayRecordings(e, n = []) {
-  let r = Object.create(null);
-  let dir = path.dirname(path.dirname(e));
+async function loadMockReplayRecordings(recordingsDir, notes = []) {
+  let pinned = Object.create(null);
+  let dir = path.dirname(path.dirname(recordingsDir));
   try {
-    await checkRepoAuthoredPath(dir, path.relative(dir, e), "mock replay recordings");
+    await checkRepoAuthoredPath(dir, path.relative(dir, recordingsDir), "mock replay recordings");
   } catch {
-    return r;
+    return pinned;
   }
-  let s;
+  let fileNames;
   try {
-    s = await readdir(e);
+    fileNames = await readdir(recordingsDir);
   } catch {
-    return r;
+    return pinned;
   }
-  let filtered = s.filter((w) => RECORDING_FILE_RE.test(w));
+  let filtered = fileNames.filter((fileName) => RECORDING_FILE_RE.test(fileName));
   if (filtered.length > MAX_PINNED_RECORDINGS)
-    n.push(
-      `mocks: ${path.basename(path.dirname(e))}/${path.basename(e)} holds ${filtered.length} recordings; only the first ${MAX_PINNED_RECORDINGS} are pinned for replay \u2014 prune ones no case reaches any more`,
+    notes.push(
+      `mocks: ${path.basename(path.dirname(recordingsDir))}/${path.basename(recordingsDir)} holds ${filtered.length} recordings; only the first ${MAX_PINNED_RECORDINGS} are pinned for replay \u2014 prune ones no case reaches any more`,
     );
-  for (let w of filtered.slice(0, MAX_PINNED_RECORDINGS)) {
-    let mockReplayRecording = await loadMockReplayRecording(e, w);
-    if (mockReplayRecording !== null) r[w] = createHash("sha256").update(mockReplayRecording).digest("hex");
+  for (let fileName of filtered.slice(0, MAX_PINNED_RECORDINGS)) {
+    let mockReplayRecording = await loadMockReplayRecording(recordingsDir, fileName);
+    if (mockReplayRecording !== null)
+      pinned[fileName] = createHash("sha256").update(mockReplayRecording).digest("hex");
   }
-  return r;
+  return pinned;
 }
 //@ chunk-qchp9vrd.js:21227-21672 placement
-async function loadMockReplayRecording(e, n) {
+async function loadMockReplayRecording(replayDir, fileName) {
   try {
-    let dir = path.dirname(path.dirname(e));
-    await checkRepoAuthoredPath(dir, path.relative(dir, path.join(e, n)), "mock replay recording");
-    let noFollow = await openNoFollow_2(path.join(e, n));
+    let dir = path.dirname(path.dirname(replayDir));
+    await checkRepoAuthoredPath(
+      dir,
+      path.relative(dir, path.join(replayDir, fileName)),
+      "mock replay recording",
+    );
+    let noFollow = await openNoFollow_2(path.join(replayDir, fileName));
     if (!noFollow.ok) return null;
-    let s = noFollow.value;
+    let handle = noFollow.value;
     try {
-      let stats = await s.stat();
+      let stats = await handle.stat();
       if (!stats.isFile() || stats.size > MAX_MOCK_RECORDING_BYTES) return null;
-      let w = Buffer.alloc(stats.size);
-      let b = 0;
-      while (b < stats.size) {
-        let { bytesRead } = await s.read({
-          buffer: w,
-          offset: b,
-          position: b,
+      let buffer = Buffer.alloc(stats.size);
+      let offset = 0;
+      while (offset < stats.size) {
+        let { bytesRead } = await handle.read({
+          buffer,
+          offset,
+          position: offset,
         });
         if (bytesRead <= 0) break;
-        b += bytesRead;
+        offset += bytesRead;
       }
-      return w.subarray(0, b);
+      return buffer.subarray(0, offset);
     } finally {
-      await s.close();
+      await handle.close();
     }
   } catch {
     return null;

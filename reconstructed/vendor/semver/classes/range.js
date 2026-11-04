@@ -5,7 +5,7 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_lrucache } from "../internal/lrucache.js";
 import { require_parse_options } from "../internal/parse-options.js";
 import { require_comparator } from "./comparator.js";
@@ -15,7 +15,7 @@ import { require_re } from "../internal/re.js";
 import { require_constants } from "../internal/constants.js";
 
 //@ chunk-bwbq4xvm.js:14215-19771 cjs-fingerprint
-var require_range = x(function (cjsExports, cjsModule) {
+var require_range = __commonJS(function (cjsExports, cjsModule) {
   var SPACE_CHARACTERS = /\s+/g;
   class Range {
     constructor(range, options) {

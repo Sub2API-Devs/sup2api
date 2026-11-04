@@ -8,13 +8,13 @@
 import {
   lazy,
   union,
-  string,
-  E,
-  M,
-  zg,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
+  nullSchema,
   record,
   array,
-  u,
+  objectSchema,
   looseObject,
   literal,
   _enum,
@@ -23,8 +23,8 @@ import {
   optional,
   unknown,
   discriminatedUnion,
-  _Ii,
-  A8e,
+  emailSchema,
+  urlSchema,
 } from "../../../zod/v4/classic/schemas.js";
 import {
   parseToolOutputSchema,
@@ -50,9 +50,9 @@ import {
   CancelledNotificationParamsSchema,
   CancelledNotificationSchema,
   ClientCapabilitiesSchema,
-  Ha,
-  Fa,
-  Ja,
+  ClientNotificationSchema,
+  ClientRequestSchema,
+  ClientResultSchema,
   ClientTasksCapabilitySchema,
   CompatibilityCallToolResultSchema,
   CompleteRequestParamsSchema,
@@ -92,13 +92,13 @@ import {
   InitializeRequestSchema,
   InitializeResultSchema,
   InitializedNotificationSchema,
-  Ta,
+  JSONArraySchema,
   JSONObjectSchema,
   JSONRPCErrorResponseSchema,
-  fZe,
+  JSONRPCMessageSchema,
   JSONRPCNotificationSchema,
   JSONRPCRequestSchema,
-  Ca,
+  JSONRPCResponseSchema,
   JSONRPCResultResponseSchema,
   JSONValueSchema,
   LegacyTitledEnumSchemaSchema,
@@ -163,9 +163,9 @@ import {
   SamplingMessageContentBlockSchema,
   SamplingMessageSchema,
   ServerCapabilitiesSchema,
-  Ba,
-  Ga,
-  Wa,
+  ServerNotificationSchema,
+  ServerRequestSchema,
+  ServerResultSchema,
   ServerTasksCapabilitySchema,
   SetLevelRequestParamsSchema,
   SetLevelRequestSchema,
@@ -216,14 +216,18 @@ import {
   OpenIdProviderMetadataSchema,
   SUPPORTED_PROTOCOL_VERSIONS,
 } from "../../core/dist/auth-CUe6YdwF.mjs";
-import { yl, IO_MODELCONTEXTPROTOCOL_TASKS } from "../../core/dist/schemas-DscsoNZN.mjs";
-import { qn } from "../../core/(bundler runtime of a pre-bundled dist file).js";
-import { slo } from "../../../zod/v4/locales/fr.js";
+import { TASK_STATUSES, IO_MODELCONTEXTPROTOCOL_TASKS } from "../../core/dist/schemas-DscsoNZN.mjs";
+import { toESModule } from "../../core/(bundler runtime of a pre-bundled dist file).js";
+import { safeParse } from "../../../zod/v4/locales/fr.js";
 import { toJSONSchema } from "../../../zod/v4/core/json-schema-processors.js";
 import { import_content_type } from "../../../content-type/index.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-r1g76qsy.js:17821-17862 esm-fingerprint
-var BRANDS = Symbol.for("mcp.sdk.errorBrands");
+var BRANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r1g76qsy.js:17821", () => {
+  BRANDS = Symbol.for("mcp.sdk.errorBrands");
+});
 //@ chunk-r1g76qsy.js:17862-18143 esm-fingerprint
 function stampErrorBrands(instance, ctor) {
   let brands = new Set();
@@ -258,125 +262,132 @@ function brandedHasInstance(cls, value) {
   return Function.prototype[Symbol.hasInstance].call(cls, value);
 }
 //@ chunk-r1g76qsy.js:18460-21533 esm-fingerprint
-var OAuthErrorCode = (function (OAuthErrorCode$1) {
-  OAuthErrorCode$1.InvalidRequest = "invalid_request";
-  OAuthErrorCode$1.InvalidClient = "invalid_client";
-  OAuthErrorCode$1.InvalidGrant = "invalid_grant";
-  OAuthErrorCode$1.UnauthorizedClient = "unauthorized_client";
-  OAuthErrorCode$1.UnsupportedGrantType = "unsupported_grant_type";
-  OAuthErrorCode$1.InvalidScope = "invalid_scope";
-  OAuthErrorCode$1.AccessDenied = "access_denied";
-  OAuthErrorCode$1.ServerError = "server_error";
-  OAuthErrorCode$1.TemporarilyUnavailable = "temporarily_unavailable";
-  OAuthErrorCode$1.UnsupportedResponseType = "unsupported_response_type";
-  OAuthErrorCode$1.UnsupportedTokenType = "unsupported_token_type";
-  OAuthErrorCode$1.InvalidToken = "invalid_token";
-  OAuthErrorCode$1.MethodNotAllowed = "method_not_allowed";
-  OAuthErrorCode$1.TooManyRequests = "too_many_requests";
-  OAuthErrorCode$1.InvalidClientMetadata = "invalid_client_metadata";
-  OAuthErrorCode$1.InvalidRedirectUri = "invalid_redirect_uri";
-  OAuthErrorCode$1.InsufficientScope = "insufficient_scope";
-  OAuthErrorCode$1.InvalidTarget = "invalid_target";
-  return OAuthErrorCode$1;
-})({});
-var OAuthError = class OAuthError extends Error {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.OAuthError",
-    });
-  }
-  static [Symbol.hasInstance](value) {
-    return brandedHasInstance(this, value);
-  }
-  static isInstance(value) {
-    if (typeof this !== "function")
-      throw TypeError(
-        "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
-      );
-    return brandedHasInstance(this, value);
-  }
-  constructor(code, message, errorUri) {
-    super(message);
-    this.code = code;
-    this.errorUri = errorUri;
-    this.name = "OAuthError";
-    stampErrorBrands(this, new.target);
-  }
-  toResponseObject() {
-    let response = {
-      error: this.code,
-      error_description: this.message,
-    };
-    if (this.errorUri) response.error_uri = this.errorUri;
-    return response;
-  }
-  static fromResponse(response) {
-    return new OAuthError(response.error, response.error_description ?? response.error, response.error_uri);
-  }
-};
-var SdkErrorCode = (function (SdkErrorCode$1) {
-  SdkErrorCode$1.NotConnected = "NOT_CONNECTED";
-  SdkErrorCode$1.AlreadyConnected = "ALREADY_CONNECTED";
-  SdkErrorCode$1.NotInitialized = "NOT_INITIALIZED";
-  SdkErrorCode$1.CapabilityNotSupported = "CAPABILITY_NOT_SUPPORTED";
-  SdkErrorCode$1.RequestTimeout = "REQUEST_TIMEOUT";
-  SdkErrorCode$1.ConnectionClosed = "CONNECTION_CLOSED";
-  SdkErrorCode$1.SendFailed = "SEND_FAILED";
-  SdkErrorCode$1.InvalidResult = "INVALID_RESULT";
-  SdkErrorCode$1.UnsupportedResultType = "UNSUPPORTED_RESULT_TYPE";
-  SdkErrorCode$1.InputRequiredRoundsExceeded = "INPUT_REQUIRED_ROUNDS_EXCEEDED";
-  SdkErrorCode$1.ListPaginationExceeded = "LIST_PAGINATION_EXCEEDED";
-  SdkErrorCode$1.MethodNotSupportedByProtocolVersion = "METHOD_NOT_SUPPORTED_BY_PROTOCOL_VERSION";
-  SdkErrorCode$1.EraNegotiationFailed = "ERA_NEGOTIATION_FAILED";
-  SdkErrorCode$1.ClientHttpNotImplemented = "CLIENT_HTTP_NOT_IMPLEMENTED";
-  SdkErrorCode$1.ClientHttpAuthentication = "CLIENT_HTTP_AUTHENTICATION";
-  SdkErrorCode$1.ClientHttpForbidden = "CLIENT_HTTP_FORBIDDEN";
-  SdkErrorCode$1.ClientHttpUnexpectedContent = "CLIENT_HTTP_UNEXPECTED_CONTENT";
-  SdkErrorCode$1.ClientHttpFailedToOpenStream = "CLIENT_HTTP_FAILED_TO_OPEN_STREAM";
-  SdkErrorCode$1.ClientHttpFailedToTerminateSession = "CLIENT_HTTP_FAILED_TO_TERMINATE_SESSION";
-  return SdkErrorCode$1;
-})({});
-var SdkError = class extends Error {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.SdkError",
-    });
-  }
-  static [Symbol.hasInstance](value) {
-    return brandedHasInstance(this, value);
-  }
-  static isInstance(value) {
-    if (typeof this !== "function")
-      throw TypeError(
-        "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
-      );
-    return brandedHasInstance(this, value);
-  }
-  constructor(code, message, data) {
-    super(message);
-    this.code = code;
-    this.data = data;
-    this.name = "SdkError";
-    stampErrorBrands(this, new.target);
-  }
-};
-var SdkHttpError = class extends SdkError {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.SdkHttpError",
-    });
-  }
-  constructor(code, message, data) {
-    super(code, message, data);
-    this.name = "SdkHttpError";
-  }
-  get status() {
-    return this.data.status;
-  }
-  get statusText() {
-    return this.data.statusText;
-  }
-};
+var OAuthErrorCode; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var OAuthError;
+var SdkErrorCode;
+var SdkError;
+var SdkHttpError;
+deferInit("chunk-r1g76qsy.js:18460", () => {
+  OAuthErrorCode = (function (OAuthErrorCode$1) {
+    OAuthErrorCode$1.InvalidRequest = "invalid_request";
+    OAuthErrorCode$1.InvalidClient = "invalid_client";
+    OAuthErrorCode$1.InvalidGrant = "invalid_grant";
+    OAuthErrorCode$1.UnauthorizedClient = "unauthorized_client";
+    OAuthErrorCode$1.UnsupportedGrantType = "unsupported_grant_type";
+    OAuthErrorCode$1.InvalidScope = "invalid_scope";
+    OAuthErrorCode$1.AccessDenied = "access_denied";
+    OAuthErrorCode$1.ServerError = "server_error";
+    OAuthErrorCode$1.TemporarilyUnavailable = "temporarily_unavailable";
+    OAuthErrorCode$1.UnsupportedResponseType = "unsupported_response_type";
+    OAuthErrorCode$1.UnsupportedTokenType = "unsupported_token_type";
+    OAuthErrorCode$1.InvalidToken = "invalid_token";
+    OAuthErrorCode$1.MethodNotAllowed = "method_not_allowed";
+    OAuthErrorCode$1.TooManyRequests = "too_many_requests";
+    OAuthErrorCode$1.InvalidClientMetadata = "invalid_client_metadata";
+    OAuthErrorCode$1.InvalidRedirectUri = "invalid_redirect_uri";
+    OAuthErrorCode$1.InsufficientScope = "insufficient_scope";
+    OAuthErrorCode$1.InvalidTarget = "invalid_target";
+    return OAuthErrorCode$1;
+  })({});
+  OAuthError = class OAuthError extends Error {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.OAuthError",
+      });
+    }
+    static [Symbol.hasInstance](value) {
+      return brandedHasInstance(this, value);
+    }
+    static isInstance(value) {
+      if (typeof this !== "function")
+        throw TypeError(
+          "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
+        );
+      return brandedHasInstance(this, value);
+    }
+    constructor(code, message, errorUri) {
+      super(message);
+      this.code = code;
+      this.errorUri = errorUri;
+      this.name = "OAuthError";
+      stampErrorBrands(this, new.target);
+    }
+    toResponseObject() {
+      let response = {
+        error: this.code,
+        error_description: this.message,
+      };
+      if (this.errorUri) response.error_uri = this.errorUri;
+      return response;
+    }
+    static fromResponse(response) {
+      return new OAuthError(response.error, response.error_description ?? response.error, response.error_uri);
+    }
+  };
+  SdkErrorCode = (function (SdkErrorCode$1) {
+    SdkErrorCode$1.NotConnected = "NOT_CONNECTED";
+    SdkErrorCode$1.AlreadyConnected = "ALREADY_CONNECTED";
+    SdkErrorCode$1.NotInitialized = "NOT_INITIALIZED";
+    SdkErrorCode$1.CapabilityNotSupported = "CAPABILITY_NOT_SUPPORTED";
+    SdkErrorCode$1.RequestTimeout = "REQUEST_TIMEOUT";
+    SdkErrorCode$1.ConnectionClosed = "CONNECTION_CLOSED";
+    SdkErrorCode$1.SendFailed = "SEND_FAILED";
+    SdkErrorCode$1.InvalidResult = "INVALID_RESULT";
+    SdkErrorCode$1.UnsupportedResultType = "UNSUPPORTED_RESULT_TYPE";
+    SdkErrorCode$1.InputRequiredRoundsExceeded = "INPUT_REQUIRED_ROUNDS_EXCEEDED";
+    SdkErrorCode$1.ListPaginationExceeded = "LIST_PAGINATION_EXCEEDED";
+    SdkErrorCode$1.MethodNotSupportedByProtocolVersion = "METHOD_NOT_SUPPORTED_BY_PROTOCOL_VERSION";
+    SdkErrorCode$1.EraNegotiationFailed = "ERA_NEGOTIATION_FAILED";
+    SdkErrorCode$1.ClientHttpNotImplemented = "CLIENT_HTTP_NOT_IMPLEMENTED";
+    SdkErrorCode$1.ClientHttpAuthentication = "CLIENT_HTTP_AUTHENTICATION";
+    SdkErrorCode$1.ClientHttpForbidden = "CLIENT_HTTP_FORBIDDEN";
+    SdkErrorCode$1.ClientHttpUnexpectedContent = "CLIENT_HTTP_UNEXPECTED_CONTENT";
+    SdkErrorCode$1.ClientHttpFailedToOpenStream = "CLIENT_HTTP_FAILED_TO_OPEN_STREAM";
+    SdkErrorCode$1.ClientHttpFailedToTerminateSession = "CLIENT_HTTP_FAILED_TO_TERMINATE_SESSION";
+    return SdkErrorCode$1;
+  })({});
+  SdkError = class extends Error {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.SdkError",
+      });
+    }
+    static [Symbol.hasInstance](value) {
+      return brandedHasInstance(this, value);
+    }
+    static isInstance(value) {
+      if (typeof this !== "function")
+        throw TypeError(
+          "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
+        );
+      return brandedHasInstance(this, value);
+    }
+    constructor(code, message, data) {
+      super(message);
+      this.code = code;
+      this.data = data;
+      this.name = "SdkError";
+      stampErrorBrands(this, new.target);
+    }
+  };
+  SdkHttpError = class extends SdkError {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.SdkHttpError",
+      });
+    }
+    constructor(code, message, data) {
+      super(code, message, data);
+      this.name = "SdkHttpError";
+    }
+    get status() {
+      return this.data.status;
+    }
+    get statusText() {
+      return this.data.statusText;
+    }
+  };
+});
 //@ chunk-r1g76qsy.js:21533-21620 esm-fingerprint
 function resourceUrlFromServerUrl(url) {
   let resourceURL = typeof url === "string" ? new URL(url) : new URL(url.href);
@@ -397,7 +408,7 @@ function checkResourceAllowed({ requestedResource, configuredResource }) {
 }
 //@ chunk-r1g76qsy.js:21991-22019 esm-fingerprint
 var FIRST_MODERN_PROTOCOL_VERSION = "2026-07-28";
-var cn = [FIRST_MODERN_PROTOCOL_VERSION];
+var defaultModernVersions = [FIRST_MODERN_PROTOCOL_VERSION];
 //@ chunk-r1g76qsy.js:22019-22047 esm-layout
 function isModernProtocolVersion(version) {
   return version >= FIRST_MODERN_PROTOCOL_VERSION;
@@ -447,74 +458,81 @@ function normalizeContentlessToolResult(value) {
 //@ chunk-r1g76qsy.js:22582-37310 esm-fingerprint
 function build$1() {
   let JSONValueSchema$1 = lazy(() =>
-    union([string(), E(), M(), zg(), record(string(), JSONValueSchema$1), array(JSONValueSchema$1)]),
+    union([
+      stringSchema(),
+      numberSchema(),
+      booleanSchema(),
+      nullSchema(),
+      record(stringSchema(), JSONValueSchema$1),
+      array(JSONValueSchema$1),
+    ]),
   );
-  let JSONObjectSchema$1 = record(string(), JSONValueSchema$1);
-  let ProgressTokenSchema$1 = union([string(), E().int()]);
-  let CursorSchema$1 = string();
-  let TaskMetadataSchema$1 = u({
-    ttl: E().optional(),
+  let JSONObjectSchema$1 = record(stringSchema(), JSONValueSchema$1);
+  let ProgressTokenSchema$1 = union([stringSchema(), numberSchema().int()]);
+  let CursorSchema$1 = stringSchema();
+  let TaskMetadataSchema$1 = objectSchema({
+    ttl: numberSchema().optional(),
   });
-  let RelatedTaskMetadataSchema$1 = u({
-    taskId: string(),
+  let RelatedTaskMetadataSchema$1 = objectSchema({
+    taskId: stringSchema(),
   });
   let RequestMetaSchema$1 = looseObject({
     progressToken: ProgressTokenSchema$1.optional(),
     "io.modelcontextprotocol/related-task": RelatedTaskMetadataSchema$1.optional(),
   });
-  let BaseRequestParamsSchema$1 = u({
+  let BaseRequestParamsSchema$1 = objectSchema({
     _meta: RequestMetaSchema$1.optional(),
   });
   let TaskAugmentedRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
     task: TaskMetadataSchema$1.optional(),
   });
-  let RequestSchema$1 = u({
-    method: string(),
+  let RequestSchema$1 = objectSchema({
+    method: stringSchema(),
     params: BaseRequestParamsSchema$1.loose().optional(),
   });
-  let NotificationsParamsSchema$1 = u({
+  let NotificationsParamsSchema$1 = objectSchema({
     _meta: RequestMetaSchema$1.optional(),
   });
-  let NotificationSchema$1 = u({
-    method: string(),
+  let NotificationSchema$1 = objectSchema({
+    method: stringSchema(),
     params: NotificationsParamsSchema$1.loose().optional(),
   });
   let ResultSchema$1 = looseObject({
     _meta: RequestMetaSchema$1.optional(),
   });
-  let RequestIdSchema$1 = union([string(), E().int()]);
+  let RequestIdSchema$1 = union([stringSchema(), numberSchema().int()]);
   let EmptyResultSchema$1 = ResultSchema$1.strict();
   let CancelledNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
     requestId: RequestIdSchema$1.optional(),
-    reason: string().optional(),
+    reason: stringSchema().optional(),
   });
   let CancelledNotificationSchema$1 = NotificationSchema$1.extend({
     method: literal("notifications/cancelled"),
     params: CancelledNotificationParamsSchema$1,
   });
-  let IconSchema$1 = u({
-    src: string(),
-    mimeType: string().optional(),
-    sizes: array(string()).optional(),
+  let IconSchema$1 = objectSchema({
+    src: stringSchema(),
+    mimeType: stringSchema().optional(),
+    sizes: array(stringSchema()).optional(),
     theme: _enum(["light", "dark"]).optional(),
   });
-  let IconsSchema$1 = u({
+  let IconsSchema$1 = objectSchema({
     icons: array(IconSchema$1).optional(),
   });
-  let BaseMetadataSchema$1 = u({
-    name: string(),
-    title: string().optional(),
+  let BaseMetadataSchema$1 = objectSchema({
+    name: stringSchema(),
+    title: stringSchema().optional(),
   });
   let ImplementationSchema$1 = BaseMetadataSchema$1.extend({
     ...BaseMetadataSchema$1.shape,
     ...IconsSchema$1.shape,
-    version: string(),
-    websiteUrl: string().optional(),
-    description: string().optional(),
+    version: stringSchema(),
+    websiteUrl: stringSchema().optional(),
+    description: stringSchema().optional(),
   });
   let FormElicitationCapabilitySchema = intersection(
-    u({
-      applyDefaults: M().optional(),
+    objectSchema({
+      applyDefaults: booleanSchema().optional(),
     }),
     JSONObjectSchema$1,
   );
@@ -527,7 +545,7 @@ function build$1() {
       return value;
     },
     intersection(
-      u({
+      objectSchema({
         form: FormElicitationCapabilitySchema.optional(),
         url: JSONObjectSchema$1.optional(),
       }),
@@ -555,21 +573,21 @@ function build$1() {
       }).optional(),
     }).optional(),
   });
-  let ClientCapabilitiesSchema$1 = u({
-    experimental: record(string(), JSONObjectSchema$1).optional(),
-    sampling: u({
+  let ClientCapabilitiesSchema$1 = objectSchema({
+    experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
+    sampling: objectSchema({
       context: JSONObjectSchema$1.optional(),
       tools: JSONObjectSchema$1.optional(),
     }).optional(),
     elicitation: ElicitationCapabilitySchema.optional(),
-    roots: u({
-      listChanged: M().optional(),
+    roots: objectSchema({
+      listChanged: booleanSchema().optional(),
     }).optional(),
     tasks: ClientTasksCapabilitySchema$1.optional(),
-    extensions: record(string(), JSONObjectSchema$1).optional(),
+    extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
   });
   let InitializeRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    protocolVersion: string(),
+    protocolVersion: stringSchema(),
     capabilities: ClientCapabilitiesSchema$1,
     clientInfo: ImplementationSchema$1,
   });
@@ -577,28 +595,28 @@ function build$1() {
     method: literal("initialize"),
     params: InitializeRequestParamsSchema$1,
   });
-  let ServerCapabilitiesSchema$1 = u({
-    experimental: record(string(), JSONObjectSchema$1).optional(),
+  let ServerCapabilitiesSchema$1 = objectSchema({
+    experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
     logging: JSONObjectSchema$1.optional(),
     completions: JSONObjectSchema$1.optional(),
-    prompts: u({
-      listChanged: M().optional(),
+    prompts: objectSchema({
+      listChanged: booleanSchema().optional(),
     }).optional(),
-    resources: u({
-      subscribe: M().optional(),
-      listChanged: M().optional(),
+    resources: objectSchema({
+      subscribe: booleanSchema().optional(),
+      listChanged: booleanSchema().optional(),
     }).optional(),
-    tools: u({
-      listChanged: M().optional(),
+    tools: objectSchema({
+      listChanged: booleanSchema().optional(),
     }).optional(),
     tasks: ServerTasksCapabilitySchema$1.optional(),
-    extensions: record(string(), JSONObjectSchema$1).optional(),
+    extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
   });
   let InitializeResultSchema$1 = ResultSchema$1.extend({
-    protocolVersion: string(),
+    protocolVersion: stringSchema(),
     capabilities: ServerCapabilitiesSchema$1,
     serverInfo: ImplementationSchema$1,
-    instructions: string().optional(),
+    instructions: stringSchema().optional(),
   });
   let InitializedNotificationSchema$1 = NotificationSchema$1.extend({
     method: literal("notifications/initialized"),
@@ -608,12 +626,12 @@ function build$1() {
     method: literal("ping"),
     params: BaseRequestParamsSchema$1.optional(),
   });
-  let ProgressSchema$1 = u({
-    progress: E(),
-    total: optional(E()),
-    message: optional(string()),
+  let ProgressSchema$1 = objectSchema({
+    progress: numberSchema(),
+    total: optional(numberSchema()),
+    message: optional(stringSchema()),
   });
-  let ProgressNotificationParamsSchema$1 = u({
+  let ProgressNotificationParamsSchema$1 = objectSchema({
     ...NotificationsParamsSchema$1.shape,
     ...ProgressSchema$1.shape,
     progressToken: ProgressTokenSchema$1,
@@ -631,15 +649,15 @@ function build$1() {
   let PaginatedResultSchema$1 = ResultSchema$1.extend({
     nextCursor: CursorSchema$1.optional(),
   });
-  let ResourceContentsSchema$1 = u({
-    uri: string(),
-    mimeType: optional(string()),
-    _meta: record(string(), unknown()).optional(),
+  let ResourceContentsSchema$1 = objectSchema({
+    uri: stringSchema(),
+    mimeType: optional(stringSchema()),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
   let TextResourceContentsSchema$1 = ResourceContentsSchema$1.extend({
-    text: string(),
+    text: stringSchema(),
   });
-  let Base64Schema = string().refine(
+  let Base64Schema = stringSchema().refine(
     (val) => {
       try {
         atob(val);
@@ -656,9 +674,9 @@ function build$1() {
     blob: Base64Schema,
   });
   let RoleSchema$1 = _enum(["user", "assistant"]);
-  let AnnotationsSchema$1 = u({
+  let AnnotationsSchema$1 = objectSchema({
     audience: array(RoleSchema$1).optional(),
-    priority: E().min(0).max(1).optional(),
+    priority: numberSchema().min(0).max(1).optional(),
     lastModified: union([
       parseToolOutputSchema({
         offset: true,
@@ -669,22 +687,22 @@ function build$1() {
       }),
     ]).optional(),
   });
-  let ResourceSchema$1 = u({
+  let ResourceSchema$1 = objectSchema({
     ...BaseMetadataSchema$1.shape,
     ...IconsSchema$1.shape,
-    uri: string(),
-    description: optional(string()),
-    mimeType: optional(string()),
-    size: optional(E()),
+    uri: stringSchema(),
+    description: optional(stringSchema()),
+    mimeType: optional(stringSchema()),
+    size: optional(numberSchema()),
     annotations: AnnotationsSchema$1.optional(),
     _meta: optional(looseObject({})),
   });
-  let ResourceTemplateSchema$1 = u({
+  let ResourceTemplateSchema$1 = objectSchema({
     ...BaseMetadataSchema$1.shape,
     ...IconsSchema$1.shape,
-    uriTemplate: string(),
-    description: optional(string()),
-    mimeType: optional(string()),
+    uriTemplate: stringSchema(),
+    description: optional(stringSchema()),
+    mimeType: optional(stringSchema()),
     annotations: AnnotationsSchema$1.optional(),
     _meta: optional(looseObject({})),
   });
@@ -701,7 +719,7 @@ function build$1() {
     resourceTemplates: array(ResourceTemplateSchema$1),
   });
   let ResourceRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    uri: string(),
+    uri: stringSchema(),
   });
   let ReadResourceRequestParamsSchema$1 = ResourceRequestParamsSchema$1;
   let ReadResourceRequestSchema$1 = RequestSchema$1.extend({
@@ -726,21 +744,21 @@ function build$1() {
     params: UnsubscribeRequestParamsSchema$1,
   });
   let ResourceUpdatedNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
-    uri: string(),
+    uri: stringSchema(),
   });
   let ResourceUpdatedNotificationSchema$1 = NotificationSchema$1.extend({
     method: literal("notifications/resources/updated"),
     params: ResourceUpdatedNotificationParamsSchema$1,
   });
-  let PromptArgumentSchema$1 = u({
-    name: string(),
-    description: optional(string()),
-    required: optional(M()),
+  let PromptArgumentSchema$1 = objectSchema({
+    name: stringSchema(),
+    description: optional(stringSchema()),
+    required: optional(booleanSchema()),
   });
-  let PromptSchema$1 = u({
+  let PromptSchema$1 = objectSchema({
     ...BaseMetadataSchema$1.shape,
     ...IconsSchema$1.shape,
-    description: optional(string()),
+    description: optional(stringSchema()),
     arguments: optional(array(PromptArgumentSchema$1)),
     _meta: optional(looseObject({})),
   });
@@ -751,45 +769,45 @@ function build$1() {
     prompts: array(PromptSchema$1),
   });
   let GetPromptRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
-    name: string(),
-    arguments: record(string(), string()).optional(),
+    name: stringSchema(),
+    arguments: record(stringSchema(), stringSchema()).optional(),
   });
   let GetPromptRequestSchema$1 = RequestSchema$1.extend({
     method: literal("prompts/get"),
     params: GetPromptRequestParamsSchema$1,
   });
-  let TextContentSchema$1 = u({
+  let TextContentSchema$1 = objectSchema({
     type: literal("text"),
-    text: string(),
+    text: stringSchema(),
     annotations: AnnotationsSchema$1.optional(),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
-  let ImageContentSchema$1 = u({
+  let ImageContentSchema$1 = objectSchema({
     type: literal("image"),
     data: Base64Schema,
-    mimeType: string(),
+    mimeType: stringSchema(),
     annotations: AnnotationsSchema$1.optional(),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
-  let AudioContentSchema$1 = u({
+  let AudioContentSchema$1 = objectSchema({
     type: literal("audio"),
     data: Base64Schema,
-    mimeType: string(),
+    mimeType: stringSchema(),
     annotations: AnnotationsSchema$1.optional(),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
-  let ToolUseContentSchema$1 = u({
+  let ToolUseContentSchema$1 = objectSchema({
     type: literal("tool_use"),
-    name: string(),
-    id: string(),
-    input: record(string(), unknown()),
-    _meta: record(string(), unknown()).optional(),
+    name: stringSchema(),
+    id: stringSchema(),
+    input: record(stringSchema(), unknown()),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
-  let EmbeddedResourceSchema$1 = u({
+  let EmbeddedResourceSchema$1 = objectSchema({
     type: literal("resource"),
     resource: union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1]),
     annotations: AnnotationsSchema$1.optional(),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
   let ResourceLinkSchema$1 = ResourceSchema$1.extend({
     type: literal("resource_link"),
@@ -801,47 +819,47 @@ function build$1() {
     ResourceLinkSchema$1,
     EmbeddedResourceSchema$1,
   ]);
-  let PromptMessageSchema$1 = u({
+  let PromptMessageSchema$1 = objectSchema({
     role: RoleSchema$1,
     content: ContentBlockSchema$1,
   });
   let GetPromptResultSchema$1 = ResultSchema$1.extend({
-    description: string().optional(),
+    description: stringSchema().optional(),
     messages: array(PromptMessageSchema$1),
   });
   let PromptListChangedNotificationSchema$1 = NotificationSchema$1.extend({
     method: literal("notifications/prompts/list_changed"),
     params: NotificationsParamsSchema$1.optional(),
   });
-  let ToolAnnotationsSchema$1 = u({
-    title: string().optional(),
-    readOnlyHint: M().optional(),
-    destructiveHint: M().optional(),
-    idempotentHint: M().optional(),
-    openWorldHint: M().optional(),
+  let ToolAnnotationsSchema$1 = objectSchema({
+    title: stringSchema().optional(),
+    readOnlyHint: booleanSchema().optional(),
+    destructiveHint: booleanSchema().optional(),
+    idempotentHint: booleanSchema().optional(),
+    openWorldHint: booleanSchema().optional(),
   });
-  let ToolExecutionSchema$1 = u({
+  let ToolExecutionSchema$1 = objectSchema({
     taskSupport: _enum(["required", "optional", "forbidden"]).optional(),
   });
-  let ToolSchema$1 = u({
+  let ToolSchema$1 = objectSchema({
     ...BaseMetadataSchema$1.shape,
     ...IconsSchema$1.shape,
-    description: string().optional(),
-    inputSchema: u({
+    description: stringSchema().optional(),
+    inputSchema: objectSchema({
       type: literal("object"),
-      properties: record(string(), JSONValueSchema$1).optional(),
-      required: array(string()).optional(),
+      properties: record(stringSchema(), JSONValueSchema$1).optional(),
+      required: array(stringSchema()).optional(),
     }).catchall(unknown()),
-    outputSchema: u({
+    outputSchema: objectSchema({
       type: literal("object"),
-      properties: record(string(), JSONValueSchema$1).optional(),
-      required: array(string()).optional(),
+      properties: record(stringSchema(), JSONValueSchema$1).optional(),
+      required: array(stringSchema()).optional(),
     })
       .catchall(unknown())
       .optional(),
     annotations: ToolAnnotationsSchema$1.optional(),
     execution: ToolExecutionSchema$1.optional(),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
   let ListToolsRequestSchema$1 = PaginatedRequestSchema$1.extend({
     method: literal("tools/list"),
@@ -851,12 +869,12 @@ function build$1() {
   });
   let CallToolResultSchema$1 = ResultSchema$1.extend({
     content: array(ContentBlockSchema$1),
-    structuredContent: record(string(), unknown()).optional(),
-    isError: M().optional(),
+    structuredContent: record(stringSchema(), unknown()).optional(),
+    isError: booleanSchema().optional(),
   });
   let CallToolRequestParamsSchema$1 = TaskAugmentedRequestParamsSchema$1.extend({
-    name: string(),
-    arguments: record(string(), unknown()).optional(),
+    name: stringSchema(),
+    arguments: record(stringSchema(), unknown()).optional(),
   });
   let CallToolRequestSchema$1 = RequestSchema$1.extend({
     method: literal("tools/call"),
@@ -885,32 +903,32 @@ function build$1() {
   });
   let LoggingMessageNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
     level: LoggingLevelSchema$1,
-    logger: string().optional(),
+    logger: stringSchema().optional(),
     data: unknown(),
   });
   let LoggingMessageNotificationSchema$1 = NotificationSchema$1.extend({
     method: literal("notifications/message"),
     params: LoggingMessageNotificationParamsSchema$1,
   });
-  let ModelHintSchema$1 = u({
-    name: string().optional(),
+  let ModelHintSchema$1 = objectSchema({
+    name: stringSchema().optional(),
   });
-  let ModelPreferencesSchema$1 = u({
+  let ModelPreferencesSchema$1 = objectSchema({
     hints: array(ModelHintSchema$1).optional(),
-    costPriority: E().min(0).max(1).optional(),
-    speedPriority: E().min(0).max(1).optional(),
-    intelligencePriority: E().min(0).max(1).optional(),
+    costPriority: numberSchema().min(0).max(1).optional(),
+    speedPriority: numberSchema().min(0).max(1).optional(),
+    intelligencePriority: numberSchema().min(0).max(1).optional(),
   });
-  let ToolChoiceSchema$1 = u({
+  let ToolChoiceSchema$1 = objectSchema({
     mode: _enum(["auto", "required", "none"]).optional(),
   });
-  let ToolResultContentSchema$1 = u({
+  let ToolResultContentSchema$1 = objectSchema({
     type: literal("tool_result"),
-    toolUseId: string().describe("The unique identifier for the corresponding tool call."),
+    toolUseId: stringSchema().describe("The unique identifier for the corresponding tool call."),
     content: array(ContentBlockSchema$1),
-    structuredContent: u({}).loose().optional(),
-    isError: M().optional(),
-    _meta: record(string(), unknown()).optional(),
+    structuredContent: objectSchema({}).loose().optional(),
+    isError: booleanSchema().optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
   let SamplingContentSchema$1 = discriminatedUnion("type", [
     TextContentSchema$1,
@@ -924,19 +942,19 @@ function build$1() {
     ToolUseContentSchema$1,
     ToolResultContentSchema$1,
   ]);
-  let SamplingMessageSchema$1 = u({
+  let SamplingMessageSchema$1 = objectSchema({
     role: RoleSchema$1,
     content: union([SamplingMessageContentBlockSchema$1, array(SamplingMessageContentBlockSchema$1)]),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
   let CreateMessageRequestParamsSchema$1 = TaskAugmentedRequestParamsSchema$1.extend({
     messages: array(SamplingMessageSchema$1),
     modelPreferences: ModelPreferencesSchema$1.optional(),
-    systemPrompt: string().optional(),
+    systemPrompt: stringSchema().optional(),
     includeContext: _enum(["none", "thisServer", "allServers"]).optional(),
-    temperature: E().optional(),
-    maxTokens: E().int(),
-    stopSequences: array(string()).optional(),
+    temperature: numberSchema().optional(),
+    maxTokens: numberSchema().int(),
+    stopSequences: array(stringSchema()).optional(),
     metadata: JSONObjectSchema$1.optional(),
     tools: array(ToolSchema$1).optional(),
     toolChoice: ToolChoiceSchema$1.optional(),
@@ -946,98 +964,98 @@ function build$1() {
     params: CreateMessageRequestParamsSchema$1,
   });
   let CreateMessageResultSchema$1 = ResultSchema$1.extend({
-    model: string(),
-    stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens"]).or(string())),
+    model: stringSchema(),
+    stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens"]).or(stringSchema())),
     role: RoleSchema$1,
     content: SamplingContentSchema$1,
   });
   let CreateMessageResultWithToolsSchema$1 = ResultSchema$1.extend({
-    model: string(),
-    stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(string())),
+    model: stringSchema(),
+    stopReason: optional(_enum(["endTurn", "stopSequence", "maxTokens", "toolUse"]).or(stringSchema())),
     role: RoleSchema$1,
     content: union([SamplingMessageContentBlockSchema$1, array(SamplingMessageContentBlockSchema$1)]),
   });
-  let BooleanSchemaSchema$1 = u({
+  let BooleanSchemaSchema$1 = objectSchema({
     type: literal("boolean"),
-    title: string().optional(),
-    description: string().optional(),
-    default: M().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    default: booleanSchema().optional(),
   });
-  let StringSchemaSchema$1 = u({
+  let StringSchemaSchema$1 = objectSchema({
     type: literal("string"),
-    title: string().optional(),
-    description: string().optional(),
-    minLength: E().optional(),
-    maxLength: E().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minLength: numberSchema().optional(),
+    maxLength: numberSchema().optional(),
     format: _enum(["email", "uri", "date", "date-time"]).optional(),
-    default: string().optional(),
+    default: stringSchema().optional(),
   });
-  let NumberSchemaSchema$1 = u({
+  let NumberSchemaSchema$1 = objectSchema({
     type: _enum(["number", "integer"]),
-    title: string().optional(),
-    description: string().optional(),
-    minimum: E().optional(),
-    maximum: E().optional(),
-    default: E().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minimum: numberSchema().optional(),
+    maximum: numberSchema().optional(),
+    default: numberSchema().optional(),
   });
-  let UntitledSingleSelectEnumSchemaSchema$1 = u({
+  let UntitledSingleSelectEnumSchemaSchema$1 = objectSchema({
     type: literal("string"),
-    title: string().optional(),
-    description: string().optional(),
-    enum: array(string()),
-    default: string().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    enum: array(stringSchema()),
+    default: stringSchema().optional(),
   });
-  let TitledSingleSelectEnumSchemaSchema$1 = u({
+  let TitledSingleSelectEnumSchemaSchema$1 = objectSchema({
     type: literal("string"),
-    title: string().optional(),
-    description: string().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
     oneOf: array(
-      u({
-        const: string(),
-        title: string(),
+      objectSchema({
+        const: stringSchema(),
+        title: stringSchema(),
       }),
     ),
-    default: string().optional(),
+    default: stringSchema().optional(),
   });
-  let LegacyTitledEnumSchemaSchema$1 = u({
+  let LegacyTitledEnumSchemaSchema$1 = objectSchema({
     type: literal("string"),
-    title: string().optional(),
-    description: string().optional(),
-    enum: array(string()),
-    enumNames: array(string()).optional(),
-    default: string().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    enum: array(stringSchema()),
+    enumNames: array(stringSchema()).optional(),
+    default: stringSchema().optional(),
   });
   let SingleSelectEnumSchemaSchema$1 = union([
     UntitledSingleSelectEnumSchemaSchema$1,
     TitledSingleSelectEnumSchemaSchema$1,
   ]);
-  let UntitledMultiSelectEnumSchemaSchema$1 = u({
+  let UntitledMultiSelectEnumSchemaSchema$1 = objectSchema({
     type: literal("array"),
-    title: string().optional(),
-    description: string().optional(),
-    minItems: E().optional(),
-    maxItems: E().optional(),
-    items: u({
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minItems: numberSchema().optional(),
+    maxItems: numberSchema().optional(),
+    items: objectSchema({
       type: literal("string"),
-      enum: array(string()),
+      enum: array(stringSchema()),
     }),
-    default: array(string()).optional(),
+    default: array(stringSchema()).optional(),
   });
-  let TitledMultiSelectEnumSchemaSchema$1 = u({
+  let TitledMultiSelectEnumSchemaSchema$1 = objectSchema({
     type: literal("array"),
-    title: string().optional(),
-    description: string().optional(),
-    minItems: E().optional(),
-    maxItems: E().optional(),
-    items: u({
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minItems: numberSchema().optional(),
+    maxItems: numberSchema().optional(),
+    items: objectSchema({
       anyOf: array(
-        u({
-          const: string(),
-          title: string(),
+        objectSchema({
+          const: stringSchema(),
+          title: stringSchema(),
         }),
       ),
     }),
-    default: array(string()).optional(),
+    default: array(stringSchema()).optional(),
   });
   let MultiSelectEnumSchemaSchema$1 = union([
     UntitledMultiSelectEnumSchemaSchema$1,
@@ -1056,18 +1074,18 @@ function build$1() {
   ]);
   let ElicitRequestFormParamsSchema$1 = TaskAugmentedRequestParamsSchema$1.extend({
     mode: literal("form").optional(),
-    message: string(),
-    requestedSchema: u({
+    message: stringSchema(),
+    requestedSchema: objectSchema({
       type: literal("object"),
-      properties: record(string(), PrimitiveSchemaDefinitionSchema$1),
-      required: array(string()).optional(),
+      properties: record(stringSchema(), PrimitiveSchemaDefinitionSchema$1),
+      required: array(stringSchema()).optional(),
     }).catchall(unknown()),
   });
   let ElicitRequestURLParamsSchema$1 = TaskAugmentedRequestParamsSchema$1.extend({
     mode: literal("url"),
-    message: string(),
-    elicitationId: string(),
-    url: string().url(),
+    message: stringSchema(),
+    elicitationId: stringSchema(),
+    url: stringSchema().url(),
   });
   let ElicitRequestParamsSchema$1 = union([ElicitRequestFormParamsSchema$1, ElicitRequestURLParamsSchema$1]);
   let ElicitRequestSchema$1 = RequestSchema$1.extend({
@@ -1075,7 +1093,7 @@ function build$1() {
     params: ElicitRequestParamsSchema$1,
   });
   let ElicitationCompleteNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
-    elicitationId: string(),
+    elicitationId: stringSchema(),
   });
   let ElicitationCompleteNotificationSchema$1 = NotificationSchema$1.extend({
     method: literal("notifications/elicitation/complete"),
@@ -1085,25 +1103,28 @@ function build$1() {
     action: _enum(["accept", "decline", "cancel"]),
     content: preprocess(
       (val) => (val === null ? undefined : val),
-      record(string(), union([string(), E(), M(), array(string())])).optional(),
+      record(
+        stringSchema(),
+        union([stringSchema(), numberSchema(), booleanSchema(), array(stringSchema())]),
+      ).optional(),
     ),
   });
-  let ResourceTemplateReferenceSchema$1 = u({
+  let ResourceTemplateReferenceSchema$1 = objectSchema({
     type: literal("ref/resource"),
-    uri: string(),
+    uri: stringSchema(),
   });
-  let PromptReferenceSchema$1 = u({
+  let PromptReferenceSchema$1 = objectSchema({
     type: literal("ref/prompt"),
-    name: string(),
+    name: stringSchema(),
   });
   let CompleteRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
     ref: union([PromptReferenceSchema$1, ResourceTemplateReferenceSchema$1]),
-    argument: u({
-      name: string(),
-      value: string(),
+    argument: objectSchema({
+      name: stringSchema(),
+      value: stringSchema(),
     }),
-    context: u({
-      arguments: record(string(), string()).optional(),
+    context: objectSchema({
+      arguments: record(stringSchema(), stringSchema()).optional(),
     }).optional(),
   });
   let CompleteRequestSchema$1 = RequestSchema$1.extend({
@@ -1112,15 +1133,15 @@ function build$1() {
   });
   let CompleteResultSchema$1 = ResultSchema$1.extend({
     completion: looseObject({
-      values: array(string()).max(100),
-      total: optional(E().int()),
-      hasMore: optional(M()),
+      values: array(stringSchema()).max(100),
+      total: optional(numberSchema().int()),
+      hasMore: optional(booleanSchema()),
     }),
   });
-  let RootSchema$1 = u({
-    uri: string().startsWith("file://"),
-    name: string().optional(),
-    _meta: record(string(), unknown()).optional(),
+  let RootSchema$1 = objectSchema({
+    uri: stringSchema().startsWith("file://"),
+    name: stringSchema().optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
   let ListRootsRequestSchema$1 = RequestSchema$1.extend({
     method: literal("roots/list"),
@@ -1134,18 +1155,18 @@ function build$1() {
     params: NotificationsParamsSchema$1.optional(),
   });
   let TaskCreationParamsSchema$1 = looseObject({
-    ttl: E().optional(),
-    pollInterval: E().optional(),
+    ttl: numberSchema().optional(),
+    pollInterval: numberSchema().optional(),
   });
   let TaskStatusSchema$1 = _enum(["working", "input_required", "completed", "failed", "cancelled"]);
-  let TaskSchema$1 = u({
-    taskId: string(),
+  let TaskSchema$1 = objectSchema({
+    taskId: stringSchema(),
     status: TaskStatusSchema$1,
-    ttl: union([E(), zg()]),
-    createdAt: string(),
-    lastUpdatedAt: string(),
-    pollInterval: optional(E()),
-    statusMessage: optional(string()),
+    ttl: union([numberSchema(), nullSchema()]),
+    createdAt: stringSchema(),
+    lastUpdatedAt: stringSchema(),
+    pollInterval: optional(numberSchema()),
+    statusMessage: optional(stringSchema()),
   });
   let CreateTaskResultSchema$1 = ResultSchema$1.extend({
     task: TaskSchema$1,
@@ -1158,14 +1179,14 @@ function build$1() {
   let GetTaskRequestSchema$1 = RequestSchema$1.extend({
     method: literal("tasks/get"),
     params: BaseRequestParamsSchema$1.extend({
-      taskId: string(),
+      taskId: stringSchema(),
     }),
   });
   let GetTaskResultSchema$1 = ResultSchema$1.merge(TaskSchema$1);
   let GetTaskPayloadRequestSchema$1 = RequestSchema$1.extend({
     method: literal("tasks/result"),
     params: BaseRequestParamsSchema$1.extend({
-      taskId: string(),
+      taskId: stringSchema(),
     }),
   });
   let GetTaskPayloadResultSchema$1 = ResultSchema$1.loose();
@@ -1178,7 +1199,7 @@ function build$1() {
   let CancelTaskRequestSchema$1 = RequestSchema$1.extend({
     method: literal("tasks/cancel"),
     params: BaseRequestParamsSchema$1.extend({
-      taskId: string(),
+      taskId: stringSchema(),
     }),
   });
   return {
@@ -1428,14 +1449,18 @@ function isNonObjectJsonSchemaRoot(json) {
   return json.type !== "object";
 }
 //@ chunk-r1g76qsy.js:37388-37530 esm-fingerprint
-var REF_REWRITE_DATA_POSITION_KEYS = new Set(["const", "enum", "default", "examples"]);
-var REF_REWRITE_NAME_MAP_KEYS = new Set([
-  "properties",
-  "patternProperties",
-  "$defs",
-  "definitions",
-  "dependentSchemas",
-]);
+var REF_REWRITE_DATA_POSITION_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REF_REWRITE_NAME_MAP_KEYS;
+deferInit("chunk-r1g76qsy.js:37388", () => {
+  REF_REWRITE_DATA_POSITION_KEYS = new Set(["const", "enum", "default", "examples"]);
+  REF_REWRITE_NAME_MAP_KEYS = new Set([
+    "properties",
+    "patternProperties",
+    "$defs",
+    "definitions",
+    "dependentSchemas",
+  ]);
+});
 //@ chunk-r1g76qsy.js:37530-38232 esm-fingerprint
 function wrapOutputSchemaForLegacy(natural) {
   let $schema = typeof natural.$schema === "string" ? natural.$schema : undefined;
@@ -1617,8 +1642,12 @@ function getNotificationSchema(method) {
   return hasNotificationMethod2025(method) ? registryMaps().notificationSchemas[method] : undefined;
 }
 //@ chunk-r1g76qsy.js:42200-42242 esm-layout
-var keys = Object.keys(requestMethodKeys$1);
-var keys_2 = Object.keys(notificationMethodKeys$1);
+var keys; // deferred: uses requestMethodKeys$1 of its import cycle while loading; runs once the cycle is complete
+var keys_2;
+deferInit("chunk-r1g76qsy.js:42200", () => {
+  keys = Object.keys(requestMethodKeys$1);
+  keys_2 = Object.keys(notificationMethodKeys$1);
+});
 //@ chunk-r1g76qsy.js:42242-42313 esm-fingerprint
 function isPlainObject$4(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -1729,12 +1758,19 @@ var rev2025Codec = {
 //@ chunk-r1g76qsy.js:43703-59401 esm-fingerprint
 function build() {
   let JSONValueSchema$1 = lazy(() =>
-    union([string(), E(), M(), zg(), record(string(), JSONValueSchema$1), array(JSONValueSchema$1)]),
+    union([
+      stringSchema(),
+      numberSchema(),
+      booleanSchema(),
+      nullSchema(),
+      record(stringSchema(), JSONValueSchema$1),
+      array(JSONValueSchema$1),
+    ]),
   );
-  let JSONObjectSchema$1 = record(string(), JSONValueSchema$1);
-  let ProgressTokenSchema$1 = union([string(), E().int()]);
-  let CursorSchema$1 = string();
-  let RequestIdSchema$1 = union([string(), E().int()]);
+  let JSONObjectSchema$1 = record(stringSchema(), JSONValueSchema$1);
+  let ProgressTokenSchema$1 = union([stringSchema(), numberSchema().int()]);
+  let CursorSchema$1 = stringSchema();
+  let RequestIdSchema$1 = union([stringSchema(), numberSchema().int()]);
   let RoleSchema$1 = _enum(["user", "assistant"]);
   let LoggingLevelSchema$1 = _enum([
     "debug",
@@ -1746,7 +1782,7 @@ function build() {
     "alert",
     "emergency",
   ]);
-  let Base64Schema = string().refine(
+  let Base64Schema = stringSchema().refine(
     (val) => {
       try {
         atob(val);
@@ -1759,52 +1795,52 @@ function build() {
       message: "Invalid Base64 string",
     },
   );
-  let TaskMetadataSchema$1 = u({
-    ttl: E().optional(),
+  let TaskMetadataSchema$1 = objectSchema({
+    ttl: numberSchema().optional(),
   });
-  let RelatedTaskMetadataSchema$1 = u({
-    taskId: string(),
+  let RelatedTaskMetadataSchema$1 = objectSchema({
+    taskId: stringSchema(),
   });
   let RequestMetaSchema$1 = looseObject({
     progressToken: ProgressTokenSchema$1.optional(),
     "io.modelcontextprotocol/related-task": RelatedTaskMetadataSchema$1.optional(),
   });
-  let BaseRequestParamsSchema$1 = u({
+  let BaseRequestParamsSchema$1 = objectSchema({
     _meta: RequestMetaSchema$1.optional(),
   });
   let TaskAugmentedRequestParamsSchema$1 = BaseRequestParamsSchema$1.extend({
     task: TaskMetadataSchema$1.optional(),
   });
-  let NotificationsParamsSchema$1 = u({
+  let NotificationsParamsSchema$1 = objectSchema({
     _meta: RequestMetaSchema$1.optional(),
   });
-  let NotificationSchema$1 = u({
-    method: string(),
+  let NotificationSchema$1 = objectSchema({
+    method: stringSchema(),
     params: NotificationsParamsSchema$1.loose().optional(),
   });
-  let IconSchema$1 = u({
-    src: string(),
-    mimeType: string().optional(),
-    sizes: array(string()).optional(),
+  let IconSchema$1 = objectSchema({
+    src: stringSchema(),
+    mimeType: stringSchema().optional(),
+    sizes: array(stringSchema()).optional(),
     theme: _enum(["light", "dark"]).optional(),
   });
-  let IconsSchema$1 = u({
+  let IconsSchema$1 = objectSchema({
     icons: array(IconSchema$1).optional(),
   });
-  let BaseMetadataSchema$1 = u({
-    name: string(),
-    title: string().optional(),
+  let BaseMetadataSchema$1 = objectSchema({
+    name: stringSchema(),
+    title: stringSchema().optional(),
   });
   let ImplementationSchema$1 = BaseMetadataSchema$1.extend({
     ...BaseMetadataSchema$1.shape,
     ...IconsSchema$1.shape,
-    version: string(),
-    websiteUrl: string().optional(),
-    description: string().optional(),
+    version: stringSchema(),
+    websiteUrl: stringSchema().optional(),
+    description: stringSchema().optional(),
   });
   let FormElicitationCapabilitySchema = intersection(
-    u({
-      applyDefaults: M().optional(),
+    objectSchema({
+      applyDefaults: booleanSchema().optional(),
     }),
     JSONObjectSchema$1,
   );
@@ -1817,7 +1853,7 @@ function build() {
       return value;
     },
     intersection(
-      u({
+      objectSchema({
         form: FormElicitationCapabilitySchema.optional(),
         url: JSONObjectSchema$1.optional(),
       }),
@@ -1845,42 +1881,42 @@ function build() {
       }).optional(),
     }).optional(),
   });
-  let ClientCapabilitiesSchema$1 = u({
-    experimental: record(string(), JSONObjectSchema$1).optional(),
-    sampling: u({
+  let ClientCapabilitiesSchema$1 = objectSchema({
+    experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
+    sampling: objectSchema({
       context: JSONObjectSchema$1.optional(),
       tools: JSONObjectSchema$1.optional(),
     }).optional(),
     elicitation: ElicitationCapabilitySchema.optional(),
-    roots: u({
-      listChanged: M().optional(),
+    roots: objectSchema({
+      listChanged: booleanSchema().optional(),
     }).optional(),
     tasks: ClientTasksCapabilitySchema$1.optional(),
-    extensions: record(string(), JSONObjectSchema$1).optional(),
+    extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
   });
-  let ServerCapabilitiesSchema$1 = u({
-    experimental: record(string(), JSONObjectSchema$1).optional(),
+  let ServerCapabilitiesSchema$1 = objectSchema({
+    experimental: record(stringSchema(), JSONObjectSchema$1).optional(),
     logging: JSONObjectSchema$1.optional(),
     completions: JSONObjectSchema$1.optional(),
-    prompts: u({
-      listChanged: M().optional(),
+    prompts: objectSchema({
+      listChanged: booleanSchema().optional(),
     }).optional(),
-    resources: u({
-      subscribe: M().optional(),
-      listChanged: M().optional(),
+    resources: objectSchema({
+      subscribe: booleanSchema().optional(),
+      listChanged: booleanSchema().optional(),
     }).optional(),
-    tools: u({
-      listChanged: M().optional(),
+    tools: objectSchema({
+      listChanged: booleanSchema().optional(),
     }).optional(),
     tasks: ServerTasksCapabilitySchema$1.optional(),
-    extensions: record(string(), JSONObjectSchema$1).optional(),
+    extensions: record(stringSchema(), JSONObjectSchema$1).optional(),
   });
-  let ProgressSchema$1 = u({
-    progress: E(),
-    total: optional(E()),
-    message: optional(string()),
+  let ProgressSchema$1 = objectSchema({
+    progress: numberSchema(),
+    total: optional(numberSchema()),
+    message: optional(stringSchema()),
   });
-  let ProgressNotificationParamsSchema$1 = u({
+  let ProgressNotificationParamsSchema$1 = objectSchema({
     ...NotificationsParamsSchema$1.shape,
     ...ProgressSchema$1.shape,
     progressToken: ProgressTokenSchema$1,
@@ -1891,27 +1927,27 @@ function build() {
   });
   let LoggingMessageNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
     level: LoggingLevelSchema$1,
-    logger: string().optional(),
+    logger: stringSchema().optional(),
     data: unknown(),
   });
   let LoggingMessageNotificationSchema$1 = NotificationSchema$1.extend({
     method: literal("notifications/message"),
     params: LoggingMessageNotificationParamsSchema$1,
   });
-  let ResourceContentsSchema$1 = u({
-    uri: string(),
-    mimeType: optional(string()),
-    _meta: record(string(), unknown()).optional(),
+  let ResourceContentsSchema$1 = objectSchema({
+    uri: stringSchema(),
+    mimeType: optional(stringSchema()),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
   let TextResourceContentsSchema$1 = ResourceContentsSchema$1.extend({
-    text: string(),
+    text: stringSchema(),
   });
   let BlobResourceContentsSchema$1 = ResourceContentsSchema$1.extend({
     blob: Base64Schema,
   });
-  let AnnotationsSchema$1 = u({
+  let AnnotationsSchema$1 = objectSchema({
     audience: array(RoleSchema$1).optional(),
-    priority: E().min(0).max(1).optional(),
+    priority: numberSchema().min(0).max(1).optional(),
     lastModified: union([
       parseToolOutputSchema({
         offset: true,
@@ -1922,22 +1958,22 @@ function build() {
       }),
     ]).optional(),
   });
-  let ResourceSchema$1 = u({
+  let ResourceSchema$1 = objectSchema({
     ...BaseMetadataSchema$1.shape,
     ...IconsSchema$1.shape,
-    uri: string(),
-    description: optional(string()),
-    mimeType: optional(string()),
-    size: optional(E()),
+    uri: stringSchema(),
+    description: optional(stringSchema()),
+    mimeType: optional(stringSchema()),
+    size: optional(numberSchema()),
     annotations: AnnotationsSchema$1.optional(),
     _meta: optional(looseObject({})),
   });
-  let ResourceTemplateSchema$1 = u({
+  let ResourceTemplateSchema$1 = objectSchema({
     ...BaseMetadataSchema$1.shape,
     ...IconsSchema$1.shape,
-    uriTemplate: string(),
-    description: optional(string()),
-    mimeType: optional(string()),
+    uriTemplate: stringSchema(),
+    description: optional(stringSchema()),
+    mimeType: optional(stringSchema()),
     annotations: AnnotationsSchema$1.optional(),
     _meta: optional(looseObject({})),
   });
@@ -1946,21 +1982,21 @@ function build() {
     params: NotificationsParamsSchema$1.optional(),
   });
   let ResourceUpdatedNotificationParamsSchema$1 = NotificationsParamsSchema$1.extend({
-    uri: string(),
+    uri: stringSchema(),
   });
   let ResourceUpdatedNotificationSchema$1 = NotificationSchema$1.extend({
     method: literal("notifications/resources/updated"),
     params: ResourceUpdatedNotificationParamsSchema$1,
   });
-  let PromptArgumentSchema$1 = u({
-    name: string(),
-    description: optional(string()),
-    required: optional(M()),
+  let PromptArgumentSchema$1 = objectSchema({
+    name: stringSchema(),
+    description: optional(stringSchema()),
+    required: optional(booleanSchema()),
   });
-  let PromptSchema$1 = u({
+  let PromptSchema$1 = objectSchema({
     ...BaseMetadataSchema$1.shape,
     ...IconsSchema$1.shape,
-    description: optional(string()),
+    description: optional(stringSchema()),
     arguments: optional(array(PromptArgumentSchema$1)),
     _meta: optional(looseObject({})),
   });
@@ -1968,38 +2004,38 @@ function build() {
     method: literal("notifications/prompts/list_changed"),
     params: NotificationsParamsSchema$1.optional(),
   });
-  let TextContentSchema$1 = u({
+  let TextContentSchema$1 = objectSchema({
     type: literal("text"),
-    text: string(),
+    text: stringSchema(),
     annotations: AnnotationsSchema$1.optional(),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
-  let ImageContentSchema$1 = u({
+  let ImageContentSchema$1 = objectSchema({
     type: literal("image"),
     data: Base64Schema,
-    mimeType: string(),
+    mimeType: stringSchema(),
     annotations: AnnotationsSchema$1.optional(),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
-  let AudioContentSchema$1 = u({
+  let AudioContentSchema$1 = objectSchema({
     type: literal("audio"),
     data: Base64Schema,
-    mimeType: string(),
+    mimeType: stringSchema(),
     annotations: AnnotationsSchema$1.optional(),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
-  let ToolUseContentSchema$1 = u({
+  let ToolUseContentSchema$1 = objectSchema({
     type: literal("tool_use"),
-    name: string(),
-    id: string(),
-    input: record(string(), unknown()),
-    _meta: record(string(), unknown()).optional(),
+    name: stringSchema(),
+    id: stringSchema(),
+    input: record(stringSchema(), unknown()),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
-  let EmbeddedResourceSchema$1 = u({
+  let EmbeddedResourceSchema$1 = objectSchema({
     type: literal("resource"),
     resource: union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1]),
     annotations: AnnotationsSchema$1.optional(),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
   let ResourceLinkSchema$1 = ResourceSchema$1.extend({
     type: literal("resource_link"),
@@ -2011,114 +2047,114 @@ function build() {
     ResourceLinkSchema$1,
     EmbeddedResourceSchema$1,
   ]);
-  let PromptMessageSchema$1 = u({
+  let PromptMessageSchema$1 = objectSchema({
     role: RoleSchema$1,
     content: ContentBlockSchema$1,
   });
-  let ToolAnnotationsSchema$1 = u({
-    title: string().optional(),
-    readOnlyHint: M().optional(),
-    destructiveHint: M().optional(),
-    idempotentHint: M().optional(),
-    openWorldHint: M().optional(),
+  let ToolAnnotationsSchema$1 = objectSchema({
+    title: stringSchema().optional(),
+    readOnlyHint: booleanSchema().optional(),
+    destructiveHint: booleanSchema().optional(),
+    idempotentHint: booleanSchema().optional(),
+    openWorldHint: booleanSchema().optional(),
   });
   let ToolListChangedNotificationSchema$1 = NotificationSchema$1.extend({
     method: literal("notifications/tools/list_changed"),
     params: NotificationsParamsSchema$1.optional(),
   });
-  let ModelHintSchema$1 = u({
-    name: string().optional(),
+  let ModelHintSchema$1 = objectSchema({
+    name: stringSchema().optional(),
   });
-  let ModelPreferencesSchema$1 = u({
+  let ModelPreferencesSchema$1 = objectSchema({
     hints: array(ModelHintSchema$1).optional(),
-    costPriority: E().min(0).max(1).optional(),
-    speedPriority: E().min(0).max(1).optional(),
-    intelligencePriority: E().min(0).max(1).optional(),
+    costPriority: numberSchema().min(0).max(1).optional(),
+    speedPriority: numberSchema().min(0).max(1).optional(),
+    intelligencePriority: numberSchema().min(0).max(1).optional(),
   });
-  let ToolChoiceSchema$1 = u({
+  let ToolChoiceSchema$1 = objectSchema({
     mode: _enum(["auto", "required", "none"]).optional(),
   });
-  let BooleanSchemaSchema$1 = u({
+  let BooleanSchemaSchema$1 = objectSchema({
     type: literal("boolean"),
-    title: string().optional(),
-    description: string().optional(),
-    default: M().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    default: booleanSchema().optional(),
   });
-  let StringSchemaSchema$1 = u({
+  let StringSchemaSchema$1 = objectSchema({
     type: literal("string"),
-    title: string().optional(),
-    description: string().optional(),
-    minLength: E().optional(),
-    maxLength: E().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minLength: numberSchema().optional(),
+    maxLength: numberSchema().optional(),
     format: _enum(["email", "uri", "date", "date-time"]).optional(),
-    default: string().optional(),
+    default: stringSchema().optional(),
   });
-  let NumberSchemaSchema$1 = u({
+  let NumberSchemaSchema$1 = objectSchema({
     type: _enum(["number", "integer"]),
-    title: string().optional(),
-    description: string().optional(),
-    minimum: E().optional(),
-    maximum: E().optional(),
-    default: E().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minimum: numberSchema().optional(),
+    maximum: numberSchema().optional(),
+    default: numberSchema().optional(),
   });
-  let UntitledSingleSelectEnumSchemaSchema$1 = u({
+  let UntitledSingleSelectEnumSchemaSchema$1 = objectSchema({
     type: literal("string"),
-    title: string().optional(),
-    description: string().optional(),
-    enum: array(string()),
-    default: string().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    enum: array(stringSchema()),
+    default: stringSchema().optional(),
   });
-  let TitledSingleSelectEnumSchemaSchema$1 = u({
+  let TitledSingleSelectEnumSchemaSchema$1 = objectSchema({
     type: literal("string"),
-    title: string().optional(),
-    description: string().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
     oneOf: array(
-      u({
-        const: string(),
-        title: string(),
+      objectSchema({
+        const: stringSchema(),
+        title: stringSchema(),
       }),
     ),
-    default: string().optional(),
+    default: stringSchema().optional(),
   });
-  let LegacyTitledEnumSchemaSchema$1 = u({
+  let LegacyTitledEnumSchemaSchema$1 = objectSchema({
     type: literal("string"),
-    title: string().optional(),
-    description: string().optional(),
-    enum: array(string()),
-    enumNames: array(string()).optional(),
-    default: string().optional(),
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    enum: array(stringSchema()),
+    enumNames: array(stringSchema()).optional(),
+    default: stringSchema().optional(),
   });
   let SingleSelectEnumSchemaSchema$1 = union([
     UntitledSingleSelectEnumSchemaSchema$1,
     TitledSingleSelectEnumSchemaSchema$1,
   ]);
-  let UntitledMultiSelectEnumSchemaSchema$1 = u({
+  let UntitledMultiSelectEnumSchemaSchema$1 = objectSchema({
     type: literal("array"),
-    title: string().optional(),
-    description: string().optional(),
-    minItems: E().optional(),
-    maxItems: E().optional(),
-    items: u({
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minItems: numberSchema().optional(),
+    maxItems: numberSchema().optional(),
+    items: objectSchema({
       type: literal("string"),
-      enum: array(string()),
+      enum: array(stringSchema()),
     }),
-    default: array(string()).optional(),
+    default: array(stringSchema()).optional(),
   });
-  let TitledMultiSelectEnumSchemaSchema$1 = u({
+  let TitledMultiSelectEnumSchemaSchema$1 = objectSchema({
     type: literal("array"),
-    title: string().optional(),
-    description: string().optional(),
-    minItems: E().optional(),
-    maxItems: E().optional(),
-    items: u({
+    title: stringSchema().optional(),
+    description: stringSchema().optional(),
+    minItems: numberSchema().optional(),
+    maxItems: numberSchema().optional(),
+    items: objectSchema({
       anyOf: array(
-        u({
-          const: string(),
-          title: string(),
+        objectSchema({
+          const: stringSchema(),
+          title: stringSchema(),
         }),
       ),
     }),
-    default: array(string()).optional(),
+    default: array(stringSchema()).optional(),
   });
   let MultiSelectEnumSchemaSchema$1 = union([
     UntitledMultiSelectEnumSchemaSchema$1,
@@ -2137,28 +2173,28 @@ function build() {
   ]);
   let ElicitRequestFormParamsSchema$1 = TaskAugmentedRequestParamsSchema$1.extend({
     mode: literal("form").optional(),
-    message: string(),
-    requestedSchema: u({
+    message: stringSchema(),
+    requestedSchema: objectSchema({
       type: literal("object"),
-      properties: record(string(), PrimitiveSchemaDefinitionSchema$1),
-      required: array(string()).optional(),
+      properties: record(stringSchema(), PrimitiveSchemaDefinitionSchema$1),
+      required: array(stringSchema()).optional(),
     }).catchall(unknown()),
   });
-  let ResourceTemplateReferenceSchema$1 = u({
+  let ResourceTemplateReferenceSchema$1 = objectSchema({
     type: literal("ref/resource"),
-    uri: string(),
+    uri: stringSchema(),
   });
-  let PromptReferenceSchema$1 = u({
+  let PromptReferenceSchema$1 = objectSchema({
     type: literal("ref/prompt"),
-    name: string(),
+    name: stringSchema(),
   });
-  let RootSchema$1 = u({
-    uri: string().startsWith("file://"),
-    name: string().optional(),
-    _meta: record(string(), unknown()).optional(),
+  let RootSchema$1 = objectSchema({
+    uri: stringSchema().startsWith("file://"),
+    name: stringSchema().optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
   let sharedClientCapabilityShape = ClientCapabilitiesSchema$1.shape;
-  let ClientCapabilities2026Schema = u({
+  let ClientCapabilities2026Schema = objectSchema({
     experimental: sharedClientCapabilityShape.experimental,
     sampling: sharedClientCapabilityShape.sampling,
     elicitation: sharedClientCapabilityShape.elicitation,
@@ -2166,7 +2202,7 @@ function build() {
     extensions: sharedClientCapabilityShape.extensions,
   });
   let sharedServerCapabilityShape = ServerCapabilitiesSchema$1.shape;
-  let ServerCapabilities2026Schema = u({
+  let ServerCapabilities2026Schema = objectSchema({
     experimental: sharedServerCapabilityShape.experimental,
     logging: sharedServerCapabilityShape.logging,
     completions: sharedServerCapabilityShape.completions,
@@ -2177,32 +2213,32 @@ function build() {
   });
   let RequestMetaEnvelopeSchema = looseObject({
     progressToken: ProgressTokenSchema$1.optional(),
-    [PROTOCOL_VERSION_META_KEY]: string(),
+    [PROTOCOL_VERSION_META_KEY]: stringSchema(),
     [CLIENT_INFO_META_KEY]: ImplementationSchema$1.optional(),
     [CLIENT_CAPABILITIES_META_KEY]: ClientCapabilities2026Schema,
     [LOG_LEVEL_META_KEY]: LoggingLevelSchema$1.optional(),
   });
-  let ToolSchema$1 = u({
+  let ToolSchema$1 = objectSchema({
     ...BaseMetadataSchema$1.shape,
     ...IconsSchema$1.shape,
-    description: string().optional(),
+    description: stringSchema().optional(),
     inputSchema: looseObject({
-      $schema: string().optional(),
+      $schema: stringSchema().optional(),
       type: literal("object"),
     }),
     outputSchema: looseObject({
-      $schema: string().optional(),
+      $schema: stringSchema().optional(),
     }).optional(),
     annotations: ToolAnnotationsSchema$1.optional(),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
-  let ToolResultContentSchema$1 = u({
+  let ToolResultContentSchema$1 = objectSchema({
     type: literal("tool_result"),
-    toolUseId: string(),
+    toolUseId: stringSchema(),
     content: array(ContentBlockSchema$1),
     structuredContent: unknown().optional(),
-    isError: M().optional(),
-    _meta: record(string(), unknown()).optional(),
+    isError: booleanSchema().optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
   let SamplingMessageContentBlockSchema$1 = union([
     TextContentSchema$1,
@@ -2211,12 +2247,12 @@ function build() {
     ToolUseContentSchema$1,
     ToolResultContentSchema$1,
   ]);
-  let SamplingMessageSchema$1 = u({
+  let SamplingMessageSchema$1 = objectSchema({
     role: RoleSchema$1,
     content: union([SamplingMessageContentBlockSchema$1, array(SamplingMessageContentBlockSchema$1)]),
-    _meta: record(string(), unknown()).optional(),
+    _meta: record(stringSchema(), unknown()).optional(),
   });
-  let ResultTypeSchema = string();
+  let ResultTypeSchema = stringSchema();
   let ResultMetaSchema = looseObject({
     [SERVER_INFO_META_KEY]: ImplementationSchema$1.optional().catch(undefined),
   });
@@ -2235,100 +2271,103 @@ function build() {
   let CallToolResultSchema$1 = wireResult({
     content: array(ContentBlockSchema$1),
     structuredContent: unknown().optional(),
-    isError: M().optional(),
+    isError: booleanSchema().optional(),
   });
   let ListToolsResultSchema$1 = wireResult({
-    ttlMs: E().int().min(0),
+    ttlMs: numberSchema().int().min(0),
     cacheScope: _enum(["public", "private"]),
     tools: array(ToolSchema$1),
     nextCursor: CursorSchema$1.optional(),
   });
   let ListPromptsResultSchema$1 = wireResult({
-    ttlMs: E().int().min(0),
+    ttlMs: numberSchema().int().min(0),
     cacheScope: _enum(["public", "private"]),
     prompts: array(PromptSchema$1),
     nextCursor: CursorSchema$1.optional(),
   });
   let GetPromptResultSchema$1 = wireResult({
-    description: string().optional(),
+    description: stringSchema().optional(),
     messages: array(PromptMessageSchema$1),
   });
   let ListResourcesResultSchema$1 = wireResult({
-    ttlMs: E().int().min(0),
+    ttlMs: numberSchema().int().min(0),
     cacheScope: _enum(["public", "private"]),
     resources: array(ResourceSchema$1),
     nextCursor: CursorSchema$1.optional(),
   });
   let ListResourceTemplatesResultSchema$1 = wireResult({
-    ttlMs: E().int().min(0),
+    ttlMs: numberSchema().int().min(0),
     cacheScope: _enum(["public", "private"]),
     resourceTemplates: array(ResourceTemplateSchema$1),
     nextCursor: CursorSchema$1.optional(),
   });
   let ReadResourceResultSchema$1 = wireResult({
-    ttlMs: E().int().min(0),
+    ttlMs: numberSchema().int().min(0),
     cacheScope: _enum(["public", "private"]),
     contents: array(union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1])),
   });
   let CompleteResultSchema$1 = wireResult({
-    completion: u({
-      values: array(string()).max(100),
-      total: E().int().optional(),
-      hasMore: M().optional(),
+    completion: objectSchema({
+      values: array(stringSchema()).max(100),
+      total: numberSchema().int().optional(),
+      hasMore: booleanSchema().optional(),
     }).loose(),
   });
   let CacheableResultSchema = wireResult({
-    ttlMs: E().int().min(0),
+    ttlMs: numberSchema().int().min(0),
     cacheScope: _enum(["public", "private"]),
   });
   let DiscoverResultSchema$1 = wireResult({
-    ttlMs: E().int().min(0).catch(0),
+    ttlMs: numberSchema().int().min(0).catch(0),
     cacheScope: _enum(["public", "private"]).catch("private"),
-    supportedVersions: array(string()),
+    supportedVersions: array(stringSchema()),
     capabilities: ServerCapabilities2026Schema,
-    instructions: string().optional(),
+    instructions: stringSchema().optional(),
   });
-  let CreateMessageRequestParamsSchema$1 = u({
+  let CreateMessageRequestParamsSchema$1 = objectSchema({
     messages: array(SamplingMessageSchema$1),
     modelPreferences: ModelPreferencesSchema$1.optional(),
-    systemPrompt: string().optional(),
+    systemPrompt: stringSchema().optional(),
     includeContext: _enum(["none", "thisServer", "allServers"]).optional(),
-    temperature: E().optional(),
-    maxTokens: E().int(),
-    stopSequences: array(string()).optional(),
+    temperature: numberSchema().optional(),
+    maxTokens: numberSchema().int(),
+    stopSequences: array(stringSchema()).optional(),
     metadata: JSONObjectSchema$1.optional(),
     tools: array(ToolSchema$1).optional(),
     toolChoice: ToolChoiceSchema$1.optional(),
   });
-  let CreateMessageRequestSchema$1 = u({
+  let CreateMessageRequestSchema$1 = objectSchema({
     method: literal("sampling/createMessage"),
     params: CreateMessageRequestParamsSchema$1,
   });
-  let ListRootsRequestSchema$1 = u({
+  let ListRootsRequestSchema$1 = objectSchema({
     method: literal("roots/list"),
-    params: u({
-      _meta: record(string(), unknown()).optional(),
+    params: objectSchema({
+      _meta: record(stringSchema(), unknown()).optional(),
     }).optional(),
   });
-  let CreateMessageResultSchema$1 = u({
+  let CreateMessageResultSchema$1 = objectSchema({
     ...SamplingMessageSchema$1.shape,
-    model: string(),
-    stopReason: string().optional(),
+    model: stringSchema(),
+    stopReason: stringSchema().optional(),
   });
-  let ListRootsResultSchema$1 = u({
+  let ListRootsResultSchema$1 = objectSchema({
     roots: array(RootSchema$1),
   });
-  let ElicitResultSchema$1 = u({
+  let ElicitResultSchema$1 = objectSchema({
     action: _enum(["accept", "decline", "cancel"]),
-    content: record(string(), union([string(), E(), M(), array(string())])).optional(),
+    content: record(
+      stringSchema(),
+      union([stringSchema(), numberSchema(), booleanSchema(), array(stringSchema())]),
+    ).optional(),
   });
-  let ElicitRequestURLParamsSchema$1 = u({
+  let ElicitRequestURLParamsSchema$1 = objectSchema({
     mode: literal("url"),
-    message: string(),
-    url: string().url(),
+    message: stringSchema(),
+    url: stringSchema().url(),
   });
   let ElicitRequestParamsSchema$1 = union([ElicitRequestFormParamsSchema$1, ElicitRequestURLParamsSchema$1]);
-  let ElicitRequestSchema$1 = u({
+  let ElicitRequestSchema$1 = objectSchema({
     method: literal("elicitation/create"),
     params: ElicitRequestParamsSchema$1,
   });
@@ -2342,17 +2381,17 @@ function build() {
     ListRootsResultSchema$1,
     ElicitResultSchema$1,
   ]);
-  let InputRequestsSchema = record(string(), InputRequestSchema);
-  let InputResponsesSchema = record(string(), InputResponseSchema);
+  let InputRequestsSchema = record(stringSchema(), InputRequestSchema);
+  let InputResponsesSchema = record(stringSchema(), InputResponseSchema);
   let InputRequiredResultSchema = wireResult({
     inputRequests: InputRequestsSchema.optional(),
-    requestState: string().optional(),
+    requestState: stringSchema().optional(),
   });
   let retryParamsShape = {
     inputResponses: InputResponsesSchema.optional(),
-    requestState: string().optional(),
+    requestState: stringSchema().optional(),
   };
-  let InputResponseRequestParamsSchema = u({
+  let InputResponseRequestParamsSchema = objectSchema({
     _meta: RequestMetaEnvelopeSchema,
     ...retryParamsShape,
   });
@@ -2360,26 +2399,26 @@ function build() {
     progressToken: ProgressTokenSchema$1.optional(),
   });
   function wireRequest(method, paramsShape) {
-    return u({
+    return objectSchema({
       method: literal(method),
-      params: u({
+      params: objectSchema({
         _meta: RequestMetaEnvelopeSchema,
         ...paramsShape,
       }),
     });
   }
   function dispatchRequest(method, paramsShape) {
-    return u({
+    return objectSchema({
       method: literal(method),
-      params: u({
+      params: objectSchema({
         _meta: DispatchRequestMetaSchema.optional(),
         ...paramsShape,
       }).optional(),
     });
   }
   let callToolParamsShape = {
-    name: string(),
-    arguments: record(string(), unknown()).optional(),
+    name: stringSchema(),
+    arguments: record(stringSchema(), unknown()).optional(),
     ...retryParamsShape,
   };
   let paginatedParamsShape = {
@@ -2389,33 +2428,33 @@ function build() {
   let ListToolsRequestSchema$1 = wireRequest("tools/list", paginatedParamsShape);
   let ListPromptsRequestSchema$1 = wireRequest("prompts/list", paginatedParamsShape);
   let GetPromptRequestSchema$1 = wireRequest("prompts/get", {
-    name: string(),
-    arguments: record(string(), string()).optional(),
+    name: stringSchema(),
+    arguments: record(stringSchema(), stringSchema()).optional(),
     ...retryParamsShape,
   });
   let ListResourcesRequestSchema$1 = wireRequest("resources/list", paginatedParamsShape);
   let ListResourceTemplatesRequestSchema$1 = wireRequest("resources/templates/list", paginatedParamsShape);
   let ReadResourceRequestSchema$1 = wireRequest("resources/read", {
-    uri: string(),
+    uri: stringSchema(),
     ...retryParamsShape,
   });
   let completeParamsShape = {
     ref: union([PromptReferenceSchema$1, ResourceTemplateReferenceSchema$1]),
-    argument: u({
-      name: string(),
-      value: string(),
+    argument: objectSchema({
+      name: stringSchema(),
+      value: stringSchema(),
     }),
-    context: u({
-      arguments: record(string(), string()).optional(),
+    context: objectSchema({
+      arguments: record(stringSchema(), stringSchema()).optional(),
     }).optional(),
   };
   let CompleteRequestSchema$1 = wireRequest("completion/complete", completeParamsShape);
   let DiscoverRequestSchema$1 = wireRequest("server/discover", {});
-  let SubscriptionFilterSchema$1 = u({
-    toolsListChanged: M().optional(),
-    promptsListChanged: M().optional(),
-    resourcesListChanged: M().optional(),
-    resourceSubscriptions: array(string()).optional(),
+  let SubscriptionFilterSchema$1 = objectSchema({
+    toolsListChanged: booleanSchema().optional(),
+    promptsListChanged: booleanSchema().optional(),
+    resourcesListChanged: booleanSchema().optional(),
+    resourceSubscriptions: array(stringSchema()).optional(),
   });
   let subscriptionsListenParamsShape = {
     notifications: SubscriptionFilterSchema$1,
@@ -2435,14 +2474,14 @@ function build() {
     "tools/call": dispatchRequest("tools/call", callToolParamsShape),
     "tools/list": dispatchRequest("tools/list", paginatedParamsShape),
     "prompts/get": dispatchRequest("prompts/get", {
-      name: string(),
-      arguments: record(string(), string()).optional(),
+      name: stringSchema(),
+      arguments: record(stringSchema(), stringSchema()).optional(),
     }),
     "prompts/list": dispatchRequest("prompts/list", paginatedParamsShape),
     "resources/list": dispatchRequest("resources/list", paginatedParamsShape),
     "resources/templates/list": dispatchRequest("resources/templates/list", paginatedParamsShape),
     "resources/read": dispatchRequest("resources/read", {
-      uri: string(),
+      uri: stringSchema(),
     }),
     "completion/complete": dispatchRequest("completion/complete", completeParamsShape),
     "server/discover": dispatchRequest("server/discover", {}),
@@ -2458,73 +2497,73 @@ function build() {
     "tools/call": liftedResult({
       content: array(ContentBlockSchema$1),
       structuredContent: unknown().optional(),
-      isError: M().optional(),
+      isError: booleanSchema().optional(),
     }),
     "tools/list": liftedResult({
-      ttlMs: E().int().min(0),
+      ttlMs: numberSchema().int().min(0),
       cacheScope: _enum(["public", "private"]),
       tools: array(ToolSchema$1),
       nextCursor: CursorSchema$1.optional(),
     }),
     "prompts/get": liftedResult({
-      description: string().optional(),
+      description: stringSchema().optional(),
       messages: array(PromptMessageSchema$1),
     }),
     "prompts/list": liftedResult({
-      ttlMs: E().int().min(0),
+      ttlMs: numberSchema().int().min(0),
       cacheScope: _enum(["public", "private"]),
       prompts: array(PromptSchema$1),
       nextCursor: CursorSchema$1.optional(),
     }),
     "resources/list": liftedResult({
-      ttlMs: E().int().min(0),
+      ttlMs: numberSchema().int().min(0),
       cacheScope: _enum(["public", "private"]),
       resources: array(ResourceSchema$1),
       nextCursor: CursorSchema$1.optional(),
     }),
     "resources/templates/list": liftedResult({
-      ttlMs: E().int().min(0),
+      ttlMs: numberSchema().int().min(0),
       cacheScope: _enum(["public", "private"]),
       resourceTemplates: array(ResourceTemplateSchema$1),
       nextCursor: CursorSchema$1.optional(),
     }),
     "resources/read": liftedResult({
-      ttlMs: E().int().min(0),
+      ttlMs: numberSchema().int().min(0),
       cacheScope: _enum(["public", "private"]),
       contents: array(union([TextResourceContentsSchema$1, BlobResourceContentsSchema$1])),
     }),
     "completion/complete": liftedResult({
-      completion: u({
-        values: array(string()).max(100),
-        total: E().int().optional(),
-        hasMore: M().optional(),
+      completion: objectSchema({
+        values: array(stringSchema()).max(100),
+        total: numberSchema().int().optional(),
+        hasMore: booleanSchema().optional(),
       }).loose(),
     }),
     "server/discover": liftedResult({
-      ttlMs: E().int().min(0).catch(0),
+      ttlMs: numberSchema().int().min(0).catch(0),
       cacheScope: _enum(["public", "private"]).catch("private"),
-      supportedVersions: array(string()),
+      supportedVersions: array(stringSchema()),
       capabilities: ServerCapabilities2026Schema,
-      instructions: string().optional(),
+      instructions: stringSchema().optional(),
     }),
     "subscriptions/listen": liftedResult({}),
   };
   let NotificationMetaSchema = looseObject({
     "io.modelcontextprotocol/subscriptionId": RequestIdSchema$1.optional(),
   });
-  let SubscriptionsAcknowledgedNotificationSchema$1 = u({
+  let SubscriptionsAcknowledgedNotificationSchema$1 = objectSchema({
     method: literal("notifications/subscriptions/acknowledged"),
-    params: u({
+    params: objectSchema({
       _meta: NotificationMetaSchema.optional(),
       notifications: SubscriptionFilterSchema$1,
     }),
   });
-  let CancelledNotificationParamsSchema$1 = u({
+  let CancelledNotificationParamsSchema$1 = objectSchema({
     _meta: NotificationMetaSchema.optional(),
     requestId: RequestIdSchema$1,
-    reason: string().optional(),
+    reason: stringSchema().optional(),
   });
-  let CancelledNotificationSchema$1 = u({
+  let CancelledNotificationSchema$1 = objectSchema({
     method: literal("notifications/cancelled"),
     params: CancelledNotificationParamsSchema$1,
   });
@@ -2539,9 +2578,9 @@ function build() {
     "notifications/subscriptions/acknowledged": SubscriptionsAcknowledgedNotificationSchema$1,
   };
   let wireResultResponse = (result) =>
-    u({
+    objectSchema({
       jsonrpc: literal("2.0"),
-      id: union([string(), E().int()]),
+      id: union([stringSchema(), numberSchema().int()]),
       result,
     }).strict();
   return {
@@ -2707,7 +2746,10 @@ function isCacheableResultMethod(method) {
   return CACHEABLE_RESULT_METHODS.includes(method);
 }
 //@ chunk-r1g76qsy.js:59592-59654 esm-fingerprint
-var RESULT_CACHE_HINT_FALLBACK = Symbol("modelcontextprotocol.resultCacheHintFallback");
+var RESULT_CACHE_HINT_FALLBACK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r1g76qsy.js:59592", () => {
+  RESULT_CACHE_HINT_FALLBACK = Symbol("modelcontextprotocol.resultCacheHintFallback");
+});
 //@ chunk-r1g76qsy.js:59654-59682 esm-layout
 function cacheHintFallbackOf(result) {
   return result[RESULT_CACHE_HINT_FALLBACK];
@@ -2721,149 +2763,160 @@ function isValidCacheScope(value) {
   return value === "public" || value === "private";
 }
 //@ chunk-r1g76qsy.js:59805-62666 esm-fingerprint
-var ProtocolErrorCode = (function (ProtocolErrorCode$1) {
-  ProtocolErrorCode$1[(ProtocolErrorCode$1.ParseError = -32700)] = "ParseError";
-  ProtocolErrorCode$1[(ProtocolErrorCode$1.InvalidRequest = -32600)] = "InvalidRequest";
-  ProtocolErrorCode$1[(ProtocolErrorCode$1.MethodNotFound = -32601)] = "MethodNotFound";
-  ProtocolErrorCode$1[(ProtocolErrorCode$1.InvalidParams = -32602)] = "InvalidParams";
-  ProtocolErrorCode$1[(ProtocolErrorCode$1.InternalError = -32603)] = "InternalError";
-  ProtocolErrorCode$1[(ProtocolErrorCode$1.ResourceNotFound = -32002)] = "ResourceNotFound";
-  ProtocolErrorCode$1[(ProtocolErrorCode$1.MissingRequiredClientCapability = -32021)] =
-    "MissingRequiredClientCapability";
-  ProtocolErrorCode$1[(ProtocolErrorCode$1.UnsupportedProtocolVersion = -32022)] =
-    "UnsupportedProtocolVersion";
-  ProtocolErrorCode$1[(ProtocolErrorCode$1.UrlElicitationRequired = -32042)] = "UrlElicitationRequired";
-  return ProtocolErrorCode$1;
-})({});
-var ProtocolError = class ProtocolError extends Error {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.ProtocolError",
-    });
-  }
-  static [Symbol.hasInstance](value) {
-    return brandedHasInstance(this, value);
-  }
-  static isInstance(value) {
-    if (typeof this !== "function")
-      throw TypeError(
-        "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
-      );
-    return brandedHasInstance(this, value);
-  }
-  constructor(code, message, data) {
-    super(message);
-    this.code = code;
-    this.data = data;
-    this.name = "ProtocolError";
-    stampErrorBrands(this, new.target);
-  }
-  static fromError(code, message, data) {
-    if (code === ProtocolErrorCode.UrlElicitationRequired && data) {
-      let errorData = data;
-      if (errorData.elicitations) return new UrlElicitationRequiredError(errorData.elicitations, message);
+var ProtocolErrorCode; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ProtocolError;
+var ResourceNotFoundError;
+var UrlElicitationRequiredError;
+var UnsupportedProtocolVersionError;
+var MissingRequiredClientCapabilityError;
+var DEFAULT_CACHE_TTL_MS;
+var DEFAULT_CACHE_SCOPE;
+var EXTENDED_RESULT_TYPE_METHODS;
+deferInit("chunk-r1g76qsy.js:59805", () => {
+  ProtocolErrorCode = (function (ProtocolErrorCode$1) {
+    ProtocolErrorCode$1[(ProtocolErrorCode$1.ParseError = -32700)] = "ParseError";
+    ProtocolErrorCode$1[(ProtocolErrorCode$1.InvalidRequest = -32600)] = "InvalidRequest";
+    ProtocolErrorCode$1[(ProtocolErrorCode$1.MethodNotFound = -32601)] = "MethodNotFound";
+    ProtocolErrorCode$1[(ProtocolErrorCode$1.InvalidParams = -32602)] = "InvalidParams";
+    ProtocolErrorCode$1[(ProtocolErrorCode$1.InternalError = -32603)] = "InternalError";
+    ProtocolErrorCode$1[(ProtocolErrorCode$1.ResourceNotFound = -32002)] = "ResourceNotFound";
+    ProtocolErrorCode$1[(ProtocolErrorCode$1.MissingRequiredClientCapability = -32021)] =
+      "MissingRequiredClientCapability";
+    ProtocolErrorCode$1[(ProtocolErrorCode$1.UnsupportedProtocolVersion = -32022)] =
+      "UnsupportedProtocolVersion";
+    ProtocolErrorCode$1[(ProtocolErrorCode$1.UrlElicitationRequired = -32042)] = "UrlElicitationRequired";
+    return ProtocolErrorCode$1;
+  })({});
+  ProtocolError = class ProtocolError extends Error {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.ProtocolError",
+      });
     }
-    if (code === ProtocolErrorCode.UnsupportedProtocolVersion && data) {
-      let errorData = data;
-      if (Array.isArray(errorData.supported) && typeof errorData.requested === "string")
-        return new UnsupportedProtocolVersionError(
-          {
-            supported: errorData.supported,
-            requested: errorData.requested,
-          },
-          message,
+    static [Symbol.hasInstance](value) {
+      return brandedHasInstance(this, value);
+    }
+    static isInstance(value) {
+      if (typeof this !== "function")
+        throw TypeError(
+          "isInstance must be called on the class (e.g. `SdkError.isInstance(value)`); for callbacks use `v => SdkError.isInstance(v)`",
         );
+      return brandedHasInstance(this, value);
     }
-    if (code === ProtocolErrorCode.InvalidParams || code === ProtocolErrorCode.ResourceNotFound) {
-      let errorData = data;
-      if (
-        typeof errorData?.uri === "string" &&
-        (code === ProtocolErrorCode.ResourceNotFound || Object.keys(errorData).length === 1)
-      )
-        return new ResourceNotFoundError(errorData.uri, message);
+    constructor(code, message, data) {
+      super(message);
+      this.code = code;
+      this.data = data;
+      this.name = "ProtocolError";
+      stampErrorBrands(this, new.target);
     }
-    if (code === ProtocolErrorCode.MissingRequiredClientCapability && data) {
-      let errorData = data;
-      if (
-        errorData.requiredCapabilities !== null &&
-        typeof errorData.requiredCapabilities === "object" &&
-        !Array.isArray(errorData.requiredCapabilities)
-      )
-        return new MissingRequiredClientCapabilityError(
-          {
-            requiredCapabilities: errorData.requiredCapabilities,
-          },
-          message,
-        );
+    static fromError(code, message, data) {
+      if (code === ProtocolErrorCode.UrlElicitationRequired && data) {
+        let errorData = data;
+        if (errorData.elicitations) return new UrlElicitationRequiredError(errorData.elicitations, message);
+      }
+      if (code === ProtocolErrorCode.UnsupportedProtocolVersion && data) {
+        let errorData = data;
+        if (Array.isArray(errorData.supported) && typeof errorData.requested === "string")
+          return new UnsupportedProtocolVersionError(
+            {
+              supported: errorData.supported,
+              requested: errorData.requested,
+            },
+            message,
+          );
+      }
+      if (code === ProtocolErrorCode.InvalidParams || code === ProtocolErrorCode.ResourceNotFound) {
+        let errorData = data;
+        if (
+          typeof errorData?.uri === "string" &&
+          (code === ProtocolErrorCode.ResourceNotFound || Object.keys(errorData).length === 1)
+        )
+          return new ResourceNotFoundError(errorData.uri, message);
+      }
+      if (code === ProtocolErrorCode.MissingRequiredClientCapability && data) {
+        let errorData = data;
+        if (
+          errorData.requiredCapabilities !== null &&
+          typeof errorData.requiredCapabilities === "object" &&
+          !Array.isArray(errorData.requiredCapabilities)
+        )
+          return new MissingRequiredClientCapabilityError(
+            {
+              requiredCapabilities: errorData.requiredCapabilities,
+            },
+            message,
+          );
+      }
+      return new ProtocolError(code, message, data);
     }
-    return new ProtocolError(code, message, data);
-  }
-};
-var ResourceNotFoundError = class extends ProtocolError {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.ResourceNotFoundError",
-    });
-  }
-  constructor(uri, message = `Resource not found: ${uri}`) {
-    super(ProtocolErrorCode.InvalidParams, message, {
-      uri,
-    });
-  }
-  get uri() {
-    return this.data.uri;
-  }
-};
-var UrlElicitationRequiredError = class extends ProtocolError {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.UrlElicitationRequiredError",
-    });
-  }
-  constructor(elicitations, message = `URL elicitation${elicitations.length > 1 ? "s" : ""} required`) {
-    super(ProtocolErrorCode.UrlElicitationRequired, message, {
-      elicitations,
-    });
-  }
-  get elicitations() {
-    return this.data?.elicitations ?? [];
-  }
-};
-var UnsupportedProtocolVersionError = class extends ProtocolError {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.UnsupportedProtocolVersionError",
-    });
-  }
-  constructor(data, message = `Unsupported protocol version: ${data.requested}`) {
-    super(ProtocolErrorCode.UnsupportedProtocolVersion, message, data);
-  }
-  get supported() {
-    return this.data.supported;
-  }
-  get requested() {
-    return this.data.requested;
-  }
-};
-var MissingRequiredClientCapabilityError = class extends ProtocolError {
-  static {
-    Object.defineProperty(this, "mcpBrand", {
-      value: "mcp.MissingRequiredClientCapabilityError",
-    });
-  }
-  constructor(
-    data,
-    message = `Missing required client capabilities: ${Object.keys(data.requiredCapabilities).join(", ")}`,
-  ) {
-    super(ProtocolErrorCode.MissingRequiredClientCapability, message, data);
-  }
-  get requiredCapabilities() {
-    return this.data.requiredCapabilities;
-  }
-};
-var DEFAULT_CACHE_TTL_MS = 0;
-var DEFAULT_CACHE_SCOPE = "private";
-var EXTENDED_RESULT_TYPE_METHODS = ["tools/call", "prompts/get", "resources/read"];
+  };
+  ResourceNotFoundError = class extends ProtocolError {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.ResourceNotFoundError",
+      });
+    }
+    constructor(uri, message = `Resource not found: ${uri}`) {
+      super(ProtocolErrorCode.InvalidParams, message, {
+        uri,
+      });
+    }
+    get uri() {
+      return this.data.uri;
+    }
+  };
+  UrlElicitationRequiredError = class extends ProtocolError {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.UrlElicitationRequiredError",
+      });
+    }
+    constructor(elicitations, message = `URL elicitation${elicitations.length > 1 ? "s" : ""} required`) {
+      super(ProtocolErrorCode.UrlElicitationRequired, message, {
+        elicitations,
+      });
+    }
+    get elicitations() {
+      return this.data?.elicitations ?? [];
+    }
+  };
+  UnsupportedProtocolVersionError = class extends ProtocolError {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.UnsupportedProtocolVersionError",
+      });
+    }
+    constructor(data, message = `Unsupported protocol version: ${data.requested}`) {
+      super(ProtocolErrorCode.UnsupportedProtocolVersion, message, data);
+    }
+    get supported() {
+      return this.data.supported;
+    }
+    get requested() {
+      return this.data.requested;
+    }
+  };
+  MissingRequiredClientCapabilityError = class extends ProtocolError {
+    static {
+      Object.defineProperty(this, "mcpBrand", {
+        value: "mcp.MissingRequiredClientCapabilityError",
+      });
+    }
+    constructor(
+      data,
+      message = `Missing required client capabilities: ${Object.keys(data.requiredCapabilities).join(", ")}`,
+    ) {
+      super(ProtocolErrorCode.MissingRequiredClientCapability, message, data);
+    }
+    get requiredCapabilities() {
+      return this.data.requiredCapabilities;
+    }
+  };
+  DEFAULT_CACHE_TTL_MS = 0;
+  DEFAULT_CACHE_SCOPE = "private";
+  EXTENDED_RESULT_TYPE_METHODS = ["tools/call", "prompts/get", "resources/read"];
+});
 //@ chunk-r1g76qsy.js:62666-62967 esm-fingerprint
 function stampResultType(method, result) {
   let provided = result.resultType;
@@ -2947,15 +3000,15 @@ function inputSchemaMaps() {
   let s = buildSchemas2026();
   maps = {
     request: {
-      "elicitation/create": u({
+      "elicitation/create": objectSchema({
         method: literal("elicitation/create"),
         params: s.ElicitRequestParamsSchema,
       }),
-      "sampling/createMessage": u({
+      "sampling/createMessage": objectSchema({
         method: literal("sampling/createMessage"),
         params: s.CreateMessageRequestParamsSchema,
       }),
-      "roots/list": u({
+      "roots/list": objectSchema({
         method: literal("roots/list"),
         params: looseObject({}).optional(),
       }),
@@ -3028,10 +3081,14 @@ function getNotificationSchema2026(method) {
   return hasNotificationMethod2026(method) ? buildSchemas2026().notificationSchemas2026[method] : undefined;
 }
 //@ chunk-r1g76qsy.js:65229-65271 esm-layout
-var keys_3 = Object.keys(requestMethodKeys);
-var keys_4 = Object.keys(notificationMethodKeys);
+var keys_3; // deferred: uses requestMethodKeys of its import cycle while loading; runs once the cycle is complete
+var keys_4;
+deferInit("chunk-r1g76qsy.js:65229", () => {
+  keys_3 = Object.keys(requestMethodKeys);
+  keys_4 = Object.keys(notificationMethodKeys);
+});
 //@ chunk-r1g76qsy.js:65271-65342 esm-fingerprint
-function Zr(value) {
+function isRecord(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 //@ chunk-r1g76qsy.js:65342-65515 esm-fingerprint
@@ -3076,10 +3133,10 @@ function enforceDeletedFields(method, result) {
   if (
     method === "tools/list" &&
     Array.isArray(tools) &&
-    tools.some((tool) => Zr(tool) && "execution" in tool)
+    tools.some((tool) => isRecord(tool) && "execution" in tool)
   )
     copy().tools = tools.map((tool) => {
-      if (!Zr(tool) || !("execution" in tool)) return tool;
+      if (!isRecord(tool) || !("execution" in tool)) return tool;
       let rest = {
         ...tool,
       };
@@ -3087,7 +3144,7 @@ function enforceDeletedFields(method, result) {
       return rest;
     });
   let capabilities = result.capabilities;
-  if (Zr(capabilities) && "tasks" in capabilities) {
+  if (isRecord(capabilities) && "tasks" in capabilities) {
     let rest = {
       ...capabilities,
     };
@@ -3097,12 +3154,12 @@ function enforceDeletedFields(method, result) {
   return next;
 }
 //@ chunk-r1g76qsy.js:66033-66355 esm-layout
-function vl(result) {
+function isTaskResult(result) {
   if (result === null || typeof result !== "object" || Array.isArray(result)) return false;
   return (
     typeof result.taskId === "string" &&
     result.taskId.length > 0 &&
-    yl.has(result.status) &&
+    TASK_STATUSES.has(result.status) &&
     typeof result.createdAt === "string" &&
     typeof result.lastUpdatedAt === "string" &&
     (result.ttlMs === null || typeof result.ttlMs === "number") &&
@@ -3158,8 +3215,8 @@ var rev2026Codec = {
   },
   projectCallToolResult: (result) => appendTextFallbackForNonObject(result),
   inputRequestSchema: getInputRequestSchema2026,
-  decodeResult(method, raw, r) {
-    if (!Zr(raw))
+  decodeResult(method, raw, skipValidation) {
+    if (!isRecord(raw))
       return {
         kind: "invalid",
         error: new SdkError(SdkErrorCode.InvalidResult, `Invalid result for ${method}: not an object`, {
@@ -3193,7 +3250,7 @@ var rev2026Codec = {
       };
     if (rawResultType === "input_required") {
       let rawInputRequests = raw.inputRequests;
-      let inputRequests = Zr(rawInputRequests) ? rawInputRequests : {};
+      let inputRequests = isRecord(rawInputRequests) ? rawInputRequests : {};
       let requestState = raw.requestState;
       if (Object.keys(inputRequests).length === 0 && typeof requestState !== "string")
         return {
@@ -3234,7 +3291,7 @@ var rev2026Codec = {
       };
     let wireResultSchemas = getWireResultSchemas();
     let wireSchema = Object.hasOwn(wireResultSchemas, method) ? wireResultSchemas[method] : undefined;
-    if (wireSchema !== undefined && r !== true) {
+    if (wireSchema !== undefined && skipValidation !== true) {
       let parsed = wireSchema.safeParse(raw);
       if (!parsed.success)
         return {
@@ -3306,233 +3363,239 @@ function isSpecNotificationMethod(method) {
   return ALL_CODECS.some((codec) => codec.hasNotificationMethod(method));
 }
 //@ chunk-r1g76qsy.js:70042-75375 esm-layout
-var ALL_CODECS = [rev2025Codec, rev2026Codec];
-var schemas_exports = qn({
-  AnnotationsSchema: () => AnnotationsSchema,
-  AudioContentSchema: () => AudioContentSchema,
-  BaseMetadataSchema: () => BaseMetadataSchema,
-  BaseRequestParamsSchema: () => BaseRequestParamsSchema,
-  BlobResourceContentsSchema: () => BlobResourceContentsSchema,
-  BooleanSchemaSchema: () => BooleanSchemaSchema,
-  CallToolRequestParamsSchema: () => CallToolRequestParamsSchema,
-  CallToolRequestSchema: () => CallToolRequestSchema,
-  CallToolResultSchema: () => CallToolResultSchema,
-  CancelTaskRequestSchema: () => CancelTaskRequestSchema,
-  CancelTaskResultSchema: () => CancelTaskResultSchema,
-  CancelledNotificationParamsSchema: () => CancelledNotificationParamsSchema,
-  CancelledNotificationSchema: () => CancelledNotificationSchema,
-  ClientCapabilitiesSchema: () => ClientCapabilitiesSchema,
-  ClientNotificationSchema: () => Ha,
-  ClientRequestSchema: () => Fa,
-  ClientResultSchema: () => Ja,
-  ClientTasksCapabilitySchema: () => ClientTasksCapabilitySchema,
-  CompatibilityCallToolResultSchema: () => CompatibilityCallToolResultSchema,
-  CompleteRequestParamsSchema: () => CompleteRequestParamsSchema,
-  CompleteRequestSchema: () => CompleteRequestSchema,
-  CompleteResultSchema: () => CompleteResultSchema,
-  ContentBlockSchema: () => ContentBlockSchema,
-  CreateMessageRequestParamsSchema: () => CreateMessageRequestParamsSchema,
-  CreateMessageRequestSchema: () => CreateMessageRequestSchema,
-  CreateMessageResultSchema: () => CreateMessageResultSchema,
-  CreateMessageResultWithToolsSchema: () => CreateMessageResultWithToolsSchema,
-  CreateTaskResultSchema: () => CreateTaskResultSchema,
-  CursorSchema: () => CursorSchema,
-  DiscoverRequestSchema: () => DiscoverRequestSchema,
-  DiscoverResultSchema: () => DiscoverResultSchema,
-  ElicitRequestFormParamsSchema: () => ElicitRequestFormParamsSchema,
-  ElicitRequestParamsSchema: () => ElicitRequestParamsSchema,
-  ElicitRequestSchema: () => ElicitRequestSchema,
-  ElicitRequestURLParamsSchema: () => ElicitRequestURLParamsSchema,
-  ElicitResultSchema: () => ElicitResultSchema,
-  ElicitationCompleteNotificationParamsSchema: () => ElicitationCompleteNotificationParamsSchema,
-  ElicitationCompleteNotificationSchema: () => ElicitationCompleteNotificationSchema,
-  EmbeddedResourceSchema: () => EmbeddedResourceSchema,
-  EmptyResultSchema: () => EmptyResultSchema,
-  EnumSchemaSchema: () => EnumSchemaSchema,
-  GetPromptRequestParamsSchema: () => GetPromptRequestParamsSchema,
-  GetPromptRequestSchema: () => GetPromptRequestSchema,
-  GetPromptResultSchema: () => GetPromptResultSchema,
-  GetTaskPayloadRequestSchema: () => GetTaskPayloadRequestSchema,
-  GetTaskPayloadResultSchema: () => GetTaskPayloadResultSchema,
-  GetTaskRequestSchema: () => GetTaskRequestSchema,
-  GetTaskResultSchema: () => GetTaskResultSchema,
-  IconSchema: () => IconSchema,
-  IconsSchema: () => IconsSchema,
-  ImageContentSchema: () => ImageContentSchema,
-  ImplementationSchema: () => ImplementationSchema,
-  InitializeRequestParamsSchema: () => InitializeRequestParamsSchema,
-  InitializeRequestSchema: () => InitializeRequestSchema,
-  InitializeResultSchema: () => InitializeResultSchema,
-  InitializedNotificationSchema: () => InitializedNotificationSchema,
-  JSONArraySchema: () => Ta,
-  JSONObjectSchema: () => JSONObjectSchema,
-  JSONRPCErrorResponseSchema: () => JSONRPCErrorResponseSchema,
-  JSONRPCMessageSchema: () => fZe,
-  JSONRPCNotificationSchema: () => JSONRPCNotificationSchema,
-  JSONRPCRequestSchema: () => JSONRPCRequestSchema,
-  JSONRPCResponseSchema: () => Ca,
-  JSONRPCResultResponseSchema: () => JSONRPCResultResponseSchema,
-  JSONValueSchema: () => JSONValueSchema,
-  LegacyTitledEnumSchemaSchema: () => LegacyTitledEnumSchemaSchema,
-  ListChangedOptionsBaseSchema: () => ListChangedOptionsBaseSchema,
-  ListPromptsRequestSchema: () => ListPromptsRequestSchema,
-  ListPromptsResultSchema: () => ListPromptsResultSchema,
-  ListResourceTemplatesRequestSchema: () => ListResourceTemplatesRequestSchema,
-  ListResourceTemplatesResultSchema: () => ListResourceTemplatesResultSchema,
-  ListResourcesRequestSchema: () => ListResourcesRequestSchema,
-  ListResourcesResultSchema: () => ListResourcesResultSchema,
-  ListRootsRequestSchema: () => ListRootsRequestSchema,
-  ListRootsResultSchema: () => ListRootsResultSchema,
-  ListTasksRequestSchema: () => ListTasksRequestSchema,
-  ListTasksResultSchema: () => ListTasksResultSchema,
-  ListToolsRequestSchema: () => ListToolsRequestSchema,
-  ListToolsResultSchema: () => ListToolsResultSchema,
-  LoggingLevelSchema: () => LoggingLevelSchema,
-  LoggingMessageNotificationParamsSchema: () => LoggingMessageNotificationParamsSchema,
-  LoggingMessageNotificationSchema: () => LoggingMessageNotificationSchema,
-  ModelHintSchema: () => ModelHintSchema,
-  ModelPreferencesSchema: () => ModelPreferencesSchema,
-  MultiSelectEnumSchemaSchema: () => MultiSelectEnumSchemaSchema,
-  NotificationSchema: () => NotificationSchema,
-  NotificationsParamsSchema: () => NotificationsParamsSchema,
-  NumberSchemaSchema: () => NumberSchemaSchema,
-  PaginatedRequestParamsSchema: () => PaginatedRequestParamsSchema,
-  PaginatedRequestSchema: () => PaginatedRequestSchema,
-  PaginatedResultSchema: () => PaginatedResultSchema,
-  PingRequestSchema: () => PingRequestSchema,
-  PrimitiveSchemaDefinitionSchema: () => PrimitiveSchemaDefinitionSchema,
-  ProgressNotificationParamsSchema: () => ProgressNotificationParamsSchema,
-  ProgressNotificationSchema: () => ProgressNotificationSchema,
-  ProgressSchema: () => ProgressSchema,
-  ProgressTokenSchema: () => ProgressTokenSchema,
-  PromptArgumentSchema: () => PromptArgumentSchema,
-  PromptListChangedNotificationSchema: () => PromptListChangedNotificationSchema,
-  PromptMessageSchema: () => PromptMessageSchema,
-  PromptReferenceSchema: () => PromptReferenceSchema,
-  PromptSchema: () => PromptSchema,
-  ReadResourceRequestParamsSchema: () => ReadResourceRequestParamsSchema,
-  ReadResourceRequestSchema: () => ReadResourceRequestSchema,
-  ReadResourceResultSchema: () => ReadResourceResultSchema,
-  RelatedTaskMetadataSchema: () => RelatedTaskMetadataSchema,
-  RequestIdSchema: () => RequestIdSchema,
-  RequestMetaSchema: () => RequestMetaSchema,
-  RequestSchema: () => RequestSchema,
-  ResourceContentsSchema: () => ResourceContentsSchema,
-  ResourceLinkSchema: () => ResourceLinkSchema,
-  ResourceListChangedNotificationSchema: () => ResourceListChangedNotificationSchema,
-  ResourceRequestParamsSchema: () => ResourceRequestParamsSchema,
-  ResourceSchema: () => ResourceSchema,
-  ResourceTemplateReferenceSchema: () => ResourceTemplateReferenceSchema,
-  ResourceTemplateSchema: () => ResourceTemplateSchema,
-  ResourceUpdatedNotificationParamsSchema: () => ResourceUpdatedNotificationParamsSchema,
-  ResourceUpdatedNotificationSchema: () => ResourceUpdatedNotificationSchema,
-  ResultMetaObjectSchema: () => ResultMetaObjectSchema,
-  ResultSchema: () => ResultSchema,
-  RoleSchema: () => RoleSchema,
-  RootSchema: () => RootSchema,
-  RootsListChangedNotificationSchema: () => RootsListChangedNotificationSchema,
-  SamplingContentSchema: () => SamplingContentSchema,
-  SamplingMessageContentBlockSchema: () => SamplingMessageContentBlockSchema,
-  SamplingMessageSchema: () => SamplingMessageSchema,
-  ServerCapabilitiesSchema: () => ServerCapabilitiesSchema,
-  ServerNotificationSchema: () => Ba,
-  ServerRequestSchema: () => Ga,
-  ServerResultSchema: () => Wa,
-  ServerTasksCapabilitySchema: () => ServerTasksCapabilitySchema,
-  SetLevelRequestParamsSchema: () => SetLevelRequestParamsSchema,
-  SetLevelRequestSchema: () => SetLevelRequestSchema,
-  SingleSelectEnumSchemaSchema: () => SingleSelectEnumSchemaSchema,
-  StringSchemaSchema: () => StringSchemaSchema,
-  SubscribeRequestParamsSchema: () => SubscribeRequestParamsSchema,
-  SubscribeRequestSchema: () => SubscribeRequestSchema,
-  SubscriptionFilterSchema: () => SubscriptionFilterSchema,
-  SubscriptionsAcknowledgedNotificationParamsSchema: () => SubscriptionsAcknowledgedNotificationParamsSchema,
-  SubscriptionsAcknowledgedNotificationSchema: () => SubscriptionsAcknowledgedNotificationSchema,
-  SubscriptionsListenRequestParamsSchema: () => SubscriptionsListenRequestParamsSchema,
-  SubscriptionsListenRequestSchema: () => SubscriptionsListenRequestSchema,
-  SubscriptionsListenResultMetaSchema: () => SubscriptionsListenResultMetaSchema,
-  SubscriptionsListenResultSchema: () => SubscriptionsListenResultSchema,
-  TaskAugmentedRequestParamsSchema: () => TaskAugmentedRequestParamsSchema,
-  TaskCreationParamsSchema: () => TaskCreationParamsSchema,
-  TaskMetadataSchema: () => TaskMetadataSchema,
-  TaskSchema: () => TaskSchema,
-  TaskStatusNotificationParamsSchema: () => TaskStatusNotificationParamsSchema,
-  TaskStatusNotificationSchema: () => TaskStatusNotificationSchema,
-  TaskStatusSchema: () => TaskStatusSchema,
-  TextContentSchema: () => TextContentSchema,
-  TextResourceContentsSchema: () => TextResourceContentsSchema,
-  TitledMultiSelectEnumSchemaSchema: () => TitledMultiSelectEnumSchemaSchema,
-  TitledSingleSelectEnumSchemaSchema: () => TitledSingleSelectEnumSchemaSchema,
-  ToolAnnotationsSchema: () => ToolAnnotationsSchema,
-  ToolChoiceSchema: () => ToolChoiceSchema,
-  ToolExecutionSchema: () => ToolExecutionSchema,
-  ToolListChangedNotificationSchema: () => ToolListChangedNotificationSchema,
-  ToolResultContentSchema: () => ToolResultContentSchema,
-  ToolSchema: () => ToolSchema,
-  ToolUseContentSchema: () => ToolUseContentSchema,
-  UnsubscribeRequestParamsSchema: () => UnsubscribeRequestParamsSchema,
-  UnsubscribeRequestSchema: () => UnsubscribeRequestSchema,
-  UntitledMultiSelectEnumSchemaSchema: () => UntitledMultiSelectEnumSchemaSchema,
-  UntitledSingleSelectEnumSchemaSchema: () => UntitledSingleSelectEnumSchemaSchema,
+var ALL_CODECS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var schemas_exports;
+deferInit("chunk-r1g76qsy.js:70042", () => {
+  ALL_CODECS = [rev2025Codec, rev2026Codec];
+  schemas_exports = toESModule({
+    AnnotationsSchema: () => AnnotationsSchema,
+    AudioContentSchema: () => AudioContentSchema,
+    BaseMetadataSchema: () => BaseMetadataSchema,
+    BaseRequestParamsSchema: () => BaseRequestParamsSchema,
+    BlobResourceContentsSchema: () => BlobResourceContentsSchema,
+    BooleanSchemaSchema: () => BooleanSchemaSchema,
+    CallToolRequestParamsSchema: () => CallToolRequestParamsSchema,
+    CallToolRequestSchema: () => CallToolRequestSchema,
+    CallToolResultSchema: () => CallToolResultSchema,
+    CancelTaskRequestSchema: () => CancelTaskRequestSchema,
+    CancelTaskResultSchema: () => CancelTaskResultSchema,
+    CancelledNotificationParamsSchema: () => CancelledNotificationParamsSchema,
+    CancelledNotificationSchema: () => CancelledNotificationSchema,
+    ClientCapabilitiesSchema: () => ClientCapabilitiesSchema,
+    ClientNotificationSchema: () => ClientNotificationSchema,
+    ClientRequestSchema: () => ClientRequestSchema,
+    ClientResultSchema: () => ClientResultSchema,
+    ClientTasksCapabilitySchema: () => ClientTasksCapabilitySchema,
+    CompatibilityCallToolResultSchema: () => CompatibilityCallToolResultSchema,
+    CompleteRequestParamsSchema: () => CompleteRequestParamsSchema,
+    CompleteRequestSchema: () => CompleteRequestSchema,
+    CompleteResultSchema: () => CompleteResultSchema,
+    ContentBlockSchema: () => ContentBlockSchema,
+    CreateMessageRequestParamsSchema: () => CreateMessageRequestParamsSchema,
+    CreateMessageRequestSchema: () => CreateMessageRequestSchema,
+    CreateMessageResultSchema: () => CreateMessageResultSchema,
+    CreateMessageResultWithToolsSchema: () => CreateMessageResultWithToolsSchema,
+    CreateTaskResultSchema: () => CreateTaskResultSchema,
+    CursorSchema: () => CursorSchema,
+    DiscoverRequestSchema: () => DiscoverRequestSchema,
+    DiscoverResultSchema: () => DiscoverResultSchema,
+    ElicitRequestFormParamsSchema: () => ElicitRequestFormParamsSchema,
+    ElicitRequestParamsSchema: () => ElicitRequestParamsSchema,
+    ElicitRequestSchema: () => ElicitRequestSchema,
+    ElicitRequestURLParamsSchema: () => ElicitRequestURLParamsSchema,
+    ElicitResultSchema: () => ElicitResultSchema,
+    ElicitationCompleteNotificationParamsSchema: () => ElicitationCompleteNotificationParamsSchema,
+    ElicitationCompleteNotificationSchema: () => ElicitationCompleteNotificationSchema,
+    EmbeddedResourceSchema: () => EmbeddedResourceSchema,
+    EmptyResultSchema: () => EmptyResultSchema,
+    EnumSchemaSchema: () => EnumSchemaSchema,
+    GetPromptRequestParamsSchema: () => GetPromptRequestParamsSchema,
+    GetPromptRequestSchema: () => GetPromptRequestSchema,
+    GetPromptResultSchema: () => GetPromptResultSchema,
+    GetTaskPayloadRequestSchema: () => GetTaskPayloadRequestSchema,
+    GetTaskPayloadResultSchema: () => GetTaskPayloadResultSchema,
+    GetTaskRequestSchema: () => GetTaskRequestSchema,
+    GetTaskResultSchema: () => GetTaskResultSchema,
+    IconSchema: () => IconSchema,
+    IconsSchema: () => IconsSchema,
+    ImageContentSchema: () => ImageContentSchema,
+    ImplementationSchema: () => ImplementationSchema,
+    InitializeRequestParamsSchema: () => InitializeRequestParamsSchema,
+    InitializeRequestSchema: () => InitializeRequestSchema,
+    InitializeResultSchema: () => InitializeResultSchema,
+    InitializedNotificationSchema: () => InitializedNotificationSchema,
+    JSONArraySchema: () => JSONArraySchema,
+    JSONObjectSchema: () => JSONObjectSchema,
+    JSONRPCErrorResponseSchema: () => JSONRPCErrorResponseSchema,
+    JSONRPCMessageSchema: () => JSONRPCMessageSchema,
+    JSONRPCNotificationSchema: () => JSONRPCNotificationSchema,
+    JSONRPCRequestSchema: () => JSONRPCRequestSchema,
+    JSONRPCResponseSchema: () => JSONRPCResponseSchema,
+    JSONRPCResultResponseSchema: () => JSONRPCResultResponseSchema,
+    JSONValueSchema: () => JSONValueSchema,
+    LegacyTitledEnumSchemaSchema: () => LegacyTitledEnumSchemaSchema,
+    ListChangedOptionsBaseSchema: () => ListChangedOptionsBaseSchema,
+    ListPromptsRequestSchema: () => ListPromptsRequestSchema,
+    ListPromptsResultSchema: () => ListPromptsResultSchema,
+    ListResourceTemplatesRequestSchema: () => ListResourceTemplatesRequestSchema,
+    ListResourceTemplatesResultSchema: () => ListResourceTemplatesResultSchema,
+    ListResourcesRequestSchema: () => ListResourcesRequestSchema,
+    ListResourcesResultSchema: () => ListResourcesResultSchema,
+    ListRootsRequestSchema: () => ListRootsRequestSchema,
+    ListRootsResultSchema: () => ListRootsResultSchema,
+    ListTasksRequestSchema: () => ListTasksRequestSchema,
+    ListTasksResultSchema: () => ListTasksResultSchema,
+    ListToolsRequestSchema: () => ListToolsRequestSchema,
+    ListToolsResultSchema: () => ListToolsResultSchema,
+    LoggingLevelSchema: () => LoggingLevelSchema,
+    LoggingMessageNotificationParamsSchema: () => LoggingMessageNotificationParamsSchema,
+    LoggingMessageNotificationSchema: () => LoggingMessageNotificationSchema,
+    ModelHintSchema: () => ModelHintSchema,
+    ModelPreferencesSchema: () => ModelPreferencesSchema,
+    MultiSelectEnumSchemaSchema: () => MultiSelectEnumSchemaSchema,
+    NotificationSchema: () => NotificationSchema,
+    NotificationsParamsSchema: () => NotificationsParamsSchema,
+    NumberSchemaSchema: () => NumberSchemaSchema,
+    PaginatedRequestParamsSchema: () => PaginatedRequestParamsSchema,
+    PaginatedRequestSchema: () => PaginatedRequestSchema,
+    PaginatedResultSchema: () => PaginatedResultSchema,
+    PingRequestSchema: () => PingRequestSchema,
+    PrimitiveSchemaDefinitionSchema: () => PrimitiveSchemaDefinitionSchema,
+    ProgressNotificationParamsSchema: () => ProgressNotificationParamsSchema,
+    ProgressNotificationSchema: () => ProgressNotificationSchema,
+    ProgressSchema: () => ProgressSchema,
+    ProgressTokenSchema: () => ProgressTokenSchema,
+    PromptArgumentSchema: () => PromptArgumentSchema,
+    PromptListChangedNotificationSchema: () => PromptListChangedNotificationSchema,
+    PromptMessageSchema: () => PromptMessageSchema,
+    PromptReferenceSchema: () => PromptReferenceSchema,
+    PromptSchema: () => PromptSchema,
+    ReadResourceRequestParamsSchema: () => ReadResourceRequestParamsSchema,
+    ReadResourceRequestSchema: () => ReadResourceRequestSchema,
+    ReadResourceResultSchema: () => ReadResourceResultSchema,
+    RelatedTaskMetadataSchema: () => RelatedTaskMetadataSchema,
+    RequestIdSchema: () => RequestIdSchema,
+    RequestMetaSchema: () => RequestMetaSchema,
+    RequestSchema: () => RequestSchema,
+    ResourceContentsSchema: () => ResourceContentsSchema,
+    ResourceLinkSchema: () => ResourceLinkSchema,
+    ResourceListChangedNotificationSchema: () => ResourceListChangedNotificationSchema,
+    ResourceRequestParamsSchema: () => ResourceRequestParamsSchema,
+    ResourceSchema: () => ResourceSchema,
+    ResourceTemplateReferenceSchema: () => ResourceTemplateReferenceSchema,
+    ResourceTemplateSchema: () => ResourceTemplateSchema,
+    ResourceUpdatedNotificationParamsSchema: () => ResourceUpdatedNotificationParamsSchema,
+    ResourceUpdatedNotificationSchema: () => ResourceUpdatedNotificationSchema,
+    ResultMetaObjectSchema: () => ResultMetaObjectSchema,
+    ResultSchema: () => ResultSchema,
+    RoleSchema: () => RoleSchema,
+    RootSchema: () => RootSchema,
+    RootsListChangedNotificationSchema: () => RootsListChangedNotificationSchema,
+    SamplingContentSchema: () => SamplingContentSchema,
+    SamplingMessageContentBlockSchema: () => SamplingMessageContentBlockSchema,
+    SamplingMessageSchema: () => SamplingMessageSchema,
+    ServerCapabilitiesSchema: () => ServerCapabilitiesSchema,
+    ServerNotificationSchema: () => ServerNotificationSchema,
+    ServerRequestSchema: () => ServerRequestSchema,
+    ServerResultSchema: () => ServerResultSchema,
+    ServerTasksCapabilitySchema: () => ServerTasksCapabilitySchema,
+    SetLevelRequestParamsSchema: () => SetLevelRequestParamsSchema,
+    SetLevelRequestSchema: () => SetLevelRequestSchema,
+    SingleSelectEnumSchemaSchema: () => SingleSelectEnumSchemaSchema,
+    StringSchemaSchema: () => StringSchemaSchema,
+    SubscribeRequestParamsSchema: () => SubscribeRequestParamsSchema,
+    SubscribeRequestSchema: () => SubscribeRequestSchema,
+    SubscriptionFilterSchema: () => SubscriptionFilterSchema,
+    SubscriptionsAcknowledgedNotificationParamsSchema: () =>
+      SubscriptionsAcknowledgedNotificationParamsSchema,
+    SubscriptionsAcknowledgedNotificationSchema: () => SubscriptionsAcknowledgedNotificationSchema,
+    SubscriptionsListenRequestParamsSchema: () => SubscriptionsListenRequestParamsSchema,
+    SubscriptionsListenRequestSchema: () => SubscriptionsListenRequestSchema,
+    SubscriptionsListenResultMetaSchema: () => SubscriptionsListenResultMetaSchema,
+    SubscriptionsListenResultSchema: () => SubscriptionsListenResultSchema,
+    TaskAugmentedRequestParamsSchema: () => TaskAugmentedRequestParamsSchema,
+    TaskCreationParamsSchema: () => TaskCreationParamsSchema,
+    TaskMetadataSchema: () => TaskMetadataSchema,
+    TaskSchema: () => TaskSchema,
+    TaskStatusNotificationParamsSchema: () => TaskStatusNotificationParamsSchema,
+    TaskStatusNotificationSchema: () => TaskStatusNotificationSchema,
+    TaskStatusSchema: () => TaskStatusSchema,
+    TextContentSchema: () => TextContentSchema,
+    TextResourceContentsSchema: () => TextResourceContentsSchema,
+    TitledMultiSelectEnumSchemaSchema: () => TitledMultiSelectEnumSchemaSchema,
+    TitledSingleSelectEnumSchemaSchema: () => TitledSingleSelectEnumSchemaSchema,
+    ToolAnnotationsSchema: () => ToolAnnotationsSchema,
+    ToolChoiceSchema: () => ToolChoiceSchema,
+    ToolExecutionSchema: () => ToolExecutionSchema,
+    ToolListChangedNotificationSchema: () => ToolListChangedNotificationSchema,
+    ToolResultContentSchema: () => ToolResultContentSchema,
+    ToolSchema: () => ToolSchema,
+    ToolUseContentSchema: () => ToolUseContentSchema,
+    UnsubscribeRequestParamsSchema: () => UnsubscribeRequestParamsSchema,
+    UnsubscribeRequestSchema: () => UnsubscribeRequestSchema,
+    UntitledMultiSelectEnumSchemaSchema: () => UntitledMultiSelectEnumSchemaSchema,
+    UntitledSingleSelectEnumSchemaSchema: () => UntitledSingleSelectEnumSchemaSchema,
+  });
 });
 //@ chunk-r1g76qsy.js:75375-75459 layout
-function Rt(e) {
-  if (e?.method === undefined && isJSONRPCResultResponse(e)) return JSONRPCResultResponseSchema.parse(e);
-  return fZe.parse(e);
+function parseJsonRpcMessage(message) {
+  if (message?.method === undefined && isJSONRPCResultResponse(message))
+    return JSONRPCResultResponseSchema.parse(message);
+  return JSONRPCMessageSchema.parse(message);
 }
 //@ chunk-r1g76qsy.js:75459-75530 layout
-function Me(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-r1g76qsy.js:75530-75597 layout
-function ua(id) {
+function isRequestId(id) {
   return typeof id === "string" || Number.isSafeInteger(id);
 }
 //@ chunk-r1g76qsy.js:75597-75683 layout
-function da(e, t, r, s, a) {
-  for (let key in e) if (key !== t && key !== r && key !== s && key !== a) return false;
+function hasOnlyKeys(object, key1, key2, key3, key4) {
+  for (let key in object) if (key !== key1 && key !== key2 && key !== key3 && key !== key4) return false;
   return true;
 }
 //@ chunk-r1g76qsy.js:75683-75956 layout
-function _i(params) {
+function isValidParams(params) {
   if (params === undefined) return true;
-  if (!Me(params)) return false;
+  if (!isPlainObject(params)) return false;
   let _meta = params._meta;
   if (_meta === undefined) return true;
-  if (!Me(_meta)) return false;
-  if (_meta.progressToken !== undefined && !ua(_meta.progressToken)) return false;
-  let r = _meta["io.modelcontextprotocol/related-task"];
-  return r === undefined || (Me(r) && typeof r.taskId === "string");
+  if (!isPlainObject(_meta)) return false;
+  if (_meta.progressToken !== undefined && !isRequestId(_meta.progressToken)) return false;
+  let relatedTask = _meta["io.modelcontextprotocol/related-task"];
+  return relatedTask === undefined || (isPlainObject(relatedTask) && typeof relatedTask.taskId === "string");
 }
 //@ chunk-r1g76qsy.js:75956-76507 layout
-var isJSONRPCRequest = (e) =>
-  Me(e) &&
-  e.jsonrpc === "2.0" &&
-  ua(e.id) &&
-  typeof e.method === "string" &&
-  _i(e.params) &&
-  da(e, "jsonrpc", "id", "method", "params");
-var isJSONRPCNotification = (e) =>
-  Me(e) &&
-  e.jsonrpc === "2.0" &&
-  typeof e.method === "string" &&
-  _i(e.params) &&
-  da(e, "jsonrpc", "method", "params");
-var isJSONRPCResultResponse = (e) =>
-  Me(e) &&
-  e.jsonrpc === "2.0" &&
-  ua(e.id) &&
-  Me(e.result) &&
-  (e.result._meta === undefined || Me(e.result._meta)) &&
-  da(e, "jsonrpc", "id", "result");
-var isJSONRPCErrorResponse = (e) =>
-  Me(e) &&
-  e.jsonrpc === "2.0" &&
-  (e.id === undefined || ua(e.id)) &&
-  Me(e.error) &&
-  Number.isSafeInteger(e.error.code) &&
-  typeof e.error.message === "string" &&
-  da(e, "jsonrpc", "id", "error");
+var isJSONRPCRequest = (message) =>
+  isPlainObject(message) &&
+  message.jsonrpc === "2.0" &&
+  isRequestId(message.id) &&
+  typeof message.method === "string" &&
+  isValidParams(message.params) &&
+  hasOnlyKeys(message, "jsonrpc", "id", "method", "params");
+var isJSONRPCNotification = (message) =>
+  isPlainObject(message) &&
+  message.jsonrpc === "2.0" &&
+  typeof message.method === "string" &&
+  isValidParams(message.params) &&
+  hasOnlyKeys(message, "jsonrpc", "method", "params");
+var isJSONRPCResultResponse = (message) =>
+  isPlainObject(message) &&
+  message.jsonrpc === "2.0" &&
+  isRequestId(message.id) &&
+  isPlainObject(message.result) &&
+  (message.result._meta === undefined || isPlainObject(message.result._meta)) &&
+  hasOnlyKeys(message, "jsonrpc", "id", "result");
+var isJSONRPCErrorResponse = (message) =>
+  isPlainObject(message) &&
+  message.jsonrpc === "2.0" &&
+  (message.id === undefined || isRequestId(message.id)) &&
+  isPlainObject(message.error) &&
+  Number.isSafeInteger(message.error.code) &&
+  typeof message.error.message === "string" &&
+  hasOnlyKeys(message, "jsonrpc", "id", "error");
 //@ chunk-r1g76qsy.js:76507-76601 esm-fingerprint
 var isInputRequiredResult = (value) =>
   typeof value === "object" &&
@@ -3540,14 +3603,25 @@ var isInputRequiredResult = (value) =>
   !Array.isArray(value) &&
   value.resultType === "input_required";
 //@ chunk-r1g76qsy.js:76601-76750 esm-layout
-var lYn = (e) => Me(e) && e.method === "initialize" && InitializeRequestSchema.safeParse(e).success;
-var qNr = (e) =>
-  Me(e) && e.method === "notifications/initialized" && InitializedNotificationSchema.safeParse(e).success;
+var isInitializeMessage = (message) =>
+  isPlainObject(message) &&
+  message.method === "initialize" &&
+  InitializeRequestSchema.safeParse(message).success;
+var isInitializedNotification = (message) =>
+  isPlainObject(message) &&
+  message.method === "notifications/initialized" &&
+  InitializedNotificationSchema.safeParse(message).success;
 //@ chunk-r1g76qsy.js:76750-76876 esm-fingerprint
-var MCP_PARAM_HEADER_PREFIX = "Mcp-Param-";
-var X_MCP_HEADER_KEY = "x-mcp-header";
-var RFC9110_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
-var PERMITTED_X_MCP_HEADER_TYPES = new Set(["string", "integer", "boolean", "number"]);
+var MCP_PARAM_HEADER_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var X_MCP_HEADER_KEY;
+var RFC9110_TOKEN;
+var PERMITTED_X_MCP_HEADER_TYPES;
+deferInit("chunk-r1g76qsy.js:76750", () => {
+  MCP_PARAM_HEADER_PREFIX = "Mcp-Param-";
+  X_MCP_HEADER_KEY = "x-mcp-header";
+  RFC9110_TOKEN = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/;
+  PERMITTED_X_MCP_HEADER_TYPES = new Set(["string", "integer", "boolean", "number"]);
+});
 //@ chunk-r1g76qsy.js:76876-78243 esm-fingerprint
 function scanXMcpHeaderDeclarations(inputSchema) {
   let declarations = [];
@@ -3609,32 +3683,36 @@ function scanXMcpHeaderDeclarations(inputSchema) {
       };
 }
 //@ chunk-r1g76qsy.js:78243-78552 esm-fingerprint
-var NON_REACHABLE_SUBSCHEMA_KEYWORDS = [
-  "items",
-  "prefixItems",
-  "contains",
-  "additionalProperties",
-  "unevaluatedProperties",
-  "unevaluatedItems",
-  "propertyNames",
-  "patternProperties",
-  "dependentSchemas",
-  "oneOf",
-  "anyOf",
-  "allOf",
-  "not",
-  "if",
-  "then",
-  "else",
-  "$defs",
-  "definitions",
-];
-var OBJECT_VALUED_SUBSCHEMA_KEYWORDS = new Set([
-  "patternProperties",
-  "dependentSchemas",
-  "$defs",
-  "definitions",
-]);
+var NON_REACHABLE_SUBSCHEMA_KEYWORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var OBJECT_VALUED_SUBSCHEMA_KEYWORDS;
+deferInit("chunk-r1g76qsy.js:78243", () => {
+  NON_REACHABLE_SUBSCHEMA_KEYWORDS = [
+    "items",
+    "prefixItems",
+    "contains",
+    "additionalProperties",
+    "unevaluatedProperties",
+    "unevaluatedItems",
+    "propertyNames",
+    "patternProperties",
+    "dependentSchemas",
+    "oneOf",
+    "anyOf",
+    "allOf",
+    "not",
+    "if",
+    "then",
+    "else",
+    "$defs",
+    "definitions",
+  ];
+  OBJECT_VALUED_SUBSCHEMA_KEYWORDS = new Set([
+    "patternProperties",
+    "dependentSchemas",
+    "$defs",
+    "definitions",
+  ]);
+});
 //@ chunk-r1g76qsy.js:78552-78608 esm-fingerprint
 function pathName(path) {
   return path.length === 0 ? "<root>" : path.join(".");
@@ -3699,101 +3777,106 @@ function buildMcpParamHeaders(declarations, args) {
   return out;
 }
 //@ chunk-r1g76qsy.js:79499-84495 esm-fingerprint
-var HEADER_MISMATCH_ERROR_CODE = -32020;
-var INBOUND_VALIDATION_LADDER = [
-  {
-    rung: "http-method",
-    order: 1,
-    evaluatedAt: "edge",
-    codes: [-32000],
-    conformance: [],
-    rationale:
-      "The modern era is POST-only; GET/DELETE are body-less 2025-era session operations and are method-routed to legacy serving (405 when legacy serving is not configured), before any body is read.",
-  },
-  {
-    rung: "jsonrpc-shape",
-    order: 2,
-    evaluatedAt: "edge",
-    codes: [ProtocolErrorCode.InvalidRequest],
-    conformance: ["server-stateless"],
-    rationale:
-      "The body must be a JSON-RPC request or notification: posted responses and batch arrays containing a modern or invalid element are rejected before classification (element-wise batch rule); all-legacy arrays stay legacy traffic.",
-  },
-  {
-    rung: "era-classification",
-    order: 3,
-    evaluatedAt: "edge",
-    codes: [HEADER_MISMATCH_ERROR_CODE, ProtocolErrorCode.UnsupportedProtocolVersion],
-    conformance: ["server-stateless", "http-header-validation", "http-custom-header-server-validation"],
-    rationale:
-      "Body-primary era classification with the protocol-version header as a cross-check; a header/body disagreement is rejected with -32020 (HeaderMismatch), and an envelope-less request on a modern-only endpoint is answered with the unsupported-protocol-version error naming the supported revisions.",
-  },
-  {
-    rung: "envelope",
-    order: 4,
-    evaluatedAt: "edge",
-    codes: [ProtocolErrorCode.InvalidParams],
-    conformance: ["server-stateless"],
-    rationale:
-      "A present envelope claim with a malformed envelope \u2014 and a missing envelope on a request whose protocol-version header names a modern revision \u2014 is an invalid-params rejection naming the offending or missing key(s); never a silent fall back to legacy handling. This is the only place an invalid-params rejection maps to HTTP 400.",
-  },
-  {
-    rung: "method-registry",
-    order: 5,
-    evaluatedAt: "dispatch",
-    codes: [ProtocolErrorCode.MethodNotFound],
-    conformance: ["server-stateless"],
-    rationale:
-      "Method existence outranks parameter validity: a method absent from the negotiated revision\u2019s registry (or with no handler installed) answers method-not-found before params or capabilities are looked at.",
-  },
-  {
-    rung: "request-params",
-    order: 6,
-    evaluatedAt: "dispatch",
-    codes: [ProtocolErrorCode.InvalidParams],
-    conformance: [],
-    rationale:
-      "Per-method params validation; emitted in-band by the dispatch layer (HTTP 200), never via the ladder status table.",
-  },
-  {
-    rung: "standard-header-validation",
-    order: 7,
-    evaluatedAt: "pre-dispatch",
-    codes: [HEADER_MISMATCH_ERROR_CODE],
-    conformance: ["http-header-validation"],
-    rationale:
-      "SEP-2243 standard `Mcp-Method` / `Mcp-Name` headers \u2014 presence, sentinel decoding, and `Mcp-Name` \u2194 body cross-check \u2014 are validated by the HTTP entry on a modern-classified request after the supported-revision gate and before dispatch. The classifier\u2019s own header-mismatch cells (protocol-version, `Mcp-Method` mismatch) stay on the edge `era-classification` rung; this rung carries the entry-layer presence/`Mcp-Name` half. Evaluated before the capability gate, the factory call, and the `Mcp-Param-*` rung so a request that fails several rungs is answered by the standard-header rung first. The documented order (after method-registry 5 and request-params 6) is NOT the observed precedence: serveModern evaluates this rung immediately after the supported-revision gate, so a request that also fails a dispatch rung is answered here before the dispatch rungs (5\u20136) are consulted.",
-  },
-  {
-    rung: "client-capabilities",
-    order: 8,
-    evaluatedAt: "pre-dispatch",
-    codes: [ProtocolErrorCode.MissingRequiredClientCapability],
-    conformance: ["server-stateless"],
-    rationale:
-      "The capability requirement is checked by the HTTP entry, pre-dispatch, against the validated envelope the classifier produced \u2014 pinning the spec-mandated HTTP 400 independently of how dispatch- and handler-produced errors are mapped. The documented order (after method resolution and params validation) is preserved observably only while the requirement table is empty: once a served method gains a requirement entry, a request that is missing the capability and would also fail a dispatch rung is answered by this gate first, so the entry must consult the method registry before the gate if the documented precedence is to stay observable.",
-  },
-  {
-    rung: "param-header-validation",
-    order: 9,
-    evaluatedAt: "pre-dispatch",
-    codes: [HEADER_MISMATCH_ERROR_CODE],
-    conformance: ["http-custom-header-server-validation"],
-    rationale:
-      "SEP-2243 `Mcp-Param-*` headers are validated against the named tool\u2019s `x-mcp-header` declarations and the body `arguments` after the tool registry is known and before dispatch reaches the handler; a missing/disagreeing/malformed header is rejected 400 / -32020 with the same shape as the standard-header cross-checks. The documented order (after method resolution and params validation) is preserved observably only when the body `arguments` would otherwise validate: the check runs pre-dispatch, so a `tools/call` that fails BOTH this rung and a dispatch-time rung (e.g. order-6 `request-params`, -32602) is answered by this gate first with 400 / -32020, not by the earlier-ordered rung.",
-  },
-];
-var LADDER_ERROR_HTTP_STATUS = {
-  [ProtocolErrorCode.ParseError]: 400,
-  [ProtocolErrorCode.InvalidRequest]: 400,
-  [ProtocolErrorCode.MethodNotFound]: 404,
-  [ProtocolErrorCode.UnsupportedProtocolVersion]: 400,
-  [ProtocolErrorCode.MissingRequiredClientCapability]: 400,
-  [HEADER_MISMATCH_ERROR_CODE]: 400,
-};
+var HEADER_MISMATCH_ERROR_CODE; // deferred: uses ProtocolErrorCode of its import cycle while loading; runs once the cycle is complete
+var INBOUND_VALIDATION_LADDER;
+var LADDER_ERROR_HTTP_STATUS;
+deferInit("chunk-r1g76qsy.js:79499", () => {
+  HEADER_MISMATCH_ERROR_CODE = -32020;
+  INBOUND_VALIDATION_LADDER = [
+    {
+      rung: "http-method",
+      order: 1,
+      evaluatedAt: "edge",
+      codes: [-32000],
+      conformance: [],
+      rationale:
+        "The modern era is POST-only; GET/DELETE are body-less 2025-era session operations and are method-routed to legacy serving (405 when legacy serving is not configured), before any body is read.",
+    },
+    {
+      rung: "jsonrpc-shape",
+      order: 2,
+      evaluatedAt: "edge",
+      codes: [ProtocolErrorCode.InvalidRequest],
+      conformance: ["server-stateless"],
+      rationale:
+        "The body must be a JSON-RPC request or notification: posted responses and batch arrays containing a modern or invalid element are rejected before classification (element-wise batch rule); all-legacy arrays stay legacy traffic.",
+    },
+    {
+      rung: "era-classification",
+      order: 3,
+      evaluatedAt: "edge",
+      codes: [HEADER_MISMATCH_ERROR_CODE, ProtocolErrorCode.UnsupportedProtocolVersion],
+      conformance: ["server-stateless", "http-header-validation", "http-custom-header-server-validation"],
+      rationale:
+        "Body-primary era classification with the protocol-version header as a cross-check; a header/body disagreement is rejected with -32020 (HeaderMismatch), and an envelope-less request on a modern-only endpoint is answered with the unsupported-protocol-version error naming the supported revisions.",
+    },
+    {
+      rung: "envelope",
+      order: 4,
+      evaluatedAt: "edge",
+      codes: [ProtocolErrorCode.InvalidParams],
+      conformance: ["server-stateless"],
+      rationale:
+        "A present envelope claim with a malformed envelope \u2014 and a missing envelope on a request whose protocol-version header names a modern revision \u2014 is an invalid-params rejection naming the offending or missing key(s); never a silent fall back to legacy handling. This is the only place an invalid-params rejection maps to HTTP 400.",
+    },
+    {
+      rung: "method-registry",
+      order: 5,
+      evaluatedAt: "dispatch",
+      codes: [ProtocolErrorCode.MethodNotFound],
+      conformance: ["server-stateless"],
+      rationale:
+        "Method existence outranks parameter validity: a method absent from the negotiated revision\u2019s registry (or with no handler installed) answers method-not-found before params or capabilities are looked at.",
+    },
+    {
+      rung: "request-params",
+      order: 6,
+      evaluatedAt: "dispatch",
+      codes: [ProtocolErrorCode.InvalidParams],
+      conformance: [],
+      rationale:
+        "Per-method params validation; emitted in-band by the dispatch layer (HTTP 200), never via the ladder status table.",
+    },
+    {
+      rung: "standard-header-validation",
+      order: 7,
+      evaluatedAt: "pre-dispatch",
+      codes: [HEADER_MISMATCH_ERROR_CODE],
+      conformance: ["http-header-validation"],
+      rationale:
+        "SEP-2243 standard `Mcp-Method` / `Mcp-Name` headers \u2014 presence, sentinel decoding, and `Mcp-Name` \u2194 body cross-check \u2014 are validated by the HTTP entry on a modern-classified request after the supported-revision gate and before dispatch. The classifier\u2019s own header-mismatch cells (protocol-version, `Mcp-Method` mismatch) stay on the edge `era-classification` rung; this rung carries the entry-layer presence/`Mcp-Name` half. Evaluated before the capability gate, the factory call, and the `Mcp-Param-*` rung so a request that fails several rungs is answered by the standard-header rung first. The documented order (after method-registry 5 and request-params 6) is NOT the observed precedence: serveModern evaluates this rung immediately after the supported-revision gate, so a request that also fails a dispatch rung is answered here before the dispatch rungs (5\u20136) are consulted.",
+    },
+    {
+      rung: "client-capabilities",
+      order: 8,
+      evaluatedAt: "pre-dispatch",
+      codes: [ProtocolErrorCode.MissingRequiredClientCapability],
+      conformance: ["server-stateless"],
+      rationale:
+        "The capability requirement is checked by the HTTP entry, pre-dispatch, against the validated envelope the classifier produced \u2014 pinning the spec-mandated HTTP 400 independently of how dispatch- and handler-produced errors are mapped. The documented order (after method resolution and params validation) is preserved observably only while the requirement table is empty: once a served method gains a requirement entry, a request that is missing the capability and would also fail a dispatch rung is answered by this gate first, so the entry must consult the method registry before the gate if the documented precedence is to stay observable.",
+    },
+    {
+      rung: "param-header-validation",
+      order: 9,
+      evaluatedAt: "pre-dispatch",
+      codes: [HEADER_MISMATCH_ERROR_CODE],
+      conformance: ["http-custom-header-server-validation"],
+      rationale:
+        "SEP-2243 `Mcp-Param-*` headers are validated against the named tool\u2019s `x-mcp-header` declarations and the body `arguments` after the tool registry is known and before dispatch reaches the handler; a missing/disagreeing/malformed header is rejected 400 / -32020 with the same shape as the standard-header cross-checks. The documented order (after method resolution and params validation) is preserved observably only when the body `arguments` would otherwise validate: the check runs pre-dispatch, so a `tools/call` that fails BOTH this rung and a dispatch-time rung (e.g. order-6 `request-params`, -32602) is answered by this gate first with 400 / -32020, not by the earlier-ordered rung.",
+    },
+  ];
+  LADDER_ERROR_HTTP_STATUS = {
+    [ProtocolErrorCode.ParseError]: 400,
+    [ProtocolErrorCode.InvalidRequest]: 400,
+    [ProtocolErrorCode.MethodNotFound]: 404,
+    [ProtocolErrorCode.UnsupportedProtocolVersion]: 400,
+    [ProtocolErrorCode.MissingRequiredClientCapability]: 400,
+    [HEADER_MISMATCH_ERROR_CODE]: 400,
+  };
+});
 //@ chunk-r1g76qsy.js:84495-84528 esm-layout
 function parseSchema(schema, data) {
-  return slo(schema, data);
+  return safeParse(schema, data);
 }
 //@ chunk-r1g76qsy.js:84528-84596 esm-fingerprint
 function shapeKeys(schemas) {
@@ -3923,10 +4006,10 @@ function referencePatternsForFormat(format, pattern) {
   let referenceSchemas;
   switch (format) {
     case "email":
-      referenceSchemas = [_Ii()];
+      referenceSchemas = [emailSchema()];
       break;
     case "uri":
-      referenceSchemas = [A8e()];
+      referenceSchemas = [urlSchema()];
       break;
     case "date":
       referenceSchemas = [parseToolInputSchemaLoose()];
@@ -3961,37 +4044,42 @@ function convertStandardElicitationSchema(schema) {
   }
 }
 //@ chunk-r1g76qsy.js:87289-87387 esm-fingerprint
-var ANNOTATION_ONLY_JSON_SCHEMA_KEYWORDS = new Set([
-  "$comment",
-  "deprecated",
-  "description",
-  "examples",
-  "readOnly",
-  "title",
-  "writeOnly",
-]);
+var ANNOTATION_ONLY_JSON_SCHEMA_KEYWORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-r1g76qsy.js:87289", () => {
+  ANNOTATION_ONLY_JSON_SCHEMA_KEYWORDS = new Set([
+    "$comment",
+    "deprecated",
+    "description",
+    "examples",
+    "readOnly",
+    "title",
+    "writeOnly",
+  ]);
+});
 //@ chunk-r1g76qsy.js:87387-87439 esm-fingerprint
 function isAnnotationOnlyJsonSchemaKeyword(key) {
   return ANNOTATION_ONLY_JSON_SCHEMA_KEYWORDS.has(key) || key.startsWith("x-");
 }
 //@ chunk-r1g76qsy.js:87439-87657 esm-fingerprint
-var ROOT_KEYS = new Set([
-  "$schema",
-  ...Object.keys(ElicitRequestFormParamsSchema.shape.requestedSchema.shape),
-]);
-var PROPERTY_KEYS_BY_TYPE = {
-  string: shapeKeys([
-    StringSchemaSchema,
-    UntitledSingleSelectEnumSchemaSchema,
-    TitledSingleSelectEnumSchemaSchema,
-    LegacyTitledEnumSchemaSchema,
-  ]),
-  number: shapeKeys([NumberSchemaSchema]),
-  integer: shapeKeys([NumberSchemaSchema]),
-  boolean: shapeKeys([BooleanSchemaSchema]),
-  array: shapeKeys([UntitledMultiSelectEnumSchemaSchema, TitledMultiSelectEnumSchemaSchema]),
-};
-var SUPPORTED_STRING_FORMATS = new Set(StringSchemaSchema.shape.format.unwrap().options);
+var ROOT_KEYS; // deferred: uses JSONValueSchema (../../core/dist/auth-CUe6YdwF.mjs) of its import cycle while loading; runs once the cycle is complete
+var PROPERTY_KEYS_BY_TYPE;
+var SUPPORTED_STRING_FORMATS;
+deferInit("chunk-r1g76qsy.js:87439", () => {
+  ROOT_KEYS = new Set(["$schema", ...Object.keys(ElicitRequestFormParamsSchema.shape.requestedSchema.shape)]);
+  PROPERTY_KEYS_BY_TYPE = {
+    string: shapeKeys([
+      StringSchemaSchema,
+      UntitledSingleSelectEnumSchemaSchema,
+      TitledSingleSelectEnumSchemaSchema,
+      LegacyTitledEnumSchemaSchema,
+    ]),
+    number: shapeKeys([NumberSchemaSchema]),
+    integer: shapeKeys([NumberSchemaSchema]),
+    boolean: shapeKeys([BooleanSchemaSchema]),
+    array: shapeKeys([UntitledMultiSelectEnumSchemaSchema, TitledMultiSelectEnumSchemaSchema]),
+  };
+  SUPPORTED_STRING_FORMATS = new Set(StringSchemaSchema.shape.format.unwrap().options);
+});
 //@ chunk-r1g76qsy.js:87657-88062 esm-fingerprint
 function walkProperty(node, path, vendor, unsupported) {
   if (!isJsonObject(node)) return node;
@@ -4108,41 +4196,44 @@ function buildInputRequired(spec) {
   };
 }
 //@ chunk-r1g76qsy.js:90306-90645 esm-fingerprint
-var inputRequired = Object.assign(buildInputRequired, {
-  elicit(params) {
-    try {
+var inputRequired; // deferred: uses buildInputRequired of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-r1g76qsy.js:90306", () => {
+  inputRequired = Object.assign(buildInputRequired, {
+    elicit(params) {
+      try {
+        return {
+          method: "elicitation/create",
+          params: normalizeElicitInputParams(params),
+        };
+      } catch (error) {
+        throw error instanceof ProtocolError
+          ? TypeError(error.message, {
+              cause: error,
+            })
+          : error;
+      }
+    },
+    elicitUrl(params) {
       return {
         method: "elicitation/create",
-        params: normalizeElicitInputParams(params),
+        params: {
+          ...params,
+          mode: "url",
+        },
       };
-    } catch (error) {
-      throw error instanceof ProtocolError
-        ? TypeError(error.message, {
-            cause: error,
-          })
-        : error;
-    }
-  },
-  elicitUrl(params) {
-    return {
-      method: "elicitation/create",
-      params: {
-        ...params,
-        mode: "url",
-      },
-    };
-  },
-  createMessage(params) {
-    return {
-      method: "sampling/createMessage",
-      params,
-    };
-  },
-  listRoots() {
-    return {
-      method: "roots/list",
-    };
-  },
+    },
+    createMessage(params) {
+      return {
+        method: "sampling/createMessage",
+        params,
+      };
+    },
+    listRoots() {
+      return {
+        method: "roots/list",
+      };
+    },
+  });
 });
 //@ chunk-r1g76qsy.js:90645-90668 esm-layout
 var DEFAULT_INPUT_REQUIRED_AUTO_FULFILL = true;
@@ -4293,185 +4384,191 @@ async function runInputRequiredDriver(args) {
   }
 }
 //@ chunk-r1g76qsy.js:92780-97520 esm-fingerprint
-var SPEC_SCHEMA_KEYS = [
-  "AnnotationsSchema",
-  "AudioContentSchema",
-  "BaseMetadataSchema",
-  "BlobResourceContentsSchema",
-  "BooleanSchemaSchema",
-  "CallToolRequestSchema",
-  "CallToolRequestParamsSchema",
-  "CallToolResultSchema",
-  "CancelledNotificationSchema",
-  "CancelledNotificationParamsSchema",
-  "CancelTaskRequestSchema",
-  "CancelTaskResultSchema",
-  "ClientCapabilitiesSchema",
-  "ClientNotificationSchema",
-  "ClientRequestSchema",
-  "ClientResultSchema",
-  "CompatibilityCallToolResultSchema",
-  "CompleteRequestSchema",
-  "CompleteRequestParamsSchema",
-  "CompleteResultSchema",
-  "ContentBlockSchema",
-  "CreateMessageRequestSchema",
-  "CreateMessageRequestParamsSchema",
-  "CreateMessageResultSchema",
-  "CreateMessageResultWithToolsSchema",
-  "CreateTaskResultSchema",
-  "CursorSchema",
-  "DiscoverRequestSchema",
-  "DiscoverResultSchema",
-  "ElicitationCompleteNotificationSchema",
-  "ElicitationCompleteNotificationParamsSchema",
-  "ElicitRequestSchema",
-  "ElicitRequestFormParamsSchema",
-  "ElicitRequestParamsSchema",
-  "ElicitRequestURLParamsSchema",
-  "ElicitResultSchema",
-  "EmbeddedResourceSchema",
-  "EmptyResultSchema",
-  "EnumSchemaSchema",
-  "GetPromptRequestSchema",
-  "GetPromptRequestParamsSchema",
-  "GetPromptResultSchema",
-  "GetTaskPayloadRequestSchema",
-  "GetTaskPayloadResultSchema",
-  "GetTaskRequestSchema",
-  "GetTaskResultSchema",
-  "IconSchema",
-  "IconsSchema",
-  "ImageContentSchema",
-  "ImplementationSchema",
-  "InitializedNotificationSchema",
-  "InitializeRequestSchema",
-  "InitializeRequestParamsSchema",
-  "InitializeResultSchema",
-  "JSONArraySchema",
-  "JSONObjectSchema",
-  "JSONRPCErrorResponseSchema",
-  "JSONRPCMessageSchema",
-  "JSONRPCNotificationSchema",
-  "JSONRPCRequestSchema",
-  "JSONRPCResponseSchema",
-  "JSONRPCResultResponseSchema",
-  "JSONValueSchema",
-  "LegacyTitledEnumSchemaSchema",
-  "ListPromptsRequestSchema",
-  "ListPromptsResultSchema",
-  "ListResourcesRequestSchema",
-  "ListResourcesResultSchema",
-  "ListResourceTemplatesRequestSchema",
-  "ListResourceTemplatesResultSchema",
-  "ListRootsRequestSchema",
-  "ListRootsResultSchema",
-  "ListTasksRequestSchema",
-  "ListTasksResultSchema",
-  "ListToolsRequestSchema",
-  "ListToolsResultSchema",
-  "LoggingLevelSchema",
-  "LoggingMessageNotificationSchema",
-  "LoggingMessageNotificationParamsSchema",
-  "ModelHintSchema",
-  "ModelPreferencesSchema",
-  "MultiSelectEnumSchemaSchema",
-  "NotificationSchema",
-  "NumberSchemaSchema",
-  "PaginatedRequestSchema",
-  "PaginatedRequestParamsSchema",
-  "PaginatedResultSchema",
-  "PingRequestSchema",
-  "PrimitiveSchemaDefinitionSchema",
-  "ProgressSchema",
-  "ProgressNotificationSchema",
-  "ProgressNotificationParamsSchema",
-  "ProgressTokenSchema",
-  "PromptSchema",
-  "PromptArgumentSchema",
-  "PromptListChangedNotificationSchema",
-  "PromptMessageSchema",
-  "PromptReferenceSchema",
-  "ReadResourceRequestSchema",
-  "ReadResourceRequestParamsSchema",
-  "ReadResourceResultSchema",
-  "RelatedTaskMetadataSchema",
-  "RequestSchema",
-  "RequestIdSchema",
-  "RequestMetaSchema",
-  "ResourceSchema",
-  "ResourceContentsSchema",
-  "ResourceLinkSchema",
-  "ResourceListChangedNotificationSchema",
-  "ResourceRequestParamsSchema",
-  "ResourceTemplateSchema",
-  "ResourceTemplateReferenceSchema",
-  "ResourceUpdatedNotificationSchema",
-  "ResourceUpdatedNotificationParamsSchema",
-  "ResultMetaObjectSchema",
-  "ResultSchema",
-  "RoleSchema",
-  "RootSchema",
-  "RootsListChangedNotificationSchema",
-  "SamplingContentSchema",
-  "SamplingMessageSchema",
-  "SamplingMessageContentBlockSchema",
-  "ServerCapabilitiesSchema",
-  "ServerNotificationSchema",
-  "ServerRequestSchema",
-  "ServerResultSchema",
-  "SetLevelRequestSchema",
-  "SetLevelRequestParamsSchema",
-  "SingleSelectEnumSchemaSchema",
-  "StringSchemaSchema",
-  "SubscribeRequestSchema",
-  "SubscribeRequestParamsSchema",
-  "SubscriptionFilterSchema",
-  "SubscriptionsAcknowledgedNotificationSchema",
-  "SubscriptionsAcknowledgedNotificationParamsSchema",
-  "SubscriptionsListenRequestSchema",
-  "SubscriptionsListenRequestParamsSchema",
-  "SubscriptionsListenResultSchema",
-  "SubscriptionsListenResultMetaSchema",
-  "TaskAugmentedRequestParamsSchema",
-  "TaskCreationParamsSchema",
-  "TaskMetadataSchema",
-  "TaskSchema",
-  "TaskStatusSchema",
-  "TaskStatusNotificationSchema",
-  "TaskStatusNotificationParamsSchema",
-  "TextContentSchema",
-  "TextResourceContentsSchema",
-  "TitledMultiSelectEnumSchemaSchema",
-  "TitledSingleSelectEnumSchemaSchema",
-  "ToolSchema",
-  "ToolAnnotationsSchema",
-  "ToolChoiceSchema",
-  "ToolExecutionSchema",
-  "ToolListChangedNotificationSchema",
-  "ToolResultContentSchema",
-  "ToolUseContentSchema",
-  "UnsubscribeRequestSchema",
-  "UnsubscribeRequestParamsSchema",
-  "UntitledMultiSelectEnumSchemaSchema",
-  "UntitledSingleSelectEnumSchemaSchema",
-];
-var authSchemas = {
-  IdJagTokenExchangeResponseSchema,
-  OAuthClientInformationFullSchema,
-  OAuthClientInformationSchema,
-  OAuthClientMetadataSchema,
-  OAuthClientRegistrationErrorSchema,
-  OAuthErrorResponseSchema,
-  OAuthMetadataSchema,
-  OAuthProtectedResourceMetadataSchema,
-  OAuthTokenRevocationRequestSchema,
-  OAuthTokensSchema,
-  OpenIdProviderDiscoveryMetadataSchema,
-  OpenIdProviderMetadataSchema,
-};
-var _specTypeSchemas = {};
-var _isSpecType = {};
+var SPEC_SCHEMA_KEYS; // deferred: uses JSONValueSchema (../../core/dist/auth-CUe6YdwF.mjs) of its import cycle while loading; runs once the cycle is complete
+var authSchemas;
+var _specTypeSchemas;
+var _isSpecType;
+deferInit("chunk-r1g76qsy.js:92780", () => {
+  SPEC_SCHEMA_KEYS = [
+    "AnnotationsSchema",
+    "AudioContentSchema",
+    "BaseMetadataSchema",
+    "BlobResourceContentsSchema",
+    "BooleanSchemaSchema",
+    "CallToolRequestSchema",
+    "CallToolRequestParamsSchema",
+    "CallToolResultSchema",
+    "CancelledNotificationSchema",
+    "CancelledNotificationParamsSchema",
+    "CancelTaskRequestSchema",
+    "CancelTaskResultSchema",
+    "ClientCapabilitiesSchema",
+    "ClientNotificationSchema",
+    "ClientRequestSchema",
+    "ClientResultSchema",
+    "CompatibilityCallToolResultSchema",
+    "CompleteRequestSchema",
+    "CompleteRequestParamsSchema",
+    "CompleteResultSchema",
+    "ContentBlockSchema",
+    "CreateMessageRequestSchema",
+    "CreateMessageRequestParamsSchema",
+    "CreateMessageResultSchema",
+    "CreateMessageResultWithToolsSchema",
+    "CreateTaskResultSchema",
+    "CursorSchema",
+    "DiscoverRequestSchema",
+    "DiscoverResultSchema",
+    "ElicitationCompleteNotificationSchema",
+    "ElicitationCompleteNotificationParamsSchema",
+    "ElicitRequestSchema",
+    "ElicitRequestFormParamsSchema",
+    "ElicitRequestParamsSchema",
+    "ElicitRequestURLParamsSchema",
+    "ElicitResultSchema",
+    "EmbeddedResourceSchema",
+    "EmptyResultSchema",
+    "EnumSchemaSchema",
+    "GetPromptRequestSchema",
+    "GetPromptRequestParamsSchema",
+    "GetPromptResultSchema",
+    "GetTaskPayloadRequestSchema",
+    "GetTaskPayloadResultSchema",
+    "GetTaskRequestSchema",
+    "GetTaskResultSchema",
+    "IconSchema",
+    "IconsSchema",
+    "ImageContentSchema",
+    "ImplementationSchema",
+    "InitializedNotificationSchema",
+    "InitializeRequestSchema",
+    "InitializeRequestParamsSchema",
+    "InitializeResultSchema",
+    "JSONArraySchema",
+    "JSONObjectSchema",
+    "JSONRPCErrorResponseSchema",
+    "JSONRPCMessageSchema",
+    "JSONRPCNotificationSchema",
+    "JSONRPCRequestSchema",
+    "JSONRPCResponseSchema",
+    "JSONRPCResultResponseSchema",
+    "JSONValueSchema",
+    "LegacyTitledEnumSchemaSchema",
+    "ListPromptsRequestSchema",
+    "ListPromptsResultSchema",
+    "ListResourcesRequestSchema",
+    "ListResourcesResultSchema",
+    "ListResourceTemplatesRequestSchema",
+    "ListResourceTemplatesResultSchema",
+    "ListRootsRequestSchema",
+    "ListRootsResultSchema",
+    "ListTasksRequestSchema",
+    "ListTasksResultSchema",
+    "ListToolsRequestSchema",
+    "ListToolsResultSchema",
+    "LoggingLevelSchema",
+    "LoggingMessageNotificationSchema",
+    "LoggingMessageNotificationParamsSchema",
+    "ModelHintSchema",
+    "ModelPreferencesSchema",
+    "MultiSelectEnumSchemaSchema",
+    "NotificationSchema",
+    "NumberSchemaSchema",
+    "PaginatedRequestSchema",
+    "PaginatedRequestParamsSchema",
+    "PaginatedResultSchema",
+    "PingRequestSchema",
+    "PrimitiveSchemaDefinitionSchema",
+    "ProgressSchema",
+    "ProgressNotificationSchema",
+    "ProgressNotificationParamsSchema",
+    "ProgressTokenSchema",
+    "PromptSchema",
+    "PromptArgumentSchema",
+    "PromptListChangedNotificationSchema",
+    "PromptMessageSchema",
+    "PromptReferenceSchema",
+    "ReadResourceRequestSchema",
+    "ReadResourceRequestParamsSchema",
+    "ReadResourceResultSchema",
+    "RelatedTaskMetadataSchema",
+    "RequestSchema",
+    "RequestIdSchema",
+    "RequestMetaSchema",
+    "ResourceSchema",
+    "ResourceContentsSchema",
+    "ResourceLinkSchema",
+    "ResourceListChangedNotificationSchema",
+    "ResourceRequestParamsSchema",
+    "ResourceTemplateSchema",
+    "ResourceTemplateReferenceSchema",
+    "ResourceUpdatedNotificationSchema",
+    "ResourceUpdatedNotificationParamsSchema",
+    "ResultMetaObjectSchema",
+    "ResultSchema",
+    "RoleSchema",
+    "RootSchema",
+    "RootsListChangedNotificationSchema",
+    "SamplingContentSchema",
+    "SamplingMessageSchema",
+    "SamplingMessageContentBlockSchema",
+    "ServerCapabilitiesSchema",
+    "ServerNotificationSchema",
+    "ServerRequestSchema",
+    "ServerResultSchema",
+    "SetLevelRequestSchema",
+    "SetLevelRequestParamsSchema",
+    "SingleSelectEnumSchemaSchema",
+    "StringSchemaSchema",
+    "SubscribeRequestSchema",
+    "SubscribeRequestParamsSchema",
+    "SubscriptionFilterSchema",
+    "SubscriptionsAcknowledgedNotificationSchema",
+    "SubscriptionsAcknowledgedNotificationParamsSchema",
+    "SubscriptionsListenRequestSchema",
+    "SubscriptionsListenRequestParamsSchema",
+    "SubscriptionsListenResultSchema",
+    "SubscriptionsListenResultMetaSchema",
+    "TaskAugmentedRequestParamsSchema",
+    "TaskCreationParamsSchema",
+    "TaskMetadataSchema",
+    "TaskSchema",
+    "TaskStatusSchema",
+    "TaskStatusNotificationSchema",
+    "TaskStatusNotificationParamsSchema",
+    "TextContentSchema",
+    "TextResourceContentsSchema",
+    "TitledMultiSelectEnumSchemaSchema",
+    "TitledSingleSelectEnumSchemaSchema",
+    "ToolSchema",
+    "ToolAnnotationsSchema",
+    "ToolChoiceSchema",
+    "ToolExecutionSchema",
+    "ToolListChangedNotificationSchema",
+    "ToolResultContentSchema",
+    "ToolUseContentSchema",
+    "UnsubscribeRequestSchema",
+    "UnsubscribeRequestParamsSchema",
+    "UntitledMultiSelectEnumSchemaSchema",
+    "UntitledSingleSelectEnumSchemaSchema",
+  ];
+  authSchemas = {
+    IdJagTokenExchangeResponseSchema,
+    OAuthClientInformationFullSchema,
+    OAuthClientInformationSchema,
+    OAuthClientMetadataSchema,
+    OAuthClientRegistrationErrorSchema,
+    OAuthErrorResponseSchema,
+    OAuthMetadataSchema,
+    OAuthProtectedResourceMetadataSchema,
+    OAuthTokenRevocationRequestSchema,
+    OAuthTokensSchema,
+    OpenIdProviderDiscoveryMetadataSchema,
+    OpenIdProviderMetadataSchema,
+  };
+  _specTypeSchemas = {};
+  _isSpecType = {};
+});
 //@ chunk-r1g76qsy.js:97520-97599 esm-fingerprint
 function register(key, schema) {
   let name = key.slice(0, -6);
@@ -4479,12 +4576,22 @@ function register(key, schema) {
   _isSpecType[name] = (v) => schema.safeParse(v).success;
 }
 //@ chunk-r1g76qsy.js:97599-97627 esm-layout
-for (let key of SPEC_SCHEMA_KEYS) register(key, schemas_exports[key]);
+// deferred: uses SPEC_SCHEMA_KEYS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-r1g76qsy.js:97599", () => {
+  for (let key of SPEC_SCHEMA_KEYS) register(key, schemas_exports[key]);
+});
 //@ chunk-r1g76qsy.js:97627-97669 esm-layout
-for (let [key, schema] of Object.entries(authSchemas)) register(key, schema);
+// deferred: uses SPEC_SCHEMA_KEYS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-r1g76qsy.js:97627", () => {
+  for (let [key, schema] of Object.entries(authSchemas)) register(key, schema);
+});
 //@ chunk-r1g76qsy.js:97669-97715 esm-layout
-var specTypeSchemas = Object.freeze(_specTypeSchemas);
-var isSpecType = Object.freeze(_isSpecType);
+var specTypeSchemas; // deferred: uses SPEC_SCHEMA_KEYS of its import cycle while loading; runs once the cycle is complete
+var isSpecType;
+deferInit("chunk-r1g76qsy.js:97669", () => {
+  specTypeSchemas = Object.freeze(_specTypeSchemas);
+  isSpecType = Object.freeze(_isSpecType);
+});
 //@ chunk-r1g76qsy.js:97715-97859 esm-fingerprint
 function bootstrapOutboundCodec(method) {
   switch (method) {
@@ -4582,735 +4689,745 @@ function requestStateAccessor(value) {
   return () => value;
 }
 //@ chunk-r1g76qsy.js:98793-112999 esm-layout
-var NO_REQUEST_STATE = requestStateAccessor(undefined);
+var NO_REQUEST_STATE; // deferred: uses requestStateAccessor of its import cycle while loading; runs once the cycle is complete
 var writeNegotiatedProtocolVersion;
-var Protocol = class {
-  _transport;
-  _requestMessageId = 0;
-  _requestHandlers = new Map();
-  _requestHandlerAbortControllers = new Map();
-  _notificationHandlers = new Map();
-  _responseHandlers = new Map();
-  _progressHandlers = new Map();
-  _timeoutInfo = new Map();
-  _pendingDebouncedNotifications = new Set();
-  _negotiatedProtocolVersion;
-  static {
-    writeNegotiatedProtocolVersion = (instance, version) => {
-      instance._negotiatedProtocolVersion = version;
-    };
-  }
-  _supportedProtocolVersions;
-  onclose;
-  onerror;
-  fallbackRequestHandler;
-  fallbackNotificationHandler;
-  constructor(_options) {
-    this._options = _options;
-    this._supportedProtocolVersions = _options?.supportedProtocolVersions ?? SUPPORTED_PROTOCOL_VERSIONS;
-    this.setNotificationHandler("notifications/cancelled", (notification) => {
-      this._oncancel(notification);
-    });
-    this.setNotificationHandler("notifications/progress", (notification) => {
-      this._onprogress(notification);
-    });
-    this.setRequestHandler("ping", (_request) => ({}));
-  }
-  _shouldDropInbound(_message) {}
-  _outboundMetaEnvelope() {}
-  _envelopeOutbound(message) {
-    let envelope = this._outboundMetaEnvelope();
-    if (envelope === undefined) return message;
-    let params = message.params ?? {};
-    return {
-      ...message,
-      params: {
-        ...params,
-        _meta: {
-          ...envelope,
-          ...params._meta,
-        },
-      },
-    };
-  }
-  _resolveNonCompleteResult(decoded, flow) {
-    return Promise.reject(
-      new SdkError(
-        SdkErrorCode.UnsupportedResultType,
-        `Unsupported result type '${decoded.kind}' for ${flow.request.method}`,
-        {
-          resultType: decoded.kind,
-          method: flow.request.method,
-        },
-      ),
-    );
-  }
-  _getRequestHandler(method) {
-    return this._requestHandlers.get(method);
-  }
-  async _oncancel(notification) {
-    if (!notification.params.requestId) return;
-    this._requestHandlerAbortControllers
-      .get(notification.params.requestId)
-      ?.abort(notification.params.reason);
-  }
-  _setupTimeout(messageId, timeout, maxTotalTimeout, onTimeout, resetTimeoutOnProgress = false) {
-    this._timeoutInfo.set(messageId, {
-      timeoutId: setTimeout(onTimeout, timeout),
-      startTime: Date.now(),
-      timeout,
-      maxTotalTimeout,
-      resetTimeoutOnProgress,
-      onTimeout,
-    });
-  }
-  _resetTimeout(messageId) {
-    let info = this._timeoutInfo.get(messageId);
-    if (!info) return false;
-    let totalElapsed = Date.now() - info.startTime;
-    if (info.maxTotalTimeout && totalElapsed >= info.maxTotalTimeout) {
-      this._timeoutInfo.delete(messageId);
-      throw new SdkError(SdkErrorCode.RequestTimeout, "Maximum total timeout exceeded", {
-        maxTotalTimeout: info.maxTotalTimeout,
-        totalElapsed,
+var Protocol;
+deferInit("chunk-r1g76qsy.js:98793", () => {
+  NO_REQUEST_STATE = requestStateAccessor(undefined);
+  Protocol = class {
+    _transport;
+    _requestMessageId = 0;
+    _requestHandlers = new Map();
+    _requestHandlerAbortControllers = new Map();
+    _notificationHandlers = new Map();
+    _responseHandlers = new Map();
+    _progressHandlers = new Map();
+    _timeoutInfo = new Map();
+    _pendingDebouncedNotifications = new Set();
+    _negotiatedProtocolVersion;
+    static {
+      writeNegotiatedProtocolVersion = (instance, version) => {
+        instance._negotiatedProtocolVersion = version;
+      };
+    }
+    _supportedProtocolVersions;
+    onclose;
+    onerror;
+    fallbackRequestHandler;
+    fallbackNotificationHandler;
+    constructor(_options) {
+      this._options = _options;
+      this._supportedProtocolVersions = _options?.supportedProtocolVersions ?? SUPPORTED_PROTOCOL_VERSIONS;
+      this.setNotificationHandler("notifications/cancelled", (notification) => {
+        this._oncancel(notification);
       });
+      this.setNotificationHandler("notifications/progress", (notification) => {
+        this._onprogress(notification);
+      });
+      this.setRequestHandler("ping", (_request) => ({}));
     }
-    clearTimeout(info.timeoutId);
-    info.timeoutId = setTimeout(info.onTimeout, info.timeout);
-    return true;
-  }
-  _cleanupTimeout(messageId) {
-    let info = this._timeoutInfo.get(messageId);
-    if (info) {
-      clearTimeout(info.timeoutId);
-      this._timeoutInfo.delete(messageId);
+    _shouldDropInbound(_message) {}
+    _outboundMetaEnvelope() {}
+    _envelopeOutbound(message) {
+      let envelope = this._outboundMetaEnvelope();
+      if (envelope === undefined) return message;
+      let params = message.params ?? {};
+      return {
+        ...message,
+        params: {
+          ...params,
+          _meta: {
+            ...envelope,
+            ...params._meta,
+          },
+        },
+      };
     }
-  }
-  async connect(transport) {
-    this._transport = transport;
-    let _onclose = this.transport?.onclose;
-    this._transport.onclose = () => {
-      try {
-        _onclose?.();
-      } finally {
-        this._onclose();
-      }
-    };
-    let _onerror = this.transport?.onerror;
-    this._transport.onerror = (error) => {
-      _onerror?.(error);
-      this._onerror(error);
-    };
-    let _onmessage = this._transport?.onmessage;
-    this._transport.onmessage = (message, extra) => {
-      _onmessage?.(message, extra);
-      if (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) this._onresponse(message);
-      else if (isJSONRPCRequest(message)) this._onrequest(message, extra);
-      else if (isJSONRPCNotification(message)) this._onnotification(message, extra);
-      else this._onerror(Error(`Unknown message type: ${JSON.stringify(message)}`));
-    };
-    transport.setSupportedProtocolVersions?.(this._supportedProtocolVersions);
-    await this._transport.start();
-  }
-  _onclose() {
-    let responseHandlers = this._responseHandlers;
-    this._responseHandlers = new Map();
-    this._progressHandlers.clear();
-    this._pendingDebouncedNotifications.clear();
-    for (let info of this._timeoutInfo.values()) clearTimeout(info.timeoutId);
-    this._timeoutInfo.clear();
-    let requestHandlerAbortControllers = this._requestHandlerAbortControllers;
-    this._requestHandlerAbortControllers = new Map();
-    let error = new SdkError(SdkErrorCode.ConnectionClosed, "Connection closed");
-    this._transport = undefined;
-    try {
-      this.onclose?.();
-    } finally {
-      for (let handler of responseHandlers.values()) handler(error);
-      for (let controller of requestHandlerAbortControllers.values()) controller.abort(error);
-    }
-  }
-  _onerror(error) {
-    this.onerror?.(error);
-  }
-  _onnotification(rawNotification, extra) {
-    let { message: notification } = liftWireOnlyMaterial(rawNotification, "notification");
-    let codec = this._negotiatedWireCodec();
-    if (extra?.classification === undefined && this._shouldDropInbound(rawNotification) === "drop") return;
-    if (extra?.classification !== undefined) {
-      let classified = classifiedWireEra(extra.classification);
-      if (classified !== codec.era) {
-        this._onerror(
-          Error(
-            `Era mismatch on inbound notification '${notification.method}': classified as ${classified} but this instance serves ${codec.era}`,
-          ),
-        );
-        return;
-      }
-    }
-    if (isSpecNotificationMethod(notification.method) && !codec.hasNotificationMethod(notification.method))
-      return;
-    let handler = this._notificationHandlers.get(notification.method);
-    let fallback = this.fallbackNotificationHandler;
-    if (handler === undefined && fallback === undefined) return;
-    Promise.resolve()
-      .then(() => (handler === undefined ? fallback(notification) : handler(notification, codec)))
-      .catch((error) => this._onerror(Error(`Uncaught error in notification handler: ${error}`)));
-  }
-  _onrequest(rawRequest, extra) {
-    let { message: request, lifted } = liftWireOnlyMaterial(rawRequest, "request");
-    let codec = this._negotiatedWireCodec();
-    if (extra?.classification === undefined && this._shouldDropInbound(rawRequest) === "drop") {
-      this._onerror(
-        Error(
-          `Dropped inbound request '${rawRequest.method}': not servable on this connection's protocol era`,
+    _resolveNonCompleteResult(decoded, flow) {
+      return Promise.reject(
+        new SdkError(
+          SdkErrorCode.UnsupportedResultType,
+          `Unsupported result type '${decoded.kind}' for ${flow.request.method}`,
+          {
+            resultType: decoded.kind,
+            method: flow.request.method,
+          },
         ),
       );
-      return;
     }
-    let capturedTransport = this._transport;
-    let sendErrorResponse = (code, message, data) => {
-      let errorResponse = {
-        jsonrpc: "2.0",
-        id: request.id,
-        error: {
-          code,
-          message,
-          ...(data !== undefined && {
-            data,
-          }),
-        },
-      };
-      capturedTransport
-        ?.send(errorResponse)
-        .catch((error) => this._onerror(Error(`Failed to send an error response: ${error}`)));
-    };
-    if (extra?.classification !== undefined) {
-      let classified = classifiedWireEra(extra.classification);
-      if (classified !== codec.era) {
-        this._onerror(
-          Error(
-            `Era mismatch on inbound request '${request.method}': classified as ${classified} but this instance serves ${codec.era}`,
-          ),
-        );
-        let requested = extra.classification.revision ?? classified;
-        sendErrorResponse(
-          ProtocolErrorCode.UnsupportedProtocolVersion,
-          `Unsupported protocol version: ${requested}`,
-          {
-            supported: this._supportedProtocolVersions,
-            requested,
-          },
-        );
-        return;
+    _getRequestHandler(method) {
+      return this._requestHandlers.get(method);
+    }
+    async _oncancel(notification) {
+      if (!notification.params.requestId) return;
+      this._requestHandlerAbortControllers
+        .get(notification.params.requestId)
+        ?.abort(notification.params.reason);
+    }
+    _setupTimeout(messageId, timeout, maxTotalTimeout, onTimeout, resetTimeoutOnProgress = false) {
+      this._timeoutInfo.set(messageId, {
+        timeoutId: setTimeout(onTimeout, timeout),
+        startTime: Date.now(),
+        timeout,
+        maxTotalTimeout,
+        resetTimeoutOnProgress,
+        onTimeout,
+      });
+    }
+    _resetTimeout(messageId) {
+      let info = this._timeoutInfo.get(messageId);
+      if (!info) return false;
+      let totalElapsed = Date.now() - info.startTime;
+      if (info.maxTotalTimeout && totalElapsed >= info.maxTotalTimeout) {
+        this._timeoutInfo.delete(messageId);
+        throw new SdkError(SdkErrorCode.RequestTimeout, "Maximum total timeout exceeded", {
+          maxTotalTimeout: info.maxTotalTimeout,
+          totalElapsed,
+        });
+      }
+      clearTimeout(info.timeoutId);
+      info.timeoutId = setTimeout(info.onTimeout, info.timeout);
+      return true;
+    }
+    _cleanupTimeout(messageId) {
+      let info = this._timeoutInfo.get(messageId);
+      if (info) {
+        clearTimeout(info.timeoutId);
+        this._timeoutInfo.delete(messageId);
       }
     }
-    if (isSpecRequestMethod(request.method) && !codec.hasRequestMethod(request.method)) {
-      sendErrorResponse(ProtocolErrorCode.MethodNotFound, "Method not found");
-      return;
+    async connect(transport) {
+      this._transport = transport;
+      let _onclose = this.transport?.onclose;
+      this._transport.onclose = () => {
+        try {
+          _onclose?.();
+        } finally {
+          this._onclose();
+        }
+      };
+      let _onerror = this.transport?.onerror;
+      this._transport.onerror = (error) => {
+        _onerror?.(error);
+        this._onerror(error);
+      };
+      let _onmessage = this._transport?.onmessage;
+      this._transport.onmessage = (message, extra) => {
+        _onmessage?.(message, extra);
+        if (isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message)) this._onresponse(message);
+        else if (isJSONRPCRequest(message)) this._onrequest(message, extra);
+        else if (isJSONRPCNotification(message)) this._onnotification(message, extra);
+        else this._onerror(Error(`Unknown message type: ${JSON.stringify(message)}`));
+      };
+      transport.setSupportedProtocolVersions?.(this._supportedProtocolVersions);
+      await this._transport.start();
     }
-    let handler = this._requestHandlers.get(request.method) ?? this.fallbackRequestHandler;
-    if (handler === undefined) {
-      sendErrorResponse(ProtocolErrorCode.MethodNotFound, "Method not found");
-      return;
-    }
-    let envelopeError = codec.checkInboundEnvelope(lifted);
-    if (envelopeError !== undefined) {
-      sendErrorResponse(ProtocolErrorCode.InvalidParams, envelopeError);
-      return;
-    }
-    let sendNotification = (notification, options) =>
-      this._notificationViaCodec(this._resolveOutboundCodec(notification.method), notification, {
-        ...options,
-        relatedRequestId: request.id,
-      });
-    let sendRequest = (r, resultSchema, options) =>
-      this._requestWithSchemaViaCodec(this._resolveOutboundCodec(r.method), r, resultSchema, {
-        ...options,
-        relatedRequestId: request.id,
-      });
-    let abortController = new AbortController();
-    this._requestHandlerAbortControllers.set(request.id, abortController);
-    let partitionedInputResponses =
-      lifted.inputResponses === undefined ? undefined : partitionInputResponses(lifted.inputResponses);
-    let baseCtx = {
-      sessionId: capturedTransport?.sessionId,
-      mcpReq: {
-        id: request.id,
-        method: request.method,
-        _meta: request.params?._meta,
-        ...(lifted.envelope !== undefined && {
-          envelope: lifted.envelope,
-        }),
-        ...(partitionedInputResponses !== undefined && {
-          inputResponses: partitionedInputResponses.accepted,
-        }),
-        ...(partitionedInputResponses !== undefined &&
-          partitionedInputResponses.droppedKeys.length > 0 && {
-            droppedInputResponseKeys: partitionedInputResponses.droppedKeys,
-          }),
-        requestState:
-          lifted.requestState === undefined ? NO_REQUEST_STATE : requestStateAccessor(lifted.requestState),
-        signal: abortController.signal,
-        send: (r, schemaOrOptions, maybeOptions) => {
-          let sendCodec = this._resolveOutboundCodec(r.method);
-          this._assertOutboundRequestInEra(sendCodec, r.method);
-          if (isStandardSchema(schemaOrOptions)) return sendRequest(r, schemaOrOptions, maybeOptions);
-          let validate = codecResultValidator(sendCodec, r.method);
-          if (validate === undefined)
-            throw TypeError(
-              `'${r.method}' is not a spec method; pass a result schema as the second argument to ctx.mcpReq.send().`,
-            );
-          return sendRequest(r, validate, schemaOrOptions);
-        },
-        notify: sendNotification,
-      },
-      http: extra?.authInfo
-        ? {
-            authInfo: extra.authInfo,
-          }
-        : undefined,
-    };
-    let ctx = this.buildContext(baseCtx, extra);
-    Promise.resolve()
-      .then(() => handler(request, ctx))
-      .then(
-        async (result) => {
-          if (abortController.signal.aborted) return;
-          let encoded;
-          try {
-            encoded = codec.encodeResult(request.method, result, this._outboundServerInfo());
-          } catch (error) {
-            this._onerror(Error(`Failed to encode result for ${request.method}: ${error}`));
-            sendErrorResponse(ProtocolErrorCode.InternalError, "Internal error");
-            return;
-          }
-          let response = {
-            result: encoded,
-            jsonrpc: "2.0",
-            id: request.id,
-          };
-          await capturedTransport?.send(response);
-        },
-        async (error) => {
-          if (abortController.signal.aborted) return;
-          let thrownCode = Number.isSafeInteger(error.code) ? error.code : ProtocolErrorCode.InternalError;
-          let errorResponse = {
-            jsonrpc: "2.0",
-            id: request.id,
-            error: {
-              code: codec.encodeErrorCode(thrownCode),
-              message: error.message ?? "Internal error",
-              ...(error.data !== undefined && {
-                data: error.data,
-              }),
-            },
-          };
-          await capturedTransport?.send(errorResponse);
-        },
-      )
-      .catch((error) => this._onerror(Error(`Failed to send response: ${error}`)))
-      .finally(() => {
-        if (this._requestHandlerAbortControllers.get(request.id) === abortController)
-          this._requestHandlerAbortControllers.delete(request.id);
-      });
-  }
-  _onprogress(notification) {
-    let { progressToken, ...params } = notification.params;
-    let messageId = Number(progressToken);
-    let handler = this._progressHandlers.get(messageId);
-    if (!handler) {
-      this._onerror(
-        Error(`Received a progress notification for an unknown token: ${JSON.stringify(notification)}`),
-      );
-      return;
-    }
-    let responseHandler = this._responseHandlers.get(messageId);
-    let timeoutInfo = this._timeoutInfo.get(messageId);
-    if (timeoutInfo && responseHandler && timeoutInfo.resetTimeoutOnProgress)
+    _onclose() {
+      let responseHandlers = this._responseHandlers;
+      this._responseHandlers = new Map();
+      this._progressHandlers.clear();
+      this._pendingDebouncedNotifications.clear();
+      for (let info of this._timeoutInfo.values()) clearTimeout(info.timeoutId);
+      this._timeoutInfo.clear();
+      let requestHandlerAbortControllers = this._requestHandlerAbortControllers;
+      this._requestHandlerAbortControllers = new Map();
+      let error = new SdkError(SdkErrorCode.ConnectionClosed, "Connection closed");
+      this._transport = undefined;
       try {
-        this._resetTimeout(messageId);
-      } catch (error) {
-        this._responseHandlers.delete(messageId);
-        this._progressHandlers.delete(messageId);
-        this._cleanupTimeout(messageId);
-        responseHandler(error);
-        return;
+        this.onclose?.();
+      } finally {
+        for (let handler of responseHandlers.values()) handler(error);
+        for (let controller of requestHandlerAbortControllers.values()) controller.abort(error);
       }
-    handler(params);
-  }
-  _onresponse(response) {
-    let messageId = Number(response.id);
-    let handler = this._responseHandlers.get(messageId);
-    if (handler === undefined) {
-      this._onerror(Error(`Received a response for an unknown message ID: ${JSON.stringify(response)}`));
-      return;
     }
-    this._responseHandlers.delete(messageId);
-    this._cleanupTimeout(messageId);
-    this._progressHandlers.delete(messageId);
-    if (isJSONRPCResultResponse(response)) handler(response);
-    else handler(ProtocolError.fromError(response.error.code, response.error.message, response.error.data));
-  }
-  get transport() {
-    return this._transport;
-  }
-  async close() {
-    await this._transport?.close();
-  }
-  request(request, schemaOrOptions, maybeOptions) {
-    let codec = this._resolveOutboundCodec(request.method);
-    this._assertOutboundRequestInEra(codec, request.method);
-    if (isStandardSchema(schemaOrOptions))
-      return this._requestWithSchemaViaCodec(codec, request, schemaOrOptions, maybeOptions);
-    let validate = codecResultValidator(codec, request.method);
-    if (validate === undefined)
-      throw TypeError(
-        `'${request.method}' is not a spec method; pass a result schema as the second argument to request().`,
-      );
-    return this._requestWithSchemaViaCodec(codec, request, validate, schemaOrOptions);
-  }
-  _negotiatedWireCodec() {
-    return codecForVersion(this._negotiatedProtocolVersion);
-  }
-  _wireCodec() {
-    return this._negotiatedWireCodec();
-  }
-  _resolveOutboundCodec(method) {
-    if (this._negotiatedProtocolVersion === undefined) {
-      let pinned = bootstrapOutboundCodec(method);
-      if (pinned) return pinned;
+    _onerror(error) {
+      this.onerror?.(error);
     }
-    return this._negotiatedWireCodec();
-  }
-  _assertOutboundRequestInEra(codec, method) {
-    if (method.startsWith("tasks/")) return;
-    if (isSpecRequestMethod(method) && !codec.hasRequestMethod(method))
-      throw new SdkError(
-        SdkErrorCode.MethodNotSupportedByProtocolVersion,
-        `Method '${method}' is not supported by the negotiated protocol version (wire era ${codec.era})`,
-        {
-          method,
-          era: codec.era,
-        },
-      );
-  }
-  _requestWithSchema(request, resultSchema, options) {
-    let codec = this._resolveOutboundCodec(request.method);
-    this._assertOutboundRequestInEra(codec, request.method);
-    return this._requestWithSchemaViaCodec(codec, request, resultSchema, options);
-  }
-  _requestWithSchemaViaCodec(codec, request, resultSchema, options) {
-    let { relatedRequestId, resumptionToken, onresumptiontoken, headers } = options ?? {};
-    let flowStartedAt = Date.now();
-    let onAbort;
-    let cleanupMessageId;
-    return new Promise((resolve, reject) => {
-      let earlyReject = (error) => {
-        reject(error);
-      };
-      if (!this._transport) {
-        earlyReject(Error("Not connected"));
-        return;
-      }
-      if (this._options?.enforceStrictCapabilities === true)
-        try {
-          this.assertCapabilityForMethod(request.method);
-        } catch (error) {
-          earlyReject(error);
-          return;
-        }
-      if (options?.signal?.aborted) {
-        let reason = options.signal.reason;
-        throw reason instanceof SdkError ? reason : new SdkError(SdkErrorCode.RequestTimeout, String(reason));
-      }
-      let requestAbort =
-        codec.era === MODERN_WIRE_REVISION && this._transport.hasPerRequestStream === true
-          ? new AbortController()
-          : undefined;
-      let messageId = this._requestMessageId++;
-      cleanupMessageId = messageId;
-      let jsonrpcRequest = {
-        ...request,
-        jsonrpc: "2.0",
-        id: messageId,
-      };
-      if (options?.onprogress) {
-        this._progressHandlers.set(messageId, options.onprogress);
-        jsonrpcRequest.params = {
-          ...request.params,
-          _meta: {
-            ...request.params?._meta,
-            progressToken: messageId,
-          },
-        };
-      }
-      let outbound = this._envelopeOutbound(jsonrpcRequest);
-      let responseReceived = false;
-      let cancel = (reason) => {
-        if (responseReceived) return;
-        this._progressHandlers.delete(messageId);
-        if (requestAbort === undefined)
-          this._transport
-            ?.send(
-              this._envelopeOutbound({
-                jsonrpc: "2.0",
-                method: "notifications/cancelled",
-                params: {
-                  requestId: messageId,
-                  reason: String(reason),
-                },
-              }),
-              {
-                relatedRequestId,
-                resumptionToken,
-                onresumptiontoken,
-              },
-            )
-            .catch((error) => this._onerror(Error(`Failed to send cancellation: ${error}`)));
-        else requestAbort.abort();
-        reject(
-          reason instanceof SdkError ? reason : new SdkError(SdkErrorCode.RequestTimeout, String(reason)),
-        );
-      };
-      this._responseHandlers.set(messageId, (response) => {
-        if (options?.signal?.aborted) return;
-        responseReceived = true;
-        if (response instanceof Error) return reject(response);
-        let g = resultSchema?.["~standard"]?.vendor === "mcp-wire-codec";
-        let decoded;
-        try {
-          decoded = codec.decodeResult(request.method, response.result, g);
-        } catch (error) {
-          return reject(error instanceof Error ? error : Error(String(error)));
-        }
-        if (decoded.kind === "invalid") return reject(decoded.error);
-        if (decoded.kind === "task") {
-          if (
-            options?.allowTask === true &&
-            this._capabilities?.extensions?.[IO_MODELCONTEXTPROTOCOL_TASKS] !== undefined &&
-            vl(decoded.result)
-          )
-            return resolve(decoded.result);
-          return reject(
-            new SdkError(
-              SdkErrorCode.UnsupportedResultType,
-              `Unsupported result type 'task' for ${request.method}`,
-              {
-                method: request.method,
-              },
+    _onnotification(rawNotification, extra) {
+      let { message: notification } = liftWireOnlyMaterial(rawNotification, "notification");
+      let codec = this._negotiatedWireCodec();
+      if (extra?.classification === undefined && this._shouldDropInbound(rawNotification) === "drop") return;
+      if (extra?.classification !== undefined) {
+        let classified = classifiedWireEra(extra.classification);
+        if (classified !== codec.era) {
+          this._onerror(
+            Error(
+              `Era mismatch on inbound notification '${notification.method}': classified as ${classified} but this instance serves ${codec.era}`,
             ),
           );
+          return;
         }
-        if (decoded.kind === "input_required") {
-          if (options?.allowInputRequired === true) return resolve(manualInputRequiredValue(decoded));
-          let flow = {
-            codec,
-            request,
-            resultSchema,
-            options,
-            flowStartedAt,
-            retry: (params, legOptions) =>
-              this._requestWithSchemaViaCodec(
-                codec,
-                params === undefined
-                  ? {
-                      method: request.method,
-                    }
-                  : {
-                      method: request.method,
-                      params,
-                    },
-                resultSchema,
-                legOptions,
-              ),
-          };
-          return resolve(this._resolveNonCompleteResult(decoded, flow));
+      }
+      if (isSpecNotificationMethod(notification.method) && !codec.hasNotificationMethod(notification.method))
+        return;
+      let handler = this._notificationHandlers.get(notification.method);
+      let fallback = this.fallbackNotificationHandler;
+      if (handler === undefined && fallback === undefined) return;
+      Promise.resolve()
+        .then(() => (handler === undefined ? fallback(notification) : handler(notification, codec)))
+        .catch((error) => this._onerror(Error(`Uncaught error in notification handler: ${error}`)));
+    }
+    _onrequest(rawRequest, extra) {
+      let { message: request, lifted } = liftWireOnlyMaterial(rawRequest, "request");
+      let codec = this._negotiatedWireCodec();
+      if (extra?.classification === undefined && this._shouldDropInbound(rawRequest) === "drop") {
+        this._onerror(
+          Error(
+            `Dropped inbound request '${rawRequest.method}': not servable on this connection's protocol era`,
+          ),
+        );
+        return;
+      }
+      let capturedTransport = this._transport;
+      let sendErrorResponse = (code, message, data) => {
+        let errorResponse = {
+          jsonrpc: "2.0",
+          id: request.id,
+          error: {
+            code,
+            message,
+            ...(data !== undefined && {
+              data,
+            }),
+          },
+        };
+        capturedTransport
+          ?.send(errorResponse)
+          .catch((error) => this._onerror(Error(`Failed to send an error response: ${error}`)));
+      };
+      if (extra?.classification !== undefined) {
+        let classified = classifiedWireEra(extra.classification);
+        if (classified !== codec.era) {
+          this._onerror(
+            Error(
+              `Era mismatch on inbound request '${request.method}': classified as ${classified} but this instance serves ${codec.era}`,
+            ),
+          );
+          let requested = extra.classification.revision ?? classified;
+          sendErrorResponse(
+            ProtocolErrorCode.UnsupportedProtocolVersion,
+            `Unsupported protocol version: ${requested}`,
+            {
+              supported: this._supportedProtocolVersions,
+              requested,
+            },
+          );
+          return;
         }
-        let result = decoded.result;
-        validateStandardSchema(resultSchema, result).then((parseResult) => {
-          if (parseResult.success) return resolve(parseResult.data);
-          let N;
+      }
+      if (isSpecRequestMethod(request.method) && !codec.hasRequestMethod(request.method)) {
+        sendErrorResponse(ProtocolErrorCode.MethodNotFound, "Method not found");
+        return;
+      }
+      let handler = this._requestHandlers.get(request.method) ?? this.fallbackRequestHandler;
+      if (handler === undefined) {
+        sendErrorResponse(ProtocolErrorCode.MethodNotFound, "Method not found");
+        return;
+      }
+      let envelopeError = codec.checkInboundEnvelope(lifted);
+      if (envelopeError !== undefined) {
+        sendErrorResponse(ProtocolErrorCode.InvalidParams, envelopeError);
+        return;
+      }
+      let sendNotification = (notification, options) =>
+        this._notificationViaCodec(this._resolveOutboundCodec(notification.method), notification, {
+          ...options,
+          relatedRequestId: request.id,
+        });
+      let sendRequest = (r, resultSchema, options) =>
+        this._requestWithSchemaViaCodec(this._resolveOutboundCodec(r.method), r, resultSchema, {
+          ...options,
+          relatedRequestId: request.id,
+        });
+      let abortController = new AbortController();
+      this._requestHandlerAbortControllers.set(request.id, abortController);
+      let partitionedInputResponses =
+        lifted.inputResponses === undefined ? undefined : partitionInputResponses(lifted.inputResponses);
+      let baseCtx = {
+        sessionId: capturedTransport?.sessionId,
+        mcpReq: {
+          id: request.id,
+          method: request.method,
+          _meta: request.params?._meta,
+          ...(lifted.envelope !== undefined && {
+            envelope: lifted.envelope,
+          }),
+          ...(partitionedInputResponses !== undefined && {
+            inputResponses: partitionedInputResponses.accepted,
+          }),
+          ...(partitionedInputResponses !== undefined &&
+            partitionedInputResponses.droppedKeys.length > 0 && {
+              droppedInputResponseKeys: partitionedInputResponses.droppedKeys,
+            }),
+          requestState:
+            lifted.requestState === undefined ? NO_REQUEST_STATE : requestStateAccessor(lifted.requestState),
+          signal: abortController.signal,
+          send: (r, schemaOrOptions, maybeOptions) => {
+            let sendCodec = this._resolveOutboundCodec(r.method);
+            this._assertOutboundRequestInEra(sendCodec, r.method);
+            if (isStandardSchema(schemaOrOptions)) return sendRequest(r, schemaOrOptions, maybeOptions);
+            let validate = codecResultValidator(sendCodec, r.method);
+            if (validate === undefined)
+              throw TypeError(
+                `'${r.method}' is not a spec method; pass a result schema as the second argument to ctx.mcpReq.send().`,
+              );
+            return sendRequest(r, validate, schemaOrOptions);
+          },
+          notify: sendNotification,
+        },
+        http: extra?.authInfo
+          ? {
+              authInfo: extra.authInfo,
+            }
+          : undefined,
+      };
+      let ctx = this.buildContext(baseCtx, extra);
+      Promise.resolve()
+        .then(() => handler(request, ctx))
+        .then(
+          async (result) => {
+            if (abortController.signal.aborted) return;
+            let encoded;
+            try {
+              encoded = codec.encodeResult(request.method, result, this._outboundServerInfo());
+            } catch (error) {
+              this._onerror(Error(`Failed to encode result for ${request.method}: ${error}`));
+              sendErrorResponse(ProtocolErrorCode.InternalError, "Internal error");
+              return;
+            }
+            let response = {
+              result: encoded,
+              jsonrpc: "2.0",
+              id: request.id,
+            };
+            await capturedTransport?.send(response);
+          },
+          async (error) => {
+            if (abortController.signal.aborted) return;
+            let thrownCode = Number.isSafeInteger(error.code) ? error.code : ProtocolErrorCode.InternalError;
+            let errorResponse = {
+              jsonrpc: "2.0",
+              id: request.id,
+              error: {
+                code: codec.encodeErrorCode(thrownCode),
+                message: error.message ?? "Internal error",
+                ...(error.data !== undefined && {
+                  data: error.data,
+                }),
+              },
+            };
+            await capturedTransport?.send(errorResponse);
+          },
+        )
+        .catch((error) => this._onerror(Error(`Failed to send response: ${error}`)))
+        .finally(() => {
+          if (this._requestHandlerAbortControllers.get(request.id) === abortController)
+            this._requestHandlerAbortControllers.delete(request.id);
+        });
+    }
+    _onprogress(notification) {
+      let { progressToken, ...params } = notification.params;
+      let messageId = Number(progressToken);
+      let handler = this._progressHandlers.get(messageId);
+      if (!handler) {
+        this._onerror(
+          Error(`Received a progress notification for an unknown token: ${JSON.stringify(notification)}`),
+        );
+        return;
+      }
+      let responseHandler = this._responseHandlers.get(messageId);
+      let timeoutInfo = this._timeoutInfo.get(messageId);
+      if (timeoutInfo && responseHandler && timeoutInfo.resetTimeoutOnProgress)
+        try {
+          this._resetTimeout(messageId);
+        } catch (error) {
+          this._responseHandlers.delete(messageId);
+          this._progressHandlers.delete(messageId);
+          this._cleanupTimeout(messageId);
+          responseHandler(error);
+          return;
+        }
+      handler(params);
+    }
+    _onresponse(response) {
+      let messageId = Number(response.id);
+      let handler = this._responseHandlers.get(messageId);
+      if (handler === undefined) {
+        this._onerror(Error(`Received a response for an unknown message ID: ${JSON.stringify(response)}`));
+        return;
+      }
+      this._responseHandlers.delete(messageId);
+      this._cleanupTimeout(messageId);
+      this._progressHandlers.delete(messageId);
+      if (isJSONRPCResultResponse(response)) handler(response);
+      else handler(ProtocolError.fromError(response.error.code, response.error.message, response.error.data));
+    }
+    get transport() {
+      return this._transport;
+    }
+    async close() {
+      await this._transport?.close();
+    }
+    request(request, schemaOrOptions, maybeOptions) {
+      let codec = this._resolveOutboundCodec(request.method);
+      this._assertOutboundRequestInEra(codec, request.method);
+      if (isStandardSchema(schemaOrOptions))
+        return this._requestWithSchemaViaCodec(codec, request, schemaOrOptions, maybeOptions);
+      let validate = codecResultValidator(codec, request.method);
+      if (validate === undefined)
+        throw TypeError(
+          `'${request.method}' is not a spec method; pass a result schema as the second argument to request().`,
+        );
+      return this._requestWithSchemaViaCodec(codec, request, validate, schemaOrOptions);
+    }
+    _negotiatedWireCodec() {
+      return codecForVersion(this._negotiatedProtocolVersion);
+    }
+    _wireCodec() {
+      return this._negotiatedWireCodec();
+    }
+    _resolveOutboundCodec(method) {
+      if (this._negotiatedProtocolVersion === undefined) {
+        let pinned = bootstrapOutboundCodec(method);
+        if (pinned) return pinned;
+      }
+      return this._negotiatedWireCodec();
+    }
+    _assertOutboundRequestInEra(codec, method) {
+      if (method.startsWith("tasks/")) return;
+      if (isSpecRequestMethod(method) && !codec.hasRequestMethod(method))
+        throw new SdkError(
+          SdkErrorCode.MethodNotSupportedByProtocolVersion,
+          `Method '${method}' is not supported by the negotiated protocol version (wire era ${codec.era})`,
+          {
+            method,
+            era: codec.era,
+          },
+        );
+    }
+    _requestWithSchema(request, resultSchema, options) {
+      let codec = this._resolveOutboundCodec(request.method);
+      this._assertOutboundRequestInEra(codec, request.method);
+      return this._requestWithSchemaViaCodec(codec, request, resultSchema, options);
+    }
+    _requestWithSchemaViaCodec(codec, request, resultSchema, options) {
+      let { relatedRequestId, resumptionToken, onresumptiontoken, headers } = options ?? {};
+      let flowStartedAt = Date.now();
+      let onAbort;
+      let cleanupMessageId;
+      return new Promise((resolve, reject) => {
+        let earlyReject = (error) => {
+          reject(error);
+        };
+        if (!this._transport) {
+          earlyReject(Error("Not connected"));
+          return;
+        }
+        if (this._options?.enforceStrictCapabilities === true)
           try {
-            N = g ? codec.decodeResult(request.method, response.result) : undefined;
+            this.assertCapabilityForMethod(request.method);
+          } catch (error) {
+            earlyReject(error);
+            return;
+          }
+        if (options?.signal?.aborted) {
+          let reason = options.signal.reason;
+          throw reason instanceof SdkError
+            ? reason
+            : new SdkError(SdkErrorCode.RequestTimeout, String(reason));
+        }
+        let requestAbort =
+          codec.era === MODERN_WIRE_REVISION && this._transport.hasPerRequestStream === true
+            ? new AbortController()
+            : undefined;
+        let messageId = this._requestMessageId++;
+        cleanupMessageId = messageId;
+        let jsonrpcRequest = {
+          ...request,
+          jsonrpc: "2.0",
+          id: messageId,
+        };
+        if (options?.onprogress) {
+          this._progressHandlers.set(messageId, options.onprogress);
+          jsonrpcRequest.params = {
+            ...request.params,
+            _meta: {
+              ...request.params?._meta,
+              progressToken: messageId,
+            },
+          };
+        }
+        let outbound = this._envelopeOutbound(jsonrpcRequest);
+        let responseReceived = false;
+        let cancel = (reason) => {
+          if (responseReceived) return;
+          this._progressHandlers.delete(messageId);
+          if (requestAbort === undefined)
+            this._transport
+              ?.send(
+                this._envelopeOutbound({
+                  jsonrpc: "2.0",
+                  method: "notifications/cancelled",
+                  params: {
+                    requestId: messageId,
+                    reason: String(reason),
+                  },
+                }),
+                {
+                  relatedRequestId,
+                  resumptionToken,
+                  onresumptiontoken,
+                },
+              )
+              .catch((error) => this._onerror(Error(`Failed to send cancellation: ${error}`)));
+          else requestAbort.abort();
+          reject(
+            reason instanceof SdkError ? reason : new SdkError(SdkErrorCode.RequestTimeout, String(reason)),
+          );
+        };
+        this._responseHandlers.set(messageId, (response) => {
+          if (options?.signal?.aborted) return;
+          responseReceived = true;
+          if (response instanceof Error) return reject(response);
+          let usesWireCodec = resultSchema?.["~standard"]?.vendor === "mcp-wire-codec";
+          let decoded;
+          try {
+            decoded = codec.decodeResult(request.method, response.result, usesWireCodec);
           } catch (error) {
             return reject(error instanceof Error ? error : Error(String(error)));
           }
-          reject(
-            N?.kind === "invalid"
-              ? N.error
-              : new SdkError(
-                  SdkErrorCode.InvalidResult,
-                  `Invalid result for ${request.method}: ${parseResult.error}`,
-                ),
-          );
-        }, reject);
-      });
-      onAbort = () => cancel(options?.signal?.reason);
-      options?.signal?.addEventListener("abort", onAbort, {
-        once: true,
-      });
-      let timeout = options?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
-      let timeoutHandler = () =>
-        cancel(
-          new SdkError(SdkErrorCode.RequestTimeout, "Request timed out", {
-            timeout,
-          }),
-        );
-      this._setupTimeout(
-        messageId,
-        timeout,
-        options?.maxTotalTimeout,
-        timeoutHandler,
-        options?.resetTimeoutOnProgress ?? false,
-      );
-      this._transport
-        .send(outbound, {
-          relatedRequestId,
-          resumptionToken,
-          onresumptiontoken,
-          headers,
-          requestSignal: requestAbort?.signal,
-        })
-        .catch((error) => {
-          this._progressHandlers.delete(messageId);
-          reject(error);
-        });
-    }).finally(() => {
-      if (onAbort) options?.signal?.removeEventListener("abort", onAbort);
-      if (cleanupMessageId !== undefined) {
-        this._responseHandlers.delete(cleanupMessageId);
-        this._cleanupTimeout(cleanupMessageId);
-      }
-    });
-  }
-  async notification(notification, options) {
-    return this._notificationViaCodec(this._resolveOutboundCodec(notification.method), notification, options);
-  }
-  async _notificationViaCodec(codec, notification, options) {
-    if (!this._transport) throw new SdkError(SdkErrorCode.NotConnected, "Not connected");
-    if (isSpecNotificationMethod(notification.method) && !codec.hasNotificationMethod(notification.method))
-      throw new SdkError(
-        SdkErrorCode.MethodNotSupportedByProtocolVersion,
-        `Notification '${notification.method}' is not supported by the negotiated protocol version (wire era ${codec.era})`,
-        {
-          method: notification.method,
-          era: codec.era,
-        },
-      );
-    this.assertNotificationCapability(notification.method);
-    let jsonrpcNotification = this._envelopeOutbound({
-      jsonrpc: "2.0",
-      ...notification,
-    });
-    if (
-      (this._options?.debouncedNotificationMethods ?? []).includes(notification.method) &&
-      !notification.params &&
-      !options?.relatedRequestId
-    ) {
-      if (this._pendingDebouncedNotifications.has(notification.method)) return;
-      this._pendingDebouncedNotifications.add(notification.method);
-      Promise.resolve().then(() => {
-        this._pendingDebouncedNotifications.delete(notification.method);
-        if (!this._transport) return;
-        this._transport?.send(jsonrpcNotification, options).catch((error) => this._onerror(error));
-      });
-      return;
-    }
-    await this._transport.send(jsonrpcNotification, options);
-  }
-  setRequestHandler(method, schemasOrHandler, maybeHandler) {
-    this.assertRequestHandlerCapability(method);
-    let stored;
-    if (typeof schemasOrHandler === "function") {
-      if (!isSpecRequestMethod(method))
-        throw TypeError(
-          `'${method}' is not a spec request method; pass schemas as the second argument to setRequestHandler().`,
-        );
-      stored = (request, ctx) => {
-        let dispatchCodec = this._negotiatedWireCodec();
-        let outcome = dispatchCodec.validateRequest(method, request);
-        if (!outcome.ok && outcome.reason === "not-in-era")
-          outcome = dispatchCodec.validateInputRequest(method, request);
-        if (!outcome.ok) {
-          if (outcome.reason === "not-in-era")
-            throw new ProtocolError(
-              ProtocolErrorCode.InternalError,
-              `No wire schema for ${method} in the resolved era`,
+          if (decoded.kind === "invalid") return reject(decoded.error);
+          if (decoded.kind === "task") {
+            if (
+              options?.allowTask === true &&
+              this._capabilities?.extensions?.[IO_MODELCONTEXTPROTOCOL_TASKS] !== undefined &&
+              isTaskResult(decoded.result)
+            )
+              return resolve(decoded.result);
+            return reject(
+              new SdkError(
+                SdkErrorCode.UnsupportedResultType,
+                `Unsupported result type 'task' for ${request.method}`,
+                {
+                  method: request.method,
+                },
+              ),
             );
-          throw Error(outcome.message);
+          }
+          if (decoded.kind === "input_required") {
+            if (options?.allowInputRequired === true) return resolve(manualInputRequiredValue(decoded));
+            let flow = {
+              codec,
+              request,
+              resultSchema,
+              options,
+              flowStartedAt,
+              retry: (params, legOptions) =>
+                this._requestWithSchemaViaCodec(
+                  codec,
+                  params === undefined
+                    ? {
+                        method: request.method,
+                      }
+                    : {
+                        method: request.method,
+                        params,
+                      },
+                  resultSchema,
+                  legOptions,
+                ),
+            };
+            return resolve(this._resolveNonCompleteResult(decoded, flow));
+          }
+          let result = decoded.result;
+          validateStandardSchema(resultSchema, result).then((parseResult) => {
+            if (parseResult.success) return resolve(parseResult.data);
+            let strictDecoded;
+            try {
+              strictDecoded = usesWireCodec ? codec.decodeResult(request.method, response.result) : undefined;
+            } catch (error) {
+              return reject(error instanceof Error ? error : Error(String(error)));
+            }
+            reject(
+              strictDecoded?.kind === "invalid"
+                ? strictDecoded.error
+                : new SdkError(
+                    SdkErrorCode.InvalidResult,
+                    `Invalid result for ${request.method}: ${parseResult.error}`,
+                  ),
+            );
+          }, reject);
+        });
+        onAbort = () => cancel(options?.signal?.reason);
+        options?.signal?.addEventListener("abort", onAbort, {
+          once: true,
+        });
+        let timeout = options?.timeout ?? DEFAULT_REQUEST_TIMEOUT_MSEC;
+        let timeoutHandler = () =>
+          cancel(
+            new SdkError(SdkErrorCode.RequestTimeout, "Request timed out", {
+              timeout,
+            }),
+          );
+        this._setupTimeout(
+          messageId,
+          timeout,
+          options?.maxTotalTimeout,
+          timeoutHandler,
+          options?.resetTimeoutOnProgress ?? false,
+        );
+        this._transport
+          .send(outbound, {
+            relatedRequestId,
+            resumptionToken,
+            onresumptiontoken,
+            headers,
+            requestSignal: requestAbort?.signal,
+          })
+          .catch((error) => {
+            this._progressHandlers.delete(messageId);
+            reject(error);
+          });
+      }).finally(() => {
+        if (onAbort) options?.signal?.removeEventListener("abort", onAbort);
+        if (cleanupMessageId !== undefined) {
+          this._responseHandlers.delete(cleanupMessageId);
+          this._cleanupTimeout(cleanupMessageId);
         }
-        return Promise.resolve(schemasOrHandler(outcome.value, ctx));
-      };
-    } else if (maybeHandler)
-      stored = async (request, ctx) => {
+      });
+    }
+    async notification(notification, options) {
+      return this._notificationViaCodec(
+        this._resolveOutboundCodec(notification.method),
+        notification,
+        options,
+      );
+    }
+    async _notificationViaCodec(codec, notification, options) {
+      if (!this._transport) throw new SdkError(SdkErrorCode.NotConnected, "Not connected");
+      if (isSpecNotificationMethod(notification.method) && !codec.hasNotificationMethod(notification.method))
+        throw new SdkError(
+          SdkErrorCode.MethodNotSupportedByProtocolVersion,
+          `Notification '${notification.method}' is not supported by the negotiated protocol version (wire era ${codec.era})`,
+          {
+            method: notification.method,
+            era: codec.era,
+          },
+        );
+      this.assertNotificationCapability(notification.method);
+      let jsonrpcNotification = this._envelopeOutbound({
+        jsonrpc: "2.0",
+        ...notification,
+      });
+      if (
+        (this._options?.debouncedNotificationMethods ?? []).includes(notification.method) &&
+        !notification.params &&
+        !options?.relatedRequestId
+      ) {
+        if (this._pendingDebouncedNotifications.has(notification.method)) return;
+        this._pendingDebouncedNotifications.add(notification.method);
+        Promise.resolve().then(() => {
+          this._pendingDebouncedNotifications.delete(notification.method);
+          if (!this._transport) return;
+          this._transport?.send(jsonrpcNotification, options).catch((error) => this._onerror(error));
+        });
+        return;
+      }
+      await this._transport.send(jsonrpcNotification, options);
+    }
+    setRequestHandler(method, schemasOrHandler, maybeHandler) {
+      this.assertRequestHandlerCapability(method);
+      let stored;
+      if (typeof schemasOrHandler === "function") {
+        if (!isSpecRequestMethod(method))
+          throw TypeError(
+            `'${method}' is not a spec request method; pass schemas as the second argument to setRequestHandler().`,
+          );
+        stored = (request, ctx) => {
+          let dispatchCodec = this._negotiatedWireCodec();
+          let outcome = dispatchCodec.validateRequest(method, request);
+          if (!outcome.ok && outcome.reason === "not-in-era")
+            outcome = dispatchCodec.validateInputRequest(method, request);
+          if (!outcome.ok) {
+            if (outcome.reason === "not-in-era")
+              throw new ProtocolError(
+                ProtocolErrorCode.InternalError,
+                `No wire schema for ${method} in the resolved era`,
+              );
+            throw Error(outcome.message);
+          }
+          return Promise.resolve(schemasOrHandler(outcome.value, ctx));
+        };
+      } else if (maybeHandler)
+        stored = async (request, ctx) => {
+          let parsed = await validateStandardSchema(schemasOrHandler.params, {
+            ...request.params,
+          });
+          if (!parsed.success)
+            throw new ProtocolError(
+              ProtocolErrorCode.InvalidParams,
+              `Invalid params for ${method}: ${parsed.error}`,
+            );
+          return maybeHandler(parsed.data, ctx);
+        };
+      else throw TypeError("setRequestHandler: handler is required");
+      this._requestHandlers.set(method, this._wrapHandler(method, stored));
+    }
+    _wrapHandler(_method, handler) {
+      return handler;
+    }
+    _outboundServerInfo() {}
+    removeRequestHandler(method) {
+      this._requestHandlers.delete(method);
+    }
+    assertCanSetRequestHandler(method) {
+      if (this._requestHandlers.has(method))
+        throw Error(`A request handler for ${method} already exists, which would be overridden`);
+    }
+    setNotificationHandler(method, schemasOrHandler, maybeHandler) {
+      if (typeof schemasOrHandler === "function") {
+        if (!isSpecNotificationMethod(method))
+          throw TypeError(
+            `'${method}' is not a spec notification method; pass schemas as the second argument to setNotificationHandler().`,
+          );
+        this._notificationHandlers.set(method, (notification, codec) => {
+          let outcome = codec.validateNotification(method, notification);
+          if (!outcome.ok) {
+            if (outcome.reason === "not-in-era")
+              throw new ProtocolError(
+                ProtocolErrorCode.InternalError,
+                `No wire schema for ${method} in the resolved era`,
+              );
+            throw Error(outcome.message);
+          }
+          return Promise.resolve(schemasOrHandler(outcome.value));
+        });
+        return;
+      }
+      if (!maybeHandler) throw TypeError("setNotificationHandler: handler is required");
+      this._notificationHandlers.set(method, async (notification) => {
         let parsed = await validateStandardSchema(schemasOrHandler.params, {
-          ...request.params,
+          ...notification.params,
         });
         if (!parsed.success)
           throw new ProtocolError(
             ProtocolErrorCode.InvalidParams,
-            `Invalid params for ${method}: ${parsed.error}`,
+            `Invalid params for notification ${method}: ${parsed.error}`,
           );
-        return maybeHandler(parsed.data, ctx);
-      };
-    else throw TypeError("setRequestHandler: handler is required");
-    this._requestHandlers.set(method, this._wrapHandler(method, stored));
-  }
-  _wrapHandler(_method, handler) {
-    return handler;
-  }
-  _outboundServerInfo() {}
-  removeRequestHandler(method) {
-    this._requestHandlers.delete(method);
-  }
-  assertCanSetRequestHandler(method) {
-    if (this._requestHandlers.has(method))
-      throw Error(`A request handler for ${method} already exists, which would be overridden`);
-  }
-  setNotificationHandler(method, schemasOrHandler, maybeHandler) {
-    if (typeof schemasOrHandler === "function") {
-      if (!isSpecNotificationMethod(method))
-        throw TypeError(
-          `'${method}' is not a spec notification method; pass schemas as the second argument to setNotificationHandler().`,
-        );
-      this._notificationHandlers.set(method, (notification, codec) => {
-        let outcome = codec.validateNotification(method, notification);
-        if (!outcome.ok) {
-          if (outcome.reason === "not-in-era")
-            throw new ProtocolError(
-              ProtocolErrorCode.InternalError,
-              `No wire schema for ${method} in the resolved era`,
-            );
-          throw Error(outcome.message);
-        }
-        return Promise.resolve(schemasOrHandler(outcome.value));
+        await maybeHandler(parsed.data, notification);
       });
-      return;
     }
-    if (!maybeHandler) throw TypeError("setNotificationHandler: handler is required");
-    this._notificationHandlers.set(method, async (notification) => {
-      let parsed = await validateStandardSchema(schemasOrHandler.params, {
-        ...notification.params,
-      });
-      if (!parsed.success)
-        throw new ProtocolError(
-          ProtocolErrorCode.InvalidParams,
-          `Invalid params for notification ${method}: ${parsed.error}`,
-        );
-      await maybeHandler(parsed.data, notification);
-    });
-  }
-  removeNotificationHandler(method) {
-    this._notificationHandlers.delete(method);
-  }
-};
+    removeNotificationHandler(method) {
+      this._notificationHandlers.delete(method);
+    }
+  };
+});
 //@ chunk-r1g76qsy.js:112999-113070 esm-fingerprint
 function isPlainObject$1(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 //@ chunk-r1g76qsy.js:113070-113206 esm-layout
-function qi(base, additional) {
+function mergeCapabilities(base, additional) {
   let result = {
     ...base,
   };
@@ -5330,20 +5447,20 @@ function qi(base, additional) {
   return result;
 }
 //@ chunk-r1g76qsy.js:113206-113277 esm-fingerprint
-function isPlainObject(value) {
+function isPlainObject_2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-r1g76qsy.js:113277-113481 esm-fingerprint
 function partitionInputResponses(inputResponses) {
   let accepted = {};
   let droppedKeys = [];
-  if (!isPlainObject(inputResponses))
+  if (!isPlainObject_2(inputResponses))
     return {
       accepted,
       droppedKeys,
     };
   for (let [key, entry] of Object.entries(inputResponses)) {
-    if (!isPlainObject(entry) || "method" in entry || "result" in entry) {
+    if (!isPlainObject_2(entry) || "method" in entry || "result" in entry) {
       droppedKeys.push(key);
       continue;
     }
@@ -5378,7 +5495,7 @@ function synthesizeInputRequestContext(key, method, params, signal, sessionId) {
 }
 //@ chunk-r1g76qsy.js:113826-114738 esm-fingerprint
 async function dispatchInputRequest(host, codec, key, entry, signal) {
-  if (!isPlainObject(entry) || typeof entry.method !== "string")
+  if (!isPlainObject_2(entry) || typeof entry.method !== "string")
     throw new SdkError(
       SdkErrorCode.InvalidResult,
       `Invalid input request '${key}': each inputRequests entry must be an embedded request object with a method`,
@@ -5406,7 +5523,7 @@ async function dispatchInputRequest(host, codec, key, entry, signal) {
         method,
       },
     );
-  let params = isPlainObject(entry.params) ? entry.params : undefined;
+  let params = isPlainObject_2(entry.params) ? entry.params : undefined;
   return await handler(
     {
       jsonrpc: "2.0",
@@ -5491,7 +5608,7 @@ function manualInputRequiredValue(decoded) {
   };
 }
 //@ chunk-r1g76qsy.js:117199-117372 esm-fingerprint
-function Oi(contentType) {
+function parseContentType(contentType) {
   if (!contentType) return;
   try {
     return import_content_type.parse(contentType).type;
@@ -5538,7 +5655,7 @@ var ReadBuffer = class {
 };
 //@ chunk-r1g76qsy.js:117999-118040 esm-layout
 function deserializeMessage(line) {
-  return Rt(JSON.parse(line));
+  return parseJsonRpcMessage(JSON.parse(line));
 }
 //@ chunk-r1g76qsy.js:118040-118085 esm-layout
 function serializeMessage(message) {
@@ -5580,8 +5697,8 @@ export {
   ProtocolErrorCode,
   isJSONRPCRequest,
   isJSONRPCErrorResponse,
-  lYn,
-  qNr,
+  isInitializeMessage,
+  isInitializedNotification,
   createFetchWithInit,
   isJSONRPCResultResponse,
   OAuthError,
@@ -5595,22 +5712,22 @@ export {
   UnsupportedProtocolVersionError,
   modernProtocolVersions,
   isModernProtocolVersion,
-  cn,
+  defaultModernVersions,
   legacyProtocolVersions,
   isSpecType,
   Protocol,
   resolveInputRequiredDriverConfig,
   runInputRequiredFlow,
-  qi,
+  mergeCapabilities,
   DEFAULT_REQUEST_TIMEOUT_MSEC,
   scanXMcpHeaderDeclarations,
   buildMcpParamHeaders,
   HEADER_MISMATCH_ERROR_CODE,
   parseSchema,
   normalizeHeaders,
-  Rt,
+  parseJsonRpcMessage,
   encodeMcpParamValue,
-  Oi,
+  parseContentType,
   ReadBuffer,
   serializeMessage,
   deserializeMessage,

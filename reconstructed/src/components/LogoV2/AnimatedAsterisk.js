@@ -11,53 +11,60 @@
 import { isReducedMotion } from "../Spinner/spinnerFlags.js";
 import { getInitialSettings_2 } from "../../utils/settings/settings.js";
 import { toRGBColor, snapTo360, hueToRgb } from "../Spinner/utils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { TEARDROP_ASTERISK } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { TEARDROP_ASTERISK } from "../../constants/figures.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
-import { y } from "../../../vendor/react/cjs/react.production.js";
+import { useState } from "../../../vendor/react/cjs/react.production.js";
 import { useAnimationFrame } from "../../ink/components/Input.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { isXtermJs } from "../../ink/terminal.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:83769-83820 placement
 function prefersReducedMotion() {
   return isReducedMotion(getInitialSettings_2().prefersReducedMotion);
 }
 //@ chunk-ag5x7vhf.js:83820-83873 layout = SETTLED_GREY (1)
-var ASTERISK_SPIN_MS = 1500;
-var ASTERISK_TURN_COUNT = 2;
-var ASTERISK_SETTLE_MS = ASTERISK_SPIN_MS * ASTERISK_TURN_COUNT;
-var SETTLED_GREY_COLOR = toRGBColor({
-  r: 153,
-  g: 153,
-  b: 153,
+var ASTERISK_SPIN_MS; // deferred: uses toRGBColor (../Spinner/utils.js) of its import cycle while loading; runs once the cycle is complete
+var ASTERISK_TURN_COUNT;
+var ASTERISK_SETTLE_MS;
+var SETTLED_GREY_COLOR;
+deferInit("chunk-ag5x7vhf.js:83820", () => {
+  ASTERISK_SPIN_MS = 1500;
+  ASTERISK_TURN_COUNT = 2;
+  ASTERISK_SETTLE_MS = ASTERISK_SPIN_MS * ASTERISK_TURN_COUNT;
+  SETTLED_GREY_COLOR = toRGBColor({
+    r: 153,
+    g: 153,
+    b: 153,
+  });
 });
 //@ chunk-ag5x7vhf.js:83873-84754 fingerprint = AnimatedAsterisk (0.765)
 function AnimatedAsterisk(props) {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let { char } = props;
   let children = char === undefined ? TEARDROP_ASTERISK : char;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let [k] = y(prefersReducedMotion);
-  let [_, I] = y(k || isScreenReaderEnabled);
-  let [D, A] = y(null);
-  let [L, V] = useAnimationFrame(_ ? null : 50);
-  let z;
+  let [reducedMotion] = useState(prefersReducedMotion);
+  let [settled, setSettled] = useState(reducedMotion || isScreenReaderEnabled);
+  let [startMs, setStartMs] = useState(null);
+  let [ref, frame] = useAnimationFrame(settled ? null : 50);
+  let settle;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    z = () => I(true);
-    $[0] = z;
-  } else z = $[0];
-  let K;
-  if ($[1] !== _) {
-    K = [_];
-    $[1] = _;
-    $[2] = K;
-  } else K = $[2];
-  useTimeout(z, _ ? null : ASTERISK_SETTLE_MS, K);
-  if (_) {
+    settle = () => setSettled(true);
+    $[0] = settle;
+  } else settle = $[0];
+  let settleDeps;
+  if ($[1] !== settled) {
+    settleDeps = [settled];
+    $[1] = settled;
+    $[2] = settleDeps;
+  } else settleDeps = $[2];
+  useTimeout(settle, settled ? null : ASTERISK_SETTLE_MS, settleDeps);
+  if (settled) {
     let children_2;
     if ($[3] !== children) {
       children_2 = jsxProd_default(Text, {
@@ -67,65 +74,65 @@ function AnimatedAsterisk(props) {
       $[3] = children;
       $[4] = children_2;
     } else children_2 = $[4];
-    let Y;
-    if ($[5] !== L || $[6] !== children_2) {
-      Y = jsxProd_default(Box, {
-        ref: L,
+    let settledBox;
+    if ($[5] !== ref || $[6] !== children_2) {
+      settledBox = jsxProd_default(Box, {
+        ref,
         children: children_2,
       });
-      $[5] = L;
+      $[5] = ref;
       $[6] = children_2;
-      $[7] = Y;
-    } else Y = $[7];
-    return Y;
+      $[7] = settledBox;
+    } else settledBox = $[7];
+    return settledBox;
   }
-  if (D === null) A(V);
-  let xe = (((V - (D ?? V)) / ASTERISK_SPIN_MS) * 360) % 360;
-  let ge;
-  let Re;
+  if (startMs === null) setStartMs(frame);
+  let hue = (((frame - (startMs ?? frame)) / ASTERISK_SPIN_MS) * 360) % 360;
+  let TextComponent;
+  let BoxComponent;
   let color;
-  let ref;
-  if ($[8] !== xe || $[9] !== L) {
-    let We = isXtermJs() ? snapTo360(xe) : xe;
-    Re = Box;
-    ref = L;
-    ge = Text;
-    color = toRGBColor(hueToRgb(We));
-    $[8] = xe;
-    $[9] = L;
-    $[10] = ge;
-    $[11] = Re;
+  let ref_2;
+  if ($[8] !== hue || $[9] !== ref) {
+    let snappedHue = isXtermJs() ? snapTo360(hue) : hue;
+    BoxComponent = Box;
+    ref_2 = ref;
+    TextComponent = Text;
+    color = toRGBColor(hueToRgb(snappedHue));
+    $[8] = hue;
+    $[9] = ref;
+    $[10] = TextComponent;
+    $[11] = BoxComponent;
     $[12] = color;
-    $[13] = ref;
+    $[13] = ref_2;
   } else {
-    ge = $[10];
-    Re = $[11];
+    TextComponent = $[10];
+    BoxComponent = $[11];
     color = $[12];
-    ref = $[13];
+    ref_2 = $[13];
   }
   let children_2;
-  if ($[14] !== ge || $[15] !== children || $[16] !== color) {
-    children_2 = jsxProd_default(ge, {
+  if ($[14] !== TextComponent || $[15] !== children || $[16] !== color) {
+    children_2 = jsxProd_default(TextComponent, {
       color,
       children,
     });
-    $[14] = ge;
+    $[14] = TextComponent;
     $[15] = children;
     $[16] = color;
     $[17] = children_2;
   } else children_2 = $[17];
-  let Fe;
-  if ($[18] !== Re || $[19] !== ref || $[20] !== children_2) {
-    Fe = jsxProd_default(Re, {
-      ref,
+  let spinner;
+  if ($[18] !== BoxComponent || $[19] !== ref_2 || $[20] !== children_2) {
+    spinner = jsxProd_default(BoxComponent, {
+      ref: ref_2,
       children: children_2,
     });
-    $[18] = Re;
-    $[19] = ref;
+    $[18] = BoxComponent;
+    $[19] = ref_2;
     $[20] = children_2;
-    $[21] = Fe;
-  } else Fe = $[21];
-  return Fe;
+    $[21] = spinner;
+  } else spinner = $[21];
+  return spinner;
 }
 //@ chunk-18hwfzwa.js:785671-785728 fingerprint = SETTLED_GREY (1)
 var ASTERISK_RAY_COUNT = 20;

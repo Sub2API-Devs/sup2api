@@ -8,7 +8,7 @@
  * pieces: chunk-4v9zy7gn.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import {
@@ -21,7 +21,7 @@ import { GITHUB_ACTION_SETUP_DOCS_URL } from "../../constants/github-app.js";
 
 //@ chunk-4v9zy7gn.js:32810-34294 fingerprint = InstallAppStep (0.475)
 function InstallAppStep(props) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   let { repoUrl, onSubmit } = props;
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {

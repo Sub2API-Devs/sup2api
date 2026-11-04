@@ -15,3 +15,4 @@ import { designCommandCall } from "../design/design.js";
  * /design-consent 的 local call(args, context, invokedName) 实现入口（由命令对象 load() 返回）。
  */
 var designConsentCall = (args, context) => designCommandCall("consent", context);
+export { designConsentCall };

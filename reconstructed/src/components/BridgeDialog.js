@@ -9,12 +9,13 @@
  * attribution: fingerprint 7, layout 7, callgraph-fingerprint 1, file-local 1
  */
 import { basename } from "path";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { OutputLine } from "./shell/OutputLine.js";
 import { Text, Box } from "../ink/components/Text.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
 import { useRegisterOverlay } from "../context/overlayContext.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useAppState, useSetAppState } from "../state/AppState.js";
@@ -26,7 +27,7 @@ import {
   selectBridgeEnabled_2,
 } from "../commands/bridge/bridge.js";
 import { useNotifications } from "../context/notifications.js";
-import { y, P } from "../../vendor/react/cjs/react.production.js";
+import { useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { useProject } from "../context/session.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { getBranch } from "../utils/git.js";
@@ -48,8 +49,30 @@ import { ErrorText } from "./ErrorText.js";
 import { useLatchedBridgeNotice } from "./PromptInput/Notifications.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { Byline } from "./design-system/Byline.js";
-import { OutputLine } from "./shell/OutputLine.js";
 
+//@ chunk-hny2rpzz.js:2423-2645 fingerprint = _temp0 (0.616)
+/**
+ * MCP 工具结果中的文本条目，用 OutputLine 渲染。
+ */
+function McpTextOutputItem(s_8) {
+  let $ = useMemoCache(3);
+  let { item, verbose } = s_8;
+  let content =
+    item.type === "text" && "text" in item && item.text !== null && item.text !== undefined
+      ? String(item.text)
+      : "";
+  let props;
+  if ($[0] !== content || $[1] !== verbose) {
+    props = jsxProd_default(OutputLine, {
+      content,
+      verbose,
+    });
+    $[0] = content;
+    $[1] = verbose;
+    $[2] = props;
+  } else props = $[2];
+  return props;
+}
 //@ chunk-18hwfzwa.js:643839-643889 fingerprint = _temp3 (1)
 function selectReplBridgeReconnecting(s_1) {
   return s_1.replBridgeReconnecting;
@@ -59,8 +82,8 @@ function selectReplBridgeError(s_4) {
   return s_4.replBridgeError;
 }
 //@ chunk-18hwfzwa.js:644028-644075 layout
-function selectReplBridgeErrorKind(zr) {
-  return zr.replBridgeErrorKind;
+function selectReplBridgeErrorKind(state) {
+  return state.replBridgeErrorKind;
 }
 //@ chunk-18hwfzwa.js:644075-644121 fingerprint = _temp7 (1)
 function selectReplBridgeExplicit(s_5) {
@@ -79,14 +102,14 @@ function selectVerbose(s_8) {
   return s_8.verbose;
 }
 //@ chunk-18hwfzwa.js:644299-644338 layout
-function selectOriginalCwd(Vr) {
-  return Vr.originalCwd;
+function selectOriginalCwd(state) {
+  return state.originalCwd;
 }
 //@ chunk-18hwfzwa.js:644338-644354 layout
 function noop_2() {}
 //@ chunk-18hwfzwa.js:644354-644381 layout
-function negate(ms) {
-  return !ms;
+function negate(value) {
+  return !value;
 }
 //@ chunk-18hwfzwa.js:644381-644583 layout
 function disableReplBridgeState(prev) {
@@ -119,13 +142,13 @@ function isNonEmptyLine_2(l) {
   return l.length > 0;
 }
 //@ chunk-18hwfzwa.js:644807-644856 layout
-function renderTextLine_4(children, Ci) {
+function renderTextLine_4(children, key) {
   return jsxProd_default(
     Text,
     {
       children,
     },
-    Ci,
+    key,
   );
 }
 //@ chunk-18hwfzwa.js:644856-649982 fingerprint = BridgeDialog (0.557)
@@ -133,7 +156,7 @@ function renderTextLine_4(children, Ci) {
  * Remote Control 对话框：显示连接/会话状态与 URL（可切换二维码），d 键断开并关闭启动时自动连接，重试错误状态，显示 cwd 与分支。
  */
 function BridgeDialog(props) {
-  let $ = w(112);
+  let $ = useMemoCache(112);
   let { onDone } = props;
   useRegisterOverlay("bridge-dialog");
   let { storageV5 } = useTheme_2();
@@ -151,17 +174,17 @@ function BridgeDialog(props) {
   let verbose = useAppState(selectVerbose);
   let setAppState = useSetAppState();
   let { removeNotification } = useNotifications();
-  let [showQR, setShowQR] = y(false);
-  let [qrText, setQrText] = y("");
-  let [branchName, setBranchName] = y("");
+  let [showQR, setShowQR] = useState(false);
+  let [qrText, setQrText] = useState("");
+  let [branchName, setBranchName] = useState("");
   let originalCwd = useProject(selectOriginalCwd);
-  let ao;
+  let cwdBase;
   if ($[0] !== originalCwd) {
-    ao = basename(originalCwd);
+    cwdBase = basename(originalCwd);
     $[0] = originalCwd;
-    $[1] = ao;
-  } else ao = $[1];
-  let co = ao;
+    $[1] = cwdBase;
+  } else cwdBase = $[1];
+  let projectName = cwdBase;
   let t2;
   let t3;
   if ($[2] === MEMO_CACHE_SENTINEL) {
@@ -175,19 +198,19 @@ function BridgeDialog(props) {
     t2 = $[2];
     t3 = $[3];
   }
-  P(t2, t3);
+  useEffect(t2, t3);
   let displayUrl = sessionActive ? sessionUrl : connectUrl;
-  let Ro;
+  let qrEffect;
   let t5;
   if ($[4] !== displayUrl || $[5] !== showQR) {
-    Ro = () => {
+    qrEffect = () => {
       if (!showQR || !displayUrl) {
         setQrText("");
         return;
       }
-      import("./chunk-y21f2heg.js")
-        .then((Io) => {
-          let { toString } = Io;
+      import("../../vendor/qrcode/lib/server.js")
+        .then((qrModule) => {
+          let { toString } = qrModule;
           return toString(displayUrl, {
             type: "utf8",
             errorCorrectionLevel: "L",
@@ -200,13 +223,13 @@ function BridgeDialog(props) {
     t5 = [showQR, displayUrl];
     $[4] = displayUrl;
     $[5] = showQR;
-    $[6] = Ro;
+    $[6] = qrEffect;
     $[7] = t5;
   } else {
-    Ro = $[6];
+    qrEffect = $[6];
     t5 = $[7];
   }
-  P(Ro, t5);
+  useEffect(qrEffect, t5);
   let t6;
   if ($[8] === MEMO_CACHE_SENTINEL) {
     t6 = () => {
@@ -231,7 +254,7 @@ function BridgeDialog(props) {
     $[11] = t8;
   } else t8 = $[11];
   MessageActionsKeybindings(t7, t8);
-  let No;
+  let handleKeyDown;
   if (
     $[12] !== replBridgeEnabled ||
     $[13] !== error ||
@@ -242,7 +265,7 @@ function BridgeDialog(props) {
     $[18] !== setAppState ||
     $[19] !== storageV5
   ) {
-    No = function Yo(input) {
+    handleKeyDown = function event(input) {
       if (input.key === "d" && !input.ctrl && !input.meta) {
         input.preventDefault();
         if (replBridgeExplicit && replBridgeEnabled && error === undefined)
@@ -273,9 +296,9 @@ function BridgeDialog(props) {
     $[17] = removeNotification;
     $[18] = setAppState;
     $[19] = storageV5;
-    $[20] = No;
-  } else No = $[20];
-  let Yo = No;
+    $[20] = handleKeyDown;
+  } else handleKeyDown = $[20];
+  let handleKeyDown_ = handleKeyDown;
   let t10;
   if ($[21] !== connected || $[22] !== error || $[23] !== reconnecting || $[24] !== sessionActive) {
     t10 = getBridgeStatus({
@@ -291,14 +314,14 @@ function BridgeDialog(props) {
     $[25] = t10;
   } else t10 = $[25];
   let { label: statusLabel, color: statusColor } = t10;
-  let Go = error ? BRIDGE_FAILED_INDICATOR : BRIDGE_READY_INDICATOR;
-  let hn;
-  let Mn;
+  let statusIndicator = error ? BRIDGE_FAILED_INDICATOR : BRIDGE_READY_INDICATOR;
+  let qrLines;
+  let bodyTree;
   let footerText;
   let gap;
   let onKeyDown;
-  let on;
-  let _o;
+  let statusText;
+  let qrCodeElement;
   let title;
   let onCancel;
   let hideInputGuide;
@@ -308,11 +331,11 @@ function BridgeDialog(props) {
     $[28] !== replBridgeEnvironmentId ||
     $[29] !== error ||
     $[30] !== replBridgeErrorKind ||
-    $[31] !== Yo ||
-    $[32] !== Go ||
+    $[31] !== handleKeyDown_ ||
+    $[32] !== statusIndicator ||
     $[33] !== onDone ||
     $[34] !== qrText ||
-    $[35] !== co ||
+    $[35] !== projectName ||
     $[36] !== sessionActive ||
     $[37] !== replBridgeSessionId ||
     $[38] !== showQR ||
@@ -320,7 +343,7 @@ function BridgeDialog(props) {
     $[40] !== statusLabel ||
     $[41] !== verbose
   ) {
-    let qrLines = qrText
+    let qrLines_2 = qrText
       ? qrText
           .split(
             `
@@ -329,12 +352,12 @@ function BridgeDialog(props) {
           .filter(isNonEmptyLine_2)
       : [];
     let contextParts;
-    if ($[52] !== branchName || $[53] !== co) {
+    if ($[52] !== branchName || $[53] !== projectName) {
       contextParts = [];
-      if (co) contextParts.push(co);
+      if (projectName) contextParts.push(projectName);
       if (branchName) contextParts.push(branchName);
       $[52] = branchName;
-      $[53] = co;
+      $[53] = projectName;
       $[54] = contextParts;
     } else contextParts = $[54];
     let contextSuffix = contextParts.length > 0 ? " \xB7 " + contextParts.join(" \xB7 ") : "";
@@ -360,20 +383,20 @@ function BridgeDialog(props) {
       $[59] = t18;
     } else t18 = $[59];
     footerText = t18;
-    Mn = Dialog;
+    bodyTree = Dialog;
     title = "Remote Control";
     onCancel = onDone;
     hideInputGuide = true;
-    hn = FocusColumn;
+    qrLines = FocusColumn;
     gap = 1;
-    onKeyDown = Yo;
+    onKeyDown = handleKeyDown_;
     let t19;
-    if ($[60] !== Go || $[61] !== statusColor || $[62] !== statusLabel) {
+    if ($[60] !== statusIndicator || $[61] !== statusColor || $[62] !== statusLabel) {
       t19 = jsxProd_default_2(Text, {
         color: statusColor,
-        children: [Go, " ", statusLabel],
+        children: [statusIndicator, " ", statusLabel],
       });
-      $[60] = Go;
+      $[60] = statusIndicator;
       $[61] = statusColor;
       $[62] = statusLabel;
       $[63] = t19;
@@ -404,16 +427,16 @@ function BridgeDialog(props) {
       $[69] = error;
       $[70] = t22;
     } else t22 = $[70];
-    let pr;
+    let qrLineList;
     if ($[71] === MEMO_CACHE_SENTINEL) {
-      pr = jsxProd_default(useLatchedBridgeNotice, {
+      qrLineList = jsxProd_default(useLatchedBridgeNotice, {
         saysWhatToDo: true,
       });
-      $[71] = pr;
-    } else pr = $[71];
-    let Qn;
+      $[71] = qrLineList;
+    } else qrLineList = $[71];
+    let statusLine;
     if ($[72] !== replBridgeEnvironmentId || $[73] !== verbose) {
-      Qn =
+      statusLine =
         verbose &&
         replBridgeEnvironmentId &&
         jsxProd_default_2(Text, {
@@ -422,8 +445,8 @@ function BridgeDialog(props) {
         });
       $[72] = replBridgeEnvironmentId;
       $[73] = verbose;
-      $[74] = Qn;
-    } else Qn = $[74];
+      $[74] = statusLine;
+    } else statusLine = $[74];
     let t24;
     if ($[75] !== replBridgeSessionId || $[76] !== verbose) {
       t24 =
@@ -437,86 +460,86 @@ function BridgeDialog(props) {
       $[76] = verbose;
       $[77] = t24;
     } else t24 = $[77];
-    if ($[78] !== t21 || $[79] !== t22 || $[80] !== Qn || $[81] !== t24) {
-      on = jsxProd_default_2(Box, {
+    if ($[78] !== t21 || $[79] !== t22 || $[80] !== statusLine || $[81] !== t24) {
+      statusText = jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [t21, t22, pr, Qn, t24],
+        children: [t21, t22, qrLineList, statusLine, t24],
       });
       $[78] = t21;
       $[79] = t22;
-      $[80] = Qn;
+      $[80] = statusLine;
       $[81] = t24;
-      $[82] = on;
-    } else on = $[82];
-    _o =
+      $[82] = statusText;
+    } else statusText = $[82];
+    qrCodeElement =
       showQR &&
-      qrLines.length > 0 &&
+      qrLines_2.length > 0 &&
       jsxProd_default(Box, {
         flexDirection: "column",
-        children: qrLines.map(renderTextLine_4),
+        children: qrLines_2.map(renderTextLine_4),
       });
     $[26] = branchName;
     $[27] = displayUrl;
     $[28] = replBridgeEnvironmentId;
     $[29] = error;
     $[30] = replBridgeErrorKind;
-    $[31] = Yo;
-    $[32] = Go;
+    $[31] = handleKeyDown_;
+    $[32] = statusIndicator;
     $[33] = onDone;
     $[34] = qrText;
-    $[35] = co;
+    $[35] = projectName;
     $[36] = sessionActive;
     $[37] = replBridgeSessionId;
     $[38] = showQR;
     $[39] = statusColor;
     $[40] = statusLabel;
     $[41] = verbose;
-    $[42] = hn;
-    $[43] = Mn;
+    $[42] = qrLines;
+    $[43] = bodyTree;
     $[44] = footerText;
     $[45] = gap;
     $[46] = onKeyDown;
-    $[47] = on;
-    $[48] = _o;
+    $[47] = statusText;
+    $[48] = qrCodeElement;
     $[49] = title;
     $[50] = onCancel;
     $[51] = hideInputGuide;
   } else {
-    hn = $[42];
-    Mn = $[43];
+    qrLines = $[42];
+    bodyTree = $[43];
     footerText = $[44];
     gap = $[45];
     onKeyDown = $[46];
-    on = $[47];
-    _o = $[48];
+    statusText = $[47];
+    qrCodeElement = $[48];
     title = $[49];
     onCancel = $[50];
     hideInputGuide = $[51];
   }
-  let Fr;
+  let bodyChildren;
   if ($[83] !== footerText) {
-    Fr =
+    bodyChildren =
       footerText &&
       jsxProd_default(Text, {
         dimColor: true,
         children: footerText,
       });
     $[83] = footerText;
-    $[84] = Fr;
-  } else Fr = $[84];
+    $[84] = bodyChildren;
+  } else bodyChildren = $[84];
   const action = error !== undefined ? "dismiss" : "disconnect";
-  let Un;
+  let dialog;
   if ($[85] !== action) {
-    Un = jsxProd_default(KeyboardShortcutHint, {
+    dialog = jsxProd_default(KeyboardShortcutHint, {
       chord: "d",
       action,
     });
     $[85] = action;
-    $[86] = Un;
-  } else Un = $[86];
-  let dr;
+    $[86] = dialog;
+  } else dialog = $[86];
+  let errorActions;
   if ($[87] !== replBridgeEnabled || $[88] !== error || $[89] !== replBridgeErrorKind) {
-    dr =
+    errorActions =
       error !== undefined &&
       !replBridgeEnabled &&
       replBridgeErrorKind === "auth" &&
@@ -527,78 +550,78 @@ function BridgeDialog(props) {
     $[87] = replBridgeEnabled;
     $[88] = error;
     $[89] = replBridgeErrorKind;
-    $[90] = dr;
-  } else dr = $[90];
-  let or;
+    $[90] = errorActions;
+  } else errorActions = $[90];
+  let mainContent;
   if ($[91] !== displayUrl) {
-    or =
+    mainContent =
       Boolean(displayUrl) &&
       jsxProd_default(Text, {
         children: "space for QR code",
       });
     $[91] = displayUrl;
-    $[92] = or;
-  } else or = $[92];
-  let pr;
+    $[92] = mainContent;
+  } else mainContent = $[92];
+  let layout;
   if ($[93] === MEMO_CACHE_SENTINEL) {
-    pr = jsxProd_default(KeyboardShortcutHint, {
+    layout = jsxProd_default(KeyboardShortcutHint, {
       chord: ["enter", "escape"],
       action: "close",
     });
-    $[93] = pr;
-  } else pr = $[93];
-  let Qn;
-  if ($[94] !== Un || $[95] !== dr || $[96] !== or) {
-    Qn = jsxProd_default(Text, {
+    $[93] = layout;
+  } else layout = $[93];
+  let dialogElement;
+  if ($[94] !== dialog || $[95] !== errorActions || $[96] !== mainContent) {
+    dialogElement = jsxProd_default(Text, {
       dimColor: true,
       children: jsxProd_default_2(Byline, {
-        children: [Un, dr, or, pr],
+        children: [dialog, errorActions, mainContent, layout],
       }),
     });
-    $[94] = Un;
-    $[95] = dr;
-    $[96] = or;
-    $[97] = Qn;
-  } else Qn = $[97];
+    $[94] = dialog;
+    $[95] = errorActions;
+    $[96] = mainContent;
+    $[97] = dialogElement;
+  } else dialogElement = $[97];
   let children;
   if (
-    $[98] !== hn ||
+    $[98] !== qrLines ||
     $[99] !== gap ||
     $[100] !== onKeyDown ||
-    $[101] !== on ||
-    $[102] !== _o ||
-    $[103] !== Fr ||
-    $[104] !== Qn
+    $[101] !== statusText ||
+    $[102] !== qrCodeElement ||
+    $[103] !== bodyChildren ||
+    $[104] !== dialogElement
   ) {
-    children = jsxProd_default_2(hn, {
+    children = jsxProd_default_2(qrLines, {
       gap,
       onKeyDown,
-      children: [on, _o, Fr, Qn],
+      children: [statusText, qrCodeElement, bodyChildren, dialogElement],
     });
-    $[98] = hn;
+    $[98] = qrLines;
     $[99] = gap;
     $[100] = onKeyDown;
-    $[101] = on;
-    $[102] = _o;
-    $[103] = Fr;
-    $[104] = Qn;
+    $[101] = statusText;
+    $[102] = qrCodeElement;
+    $[103] = bodyChildren;
+    $[104] = dialogElement;
     $[105] = children;
   } else children = $[105];
   let t21;
   if (
-    $[106] !== Mn ||
+    $[106] !== bodyTree ||
     $[107] !== title ||
     $[108] !== onCancel ||
     $[109] !== hideInputGuide ||
     $[110] !== children
   ) {
-    t21 = jsxProd_default(Mn, {
+    t21 = jsxProd_default(bodyTree, {
       title,
       onCancel,
       hideInputGuide,
       children,
     });
-    $[106] = Mn;
+    $[106] = bodyTree;
     $[107] = title;
     $[108] = onCancel;
     $[109] = hideInputGuide;
@@ -606,28 +629,5 @@ function BridgeDialog(props) {
     $[111] = t21;
   } else t21 = $[111];
   return t21;
-}
-//@ chunk-hny2rpzz.js:2423-2645 fingerprint = _temp0 (0.616)
-/**
- * MCP 工具结果中的文本条目，用 OutputLine 渲染。
- */
-function McpTextOutputItem(s_8) {
-  let $ = w(3);
-  let { item, verbose } = s_8;
-  let content =
-    item.type === "text" && "text" in item && item.text !== null && item.text !== undefined
-      ? String(item.text)
-      : "";
-  let i;
-  if ($[0] !== content || $[1] !== verbose) {
-    i = jsxProd_default(OutputLine, {
-      content,
-      verbose,
-    });
-    $[0] = content;
-    $[1] = verbose;
-    $[2] = i;
-  } else i = $[2];
-  return i;
 }
 export { BridgeDialog, McpTextOutputItem };

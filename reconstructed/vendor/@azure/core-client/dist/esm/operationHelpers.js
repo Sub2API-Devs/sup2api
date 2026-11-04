@@ -8,8 +8,8 @@
 import { state_2 } from "../commonjs/state-cjs.js";
 
 //@ chunk-mrx6y2r5.js:68828-69300 esm-fingerprint
-function getOperationArgumentValueFromParameter(operationArguments, t, fallbackObject) {
-  let { parameterPath, mapper: parameterMapper } = t;
+function getOperationArgumentValueFromParameter(operationArguments, parameter, fallbackObject) {
+  let { parameterPath, mapper: parameterMapper } = parameter;
   let value;
   if (typeof parameterPath === "string") parameterPath = [parameterPath];
   if (Array.isArray(parameterPath)) {

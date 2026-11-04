@@ -28,7 +28,14 @@ import {
   psDefaultTimeoutMs,
 } from "./prompt.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, E, M, u, literal } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
+  objectSchema,
+  literal,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { isAllPrintable } from "../../utils/truncateGraphemes.js";
 import { coercedNumberSchema } from "../ArtifactTool/publishEdits.js";
 import { booleanishSchema } from "../../utils/spellcheck.js";
@@ -223,24 +230,24 @@ function isSearchOrReadPowerShellCommand(command) {
     };
   let isSearch = false;
   let isRead = false;
-  let g = false;
-  for (let y of filtered) {
-    let w = y.trim().split(/\s+/)[0];
-    if (!w) continue;
-    let normalized = resolveToCanonical(w);
+  let sawRealCommand = false;
+  for (let segment of filtered) {
+    let firstToken = segment.trim().split(/\s+/)[0];
+    if (!firstToken) continue;
+    let normalized = resolveToCanonical(firstToken);
     if (PS_SEMANTIC_NEUTRAL_COMMANDS.has(normalized)) continue;
-    g = true;
-    let O = PS_SEARCH_COMMANDS.has(normalized);
-    let S = PS_READ_COMMANDS.has(normalized);
-    if (!O && !S)
+    sawRealCommand = true;
+    let isSearchCmd = PS_SEARCH_COMMANDS.has(normalized);
+    let isReadCmd = PS_READ_COMMANDS.has(normalized);
+    if (!isSearchCmd && !isReadCmd)
       return {
         isSearch: false,
         isRead: false,
       };
-    if (O) isSearch = true;
-    if (S) isRead = true;
+    if (isSearchCmd) isSearch = true;
+    if (isReadCmd) isRead = true;
   }
-  if (!g)
+  if (!sawRealCommand)
     return {
       isSearch: false,
       isRead: false,
@@ -291,14 +298,14 @@ function detectBlockedSleepPattern(command) {
 /**
  * PowerShell 版 shouldUseSandbox（shellType=powershell）。
  */
-function shouldUsePowerShellSandbox(e, n) {
+function shouldUsePowerShellSandbox(input, sandboxContext) {
   return shouldUseSandbox(
     {
-      command: e.command,
-      dangerouslyDisableSandbox: e.dangerouslyDisableSandbox,
+      command: input.command,
+      dangerouslyDisableSandbox: input.dangerouslyDisableSandbox,
       shellType: "powershell",
     },
-    n,
+    sandboxContext,
   );
 }
 //@ chunk-v0yfsee9.js:90773-90810 layout
@@ -318,17 +325,17 @@ var HIDDEN_CONTROL_CHARS_MESSAGE =
   "command contains control characters that would be hidden in the approval dialog";
 var fullInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    command: string()
+    command: stringSchema()
       .refine(isAllPrintable, HIDDEN_CONTROL_CHARS_MESSAGE)
       .describe("The PowerShell command to execute"),
-    timeout: coercedNumberSchema(E().optional()).describe(
+    timeout: coercedNumberSchema(numberSchema().optional()).describe(
       `Optional timeout in milliseconds (max ${psMaxTimeoutMs()} for a foreground command)`,
     ),
-    description: string()
+    description: stringSchema()
       .optional()
       .describe("Clear, concise description of what this command does in active voice."),
-    run_in_background: booleanishSchema(M().optional()).describe(getRunInBackgroundDescription()),
-    dangerouslyDisableSandbox: booleanishSchema(M().optional()).describe(
+    run_in_background: booleanishSchema(booleanSchema().optional()).describe(getRunInBackgroundDescription()),
+    dangerouslyDisableSandbox: booleanishSchema(booleanSchema().optional()).describe(
       "Set this to true to dangerously override sandbox mode and run commands without sandboxing.",
     ),
     ...(areCommandNetworkListsOffered_2() && allowedDomainsInputSchema()),
@@ -344,33 +351,33 @@ var inputSchema = DoctorLazy(() =>
     : coercedInputSchema(),
 );
 var outputSchema = DoctorLazy(() =>
-  u({
-    stdout: string().describe("The standard output of the command"),
-    stderr: string().describe("The standard error output of the command"),
-    interrupted: M().describe("Whether the command was interrupted"),
-    returnCodeInterpretation: string()
+  objectSchema({
+    stdout: stringSchema().describe("The standard output of the command"),
+    stderr: stringSchema().describe("The standard error output of the command"),
+    interrupted: booleanSchema().describe("Whether the command was interrupted"),
+    returnCodeInterpretation: stringSchema()
       .optional()
       .describe("Semantic interpretation for non-error exit codes with special meaning"),
-    isImage: M().optional().describe("Flag to indicate if stdout contains image data"),
-    persistedOutputPath: string()
+    isImage: booleanSchema().optional().describe("Flag to indicate if stdout contains image data"),
+    persistedOutputPath: stringSchema()
       .optional()
       .describe("Path to persisted full output when too large for inline"),
-    persistedOutputSize: E().optional().describe("Total output size in bytes when persisted"),
-    backgroundTaskId: string()
+    persistedOutputSize: numberSchema().optional().describe("Total output size in bytes when persisted"),
+    backgroundTaskId: stringSchema()
       .optional()
       .describe("ID of the background task if command is running in background"),
-    backgroundedByUser: M()
+    backgroundedByUser: booleanSchema()
       .optional()
       .describe("True if the user manually backgrounded the command with Ctrl+B"),
-    backgroundedByTurnAbort: M()
+    backgroundedByTurnAbort: booleanSchema()
       .optional()
       .describe("@internal True if a plugin's turn abort moved the running command to the background"),
-    backgroundedToDeliverMessage: M()
+    backgroundedToDeliverMessage: booleanSchema()
       .optional()
       .describe(
         "@internal True if the command was moved to the background so a message queued for the model could reach it",
       ),
-    timedOutAfterMs: E()
+    timedOutAfterMs: numberSchema()
       .optional()
       .describe("Set when the command hit its timeout and was auto-backgrounded; the timeout value in ms"),
     subagentCapApplied: literal(true)
@@ -392,93 +399,93 @@ var outputSchema = DoctorLazy(() =>
 /**
  * PowerShell 只读判定：无同步安全隐患（hasSyncSecurityConcerns）且 isReadOnlyCommand。
  */
-function isReadOnlyPowerShellInput(e) {
-  if (hasSyncSecurityConcerns(e.command)) return false;
-  return isReadOnlyCommand(e.command);
+function isReadOnlyPowerShellInput(input) {
+  if (hasSyncSecurityConcerns(input.command)) return false;
+  return isReadOnlyCommand(input.command);
 }
 //@ chunk-v0yfsee9.js:93675-94856 layout
-function makeShellCallContext(e, n) {
+function makeShellCallContext(baseContext, callOptions) {
   return {
     get session() {
-      return e.session;
+      return baseContext.session;
     },
     get storageV5() {
-      return e.storageV5;
+      return baseContext.storageV5;
     },
     get agentId() {
-      return e.agentId;
+      return baseContext.agentId;
     },
     get agentContext() {
-      return e.agentContext;
+      return baseContext.agentContext;
     },
     get agentWorktree() {
-      return e.agentWorktree;
+      return baseContext.agentWorktree;
     },
     get hookCaller() {
-      return e.hookCaller;
+      return baseContext.hookCaller;
     },
     get hookServesModel() {
-      return e.hookServesModel;
+      return baseContext.hookServesModel;
     },
     get pluginUnnamed() {
-      return e.pluginUnnamed;
+      return baseContext.pluginUnnamed;
     },
     get taskRegistry() {
-      return e.taskRegistry;
+      return baseContext.taskRegistry;
     },
     get toolState() {
-      return e.toolState;
+      return baseContext.toolState;
     },
     get applyFileHistoryOp() {
-      return e.applyFileHistoryOp;
+      return baseContext.applyFileHistoryOp;
     },
     get sessionEnvVars() {
-      return e.sessionEnvVars;
+      return baseContext.sessionEnvVars;
     },
     get markPrResolvedThisSession() {
-      return e.markPrResolvedThisSession;
+      return baseContext.markPrResolvedThisSession;
     },
-    emitToolProgress: e.emitToolProgress,
+    emitToolProgress: baseContext.emitToolProgress,
     get shellPermission() {
       return {
-        ...e.shellPermission,
+        ...baseContext.shellPermission,
         abortController: {
-          signal: n.signal,
+          signal: callOptions.signal,
         },
-        toolUseId: n.toolUseId,
+        toolUseId: callOptions.toolUseId,
       };
     },
     get mainLoopModel() {
-      return e.mainLoopModel;
+      return baseContext.mainLoopModel;
     },
     get permissions() {
-      return e.permissions;
+      return baseContext.permissions;
     },
     get hasSpendCap() {
-      return e.hasSpendCap;
+      return baseContext.hasSpendCap;
     },
     get toolUseId() {
-      return n.toolUseId;
+      return callOptions.toolUseId;
     },
     get userTypedShellDispatch() {
-      return n.userTypedShellDispatch === true;
+      return callOptions.userTypedShellDispatch === true;
     },
     get abortController() {
       return {
-        signal: n.signal,
+        signal: callOptions.signal,
       };
     },
     get innerCall() {
-      return n.innerCall;
+      return callOptions.innerCall;
     },
     get shellWallCapMs() {
-      return n.shellWallCapMs;
+      return callOptions.shellWallCapMs;
     },
     get promptShellPluginId() {
-      return n.promptShellPluginId;
+      return callOptions.promptShellPluginId;
     },
     get remoteCall() {
-      return n.remoteCall;
+      return callOptions.remoteCall;
     },
   };
 }
@@ -509,8 +516,8 @@ var PowerShellTool = buildTool({
   isConcurrencySafe(input) {
     return this.isReadOnly?.(input) ?? false;
   },
-  suppressesAllPermissionUpdates(e) {
-    return hasHostField(e);
+  suppressesAllPermissionUpdates(input) {
+    return hasHostField(input);
   },
   isSearchOrReadCommand(input) {
     if (typeof input?.command !== "string")
@@ -520,45 +527,45 @@ var PowerShellTool = buildTool({
       };
     return isSearchOrReadPowerShellCommand(input.command);
   },
-  isReadOnly(e) {
-    return isReadOnlyPowerShellInput(e);
+  isReadOnly(input) {
+    return isReadOnlyPowerShellInput(input);
   },
-  sandboxNetworkLists(e) {
-    return getCommandNetworkLists(e);
+  sandboxNetworkLists(input) {
+    return getCommandNetworkLists(input);
   },
-  toAutoClassifierInput(e) {
-    let dangerouslyDisableSandbox = e.dangerouslyDisableSandbox;
-    let r = false;
-    let s = remoteRoutingCandidate(e);
-    let m = commandNetworkListsInput(e);
-    if (s !== undefined || m !== undefined)
+  toAutoClassifierInput(input) {
+    let dangerouslyDisableSandbox = input.dangerouslyDisableSandbox;
+    let unusedFlag = false;
+    let hostCandidate = remoteRoutingCandidate(input);
+    let networkLists = commandNetworkListsInput(input);
+    if (hostCandidate !== undefined || networkLists !== undefined)
       return {
-        command: e.command,
+        command: input.command,
         ...false,
-        ...(s !== undefined && {
-          [HOST_TOOL_INPUT_FIELD]: s,
+        ...(hostCandidate !== undefined && {
+          [HOST_TOOL_INPUT_FIELD]: hostCandidate,
         }),
-        ...m,
+        ...networkLists,
       };
-    return e.command;
+    return input.command;
   },
   async preparePermissionMatcher({ command }) {
     let powerShellCommand = await parsePowerShellCommand(command);
     if (!powerShellCommand.valid) return () => true;
-    let flattened = getAllCommands(powerShellCommand).flatMap((s) => {
-      let joined = [s.name, ...s.args].join(" ");
-      let joined_2 = [resolveToCanonical(s.name), ...s.args].join(" ");
+    let flattened = getAllCommands(powerShellCommand).flatMap((command) => {
+      let joined = [command.name, ...command.args].join(" ");
+      let joined_2 = [resolveToCanonical(command.name), ...command.args].join(" ");
       return joined.toLowerCase() === joined_2 ? [joined] : [joined, joined_2];
     });
-    return (s) => {
-      let m = permissionRuleExtractPrefix(s);
-      return flattened.some((g) => {
-        if (m !== null) {
-          let lower = m.toLowerCase();
-          let lower_2 = g.toLowerCase();
+    return (ruleContent) => {
+      let rulePrefix = permissionRuleExtractPrefix(ruleContent);
+      return flattened.some((candidate) => {
+        if (rulePrefix !== null) {
+          let lower = rulePrefix.toLowerCase();
+          let lower_2 = candidate.toLowerCase();
           return lower_2 === lower || lower_2.startsWith(`${lower} `);
         }
-        return matchWildcardPattern(s, g, true, true);
+        return matchWildcardPattern(ruleContent, candidate, true, true);
       });
     };
   },
@@ -628,7 +635,7 @@ var PowerShellTool = buildTool({
       if (stderr) errorMessage += NEWLINE;
       errorMessage += "<error>Command was aborted before completion</error>";
     }
-    let D = backgroundTaskId
+    let backgroundNotice = backgroundTaskId
       ? formatBackgroundTaskMessage({
           backgroundTaskId,
           outputPath: getTaskOutputPath(backgroundTaskId),
@@ -648,7 +655,7 @@ var PowerShellTool = buildTool({
         type: "tool_result",
         content: backgroundTaskNotice(
           backgroundTaskId,
-          [errorMessage, D].filter(Boolean).join(`
+          [errorMessage, backgroundNotice].filter(Boolean).join(`
 `),
           {
             backgroundedByUser,
@@ -659,48 +666,53 @@ var PowerShellTool = buildTool({
     return {
       tool_use_id: toolUseID,
       type: "tool_result",
-      content: [processedStdout, errorMessage, D].filter(Boolean).join(`
+      content: [processedStdout, errorMessage, backgroundNotice].filter(Boolean).join(`
 `),
       is_error: interrupted,
     };
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async validateInput(n, r) {
-        if (canRunToolsOnThisMachine() && hasHostField(n))
+      async validateInput(input, callOptions) {
+        if (canRunToolsOnThisMachine() && hasHostField(input))
           return {
             result: false,
             message: hostFieldNotForwardedMessage(),
             errorCode: 12,
           };
-        if (hasInvisibleCommandChars(n.command))
+        if (hasInvisibleCommandChars(input.command))
           return {
             result: false,
             message: INVISIBLE_CHAR_REFUSAL,
             errorCode: 13,
           };
-        let s = sandboxPolicyRefusal(shouldUsePowerShellSandbox(n), n.command, false, "powershell");
-        if (s !== null) {
+        let sandboxRefusal = sandboxPolicyRefusal(
+          shouldUsePowerShellSandbox(input),
+          input.command,
+          false,
+          "powershell",
+        );
+        if (sandboxRefusal !== null) {
           logFeatureSad("sandbox_exec", "sandbox_policy_refusal", {
             tool: lit("powershell"),
           });
           return {
             result: false,
-            message: s,
+            message: sandboxRefusal,
             errorCode: 11,
           };
         }
-        let m = checkAllowedDomainsInput(n, shouldUsePowerShellSandbox(n));
-        if (m !== undefined) return m;
+        let domainRefusal = checkAllowedDomainsInput(input, shouldUsePowerShellSandbox(input));
+        if (domainRefusal !== undefined) return domainRefusal;
         if (
           isBashAvailable() &&
           !isBackgroundTasksOff() &&
           backgroundCompletionNoticeEnabled() &&
-          r.remoteCall?.constraints.background !== "forbidden" &&
-          !n.run_in_background &&
-          r.shellWallCapMs === undefined
+          callOptions.remoteCall?.constraints.background !== "forbidden" &&
+          !input.run_in_background &&
+          callOptions.shellWallCapMs === undefined
         ) {
-          let blockedSleepPattern = detectBlockedSleepPattern(n.command);
+          let blockedSleepPattern = detectBlockedSleepPattern(input.command);
           if (blockedSleepPattern !== null)
             return {
               result: false,
@@ -712,31 +724,31 @@ var PowerShellTool = buildTool({
           result: true,
         };
       },
-      permissionCheckFailureDecision(n, r) {
-        let shellCallContext = makeShellCallContext(e, r);
+      permissionCheckFailureDecision(input, callOptions) {
+        let shellCallContext = makeShellCallContext(toolContext, callOptions);
         return denyCrashedCheckUnderCommandClamp(shellCallContext.shellPermission);
       },
-      async checkPermissions(n, r) {
-        let shellCallContext = makeShellCallContext(e, r);
-        let m = await checkPowerShellPermissions(n, shellCallContext.shellPermission);
+      async checkPermissions(input, callOptions) {
+        let shellCallContext = makeShellCallContext(toolContext, callOptions);
+        let decision = await checkPowerShellPermissions(input, shellCallContext.shellPermission);
         if (
-          n.dangerouslyDisableSandbox &&
-          m.behavior !== "deny" &&
-          !isAllRuleReason(m.decisionReason) &&
-          !shouldUsePowerShellSandbox(n) &&
+          input.dangerouslyDisableSandbox &&
+          decision.behavior !== "deny" &&
+          !isAllRuleReason(decision.decisionReason) &&
+          !shouldUsePowerShellSandbox(input) &&
           shouldUsePowerShellSandbox({
-            ...n,
+            ...input,
             dangerouslyDisableSandbox: false,
           }) &&
-          (m.behavior !== "ask" || shouldRetagAskAsSandboxOverride(m))
+          (decision.behavior !== "ask" || shouldRetagAskAsSandboxOverride(decision))
         ) {
-          let g = noopToolUseHook({
+          let hookResult = noopToolUseHook({
             toolName: POWERSHELL_TOOL_NAME,
-            input: n,
+            input,
             context: shellCallContext.shellPermission,
           });
-          if (g) return g;
-          if (m.behavior !== "ask")
+          if (hookResult) return hookResult;
+          if (decision.behavior !== "ask")
             return {
               behavior: "ask",
               decisionReason: {
@@ -751,80 +763,80 @@ var PowerShellTool = buildTool({
               type: "sandboxOverride",
               reason: "dangerouslyDisableSandbox",
               replaces: {
-                decisionReason: m.decisionReason,
-                message: m.message,
-                blockedPath: m.blockedPath,
+                decisionReason: decision.decisionReason,
+                message: decision.message,
+                blockedPath: decision.blockedPath,
               },
             },
             message: "Run outside of the sandbox",
           };
         }
-        return m;
+        return decision;
       },
-      async call(n, r) {
-        let shellCallContext = makeShellCallContext(e, r);
-        let { onProgress } = r;
-        let model = safeRequestedModelName(r.parentMessage, shellCallContext.mainLoopModel());
+      async call(input, callOptions) {
+        let shellCallContext = makeShellCallContext(toolContext, callOptions);
+        let { onProgress } = callOptions;
+        let model = safeRequestedModelName(callOptions.parentMessage, shellCallContext.mainLoopModel());
         let userTypedShellDispatch = shellCallContext.userTypedShellDispatch;
         let constraints = shellCallContext.remoteCall?.constraints;
-        let h = constraints?.sandbox === "required";
-        let O = shouldUsePowerShellSandbox(n, {
+        let sandboxRequired = constraints?.sandbox === "required";
+        let useSandbox = shouldUsePowerShellSandbox(input, {
           userTypedShellDispatch,
-          disableUnsandboxedCommands: h,
+          disableUnsandboxedCommands: sandboxRequired,
         });
-        if (!userTypedShellDispatch && hasInvisibleCommandChars(n.command))
+        if (!userTypedShellDispatch && hasInvisibleCommandChars(input.command))
           throw new MalformedCommandError(INVISIBLE_CHAR_REFUSAL);
-        let S = sandboxPolicyRefusal(
-          O,
-          n.command,
-          userTypedShellDispatch && n.dangerouslyDisableSandbox === true,
+        let sandboxRefusal = sandboxPolicyRefusal(
+          useSandbox,
+          input.command,
+          userTypedShellDispatch && input.dangerouslyDisableSandbox === true,
           "powershell",
         );
-        if (S !== null) {
+        if (sandboxRefusal !== null) {
           logFeatureSad("sandbox_exec", "sandbox_policy_refusal", {
             tool: lit("powershell"),
           });
-          throw new SandboxPolicyRefusalError(S);
+          throw new SandboxPolicyRefusalError(sandboxRefusal);
         }
-        if (h) {
-          let z =
-            !O || getEffectiveFilesystemPolicy() !== "strict" || isScrubEnabled()
+        if (sandboxRequired) {
+          let sandboxPosture =
+            !useSandbox || getEffectiveFilesystemPolicy() !== "strict" || isScrubEnabled()
               ? {
                   confined: false,
                   reason: "sandbox_unconfined",
                 }
               : await ensureDeviceSandboxPosture();
-          if (!z.confined) {
+          if (!sandboxPosture.confined) {
             logFeatureSad("sandbox_exec", "remote_floor_refusal");
             throw new SandboxPolicyRefusalError(
               "This call must run inside a fully confining sandbox and none is available here. The command was not run.",
-              z.reason,
+              sandboxPosture.reason,
             );
           }
         }
         let { abortController, emitToolProgress } = shellCallContext;
-        let _ = !shellCallContext.agentId;
-        let P = !_ || constraints?.pinCwd === true;
+        let isMainThread = !shellCallContext.agentId;
+        let preventCwdChanges = !isMainThread || constraints?.pinCwd === true;
         let progressCounter = 0;
-        await using D = copyShellOutputFile(shellCallContext.taskRegistry);
-        let V = false;
+        await using outputTracker = copyShellOutputFile(shellCallContext.taskRegistry);
+        let heldForPlugin = false;
         try {
           let commandGenerator = runPowerShellCommand({
-            input: n,
-            useSandbox: O,
-            networkLists: takeCommandNetworkLists(shellCallContext.toolUseId, n.command),
+            input,
+            useSandbox,
+            networkLists: takeCommandNetworkLists(shellCallContext.toolUseId, input.command),
             constraints,
             backgroundHeld: () => shouldHoldForPlugin(shellCallContext),
             onHeldEnd: () => {
-              V = true;
+              heldForPlugin = true;
             },
             onNote: shellCallContext.remoteCall?.onNote,
             abortController,
             taskRegistry: shellCallContext.taskRegistry,
             emitToolProgress,
             session: shellCallContext.session,
-            preventCwdChanges: P,
-            isMainThread: _,
+            preventCwdChanges,
+            isMainThread,
             subagentCapMs: getSubagentForegroundCapMs(shellCallContext),
             toolUseId: shellCallContext.toolUseId,
             toolState: shellCallContext.toolState,
@@ -836,15 +848,18 @@ var PowerShellTool = buildTool({
             isolationRoot: isolationWorktreeFor(shellCallContext),
             sessionEnvVars: shellCallContext.sessionEnvVars,
           });
-          let W = shouldUseShellTool(shellCallContext.remoteCall !== undefined, shellCallContext.hasSpendCap)
+          let reportProgress = shouldUseShellTool(
+            shellCallContext.remoteCall !== undefined,
+            shellCallContext.hasSpendCap,
+          )
             ? onProgress
             : undefined;
           let generatorResult;
           do {
             generatorResult = await commandGenerator.next();
-            if (!generatorResult.done && W) {
+            if (!generatorResult.done && reportProgress) {
               let progress = generatorResult.value;
-              W({
+              reportProgress({
                 type: "progress",
                 toolUseID: `ps-progress-${progressCounter++}`,
                 data: {
@@ -860,227 +875,241 @@ var PowerShellTool = buildTool({
               });
             }
           } while (!generatorResult.done);
-          let R = generatorResult.value;
-          D.track(R);
-          let G = R.code === 0 && !R.stdout && R.stderr && !R.backgroundTaskId;
-          let B =
-            O && !G && !R.backgroundTaskId && shellCallContext.toolUseId
+          let finalYield = generatorResult.value;
+          outputTracker.track(finalYield);
+          let stderrOnlySuccess =
+            finalYield.code === 0 && !finalYield.stdout && finalYield.stderr && !finalYield.backgroundTaskId;
+          let sandboxViolations =
+            useSandbox && !stderrOnlySuccess && !finalYield.backgroundTaskId && shellCallContext.toolUseId
               ? getParsedSandboxViolations(shellCallContext.toolUseId)
               : undefined;
-          let q = G ? undefined : O;
-          let output = await withSpilledOutputTail(R.stdout, R.outputFilePath);
+          let sandboxed = stderrOnlySuccess ? undefined : useSandbox;
+          let output = await withSpilledOutputTail(finalYield.stdout, finalYield.outputFilePath);
           if (
-            !G &&
-            !R.backgroundTaskId &&
-            trackGitOperations(shellCallContext.session.host, n.command, R.code, output).prResolved
+            !stderrOnlySuccess &&
+            !finalYield.backgroundTaskId &&
+            trackGitOperations(shellCallContext.session.host, input.command, finalYield.code, output)
+              .prResolved
           )
             shellCallContext.markPrResolvedThisSession();
-          let powerShellDestructiveCategory = getPowerShellDestructiveCategory(n.command);
-          let ne = unwrapAbortReason(abortController.signal.reason);
-          let de = R.interrupted && ne === "interrupt";
-          let interrupted = R.interrupted && isUserInitiatedAbortReason(ne);
-          if (R.interrupted && ne === "background") throw new AbortError();
-          let he = "";
+          let powerShellDestructiveCategory = getPowerShellDestructiveCategory(input.command);
+          let abortReason = unwrapAbortReason(abortController.signal.reason);
+          let interruptedByInterrupt = finalYield.interrupted && abortReason === "interrupt";
+          let interrupted = finalYield.interrupted && isUserInitiatedAbortReason(abortReason);
+          if (finalYield.interrupted && abortReason === "background") throw new AbortError();
+          let resetNotice = "";
           let cwd = getSessionProject(shellCallContext.session).cwd;
-          if (!P) {
+          if (!preventCwdChanges) {
             if (
               resetCwdIfOutsideProject(shellCallContext.session, shellCallContext.permissions()) ||
-              R.cwdChangeRefused
+              finalYield.cwdChangeRefused
             )
-              he = stdErrAppendShellResetMessage("");
+              resetNotice = stdErrAppendShellResetMessage("");
           }
-          let Ee =
-            R.backgroundTaskId !== undefined &&
+          let endsWithFinalResponse =
+            finalYield.backgroundTaskId !== undefined &&
             (reapsShellsOnExit(shellCallContext.agentContext) ||
               (shellCallContext.agentId === undefined && isPrintWithoutTidySloth()))
               ? true
               : undefined;
-          if (R.backgroundTaskId) {
+          if (finalYield.backgroundTaskId) {
             let stdout = consumeClaudeCodeHints(
-              R.timedOutAfterMs !== undefined && shellCallContext.innerCall !== true
-                ? await readShellOutputSoFar(R.backgroundTaskId, PREVIEW_SIZE_CHARS)
-                : R.stdout || "",
+              finalYield.timedOutAfterMs !== undefined && shellCallContext.innerCall !== true
+                ? await readShellOutputSoFar(finalYield.backgroundTaskId, PREVIEW_SIZE_CHARS)
+                : finalYield.stdout || "",
               {
-                command: n.command,
+                command: input.command,
                 pendingHint: shellCallContext.session.pendingHint,
-                isMainThread: _,
+                isMainThread,
                 surface: "shell",
               },
             );
             if (isInputHoldOn())
               logEvent("tengu_bash_task_ack", {
-                trigger: R.backgroundedByUser
+                trigger: finalYield.backgroundedByUser
                   ? lit("user")
-                  : R.backgroundedByTurnAbort
+                  : finalYield.backgroundedByTurnAbort
                     ? lit("turn_abort")
-                    : R.backgroundedToDeliverMessage
+                    : finalYield.backgroundedToDeliverMessage
                       ? lit("deliver_message")
-                      : R.timedOutAfterMs !== undefined
+                      : finalYield.timedOutAfterMs !== undefined
                         ? lit("timeout")
                         : lit("explicit"),
-                ends_with_final_response: Ee === true,
+                ends_with_final_response: endsWithFinalResponse === true,
                 shell: lit("powershell"),
               });
             return {
               data: {
                 stdout,
-                stderr: [R.stderr || "", he].filter(Boolean).join(`
+                stderr: [finalYield.stderr || "", resetNotice].filter(Boolean).join(`
 `),
                 interrupted: false,
-                backgroundTaskId: R.backgroundTaskId,
-                backgroundedByUser: R.backgroundedByUser,
-                backgroundedByTurnAbort: R.backgroundedByTurnAbort,
-                backgroundedToDeliverMessage: R.backgroundedToDeliverMessage,
-                timedOutAfterMs: R.timedOutAfterMs,
-                subagentCapApplied: R.subagentCapApplied,
-                backgroundEndsWithFinalResponse: Ee,
+                backgroundTaskId: finalYield.backgroundTaskId,
+                backgroundedByUser: finalYield.backgroundedByUser,
+                backgroundedByTurnAbort: finalYield.backgroundedByTurnAbort,
+                backgroundedToDeliverMessage: finalYield.backgroundedToDeliverMessage,
+                timedOutAfterMs: finalYield.timedOutAfterMs,
+                subagentCapApplied: finalYield.subagentCapApplied,
+                backgroundEndsWithFinalResponse: endsWithFinalResponse,
               },
-              ...(q !== undefined && {
-                sandboxed: q,
+              ...(sandboxed !== undefined && {
+                sandboxed,
               }),
             };
           }
           let stdoutAccumulator = new EndTruncatingAccumulator();
-          let ee = (R.stdout || "").trimEnd();
-          stdoutAccumulator.append(ee + NEWLINE);
-          let interpretation = interpretCommandResult(n.command, R.code, ee, R.stderr || "");
+          let trimmedStdout = (finalYield.stdout || "").trimEnd();
+          stdoutAccumulator.append(trimmedStdout + NEWLINE);
+          let interpretation = interpretCommandResult(
+            input.command,
+            finalYield.code,
+            trimmedStdout,
+            finalYield.stderr || "",
+          );
           let stdout = trimBlankEdgeLines(stdoutAccumulator.toString());
           stdout = consumeClaudeCodeHints(stdout, {
-            command: n.command,
+            command: input.command,
             pendingHint: shellCallContext.session.pendingHint,
-            isMainThread: _,
+            isMainThread,
             surface: "shell",
           });
-          if (R.preSpawnError) {
-            let F = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              R.preSpawnError,
+          if (finalYield.preSpawnError) {
+            let spawnError = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+              finalYield.preSpawnError,
               "PowerShell: pre-spawn error (cwd/argv redacted)",
             );
-            throw R.preSpawnErrorCode === "e2big"
-              ? tagObject(F, {
+            throw finalYield.preSpawnErrorCode === "e2big"
+              ? tagObject(spawnError, {
                   kind: "spawn_arg_limit",
                 })
-              : F;
+              : spawnError;
           }
-          if (interpretation.isError && !de) {
-            let F = ee.length <= 8192 ? ee : ee.slice(0, 4096) + ee.slice(-4096);
-            let K = classifyPowerShellError(F, R.code);
+          if (interpretation.isError && !interruptedByInterrupt) {
+            let stdoutExcerpt =
+              trimmedStdout.length <= 8192
+                ? trimmedStdout
+                : trimmedStdout.slice(0, 4096) + trimmedStdout.slice(-4096);
+            let errorClass = classifyPowerShellError(stdoutExcerpt, finalYield.code);
             logEvent("tengu_powershell_tool_command_failed", {
               model,
-              command_type: fromEnum(classifyPowerShellCommand(n.command)),
-              exit_code: R.code,
-              stdout_length: ee.length,
-              error_class: sanitizedMachineReasonForTelemetry(K),
+              command_type: fromEnum(classifyPowerShellCommand(input.command)),
+              exit_code: finalYield.code,
+              stdout_length: trimmedStdout.length,
+              error_class: sanitizedMachineReasonForTelemetry(errorClass),
               not_recognized_kind:
-                K === "not_recognized" || K === "command_not_found"
-                  ? fromEnum(classifyNotRecognizedCommand(F) ?? "unextracted")
+                errorClass === "not_recognized" || errorClass === "command_not_found"
+                  ? fromEnum(classifyNotRecognizedCommand(stdoutExcerpt) ?? "unextracted")
                   : undefined,
               parser_error_kind:
-                K === "parser_error" || K === "ps5_chain_op"
-                  ? fromEnum(classifyPowerShellParseErrorKind(F) ?? "unextracted")
+                errorClass === "parser_error" || errorClass === "ps5_chain_op"
+                  ? fromEnum(classifyPowerShellParseErrorKind(stdoutExcerpt) ?? "unextracted")
                   : undefined,
-              bash_syntax_shape: fromEnum(detectBashSyntax(n.command)),
+              bash_syntax_shape: fromEnum(detectBashSyntax(input.command)),
               powershell_edition: fromEnum((await getPowerShellEditionAsync()) ?? "unknown"),
               user_typed_shell_dispatch: userTypedShellDispatch,
               call_origin: fromEnum(constraints ? "remote" : "local"),
               destructive_category: fromEnum(powerShellDestructiveCategory ?? "none"),
               destructive_target_scope: fromEnum(
-                classifyDestructiveTargetScope(n.command, getCwd(), powerShellDestructiveCategory),
+                classifyDestructiveTargetScope(input.command, getCwd(), powerShellDestructiveCategory),
               ),
               permission_mode: fromEnum(shellCallContext.permissions().mode),
             });
             throw new ShellError({
               stdout,
-              stderr: V
-                ? `${(R.stderr || "").trimEnd()}
+              stderr: heldForPlugin
+                ? `${(finalYield.stderr || "").trimEnd()}
 
 ${ENDED_INSTEAD_OF_BACKGROUND_MESSAGE}`
-                : R.stderr || "",
-              code: R.code,
+                : finalYield.stderr || "",
+              code: finalYield.code,
               interrupted,
-              sandboxViolations: B,
-              sandboxed: q,
+              sandboxViolations,
+              sandboxed,
             });
           }
-          let me;
-          let ge;
-          if (R.outputFilePath && R.outputTaskId) {
-            let F;
-            let K;
+          let toolResultsDir;
+          let toolResultPath;
+          if (finalYield.outputFilePath && finalYield.outputTaskId) {
+            let resultsDir;
+            let outputPath;
             try {
               let originalCwd = getOriginalCwd_2(shellCallContext.session);
-              F = await ensureToolResultsDir(originalCwd, shellCallContext.storageV5);
-              let toolResultFilePath = getToolResultFilePath(originalCwd, R.outputTaskId, false);
-              let J =
+              resultsDir = await ensureToolResultsDir(originalCwd, shellCallContext.storageV5);
+              let toolResultFilePath = getToolResultFilePath(originalCwd, finalYield.outputTaskId, false);
+              let storageKey =
                 isStorageV5Enabled() && shellCallContext.storageV5 !== undefined
                   ? toolResultsKey(dirname(toolResultFilePath), basename(toolResultFilePath))
                   : undefined;
-              let we = true;
-              if (isStorageV5Enabled() && shellCallContext.storageV5 !== undefined && J !== undefined) {
-                let se = await persistShellOutput(
+              let storeOutput = true;
+              if (
+                isStorageV5Enabled() &&
+                shellCallContext.storageV5 !== undefined &&
+                storageKey !== undefined
+              ) {
+                let persistedPath = await persistShellOutput(
                   shellCallContext.storageV5,
-                  J,
-                  R.outputFilePath,
+                  storageKey,
+                  finalYield.outputFilePath,
                   MAX_PERSISTED_OUTPUT_BYTES,
                   getTaskOutputRootDir(),
                 );
-                we = se === "today";
-                if (typeof se === "number") {
-                  me = toolResultFilePath;
-                  ge = se;
+                storeOutput = persistedPath === "today";
+                if (typeof persistedPath === "number") {
+                  toolResultsDir = toolResultFilePath;
+                  toolResultPath = persistedPath;
                 }
               }
-              if (we) {
-                ge = await persistTaskOutputSnapshot(
-                  R.outputFilePath,
+              if (storeOutput) {
+                toolResultPath = await persistTaskOutputSnapshot(
+                  finalYield.outputFilePath,
                   toolResultFilePath,
                   MAX_PERSISTED_OUTPUT_BYTES,
                 );
-                me = toolResultFilePath;
+                toolResultsDir = toolResultFilePath;
               }
             } catch (error) {
-              K = error;
+              outputPath = error;
             }
-            if (me === undefined) D.copyFailed(K, F);
+            if (toolResultsDir === undefined) outputTracker.copyFailed(outputPath, resultsDir);
           }
           let isImage = isBase64DataUri(stdout);
           let compressedStdout = stdout;
           if (isImage) {
             let resized = await resizeShellImageOutput(
               stdout,
-              R.outputFilePath,
-              ge,
+              finalYield.outputFilePath,
+              toolResultPath,
               imageLimitsForModel(shellCallContext.mainLoopModel()),
             );
             if (resized) compressedStdout = resized;
             else isImage = false;
           }
-          let finalStderr = [R.stderr || "", he].filter(Boolean).join(`
+          let finalStderr = [finalYield.stderr || "", resetNotice].filter(Boolean).join(`
 `);
           let gitOperation;
-          if (!G) {
-            let gitOperation_2 = detectGitOperation(n.command, output);
+          if (!stderrOnlySuccess) {
+            let gitOperation_2 = detectGitOperation(input.command, output);
             if (Object.keys(gitOperation_2).length > 0) gitOperation = gitOperation_2;
             if (!shellCallContext.remoteCall)
               emitVcsStateChanges(gitOperation_2, output, {
-                command: n.command,
-                exitCode: R.code,
+                command: input.command,
+                exitCode: finalYield.code,
                 cwd,
               });
           }
           logEvent("tengu_powershell_tool_command_executed", {
             model,
-            command_type: fromEnum(classifyPowerShellCommand(n.command)),
+            command_type: fromEnum(classifyPowerShellCommand(input.command)),
             stdout_length: compressedStdout.length,
             stderr_length: finalStderr.length,
-            exit_code: R.code,
-            interrupted: R.interrupted,
+            exit_code: finalYield.code,
+            interrupted: finalYield.interrupted,
             powershell_edition: fromEnum((await getPowerShellEditionAsync()) ?? "unknown"),
             user_typed_shell_dispatch: userTypedShellDispatch,
             call_origin: fromEnum(constraints ? "remote" : "local"),
             destructive_category: fromEnum(powerShellDestructiveCategory ?? "none"),
             destructive_target_scope: fromEnum(
-              classifyDestructiveTargetScope(n.command, getCwd(), powerShellDestructiveCategory),
+              classifyDestructiveTargetScope(input.command, getCwd(), powerShellDestructiveCategory),
             ),
             permission_mode: fromEnum(shellCallContext.permissions().mode),
           });
@@ -1088,18 +1117,18 @@ ${ENDED_INSTEAD_OF_BACKGROUND_MESSAGE}`
             data: {
               stdout: compressedStdout,
               stderr: finalStderr,
-              interrupted: R.interrupted,
+              interrupted: finalYield.interrupted,
               returnCodeInterpretation: interpretation.message,
               isImage,
-              persistedOutputPath: me,
-              persistedOutputSize: ge,
+              persistedOutputPath: toolResultsDir,
+              persistedOutputSize: toolResultPath,
               gitOperation,
             },
-            ...(B !== undefined && {
-              sandboxViolations: B,
+            ...(sandboxViolations !== undefined && {
+              sandboxViolations,
             }),
-            ...(q !== undefined && {
-              sandboxed: q,
+            ...(sandboxed !== undefined && {
+              sandboxed,
             }),
           };
         } finally {
@@ -1108,7 +1137,7 @@ ${ENDED_INSTEAD_OF_BACKGROUND_MESSAGE}`
               kind: "clear",
               toolUseId: shellCallContext.toolUseId,
             });
-          if (!isReadOnlyPowerShellInput(n))
+          if (!isReadOnlyPowerShellInput(input))
             shellCallContext.applyFileHistoryOp({
               kind: "touch",
             });
@@ -1147,21 +1176,22 @@ async function* runPowerShellCommand({
   toolState,
 }) {
   let { command, description, timeout, run_in_background } = input;
-  let ne = isBackgroundTasksOff() || constraints?.background === "forbidden" || backgroundHeld?.() === true;
-  let de = run_in_background === true && !ne;
-  let oe =
+  let backgroundForbidden =
+    isBackgroundTasksOff() || constraints?.background === "forbidden" || backgroundHeld?.() === true;
+  let shouldRunInBackground = run_in_background === true && !backgroundForbidden;
+  let effectiveTimeoutMs =
     shellWallCapMs !== undefined
       ? Math.min(timeout || psMaxTimeoutMs(), shellWallCapMs, constraints?.maxTimeoutMs ?? 1 / 0)
       : Math.min(
           timeout || psDefaultTimeoutMs(),
-          de ? getBackgroundTimeoutCapMs() : psMaxTimeoutMs(),
+          shouldRunInBackground ? getBackgroundTimeoutCapMs() : psMaxTimeoutMs(),
           constraints?.maxTimeoutMs ?? 1 / 0,
         );
-  if (timeout && oe < timeout)
+  if (timeout && effectiveTimeoutMs < timeout)
     onNote?.({
       key: "timeout_clamped",
       requestedMs: timeout,
-      appliedMs: oe,
+      appliedMs: effectiveTimeoutMs,
     });
   let fullOutput = "";
   let lastProgressOutput = "";
@@ -1170,30 +1200,31 @@ async function* runPowerShellCommand({
   let backgroundShellId = undefined;
   let timedOutAfterMs = undefined;
   let interruptBackgroundingStarted = false;
-  let me = () => abortController.signal.aborted && isTurnLevelAbort(abortController.signal.reason, caller);
+  let isTurnAbort = () =>
+    abortController.signal.aborted && isTurnLevelAbort(abortController.signal.reason, caller);
   let resolveProgress = null;
   function createProgressSignal() {
     return new Promise((resolve) => {
       resolveProgress = () => resolve(null);
     });
   }
-  using A = onAbortDisposable(abortController.signal, () => {
-    if (!me()) return;
-    let Z = resolveProgress;
-    if (Z) {
+  using abortDisposable = onAbortDisposable(abortController.signal, () => {
+    if (!isTurnAbort()) return;
+    let abortResolve = resolveProgress;
+    if (abortResolve) {
       resolveProgress = null;
-      Z();
+      abortResolve();
     }
   });
-  let L = !ne && (await isAutobackgroundingAllowed(command));
-  let j = !ne;
-  let F = effectiveShellTimeoutMs({
-    requestedTimeoutMs: oe,
+  let canAutoBackground = !backgroundForbidden && (await isAutobackgroundingAllowed(command));
+  let turnAbortBackgrounds = !backgroundForbidden;
+  let shellTimeoutMs = effectiveShellTimeoutMs({
+    requestedTimeoutMs: effectiveTimeoutMs,
     isMainAgent: isMainThread === true,
-    canAutoBackground: L,
-    subagentCapMs: de ? 0 : subagentCapMs,
+    canAutoBackground,
+    subagentCapMs: shouldRunInBackground ? 0 : subagentCapMs,
   });
-  let K = isMainThread !== true && F < oe ? true : undefined;
+  let subagentCapApplied = isMainThread !== true && shellTimeoutMs < effectiveTimeoutMs ? true : undefined;
   if (!(await getCachedPowerShellPath()))
     return {
       stdout: "",
@@ -1204,10 +1235,10 @@ async function* runPowerShellCommand({
   let shellCommand;
   try {
     shellCommand = await exec(command, abortController.signal, "powershell", {
-      timeout: F,
+      timeout: shellTimeoutMs,
       owningAgentId: agentId,
       caller,
-      turnAbortBackgrounds: j,
+      turnAbortBackgrounds,
       sandboxAttributionId: toolUseId,
       sandboxNetworkLists: networkLists,
       onProgress(lastLines, allLines, totalLines, totalBytes, isIncomplete) {
@@ -1229,10 +1260,10 @@ async function* runPowerShellCommand({
       agentWorktree,
       isolationRoot,
       shouldUseSandbox: useSandbox,
-      shouldAutoBackground: L,
+      shouldAutoBackground: canAutoBackground,
       sessionEnvVars,
       ...(isNpmPluginSourcePath(promptShellPluginId) && {
-        bunOptionsFor: (Z) => bunOptionsGuard(promptShellPluginId, Z),
+        bunOptionsFor: (commandText) => bunOptionsGuard(promptShellPluginId, commandText),
       }),
     });
   } catch (error) {
@@ -1261,17 +1292,17 @@ async function* runPowerShellCommand({
       interrupted: false,
     };
   }
-  let J =
+  let releaseViolationReport =
     shellCommand.status !== "killed"
       ? claimViolationReport(POWERSHELL_TOOL_NAME, command, toolState, {
           useSandbox,
         })
       : null;
   let resultPromise = shellCommand.result;
-  if (J)
+  if (releaseViolationReport)
     resultPromise
-      .then((Z) => {
-        if (Z.preSpawnError) J();
+      .then((shellResult) => {
+        if (shellResult.preSpawnError) releaseViolationReport();
       })
       .catch(() => {});
   async function spawnBackgroundTask(timeout) {
@@ -1293,7 +1324,7 @@ async function* runPowerShellCommand({
       )
     ).taskId;
   }
-  function startBackgrounding(eventName, backgroundFn, ye) {
+  function startBackgrounding(eventName, backgroundFn, extraEventFields) {
     if (backgroundHeld?.() === true) {
       onHeldEnd?.();
       shellCommand.kill();
@@ -1313,7 +1344,7 @@ async function* runPowerShellCommand({
       backgroundShellId = foregroundTaskId;
       logEvent(eventName, {
         command_type: fromEnum(classifyPowerShellCommand(command)),
-        ...ye,
+        ...extraEventFields,
       });
       backgroundFn?.(foregroundTaskId);
       return;
@@ -1327,26 +1358,26 @@ async function* runPowerShellCommand({
       }
       logEvent(eventName, {
         command_type: fromEnum(classifyPowerShellCommand(command)),
-        ...ye,
+        ...extraEventFields,
       });
       if (backgroundFn) backgroundFn(shellId);
     });
   }
-  if (shellCommand.onTimeout && L)
+  if (shellCommand.onTimeout && canAutoBackground)
     shellCommand.onTimeout((backgroundFn) => {
-      timedOutAfterMs = F;
+      timedOutAfterMs = shellTimeoutMs;
       startBackgrounding("tengu_powershell_command_timeout_backgrounded", backgroundFn, {
-        timeout_ms: F,
-        requested_timeout_ms: timeoutWhenPositive(timeout, oe) ?? 0,
-        subagent_cap_applied: K === true,
+        timeout_ms: shellTimeoutMs,
+        requested_timeout_ms: timeoutWhenPositive(timeout, effectiveTimeoutMs) ?? 0,
+        subagent_cap_applied: subagentCapApplied === true,
       });
     });
-  if (de && shellCommand.status !== "killed") {
+  if (shouldRunInBackground && shellCommand.status !== "killed") {
     if (shellCommand.status === "completed") {
-      let ye = await resultPromise;
-      if (ye.preSpawnError) return ye;
+      let completedResult = await resultPromise;
+      if (completedResult.preSpawnError) return completedResult;
     }
-    let timeout_2 = timeoutWhenPositive(timeout, oe);
+    let timeout_2 = timeoutWhenPositive(timeout, effectiveTimeoutMs);
     let shellId = await spawnBackgroundTask(timeout_2);
     logEvent("tengu_powershell_command_explicitly_backgrounded", {
       command_type: fromEnum(classifyPowerShellCommand(command)),
@@ -1364,21 +1395,23 @@ async function* runPowerShellCommand({
   let startTime = Date.now();
   let nextProgressTime = startTime + PROGRESS_THRESHOLD_MS;
   let foregroundTaskId = undefined;
-  let ze = null;
+  let finalResult = null;
   try {
     while (true) {
       let now = Date.now();
       let timeUntilNextProgress = Math.max(0, nextProgressTime - now);
-      let ye;
-      if (!interruptBackgroundingStarted && me()) ye = Promise.resolve(null);
-      else ye = createProgressSignal();
+      let progressSignal;
+      if (!interruptBackgroundingStarted && isTurnAbort()) progressSignal = Promise.resolve(null);
+      else progressSignal = createProgressSignal();
       let result = await Promise.race([
         resultPromise,
-        new Promise((resolve) => setTimeout((Le) => Le(null), timeUntilNextProgress, resolve).unref()),
-        ye,
+        new Promise((resolve) =>
+          setTimeout((resolveTimer) => resolveTimer(null), timeUntilNextProgress, resolve).unref(),
+        ),
+        progressSignal,
       ]);
       if (result !== null) {
-        ze = result;
+        finalResult = result;
         if (result.backgroundTaskId !== undefined) {
           if (markTaskNotified(result.backgroundTaskId, result, taskRegistry))
             emitTaskNotification(
@@ -1413,21 +1446,21 @@ async function* runPowerShellCommand({
           code: 0,
           interrupted: false,
           backgroundTaskId: backgroundShellId,
-          ...(me() && {
+          ...(isTurnAbort() && {
             backgroundedByTurnAbort: true,
           }),
           timedOutAfterMs,
-          subagentCapApplied: K,
+          subagentCapApplied,
         };
       if (
         abortController.signal.aborted &&
-        (unwrapAbortReason(abortController.signal.reason) === "interrupt" || me()) &&
+        (unwrapAbortReason(abortController.signal.reason) === "interrupt" || isTurnAbort()) &&
         !interruptBackgroundingStarted
       ) {
         interruptBackgroundingStarted = true;
-        if (L || (me() && j)) {
+        if (canAutoBackground || (isTurnAbort() && turnAbortBackgrounds)) {
           startBackgrounding(
-            me()
+            isTurnAbort()
               ? "tengu_powershell_command_turn_abort_backgrounded"
               : "tengu_powershell_command_interrupt_backgrounded",
           );
@@ -1456,7 +1489,7 @@ async function* runPowerShellCommand({
       let elapsed = Date.now() - startTime;
       let elapsedSeconds = Math.floor(elapsed / 1000);
       if (
-        !ne &&
+        !backgroundForbidden &&
         !interruptBackgroundingStarted &&
         backgroundShellId === undefined &&
         elapsedSeconds >= PROGRESS_THRESHOLD_MS / 1000
@@ -1470,7 +1503,7 @@ async function* runPowerShellCommand({
               shellCommand,
               agentId,
               caller,
-              autoBackgroundArmed: L,
+              autoBackgroundArmed: canAutoBackground,
             },
             taskRegistry,
             toolUseId,
@@ -1491,7 +1524,7 @@ async function* runPowerShellCommand({
         taskId: shellCommand.taskOutput.taskId,
         ...(timeout
           ? {
-              timeoutMs: F,
+              timeoutMs: shellTimeoutMs,
             }
           : undefined),
       };
@@ -1503,8 +1536,8 @@ async function* runPowerShellCommand({
       if (foregroundTaskId)
         unregisterForeground(
           foregroundTaskId,
-          ze
-            ? shellStatusForDisplay(ze, {
+          finalResult
+            ? shellStatusForDisplay(finalResult, {
                 command,
                 shell: "powershell",
               })
@@ -1537,21 +1570,21 @@ function needsApprovalSuggestions(envelope) {
 /**
  * 若规则列表只有一条该工具的前缀/通配规则（非精确匹配），返回其工具名与规则内容。
  */
-function singlePrefixRuleFor(e, o) {
-  let [t, ...r] = e;
-  if (t === undefined || r.length > 0 || !isShellToolName(o)) return;
-  let { toolName, ruleContent } = permissionRuleValueFromString(t);
-  return toolName === o &&
+function singlePrefixRuleFor(rules, firstToolName) {
+  let [ruleString, ...rest] = rules;
+  if (ruleString === undefined || rest.length > 0 || !isShellToolName(firstToolName)) return;
+  let { toolName, ruleContent } = permissionRuleValueFromString(ruleString);
+  return toolName === firstToolName &&
     ruleContent !== undefined &&
     formatPermissionRule({
-      toolName: o,
+      toolName: firstToolName,
       ruleContent,
-    }) === t &&
+    }) === ruleString &&
     parseShellPermissionRule(ruleContent).type !== "exact"
     ? {
-        toolName: o,
+        toolName: firstToolName,
         ruleContent,
       }
     : undefined;
 }
-export { isViolinTableFlagOn, singlePrefixRuleFor, needsApprovalSuggestions };
+export { isViolinTableFlagOn, singlePrefixRuleFor, needsApprovalSuggestions, PowerShellTool };

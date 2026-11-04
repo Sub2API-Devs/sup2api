@@ -97,7 +97,7 @@ function createPermissionContext(
 ) {
   let messageId = assistantMessage.message.id;
   let mode = getToolPermissionContext(toolUseContext).mode;
-  function k(args, opts) {
+  function logDecision(args, opts) {
     logPermissionDecision_2(
       {
         tool,
@@ -121,29 +121,29 @@ function createPermissionContext(
     toolUseID,
     setClassifierApprovals: setToolPermissionContext,
     permissionMode: mode,
-    logDecision: k,
+    logDecision,
     logCancelled() {
       logEvent("tengu_tool_use_cancelled", {
         messageID: sanitizeMarkName(messageId),
         toolName: sanitizeToolNameForAnalytics(tool.name),
       });
     },
-    persistPermissions(h) {
-      if (h.length === 0 || isHookOrPluginSteered(toolUseContext)) return false;
-      forgetSessionEditRules(toolUseContext.session, h);
-      persistPermissionUpdates(h, toolUseContext.storageV5).catch(logError);
-      if (queueOps !== undefined) queueOps(h);
+    persistPermissions(updates) {
+      if (updates.length === 0 || isHookOrPluginSteered(toolUseContext)) return false;
+      forgetSessionEditRules(toolUseContext.session, updates);
+      persistPermissionUpdates(updates, toolUseContext.storageV5).catch(logError);
+      if (queueOps !== undefined) queueOps(updates);
       else {
-        toolUseContext.setSessionToolPermissionContext((w) => applyPermissionUpdates(w, h));
+        toolUseContext.setSessionToolPermissionContext((context) => applyPermissionUpdates(context, updates));
         setImmediate(() => {
           permissionModeSignal.emit();
         });
       }
-      return h.some((update) => supportsPersistence(update.destination));
+      return updates.some((update) => supportsPersistence(update.destination));
     },
-    setModeFromBridge(h) {
+    setModeFromBridge(mode) {
       return setPermissionModeWithGuards(
-        h,
+        mode,
         getToolPermissionContext(toolUseContext),
         toolUseContext.setToolPermissionContext,
       );
@@ -154,7 +154,7 @@ function createPermissionContext(
       resolve(this.cancelAndAbort(undefined, true));
       return true;
     },
-    cancelAndAbort(feedback, isAbort, contentBlocks, F) {
+    cancelAndAbort(feedback, isAbort, contentBlocks, options) {
       let sub = !!toolUseContext.agentId;
       let baseMessage = feedback
         ? `${sub ? SUBAGENT_REJECT_MESSAGE_WITH_REASON_PREFIX : REJECT_MESSAGE_WITH_REASON_PREFIX}${feedback}`
@@ -179,21 +179,28 @@ function createPermissionContext(
         behavior: "ask",
         message,
         contentBlocks,
-        ...(F?.feedbackIsFromUser &&
+        ...(options?.feedbackIsFromUser &&
           feedback && {
             userFeedback: feedback,
           }),
       };
     },
-    async runHooks(h, w, B, F, P, E) {
+    async runHooks(
+      permissionMode,
+      suggestions,
+      suppressAllowRule,
+      isAborted,
+      hookInput,
+      permissionPromptStartTimeMs,
+    ) {
       if (toolUseContext.forRemoteExecution === true) return null;
       for await (let hookResult of executePermissionRequestHooks(
         tool.name,
         toolUseID,
         input,
         toolUseContext,
-        h,
-        w,
+        permissionMode,
+        suggestions,
         toolUseContext.abortController.signal,
       ))
         if (hookResult.permissionRequestResult) {
@@ -205,7 +212,7 @@ function createPermissionContext(
             )
               return null;
             if (shouldReplaceMemoryInput(tool, input, decision.updatedInput, true)) {
-              let H = guardAccountMemoryHookRewrite(tool, "PermissionRequest");
+              let memoryDeny = guardAccountMemoryHookRewrite(tool, "PermissionRequest");
               this.logDecision(
                 {
                   decision: "reject",
@@ -213,18 +220,22 @@ function createPermissionContext(
                 },
                 {
                   input,
-                  permissionPromptStartTimeMs: E,
+                  permissionPromptStartTimeMs,
                 },
               );
-              return H;
+              return memoryDeny;
             }
-            let q = await validatePermissionRequestUpdatedInput(tool, decision.updatedInput, input, (H) =>
-              tool.validateInput?.(H, {
-                ...toolUseContext,
-                toolUseId: toolUseID,
-              }),
+            let validation = await validatePermissionRequestUpdatedInput(
+              tool,
+              decision.updatedInput,
+              input,
+              (candidateInput) =>
+                tool.validateInput?.(candidateInput, {
+                  ...toolUseContext,
+                  toolUseId: toolUseID,
+                }),
             );
-            if (q.deny !== undefined) {
+            if (validation.deny !== undefined) {
               this.logDecision(
                 {
                   decision: "reject",
@@ -234,15 +245,15 @@ function createPermissionContext(
                 },
                 {
                   input,
-                  permissionPromptStartTimeMs: E,
+                  permissionPromptStartTimeMs,
                 },
               );
-              return q.deny;
+              return validation.deny;
             }
-            let input_2 = q.input;
-            let finalInput = input_2 ?? P ?? input;
+            let input_2 = validation.input;
+            let finalInput = input_2 ?? hookInput ?? input;
             if (input_2) {
-              let H = guardHookUpdatedInput(
+              let recheck = guardHookUpdatedInput(
                 await withProvisionalRecord(toolUseContext, toolUseID, tool.name, () =>
                   checkRuleBasedPermissions(
                     tool,
@@ -258,7 +269,7 @@ function createPermissionContext(
                 ),
                 tool.name,
               );
-              if (H?.behavior === "deny") {
+              if (recheck?.behavior === "deny") {
                 this.logDecision(
                   {
                     decision: "reject",
@@ -266,21 +277,27 @@ function createPermissionContext(
                   },
                   {
                     input: finalInput,
-                    permissionPromptStartTimeMs: E,
+                    permissionPromptStartTimeMs,
                   },
                 );
                 return {
-                  ...H,
+                  ...recheck,
                   decideLocation: "ask-path",
                 };
               }
-              if (H?.behavior === "ask")
+              if (recheck?.behavior === "ask")
                 return {
-                  reprompted: H,
+                  reprompted: recheck,
                   finalInput,
                 };
             }
-            return this.handleHookAllow(finalInput, decision.updatedPermissions ?? [], B, F, E);
+            return this.handleHookAllow(
+              finalInput,
+              decision.updatedPermissions ?? [],
+              suppressAllowRule,
+              isAborted,
+              permissionPromptStartTimeMs,
+            );
           } else if (decision.behavior === "deny") {
             this.logDecision(
               {
@@ -290,7 +307,7 @@ function createPermissionContext(
                 },
               },
               {
-                permissionPromptStartTimeMs: E,
+                permissionPromptStartTimeMs,
               },
             );
             if (decision.interrupt) {
@@ -334,39 +351,40 @@ function createPermissionContext(
         decideLocation: "ask-path",
       };
     },
-    handleUserAllow(updatedInput, w, B) {
-      let F = normalizePermissionUpdate(
-        [...sanitizePermissionUpdates(w)],
-        B?.surface === "host_dialog" &&
+    handleUserAllow(updatedInput, updates, options) {
+      let normalizedUpdates = normalizePermissionUpdate(
+        [...sanitizePermissionUpdates(updates)],
+        options?.surface === "host_dialog" &&
           tool.suppressesAlwaysAllowRule?.(input) !== true &&
-          B.askSuppressesAlwaysAllowRule !== true
+          options.askSuppressesAlwaysAllowRule !== true
           ? suggestWebToolRule(tool, input)
           : undefined,
         getToolPermissionContext(toolUseContext),
       );
-      let P =
+      let persistedUpdates =
         toolUseContext.forRemoteExecution === true || isHookOrPluginSteered(toolUseContext)
           ? []
           : tool.suppressesAllPermissionUpdates?.(input) === true
-            ? withoutGrantsForRemoteScope(F)
-            : tool.suppressesAlwaysAllowRule?.(input) === true || B?.askSuppressesAlwaysAllowRule === true
-              ? stripWholeToolGrantsForAsk(F, tool, getToolPermissionContext(toolUseContext))
-              : F;
-      let permanent = this.persistPermissions(P);
-      logShellAllowRuleAdded(P);
-      if (B?.surface === "host_dialog") {
+            ? withoutGrantsForRemoteScope(normalizedUpdates)
+            : tool.suppressesAlwaysAllowRule?.(input) === true ||
+                options?.askSuppressesAlwaysAllowRule === true
+              ? stripWholeToolGrantsForAsk(normalizedUpdates, tool, getToolPermissionContext(toolUseContext))
+              : normalizedUpdates;
+      let permanent = this.persistPermissions(persistedUpdates);
+      logShellAllowRuleAdded(persistedUpdates);
+      if (options?.surface === "host_dialog") {
         if (
           toolUseContext.forRemoteExecution !== true &&
           !isHookOrPluginSteered(toolUseContext) &&
           tool.suppressesAllPermissionUpdates?.(input) !== true &&
-          B.askSuppressesAlwaysAllowRule !== true
+          options.askSuppressesAlwaysAllowRule !== true
         )
-          applyMcpServerAllowRule(tool, F, (M) => {
-            this.persistPermissions([M]);
+          applyMcpServerAllowRule(tool, normalizedUpdates, (serverRule) => {
+            this.persistPermissions([serverRule]);
           });
-        recordEditedRuleContents(toolUseContext.session, P);
+        recordEditedRuleContents(toolUseContext.session, persistedUpdates);
       }
-      let V = permissionGrantScope(P);
+      let grantScope = permissionGrantScope(persistedUpdates);
       this.logDecision(
         {
           decision: "accept",
@@ -374,41 +392,48 @@ function createPermissionContext(
             type: "user",
             permanent,
           },
-          surface: B?.surface,
-          scope: V === "once" && getToolPermissionContext(toolUseContext).mode !== mode ? "session" : V,
+          surface: options?.surface,
+          scope:
+            grantScope === "once" && getToolPermissionContext(toolUseContext).mode !== mode
+              ? "session"
+              : grantScope,
         },
         {
           input: updatedInput,
-          permissionPromptStartTimeMs: B?.permissionPromptStartTimeMs,
+          permissionPromptStartTimeMs: options?.permissionPromptStartTimeMs,
         },
       );
       let userModified = tool.inputsEquivalent ? !tool.inputsEquivalent(input, updatedInput) : false;
-      let trimmedFeedback = B?.feedback?.trim();
+      let trimmedFeedback = options?.feedback?.trim();
       return this.buildAllow(updatedInput, {
         userModified,
-        decisionReason: B?.decisionReason,
+        decisionReason: options?.decisionReason,
         acceptFeedback: trimmedFeedback || undefined,
-        contentBlocks: B?.contentBlocks,
-        matchedAskRule: B?.matchedAskRule,
+        contentBlocks: options?.contentBlocks,
+        matchedAskRule: options?.matchedAskRule,
       });
     },
-    handleHookAllow(finalInput, w, B, F, permissionPromptStartTimeMs) {
-      if (F())
+    handleHookAllow(finalInput, updates, suppressAllowRule, isAborted, permissionPromptStartTimeMs) {
+      if (isAborted())
         return this.buildAllow(finalInput, {
           decisionReason: {
             type: "hook",
             hookName: "PermissionRequest",
           },
         });
-      let E = sanitizePermissionUpdates(w);
+      let sanitizedUpdates = sanitizePermissionUpdates(updates);
       let permanent = this.persistPermissions(
         toolUseContext.forRemoteExecution === true
           ? []
           : tool.suppressesAllPermissionUpdates?.(input) === true
-            ? withoutGrantsForRemoteScope(E)
-            : tool.suppressesAlwaysAllowRule?.(input) === true || B
-              ? stripWholeToolGrantsForAsk([...E], tool, getToolPermissionContext(toolUseContext))
-              : E,
+            ? withoutGrantsForRemoteScope(sanitizedUpdates)
+            : tool.suppressesAlwaysAllowRule?.(input) === true || suppressAllowRule
+              ? stripWholeToolGrantsForAsk(
+                  [...sanitizedUpdates],
+                  tool,
+                  getToolPermissionContext(toolUseContext),
+                )
+              : sanitizedUpdates,
       );
       this.logDecision(
         {

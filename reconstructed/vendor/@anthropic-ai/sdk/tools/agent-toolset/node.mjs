@@ -22,7 +22,7 @@ import {
   isWithin,
 } from "./fs-util.mjs";
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
-import { SEn } from "../../internal/utils/promise.mjs";
+import { promiseWithResolvers } from "../../internal/utils/promise.mjs";
 import { betaTool } from "../../helpers/beta/json-schema.mjs";
 import { ToolError } from "../../lib/tools/ToolError.mjs";
 
@@ -78,7 +78,7 @@ function rejectUnrestrictedPaths(value) {
   );
 }
 //@ chunk-2cw52qnf.js:27205-27264 esm-layout
-function Wr(ctx) {
+function allowedRootCandidates(ctx) {
   return [
     betaBashTool(ctx),
     betaReadTool(ctx),
@@ -167,7 +167,7 @@ var BashSession = (() => {
 `;
       __classPrivateFieldGet(this, _BashSession_proc, "f").stdin.write(wrapped);
       if (__classPrivateFieldGet(this, _BashSession_buf, "f").indexOf(sentinel) < 0) {
-        let { promise: sentinelSeen, resolve } = SEn();
+        let { promise: sentinelSeen, resolve } = promiseWithResolvers();
         __classPrivateFieldSet(
           this,
           _BashSession_waiting,
@@ -298,7 +298,7 @@ function betaBashTool(ctx) {
     },
     run: async ({ command, restart, timeout_ms }, context) => {
       let prev = tail;
-      let gate = SEn();
+      let gate = promiseWithResolvers();
       tail = gate.promise;
       try {
         await prev;
@@ -692,7 +692,7 @@ function betaGlobTool(ctx) {
         throw new ToolError(`glob: ${e instanceof Error ? e.message : String(e)}`);
       }
       if (matches.length === 0) return "no matches";
-      matches.sort((a, b) => b.mtime - a.mtime);
+      matches.sort((entry, b) => b.mtime - entry.mtime);
       return matches.slice(0, GLOB_RESULT_LIMIT).map((m) => m.path).join(`
 `);
     },
@@ -860,3 +860,4 @@ async function findRg() {
   }
   return null;
 }
+export { allowedRootCandidates };

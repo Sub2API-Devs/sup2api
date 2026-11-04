@@ -8,21 +8,21 @@
  * pieces: chunk-x6v6jz2y.js (41)
  * attribution: placement 41
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useDeclaredCursor } from "../hooks/use-declared-cursor.js";
 import { assignRef } from "./ErrorBoundary.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BaseBox } from "./Box.js";
 import {
   init_react_production,
-  Se,
-  R,
-  ce,
-  zt,
-  yt,
-  Q,
-  Uy,
-  P,
+  useContext,
+  useRef,
+  useCallback,
+  useLayoutEffect,
+  useSyncExternalStore,
+  useMemo,
+  useReducer,
+  useEffect,
 } from "../../../vendor/react/cjs/react.production.js";
 import { clampScrollTop } from "../events/event-handlers.js";
 import { TerminalSizeContext, StdinContextAlias } from "../terminalModes.js";
@@ -30,135 +30,136 @@ import { env } from "../../utils/env.js";
 import { clockContext, noopClock, nullClock, defaultSetTimeout } from "./ClockContext.js";
 import { useTerminalFocusState } from "../hooks/use-terminal-focus.js";
 import { SCROLL_JUMP_LINES } from "../scrollConstants.js";
-import { kp } from "../../../vendor/convert-to-spaces/dist/index.js";
+import { APP_CONTEXT } from "../../../vendor/convert-to-spaces/dist/index.js";
 import { isDescendantOf } from "../focus.js";
 import { InputNowContext } from "../terminalProbe.js";
 import { getSecondRootError } from "../terminal.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-x6v6jz2y.js:19648-20724 placement
-function InputImpl(o) {
-  let r = w(30);
-  let l;
+function InputImpl(props) {
+  let $ = useMemoCache(30);
+  let caret;
   let children;
   let onKeyDown;
   let onPaste;
-  let m;
-  let b;
-  let C;
-  let h;
-  let k;
-  if (r[0] !== o) {
+  let ref;
+  let rest;
+  let autoFocusProp;
+  let disabledProp;
+  let allowPrintableKeybindingsProp;
+  if ($[0] !== props) {
     ({
-      ref: m,
-      autoFocus: C,
-      disabled: h,
+      ref,
+      autoFocus: autoFocusProp,
+      disabled: disabledProp,
       onKeyDown,
       onPaste,
-      caret: l,
-      allowPrintableKeybindings: k,
+      caret,
+      allowPrintableKeybindings: allowPrintableKeybindingsProp,
       children,
-      ...b
-    } = o);
-    r[0] = o;
-    r[1] = l;
-    r[2] = children;
-    r[3] = onKeyDown;
-    r[4] = onPaste;
-    r[5] = m;
-    r[6] = b;
-    r[7] = C;
-    r[8] = h;
-    r[9] = k;
+      ...rest
+    } = props);
+    $[0] = props;
+    $[1] = caret;
+    $[2] = children;
+    $[3] = onKeyDown;
+    $[4] = onPaste;
+    $[5] = ref;
+    $[6] = rest;
+    $[7] = autoFocusProp;
+    $[8] = disabledProp;
+    $[9] = allowPrintableKeybindingsProp;
   } else {
-    l = r[1];
-    children = r[2];
-    onKeyDown = r[3];
-    onPaste = r[4];
-    m = r[5];
-    b = r[6];
-    C = r[7];
-    h = r[8];
-    k = r[9];
+    caret = $[1];
+    children = $[2];
+    onKeyDown = $[3];
+    onPaste = $[4];
+    ref = $[5];
+    rest = $[6];
+    autoFocusProp = $[7];
+    disabledProp = $[8];
+    allowPrintableKeybindingsProp = $[9];
   }
-  let autoFocus = C === undefined ? false : C;
-  let E = h === undefined ? false : h;
-  let A = k === undefined ? false : k;
-  const line = l?.line ?? 0;
-  const column = l?.column ?? 0;
-  const active = l !== undefined;
-  const visible = l?.visible;
-  let F;
-  if (r[10] !== line || r[11] !== column || r[12] !== active || r[13] !== visible) {
-    F = {
+  let autoFocus = autoFocusProp === undefined ? false : autoFocusProp;
+  let isDisabled = disabledProp === undefined ? false : disabledProp;
+  let allowPrintable = allowPrintableKeybindingsProp === undefined ? false : allowPrintableKeybindingsProp;
+  const line = caret?.line ?? 0;
+  const column = caret?.column ?? 0;
+  const active = caret !== undefined;
+  const visible = caret?.visible;
+  let cursorState;
+  if ($[10] !== line || $[11] !== column || $[12] !== active || $[13] !== visible) {
+    cursorState = {
       line,
       column,
       active,
       visible,
     };
-    r[10] = line;
-    r[11] = column;
-    r[12] = active;
-    r[13] = visible;
-    r[14] = F;
-  } else F = r[14];
-  let declaredCursor = useDeclaredCursor(F);
-  let _;
-  if (r[15] !== declaredCursor || r[16] !== m) {
-    _ = (H) => {
-      declaredCursor(H);
-      assignRef(m, H);
+    $[10] = line;
+    $[11] = column;
+    $[12] = active;
+    $[13] = visible;
+    $[14] = cursorState;
+  } else cursorState = $[14];
+  let declaredCursor = useDeclaredCursor(cursorState);
+  let mergedRef;
+  if ($[15] !== declaredCursor || $[16] !== ref) {
+    mergedRef = (node) => {
+      declaredCursor(node);
+      assignRef(ref, node);
     };
-    r[15] = declaredCursor;
-    r[16] = m;
-    r[17] = _;
-  } else _ = r[17];
-  let ref = _;
-  if (E) {
-    let D;
-    if (r[18] !== children || r[19] !== ref || r[20] !== b) {
-      D = jsxProd_default(BaseBox, {
-        ref,
-        ...b,
+    $[15] = declaredCursor;
+    $[16] = ref;
+    $[17] = mergedRef;
+  } else mergedRef = $[17];
+  let ref_2 = mergedRef;
+  if (isDisabled) {
+    let disabledElement;
+    if ($[18] !== children || $[19] !== ref_2 || $[20] !== rest) {
+      disabledElement = jsxProd_default(BaseBox, {
+        ref: ref_2,
+        ...rest,
         children,
       });
-      r[18] = children;
-      r[19] = ref;
-      r[20] = b;
-      r[21] = D;
-    } else D = r[21];
-    return D;
+      $[18] = children;
+      $[19] = ref_2;
+      $[20] = rest;
+      $[21] = disabledElement;
+    } else disabledElement = $[21];
+    return disabledElement;
   }
-  const textEntry = !A;
-  let U;
+  const textEntry = !allowPrintable;
+  let inputElement;
   if (
-    r[22] !== autoFocus ||
-    r[23] !== children ||
-    r[24] !== onKeyDown ||
-    r[25] !== onPaste ||
-    r[26] !== ref ||
-    r[27] !== b ||
-    r[28] !== textEntry
+    $[22] !== autoFocus ||
+    $[23] !== children ||
+    $[24] !== onKeyDown ||
+    $[25] !== onPaste ||
+    $[26] !== ref_2 ||
+    $[27] !== rest ||
+    $[28] !== textEntry
   ) {
-    U = jsxProd_default(BaseBox, {
-      ref,
+    inputElement = jsxProd_default(BaseBox, {
+      ref: ref_2,
       tabIndex: 0,
       autoFocus,
       textEntry,
       onKeyDown,
       onPaste,
-      ...b,
+      ...rest,
       children,
     });
-    r[22] = autoFocus;
-    r[23] = children;
-    r[24] = onKeyDown;
-    r[25] = onPaste;
-    r[26] = ref;
-    r[27] = b;
-    r[28] = textEntry;
-    r[29] = U;
-  } else U = r[29];
-  return U;
+    $[22] = autoFocus;
+    $[23] = children;
+    $[24] = onKeyDown;
+    $[25] = onPaste;
+    $[26] = ref_2;
+    $[27] = rest;
+    $[28] = textEntry;
+    $[29] = inputElement;
+  } else inputElement = $[29];
+  return inputElement;
 }
 //@ chunk-x6v6jz2y.js:20724-20735 placement
 var Input = InputImpl;
@@ -167,7 +168,7 @@ var Input = InputImpl;
  * <Newline>：输出 count 个换行的 ink-text。
  */
 function Newline(props) {
-  let $ = w(4);
+  let $ = useMemoCache(4);
   let { count } = props;
   let count_2 = count === undefined ? 1 : count;
   let children;
@@ -192,7 +193,7 @@ function Newline(props) {
  * <NoSelect>：内容不参与鼠标选区复制（如行号栏、装饰符）；fromLeftEdge 时从屏幕最左列起整段不可选。
  */
 function NoSelect(t0) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let boxProps;
   let children;
   let fromLeftEdge;
@@ -230,7 +231,7 @@ function NoSelect(t0) {
  * <RawAnsi>：直接输出已排好的 ANSI 行（ink-raw-ansi），宽高由调用方给出，不再折行或测量。
  */
 function RawAnsi(props) {
-  let $ = w(6);
+  let $ = useMemoCache(6);
   let { lines, width } = props;
   if (lines.length === 0) {
     return null;
@@ -257,9 +258,15 @@ function RawAnsi(props) {
   return t2;
 }
 //@ chunk-x6v6jz2y.js:21564-21568 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:21564", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:21568-21572 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:21568", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:21572-22038 placement
 /**
  * 节点当前是否在终端可见区域内：累加祖先偏移并减去滚动容器的 scrollTop，按根高度与终端行数推出视口范围；滚动容器尚未渲染时返回 null。
@@ -296,264 +303,302 @@ function isNodeOnScreen(node, terminalSize) {
  * 跟踪组件是否在终端可见区域：返回 ref 回调、可见状态对象、读取函数与即时探测函数；每次提交后更新。动画类组件据此在不可见时停止刷新。
  */
 function useTerminalViewport() {
-  let clock = Se(TerminalSizeContext);
-  let r = R(null);
-  let l = R({
+  let clock = useContext(TerminalSizeContext);
+  let nodeRef = useRef(null);
+  let visibilityRef = useRef({
     isVisible: true,
   });
-  let u = ce((h) => {
-    r.current = h;
-    if (h === null && !l.current.isVisible)
-      l.current = {
+  let setRef = useCallback((node) => {
+    nodeRef.current = node;
+    if (node === null && !visibilityRef.current.isVisible)
+      visibilityRef.current = {
         isVisible: true,
       };
   }, []);
-  function d() {
-    let h = isNodeOnScreen(r.current, clock);
-    if (h === null) return l.current.isVisible;
-    if (h !== l.current.isVisible)
-      l.current = {
-        isVisible: h,
+  function computeVisibility() {
+    let isVisible = isNodeOnScreen(nodeRef.current, clock);
+    if (isVisible === null) return visibilityRef.current.isVisible;
+    if (isVisible !== visibilityRef.current.isVisible)
+      visibilityRef.current = {
+        isVisible,
       };
-    return h;
+    return isVisible;
   }
-  let p = R(d);
-  p.current = d;
-  let m = ce(() => p.current(), []);
-  let clockRef = R(clock);
+  let visibilityFnRef = useRef(computeVisibility);
+  visibilityFnRef.current = computeVisibility;
+  let getVisibility = useCallback(() => visibilityFnRef.current(), []);
+  let clockRef = useRef(clock);
   clockRef.current = clock;
-  let C = ce(() => isNodeOnScreen(r.current, clockRef.current), []);
-  zt(() => {
-    d();
+  let isNodeVisible = useCallback(() => isNodeOnScreen(nodeRef.current, clockRef.current), []);
+  useLayoutEffect(() => {
+    computeVisibility();
   });
-  return [u, l.current, m, C];
+  return [setRef, visibilityRef.current, getVisibility, isNodeVisible];
 }
 //@ chunk-x6v6jz2y.js:22467-22478 placement
 var CURSOR_FLASH_MS = 480;
 //@ chunk-x6v6jz2y.js:22478-22556 placement
-function fullRepaintInterval(o) {
-  return env.CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT ? Math.max(o, CURSOR_FLASH_MS) : o;
+function fullRepaintInterval(intervalMs) {
+  return env.CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT ? Math.max(intervalMs, CURSOR_FLASH_MS) : intervalMs;
 }
 //@ chunk-x6v6jz2y.js:22556-22851 placement
-function useAnimationFrame(o = 16) {
-  let r = Se(clockContext);
-  let [l, { isVisible: u }, d] = useTerminalViewport();
+function useAnimationFrame(intervalMs = 16) {
+  let clock = useContext(clockContext);
+  let [frame, { isVisible }, readVisibility] = useTerminalViewport();
   let terminalFocusState = useTerminalFocusState();
-  let terminalFocusStateRef = R(terminalFocusState);
-  let b = u;
+  let terminalFocusStateRef = useRef(terminalFocusState);
+  let visible = isVisible;
   if (terminalFocusStateRef.current !== terminalFocusState) {
     terminalFocusStateRef.current = terminalFocusState;
-    b = d();
+    visible = readVisibility();
   }
-  let C = !!r && b && o !== null;
-  let h = o === null ? null : Math.ceil(fullRepaintInterval(o) / SCROLL_JUMP_LINES) * SCROLL_JUMP_LINES;
-  let k = R(0);
-  let x = yt(C ? r.subscribeKeepAlive : noopClock, () =>
-    C ? (k.current = Math.max(k.current, Math.floor(r.now() / h) * h)) : k.current,
+  let isRunning = !!clock && visible && intervalMs !== null;
+  let bucketMs =
+    intervalMs === null
+      ? null
+      : Math.ceil(fullRepaintInterval(intervalMs) / SCROLL_JUMP_LINES) * SCROLL_JUMP_LINES;
+  let lastFrameRef = useRef(0);
+  let frameValue = useSyncExternalStore(isRunning ? clock.subscribeKeepAlive : noopClock, () =>
+    isRunning
+      ? (lastFrameRef.current = Math.max(lastFrameRef.current, Math.floor(clock.now() / bucketMs) * bucketMs))
+      : lastFrameRef.current,
   );
-  return [l, x];
+  return [frame, frameValue];
 }
 //@ chunk-x6v6jz2y.js:22851-22855 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:22851", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:22855-22879 placement
 /**
  * 导出值：useInputClockValue（取输入时钟）。
  */
-var useInputClockValue = () => Se(kp);
+var useInputClockValue = () => useContext(APP_CONTEXT);
 var useApp = useInputClockValue;
 //@ chunk-x6v6jz2y.js:22879-22883 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:22879", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:22883-23169 placement = cleanupTaskOutput (0.67)
-function useDebouncedCallback(o, r) {
-  let l = Se(clockContext);
-  let u = R(o);
-  u.current = o;
-  let code = R(null);
-  let p = ce((b) => () => code.current?.(), []);
-  yt(p, nullClock);
-  let m = l?.setTimeout ?? defaultSetTimeout;
-  return Q(() => {
-    let b = (...C) => {
+function useDebouncedCallback(callback, delayMs) {
+  let clock = useContext(clockContext);
+  let callbackRef = useRef(callback);
+  callbackRef.current = callback;
+  let code = useRef(null);
+  let cleanupFn = useCallback((cancel) => () => code.current?.(), []);
+  useSyncExternalStore(cleanupFn, nullClock);
+  let setTimeoutImpl = clock?.setTimeout ?? defaultSetTimeout;
+  return useMemo(() => {
+    let debounced = (...args) => {
       code.current?.();
-      code.current = m(() => {
+      code.current = setTimeoutImpl(() => {
         code.current = null;
-        u.current(...C);
-      }, r);
+        callbackRef.current(...args);
+      }, delayMs);
     };
-    b.cancel = () => {
+    debounced.cancel = () => {
       code.current?.();
       code.current = null;
     };
-    return b;
-  }, [m, r]);
+    return debounced;
+  }, [setTimeoutImpl, delayMs]);
 }
 //@ chunk-x6v6jz2y.js:23169-23173 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:23169", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:23173-23191 placement
 var noopClockA = () => () => {};
 //@ chunk-x6v6jz2y.js:23191-23559 placement
 function useFocus() {
-  let { focusManager, rootNode } = Se(kp);
-  let l = yt(focusManager?.subscribe ?? noopClockA, () => focusManager?.activeElement ?? null);
-  return Q(
+  let { focusManager, rootNode } = useContext(APP_CONTEXT);
+  let activeElement = useSyncExternalStore(
+    focusManager?.subscribe ?? noopClockA,
+    () => focusManager?.activeElement ?? null,
+  );
+  return useMemo(
     () => ({
-      activeElement: l,
+      activeElement,
       focusNext: () => {
         if (focusManager && rootNode) focusManager.focusNext(rootNode);
       },
       focusPrevious: () => {
         if (focusManager && rootNode) focusManager.focusPrevious(rootNode);
       },
-      focusDirection: (u) => {
-        if (focusManager && rootNode) return focusManager.focusDirection(u, rootNode);
+      focusDirection: (direction) => {
+        if (focusManager && rootNode) return focusManager.focusDirection(direction, rootNode);
         return false;
       },
-      focus: (u) => focusManager?.focus(u),
+      focus: (node) => focusManager?.focus(node),
       blur: () => focusManager?.blur(),
       subscribe: focusManager?.subscribe ?? noopClockA,
     }),
-    [l, focusManager, rootNode],
+    [activeElement, focusManager, rootNode],
   );
 }
 //@ chunk-x6v6jz2y.js:23559-23563 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:23559", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:23563-23581 placement
 var noopClockB = () => () => {};
 //@ chunk-x6v6jz2y.js:23581-23734 placement
-function useHasFocus(o) {
-  let { focusManager } = Se(kp);
-  return yt(
+function useHasFocus(nodeRef) {
+  let { focusManager } = useContext(APP_CONTEXT);
+  return useSyncExternalStore(
     focusManager?.subscribe ?? noopClockB,
     () => {
-      let l = o.current;
+      let node = nodeRef.current;
       let activeElement = focusManager?.activeElement;
-      if (!l || !activeElement) return false;
-      return isDescendantOf(activeElement, l);
+      if (!node || !activeElement) return false;
+      return isDescendantOf(activeElement, node);
     },
     () => false,
   );
 }
 //@ chunk-x6v6jz2y.js:23734-23738 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:23734", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:23738-23771 placement
 function useInputClock() {
-  return Se(InputNowContext) ?? nowMs;
+  return useContext(InputNowContext) ?? nowMs;
 }
 //@ chunk-x6v6jz2y.js:23771-23803 placement
 function nowMs() {
   return Date.now();
 }
 //@ chunk-x6v6jz2y.js:23803-23807 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:23803", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:23807-24120 placement
-function useAnimationTimer(o) {
-  let r = Se(clockContext);
-  let l = o === null ? null : Math.ceil(fullRepaintInterval(o) / SCROLL_JUMP_LINES) * SCROLL_JUMP_LINES;
-  let u = R(null);
-  let d = Q(() => {
-    if (!r || l === null) return noopClock;
-    return (p) =>
-      r.subscribeFollower(() => {
-        u.current = r.now();
-        p();
+function useAnimationTimer(intervalMs) {
+  let clock = useContext(clockContext);
+  let bucketMs =
+    intervalMs === null
+      ? null
+      : Math.ceil(fullRepaintInterval(intervalMs) / SCROLL_JUMP_LINES) * SCROLL_JUMP_LINES;
+  let lastFrameRef = useRef(null);
+  let subscribeFollower = useMemo(() => {
+    if (!clock || bucketMs === null) return noopClock;
+    return (onTick) =>
+      clock.subscribeFollower(() => {
+        lastFrameRef.current = clock.now();
+        onTick();
       });
-  }, [r, l]);
-  return yt(d, () => {
-    if (!r || l === null) {
-      u.current = null;
+  }, [clock, bucketMs]);
+  return useSyncExternalStore(subscribeFollower, () => {
+    if (!clock || bucketMs === null) {
+      lastFrameRef.current = null;
       return 0;
     }
-    if (u.current === null) u.current = r.now();
-    return Math.floor(u.current / l) * l;
+    if (lastFrameRef.current === null) lastFrameRef.current = clock.now();
+    return Math.floor(lastFrameRef.current / bucketMs) * bucketMs;
   });
 }
 //@ chunk-x6v6jz2y.js:24120-24359 placement
-function useInterval(o, r, l) {
-  let u = R(o);
-  u.current = o;
-  let d = Se(clockContext);
-  let immediate = l?.immediate ?? false;
-  let m = R(null);
-  let b = Q(
+function useInterval(callback, intervalMs, options) {
+  let callbackRef = useRef(callback);
+  callbackRef.current = callback;
+  let clock = useContext(clockContext);
+  let immediate = options?.immediate ?? false;
+  let lastRunRef = useRef(null);
+  let subscribeEffect = useMemo(
     () =>
-      !d || r === null
-        ? (C) => {
-            m.current = null;
+      !clock || intervalMs === null
+        ? (noopSubscribe) => {
+            lastRunRef.current = null;
             return () => {};
           }
-        : (C) => {
-            if (immediate && m.current === null) u.current();
-            m.current = r;
-            return startClockInterval(d, () => u.current(), r);
+        : (tickFn) => {
+            if (immediate && lastRunRef.current === null) callbackRef.current();
+            lastRunRef.current = intervalMs;
+            return startClockInterval(clock, () => callbackRef.current(), intervalMs);
           },
-    [d, r, immediate],
+    [clock, intervalMs, immediate],
   );
-  yt(b, nullClock);
+  useSyncExternalStore(subscribeEffect, nullClock);
 }
 //@ chunk-x6v6jz2y.js:24359-24495 placement
-function startClockInterval(o, r, l) {
-  let u = false;
-  let d;
-  let p = () => {
-    if (u) return;
+function startClockInterval(clock, tick, intervalMs) {
+  let isStopped = false;
+  let cancelTimer;
+  let runTick = () => {
+    if (isStopped) return;
     try {
-      r();
+      tick();
     } finally {
-      if (!u) d = o.setTimeout(p, l);
+      if (!isStopped) cancelTimer = clock.setTimeout(runTick, intervalMs);
     }
   };
-  d = o.setTimeout(p, l);
+  cancelTimer = clock.setTimeout(runTick, intervalMs);
   return () => {
-    u = true;
-    d();
+    isStopped = true;
+    cancelTimer();
   };
 }
 //@ chunk-x6v6jz2y.js:24495-24499 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:24495", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:24499-24618 placement
-function useMeasured(o) {
-  let { subscribeLayout } = Se(kp);
-  let l = yt(subscribeLayout, o);
-  let [, u] = Uy((d) => d + 1, 0);
-  zt(() => {
-    if (!Object.is(o(), l)) u();
+function useMeasured(select) {
+  let { subscribeLayout } = useContext(APP_CONTEXT);
+  let value = useSyncExternalStore(subscribeLayout, select);
+  let [, forceRender] = useReducer((count) => count + 1, 0);
+  useLayoutEffect(() => {
+    if (!Object.is(select(), value)) forceRender();
   });
-  return l;
+  return value;
 }
 //@ chunk-x6v6jz2y.js:24618-24622 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:24618", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:24622-24696 placement
-function useFinePointer(o) {
-  let { retainFinePointer } = Se(kp);
-  P(() => (o ? retainFinePointer() : undefined), [o, retainFinePointer]);
+function useFinePointer(retain) {
+  let { retainFinePointer } = useContext(APP_CONTEXT);
+  useEffect(() => (retain ? retainFinePointer() : undefined), [retain, retainFinePointer]);
 }
 //@ chunk-x6v6jz2y.js:24696-24700 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:24696", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:24700-24821 placement
-function nodeRowRange(o) {
-  if (!o?.yogaNode) return;
-  if (o.yogaNode.getDisplay() === 1) return null;
-  let r = absoluteTop(o);
-  return r && scrollAdjustedRow(o, r.box, r.at);
+function nodeRowRange(node) {
+  if (!node?.yogaNode) return;
+  if (node.yogaNode.getDisplay() === 1) return null;
+  let placement = absoluteTop(node);
+  return placement && scrollAdjustedRow(node, placement.box, placement.at);
 }
 //@ chunk-x6v6jz2y.js:24821-24974 placement
-function nodeScreenBox(o) {
-  let r = o?.yogaNode && absoluteTop(o);
-  if (!r) return;
+function nodeScreenBox(node) {
+  let placement = node?.yogaNode && absoluteTop(node);
+  if (!placement) return;
   return {
-    row: r.row,
-    rows: o?.yogaNode?.getComputedHeight() ?? 0,
-    viewportRows: r.box.scrollViewportHeight,
+    row: placement.row,
+    rows: node?.yogaNode?.getComputedHeight() ?? 0,
+    viewportRows: placement.box.scrollViewportHeight,
   };
 }
 //@ chunk-x6v6jz2y.js:24974-25358 placement
-function absoluteTop(o) {
-  let r = 0;
-  let l = o;
+function absoluteTop(node) {
+  let row = 0;
+  let current = node;
   for (;;) {
-    let parentNode = l.parentNode;
-    if (!parentNode?.yogaNode || !l.yogaNode) return;
-    r += l.yogaNode.getComputedTop();
+    let parentNode = current.parentNode;
+    if (!parentNode?.yogaNode || !current.yogaNode) return;
+    row += current.yogaNode.getComputedTop();
     let parentNode_2 = parentNode.parentNode;
     if (
       parentNode_2?.yogaNode !== undefined &&
@@ -561,85 +606,92 @@ function absoluteTop(o) {
     )
       return {
         box: parentNode_2,
-        row: r,
+        row,
         at: {
-          top: parentNode.yogaNode.getComputedTop() + r,
-          itemTop: parentNode.yogaNode.getComputedTop() + l.yogaNode.getComputedTop(),
-          itemHeight: l.yogaNode.getComputedHeight(),
+          top: parentNode.yogaNode.getComputedTop() + row,
+          itemTop: parentNode.yogaNode.getComputedTop() + current.yogaNode.getComputedTop(),
+          itemHeight: current.yogaNode.getComputedHeight(),
         },
       };
-    l = parentNode;
+    current = parentNode;
   }
 }
 //@ chunk-x6v6jz2y.js:25358-25742 placement
-function scrollAdjustedRow(o, box, l) {
+function scrollAdjustedRow(itemNode, box, at) {
   let { scrollTopRendered, yogaNode } = box;
-  let computedHeight = o.yogaNode?.getComputedHeight();
+  let computedHeight = itemNode.yogaNode?.getComputedHeight();
   if (scrollTopRendered === undefined || !yogaNode || !computedHeight) return;
   let computedBorder = yogaNode.getComputedBorder(1);
-  let b = yogaNode.getComputedHeight() - yogaNode.getComputedBorder(3);
-  let C = computedBorder + yogaNode.getComputedPadding(1);
-  let h = b - yogaNode.getComputedPadding(3);
-  let k = l.top - scrollTopRendered;
-  let x = l.itemTop - scrollTopRendered;
-  let E = x + l.itemHeight <= C || x >= h;
-  let max = Math.max(k, computedBorder);
-  let min = Math.min(k + computedHeight, b);
-  return E || max >= min
+  let innerBottom = yogaNode.getComputedHeight() - yogaNode.getComputedBorder(3);
+  let innerTop = computedBorder + yogaNode.getComputedPadding(1);
+  let innerBottomPadding = innerBottom - yogaNode.getComputedPadding(3);
+  let topInBox = at.top - scrollTopRendered;
+  let itemTopInBox = at.itemTop - scrollTopRendered;
+  let isFullyClipped = itemTopInBox + at.itemHeight <= innerTop || itemTopInBox >= innerBottomPadding;
+  let max = Math.max(topInBox, computedBorder);
+  let min = Math.min(topInBox + computedHeight, innerBottom);
+  return isFullyClipped || max >= min
     ? null
     : {
-        first: max - k,
-        last: min - k - 1,
+        first: max - topInBox,
+        last: min - topInBox - 1,
         of: computedHeight,
       };
 }
 //@ chunk-x6v6jz2y.js:25742-26370 placement
-function usePaintedRows(o, rows) {
-  let { subscribeFrames } = Se(kp);
-  let u = R(null);
-  let d = R({
+function usePaintedRows(isEnabled, rows) {
+  let { subscribeFrames } = useContext(APP_CONTEXT);
+  let nodeRef = useRef(null);
+  let lastStateRef = useRef({
     rows,
     lastRows: undefined,
     contentRows: undefined,
   });
-  let p = yt(
-    ce((m) => (o ? subscribeFrames(m) : () => {}), [o, subscribeFrames]),
-    ce(() => {
-      if (!o) return;
-      let computedHeight = u.current?.yogaNode?.getComputedHeight();
-      let reduced = u.current?.childNodes.reduce(
+  let rowsState = useSyncExternalStore(
+    useCallback((onFrame) => (isEnabled ? subscribeFrames(onFrame) : () => {}), [isEnabled, subscribeFrames]),
+    useCallback(() => {
+      if (!isEnabled) return;
+      let computedHeight = nodeRef.current?.yogaNode?.getComputedHeight();
+      let reduced = nodeRef.current?.childNodes.reduce(
         (acc, childNode) => acc + (childNode.yogaNode?.getComputedHeight() ?? 0),
         0,
       );
-      let C = nodeRowRange(u.current);
-      let h = d.current;
-      let k =
-        C === undefined ||
-        C === h.rows ||
-        (!!C && !!h.rows && C.first === h.rows.first && C.last === h.rows.last && C.of === h.rows.of);
-      let x = computedHeight === undefined ? undefined : reduced;
-      if (!(k && x === h.contentRows))
-        d.current = {
-          rows: k ? h.rows : C,
-          lastRows: computedHeight || h.lastRows,
-          contentRows: x,
+      let rowsRange = nodeRowRange(nodeRef.current);
+      let previous = lastStateRef.current;
+      let rowsUnchanged =
+        rowsRange === undefined ||
+        rowsRange === previous.rows ||
+        (!!rowsRange &&
+          !!previous.rows &&
+          rowsRange.first === previous.rows.first &&
+          rowsRange.last === previous.rows.last &&
+          rowsRange.of === previous.rows.of);
+      let contentRows = computedHeight === undefined ? undefined : reduced;
+      if (!(rowsUnchanged && contentRows === previous.contentRows))
+        lastStateRef.current = {
+          rows: rowsUnchanged ? previous.rows : rowsRange,
+          lastRows: computedHeight || previous.lastRows,
+          contentRows,
         };
-      else if (computedHeight) h.lastRows = computedHeight;
-      return d.current;
-    }, [o]),
+      else if (computedHeight) previous.lastRows = computedHeight;
+      return lastStateRef.current;
+    }, [isEnabled]),
   );
-  return [u, p?.rows, p?.lastRows, p?.contentRows];
+  return [nodeRef, rowsState?.rows, rowsState?.lastRows, rowsState?.contentRows];
 }
 //@ chunk-x6v6jz2y.js:26370-26374 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:26370", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:26374-27033 placement = useSelection (0.958)
 /**
  * 选区操作钩子：复制（并清除）/复制不清除、取选中文本、清除、是否有选区、读状态、订阅变化、键盘移动焦点、设置选区背景色。没有 Ink 实例时返回空实现。
  */
 function useSelection() {
-  Se(StdinContextAlias);
+  useContext(StdinContextAlias);
   let ink = getSecondRootError().get(process.stdout);
-  return Q(() => {
+  return useMemo(() => {
     if (!ink)
       return {
         copySelection: () => "",

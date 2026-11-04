@@ -14,8 +14,8 @@ import { execFileNoThrow } from "./execFileNoThrow.js";
 /**
  * 把 Windows 盘符路径转为 WSL 的 /mnt/<盘符> 路径，非盘符路径返回 null。
  */
-function windowsToWslPath(t) {
-  let match = t.match(/^([A-Z]):(.*)$/i);
+function windowsToWslPath(windowsPath) {
+  let match = windowsPath.match(/^([A-Z]):(.*)$/i);
   if (!match) return null;
   return `/mnt/${match[1].toLowerCase()}${match[2].replaceAll("\\", "/")}`;
 }
@@ -50,11 +50,11 @@ class WindowsToWSLConverter {
 }
 //@ chunk-j0y6ypnr.js:846-953 placement
 /**
- * 判断 \\wsl$ 或 \\wsl.localhost 路径是否属于给定发行版（非 WSL 路径视为匹配）。
+ * 判断 \\wsl$ 或 \\wsl.localhost 的 UNC 路径是否属于给定 WSL 发行版；不是 WSL 路径时视为匹配。
  */
-function isSameWslDistro(windowsPath, wslDistroName) {
+function checkWSLDistroMatch(windowsPath, wslDistroName) {
   let wslUncMatch = windowsPath.match(/^\\\\wsl(?:\.localhost|\$)\\([^\\]+)(.*)$/);
   if (wslUncMatch) return wslUncMatch[1] === wslDistroName;
   return true;
 }
-export { windowsToWslPath, isSameWslDistro, WindowsToWSLConverter };
+export { windowsToWslPath, checkWSLDistroMatch, WindowsToWSLConverter };

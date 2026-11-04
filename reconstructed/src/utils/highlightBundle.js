@@ -17,3 +17,4 @@ var HLJS_BUNDLE_RESOURCE_ID = __cc_resource_0;
 function loadHljsBundleJs() {
   return readEmbeddedText(HLJS_BUNDLE_RESOURCE_ID, import.meta.dirname);
 }
+export { loadHljsBundleJs };

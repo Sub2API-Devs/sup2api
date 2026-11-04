@@ -65,17 +65,17 @@ function findQuoteObject(text, offset, quote, isInner) {
   let positions = [];
   for (let i = 0; i < line.length; i++) if (line[i] === quote) positions.push(i);
   for (let i = 0; i < positions.length - 1; i += 2) {
-    let h = positions[i];
-    let x = positions[i + 1];
-    if (h <= posInLine && posInLine <= x)
+    let openIndex = positions[i];
+    let closeIndex = positions[i + 1];
+    if (openIndex <= posInLine && posInLine <= closeIndex)
       return isInner
         ? {
-            start: lineStart + h + 1,
-            end: lineStart + x,
+            start: lineStart + openIndex + 1,
+            end: lineStart + closeIndex,
           }
         : {
-            start: lineStart + h,
-            end: lineStart + x + 1,
+            start: lineStart + openIndex,
+            end: lineStart + closeIndex + 1,
           };
   }
   return null;

@@ -31,9 +31,9 @@ function createBufferedWriter({
       flushTimer = null;
     }
   }
-  function writeFn(f) {
+  function writeFn(entries) {
     try {
-      writeBatch(f);
+      writeBatch(entries);
     } catch {}
   }
   function flush() {
@@ -89,8 +89,8 @@ function createBufferedWriter({
 //@ chunk-cgr0tezp.js:15113-15337 affinity = createBufferedWriter (0.761)
 function createBufferedWriter_2({ writeFn, flushIntervalMs, maxBufferSize, maxBufferBytes, immediateMode }) {
   return createBufferedWriter({
-    writeBatch: (o) => writeFn(o.join("")),
-    sizeOf: (o) => o.length,
+    writeBatch: (items) => writeFn(items.join("")),
+    sizeOf: (item) => item.length,
     flushIntervalMs,
     maxBufferSize,
     maxBufferBytes,

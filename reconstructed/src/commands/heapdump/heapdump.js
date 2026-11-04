@@ -19,9 +19,9 @@ import { logForDebugging } from "../../utils/debug.js";
  */
 async function call(args, context) {
   let result = await performHeapDump();
-  let a = isBridgeOrTransport(context.session);
+  let isBridge = isBridgeOrTransport(context.session);
   if (!result.success) {
-    if (a) {
+    if (isBridge) {
       logForDebugging(`heapdump failed: ${result.error}`, {
         level: "error",
       });
@@ -35,50 +35,51 @@ async function call(args, context) {
       value: `Failed to create heap dump: ${result.error}`,
     };
   }
-  let i = a ? basename(result.heapPath) : result.heapPath;
-  let p = a ? basename(result.diagPath) : result.diagPath;
-  if (a) logForDebugging(`heapdump written: ${result.heapPath} ${result.diagPath}`);
-  let h = [i, p, "", formatHeapReport(result.diagnostics)];
-  h.push("", "Open the .heapsnapshot in Chrome DevTools \u2192 Memory \u2192 Load to inspect retainers.");
+  let heapName = isBridge ? basename(result.heapPath) : result.heapPath;
+  let diagName = isBridge ? basename(result.diagPath) : result.diagPath;
+  if (isBridge) logForDebugging(`heapdump written: ${result.heapPath} ${result.diagPath}`);
+  let lines = [heapName, diagName, "", formatHeapReport(result.diagnostics)];
+  lines.push("", "Open the .heapsnapshot in Chrome DevTools \u2192 Memory \u2192 Load to inspect retainers.");
   return {
     type: "text",
-    value: h.join(`
+    value: lines.join(`
 `),
   };
 }
 //@ chunk-dhgx9s0b.js:2840-3908 affinity
 function formatHeapReport(diagnostics) {
   let { memoryUsage, resourceUsage, analysis } = diagnostics;
-  let i = analysis.potentialLeaks.length
+  let leakLines = analysis.potentialLeaks.length
     ? analysis.potentialLeaks.map((potentialLeak) => `  \u26A0 ${potentialLeak}`).join(`
 `)
     : "  (no obvious leak indicators)";
-  let p = (n, u) =>
-    `RSS ${formatGigabytes(memoryUsage.rss)} (peak ${formatGigabytes(resourceUsage.maxRSS)}) ${n > u ? "\u2014 most memory is JS heap (inspect the .heapsnapshot)" : "\u2014 most memory is native (NOT in the .heapsnapshot)"}`;
+  let formatBytes = (label, bytes) =>
+    `RSS ${formatGigabytes(memoryUsage.rss)} (peak ${formatGigabytes(resourceUsage.maxRSS)}) ${label > bytes ? "\u2014 most memory is JS heap (inspect the .heapsnapshot)" : "\u2014 most memory is native (NOT in the .heapsnapshot)"}`;
   if (diagnostics.runtime === "bun") {
     let max = Math.max(0, memoryUsage.rss - memoryUsage.heapUsed);
     return [
-      p(memoryUsage.heapUsed, max),
+      formatBytes(memoryUsage.heapUsed, max),
       `  JS heap          ${formatGigabytes(memoryUsage.heapUsed).padStart(8)}  in snapshot`,
       `  strings, buffers ${formatGigabytes(memoryUsage.external).padStart(8)}  part of the JS heap, in snapshot`,
       `  outside the heap ${formatGigabytes(max).padStart(8)}  not in snapshot (code/JIT/stacks/allocator)`,
-      i,
+      leakLines,
     ].join(`
 `);
   }
-  let h = memoryUsage.external - memoryUsage.arrayBuffers;
+  let externalBytes = memoryUsage.external - memoryUsage.arrayBuffers;
   let max = Math.max(0, memoryUsage.rss - memoryUsage.heapTotal - memoryUsage.external);
   return [
-    p(memoryUsage.heapTotal, memoryUsage.external + max),
+    formatBytes(memoryUsage.heapTotal, memoryUsage.external + max),
     `  JS heap        ${formatGigabytes(memoryUsage.heapTotal).padStart(8)}  in snapshot`,
     `  array buffers  ${formatGigabytes(memoryUsage.arrayBuffers).padStart(8)}  not in snapshot`,
-    `  other external ${formatGigabytes(h).padStart(8)}  not in snapshot`,
+    `  other external ${formatGigabytes(externalBytes).padStart(8)}  not in snapshot`,
     `  unaccounted    ${formatGigabytes(max).padStart(8)}  not in snapshot (code/JIT/stacks/allocator)`,
-    i,
+    leakLines,
   ].join(`
 `);
 }
 //@ chunk-dhgx9s0b.js:3908-3962 affinity
-function formatGigabytes(r) {
-  return `${(r / 1073741824).toFixed(2)} GB`;
+function formatGigabytes(bytes) {
+  return `${(bytes / 1073741824).toFixed(2)} GB`;
 }
+export { call };

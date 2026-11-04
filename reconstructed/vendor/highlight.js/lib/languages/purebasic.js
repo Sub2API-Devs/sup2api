@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:378896-380493 cjs-fingerprint
-var require_purebasic = x(function (cjsExports, cjsModule) {
+var require_purebasic = __commonJS(function (cjsExports, cjsModule) {
   function purebasic(hljs) {
     let STRINGS = {
       className: "string",

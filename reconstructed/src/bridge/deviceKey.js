@@ -28,19 +28,25 @@ import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "../utils/errors.js";
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-x58vpmpd.js:4016-4216 placement
-var fileDeviceKeyStore = fileDeviceKeyBackend(getDeviceKeysFilePath);
-var keychainDeviceKeyStore = createDeviceKeyKeychainStore(getDeviceKeysFilePath);
-var DISKLESS_DEVICE_KEY_STORE = {
-  name: "diskless",
-  read: async () => READ_FAILED,
-  write: async () => false,
-  withWriteLock: async () => {
-    throw Error("This hosted session (claude-code-server) keeps no device key on its machine");
-  },
-};
+var fileDeviceKeyStore; // deferred: uses fileDeviceKeyBackend (../utils/secureStorage/deviceKeyStore.js) of its import cycle while loading; runs once the cycle is complete
+var keychainDeviceKeyStore;
+var DISKLESS_DEVICE_KEY_STORE;
 var deviceKeyStoreOverride;
+deferInit("chunk-x58vpmpd.js:4016", () => {
+  fileDeviceKeyStore = fileDeviceKeyBackend(getDeviceKeysFilePath);
+  keychainDeviceKeyStore = createDeviceKeyKeychainStore(getDeviceKeysFilePath);
+  DISKLESS_DEVICE_KEY_STORE = {
+    name: "diskless",
+    read: async () => READ_FAILED,
+    write: async () => false,
+    withWriteLock: async () => {
+      throw Error("This hosted session (claude-code-server) keeps no device key on its machine");
+    },
+  };
+});
 //@ chunk-x58vpmpd.js:4216-4270 placement
 function deviceKeyStoreForHost() {
   if (deviceKeyStoreOverride) return deviceKeyStoreOverride;
@@ -52,41 +58,46 @@ function deviceKeyStore() {
   return DEVICE_KEY_STORE;
 }
 //@ chunk-x58vpmpd.js:4293-4326 placement
-var legacyKeyMigrationSeen = identity(new Set(), (e) => e.clear());
+var legacyKeyMigrationSeen; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x58vpmpd.js:4293", () => {
+  legacyKeyMigrationSeen = identity(new Set(), (seen) => seen.clear());
+});
 //@ chunk-x58vpmpd.js:4326-4388 placement
-function isInMemoryDeviceKeyStore(e) {
-  return e?.inMemory === true || (getPlatform_2() === "windows" && isWindowsCredManBackendEnabled());
+function isInMemoryDeviceKeyStore(options) {
+  return options?.inMemory === true || (getPlatform_2() === "windows" && isWindowsCredManBackendEnabled());
 }
 //@ chunk-x58vpmpd.js:4388-5470 placement
 /**
  * 设备密钥存储：在安全存储（钥匙串）中加载、生成、迁移 cowork 远程设备密钥。
  */
 var DEVICE_KEY_STORE = {
-  async load(e, r) {
-    let deviceKeyRecord = await readDeviceKeyRecord(e, r, "load");
-    let i = deviceKeyRecord && parseDeviceKeyPrivateKey(deviceKeyRecord.stored);
-    return deviceKeyRecord && i ? deviceKeyInfo(e, deviceKeyRecord, i, r) : undefined;
+  async load(accountUuid, options) {
+    let deviceKeyRecord = await readDeviceKeyRecord(accountUuid, options, "load");
+    let privateKey = deviceKeyRecord && parseDeviceKeyPrivateKey(deviceKeyRecord.stored);
+    return deviceKeyRecord && privateKey
+      ? deviceKeyInfo(accountUuid, deviceKeyRecord, privateKey, options)
+      : undefined;
   },
-  async loadOrCreate(e, r) {
-    let deviceKeyRecord = await readDeviceKeyRecord(e, r, "create");
-    if (deviceKeyRecord) {
-      let deviceKeyPrivateKey = parseDeviceKeyPrivateKey(deviceKeyRecord.stored);
-      if (deviceKeyPrivateKey) return deviceKeyInfo(e, deviceKeyRecord, deviceKeyPrivateKey, r);
+  async loadOrCreate(accountUuid, options) {
+    let held = await readDeviceKeyRecord(accountUuid, options, "create");
+    if (held) {
+      let deviceKeyPrivateKey = parseDeviceKeyPrivateKey(held.stored);
+      if (deviceKeyPrivateKey) return deviceKeyInfo(accountUuid, held, deviceKeyPrivateKey, options);
       logForDebugging("[deviceKey] stored device key is unreadable; minting a new one");
-      if (deviceKeyRecord.location === "legacy")
-        await migrateLegacyDeviceKeyNoop(e, deviceKeyRecord, r).catch((error) => {
+      if (held.location === "legacy")
+        await migrateLegacyDeviceKeyNoop(accountUuid, held, options).catch((error) => {
           logForDebugging(`[deviceKey] could not retire the unreadable device key: ${errorMessage(error)}`);
         });
     }
-    let deviceKey = await loadDeviceKey(e, r);
-    let s = deviceKey && parseDeviceKeyPrivateKey(deviceKey.stored);
-    if (deviceKey && s) {
+    let deviceKey = await loadDeviceKey(accountUuid, options);
+    let privateKey = deviceKey && parseDeviceKeyPrivateKey(deviceKey.stored);
+    if (deviceKey && privateKey) {
       logForDebugging(
         `[deviceKey] adopting the device key already held in the ${deviceKey.location === "item" ? "device-key item" : "credentials store"}`,
       );
-      return deviceKeyInfo(e, deviceKey, s, r);
+      return deviceKeyInfo(accountUuid, deviceKey, privateKey, options);
     }
-    let a = {
+    let newKey = {
       privateKeyPkcs8B64: generateKeyPairSync("ec", {
         namedCurve: "P-256",
       })
@@ -96,11 +107,11 @@ var DEVICE_KEY_STORE = {
         })
         .toString("base64"),
     };
-    let c;
+    let saved;
     try {
-      c = isInMemoryDeviceKeyStore(r)
-        ? await saveDeviceKeyRecord(e, a, r)
-        : await loadOrCreateDeviceKey(e, a);
+      saved = isInMemoryDeviceKeyStore(options)
+        ? await saveDeviceKeyRecord(accountUuid, newKey, options)
+        : await loadOrCreateDeviceKey(accountUuid, newKey);
     } catch (error) {
       throw error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
         ? error
@@ -110,126 +121,129 @@ var DEVICE_KEY_STORE = {
             "key_not_persisted",
           );
     }
-    let y = c && parseDeviceKeyPrivateKey(c.stored);
-    if (!c || !y)
+    let savedKey = saved && parseDeviceKeyPrivateKey(saved.stored);
+    if (!saved || !savedKey)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "deviceRegistry: device key could not be persisted",
         "deviceRegistry: device key not persisted",
         "key_not_persisted",
       );
-    return deviceKeyInfo(e, c, y, r);
+    return deviceKeyInfo(accountUuid, saved, savedKey, options);
   },
 };
 //@ chunk-x58vpmpd.js:5470-5857 placement
-function loadOrCreateDeviceKey(e, r) {
-  let n = deviceKeyStoreForHost();
-  return n.withWriteLock(async () => {
-    let i = await n.read();
-    if (isStorageUnavailable(i)) return assertKeychainAvailable(i);
-    let s = deviceKeyEntry(i, e);
-    if (s && parseDeviceKeyPrivateKey(s))
+function loadOrCreateDeviceKey(accountUuid, record) {
+  let store = deviceKeyStoreForHost();
+  return store.withWriteLock(async () => {
+    let snapshot = await store.read();
+    if (isStorageUnavailable(snapshot)) return assertKeychainAvailable(snapshot);
+    let existing = deviceKeyEntry(snapshot, accountUuid);
+    if (existing && parseDeviceKeyPrivateKey(existing))
       return {
         location: "item",
-        stored: s,
+        stored: existing,
       };
     if (
-      !(await n.write({
-        ...i,
+      !(await store.write({
+        ...snapshot,
         keys: {
-          ...i?.keys,
-          [e]: r,
+          ...snapshot?.keys,
+          [accountUuid]: record,
         },
       }))
     ) {
       logFeatureSad("device_key_store", "item_write_failed");
       return;
     }
-    let c = await n.read();
-    let y = isStorageUnavailable(c) ? undefined : deviceKeyEntry(c, e);
-    if (!y) logFeatureSad("device_key_store", "readback_mismatch");
+    let readBack = await store.read();
+    let written = isStorageUnavailable(readBack) ? undefined : deviceKeyEntry(readBack, accountUuid);
+    if (!written) logFeatureSad("device_key_store", "readback_mismatch");
     return (
-      y && {
+      written && {
         location: "item",
-        stored: y,
+        stored: written,
       }
     );
   });
 }
 //@ chunk-x58vpmpd.js:5857-6108 placement
-async function saveDeviceKeyRecord(e, r, n) {
-  await getSecureStorage().mutate((s) => {
-    if (s.coworkRemoteDevice?.[e]) return s;
+async function saveDeviceKeyRecord(accountUuid, record, options) {
+  await getSecureStorage().mutate((storage) => {
+    if (storage.coworkRemoteDevice?.[accountUuid]) return storage;
     return {
-      ...s,
+      ...storage,
       coworkRemoteDevice: {
-        ...s.coworkRemoteDevice,
-        [e]: r,
+        ...storage.coworkRemoteDevice,
+        [accountUuid]: record,
       },
     };
-  }, n);
-  let i = (await getSecureStorage().readAsync(n))?.coworkRemoteDevice?.[e];
+  }, options);
+  let stored = (await getSecureStorage().readAsync(options))?.coworkRemoteDevice?.[accountUuid];
   return (
-    i && {
+    stored && {
       location: "legacy",
-      stored: i,
+      stored,
     }
   );
 }
 //@ chunk-x58vpmpd.js:6108-6798 placement
-async function readDeviceKeyRecord(e, r, n) {
-  let i = (await getSecureStorage().readAsync(r))?.coworkRemoteDevice?.[e];
-  if (isInMemoryDeviceKeyStore(r)) {
-    if (i || r?.inMemory === true)
+async function readDeviceKeyRecord(accountUuid, options, mode) {
+  let legacyStored = (await getSecureStorage().readAsync(options))?.coworkRemoteDevice?.[accountUuid];
+  if (isInMemoryDeviceKeyStore(options)) {
+    if (legacyStored || options?.inMemory === true)
       return (
-        i && {
+        legacyStored && {
           location: "legacy",
-          stored: i,
+          stored: legacyStored,
         }
       );
-    let c = await deviceKeyStoreForHost().read();
-    let y = isStorageUnavailable(c) ? undefined : deviceKeyEntry(c, e);
+    let snapshot = await deviceKeyStoreForHost().read();
+    let entry = isStorageUnavailable(snapshot) ? undefined : deviceKeyEntry(snapshot, accountUuid);
     return (
-      y && {
+      entry && {
         location: "item",
-        stored: y,
+        stored: entry,
       }
     );
   }
-  let s = await deviceKeyStoreForHost().read();
-  if (isStorageUnavailable(s)) {
-    if (i && parseDeviceKeyPrivateKey(i)) {
-      if (s === READ_FAILED) logFeatureSad("device_key_store", "item_unreadable_using_legacy");
+  let snapshot = await deviceKeyStoreForHost().read();
+  if (isStorageUnavailable(snapshot)) {
+    if (legacyStored && parseDeviceKeyPrivateKey(legacyStored)) {
+      if (snapshot === READ_FAILED) logFeatureSad("device_key_store", "item_unreadable_using_legacy");
       return {
         location: "legacy",
-        stored: i,
+        stored: legacyStored,
       };
     }
-    if (s === NO_KEYCHAIN && n === "load") return;
-    return assertKeychainAvailable(s);
+    if (snapshot === NO_KEYCHAIN && mode === "load") return;
+    return assertKeychainAvailable(snapshot);
   }
-  let a = deviceKeyEntry(s, e);
-  if (a) {
-    if (i?.privateKeyPkcs8B64 === a.privateKeyPkcs8B64 && (n === "create" || !legacyKeyMigrationSeen.has(e)))
-      await clearDevicePrivateKey(e, a.privateKeyPkcs8B64, r);
+  let entry = deviceKeyEntry(snapshot, accountUuid);
+  if (entry) {
+    if (
+      legacyStored?.privateKeyPkcs8B64 === entry.privateKeyPkcs8B64 &&
+      (mode === "create" || !legacyKeyMigrationSeen.has(accountUuid))
+    )
+      await clearDevicePrivateKey(accountUuid, entry.privateKeyPkcs8B64, options);
     return {
       location: "item",
-      stored: a,
+      stored: entry,
     };
   }
-  if (!i) return;
-  if (n === "load" && legacyKeyMigrationSeen.has(e))
+  if (!legacyStored) return;
+  if (mode === "load" && legacyKeyMigrationSeen.has(accountUuid))
     return {
       location: "legacy",
-      stored: i,
+      stored: legacyStored,
     };
   return {
-    location: await createDeviceKey(e, i, r),
-    stored: i,
+    location: await createDeviceKey(accountUuid, legacyStored, options),
+    stored: legacyStored,
   };
 }
 //@ chunk-x58vpmpd.js:6798-7174 placement
-function assertKeychainAvailable(e) {
-  if (e === NO_KEYCHAIN) {
+function assertKeychainAvailable(readState) {
+  if (readState === NO_KEYCHAIN) {
     logFeatureSad("device_key_store", "no_keychain");
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "deviceRegistry: this account has no login keychain to hold a device key",
@@ -245,26 +259,27 @@ function assertKeychainAvailable(e) {
   );
 }
 //@ chunk-x58vpmpd.js:7174-7729 placement
-async function loadDeviceKey(e, r) {
-  if (r?.inMemory !== true) {
-    let i = await deviceKeyStoreForHost().read();
-    if (isStorageUnavailable(i)) return assertKeychainAvailable(i);
-    let s = deviceKeyEntry(i, e);
-    if (s && parseDeviceKeyPrivateKey(s))
+async function loadDeviceKey(accountUuid, options) {
+  if (options?.inMemory !== true) {
+    let snapshot = await deviceKeyStoreForHost().read();
+    if (isStorageUnavailable(snapshot)) return assertKeychainAvailable(snapshot);
+    let entry = deviceKeyEntry(snapshot, accountUuid);
+    if (entry && parseDeviceKeyPrivateKey(entry))
       return {
         location: "item",
-        stored: s,
+        stored: entry,
       };
   }
   let secureStorage = getSecureStorage();
-  for (let i of [
+  for (let strictOptions of [
     {
       inaccessibleAs: "failure",
     },
     undefined,
   ]) {
-    let s = await (secureStorage.readAsyncStrict?.(r, i) ?? secureStorage.readAsync(r));
-    if (s === READ_FAILED) {
+    let storage = await (secureStorage.readAsyncStrict?.(options, strictOptions) ??
+      secureStorage.readAsync(options));
+    if (storage === READ_FAILED) {
       logFeatureSad("device_key_store", "legacy_read_failed");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "deviceRegistry: the credentials store could not be read for a device key",
@@ -272,77 +287,81 @@ async function loadDeviceKey(e, r) {
         "key_store_unreadable",
       );
     }
-    let a = s?.coworkRemoteDevice?.[e];
-    if (a && parseDeviceKeyPrivateKey(a))
+    let stored = storage?.coworkRemoteDevice?.[accountUuid];
+    if (stored && parseDeviceKeyPrivateKey(stored))
       return {
         location: "legacy",
-        stored: a,
+        stored,
       };
   }
   return;
 }
 //@ chunk-x58vpmpd.js:7729-8371 placement
-async function createDeviceKey(e, r, n) {
-  let i;
-  let s = deviceKeyStoreForHost();
+async function createDeviceKey(accountUuid, record, options) {
+  let outcome;
+  let store = deviceKeyStoreForHost();
   try {
-    i = await s.withWriteLock(async () => {
-      let a = await s.read();
-      if (isStorageUnavailable(a))
-        return keepDeviceKeyInLegacyStore(e, a === NO_KEYCHAIN ? "no_keychain" : "item_read_failed");
-      if (deviceKeyEntry(a, e) === undefined) {
+    outcome = await store.withWriteLock(async () => {
+      let snapshot = await store.read();
+      if (isStorageUnavailable(snapshot))
+        return keepDeviceKeyInLegacyStore(
+          accountUuid,
+          snapshot === NO_KEYCHAIN ? "no_keychain" : "item_read_failed",
+        );
+      if (deviceKeyEntry(snapshot, accountUuid) === undefined) {
         if (
-          !(await s.write({
-            ...a,
+          !(await store.write({
+            ...snapshot,
             keys: {
-              ...a?.keys,
-              [e]: r,
+              ...snapshot?.keys,
+              [accountUuid]: record,
             },
           }))
         )
-          return keepDeviceKeyInLegacyStore(e, "item_write_failed");
+          return keepDeviceKeyInLegacyStore(accountUuid, "item_write_failed");
       }
-      let c = await s.read();
-      let y = isStorageUnavailable(c) ? undefined : deviceKeyEntry(c, e);
-      if (y === undefined) return keepDeviceKeyInLegacyStore(e, "readback_mismatch");
-      if (y.privateKeyPkcs8B64 !== r.privateKeyPkcs8B64 || y.rowPk !== r.rowPk)
-        return keepDeviceKeyInLegacyStore(e, "readback_foreign_key");
+      let readBack = await store.read();
+      let written = isStorageUnavailable(readBack) ? undefined : deviceKeyEntry(readBack, accountUuid);
+      if (written === undefined) return keepDeviceKeyInLegacyStore(accountUuid, "readback_mismatch");
+      if (written.privateKeyPkcs8B64 !== record.privateKeyPkcs8B64 || written.rowPk !== record.rowPk)
+        return keepDeviceKeyInLegacyStore(accountUuid, "readback_foreign_key");
       return "item";
     });
   } catch (error) {
     logForDebugging(
       `[deviceKey] could not take the device-key lock to move the device key: ${errorMessage(error)}`,
     );
-    return keepDeviceKeyInLegacyStore(e, "lock_unavailable");
+    return keepDeviceKeyInLegacyStore(accountUuid, "lock_unavailable");
   }
-  if (i === "item") await clearDevicePrivateKey(e, r.privateKeyPkcs8B64, n);
-  return i;
+  if (outcome === "item") await clearDevicePrivateKey(accountUuid, record.privateKeyPkcs8B64, options);
+  return outcome;
 }
 //@ chunk-x58vpmpd.js:8371-8510 placement
-function keepDeviceKeyInLegacyStore(e, r) {
-  legacyKeyMigrationSeen.add(e);
-  logForDebugging(`[deviceKey] device key stays in the credentials store for now (${r})`);
-  logFeatureSad("device_key_store", r);
+function keepDeviceKeyInLegacyStore(accountUuid, reason) {
+  legacyKeyMigrationSeen.add(accountUuid);
+  logForDebugging(`[deviceKey] device key stays in the credentials store for now (${reason})`);
+  logFeatureSad("device_key_store", reason);
   return "legacy";
 }
 //@ chunk-x58vpmpd.js:8510-8948 placement
-async function clearDevicePrivateKey(e, r, n) {
-  let i = false;
+async function clearDevicePrivateKey(accountUuid, privateKeyPkcs8B64, options) {
+  let removed = false;
   try {
     if (
       (
-        await getSecureStorage().mutate((a) => {
-          if (a.coworkRemoteDevice?.[e]?.privateKeyPkcs8B64 !== r) return a;
-          i = true;
-          let { [e]: c, ...y } = a.coworkRemoteDevice;
+        await getSecureStorage().mutate((storage) => {
+          if (storage.coworkRemoteDevice?.[accountUuid]?.privateKeyPkcs8B64 !== privateKeyPkcs8B64)
+            return storage;
+          removed = true;
+          let { [accountUuid]: dropped, ...rest } = storage.coworkRemoteDevice;
           return {
-            ...a,
-            coworkRemoteDevice: y,
+            ...storage,
+            coworkRemoteDevice: rest,
           };
-        }, n)
+        }, options)
       ).success
     ) {
-      if (i) {
+      if (removed) {
         logForDebugging("[deviceKey] moved the device key out of the credentials store into its own item");
         logFeatureOk("device_key_store");
       }
@@ -351,13 +370,13 @@ async function clearDevicePrivateKey(e, r, n) {
   } catch (error) {
     logForDebugging(`[deviceKey] could not clear the legacy device key: ${errorMessage(error)}`);
   }
-  keepDeviceKeyInLegacyStore(e, "legacy_delete_failed");
+  keepDeviceKeyInLegacyStore(accountUuid, "legacy_delete_failed");
 }
 //@ chunk-x58vpmpd.js:8948-9159 placement
-function parseDeviceKeyPrivateKey(stored) {
+function parseDeviceKeyPrivateKey(deviceKey) {
   try {
     let privateKey = createPrivateKey({
-      key: Buffer.from(stored.privateKeyPkcs8B64, "base64"),
+      key: Buffer.from(deviceKey.privateKeyPkcs8B64, "base64"),
       format: "der",
       type: "pkcs8",
     });
@@ -370,113 +389,113 @@ function parseDeviceKeyPrivateKey(stored) {
   }
 }
 //@ chunk-x58vpmpd.js:9159-9538 placement
-function deviceKeyInfo(e, { location, stored }, i, s) {
+function deviceKeyInfo(accountUuid, { location, stored }, privateKey, options) {
   return {
     rowPk: stored.rowPk,
-    publicKeySpkiB64: createPublicKey(i)
+    publicKeySpkiB64: createPublicKey(privateKey)
       .export({
         type: "spki",
         format: "der",
       })
       .toString("base64"),
-    sign: async (a) =>
-      sign("sha256", a, {
-        key: i,
+    sign: async (data) =>
+      sign("sha256", data, {
+        key: privateKey,
         dsaEncoding: "ieee-p1363",
       }),
-    setRowPk: (a) =>
+    setRowPk: (rowPk) =>
       migrateLegacyDeviceKey(
-        e,
+        accountUuid,
         {
           location,
           stored,
         },
-        (c) => {
-          if (c.rowPk === a) return c;
-          if (a === undefined) {
-            let { rowPk, ...l } = c;
-            return l;
+        (stored) => {
+          if (stored.rowPk === rowPk) return stored;
+          if (rowPk === undefined) {
+            let { rowPk, ...withoutRowPk } = stored;
+            return withoutRowPk;
           }
           return {
-            ...c,
-            rowPk: a,
+            ...stored,
+            rowPk,
           };
         },
-        s,
+        options,
       ),
     drop: () =>
       migrateLegacyDeviceKeyNoop(
-        e,
+        accountUuid,
         {
           location,
           stored,
         },
-        s,
+        options,
       ),
   };
 }
 //@ chunk-x58vpmpd.js:9538-10366 placement
-async function migrateLegacyDeviceKey(e, { location, stored }, i, s) {
+async function migrateLegacyDeviceKey(accountUuid, { location, stored }, transform, options) {
   if (location === "legacy") {
-    await getSecureStorage().mutate((c) => {
-      let y = c.coworkRemoteDevice?.[e];
-      if (y?.privateKeyPkcs8B64 !== stored.privateKeyPkcs8B64) return c;
-      let l = i(y);
-      if (l === y) return c;
-      let { [e]: D, ...P } = c.coworkRemoteDevice ?? {};
+    await getSecureStorage().mutate((storage) => {
+      let current = storage.coworkRemoteDevice?.[accountUuid];
+      if (current?.privateKeyPkcs8B64 !== stored.privateKeyPkcs8B64) return storage;
+      let next = transform(current);
+      if (next === current) return storage;
+      let { [accountUuid]: dropped, ...rest } = storage.coworkRemoteDevice ?? {};
       return {
-        ...c,
+        ...storage,
         coworkRemoteDevice:
-          l === undefined
-            ? P
+          next === undefined
+            ? rest
             : {
-                ...P,
-                [e]: l,
+                ...rest,
+                [accountUuid]: next,
               },
       };
-    }, s);
+    }, options);
     return;
   }
-  let a = deviceKeyStoreForHost();
-  await a.withWriteLock(async () => {
-    let c = await a.read();
-    if (isStorageUnavailable(c))
+  let store = deviceKeyStoreForHost();
+  await store.withWriteLock(async () => {
+    let snapshot = await store.read();
+    if (isStorageUnavailable(snapshot))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `deviceRegistry: the ${a.name} device-key store could not be read`,
+        `deviceRegistry: the ${store.name} device-key store could not be read`,
         "deviceRegistry: device-key store unreadable",
       );
-    let y = deviceKeyEntry(c, e);
-    if (c === null || y?.privateKeyPkcs8B64 !== stored.privateKeyPkcs8B64) return;
-    let l = i(y);
-    if (l === y) return;
-    let { [e]: D, ...P } = c.keys;
+    let entry = deviceKeyEntry(snapshot, accountUuid);
+    if (snapshot === null || entry?.privateKeyPkcs8B64 !== stored.privateKeyPkcs8B64) return;
+    let next = transform(entry);
+    if (next === entry) return;
+    let { [accountUuid]: dropped, ...rest } = snapshot.keys;
     if (
-      !(await a.write({
-        ...c,
+      !(await store.write({
+        ...snapshot,
         keys:
-          l === undefined
-            ? P
+          next === undefined
+            ? rest
             : {
-                ...P,
-                [e]: l,
+                ...rest,
+                [accountUuid]: next,
               },
       }))
     )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `deviceRegistry: the ${a.name} device-key store refused the write`,
+        `deviceRegistry: the ${store.name} device-key store refused the write`,
         "deviceRegistry: device-key store write refused",
       );
   });
 }
 //@ chunk-x58vpmpd.js:10366-10413 placement
-function migrateLegacyDeviceKeyNoop(e, r, n) {
+function migrateLegacyDeviceKeyNoop(accountUuid, held, options) {
   return migrateLegacyDeviceKey(
-    e,
-    r,
+    accountUuid,
+    held,
     () => {
       return;
     },
-    n,
+    options,
   );
 }
 export { deviceKeyStore };

@@ -5,11 +5,11 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_external } from "../v4/classic/external.cjs";
 
 //@ chunk-1ny7cxrt.js:656965-658225 cjs-fingerprint
-var require_v3 = x(function (cjsExports) {
+var require_v3 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -56,9 +56,10 @@ var require_v3 = x(function (cjsExports) {
     };
   var __exportStar =
     (cjsExports && cjsExports.__exportStar) ||
-    function (m, t) {
+    function (m, target) {
       for (var p in m)
-        if (p !== "default" && !Object.prototype.hasOwnProperty.call(t, p)) __createBinding(t, m, p);
+        if (p !== "default" && !Object.prototype.hasOwnProperty.call(target, p))
+          __createBinding(target, m, p);
     };
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

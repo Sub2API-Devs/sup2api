@@ -15,19 +15,20 @@ import {
   GENERATED_DIRECTORIES,
   GENERATED_FILENAME_PATTERNS,
 } from "../../../utils/generatedFiles.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-wyqg6m3h.js:26852-26891 placement
-var rootedPathOf = (e) => `/${e.replace(/^\/+/, "")}`;
+var rootedPathOf = (path) => `/${path.replace(/^\/+/, "")}`;
 //@ chunk-wyqg6m3h.js:26891-27044 placement
-function isGeneratedFile(e) {
-  let lower = baseNameOf(e).toLowerCase();
-  let r = rootedPathOf(e);
-  let any = GENERATED_SUFFIXES.some((n) => lower.endsWith(n));
+function isGeneratedFile(path) {
+  let lower = baseNameOf(path).toLowerCase();
+  let rootedPath = rootedPathOf(path);
+  let any = GENERATED_SUFFIXES.some((suffix) => lower.endsWith(suffix));
   return (
     GENERATED_FILENAMES.has(lower) ||
     any ||
-    GENERATED_DIRECTORIES.some((n) => r.includes(n)) ||
-    GENERATED_FILENAME_PATTERNS.some((n) => n.test(lower))
+    GENERATED_DIRECTORIES.some((dir) => rootedPath.includes(dir)) ||
+    GENERATED_FILENAME_PATTERNS.some((pattern) => pattern.test(lower))
   );
 }
 //@ chunk-wyqg6m3h.js:27044-27180 placement
@@ -44,18 +45,24 @@ var TEST_DIRECTORIES = [
   "/testdata/",
 ];
 //@ chunk-wyqg6m3h.js:27180-27289 placement
-var TEST_FILENAME_PATTERNS = Object.freeze([
-  /\.test\.[a-z]+$/i,
-  /\.spec\.[a-z]+$/i,
-  /_test\.[a-z]+$/i,
-  /_spec\.[a-z]+$/i,
-  /\.snap$/i,
-]);
+var TEST_FILENAME_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wyqg6m3h.js:27180", () => {
+  TEST_FILENAME_PATTERNS = Object.freeze([
+    /\.test\.[a-z]+$/i,
+    /\.spec\.[a-z]+$/i,
+    /_test\.[a-z]+$/i,
+    /_spec\.[a-z]+$/i,
+    /\.snap$/i,
+  ]);
+});
 //@ chunk-wyqg6m3h.js:27289-27384 placement
-function isTestFile(e) {
-  let o = baseNameOf(e);
-  let r = rootedPathOf(e);
-  return TEST_DIRECTORIES.some((s) => r.includes(s)) || TEST_FILENAME_PATTERNS.some((s) => s.test(o));
+function isTestFile(path) {
+  let fileName = baseNameOf(path);
+  let rootedPath = rootedPathOf(path);
+  return (
+    TEST_DIRECTORIES.some((dir) => rootedPath.includes(dir)) ||
+    TEST_FILENAME_PATTERNS.some((pattern) => pattern.test(fileName))
+  );
 }
 //@ chunk-wyqg6m3h.js:27384-27409 placement
 var isNoiseFile = (path) => isTestFile(path) || isGeneratedFile(path);
@@ -92,26 +99,26 @@ var PANEL_HIDDEN_TEXT = "Diff panel hidden";
 //@ chunk-wyqg6m3h.js:28000-28026 placement
 var PANEL_SHOWN_TEXT = "Diff panel shown";
 //@ chunk-wyqg6m3h.js:28026-28115 placement
-var registerFailedTextOf = (e) =>
-  `could not register /diff: ${e}; the diff panel is unavailable this session`;
+var registerFailedTextOf = (error) =>
+  `could not register /diff: ${error}; the diff panel is unavailable this session`;
 //@ chunk-wyqg6m3h.js:28115-28192 placement
 var RESIZE_TERMINAL_TEXT = "Resize your terminal to at least 110 columns to show the diff panel";
 //@ chunk-wyqg6m3h.js:28192-28287 placement
-var untrackedWithheldTextOf = (e) =>
-  `Untracked files unavailable (${e.words.lister} could not list them); not counted`;
+var untrackedWithheldTextOf = (status) =>
+  `Untracked files unavailable (${status.words.lister} could not list them); not counted`;
 //@ chunk-wyqg6m3h.js:28287-28319 placement
 var COMMAND_SPEC = {
   name: COMMAND_NAME,
   description: COMMAND_DESCRIPTION,
 };
 //@ chunk-wyqg6m3h.js:28319-28379 placement
-var isRecord = (e) => typeof e === "object" && e !== null && !Array.isArray(e);
+var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 //@ chunk-wyqg6m3h.js:28379-28418 placement = CODE_EDITING_TOOLS (1)
 var CODE_EDITING_TOOLS = ["Edit", "Write", "NotebookEdit"];
 //@ chunk-wyqg6m3h.js:28418-28495 placement
-function mayHaveWritten(e) {
-  let o = e;
-  return o === undefined || (o.deny === undefined && o.isReadOnly !== true);
+function mayHaveWritten(result) {
+  let value = result;
+  return value === undefined || (value.deny === undefined && value.isReadOnly !== true);
 }
 //@ chunk-wyqg6m3h.js:28495-28524 placement
 var SHELL_TOOLS = ["Bash", "PowerShell"];

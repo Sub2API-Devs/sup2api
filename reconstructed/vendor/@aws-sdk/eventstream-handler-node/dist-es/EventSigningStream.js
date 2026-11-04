@@ -6,11 +6,11 @@
  * attribution: esm-layout 2, esm-fingerprint 2
  */
 import { Transform } from "stream";
-import { Re } from "../../../../runtime/bun-runtime.js";
-import { require_core as require_core_2 } from "../../core/dist-cjs/index.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
+import { require_core_2 } from "../../core/dist-cjs/index.js";
 
 //@ chunk-3cddmtk7.js:14802-18139 esm-layout
-var Ee = {
+var packageJson = {
   name: "@aws-sdk/client-bedrock-runtime",
   description: "AWS SDK for JavaScript Bedrock Runtime Client for Node.js, Browser and React Native",
   version: "3.936.0",
@@ -114,7 +114,7 @@ var Ee = {
   },
 };
 //@ chunk-3cddmtk7.js:18139-18154 esm-layout
-var import_core_4 = Re(require_core_2());
+var import_core_6 = __toESM(require_core_2());
 //@ chunk-3cddmtk7.js:18258-19045 esm-fingerprint
 class EventSigningStream extends Transform {
   priorSignature;
@@ -177,4 +177,4 @@ function getSignatureBinary(signature) {
   let buf = Buffer.from(signature, "hex");
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength / Uint8Array.BYTES_PER_ELEMENT);
 }
-export { EventSigningStream, import_core_4, Ee };
+export { EventSigningStream, import_core_6, packageJson };

@@ -9,7 +9,7 @@
  * attribution: placement 1, layout 1, fingerprint 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme } from "../design-system/ThemeProvider.js";
 import { useAppState } from "../../state/AppState.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -30,19 +30,23 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { renderToolActivity } from "./renderToolActivity.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:704222-704226 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:704222", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:704226-704283 layout
-function selectAgentDefinitionsActiveAgents_2(cn) {
-  return cn.agentDefinitions.activeAgents;
+function selectAgentDefinitionsActiveAgents_2(appState) {
+  return appState.agentDefinitions.activeAgents;
 }
 //@ chunk-18hwfzwa.js:704283-708595 fingerprint = InProcessTeammateDetailDialog (0.709)
 /**
  * 进程内队友详情：状态（运行/完成/被杀）、当前活动、token、最近消息与提示。
  */
 function InProcessTeammateDetailDialog(props) {
-  let $ = w(71);
+  let $ = useMemoCache(71);
   let { teammate, onDone, onKill, onBack, onForeground } = props;
   let [theme] = useTheme();
   let activeAgents = useAppState(selectAgentDefinitionsActiveAgents_2);
@@ -62,9 +66,9 @@ function InProcessTeammateDetailDialog(props) {
     teammate.endTime,
   );
   const onKill_2 = teammate.status === "running" ? onKill : undefined;
-  let kt;
+  let confirmationHandlers;
   if ($[1] !== onBack || $[2] !== onDone || $[3] !== onKill_2) {
-    kt = {
+    confirmationHandlers = {
       onClose: onDone,
       onBack,
       onKill: onKill_2,
@@ -72,12 +76,12 @@ function InProcessTeammateDetailDialog(props) {
     $[1] = onBack;
     $[2] = onDone;
     $[3] = onKill_2;
-    $[4] = kt;
-  } else kt = $[4];
-  let confirmationKeys = useConfirmationKeys(kt);
-  let It;
+    $[4] = confirmationHandlers;
+  } else confirmationHandlers = $[4];
+  let confirmationKeys = useConfirmationKeys(confirmationHandlers);
+  let keyDownHandler;
   if ($[5] !== confirmationKeys || $[6] !== onForeground || $[7] !== teammate.status) {
-    It = (e) => {
+    keyDownHandler = (e) => {
       if (e.key === "f" && !e.ctrl && !e.meta && teammate.status === "running" && onForeground) {
         e.preventDefault();
         onForeground();
@@ -88,9 +92,9 @@ function InProcessTeammateDetailDialog(props) {
     $[5] = confirmationKeys;
     $[6] = onForeground;
     $[7] = teammate.status;
-    $[8] = It;
-  } else It = $[8];
-  let handleKeyDown = It;
+    $[8] = keyDownHandler;
+  } else keyDownHandler = $[8];
+  let handleKeyDown = keyDownHandler;
   let t5;
   if ($[9] !== teammate) {
     t5 = describeTeammateActivity(teammate);
@@ -100,61 +104,61 @@ function InProcessTeammateDetailDialog(props) {
   let activity = t5;
   let tokenCount = teammate.result?.totalTokens ?? teammate.progress?.tokenCount;
   let toolUseCount = teammate.result?.totalToolUseCount ?? teammate.progress?.toolUseCount;
-  let io;
+  let agentEffortLabel;
   if ($[11] !== teammate.effort || $[12] !== teammate.model) {
-    io = agentLabel(teammate.model, teammate.effort);
+    agentEffortLabel = agentLabel(teammate.model, teammate.effort);
     $[11] = teammate.effort;
     $[12] = teammate.model;
-    $[13] = io;
-  } else io = $[13];
-  let so = io;
-  let po;
+    $[13] = agentEffortLabel;
+  } else agentEffortLabel = $[13];
+  let agentEffortText = agentEffortLabel;
+  let truncatedPrompt;
   if ($[14] !== teammate.prompt) {
-    po = truncateToWidth(teammate.prompt, 300);
+    truncatedPrompt = truncateToWidth(teammate.prompt, 300);
     $[14] = teammate.prompt;
-    $[15] = po;
-  } else po = $[15];
-  let displayPrompt = po;
+    $[15] = truncatedPrompt;
+  } else truncatedPrompt = $[15];
+  let displayPrompt = truncatedPrompt;
   let color;
   if ($[16] !== teammate.identity.color) {
     color = toInkColor(teammate.identity.color);
     $[16] = teammate.identity.color;
     $[17] = color;
   } else color = $[17];
-  let bo;
+  let agentNameElement;
   if ($[18] !== color || $[19] !== teammate.identity.agentName) {
-    bo = jsxProd_default_2(Text, {
+    agentNameElement = jsxProd_default_2(Text, {
       color,
       children: ["@", teammate.identity.agentName],
     });
     $[18] = color;
     $[19] = teammate.identity.agentName;
-    $[20] = bo;
-  } else bo = $[20];
-  let Ao;
+    $[20] = agentNameElement;
+  } else agentNameElement = $[20];
+  let activityElement;
   if ($[21] !== activity) {
-    Ao =
+    activityElement =
       activity &&
       jsxProd_default_2(Text, {
         dimColor: true,
         children: [" (", activity, ")"],
       });
     $[21] = activity;
-    $[22] = Ao;
-  } else Ao = $[22];
+    $[22] = activityElement;
+  } else activityElement = $[22];
   let t10;
-  if ($[23] !== Ao || $[24] !== bo) {
+  if ($[23] !== activityElement || $[24] !== agentNameElement) {
     t10 = jsxProd_default_2(Text, {
-      children: [bo, Ao],
+      children: [agentNameElement, activityElement],
     });
-    $[23] = Ao;
-    $[24] = bo;
+    $[23] = activityElement;
+    $[24] = agentNameElement;
     $[25] = t10;
   } else t10 = $[25];
   let title = t10;
-  let Ho;
+  let statusLine;
   if ($[26] !== teammate.status) {
-    Ho =
+    statusLine =
       teammate.status !== "running" &&
       jsxProd_default_2(Text, {
         color:
@@ -165,62 +169,67 @@ function InProcessTeammateDetailDialog(props) {
         ],
       });
     $[26] = teammate.status;
-    $[27] = Ho;
-  } else Ho = $[27];
-  let Io;
+    $[27] = statusLine;
+  } else statusLine = $[27];
+  let tokenUsageHint;
   if ($[28] !== tokenCount) {
-    Io =
+    tokenUsageHint =
       tokenCount !== undefined &&
       tokenCount > 0 &&
       jsxProd_default_2(Fragment, {
         children: [" \xB7 ", formatNumber(tokenCount), " tokens"],
       });
     $[28] = tokenCount;
-    $[29] = Io;
-  } else Io = $[29];
-  let Wo;
+    $[29] = tokenUsageHint;
+  } else tokenUsageHint = $[29];
+  let toolCountHint;
   if ($[30] !== toolUseCount) {
-    Wo =
+    toolCountHint =
       toolUseCount !== undefined &&
       toolUseCount > 0 &&
       jsxProd_default_2(Fragment, {
         children: [" ", "\xB7 ", toolUseCount, " ", toolUseCount === 1 ? "tool" : "tools"],
       });
     $[30] = toolUseCount;
-    $[31] = Wo;
-  } else Wo = $[31];
-  let mn;
-  if ($[32] !== so) {
-    mn =
-      so &&
+    $[31] = toolCountHint;
+  } else toolCountHint = $[31];
+  let effortHint;
+  if ($[32] !== agentEffortText) {
+    effortHint =
+      agentEffortText &&
       jsxProd_default_2(Fragment, {
-        children: [" \xB7 ", so],
+        children: [" \xB7 ", agentEffortText],
       });
-    $[32] = so;
-    $[33] = mn;
-  } else mn = $[33];
-  let Cn;
-  if ($[34] !== elapsedTicker || $[35] !== Io || $[36] !== Wo || $[37] !== mn) {
-    Cn = jsxProd_default_2(Text, {
+    $[32] = agentEffortText;
+    $[33] = effortHint;
+  } else effortHint = $[33];
+  let timingLine;
+  if (
+    $[34] !== elapsedTicker ||
+    $[35] !== tokenUsageHint ||
+    $[36] !== toolCountHint ||
+    $[37] !== effortHint
+  ) {
+    timingLine = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [elapsedTicker, Io, Wo, mn],
+      children: [elapsedTicker, tokenUsageHint, toolCountHint, effortHint],
     });
     $[34] = elapsedTicker;
-    $[35] = Io;
-    $[36] = Wo;
-    $[37] = mn;
-    $[38] = Cn;
-  } else Cn = $[38];
-  let No;
-  if ($[39] !== Ho || $[40] !== Cn) {
-    No = jsxProd_default_2(Text, {
-      children: [Ho, Cn],
+    $[35] = tokenUsageHint;
+    $[36] = toolCountHint;
+    $[37] = effortHint;
+    $[38] = timingLine;
+  } else timingLine = $[38];
+  let subtitle;
+  if ($[39] !== statusLine || $[40] !== timingLine) {
+    subtitle = jsxProd_default_2(Text, {
+      children: [statusLine, timingLine],
     });
-    $[39] = Ho;
-    $[40] = Cn;
-    $[41] = No;
-  } else No = $[41];
-  let subtitle = No;
+    $[39] = statusLine;
+    $[40] = timingLine;
+    $[41] = subtitle;
+  } else subtitle = $[41];
+  let subtitle_2 = subtitle;
   const showBack = !!onBack;
   const showStop = teammate.status === "running" && !!onKill;
   let children;
@@ -337,7 +346,7 @@ function InProcessTeammateDetailDialog(props) {
   let children_2;
   if (
     $[60] !== onDone ||
-    $[61] !== subtitle ||
+    $[61] !== subtitle_2 ||
     $[62] !== inputGuide ||
     $[63] !== t17 ||
     $[64] !== t19 ||
@@ -346,14 +355,14 @@ function InProcessTeammateDetailDialog(props) {
   ) {
     children_2 = jsxProd_default_2(Dialog, {
       title,
-      subtitle,
+      subtitle: subtitle_2,
       onCancel: onDone,
       color: "background",
       inputGuide,
       children: [t17, t19, t20],
     });
     $[60] = onDone;
-    $[61] = subtitle;
+    $[61] = subtitle_2;
     $[62] = inputGuide;
     $[63] = t17;
     $[64] = t19;

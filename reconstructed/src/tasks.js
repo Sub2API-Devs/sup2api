@@ -35,9 +35,9 @@ function getTaskImplsByType() {
     MonitorMcpTaskImpl,
     MonitorWsTask,
     InProcessTeammateTask,
-    require("./chunk-xxmv82wc.js").LocalWorkflowTask,
+    require("./tasks/LocalWorkflowTask/LocalWorkflowTask.lazy.js").LocalWorkflowTask,
   ];
-  taskImpls.push(require("./chunk-1wp0vvkk.js").MCP_TASK);
+  taskImpls.push(require("./tasks/McpTask/MCP_TASK.lazy.js").MCP_TASK);
   return new Map(taskImpls.map((taskImpl) => [taskImpl.type, taskImpl]));
 }
 export { getTaskImplsByType };

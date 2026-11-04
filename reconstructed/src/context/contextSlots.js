@@ -8,7 +8,7 @@
  * pieces: chunk-jryts5sf.js (2)
  * attribution: placement 2
  */
-import { init_react_production, qt } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, createContext } from "../../vendor/react/cjs/react.production.js";
 
 //@ chunk-jryts5sf.js:229-233 placement
 init_react_production();
@@ -16,6 +16,6 @@ init_react_production();
 /**
  * 两个 React 上下文槽。
  */
-var ContextSlotA = qt(null);
-var contextSlot = qt(null);
+var ContextSlotA = createContext(null);
+var contextSlot = createContext(null);
 export { ContextSlotA, contextSlot };

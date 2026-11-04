@@ -11,19 +11,20 @@
 import { uiSignals } from "../../state/uiSignals.js";
 import { useClock } from "../../ink/components/ClockContext.js";
 import { useInputClock } from "../../ink/components/Input.js";
-import { R, P, ce } from "../../../vendor/react/cjs/react.production.js";
+import { useRef, useEffect, useCallback } from "../../../vendor/react/cjs/react.production.js";
 import { isWithinRecentInput } from "../../hooks/useRecentInputGuard.js";
 import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
 import { usePreDispatchKeyHandler } from "../../keybindings/useActionHandlers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:475961-476111 placement
 function capturePromptDigits() {
-  uiSignals.promptDigitCaptures.setState((h) => ({
-    count: h.count + 1,
+  uiSignals.promptDigitCaptures.setState((state) => ({
+    count: state.count + 1,
   }));
   return function () {
-    uiSignals.promptDigitCaptures.setState((x) => ({
-      count: x.count - 1,
+    uiSignals.promptDigitCaptures.setState((state) => ({
+      count: state.count - 1,
     }));
   };
 }
@@ -32,21 +33,26 @@ function hasDigitCaptures() {
   return uiSignals.promptDigitCaptures.getState().count > 0;
 }
 //@ chunk-18hwfzwa.js:476175-476334 placement
-var DIGIT_HOTKEY_DELAY_MS = 400;
-var DIGIT_HOTKEY_HOLD_MS = 600;
-var AZERTY_DIGIT_MAP = new Map([
-  ["&", "1"],
-  ["\xE9", "2"],
-  ['"', "3"],
-  ["'", "4"],
-  ["(", "5"],
-  ["-", "6"],
-  ["\xA7", "6"],
-  ["\xE8", "7"],
-  ["_", "8"],
-  ["\xE7", "9"],
-  ["\xE0", "0"],
-]);
+var DIGIT_HOTKEY_DELAY_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DIGIT_HOTKEY_HOLD_MS;
+var AZERTY_DIGIT_MAP;
+deferInit("chunk-18hwfzwa.js:476175", () => {
+  DIGIT_HOTKEY_DELAY_MS = 400;
+  DIGIT_HOTKEY_HOLD_MS = 600;
+  AZERTY_DIGIT_MAP = new Map([
+    ["&", "1"],
+    ["\xE9", "2"],
+    ['"', "3"],
+    ["'", "4"],
+    ["(", "5"],
+    ["-", "6"],
+    ["\xA7", "6"],
+    ["\xE8", "7"],
+    ["_", "8"],
+    ["\xE7", "9"],
+    ["\xE0", "0"],
+  ]);
+});
 //@ chunk-18hwfzwa.js:476334-476388 placement
 function normalizeDigitKey(inputValue) {
   return AZERTY_DIGIT_MAP.get(inputValue) ?? inputValue.normalize("NFKC");
@@ -65,55 +71,57 @@ function useDigitHotkeys({
 }) {
   let clock = useClock();
   let inputClock = useInputClock();
-  let inputValueRef = R(inputValue);
-  let rt = R(false);
-  let kt = R(null);
-  let At = R(enabled ? Date.now() : null);
-  P(() => {
-    if (enabled) At.current = Date.now();
+  let inputValueRef = useRef(inputValue);
+  let didFireRef = useRef(false);
+  let cancelTimerRef = useRef(null);
+  let mountedAtRef = useRef(enabled ? Date.now() : null);
+  useEffect(() => {
+    if (enabled) mountedAtRef.current = Date.now();
   }, [enabled]);
-  let It = ce(
+  let isWithinMountDelay = useCallback(
     () =>
-      mountDelayMs > 0 && At.current !== null && isWithinRecentInput(inputClock, At.current, mountDelayMs),
+      mountDelayMs > 0 &&
+      mountedAtRef.current !== null &&
+      isWithinRecentInput(inputClock, mountedAtRef.current, mountDelayMs),
     [mountDelayMs, inputClock],
   );
-  let Ot = R(false);
-  let inputValueRef_2 = R(inputValue);
-  P(() => {
+  let didTypeOnceRef = useRef(false);
+  let inputValueRef_2 = useRef(inputValue);
+  useEffect(() => {
     if (inputValue === inputValueRef_2.current) return;
     inputValueRef_2.current = inputValue;
-    Ot.current = inputValue.length === 1 && It();
-  }, [inputValue, It]);
-  P(() => {
+    didTypeOnceRef.current = inputValue.length === 1 && isWithinMountDelay();
+  }, [inputValue, isWithinMountDelay]);
+  useEffect(() => {
     if (!enabled) return;
     return capturePromptDigits();
   }, [enabled]);
-  let Dt = R({
+  let handlersRef = useRef({
     isValidDigit,
     onDigit,
   });
-  Dt.current = {
+  handlersRef.current = {
     isValidDigit,
     onDigit,
   };
   let keybindingContext = useKeybindingContext();
   usePreDispatchKeyHandler(
-    (oo, Xt) => {
-      if (!enterConfirms || !enabled || (once && rt.current)) return;
+    (input, key) => {
+      if (!enterConfirms || !enabled || (once && didFireRef.current)) return;
       if (
         inputValue.length !== 1 ||
         (acceptAfterPause && inputValue === inputValueRef.current) ||
-        It() ||
-        (!acceptAfterPause && Ot.current)
+        isWithinMountDelay() ||
+        (!acceptAfterPause && didTypeOnceRef.current)
       )
         return;
       if (
         !(!acceptAfterPause && keybindingContext !== null) &&
-        (!Xt.return || Xt.shift || Xt.ctrl || Xt.meta || Xt.super)
+        (!key.return || key.shift || key.ctrl || key.meta || key.super)
       )
         return;
       if (keybindingContext) {
-        let resolved = keybindingContext.resolve(oo, Xt, [
+        let resolved = keybindingContext.resolve(input, key, [
           ...keybindingContext.activeContexts,
           "Chat",
           "Global",
@@ -121,44 +129,54 @@ function useDigitHotkeys({
         if (resolved.type !== "match" || resolved.action !== "chat:submit") return;
       }
       let normalized = inputValue.normalize("NFKC");
-      let po = Dt.current.isValidDigit(normalized)
+      let digit = handlersRef.current.isValidDigit(normalized)
         ? normalized
         : (AZERTY_DIGIT_MAP.get(inputValue) ?? normalized);
-      if (!Dt.current.isValidDigit(po)) return;
-      if (kt.current !== null) {
-        kt.current();
-        kt.current = null;
+      if (!handlersRef.current.isValidDigit(digit)) return;
+      if (cancelTimerRef.current !== null) {
+        cancelTimerRef.current();
+        cancelTimerRef.current = null;
       }
-      rt.current = true;
-      Dt.current.onDigit(po);
+      didFireRef.current = true;
+      handlersRef.current.onDigit(digit);
       return true;
     },
     {
       isActive: enabled,
     },
   );
-  P(() => {
-    if (!enabled || !acceptAfterPause || (once && rt.current)) return;
-    if (kt.current !== null) {
-      kt.current();
-      kt.current = null;
+  useEffect(() => {
+    if (!enabled || !acceptAfterPause || (once && didFireRef.current)) return;
+    if (cancelTimerRef.current !== null) {
+      cancelTimerRef.current();
+      cancelTimerRef.current = null;
     }
-    if (It()) return;
+    if (isWithinMountDelay()) return;
     if (inputValue !== inputValueRef.current && inputValue.length === 1) {
       let normalized = inputValue.normalize("NFKC");
-      if (Dt.current.isValidDigit(normalized))
-        kt.current = clock.setTimeout(() => {
-          kt.current = null;
-          rt.current = true;
-          Dt.current.onDigit(normalized);
+      if (handlersRef.current.isValidDigit(normalized))
+        cancelTimerRef.current = clock.setTimeout(() => {
+          cancelTimerRef.current = null;
+          didFireRef.current = true;
+          handlersRef.current.onDigit(normalized);
         }, debounceMs);
     }
     return () => {
-      if (kt.current !== null) {
-        kt.current();
-        kt.current = null;
+      if (cancelTimerRef.current !== null) {
+        cancelTimerRef.current();
+        cancelTimerRef.current = null;
       }
     };
-  }, [inputValue, enabled, acceptAfterPause, once, debounceMs, mountDelayMs, clock, inputClock, It]);
+  }, [
+    inputValue,
+    enabled,
+    acceptAfterPause,
+    once,
+    debounceMs,
+    mountDelayMs,
+    clock,
+    inputClock,
+    isWithinMountDelay,
+  ]);
 }
 export { useDigitHotkeys, DIGIT_HOTKEY_HOLD_MS, DIGIT_HOTKEY_DELAY_MS, normalizeDigitKey };

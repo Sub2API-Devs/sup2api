@@ -11,9 +11,13 @@
 import { init_react_production } from "../../../../vendor/react/cjs/react.production.js";
 import { shouldShowAlwaysAllowOptions } from "../../../utils/permissions/permissionsLoader.js";
 import { POWERSHELL_TOOL_NAME } from "../../../tools/PowerShellTool/toolName.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1395417-1395421 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1395417", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1395421-1396518 fingerprint = powershellToolUseOptions (0.902)
 function powershellToolUseOptions({
   suggestionsRow = null,
@@ -40,14 +44,14 @@ function powershellToolUseOptions({
       label: "Yes",
       value: "yes",
     });
-  let We = hasBackendSuggestions ?? suggestionsRow !== null;
-  if (shouldShowAlwaysAllowOptions() && We) {
+  let hasAnySuggestions = hasBackendSuggestions ?? suggestionsRow !== null;
+  if (shouldShowAlwaysAllowOptions() && hasAnySuggestions) {
     let hasNonPowerShellSuggestions =
       suggestionsRow !== null &&
       suggestionsRow.applies.some(
-        (Xe) =>
-          Xe.type === "addDirectories" ||
-          (Xe.type === "addRules" && Xe.rules.some((rule) => rule.toolName !== POWERSHELL_TOOL_NAME)),
+        (update) =>
+          update.type === "addDirectories" ||
+          (update.type === "addRules" && update.rules.some((rule) => rule.toolName !== POWERSHELL_TOOL_NAME)),
       );
     if (editablePrefix !== undefined && onEditablePrefixChange && !hasNonPowerShellSuggestions)
       options.push({

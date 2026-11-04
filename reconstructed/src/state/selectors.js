@@ -36,15 +36,16 @@ function getActiveAgentForInput(appState) {
   };
 }
 //@ chunk-0e8j1zzj.js:12141-12356 placement
-function getActiveAgentName(o) {
-  let activeAgentForInput = getActiveAgentForInput(o);
+function getActiveAgentName(appState) {
+  let activeAgentForInput = getActiveAgentForInput(appState);
   switch (activeAgentForInput.type) {
     case "leader":
       return;
     case "viewed":
       return activeAgentForInput.task.identity.agentName;
     case "named_agent": {
-      for (let [d, c] of o.agentNameRegistry) if (c === activeAgentForInput.task.id) return d;
+      for (let [registeredName, taskId] of appState.agentNameRegistry)
+        if (taskId === activeAgentForInput.task.id) return registeredName;
       return activeAgentForInput.task.agentType;
     }
   }
@@ -52,7 +53,7 @@ function getActiveAgentName(o) {
 //@ chunk-18hwfzwa.js:481398-481499 fingerprint = getViewedTeammateTask (1)
 function getViewedTeammateTask(appState) {
   let viewingAgentTaskId = appState.viewingAgentTaskId;
-  let D = viewingAgentTaskId === undefined ? undefined : appState.tasks[viewingAgentTaskId];
-  return D ? describeAgentTask(D)?.id : undefined;
+  let task = viewingAgentTaskId === undefined ? undefined : appState.tasks[viewingAgentTaskId];
+  return task ? describeAgentTask(task)?.id : undefined;
 }
 export { getViewedTeammateTask_2, getActiveAgentForInput, getViewedTeammateTask, getActiveAgentName };

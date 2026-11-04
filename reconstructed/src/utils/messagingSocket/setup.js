@@ -65,12 +65,12 @@ class MessagingSocketState {
 /**
  * 消息 socket 不可用的原因文字（目录、路径、绑定、发布密钥、绑定后设置失败）。
  */
-function messagingSocketUnavailableReason(e) {
-  if (e.startInFlight || e.activeSocketPath !== undefined) return;
-  switch (e.lastStartFailureCause) {
+function messagingSocketUnavailableReason(state) {
+  if (state.startInFlight || state.activeSocketPath !== undefined) return;
+  switch (state.lastStartFailureCause) {
     case "socket_dir_refused":
-      return e.lastStartFailureDetail !== undefined
-        ? `its socket directory could not be set up: ${e.lastStartFailureDetail}`
+      return state.lastStartFailureDetail !== undefined
+        ? `its socket directory could not be set up: ${state.lastStartFailureDetail}`
         : "its socket directory could not be set up";
     case "path_refused":
       return "its socket path is not a usable local address";

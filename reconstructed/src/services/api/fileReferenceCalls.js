@@ -11,6 +11,7 @@
 import { logForDebugging } from "../../utils/debug.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:274904-274916 placement
 /**
@@ -29,33 +30,36 @@ class FileReferenceTracker {
   fileReferenceHintLatch() {
     return this.#n;
   }
-  replaceFileReferenceHintLatch(e) {
-    this.#n = e;
+  replaceFileReferenceHintLatch(latch) {
+    this.#n = latch;
   }
-  isFileReferenceCall(e) {
-    return e === undefined ? this.#t : this.#e.has(e);
+  isFileReferenceCall(callId) {
+    return callId === undefined ? this.#t : this.#e.has(callId);
   }
-  noteFileReferenceCall(e) {
+  noteFileReferenceCall(callId) {
     this.#t = true;
-    if (e === undefined || this.#e.has(e)) return;
+    if (callId === undefined || this.#e.has(callId)) return;
     if (this.#e.size >= MAX_TRACKED_CALLS) {
-      let n = this.#e.values().next().value;
-      if (n !== undefined) this.#e.delete(n);
+      let oldest = this.#e.values().next().value;
+      if (oldest !== undefined) this.#e.delete(oldest);
     }
-    this.#e.add(e);
+    this.#e.add(callId);
   }
-  isFirstReferenceApproved(e) {
-    return this.#r.has(e);
+  isFirstReferenceApproved(referenceKey) {
+    return this.#r.has(referenceKey);
   }
-  noteFirstReferenceApproved(e) {
-    this.#r.add(e);
+  noteFirstReferenceApproved(referenceKey) {
+    this.#r.add(referenceKey);
   }
 }
 //@ chunk-aepeg2w5.js:275382-275409 placement
 /**
  * 导出函数 `fileReferenceTrackerSlot`。
  */
-var fileReferenceTrackerSlot = new SessionRootSlot(() => new FileReferenceTracker());
+var fileReferenceTrackerSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:275382", () => {
+  fileReferenceTrackerSlot = new SessionRootSlot(() => new FileReferenceTracker());
+});
 //@ chunk-aepeg2w5.js:275409-275468 placement
 /**
  * 导出函数 `fileReferenceHintLatch`：返回 U3t.of(getRootSession()).fileReferenceHintLatch()。
@@ -81,8 +85,8 @@ function isFileReferenceCall(toolUseId) {
 /**
  * 导出函数 `noteFileReferenceCall`：参数 e。
  */
-function noteFileReferenceCall(e) {
-  fileReferenceTrackerSlot.of(getRootSession()).noteFileReferenceCall(e);
+function noteFileReferenceCall(callId) {
+  fileReferenceTrackerSlot.of(getRootSession()).noteFileReferenceCall(callId);
 }
 export {
   replaceFileReferenceHintLatch,

@@ -5,10 +5,10 @@
  * pieces: chunk-hq88884p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-hq88884p.js:17045-18297 cjs-fingerprint
-var require_helpers = x(function (cjsExports) {
+var require_helpers = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create

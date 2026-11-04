@@ -15,24 +15,30 @@ import { POWERSHELL_TOOL_NAME } from "../../tools/PowerShellTool/toolName.js";
 import { isRemoteManagedEnvironment } from "../../utils/remoteEnvironment.js";
 import { isCcsTenant, getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3782731-3782797 placement
-var END_CONVERSATION_TOOL_NAME = require("./chunk-jbpmz76b.js").END_CONVERSATION_TOOL_NAME;
+var END_CONVERSATION_TOOL_NAME; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-e6aww6q8.js:3782731", () => {
+  END_CONVERSATION_TOOL_NAME =
+    require("../../tools/EndConversationTool/constants.js").END_CONVERSATION_TOOL_NAME;
+});
 //@ chunk-e6aww6q8.js:3782797-3783079 placement
 /**
  * 判断已中止的工具调用该记为对话结束、用户中断或不算中断（interrupt、权限停止、shell 已运行且属后台化时）。
  */
-function getAbortKind(signal, n, r) {
+function getAbortKind(signal, tracked, abortScope) {
   if (!signal.aborted) return null;
-  let s = unwrapAbortReason(signal.reason);
-  if (s === "interrupt" || s === "permission-stop") return null;
+  let reasonKind = unwrapAbortReason(signal.reason);
+  if (reasonKind === "interrupt" || reasonKind === "permission-stop") return null;
   if (
-    n.ran &&
-    isTurnLevelAbort(signal.reason, r) &&
-    (n.name === BASH_TOOL_NAME || n.name === POWERSHELL_TOOL_NAME)
+    tracked.ran &&
+    isTurnLevelAbort(signal.reason, abortScope) &&
+    (tracked.name === BASH_TOOL_NAME || tracked.name === POWERSHELL_TOOL_NAME)
   )
     return null;
-  if (s === "end_conversation") return n.name === END_CONVERSATION_TOOL_NAME ? null : "conversation_ended";
+  if (reasonKind === "end_conversation")
+    return tracked.name === END_CONVERSATION_TOOL_NAME ? null : "conversation_ended";
   return "user_interrupted";
 }
 //@ chunk-e6aww6q8.js:3783079-3783194 placement
@@ -49,12 +55,12 @@ function getSerializedPetalLimit() {
  * 判断中止原因是否属于用户取消、远程取消或 AbortError。
  */
 function isCancelAbort(signal) {
-  let n = classifyAbortReasonForTelemetry(signal.reason);
-  return n === "user_cancel" || n === "remote_cancel" || AbortError(signal);
+  let reasonKind = classifyAbortReasonForTelemetry(signal.reason);
+  return reasonKind === "user_cancel" || reasonKind === "remote_cancel" || AbortError(signal);
 }
 //@ chunk-e6aww6q8.js:3783284-3783493 placement = AbortError (1)
-function AbortError(e) {
-  let reason = e.reason;
+function AbortError(signal) {
+  let reason = signal.reason;
   if (!(reason instanceof DOMException) || reason.name !== "AbortError") return false;
   let abortController = new AbortController();
   abortController.abort();

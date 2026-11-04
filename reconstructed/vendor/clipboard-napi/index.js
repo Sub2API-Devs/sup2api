@@ -5,7 +5,7 @@
  * pieces: clipboard-napi.js (1)
  * attribution: placement 1
  */
-import { irs } from "../private-unresolved/clipboard-napi.node.js";
+import { require_clipboard_napi_node } from "../private-unresolved/clipboard-napi.node.js";
 
 //@ clipboard-napi.js:228-249 placement
-export default irs();
+export default require_clipboard_napi_node();

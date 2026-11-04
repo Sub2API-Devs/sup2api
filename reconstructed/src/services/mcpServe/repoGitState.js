@@ -10,13 +10,13 @@
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
+  objectSchema,
   record,
-  string,
+  stringSchema,
   array,
   discriminatedUnion,
   literal,
-  M,
+  booleanSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { MAX_REPO_URL_CHARS } from "../../utils/detectRepository.js";
 import {
@@ -40,90 +40,94 @@ var MAX_CWD_CHARS = 4096;
 var MAX_REF_CHARS = 255;
 var SAFE_ABSOLUTE_PATH_RE = /^\/[^\p{C}\p{Zl}\p{Zp}]*$/u;
 var readRepoGitStateResultSchema = DoctorLazy(() =>
-  u({
-    branches: record(string().max(MAX_BRANCH_NAME_CHARS), string().max(MAX_REF_CHARS).nullable()).refine(
-      isBranchesMapSmallEnough,
-    ),
+  objectSchema({
+    branches: record(
+      stringSchema().max(MAX_BRANCH_NAME_CHARS),
+      stringSchema().max(MAX_REF_CHARS).nullable(),
+    ).refine(isBranchesMapSmallEnough),
     events: array(
       discriminatedUnion("subtype", [
-        u({
+        objectSchema({
           subtype: literal("code_change_published"),
-          url: string().max(MAX_REPO_URL_CHARS),
+          url: stringSchema().max(MAX_REPO_URL_CHARS),
           action: SDKSystemCodeChangePublishedMessageSchema().shape.action.unwrap(),
-          branch: string().refine(isSafeBranchName).optional(),
+          branch: stringSchema().refine(isSafeBranchName).optional(),
         }),
-        u({
+        objectSchema({
           subtype: literal("vcs_state_changed"),
           kind: SDKSystemVcsStateChangedMessageSchema().shape.kind,
-          cwd: string().max(MAX_CWD_CHARS).regex(SAFE_ABSOLUTE_PATH_RE),
-          branch: string().refine(isSafeBranchName).optional(),
+          cwd: stringSchema().max(MAX_CWD_CHARS).regex(SAFE_ABSOLUTE_PATH_RE),
+          branch: stringSchema().refine(isSafeBranchName).optional(),
         }),
       ])
         .nullable()
         .catch(null),
     ).max(MAX_EVENTS),
-    cut: M().optional(),
+    cut: booleanSchema().optional(),
   }),
 );
 //@ chunk-wy9dbk5f.js:50887-51776 placement
-async function serveReadRepoGitState(e, r, { callerGone }) {
-  let s = [...getRepoCheckouts()];
-  let a = s.length > MAX_BRANCHES;
-  let c = [];
-  for (let [h, S] of s.slice(0, MAX_BRANCHES)) {
-    if (h.length > MAX_BRANCH_NAME_CHARS) {
-      a = true;
+async function serveReadRepoGitState(input, signal, { callerGone }) {
+  let checkouts = [...getRepoCheckouts()];
+  let cut = checkouts.length > MAX_BRANCHES;
+  let branchEntries = [];
+  for (let [branchName, checkout] of checkouts.slice(0, MAX_BRANCHES)) {
+    if (branchName.length > MAX_BRANCH_NAME_CHARS) {
+      cut = true;
       continue;
     }
-    let checkoutPath = resolveCheckoutPath(S);
-    if (checkoutPath === null) continue;
-    let b = await refreshGitDir(checkoutPath);
-    if (b !== null) {
-      let gitHead = await readGitHead(b);
-      c.push([h, gitHead?.type === "branch" && isSafeBranchName(gitHead.name) ? gitHead.name : null]);
+    let cwd = resolveCheckoutPath(checkout);
+    if (cwd === null) continue;
+    let gitDir = await refreshGitDir(cwd);
+    if (gitDir !== null) {
+      let gitHead = await readGitHead(gitDir);
+      branchEntries.push([
+        branchName,
+        gitHead?.type === "branch" && isSafeBranchName(gitHead.name) ? gitHead.name : null,
+      ]);
     }
   }
   await settlePendingPrLinks();
-  r.throwIfAborted();
+  signal.throwIfAborted();
   callerGone?.throwIfAborted();
-  let y = [];
-  for (let h of drainTaskNotifications()) {
-    if (h.type !== "system") continue;
-    if (h.subtype === "code_change_published")
-      y.push({
-        subtype: h.subtype,
-        url: h.url,
-        action: h.action,
-        ...(h.branch !== undefined && {
-          branch: h.branch,
+  let events = [];
+  for (let notification of drainTaskNotifications()) {
+    if (notification.type !== "system") continue;
+    if (notification.subtype === "code_change_published")
+      events.push({
+        subtype: notification.subtype,
+        url: notification.url,
+        action: notification.action,
+        ...(notification.branch !== undefined && {
+          branch: notification.branch,
         }),
       });
-    else if (h.subtype === "vcs_state_changed") {
-      if (h.cwd.length > MAX_CWD_CHARS || !SAFE_ABSOLUTE_PATH_RE.test(h.cwd)) {
-        a = true;
+    else if (notification.subtype === "vcs_state_changed") {
+      if (notification.cwd.length > MAX_CWD_CHARS || !SAFE_ABSOLUTE_PATH_RE.test(notification.cwd)) {
+        cut = true;
         continue;
       }
-      y.push({
-        subtype: h.subtype,
-        kind: h.kind,
-        cwd: h.cwd,
-        ...("branch" in h &&
-          h.branch !== undefined &&
-          isSafeBranchName(h.branch) && {
-            branch: h.branch,
+      events.push({
+        subtype: notification.subtype,
+        kind: notification.kind,
+        cwd: notification.cwd,
+        ...("branch" in notification &&
+          notification.branch !== undefined &&
+          isSafeBranchName(notification.branch) && {
+            branch: notification.branch,
           }),
       });
     }
   }
-  a ||= y.length > MAX_EVENTS;
-  let sliced = y.slice(-MAX_EVENTS);
+  cut ||= events.length > MAX_EVENTS;
+  let sliced = events.slice(-MAX_EVENTS);
   return {
-    summary: `${c.length} checkouts, ${sliced.length} events`,
+    summary: `${branchEntries.length} checkouts, ${sliced.length} events`,
     output: {
-      branches: Object.fromEntries(c),
+      branches: Object.fromEntries(branchEntries),
       events: sliced,
-      ...(a && {
-        cut: a,
+      ...(cut && {
+        cut,
       }),
     },
   };
@@ -132,7 +136,7 @@ async function serveReadRepoGitState(e, r, { callerGone }) {
 /**
  * 判断分支表条数是否在上限内。
  */
-function isBranchesMapSmallEnough(e) {
-  return Object.keys(e).length <= MAX_BRANCHES;
+function isBranchesMapSmallEnough(branches) {
+  return Object.keys(branches).length <= MAX_BRANCHES;
 }
 export { READREPOGITSTATE, serveReadRepoGitState };

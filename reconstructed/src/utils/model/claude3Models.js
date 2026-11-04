@@ -18,15 +18,15 @@ var CLAUDE3_MODEL_IDS = ["claude-3-opus", "claude-3-sonnet", "claude-3-haiku"];
 /**
  * 判断当前模型是否不是 claude-3 系列。
  */
-function isNotClaude3Model(e) {
-  return !includesAnyIgnoreCase(e ?? getMainLoopModel(), CLAUDE3_MODEL_IDS);
+function isNotClaude3Model(model) {
+  return !includesAnyIgnoreCase(model ?? getMainLoopModel(), CLAUDE3_MODEL_IDS);
 }
 //@ chunk-g54kbxqw.js:132331-132415 placement
 /**
  * 判断扩展名是否属于可处理的文档类型。
  */
 function isDocumentExtension(ext) {
-  let n = ext.startsWith(".") ? ext.slice(1) : ext;
-  return DOCUMENT_EXTENSIONS.has(n.toLowerCase());
+  let extension = ext.startsWith(".") ? ext.slice(1) : ext;
+  return DOCUMENT_EXTENSIONS.has(extension.toLowerCase());
 }
 export { isDocumentExtension, isNotClaude3Model };

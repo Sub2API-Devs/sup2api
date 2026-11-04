@@ -25,6 +25,7 @@ import {
 } from "../../utils/modelCost.js";
 import { firstPartyNameToCanonical } from "../../utils/model/modelFallback.js";
 import { has1mSuffix, isLegacyNo1mModel } from "../../utils/model/contextWindow1m.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-1ny7cxrt.js:1347664-1347778 placement
 /**
@@ -62,20 +63,20 @@ function getRoleModelRestrictionMessage(modelId, role, models) {
 /**
  * 上游的模型列表是否包含该模型（精确、单个 * 通配或同一模型族）。
  */
-function upstreamServesModel(e, t) {
-  if (!e.models) return true;
-  let modelConfigById = findModelConfigById(t);
-  let lower = t.toLowerCase();
-  return e.models.some((model) => {
+function upstreamServesModel(upstream, modelId) {
+  if (!upstream.models) return true;
+  let modelConfigById = findModelConfigById(modelId);
+  let lower = modelId.toLowerCase();
+  return upstream.models.some((model) => {
     let lower_2 = model.toLowerCase();
-    let [a = "", l, c] = lower_2.split("*");
+    let [pattern = "", suffixPart, prefixPart] = lower_2.split("*");
     return (
       lower_2 === lower ||
-      (l !== undefined &&
-        c === undefined &&
-        lower.length >= a.length + l.length &&
-        lower.startsWith(a) &&
-        lower.endsWith(l)) ||
+      (suffixPart !== undefined &&
+        prefixPart === undefined &&
+        lower.length >= pattern.length + suffixPart.length &&
+        lower.startsWith(pattern) &&
+        lower.endsWith(suffixPart)) ||
       (modelConfigById !== null && findModelConfigById(model) === modelConfigById)
     );
   });
@@ -84,48 +85,48 @@ function upstreamServesModel(e, t) {
 /**
  * 把请求的模型解析为上游的模型 id（配置映射、内置映射，按区域选 Bedrock 型号），失败返回原因。
  */
-function resolveUpstreamModel(modelId, upstream, models, autoIncludeBuiltinModels = true, r = false) {
+function resolveUpstreamModel(modelId, upstream, models, autoIncludeBuiltinModels = true, brief = false) {
   let modelConfigById = findModelConfigById(modelId);
   if (!upstreamServesModel(upstream, modelId))
     return {
       ok: false,
       listSkip: true,
-      error: r
+      error: brief
         ? `model ${sanitizeModelIdForMessage(modelId)} is not available on this upstream`
         : `model ${sanitizeModelIdForMessage(modelId)} is not served by upstream '${upstream.name}'`,
     };
   let modelEntryById = findModelEntryById(modelId, models);
-  let l = modelEntryById?.upstream_model[upstream.name];
-  if (l)
+  let mapped = modelEntryById?.upstream_model[upstream.name];
+  if (mapped)
     return {
       ok: true,
-      model: l,
+      model: mapped,
     };
   if (modelConfigById && (autoIncludeBuiltinModels || modelEntryById)) {
     let region = upstream.region;
-    let u = !region || bedrockRegionGroup(region) === "us" || region.startsWith("ca-");
-    let f =
+    let isUsRegion = !region || bedrockRegionGroup(region) === "us" || region.startsWith("ca-");
+    let wireModel =
       upstream.provider === "anthropic"
         ? modelConfigById.firstParty
-        : upstream.provider === "bedrock" && modelConfigById.bedrock && !u
+        : upstream.provider === "bedrock" && modelConfigById.bedrock && !isUsRegion
           ? bedrockModelFromArnOrName(modelConfigById.bedrock)
           : modelConfigById[upstream.provider];
-    if (!f)
+    if (!wireModel)
       return {
         ok: false,
-        error: r
+        error: brief
           ? `model ${sanitizeModelIdForMessage(modelId)} is not available on this upstream`
           : `model ${sanitizeModelIdForMessage(modelId)} is not available on ${upstream.provider}`,
       };
     return {
       ok: true,
-      model: f,
+      model: wireModel,
     };
   }
   if (modelEntryById)
     return {
       ok: false,
-      error: r
+      error: brief
         ? `model ${sanitizeModelIdForMessage(modelId)} is not configured for this upstream`
         : `model ${sanitizeModelIdForMessage(modelId)} has no upstream_model.${upstream.name} configured`,
     };
@@ -158,47 +159,55 @@ var BUILTIN_MODEL_KEYS = [
 /**
  * 网关 /v1/models 列表：配置的模型加上上游可服务的内置模型，过滤受限模型。
  */
-function listGatewayModels(e, t, n, o) {
-  let r = new Map();
-  for (let s of e)
-    r.set(s.id, {
+function listGatewayModels(gatewayModels, upstreams, includeBuiltin, restriction) {
+  let byId = new Map();
+  for (let modelConfig of gatewayModels)
+    byId.set(modelConfig.id, {
       type: "model",
-      id: s.id,
-      display_name: s.label ?? s.id,
-      ...(s.description && {
-        description: s.description,
+      id: modelConfig.id,
+      display_name: modelConfig.label ?? modelConfig.id,
+      ...(modelConfig.description && {
+        description: modelConfig.description,
       }),
     });
-  if (n) {
-    let s = [DEFAULT_3P_OPUS_KEY, DEFAULT_3P_SONNET_KEY, DEFAULT_3P_HAIKU_KEY];
-    let a = BUILTIN_MODEL_KEYS.filter((l) => !s.includes(l)).reverse();
-    for (let l of [...s, ...a]) {
-      let c = catalogEntriesByFirstPartyId[l];
-      if (r.has(c.firstParty)) continue;
+  if (includeBuiltin) {
+    let preferredKeys = [DEFAULT_3P_OPUS_KEY, DEFAULT_3P_SONNET_KEY, DEFAULT_3P_HAIKU_KEY];
+    let otherKeys = BUILTIN_MODEL_KEYS.filter((key) => !preferredKeys.includes(key)).reverse();
+    for (let key of [...preferredKeys, ...otherKeys]) {
+      let catalogEntry = catalogEntriesByFirstPartyId[key];
+      if (byId.has(catalogEntry.firstParty)) continue;
       if (
-        t.some(
-          (f) =>
-            (f.provider === "anthropic" || c[f.provider] !== null) && upstreamServesModel(f, c.firstParty),
+        upstreams.some(
+          (upstream) =>
+            (upstream.provider === "anthropic" || catalogEntry[upstream.provider] !== null) &&
+            upstreamServesModel(upstream, catalogEntry.firstParty),
         )
       )
-        r.set(c.firstParty, {
+        byId.set(catalogEntry.firstParty, {
           type: "model",
-          id: c.firstParty,
-          display_name: c.firstParty,
+          id: catalogEntry.firstParty,
+          display_name: catalogEntry.firstParty,
         });
     }
   }
-  return o
-    ? [...r.values()].filter((s) => !modelRestriction(s.id, o, o.deniedModels && findModelEntryById(s.id, e)))
-    : [...r.values()];
+  return restriction
+    ? [...byId.values()].filter(
+        (modelEntry) =>
+          !modelRestriction(
+            modelEntry.id,
+            restriction,
+            restriction.deniedModels && findModelEntryById(modelEntry.id, gatewayModels),
+          ),
+      )
+    : [...byId.values()];
 }
 //@ chunk-1ny7cxrt.js:1376027-1376131 placement
 /**
  * /v1/models 响应。
  */
-function modelsResponse(e, t, autoIncludeBuiltinModels = true, o) {
+function modelsResponse(models, upstreams, includeBuiltin = true, policy) {
   return Response.json({
-    data: listGatewayModels(e, t, autoIncludeBuiltinModels, o),
+    data: listGatewayModels(models, upstreams, includeBuiltin, policy),
     has_more: false,
     first_id: null,
     last_id: null,
@@ -208,16 +217,16 @@ function modelsResponse(e, t, autoIncludeBuiltinModels = true, o) {
 /**
  * 按定价覆盖或已知模型价格计算请求花费（分），乘以倍率。
  */
-function requestCostCents(e, t, n, pricing, r) {
-  let sdkUsage = toSdkUsage(t);
-  let pricingOverride = findPricingOverride(pricing, r, e, n);
-  let l = hasKnownModelCost(e ?? "") ? e : hasKnownModelCost(n ?? "") ? n : null;
-  let c = pricingOverride
+function requestCostCents(modelId, usage, body, pricing, upstreamName) {
+  let sdkUsage = toSdkUsage(usage);
+  let pricingOverride = findPricingOverride(pricing, upstreamName, modelId, body);
+  let costModel = hasKnownModelCost(modelId ?? "") ? modelId : hasKnownModelCost(body ?? "") ? body : null;
+  let costs = pricingOverride
     ? toModelCosts(pricingOverride)
-    : l != null
-      ? getModelCosts(l, sdkUsage)
+    : costModel != null
+      ? getModelCosts(costModel, sdkUsage)
       : DEFAULT_MODEL_COSTS;
-  return tokensToUSDCost(c, sdkUsage) * 100 * (pricing?.multiplier ?? 1);
+  return tokensToUSDCost(costs, sdkUsage) * 100 * (pricing?.multiplier ?? 1);
 }
 //@ chunk-1ny7cxrt.js:1376283-1376460 placement
 /**
@@ -236,15 +245,17 @@ function toModelCosts(pricingOverride) {
 /**
  * 找某上游下匹配模型的价格覆盖。
  */
-function findPricingOverride(pricing, t, n, o) {
-  if (!pricing || !t) return;
-  let filtered = pricing.overrides.filter((override) => override.upstream === t);
+function findPricingOverride(pricing, upstreamName, modelId, body) {
+  if (!pricing || !upstreamName) return;
+  let filtered = pricing.overrides.filter((override) => override.upstream === upstreamName);
   if (filtered.length === 0) return;
-  let s = pricedCanonicalModel(n) ?? pricedCanonicalModel(o);
+  let canonical = pricedCanonicalModel(modelId) ?? pricedCanonicalModel(body);
   return (
-    filtered.find((a) => modelIdEquals(a.model, n)) ??
-    filtered.find((a) => modelIdEquals(a.model, o)) ??
-    (s ? filtered.find((a) => builtinCanonicalModelId(a.model) === s) : undefined)
+    filtered.find((override) => modelIdEquals(override.model, modelId)) ??
+    filtered.find((override) => modelIdEquals(override.model, body)) ??
+    (canonical
+      ? filtered.find((override) => builtinCanonicalModelId(override.model) === canonical)
+      : undefined)
   );
 }
 //@ chunk-1ny7cxrt.js:1376689-1376727 placement
@@ -258,61 +269,71 @@ function isSameModel(model, model_2) {
 /**
  * 模型名的规范化键：内置模型用 builtin:<规范名>，否则 string:<小写名>。
  */
-function modelCanonicalKey(e) {
-  let t = builtinCanonicalModelId(e);
-  return t !== null ? `builtin:${t}` : `string:${e.toLowerCase()}`;
+function modelCanonicalKey(model) {
+  let canonical = builtinCanonicalModelId(model);
+  return canonical !== null ? `builtin:${canonical}` : `string:${model.toLowerCase()}`;
 }
 //@ chunk-1ny7cxrt.js:1376813-1376871 placement
 /**
  * 把模型名解析成内置规范名（非内置返回 null）。
  */
-function builtinCanonicalModelId(e) {
-  let modelConfigById = findModelConfigById(e);
+function builtinCanonicalModelId(model) {
+  let modelConfigById = findModelConfigById(model);
   return modelConfigById ? firstPartyNameToCanonical(modelConfigById.firstParty) : null;
 }
 //@ chunk-1ny7cxrt.js:1376871-1376946 placement
 /**
  * 把模型名解析成有价格配置的规范名（不在 MODEL_COSTS 里返回 null）。
  */
-function pricedCanonicalModel(e) {
-  if (!e) return null;
-  let t = firstPartyNameToCanonical(e);
-  return MODEL_COSTS[t] !== undefined ? t : null;
+function pricedCanonicalModel(name) {
+  if (!name) return null;
+  let canonical = firstPartyNameToCanonical(name);
+  return MODEL_COSTS[canonical] !== undefined ? canonical : null;
 }
 //@ chunk-1ny7cxrt.js:1376946-1377013 placement
 /**
  * 忽略大小写比较两个模型名。
  */
-function modelIdEquals(model, t) {
-  return t != null && model.toLowerCase() === t.toLowerCase();
+function modelIdEquals(model, other) {
+  return other != null && model.toLowerCase() === other.toLowerCase();
 }
 //@ chunk-1ny7cxrt.js:1377628-1377686 placement
 /**
  * 不支持 1M 上下文的旧模型集合（claude-sonnet-4-0、claude-sonnet-4-5）。
  */
-var NO_1M_CONTEXT_MODELS = new Set(["claude-sonnet-4-0", "claude-sonnet-4-5"]);
+var NO_1M_CONTEXT_MODELS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-1ny7cxrt.js:1377628", () => {
+  NO_1M_CONTEXT_MODELS = new Set(["claude-sonnet-4-0", "claude-sonnet-4-5"]);
+});
 //@ chunk-1ny7cxrt.js:1377686-1377938 placement
 /**
  * 网关上该模型是否支持 1M 上下文（所有可服务上游一致）。
  */
-function supports1mContext(id, t) {
-  if (has1mSuffix(id)) return false;
-  let n = NO_1M_CONTEXT_MODELS.has(firstPartyNameToCanonical(id)) ? undefined : modelSupports1m(id);
-  if (n === false) return false;
-  let flattened = t.upstreams.flatMap((upstream) => {
-    let upstreamModel = resolveUpstreamModel(id, upstream, t.models, t.auto_include_builtin_models);
+function supports1mContext(name, config) {
+  if (has1mSuffix(name)) return false;
+  let directSupport = NO_1M_CONTEXT_MODELS.has(firstPartyNameToCanonical(name))
+    ? undefined
+    : modelSupports1m(name);
+  if (directSupport === false) return false;
+  let flattened = config.upstreams.flatMap((upstream) => {
+    let upstreamModel = resolveUpstreamModel(
+      name,
+      upstream,
+      config.models,
+      config.auto_include_builtin_models,
+    );
     return upstreamModel.ok ? [modelSupports1m(upstreamModel.model)] : [];
   });
-  return !flattened.includes(false) && (n === true || flattened.includes(true));
+  return !flattened.includes(false) && (directSupport === true || flattened.includes(true));
 }
 //@ chunk-1ny7cxrt.js:1377938-1378065 placement
 /**
  * 目录中模型是否支持 1M beta。
  */
-function modelSupports1m(e) {
-  let t = firstPartyNameToCanonical(e);
-  if (isLegacyNo1mModel(t) || NO_1M_CONTEXT_MODELS.has(t)) return false;
-  let context = getCatalogEntry(t)?.context;
+function modelSupports1m(name) {
+  let canonical = firstPartyNameToCanonical(name);
+  if (isLegacyNo1mModel(canonical) || NO_1M_CONTEXT_MODELS.has(canonical)) return false;
+  let context = getCatalogEntry(canonical)?.context;
   return context === undefined ? undefined : context.supports_1m_beta === true;
 }
 export {

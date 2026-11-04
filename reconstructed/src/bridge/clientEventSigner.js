@@ -16,6 +16,7 @@ import { logFeatureOk, logFeatureBad } from "../services/analytics/featureTeleme
 import { loadRegisteredDevice } from "./deviceRegistry.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-869v6e0e.js:447-509 placement
 var ANTHROPIC_CCR_CLIENT_EVENT_V1 = "anthropic.ccr.client_event.v1";
@@ -24,80 +25,84 @@ var JCS_LIB = "claude-code-jcs@1";
 /**
  * JSON 规范化序列化（JCS），用于设备事件签名；本模块还提供客户端事件签名器。
  */
-function canonicalJson(r) {
-  let n = [];
-  let o = [];
-  let i = (e) => {
-    if (e === null || typeof e === "boolean" || typeof e === "string") n.push(jsonStringifyRaw(e));
-    else if (typeof e === "number") {
-      if (!Number.isFinite(e)) throw Error("canonicalJson: non-finite number");
-      n.push(String(e));
-    } else if (Array.isArray(e)) {
-      n.push("[");
-      o.push({
-        values: Array.from(e, (s) => (s === undefined ? null : s)),
+function canonicalJson(value) {
+  let out = [];
+  let stack = [];
+  let emitValue = (node) => {
+    if (node === null || typeof node === "boolean" || typeof node === "string")
+      out.push(jsonStringifyRaw(node));
+    else if (typeof node === "number") {
+      if (!Number.isFinite(node)) throw Error("canonicalJson: non-finite number");
+      out.push(String(node));
+    } else if (Array.isArray(node)) {
+      out.push("[");
+      stack.push({
+        values: Array.from(node, (item) => (item === undefined ? null : item)),
         next: 0,
       });
-    } else if (typeof e === "object") {
-      let s = e;
-      let sorted = Object.keys(s)
-        .filter((key) => s[key] !== undefined)
+    } else if (typeof node === "object") {
+      let object = node;
+      let sorted = Object.keys(object)
+        .filter((key) => object[key] !== undefined)
         .sort();
-      n.push("{");
-      o.push({
+      out.push("{");
+      stack.push({
         names: sorted,
-        values: sorted.map((c) => s[c]),
+        values: sorted.map((name) => object[name]),
         next: 0,
       });
     } else throw Error("canonicalJson: a value with no JSON form");
   };
-  i(r);
-  while (o.length > 0) {
-    let last = o.at(-1);
+  emitValue(value);
+  while (stack.length > 0) {
+    let last = stack.at(-1);
     if (last.next === last.values.length) {
-      n.push(last.names ? "}" : "]");
-      o.pop();
+      out.push(last.names ? "}" : "]");
+      stack.pop();
       continue;
     }
-    if (last.next > 0) n.push(",");
-    if (last.names) n.push(`${jsonStringifyRaw(last.names[last.next])}:`);
-    let s = last.values[last.next];
+    if (last.next > 0) out.push(",");
+    if (last.names) out.push(`${jsonStringifyRaw(last.names[last.next])}:`);
+    let child = last.values[last.next];
     last.next += 1;
-    i(s);
+    emitValue(child);
   }
-  return n.join("");
+  return out.join("");
 }
 //@ chunk-869v6e0e.js:1276-1485 placement = generateCodeChallenge (0.89)
-function generateCodeChallenge(r, n) {
-  let { uuid, type: i, ...e } = n;
-  let s = createHash("sha256").update(canonicalJson(e), "utf8").digest();
+function generateCodeChallenge(rowPk, event) {
+  let { uuid, type: eventType, ...payload } = event;
+  let payloadHash = createHash("sha256").update(canonicalJson(payload), "utf8").digest();
   return Buffer.concat([
     Buffer.from(ANTHROPIC_CCR_CLIENT_EVENT_V1, "utf8"),
     buffer,
-    Buffer.from(r, "utf8"),
+    Buffer.from(rowPk, "utf8"),
     buffer,
     Buffer.from(uuid, "utf8"),
     buffer,
-    Buffer.from(i, "utf8"),
+    Buffer.from(eventType, "utf8"),
     buffer,
-    s,
+    payloadHash,
   ]);
 }
 //@ chunk-869v6e0e.js:1485-1508 placement
-var buffer = Buffer.from([0]);
+var buffer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-869v6e0e.js:1485", () => {
+  buffer = Buffer.from([0]);
+});
 //@ chunk-869v6e0e.js:1508-1693 placement
 function createClientEventSigner(rowPk, key) {
   let kid = DEVICE_REGISTRY_KID_PREFIX + rowPk;
-  let i = false;
+  let signFailureNoted = false;
   return {
     noteSignFailure: () => {
-      if (i) return false;
-      i = true;
+      if (signFailureNoted) return false;
+      signFailureNoted = true;
       return true;
     },
-    sign: async (e, s) => ({
+    sign: async (rowPk, event) => ({
       kid,
-      signature: (await key.sign(generateCodeChallenge(e, s))).toString("base64"),
+      signature: (await key.sign(generateCodeChallenge(rowPk, event))).toString("base64"),
       jcs_lib: JCS_LIB,
     }),
   };
@@ -114,36 +119,38 @@ async function signerForBoundDevice({ accountUuid, boundDeviceUuid, credentials,
   );
 }
 //@ chunk-869v6e0e.js:1816-2225 placement
-async function deviceEventSignerOnceBoundHere(r, n) {
-  let o = await resolveCurrentDeviceBinding(n).catch(() => {
+async function deviceEventSignerOnceBoundHere(bindingPromise, credentials) {
+  let binding = await resolveCurrentDeviceBinding(credentials).catch(() => {
     return;
   });
-  if (o?.status !== "resolved") return;
-  let deviceKeyOutcome = await readDeviceKeyOutcome(o.accountUuid, n);
-  let e;
-  let s = 0;
-  let l = 0;
-  let c = (a, u) => {
-    let p = ++s;
-    a.then(
-      (S) => {
-        if (p > l) {
-          l = p;
-          e = u(S);
+  if (binding?.status !== "resolved") return;
+  let deviceKeyOutcome = await readDeviceKeyOutcome(binding.accountUuid, credentials);
+  let signer;
+  let issuedCount = 0;
+  let appliedSeq = 0;
+  let adoptWhenReady = (promise, makeSigner) => {
+    let seq = ++issuedCount;
+    promise.then(
+      (boundUuid) => {
+        if (seq > appliedSeq) {
+          appliedSeq = seq;
+          signer = makeSigner(boundUuid);
         }
       },
       () => {},
     );
   };
-  c(r, (a) => (a === undefined ? undefined : signerFromDeviceKeyOutcome(deviceKeyOutcome, a)));
+  adoptWhenReady(bindingPromise, (boundUuid) =>
+    boundUuid === undefined ? undefined : signerFromDeviceKeyOutcome(deviceKeyOutcome, boundUuid),
+  );
   return deviceKeyOutcome.status === "loaded"
     ? {
-        sign: async (a, u) => e?.sign(a, u),
-        noteSignFailure: () => e?.noteSignFailure() ?? false,
-        rebind: (a) =>
-          c(a, (u) =>
-            u !== undefined && isSameDeviceRowPk(deviceKeyOutcome.rowPk, u)
-              ? (e ?? signerFromDeviceKeyOutcome(deviceKeyOutcome, u))
+        sign: async (rowPk, event) => signer?.sign(rowPk, event),
+        noteSignFailure: () => signer?.noteSignFailure() ?? false,
+        rebind: (promise) =>
+          adoptWhenReady(promise, (boundUuid) =>
+            boundUuid !== undefined && isSameDeviceRowPk(deviceKeyOutcome.rowPk, boundUuid)
+              ? (signer ?? signerFromDeviceKeyOutcome(deviceKeyOutcome, boundUuid))
               : undefined,
           ),
       }
@@ -151,12 +158,12 @@ async function deviceEventSignerOnceBoundHere(r, n) {
 }
 //@ chunk-869v6e0e.js:2225-2396 placement
 async function deviceEventSignerFor(boundDeviceUuid, credentials, held) {
-  let i = await resolveCurrentDeviceBinding(credentials).catch(() => {
+  let binding = await resolveCurrentDeviceBinding(credentials).catch(() => {
     return;
   });
-  return i?.status === "resolved"
+  return binding?.status === "resolved"
     ? signerForBoundDevice({
-        accountUuid: i.accountUuid,
+        accountUuid: binding.accountUuid,
         boundDeviceUuid,
         credentials,
         held,
@@ -165,26 +172,26 @@ async function deviceEventSignerFor(boundDeviceUuid, credentials, held) {
 }
 //@ chunk-869v6e0e.js:2396-2620 placement
 async function deviceEventSignerIfBoundHere(boundDeviceUuid, credentials) {
-  let o = await resolveCurrentDeviceBinding(credentials).catch(() => {
+  let binding = await resolveCurrentDeviceBinding(credentials).catch(() => {
     return;
   });
-  if (o?.status !== "resolved") return;
-  let deviceKeyOutcome = await readDeviceKeyOutcome(o.accountUuid, credentials);
+  if (binding?.status !== "resolved") return;
+  let deviceKeyOutcome = await readDeviceKeyOutcome(binding.accountUuid, credentials);
   if (deviceKeyOutcome.status !== "loaded" || !isSameDeviceRowPk(deviceKeyOutcome.rowPk, boundDeviceUuid))
     return;
   logFeatureOk("client_event_signer");
   return createClientEventSigner(deviceKeyOutcome.rowPk, deviceKeyOutcome.key);
 }
 //@ chunk-869v6e0e.js:2620-2930 placement
-async function readDeviceKeyOutcome(accountUuid, n, o) {
-  if (o?.accountUuid === accountUuid)
+async function readDeviceKeyOutcome(accountUuid, credentials, held) {
+  if (held?.accountUuid === accountUuid)
     return {
       status: "loaded",
-      rowPk: o.rowPk,
-      key: o.key,
+      rowPk: held.rowPk,
+      key: held.key,
     };
   try {
-    let registeredDevice = await loadRegisteredDevice(accountUuid, n);
+    let registeredDevice = await loadRegisteredDevice(accountUuid, credentials);
     return registeredDevice === undefined
       ? {
           status: "no_device_key",
@@ -202,21 +209,21 @@ async function readDeviceKeyOutcome(accountUuid, n, o) {
   }
 }
 //@ chunk-869v6e0e.js:2930-2973 placement
-function isSameDeviceRowPk(rowPk, n) {
-  return rowPk === n.toLowerCase();
+function isSameDeviceRowPk(rowPk, boundDeviceUuid) {
+  return rowPk === boundDeviceUuid.toLowerCase();
 }
 //@ chunk-869v6e0e.js:2973-3218 placement
 /**
  * 按设备密钥读取结果构造事件签名器，绑定到别处则不签
  */
-function signerFromDeviceKeyOutcome(deviceKeyOutcome, n) {
+function signerFromDeviceKeyOutcome(deviceKeyOutcome, boundDeviceUuid) {
   switch (deviceKeyOutcome.status) {
     case "no_device_key":
     case "load_failed":
       logFeatureBad("client_event_signer", deviceKeyOutcome.status);
       return;
     case "loaded":
-      if (!isSameDeviceRowPk(deviceKeyOutcome.rowPk, n)) {
+      if (!isSameDeviceRowPk(deviceKeyOutcome.rowPk, boundDeviceUuid)) {
         logFeatureBad("client_event_signer", "bound_elsewhere");
         return;
       }
@@ -231,4 +238,5 @@ export {
   createClientEventSigner,
   canonicalJson,
   JCS_LIB,
+  deviceEventSignerOnceBoundHere,
 };

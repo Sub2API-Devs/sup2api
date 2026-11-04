@@ -46,9 +46,9 @@ function spawnSecurity(serviceName) {
           windowsHide: true,
         },
         (err, stdout) => {
-          let a = Boolean(err && "killed" in err && err.killed);
+          let killed = Boolean(err && "killed" in err && err.killed);
           resolve(
-            a
+            killed
               ? null
               : {
                   stdout: err ? null : stdout?.trim() || null,
@@ -66,8 +66,8 @@ function spawnSecurity(serviceName) {
  * macOS 钥匙串预读的启动入口；在 linux 构建中函数体被裁剪，实际什么也不做。
  */
 function startKeychainPrefetch() {
-  let n = isBareMode();
-  if (KEYCHAIN_PREFETCH_CACHE || n) return;
+  let bare = isBareMode();
+  if (KEYCHAIN_PREFETCH_CACHE || bare) return;
   let keychainCacheState = getKeychainCacheState();
   let generation = keychainCacheState.generation;
   return;
@@ -76,17 +76,22 @@ function startKeychainPrefetch() {
 /**
  * 等待钥匙串预读完成（可带超时）；没有预读任务时直接返回。
  */
-async function ensureKeychainPrefetchCompleted(n) {
+async function ensureKeychainPrefetchCompleted(timeoutMs) {
   if (!KEYCHAIN_PREFETCH_CACHE) return;
-  await (n === undefined ? KEYCHAIN_PREFETCH_CACHE : withDeadline(KEYCHAIN_PREFETCH_CACHE, n));
+  await (timeoutMs === undefined
+    ? KEYCHAIN_PREFETCH_CACHE
+    : withDeadline(KEYCHAIN_PREFETCH_CACHE, timeoutMs));
 }
 //@ chunk-9np9x1zv.js:884-931 facade-exports
 function clearLegacyApiKeyPrefetch() {
   getKeychainCacheState().legacyApiKeyPrefetch = null;
 }
 export {
-  startKeychainPrefetch,
   ensureKeychainPrefetchCompleted,
+  startKeychainPrefetch,
   clearLegacyApiKeyPrefetch,
   KEYCHAIN_PREFETCH_FASTPATH_BUDGET_MS,
+  getLastKnown,
+  isWindowsCredManagerAvailable,
+  setLastKnown,
 };

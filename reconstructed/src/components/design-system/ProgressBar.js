@@ -10,7 +10,7 @@
  */
 import { terminalDetector } from "../../ink/terminalColorSupport.js";
 import { repeatString } from "../../utils/stringUtils.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default_2,
@@ -48,95 +48,109 @@ var SHADE_BAR_CHARS = {
 var getBarChars = () =>
   terminalDetector.hasGeometricShapesInkBleedBug() ? BLOCK_BAR_CHARS : GEOMETRIC_BAR_CHARS;
 var clampRatio = (inputRatio) => Math.min(1, Math.max(0, inputRatio));
-var renderBlockBar = (m, width) => {
-  let floored = Math.floor(m * width);
-  let i = [repeatString(PARTIAL_BLOCK_CHARS.at(-1), floored)];
+var renderBlockBar = (ratio, width) => {
+  let floored = Math.floor(ratio * width);
+  let segments = [repeatString(PARTIAL_BLOCK_CHARS.at(-1), floored)];
   if (floored < width) {
-    let l = m * width - floored;
-    let floored_2 = Math.floor(l * (PARTIAL_BLOCK_CHARS.length - 1));
-    i.push(PARTIAL_BLOCK_CHARS[floored_2]);
-    let t = width - floored - 1;
-    if (t > 0) i.push(PARTIAL_BLOCK_CHARS[0].repeat(t));
+    let fraction = ratio * width - floored;
+    let floored_2 = Math.floor(fraction * (PARTIAL_BLOCK_CHARS.length - 1));
+    segments.push(PARTIAL_BLOCK_CHARS[floored_2]);
+    let remaining = width - floored - 1;
+    if (remaining > 0) segments.push(PARTIAL_BLOCK_CHARS[0].repeat(remaining));
   }
-  return i.join("");
+  return segments.join("");
 };
 //@ chunk-7tjtztz1.js:841-1732 fingerprint = ProgressBar (0.457)
 function ProgressBar(props) {
-  let $ = w(17);
+  let $ = useMemoCache(17);
   let { ratio: inputRatio, width, fillColor, emptyColor, variant } = props;
-  let t = variant === undefined ? "block" : variant;
-  let u;
+  let variantName = variant === undefined ? "block" : variant;
+  let Component;
   let color;
   let backgroundColor;
-  let C;
+  let percentLabel;
   let children;
-  let M;
-  if ($[0] !== emptyColor || $[1] !== fillColor || $[2] !== inputRatio || $[3] !== t || $[4] !== width) {
-    M = EARLY_RETURN_SENTINEL;
+  let result;
+  if (
+    $[0] !== emptyColor ||
+    $[1] !== fillColor ||
+    $[2] !== inputRatio ||
+    $[3] !== variantName ||
+    $[4] !== width
+  ) {
+    result = EARLY_RETURN_SENTINEL;
     J: {
-      let d = clampRatio(inputRatio);
-      if (t !== "block") {
-        let { fill, empty } = t === "shade" ? SHADE_BAR_CHARS : getBarChars();
-        let rounded = Math.round(d * width);
-        let I =
-          t === "shade" && d > 0 && d < 1 ? Math.min(Math.max(width - 1, 0), Math.max(1, rounded)) : rounded;
-        M = jsxProd_default_2(Text, {
-          "aria-label": t === "shade" ? `${Math.round(d * 100)}%` : undefined,
+      let ratio = clampRatio(inputRatio);
+      if (variantName !== "block") {
+        let { fill, empty } = variantName === "shade" ? SHADE_BAR_CHARS : getBarChars();
+        let rounded = Math.round(ratio * width);
+        let fillCount =
+          variantName === "shade" && ratio > 0 && ratio < 1
+            ? Math.min(Math.max(width - 1, 0), Math.max(1, rounded))
+            : rounded;
+        result = jsxProd_default_2(Text, {
+          "aria-label": variantName === "shade" ? `${Math.round(ratio * 100)}%` : undefined,
           children: [
             jsxProd_default(Text, {
               color: fillColor,
-              children: repeatString(fill, I),
+              children: repeatString(fill, fillCount),
             }),
             jsxProd_default(Text, {
               color: emptyColor,
               dimColor: emptyColor === undefined,
-              children: repeatString(empty, width - I),
+              children: repeatString(empty, width - fillCount),
             }),
           ],
         });
         break J;
       }
-      u = Text;
+      Component = Text;
       color = fillColor;
       backgroundColor = emptyColor;
-      C = `${Math.round(d * 100)}%`;
-      children = renderBlockBar(d, width);
+      percentLabel = `${Math.round(ratio * 100)}%`;
+      children = renderBlockBar(ratio, width);
     }
     $[0] = emptyColor;
     $[1] = fillColor;
     $[2] = inputRatio;
-    $[3] = t;
+    $[3] = variantName;
     $[4] = width;
-    $[5] = u;
+    $[5] = Component;
     $[6] = color;
     $[7] = backgroundColor;
-    $[8] = C;
+    $[8] = percentLabel;
     $[9] = children;
-    $[10] = M;
+    $[10] = result;
   } else {
-    u = $[5];
+    Component = $[5];
     color = $[6];
     backgroundColor = $[7];
-    C = $[8];
+    percentLabel = $[8];
     children = $[9];
-    M = $[10];
+    result = $[10];
   }
-  if (M !== EARLY_RETURN_SENTINEL) return M;
-  let E;
-  if ($[11] !== u || $[12] !== color || $[13] !== backgroundColor || $[14] !== C || $[15] !== children) {
-    E = jsxProd_default(u, {
+  if (result !== EARLY_RETURN_SENTINEL) return result;
+  let bar;
+  if (
+    $[11] !== Component ||
+    $[12] !== color ||
+    $[13] !== backgroundColor ||
+    $[14] !== percentLabel ||
+    $[15] !== children
+  ) {
+    bar = jsxProd_default(Component, {
       color,
       backgroundColor,
-      "aria-label": C,
+      "aria-label": percentLabel,
       children,
     });
-    $[11] = u;
+    $[11] = Component;
     $[12] = color;
     $[13] = backgroundColor;
-    $[14] = C;
+    $[14] = percentLabel;
     $[15] = children;
-    $[16] = E;
-  } else E = $[16];
-  return E;
+    $[16] = bar;
+  } else bar = $[16];
+  return bar;
 }
 export { ProgressBar };

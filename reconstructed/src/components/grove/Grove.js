@@ -8,9 +8,9 @@
  * pieces: chunk-18hwfzwa.js (2), chunk-fggt3ccb.js (7)
  * attribution: affinity 1, callgraph-witnessed 1, placement 1, fingerprint 4, facade-exports 2
  */
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { logEvent } from "../../services/analytics/index.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default_2,
@@ -45,9 +45,13 @@ import { stableEmptyObject } from "../../utils/stableEmptyObject.js";
 import { permissionModeIndicator } from "../../utils/permissions/PermissionMode.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { PermissionDialog_2 } from "../permissions/PermissionDialog.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fggt3ccb.js:722-726 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fggt3ccb.js:722", () => {
+  init_react_production();
+});
 //@ chunk-fggt3ccb.js:726-784 fingerprint = _temp2 (1)
 function logGrovePrivacyViewed() {
   logEvent("tengu_grove_privacy_settings_viewed", {});
@@ -70,7 +74,7 @@ var ACCEPT_OPT_OUT_OPTION = {
 };
 //@ chunk-fggt3ccb.js:1076-2606 fingerprint = GracePeriodContentBody (0.417)
 function GracePeriodContentBody() {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t0 = jsxProd_default_2(Text, {
@@ -201,7 +205,7 @@ function GracePeriodContentBody() {
 }
 //@ chunk-fggt3ccb.js:2606-3961 fingerprint = PostGracePeriodContentBody (0.462)
 function PostGracePeriodContentBody() {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t0 = jsxProd_default(Text, {
@@ -305,11 +309,11 @@ function PostGracePeriodContentBody() {
  * 条款更新对话框：宽限期内可接受新条款、选择是否允许用于训练（accept_opt_in/opt_out），宽限期后必须选择；记录 tengu_grove_policy_*。
  */
 function GroveDialog(props) {
-  let $ = w(52);
+  let $ = useMemoCache(52);
   let { showIfAlreadyViewed, location, onDone } = props;
-  let [shouldShowDialog, setShouldShowDialog] = y(null);
-  let [groveConfig, setGroveConfig] = y(null);
-  let [h, d] = y(false);
+  let [shouldShowDialog, setShouldShowDialog] = useState(null);
+  let [groveConfig, setGroveConfig] = useState(null);
+  let [optInFailed, setOptInFailed] = useState(false);
   let { credentials, storageV5 } = useTheme_2();
   let t1;
   let t2;
@@ -355,7 +359,7 @@ function GroveDialog(props) {
     t1 = $[5];
     t2 = $[6];
   }
-  P(t1, t2);
+  useEffect(t1, t2);
   if (shouldShowDialog === null) {
     return null;
   }
@@ -367,16 +371,16 @@ function GroveDialog(props) {
     t3 = async function onChange(value) {
       ee: switch (value) {
         case "accept_opt_in": {
-          let F =
+          let optedIn =
             (await updateGroveSettings(true, credentials, {
               onlyIfUnset: true,
             })) === false;
           logEvent("tengu_grove_policy_submitted", {
-            state: !F,
+            state: !optedIn,
             dismissable: groveConfig?.notice_is_grace_period,
           });
-          if (F) {
-            d(true);
+          if (optedIn) {
+            setOptInFailed(true);
             return;
           }
           break ee;
@@ -428,16 +432,16 @@ function GroveDialog(props) {
   } else t4 = $[12];
   let acceptOptions = t4;
   if (groveConfig?.grove_locked_by_claude_science) {
-    let E;
+    let lockedOptions;
     if ($[13] === MEMO_CACHE_SENTINEL) {
-      E = [ACCEPT_OPT_OUT_OPTION];
-      $[13] = E;
-    } else E = $[13];
-    acceptOptions = E;
+      lockedOptions = [ACCEPT_OPT_OUT_OPTION];
+      $[13] = lockedOptions;
+    } else lockedOptions = $[13];
+    acceptOptions = lockedOptions;
   }
-  let E;
+  let onCancel;
   if ($[14] !== groveConfig?.notice_is_grace_period || $[15] !== onChange) {
-    E = function handleCancel() {
+    onCancel = function handleCancel() {
       if (groveConfig?.notice_is_grace_period) {
         onChange("defer");
         return;
@@ -446,19 +450,19 @@ function GroveDialog(props) {
     };
     $[14] = groveConfig?.notice_is_grace_period;
     $[15] = onChange;
-    $[16] = E;
-  } else E = $[16];
-  let onCancel = E;
-  let Ie;
+    $[16] = onCancel;
+  } else onCancel = $[16];
+  let onCancel_2 = onCancel;
+  let onExit;
   if ($[17] !== onDone) {
-    Ie = function O() {
+    onExit = function onExit() {
       onDone("accept_opt_out");
     };
     $[17] = onDone;
-    $[18] = Ie;
-  } else Ie = $[18];
-  let O = Ie;
-  if (h) {
+    $[18] = onExit;
+  } else onExit = $[18];
+  let onExit_2 = onExit;
+  if (optInFailed) {
     const exitOnCtrlCD = location !== "settings";
     let inputGuide;
     if ($[19] === MEMO_CACHE_SENTINEL) {
@@ -477,14 +481,14 @@ function GroveDialog(props) {
       $[19] = inputGuide;
     } else inputGuide = $[19];
     let bindings;
-    if ($[20] !== O) {
+    if ($[20] !== onExit_2) {
       bindings = [
         {
           action: "confirm:yes",
-          run: O,
+          run: onExit_2,
         },
       ];
-      $[20] = O;
+      $[20] = onExit_2;
       $[21] = bindings;
     } else bindings = $[21];
     let children;
@@ -506,22 +510,22 @@ function GroveDialog(props) {
       $[23] = bindings;
       $[24] = children_2;
     } else children_2 = $[24];
-    let Y;
-    if ($[25] !== O || $[26] !== children_2 || $[27] !== exitOnCtrlCD) {
-      Y = jsxProd_default(Dialog, {
+    let failureDialog;
+    if ($[25] !== onExit_2 || $[26] !== children_2 || $[27] !== exitOnCtrlCD) {
+      failureDialog = jsxProd_default(Dialog, {
         title: "Help improve our AI models",
         color: "professionalBlue",
-        onCancel: O,
+        onCancel: onExit_2,
         exitOnCtrlCD,
         inputGuide,
         children: children_2,
       });
-      $[25] = O;
+      $[25] = onExit_2;
       $[26] = children_2;
       $[27] = exitOnCtrlCD;
-      $[28] = Y;
-    } else Y = $[28];
-    return Y;
+      $[28] = failureDialog;
+    } else failureDialog = $[28];
+    return failureDialog;
   }
   const exitOnCtrlCD = location !== "settings";
   let inputGuide;
@@ -540,9 +544,9 @@ function GroveDialog(props) {
     });
     $[29] = inputGuide;
   } else inputGuide = $[29];
-  let D;
+  let contentBody;
   if ($[30] !== groveConfig?.notice_is_grace_period) {
-    D = jsxProd_default(Box, {
+    contentBody = jsxProd_default(Box, {
       flexDirection: "column",
       gap: 1,
       flexGrow: 1,
@@ -551,8 +555,8 @@ function GroveDialog(props) {
         : jsxProd_default(PostGracePeriodContentBody, {}),
     });
     $[30] = groveConfig?.notice_is_grace_period;
-    $[31] = D;
-  } else D = $[31];
+    $[31] = contentBody;
+  } else contentBody = $[31];
   let t7;
   if ($[32] === MEMO_CACHE_SENTINEL) {
     t7 = jsxProd_default(Box, {
@@ -564,15 +568,15 @@ function GroveDialog(props) {
     });
     $[32] = t7;
   } else t7 = $[32];
-  let b;
-  if ($[33] !== D) {
-    b = jsxProd_default_2(Box, {
+  let contentRow;
+  if ($[33] !== contentBody) {
+    contentRow = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [D, t7],
+      children: [contentBody, t7],
     });
-    $[33] = D;
-    $[34] = b;
-  } else b = $[34];
+    $[33] = contentBody;
+    $[34] = contentRow;
+  } else contentRow = $[34];
   let t9;
   if ($[35] === MEMO_CACHE_SENTINEL) {
     t9 = jsxProd_default_2(Box, {
@@ -616,7 +620,7 @@ function GroveDialog(props) {
     $[42] = onChange_2;
   } else onChange_2 = $[42];
   let t13;
-  if ($[43] !== onCancel || $[44] !== options || $[45] !== onChange_2) {
+  if ($[43] !== onCancel_2 || $[44] !== options || $[45] !== onChange_2) {
     t13 = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
@@ -625,27 +629,27 @@ function GroveDialog(props) {
         jsxProd_default(ModelSelector, {
           options,
           onChange: onChange_2,
-          onCancel,
+          onCancel: onCancel_2,
         }),
       ],
     });
-    $[43] = onCancel;
+    $[43] = onCancel_2;
     $[44] = options;
     $[45] = onChange_2;
     $[46] = t13;
   } else t13 = $[46];
   let t14;
-  if ($[47] !== onCancel || $[48] !== b || $[49] !== t13 || $[50] !== exitOnCtrlCD) {
+  if ($[47] !== onCancel_2 || $[48] !== contentRow || $[49] !== t13 || $[50] !== exitOnCtrlCD) {
     t14 = jsxProd_default_2(Dialog, {
       title: "Updates to Consumer Terms and Policies",
       color: "professionalBlue",
-      onCancel,
+      onCancel: onCancel_2,
       exitOnCtrlCD,
       inputGuide,
-      children: [b, t13],
+      children: [contentRow, t13],
     });
-    $[47] = onCancel;
-    $[48] = b;
+    $[47] = onCancel_2;
+    $[48] = contentRow;
     $[49] = t13;
     $[50] = exitOnCtrlCD;
     $[51] = t14;
@@ -654,24 +658,24 @@ function GroveDialog(props) {
 }
 //@ chunk-fggt3ccb.js:8183-10093 facade-exports = PrivacySettingsDialog (0.431)
 function PrivacySettingsDialog(props) {
-  let $ = w(27);
+  let $ = useMemoCache(27);
   let { settings, domainExcluded, lockedByClaudeScience, onDone } = props;
-  let [groveEnabled, setGroveEnabled] = y(settings.grove_enabled);
+  let [groveEnabled, setGroveEnabled] = useState(settings.grove_enabled);
   let { credentials } = useTheme_2();
-  let h = domainExcluded || lockedByClaudeScience;
+  let locked = domainExcluded || lockedByClaudeScience;
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t1 = [];
     $[0] = t1;
   } else t1 = $[0];
-  P(logGrovePrivacyViewed, t1);
-  let G;
-  if ($[1] !== credentials || $[2] !== groveEnabled || $[3] !== h) {
-    G = function T(event) {
+  useEffect(logGrovePrivacyViewed, t1);
+  let onKeyDown;
+  if ($[1] !== credentials || $[2] !== groveEnabled || $[3] !== locked) {
+    onKeyDown = function onKeyDown(event) {
       if (event.ctrl || event.meta) {
         return;
       }
-      if (!h && (event.key === "tab" || event.key === "return" || event.key === " ")) {
+      if (!locked && (event.key === "tab" || event.key === "return" || event.key === " ")) {
         event.preventDefault();
         let newValue = !groveEnabled;
         setGroveEnabled(newValue);
@@ -680,10 +684,10 @@ function PrivacySettingsDialog(props) {
     };
     $[1] = credentials;
     $[2] = groveEnabled;
-    $[3] = h;
-    $[4] = G;
-  } else G = $[4];
-  let onKeyDown = G;
+    $[3] = locked;
+    $[4] = onKeyDown;
+  } else onKeyDown = $[4];
+  let onKeyDown_2 = onKeyDown;
   let t3;
   if ($[5] === MEMO_CACHE_SENTINEL) {
     t3 = jsxProd_default(Text, {
@@ -692,27 +696,27 @@ function PrivacySettingsDialog(props) {
     });
     $[5] = t3;
   } else t3 = $[5];
-  let C = t3;
+  let valueText = t3;
   if (lockedByClaudeScience) {
-    let p;
+    let lockedValue;
     if ($[6] === MEMO_CACHE_SENTINEL) {
-      p = jsxProd_default(Text, {
+      lockedValue = jsxProd_default(Text, {
         dimColor: true,
         children: "false",
       });
-      $[6] = p;
-    } else p = $[6];
-    C = p;
+      $[6] = lockedValue;
+    } else lockedValue = $[6];
+    valueText = lockedValue;
   } else if (domainExcluded) {
-    let p;
+    let domainValue;
     if ($[7] === MEMO_CACHE_SENTINEL) {
-      p = jsxProd_default(Text, {
+      domainValue = jsxProd_default(Text, {
         color: "error",
         children: "false (for emails with your domain)",
       });
-      $[7] = p;
-    } else p = $[7];
-    C = p;
+      $[7] = domainValue;
+    } else domainValue = $[7];
+    valueText = domainValue;
   } else if (groveEnabled) {
     let t4;
     if ($[8] === MEMO_CACHE_SENTINEL) {
@@ -722,11 +726,11 @@ function PrivacySettingsDialog(props) {
       });
       $[8] = t4;
     } else t4 = $[8];
-    C = t4;
+    valueText = t4;
   }
   let inputGuide;
-  if ($[9] !== h) {
-    inputGuide = h
+  if ($[9] !== locked) {
+    inputGuide = locked
       ? jsxProd_default(KeyboardShortcutHint, {
           chord: "escape",
           action: "cancel",
@@ -743,12 +747,12 @@ function PrivacySettingsDialog(props) {
             }),
           ],
         });
-    $[9] = h;
+    $[9] = locked;
     $[10] = inputGuide;
   } else inputGuide = $[10];
-  let Q;
+  let privacyLinkText;
   if ($[11] === MEMO_CACHE_SENTINEL) {
-    Q = jsxProd_default_2(Text, {
+    privacyLinkText = jsxProd_default_2(Text, {
       children: [
         "Review and manage your privacy settings at",
         " ",
@@ -757,62 +761,62 @@ function PrivacySettingsDialog(props) {
         }),
       ],
     });
-    $[11] = Q;
-  } else Q = $[11];
-  let X;
+    $[11] = privacyLinkText;
+  } else privacyLinkText = $[11];
+  let labelText;
   if ($[12] === MEMO_CACHE_SENTINEL) {
-    X = jsxProd_default(Box, {
+    labelText = jsxProd_default(Box, {
       width: 44,
       children: jsxProd_default(Text, {
         bold: true,
         children: "Help improve our AI models",
       }),
     });
-    $[12] = X;
-  } else X = $[12];
-  let V;
-  if ($[13] !== C) {
-    V = jsxProd_default_2(Box, {
+    $[12] = labelText;
+  } else labelText = $[12];
+  let settingRow;
+  if ($[13] !== valueText) {
+    settingRow = jsxProd_default_2(Box, {
       children: [
-        X,
+        labelText,
         jsxProd_default(Box, {
-          children: C,
+          children: valueText,
         }),
       ],
     });
-    $[13] = C;
-    $[14] = V;
-  } else V = $[14];
-  let L;
+    $[13] = valueText;
+    $[14] = settingRow;
+  } else settingRow = $[14];
+  let lockedNotice;
   if ($[15] !== lockedByClaudeScience) {
-    L =
+    lockedNotice =
       lockedByClaudeScience &&
       jsxProd_default(Text, {
         dimColor: true,
         children: "Not available for this account.",
       });
     $[15] = lockedByClaudeScience;
-    $[16] = L;
-  } else L = $[16];
-  let F;
-  if ($[17] !== V || $[18] !== L) {
-    F = jsxProd_default_2(Box, {
+    $[16] = lockedNotice;
+  } else lockedNotice = $[16];
+  let settingsColumn;
+  if ($[17] !== settingRow || $[18] !== lockedNotice) {
+    settingsColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [V, L],
+      children: [settingRow, lockedNotice],
     });
-    $[17] = V;
-    $[18] = L;
-    $[19] = F;
-  } else F = $[19];
+    $[17] = settingRow;
+    $[18] = lockedNotice;
+    $[19] = settingsColumn;
+  } else settingsColumn = $[19];
   let children;
-  if ($[20] !== onKeyDown || $[21] !== F) {
+  if ($[20] !== onKeyDown_2 || $[21] !== settingsColumn) {
     children = jsxProd_default_2(FocusColumn, {
       gap: 1,
-      onKeyDown,
-      children: [Q, F],
+      onKeyDown: onKeyDown_2,
+      children: [privacyLinkText, settingsColumn],
     });
-    $[20] = onKeyDown;
-    $[21] = F;
+    $[20] = onKeyDown_2;
+    $[21] = settingsColumn;
     $[22] = children;
   } else children = $[22];
   let t8;
@@ -840,64 +844,64 @@ function getNudgeOpenedAtMs() {
  * 询问是否把 auto 模式设为默认权限模式的对话框；上报 tengu_auto_default_nudge_shown，带输入防抖拒绝。
  */
 function AutoModeDefaultNudgeDialog(exitState) {
-  let $ = w(32);
+  let $ = useMemoCache(32);
   let { currentMode, onDone } = exitState;
-  let ee;
+  let logImpression;
   if ($[0] !== currentMode) {
-    ee = () => {
+    logImpression = () => {
       logEvent("tengu_auto_default_nudge_shown", {
         current_mode: fromEnum(currentMode),
       });
     };
     $[0] = currentMode;
-    $[1] = ee;
-  } else ee = $[1];
-  useOnFirstReveal("impression", ee);
+    $[1] = logImpression;
+  } else logImpression = $[1];
+  useOnFirstReveal("impression", logImpression);
   let globalExitKeybindings = useGlobalExitKeybindings();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let refusableAnswer = useRefusableAnswer(onDone);
   let inputClock = useInputClock();
-  let [We] = y(getNudgeOpenedAtMs);
+  let [openedAtMs] = useState(getNudgeOpenedAtMs);
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let rt;
-  if ($[2] !== inputClock || $[3] !== We || $[4] !== noteRefused || $[5] !== refusedWithin) {
-    rt = () => {
-      if (isWithinRecentInput(inputClock, We) || refusedWithin()) {
+  let shouldRefuse;
+  if ($[2] !== inputClock || $[3] !== openedAtMs || $[4] !== noteRefused || $[5] !== refusedWithin) {
+    shouldRefuse = () => {
+      if (isWithinRecentInput(inputClock, openedAtMs) || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
     $[2] = inputClock;
-    $[3] = We;
+    $[3] = openedAtMs;
     $[4] = noteRefused;
     $[5] = refusedWithin;
-    $[6] = rt;
-  } else rt = $[6];
-  let kt = rt;
-  let At;
-  if ($[7] !== kt || $[8] !== refusableAnswer) {
-    At = function Ot(It) {
-      if (kt()) {
-        refusableAnswer.refuse(It);
+    $[6] = shouldRefuse;
+  } else shouldRefuse = $[6];
+  let shouldRefuse_2 = shouldRefuse;
+  let handleAnswer;
+  if ($[7] !== shouldRefuse_2 || $[8] !== refusableAnswer) {
+    handleAnswer = function handleAnswer(value) {
+      if (shouldRefuse_2()) {
+        refusableAnswer.refuse(value);
         return;
       }
-      refusableAnswer.answer(It);
+      refusableAnswer.answer(value);
     };
-    $[7] = kt;
+    $[7] = shouldRefuse_2;
     $[8] = refusableAnswer;
-    $[9] = At;
-  } else At = $[9];
-  let Ot = At;
-  let Et;
+    $[9] = handleAnswer;
+  } else handleAnswer = $[9];
+  let choose = handleAnswer;
+  let emptyHintProps;
   if ($[10] === MEMO_CACHE_SENTINEL) {
-    Et = stableEmptyObject(false);
-    $[10] = Et;
-  } else Et = $[10];
-  let Dt = Et;
-  let Lt;
+    emptyHintProps = stableEmptyObject(false);
+    $[10] = emptyHintProps;
+  } else emptyHintProps = $[10];
+  let emptyHintProps_2 = emptyHintProps;
+  let explainerBox;
   if ($[11] === MEMO_CACHE_SENTINEL) {
-    Lt = jsxProd_default(Box, {
+    explainerBox = jsxProd_default(Box, {
       marginBottom: 1,
       flexDirection: "column",
       children: jsxProd_default(Text, {
@@ -905,29 +909,29 @@ function AutoModeDefaultNudgeDialog(exitState) {
           "Auto mode lets Claude handle permission prompts automatically. Claude checks each tool call for risky actions and prompt injection before executing, runs the ones it assesses as lower-risk, and blocks the rest.",
       }),
     });
-    $[11] = Lt;
-  } else Lt = $[11];
+    $[11] = explainerBox;
+  } else explainerBox = $[11];
   const attempts = refusableAnswer.attempts;
   const defaultFocusValue = refusableAnswer.refused ?? undefined;
-  let io;
+  let acceptOption;
   if ($[12] === MEMO_CACHE_SENTINEL) {
-    io = {
+    acceptOption = {
       label: "Yes, set auto mode as my default permission mode",
       value: "accept",
     };
-    $[12] = io;
-  } else io = $[12];
-  let so;
+    $[12] = acceptOption;
+  } else acceptOption = $[12];
+  let modeLabel;
   if ($[13] !== currentMode) {
-    so = permissionModeIndicator(currentMode);
+    modeLabel = permissionModeIndicator(currentMode);
     $[13] = currentMode;
-    $[14] = so;
-  } else so = $[14];
-  const label = `No, keep ${so}`;
+    $[14] = modeLabel;
+  } else modeLabel = $[14];
+  const label = `No, keep ${modeLabel}`;
   let options;
   if ($[15] !== label) {
     options = [
-      io,
+      acceptOption,
       {
         label,
         value: "decline",
@@ -937,45 +941,45 @@ function AutoModeDefaultNudgeDialog(exitState) {
     $[16] = options;
   } else options = $[16];
   let onCancel;
-  if ($[17] !== Ot) {
-    onCancel = () => Ot("decline");
-    $[17] = Ot;
+  if ($[17] !== choose) {
+    onCancel = () => choose("decline");
+    $[17] = choose;
     $[18] = onCancel;
   } else onCancel = $[18];
-  let bo;
+  let selectorBox;
   if (
-    $[19] !== Ot ||
-    $[20] !== kt ||
+    $[19] !== choose ||
+    $[20] !== shouldRefuse_2 ||
     $[21] !== refusableAnswer.attempts ||
     $[22] !== options ||
     $[23] !== onCancel ||
     $[24] !== defaultFocusValue
   ) {
-    bo = jsxProd_default(Box, {
+    selectorBox = jsxProd_default(Box, {
       children: jsxProd_default(
         ModelSelector,
         {
           defaultFocusValue,
           hideIndexes: true,
-          refuseInput: kt,
+          refuseInput: shouldRefuse_2,
           options,
-          onChange: Ot,
+          onChange: choose,
           onCancel,
         },
         attempts,
       ),
     });
-    $[19] = Ot;
-    $[20] = kt;
+    $[19] = choose;
+    $[20] = shouldRefuse_2;
     $[21] = refusableAnswer.attempts;
     $[22] = options;
     $[23] = onCancel;
     $[24] = defaultFocusValue;
-    $[25] = bo;
-  } else bo = $[25];
-  let Ao;
+    $[25] = selectorBox;
+  } else selectorBox = $[25];
+  let exitHint;
   if ($[26] !== globalExitKeybindings || $[27] !== isScreenReaderEnabled) {
-    Ao =
+    exitHint =
       false &&
       (!isScreenReaderEnabled || globalExitKeybindings.pending) &&
       jsxProd_default(Box, {
@@ -990,14 +994,14 @@ function AutoModeDefaultNudgeDialog(exitState) {
                   jsxProd_default(KeyboardShortcutHint, {
                     chord: "enter",
                     action: "confirm",
-                    ...Dt,
+                    ...emptyHintProps_2,
                   }),
                   jsxProd_default(ConfigurableShortcutHint, {
                     action: "select:cancel",
                     context: "Select",
                     fallback: "Esc",
                     description: "cancel",
-                    ...Dt,
+                    ...emptyHintProps_2,
                   }),
                 ],
               }),
@@ -1005,24 +1009,24 @@ function AutoModeDefaultNudgeDialog(exitState) {
       });
     $[26] = globalExitKeybindings;
     $[27] = isScreenReaderEnabled;
-    $[28] = Ao;
-  } else Ao = $[28];
-  let Bo;
-  if ($[29] !== bo || $[30] !== Ao) {
-    Bo = jsxProd_default(PermissionDialog_2, {
+    $[28] = exitHint;
+  } else exitHint = $[28];
+  let dialog;
+  if ($[29] !== selectorBox || $[30] !== exitHint) {
+    dialog = jsxProd_default(PermissionDialog_2, {
       title: "Make auto mode your default permission mode?",
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         paddingX: false ? 0 : 2,
         paddingTop: 1,
         paddingBottom: false ? 0 : 1,
-        children: [Lt, bo, Ao],
+        children: [explainerBox, selectorBox, exitHint],
       }),
     });
-    $[29] = bo;
-    $[30] = Ao;
-    $[31] = Bo;
-  } else Bo = $[31];
-  return Bo;
+    $[29] = selectorBox;
+    $[30] = exitHint;
+    $[31] = dialog;
+  } else dialog = $[31];
+  return dialog;
 }
 export { AutoModeDefaultNudgeDialog, PrivacySettingsDialog, GroveDialog };

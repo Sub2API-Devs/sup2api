@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:507047-507954 cjs-fingerprint
-var require_vala = x(function (cjsExports, cjsModule) {
+var require_vala = __commonJS(function (cjsExports, cjsModule) {
   function vala(hljs) {
     return {
       name: "Vala",

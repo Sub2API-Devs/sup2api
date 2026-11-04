@@ -59,39 +59,40 @@ var MAX_FORK_TRANSCRIPT_BYTES = 4194304;
 var MAX_BRANCH_MESSAGES = 1e5;
 //@ chunk-khj4kcw5.js:12248-12452 fingerprint = deriveFirstPrompt (0.567)
 function deriveFirstPrompt(firstUserMessage) {
-  let p = {
+  let firstMessageSeed = {
     commandFallback: "",
   };
-  let d;
-  for (let s of firstUserMessage) {
-    d = renderPluginPrompt(s, p, "shown");
-    if (d !== undefined) break;
+  let text;
+  for (let part of firstUserMessage) {
+    text = renderPluginPrompt(part, firstMessageSeed, "shown");
+    if (text !== undefined) break;
   }
-  d ??= p.commandFallback;
-  return d.replace(/\s+/g, " ").trim().slice(0, 100).trimEnd() || "Branched conversation";
+  text ??= firstMessageSeed.commandFallback;
+  return text.replace(/\s+/g, " ").trim().slice(0, 100).trimEnd() || "Branched conversation";
 }
 //@ chunk-khj4kcw5.js:12452-15231 fingerprint = createFork (0.46)
 async function createFork(messages, customTitle, extraMessages, storageV5) {
   let forkSessionId = randomUUID();
   let originalSessionId = getSessionId();
-  let O = isSessionHistorySuppressed() || isSessionHistorySuppressedFor(pinSessionId(originalSessionId));
+  let historySuppressed =
+    isSessionHistorySuppressed() || isSessionHistorySuppressedFor(pinSessionId(originalSessionId));
   let conversationAtisLatch = getConversationAtisLatch();
-  let v = isSillyShoreGateOn() ? getConversationToolsUsed().names() : [];
-  let B = undefined;
-  let j = undefined;
+  let toolsUsed = isSillyShoreGateOn() ? getConversationToolsUsed().names() : [];
+  let atisLatch = undefined;
+  let relocatedCwd = undefined;
   let projectDir = getProjectDir(getOriginalCwd());
   let forkSessionPath = getTranscriptPathForSession(forkSessionId);
-  let f = getMaterializedSessionFile() ?? getTranscriptPath();
-  let transcriptStorageKey = getTranscriptStorageKey(f, storageV5);
+  let sessionFile = getMaterializedSessionFile() ?? getTranscriptPath();
+  let transcriptStorageKey = getTranscriptStorageKey(sessionFile, storageV5);
   if (transcriptStorageKey !== undefined)
     return createForkFromStorage({
       sourceV5: transcriptStorageKey,
       forkKey: STORAGE_SPACES.transcript(getProjectKey(getOriginalCwd()), forkSessionId),
       forkSessionId,
       originalSessionId,
-      sourceTaintAtEntry: O,
+      sourceTaintAtEntry: historySuppressed,
       atisLatchAtEntry: conversationAtisLatch,
-      toolsUsedAtEntry: v,
+      toolsUsedAtEntry: toolsUsed,
       currentMessages: messages,
       customTitle,
       extraMessages,
@@ -102,12 +103,12 @@ async function createFork(messages, customTitle, extraMessages, storageV5) {
     recursive: true,
     mode: 448,
   });
-  let U;
+  let transcript;
   try {
-    U = createReadStream(f, {
+    transcript = createReadStream(sessionFile, {
       encoding: "utf8",
     });
-    await once(U, "open");
+    await once(transcript, "open");
   } catch (error) {
     if (isENOENT(error)) throw Error("No conversation to branch");
     logError(error);
@@ -117,187 +118,187 @@ async function createFork(messages, customTitle, extraMessages, storageV5) {
     encoding: "utf8",
     mode: 384,
   });
-  let w = null;
+  let outStream = null;
   writeStream.on("error", (entry) => {
-    w = toError(entry);
+    outStream = toError(entry);
   });
-  let P = new Set(messages.map((entry) => entry.uuid));
-  let g = new Map();
-  let I = [];
-  let C = [];
-  let h;
-  let A = async () => {
+  let seenUuids = new Set(messages.map((entry) => entry.uuid));
+  let rowsByUuid = new Map();
+  let lines = [];
+  let extraLines = [];
+  let tally;
+  let cleanup = async () => {
     writeStream.destroy();
     await unlink(forkSessionPath).catch(() => {});
   };
-  let M = async (entry) => {
-    if (w) {
-      await A();
-      throw w;
+  let writeRow = async (entry) => {
+    if (outStream) {
+      await cleanup();
+      throw outStream;
     }
     if (!writeStream.write(entry)) await once(writeStream, "drain").catch(() => {});
   };
-  let n = O;
-  let r = () =>
-    M(
+  let suppressedFlag = historySuppressed;
+  let nextLine = () =>
+    writeRow(
       jsonStringify(buildHistorySuppressionEntry(forkSessionId, "fork_inherit")) +
         `
 `,
     );
   try {
-    if (n) await r();
-    for await (let e of transcriptLines(U)) {
-      if (e.length === 0) continue;
-      let c;
+    if (suppressedFlag) await nextLine();
+    for await (let line of transcriptLines(transcript)) {
+      if (line.length === 0) continue;
+      let parsed;
       try {
-        c = jsonParse(e);
+        parsed = jsonParse(line);
       } catch {
         continue;
       }
-      if (!isPlainObject(c)) continue;
-      let i = c;
+      if (!isPlainObject(parsed)) continue;
+      let row = parsed;
       if (
-        i.type === "content-replacement" &&
-        i.sessionId === originalSessionId &&
-        Array.isArray(i.replacements)
+        row.type === "content-replacement" &&
+        row.sessionId === originalSessionId &&
+        Array.isArray(row.replacements)
       ) {
-        I.push(...i.replacements);
+        lines.push(...row.replacements);
         continue;
       }
       if (
-        i.type === "relocated" &&
-        i.sessionId === originalSessionId &&
-        typeof i.relocatedCwd === "string" &&
-        i.relocatedCwd !== ""
+        row.type === "relocated" &&
+        row.sessionId === originalSessionId &&
+        typeof row.relocatedCwd === "string" &&
+        row.relocatedCwd !== ""
       ) {
-        h = i.relocatedCwd;
+        tally = row.relocatedCwd;
         continue;
       }
-      if (i.type === "memory-mode" && i.sessionId === originalSessionId) {
-        C.push(i);
+      if (row.type === "memory-mode" && row.sessionId === originalSessionId) {
+        extraLines.push(row);
         continue;
       }
-      if (i.type === "history-suppression") {
-        if (!n) {
-          n = true;
-          await r();
+      if (row.type === "history-suppression") {
+        if (!suppressedFlag) {
+          suppressedFlag = true;
+          await nextLine();
         }
         continue;
       }
-      if (!isTranscriptMessage(i) || i.isSidechain || !P.has(i.uuid)) continue;
-      g.set(i.uuid, i);
+      if (!isTranscriptMessage(row) || row.isSidechain || !seenUuids.has(row.uuid)) continue;
+      rowsByUuid.set(row.uuid, row);
     }
   } catch (error) {
-    await A();
+    await cleanup();
     throw error;
   } finally {
-    U.destroy();
+    transcript.destroy();
   }
   let parentUuid = null;
-  let T = null;
-  let F = [];
+  let lastRow = null;
+  let tail = [];
   try {
-    for (let e of messages) {
-      let c = g.get(e.uuid);
-      if (!c) continue;
-      let i =
-        c.type === "system" && c.subtype === "model_refusal_fallback"
+    for (let message of messages) {
+      let row = rowsByUuid.get(message.uuid);
+      if (!row) continue;
+      let patch =
+        row.type === "system" && row.subtype === "model_refusal_fallback"
           ? {
               neutralizedByFork: true,
             }
           : undefined;
-      let x = {
-        ...c,
-        ...i,
+      let rewritten = {
+        ...row,
+        ...patch,
         sessionId: forkSessionId,
         parentUuid,
         isSidechain: false,
         sessionKind: undefined,
         forkedFrom: {
           sessionId: originalSessionId,
-          messageUuid: c.uuid,
+          messageUuid: row.uuid,
         },
       };
-      let V = {
-        ...c,
-        ...i,
+      let mergedRow = {
+        ...row,
+        ...patch,
         sessionId: forkSessionId,
       };
-      F.push(V);
-      T = c;
-      await M(
-        jsonStringify(x) +
+      tail.push(mergedRow);
+      lastRow = row;
+      await writeRow(
+        jsonStringify(rewritten) +
           `
 `,
       );
-      if (c.type !== "progress") parentUuid = c.uuid;
+      if (row.type !== "progress") parentUuid = row.uuid;
     }
   } catch (error) {
-    await A();
+    await cleanup();
     throw error;
   }
-  if (T === null) {
-    await A();
+  if (lastRow === null) {
+    await cleanup();
     throw Error("No messages to branch");
   }
   if (extraMessages?.length)
-    for (let e of extraMessages) {
-      let c = {
-        ...e,
-        cwd: T.cwd,
-        userType: T.userType,
-        entrypoint: T.entrypoint,
-        version: T.version,
-        gitBranch: T.gitBranch,
+    for (let message of extraMessages) {
+      let base = {
+        ...message,
+        cwd: lastRow.cwd,
+        userType: lastRow.userType,
+        entrypoint: lastRow.entrypoint,
+        version: lastRow.version,
+        gitBranch: lastRow.gitBranch,
         sessionId: forkSessionId,
         timestamp: new Date().toISOString(),
       };
-      let i = {
-        ...c,
+      let row = {
+        ...base,
         parentUuid,
         isSidechain: false,
       };
-      F.push(c);
-      await M(
-        jsonStringify(i) +
+      tail.push(base);
+      await writeRow(
+        jsonStringify(row) +
           `
 `,
       );
-      if (e.type !== "progress") parentUuid = e.uuid;
+      if (message.type !== "progress") parentUuid = message.uuid;
     }
-  if (I.length > 0)
-    await M(
+  if (lines.length > 0)
+    await writeRow(
       jsonStringify({
         type: "content-replacement",
         sessionId: forkSessionId,
-        replacements: I,
+        replacements: lines,
       }) +
         `
 `,
     );
-  for (let entry of C) {
+  for (let entry of extraLines) {
     let serialized = {
       ...entry,
       sessionId: forkSessionId,
     };
-    await M(
+    await writeRow(
       jsonStringify(serialized) +
         `
 `,
     );
   }
-  if (h)
-    await M(
+  if (tally)
+    await writeRow(
       jsonStringify({
         type: "relocated",
         sessionId: forkSessionId,
-        relocatedCwd: h,
+        relocatedCwd: tally,
       }) +
         `
 `,
     );
   if (conversationAtisLatch !== undefined)
-    await M(
+    await writeRow(
       jsonStringify({
         type: "atis-latch",
         sessionId: forkSessionId,
@@ -306,36 +307,36 @@ async function createFork(messages, customTitle, extraMessages, storageV5) {
         `
 `,
     );
-  if (v.length > 0)
-    await M(
+  if (toolsUsed.length > 0)
+    await writeRow(
       jsonStringify({
         type: "tools-used",
         sessionId: forkSessionId,
-        tools: v,
+        tools: toolsUsed,
       }) +
         `
 `,
     );
   writeStream.end();
   await finished(writeStream).catch(() => {});
-  if (w) {
-    await A();
-    throw w;
+  if (outStream) {
+    await cleanup();
+    throw outStream;
   }
   return {
     sessionId: forkSessionId,
     title: customTitle,
     forkPath: forkSessionPath,
-    serializedMessages: F,
-    contentReplacementRecords: I,
-    sessionHistorySuppressed: n,
+    serializedMessages: tail,
+    contentReplacementRecords: lines,
+    sessionHistorySuppressed: suppressedFlag,
   };
 }
 //@ chunk-khj4kcw5.js:15231-15267 layout
-function toJsonlLine(t) {
+function toJsonlLine(message) {
   return {
     data:
-      jsonStringify(t) +
+      jsonStringify(message) +
       `
 `,
   };
@@ -344,7 +345,7 @@ function toJsonlLine(t) {
 /**
  * createForkFromStorage：storage v5 路径的 createFork。
  */
-async function createForkFromStorage(t) {
+async function createForkFromStorage(entry) {
   let {
     sourceV5,
     forkKey,
@@ -354,193 +355,195 @@ async function createForkFromStorage(t) {
     customTitle,
     extraMessages,
     forkSessionPath,
-  } = t;
-  let B = undefined;
-  let j = undefined;
+  } = entry;
+  let atisLatch = undefined;
+  let relocatedCwd = undefined;
   let { backend, key } = sourceV5;
-  let f = [];
-  let R = new Set(currentMessages.map((currentMessage) => currentMessage.uuid));
-  let U = new Map();
-  let S = [];
-  let w = [];
-  let P;
-  let sourceTaintAtEntry = t.sourceTaintAtEntry;
-  if (sourceTaintAtEntry) f.push(toJsonlLine(buildHistorySuppressionEntry(forkSessionId, "fork_inherit")));
-  let I;
+  let records = [];
+  let currentUuids = new Set(currentMessages.map((currentMessage) => currentMessage.uuid));
+  let byUuid = new Map();
+  let replacements = [];
+  let extraRows = [];
+  let cwdAfterMove;
+  let sourceTaintAtEntry = entry.sourceTaintAtEntry;
+  if (sourceTaintAtEntry)
+    records.push(toJsonlLine(buildHistorySuppressionEntry(forkSessionId, "fork_inherit")));
+  let parsed;
   for (let i = 0; ; i++) {
     if (i >= MAX_BRANCH_MESSAGES) throw Error("Conversation too long to branch through storage");
-    let records = await backend.readRecords(key, {
+    let records_2 = await backend.readRecords(key, {
       order: "forward",
       maxBytes: MAX_FORK_TRANSCRIPT_BYTES,
-      ...(I !== undefined && {
-        fromSeq: I,
+      ...(parsed !== undefined && {
+        fromSeq: parsed,
       }),
     });
-    if (!records.ok) {
-      if (records.error.code === "NotFound") throw Error("No conversation to branch");
-      let E = Error("Conversation unreadable through storage", {
-        cause: records.error,
+    if (!records_2.ok) {
+      if (records_2.error.code === "NotFound") throw Error("No conversation to branch");
+      let unreadable = Error("Conversation unreadable through storage", {
+        cause: records_2.error,
       });
-      logError(E);
-      throw E;
+      logError(unreadable);
+      throw unreadable;
     }
-    for (let item of records.value.items) {
-      let T = Buffer.from(item.data.buffer, item.data.byteOffset, item.data.byteLength)
+    for (let item of records_2.value.items) {
+      let text = Buffer.from(item.data.buffer, item.data.byteOffset, item.data.byteLength)
         .toString("utf8")
         .trimEnd();
-      if (T.length === 0) continue;
-      let F;
+      if (text.length === 0) continue;
+      let row;
       try {
-        F = jsonParse(T);
+        row = jsonParse(text);
       } catch {
         continue;
       }
-      if (!isPlainObject(F)) continue;
-      let e = F;
+      if (!isPlainObject(row)) continue;
+      let parsedRow = row;
       if (
-        e.type === "content-replacement" &&
-        e.sessionId === originalSessionId &&
-        Array.isArray(e.replacements)
+        parsedRow.type === "content-replacement" &&
+        parsedRow.sessionId === originalSessionId &&
+        Array.isArray(parsedRow.replacements)
       ) {
-        S.push(...e.replacements);
+        replacements.push(...parsedRow.replacements);
         continue;
       }
       if (
-        e.type === "relocated" &&
-        e.sessionId === originalSessionId &&
-        typeof e.relocatedCwd === "string" &&
-        e.relocatedCwd !== ""
+        parsedRow.type === "relocated" &&
+        parsedRow.sessionId === originalSessionId &&
+        typeof parsedRow.relocatedCwd === "string" &&
+        parsedRow.relocatedCwd !== ""
       ) {
-        P = e.relocatedCwd;
+        cwdAfterMove = parsedRow.relocatedCwd;
         continue;
       }
-      if (e.type === "memory-mode" && e.sessionId === originalSessionId) {
-        w.push(e);
+      if (parsedRow.type === "memory-mode" && parsedRow.sessionId === originalSessionId) {
+        extraRows.push(parsedRow);
         continue;
       }
-      if (e.type === "history-suppression") {
+      if (parsedRow.type === "history-suppression") {
         if (!sourceTaintAtEntry) {
           sourceTaintAtEntry = true;
-          f.push(toJsonlLine(buildHistorySuppressionEntry(forkSessionId, "fork_inherit")));
+          records.push(toJsonlLine(buildHistorySuppressionEntry(forkSessionId, "fork_inherit")));
         }
         continue;
       }
-      if (!isTranscriptMessage(e) || e.isSidechain || !R.has(e.uuid)) continue;
-      U.set(e.uuid, e);
+      if (!isTranscriptMessage(parsedRow) || parsedRow.isSidechain || !currentUuids.has(parsedRow.uuid))
+        continue;
+      byUuid.set(parsedRow.uuid, parsedRow);
     }
-    I = records.value.nextSeq;
-    if (I === undefined) break;
+    parsed = records_2.value.nextSeq;
+    if (parsed === undefined) break;
   }
-  let C = null;
-  let h = null;
-  let A = [];
+  let prevUuid = null;
+  let prevBranch = null;
+  let out = [];
   for (let currentMessage of currentMessages) {
-    let r = U.get(currentMessage.uuid);
-    if (!r) continue;
-    let E =
-      r.type === "system" && r.subtype === "model_refusal_fallback"
+    let orig = byUuid.get(currentMessage.uuid);
+    if (!orig) continue;
+    let next =
+      orig.type === "system" && orig.subtype === "model_refusal_fallback"
         ? {
             neutralizedByFork: true,
           }
         : undefined;
-    let T = {
-      ...r,
-      ...E,
+    let record = {
+      ...orig,
+      ...next,
       sessionId: forkSessionId,
-      parentUuid: C,
+      parentUuid: prevUuid,
       isSidechain: false,
       sessionKind: undefined,
       forkedFrom: {
         sessionId: originalSessionId,
-        messageUuid: r.uuid,
+        messageUuid: orig.uuid,
       },
     };
-    A.push({
-      ...r,
-      ...E,
+    out.push({
+      ...orig,
+      ...next,
       sessionId: forkSessionId,
     });
-    h = r;
-    f.push(toJsonlLine(T));
-    if (r.type !== "progress") C = r.uuid;
+    prevBranch = orig;
+    records.push(toJsonlLine(record));
+    if (orig.type !== "progress") prevUuid = orig.uuid;
   }
-  if (h === null) throw Error("No messages to branch");
+  if (prevBranch === null) throw Error("No messages to branch");
   if (extraMessages?.length)
     for (let extraMessage of extraMessages) {
-      let r = {
+      let record = {
         ...extraMessage,
-        cwd: h.cwd,
-        userType: h.userType,
-        entrypoint: h.entrypoint,
-        version: h.version,
-        gitBranch: h.gitBranch,
+        cwd: prevBranch.cwd,
+        userType: prevBranch.userType,
+        entrypoint: prevBranch.entrypoint,
+        version: prevBranch.version,
+        gitBranch: prevBranch.gitBranch,
         sessionId: forkSessionId,
         timestamp: new Date().toISOString(),
       };
-      A.push(r);
-      f.push(
+      out.push(record);
+      records.push(
         toJsonlLine({
-          ...r,
-          parentUuid: C,
+          ...record,
+          parentUuid: prevUuid,
           isSidechain: false,
         }),
       );
-      if (extraMessage.type !== "progress") C = extraMessage.uuid;
+      if (extraMessage.type !== "progress") prevUuid = extraMessage.uuid;
     }
-  if (S.length > 0) {
-    let n = {
+  if (replacements.length > 0) {
+    let replacementRecord = {
       type: "content-replacement",
       sessionId: forkSessionId,
-      replacements: S,
+      replacements,
     };
-    f.push(toJsonlLine(n));
+    records.push(toJsonlLine(replacementRecord));
   }
-  for (let n of w) {
-    let r = {
-      ...n,
+  for (let message of extraRows) {
+    let record = {
+      ...message,
       sessionId: forkSessionId,
     };
-    f.push(toJsonlLine(r));
+    records.push(toJsonlLine(record));
   }
-  if (P) {
-    let n = {
+  if (cwdAfterMove) {
+    let record = {
       type: "relocated",
       sessionId: forkSessionId,
-      relocatedCwd: P,
+      relocatedCwd: cwdAfterMove,
     };
-    f.push(toJsonlLine(n));
+    records.push(toJsonlLine(record));
   }
-  if (t.atisLatchAtEntry !== undefined) {
-    let n = {
+  if (entry.atisLatchAtEntry !== undefined) {
+    let record = {
       type: "atis-latch",
       sessionId: forkSessionId,
-      atis: t.atisLatchAtEntry,
+      atis: entry.atisLatchAtEntry,
     };
-    f.push(toJsonlLine(n));
+    records.push(toJsonlLine(record));
   }
-  if (t.toolsUsedAtEntry.length > 0) {
-    let n = {
+  if (entry.toolsUsedAtEntry.length > 0) {
+    let record = {
       type: "tools-used",
       sessionId: forkSessionId,
-      tools: [...t.toolsUsedAtEntry],
+      tools: [...entry.toolsUsedAtEntry],
     };
-    f.push(toJsonlLine(n));
+    records.push(toJsonlLine(record));
   }
-  let M = await backend.append(forkKey, f);
-  if (!M.ok) {
+  let appended = await backend.append(forkKey, records);
+  if (!appended.ok) {
     await backend.delete(forkKey).catch(() => {
       return;
     });
     throw Error("Branch could not be written through storage", {
-      cause: M.error,
+      cause: appended.error,
     });
   }
   return {
     sessionId: forkSessionId,
     title: customTitle,
     forkPath: forkSessionPath,
-    serializedMessages: A,
-    contentReplacementRecords: S,
+    serializedMessages: out,
+    contentReplacementRecords: replacements,
     sessionHistorySuppressed: sourceTaintAtEntry,
   };
 }
@@ -576,12 +579,13 @@ async function getUniqueForkName(baseName, storageV5) {
 async function call(onDone, context, args = {}) {
   let sessionId = getSessionId();
   let currentSessionTitle = getCurrentSessionTitle(sessionId);
-  let m = isSessionHistorySuppressed() || isSessionHistorySuppressedFor(pinSessionId(sessionId));
+  let historySuppressed =
+    isSessionHistorySuppressed() || isSessionHistorySuppressedFor(pinSessionId(sessionId));
   let originalSessionId = getConversationAtisLatch();
   let toolsUsed = getConversationToolsUsed().names();
-  let v = undefined;
-  let B = undefined;
-  let memoryModeStamps = getCurrentSessionMemoryModeStamps().map(({ inFlight, ...y }) => y);
+  let atisLatch = undefined;
+  let relocatedCwd = undefined;
+  let memoryModeStamps = getCurrentSessionMemoryModeStamps().map(({ inFlight, ...stamp }) => stamp);
   try {
     let {
       sessionId: sessionId_2,
@@ -597,10 +601,11 @@ async function call(onDone, context, args = {}) {
     );
     let now = new Date();
     let firstPrompt = deriveFirstPrompt(serializedMessages);
-    let g = title?.replace(/\s+/g, " ").trim() ?? (await getUniqueForkName(firstPrompt, onDone.storageV5));
-    let I = title ? "user" : "auto";
-    await saveCustomTitle(sessionId_2, g, forkPath, I, onDone.storageV5);
-    await saveAgentName(sessionId_2, g, forkPath, I, onDone.storageV5);
+    let forkName =
+      title?.replace(/\s+/g, " ").trim() ?? (await getUniqueForkName(firstPrompt, onDone.storageV5));
+    let nameSource = title ? "user" : "auto";
+    await saveCustomTitle(sessionId_2, forkName, forkPath, nameSource, onDone.storageV5);
+    await saveAgentName(sessionId_2, forkName, forkPath, nameSource, onDone.storageV5);
     logEvent("tengu_conversation_forked", {
       message_count: serializedMessages.length,
       has_custom_title: !!title,
@@ -616,10 +621,10 @@ async function call(onDone, context, args = {}) {
       messageCount: serializedMessages.length,
       isSidechain: false,
       sessionId: sessionId_2,
-      customTitle: g,
-      agentName: g,
+      customTitle: forkName,
+      agentName: forkName,
       contentReplacements: contentReplacementRecords,
-      sessionHistorySuppressed: sessionHistorySuppressed || m ? true : undefined,
+      sessionHistorySuppressed: sessionHistorySuppressed || historySuppressed ? true : undefined,
       atisLatch: originalSessionId,
       toolsUsed,
       memoryModeStamps,
@@ -628,12 +633,12 @@ async function call(onDone, context, args = {}) {
         : undefined,
       forkedFromSessionId: sessionId,
     };
-    let titleInfo = title ? ` "${g}"` : "";
-    let A = currentSessionTitle ? ` ("${currentSessionTitle}")` : "";
-    let successMessage = `Branched conversation${titleInfo}. You are now in the new branch (session ${sessionId_2}). Use /resume ${sessionId}${A} to return to the original, or run \`claude -r ${sessionId}\` in a new terminal.`;
+    let titleInfo = title ? ` "${forkName}"` : "";
+    let titleSuffix = currentSessionTitle ? ` ("${currentSessionTitle}")` : "";
+    let successMessage = `Branched conversation${titleInfo}. You are now in the new branch (session ${sessionId_2}). Use /resume ${sessionId}${titleSuffix} to return to the original, or run \`claude -r ${sessionId}\` in a new terminal.`;
     if (onDone.resume) {
       await onDone.resume(sessionId_2, forkLog, "fork");
-      syncJobName(getOwnJobShortId(), g, "user", onDone.storageV5);
+      syncJobName(getOwnJobShortId(), forkName, "user", onDone.storageV5);
       context(successMessage, {
         display: "system",
       });
@@ -655,3 +660,4 @@ async function branchCommandCall(onDone, context, args) {
   });
   return null;
 }
+export { call, branchCommandCall, createFork, deriveFirstPrompt };

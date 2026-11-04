@@ -42,46 +42,48 @@ import { raceWithAbortSignal } from "../sleep.js";
 /**
  * 存储的登录是否被拒用（例如设置了 helper 或 base URL）。
  */
-function isStoredLoginRefused(e, r = false, d = false) {
-  let s = true;
+function isStoredLoginRefused(baseUrlOverrideValue, settling = false, includeFilesDial = false) {
+  let fallback = true;
   try {
     if (isDiskless()) return false;
     let { machine, slot } = getPolicySlots();
-    let a = helperTierOf(machine);
-    s = a !== null;
-    let R =
-      a === null &&
+    let machineTier = helperTierOf(machine);
+    fallback = machineTier !== null;
+    let useRemoteTier =
+      machineTier === null &&
       ((getPolicySettingsOrigin() === "helper" && !armedFromUserWritableBase()) ||
-        (isConfirmedHelperHeld() && (e !== undefined || helperTierOf(slot ?? null) === null)));
-    let u = a ?? (R ? null : getRemoteHelperTier());
-    s = u !== null;
-    if (u === null) return false;
-    let env_2 = u.env ?? {};
-    let g = routesOffAnthropicApiWith((A) =>
-      A === "ANTHROPIC_BASE_URL" ? undefined : getEnvCaseInsensitive(env_2, A),
+        (isConfirmedHelperHeld() &&
+          (baseUrlOverrideValue !== undefined || helperTierOf(slot ?? null) === null)));
+    let tierConfig = machineTier ?? (useRemoteTier ? null : getRemoteHelperTier());
+    fallback = tierConfig !== null;
+    if (tierConfig === null) return false;
+    let env_2 = tierConfig.env ?? {};
+    let routesApi = routesOffAnthropicApiWith((envVarName) =>
+      envVarName === "ANTHROPIC_BASE_URL" ? undefined : getEnvCaseInsensitive(env_2, envVarName),
     );
-    let o = e ?? env.ANTHROPIC_BASE_URL;
-    let t =
-      o && !isHttpsEndpoint(o)
-        ? o
-        : baseUrlOverride(slot?.env ?? {}, d) || (g ? undefined : baseUrlOverride(env_2, d) || o);
-    if (t ? isHttpsEndpoint(t) : !g) return false;
+    let baseUrl = baseUrlOverrideValue ?? env.ANTHROPIC_BASE_URL;
+    let effectiveBaseUrl =
+      baseUrl && !isHttpsEndpoint(baseUrl)
+        ? baseUrl
+        : baseUrlOverride(slot?.env ?? {}, includeFilesDial) ||
+          (routesApi ? undefined : baseUrlOverride(env_2, includeFilesDial) || baseUrl);
+    if (effectiveBaseUrl ? isHttpsEndpoint(effectiveBaseUrl) : !routesApi) return false;
     let oauthConfig = getOauthConfig();
     let origin = URL.parse(oauthConfig.BASE_API_URL)?.origin;
     if (
       oauthConfig.OAUTH_FILE_SUFFIX !== "-local-oauth" &&
       origin &&
       origin !== "null" &&
-      t &&
-      t === o &&
-      URL.parse(t)?.origin === origin
+      effectiveBaseUrl &&
+      effectiveBaseUrl === baseUrl &&
+      URL.parse(effectiveBaseUrl)?.origin === origin
     )
       return false;
     let { source } = getAuthTokenSource();
-    let E = source === "CLAUDE_CODE_OAUTH_TOKEN" && getClaudeAIOAuthTokenOrigin() !== "env";
+    let hasEnvToken = source === "CLAUDE_CODE_OAUTH_TOKEN" && getClaudeAIOAuthTokenOrigin() !== "env";
     if (
-      (!r &&
-        !E &&
+      (!settling &&
+        !hasEnvToken &&
         !isOauthTokenFromBgSnapshot() &&
         !isLoginStashedInTokenSlot() &&
         source !== "claude.ai" &&
@@ -95,7 +97,7 @@ function isStoredLoginRefused(e, r = false, d = false) {
     return getSessionHybridOrganizationUuid() === null;
   } catch {
     logError(Error("Stored login check failed"));
-    return s;
+    return fallback;
   }
 }
 //@ chunk-gkzv6xmy.js:1405-1549 placement
@@ -116,24 +118,24 @@ async function awaitStoredLoginSettle(signal) {
   }
 }
 //@ chunk-gkzv6xmy.js:1664-1885 placement
-async function settleStoredLoginRefusal(e) {
+async function settleStoredLoginRefusal(context) {
   try {
-    let r = e?.url ?? (e?.isFilesDial ? getOauthConfig().BASE_API_URL : undefined);
+    let baseUrl = context?.url ?? (context?.isFilesDial ? getOauthConfig().BASE_API_URL : undefined);
     if (
-      isStoredLoginRefused(r, true, e?.isFilesDial ?? false) &&
+      isStoredLoginRefused(baseUrl, true, context?.isFilesDial ?? false) &&
       !isRemoteManagedSettingsVerified() &&
-      (e !== undefined || isClaudeAISubscriber())
+      (context !== undefined || isClaudeAISubscriber())
     )
-      await (e?.signal ? awaitStoredLoginSettle(e.signal) : settleRemotePolicy());
+      await (context?.signal ? awaitStoredLoginSettle(context.signal) : settleRemotePolicy());
   } catch {
     logError(Error("Stored login settle failed"));
   }
 }
 //@ chunk-gkzv6xmy.js:1885-1996 placement
-function baseUrlOverride(e, r) {
+function baseUrlOverride(envObject, includeFilesDial) {
   return (
-    getEnvCaseInsensitive(e, "ANTHROPIC_BASE_URL")?.trim() ||
-    (r ? getEnvCaseInsensitive(e, "CLAUDE_CODE_API_BASE_URL")?.trim() : undefined)
+    getEnvCaseInsensitive(envObject, "ANTHROPIC_BASE_URL")?.trim() ||
+    (includeFilesDial ? getEnvCaseInsensitive(envObject, "CLAUDE_CODE_API_BASE_URL")?.trim() : undefined)
   );
 }
 export { settleStoredLoginRefusal, isStoredLoginRefused, storedLoginRefusalReason };

@@ -5,10 +5,10 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-m4p5zn6n.js:1221-1714 cjs-fingerprint
-var require_mode = x(function (cjsExports, cjsModule) {
+var require_mode = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = isexe;
   isexe.sync = sync;
   var fs = importMetaRequire("fs");

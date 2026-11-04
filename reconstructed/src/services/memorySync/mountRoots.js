@@ -9,7 +9,7 @@
  * attribution: placement 3
  */
 import { projectKeyFromMemoryDir, projectsRelativeParts } from "../../memdir/teamMemPrompts.js";
-import { isTeamSubscriber_2 } from "../../utils/auth.js";
+import { TEAM_MEMORY_SCOPE } from "../../utils/auth.js";
 import { isValidKeySegment } from "../../utils/storage/storageSpaces.js";
 
 //@ chunk-82kqcve8.js:125363-125573 placement
@@ -19,11 +19,11 @@ import { isValidKeySegment } from "../../utils/storage/storageSpaces.js";
 function memoryStoreMountRoot(scope, dir) {
   if (scope === "account") return;
   if (scope === "user") {
-    let s = projectKeyFromMemoryDir(dir);
-    return s === undefined
+    let projectKey = projectKeyFromMemoryDir(dir);
+    return projectKey === undefined
       ? undefined
       : {
-          projectKey: s,
+          projectKey,
           baseRelPath: [],
         };
   }
@@ -52,15 +52,15 @@ function memoryMountScope(base) {
 /**
  * 解析团队记忆目录路径，得到项目键与相对路径。
  */
-function parseTeamMemoryDir(e) {
-  let n = projectsRelativeParts(e);
-  if (n?.length !== 4 || n[1] !== "memory" || n[2] !== isTeamSubscriber_2) return;
-  let r = n[0];
-  let s = n[3];
-  return isValidKeySegment(r) && isValidKeySegment(s)
+function parseTeamMemoryDir(dir) {
+  let parts = projectsRelativeParts(dir);
+  if (parts?.length !== 4 || parts[1] !== "memory" || parts[2] !== TEAM_MEMORY_SCOPE) return;
+  let projectKey = parts[0];
+  let mountName = parts[3];
+  return isValidKeySegment(projectKey) && isValidKeySegment(mountName)
     ? {
-        projectKey: r,
-        relPath: [isTeamSubscriber_2, s],
+        projectKey,
+        relPath: [TEAM_MEMORY_SCOPE, mountName],
       }
     : undefined;
 }

@@ -5,11 +5,11 @@
  * pieces: chunk-b7dyevzy.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_argument } from "./argument.js";
 
 //@ chunk-b7dyevzy.js:1889-6481 cjs-fingerprint
-var require_help = x(function (cjsExports) {
+var require_help = __commonJS(function (cjsExports) {
   var { humanReadableArgName } = require_argument();
   class Help {
     constructor() {

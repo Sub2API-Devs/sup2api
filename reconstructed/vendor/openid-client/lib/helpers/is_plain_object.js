@@ -5,10 +5,10 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:8029-8101 cjs-require-graph
-var require_is_plain_object = x(function (cjsExports, cjsModule) {
+var require_is_plain_object = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = (a) => !!a && a.constructor === Object;
 });
 export { require_is_plain_object };

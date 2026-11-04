@@ -41,43 +41,43 @@ var regExp = new RegExp(INVISIBLE_FORMAT_CHAR_RE, "g");
 /**
  * 名字折叠（小写、去变音）。
  */
-function foldName(e) {
-  return foldProtectedDirName(e, true);
+function foldName(name) {
+  return foldProtectedDirName(name, true);
 }
 //@ chunk-dcmhvw5a.js:16257-16289 placement
 /**
  * foldProtectedDirNameLower：保护目录名折叠（区分大小写）。
  */
-function foldProtectedDirNameLower(e) {
-  return foldProtectedDirName(e, false);
+function foldProtectedDirNameLower(name) {
+  return foldProtectedDirName(name, false);
 }
 //@ chunk-dcmhvw5a.js:16289-16451 placement
-function foldProtectedDirName(e, n) {
-  let replaced = e
+function foldProtectedDirName(name, stripStreamSuffix) {
+  let replaced = name
     .toLowerCase()
     .replace(/\u0131/g, "i")
     .replace(/\u017f/g, "s");
   let replaced_2 = replaced.replace(regExp, "");
-  return (n ? replaced_2.replace(/:.*$/, "") : replaced_2).replace(/[. ]+$/, "") || replaced;
+  return (stripStreamSuffix ? replaced_2.replace(/:.*$/, "") : replaced_2).replace(/[. ]+$/, "") || replaced;
 }
 //@ chunk-dcmhvw5a.js:16451-16476 placement
 /**
  * isProtectedDirAlwaysFalse：恒 false（占位）。
  */
-function isProtectedDirAlwaysFalse(e) {
+function isProtectedDirAlwaysFalse(name) {
   return false;
 }
 //@ chunk-dcmhvw5a.js:16476-16655 placement
 /**
  * 路径是否进入受保护目录（.git、hooks 等）。
  */
-function isProtectedDirPath(e, n, r) {
-  let parts = e.slice(n.length).split(sep);
-  let a = parts.length - 1;
+function isProtectedDirPath(inputPath, rootDir, dangerousFiles) {
+  let parts = inputPath.slice(rootDir.length).split(sep);
+  let lastIndex = parts.length - 1;
   for (let j = 0; j < parts.length; j++) {
-    let g = foldName(parts[j]);
-    if (PROTECTED_DIR_NAMES.has(g) || isProtectedDirAlwaysFalse(g)) return true;
-    if (j === a && r?.has(g)) return true;
+    let foldedSegment = foldName(parts[j]);
+    if (PROTECTED_DIR_NAMES.has(foldedSegment) || isProtectedDirAlwaysFalse(foldedSegment)) return true;
+    if (j === lastIndex && dangerousFiles?.has(foldedSegment)) return true;
   }
   return false;
 }

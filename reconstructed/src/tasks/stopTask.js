@@ -53,15 +53,16 @@ import {
 } from "../utils/sessionStorage.js";
 import { waitForTaskCompletion } from "../tools/TaskOutputTool/TaskOutputTool.js";
 import { isLocalAgent } from "../state/teammateViewHelpers.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-kxyd0g16.js:20267-20423 placement = getSelectableBackgroundTasks (0.759)
-function getSelectableBackgroundTasks(e, r, n) {
-  let agentNameRegistry = n?.().agentNameRegistry;
+function getSelectableBackgroundTasks(matchesName, taskRegistry, getAppState) {
+  let agentNameRegistry = getAppState?.().agentNameRegistry;
   if (!agentNameRegistry) return;
-  for (let [f, h] of agentNameRegistry) {
-    if (!e(f)) continue;
-    let y = r.get(h);
-    if (y?.type === "local_agent") return y;
+  for (let [agentName, agentId] of agentNameRegistry) {
+    if (!matchesName(agentName)) continue;
+    let task = taskRegistry.get(agentId);
+    if (task?.type === "local_agent") return task;
   }
   return;
 }
@@ -69,20 +70,20 @@ function getSelectableBackgroundTasks(e, r, n) {
 /**
  * 生成正在运行的后台子代理列表说明（排除当前、主会话、观察者与已注册命名的代理），附在停止任务结果后。
  */
-function describeRunningBackgroundAgents(e, r, n) {
-  let s = new Set(r?.().agentNameRegistry?.values() ?? []);
-  let mapped = Object.values(e.all())
+function describeRunningBackgroundAgents(taskRegistry, getAppState, excludeTaskId) {
+  let namedAgentIds = new Set(getAppState?.().agentNameRegistry?.values() ?? []);
+  let mapped = Object.values(taskRegistry.all())
     .filter(
-      (h) =>
-        h.type === "local_agent" &&
-        h.id !== n &&
-        h.agentType !== "main-session" &&
-        h.isBackgrounded &&
-        h.isObserver !== true &&
-        !s.has(h.id) &&
-        (h.status === "running" || isWaitingOnChildren(h)),
+      (task) =>
+        task.type === "local_agent" &&
+        task.id !== excludeTaskId &&
+        task.agentType !== "main-session" &&
+        task.isBackgrounded &&
+        task.isObserver !== true &&
+        !namedAgentIds.has(task.id) &&
+        (task.status === "running" || isWaitingOnChildren(task)),
     )
-    .map((h) => (h.description ? `${h.id} (${printableName(h.description)})` : h.id));
+    .map((task) => (task.description ? `${task.id} (${printableName(task.description)})` : task.id));
   return mapped.length > 0 ? `. Running background agents: ${mapped.join(", ")}` : "";
 }
 //@ chunk-kxyd0g16.js:20808-20890 layout
@@ -128,16 +129,19 @@ function emitCascadeSpared(stoppedAgentId, sparedAgentIds, killedBy, taskRegistr
 /**
  * TaskStop 拒绝错误，code 为 not_found / ambiguous / not_running / not_owner / unsupported_type，带任务当前状态。
  */
-class StopTaskError extends WireSafeControlError {
-  code;
-  taskStatus;
-  constructor(message, r, taskStatus) {
-    super(message, `StopTask: ${r}`, "stop_task_refused");
-    this.code = r;
-    this.taskStatus = taskStatus;
-    this.name = "StopTaskError";
-  }
-}
+let StopTaskError; // deferred: uses WireSafeControlError (../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:21165", () => {
+  StopTaskError = class StopTaskError extends WireSafeControlError {
+    code;
+    taskStatus;
+    constructor(message, code, taskStatus) {
+      super(message, `StopTask: ${code}`, "stop_task_refused");
+      this.code = code;
+      this.taskStatus = taskStatus;
+      this.name = "StopTaskError";
+    }
+  };
+});
 //@ chunk-kxyd0g16.js:21323-21515 layout = killAllRunningAgentTasks (0.849)
 /**
  * 列出代理名字注册表里仍在运行（或有存活工作）的本地代理名字。
@@ -145,27 +149,28 @@ class StopTaskError extends WireSafeControlError {
 function getRunningAgentNames(taskRegistry, getAppState) {
   let entries = getAppState?.().agentNameRegistry?.entries();
   if (!entries) return [];
-  let s = [];
-  for (let [f, h] of entries) {
-    let y = taskRegistry.get(h);
-    if (y?.type === "local_agent" && (y.status === "running" || isWaitingOnChildren(y))) s.push(f);
+  let names = [];
+  for (let [agentName, agentId] of entries) {
+    let task = taskRegistry.get(agentId);
+    if (task?.type === "local_agent" && (task.status === "running" || isWaitingOnChildren(task)))
+      names.push(agentName);
   }
-  return s;
+  return names;
 }
 //@ chunk-kxyd0g16.js:21515-21814 layout
 /**
  * 生成"找不到任务"的错误消息：可能的拼写建议、正在运行的队友与命名代理、后台代理列表。
  */
-function formatTaskNotFoundMessage(e, taskRegistry, getAppState, s, f) {
+function formatTaskNotFoundMessage(taskId, taskRegistry, getAppState, suggestion, callerAgentId) {
   let runningTeammateAgentIds = getRunningTeammateAgentIds(taskRegistry.all());
   let runningAgentNames = getRunningAgentNames(taskRegistry, getAppState);
-  let k = `No task found with ID: ${singleLineText(e)}`;
-  if (s !== undefined) k += `. Did you mean: ${singleLineText(s)}?`;
+  let message = `No task found with ID: ${singleLineText(taskId)}`;
+  if (suggestion !== undefined) message += `. Did you mean: ${singleLineText(suggestion)}?`;
   if (runningTeammateAgentIds.length > 0)
-    k += `. Running teammates: ${runningTeammateAgentIds.map((runningTeammateAgentId) => singleLineText(runningTeammateAgentId)).join(", ")}`;
+    message += `. Running teammates: ${runningTeammateAgentIds.map((runningTeammateAgentId) => singleLineText(runningTeammateAgentId)).join(", ")}`;
   if (runningAgentNames.length > 0)
-    k += `. Running named agents: ${runningAgentNames.map((runningAgentName) => singleLineText(runningAgentName)).join(", ")}`;
-  return k + describeRunningBackgroundAgents(taskRegistry, getAppState, f);
+    message += `. Running named agents: ${runningAgentNames.map((runningAgentName) => singleLineText(runningAgentName)).join(", ")}`;
+  return message + describeRunningBackgroundAgents(taskRegistry, getAppState, callerAgentId);
 }
 //@ chunk-kxyd0g16.js:21814-21925 layout
 /**
@@ -255,16 +260,16 @@ async function stopTask(taskId, context) {
   if (hasLingeringLoop) {
     let taskKillController = getTaskKillController(resolvedTaskId);
     if (taskKillController && !taskKillController.signal.aborted) taskKillController.abort();
-    for (let G of liveAgentControllers(resolvedTaskId))
-      G.abort(new DOMException("workflow-abort", "AbortError"));
-    let W = new Set(taskAgentIds(resolvedTaskId));
-    if (task.type === "local_agent") W.add(resolvedTaskId);
-    let Q = 0;
-    for (let G of W) {
+    for (let loopController of liveAgentControllers(resolvedTaskId))
+      loopController.abort(new DOMException("workflow-abort", "AbortError"));
+    let agentIds = new Set(taskAgentIds(resolvedTaskId));
+    if (task.type === "local_agent") agentIds.add(resolvedTaskId);
+    let killedGroupCount = 0;
+    for (let agentId of agentIds) {
       if (getTaskLoop(resolvedTaskId) !== loopToken) break;
-      let ae = killAgentProcessGroups(G);
-      trackExitProcessSweep(ae);
-      Q += (await ae).length;
+      let killPromise = killAgentProcessGroups(agentId);
+      trackExitProcessSweep(killPromise);
+      killedGroupCount += (await killPromise).length;
     }
     scheduleKillEscalation(resolvedTaskId, task.type === "local_agent" ? [resolvedTaskId] : [], {
       expectedLoopToken: loopToken,
@@ -273,7 +278,7 @@ async function stopTask(taskId, context) {
       taskId: resolvedTaskId,
       taskType: task.type,
       command: isLocalShellTask(task) ? task.command : task.description,
-      note: `had already ended (${task.status}) but its loop had not exited; re-signalled it and killed ${Q} process group(s). The record remains listed while the loop is still live.`,
+      note: `had already ended (${task.status}) but its loop had not exited; re-signalled it and killed ${killedGroupCount} process group(s). The record remains listed while the loop is still live.`,
     };
   }
   let hadLiveWork = isWaitingOnChildren(task);
@@ -282,41 +287,41 @@ async function stopTask(taskId, context) {
     let agentId = task.agentId ?? resolvedTaskId;
     let allTasks = taskRegistry.all();
     let sparedAgentIds = [];
-    for (let G of Object.values(allTasks)) {
+    for (let subTask of Object.values(allTasks)) {
       if (
-        G.type !== "local_agent" ||
-        G.id === resolvedTaskId ||
-        (G.status !== "running" && !isWaitingOnChildren(G))
+        subTask.type !== "local_agent" ||
+        subTask.id === resolvedTaskId ||
+        (subTask.status !== "running" && !isWaitingOnChildren(subTask))
       )
         continue;
-      if (isSparedFromCascadeStop(G, agentId, allTasks)) {
-        sparedAgentIds.push(G.id);
+      if (isSparedFromCascadeStop(subTask, agentId, allTasks)) {
+        sparedAgentIds.push(subTask.id);
         continue;
       }
-      if (isTaskOwnedBy(G, agentId, allTasks, isCascadeStopExempt)) {
-        markAgentNotified(G.id, taskRegistry);
-        if (!isObserverAgentTask(G))
-          emitTaskNotification(G.id, "stopped", {
-            toolUseId: G.toolUseId,
-            summary: G.description,
+      if (isTaskOwnedBy(subTask, agentId, allTasks, isCascadeStopExempt)) {
+        markAgentNotified(subTask.id, taskRegistry);
+        if (!isObserverAgentTask(subTask))
+          emitTaskNotification(subTask.id, "stopped", {
+            toolUseId: subTask.toolUseId,
+            summary: subTask.description,
           });
-        if (context.source !== undefined) markStoppedByUser(G.id, taskRegistry, storageV5);
-        await taskImpl.kill(G.id, taskRegistry, setAppState, killedBy, storageV5);
+        if (context.source !== undefined) markStoppedByUser(subTask.id, taskRegistry, storageV5);
+        await taskImpl.kill(subTask.id, taskRegistry, setAppState, killedBy, storageV5);
       }
     }
     emitCascadeSpared(agentId, sparedAgentIds, killedBy, taskRegistry);
   }
   if (isLocalShellTask(task)) {
-    let L = false;
+    let markedNotified = false;
     taskRegistry.update(resolvedTaskId, (prev) => {
       if (prev.notified) return prev;
-      L = true;
+      markedNotified = true;
       return {
         ...prev,
         notified: true,
       };
     });
-    if (L)
+    if (markedNotified)
       emitTaskNotification(resolvedTaskId, "stopped", {
         toolUseId: task.toolUseId,
         summary: task.description,
@@ -366,27 +371,27 @@ async function stopTask(taskId, context) {
 /**
  * 用户停止任务（找不到时标记 stoppedByUser）。
  */
-async function stopTaskByUser(e, r) {
+async function stopTaskByUser(taskId, context) {
   try {
-    await stopTask(e, r);
+    await stopTask(taskId, context);
     logFeatureOk("task_stop_user");
   } catch (error) {
     if (error instanceof StopTaskError) {
       if (error.code === "not_found") {
-        if (r.source !== undefined && normalizeAgentIdOrNull(e) !== null)
+        if (context.source !== undefined && normalizeAgentIdOrNull(taskId) !== null)
           landAgentStop(
-            identityAgentId2(e),
+            identityAgentId2(taskId),
             "stoppedByUser",
             () =>
               updateAgentMetadata(
-                identityAgentId2(e),
+                identityAgentId2(taskId),
                 {
                   stoppedByUser: true,
                 },
-                r.storageV5,
+                context.storageV5,
                 isPathAbsent,
               ),
-            r.storageV5,
+            context.storageV5,
           );
         logFeatureOk("task_stop_user");
         return;
@@ -410,27 +415,28 @@ async function stopTaskByUser(e, r) {
 /**
  * 停止全部运行中的后台任务（可按条件筛选）。
  */
-function stopAllRunningTasks(e) {
-  let { taskRegistry, setAppState, shouldStop, storageV5 } = e;
-  stopObserverAgents(e);
-  for (let h of Object.values(taskRegistry.all())) {
-    let y = isWaitingOnChildren(h) && isWaitableAgentOrWorkflow(h);
+function stopAllRunningTasks(context) {
+  let { taskRegistry, setAppState, shouldStop, storageV5 } = context;
+  stopObserverAgents(context);
+  for (let task of Object.values(taskRegistry.all())) {
+    let isWaitableLive = isWaitingOnChildren(task) && isWaitableAgentOrWorkflow(task);
     if (
-      isObserverAgentTask(h) ||
-      (!y && (h.status !== "running" || !waitForTaskCompletion(h) || !isWaitableAgentOrWorkflow(h))) ||
-      (shouldStop !== undefined && !shouldStop(h))
+      isObserverAgentTask(task) ||
+      (!isWaitableLive &&
+        (task.status !== "running" || !waitForTaskCompletion(task) || !isWaitableAgentOrWorkflow(task))) ||
+      (shouldStop !== undefined && !shouldStop(task))
     )
       continue;
-    markStoppedByUser(h.id, taskRegistry, storageV5);
-    if (h.type === "local_agent") {
-      markAgentNotified(h.id, taskRegistry);
-      dropQueuedCommandsForAgent(h.id);
+    markStoppedByUser(task.id, taskRegistry, storageV5);
+    if (task.type === "local_agent") {
+      markAgentNotified(task.id, taskRegistry);
+      dropQueuedCommandsForAgent(task.id);
     }
-    lookupTaskForStop(h.type)?.kill(h.id, taskRegistry, setAppState, "system", storageV5);
-    if (h.type === "local_agent")
-      emitTaskNotification(h.id, "stopped", {
-        toolUseId: h.toolUseId,
-        summary: h.description,
+    lookupTaskForStop(task.type)?.kill(task.id, taskRegistry, setAppState, "system", storageV5);
+    if (task.type === "local_agent")
+      emitTaskNotification(task.id, "stopped", {
+        toolUseId: task.toolUseId,
+        summary: task.description,
       });
   }
 }
@@ -438,64 +444,65 @@ function stopAllRunningTasks(e) {
 /**
  * 停止所有正在运行的观察者代理任务。
  */
-function stopObserverAgents(e) {
-  for (let r of Object.values(e.taskRegistry.all()))
-    if (isObserverAgentTask(r) && r.status === "running")
-      lookupTaskForStop(r.type)?.kill(r.id, e.taskRegistry, e.setAppState, "system");
+function stopObserverAgents(context) {
+  for (let task of Object.values(context.taskRegistry.all()))
+    if (isObserverAgentTask(task) && task.status === "running")
+      lookupTaskForStop(task.type)?.kill(task.id, context.taskRegistry, context.setAppState, "system");
 }
 //@ chunk-kxyd0g16.js:26025-26308 placement
 /**
  * 标记任务被用户停止并累计次数。
  */
-function markStoppedByUser(e, taskRegistry, storageV5) {
-  taskRegistry.update(e, (f) =>
-    isLocalAgent(f)
+function markStoppedByUser(taskId, taskRegistry, storageV5) {
+  taskRegistry.update(taskId, (prev) =>
+    isLocalAgent(prev)
       ? {
-          ...f,
+          ...prev,
           stoppedByUser: true,
-          userStopCount: (f.userStopCount ?? 0) + 1,
+          userStopCount: (prev.userStopCount ?? 0) + 1,
         }
-      : f.stoppedByUser
-        ? f
+      : prev.stoppedByUser
+        ? prev
         : {
-            ...f,
+            ...prev,
             stoppedByUser: true,
           },
   );
-  let s = taskRegistry.get(e);
-  if (s?.type === "local_agent") {
-    let agentType = "agentType" in s && typeof s.agentType === "string" ? s.agentType : "general-purpose";
-    markAgentStoppedByUser(e, agentType, storageV5);
+  let task = taskRegistry.get(taskId);
+  if (task?.type === "local_agent") {
+    let agentType =
+      "agentType" in task && typeof task.agentType === "string" ? task.agentType : "general-purpose";
+    markAgentStoppedByUser(taskId, agentType, storageV5);
   }
 }
 //@ chunk-kxyd0g16.js:26308-26406 placement
-function isSettledAgentAwaitingLoop(e, r) {
+function isSettledAgentAwaitingLoop(task, taskId) {
   return (
-    isTerminalTaskStatus(e.status) &&
-    (e.type === "local_agent" || e.type === "local_workflow") &&
-    !isTaskLoopSettled(r)
+    isTerminalTaskStatus(task.status) &&
+    (task.type === "local_agent" || task.type === "local_workflow") &&
+    !isTaskLoopSettled(taskId)
   );
 }
 //@ chunk-kxyd0g16.js:26406-26589 placement
-async function markAgentStoppedByUser(e, agentType, n) {
+async function markAgentStoppedByUser(agentId, agentType, storageV5) {
   await landAgentStop(
-    identityAgentId2(e),
+    identityAgentId2(agentId),
     "stoppedByUser",
     async () => {
-      let agentMetadata = await readAgentMetadata(identityAgentId2(e), n, isPathAbsent);
+      let agentMetadata = await readAgentMetadata(identityAgentId2(agentId), storageV5, isPathAbsent);
       if (agentMetadata?.stoppedByUser) return;
       await writeAgentMetadata(
-        identityAgentId2(e),
+        identityAgentId2(agentId),
         {
           ...(agentMetadata ?? {
             agentType,
           }),
           stoppedByUser: true,
         },
-        n,
+        storageV5,
       );
     },
-    n,
+    storageV5,
   );
 }
 export {

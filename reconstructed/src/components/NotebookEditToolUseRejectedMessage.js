@@ -8,7 +8,7 @@
  * pieces: chunk-q466qetm.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { getDisplayPath } from "../utils/file.js";
 import {
   jsxProd_default_2,
@@ -26,27 +26,27 @@ import { MessageResponse } from "./MessageResponse.js";
 
 //@ chunk-q466qetm.js:7512-8643 fingerprint = NotebookEditToolUseRejectedMessage (0.909)
 function NotebookEditToolUseRejectedMessage(props) {
-  let $ = w(23);
+  let $ = useMemoCache(23);
   let { notebook_path, cell_id, new_source, cell_type, edit_mode: editMode, verbose } = props;
   let edit_mode = editMode === undefined ? "replace" : editMode;
-  let f = edit_mode === "delete" ? "delete" : `${edit_mode} cell in`;
-  let M;
+  let actionLabel = edit_mode === "delete" ? "delete" : `${edit_mode} cell in`;
+  let filePathLabel;
   if ($[0] !== notebook_path || $[1] !== verbose) {
-    M = verbose ? notebook_path : getDisplayPath(notebook_path);
+    filePathLabel = verbose ? notebook_path : getDisplayPath(notebook_path);
     $[0] = notebook_path;
     $[1] = verbose;
-    $[2] = M;
-  } else M = $[2];
-  let children = M;
-  let u;
-  if ($[3] !== f) {
-    u = jsxProd_default_2(Text, {
+    $[2] = filePathLabel;
+  } else filePathLabel = $[2];
+  let children = filePathLabel;
+  let rejectedNotice;
+  if ($[3] !== actionLabel) {
+    rejectedNotice = jsxProd_default_2(Text, {
       color: "subtle",
-      children: ["User rejected ", f, " "],
+      children: ["User rejected ", actionLabel, " "],
     });
-    $[3] = f;
-    $[4] = u;
-  } else u = $[4];
+    $[3] = actionLabel;
+    $[4] = rejectedNotice;
+  } else rejectedNotice = $[4];
   let t4;
   if ($[5] !== children || $[6] !== notebook_path) {
     t4 = jsxProd_default(Text, {
@@ -61,30 +61,30 @@ function NotebookEditToolUseRejectedMessage(props) {
     $[6] = notebook_path;
     $[7] = t4;
   } else t4 = $[7];
-  let y;
+  let highlightedCode;
   if ($[8] !== cell_id) {
-    y = cell_id ? markBrokenSequences(replaceLineBreaks(stripUnsafeChars(cell_id))) : "";
+    highlightedCode = cell_id ? markBrokenSequences(replaceLineBreaks(stripUnsafeChars(cell_id))) : "";
     $[8] = cell_id;
-    $[9] = y;
-  } else y = $[9];
-  let _;
-  if ($[10] !== y) {
-    _ = jsxProd_default_2(Text, {
+    $[9] = highlightedCode;
+  } else highlightedCode = $[9];
+  let cellNotice;
+  if ($[10] !== highlightedCode) {
+    cellNotice = jsxProd_default_2(Text, {
       color: "subtle",
-      children: [" at cell ", y],
+      children: [" at cell ", highlightedCode],
     });
-    $[10] = y;
-    $[11] = _;
-  } else _ = $[11];
+    $[10] = highlightedCode;
+    $[11] = cellNotice;
+  } else cellNotice = $[11];
   let t6;
-  if ($[12] !== u || $[13] !== t4 || $[14] !== _) {
+  if ($[12] !== rejectedNotice || $[13] !== t4 || $[14] !== cellNotice) {
     t6 = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [u, t4, _],
+      children: [rejectedNotice, t4, cellNotice],
     });
-    $[12] = u;
+    $[12] = rejectedNotice;
     $[13] = t4;
-    $[14] = _;
+    $[14] = cellNotice;
     $[15] = t6;
   } else t6 = $[15];
   let t7;

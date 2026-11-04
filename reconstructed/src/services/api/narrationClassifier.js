@@ -10,26 +10,30 @@
  */
 import { claimOnce } from "./verificationRequired.js";
 import { logError } from "../../utils/log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2538286-2538334 placement
-var textDecoder = new TextDecoder("utf-8", {
-  ignoreBOM: true,
+var textDecoder; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2538286", () => {
+  textDecoder = new TextDecoder("utf-8", {
+    ignoreBOM: true,
+  });
 });
 //@ chunk-e6aww6q8.js:2538334-2538496 placement
-function readVarint(bytes, n) {
+function readVarint(bytes, offset) {
   let value = 0;
-  let s = 1;
+  let shift = 1;
   for (let idx = 0; idx < 10; idx++) {
-    let y = n + idx;
-    if (y >= bytes.length) return;
-    let S = bytes[y];
-    value += (S & 127) * s;
-    if ((S & 128) === 0)
+    let cursor = offset + idx;
+    if (cursor >= bytes.length) return;
+    let byte = bytes[cursor];
+    value += (byte & 127) * shift;
+    if ((byte & 128) === 0)
       return {
         value,
-        next: y + 1,
+        next: cursor + 1,
       };
-    s *= 128;
+    shift *= 128;
   }
   return;
 }
@@ -38,34 +42,34 @@ function readVarint(bytes, n) {
  * 极简 protobuf 解析器：逐字段读 tag，varint 与 length-delimited 字段回调 visitor，跳过 64/32 位定长字段；格式错误返回 false。
  */
 function walkProtobufFields(bytes, visitor) {
-  let r = 0;
-  while (r < bytes.length) {
-    let varint = readVarint(bytes, r);
+  let shift = 0;
+  while (shift < bytes.length) {
+    let varint = readVarint(bytes, shift);
     if (varint === undefined) return false;
-    let h = varint.value & 7;
+    let wireType = varint.value & 7;
     let floored = Math.floor(varint.value / 8);
-    switch (((r = varint.next), h)) {
+    switch (((shift = varint.next), wireType)) {
       case 0: {
-        let varint = readVarint(bytes, r);
+        let varint = readVarint(bytes, shift);
         if (varint === undefined) return false;
-        r = varint.next;
+        shift = varint.next;
         visitor.onVarint?.(floored, varint.value);
         break;
       }
       case 1:
-        if (r + 8 > bytes.length) return false;
-        r += 8;
+        if (shift + 8 > bytes.length) return false;
+        shift += 8;
         break;
       case 2: {
-        let varint = readVarint(bytes, r);
+        let varint = readVarint(bytes, shift);
         if (varint === undefined || varint.value > bytes.length - varint.next) return false;
-        r = varint.next + varint.value;
-        visitor.onBytes?.(floored, bytes.subarray(varint.next, r));
+        shift = varint.next + varint.value;
+        visitor.onBytes?.(floored, bytes.subarray(varint.next, shift));
         break;
       }
       case 5:
-        if (r + 4 > bytes.length) return false;
-        r += 4;
+        if (shift + 4 > bytes.length) return false;
+        shift += 4;
         break;
       default:
         return false;
@@ -74,20 +78,20 @@ function walkProtobufFields(bytes, visitor) {
   return true;
 }
 //@ chunk-e6aww6q8.js:2538965-2539041 placement
-function nestedBytesField(bytes, n) {
-  let r;
+function nestedBytesField(bytes, field) {
+  let out;
   return walkProtobufFields(bytes, {
-    onBytes(h, y) {
-      if (h === n) r = y;
+    onBytes(result, bytes) {
+      if (result === field) out = bytes;
     },
   })
-    ? r
+    ? out
     : undefined;
 }
 //@ chunk-e6aww6q8.js:2539041-2539113 placement
-function nestedTextField(e, n) {
-  let r = nestedBytesField(e, n);
-  return r === undefined ? undefined : textDecoder.decode(r);
+function nestedTextField(envelope, field) {
+  let bytes = nestedBytesField(envelope, field);
+  return bytes === undefined ? undefined : textDecoder.decode(bytes);
 }
 //@ chunk-e6aww6q8.js:2539113-2539151 placement
 /**
@@ -99,33 +103,36 @@ var NARRATION_TEXT_FIELD = 8;
 var NARRATION = "narration";
 //@ chunk-e6aww6q8.js:2539169-2539391 placement
 function decodeSignatureKind(signature) {
-  let n;
+  let text;
   try {
-    n = atob(signature);
+    text = atob(signature);
   } catch {
     return;
   }
-  let uint8Array = new Uint8Array(n.length);
-  for (let idx = 0; idx < n.length; idx++) uint8Array[idx] = n.charCodeAt(idx);
-  let s = nestedBytesField(uint8Array, NARRATION_ENVELOPE_FIELD);
-  if (s === undefined) return;
-  let h = nestedBytesField(s, NARRATION_PAYLOAD_FIELD);
-  if (h === undefined) return;
-  return nestedTextField(h, NARRATION_TEXT_FIELD);
+  let uint8Array = new Uint8Array(text.length);
+  for (let idx = 0; idx < text.length; idx++) uint8Array[idx] = text.charCodeAt(idx);
+  let envelope = nestedBytesField(uint8Array, NARRATION_ENVELOPE_FIELD);
+  if (envelope === undefined) return;
+  let payload = nestedBytesField(envelope, NARRATION_PAYLOAD_FIELD);
+  if (payload === undefined) return;
+  return nestedTextField(payload, NARRATION_TEXT_FIELD);
 }
 //@ chunk-e6aww6q8.js:2539391-2539411 placement
-var weakMap_10 = new WeakMap();
+var weakMap_10; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2539391", () => {
+  weakMap_10 = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:2539411-2539630 placement
 function isNarrationThinking(block) {
   try {
     if (block.type !== "thinking" || !block.signature) return false;
-    let n;
-    if (weakMap_10.has(block)) n = weakMap_10.get(block);
+    let value;
+    if (weakMap_10.has(block)) value = weakMap_10.get(block);
     else {
-      n = decodeSignatureKind(block.signature);
-      weakMap_10.set(block, n);
+      value = decodeSignatureKind(block.signature);
+      weakMap_10.set(block, value);
     }
-    return n === NARRATION;
+    return value === NARRATION;
   } catch (error) {
     if (claimOnce().claim("narration_classifier_error")) logError(error);
     return false;

@@ -71,7 +71,7 @@ class SchedulerLockState {
 /**
  * 依赖模块与常量：检查间隔 1000ms、文件监听去抖 300ms、锁探测间隔 5000ms。
  */
-var loopSentinelModule = require("./chunk-w6rm7nhv.js");
+var loopSentinelModule = require("./loop/LOOP_FILE_DYNAMIC_SENTINEL.lazy.js");
 var CHECK_INTERVAL_MS = 1000;
 var WATCH_DEBOUNCE_MS = 300;
 var LOCK_PROBE_INTERVAL_MS = 5000;
@@ -90,40 +90,41 @@ function isRecurringTaskAged(task, nowMs, maxAgeMs) {
 async function findKnownCreatorSessions(tasks, selfSessionId, projectDir) {
   let projectDir_2 = getProjectDir(projectDir);
   let fsImplementation = getFsImplementation();
-  let h = new Set();
-  let d = new Set();
+  let knownSessions = new Set();
+  let creatorSessions = new Set();
   for (let { createdBySessionId } of tasks)
-    if (createdBySessionId !== undefined && createdBySessionId !== selfSessionId) d.add(createdBySessionId);
+    if (createdBySessionId !== undefined && createdBySessionId !== selfSessionId)
+      creatorSessions.add(createdBySessionId);
   await Promise.all(
-    Array.from(d, async (v) => {
-      if (validateUuid(v) === null) return;
+    Array.from(creatorSessions, async (sessionId) => {
+      if (validateUuid(sessionId) === null) return;
       if (
-        await fsImplementation.lstat(join(projectDir_2, `${v}.jsonl`)).then(
-          (M) => M.isFile(),
+        await fsImplementation.lstat(join(projectDir_2, `${sessionId}.jsonl`)).then(
+          (stats) => stats.isFile(),
           (error) => {
             let errnoCode = getErrnoCode(error);
             if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR")
               logForDebugging(
-                `[ScheduledTasks] could not look for a transcript of task creator ${v} (${errnoCode}); treating it as not found`,
+                `[ScheduledTasks] could not look for a transcript of task creator ${sessionId} (${errnoCode}); treating it as not found`,
               );
             return false;
           },
         )
       )
-        h.add(v);
+        knownSessions.add(sessionId);
     }),
   );
-  if (h.size < d.size)
+  if (knownSessions.size < creatorSessions.size)
     logForDebugging(
-      `[ScheduledTasks] found no transcript in ${projectDir_2} for ${d.size - h.size} other session(s) named in scheduled_tasks.json (a file copied from another checkout looks like this); this session will not run their tasks`,
+      `[ScheduledTasks] found no transcript in ${projectDir_2} for ${creatorSessions.size - knownSessions.size} other session(s) named in scheduled_tasks.json (a file copied from another checkout looks like this); this session will not run their tasks`,
     );
-  return h;
+  return knownSessions;
 }
 //@ chunk-hnzqng4j.js:5640-5674 layout
 /**
  * 本进程已"交给处理器保留"的任务键集合（dir + id）。
  */
-var keptBackTaskKeys = identity(new Set(), (n) => n.clear());
+var keptBackTaskKeys = identity(new Set(), (set) => set.clear());
 //@ chunk-hnzqng4j.js:5674-5716 layout
 function taskKey(dir, taskId) {
   return `${dir ?? ""}\x00${taskId}`;
@@ -158,7 +159,7 @@ function createCronScheduler(options) {
   let lockState = new SchedulerLockState();
   let lockSessionId = dir !== undefined ? lockIdentity : getSessionId();
   let ownSessionIds = new Set();
-  let ne = null;
+  let unsubscribeSessionSwitch = null;
   let fileTasks = [];
   let extraTasks = [];
   let nextFireAt = new Map();
@@ -180,50 +181,50 @@ function createCronScheduler(options) {
     }
     if (createdByProcStart === undefined) return false;
     let now = Date.now();
-    let T = pidTokenCache.get(createdByPid);
-    if (!T || now - T.at >= 60000) {
-      T = {
+    let pidTokenEntry = pidTokenCache.get(createdByPid);
+    if (!pidTokenEntry || now - pidTokenEntry.at >= 60000) {
+      pidTokenEntry = {
         at: now,
         token: getProcessStartTime(createdByPid),
       };
-      pidTokenCache.set(createdByPid, T);
+      pidTokenCache.set(createdByPid, pidTokenEntry);
     }
-    return T.token !== undefined && T.token !== createdByProcStart;
+    return pidTokenEntry.token !== undefined && pidTokenEntry.token !== createdByProcStart;
   }
-  function Ce(r) {
-    return normalizePathForCwdCompare(r, slugCollisionGuardFoldsCase());
+  function normalizePath(path) {
+    return normalizePathForCwdCompare(path, slugCollisionGuardFoldsCase());
   }
-  function isFromThisProject(r) {
-    if (r.createdInProject !== undefined) return Ce(r.createdInProject) === projectKey;
-    return r.createdBySessionId !== undefined && knownCreatorSessions.has(r.createdBySessionId);
+  function isFromThisProject(task) {
+    if (task.createdInProject !== undefined) return normalizePath(task.createdInProject) === projectKey;
+    return task.createdBySessionId !== undefined && knownCreatorSessions.has(task.createdBySessionId);
   }
-  function isOwnedByThisSession(r) {
-    if (r.createdBySessionId === undefined) return holdsLock;
-    if (r.createdBySessionId === lockSessionId) return true;
+  function isOwnedByThisSession(task) {
+    if (task.createdBySessionId === undefined) return holdsLock;
+    if (task.createdBySessionId === lockSessionId) return true;
     if (
-      ownSessionIds.has(r.createdBySessionId) &&
-      r.createdByPid === process.pid &&
-      (r.createdByProcStart === undefined
-        ? r.createdAt >= performance.timeOrigin
-        : r.createdByProcStart === ownProcStartMemo.token)
+      ownSessionIds.has(task.createdBySessionId) &&
+      task.createdByPid === process.pid &&
+      (task.createdByProcStart === undefined
+        ? task.createdAt >= performance.timeOrigin
+        : task.createdByProcStart === ownProcStartMemo.token)
     )
       return true;
     return (
       holdsLock &&
-      isFromThisProject(r) &&
-      (r.createdByPid === undefined || isCreatorProcessGone(r.createdByPid, r.createdByProcStart))
+      isFromThisProject(task) &&
+      (task.createdByPid === undefined || isCreatorProcessGone(task.createdByPid, task.createdByProcStart))
     );
   }
-  function removeTasks(r) {
-    if (r.length === 0) return;
+  function removeTasks(tasksToRemove) {
+    if (tasksToRemove.length === 0) return;
     removeCronTasks(
-      r.map((c) => c.id),
+      tasksToRemove.map((task) => task.id),
       dir,
     ).catch((error) => logForDebugging(`[ScheduledTasks] failed to remove tasks: ${error}`));
   }
   async function load(initial) {
     let tasks = isCronFileIgnored(dir) ? [] : await readCronTasks(dir);
-    let C = getExtraTasks
+    let extraTasks_2 = getExtraTasks
       ? await getExtraTasks().catch((error) => {
           if (claimOnce().claim("cron_extra_tasks_load_bad"))
             logFeatureBad("routine_register_trigger", "extra_tasks_load_failed");
@@ -233,28 +234,28 @@ function createCronScheduler(options) {
       : [];
     let projectDir = dir ?? getProjectRoot();
     let knownCreatorSessions_2 = await findKnownCreatorSessions(
-      tasks.filter((S) => S.createdInProject === undefined),
+      tasks.filter((task) => task.createdInProject === undefined),
       lockSessionId,
       projectDir,
     );
     if (stopped) return;
     fileTasks = tasks;
-    extraTasks = C;
+    extraTasks = extraTasks_2;
     knownCreatorSessions = knownCreatorSessions_2;
-    projectKey = Ce(projectDir);
+    projectKey = normalizePath(projectDir);
     if (!initial) return;
-    let e = false;
-    for (let S of tasks)
+    let sawChange = false;
+    for (let task of tasks)
       if (
         lockSessionId !== undefined &&
-        S.createdBySessionId === lockSessionId &&
-        S.createdByPid !== process.pid
+        task.createdBySessionId === lockSessionId &&
+        task.createdByPid !== process.pid
       ) {
-        S.createdByPid = process.pid;
-        S.createdByProcStart = ownProcStart();
-        e = true;
+        task.createdByPid = process.pid;
+        task.createdByProcStart = ownProcStart();
+        sawChange = true;
       }
-    if (e)
+    if (sawChange)
       await writeCronTasks(tasks, dir).catch((error) =>
         logForDebugging(`[ScheduledTasks] failed to refresh task pids: ${error}`),
       );
@@ -276,11 +277,11 @@ function createCronScheduler(options) {
         count: missed.length,
         taskIds: joinSanitizedMarkNames(missed.map((t) => t.id)),
       });
-      let S = new Set();
+      let keptBackIds = new Set();
       try {
         if (onMissed) {
-          S = new Set(onMissed(missed, removeTasks) ?? []);
-          for (let b of S) keptBackTaskKeys.add(taskKey(dir, b));
+          keptBackIds = new Set(onMissed(missed, removeTasks) ?? []);
+          for (let taskId of keptBackIds) keptBackTaskKeys.add(taskKey(dir, taskId));
         } else onFire(buildMissedTaskNotification(missed));
       } catch (error) {
         logForDebugging(
@@ -297,9 +298,9 @@ function createCronScheduler(options) {
         );
         return;
       }
-      removeTasks(missed.filter((e) => !S.has(e.id)));
+      removeTasks(missed.filter((e) => !keptBackIds.has(e.id)));
       logForDebugging(
-        `[ScheduledTasks] surfaced ${missed.length - S.size} missed one-shot task(s), kept back ${S.size}`,
+        `[ScheduledTasks] surfaced ${missed.length - keptBackIds.size} missed one-shot task(s), kept back ${keptBackIds.size}`,
       );
     }
   }
@@ -314,19 +315,19 @@ function createCronScheduler(options) {
     let seen = new Set();
     let firedFileRecurring = [];
     let jitterCfg = getJitterConfig?.() ?? DEFAULT_CRON_JITTER_CONFIG;
-    function x(t, isSession) {
+    function armTask(t, isSession) {
       if (filter && !filter(t)) return;
       seen.add(t.id);
       if (inFlight.has(t.id)) return;
       if (!isSession && keptBackTaskKeys.has(taskKey(dir, t.id))) return;
       let next = nextFireAt.get(t.id);
       if (next === undefined) {
-        let L = nextFireTimeForTask(t, jitterCfg);
-        if (L === null)
+        let nextFireAt_2 = nextFireTimeForTask(t, jitterCfg);
+        if (nextFireAt_2 === null)
           logFeatureBad("cron_task_fire", "next_fire_unresolvable", {
             recurring: t.recurring ?? false,
           });
-        next = L ?? 1 / 0;
+        next = nextFireAt_2 ?? 1 / 0;
         nextFireAt.set(t.id, next);
         logForDebugging(
           `[ScheduledTasks] scheduled ${t.id} for ${next === 1 / 0 ? "never" : new Date(next).toISOString()}`,
@@ -340,34 +341,34 @@ function createCronScheduler(options) {
         taskId,
         autonomousLoopDefault: loopSentinelModule.isLoopDefaultSentinel(t.prompt),
       });
-      let b = {
+      let taskFlags = {
         recurring: t.recurring ?? false,
         permanent: t.permanent ?? false,
       };
-      let _e = false;
+      let fired = false;
       try {
-        if (onFireTask) _e = onFireTask(t, () => removeTasks([t])) === true;
+        if (onFireTask) fired = onFireTask(t, () => removeTasks([t])) === true;
         else onFire(t.prompt);
-        logFeatureOk("cron_task_fire", b);
+        logFeatureOk("cron_task_fire", taskFlags);
       } catch (error) {
-        let Q = !isSession && !t.recurring;
-        if (Q) nextFireAt.set(t.id, 1 / 0);
+        let isOneShot = !isSession && !t.recurring;
+        if (isOneShot) nextFireAt.set(t.id, 1 / 0);
         logForDebugging(
-          Q
+          isOneShot
             ? `[ScheduledTasks] delivering task ${t.id} failed (its handler threw); the task stays in scheduled_tasks.json for a later session`
             : `[ScheduledTasks] delivering task ${t.id} failed (its handler threw); this run is dropped and will not be retried`,
           {
             level: "error",
           },
         );
-        logFeatureBad("cron_task_fire", "handler_threw", b);
+        logFeatureBad("cron_task_fire", "handler_threw", taskFlags);
         logError(
           toReportableTaskError(
             error,
             "scheduled task fire handler threw (message not reported: it may contain user text)",
           ),
         );
-        if (Q) return;
+        if (isOneShot) return;
       }
       let aged = isRecurringTaskAged(t, now, jitterCfg.recurringMaxAgeMs);
       if (aged) {
@@ -381,15 +382,15 @@ function createCronScheduler(options) {
         });
       }
       if (t.recurring && !aged) {
-        let L = jitteredNextCronRunMs(t.cron, now, t.id, jitterCfg);
-        if (L === null) logFeatureSad("cron_task_fire", "reschedule_unresolvable");
-        let Q = L ?? 1 / 0;
-        nextFireAt.set(t.id, Q);
+        let jitteredNext = jitteredNextCronRunMs(t.cron, now, t.id, jitterCfg);
+        if (jitteredNext === null) logFeatureSad("cron_task_fire", "reschedule_unresolvable");
+        let nextAt = jitteredNext ?? 1 / 0;
+        nextFireAt.set(t.id, nextAt);
         if (!isSession) firedFileRecurring.push(t.id);
       } else if (isSession) {
         removeSessionCronTasks([t.id]);
         nextFireAt.delete(t.id);
-      } else if (_e) {
+      } else if (fired) {
         keptBackTaskKeys.add(taskKey(dir, t.id));
         nextFireAt.set(t.id, 1 / 0);
       } else {
@@ -400,7 +401,7 @@ function createCronScheduler(options) {
           .finally(() => inFlight.delete(t.id));
       }
     }
-    for (let t of fileTasks) if (isOwnedByThisSession(t)) x(t, false);
+    for (let t of fileTasks) if (isOwnedByThisSession(t)) armTask(t, false);
     if (firedFileRecurring.length > 0) {
       for (let id of firedFileRecurring) inFlight.add(id);
       markCronTasksFired(firedFileRecurring, now, dir)
@@ -410,12 +411,12 @@ function createCronScheduler(options) {
         });
     }
     if (dir === undefined)
-      for (let e of getSessionCronTasks().slice()) {
-        x(e, true);
-        let j = nextFireAt.get(e.id);
-        e.nextFireAt = j === 1 / 0 ? undefined : j;
+      for (let sessionTask of getSessionCronTasks().slice()) {
+        armTask(sessionTask, true);
+        let scheduledAt = nextFireAt.get(sessionTask.id);
+        sessionTask.nextFireAt = scheduledAt === 1 / 0 ? undefined : scheduledAt;
       }
-    for (let extraTask of extraTasks) x(extraTask, true);
+    for (let extraTask of extraTasks) armTask(extraTask, true);
     if (seen.size === 0) {
       nextFireAt.clear();
       return;
@@ -426,7 +427,7 @@ function createCronScheduler(options) {
     if (stopped) return;
     enablePoll?.();
     enablePoll = null;
-    let { default: chokidar } = await import("./chunk-p13a1b4d.js");
+    let { default: chokidar } = await import("../../vendor/chokidar/default.lazy.js");
     if (stopped) return;
     holdsLock = leaseFileTasks()
       ? await tryAcquireSchedulerLock(lockState, options_2).catch(() => false)
@@ -465,7 +466,7 @@ function createCronScheduler(options) {
     }
     load(true).then(check);
     let path = getCronFilePath(dir);
-    watcher = Fe(() =>
+    watcher = watch(() =>
       chokidar.watch(path, {
         persistent: false,
         ignoreInitial: true,
@@ -478,34 +479,34 @@ function createCronScheduler(options) {
     checkTimer = setInterval(check, CHECK_INTERVAL_MS);
     checkTimer.unref?.();
   }
-  function Fe(en) {
-    let c = en();
-    c.on("error", (T) =>
-      logForDebugging(`[ScheduledTasks] watcher error: ${T}`, {
+  function watch(en) {
+    let watcher_2 = en();
+    watcher_2.on("error", (error) =>
+      logForDebugging(`[ScheduledTasks] watcher error: ${error}`, {
         level: "warn",
       }),
     );
-    let C = () => {
-      if (stopped || watcher !== c) return;
-      watcher = Fe(en);
+    let onFileChange = () => {
+      if (stopped || watcher !== watcher_2) return;
+      watcher = watch(en);
       watcher.once("ready", () => void load(false));
-      c.close().catch((error) =>
+      watcher_2.close().catch((error) =>
         logForDebugging(`[ScheduledTasks] watcher close failed: ${error}`, {
           level: "warn",
         }),
       );
     };
-    c.on("add", C);
-    c.on("change", C);
-    c.on("unlink", () => {
+    watcher_2.on("add", onFileChange);
+    watcher_2.on("change", onFileChange);
+    watcher_2.on("unlink", () => {
       if (!stopped) {
         fileTasks = [];
-        let T = new Set(extraTasks.map((extraTask) => extraTask.id));
-        if (dir === undefined) for (let x of getSessionCronTasks()) T.add(x.id);
-        for (let key of nextFireAt.keys()) if (!T.has(key)) nextFireAt.delete(key);
+        let knownIds = new Set(extraTasks.map((extraTask) => extraTask.id));
+        if (dir === undefined) for (let task of getSessionCronTasks()) knownIds.add(task.id);
+        for (let key of nextFireAt.keys()) if (!knownIds.has(key)) nextFireAt.delete(key);
       }
     });
-    return c;
+    return watcher_2;
   }
   return {
     start() {
@@ -523,8 +524,8 @@ function createCronScheduler(options) {
         `[ScheduledTasks] scheduler start() \u2014 enabled=${getScheduledTasksEnabled()}, hasTasks=${hasCronTasksSync()}`,
       );
       ownSessionIds.add(getSessionId());
-      ne ??= onSessionSwitch((r) => {
-        ownSessionIds.add(r);
+      unsubscribeSessionSwitch ??= onSessionSwitch((nextSessionId) => {
+        ownSessionIds.add(nextSessionId);
       });
       if (!getScheduledTasksEnabled() && (assistantMode || getExtraTasks !== undefined || hasCronTasksSync()))
         setScheduledTasksEnabled(true);
@@ -538,8 +539,8 @@ function createCronScheduler(options) {
       stopped = true;
       enablePoll?.();
       enablePoll = null;
-      ne?.();
-      ne = null;
+      unsubscribeSessionSwitch?.();
+      unsubscribeSessionSwitch = null;
       if (checkTimer) {
         clearInterval(checkTimer);
         checkTimer = null;
@@ -585,19 +586,19 @@ ${blocks.join(`
 `)}`;
 }
 //@ chunk-hnzqng4j.js:12727-12919 sole-consumer
-function toReportableTaskError(error, s) {
-  let i = () =>
+function toReportableTaskError(error, taskId) {
+  let buildError = () =>
     withTelemetryMessage(
       Error("scheduled task handler threw (message not reported: it may contain user text)", {
         cause: error,
       }),
-      s,
+      taskId,
     );
   try {
-    let y = withTelemetryMessage(toError(error), s);
-    return getTelemetryMessage(y) === s ? y : i();
+    let tagged = withTelemetryMessage(toError(error), taskId);
+    return getTelemetryMessage(tagged) === taskId ? tagged : buildError();
   } catch {
-    return i();
+    return buildError();
   }
 }
 export { createCronScheduler, buildMissedTaskNotification };

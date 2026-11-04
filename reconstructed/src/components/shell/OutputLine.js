@@ -8,8 +8,12 @@
  * pieces: chunk-s3fw2t2g.js (11)
  * attribution: placement 9, fingerprint 1, file-local 1
  */
-import { init_react_production, qt, Se } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  createContext,
+  useContext,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -20,36 +24,49 @@ import { wrapText_2 } from "../../utils/terminal.js";
 import { Ansi } from "../../ink/components/AnsiText.js";
 import { MessageResponse } from "../MessageResponse.js";
 import { Text } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s3fw2t2g.js:634-638 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s3fw2t2g.js:634", () => {
+  init_react_production();
+});
 //@ chunk-s3fw2t2g.js:638-642 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s3fw2t2g.js:638", () => {
+  init_react_production();
+});
 //@ chunk-s3fw2t2g.js:642-646 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s3fw2t2g.js:642", () => {
+  init_react_production();
+});
 //@ chunk-s3fw2t2g.js:646-659 placement
-var outputLineSignal = qt(false);
+var outputLineSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s3fw2t2g.js:646", () => {
+  outputLineSignal = createContext(false);
+});
 //@ chunk-s3fw2t2g.js:659-788 placement
 /**
  * 为子树标记处于工具结果中。
  */
 function InsideToolResultProvider(props) {
-  let s = w(2);
+  let $ = useMemoCache(2);
   let { children } = props;
-  let o;
-  if (s[0] !== children) {
-    o = jsxProd_default(outputLineSignal.Provider, {
+  let boxElement;
+  if ($[0] !== children) {
+    boxElement = jsxProd_default(outputLineSignal.Provider, {
       value: true,
       children,
     });
-    s[0] = children;
-    s[1] = o;
-  } else o = s[1];
-  return o;
+    $[0] = children;
+    $[1] = boxElement;
+  } else boxElement = $[1];
+  return boxElement;
 }
 //@ chunk-s3fw2t2g.js:788-814 placement
 function useOutputLineSignal() {
-  return Se(outputLineSignal);
+  return useContext(outputLineSignal);
 }
 //@ chunk-s3fw2t2g.js:814-972 placement
 function linkifyUrlsInText(line) {
@@ -79,44 +96,44 @@ function tryJsonFormatContent(content) {
 }
 //@ chunk-s3fw2t2g.js:1296-1893 fingerprint = OutputLine (0.829)
 function OutputLine(props) {
-  let $ = w(14);
+  let $ = useMemoCache(14);
   let { content, verbose, isError, isWarning } = props;
   let { columns } = useTerminalSize();
   let [themeName] = useTheme();
   let expandShellOutput = useOutputLineSignal();
-  let suppressExpandHint = Se(expandContextSignal);
+  let suppressExpandHint = useContext(expandContextSignal);
   let shouldShowFull = verbose || expandShellOutput;
-  let O;
+  let validationErrors;
   if ($[0] !== content || $[1] !== themeName) {
-    O = ValidationErrorsList_2(tryJsonFormatContent(content), themeName);
+    validationErrors = ValidationErrorsList_2(tryJsonFormatContent(content), themeName);
     $[0] = content;
     $[1] = themeName;
-    $[2] = O;
-  } else O = $[2];
-  let content_2 = O;
-  let N;
+    $[2] = validationErrors;
+  } else validationErrors = $[2];
+  let content_2 = validationErrors;
+  let formatted;
   ur: {
     if (shouldShowFull) {
-      let i;
+      let jsonResult;
       if ($[3] !== content_2) {
-        i = tryFormatJson(content_2);
+        jsonResult = tryFormatJson(content_2);
         $[3] = content_2;
-        $[4] = i;
-      } else i = $[4];
-      N = i;
+        $[4] = jsonResult;
+      } else jsonResult = $[4];
+      formatted = jsonResult;
       break ur;
     }
-    let i;
+    let body;
     if ($[5] !== columns || $[6] !== content_2 || $[7] !== suppressExpandHint) {
-      i = tryFormatJson(wrapText_2(content_2, columns, suppressExpandHint));
+      body = tryFormatJson(wrapText_2(content_2, columns, suppressExpandHint));
       $[5] = columns;
       $[6] = content_2;
       $[7] = suppressExpandHint;
-      $[8] = i;
-    } else i = $[8];
-    N = i;
+      $[8] = body;
+    } else body = $[8];
+    formatted = body;
   }
-  let formattedContent = N;
+  let formattedContent = formatted;
   let color = isError ? "error" : isWarning ? "warning" : undefined;
   let children;
   if ($[9] !== formattedContent) {

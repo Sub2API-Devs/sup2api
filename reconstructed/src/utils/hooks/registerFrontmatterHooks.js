@@ -17,10 +17,10 @@ import { REPO_DIR_SETTING_SOURCES } from "../settings/constants.js";
 //@ chunk-ahpsetyz.js:371-545 placement
 function hasFrontmatterHooks(hooks) {
   if (!hooks || Object.keys(hooks).length === 0) return false;
-  for (let n of HOOK_EVENTS) {
-    let e = hooks[n];
-    if (!e || e.length === 0) continue;
-    for (let r of e) if ((r.hooks?.length ?? 0) > 0) return true;
+  for (let event of HOOK_EVENTS) {
+    let matchers = hooks[event];
+    if (!matchers || matchers.length === 0) continue;
+    for (let matcher of matchers) if ((matcher.hooks?.length ?? 0) > 0) return true;
   }
   return false;
 }
@@ -36,10 +36,10 @@ function registerFrontmatterHooks(
   isAgent = false,
   personal = false,
   checkout = false,
-  p,
+  commandRepository,
 ) {
   if (!hooks || Object.keys(hooks).length === 0) return;
-  tagHooksWithSource(hooks, p);
+  tagHooksWithSource(hooks, commandRepository);
   let hookCount = 0;
   for (let event of HOOK_EVENTS) {
     let matchers = hooks[event];

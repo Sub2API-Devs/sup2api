@@ -60,8 +60,8 @@ function isAutoContinueEligible() {
 /**
  * 判断 5 小时额度是否可自动恢复。
  */
-function isFiveHourAutoResumable(e) {
-  return isAutoContinueEligible() && isAutoResumableLimit(e) && e.rateLimitType === "five_hour";
+function isFiveHourAutoResumable(limits) {
+  return isAutoContinueEligible() && isAutoResumableLimit(limits) && limits.rateLimitType === "five_hour";
 }
 //@ chunk-9694pmdw.js:899-996 placement
 var AUTO_RESUMABLE_LIMIT_TYPES = [
@@ -75,12 +75,12 @@ var AUTO_RESUMABLE_LIMIT_TYPES = [
 /**
  * 判断某额度类型是否支持自动恢复。
  */
-function canAutoResumeLimitType(e) {
+function canAutoResumeLimitType(limits) {
   return (
     isAutoContinueEligible() &&
-    isAutoResumableLimit(e) &&
-    e.rateLimitType !== undefined &&
-    AUTO_RESUMABLE_LIMIT_TYPES.includes(e.rateLimitType)
+    isAutoResumableLimit(limits) &&
+    limits.rateLimitType !== undefined &&
+    AUTO_RESUMABLE_LIMIT_TYPES.includes(limits.rateLimitType)
   );
 }
 //@ chunk-9694pmdw.js:1087-1122 placement

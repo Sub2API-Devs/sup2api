@@ -17,50 +17,50 @@ import { buildUserResourceAttributes, buildInferenceModels } from "./telemetry/r
 /**
  * 判断会话是否为网关托管的 Claude Code 桌面会话（underCode 且带 desktopSessionPayload）。
  */
-function isManagedClaudeCodeDesktopSession(e) {
-  return e?.underCode === true && e.desktopSessionPayload !== undefined;
+function isManagedClaudeCodeDesktopSession(policyEntry) {
+  return policyEntry?.underCode === true && policyEntry.desktopSessionPayload !== undefined;
 }
 //@ chunk-1ny7cxrt.js:1383221-1383830 placement
 /**
  * 生成发给客户端的网关引导配置：推理提供方、OTLP 端点、托管设置派生项、禁用内置工具与过期时间。
  */
-function buildClientBootstrapConfig(e, policy, n, o) {
-  let settings = policy?.payload.settings ?? {};
+function buildClientBootstrapConfig(config, policyEntry, claims, publicUrl) {
+  let settings = policyEntry?.payload.settings ?? {};
   let disabledBuiltinToolsFromSettings = getDisabledBuiltinToolsFromSettings(settings);
-  let desktop = policy?.desktop;
-  let l = unionStringLists(
+  let desktop = policyEntry?.desktop;
+  let disabledTools = unionStringLists(
     disabledBuiltinToolsFromSettings.disabledBuiltinTools,
     desktop?.disabledBuiltinTools,
   );
-  let c =
+  let desktopBlock =
     desktop === undefined
       ? undefined
       : {
           ...desktop,
-          ...(l === undefined
+          ...(disabledTools === undefined
             ? {}
             : {
-                disabledBuiltinTools: l,
+                disabledBuiltinTools: disabledTools,
               }),
         };
-  let publicUrl = e.telemetry.forward_to.length > 0 && e.listen.public_url;
+  let publicUrl_2 = config.telemetry.forward_to.length > 0 && config.listen.public_url;
   return {
     inferenceProvider: "gateway",
-    inferenceGatewayBaseUrl: o,
+    inferenceGatewayBaseUrl: publicUrl,
     inferenceCredentialKind: "interactive",
-    ...(isManagedClaudeCodeDesktopSession(policy) && {
+    ...(isManagedClaudeCodeDesktopSession(policyEntry) && {
       inferenceGatewayManagedClaudeCode: true,
     }),
-    ...(publicUrl && {
-      otlpEndpoint: o,
+    ...(publicUrl_2 && {
+      otlpEndpoint: publicUrl,
       otlpProtocol: otlpProtocol(settings),
-      otlpResourceAttributes: buildUserResourceAttributes(n, e.telemetry.resource_attributes),
+      otlpResourceAttributes: buildUserResourceAttributes(claims, config.telemetry.resource_attributes),
     }),
-    ...buildInferenceModels(e, policy ?? undefined, settings),
+    ...buildInferenceModels(config, policyEntry ?? undefined, settings),
     ...disabledBuiltinToolsFromSettings,
     ...coworkEgressHosts(settings),
-    ...c,
-    expiresAt: Math.floor(Date.now() / 1000) + e.session.ttl_hours * 3600,
+    ...desktopBlock,
+    expiresAt: Math.floor(Date.now() / 1000) + config.session.ttl_hours * 3600,
   };
 }
 export { isManagedClaudeCodeDesktopSession, buildClientBootstrapConfig };

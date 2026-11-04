@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_planner } from "./planner.js";
 import { require_error } from "./error.js";
 import { require_field } from "./field.js";
@@ -13,7 +13,7 @@ import { require_uint } from "./uint.js";
 import { require_type } from "./type.js";
 
 //@ chunk-fq0cr76a.js:603440-611055 cjs-fingerprint
-var require_access = x(function (cjsExports) {
+var require_access = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

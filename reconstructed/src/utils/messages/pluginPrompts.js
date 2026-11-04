@@ -20,41 +20,47 @@ var PLUGIN_PROMPT_TEXTS =
 
 This is how Claude Code surfaces a prompt a plugin submits between ` +
   "turns \u2014 it starts this turn in the user's place. Address the message above.";
-var pluginMessagePrefix = (t) =>
+var pluginMessagePrefix = (label) =>
   "The " +
-  t +
+  label +
   ` plugin sent a message:
 `;
-var pluginPromptLabel = (t) => `Prompt from the ${t} plugin`;
-var isTextObject = (t) =>
-  typeof t === "object" && t !== null && "text" in t && typeof t.text === "string" && t.text !== "";
-var isPluginMessagePrefix = (t) =>
-  t.length > 28 &&
-  t.startsWith("The ") &&
-  t.endsWith(` plugin sent a message:
+var pluginPromptLabel = (label) => `Prompt from the ${label} plugin`;
+var isTextObject = (value) =>
+  typeof value === "object" &&
+  value !== null &&
+  "text" in value &&
+  typeof value.text === "string" &&
+  value.text !== "";
+var isPluginMessagePrefix = (text) =>
+  text.length > 28 &&
+  text.startsWith("The ") &&
+  text.endsWith(` plugin sent a message:
 `);
 //@ chunk-5k94rwtv.js:682-812 placement
 /**
  * 解析插件提交的包装提示：首行为插件前缀、末尾为固定后缀时返回插件标签与原文。
  */
-function parseWrappedPluginPrompt(t, n) {
-  let sliced = t.slice(
+function parseWrappedPluginPrompt(content, pluginPrompt) {
+  let text = content.slice(
     0,
-    t.indexOf(`
+    content.indexOf(`
 `) + 1,
   );
-  return isTextObject(n) && isPluginMessagePrefix(sliced) && t === sliced + n.text + PLUGIN_PROMPT_TEXTS
+  return isTextObject(pluginPrompt) &&
+    isPluginMessagePrefix(text) &&
+    content === text + pluginPrompt.text + PLUGIN_PROMPT_TEXTS
     ? {
-        label: sliced.slice(4, -24),
-        text: n.text,
+        label: text.slice(4, -24),
+        text: pluginPrompt.text,
       }
     : undefined;
 }
 //@ chunk-5k94rwtv.js:812-905 placement
-function renderPluginPromptWithJoiner(t, n, r) {
-  let wrappedPluginPrompt = parseWrappedPluginPrompt(t, n);
-  if (wrappedPluginPrompt === undefined) return t;
-  return `${pluginPromptLabel(wrappedPluginPrompt.label)}${r}${wrappedPluginPrompt.text}`;
+function renderPluginPromptWithJoiner(content, pluginPrompt, joiner) {
+  let wrappedPluginPrompt = parseWrappedPluginPrompt(content, pluginPrompt);
+  if (wrappedPluginPrompt === undefined) return content;
+  return `${pluginPromptLabel(wrappedPluginPrompt.label)}${joiner}${wrappedPluginPrompt.text}`;
 }
 //@ chunk-5k94rwtv.js:905-953 placement
 /**
@@ -62,9 +68,9 @@ function renderPluginPromptWithJoiner(t, n, r) {
  */
 var renderPluginPromptColon = (content, pluginPrompt) =>
   renderPluginPromptWithJoiner(content, pluginPrompt, ": ");
-var renderPluginPromptSpace = (t, pluginPrompt) =>
+var renderPluginPromptSpace = (content, pluginPrompt) =>
   renderPluginPromptWithJoiner(
-    t,
+    content,
     pluginPrompt,
     `
 `,
@@ -76,25 +82,27 @@ var renderPluginPromptSpace = (t, pluginPrompt) =>
 var TAG_OR_INTERRUPT_START_RE = /^(?:\s*<[a-z][\w-]*[\s>]|\[Request interrupted by user[^\]]*\])/;
 var COMMAND_NAME_TAG_RE = /<command-name>(.*?)<\/command-name>/;
 //@ chunk-5k94rwtv.js:1067-1818 placement
-function renderPluginPrompt(t, n, r = "stored") {
-  if (t.type !== "user") return;
-  if (t.isMeta === true || t.isCompactSummary === true) return;
-  let message = t.message;
-  if (!message) return;
-  let content = message.content;
-  let u =
-    r === "shown" && typeof content === "string" ? renderPluginPromptColon(content, t.pluginPrompt) : content;
-  let c = u !== content;
-  let p = [];
-  if (typeof u === "string") p.push(u);
+function renderPluginPrompt(message, state, mode = "stored") {
+  if (message.type !== "user") return;
+  if (message.isMeta === true || message.isCompactSummary === true) return;
+  let message_2 = message.message;
+  if (!message_2) return;
+  let content = message_2.content;
+  let shownContent =
+    mode === "shown" && typeof content === "string"
+      ? renderPluginPromptColon(content, message.pluginPrompt)
+      : content;
+  let rewritten = shownContent !== content;
+  let texts = [];
+  if (typeof shownContent === "string") texts.push(shownContent);
   else if (Array.isArray(content))
-    for (let e of content) {
-      if (!e || typeof e !== "object") continue;
-      if (e.type === "tool_result") return;
-      if (e.type === "text" && typeof e.text === "string") p.push(e.text);
+    for (let block of content) {
+      if (!block || typeof block !== "object") continue;
+      if (block.type === "tool_result") return;
+      if (block.type === "text" && typeof block.text === "string") texts.push(block.text);
     }
-  for (let e of p) {
-    let trimmed = flattenPastedBlocks(e)
+  for (let text of texts) {
+    let trimmed = flattenPastedBlocks(text)
       .replaceAll(
         `
 `,
@@ -102,13 +110,13 @@ function renderPluginPrompt(t, n, r = "stored") {
       )
       .trim();
     if (!trimmed) continue;
-    let a = c ? null : COMMAND_NAME_TAG_RE.exec(trimmed);
-    if (a) {
-      if (!n.commandFallback) n.commandFallback = a[1];
+    let commandMatch = rewritten ? null : COMMAND_NAME_TAG_RE.exec(trimmed);
+    if (commandMatch) {
+      if (!state.commandFallback) state.commandFallback = commandMatch[1];
       continue;
     }
-    let g = c ? null : /<bash-input>([\s\S]*?)<\/bash-input>/.exec(trimmed);
-    if (g) return `! ${g[1].trim()}`;
+    let bashMatch = rewritten ? null : /<bash-input>([\s\S]*?)<\/bash-input>/.exec(trimmed);
+    if (bashMatch) return `! ${bashMatch[1].trim()}`;
     if (TAG_OR_INTERRUPT_START_RE.test(trimmed)) continue;
     if (trimmed.length > 200) trimmed = truncateToLength(trimmed, 200).trim() + "\u2026";
     return trimmed;

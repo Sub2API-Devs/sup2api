@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:533165-552193 cjs-fingerprint
-var require_x86asm = x(function (cjsExports, cjsModule) {
+var require_x86asm = __commonJS(function (cjsExports, cjsModule) {
   function x86asm(hljs) {
     return {
       name: "Intel x86 Assembly",

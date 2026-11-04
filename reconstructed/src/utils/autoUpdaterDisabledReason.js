@@ -19,7 +19,7 @@ import { isEnvTruthy } from "./envUtils.js";
 /**
  * 自动更新被禁用的原因：嵌套会话、托管设置未加载、未读用户设置、设置不可读，或在环境变量设置中关闭；都不是则为 null。
  */
-function autoUpdaterDisabledReason(n) {
+function autoUpdaterDisabledReason(envObject) {
   if (isChildSession()) return "nested session";
   if (getEligibilityMemo() !== false && !getRemoteManagedSettingsSyncFromCache())
     return "server-managed settings not loaded";
@@ -32,21 +32,22 @@ function autoUpdaterDisabledReason(n) {
   )
     return "settings not readable";
   return [
-    n,
+    envObject,
     ...enabledSettingSources.map((enabledSettingSource) => getSettingsForSource(enabledSettingSource)?.env),
-  ].some((e) => Object.entries(e ?? {}).some(isUpdateDisablingEnv))
+  ].some((env) => Object.entries(env ?? {}).some(isUpdateDisablingEnv))
     ? "turned off in settings"
     : null;
 }
 //@ chunk-t9wvryrs.js:2537-2719 placement
-function isUpdateDisablingEnv([n, t]) {
-  switch (n.toUpperCase()) {
+function isUpdateDisablingEnv([key, value]) {
+  switch (key.toUpperCase()) {
     case "DISABLE_AUTOUPDATER":
     case "DISABLE_UPDATES":
-      return isEnvTruthy(t);
+      return isEnvTruthy(value);
     case "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":
-      return t !== "";
+      return value !== "";
     default:
       return false;
   }
 }
+export { autoUpdaterDisabledReason };

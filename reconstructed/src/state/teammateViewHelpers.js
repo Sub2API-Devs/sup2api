@@ -8,14 +8,56 @@
  * pieces: chunk-18hwfzwa.js (1), chunk-6vnxsn99.js (5), chunk-e6aww6q8.js (8)
  * attribution: fingerprint 5, placement 4, sole-consumer 3, affinity 1, layout 1
  */
+import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
+import { mainAgentId } from "../bootstrap/state.js";
 import { isTerminalTaskStatus } from "../tasks/taskStatus.js";
 import { isCompletedBackgroundAgent, isMainSessionTask as isMainSessionTask_2 } from "../tasks/taskKinds.js";
 import { logEvent } from "../services/analytics/index.js";
-import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
-import { mainAgentId } from "../bootstrap/state.js";
 import { collectAncestorTaskIds } from "../components/CoordinatorAgentStatus.js";
 import { isIdleCompletedSubagent } from "../tasks/LocalMainSessionTask.js";
 
+//@ chunk-6vnxsn99.js:70338-70426 fingerprint = isLocalAgent (1)
+/**
+ * 任务对象是否为本地子代理任务（type === 'local_agent'）。
+ */
+function isLocalAgent(task) {
+  return typeof task === "object" && task !== null && "type" in task && task.type === "local_agent";
+}
+//@ chunk-6vnxsn99.js:71957-72046 placement
+function splitViewedTask(task) {
+  let teammate = isInProcessTeammateTask(task) ? task : undefined;
+  let localAgent = !teammate && isLocalAgent(task) ? task : undefined;
+  return {
+    teammate,
+    localAgent,
+  };
+}
+//@ chunk-6vnxsn99.js:72046-72089 placement
+function viewedTaskParts(viewingAgentTaskId, tasks) {
+  return splitViewedTask(viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined);
+}
+//@ chunk-6vnxsn99.js:72089-72163 placement
+function viewedTaskId(viewedTask) {
+  let { teammate, localAgent } = splitViewedTask(viewedTask);
+  return (teammate ?? localAgent)?.id ?? mainAgentId();
+}
+//@ chunk-6vnxsn99.js:72163-72456 placement
+/**
+ * 由当前查看的任务计算转录视图状态：是否主会话/队友、消息、进行中的工具调用、会话键与是否加载中。
+ */
+function getViewedTranscriptState({ viewedTask, transcript, mainIsBusy, mainConversationId }) {
+  let { teammate, localAgent } = splitViewedTask(viewedTask);
+  let task = teammate ?? localAgent;
+  return {
+    task,
+    isMain: !task,
+    isTeammate: !!teammate,
+    messages: transcript.messages,
+    inProgressToolUseIDs: transcript.inProgressToolUseIDs,
+    conversationKey: task ? task.id : mainConversationId,
+    isLoading: task ? task.status === "running" && !task.isIdle : mainIsBusy,
+  };
+}
 //@ chunk-e6aww6q8.js:4005336-4005350 sole-consumer
 var TEAMMATE_EVICT_DELAY_MS = 30000;
 //@ chunk-e6aww6q8.js:4005350-4005439 sole-consumer = isLocalAgent (1)
@@ -35,18 +77,18 @@ function isAgentOrTeammateTask(task) {
   );
 }
 //@ chunk-e6aww6q8.js:4005562-4005758 affinity
-function markTaskForEviction(e) {
-  if (e.type === "in_process_teammate")
+function markTaskForEviction(task) {
+  if (task.type === "in_process_teammate")
     return {
-      ...e,
-      evictAfter: e.isIdle ? Date.now() + TEAMMATE_EVICT_DELAY_MS : undefined,
+      ...task,
+      evictAfter: task.isIdle ? Date.now() + TEAMMATE_EVICT_DELAY_MS : undefined,
     };
   return {
-    ...e,
+    ...task,
     retain: false,
     diskLoaded: false,
     evictAfter:
-      isTerminalTaskStatus(e.status) && !isCompletedBackgroundAgent(e)
+      isTerminalTaskStatus(task.status) && !isCompletedBackgroundAgent(task)
         ? Date.now() + TEAMMATE_EVICT_DELAY_MS
         : undefined,
   };
@@ -149,57 +191,15 @@ function stopOrDismissAgent(taskId, setAppState) {
     };
   });
 }
-//@ chunk-6vnxsn99.js:70338-70426 fingerprint = isLocalAgent (1)
-/**
- * 任务对象是否为本地子代理任务（type === 'local_agent'）。
- */
-function isLocalAgent(task) {
-  return typeof task === "object" && task !== null && "type" in task && task.type === "local_agent";
-}
-//@ chunk-6vnxsn99.js:71957-72046 placement
-function splitViewedTask(e) {
-  let n = isInProcessTeammateTask(e) ? e : undefined;
-  let localAgent = !n && isLocalAgent(e) ? e : undefined;
-  return {
-    teammate: n,
-    localAgent,
-  };
-}
-//@ chunk-6vnxsn99.js:72046-72089 placement
-function viewedTaskParts(viewingAgentTaskId, tasks) {
-  return splitViewedTask(viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined);
-}
-//@ chunk-6vnxsn99.js:72089-72163 placement
-function viewedTaskId(e) {
-  let { teammate, localAgent } = splitViewedTask(e);
-  return (teammate ?? localAgent)?.id ?? mainAgentId();
-}
-//@ chunk-6vnxsn99.js:72163-72456 placement
-/**
- * 由当前查看的任务计算转录视图状态：是否主会话/队友、消息、进行中的工具调用、会话键与是否加载中。
- */
-function getViewedTranscriptState({ viewedTask, transcript, mainIsBusy, mainConversationId }) {
-  let { teammate, localAgent } = splitViewedTask(viewedTask);
-  let u = teammate ?? localAgent;
-  return {
-    task: u,
-    isMain: !u,
-    isTeammate: !!teammate,
-    messages: transcript.messages,
-    inProgressToolUseIDs: transcript.inProgressToolUseIDs,
-    conversationKey: u ? u.id : mainConversationId,
-    isLoading: u ? u.status === "running" && !u.isIdle : mainIsBusy,
-  };
-}
 //@ chunk-18hwfzwa.js:812256-812465 fingerprint = release (0.781)
 function release(tasks, viewingAgentTaskId) {
-  let D;
-  return Object.values(tasks).filter((L) => {
-    if (!isMainSessionTask_2(L)) return false;
-    if (!isTerminalTaskStatus(L.status)) return true;
-    if (L.evictAfter !== undefined || L.retain === true) return true;
-    if (D === undefined) D = collectAncestorTaskIds(tasks, viewingAgentTaskId);
-    return D.has(L.id) || !isIdleCompletedSubagent(L);
+  let ancestorIds;
+  return Object.values(tasks).filter((task) => {
+    if (!isMainSessionTask_2(task)) return false;
+    if (!isTerminalTaskStatus(task.status)) return true;
+    if (task.evictAfter !== undefined || task.retain === true) return true;
+    if (ancestorIds === undefined) ancestorIds = collectAncestorTaskIds(tasks, viewingAgentTaskId);
+    return ancestorIds.has(task.id) || !isIdleCompletedSubagent(task);
   });
 }
 export {

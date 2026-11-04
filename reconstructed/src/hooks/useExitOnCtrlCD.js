@@ -8,7 +8,7 @@
  * pieces: chunk-1kwgxcw6.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { Q, y, ce } from "../../vendor/react/cjs/react.production.js";
+import { useMemo, useState, useCallback } from "../../vendor/react/cjs/react.production.js";
 import { useApp } from "../ink/components/Input.js";
 import { isKbCohesionFixesOn } from "../utils/kbCohesionFixes.js";
 import { useShortcutDisplay } from "../keybindings/useShortcutDisplay.js";
@@ -18,12 +18,12 @@ import { useDoublePress } from "../keybindings/useActionHandlers.js";
 /**
  * 把双击 Ctrl-C/Ctrl-D 退出逻辑包装成键绑定条目（app:interrupt、app:exit），enabled=false 时返回空列表；同时返回退出提示状态。
  */
-function useExitKeybindingEntries(l, a, n = true) {
-  let { handleInterrupt, handleExit, exitState } = useExitOnCtrlCD(a, l);
+function useExitKeybindingEntries(shouldIntercept, exitOverride, isEnabled = true) {
+  let { handleInterrupt, handleExit, exitState } = useExitOnCtrlCD(exitOverride, shouldIntercept);
   return {
-    entries: Q(
+    entries: useMemo(
       () =>
-        n
+        isEnabled
           ? [
               {
                 action: "app:interrupt",
@@ -35,7 +35,7 @@ function useExitKeybindingEntries(l, a, n = true) {
               },
             ]
           : [],
-      [n, handleInterrupt, handleExit],
+      [isEnabled, handleInterrupt, handleExit],
     ),
     exitState,
   };
@@ -44,18 +44,18 @@ function useExitKeybindingEntries(l, a, n = true) {
 /**
  * 双击退出：app:interrupt（Ctrl-C）/app:exit（Ctrl-D）第一次只显示 "Press X again to exit"，超时内再按才退出。
  */
-function useExitOnCtrlCD(l, a) {
+function useExitOnCtrlCD(shouldIntercept, exitOverride) {
   let { exit } = useApp();
-  let [exitState, setExitState] = y({
+  let [exitState, setExitState] = useState({
     pending: false,
     keyName: null,
   });
-  let exitFn = Q(() => a ?? exit, [a, exit]);
-  let i = isKbCohesionFixesOn();
+  let exitFn = useMemo(() => exitOverride ?? exit, [exitOverride, exit]);
+  let usesShortcutDisplay = isKbCohesionFixesOn();
   let shortcutDisplay = useShortcutDisplay("app:interrupt", "Global", "Ctrl-C");
   let shortcutDisplay_2 = useShortcutDisplay("app:exit", "Global", "Ctrl-D");
-  let keyName = i && shortcutDisplay ? shortcutDisplay : "Ctrl-C";
-  let keyName_2 = i && shortcutDisplay_2 ? shortcutDisplay_2 : "Ctrl-D";
+  let keyName = usesShortcutDisplay && shortcutDisplay ? shortcutDisplay : "Ctrl-C";
+  let keyName_2 = usesShortcutDisplay && shortcutDisplay_2 ? shortcutDisplay_2 : "Ctrl-D";
   let handleCtrlCDoublePress = useDoublePress(
     (pending) =>
       setExitState({
@@ -72,11 +72,11 @@ function useExitOnCtrlCD(l, a) {
       }),
     exitFn,
   );
-  let handleInterrupt = ce(() => {
-    if (l?.()) return;
+  let handleInterrupt = useCallback(() => {
+    if (shouldIntercept?.()) return;
     handleCtrlCDoublePress();
-  }, [handleCtrlCDoublePress, l]);
-  let handleExit = ce(() => {
+  }, [handleCtrlCDoublePress, shouldIntercept]);
+  let handleExit = useCallback(() => {
     handleCtrlDDoublePress();
   }, [handleCtrlDDoublePress]);
   return {

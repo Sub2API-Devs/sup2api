@@ -23,11 +23,14 @@ var SETUP_ISSUE_HINTS = {
 /**
  * 记录某类设置问题的数量及查看详情的提示。
  */
-function logSetupIssues(e, n) {
-  if (n <= 0) return;
-  let r = SETUP_ISSUE_HINTS[e];
-  logForDebugging(`${n} setup ${plural(n, "issue")}: ${e}${r ? ` (${r})` : ""}`, {
-    level: "info",
-  });
+function logSetupIssues(issueKey, issueCount) {
+  if (issueCount <= 0) return;
+  let issueHint = SETUP_ISSUE_HINTS[issueKey];
+  logForDebugging(
+    `${issueCount} setup ${plural(issueCount, "issue")}: ${issueKey}${issueHint ? ` (${issueHint})` : ""}`,
+    {
+      level: "info",
+    },
+  );
 }
 export { logSetupIssues };

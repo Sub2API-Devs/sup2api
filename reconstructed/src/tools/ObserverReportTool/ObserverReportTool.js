@@ -22,7 +22,12 @@ import { isDiskless, mainAgentId } from "../../bootstrap/state.js";
 import { isInProcessTeammateTask } from "../../tasks/InProcessTeammateTask/types.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, M, zodStrictObject } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  booleanSchema,
+  zodStrictObject,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { SUBAGENTHANDBACK, AGENT, MAX_AGENT_OUTPUT_TOKENS } from "../AgentTool/constants.js";
 import { takeClassifierBlock } from "../../utils/permissions/permissions.js";
@@ -71,84 +76,89 @@ import { SCHEDULE_WAKEUP_TOOL_NAME } from "../ScheduleWakeupTool/prompt.js";
 import { MONITOR } from "../MonitorTool/constants.js";
 import { CRON_CREATE_TOOL_NAME } from "../ScheduleCronTool/prompt.js";
 import { POLL } from "../PollTool/prompt.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0m7em5b4.js:3368-3392 placement
 var launchAgentsWithHooks = (request) => runAgentSpawnHooks(request, eventCallersFor);
 //@ chunk-0m7em5b4.js:3392-3475 placement
 var NO_OWN_WORKDIR_MESSAGE = "a working directory of its own is unavailable in a session without a disk";
 //@ chunk-0m7em5b4.js:3475-3624 placement
-function parseAgentIdArg(e) {
-  if (e === undefined || e === null) return;
-  if (typeof e !== "string" || e.trim() === "") return "cwd must be a string holding a path";
+function parseAgentIdArg(cwdArg) {
+  if (cwdArg === undefined || cwdArg === null) return;
+  if (typeof cwdArg !== "string" || cwdArg.trim() === "") return "cwd must be a string holding a path";
   return isDiskless() ? NO_OWN_WORKDIR_MESSAGE : undefined;
 }
 //@ chunk-0m7em5b4.js:3820-4006 placement
-function reportSenderIdentity(e, h, w) {
-  if (h !== undefined)
+function reportSenderIdentity(agentId, agentName, task) {
+  if (agentName !== undefined)
     return {
-      from: h,
-      displayName: h,
+      from: agentName,
+      displayName: agentName,
     };
-  if (isInProcessTeammateTask(w))
+  if (isInProcessTeammateTask(task))
     return {
-      from: w.identity.agentName,
-      displayName: w.identity.agentName,
+      from: task.identity.agentName,
+      displayName: task.identity.agentName,
     };
   return {
-    from: e,
-    displayName: isLocalAgent(w) ? w.agentType : e,
+    from: agentId,
+    displayName: isLocalAgent(task) ? task.agentType : agentId,
   };
 }
 //@ chunk-0m7em5b4.js:4006-4121 placement
-var observerReportInputSchema = DoctorLazy(() =>
-  u({
-    message: string().describe("Your full report for your caller"),
-  }),
-);
-var observerReportOutputSchema = DoctorLazy(() =>
-  u({
-    success: M(),
-    message: string(),
-  }),
-);
+var observerReportInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var observerReportOutputSchema;
+deferInit("chunk-0m7em5b4.js:4006", () => {
+  observerReportInputSchema = DoctorLazy(() =>
+    objectSchema({
+      message: stringSchema().describe("Your full report for your caller"),
+    }),
+  );
+  observerReportOutputSchema = DoctorLazy(() =>
+    objectSchema({
+      success: booleanSchema(),
+      message: stringSchema(),
+    }),
+  );
+});
 //@ chunk-0m7em5b4.js:4121-4576 placement
 /**
  * 为观察者报告工具构建调用上下文：以 getter 代理会话、存储、代理 id、任务注册表、生命周期、消息队列与消息等字段。
  */
-function createReportContext(e, h) {
+function createReportContext(baseContext, callOptions) {
   return {
     get session() {
-      return e.session;
+      return baseContext.session;
     },
     get storageV5() {
-      return e.storageV5;
+      return baseContext.storageV5;
     },
     get agentId() {
-      return e.agentId;
+      return baseContext.agentId;
     },
     get taskRegistry() {
-      return e.taskRegistry;
+      return baseContext.taskRegistry;
     },
     get agentLifecycle() {
-      return e.agentLifecycle;
+      return baseContext.agentLifecycle;
     },
     get messageQueue() {
-      return e.messageQueue;
+      return baseContext.messageQueue;
     },
     get messages() {
-      return e.messages;
+      return baseContext.messages;
     },
     get hookCaller() {
-      return e.hookCaller;
+      return baseContext.hookCaller;
     },
     get hookServesModel() {
-      return e.hookServesModel;
+      return baseContext.hookServesModel;
     },
     get pluginUnnamed() {
-      return e.pluginUnnamed;
+      return baseContext.pluginUnnamed;
     },
     get toolUseId() {
-      return h.toolUseId;
+      return callOptions.toolUseId;
     },
   };
 }
@@ -156,258 +166,261 @@ function createReportContext(e, h) {
 /**
  * ObserverReport 工具（2.1.316 新增）：观察者代理把最终报告送回其报告目标（被观察的代理），超长报告先落盘再给路径。
  */
-var ObserverReportTool = buildTool({
-  name: SUBAGENTHANDBACK,
-  searchHint: "deliver your final report to the agent that spawned you",
-  backgrounding: "never",
-  maxResultSizeChars: 1e5,
-  alwaysLoad: true,
-  userFacingName() {
-    return SUBAGENTHANDBACK;
-  },
-  get inputSchema() {
-    return observerReportInputSchema();
-  },
-  get outputSchema() {
-    return observerReportOutputSchema();
-  },
-  isReadOnly() {
-    return false;
-  },
-  classifierOnly() {
-    return {
-      onBlock: "flag",
-    };
-  },
-  async description() {
-    return SUBAGENT_REPORT_INSTRUCTIONS;
-  },
-  async prompt() {
-    return SUBAGENT_HANDBACK_INSTRUCTIONS;
-  },
-  toAutoClassifierInput(e) {
-    return `${SUBAGENT_HANDBACK_DESCRIPTION}: ${e.message}`;
-  },
-  create(e) {
-    return {
-      async validateInput(h) {
-        if (h.message.trim().length === 0)
+var ObserverReportTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0m7em5b4.js:4576", () => {
+  ObserverReportTool = buildTool({
+    name: SUBAGENTHANDBACK,
+    searchHint: "deliver your final report to the agent that spawned you",
+    backgrounding: "never",
+    maxResultSizeChars: 1e5,
+    alwaysLoad: true,
+    userFacingName() {
+      return SUBAGENTHANDBACK;
+    },
+    get inputSchema() {
+      return observerReportInputSchema();
+    },
+    get outputSchema() {
+      return observerReportOutputSchema();
+    },
+    isReadOnly() {
+      return false;
+    },
+    classifierOnly() {
+      return {
+        onBlock: "flag",
+      };
+    },
+    async description() {
+      return SUBAGENT_REPORT_INSTRUCTIONS;
+    },
+    async prompt() {
+      return SUBAGENT_HANDBACK_INSTRUCTIONS;
+    },
+    toAutoClassifierInput(input) {
+      return `${SUBAGENT_HANDBACK_DESCRIPTION}: ${input.message}`;
+    },
+    create(toolContext) {
+      return {
+        async validateInput(input) {
+          if (input.message.trim().length === 0)
+            return {
+              result: false,
+              message: "message must not be empty",
+              errorCode: 9,
+            };
           return {
-            result: false,
-            message: "message must not be empty",
-            errorCode: 9,
+            result: true,
           };
-        return {
-          result: true,
-        };
-      },
-      async call(h, w) {
-        let reportContext = createReportContext(e, w);
-        let agentId = reportContext.agentId;
-        let P = takeClassifierBlock(reportContext.toolUseId);
-        let E = P !== undefined && P.kind !== "unavailable";
-        if (E && agentId !== undefined) flagAgentContract(agentId);
-        let handbackTarget = getHandbackTarget(reportContext);
-        if (agentId === undefined || handbackTarget === undefined)
-          return {
+        },
+        async call(input, callOptions) {
+          let reportContext = createReportContext(toolContext, callOptions);
+          let agentId = reportContext.agentId;
+          let classifierBlock = takeClassifierBlock(reportContext.toolUseId);
+          let isFlagged = classifierBlock !== undefined && classifierBlock.kind !== "unavailable";
+          if (isFlagged && agentId !== undefined) flagAgentContract(agentId);
+          let handbackTarget = getHandbackTarget(reportContext);
+          if (agentId === undefined || handbackTarget === undefined)
+            return {
+              data: {
+                success: false,
+                message: `Nothing was sent: ${SUBAGENTHANDBACK} is not active for this agent. Write your report as plain text instead.`,
+              },
+            };
+          let refusedResult = {
             data: {
               success: false,
-              message: `Nothing was sent: ${SUBAGENTHANDBACK} is not active for this agent. Write your report as plain text instead.`,
+              message: `Nothing was sent: your report was already delivered (${SUBAGENTHANDBACK} delivers one report). ${isSendMessageUnavailable() ? "Stop now." : `Use ${SENDMESSAGE} for anything further, then stop.`}`,
             },
           };
-        let F = {
-          data: {
-            success: false,
-            message: `Nothing was sent: your report was already delivered (${SUBAGENTHANDBACK} delivers one report). ${isSendMessageUnavailable() ? "Stop now." : `Use ${SENDMESSAGE} for anything further, then stop.`}`,
-          },
-        };
-        if (handbackForRecipient(agentId, handbackTarget.recipient) !== undefined) return F;
-        let j = agentDisplayName(reportContext, agentId);
-        let Z = clipTeammateText(
-          reportSenderIdentity(
-            agentId,
-            reportContext.agentLifecycle.nameOf(identityAgentId2(agentId)),
-            reportContext.taskRegistry.get(agentId),
-          ).displayName,
-        );
-        let sanitized = sanitizeSubagentOutput(h.message).sanitized;
-        let ke = handbackReportText(await spillLongReport(sanitized, reportContext));
-        let Q = P === undefined ? undefined : describeReportBlock(P);
-        let Me =
-          Q === undefined
-            ? ke
-            : `${indentLines(Q)}
-${ke}`;
-        let Pe = normalizeAgentMessageBody(Me);
-        let handbackReport = parseHandbackReport(Pe);
-        let origin = {
-          kind: "peer",
-          from: j,
-          senderTaskId: agentId,
-          ...(Z && {
-            name: Z,
-          }),
-          body: Pe,
-          handback: true,
-          ...(reportContext.hookCaller !== undefined &&
-            !reportContext.hookServesModel && {
-              plugin: reportContext.hookCaller,
+          if (handbackForRecipient(agentId, handbackTarget.recipient) !== undefined) return refusedResult;
+          let senderName = agentDisplayName(reportContext, agentId);
+          let shortSenderName = clipTeammateText(
+            reportSenderIdentity(
+              agentId,
+              reportContext.agentLifecycle.nameOf(identityAgentId2(agentId)),
+              reportContext.taskRegistry.get(agentId),
+            ).displayName,
+          );
+          let sanitized = sanitizeSubagentOutput(input.message).sanitized;
+          let reportBody = handbackReportText(await spillLongReport(sanitized, reportContext));
+          let warningText = classifierBlock === undefined ? undefined : describeReportBlock(classifierBlock);
+          let reportWithWarning =
+            warningText === undefined
+              ? reportBody
+              : `${indentLines(warningText)}
+${reportBody}`;
+          let normalizedBody = normalizeAgentMessageBody(reportWithWarning);
+          let handbackReport = parseHandbackReport(normalizedBody);
+          let origin = {
+            kind: "peer",
+            from: senderName,
+            senderTaskId: agentId,
+            ...(shortSenderName && {
+              name: shortSenderName,
             }),
-          ...(E && {
-            flagged: true,
-          }),
-          ...(handbackReport?.note !== undefined && {
-            handbackNote: handbackReport.note,
-          }),
-          ...(handbackReport !== undefined && {
-            handbackReportText: handbackReport.report,
-          }),
-        };
-        let Fe = reportContext.taskRegistry.get(agentId);
-        let oe =
-          isLocalAgent(Fe) &&
-          Fe.isBackgrounded &&
-          !shouldNotifyTeammateLifecycle(handbackTarget.recipient, reportContext.taskRegistry)
-            ? mainAgentId()
-            : handbackTarget.recipient;
-        if (oe !== handbackTarget.recipient)
-          reportContext.taskRegistry.update(agentId, (re) => ({
-            ...re,
-            handbackRecipient: oe,
-          }));
-        if (handbackForRecipient(agentId, oe) !== undefined) return F;
-        let Ce = agentMessageTag(j, Me);
-        let W = toolsUsedForSummary(reportContext.messages());
-        let Be =
-          W.length > 0
-            ? {
-                toolsUsed: W,
-              }
-            : {};
-        if (oe === mainAgentId()) {
-          let re = () =>
-            reportContext.messageQueue.enqueueReportingAdmission({
-              mode: "prompt",
-              agentId: mainAgentId(),
-              value: Ce,
-              priority: "next",
+            body: normalizedBody,
+            handback: true,
+            ...(reportContext.hookCaller !== undefined &&
+              !reportContext.hookServesModel && {
+                plugin: reportContext.hookCaller,
+              }),
+            ...(isFlagged && {
+              flagged: true,
+            }),
+            ...(handbackReport?.note !== undefined && {
+              handbackNote: handbackReport.note,
+            }),
+            ...(handbackReport !== undefined && {
+              handbackReportText: handbackReport.report,
+            }),
+          };
+          let senderTask = reportContext.taskRegistry.get(agentId);
+          let recipient =
+            isLocalAgent(senderTask) &&
+            senderTask.isBackgrounded &&
+            !shouldNotifyTeammateLifecycle(handbackTarget.recipient, reportContext.taskRegistry)
+              ? mainAgentId()
+              : handbackTarget.recipient;
+          if (recipient !== handbackTarget.recipient)
+            reportContext.taskRegistry.update(agentId, (task) => ({
+              ...task,
+              handbackRecipient: recipient,
+            }));
+          if (handbackForRecipient(agentId, recipient) !== undefined) return refusedResult;
+          let taggedMessage = agentMessageTag(senderName, reportWithWarning);
+          let toolsUsed = toolsUsedForSummary(reportContext.messages());
+          let toolsUsedMeta =
+            toolsUsed.length > 0
+              ? {
+                  toolsUsed,
+                }
+              : {};
+          if (recipient === mainAgentId()) {
+            let enqueue = () =>
+              reportContext.messageQueue.enqueueReportingAdmission({
+                mode: "prompt",
+                agentId: mainAgentId(),
+                value: taggedMessage,
+                priority: "next",
+                origin,
+                skipSlashCommands: true,
+                isMeta: true,
+                skipAttachments: true,
+                ...toolsUsedMeta,
+              });
+            if (shouldHoldForPlugin(reportContext)) {
+              noteHandback({
+                sender: agentId,
+                recipient,
+                senderName,
+                flagged: isFlagged,
+              });
+              let deliverWhenReleased = () => {
+                if (shouldHoldForPlugin(reportContext)) return holdQueuedInput(deliverWhenReleased);
+                let hadHandback = hasHandbackFrom(agentId);
+                enqueue();
+                if (!hadHandback) forgetHandback(agentId);
+              };
+              holdQueuedInput(deliverWhenReleased);
+            } else if (!enqueue().admitted)
+              return {
+                data: {
+                  success: false,
+                  message: "Nothing was sent: the main conversation did not accept the message.",
+                },
+              };
+          } else {
+            if (!useTeammateLifecycleNotification(reportContext.taskRegistry.get(handbackTarget.recipient)))
+              return {
+                data: {
+                  success: false,
+                  message: "Nothing was sent: the agent that spawned you is no longer running.",
+                },
+              };
+            sendMessageToAgent(handbackTarget.recipient, taggedMessage, reportContext.taskRegistry, {
               origin,
-              skipSlashCommands: true,
               isMeta: true,
-              skipAttachments: true,
-              ...Be,
+              ...toolsUsedMeta,
             });
-          if (shouldHoldForPlugin(reportContext)) {
-            noteHandback({
-              sender: agentId,
-              recipient: oe,
-              senderName: j,
-              flagged: E,
-            });
-            let pe = () => {
-              if (shouldHoldForPlugin(reportContext)) return holdQueuedInput(pe);
-              let ie = hasHandbackFrom(agentId);
-              re();
-              if (!ie) forgetHandback(agentId);
-            };
-            holdQueuedInput(pe);
-          } else if (!re().admitted)
-            return {
-              data: {
-                success: false,
-                message: "Nothing was sent: the main conversation did not accept the message.",
-              },
-            };
-        } else {
-          if (!useTeammateLifecycleNotification(reportContext.taskRegistry.get(handbackTarget.recipient)))
-            return {
-              data: {
-                success: false,
-                message: "Nothing was sent: the agent that spawned you is no longer running.",
-              },
-            };
-          sendMessageToAgent(handbackTarget.recipient, Ce, reportContext.taskRegistry, {
-            origin,
-            isMeta: true,
-            ...Be,
-          });
-        }
-        reportContext.taskRegistry.update(agentId, (re) => ({
-          ...re,
-          handbackReport: {
-            text: normalizeAgentMessageBody(
-              sanitizeSubagentOutput(h.message, {
-                prependMarker: false,
-              }).sanitized,
-            ),
-            ...(Q !== undefined && {
-              warning: normalizeAgentMessageBody(Q),
+          }
+          reportContext.taskRegistry.update(agentId, (task) => ({
+            ...task,
+            handbackReport: {
+              text: normalizeAgentMessageBody(
+                sanitizeSubagentOutput(input.message, {
+                  prependMarker: false,
+                }).sanitized,
+              ),
+              ...(warningText !== undefined && {
+                warning: normalizeAgentMessageBody(warningText),
+              }),
+            },
+          }));
+          return {
+            data: {
+              success: true,
+              message: "Report delivered to your caller.",
+            },
+            ...(getFeatureValue_CACHED_MAY_BE_STALE("tengu_purring_pine", true) && {
+              endsTurn: true,
             }),
-          },
-        }));
-        return {
-          data: {
-            success: true,
-            message: "Report delivered to your caller.",
-          },
-          ...(getFeatureValue_CACHED_MAY_BE_STALE("tengu_purring_pine", true) && {
-            endsTurn: true,
-          }),
-        };
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    return {
-      tool_use_id: toolUseId,
-      type: "tool_result",
-      content: [
-        {
-          type: "text",
-          text: jsonStringify(e),
+          };
         },
-      ],
-    };
-  },
-  renderToolUseMessage() {
-    return null;
-  },
+      };
+    },
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
+      return {
+        tool_use_id: toolUseId,
+        type: "tool_result",
+        content: [
+          {
+            type: "text",
+            text: jsonStringify(result),
+          },
+        ],
+      };
+    },
+    renderToolUseMessage() {
+      return null;
+    },
+  });
 });
 //@ chunk-0m7em5b4.js:7501-7683 placement
-function describeReportBlock(e) {
-  switch (e.kind) {
+function describeReportBlock(block) {
+  switch (block.kind) {
     case "blocked":
-      return blockedReportWarning(e.reason);
+      return blockedReportWarning(block.reason);
     case "refused":
-      return e.switchedOff ? buildUnreviewedSubagentWarning("report") : UNREVIEWED_REPORT_WARNING;
+      return block.switchedOff ? buildUnreviewedSubagentWarning("report") : UNREVIEWED_REPORT_WARNING;
     case "unavailable":
-      return buildSubagentClassifierUnavailableNote(e.model, e.httpStatus, e.errorKind);
+      return buildSubagentClassifierUnavailableNote(block.model, block.httpStatus, block.errorKind);
   }
 }
 //@ chunk-0m7em5b4.js:7683-7909 placement
-async function spillLongReport(sanitized, reportContext) {
-  let persistenceThreshold = getPersistenceThreshold(AGENT, MAX_AGENT_OUTPUT_TOKENS);
-  if (sanitized.length <= persistenceThreshold) return sanitized;
-  let A = await persistToolResult(
-    sanitized,
+async function spillLongReport(content, reportContext) {
+  let maxChars = getPersistenceThreshold(AGENT, MAX_AGENT_OUTPUT_TOKENS);
+  if (content.length <= maxChars) return content;
+  let persisted = await persistToolResult(
+    content,
     reportContext.toolUseId ?? `${SUBAGENTHANDBACK}-${randomUUID()}`,
     toolResultsDirFor_2(reportContext.session),
     reportContext.storageV5,
   );
-  if (isPersistError(A)) {
+  if (isPersistError(persisted)) {
     if (toolResultStore(reportContext.session) !== undefined)
-      return buildTruncatedInlineResult(sanitized, persistenceThreshold)?.message ?? sanitized;
-    return sanitized;
+      return buildTruncatedInlineResult(content, maxChars)?.message ?? content;
+    return content;
   }
-  return buildPersistedOutputMessage(A);
+  return buildPersistedOutputMessage(persisted);
 }
 //@ chunk-0m7em5b4.js:7909-8099 placement
 function getHandbackTarget(reportContext) {
   if (reportContext.agentId === undefined) return;
-  let h = reportContext.taskRegistry.get(reportContext.agentId);
-  if (!isLocalAgent(h) || h.handbackContract !== true || h.handbackRecipient === undefined) return;
+  let task = reportContext.taskRegistry.get(reportContext.agentId);
+  if (!isLocalAgent(task) || task.handbackContract !== true || task.handbackRecipient === undefined) return;
   return {
-    recipient: h.handbackRecipient,
+    recipient: task.handbackRecipient,
   };
 }
 //@ chunk-0m7em5b4.js:8099-8157 placement
@@ -431,139 +444,151 @@ var OBSERVER_REPORT_PROMPT =
 /**
  * ObserverReport 工具配置对象（report 入参、提示与结果大小上限）。
  */
-var ObserverReportInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    report: string().min(1).describe("The report to deliver to your report target. Be concise and specific."),
-  }),
-);
-var observerReportTool = buildTool({
-  name: OBSERVERREPORT,
-  backgrounding: "never",
-  maxResultSizeChars: 1000,
-  async description() {
-    return OBSERVER_REPORT_DESCRIPTION;
-  },
-  async prompt() {
-    return OBSERVER_REPORT_PROMPT;
-  },
-  get inputSchema() {
-    return ObserverReportInputSchema();
-  },
-  isReadOnly() {
-    return false;
-  },
-  isEnabled() {
-    return true;
-  },
-  create(e) {
-    return {
-      async checkPermissions(updatedInput) {
-        return {
-          behavior: "allow",
-          updatedInput,
-        };
-      },
-      async call(h) {
-        let agentId = e.agentId;
-        if (agentId === undefined)
+var ObserverReportInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var observerReportTool;
+deferInit("chunk-0m7em5b4.js:9170", () => {
+  ObserverReportInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      report: stringSchema()
+        .min(1)
+        .describe("The report to deliver to your report target. Be concise and specific."),
+    }),
+  );
+  observerReportTool = buildTool({
+    name: OBSERVERREPORT,
+    backgrounding: "never",
+    maxResultSizeChars: 1000,
+    async description() {
+      return OBSERVER_REPORT_DESCRIPTION;
+    },
+    async prompt() {
+      return OBSERVER_REPORT_PROMPT;
+    },
+    get inputSchema() {
+      return ObserverReportInputSchema();
+    },
+    isReadOnly() {
+      return false;
+    },
+    isEnabled() {
+      return true;
+    },
+    create(toolContext) {
+      return {
+        async checkPermissions(updatedInput) {
           return {
-            data: {
-              success: false,
-              message:
-                "ObserverReport is only available to an observer agent; the main session does not have an observed pairing.",
-            },
+            behavior: "allow",
+            updatedInput,
           };
-        let armedPairingByObserver = findArmedPairingByObserver(e.session, agentId);
-        if (!armedPairingByObserver)
-          return {
-            data: {
-              success: false,
-              message:
-                "Your observer pairing is not armed (stopped, retired, or never installed). The report was not delivered.",
-            },
-          };
-        let { reportTargetTaskId, reportTargetName, viaWorkerName } = armedPairingByObserver;
-        if (reportTargetTaskId !== undefined) {
-          let r = e.taskRegistry.get(reportTargetTaskId);
-          if (!(
-            isLocalAgent(r) &&
-            (r.status === "running" ||
-              (r.status === "completed" && [...keepaliveReasons(r)].some((Q) => Q !== FLAG_IDLE_WINDOW)))
-          ))
+        },
+        async call(input) {
+          let agentId = toolContext.agentId;
+          if (agentId === undefined)
             return {
               data: {
                 success: false,
-                message: `The report target (${reportTargetName}) is not running. The report was not delivered.`,
+                message:
+                  "ObserverReport is only available to an observer agent; the main session does not have an observed pairing.",
               },
             };
-        }
-        let O = `observer:${armedPairingByObserver.observerAgentType}`;
-        let F =
-          armedPairingByObserver.observedTaskId === undefined
-            ? `"${viaWorkerName}"`
-            : `"${viaWorkerName}" [${armedPairingByObserver.observedTaskId}]`;
-        let text = agentMessageTag(
-          O,
-          viaWorkerName === undefined
-            ? h.report
-            : `(observing worker ${F})
-${h.report}`,
-        );
-        let Z = {
-          kind: "observer",
-          from: O,
-          senderTaskId: agentId,
-        };
-        armedPairingByObserver.reportOrigins.add(Z);
-        if (reportTargetTaskId === undefined)
-          enqueueCommand({
-            mode: "prompt",
-            agentId: mainAgentId(),
-            value: text,
-            priority: "next",
-            origin: Z,
-            skipSlashCommands: true,
-            isMeta: true,
-            skipAttachments: true,
-          });
-        else
-          queueAgentMessage(reportTargetTaskId, text, e.taskRegistry, {
-            origin: Z,
-            isMeta: true,
-          });
-        return {
-          data: {
-            success: true,
-            message: `Report queued for ${reportTargetTaskId === undefined ? "the main conversation" : reportTargetName}.`,
-          },
-        };
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    return {
-      type: "tool_result",
-      tool_use_id: toolUseId,
-      content: e.message,
-      is_error: !e.success,
-    };
-  },
-  renderToolUseMessage(e) {
-    return `report: ${e.report}`;
-  },
+          let armedPairingByObserver = findArmedPairingByObserver(toolContext.session, agentId);
+          if (!armedPairingByObserver)
+            return {
+              data: {
+                success: false,
+                message:
+                  "Your observer pairing is not armed (stopped, retired, or never installed). The report was not delivered.",
+              },
+            };
+          let { reportTargetTaskId, reportTargetName, viaWorkerName } = armedPairingByObserver;
+          if (reportTargetTaskId !== undefined) {
+            let task = toolContext.taskRegistry.get(reportTargetTaskId);
+            if (!(
+              isLocalAgent(task) &&
+              (task.status === "running" ||
+                (task.status === "completed" &&
+                  [...keepaliveReasons(task)].some(
+                    (keepaliveReason) => keepaliveReason !== FLAG_IDLE_WINDOW,
+                  )))
+            ))
+              return {
+                data: {
+                  success: false,
+                  message: `The report target (${reportTargetName}) is not running. The report was not delivered.`,
+                },
+              };
+          }
+          let senderAgentTag = `observer:${armedPairingByObserver.observerAgentType}`;
+          let workerLabel =
+            armedPairingByObserver.observedTaskId === undefined
+              ? `"${viaWorkerName}"`
+              : `"${viaWorkerName}" [${armedPairingByObserver.observedTaskId}]`;
+          let text = agentMessageTag(
+            senderAgentTag,
+            viaWorkerName === undefined
+              ? input.report
+              : `(observing worker ${workerLabel})
+${input.report}`,
+          );
+          let origin = {
+            kind: "observer",
+            from: senderAgentTag,
+            senderTaskId: agentId,
+          };
+          armedPairingByObserver.reportOrigins.add(origin);
+          if (reportTargetTaskId === undefined)
+            enqueueCommand({
+              mode: "prompt",
+              agentId: mainAgentId(),
+              value: text,
+              priority: "next",
+              origin,
+              skipSlashCommands: true,
+              isMeta: true,
+              skipAttachments: true,
+            });
+          else
+            queueAgentMessage(reportTargetTaskId, text, toolContext.taskRegistry, {
+              origin,
+              isMeta: true,
+            });
+          return {
+            data: {
+              success: true,
+              message: `Report queued for ${reportTargetTaskId === undefined ? "the main conversation" : reportTargetName}.`,
+            },
+          };
+        },
+      };
+    },
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
+      return {
+        type: "tool_result",
+        tool_use_id: toolUseId,
+        content: result.message,
+        is_error: !result.success,
+      };
+    },
+    renderToolUseMessage(input) {
+      return `report: ${input.report}`;
+    },
+  });
 });
 //@ chunk-0m7em5b4.js:10922-10958 placement
-var OBSERVER_EXCLUDED_TOOLS = [
-  SENDMESSAGE,
-  SUBAGENTHANDBACK,
-  OBSERVERREPORT,
-  AGENT,
-  WORKFLOW_TOOL_NAME,
-  SCHEDULE_WAKEUP_TOOL_NAME,
-  MONITOR,
-  CRON_CREATE_TOOL_NAME,
-  POLL,
-];
+var OBSERVER_EXCLUDED_TOOLS; // deferred: uses SENDMESSAGE (../SendMessageTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0m7em5b4.js:10922", () => {
+  OBSERVER_EXCLUDED_TOOLS = [
+    SENDMESSAGE,
+    SUBAGENTHANDBACK,
+    OBSERVERREPORT,
+    AGENT,
+    WORKFLOW_TOOL_NAME,
+    SCHEDULE_WAKEUP_TOOL_NAME,
+    MONITOR,
+    CRON_CREATE_TOOL_NAME,
+    POLL,
+  ];
+});
 export {
   parseAgentIdArg,
   OBSERVER_EXCLUDED_TOOLS,

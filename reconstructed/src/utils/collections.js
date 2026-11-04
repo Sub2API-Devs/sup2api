@@ -13,74 +13,76 @@
 /**
  * 在元素间插入分隔。
  */
-function intersperse(e, n) {
-  return e.flatMap((t, r) => (r ? [n(r), t] : [t]));
+function intersperse(items, separator) {
+  return items.flatMap((item, index) => (index ? [separator(index), item] : [item]));
 }
 //@ chunk-q3kq8hyf.js:249-308 placement
 /**
  * 统计满足条件的元素数。
  */
-function count(e, n) {
-  let t = 0;
-  for (let r of e) t += +!!n(r);
-  return t;
+function count(items, predicate) {
+  let count = 0;
+  for (let item of items) count += +!!predicate(item);
+  return count;
 }
 //@ chunk-q3kq8hyf.js:308-442 placement
-function setsEqual(e, n) {
-  if (e === n) return true;
-  if (e === undefined || n === undefined || e.size !== n.size) return false;
-  for (let t of e) if (!n.has(t)) return false;
+function setsEqual(left, right) {
+  if (left === right) return true;
+  if (left === undefined || right === undefined || left.size !== right.size) return false;
+  for (let value of left) if (!right.has(value)) return false;
   return true;
 }
 //@ chunk-q3kq8hyf.js:442-593 placement
 /**
  * 数组浅相等。
  */
-function arraysEqual(e, n) {
-  if (e === n) return true;
-  if (e === undefined || n === undefined || e.length !== n.length) return false;
-  for (let i = 0; i < e.length; i++) if (e[i] !== n[i]) return false;
+function arraysEqual(left, right) {
+  if (left === right) return true;
+  if (left === undefined || right === undefined || left.length !== right.length) return false;
+  for (let i = 0; i < left.length; i++) if (left[i] !== right[i]) return false;
   return true;
 }
 //@ chunk-q3kq8hyf.js:593-629 placement
 /**
  * 去重。
  */
-function uniq(e) {
-  return [...new Set(e)];
+function uniq(items) {
+  return [...new Set(items)];
 }
 //@ chunk-q3kq8hyf.js:629-734 placement
 /**
  * 按键去重。
  */
-function uniqBy(e, n) {
-  let t = new Set();
-  let r = [];
-  for (let o of e) {
-    let i = n(o);
-    if (!t.has(i)) {
-      t.add(i);
-      r.push(o);
+function uniqBy(items, keyOf) {
+  let seen = new Set();
+  let result = [];
+  for (let item of items) {
+    let key = keyOf(item);
+    if (!seen.has(key)) {
+      seen.add(key);
+      result.push(item);
     }
   }
-  return r;
+  return result;
 }
 //@ chunk-q3kq8hyf.js:734-857 placement
 /**
  * 只保留字符串元素。
  */
-function stringArray(e) {
-  if (!Array.isArray(e)) return [];
-  return e.every((n) => typeof n === "string") ? e : e.filter((n) => typeof n === "string");
+function stringArray(value) {
+  if (!Array.isArray(value)) return [];
+  return value.every((item) => typeof item === "string")
+    ? value
+    : value.filter((item) => typeof item === "string");
 }
 //@ chunk-q3kq8hyf.js:857-949 placement
 /**
  * 返回两个字符串数组的公共前缀长度。
  */
-function commonPrefixLength(e, n) {
-  let min = Math.min(e.length, n.length);
-  let r = 0;
-  while (r < min && e[r] === n[r]) r++;
-  return r;
+function commonPrefixLength(left, right) {
+  let min = Math.min(left.length, right.length);
+  let index = 0;
+  while (index < min && left[index] === right[index]) index++;
+  return index;
 }
 export { count, uniq, arraysEqual, stringArray, commonPrefixLength, uniqBy, intersperse, setsEqual };

@@ -26,7 +26,7 @@ var EDITOR_OVERRIDES = {
   subl: "subl --wait",
 };
 //@ chunk-0dfh72mg.js:2583-3468 fingerprint = editFileInEditor (0.539)
-function editFileInEditor(n, e) {
+function editFileInEditor(filePath, cursorOffset) {
   let fs = getFsImplementation();
   let inkInstance = getSecondRootError().get(process.stdout);
   if (!inkInstance) throw Error("Ink instance not found - cannot pause rendering");
@@ -36,7 +36,7 @@ function editFileInEditor(n, e) {
       content: null,
     };
   try {
-    fs.statSync(n);
+    fs.statSync(filePath);
   } catch {
     return {
       content: null,
@@ -46,36 +46,40 @@ function editFileInEditor(n, e) {
   if (useAlternateScreen) inkInstance.enterAlternateScreen();
   else inkInstance.prepareTerminalForHandoff();
   try {
-    let g = EDITOR_OVERRIDES[editor] ?? editor;
-    let parts = g.split(" ");
-    let m = parts[0] ?? g;
+    let editorCommand = EDITOR_OVERRIDES[editor] ?? editor;
+    let parts = editorCommand.split(" ");
+    let binary = parts[0] ?? editorCommand;
     let sliced = parts.slice(1);
-    let l = editorOpenArgv(editor, n, e);
-    let s;
+    let openArgs = editorOpenArgv(editor, filePath, cursorOffset);
+    let spawnResult;
     {
-      let f = keeperCgroupSpawnOptions();
-      s = spawnSync(m, [...sliced, ...l], {
+      let cgroupOptions = keeperCgroupSpawnOptions();
+      spawnResult = spawnSync(binary, [...sliced, ...openArgs], {
         stdio: "inherit",
-        ...f,
+        ...cgroupOptions,
       });
-      if (s.error && f.cgroup !== undefined)
-        s = spawnSync(m, [...sliced, ...l], {
+      if (spawnResult.error && cgroupOptions.cgroup !== undefined)
+        spawnResult = spawnSync(binary, [...sliced, ...openArgs], {
           stdio: "inherit",
         });
     }
-    if (s.error || s.signal || (s.status !== null && s.status !== 0)) {
+    if (
+      spawnResult.error ||
+      spawnResult.signal ||
+      (spawnResult.status !== null && spawnResult.status !== 0)
+    ) {
       let editorName = toIDEDisplayName(editor);
       return {
         content: null,
-        error: s.error
-          ? `Couldn't open ${editorName} \u2014 ${s.error.message}`
-          : s.signal
-            ? `${editorName} closed unexpectedly (${s.signal})`
-            : `${editorName} quit unexpectedly (exit code ${s.status})`,
+        error: spawnResult.error
+          ? `Couldn't open ${editorName} \u2014 ${spawnResult.error.message}`
+          : spawnResult.signal
+            ? `${editorName} closed unexpectedly (${spawnResult.signal})`
+            : `${editorName} quit unexpectedly (exit code ${spawnResult.status})`,
       };
     }
     return {
-      content: fs.readFileSync(n, {
+      content: fs.readFileSync(filePath, {
         encoding: "utf-8",
       }),
     };
@@ -115,8 +119,8 @@ var PROMPT_EDITOR_REPLY_MARKER_LINE = 50;
 /**
  * 把 Claude 上一条回复格式化为编辑器中的注释块（最多 50 行，超出截断）。
  */
-function formatLastResponseForEditor(n) {
-  let lines = stripMemoryTags(n).split(`
+function formatLastResponseForEditor(lastResponse) {
+  let lines = stripMemoryTags(lastResponse).split(`
 `);
   if (lines.length > PROMPT_EDITOR_REPLY_MARKER_LINE) {
     lines = lines.slice(-PROMPT_EDITOR_REPLY_MARKER_LINE);
@@ -142,20 +146,20 @@ function recollapsePastedContent(finalContent) {
 /**
  * 在外部编辑器（$EDITOR/$VISUAL）中编辑当前提示词，返回编辑后的内容；可附带 Claude 上一条回复作参考（保存时去掉）。
  */
-function editPromptInEditor(currentPrompt, pastedContents, r, cursorOffset) {
+function editPromptInEditor(currentPrompt, pastedContents, lastResponse, cursorOffset) {
   let fs = getFsImplementation();
   let tempFile = generateTempFilePath();
   try {
-    let g = pastedContents ? addPastedEntry(currentPrompt, pastedContents) : currentPrompt;
-    let u = r ? formatLastResponseForEditor(r) : "";
-    let m = u + g;
+    let promptWithPastes = pastedContents ? addPastedEntry(currentPrompt, pastedContents) : currentPrompt;
+    let lastResponseText = lastResponse ? formatLastResponseForEditor(lastResponse) : "";
+    let fileContent = lastResponseText + promptWithPastes;
     let sliced = currentPrompt.slice(0, cursorOffset);
-    let l =
+    let cursorLine =
       cursorOffset === undefined
         ? undefined
         : 1 +
           countCharInString(
-            u,
+            lastResponseText,
             `
 `,
           ) +
@@ -164,22 +168,22 @@ function editPromptInEditor(currentPrompt, pastedContents, r, cursorOffset) {
             `
 `,
           );
-    writeFileSync_DEPRECATED(tempFile, m, {
+    writeFileSync_DEPRECATED(tempFile, fileContent, {
       encoding: "utf-8",
       flush: true,
     });
-    let result = editFileInEditor(tempFile, l);
+    let result = editFileInEditor(tempFile, cursorLine);
     if (result.content === null) return result;
     let finalContent = result.content;
-    if (r) finalContent = recollapsePastedContent(finalContent);
-    let f = finalContent.endsWith(`\r
+    if (lastResponse) finalContent = recollapsePastedContent(finalContent);
+    let lineEnding = finalContent.endsWith(`\r
 `)
       ? `\r
 `
       : `
 `;
-    if (finalContent.endsWith(f) && !finalContent.endsWith(f + f))
-      finalContent = finalContent.slice(0, -f.length);
+    if (finalContent.endsWith(lineEnding) && !finalContent.endsWith(lineEnding + lineEnding))
+      finalContent = finalContent.slice(0, -lineEnding.length);
     if (pastedContents)
       finalContent = expandPastedContentForEditor(finalContent, currentPrompt, pastedContents);
     return {

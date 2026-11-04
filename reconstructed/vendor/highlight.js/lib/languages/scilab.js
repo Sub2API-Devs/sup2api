@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:419934-421127 cjs-fingerprint
-var require_scilab = x(function (cjsExports, cjsModule) {
+var require_scilab = __commonJS(function (cjsExports, cjsModule) {
   function scilab(hljs) {
     let COMMON_CONTAINS = [
       hljs.C_NUMBER_MODE,

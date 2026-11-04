@@ -9,29 +9,33 @@
  * attribution: placement 9
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, _enum, record, string, unknown } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, _enum, record, stringSchema, unknown } from "../../vendor/zod/v4/classic/schemas.js";
 import { capPermissionUpdates_2 } from "../utils/permissions/permissionAnswer.js";
 import { logForDebugging } from "../utils/debug.js";
 import { logFeatureBad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-z4hdycrw.js:380-643 placement
-var bridgePermissionResponseSchema = DoctorLazy(() =>
-  u({
-    behavior: _enum(["allow", "deny"]),
-    updatedInput: record(string(), unknown())
-      .optional()
-      .transform((e) => (e && Object.keys(e).length === 0 ? undefined : e)),
-    updatedPermissions: capPermissionUpdates_2("refused", "bridge client"),
-    message: string().optional().catch(undefined),
-    toolName: string().optional().catch(undefined),
-  }),
-);
+var bridgePermissionResponseSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z4hdycrw.js:380", () => {
+  bridgePermissionResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      behavior: _enum(["allow", "deny"]),
+      updatedInput: record(stringSchema(), unknown())
+        .optional()
+        .transform((input) => (input && Object.keys(input).length === 0 ? undefined : input)),
+      updatedPermissions: capPermissionUpdates_2("refused", "bridge client"),
+      message: stringSchema().optional().catch(undefined),
+      toolName: stringSchema().optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-z4hdycrw.js:643-1033 placement
 function parseBridgePermissionResponse(response) {
-  let n = bridgePermissionResponseSchema().safeParse(response);
-  if (!n.success) {
+  let parsed = bridgePermissionResponseSchema().safeParse(response);
+  if (!parsed.success) {
     logForDebugging(
-      `Malformed bridge permission response ignored: ${n.error.issues[0]?.message ?? "unknown"}`,
+      `Malformed bridge permission response ignored: ${parsed.error.issues[0]?.message ?? "unknown"}`,
       {
         level: "warn",
       },
@@ -43,13 +47,13 @@ function parseBridgePermissionResponse(response) {
     typeof response === "object" &&
     response !== null &&
     response.updatedPermissions !== undefined &&
-    n.data.updatedPermissions === undefined
+    parsed.data.updatedPermissions === undefined
   )
     return {
-      ...n.data,
+      ...parsed.data,
       updatedPermissionsDropped: true,
     };
-  return n.data;
+  return parsed.data;
 }
 //@ chunk-z4hdycrw.js:1033-1340 placement
 function isValidBridgeToolName(toolName, toolName_2, requestId) {
@@ -68,12 +72,14 @@ function isValidBridgeToolName(toolName, toolName_2, requestId) {
   return true;
 }
 //@ chunk-z4hdycrw.js:1340-1392 placement
-function isDifferentString(e, n) {
-  return typeof e === "string" && e !== n;
+function isDifferentString(value, other) {
+  return typeof value === "string" && value !== other;
 }
 //@ chunk-z4hdycrw.js:1392-1494 placement
-function humanizeToolName(name) {
-  return (name.split("__").pop() || name).replace(/_/g, " ").replace(/\b\w/g, (s) => s.toUpperCase());
+function humanizeToolName(toolName) {
+  return (toolName.split("__").pop() || toolName)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 //@ chunk-z4hdycrw.js:1494-1503 placement
 var EMPTY_BRIDGE_TOOLS = [];
@@ -89,51 +95,52 @@ class BridgeToolProvider {
   #r = () => false;
   #e;
   #t = new WeakMap();
-  provide(e, n = () => true, s = () => false) {
-    this.#s = e;
-    this.#i = n;
-    this.#n = s;
+  provide(sourceTools, isPresentable = () => true, shouldHideMachine = () => false) {
+    this.#s = sourceTools;
+    this.#i = isPresentable;
+    this.#n = shouldHideMachine;
     this.#e = undefined;
   }
-  presentUntilAnnounced(e, n) {
-    this.#o = e;
-    this.#r = n;
+  presentUntilAnnounced(pendingTools, isPresenting) {
+    this.#o = pendingTools;
+    this.#r = isPresenting;
     this.#e = undefined;
   }
   presentable() {
     return this.#i();
   }
   tools() {
-    let e = this.#s();
+    let sourceTools = this.#s();
     if (this.#o.some(({ machine }) => this.#n(machine))) {
       let filtered = this.#o.filter(({ machine }) => !this.#n(machine));
       this.#o = filtered.length > 0 ? filtered : EMPTY_BRIDGE_TOOLS;
     }
-    let n = this.#r() ? this.#o : EMPTY_BRIDGE_TOOLS;
-    if (this.#e === undefined || this.#e.source !== e || this.#e.pending !== n) {
-      let s = [
-        ...e,
-        ...n.filter(
-          ({ tool, machine }) => !e.some((l) => l.machine === machine && l.tool.name === tool.name),
+    let pendingTools = this.#r() ? this.#o : EMPTY_BRIDGE_TOOLS;
+    if (this.#e === undefined || this.#e.source !== sourceTools || this.#e.pending !== pendingTools) {
+      let mergedTools = [
+        ...sourceTools,
+        ...pendingTools.filter(
+          ({ tool, machine }) =>
+            !sourceTools.some((existing) => existing.machine === machine && existing.tool.name === tool.name),
         ),
       ];
-      for (let { tool, machine } of s) this.#t.set(tool, machine);
+      for (let { tool, machine } of mergedTools) this.#t.set(tool, machine);
       this.#e = {
-        source: e,
-        pending: n,
-        tools: s.map(({ tool }) => tool),
+        source: sourceTools,
+        pending: pendingTools,
+        tools: mergedTools.map(({ tool }) => tool),
       };
     }
     return this.#e.tools;
   }
-  machineFor(e) {
+  machineFor(tool) {
     this.tools();
-    return this.#t.get(e);
+    return this.#t.get(tool);
   }
 }
 //@ chunk-z4hdycrw.js:2242-2298 placement
-function bridgeToolsOf(e) {
-  return e.toolState?.get(BridgeToolProvider).tools() ?? EMPTY_BRIDGE_TOOLS_FALLBACK;
+function bridgeToolsOf(extension) {
+  return extension.toolState?.get(BridgeToolProvider).tools() ?? EMPTY_BRIDGE_TOOLS_FALLBACK;
 }
 //@ chunk-z4hdycrw.js:2298-2307 placement
 var EMPTY_BRIDGE_TOOLS_FALLBACK = [];

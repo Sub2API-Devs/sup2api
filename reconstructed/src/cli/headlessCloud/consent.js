@@ -10,7 +10,15 @@
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../handlers/util.js";
-import { u, literal, string, M, array, _enum, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  booleanSchema,
+  array,
+  _enum,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   shortLabel,
   isCleanText,
@@ -30,62 +38,73 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { stripDeclineMessage } from "../../services/requestUserDialog.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fe6rs39h.js:41526-42021 placement
 /**
  * 设备 MCP 同意的上限常量：最多 64 台服务器、名字 128 字符、机器名 256 字符，以及 device_mcp_consent 对话框 spec。
  */
-var DEVICE_MCP_CONSENT_LIMITS = 20;
-var MAX_DEVICE_MCP_CONSENT_SERVERS = 64;
-var MAX_DEVICE_MCP_NAME_CHARS = 128;
-var MAX_MACHINE_NAME_CHARS_2 = 256;
-var deviceMcpConsentSpec = withHideWhile({
-  kind: "device_mcp_consent",
-  payload: DoctorLazy(() =>
-    u({
-      v: literal(1),
-      machine_name: string().min(1).max(MAX_MACHINE_NAME_CHARS_2),
-      reconsent: M(),
-      changed_servers: array(string().min(1).max(MAX_DEVICE_MCP_NAME_CHARS)).optional(),
-      servers: array(
-        u({
-          name: string().min(1).max(MAX_DEVICE_MCP_NAME_CHARS),
-          scope: _enum(["user", "local", "plugin"]),
-          transport: _enum(["stdio", "http", "sse", "ws"]),
-          tool_count: E().int().nonnegative(),
-          tool_names: array(string().min(1).max(MAX_DEVICE_MCP_NAME_CHARS)).max(DEVICE_MCP_CONSENT_LIMITS),
-          tool_names_truncated: M(),
-        }),
-      )
-        .min(1)
-        .max(MAX_DEVICE_MCP_CONSENT_SERVERS),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["allow", "deny", "not_now"])),
-  default: "not_now",
-  hideWhile: [],
+var DEVICE_MCP_CONSENT_LIMITS; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_DEVICE_MCP_CONSENT_SERVERS;
+var MAX_DEVICE_MCP_NAME_CHARS;
+var MAX_MACHINE_NAME_CHARS_2;
+var deviceMcpConsentSpec;
+deferInit("chunk-fe6rs39h.js:41526", () => {
+  DEVICE_MCP_CONSENT_LIMITS = 20;
+  MAX_DEVICE_MCP_CONSENT_SERVERS = 64;
+  MAX_DEVICE_MCP_NAME_CHARS = 128;
+  MAX_MACHINE_NAME_CHARS_2 = 256;
+  deviceMcpConsentSpec = withHideWhile({
+    kind: "device_mcp_consent",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        v: literal(1),
+        machine_name: stringSchema().min(1).max(MAX_MACHINE_NAME_CHARS_2),
+        reconsent: booleanSchema(),
+        changed_servers: array(stringSchema().min(1).max(MAX_DEVICE_MCP_NAME_CHARS)).optional(),
+        servers: array(
+          objectSchema({
+            name: stringSchema().min(1).max(MAX_DEVICE_MCP_NAME_CHARS),
+            scope: _enum(["user", "local", "plugin"]),
+            transport: _enum(["stdio", "http", "sse", "ws"]),
+            tool_count: numberSchema().int().nonnegative(),
+            tool_names: array(stringSchema().min(1).max(MAX_DEVICE_MCP_NAME_CHARS)).max(
+              DEVICE_MCP_CONSENT_LIMITS,
+            ),
+            tool_names_truncated: booleanSchema(),
+          }),
+        )
+          .min(1)
+          .max(MAX_DEVICE_MCP_CONSENT_SERVERS),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["allow", "deny", "not_now"])),
+    default: "not_now",
+    hideWhile: [],
+  });
 });
 //@ chunk-fe6rs39h.js:42021-42633 placement
 /**
  * 构造本机 MCP 服务器供云会话使用的同意请求载荷：列出（或重新同意时只列变化的）服务器名、范围、传输与工具摘要；数量超限、名称不干净或重名时返回 null。
  */
 function buildMcpServeConsentPayload({ machineName, offered, snapshot, withheld, diffNamesCap }) {
-  let servers = withheld === undefined ? offered : offered.filter(([R]) => Object.hasOwn(withheld, R));
+  let servers =
+    withheld === undefined ? offered : offered.filter(([offered]) => Object.hasOwn(withheld, offered));
   if (servers.length === 0 || servers.length > MAX_DEVICE_MCP_CONSENT_SERVERS) return null;
-  let flattened = servers.flatMap(([R, config]) => {
-    let I = mcpScopeLabel(config);
-    let transportLabel = getTransportLabel(config);
-    return I === undefined || transportLabel === undefined
+  let flattened = servers.flatMap(([entry, serverConfig]) => {
+    let scope = mcpScopeLabel(serverConfig);
+    let transportLabel = getTransportLabel(serverConfig);
+    return scope === undefined || transportLabel === undefined
       ? []
       : [
           {
-            name: shortLabel(R),
-            scope: I,
+            name: shortLabel(entry),
+            scope,
             transport: transportLabel,
             ...mcpToolSummary(
-              R,
+              entry,
               snapshot,
-              withheld !== undefined && Object.hasOwn(withheld, R) ? withheld[R] : undefined,
+              withheld !== undefined && Object.hasOwn(withheld, entry) ? withheld[entry] : undefined,
               diffNamesCap,
             ),
           },
@@ -96,25 +115,25 @@ function buildMcpServeConsentPayload({ machineName, offered, snapshot, withheld,
     machine_name: machineName,
     reconsent: withheld !== undefined,
     ...(withheld !== undefined && {
-      changed_servers: flattened.map((R) => R.name),
+      changed_servers: flattened.map((server) => server.name),
     }),
     servers: flattened,
   };
   return flattened.length === servers.length &&
-    flattened.every((R) => isCleanText(R.name)) &&
-    new Set(offered.map(([R]) => shortLabel(R).normalize("NFC"))).size === offered.length &&
+    flattened.every((server) => isCleanText(server.name)) &&
+    new Set(offered.map(([server]) => shortLabel(server).normalize("NFC"))).size === offered.length &&
     deviceMcpConsentSpec.payload().safeParse(payload).success
     ? payload
     : null;
 }
 //@ chunk-fe6rs39h.js:42633-42825 placement
-function mcpScopeLabel(e) {
-  switch (e.scope) {
+function mcpScopeLabel(client) {
+  switch (client.scope) {
     case "user":
     case "local":
-      return e.scope;
+      return client.scope;
     case "dynamic":
-      return isPluginServerConfig(e) ? "plugin" : undefined;
+      return isPluginServerConfig(client) ? "plugin" : undefined;
     case "project":
     case "enterprise":
     case "managed":
@@ -141,47 +160,51 @@ function getTransportLabel(config) {
   }
 }
 //@ chunk-fe6rs39h.js:43003-43494 placement
-function mcpToolSummary(e, snapshot, s, diffNamesCap) {
+function mcpToolSummary(serverName, snapshot, diff, diffNamesCap) {
   if (snapshot === "unreadable")
     return {
       tool_count: 0,
       tool_names: [],
       tool_names_truncated: true,
     };
-  let h = Object.hasOwn(snapshot.servers, e) ? snapshot.servers[e] : undefined;
-  let sliced = getMcpPrefix(e).slice(5);
-  let S = uniq(
-    [...(s?.added ?? []), ...(h === undefined || h === "declined" ? [] : Object.keys(h))].map((k) =>
-      k.startsWith(sliced) ? k.slice(sliced.length) : k,
-    ),
+  let serverTools = Object.hasOwn(snapshot.servers, serverName) ? snapshot.servers[serverName] : undefined;
+  let sliced = getMcpPrefix(serverName).slice(5);
+  let toolNames = uniq(
+    [
+      ...(diff?.added ?? []),
+      ...(serverTools === undefined || serverTools === "declined" ? [] : Object.keys(serverTools)),
+    ].map((name) => (name.startsWith(sliced) ? name.slice(sliced.length) : name)),
   );
-  let filtered = S.filter((k) => isCleanText(shortLabel(k)));
-  let R = disambiguateLabels(filtered, shortLabel);
+  let filtered = toolNames.filter((name) => isCleanText(shortLabel(name)));
+  let listable = disambiguateLabels(filtered, shortLabel);
   return {
-    tool_count: S.length,
-    tool_names: R.slice(0, DEVICE_MCP_CONSENT_LIMITS),
+    tool_count: toolNames.length,
+    tool_names: listable.slice(0, DEVICE_MCP_CONSENT_LIMITS),
     tool_names_truncated:
-      R.length > DEVICE_MCP_CONSENT_LIMITS ||
-      filtered.length < S.length ||
-      (s !== undefined && Math.max(s.added.length, s.changed.length) >= diffNamesCap),
+      listable.length > DEVICE_MCP_CONSENT_LIMITS ||
+      filtered.length < toolNames.length ||
+      (diff !== undefined && Math.max(diff.added.length, diff.changed.length) >= diffNamesCap),
   };
 }
 //@ chunk-fe6rs39h.js:43494-43728 placement
-var UNATTENDED_SERVING_CONSENT = withHideWhile({
-  kind: "unattended_serving_consent",
-  payload: DoctorLazy(() =>
-    u({
-      machineName: string(),
-      title: string(),
-      body: string(),
-      detail: string(),
-      terms: string(),
-      version: E().int().nonnegative(),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["accept", "decline", "not_now"])),
-  default: "not_now",
-  hideWhile: [],
+var UNATTENDED_SERVING_CONSENT; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fe6rs39h.js:43494", () => {
+  UNATTENDED_SERVING_CONSENT = withHideWhile({
+    kind: "unattended_serving_consent",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        machineName: stringSchema(),
+        title: stringSchema(),
+        body: stringSchema(),
+        detail: stringSchema(),
+        terms: stringSchema(),
+        version: numberSchema().int().nonnegative(),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["accept", "decline", "not_now"])),
+    default: "not_now",
+    hideWhile: [],
+  });
 });
 //@ chunk-fe6rs39h.js:43728-43903 placement
 function unattendedServingConsentPayload(machineName) {
@@ -195,56 +218,56 @@ function unattendedServingConsentPayload(machineName) {
   };
 }
 //@ chunk-fe6rs39h.js:43903-43951 placement
-function isConsentDialogKind(e) {
-  return e === UNATTENDED_SERVING_CONSENT.kind || e === deviceMcpConsentSpec.kind;
+function isConsentDialogKind(kind) {
+  return kind === UNATTENDED_SERVING_CONSENT.kind || kind === deviceMcpConsentSpec.kind;
 }
 //@ chunk-fe6rs39h.js:43951-44661 placement
 function createHostDialogHandler({ io, declaredKinds, clock }) {
-  return async function (h, y, S) {
-    let w = clock.now();
-    let R = (N) => {
+  return async function (request, payload, context) {
+    let startedAt = clock.now();
+    let logOutcome = (outcome) => {
       logEvent("tengu_remote_headless_client_host_dialog", {
-        dialog_kind: shortHash(h.kind),
-        outcome: fromEnum(N),
-        latency_ms: clock.now() - w,
+        dialog_kind: shortHash(request.kind),
+        outcome: fromEnum(outcome),
+        latency_ms: clock.now() - startedAt,
       });
     };
-    let k = {
-      answer: h.default,
+    let fallback = {
+      answer: request.default,
       answered: false,
     };
-    if (!declaredKinds.has(h.kind)) {
-      R("undeclared");
-      return k;
+    if (!declaredKinds.has(request.kind)) {
+      logOutcome("undeclared");
+      return fallback;
     }
-    let I = h.payload().safeParse(y);
-    if (!I.success) {
-      R("invalid_payload");
-      return k;
+    let parsedPayload = request.payload().safeParse(payload);
+    if (!parsedPayload.success) {
+      logOutcome("invalid_payload");
+      return fallback;
     }
-    let O;
+    let dialogResult;
     try {
-      O = await io.requestUserDialog(h.kind, I.data, {
-        signal: S?.signal,
+      dialogResult = await io.requestUserDialog(request.kind, parsedPayload.data, {
+        signal: context?.signal,
       });
     } catch (error) {
-      logForDebugging(`[headlessCloudClient] host dialog ${h.kind} failed: ${errorMessage(error)}`);
-      O = {
+      logForDebugging(`[headlessCloudClient] host dialog ${request.kind} failed: ${errorMessage(error)}`);
+      dialogResult = {
         behavior: "cancelled",
       };
     }
-    if (O.behavior === "cancelled") {
-      R("cancelled");
-      return k;
+    if (dialogResult.behavior === "cancelled") {
+      logOutcome("cancelled");
+      return fallback;
     }
-    let P = h.result().safeParse(O.result);
-    if (!P.success) {
-      R("invalid_result");
-      return k;
+    let parsedResult = request.result().safeParse(dialogResult.result);
+    if (!parsedResult.success) {
+      logOutcome("invalid_result");
+      return fallback;
     }
-    R("answered");
+    logOutcome("answered");
     return {
-      answer: stripDeclineMessage(P.data),
+      answer: stripDeclineMessage(parsedResult.data),
       answered: true,
     };
   };

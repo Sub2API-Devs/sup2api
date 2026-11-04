@@ -9,7 +9,7 @@
  * attribution: placement 12
  */
 import { MAX_NUDGE_BODY_LINES, normalizeNewlines } from "../utils/effortMediumNudge.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
@@ -19,7 +19,7 @@ import { useGlobalExitKeybindings } from "../keybindings/useKeybinding.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useRefusableAnswer } from "../hooks/useRefusableAnswer.js";
 import { useInputClock } from "../ink/components/Input.js";
-import { y } from "../../vendor/react/cjs/react.production.js";
+import { useState } from "../../vendor/react/cjs/react.production.js";
 import { useRefusalTracker } from "./CustomSelect/selectTypeahead.js";
 import { isWithinRecentInput } from "../hooks/useRecentInputGuard.js";
 import { renderModelName } from "../utils/model/modelDisplay.js";
@@ -42,6 +42,7 @@ import {
   stripTrailingEllipsis,
   labelOr,
 } from "../utils/permissions/approvalPayloadSerialization.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1101734-1101913 placement = formatPrice (1)
 /**
@@ -49,43 +50,57 @@ import {
  */
 function formatCostMultiplier(price) {
   if (price < 0.1) return `~${Math.max(0.01, Math.round(price * 100) / 100).toFixed(2)}x`;
-  let x = Math.round(price * 10) / 10;
-  return Number.isInteger(x) ? `~${x.toFixed(0)}x` : `~${x.toFixed(1)}x`;
+  let roundedPrice = Math.round(price * 10) / 10;
+  return Number.isInteger(roundedPrice) ? `~${roundedPrice.toFixed(0)}x` : `~${roundedPrice.toFixed(1)}x`;
 }
 //@ chunk-18hwfzwa.js:1101913-1101946 placement
 function getDialogOpenedAtMs() {
   return Date.now();
 }
 //@ chunk-18hwfzwa.js:1101946-1102085 placement
-var EFFORT_BODY_MAX_LINES = MAX_NUDGE_BODY_LINES + 1;
-var EFFORT_DIALOG_PADDING = 6;
-var EFFORT_DIALOG_GAP = 2;
-var EFFORT_DIALOG_INSET = EFFORT_DIALOG_PADDING + 4;
-var EFFORT_OPTION_MAX_LINES = 2;
-var EFFORT_SWITCH_TITLE = "Switch your default effort to {to}?";
-var EFFORT_SWITCH_YES_LABEL = "Yes, use {to} effort by default";
-var EFFORT_SWITCH_NO_LABEL = "No, keep {from}";
+var EFFORT_BODY_MAX_LINES; // deferred: uses MAX_NUDGE_BODY_CHARS (../utils/effortMediumNudge.js) of its import cycle while loading; runs once the cycle is complete
+var EFFORT_DIALOG_PADDING;
+var EFFORT_DIALOG_GAP;
+var EFFORT_DIALOG_INSET;
+var EFFORT_OPTION_MAX_LINES;
+var EFFORT_SWITCH_TITLE;
+var EFFORT_SWITCH_YES_LABEL;
+var EFFORT_SWITCH_NO_LABEL;
+deferInit("chunk-18hwfzwa.js:1101946", () => {
+  EFFORT_BODY_MAX_LINES = MAX_NUDGE_BODY_LINES + 1;
+  EFFORT_DIALOG_PADDING = 6;
+  EFFORT_DIALOG_GAP = 2;
+  EFFORT_DIALOG_INSET = EFFORT_DIALOG_PADDING + 4;
+  EFFORT_OPTION_MAX_LINES = 2;
+  EFFORT_SWITCH_TITLE = "Switch your default effort to {to}?";
+  EFFORT_SWITCH_YES_LABEL = "Yes, use {to} effort by default";
+  EFFORT_SWITCH_NO_LABEL = "No, keep {from}";
+});
 //@ chunk-18hwfzwa.js:1102085-1105698 placement
 /**
  * EffortMediumNudgeDialog：建议把 effort 调到 medium 的对话框。
  */
 function EffortMediumNudgeDialog(props) {
-  let $ = w(75);
+  let $ = useMemoCache(75);
   let { model, copy, onDone } = props;
-  let ke = useIsScreenReaderEnabled() ? "screen_reader" : copy.cancelFirst ? "cancel_first" : "confirm_first";
-  let Be;
+  let optionOrder = useIsScreenReaderEnabled()
+    ? "screen_reader"
+    : copy.cancelFirst
+      ? "cancel_first"
+      : "confirm_first";
+  let impressionCached;
   if (
     $[0] !== copy.cohort ||
     $[1] !== copy.fromLevel ||
     $[2] !== copy.modelKey ||
     $[3] !== copy.showWarning ||
     $[4] !== copy.toLevel ||
-    $[5] !== ke
+    $[5] !== optionOrder
   ) {
-    Be = () => {
+    impressionCached = () => {
       logEvent("tengu_effort_medium_nudge_shown", {
         cohort: fromEnum(copy.cohort),
-        option_order: fromEnum(ke),
+        option_order: fromEnum(optionOrder),
         nudge_model: telemetrySafeModelName(copy.modelKey),
         from_level: fromEnum(copy.fromLevel),
         to_level: fromEnum(copy.toLevel),
@@ -97,53 +112,53 @@ function EffortMediumNudgeDialog(props) {
     $[2] = copy.modelKey;
     $[3] = copy.showWarning;
     $[4] = copy.toLevel;
-    $[5] = ke;
-    $[6] = Be;
-  } else Be = $[6];
-  useOnFirstReveal("impression", Be);
+    $[5] = optionOrder;
+    $[6] = impressionCached;
+  } else impressionCached = $[6];
+  useOnFirstReveal("impression", impressionCached);
   useGlobalExitKeybindings();
   let { columns } = useTerminalSize();
-  let We;
-  if ($[7] !== onDone || $[8] !== ke) {
-    We = (ze) => onDone(ze, ke);
+  let answerCached;
+  if ($[7] !== onDone || $[8] !== optionOrder) {
+    answerCached = (selectedValue) => onDone(selectedValue, optionOrder);
     $[7] = onDone;
-    $[8] = ke;
-    $[9] = We;
-  } else We = $[9];
-  let refusableAnswer = useRefusableAnswer(We);
+    $[8] = optionOrder;
+    $[9] = answerCached;
+  } else answerCached = $[9];
+  let refusableAnswer = useRefusableAnswer(answerCached);
   let inputClock = useInputClock();
-  let [kt] = y(getDialogOpenedAtMs);
+  let [openedAt] = useState(getDialogOpenedAtMs);
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let Ot;
-  if ($[10] !== inputClock || $[11] !== kt || $[12] !== noteRefused || $[13] !== refusedWithin) {
-    Ot = () => {
-      if (isWithinRecentInput(inputClock, kt) || refusedWithin()) {
+  let refuseInputCached;
+  if ($[10] !== inputClock || $[11] !== openedAt || $[12] !== noteRefused || $[13] !== refusedWithin) {
+    refuseInputCached = () => {
+      if (isWithinRecentInput(inputClock, openedAt) || refusedWithin()) {
         noteRefused();
         return true;
       }
       return false;
     };
     $[10] = inputClock;
-    $[11] = kt;
+    $[11] = openedAt;
     $[12] = noteRefused;
     $[13] = refusedWithin;
-    $[14] = Ot;
-  } else Ot = $[14];
-  let Et = Ot;
-  let Dt;
-  if ($[15] !== Et || $[16] !== refusableAnswer) {
-    Dt = function oo(Lt) {
-      if (Et()) {
-        refusableAnswer.refuse(Lt);
+    $[14] = refuseInputCached;
+  } else refuseInputCached = $[14];
+  let refuseInput = refuseInputCached;
+  let answerHandlerCached;
+  if ($[15] !== refuseInput || $[16] !== refusableAnswer) {
+    answerHandlerCached = function handleAnswer(value) {
+      if (refuseInput()) {
+        refusableAnswer.refuse(value);
         return;
       }
-      refusableAnswer.answer(Lt);
+      refusableAnswer.answer(value);
     };
-    $[15] = Et;
+    $[15] = refuseInput;
     $[16] = refusableAnswer;
-    $[17] = Dt;
-  } else Dt = $[17];
-  let oo = Dt;
+    $[17] = answerHandlerCached;
+  } else answerHandlerCached = $[17];
+  let answer = answerHandlerCached;
   let focus =
     refusableAnswer.refused !== null
       ? refusableAnswer.refused === "decline"
@@ -152,10 +167,10 @@ function EffortMediumNudgeDialog(props) {
       : copy.cancelFirst === true
         ? "cancel"
         : "confirm";
-  let io;
-  let so;
-  let po;
-  let ao;
+  let TextComponent;
+  let BodyBox;
+  let DialogBox;
+  let DialogComponent;
   let cancelLabel;
   let confirmLabel;
   let title;
@@ -164,7 +179,7 @@ function EffortMediumNudgeDialog(props) {
   let flexDirection;
   let paddingX;
   let paddingY;
-  let mn;
+  let warningText;
   if (
     $[18] !== columns ||
     $[19] !== copy.body ||
@@ -177,41 +192,48 @@ function EffortMediumNudgeDialog(props) {
     $[26] !== copy.warningText ||
     $[27] !== model
   ) {
-    let Cn = renderModelName(model);
-    let vo = (body) =>
+    let modelName = renderModelName(model);
+    let fillTemplate = (body) =>
       sanitizeNudgeText(
-        body.replaceAll("{model}", Cn).replaceAll("{from}", copy.fromLevel).replaceAll("{to}", copy.toLevel),
+        body
+          .replaceAll("{model}", modelName)
+          .replaceAll("{from}", copy.fromLevel)
+          .replaceAll("{to}", copy.toLevel),
       );
-    let Yo = clampToTwoLines(vo(copy.title ?? EFFORT_SWITCH_TITLE), columns, EFFORT_DIALOG_GAP);
-    let kn = vo(copy.body);
+    let titleText = clampToTwoLines(
+      fillTemplate(copy.title ?? EFFORT_SWITCH_TITLE),
+      columns,
+      EFFORT_DIALOG_GAP,
+    );
+    let bodyText = fillTemplate(copy.body);
     confirmLabel = clampToTwoLines(
-      vo(copy.confirmLabel ?? EFFORT_SWITCH_YES_LABEL),
+      fillTemplate(copy.confirmLabel ?? EFFORT_SWITCH_YES_LABEL),
       columns,
       EFFORT_DIALOG_INSET,
     );
     cancelLabel = clampToTwoLines(
-      vo(copy.cancelLabel ?? EFFORT_SWITCH_NO_LABEL),
+      fillTemplate(copy.cancelLabel ?? EFFORT_SWITCH_NO_LABEL),
       columns,
       EFFORT_DIALOG_INSET,
     );
-    mn =
+    warningText =
       copy.showWarning === true
         ? clampToTwoLines(
-            vo(copy.warningText ?? effortCostDescription(model, copy.fromLevel)),
+            fillTemplate(copy.warningText ?? effortCostDescription(model, copy.fromLevel)),
             columns,
             EFFORT_DIALOG_PADDING,
           )
         : undefined;
-    ao = PermissionDialog_2;
-    title = Yo;
-    po = Box;
+    DialogComponent = PermissionDialog_2;
+    title = titleText;
+    DialogBox = Box;
     flexDirection = "column";
     paddingX = 2;
     paddingY = 1;
-    so = Box;
+    BodyBox = Box;
     marginBottom = 1;
-    io = Text;
-    children = clampEffortBody(kn, columns);
+    TextComponent = Text;
+    children = clampEffortBody(bodyText, columns);
     $[18] = columns;
     $[19] = copy.body;
     $[20] = copy.cancelLabel;
@@ -222,10 +244,10 @@ function EffortMediumNudgeDialog(props) {
     $[25] = copy.toLevel;
     $[26] = copy.warningText;
     $[27] = model;
-    $[28] = io;
-    $[29] = so;
-    $[30] = po;
-    $[31] = ao;
+    $[28] = TextComponent;
+    $[29] = BodyBox;
+    $[30] = DialogBox;
+    $[31] = DialogComponent;
     $[32] = cancelLabel;
     $[33] = confirmLabel;
     $[34] = title;
@@ -234,12 +256,12 @@ function EffortMediumNudgeDialog(props) {
     $[37] = flexDirection;
     $[38] = paddingX;
     $[39] = paddingY;
-    $[40] = mn;
+    $[40] = warningText;
   } else {
-    io = $[28];
-    so = $[29];
-    po = $[30];
-    ao = $[31];
+    TextComponent = $[28];
+    BodyBox = $[29];
+    DialogBox = $[30];
+    DialogComponent = $[31];
     cancelLabel = $[32];
     confirmLabel = $[33];
     title = $[34];
@@ -248,77 +270,77 @@ function EffortMediumNudgeDialog(props) {
     flexDirection = $[37];
     paddingX = $[38];
     paddingY = $[39];
-    mn = $[40];
+    warningText = $[40];
   }
   let children_2;
-  if ($[41] !== io || $[42] !== children) {
-    children_2 = jsxProd_default(io, {
+  if ($[41] !== TextComponent || $[42] !== children) {
+    children_2 = jsxProd_default(TextComponent, {
       children,
     });
-    $[41] = io;
+    $[41] = TextComponent;
     $[42] = children;
     $[43] = children_2;
   } else children_2 = $[43];
-  let bn;
-  if ($[44] !== so || $[45] !== children_2 || $[46] !== marginBottom) {
-    bn = jsxProd_default(so, {
+  let bodyElement;
+  if ($[44] !== BodyBox || $[45] !== children_2 || $[46] !== marginBottom) {
+    bodyElement = jsxProd_default(BodyBox, {
       marginBottom,
       children: children_2,
     });
-    $[44] = so;
+    $[44] = BodyBox;
     $[45] = children_2;
     $[46] = marginBottom;
-    $[47] = bn;
-  } else bn = $[47];
-  let Go;
-  if ($[48] !== mn) {
-    Go =
-      mn !== undefined &&
+    $[47] = bodyElement;
+  } else bodyElement = $[47];
+  let warningElement;
+  if ($[48] !== warningText) {
+    warningElement =
+      warningText !== undefined &&
       jsxProd_default(Box, {
         marginBottom: 1,
         children: jsxProd_default(Text, {
           color: "warning",
-          children: mn,
+          children: warningText,
         }),
       });
-    $[48] = mn;
-    $[49] = Go;
-  } else Go = $[49];
+    $[48] = warningText;
+    $[49] = warningElement;
+  } else warningElement = $[49];
   const cancelFirst = copy.cancelFirst === true;
   let onConfirm;
   let onCancel;
-  if ($[50] !== oo) {
-    onConfirm = () => oo("accept");
-    onCancel = () => oo("decline");
-    $[50] = oo;
+  if ($[50] !== answer) {
+    onConfirm = () => answer("accept");
+    onCancel = () => answer("decline");
+    $[50] = answer;
     $[51] = onConfirm;
     $[52] = onCancel;
   } else {
     onConfirm = $[51];
     onCancel = $[52];
   }
-  let Sn;
+  let confirmElement;
   if (
     $[53] !== cancelLabel ||
     $[54] !== confirmLabel ||
     $[55] !== focus ||
-    $[56] !== kt ||
-    $[57] !== Et ||
+    $[56] !== openedAt ||
+    $[57] !== refuseInput ||
     $[58] !== refusableAnswer.attempts ||
     $[59] !== cancelFirst ||
     $[60] !== onConfirm ||
     $[61] !== onCancel
   ) {
-    Sn = jsxProd_default(
+    confirmElement = jsxProd_default(
       ConfirmSelect,
       {
-        openedAt: kt,
+        openedAt,
         confirmLabel,
         cancelLabel,
         cancelFirst,
         focus,
         hideIndexes: true,
-        refuseInput: Et,
+        refuseInput,
         onConfirm,
         onCancel,
       },
@@ -327,51 +349,51 @@ function EffortMediumNudgeDialog(props) {
     $[53] = cancelLabel;
     $[54] = confirmLabel;
     $[55] = focus;
-    $[56] = kt;
-    $[57] = Et;
+    $[56] = openedAt;
+    $[57] = refuseInput;
     $[58] = refusableAnswer.attempts;
     $[59] = cancelFirst;
     $[60] = onConfirm;
     $[61] = onCancel;
-    $[62] = Sn;
-  } else Sn = $[62];
+    $[62] = confirmElement;
+  } else confirmElement = $[62];
   let children_3;
   if (
-    $[63] !== po ||
-    $[64] !== bn ||
-    $[65] !== Go ||
-    $[66] !== Sn ||
+    $[63] !== DialogBox ||
+    $[64] !== bodyElement ||
+    $[65] !== warningElement ||
+    $[66] !== confirmElement ||
     $[67] !== flexDirection ||
     $[68] !== paddingX ||
     $[69] !== paddingY
   ) {
-    children_3 = jsxProd_default_2(po, {
+    children_3 = jsxProd_default_2(DialogBox, {
       flexDirection,
       paddingX,
       paddingY,
-      children: [bn, Go, Sn],
+      children: [bodyElement, warningElement, confirmElement],
     });
-    $[63] = po;
-    $[64] = bn;
-    $[65] = Go;
-    $[66] = Sn;
+    $[63] = DialogBox;
+    $[64] = bodyElement;
+    $[65] = warningElement;
+    $[66] = confirmElement;
     $[67] = flexDirection;
     $[68] = paddingX;
     $[69] = paddingY;
     $[70] = children_3;
   } else children_3 = $[70];
-  let on;
-  if ($[71] !== ao || $[72] !== title || $[73] !== children_3) {
-    on = jsxProd_default(ao, {
+  let dialogElement;
+  if ($[71] !== DialogComponent || $[72] !== title || $[73] !== children_3) {
+    dialogElement = jsxProd_default(DialogComponent, {
       title,
       children: children_3,
     });
-    $[71] = ao;
+    $[71] = DialogComponent;
     $[72] = title;
     $[73] = children_3;
-    $[74] = on;
-  } else on = $[74];
-  return on;
+    $[74] = dialogElement;
+  } else dialogElement = $[74];
+  return dialogElement;
 }
 //@ chunk-18hwfzwa.js:1105698-1105926 placement
 function effortCostDescription(model, effort) {
@@ -383,34 +405,34 @@ function effortCostDescription(model, effort) {
   return `{from} effort is ${formatCostMultiplier(price)} the estimated cost of ${defaultEffortLevel} (the default).`;
 }
 //@ chunk-18hwfzwa.js:1105926-1106120 placement
-function clampEffortBody(h, columns) {
-  let D = subtractInsetWidth(columns, EFFORT_DIALOG_PADDING);
-  let lines = wrapText(h, D, "wrap").split(`
+function clampEffortBody(body, columns) {
+  let width = subtractInsetWidth(columns, EFFORT_DIALOG_PADDING);
+  let lines = wrapText(body, width, "wrap").split(`
 `);
-  if (lines.length <= EFFORT_BODY_MAX_LINES) return h;
-  let ee = lines.length - (EFFORT_BODY_MAX_LINES - 1);
-  let ke = truncateToWidth(`\u2026 (+${ee} more lines)`, D);
+  if (lines.length <= EFFORT_BODY_MAX_LINES) return body;
+  let overflowCount = lines.length - (EFFORT_BODY_MAX_LINES - 1);
+  let overflowLine = truncateToWidth(`\u2026 (+${overflowCount} more lines)`, width);
   return `${lines.slice(0, EFFORT_BODY_MAX_LINES - 1).join(`
 `)}
-${ke}`;
+${overflowLine}`;
 }
 //@ chunk-18hwfzwa.js:1106120-1106154 placement
-function sanitizeNudgeText(h) {
-  return stripNonPrintable(normalizeNewlines(h));
+function sanitizeNudgeText(text) {
+  return stripNonPrintable(normalizeNewlines(text));
 }
 //@ chunk-18hwfzwa.js:1106154-1106195 placement
-function subtractInsetWidth(h, x) {
-  return Math.max(1, h - x);
+function subtractInsetWidth(columns, inset) {
+  return Math.max(1, columns - inset);
 }
 //@ chunk-18hwfzwa.js:1106195-1106379 placement
-function clampToTwoLines(h, columns, D) {
-  let L = subtractInsetWidth(columns, D);
-  let lines = wrapText(h, L, "wrap").split(`
+function clampToTwoLines(text, columns, inset) {
+  let width = subtractInsetWidth(columns, inset);
+  let lines = wrapText(text, width, "wrap").split(`
 `);
-  if (lines.length <= EFFORT_OPTION_MAX_LINES) return h;
+  if (lines.length <= EFFORT_OPTION_MAX_LINES) return text;
   let sliced = lines.slice(0, EFFORT_OPTION_MAX_LINES);
   sliced[EFFORT_OPTION_MAX_LINES - 1] =
-    `${truncateToWidthNoEllipsis(sliced[EFFORT_OPTION_MAX_LINES - 1] ?? "", Math.max(0, L - 1))}\u2026`;
+    `${truncateToWidthNoEllipsis(sliced[EFFORT_OPTION_MAX_LINES - 1] ?? "", Math.max(0, width - 1))}\u2026`;
   return sliced.join(`
 `);
 }
@@ -418,16 +440,16 @@ function clampToTwoLines(h, columns, D) {
 var LABEL_MAX_WIDTH = 160;
 var LABEL_MAX_LENGTH = 1024;
 //@ chunk-18hwfzwa.js:1106400-1106603 placement
-function sanitizeOneLineLabel(h) {
-  let x = truncateToLength(h, LABEL_MAX_LENGTH);
-  let D = renderableText(x.replace(/[\r\n\t ]+/g, " "));
-  if (!isCleanText(D)) return "";
-  let L = stripTrailingEllipsis(D.replace(/\s+/g, " ").trim()).trimEnd();
-  if (!isCleanText(L)) return "";
-  return truncateToWidth(x.length < h.length ? `${L}\u2026` : L, LABEL_MAX_WIDTH);
+function sanitizeOneLineLabel(text) {
+  let truncatedText = truncateToLength(text, LABEL_MAX_LENGTH);
+  let flat = renderableText(truncatedText.replace(/[\r\n\t ]+/g, " "));
+  if (!isCleanText(flat)) return "";
+  let cleaned = stripTrailingEllipsis(flat.replace(/\s+/g, " ").trim()).trimEnd();
+  if (!isCleanText(cleaned)) return "";
+  return truncateToWidth(truncatedText.length < text.length ? `${cleaned}\u2026` : cleaned, LABEL_MAX_WIDTH);
 }
 //@ chunk-18hwfzwa.js:1106603-1106798 placement
-function LabelValueRow(Cn) {
+function LabelValueRow(props) {
   return jsxProd_default_2(
     Box,
     {
@@ -436,16 +458,16 @@ function LabelValueRow(Cn) {
           flexShrink: 0,
           children: jsxProd_default(Text, {
             dimColor: true,
-            children: Cn.label,
+            children: props.label,
           }),
         }),
         jsxProd_default_2(Text, {
           wrap: "truncate-end",
-          children: [" ", labelOr(Cn.value, Cn.fallback), Cn.suffix],
+          children: [" ", labelOr(props.value, props.fallback), props.suffix],
         }),
       ],
     },
-    Cn.label,
+    props.label,
   );
 }
 export { sanitizeOneLineLabel, LabelValueRow, EffortMediumNudgeDialog, formatCostMultiplier };

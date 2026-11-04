@@ -5,10 +5,10 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:15734-17076 cjs-fingerprint
-var require_lodash_once = x(function (cjsExports, cjsModule) {
+var require_lodash_once = __commonJS(function (cjsExports, cjsModule) {
   var FUNC_ERROR_TEXT = "Expected a function";
   var INFINITY = 1 / 0;
   var MAX_INTEGER = 179769313486231570000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000;

@@ -10,7 +10,7 @@
  */
 import { randomBytes } from "crypto";
 import { renderCallbackPage, brokenLinkSvg, checkmarkSvg } from "../oauth/callbackPage.js";
-import { xHe } from "../../../vendor/es-toolkit/dist/string/escape.mjs";
+import { escapeHtml } from "../../../vendor/es-toolkit/dist/string/escape.mjs";
 
 //@ chunk-1ny7cxrt.js:1330688-1332239 placement
 /**
@@ -38,20 +38,20 @@ var CLAUDE_ASCII_LOGO = ` \u2590\u259B\u2588\u2588\u2588\u259B\u2588
 /**
  * 渲染网关 HTML 页面（CSP、可选关闭标签脚本 nonce、禁止缓存）。
  */
-function htmlPageResponse(e, t) {
-  let n = t?.closeTab ? randomBytes(16).toString("base64url") : undefined;
-  let o = t?.formAction ? `'self' ${t.formAction}` : "'self'";
+function htmlPageResponse(body, options) {
+  let nonce = options?.closeTab ? randomBytes(16).toString("base64url") : undefined;
+  let formActionSource = options?.formAction ? `'self' ${options.formAction}` : "'self'";
   return new Response(
-    renderCallbackPage(e, {
+    renderCallbackPage(body, {
       css: DEVICE_PAGE_CSS,
-      closeTab: n !== undefined && {
-        nonce: n,
+      closeTab: nonce !== undefined && {
+        nonce,
       },
     }),
     {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
-        "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; font-src data:; ${n ? `script-src 'nonce-${n}'; ` : ""}frame-ancestors 'none'; form-action ${o}; base-uri 'none'`,
+        "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; font-src data:; ${nonce ? `script-src 'nonce-${nonce}'; ` : ""}frame-ancestors 'none'; form-action ${formActionSource}; base-uri 'none'`,
         "Cache-Control": "no-store",
         Pragma: "no-cache",
       },
@@ -62,9 +62,12 @@ function htmlPageResponse(e, t) {
 /**
  * 网关首页：版本、身份提供方与连接说明。
  */
-function gatewayIndexPage(e, t, n) {
-  let o = xHe(e);
-  let r = t === null ? "(none \u2014 customer-routed inference only)" : xHe(new URL(t).hostname);
+function gatewayIndexPage(baseUrl, issuerUrl, version) {
+  let baseUrlText = escapeHtml(baseUrl);
+  let issuerHost =
+    issuerUrl === null
+      ? "(none \u2014 customer-routed inference only)"
+      : escapeHtml(new URL(issuerUrl).hostname);
   return new Response(
     `<!doctype html>
 <html>
@@ -77,15 +80,15 @@ function gatewayIndexPage(e, t, n) {
 <pre style="margin: 0;">
 <b>Claude gateway for Amazon Bedrock, Google Cloud, and Microsoft Foundry</b>
 
-Running at ${o}
+Running at ${baseUrlText}
 
 To connect from Claude Code:
   Your admin provisions this gateway URL via managed settings
   (forceLoginGatewayUrl) \u2014 then /login connects here directly.
 
-Identity provider   ${r}
+Identity provider   ${issuerHost}
 Discovery           <a href="/.well-known/oauth-authorization-server">/.well-known/oauth-authorization-server</a>
-Version             ${xHe(n)}
+Version             ${escapeHtml(version)}
 </pre>
 </body>
 </html>`,
@@ -103,19 +106,19 @@ Version             ${xHe(n)}
 /**
  * 设备码页面：预填时确认/拒绝，否则输入码。
  */
-function deviceCodePage(e) {
-  let { prefill, error, idpOrigin } = e;
-  let r = error ? `<p class="refused" id="e" role="alert">${xHe(error)}</p>` : "";
+function deviceCodePage(options) {
+  let { prefill, error, idpOrigin } = options;
+  let errorHtml = error ? `<p class="refused" id="e" role="alert">${escapeHtml(error)}</p>` : "";
   if (prefill)
     return htmlPageResponse(
       `<h1>Approve sign-in?</h1>
 <p class="sub">A device is requesting access to Claude Code. <strong>Only continue if this code matches the one shown on your device.</strong> If you didn't start this, select Deny.</p>
 <form method="post" action="/device">
-  <div class="code-display">${xHe(prefill)}</div>
-  <input type="hidden" name="user_code" value="${xHe(prefill)}">
+  <div class="code-display">${escapeHtml(prefill)}</div>
+  <input type="hidden" name="user_code" value="${escapeHtml(prefill)}">
   <button class="go" type="submit">This matches my device \u2014 continue</button>
   <button class="deny" type="submit" formaction="/device/deny">Deny</button>
-${r}</form>`,
+${errorHtml}</form>`,
       {
         formAction: idpOrigin,
       },
@@ -126,7 +129,7 @@ ${r}</form>`,
 <form method="post" action="/device">
   <input class="code-input" name="user_code" aria-labelledby="h"${error ? ' aria-describedby="e"' : ""} inputmode="latin" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="XXXX-XXXX" maxlength="9" autofocus required>
   <button class="go" type="submit">Continue</button>
-${r}</form>`,
+${errorHtml}</form>`,
     {
       formAction: idpOrigin,
     },
@@ -136,8 +139,8 @@ ${r}</form>`,
 /**
  * 拒绝登录后的页面（或未在等待批准）。
  */
-function deviceDeniedPage(e) {
-  if (!e)
+function deviceDeniedPage(denied) {
+  if (!denied)
     return htmlPageResponse(`<h1>This sign-in isn&rsquo;t waiting for approval.</h1>
 <p class="sub">It may have expired, or already been approved or stopped. If you approved a sign-in you didn&rsquo;t start, tell your IT administrator now.</p>`);
   return htmlPageResponse(`${brokenLinkSvg()}
@@ -148,12 +151,12 @@ function deviceDeniedPage(e) {
 /**
  * 登录完成或失败页面。
  */
-function signInResultPage(e) {
-  if (e)
+function signInResultPage(errorMessage) {
+  if (errorMessage)
     return htmlPageResponse(`${brokenLinkSvg()}
 <h1>We couldn&rsquo;t finish signing you in.</h1>
 <p class="sub">Close this tab and try signing in again. If the error persists, share the message below with your IT administrator.</p>
-<div class="detail">${xHe(e)}</div>`);
+<div class="detail">${escapeHtml(errorMessage)}</div>`);
   return htmlPageResponse(
     `${checkmarkSvg()}
 <h1>You&rsquo;re signed in.</h1>

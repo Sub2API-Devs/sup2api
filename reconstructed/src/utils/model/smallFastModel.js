@@ -88,10 +88,10 @@ function isDefaultOpusModelAdminSteered() {
  */
 function isSonnetOnlySteering() {
   let adminSteering = getAdminSteering();
-  let n =
+  let enforced =
     getModelEnforcementState().state !== "inactive" ||
     getSettings_DEPRECATED()?.enforceAvailableModels === true;
-  return adminSteering.sonnet && !adminSteering.opus && !n;
+  return adminSteering.sonnet && !adminSteering.opus && !enforced;
 }
 //@ chunk-aepeg2w5.js:427251-427399 placement
 function hasDedicatedSmallFastModel() {
@@ -155,89 +155,94 @@ function getHostedDefaultSmallFastModel() {
     !areBuiltinModelsKnownHosted()
   )
     return;
-  let defaultHaikuModel = getDefaultHaikuModel();
-  return getSmallFastModel() === defaultHaikuModel &&
-    !isModelOverrideTarget(defaultHaikuModel) &&
-    toProviderWireModelId(defaultHaikuModel) === stripAnyVersatileSuffix(defaultHaikuModel)
-    ? defaultHaikuModel
+  let model = getDefaultHaikuModel();
+  return getSmallFastModel() === model &&
+    !isModelOverrideTarget(model) &&
+    toProviderWireModelId(model) === stripAnyVersatileSuffix(model)
+    ? model
     : undefined;
 }
 //@ chunk-aepeg2w5.js:428079-428114 placement
-function mainLoopIfDenied(e) {
-  return isModelDeniedByManagedSafe(e) ? getMainLoopModel() : e;
+function mainLoopIfDenied(model) {
+  return isModelDeniedByManagedSafe(model) ? getMainLoopModel() : model;
 }
 //@ chunk-aepeg2w5.js:428114-428226 placement
-function unlessManagedDeniedModel(e) {
-  if (!isModelDeniedByManagedSafe(e)) return e;
+function unlessManagedDeniedModel(model) {
+  if (!isModelDeniedByManagedSafe(model)) return model;
   let mainLoopModel = getMainLoopModel();
-  logForDebugging(`[deniedModels] helper request for ${e} sent as ${mainLoopModel}`);
+  logForDebugging(`[deniedModels] helper request for ${model} sent as ${mainLoopModel}`);
   return mainLoopModel;
 }
 //@ chunk-aepeg2w5.js:428226-428339 placement
-function resolveSmallFastModel(e) {
-  let modelId = parseModelId(e);
-  if (modelId?.family === "haiku" && modelId.trailer === undefined && hasProviderModelPrefix(e, modelId))
-    return mainLoopIfDenied(e);
-  return isBlockedByManagedModelPolicySafe(e) ? getMainLoopModel() : e;
+function resolveSmallFastModel(model) {
+  let modelId = parseModelId(model);
+  if (modelId?.family === "haiku" && modelId.trailer === undefined && hasProviderModelPrefix(model, modelId))
+    return mainLoopIfDenied(model);
+  return isBlockedByManagedModelPolicySafe(model) ? getMainLoopModel() : model;
 }
 //@ chunk-aepeg2w5.js:428339-428381 placement
-function catalogFamilyIs(e, n) {
-  return getCatalogEntry(e)?.family === n;
+function catalogFamilyIs(model, family) {
+  return getCatalogEntry(model)?.family === family;
 }
 //@ chunk-aepeg2w5.js:428381-428418 placement
-function isNonCustomFableModel(e) {
-  return catalogFamilyIs(e, "fable");
+function isNonCustomFableModel(model) {
+  return catalogFamilyIs(model, "fable");
 }
 //@ chunk-aepeg2w5.js:428418-428456 placement
-function isNonCustomMythosModel(e) {
-  return catalogFamilyIs(e, "mythos");
+function isNonCustomMythosModel(model) {
+  return catalogFamilyIs(model, "mythos");
 }
 //@ chunk-aepeg2w5.js:428456-428508 placement
-function swapShrinksContextWindow(e, n) {
+function swapShrinksContextWindow(fromModel, toModel) {
   let sdkBetas = getSdkBetas();
-  return getContextWindow(n, sdkBetas) < getContextWindow(e, sdkBetas);
+  return getContextWindow(toModel, sdkBetas) < getContextWindow(fromModel, sdkBetas);
 }
 //@ chunk-aepeg2w5.js:428508-428521 placement
 var CONTEXT_SWAP_SLACK = 20000;
 //@ chunk-aepeg2w5.js:428521-428576 placement
-function ladderStepLosesContext(e, n, r) {
-  return swapShrinksContextWindow(e, n) && r() > getContextWindow(n, getSdkBetas()) - CONTEXT_SWAP_SLACK;
+function ladderStepLosesContext(fromModel, toModel, currentContextSize) {
+  return (
+    swapShrinksContextWindow(fromModel, toModel) &&
+    currentContextSize() > getContextWindow(toModel, getSdkBetas()) - CONTEXT_SWAP_SLACK
+  );
 }
 //@ chunk-aepeg2w5.js:428576-428759 placement
-function ladderRungsToSend(e) {
+function ladderRungsToSend(model) {
   let sdkBetas = getSdkBetas();
-  let contextWindow = getContextWindow(e, sdkBetas);
-  let filtered = getUnrefusedFallbacks(e).filter((S) => isModelAllowed(S));
-  let h = [];
-  let y = 0;
+  let contextWindow = getContextWindow(model, sdkBetas);
+  let filtered = getUnrefusedFallbacks(model).filter((candidate) => isModelAllowed(candidate));
+  let kept = [];
+  let bestBelow = 0;
   for (let j = filtered.length - 1; j >= 0; j--) {
     let contextWindow_2 = getContextWindow(filtered[j], sdkBetas);
-    if (contextWindow_2 >= contextWindow || contextWindow_2 >= y) h.push(filtered[j]);
-    y = Math.max(y, contextWindow_2);
+    if (contextWindow_2 >= contextWindow || contextWindow_2 >= bestBelow) kept.push(filtered[j]);
+    bestBelow = Math.max(bestBelow, contextWindow_2);
   }
-  return h.reverse();
+  return kept.reverse();
 }
 //@ chunk-aepeg2w5.js:428759-428805 placement
 function largestSessionContextTokens() {
   return Math.max(getLastMainThreadContextTokens() ?? 0, maxConversationSize());
 }
 //@ chunk-aepeg2w5.js:428805-429009 placement
-function preserve1mContextForRefusalFallback(e, n) {
+function preserve1mContextForRefusalFallback(fromModel, toModel) {
   let sdkBetas = getSdkBetas();
-  let contextWindow = getContextWindow(e, sdkBetas);
-  if (getContextWindow(n, sdkBetas) >= contextWindow) {
-    if (has1mSuffix_2(n)) {
-      if (!has1mSuffix_2(e)) {
-        let y = strip1mTag(n);
-        return getContextWindow(y, sdkBetas) >= contextWindow ? y : undefined;
+  let contextWindow = getContextWindow(fromModel, sdkBetas);
+  if (getContextWindow(toModel, sdkBetas) >= contextWindow) {
+    if (has1mSuffix_2(toModel)) {
+      if (!has1mSuffix_2(fromModel)) {
+        let stripped = strip1mTag(toModel);
+        return getContextWindow(stripped, sdkBetas) >= contextWindow ? stripped : undefined;
       }
-      if (isKnownNon1mTarget(n)) return;
+      if (isKnownNon1mTarget(toModel)) return;
     }
-    return n;
+    return toModel;
   }
-  if (!has1mSuffix_2(e)) return;
-  let h = append1mSuffixIfMissing(n);
-  return eligible1mSuffixTarget(h) && getContextWindow(h, sdkBetas) >= contextWindow ? h : undefined;
+  if (!has1mSuffix_2(fromModel)) return;
+  let with1m = append1mSuffixIfMissing(toModel);
+  return eligible1mSuffixTarget(with1m) && getContextWindow(with1m, sdkBetas) >= contextWindow
+    ? with1m
+    : undefined;
 }
 //@ chunk-aepeg2w5.js:429009-429045 placement
 function isNonCustomOpusModel(canonicalName) {
@@ -249,8 +254,8 @@ function isNonCustomSonnetModel(canonicalName) {
 }
 //@ chunk-aepeg2w5.js:429083-429160 placement
 function getUserSpecifiedModelSetting() {
-  let mainLoopModelOverride = getMainLoopModelOverride();
-  if (mainLoopModelOverride !== undefined) return vetUserSpecifiedModel(mainLoopModelOverride, "explicit");
+  let model = getMainLoopModelOverride();
+  if (model !== undefined) return vetUserSpecifiedModel(model, "explicit");
   return getBaselineModelSetting();
 }
 //@ chunk-aepeg2w5.js:429160-429302 placement = getUserSpecifiedModelSetting (0.36)
@@ -260,22 +265,22 @@ function getUserSpecifiedModelSetting() {
 function getBaselineModelSetting() {
   let modelOverride = getInitialMainLoopModel();
   let envAnthropicModel = process.env.ANTHROPIC_MODEL;
-  let r =
+  let setting =
     modelOverride !== undefined
       ? modelOverride
       : envAnthropicModel || getSettings_DEPRECATED()?.model || undefined;
-  return vetUserSpecifiedModel(r, modelOverride !== undefined ? "explicit" : "persisted");
+  return vetUserSpecifiedModel(setting, modelOverride !== undefined ? "explicit" : "persisted");
 }
 //@ chunk-aepeg2w5.js:429302-429417 placement
 /**
  * 模型不被允许且未复核时返回白名单替代（Hk）；未解析的别名（persisted 来源）丢弃；否则登记并原样返回。
  */
-function vetUserSpecifiedModel(e, n = "explicit") {
-  if (e && !isModelAllowed(e) && !keepsHonoredModelOnCachedDeny(e))
-    return stepDownRestrictedFamilyAliasPick(e) ?? undefined;
-  if (e && isUnservedModelSpelling(e, n)) return;
-  if (e) noteHonoredSessionModel(e);
-  return e;
+function vetUserSpecifiedModel(model, source = "explicit") {
+  if (model && !isModelAllowed(model) && !keepsHonoredModelOnCachedDeny(model))
+    return stepDownRestrictedFamilyAliasPick(model) ?? undefined;
+  if (model && isUnservedModelSpelling(model, source)) return;
+  if (model) noteHonoredSessionModel(model);
+  return model;
 }
 export {
   areBuiltinModelsKnownHosted,

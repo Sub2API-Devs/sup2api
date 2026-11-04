@@ -34,16 +34,16 @@ async function acquireControllingTty() {
   if (getPlatform() === "windows") return "unsupported";
   if (!isatty(0) || !isatty(1) || !isatty(2)) return "not_a_tty";
   if (await hasControllingTty()) return "already";
-  let e;
+  let attached;
   try {
-    e = Bun.ant.loginTty(0);
+    attached = Bun.ant.loginTty(0);
   } catch (error) {
     logForDebugging(
       `[bg-ctty] Bun.ant.loginTty unavailable: ${error instanceof Error ? error.message : String(error)}`,
     );
     return "ffi_unavailable";
   }
-  if (!e) {
+  if (!attached) {
     logForDebugging("[bg-ctty] login_tty(0) failed", {
       level: "warn",
     });

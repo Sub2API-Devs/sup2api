@@ -37,33 +37,33 @@ function renderToolUseMessage(input) {
       sessionId: undefined,
       toolArgs: {},
     };
-  let { session_id: sessionId, trigger_id: triggerId, ...s } = input;
+  let { session_id: sessionId, trigger_id: triggerId, ...toolArgs } = input;
   return {
     sessionId: typeof sessionId === "string" && sessionId.length > 0 ? sessionId : undefined,
-    toolArgs: s,
+    toolArgs,
   };
 }
 //@ chunk-zethn0a3.js:4007-4040 placement
-function parseJsonRpcMessage(e) {
-  return JSONRPCMessageSchema.parse(e);
+function parseJsonRpcMessage(message) {
+  return JSONRPCMessageSchema.parse(message);
 }
 //@ chunk-zethn0a3.js:4040-4980 placement
 /**
  * 设备 MCP 服务器的工具调用分发；未知工具报错
  */
-function handleDeviceToolCall(e) {
-  let o = 0;
-  let n = [];
-  let s = () => {
-    if (o !== 0) return;
-    let i = n;
-    n = [];
-    i.forEach((r) => r());
+function handleDeviceToolCall(bridge) {
+  let inFlight = 0;
+  let idleResolvers = [];
+  let flushIdleWaiters = () => {
+    if (inFlight !== 0) return;
+    let waiters = idleResolvers;
+    idleResolvers = [];
+    waiters.forEach((resolve) => resolve());
   };
-  let l = new Server(
+  let server = new Server(
     {
       name: CLAUDE_CODE_DEVICE,
-      version: e.version,
+      version: bridge.version,
     },
     {
       capabilities: {
@@ -71,58 +71,61 @@ function handleDeviceToolCall(e) {
       },
     },
   );
-  l.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [...e.registry.definitions()],
+  server.setRequestHandler(ListToolsRequestSchema, async () => ({
+    tools: [...bridge.registry.definitions()],
   }));
-  l.setRequestHandler(CallToolRequestSchema, async ({ params: { name: i, arguments: r } }, f) => {
-    let tool = e.registry.get(i);
-    if (!tool)
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Unknown tool: ${i}`,
-          },
-        ],
-        isError: true,
-      };
-    let { sessionId, toolArgs } = renderToolUseMessage(r);
-    if (sessionId !== undefined && sessionIdBody(sessionId) !== sessionIdBody(e.sessionId))
-      return refuseCrossSessionDeviceCall(tool, sessionId, e.sessionId);
-    if (tool.senderJudgedBy === "dispatch") {
-      let u = unknownAttestationResult();
-      if (u.heldBack) return refuseUntrustedDeviceToolCall(tool, u.attestation);
-    }
-    o++;
-    try {
-      return await tool.call(toolArgs, {
-        sessionId,
-        signal: f.signal,
-      });
-    } catch (error) {
-      logForDebugging(`[deviceBridge] tool ${i} failed: ${toError(error).message}`);
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Tool ${i} failed: internal error`,
-          },
-        ],
-        isError: true,
-      };
-    } finally {
-      o--;
-      if (o === 0) setTimeout(s, 0);
-    }
-  });
+  server.setRequestHandler(
+    CallToolRequestSchema,
+    async ({ params: { name: toolName, arguments: args } }, extra) => {
+      let tool = bridge.registry.get(toolName);
+      if (!tool)
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Unknown tool: ${toolName}`,
+            },
+          ],
+          isError: true,
+        };
+      let { sessionId, toolArgs } = renderToolUseMessage(args);
+      if (sessionId !== undefined && sessionIdBody(sessionId) !== sessionIdBody(bridge.sessionId))
+        return refuseCrossSessionDeviceCall(tool, sessionId, bridge.sessionId);
+      if (tool.senderJudgedBy === "dispatch") {
+        let attestation = unknownAttestationResult();
+        if (attestation.heldBack) return refuseUntrustedDeviceToolCall(tool, attestation.attestation);
+      }
+      inFlight++;
+      try {
+        return await tool.call(toolArgs, {
+          sessionId,
+          signal: extra.signal,
+        });
+      } catch (error) {
+        logForDebugging(`[deviceBridge] tool ${toolName} failed: ${toError(error).message}`);
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Tool ${toolName} failed: internal error`,
+            },
+          ],
+          isError: true,
+        };
+      } finally {
+        inFlight--;
+        if (inFlight === 0) setTimeout(flushIdleWaiters, 0);
+      }
+    },
+  );
   return {
-    server: l,
-    inFlightCalls: () => o,
+    server,
+    inFlightCalls: () => inFlight,
     whenIdle: () => {
       let promise = new Promise((resolve) => {
-        n.push(resolve);
+        idleResolvers.push(resolve);
       });
-      if (o === 0) setTimeout(s, 0);
+      if (inFlight === 0) setTimeout(flushIdleWaiters, 0);
       return promise;
     },
   };
@@ -131,20 +134,20 @@ function handleDeviceToolCall(e) {
 /**
  * 拒绝声明的会话与本设备所服务会话不一致的调用并上报 tengu_device_tool_refused
  */
-function refuseCrossSessionDeviceCall(e, sessionId, sessionId_2) {
-  let s = e.definition.name;
+function refuseCrossSessionDeviceCall(tool, sessionId, sessionId_2) {
+  let toolName = tool.definition.name;
   logForDebugging(
-    `[deviceBridge] refused ${s}: call asserted for session ${jsonStringify(sessionId.slice(0, 48))}, this device serves ${sessionId_2}`,
+    `[deviceBridge] refused ${toolName}: call asserted for session ${jsonStringify(sessionId.slice(0, 48))}, this device serves ${sessionId_2}`,
   );
   logEvent("tengu_device_tool_refused", {
-    tool: e.analyticsName,
+    tool: tool.analyticsName,
     reason: lit("session_mismatch"),
   });
   return {
     content: [
       {
         type: "text",
-        text: `${s} refused: the user's machine is currently connected on behalf of a different Claude Code cloud session (usually another session started from the same machine), so it cannot run device tools for this session and nothing was run. Tell the user, and continue with the tools in this cloud environment; if this session was also started with Claude Code on that machine, its device tools may work again once the other session ends. Do not retry in a loop.`,
+        text: `${toolName} refused: the user's machine is currently connected on behalf of a different Claude Code cloud session (usually another session started from the same machine), so it cannot run device tools for this session and nothing was run. Tell the user, and continue with the tools in this cloud environment; if this session was also started with Claude Code on that machine, its device tools may work again once the other session ends. Do not retry in a loop.`,
       },
     ],
     isError: true,
@@ -183,14 +186,14 @@ var DEVICE_IDLE_NOTICE = "This machine is attached but does not run commands for
 /**
  * 返回本设备运行环境信息（平台、架构）的 identify 工具定义
  */
-function DEVICE_IDENTIFY_TOOL(e) {
-  let o = e.now ?? (() => new Date());
+function DEVICE_IDENTIFY_TOOL(bridge) {
+  let now = bridge.now ?? (() => new Date());
   return {
     definition: {
       name: GET_DEVICE_INFO,
       description:
         "Returns runtime environment details for this device (platform, architecture, Claude Code version, and device name). Call this to confirm the device connection is live." +
-        (e.idle ? ` ${DEVICE_IDLE_NOTICE}` : ""),
+        (bridge.idle ? ` ${DEVICE_IDLE_NOTICE}` : ""),
       inputSchema: {
         type: "object",
         properties: {},
@@ -202,21 +205,22 @@ function DEVICE_IDENTIFY_TOOL(e) {
         "The bridge service's own identify probe, sent with no session. It takes no input, runs nothing and reads nothing here, and answers the name this machine dialed the bridge under plus platform, architecture, Claude Code version and the time. Refusing it would hide the machine from the bridge, not keep anything from a sender.",
     },
     call: async () => {
-      let n = {
+      let details = {
         platform: getPlatform(),
         arch: "x64",
-        claudeCodeVersion: e.version,
-        deviceName: e.getDeviceName(),
-        timestamp: o().toISOString(),
+        claudeCodeVersion: bridge.version,
+        deviceName: bridge.getDeviceName(),
+        timestamp: now().toISOString(),
       };
       return {
         content: [
           {
             type: "text",
-            text: jsonStringify(n, null, 2),
+            text: jsonStringify(details, null, 2),
           },
         ],
       };
     },
   };
 }
+export { handleDeviceToolCall, DEVICE_IDENTIFY_TOOL, parseJsonRpcMessage };

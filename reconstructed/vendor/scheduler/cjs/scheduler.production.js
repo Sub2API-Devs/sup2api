@@ -2,12 +2,54 @@
  * scheduler/cjs/scheduler.production.js
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * third-party: scheduler@0.26.0..0.28.0
- * pieces: chunk-bzr73sfg.js (11)
+ * pieces: chunk-bzr73sfg.js (12)
  * attribution: esm-layout 4, esm-fingerprint 7
  */
-import { Wi } from "./scheduler-unstable_post_task.development.js";
-import { Xa } from "../../../runtime/bun-runtime.js";
+import { defineExports, __esm } from "../../../runtime/bun-runtime.js";
+import { schedulerExports } from "./scheduler-unstable_post_task.development.js";
 
+//@ chunk-bzr73sfg.js:2546-3596 esm-fingerprint (moved: shares a binding it assigns)
+defineExports(
+  schedulerExports,
+  {
+    unstable_now: () => unstableNow,
+    unstable_IdlePriority: () => unstableIdlePriority,
+    unstable_ImmediatePriority: () => unstableImmediatePriority,
+    unstable_LowPriority: () => unstableLowPriority,
+    unstable_NormalPriority: () => unstableNormalPriority,
+    unstable_Profiling: () => unstableProfiling,
+    unstable_UserBlockingPriority: () => unstableUserBlockingPriority,
+    unstable_cancelCallback: () => unstableCancelCallback,
+    unstable_forceFrameRate: () => unstableForceFrameRate,
+    unstable_getCurrentPriorityLevel: () => unstableGetCurrentPriorityLevel,
+    unstable_next: () => unstableNext,
+    unstable_requestPaint: () => unstableRequestPaint,
+    unstable_runWithPriority: () => unstableRunWithPriority,
+    unstable_scheduleCallback: () => unstableScheduleCallback,
+    unstable_shouldYield: () => shouldYieldToHost_default,
+    unstable_wrapCallback: () => unstableWrapCallback,
+  },
+  {
+    unstable_now: (now) => (unstableNow = now),
+    unstable_IdlePriority: (idlePriority) => (unstableIdlePriority = idlePriority),
+    unstable_ImmediatePriority: (immediatePriority) => (unstableImmediatePriority = immediatePriority),
+    unstable_LowPriority: (lowPriority) => (unstableLowPriority = lowPriority),
+    unstable_NormalPriority: (normalPriority) => (unstableNormalPriority = normalPriority),
+    unstable_Profiling: (profiling) => (unstableProfiling = profiling),
+    unstable_UserBlockingPriority: (userBlockingPriority) =>
+      (unstableUserBlockingPriority = userBlockingPriority),
+    unstable_cancelCallback: (cancelCallback) => (unstableCancelCallback = cancelCallback),
+    unstable_forceFrameRate: (forceFrameRate) => (unstableForceFrameRate = forceFrameRate),
+    unstable_getCurrentPriorityLevel: (getCurrentPriorityLevel) =>
+      (unstableGetCurrentPriorityLevel = getCurrentPriorityLevel),
+    unstable_next: (next) => (unstableNext = next),
+    unstable_requestPaint: (requestPaint) => (unstableRequestPaint = requestPaint),
+    unstable_runWithPriority: (runWithPriority) => (unstableRunWithPriority = runWithPriority),
+    unstable_scheduleCallback: (scheduleCallback) => (unstableScheduleCallback = scheduleCallback),
+    unstable_shouldYield: (shouldYield) => (shouldYieldToHost_default = shouldYield),
+    unstable_wrapCallback: (wrapCallback) => (unstableWrapCallback = wrapCallback),
+  },
+);
 //@ chunk-bzr73sfg.js:3596-3717 esm-layout
 function push(heap, node) {
   var index = heap.length;
@@ -92,13 +134,13 @@ function handleTimeout(currentTime) {
 }
 //@ chunk-bzr73sfg.js:4406-4463 esm-fingerprint
 function shouldYieldToHost() {
-  return needsPaint ? true : Wi.unstable_now() - startTime < frameInterval ? false : true;
+  return needsPaint ? true : schedulerExports.unstable_now() - startTime < frameInterval ? false : true;
 }
 //@ chunk-bzr73sfg.js:4463-5029 esm-fingerprint
 function performWorkUntilDeadline() {
   needsPaint = false;
   if (isMessageLoopRunning) {
-    var currentTime = Wi.unstable_now();
+    var currentTime = schedulerExports.unstable_now();
     startTime = currentTime;
     var hasMoreWork = true;
     try {
@@ -123,7 +165,7 @@ function performWorkUntilDeadline() {
                 currentTask.callback = null;
                 currentPriorityLevel = currentTask.priorityLevel;
                 var continuationCallback = callback(currentTask.expirationTime <= currentTime);
-                currentTime = Wi.unstable_now();
+                currentTime = schedulerExports.unstable_now();
                 if (typeof continuationCallback === "function") {
                   currentTask.callback = continuationCallback;
                   advanceTimers(currentTime);
@@ -157,13 +199,13 @@ function performWorkUntilDeadline() {
   }
 }
 //@ chunk-bzr73sfg.js:5029-5088 esm-fingerprint
-function requestHostTimeout(handleTimeout, u) {
+function requestHostTimeout(handleTimeout, timeoutMs) {
   taskTimeoutID = localSetTimeout(function () {
-    handleTimeout(Wi.unstable_now());
-  }, u);
+    handleTimeout(schedulerExports.unstable_now());
+  }, timeoutMs);
 }
 //@ chunk-bzr73sfg.js:5088-6328 esm-layout
-var Yn = undefined;
+var unstableNow = undefined;
 var localPerformance;
 var localDate;
 var initialTime;
@@ -184,28 +226,28 @@ var taskTimeoutID = -1;
 var frameInterval = 5;
 var startTime = -1;
 var schedulePerformWorkUntilDeadline;
-var ns;
-var ad;
-var rs = 5;
-var os = 1;
-var Dy = 4;
-var gl = 3;
-var _y = null;
-var ls = 2;
-var as = function (task) {
+var messageChannel;
+var messagePort;
+var unstableIdlePriority = 5;
+var unstableImmediatePriority = 1;
+var unstableLowPriority = 4;
+var unstableNormalPriority = 3;
+var unstableProfiling = null;
+var unstableUserBlockingPriority = 2;
+var unstableCancelCallback = function (task) {
   task.callback = null;
 };
-var Oy = function (fps) {
+var unstableForceFrameRate = function (fps) {
   if (0 > fps || 125 < fps)
     console.error(
       "forceFrameRate takes a positive int between 0 and 125, forcing frame rates higher than 125 fps is not supported",
     );
   else frameInterval = 0 < fps ? Math.floor(1000 / fps) : 5;
 };
-var Hy = function () {
+var unstableGetCurrentPriorityLevel = function () {
   return currentPriorityLevel;
 };
-var Ly = function (eventHandler) {
+var unstableNext = function (eventHandler) {
   switch (currentPriorityLevel) {
     case 1:
     case 2:
@@ -223,10 +265,10 @@ var Ly = function (eventHandler) {
     currentPriorityLevel = previousPriorityLevel;
   }
 };
-var ss = function () {
+var unstableRequestPaint = function () {
   needsPaint = true;
 };
-var Py = function (priorityLevel, eventHandler) {
+var unstableRunWithPriority = function (priorityLevel, eventHandler) {
   switch (priorityLevel) {
     case 1:
     case 2:
@@ -245,8 +287,8 @@ var Py = function (priorityLevel, eventHandler) {
     currentPriorityLevel = previousPriorityLevel;
   }
 };
-var bl = function (priorityLevel, callback, options) {
-  var currentTime = Wi.unstable_now();
+var unstableScheduleCallback = function (priorityLevel, callback, options) {
+  var currentTime = schedulerExports.unstable_now();
   switch (
     (typeof options === "object" && options !== null
       ? ((options = options.delay),
@@ -302,29 +344,29 @@ var bl = function (priorityLevel, callback, options) {
   return priorityLevel;
 };
 var shouldYieldToHost_default;
-var By = function (callback) {
+var unstableWrapCallback = function (callback) {
   var parentPriorityLevel = currentPriorityLevel;
   return function () {
-    var f = currentPriorityLevel;
+    var previousPriorityLevel = currentPriorityLevel;
     currentPriorityLevel = parentPriorityLevel;
     try {
       return callback.apply(this, arguments);
     } finally {
-      currentPriorityLevel = f;
+      currentPriorityLevel = previousPriorityLevel;
     }
   };
 };
 //@ chunk-bzr73sfg.js:6328-6890 esm-fingerprint
-var init_scheduler_production = Xa(() => {
+var init_scheduler_production = __esm(() => {
   if (typeof performance === "object" && typeof performance.now === "function") {
     localPerformance = performance;
-    Yn = function () {
+    unstableNow = function () {
       return localPerformance.now();
     };
   } else {
     localDate = Date;
     initialTime = localDate.now();
-    Yn = function () {
+    unstableNow = function () {
       return localDate.now() - initialTime;
     };
   }
@@ -338,11 +380,11 @@ var init_scheduler_production = Xa(() => {
       localSetImmediate(performWorkUntilDeadline);
     };
   else if (typeof MessageChannel !== "undefined") {
-    ns = new MessageChannel();
-    ad = ns.port2;
-    ns.port1.onmessage = performWorkUntilDeadline;
+    messageChannel = new MessageChannel();
+    messagePort = messageChannel.port2;
+    messageChannel.port1.onmessage = performWorkUntilDeadline;
     schedulePerformWorkUntilDeadline = function () {
-      ad.postMessage(null);
+      messagePort.postMessage(null);
     };
   } else
     schedulePerformWorkUntilDeadline = function () {
@@ -351,21 +393,14 @@ var init_scheduler_production = Xa(() => {
   shouldYieldToHost_default = shouldYieldToHost;
 });
 export {
-  Yn,
-  rs,
-  os,
-  Dy,
-  gl,
-  _y,
-  ls,
-  as,
-  Oy,
-  Hy,
-  Ly,
-  ss,
-  Py,
-  bl,
-  shouldYieldToHost_default,
-  By,
   init_scheduler_production,
+  unstableScheduleCallback,
+  unstableCancelCallback,
+  shouldYieldToHost_default,
+  unstableRequestPaint,
+  unstableNow,
+  unstableImmediatePriority,
+  unstableUserBlockingPriority,
+  unstableNormalPriority,
+  unstableIdlePriority,
 };

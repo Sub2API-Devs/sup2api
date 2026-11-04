@@ -17,52 +17,52 @@ function hasWorkflowSizeSetting() {
   return mergedCommandNames()?.settings.workflowSizeGuideline !== undefined;
 }
 //@ chunk-6rgkw5kr.js:7710-7783 placement
-function workflowSizeSetting(workflowSizeGuideline) {
+function workflowSizeSetting(fallbackSetting) {
   return (
     workflowSizeName(mergedCommandNames()?.settings.workflowSizeGuideline) ??
-    workflowSizeName(workflowSizeGuideline)
+    workflowSizeName(fallbackSetting)
   );
 }
 //@ chunk-6rgkw5kr.js:7783-7876 placement
-function resolveWorkflowSize(e, size) {
-  let l = workflowSizeSetting(e);
-  return l === undefined
+function resolveWorkflowSize(settings, size) {
+  let resolved = workflowSizeSetting(settings);
+  return resolved === undefined
     ? {
         size,
         isDefault: true,
       }
     : {
-        size: l,
+        size: resolved,
         isDefault: false,
       };
 }
 //@ chunk-6rgkw5kr.js:7876-7995 placement
-function sessionWorkflowSize(e, i) {
+function sessionWorkflowSize(value, configured) {
   let sessionFeatureValues = getSessionFeatureValues();
-  sessionFeatureValues.sessionStartWorkflowSizeGuideline ??= resolveWorkflowSize(e, i);
+  sessionFeatureValues.sessionStartWorkflowSizeGuideline ??= resolveWorkflowSize(value, configured);
   return sessionFeatureValues.sessionStartWorkflowSizeGuideline;
 }
 //@ chunk-6rgkw5kr.js:7995-8099 placement
-function workflowSizePromptLine(workflowSizeGuideline, i) {
-  let { size, isDefault } = sessionWorkflowSize(workflowSizeGuideline, i);
+function workflowSizePromptLine(workflowSizeGuideline, guideline) {
+  let { size, isDefault } = sessionWorkflowSize(workflowSizeGuideline, guideline);
   if (size === "unrestricted") return "";
   return `
 
 ${workflowSizeIntro(size, isDefault)}`;
 }
 //@ chunk-6rgkw5kr.js:8099-8387 placement
-function latestWorkflowSize(e, workflowSizeGuideline, l) {
-  let size = resolveWorkflowSize(workflowSizeGuideline, l).size;
-  let s;
-  for (let j = e.length - 1; j >= 0; j--) {
-    let t = e[j];
-    if (t?.type === "attachment" && t.attachment.type === "workflow_size_guideline_change") {
-      s = t.attachment.size;
+function latestWorkflowSize(a, settings, sessionId) {
+  let size = resolveWorkflowSize(settings, sessionId).size;
+  let attachmentSize;
+  for (let j = a.length - 1; j >= 0; j--) {
+    let message = a[j];
+    if (message?.type === "attachment" && message.attachment.type === "workflow_size_guideline_change") {
+      attachmentSize = message.attachment.size;
       break;
     }
   }
-  let c = s ?? sessionWorkflowSize(workflowSizeGuideline, l).size;
-  if (size !== c)
+  let currentSize = attachmentSize ?? sessionWorkflowSize(settings, sessionId).size;
+  if (size !== currentSize)
     return [
       {
         type: "workflow_size_guideline_change",

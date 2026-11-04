@@ -9,7 +9,11 @@
  * attribution: placement 14
  */
 import { YOGA_INSTANCE } from "../../native-ts/yoga-layout/index.js";
-import { init_react_production, qt, Se } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  createContext,
+  useContext,
+} from "../../../vendor/react/cjs/react.production.js";
 import { sanitizeErrorName, errorMessage } from "../../utils/errors.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -19,6 +23,7 @@ import { shortHash } from "../../utils/shortHash.js";
 import { shutdown1PEventLogging } from "../../services/analytics/firstPartyEventLogger.js";
 import { shutdownDatadog } from "../../services/analytics/datadog.js";
 import { Button_2 } from "./Button.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bzr73sfg.js:171893-171903 placement
 /**
@@ -26,35 +31,50 @@ import { Button_2 } from "./Button.js";
  */
 var Yoga = YOGA_INSTANCE;
 //@ chunk-bzr73sfg.js:171934-171938 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:171934", () => {
+  init_react_production();
+});
 //@ chunk-bzr73sfg.js:171938-171952 placement
-var errorBoundaryTriggered = qt(false);
+var errorBoundaryTriggered; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:171938", () => {
+  errorBoundaryTriggered = createContext(false);
+});
 //@ chunk-bzr73sfg.js:171952-171998 placement
-errorBoundaryTriggered.displayName = "InternalAccessibilityContext";
+// deferred: uses errorBoundaryTriggered of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bzr73sfg.js:171952", () => {
+  errorBoundaryTriggered.displayName = "InternalAccessibilityContext";
+});
 //@ chunk-bzr73sfg.js:171998-172009 placement
 /**
  * 导出值：ErrorBoundaryStateRef（错误边界的同一信号）。
  */
-var ErrorBoundaryStateRef = errorBoundaryTriggered;
+var ErrorBoundaryStateRef; // deferred: uses errorBoundaryTriggered of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bzr73sfg.js:171998", () => {
+  ErrorBoundaryStateRef = errorBoundaryTriggered;
+});
 //@ chunk-bzr73sfg.js:172009-172013 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bzr73sfg.js:172009", () => {
+  init_react_production();
+});
 //@ chunk-bzr73sfg.js:172013-172355 placement
 /**
  * React 错误边界捕获渲染错误时记录日志并上报 tengu_uncaught_exception。
  */
-function reportRenderError(n, u) {
-  let f = sanitizeErrorName(n) ?? lit("unknown");
+function reportRenderError(error, info) {
+  let errorName = sanitizeErrorName(error) ?? lit("unknown");
   try {
-    logForDebugging(`[reportRenderError] React boundary caught ${f}: ${errorMessage(n)}`, {
+    logForDebugging(`[reportRenderError] React boundary caught ${errorName}: ${errorMessage(error)}`, {
       level: "error",
     });
   } catch {}
-  let componentStack = u?.componentStack;
+  let componentStack = info?.componentStack;
   (async () => {
     try {
       await logEventAsync("tengu_uncaught_exception", {
-        error_name: f,
-        ...errorTelemetryFields(n),
+        error_name: errorName,
+        ...errorTelemetryFields(error),
         source: lit("react_render"),
         ...(componentStack && {
           error_component_stack_hash: shortHash(componentStack),
@@ -75,26 +95,32 @@ var MULTI_CLICK_MAX_MS = 500;
 //@ chunk-x6v6jz2y.js:19217-19227 placement
 var Button = Button_2;
 //@ chunk-x6v6jz2y.js:19227-19231 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:19227", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:19231-19260 placement
 function useIsScreenReaderEnabled() {
-  return Se(ErrorBoundaryStateRef);
+  return useContext(ErrorBoundaryStateRef);
 }
 //@ chunk-x6v6jz2y.js:19260-19326 placement
-function Decorative(o) {
-  let { children, fallback } = o;
+function Decorative(props) {
+  let { children, fallback } = props;
   return useIsScreenReaderEnabled() ? (fallback ?? null) : children;
 }
 //@ chunk-x6v6jz2y.js:19326-19399 placement
-function assignRef(o, r) {
-  if (typeof o === "function") {
-    o(r);
+function assignRef(ref, value) {
+  if (typeof ref === "function") {
+    ref(value);
     return;
   }
-  if (o) o.current = r;
+  if (ref) ref.current = value;
 }
 //@ chunk-x6v6jz2y.js:19399-19403 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:19399", () => {
+  init_react_production();
+});
 export {
   useIsScreenReaderEnabled,
   Button,

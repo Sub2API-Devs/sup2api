@@ -8,7 +8,7 @@
 import {
   properAncestors,
   walkGlobPatternSteps,
-  Dqt,
+  pathSpellingVariants,
   normalizePathForSandbox,
   isAtOrUnder,
 } from "./sandbox-utils.js";
@@ -39,7 +39,7 @@ function collapseReadDenyLocations({ locations, reExposedPaths }) {
   return kept;
 }
 //@ chunk-fq0cr76a.js:756612-758463 esm-fingerprint
-function* zE(globPattern, reExposedPaths, unlistableDirs, opts = {}) {
+function* expandReadDenyGlobLinuxSteps(globPattern, reExposedPaths, unlistableDirs, opts = {}) {
   let walk = yield* walkGlobPatternSteps(globPattern, {
     withDirectoryForm: true,
     followSymlinkedDirectories: true,
@@ -102,7 +102,7 @@ function* zE(globPattern, reExposedPaths, unlistableDirs, opts = {}) {
   }
   let reExposed = new Set(
     reExposedPaths.flatMap((p) =>
-      Dqt(
+      pathSpellingVariants(
         normalizePathForSandbox(p, {
           literal: true,
         }),
@@ -145,4 +145,4 @@ function* zE(globPattern, reExposedPaths, unlistableDirs, opts = {}) {
     );
   return [...mounts, ...spelledLinks].sort();
 }
-export { zE };
+export { expandReadDenyGlobLinuxSteps };

@@ -10,7 +10,7 @@ import { RateLimits_2 } from "./rate-limits.mjs";
 import { Members } from "./members.mjs";
 import { ServiceAccounts_2 } from "./service-accounts.mjs";
 import { buildHeaders } from "../../../../internal/headers.mjs";
-import { I } from "../../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../../internal/utils/path.mjs";
 import { Page } from "../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:128319-129152 esm-fingerprint
@@ -40,10 +40,10 @@ var Workspaces_3 = (() => {
       });
     }
     retrieve(workspaceID, options) {
-      return this._client.get(I`/v1/organizations/workspaces/${workspaceID}?beta=true`, options);
+      return this._client.get(parseUrl_2`/v1/organizations/workspaces/${workspaceID}?beta=true`, options);
     }
     update(workspaceID, body, options) {
-      return this._client.post(I`/v1/organizations/workspaces/${workspaceID}?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/organizations/workspaces/${workspaceID}?beta=true`, {
         body,
         ...options,
       });
@@ -55,7 +55,10 @@ var Workspaces_3 = (() => {
       });
     }
     archive(workspaceID, options) {
-      return this._client.post(I`/v1/organizations/workspaces/${workspaceID}/archive?beta=true`, options);
+      return this._client.post(
+        parseUrl_2`/v1/organizations/workspaces/${workspaceID}/archive?beta=true`,
+        options,
+      );
     }
   }
   Workspaces.RateLimits = RateLimits_2;

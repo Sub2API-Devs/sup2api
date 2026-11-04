@@ -22,11 +22,11 @@ import {
   sanitizeTimestamp,
   notificationOriginLabel,
 } from "../../services/queuedNotifications/queuedNotifications.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { firstMeaningfulLine } from "../../utils/swarm/teammateIds.js";
 import { sanitizeDisplayText } from "../../utils/sanitizeDisplayText.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { BACK_ARROW_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BACK_ARROW_GLYPH } from "../../constants/figures.js";
 import { stripControlChars } from "../../utils/stripControlChars.js";
 import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 
@@ -34,29 +34,32 @@ import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 /**
  * 通知结果（错误文本或 JSON）超出终端行数时返回 true，用于折叠显示。
  */
-function exceedsNotificationsLineLimit(m, { columns }) {
-  if (m.error) return exceedsLineLimit(m.error, columns);
-  return exceedsLineLimit(jsonStringify(m, null, 2), columns);
+function exceedsNotificationsLineLimit(result, { columns }) {
+  if (result.error) return exceedsLineLimit(result.error, columns);
+  return exceedsLineLimit(jsonStringify(result, null, 2), columns);
 }
 //@ chunk-ah34pb7m.js:33141-33657 placement
 /**
  * 渲染通知列表结果。
  */
-function renderNotificationsResult(m, d, { verbose }) {
-  let g = m.remaining > 0 ? `${m.remaining} more ${plural(m.remaining, "notification")} still queued` : "";
-  if (m.notifications.length === 0)
+function renderNotificationsResult(result, progressMessages, { verbose }) {
+  let remainingText =
+    result.remaining > 0
+      ? `${result.remaining} more ${plural(result.remaining, "notification")} still queued`
+      : "";
+  if (result.notifications.length === 0)
     return jsxProd_default(MessageResponse, {
       height: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
-        children: g || "No queued notifications",
+        children: remainingText || "No queued notifications",
       }),
     });
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        m.notifications.map((notification) =>
+        result.notifications.map((notification) =>
           jsxProd_default_2(
             Box,
             {
@@ -74,10 +77,10 @@ function renderNotificationsResult(m, d, { verbose }) {
             notification.notification_id,
           ),
         ),
-        g
+        remainingText
           ? jsxProd_default(Text, {
               dimColor: true,
-              children: g,
+              children: remainingText,
             })
           : null,
       ],
@@ -112,91 +115,91 @@ function renderNotificationItem(origin, content, verbose) {
  * 一条通知（来源、摘要、正文）。
  */
 function NotificationItem(props) {
-  let T = w(25);
+  let $ = useMemoCache(25);
   let { origin, summary, expandHint, body, verbose } = props;
-  let M = expandHint === undefined ? false : expandHint;
-  let x;
-  if (T[0] !== summary || T[1] !== verbose) {
-    x = verbose ? "" : firstMeaningfulLine(summary.replace(/\n/g, " "), sanitizeDisplayText);
-    T[0] = summary;
-    T[1] = verbose;
-    T[2] = x;
-  } else x = T[2];
-  let k = x;
-  let b;
-  if (T[3] !== body || T[4] !== verbose) {
-    b = verbose ? sanitizeDisplayText(body).trim() : "";
-    T[3] = body;
-    T[4] = verbose;
-    T[5] = b;
-  } else b = T[5];
-  let E = b;
-  let B;
-  if (T[6] === MEMO_CACHE_SENTINEL) {
-    B = jsxProd_default(Text, {
+  let shouldExpandHint = expandHint === undefined ? false : expandHint;
+  let summaryPreview;
+  if ($[0] !== summary || $[1] !== verbose) {
+    summaryPreview = verbose ? "" : firstMeaningfulLine(summary.replace(/\n/g, " "), sanitizeDisplayText);
+    $[0] = summary;
+    $[1] = verbose;
+    $[2] = summaryPreview;
+  } else summaryPreview = $[2];
+  let summaryText = summaryPreview;
+  let bodyPreview;
+  if ($[3] !== body || $[4] !== verbose) {
+    bodyPreview = verbose ? sanitizeDisplayText(body).trim() : "";
+    $[3] = body;
+    $[4] = verbose;
+    $[5] = bodyPreview;
+  } else bodyPreview = $[5];
+  let bodyText = bodyPreview;
+  let inboundGlyph;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    inboundGlyph = jsxProd_default(Text, {
       "aria-label": "inbound:",
       color: "suggestion",
       children: BACK_ARROW_GLYPH,
     });
-    T[6] = B;
-  } else B = T[6];
+    $[6] = inboundGlyph;
+  } else inboundGlyph = $[6];
   let children;
-  if (T[7] !== origin) {
+  if ($[7] !== origin) {
     children = stripControlChars(notificationOriginLabel(origin));
-    T[7] = origin;
-    T[8] = children;
-  } else children = T[8];
-  let N;
-  if (T[9] !== children) {
-    N = jsxProd_default(Text, {
+    $[7] = origin;
+    $[8] = children;
+  } else children = $[8];
+  let originElement;
+  if ($[9] !== children) {
+    originElement = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
-    T[9] = children;
-    T[10] = N;
-  } else N = T[10];
-  let W;
-  if (T[11] !== k) {
-    W = k
+    $[9] = children;
+    $[10] = originElement;
+  } else originElement = $[10];
+  let summaryElement;
+  if ($[11] !== summaryText) {
+    summaryElement = summaryText
       ? jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Text, {
               dimColor: true,
               children: " \xB7 ",
             }),
-            k,
+            summaryText,
           ],
         })
       : null;
-    T[11] = k;
-    T[12] = W;
-  } else W = T[12];
-  let U;
-  if (T[13] !== M || T[14] !== verbose) {
-    U =
-      M && !verbose
+    $[11] = summaryText;
+    $[12] = summaryElement;
+  } else summaryElement = $[12];
+  let expandHintElement;
+  if ($[13] !== shouldExpandHint || $[14] !== verbose) {
+    expandHintElement =
+      shouldExpandHint && !verbose
         ? jsxProd_default_2(Fragment, {
             children: [" ", jsxProd_default(CtrlOToExpand, {})],
           })
         : null;
-    T[13] = M;
-    T[14] = verbose;
-    T[15] = U;
-  } else U = T[15];
-  let K;
-  if (T[16] !== N || T[17] !== W || T[18] !== U) {
-    K = jsxProd_default_2(Text, {
+    $[13] = shouldExpandHint;
+    $[14] = verbose;
+    $[15] = expandHintElement;
+  } else expandHintElement = $[15];
+  let headerLine;
+  if ($[16] !== originElement || $[17] !== summaryElement || $[18] !== expandHintElement) {
+    headerLine = jsxProd_default_2(Text, {
       wrap: "truncate-end",
-      children: [B, " ", N, W, U],
+      children: [inboundGlyph, " ", originElement, summaryElement, expandHintElement],
     });
-    T[16] = N;
-    T[17] = W;
-    T[18] = U;
-    T[19] = K;
-  } else K = T[19];
-  let V;
-  if (T[20] !== E) {
-    V = E
+    $[16] = originElement;
+    $[17] = summaryElement;
+    $[18] = expandHintElement;
+    $[19] = headerLine;
+  } else headerLine = $[19];
+  let bodyBox;
+  if ($[20] !== bodyText) {
+    bodyBox = bodyText
       ? jsxProd_default(Box, {
           borderStyle: "quote",
           borderTop: false,
@@ -207,30 +210,30 @@ function NotificationItem(props) {
           children: jsxProd_default(Text, {
             dimColor: true,
             wrap: "wrap",
-            children: E,
+            children: bodyText,
           }),
         })
       : null;
-    T[20] = E;
-    T[21] = V;
-  } else V = T[21];
-  let Y;
-  if (T[22] !== V || T[23] !== K) {
-    Y = jsxProd_default_2(Box, {
+    $[20] = bodyText;
+    $[21] = bodyBox;
+  } else bodyBox = $[21];
+  let itemBox;
+  if ($[22] !== bodyBox || $[23] !== headerLine) {
+    itemBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [K, V],
+      children: [headerLine, bodyBox],
     });
-    T[22] = V;
-    T[23] = K;
-    T[24] = Y;
-  } else Y = T[24];
-  return Y;
+    $[22] = bodyBox;
+    $[23] = headerLine;
+    $[24] = itemBox;
+  } else itemBox = $[24];
+  return itemBox;
 }
 //@ chunk-ah34pb7m.js:35109-35256 placement
-function renderHttpStatusLine(m) {
-  let d =
+function renderHttpStatusLine(result) {
+  let lineCount =
     countCharInString(
-      m.json,
+      result.json,
       `
 `,
     ) + 1;
@@ -238,11 +241,11 @@ function renderHttpStatusLine(m) {
     children: jsxProd_default_2(Text, {
       children: [
         "HTTP ",
-        m.status,
+        result.status,
         " ",
         jsxProd_default_2(Text, {
           dimColor: true,
-          children: ["(", d, " lines)"],
+          children: ["(", lineCount, " lines)"],
         }),
       ],
     }),

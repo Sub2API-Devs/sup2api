@@ -5,11 +5,11 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-s82q9s4x.js:61437-63889 cjs-fingerprint
-var require_schemes = x(function (cjsExports, cjsModule) {
+var require_schemes = __commonJS(function (cjsExports, cjsModule) {
   var { isUUID } = require_utils();
   var URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;
   var supportedSchemeNames = ["http", "https", "ws", "wss", "urn", "urn:uuid"];

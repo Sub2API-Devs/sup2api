@@ -5,26 +5,26 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:4742-5269 cjs-require-graph
-var require_mime_types = x(function (cjsExports, cjsModule) {
-  var Ze = (e) => () => {
+var require_mime_types = __commonJS(function (cjsExports, cjsModule) {
+  var makeStub = (methodName) => () => {
     throw Error(
       "mime-types." +
-        e +
+        methodName +
         "() is stubbed in this build. Do not rely on axios auto-multipart serialization (plain object + Content-Type: multipart/form-data). Use native FormData or hand-roll the multipart body instead. See scripts/build-plugins.ts stubMimeTypes plugin.",
     );
   };
   cjsModule.exports = {
-    lookup: Ze("lookup"),
-    contentType: Ze("contentType"),
-    extension: Ze("extension"),
-    charset: Ze("charset"),
+    lookup: makeStub("lookup"),
+    contentType: makeStub("contentType"),
+    extension: makeStub("extension"),
+    charset: makeStub("charset"),
     extensions: Object.create(null),
     types: Object.create(null),
     charsets: {
-      lookup: Ze("charsets.lookup"),
+      lookup: makeStub("charsets.lookup"),
     },
   };
 });

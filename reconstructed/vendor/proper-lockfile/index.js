@@ -5,12 +5,12 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_lockfile } from "./lib/lockfile.js";
 import { properLockfileAdapter } from "./lib/adapter.js";
 
 //@ chunk-bmbhxpfm.js:21622-22139 cjs-fingerprint
-var properLockfileIndex = x(function (cjsExports, cjsModule) {
+var properLockfileIndex = __commonJS(function (cjsExports, cjsModule) {
   var lockfile = require_lockfile();
   var { toPromise, toSync, toSyncOptions } = properLockfileAdapter();
   async function lock(file, options) {

@@ -26,59 +26,70 @@ import { logError } from "../log.js";
 import { getMcpPrefix as getMcpPrefix_2 } from "../../services/mcp/mcpStringUtils.js";
 import { COMPUTER_USE_MCP_SERVER_NAME } from "../computerUse/common.js";
 import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:990241-990271 placement
 var TENGU_DRIFTING_REEF = "tengu_drifting_reef";
 //@ chunk-e6aww6q8.js:990271-990312 placement
-function flagInFeatureConfig(e, n) {
-  return isPlainObject_5(e) && e[n] === true;
+function flagInFeatureConfig(config, flag) {
+  return isPlainObject_5(config) && config[flag] === true;
 }
 //@ chunk-e6aww6q8.js:990312-990354 placement
 /**
  * isActionSummaryEnabled：动作摘要总开关。
  */
-function isActionSummaryEnabled(e) {
-  return flagInFeatureConfig(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DRIFTING_REEF, null), e);
+function isActionSummaryEnabled(flag) {
+  return flagInFeatureConfig(getFeatureValue_CACHED_MAY_BE_STALE(TENGU_DRIFTING_REEF, null), flag);
 }
 //@ chunk-e6aww6q8.js:990354-990397 placement
-function isSessionPinnedActionSummary(e) {
-  return flagInFeatureConfig(getFeatureValue_SESSION_PINNED(TENGU_DRIFTING_REEF, null), e);
+function isSessionPinnedActionSummary(flag) {
+  return flagInFeatureConfig(getFeatureValue_SESSION_PINNED(TENGU_DRIFTING_REEF, null), flag);
 }
 //@ chunk-e6aww6q8.js:990397-991504 placement
 /**
  * 计算机操作的 action_summary 字段说明与适用的操作。
  */
-var ACTION_SUMMARY_SCHEMA = "action_summary";
-var ACTION_SUMMARY_STYLE_RULE =
-  "State the effect only, and accurately: no reasons, nothing about what you were asked or allowed to do, no passwords or other secrets.";
-var COMPUTER_ACTIONS_WITH_SUMMARY = new Set([
-  "left_click",
-  "right_click",
-  "double_click",
-  "triple_click",
-  "left_click_drag",
-  "key",
-  "type",
-]);
-var v1t = Object.freeze({
-  type: "string",
-  description: `A few words saying what this action does on the page and to what, for example 'Sends the drafted reply to pat@example.com' or 'Opens the Filters menu'. Set it on every left_click, right_click, double_click, triple_click, left_click_drag, key and type action. ${ACTION_SUMMARY_STYLE_RULE}`,
+var ACTION_SUMMARY_FIELD; // deferred: uses MCP_CLAUDE_DEVICE_CHROME (../claudeInChrome/chromeToolNames.js) of its import cycle while loading; runs once the cycle is complete
+var ACTION_SUMMARY_STYLE_RULE;
+var COMPUTER_ACTIONS_WITH_SUMMARY;
+var computerActionSummarySchema;
+var formInputSummarySchema;
+var BATCH_ITEM_SUMMARY_INSTRUCTION;
+var ACTION_SUMMARY_SCHEMA_BY_TOOL;
+var BATCH_TOOLS_WITH_SUMMARY;
+deferInit("chunk-e6aww6q8.js:990397", () => {
+  ACTION_SUMMARY_FIELD = "action_summary";
+  ACTION_SUMMARY_STYLE_RULE =
+    "State the effect only, and accurately: no reasons, nothing about what you were asked or allowed to do, no passwords or other secrets.";
+  COMPUTER_ACTIONS_WITH_SUMMARY = new Set([
+    "left_click",
+    "right_click",
+    "double_click",
+    "triple_click",
+    "left_click_drag",
+    "key",
+    "type",
+  ]);
+  computerActionSummarySchema = Object.freeze({
+    type: "string",
+    description: `A few words saying what this action does on the page and to what, for example 'Sends the drafted reply to pat@example.com' or 'Opens the Filters menu'. Set it on every left_click, right_click, double_click, triple_click, left_click_drag, key and type action. ${ACTION_SUMMARY_STYLE_RULE}`,
+  });
+  formInputSummarySchema = Object.freeze({
+    type: "string",
+    description: `A few words saying what this form fill does on the page and to what, for example 'Sets the delivery date to 29 September'. ${ACTION_SUMMARY_STYLE_RULE}`,
+  });
+  BATCH_ITEM_SUMMARY_INSTRUCTION = `For computer items whose action is left_click, right_click, double_click, triple_click, left_click_drag, key or type, and for form_input items, include ${ACTION_SUMMARY_FIELD} in the item's input, as you would when calling that tool directly.`;
+  ACTION_SUMMARY_SCHEMA_BY_TOOL = new Map(
+    CHROME_TOOL_PREFIXES.flatMap((prefix) => [
+      [prefix + "computer", computerActionSummarySchema],
+      [prefix + "form_input", formInputSummarySchema],
+    ]),
+  );
+  BATCH_TOOLS_WITH_SUMMARY = new Set(CHROME_TOOL_PREFIXES.map((prefix) => prefix + "browser_batch"));
 });
-var pPo = Object.freeze({
-  type: "string",
-  description: `A few words saying what this form fill does on the page and to what, for example 'Sets the delivery date to 29 September'. ${ACTION_SUMMARY_STYLE_RULE}`,
-});
-var BATCH_ITEM_SUMMARY_INSTRUCTION = `For computer items whose action is left_click, right_click, double_click, triple_click, left_click_drag, key or type, and for form_input items, include ${ACTION_SUMMARY_SCHEMA} in the item's input, as you would when calling that tool directly.`;
-var ACTION_SUMMARY_SCHEMA_BY_TOOL = new Map(
-  CHROME_TOOL_PREFIXES.flatMap((e) => [
-    [e + "computer", v1t],
-    [e + "form_input", pPo],
-  ]),
-);
-var BATCH_TOOLS_WITH_SUMMARY = new Set(CHROME_TOOL_PREFIXES.map((e) => e + "browser_batch"));
 //@ chunk-e6aww6q8.js:991504-991693 placement
-function getActionsSchemaParts(e) {
-  let actions = e?.properties?.actions;
+function getActionsSchemaParts(schema) {
+  let actions = schema?.properties?.actions;
   if (!isPlainObject_5(actions) || !isPlainObject_5(actions.items)) return;
   let items = actions.items;
   let properties = items.properties;
@@ -91,20 +102,24 @@ function getActionsSchemaParts(e) {
   };
 }
 //@ chunk-e6aww6q8.js:991693-991939 placement
-function getActionSummaryLength(toolNameForPermissionCheck, inputJSONSchema, r) {
-  let s = ACTION_SUMMARY_SCHEMA_BY_TOOL.get(toolNameForPermissionCheck);
+function getActionSummaryLength(toolName, inputJSONSchema, input) {
+  let summarySchema = ACTION_SUMMARY_SCHEMA_BY_TOOL.get(toolName);
   let properties = inputJSONSchema?.properties;
   if (
-    s === undefined ||
+    summarySchema === undefined ||
     typeof properties !== "object" ||
     properties === null ||
-    !(ACTION_SUMMARY_SCHEMA in properties)
+    !(ACTION_SUMMARY_FIELD in properties)
   )
     return;
-  let y = r;
-  if (s === v1t && !(typeof y?.action === "string" && COMPUTER_ACTIONS_WITH_SUMMARY.has(y.action))) return;
-  let S = y?.[ACTION_SUMMARY_SCHEMA];
-  return typeof S === "string" ? S.length : 0;
+  let toolInput = input;
+  if (
+    summarySchema === computerActionSummarySchema &&
+    !(typeof toolInput?.action === "string" && COMPUTER_ACTIONS_WITH_SUMMARY.has(toolInput.action))
+  )
+    return;
+  let summary = toolInput?.[ACTION_SUMMARY_FIELD];
+  return typeof summary === "string" ? summary.length : 0;
 }
 //@ chunk-e6aww6q8.js:991939-992038 placement
 function isBrowserActionSummaryAwake() {
@@ -114,35 +129,38 @@ function isBrowserActionSummaryAwake() {
   );
 }
 //@ chunk-e6aww6q8.js:992038-992081 placement
-var schemaSummaryLogState = identity_2(
-  {
-    logged: false,
-  },
-  (e) => {
-    e.logged = false;
-  },
-);
+var schemaSummaryLogState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:992038", () => {
+  schemaSummaryLogState = identity_2(
+    {
+      logged: false,
+    },
+    (state) => {
+      state.logged = false;
+    },
+  );
+});
 //@ chunk-e6aww6q8.js:992081-992310 placement
 /**
  * 在开关开启时给计算机操作类工具的输入 schema 加上操作摘要字段（批量动作工具改写 actions 描述）。
  */
-function addActionSummaryToSchema(e, mcpToolName, r = isBrowserActionSummaryAwake) {
-  if (BATCH_TOOLS_WITH_SUMMARY.has(mcpToolName)) return addActionSummaryToBatchDescription(e, r);
-  let s = ACTION_SUMMARY_SCHEMA_BY_TOOL.get(mcpToolName);
+function addActionSummaryToSchema(schema, mcpToolName, isEnabled = isBrowserActionSummaryAwake) {
+  if (BATCH_TOOLS_WITH_SUMMARY.has(mcpToolName)) return addActionSummaryToBatchDescription(schema, isEnabled);
+  let summarySchema = ACTION_SUMMARY_SCHEMA_BY_TOOL.get(mcpToolName);
   if (
-    s === undefined ||
-    typeof e.properties !== "object" ||
-    e.properties === null ||
-    ACTION_SUMMARY_SCHEMA in e.properties ||
-    !r()
+    summarySchema === undefined ||
+    typeof schema.properties !== "object" ||
+    schema.properties === null ||
+    ACTION_SUMMARY_FIELD in schema.properties ||
+    !isEnabled()
   )
-    return e;
+    return schema;
   logSchemaSummaryOnce();
   return {
-    ...e,
+    ...schema,
     properties: {
-      ...e.properties,
-      [ACTION_SUMMARY_SCHEMA]: s,
+      ...schema.properties,
+      [ACTION_SUMMARY_FIELD]: summarySchema,
     },
   };
 }
@@ -157,22 +175,22 @@ function logSchemaSummaryOnce() {
 /**
  * 在批量动作工具的 actions.items.input 描述中追加操作摘要要求（已有时不重复）。
  */
-function addActionSummaryToBatchDescription(e, n) {
-  let actionsSchemaParts = getActionsSchemaParts(e);
-  if (actionsSchemaParts === undefined) return e;
+function addActionSummaryToBatchDescription(schema, isEnabled) {
+  let actionsSchemaParts = getActionsSchemaParts(schema);
+  if (actionsSchemaParts === undefined) return schema;
   let { actions, items, itemProperties, input } = actionsSchemaParts;
   let description = input.description;
   if (
     (description !== undefined && typeof description !== "string") ||
-    description?.includes(ACTION_SUMMARY_SCHEMA) ||
-    !n()
+    description?.includes(ACTION_SUMMARY_FIELD) ||
+    !isEnabled()
   )
-    return e;
+    return schema;
   logSchemaSummaryOnce();
   return {
-    ...e,
+    ...schema,
     properties: {
-      ...e.properties,
+      ...schema.properties,
       actions: {
         ...actions,
         items: {
@@ -196,13 +214,13 @@ function addActionSummaryToBatchDescription(e, n) {
 /**
  * 统计批量动作调用中需要摘要的动作（form_input 与特定 computer 动作）数和实际填写了摘要的数量。
  */
-function countBatchActionSummaries(toolNameForPermissionCheck, inputJSONSchema, r) {
-  if (!BATCH_TOOLS_WITH_SUMMARY.has(toolNameForPermissionCheck)) return;
-  let description = getActionsSchemaParts(inputJSONSchema)?.input.description;
+function countBatchActionSummaries(toolName, schema, input) {
+  if (!BATCH_TOOLS_WITH_SUMMARY.has(toolName)) return;
+  let description = getActionsSchemaParts(schema)?.input.description;
   if (typeof description !== "string" || !description.includes(BATCH_ITEM_SUMMARY_INSTRUCTION)) return;
-  let h = 0;
-  let y = 0;
-  let actions = isPlainObject_5(r) && Array.isArray(r.actions) ? r.actions : [];
+  let expectedItems = 0;
+  let filledItems = 0;
+  let actions = isPlainObject_5(input) && Array.isArray(input.actions) ? input.actions : [];
   for (let action of actions) {
     if (!isPlainObject_5(action) || !isPlainObject_5(action.input)) continue;
     if (!(
@@ -212,23 +230,23 @@ function countBatchActionSummaries(toolNameForPermissionCheck, inputJSONSchema, 
         COMPUTER_ACTIONS_WITH_SUMMARY.has(action.input.action))
     ))
       continue;
-    h++;
-    let G = action.input[ACTION_SUMMARY_SCHEMA];
-    if (typeof G === "string" && G.trim() !== "") y++;
+    expectedItems++;
+    let summary = action.input[ACTION_SUMMARY_FIELD];
+    if (typeof summary === "string" && summary.trim() !== "") filledItems++;
   }
   return {
-    expectedItems: h,
-    filledItems: y,
+    expectedItems,
+    filledItems,
   };
 }
 //@ chunk-e6aww6q8.js:993171-993330 placement
 /**
  * 项目功能开启时，按根工具集判断项目角色（thread/overview/other）用于遥测；出错时返回空对象。
  */
-function getProjectsRoleTelemetry(e) {
+function getProjectsRoleTelemetry(context) {
   try {
     if (!hasRelaySourceForClients()) return {};
-    let { tools } = e.rootToolSurface;
+    let { tools } = context.rootToolSurface;
     return {
       projectsRole: fromEnum(
         hasUpdateStatusToolOnly(tools) ? "thread" : hasStartThreadToolOnly(tools) ? "overview" : "other",
@@ -243,70 +261,88 @@ function getProjectsRoleTelemetry(e) {
 /**
  * COMPUTER_BATCH_EXEMPT_ACTIONS：computer_batch 不需要摘要的动作；APP_BATCH_EXEMPT_ACTIONS：app_batch 不需要摘要的动作；COMPUTER_USE_ACTION_NAMES：计算机使用类工具的动作名全集（同一声明共 7 个绑定）。
  */
-var ACTION_SUMMARY_FIELD =
-  "A few words saying what this action does and to what, for example 'Sends the drafted reply to pat@example.com' or 'Opens the Filters menu'.";
-var yPo = Object.freeze({
-  type: "string",
-  description: `${ACTION_SUMMARY_FIELD} Set it on every call. ${ACTION_SUMMARY_STYLE_RULE}`,
+var ACTION_SUMMARY_FIELD_2; // deferred: uses ACTION_SUMMARY_FIELD of its import cycle while loading; runs once the cycle is complete
+var genericActionSummarySchema;
+var COMPUTER_BATCH_EXEMPT_ACTIONS;
+var APP_BATCH_EXEMPT_ACTIONS;
+var COMPUTER_BATCH_SUMMARY_SCHEMA;
+var APP_BATCH_SUMMARY_SCHEMA;
+var COMPUTER_USE_ACTION_NAMES;
+var BATCH_SUMMARY_SCHEMA_BY_TOOL;
+var BATCH_EXEMPT_ACTIONS_BY_TOOL;
+var COMPUTER_USE_TOOL_PREFIX;
+var REMOTE_DEVICE_TOOL_PREFIX;
+deferInit("chunk-e6aww6q8.js:994061", () => {
+  ACTION_SUMMARY_FIELD_2 =
+    "A few words saying what this action does and to what, for example 'Sends the drafted reply to pat@example.com' or 'Opens the Filters menu'.";
+  genericActionSummarySchema = Object.freeze({
+    type: "string",
+    description: `${ACTION_SUMMARY_FIELD_2} Set it on every call. ${ACTION_SUMMARY_STYLE_RULE}`,
+  });
+  COMPUTER_BATCH_EXEMPT_ACTIONS = ["mouse_move", "scroll", "screenshot", "zoom", "cursor_position", "wait"];
+  APP_BATCH_EXEMPT_ACTIONS = ["scroll", "screenshot", "zoom"];
+  COMPUTER_BATCH_SUMMARY_SCHEMA = Object.freeze({
+    type: "string",
+    description: `${ACTION_SUMMARY_FIELD_2} Set it on every action except ${joinWithAnd(COMPUTER_BATCH_EXEMPT_ACTIONS)}. ${ACTION_SUMMARY_STYLE_RULE}`,
+  });
+  APP_BATCH_SUMMARY_SCHEMA = Object.freeze({
+    type: "string",
+    description: `${ACTION_SUMMARY_FIELD_2} Set it on every action except ${joinWithAnd(APP_BATCH_EXEMPT_ACTIONS)}. ${ACTION_SUMMARY_STYLE_RULE}`,
+  });
+  COMPUTER_USE_ACTION_NAMES = [
+    "left_click",
+    "right_click",
+    "middle_click",
+    "double_click",
+    "triple_click",
+    "left_click_drag",
+    "left_mouse_down",
+    "left_mouse_up",
+    "key",
+    "hold_key",
+    "type",
+    "app_click",
+    "app_drag",
+    "app_key",
+    "app_type",
+    "app_menu",
+  ];
+  BATCH_SUMMARY_SCHEMA_BY_TOOL = {
+    computer_batch: COMPUTER_BATCH_SUMMARY_SCHEMA,
+    app_batch: APP_BATCH_SUMMARY_SCHEMA,
+  };
+  BATCH_EXEMPT_ACTIONS_BY_TOOL = {
+    computer_batch: COMPUTER_BATCH_EXEMPT_ACTIONS,
+    app_batch: APP_BATCH_EXEMPT_ACTIONS,
+  };
+  COMPUTER_USE_TOOL_PREFIX = getMcpPrefix_2(COMPUTER_USE_MCP_SERVER_NAME);
+  REMOTE_DEVICE_TOOL_PREFIX = getMcpPrefix_2(REMOTE_DEVICES);
 });
-var COMPUTER_BATCH_EXEMPT_ACTIONS = ["mouse_move", "scroll", "screenshot", "zoom", "cursor_position", "wait"];
-var APP_BATCH_EXEMPT_ACTIONS = ["scroll", "screenshot", "zoom"];
-var _Po = Object.freeze({
-  type: "string",
-  description: `${ACTION_SUMMARY_FIELD} Set it on every action except ${joinWithAnd(COMPUTER_BATCH_EXEMPT_ACTIONS)}. ${ACTION_SUMMARY_STYLE_RULE}`,
-});
-var SPo = Object.freeze({
-  type: "string",
-  description: `${ACTION_SUMMARY_FIELD} Set it on every action except ${joinWithAnd(APP_BATCH_EXEMPT_ACTIONS)}. ${ACTION_SUMMARY_STYLE_RULE}`,
-});
-var COMPUTER_USE_ACTION_NAMES = [
-  "left_click",
-  "right_click",
-  "middle_click",
-  "double_click",
-  "triple_click",
-  "left_click_drag",
-  "left_mouse_down",
-  "left_mouse_up",
-  "key",
-  "hold_key",
-  "type",
-  "app_click",
-  "app_drag",
-  "app_key",
-  "app_type",
-  "app_menu",
-];
-var BATCH_SUMMARY_SCHEMA_BY_TOOL = {
-  computer_batch: _Po,
-  app_batch: SPo,
-};
-var BATCH_EXEMPT_ACTIONS_BY_TOOL = {
-  computer_batch: COMPUTER_BATCH_EXEMPT_ACTIONS,
-  app_batch: APP_BATCH_EXEMPT_ACTIONS,
-};
-var COMPUTER_USE_TOOL_PREFIX = getMcpPrefix_2(COMPUTER_USE_MCP_SERVER_NAME);
-var REMOTE_DEVICE_TOOL_PREFIX = getMcpPrefix_2(REMOTE_DEVICES);
 //@ chunk-e6aww6q8.js:994922-995014 placement
-function computerUseToolNames(e) {
+function computerUseToolNames(actionName) {
   return [
-    COMPUTER_USE_TOOL_PREFIX + e,
-    `${REMOTE_DEVICE_TOOL_PREFIX}computer_${e}`,
-    ...(e.startsWith("computer_") ? [REMOTE_DEVICE_TOOL_PREFIX + e] : []),
+    COMPUTER_USE_TOOL_PREFIX + actionName,
+    `${REMOTE_DEVICE_TOOL_PREFIX}computer_${actionName}`,
+    ...(actionName.startsWith("computer_") ? [REMOTE_DEVICE_TOOL_PREFIX + actionName] : []),
   ];
 }
 //@ chunk-e6aww6q8.js:995014-995196 placement
-var ACTION_SUMMARY_TOOLS = new Set(COMPUTER_USE_ACTION_NAMES.flatMap(computerUseToolNames));
-var ACTION_SUMMARY_ITEM_TOOLS = new Map(
-  Object.entries(BATCH_SUMMARY_SCHEMA_BY_TOOL).flatMap(([key, value]) =>
-    computerUseToolNames(key).map((r) => [r, value]),
-  ),
-);
-var ACTION_SUMMARY_EXEMPT_ACTIONS = new Map(
-  Object.entries(BATCH_EXEMPT_ACTIONS_BY_TOOL).flatMap(([key, value]) =>
-    computerUseToolNames(key).map((r) => [r, value]),
-  ),
-);
+var ACTION_SUMMARY_TOOLS; // deferred: uses ACTION_SUMMARY_FIELD_2 of its import cycle while loading; runs once the cycle is complete
+var ACTION_SUMMARY_ITEM_TOOLS;
+var ACTION_SUMMARY_EXEMPT_ACTIONS;
+deferInit("chunk-e6aww6q8.js:995014", () => {
+  ACTION_SUMMARY_TOOLS = new Set(COMPUTER_USE_ACTION_NAMES.flatMap(computerUseToolNames));
+  ACTION_SUMMARY_ITEM_TOOLS = new Map(
+    Object.entries(BATCH_SUMMARY_SCHEMA_BY_TOOL).flatMap(([key, value]) =>
+      computerUseToolNames(key).map((toolName) => [toolName, value]),
+    ),
+  );
+  ACTION_SUMMARY_EXEMPT_ACTIONS = new Map(
+    Object.entries(BATCH_EXEMPT_ACTIONS_BY_TOOL).flatMap(([key, value]) =>
+      computerUseToolNames(key).map((toolName) => [toolName, value]),
+    ),
+  );
+});
 //@ chunk-e6aww6q8.js:995196-995304 placement
 function isComputerUseSummaryEnabled() {
   return (
@@ -315,61 +351,72 @@ function isComputerUseSummaryEnabled() {
   );
 }
 //@ chunk-e6aww6q8.js:995304-995347 placement
-var computerUseSummaryLogState = identity_2(
-  {
-    logged: false,
-  },
-  (e) => {
-    e.logged = false;
-  },
-);
+var computerUseSummaryLogState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:995304", () => {
+  computerUseSummaryLogState = identity_2(
+    {
+      logged: false,
+    },
+    (state) => {
+      state.logged = false;
+    },
+  );
+});
 //@ chunk-e6aww6q8.js:995347-995555 placement
 /**
  * 计算机使用类工具开关开启时给 schema（或 actions.items）加操作摘要字段，首次生效记 computeruse_action_summary。
  */
-function addComputerUseActionSummary(e, mcpToolName, r = isComputerUseSummaryEnabled) {
-  let s = ACTION_SUMMARY_ITEM_TOOLS.get(mcpToolName);
-  if (s === undefined && !ACTION_SUMMARY_TOOLS.has(mcpToolName)) return e;
-  let h = s === undefined ? addSummaryProperty(e, yPo) : addSummaryToActionItems(e, s);
-  if (h === e || !r()) return e;
+function addComputerUseActionSummary(schema, mcpToolName, isEnabled = isComputerUseSummaryEnabled) {
+  let itemSchema = ACTION_SUMMARY_ITEM_TOOLS.get(mcpToolName);
+  if (itemSchema === undefined && !ACTION_SUMMARY_TOOLS.has(mcpToolName)) return schema;
+  let updatedSchema =
+    itemSchema === undefined
+      ? addSummaryProperty(schema, genericActionSummarySchema)
+      : addSummaryToActionItems(schema, itemSchema);
+  if (updatedSchema === schema || !isEnabled()) return schema;
   if (!computerUseSummaryLogState.logged) {
     computerUseSummaryLogState.logged = true;
     logFeatureOk("computeruse_action_summary");
   }
-  return h;
+  return updatedSchema;
 }
 //@ chunk-e6aww6q8.js:995555-996091 placement
 /**
  * 统计工具调用的操作摘要填写情况：单动作工具返回摘要长度；批量工具返回需摘要动作数与已填数。
  */
-function measureActionSummaries(toolNameForPermissionCheck, inputJSONSchema, r) {
+function measureActionSummaries(toolName, inputJSONSchema, input) {
   let properties = inputJSONSchema?.properties;
   if (!isNonNullRecord(properties)) return;
-  let input = isNonNullRecord(r) ? r : {};
-  if (ACTION_SUMMARY_TOOLS.has(toolNameForPermissionCheck)) {
-    if (!(ACTION_SUMMARY_SCHEMA in properties)) return;
-    let G = input[ACTION_SUMMARY_SCHEMA];
+  let input_2 = isNonNullRecord(input) ? input : {};
+  if (ACTION_SUMMARY_TOOLS.has(toolName)) {
+    if (!(ACTION_SUMMARY_FIELD in properties)) return;
+    let summary = input_2[ACTION_SUMMARY_FIELD];
     return {
-      length: typeof G === "string" ? G.length : 0,
+      length: typeof summary === "string" ? summary.length : 0,
     };
   }
-  let exemptActions = ACTION_SUMMARY_EXEMPT_ACTIONS.get(toolNameForPermissionCheck);
+  let exemptActions = ACTION_SUMMARY_EXEMPT_ACTIONS.get(toolName);
   if (exemptActions === undefined) return;
   let actions = properties.actions;
   if (
     !isNonNullRecord(actions) ||
     !isNonNullRecord(actions.items) ||
     !isNonNullRecord(actions.items.properties) ||
-    !(ACTION_SUMMARY_SCHEMA in actions.items.properties)
+    !(ACTION_SUMMARY_FIELD in actions.items.properties)
   )
     return;
   let expectedItems = 0;
   let filledItems = 0;
-  for (let G of Array.isArray(input.actions) ? input.actions : []) {
-    if (!isNonNullRecord(G) || typeof G.action !== "string" || exemptActions.includes(G.action)) continue;
+  for (let action of Array.isArray(input_2.actions) ? input_2.actions : []) {
+    if (
+      !isNonNullRecord(action) ||
+      typeof action.action !== "string" ||
+      exemptActions.includes(action.action)
+    )
+      continue;
     expectedItems++;
-    let q = G[ACTION_SUMMARY_SCHEMA];
-    if (typeof q === "string" && q.trim() !== "") filledItems++;
+    let summary = action[ACTION_SUMMARY_FIELD];
+    if (typeof summary === "string" && summary.trim() !== "") filledItems++;
   }
   return {
     expectedItems,
@@ -377,38 +424,38 @@ function measureActionSummaries(toolNameForPermissionCheck, inputJSONSchema, r) 
   };
 }
 //@ chunk-e6aww6q8.js:996091-996191 placement
-function joinWithAnd(e) {
-  if (e.length < 2) return e.join("");
-  return `${e.slice(0, -1).join(", ")} and ${e.at(-1)}`;
+function joinWithAnd(parts) {
+  if (parts.length < 2) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
 //@ chunk-e6aww6q8.js:996191-996262 placement
-function isNonNullRecord(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isNonNullRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-e6aww6q8.js:996262-996379 placement
-function addSummaryProperty(e, n) {
-  if (!isNonNullRecord(e.properties) || ACTION_SUMMARY_SCHEMA in e.properties) return e;
+function addSummaryProperty(schema, summarySchema) {
+  if (!isNonNullRecord(schema.properties) || ACTION_SUMMARY_FIELD in schema.properties) return schema;
   return {
-    ...e,
+    ...schema,
     properties: {
-      ...e.properties,
-      [ACTION_SUMMARY_SCHEMA]: n,
+      ...schema.properties,
+      [ACTION_SUMMARY_FIELD]: summarySchema,
     },
   };
 }
 //@ chunk-e6aww6q8.js:996379-996568 placement
-function addSummaryToActionItems(e, n) {
-  let actions = e.properties?.actions;
-  if (!isNonNullRecord(actions) || !isNonNullRecord(actions.items)) return e;
-  let s = addSummaryProperty(actions.items, n);
-  if (s === actions.items) return e;
+function addSummaryToActionItems(itemSchema, summarySchema) {
+  let actions = itemSchema.properties?.actions;
+  if (!isNonNullRecord(actions) || !isNonNullRecord(actions.items)) return itemSchema;
+  let updatedItems = addSummaryProperty(actions.items, summarySchema);
+  if (updatedItems === actions.items) return itemSchema;
   return {
-    ...e,
+    ...itemSchema,
     properties: {
-      ...e.properties,
+      ...itemSchema.properties,
       actions: {
         ...actions,
-        items: s,
+        items: updatedItems,
       },
     },
   };

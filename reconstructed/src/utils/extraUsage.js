@@ -21,16 +21,16 @@ import { has1mSuffix_2 } from "./model/contextWindow1m.js";
  */
 function isBilledAsExtraUsage(model, isFastMode, isOpus1mMerged) {
   if (!isClaudeAISubscriber()) return false;
-  let a = model !== null ? parseUserSpecifiedModel(model) : getDefaultMainLoopModel();
-  let lower = a.toLowerCase();
-  let l = lower.includes("opus") || lower.includes("fable");
+  let resolvedModel = model !== null ? parseUserSpecifiedModel(model) : getDefaultMainLoopModel();
+  let lower = resolvedModel.toLowerCase();
+  let isOpusOrFable = lower.includes("opus") || lower.includes("fable");
   let included = lower.includes("opus-4-6");
   let included_2 = lower.includes("sonnet-4-6");
   if (isFastMode && supportsFastMode(model)) return true;
-  let u = usageCreditsBillingState(a);
-  if (u !== "pay_per_request" && u !== "included_in_plan") return true;
+  let billingState = usageCreditsBillingState(resolvedModel);
+  if (billingState !== "pay_per_request" && billingState !== "included_in_plan") return true;
   if (!has1mSuffix_2(lower)) return false;
-  if (l && isOpus1mMerged) return false;
+  if (isOpusOrFable && isOpus1mMerged) return false;
   return included || included_2;
 }
 export { isBilledAsExtraUsage };

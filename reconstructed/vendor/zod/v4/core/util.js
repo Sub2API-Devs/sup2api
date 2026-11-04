@@ -6,16 +6,23 @@
  * attribution: esm-fingerprint 54, esm-layout 8
  */
 import { globalConfig } from "./core.js";
+import { deferInit, beginDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ./core.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("vendor/zod/v4/core/core.js");
+// This module is the first evaluated of an import cycle of 2 modules closed by ./core.js (in the hooks worker thread);
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("worker:vendor/zod/v4/core/core.js");
 //@ chunk-t7zrjgp6.js:191-340 esm-fingerprint
-function iSr(entries) {
+function getEnumValues(entries) {
   let numericValues = Object.values(entries).filter((v) => typeof v === "number");
   return Object.entries(entries)
     .filter(([k, _]) => numericValues.indexOf(+k) === -1)
     .map(([_, value]) => value);
 }
 //@ chunk-t7zrjgp6.js:340-396 esm-fingerprint
-function Zgs(array, separator = "|") {
+function joinValues(array, separator = "|") {
   return array.map((val) => stringifyPrimitive(val)).join(separator);
 }
 //@ chunk-t7zrjgp6.js:396-466 esm-fingerprint
@@ -43,7 +50,7 @@ function cached(getter) {
   return new Cached(getter);
 }
 //@ chunk-t7zrjgp6.js:656-700 esm-layout
-function EIi(input) {
+function nullish(input) {
   return input === null || input === undefined;
 }
 //@ chunk-t7zrjgp6.js:700-802 esm-fingerprint
@@ -169,15 +176,18 @@ function isObject(data) {
   return typeof data === "object" && data !== null && !Array.isArray(data);
 }
 //@ chunk-t7zrjgp6.js:2379-2551 esm-fingerprint
-var allowsEval = cached(() => {
-  if (globalConfig.jitless) return false;
-  if (typeof navigator !== "undefined" && navigator?.userAgent?.includes("Cloudflare")) return false;
-  try {
-    new Function("");
-    return true;
-  } catch (_) {
-    return false;
-  }
+var allowsEval; // deferred: uses cached of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t7zrjgp6.js:2379", () => {
+  allowsEval = cached(() => {
+    if (globalConfig.jitless) return false;
+    if (typeof navigator !== "undefined" && navigator?.userAgent?.includes("Cloudflare")) return false;
+    try {
+      new Function("");
+      return true;
+    } catch (_) {
+      return false;
+    }
+  });
 });
 //@ chunk-t7zrjgp6.js:2551-2792 esm-fingerprint
 function isPlainObject(o) {
@@ -202,7 +212,10 @@ function shallowClone(o) {
   return o;
 }
 //@ chunk-t7zrjgp6.js:2949-2995 esm-fingerprint
-var CIi = new Set(["string", "number", "symbol"]);
+var propertyKeyTypes; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-t7zrjgp6.js:2949", () => {
+  propertyKeyTypes = new Set(["string", "number", "symbol"]);
+});
 //@ chunk-t7zrjgp6.js:2995-3058 esm-fingerprint
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -246,17 +259,21 @@ function optionalKeys(shape) {
   );
 }
 //@ chunk-t7zrjgp6.js:3674-4066 esm-fingerprint
-var NUMBER_FORMAT_RANGES = (() => ({
-  safeint: [Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
-  int32: [-2147483648, 2147483647],
-  uint32: [0, 4294967295],
-  float32: [-340282346638528860000000000000000000000, 340282346638528860000000000000000000000],
-  float64: [-Number.MAX_VALUE, Number.MAX_VALUE],
-}))();
-var BIGINT_FORMAT_RANGES = {
-  int64: [BigInt("-9223372036854775808"), BigInt("9223372036854775807")],
-  uint64: [BigInt(0), BigInt("18446744073709551615")],
-};
+var NUMBER_FORMAT_RANGES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BIGINT_FORMAT_RANGES;
+deferInit("chunk-t7zrjgp6.js:3674", () => {
+  NUMBER_FORMAT_RANGES = (() => ({
+    safeint: [Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
+    int32: [-2147483648, 2147483647],
+    uint32: [0, 4294967295],
+    float32: [-340282346638528860000000000000000000000, 340282346638528860000000000000000000000],
+    float64: [-Number.MAX_VALUE, Number.MAX_VALUE],
+  }))();
+  BIGINT_FORMAT_RANGES = {
+    int64: [BigInt("-9223372036854775808"), BigInt("9223372036854775807")],
+    uint64: [BigInt(0), BigInt("18446744073709551615")],
+  };
+});
 //@ chunk-t7zrjgp6.js:4066-4272 esm-fingerprint
 function pick(schema, mask) {
   let currDef = schema._zod.def;
@@ -488,8 +505,8 @@ function getLengthableOrigin(input) {
 }
 //@ chunk-t7zrjgp6.js:7647-7940 esm-fingerprint
 function parsedType(data) {
-  let t = typeof data;
-  switch (t) {
+  let getParsedType = typeof data;
+  switch (getParsedType) {
     case "number":
       return Number.isNaN(data) ? "nan" : "number";
     case "object": {
@@ -500,7 +517,7 @@ function parsedType(data) {
         return obj.constructor.name;
     }
   }
-  return t;
+  return getParsedType;
 }
 //@ chunk-t7zrjgp6.js:7940-8055 esm-fingerprint
 function issue(...args) {
@@ -517,7 +534,7 @@ function issue(...args) {
   };
 }
 //@ chunk-t7zrjgp6.js:8055-8264 esm-fingerprint
-function C(proto, table) {
+function members(proto, table) {
   for (let key in table) {
     let desc = Object.getOwnPropertyDescriptor(table, key);
     if (desc.get)
@@ -540,7 +557,7 @@ function own(inst, key, value, enumerable = true) {
   return value;
 }
 //@ chunk-t7zrjgp6.js:8376-8417 esm-layout
-function shs(inst, key, value) {
+function hide(inst, key, value) {
   return own(inst, key, value, false);
 }
 //@ chunk-t7zrjgp6.js:8417-8586 esm-fingerprint
@@ -661,7 +678,7 @@ export {
   jsonStringifyReplacer,
   finalizeIssue,
   captureStackTrace,
-  EIi,
+  nullish,
   floatSafeRemainder,
   NUMBER_FORMAT_RANGES,
   codePointLength,
@@ -670,7 +687,7 @@ export {
   aborted,
   explicitlyAborted,
   attachSchema,
-  shs,
+  hide,
   own,
   prefixIssues,
   optionalKeys,
@@ -683,13 +700,13 @@ export {
   cleanRegex,
   rawShape,
   isPlainObject,
-  iSr,
-  CIi,
+  getEnumValues,
+  propertyKeyTypes,
   defineLazy,
   issue,
   parsedType,
   stringifyPrimitive,
-  Zgs,
+  joinValues,
   normalizeParams,
   slugify,
   mergeDefs,
@@ -706,5 +723,5 @@ export {
   shallowClone,
   BIGINT_FORMAT_RANGES,
   CONSTANT_CATCH,
-  C,
+  members,
 };

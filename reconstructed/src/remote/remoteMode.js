@@ -12,6 +12,7 @@ import { AsyncLocalStorage } from "async_hooks";
 import { getCaps, getIsRemoteMode } from "../bootstrap/state.js";
 import { identity } from "../utils/pathClassification.js";
 import { getCwdOrNull, getCurrentCallFrame, realPathOutcomeSync } from "../utils/cwd.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-fnk5kvbf.js:345-869 placement
 /**
@@ -103,8 +104,8 @@ function isRemoteControlChannelAvailable() {
 /**
  * 导出函数 `hasRemoteControlChannel`：参数 e，返回 e?.caps?.controlChannel === !0 && !e.viewerOnly。
  */
-function hasRemoteControlChannel(e) {
-  return e?.caps?.controlChannel === true && !e.viewerOnly;
+function hasRemoteControlChannel(handle) {
+  return handle?.caps?.controlChannel === true && !handle.viewerOnly;
 }
 //@ chunk-fnk5kvbf.js:1184-1208 placement
 /**
@@ -117,63 +118,66 @@ function alwaysFalseRemoteMode() {
 /**
  * 导出函数 `hasRemoteCap`：参数 e，返回 Jn()?.caps?.[e] === !0。
  */
-function hasRemoteCap(e) {
-  return getRemoteCaps()?.caps?.[e] === true;
+function hasRemoteCap(cap) {
+  return getRemoteCaps()?.caps?.[cap] === true;
 }
 //@ chunk-fnk5kvbf.js:1251-1311 placement
 /**
  * 导出函数 `canUseRemoteFeature`：参数 e, n，返回 n && !(e.isRemoteMode && e.viewerOnly)。
  */
-function canUseRemoteFeature(e, n) {
-  return n && !(e.isRemoteMode && e.viewerOnly);
+function canUseRemoteFeature(handle, enabled) {
+  return enabled && !(handle.isRemoteMode && handle.viewerOnly);
 }
 //@ chunk-fnk5kvbf.js:1311-1409 placement
-function rejectUnwiredTransport(e) {
-  return Promise.reject(Error(`sendControlRequest not yet wired for ${e} transport`));
+function rejectUnwiredTransport(transport) {
+  return Promise.reject(Error(`sendControlRequest not yet wired for ${transport} transport`));
 }
 //@ chunk-fnk5kvbf.js:1409-1936 placement
 /**
  * 构造远程模式句柄：kind、只读查看、能力表、会话 id，并把传输的 send/cancel/disconnect 等方法带上默认实现；非远程模式返回固定的本地句柄。
  */
-function createRemoteModeHandle(e, n, viewerOnly, sessionId, ccrConsoleProfileBearer = false) {
-  if (!n.isRemoteMode) return LOCAL_MODE_HANDLE;
+function createRemoteModeHandle(kind, transport, viewerOnly, sessionId, ccrConsoleProfileBearer = false) {
+  if (!transport.isRemoteMode) return LOCAL_MODE_HANDLE;
   return {
-    kind: e,
+    kind,
     isRemoteMode: true,
     viewerOnly,
-    caps: REMOTE_TRANSPORT_CAPS[e],
+    caps: REMOTE_TRANSPORT_CAPS[kind],
     sessionId,
     ...(ccrConsoleProfileBearer && {
       consoleProfileBearer: ccrConsoleProfileBearer,
     }),
-    sendMessage: n.sendMessage,
-    cancelRequest: n.cancelRequest,
-    cancelHeldMessages: n.cancelHeldMessages ?? (() => false),
-    sendQueuedNow: n.sendQueuedNow ?? (() => Promise.resolve("failed")),
-    workerSendsNow: n.workerSendsNow ?? (() => false),
+    sendMessage: transport.sendMessage,
+    cancelRequest: transport.cancelRequest,
+    cancelHeldMessages: transport.cancelHeldMessages ?? (() => false),
+    sendQueuedNow: transport.sendQueuedNow ?? (() => Promise.resolve("failed")),
+    workerSendsNow: transport.workerSendsNow ?? (() => false),
     serviceTimeMs:
-      n.serviceTimeMs ??
+      transport.serviceTimeMs ??
       (() => {
         return;
       }),
-    holdsSends: n.holdsSends ?? (() => false),
-    disconnect: n.disconnect,
-    sendControlRequest: n.sendControlRequest ?? (() => rejectUnwiredTransport(e)),
+    holdsSends: transport.holdsSends ?? (() => false),
+    disconnect: transport.disconnect,
+    sendControlRequest: transport.sendControlRequest ?? (() => rejectUnwiredTransport(kind)),
     ...false,
   };
 }
 //@ chunk-fnk5kvbf.js:1936-1948 placement
-var remoteCallFrameStorage = new AsyncLocalStorage();
+var remoteCallFrameStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fnk5kvbf.js:1936", () => {
+  remoteCallFrameStorage = new AsyncLocalStorage();
+});
 //@ chunk-fnk5kvbf.js:1948-1993 placement
 /**
  * 导出函数 `runInRemoteCallFrameMain`：参数 e, n，返回 s.run({ cwd: Mn(e) }, n)。
  */
-function runInRemoteCallFrameMain(e, n) {
+function runInRemoteCallFrameMain(cwd, fn) {
   return remoteCallFrameStorage.run(
     {
-      cwd: identity(e),
+      cwd: identity(cwd),
     },
-    n,
+    fn,
   );
 }
 //@ chunk-fnk5kvbf.js:1993-2273 placement
@@ -181,30 +185,30 @@ function runInRemoteCallFrameMain(e, n) {
  * 在远程工作目录存在时，把回调放进新的调用帧（记录外层帧、物理路径、是否可在目录消失后恢复）中执行，结束后标记帧已结束。
  */
 async function runInRemoteCallFrame(
-  e,
-  { recoversIfAlreadyGone: n } = {
+  fn,
+  { recoversIfAlreadyGone } = {
     recoversIfAlreadyGone: false,
   },
 ) {
-  let cwdOrNull = getCwdOrNull();
-  if (cwdOrNull === null) return e();
+  let path = getCwdOrNull();
+  if (path === null) return fn();
   let currentCallFrame = getCurrentCallFrame();
-  let l = {
+  let call = {
     outer: currentCallFrame,
     isOver: false,
-    physical: realPathOutcomeSync(cwdOrNull),
-    recoversIfAlreadyGone: n && currentCallFrame?.call?.recoversIfAlreadyGone !== false,
+    physical: realPathOutcomeSync(path),
+    recoversIfAlreadyGone: recoversIfAlreadyGone && currentCallFrame?.call?.recoversIfAlreadyGone !== false,
   };
   try {
     return await remoteCallFrameStorage.run(
       {
-        cwd: cwdOrNull,
-        call: l,
+        cwd: path,
+        call,
       },
-      e,
+      fn,
     );
   } finally {
-    l.isOver = true;
+    call.isOver = true;
   }
 }
 export {

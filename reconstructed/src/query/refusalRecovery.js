@@ -69,6 +69,7 @@ import {
 } from "../services/api/safeguardMessages.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { logForDebugging } from "../utils/debug.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ha3km179.js:107203-110228 placement
 /**
@@ -96,23 +97,27 @@ async function* recoverFromRefusal({
         result: null,
       };
     let { actualTokens, limitTokens } = parsePromptTooLongTokenCounts(refusal.errorDetails ?? "");
-    let G = roughTokenCountEstimationForMessages(messages, facts.bytesPerToken);
-    let ee =
-      actualTokens !== undefined && limitTokens !== undefined ? limitTokens - (actualTokens - G) : undefined;
-    let V = ee !== undefined && ee < MAX_OUTPUT_TOKENS_CAP;
+    let messagesEstimate = roughTokenCountEstimationForMessages(messages, facts.bytesPerToken);
+    let roomAfterPrefix =
+      actualTokens !== undefined && limitTokens !== undefined
+        ? limitTokens - (actualTokens - messagesEstimate)
+        : undefined;
+    let futile = roomAfterPrefix !== undefined && roomAfterPrefix < MAX_OUTPUT_TOKENS_CAP;
     let { refusals, afterBoundary } = countRecentRefusals(messages);
-    let Z = afterBoundary;
-    let re = countNonProgressMessages(messages.filter((message) => !isSyntheticModelMessage(message))).length;
-    let Re = re < 2;
+    let unansweredCompaction = afterBoundary;
+    let roundsInView = countNonProgressMessages(
+      messages.filter((message) => !isSyntheticModelMessage(message)),
+    ).length;
+    let oneRound = roundsInView < 2;
     let cleanupHelpers = loadCleanupHelpers();
     let status = cleanupHelpers?.getTeleportCacheState().status;
     let lastDispatchFallback = cleanupHelpers?.getLastDispatchFallback();
-    let nt =
+    let relayStillOn =
       status === "active" &&
       lastDispatchFallback?.cause !== "model_mismatch" &&
       lastDispatchFallback?.httpStatus !== 400 &&
       lastDispatchFallback?.httpStatus !== 413;
-    let bt = hasAttempted
+    let skipReason = hasAttempted
       ? "prior_attempt"
       : toolUseContext.abortController.signal.aborted
         ? "aborted"
@@ -122,43 +127,43 @@ async function* recoverFromRefusal({
             ? "decided_at_loop_top"
             : offPickedModel
               ? "off_picked_model"
-              : Z
+              : unansweredCompaction
                 ? "unanswered_compaction"
                 : refusals >= TENGU_MODULAR_SEAL
                   ? "repeated_refusals"
-                  : Re
+                  : oneRound
                     ? "one_round"
-                    : nt
+                    : relayStillOn
                       ? "relay_still_on"
-                      : V
+                      : futile
                         ? "futile"
                         : undefined;
-    let dt = requestPrefixStats(
+    let prefixStats = requestPrefixStats(
       sentSystemPrompt.map((text) => ({
         text,
       })),
       sentInlineTools?.map((sentInlineTool) => sentInlineTool.schema) ?? [],
       new Map(),
     );
-    let rt = {
-      skipReason: fromEnumOpt(bt),
+    let telemetryBase = {
+      skipReason: fromEnumOpt(skipReason),
       loopTopOutcome: fromEnum(loopTopOutcome),
       refusalsSinceReply: refusals,
-      unansweredCompaction: Z,
-      oneRound: Re,
-      roundsInViewMax5: Math.min(re, 5),
-      futile: V,
-      roomAfterPrefixTokens: ee,
+      unansweredCompaction,
+      oneRound,
+      roundsInViewMax5: Math.min(roundsInView, 5),
+      futile,
+      roomAfterPrefixTokens: roomAfterPrefix,
       requestOffPickedModel: offPickedModel,
       relayStatus: fromEnumOpt(status),
       relayFallbackCause: fromEnumOpt(lastDispatchFallback?.cause),
       relayHttpStatus: lastDispatchFallback?.httpStatus,
       actualTokens,
       limitTokens,
-      messagesEstimate: G,
-      systemCharLength: dt?.systemCharLength,
-      toolsCharLength: dt?.toolsCharLength,
-      toolsCount: dt?.toolsCount,
+      messagesEstimate,
+      systemCharLength: prefixStats?.systemCharLength,
+      toolsCharLength: prefixStats?.toolsCharLength,
+      toolsCount: prefixStats?.toolsCount,
       bytesPerToken: facts.bytesPerToken,
       blockingLimitTokens: getEffectiveContextWindow(facts) - MAX_WINDOW_TOKENS,
       hadPromptUsage: hasUsageAnchor(messages),
@@ -167,9 +172,9 @@ async function* recoverFromRefusal({
       queryChainId: sanitizeMarkName(toolUseContext.queryTracking?.chainId),
       queryDepth: toolUseContext.queryTracking?.depth,
     };
-    if (bt !== undefined) {
+    if (skipReason !== undefined) {
       logEvent("tengu_compact_after_prompt_too_long", {
-        ...rt,
+        ...telemetryBase,
         outcome: lit("skipped"),
       });
       return {
@@ -178,7 +183,7 @@ async function* recoverFromRefusal({
     }
     if (getFeatureValue_CACHED_MAY_BE_STALE(TENGU_MODULAR_SEAL_2, false) !== true) {
       logEvent("tengu_compact_after_prompt_too_long", {
-        ...rt,
+        ...telemetryBase,
         outcome: lit("flag_off"),
       });
       return {
@@ -186,9 +191,9 @@ async function* recoverFromRefusal({
       };
     }
     let startTime = performance.now();
-    let Pe;
+    let compactOutcome;
     try {
-      Pe = yield* autocompact(
+      compactOutcome = yield* autocompact(
         messages,
         toolUseContext,
         facts,
@@ -201,43 +206,44 @@ async function* recoverFromRefusal({
       );
     } catch (error) {
       logError(withTelemetryMessage(toError(error), "compactAfterRefusal: the compaction threw"));
-      Pe = {
+      compactOutcome = {
         kind: "threw",
       };
     }
-    let Ke =
-      Pe.kind === "failed"
-        ? Pe.compactFailure
-        : Pe.kind === "threw"
+    let failure =
+      compactOutcome.kind === "failed"
+        ? compactOutcome.compactFailure
+        : compactOutcome.kind === "threw"
           ? {
               reason: "error",
               detail: "an internal error",
             }
           : undefined;
-    let J = Pe.kind === "compacted" ? Pe.result : null;
+    let result = compactOutcome.kind === "compacted" ? compactOutcome.result : null;
     try {
-      let je = unwrapAbortReason(toolUseContext.abortController.signal.reason) === "recovery-timeout";
+      let recoveryTimedOut =
+        unwrapAbortReason(toolUseContext.abortController.signal.reason) === "recovery-timeout";
       logEvent("tengu_compact_after_prompt_too_long", {
-        ...rt,
-        outcome: fromEnum(Pe.kind),
-        failureReason: fromEnumOpt(Ke?.reason),
-        recoveryTimedOut: je,
-        preCompactTokenCount: J?.preCompactTokenCount,
-        truePostCompactTokenCount: J?.truePostCompactTokenCount,
-        ptlAttempts: J?.ptlAttempts,
-        promptCacheSharingEnabled: J?.promptCacheSharingEnabled,
+        ...telemetryBase,
+        outcome: fromEnum(compactOutcome.kind),
+        failureReason: fromEnumOpt(failure?.reason),
+        recoveryTimedOut,
+        preCompactTokenCount: result?.preCompactTokenCount,
+        truePostCompactTokenCount: result?.truePostCompactTokenCount,
+        ptlAttempts: result?.ptlAttempts,
+        promptCacheSharingEnabled: result?.promptCacheSharingEnabled,
         durationMs: Math.round(performance.now() - startTime),
       });
-      if (J) logFeatureOk("compact_after_prompt_too_long");
-      else if (je) logFeatureBad("compact_after_prompt_too_long", "recovery_timeout");
-      else if (Ke?.reason === "aborted") logFeatureSad("compact_after_prompt_too_long", Ke.reason);
-      else logFeatureBad("compact_after_prompt_too_long", Ke?.reason ?? Pe.kind);
+      if (result) logFeatureOk("compact_after_prompt_too_long");
+      else if (recoveryTimedOut) logFeatureBad("compact_after_prompt_too_long", "recovery_timeout");
+      else if (failure?.reason === "aborted") logFeatureSad("compact_after_prompt_too_long", failure.reason);
+      else logFeatureBad("compact_after_prompt_too_long", failure?.reason ?? compactOutcome.kind);
     } catch (error) {
       logError(withTelemetryMessage(toError(error), "compactAfterRefusal: logging the outcome threw"));
     }
     return {
-      result: J,
-      failure: Ke,
+      result,
+      failure,
     };
   } catch (error) {
     logError(withTelemetryMessage(toError(error), "compactAfterRefusal: threw before the compaction"));
@@ -251,26 +257,26 @@ async function* recoverFromRefusal({
  * 统计最近的拒绝次数（是否在压缩边界后）。
  */
 function countRecentRefusals(messages) {
-  let n = 0;
+  let refusals = 0;
   let preservedMessages = messages.findLast(isCompactBoundaryMessage)?.compactMetadata?.preservedMessages;
-  let s = new Set(preservedMessages?.allUuids ?? preservedMessages?.uuids);
+  let preservedUuids = new Set(preservedMessages?.allUuids ?? preservedMessages?.uuids);
   for (let j = messages.length - 1; j >= 0; j--) {
-    let y = messages[j];
-    if (!y || s.has(y.uuid)) continue;
-    if (isCompactBoundaryMessage(y))
+    let message = messages[j];
+    if (!message || preservedUuids.has(message.uuid)) continue;
+    if (isCompactBoundaryMessage(message))
       return {
-        refusals: n,
+        refusals,
         afterBoundary: true,
       };
-    if (y.type === "assistant" && !isSyntheticModelMessage(y))
+    if (message.type === "assistant" && !isSyntheticModelMessage(message))
       return {
-        refusals: n,
+        refusals,
         afterBoundary: false,
       };
-    if (y.type === "assistant" && isPromptTooLongMessage_2(y)) n++;
+    if (message.type === "assistant" && isPromptTooLongMessage_2(message)) refusals++;
   }
   return {
-    refusals: n,
+    refusals,
     afterBoundary: false,
   };
 }
@@ -278,8 +284,8 @@ function countRecentRefusals(messages) {
 /**
  * 合成模型的消息
  */
-function isSyntheticModelMessage(e) {
-  return e.type === "assistant" && e.message.model === SYNTHETIC_MODEL;
+function isSyntheticModelMessage(message) {
+  return message.type === "assistant" && message.message.model === SYNTHETIC_MODEL;
 }
 //@ chunk-ha3km179.js:110658-110893 placement
 /**
@@ -309,38 +315,38 @@ function shouldCompactAfterLongContextRefusal(msg, attemptModelFacts, querySourc
 /**
  * 从错误详情计算提示过长时的令牌比例分档。
  */
-function promptTooLongFacts(e) {
+function promptTooLongFacts(reply) {
   try {
-    let { actualTokens, limitTokens } = parsePromptTooLongTokenCounts(e.errorDetails ?? "");
-    let s = requestPrefixStats(
-      e.systemPrompt.map((text) => ({
+    let { actualTokens, limitTokens } = parsePromptTooLongTokenCounts(reply.errorDetails ?? "");
+    let prefixStats = requestPrefixStats(
+      reply.systemPrompt.map((text) => ({
         text,
       })),
-      e.inlineTools?.map((inlineTool) => inlineTool.schema) ?? [],
+      reply.inlineTools?.map((inlineTool) => inlineTool.schema) ?? [],
       new Map(),
     );
-    if (s === undefined) return {};
-    let h = roughTokenCountEstimationForMessages(e.messages);
-    let y =
+    if (prefixStats === undefined) return {};
+    let roundEstimate = roughTokenCountEstimationForMessages(reply.messages);
+    let ratio =
       actualTokens === undefined
         ? undefined
-        : (actualTokens - (s.systemCharLength + s.toolsCharLength) / 4) / h;
+        : (actualTokens - (prefixStats.systemCharLength + prefixStats.toolsCharLength) / 4) / roundEstimate;
     return {
       actualTokens,
       limitTokens,
-      systemCharLength: s.systemCharLength,
-      toolsCharLength: s.toolsCharLength,
-      roundSizingEstimate: h,
+      systemCharLength: prefixStats.systemCharLength,
+      toolsCharLength: prefixStats.toolsCharLength,
+      roundSizingEstimate: roundEstimate,
       actualToRoundSizingRatio: fromEnum(
-        y === undefined
+        ratio === undefined
           ? "no_numbers"
-          : y < 1.5
+          : ratio < 1.5
             ? "under_1_5"
-            : y < 2
+            : ratio < 2
               ? "1_5_to_2"
-              : y < 3
+              : ratio < 3
                 ? "2_to_3"
-                : y < 4
+                : ratio < 4
                   ? "3_to_4"
                   : "4_and_over",
       ),
@@ -353,49 +359,52 @@ function promptTooLongFacts(e) {
   }
 }
 //@ chunk-ha3km179.js:111521-111592 placement
-var mi = Object.freeze({
-  delivery: "transient",
-  records: Object.freeze([]),
+var EMPTY_ANNOUNCEMENT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ha3km179.js:111521", () => {
+  EMPTY_ANNOUNCEMENT = Object.freeze({
+    delivery: "transient",
+    records: Object.freeze([]),
+  });
 });
 //@ chunk-ha3km179.js:111592-112007 placement
 /**
  * 决定系统提醒的投递方式（kept/next_user_message 等）。
  */
-function decideReminderDelivery(e) {
+function decideReminderDelivery(params) {
   try {
-    let n =
-      e.deliveryOverride ??
-      e.decide(
-        e.querySource,
-        e.agentId,
-        e.model,
-        e.reminderModel,
-        e.creditRetryStateless,
-        e.recordedKeptReminders,
+    let delivery =
+      params.deliveryOverride ??
+      params.decide(
+        params.querySource,
+        params.agentId,
+        params.model,
+        params.reminderModel,
+        params.creditRetryStateless,
+        params.recordedKeptReminders,
       );
-    if (n !== "kept")
+    if (delivery !== "kept")
       return {
-        delivery: n,
+        delivery,
         records: [],
       };
-    let records = e.recordsDue(e.messages, e.session, e.reminderModel).map((s) =>
-      e.createRecord(
+    let records = params.recordsDue(params.messages, params.session, params.reminderModel).map((record) =>
+      params.createRecord(
         {
-          type: s.type,
-          text: s.text,
-          model: e.reminderModel,
+          type: record.type,
+          text: record.text,
+          model: params.reminderModel,
           clearAt: "next_user_message",
         },
-        e.stamp,
+        params.stamp,
       ),
     );
     return {
-      delivery: n,
+      delivery,
       records,
     };
   } catch (error) {
     logError(error);
-    return mi;
+    return EMPTY_ANNOUNCEMENT;
   }
 }
 //@ chunk-ha3km179.js:112007-112114 placement
@@ -404,7 +413,10 @@ function decideReminderDelivery(e) {
  */
 function allAnsweredWithoutRequest(assistantMessages) {
   try {
-    return assistantMessages.length > 0 && assistantMessages.every((n) => n.answeredWithoutRequest === true);
+    return (
+      assistantMessages.length > 0 &&
+      assistantMessages.every((message) => message.answeredWithoutRequest === true)
+    );
   } catch (error) {
     logError(error);
     return false;
@@ -435,8 +447,12 @@ function shouldRetryRefusal(querySource, refusalRetrySpent) {
 /**
  * 判断消息是否为 stop_reason 为 refusal 的 API 错误消息。
  */
-function isRefusalErrorMessage(e) {
-  return e?.type === "assistant" && e.isApiErrorMessage === true && e.message.stop_reason === "refusal";
+function isRefusalErrorMessage(message) {
+  return (
+    message?.type === "assistant" &&
+    message.isApiErrorMessage === true &&
+    message.message.stop_reason === "refusal"
+  );
 }
 //@ chunk-ha3km179.js:112586-113781 placement
 /**
@@ -454,34 +470,36 @@ function synthesizeRefusedToolResults({
   deps,
   makeUserMessage,
 }) {
-  let w = new Set(
-    answered.flatMap((L) =>
-      L.type === "user" && Array.isArray(L.message.content)
-        ? L.message.content.flatMap((z) => (z.type === "tool_result" ? [z.tool_use_id] : []))
+  let answeredIds = new Set(
+    answered.flatMap((message) =>
+      message.type === "user" && Array.isArray(message.message.content)
+        ? message.message.content.flatMap((block) =>
+            block.type === "tool_result" ? [block.tool_use_id] : [],
+          )
         : [],
     ),
   );
-  let P = new Set(started);
-  let Q = 0;
-  let flattened = kept.flatMap((L) =>
-    L.message.content.flatMap((z) => {
-      if (z.type !== "tool_use" || w.has(z.id)) return [];
-      let G = P.has(z.id);
-      if (G) Q++;
-      let ee = G ? TOOL_INTERRUPTED_BY_REFUSAL : TOOL_NOT_RUN_AFTER_REFUSAL;
+  let startedIds = new Set(started);
+  let interruptedCount = 0;
+  let flattened = kept.flatMap((message) =>
+    message.message.content.flatMap((block) => {
+      if (block.type !== "tool_use" || answeredIds.has(block.id)) return [];
+      let wasStarted = startedIds.has(block.id);
+      if (wasStarted) interruptedCount++;
+      let resultText = wasStarted ? TOOL_INTERRUPTED_BY_REFUSAL : TOOL_NOT_RUN_AFTER_REFUSAL;
       return [
         makeUserMessage({
           content: [
             {
               type: "tool_result",
-              tool_use_id: z.id,
+              tool_use_id: block.id,
               is_error: true,
-              content: ee,
+              content: resultText,
             },
           ],
-          toolUseResult: ee,
-          toolDenialKind: G ? "interrupted" : "cancelled",
-          sourceToolAssistantUUID: L.uuid,
+          toolUseResult: resultText,
+          toolDenialKind: wasStarted ? "interrupted" : "cancelled",
+          sourceToolAssistantUUID: message.uuid,
           now: deps.now,
           uuidFn: deps.uuid,
         }),
@@ -497,9 +515,9 @@ function synthesizeRefusedToolResults({
       queryChainId,
       queryDepth,
       querySource: agentTypeForTelemetry(querySource),
-      tool_calls_not_run: flattened.length - Q,
-      tool_calls_interrupted: Q,
-      tool_calls_already_finished: w.size,
+      tool_calls_not_run: flattened.length - interruptedCount,
+      tool_calls_interrupted: interruptedCount,
+      tool_calls_already_finished: answeredIds.size,
     });
   } catch (error) {
     logError(error);
@@ -511,7 +529,8 @@ function synthesizeRefusedToolResults({
       "notice",
     ),
     nudge: makeUserMessage({
-      content: Q > 0 ? SAFETY_CLASSIFIER_STOPPED_WITH_INTERRUPT_TEXT : SAFETY_CLASSIFIER_STOPPED_TEXT,
+      content:
+        interruptedCount > 0 ? SAFETY_CLASSIFIER_STOPPED_WITH_INTERRUPT_TEXT : SAFETY_CLASSIFIER_STOPPED_TEXT,
       isMeta: true,
       turnCompanion: true,
       refusedMessageId: refused.refusedMessageId,
@@ -575,38 +594,38 @@ async function askRefusalFallbackPreference({
   telemetry,
 }) {
   try {
-    let S = renderModelName(originalModel);
-    let M = renderModelName(fallbackModel);
-    let safeguardLead = getSafeguardLead(S, originalModel, apiRefusalCategory);
-    let T = await confirmWithUser({
+    let originalName = renderModelName(originalModel);
+    let fallbackName = renderModelName(fallbackModel);
+    let safeguardLead = getSafeguardLead(originalName, originalModel, apiRefusalCategory);
+    let answer = await confirmWithUser({
       canUseTool,
       toolUseContext,
       source: "refusal_fallback_preference",
       header: "Model switch",
-      question: `${safeguardLead} Switch to ${M} and keep going whenever this happens? You can change this later in /config.`,
+      question: `${safeguardLead} Switch to ${fallbackName} and keep going whenever this happens? You can change this later in /config.`,
       choices: [
         {
           value: "switch_automatically",
           label: FALLBACK_PREFERENCE_LABELS.switchAutomatically,
-          description: `Continue on ${M} now, and switch without asking from now on`,
+          description: `Continue on ${fallbackName} now, and switch without asking from now on`,
         },
         {
           value: "pause",
-          label: `Stay on ${S}`,
+          label: `Stay on ${originalName}`,
           description: "Stop here without switching, and ask me each time a message is flagged",
         },
       ],
     });
-    let w = T.kind === "chose" ? T.value : T.kind;
+    let choiceValue = answer.kind === "chose" ? answer.value : answer.kind;
     switch (
       (logEvent("tengu_refusal_fallback_preference_prompt", {
         ...telemetry,
-        choice: fromEnum(w),
+        choice: fromEnum(choiceValue),
       }),
-      T.kind)
+      answer.kind)
     ) {
       case "unanswered":
-        logFeatureSad("refusal_fallback_preference_prompt", T.reason);
+        logFeatureSad("refusal_fallback_preference_prompt", answer.reason);
         return "retry_fallback";
       case "declined":
         logFeatureOk("refusal_fallback_preference_prompt");
@@ -617,9 +636,9 @@ async function askRefusalFallbackPreference({
       case "chose":
         break;
     }
-    let P = T.value === "switch_automatically";
+    let switchAutomatically = answer.value === "switch_automatically";
     let { error } = await setSwitchModelsOnFlag(
-      P,
+      switchAutomatically,
       "first_flag_prompt",
       isStorageV5Enabled() ? toolUseContext.storageV5 : undefined,
     );
@@ -629,7 +648,7 @@ async function askRefusalFallbackPreference({
       });
       logFeatureSad("refusal_fallback_preference_prompt", "save_failed");
     } else logFeatureOk("refusal_fallback_preference_prompt");
-    return P ? "retry_fallback" : "edit_prompt";
+    return switchAutomatically ? "retry_fallback" : "edit_prompt";
   } catch (error) {
     logError(error);
     logFeatureBad("refusal_fallback_preference_prompt", "error");
@@ -639,7 +658,7 @@ async function askRefusalFallbackPreference({
 export {
   shouldRetryRefusal,
   shouldAskRefusalFallbackPreference,
-  mi,
+  EMPTY_ANNOUNCEMENT,
   decideReminderDelivery,
   askRefusalFallbackPreference,
   allAnsweredWithoutRequest,

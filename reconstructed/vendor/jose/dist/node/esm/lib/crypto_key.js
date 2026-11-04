@@ -2,23 +2,17 @@
  * jose/dist/node/esm/lib/crypto_key.js
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * third-party: jose@6.2.2
- * pieces: chunk-2tyrgda4.js (8)
+ * pieces: chunk-2tyrgda4.js (7)
  * attribution: esm-layout 3, esm-fingerprint 5
  */
-import { Xa } from "../../../../../../runtime/bun-runtime.js";
-import { timingSafeEqual_default, timingSafeEqual } from "../../../browser/runtime/timing_safe_equal.js";
 
-//@ chunk-2tyrgda4.js:4322-4345 esm-layout
-var init_crypto_key = Xa(() => {
-  timingSafeEqual_default = timingSafeEqual;
-});
 //@ chunk-2tyrgda4.js:4345-4463 esm-fingerprint
 function unusable(name, prop = "algorithm.name") {
   return TypeError(`CryptoKey does not support this operation, its ${prop} must be ${name}`);
 }
 //@ chunk-2tyrgda4.js:4463-4497 esm-layout
-function B(algorithm, t) {
-  return algorithm.name === t;
+function isAlgorithm(algorithm, expectedName) {
+  return algorithm.name === expectedName;
 }
 //@ chunk-2tyrgda4.js:4497-4548 esm-layout
 function getHashLength(hash) {
@@ -55,7 +49,7 @@ function checkSigCryptoKey(key, alg, ...usages) {
     case "HS256":
     case "HS384":
     case "HS512": {
-      if (!B(key.algorithm, "HMAC")) throw unusable("HMAC");
+      if (!isAlgorithm(key.algorithm, "HMAC")) throw unusable("HMAC");
       let expected = parseInt(alg.slice(2), 10);
       if (getHashLength(key.algorithm.hash) !== expected) throw unusable(`SHA-${expected}`, "algorithm.hash");
       break;
@@ -63,7 +57,7 @@ function checkSigCryptoKey(key, alg, ...usages) {
     case "RS256":
     case "RS384":
     case "RS512": {
-      if (!B(key.algorithm, "RSASSA-PKCS1-v1_5")) throw unusable("RSASSA-PKCS1-v1_5");
+      if (!isAlgorithm(key.algorithm, "RSASSA-PKCS1-v1_5")) throw unusable("RSASSA-PKCS1-v1_5");
       let expected = parseInt(alg.slice(2), 10);
       if (getHashLength(key.algorithm.hash) !== expected) throw unusable(`SHA-${expected}`, "algorithm.hash");
       break;
@@ -71,7 +65,7 @@ function checkSigCryptoKey(key, alg, ...usages) {
     case "PS256":
     case "PS384":
     case "PS512": {
-      if (!B(key.algorithm, "RSA-PSS")) throw unusable("RSA-PSS");
+      if (!isAlgorithm(key.algorithm, "RSA-PSS")) throw unusable("RSA-PSS");
       let expected = parseInt(alg.slice(2), 10);
       if (getHashLength(key.algorithm.hash) !== expected) throw unusable(`SHA-${expected}`, "algorithm.hash");
       break;
@@ -84,7 +78,7 @@ function checkSigCryptoKey(key, alg, ...usages) {
     case "ES256":
     case "ES384":
     case "ES512": {
-      if (!B(key.algorithm, "ECDSA")) throw unusable("ECDSA");
+      if (!isAlgorithm(key.algorithm, "ECDSA")) throw unusable("ECDSA");
       let expected = getNamedCurve(alg);
       if (key.algorithm.namedCurve !== expected) throw unusable(expected, "algorithm.namedCurve");
       break;
@@ -100,7 +94,7 @@ function checkEncCryptoKey(key, alg, ...usages) {
     case "A128GCM":
     case "A192GCM":
     case "A256GCM": {
-      if (!B(key.algorithm, "AES-GCM")) throw unusable("AES-GCM");
+      if (!isAlgorithm(key.algorithm, "AES-GCM")) throw unusable("AES-GCM");
       let expected = parseInt(alg.slice(1, 4), 10);
       if (key.algorithm.length !== expected) throw unusable(expected, "algorithm.length");
       break;
@@ -108,7 +102,7 @@ function checkEncCryptoKey(key, alg, ...usages) {
     case "A128KW":
     case "A192KW":
     case "A256KW": {
-      if (!B(key.algorithm, "AES-KW")) throw unusable("AES-KW");
+      if (!isAlgorithm(key.algorithm, "AES-KW")) throw unusable("AES-KW");
       let expected = parseInt(alg.slice(1, 4), 10);
       if (key.algorithm.length !== expected) throw unusable(expected, "algorithm.length");
       break;
@@ -127,13 +121,13 @@ function checkEncCryptoKey(key, alg, ...usages) {
     case "PBES2-HS256+A128KW":
     case "PBES2-HS384+A192KW":
     case "PBES2-HS512+A256KW":
-      if (!B(key.algorithm, "PBKDF2")) throw unusable("PBKDF2");
+      if (!isAlgorithm(key.algorithm, "PBKDF2")) throw unusable("PBKDF2");
       break;
     case "RSA-OAEP":
     case "RSA-OAEP-256":
     case "RSA-OAEP-384":
     case "RSA-OAEP-512": {
-      if (!B(key.algorithm, "RSA-OAEP")) throw unusable("RSA-OAEP");
+      if (!isAlgorithm(key.algorithm, "RSA-OAEP")) throw unusable("RSA-OAEP");
       let expected = parseInt(alg.slice(9), 10) || 1;
       if (getHashLength(key.algorithm.hash) !== expected) throw unusable(`SHA-${expected}`, "algorithm.hash");
       break;
@@ -143,4 +137,4 @@ function checkEncCryptoKey(key, alg, ...usages) {
   }
   checkUsage(key, usages);
 }
-export { checkEncCryptoKey, init_crypto_key, checkSigCryptoKey };
+export { checkEncCryptoKey, checkSigCryptoKey };

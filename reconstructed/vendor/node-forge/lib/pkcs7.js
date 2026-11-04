@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_aes } from "./aes.js";
 import { require_asn1 } from "./asn1.js";
@@ -18,7 +18,7 @@ import { require_util } from "./util.js";
 import { require_x509 } from "./x509.js";
 
 //@ chunk-fq0cr76a.js:277801-293009 cjs-fingerprint
-var require_pkcs7 = x(function (cjsExports, cjsModule) {
+var require_pkcs7 = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_aes();
   require_asn1();
@@ -289,7 +289,7 @@ var require_pkcs7 = x(function (cjsExports, cjsModule) {
         }
         signer.signature = signer.key.sign(signer.md, "RSASSA-PKCS1-V1_5");
       }
-      msg.signerInfos = Z6(msg.signers);
+      msg.signerInfos = signersFromAsn1(msg.signers);
     }
   };
   p7.createEncryptedData = function () {
@@ -540,7 +540,7 @@ var require_pkcs7 = x(function (cjsExports, cjsModule) {
     }
     return rval;
   }
-  function Z6(signerInfoAsn1s) {
+  function signersFromAsn1(signerInfoAsn1s) {
     var ret = [];
     for (var i = 0; i < signerInfoAsn1s.length; ++i) ret.push(_signerFromAsn1(signerInfoAsn1s[i]));
     return ret;

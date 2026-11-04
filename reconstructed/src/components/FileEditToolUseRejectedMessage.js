@@ -8,7 +8,7 @@
  * pieces: chunk-vnfdjr3f.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import {
   jsxProd_default_2,
@@ -29,7 +29,7 @@ var MAX_DIFF_PREVIEW_LINES = 10;
  * 编辑/写入被拒绝："User rejected update/write to <路径>"，写入显示被拒内容（高亮），编辑显示被拒 diff。
  */
 function FileEditToolUseRejectedMessage(props) {
-  let $ = w(39);
+  let $ = useMemoCache(39);
   let { file_path, operation, patch, firstLine, fileContent, content, style, verbose } = props;
   let { columns } = useTerminalSize();
   let t1;
@@ -48,9 +48,9 @@ function FileEditToolUseRejectedMessage(props) {
     $[3] = verbose;
     $[4] = children;
   } else children = $[4];
-  let P;
+  let fileElement;
   if ($[5] !== file_path || $[6] !== children) {
-    P = jsxProd_default(Text, {
+    fileElement = jsxProd_default(Text, {
       bold: true,
       color: "subtle",
       children: jsxProd_default(FilePathLink, {
@@ -60,16 +60,16 @@ function FileEditToolUseRejectedMessage(props) {
     });
     $[5] = file_path;
     $[6] = children;
-    $[7] = P;
-  } else P = $[7];
+    $[7] = fileElement;
+  } else fileElement = $[7];
   let t4;
-  if ($[8] !== t1 || $[9] !== P) {
+  if ($[8] !== t1 || $[9] !== fileElement) {
     t4 = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [t1, P],
+      children: [t1, fileElement],
     });
     $[8] = t1;
-    $[9] = P;
+    $[9] = fileElement;
     $[10] = t4;
   } else t4 = $[10];
   let text = t4;
@@ -119,27 +119,27 @@ function FileEditToolUseRejectedMessage(props) {
       $[19] = width;
       $[20] = t8;
     } else t8 = $[20];
-    let A;
+    let overflowElement;
     if ($[21] !== plusLines || $[22] !== verbose) {
-      A =
+      overflowElement =
         !verbose &&
         jsxProd_default(OverflowHint, {
           count: plusLines,
         });
       $[21] = plusLines;
       $[22] = verbose;
-      $[23] = A;
-    } else A = $[23];
+      $[23] = overflowElement;
+    } else overflowElement = $[23];
     let t10;
-    if ($[24] !== t8 || $[25] !== A || $[26] !== text) {
+    if ($[24] !== t8 || $[25] !== overflowElement || $[26] !== text) {
       t10 = jsxProd_default(MessageResponse, {
         children: jsxProd_default_2(Box, {
           flexDirection: "column",
-          children: [text, t8, A],
+          children: [text, t8, overflowElement],
         }),
       });
       $[24] = t8;
-      $[25] = A;
+      $[25] = overflowElement;
       $[26] = text;
       $[27] = t10;
     } else t10 = $[27];

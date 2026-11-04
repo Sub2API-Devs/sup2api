@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useHost } from "../../context/session.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import {
@@ -30,7 +30,7 @@ import { MessageResponse } from "../MessageResponse.js";
 
 //@ chunk-ah34pb7m.js:40534-43247 fingerprint = AdvisorMessage (0.614)
 function AdvisorMessage(props) {
-  let $ = w(42);
+  let $ = useMemoCache(42);
   let { block, addMargin, resolvedToolUseIDs, erroredToolUseIDs, shouldAnimate, verbose, advisorModel } =
     props;
   let host = useHost();
@@ -118,63 +118,63 @@ function AdvisorMessage(props) {
   }
   let body;
   if (getErrorMessageIfRefusal(block)) {
-    let b;
+    let refusalText;
     if ($[22] !== block) {
-      b = getAdvisorRefusalText(block);
+      refusalText = getAdvisorRefusalText(block);
       $[22] = block;
-      $[23] = b;
-    } else b = $[23];
-    let ee = b;
-    let B;
+      $[23] = refusalText;
+    } else refusalText = $[23];
+    let refusalDetail = refusalText;
+    let warningText;
     if ($[24] === MEMO_CACHE_SENTINEL) {
-      B = jsxProd_default(Text, {
+      warningText = jsxProd_default(Text, {
         color: "warning",
         children: "Advisor declined to advise on this request",
       });
-      $[24] = B;
-    } else B = $[24];
-    let L;
-    if ($[25] !== ee || $[26] !== verbose) {
-      L =
-        ee !== undefined && !verbose
+      $[24] = warningText;
+    } else warningText = $[24];
+    let expandHint;
+    if ($[25] !== refusalDetail || $[26] !== verbose) {
+      expandHint =
+        refusalDetail !== undefined && !verbose
           ? jsxProd_default_2(Fragment, {
               children: [" ", jsxProd_default(CtrlOToExpand, {})],
             })
           : null;
-      $[25] = ee;
+      $[25] = refusalDetail;
       $[26] = verbose;
-      $[27] = L;
-    } else L = $[27];
-    let N;
-    if ($[28] !== L) {
-      N = jsxProd_default_2(Text, {
-        children: [B, L],
+      $[27] = expandHint;
+    } else expandHint = $[27];
+    let summaryLine;
+    if ($[28] !== expandHint) {
+      summaryLine = jsxProd_default_2(Text, {
+        children: [warningText, expandHint],
       });
-      $[28] = L;
-      $[29] = N;
-    } else N = $[29];
-    let le = N;
-    let W;
-    if ($[30] !== le || $[31] !== ee || $[32] !== verbose) {
-      W =
-        verbose && ee !== undefined
+      $[28] = expandHint;
+      $[29] = summaryLine;
+    } else summaryLine = $[29];
+    let summaryText = summaryLine;
+    let refusalBody;
+    if ($[30] !== summaryText || $[31] !== refusalDetail || $[32] !== verbose) {
+      refusalBody =
+        verbose && refusalDetail !== undefined
           ? jsxProd_default_2(Box, {
               flexDirection: "column",
               children: [
-                le,
+                summaryText,
                 jsxProd_default(Text, {
                   dimColor: true,
-                  children: ee,
+                  children: refusalDetail,
                 }),
               ],
             })
-          : le;
-      $[30] = le;
-      $[31] = ee;
+          : summaryText;
+      $[30] = summaryText;
+      $[31] = refusalDetail;
       $[32] = verbose;
-      $[33] = W;
-    } else W = $[33];
-    body = W;
+      $[33] = refusalBody;
+    } else refusalBody = $[33];
+    body = refusalBody;
   } else {
     ge: switch (block.content?.type) {
       case "advisor_tool_result_error": {
@@ -217,9 +217,9 @@ function AdvisorMessage(props) {
         break ge;
       }
       case "advisor_redacted_result": {
-        let b;
+        let redactedText;
         if ($[39] === MEMO_CACHE_SENTINEL) {
-          b = jsxProd_default_2(Text, {
+          redactedText = jsxProd_default_2(Text, {
             dimColor: true,
             children: [
               jsxProd_default_2(Text, {
@@ -229,9 +229,9 @@ function AdvisorMessage(props) {
               "Advisor has reviewed the conversation and will apply the feedback",
             ],
           });
-          $[39] = b;
-        } else b = $[39];
-        body = b;
+          $[39] = redactedText;
+        } else redactedText = $[39];
+        body = redactedText;
         break ge;
       }
       default: {

@@ -80,10 +80,10 @@ var FREE_SPACE_LABEL = "Free space";
 /**
  * /context 分类的种类：Free space、Autocompact/Compact buffer、延迟加载项、已使用。
  */
-function getContextCategoryKind(e) {
-  if (e.name === FREE_SPACE_LABEL) return "free";
-  if (e.name === AUTOCOMPACT_BUFFER_LABEL || e.name === COMPACT_BUFFER_LABEL) return "buffer";
-  if (e.isDeferred) return "deferred";
+function getContextCategoryKind(category) {
+  if (category.name === FREE_SPACE_LABEL) return "free";
+  if (category.name === AUTOCOMPACT_BUFFER_LABEL || category.name === COMPACT_BUFFER_LABEL) return "buffer";
+  if (category.isDeferred) return "deferred";
   return "used";
 }
 //@ chunk-e6aww6q8.js:2372134-2372145 layout
@@ -95,22 +95,24 @@ var TOOL_DEFINITION_TOKEN_OVERHEAD = 500;
 function distributeProportionally(total, weights) {
   let reduced = weights.reduce((acc, weight) => acc + weight, 0);
   let mapped = weights.map((weight) => (reduced > 0 ? (weight / reduced) * total : total / weights.length));
-  let mapped_2 = mapped.map((w) => Math.floor(w));
-  let y = total - mapped_2.reduce((acc, L) => acc + L, 0);
-  let sorted = [...mapped.keys()].sort((w, L) => mapped[L] - mapped_2[L] - (mapped[w] - mapped_2[w]));
-  for (let w of sorted) {
-    if (y <= 0) break;
-    mapped_2[w] += 1;
-    y -= 1;
+  let mapped_2 = mapped.map((exact) => Math.floor(exact));
+  let remainingUnits = total - mapped_2.reduce((acc, value) => acc + value, 0);
+  let sorted = [...mapped.keys()].sort(
+    (indexA, indexB) => mapped[indexB] - mapped_2[indexB] - (mapped[indexA] - mapped_2[indexA]),
+  );
+  for (let index of sorted) {
+    if (remainingUnits <= 0) break;
+    mapped_2[index] += 1;
+    remainingUnits -= 1;
   }
   return mapped_2;
 }
 //@ chunk-e6aww6q8.js:2372385-2372766 layout
-function createCountEach(count, n) {
-  return async (r) => {
-    if (!n || r.length < 2)
+function createCountEach(count, useBulk) {
+  return async (texts) => {
+    if (!useBulk || texts.length < 2)
       return Promise.all(
-        r.map(
+        texts.map(
           async (content) =>
             (await count(
               [
@@ -123,12 +125,12 @@ function createCountEach(count, n) {
             )) || 0,
         ),
       );
-    let filtered = [...r.keys()].filter((key) => r[key].trim());
-    let mapped = r.map(() => 0);
+    let filtered = [...texts.keys()].filter((key) => texts[key].trim());
+    let mapped = texts.map(() => 0);
     if (filtered.length === 0) return mapped;
-    let content = filtered.map((L) => ({
+    let content = filtered.map((index) => ({
       type: "text",
-      text: r[L],
+      text: texts[index],
     }));
     let total =
       (await count(
@@ -140,11 +142,11 @@ function createCountEach(count, n) {
         ],
         [],
       )) || 0;
-    let w = distributeProportionally(
+    let weights = distributeProportionally(
       total,
-      filtered.map((L) => roughTokenCountEstimation(r[L])),
+      filtered.map((index) => roughTokenCountEstimation(texts[index])),
     );
-    for (let [L, G] of filtered.entries()) mapped[G] = w[L];
+    for (let [position, index] of filtered.entries()) mapped[index] = weights[position];
     return mapped;
   };
 }
@@ -153,60 +155,67 @@ function createCountEach(count, n) {
  * 计 token：count_tokens 不可用时退回本地估算。
  */
 function countTokensWithFallback(messages, tools) {
-  return async (r, s) => {
+  return async (mappedMessages, apiTools) => {
     try {
-      let result = await messages(r, s);
+      let result = await messages(mappedMessages, apiTools);
       if (result !== null) return result;
     } catch (err) {
       if (!isAbortError(err)) logError(err);
     }
-    logForDebugging(`analyzeContext: count unavailable, estimating locally (${s.length} tools)`);
-    return tools(r, s);
+    logForDebugging(`analyzeContext: count unavailable, estimating locally (${apiTools.length} tools)`);
+    return tools(mappedMessages, apiTools);
   };
 }
 //@ chunk-e6aww6q8.js:2372966-2373102 layout
 /**
  * 创建 token 计数器；full 模式且 tengu_context_usage_bulk_counts 打开时，把多段文本放进一次 count_tokens 请求批量计数。
  */
-function createTokenCounter(detail, host, credentials) {
-  let contextTokenCounter = createContextTokenCounter(detail, host, credentials);
-  let h = detail === "full" && getFeatureValue_CACHED_MAY_BE_STALE("tengu_context_usage_bulk_counts", false);
+function createTokenCounter(detailLevel, host, credentials) {
+  let contextTokenCounter = createContextTokenCounter(detailLevel, host, credentials);
+  let bulkCountsEnabled =
+    detailLevel === "full" && getFeatureValue_CACHED_MAY_BE_STALE("tengu_context_usage_bulk_counts", false);
   return {
     ...contextTokenCounter,
-    countEach: createCountEach(contextTokenCounter.count, h),
-    bulk: h,
+    countEach: createCountEach(contextTokenCounter.count, bulkCountsEnabled),
+    bulk: bulkCountsEnabled,
   };
 }
 //@ chunk-e6aww6q8.js:2373102-2373477 placement
 /**
  * 构造 /context 用的 token 计数器：summary 模式用按字节比例的粗估；否则调用计数 API（按宿主对 401 去重并按内容缓存），失败时回退到粗估。
  */
-function createContextTokenCounter(e, n, credentials) {
+function createContextTokenCounter(detailLevel, host, credentials) {
   let mainLoopModel = getMainLoopModel();
-  let h = bytesPerTokenForModel(mainLoopModel);
-  let tools = (G, q) => {
-    let Z = 0;
-    for (let Se of G) Z += roughTokenCountEstimationForContent(Se.content, h);
-    if (q.length > 0)
-      Z += roughTokenCountEstimationForFileType(jsonStringify(q), "json") + TOOL_DEFINITION_TOKEN_OVERHEAD;
-    return Z;
+  let bytesPerToken = bytesPerTokenForModel(mainLoopModel);
+  let tools = (messages, toolDefs) => {
+    let tokenCount = 0;
+    for (let message of messages)
+      tokenCount += roughTokenCountEstimationForContent(message.content, bytesPerToken);
+    if (toolDefs.length > 0)
+      tokenCount +=
+        roughTokenCountEstimationForFileType(jsonStringify(toolDefs), "json") +
+        TOOL_DEFINITION_TOKEN_OVERHEAD;
+    return tokenCount;
   };
-  if (e === "summary") {
-    let G = async (q, Z) => tools(q, Z);
+  if (detailLevel === "summary") {
+    let estimateCount = async (messages, toolDefs) => tools(messages, toolDefs);
     return {
-      count: G,
-      countTranscript: G,
+      count: estimateCount,
+      countTranscript: estimateCount,
     };
   }
-  let messages = (G, q) =>
-    countMessagesTokensWithAPI(G, q, mainLoopModel, {
+  let messages = (messages, toolDefs) =>
+    countMessagesTokensWithAPI(messages, toolDefs, mainLoopModel, {
       credentials,
     });
-  let w = oauth401DedupByHost.of(n);
-  let L = jsonStringify([toProviderWireModelId(mainLoopModel), getModelBetas(mainLoopModel)]);
+  let oauthDedup = oauth401DedupByHost.of(host);
+  let modelFingerprint = jsonStringify([toProviderWireModelId(mainLoopModel), getModelBetas(mainLoopModel)]);
   return {
     count: countTokensWithFallback(
-      (G, q) => w.run(computeContentHash(L + jsonStringify([G, q])), () => messages(G, q)),
+      (messages_2, toolDefs) =>
+        oauthDedup.run(computeContentHash(modelFingerprint + jsonStringify([messages_2, toolDefs])), () =>
+          messages(messages_2, toolDefs),
+        ),
       tools,
     ),
     countTranscript: countTokensWithFallback(messages, tools),
@@ -216,19 +225,26 @@ function createContextTokenCounter(e, n, credentials) {
 /**
  * 把工具列表转成 API 工具定义（标记延迟/列出、带记录的描述与条目），用于上下文分析。
  */
-async function toolsToApiDefinitions(e, getToolPermissionContext, r, model, h, y) {
-  let { isDeferredToolByEngine } = await import("./chunk-pk01bzyd.js");
+async function toolsToApiDefinitions(
+  tools,
+  getToolPermissionContext,
+  agentInfo,
+  model,
+  toolDescriptions,
+  toolEntries,
+) {
+  let { isDeferredToolByEngine } = await import("../tools/ToolSearchTool/prompt.js");
   let nonDeferrableBuiltins = getNonDeferrableBuiltins();
   return Promise.all(
-    e.map((L) =>
-      toolToApiDefinition(L, {
+    tools.map((tool) =>
+      toolToApiDefinition(tool, {
         getToolPermissionContext,
-        tools: e,
-        agents: r?.activeAgents ?? [],
+        tools,
+        agents: agentInfo?.activeAgents ?? [],
         model,
-        enginePlacement: isDeferredToolByEngine(L, nonDeferrableBuiltins) ? "deferred" : "listed",
-        recordedDescription: h?.get(L.name),
-        recordedEntry: toolMatchesName(L, STRUCTUREDOUTPUT) ? undefined : y?.get(L.name),
+        enginePlacement: isDeferredToolByEngine(tool, nonDeferrableBuiltins) ? "deferred" : "listed",
+        recordedDescription: toolDescriptions?.get(tool.name),
+        recordedEntry: toolMatchesName(tool, STRUCTUREDOUTPUT) ? undefined : toolEntries?.get(tool.name),
       }),
     ),
   );
@@ -243,15 +259,22 @@ async function countToolDefinitionTokens(
   agentInfo,
   model,
   credentials,
-  y,
-  S,
-  w = (L, G) =>
-    countMessagesTokensWithAPI(L, G, undefined, {
+  toolDescriptions,
+  toolEntries,
+  countFn = (messages, toolDefs) =>
+    countMessagesTokensWithAPI(messages, toolDefs, undefined, {
       credentials,
     }),
 ) {
-  let L = await toolsToApiDefinitions(tools, getToolPermissionContext, agentInfo, model, y, S);
-  let result = await w([], L);
+  let apiTools = await toolsToApiDefinitions(
+    tools,
+    getToolPermissionContext,
+    agentInfo,
+    model,
+    toolDescriptions,
+    toolEntries,
+  );
+  let result = await countFn([], apiTools);
   if (result === null || result === 0) {
     let toolNames = tools.map((t) => t.name).join(", ");
     logForDebugging(
@@ -274,8 +297,8 @@ function extractSectionName(content) {
   return firstLine.length > 40 ? firstLine.slice(0, 40) + "\u2026" : firstLine;
 }
 //@ chunk-e6aww6q8.js:2374513-2375019 fingerprint = countSystemTokens (0.767)
-async function countSystemTokens(session, systemPrompt, r, count, countEach) {
-  let systemContext = r ? {} : await getCachedSystemContext(session);
+async function countSystemTokens(session, systemPrompt, skipSystemContext, count, countEach) {
+  let systemContext = skipSystemContext ? {} : await getCachedSystemContext(session);
   let namedEntries = [
     ...systemPrompt
       .filter((content) => content.length > 0 && content !== SYSTEM_PROMPT_DYNAMIC_BOUNDARY)
@@ -290,7 +313,7 @@ async function countSystemTokens(session, systemPrompt, r, count, countEach) {
         content,
       })),
   ];
-  let w = 0;
+  let redirectedContextTokens = 0;
   if (namedEntries.length < 1)
     return {
       systemPromptTokens: 0,
@@ -326,9 +349,9 @@ async function countMemoryFileTokens(session, storageV5, countEach) {
       memoryFileDetails: [],
       claudeMdTokens: 0,
     };
-  let S = await countEach(memoryFilesData.map((file) => file.content));
-  for (let [w, file] of memoryFilesData.entries()) {
-    let tokens = S[w] ?? 0;
+  let tokenCounts = await countEach(memoryFilesData.map((file) => file.content));
+  for (let [index, file] of memoryFilesData.entries()) {
+    let tokens = tokenCounts[index] ?? 0;
     claudeMdTokens += tokens;
     memoryFileDetails.push({
       path: file.path,
@@ -350,10 +373,10 @@ async function countBuiltInToolTokens(
   messages,
   credentials,
   runtimeModel,
-  toolDescriptions,
-  toolEntries,
-  count,
-  bulk,
+  context,
+  agent,
+  counter,
+  batch,
 ) {
   let builtInTools = hideAliasedV1Tools(identityValue_2(tools).filter((tool) => !tool.isMcp));
   if (builtInTools.length < 1)
@@ -363,20 +386,20 @@ async function countBuiltInToolTokens(
       deferredBuiltinTokens: 0,
       systemToolDetails: [],
     };
-  let { isToolSearchEnabled } = await import("./chunk-emm38ary.js");
-  let { isDeferredToolInConversation } = await import("./chunk-pk01bzyd.js");
-  let we = await isToolSearchEnabled(
+  let { isToolSearchEnabled } = await import("./toolSearch.js");
+  let { isDeferredToolInConversation } = await import("../tools/ToolSearchTool/prompt.js");
+  let toolSearchEnabled = await isToolSearchEnabled(
     model ?? "",
     tools,
     getToolPermissionContext,
     agentInfo?.activeAgents ?? [],
     "analyzeBuiltIn",
     credentials,
-    toolDescriptions,
+    context,
   );
-  let Ee = (t) => isDeferredToolInConversation(t, runtimeModel, tools);
-  let alwaysLoadedTools = builtInTools.filter((t) => !Ee(t));
-  let deferredBuiltinTools = builtInTools.filter(Ee);
+  let isDeferredInConversation = (t) => isDeferredToolInConversation(t, runtimeModel, tools);
+  let alwaysLoadedTools = builtInTools.filter((t) => !isDeferredInConversation(t));
+  let deferredBuiltinTools = builtInTools.filter(isDeferredInConversation);
   let alwaysLoadedTokens =
     alwaysLoadedTools.length > 0
       ? await countToolDefinitionTokens(
@@ -385,9 +408,9 @@ async function countBuiltInToolTokens(
           agentInfo,
           model,
           undefined,
-          toolDescriptions,
-          toolEntries,
-          count,
+          context,
+          agent,
+          counter,
         )
       : 0;
   let systemToolDetails = [];
@@ -398,19 +421,19 @@ async function countBuiltInToolTokens(
       deferredBuiltinTokens: 0,
       systemToolDetails,
     };
-  if (!we) {
-    let Et = await countToolDefinitionTokens(
+  if (!toolSearchEnabled) {
+    let deferredTokens = await countToolDefinitionTokens(
       deferredBuiltinTools,
       getToolPermissionContext,
       agentInfo,
       model,
       undefined,
-      toolDescriptions,
-      toolEntries,
-      count,
+      context,
+      agent,
+      counter,
     );
     return {
-      builtInToolTokens: alwaysLoadedTokens + Et,
+      builtInToolTokens: alwaysLoadedTokens + deferredTokens,
       deferredBuiltinDetails: [],
       deferredBuiltinTokens: 0,
       systemToolDetails,
@@ -433,8 +456,8 @@ async function countBuiltInToolTokens(
             deferredToolNameSet.has(block.name)
           )
             loadedToolNames.add(block.name);
-        for (let gt of msg.batchToolUses ?? [])
-          if (deferredToolNameSet.has(gt.name)) loadedToolNames.add(gt.name);
+        for (let batchToolUse of msg.batchToolUses ?? [])
+          if (deferredToolNameSet.has(batchToolUse.name)) loadedToolNames.add(batchToolUse.name);
       }
   }
   let tokensByTool = await countToolTokensPerItem(
@@ -442,10 +465,10 @@ async function countBuiltInToolTokens(
     getToolPermissionContext,
     agentInfo,
     model,
-    toolDescriptions,
-    toolEntries,
-    count,
-    bulk,
+    context,
+    agent,
+    counter,
+    batch,
   );
   for (let [i, tool] of deferredBuiltinTools.entries()) {
     let tokens = tokensByTool[i] ?? 0;
@@ -474,13 +497,17 @@ async function countSlashCommandTokens(
   tools,
   getToolPermissionContext,
   agentInfo,
-  s,
+  mcpPromptCommands,
   storageV5,
   toolDescriptions,
   toolEntries,
   count,
 ) {
-  let info = await getSkillToolInfo(getCwdOrNull(), mcpPromptCommandsWithReserved(s), storageV5);
+  let info = await getSkillToolInfo(
+    getCwdOrNull(),
+    mcpPromptCommandsWithReserved(mcpPromptCommands),
+    storageV5,
+  );
   let slashCommandTool = findSkillTool(tools);
   if (!slashCommandTool)
     return {
@@ -512,10 +539,10 @@ async function countSkillTokens(
   tools,
   getToolPermissionContext,
   agentInfo,
-  effectiveSystemPrompt,
-  model,
-  y,
-  agentId,
+  countModel,
+  budgetModel,
+  cwd,
+  includeHidden,
   storageV5,
   toolDescriptions,
   toolEntries,
@@ -523,7 +550,7 @@ async function countSkillTokens(
   localPaths,
 ) {
   try {
-    let { merged, included } = await mergedSkillListing(y, agentId, storageV5);
+    let { merged, included } = await mergedSkillListing(cwd, includeHidden, storageV5);
     let slashCommandTool = findSkillTool(tools);
     if (!slashCommandTool)
       return {
@@ -544,7 +571,7 @@ async function countSkillTokens(
       toolEntries,
       count,
     );
-    let Ae = skillListingTokenCounts(included, effectiveSystemPrompt, model);
+    let tokensBySkill = skillListingTokenCounts(included, countModel, budgetModel);
     let skillFrontmatter = included.map((skill) => ({
       name: getCommandName_2(skill),
       source:
@@ -562,7 +589,7 @@ async function countSkillTokens(
         skill.skillFile?.path !== undefined && {
           path: skill.skillFile.path,
         }),
-      tokens: Ae.get(skill.name) ?? 0,
+      tokens: tokensBySkill.get(skill.name) ?? 0,
     }));
     let totalSkills = merged.length;
     return {
@@ -596,8 +623,8 @@ async function countMcpToolTokens(
   runtimeModel,
   toolDescriptions,
   toolEntries,
-  count = (q, Z) =>
-    countMessagesTokensWithAPI(q, Z, undefined, {
+  count = (messages, toolDefs) =>
+    countMessagesTokensWithAPI(messages, toolDefs, undefined, {
       credentials,
     }),
 ) {
@@ -631,8 +658,8 @@ async function countMcpToolTokens(
   );
   let estimateTotal = estimates.reduce((acc, e) => acc + e, 0) || 1;
   let mcpToolTokensByTool = estimates.map((e) => Math.round((e / estimateTotal) * totalTokens));
-  let { isToolSearchEnabled } = await import("./chunk-emm38ary.js");
-  let { isDeferredToolInConversation } = await import("./chunk-pk01bzyd.js");
+  let { isToolSearchEnabled } = await import("./toolSearch.js");
+  let { isDeferredToolInConversation } = await import("../tools/ToolSearchTool/prompt.js");
   let isDeferred = await isToolSearchEnabled(
     model,
     tools,
@@ -642,13 +669,13 @@ async function countMcpToolTokens(
     credentials,
     toolDescriptions,
   );
-  let ze = identityValue_2(tools);
-  let lt =
-    ze === tools
+  let aliasedTools = identityValue_2(tools);
+  let droppedToolNames =
+    aliasedTools === tools
       ? new Set()
       : (() => {
-          let gt = new Set(ze.map((At) => At.name));
-          return new Set(mcpTools.map((mcpTool) => mcpTool.name).filter((At) => !gt.has(At)));
+          let aliasedNames = new Set(aliasedTools.map((tool) => tool.name));
+          return new Set(mcpTools.map((mcpTool) => mcpTool.name).filter((name) => !aliasedNames.has(name)));
         })();
   let loadedMcpToolNames = new Set();
   if (isDeferred && messages) {
@@ -668,32 +695,33 @@ async function countMcpToolTokens(
   }
   let nonDeferrableBuiltins = getNonDeferrableBuiltins();
   for (let [i, tool] of mcpTools.entries()) {
-    let It = lt.has(tool.name);
+    let isDropped = droppedToolNames.has(tool.name);
     mcpToolDetails.push({
       name: tool.name,
       serverName: tool.name.split("__")[1] || "unknown",
-      tokens: It ? 0 : mcpToolTokensByTool[i],
+      tokens: isDropped ? 0 : mcpToolTokensByTool[i],
       isLoaded:
-        !It &&
+        !isDropped &&
         (loadedMcpToolNames.has(tool.name) ||
           !isDeferredToolInConversation(tool, runtimeModel, tools, {
             nonDeferrableBuiltins,
           })),
     });
   }
-  let pt = 0;
-  for (let [gt, At] of mcpTools.entries()) if (lt.has(At.name)) pt += mcpToolTokensByTool[gt];
-  let Et = 0;
+  let droppedTokens = 0;
+  for (let [index, tool] of mcpTools.entries())
+    if (droppedToolNames.has(tool.name)) droppedTokens += mcpToolTokensByTool[index];
+  let loadedTokens = 0;
   let deferredToolTokens = 0;
   for (let detail of mcpToolDetails)
-    if (detail.isLoaded) Et += detail.tokens;
+    if (detail.isLoaded) loadedTokens += detail.tokens;
     else if (isDeferred) deferredToolTokens += detail.tokens;
   return {
     mcpToolTokens: isDeferred
-      ? Et
-      : lt.size === mcpTools.length && mcpTools.length > 0
+      ? loadedTokens
+      : droppedToolNames.size === mcpTools.length && mcpTools.length > 0
         ? 0
-        : Math.max(0, totalTokens - pt),
+        : Math.max(0, totalTokens - droppedTokens),
     mcpToolDetails,
     deferredToolTokens,
     loadedMcpToolNames,
@@ -703,21 +731,24 @@ async function countMcpToolTokens(
 /**
  * MCP 服务器 instructions 占用的 token；CLAUDE_CODE_DISABLE_ATTACHMENTS 或 CLAUDE_CODE_SIMPLE 时为 0。
  */
-async function countMcpInstructionsTokens(e, count) {
+async function countMcpInstructionsTokens(mcpClients, count) {
   if (env.CLAUDE_CODE_DISABLE_ATTACHMENTS || env.CLAUDE_CODE_SIMPLE)
     return {
       mcpInstructionsTokens: 0,
       mcpInstructionsDetails: [],
     };
   let sorted = [
-    ...computeMcpInstructionsDelta(e.filter(isConnectedOrCached), getMcpServerInstructionBlocks(e)).entries(),
-  ].sort(([S], [w]) => compareStringsGrouped(S, w));
+    ...computeMcpInstructionsDelta(
+      mcpClients.filter(isConnectedOrCached),
+      getMcpServerInstructionBlocks(mcpClients),
+    ).entries(),
+  ].sort(([serverA], [serverB]) => compareStringsGrouped(serverA, serverB));
   if (sorted.length === 0)
     return {
       mcpInstructionsTokens: 0,
       mcpInstructionsDetails: [],
     };
-  let content = sorted.map(([, S]) => S).join(`
+  let content = sorted.map(([, instructions]) => instructions).join(`
 
 `);
   let total =
@@ -735,15 +766,15 @@ async function countMcpInstructionsTokens(e, count) {
       mcpInstructionsTokens: 0,
       mcpInstructionsDetails: [],
     };
-  let y = distributeProportionally(
+  let tokensByServer = distributeProportionally(
     total,
-    sorted.map(([, S]) => roughTokenCountEstimation(S)),
+    sorted.map(([, instructions]) => roughTokenCountEstimation(instructions)),
   );
   return {
     mcpInstructionsTokens: total,
-    mcpInstructionsDetails: sorted.map(([S], i) => ({
-      serverName: S,
-      tokens: y[i] ?? 0,
+    mcpInstructionsDetails: sorted.map(([serverName], i) => ({
+      serverName,
+      tokens: tokensByServer[i] ?? 0,
     })),
   };
 }
@@ -755,20 +786,20 @@ async function countCustomAgentTokens(agentDefinitions, countEach, localPaths) {
   let tokenCounts = await countEach(
     customAgents.map((agent) => [agent.agentType, agent.whenToUse].join(" ")),
   );
-  for (let [i, L] of customAgents.entries()) {
+  for (let [i, agent] of customAgents.entries()) {
     let tokens = tokenCounts[i] || 0;
     agentTokens += tokens || 0;
     agentDetails.push({
-      agentType: L.agentType,
-      source: L.source,
+      agentType: agent.agentType,
+      source: agent.source,
       ...(localPaths &&
-        L.source === "plugin" && {
-          pluginId: L.plugin,
+        agent.source === "plugin" && {
+          pluginId: agent.plugin,
         }),
       ...(localPaths &&
-        L.filePath !== undefined &&
-        isAbsolute(L.filePath) && {
-          path: L.filePath,
+        agent.filePath !== undefined &&
+        isAbsolute(agent.filePath) && {
+          path: agent.filePath,
         }),
       tokens: tokens || 0,
     });
@@ -825,7 +856,7 @@ function processAttachment(msg, breakdown) {
 /**
  * 按消息类型（assistant 工具调用、user 工具结果、附件）累计估算 token，并按工具名分类。
  */
-async function approximateMessageTokens(messages, n, countTranscript) {
+async function approximateMessageTokens(messages, skipTranscriptCount, countTranscript) {
   let breakdown = {
     totalTokens: 0,
     toolCallTokens: 0,
@@ -851,15 +882,16 @@ async function approximateMessageTokens(messages, n, countTranscript) {
     if (msg.type === "assistant") processAssistantMessage(msg, breakdown);
     else if (msg.type === "user") processUserMessage(msg, breakdown, toolUseIdToName);
     else if (msg.type === "attachment") processAttachment(msg, breakdown);
-  let approximateMessageTokens = n
+  let approximateMessageTokens = skipTranscriptCount
     ? 0
     : await countTranscript(
         normalizeMessagesForAPI(
           messages.filter(
-            (S) =>
+            (message) =>
               !(
-                S.type === "attachment" &&
-                (S.attachment.type === "instructions" || S.attachment.type === "mcp_instructions_delta")
+                message.type === "attachment" &&
+                (message.attachment.type === "instructions" ||
+                  message.attachment.type === "mcp_instructions_delta")
               ),
           ),
           undefined,
@@ -868,13 +900,13 @@ async function approximateMessageTokens(messages, n, countTranscript) {
             echoWireToolInputs: shouldEchoWireToolInputs(messages),
             echoApiBlockOrder: isStellarDriftEnabled(),
           },
-        ).map((S) => {
-          if (S.type === "assistant")
+        ).map((message) => {
+          if (message.type === "assistant")
             return {
               role: "assistant",
-              content: S.message.content,
+              content: message.message.content,
             };
-          return S.message;
+          return message.message;
         }),
         [],
       );
@@ -885,7 +917,14 @@ async function approximateMessageTokens(messages, n, countTranscript) {
 /**
  * /context 的统计：分别计算系统提示、工具定义、MCP 工具、自定义 agent、记忆文件、技能、斜杠命令、消息与附件的 token，加上自动压缩缓冲与剩余空间，生成分类数据和网格。
  */
-async function analyzeContextUsage(messages, model, getToolPermissionContext, tools, agentDefinitions, y) {
+async function analyzeContextUsage(
+  messages,
+  model,
+  getToolPermissionContext,
+  tools,
+  agentDefinitions,
+  options,
+) {
   let {
     session,
     terminalWidth,
@@ -896,7 +935,7 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
     excludeDynamicSections,
     detail = "full",
     localPaths = false,
-  } = y;
+  } = options;
   await awaitArtifactRosterSafe(tools);
   let credentials = toolUseContext?.credentials;
   let { count, countTranscript, countEach, bulk } = createTokenCounter(detail, session.host, credentials);
@@ -905,20 +944,23 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
     permissionMode: (await getToolPermissionContext()).mode,
     mainLoopModel: model,
   });
-  let Je = isAutoCompactEnabled() ? configuredWindow : undefined;
-  let { window: contextWindow, source } = getAutoCompactWindow(getModelContextInfo(runtimeModel_2), Je);
-  let Et = toolUseContext?.options.mcpClients ?? toolUseContext?.getMcp?.().clients ?? [];
+  let configuredWindowTokens = isAutoCompactEnabled() ? configuredWindow : undefined;
+  let { window: contextWindow, source } = getAutoCompactWindow(
+    getModelContextInfo(runtimeModel_2),
+    configuredWindowTokens,
+  );
+  let mcpClients = toolUseContext?.options.mcpClients ?? toolUseContext?.getMcp?.().clients ?? [];
   let defaultSystemPrompt = await getSystemPrompt(tools, runtimeModel_2, {
     excludeDynamicSections,
     analysisOnly: true,
   });
-  let gt = effectiveSystemPromptText({
+  let effectiveSystemPrompt = effectiveSystemPromptText({
     mainThreadAgentDefinition,
     toolUseContext: {
       options: {
         ...(toolUseContext?.options ?? {}),
         tools,
-        mcpClients: Et,
+        mcpClients,
       },
     },
     customSystemPrompt: toolUseContext?.options.customSystemPrompt,
@@ -926,19 +968,19 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
     appendSystemPrompt: toolUseContext?.options.appendSystemPrompt,
     analysisOnly: true,
   });
-  let At;
-  let It;
+  let promptSnapshot;
+  let baselineSnapshot;
   if (toolUseContext !== undefined) {
-    let yr = messagesSinceCompactBoundary(messages);
-    At = promptSnapshotUnlessRenderPoint(yr, toolUseContext.options);
-    It = snapshotIfEnabled(yr, toolUseContext.options);
+    let postCompactMessages = messagesSinceCompactBoundary(messages);
+    promptSnapshot = promptSnapshotUnlessRenderPoint(postCompactMessages, toolUseContext.options);
+    baselineSnapshot = snapshotIfEnabled(postCompactMessages, toolUseContext.options);
   }
-  let systemPrompt = At?.systemPrompt ?? gt;
-  let toolDescriptions = It?.toolDescriptions;
-  let toolEntries = It?.toolEntries;
-  let rn = originalMessages ?? messages;
-  let lastApiUsage = getLastApiUsage(rn);
-  let no =
+  let systemPrompt = promptSnapshot?.systemPrompt ?? effectiveSystemPrompt;
+  let toolDescriptions = baselineSnapshot?.toolDescriptions;
+  let toolEntries = baselineSnapshot?.toolEntries;
+  let sourceMessages = originalMessages ?? messages;
+  let lastApiUsage = getLastApiUsage(sourceMessages);
+  let apiUsage =
     lastApiUsage &&
     lastApiUsage.input_tokens +
       lastApiUsage.cache_creation_input_tokens +
@@ -946,13 +988,15 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
       0
       ? lastApiUsage
       : null;
-  let hn = no ? no.input_tokens + no.cache_creation_input_tokens + no.cache_read_input_tokens : null;
+  let apiUsageTokens = apiUsage
+    ? apiUsage.input_tokens + apiUsage.cache_creation_input_tokens + apiUsage.cache_read_input_tokens
+    : null;
   let [
-    { systemPromptTokens, systemPromptSections, redirectedContextTokens: Kn },
+    { systemPromptTokens, systemPromptSections, redirectedContextTokens },
     { claudeMdTokens, memoryFileDetails },
     { builtInToolTokens, deferredBuiltinDetails, deferredBuiltinTokens, systemToolDetails },
     { mcpToolTokens, mcpToolDetails, deferredToolTokens },
-    { mcpInstructionsTokens: ao, mcpInstructionsDetails: $o },
+    { mcpInstructionsTokens, mcpInstructionsDetails },
     { agentTokens, agentDetails },
     { slashCommandTokens, commandInfo },
     messageBreakdown,
@@ -990,7 +1034,7 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
       toolEntries,
       count,
     ),
-    countMcpInstructionsTokens(Et, count),
+    countMcpInstructionsTokens(mcpClients, count),
     countCustomAgentTokens(agentDefinitions, countEach, localPaths),
     countSlashCommandTokens(
       tools,
@@ -1002,7 +1046,7 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
       toolEntries,
       count,
     ),
-    approximateMessageTokens(messages, hn !== null, countTranscript),
+    approximateMessageTokens(messages, apiUsageTokens !== null, countTranscript),
   ]);
   let skillInfo = (
     await countSkillTokens(
@@ -1021,10 +1065,10 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
     )
   ).skillInfo;
   let skillFrontmatterTokens = skillInfo.skillFrontmatter.reduce((sum, skill) => sum + skill.tokens, 0);
-  let Cr = messageBreakdown.totalTokens + Kn;
+  let messageTokens = messageBreakdown.totalTokens + redirectedContextTokens;
   let isAutoCompact = isAutoCompactEnabled();
-  let Oo = isAutoCompact
-    ? effectiveContextWindow(getModelContextInfo(model), Je) - MIN_WINDOW_TOKENS
+  let autoCompactThreshold = isAutoCompact
+    ? effectiveContextWindow(getModelContextInfo(model), configuredWindowTokens) - MIN_WINDOW_TOKENS
     : undefined;
   let cats = [];
   if (systemPromptTokens > 0)
@@ -1049,11 +1093,11 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
       tokens: mcpToolTokens,
       color: "cyan_FOR_SUBAGENTS_ONLY",
     });
-  if (ao > 0)
+  if (mcpInstructionsTokens > 0)
     cats.push({
       id: "mcp_instructions",
       name: "MCP server instructions",
-      tokens: ao,
+      tokens: mcpInstructionsTokens,
       color: "green_FOR_SUBAGENTS_ONLY",
     });
   if (deferredToolTokens > 0)
@@ -1093,68 +1137,68 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
       tokens: skillFrontmatterTokens,
       color: "warning",
     });
-  let Io = 0;
-  let zo;
+  let bufferTokens = 0;
+  let bufferCategory;
   if (!(isAutoCompact && source === "auto")) {
-    if (isAutoCompact && Oo !== undefined) {
-      Io = contextWindow - Oo;
-      zo = {
+    if (isAutoCompact && autoCompactThreshold !== undefined) {
+      bufferTokens = contextWindow - autoCompactThreshold;
+      bufferCategory = {
         id: "autocompact_buffer",
         name: AUTOCOMPACT_BUFFER_LABEL,
       };
     } else if (!isAutoCompact) {
-      Io = MAX_WINDOW_TOKENS;
-      zo = {
+      bufferTokens = MAX_WINDOW_TOKENS;
+      bufferCategory = {
         id: "compact_buffer",
         name: COMPACT_BUFFER_LABEL,
       };
     }
   }
-  let Es = null;
-  if (hn !== null) {
+  let apiTotalTokens = null;
+  if (apiUsageTokens !== null) {
     let actualUsage = cats.reduce((sum, cat) => sum + (cat.isDeferred ? 0 : cat.tokens), 0);
-    let Kr = contextWindow - actualUsage - Io;
-    let Li = estimateTokensSinceAnchor(rn, bytesPerTokenForModel(runtimeModel_2));
-    let Qs = Math.max(0, hn - actualUsage) + Li;
-    Cr = Math.max(0, Math.min(Qs, Kr));
-    Es = actualUsage + Qs;
+    let remainingWindowTokens = contextWindow - actualUsage - bufferTokens;
+    let sinceAnchorTokens = estimateTokensSinceAnchor(sourceMessages, bytesPerTokenForModel(runtimeModel_2));
+    let apiDerivedTokens = Math.max(0, apiUsageTokens - actualUsage) + sinceAnchorTokens;
+    messageTokens = Math.max(0, Math.min(apiDerivedTokens, remainingWindowTokens));
+    apiTotalTokens = actualUsage + apiDerivedTokens;
   }
   let unattributedTokens = Math.max(
     0,
-    Cr -
+    messageTokens -
       messageBreakdown.toolCallTokens -
       messageBreakdown.toolResultTokens -
       messageBreakdown.attachmentTokens -
       messageBreakdown.assistantMessageTokens -
       messageBreakdown.userMessageTokens -
-      Kn,
+      redirectedContextTokens,
   );
-  if (Cr > 0)
+  if (messageTokens > 0)
     cats.push({
       id: "messages",
       name: "Messages",
-      tokens: Cr,
+      tokens: messageTokens,
       color: "purple_FOR_SUBAGENTS_ONLY",
     });
-  let reduced = cats.reduce((acc, Kr) => acc + (Kr.isDeferred ? 0 : Kr.tokens), 0);
-  if (zo)
+  let reduced = cats.reduce((acc, category) => acc + (category.isDeferred ? 0 : category.tokens), 0);
+  if (bufferCategory)
     cats.push({
-      ...zo,
-      tokens: Io,
+      ...bufferCategory,
+      tokens: bufferTokens,
       color: "inactive",
     });
-  let freeTokens = Math.max(0, contextWindow - reduced - Io);
+  let freeTokens = Math.max(0, contextWindow - reduced - bufferTokens);
   cats.push({
     id: "free_space",
     name: FREE_SPACE_LABEL,
     tokens: freeTokens,
     color: "promptBorder",
   });
-  let as = Es ?? reduced;
+  let totalTokens = apiTotalTokens ?? reduced;
   let isNarrowScreen = terminalWidth && terminalWidth < 80;
-  let ji = contextWindow >= 1e6;
-  let GRID_WIDTH = isNarrowScreen ? 5 : ji ? 20 : 10;
-  let GRID_HEIGHT = ji ? 10 : isNarrowScreen ? 5 : 10;
+  let isLargeWindow = contextWindow >= 1e6;
+  let GRID_WIDTH = isNarrowScreen ? 5 : isLargeWindow ? 20 : 10;
+  let GRID_HEIGHT = isLargeWindow ? 10 : isNarrowScreen ? 5 : 10;
   let TOTAL_SQUARES = GRID_WIDTH * GRID_HEIGHT;
   let mapped = cats
     .filter((cat) => !cat.isDeferred)
@@ -1200,7 +1244,7 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
     for (let square of squares) if (gridSquares.length < TOTAL_SQUARES) gridSquares.push(square);
   }
   let reservedSquareCount = reservedCategory ? reservedCategory.squares : 0;
-  let freeSpaceCat = cats.find((yr) => yr.name === FREE_SPACE_LABEL);
+  let freeSpaceCat = cats.find((freeSpaceCategory) => freeSpaceCategory.name === FREE_SPACE_LABEL);
   let freeSpaceTarget = TOTAL_SQUARES - reservedSquareCount;
   while (gridSquares.length < freeSpaceTarget)
     gridSquares.push({
@@ -1245,40 +1289,43 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
       callTokens,
       resultTokens,
     }))
-    .sort((yr, Kr) => Kr.callTokens + Kr.resultTokens - (yr.callTokens + yr.resultTokens));
+    .sort(
+      (leftTool, rightTool) =>
+        rightTool.callTokens + rightTool.resultTokens - (leftTool.callTokens + leftTool.resultTokens),
+    );
   let attachmentsByTypeArray = Array.from(messageBreakdown.attachmentsByType.entries())
     .map(([name, tokens]) => ({
       name,
       tokens,
     }))
-    .sort((yr, Kr) => Kr.tokens - yr.tokens);
+    .sort((leftAttachment, rightAttachment) => rightAttachment.tokens - leftAttachment.tokens);
   let formattedMessageBreakdown = {
     toolCallTokens: messageBreakdown.toolCallTokens,
     toolResultTokens: messageBreakdown.toolResultTokens,
     attachmentTokens: messageBreakdown.attachmentTokens,
     assistantMessageTokens: messageBreakdown.assistantMessageTokens,
     userMessageTokens: messageBreakdown.userMessageTokens,
-    redirectedContextTokens: Kn,
+    redirectedContextTokens,
     unattributedTokens,
     toolCallsByType: toolsByTypeArray,
     attachmentsByType: attachmentsByTypeArray,
   };
   return {
-    categories: cats.map((yr) => ({
-      ...yr,
-      kind: getContextCategoryKind(yr),
+    categories: cats.map((category) => ({
+      ...category,
+      kind: getContextCategoryKind(category),
     })),
-    totalTokens: as,
+    totalTokens,
     maxTokens: contextWindow,
     rawMaxTokens: contextWindow,
     autocompactSource: source,
-    percentage: Math.round((as / contextWindow) * 100),
+    percentage: Math.round((totalTokens / contextWindow) * 100),
     gridRows,
     model: runtimeModel_2,
     memoryFiles: memoryFileDetails,
     mcpTools: mcpToolDetails,
     ...(localPaths && {
-      mcpInstructions: $o,
+      mcpInstructions: mcpInstructionsDetails,
     }),
     deferredBuiltinTools: undefined,
     systemTools: undefined,
@@ -1301,10 +1348,10 @@ async function analyzeContextUsage(messages, model, getToolPermissionContext, to
             skillFrontmatter: skillInfo.skillFrontmatter,
           }
         : undefined,
-    autoCompactThreshold: Oo,
+    autoCompactThreshold,
     isAutoCompactEnabled: isAutoCompact,
     messageBreakdown: formattedMessageBreakdown,
-    apiUsage: no,
+    apiUsage,
   };
 }
 export {

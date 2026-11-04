@@ -18,35 +18,35 @@ import { logFeatureOk, logFeatureSad, logFeatureBad } from "../../services/analy
 /**
  * 沿改名表追踪插件新名字（检测环、缺失、过深）。
  */
-function resolvePluginRename(e, renames, r) {
-  if (!Object.hasOwn(renames, e)) return null;
-  let s = new Set();
-  let h = e;
+function resolvePluginRename(pluginName, renames, validNames) {
+  if (!Object.hasOwn(renames, pluginName)) return null;
+  let seen = new Set();
+  let current = pluginName;
   for (let idx = 0; idx < MAX_CACHE_PUBLISH_ATTEMPTS; idx++) {
-    if (s.has(h))
+    if (seen.has(current))
       return {
         kind: "unresolved",
         reason: "cycle",
       };
-    s.add(h);
-    let S = Object.hasOwn(renames, h) ? renames[h] : undefined;
-    if (S === undefined)
-      return r.has(h)
+    seen.add(current);
+    let target = Object.hasOwn(renames, current) ? renames[current] : undefined;
+    if (target === undefined)
+      return validNames.has(current)
         ? {
             kind: "renamed",
-            to: h,
+            to: current,
             chainDepth: idx,
           }
         : {
             kind: "unresolved",
             reason: "target-missing",
           };
-    if (S === null)
+    if (target === null)
       return {
         kind: "removed",
         chainDepth: idx + 1,
       };
-    h = S;
+    current = target;
   }
   return {
     kind: "unresolved",
@@ -57,53 +57,55 @@ function resolvePluginRename(e, renames, r) {
 /**
  * 把设置中已改名的插件迁移到新名字。
  */
-async function migrateRenamedPluginsInSettings(e, storageV5) {
-  if (e.length === 0) return;
-  let r = 0;
-  let s = 0;
-  let h = new Set(getEnabledSettingSources());
-  for (let y of EDITABLE_SETTING_SOURCES) {
-    if (!h.has(y)) continue;
-    let settingsForSourceWriteSeed = getSettingsForSourceWriteSeed(y);
+async function migrateRenamedPluginsInSettings(renames, storageV5) {
+  if (renames.length === 0) return;
+  let updatedCount = 0;
+  let failedCount = 0;
+  let enabledSources = new Set(getEnabledSettingSources());
+  for (let source of EDITABLE_SETTING_SOURCES) {
+    if (!enabledSources.has(source)) continue;
+    let settingsForSourceWriteSeed = getSettingsForSourceWriteSeed(source);
     let enabledPlugins = settingsForSourceWriteSeed?.enabledPlugins;
     let pluginConfigs = settingsForSourceWriteSeed?.pluginConfigs;
     if (!enabledPlugins && !pluginConfigs) continue;
-    let G = {};
-    let q = {};
-    for (let { oldId, newId } of e) {
+    let enabledUpdates = {};
+    let configUpdates = {};
+    for (let { oldId, newId } of renames) {
       if (enabledPlugins && oldId in enabledPlugins) {
-        G[oldId] = undefined;
-        if (newId !== null && !(newId in enabledPlugins) && !(newId in G)) G[newId] = enabledPlugins[oldId];
+        enabledUpdates[oldId] = undefined;
+        if (newId !== null && !(newId in enabledPlugins) && !(newId in enabledUpdates))
+          enabledUpdates[newId] = enabledPlugins[oldId];
       }
       if (pluginConfigs && oldId in pluginConfigs) {
-        q[oldId] = undefined;
-        if (newId !== null && !(newId in pluginConfigs) && !(newId in q)) q[newId] = pluginConfigs[oldId];
+        configUpdates[oldId] = undefined;
+        if (newId !== null && !(newId in pluginConfigs) && !(newId in configUpdates))
+          configUpdates[newId] = pluginConfigs[oldId];
       }
     }
-    if (Object.keys(G).length === 0 && Object.keys(q).length === 0) continue;
+    if (Object.keys(enabledUpdates).length === 0 && Object.keys(configUpdates).length === 0) continue;
     let { error } = await updateSettingsForSource(
-      y,
+      source,
       {
-        ...(Object.keys(G).length > 0 && {
-          enabledPlugins: G,
+        ...(Object.keys(enabledUpdates).length > 0 && {
+          enabledPlugins: enabledUpdates,
         }),
-        ...(Object.keys(q).length > 0 && {
-          pluginConfigs: q,
+        ...(Object.keys(configUpdates).length > 0 && {
+          pluginConfigs: configUpdates,
         }),
       },
       undefined,
       storageV5,
     );
     if (error) {
-      s++;
-      logForDebugging(`migrateRenamedPluginsInSettings: failed to update ${y}: ${error.message}`, {
+      failedCount++;
+      logForDebugging(`migrateRenamedPluginsInSettings: failed to update ${source}: ${error.message}`, {
         level: "warn",
       });
-    } else r++;
+    } else updatedCount++;
   }
-  if (r > 0 && s === 0) logFeatureOk("plugin_rename_migration");
-  else if (r > 0) logFeatureSad("plugin_rename_migration", "partial_settings_write");
-  else if (s > 0) logFeatureBad("plugin_rename_migration", "settings_write_failed");
+  if (updatedCount > 0 && failedCount === 0) logFeatureOk("plugin_rename_migration");
+  else if (updatedCount > 0) logFeatureSad("plugin_rename_migration", "partial_settings_write");
+  else if (failedCount > 0) logFeatureBad("plugin_rename_migration", "settings_write_failed");
   else logFeatureSad("plugin_rename_migration", "no_editable_scope");
 }
 export { resolvePluginRename, migrateRenamedPluginsInSettings };

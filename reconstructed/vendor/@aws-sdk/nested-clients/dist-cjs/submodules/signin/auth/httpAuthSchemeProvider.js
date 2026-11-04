@@ -5,12 +5,12 @@
  * pieces: chunk-y366fgzk.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../../runtime/bun-runtime.js";
-import { require_core as require_core_2 } from "../../../../../core/dist-cjs/index.js";
+import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
+import { require_core_2 } from "../../../../../core/dist-cjs/index.js";
 import { require_util_middleware } from "../../../../../../@smithy/util-middleware/dist-cjs/index.js";
 
 //@ chunk-y366fgzk.js:783-1795 cjs-fingerprint
-var require_httpAuthSchemeProvider = x(function (cjsExports) {
+var require_httpAuthSchemeProvider = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

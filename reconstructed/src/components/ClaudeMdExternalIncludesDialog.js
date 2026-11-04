@@ -8,7 +8,9 @@
  * pieces: chunk-e6aww6q8.js (1), chunk-jz0q3n7b.js (5)
  * attribution: fingerprint 2, placement 1, file-last-pair 1, facade-exports 2
  */
-import { init_react_production, P, R } from "../../vendor/react/cjs/react.production.js";
+import { getCurrentProjectConfig, saveCurrentProjectConfig } from "../utils/config.js";
+import { hasExternalClaudeMdIncludes, getMemoryFilesCached } from "../utils/claudemd.js";
+import { init_react_production, useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
 import { logEvent } from "../services/analytics/index.js";
 import {
   jsxProd_default_2,
@@ -17,9 +19,8 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box, Link } from "../ink/components/Text.js";
 import { stripInvisibleChars } from "../utils/invisibleChars.js";
-import { saveCurrentProjectConfig, getCurrentProjectConfig } from "../utils/config.js";
 import { fromEnum } from "../services/analytics/safeMetadata.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
@@ -32,10 +33,26 @@ import { MAX_VISIBLE_ITEMS } from "./permissions/wrapWidth.js";
 import { Dialog } from "./design-system/Dialog.js";
 import { plural } from "../utils/stringUtils.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
-import { hasExternalClaudeMdIncludes, getMemoryFilesCached } from "../utils/claudemd.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:1353129-1353286 fingerprint = _temp3 (1)
+/**
+ * 尚未批准或提示过、且 CLAUDE.md 引用了外部文件时返回 true。
+ */
+async function shouldShowExternalIncludesDialog(session, storageV5) {
+  let currentProjectConfig = getCurrentProjectConfig();
+  if (
+    currentProjectConfig.hasClaudeMdExternalIncludesApproved ||
+    currentProjectConfig.hasClaudeMdExternalIncludesWarningShown
+  )
+    return false;
+  return hasExternalClaudeMdIncludes(await getMemoryFilesCached(session, true, storageV5));
+}
 //@ chunk-jz0q3n7b.js:746-750 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-jz0q3n7b.js:746", () => {
+  init_react_production();
+});
 //@ chunk-jz0q3n7b.js:750-810 fingerprint = _temp (1)
 function logClaudeMdIncludesShown() {
   logEvent("tengu_claude_md_includes_dialog_shown", {});
@@ -53,21 +70,21 @@ function renderIncludePath(include, i) {
   );
 }
 //@ chunk-jz0q3n7b.js:909-1153 facade-exports = _temp2 (0.486)
-function recordExternalIncludesDecision(g, h, storageV5) {
+function recordExternalIncludesDecision(approved, source, storageV5) {
   saveCurrentProjectConfig(
-    (l) => ({
-      ...l,
-      hasClaudeMdExternalIncludesApproved: g,
+    (config) => ({
+      ...config,
+      hasClaudeMdExternalIncludesApproved: approved,
       hasClaudeMdExternalIncludesWarningShown: true,
     }),
     storageV5,
   );
   logEvent(
-    g
+    approved
       ? "tengu_claude_md_external_includes_dialog_accepted"
       : "tengu_claude_md_external_includes_dialog_declined",
     {
-      source: fromEnum(h),
+      source: fromEnum(source),
     },
   );
 }
@@ -76,20 +93,20 @@ function recordExternalIncludesDecision(g, h, storageV5) {
  * 外部 CLAUDE.md 引用确认：列出工作目录外被 @ 引用的文件，允许或拒绝（记录 tengu_claude_md_external_includes_dialog_*）。
  */
 function ClaudeMdExternalIncludesDialog(props) {
-  let $ = w(37);
+  let $ = useMemoCache(37);
   let { onDone, isStandaloneDialog, externalIncludes } = props;
   let { storageV5 } = useTheme_2();
-  let G;
+  let shownDeps;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    G = [];
-    $[0] = G;
-  } else G = $[0];
-  P(logClaudeMdIncludesShown, G);
+    shownDeps = [];
+    $[0] = shownDeps;
+  } else shownDeps = $[0];
+  useEffect(logClaudeMdIncludesShown, shownDeps);
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let z;
+  let refuseInput;
   if ($[1] !== inputRefusalWindow || $[2] !== noteRefused || $[3] !== refusedWithin) {
-    z = function I() {
+    refuseInput = function refuseInputFn() {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return true;
@@ -99,28 +116,28 @@ function ClaudeMdExternalIncludesDialog(props) {
     $[1] = inputRefusalWindow;
     $[2] = noteRefused;
     $[3] = refusedWithin;
-    $[4] = z;
-  } else z = $[4];
-  let refuseInput = z;
+    $[4] = refuseInput;
+  } else refuseInput = $[4];
+  let refuseInput_2 = refuseInput;
   let openedAt = useMountTime();
-  let L = settleKey(epoch);
-  let H;
+  let settled = settleKey(epoch);
+  let includes;
   if ($[5] !== externalIncludes) {
-    H = externalIncludes ?? [];
+    includes = externalIncludes ?? [];
     $[5] = externalIncludes;
-    $[6] = H;
-  } else H = $[6];
-  let f = H;
-  let J;
-  if ($[7] !== f) {
-    J = f.length <= MAX_VISIBLE_ITEMS ? f : f.slice(0, MAX_VISIBLE_ITEMS - 2);
-    $[7] = f;
-    $[8] = J;
-  } else J = $[8];
-  let Q = J;
-  let sliced = f.slice(Q.length);
-  let X = R(false);
-  let ee;
+    $[6] = includes;
+  } else includes = $[6];
+  let list = includes;
+  let visible;
+  if ($[7] !== list) {
+    visible = list.length <= MAX_VISIBLE_ITEMS ? list : list.slice(0, MAX_VISIBLE_ITEMS - 2);
+    $[7] = list;
+    $[8] = visible;
+  } else visible = $[8];
+  let visibleList = visible;
+  let sliced = list.slice(visibleList.length);
+  let answeredRef = useRef(false);
+  let handleAnswer;
   if (
     $[9] !== inputRefusalWindow ||
     $[10] !== noteRefused ||
@@ -128,15 +145,15 @@ function ClaudeMdExternalIncludesDialog(props) {
     $[12] !== refusedWithin ||
     $[13] !== storageV5
   ) {
-    ee = (value) => {
+    handleAnswer = (value) => {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return;
       }
-      if (X.current) {
+      if (answeredRef.current) {
         return;
       }
-      X.current = true;
+      answeredRef.current = true;
       recordExternalIncludesDecision(value === "yes", "dialog", storageV5);
       onDone();
     };
@@ -145,32 +162,32 @@ function ClaudeMdExternalIncludesDialog(props) {
     $[11] = onDone;
     $[12] = refusedWithin;
     $[13] = storageV5;
-    $[14] = ee;
-  } else ee = $[14];
-  let i = ee;
-  let te;
-  if ($[15] !== i) {
-    te = () => {
-      i("no");
+    $[14] = handleAnswer;
+  } else handleAnswer = $[14];
+  let choose = handleAnswer;
+  let handleCancel;
+  if ($[15] !== choose) {
+    handleCancel = () => {
+      choose("no");
     };
-    $[15] = i;
-    $[16] = te;
-  } else te = $[16];
-  let onCancel = te;
-  const B = Dialog;
+    $[15] = choose;
+    $[16] = handleCancel;
+  } else handleCancel = $[16];
+  let onCancel = handleCancel;
+  const DialogComponent = Dialog;
   const title = "Allow external CLAUDE.md file imports?";
   const color = "warning";
   const hideBorder = !isStandaloneDialog;
   const hideInputGuide = !isStandaloneDialog;
-  let y;
+  let bodyText;
   if ($[17] === MEMO_CACHE_SENTINEL) {
-    y = jsxProd_default(Text, {
+    bodyText = jsxProd_default(Text, {
       children:
         "This project's CLAUDE.md or .claude/rules imports files outside the current working directory. Never allow this for third-party repositories.",
     });
-    $[17] = y;
-  } else y = $[17];
-  const F =
+    $[17] = bodyText;
+  } else bodyText = $[17];
+  const includesList =
     externalIncludes &&
     externalIncludes.length > 0 &&
     jsxProd_default_2(Box, {
@@ -180,7 +197,7 @@ function ClaudeMdExternalIncludesDialog(props) {
           dimColor: true,
           children: "External imports:",
         }),
-        Q.map(renderIncludePath),
+        visibleList.map(renderIncludePath),
         sliced.length > 0
           ? jsxProd_default_2(Fragment, {
               children: [
@@ -206,9 +223,9 @@ function ClaudeMdExternalIncludesDialog(props) {
           : null,
       ],
     });
-  let oe;
+  let options;
   if ($[18] === MEMO_CACHE_SENTINEL) {
-    oe = jsxProd_default_2(Text, {
+    options = jsxProd_default_2(Text, {
       dimColor: true,
       children: [
         "Important: Only use Claude Code with files you trust. Accessing untrusted files may pose security risks",
@@ -219,32 +236,32 @@ function ClaudeMdExternalIncludesDialog(props) {
         " ",
       ],
     });
-    $[18] = oe;
-  } else oe = $[18];
+    $[18] = options;
+  } else options = $[18];
   let onConfirm;
   let onCancel_2;
-  if ($[19] !== i) {
-    onConfirm = () => i("yes");
-    onCancel_2 = () => i("no");
-    $[19] = i;
+  if ($[19] !== choose) {
+    onConfirm = () => choose("yes");
+    onCancel_2 = () => choose("no");
+    $[19] = choose;
     $[20] = onConfirm;
     $[21] = onCancel_2;
   } else {
     onConfirm = $[20];
     onCancel_2 = $[21];
   }
-  let D;
+  let layout;
   if (
-    $[22] !== L.remountKey ||
-    $[23] !== refuseInput ||
+    $[22] !== settled.remountKey ||
+    $[23] !== refuseInput_2 ||
     $[24] !== openedAt ||
     $[25] !== onConfirm ||
     $[26] !== onCancel_2
   ) {
-    D = jsxProd_default(
+    layout = jsxProd_default(
       ConfirmSelect,
       {
-        refuseInput,
+        refuseInput: refuseInput_2,
         openedAt,
         hideIndexes: true,
         confirmLabel: "Yes, allow external imports",
@@ -254,58 +271,45 @@ function ClaudeMdExternalIncludesDialog(props) {
         onConfirm,
         onCancel: onCancel_2,
       },
-      L.remountKey,
+      settled.remountKey,
     );
-    $[22] = L.remountKey;
-    $[23] = refuseInput;
+    $[22] = settled.remountKey;
+    $[23] = refuseInput_2;
     $[24] = openedAt;
     $[25] = onConfirm;
     $[26] = onCancel_2;
-    $[27] = D;
-  } else D = $[27];
-  let ne;
+    $[27] = layout;
+  } else layout = $[27];
+  let dialog;
   if (
-    $[28] !== B ||
+    $[28] !== DialogComponent ||
     $[29] !== onCancel ||
     $[30] !== isStandaloneDialog ||
     $[31] !== hideInputGuide ||
-    $[32] !== y ||
-    $[33] !== F ||
-    $[34] !== D ||
+    $[32] !== bodyText ||
+    $[33] !== includesList ||
+    $[34] !== layout ||
     $[35] !== hideBorder
   ) {
-    ne = jsxProd_default_2(B, {
+    dialog = jsxProd_default_2(DialogComponent, {
       title,
       color,
       onCancel,
       exitOnCtrlCD: isStandaloneDialog,
       hideBorder,
       hideInputGuide,
-      children: [y, F, oe, D],
+      children: [bodyText, includesList, options, layout],
     });
-    $[28] = B;
+    $[28] = DialogComponent;
     $[29] = onCancel;
     $[30] = isStandaloneDialog;
     $[31] = hideInputGuide;
-    $[32] = y;
-    $[33] = F;
-    $[34] = D;
+    $[32] = bodyText;
+    $[33] = includesList;
+    $[34] = layout;
     $[35] = hideBorder;
-    $[36] = ne;
-  } else ne = $[36];
-  return ne;
-}
-//@ chunk-e6aww6q8.js:1353129-1353286 fingerprint = _temp3 (1)
-/**
- * 尚未批准或提示过、且 CLAUDE.md 引用了外部文件时返回 true。
- */
-async function shouldShowExternalIncludesDialog(session, storageV5) {
-  let currentProjectConfig = getCurrentProjectConfig();
-  if (
-    currentProjectConfig.hasClaudeMdExternalIncludesApproved ||
-    currentProjectConfig.hasClaudeMdExternalIncludesWarningShown
-  )
-    return false;
-  return hasExternalClaudeMdIncludes(await getMemoryFilesCached(session, true, storageV5));
+    $[36] = dialog;
+  } else dialog = $[36];
+  return dialog;
 }
 export { shouldShowExternalIncludesDialog, recordExternalIncludesDecision, ClaudeMdExternalIncludesDialog };

@@ -18,18 +18,28 @@ import { fromEnumOpt, lit } from "../services/analytics/safeMetadata.js";
 import { getEntrypointKind } from "./entrypointKinds.js";
 import { logEvent } from "../services/analytics/index.js";
 import { jsonStringify } from "./slowOperations.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-eweqvj83.js:2697-2760 fingerprint = DETAILED_PROFILING (0.771)
-var PROFILE_STARTUP = env.CLAUDE_CODE_PROFILE_STARTUP;
-var PROFILING_SAMPLE_RATE = 0.05;
-var isProfilingSampledByRandom = Math.random() < PROFILING_SAMPLE_RATE;
+var PROFILE_STARTUP; // deferred: uses env (./env.js) of its import cycle while loading; runs once the cycle is complete
+var PROFILING_SAMPLE_RATE;
+var isProfilingSampledByRandom;
+deferInit("chunk-eweqvj83.js:2697", () => {
+  PROFILE_STARTUP = env.CLAUDE_CODE_PROFILE_STARTUP;
+  PROFILING_SAMPLE_RATE = 0.05;
+  isProfilingSampledByRandom = Math.random() < PROFILING_SAMPLE_RATE;
+});
 //@ chunk-eweqvj83.js:2760-2784 layout
 function isProfilingSampled() {
   return isProfilingSampledByRandom;
 }
 //@ chunk-eweqvj83.js:2784-2810 fingerprint = MARK_PREFIX (1)
-var HEADLESS_PROFILING_ENABLED = PROFILE_STARTUP || isProfilingSampledByRandom;
-var HEADLESS = "headless_";
+var HEADLESS_PROFILING_ENABLED; // deferred: uses PROFILE_STARTUP of its import cycle while loading; runs once the cycle is complete
+var HEADLESS;
+deferInit("chunk-eweqvj83.js:2784", () => {
+  HEADLESS_PROFILING_ENABLED = PROFILE_STARTUP || isProfilingSampledByRandom;
+  HEADLESS = "headless_";
+});
 //@ chunk-eweqvj83.js:2810-2869 layout
 class HeadlessProfilerState {
   current = -1;
@@ -39,7 +49,10 @@ class HeadlessProfilerState {
   }
 }
 //@ chunk-eweqvj83.js:2869-2893 layout
-var headlessProfilerStateByHost = new HostScoped(() => new HeadlessProfilerState());
+var headlessProfilerStateByHost; // deferred: uses HeadlessProfilerState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-eweqvj83.js:2869", () => {
+  headlessProfilerStateByHost = new HostScoped(() => new HeadlessProfilerState());
+});
 //@ chunk-eweqvj83.js:2893-2929 layout
 function getHeadlessProfilerState() {
   return headlessProfilerStateByHost.of(getRootSession().host);
@@ -93,17 +106,17 @@ function logHeadlessProfilerTurn() {
   let turnStart = checkpointTimes.get("turn_start");
   if (turnStart === undefined) return;
   let headlessProfilerState = getHeadlessProfilerState();
-  let u = headlessProfilerState.current;
-  if (PROFILE_STARTUP && u === 0)
-    headlessProfilerState.turn0Marks = marks.map(({ name: f, startTime }) => ({
-      name: f,
+  let turnNumber = headlessProfilerState.current;
+  if (PROFILE_STARTUP && turnNumber === 0)
+    headlessProfilerState.turn0Marks = marks.map(({ name, startTime }) => ({
+      name,
       startTime,
     }));
   let metadata = {
-    turn_number: u,
+    turn_number: turnNumber,
   };
-  if (u === 0)
-    for (let [key, [d, m]] of Object.entries({
+  if (turnNumber === 0)
+    for (let [key, [fromMark, toMark]] of Object.entries({
       load_initial_messages_ms: ["before_loadInitialMessages", "after_loadInitialMessages"],
       system_prompt_ms: ["before_getSystemPrompt", "after_getSystemPrompt"],
       streaming_setup_ms: ["before_runHeadlessStreaming", "stdin_listen_started"],
@@ -111,12 +124,13 @@ function logHeadlessProfilerTurn() {
       mcp_prewait_ms: ["before_mcp_prewait", "after_mcp_prewait"],
       grove_check_ms: ["before_grove_check", "after_grove_check"],
     })) {
-      let l = checkpointTimes.get(d);
-      let y = checkpointTimes.get(m);
-      if (l !== undefined && y !== undefined && y > l) metadata[key] = Math.round(y - l);
+      let fromTime = checkpointTimes.get(fromMark);
+      let toTime = checkpointTimes.get(toMark);
+      if (fromTime !== undefined && toTime !== undefined && toTime > fromTime)
+        metadata[key] = Math.round(toTime - fromTime);
     }
   let systemMessageTime = checkpointTimes.get("system_message_yielded");
-  if (systemMessageTime !== undefined && u === 0)
+  if (systemMessageTime !== undefined && turnNumber === 0)
     metadata.time_to_system_message_ms = Math.round(systemMessageTime);
   let queryStartTime = checkpointTimes.get("query_started");
   if (queryStartTime !== undefined) metadata.time_to_query_start_ms = Math.round(queryStartTime - turnStart);
@@ -129,11 +143,13 @@ function logHeadlessProfilerTurn() {
   let turnMetrics = computeTurnMetrics(marks);
   if (turnMetrics.length > 0) {
     metadata.query_round_count = turnMetrics.length;
-    let flattened = turnMetrics.flatMap((m) => (m.overheadMs === undefined ? [] : [m.overheadMs]));
+    let flattened = turnMetrics.flatMap((metric) =>
+      metric.overheadMs === undefined ? [] : [metric.overheadMs],
+    );
     if (flattened.length > 0) {
       metadata.query_overhead_first_ms = flattened[0];
-      metadata.query_overhead_max_ms = flattened.reduce((acc, l) => Math.max(acc, l));
-      metadata.query_overhead_total_ms = flattened.reduce((acc, l) => acc + l, 0);
+      metadata.query_overhead_max_ms = flattened.reduce((acc, ms) => Math.max(acc, ms));
+      metadata.query_overhead_total_ms = flattened.reduce((acc, ms) => acc + ms, 0);
     }
     let firstChunkAt = turnMetrics[0]?.firstChunkAt;
     if (firstChunkAt !== undefined)
@@ -142,27 +158,28 @@ function logHeadlessProfilerTurn() {
   metadata.checkpoint_count = marks.length;
   if (env.CLAUDE_CODE_ENTRYPOINT) metadata.entrypoint = fromEnumOpt(getEntrypointKind()) ?? lit("other");
   if (isProfilingSampledByRandom) logEvent("tengu_headless_latency", metadata);
-  if (PROFILE_STARTUP) logForDebugging(`[headlessProfiler] Turn ${u} metrics: ${jsonStringify(metadata)}`);
+  if (PROFILE_STARTUP)
+    logForDebugging(`[headlessProfiler] Turn ${turnNumber} metrics: ${jsonStringify(metadata)}`);
 }
 //@ chunk-eweqvj83.js:5160-5623 affinity
 function computeTurnMetrics(marks) {
-  let o = [];
-  for (let r of marks) {
-    let s = r.name.startsWith(HEADLESS) ? r.name.slice(HEADLESS.length) : r.name;
-    let last = o.at(-1);
-    if (s === "query_started")
-      o.push({
-        startedAt: r.startTime,
+  let rounds = [];
+  for (let mark of marks) {
+    let name = mark.name.startsWith(HEADLESS) ? mark.name.slice(HEADLESS.length) : mark.name;
+    let last = rounds.at(-1);
+    if (name === "query_started")
+      rounds.push({
+        startedAt: mark.startTime,
       });
-    else if (last !== undefined && s === "api_request_sent") last.dispatchedAt ??= r.startTime;
-    else if (last !== undefined && s === "first_chunk") last.firstChunkAt ??= r.startTime;
+    else if (last !== undefined && name === "api_request_sent") last.dispatchedAt ??= mark.startTime;
+    else if (last !== undefined && name === "first_chunk") last.firstChunkAt ??= mark.startTime;
   }
-  return o.map((r) => ({
-    ...(r.dispatchedAt !== undefined && {
-      overheadMs: Math.round(r.dispatchedAt - r.startedAt),
+  return rounds.map((round) => ({
+    ...(round.dispatchedAt !== undefined && {
+      overheadMs: Math.round(round.dispatchedAt - round.startedAt),
     }),
-    ...(r.firstChunkAt !== undefined && {
-      firstChunkAt: r.firstChunkAt,
+    ...(round.firstChunkAt !== undefined && {
+      firstChunkAt: round.firstChunkAt,
     }),
   }));
 }

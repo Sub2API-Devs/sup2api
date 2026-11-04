@@ -21,9 +21,9 @@ import { mainAgentId } from "../../bootstrap/state.js";
  * 往子代理的 transcript 追加一条消息。
  */
 function appendAgentTranscriptMessage(taskId, message, taskRegistry) {
-  taskRegistry.updateTranscript(taskId, (s) => ({
-    ...s,
-    messages: [...s.messages, message],
+  taskRegistry.updateTranscript(taskId, (transcript) => ({
+    ...transcript,
+    messages: [...transcript.messages, message],
   }));
 }
 //@ chunk-e6aww6q8.js:4718996-4719155 placement = queuePendingMessage (0.752)
@@ -44,20 +44,22 @@ function drainPendingMessages(taskId, taskRegistry) {
 /**
  * 插件拒绝恢复代理时，丢弃对应的排队消息并发出恢复失败事件。
  */
-function dropDeniedResumeMessages(e, n, r, { deniedByPlugin }) {
-  let h = new Set(r);
-  let filtered = drainPendingMessages(e, n).filter((S) => !h.has(S));
-  queuePendingMessage(e, filtered, n);
-  logForDebugging(`resume of ${e} denied: dropping ${r.length} queued message(s): ${deniedByPlugin}`);
-  getTaskRunState().agentResumeFailed.emit(e, {
+function dropDeniedResumeMessages(agentId, taskRegistry, deniedMessages, { deniedByPlugin }) {
+  let deniedIds = new Set(deniedMessages);
+  let filtered = drainPendingMessages(agentId, taskRegistry).filter((queued) => !deniedIds.has(queued));
+  queuePendingMessage(agentId, filtered, taskRegistry);
+  logForDebugging(
+    `resume of ${agentId} denied: dropping ${deniedMessages.length} queued message(s): ${deniedByPlugin}`,
+  );
+  getTaskRunState().agentResumeFailed.emit(agentId, {
     error: new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       deniedByPlugin,
       "Subagent resume denied by a plugin",
     ),
-    undeliverable: r,
+    undeliverable: deniedMessages,
     terminal: false,
   });
-  if (filtered.length > 0) getTaskRunState().agentStrandedMessages.emit(e);
+  if (filtered.length > 0) getTaskRunState().agentStrandedMessages.emit(agentId);
 }
 //@ chunk-e6aww6q8.js:4719571-4719714 placement
 /**
@@ -74,14 +76,14 @@ function sendMessageToAgent(agentId, text, taskRegistry, options = {}) {
  * 发送消息后清除代理的等待通知接收者（若匹配）。
  */
 function clearWaitingNotice(agentId, agentId_2, taskRegistry) {
-  let s = resolveVisibleSubagentId(agentId_2, taskRegistry) ?? mainAgentId();
-  taskRegistry.update(agentId, (h) =>
-    h.waitingNoticeRecipient === s
+  let recipient = resolveVisibleSubagentId(agentId_2, taskRegistry) ?? mainAgentId();
+  taskRegistry.update(agentId, (task) =>
+    task.waitingNoticeRecipient === recipient
       ? {
-          ...h,
+          ...task,
           waitingNoticeRecipient: undefined,
         }
-      : h,
+      : task,
   );
 }
 export {

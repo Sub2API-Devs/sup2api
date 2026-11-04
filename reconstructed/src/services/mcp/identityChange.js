@@ -48,11 +48,11 @@ function notifyIdentityTripped() {
   });
 }
 //@ chunk-0qyh5wah.js:2028-2157 placement
-function setIdentityTrippedHandler(e) {
+function setIdentityTrippedHandler(handler) {
   let cliOwnedState = getCliOwnedState();
-  cliOwnedState.identityTrippedHandler = e;
+  cliOwnedState.identityTrippedHandler = handler;
   return () => {
-    if (cliOwnedState.identityTrippedHandler === e) cliOwnedState.identityTrippedHandler = null;
+    if (cliOwnedState.identityTrippedHandler === handler) cliOwnedState.identityTrippedHandler = null;
   };
 }
 //@ chunk-0qyh5wah.js:2157-2241 placement
@@ -110,9 +110,9 @@ function rearmIdentityBaseline() {
   getDiscoveryCacheStore().lastResolvedAccountToken = BASELINE_REARMED;
 }
 //@ chunk-0qyh5wah.js:2655-2705 placement
-function isCurrentIdentityEpoch(e) {
+function isCurrentIdentityEpoch(epoch) {
   resolveIdentityIfNeeded();
-  return e === getCliOwnedState().identityEpoch;
+  return epoch === getCliOwnedState().identityEpoch;
 }
 //@ chunk-0qyh5wah.js:2705-2846 placement
 function noteIdentityChanged() {

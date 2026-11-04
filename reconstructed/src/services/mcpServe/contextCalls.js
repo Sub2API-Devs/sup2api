@@ -13,13 +13,13 @@ import { dirname, posix } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
-  string,
+  stringSchema,
   int,
-  u,
+  objectSchema,
   array,
-  E,
+  numberSchema,
   literal,
-  M,
+  booleanSchema,
   unknown,
   _enum,
 } from "../../../vendor/zod/v4/classic/schemas.js";
@@ -84,21 +84,21 @@ var readChangedFilesInputSchema = DoctorLazy(() =>
     permission_context: safeSerializedPermissionContextSchema(),
     agent_id: agentIdSchema().optional(),
     told: zodStrictObject({
-      id: string().max(64),
+      id: stringSchema().max(64),
       count: int().min(0),
     }).optional(),
   }),
 );
 var changedFilesResultSchema = DoctorLazy(() =>
-  u({
-    id: string().optional(),
+  objectSchema({
+    id: stringSchema().optional(),
     changed: array(
-      u({
-        filename: string(),
-        snippet: string(),
+      objectSchema({
+        filename: stringSchema(),
+        snippet: stringSchema(),
       }),
     ),
-    tracked: E(),
+    tracked: numberSchema(),
     isBusy: literal(true).optional(),
   }),
 );
@@ -106,21 +106,21 @@ var changedFilesResultSchema = DoctorLazy(() =>
 /**
  * 当文件按 inode 操作符变化时分两次写入。
  */
-function updateFileMap(e, { path, was, now }) {
-  if (e.get(path) === was) e.set(path, now);
+function updateFileMap(fileMap, { path, was, now }) {
+  if (fileMap.get(path) === was) fileMap.set(path, now);
 }
 //@ chunk-wy9dbk5f.js:26307-28335 placement
-async function serveReadChangedFiles(e, r, n) {
-  if (isPlainObject(e) && exceedsSerializedContextLimit(e.permission_context))
+async function serveReadChangedFiles(input, signal, context) {
+  if (isPlainObject(input) && exceedsSerializedContextLimit(input.permission_context))
     throw Error("permission_context is too large");
   let {
     permission_context: permissionContext,
     agent_id: agentId,
     told,
-  } = readChangedFilesInputSchema().parse(e);
-  let launchPermissionContext = n.launchPermissionContext;
-  let g = call(n.session, agentId);
-  if (launchPermissionContext === undefined || g === undefined || g.size === 0)
+  } = readChangedFilesInputSchema().parse(input);
+  let launchPermissionContext = context.launchPermissionContext;
+  let fileMap = call(context.session, agentId);
+  if (launchPermissionContext === undefined || fileMap === undefined || fileMap.size === 0)
     return {
       summary: "nothing tracked",
       output: {
@@ -128,135 +128,141 @@ async function serveReadChangedFiles(e, r, n) {
         tracked: 0,
       },
     };
-  let repoRulesForRequest = await readRepoRulesForRequest(READCHANGEDFILES, n.meta);
+  let repoRulesForRequest = await readRepoRulesForRequest(READCHANGEDFILES, context.meta);
   if (repoRulesForRequest.refused !== undefined)
     return {
       summary: "the repo rules could not be read",
       output: {
         changed: [],
-        tracked: g.size,
+        tracked: fileMap.size,
       },
     };
-  let { changedFilesPasses } = mcpServeCallState.of(n.session);
-  let C = changedFilesPasses.get(g) ?? {
-    copy: createRemoteFileState(g.max, g.maxSize),
+  let { changedFilesPasses } = mcpServeCallState.of(context.session);
+  let pass = changedFilesPasses.get(fileMap) ?? {
+    copy: createRemoteFileState(fileMap.max, fileMap.maxSize),
     isRunning: false,
     answered: undefined,
   };
-  changedFilesPasses.set(g, C);
-  if (C.isRunning)
+  changedFilesPasses.set(fileMap, pass);
+  if (pass.isRunning)
     return {
       summary: "a pass is running",
       output: {
         isBusy: true,
         changed: [],
-        tracked: g.size,
+        tracked: fileMap.size,
       },
     };
-  if (told !== undefined && told.id === C.answered?.id)
-    C.answered.changes.slice(0, told.count).forEach((change) => {
-      updateFileMap(g, change);
+  if (told !== undefined && told.id === pass.answered?.id)
+    pass.answered.changes.slice(0, told.count).forEach((change) => {
+      updateFileMap(fileMap, change);
     });
-  C.answered = undefined;
-  let b = new Map(g.entries());
-  let R = {
+  pass.answered = undefined;
+  let before = new Map(fileMap.entries());
+  let appState = {
     ...serveModeDefaultAppState(),
     toolPermissionContext: buildNativeDoctorDiagnostics(
       permissionContext,
       launchPermissionContext,
-      getSessionProject(n.session).originalCwd,
+      getSessionProject(context.session).originalCwd,
       repoRulesForRequest.repoRules,
     ),
   };
-  let x = n.toolUseContext();
-  let { copy } = C;
+  let toolContext = context.toolUseContext();
+  let { copy } = pass;
   copy.clear();
-  copy.load(g.dump());
-  let childAbortController = createChildAbortController(x.abortController);
-  let timer = setTimeout((v) => v.abort(), CHANGED_FILES_TIMEOUT_MS, childAbortController);
-  C.isRunning = true;
-  let L;
+  copy.load(fileMap.dump());
+  let childAbortController = createChildAbortController(toolContext.abortController);
+  let timer = setTimeout((controller) => controller.abort(), CHANGED_FILES_TIMEOUT_MS, childAbortController);
+  pass.isRunning = true;
+  let changes;
   try {
-    L = await getChangedFiles({
-      ...x,
+    changes = await getChangedFiles({
+      ...toolContext,
       readFileState: copy,
       agentId: agentId === undefined ? undefined : identityAgentId2(agentId),
       abortController: childAbortController,
-      getAppState: () => R,
+      getAppState: () => appState,
     });
   } finally {
     clearTimeout(timer);
-    C.isRunning = false;
+    pass.isRunning = false;
   }
-  let j = new Map(g.entries());
-  let B = [];
-  let H = [];
-  for (let v of L) {
-    if (v.type !== "edited_text_file" && v.type !== "edited_image_file") continue;
-    let X = v.type === "edited_text_file";
-    let V = b.get(v.filename);
-    let de = X
-      ? copy.get(v.filename)
-      : V && {
-          ...V,
+  let after = new Map(fileMap.entries());
+  let snippets = [];
+  let changeList = [];
+  for (let change of changes) {
+    if (change.type !== "edited_text_file" && change.type !== "edited_image_file") continue;
+    let isText = change.type === "edited_text_file";
+    let beforeEntry = before.get(change.filename);
+    let afterEntry = isText
+      ? copy.get(change.filename)
+      : beforeEntry && {
+          ...beforeEntry,
           offset: 1,
           limit: 1,
         };
-    if (V !== undefined && de !== undefined && j.get(v.filename) === V) {
-      B.push({
-        filename: v.filename,
-        snippet: X ? v.snippet : "",
+    if (beforeEntry !== undefined && afterEntry !== undefined && after.get(change.filename) === beforeEntry) {
+      snippets.push({
+        filename: change.filename,
+        snippet: isText ? change.snippet : "",
       });
-      H.push({
-        path: v.filename,
-        was: V,
-        now: de,
+      changeList.push({
+        path: change.filename,
+        was: beforeEntry,
+        now: afterEntry,
       });
     }
   }
-  let Y = new Set(H.map(({ path }) => path));
-  for (let [v, X] of b) {
-    let V = copy.get(v);
-    if (V === X || V === undefined || Y.has(v) || j.get(v) !== X) continue;
-    if (V.contentHash !== X.contentHash) {
-      B.push({
-        filename: v,
+  let seenPaths = new Set(changeList.map(({ path }) => path));
+  for (let [fileName, previous] of before) {
+    let current = copy.get(fileName);
+    if (
+      current === previous ||
+      current === undefined ||
+      seenPaths.has(fileName) ||
+      after.get(fileName) !== previous
+    )
+      continue;
+    if (current.contentHash !== previous.contentHash) {
+      snippets.push({
+        filename: fileName,
         snippet: "",
       });
-      H.push({
-        path: v,
-        was: X,
-        now: V,
+      changeList.push({
+        path: fileName,
+        was: previous,
+        now: current,
       });
     } else
-      updateFileMap(g, {
-        path: v,
-        was: X,
+      updateFileMap(fileMap, {
+        path: fileName,
+        was: previous,
         now: {
-          ...X,
-          timestamp: V.timestamp,
+          ...previous,
+          timestamp: current.timestamp,
         },
       });
   }
-  let tracked = g.size;
-  if (H.length === 0)
+  let tracked = fileMap.size;
+  if (changeList.length === 0)
     return {
       summary: "nothing changed",
       output: {
-        changed: B,
+        changed: snippets,
         tracked,
       },
     };
   let id = randomUUID();
-  C.answered = {
+  pass.answered = {
     id,
-    changes: H,
+    changes: changeList,
   };
   return {
-    summary: `${H.length} changed`,
+    summary: `${changeList.length} changed`,
     output: {
       id,
-      changed: B,
+      changed: snippets,
       tracked,
     },
   };
@@ -267,15 +273,15 @@ async function serveReadChangedFiles(e, r, n) {
  */
 var READENVIRONMENT = "ReadEnvironment";
 var readEnvironmentResultSchema = DoctorLazy(() =>
-  u({
-    workingDirectory: string(),
-    shellDirectory: string().optional(),
-    isGitRepo: M(),
+  objectSchema({
+    workingDirectory: stringSchema(),
+    shellDirectory: stringSchema().optional(),
+    isGitRepo: booleanSchema(),
     agentProxy: ProxyEnvironmentSchema().nullable().optional().catch(undefined),
   }),
 );
 //@ chunk-wy9dbk5f.js:28493-28713 placement
-async function serveReadEnvironment(e, r, { session }) {
+async function serveReadEnvironment(input, signal, { session }) {
   let originalCwd = getOriginalCwd();
   return {
     summary: "the working directory",
@@ -297,55 +303,71 @@ var EMPTY_LIST = [];
 /**
  * 在上下文里补上 AGENTS.md 指令。
  */
-async function withAgentsMdInstructions(sessionMemoryFiles, agentsMd, session, context) {
-  let agentsMdInstructions = await readAgentsMdInstructions(sessionMemoryFiles, agentsMd, session, context);
-  return agentsMdInstructions
-    ? fromPluginInstructionFiles(agentsMdInstructions, sessionMemoryFiles)
-    : sessionMemoryFiles;
+async function withAgentsMdInstructions(sessionMemoryFiles, agentsMdMode, session, context) {
+  let files = await readAgentsMdInstructions(sessionMemoryFiles, agentsMdMode, session, context);
+  return files ? fromPluginInstructionFiles(files, sessionMemoryFiles) : sessionMemoryFiles;
 }
 //@ chunk-wy9dbk5f.js:28912-29173 placement
-async function readAncestorInstructions(filePath, sessionMemoryFiles, agentsMd, within, session, context) {
-  let y = {
+async function readAncestorInstructions(
+  filePath,
+  sessionMemoryFiles,
+  agentsMdMode,
+  within,
+  session,
+  context,
+) {
+  let search = {
     start: dirname(filePath),
     below: getOriginalCwd(),
     held: () => within,
   };
-  let [g, h] = await Promise.all([
-    fsAncestors(AGENTS_MD_FILENAMES, AGENTS_MD_PLUGIN_NAME, y),
-    fsAncestors(CLAUDE_MD_FILENAMES, AGENTS_MD_PLUGIN_NAME, y),
+  let [agentsFiles, claudeFiles] = await Promise.all([
+    fsAncestors(AGENTS_MD_FILENAMES, AGENTS_MD_PLUGIN_NAME, search),
+    fsAncestors(CLAUDE_MD_FILENAMES, AGENTS_MD_PLUGIN_NAME, search),
   ]).catch(() => [EMPTY_LIST, EMPTY_LIST]);
-  let S = agentsMd === DEFAULT_AGENTS_MD_MODE ? excludeDirs(g, h) : g;
-  let C = S.length > 0 && (await readAgentsMdInstructions(sessionMemoryFiles, agentsMd, session, context));
-  if (!C) return [];
+  let ancestorFiles =
+    agentsMdMode === DEFAULT_AGENTS_MD_MODE ? excludeDirs(agentsFiles, claudeFiles) : agentsFiles;
+  let sessionInstructions =
+    ancestorFiles.length > 0 &&
+    (await readAgentsMdInstructions(sessionMemoryFiles, agentsMdMode, session, context));
+  if (!sessionInstructions) return [];
   return fromPluginInstructionFiles(
-    dedupeInstructionFiles(flattenProjectInstructionParts(S), [...C, ...flattenProjectInstructionParts(h)]),
+    dedupeInstructionFiles(flattenProjectInstructionParts(ancestorFiles), [
+      ...sessionInstructions,
+      ...flattenProjectInstructionParts(claudeFiles),
+    ]),
     [],
   );
 }
 //@ chunk-wy9dbk5f.js:29173-29381 placement
-async function readAgentsMdInstructions(e, r, n, s) {
-  let originalCwd = getOriginalCwd();
-  let mapped = e.map(toPluginInstructionFile);
+async function readAgentsMdInstructions(sessionMemoryFiles, agentsMdMode, session, context) {
+  let dir = getOriginalCwd();
+  let files = sessionMemoryFiles.map(toPluginInstructionFile);
   if (
-    r === DEFAULT_AGENTS_MD_MODE &&
-    (mapped.some((g) => isClaudeMdAtDir(g, originalCwd)) ||
-      (await readAgentsMdInstructionsFor(CLAUDE_MD_FILENAMES, n, s).then(
+    agentsMdMode === DEFAULT_AGENTS_MD_MODE &&
+    (files.some((file) => isClaudeMdAtDir(file, dir)) ||
+      (await readAgentsMdInstructionsFor(CLAUDE_MD_FILENAMES, session, context).then(
         (agentsMdInstructionsFor) => agentsMdInstructionsFor.length > 0,
         () => true,
       )))
   )
     return;
-  let y = await readAgentsMdInstructionsFor(AGENTS_MD_FILENAMES, n, s).catch(() => EMPTY_LIST);
-  return insertAgentsMdFiles(mapped, dedupeInstructionFiles(flattenProjectInstructionParts(y), mapped));
+  let agentsInstructions = await readAgentsMdInstructionsFor(AGENTS_MD_FILENAMES, session, context).catch(
+    () => EMPTY_LIST,
+  );
+  return insertAgentsMdFiles(
+    files,
+    dedupeInstructionFiles(flattenProjectInstructionParts(agentsInstructions), files),
+  );
 }
 //@ chunk-wy9dbk5f.js:29381-29439 placement
 /**
  * 读取 AGENTS.md 指令。
  */
-function readAgentsMdInstructionsFor(e, r, judgedBy) {
-  setClaudeMdJudgedBy(r, judgedBy);
-  return fsAncestors(e, AGENTS_MD_PLUGIN_NAME, {
-    session: r,
+function readAgentsMdInstructionsFor(filenames, session, judgedBy) {
+  setClaudeMdJudgedBy(session, judgedBy);
+  return fsAncestors(filenames, AGENTS_MD_PLUGIN_NAME, {
+    session,
   });
 }
 //@ chunk-wy9dbk5f.js:29439-29484 placement
@@ -353,7 +375,7 @@ function readAgentsMdInstructionsFor(e, r, judgedBy) {
  * 读规则参数的 schema。
  */
 var readRulesInputSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     readRules: unknown().optional(),
   }),
 );
@@ -361,20 +383,24 @@ var readRulesInputSchema = DoctorLazy(() =>
 /**
  * 解析读取调用的权限上下文：未发送读规则时用当前工具上下文；发送了则与启动时权限上下文合并，无效时返回 undefined。
  */
-function resolveReadPermissionContext(e, r) {
-  let readRules = readRulesInputSchema().safeParse(e).data?.readRules;
+function resolveReadPermissionContext(input, context) {
+  let readRules = readRulesInputSchema().safeParse(input).data?.readRules;
   if (readRules === undefined)
     return {
-      context: getToolPermissionContext(r.toolUseContext()),
+      context: getToolPermissionContext(context.toolUseContext()),
       bySentRules: false,
     };
-  let s = exceedsSerializedContextLimit(readRules)
+  let sentContext = exceedsSerializedContextLimit(readRules)
     ? undefined
     : safeSerializedPermissionContextSchema().safeParse(readRules).data;
-  if (s === undefined || r.launchPermissionContext === undefined) return;
-  let context = buildNativeDoctorDiagnostics(s, r.launchPermissionContext, getOriginalCwd());
+  if (sentContext === undefined || context.launchPermissionContext === undefined) return;
+  let context_2 = buildNativeDoctorDiagnostics(
+    sentContext,
+    context.launchPermissionContext,
+    getOriginalCwd(),
+  );
   return {
-    context: mergePersistedDenyRules(context),
+    context: mergePersistedDenyRules(context_2),
     bySentRules: true,
   };
 }
@@ -386,43 +412,43 @@ var READPROJECTCONTEXT = "ReadProjectContext";
 var READNESTEDPROJECTCONTEXT = "ReadNestedProjectContext";
 var MAX_PROJECT_CONTEXT_BYTES = 8388608;
 var readProjectContextInputSchema = DoctorLazy(() =>
-  u({
-    maxChars: E().int().positive().optional(),
+  objectSchema({
+    maxChars: numberSchema().int().positive().optional(),
     agentsMd: _enum(AGENTS_MD_MODES).optional().catch(undefined),
-    addedDirectories: M().optional().catch(undefined),
+    addedDirectories: booleanSchema().optional().catch(undefined),
   }),
 );
 var MAX_NESTED_CONTEXT_BYTES = MAX_PROJECT_CONTEXT_BYTES / 8;
 var readNestedProjectContextInputSchema = DoctorLazy(() =>
-  u({
-    filePath: string()
+  objectSchema({
+    filePath: stringSchema()
       .max(4096)
-      .refine(function (r) {
-        return posix.isAbsolute(r) && posix.normalize(r) === r;
+      .refine(function (filePath) {
+        return posix.isAbsolute(filePath) && posix.normalize(filePath) === filePath;
       }, "must be an absolute, normalized path"),
-    maxChars: E().int().positive().optional(),
+    maxChars: numberSchema().int().positive().optional(),
     agentsMd: _enum(AGENTS_MD_MODES).optional().catch(undefined),
-    addedDirectories: M().optional().catch(undefined),
+    addedDirectories: booleanSchema().optional().catch(undefined),
   }),
 );
 var projectContextFilesSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     memoryFiles: array(
-      u({
-        path: string().max(4096),
+      objectSchema({
+        path: stringSchema().max(4096),
         type: _enum(["Project", "Local"]),
-        content: string(),
-        parent: string().optional(),
-        globs: array(string()).optional(),
+        content: stringSchema(),
+        parent: stringSchema().optional(),
+        globs: array(stringSchema()).optional(),
       }),
     ),
-    tooLarge: M().optional(),
-    rulesUnread: M().optional(),
-    rulesJudged: M().optional(),
+    tooLarge: booleanSchema().optional(),
+    rulesUnread: booleanSchema().optional(),
+    rulesJudged: booleanSchema().optional(),
   }),
 );
 //@ chunk-wy9dbk5f.js:30496-30941 placement
-async function serveReadProjectContext(e, r, n) {
+async function serveReadProjectContext(input, signal, context) {
   if (isClaudeMdLoadingDisabled())
     return {
       summary: "CLAUDE.md loading is off",
@@ -430,62 +456,70 @@ async function serveReadProjectContext(e, r, n) {
         memoryFiles: [],
       },
     };
-  let s = readProjectContextInputSchema().safeParse(e);
-  let { session } = n.toolUseContext();
-  setClaudeMdAdditionalDirectoriesAsked(s.success ? s.data.addedDirectories : undefined);
+  let parsed = readProjectContextInputSchema().safeParse(input);
+  let { session } = context.toolUseContext();
+  setClaudeMdAdditionalDirectoriesAsked(parsed.success ? parsed.data.addedDirectories : undefined);
   clearMemoryFilesCache(session);
-  let readPermissionContext = resolveReadPermissionContext(e, n);
+  let readPermissionContext = resolveReadPermissionContext(input, context);
   if (readPermissionContext === undefined) return RULES_UNREAD_RESULT;
-  let sessionMemoryFiles = await loadSessionMemoryFiles(n, readPermissionContext.context);
-  r.throwIfAborted();
-  let agentsMd = s.success ? s.data.agentsMd : undefined;
-  let h = agentsMd
+  let sessionMemoryFiles = await loadSessionMemoryFiles(context, readPermissionContext.context);
+  signal.throwIfAborted();
+  let agentsMd = parsed.success ? parsed.data.agentsMd : undefined;
+  let memoryFiles = agentsMd
     ? await withAgentsMdInstructions(sessionMemoryFiles, agentsMd, session, readPermissionContext.context)
     : sessionMemoryFiles;
-  r.throwIfAborted();
+  signal.throwIfAborted();
   return buildProjectContextResult(
-    h,
-    s.success ? s.data.maxChars : undefined,
+    memoryFiles,
+    parsed.success ? parsed.data.maxChars : undefined,
     MAX_PROJECT_CONTEXT_BYTES,
     readPermissionContext.bySentRules,
   );
 }
 //@ chunk-wy9dbk5f.js:30941-31445 placement
-async function serveReadNestedProjectContext(e, r, n) {
-  let s = readNestedProjectContextInputSchema().parse(e);
-  setClaudeMdAdditionalDirectoriesAsked(s.addedDirectories);
-  let a = n.toolUseContext();
-  if (isClaudeMdLoadingDisabled() || !pathInAllowedWorkingPath(s.filePath, getToolPermissionContext(a)))
+async function serveReadNestedProjectContext(input, signal, context) {
+  let request = readNestedProjectContextInputSchema().parse(input);
+  setClaudeMdAdditionalDirectoriesAsked(request.addedDirectories);
+  let toolContext = context.toolUseContext();
+  if (
+    isClaudeMdLoadingDisabled() ||
+    !pathInAllowedWorkingPath(request.filePath, getToolPermissionContext(toolContext))
+  )
     return {
       summary: "no memory files",
       output: {
         memoryFiles: [],
       },
     };
-  let readPermissionContext = resolveReadPermissionContext(e, n);
+  let readPermissionContext = resolveReadPermissionContext(input, context);
   if (readPermissionContext === undefined) return RULES_UNREAD_RESULT;
-  let y = [];
+  let memoryFiles = [];
   let heldOutsideTracker = buildHeldOutsideTracker(readPermissionContext.context);
-  for await (let h of iterateMemoryFilesForPath(s.filePath, a.storageV5, undefined, heldOutsideTracker)) {
-    r.throwIfAborted();
-    y.push(...h);
+  for await (let files of iterateMemoryFilesForPath(
+    request.filePath,
+    toolContext.storageV5,
+    undefined,
+    heldOutsideTracker,
+  )) {
+    signal.throwIfAborted();
+    memoryFiles.push(...files);
   }
-  if (s.agentsMd) {
-    y.push(
+  if (request.agentsMd) {
+    memoryFiles.push(
       ...(await readAncestorInstructions(
-        s.filePath,
-        await loadSessionMemoryFiles(n, readPermissionContext.context),
-        s.agentsMd,
+        request.filePath,
+        await loadSessionMemoryFiles(context, readPermissionContext.context),
+        request.agentsMd,
         heldOutsideTracker?.within,
-        a.session,
+        toolContext.session,
         readPermissionContext.context,
       )),
     );
-    r.throwIfAborted();
+    signal.throwIfAborted();
   }
   return buildProjectContextResult(
-    y,
-    s.maxChars,
+    memoryFiles,
+    request.maxChars,
     MAX_NESTED_CONTEXT_BYTES,
     readPermissionContext.bySentRules,
   );
@@ -499,32 +533,32 @@ var RULES_UNREAD_RESULT = {
   },
 };
 //@ chunk-wy9dbk5f.js:31563-31711 placement
-function loadSessionMemoryFiles(e, judgedBy) {
-  let { session, storageV5, credentials } = e.toolUseContext();
+function loadSessionMemoryFiles(context, judgedBy) {
+  let { session, storageV5, credentials } = context.toolUseContext();
   setClaudeMdJudgedBy(session, judgedBy);
   disableSetupGuideReports(session);
-  if (e.callerLogsSharedEvents) markInitialLoadLogged(session);
+  if (context.callerLogsSharedEvents) markInitialLoadLogged(session);
   return getMemoryFilesCached(session, false, storageV5, credentials);
 }
 //@ chunk-wy9dbk5f.js:31711-32088 placement
 /**
  * 只保留 Project/Local 记忆文件构造 ReadProjectContext 结果；总大小超上限时返回 tooLarge。
  */
-function buildProjectContextResult(e, r, n, bySentRules) {
-  let flattened = e.flatMap((c) =>
-    c.type === "Project" || c.type === "Local"
+function buildProjectContextResult(memoryFiles, maxChars, maxBytes, bySentRules) {
+  let memoryFiles_2 = memoryFiles.flatMap((file) =>
+    file.type === "Project" || file.type === "Local"
       ? [
           {
-            path: c.path,
-            type: c.type,
-            content: c.content,
-            parent: c.parent,
-            globs: c.globs,
+            path: file.path,
+            type: file.type,
+            content: file.content,
+            parent: file.parent,
+            globs: file.globs,
           },
         ]
       : [],
   );
-  if (measureMemoryFiles(flattened) > Math.min(r ?? n, n))
+  if (measureMemoryFiles(memoryFiles_2) > Math.min(maxChars ?? maxBytes, maxBytes))
     return {
       summary: "project context too large",
       output: {
@@ -536,9 +570,9 @@ function buildProjectContextResult(e, r, n, bySentRules) {
       },
     };
   return {
-    summary: `${flattened.length} memory files`,
+    summary: `${memoryFiles_2.length} memory files`,
     output: {
-      memoryFiles: flattened,
+      memoryFiles: memoryFiles_2,
       ...(bySentRules && {
         rulesJudged: true,
       }),
@@ -546,14 +580,14 @@ function buildProjectContextResult(e, r, n, bySentRules) {
   };
 }
 //@ chunk-wy9dbk5f.js:32088-32230 placement
-function measureMemoryFiles(e) {
-  let r = 0;
-  for (let n of e) {
-    r += n.path.length + n.content.length;
-    r += n.parent?.length ?? 0;
-    for (let s of n.globs ?? []) r += s.length;
+function measureMemoryFiles(memoryFiles) {
+  let totalChars = 0;
+  for (let file of memoryFiles) {
+    totalChars += file.path.length + file.content.length;
+    totalChars += file.parent?.length ?? 0;
+    for (let glob of file.globs ?? []) totalChars += glob.length;
   }
-  return r;
+  return totalChars;
 }
 export {
   READPROJECTCONTEXT,

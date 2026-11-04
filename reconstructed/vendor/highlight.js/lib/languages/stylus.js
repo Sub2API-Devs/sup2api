@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:468723-482400 cjs-fingerprint
-var require_stylus = x(function (cjsExports, cjsModule) {
+var require_stylus = __commonJS(function (cjsExports, cjsModule) {
   var MODES = (hljs) => ({
     IMPORTANT: {
       scope: "meta",

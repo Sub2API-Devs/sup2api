@@ -22,38 +22,41 @@ var MAX_SAFE_FILE_READ_BYTES = 65536;
 /**
  * isDirectoryOrFalse：目录判断（失败为假）。
  */
-async function isDirectoryOrFalse(e) {
-  return (await lstat(e).catch(() => null))?.isDirectory() === true;
+async function isDirectoryOrFalse(path) {
+  return (await lstat(path).catch(() => null))?.isDirectory() === true;
 }
 //@ chunk-s61vbvea.js:459585-460009 placement
-async function readPluginFileSafe(e, n) {
-  let r = e;
-  for (let y of pathModule_2.relative(e, n).split(pathModule_2.sep).filter(Boolean)) {
-    r = pathModule_2.join(r, y);
-    let S;
+async function readPluginFileSafe(root, target) {
+  let current = root;
+  for (let segment of pathModule_2.relative(root, target).split(pathModule_2.sep).filter(Boolean)) {
+    current = pathModule_2.join(current, segment);
+    let stat;
     try {
-      S = await lstat(r);
+      stat = await lstat(current);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "refused";
     }
-    if (!S.isDirectory()) return S.isSymbolicLink() ? "refused" : "not-a-directory";
+    if (!stat.isDirectory()) return stat.isSymbolicLink() ? "refused" : "not-a-directory";
   }
-  let [s, h] = await Promise.all([realpath(e).catch(() => null), realpath(n).catch(() => null)]);
-  if (s === null || h === null) return "refused";
-  return isSubpathOf(s, h, true) ? "ok" : "refused";
+  let [realRoot, realTarget] = await Promise.all([
+    realpath(root).catch(() => null),
+    realpath(target).catch(() => null),
+  ]);
+  if (realRoot === null || realTarget === null) return "refused";
+  return isSubpathOf(realRoot, realTarget, true) ? "ok" : "refused";
 }
 //@ chunk-s61vbvea.js:460009-460086 placement
 /**
  * mcpAuthCacheContent：MCP 认证缓存内容。
  */
-async function mcpAuthCacheContent(e) {
-  let mcpAuthCache = await getMcpAuthCache(e);
+async function readSmallFileText(path) {
+  let mcpAuthCache = await getMcpAuthCache(path);
   return mcpAuthCache.kind === "ok" ? mcpAuthCache.content : undefined;
 }
 //@ chunk-s61vbvea.js:460086-460202 placement = getMcpAuthCache (0.79)
-async function getMcpAuthCache(e, n = ONE_MIB) {
-  let regularFileUpTo = await readRegularFileUpTo(e, n);
+async function getMcpAuthCache(path, maxBytes = ONE_MIB) {
+  let regularFileUpTo = await readRegularFileUpTo(path, maxBytes);
   return regularFileUpTo.kind === "ok"
     ? {
         kind: "ok",
@@ -65,10 +68,10 @@ async function getMcpAuthCache(e, n = ONE_MIB) {
 /**
  * 读取普通文件（lstat 与打开后都确认是普通文件），分块读到上限 n；不存在返回 absent，非普通文件 refused，超限 too-large，否则 ok 与内容。
  */
-async function readRegularFileUpTo(e, n) {
-  let r;
+async function readRegularFileUpTo(path, maxBytes) {
+  let stat;
   try {
-    r = await lstat(e);
+    stat = await lstat(path);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR")
@@ -78,38 +81,38 @@ async function readRegularFileUpTo(e, n) {
       };
     throw error;
   }
-  if (!r.isFile())
+  if (!stat.isFile())
     return {
       kind: "refused",
     };
-  let s;
+  let handle;
   try {
-    s = await open(e, readOnlyNoFollowFlags());
-    if (!(await s.stat()).isFile())
+    handle = await open(path, readOnlyNoFollowFlags());
+    if (!(await handle.stat()).isFile())
       return {
         kind: "refused",
       };
-    let y = [];
-    let S = 0;
-    while (S <= n) {
-      let w = Buffer.alloc(Math.min(MAX_SAFE_FILE_READ_BYTES, n + 1 - S));
-      let { bytesRead } = await s.read(w, 0, w.length);
+    let chunks = [];
+    let total = 0;
+    while (total <= maxBytes) {
+      let chunk = Buffer.alloc(Math.min(MAX_SAFE_FILE_READ_BYTES, maxBytes + 1 - total));
+      let { bytesRead } = await handle.read(chunk, 0, chunk.length);
       if (bytesRead === 0) break;
-      y.push(w.subarray(0, bytesRead));
-      S += bytesRead;
+      chunks.push(chunk.subarray(0, bytesRead));
+      total += bytesRead;
     }
-    if (S > n)
+    if (total > maxBytes)
       return {
         kind: "too-large",
       };
     return {
       kind: "ok",
-      bytes: Buffer.concat(y, S),
+      bytes: Buffer.concat(chunks, total),
     };
   } finally {
-    await s?.close().catch(() => {
+    await handle?.close().catch(() => {
       return;
     });
   }
 }
-export { getMcpAuthCache, readRegularFileUpTo, isDirectoryOrFalse, readPluginFileSafe, mcpAuthCacheContent };
+export { getMcpAuthCache, readRegularFileUpTo, isDirectoryOrFalse, readPluginFileSafe, readSmallFileText };

@@ -44,38 +44,38 @@ function renderMermaidBlock(text, lang) {
 function getPlainMarkedRenderer() {
   let marked = getLiveState().marked;
   if (marked.plain) return marked.plain;
-  let n = new Marked({
+  let renderer = new Marked({
     gfm: true,
   });
-  n.use({
+  renderer.use({
     renderer: {
       code({ text, lang }) {
         return renderMermaidBlock(text, lang);
       },
     },
   });
-  marked.plain = n;
-  return n;
+  marked.plain = renderer;
+  return renderer;
 }
 //@ chunk-8wvtd8sr.js:13164-13201 placement
 /**
  * 用内置样式表把 Markdown 渲染成 HTML。
  */
-async function renderMarkdownWithStylesheet(source) {
-  return MARKDOWN_STYLESHEET + renderMarkdownToHtml(source);
+async function renderMarkdownWithStylesheet(markdown) {
+  return MARKDOWN_STYLESHEET + renderMarkdownToHtml(markdown);
 }
 //@ chunk-8wvtd8sr.js:13201-13248 placement
 /**
  * 用 marked 渲染器把 Markdown 解析成 HTML。
  */
-function renderMarkdownToHtml(e) {
-  return getPlainMarkedRenderer().parse(e, {
+function renderMarkdownToHtml(markdown) {
+  return getPlainMarkedRenderer().parse(markdown, {
     async: false,
   });
 }
 //@ chunk-8wvtd8sr.js:13248-13284 placement = applyMarkdown (1)
-function applyMarkdown(e) {
-  return getPlainMarkedRenderer().lexer(e);
+function applyMarkdown(markdown) {
+  return getPlainMarkedRenderer().lexer(markdown);
 }
 //@ chunk-8wvtd8sr.js:13284-13324 placement
 var ATX_HEADING_REGEX = /^ {0,3}#{1,6}(?:[ \t]+(.*))?$/m;
@@ -83,49 +83,49 @@ var ATX_HEADING_REGEX = /^ {0,3}#{1,6}(?:[ \t]+(.*))?$/m;
 /**
  * 判断字符是否属于空白。
  */
-function hasWhitespace(e) {
-  return /\s/.test(e);
+function hasWhitespace(char) {
+  return /\s/.test(char);
 }
 //@ chunk-8wvtd8sr.js:13358-13544 placement
-function stripClosingHashes(e) {
-  let n = e.length;
-  while (n > 0 && hasWhitespace(e[n - 1])) n--;
-  let s = n;
-  while (n > 0 && e[n - 1] === "#") n--;
-  if (n === s || (n > 0 && e[n - 1] !== " ")) return e.slice(0, s);
-  while (n > 0 && hasWhitespace(e[n - 1])) n--;
-  return e.slice(0, n);
+function stripClosingHashes(text) {
+  let end = text.length;
+  while (end > 0 && hasWhitespace(text[end - 1])) end--;
+  let hashesStart = end;
+  while (end > 0 && text[end - 1] === "#") end--;
+  if (end === hashesStart || (end > 0 && text[end - 1] !== " ")) return text.slice(0, hashesStart);
+  while (end > 0 && hasWhitespace(text[end - 1])) end--;
+  return text.slice(0, end);
 }
 //@ chunk-8wvtd8sr.js:13544-13599 placement
 var FRONT_MATTER_OPEN_REGEX = /^---[ \t]*\n/;
 var FRONT_MATTER_CLOSE_REGEX = /^---[ \t]*$/m;
 var BLANK_LINE_REGEX = /^[ \t]*$/m;
 //@ chunk-8wvtd8sr.js:13599-13790 placement
-function stripFrontMatter(e) {
-  let match = e.match(FRONT_MATTER_OPEN_REGEX);
-  if (!match) return e;
-  let sliced = e.slice(match[0].length);
+function stripFrontMatter(markdown) {
+  let match = markdown.match(FRONT_MATTER_OPEN_REGEX);
+  if (!match) return markdown;
+  let sliced = markdown.slice(match[0].length);
   let match_2 = sliced.match(FRONT_MATTER_CLOSE_REGEX);
-  if (!match_2) return e;
+  if (!match_2) return markdown;
   let match_3 = sliced.match(BLANK_LINE_REGEX);
-  if (match_3 && match_3.index < match_2.index) return e;
+  if (match_3 && match_3.index < match_2.index) return markdown;
   return sliced.slice(match_2.index + match_2[0].length + 1);
 }
 //@ chunk-8wvtd8sr.js:13790-14004 placement
 function firstHeadingText(markdown) {
-  let n = stripFrontMatter(markdown);
-  if (n.length <= MAX_TITLE_CHARS) {
-    let r;
+  let body = stripFrontMatter(markdown);
+  if (body.length <= MAX_TITLE_CHARS) {
+    let tokens;
     try {
-      r = applyMarkdown(n);
+      tokens = applyMarkdown(body);
     } catch {
       return;
     }
-    let found = r.find((y) => y.type === "heading");
+    let found = tokens.find((token) => token.type === "heading");
     return found && "text" in found ? found.text : undefined;
   }
-  let s = n.match(ATX_HEADING_REGEX)?.[1];
-  return s === undefined ? undefined : stripClosingHashes(s).slice(0, MAX_TITLE_CHARS);
+  let headingText = body.match(ATX_HEADING_REGEX)?.[1];
+  return headingText === undefined ? undefined : stripClosingHashes(headingText).slice(0, MAX_TITLE_CHARS);
 }
 //@ chunk-8wvtd8sr.js:14004-14031 placement
 var MAX_TITLE_CHARS = 65536;
@@ -150,8 +150,8 @@ var FRONT_MATTER_LINE_REGEX = /^(?:[ \t]*$|[ \t]+\S|- |[\w"'.-][^:#]*:(?:[ \t]|$
  * 找出 Markdown 开头的标题：跳过 front matter，若其中只有空行/注释则把首个 token 作为标题（含链接引用定义），否则取 front matter 里的打包标题或首个非空行。
  */
 function findLeadingHeading(source) {
-  let n = source.length - stripFrontMatter(source).length;
-  let sliced = source.slice(0, n);
+  let frontMatterLength = source.length - stripFrontMatter(source).length;
+  let sliced = source.slice(0, frontMatterLength);
   let sliced_2 = sliced
     .replace(/\n$/, "")
     .split(
@@ -159,14 +159,14 @@ function findLeadingHeading(source) {
 `,
     )
     .slice(1, -1);
-  let all = sliced_2.every((A) => FRONT_MATTER_LINE_REGEX.test(A) && !ATX_HEADING_REGEX.test(A));
-  let y = StreamingMarkdown(source, all ? n : 0);
+  let all = sliced_2.every((line) => FRONT_MATTER_LINE_REGEX.test(line) && !ATX_HEADING_REGEX.test(line));
+  let streamed = StreamingMarkdown(source, all ? frontMatterLength : 0);
   let heading =
-    y && y.token.type === "heading"
+    streamed && streamed.token.type === "heading"
       ? {
-          token: y.token,
-          offset: y.offset,
-          links: y.links,
+          token: streamed.token,
+          offset: streamed.offset,
+          links: streamed.links,
         }
       : null;
   let packedHeading;
@@ -174,7 +174,7 @@ function findLeadingHeading(source) {
     let match = ATX_HEADING_REGEX.exec(sliced);
     packedHeading = match
       ? stripClosingHashes(match[1] ?? "")
-      : sliced_2.find((S) => !FRONT_MATTER_LINE_REGEX.test(S) || ATX_HEADING_REGEX.test(S))?.trim();
+      : sliced_2.find((line) => !FRONT_MATTER_LINE_REGEX.test(line) || ATX_HEADING_REGEX.test(line))?.trim();
   }
   return {
     heading,
@@ -187,29 +187,29 @@ function findLeadingHeading(source) {
  */
 function resolvePageTitle(markdown, options) {
   if (options.heading) {
-    let r = renderHeadingHtml(options.heading.token, options.heading.links, options.renderBody);
-    let h = htmlToPlainText(r);
-    return h === "" && !/<\w/.test(r.replace(/<!--[\s\S]*?-->/g, ""))
+    let headingHtml = renderHeadingHtml(options.heading.token, options.heading.links, options.renderBody);
+    let plainText = htmlToPlainText(headingHtml);
+    return plainText === "" && !/<\w/.test(headingHtml.replace(/<!--[\s\S]*?-->/g, ""))
       ? {
           titleHtml: escapeXmlAttr(options.fallbackTitle),
           title: options.fallbackTitle,
         }
       : {
-          titleHtml: r,
-          title: h || options.fallbackTitle,
+          titleHtml: headingHtml,
+          title: plainText || options.fallbackTitle,
         };
   }
-  let found = [firstHeadingText(markdown), options.packedHeading].find(
-    (r) => r !== undefined && r.trim() !== "",
+  let text = [firstHeadingText(markdown), options.packedHeading].find(
+    (candidate) => candidate !== undefined && candidate.trim() !== "",
   );
-  return found === undefined
+  return text === undefined
     ? {
         titleHtml: escapeXmlAttr(options.fallbackTitle),
         title: options.fallbackTitle,
       }
     : {
         titleHtml: "",
-        title: firstLineOrFallback(found, options.fallbackTitle),
+        title: firstLineOrFallback(text, options.fallbackTitle),
       };
 }
 //@ chunk-8wvtd8sr.js:15448-15497 placement
@@ -218,21 +218,21 @@ var MARKDOWN_LINK_REGEX = /!?\[([^\]]{0,400})\]\([^\s)]{0,1500}\)/g;
 /**
  * 未被转义的 Markdown 链接才做替换。
  */
-function replaceLinkUnlessEscaped(e, n, s, r) {
-  if (s > 0 && r[s - 1] === "\\") return e;
-  if (n.endsWith("\\")) return e;
-  return n;
+function replaceLinkUnlessEscaped(text, label, offset, source) {
+  if (offset > 0 && source[offset - 1] === "\\") return text;
+  if (label.endsWith("\\")) return text;
+  return label;
 }
 //@ chunk-8wvtd8sr.js:15587-15600 placement
 var CODE_SPAN_REGEX = /`+/g;
 //@ chunk-8wvtd8sr.js:15600-15787 placement
-function stripInlineMarks(e) {
+function stripInlineMarks(text) {
   for (let j = 0; j < 3; j++) {
-    let replaced = e.replace(MARKDOWN_LINK_REGEX, replaceLinkUnlessEscaped);
-    if (replaced === e) break;
-    e = replaced;
+    let replaced = text.replace(MARKDOWN_LINK_REGEX, replaceLinkUnlessEscaped);
+    if (replaced === text) break;
+    text = replaced;
   }
-  return e
+  return text
     .replace(/[*`]|~~/g, "")
     .replace(/(?<![\p{L}\p{N}])(?<!_)_+(?!_)|(?<!_)_+(?!_)(?![\p{L}\p{N}])/gu, "");
 }
@@ -240,41 +240,41 @@ function stripInlineMarks(e) {
 /**
  * 去掉代码片段以外的强调标记：按反引号串配对找出行内代码，代码内保留原文，代码外的文本经转义处理。
  */
-function stripMarksOutsideCode(e) {
-  let n = [];
-  for (let y of e.matchAll(CODE_SPAN_REGEX))
-    n.push({
-      start: y.index,
-      len: y[0].length,
+function stripMarksOutsideCode(text) {
+  let spans = [];
+  for (let match of text.matchAll(CODE_SPAN_REGEX))
+    spans.push({
+      start: match.index,
+      len: match[0].length,
     });
-  let s = "";
-  let r = 0;
-  let h = 0;
-  while (h < n.length) {
-    let y = n[h];
-    let p = h + 1;
-    while (p < n.length) {
-      if (n[p].len === y.len) break;
-      p++;
+  let out = "";
+  let cursor = 0;
+  let index = 0;
+  while (index < spans.length) {
+    let openSpan = spans[index];
+    let closeIndex = index + 1;
+    while (closeIndex < spans.length) {
+      if (spans[closeIndex].len === openSpan.len) break;
+      closeIndex++;
     }
-    if (p < n.length) {
-      let w = n[p];
-      s += stripInlineMarks(e.slice(r, y.start));
-      s += e.slice(y.start + y.len, w.start);
-      r = w.start + w.len;
-      h = p + 1;
-    } else h++;
+    if (closeIndex < spans.length) {
+      let closeSpan = spans[closeIndex];
+      out += stripInlineMarks(text.slice(cursor, openSpan.start));
+      out += text.slice(openSpan.start + openSpan.len, closeSpan.start);
+      cursor = closeSpan.start + closeSpan.len;
+      index = closeIndex + 1;
+    } else index++;
   }
-  s += stripInlineMarks(e.slice(r));
-  return s;
+  out += stripInlineMarks(text.slice(cursor));
+  return out;
 }
 //@ chunk-8wvtd8sr.js:16123-16187 placement
 /**
  * 取首行文本（去 Markdown 标记）作为标题，空则用兜底标题。
  */
-function firstLineOrFallback(e, fallbackTitle) {
+function firstLineOrFallback(text, fallbackTitle) {
   return (
-    stripMarksOutsideCode(e ?? "")
+    stripMarksOutsideCode(text ?? "")
       .replace(/\s+/g, " ")
       .trim() || fallbackTitle
   );
@@ -310,7 +310,7 @@ async function renderMarkdownArtifact(markdown, fallbackTitle) {
   let pageTitle = clippedLineOrFallback(title, fallbackTitle);
   let template;
   try {
-    template = (await import("./chunk-2trvskyb.js")).PLAN_TEMPLATE;
+    template = (await import("./PLAN_TEMPLATE.lazy.js")).PLAN_TEMPLATE;
   } catch (error) {
     logFeatureSad("artifact_publish", "md_template_load_failed");
     logForDebugging(
@@ -326,7 +326,7 @@ async function renderMarkdownArtifact(markdown, fallbackTitle) {
       title: pageTitle,
       templated: false,
     };
-  let R = heading
+  let body = heading
     ? source.slice(0, heading.offset) + source.slice(heading.offset + heading.token.raw.length)
     : source;
   let templated = fillPlanTemplate(template, {
@@ -334,7 +334,7 @@ async function renderMarkdownArtifact(markdown, fallbackTitle) {
     tabTitle: fallbackTitle,
     eyebrow: `Markdown \xB7 ${fallbackTitle}`,
     summary: "",
-    body: renderMarkdownToHtml(R),
+    body: renderMarkdownToHtml(body),
   });
   if (templated === null) {
     logFeatureSad("artifact_publish", "md_template_shape_drift");
@@ -359,18 +359,18 @@ async function renderMarkdownArtifact(markdown, fallbackTitle) {
 //@ chunk-8wvtd8sr.js:17206-17244 placement
 var SECTION_BLOCK_REGEX = /<section\b[\s\S]*<\/section>/;
 //@ chunk-8wvtd8sr.js:17244-17532 placement
-function fillPlanTemplate(template, n) {
+function fillPlanTemplate(template, values) {
   let replaced = template.replace(LEADING_COMMENT_REGEX, "");
   if (!SECTION_BLOCK_REGEX.test(replaced)) return null;
-  let r = {
-    TITLE: n.titleHtml,
-    TAB_TITLE: escapeXmlAttr(n.tabTitle),
-    EYEBROW: escapeXmlAttr(n.eyebrow),
-    SUMMARY: escapeXmlAttr(n.summary),
+  let parts = {
+    TITLE: values.titleHtml,
+    TAB_TITLE: escapeXmlAttr(values.tabTitle),
+    EYEBROW: escapeXmlAttr(values.eyebrow),
+    SUMMARY: escapeXmlAttr(values.summary),
   };
   return replaced
-    .replace(/\{\{(TITLE|TAB_TITLE|EYEBROW|SUMMARY)\}\}/g, (h, y) => r[y] ?? "")
-    .replace(SECTION_BLOCK_REGEX, () => `<section>${n.body}</section>`);
+    .replace(/\{\{(TITLE|TAB_TITLE|EYEBROW|SUMMARY)\}\}/g, (key, section) => parts[section] ?? "")
+    .replace(SECTION_BLOCK_REGEX, () => `<section>${values.body}</section>`);
 }
 //@ chunk-8wvtd8sr.js:17532-17583 placement
 var HEADING_TAG_REGEX = /^\s*<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>\s*$/;
@@ -378,13 +378,13 @@ var HEADING_TAG_REGEX = /^\s*<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>\s*$/;
 /**
  * 把链接定义表还原成 Markdown 引用式链接定义行（[name]: href "title"），href 含空白或括号时用尖括号，标题按引号情况选择包裹符。
  */
-function linkDefinitionsMarkdown(e) {
-  return Object.entries(e)
+function linkDefinitionsMarkdown(links) {
+  return Object.entries(links)
     .map(([key, value]) => {
       if (!value?.href || /[<>\n]/.test(value.href) || /[\]\n]/.test(key)) return "";
-      let r = /[\s()]/.test(value.href) ? `<${value.href}>` : value.href;
+      let needsAngles = /[\s()]/.test(value.href) ? `<${value.href}>` : value.href;
       let title = value.title ?? "";
-      let y =
+      let definitions =
         !title || /\n/.test(title)
           ? ""
           : !title.includes('"')
@@ -394,21 +394,21 @@ function linkDefinitionsMarkdown(e) {
               : !/[()]/.test(title)
                 ? ` (${title})`
                 : "";
-      return `[${key}]: ${r}${y}
+      return `[${key}]: ${needsAngles}${definitions}
 `;
     })
     .join("");
 }
 //@ chunk-8wvtd8sr.js:17904-18105 placement
 function renderHeadingHtml(token, links, renderBody) {
-  let r =
+  let source =
     token.raw.replace(
       /\n*$/,
       `
 
 `,
     ) + linkDefinitionsMarkdown(links);
-  let trimmed = HEADING_TAG_REGEX.exec(renderBody(r))?.[1]?.trim();
+  let trimmed = HEADING_TAG_REGEX.exec(renderBody(source))?.[1]?.trim();
   if (trimmed === undefined || /<\/?section\b/i.test(trimmed))
     return escapeXmlAttr(token.text.replace(/\s+/g, " ").trim());
   return trimmed.replace(/\s+/g, " ");
@@ -417,21 +417,24 @@ function renderHeadingHtml(token, links, renderBody) {
 /**
  * 把标题 HTML 转成纯文本：img 换成 alt，去标签，解码常见实体与数字实体（拒绝代理区与越界码点），折叠空白。
  */
-function htmlToPlainText(e) {
-  return e
+function htmlToPlainText(html) {
+  return html
     .replace(/<img\b[^>]*\balt="([^"]*)"[^>]*>/gi, " $1 ")
     .replace(/<[^>]*>/g, "")
-    .replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (n, s) => {
-      let lower = s.toLowerCase();
+    .replace(/&(#x[0-9a-f]+|#\d+|amp|lt|gt|quot|apos);/gi, (whole, entity) => {
+      let lower = entity.toLowerCase();
       if (lower === "amp") return "&";
       if (lower === "lt") return "<";
       if (lower === "gt") return ">";
       if (lower === "quot") return '"';
       if (lower === "apos") return "'";
-      let h = lower.startsWith("#x") ? parseInt(lower.slice(2), 16) : parseInt(lower.slice(1), 10);
-      return Number.isFinite(h) && h > 0 && h <= 1114111 && (h < 55296 || h > 57343)
-        ? String.fromCodePoint(h)
-        : n;
+      let codePoint = lower.startsWith("#x") ? parseInt(lower.slice(2), 16) : parseInt(lower.slice(1), 10);
+      return Number.isFinite(codePoint) &&
+        codePoint > 0 &&
+        codePoint <= 1114111 &&
+        (codePoint < 55296 || codePoint > 57343)
+        ? String.fromCodePoint(codePoint)
+        : whole;
     })
     .replace(/\s+/g, " ")
     .trim();

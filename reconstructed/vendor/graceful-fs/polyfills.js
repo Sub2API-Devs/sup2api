@@ -5,10 +5,10 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 
 //@ chunk-bmbhxpfm.js:301-4288 cjs-fingerprint
-var require_polyfills = x(function (cjsExports, cjsModule) {
+var require_polyfills = __commonJS(function (cjsExports, cjsModule) {
   var constants = importMetaRequire("constants");
   var origCwd = process.cwd;
   var cwd = null;

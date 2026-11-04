@@ -5,11 +5,11 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-vwj6ccer.js:31379-42755 cjs-fingerprint
-var require_select = x(function (cjsExports, cjsModule) {
-  var Zr = Object.create(null, {
+var require_select = __commonJS(function (cjsExports, cjsModule) {
+  var selectWindow = Object.create(null, {
     location: {
       get: function () {
         throw Error("window.location is not supported.");
@@ -104,13 +104,13 @@ var require_select = x(function (cjsExports, cjsModule) {
     };
   };
   var nth = function (param_, test, last) {
-    var a = parseNth(param_);
-    var { group, offset } = a;
-    var d = !last ? child : lastChild;
+    var nthInfo = parseNth(param_);
+    var { group, offset } = nthInfo;
+    var siblingFn = !last ? child : lastChild;
     var advance = !last ? next : prev;
     return function (el) {
       if (!parentIsElement(el)) return;
-      var rel = d(el.parentNode);
+      var rel = siblingFn(el.parentNode);
       var pos = 0;
       while (rel) {
         if (test(rel, el)) pos++;
@@ -251,7 +251,7 @@ var require_select = x(function (cjsExports, cjsModule) {
       return !!el.disabled;
     },
     ":target": function (el) {
-      return el.id === Zr.location.hash.substring(1);
+      return el.id === selectWindow.location.hash.substring(1);
     },
     ":focus": function (el) {
       return el === el.ownerDocument.activeElement;
@@ -272,7 +272,7 @@ var require_select = x(function (cjsExports, cjsModule) {
       return selectors[":nth-match"](param, true);
     },
     ":links-here": function (el) {
-      return el + "" === Zr.location + "";
+      return el + "" === selectWindow.location + "";
     },
     ":lang": function (param) {
       return function (el) {
@@ -299,11 +299,11 @@ var require_select = x(function (cjsExports, cjsModule) {
       return typeof el.href === "string";
     },
     ":local-link": function (el) {
-      if (el.nodeName) return el.href && el.host === Zr.location.host;
+      if (el.nodeName) return el.href && el.host === selectWindow.location.host;
       var param = +el + 1;
       return function (el) {
         if (!el.href) return;
-        var url = Zr.location + "";
+        var url = selectWindow.location + "";
         var href = el + "";
         return truncateUrl(url, param) === truncateUrl(href, param);
       };

@@ -12,24 +12,24 @@ import { PressEnterToContinue } from "../../../components/PressEnterToContinue.j
 import { CC_PLUGIN_YOU_SHOULD_KNOW } from "../../../services/tips/youShouldKnowTip.js";
 
 //@ chunk-bss4k1z9.js:13092-13231 placement
-function renderNoteRuns(e, t, o) {
-  let { Text } = e;
-  return t
-    .flatMap((n, i) =>
-      i === 0
-        ? n
+function renderNoteRuns(ui, runs, style) {
+  let { Text } = ui;
+  return runs
+    .flatMap((run, index) =>
+      index === 0
+        ? run
         : [
             {
               text: " ",
             },
-            ...n,
+            ...run,
           ],
     )
     .map(({ text, look }) =>
       h(
         Text,
         {
-          ...(look === undefined ? o : PressEnterToContinue[look]),
+          ...(look === undefined ? style : PressEnterToContinue[look]),
         },
         text,
       ),
@@ -38,8 +38,8 @@ function renderNoteRuns(e, t, o) {
 //@ chunk-bss4k1z9.js:13231-13241 placement
 var CARD_WIDTH = 60;
 //@ chunk-bss4k1z9.js:13241-13477 placement
-function aboutCard(e, copy) {
-  let { Box, Text } = e;
+function aboutCard(ui, runs) {
+  let { Box, Text } = ui;
   return h(
     Box,
     {
@@ -61,19 +61,19 @@ function aboutCard(e, copy) {
       {
         wrap: "wrap",
       },
-      renderNoteRuns(e, copy, {}),
+      renderNoteRuns(ui, runs, {}),
     ),
   );
 }
 //@ chunk-bss4k1z9.js:13477-13579 placement
-var aboutChoice = (e) => ({
+var aboutChoice = (state) => ({
   hotkey: "3",
-  label: e.isOpen ? "Return to topic" : "What is this",
-  onPress: e.onPress,
+  label: state.isOpen ? "Return to topic" : "What is this",
+  onPress: state.onPress,
   isDim: true,
 });
 //@ chunk-bss4k1z9.js:13579-13641 placement
-var plainText = (e) => e.map((t) => t.map((o) => o.text).join("")).join(" ");
+var plainText = (runs) => runs.map((run) => run.map((part) => part.text).join("")).join(" ");
 //@ chunk-bss4k1z9.js:13641-13739 placement
 var LEARN = [
   {
@@ -118,11 +118,11 @@ var TERMINAL_COPY = [WATCHING, WHEN, LEARN, PLUGIN_OFF];
 //@ chunk-bss4k1z9.js:14081-14095 placement
 var ABOUT_THIS = plainText(TERMINAL_COPY);
 //@ chunk-bss4k1z9.js:14095-14347 placement
-function offerHead(e, { lead, body, surface, copy }) {
-  let { Box, Text } = e;
-  let l = surface === "desktop";
-  let u = copy.length > 0;
-  return l
+function offerHead(ui, { lead, body, surface, copy }) {
+  let { Box, Text } = ui;
+  let isDesktop = surface === "desktop";
+  let hasCopy = copy.length > 0;
+  return isDesktop
     ? h(
         Box,
         {
@@ -136,7 +136,7 @@ function offerHead(e, { lead, body, surface, copy }) {
             flexShrink: 0,
           },
           lead,
-          u ? aboutCard(e, copy) : undefined,
+          hasCopy ? aboutCard(ui, copy) : undefined,
         ),
         h(
           Text,
@@ -172,39 +172,40 @@ var KEY_TEXT = "0: ";
 //@ chunk-bss4k1z9.js:14453-14465 placement
 var WIDE_FROM = 4352;
 //@ chunk-bss4k1z9.js:14465-14535 placement
-var cellsAtMost = (e) => [...e].reduce((acc, o) => acc + ((o.codePointAt(0) ?? 0) >= WIDE_FROM ? 2 : 1), 0);
+var cellsAtMost = (text) =>
+  [...text].reduce((acc, char) => acc + ((char.codePointAt(0) ?? 0) >= WIDE_FROM ? 2 : 1), 0);
 //@ chunk-bss4k1z9.js:14535-14544 placement
 var WRAP_RESERVE_CELLS = 1;
 //@ chunk-bss4k1z9.js:14544-14736 placement
-function wrapRows(e, t) {
-  let max = Math.max(t - WRAP_RESERVE_CELLS, 1);
-  let r = 0;
-  let n = 0;
-  for (let i of e.split(" ").filter((a) => a !== "")) {
-    let a = cellsAtMost(i);
-    if (r === 0 || n + 1 + a > max) {
-      r += Math.ceil(Math.max(a, 1) / max);
-      n = a % max === 0 ? max : a % max;
-    } else n += 1 + a;
+function wrapRows(text, width) {
+  let max = Math.max(width - WRAP_RESERVE_CELLS, 1);
+  let rowCount = 0;
+  let colCount = 0;
+  for (let word of text.split(" ").filter((word) => word !== "")) {
+    let wordWidth = cellsAtMost(word);
+    if (rowCount === 0 || colCount + 1 + wordWidth > max) {
+      rowCount += Math.ceil(Math.max(wordWidth, 1) / max);
+      colCount = wordWidth % max === 0 ? max : wordWidth % max;
+    } else colCount += 1 + wordWidth;
   }
-  return r;
+  return rowCount;
 }
 //@ chunk-bss4k1z9.js:14736-14914 placement
 function choicesRows({ columns, labels }) {
   let max = Math.max(columns, 1);
-  let r = 1;
-  let n = 0;
+  let rows = 1;
+  let usedCells = 0;
   for (let label of labels) {
-    let a = KEY_TEXT + label;
-    let l = cellsAtMost(a) + CHOICE_GAP;
-    let u = n > 0 && n + l > max;
-    let k = l > max;
-    let s = k ? wrapRows(a, max - CHOICE_GAP) : 1;
-    let f = u ? 0 : n;
-    r += (u ? 1 : 0) + s - 1;
-    n = k ? max : f + l;
+    let keyedLabel = KEY_TEXT + label;
+    let choiceCells = cellsAtMost(keyedLabel) + CHOICE_GAP;
+    let wrapsNext = usedCells > 0 && usedCells + choiceCells > max;
+    let needsWrap = choiceCells > max;
+    let choiceRows = needsWrap ? wrapRows(keyedLabel, max - CHOICE_GAP) : 1;
+    let nextCells = wrapsNext ? 0 : usedCells;
+    rows += (wrapsNext ? 1 : 0) + choiceRows - 1;
+    usedCells = needsWrap ? max : nextCells + choiceCells;
   }
-  return r;
+  return rows;
 }
 //@ chunk-bss4k1z9.js:14914-14923 placement
 var OFFER_MARGIN_ROWS = 1;
@@ -213,68 +214,68 @@ var STAR_CELLS = 2;
 //@ chunk-bss4k1z9.js:14932-14957 placement
 var taggedLeadText = (tag) => `${tag} \xB7 `;
 //@ chunk-bss4k1z9.js:14957-15024 placement
-var headedRows = (e, t) =>
+var headedRows = (text, frame) =>
   OFFER_MARGIN_ROWS +
-  wrapRows(e, t.columns - STAR_CELLS) +
+  wrapRows(text, frame.columns - STAR_CELLS) +
   choicesRows({
-    ...t,
-    columns: t.columns - 2,
+    ...frame,
+    columns: frame.columns - 2,
   });
 //@ chunk-bss4k1z9.js:15024-15059 placement
-var closedOfferRows = (e) => headedRows(taggedLeadText(e.tag) + e.line, e);
+var closedOfferRows = (offer) => headedRows(taggedLeadText(offer.tag) + offer.line, offer);
 //@ chunk-bss4k1z9.js:15059-15084 placement
-var offerRows = (e) => headedRows(e.note, e);
+var offerRows = (offer) => headedRows(offer.note, offer);
 //@ chunk-bss4k1z9.js:15084-15250 placement
-function fittedCopy(e) {
-  let t = (o) =>
+function fittedCopy(offer) {
+  let fits = (count) =>
     offerRows({
-      ...e,
-      columns: e.bodyColumns,
-      note: plainText(e.copy.slice(0, o)),
-    }) <= e.maxRows;
-  return e.copy.slice(0, e.copy.map((o, r) => e.copy.length - r).find(t) ?? 0);
+      ...offer,
+      columns: offer.bodyColumns,
+      note: plainText(offer.copy.slice(0, count)),
+    }) <= offer.maxRows;
+  return offer.copy.slice(0, offer.copy.map((line, index) => offer.copy.length - index).find(fits) ?? 0);
 }
 //@ chunk-bss4k1z9.js:15250-15626 placement
-function aboutFit(e, t) {
-  let o = aboutChoice(e);
-  let r = aboutChoice({
-    ...e,
+function aboutFit(about, frame) {
+  let closedChoice = aboutChoice(about);
+  let openChoice = aboutChoice({
+    ...about,
     isOpen: true,
   });
-  let { budget } = e;
-  let i = budget === "scrolls";
-  let a = i
-    ? e.copy
+  let { budget } = about;
+  let scrolls = budget === "scrolls";
+  let copy = scrolls
+    ? about.copy
     : fittedCopy({
         ...budget,
-        ...t,
-        copy: e.copy,
-        labels: [...t.before, r, ...t.after].map((s) => s.label),
+        ...frame,
+        copy: about.copy,
+        labels: [...frame.before, openChoice, ...frame.after].map((choice) => choice.label),
       });
-  let l = aboutChoice({
-    ...e,
+  let closedAboutChoice = aboutChoice({
+    ...about,
     isOpen: false,
   });
-  let u =
-    i ||
+  let closedFits =
+    scrolls ||
     closedOfferRows({
       columns: budget.bodyColumns,
-      tag: t.tag,
-      line: t.line,
-      labels: [...t.before, l, ...t.after].map((s) => s.label),
+      tag: frame.tag,
+      line: frame.line,
+      labels: [...frame.before, closedAboutChoice, ...frame.after].map((choice) => choice.label),
     }) <= budget.maxRows;
-  let k = a.length > 0 && u;
+  let showChoices = copy.length > 0 && closedFits;
   return {
-    note: e.isOpen && k ? a : [],
-    choices: k ? [o] : [],
+    note: about.isOpen && showChoices ? copy : [],
+    choices: showChoices ? [closedChoice] : [],
   };
 }
 //@ chunk-bss4k1z9.js:15626-15747 placement
-var aboutFrame = (e, { maxRows, bodyColumns }, userType) => {
-  let n = e ? APP_COPY : TERMINAL_COPY;
+var aboutFrame = (isCompact, { maxRows, bodyColumns }, userType) => {
+  let copy = isCompact ? APP_COPY : TERMINAL_COPY;
   return {
-    copy: userType ? [] : n,
-    budget: e
+    copy: userType ? [] : copy,
+    budget: isCompact
       ? "scrolls"
       : {
           maxRows,
@@ -285,10 +286,10 @@ var aboutFrame = (e, { maxRows, bodyColumns }, userType) => {
 //@ chunk-bss4k1z9.js:15747-15801 placement
 var aboutKeyOf = ({ line, shownAt }) => `${shownAt ?? "unstamped"} ${line}`;
 //@ chunk-bss4k1z9.js:15801-15933 placement
-async function aboutShown(e, id) {
+async function aboutShown(ctx, id) {
   try {
     return (
-      await e.state.get({
+      await ctx.state.get({
         plugin: "cc-plugin-you-should-know",
         key: "aboutOpen",
         id,
@@ -299,17 +300,17 @@ async function aboutShown(e, id) {
   }
 }
 //@ chunk-bss4k1z9.js:15933-16141 placement
-async function toggleAbout(e, { sid, key }) {
-  let r = {
+async function toggleAbout(ctx, { sid, key }) {
+  let stateKey = {
     plugin: "cc-plugin-you-should-know",
     key: "aboutOpen",
     id: sid,
   };
   try {
-    let n = await e.state.get(r);
-    let i = n.value === key ? "" : key;
-    await e.state.set(r, i, {
-      ifVersion: n.version,
+    let current = await ctx.state.get(stateKey);
+    let nextKey = current.value === key ? "" : key;
+    await ctx.state.set(stateKey, nextKey, {
+      ifVersion: current.version,
     });
   } catch {
     return;
@@ -366,24 +367,24 @@ var QUESTION_WORDS = ["why", "how", "what"];
 //@ chunk-bss4k1z9.js:16808-17021 placement
 function lineKind(line) {
   let parts = (line ?? "").toLowerCase().split(/[^a-z0-9']+/);
-  let o = parts[0] ?? "";
-  let any = OPENERS.some((i) => i === o);
-  let last = parts.findLast((i) => QUESTION_WORDS.some((a) => a === i));
+  let firstWord = parts[0] ?? "";
+  let any = OPENERS.some((opener) => opener === firstWord);
+  let last = parts.findLast((word) => QUESTION_WORDS.some((questionWord) => questionWord === word));
   return {
-    verb: choiceOf(any ? o : "other", [...OPENERS, "other"]),
+    verb: choiceOf(any ? firstWord : "other", [...OPENERS, "other"]),
     asks: choiceOf(last ?? "none", [...QUESTION_WORDS, "none"]),
   };
 }
 //@ chunk-bss4k1z9.js:17021-17093 placement
-var markOf = (feature, t, reason) =>
-  t === "ok"
+var markOf = (feature, kind, reason) =>
+  kind === "ok"
     ? {
         feature,
-        kind: t,
+        kind,
       }
     : {
         feature,
-        kind: t,
+        kind,
         reason,
       };
 //@ chunk-bss4k1z9.js:17093-17124 placement
@@ -400,8 +401,8 @@ var PAGE_KINDS = {
 };
 //@ chunk-bss4k1z9.js:17220-17284 placement
 function pageMark(reason) {
-  let t = PAGE_KINDS[reason];
-  return t ? markOf("learn_page", t, reason) : undefined;
+  let kind = PAGE_KINDS[reason];
+  return kind ? markOf("learn_page", kind, reason) : undefined;
 }
 //@ chunk-bss4k1z9.js:17284-17354 placement
 var PAGE_OUTCOMES = ["ready", "reset", "fork", "empty", "publish", "blocked", "timeout"];
@@ -419,9 +420,9 @@ var PROPOSED_KINDS = {
   error: "bad",
 };
 //@ chunk-bss4k1z9.js:17505-17630 placement
-function proposedMark(e) {
-  let o = e.outcome === "none" && e.usage === null ? null : PROPOSED_KINDS[e.outcome];
-  return o ? markOf("you_should_know", o, e.outcome) : undefined;
+function proposedMark(result) {
+  let kind = result.outcome === "none" && result.usage === null ? null : PROPOSED_KINDS[result.outcome];
+  return kind ? markOf("you_should_know", kind, result.outcome) : undefined;
 }
 //@ chunk-bss4k1z9.js:17630-17717 placement
 var PROPOSED_OUTCOMES = [

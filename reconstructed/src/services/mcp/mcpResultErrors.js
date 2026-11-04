@@ -19,42 +19,53 @@ import {
   McpSessionExpiredError,
   McpToolCallError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from "./client.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-cyj440je.js:2427-2700 placement
 /**
  * MCP 服务器返回结果未通过 schema 校验时抛出的错误（McpResponseSchemaError），消息含服务器名与校验信息，cause 保留原错误。
  */
-class McpResponseSchemaError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  constructor(e, error) {
-    let o = typeof error?.message === "string" ? error.message : String(error);
-    super(
-      `MCP server "${e}" returned a malformed result that failed schema validation: ${o}`,
-      "MCP server returned a malformed result",
-    );
-    this.name = "McpResponseSchemaError";
-    this.cause = error;
-  }
-}
+let McpResponseSchemaError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cyj440je.js:2427", () => {
+  McpResponseSchemaError = class McpResponseSchemaError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    constructor(serverName, error) {
+      let message = typeof error?.message === "string" ? error.message : String(error);
+      super(
+        `MCP server "${serverName}" returned a malformed result that failed schema validation: ${message}`,
+        "MCP server returned a malformed result",
+      );
+      this.name = "McpResponseSchemaError";
+      this.cause = error;
+    }
+  };
+});
 //@ chunk-cyj440je.js:2700-3510 placement
-class McpToolResultNotReadError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  mcpErrorSource;
-  why;
-  constructor(serverName, tool, o) {
-    if (o.kind === "too_large")
-      super(
-        `The response from MCP server "${serverName}" for tool "${tool}" was larger than ${Math.round(o.capBytes / 1024 / 1024)}MB, so it was not read. The tool may have run: check whether it did before running it again, and when you run it again, ask for less data.`,
-        "MCP tool response over the size cap",
-      );
-    else
-      super(
-        `The connection to MCP server "${serverName}" was closed because a message from the server was too large or could not be parsed, so the result of tool "${tool}" was not read. The tool may have run: check whether it did before running it again.`,
-        "MCP connection closed after an unreadable server message",
-      );
-    this.name = "McpToolResultNotReadError";
-    this.why = o;
-    this.mcpErrorSource = o.kind === "too_large" ? "downstream_error" : "downstream_unreachable";
-  }
-}
+let McpToolResultNotReadError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cyj440je.js:2700", () => {
+  McpToolResultNotReadError = class McpToolResultNotReadError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    mcpErrorSource;
+    why;
+    constructor(serverName, tool, why) {
+      if (why.kind === "too_large")
+        super(
+          `The response from MCP server "${serverName}" for tool "${tool}" was larger than ${Math.round(why.capBytes / 1024 / 1024)}MB, so it was not read. The tool may have run: check whether it did before running it again, and when you run it again, ask for less data.`,
+          "MCP tool response over the size cap",
+        );
+      else
+        super(
+          `The connection to MCP server "${serverName}" was closed because a message from the server was too large or could not be parsed, so the result of tool "${tool}" was not read. The tool may have run: check whether it did before running it again.`,
+          "MCP connection closed after an unreadable server message",
+        );
+      this.name = "McpToolResultNotReadError";
+      this.why = why;
+      this.mcpErrorSource = why.kind === "too_large" ? "downstream_error" : "downstream_unreachable";
+    }
+  };
+});
 //@ chunk-cyj440je.js:3510-3581 placement
 /**
  * 判断错误文本是否为“认证挑战后消息格式错误”。
@@ -63,16 +74,21 @@ function isMalformedAfterAuthChallenge(closeReason) {
   return closeReason === "malformed message after an auth challenge";
 }
 //@ chunk-cyj440je.js:3581-4059 placement
-class McpStructuredContentNotReadError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  mcpErrorSource = "downstream_error";
-  constructor(name, name_2) {
-    super(
-      `The structured content in the response from MCP server "${name}" for tool "${name_2}" was not read here. This happens most often when it is too large, is nested too deep or holds a number that is too large. The tool may have run: check whether it did before calling it again, and ask for less data.`,
-      "MCP tool response with structured content that is not read",
-    );
-    this.name = "McpStructuredContentNotReadError";
-  }
-}
+let McpStructuredContentNotReadError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cyj440je.js:3581", () => {
+  McpStructuredContentNotReadError = class McpStructuredContentNotReadError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    mcpErrorSource = "downstream_error";
+    constructor(name, name_2) {
+      super(
+        `The structured content in the response from MCP server "${name}" for tool "${name_2}" was not read here. This happens most often when it is too large, is nested too deep or holds a number that is too large. The tool may have run: check whether it did before calling it again, and ask for less data.`,
+        "MCP tool response with structured content that is not read",
+      );
+      this.name = "McpStructuredContentNotReadError";
+    }
+  };
+});
 //@ chunk-cyj440je.js:4059-4162 placement
 /**
  * 判断错误文本是否表示响应体被截断（过大或 JSON-RPC 消息被截断）。
@@ -86,36 +102,45 @@ function isTruncatedBodyError(closeReason) {
 /**
  * MCP 错误分类常量：CCR 需批准与 URL elicitation 错误码、错误来源列表，以及不可达、配置错误与连接类错误码集合。
  */
-var CCR_NEEDS_APPROVAL_CODE = -32003;
-var URL_ELICITATION_REQUIRED_CODE = -32042;
-var MCP_ERROR_SOURCES = ["downstream_error", "downstream_unreachable", "user_auth", "user_config", "other"];
-var MCP_ERROR_SOURCE_SET = new Set(MCP_ERROR_SOURCES);
-var UNREACHABLE_ERRNOS = new Set([
-  "ECONNREFUSED",
-  "ETIMEDOUT",
-  "ECONNRESET",
-  "ECONNABORTED",
-  "ENOTFOUND",
-  "ENETUNREACH",
-  "EAI_AGAIN",
-  "ConnectionRefused",
-  "ConnectionClosed",
-  "FailedToOpenSocket",
-  "ERR_SOCKET_CLOSED",
-  "ERR_PROXY_TUNNEL",
-]);
-var CONFIG_ERRNOS = new Set(["ERR_INVALID_URL", "MODULE_NOT_FOUND", "ENOENT", "ENOEXEC", "EACCES", "EPERM"]);
-var UNREACHABLE_CODES = new Set([
-  "ESOCKETTIMEDOUT",
-  "EHOSTUNREACH",
-  "EPIPE",
-  "CONNECT_TIMEOUT",
-  "CONNECT_SUSPENDED",
-  "REQUEST_TIMEOUT",
-  "CONNECTION_CLOSED",
-  "NOT_CONNECTED",
-  "SEND_FAILED",
-]);
+var CCR_NEEDS_APPROVAL_CODE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var URL_ELICITATION_REQUIRED_CODE;
+var MCP_ERROR_SOURCES;
+var MCP_ERROR_SOURCE_SET;
+var UNREACHABLE_ERRNOS;
+var CONFIG_ERRNOS;
+var UNREACHABLE_CODES;
+deferInit("chunk-cyj440je.js:4162", () => {
+  CCR_NEEDS_APPROVAL_CODE = -32003;
+  URL_ELICITATION_REQUIRED_CODE = -32042;
+  MCP_ERROR_SOURCES = ["downstream_error", "downstream_unreachable", "user_auth", "user_config", "other"];
+  MCP_ERROR_SOURCE_SET = new Set(MCP_ERROR_SOURCES);
+  UNREACHABLE_ERRNOS = new Set([
+    "ECONNREFUSED",
+    "ETIMEDOUT",
+    "ECONNRESET",
+    "ECONNABORTED",
+    "ENOTFOUND",
+    "ENETUNREACH",
+    "EAI_AGAIN",
+    "ConnectionRefused",
+    "ConnectionClosed",
+    "FailedToOpenSocket",
+    "ERR_SOCKET_CLOSED",
+    "ERR_PROXY_TUNNEL",
+  ]);
+  CONFIG_ERRNOS = new Set(["ERR_INVALID_URL", "MODULE_NOT_FOUND", "ENOENT", "ENOEXEC", "EACCES", "EPERM"]);
+  UNREACHABLE_CODES = new Set([
+    "ESOCKETTIMEDOUT",
+    "EHOSTUNREACH",
+    "EPIPE",
+    "CONNECT_TIMEOUT",
+    "CONNECT_SUSPENDED",
+    "REQUEST_TIMEOUT",
+    "CONNECTION_CLOSED",
+    "NOT_CONNECTED",
+    "SEND_FAILED",
+  ]);
+});
 //@ chunk-cyj440je.js:4733-4862 placement
 function isHttpAuthErrorMessage(error) {
   return (
@@ -182,8 +207,8 @@ function classifyMcpErrorSource(error, isCause) {
   if (!isCause) {
     let cause = error.cause;
     for (let idx = 0; idx < 4 && cause !== undefined; idx++) {
-      let s = classifyMcpErrorSource(cause, true);
-      if (s !== "other") return s;
+      let category = classifyMcpErrorSource(cause, true);
+      if (category !== "other") return category;
       cause = cause instanceof Error ? cause.cause : undefined;
     }
   }

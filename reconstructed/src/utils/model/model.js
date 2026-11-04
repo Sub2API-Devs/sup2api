@@ -118,76 +118,79 @@ import {
   isSameModelIdentity,
   buildModelEnvInfoAttachment,
 } from "../../constants/prompts.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:420461-420644 fingerprint = getDefaultHaikuModel (0.317)
 /**
  * 模型是否等于某档 ANTHROPIC_DEFAULT_{FABLE,OPUS,SONNET,HAIKU}_MODEL。旧版名 getDefaultHaikuModel 为错配。
  */
-function isTierDefaultModelEnv(e) {
+function isTierDefaultModelEnv(model) {
   return [
     env.ANTHROPIC_DEFAULT_FABLE_MODEL,
     env.ANTHROPIC_DEFAULT_OPUS_MODEL,
     env.ANTHROPIC_DEFAULT_SONNET_MODEL,
     env.ANTHROPIC_DEFAULT_HAIKU_MODEL,
-  ].some((n) => n !== undefined && sameModelSpelling(n, e));
+  ].some((envModel) => envModel !== undefined && sameModelSpelling(envModel, model));
 }
 //@ chunk-aepeg2w5.js:429528-429584 placement
 /**
  * 模型写法规范化：trim、小写并去掉修饰后缀。
  */
-function normalizeModelSpelling(e) {
-  return strip1mSuffix(e.trim().toLowerCase()).trim();
+function normalizeModelSpelling(model) {
+  return strip1mSuffix(model.trim().toLowerCase()).trim();
 }
 //@ chunk-aepeg2w5.js:429584-429904 layout
 /**
  * 判断（规范化后的）模型名是否为已知的自定义模型：ANTHROPIC_CUSTOM_MODEL_OPTION、精选选择器选项、模型覆盖目标、附加模型选项缓存或已验证过的模型。
  */
-function isKnownCustomModel(e) {
+function isKnownCustomModel(normalized) {
   let ANTHROPIC_CUSTOM_MODEL_OPTION = env.ANTHROPIC_CUSTOM_MODEL_OPTION;
   if (
     ANTHROPIC_CUSTOM_MODEL_OPTION !== undefined &&
-    normalizeModelSpelling(ANTHROPIC_CUSTOM_MODEL_OPTION) === e
+    normalizeModelSpelling(ANTHROPIC_CUSTOM_MODEL_OPTION) === normalized
   )
     return true;
   if (
-    getCuratedModelPicker()?.picker.options.some((option) => normalizeModelSpelling(option.model) === e) ??
+    getCuratedModelPicker()?.picker.options.some(
+      (option) => normalizeModelSpelling(option.model) === normalized,
+    ) ??
     false
   )
     return true;
-  if (isModelOverrideTarget(e)) return true;
+  if (isModelOverrideTarget(normalized)) return true;
   if (
     getAdditionalModelOptionsCache().some(
-      (r) => typeof r.value === "string" && normalizeModelSpelling(r.value) === e,
+      (option) => typeof option.value === "string" && normalizeModelSpelling(option.value) === normalized,
     )
   )
     return true;
   for (let validatedModel of getProviderState().providerCache.validatedModels)
-    if (normalizeModelSpelling(validatedModel) === e) return true;
+    if (normalizeModelSpelling(validatedModel) === normalized) return true;
   return false;
 }
 //@ chunk-aepeg2w5.js:429904-430061 placement
 /**
  * 判断模型名是否为某个模型覆盖设置的目标值。
  */
-function isModelOverrideTarget(e) {
-  let n = normalizeModelSpelling(e);
-  if (n === "") return false;
-  for (let r of [getSettingsModelOverrides(), getPairedPolicyModelOverrides()])
-    for (let s of Object.values(r ?? {}))
-      if (typeof s === "string" && normalizeModelSpelling(s) === n) return true;
+function isModelOverrideTarget(model) {
+  let normalized = normalizeModelSpelling(model);
+  if (normalized === "") return false;
+  for (let overrides of [getSettingsModelOverrides(), getPairedPolicyModelOverrides()])
+    for (let value of Object.values(overrides ?? {}))
+      if (typeof value === "string" && normalizeModelSpelling(value) === normalized) return true;
   return false;
 }
 //@ chunk-aepeg2w5.js:430061-430111 placement
-function isUnservedFamilySpelling(e) {
-  return noCatalogAliasTarget(e)?.kind === "unresolved";
+function isUnservedFamilySpelling(model) {
+  return noCatalogAliasTarget(model)?.kind === "unresolved";
 }
 //@ chunk-aepeg2w5.js:430111-430167 placement
-function isUnservedModelSpelling(e, n) {
-  return isUnservedFamilySpelling(e) || (n === "persisted" && neverUnavailable(e));
+function isUnservedModelSpelling(model, source) {
+  return isUnservedFamilySpelling(model) || (source === "persisted" && neverUnavailable(model));
 }
 //@ chunk-aepeg2w5.js:430167-430205 placement
-function isServedExpandedSpelling(e) {
-  return noCatalogBehavesAs(e) !== undefined;
+function isServedExpandedSpelling(model) {
+  return noCatalogBehavesAs(model) !== undefined;
 }
 //@ chunk-aepeg2w5.js:430205-430279 placement
 function getMainLoopModel() {
@@ -204,7 +207,7 @@ var FAMILY_AVAILABILITY = {
   fable: {
     available: isFableAvailable,
     defaultModel: () => getDefaultFableModel(),
-    builtinDefault: (e) => getDefaultFableBuiltin(e),
+    builtinDefault: (modelStrings) => getDefaultFableBuiltin(modelStrings),
   },
 };
 //@ chunk-aepeg2w5.js:430359-430466 placement
@@ -223,14 +226,14 @@ function getBestAvailableAlias() {
 }
 //@ chunk-aepeg2w5.js:430466-430664 placement
 function getDefaultMainLoopModelSetting_2() {
-  let e = FAMILY_AVAILABILITY[getBestAvailableAlias()];
-  if (e !== undefined) {
-    let n = e.defaultModel();
+  let family = FAMILY_AVAILABILITY[getBestAvailableAlias()];
+  if (family !== undefined) {
+    let model = family.defaultModel();
     let providerState = getProviderState();
-    if (providerState.resolvingBestModel) return n;
+    if (providerState.resolvingBestModel) return model;
     providerState.resolvingBestModel = true;
     try {
-      if (isModelAllowed(n)) return n;
+      if (isModelAllowed(model)) return model;
     } finally {
       providerState.resolvingBestModel = false;
     }
@@ -246,12 +249,12 @@ var DEFAULT_VERTEX_OPUS_KEY = "opus55";
 var DEFAULT_MANTLE_OPUS_KEY = "opus55";
 var DEFAULT_3P_FABLE_KEY = "fable51";
 //@ chunk-aepeg2w5.js:430762-430813 placement
-function isFableModelValue(e) {
-  return e.includes("claude-fable-");
+function isFableModelValue(value) {
+  return value.includes("claude-fable-");
 }
 //@ chunk-aepeg2w5.js:430813-430865 placement
-function isMythosModelValue(e) {
-  return e.includes("claude-mythos-");
+function isMythosModelValue(value) {
+  return value.includes("claude-mythos-");
 }
 //@ chunk-aepeg2w5.js:430865-431253 placement
 function isFableAvailable() {
@@ -289,99 +292,100 @@ function hasExtraModelOptions() {
 //@ chunk-aepeg2w5.js:431295-431388 placement
 function hasEnabledModelOptionMatching(isFableModelValue) {
   return getAdditionalModelOptionsCache().some(
-    (n) => n.disabled !== true && typeof n.value === "string" && isFableModelValue(n.value),
+    (option) =>
+      option.disabled !== true && typeof option.value === "string" && isFableModelValue(option.value),
   );
 }
 //@ chunk-aepeg2w5.js:431388-431608 placement
 function isDefaultFableOptionDisabled() {
   if (getAPIProvider() !== "firstParty" || !isFirstPartyAnthropicBaseUrl()) return false;
   let filtered = getAdditionalModelOptionsCache().filter(
-    (r) => typeof r.value === "string" && isFableModelValue(r.value),
+    (option) => typeof option.value === "string" && isFableModelValue(option.value),
   );
   let canonicalName = getCanonicalName(getDefaultFableModel(), {
     identity: true,
   });
   return allMatchAfterFilter(
     filtered,
-    (r) =>
-      getCanonicalName(String(r.value), {
+    (option) =>
+      getCanonicalName(String(option.value), {
         identity: true,
       }) === canonicalName,
-    (r) => r.disabled === true,
+    (option) => option.disabled === true,
   );
 }
 //@ chunk-aepeg2w5.js:431608-431692 placement
-function allMatchAfterFilter(e, n, r) {
-  let filtered = e.filter(n);
-  let h = filtered.length > 0 ? filtered : e;
-  return h.length > 0 && h.every(r);
+function allMatchAfterFilter(items, matches, predicate) {
+  let filtered = items.filter(matches);
+  let candidates = filtered.length > 0 ? filtered : items;
+  return candidates.length > 0 && candidates.every(predicate);
 }
 //@ chunk-aepeg2w5.js:431692-431834 placement
-function isServedCatalogModelInactive(e, n) {
+function isServedCatalogModelInactive(matchesId, canonical) {
   if (activeServedCatalog() === null) return false;
-  let filtered = activeCatalogModels().filter((s) => e(s.id));
+  let filtered = activeCatalogModels().filter((row) => matchesId(row.id));
   return allMatchAfterFilter(
     filtered,
-    (s) =>
-      n !== undefined &&
-      getCanonicalName(s.id, {
+    (row) =>
+      canonical !== undefined &&
+      getCanonicalName(row.id, {
         identity: true,
-      }) === n,
-    (s) => !isActiveCatalogModel(s),
+      }) === canonical,
+    (row) => !isActiveCatalogModel(row),
   );
 }
 //@ chunk-aepeg2w5.js:431834-432395 placement
-function isMythosAvailable(e) {
+function isMythosAvailable(model) {
   if (getAPIProvider() !== "firstParty" || !isFirstPartyAnthropicBaseUrl()) return false;
-  let n = (canonicalName) => (isNonCustomMythosModel(canonicalName) ? canonicalName : undefined);
-  let r =
-    e === undefined
+  let asMythos = (canonicalName) => (isNonCustomMythosModel(canonicalName) ? canonicalName : undefined);
+  let canonical =
+    model === undefined
       ? undefined
-      : n(
-          getCanonicalName(e, {
+      : asMythos(
+          getCanonicalName(model, {
             identity: true,
           }),
         );
-  let s = (y) => {
-    let filtered = y.filter((w) => w.canonical === r);
-    return (filtered.length > 0 ? filtered : y).some((w) => w.enabled);
+  let anyEnabled = (entries) => {
+    let filtered = entries.filter((entry) => entry.canonical === canonical);
+    return (filtered.length > 0 ? filtered : entries).some((entry) => entry.enabled);
   };
-  let h = () => {
-    let y = activeServedCatalog();
-    return s(
-      activeCatalogModels().flatMap((S) => {
-        let w = n(getCanonicalName(S.id));
-        return w && y !== null
+  let anyServedCatalogEntryEnabled = () => {
+    let catalog = activeServedCatalog();
+    return anyEnabled(
+      activeCatalogModels().flatMap((row) => {
+        let mythosCanonical = asMythos(getCanonicalName(row.id));
+        return mythosCanonical && catalog !== null
           ? [
               {
-                canonical: w,
-                enabled: isCatalogRowSelectable(y, S),
+                canonical: mythosCanonical,
+                enabled: isCatalogRowSelectable(catalog, row),
               },
             ]
           : [];
       }),
     );
   };
-  if (isServedCatalogActive()) return h();
+  if (isServedCatalogActive()) return anyServedCatalogEntryEnabled();
   if (isEffectiveCatalogActive()) {
-    if (isServedCatalogModelInactive(isMythosModelValue, r)) return false;
-    if (!hasExtraModelOptions()) return h();
+    if (isServedCatalogModelInactive(isMythosModelValue, canonical)) return false;
+    if (!hasExtraModelOptions()) return anyServedCatalogEntryEnabled();
   }
-  return s(
-    getAdditionalModelOptionsCache().flatMap((y) => {
-      let S =
-        typeof y.value === "string"
-          ? n(
-              getCanonicalName(y.value, {
+  return anyEnabled(
+    getAdditionalModelOptionsCache().flatMap((option) => {
+      let mythosCanonical =
+        typeof option.value === "string"
+          ? asMythos(
+              getCanonicalName(option.value, {
                 identity: true,
               }),
             )
           : undefined;
-      return S
+      return mythosCanonical
         ? [
             {
-              canonical: S,
-              enabled: y.disabled !== true,
+              canonical: mythosCanonical,
+              enabled: option.disabled !== true,
             },
           ]
         : [];
@@ -390,54 +394,56 @@ function isMythosAvailable(e) {
 }
 //@ chunk-aepeg2w5.js:432395-432483 placement
 function catalogHasSelectableMatching(isFableModelValue) {
-  let n = activeServedCatalog();
-  if (n === null) return false;
-  return activeCatalogModels().some((r) => isCatalogRowSelectable(n, r) && isFableModelValue(r.id));
+  let catalog = activeServedCatalog();
+  if (catalog === null) return false;
+  return activeCatalogModels().some(
+    (row) => isCatalogRowSelectable(catalog, row) && isFableModelValue(row.id),
+  );
 }
 //@ chunk-aepeg2w5.js:432483-432573 placement
-function isPinnedFableModel(e) {
+function isPinnedFableModel(model) {
   let ANTHROPIC_DEFAULT_FABLE_MODEL = env.ANTHROPIC_DEFAULT_FABLE_MODEL;
   if (!ANTHROPIC_DEFAULT_FABLE_MODEL) return false;
-  return strip1mSuffix(e) === strip1mSuffix(ANTHROPIC_DEFAULT_FABLE_MODEL);
+  return strip1mSuffix(model) === strip1mSuffix(ANTHROPIC_DEFAULT_FABLE_MODEL);
 }
 //@ chunk-aepeg2w5.js:432573-432673 placement
-function isFableFamilyOrPinnedModel(e, n) {
+function isFableFamilyOrPinnedModel(model, options) {
   return (
     getCanonicalName(
-      e,
-      n?.identity
+      model,
+      options?.identity
         ? {
             identity: true,
           }
         : undefined,
-    ).startsWith("claude-fable-") || isPinnedFableModel(e)
+    ).startsWith("claude-fable-") || isPinnedFableModel(model)
   );
 }
 //@ chunk-aepeg2w5.js:432673-432730 placement
 /**
  * 判断模型值是否属于 mythos 系列。
  */
-function isMythosModelValue_2(e) {
-  return getCanonicalName(e).startsWith("claude-mythos-");
+function isMythosModelValue_2(model) {
+  return getCanonicalName(model).startsWith("claude-mythos-");
 }
 //@ chunk-aepeg2w5.js:432730-432781 placement
-function isOpus5FamilyModel(e) {
-  return strip1mSuffix(getCanonicalName(e)) === "claude-opus-5";
+function isOpus5FamilyModel(model) {
+  return strip1mSuffix(getCanonicalName(model)) === "claude-opus-5";
 }
 //@ chunk-aepeg2w5.js:432781-432834 placement
-function isOpus55FamilyModel(e) {
-  return strip1mSuffix(getCanonicalName(e)) === "claude-opus-5-5";
+function isOpus55FamilyModel(model) {
+  return strip1mSuffix(getCanonicalName(model)) === "claude-opus-5-5";
 }
 //@ chunk-aepeg2w5.js:432834-432889 placement
-function isSonnet55FamilyModel(mainLoopModel) {
-  return strip1mSuffix(getCanonicalName(mainLoopModel)) === "claude-sonnet-5-5";
+function isSonnet55FamilyModel(modelName) {
+  return strip1mSuffix(getCanonicalName(modelName)) === "claude-sonnet-5-5";
 }
 //@ chunk-aepeg2w5.js:432889-432958 placement
 function isLegacy46Model(canonicalName) {
   return canonicalName === "claude-opus-4-6" || canonicalName === "claude-sonnet-4-6";
 }
 //@ chunk-aepeg2w5.js:432958-432983 placement
-function isAntInternalFastModelId(e) {
+function isAntInternalFastModelId(modelId) {
   return false;
 }
 //@ chunk-aepeg2w5.js:432983-432998 layout
@@ -459,8 +465,8 @@ function resolveDefaultOpusModel(currentModel) {
       ANTHROPIC_DEFAULT_OPUS_MODEL =
         OPUS_FALLBACK_ORDER_2.slice(index)
           .concat(OPUS_FALLBACK_ORDER_2.slice(0, index))
-          .map((h) => modelStrings[h])
-          .find((h) => isModelAllowed(h)) ?? modelStrings[OPUS5_KEY];
+          .map((key) => modelStrings[key])
+          .find((candidate) => isModelAllowed(candidate)) ?? modelStrings[OPUS5_KEY];
     }
   }
   return inherit1mSuffix(identityModelId(ANTHROPIC_DEFAULT_OPUS_MODEL), currentModel);
@@ -474,8 +480,10 @@ function getTierOverrideModel(alias, parentModel) {
   let canonical = ultraplanModelOrUndefined(alias);
   if (canonical === undefined) return;
   let lower = canonical.toLowerCase();
-  let h = Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower) ? MODEL_KEY_BY_FIRST_PARTY_ID[lower] : undefined;
-  if (h !== undefined) return parentModel[h];
+  let key = Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower)
+    ? MODEL_KEY_BY_FIRST_PARTY_ID[lower]
+    : undefined;
+  if (key !== undefined) return parentModel[key];
   let providerModelId = resolveProviderModelId(
     findServedModel(canonical) ?? {
       id: canonical,
@@ -491,85 +499,87 @@ function tierOverrideModel(alias) {
   return getTierOverrideModel(alias, getModelStrings());
 }
 //@ chunk-aepeg2w5.js:437150-437503 placement
-function documentTierAliasTarget(e) {
+function documentTierAliasTarget(alias) {
   if (activeServedCatalog() === null) return;
-  let n = ultraplanModelOrUndefined(e);
-  if (n === undefined) return;
-  let lower = n.toLowerCase();
-  let s = Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower) ? MODEL_KEY_BY_FIRST_PARTY_ID[lower] : undefined;
-  if (s !== undefined)
+  let canonical = ultraplanModelOrUndefined(alias);
+  if (canonical === undefined) return;
+  let lower = canonical.toLowerCase();
+  let key = Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower)
+    ? MODEL_KEY_BY_FIRST_PARTY_ID[lower]
+    : undefined;
+  if (key !== undefined)
     return {
-      key: s,
-      name: displayNameForModel(n, s),
+      key,
+      name: displayNameForModel(canonical, key),
     };
-  let h = findServedModel(n) ?? {
-    id: n,
+  let served = findServedModel(canonical) ?? {
+    id: canonical,
   };
-  let y = entryModelKey(h.id);
-  if (y !== undefined)
+  let entryKey = entryModelKey(served.id);
+  if (entryKey !== undefined)
     return {
-      key: y,
-      name: displayNameForModel(n, y),
+      key: entryKey,
+      name: displayNameForModel(canonical, entryKey),
     };
-  let providerModelId = resolveProviderModelId(h);
+  let providerModelId = resolveProviderModelId(served);
   return providerModelId === undefined
     ? undefined
     : {
         key: undefined,
         modelId: providerModelId,
-        ...(hasDescribableCatalogModel(h.id) && {
-          overrideKey: h.id,
+        ...(hasDescribableCatalogModel(served.id) && {
+          overrideKey: served.id,
         }),
-        name: displayNameForModel(n, undefined),
+        name: displayNameForModel(canonical, undefined),
       };
 }
 //@ chunk-aepeg2w5.js:437503-437597 placement
 /**
  * 取模型的展示名（营销名或目录名，兜底 "that model"）。
  */
-function displayNameForModel(e, n) {
+function displayNameForModel(model, key) {
   return (
-    getMarketingNameForModel(n !== undefined ? catalogEntriesByFirstPartyId[n].firstParty : e) ??
-    (sanitizeTitle(findServedModel(e)?.name ?? e) || "that model")
+    getMarketingNameForModel(key !== undefined ? catalogEntriesByFirstPartyId[key].firstParty : model) ??
+    (sanitizeTitle(findServedModel(model)?.name ?? model) || "that model")
   );
 }
 //@ chunk-aepeg2w5.js:437597-437696 placement
 function getDefaultFableModel() {
-  let e = env.ANTHROPIC_DEFAULT_FABLE_MODEL ?? tierOverrideModel("fable");
-  return identityModelId(e !== undefined ? strip1mWhenNative(e) : getDefaultFableBuiltin());
+  let model = env.ANTHROPIC_DEFAULT_FABLE_MODEL ?? tierOverrideModel("fable");
+  return identityModelId(model !== undefined ? strip1mWhenNative(model) : getDefaultFableBuiltin());
 }
 //@ chunk-aepeg2w5.js:437696-437765 placement
-function strip1mTagWhereBuiltIn(e) {
-  let n = strip1mTag(e);
-  return n !== e &&
-    modelHasNative1MContext(n, {
+function strip1mTagWhereBuiltIn(model) {
+  let stripped = strip1mTag(model);
+  return stripped !== model &&
+    modelHasNative1MContext(stripped, {
       byItsOwnName: true,
     })
-    ? n
-    : e;
+    ? stripped
+    : model;
 }
 //@ chunk-aepeg2w5.js:437765-437858 placement
-function strip1mWhenNative(e) {
-  let n = strip1mTag(e);
-  if (n === e) return e;
-  return modelHasNative1MContext(n, {
+function strip1mWhenNative(model) {
+  let stripped = strip1mTag(model);
+  if (stripped === model) return model;
+  return modelHasNative1MContext(stripped, {
     byItsOwnName: true,
   }) ||
-    (isFirstPartyApiBackend() && neverHasNative1m(n))
-    ? n
-    : e;
+    (isFirstPartyApiBackend() && neverHasNative1m(stripped))
+    ? stripped
+    : model;
 }
 //@ chunk-aepeg2w5.js:437858-437882 placement
-function neverHasNative1m(e) {
+function neverHasNative1m(model) {
   return false;
 }
 //@ chunk-aepeg2w5.js:437882-437946 placement
 /**
  * 取默认 Fable 模型（目录档位或内置默认，并处理 1M 后缀）。
  */
-function getDefaultFableBuiltin(e = getModelStrings()) {
-  let n = catalogFamilyDefaultKey("fable", e) ?? e.fable51;
-  return strip1mWhenNative(n);
+function getDefaultFableBuiltin(modelStrings = getModelStrings()) {
+  let model = catalogFamilyDefaultKey("fable", modelStrings) ?? modelStrings.fable51;
+  return strip1mWhenNative(model);
 }
 //@ chunk-aepeg2w5.js:437946-438052 placement
 function getDefaultOpusModel() {
@@ -599,22 +609,25 @@ function getDefaultSonnetModel() {
 /**
  * 一组旧模型规范名；getAgentToolCallFormatVersion 一类判断（命中返回 4，否则 3）用。旧版名 firstPartyNameToCanonical 为错配。
  */
-var LEGACY_SUBAGENT_MODEL_IDS = new Set([
-  "claude-3-opus",
-  "claude-3-sonnet",
-  "claude-3-haiku",
-  "claude-3-5-sonnet",
-  "claude-3-5-haiku",
-  "claude-3-7-sonnet",
-  "claude-opus-4-0",
-  "claude-opus-4-1",
-  "claude-opus-4-5",
-  "claude-opus-4-6",
-  "claude-sonnet-4-0",
-  "claude-sonnet-4-5",
-  "claude-sonnet-4-6",
-  "claude-haiku-4-5",
-]);
+var LEGACY_SUBAGENT_MODEL_IDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:459417", () => {
+  LEGACY_SUBAGENT_MODEL_IDS = new Set([
+    "claude-3-opus",
+    "claude-3-sonnet",
+    "claude-3-haiku",
+    "claude-3-5-sonnet",
+    "claude-3-5-haiku",
+    "claude-3-7-sonnet",
+    "claude-opus-4-0",
+    "claude-opus-4-1",
+    "claude-opus-4-5",
+    "claude-opus-4-6",
+    "claude-sonnet-4-0",
+    "claude-sonnet-4-5",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5",
+  ]);
+});
 //@ chunk-aepeg2w5.js:464052-464521 fingerprint = parseUserSpecifiedModel (0.775)
 /**
  * 解析用户写的模型：别名（fable/opusplan/sonnet/haiku/opus/best，可带 [1m]）展开成对应档默认模型；旧 Opus 4/4.1 在重映射开启时换成默认 Opus；其余保留并规范 [1m] 后缀。
@@ -659,8 +672,8 @@ function resolveModelAliasSetting(modelInput) {
   return identityModelId(modelInputTrimmed);
 }
 //@ chunk-aepeg2w5.js:464521-464580 placement
-function resolveModelAliasSpelling(e) {
-  return isModelKeyAliasOrResolved(e.toLowerCase().trim()) ? parseUserSpecifiedModel(e) : e;
+function resolveModelAliasSpelling(model) {
+  return isModelKeyAliasOrResolved(model.toLowerCase().trim()) ? parseUserSpecifiedModel(model) : model;
 }
 //@ chunk-aepeg2w5.js:464580-464626 placement = resolveAgentModelDisplay (1)
 /**
@@ -670,28 +683,28 @@ function inlineSkillModelOverride(agent) {
   return agent === "inherit" ? undefined : agent;
 }
 //@ chunk-aepeg2w5.js:464626-464951 placement
-function resolveSkillModelOverride(e, mainLoopModel) {
-  let publicName = parseUserSpecifiedModel(e);
+function resolveSkillModelOverride(model, mainLoopModel) {
+  let publicName = parseUserSpecifiedModel(model);
   if (!isExemptDefaultResolvingPick(publicName) && !isModelAllowed(publicName)) {
     logForDebugging(
-      `Skill/command model "${e}" is not in the availableModels allowlist; keeping the session model`,
+      `Skill/command model "${model}" is not in the availableModels allowlist; keeping the session model`,
       {
         level: "warn",
       },
     );
     return mainLoopModel;
   }
-  let s =
+  let mainHasNative1m =
     has1mSuffix_2(mainLoopModel) ||
     modelHasNative1MContext(mainLoopModel) ||
     antGrants1MContext(mainLoopModel);
-  let h = s || isContextWindow1m(mainLoopModel);
-  if (has1mSuffix_2(e) || !h) return e;
-  let resolved = parseUserSpecifiedModel(e);
+  let mainIs1m = mainHasNative1m || isContextWindow1m(mainLoopModel);
+  if (has1mSuffix_2(model) || !mainIs1m) return model;
+  let resolved = parseUserSpecifiedModel(model);
   if (modelHasNative1MContext(resolved)) return resolved;
   if (isContextWindow1m(resolved) || antGrants1MContext(resolved)) return resolved;
-  if (s && supports1mBeta(resolved)) return e + "[1m]";
-  return e;
+  if (mainHasNative1m && supports1mBeta(resolved)) return model + "[1m]";
+  return model;
 }
 //@ chunk-aepeg2w5.js:464951-465048 fingerprint = LEGACY_OPUS_FIRSTPARTY (1)
 /**
@@ -737,64 +750,70 @@ function modelDisplayString(model) {
 /**
  * claude-3-x 系列的营销名（Claude 3.7 Sonnet 等）。
  */
-var MODELS_WITH_1M_DISPLAY_SUFFIX = new Set([
-  "claude-opus-4-6",
-  "claude-opus-4-7",
-  "claude-opus-4-8",
-  "claude-opus-5",
-  "claude-opus-5-5",
-  "claude-sonnet-4-0",
-  "claude-sonnet-4-5",
-  "claude-sonnet-4-6",
-]);
-var LEGACY_MARKETING_NAMES = new Map([
-  ["claude-3-7-sonnet", "Claude 3.7 Sonnet"],
-  ["claude-3-5-sonnet", "Claude 3.5 Sonnet"],
-  ["claude-3-5-haiku", "Claude 3.5 Haiku"],
-]);
+var MODELS_WITH_1M_DISPLAY_SUFFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var LEGACY_MARKETING_NAMES;
+deferInit("chunk-aepeg2w5.js:465304", () => {
+  MODELS_WITH_1M_DISPLAY_SUFFIX = new Set([
+    "claude-opus-4-6",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-opus-5",
+    "claude-opus-5-5",
+    "claude-sonnet-4-0",
+    "claude-sonnet-4-5",
+    "claude-sonnet-4-6",
+  ]);
+  LEGACY_MARKETING_NAMES = new Map([
+    ["claude-3-7-sonnet", "Claude 3.7 Sonnet"],
+    ["claude-3-5-sonnet", "Claude 3.5 Sonnet"],
+    ["claude-3-5-haiku", "Claude 3.5 Haiku"],
+  ]);
+});
 //@ chunk-aepeg2w5.js:465608-466021 placement
-function nameForUnnamedModelId(e) {
+function nameForUnnamedModelId(modelId) {
   if (getAPIProvider() === "foundry") return;
-  let trimmed = e.trim();
+  let trimmed = modelId.trim();
   let lower = trimmed.toLowerCase();
   if (/\s/.test(lower)) return;
-  let s = settingsOverrideCanonicalName(strip1mSuffix(trimmed));
-  if (s !== undefined)
-    return getCatalogDisplayName(s, has1mSuffix_2(strip1mTagWhereBuiltIn(trimmed))) ?? undefined;
-  let h = lower;
-  let modelId = parseModelId(h);
-  if (!modelId) {
+  let canonical = settingsOverrideCanonicalName(strip1mSuffix(trimmed));
+  if (canonical !== undefined)
+    return getCatalogDisplayName(canonical, has1mSuffix_2(strip1mTagWhereBuiltIn(trimmed))) ?? undefined;
+  let candidate = lower;
+  let modelId_2 = parseModelId(candidate);
+  if (!modelId_2) {
     let index = lower.indexOf("claude-");
     if (index <= 0 || /[a-z0-9]/.test(lower[index - 1] ?? "")) return;
-    h = lower.slice(index);
-    modelId = parseModelId(h);
+    candidate = lower.slice(index);
+    modelId_2 = parseModelId(candidate);
   }
   if (
-    !modelId ||
-    modelId.trailer !== undefined ||
-    /-fast(?![a-z0-9])/.test(h.slice(h.lastIndexOf(modelId.base) + modelId.base.length))
+    !modelId_2 ||
+    modelId_2.trailer !== undefined ||
+    /-fast(?![a-z0-9])/.test(candidate.slice(candidate.lastIndexOf(modelId_2.base) + modelId_2.base.length))
   )
     return;
-  return getPublicModelDisplayName(has1mSuffix_2(h) ? h : strip1mSuffix(h)) ?? undefined;
+  return (
+    getPublicModelDisplayName(has1mSuffix_2(candidate) ? candidate : strip1mSuffix(candidate)) ?? undefined
+  );
 }
 //@ chunk-aepeg2w5.js:466021-466067 placement
-function settingsOverrideCanonicalName(e) {
+function settingsOverrideCanonicalName(model) {
   return (
-    findOverrideCanonicalName(getSettingsModelOverrides(), e) ??
-    findOverrideCanonicalName(getPairedPolicyModelOverrides(), e)
+    findOverrideCanonicalName(getSettingsModelOverrides(), model) ??
+    findOverrideCanonicalName(getPairedPolicyModelOverrides(), model)
   );
 }
 //@ chunk-aepeg2w5.js:466067-466272 placement
-function getMarketingNameForModel(e) {
+function getMarketingNameForModel(model) {
   if (getAPIProvider() === "foundry") return;
-  let canonicalName = getCanonicalName(e, {
+  let canonicalName = getCanonicalName(model, {
     identity: true,
   });
-  let r = LEGACY_MARKETING_NAMES.get(canonicalName);
-  if (r !== undefined) return r;
+  let legacyName = LEGACY_MARKETING_NAMES.get(canonicalName);
+  if (legacyName !== undefined) return legacyName;
   let catalogEntry = getCatalogEntry(canonicalName);
   if (!catalogEntry) return;
-  return has1mSuffix(strip1mTagWhereBuiltIn(e)) && MODELS_WITH_1M_DISPLAY_SUFFIX.has(canonicalName)
+  return has1mSuffix(strip1mTagWhereBuiltIn(model)) && MODELS_WITH_1M_DISPLAY_SUFFIX.has(canonicalName)
     ? `${catalogEntry.display_name} (1M context)`
     : catalogEntry.display_name;
 }
@@ -804,22 +823,25 @@ function modelSettingResolvesThroughModelStrings(userSpecifiedModelSetting) {
   return isModelKeyAlias(lower) || Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower);
 }
 //@ chunk-aepeg2w5.js:466355-466630 placement
-function toProviderWireModelId(e) {
-  let n = stripAnyVersatileSuffix(e);
-  let lower = n.toLowerCase();
-  if (!Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower)) return catalogAliasFor(n) ?? n;
-  let s = MODEL_KEY_BY_FIRST_PARTY_ID[lower];
-  if (s === undefined) return n;
-  let h = warnModelOutsideAvailable({
+function toProviderWireModelId(model) {
+  let stripped = stripAnyVersatileSuffix(model);
+  let lower = stripped.toLowerCase();
+  if (!Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower)) return catalogAliasFor(stripped) ?? stripped;
+  let key = MODEL_KEY_BY_FIRST_PARTY_ID[lower];
+  if (key === undefined) return stripped;
+  let mapping = warnModelOutsideAvailable({
     id: lower,
-    raw: getRawModelStrings()[s],
+    raw: getRawModelStrings()[key],
     overrideKey: lower,
   });
-  if (h === undefined) return n;
+  if (mapping === undefined) return stripped;
   let apiProvider = getAPIProvider();
-  if (h.overridden || (apiProvider !== "foundry" && catalogEntriesByFirstPartyId[s][apiProvider] !== null))
-    return stripAnyVersatileSuffix(h.mapped);
-  return n;
+  if (
+    mapping.overridden ||
+    (apiProvider !== "foundry" && catalogEntriesByFirstPartyId[key][apiProvider] !== null)
+  )
+    return stripAnyVersatileSuffix(mapping.mapped);
+  return stripped;
 }
 //@ chunk-aepeg2w5.js:466630-467071 placement
 /**
@@ -827,32 +849,36 @@ function toProviderWireModelId(e) {
  */
 function warnModelOutsideAvailable({ id, raw, overrideKey }) {
   if (getModelEnforcementState().state === "refused") return;
-  let h;
+  let settings;
   try {
-    h = getSettingsForSource("policySettings");
+    settings = getSettingsForSource("policySettings");
   } catch {
     return;
   }
-  let availableModels = h?.availableModels;
-  let S = h?.modelOverrides ?? getPairedPolicyModelOverrides() ?? {};
+  let availableModels = settings?.availableModels;
+  let overrides = settings?.modelOverrides ?? getPairedPolicyModelOverrides() ?? {};
   if (
     availableModels !== undefined &&
     !isModelAllowed(id, {
       allowlist: availableModels,
-      overridesMap: S,
+      overridesMap: overrides,
       envFreeAliasResolution: true,
     })
   )
     return;
-  let w = availableModels === undefined ? (getInitialSettings_2().modelOverrides ?? {}) : S;
-  let R = overrideKey !== undefined && Object.hasOwn(w, overrideKey) ? w[overrideKey] : undefined;
-  if (!R || (availableModels === undefined && R === raw) || isModelDeniedByManagedFalse(R))
+  let mappedOverrides =
+    availableModels === undefined ? (getInitialSettings_2().modelOverrides ?? {}) : overrides;
+  let mapped =
+    overrideKey !== undefined && Object.hasOwn(mappedOverrides, overrideKey)
+      ? mappedOverrides[overrideKey]
+      : undefined;
+  if (!mapped || (availableModels === undefined && mapped === raw) || isModelDeniedByManagedFalse(mapped))
     return {
       mapped: raw,
       overridden: false,
     };
   return {
-    mapped: R,
+    mapped,
     overridden: true,
   };
 }
@@ -860,30 +886,29 @@ function warnModelOutsideAvailable({ id, raw, overrideKey }) {
 /**
  * 取模型在目录中的别名（若可唯一确定）。
  */
-function catalogAliasFor(e) {
-  let effectiveServedEntry = findEffectiveServedEntry(e);
-  if (effectiveServedEntry === undefined || entryModelKey(effectiveServedEntry.id) !== undefined) return;
-  let id = hasDescribableCatalogModel(effectiveServedEntry.id) ? effectiveServedEntry.id : undefined;
-  if (gatewayCatalogRowId(e) !== undefined && e.toLowerCase() !== id) return;
-  let providerModelId = resolveProviderModelId(effectiveServedEntry);
-  if (providerModelId === undefined || (providerModelId === effectiveServedEntry.id && id === undefined))
-    return;
-  let h = warnModelOutsideAvailable({
-    id: effectiveServedEntry.id,
-    raw: gatewayModelIdFor(effectiveServedEntry) ?? e,
+function catalogAliasFor(model) {
+  let entry = findEffectiveServedEntry(model);
+  if (entry === undefined || entryModelKey(entry.id) !== undefined) return;
+  let id = hasDescribableCatalogModel(entry.id) ? entry.id : undefined;
+  if (gatewayCatalogRowId(model) !== undefined && model.toLowerCase() !== id) return;
+  let providerModelId = resolveProviderModelId(entry);
+  if (providerModelId === undefined || (providerModelId === entry.id && id === undefined)) return;
+  let mapping = warnModelOutsideAvailable({
+    id: entry.id,
+    raw: gatewayModelIdFor(entry) ?? model,
     overrideKey: id,
   });
-  if (h === undefined || h.mapped === effectiveServedEntry.id || isModelDeniedByManagedFalse(h.mapped))
+  if (mapping === undefined || mapping.mapped === entry.id || isModelDeniedByManagedFalse(mapping.mapped))
     return;
-  return stripAnyVersatileSuffix(h.mapped);
+  return stripAnyVersatileSuffix(mapping.mapped);
 }
 //@ chunk-aepeg2w5.js:467388-467435 placement
 function strip1mTag(model) {
   return model.replace(/\[1m\]/gi, "");
 }
 //@ chunk-aepeg2w5.js:467435-467685 placement
-function getFlagContextWindow(e) {
-  let canonicalName = getCanonicalName(e, {
+function getFlagContextWindow(model) {
+  let canonicalName = getCanonicalName(model, {
     identity: true,
     overridesMap: {},
   });
@@ -892,12 +917,12 @@ function getFlagContextWindow(e) {
     !isFirstPartyApiBackend() ||
     is1mContextDisabled() ||
     isLongContext1mCreditsBlocked() ||
-    getSonnet46ContextWindowOverride(e) !== null
+    getSonnet46ContextWindowOverride(model) !== null
   )
     return null;
-  let r = getFeatureValue_SESSION_PINNED(TENGU_KIND_DEWDROP, {})?.[canonicalName];
-  if (typeof r !== "number" || !Number.isInteger(r) || r >= 1e6) return null;
-  let min = Math.min(r, servedMaxInputTokens(e, canonicalName) ?? r);
+  let pin = getFeatureValue_SESSION_PINNED(TENGU_KIND_DEWDROP, {})?.[canonicalName];
+  if (typeof pin !== "number" || !Number.isInteger(pin) || pin >= 1e6) return null;
+  let min = Math.min(pin, servedMaxInputTokens(model, canonicalName) ?? pin);
   return min > CONTEXT_WINDOW_THRESHOLD ? min : null;
 }
 //@ chunk-aepeg2w5.js:470748-470799 placement
@@ -909,42 +934,47 @@ var SECONDARY_CONTEXT_WINDOW = 200000;
 var MAX_CONTEXT_WINDOW_1M = 1e6;
 var SMALL_FAST_MAX_OUTPUT_TOKENS = 32000;
 var MAX_OUTPUT_TOKENS_LIMIT = 128000;
+//@ chunk-hwmsct5x.js:200437-200502 placement = CLAUDE_4_5_OR_4_6_MODEL_IDS (0.463)
+/**
+ * sonnet/opus/haiku/fable → 对应默认模型 getter 的结果。旧版名 CLAUDE_4_5_OR_4_6_MODEL_IDS 为错配。
+ */
+function getDefaultModelForFamily(family) {
+  return {
+    sonnet: getDefaultSonnetModel,
+    opus: getDefaultOpusModel,
+    haiku: getDefaultHaikuModel,
+    fable: getDefaultFableModel,
+  }[family]();
+}
 //@ chunk-e6aww6q8.js:1428769-1428917 fingerprint = getSmallFastModel (1)
 /**
  * 自定义模型名能否按 opus 别名对待：不含已知族名、不是已知模型或档位默认、也不是 ANTHROPIC_SMALL_FAST_MODEL。旧版名 getSmallFastModel 为错配。
  */
-function isOpusAliasCandidate(e, canonicalName) {
-  if (MODEL_KEY_NAMES.some((s) => canonicalName.includes(s))) return false;
-  if (isRecognizedCanonical(canonicalName) || isTierDefaultModelEnv(e)) return false;
+function isOpusAliasCandidate(model, canonicalName) {
+  if (MODEL_KEY_NAMES.some((name) => canonicalName.includes(name))) return false;
+  if (isRecognizedCanonical(canonicalName) || isTierDefaultModelEnv(model)) return false;
   let ANTHROPIC_SMALL_FAST_MODEL = env.ANTHROPIC_SMALL_FAST_MODEL;
-  return !(ANTHROPIC_SMALL_FAST_MODEL !== undefined && sameModelSpelling(ANTHROPIC_SMALL_FAST_MODEL, e));
+  return !(ANTHROPIC_SMALL_FAST_MODEL !== undefined && sameModelSpelling(ANTHROPIC_SMALL_FAST_MODEL, model));
 }
 //@ chunk-e6aww6q8.js:3333467-3333681 fingerprint = getRuntimeMainLoopModel (0.687)
 /**
  * 运行时模型（含 plan 模式切换）与上次公告不同时生成模型公告附件。旧版名 getRuntimeMainLoopModel 不准确。
  */
-async function getRuntimeModelSwitchAnnouncements(e, n) {
-  if (!shouldEmitEnvironmentChanges(e.options)) return [];
-  let r = messagesSinceCompactBoundary(n ?? []);
-  let mode = getToolPermissionContext(e).mode;
-  let h = modelInfoForModel(
+async function getRuntimeModelSwitchAnnouncements(context, messages) {
+  if (!shouldEmitEnvironmentChanges(context.options)) return [];
+  let recentMessages = messagesSinceCompactBoundary(messages ?? []);
+  let mode = getToolPermissionContext(context).mode;
+  let modelInfo = modelInfoForModel(
     getRuntimeMainLoopModel({
       permissionMode: mode,
-      mainLoopModel: getMainLoopModel_2(e),
-      exceeds200kTokens: mode === "plan" && doesMostRecentAssistantMessageExceed200k(r),
+      mainLoopModel: getMainLoopModel_2(context),
+      exceeds200kTokens: mode === "plan" && doesMostRecentAssistantMessageExceed200k(recentMessages),
     }),
   );
-  let lastModelIdentity = getLastModelIdentity(r);
-  return lastModelIdentity && isSameModelIdentity(lastModelIdentity, h)
+  let lastModelIdentity = getLastModelIdentity(recentMessages);
+  return lastModelIdentity && isSameModelIdentity(lastModelIdentity, modelInfo)
     ? []
-    : [await buildModelEnvInfoAttachment(h)];
-}
-//@ chunk-095ptjmr.js:6087-6140 fingerprint = resolveSkillModelOverride (1)
-/**
- * 已有 [1m] 原样返回，否则追加 [1m]。旧版名 resolveSkillModelOverride 为错配。
- */
-function ensure1mSuffix(f) {
-  return /\[1m\]$/i.test(f) ? f : `${f}[1m]`;
+    : [await buildModelEnvInfoAttachment(modelInfo)];
 }
 //@ chunk-d1cgs5na.js:12054-12136 fingerprint = renderDefaultModelSetting (1)
 /**
@@ -955,17 +985,12 @@ function renderDefaultModelSetting(setting) {
     ? [getDefaultOpusModel(), parseUserSpecifiedModel(setting)]
     : [parseUserSpecifiedModel(setting)];
 }
-//@ chunk-hwmsct5x.js:200437-200502 placement = CLAUDE_4_5_OR_4_6_MODEL_IDS (0.463)
+//@ chunk-095ptjmr.js:6087-6140 fingerprint = resolveSkillModelOverride (1)
 /**
- * sonnet/opus/haiku/fable → 对应默认模型 getter 的结果。旧版名 CLAUDE_4_5_OR_4_6_MODEL_IDS 为错配。
+ * 已有 [1m] 原样返回，否则追加 [1m]。旧版名 resolveSkillModelOverride 为错配。
  */
-function getDefaultModelForFamily(e) {
-  return {
-    sonnet: getDefaultSonnetModel,
-    opus: getDefaultOpusModel,
-    haiku: getDefaultHaikuModel,
-    fable: getDefaultFableModel,
-  }[e]();
+function ensure1mSuffix(model) {
+  return /\[1m\]$/i.test(model) ? model : `${model}[1m]`;
 }
 export {
   strip1mTagWhereBuiltIn,

@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (4)
  * attribution: placement 4
  */
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { X_TRUSTED_DEVICE_TOKEN } from "./cloudLaunch.js";
 import { trustedDeviceHeaders, resendAfterUntrustedDevice, getOAuthRequestHeaders } from "./api.js";
 import { lacksAuthorizationHeader } from "../../services/oauth/sessionsBearerHooks.js";
@@ -19,58 +19,62 @@ import { isAbortError } from "../errors.js";
 /**
  * 确保本机为可信设备（创建设备证明、处理令牌被拒与恢复关闭）。
  */
-async function ensureTrustedDevice(referralEligibility, n, r) {
-  let s = wi(n ?? {}, (Z, Se) => Se.toLowerCase() === X_TRUSTED_DEVICE_TOKEN.toLowerCase());
-  let h = {
-    ...referralEligibility.headers,
-    ...s,
-    ...(referralEligibility.profile ? {} : await trustedDeviceHeaders()),
+async function ensureTrustedDevice(provider, referral, options) {
+  let referralHeaders = import_reject(
+    referral ?? {},
+    (value, headerName) => headerName.toLowerCase() === X_TRUSTED_DEVICE_TOKEN.toLowerCase(),
+  );
+  let headers = {
+    ...provider.headers,
+    ...referralHeaders,
+    ...(provider.profile ? {} : await trustedDeviceHeaders()),
   };
-  let y = await r(h);
+  let response = await options(headers);
   if (
-    !referralEligibility.profile &&
-    y.status === 401 &&
-    referralEligibility.recoverBearer !== undefined &&
-    !referralEligibility.reauthorized
+    !provider.profile &&
+    response.status === 401 &&
+    provider.recoverBearer !== undefined &&
+    !provider.reauthorized
   ) {
-    referralEligibility.reauthorized = true;
-    let bearer = referralEligibility.bearer;
-    let Se = lacksAuthorizationHeader(y.config);
-    if (!(await referralEligibility.recoverBearer(bearer, Se))) return y;
-    let ke = await refreshBearerHeaders(referralEligibility);
-    if (!Se && referralEligibility.bearer === bearer) return y;
-    h = {
-      ...ke,
-      ...s,
+    provider.reauthorized = true;
+    let bearer = provider.bearer;
+    let lacksAuth = lacksAuthorizationHeader(response.config);
+    if (!(await provider.recoverBearer(bearer, lacksAuth))) return response;
+    let refreshedHeaders = await refreshBearerHeaders(provider);
+    if (!lacksAuth && provider.bearer === bearer) return response;
+    headers = {
+      ...refreshedHeaders,
+      ...referralHeaders,
       ...(await trustedDeviceHeaders()),
     };
-    y = await r(h);
-    if (y.status === 401 && !lacksAuthorizationHeader(y.config))
-      referralEligibility.recoverBearer(referralEligibility.bearer, false).catch(() => {});
+    response = await options(headers);
+    if (response.status === 401 && !lacksAuthorizationHeader(response.config))
+      provider.recoverBearer(provider.bearer, false).catch(() => {});
   }
-  if (referralEligibility.profile || referralEligibility.recovery !== undefined || y.status !== 403) return y;
-  let { classifyElevatedAuthError, readUntrustedDeviceRefusal } = await import("./chunk-g9dw262t.js");
-  if (readUntrustedDeviceRefusal(y.data)?.kind !== "token_refused") return y;
-  let { isDeviceIdentityEnabled } = await import("./chunk-m288yvvf.js");
+  if (provider.profile || provider.recovery !== undefined || response.status !== 403) return response;
+  let { classifyElevatedAuthError, readUntrustedDeviceRefusal } =
+    await import("../../bridge/codeSessionApi.js");
+  if (readUntrustedDeviceRefusal(response.data)?.kind !== "token_refused") return response;
+  let { isDeviceIdentityEnabled } = await import("../../services/analytics/violinGates.js");
   if (!(await isDeviceIdentityEnabled().catch(() => false))) {
-    referralEligibility.recovery = "disabled";
+    provider.recovery = "disabled";
     logFeatureSad("cloud_create_device_proof", "recovery_disabled");
-    return y;
+    return response;
   }
-  referralEligibility.recovery = "tried";
-  let G;
-  let q = await resendAfterUntrustedDevice(
-    y,
-    h[X_TRUSTED_DEVICE_TOKEN],
-    async (Z) => {
-      let Se = await refreshBearerHeaders(referralEligibility);
-      referralEligibility.reenrolled = true;
-      return r({
-        ...Se,
-        ...s,
-        [X_TRUSTED_DEVICE_TOKEN]: Z,
+  provider.recovery = "tried";
+  let resendError;
+  let secondResponse = await resendAfterUntrustedDevice(
+    response,
+    headers[X_TRUSTED_DEVICE_TOKEN],
+    async (newToken) => {
+      let refreshedHeaders = await refreshBearerHeaders(provider);
+      provider.reenrolled = true;
+      return options({
+        ...refreshedHeaders,
+        ...referralHeaders,
+        [X_TRUSTED_DEVICE_TOKEN]: newToken,
       }).catch((error) => {
-        G = {
+        resendError = {
           error,
         };
         throw error;
@@ -78,34 +82,34 @@ async function ensureTrustedDevice(referralEligibility, n, r) {
     },
     "cloud_session",
   );
-  if (!referralEligibility.reenrolled) await refreshBearerHeaders(referralEligibility);
-  if (G !== undefined) {
-    if (!isAbortError(G.error)) logFeatureSad("cloud_create_device_proof", "resend_unanswered");
-    throw G.error;
+  if (!provider.reenrolled) await refreshBearerHeaders(provider);
+  if (resendError !== undefined) {
+    if (!isAbortError(resendError.error)) logFeatureSad("cloud_create_device_proof", "resend_unanswered");
+    throw resendError.error;
   }
-  if (!referralEligibility.reenrolled) logFeatureSad("cloud_create_device_proof", "not_reenrolled");
+  if (!provider.reenrolled) logFeatureSad("cloud_create_device_proof", "not_reenrolled");
   else if (
-    q.status === 403 &&
-    (readUntrustedDeviceRefusal(q.data)?.kind === "token_refused" ||
-      classifyElevatedAuthError(q.data) === "session_stale_relogin")
+    secondResponse.status === 403 &&
+    (readUntrustedDeviceRefusal(secondResponse.data)?.kind === "token_refused" ||
+      classifyElevatedAuthError(secondResponse.data) === "session_stale_relogin")
   )
     logFeatureSad("cloud_create_device_proof", "refused_after_reenroll");
   else logFeatureOk("cloud_create_device_proof");
-  return q;
+  return secondResponse;
 }
 //@ chunk-e6aww6q8.js:1879795-1879940 placement
-async function refreshBearerHeaders(e) {
-  let n = await e.readBearer().catch(() => {
+async function refreshBearerHeaders(provider) {
+  let token = await provider.readBearer().catch(() => {
     return;
   });
-  if (n !== undefined) {
-    e.bearer = n;
-    e.headers = {
-      ...e.headers,
-      ...getOAuthRequestHeaders(n),
+  if (token !== undefined) {
+    provider.bearer = token;
+    provider.headers = {
+      ...provider.headers,
+      ...getOAuthRequestHeaders(token),
     };
   }
-  return e.headers;
+  return provider.headers;
 }
 //@ chunk-e6aww6q8.js:1879940-1880061 placement
 var UNTRUSTED_DEVICE_MESSAGE =
@@ -116,9 +120,10 @@ var UNTRUSTED_DEVICE_MESSAGE =
  */
 async function explainUntrustedDeviceRefusal(response, referralEligibility) {
   if (referralEligibility.profile || response.status !== 403) return;
-  let { classifyElevatedAuthError, readUntrustedDeviceRefusal } = await import("./chunk-g9dw262t.js");
+  let { classifyElevatedAuthError, readUntrustedDeviceRefusal } =
+    await import("../../bridge/codeSessionApi.js");
   let { loginEnrollmentOnThisComputer, SESSION_STALE_RELOGIN_HINT, untrustedDeviceHint } =
-    await import("./chunk-3kb57csj.js");
+    await import("../../bridge/trustedDevice.js");
   let untrustedDeviceRefusal = readUntrustedDeviceRefusal(response.data);
   if (untrustedDeviceRefusal === undefined)
     return classifyElevatedAuthError(response.data) === "session_stale_relogin"

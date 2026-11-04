@@ -5,7 +5,7 @@
  * pieces: chunk-a1ttyqdw.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_getHomeDir } from "./getHomeDir.js";
 import { require_getSSOTokenFilepath } from "./getSSOTokenFilepath.js";
 import { require_getSSOTokenFromFile } from "./getSSOTokenFromFile.js";
@@ -13,7 +13,7 @@ import { require_types } from "../../types/dist-cjs/index.js";
 import { require_readFile } from "./readFile.js";
 
 //@ chunk-a1ttyqdw.js:1663-4692 cjs-fingerprint
-var require_shared_ini_file_loader = x(function (cjsExports) {
+var require_shared_ini_file_loader = __commonJS(function (cjsExports) {
   var getHomeDir = require_getHomeDir();
   var getSSOTokenFilepath = require_getSSOTokenFilepath();
   var getSSOTokenFromFile = require_getSSOTokenFromFile();

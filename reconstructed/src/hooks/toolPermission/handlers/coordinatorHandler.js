@@ -19,18 +19,18 @@ import { logFeatureBad, logFeatureOk } from "../../../services/analytics/feature
 async function handleCoordinatorPermission(params) {
   let { ctx, updatedInput, suggestions, permissionMode } = params;
   if (params.askIsPersonOnly) return null;
-  let R = false;
+  let checkFailed = false;
   try {
-    let C = await ctx.runHooks(
+    let hookResult = await ctx.runHooks(
       permissionMode,
       suggestions,
       params.askSuppressesAlwaysAllowRule,
       () => ctx.toolUseContext.abortController.signal.aborted,
       updatedInput,
     );
-    if (C && !("reprompted" in C)) return C;
+    if (hookResult && !("reprompted" in hookResult)) return hookResult;
   } catch (error) {
-    R = true;
+    checkFailed = true;
     if (error instanceof Error)
       logError(withTelemetryMessage(error, "coordinator automated permission check failed"));
     else
@@ -41,7 +41,7 @@ async function handleCoordinatorPermission(params) {
         ),
       );
   } finally {
-    if (R) logFeatureBad("permission_coordinator_check", "permission_coordinator_check_failed");
+    if (checkFailed) logFeatureBad("permission_coordinator_check", "permission_coordinator_check_failed");
     else logFeatureOk("permission_coordinator_check");
   }
   return null;

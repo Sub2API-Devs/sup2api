@@ -30,12 +30,12 @@ import { inspectSubmodules } from "../utils/git/submoduleInspection.js";
 var WORKTREE_COLLECT_TIMEOUT_MS = 1e4;
 var SUBMODULE_CHECK_RESERVE_MS = 500;
 //@ chunk-8hayd0gw.js:679-853 placement
-async function withCollectTimeout(e, r = WORKTREE_COLLECT_TIMEOUT_MS) {
+async function withCollectTimeout(promise, timeoutMs = WORKTREE_COLLECT_TIMEOUT_MS) {
   let abortController = new AbortController();
   try {
     return await Promise.race([
-      e,
-      sleep(r, abortController.signal).then(() => {
+      promise,
+      sleep(timeoutMs, abortController.signal).then(() => {
         throw Error("worktree probe timed out");
       }),
     ]);
@@ -47,17 +47,17 @@ async function withCollectTimeout(e, r = WORKTREE_COLLECT_TIMEOUT_MS) {
 /**
  * 在超时内收集工作树状态（分支、未推送提交、改动、进行中操作、子模块），供 teleport 到云端前检查。
  */
-async function collectWorktreeState(originalCwd, r, s = WORKTREE_COLLECT_TIMEOUT_MS) {
+async function collectWorktreeState(originalCwd, branch, timeoutMs = WORKTREE_COLLECT_TIMEOUT_MS) {
   let gitRootRecheckingNegative = findGitRootRecheckingNegative(originalCwd);
   if (!gitRootRecheckingNegative) return null;
   try {
-    let n = await withCollectTimeout(
-      collectWorktreeStateUnbounded(gitRootRecheckingNegative, r, Date.now() + s),
-      s,
+    let state = await withCollectTimeout(
+      collectWorktreeStateUnbounded(gitRootRecheckingNegative, branch, Date.now() + timeoutMs),
+      timeoutMs,
     );
-    if (n.submodules_unverified) logFeatureSad("bridge_worktree_state", "submodules_unverifiable");
+    if (state.submodules_unverified) logFeatureSad("bridge_worktree_state", "submodules_unverifiable");
     else logFeatureOk("bridge_worktree_state");
-    return n;
+    return state;
   } catch (error) {
     logFeatureBad("bridge_worktree_state", "collect_failed");
     logForDebugging(`[bridge:worktree] collectWorktreeState failed: ${errorMessage(error)}`);
@@ -68,31 +68,31 @@ async function collectWorktreeState(originalCwd, r, s = WORKTREE_COLLECT_TIMEOUT
 /**
  * 并行收集分支、未推送、改动、进行中操作、子模块状态
  */
-async function collectWorktreeStateUnbounded(cwd, r, s) {
+async function collectWorktreeStateUnbounded(cwd, branch, deadlineMs) {
   let gitDir = await getGitDir(cwd);
   if (!gitDir) {
     getGitRepoCache().gitDirByCwd.delete(resolve(cwd));
     gitDir = await getGitDir(cwd);
   }
   if (!gitDir) throw Error("getGitDir returned null \u2014 cannot verify worktree state");
-  let [headCommit, o, worktreeStatus, inProgressOperation, h, w] = await Promise.all([
+  let [headCommit, unpushed, worktreeStatus, inProgressOperation, hasSubmodules, hasLfs] = await Promise.all([
     readHeadCommit(cwd),
-    countUnpushedCommits(cwd, r),
-    readWorktreeStatus(cwd, s),
+    countUnpushedCommits(cwd, branch),
+    readWorktreeStatus(cwd, deadlineMs),
     detectInProgressOperation(cwd, gitDir),
     pathExistsAsFileOrDir(join(cwd, ".gitmodules")),
     hasFilterAttributes(cwd),
   ]);
   return {
-    branch: r,
+    branch,
     head_sha: headCommit,
-    unpushed_count: o.count,
+    unpushed_count: unpushed.count,
     is_dirty: worktreeStatus.dirty,
-    upstream_exists: o.upstreamExists,
+    upstream_exists: unpushed.upstreamExists,
     mid_operation: inProgressOperation,
-    has_submodules: h,
+    has_submodules: hasSubmodules,
     submodules_unverified: worktreeStatus.submodulesUnverified,
-    has_lfs: w,
+    has_lfs: hasLfs,
     reported_at: new Date().toISOString(),
   };
 }
@@ -102,11 +102,11 @@ var WORKTREE_GIT_MAX_BUFFER = 4194304;
 /**
  * 在工作树里运行 git（安全环境、超时）
  */
-function runWorktreeGit(e, r, { userLocale: s } = {}) {
-  return execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...r], {
-    cwd: e,
-    env: buildGitEnvForRepo(e, undefined, {
-      userLocale: s,
+function runWorktreeGit(cwd, args, { userLocale } = {}) {
+  return execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...args], {
+    cwd,
+    env: buildGitEnvForRepo(cwd, undefined, {
+      userLocale,
     }),
     preserveOutputOnError: false,
     maxBuffer: WORKTREE_GIT_MAX_BUFFER,
@@ -122,28 +122,33 @@ async function readHeadCommit(cwd) {
 /**
  * 统计相对 origin/<branch> 未推送的提交数
  */
-async function countUnpushedCommits(e, r) {
-  if (!r)
+async function countUnpushedCommits(cwd, branch) {
+  if (!branch)
     return {
       count: null,
       upstreamExists: false,
     };
-  let s = `refs/remotes/origin/${r}`;
-  let i = await runWorktreeGit(e, ["rev-parse", "--verify", "--quiet", `${s}^{commit}`]);
-  if (i.code !== 0 || !i.stdout.trim())
+  let upstreamRef = `refs/remotes/origin/${branch}`;
+  let verifyResult = await runWorktreeGit(cwd, [
+    "rev-parse",
+    "--verify",
+    "--quiet",
+    `${upstreamRef}^{commit}`,
+  ]);
+  if (verifyResult.code !== 0 || !verifyResult.stdout.trim())
     return {
       count: null,
       upstreamExists: false,
     };
-  let { code, stdout } = await runWorktreeGit(e, ["rev-list", "--count", `${s}..HEAD`]);
+  let { code, stdout } = await runWorktreeGit(cwd, ["rev-list", "--count", `${upstreamRef}..HEAD`]);
   if (code !== 0)
     return {
       count: null,
       upstreamExists: false,
     };
-  let a = parseInt(stdout.trim(), 10);
+  let count = parseInt(stdout.trim(), 10);
   return {
-    count: Number.isFinite(a) ? a : null,
+    count: Number.isFinite(count) ? count : null,
     upstreamExists: true,
   };
 }
@@ -151,11 +156,11 @@ async function countUnpushedCommits(e, r) {
 /**
  * git status --porcelain 读取工作树改动
  */
-async function readWorktreeStatus(e, r) {
-  let filterNeutralizingArgs = await buildFilterNeutralizingArgs(e);
+async function readWorktreeStatus(cwd, deadlineMs) {
+  let filterNeutralizingArgs = await buildFilterNeutralizingArgs(cwd);
   if (!filterNeutralizingArgs.ok) throw Error("repository config could not be vetted");
   let { code, stdout } = await runWorktreeGit(
-    e,
+    cwd,
     [
       ...filterNeutralizingArgs.args,
       "--no-optional-locks",
@@ -174,15 +179,15 @@ async function readWorktreeStatus(e, r) {
       dirty: true,
       submodulesUnverified: false,
     };
-  let o = await inspectSubmodules(e, {
-    deadlineMs: Math.max(0, r - Date.now() - SUBMODULE_CHECK_RESERVE_MS),
+  let submodules = await inspectSubmodules(cwd, {
+    deadlineMs: Math.max(0, deadlineMs - Date.now() - SUBMODULE_CHECK_RESERVE_MS),
   });
-  if (o.kind === "verified")
+  if (submodules.kind === "verified")
     return {
-      dirty: o.withTrackedChanges.length + o.withUntrackedFiles.length > 0,
+      dirty: submodules.withTrackedChanges.length + submodules.withUntrackedFiles.length > 0,
       submodulesUnverified: false,
     };
-  switch (o.reason) {
+  switch (submodules.reason) {
     case "unreadable":
       throw Error("submodule state unreadable \u2014 cannot verify worktree is clean");
     case "nested_submodules":
@@ -192,7 +197,7 @@ async function readWorktreeStatus(e, r) {
     case "gitdir_outside_modules":
     case "timeout":
       logForDebugging(
-        `[bridge:worktree] submodules could not be inspected (${o.reason}); reporting is_dirty=true, submodules_unverified=true`,
+        `[bridge:worktree] submodules could not be inspected (${submodules.reason}); reporting is_dirty=true, submodules_unverified=true`,
         {
           level: "warn",
         },
@@ -206,8 +211,8 @@ async function readWorktreeStatus(e, r) {
 //@ chunk-8hayd0gw.js:3323-3434 placement
 async function pathExistsAsFileOrDir(path) {
   try {
-    let r = await lstat(path);
-    return r.isFile() || r.isDirectory();
+    let stats = await lstat(path);
+    return stats.isFile() || stats.isDirectory();
   } catch (error) {
     if (isENOENT(error)) return false;
     throw error;
@@ -230,15 +235,17 @@ var IN_PROGRESS_STATE_FILES = [
 /**
  * 检测进行中的 rebase/merge/cherry-pick 等
  */
-async function detectInProgressOperation(e, gitDir) {
+async function detectInProgressOperation(cwd, cwd_2) {
   let index = (
-    await Promise.all(IN_PROGRESS_STATE_FILES.map(([o]) => pathExistsAsFileOrDir(join(gitDir, o))))
+    await Promise.all(
+      IN_PROGRESS_STATE_FILES.map(([fileName]) => pathExistsAsFileOrDir(join(cwd_2, fileName))),
+    )
   ).indexOf(true);
   if (index !== -1) return IN_PROGRESS_STATE_FILES[index][1];
   let existingRefs = await findExistingRefs(
-    gitDir,
+    cwd_2,
     SEQUENCER_STATE_FILES,
-    async (o) => (await runWorktreeGit(e, o)).exitCode,
+    async (args) => (await runWorktreeGit(cwd, args)).exitCode,
   );
   if (existingRefs === null) throw Error("git could not say whether a cherry-pick or revert is in progress");
   return existingRefs.has("CHERRY_PICK_HEAD")
@@ -251,24 +258,24 @@ async function detectInProgressOperation(e, gitDir) {
 /**
  * .gitattributes 是否声明 filter
  */
-async function hasFilterAttributes(e) {
-  let r = join(e, ".gitattributes");
+async function hasFilterAttributes(cwd) {
+  let path = join(cwd, ".gitattributes");
   try {
-    if (!(await lstat(r)).isFile()) return false;
+    if (!(await lstat(path)).isFile()) return false;
   } catch (error) {
     if (isENOENT(error)) return false;
     throw error;
   }
-  let s;
+  let handle;
   try {
-    s = await open(r, "r");
-    let { buffer, bytesRead } = await s.read(Buffer.alloc(65536), 0, 65536, 0);
+    handle = await open(path, "r");
+    let { buffer, bytesRead } = await handle.read(Buffer.alloc(65536), 0, 65536, 0);
     return buffer.toString("utf8", 0, bytesRead).includes("filter=lfs");
   } catch (error) {
     if (isENOENT(error)) return false;
     throw error;
   } finally {
-    await s?.close();
+    await handle?.close();
   }
 }
-export { collectWorktreeState, withCollectTimeout };
+export { collectWorktreeState, withCollectTimeout, WORKTREE_COLLECT_TIMEOUT_MS };

@@ -44,13 +44,18 @@ import { isPermittedByOrgModelPolicy } from "../utils/model/defaultModel.js";
 import { calculateCostWithPricingSource } from "../utils/modelCost.js";
 import { EMPTY_USAGE } from "../services/api/emptyUsage.js";
 import { isModelNotFoundError, isModelPermissionDeniedError } from "../services/api/withRetry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3302627-3302679 placement
 /**
  * 记忆选择器按会话保存的两张表（已展示条目与已用会话）。
  */
-var memoryPickerMaps = new SessionRootSlot(() => new Map());
-var memoryPickerSets = new SessionRootSlot(() => new Set());
+var memoryPickerMaps; // deferred: uses SessionRootSlot (../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var memoryPickerSets;
+deferInit("chunk-e6aww6q8.js:3302627", () => {
+  memoryPickerMaps = new SessionRootSlot(() => new Map());
+  memoryPickerSets = new SessionRootSlot(() => new Set());
+});
 //@ chunk-e6aww6q8.js:3302713-3304053 placement
 /**
  * 记忆召回选择器的系统提示（最多选 5 个、谨慎对待用户/项目概况记忆）及其输出 token 上限。
@@ -72,53 +77,56 @@ var SELECTOR_MAX_TOKENS = 512;
  */
 async function selectMemoryRecall(
   session,
-  n,
-  dir,
-  memorySelector,
+  query,
+  memoryDir,
+  selectorCtx,
   signal,
   paths = new Set(),
-  S = false,
-  w,
-  L = false,
-  G,
+  useIndex = false,
+  excludePath,
+  fromIndex = false,
+  isExcluded,
   isMultiStoreSyncAvailable = () => false,
   storageV5,
   credentials,
   selectorTurnReverts = [],
   regularFilesOnly = false,
-  Ee,
-  Ae = true,
-  Ie = Ee?.scope,
+  account,
+  usePicker = true,
+  accountScope = account?.scope,
 ) {
-  memorySelector.lastUsage = null;
-  if (S)
+  selectorCtx.lastUsage = null;
+  if (useIndex)
     try {
-      if (dir === getAutoMemPath() && (isMultiStoreSyncAvailable() || hasOrgMemoryDecisionRunStarted()))
+      if (memoryDir === getAutoMemPath() && (isMultiStoreSyncAvailable() || hasOrgMemoryDecisionRunStarted()))
         await waitForOrgMemoryDecisionSettledOnce(FIRST_STORE_PULL_WAIT_DEADLINE_MS, signal);
       if (signal.aborted) return [];
-      let { searchMemoryFilesWithIndex } = await import("./chunk-vp5gef34.js");
-      let rn = recallVisibleTeamMounts(dir);
-      let pn = 5 + Math.min(paths.size + 10, 20);
+      let { searchMemoryFilesWithIndex } = await import("./prewarmMemoryIndex.lazy.js");
+      let visibleTeamMounts = recallVisibleTeamMounts(memoryDir);
+      let candidateLimit = 5 + Math.min(paths.size + 10, 20);
       let { ranked, stats } = await searchMemoryFilesWithIndex(
         session,
-        n,
-        dir,
+        query,
+        memoryDir,
         signal,
-        pn,
+        candidateLimit,
         loadedIndexExclusions(),
-        w,
-        L,
-        (Kn) => isRecallVisiblePath(Kn, rn),
+        excludePath,
+        fromIndex,
+        (path) => isRecallVisiblePath(path, visibleTeamMounts),
       );
-      let ho = recallVisibleTeamMounts(dir);
+      let teamMountsForFilter = recallVisibleTeamMounts(memoryDir);
       let mapped = ranked
         .filter(
-          (Kn) => isRecallVisiblePath(relative(dir, Kn.path), ho) && !paths.has(Kn.path) && !G?.(Kn.path),
+          (hit) =>
+            isRecallVisiblePath(relative(memoryDir, hit.path), teamMountsForFilter) &&
+            !paths.has(hit.path) &&
+            !isExcluded?.(hit.path),
         )
         .slice(0, 5)
-        .map((Kn) => ({
-          path: Kn.path,
-          mtimeMs: Kn.mtimeMs,
+        .map((hit) => ({
+          path: hit.path,
+          mtimeMs: hit.mtimeMs,
         }));
       if (!signal.aborted)
         if (!stats.sync.scanCompleted)
@@ -130,21 +138,21 @@ async function selectMemoryRecall(
             via_index: true,
           });
         else {
-          let Kn =
+          let zeroReason =
             mapped.length > 0
               ? undefined
               : stats.suppressedByFloor
                 ? "below_relevance_floor"
                 : stats.hitCount === 0
                   ? "no_servable_hits"
-                  : stats.belowFloorCount > 0 && ranked.length < pn
+                  : stats.belowFloorCount > 0 && ranked.length < candidateLimit
                     ? "partially_below_floor"
                     : "all_filtered";
           logFeatureOk("memory_recall_select", {
             via_index: true,
             selected_count: mapped.length,
-            ...(Kn !== undefined && {
-              selected_zero_reason: fromEnum(Kn),
+            ...(zeroReason !== undefined && {
+              selected_zero_reason: fromEnum(zeroReason),
             }),
             candidate_docs: stats.docCount,
             index_query_term_count: stats.queryTermCount,
@@ -169,86 +177,104 @@ async function selectMemoryRecall(
       }
       return [];
     }
-  let Me = {
+  let cacheControl = {
     type: "ephemeral",
   };
-  let We = dir === getAutoMemPath() && isFirstStorePullPending();
-  let ze = pickerStateForDir(memorySelector, dir);
-  let Je =
-    (Ae ? (ze?.hydrated || We ? ze : undefined) : ze?.memories.length === 0 ? ze : undefined) ??
+  let orgStorePending = memoryDir === getAutoMemPath() && isFirstStorePullPending();
+  let pickerState = pickerStateForDir(selectorCtx, memoryDir);
+  let activePickerState =
+    (usePicker
+      ? pickerState?.hydrated || orgStorePending
+        ? pickerState
+        : undefined
+      : pickerState?.memories.length === 0
+        ? pickerState
+        : undefined) ??
     (await (
-      Ae
-        ? scanMemoryFiles(dir, signal, storageV5, {
+      usePicker
+        ? scanMemoryFiles(memoryDir, signal, storageV5, {
             regularFilesOnly,
           })
         : Promise.resolve([])
     ).then((memories) => {
       if (signal.aborted) return;
       if (memories.length > 0)
-        return startMemoryPickerState(memorySelector, dir, memories, formatMemoryManifest(memories), Me, !We);
-      return Ee
-        ? startMemoryPickerState(memorySelector, dir, [], NO_LOCAL_MEMORY_TEXT, Me, false)
+        return startMemoryPickerState(
+          selectorCtx,
+          memoryDir,
+          memories,
+          formatMemoryManifest(memories),
+          cacheControl,
+          !orgStorePending,
+        );
+      return account
+        ? startMemoryPickerState(selectorCtx, memoryDir, [], NO_LOCAL_MEMORY_TEXT, cacheControl, false)
         : undefined;
     }));
-  setPickerAccountContext(memorySelector, dir, Ee, Me, Ie);
-  let nt = Je?.account?.names ?? new Set();
-  let pt = recallVisibleTeamMounts(dir);
-  let Et = (Zt) => !paths.has(Zt.filePath) && isRecallVisiblePath(Zt.filename, pt);
-  if (!Je || (!Je.memories.some(Et) && nt.size === 0)) {
+  setPickerAccountContext(selectorCtx, memoryDir, account, cacheControl, accountScope);
+  let accountNames = activePickerState?.account?.names ?? new Set();
+  let visibleTeamMounts = recallVisibleTeamMounts(memoryDir);
+  let isCandidate = (memory) =>
+    !paths.has(memory.filePath) && isRecallVisiblePath(memory.filename, visibleTeamMounts);
+  if (!activePickerState || (!activePickerState.memories.some(isCandidate) && accountNames.size === 0)) {
     if (!signal.aborted)
       logFeatureSad(
         "memory_recall_select",
-        Je
-          ? Je.memories.some((memory) => !paths.has(memory.filePath))
+        activePickerState
+          ? activePickerState.memories.some((memory) => !paths.has(memory.filePath))
             ? "none_visible"
             : "all_surfaced"
           : "no_candidates",
       );
     return [];
   }
-  let history = pickerMessages(Je);
-  let gt = new Map(Je.memories.map((memory) => [memory.filename, memory]));
+  let history = pickerMessages(activePickerState);
+  let memoryByFilename = new Map(activePickerState.memories.map((memory) => [memory.filename, memory]));
   let relevantMemories = await selectRelevantMemories({
-    query: n,
-    memoryDir: dir,
-    selectorCtx: memorySelector,
+    query,
+    memoryDir,
+    selectorCtx,
     history,
-    turnCount: (Je.messages.length - 1) / 2 + 1,
-    byFilename: gt,
-    accountNames: nt,
-    cacheControl: Me,
+    turnCount: (activePickerState.messages.length - 1) / 2 + 1,
+    byFilename: memoryByFilename,
+    accountNames,
+    cacheControl,
     signal,
     credentials,
     selectorTurnReverts,
   });
-  let It = recallVisibleTeamMounts(dir);
-  let Yt = [];
-  let qt = [];
+  let teamMountsForSelection = recallVisibleTeamMounts(memoryDir);
+  let visibleMemories = [];
+  let selected = [];
   for (let relevantMemory of relevantMemories) {
-    let rn = gt.get(relevantMemory);
-    if (rn === undefined) {
-      if (nt.has(relevantMemory))
-        qt.push({
+    let memory = memoryByFilename.get(relevantMemory);
+    if (memory === undefined) {
+      if (accountNames.has(relevantMemory))
+        selected.push({
           path: relevantMemory,
           mtimeMs: 0,
           account: true,
         });
-    } else if (!paths.has(rn.filePath) && isRecallVisiblePath(rn.filename, It)) {
-      Yt.push(rn);
-      qt.push({
-        path: rn.filePath,
-        mtimeMs: rn.mtimeMs,
+    } else if (!paths.has(memory.filePath) && isRecallVisiblePath(memory.filename, teamMountsForSelection)) {
+      visibleMemories.push(memory);
+      selected.push({
+        path: memory.filePath,
+        mtimeMs: memory.mtimeMs,
       });
     }
   }
-  return qt;
+  return selected;
 }
 //@ chunk-e6aww6q8.js:3306754-3306853 placement
 /**
  * 没有本地记忆时给模型看的占位文字，以及“记忆类型前缀”的匹配正则。
  */
-var NO_LOCAL_MEMORY_TEXT = "(no local memory files)";
-var regExp_16 = new RegExp(`^\\[(?:${[...MEMORY_TYPES, "account"].join("|")})\\]\\s+`);
+var NO_LOCAL_MEMORY_TEXT; // deferred: uses MEMORY_TYPES (./memoryTypes.js) of its import cycle while loading; runs once the cycle is complete
+var regExp_16;
+deferInit("chunk-e6aww6q8.js:3306754", () => {
+  NO_LOCAL_MEMORY_TEXT = "(no local memory files)";
+  regExp_16 = new RegExp(`^\\[(?:${[...MEMORY_TYPES, "account"].join("|")})\\]\\s+`);
+});
 //@ chunk-e6aww6q8.js:3308623-3308633 placement
 /**
  * 2
@@ -256,27 +282,27 @@ var regExp_16 = new RegExp(`^\\[(?:${[...MEMORY_TYPES, "account"].join("|")})\\]
 var YIELD_EVERY_N = 2;
 //@ chunk-e6aww6q8.js:3308633-3308829 placement
 function* iterateSelectorModels() {
-  let defaultSonnetModel = getDefaultSonnetModel();
-  yield defaultSonnetModel;
-  let millionTokenCost = getMillionTokenCost(defaultSonnetModel);
+  let model = getDefaultSonnetModel();
+  yield model;
+  let millionTokenCost = getMillionTokenCost(model);
   if (isNoModelFallbackEnabled() || millionTokenCost === undefined) return;
-  let r = 0;
-  for (let s of allowedVersionsInFamilyForProvider("sonnet")) {
-    let millionTokenCost_2 = getMillionTokenCost(s);
+  let yieldCount = 0;
+  for (let model_2 of allowedVersionsInFamilyForProvider("sonnet")) {
+    let millionTokenCost_2 = getMillionTokenCost(model_2);
     if (
-      stripAnyVersatileSuffix(s) !== stripAnyVersatileSuffix(defaultSonnetModel) &&
-      isPermittedByOrgModelPolicy(s) &&
+      stripAnyVersatileSuffix(model_2) !== stripAnyVersatileSuffix(model) &&
+      isPermittedByOrgModelPolicy(model_2) &&
       millionTokenCost_2 !== undefined &&
       millionTokenCost_2 <= millionTokenCost
     ) {
-      yield s;
-      if (++r === YIELD_EVERY_N) return;
+      yield model_2;
+      if (++yieldCount === YIELD_EVERY_N) return;
     }
   }
 }
 //@ chunk-e6aww6q8.js:3308829-3308946 placement
-function getMillionTokenCost(e) {
-  let { usd, pricing } = calculateCostWithPricingSource(e, {
+function getMillionTokenCost(model) {
+  let { usd, pricing } = calculateCostWithPricingSource(model, {
     ...EMPTY_USAGE,
     input_tokens: 1e6,
     output_tokens: 1e6,
@@ -287,37 +313,37 @@ function getMillionTokenCost(e) {
 /**
  * 依次用候选模型执行请求，遇到 API 拒绝时换下一个模型；全部拒绝后抛出最后的错误。
  */
-async function tryModelsUntilAccepted(e, n, signal) {
-  let s;
-  let h = 0;
-  let y = e.next();
-  while (y.done !== true)
+async function tryModelsUntilAccepted(models, attempt, signal) {
+  let lastError;
+  let refusals = 0;
+  let nextModel = models.next();
+  while (nextModel.done !== true)
     try {
       return {
-        result: await n(y.value),
-        refusals: h,
+        result: await attempt(nextModel.value),
+        refusals,
       };
     } catch (error) {
       if (signal.aborted || !isUnusableSelectorModel(error)) throw error;
-      s = error;
-      h++;
-      let w = e.next();
+      lastError = error;
+      refusals++;
+      let followingModel = models.next();
       logForDebugging(
-        `[memdir] the API refused the selector request for ${y.value} (${errorMessage(error)}); ${w.done === true ? "no model left to try" : `trying ${w.value}`}`,
+        `[memdir] the API refused the selector request for ${nextModel.value} (${errorMessage(error)}); ${followingModel.done === true ? "no model left to try" : `trying ${followingModel.value}`}`,
         {
           level: "warn",
         },
       );
-      y = w;
+      nextModel = followingModel;
     }
-  throw s;
+  throw lastError;
 }
 //@ chunk-e6aww6q8.js:3309282-3309320 placement
 /**
  * 模型不存在或无权限
  */
-function isUnusableSelectorModel(e) {
-  return isModelNotFoundError(e) || isModelPermissionDeniedError(e);
+function isUnusableSelectorModel(error) {
+  return isModelNotFoundError(error) || isModelPermissionDeniedError(error);
 }
 export {
   MEMORY_SELECTOR_PROMPT,

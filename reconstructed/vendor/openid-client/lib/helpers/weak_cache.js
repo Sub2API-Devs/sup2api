@@ -5,10 +5,10 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:23683-23735 cjs-fingerprint
-var require_weak_cache = x(function (cjsExports, cjsModule) {
+var require_weak_cache = __commonJS(function (cjsExports, cjsModule) {
   cjsExports.keystores = new WeakMap();
 });
 export { require_weak_cache };

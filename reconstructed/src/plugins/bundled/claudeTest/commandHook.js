@@ -40,7 +40,7 @@ import {
   REPORT_MISSING_TEXT,
 } from "./messages.js";
 import {
-  $e,
+  SKILL_NAMES,
   CLAUDE_TEST_RUNNER,
   HELPER_TOOL_PREFIX,
   CLAUDE_TEST_2 as CLAUDE_TEST_2_2,
@@ -87,27 +87,28 @@ import { hasComplianceTaint } from "../../../services/policyLimits/complianceTai
 import { getPlatform } from "../../../utils/platform.js";
 import { HostScoped } from "../../../utils/hostScoped.js";
 import { getRootSession } from "../../../bootstrap/state.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-ae5g0zb5.js:88412-92023 placement
 /**
  * 注册 command.run 钩子处理 /claude-test：检查可用性、确保自有代理、打开面板并启动运行（约 3.6 KB）。
  */
-function registerClaudeTestCommand(e) {
+function registerClaudeTestCommand(on) {
   claudeTestState.isModuleLoaded = true;
-  e(
+  on(
     "command.run",
     {
       command: "claude-test",
     },
-    async (n, r, o) => {
-      let s = await checkLoginWatch(n);
-      if (s !== undefined)
+    async (ctx, payload, next) => {
+      let loginMessage = await checkLoginWatch(ctx);
+      if (loginMessage !== undefined)
         return {
-          text: s,
+          text: loginMessage,
         };
-      let a = r.origin.kind === "composer" || r.origin.kind === "bridge";
-      let i = a ? await claudeTestState.seatOwnAgents?.() : undefined;
-      switch (i) {
+      let fromComposer = payload.origin.kind === "composer" || payload.origin.kind === "bridge";
+      let agentSeat = fromComposer ? await claudeTestState.seatOwnAgents?.() : undefined;
+      switch (agentSeat) {
         case "missing":
           return {
             text: AGENTS_NOT_LOADED_TEXT,
@@ -119,198 +120,202 @@ function registerClaudeTestCommand(e) {
         default:
           break;
       }
-      REMOTE_STATE.isRemote = r.origin.kind === "bridge";
-      if (await markSessionWantsHelper(n)) {
-        if (a) {
-          claudeTestState.typedArgs = r.args;
-          setPaneOpenedAt(openClaudeTestPane(n));
+      REMOTE_STATE.isRemote = payload.origin.kind === "bridge";
+      if (await markSessionWantsHelper(ctx)) {
+        if (fromComposer) {
+          claudeTestState.typedArgs = payload.args;
+          setPaneOpenedAt(openClaudeTestPane(ctx));
         }
-        if (i === "listed")
+        if (agentSeat === "listed")
           claudeTestState.agentsCheckedFor = {
-            args: r.args,
+            args: payload.args,
             at: Date.now(),
           };
-        return o(r);
+        return next(payload);
       }
-      if (!a)
+      if (!fromComposer)
         return {
           text: HELPER_NOT_READY_TEXT,
         };
-      let c = await describeHelperListing(n, () => o.budget.remainingMs);
-      if (c !== undefined)
+      let listingMessage = await describeHelperListing(ctx, () => next.budget.remainingMs);
+      if (listingMessage !== undefined)
         return {
-          text: c,
+          text: listingMessage,
         };
-      claudeTestState.typedArgs = r.args;
-      setPaneOpenedAt(openClaudeTestPane(n));
-      if (i === "listed")
+      claudeTestState.typedArgs = payload.args;
+      setPaneOpenedAt(openClaudeTestPane(ctx));
+      if (agentSeat === "listed")
         claudeTestState.agentsCheckedFor = {
-          args: r.args,
+          args: payload.args,
           at: Date.now(),
         };
-      return o(r);
+      return next(payload);
     },
   );
-  e(
+  on(
     "skill.prompt",
     {
-      skill: $e.run,
+      skill: SKILL_NAMES.run,
     },
-    async (n, r, o) => {
-      let s = consumePaneOpenedRecently();
-      let a = await checkLoginWatch(n);
-      let i = takeLoadMark(r.text);
-      if (a !== undefined)
-        return o({
-          ...r,
-          text: tellPersonAndStop(a),
+    async (ctx, payload, next) => {
+      let paneOpened = consumePaneOpenedRecently();
+      let loginMessage = await checkLoginWatch(ctx);
+      let loadMark = takeLoadMark(payload.text);
+      if (loginMessage !== undefined)
+        return next({
+          ...payload,
+          text: tellPersonAndStop(loginMessage),
         });
-      if (!r.text.startsWith(LOAD_MARK_PREFIX)) return o(r);
-      if (i === undefined)
-        return o({
-          ...r,
+      if (!payload.text.startsWith(LOAD_MARK_PREFIX)) return next(payload);
+      if (loadMark === undefined)
+        return next({
+          ...payload,
           text: tellPersonAndStop(REQUEST_NOT_RUN_TEXT),
         });
-      if (await markSessionWantsHelper(n))
-        return o({
-          ...r,
-          text: await finishCommandOutput(n, i, s, () => o.budget.remainingMs),
+      if (await markSessionWantsHelper(ctx))
+        return next({
+          ...payload,
+          text: await finishCommandOutput(ctx, loadMark, paneOpened, () => next.budget.remainingMs),
         });
-      if (!i.isTyped || !i.mayStillStart())
-        return o({
-          ...r,
+      if (!loadMark.isTyped || !loadMark.mayStillStart())
+        return next({
+          ...payload,
           text: tellPersonAndStop(HELPER_NOT_READY_TEXT),
         });
-      let c = await describeHelperListing(n, () => o.budget.remainingMs);
-      if (c !== undefined)
-        return o({
-          ...r,
-          text: tellPersonAndStop(c),
+      let listingMessage = await describeHelperListing(ctx, () => next.budget.remainingMs);
+      if (listingMessage !== undefined)
+        return next({
+          ...payload,
+          text: tellPersonAndStop(listingMessage),
         });
-      return o({
-        ...r,
-        text: await finishCommandOutput(n, i, s, () => o.budget.remainingMs),
+      return next({
+        ...payload,
+        text: await finishCommandOutput(ctx, loadMark, paneOpened, () => next.budget.remainingMs),
       });
     },
   );
-  e(
+  on(
     "classic.SubagentStop",
     {
       agent_type: CLAUDE_TEST_RUNNER,
     },
-    async (n, r, o) => {
+    async (ctx, payload, next) => {
       await claudeTestState.reportRuns?.();
-      return o(r);
+      return next(payload);
     },
   );
-  e(
+  on(
     "tool.call",
     {
       tool: APP_UP_ANSWER_KEY,
     },
-    async (n, r, o) => {
-      let s = await o(r);
+    async (ctx, payload, next) => {
+      let result = await next(payload);
       if (
-        s.deny === undefined &&
-        o.origin.plugin === "engine" &&
-        r.agentId === undefined &&
-        noteAppStartEnded(r.project, s.result, typeof r.wait === "number" && r.wait > 0)
+        result.deny === undefined &&
+        next.origin.plugin === "engine" &&
+        payload.agentId === undefined &&
+        noteAppStartEnded(
+          payload.project,
+          result.result,
+          typeof payload.wait === "number" && payload.wait > 0,
+        )
       )
-        tickClaudeTestPane(n);
+        tickClaudeTestPane(ctx);
       if (
-        s.deny === undefined &&
-        s.isError !== true &&
-        o.origin.plugin === "engine" &&
-        r.agentId === undefined &&
-        notePortHealth(r.project, s.result)
+        result.deny === undefined &&
+        result.isError !== true &&
+        next.origin.plugin === "engine" &&
+        payload.agentId === undefined &&
+        notePortHealth(payload.project, result.result)
       )
-        tickClaudeTestPane(n);
-      return s;
+        tickClaudeTestPane(ctx);
+      return result;
     },
   );
-  e(
+  on(
     "tool.call",
     {
       tool: START_APP_ANSWER_KEY,
     },
-    async (n, r, o) => {
-      let s = await o(r);
+    async (ctx, payload, next) => {
+      let result = await next(payload);
       if (
-        s.deny === undefined &&
-        s.isError !== true &&
-        o.origin.plugin === "engine" &&
-        r.agentId === undefined &&
-        noteStartAppAnswer(r.project, s.result)
+        result.deny === undefined &&
+        result.isError !== true &&
+        next.origin.plugin === "engine" &&
+        payload.agentId === undefined &&
+        noteStartAppAnswer(payload.project, result.result)
       )
-        tickClaudeTestPane(n);
-      return s;
+        tickClaudeTestPane(ctx);
+      return result;
     },
   );
-  e(
+  on(
     "tool.call",
     {
       tool: CONFIRM_RUN_ANSWER_KEY,
     },
-    async (n, r, o) => {
-      let s = await o(r);
+    async (ctx, payload, next) => {
+      let result = await next(payload);
       if (
-        s.deny === undefined &&
-        s.isError !== true &&
-        o.origin.plugin === "engine" &&
-        r.agentId === undefined &&
-        noteRunConfirmed(r.project, s.result)
+        result.deny === undefined &&
+        result.isError !== true &&
+        next.origin.plugin === "engine" &&
+        payload.agentId === undefined &&
+        noteRunConfirmed(payload.project, result.result)
       )
-        tickClaudeTestPane(n);
-      return s;
+        tickClaudeTestPane(ctx);
+      return result;
     },
   );
-  e(
+  on(
     "tool.call",
     {
       tool: MORE_TESTS_ANSWER_KEY,
     },
-    async (n, r, o) => {
-      let s = await o(r);
+    async (ctx, payload, next) => {
+      let result = await next(payload);
       if (
-        s.deny === undefined &&
-        o.origin.plugin === "engine" &&
-        r.agentId === undefined &&
-        (s.isError === true
-          ? noteMoreTestsDeclinedByText(r.project, s.text ?? s.result)
-          : noteMoreTestsDeclined(r.project, s.result))
+        result.deny === undefined &&
+        next.origin.plugin === "engine" &&
+        payload.agentId === undefined &&
+        (result.isError === true
+          ? noteMoreTestsDeclinedByText(payload.project, result.text ?? result.result)
+          : noteMoreTestsDeclined(payload.project, result.result))
       )
-        tickClaudeTestPane(n);
-      return s;
+        tickClaudeTestPane(ctx);
+      return result;
     },
   );
-  for (let n of CLAUDE_TEST_CONSENT_KINDS)
-    e(
+  for (let kind of CLAUDE_TEST_CONSENT_KINDS)
+    on(
       "tool.call",
       {
-        tool: `${HELPER_TOOL_PREFIX}${n}`,
+        tool: `${HELPER_TOOL_PREFIX}${kind}`,
       },
-      async (r, o, s) => {
-        if (!isEarlyPhaseActive() || o.agentId !== undefined) return s(o);
+      async (ctx, payload, next) => {
+        if (!isEarlyPhaseActive() || payload.agentId !== undefined) return next(payload);
         let gate = openGate();
         try {
-          return await s(o);
+          return await next(payload);
         } finally {
           closeGate(gate);
         }
       },
     );
-  e(
+  on(
     "ui.render",
     {
       component: "Pane",
       requestId: CLAUDE_TEST_2_2,
       surface: "terminal",
     },
-    (n, r, o) => {
-      if (r.requestId !== CLAUDE_TEST_2_2 || r.surface !== "terminal") return o(r);
-      let { Box, Text, Image, Link } = n.ui.resolve(r);
+    (ctx, payload, next) => {
+      if (payload.requestId !== CLAUDE_TEST_2_2 || payload.surface !== "terminal") return next(payload);
+      let { Box, Text, Image, Link } = ctx.ui.resolve(payload);
       let now = Date.now();
-      let S =
+      let facts =
         helperRuntimeState.facts ??
         createOpeningFacts(
           paneState.openedAt > 0 ? paneState.openedAt : now,
@@ -318,39 +323,41 @@ function registerClaudeTestCommand(e) {
           helperRuntimeState.appStarting?.isGuess === true,
           helperRuntimeState.early?.name?.name ?? null,
         );
-      let w = isEarlyPhaseActive(now);
-      let f = {
-        ...S,
-        ...(w &&
+      let isEarlyPhase = isEarlyPhaseActive(now);
+      let paneFacts = {
+        ...facts,
+        ...(isEarlyPhase &&
           isGateOpen() && {
             isWaitingForPerson: true,
           }),
-        ...(w &&
-          shouldShowFixing(claudeTestState.typedArgs, S) && {
+        ...(isEarlyPhase &&
+          shouldShowFixing(claudeTestState.typedArgs, facts) && {
             isFixing: true,
           }),
       };
-      let finishedReportHref = getFinishedReportHref(f);
-      let P = finishedReportHref === null ? 0 : 1;
-      let max = Math.max(20 + PANE_PAD_LEFT + PANE_PAD_RIGHT, r.props.bodyColumns);
+      let finishedReportHref = getFinishedReportHref(paneFacts);
+      let reportRows = finishedReportHref === null ? 0 : 1;
+      let max = Math.max(20 + PANE_PAD_LEFT + PANE_PAD_RIGHT, payload.props.bodyColumns);
       let max_2 = Math.max(20, max - PANE_PAD_LEFT - PANE_PAD_RIGHT);
-      let j = (r.props.scroll.bodyRows > 0 ? r.props.scroll.bodyRows : PANE_DEFAULT_WIDTH) - PANE_PAD_BOTTOM;
-      let se = r.props.placement === "dock";
-      let J = renderClaudeTestPane(
-        f,
+      let bodyRows =
+        (payload.props.scroll.bodyRows > 0 ? payload.props.scroll.bodyRows : PANE_DEFAULT_WIDTH) -
+        PANE_PAD_BOTTOM;
+      let isDocked = payload.props.placement === "dock";
+      let statusLines = renderClaudeTestPane(
+        paneFacts,
         now,
         max_2,
         INLINE_IMAGE_CAPS.glyphs,
-        j - P,
+        bodyRows - reportRows,
         !INLINE_IMAGE_CAPS.opensHere,
       );
       let picture = helperRuntimeState.picture;
-      let ce =
+      let screenshotSize =
         picture === null
           ? null
           : helperRuntimeState.canDrawPictures === false
             ? null
-            : fitScreenshotSize(max_2, j - totalLines(J) - P - 1);
+            : fitScreenshotSize(max_2, bodyRows - totalLines(statusLines) - reportRows - 1);
       return Box({
         flexDirection: "column",
         justifyContent: "space-between",
@@ -358,14 +365,14 @@ function registerClaudeTestCommand(e) {
         paddingLeft: PANE_PAD_LEFT,
         paddingRight: PANE_PAD_RIGHT,
         paddingBottom: PANE_PAD_BOTTOM,
-        ...(se && {
-          minHeight: j + PANE_PAD_BOTTOM,
+        ...(isDocked && {
+          minHeight: bodyRows + PANE_PAD_BOTTOM,
         }),
         children: [
           Box({
             flexDirection: "column",
             children: [
-              ...J.map((pe) => renderStatusLine(n, r, pe, max_2)),
+              ...statusLines.map((statusLine) => renderStatusLine(ctx, payload, statusLine, max_2)),
               ...(finishedReportHref === null
                 ? []
                 : [
@@ -398,7 +405,7 @@ function registerClaudeTestCommand(e) {
                 }),
               ]
             : []),
-          ...(picture === null || ce === null
+          ...(picture === null || screenshotSize === null
             ? []
             : [
                 Box({
@@ -412,8 +419,8 @@ function registerClaudeTestCommand(e) {
                       source: {
                         png: picture.png,
                       },
-                      columns: ce.columns,
-                      rows: ce.rows,
+                      columns: screenshotSize.columns,
+                      rows: screenshotSize.rows,
                       alt: PANE_TITLE,
                     }),
                   ],
@@ -428,21 +435,21 @@ function registerClaudeTestCommand(e) {
 /**
  * 面板开关开启时打开 Claude Test 窗格（记录 placed 承诺），重置面板状态、探测能否画图并决定是否打开浏览器。
  */
-function openClaudeTestPane(e) {
+function openClaudeTestPane(ctx) {
   try {
     if (claudeTestState.isPaneOn?.() === true) {
-      helperRuntimeState.placed = e.ui
+      helperRuntimeState.placed = ctx.ui
         .open({
           id: CLAUDE_TEST_2_2,
           title: CLAUDE_TEST_TITLE,
         })
         .then(
-          (n) => n.isPlaced,
+          (placement) => placement.isPlaced,
           () => false,
         );
-      resetPaneForCommand(e);
-      probePictureSupport(e);
-      shouldOpenBrowser(e);
+      resetPaneForCommand(ctx);
+      probePictureSupport(ctx);
+      shouldOpenBrowser(ctx);
       return true;
     }
   } catch {}
@@ -475,29 +482,34 @@ function consumePaneOpenedRecently() {
 /**
  * /claude-test 命令输出收尾：必要时打开窗格、预判项目并等待窗格放置/画图探测，返回命令文本加画图提示。
  */
-async function finishCommandOutput(e, n, r, o) {
-  let s = r || (n.isTyped && openClaudeTestPane(e));
-  if (s) trackProjectGuess(e, o() - PANE_POLL_MS > 0 ? await resolveProjectAndPermission(e) : undefined);
+async function finishCommandOutput(ctx, mark, paneOpened, remainingMs) {
+  let paneOpen = paneOpened || (mark.isTyped && openClaudeTestPane(ctx));
+  if (paneOpen)
+    trackProjectGuess(
+      ctx,
+      remainingMs() - PANE_POLL_MS > 0 ? await resolveProjectAndPermission(ctx) : undefined,
+    );
   let promise = new Promise(() => {
     return;
   });
   try {
-    promise = !s
+    promise = !paneOpen
       ? Promise.resolve(false)
-      : e.clock.sleep(Math.max(0, Math.min(PICTURE_PROBE_WAIT_MS, o() - PANE_POLL_MS))).then(
+      : ctx.clock.sleep(Math.max(0, Math.min(PICTURE_PROBE_WAIT_MS, remainingMs() - PANE_POLL_MS))).then(
           () => false,
           () => false,
         );
   } catch {}
-  let i = s && (await Promise.race([helperRuntimeState.placed ?? Promise.resolve(false), promise]));
-  if (i) await waitForPictureProbe(e, Math.min(PICTURE_PROBE_WAIT_MS, o() - PANE_POLL_MS));
-  let c =
-    !i || REMOTE_STATE.isRemote
+  let placed =
+    paneOpen && (await Promise.race([helperRuntimeState.placed ?? Promise.resolve(false), promise]));
+  if (placed) await waitForPictureProbe(ctx, Math.min(PICTURE_PROBE_WAIT_MS, remainingMs() - PANE_POLL_MS));
+  let panelRule =
+    !placed || REMOTE_STATE.isRemote
       ? ""
       : helperRuntimeState.canDrawPictures === false
         ? PANEL_OPEN_NO_PICTURES_RULE
         : PANEL_OPEN_RULE;
-  return n.came + c;
+  return mark.came + panelRule;
 }
 //@ chunk-ae5g0zb5.js:92720-92861 placement
 /**
@@ -527,22 +539,22 @@ var TONE_STYLES = {
 /**
  * 把带色调的文本片段渲染成 Text 元素。
  */
-function renderToneSpans(e, n, r) {
-  let { Text } = e.ui.resolve(n);
-  return r.map((s) =>
+function renderToneSpans(ctx, payload, spans) {
+  let { Text } = ctx.ui.resolve(payload);
+  return spans.map((span) =>
     Text({
-      ...(s.tone !== undefined && TONE_STYLES[s.tone]),
-      children: s.text,
+      ...(span.tone !== undefined && TONE_STYLES[span.tone]),
+      children: span.text,
     }),
   );
 }
 //@ chunk-ae5g0zb5.js:92979-93670 placement
-function renderStatusLine(e, n, r, width) {
-  let { Box, Text } = e.ui.resolve(n);
-  switch (r.kind) {
+function renderStatusLine(ctx, payload, line, width) {
+  let { Box, Text } = ctx.ui.resolve(payload);
+  switch (line.kind) {
     case "text":
       return Text({
-        children: r.spans.length === 0 ? " " : renderToneSpans(e, n, r.spans),
+        children: line.spans.length === 0 ? " " : renderToneSpans(ctx, payload, line.spans),
       });
     case "row":
       return Box({
@@ -552,7 +564,7 @@ function renderStatusLine(e, n, r, width) {
           Box({
             flexShrink: 0,
             children: Text({
-              children: renderToneSpans(e, n, r.lead),
+              children: renderToneSpans(ctx, payload, line.lead),
             }),
           }),
           Box({
@@ -560,18 +572,18 @@ function renderStatusLine(e, n, r, width) {
             flexShrink: 1,
             minWidth: 0,
             children: Text({
-              wrap: r.wraps === true ? "wrap" : "truncate-end",
-              children: renderToneSpans(e, n, r.body),
+              wrap: line.wraps === true ? "wrap" : "truncate-end",
+              children: renderToneSpans(ctx, payload, line.body),
             }),
           }),
-          ...(r.right === null
+          ...(line.right === null
             ? []
             : [
                 Box({
                   flexShrink: 0,
                   marginLeft: 1,
                   children: Text({
-                    children: renderToneSpans(e, n, [r.right]),
+                    children: renderToneSpans(ctx, payload, [line.right]),
                   }),
                 }),
               ]),
@@ -582,60 +594,64 @@ function renderStatusLine(e, n, r, width) {
         flexDirection: "row",
         flexWrap: "wrap",
         columnGap: 1,
-        paddingLeft: r.indent,
+        paddingLeft: line.indent,
         width,
-        children: r.items.map((children) =>
+        children: line.items.map((children) =>
           Box({
             flexShrink: 0,
             children: Text({
-              ...(r.tone !== undefined && TONE_STYLES[r.tone]),
+              ...(line.tone !== undefined && TONE_STYLES[line.tone]),
               children,
             }),
           }),
         ),
       });
     default:
-      return r;
+      return line;
   }
 }
 //@ chunk-ae5g0zb5.js:93670-93722 placement
 /**
  * 内联图片能力与是否在此打开
  */
-var INLINE_IMAGE_CAPS = {
-  glyphs: supportsInlineImages({
-    platform: "linux",
-  }),
-  opensHere: true,
-};
+var INLINE_IMAGE_CAPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ae5g0zb5.js:93670", () => {
+  INLINE_IMAGE_CAPS = {
+    glyphs: supportsInlineImages({
+      platform: "linux",
+    }),
+    opensHere: true,
+  };
+});
 //@ chunk-ae5g0zb5.js:93722-94191 placement
-async function shouldOpenBrowser(e) {
+async function shouldOpenBrowser(ctx) {
   try {
-    let [n, r, o, s, a, i, c, _, S] = await Promise.all([
-      e.env.get("TERM"),
-      e.env.get("TERM_PROGRAM"),
-      e.env.get("CLAUDE_TEST_NO_OPEN"),
-      e.env.get("CI"),
-      e.env.get("SSH_CONNECTION"),
-      e.env.get("SSH_TTY"),
-      e.env.get("SSH_CLIENT"),
-      e.env.get("DISPLAY"),
-      e.env.get("WAYLAND_DISPLAY"),
-    ]);
+    let [term, termProgram, noOpen, ci, sshConnection, sshTty, sshClient, display, waylandDisplay] =
+      await Promise.all([
+        ctx.env.get("TERM"),
+        ctx.env.get("TERM_PROGRAM"),
+        ctx.env.get("CLAUDE_TEST_NO_OPEN"),
+        ctx.env.get("CI"),
+        ctx.env.get("SSH_CONNECTION"),
+        ctx.env.get("SSH_TTY"),
+        ctx.env.get("SSH_CLIENT"),
+        ctx.env.get("DISPLAY"),
+        ctx.env.get("WAYLAND_DISPLAY"),
+      ]);
     INLINE_IMAGE_CAPS.glyphs = supportsInlineImages({
-      term: n,
-      termProgram: r,
+      term,
+      termProgram,
       platform: "linux",
     });
     INLINE_IMAGE_CAPS.opensHere = canOpenBrowser(
       {
-        CLAUDE_TEST_NO_OPEN: o,
-        CI: s,
-        SSH_CONNECTION: a,
-        SSH_TTY: i,
-        SSH_CLIENT: c,
-        DISPLAY: _,
-        WAYLAND_DISPLAY: S,
+        CLAUDE_TEST_NO_OPEN: noOpen,
+        CI: ci,
+        SSH_CONNECTION: sshConnection,
+        SSH_TTY: sshTty,
+        SSH_CLIENT: sshClient,
+        DISPLAY: display,
+        WAYLAND_DISPLAY: waylandDisplay,
       },
       "linux",
     );
@@ -645,26 +661,29 @@ async function shouldOpenBrowser(e) {
 /**
  * 窗格刷新循环状态（打开/命令时间、代数、运行者、报告链接等）。
  */
-var paneState = {
-  openedAt: 0,
-  commandAt: 0,
-  generation: 0,
-  sawExplorer: false,
-  drawnRun: null,
-  runners: new Set(),
-  isBusy: false,
-  tickedAt: 0,
-  report: null,
-};
+var paneState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ae5g0zb5.js:94191", () => {
+  paneState = {
+    openedAt: 0,
+    commandAt: 0,
+    generation: 0,
+    sawExplorer: false,
+    drawnRun: null,
+    runners: new Set(),
+    isBusy: false,
+    tickedAt: 0,
+    report: null,
+  };
+});
 //@ chunk-ae5g0zb5.js:94313-94426 placement
 /**
  * 运行结束且报告属于本次运行时返回报告链接。
  */
-function getFinishedReportHref(e) {
+function getFinishedReportHref(facts) {
   let report = paneState.report;
-  return e.run?.finished === true &&
+  return facts.run?.finished === true &&
     report !== null &&
-    report.runId === e.runId &&
+    report.runId === facts.runId &&
     INLINE_IMAGE_CAPS.opensHere
     ? report.href
     : null;
@@ -683,11 +702,11 @@ async function fetchReportHref(dir, facts, generation) {
   )
     return;
   try {
-    let s = await claudeTestState.reportHref?.(dir, runId);
-    if (s !== undefined && paneState.generation === generation)
+    let href = await claudeTestState.reportHref?.(dir, runId);
+    if (href !== undefined && paneState.generation === generation)
       paneState.report = {
         runId,
-        href: s,
+        href,
       };
   } catch {}
 }
@@ -718,14 +737,18 @@ function isAltTextRefusal(deny) {
 /**
  * claude-test 询问「能否在这里画图」的最小间隔 1 秒，避免同一轮里反复弹问；同一声明还带着询问状态对象。
  */
-var PICTURE_ASK_MIN_GAP_MS = 1000;
-var pictureAskState = {
-  isAsking: false,
-  round: 0,
-  askedAt: 0,
-  firstAskedAt: 0,
-  waiters: new Set(),
-};
+var PICTURE_ASK_MIN_GAP_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var pictureAskState;
+deferInit("chunk-ae5g0zb5.js:94827", () => {
+  PICTURE_ASK_MIN_GAP_MS = 1000;
+  pictureAskState = {
+    isAsking: false,
+    round: 0,
+    askedAt: 0,
+    firstAskedAt: 0,
+    waiters: new Set(),
+  };
+});
 //@ chunk-ae5g0zb5.js:94904-94977 placement
 /**
  * 把“能否画图”的询问标记为结束并叫醒所有等待者。
@@ -739,7 +762,7 @@ function settlePictureAsk() {
 /**
  * 开始探测终端能否显示图片：触发重绘、稍后发送探测图，超时则放弃。
  */
-function probePictureSupport(e) {
+function probePictureSupport(ctx) {
   if (
     helperRuntimeState.canDrawPictures !== null ||
     (pictureAskState.isAsking && Date.now() - pictureAskState.askedAt < PICTURE_ASK_TIMEOUT_MS)
@@ -751,12 +774,12 @@ function probePictureSupport(e) {
   pictureAskState.round += 1;
   let round = pictureAskState.round;
   try {
-    runQuietly(() => e.ui.invalidate("ui.render"));
-    e.clock.after(100, () => sendPictureProbe(e, 12));
-    e.clock.after(PICTURE_ASK_TIMEOUT_MS, () => {
+    runQuietly(() => ctx.ui.invalidate("ui.render"));
+    ctx.clock.after(100, () => sendPictureProbe(ctx, 12));
+    ctx.clock.after(PICTURE_ASK_TIMEOUT_MS, () => {
       if (pictureAskState.isAsking && pictureAskState.round === round) {
         settlePictureAsk();
-        runQuietly(() => e.ui.invalidate("ui.render"));
+        runQuietly(() => ctx.ui.invalidate("ui.render"));
       }
     });
   } catch {
@@ -767,14 +790,14 @@ function probePictureSupport(e) {
 /**
  * 发送探测图片并据结果设置 canDrawPictures，未决时重试 n 次。
  */
-function sendPictureProbe(e, n) {
+function sendPictureProbe(ctx, attemptsLeft) {
   if (helperRuntimeState.canDrawPictures !== null) {
     settlePictureAsk();
     return;
   }
-  let r;
+  let probe;
   try {
-    r = e.ui.blit({
+    probe = ctx.ui.blit({
       requestId: CLAUDE_TEST_2_2,
       key: PROBE,
       source: PROBE_IMAGE,
@@ -783,33 +806,35 @@ function sendPictureProbe(e, n) {
     settlePictureAsk();
     return;
   }
-  r.then((o) => {
-    if (o.deny === undefined) helperRuntimeState.canDrawPictures = true;
-    else if (isAltTextRefusal(o.deny)) helperRuntimeState.canDrawPictures = false;
-    else if (n > 0) {
-      e.clock.after(250, () => sendPictureProbe(e, n - 1));
-      return;
-    }
-    settlePictureAsk();
-    runQuietly(() => e.ui.invalidate("ui.render"));
-  }).catch(() => settlePictureAsk());
+  probe
+    .then((result) => {
+      if (result.deny === undefined) helperRuntimeState.canDrawPictures = true;
+      else if (isAltTextRefusal(result.deny)) helperRuntimeState.canDrawPictures = false;
+      else if (attemptsLeft > 0) {
+        ctx.clock.after(250, () => sendPictureProbe(ctx, attemptsLeft - 1));
+        return;
+      }
+      settlePictureAsk();
+      runQuietly(() => ctx.ui.invalidate("ui.render"));
+    })
+    .catch(() => settlePictureAsk());
 }
 //@ chunk-ae5g0zb5.js:95667-95844 placement
 /**
  * 等待画图探测结束（最多 n 毫秒）。
  */
-function waitForPictureProbe(e, n) {
-  if (!pictureAskState.isAsking || n <= 0) return Promise.resolve();
+function waitForPictureProbe(ctx, timeoutMs) {
+  if (!pictureAskState.isAsking || timeoutMs <= 0) return Promise.resolve();
   return new Promise((resolve) => {
-    let o = () => {
-      pictureAskState.waiters.delete(o);
+    let finish = () => {
+      pictureAskState.waiters.delete(finish);
       resolve();
     };
-    pictureAskState.waiters.add(o);
+    pictureAskState.waiters.add(finish);
     try {
-      e.clock.after(n, o);
+      ctx.clock.after(timeoutMs, finish);
     } catch {
-      o();
+      finish();
     }
   });
 }
@@ -824,19 +849,19 @@ var PANE_PAD_BOTTOM = 1;
 /**
  * 画图能力未知时 500ms 后重试绘制结论截图。
  */
-function retryVerdictPicture(e) {
+function retryVerdictPicture(ctx) {
   if (helperRuntimeState.canDrawPictures !== null) return;
-  e.clock.after(500, () => blitVerdictPicture(e, 5));
+  ctx.clock.after(500, () => blitVerdictPicture(ctx, 5));
 }
 //@ chunk-ae5g0zb5.js:95944-96306 placement
 /**
  * 把结论截图画到窗格，据结果更新是否能画图，失败重试。
  */
-function blitVerdictPicture(e, n) {
+function blitVerdictPicture(ctx, attemptsLeft) {
   let picture = helperRuntimeState.picture;
   if (picture === null || helperRuntimeState.canDrawPictures !== null) return;
   pictureAskState.firstAskedAt ||= Date.now();
-  e.ui
+  ctx.ui
     .blit({
       requestId: CLAUDE_TEST_2_2,
       key: "verdict",
@@ -844,12 +869,12 @@ function blitVerdictPicture(e, n) {
         png: picture.png,
       },
     })
-    .then((o) => {
-      if (o.deny === undefined) helperRuntimeState.canDrawPictures = true;
-      else if (isAltTextRefusal(o.deny)) {
+    .then((result) => {
+      if (result.deny === undefined) helperRuntimeState.canDrawPictures = true;
+      else if (isAltTextRefusal(result.deny)) {
         helperRuntimeState.canDrawPictures = false;
-        runQuietly(() => e.ui.invalidate("ui.render"));
-      } else if (n > 0) e.clock.after(1000, () => blitVerdictPicture(e, n - 1));
+        runQuietly(() => ctx.ui.invalidate("ui.render"));
+      } else if (attemptsLeft > 0) ctx.clock.after(1000, () => blitVerdictPicture(ctx, attemptsLeft - 1));
     })
     .catch(() => {
       return;
@@ -859,7 +884,7 @@ function blitVerdictPicture(e, n) {
 /**
  * 新一次命令时重置窗格与运行状态，并启动 250ms 刷新循环（每 4 拍完整刷新一次）。
  */
-function resetPaneForCommand(e) {
+function resetPaneForCommand(ctx) {
   paneState.openedAt = Date.now();
   paneState.commandAt = paneState.openedAt;
   paneState.generation += 1;
@@ -895,17 +920,17 @@ function resetPaneForCommand(e) {
   try {
     helperRuntimeState.stop?.();
   } catch {}
-  let r = 0;
-  let all = e.clock.every(250, () => {
-    r += 1;
-    if (r % 4 === 0) tickClaudeTestPane(e);
-    else runQuietly(() => e.ui.invalidate("ui.render"));
+  let tickCount = 0;
+  let all = ctx.clock.every(250, () => {
+    tickCount += 1;
+    if (tickCount % 4 === 0) tickClaudeTestPane(ctx);
+    else runQuietly(() => ctx.ui.invalidate("ui.render"));
   });
   helperRuntimeState.stop = () => {
     all.cancel();
     helperRuntimeState.stop = null;
   };
-  tickClaudeTestPane(e);
+  tickClaudeTestPane(ctx);
 }
 //@ chunk-ae5g0zb5.js:96938-96958 placement
 /**
@@ -917,32 +942,32 @@ var PANE_COMMAND_STALE_MS = 5000;
 /**
  * 面板刷新：读取运行目录、更新视图、面板关闭超时后停止。
  */
-async function tickClaudeTestPane(e) {
+async function tickClaudeTestPane(ctx) {
   paneState.tickedAt = Date.now();
   if (paneState.isBusy) return;
   paneState.isBusy = true;
   let generation = paneState.generation;
   try {
-    let r;
+    let panes;
     try {
-      r = await e.ui.panes();
+      panes = await ctx.ui.panes();
     } catch {}
     if (
-      r !== undefined &&
-      !r.some((b) => b.id === CLAUDE_TEST_2_2) &&
+      panes !== undefined &&
+      !panes.some((pane) => pane.id === CLAUDE_TEST_2_2) &&
       Date.now() - paneState.commandAt > PANE_COMMAND_STALE_MS
     ) {
       helperRuntimeState.stop?.();
       return;
     }
-    let { dir, appFolder } = await resolveAppDir(e, await e.session.root(), claudeTestState.typedArgs);
+    let { dir, appFolder } = await resolveAppDir(ctx, await ctx.session.root(), claudeTestState.typedArgs);
     let now = Date.now();
     let runFolderFacts = await readRunFolderFacts(
-      e,
+      ctx,
       dir,
       paneState.openedAt,
       now,
-      await describeRunPhase(e),
+      await describeRunPhase(ctx),
       hasFixFlag(claudeTestState.typedArgs),
     );
     if (paneState.generation !== generation) return;
@@ -954,13 +979,13 @@ async function tickClaudeTestPane(e) {
       paneState.drawnRun = runFolderFacts.runRel;
       paneState.runners = new Set();
     }
-    let c = await claudeTestState.installNoteText?.().catch(() => {
+    let installNote = await claudeTestState.installNoteText?.().catch(() => {
       return;
     });
-    let early = await resolveEarlyAppInfo(e, dir);
-    let S = await e.agent.list().catch(() => []);
+    let early = await resolveEarlyAppInfo(ctx, dir);
+    let agents = await ctx.agent.list().catch(() => []);
     if (paneState.generation !== generation) return;
-    let w = rememberRunHalt(
+    let halt = rememberRunHalt(
       runFolderFacts.runRel === null
         ? null
         : `${dir}
@@ -970,27 +995,27 @@ ${runFolderFacts.runRel}`,
           ...runFolderFacts.facts,
           early,
         },
-        S,
+        agents,
         paneState.runners,
         claudeTestState.typedArgs,
       ),
       runFolderFacts.facts.run?.finished === true,
-      S.some((b) => regExp_2.test(b.type) && ACTIVE_TASK_STATUSES.has(b.status)),
+      agents.some((agent) => regExp_2.test(agent.type) && ACTIVE_TASK_STATUSES.has(agent.status)),
     );
     helperRuntimeState.facts = {
       ...runFolderFacts.facts,
       openedAt: paneState.openedAt,
       readAt: now,
       appFolder,
-      install: describeInstallState(c, paneState.openedAt, Date.now()),
+      install: describeInstallState(installNote, paneState.openedAt, Date.now()),
       early,
       ...(isRunAcceptedPending(runFolderFacts.facts, dir, paneState.openedAt) && {
         isStartingRun: true,
       }),
-      ...(w !== undefined && {
-        halt: w,
+      ...(halt !== undefined && {
+        halt,
       }),
-      ...(w === undefined &&
+      ...(halt === undefined &&
         isAppStartPending(dir, paneState.commandAt, Date.now()) && {
           isStartingApp: true,
         }),
@@ -1006,19 +1031,19 @@ ${runFolderFacts.runRel}`,
       runFolderFacts.runReal !== null &&
       helperRuntimeState.picture?.stem !== pictureStem
     ) {
-      let screenshot = await readScreenshot(e, runFolderFacts.runRel, runFolderFacts.runReal, pictureStem);
+      let screenshot = await readScreenshot(ctx, runFolderFacts.runRel, runFolderFacts.runReal, pictureStem);
       if (screenshot !== undefined && paneState.generation === generation) {
         helperRuntimeState.picture = {
           stem: pictureStem,
           png: screenshot,
         };
-        retryVerdictPicture(e);
+        retryVerdictPicture(ctx);
       }
     }
   } catch {
   } finally {
     paneState.isBusy = false;
-    runQuietly(() => e.ui.invalidate("ui.render"));
+    runQuietly(() => ctx.ui.invalidate("ui.render"));
   }
 }
 //@ chunk-ae5g0zb5.js:98343-98486 placement
@@ -1035,12 +1060,13 @@ var APP_START_AHEAD_TIMEOUT_MS = 60000;
 /**
  * 工具答案（对象、字符串或单个 text 块）解析为普通对象，否则 null。
  */
-function parseAnswerObject(e) {
-  if (isPlainObjectNonArray(e) && [Object.prototype, null].includes(Object.getPrototypeOf(e))) return e;
-  let [n, ...r] = answerTextParts(e);
-  if (n === undefined || r.length > 0) return null;
+function parseAnswerObject(value) {
+  if (isPlainObjectNonArray(value) && [Object.prototype, null].includes(Object.getPrototypeOf(value)))
+    return value;
+  let [firstPart, ...restParts] = answerTextParts(value);
+  if (firstPart === undefined || restParts.length > 0) return null;
   try {
-    let parsed = JSON.parse(n);
+    let parsed = JSON.parse(firstPart);
     return isPlainObjectNonArray(parsed) ? parsed : null;
   } catch {
     return null;
@@ -1070,34 +1096,34 @@ function noteStartAppAnswer(project, result) {
 /**
  * 应用未运行但允许启动时，提前标记为启动中。
  */
-function noteAppDownWithStartAllowed(project, n) {
-  let r =
+function noteAppDownWithStartAllowed(project, answerText) {
+  let isGuessedStart =
     helperRuntimeState.appStarting?.isGuess === true && helperRuntimeState.appStarting.project === project;
   if (
     typeof project !== "string" ||
     helperRuntimeState.stop === null ||
-    (helperRuntimeState.appStarting !== null && !r) ||
-    n === undefined ||
+    (helperRuntimeState.appStarting !== null && !isGuessedStart) ||
+    answerText === undefined ||
     hasCiFlag(claudeTestState.typedArgs)
   )
     return false;
-  let o;
+  let answer;
   try {
-    let parsed = JSON.parse(n);
-    o = isPlainObjectNonArray(parsed) ? parsed : null;
+    let parsed = JSON.parse(answerText);
+    answer = isPlainObjectNonArray(parsed) ? parsed : null;
   } catch {
     return false;
   }
   if (
-    o === null ||
-    o.up !== false ||
-    o.startEnded === true ||
-    isPlainObjectNonArray(o.portBusy) ||
-    !isPlainObjectNonArray(o.startDialog) ||
-    o.startAllowed !== true
+    answer === null ||
+    answer.up !== false ||
+    answer.startEnded === true ||
+    isPlainObjectNonArray(answer.portBusy) ||
+    !isPlainObjectNonArray(answer.startDialog) ||
+    answer.startAllowed !== true
   )
     return false;
-  let at = r ? helperRuntimeState.appStarting?.at : undefined;
+  let at = isGuessedStart ? helperRuntimeState.appStarting?.at : undefined;
   helperRuntimeState.appStarting = {
     project,
     at: at ?? Date.now(),
@@ -1110,19 +1136,19 @@ function noteAppDownWithStartAllowed(project, n) {
 /**
  * 应用探测结果：不允许启动时忘记记住的项目；撤销猜测的启动状态。
  */
-function noteAppProbeResult(project, n) {
+function noteAppProbeResult(project, answerText) {
   let appStarting = helperRuntimeState.appStarting;
-  let o = null;
+  let answer = null;
   try {
-    let s = n === undefined ? null : JSON.parse(n);
-    o = isPlainObjectNonArray(s) ? s : null;
+    let parsed = answerText === undefined ? null : JSON.parse(answerText);
+    answer = isPlainObjectNonArray(parsed) ? parsed : null;
   } catch {
-    o = null;
+    answer = null;
   }
   if (
-    o !== null &&
-    o.up === false &&
-    o.startAllowed !== true &&
+    answer !== null &&
+    answer.up === false &&
+    answer.startAllowed !== true &&
     helperRuntimeState.rememberedStart === project
   )
     helperRuntimeState.rememberedStart = null;
@@ -1134,12 +1160,13 @@ function noteAppProbeResult(project, n) {
 /**
  * 应用启动结束（或端口被占）时清除启动中状态。
  */
-function noteAppStartEnded(project, result, r = false) {
+function noteAppStartEnded(project, result, hasWait = false) {
   let appStarting = helperRuntimeState.appStarting;
   if (appStarting === null || project !== appStarting.project) return false;
   let answerObject = parseAnswerObject(result);
   if (answerObject === null || answerObject.up === true) return false;
-  if (answerObject.startEnded !== true && !isPlainObjectNonArray(answerObject.portBusy) && !r) return false;
+  if (answerObject.startEnded !== true && !isPlainObjectNonArray(answerObject.portBusy) && !hasWait)
+    return false;
   helperRuntimeState.appStarting = null;
   return true;
 }
@@ -1152,13 +1179,13 @@ var EARLY_PHASE_WINDOW_MS = 3600000;
 /**
  * 面板早期阶段是否仍在进行（时间窗内且运行未结束/未停止）。
  */
-function isEarlyPhaseActive(e = Date.now()) {
+function isEarlyPhaseActive(now = Date.now()) {
   let facts = helperRuntimeState.facts;
   let at = helperRuntimeState.early?.at ?? 0;
   return (
     helperRuntimeState.stop !== null &&
     at > 0 &&
-    e - at < EARLY_PHASE_WINDOW_MS &&
+    now - at < EARLY_PHASE_WINDOW_MS &&
     (facts?.run?.finished !== true || facts.isKept === true) &&
     (facts?.note?.stopped ?? null) === null &&
     facts?.halt === undefined
@@ -1168,8 +1195,8 @@ function isEarlyPhaseActive(e = Date.now()) {
 /**
  * 带 fix 参数、非重跑且尚未开始运行时，标记为“正在修复”。
  */
-function shouldShowFixing(typedArgs, n) {
-  return hasFixFlag(typedArgs) && n.isFixRerun !== true && n.run === null;
+function shouldShowFixing(typedArgs, facts) {
+  return hasFixFlag(typedArgs) && facts.isFixRerun !== true && facts.run === null;
 }
 //@ chunk-ae5g0zb5.js:100150-100232 placement
 /**
@@ -1182,25 +1209,34 @@ function hasCiFlag(typedArgs) {
 /**
  * 匹配 Claude Test 运行代理的 task 名，以及“仍在进行”的 task 状态集合。
  */
-var regExp_2 = new RegExp(`^${CLAUDE_TEST_RUNNER}(-\\d+)?$`);
-var ACTIVE_TASK_STATUSES = new Set(["pending", "running", "waiting"]);
+var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ACTIVE_TASK_STATUSES;
+deferInit("chunk-ae5g0zb5.js:100232", () => {
+  regExp_2 = new RegExp(`^${CLAUDE_TEST_RUNNER}(-\\d+)?$`);
+  ACTIVE_TASK_STATUSES = new Set(["pending", "running", "waiting"]);
+});
 //@ chunk-ae5g0zb5.js:100314-100719 placement
 /**
  * 根据后台任务状态判断运行被停止（stopped）或因应用未运行而阻塞（blocked）。
  */
-function detectRunHalt(e, n, runners, typedArgs) {
-  let filtered = n.filter((c) => regExp_2.test(c.type));
-  for (let c of filtered) if (ACTIVE_TASK_STATUSES.has(c.status)) runners.add(c.id);
-  if (e.run?.finished === true) return;
-  let filtered_2 = filtered.filter((c) => runners.has(c.id));
+function detectRunHalt(runFolderFacts, agents, runners, typedArgs) {
+  let filtered = agents.filter((agent) => regExp_2.test(agent.type));
+  for (let agent of filtered) if (ACTIVE_TASK_STATUSES.has(agent.status)) runners.add(agent.id);
+  if (runFolderFacts.run?.finished === true) return;
+  let filtered_2 = filtered.filter((agent) => runners.has(agent.id));
   if (
     filtered_2.length > 0 &&
-    filtered_2.every((c) => !ACTIVE_TASK_STATUSES.has(c.status)) &&
-    filtered_2.some((c) => c.status === "killed")
+    filtered_2.every((agent) => !ACTIVE_TASK_STATUSES.has(agent.status)) &&
+    filtered_2.some((agent) => agent.status === "killed")
   )
     return "stopped";
-  let i = e.note?.app?.state ?? e.early?.app?.kind ?? null;
-  if (hasCiFlag(typedArgs) && (e.run === null || !e.run.started) && runners.size === 0 && i === "down")
+  let appState = runFolderFacts.note?.app?.state ?? runFolderFacts.early?.app?.kind ?? null;
+  if (
+    hasCiFlag(typedArgs) &&
+    (runFolderFacts.run === null || !runFolderFacts.run.started) &&
+    runners.size === 0 &&
+    appState === "down"
+  )
     return "blocked";
   return;
 }
@@ -1208,47 +1244,53 @@ function detectRunHalt(e, n, runners, typedArgs) {
 /**
  * 记录哪些项目的运行处于“已停止”。
  */
-var stoppedProjects = new Set();
+var stoppedProjects; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ae5g0zb5.js:100719", () => {
+  stoppedProjects = new Set();
+});
 //@ chunk-ae5g0zb5.js:100734-100893 placement
 /**
  * 记住或清除某项目的停止状态。
  */
-function rememberRunHalt(e, runHalt, r, o = false) {
-  if (e !== null && o) stoppedProjects.delete(e);
-  if (e !== null && runHalt === "stopped") stoppedProjects.add(e);
-  if (runHalt !== undefined || r || e === null) return runHalt;
-  return stoppedProjects.has(e) ? "stopped" : undefined;
+function rememberRunHalt(project, runHalt, runFinished, hasActiveRunner = false) {
+  if (project !== null && hasActiveRunner) stoppedProjects.delete(project);
+  if (project !== null && runHalt === "stopped") stoppedProjects.add(project);
+  if (runHalt !== undefined || runFinished || project === null) return runHalt;
+  return stoppedProjects.has(project) ? "stopped" : undefined;
 }
 //@ chunk-ae5g0zb5.js:100893-100974 placement
 /**
  * 参数里是否有 fix
  */
-function hasFixFlag(e) {
-  return typeof e === "string" && e.trim().split(/\s+/).includes("fix");
+function hasFixFlag(args) {
+  return typeof args === "string" && args.trim().split(/\s+/).includes("fix");
 }
 //@ chunk-ae5g0zb5.js:100974-101084 placement
 /**
  * 应用启动中且未超时。
  */
-function isAppStartPending(dir, commandAt, r) {
+function isAppStartPending(dir, commandAt, now) {
   let appStarting = helperRuntimeState.appStarting;
   return (
     appStarting !== null &&
     appStarting.project === dir &&
     appStarting.at >= commandAt &&
-    r - appStarting.at < (appStarting.isAhead === true ? APP_START_AHEAD_TIMEOUT_MS : APP_START_TIMEOUT_MS_2)
+    now - appStarting.at <
+      (appStarting.isAhead === true ? APP_START_AHEAD_TIMEOUT_MS : APP_START_TIMEOUT_MS_2)
   );
 }
 //@ chunk-ae5g0zb5.js:101084-101226 placement
 /**
  * 答案中的文本片段（字符串或 text 块）。
  */
-function answerTextParts(e) {
-  return typeof e === "string"
-    ? [e]
-    : Array.isArray(e)
-      ? e.flatMap((n) =>
-          isPlainObjectNonArray(n) && n.type === "text" && typeof n.text === "string" ? [n.text] : [],
+function answerTextParts(value) {
+  return typeof value === "string"
+    ? [value]
+    : Array.isArray(value)
+      ? value.flatMap((part) =>
+          isPlainObjectNonArray(part) && part.type === "text" && typeof part.text === "string"
+            ? [part.text]
+            : [],
         )
       : [];
 }
@@ -1297,8 +1339,8 @@ var ASK_PROMPT_RE = /\bAsk (?:with AskUserQuestion|as the run skill says)\b/;
 /**
  * 文本回答匹配拒绝时记录“更多测试”被拒。
  */
-function noteMoreTestsDeclinedByText(project, n) {
-  if (helperRuntimeState.stop === null || !answerTextParts(n).some((r) => ASK_PROMPT_RE.test(r)))
+function noteMoreTestsDeclinedByText(project, text) {
+  if (helperRuntimeState.stop === null || !answerTextParts(text).some((part) => ASK_PROMPT_RE.test(part)))
     return false;
   helperRuntimeState.moreDeclined = {
     project: typeof project === "string" ? project : null,
@@ -1340,12 +1382,12 @@ function isRunAcceptedPending(facts, dir, openedAt) {
 function notePortHealth(project, result) {
   let early = helperRuntimeState.early;
   let answerObject = parseAnswerObject(result);
-  let s = answerObject === null ? null : parsePortHealthStatus(JSON.stringify(answerObject));
-  if (early === null || s === null || project !== early.project || helperRuntimeState.stop === null)
+  let portStatus = answerObject === null ? null : parsePortHealthStatus(JSON.stringify(answerObject));
+  if (early === null || portStatus === null || project !== early.project || helperRuntimeState.stop === null)
     return false;
   helperRuntimeState.early = {
     ...early,
-    app: s,
+    app: portStatus,
   };
   return true;
 }
@@ -1358,38 +1400,38 @@ var EARLY_CHECK_STALE_MS = 1e4;
 /**
  * 早期阶段的应用名（按目录缓存 package.json 名称）与应用状态。
  */
-async function resolveEarlyAppInfo(e, dir) {
+async function resolveEarlyAppInfo(ctx, dir) {
   let early = helperRuntimeState.early;
   if (early === null) return null;
-  let o = early.name;
-  if (o === null || o.dir !== dir) {
-    o = {
+  let nameInfo = early.name;
+  if (nameInfo === null || nameInfo.dir !== dir) {
+    nameInfo = {
       dir,
-      name: await findAppPackageJson(e, dir),
+      name: await findAppPackageJson(ctx, dir),
     };
     if (helperRuntimeState.early?.at === early.at)
       helperRuntimeState.early = {
         ...helperRuntimeState.early,
-        name: o,
+        name: nameInfo,
       };
   }
   let app = helperRuntimeState.early?.at === early.at ? helperRuntimeState.early.app : null;
   let project = helperRuntimeState.early?.project ?? null;
-  let i = project !== null && project !== dir;
-  let c = app?.kind === "checking" && Date.now() - early.at > EARLY_CHECK_STALE_MS;
+  let isOtherProject = project !== null && project !== dir;
+  let isCheckStale = app?.kind === "checking" && Date.now() - early.at > EARLY_CHECK_STALE_MS;
   return {
-    name: o.name,
-    app: i || c ? null : app,
+    name: nameInfo.name,
+    app: isOtherProject || isCheckStale ? null : app,
   };
 }
 //@ chunk-ae5g0zb5.js:102555-102895 placement
 /**
  * 跟踪预判的项目与权限回答，回答到达后更新应用状态并刷新窗格。
  */
-function trackProjectGuess(e, n) {
+function trackProjectGuess(ctx, guess) {
   let early = helperRuntimeState.early;
   if (early === null) return;
-  if (n === undefined) {
+  if (guess === undefined) {
     helperRuntimeState.early = {
       ...early,
       app: null,
@@ -1399,24 +1441,25 @@ function trackProjectGuess(e, n) {
   }
   helperRuntimeState.early = {
     ...early,
-    project: n.project,
+    project: guess.project,
   };
-  n.answer.then((json) => {
+  guess.answer.then((probeResult) => {
     let early_2 = helperRuntimeState.early;
     if (early_2?.at === early.at) {
-      let a = early_2.app?.kind === "checking";
-      if (!a || !noteAppDownWithStartAllowed(n.project, json)) noteAppProbeResult(n.project, json);
-      if (a)
+      let wasChecking = early_2.app?.kind === "checking";
+      if (!wasChecking || !noteAppDownWithStartAllowed(guess.project, probeResult))
+        noteAppProbeResult(guess.project, probeResult);
+      if (wasChecking)
         helperRuntimeState.early = {
           ...early_2,
-          app: parsePortHealthStatus(json),
+          app: parsePortHealthStatus(probeResult),
         };
-      tickClaudeTestPane(e);
+      tickClaudeTestPane(ctx);
     }
   });
 }
 //@ chunk-ae5g0zb5.js:102895-103412 placement
-async function describeRunPhase(e) {
+async function describeRunPhase(ctx) {
   let facts = helperRuntimeState.facts;
   if (facts !== null && facts.run !== null)
     return {
@@ -1424,15 +1467,16 @@ async function describeRunPhase(e) {
       hasReadCode: facts.hasReadCode,
       isWritingTests: facts.isWritingTests,
     };
-  let r = await e.agent.list().catch(() => []);
-  let filtered = r.filter((i) => i.type === CLAUDE_TEST_EXPLORER);
-  let any = r.some((i) => i.type === CLAUDE_TEST_CONDUCTOR && i.status === "running");
-  let any_2 = filtered.some((i) => i.status === "running");
+  let agents = await ctx.agent.list().catch(() => []);
+  let filtered = agents.filter((agent) => agent.type === CLAUDE_TEST_EXPLORER);
+  let any = agents.some((agent) => agent.type === CLAUDE_TEST_CONDUCTOR && agent.status === "running");
+  let any_2 = filtered.some((agent) => agent.status === "running");
   paneState.sawExplorer ||= filtered.length > 0 || any;
   return {
     isReadingCode: any_2,
-    hasReadCode: filtered.some((i) => i.status === "completed") || (paneState.sawExplorer && !any_2 && !any),
-    isWritingTests: r.some((i) => i.type === CLAUDE_TEST_AUTHOR && i.status === "running"),
+    hasReadCode:
+      filtered.some((agent) => agent.status === "completed") || (paneState.sawExplorer && !any_2 && !any),
+    isWritingTests: agents.some((agent) => agent.type === CLAUDE_TEST_AUTHOR && agent.status === "running"),
     isPreparing: any,
   };
 }
@@ -1445,11 +1489,11 @@ function takeLoadMark(text) {
 `);
   if (!text.startsWith(LOAD_MARK_PREFIX) || index === -1) return;
   let sliced = text.slice(LOAD_MARK_PREFIX.length, index);
-  let o = claudeTestState.loads.get(sliced);
+  let mark = claudeTestState.loads.get(sliced);
   claudeTestState.loads.delete(sliced);
-  return o !== undefined && Date.now() - o.issuedAt <= PANEL_OPEN_FRESH_MS
+  return mark !== undefined && Date.now() - mark.issuedAt <= PANEL_OPEN_FRESH_MS
     ? {
-        ...o,
+        ...mark,
         came: text.slice(index + 1),
       }
     : undefined;
@@ -1458,26 +1502,26 @@ function takeLoadMark(text) {
 /**
  * 检查当前工具列表里是否存在浏览器助手提供的工具前缀。
  */
-async function hasHelperTool(e) {
-  return (await e.tool.list()).some((n) => n.name.startsWith(HELPER_TOOL_PREFIX));
+async function hasHelperTool(ctx) {
+  return (await ctx.tool.list()).some((tool) => tool.name.startsWith(HELPER_TOOL_PREFIX));
 }
 //@ chunk-ae5g0zb5.js:103706-103868 placement
 /**
  * 浏览器助手可启动时把当前会话加入需要助手的集合。
  */
-async function markSessionWantsHelper(e) {
-  if (!(await hasHelperTool(e))) {
+async function markSessionWantsHelper(ctx) {
+  if (!(await hasHelperTool(ctx))) {
     claudeTestState.hasStartedServer = false;
     return false;
   }
-  let n = await e.session.id();
+  let sessionId = await ctx.session.id();
   if (!claudeTestState.hasStartedServer) return false;
-  claudeTestState.wantedSessions.add(n);
+  claudeTestState.wantedSessions.add(sessionId);
   return true;
 }
 //@ chunk-ae5g0zb5.js:103868-104225 placement
-async function checkLoginWatch(e) {
-  if (!(await e.session.surfaces()).includes("terminal")) {
+async function checkLoginWatch(ctx) {
+  if (!(await ctx.session.surfaces()).includes("terminal")) {
     claudeTestState.report?.("no_terminal");
     return CLI_ONLY_TEXT;
   }
@@ -1491,56 +1535,56 @@ async function checkLoginWatch(e) {
     default:
       return LOGIN_CHECK_FAILED_TEXT;
   }
-  let n = claudeTestState.wantedSessions.has(await e.session.id());
-  if (!claudeTestState.hasStartedServer && !n && (await hasHelperTool(e))) {
+  let wanted = claudeTestState.wantedSessions.has(await ctx.session.id());
+  if (!claudeTestState.hasStartedServer && !wanted && (await hasHelperTool(ctx))) {
     claudeTestState.report?.("other_plugin");
     return DUPLICATE_HELPER_TOOLS_TEXT;
   }
   return;
 }
 //@ chunk-ae5g0zb5.js:104225-105061 placement
-async function describeHelperListing(e, n) {
+async function describeHelperListing(ctx, remainingMs) {
   let { watchLogin, takeOut } = claudeTestState;
   if (watchLogin === undefined || takeOut === undefined) return LOGIN_CHECK_FAILED_TEXT;
-  let s = await claudeTestState.filesReady?.();
-  if (s === undefined) return ASK_IN_CHAT_TEXT;
-  if (s.ignored !== undefined) {
-    let f = describeHelperEnvIgnored(s.ignored);
-    runQuietly(() => e.ui.log(f));
+  let filesState = await claudeTestState.filesReady?.();
+  if (filesState === undefined) return ASK_IN_CHAT_TEXT;
+  if (filesState.ignored !== undefined) {
+    let ignoredMessage = describeHelperEnvIgnored(filesState.ignored);
+    runQuietly(() => ctx.ui.log(ignoredMessage));
   }
-  if (s.problem !== undefined) {
+  if (filesState.problem !== undefined) {
     claudeTestState.wantedSessions.clear();
     claudeTestState.hasStartedServer = false;
-    return describeHelperFileMismatch(s.folder, s.problem, s.what);
+    return describeHelperFileMismatch(filesState.folder, filesState.problem, filesState.what);
   }
-  let a = await e.session.id();
-  claudeTestState.wantedSessions.add(a);
-  let i = describeHelperState_2(watchLogin, takeOut);
-  if (i !== undefined) return i;
-  runQuietly(() => e.ui.toast(RUN_STOPPED_TEXT));
-  let c = await describeAvailability(e);
-  if (!claudeTestState.wantedSessions.has(a)) {
+  let sessionId = await ctx.session.id();
+  claudeTestState.wantedSessions.add(sessionId);
+  let helperMessage = describeHelperState_2(watchLogin, takeOut);
+  if (helperMessage !== undefined) return helperMessage;
+  runQuietly(() => ctx.ui.toast(RUN_STOPPED_TEXT));
+  let availabilityMessage = await describeAvailability(ctx);
+  if (!claudeTestState.wantedSessions.has(sessionId)) {
     takeOut();
     return HELPER_NOT_READY_TEXT;
   }
-  if (c !== undefined) return c;
-  let min = Math.min(claudeTestState.listedWaitMs, n() - PANE_POLL_MS);
-  let S = await e.clock.now();
-  while (!(await hasHelperTool(e))) {
-    if (!claudeTestState.wantedSessions.has(a)) break;
-    if ((await e.clock.now()) - S >= min) {
+  if (availabilityMessage !== undefined) return availabilityMessage;
+  let min = Math.min(claudeTestState.listedWaitMs, remainingMs() - PANE_POLL_MS);
+  let startedAt = await ctx.clock.now();
+  while (!(await hasHelperTool(ctx))) {
+    if (!claudeTestState.wantedSessions.has(sessionId)) break;
+    if ((await ctx.clock.now()) - startedAt >= min) {
       claudeTestState.report?.("not_listed");
       return BROWSER_UNAVAILABLE_TEXT;
     }
-    await e.clock.sleep(100);
+    await ctx.clock.sleep(100);
   }
-  if (!claudeTestState.wantedSessions.has(a)) {
+  if (!claudeTestState.wantedSessions.has(sessionId)) {
     takeOut();
     return HELPER_NOT_READY_TEXT;
   }
   claudeTestState.hasStartedServer = true;
-  let w = describeHelperState_2(watchLogin, takeOut);
-  if (w !== undefined) return w;
+  let finalHelperMessage = describeHelperState_2(watchLogin, takeOut);
+  if (finalHelperMessage !== undefined) return finalHelperMessage;
   claudeTestState.report?.("listed");
   return;
 }
@@ -1549,8 +1593,8 @@ async function describeHelperListing(e, n) {
  * 助手状态对应的提示文本（watching 时无提示）。
  */
 function describeHelperState_2(watchLogin, takeOut) {
-  let r = watchLogin();
-  switch (r) {
+  let status = watchLogin();
+  switch (status) {
     case "watching":
       return;
     case "login_changed":
@@ -1567,11 +1611,12 @@ function describeHelperState_2(watchLogin, takeOut) {
   }
 }
 //@ chunk-ae5g0zb5.js:105271-105585 placement
-async function describeAvailability(e) {
+async function describeAvailability(ctx) {
   try {
-    let n = await e.mcp.connect(BROWSER);
-    if (n.isConnected) return n.server === HELPER_SERVER_NAME ? undefined : TESTS_FAILED_TEXT;
-    switch (n.reason) {
+    let connection = await ctx.mcp.connect(BROWSER);
+    if (connection.isConnected)
+      return connection.server === HELPER_SERVER_NAME ? undefined : TESTS_FAILED_TEXT;
+    switch (connection.reason) {
       case "disabled":
         return INSTALL_NEEDED_TEXT;
       case "policy":
@@ -1583,7 +1628,7 @@ async function describeAvailability(e) {
     }
   } catch (error) {
     runQuietly(() =>
-      e.ui.log(`Claude Test: $.mcp.connect rejected: ${String(error)}`, {
+      ctx.ui.log(`Claude Test: $.mcp.connect rejected: ${String(error)}`, {
         to: "debug",
       }),
     );
@@ -1594,9 +1639,9 @@ async function describeAvailability(e) {
 /**
  * 吞掉异常地执行
  */
-function runQuietly(e) {
+function runQuietly(fn) {
   try {
-    e();
+    fn();
   } catch {}
 }
 //@ chunk-ae5g0zb5.js:105616-105680 placement
@@ -1604,11 +1649,14 @@ function runQuietly(e) {
  * 非 root 的 uid
  */
 function isNonRootUser() {
-  let e = process.getuid?.();
-  return e !== undefined && e !== 0;
+  let uid = process.getuid?.();
+  return uid !== undefined && uid !== 0;
 }
 //@ chunk-ae5g0zb5.js:105680-105720 placement = SUPPORTED_PLATFORMS (0.811)
-var SUPPORTED_PLATFORMS = new Set(["linux", "macos", "wsl"]);
+var SUPPORTED_PLATFORMS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ae5g0zb5.js:105680", () => {
+  SUPPORTED_PLATFORMS = new Set(["linux", "macos", "wsl"]);
+});
 //@ chunk-ae5g0zb5.js:105720-105862 placement
 /**
  * Claude Test 是否可用：非 bare、合规无 HIPAA/ZDR、平台支持且开关开启。
@@ -1630,11 +1678,14 @@ function isClaudeTestAvailable() {
 /**
  * HostScoped 的助手标记状态
  */
-var claudeTestMarkSlot = new HostScoped(() => ({
-  mark: undefined,
-  reload: undefined,
-  outcome: undefined,
-}));
+var claudeTestMarkSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ae5g0zb5.js:105862", () => {
+  claudeTestMarkSlot = new HostScoped(() => ({
+    mark: undefined,
+    reload: undefined,
+    outcome: undefined,
+  }));
+});
 //@ chunk-ae5g0zb5.js:105925-105962 placement
 /**
  * 取当前宿主的助手标记状态
@@ -1645,15 +1696,23 @@ function claudeTestMarkState() {
 //@ chunk-ae5g0zb5.js:105962-105983 placement
 var CLAUDE_TEST_3 = "claude-test";
 //@ chunk-ae5g0zb5.js:105983-106044 placement
-var regExp_3 = new RegExp(`^${CLAUDE_TEST_3}@[A-Za-z0-9][A-Za-z0-9._-]{0,39}$`);
+var regExp_3; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ae5g0zb5.js:105983", () => {
+  regExp_3 = new RegExp(`^${CLAUDE_TEST_3}@[A-Za-z0-9][A-Za-z0-9._-]{0,39}$`);
+});
 //@ chunk-ae5g0zb5.js:106044-106214 placement
 /**
  * 在命令列表中找到 Claude Test 插件的来源仓库。
  */
-function findClaudeTestRepository(e) {
-  return e
-    .flatMap((n) => (n.type === "prompt" && n.pluginInfo !== undefined ? [n.pluginInfo] : []))
-    .find((n) => n.pluginManifest.name === CLAUDE_TEST_3 && regExp_3.test(n.repository))?.repository;
+function findClaudeTestRepository(messages) {
+  return messages
+    .flatMap((message) =>
+      message.type === "prompt" && message.pluginInfo !== undefined ? [message.pluginInfo] : [],
+    )
+    .find(
+      (pluginInfo) =>
+        pluginInfo.pluginManifest.name === CLAUDE_TEST_3 && regExp_3.test(pluginInfo.repository),
+    )?.repository;
 }
 export {
   CLAUDE_TEST_3,

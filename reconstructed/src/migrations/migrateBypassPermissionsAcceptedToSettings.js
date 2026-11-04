@@ -18,7 +18,7 @@ import { logForDebugging } from "../utils/debug.js";
 /**
  * 迁移：全局配置 bypassPermissionsModeAccepted → userSettings.skipDangerousModePermissionPrompt=true。
  */
-async function migrateBypassPermissionsAcceptedToSettings(e) {
+async function migrateBypassPermissionsAcceptedToSettings(context) {
   if (!getGlobalConfig().bypassPermissionsModeAccepted) return true;
   try {
     if (!hasSkipDangerousModePermissionPrompt()) {
@@ -28,7 +28,7 @@ async function migrateBypassPermissionsAcceptedToSettings(e) {
           skipDangerousModePermissionPrompt: true,
         },
         undefined,
-        e,
+        context,
       );
       if (error) throw error;
     }
@@ -37,7 +37,7 @@ async function migrateBypassPermissionsAcceptedToSettings(e) {
       if (!("bypassPermissionsModeAccepted" in current)) return current;
       let { bypassPermissionsModeAccepted, ...updatedConfig } = current;
       return updatedConfig;
-    }, e);
+    }, context);
     logFeatureOk("migration_bypass_permissions_to_settings");
     return true;
   } catch (error) {

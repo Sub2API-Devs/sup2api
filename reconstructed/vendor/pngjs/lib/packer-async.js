@@ -5,12 +5,12 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_constants } from "./constants.js";
 import { require_packer } from "./packer.js";
 
 //@ chunk-spjgqa4y.js:42993-43714 cjs-fingerprint
-var require_packer_async = x(function (cjsExports, cjsModule) {
+var require_packer_async = __commonJS(function (cjsExports, cjsModule) {
   var util = importMetaRequire("util");
   var Stream = importMetaRequire("stream");
   var constants = require_constants();

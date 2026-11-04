@@ -24,15 +24,16 @@ import { env } from "../../utils/env.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
 import { HostScoped } from "../../utils/hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3wek6r2k.js:7979-8153 placement
 function releaseGrowthBookHold(host) {
   let holdForHost = fetchHoldForHost(host);
-  let n = pendingWithoutStart(holdForHost);
-  holdForHost.hasHeld ||= n;
+  let pending = pendingWithoutStart(holdForHost);
+  holdForHost.hasHeld ||= pending;
   holdForHost.isOver = true;
   holdForHost.over.resolve();
-  if (n)
+  if (pending)
     initializeGrowthBook().catch((error) =>
       logForDebugging(`flag fetch after the hold did not begin (${errorMessage(error)})`, {
         level: "error",
@@ -47,9 +48,9 @@ var GROWTHBOOK_HOLD_STAGES = {
   after: "after_held_growthbook_init",
 };
 //@ chunk-3wek6r2k.js:8261-8410 placement
-function runPendingSettingsRule(e, o) {
+function runPendingSettingsRule(rule, retry) {
   try {
-    return e(o);
+    return rule(retry);
   } catch (error) {
     logForDebugging(
       `flag fetch held: the rule for pending settings environment threw (${errorMessage(error)})`,
@@ -61,33 +62,36 @@ function runPendingSettingsRule(e, o) {
   }
 }
 //@ chunk-3wek6r2k.js:8410-8460 placement
-var armPendingSettingsEnvRule = (rootSession, hasRepoSettingsEnv, n) => {
-  fetchHoldForHost(rootSession.host).isPending ??= runPendingSettingsRule(hasRepoSettingsEnv, n);
+var armPendingSettingsEnvRule = (rootSession, rule, tracker) => {
+  fetchHoldForHost(rootSession.host).isPending ??= runPendingSettingsRule(rule, tracker);
 };
 //@ chunk-3wek6r2k.js:8460-8508 placement
 var shouldHoldForOnboarding = (host, config) => !config.hasCompletedOnboarding && hasHeldGrowthBook(host);
 //@ chunk-3wek6r2k.js:8508-8583 placement
-var hasRepoSettingsEnv = (e) =>
-  e ||
+var hasRepoSettingsEnv = (rootSession) =>
+  rootSession ||
   REPO_DIR_SETTING_SOURCE_LIST.some(
-    (o) =>
-      isSettingSourceEnabled(o) &&
-      Object.keys(filterPolicyPredicateEnv(getSettingsForSource(o)?.env, o)).length > 0,
+    (name) =>
+      isSettingSourceEnabled(name) &&
+      Object.keys(filterPolicyPredicateEnv(getSettingsForSource(name)?.env, name)).length > 0,
   );
 //@ chunk-3wek6r2k.js:8583-8625 placement
-var canSkipGrowthBookHold = (rootSession, o) =>
-  !o && !getIsNonInteractiveSession() && hasHeldGrowthBook(rootSession.host) && hasFreshGrowthBookFeatures();
+var canSkipGrowthBookHold = (rootSession, growthBook) =>
+  !growthBook &&
+  !getIsNonInteractiveSession() &&
+  hasHeldGrowthBook(rootSession.host) &&
+  hasFreshGrowthBookFeatures();
 //@ chunk-3wek6r2k.js:8625-8675 placement
-function maybeStartLazyLoad(rootSession, o, n) {
-  return refreshAccountSkillsSyncFlag() ? startSkillSyncAndResync(rootSession, o, n) : undefined;
+function maybeStartLazyLoad(rootSession, host, options) {
+  return refreshAccountSkillsSyncFlag() ? startSkillSyncAndResync(rootSession, host, options) : undefined;
 }
 //@ chunk-3wek6r2k.js:8675-8692 placement
 var STARTUP_GATE_TICK_MS = 1000;
 var MAX_STARTUP_GATE_RESTARMS = 9;
 //@ chunk-3wek6r2k.js:8692-8736 placement
-function runTaskSafely(task, o) {
+function runTaskSafely(task, host) {
   try {
-    task(o);
+    task(host);
   } catch (error) {
     logError(toError(error));
   }
@@ -117,11 +121,11 @@ class StartupWorkGate {
   get openReason() {
     return this.#a;
   }
-  arm(e = STARTUP_GATE_TICK_MS) {
+  arm(tickMs = STARTUP_GATE_TICK_MS) {
     if (this.#r || this.#n) return;
     this.#r = true;
     this.#c = performance.now();
-    this.#u = e;
+    this.#u = tickMs;
     this.#i = registerCleanup(() => this.release("shutdown"));
   }
   expectHandshake() {
@@ -141,34 +145,34 @@ class StartupWorkGate {
     }, this.#u);
     this.#t.unref?.();
   }
-  hold(name, o) {
+  hold(name, task) {
     if (!this.#r || this.#n) {
-      o(this.#a ?? "not_armed");
+      task(this.#a ?? "not_armed");
       return;
     }
     this.#o.push({
       name,
-      task: o,
+      task,
     });
   }
-  yieldToTurnWhen(e) {
-    this.#l = e;
+  yieldToTurnWhen(predicate) {
+    this.#l = predicate;
   }
-  release(e) {
-    let o = e === "shutdown" || e === "input_closed" || e === "not_applicable";
-    let n = this.#e ? this.#e.held.slice(this.#e.next) : [];
-    let r = o || (e === "turn_started" && this.#e?.reason === "host_initialized");
-    if (this.#n && this.#o.length === 0 && !(r && n.length > 0)) return;
-    let u = !this.#n;
-    if (u) {
+  release(reason) {
+    let noRemainder = reason === "shutdown" || reason === "input_closed" || reason === "not_applicable";
+    let rest = this.#e ? this.#e.held.slice(this.#e.next) : [];
+    let trustedReason = noRemainder || (reason === "turn_started" && this.#e?.reason === "host_initialized");
+    if (this.#n && this.#o.length === 0 && !(trustedReason && rest.length > 0)) return;
+    let wasOpen = !this.#n;
+    if (wasOpen) {
       this.#n = true;
-      this.#a = e;
+      this.#a = reason;
     }
     if (this.#t !== undefined) {
       clearTimeout(this.#t);
       this.#t = undefined;
     }
-    let p = [...n, ...this.#o];
+    let tasksToRun = [...rest, ...this.#o];
     this.#o = [];
     if (this.#e) {
       this.#e.next = this.#e.held.length;
@@ -176,29 +180,29 @@ class StartupWorkGate {
     }
     if (this.#r)
       logForDebugging(
-        `[startupWorkGate] ${u ? "open" : "draining remainder"} (${e}) after ${Math.round(performance.now() - (this.#c ?? 0))}ms; running ${p.length} held task(s): ${p.map((y) => y.name).join(", ")}`,
+        `[startupWorkGate] ${wasOpen ? "open" : "draining remainder"} (${reason}) after ${Math.round(performance.now() - (this.#c ?? 0))}ms; running ${tasksToRun.length} held task(s): ${tasksToRun.map((task) => task.name).join(", ")}`,
       );
-    if (o) {
-      for (let { task } of p) runTaskSafely(task, e);
-      this.#p(e);
+    if (noRemainder) {
+      for (let { task } of tasksToRun) runTaskSafely(task, reason);
+      this.#p(reason);
       return;
     }
-    let h = {
-      reason: e,
-      held: p,
+    let cursor = {
+      reason,
+      held: tasksToRun,
       next: 0,
     };
-    this.#e = h;
-    let S = () => {
-      if (this.#e !== h) return;
-      let y = h.held[h.next];
-      if (y === undefined) {
+    this.#e = cursor;
+    let runNext = () => {
+      if (this.#e !== cursor) return;
+      let task = cursor.held[cursor.next];
+      if (task === undefined) {
         this.#e = undefined;
-        this.#p(e);
+        this.#p(reason);
         return;
       }
-      if (e === "host_initialized" && this.#l?.()) {
-        this.#o = [...h.held.slice(h.next), ...this.#o];
+      if (reason === "host_initialized" && this.#l?.()) {
+        this.#o = [...cursor.held.slice(cursor.next), ...this.#o];
         this.#e = undefined;
         this.#s = 0;
         this.#d();
@@ -207,48 +211,51 @@ class StartupWorkGate {
         );
         return;
       }
-      h.next++;
-      runTaskSafely(y.task, e);
-      setImmediate(S);
+      cursor.next++;
+      runTaskSafely(task.task, reason);
+      setImmediate(runNext);
     };
-    setImmediate(S);
+    setImmediate(runNext);
   }
-  #p(e) {
-    if (e !== "shutdown") this.#i?.();
+  #p(task) {
+    if (task !== "shutdown") this.#i?.();
     this.#i = undefined;
   }
 }
 //@ chunk-3wek6r2k.js:10578-10603 placement
-var STARTUP_WORK_GATE_SLOT = new HostScoped(() => new StartupWorkGate());
+var STARTUP_WORK_GATE_SLOT; // deferred: uses StartupWorkGate of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3wek6r2k.js:10578", () => {
+  STARTUP_WORK_GATE_SLOT = new HostScoped(() => new StartupWorkGate());
+});
 //@ chunk-3wek6r2k.js:10603-10686 placement
-function armStartupWorkGate(host, o) {
+function armStartupWorkGate(host, options) {
   if (env.CLAUDE_CODE_DISABLE_STARTUP_WORK_GATE) return;
-  STARTUP_WORK_GATE_SLOT.of(host).arm(o);
+  STARTUP_WORK_GATE_SLOT.of(host).arm(options);
 }
 //@ chunk-3wek6r2k.js:10686-10725 placement
-function holdForStartupWork(host, o, n) {
-  STARTUP_WORK_GATE_SLOT.of(host).hold(o, n);
+function holdForStartupWork(host, name, task) {
+  STARTUP_WORK_GATE_SLOT.of(host).hold(name, task);
 }
 //@ chunk-3wek6r2k.js:10725-10778 placement
-function waitForStartupWork(host, o) {
-  return new Promise((resolve) => holdForStartupWork(host, o, resolve));
+function waitForStartupWork(host, gateHost) {
+  return new Promise((resolve) => holdForStartupWork(host, gateHost, resolve));
 }
 //@ chunk-3wek6r2k.js:10778-10821 placement
 function expectStartupHandshake(host) {
   STARTUP_WORK_GATE_SLOT.of(host).expectHandshake();
 }
 //@ chunk-3wek6r2k.js:10821-10867 placement
-function yieldStartupWorkToTurn(host, o) {
-  STARTUP_WORK_GATE_SLOT.of(host).yieldToTurnWhen(o);
+function yieldStartupWorkToTurn(host, turnHost) {
+  STARTUP_WORK_GATE_SLOT.of(host).yieldToTurnWhen(turnHost);
 }
 //@ chunk-3wek6r2k.js:10867-10905 placement
-function releaseStartupWork(host, o) {
-  STARTUP_WORK_GATE_SLOT.of(host).release(o);
+function releaseStartupWork(host, releaseHost) {
+  STARTUP_WORK_GATE_SLOT.of(host).release(releaseHost);
 }
 export {
+  waitForStartupWork,
   releaseStartupWork,
   holdForStartupWork,
-  waitForStartupWork,
   yieldStartupWorkToTurn,
   expectStartupHandshake,
   hasRepoSettingsEnv,

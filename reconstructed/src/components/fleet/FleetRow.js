@@ -51,11 +51,16 @@ import { redactSecrets } from "../../services/teamMemorySync/secretScanner.js";
 import { DEFAULT_BG_AGENT_TEMPLATE } from "../../cli/bg/bgSpawnEnv.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { splitGraphemes } from "../../utils/intl.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useClock } from "../../ink/components/ClockContext.js";
-import { R, y, zt, Kc } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useRef,
+  useState,
+  useLayoutEffect,
+  fragmentTypeExport,
+} from "../../../vendor/react/cjs/react.production.js";
 import { countGraphemes } from "../../ink/output.js";
-import { BOXED_DIAMOND_GLYPH, BULLET_OPERATOR } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BOXED_DIAMOND_GLYPH, BULLET_OPERATOR } from "../../constants/figures.js";
 import { MAX_DISPATCH_RETRIES } from "./fleetDispatch.js";
 import { getDefaultCharacters, spinnerFramesForTerminal } from "../Spinner/utils.js";
 import { isGitLabMergeRequestUrl } from "../../utils/detectRepository.js";
@@ -91,23 +96,23 @@ import { isNonWslUncPath, isNetworkRelatedPath } from "../../utils/networkPaths.
 /**
  * 会话距上次更新的时长文字（活跃时为空）。
  */
-function formatJobAge(h, E) {
-  let state = h.state;
+function formatJobAge(job, nowMs) {
+  let state = job.state;
   if (returnFalse_2(state)) {
-    let x = Date.parse(state.updatedAt) || Date.parse(state.createdAt);
-    if (!Number.isFinite(x)) return "";
-    let max = Math.max(0, E - x);
+    let updatedMs = Date.parse(state.updatedAt) || Date.parse(state.createdAt);
+    if (!Number.isFinite(updatedMs)) return "";
+    let max = Math.max(0, nowMs - updatedMs);
     return state.tempo === "active" && state.detail !== SEED_DETAIL && max < STUCK_AFTER_MS
       ? ""
       : formatDuration(max, {
           mostSignificantOnly: true,
         });
   }
-  let C =
+  let referenceMs =
     isSettled(state) && !(terminalOutcome(state.state) === "success" && isSelfDriving(state))
       ? Date.parse(state.firstTerminalAt ?? state.updatedAt)
-      : E;
-  return formatDuration(Math.max(0, C - Date.parse(state.createdAt)), {
+      : nowMs;
+  return formatDuration(Math.max(0, referenceMs - Date.parse(state.createdAt)), {
     mostSignificantOnly: true,
   });
 }
@@ -115,158 +120,158 @@ function formatJobAge(h, E) {
 /**
  * 未来时间显示 “in X”，否则显示会话年龄。
  */
-function formatJobAgeOrEta(h, E, k = Date.now()) {
-  if (E != null && E > k)
-    return `in ${formatDuration(E - k, {
+function formatJobAgeOrEta(job, etaMs, nowMs = Date.now()) {
+  if (etaMs != null && etaMs > nowMs)
+    return `in ${formatDuration(etaMs - nowMs, {
       mostSignificantOnly: true,
     })}`;
-  return formatJobAge(h, k);
+  return formatJobAge(job, nowMs);
 }
 //@ chunk-93kwxas0.js:73153-73763 placement
 /**
  * 会话显示标题：名称或意图摘要，当前/来源会话特殊标注。
  */
-function getJobTitle(state, E = false, k = false) {
-  let C = (name) => collapseWhitespace(returnFalse_2(state) ? sanitizeAttentionText(name) : name);
-  if (state.name) return redactSecrets(C(state.name));
-  let x = 25;
-  let filtered = redactSecrets(C(state.displayIntent ?? state.intent))
+function getJobTitle(state, isCurrent = false, shortForm = false) {
+  let sanitize = (name) => collapseWhitespace(returnFalse_2(state) ? sanitizeAttentionText(name) : name);
+  if (state.name) return redactSecrets(sanitize(state.name));
+  let maxWidth = 25;
+  let filtered = redactSecrets(sanitize(state.displayIntent ?? state.intent))
     .split(" ")
     .filter(Boolean);
   if (filtered.length === 0) {
-    if (E) return k ? "session you came from" : "current session";
+    if (isCurrent) return shortForm ? "session you came from" : "current session";
     if (
       (state.template === "bg" || state.template === DEFAULT_BG_AGENT_TEMPLATE.name) &&
       state.state === "working"
     )
-      return k ? "untitled session" : "new session";
-    if (k && (state.template === "bg" || state.template === DEFAULT_BG_AGENT_TEMPLATE.name))
+      return shortForm ? "untitled session" : "new session";
+    if (shortForm && (state.template === "bg" || state.template === DEFAULT_BG_AGENT_TEMPLATE.name))
       return "untitled session";
     return collapseWhitespace(state.template);
   }
-  let A = filtered.length > 3 ? `${filtered.slice(0, 3).join(" ")}\u2026` : filtered.join(" ");
-  if (bunStringWidth(A) <= x) return A;
-  let L = "";
-  let V = 0;
-  for (let D of splitGraphemes(A)) {
-    let U = bunStringWidth(D);
-    if (V + U > x - 1) break;
-    L += D;
-    V += U;
+  let truncatedWords = filtered.length > 3 ? `${filtered.slice(0, 3).join(" ")}\u2026` : filtered.join(" ");
+  if (bunStringWidth(truncatedWords) <= maxWidth) return truncatedWords;
+  let result = "";
+  let width = 0;
+  for (let grapheme of splitGraphemes(truncatedWords)) {
+    let graphemeWidth = bunStringWidth(grapheme);
+    if (width + graphemeWidth > maxWidth - 1) break;
+    result += grapheme;
+    width += graphemeWidth;
   }
-  return `${L}\u2026`;
+  return `${result}\u2026`;
 }
 //@ chunk-93kwxas0.js:73763-74583 placement
 /**
  * 未命名会话自动生成标题的 hook。
  */
-function useAutoTitle(h, E) {
-  let C = w(12);
+function useAutoTitle(label, hasName) {
+  let $ = useMemoCache(12);
   let clock = useClock();
-  let x;
-  if (C[0] !== h || C[1] !== E) {
-    x = {
-      label: h,
-      hasName: E,
+  let initial;
+  if ($[0] !== label || $[1] !== hasName) {
+    initial = {
+      label,
+      hasName,
       fired: false,
     };
-    C[0] = h;
-    C[1] = E;
-    C[2] = x;
-  } else x = C[2];
-  let T = R(x);
-  let [A, L] = y(null);
-  let V;
-  let D;
-  if (C[3] !== clock || C[4] !== h || C[5] !== E) {
-    V = () => {
-      if (T.current.fired || T.current.hasName || !E) {
-        T.current = {
-          label: h,
-          hasName: E,
-          fired: T.current.fired,
+    $[0] = label;
+    $[1] = hasName;
+    $[2] = initial;
+  } else initial = $[2];
+  let stateRef = useRef(initial);
+  let [animation, setAnimation] = useState(null);
+  let titleEffect;
+  let titleDeps;
+  if ($[3] !== clock || $[4] !== label || $[5] !== hasName) {
+    titleEffect = () => {
+      if (stateRef.current.fired || stateRef.current.hasName || !hasName) {
+        stateRef.current = {
+          label,
+          hasName,
+          fired: stateRef.current.fired,
         };
         return;
       }
-      let label = T.current.label;
-      T.current = {
-        label: h,
+      let label_2 = stateRef.current.label;
+      stateRef.current = {
+        label,
         hasName: true,
         fired: true,
       };
-      let max = Math.max(countGraphemes(label), countGraphemes(h));
+      let max = Math.max(countGraphemes(label_2), countGraphemes(label));
       if (max === 0) {
         return;
       }
-      L({
-        old: label,
+      setAnimation({
+        old: label_2,
         n: 1,
       });
-      let X = 1;
+      let step = 1;
       let max_2 = Math.max(16, Math.floor(360 / max));
-      let W = null;
-      let z = () => {
-        X = X + 1;
-        if (X >= max) {
-          L(null);
-          W = null;
+      let timer = null;
+      let advance = () => {
+        step = step + 1;
+        if (step >= max) {
+          setAnimation(null);
+          timer = null;
         } else {
-          L({
-            old: label,
-            n: X,
+          setAnimation({
+            old: label_2,
+            n: step,
           });
-          W = clock.setTimeout(z, max_2);
+          timer = clock.setTimeout(advance, max_2);
         }
       };
-      W = clock.setTimeout(z, max_2);
+      timer = clock.setTimeout(advance, max_2);
       return () => {
-        W?.();
-        L(null);
+        timer?.();
+        setAnimation(null);
       };
     };
-    D = [clock, h, E];
-    C[3] = clock;
-    C[4] = h;
-    C[5] = E;
-    C[6] = V;
-    C[7] = D;
+    titleDeps = [clock, label, hasName];
+    $[3] = clock;
+    $[4] = label;
+    $[5] = hasName;
+    $[6] = titleEffect;
+    $[7] = titleDeps;
   } else {
-    V = C[6];
-    D = C[7];
+    titleEffect = $[6];
+    titleDeps = $[7];
   }
-  zt(V, D);
-  if (!A) {
+  useLayoutEffect(titleEffect, titleDeps);
+  if (!animation) {
     return null;
   }
-  let oe;
-  if (C[8] !== A.n || C[9] !== A.old || C[10] !== h) {
-    oe = blendTitleAnimation(A.old, h, A.n);
-    C[8] = A.n;
-    C[9] = A.old;
-    C[10] = h;
-    C[11] = oe;
-  } else oe = C[11];
-  return oe;
+  let frame;
+  if ($[8] !== animation.n || $[9] !== animation.old || $[10] !== label) {
+    frame = blendTitleAnimation(animation.old, label, animation.n);
+    $[8] = animation.n;
+    $[9] = animation.old;
+    $[10] = label;
+    $[11] = frame;
+  } else frame = $[11];
+  return frame;
 }
 //@ chunk-93kwxas0.js:74583-74814 placement
 /**
  * 标题替换动画的一帧：新标题前 k 个字素 + 旧标题剩余部分，补齐到两者最大宽度。
  */
-function blendTitleAnimation(old, E, k) {
-  let C = splitGraphemes(old);
-  let x = splitGraphemes(E);
-  let joined = x.slice(0, Math.min(k, x.length)).join("");
-  let max = Math.max(bunStringWidth(old), bunStringWidth(E));
-  let L = bunStringWidth(joined);
-  let V = "";
-  for (let D of C.slice(k)) {
-    let U = bunStringWidth(D);
-    if (L + U > max) break;
-    V += D;
-    L += U;
+function blendTitleAnimation(old, newTitle, step) {
+  let oldGraphemes = splitGraphemes(old);
+  let newGraphemes = splitGraphemes(newTitle);
+  let joined = newGraphemes.slice(0, Math.min(step, newGraphemes.length)).join("");
+  let max = Math.max(bunStringWidth(old), bunStringWidth(newTitle));
+  let width = bunStringWidth(joined);
+  let tail = "";
+  for (let grapheme of oldGraphemes.slice(step)) {
+    let graphemeWidth = bunStringWidth(grapheme);
+    if (width + graphemeWidth > max) break;
+    tail += grapheme;
+    width += graphemeWidth;
   }
   return {
-    display: joined + V + repeatString(" ", max - L),
+    display: joined + tail + repeatString(" ", max - width),
     newLen: joined.length,
   };
 }
@@ -275,15 +280,17 @@ function blendTitleAnimation(old, E, k) {
  * 会话产物（PR/frame）列所需宽度。
  */
 function artifactColumnWidth(state) {
-  let E = validChildren(state.children);
-  if (!E.length) return 0;
-  let filtered = E.filter((C) => C.kind !== "frame");
+  let children = validChildren(state.children);
+  if (!children.length) return 0;
+  let filtered = children.filter((child) => child.kind !== "frame");
   if (filtered.length > 1) return bunStringWidth(`${filtered.length} PRs`);
   if (filtered.length === 1) {
-    let C = prNumberOfChild(filtered[0]);
-    return bunStringWidth(C !== undefined ? `#${C}` : "PR");
+    let prNumber = prNumberOfChild(filtered[0]);
+    return bunStringWidth(prNumber !== undefined ? `#${prNumber}` : "PR");
   }
-  return bunStringWidth(E.length > 1 ? `${E.length} ${BOXED_DIAMOND_GLYPH}` : BOXED_DIAMOND_GLYPH);
+  return bunStringWidth(
+    children.length > 1 ? `${children.length} ${BOXED_DIAMOND_GLYPH}` : BOXED_DIAMOND_GLYPH,
+  );
 }
 //@ chunk-93kwxas0.js:75065-75113 placement
 function hasSafeModeFlag(respawnFlags) {
@@ -293,16 +300,16 @@ function hasSafeModeFlag(respawnFlags) {
 /**
  * 计算 Agents 行的列宽（年龄、标签、产物、详情）。
  */
-function computeFleetColumnWidths(h, E, initialJobId, columns, ageNow) {
+function computeFleetColumnWidths(jobs, statusFor, initialJobId, columns, nowMs) {
   let max = Math.max(
     MAX_DISPATCH_RETRIES,
-    ...h.map((D) => bunStringWidth(formatJobAgeOrEta(D, E(D), ageNow))),
+    ...jobs.map((job) => bunStringWidth(formatJobAgeOrEta(job, statusFor(job), nowMs))),
   );
   let min = Math.min(
     Math.max(40, Math.floor(columns / 3)),
-    Math.max(12, ...h.map((D) => bunStringWidth(getJobTitle(D.state, D.id === initialJobId)))),
+    Math.max(12, ...jobs.map((job) => bunStringWidth(getJobTitle(job.state, job.id === initialJobId)))),
   );
-  let max_2 = Math.max(0, ...h.map((D) => artifactColumnWidth(D.state)));
+  let max_2 = Math.max(0, ...jobs.map((job) => artifactColumnWidth(job.state)));
   let detail = Math.max(8, columns - (min + 2) - 2 - (max_2 + 2) - (max + 2) - 2);
   return {
     age: max,
@@ -331,32 +338,32 @@ function loopJobGlyphAlt() {
 /**
  * 由活动与状态得出动词与颜色（Done/Failed/Stopped/Working…）。
  */
-function activityVerb(activity, tempo, k, C) {
-  if (activity === "success" && C)
+function activityVerb(activity, tempo, status, outcome) {
+  if (activity === "success" && outcome)
     return {
       word: "Done",
       color: "success",
       dim: false,
     };
-  if (activity === "failure" && C)
+  if (activity === "failure" && outcome)
     return {
       word: "Failed",
       color: "error",
       dim: false,
     };
-  if (activity === "stopped" && C)
+  if (activity === "stopped" && outcome)
     return {
       word: "Stopped",
       color: "inactive",
       dim: false,
     };
-  if (k === "busy" || k === "shell")
+  if (status === "busy" || status === "shell")
     return {
       word: FLEET_BUCKET_LABELS.working,
       color: undefined,
       dim: false,
     };
-  if (tempo === "blocked" || k === "waiting")
+  if (tempo === "blocked" || status === "waiting")
     return {
       word: FLEET_BUCKET_LABELS.blocked,
       color: "warning",
@@ -386,21 +393,21 @@ var COLOR_PRIORITY = {
  * 在会话与子项颜色中取优先级最高的颜色。
  */
 function pickHighestPriorityColor(color, childRows) {
-  let k = color;
-  let C = color ? (COLOR_PRIORITY[color] ?? 0) : 0;
-  for (let x of childRows) {
-    if (x.color === undefined || isFrameRow(x)) continue;
-    let T = COLOR_PRIORITY[x.color] ?? 0;
-    if (T > C) {
-      k = x.color;
-      C = T;
+  let bestColor = color;
+  let bestPriority = color ? (COLOR_PRIORITY[color] ?? 0) : 0;
+  for (let child of childRows) {
+    if (child.color === undefined || isFrameRow(child)) continue;
+    let priority = COLOR_PRIORITY[child.color] ?? 0;
+    if (priority > bestPriority) {
+      bestColor = child.color;
+      bestPriority = priority;
     }
   }
-  return k;
+  return bestColor;
 }
 //@ chunk-93kwxas0.js:76176-76219 placement
-function isFrameRow(h) {
-  return h.row.kind === "frame";
+function isFrameRow(row) {
+  return row.row.kind === "frame";
 }
 //@ chunk-93kwxas0.js:76219-76263 placement
 function prKindOf(row) {
@@ -410,14 +417,14 @@ function prKindOf(row) {
 /**
  * 子项的 PR 号：从链接里解析，或 id 本身是数字。
  */
-function prNumberOfChild(h) {
-  let prNumber = parsePrNumber(h.href);
+function prNumberOfChild(child) {
+  let prNumber = parsePrNumber(child.href);
   if (prNumber !== null) return Number(prNumber);
-  return /^\d+$/.test(h.id) ? Number(h.id) : undefined;
+  return /^\d+$/.test(child.id) ? Number(child.id) : undefined;
 }
 //@ chunk-93kwxas0.js:76369-76428 placement
-function normalizePrStatusColor(h) {
-  let prStatusColor = getPrStatusColor(h);
+function normalizePrStatusColor(status) {
+  let prStatusColor = getPrStatusColor(status);
   return prStatusColor === "error" ? "warning" : prStatusColor;
 }
 //@ chunk-93kwxas0.js:76428-76465 placement
@@ -427,61 +434,61 @@ var PR_SORT_RANK = {
   success: 1,
 };
 //@ chunk-93kwxas0.js:76465-76528 placement
-function sortByRank(h) {
-  return [...h].sort((E, k) => k.sortRank - E.sortRank);
+function sortByRank(rows) {
+  return [...rows].sort((left, right) => right.sortRank - left.sortRank);
 }
 //@ chunk-93kwxas0.js:76528-77217 placement
 /**
  * PR 状态的显示片段（已合并/关闭、检查失败/进行/通过）。
  */
-function prStatusSegments(h) {
-  if (h.state === "MERGED")
+function prStatusSegments(status) {
+  if (status.state === "MERGED")
     return [
       {
         text: "merged",
         color: "merged",
       },
     ];
-  if (h.state === "CLOSED")
+  if (status.state === "CLOSED")
     return [
       {
         text: "closed",
         color: "inactive",
       },
     ];
-  let E = [];
-  let { failed, pending, passed } = h.checks;
-  let T = failed + pending + passed;
+  let segments = [];
+  let { failed, pending, passed } = status.checks;
+  let checkTotal = failed + pending + passed;
   if (failed > 0)
-    E.push({
-      text: `${figures_default.cross} ${failed}/${T}`,
+    segments.push({
+      text: `${figures_default.cross} ${failed}/${checkTotal}`,
       color: "error",
     });
   else if (pending > 0)
-    E.push({
-      text: `${passed}/${T}`,
+    segments.push({
+      text: `${passed}/${checkTotal}`,
       color: "warning",
     });
-  else if (T > 0)
-    E.push({
+  else if (checkTotal > 0)
+    segments.push({
       text: figures_default.tick,
       color: "success",
     });
-  switch (h.review) {
+  switch (status.review) {
     case "APPROVED":
-      E.push({
+      segments.push({
         text: "approved",
         color: "success",
       });
       break;
     case "CHANGES_REQUESTED":
-      E.push({
+      segments.push({
         text: figures_default.cross,
         color: "error",
       });
       break;
     case "REVIEW_REQUIRED":
-      E.push({
+      segments.push({
         text: "needs review",
         color: undefined,
       });
@@ -489,48 +496,48 @@ function prStatusSegments(h) {
     case null:
       break;
   }
-  if (E.length === 0 && h.state !== "DRAFT")
-    E.push({
-      text: h.state.toLowerCase(),
-      color: normalizePrStatusColor(h),
+  if (segments.length === 0 && status.state !== "DRAFT")
+    segments.push({
+      text: status.state.toLowerCase(),
+      color: normalizePrStatusColor(status),
     });
-  return E;
+  return segments;
 }
 //@ chunk-93kwxas0.js:77217-77727 placement
 /**
  * 生成会话的子行（frame、PR 链接及其状态）。
  */
-function childFrameRows(children, E) {
+function childFrameRows(children, statusByHref) {
   return sortByRank(
-    validChildren(children).map((k) => {
-      if (k.kind === "frame")
+    validChildren(children).map((child) => {
+      if (child.kind === "frame")
         return {
-          row: k,
+          row: child,
           prNumber: undefined,
-          label: collapseWhitespace(k.title ?? "") || collapseWhitespace(k.id),
+          label: collapseWhitespace(child.title ?? "") || collapseWhitespace(child.id),
           status: [],
           diffStat: undefined,
           isDraft: false,
           color: "claude",
           sortRank: 0,
         };
-      let C = E.get(k.href);
-      let x = C ? getPrStatusColor(C) : undefined;
+      let status = statusByHref.get(child.href);
+      let color = status ? getPrStatusColor(status) : undefined;
       return {
-        row: k,
-        prNumber: C?.number ?? prNumberOfChild(k),
-        label: C?.title ? collapseWhitespace(C.title) : "",
-        status: C ? prStatusSegments(C) : [],
+        row: child,
+        prNumber: status?.number ?? prNumberOfChild(child),
+        label: status?.title ? collapseWhitespace(status.title) : "",
+        status: status ? prStatusSegments(status) : [],
         diffStat:
-          C && C.state !== "MERGED" && C.state !== "CLOSED"
+          status && status.state !== "MERGED" && status.state !== "CLOSED"
             ? {
-                additions: C.additions,
-                deletions: C.deletions,
+                additions: status.additions,
+                deletions: status.deletions,
               }
             : undefined,
-        isDraft: C?.state === "DRAFT",
-        color: C ? normalizePrStatusColor(C) : undefined,
-        sortRank: C?.state === "OPEN" && x ? (PR_SORT_RANK[x] ?? 0) : 0,
+        isDraft: status?.state === "DRAFT",
+        color: status ? normalizePrStatusColor(status) : undefined,
+        sortRank: status?.state === "OPEN" && color ? (PR_SORT_RANK[color] ?? 0) : 0,
       };
     }),
   );
@@ -542,19 +549,19 @@ var URL_RE = /https?:\/\/[^\s"'<>\\\u2026\x00-\x1f]+/;
  * 渲染带 **粗体**、++强调++、代码和链接的单行文本。
  */
 function InlineMarkup(props) {
-  let C = w(11);
-  let { value: E, linkHref } = props;
-  let x;
+  let $ = useMemoCache(11);
+  let { value, linkHref } = props;
+  let Component;
   let dimColor;
   let children;
-  if (C[0] !== linkHref || C[1] !== E) {
-    let parts = E.split(/(\*\*.+?\*\*|\+\+.+?\+\+|`[^`]+`|https?:\/\/[^\s"'<>\\\u2026\x00-\x1f]+)/g);
-    x = Text;
+  if ($[0] !== linkHref || $[1] !== value) {
+    let parts = value.split(/(\*\*.+?\*\*|\+\+.+?\+\+|`[^`]+`|https?:\/\/[^\s"'<>\\\u2026\x00-\x1f]+)/g);
+    Component = Text;
     dimColor = true;
-    let V;
-    if (C[5] !== linkHref) {
-      V = (D, U) => {
-        let match = D.match(/^(?:\*\*|\+\+|`)(.+?)(?:\*\*|\+\+|`)$/);
+    let renderPart;
+    if ($[5] !== linkHref) {
+      renderPart = (part, key) => {
+        let match = part.match(/^(?:\*\*|\+\+|`)(.+?)(?:\*\*|\+\+|`)$/);
         if (match) {
           return jsxProd_default(
             Text,
@@ -562,75 +569,75 @@ function InlineMarkup(props) {
               bold: true,
               children: match[1],
             },
-            U,
+            key,
           );
         }
-        if (URL_RE.test(D)) {
-          let X = trimTrailingPunctuation(D);
-          let K = linkHref === undefined ? X : linkHref(X);
-          if (K === undefined) {
-            return D;
+        if (URL_RE.test(part)) {
+          let url = trimTrailingPunctuation(part);
+          let href = linkHref === undefined ? url : linkHref(url);
+          if (href === undefined) {
+            return part;
           }
           return jsxProd_default_2(
-            Kc,
+            fragmentTypeExport,
             {
               children: [
                 jsxProd_default(Link, {
-                  url: K,
-                  children: X,
+                  url: href,
+                  children: url,
                 }),
-                D.slice(X.length),
+                part.slice(url.length),
               ],
             },
-            U,
+            key,
           );
         }
-        return D;
+        return part;
       };
-      C[5] = linkHref;
-      C[6] = V;
-    } else V = C[6];
-    children = parts.map(V);
-    C[0] = linkHref;
-    C[1] = E;
-    C[2] = x;
-    C[3] = dimColor;
-    C[4] = children;
+      $[5] = linkHref;
+      $[6] = renderPart;
+    } else renderPart = $[6];
+    children = parts.map(renderPart);
+    $[0] = linkHref;
+    $[1] = value;
+    $[2] = Component;
+    $[3] = dimColor;
+    $[4] = children;
   } else {
-    x = C[2];
-    dimColor = C[3];
-    children = C[4];
+    Component = $[2];
+    dimColor = $[3];
+    children = $[4];
   }
-  let V;
-  if (C[7] !== x || C[8] !== dimColor || C[9] !== children) {
-    V = jsxProd_default(x, {
+  let textNode;
+  if ($[7] !== Component || $[8] !== dimColor || $[9] !== children) {
+    textNode = jsxProd_default(Component, {
       dimColor,
       children,
     });
-    C[7] = x;
-    C[8] = dimColor;
-    C[9] = children;
-    C[10] = V;
-  } else V = C[10];
-  return V;
+    $[7] = Component;
+    $[8] = dimColor;
+    $[9] = children;
+    $[10] = textNode;
+  } else textNode = $[10];
+  return textNode;
 }
 //@ chunk-93kwxas0.js:78456-78583 placement
 /**
  * 行的无障碍前缀：“selected, pinned, 动词:”。
  */
-function jobRowAriaLabel(activity, tempo, k, C, x, T = false) {
-  let A = x ? "selected, " : "";
-  let L = T ? "pinned, " : "";
-  let { word } = activityVerb(activity, tempo, k, C);
-  return `${A}${L}${word.toLowerCase()}:`;
+function jobRowAriaLabel(activity, tempo, status, outcome, selected, pinned = false) {
+  let selectedPrefix = selected ? "selected, " : "";
+  let pinnedPrefix = pinned ? "pinned, " : "";
+  let { word } = activityVerb(activity, tempo, status, outcome);
+  return `${selectedPrefix}${pinnedPrefix}${word.toLowerCase()}:`;
 }
 //@ chunk-93kwxas0.js:78583-78723 placement
 /**
  * 行首状态符号：非活跃时为点，忙碌/shell 时为空，循环任务和普通任务各有符号。
  */
-function jobRowGlyph(state, E, k) {
-  if (E && state.tempo !== "active" && k === undefined) return BULLET_OPERATOR;
-  if (k === "busy" || k === "shell") return null;
+function jobRowGlyph(state, muted, status) {
+  if (muted && state.tempo !== "active" && status === undefined) return BULLET_OPERATOR;
+  if (status === "busy" || status === "shell") return null;
   if (isLoopJob(state)) return loopJobGlyphAlt();
   return loopJobGlyph();
 }
@@ -639,21 +646,21 @@ function jobRowGlyph(state, E, k) {
  * Agents 视图的旋转指示帧；减少动态效果或读屏时为静态点。
  */
 function useFleetSpinnerFrame() {
-  let x = w(1);
+  let $ = useMemoCache(1);
   let prefersReducedMotion = usePrefersReducedMotion();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let k = prefersReducedMotion || isScreenReaderEnabled;
-  let [, C] = useAnimationFrame(k ? null : 120);
-  if (k) {
+  let isStatic = prefersReducedMotion || isScreenReaderEnabled;
+  let [, frame] = useAnimationFrame(isStatic ? null : 120);
+  if (isStatic) {
     return SPINNER_DOT;
   }
-  let T;
-  if (x[0] === MEMO_CACHE_SENTINEL) {
-    T = getLoopSpinnerChars();
-    x[0] = T;
-  } else T = x[0];
-  let A = T;
-  return A[Math.floor(C / 120) % A.length];
+  let spinnerChars;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    spinnerChars = getLoopSpinnerChars();
+    $[0] = spinnerChars;
+  } else spinnerChars = $[0];
+  let chars = spinnerChars;
+  return chars[Math.floor(frame / 120) % chars.length];
 }
 //@ chunk-93kwxas0.js:78895-79070 placement
 var FLEET_RECENT_WINDOW_MS = 172800000;
@@ -675,11 +682,11 @@ var SIMPLE_BUCKET_KEYS = {
 /**
  * 会话归入 needs/live/done 中的哪个桶。
  */
-function jobBucket_2(state, E) {
-  if (E === "busy") return "live";
+function jobBucket_2(state, status) {
+  if (status === "busy") return "live";
   if (isSettled(state) && !(terminalOutcome(state.state) === "success" && isSelfDriving(state)))
     return "done";
-  if (E === "waiting") return "needs";
+  if (status === "waiting") return "needs";
   if (state.tempo === "blocked" && state.needs && state.needs !== IDLE_NEEDS) return "needs";
   return "live";
 }
@@ -688,115 +695,118 @@ function jobBucket_2(state, E) {
  * 会话最近的有效时间戳（终止/首次终止/更新/创建）。
  */
 function jobLatestTimestamp(state) {
-  for (let E of [state.lastTerminalAt, state.firstTerminalAt, state.updatedAt, state.createdAt])
-    if (E) {
-      let timestamp = Date.parse(E);
-      if (Number.isFinite(timestamp)) return timestamp;
+  for (let timestamp of [state.lastTerminalAt, state.firstTerminalAt, state.updatedAt, state.createdAt])
+    if (timestamp) {
+      let timestamp_2 = Date.parse(timestamp);
+      if (Number.isFinite(timestamp_2)) return timestamp_2;
     }
   return 0;
 }
 //@ chunk-93kwxas0.js:79429-79511 placement
-function isDifferentDoneGroup(h, E) {
-  if (h === undefined) return false;
-  return !(simpleGroupOf(h) === SIMPLE_BUCKET_KEYS.done && simpleGroupOf(E) === SIMPLE_BUCKET_KEYS.done);
+function isDifferentDoneGroup(previous, nextGroup) {
+  if (previous === undefined) return false;
+  return !(
+    simpleGroupOf(previous) === SIMPLE_BUCKET_KEYS.done &&
+    simpleGroupOf(nextGroup) === SIMPLE_BUCKET_KEYS.done
+  );
 }
 //@ chunk-93kwxas0.js:79511-79562 placement
-function simpleGroupOf(h) {
-  return h.group === SIMPLE_FINISHED ? SIMPLE_BUCKET_KEYS.done : h.group;
+function simpleGroupOf(group) {
+  return group.group === SIMPLE_FINISHED ? SIMPLE_BUCKET_KEYS.done : group.group;
 }
 //@ chunk-93kwxas0.js:79562-79608 placement
-function remainingRowsForTerminal(terminalRows, E) {
-  return Math.max(0, terminalRows - RECENT_LIST_GAP - DONE_CAP_TITLE_ROWS - E);
+function remainingRowsForTerminal(terminalRows, reserved) {
+  return Math.max(0, terminalRows - RECENT_LIST_GAP - DONE_CAP_TITLE_ROWS - reserved);
 }
 //@ chunk-93kwxas0.js:79608-80705 placement
 /**
  * 把会话分成 needs/live/done 等带计数的桶。
  */
-function bucketJobs(h, { statusFor, now, fallbackOrigin, showFinishedEarlier, terminalRows }) {
-  let A = [];
-  let L = [];
-  let V = [];
-  let D = [];
-  let U = 0;
-  let N = 0;
-  let X = 0;
-  for (let le of h) {
-    let Oe = statusFor(le);
-    let De = jobBucket_2(le.state, Oe);
-    if (De === "needs") U++;
-    else if (De === "live") {
-      N++;
-      if (Oe === "busy" || Oe === "shell") X++;
+function bucketJobs(jobs, { statusFor, now, fallbackOrigin, showFinishedEarlier, terminalRows }) {
+  let pinnedRows = [];
+  let needsRows = [];
+  let liveRows = [];
+  let doneRows = [];
+  let needsCount = 0;
+  let liveCount = 0;
+  let workingCount = 0;
+  for (let job of jobs) {
+    let status = statusFor(job);
+    let bucket = jobBucket_2(job.state, status);
+    if (bucket === "needs") needsCount++;
+    else if (bucket === "live") {
+      liveCount++;
+      if (status === "busy" || status === "shell") workingCount++;
     }
-    if (le.state.pinned) {
-      A.push(le);
+    if (job.state.pinned) {
+      pinnedRows.push(job);
       continue;
     }
-    switch (De) {
+    switch (bucket) {
       case "needs":
-        L.push(le);
+        needsRows.push(job);
         break;
       case "live":
-        V.push(le);
+        liveRows.push(job);
         break;
       case "done":
-        D.push(le);
+        doneRows.push(job);
         break;
     }
   }
-  D.sort((le, Oe) => jobLatestTimestamp(Oe.state) - jobLatestTimestamp(le.state));
-  let K = [
+  doneRows.sort((left, right) => jobLatestTimestamp(right.state) - jobLatestTimestamp(left.state));
+  let rows = [
     {
       kind: "newsession",
       origin: fallbackOrigin,
       group: SIMPLE_NEW_SESSION,
     },
   ];
-  let W = (group, Oe) => {
-    for (let De of Oe)
-      K.push({
+  let addGroup = (group, groupRows) => {
+    for (let job of groupRows)
+      rows.push({
         kind: "job",
-        job: De,
-        origin: spawnOrigin(De.state),
+        job,
+        origin: spawnOrigin(job.state),
         group,
       });
   };
-  W(SIMPLE_PINNED, A);
-  W(SIMPLE_BUCKET_KEYS.needs, L);
-  W(SIMPLE_BUCKET_KEYS.live, V);
-  let oe =
+  addGroup(SIMPLE_PINNED, pinnedRows);
+  addGroup(SIMPLE_BUCKET_KEYS.needs, needsRows);
+  addGroup(SIMPLE_BUCKET_KEYS.live, liveRows);
+  let headerRows =
     1 +
-    (V.length * RUNNING_GROUP_ROWS + (A.length + L.length) * PORCELAIN_GROUP_ROWS) +
-    (U + N === 0 ? EMPTY_GROUP_ROWS : 0) +
-    (D.length > 0 ? 1 + FINISHED_SECTION_ROWS : 0);
-  let ge = remainingRowsForTerminal(terminalRows, oe);
-  let se = count(D, (le) => now - jobLatestTimestamp(le.state) > FLEET_RECENT_WINDOW_MS);
-  let max = Math.max(0, D.length - se - ge);
-  let ae = showFinishedEarlier ? 0 : se + max;
-  let me = ae >= LIVE_GROUP_ROWS ? ae : 0;
+    (liveRows.length * RUNNING_GROUP_ROWS + (pinnedRows.length + needsRows.length) * PORCELAIN_GROUP_ROWS) +
+    (needsCount + liveCount === 0 ? EMPTY_GROUP_ROWS : 0) +
+    (doneRows.length > 0 ? 1 + FINISHED_SECTION_ROWS : 0);
+  let doneCap = remainingRowsForTerminal(terminalRows, headerRows);
+  let oldCount = count(doneRows, (job) => now - jobLatestTimestamp(job.state) > FLEET_RECENT_WINDOW_MS);
+  let max = Math.max(0, doneRows.length - oldCount - doneCap);
+  let foldCount = showFinishedEarlier ? 0 : oldCount + max;
+  let foldHidden = foldCount >= LIVE_GROUP_ROWS ? foldCount : 0;
   let doneFoldHiddenFailed = count(
-    D.slice(D.length - me),
-    (le) => terminalOutcome(le.state.state) === "failure",
+    doneRows.slice(doneRows.length - foldHidden),
+    (job) => terminalOutcome(job.state.state) === "failure",
   );
-  W(SIMPLE_BUCKET_KEYS.done, D.slice(0, D.length - me));
-  if (me > 0)
-    K.push({
+  addGroup(SIMPLE_BUCKET_KEYS.done, doneRows.slice(0, doneRows.length - foldHidden));
+  if (foldHidden > 0)
+    rows.push({
       kind: "fold",
       origin: fallbackOrigin,
       group: SIMPLE_FINISHED,
-      hidden: me,
+      hidden: foldHidden,
     });
   return {
-    rows: K,
-    doneCount: D.length,
-    doneFoldHidden: me,
+    rows,
+    doneCount: doneRows.length,
+    doneFoldHidden: foldHidden,
     doneFoldHiddenFailed,
-    doneCap: ge,
+    doneCap,
     foldGroup: SIMPLE_FINISHED,
-    runningCount: U + N,
-    needsCount: U,
-    workingCount: X,
-    liveCount: N,
+    runningCount: needsCount + liveCount,
+    needsCount,
+    workingCount,
+    liveCount,
   };
 }
 //@ chunk-93kwxas0.js:80705-80972 placement
@@ -805,39 +815,40 @@ function bucketJobs(h, { statusFor, now, fallbackOrigin, showFinishedEarlier, te
  */
 function fanProgressLabel(state) {
   let fan = state.fan ?? [];
-  let filtered = fan.filter((x) => x.kind === "todo");
-  if (filtered.length > 0) return `${count(filtered, (x) => x.doneAt !== undefined)}/${filtered.length}`;
-  let filtered_2 = fan.filter((x) => x.kind === "agent" || x.kind === "workflow");
+  let filtered = fan.filter((item) => item.kind === "todo");
+  if (filtered.length > 0)
+    return `${count(filtered, (item) => item.doneAt !== undefined)}/${filtered.length}`;
+  let filtered_2 = fan.filter((item) => item.kind === "agent" || item.kind === "workflow");
   if (filtered_2.length > 0)
-    return `${count(filtered_2, (x) => x.doneAt !== undefined)}/${filtered_2.length} agents`;
+    return `${count(filtered_2, (item) => item.doneAt !== undefined)}/${filtered_2.length} agents`;
   return;
 }
 //@ chunk-93kwxas0.js:80972-81074 placement
 /**
  * “N tokens”，下行时带箭头。
  */
-function formatTokenCount(tokens, E) {
+function formatTokenCount(tokens, withArrow) {
   if (tokens === undefined || tokens <= 0) return;
-  let k = `${formatTokens(tokens)} tokens`;
-  return E ? `${figures_default.arrowDown} ${k}` : k;
+  let text = `${formatTokens(tokens)} tokens`;
+  return withArrow ? `${figures_default.arrowDown} ${text}` : text;
 }
 //@ chunk-93kwxas0.js:81074-81330 placement
 /**
  * 行的活动词与颜色：working 变暗，blocked 时区分 “Needs you” 与 “Idle”。
  */
-function jobActivityDisplay(job, E) {
-  let k = E(job);
-  let C = activityVerb(job.activity, job.state.tempo, k, terminalOutcome(job.state.state));
-  if (C.word === FLEET_BUCKET_LABELS.working)
+function jobActivityDisplay(job, statusFor) {
+  let status = statusFor(job);
+  let display = activityVerb(job.activity, job.state.tempo, status, terminalOutcome(job.state.state));
+  if (display.word === FLEET_BUCKET_LABELS.working)
     return {
-      ...C,
+      ...display,
       color: undefined,
       dim: true,
     };
-  if (C.word !== FLEET_BUCKET_LABELS.blocked) return C;
-  return jobBucket_2(job.state, k) === "needs"
+  if (display.word !== FLEET_BUCKET_LABELS.blocked) return display;
+  return jobBucket_2(job.state, status) === "needs"
     ? {
-        ...C,
+        ...display,
         word: "Needs you",
       }
     : {
@@ -847,51 +858,60 @@ function jobActivityDisplay(job, E) {
       };
 }
 //@ chunk-93kwxas0.js:81330-81418 placement
-function jobAgeLabel(job, loopJobIds, loopKicks, ageNow) {
+function jobAgeLabel(job, loopJobIds, loopKicks, nowMs) {
   return formatJobAgeOrEta(
     job,
     loopJobIds.has(job.id) ? loopKicks.get(job.state.sessionId)?.nextAt : undefined,
-    ageNow,
+    nowMs,
   );
 }
 //@ chunk-93kwxas0.js:81418-81481 placement
-function jobTokenLabel(job, E) {
-  return formatTokenCount(job.state.tokens, E.word === FLEET_BUCKET_LABELS.working);
+function jobTokenLabel(job, display) {
+  return formatTokenCount(job.state.tokens, display.word === FLEET_BUCKET_LABELS.working);
 }
 //@ chunk-93kwxas0.js:81481-81851 placement
 /**
  * 生成会话"需要你处理"的一行说明。
  */
-function jobNeedsLine(job, E, k, columns) {
-  let x = isScreenReaderMode() ? 1 / 0 : Math.max(24, Math.min(72, Math.floor(columns * 0.55)));
-  let T = (U) => (x === 1 / 0 ? U : truncateToWidth(U, x));
-  if (jobBucket_2(job.state, k) === "done") return;
+function jobNeedsLine(job, display, status, columns) {
+  let lineWidth = isScreenReaderMode() ? 1 / 0 : Math.max(24, Math.min(72, Math.floor(columns * 0.55)));
+  let truncate = (line) => (lineWidth === 1 / 0 ? line : truncateToWidth(line, lineWidth));
+  if (jobBucket_2(job.state, status) === "done") return;
   let needs = job.state.needs && job.state.needs !== IDLE_NEEDS ? job.state.needs : undefined;
-  if (needs) return T(jobPreviewText(job.state, needs));
-  if (!job.state.pinned && E.word !== FLEET_BUCKET_LABELS.working) return;
-  let V = fanProgressLabel(job.state);
-  if (V) return V;
+  if (needs) return truncate(jobPreviewText(job.state, needs));
+  if (!job.state.pinned && display.word !== FLEET_BUCKET_LABELS.working) return;
+  let progress = fanProgressLabel(job.state);
+  if (progress) return progress;
   let detail = job.state.detail;
-  return detail && !isTerminalDetail(detail) ? T(jobPreviewText(job.state, detail)) : undefined;
+  return detail && !isTerminalDetail(detail) ? truncate(jobPreviewText(job.state, detail)) : undefined;
 }
 //@ chunk-93kwxas0.js:81851-81909 placement
-function groupCollapseKey(groupMode, E) {
-  return E === "pinned" ? "pinned" : `${groupMode}:${E}`;
+function groupCollapseKey(groupMode, group) {
+  return group === "pinned" ? "pinned" : `${groupMode}:${group}`;
 }
 //@ chunk-93kwxas0.js:81909-82123 placement = prependModeCharacterToInput (1)
-function prependModeCharacterToInput(query, mode, jobs, cwdFilter) {
-  let x = mode === "bash" ? null : parsePrNumber(query);
-  let T = x ? prUrlMatcher(x) : undefined;
-  let A = mode === "bash" || x ? null : soloUrl(query);
-  let L = (D) => !cwdFilter || jobMatchesCwd(D.state, cwdFilter);
-  let V = x ? (D) => jobReferencesPr(D, x, T) : A ? (D) => mentionsText(D, A) : null;
-  return V ? (jobs ?? []).find((D) => L(D) && V(D.state))?.id : undefined;
+function prependModeCharacterToInput(text, mode, jobs, cwdFilter) {
+  let prNumber = mode === "bash" ? null : parsePrNumber(text);
+  let prMatcher = prNumber ? prUrlMatcher(prNumber) : undefined;
+  let soloUrl_ = mode === "bash" || prNumber ? null : soloUrl(text);
+  let matchesCwd = (job) => !cwdFilter || jobMatchesCwd(job.state, cwdFilter);
+  let matchesJob = prNumber
+    ? (job) => jobReferencesPr(job, prNumber, prMatcher)
+    : soloUrl_
+      ? (job) => mentionsText(job, soloUrl_)
+      : null;
+  return matchesJob ? (jobs ?? []).find((job) => matchesCwd(job) && matchesJob(job.state))?.id : undefined;
 }
 //@ chunk-93kwxas0.js:82123-82217 placement
-function parseDraftInput(query, mode, k, C) {
-  return k
+function parseDraftInput(query, mode, modeCharacterJobId, parseScope) {
+  return modeCharacterJobId
     ? null
-    : parseDispatchInput(mode === "bash" ? `!${query}` : query, C.templates, C.allRepos, C.routines);
+    : parseDispatchInput(
+        mode === "bash" ? `!${query}` : query,
+        parseScope.templates,
+        parseScope.allRepos,
+        parseScope.routines,
+      );
 }
 //@ chunk-93kwxas0.js:82217-82276 placement
 function hasDispatchIntent(dispatch) {
@@ -950,49 +970,60 @@ function buildFleetRows({
   now,
   ageNow,
 }) {
-  let Wt = (xe) => groupCollapseKey(groupMode, xe);
+  let collapseKeyOf = (group) => groupCollapseKey(groupMode, group);
   let isBashDispatch = mode === "bash" || dispatch?.exec !== undefined;
-  let Ge = hasDispatchIntent(dispatch);
-  let yt = hasDispatchContent(dispatch);
-  let Bt = dispatch === null;
-  let lt = Bt ? new Set() : collapsed;
-  let { template, state, name: Ot, group, output, pr, url, text } = parseDispatchFlags(dispatch ? "" : query);
-  let Fe = pr ? prUrlMatcher(pr) : undefined;
-  let Rt = [...(jobs ?? []), ...(peersEnabled ? adoptedPeers : [])];
-  let Vt = cwdFilter ? Rt.filter((xe) => jobMatchesCwd(xe.state, cwdFilter)) : Rt;
-  let Be = showRemoteTabs
+  let hasIntent = hasDispatchIntent(dispatch);
+  let hasContent = hasDispatchContent(dispatch);
+  let isQueryOnly = dispatch === null;
+  let activeCollapsed = isQueryOnly ? new Set() : collapsed;
+  let {
+    template,
+    state,
+    name: nameFilter,
+    group,
+    output,
+    pr,
+    url,
+    text,
+  } = parseDispatchFlags(dispatch ? "" : query);
+  let prMatcher = pr ? prUrlMatcher(pr) : undefined;
+  let localJobs = [...(jobs ?? []), ...(peersEnabled ? adoptedPeers : [])];
+  let scopedLocalJobs = cwdFilter
+    ? localJobs.filter((job) => jobMatchesCwd(job.state, cwdFilter))
+    : localJobs;
+  let scopedJobs = showRemoteTabs
     ? activeTab === "remote"
       ? remoteJobs
-      : Vt
+      : scopedLocalJobs
     : simpleWantsRemote
-      ? [...Vt, ...remoteJobs]
-      : Vt;
-  let filtered = Be.filter((xe) => {
-    if (template && !xe.state.template.toLowerCase().startsWith(template)) return false;
-    if (Ot && rankJobNameMatch(xe.state, Ot) === 0) return false;
+      ? [...scopedLocalJobs, ...remoteJobs]
+      : scopedLocalJobs;
+  let filtered = scopedJobs.filter((job) => {
+    if (template && !job.state.template.toLowerCase().startsWith(template)) return false;
+    if (nameFilter && rankJobNameMatch(job.state, nameFilter) === 0) return false;
     if (
       group &&
-      !xe.state.group?.toLowerCase().startsWith(group) &&
-      !(xe.state.pinned && "pinned".startsWith(group))
+      !job.state.group?.toLowerCase().startsWith(group) &&
+      !(job.state.pinned && "pinned".startsWith(group))
     )
       return false;
-    if (pr && !jobReferencesPr(xe.state, pr, Fe)) return false;
-    if (url && !mentionsText(xe.state, url)) return false;
+    if (pr && !jobReferencesPr(job.state, pr, prMatcher)) return false;
+    if (url && !mentionsText(job.state, url)) return false;
     if (
       output !== undefined &&
-      !Object.values(xe.state.output ?? {}).some((qt) => qt.toLowerCase().includes(output))
+      !Object.values(job.state.output ?? {}).some((outputValue) => outputValue.toLowerCase().includes(output))
     )
       return false;
     if (
       state &&
-      !xe.state.state.toLowerCase().startsWith(state) &&
-      !jobTempo(xe.state).startsWith(state) &&
-      !FLEET_BUCKET_LABELS[jobBucket(xe, prStatuses, liveStatus(xe))].toLowerCase().startsWith(state)
+      !job.state.state.toLowerCase().startsWith(state) &&
+      !jobTempo(job.state).startsWith(state) &&
+      !FLEET_BUCKET_LABELS[jobBucket(job, prStatuses, liveStatus(job))].toLowerCase().startsWith(state)
     )
       return false;
     if (text) {
       if (
-        ![xe.state.name, xe.state.intent, xe.state.detail, ...Object.values(xe.state.output ?? {})]
+        ![job.state.name, job.state.intent, job.state.detail, ...Object.values(job.state.output ?? {})]
           .join(" ")
           .toLowerCase()
           .includes(text)
@@ -1001,57 +1032,64 @@ function buildFleetRows({
     }
     return true;
   });
-  let filtered_2 = pendings.filter((pending) => !filtered.some((qt) => qt.id === pending.id));
-  let $e = filtered_2.length > 0 ? sortJobs([...filtered_2, ...filtered]) : filtered;
-  let ht = groupMode === "state";
-  let jt = groupMode === "group";
-  let We = new Map(
-    $e.map((xe) => [
-      xe.id,
-      xe.state.pinned
+  let filtered_2 = pendings.filter((pending) => !filtered.some((job) => job.id === pending.id));
+  let withPendings = filtered_2.length > 0 ? sortJobs([...filtered_2, ...filtered]) : filtered;
+  let byState = groupMode === "state";
+  let byGroup = groupMode === "group";
+  let groupOf = new Map(
+    withPendings.map((job) => [
+      job.id,
+      job.state.pinned
         ? "pinned"
-        : pendingDelete?.id === xe.id && pendingDelete.group
+        : pendingDelete?.id === job.id && pendingDelete.group
           ? pendingDelete.group
-          : ht
-            ? jobBucket(xe, prStatuses, liveStatus(xe))
-            : jt
-              ? (xe.state.group ?? UNGROUPED)
-              : canonicalRepoRoot(xe.state),
+          : byState
+            ? jobBucket(job, prStatuses, liveStatus(job))
+            : byGroup
+              ? (job.state.group ?? UNGROUPED)
+              : canonicalRepoRoot(job.state),
     ]),
   );
-  let Jt = (xe) => (xe === "pinned" ? -1 : xe === UNGROUPED ? 1 : 0);
-  let sorted = [...$e].sort((xe, qt) => {
-    let it = We.get(xe.id);
-    let io = We.get(qt.id);
-    if (it === "pinned" || io === "pinned") return (it === "pinned" ? 0 : 1) - (io === "pinned" ? 0 : 1);
-    if (jt) {
-      let bo = (wo) =>
-        pendingDelete?.id === wo.id && pendingDelete.sortKey !== undefined
+  let pinnedRank = (group) => (group === "pinned" ? -1 : group === UNGROUPED ? 1 : 0);
+  let jobs_2 = [...withPendings].sort((jobA, jobB) => {
+    let groupA = groupOf.get(jobA.id);
+    let groupB = groupOf.get(jobB.id);
+    if (groupA === "pinned" || groupB === "pinned")
+      return (groupA === "pinned" ? 0 : 1) - (groupB === "pinned" ? 0 : 1);
+    if (byGroup) {
+      let sortTimeOf = (job) =>
+        pendingDelete?.id === job.id && pendingDelete.sortKey !== undefined
           ? pendingDelete.sortKey
-          : Date.parse(wo.state.updatedAt);
-      return Jt(it) - Jt(io) || it.localeCompare(io) || bo(qt) - bo(xe);
+          : Date.parse(job.state.updatedAt);
+      return (
+        pinnedRank(groupA) - pinnedRank(groupB) ||
+        groupA.localeCompare(groupB) ||
+        sortTimeOf(jobB) - sortTimeOf(jobA)
+      );
     }
-    if (ht) {
-      let bo = FLEET_BUCKETS.indexOf(it) - FLEET_BUCKETS.indexOf(io);
-      let wo = (Ho) =>
-        pendingDelete?.id === Ho.id && pendingDelete.sortKey !== undefined
+    if (byState) {
+      let bucketDelta = FLEET_BUCKETS.indexOf(groupA) - FLEET_BUCKETS.indexOf(groupB);
+      let sortKeyOf = (job) =>
+        pendingDelete?.id === job.id && pendingDelete.sortKey !== undefined
           ? pendingDelete.sortKey
-          : jobSortKey_2(Ho.state, it);
-      return bo !== 0 ? bo : wo(qt) - wo(xe) || qt.state.createdAt.localeCompare(xe.state.createdAt);
+          : jobSortKey_2(job.state, groupA);
+      return bucketDelta !== 0
+        ? bucketDelta
+        : sortKeyOf(jobB) - sortKeyOf(jobA) || jobB.state.createdAt.localeCompare(jobA.state.createdAt);
     }
-    if (it === launcherGroup && io !== launcherGroup) return -1;
-    if (io === launcherGroup && it !== launcherGroup) return 1;
-    return it.localeCompare(io);
+    if (groupA === launcherGroup && groupB !== launcherGroup) return -1;
+    if (groupB === launcherGroup && groupA !== launcherGroup) return 1;
+    return groupA.localeCompare(groupB);
   });
-  let He = 1 / 0;
-  let ct = DONE_CAP_MIN;
-  let vt = false;
-  let rt = new Set();
-  for (let xe of [...(jobs ?? []), ...pendings, ...(peersEnabled ? adoptedPeers : [])]) {
-    if (xe.state.sessionId) rt.add(xe.state.sessionId);
-    if (xe.state.resumeSessionId) rt.add(xe.state.resumeSessionId);
+  let doneFoldAt = 1 / 0;
+  let doneCap = DONE_CAP_MIN;
+  let compactHeader = false;
+  let jobSessionIds = new Set();
+  for (let job of [...(jobs ?? []), ...pendings, ...(peersEnabled ? adoptedPeers : [])]) {
+    if (job.state.sessionId) jobSessionIds.add(job.state.sessionId);
+    if (job.state.resumeSessionId) jobSessionIds.add(job.state.resumeSessionId);
   }
-  let Xe =
+  let earlierVisible =
     Boolean(template || pr || url || state || group) ||
     output !== undefined ||
     earlierEntries.length === 0 ||
@@ -1060,44 +1098,45 @@ function buildFleetRows({
       ? []
       : earlierEntries.filter(
           (earlierEntry) =>
-            !rt.has(earlierEntry.sessionId) &&
+            !jobSessionIds.has(earlierEntry.sessionId) &&
             (!text || earlierEntry.title.toLowerCase().includes(text)) &&
-            (!Ot || earlierEntry.title.toLowerCase().includes(Ot)),
+            (!nameFilter || earlierEntry.title.toLowerCase().includes(nameFilter)),
         );
-  if (ht && !simpleView) {
-    let done = sorted.filter((bo) => We.get(bo.id) === "done");
-    let size = new Set(sorted.map((bo) => We.get(bo.id))).size;
-    let reduced = sorted.reduce((acc, wo) => {
-      let Ho = We.get(wo.id);
-      return Ho !== "done" && !lt.has(Wt(Ho)) ? acc + 1 : acc;
+  if (byState && !simpleView) {
+    let done = jobs_2.filter((job) => groupOf.get(job.id) === "done");
+    let size = new Set(jobs_2.map((job) => groupOf.get(job.id))).size;
+    let reduced = jobs_2.reduce((acc, job) => {
+      let group = groupOf.get(job.id);
+      return group !== "done" && !activeCollapsed.has(collapseKeyOf(group)) ? acc + 1 : acc;
     }, 0);
-    let doneCap = computeDoneCap(termRows, reduced + Math.max(0, size * 2 - 1));
-    ct = doneCap.doneCap;
-    vt = doneCap.compactHeader;
+    let doneCap_2 = computeDoneCap(termRows, reduced + Math.max(0, size * 2 - 1));
+    doneCap = doneCap_2.doneCap;
+    compactHeader = doneCap_2.compactHeader;
     if (!capExpanded.has("done"))
-      He = doneFoldIndex({
+      doneFoldAt = doneFoldIndex({
         done,
-        earlier: Xe,
-        doneCap: ct,
+        earlier: earlierVisible,
+        doneCap,
         initialJobId,
         linkMatchId,
       });
-  } else if (!simpleView && activeTab !== "remote" && Xe.length > 0) {
-    let size = new Set(sorted.map((it) => We.get(it.id))).size;
-    let doneCap = computeDoneCap(termRows, sorted.length + Math.max(0, size * 2 - 1));
-    ct = doneCap.doneCap;
-    vt = doneCap.compactHeader;
-    if (!capExpanded.has(EARLIER)) He = Xe.length >= ct + DONE_CAP_SLACK ? ct : 1 / 0;
+  } else if (!simpleView && activeTab !== "remote" && earlierVisible.length > 0) {
+    let size = new Set(jobs_2.map((job) => groupOf.get(job.id))).size;
+    let doneCap_2 = computeDoneCap(termRows, jobs_2.length + Math.max(0, size * 2 - 1));
+    doneCap = doneCap_2.doneCap;
+    compactHeader = doneCap_2.compactHeader;
+    if (!capExpanded.has(EARLIER))
+      doneFoldAt = earlierVisible.length >= doneCap + DONE_CAP_SLACK ? doneCap : 1 / 0;
   }
   let bandCounts = {
-    blocked: count(Be, (xe) => jobTempo(xe.state, liveStatus(xe)) === "blocked"),
-    active: count(Be, (xe) => jobTempo(xe.state, liveStatus(xe)) === "active"),
-    completed: count(Be, (xe) => jobTempo(xe.state, liveStatus(xe)) === "completed"),
+    blocked: count(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "blocked"),
+    active: count(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "active"),
+    completed: count(scopedJobs, (job) => jobTempo(job.state, liveStatus(job)) === "completed"),
   };
-  let all = sorted.every((xe) => xe.id === initialJobId);
-  let uo = !simpleView && ht && !query && all && !sorted[0]?.state.pinned;
-  let Kt = simpleView
-    ? bucketJobs($e, {
+  let all = jobs_2.every((job) => job.id === initialJobId);
+  let isOnboarding = !simpleView && byState && !query && all && !jobs_2[0]?.state.pinned;
+  let simpleBuilt = simpleView
+    ? bucketJobs(withPendings, {
         statusFor: liveStatus,
         now,
         fallbackOrigin: scopedFallbackOrigin,
@@ -1105,120 +1144,127 @@ function buildFleetRows({
         terminalRows: termRows,
       })
     : null;
-  if (Kt !== null) {
-    let xe = 1 + Kt.needsCount + Kt.liveCount;
-    vt = computeDoneCap(termRows, xe).compactHeader;
+  if (simpleBuilt !== null) {
+    let simpleRowCount = 1 + simpleBuilt.needsCount + simpleBuilt.liveCount;
+    compactHeader = computeDoneCap(termRows, simpleRowCount).compactHeader;
   }
-  let po =
-    Kt ??
-    layoutRows(sorted, We, {
-      byState: ht,
-      byGroup: jt,
+  let built =
+    simpleBuilt ??
+    layoutRows(jobs_2, groupOf, {
+      byState,
+      byGroup,
       onRemoteTab: activeTab === "remote",
       launcherGroup,
       scopedFallbackOrigin,
-      doneFoldAt: He,
-      emptyBucketHint: uo,
-      earlier: Xe,
+      doneFoldAt,
+      emptyBucketHint: isOnboarding,
+      earlier: earlierVisible,
     });
-  let rows = po.rows;
-  let pt = new Map();
-  for (let xe of sorted) {
-    let qt = We.get(xe.id);
-    pt.set(qt, (pt.get(qt) ?? 0) + 1);
+  let rows = built.rows;
+  let groupCounts = new Map();
+  for (let job of jobs_2) {
+    let group = groupOf.get(job.id);
+    groupCounts.set(group, (groupCounts.get(group) ?? 0) + 1);
   }
-  if (Xe.length > 0 && activeTab !== "remote") {
-    let xe = ht ? "done" : EARLIER;
-    pt.set(xe, (pt.get(xe) ?? 0) + Xe.length);
+  if (earlierVisible.length > 0 && activeTab !== "remote") {
+    let earlierGroupName = byState ? "done" : EARLIER;
+    groupCounts.set(earlierGroupName, (groupCounts.get(earlierGroupName) ?? 0) + earlierVisible.length);
   }
-  if (lt.size > 0) rows = rows.filter((xe) => xe.kind === "header" || !lt.has(Wt(xe.group)));
-  let homeIdx = simpleView ? 0 : Bt ? bestSearchMatchIndex(rows, Ot) : initialFocusIndex(rows, launcherCwd);
-  let hasMultipleOrigins = new Set(rows.filter((xe) => xe.kind === "header").map((xe) => xe.group)).size > 1;
-  let Ce = rows[focusedIdx];
-  let job = Ce?.kind === "job" ? Ce.job : undefined;
-  let at =
-    activeTab === "remote" || (Ce?.kind === "job" && Ce.job.state.backend !== "daemon")
+  if (activeCollapsed.size > 0)
+    rows = rows.filter((row) => row.kind === "header" || !activeCollapsed.has(collapseKeyOf(row.group)));
+  let homeIdx = simpleView
+    ? 0
+    : isQueryOnly
+      ? bestSearchMatchIndex(rows, nameFilter)
+      : initialFocusIndex(rows, launcherCwd);
+  let hasMultipleOrigins =
+    new Set(rows.filter((row) => row.kind === "header").map((row) => row.group)).size > 1;
+  let focusedRow = rows[focusedIdx];
+  let job = focusedRow?.kind === "job" ? focusedRow.job : undefined;
+  let focusOrigin =
+    activeTab === "remote" || (focusedRow?.kind === "job" && focusedRow.job.state.backend !== "daemon")
       ? scopedFallbackOrigin
-      : (Ce?.origin ?? scopedFallbackOrigin);
-  let altOpenOrigin = activeTab === "remote" ? (Ce?.origin ?? at) : at;
-  let focusedGroup = Ce?.group ?? launcherGroup;
-  let dispatchOrigin = ht && !simpleView ? scopedFallbackOrigin : at;
+      : (focusedRow?.origin ?? scopedFallbackOrigin);
+  let altOpenOrigin = activeTab === "remote" ? (focusedRow?.origin ?? focusOrigin) : focusOrigin;
+  let focusedGroup = focusedRow?.group ?? launcherGroup;
+  let dispatchOrigin = byState && !simpleView ? scopedFallbackOrigin : focusOrigin;
   let focusIsFromHover = focusedIdx === hoverFocusIdx;
   let cols = computeFleetColumnWidths(
-    sorted,
-    (xe) => (loopJobIds.has(xe.id) ? loopKicks.get(xe.state.sessionId)?.nextAt : null),
+    jobs_2,
+    (job) => (loopJobIds.has(job.id) ? loopKicks.get(job.state.sessionId)?.nextAt : null),
     initialJobId,
     columns,
     ageNow,
   );
   let dispatchTargetGroup = (() => {
-    if (!yt || linkMatchId) return null;
-    if (ht) return "working";
+    if (!hasContent || linkMatchId) return null;
+    if (byState) return "working";
     if (dispatchRepoCwd)
       return (
-        rows.find((it) => it.kind === "header" && it.origin === dispatchRepoCwd && it.group !== "pinned")
+        rows.find((row) => row.kind === "header" && row.origin === dispatchRepoCwd && row.group !== "pinned")
           ?.group ?? null
       );
-    let xe = rows[focusedIdx];
-    if (xe?.kind === "job") {
-      if (xe.group === "pinned")
+    let currentRow = rows[focusedIdx];
+    if (currentRow?.kind === "job") {
+      if (currentRow.group === "pinned")
         return (
-          rows.find((it) => it.kind === "header" && it.origin === xe.origin && it.group !== "pinned")
-            ?.group ?? null
+          rows.find(
+            (row) => row.kind === "header" && row.origin === currentRow.origin && row.group !== "pinned",
+          )?.group ?? null
         );
-      return xe.group;
+      return currentRow.group;
     }
-    if (xe?.kind === "header") return xe.group === "pinned" ? null : xe.group;
+    if (currentRow?.kind === "header") return currentRow.group === "pinned" ? null : currentRow.group;
     return null;
   })();
-  let enterIsNoop = !Ge && dispatch?.cwd !== undefined;
+  let enterIsNoop = !hasIntent && dispatch?.cwd !== undefined;
   let focusedIsPending = !!job && pendings.some((pending) => pending.id === job.id);
-  let go = !!job && job.id === initialJobId;
-  let runningCount = count(simpleWantsRemote ? [...Rt, ...remoteJobs] : Rt, (xe) => {
-    let qt = jobBucket(xe, prStatuses, liveStatus(xe));
-    return qt === "blocked" || qt === "working";
+  let focusedIsOrigin = !!job && job.id === initialJobId;
+  let runningCount = count(simpleWantsRemote ? [...localJobs, ...remoteJobs] : localJobs, (job) => {
+    let bucket = jobBucket(job, prStatuses, liveStatus(job));
+    return bucket === "blocked" || bucket === "working";
   });
-  let enterLabel = Ge
+  let enterLabel = hasIntent
     ? "create"
-    : go
+    : focusedIsOrigin
       ? "return"
       : job && isFailedSettledJob(job.state) && !heldInTerminal(job)
         ? "resume"
         : "open";
   let headerJobs =
-    Ce?.kind === "header" && Ce.group === followOrigin
-      ? sorted.filter((xe) => We.get(xe.id) === Ce.group)
+    focusedRow?.kind === "header" && focusedRow.group === followOrigin
+      ? jobs_2.filter((job) => groupOf.get(job.id) === focusedRow.group)
       : [];
   return {
-    byState: ht,
-    byGroup: jt,
-    hasDispatch: Ge,
-    hasComposedDispatch: yt,
+    byState,
+    byGroup,
+    hasDispatch: hasIntent,
+    hasComposedDispatch: hasContent,
     isBashDispatch,
     enterIsNoop,
-    queryIsFilter: Bt,
-    hasNameFilter: Ot !== undefined,
+    queryIsFilter: isQueryOnly,
+    hasNameFilter: nameFilter !== undefined,
     loopJobIds,
-    localJobs: Rt,
-    scopedLocalJobs: Vt,
-    scopedJobs: Be,
-    filtered: sorted,
-    groupOf: We,
-    jobSessionIds: rt,
-    earlierVisible: Xe,
-    doneCap: ct,
-    compactHeader: vt,
-    simpleBuilt: Kt,
-    built: po,
-    collapsed: lt,
+    localJobs,
+    scopedLocalJobs,
+    scopedJobs,
+    filtered: jobs_2,
+    groupOf,
+    jobSessionIds,
+    earlierVisible,
+    doneCap,
+    compactHeader,
+    simpleBuilt,
+    built,
+    collapsed: activeCollapsed,
     rows,
     homeIdx,
     hasMultipleOrigins,
-    groupCounts: pt,
+    groupCounts,
     bandCounts,
     onlyOrigin: all,
-    isOnboarding: uo,
-    focusedRow: Ce,
+    isOnboarding,
+    focusedRow,
     focused: job,
     altOpenOrigin,
     focusedGroup,
@@ -1231,7 +1277,7 @@ function buildFleetRows({
     runningCount,
     enterLabel,
     focusedIsPending,
-    focusedIsOrigin: go,
+    focusedIsOrigin,
   };
 }
 //@ chunk-93kwxas0.js:88328-88380 placement

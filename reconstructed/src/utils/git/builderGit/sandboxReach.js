@@ -65,26 +65,31 @@ import { readOnlyNoFollowFlags } from "../../platformTargets.js";
 import { toUncLongPath } from "../../windowsUncPaths.js";
 import { rawPointerPathIsUnsafe } from "../gitFilesystem.js";
 import { stripPathQuotes } from "../../which.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:208341-208477 placement
-function msysPathToWindows(e) {
-  let n = getPlatform_2() === "windows" ? /^\/([A-Za-z])(?=\/|$)/.exec(e) : null;
-  return n === null ? e : `${n[1].toUpperCase()}:${e.slice(2) || "\\"}`;
+function msysPathToWindows(path) {
+  let driveMatch = getPlatform_2() === "windows" ? /^\/([A-Za-z])(?=\/|$)/.exec(path) : null;
+  return driveMatch === null ? path : `${driveMatch[1].toUpperCase()}:${path.slice(2) || "\\"}`;
 }
 //@ chunk-s61vbvea.js:208477-208564 placement
-function reachRootsForPath(e, n) {
-  let r = msysPathToWindows(e);
-  if (r !== e) return uniq([...checkSandboxWriteRoot(r, n), ...checkSandboxWriteRoot(e, n)]);
-  return checkSandboxWriteRoot(e, n);
+function reachRootsForPath(path, launchDir) {
+  let windowsPath = msysPathToWindows(path);
+  if (windowsPath !== path)
+    return uniq([
+      ...checkSandboxWriteRoot(windowsPath, launchDir),
+      ...checkSandboxWriteRoot(path, launchDir),
+    ]);
+  return checkSandboxWriteRoot(path, launchDir);
 }
 //@ chunk-s61vbvea.js:208564-209049 placement
-function checkSandboxWriteRoot(e, n) {
-  let r = e.startsWith("~") || isAbsolute(e) ? e : resolve(n, e);
+function checkSandboxWriteRoot(path, launchDir) {
+  let resolvedPath = path.startsWith("~") || isAbsolute(path) ? path : resolve(launchDir, path);
   let foreignSpelling = resolveForeignSpelling(
-    classifyPathSpelling(r, n, {
+    classifyPathSpelling(resolvedPath, launchDir, {
       pattern: true,
     }),
-    n,
+    launchDir,
     protectedHomeRoots(),
     {
       pattern: true,
@@ -93,7 +98,7 @@ function checkSandboxWriteRoot(e, n) {
   let { spelling, verdict } = foreignSpelling;
   if (verdict !== "local") {
     logForDebugging(
-      `[sandboxReach] write root ${r} cannot be vouched for (${verdict}): counted as every volume`,
+      `[sandboxReach] write root ${resolvedPath} cannot be vouched for (${verdict}): counted as every volume`,
       {
         level: "warn",
       },
@@ -106,22 +111,22 @@ function checkSandboxWriteRoot(e, n) {
               verdict: "opaque",
             }
           : foreignSpelling,
-        n,
+        launchDir,
       ),
     ];
   }
   let globBaseDirectory = getGlobBaseDirectory_2(spelling);
-  let w;
+  let nativeBase;
   try {
-    w = getGlobBaseDirectory_2(normalizePathForSandbox(spelling));
+    nativeBase = getGlobBaseDirectory_2(normalizePathForSandbox(spelling));
   } catch {
-    w = null;
+    nativeBase = null;
   }
-  let filtered = [globBaseDirectory, w].filter((P) => P !== null);
-  let flattened = filtered.flatMap((P) => {
+  let filtered = [globBaseDirectory, nativeBase].filter((base) => base !== null);
+  let flattened = filtered.flatMap((base) => {
     try {
-      let j = realpathSync(P);
-      return isAbsolute(j) ? [j] : [];
+      let real = realpathSync(base);
+      return isAbsolute(real) ? [real] : [];
     } catch {
       return [];
     }
@@ -132,55 +137,59 @@ function checkSandboxWriteRoot(e, n) {
 /**
  * 读取某设置源（或传入的设置）中 permissions.allow 的 Edit 规则路径、sandbox.filesystem.allowWrite 与 permissions.additionalDirectories，展开为路径列表；读取失败返回空。
  */
-function collectSettingsWriteRoots(e, n, r) {
-  let s;
+function collectSettingsWriteRoots(source, launchDir, settings) {
+  let resolvedSettings;
   try {
-    s = r === undefined ? getSettingsForSourceTightenOnly(e) : r;
+    resolvedSettings = settings === undefined ? getSettingsForSourceTightenOnly(source) : settings;
   } catch {
     return [];
   }
-  let h = [];
-  for (let y of s?.permissions?.allow ?? [])
+  let roots = [];
+  for (let rule of resolvedSettings?.permissions?.allow ?? [])
     try {
-      let ruleForSandbox = parseRuleForSandbox(y);
+      let ruleForSandbox = parseRuleForSandbox(rule);
       if (ruleForSandbox.toolName === FILE_EDIT_TOOL_NAME && ruleForSandbox.ruleContent)
-        h.push(resolvePathPatternForSandbox(ruleForSandbox.ruleContent, e));
+        roots.push(resolvePathPatternForSandbox(ruleForSandbox.ruleContent, source));
     } catch {}
-  for (let y of s?.sandbox?.filesystem?.allowWrite ?? [])
+  for (let pathRule of resolvedSettings?.sandbox?.filesystem?.allowWrite ?? [])
     try {
-      h.push(resolveSandboxFilesystemPath(y, e));
+      roots.push(resolveSandboxFilesystemPath(pathRule, source));
     } catch {}
-  for (let y of s?.permissions?.additionalDirectories ?? [])
+  for (let extraDir of resolvedSettings?.permissions?.additionalDirectories ?? [])
     try {
-      h.push(expandPath(y, n));
+      roots.push(expandPath(extraDir, launchDir));
     } catch {}
-  return h;
+  return roots;
 }
 //@ chunk-s61vbvea.js:209421-209601 placement
 /**
  * 默认可达根：临时目录、配置目录、工作树公共 git 目录与额外目录。
  */
-function collectBaseReachRoots(e) {
-  let n = [getClaudeTempDirRealpath(), getChildProcessTmpDirRealpath()];
+function collectBaseReachRoots(launchDir) {
+  let roots = [getClaudeTempDirRealpath(), getChildProcessTmpDirRealpath()];
   try {
-    n.push(...getDefaultWritePaths());
+    roots.push(...getDefaultWritePaths());
   } catch {}
   try {
-    let worktreeGitCommonDir = detectWorktreeGitCommonDir(e);
-    if (worktreeGitCommonDir) n.push(worktreeGitCommonDir);
+    let worktreeGitCommonDir = detectWorktreeGitCommonDir(launchDir);
+    if (worktreeGitCommonDir) roots.push(worktreeGitCommonDir);
   } catch {}
-  for (let r of getAdditionalDirectoriesForClaudeMd())
+  for (let dir of getAdditionalDirectoriesForClaudeMd())
     try {
-      n.push(expandPath(r, e));
+      roots.push(expandPath(dir, launchDir));
     } catch {}
-  return uniq(n.flatMap((r) => reachRootsForPath(r, e)));
+  return uniq(roots.flatMap((root) => reachRootsForPath(root, launchDir)));
 }
 //@ chunk-s61vbvea.js:209601-209667 placement
 /**
  * 某设置来源的可达根（展开设置写入根）。
  */
-function settingsReachRootsForSource(e, n, r) {
-  return uniq((r ?? collectSettingsWriteRoots(n, e)).flatMap((s) => reachRootsForPath(s, e)));
+function settingsReachRootsForSource(launchDir, source, writeRoots) {
+  return uniq(
+    (writeRoots ?? collectSettingsWriteRoots(source, launchDir)).flatMap((root) =>
+      reachRootsForPath(root, launchDir),
+    ),
+  );
 }
 //@ chunk-s61vbvea.js:209667-209739 placement
 /**
@@ -189,16 +198,19 @@ function settingsReachRootsForSource(e, n, r) {
 function settingsReachRoots(launchDir) {
   return uniq([
     ...collectBaseReachRoots(launchDir),
-    ...SETTING_SOURCES.flatMap((n) => settingsReachRootsForSource(launchDir, n, null)),
+    ...SETTING_SOURCES.flatMap((source) => settingsReachRootsForSource(launchDir, source, null)),
   ]);
 }
 //@ chunk-s61vbvea.js:209739-209749 placement
-var REPO_DIR_SETTING_SOURCES_2 = REPO_DIR_SETTING_SOURCE_LIST;
+var REPO_DIR_SETTING_SOURCES_2; // deferred: uses EDITABLE_SETTING_SOURCES (../../settings/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:209739", () => {
+  REPO_DIR_SETTING_SOURCES_2 = REPO_DIR_SETTING_SOURCE_LIST;
+});
 //@ chunk-s61vbvea.js:209749-209955 placement
-function collectRepoSettingsReachRoots(e) {
-  let mapped = REPO_DIR_SETTING_SOURCES_2.map((r) => ({
-    source: r,
-    read: readRepoSettingsForReach(r),
+function collectRepoSettingsReachRoots(launchDir) {
+  let mapped = REPO_DIR_SETTING_SOURCES_2.map((source) => ({
+    source,
+    read: readRepoSettingsForReach(source),
   }));
   return mapped.some(({ read }) => read === "unreadable")
     ? "unreadable"
@@ -207,17 +219,17 @@ function collectRepoSettingsReachRoots(e) {
           read === "unreadable"
             ? []
             : settingsReachRootsForSource(
-                e,
+                launchDir,
                 source,
-                read.flatMap((h) => collectSettingsWriteRoots(source, e, h)),
+                read.flatMap((read) => collectSettingsWriteRoots(source, launchDir, read)),
               ),
         ),
       );
 }
 //@ chunk-s61vbvea.js:209955-210150 placement
-function readRepoSettingsForReach(e) {
+function readRepoSettingsForReach(source) {
   try {
-    let repoDirSettingsFresh = readRepoDirSettingsFresh(e);
+    let repoDirSettingsFresh = readRepoDirSettingsFresh(source);
     if (repoDirSettingsFresh.kind === "unreadable" || repoDirSettingsFresh.kind === "unreadable_for_now")
       return "unreadable";
     if (repoDirSettingsFresh.kind === "in_effect") return [repoDirSettingsFresh.settings];
@@ -239,27 +251,29 @@ function createReachCollector(keepsVolumes = true) {
   };
 }
 //@ chunk-s61vbvea.js:263279-263448 placement
-function mergeReachRoots(e, n) {
-  let r = weakMap.get(n) ?? new Set();
-  let filtered = n.filter((h) => r.has(h) || (!e.keepsVolumes && isVolumeRoot(h)));
-  for (let h of n) if (!filtered.includes(h)) e.roots.add(h);
-  return uniq([...e.roots, ...filtered]);
+function mergeReachRoots(screenMemo, roots) {
+  let previouslyCounted = weakMap.get(roots) ?? new Set();
+  let filtered = roots.filter(
+    (root) => previouslyCounted.has(root) || (!screenMemo.keepsVolumes && isVolumeRoot(root)),
+  );
+  for (let root of roots) if (!filtered.includes(root)) screenMemo.roots.add(root);
+  return uniq([...screenMemo.roots, ...filtered]);
 }
 //@ chunk-s61vbvea.js:263448-263486 placement
 /**
  * 判断路径是否为卷根（/）。
  */
-function isVolumeRoot(e) {
-  return e === parse(e).root;
+function isVolumeRoot(path) {
+  return path === parse(path).root;
 }
 //@ chunk-s61vbvea.js:263486-263599 placement
-function reachForWorkTree(e, n) {
-  let workTree = n?.workTree ?? e;
+function reachForWorkTree(workTree, layout) {
+  let workTree_2 = layout?.workTree ?? workTree;
   return {
-    tree: workTree,
-    roots: baseReachRootsForTree(workTree, [
-      ...findEnclosingRepos(workTree),
-      ...(n === undefined ? [] : [checkoutDirOfGitDir(n.commonDir)]),
+    tree: workTree_2,
+    roots: baseReachRootsForTree(workTree_2, [
+      ...findEnclosingRepos(workTree_2),
+      ...(layout === undefined ? [] : [checkoutDirOfGitDir(layout.commonDir)]),
     ]),
   };
 }
@@ -267,82 +281,85 @@ function reachForWorkTree(e, n) {
 /**
  * 把可达根解析为真实路径，无法担保的按“整卷”处理。
  */
-function resolveReachRoots(e, tree) {
-  let r = new Set();
-  let s = new Set();
-  let h = (w, R) => {
-    let x = countRootAsEveryVolume(w, R, tree);
-    for (let P of x) r.add(P);
-    return x;
+function resolveReachRoots(roots, tree) {
+  let countedRoots = new Set();
+  let realRoots = new Set();
+  let countAsEveryVolume = (root, screenMemo) => {
+    let volumes = countRootAsEveryVolume(root, screenMemo, tree);
+    for (let volume of volumes) countedRoots.add(volume);
+    return volumes;
   };
-  let y = uniq([
-    ...e.filter((w) => !isPathTooDeep(w, 0)),
-    ...uniq(e).flatMap((w) => {
-      if (isPathTooDeep(w, 0))
-        return h(w, {
-          spelling: w,
+  let resolved = uniq([
+    ...roots.filter((root) => !isPathTooDeep(root, 0)),
+    ...uniq(roots).flatMap((root) => {
+      if (isPathTooDeep(root, 0))
+        return countAsEveryVolume(root, {
+          spelling: root,
           verdict: "opaque",
         });
-      let foreignSpelling = resolveForeignSpelling(classifyPathSpelling(w, tree), tree, protectedHomeRoots());
-      if (foreignSpelling.verdict !== "local") return h(w, foreignSpelling);
-      let realPathLoose = resolveRealPathLoose(foreignSpelling.spelling, tree);
+      let screenMemo = resolveForeignSpelling(classifyPathSpelling(root, tree), tree, protectedHomeRoots());
+      if (screenMemo.verdict !== "local") return countAsEveryVolume(root, screenMemo);
+      let realPathLoose = resolveRealPathLoose(screenMemo.spelling, tree);
       if (realPathLoose === null)
-        return h(w, {
-          ...foreignSpelling,
+        return countAsEveryVolume(root, {
+          ...screenMemo,
           verdict: "opaque",
         });
-      s.add(realPathLoose);
+      realRoots.add(realPathLoose);
       return [realPathLoose];
     }),
   ]);
-  let filtered = [...r].filter((w) => !e.includes(w) && !s.has(w));
-  if (filtered.length > 0) weakMap.set(y, new Set(filtered));
-  return y;
+  let filtered = [...countedRoots].filter((root) => !roots.includes(root) && !realRoots.has(root));
+  if (filtered.length > 0) weakMap.set(resolved, new Set(filtered));
+  return resolved;
 }
 //@ chunk-s61vbvea.js:264061-264080 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:264061", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-s61vbvea.js:264080-264280 placement
-function countRootAsEveryVolume(e, n, r) {
+function countRootAsEveryVolume(root, spelling, tree) {
   logForDebugging(
-    `[builderGit] reach root ${truncateWithCount(e, 256)} cannot be vouched for (${n.verdict}): counted as every volume`,
+    `[builderGit] reach root ${truncateWithCount(root, 256)} cannot be vouched for (${spelling.verdict}): counted as every volume`,
     {
       level: "warn",
     },
   );
   return spellingsToCheck(
-    n.verdict === "foreign"
+    spelling.verdict === "foreign"
       ? {
-          ...n,
+          ...spelling,
           verdict: "opaque",
         }
-      : n,
-    r,
+      : spelling,
+    tree,
   );
 }
 //@ chunk-s61vbvea.js:264280-264331 placement
 /**
  * 取某仓库工作树的可达根。
  */
-function reachRootsForRepo(e, n) {
+function reachRootsForRepo(tree, extraRoots) {
   return reachRootsOrUnreadable({
-    tree: e,
-    roots: baseReachRootsForTree(e, n),
+    tree,
+    roots: baseReachRootsForTree(tree, extraRoots),
   });
 }
 //@ chunk-s61vbvea.js:264331-264395 placement
-function baseReachRootsForTree(e, n) {
+function baseReachRootsForTree(tree, extraRoots) {
   return uniq([
-    e,
-    ...n,
-    ...repoAncestorRoots(e),
+    tree,
+    ...extraRoots,
+    ...repoAncestorRoots(tree),
     ...getProtectedTempDirsWithPreSettings(),
-    ...settingsReachRoots(e),
+    ...settingsReachRoots(tree),
   ]);
 }
 //@ chunk-s61vbvea.js:264395-264471 placement
-function repoAncestorRoots(e) {
-  let n = repoAncestorsBelowHome(e);
-  return n.length === 0 ? [] : uniq([...n, homedir()].filter(isAbsolute));
+function repoAncestorRoots(tree) {
+  let ancestors = repoAncestorsBelowHome(tree);
+  return ancestors.length === 0 ? [] : uniq([...ancestors, homedir()].filter(isAbsolute));
 }
 //@ chunk-s61vbvea.js:264471-264531 placement
 /**
@@ -355,69 +372,78 @@ function checkoutDirOfGitDir(commonDir) {
 /**
  * 工作树上方（家目录以下）的 git 仓库目录。
  */
-function findEnclosingRepos(e) {
-  let n = resolveRealPathLoose(homedir(), e) ?? homedir();
-  let r = (s) => {
-    let h = dirname(s);
-    return h === s || isPathInside_2(h, n) ? [] : [h, ...r(h)];
+function findEnclosingRepos(tree) {
+  let homeReal = resolveRealPathLoose(homedir(), tree) ?? homedir();
+  let ancestorsOf = (dir) => {
+    let parentDir = dirname(dir);
+    return parentDir === dir || isPathInside_2(parentDir, homeReal)
+      ? []
+      : [parentDir, ...ancestorsOf(parentDir)];
   };
-  return r(e).filter(isGitRepoDir);
+  return ancestorsOf(tree).filter(isGitRepoDir);
 }
 //@ chunk-s61vbvea.js:264651-264715 placement
 /**
  * 找出家目录之上且包含该路径的 git 检出。
  */
-function enclosingCheckoutAboveHome(e) {
-  return repoAncestorsBelowHome(e).find((n) => isPathInside_2(n, e) && !isPathInside_2(e, n)) ?? null;
+function enclosingCheckoutAboveHome(tree) {
+  return (
+    repoAncestorsBelowHome(tree).find(
+      (ancestor) => isPathInside_2(ancestor, tree) && !isPathInside_2(tree, ancestor),
+    ) ?? null
+  );
 }
 //@ chunk-s61vbvea.js:264715-264766 placement
 /**
  * 列出家目录以下的各层 git 仓库祖先。
  */
-function repoAncestorsBelowHome(e) {
-  let n = homedir();
-  return n === "" ? [] : listRepoAncestors(n, e);
+function repoAncestorsBelowHome(tree) {
+  let homeDir = homedir();
+  return homeDir === "" ? [] : listRepoAncestors(homeDir, tree);
 }
 //@ chunk-s61vbvea.js:264766-264804 placement
 /**
  * 最近的一层仓库祖先。
  */
-function nearestRepoAncestor(e) {
-  return repoAncestorsBelowHome(e)[0] ?? null;
+function nearestRepoAncestor(tree) {
+  return repoAncestorsBelowHome(tree)[0] ?? null;
 }
 //@ chunk-s61vbvea.js:264804-264947 placement
 /**
  * 路径相对家目录：home/above_home/elsewhere。
  */
-function classifyHomePosition(e, n) {
-  let r = homedir();
-  if (r === "") return "elsewhere";
-  let s = resolveRealPathLoose(r, n) ?? r;
-  return s === e || r === e
+function classifyHomePosition(tree, cwd) {
+  let homeDir = homedir();
+  if (homeDir === "") return "elsewhere";
+  let realHome = resolveRealPathLoose(homeDir, cwd) ?? homeDir;
+  return realHome === tree || homeDir === tree
     ? "home"
-    : isPathInside_2(e, s) || isPathInside_2(e, r)
+    : isPathInside_2(tree, realHome) || isPathInside_2(tree, homeDir)
       ? "above_home"
       : "elsewhere";
 }
 //@ chunk-s61vbvea.js:264947-265102 placement
-function listRepoAncestors(e, n) {
-  let r = resolveRealPathLoose(e, n) ?? e;
-  return uniq([...(isAbsolute(r) ? ancestorChain(r) : []), ...(isAbsolute(e) ? ancestorChain(e) : [])])
+function listRepoAncestors(baseDir, cwd) {
+  let realBase = resolveRealPathLoose(baseDir, cwd) ?? baseDir;
+  return uniq([
+    ...(isAbsolute(realBase) ? ancestorChain(realBase) : []),
+    ...(isAbsolute(baseDir) ? ancestorChain(baseDir) : []),
+  ])
     .filter(isTraversableDirectory)
     .filter(isGitRepoDir)
-    .sort((h, y) => h.split(sep).length - y.split(sep).length);
+    .sort((left, right) => left.split(sep).length - right.split(sep).length);
 }
 //@ chunk-s61vbvea.js:265102-265147 placement
 /**
  * 最外层（最远）的仓库祖先。
  */
-function outermostRepoAncestor(e, configHome) {
-  return listRepoAncestors(e, configHome).at(-1) ?? null;
+function outermostRepoAncestor(tree, cwd) {
+  return listRepoAncestors(tree, cwd).at(-1) ?? null;
 }
 //@ chunk-s61vbvea.js:265147-265220 placement
-function ancestorChain(e, n = MAX_ANCESTOR_CHAIN) {
-  let r = dirname(e);
-  return r === e || n === 0 ? [e] : [e, ...ancestorChain(r, n - 1)];
+function ancestorChain(dir, remaining = MAX_ANCESTOR_CHAIN) {
+  let parentDir = dirname(dir);
+  return parentDir === dir || remaining === 0 ? [dir] : [dir, ...ancestorChain(parentDir, remaining - 1)];
 }
 //@ chunk-s61vbvea.js:265220-265231 placement
 var MAX_ANCESTOR_CHAIN = MAX_PROTECTED_PATH_LENGTH;
@@ -425,83 +451,91 @@ var MAX_ANCESTOR_CHAIN = MAX_PROTECTED_PATH_LENGTH;
 /**
  * 找到可达范围内可写的 git 检出，或返回无法担保的位置。
  */
-async function findHeldCheckout(e, n) {
-  if (hasDotDotSegment(e) || !isAbsolute(e)) return null;
-  let r = classifyReachRoot(e, n);
-  let sorted = uniq(r.nodes)
-    .filter((y) => !r.links.has(y) && !r.cutAt.has(y) && isTraversableDirectory(y))
+async function findHeldCheckout(includePath, cwd) {
+  if (hasDotDotSegment(includePath) || !isAbsolute(includePath)) return null;
+  let reach = classifyReachRoot(includePath, cwd);
+  let sorted = uniq(reach.nodes)
+    .filter((node) => !reach.links.has(node) && !reach.cutAt.has(node) && isTraversableDirectory(node))
     .filter(isGitRepoDir)
-    .sort((y, S) => S.split(sep).length - y.split(sep).length);
-  for (let y of sorted)
-    if (await isCheckoutHeld(r, y))
+    .sort((left, right) => right.split(sep).length - left.split(sep).length);
+  for (let checkout of sorted)
+    if (await isCheckoutHeld(reach, checkout))
       return {
         kind: "held",
-        checkout: y,
+        checkout,
       };
-  let [h] = r.cutAt;
-  return h === undefined
+  let [unvouchedAt] = reach.cutAt;
+  return unvouchedAt === undefined
     ? null
     : {
         kind: "unvouched",
-        at: h,
+        at: unvouchedAt,
       };
 }
 //@ chunk-s61vbvea.js:265550-265760 placement
-async function isCheckoutHeld(e, n) {
-  let filtered = uniq(e.nodes).filter((y) => isPathInside_2(n, y));
-  if (filtered.some((y) => e.cutAt.has(y))) return true;
-  let filtered_2 = filtered.filter((y) => !e.links.has(y));
+async function isCheckoutHeld(reach, checkout) {
+  let filtered = uniq(reach.nodes).filter((node) => isPathInside_2(checkout, node));
+  if (filtered.some((node) => reach.cutAt.has(node))) return true;
+  let filtered_2 = filtered.filter((node) => !reach.links.has(node));
   let results = await Promise.all(filtered_2.map(isWritableOrOwned));
-  return filtered_2.length === 0 || results.some((y) => y === true);
+  return filtered_2.length === 0 || results.some((owned) => owned === true);
 }
 //@ chunk-s61vbvea.js:265760-266322 placement
-function classifyReachRoot(e, n) {
-  let r = new Set();
-  let s = new Set();
-  let h = 0;
-  let y = (w, R) => {
-    let { root } = parse(w);
-    let filtered = w
+function classifyReachRoot(startPath, cwd) {
+  let linkNodes = new Set();
+  let cutAt = new Set();
+  let linkHops = 0;
+  let walk = (path, tail) => {
+    let { root } = parse(path);
+    let filtered = path
       .slice(root.length)
       .split(sep === "/" ? /\/+/ : /[\\/]+/)
-      .filter((j) => j !== "");
-    return [root, ...S(root, [...filtered, ...R])];
+      .filter((segment) => segment !== "");
+    return [root, ...walkParts(root, [...filtered, ...tail])];
   };
-  let S = (w, R) => {
-    let [x, ...P] = R;
-    if (x === undefined) return [];
-    let j = join(w, x);
-    let G = lstatLinkKind(j);
-    if (G === "missing") return [j, ...P.map((q, Q) => join(j, ...P.slice(0, Q + 1)))];
-    if (G === "opaque") {
-      s.add(j);
-      return [j];
+  let walkParts = (base, parts) => {
+    let [part, ...rest] = parts;
+    if (part === undefined) return [];
+    let nextPath = join(base, part);
+    let linkKind = lstatLinkKind(nextPath);
+    if (linkKind === "missing")
+      return [
+        nextPath,
+        ...rest.map((tailPart, tailIndex) => join(nextPath, ...rest.slice(0, tailIndex + 1))),
+      ];
+    if (linkKind === "opaque") {
+      cutAt.add(nextPath);
+      return [nextPath];
     }
-    if (G.link === null) return [j, ...S(j, P)];
-    r.add(j);
-    let L =
-      ++h > MAX_LINK_HOPS
+    if (linkKind.link === null) return [nextPath, ...walkParts(nextPath, rest)];
+    linkNodes.add(nextPath);
+    let linkSpelling =
+      ++linkHops > MAX_LINK_HOPS
         ? null
-        : resolveForeignSpelling(classifyPathSpellingSync(G.link, w, n), n, protectedHomeRoots());
-    if (L === null || L.verdict !== "local") {
-      s.add(j);
-      return [j];
+        : resolveForeignSpelling(
+            classifyPathSpellingSync(linkKind.link, base, cwd),
+            cwd,
+            protectedHomeRoots(),
+          );
+    if (linkSpelling === null || linkSpelling.verdict !== "local") {
+      cutAt.add(nextPath);
+      return [nextPath];
     }
-    return [j, ...y(L.spelling, P)];
+    return [nextPath, ...walk(linkSpelling.spelling, rest)];
   };
   return {
-    nodes: y(e, []),
-    links: r,
-    cutAt: s,
+    nodes: walk(startPath, []),
+    links: linkNodes,
+    cutAt,
   };
 }
 //@ chunk-s61vbvea.js:266322-266635 placement
 /**
  * 路径可写，或属当前用户（不存在返回 absent）。
  */
-async function isWritableOrOwned(e) {
+async function isWritableOrOwned(path) {
   try {
-    await access(e, constants.W_OK);
+    await access(path, constants.W_OK);
     return true;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -509,21 +543,21 @@ async function isWritableOrOwned(e) {
     if (!(errnoCode === "EACCES" || errnoCode === "EPERM" || errnoCode === "EROFS")) return true;
   }
   try {
-    let n = process.getuid?.();
-    return n === undefined || (await lstat(e)).uid === n;
+    let uid = process.getuid?.();
+    return uid === undefined || (await lstat(path)).uid === uid;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : true;
   }
 }
 //@ chunk-s61vbvea.js:266635-266671 placement
-function isTraversableDirectory(e) {
-  return !isNetworkMountRoot_2(e) && !isProcFilesystem(e);
+function isTraversableDirectory(path) {
+  return !isNetworkMountRoot_2(path) && !isProcFilesystem(path);
 }
 //@ chunk-s61vbvea.js:266671-266729 placement
-function isProcFilesystem(e) {
+function isProcFilesystem(path) {
   try {
-    return statfsSync(e).type === PROC_SUPER_MAGIC;
+    return statfsSync(path).type === PROC_SUPER_MAGIC;
   } catch {
     return false;
   }
@@ -531,26 +565,27 @@ function isProcFilesystem(e) {
 //@ chunk-s61vbvea.js:266729-266740 placement
 var PROC_SUPER_MAGIC = 391;
 //@ chunk-s61vbvea.js:266740-266786 placement
-function isGitRepoDir(e) {
-  return pathMayExist(join(e, ".git")) || isCurrentDirectoryBareGitRepo(e);
+function isGitRepoDir(dirPath) {
+  return pathMayExist(join(dirPath, ".git")) || isCurrentDirectoryBareGitRepo(dirPath);
 }
 //@ chunk-s61vbvea.js:266786-266953 placement = isCurrentDirectoryBareGitRepo (0.757)
-function isCurrentDirectoryBareGitRepo(e) {
+function isCurrentDirectoryBareGitRepo(dirPath) {
   return (
-    basename(e).toLowerCase() !== ".git" &&
-    (["HEAD", "objects", "refs"].every((n) => pathExistsSync(join(e, n))) ||
-      (lstatOrUndefined(join(e, "worktrees"))?.isDirectory() === true && isGitdirFile(join(e, "config"))))
+    basename(dirPath).toLowerCase() !== ".git" &&
+    (["HEAD", "objects", "refs"].every((name) => pathExistsSync(join(dirPath, name))) ||
+      (lstatOrUndefined(join(dirPath, "worktrees"))?.isDirectory() === true &&
+        isGitdirFile(join(dirPath, "config"))))
   );
 }
 //@ chunk-s61vbvea.js:266953-266990 placement
-function pathExistsSync(e) {
-  return lstatOrUndefined(e) !== undefined;
+function pathExistsSync(path) {
+  return lstatOrUndefined(path) !== undefined;
 }
 //@ chunk-s61vbvea.js:266990-267128 placement
-function pathMayExist(e) {
+function pathMayExist(path) {
   try {
     return (
-      lstatSync(e, {
+      lstatSync(path, {
         throwIfNoEntry: false,
       }) !== undefined
     );
@@ -563,17 +598,17 @@ function pathMayExist(e) {
 var GIT_CONFIG_HEAD_PROBE_BYTES = 4096;
 var CORE_SECTION_RE = /^[ \t]*\[core\]/im;
 //@ chunk-s61vbvea.js:267163-267380 placement
-function isGitdirFile(e) {
-  if (lstatOrUndefined(e)?.isFile() !== true) return false;
+function isGitdirFile(configPath) {
+  if (lstatOrUndefined(configPath)?.isFile() !== true) return false;
   try {
-    let n = openSync(e, readOnlyNoFollowFlags());
+    let fd = openSync(configPath, readOnlyNoFollowFlags());
     try {
-      let r = Buffer.alloc(GIT_CONFIG_HEAD_PROBE_BYTES);
-      let s = readSync(n, r, 0, GIT_CONFIG_HEAD_PROBE_BYTES, 0);
-      let replaced = r.toString("latin1", 0, s).replace(/^\xEF\xBB\xBF/, "");
+      let buffer = Buffer.alloc(GIT_CONFIG_HEAD_PROBE_BYTES);
+      let bytesRead = readSync(fd, buffer, 0, GIT_CONFIG_HEAD_PROBE_BYTES, 0);
+      let replaced = buffer.toString("latin1", 0, bytesRead).replace(/^\xEF\xBB\xBF/, "");
       return CORE_SECTION_RE.test(replaced);
     } finally {
-      closeSync(n);
+      closeSync(fd);
     }
   } catch {
     return false;
@@ -588,9 +623,9 @@ var MAX_CONFIG_WALK_BYTES = 1048576;
 /**
  * 取 lstat 结果；不存在或出错返回 undefined。
  */
-function lstatOrUndefined(e) {
+function lstatOrUndefined(path) {
   try {
-    return lstatSync(e, {
+    return lstatSync(path, {
       throwIfNoEntry: false,
     });
   } catch {
@@ -598,45 +633,48 @@ function lstatOrUndefined(e) {
   }
 }
 //@ chunk-s61vbvea.js:274082-274177 placement
-function resolveRealPathLoose(e, n) {
-  if (isPathTooDeep(e, 0)) return null;
-  let [r, s] = splitAtPathMax(e);
-  let h = realpathWithMissingTail(r, n);
-  return h === null ? null : join(h, s);
+function resolveRealPathLoose(path, cwd) {
+  if (isPathTooDeep(path, 0)) return null;
+  let [head, tail] = splitAtPathMax(path);
+  let realHead = realpathWithMissingTail(head, cwd);
+  return realHead === null ? null : join(realHead, tail);
 }
 //@ chunk-s61vbvea.js:274177-274436 placement = getReservedShortcuts (0.806)
-function splitAtPathMax(e) {
-  let n = getPlatform_2() === "windows" ? null : getPlatform_2() === "macos" ? 1024 : 4096;
-  if (n === null || Buffer.byteLength(e) < n) return [e, ""];
-  let index = e.lastIndexOf(sep, n - 1);
-  while (index > 0 && Buffer.byteLength(e.slice(0, index)) >= n) index = e.lastIndexOf(sep, index - 1);
-  return index > 0 ? [e.slice(0, index), e.slice(index + 1)] : [e, ""];
+function splitAtPathMax(path) {
+  let pathMax = getPlatform_2() === "windows" ? null : getPlatform_2() === "macos" ? 1024 : 4096;
+  if (pathMax === null || Buffer.byteLength(path) < pathMax) return [path, ""];
+  let index = path.lastIndexOf(sep, pathMax - 1);
+  while (index > 0 && Buffer.byteLength(path.slice(0, index)) >= pathMax)
+    index = path.lastIndexOf(sep, index - 1);
+  return index > 0 ? [path.slice(0, index), path.slice(index + 1)] : [path, ""];
 }
 //@ chunk-s61vbvea.js:274436-274715 placement
-function realpathWithMissingTail(e, n, r = [], s = 0) {
-  if (isPathTooDeep(e, r.length)) return null;
+function realpathWithMissingTail(path, cwd, missingTail = [], hops = 0) {
+  if (isPathTooDeep(path, missingTail.length)) return null;
   try {
-    return join(toUncLongPath(realpathSync.native(e)), ...r);
+    return join(toUncLongPath(realpathSync.native(path)), ...missingTail);
   } catch {
-    let h = s < MAX_LINK_HOPS_2 ? readLinkTargetInfo(e) : null;
-    if (h !== null) {
-      let { spelling, verdict } = classifyPathSpellingSync(h.text, h.dir, n);
-      return verdict === "local" ? realpathWithMissingTail(spelling, n, r, s + 1) : null;
+    let linkInfo = hops < MAX_LINK_HOPS_2 ? readLinkTargetInfo(path) : null;
+    if (linkInfo !== null) {
+      let { spelling, verdict } = classifyPathSpellingSync(linkInfo.text, linkInfo.dir, cwd);
+      return verdict === "local" ? realpathWithMissingTail(spelling, cwd, missingTail, hops + 1) : null;
     }
-    let y = dirname(e);
-    return y === e ? join(e, ...r) : realpathWithMissingTail(y, n, [basename(e), ...r], s);
+    let parentDir = dirname(path);
+    return parentDir === path
+      ? join(path, ...missingTail)
+      : realpathWithMissingTail(parentDir, cwd, [basename(path), ...missingTail], hops);
   }
 }
 //@ chunk-s61vbvea.js:274715-274803 placement
-function resolvePathSpellings(e, n) {
-  let realPathLoose = resolveRealPathLoose(e, n);
+function resolvePathSpellings(path, cwd) {
+  let realPathLoose = resolveRealPathLoose(path, cwd);
   return realPathLoose === null
     ? spellingsToCheck(
         {
-          spelling: e,
+          spelling: path,
           verdict: "opaque",
         },
-        n,
+        cwd,
       )
     : [realPathLoose];
 }
@@ -644,11 +682,11 @@ function resolvePathSpellings(e, n) {
 var MAX_LINK_HOPS_2 = 8;
 var GIT_NOT_FOUND_MESSAGE = "git was not found on the PATH this process was started with";
 //@ chunk-s61vbvea.js:274877-275039 placement
-function homeInCheckoutNote(e) {
-  let n = nearestRepoAncestor(e);
-  return n === null
+function homeInCheckoutNote(tree) {
+  let ancestor = nearestRepoAncestor(tree);
+  return ancestor === null
     ? ""
-    : `; the home directory counts here because it ${classifyHomePosition(n, e) === "home" ? "is itself" : "lies inside"} a git checkout (${n})`;
+    : `; the home directory counts here because it ${classifyHomePosition(ancestor, tree) === "home" ? "is itself" : "lies inside"} a git checkout (${ancestor})`;
 }
 //@ chunk-s61vbvea.js:275039-275590 placement
 /**
@@ -661,16 +699,16 @@ var UNEXAMINABLE_REACH_NOTE =
 /**
  * 判断路径是否位于外部挂载或指向不安全目标。
  */
-function pathIsForeignOrUnsafePointer(e, n, r = n) {
-  return isOnForeignMount(e, r) || rawPointerPathIsUnsafe(e, n, r);
+function pathIsForeignOrUnsafePointer(pointer, baseDir, mountBase = baseDir) {
+  return isOnForeignMount(pointer, mountBase) || rawPointerPathIsUnsafe(pointer, baseDir, mountBase);
 }
 //@ chunk-s61vbvea.js:275638-275733 placement
-function readLinkTargetInfo(e) {
+function readLinkTargetInfo(linkPath) {
   try {
-    let n = readlinkSync(e);
-    let dir = isAbsolute(n) ? dirname(e) : realpathSync(dirname(e));
+    let linkTarget = readlinkSync(linkPath);
+    let dir = isAbsolute(linkTarget) ? dirname(linkPath) : realpathSync(dirname(linkPath));
     return {
-      text: n,
+      text: linkTarget,
       dir,
     };
   } catch {
@@ -678,104 +716,118 @@ function readLinkTargetInfo(e) {
   }
 }
 //@ chunk-s61vbvea.js:275733-275859 placement
-function filterSafePathEnv(e, n, r) {
-  let reachPredicate = makeReachPredicate(n);
-  let h = new Map();
-  return e
+function filterSafePathEnv(pathValue, reach, expectedNames) {
+  let reachPredicate = makeReachPredicate(reach);
+  let memo = new Map();
+  return pathValue
     .split(delimiter)
-    .map((y) => stripPathQuotes(y))
-    .filter((y) => y !== "" && isAbsolute(y) && isPathDirSafe(y, reachPredicate, r, h))
+    .map((part) => stripPathQuotes(part))
+    .filter(
+      (part) => part !== "" && isAbsolute(part) && isPathDirSafe(part, reachPredicate, expectedNames, memo),
+    )
     .join(delimiter);
 }
 //@ chunk-s61vbvea.js:275859-276200 placement
 /**
  * PATH 中的目录及其中的 git 等程序都在可达范围之外。
  */
-function isPathDirSafe(e, n, r, s = new Map()) {
-  if (isReachableOrUnsafe(e, n, s)) return false;
-  let realPathLoose = resolveRealPathLoose(e, n.anchor);
+function isPathDirSafe(dirPath, reach, expectedNames, memo = new Map()) {
+  if (isReachableOrUnsafe(dirPath, reach, memo)) return false;
+  let realPathLoose = resolveRealPathLoose(dirPath, reach.anchor);
   if (realPathLoose === null) return false;
-  return r.every((y) => {
-    let S = `${e}${sep}${y}`;
-    if (isForeignSpelling(S, n.anchor)) return false;
-    let w = s.get(S) ?? lstatLinkKind(S);
-    s.set(S, w);
-    if (w === "missing") return !n(S) && !n(join(realPathLoose, y));
-    if (w !== "opaque" && w.link === null) {
-      let realPathLoose = resolveRealPathLoose(S, n.anchor);
-      return realPathLoose !== null && !n(S) && !n(realPathLoose);
+  return expectedNames.every((entryName) => {
+    let entryPath = `${dirPath}${sep}${entryName}`;
+    if (isForeignSpelling(entryPath, reach.anchor)) return false;
+    let linkKind = memo.get(entryPath) ?? lstatLinkKind(entryPath);
+    memo.set(entryPath, linkKind);
+    if (linkKind === "missing") return !reach(entryPath) && !reach(join(realPathLoose, entryName));
+    if (linkKind !== "opaque" && linkKind.link === null) {
+      let realPathLoose = resolveRealPathLoose(entryPath, reach.anchor);
+      return realPathLoose !== null && !reach(entryPath) && !reach(realPathLoose);
     }
-    return !isReachableOrUnsafe(S, n, s);
+    return !isReachableOrUnsafe(entryPath, reach, memo);
   });
 }
 //@ chunk-s61vbvea.js:276200-276325 placement
-function makeReachPredicate(e) {
-  return Object.assign((n) => e.some((r) => isPathInside_2(r, n)), {
-    beneath: (n) => e.some((r) => isPathInside_2(n, r) && !isPathInside_2(r, n)),
-    anchor: e[0] ?? sep,
+function makeReachPredicate(roots) {
+  return Object.assign((path) => roots.some((root) => isPathInside_2(root, path)), {
+    beneath: (path) => roots.some((root) => isPathInside_2(path, root) && !isPathInside_2(root, path)),
+    anchor: roots[0] ?? sep,
   });
 }
 //@ chunk-s61vbvea.js:276325-277031 placement
 /**
  * 判断路径能否被沙箱写到：非绝对、设备路径或在可达范围内（含其上层）直接返回 true；否则逐级 lstat， 遇到不存在的组件按真实路径与剩余部分判断，遇到链接递归解析（限深度），无法判断的视为可达。
  */
-function isReachableOrUnsafe(e, n, r, s = MAX_LINK_HOPS) {
+function isReachableOrUnsafe(path, reach, memo, hopsLeft = MAX_LINK_HOPS) {
   if (
-    !isAbsolute(e) ||
-    isWindowsNonDrivePath(e) ||
-    e.startsWith("\\\\?\\") ||
-    isForeignSpelling(e, n.anchor) ||
-    n(e) ||
-    n.beneath(e)
+    !isAbsolute(path) ||
+    isWindowsNonDrivePath(path) ||
+    path.startsWith("\\\\?\\") ||
+    isForeignSpelling(path, reach.anchor) ||
+    reach(path) ||
+    reach.beneath(path)
   )
     return true;
-  let { root } = parse(e);
-  let filtered = e
+  let { root } = parse(path);
+  let filtered = path
     .slice(root.length)
     .split(sep === "/" ? /\/+/ : /[\\/]+/)
-    .filter((R) => R !== "" && R !== ".");
-  let S = root;
-  for (let [R, x] of filtered.entries()) {
-    S = x === ".." ? dirname(S) : join(S, x);
-    let P = r.get(S);
-    if (P === undefined && (n(S) || isForeignSpelling(S, n.anchor))) return true;
-    let j = P ?? lstatLinkKind(S);
-    r.set(S, j);
-    if (j === "opaque") return true;
-    if (j === "missing") {
-      let realPathLoose = resolveRealPathLoose(e, n.anchor);
+    .filter((segment) => segment !== "" && segment !== ".");
+  let currentPath = root;
+  for (let [index, segment] of filtered.entries()) {
+    currentPath = segment === ".." ? dirname(currentPath) : join(currentPath, segment);
+    let cachedKind = memo.get(currentPath);
+    if (cachedKind === undefined && (reach(currentPath) || isForeignSpelling(currentPath, reach.anchor)))
+      return true;
+    let nextKind = cachedKind ?? lstatLinkKind(currentPath);
+    memo.set(currentPath, nextKind);
+    if (nextKind === "opaque") return true;
+    if (nextKind === "missing") {
+      let realPathLoose = resolveRealPathLoose(path, reach.anchor);
       return (
         realPathLoose === null ||
-        n(realPathLoose) ||
-        n.beneath(realPathLoose) ||
-        filtered.slice(R + 1).some((L, q) => n(join(S, ...filtered.slice(R + 1, R + 2 + q))))
+        reach(realPathLoose) ||
+        reach.beneath(realPathLoose) ||
+        filtered
+          .slice(index + 1)
+          .some((tailSegment, tailIndex) =>
+            reach(join(currentPath, ...filtered.slice(index + 1, index + 2 + tailIndex))),
+          )
       );
     }
-    if (j.link !== null) {
-      if (s === 0) return true;
-      let G = isAbsolute(j.link) ? j.link : `${dirname(S)}${sep}${j.link}`;
-      return isReachableOrUnsafe([G, ...filtered.slice(R + 1)].join(sep), n, r, s - 1);
+    if (nextKind.link !== null) {
+      if (hopsLeft === 0) return true;
+      let linkTarget = isAbsolute(nextKind.link)
+        ? nextKind.link
+        : `${dirname(currentPath)}${sep}${nextKind.link}`;
+      return isReachableOrUnsafe(
+        [linkTarget, ...filtered.slice(index + 1)].join(sep),
+        reach,
+        memo,
+        hopsLeft - 1,
+      );
     }
   }
-  let realPathLoose = resolveRealPathLoose(e, n.anchor);
-  return realPathLoose === null || n(realPathLoose) || n.beneath(realPathLoose);
+  let realPathLoose = resolveRealPathLoose(path, reach.anchor);
+  return realPathLoose === null || reach(realPathLoose) || reach.beneath(realPathLoose);
 }
 //@ chunk-s61vbvea.js:277031-277041 placement
 var MAX_LINK_HOPS = 40;
 //@ chunk-s61vbvea.js:277041-277278 placement
-function lstatLinkKind(e) {
+function lstatLinkKind(path) {
   try {
-    let n = lstatSync(e, {
+    let stats = lstatSync(path, {
       throwIfNoEntry: false,
     });
-    if (n === undefined) return "missing";
-    if (!n.isSymbolicLink())
+    if (stats === undefined) return "missing";
+    if (!stats.isSymbolicLink())
       return {
         link: null,
       };
-    let r = readlinkSync(e);
+    let linkText = readlinkSync(path);
     return {
-      link: toUncLongPath(r.replace(/^\\\?\?\\/, "\\\\?\\")),
+      link: toUncLongPath(linkText.replace(/^\\\?\?\\/, "\\\\?\\")),
     };
   } catch (error) {
     return getErrnoCode(error) === "ENOTDIR" ? "missing" : "opaque";

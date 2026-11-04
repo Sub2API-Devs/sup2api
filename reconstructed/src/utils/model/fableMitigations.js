@@ -15,9 +15,9 @@ import { isLocalAgentOrCowork } from "../entrypointKinds.js";
 /**
  * 判断模型是否需要 Fable 5 缓解措施（按能力声明，claude-mythos-5 默认需要）。
  */
-function needsFableMitigations(canonicalName, n) {
-  let e = modelSupportsCapability(canonicalName, "fable_5_mitigations", n);
-  if (e !== undefined) return e;
+function needsFableMitigations(canonicalName, model) {
+  let flag = modelSupportsCapability(canonicalName, "fable_5_mitigations", model);
+  if (flag !== undefined) return flag;
   if (canonicalName === "claude-mythos-5") return true;
   return false;
 }
@@ -41,8 +41,8 @@ function isFableModel(canonicalName) {
 /**
  * 判断模型 id 是否属于 mythos 系列。
  */
-function isMythosModel(canonicalName) {
-  return canonicalName.startsWith("claude-mythos-");
+function isMythosModel(modelId) {
+  return modelId.startsWith("claude-mythos-");
 }
 //@ chunk-m8whhcc1.js:557-582 placement
 /**

@@ -27,7 +27,7 @@ import { isPingStreamEvent } from "../utils/messages.js";
 import { checkHasTrustDialogAccepted, saveGlobalConfig } from "../utils/config.js";
 import { applyConfigEnvironmentVariables } from "../utils/managedEnvApply.js";
 import { captureAdmin3PSteeringSnapshot } from "../utils/model/thirdPartyDefaultFallbacks.js";
-import { u, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import {
   permissionModeFromString,
   toExternalPermissionMode,
@@ -38,8 +38,6 @@ import {
   isBypassPermissionsModeDisabled,
   transitionPermissionMode,
   stripDangerousPermissionsForAutoMode,
-  releaseCarriedEffortIfModelChanged,
-  releaseCarriedEffortForEffortChange,
 } from "../utils/permissions/permissionSetup.js";
 import { logForDebugging } from "../utils/debug.js";
 import { toError } from "../utils/errors.js";
@@ -62,19 +60,21 @@ import {
 } from "../utils/model/modelSwitchHooks.js";
 import { forgetHeldWindows } from "../services/claudeAiLimits.js";
 import { onKeepaliveModelSwitch } from "../services/api/cacheKeepalive.js";
+import {
+  releaseCarriedEffortIfModelChanged,
+  isSameEffortSetting,
+  releaseCarriedEffortForEffortChange,
+  isUltracodeActive,
+  effortSettingToString,
+  effortLevelValue,
+  isEffortLevel,
+} from "../utils/effort.js";
 import { withClientDataReseedOnModelChange, refreshBootstrapDataTracked_2 } from "../bridge/bridgeEnabled.js";
 import { getMainLoopModel } from "../utils/model/model.js";
 import { reportEffortForModel, reportBridgeEffortMetadata } from "../bridge/applyFlagSettings.js";
 import { confirmAndFire } from "../services/quotaAutoResume/quotaAutoResume.js";
 import { abortPrecomputeOnModelSwitch } from "../services/compact/precomputedCompact.js";
 import { getDefaultMainLoopModel } from "../utils/model/modelFallback.js";
-import {
-  isSameEffortSetting,
-  isUltracodeActive,
-  effortSettingToString,
-  effortLevelValue,
-  isEffortLevel,
-} from "../utils/effort.js";
 import {
   hasSessionIngressAuthForFastMode,
   supportsFastMode,
@@ -108,6 +108,7 @@ import {
   skipsTranscript,
   isAwaitedAgentTask,
 } from "../tasks/taskKinds.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-tbfde207.js:1529-1562 placement
 /**
@@ -120,20 +121,20 @@ function shouldEmitCompactError() {
 /**
  * 向 SDK 发出 status 事件前去掉 compact_error 字段（未开启时）。
  */
-function stripCompactErrorForSdk(e) {
+function stripCompactErrorForSdk(event) {
   if (
-    e.type === "system" &&
-    "subtype" in e &&
-    e.subtype === "status" &&
-    "compact_error" in e &&
-    e.compact_error !== undefined &&
+    event.type === "system" &&
+    "subtype" in event &&
+    event.subtype === "status" &&
+    "compact_error" in event &&
+    event.compact_error !== undefined &&
     !shouldEmitCompactError()
   )
     return {
-      ...e,
+      ...event,
       compact_error: undefined,
     };
-  return e;
+  return event;
 }
 //@ chunk-tbfde207.js:1732-1994 placement
 /**
@@ -165,16 +166,16 @@ function emitStatusChange({ status, permissionMode, compactResult, compactError 
 /**
  * REPL 桥接开启部分消息时，把流事件作为 stream_event 通知转发给桥接端（附首 token 时间）。
  */
-function forwardStreamEventToBridge(e) {
+function forwardStreamEventToBridge(notification) {
   try {
     if (!isReplBridgeActive() || !isBridgePartialMessagesEnabled()) return;
-    if (isPingStreamEvent(e.event)) return;
+    if (isPingStreamEvent(notification.event)) return;
     enqueueTaskNotification({
       type: "stream_event",
-      event: e.event,
+      event: notification.event,
       parent_tool_use_id: null,
-      ...(e.ttftMs !== undefined && {
-        ttft_ms: e.ttftMs,
+      ...(notification.ttftMs !== undefined && {
+        ttft_ms: notification.ttftMs,
       }),
     });
   } catch (error) {
@@ -190,15 +191,15 @@ function shallowEqualTaskMaps(messages, dividerIndex) {
   let keys_2 = Object.keys(dividerIndex);
   if (keys.length !== keys_2.length) return false;
   for (let i = 0; i < keys_2.length; i++) {
-    let M = keys_2[i];
-    if (M === undefined || M !== keys[i]) return false;
-    let g = messages[M];
-    let c = dividerIndex[M];
-    if (g === c) continue;
-    if (g === undefined || c === undefined) return false;
-    for (let key of Object.keys(c))
-      if (key !== "progress" && (!Object.hasOwn(g, key) || g[key] !== c[key])) return false;
-    for (let key of Object.keys(g)) if (key !== "progress" && !Object.hasOwn(c, key)) return false;
+    let key = keys_2[i];
+    if (key === undefined || key !== keys[i]) return false;
+    let left = messages[key];
+    let right = dividerIndex[key];
+    if (left === right) continue;
+    if (left === undefined || right === undefined) return false;
+    for (let key of Object.keys(right))
+      if (key !== "progress" && (!Object.hasOwn(left, key) || left[key] !== right[key])) return false;
+    for (let key of Object.keys(left)) if (key !== "progress" && !Object.hasOwn(right, key)) return false;
   }
   return true;
 }
@@ -208,21 +209,24 @@ function shallowEqualTaskMaps(messages, dividerIndex) {
  */
 function applyStartupConfigSideEffects() {
   if (isDiskless() || !checkHasTrustDialogAccepted()) return;
-  let e = null;
-  let r = [];
+  let providerCaches = null;
+  let movedProviders = [];
   applyConfigEnvironmentVariables();
   captureAdmin3PSteeringSnapshot();
-  e?.resetProviderBoundCachesIfMoved(r);
+  providerCaches?.resetProviderBoundCachesIfMoved(movedProviders);
 }
 //@ chunk-tbfde207.js:2687-2854 placement
-var externalStatusSchema = u({
-  status_category: string(),
-  status_detail: string(),
-  needs_action: string(),
-  recent_action: string().optional(),
-  description: string().optional(),
-  reply: string().optional(),
-  standing: string().optional(),
+var externalStatusSchema; // deferred: uses objectSchema (../../vendor/zod/v4/classic/schemas.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tbfde207.js:2687", () => {
+  externalStatusSchema = objectSchema({
+    status_category: stringSchema(),
+    status_detail: stringSchema(),
+    needs_action: stringSchema(),
+    recent_action: stringSchema().optional(),
+    description: stringSchema().optional(),
+    reply: stringSchema().optional(),
+    standing: stringSchema().optional(),
+  });
 });
 //@ chunk-tbfde207.js:2854-3646 fingerprint = externalMetadataToAppState (0.435)
 /**
@@ -232,10 +236,10 @@ function externalMetadataToAppState(metadata) {
   return (prev) => {
     let toolPermissionContext = prev.toolPermissionContext;
     if (typeof metadata.permission_mode === "string") {
-      let d = permissionModeFromString(metadata.permission_mode);
-      setAccountSetPermissionMode(d);
+      let restoredMode = permissionModeFromString(metadata.permission_mode);
+      setAccountSetPermissionMode(restoredMode);
       if (
-        d === "bypassPermissions" &&
+        restoredMode === "bypassPermissions" &&
         (isBypassPermissionsModeDisabled() || !toolPermissionContext.isBypassPermissionsModeAvailable)
       ) {
         logForDebugging(
@@ -244,29 +248,30 @@ function externalMetadataToAppState(metadata) {
             level: "warn",
           },
         );
-        d = "default";
+        restoredMode = "default";
       }
       try {
         toolPermissionContext = {
-          ...transitionPermissionMode(toolPermissionContext.mode, d, toolPermissionContext),
-          mode: d,
+          ...transitionPermissionMode(toolPermissionContext.mode, restoredMode, toolPermissionContext),
+          mode: restoredMode,
         };
-        if (d === "auto") toolPermissionContext = stripDangerousPermissionsForAutoMode(toolPermissionContext);
+        if (restoredMode === "auto")
+          toolPermissionContext = stripDangerousPermissionsForAutoMode(toolPermissionContext);
       } catch (error) {
         logForDebugging(
-          `[externalMetadataToAppState] transitionPermissionMode rejected restored mode '${d}': ${toError(error).message}`,
+          `[externalMetadataToAppState] transitionPermissionMode rejected restored mode '${restoredMode}': ${toError(error).message}`,
         );
       }
     }
-    let i = externalStatusSchema.safeParse(metadata.post_turn_summary);
+    let summaryParse = externalStatusSchema.safeParse(metadata.post_turn_summary);
     return {
       ...prev,
       toolPermissionContext,
       ...(typeof metadata.is_ultraplan_mode === "boolean" && {
         isUltraplanMode: metadata.is_ultraplan_mode,
       }),
-      ...(i.success && {
-        postTurnSummary: i.data,
+      ...(summaryParse.success && {
+        postTurnSummary: summaryParse.data,
       }),
     };
   };
@@ -275,10 +280,10 @@ function externalMetadataToAppState(metadata) {
 /**
  * AppState 变化时的副作用：权限模式切换、MCP roots、后台任务、模型等通知。
  */
-function onAppStateChange({ newState, oldState }, n, i, d, M) {
+function onAppStateChange({ newState, oldState }, session, workerConn, storageV5, credentials) {
   let mode = oldState.toolPermissionContext.mode;
   let mode_2 = newState.toolPermissionContext.mode;
-  let m = newState.proactivityLevel !== oldState.proactivityLevel;
+  let isProactivityChanged = newState.proactivityLevel !== oldState.proactivityLevel;
   if (mode !== mode_2) {
     let externalPermissionMode = toExternalPermissionMode(mode);
     let externalPermissionMode_2 = toExternalPermissionMode(mode_2);
@@ -291,22 +296,22 @@ function onAppStateChange({ newState, oldState }, n, i, d, M) {
         newUltraplan: newState.isUltraplanMode,
       });
       let isUltraplanMode = permissionModeAnalyticsFields.is_ultraplan_mode;
-      i?.notifyMetadataChanged(permissionModeAnalyticsFields);
-      if (i?.isWorkerPermissionModeRecordEnabled)
-        i.notifyInternalMetadataChanged({
+      workerConn?.notifyMetadataChanged(permissionModeAnalyticsFields);
+      if (workerConn?.isWorkerPermissionModeRecordEnabled)
+        workerConn.notifyInternalMetadataChanged({
           worker_permission_mode: externalPermissionMode_2,
         });
       reportBridgePermissionMode(mode_2, isUltraplanMode);
-      if (!i)
+      if (!workerConn)
         emitStatusChange({
           status: null,
           permissionMode: externalPermissionMode_2,
         });
     }
-    i?.notifyPermissionModeChanged(mode_2);
+    workerConn?.notifyPermissionModeChanged(mode_2);
     syncSessionPermissionMode(mode_2);
-  } else if (m) i?.notifyProactivityLevelChanged();
-  if (mode !== mode_2 || m) {
+  } else if (isProactivityChanged) workerConn?.notifyProactivityLevelChanged();
+  if (mode !== mode_2 || isProactivityChanged) {
     syncRespawnFlag(
       "--permission-mode",
       ["--inherit-permission-mode"],
@@ -316,9 +321,10 @@ function onAppStateChange({ newState, oldState }, n, i, d, M) {
         hasLeftProactivityBaseline(newState.toolPermissionContext),
       ),
       undefined,
-      d,
+      storageV5,
     );
-    if (m) syncRespawnFlag("--proactivity", [], newState.proactivityLevel, undefined, d);
+    if (isProactivityChanged)
+      syncRespawnFlag("--proactivity", [], newState.proactivityLevel, undefined, storageV5);
   }
   if (newState.toolPermissionContext !== oldState.toolPermissionContext) notifyRoomConsentChanged();
   if (
@@ -335,58 +341,60 @@ function onAppStateChange({ newState, oldState }, n, i, d, M) {
     publishAnnouncedDirs(newState.toolPermissionContext)
   )
     try {
-      require("./chunk-asne9cp8.js").mcpClientModule().notifyMcpRootsListChanged();
+      require("../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule().notifyMcpRootsListChanged();
     } catch (error) {
       logForDebugging(`Failed to notify MCP servers of roots change: ${toError(error).message}`);
     }
   if (newState.tasks !== oldState.tasks) {
-    let s = shallowEqualTaskMaps(oldState.tasks, newState.tasks);
-    if (i) {
-      let a = {};
-      if (!s) {
-        let y = runningBackgroundTasks(newState);
-        if (!sameTaskIdSequence(runningBackgroundTasks(oldState), y)) a.running_background_tasks = y;
+    let tasksEqual = shallowEqualTaskMaps(oldState.tasks, newState.tasks);
+    if (workerConn) {
+      let patch = {};
+      if (!tasksEqual) {
+        let runningNow = runningBackgroundTasks(newState);
+        if (!sameTaskIdSequence(runningBackgroundTasks(oldState), runningNow))
+          patch.running_background_tasks = runningNow;
         if (isIterativeHavenGateOn()) {
-          let k = runningDirectAgents(newState);
-          if (!sameTaskIdSequence(runningDirectAgents(oldState), k)) a.running_foreground_agents = k;
+          let agentsNow = runningDirectAgents(newState);
+          if (!sameTaskIdSequence(runningDirectAgents(oldState), agentsNow))
+            patch.running_foreground_agents = agentsNow;
         }
       }
-      let resumableOrphanedAgents = i.resumableOrphanedAgents;
+      let resumableOrphanedAgents = workerConn.resumableOrphanedAgents;
       let filtered = resumableOrphanedAgents.filter(
         (resumableOrphanedAgent) => !Object.hasOwn(newState.tasks, resumableOrphanedAgent.task_id),
       );
       if (filtered.length !== resumableOrphanedAgents.length) {
-        i.resumableOrphanedAgents = filtered;
-        a.resumable_orphaned_agents = filtered;
+        workerConn.resumableOrphanedAgents = filtered;
+        patch.resumable_orphaned_agents = filtered;
       }
-      if (Object.keys(a).length > 0) i.notifyInternalMetadataChanged(a);
+      if (Object.keys(patch).length > 0) workerConn.notifyInternalMetadataChanged(patch);
     }
-    if (!s) {
-      let a = backgroundTasksForMetadata(oldState);
-      let f = backgroundTasksForMetadata(newState);
+    if (!tasksEqual) {
+      let before = backgroundTasksForMetadata(oldState);
+      let after = backgroundTasksForMetadata(newState);
       if (
-        a.length !== f.length ||
-        f.some(
-          (p, y) =>
-            p.task_id !== a[y]?.task_id ||
-            p.description !== a[y]?.description ||
-            p.parent_task_id !== a[y]?.parent_task_id ||
-            p.ambient !== a[y]?.ambient ||
-            p.awaited !== a[y]?.awaited,
+        before.length !== after.length ||
+        after.some(
+          (task, index) =>
+            task.task_id !== before[index]?.task_id ||
+            task.description !== before[index]?.description ||
+            task.parent_task_id !== before[index]?.parent_task_id ||
+            task.ambient !== before[index]?.ambient ||
+            task.awaited !== before[index]?.awaited,
         )
       )
         enqueueTaskNotification({
           type: "system",
           subtype: "background_tasks_changed",
-          tasks: f,
+          tasks: after,
         });
     }
   }
-  let session = oldState.toolPermissionContext.alwaysAllowRules.session;
-  let session_2 = newState.toolPermissionContext.alwaysAllowRules.session;
-  if (session !== session_2) {
-    let filtered = session_2?.filter((a) => !a.startsWith("mcp__"));
-    i?.notifyInternalMetadataChanged({
+  let session_2 = oldState.toolPermissionContext.alwaysAllowRules.session;
+  let session_3 = newState.toolPermissionContext.alwaysAllowRules.session;
+  if (session_2 !== session_3) {
+    let filtered = session_3?.filter((rule) => !rule.startsWith("mcp__"));
+    workerConn?.notifyInternalMetadataChanged({
       session_allow_rules: filtered?.length ? filtered : null,
     });
   }
@@ -395,25 +403,25 @@ function onAppStateChange({ newState, oldState }, n, i, d, M) {
     newState.mainLoopModelForSession !== oldState.mainLoopModelForSession ||
     newState.toolPermissionContext.mode !== oldState.toolPermissionContext.mode
   ) {
-    let s = takePendingSwitchSource(n);
+    let switchSource = takePendingSwitchSource(session);
     try {
-      let a = effectiveModelForContext(oldState);
-      let f = effectiveModelForContext(newState);
-      if (a !== f) {
+      let previousModel = effectiveModelForContext(oldState);
+      let nextModel = effectiveModelForContext(newState);
+      if (previousModel !== nextModel) {
         forgetHeldWindows(["seven_day_overage_included"]);
         if (
           newState.mainLoopModel !== oldState.mainLoopModel ||
           newState.mainLoopModelForSession !== oldState.mainLoopModelForSession
         )
-          onKeepaliveModelSwitch(n.host, a, f);
+          onKeepaliveModelSwitch(session.host, previousModel, nextModel);
         if (!getIsRemoteMode())
-          runPostModelSwitchHooks(n, {
-            fromModel: a,
-            toModel: f,
-            requestedModel: s.requestedModel,
-            source: s.source,
+          runPostModelSwitchHooks(session, {
+            fromModel: previousModel,
+            toModel: nextModel,
+            requestedModel: switchSource.requestedModel,
+            source: switchSource.source,
           });
-        releaseCarriedEffortIfModelChanged(f);
+        releaseCarriedEffortIfModelChanged(nextModel);
       }
     } catch (error) {
       logError(toError(error));
@@ -421,7 +429,7 @@ function onAppStateChange({ newState, oldState }, n, i, d, M) {
   }
   if (newState.mainLoopModel !== oldState.mainLoopModel) {
     let mainLoopModel = newState.mainLoopModel;
-    let a = withClientDataReseedOnModelChange(() => setMainLoopModelOverride(mainLoopModel));
+    let reseed = withClientDataReseedOnModelChange(() => setMainLoopModelOverride(mainLoopModel));
     let mainLoopModel_2 = getMainLoopModel();
     try {
       reportBridgeModel(mainLoopModel_2);
@@ -430,12 +438,12 @@ function onAppStateChange({ newState, oldState }, n, i, d, M) {
     }
     reportEffortForModel(mainLoopModel_2, newState);
     confirmAndFire();
-    abortPrecomputeOnModelSwitch(n.precompute);
-    refreshBootstrapDataTracked_2(d, M, a);
-    i?.notifyMetadataChanged({
+    abortPrecomputeOnModelSwitch(session.precompute);
+    refreshBootstrapDataTracked_2(storageV5, credentials, reseed);
+    workerConn?.notifyMetadataChanged({
       model: mainLoopModel ?? getDefaultMainLoopModel(),
     });
-    syncRespawnFlag("--model", ["-m"], mainLoopModel, undefined, d);
+    syncRespawnFlag("--model", ["-m"], mainLoopModel, undefined, storageV5);
   }
   if (newState.fotwClaim?.phase === "granted" && oldState.fotwClaim?.phase !== "granted") confirmAndFire();
   if (
@@ -449,15 +457,17 @@ function onAppStateChange({ newState, oldState }, n, i, d, M) {
   if (!isSameEffortSetting(newState.sessionEffort, oldState.sessionEffort)) {
     releaseCarriedEffortForEffortChange();
     getLearnedEffortCaps().clear();
-    let s = i?.ultracodeActivePatch(isUltracodeActive(newState.ultracode, getMainLoopModel()));
-    i?.notifyMetadataChanged({
+    let ultracodePatch = workerConn?.ultracodeActivePatch(
+      isUltracodeActive(newState.ultracode, getMainLoopModel()),
+    );
+    workerConn?.notifyMetadataChanged({
       effort_level: effortSettingToString(newState.sessionEffort),
-      ...s,
+      ...ultracodePatch,
     });
     reportEffortForModel(getMainLoopModel(), newState);
-    syncEffortRespawnFlag(newState.sessionEffort, d);
+    syncEffortRespawnFlag(newState.sessionEffort, storageV5);
   }
-  if (newState.fastMode !== oldState.fastMode) fastModeNoticeIfNeeded(newState.fastMode === true, d);
+  if (newState.fastMode !== oldState.fastMode) fastModeNoticeIfNeeded(newState.fastMode === true, storageV5);
   if (newState.mainLoopModelForSession !== oldState.mainLoopModelForSession) {
     let mainLoopModel = getMainLoopModel();
     try {
@@ -474,50 +484,50 @@ function onAppStateChange({ newState, oldState }, n, i, d, M) {
       newState.mainLoopModel === oldState.mainLoopModel
     ) {
       setMainLoopModelOverride(newState.mainLoopModel);
-      i?.notifyMetadataChanged({
+      workerConn?.notifyMetadataChanged({
         model: newState.mainLoopModel ?? getDefaultMainLoopModel(),
       });
     }
   }
   if (newState.advisorModel !== oldState.advisorModel)
-    syncRespawnFlag("--advisor", [], newState.advisorModel ?? null, undefined, d);
-  if (i && newState.frameUrls !== oldState.frameUrls) {
-    let s = isPublishToolEnabled();
-    let a = isCcsTenant() ? isArtifactAccountAllowed() : isArtifactAdminAllowed();
+    syncRespawnFlag("--advisor", [], newState.advisorModel ?? null, undefined, storageV5);
+  if (workerConn && newState.frameUrls !== oldState.frameUrls) {
+    let isPublishEnabled = isPublishToolEnabled();
+    let isArtifactAllowed = isCcsTenant() ? isArtifactAccountAllowed() : isArtifactAdminAllowed();
     let filtered = frameUrlRowsToPersist(newState.frameUrls)
-      .map(([, p]) => p)
-      .filter((p) => (p.mcpPublishedHere === true ? a : s));
-    if (filtered.length > 0 || (s && nonOpenedFrameUrls(oldState.frameUrls).length > 0))
-      i.notifyMetadataChanged({
+      .map(([, revisionRow]) => revisionRow)
+      .filter((frameRow) => (frameRow.mcpPublishedHere === true ? isArtifactAllowed : isPublishEnabled));
+    if (filtered.length > 0 || (isPublishEnabled && nonOpenedFrameUrls(oldState.frameUrls).length > 0))
+      workerConn.notifyMetadataChanged({
         artifacts: filtered.length === 0 ? null : filtered.map(frameUrlToRecord),
       });
   }
-  if (i && !shallowEqualByKeys(newState.activeGoal, oldState.activeGoal)) {
+  if (workerConn && !shallowEqualByKeys(newState.activeGoal, oldState.activeGoal)) {
     let activeGoal = newState.activeGoal;
-    i.notifyActiveGoalChanged(activeGoal);
+    workerConn.notifyActiveGoalChanged(activeGoal);
     if (activeGoal) {
-      let { tokens_at_start: tokensAtStart, ...f } = serializeGoalState(activeGoal);
-      i.notifyMetadataChanged({
+      let { tokens_at_start: tokensAtStart, ...goalFields } = serializeGoalState(activeGoal);
+      workerConn.notifyMetadataChanged({
         goal: {
-          ...f,
-          last_reason: f.last_reason ?? null,
+          ...goalFields,
+          last_reason: goalFields.last_reason ?? null,
           met: false,
         },
       });
     } else
-      i.notifyMetadataChanged({
+      workerConn.notifyMetadataChanged({
         goal: null,
       });
   }
   if (
-    i &&
+    workerConn &&
     (newState.autoCompactWindow !== oldState.autoCompactWindow ||
       newState.mainLoopModel !== oldState.mainLoopModel ||
       newState.mainLoopModelForSession !== oldState.mainLoopModelForSession ||
       newState.settings !== oldState.settings)
   )
-    i.notifyAutocompactInputsChanged();
-  if (newState.verbose !== oldState.verbose) saveUserIntentSetting("verbose", newState.verbose, d);
+    workerConn.notifyAutocompactInputsChanged();
+  if (newState.verbose !== oldState.verbose) saveUserIntentSetting("verbose", newState.verbose, storageV5);
   if (newState.settings !== oldState.settings) {
     try {
       clearApiKeyHelperCache();
@@ -542,34 +552,35 @@ function onAppStateChange({ newState, oldState }, n, i, d, M) {
     newState.mainLoopModelForSession !== oldState.mainLoopModelForSession ||
     newState.settings !== oldState.settings
   ) {
-    let s = isUltracodeActive(newState.ultracode, getMainLoopModel());
+    let ultracodeActive = isUltracodeActive(newState.ultracode, getMainLoopModel());
     if (
       oldState.ultracode === true &&
       newState.ultracode !== true &&
       newState.sessionEffort.kind === "level" &&
       isSameEffortSetting(newState.sessionEffort, oldState.sessionEffort)
     ) {
-      i?.notifyMetadataChanged({
+      workerConn?.notifyMetadataChanged({
         effort_level: effortSettingToString(newState.sessionEffort),
-        ...i.ultracodeActivePatch(s),
+        ...workerConn.ultracodeActivePatch(ultracodeActive),
       });
-      syncEffortRespawnFlag(newState.sessionEffort, d);
-    } else i?.notifyUltracodeActive(s);
+      syncEffortRespawnFlag(newState.sessionEffort, storageV5);
+    } else workerConn?.notifyUltracodeActive(ultracodeActive);
     reportBridgeEffortMetadata({
-      ultracodeActive: s,
+      ultracodeActive,
     });
   }
 }
 //@ chunk-tbfde207.js:9479-9662 placement
-function syncEffortRespawnFlag(sessionEffort, r) {
+function syncEffortRespawnFlag(sessionEffort, storageV5) {
   switch (sessionEffort.kind) {
     case "inherit":
     case "default":
-      syncRespawnFlag("--effort", [], null, undefined, r);
+      syncRespawnFlag("--effort", [], null, undefined, storageV5);
       return;
     case "level": {
-      let n = effortLevelValue(sessionEffort);
-      if (n !== undefined && isEffortLevel(n)) syncRespawnFlag("--effort", [], n, undefined, r);
+      let level = effortLevelValue(sessionEffort);
+      if (level !== undefined && isEffortLevel(level))
+        syncRespawnFlag("--effort", [], level, undefined, storageV5);
       return;
     }
   }
@@ -577,25 +588,25 @@ function syncEffortRespawnFlag(sessionEffort, r) {
 //@ chunk-tbfde207.js:9662-9829 placement
 function isObserverOwnedTask(task, tasks) {
   if (task.type !== "local_bash" && task.type !== "monitor_mcp" && task.type !== "monitor_ws") return false;
-  let n = task.agentId !== undefined ? tasks[task.agentId] : undefined;
-  return n !== undefined && isObserverAgentTask(n);
+  let agentTask = task.agentId !== undefined ? tasks[task.agentId] : undefined;
+  return agentTask !== undefined && isObserverAgentTask(agentTask);
 }
 //@ chunk-tbfde207.js:9829-10178 placement
 /**
  * 子代理启动的遥测字段。
  */
-function agentSpawnTelemetry(e) {
+function agentSpawnTelemetry(task) {
   return {
-    agent_type: e.agentType,
-    ...(e.selectedAgent && {
-      is_built_in: e.selectedAgent.source === "built-in",
+    agent_type: task.agentType,
+    ...(task.selectedAgent && {
+      is_built_in: task.selectedAgent.source === "built-in",
     }),
-    forked_skill: e.forkedSkillName !== undefined,
-    main_thread_spawned: e.spawnDepth === 1 && e.parentAgentId === undefined,
-    default_launch: e.cwd === undefined && e.launchedWithDefaults === true,
-    ...(e.cwd === undefined &&
-      e.launchModel !== undefined && {
-        launch_model: e.launchModel,
+    forked_skill: task.forkedSkillName !== undefined,
+    main_thread_spawned: task.spawnDepth === 1 && task.parentAgentId === undefined,
+    default_launch: task.cwd === undefined && task.launchedWithDefaults === true,
+    ...(task.cwd === undefined &&
+      task.launchModel !== undefined && {
+        launch_model: task.launchModel,
       }),
   };
 }
@@ -603,8 +614,8 @@ function agentSpawnTelemetry(e) {
 /**
  * 列出正在运行的后台任务。
  */
-function runningBackgroundTasks(e) {
-  return Object.values(e.tasks)
+function runningBackgroundTasks(state) {
+  return Object.values(state.tasks)
     .filter(
       (task) =>
         waitForTaskCompletion(task) &&
@@ -635,7 +646,7 @@ function runningBackgroundTasks(e) {
         ...agentSpawnTelemetry(task),
         run_id: getRunId(task.id),
       }),
-      ...(isObserverOwnedTask(task, e.tasks) && {
+      ...(isObserverOwnedTask(task, state.tasks) && {
         observer_owned: true,
       }),
     }));
@@ -644,29 +655,29 @@ function runningBackgroundTasks(e) {
 /**
  * 两个任务列表的 task_id 顺序是否相同。
  */
-function sameTaskIdSequence(e, r) {
-  return e.length === r.length && r.every((n, i) => n.task_id === e[i]?.task_id);
+function sameTaskIdSequence(left, right) {
+  return left.length === right.length && right.every((task, index) => task.task_id === left[index]?.task_id);
 }
 //@ chunk-tbfde207.js:10853-11161 placement
 /**
  * 列出主线程直接派生的运行中代理。
  */
 function runningDirectAgents({ tasks }) {
-  return Object.values(tasks).flatMap((r) =>
-    r.type === "local_agent" &&
-    r.status === "running" &&
-    r.isBackgrounded === false &&
-    r.directCall === true &&
-    r.toolUseId !== undefined &&
-    r.spawnDepth === 1 &&
-    r.parentAgentId === undefined
+  return Object.values(tasks).flatMap((task) =>
+    task.type === "local_agent" &&
+    task.status === "running" &&
+    task.isBackgrounded === false &&
+    task.directCall === true &&
+    task.toolUseId !== undefined &&
+    task.spawnDepth === 1 &&
+    task.parentAgentId === undefined
       ? [
           {
-            task_id: r.id,
-            task_type: r.type,
-            description: r.description,
-            tool_use_id: r.toolUseId,
-            ...agentSpawnTelemetry(r),
+            task_id: task.id,
+            task_type: task.type,
+            description: task.description,
+            tool_use_id: task.toolUseId,
+            ...agentSpawnTelemetry(task),
           },
         ]
       : [],
@@ -681,14 +692,14 @@ var GOAL_STATE_FIELDS = ["condition", "setAt", "iterations", "tokensAtStart", "l
 /**
  * 把目标状态序列化为线上格式（condition、iterations、set_at、tokens_at_start、last_reason）。
  */
-function serializeGoalState(e) {
+function serializeGoalState(goal) {
   return {
-    condition: e.condition,
-    iterations: e.iterations,
-    set_at: e.setAt,
-    tokens_at_start: e.tokensAtStart,
-    ...(e.lastReason !== undefined && {
-      last_reason: e.lastReason,
+    condition: goal.condition,
+    iterations: goal.iterations,
+    set_at: goal.setAt,
+    tokens_at_start: goal.tokensAtStart,
+    ...(goal.lastReason !== undefined && {
+      last_reason: goal.lastReason,
     }),
   };
 }
@@ -696,11 +707,11 @@ function serializeGoalState(e) {
 function shallowEqualByKeys(activeGoal, activeGoal_2) {
   if (activeGoal === activeGoal_2) return true;
   if (activeGoal === undefined || activeGoal_2 === undefined) return false;
-  return GOAL_STATE_FIELDS.every((n) => activeGoal[n] === activeGoal_2[n]);
+  return GOAL_STATE_FIELDS.every((field) => activeGoal[field] === activeGoal_2[field]);
 }
 //@ chunk-tbfde207.js:11503-11796 placement
-function backgroundTasksForMetadata(e) {
-  return Object.values(e.tasks)
+function backgroundTasksForMetadata(state) {
+  return Object.values(state.tasks)
     .filter(
       (task) =>
         waitForTaskCompletion(task) &&
@@ -714,7 +725,7 @@ function backgroundTasksForMetadata(e) {
       task_type: task.type,
       subagent_type: getSelectableBackgroundTasks(task),
       description: task.description,
-      parent_task_id: taskParentAgentId(task, e.tasks),
+      parent_task_id: taskParentAgentId(task, state.tasks),
       ...(skipsTranscript(task) && {
         ambient: true,
       }),
@@ -727,25 +738,25 @@ function backgroundTasksForMetadata(e) {
 /**
  * 需要时发出 fast mode 不可用的提示。
  */
-function fastModeNoticeIfNeeded(e, r) {
+function fastModeNoticeIfNeeded(enabled, storageV5) {
   if (
-    !e &&
+    !enabled &&
     (!supportsFastMode(getMainLoopModel()) ||
       getFastModeUnavailableReasonCode(getMainLoopModel()) !== null ||
       wasCreditsExhaustedNotifiedThisTurn())
   )
     return;
-  syncFastModeFlag(e, r);
+  syncFastModeFlag(enabled, storageV5);
 }
 //@ chunk-tbfde207.js:11871-11953 placement
 /**
  * 发出 background_tasks_changed 事件。
  */
-function emitBackgroundTasksChanged(e) {
+function emitBackgroundTasksChanged(state) {
   enqueueTaskNotification({
     type: "system",
     subtype: "background_tasks_changed",
-    tasks: backgroundTasksForMetadata(e),
+    tasks: backgroundTasksForMetadata(state),
   });
 }
 //@ chunk-tbfde207.js:11953-12011 placement
@@ -771,12 +782,12 @@ function onChangeAppState({ newState, oldState }, session, storageV5, credential
     credentials,
   );
   if (newState.expandedView !== oldState.expandedView) {
-    let a = newState.expandedView === "tasks";
+    let isTasksView = newState.expandedView === "tasks";
     saveGlobalConfig((current) => {
-      if (current.showExpandedTodos === a) return current;
+      if (current.showExpandedTodos === isTasksView) return current;
       return {
         ...current,
-        showExpandedTodos: a,
+        showExpandedTodos: isTasksView,
       };
     }, storageV5);
   }

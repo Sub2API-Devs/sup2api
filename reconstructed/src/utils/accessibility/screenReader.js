@@ -33,13 +33,14 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { isEnvTruthy } from "../envUtils.js";
 import { stripControlChars } from "../settings/writeQueues.js";
 import { fromEnumOpt } from "../../services/analytics/safeMetadata.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vd0bcd16.js:654-1333 placement
 /**
  * 遮盖错误文本中的 URL、邮箱、密钥、路径等再做哈希。
  */
-function scrubErrorText(e) {
-  return e
+function scrubErrorText(text) {
+  return text
     .slice(0, 500)
     .replace(/https?:\/\/\S+/gi, "<url>")
     .replace(/\b[\w.+-]+@[\w.-]+\.\w{2,}\b/g, "<email>")
@@ -64,41 +65,41 @@ var MAX_SCRUBBED_STACK_CHARS = 4000;
 /**
  * 提取错误栈的前几帧（区分内部/外部）。
  */
-function topStackFrames(e, n = 5) {
-  let t = [];
-  let r;
-  for (let line of e.slice(0, MAX_SCRUBBED_STACK_CHARS).split(`
+function topStackFrames(stackText, maxNames = 5) {
+  let names = [];
+  let topFrame;
+  for (let line of stackText.slice(0, MAX_SCRUBBED_STACK_CHARS).split(`
 `)) {
     let trimmed = line.trim();
     if (!trimmed.startsWith("at ")) continue;
     let sliced = trimmed.slice(3);
     let index = sliced.indexOf(" (");
-    if (r === undefined) {
-      let R = index !== -1 ? sliced.slice(index + 2, -1) : sliced;
-      if (/^(?:node|bun|internal):/.test(R)) r = R;
+    if (topFrame === undefined) {
+      let frameLocation = index !== -1 ? sliced.slice(index + 2, -1) : sliced;
+      if (/^(?:node|bun|internal):/.test(frameLocation)) topFrame = frameLocation;
       else {
-        let match = R.match(/([^/\\]+:\d+:\d+)\)?$/);
-        if (match) r = match[1];
+        let match = frameLocation.match(/([^/\\]+:\d+:\d+)\)?$/);
+        if (match) topFrame = match[1];
       }
     }
-    let c = index !== -1 ? sliced.slice(0, index) : sliced;
-    c = c.replace(/^async\s+/, "").replace(/^new\s+/, "");
-    if (c.includes("/") || c.includes("\\") || /:\d/.test(c)) continue;
-    if (c) t.push(c);
-    if (t.length >= n) break;
+    let functionName = index !== -1 ? sliced.slice(0, index) : sliced;
+    functionName = functionName.replace(/^async\s+/, "").replace(/^new\s+/, "");
+    if (functionName.includes("/") || functionName.includes("\\") || /:\d/.test(functionName)) continue;
+    if (functionName) names.push(functionName);
+    if (names.length >= maxNames) break;
   }
   return {
-    names: t,
-    topFrame: r,
+    names,
+    topFrame,
   };
 }
 //@ chunk-vd0bcd16.js:1840-1908 placement
 /**
  * 安全地把值转成字符串，失败返回占位文本。
  */
-function safeToString(e) {
+function safeToString(value) {
   try {
-    return String(e);
+    return String(value);
   } catch {
     return "[unstringifiable]";
   }
@@ -107,46 +108,54 @@ function safeToString(e) {
 /**
  * 生成错误遥测字段（消息哈希、错误码、构造器名、栈）。
  */
-function errorTelemetryFields(e) {
+function errorTelemetryFields(error) {
   try {
-    let n = safeToString(e instanceof Error ? e.message : e);
-    let t = {
-      error_message_hash: shortHash(scrubErrorText(n)),
+    let messageText = safeToString(error instanceof Error ? error.message : error);
+    let fields = {
+      error_message_hash: shortHash(scrubErrorText(messageText)),
     };
-    let r = sanitizeErrnoForTelemetry(e);
-    if (r !== undefined) t.error_code = r;
-    if (!(e instanceof Error)) return t;
-    let l = sanitizeClassName(e.constructor?.name);
-    if (l !== undefined) t.error_constructor = l;
-    let stack = e.stack;
-    if (typeof stack !== "string") return t;
-    let a = {
-      name: e.name,
-      message: e.message,
+    let errnoCode = sanitizeErrnoForTelemetry(error);
+    if (errnoCode !== undefined) fields.error_code = errnoCode;
+    if (!(error instanceof Error)) return fields;
+    let constructorName = sanitizeClassName(error.constructor?.name);
+    if (constructorName !== undefined) fields.error_constructor = constructorName;
+    let stack = error.stack;
+    if (typeof stack !== "string") return fields;
+    let errorLike = {
+      name: error.name,
+      message: error.message,
       stack,
     };
-    let u = stripStackHeader(a);
-    let c = u.length < stack.length && stack.endsWith(u);
-    let { names, topFrame } = topStackFrames(u);
-    if (names.length > 0) t.error_stack_hash = shortHash(names.join("|"));
-    let A = stack.length - u.length;
-    let stack_2 = stack.slice(0, A + MAX_SCRUBBED_STACK_CHARS);
-    let [f] = c
+    let strippedStack = stripStackHeader(errorLike);
+    let hadHeaderStripped = strippedStack.length < stack.length && stack.endsWith(strippedStack);
+    let { names, topFrame } = topStackFrames(strippedStack);
+    if (names.length > 0) fields.error_stack_hash = shortHash(names.join("|"));
+    let headerLength = stack.length - strippedStack.length;
+    let stack_2 = stack.slice(0, headerLength + MAX_SCRUBBED_STACK_CHARS);
+    let [firstFrame] = hadHeaderStripped
       ? getSanitizedStackFrames(
           {
-            ...a,
+            ...errorLike,
             stack: stack_2,
           },
           1,
         )
       : [];
-    if (f !== undefined) {
-      let m = isStackFrameExternal(f) ? f.file : isSourceFrame(f) ? getBaseName(f.file) : undefined;
-      let S = sanitizeTopFrame(m === undefined ? USER_CODE_PLACEHOLDER : `${m}:${f.line}:${f.column}`);
-      let b = m !== undefined && sanitizeTopFrame(topFrame ?? "") !== S;
-      if (S !== undefined && !b) t.error_top_frame = S;
+    if (firstFrame !== undefined) {
+      let frameFile = isStackFrameExternal(firstFrame)
+        ? firstFrame.file
+        : isSourceFrame(firstFrame)
+          ? getBaseName(firstFrame.file)
+          : undefined;
+      let topFrameKey = sanitizeTopFrame(
+        frameFile === undefined
+          ? USER_CODE_PLACEHOLDER
+          : `${frameFile}:${firstFrame.line}:${firstFrame.column}`,
+      );
+      let topFrameMismatch = frameFile !== undefined && sanitizeTopFrame(topFrame ?? "") !== topFrameKey;
+      if (topFrameKey !== undefined && !topFrameMismatch) fields.error_top_frame = topFrameKey;
     }
-    return t;
+    return fields;
   } catch {
     return {};
   }
@@ -175,35 +184,35 @@ class ScreenReaderMode {
   #e = [];
   #r = false;
   #s = 0;
-  swapRemoteGateReader(e) {
-    let n = this.#t;
-    this.#t = e;
-    return n;
+  swapRemoteGateReader(reader) {
+    let previousReader = this.#t;
+    this.#t = reader;
+    return previousReader;
   }
   isEnabled() {
     if (this.#n !== undefined) return this.#n;
-    let e;
-    let n;
+    let enabled;
+    let source;
     if (eagerHasCliFlag("--ax-screen-reader")) {
-      e = true;
-      n = "flag";
+      enabled = true;
+      source = "flag";
     } else {
       let CLAUDE_AX_SCREEN_READER = env.CLAUDE_AX_SCREEN_READER;
       if (CLAUDE_AX_SCREEN_READER !== undefined) {
-        e = CLAUDE_AX_SCREEN_READER;
-        n = "env";
+        enabled = CLAUDE_AX_SCREEN_READER;
+        source = "env";
       } else {
-        e =
-          getSecuritySensitiveSettingWithSources("axScreenReader").find((l) =>
-            isSettingSourceEnabled(l.source),
+        enabled =
+          getSecuritySensitiveSettingWithSources("axScreenReader").find((sourceEntry) =>
+            isSettingSourceEnabled(sourceEntry.source),
           )?.value === true;
-        n = "settings";
+        source = "settings";
       }
     }
-    if (!e) return (this.#n = false);
-    let t = this.#t?.(TENGU_AX_SCREEN_READER, true) ?? true;
-    this.#a = t ? n : undefined;
-    return (this.#n = t);
+    if (!enabled) return (this.#n = false);
+    let isRemoteEnabled = this.#t?.(TENGU_AX_SCREEN_READER, true) ?? true;
+    this.#a = isRemoteEnabled ? source : undefined;
+    return (this.#n = isRemoteEnabled);
   }
   activationSource() {
     return this.isEnabled() ? this.#a : undefined;
@@ -215,14 +224,14 @@ class ScreenReaderMode {
   isSuggestionNavEnabled() {
     {
       if (!this.isEnabled()) return false;
-      let e = false;
-      this.#u ??= this.#t?.("tengu_ax_sr_suggestion_nav", e) ?? e;
+      let defaultEnabled = false;
+      this.#u ??= this.#t?.("tengu_ax_sr_suggestion_nav", defaultEnabled) ?? defaultEnabled;
       return this.#u;
     }
     return false;
   }
-  markAnnouncementWritten(e) {
-    if (this.#i === null) this.#i = e;
+  markAnnouncementWritten(writtenAtMs) {
+    if (this.#i === null) this.#i = writtenAtMs;
   }
   endStartupQuiet() {
     this.#c = true;
@@ -230,28 +239,28 @@ class ScreenReaderMode {
   startupQuietOpenedAtMs() {
     return this.#c ? null : this.#i;
   }
-  queueAnnouncement(e, n = false) {
-    this.#e.push(e);
-    if (n) this.#r = true;
+  queueAnnouncement(text, shouldHold = false) {
+    this.#e.push(text);
+    if (shouldHold) this.#r = true;
     if (this.#e.length > MAX_ANNOUNCEMENT_QUEUE) this.#e.splice(0, this.#e.length - MAX_ANNOUNCEMENT_QUEUE);
   }
   drainAnnouncements() {
     return this.#e.splice(0);
   }
   takeHoldRequest() {
-    let e = this.#r;
+    let holdRequested = this.#r;
     this.#r = false;
-    return e;
+    return holdRequested;
   }
-  startHold(e) {
-    this.#s = e;
+  startHold(holdUntilMs) {
+    this.#s = holdUntilMs;
   }
   endHold() {
     this.#s = 0;
     this.#r = false;
   }
-  holdActive(e) {
-    return e < this.#s;
+  holdActive(nowMs) {
+    return nowMs < this.#s;
   }
   reset() {
     this.#n = undefined;
@@ -269,7 +278,10 @@ class ScreenReaderMode {
 /**
  * 按宿主隔离的屏幕阅读器模式状态。
  */
-var screenReaderModeByHost = new HostScoped(() => new ScreenReaderMode());
+var screenReaderModeByHost; // deferred: uses ScreenReaderMode of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-vd0bcd16.js:4061", () => {
+  screenReaderModeByHost = new HostScoped(() => new ScreenReaderMode());
+});
 //@ chunk-vd0bcd16.js:4084-4119 placement
 /**
  * 取出当前宿主的屏幕阅读器模式状态。
@@ -308,8 +320,8 @@ function screenReaderStatusLine() {
   {
     let screenReaderMode = getScreenReaderMode();
     if (screenReaderMode.isEnabled()) {
-      let n = screenReaderMode.activationSource();
-      return n ? `[Screen Reader Mode: on via ${n}]` : "[Screen Reader Mode: on]";
+      let source = screenReaderMode.activationSource();
+      return source ? `[Screen Reader Mode: on via ${source}]` : "[Screen Reader Mode: on]";
     }
   }
   return null;
@@ -324,30 +336,32 @@ function screenReaderSettingHint() {
       getScreenReaderMode().isEnabled() ||
       eagerHasCliFlag("--ax-screen-reader") ||
       env.CLAUDE_AX_SCREEN_READER !== undefined ||
-      getSecuritySensitiveSettingWithSources("axScreenReader").some((s) => isSettingSourceEnabled(s.source))
+      getSecuritySensitiveSettingWithSources("axScreenReader").some((sourceEntry) =>
+        isSettingSourceEnabled(sourceEntry.source),
+      )
     )
       return null;
     if (
-      !["projectSettings", "localSettings"].some((s) => {
-        let a = isSettingSourceEnabled(s) ? getSettingsForSource(s) : null;
+      !["projectSettings", "localSettings"].some((sourceName) => {
+        let sourceSettings = isSettingSourceEnabled(sourceName) ? getSettingsForSource(sourceName) : null;
         return (
-          a?.axScreenReader === true ||
-          Object.entries(a?.env ?? {}).some(
+          sourceSettings?.axScreenReader === true ||
+          Object.entries(sourceSettings?.env ?? {}).some(
             ([key, value]) => key.toUpperCase() === "CLAUDE_AX_SCREEN_READER" && isEnvTruthy(value),
           )
         );
       })
     )
       return null;
-    let n = "start Claude Code with --ax-screen-reader";
+    let flagHint = "start Claude Code with --ax-screen-reader";
     if (!isSettingSourceEnabled("userSettings"))
-      return `Screen reader mode is off: project settings can't turn it on. To turn it on, ${n}.`;
-    let t = homedir();
+      return `Screen reader mode is off: project settings can't turn it on. To turn it on, ${flagHint}.`;
+    let homeDir = homedir();
     let replaced = stripControlChars(
-      getSettingsFilePathForSource("userSettings") ?? join(t, ".claude", "settings.json"),
+      getSettingsFilePathForSource("userSettings") ?? join(homeDir, ".claude", "settings.json"),
     ).replace(/[\t\n]/g, " ");
-    let l = replaced.startsWith(t + sep) ? `~${replaced.slice(t.length)}` : replaced;
-    return `Screen reader mode is off: project settings can't turn it on. To turn it on, ${n}, or add "axScreenReader": true to your own settings file at ${l} and restart.`;
+    let displayPath = replaced.startsWith(homeDir + sep) ? `~${replaced.slice(homeDir.length)}` : replaced;
+    return `Screen reader mode is off: project settings can't turn it on. To turn it on, ${flagHint}, or add "axScreenReader": true to your own settings file at ${displayPath} and restart.`;
   }
   return null;
 }
@@ -355,18 +369,18 @@ function screenReaderSettingHint() {
 /**
  * 启动时输出读屏模式状态或设置提示。
  */
-function announceScreenReaderMode(e, n) {
+function announceScreenReaderMode(isStartup, announce) {
   {
-    if (!e) return null;
-    let t = screenReaderStatusLine();
-    if (t !== null) {
-      n(t);
+    if (!isStartup) return null;
+    let statusLine = screenReaderStatusLine();
+    if (statusLine !== null) {
+      announce(statusLine);
       markAnnouncementWritten();
-      return t;
+      return statusLine;
     }
-    let r = screenReaderSettingHint();
-    if (r !== null) n(r);
-    return r;
+    let hintText = screenReaderSettingHint();
+    if (hintText !== null) announce(hintText);
+    return hintText;
   }
   return null;
 }
@@ -396,14 +410,14 @@ function endStartupQuiet() {
  */
 function startupQuietRemainingMs() {
   {
-    let e = getScreenReaderMode().startupQuietOpenedAtMs();
-    if (e === null) return 0;
+    let openedAtMs = getScreenReaderMode().startupQuietOpenedAtMs();
+    if (openedAtMs === null) return 0;
     let min = Math.min(
       env.CLAUDE_AX_STARTUP_QUIET_MS ?? DEFAULT_AX_STARTUP_QUIET_MS,
       MAX_AX_STARTUP_QUIET_MS,
     );
-    let t = e + min - Date.now();
-    return t > 0 ? t : 0;
+    let remainingMs = openedAtMs + min - Date.now();
+    return remainingMs > 0 ? remainingMs : 0;
   }
   return 0;
 }
@@ -462,8 +476,8 @@ var MAX_ANNOUNCEMENT_QUEUE = 16;
 /**
  * 加入一条屏幕阅读器播报。
  */
-function announce(e, n) {
-  getScreenReaderMode().queueAnnouncement(e, n?.hold === true);
+function announce(text, options) {
+  getScreenReaderMode().queueAnnouncement(text, options?.hold === true);
 }
 //@ chunk-vd0bcd16.js:6096-6205 placement
 /**
@@ -478,8 +492,8 @@ function takeAnnouncementHoldMs() {
 /**
  * 开始一段播报保持（给定毫秒）。
  */
-function startAnnouncementHold(e) {
-  getScreenReaderMode().startHold(Date.now() + e);
+function startAnnouncementHold(holdMs) {
+  getScreenReaderMode().startHold(Date.now() + holdMs);
 }
 //@ chunk-vd0bcd16.js:6249-6278 placement
 /**

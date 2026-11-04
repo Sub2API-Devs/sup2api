@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:79658-80981 cjs-fingerprint
-var require_cos = x(function (cjsExports, cjsModule) {
+var require_cos = __commonJS(function (cjsExports, cjsModule) {
   function cos(hljs) {
     return {
       name: "Cach\xE9 Object Script",

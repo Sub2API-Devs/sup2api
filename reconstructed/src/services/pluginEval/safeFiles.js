@@ -27,183 +27,193 @@ import { platformNoFollowFlags } from "../../utils/platformTargets.js";
 /**
  * 以当前目录为基准检查路径是否属于仓库内容。
  */
-function checkRepoAuthoredPathFromCwd(e, n = []) {
+function checkRepoAuthoredPathFromCwd(target, extraTrustedRoots = []) {
   let cwd = getCwd();
-  return checkRepoAuthoredPath(cwd, path.resolve(cwd, e), "target", [getClaudeConfigDir(), ...n]);
+  return checkRepoAuthoredPath(cwd, path.resolve(cwd, target), "target", [
+    getClaudeConfigDir(),
+    ...extraTrustedRoots,
+  ]);
 }
 //@ chunk-qchp9vrd.js:109702-112323 placement
 /**
  * 以不跟随链接方式打开普通文件，检测打开过程中被替换。
  */
-async function openRegularFileSafely(e, n, r) {
-  let base = path.basename(e);
-  let s = () =>
+async function openRegularFileSafely(filePath, mode, label) {
+  let base = path.basename(filePath);
+  let symlinkError = () =>
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `${base} is a symlink; use a regular file`,
-      `${r}: symlink refused`,
+      `${label}: symlink refused`,
     );
-  let h = () =>
+  let vanishedError = () =>
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `${base} vanished while being opened; try again`,
-      `${r}: removed between lstat and open`,
+      `${label}: removed between lstat and open`,
     );
-  let w;
-  let b = null;
-  let y = false;
+  let handle;
+  let expectedIdentity = null;
+  let created = false;
   try {
     if (getPlatform() === "windows") {
-      let T = null;
+      let beforeStats = null;
       try {
-        T = await lstat(e, {
+        beforeStats = await lstat(filePath, {
           bigint: true,
         });
       } catch (error) {
         if (!isENOENT(error)) throw error;
       }
-      if (T === null)
+      if (beforeStats === null)
         try {
-          w = await open(e, "wx+");
-          y = true;
+          handle = await open(filePath, "wx+");
+          created = true;
         } catch (error) {
           if (getErrnoCode(error) !== "EEXIST") throw error;
-          T = await lstat(e, {
+          beforeStats = await lstat(filePath, {
             bigint: true,
           }).catch((error) => {
-            throw isENOENT(error) ? h() : error;
+            throw isENOENT(error) ? vanishedError() : error;
           });
         }
-      if (y) {
-        let N = await lstat(e, {
+      if (created) {
+        let afterStats = await lstat(filePath, {
           bigint: true,
         }).catch(() => null);
-        if (N === null)
+        if (afterStats === null)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             `${base} could not be examined after being created; refusing to use it`,
-            `${r}: post-create lstat failed`,
+            `${label}: post-create lstat failed`,
           );
-        if (N.isSymbolicLink()) {
-          let x = await readlink(e).catch(() => "?");
+        if (afterStats.isSymbolicLink()) {
+          let linkTarget = await readlink(filePath).catch(() => "?");
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `${base} became a symlink while being created; refusing it (an empty file may have been created at its target, ${escapeNonAscii(x)})`,
-            `${r}: symlink raced in during create`,
+            `${base} became a symlink while being created; refusing it (an empty file may have been created at its target, ${escapeNonAscii(linkTarget)})`,
+            `${label}: symlink raced in during create`,
           );
         }
-        b = {
-          ino: N.ino,
-          dev: N.dev,
+        expectedIdentity = {
+          ino: afterStats.ino,
+          dev: afterStats.dev,
         };
-      } else if (T !== null) {
-        if (n === "create")
+      } else if (beforeStats !== null) {
+        if (mode === "create")
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             `${base} already exists; refusing to overwrite it`,
-            `${r}: exists (exclusive create)`,
+            `${label}: exists (exclusive create)`,
           );
-        if (T.isSymbolicLink()) throw s();
+        if (beforeStats.isSymbolicLink()) throw symlinkError();
         try {
-          w = await open(e, "r+");
+          handle = await open(filePath, "r+");
         } catch (error) {
-          if (isENOENT(error)) throw h();
+          if (isENOENT(error)) throw vanishedError();
           throw error;
         }
-        b = {
-          ino: T.ino,
-          dev: T.dev,
+        expectedIdentity = {
+          ino: beforeStats.ino,
+          dev: beforeStats.dev,
         };
       }
     } else {
-      let T = platformNoFollowFlags();
+      let noFollowFlags = platformNoFollowFlags();
       try {
-        w = await open(e, constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | T, 420);
-        y = true;
+        handle = await open(
+          filePath,
+          constants.O_RDWR | constants.O_CREAT | constants.O_EXCL | noFollowFlags,
+          420,
+        );
+        created = true;
       } catch (error) {
         if (getErrnoCode(error) !== "EEXIST") throw error;
-        if (n === "create")
+        if (mode === "create")
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             `${base} already exists; refusing to overwrite it`,
-            `${r}: exists (exclusive create)`,
+            `${label}: exists (exclusive create)`,
           );
-        w = await open(e, constants.O_RDWR | T).catch((error) => {
-          throw isENOENT(error) ? h() : error;
+        handle = await open(filePath, constants.O_RDWR | noFollowFlags).catch((error) => {
+          throw isENOENT(error) ? vanishedError() : error;
         });
       }
     }
   } catch (error) {
-    if (y) {
-      let N =
-        (await w
+    if (created) {
+      let stats =
+        (await handle
           ?.stat({
             bigint: true,
           })
           .catch(() => null)) ?? null;
-      await w?.close().catch(() => {});
-      if (N !== null) await getFileIdentity(e, N);
+      await handle?.close().catch(() => {});
+      if (stats !== null) await getFileIdentity(filePath, stats);
     }
     if (getErrnoCode(error) === "ELOOP")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `${base} is a symlink (or its path loops through symlinks); use a regular file at a plain path`,
-        `${r}: ELOOP (leaf symlink or path loop)`,
+        `${label}: ELOOP (leaf symlink or path loop)`,
       );
     if (getErrnoCode(error) === "EISDIR")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `${base} is a directory, not a file`,
-        `${r}: leaf is a directory`,
+        `${label}: leaf is a directory`,
       );
     throw error;
   }
-  if (w === undefined)
+  if (handle === undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `${base} could not be opened`,
-      `${r}: no handle (unreachable)`,
+      `${label}: no handle (unreachable)`,
     );
-  let R = w;
-  let S = null;
+  let fileHandle = handle;
+  let readStats = null;
   try {
-    let T = (S = await R.stat({
+    let stats = (readStats = await fileHandle.stat({
       bigint: true,
     }));
-    if ((b !== null || y) && T.ino === 0n)
+    if ((expectedIdentity !== null || created) && stats.ino === 0n)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `${base}: file identity cannot be verified on this filesystem; use a local volume`,
-        `${r}: identity unverifiable (ino 0)`,
+        `${label}: identity unverifiable (ino 0)`,
       );
-    if (b !== null && (T.ino !== b.ino || T.dev !== b.dev))
+    if (
+      expectedIdentity !== null &&
+      (stats.ino !== expectedIdentity.ino || stats.dev !== expectedIdentity.dev)
+    )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `${base} changed while being opened; try again`,
-        `${r}: identity changed between lstat and open`,
+        `${label}: identity changed between lstat and open`,
       );
-    if (!T.isFile())
+    if (!stats.isFile())
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `${base} is not a regular file`,
-        `${r}: not a regular file`,
+        `${label}: not a regular file`,
       );
-    if (T.nlink > 1n)
+    if (stats.nlink > 1n)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${base} is hard-linked elsewhere (${T.nlink} links); use a plain copy`,
-        `${r}: hard link refused`,
+        `${base} is hard-linked elsewhere (${stats.nlink} links); use a plain copy`,
+        `${label}: hard link refused`,
       );
     return {
-      handle: R,
-      size: Number(T.size),
-      created: y,
+      handle: fileHandle,
+      size: Number(stats.size),
+      created,
       identity: {
-        ino: T.ino,
-        dev: T.dev,
+        ino: stats.ino,
+        dev: stats.dev,
       },
     };
   } catch (error) {
-    await R.close().catch(() => {});
-    if (y && S !== null) await getFileIdentity(e, S);
+    await fileHandle.close().catch(() => {});
+    if (created && readStats !== null) await getFileIdentity(filePath, readStats);
     throw error;
   }
 }
 //@ chunk-qchp9vrd.js:112323-112502 placement = getFileIdentity (0.865)
-async function getFileIdentity(e, n) {
-  if (n.ino === 0n) return;
-  let r = await lstat(e, {
+async function getFileIdentity(filePath, identity) {
+  if (identity.ino === 0n) return;
+  let stats = await lstat(filePath, {
     bigint: true,
   }).catch(() => null);
-  if (r !== null && !r.isSymbolicLink() && r.ino === n.ino && r.dev === n.dev)
-    await unlink(e).catch(() => {});
+  if (stats !== null && !stats.isSymbolicLink() && stats.ino === identity.ino && stats.dev === identity.dev)
+    await unlink(filePath).catch(() => {});
 }
 //@ chunk-qchp9vrd.js:112502-112515 placement
 /**

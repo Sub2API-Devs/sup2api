@@ -5,7 +5,7 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import {
   require_Reflect_getPrototypeOf,
   require_Reflect_getPrototypeOf_2,
@@ -13,7 +13,7 @@ import {
 import { require_get } from "../dunder-proto/get.js";
 
 //@ chunk-h6b7mazd.js:11796-12047 cjs-fingerprint
-var require_get_proto = x(function (cjsExports, cjsModule) {
+var require_get_proto = __commonJS(function (cjsExports, cjsModule) {
   var reflectGetProto = require_Reflect_getPrototypeOf();
   var originalGetProto = require_Reflect_getPrototypeOf_2();
   var getDunderProto = require_get();

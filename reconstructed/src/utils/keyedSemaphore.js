@@ -51,38 +51,38 @@ class KeyedSemaphore {
       this.#t(slot);
     });
   }
-  wouldWait(e, n) {
-    let r = this.#n(e);
-    return r.active >= n || r.waiters.length > 0;
+  wouldWait(key, limit) {
+    let slot = this.#n(key);
+    return slot.active >= limit || slot.waiters.length > 0;
   }
-  occupy(e) {
-    let n = this.#n(e);
-    n.active += 1;
+  occupy(key) {
+    let slot = this.#n(key);
+    slot.active += 1;
     return () => {
-      n.active -= 1;
-      this.#t(n);
+      slot.active -= 1;
+      this.#t(slot);
     };
   }
-  #t(e) {
-    while (e.waiters.length > 0 && e.active < e.waiters[0].limit) {
-      let n = e.waiters.shift();
-      if (n.signal.aborted) {
-        n.cancel();
+  #t(slot) {
+    while (slot.waiters.length > 0 && slot.active < slot.waiters[0].limit) {
+      let waiter = slot.waiters.shift();
+      if (waiter.signal.aborted) {
+        waiter.cancel();
         continue;
       }
-      e.active += 1;
-      n.grant();
+      slot.active += 1;
+      waiter.grant();
     }
   }
-  #n(e) {
-    let n = this.#e.get(e);
-    if (n) return n;
-    let r = {
+  #n(key) {
+    let existingSlot = this.#e.get(key);
+    if (existingSlot) return existingSlot;
+    let slot = {
       active: 0,
       waiters: [],
     };
-    this.#e.set(e, r);
-    return r;
+    this.#e.set(key, slot);
+    return slot;
   }
 }
 //@ chunk-e6aww6q8.js:2157385-2157689 placement
@@ -95,20 +95,20 @@ async function acquireSeat(semaphore, key, limit, signal, { waitLimitMs, onWait 
     timeoutMs: waitLimitMs,
     refTimer: true,
   });
-  let w = await semaphore.acquire(key, limit, combinedAbortSignal.signal);
+  let release = await semaphore.acquire(key, limit, combinedAbortSignal.signal);
   combinedAbortSignal.cleanup();
-  if (w === undefined && signal.aborted) return;
-  let L = () => {
-    w?.();
-    w = undefined;
+  if (release === undefined && signal.aborted) return;
+  let releaseSeat = () => {
+    release?.();
+    release = undefined;
   };
   return {
-    seated: w !== undefined,
-    release: L,
+    seated: release !== undefined,
+    release: releaseSeat,
     retake: () => {
-      w ??= semaphore.occupy(key);
+      release ??= semaphore.occupy(key);
     },
-    [Symbol.dispose]: L,
+    [Symbol.dispose]: releaseSeat,
   };
 }
 export { KeyedSemaphore, acquireSeat };

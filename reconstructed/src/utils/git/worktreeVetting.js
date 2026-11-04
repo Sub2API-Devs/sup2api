@@ -32,692 +32,744 @@ import { buildGitConfigEnv } from "./gitConfigEnv.js";
 import { env } from "../env.js";
 import { identity } from "../identity.js";
 import { openFailureText } from "./worktreeRegistrations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-2xm1rxms.js:1124-1168 placement
 var MAX_GITDIR_FILE_BYTES = 65536;
 var MAX_LINK_TEXT_BYTES = 4096;
-var runGitForVetting = (e, n) => execFileNoThrowWithCwd(gitExe(), e, n);
+var runGitForVetting = (args, options) => execFileNoThrowWithCwd(gitExe(), args, options);
 //@ chunk-2xm1rxms.js:1168-4308 placement
 /**
  * 检查目录是否为可安全操作的 worktree：.git 指针、gitdir 与 commondir 是否一致且在仓库内。
  */
-async function vetWorktree(e, { dotGitLink: n = "refuse", run: o = runGitForVetting } = {}) {
-  let r = (skipped, E) => {
-    logForDebugging(`Could not vet the worktree registrations of ${e}: ${E}`, {
+async function vetWorktree(repoRoot, { dotGitLink = "refuse", run: runGit = runGitForVetting } = {}) {
+  let skip = (skipped, reason) => {
+    logForDebugging(`Could not vet the worktree registrations of ${repoRoot}: ${reason}`, {
       level: "warn",
     });
     return {
       skipped,
-      why: E,
+      why: reason,
     };
   };
-  let s = getPlatform() === "windows";
-  let a = async (p) => {
-    let E = await readlink(p).then(
+  let isWindows = getPlatform() === "windows";
+  let probeSymlink = async (linkPath) => {
+    let verdict = await readlink(linkPath).then(
       () => "link",
       (error) => (getErrnoCode(error) === "EINVAL" ? "clear" : isENOENT(error) ? "missing" : "unknown"),
     );
-    if (E !== "missing") return E;
-    return (await isWindowsShortcutAbsent(p)) ? "missing" : "unknown";
+    if (verdict !== "missing") return verdict;
+    return (await isWindowsShortcutAbsent(linkPath)) ? "missing" : "unknown";
   };
-  let l = join(e, ".git");
-  let u = await symlinkVerdictForPath(l, e);
-  let c;
-  let w;
-  if (u === "clear") {
-    let [p, E] = await Promise.all([
-      lstat(l).catch(() => null),
-      stat(e).then(
-        (v) => v,
+  let dotGitPath = join(repoRoot, ".git");
+  let dotGitVerdict = await symlinkVerdictForPath(dotGitPath, repoRoot);
+  let gitDirPath;
+  let ownerUids;
+  if (dotGitVerdict === "clear") {
+    let [dotGitStats, rootStats] = await Promise.all([
+      lstat(dotGitPath).catch(() => null),
+      stat(repoRoot).then(
+        (stats) => stats,
         (error) => (isENOENT(error) ? null : undefined),
       ),
     ]);
-    if (E === null) return r("gone", "the repository root is gone");
-    if (E === undefined) return r("unvettable", "the repository root cannot be stat'd");
-    if (p === null) return r("unvettable", ".git vanished");
-    if (!p.isDirectory()) return r("pointer", ".git is not a real directory (a pointer file)");
-    c = l;
-    w = [p.uid, E.uid];
-  } else if (u === "missing") {
-    let [p, E, v] = await Promise.all([
-      lstat(join(e, "HEAD")).catch(() => null),
-      lstat(join(e, "objects")).catch(() => null),
-      stat(e).then(
-        (y) => y,
+    if (rootStats === null) return skip("gone", "the repository root is gone");
+    if (rootStats === undefined) return skip("unvettable", "the repository root cannot be stat'd");
+    if (dotGitStats === null) return skip("unvettable", ".git vanished");
+    if (!dotGitStats.isDirectory()) return skip("pointer", ".git is not a real directory (a pointer file)");
+    gitDirPath = dotGitPath;
+    ownerUids = [dotGitStats.uid, rootStats.uid];
+  } else if (dotGitVerdict === "missing") {
+    let [headStats, objectsStats, rootStats] = await Promise.all([
+      lstat(join(repoRoot, "HEAD")).catch(() => null),
+      lstat(join(repoRoot, "objects")).catch(() => null),
+      stat(repoRoot).then(
+        (stats) => stats,
         (error) => (isENOENT(error) ? null : undefined),
       ),
     ]);
-    if (v === null) return r("gone", "the repository root is gone");
-    if (v === undefined) return r("unvettable", "the repository root cannot be stat'd");
-    if (p === null || !p.isFile() || E === null || !E.isDirectory())
-      return r("not-a-repository", "no .git, and the root is not a bare git directory");
-    c = e;
-    w = [v.uid];
-  } else if (u === "link" && n === "vet") {
-    let gitdirFile = await readGitdirFile(l, e);
-    if ("refused" in gitdirFile) return r("unvettable", `.git is a link whose text ${gitdirFile.refused}`);
+    if (rootStats === null) return skip("gone", "the repository root is gone");
+    if (rootStats === undefined) return skip("unvettable", "the repository root cannot be stat'd");
+    if (headStats === null || !headStats.isFile() || objectsStats === null || !objectsStats.isDirectory())
+      return skip("not-a-repository", "no .git, and the root is not a bare git directory");
+    gitDirPath = repoRoot;
+    ownerUids = [rootStats.uid];
+  } else if (dotGitVerdict === "link" && dotGitLink === "vet") {
+    let gitdirFile = await readGitdirFile(dotGitPath, repoRoot);
+    if ("refused" in gitdirFile) return skip("unvettable", `.git is a link whose text ${gitdirFile.refused}`);
     let text = gitdirFile.text;
-    let v = stripTrailingSeparators(resolve(e, text));
-    let y = stripTrailingSeparators(normalize(e));
-    if ((await symlinkVerdictForPath(v, v.startsWith(y + sep) ? y : undefined)) !== "clear")
-      return r(
+    let resolvedLinkTarget = stripTrailingSeparators(resolve(repoRoot, text));
+    let rootSpelling = stripTrailingSeparators(normalize(repoRoot));
+    if (
+      (await symlinkVerdictForPath(
+        resolvedLinkTarget,
+        resolvedLinkTarget.startsWith(rootSpelling + sep) ? rootSpelling : undefined,
+      )) !== "clear"
+    )
+      return skip(
         "unvettable",
         ".git is a link whose target is missing, goes through another link, or cannot be probed",
       );
-    let [P, G, V, j] = await Promise.all([
-      lstat(v).catch(() => null),
-      lstat(join(v, "HEAD")).catch(() => null),
-      lstat(join(v, "objects")).catch(() => null),
-      stat(e).then(
-        (D) => D,
+    let [linkStats, linkHeadStats, linkObjectsStats, rootStats] = await Promise.all([
+      lstat(resolvedLinkTarget).catch(() => null),
+      lstat(join(resolvedLinkTarget, "HEAD")).catch(() => null),
+      lstat(join(resolvedLinkTarget, "objects")).catch(() => null),
+      stat(repoRoot).then(
+        (stats) => stats,
         (error) => (isENOENT(error) ? null : undefined),
       ),
     ]);
-    if (j === null) return r("gone", "the repository root is gone");
-    if (j === undefined) return r("unvettable", "the repository root cannot be stat'd");
-    if (P === null || !P.isDirectory() || G === null || !G.isFile() || V === null || !V.isDirectory())
-      return r("unvettable", ".git is a link to something other than a git directory");
-    c = v;
-    w = [P.uid, j.uid];
-  } else return r("unvettable", ".git is a link, a mount point, or cannot be probed");
-  if ((await a(join(c, "commondir"))) !== "missing")
-    return r("unvettable", `${c}/commondir exists, which git never writes into a main git dir`);
-  let h = s || !w.every(isTrustedOwnerUid) ? await gitConfigEnvOverrides(e, c, o) : null;
-  if (h !== null) return r("unvettable", h);
-  let g = join(c, "worktrees");
-  let b = await symlinkVerdictForPath(g, e);
-  let T = new Map();
-  let m = new Map();
-  if (b === "missing")
+    if (rootStats === null) return skip("gone", "the repository root is gone");
+    if (rootStats === undefined) return skip("unvettable", "the repository root cannot be stat'd");
+    if (
+      linkStats === null ||
+      !linkStats.isDirectory() ||
+      linkHeadStats === null ||
+      !linkHeadStats.isFile() ||
+      linkObjectsStats === null ||
+      !linkObjectsStats.isDirectory()
+    )
+      return skip("unvettable", ".git is a link to something other than a git directory");
+    gitDirPath = resolvedLinkTarget;
+    ownerUids = [linkStats.uid, rootStats.uid];
+  } else return skip("unvettable", ".git is a link, a mount point, or cannot be probed");
+  if ((await probeSymlink(join(gitDirPath, "commondir"))) !== "missing")
+    return skip("unvettable", `${gitDirPath}/commondir exists, which git never writes into a main git dir`);
+  let ownershipProblem =
+    isWindows || !ownerUids.every(isTrustedOwnerUid)
+      ? await gitConfigEnvOverrides(repoRoot, gitDirPath, runGit)
+      : null;
+  if (ownershipProblem !== null) return skip("unvettable", ownershipProblem);
+  let worktreesDir = join(gitDirPath, "worktrees");
+  let worktreesVerdict = await symlinkVerdictForPath(worktreesDir, repoRoot);
+  let vetted = new Map();
+  let refused = new Map();
+  if (worktreesVerdict === "missing")
     return {
-      gitDir: c,
-      vetted: T,
-      refused: m,
+      gitDir: gitDirPath,
+      vetted,
+      refused,
     };
-  let f =
-    b === "clear"
-      ? await readdir(g, {
+  let entryNames =
+    worktreesVerdict === "clear"
+      ? await readdir(worktreesDir, {
           encoding: "buffer",
         }).catch(() => null)
       : null;
-  if (f === null) return r("unvettable", `${g} is a link or cannot be read`);
-  for (let p of f) {
-    let E = decodeSafeName(p);
-    if (E === null) {
-      let A = join(g, `<${p.toString("hex")}>`);
-      let P = "has a name this check and git would read differently";
-      m.set(A, "has a name this check and git would read differently");
+  if (entryNames === null) return skip("unvettable", `${worktreesDir} is a link or cannot be read`);
+  for (let rawName of entryNames) {
+    let entryName = decodeSafeName(rawName);
+    if (entryName === null) {
+      let entryPath = join(worktreesDir, `<${rawName.toString("hex")}>`);
+      let refusalText = "has a name this check and git would read differently";
+      refused.set(entryPath, "has a name this check and git would read differently");
       logForDebugging(
-        `Refused worktree admin entry ${A}: has a name this check and git would read differently`,
+        `Refused worktree admin entry ${entryPath}: has a name this check and git would read differently`,
         {
           level: "warn",
         },
       );
       continue;
     }
-    let v = join(g, E);
-    let y = await vetWorktreeLink(v, e, a, s);
-    if (y === "missing") continue;
-    if (y === null) continue;
-    if (typeof y === "object") T.set(v, y.worktree);
+    let entryPath = join(worktreesDir, entryName);
+    let entryResult = await vetWorktreeLink(entryPath, repoRoot, probeSymlink, isWindows);
+    if (entryResult === "missing") continue;
+    if (entryResult === null) continue;
+    if (typeof entryResult === "object") vetted.set(entryPath, entryResult.worktree);
     else {
-      m.set(v, y);
-      logForDebugging(`Refused worktree admin entry ${v}: ${y}`, {
+      refused.set(entryPath, entryResult);
+      logForDebugging(`Refused worktree admin entry ${entryPath}: ${entryResult}`, {
         level: "warn",
       });
     }
   }
   return {
-    gitDir: c,
-    vetted: T,
-    refused: m,
+    gitDir: gitDirPath,
+    vetted,
+    refused,
   };
 }
 //@ chunk-2xm1rxms.js:4308-4458 placement
-async function looksLikeGitDir(e) {
-  for (let n of ["objects", "config", "packed-refs", "hooks", "worktrees"])
-    if ((await e(n).catch(() => "unchecked")) !== null) return true;
+async function looksLikeGitDir(readEntry) {
+  for (let entryName of ["objects", "config", "packed-refs", "hooks", "worktrees"])
+    if ((await readEntry(entryName).catch(() => "unchecked")) !== null) return true;
   return false;
 }
 //@ chunk-2xm1rxms.js:4458-6341 placement
-async function vetWorktreeLink(e, n, o, r) {
-  let s = await symlinkVerdictForPath(e, n);
-  if (s === "missing") return "missing";
-  if (s !== "clear") return "is a link, a mount point, or cannot be probed";
-  let a = await lstat(e).then(
-    (m) => m,
+async function vetWorktreeLink(entryPath, repoRoot, probeSymlink, isWindows) {
+  let verdict = await symlinkVerdictForPath(entryPath, repoRoot);
+  if (verdict === "missing") return "missing";
+  if (verdict !== "clear") return "is a link, a mount point, or cannot be probed";
+  let stats = await lstat(entryPath).then(
+    (stats) => stats,
     (error) => (isENOENT(error) ? null : undefined),
   );
-  if (a === undefined) return "cannot be probed";
-  if (a === null) return "missing";
-  if (a.isSymbolicLink()) return "became a link";
-  if (!a.isDirectory()) return r ? "is not a directory" : null;
-  let worktreePointer = await readWorktreePointer(e, o, r ? 1 / 0 : 1);
+  if (stats === undefined) return "cannot be probed";
+  if (stats === null) return "missing";
+  if (stats.isSymbolicLink()) return "became a link";
+  if (!stats.isDirectory()) return isWindows ? "is not a directory" : null;
+  let worktreePointer = await readWorktreePointer(entryPath, probeSymlink, isWindows ? 1 / 0 : 1);
   if (worktreePointer !== null) return worktreePointer;
   if (
-    await looksLikeGitDir((m) =>
-      lstat(join(e, m)).catch((error) => {
+    await looksLikeGitDir((entryName) =>
+      lstat(join(entryPath, entryName)).catch((error) => {
         if (isENOENT(error)) return null;
         throw error;
       }),
     )
   )
     return "holds a git directory's own files (objects, config, packed-refs, hooks or worktrees), or could not be checked for them";
-  let u = join(e, "gitdir");
-  let c = await lstat(u).then(
-    (m) => m,
+  let gitdirPath = join(entryPath, "gitdir");
+  let gitdirStats = await lstat(gitdirPath).then(
+    (stats) => stats,
     (error) => (isENOENT(error) ? null : undefined),
   );
-  if (c === undefined) return "gitdir cannot be probed";
-  if (c === null)
-    return (await o(u)) === "missing"
+  if (gitdirStats === undefined) return "gitdir cannot be probed";
+  if (gitdirStats === null)
+    return (await probeSymlink(gitdirPath)) === "missing"
       ? {
           worktree: null,
         }
       : "gitdir is absent to lstat but not to the probe (a shortcut beside it, or a race)";
-  if (!c.isFile()) return "gitdir is not a regular file";
-  if (c.size > MAX_GITDIR_FILE_BYTES) return "gitdir is larger than any git writes";
-  let w = await readFileGuarded(u, MAX_GITDIR_FILE_BYTES, {
+  if (!gitdirStats.isFile()) return "gitdir is not a regular file";
+  if (gitdirStats.size > MAX_GITDIR_FILE_BYTES) return "gitdir is larger than any git writes";
+  let gitdirText = await readFileGuarded(gitdirPath, MAX_GITDIR_FILE_BYTES, {
     noFollow: true,
   }).catch(() => null);
-  if (w === null) return "gitdir cannot be read";
-  let replaced = w.replace(/[\r\n]+$/, "");
-  if (replaced === "")
+  if (gitdirText === null) return "gitdir cannot be read";
+  let gitdirValue = gitdirText.replace(/[\r\n]+$/, "");
+  if (gitdirValue === "")
     return {
       worktree: null,
     };
-  let g = gitdirPathProblem(replaced, n, r);
-  if (g !== null) return g;
-  let b;
-  let T;
-  if (isAbsolute(replaced)) {
-    let m = normalize(replaced);
-    let f = stripTrailingSeparators(normalize(n));
-    b = [m];
-    let p = (y, A) => (r && A === 0 ? y.toLowerCase() : y);
-    let parts = m.split(sep);
-    let parts_2 = f.split(sep);
-    T =
-      parts.length > parts_2.length && parts_2.every((y, A) => p(y, A) === p(parts[A] ?? "", A))
+  let pathProblem = gitdirPathProblem(gitdirValue, repoRoot, isWindows);
+  if (pathProblem !== null) return pathProblem;
+  let candidates;
+  let containingRoot;
+  if (isAbsolute(gitdirValue)) {
+    let normalizedTarget = normalize(gitdirValue);
+    let normalizedRoot = stripTrailingSeparators(normalize(repoRoot));
+    candidates = [normalizedTarget];
+    let foldPart = (part, index) => (isWindows && index === 0 ? part.toLowerCase() : part);
+    let parts = normalizedTarget.split(sep);
+    let parts_2 = normalizedRoot.split(sep);
+    containingRoot =
+      parts.length > parts_2.length &&
+      parts_2.every((rootPart, index) => foldPart(rootPart, index) === foldPart(parts[index] ?? "", index))
         ? parts.slice(0, parts_2.length).join(sep)
         : undefined;
   } else {
-    let m = await realpath(n).catch(() => null);
-    if (m === null) return "the repository root does not resolve";
-    T = m;
-    let f = stripTrailingSeparators(normalize(n));
-    let p = e.startsWith(f + sep) ? join(m, relative(n, e)) : e;
-    b = [resolve(p, replaced), resolve(m, replaced)];
+    let realRoot = await realpath(repoRoot).catch(() => null);
+    if (realRoot === null) return "the repository root does not resolve";
+    containingRoot = realRoot;
+    let rootSpelling = stripTrailingSeparators(normalize(repoRoot));
+    let spelledEntry = entryPath.startsWith(rootSpelling + sep)
+      ? join(realRoot, relative(repoRoot, entryPath))
+      : entryPath;
+    candidates = [resolve(spelledEntry, gitdirValue), resolve(realRoot, gitdirValue)];
   }
-  for (let m of b) {
-    if (isOnForeignMount(m, T ?? n)) return "gitdir names another host";
-    let f = await symlinkVerdictForPath(dirname(m), T);
-    if (f === "link" || f === "unknown")
+  for (let candidatePath of candidates) {
+    if (isOnForeignMount(candidatePath, containingRoot ?? repoRoot)) return "gitdir names another host";
+    let parentVerdict = await symlinkVerdictForPath(dirname(candidatePath), containingRoot);
+    if (parentVerdict === "link" || parentVerdict === "unknown")
       return "gitdir walks through a link, or a component cannot be probed";
-    if (f === "clear") {
-      let p = await o(m);
-      if (p === "link" || p === "unknown") return "gitdir names a link, or one that cannot be probed";
+    if (parentVerdict === "clear") {
+      let entryVerdict = await probeSymlink(candidatePath);
+      if (entryVerdict === "link" || entryVerdict === "unknown")
+        return "gitdir names a link, or one that cannot be probed";
     }
   }
   return {
-    worktree: b[0] ?? null,
+    worktree: candidates[0] ?? null,
   };
 }
 //@ chunk-2xm1rxms.js:6341-7138 placement
-async function gitConfigEnvOverrides(e, n, o) {
-  let r = {};
-  for (let c of ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"]) {
-    let w = process.env[c];
-    if (w !== undefined) r[c] = w;
+async function gitConfigEnvOverrides(cwd, gitDir, runGit) {
+  let configEnv = {};
+  for (let varName of ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"]) {
+    let value = process.env[varName];
+    if (value !== undefined) configEnv[varName] = value;
   }
-  let s = await o([...GIT_SAFE_GLOBAL_ARGS, "-C", e, "rev-parse", "--git-dir"], {
-    cwd: e,
+  let result = await runGit([...GIT_SAFE_GLOBAL_ARGS, "-C", cwd, "rev-parse", "--git-dir"], {
+    cwd,
     env: getRemoteHostSessionCount({
-      ...r,
+      ...configEnv,
       ...buildGitConfigEnv(),
     }),
     timeout: 1e4,
   }).catch((error) => {
-    logForDebugging(`Could not run git to check the ownership of ${n}: ${errorMessage(error)}`, {
+    logForDebugging(`Could not run git to check the ownership of ${gitDir}: ${errorMessage(error)}`, {
       level: "error",
     });
     return null;
   });
-  if (s === null) return `git could not be run to check the ownership of ${n}`;
-  if (s.code !== 0)
-    return `git's ownership check for ${n} failed (exit ${s.code}); if another user owns it, it needs a safe.directory entry`;
-  let trimmed = s.stdout.trim();
-  if (trimmed === "") return `git gave no answer when checking the ownership of ${n}`;
-  let [l, u] = await Promise.all([
-    realpath(resolve(e, trimmed)).catch(() => null),
-    realpath(n).catch(() => null),
+  if (result === null) return `git could not be run to check the ownership of ${gitDir}`;
+  if (result.code !== 0)
+    return `git's ownership check for ${gitDir} failed (exit ${result.code}); if another user owns it, it needs a safe.directory entry`;
+  let trimmed = result.stdout.trim();
+  if (trimmed === "") return `git gave no answer when checking the ownership of ${gitDir}`;
+  let [realReported, realGitDir] = await Promise.all([
+    realpath(resolve(cwd, trimmed)).catch(() => null),
+    realpath(gitDir).catch(() => null),
   ]);
-  return l !== null && u !== null && stripTrailingSeparators(l) === stripTrailingSeparators(u)
+  return realReported !== null &&
+    realGitDir !== null &&
+    stripTrailingSeparators(realReported) === stripTrailingSeparators(realGitDir)
     ? null
-    : `git's ownership check did not name ${n}`;
+    : `git's ownership check did not name ${gitDir}`;
 }
 //@ chunk-2xm1rxms.js:7138-7276 placement
-function isTrustedOwnerUid(e) {
-  let n = process.geteuid?.();
-  if (n === undefined || e === n) return true;
-  if (n !== 0) return false;
+function isTrustedOwnerUid(uid) {
+  let euid = process.geteuid?.();
+  if (euid === undefined || uid === euid) return true;
+  if (euid !== 0) return false;
   let SUDO_UID = env.SUDO_UID;
-  return e === 0 || (SUDO_UID !== undefined && e === SUDO_UID);
+  return uid === 0 || (SUDO_UID !== undefined && uid === SUDO_UID);
 }
 //@ chunk-2xm1rxms.js:7276-8027 placement
-function gitdirPathProblem(e, n, o) {
-  if (e.includes("\uFFFD") || /\p{Cc}/u.test(e) || /^[A-Za-z]:(?![\\/])/.test(e))
+function gitdirPathProblem(gitdirValue, baseDir, isWindows) {
+  if (
+    gitdirValue.includes("\uFFFD") ||
+    /\p{Cc}/u.test(gitdirValue) ||
+    /^[A-Za-z]:(?![\\/])/.test(gitdirValue)
+  )
     return "gitdir holds bytes git would read differently";
-  let r = o ? /[\\/]+/ : /\/+/;
-  if (o && e.split(r).some((s) => s !== "." && s !== ".." && /[. ]$/.test(s)))
+  let separatorRe = isWindows ? /[\\/]+/ : /\/+/;
+  if (
+    isWindows &&
+    gitdirValue.split(separatorRe).some((part) => part !== "." && part !== ".." && /[. ]$/.test(part))
+  )
     return "gitdir holds a component ending in a dot or space";
-  if (!isAbsolute(e)) {
-    let parts = e.split(r);
-    let index = parts.findIndex((u) => u !== "..");
-    return (index < 0 ? [] : parts.slice(index)).some((u) => u === "" || u === "." || u === "..")
+  if (!isAbsolute(gitdirValue)) {
+    let parts = gitdirValue.split(separatorRe);
+    let index = parts.findIndex((startIndex) => startIndex !== "..");
+    return (index < 0 ? [] : parts.slice(index)).some((part) => part === "" || part === "." || part === "..")
       ? "gitdir is a relative value git would not write"
       : null;
   }
-  if (e.split(r).some((s) => s === "." || s === ".."))
+  if (gitdirValue.split(separatorRe).some((part) => part === "." || part === ".."))
     return "gitdir holds a dot segment git would not write";
-  if (!isSafeAbsoluteWorktreePath(e)) return "gitdir is rooted without a drive or a host";
-  if (isOnForeignMount(e, n)) return "gitdir names another host";
-  return r.test(e.slice(-1)) ? "gitdir ends in a separator git would not write" : null;
+  if (!isSafeAbsoluteWorktreePath(gitdirValue)) return "gitdir is rooted without a drive or a host";
+  if (isOnForeignMount(gitdirValue, baseDir)) return "gitdir names another host";
+  return separatorRe.test(gitdirValue.slice(-1)) ? "gitdir ends in a separator git would not write" : null;
 }
 //@ chunk-2xm1rxms.js:8027-8695 placement
-async function readGitdirFile(e, n) {
-  let o = await readlink(e, {
+async function readGitdirFile(linkPath, baseDir) {
+  let linkText = await readlink(linkPath, {
     encoding: "buffer",
   }).then(
-    (a) => {
-      let str = a.toString("utf-8");
-      return str.includes("\x00") || !Buffer.from(str, "utf-8").equals(a) ? null : str;
+    (bytes) => {
+      let str = bytes.toString("utf-8");
+      return str.includes("\x00") || !Buffer.from(str, "utf-8").equals(bytes) ? null : str;
     },
     () => null,
   );
-  if (o === null)
+  if (linkText === null)
     return {
       refused: "cannot be read",
     };
-  if (/[\p{Cc}\uFFFD]/u.test(o))
+  if (/[\p{Cc}\uFFFD]/u.test(linkText))
     return {
       refused: "holds a control character or U+FFFD",
     };
-  if (isOnForeignMount(o, n))
+  if (isOnForeignMount(linkText, baseDir))
     return {
       refused: "names another host",
     };
-  let r = getPlatform() === "windows";
-  let s = r ? /[\\/]+/ : /\/+/;
+  let isWindows = getPlatform() === "windows";
+  let separatorRe = isWindows ? /[\\/]+/ : /\/+/;
   if (
-    o === "" ||
-    s.test(o.slice(-1)) ||
-    o.split(s).some((a) => a === "." || a === "..") ||
-    (isAbsolute(o) && !isSafeAbsoluteWorktreePath(o)) ||
-    (r && /^[A-Za-z]:(?![\\/])/.test(o))
+    linkText === "" ||
+    separatorRe.test(linkText.slice(-1)) ||
+    linkText.split(separatorRe).some((part) => part === "." || part === "..") ||
+    (isAbsolute(linkText) && !isSafeAbsoluteWorktreePath(linkText)) ||
+    (isWindows && /^[A-Za-z]:(?![\\/])/.test(linkText))
   )
     return {
       refused:
         "is empty, ends in a separator, holds a dot segment, or is rooted or drive-relative in a way git would read differently",
     };
   return {
-    text: o,
+    text: linkText,
   };
 }
 //@ chunk-2xm1rxms.js:8695-8860 placement
-function decodeSafeName(e) {
-  let str = e.toString("utf8");
+function decodeSafeName(rawName) {
+  let str = rawName.toString("utf8");
   return !str.includes("\uFFFD") &&
     !/\p{Cc}/u.test(str) &&
     !(getPlatform() === "windows" && /[. ]$/.test(str)) &&
-    Buffer.from(str, "utf8").equals(e)
+    Buffer.from(str, "utf8").equals(rawName)
     ? str
     : null;
 }
 //@ chunk-2xm1rxms.js:8860-9581 placement
-async function readWorktreePointer(e, n, o) {
-  let r = getPlatform() === "windows";
-  let s = MAX_LINK_TEXT_BYTES;
-  let a = async (l, u) => {
-    let c = await readdir(l, {
+async function readWorktreePointer(dirPath, probeSymlink, maxDepth) {
+  let isWindows = getPlatform() === "windows";
+  let remainingBudget = MAX_LINK_TEXT_BYTES;
+  let walk = async (dirPath, depth) => {
+    let names = await readdir(dirPath, {
       encoding: "buffer",
     }).catch(() => null);
-    if (c === null) return `${l} cannot be read`;
-    for (let w of c) {
-      if (--s < 0) return "holds more files than any entry git writes";
-      let h = decodeSafeName(w);
-      if (h === null) return `${l} holds a name that is not valid UTF-8`;
-      if (r && h.toLowerCase().endsWith(".lnk"))
-        return `${join(l, h)} is named as a shortcut, which git never writes here`;
-      let g = join(l, h);
-      let b = await lstat(g).catch(() => null);
-      if (b === null) return `${g} cannot be probed`;
-      let T = r && b.isDirectory() ? await symlinkVerdictForPath(g, l) : await n(g);
-      if (T === "link" || T === "unknown") return `${g} is a link or cannot be probed`;
-      if (b.isDirectory() && u > 1) {
-        let m = await a(g, u - 1);
-        if (m !== null) return m;
+    if (names === null) return `${dirPath} cannot be read`;
+    for (let rawName of names) {
+      if (--remainingBudget < 0) return "holds more files than any entry git writes";
+      let name = decodeSafeName(rawName);
+      if (name === null) return `${dirPath} holds a name that is not valid UTF-8`;
+      if (isWindows && name.toLowerCase().endsWith(".lnk"))
+        return `${join(dirPath, name)} is named as a shortcut, which git never writes here`;
+      let entryPath = join(dirPath, name);
+      let stats = await lstat(entryPath).catch(() => null);
+      if (stats === null) return `${entryPath} cannot be probed`;
+      let verdict =
+        isWindows && stats.isDirectory()
+          ? await symlinkVerdictForPath(entryPath, dirPath)
+          : await probeSymlink(entryPath);
+      if (verdict === "link" || verdict === "unknown") return `${entryPath} is a link or cannot be probed`;
+      if (stats.isDirectory() && depth > 1) {
+        let nestedProblem = await walk(entryPath, depth - 1);
+        if (nestedProblem !== null) return nestedProblem;
       }
     }
     return null;
   };
-  return a(e, o);
+  return walk(dirPath, maxDepth);
 }
 //@ chunk-2xm1rxms.js:9581-9695 placement
 /**
  * worktree 校验读取的字节上限，以及"匹配前后"回调状态的宿主作用域存储。
  */
-var WORKTREE_READ_LIMITS_2 = 65536;
-var WORKTREE_READ_LIMITS = 65536;
-var worktreeHookState = identity(
-  {
-    afterMatch: null,
-    beforeMutation: null,
-  },
-  (e) => {
-    e.afterMatch = null;
-    e.beforeMutation = null;
-  },
-);
+var WORKTREE_READ_LIMITS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WORKTREE_READ_LIMITS;
+var worktreeHookState;
+deferInit("chunk-2xm1rxms.js:9581", () => {
+  WORKTREE_READ_LIMITS_2 = 65536;
+  WORKTREE_READ_LIMITS = 65536;
+  worktreeHookState = identity(
+    {
+      afterMatch: null,
+      beforeMutation: null,
+    },
+    (state) => {
+      state.afterMatch = null;
+      state.beforeMutation = null;
+    },
+  );
+});
 //@ chunk-2xm1rxms.js:9695-9940 placement
-async function vetRepoForWorktrees(e) {
-  let n = await vetWorktree(e, {
+async function vetRepoForWorktrees(repoRoot) {
+  let vetResult = await vetWorktree(repoRoot, {
     dotGitLink: "vet",
   });
-  if ("skipped" in n) return null;
-  let o = await isSameRepository(e, n.gitDir);
-  if ("refused" in o) {
-    logForDebugging(`Could not vet the worktree registrations of ${e}: ${o.refused}`, {
+  if ("skipped" in vetResult) return null;
+  let sameRepo = await isSameRepository(repoRoot, vetResult.gitDir);
+  if ("refused" in sameRepo) {
+    logForDebugging(`Could not vet the worktree registrations of ${repoRoot}: ${sameRepo.refused}`, {
       level: "warn",
     });
     return null;
   }
-  return o.gitDir;
+  return sameRepo.gitDir;
 }
 //@ chunk-2xm1rxms.js:9940-10483 placement
-async function isSameRepository(e, gitDir) {
-  let o = normalizedAbsolute(e);
-  let r = normalizedAbsolute(gitDir);
-  if (r === o)
-    return (await lstat(join(o, ".git")).then(
+async function isSameRepository(repoRoot, gitDir) {
+  let normalizedRoot = normalizedAbsolute(repoRoot);
+  let normalizedGitDir = normalizedAbsolute(gitDir);
+  if (normalizedGitDir === normalizedRoot)
+    return (await lstat(join(normalizedRoot, ".git")).then(
       () => true,
       (error) => !isENOENT(error),
     ))
       ? {
-          refused: `the repository's .git is a link to its own root, ${o}, which cannot be used as a git directory safely`,
+          refused: `the repository's .git is a link to its own root, ${normalizedRoot}, which cannot be used as a git directory safely`,
         }
-      : resolveGitDirUnder(o, "");
-  if (r === normalizedAbsolute(join(e, ".git"))) return resolveGitDirUnder(o, ".git");
-  let s = await locateInside(r, o);
-  return s === "elsewhere"
+      : resolveGitDirUnder(normalizedRoot, "");
+  if (normalizedGitDir === normalizedAbsolute(join(repoRoot, ".git")))
+    return resolveGitDirUnder(normalizedRoot, ".git");
+  let location = await locateInside(normalizedGitDir, normalizedRoot);
+  return location === "elsewhere"
     ? {
-        gitDir: r,
+        gitDir: normalizedGitDir,
       }
     : {
         refused:
-          s === "inside"
-            ? `the repository's .git is a link to ${r}, inside its own working tree, which cannot be opened safely`
-            : `the repository's .git is a link to ${r}, which could not be checked against the working tree`,
+          location === "inside"
+            ? `the repository's .git is a link to ${normalizedGitDir}, inside its own working tree, which cannot be opened safely`
+            : `the repository's .git is a link to ${normalizedGitDir}, which could not be checked against the working tree`,
       };
 }
 //@ chunk-2xm1rxms.js:10483-10611 placement
-async function resolveGitDirUnder(e, n) {
-  let o = await realpath(e).catch(() => null);
-  return o === null
+async function resolveGitDirUnder(rootPath, suffix) {
+  let realRoot = await realpath(rootPath).catch(() => null);
+  return realRoot === null
     ? {
-        refused: `${e} could not be resolved`,
+        refused: `${rootPath} could not be resolved`,
       }
     : {
-        gitDir: join(o, n),
+        gitDir: join(realRoot, suffix),
       };
 }
 //@ chunk-2xm1rxms.js:10611-10667 placement
-function normalizedAbsolute(e) {
-  let n = normalize(e);
-  return parse(n).root === n ? n : stripTrailingSeparators(n);
+function normalizedAbsolute(path) {
+  let normalized = normalize(path);
+  return parse(normalized).root === normalized ? normalized : stripTrailingSeparators(normalized);
 }
 //@ chunk-2xm1rxms.js:10667-10973 placement
-async function locateInside(e, n) {
-  if (isPathInsideOrEqual(normalizePathKey(e), normalizePathKey(n))) return "inside";
-  let o = await stat(n, {
+async function locateInside(childPath, rootPath) {
+  if (isPathInsideOrEqual(normalizePathKey(childPath), normalizePathKey(rootPath))) return "inside";
+  let rootStats = await stat(rootPath, {
     bigint: true,
   }).catch(() => null);
-  if (o === null) return "unknown";
-  for (let r = e; ; r = dirname(r)) {
-    let s = await lstat(r, {
+  if (rootStats === null) return "unknown";
+  for (let currentPath = childPath; ; currentPath = dirname(currentPath)) {
+    let stats = await lstat(currentPath, {
       bigint: true,
     }).catch(() => null);
-    if (s === null) return "unknown";
-    if (s.dev === o.dev && s.ino === o.ino) return "inside";
-    if (dirname(r) === r) return "elsewhere";
+    if (stats === null) return "unknown";
+    if (stats.dev === rootStats.dev && stats.ino === rootStats.ino) return "inside";
+    if (dirname(currentPath) === currentPath) return "elsewhere";
   }
 }
 //@ chunk-2xm1rxms.js:10973-11083 placement
-async function resolveRootSpellings(e) {
-  let n = normalizedAbsolute(e);
-  let o = await realpath(n).catch(() => null);
+async function resolveRootSpellings(path) {
+  let normalized = normalizedAbsolute(path);
+  let realPath = await realpath(normalized).catch(() => null);
   return {
-    root: n,
-    tops: [n, o].filter((r) => r !== null),
+    root: normalized,
+    tops: [normalized, realPath].filter((spelling) => spelling !== null),
   };
 }
 //@ chunk-2xm1rxms.js:11083-11385 placement
-async function collectWorktreeTops(e, repoSpelled) {
-  let o = new Set();
-  let r = [];
-  let { root, tops } = await resolveRootSpellings(repoSpelled);
-  for (let l of e) {
-    let u = stripTrailingSeparators(normalize(l));
-    o.add(join(u, ".git"));
-    if (isOnForeignMount(u, root)) continue;
-    let c = dirname(u);
-    let w = await walkToCommonAncestor(c, findDeepestContainingRoot(c, tops));
-    if ("refused" in w) {
-      r.push(`${u}: ${w.refused}`);
+async function collectWorktreeTops(worktreePaths, path) {
+  let gitdirs = new Set();
+  let unresolved = [];
+  let { root, tops } = await resolveRootSpellings(path);
+  for (let worktreePath of worktreePaths) {
+    let normalized = stripTrailingSeparators(normalize(worktreePath));
+    gitdirs.add(join(normalized, ".git"));
+    if (isOnForeignMount(normalized, root)) continue;
+    let parentDir = dirname(normalized);
+    let ancestorResult = await walkToCommonAncestor(parentDir, findDeepestContainingRoot(parentDir, tops));
+    if ("refused" in ancestorResult) {
+      unresolved.push(`${normalized}: ${ancestorResult.refused}`);
       continue;
     }
-    o.add(join(w.resolved, basename(u), ".git"));
+    gitdirs.add(join(ancestorResult.resolved, basename(normalized), ".git"));
   }
   return {
-    gitdirs: o,
-    unresolved: r,
+    gitdirs,
+    unresolved,
     tops,
   };
 }
 //@ chunk-2xm1rxms.js:11385-11395 placement
 var MAX_SYMLINK_LINKS = 16;
 //@ chunk-2xm1rxms.js:11395-12028 placement
-async function walkToCommonAncestor(e, deepestContainingRoot) {
-  let targetPath = e;
-  let stopAt = deepestContainingRoot;
+async function walkToCommonAncestor(dirPath, deepestContainingRoot) {
+  let targetPath = dirPath;
+  let containingRoot = deepestContainingRoot;
   for (let j = 0; j <= MAX_SYMLINK_LINKS; j++) {
-    let a =
-      targetPath === stopAt
+    let verdict =
+      targetPath === containingRoot
         ? {
             verdict: "clear",
             at: undefined,
           }
-        : await checkPathForSymlinks(targetPath, stopAt);
-    if (a.verdict === "clear" || a.verdict === "missing") {
-      if (stopAt === undefined)
+        : await checkPathForSymlinks(targetPath, containingRoot);
+    if (verdict.verdict === "clear" || verdict.verdict === "missing") {
+      if (containingRoot === undefined)
         return {
           resolved: targetPath,
         };
-      let c = await realpath(stopAt).catch(() => null);
-      return c === null
+      let realStop = await realpath(containingRoot).catch(() => null);
+      return realStop === null
         ? {
-            refused: `${stopAt} could not be resolved`,
+            refused: `${containingRoot} could not be resolved`,
           }
         : {
-            resolved: join(c, relative(stopAt, targetPath)),
+            resolved: join(realStop, relative(containingRoot, targetPath)),
           };
     }
-    if (a.verdict !== "link" || a.at === undefined)
+    if (verdict.verdict !== "link" || verdict.at === undefined)
       return {
         refused: `a component of ${targetPath} cannot be probed`,
       };
-    let gitdirFile = await readGitdirFile(a.at, dirname(a.at));
+    let gitdirFile = await readGitdirFile(verdict.at, dirname(verdict.at));
     if ("refused" in gitdirFile)
       return {
-        refused: `the text of the link ${a.at} ${gitdirFile.refused}`,
+        refused: `the text of the link ${verdict.at} ${gitdirFile.refused}`,
       };
-    let u = resolve(dirname(a.at), gitdirFile.text);
-    targetPath = join(u, relative(a.at, targetPath));
-    if (stopAt !== undefined && !isPathInsideOrEqual(u, stopAt)) stopAt = undefined;
+    let resolvedLink = resolve(dirname(verdict.at), gitdirFile.text);
+    targetPath = join(resolvedLink, relative(verdict.at, targetPath));
+    if (containingRoot !== undefined && !isPathInsideOrEqual(resolvedLink, containingRoot))
+      containingRoot = undefined;
   }
   return {
-    refused: `more than ${MAX_SYMLINK_LINKS} links lead to ${e}`,
+    refused: `more than ${MAX_SYMLINK_LINKS} links lead to ${dirPath}`,
   };
 }
 //@ chunk-2xm1rxms.js:12028-12095 placement
-function isPathInsideOrEqual(e, n) {
-  return e === n || e.startsWith(n.endsWith(sep) ? n : n + sep);
+function isPathInsideOrEqual(path, rootPath) {
+  return path === rootPath || path.startsWith(rootPath.endsWith(sep) ? rootPath : rootPath + sep);
 }
 //@ chunk-2xm1rxms.js:12095-12269 placement
-function parseGitdirLine(e, n) {
-  let replaced = e.replace(/[\r\n]+$/, "");
+function parseGitdirLine(rawText, baseDir) {
+  let gitdirValue = rawText.replace(/[\r\n]+$/, "");
   if (
-    replaced === "" ||
-    gitdirPathProblem(replaced, n, getPlatform() === "windows") !== null ||
-    isOnForeignMount(replaced, n)
+    gitdirValue === "" ||
+    gitdirPathProblem(gitdirValue, baseDir, getPlatform() === "windows") !== null ||
+    isOnForeignMount(gitdirValue, baseDir)
   )
     return null;
-  let r = normalize(isAbsolute(replaced) ? replaced : resolve(n, replaced));
-  return basename(r) === ".git" && isSafeAbsoluteWorktreePath(r) ? r : null;
+  let normalizedPath = normalize(isAbsolute(gitdirValue) ? gitdirValue : resolve(baseDir, gitdirValue));
+  return basename(normalizedPath) === ".git" && isSafeAbsoluteWorktreePath(normalizedPath)
+    ? normalizedPath
+    : null;
 }
 //@ chunk-2xm1rxms.js:12269-12410 placement
-function findDeepestContainingRoot(e, tops) {
-  let o;
-  for (let r of tops)
-    for (let s = r; ; s = dirname(s)) {
-      if (isPathInsideOrEqual(e, s)) {
-        if (o === undefined || s.length > o.length) o = s;
+function findDeepestContainingRoot(path, tops) {
+  let deepestRoot;
+  for (let root of tops)
+    for (let candidateRoot = root; ; candidateRoot = dirname(candidateRoot)) {
+      if (isPathInsideOrEqual(path, candidateRoot)) {
+        if (deepestRoot === undefined || candidateRoot.length > deepestRoot.length)
+          deepestRoot = candidateRoot;
         break;
       }
-      if (dirname(s) === s) break;
+      if (dirname(candidateRoot) === candidateRoot) break;
     }
-  return o;
+  return deepestRoot;
 }
 //@ chunk-2xm1rxms.js:12410-12523 placement
-async function verifyAdminEntry(e, n, worktreePaths) {
-  let tops = worktreePaths?.tops ?? (await resolveRootSpellings(n.repoSpelled)).tops;
-  return (await symlinkVerdictForPath(e, findDeepestContainingRoot(dirname(e), tops))) === "missing";
+async function verifyAdminEntry(gitdirPath, options, worktreePaths) {
+  let tops = worktreePaths?.tops ?? (await resolveRootSpellings(options.repoSpelled)).tops;
+  return (
+    (await symlinkVerdictForPath(gitdirPath, findDeepestContainingRoot(dirname(gitdirPath), tops))) ===
+    "missing"
+  );
 }
 //@ chunk-2xm1rxms.js:12523-12602 placement
-function isSafePathSegment(e) {
-  return e !== "" && e !== "." && e !== ".." && !/[\\/\p{Cc}\uFFFD]/u.test(e);
+function isSafePathSegment(name) {
+  return name !== "" && name !== "." && name !== ".." && !/[\\/\p{Cc}\uFFFD]/u.test(name);
 }
 //@ chunk-2xm1rxms.js:12602-12772 placement
-function pathVariants(e) {
-  let n = new Set();
-  for (let o of e) {
-    let r = basename(stripTrailingSeparators(normalize(o)));
-    for (let s of [escapeDotSegments(r), r]) {
-      if (s === "") continue;
-      n.add(s);
-      for (let j = 1; j <= 99; j++) n.add(`${s}${j}`);
+function pathVariants(paths) {
+  let variants = new Set();
+  for (let worktreePath of paths) {
+    let baseName = basename(stripTrailingSeparators(normalize(worktreePath)));
+    for (let candidateName of [escapeDotSegments(baseName), baseName]) {
+      if (candidateName === "") continue;
+      variants.add(candidateName);
+      for (let j = 1; j <= 99; j++) variants.add(`${candidateName}${j}`);
     }
   }
-  return [...n];
+  return [...variants];
 }
 //@ chunk-2xm1rxms.js:12772-13055 placement
-function escapeDotSegments(e) {
-  let n = "";
-  for (let j = 0; j < e.length; j++) {
-    let r = e[j];
-    let code = r.charCodeAt(0);
-    if (r === "." && (j === 0 || e[j - 1] === ".")) n += j === 0 ? "-" : "";
-    else if (r === "{" && e[j - 1] === "@") n += "-";
-    else if (code < 32 || code === 127 || " :?[\\^~*".includes(r)) n += "-";
-    else n += r;
+function escapeDotSegments(name) {
+  let out = "";
+  for (let j = 0; j < name.length; j++) {
+    let char = name[j];
+    let code = char.charCodeAt(0);
+    if (char === "." && (j === 0 || name[j - 1] === ".")) out += j === 0 ? "-" : "";
+    else if (char === "{" && name[j - 1] === "@") out += "-";
+    else if (code < 32 || code === 127 || " :?[\\^~*".includes(char)) out += "-";
+    else out += char;
   }
-  while (n.endsWith(".lock")) n = n.slice(0, -5);
-  return n;
+  while (out.endsWith(".lock")) out = out.slice(0, -5);
+  return out;
 }
 //@ chunk-2xm1rxms.js:13055-13208 placement
 async function loadDeviceTreeHost() {
-  let [e, n] = await Promise.all([import("./chunk-ejkghqj9.js"), import("./chunk-78kn47sp.js")]);
+  let [treeModule, hostModule] = await Promise.all([
+    import("../fsAnchor/treeAnchor.js"),
+    import("../fsAnchor/deviceTreeHost.js"),
+  ]);
   return {
-    ...e,
-    host: n.createDeviceTreeHost(),
+    ...treeModule,
+    host: hostModule.createDeviceTreeHost(),
   };
 }
 //@ chunk-2xm1rxms.js:13208-14073 placement
-async function loadRepoLayout(e, repoSpelled) {
-  let o = await loadDeviceTreeHost().catch((error) => ({
+async function loadRepoLayout(gitDirSpelled, repoSpelled) {
+  let modules = await loadDeviceTreeHost().catch((error) => ({
     failed: errorMessage(error),
   }));
-  if ("failed" in o)
+  if ("failed" in modules)
     return {
-      unavailable: `its module did not load: ${o.failed}`,
+      unavailable: `its module did not load: ${modules.failed}`,
       modules: null,
     };
-  let r = await realpath(normalizedAbsolute(repoSpelled)).catch(() => null);
-  let s = r !== null && parse(r).root !== r && e === join(r, ".git");
-  let a = s ? r : e;
-  let l = await (
-    s || parse(e).root === e
-      ? o.openTreeAnchor(o.host, {
-          gitRoot: a,
-          realRoot: a,
+  let realRoot = await realpath(normalizedAbsolute(repoSpelled)).catch(() => null);
+  let isLinkedGitFile =
+    realRoot !== null && parse(realRoot).root !== realRoot && gitDirSpelled === join(realRoot, ".git");
+  let anchorRoot = isLinkedGitFile ? realRoot : gitDirSpelled;
+  let anchor = await (
+    isLinkedGitFile || parse(gitDirSpelled).root === gitDirSpelled
+      ? modules.openTreeAnchor(modules.host, {
+          gitRoot: anchorRoot,
+          realRoot: anchorRoot,
         })
-      : o.openTreeAnchorAtName(o.host, e)
+      : modules.openTreeAnchorAtName(modules.host, gitDirSpelled)
   ).catch((error) => ({
     unavailable: errorMessage(error),
   }));
-  if ("unavailable" in l)
+  if ("unavailable" in anchor)
     return {
-      unavailable: l.unavailable,
-      modules: o,
+      unavailable: anchor.unavailable,
+      modules,
     };
-  if (!s) return l;
+  if (!isLinkedGitFile) return anchor;
   try {
-    let u = await l.anchorBeneath(".git");
-    let c = await u.lstat("").catch(() => null);
-    if (c === null || c.ino === 0n) {
-      await u.close().catch(() => {});
+    let gitDirAnchor = await anchor.anchorBeneath(".git");
+    let gitDirStats = await gitDirAnchor.lstat("").catch(() => null);
+    if (gitDirStats === null || gitDirStats.ino === 0n) {
+      await gitDirAnchor.close().catch(() => {});
       return {
         refused:
-          c === null
-            ? `${e}: its file id could not be read once it was opened`
-            : `${e} is on a volume that reports no file ids`,
+          gitDirStats === null
+            ? `${gitDirSpelled}: its file id could not be read once it was opened`
+            : `${gitDirSpelled} is on a volume that reports no file ids`,
       };
     }
-    return u;
+    return gitDirAnchor;
   } catch (error) {
     return {
-      refused: `could not open ${e} from ${a} without following a link: ${errorMessage(error)}`,
+      refused: `could not open ${gitDirSpelled} from ${anchorRoot} without following a link: ${errorMessage(error)}`,
     };
   } finally {
-    await l.close().catch(() => {});
+    await anchor.close().catch(() => {});
   }
 }
 //@ chunk-2xm1rxms.js:14073-14780 placement
-async function openNonBlocking(e, n, o) {
-  let r = await e
-    .open(n, constants.O_RDONLY | constants.O_NONBLOCK)
+async function openNonBlocking(fsOps, relPath, maxBytes) {
+  let openResult = await fsOps
+    .open(relPath, constants.O_RDONLY | constants.O_NONBLOCK)
     .catch((error) => getErrnoCode(error) ?? "EIO");
-  if (typeof r === "string") {
-    if (r !== "ENOENT")
+  if (typeof openResult === "string") {
+    if (openResult !== "ENOENT")
       return {
-        unread: openFailureText(r),
+        unread: openFailureText(openResult),
       };
-    let s = await e.lstat(n).then(
+    let statResult = await fsOps.lstat(relPath).then(
       () => "present",
       (error) => getErrnoCode(error) ?? "EIO",
     );
-    return s === "ENOENT"
+    return statResult === "ENOENT"
       ? "absent"
       : {
-          unread: s === "present" ? "could not be opened where the held folder has it" : openFailureText(s),
+          unread:
+            statResult === "present"
+              ? "could not be opened where the held folder has it"
+              : openFailureText(statResult),
         };
   }
   try {
-    let stats = await r.stat({
+    let stats = await openResult.stat({
       bigint: true,
     });
-    if (e.backend === "darwin_at") {
-      let stats_2 = await e.lstat(n);
+    if (fsOps.backend === "darwin_at") {
+      let stats_2 = await fsOps.lstat(relPath);
       if (stats.dev !== stats_2.dev || stats.ino !== stats_2.ino)
         return {
           unread: "was replaced as it was opened",
@@ -727,7 +779,7 @@ async function openNonBlocking(e, n, o) {
       return {
         unread: "is not a regular file",
       };
-    let upToBytes = await readUpToBytes(r, o);
+    let upToBytes = await readUpToBytes(openResult, maxBytes);
     return upToBytes === null
       ? {
           unread: "is larger than git writes",
@@ -740,39 +792,41 @@ async function openNonBlocking(e, n, o) {
       unread: "could not be read",
     };
   } finally {
-    await r.close().catch(() => {});
+    await openResult.close().catch(() => {});
   }
 }
 //@ chunk-2xm1rxms.js:14780-14967 placement
-async function readUpToBytes(e, n) {
-  let o = Buffer.alloc(n + 1);
-  let r = 0;
+async function readUpToBytes(handle, maxBytes) {
+  let buffer = Buffer.alloc(maxBytes + 1);
+  let totalRead = 0;
   for (;;) {
-    let { bytesRead } = await e.read(o, r, o.length - r, r);
+    let { bytesRead } = await handle.read(buffer, totalRead, buffer.length - totalRead, totalRead);
     if (bytesRead === 0) break;
-    r += bytesRead;
-    if (r > n) return null;
+    totalRead += bytesRead;
+    if (totalRead > maxBytes) return null;
   }
-  return o.subarray(0, r).toString("utf-8");
+  return buffer.subarray(0, totalRead).toString("utf-8");
 }
 //@ chunk-2xm1rxms.js:14967-15054 placement
 /**
  * worktreePath 字段统一成数组。
  */
-function normalizeWorktreePaths(e) {
-  return typeof e.worktreePath === "string" ? [e.worktreePath] : e.worktreePath;
+function normalizeWorktreePaths(options) {
+  return typeof options.worktreePath === "string" ? [options.worktreePath] : options.worktreePath;
 }
 //@ chunk-2xm1rxms.js:15054-15129 placement = WORKTREE_PATH_TAG (0.798)
 /**
  * 有 worktreePath 时解析出仓库内 worktree 路径列表，否则 null。旧版名 WORKTREE_PATH_TAG 为错配。
  */
-async function resolveWorktreePaths(e) {
-  return "worktreePath" in e ? collectWorktreeTops(normalizeWorktreePaths(e), e.repoSpelled) : null;
+async function resolveWorktreePaths(options) {
+  return "worktreePath" in options
+    ? collectWorktreeTops(normalizeWorktreePaths(options), options.repoSpelled)
+    : null;
 }
 //@ chunk-2xm1rxms.js:15129-15174 placement
-function noteUnchecked(e, n) {
-  e.unchecked++;
-  e.kinds.add(n);
+function noteUnchecked(progress, kindText) {
+  progress.unchecked++;
+  progress.kinds.add(kindText);
 }
 export {
   pathVariants,

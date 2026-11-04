@@ -10,7 +10,7 @@ import { isAbortError_2 } from "../internal/errors.mjs";
 import { APIUserAbortError, AnthropicError } from "../core/error.mjs";
 import { STAINLESS_HELPER_METHOD_HEADER } from "../internal/stainless-helper-header.mjs";
 import { Stream } from "../core/streaming.mjs";
-import { Bt } from "../tools/agent-toolset/memories.mjs";
+import { sleepWithAbort } from "../tools/agent-toolset/memories.mjs";
 import { attachParsedOutput } from "./beta-parser.mjs";
 import { JSON_BUF_PROPERTY, withLazyInput } from "../internal/message-stream-utils.mjs";
 
@@ -479,7 +479,7 @@ var BetaMessageStream = (() => {
               break;
             }
             default:
-              Bt(event.delta);
+              sleepWithAbort(event.delta);
           }
           break;
         }
@@ -614,7 +614,7 @@ var BetaMessageStream = (() => {
               break;
             }
             default:
-              Bt(event.delta);
+              sleepWithAbort(event.delta);
           }
           return snapshot;
         }

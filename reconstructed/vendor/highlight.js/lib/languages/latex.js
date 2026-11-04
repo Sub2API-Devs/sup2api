@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:225925-229395 cjs-fingerprint
-var require_latex = x(function (cjsExports, cjsModule) {
+var require_latex = __commonJS(function (cjsExports, cjsModule) {
   function latex(hljs) {
     let begin = hljs.regex.either(
       ...[

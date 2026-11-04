@@ -5,27 +5,30 @@
  * pieces: chunk-2tyrgda4.js (4)
  * attribution: esm-layout 1, esm-fingerprint 3
  */
-import { Xa } from "../../../../../runtime/bun-runtime.js";
-import { O, init_is_key_like, m } from "./is_key_like.js";
-import { z, Jr } from "../../node/esm/lib/check_key_type.js";
-import { A } from "../../node/esm/lib/invalid_key_input.js";
-import { p, g } from "../../webapi/lib/buffer_utils.js";
-import { concat, he } from "../../node/esm/lib/buffer_utils.js";
+import { keyMustBeTypeError, noop } from "../../node/esm/lib/invalid_key_input.js";
+import { cryptoModule, isCryptoKey, init_buffer_utils } from "../../webapi/lib/buffer_utils.js";
+import { concat, uint64be } from "../../node/esm/lib/buffer_utils.js";
 import { checkEncCryptoKey } from "../../node/esm/lib/crypto_key.js";
-import { ge, j, f } from "../../webapi/lib/content_encryption.js";
+import { keyObjectTypes, noopInit, init_is_key_like } from "./is_key_like.js";
+import {
+  checkIvLengthInit,
+  checkCekLengthInit,
+  JOSENotSupported,
+  init_content_encryption_5,
+  init_timing_safe_equal,
+  init_content_encryption_2,
+} from "../../webapi/lib/content_encryption.js";
+import { __esm } from "../../../../../runtime/bun-runtime.js";
+import { init_base64url } from "./base64url.js";
 
-//@ chunk-2tyrgda4.js:18405-18435 esm-layout
-var init_encrypt = Xa(() => {
-  O();
-  init_is_key_like();
-  z = Jr;
-});
 //@ chunk-2tyrgda4.js:18435-18923 esm-fingerprint
 async function cbcEncrypt(enc, plaintext, cek, iv, aad) {
-  if (!(cek instanceof Uint8Array)) throw TypeError(A(cek, "Uint8Array"));
+  if (!(cek instanceof Uint8Array)) throw TypeError(keyMustBeTypeError(cek, "Uint8Array"));
   let keySize = parseInt(enc.slice(1, 4), 10);
-  let encKey = await p.subtle.importKey("raw", cek.subarray(keySize >> 3), "AES-CBC", false, ["encrypt"]);
-  let macKey = await p.subtle.importKey(
+  let encKey = await cryptoModule.subtle.importKey("raw", cek.subarray(keySize >> 3), "AES-CBC", false, [
+    "encrypt",
+  ]);
+  let macKey = await cryptoModule.subtle.importKey(
     "raw",
     cek.subarray(0, keySize >> 3),
     {
@@ -36,7 +39,7 @@ async function cbcEncrypt(enc, plaintext, cek, iv, aad) {
     ["sign"],
   );
   let ciphertext = new Uint8Array(
-    await p.subtle.encrypt(
+    await cryptoModule.subtle.encrypt(
       {
         iv,
         name: "AES-CBC",
@@ -45,8 +48,8 @@ async function cbcEncrypt(enc, plaintext, cek, iv, aad) {
       plaintext,
     ),
   );
-  let macData = concat(aad, iv, ciphertext, he(aad.length << 3));
-  let tag = new Uint8Array((await p.subtle.sign("HMAC", macKey, macData)).slice(0, keySize >> 3));
+  let macData = concat(aad, iv, ciphertext, uint64be(aad.length << 3));
+  let tag = new Uint8Array((await cryptoModule.subtle.sign("HMAC", macKey, macData)).slice(0, keySize >> 3));
   return {
     ciphertext,
     tag,
@@ -55,13 +58,14 @@ async function cbcEncrypt(enc, plaintext, cek, iv, aad) {
 //@ chunk-2tyrgda4.js:18923-19230 esm-fingerprint
 async function gcmEncrypt(enc, plaintext, cek, iv, aad) {
   let encKey;
-  if (cek instanceof Uint8Array) encKey = await p.subtle.importKey("raw", cek, "AES-GCM", false, ["encrypt"]);
+  if (cek instanceof Uint8Array)
+    encKey = await cryptoModule.subtle.importKey("raw", cek, "AES-GCM", false, ["encrypt"]);
   else {
     checkEncCryptoKey(cek, enc, "encrypt");
     encKey = cek;
   }
   let encrypted = new Uint8Array(
-    await p.subtle.encrypt(
+    await cryptoModule.subtle.encrypt(
       {
         additionalData: aad,
         iv,
@@ -80,21 +84,34 @@ async function gcmEncrypt(enc, plaintext, cek, iv, aad) {
 }
 //@ chunk-2tyrgda4.js:19230-19683 esm-fingerprint
 var encrypt_3 = async (enc, plaintext, cek, iv, aad) => {
-  if (!g(cek) && !(cek instanceof Uint8Array)) throw TypeError(A(cek, ...m, "Uint8Array"));
-  switch ((ge(enc, iv), enc)) {
+  if (!isCryptoKey(cek) && !(cek instanceof Uint8Array))
+    throw TypeError(keyMustBeTypeError(cek, ...keyObjectTypes, "Uint8Array"));
+  switch ((checkIvLengthInit(enc, iv), enc)) {
     case "A128CBC-HS256":
     case "A192CBC-HS384":
     case "A256CBC-HS512":
-      if (cek instanceof Uint8Array) j(cek, parseInt(enc.slice(-3), 10));
+      if (cek instanceof Uint8Array) checkCekLengthInit(cek, parseInt(enc.slice(-3), 10));
       return cbcEncrypt(enc, plaintext, cek, iv, aad);
     case "A128GCM":
     case "A192GCM":
     case "A256GCM":
-      if (cek instanceof Uint8Array) j(cek, parseInt(enc.slice(1, 4), 10));
+      if (cek instanceof Uint8Array) checkCekLengthInit(cek, parseInt(enc.slice(1, 4), 10));
       return gcmEncrypt(enc, plaintext, cek, iv, aad);
     default:
-      throw new f("Unsupported JWE Content Encryption Algorithm");
+      throw new JOSENotSupported("Unsupported JWE Content Encryption Algorithm");
   }
 };
 var encrypt_default;
-export { encrypt_default, encrypt_3, init_encrypt };
+//@ chunk-2tyrgda4.js:19683-19740 esm-layout (moved: shares a binding it assigns)
+var init_aesgcmkw = __esm(() => {
+  init_base64url();
+  init_content_encryption_5();
+  init_timing_safe_equal();
+  init_buffer_utils();
+  noop();
+  noopInit();
+  init_content_encryption_2();
+  init_is_key_like();
+  encrypt_default = encrypt_3;
+});
+export { encrypt_default, init_aesgcmkw };

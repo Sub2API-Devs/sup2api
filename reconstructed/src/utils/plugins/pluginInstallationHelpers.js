@@ -167,86 +167,97 @@ import { CommandSourceError } from "./commandSource.js";
 /**
  * 两条安装记录是否等价（路径、更新时间相同且 auto 标记不降级）。
  */
-function registerPluginInstallation(e, n) {
+function registerPluginInstallation(existing, next) {
   return (
-    e.installPath === n.installPath && e.lastUpdated === n.lastUpdated && (n.auto !== true || e.auto === true)
+    existing.installPath === next.installPath &&
+    existing.lastUpdated === next.lastUpdated &&
+    (next.auto !== true || existing.auto === true)
   );
 }
 //@ chunk-e6aww6q8.js:4365510-4366714 callgraph-fingerprint = cacheAndRegisterPlugin (0.165)
 /**
  * 把一个 marketplace 插件下载缓存并写入安装记录（拒绝不安全的条目路径）。
  */
-async function cacheAndRegisterPlugin(e, entry, source, marketplaceInstallLocation, h, y, version) {
+async function cacheAndRegisterPlugin(
+  pluginId,
+  entry,
+  source,
+  marketplaceInstallLocation,
+  knownMarketplaces,
+  needsCache,
+  storageV5,
+) {
   let pluginEntryPath = await resolvePluginEntryPath(
-    e,
+    pluginId,
     marketplaceInstallLocation,
     source,
-    h,
+    knownMarketplaces,
     tryUnwrapTextPayload(),
-    version,
+    storageV5,
   );
-  let { entryPath, reason } = y
+  let { entryPath, reason } = needsCache
     ? entryPathOrReason(pluginEntryPath)
     : entryPathOrReasonLenient(pluginEntryPath);
   if (entryPath === undefined) {
-    logForDebugging(`Skipping ${jsonStringify(e)}: ${reason} (refused, not probed)`, {
+    logForDebugging(`Skipping ${jsonStringify(pluginId)}: ${reason} (refused, not probed)`, {
       level: "warn",
     });
     return;
   }
-  let manifestVersion = await readManifestVersion(entryPath, e, version);
-  let Z =
+  let manifestVersion = await readManifestVersion(entryPath, pluginId, storageV5);
+  let marketplaceDir =
     pluginEntryPath.kind === "ok" ||
     pluginEntryPath.kind === "location-missing" ||
     pluginEntryPath.kind === "location-error"
       ? pluginEntryPath.marketplaceDir
       : entryPath;
-  let cacheResult = await probePluginGitHead(entryPath, Z);
-  let ke = cacheResult.repo ? (cacheResult.sha ?? undefined) : undefined;
-  let we = !cacheResult.repo && parsePluginIdentifier(e).marketplace === CLAUDE_PLUGINS_OFFICIAL;
-  let Ee = we ? await marketplaceCommitSha(entryPath) : null;
-  let Ae = ke ?? Ee ?? undefined;
+  let cacheResult = await probePluginGitHead(entryPath, marketplaceDir);
+  let gitSha = cacheResult.repo ? (cacheResult.sha ?? undefined) : undefined;
+  let isOfficialPinned =
+    !cacheResult.repo && parsePluginIdentifier(pluginId).marketplace === CLAUDE_PLUGINS_OFFICIAL;
+  let pinnedShaValue = isOfficialPinned ? await marketplaceCommitSha(entryPath) : null;
+  let commitSha = gitSha ?? pinnedShaValue ?? undefined;
   if (manifestVersion === "unknown" && entry.version) manifestVersion = entry.version;
-  if (manifestVersion === "unknown" && Ae) manifestVersion = Ae.substring(0, 12);
+  if (manifestVersion === "unknown" && commitSha) manifestVersion = commitSha.substring(0, 12);
   if (manifestVersion === "unknown") {
-    let Me = we ? (Ee ?? null) : await pluginVersionOrNull(entryPath);
-    if (Me) manifestVersion = Me.substring(0, 12);
+    let versionGuess = isOfficialPinned ? (pinnedShaValue ?? null) : await pluginVersionOrNull(entryPath);
+    if (versionGuess) manifestVersion = versionGuess.substring(0, 12);
   }
-  let tempPath = getVersionedCachePath(e, manifestVersion);
-  if (y) {
+  let tempPath = getVersionedCachePath(pluginId, manifestVersion);
+  if (needsCache) {
     try {
       tempPath = await copyPluginToVersionedCache(
         entryPath,
-        e,
+        pluginId,
         manifestVersion,
         entry,
         marketplaceInstallLocation,
         {
-          storageV5: isStorageV5Enabled() ? version : undefined,
+          storageV5: isStorageV5Enabled() ? storageV5 : undefined,
         },
       );
     } catch (error) {
       logForDebugging(
-        `Cannot materialize versioned cache for ${e} from ${entryPath}: ${errorMessage(error)}, skipping`,
+        `Cannot materialize versioned cache for ${pluginId} from ${entryPath}: ${errorMessage(error)}, skipping`,
       );
       try {
-        let We = strictCacheAddressable(version);
+        let strict = strictCacheAddressable(storageV5);
         if (
-          (!We ||
+          (!strict ||
             ((await versionParentContained(tempPath)) && (await classifyCacheEntry(tempPath)) === "other")) &&
-          !(await cacheDirHasPluginContentStrict(tempPath, version)) &&
+          !(await cacheDirHasPluginContentStrict(tempPath, storageV5)) &&
           !(
-            We &&
+            strict &&
             (await isPluginVersionInUse(
               tempPath,
               {
                 excludeSelf: true,
               },
-              version,
+              storageV5,
             ).catch(() => true))
           )
         )
-          if (We) await removeVersionDirIfIdle(tempPath);
+          if (strict) await removeVersionDirIfIdle(tempPath);
           else
             await getFsImplementation().rm(tempPath, {
               recursive: true,
@@ -255,9 +266,9 @@ async function cacheAndRegisterPlugin(e, entry, source, marketplaceInstallLocati
       } catch {}
       return;
     }
-    if (!(await pluginInstallPathExists(tempPath, version))) {
+    if (!(await pluginInstallPathExists(tempPath, storageV5))) {
       logForDebugging(
-        `Cannot materialize versioned cache for ${e}: no readable plugin payload at ${tempPath}, skipping`,
+        `Cannot materialize versioned cache for ${pluginId}: no readable plugin payload at ${tempPath}, skipping`,
       );
       return;
     }
@@ -265,8 +276,9 @@ async function cacheAndRegisterPlugin(e, entry, source, marketplaceInstallLocati
   return {
     installPath: tempPath,
     version: manifestVersion,
-    gitCommitSha: Ae,
-    keepStoredCommit: (cacheResult.repo && cacheResult.sha === null) || (we && Ee === undefined),
+    gitCommitSha: commitSha,
+    keepStoredCommit:
+      (cacheResult.repo && cacheResult.sha === null) || (isOfficialPinned && pinnedShaValue === undefined),
   };
 }
 //@ chunk-e6aww6q8.js:4366714-4366773 placement = getVersionedZipCachePath (1)
@@ -280,43 +292,48 @@ function pluginInstallPathExists(pluginId, version) {
 /**
  * bindingKeysFor：找绑定键与其值。
  */
-function bindingKeysFor(plugins, n) {
-  return findBindingKeysFor(Object.keys(plugins), n).map((r) => [r, plugins[r] ?? []]);
+function bindingKeysFor(plugins, pluginId) {
+  return findBindingKeysFor(Object.keys(plugins), pluginId).map((key) => [key, plugins[key] ?? []]);
 }
 //@ chunk-e6aww6q8.js:4366842-4366922 placement
 /**
  * pluginBindingValues：绑定的插件名列表。
  */
-function pluginBindingValues(plugins, n) {
-  let r = bindingKeysFor(plugins, n);
-  return r.length === 0 ? undefined : r.flatMap(([, s]) => s);
+function pluginBindingValues(installationMap, pluginId) {
+  let pairs = bindingKeysFor(installationMap, pluginId);
+  return pairs.length === 0 ? undefined : pairs.flatMap(([, installations]) => installations);
 }
 //@ chunk-e6aww6q8.js:4366922-4367185 placement
 /**
  * 同目录名插件绑定到不同仓库时返回冲突者。
  */
-function findDataDirConflictingRecord(e, n, r, source) {
-  let h = samePluginSource(source, undefined);
-  let y = (w) => w !== undefined && parseRepoWithRef(w) !== h;
-  let found = uniq([...findBindingKeysFor(Object.keys(e), r), ...findBindingKeysFor(n.keys(), r)]).find(
-    (w) => (e[w] ?? []).some((L) => y(L.directoryRepositoryKey)) || y(n.get(w)),
+function findDataDirConflictingRecord(plugins, bindings, pluginId, source) {
+  let sourceKey = samePluginSource(source, undefined);
+  let isDifferent = (key) => key !== undefined && parseRepoWithRef(key) !== sourceKey;
+  let found = uniq([
+    ...findBindingKeysFor(Object.keys(plugins), pluginId),
+    ...findBindingKeysFor(bindings.keys(), pluginId),
+  ]).find(
+    (key) =>
+      (plugins[key] ?? []).some((installation) => isDifferent(installation.directoryRepositoryKey)) ||
+      isDifferent(bindings.get(key)),
   );
-  return found === undefined || found === r
+  return found === undefined || found === pluginId
     ? undefined
     : {
         id: found,
-        installed: (e[found]?.length ?? 0) > 0,
+        installed: (plugins[found]?.length ?? 0) > 0,
       };
 }
 //@ chunk-e6aww6q8.js:4367185-4367294 placement
 /**
  * 官方插件目录插件的仓库与当前来源不同。
  */
-function isDirectoryRepositoryChanged(e, n, source, s) {
+function isDirectoryRepositoryChanged(pluginId, values, source, bindings) {
   {
-    if (isUnboundOfficialPlugin(e, n, s)) return true;
-    let h = samePluginSource(source, undefined);
-    return getBoundRepositoryKeys(e, n, s).some((y) => y !== h);
+    if (isUnboundOfficialPlugin(pluginId, values, bindings)) return true;
+    let sourceKey = samePluginSource(source, undefined);
+    return getBoundRepositoryKeys(pluginId, values, bindings).some((key) => key !== sourceKey);
   }
   return false;
 }
@@ -324,85 +341,95 @@ function isDirectoryRepositoryChanged(e, n, source, s) {
 /**
  * 官方插件目录插件且尚无仓库绑定。
  */
-function isUnboundOfficialPlugin(e, n, r, s = false) {
-  if (!e.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`) || !isUnreadableBindings(r)) return false;
-  return s || (n ?? []).every((h) => h.directoryRepositoryKey === undefined);
+function isUnboundOfficialPlugin(pluginId, values, bindings, readFailed = false) {
+  if (!pluginId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`) || !isUnreadableBindings(bindings)) return false;
+  return (
+    readFailed || (values ?? []).every((installation) => installation.directoryRepositoryKey === undefined)
+  );
 }
 //@ chunk-e6aww6q8.js:4367426-4367596 placement
 /**
  * 官方插件目录插件已记录的仓库键。
  */
-function getBoundRepositoryKeys(e, n, r) {
-  if (!e.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)) return [];
+function getBoundRepositoryKeys(pluginId, values, bindings) {
+  if (!pluginId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)) return [];
   return [
-    ...(n ?? []).flatMap((s) => s.directoryRepositoryKey ?? []),
-    ...findBindingKeysFor(r.keys(), e).flatMap((s) => r.get(s) ?? []),
+    ...(values ?? []).flatMap((installation) => installation.directoryRepositoryKey ?? []),
+    ...findBindingKeysFor(bindings.keys(), pluginId).flatMap((key) => bindings.get(key) ?? []),
   ].map(parseRepoWithRef);
 }
 //@ chunk-e6aww6q8.js:4367596-4367739 placement
-async function parsePluginIdSafe(e, n, r, s) {
+async function parsePluginIdSafe(pluginId, record, version, loadKnown) {
   try {
-    return await parsePluginId(e, n, r, s);
+    return await parsePluginId(pluginId, record, version, loadKnown);
   } catch (error) {
-    logForDebugging(`Cannot judge ${e} managed record: ${errorMessage(error)}, leaving it as is`);
+    logForDebugging(`Cannot judge ${pluginId} managed record: ${errorMessage(error)}, leaving it as is`);
     return true;
   }
 }
 //@ chunk-e6aww6q8.js:4367739-4368179 placement
-async function parsePluginId(e, { installPath, claudeaiPluginId }, version, h) {
+async function parsePluginId(pluginId, { installPath, claudeaiPluginId }, version, loadKnown) {
   if (claudeaiPluginId !== undefined) return true;
   let { absolute, suspect } = classifyMarketplacePath(installPath);
   if (suspect) return false;
   if (await pluginInstallPathExists(absolute, version)) return true;
   if (
     getPluginSeedDirs().length > 0 &&
-    (await probeSeedForPlugin(e, basename(absolute).replace(/\.zip$/, ""), "always")) !== null
+    (await probeSeedForPlugin(pluginId, basename(absolute).replace(/\.zip$/, ""), "always")) !== null
   )
     return true;
-  let w = await h();
-  if (isKnownMarketplacesReadFailure(w)) return true;
-  let { marketplace } = parsePluginIdentifier(e);
-  let source = marketplace ? w[marketplace]?.source : undefined;
+  let known = await loadKnown();
+  if (isKnownMarketplacesReadFailure(known)) return true;
+  let { marketplace } = parsePluginIdentifier(pluginId);
+  let source = marketplace ? known[marketplace]?.source : undefined;
   if (source === undefined) return false;
   if (isClaudeAiMarketplaceSource(source)) return true;
   if (!isLocalMarketplaceSource(source)) return false;
-  return typeof (await getPluginByIdCacheOnly(e, version))?.entry?.source === "string";
+  return typeof (await getPluginByIdCacheOnly(pluginId, version))?.entry?.source === "string";
 }
 //@ chunk-e6aww6q8.js:4368179-4368533 placement
 /**
  * 托管记录缺失缓存时从市场重新缓存注册。
  */
-async function healManagedRecord(e, n, r) {
+async function healManagedRecord(pluginId, known, version) {
   try {
-    let pluginByIdCacheOnly = await getPluginByIdCacheOnly(e, r);
+    let pluginByIdCacheOnly = await getPluginByIdCacheOnly(pluginId, version);
     if (!pluginByIdCacheOnly || typeof pluginByIdCacheOnly.entry.source !== "string") return;
-    let { marketplace } = parsePluginIdentifier(e);
-    let source = marketplace ? n?.[marketplace]?.source : undefined;
+    let { marketplace } = parsePluginIdentifier(pluginId);
+    let source = marketplace ? known?.[marketplace]?.source : undefined;
     if (
-      isPluginBlockedByPolicy(e) ||
+      isPluginBlockedByPolicy(pluginId) ||
       isSourceDisallowedOrUnverifiable(source) ||
       isLocalMarketplaceEntry(pluginByIdCacheOnly.entry.source, source)
     )
       return;
     return await cacheAndRegisterPlugin(
-      e,
+      pluginId,
       pluginByIdCacheOnly.entry,
       pluginByIdCacheOnly.entry.source,
       pluginByIdCacheOnly.marketplaceInstallLocation,
-      n,
+      known,
       true,
-      r,
+      version,
     );
   } catch (error) {
-    logForDebugging(`Cannot heal ${e} managed record: ${errorMessage(error)}, leaving it as is`);
+    logForDebugging(`Cannot heal ${pluginId} managed record: ${errorMessage(error)}, leaving it as is`);
     return;
   }
 }
 //@ chunk-e6aww6q8.js:4368533-4368762 placement
-function mergePreviousProducerPaths(e, n) {
-  let r = e.sourceProducerPath !== undefined && e.sourceProducerPath !== n ? [e.sourceProducerPath] : [];
-  return [...(e.previousProducerPaths ?? []).filter((s) => s !== e.sourceProducerPath && s !== n), ...r]
-    .filter((s) => s !== "")
+function mergePreviousProducerPaths(record, producerPath) {
+  let currentAsPrevious =
+    record.sourceProducerPath !== undefined && record.sourceProducerPath !== producerPath
+      ? [record.sourceProducerPath]
+      : [];
+  return [
+    ...(record.previousProducerPaths ?? []).filter(
+      (path) => path !== record.sourceProducerPath && path !== producerPath,
+    ),
+    ...currentAsPrevious,
+  ]
+    .filter((path) => path !== "")
     .slice(-MAX_PREVIOUS_PRODUCER_PATHS);
 }
 //@ chunk-e6aww6q8.js:4431505-4431671 fingerprint = validatePathWithinBase (1)
@@ -426,20 +453,20 @@ function formatResolutionError(r_2) {
       return `Dependency cycle: ${r_2.chain.map(displaySafePluginId).join(" \u2192 ")}`;
     case "cross-marketplace": {
       let depMkt = parsePluginIdentifier(r_2.dependency).marketplace;
-      let r = depMkt ? quoteName(displaySafeName(depMkt, MAX_DISPLAY_NAME_LENGTH)) : undefined;
-      let where = r ? `marketplace ${r}` : "a different marketplace";
-      let hint = r
-        ? ` Add ${r} to allowCrossMarketplaceDependenciesOn in the ROOT marketplace's marketplace.json (the marketplace of the plugin you're installing \u2014 only its allowlist applies; no transitive trust).`
+      let marketplaceLabel = depMkt ? quoteName(displaySafeName(depMkt, MAX_DISPLAY_NAME_LENGTH)) : undefined;
+      let where = marketplaceLabel ? `marketplace ${marketplaceLabel}` : "a different marketplace";
+      let hint = marketplaceLabel
+        ? ` Add ${marketplaceLabel} to allowCrossMarketplaceDependenciesOn in the ROOT marketplace's marketplace.json (the marketplace of the plugin you're installing \u2014 only its allowlist applies; no transitive trust).`
         : "";
       return `Dependency ${quoteName(displaySafePluginId(r_2.dependency))} (required by ${displaySafePluginId(r_2.requiredBy)}) is in ${where}, which is not in the allowlist \u2014 cross-marketplace dependencies are blocked by default. Install it manually first.${hint}`;
     }
     case "not-found": {
       let { marketplace: depMkt } = parsePluginIdentifier(r_2.missing);
-      let r = quoteName(displaySafePluginId(r_2.missing));
-      let s = displaySafePluginId(r_2.requiredBy);
+      let dependencyLabel = quoteName(displaySafePluginId(r_2.missing));
+      let dependentLabel = displaySafePluginId(r_2.requiredBy);
       return depMkt
-        ? `Dependency ${r} (required by ${s}) not found. Is the ${quoteName(displaySafeName(depMkt, MAX_DISPLAY_NAME_LENGTH))} marketplace added?`
-        : `Dependency ${r} (required by ${s}) not found in any configured marketplace`;
+        ? `Dependency ${dependencyLabel} (required by ${dependentLabel}) not found. Is the ${quoteName(displaySafeName(depMkt, MAX_DISPLAY_NAME_LENGTH))} marketplace added?`
+        : `Dependency ${dependencyLabel} (required by ${dependentLabel}) not found in any configured marketplace`;
     }
   }
 }
@@ -473,47 +500,52 @@ async function installResolvedPlugin({
       reason: "installed-list-held",
       held: installedListRefusal,
     };
-  let Me = await checkInstallAllowed(pluginId, entry, storageV5);
-  if (!Me.ok) return Me.refusal;
-  let { knownMarketplaces, failClosedOnUnknownSource } = Me;
-  let [lt, ...Je] =
+  let allowed = await checkInstallAllowed(pluginId, entry, storageV5);
+  if (!allowed.ok) return allowed.refusal;
+  let { knownMarketplaces, failClosedOnUnknownSource } = allowed;
+  let [firstOther, ...restOthers] =
     isPluginDirectoryAvailable() && !auto && !requiredByEnabledDependent
       ? await describeOtherMarketplaceInstalls(pluginId, entry, knownMarketplaces, storageV5)
       : [];
-  let nt = lt ? [lt, ...Je] : undefined;
-  if (nt && replaceInstalledCopy && switchWalkNotFresh !== undefined)
+  let otherInstalls = firstOther ? [firstOther, ...restOthers] : undefined;
+  if (otherInstalls && replaceInstalledCopy && switchWalkNotFresh !== undefined)
     return {
       ok: false,
       reason: "switch-needs-fresh-listing",
       pluginName: entry.name,
       detail: switchWalkNotFresh,
-      installedCopies: nt,
+      installedCopies: otherInstalls,
     };
   if (
     replaceInstalledCopy &&
-    (await resolveDelistedPluginId(replaceOnlyPluginIds, nt ?? [], storageV5)).length > 0
+    (await resolveDelistedPluginId(replaceOnlyPluginIds, otherInstalls ?? [], storageV5)).length > 0
   )
     return {
       ok: false,
       reason: "fewer-installed-than-shown",
       pluginName: entry.name,
     };
-  let pt =
-    nt && replaceInstalledCopy
-      ? findOtherMarketplaceInstallBlocker(pluginId, nt, replaceOnlyPluginIds, switchTargetMarkedInItsOwnWalk)
+  let blocker =
+    otherInstalls && replaceInstalledCopy
+      ? findOtherMarketplaceInstallBlocker(
+          pluginId,
+          otherInstalls,
+          replaceOnlyPluginIds,
+          switchTargetMarkedInItsOwnWalk,
+        )
       : undefined;
-  if (pt?.reason === "more-installed-than-shown")
+  if (blocker?.reason === "more-installed-than-shown")
     return {
       ok: false,
       reason: "more-installed-than-shown",
       pluginName: entry.name,
     };
-  if (nt && (!replaceInstalledCopy || pt !== undefined))
+  if (otherInstalls && (!replaceInstalledCopy || blocker !== undefined))
     return {
       ok: false,
       reason: "installed-from-other-marketplace",
       pluginName: entry.name,
-      installedCopies: nt,
+      installedCopies: otherInstalls,
     };
   let depInfo = new Map();
   if (isRelativeSourcePath(entry.source) && !marketplaceInstallLocation)
@@ -533,55 +565,56 @@ async function installResolvedPlugin({
       ? (await getMarketplaceCacheOnly(rootMarketplace, storageV5))?.allowCrossMarketplaceDependenciesOn
       : undefined) ?? [],
   );
-  let At = scope !== "user" ? getCwd() : undefined;
+  let projectPath = scope !== "user" ? getCwd() : undefined;
   let plugins = (
     isStorageV5Enabled() && storageV5 !== undefined
       ? await loadInstalledPlugins(storageV5)
       : loadInstalledPluginsSync()
   ).plugins;
   let alreadyEnabled = new Set();
-  for (let nr of getEnabledPluginIdsInSource(settingSource))
-    if (installationAtTarget(plugins[nr], scope, At) !== undefined) alreadyEnabled.add(nr);
+  for (let id of getEnabledPluginIdsInSource(settingSource))
+    if (installationAtTarget(plugins[id], scope, projectPath) !== undefined) alreadyEnabled.add(id);
   let allPluginsCacheOnly = await loadAllPluginsCacheOnly(storageV5);
-  let combined = allPluginsCacheOnly.enabled.concat(allPluginsCacheOnly.disabled);
-  let rn = new Map();
-  for (let nr of combined) rn.set(nr.source, nr.resolvedVersion ?? nr.manifest.version);
+  let plugins_2 = allPluginsCacheOnly.enabled.concat(allPluginsCacheOnly.disabled);
+  let versionsById = new Map();
+  for (let plugin of plugins_2)
+    versionsById.set(plugin.source, plugin.resolvedVersion ?? plugin.manifest.version);
   let enabledPlugins = getSettingsForSourceForUpkeep(settingSource)?.enabledPlugins;
-  let no = new Set();
-  for (let nr of combined) {
-    if (!nr.depConstraints) continue;
-    for (let [Ti, Vs] of nr.depConstraints) {
-      if (Vs.version === undefined) continue;
-      let _i = qualifyDependency(Ti, nr.source);
-      if (Array.isArray(enabledPlugins?.[_i])) continue;
+  let forceInclude = new Set();
+  for (let plugin of plugins_2) {
+    if (!plugin.depConstraints) continue;
+    for (let [rawDependency, constraint] of plugin.depConstraints) {
+      if (constraint.version === undefined) continue;
+      let dependencyId = qualifyDependency(rawDependency, plugin.source);
+      if (Array.isArray(enabledPlugins?.[dependencyId])) continue;
       if (
-        isPluginBlockedByPolicy(_i) ||
-        findBlockedMarketplace(_i, knownMarketplaces, {
+        isPluginBlockedByPolicy(dependencyId) ||
+        findBlockedMarketplace(dependencyId, knownMarketplaces, {
           failClosedOnUnknownSource,
         })
       ) {
         logForDebugging(
-          `installResolvedPlugin: ${_i} version-unsatisfied but policy-blocked; not force-including`,
+          `installResolvedPlugin: ${dependencyId} version-unsatisfied but policy-blocked; not force-including`,
         );
         continue;
       }
-      if (!versionSatisfies(rn.get(_i), Vs.version)) {
-        if (isPluginDirectoryMarketplace(_i, knownMarketplaces)) {
-          let jo = depInfo.get(_i) ?? (await getPluginById(_i, storageV5, "update"));
+      if (!versionSatisfies(versionsById.get(dependencyId), constraint.version)) {
+        if (isPluginDirectoryMarketplace(dependencyId, knownMarketplaces)) {
+          let info = depInfo.get(dependencyId) ?? (await getPluginById(dependencyId, storageV5, "update"));
           let orgBlockedPlugins = await collectOrgBlockedPlugins(storageV5);
           if (
-            jo
-              ? isListingBlocked(jo.entry, orgBlockedPlugins)
+            info
+              ? isListingBlocked(info.entry, orgBlockedPlugins)
               : orgBlockedPlugins !== null || isListingRepositoryBlockedByHostPolicy(undefined)
           ) {
             logForDebugging(
-              `installResolvedPlugin: ${_i} version-unsatisfied but a policy-blocked copy, or unlisted while a block stands; not force-including`,
+              `installResolvedPlugin: ${dependencyId} version-unsatisfied but a policy-blocked copy, or unlisted while a block stands; not force-including`,
             );
             continue;
           }
-          if (jo) depInfo.set(_i, jo);
+          if (info) depInfo.set(dependencyId, info);
         }
-        no.add(_i);
+        forceInclude.add(dependencyId);
       }
     }
   }
@@ -590,13 +623,13 @@ async function installResolvedPlugin({
     async (id) => {
       if (depInfo.has(id)) return depInfo.get(id).entry;
       if (id === pluginId) return entry;
-      let info = await getPluginById(id, storageV5, no.has(id) ? "update" : "install");
+      let info = await getPluginById(id, storageV5, forceInclude.has(id) ? "update" : "install");
       if (info) depInfo.set(id, info);
       return info?.entry ?? null;
     },
     alreadyEnabled,
     allowedCrossMarketplaces,
-    no,
+    forceInclude,
   );
   if (!dependencyClosure.ok)
     return {
@@ -611,25 +644,25 @@ async function installResolvedPlugin({
       reason: "unrecordable-plugin-id",
       pluginId: found,
     };
-  for (let nr of dependencyClosure.closure) {
-    if (nr === pluginId || alreadyEnabled.has(nr)) continue;
-    if (isPluginBlockedByPolicy(nr))
+  for (let id of dependencyClosure.closure) {
+    if (id === pluginId || alreadyEnabled.has(id)) continue;
+    if (isPluginBlockedByPolicy(id))
       return {
         ok: false,
         reason: "dependency-blocked-by-policy",
         pluginName: entry.name,
-        blockedDependency: nr,
+        blockedDependency: id,
       };
-    let info = await pluginDirectoryUnavailableReason(nr);
+    let info = await pluginDirectoryUnavailableReason(id);
     if (info !== null)
       return {
         ok: false,
         reason: "plugin-directory-unavailable",
         pluginName: entry.name,
         cause: info,
-        unavailableDependency: nr,
+        unavailableDependency: id,
       };
-    let blockedMarketplace = findBlockedMarketplace(nr, knownMarketplaces, {
+    let blockedMarketplace = findBlockedMarketplace(id, knownMarketplaces, {
       failClosedOnUnknownSource,
     });
     if (blockedMarketplace)
@@ -637,22 +670,22 @@ async function installResolvedPlugin({
         ok: false,
         reason: "dependency-marketplace-blocked-by-policy",
         pluginName: entry.name,
-        blockedDependency: nr,
+        blockedDependency: id,
         marketplaceName: blockedMarketplace,
       };
-    let entry_2 = depInfo.get(nr)?.entry;
+    let entry_2 = depInfo.get(id)?.entry;
     if (
       entry_2 !== undefined &&
-      (await isListingUsableForMarketplace(nr, entry_2, knownMarketplaces, storageV5))
+      (await isListingUsableForMarketplace(id, entry_2, knownMarketplaces, storageV5))
     )
       return {
         ok: false,
         reason: "dependency-blocked-by-policy",
         pluginName: entry.name,
-        blockedDependency: nr,
+        blockedDependency: id,
       };
   }
-  let plugins_2 = (
+  let plugins_3 = (
     isStorageV5Enabled() && storageV5 !== undefined
       ? await loadInstalledPlugins(storageV5)
       : loadInstalledPluginsSync()
@@ -660,7 +693,7 @@ async function installResolvedPlugin({
   let sharedStorageConflict = findSharedStorageConflict(
     dependencyClosure.closure,
     dependencyClosure.closure,
-    plugins_2,
+    plugins_3,
   );
   if (sharedStorageConflict !== null)
     return {
@@ -669,60 +702,62 @@ async function installResolvedPlugin({
       ...sharedStorageConflict,
       rootKept: false,
     };
-  let Xn = {
+  let writeSeed = {
     ...(getSettingsForSourceWriteSeed(settingSource)?.enabledPlugins ?? {}),
   };
-  let fo = {};
-  for (let nr of getEnabledSettingSources())
-    Object.assign(fo, getSettingsForSource(nr)?.enabledPlugins ?? {});
-  let explicitAnywhere = new Set(Object.keys(fo).filter((key) => fo[key] !== undefined));
+  let allEnabled = {};
+  for (let settingSource of getEnabledSettingSources())
+    Object.assign(allEnabled, getSettingsForSource(settingSource)?.enabledPlugins ?? {});
+  let explicitAnywhere = new Set(Object.keys(allEnabled).filter((key) => allEnabled[key] !== undefined));
   let rootRequiredByDependent =
     requiredByEnabledDependent === true ||
-    combined.some((nr) => {
-      if (nr.source === pluginId) return false;
-      let Ti = fo[nr.source];
+    plugins_2.some((plugin) => {
+      if (plugin.source === pluginId) return false;
+      let value = allEnabled[plugin.source];
       return (
-        (Ti !== undefined ? Ti === true || Array.isArray(Ti) : nr.manifest.defaultEnabled !== false) &&
-        (nr.manifest.dependencies ?? []).some((_i) =>
-          dependencyRefMatches(qualifyDependency(_i, nr.source), pluginId, nr.source),
+        (value !== undefined
+          ? value === true || Array.isArray(value)
+          : plugin.manifest.defaultEnabled !== false) &&
+        (plugin.manifest.dependencies ?? []).some((rawDependency) =>
+          dependencyRefMatches(qualifyDependency(rawDependency, plugin.source), pluginId, plugin.source),
         )
       );
     });
-  function vn(nr) {
-    return nr === pluginId ? entry : depInfo.get(nr)?.entry;
+  function entryFor(id) {
+    return id === pluginId ? entry : depInfo.get(id)?.entry;
   }
-  let co = new Map();
-  let So = new Map();
+  let defaultsById = new Map();
+  let depsById = new Map();
   for (let id of dependencyClosure.closure) {
-    let Ti = vn(id);
-    co.set(id, Ti?.defaultEnabled ?? true);
-    So.set(
+    let entry = entryFor(id);
+    defaultsById.set(id, entry?.defaultEnabled ?? true);
+    depsById.set(
       id,
-      (Ti?.dependencies ?? []).map((Vs) => qualifyDependency(Vs, id)),
+      (entry?.dependencies ?? []).map((rawDependency) => qualifyDependency(rawDependency, id)),
     );
   }
   let dependencyEnablement = computeDependencyEnablement({
     closure: dependencyClosure.closure,
     rootId: pluginId,
     rootRequiredByDependent,
-    priorEnabled: Xn,
+    priorEnabled: writeSeed,
     explicitAnywhere,
-    defaultsById: co,
-    dependenciesById: So,
+    defaultsById,
+    dependenciesById: depsById,
   });
-  let un = new Map();
-  let ao = {};
+  let writtenEnablement = new Map();
+  let nextEnabled = {};
   for (let id of dependencyClosure.closure) {
-    let Ti = Xn[id];
-    ao[id] = Array.isArray(Ti) ? Ti : (dependencyEnablement.get(id) ?? true);
-    un.set(id, ao[id]);
+    let current = writeSeed[id];
+    nextEnabled[id] = Array.isArray(current) ? current : (dependencyEnablement.get(id) ?? true);
+    writtenEnablement.set(id, nextEnabled[id]);
   }
   let { error } = await updateSettingsForSourceWithTransform(
     settingSource,
-    (nr) => ({
+    (settings) => ({
       enabledPlugins: {
-        ...nr?.enabledPlugins,
-        ...ao,
+        ...settings?.enabledPlugins,
+        ...nextEnabled,
       },
     }),
     undefined,
@@ -734,13 +769,13 @@ async function installResolvedPlugin({
       reason: "settings-write-failed",
       message: error.message,
     };
-  async function yo(nr, Ti) {
-    if (!isRelativeSourcePath(Ti.entry.source)) return;
+  async function entryPathFor(id, info) {
+    if (!isRelativeSourcePath(info.entry.source)) return;
     let { entryPath, reason } = entryPathOrReason(
       await resolvePluginEntryPath(
-        nr,
-        Ti.marketplaceInstallLocation,
-        Ti.entry.source,
+        id,
+        info.marketplaceInstallLocation,
+        info.entry.source,
         knownMarketplaces,
         tryUnwrapTextPayload(),
         storageV5,
@@ -748,72 +783,83 @@ async function installResolvedPlugin({
     );
     if (entryPath === undefined)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Cannot install ${printableName(nr, 120)}: ${reason}`,
+        `Cannot install ${printableName(id, 120)}: ${reason}`,
         "plugin install marketplace entry path refused",
       );
     return entryPath;
   }
-  let Ho = new Map();
-  let rr = new Map();
-  let br = new Set();
-  let Hr = false;
+  let installedPaths = new Map();
+  let priorRecords = new Map();
+  let changedIds = new Set();
+  let settingsWrittenForRoot = false;
   let closure = dependencyClosure.closure;
-  async function cs() {
-    for (let [nr, Ti] of Ho) {
-      Ho.delete(nr);
-      let { records = [], recordedAt } = rr.get(nr) ?? {};
-      let jo = installationAtTarget(
+  async function revertInstalled() {
+    for (let [id, path] of installedPaths) {
+      installedPaths.delete(id);
+      let { records = [], recordedAt } = priorRecords.get(id) ?? {};
+      let currentInstall = installationAtTarget(
         (isStorageV5Enabled() && storageV5 !== undefined
           ? await loadInstalledPlugins(storageV5)
           : loadInstalledPluginsSync()
-        ).plugins[nr],
+        ).plugins[id],
         scope,
-        At,
+        projectPath,
       );
-      let Qr = installationAtTarget(records, scope, At);
-      let fi = (auto === true || nr !== pluginId) && (Qr === undefined || Qr.auto === true);
-      let Ri = {
-        installPath: Ti,
-        lastUpdated: recordedAt ?? jo?.lastUpdated,
-        ...(fi && {
+      let priorRecord = installationAtTarget(records, scope, projectPath);
+      let markAuto =
+        (auto === true || id !== pluginId) && (priorRecord === undefined || priorRecord.auto === true);
+      let record = {
+        installPath: path,
+        lastUpdated: recordedAt ?? currentInstall?.lastUpdated,
+        ...(markAuto && {
           auto: true,
         }),
       };
       if (
-        jo !== undefined &&
-        (jo.installPath !== Ti ||
-          (recordedAt !== undefined && jo.lastUpdated !== recordedAt) ||
-          (fi && jo.auto !== true))
+        currentInstall !== undefined &&
+        (currentInstall.installPath !== path ||
+          (recordedAt !== undefined && currentInstall.lastUpdated !== recordedAt) ||
+          (markAuto && currentInstall.auto !== true))
       ) {
-        br.add(nr);
+        changedIds.add(id);
         continue;
       }
-      if (Qr !== undefined) {
-        if (jo !== undefined && !(await restoreEarlierInstallRecord(nr, Qr, Ri, storageV5))) br.add(nr);
+      if (priorRecord !== undefined) {
+        if (
+          currentInstall !== undefined &&
+          !(await restoreEarlierInstallRecord(id, priorRecord, record, storageV5))
+        )
+          changedIds.add(id);
         continue;
       }
-      if ((await removePluginInstallation(nr, scope, At, storageV5, Ri)) === false) {
-        br.add(nr);
+      if ((await removePluginInstallation(id, scope, projectPath, storageV5, record)) === false) {
+        changedIds.add(id);
         continue;
       }
-      Hr ||= nr === pluginId;
-      if (records.length === 0) await markPluginVersionOrphaned(Ti, storageV5);
+      settingsWrittenForRoot ||= id === pluginId;
+      if (records.length === 0) await markPluginVersionOrphaned(path, storageV5);
     }
   }
-  async function _r() {
-    let nr = {};
-    for (let jo of closure) {
-      if (br.has(jo)) continue;
-      nr[jo] =
-        jo === pluginId && Ho.has(jo) && !Array.isArray(Xn[jo])
+  async function restoreSettings() {
+    let settingsKey = {};
+    for (let settingPluginId of closure) {
+      if (changedIds.has(settingPluginId)) continue;
+      settingsKey[settingPluginId] =
+        settingPluginId === pluginId &&
+        installedPaths.has(settingPluginId) &&
+        !Array.isArray(writeSeed[settingPluginId])
           ? (dependencyEnablement.get(pluginId) ?? true)
-          : Xn[jo];
+          : writeSeed[settingPluginId];
     }
-    let { [pluginId]: Ti, ...Vs } = nr;
+    let { [pluginId]: removedSetting, ...nextSettings } = settingsKey;
     let { error } = await updateSettingsForSourceWithTransform(
       settingSource,
-      (jo) => ({
-        enabledPlugins: Hr && jo?.enabledPlugins?.[pluginId] !== un.get(pluginId) ? Vs : nr,
+      (settingsNow) => ({
+        enabledPlugins:
+          settingsWrittenForRoot &&
+          settingsNow?.enabledPlugins?.[pluginId] !== writtenEnablement.get(pluginId)
+            ? nextSettings
+            : settingsKey,
       }),
       {
         legacyRevocation: "skip",
@@ -828,12 +874,12 @@ async function installResolvedPlugin({
         },
       );
   }
-  let Cr;
-  let Vr = new Map();
-  let Oo = new Map();
-  let jr = [];
-  let Or = new Set();
-  let Io = [];
+  let declaredDeps;
+  let defaultById = new Map();
+  let extraDeps = new Map();
+  let notFoundDeps = [];
+  let officialDeps = new Set();
+  let nowLoadingFalse = [];
   try {
     if (!depInfo.has(pluginId)) {
       let marketplaceInstallLocation = (await getPluginById(pluginId, storageV5, "install"))
@@ -844,14 +890,14 @@ async function installResolvedPlugin({
           marketplaceInstallLocation,
         });
     }
-    let nr = new Set(closure);
-    let { ranges, requirers } = collectDependencyVersionRanges(combined, nr);
-    let _i = new Map();
-    let jo = new Map();
-    async function Qr(reason) {
+    let closureSet = new Set(closure);
+    let { ranges, requirers } = collectDependencyVersionRanges(plugins_2, closureSet);
+    let pendingRanges = new Map();
+    let rangesByDep = new Map();
+    async function reportAndRollback(reason) {
       switch (reason) {
         case "directory-pin-unsatisfied":
-          await cs();
+          await revertInstalled();
           break;
         case "range-conflict":
         case "no-matching-tag":
@@ -859,13 +905,14 @@ async function installResolvedPlugin({
           if (
             auto ||
             requiredByEnabledDependent ||
-            Xn[pluginId] !== undefined ||
-            rr.get(pluginId)?.records.length !== 0
+            writeSeed[pluginId] !== undefined ||
+            priorRecords.get(pluginId)?.records.length !== 0
           )
             break;
           try {
-            for (let key of Ho.keys()) if (rr.get(key)?.records.length !== 0) Ho.delete(key);
-            await cs();
+            for (let key of installedPaths.keys())
+              if (priorRecords.get(key)?.records.length !== 0) installedPaths.delete(key);
+            await revertInstalled();
           } catch (error) {
             logError(error);
             logForDebugging(
@@ -880,55 +927,61 @@ async function installResolvedPlugin({
         case "directory-identity-changed":
           break;
       }
-      await _r();
+      await restoreSettings();
     }
-    async function fi(Di) {
-      let yr = depInfo.get(Di);
-      if (!yr)
+    async function materializeOne(id) {
+      let info = depInfo.get(id);
+      if (!info)
         return {
           ok: true,
           dependencies: undefined,
         };
-      let Kr = [...(_i.get(Di) ?? []), ...(ranges.get(Di) ?? [])];
-      let Li;
-      let entry = yr.entry;
-      let Hi;
-      if (Kr.length > 0) {
-        let ta = intersectVersionConstraints(Kr);
-        if (!ta.ok)
+      let requiredRanges = [...(pendingRanges.get(id) ?? []), ...(ranges.get(id) ?? [])];
+      let pinnedRange;
+      let entry = info.entry;
+      let pinRange;
+      if (requiredRanges.length > 0) {
+        let intersected = intersectVersionConstraints(requiredRanges);
+        if (!intersected.ok)
           return {
             ok: false,
             reason: "range-conflict",
-            dep: Di,
-            ranges: Kr,
-            why: ta.reason,
+            dep: id,
+            ranges: requiredRanges,
+            why: intersected.reason,
           };
-        if (Di.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`)) Hi = ta.range === "*" ? undefined : ta.range;
-        else if (ta.range !== "*") {
-          let pluginCloneUrl = getPluginCloneUrl(yr.entry.source);
-          let source = knownMarketplaces[parsePluginIdentifier(Di).marketplace ?? ""]?.source;
-          let tu = pluginCloneUrl === null && typeof yr.entry.source === "string";
-          let pd = tu ? getMarketplaceCloneUrl(source) : pluginCloneUrl;
-          if (pd !== null) {
-            let versionRange = await resolveVersionRange(pd, yr.entry.name, ta.range, jo);
-            if (versionRange === null && !tu)
+        if (id.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`))
+          pinRange = intersected.range === "*" ? undefined : intersected.range;
+        else if (intersected.range !== "*") {
+          let pluginCloneUrl = getPluginCloneUrl(info.entry.source);
+          let source = knownMarketplaces[parsePluginIdentifier(id).marketplace ?? ""]?.source;
+          let isRepoRelative = pluginCloneUrl === null && typeof info.entry.source === "string";
+          let cloneUrl = isRepoRelative ? getMarketplaceCloneUrl(source) : pluginCloneUrl;
+          if (cloneUrl !== null) {
+            let versionRange = await resolveVersionRange(
+              cloneUrl,
+              info.entry.name,
+              intersected.range,
+              rangesByDep,
+            );
+            if (versionRange === null && !isRepoRelative)
               return {
                 ok: false,
                 reason: "no-matching-tag",
-                dep: Di,
-                range: ta.range,
+                dep: id,
+                range: intersected.range,
               };
             if (versionRange === null)
               logForDebugging(
-                `materializeOne(${Di}): no ${yr.entry.name}--v* tag satisfying ${ta.range} on marketplace repo; falling through to HEAD copy`,
+                `materializeOne(${id}): no ${info.entry.name}--v* tag satisfying ${intersected.range} on marketplace repo; falling through to HEAD copy`,
               );
             else {
-              Li = versionRange;
-              if (tu && typeof yr.entry.source === "string") {
-                let relativePluginSource = toRelativePluginSource(source, yr.entry.source);
+              pinnedRange = versionRange;
+              if (isRepoRelative && typeof info.entry.source === "string") {
+                let relativePluginSource = toRelativePluginSource(source, info.entry.source);
                 if (relativePluginSource !== null)
                   entry = {
-                    ...yr.entry,
+                    ...info.entry,
                     source: relativePluginSource,
                   };
               }
@@ -936,33 +989,33 @@ async function installResolvedPlugin({
           }
         }
       }
-      let Xa = await installPluginWithRecords(
-        Di,
+      let installResult = await installPluginWithRecords(
+        id,
         entry,
         scope,
-        At,
-        await yo(Di, {
-          ...yr,
+        projectPath,
+        await entryPathFor(id, {
+          ...info,
           entry,
         }),
-        Li,
-        auto === true || Di !== pluginId,
-        yr.marketplaceInstallLocation,
-        marketplaceSourceOfEntry(Di, knownMarketplaces),
-        Di === pluginId && auto !== true
+        pinnedRange,
+        auto === true || id !== pluginId,
+        info.marketplaceInstallLocation,
+        marketplaceSourceOfEntry(id, knownMarketplaces),
+        id === pluginId && auto !== true
           ? commandSourceConsent
           : {
               kind: "none",
-              pluginId: Di,
+              pluginId: id,
             },
         storageV5,
         {
-          explicitInstall: explicit && Di === pluginId,
-          consented: Di === pluginId ? consentedEntryHelper : undefined,
+          explicitInstall: explicit && id === pluginId,
+          consented: id === pluginId ? consentedEntryHelper : undefined,
         },
         undefined,
-        Hi,
-        Di !== pluginId && alreadyEnabled.has(Di) ? undefined : gitHubHttpsFallback,
+        pinRange,
+        id !== pluginId && alreadyEnabled.has(id) ? undefined : gitHubHttpsFallback,
       ).catch((error) => {
         if (
           error instanceof PinnedVersionMismatchError ||
@@ -972,143 +1025,152 @@ async function installResolvedPlugin({
           return error;
         throw error;
       });
-      if (Xa instanceof PluginFolderHeldError)
+      if (installResult instanceof PluginFolderHeldError)
         return {
           ok: false,
           reason: "plugin-folder-held",
-          pluginId: Di,
+          pluginId: id,
           sharedWith: "installed",
-          holders: Xa.holders,
+          holders: installResult.holders,
         };
-      if (Xa instanceof PluginCachePublishError)
+      if (installResult instanceof PluginCachePublishError)
         return {
           ok: false,
-          reason: Xa.reason,
-          dep: Di,
-          message: Xa.message,
+          reason: installResult.reason,
+          dep: id,
+          message: installResult.message,
         };
-      if (Xa instanceof PinnedVersionMismatchError)
+      if (installResult instanceof PinnedVersionMismatchError)
         return {
           ok: false,
           reason: "directory-pin-unsatisfied",
-          dep: Di,
-          message: `"${printableName(yr.entry.name, 120)}" from the ${OFFICIAL_MARKETPLACE_DISPLAY} is pinned to its listed commit (${Xa.manifestVersion ? `version ${printableName(Xa.manifestVersion, 120)}` : "no version"}), which does not satisfy ${printableName(Kr.join(", "), 120)} required by ${(requirers.get(Di) ?? []).map((ta) => `"${printableName(parsePluginIdentifier(ta).name, 120)}"`).join(", ")}.`,
+          dep: id,
+          message: `"${printableName(info.entry.name, 120)}" from the ${OFFICIAL_MARKETPLACE_DISPLAY} is pinned to its listed commit (${installResult.manifestVersion ? `version ${printableName(installResult.manifestVersion, 120)}` : "no version"}), which does not satisfy ${printableName(requiredRanges.join(", "), 120)} required by ${(requirers.get(id) ?? []).map((requirerId) => `"${printableName(parsePluginIdentifier(requirerId).name, 120)}"`).join(", ")}.`,
         };
-      Ho.set(Di, Xa.path);
-      rr.set(Di, {
-        records: Xa.recordsBefore,
-        recordedAt: Xa.recordedAt,
+      installedPaths.set(id, installResult.path);
+      priorRecords.set(id, {
+        records: installResult.recordsBefore,
+        recordedAt: installResult.recordedAt,
       });
-      Vr.set(Di, Xa.defaultEnabled);
-      Oo.set(Di, Xa.dependencies ?? []);
-      for (let [ta, Bs] of Xa.depConstraints ?? []) {
-        if (Bs.version === undefined) continue;
-        let Ca = qualifyDependency(ta, Di);
-        requirers.set(Ca, [...(requirers.get(Ca) ?? []), Di]);
-        let tu = _i.get(Ca);
-        if (tu) tu.push(Bs.version);
-        else _i.set(Ca, [Bs.version]);
+      defaultById.set(id, installResult.defaultEnabled);
+      extraDeps.set(id, installResult.dependencies ?? []);
+      for (let [rawDependency, constraint] of installResult.depConstraints ?? []) {
+        if (constraint.version === undefined) continue;
+        let dependencyId = qualifyDependency(rawDependency, id);
+        requirers.set(dependencyId, [...(requirers.get(dependencyId) ?? []), id]);
+        let ranges = pendingRanges.get(dependencyId);
+        if (ranges) ranges.push(constraint.version);
+        else pendingRanges.set(dependencyId, [constraint.version]);
       }
       return {
         ok: true,
-        dependencies: Xa.dependencies ?? [],
+        dependencies: installResult.dependencies ?? [],
       };
     }
     for (let idx = dependencyClosure.closure.length - 1; idx >= 0; idx--) {
-      let yr = dependencyClosure.closure[idx];
-      if (yr === undefined) continue;
-      let Kr = yr !== pluginId && alreadyEnabled.has(yr);
-      let Li;
+      let id = dependencyClosure.closure[idx];
+      if (id === undefined) continue;
+      let forceIncluded = id !== pluginId && alreadyEnabled.has(id);
+      let result;
       try {
-        Li = await fi(yr);
+        result = await materializeOne(id);
       } catch (error) {
-        if (Kr) {
+        if (forceIncluded) {
           logForDebugging(
-            `installResolvedPlugin: force-included ${yr} fetch threw (${error instanceof Error ? error.message : String(error)}); skipping (pinner stays demoted)`,
+            `installResolvedPlugin: force-included ${id} fetch threw (${error instanceof Error ? error.message : String(error)}); skipping (pinner stays demoted)`,
           );
           continue;
         }
         throw error;
       }
-      if (!Li.ok) {
-        if (Kr) {
+      if (!result.ok) {
+        if (forceIncluded) {
           logForDebugging(
-            Li.reason === "range-conflict"
-              ? `installResolvedPlugin: force-included ${yr} has disjoint pinner ranges ${Li.ranges.join(", ")}; skipping (pinner stays demoted)`
-              : Li.reason === "no-matching-tag"
-                ? `installResolvedPlugin: force-included ${yr} has no tag satisfying ${Li.range}; skipping (pinner stays demoted)`
-                : Li.reason === "directory-binding-unreadable" ||
-                    Li.reason === "directory-identity-changed" ||
-                    Li.reason === "plugin-folder-held"
-                  ? `installResolvedPlugin: force-included ${yr} was refused before any fetch (${Li.reason}); skipping (pinner stays demoted)`
-                  : `installResolvedPlugin: force-included ${yr} is pinned to a listed commit outside the required range; skipping (pinner stays demoted)`,
+            result.reason === "range-conflict"
+              ? `installResolvedPlugin: force-included ${id} has disjoint pinner ranges ${result.ranges.join(", ")}; skipping (pinner stays demoted)`
+              : result.reason === "no-matching-tag"
+                ? `installResolvedPlugin: force-included ${id} has no tag satisfying ${result.range}; skipping (pinner stays demoted)`
+                : result.reason === "directory-binding-unreadable" ||
+                    result.reason === "directory-identity-changed" ||
+                    result.reason === "plugin-folder-held"
+                  ? `installResolvedPlugin: force-included ${id} was refused before any fetch (${result.reason}); skipping (pinner stays demoted)`
+                  : `installResolvedPlugin: force-included ${id} is pinned to a listed commit outside the required range; skipping (pinner stays demoted)`,
           );
           continue;
         }
-        await Qr(Li.reason);
-        return Li.reason === "plugin-folder-held"
+        await reportAndRollback(result.reason);
+        return result.reason === "plugin-folder-held"
           ? {
-              ...Li,
-              rootKept: Ho.has(pluginId),
+              ...result,
+              rootKept: installedPaths.has(pluginId),
             }
-          : Li;
+          : result;
       }
-      for (let Qs of Li.dependencies ?? []) Or.add(qualifyDependency(Qs, yr));
-      if (yr === pluginId) Cr = Li.dependencies;
+      for (let rawDependency of result.dependencies ?? [])
+        officialDeps.add(qualifyDependency(rawDependency, id));
+      if (id === pluginId) declaredDeps = result.dependencies;
     }
-    let Ri = new Set((Cr ?? []).map((Di) => qualifyDependency(Di, pluginId)));
-    for (let [Di, yr] of _i) {
-      if (nr.has(Di) || (no.has(Di) && Ri.has(Di)) || !alreadyEnabled.has(Di)) continue;
-      let combined = yr.concat(ranges.get(Di) ?? []);
-      let Li = intersectVersionConstraints(combined);
-      if (!Li.ok) {
-        await Qr("range-conflict");
+    let rootDepIds = new Set(
+      (declaredDeps ?? []).map((rawDependency) => qualifyDependency(rawDependency, pluginId)),
+    );
+    for (let [dependencyId, pendingRangesForDep] of pendingRanges) {
+      if (
+        closureSet.has(dependencyId) ||
+        (forceInclude.has(dependencyId) && rootDepIds.has(dependencyId)) ||
+        !alreadyEnabled.has(dependencyId)
+      )
+        continue;
+      let combined = pendingRangesForDep.concat(ranges.get(dependencyId) ?? []);
+      let intersected = intersectVersionConstraints(combined);
+      if (!intersected.ok) {
+        await reportAndRollback("range-conflict");
         return {
           ok: false,
           reason: "range-conflict",
-          dep: Di,
+          dep: dependencyId,
           ranges: combined,
-          why: Li.reason,
+          why: intersected.reason,
         };
       }
-      let info = rn.get(Di);
-      if (Li.range !== "*" && !versionSatisfies(info, Li.range)) {
-        let Hi =
-          requirers.get(Di)?.includes(pluginId) === true &&
-          !Array.isArray(enabledPlugins?.[Di]) &&
-          !isPluginBlockedByPolicy(Di) &&
-          !findBlockedMarketplace(Di, knownMarketplaces, {
+      let info = versionsById.get(dependencyId);
+      if (intersected.range !== "*" && !versionSatisfies(info, intersected.range)) {
+        let canSuggestUpdate =
+          requirers.get(dependencyId)?.includes(pluginId) === true &&
+          !Array.isArray(enabledPlugins?.[dependencyId]) &&
+          !isPluginBlockedByPolicy(dependencyId) &&
+          !findBlockedMarketplace(dependencyId, knownMarketplaces, {
             failClosedOnUnknownSource,
           });
-        if (Hi) await _r();
-        else await Qr("range-conflict");
+        if (canSuggestUpdate) await restoreSettings();
+        else await reportAndRollback("range-conflict");
         return {
           ok: false,
           reason: "range-conflict",
-          dep: Di,
+          dep: dependencyId,
           ranges: combined,
           why: "installed-unsatisfied",
           installed: info,
-          suggestDependencyUpdate: Hi,
+          suggestDependencyUpdate: canSuggestUpdate,
         };
       }
     }
-    let Ja = [
+    let batch = [
       {
-        manifestDeps: Cr,
+        manifestDeps: declaredDeps,
         declaringId: pluginId,
       },
     ];
-    while (Ja.length > 0) {
-      let Di = [];
-      for (let { manifestDeps, declaringId } of Ja) {
-        for (let Bs of manifestDeps ?? []) Or.add(qualifyDependency(Bs, declaringId));
-        let ta = await autoInstallPluginDependencies({
+    while (batch.length > 0) {
+      let newIds = [];
+      for (let { manifestDeps, declaringId } of batch) {
+        for (let rawDependency of manifestDeps ?? [])
+          officialDeps.add(qualifyDependency(rawDependency, declaringId));
+        let autoResult = await autoInstallPluginDependencies({
           rootManifestDeps: manifestDeps,
           pluginId: declaringId,
-          closureSet: nr,
+          closureSet,
           alreadyEnabled,
-          forceInclude: no,
+          forceInclude,
           rootMarketplace,
           allowedCrossMarketplaces,
           knownMarketplaces,
@@ -1116,157 +1178,161 @@ async function installResolvedPlugin({
           depInfo,
           storageV5,
         });
-        if (!ta.ok) {
-          await _r();
-          if (ta.blockedMarketplace)
+        if (!autoResult.ok) {
+          await restoreSettings();
+          if (autoResult.blockedMarketplace)
             return {
               ok: false,
               reason: "dependency-marketplace-blocked-by-policy",
               pluginName: entry.name,
-              blockedDependency: ta.blockedDependency,
-              marketplaceName: ta.blockedMarketplace,
+              blockedDependency: autoResult.blockedDependency,
+              marketplaceName: autoResult.blockedMarketplace,
             };
           return {
             ok: false,
             reason: "dependency-blocked-by-policy",
             pluginName: entry.name,
-            blockedDependency: ta.blockedDependency,
+            blockedDependency: autoResult.blockedDependency,
           };
         }
-        jr.push(...ta.notFound.filter((Bs) => !allPluginsCacheOnly.enabled.some((Ca) => Ca.source === Bs)));
-        for (let id of ta.ids) {
-          if (nr.has(id)) continue;
-          nr.add(id);
+        notFoundDeps.push(
+          ...autoResult.notFound.filter(
+            (id) => !allPluginsCacheOnly.enabled.some((plugin) => plugin.source === id),
+          ),
+        );
+        for (let id of autoResult.ids) {
+          if (closureSet.has(id)) continue;
+          closureSet.add(id);
           closure.push(id);
-          Di.push(id);
+          newIds.push(id);
         }
       }
-      if (Di.length === 0) break;
-      let sharedStorageConflict = findSharedStorageConflict(Di, closure, plugins_2);
+      if (newIds.length === 0) break;
+      let sharedStorageConflict = findSharedStorageConflict(newIds, closure, plugins_3);
       if (sharedStorageConflict !== null) {
-        await Qr("plugin-folder-held");
+        await reportAndRollback("plugin-folder-held");
         return {
           ok: false,
           reason: "plugin-folder-held",
           ...sharedStorageConflict,
-          rootKept: Ho.has(pluginId),
+          rootKept: installedPaths.has(pluginId),
         };
       }
-      let Kr = {};
-      for (let Hi of Di) {
-        Kr[Hi] = true;
-        un.set(Hi, true);
+      let enableOops = {};
+      for (let id of newIds) {
+        enableOops[id] = true;
+        writtenEnablement.set(id, true);
       }
       let { error } = await updateSettingsForSourceWithTransform(
         settingSource,
-        (Hi) => ({
+        (settings) => ({
           enabledPlugins: {
-            ...Hi?.enabledPlugins,
-            ...Kr,
+            ...settings?.enabledPlugins,
+            ...enableOops,
           },
         }),
         undefined,
         storageV5,
       );
       if (error) {
-        await _r();
+        await restoreSettings();
         return {
           ok: false,
           reason: "settings-write-failed",
           message: error.message,
         };
       }
-      let Qs = [];
-      for (let Hi of Di) {
-        let Xa = alreadyEnabled.has(Hi);
-        let ta;
+      let nextBatch = [];
+      for (let id of newIds) {
+        let alreadyOn = alreadyEnabled.has(id);
+        let result;
         try {
-          ta = await fi(Hi);
+          result = await materializeOne(id);
         } catch (error) {
-          if (Xa) {
+          if (alreadyOn) {
             logForDebugging(
-              `installResolvedPlugin: force-included ${Hi} fetch threw (${error instanceof Error ? error.message : String(error)}); skipping (pinner stays demoted)`,
+              `installResolvedPlugin: force-included ${id} fetch threw (${error instanceof Error ? error.message : String(error)}); skipping (pinner stays demoted)`,
             );
             continue;
           }
           throw error;
         }
-        if (!ta.ok) {
-          if (Xa) {
+        if (!result.ok) {
+          if (alreadyOn) {
             logForDebugging(
-              `installResolvedPlugin: force-included ${Hi} ${ta.reason}; skipping (pinner stays demoted)`,
+              `installResolvedPlugin: force-included ${id} ${result.reason}; skipping (pinner stays demoted)`,
             );
             continue;
           }
-          await Qr(ta.reason);
-          return ta.reason === "plugin-folder-held"
+          await reportAndRollback(result.reason);
+          return result.reason === "plugin-folder-held"
             ? {
-                ...ta,
-                rootKept: Ho.has(pluginId),
+                ...result,
+                rootKept: installedPaths.has(pluginId),
               }
-            : ta;
+            : result;
         }
-        Qs.push({
-          manifestDeps: ta.dependencies,
-          declaringId: Hi,
+        nextBatch.push({
+          manifestDeps: result.dependencies,
+          declaringId: id,
         });
       }
-      Ja = Qs;
+      batch = nextBatch;
     }
   } catch (error) {
-    await _r();
+    await restoreSettings();
     throw error;
   }
-  if (Cr !== undefined) {
-    let nr = new Set(Cr.map((Ti) => qualifyDependency(Ti, pluginId)));
-    for (let Ti of entry.dependencies ?? []) {
-      let Vs = qualifyDependency(Ti, pluginId);
-      if (!nr.has(Vs))
+  if (declaredDeps !== undefined) {
+    let rootDepIds = new Set(declaredDeps.map((rawDependency) => qualifyDependency(rawDependency, pluginId)));
+    for (let rawDependency of entry.dependencies ?? []) {
+      let depId = qualifyDependency(rawDependency, pluginId);
+      if (!rootDepIds.has(depId))
         logForDebugging(
-          `Marketplace entry for ${pluginId} lists dependency "${Ti}" not present in plugin.json \u2014 catalog may be stale`,
+          `Marketplace entry for ${pluginId} lists dependency "${rawDependency}" not present in plugin.json \u2014 catalog may be stale`,
         );
     }
   }
-  let zo = new Map();
-  let rs = new Map();
-  for (let nr of closure) {
-    let Ti = vn(nr);
-    zo.set(nr, Ti?.defaultEnabled ?? Vr.get(nr) ?? true);
-    let mapped = (Ti?.dependencies ?? []).map((_i) => qualifyDependency(_i, nr));
-    for (let _i of Oo.get(nr) ?? []) mapped.push(qualifyDependency(_i, nr));
-    rs.set(nr, mapped);
+  let defaults2 = new Map();
+  let deps2 = new Map();
+  for (let id of closure) {
+    let entry = entryFor(id);
+    defaults2.set(id, entry?.defaultEnabled ?? defaultById.get(id) ?? true);
+    let mapped = (entry?.dependencies ?? []).map((rawDependency) => qualifyDependency(rawDependency, id));
+    for (let rawDependency of extraDeps.get(id) ?? []) mapped.push(qualifyDependency(rawDependency, id));
+    deps2.set(id, mapped);
   }
   let dependencyEnablement_2 = computeDependencyEnablement({
     closure,
     rootId: pluginId,
     rootRequiredByDependent,
-    priorEnabled: Xn,
+    priorEnabled: writeSeed,
     explicitAnywhere,
-    defaultsById: zo,
-    dependenciesById: rs,
+    defaultsById: defaults2,
+    dependenciesById: deps2,
   });
-  let Nr = {};
-  for (let nr of closure) {
-    let Ti = Xn[nr];
-    let Vs = dependencyEnablement_2.get(nr) ?? true;
-    if (Ti !== undefined && Ti !== Vs) continue;
-    if (un.get(nr) !== Vs) Nr[nr] = Vs;
+  let corrections = {};
+  for (let id of closure) {
+    let current = writeSeed[id];
+    let desired = dependencyEnablement_2.get(id) ?? true;
+    if (current !== undefined && current !== desired) continue;
+    if (writtenEnablement.get(id) !== desired) corrections[id] = desired;
   }
-  let Is = true;
-  if (Object.keys(Nr).length > 0) {
+  let correctionApplied = true;
+  if (Object.keys(corrections).length > 0) {
     let { error } = await updateSettingsForSourceWithTransform(
       settingSource,
-      (Ti) => ({
+      (settings) => ({
         enabledPlugins: {
-          ...Ti?.enabledPlugins,
-          ...Nr,
+          ...settings?.enabledPlugins,
+          ...corrections,
         },
       }),
       undefined,
       storageV5,
     );
     if (error) {
-      Is = false;
+      correctionApplied = false;
       logForDebugging(`Failed to apply defaultEnabled correction for ${pluginId}: ${error.message}`, {
         level: "warn",
       });
@@ -1274,34 +1340,35 @@ async function installResolvedPlugin({
   }
   let enabledSettingSources = getEnabledSettingSources();
   let index = enabledSettingSources.indexOf(settingSource);
-  function Vi(nr) {
+  function disabledInLaterSource(id) {
     for (let idx = enabledSettingSources.length - 1; idx > index; idx--) {
-      let mktLocation = getSettingsForSource(enabledSettingSources[idx])?.enabledPlugins?.[nr];
+      let mktLocation = getSettingsForSource(enabledSettingSources[idx])?.enabledPlugins?.[id];
       if (mktLocation !== undefined) return mktLocation === false;
     }
     return false;
   }
   let filtered = closure.filter(
-    (nr) => dependencyEnablement_2.get(nr) === false && (Is || un.get(nr) === false),
+    (id) =>
+      dependencyEnablement_2.get(id) === false && (correctionApplied || writtenEnablement.get(id) === false),
   );
-  let installedDisabled = closure.filter((nr) => filtered.includes(nr) || Vi(nr));
+  let installedDisabled = closure.filter((id) => filtered.includes(id) || disabledInLaterSource(id));
   refreshPluginCaches(storageV5);
   let marketplace = parsePluginIdentifier_2(pluginId).marketplace;
-  let wa = isOfficialMarketplaceName_3(marketplace);
-  let hr = wa || isToolDetailsLoggingEnabled();
+  let pluginMarketplace = isOfficialMarketplaceName_3(marketplace);
+  let logNames = pluginMarketplace || isToolDetailsLoggingEnabled();
   logOTelEvent("plugin_installed", {
-    ...(hr && {
+    ...(logNames && {
       "plugin.name": entry.name,
     }),
-    ...(hr &&
+    ...(logNames &&
       entry.version && {
         "plugin.version": entry.version,
       }),
-    ...(hr &&
+    ...(logNames &&
       marketplace && {
         "marketplace.name": marketplace,
       }),
-    "marketplace.is_official": String(wa),
+    "marketplace.is_official": String(pluginMarketplace),
     ...(trigger && {
       "install.trigger": trigger,
     }),
@@ -1309,62 +1376,66 @@ async function installResolvedPlugin({
       "install.disabled_by_default": "true",
     }),
   });
-  if (isPluginDirectoryAvailable() && [...Or].some((nr) => nr.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`))) {
-    let nr = await bindingsWithReadFailure();
-    for (let Ti of Or) {
-      let { name: Vs, marketplace } = parsePluginIdentifier(Ti);
-      let jo = pluginBindingValues(plugins, Ti);
+  if (
+    isPluginDirectoryAvailable() &&
+    [...officialDeps].some((id) => id.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`))
+  ) {
+    let bindings = await bindingsWithReadFailure();
+    for (let id of officialDeps) {
+      let { name, marketplace } = parsePluginIdentifier(id);
+      let values = pluginBindingValues(plugins, id);
       if (
         marketplace !== OFFICIAL_MARKETPLACE_NAME ||
-        Ho.has(Ti) ||
-        (jo?.length ?? 0) === 0 ||
-        jr.includes(Ti)
+        installedPaths.has(id) ||
+        (values?.length ?? 0) === 0 ||
+        notFoundDeps.includes(id)
       )
         continue;
-      let pluginDirectoryMarketplace = await loadPluginDirectoryMarketplace(Vs, storageV5);
+      let pluginDirectoryMarketplace = await loadPluginDirectoryMarketplace(name, storageV5);
       if (pluginDirectoryMarketplace === null) continue;
-      let found = pluginDirectoryMarketplace.plugins.find((plugin) => plugin.name === Vs);
-      if (found === undefined || isDirectoryRepositoryChanged(Ti, jo, found.source, nr)) Io.push(Ti);
+      let found = pluginDirectoryMarketplace.plugins.find((plugin) => plugin.name === name);
+      if (found === undefined || isDirectoryRepositoryChanged(id, values, found.source, bindings))
+        nowLoadingFalse.push(id);
     }
   }
-  let mi = "";
-  if (jr.length > 0) {
+  let depWarning = "";
+  if (notFoundDeps.length > 0) {
     let pluginDirectoryState = await getPluginDirectoryState();
     if (pluginDirectoryState !== "unavailable") {
-      let Ti = `@${OFFICIAL_MARKETPLACE_NAME}`;
-      let Vs =
+      let suffix = `@${OFFICIAL_MARKETPLACE_NAME}`;
+      let stateReason =
         pluginDirectoryState === "off"
           ? `the ${OFFICIAL_MARKETPLACE_DISPLAY} is off`
           : pluginDirectoryState === "blocked"
             ? `the ${OFFICIAL_MARKETPLACE_DISPLAY} is blocked by your organization`
             : `the ${OFFICIAL_MARKETPLACE_DISPLAY} could not be read, or does not list it`;
-      let _i = uniq(jr);
-      let sliced = _i.slice(0, 5);
-      let Qr = _i.length - sliced.length;
-      mi = `. Warning: ${sliced.map((fi) => `dependency "${quotedPrintable(fi, 120)}" was not installed (${fi.endsWith(Ti) ? Vs : "no marketplace you have added lists it"})`).join("; ")}${Qr > 0 ? `; and ${Qr} more` : ""}. "${quotedPrintable(entry.name, 120)}" will not load without ${plural(_i.length, "it", "them")}`;
+      let ids = uniq(notFoundDeps);
+      let sliced = ids.slice(0, 5);
+      let moreCount = ids.length - sliced.length;
+      depWarning = `. Warning: ${sliced.map((id) => `dependency "${quotedPrintable(id, 120)}" was not installed (${id.endsWith(suffix) ? stateReason : "no marketplace you have added lists it"})`).join("; ")}${moreCount > 0 ? `; and ${moreCount} more` : ""}. "${quotedPrintable(entry.name, 120)}" will not load without ${plural(ids.length, "it", "them")}`;
     }
   }
-  let Ha = "";
-  if (Io.length > 0) {
-    let depNote = uniq(Io);
-    let Ti = depNote.length === 1;
+  let directoryWarning = "";
+  if (nowLoadingFalse.length > 0) {
+    let depNote = uniq(nowLoadingFalse);
+    let isSingle = depNote.length === 1;
     let joined = depNote
       .slice(0, 5)
       .map((id) => `"${quotedPrintable(id, 120)}"`)
       .join(", ");
-    let _i = depNote.length > 5 ? ` and ${depNote.length - 5} more` : "";
-    let jo = `"${quotedPrintable(entry.name, 120)}"`;
-    Ha = `. Warning: ${Ti ? "dependency" : "dependencies"} ${joined}${_i} ${Ti ? "is" : "are"} installed, but the ${OFFICIAL_MARKETPLACE_DISPLAY}'s current listing will not keep ${Ti ? "it" : "them"} loading, and ${jo} will not load without ${Ti ? "it" : "them"}. Once ${Ti ? "it stops (it may have already)" : "they stop (they may have already)"}, \`claude plugin list\` says why`;
+    let moreText = depNote.length > 5 ? ` and ${depNote.length - 5} more` : "";
+    let selfLabel = `"${quotedPrintable(entry.name, 120)}"`;
+    directoryWarning = `. Warning: ${isSingle ? "dependency" : "dependencies"} ${joined}${moreText} ${isSingle ? "is" : "are"} installed, but the ${OFFICIAL_MARKETPLACE_DISPLAY}'s current listing will not keep ${isSingle ? "it" : "them"} loading, and ${selfLabel} will not load without ${isSingle ? "it" : "them"}. Once ${isSingle ? "it stops (it may have already)" : "they stop (they may have already)"}, \`claude plugin list\` says why`;
   }
-  let depNote = `${formatDependencyCountSuffix([...Ho.keys()].filter((key) => key !== pluginId))}${mi}${Ha}`;
+  let depNote = `${formatDependencyCountSuffix([...installedPaths.keys()].filter((key) => key !== pluginId))}${depWarning}${directoryWarning}`;
   return {
     ok: true,
     closure: dependencyClosure.closure,
     depNote,
     installedDisabled,
     installedDisabledByDefault: filtered,
-    ...(nt && {
-      replacedCopies: nt,
+    ...(otherInstalls && {
+      replacedCopies: otherInstalls,
     }),
     copiesInOtherProjects:
       isPluginDirectoryAvailable() && scope === "user" && auto !== true
@@ -1400,10 +1471,10 @@ function logInstallFailed({ reason, errorKind, pluginId, entry, marketplaceName,
 /**
  * 从市场安装一个插件（界面/推荐用的简化入口）：取条目、调用 installResolvedPlugin，失败记 tengu_plugin_install_failed。
  */
-async function installPluginFromMarketplace(e) {
-  let { pluginId, entry, marketplaceName, scope = "user", storageV5 } = e;
-  let trigger = e.trigger;
-  let surface = e.trigger === "hint" ? undefined : e.surface;
+async function installPluginFromMarketplace(request) {
+  let { pluginId, entry, marketplaceName, scope = "user", storageV5 } = request;
+  let trigger = request.trigger;
+  let surface = request.trigger === "hint" ? undefined : request.surface;
   try {
     let pluginInfo = await getInstalledListRefusal(storageV5);
     if (pluginInfo !== undefined)
@@ -1420,9 +1491,9 @@ async function installPluginFromMarketplace(e) {
       scope,
       marketplaceInstallLocation,
       trigger: "ui",
-      explicit: e.trigger === "user",
-      consentedEntryHelper: e.trigger === "user" ? e.consentedEntryHelper : undefined,
-      commandSourceConsent: e.commandSourceConsent,
+      explicit: request.trigger === "user",
+      consentedEntryHelper: request.trigger === "user" ? request.consentedEntryHelper : undefined,
+      commandSourceConsent: request.commandSourceConsent,
       storageV5,
     });
     if (!result.ok)
@@ -1542,11 +1613,11 @@ async function installPluginFromMarketplace(e) {
             errorIsOurs: true,
           };
         case "range-conflict": {
-          let Ie = result.dep === pluginId ? "Plugin" : "Dependency";
+          let subject = result.dep === pluginId ? "Plugin" : "Dependency";
           return {
             success: false,
             error: describeConstraintConflict(
-              Ie,
+              subject,
               result.dep,
               result.ranges,
               result.why,
@@ -1557,10 +1628,10 @@ async function installPluginFromMarketplace(e) {
           };
         }
         case "no-matching-tag": {
-          let Ie = result.dep === pluginId ? "Plugin" : "Dependency";
+          let subject = result.dep === pluginId ? "Plugin" : "Dependency";
           return {
             success: false,
-            error: noMatchingTagMessage(Ie, result.dep, result.range),
+            error: noMatchingTagMessage(subject, result.dep, result.range),
             errorIsOurs: true,
           };
         }
@@ -1593,8 +1664,8 @@ async function installPluginFromMarketplace(e) {
         replaced: false,
       }),
     });
-    let Se = claudeCommand("plugin enable", pluginId);
-    let enableHint = `enable it in /plugin${Se ? ` or run: ${Se}` : ""}`;
+    let enableCommand = claudeCommand("plugin enable", pluginId);
+    let enableHint = `enable it in /plugin${enableCommand ? ` or run: ${enableCommand}` : ""}`;
     let included = result.installedDisabled.includes(pluginId);
     let included_2 = result.installedDisabledByDefault.includes(pluginId);
     let otherProjectsNote = describeOtherMarketplaceInstall(
@@ -1616,11 +1687,14 @@ async function installPluginFromMarketplace(e) {
       installedDisabledByDefault: included_2,
     };
   } catch (err) {
-    let G = redactUrlsInMessage(err instanceof Error ? err.message : String(err));
-    let q = err instanceof CommandSourceError;
-    logForDebugging(`installPluginFromMarketplace ${q ? "refused" : "failed"} for ${pluginId}: ${G}`, {
-      level: q ? "info" : "error",
-    });
+    let message = redactUrlsInMessage(err instanceof Error ? err.message : String(err));
+    let isRefusal = err instanceof CommandSourceError;
+    logForDebugging(
+      `installPluginFromMarketplace ${isRefusal ? "refused" : "failed"} for ${pluginId}: ${message}`,
+      {
+        level: isRefusal ? "info" : "error",
+      },
+    );
     logInstallFailed({
       reason:
         err instanceof EntryHelperError
@@ -1637,9 +1711,9 @@ async function installPluginFromMarketplace(e) {
     });
     return {
       success: false,
-      error: q ? G : `Failed to install: ${G}`,
-      refusal: q ? err : undefined,
-      ...(q && {
+      error: isRefusal ? message : `Failed to install: ${message}`,
+      refusal: isRefusal ? err : undefined,
+      ...(isRefusal && {
         errorIsOurs: true,
       }),
     };

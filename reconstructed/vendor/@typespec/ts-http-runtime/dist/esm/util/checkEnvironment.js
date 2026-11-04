@@ -30,7 +30,7 @@ var isNodeLike =
   Boolean(globalThis.process.version) &&
   Boolean((_d = globalThis.process.versions) === null || _d === undefined ? undefined : _d.node);
 //@ chunk-mrx6y2r5.js:47892-48001 esm-fingerprint
-var vl =
+var isReactNative =
   typeof navigator !== "undefined" &&
   (navigator === null || navigator === undefined ? undefined : navigator.product) === "ReactNative";
 export { isNodeLike };

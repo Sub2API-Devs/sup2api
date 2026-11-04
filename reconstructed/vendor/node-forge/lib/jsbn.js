@@ -5,11 +5,11 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 
 //@ chunk-fq0cr76a.js:92952-112817 cjs-fingerprint
-var require_jsbn = x(function (cjsExports, cjsModule) {
+var require_jsbn = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   cjsModule.exports = forge.jsbn = forge.jsbn || {};
   var dbits;
@@ -346,61 +346,64 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
     r_2.s = 0;
     r_2.clamp();
   }
-  function bnpDivRemTo(m, q_2, r) {
+  function bnpDivRemTo(m, q_2, remainder) {
     var pm = m.abs();
     if (pm.t <= 0) return;
     var pt = this.abs();
     if (pt.t < pm.t) {
       if (q_2 != null) q_2.fromInt(0);
-      if (r != null) this.copyTo(r);
+      if (remainder != null) this.copyTo(remainder);
       return;
     }
-    if (r == null) r = nbi();
-    var y = nbi();
+    if (remainder == null) remainder = nbi();
+    var shiftedModulus = nbi();
     var ts = this.s;
     var ms = m.s;
     var nsh = this.DB - nbits(pm.data[pm.t - 1]);
     if (nsh > 0) {
-      pm.lShiftTo(nsh, y);
-      pt.lShiftTo(nsh, r);
+      pm.lShiftTo(nsh, shiftedModulus);
+      pt.lShiftTo(nsh, remainder);
     } else {
-      pm.copyTo(y);
-      pt.copyTo(r);
+      pm.copyTo(shiftedModulus);
+      pt.copyTo(remainder);
     }
-    var ys = y.t;
-    var y0 = y.data[ys - 1];
+    var ys = shiftedModulus.t;
+    var y0 = shiftedModulus.data[ys - 1];
     if (y0 == 0) return;
-    var yt = y0 * (1 << this.F1) + (ys > 1 ? y.data[ys - 2] >> this.F2 : 0);
+    var yt = y0 * (1 << this.F1) + (ys > 1 ? shiftedModulus.data[ys - 2] >> this.F2 : 0);
     var d1 = this.FV / yt;
     var d2 = (1 << this.F1) / yt;
     var e = 1 << this.F2;
-    var i = r.t;
+    var i = remainder.t;
     var j = i - ys;
     var t = q_2 == null ? nbi() : q_2;
-    y.dlShiftTo(j, t);
-    if (r.compareTo(t) >= 0) {
-      r.data[r.t++] = 1;
-      r.subTo(t, r);
+    shiftedModulus.dlShiftTo(j, t);
+    if (remainder.compareTo(t) >= 0) {
+      remainder.data[remainder.t++] = 1;
+      remainder.subTo(t, remainder);
     }
     BigInteger.ONE.dlShiftTo(ys, t);
-    t.subTo(y, y);
-    while (y.t < ys) y.data[y.t++] = 0;
+    t.subTo(shiftedModulus, shiftedModulus);
+    while (shiftedModulus.t < ys) shiftedModulus.data[shiftedModulus.t++] = 0;
     while (--j >= 0) {
-      var qd = r.data[--i] == y0 ? this.DM : Math.floor(r.data[i] * d1 + (r.data[i - 1] + e) * d2);
-      if ((r.data[i] += y.am(0, qd, r, j, 0, ys)) < qd) {
-        y.dlShiftTo(j, t);
-        r.subTo(t, r);
-        while (r.data[i] < --qd) r.subTo(t, r);
+      var qd =
+        remainder.data[--i] == y0
+          ? this.DM
+          : Math.floor(remainder.data[i] * d1 + (remainder.data[i - 1] + e) * d2);
+      if ((remainder.data[i] += shiftedModulus.am(0, qd, remainder, j, 0, ys)) < qd) {
+        shiftedModulus.dlShiftTo(j, t);
+        remainder.subTo(t, remainder);
+        while (remainder.data[i] < --qd) remainder.subTo(t, remainder);
       }
     }
     if (q_2 != null) {
-      r.drShiftTo(ys, q_2);
+      remainder.drShiftTo(ys, q_2);
       if (ts != ms) BigInteger.ZERO.subTo(q_2, q_2);
     }
-    r.t = ys;
-    r.clamp();
-    if (nsh > 0) r.rShiftTo(nsh, r);
-    if (ts < 0) BigInteger.ZERO.subTo(r, r);
+    remainder.t = ys;
+    remainder.clamp();
+    if (nsh > 0) remainder.rShiftTo(nsh, remainder);
+    if (ts < 0) BigInteger.ZERO.subTo(remainder, remainder);
   }
   function bnMod(a) {
     var r = nbi();
@@ -421,9 +424,9 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
   function cReduce(x) {
     x.divRemTo(this.m, null, x);
   }
-  function cMulTo(x, y, r) {
-    x.multiplyTo(y, r);
-    this.reduce(r);
+  function cMulTo(x, y, product) {
+    x.multiplyTo(y, product);
+    this.reduce(product);
   }
   function cSqrTo(x, r) {
     x.squareTo(r);
@@ -486,9 +489,9 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
     x.squareTo(r);
     this.reduce(r);
   }
-  function montMulTo(x, y, r) {
-    x.multiplyTo(y, r);
-    this.reduce(r);
+  function montMulTo(x, y, product) {
+    x.multiplyTo(y, product);
+    this.reduce(product);
   }
   Montgomery.prototype.convert = montConvert;
   Montgomery.prototype.revert = montRevert;
@@ -498,29 +501,29 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
   function bnpIsEven() {
     return (this.t > 0 ? this.data[0] & 1 : this.s) == 0;
   }
-  function bnpExp(e, z) {
-    if (e > 4294967295 || e < 1) return BigInteger.ONE;
-    var r = nbi();
+  function bnpExp(exponent, z) {
+    if (exponent > 4294967295 || exponent < 1) return BigInteger.ONE;
+    var accumulator = nbi();
     var r2 = nbi();
     var g = z.convert(this);
-    var i = nbits(e) - 1;
-    g.copyTo(r);
+    var i = nbits(exponent) - 1;
+    g.copyTo(accumulator);
     while (--i >= 0) {
-      z.sqrTo(r, r2);
-      if ((e & (1 << i)) > 0) z.mulTo(r2, g, r);
+      z.sqrTo(accumulator, r2);
+      if ((exponent & (1 << i)) > 0) z.mulTo(r2, g, accumulator);
       else {
-        var t = r;
-        r = r2;
+        var t = accumulator;
+        accumulator = r2;
         r2 = t;
       }
     }
-    return z.revert(r);
+    return z.revert(accumulator);
   }
-  function bnModPowInt(e, m) {
+  function bnModPowInt(exponent, m) {
     var z;
-    if (e < 256 || m.isEven()) z = new Classic(m);
+    if (exponent < 256 || m.isEven()) z = new Classic(m);
     else z = new Montgomery(m);
-    return this.exp(e, z);
+    return this.exp(exponent, z);
   }
   BigInteger.prototype.copyTo = bnpCopyTo;
   BigInteger.prototype.fromInt = bnpFromInt;
@@ -676,22 +679,22 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
   function bnMax(a) {
     return this.compareTo(a) > 0 ? this : a;
   }
-  function bnpBitwiseTo(a, op, r) {
+  function bnpBitwiseTo(a, op, result) {
     var i;
     var f;
     var m = Math.min(a.t, this.t);
-    for (i = 0; i < m; ++i) r.data[i] = op(this.data[i], a.data[i]);
+    for (i = 0; i < m; ++i) result.data[i] = op(this.data[i], a.data[i]);
     if (a.t < this.t) {
       f = a.s & this.DM;
-      for (i = m; i < this.t; ++i) r.data[i] = op(this.data[i], f);
-      r.t = this.t;
+      for (i = m; i < this.t; ++i) result.data[i] = op(this.data[i], f);
+      result.t = this.t;
     } else {
       f = this.s & this.DM;
-      for (i = m; i < a.t; ++i) r.data[i] = op(f, a.data[i]);
-      r.t = a.t;
+      for (i = m; i < a.t; ++i) result.data[i] = op(f, a.data[i]);
+      result.t = a.t;
     }
-    r.s = op(this.s, a.s);
-    r.clamp();
+    result.s = op(this.s, a.s);
+    result.clamp();
   }
   function op_and(x, y) {
     return x & y;
@@ -791,9 +794,9 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
     return (this.data[j] & (1 << (n_2 % this.DB))) != 0;
   }
   function bnpChangeBit(n_2, op) {
-    var r = BigInteger.ONE.shiftLeft(n_2);
-    this.bitwiseTo(r, op, r);
-    return r;
+    var shiftedOne = BigInteger.ONE.shiftLeft(n_2);
+    this.bitwiseTo(shiftedOne, op, shiftedOne);
+    return shiftedOne;
   }
   function bnSetBit(n) {
     return this.changeBit(n, op_or);
@@ -868,9 +871,9 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
   }
   function bnDivideAndRemainder(a) {
     var q = nbi();
-    var r = nbi();
-    this.divRemTo(a, q, r);
-    return [q, r];
+    var remainder = nbi();
+    this.divRemTo(a, q, remainder);
+    return [q, remainder];
   }
   function bnpDMultiply(n) {
     this.data[this.t] = this.am(0, n - 1, this, 0, 0, this.t);
@@ -891,8 +894,8 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
   function nNop(x) {
     return x;
   }
-  function nMulTo(x, y, r) {
-    x.multiplyTo(y, r);
+  function nMulTo(x, y, product) {
+    x.multiplyTo(y, product);
   }
   function nSqrTo(x, r) {
     x.squareTo(r);
@@ -901,28 +904,36 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
   NullExp.prototype.revert = nNop;
   NullExp.prototype.mulTo = nMulTo;
   NullExp.prototype.sqrTo = nSqrTo;
-  function bnPow(e) {
-    return this.exp(e, new NullExp());
+  function bnPow(exponent) {
+    return this.exp(exponent, new NullExp());
   }
-  function bnpMultiplyLowerTo(a, n, r) {
-    var i = Math.min(this.t + a.t, n);
-    r.s = 0;
-    r.t = i;
-    while (i > 0) r.data[--i] = 0;
+  function bnpMultiplyLowerTo(a, wordCount, product) {
+    var i = Math.min(this.t + a.t, wordCount);
+    product.s = 0;
+    product.t = i;
+    while (i > 0) product.data[--i] = 0;
     var j;
-    for (j = r.t - this.t; i < j; ++i) r.data[i + this.t] = this.am(0, a.data[i], r, i, 0, this.t);
-    for (j = Math.min(a.t, n); i < j; ++i) this.am(0, a.data[i], r, i, 0, n - i);
-    r.clamp();
+    for (j = product.t - this.t; i < j; ++i)
+      product.data[i + this.t] = this.am(0, a.data[i], product, i, 0, this.t);
+    for (j = Math.min(a.t, wordCount); i < j; ++i) this.am(0, a.data[i], product, i, 0, wordCount - i);
+    product.clamp();
   }
-  function bnpMultiplyUpperTo(a, n, r) {
-    --n;
-    var i = (r.t = this.t + a.t - n);
-    r.s = 0;
-    while (--i >= 0) r.data[i] = 0;
-    for (i = Math.max(n - this.t, 0); i < a.t; ++i)
-      r.data[this.t + i - n] = this.am(n - i, a.data[i], r, 0, 0, this.t + i - n);
-    r.clamp();
-    r.drShiftTo(1, r);
+  function bnpMultiplyUpperTo(a, wordCount, product) {
+    --wordCount;
+    var i = (product.t = this.t + a.t - wordCount);
+    product.s = 0;
+    while (--i >= 0) product.data[i] = 0;
+    for (i = Math.max(wordCount - this.t, 0); i < a.t; ++i)
+      product.data[this.t + i - wordCount] = this.am(
+        wordCount - i,
+        a.data[i],
+        product,
+        0,
+        0,
+        this.t + i - wordCount,
+      );
+    product.clamp();
+    product.drShiftTo(1, product);
   }
   function Barrett(m) {
     this.r2 = nbi();
@@ -960,17 +971,17 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
     x.squareTo(r);
     this.reduce(r);
   }
-  function barrettMulTo(x, y, r) {
-    x.multiplyTo(y, r);
-    this.reduce(r);
+  function barrettMulTo(x, y, product) {
+    x.multiplyTo(y, product);
+    this.reduce(product);
   }
   Barrett.prototype.convert = barrettConvert;
   Barrett.prototype.revert = barrettRevert;
   Barrett.prototype.reduce = barrettReduce;
   Barrett.prototype.mulTo = barrettMulTo;
   Barrett.prototype.sqrTo = barrettSqrTo;
-  function bnModPow(e, m) {
-    var i = e.bitLength();
+  function bnModPow(exponent, m) {
+    var i = exponent.bitLength();
     var k;
     var r = nbv(1);
     var z;
@@ -997,17 +1008,17 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
         n += 2;
       }
     }
-    var j = e.t - 1;
+    var j = exponent.t - 1;
     var w;
     var is1 = true;
     var r2 = nbi();
     var t;
-    i = nbits(e.data[j]) - 1;
+    i = nbits(exponent.data[j]) - 1;
     while (j >= 0) {
-      if (i >= k1) w = (e.data[j] >> (i - k1)) & km;
+      if (i >= k1) w = (exponent.data[j] >> (i - k1)) & km;
       else {
-        w = (e.data[j] & ((1 << (i + 1)) - 1)) << (k1 - i);
-        if (j > 0) w |= e.data[j - 1] >> (this.DB + i - k1);
+        w = (exponent.data[j] & ((1 << (i + 1)) - 1)) << (k1 - i);
+        if (j > 0) w |= exponent.data[j - 1] >> (this.DB + i - k1);
       }
       n = k;
       while ((w & 1) == 0) {
@@ -1035,7 +1046,7 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
         }
         z.mulTo(r2, g[w], r);
       }
-      while (j >= 0 && (e.data[j] & (1 << i)) == 0) {
+      while (j >= 0 && (exponent.data[j] & (1 << i)) == 0) {
         z.sqrTo(r, r2);
         t = r;
         r = r2;
@@ -1081,11 +1092,11 @@ var require_jsbn = x(function (cjsExports, cjsModule) {
   function bnpModInt(n_2) {
     if (n_2 <= 0) return 0;
     var d = this.DV % n_2;
-    var r = this.s < 0 ? n_2 - 1 : 0;
+    var accumulator = this.s < 0 ? n_2 - 1 : 0;
     if (this.t > 0)
-      if (d == 0) r = this.data[0] % n_2;
-      else for (var i = this.t - 1; i >= 0; --i) r = (d * r + this.data[i]) % n_2;
-    return r;
+      if (d == 0) accumulator = this.data[0] % n_2;
+      else for (var i = this.t - 1; i >= 0; --i) accumulator = (d * accumulator + this.data[i]) % n_2;
+    return accumulator;
   }
   function bnModInverse(m) {
     if (this.signum() == 0) return BigInteger.ZERO;

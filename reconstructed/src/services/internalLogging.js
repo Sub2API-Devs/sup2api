@@ -36,27 +36,27 @@ class PermissionContextLogState {
 var MAX_MOUNTINFO_BYTES = 4194304;
 //@ chunk-gjx0rh1b.js:13323-13538 fingerprint = getContainerId (0.524)
 async function getContainerId() {
-  let [, e, n] = /^(\d+)\.(\d+)/.exec(release()) ?? [];
-  if (!(Number(e) > 5 || (Number(e) === 5 && Number(n) >= 8))) return null;
-  let r = await readJSONLFile("/proc/self/mountinfo", MAX_MOUNTINFO_BYTES).catch(() => null);
-  return r === null || r.length >= MAX_MOUNTINFO_BYTES ? null : r;
+  let [, major, minor] = /^(\d+)\.(\d+)/.exec(release()) ?? [];
+  if (!(Number(major) > 5 || (Number(major) === 5 && Number(minor) >= 8))) return null;
+  let text = await readJSONLFile("/proc/self/mountinfo", MAX_MOUNTINFO_BYTES).catch(() => null);
+  return text === null || text.length >= MAX_MOUNTINFO_BYTES ? null : text;
 }
 //@ chunk-gjx0rh1b.js:13538-13793 sole-consumer = readJSONLFile (0.763)
-async function readJSONLFile(e, n) {
-  let r = await open(e, constants.O_RDONLY | READ_LIMITS);
+async function readJSONLFile(filePath, maxBytes) {
+  let handle = await open(filePath, constants.O_RDONLY | READ_LIMITS);
   try {
-    let o = [];
-    let s = 0;
-    while (s < n) {
+    let chunks = [];
+    let totalBytes = 0;
+    while (totalBytes < maxBytes) {
       let buf = Buffer.allocUnsafe(65536);
-      let { bytesRead } = await r.read(buf, 0, buf.length, null);
+      let { bytesRead } = await handle.read(buf, 0, buf.length, null);
       if (bytesRead === 0) break;
-      o.push(buf.subarray(0, bytesRead));
-      s += bytesRead;
+      chunks.push(buf.subarray(0, bytesRead));
+      totalBytes += bytesRead;
     }
-    return Buffer.concat(o);
+    return Buffer.concat(chunks);
   } finally {
-    await r.close();
+    await handle.close();
   }
 }
 export { PermissionContextLogState, getContainerId };

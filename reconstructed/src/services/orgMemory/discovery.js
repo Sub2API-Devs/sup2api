@@ -10,7 +10,16 @@
  */
 import { join } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, M, array, unknown, string, _enum, E, record } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  booleanSchema,
+  array,
+  unknown,
+  stringSchema,
+  _enum,
+  numberSchema,
+  record,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   isGroupingId,
   isPublicProjects,
@@ -80,79 +89,91 @@ import { invalidateMemorySections } from "../../utils/focusMode.js";
 import { getCurrentProjectConfig, checkHasTrustDialogAccepted } from "../../utils/config.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:46971-47411 placement
 /**
  * 单个发现到的记忆库的 schema。
  */
-var ORG_MEMORY_MOUNTS_PATH = "/v1/code/local/memory/mounts";
-var ORG_MEMORY_DISCOVERY_JSON = "org-memory-discovery.json";
-var DISCOVERY_TTL_MS = 86400000;
-var discoveryResponseSchema = DoctorLazy(() =>
-  u({
-    enabled: M(),
-    stores: array(unknown()).default([]),
-    write_opt_in_available: unknown().optional(),
-    candidates: unknown().optional(),
-  }),
-);
-var discoveredStoreSchema = DoctorLazy(() =>
-  u({
-    kind: string().min(1).max(64),
-    id: string()
-      .min(1)
-      .max(128)
-      .regex(/^[A-Za-z0-9_-]+$/),
-    name: string()
-      .min(1)
-      .max(256)
-      .regex(/^[^\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]+$/),
-    visibility: _enum(["public", "private"]),
-    default: M().optional(),
-  }),
-);
+var ORG_MEMORY_MOUNTS_PATH; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ORG_MEMORY_DISCOVERY_JSON;
+var DISCOVERY_TTL_MS;
+var discoveryResponseSchema;
+var discoveredStoreSchema;
+deferInit("chunk-82kqcve8.js:46971", () => {
+  ORG_MEMORY_MOUNTS_PATH = "/v1/code/local/memory/mounts";
+  ORG_MEMORY_DISCOVERY_JSON = "org-memory-discovery.json";
+  DISCOVERY_TTL_MS = 86400000;
+  discoveryResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      enabled: booleanSchema(),
+      stores: array(unknown()).default([]),
+      write_opt_in_available: unknown().optional(),
+      candidates: unknown().optional(),
+    }),
+  );
+  discoveredStoreSchema = DoctorLazy(() =>
+    objectSchema({
+      kind: stringSchema().min(1).max(64),
+      id: stringSchema()
+        .min(1)
+        .max(128)
+        .regex(/^[A-Za-z0-9_-]+$/),
+      name: stringSchema()
+        .min(1)
+        .max(256)
+        .regex(/^[^\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]+$/),
+      visibility: _enum(["public", "private"]),
+      default: booleanSchema().optional(),
+    }),
+  );
+});
 //@ chunk-82kqcve8.js:47411-47832 placement
 /**
  * 解析发现接口返回的候选记忆库：只保留合法的 workspace_silo（cagt_ 前缀）与 project，按 ID 去重。
  */
 function parseStoreCandidates(candidates) {
   if (!Array.isArray(candidates)) return [];
-  let n = [];
-  let r = new Set();
-  for (let s of candidates) {
-    let h = discoveredStoreSchema().safeParse(s);
-    if (!h.success) continue;
-    let { kind, id, name: S, visibility } = h.data;
+  let stores = [];
+  let seenIds = new Set();
+  for (let candidate of candidates) {
+    let parsed = discoveredStoreSchema().safeParse(candidate);
+    if (!parsed.success) continue;
+    let { kind, id, name, visibility } = parsed.data;
     if (kind === "workspace_silo" && !id.startsWith("cagt_")) continue;
     if (kind === "project" && !isGroupingId(id)) continue;
     if (kind !== "workspace_silo" && kind !== "project") continue;
-    if (r.has(id)) continue;
-    r.add(id);
-    n.push({
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+    stores.push({
       kind,
       id,
-      name: S,
+      name,
       visibility,
-      isDefault: h.data.default === true,
+      isDefault: parsed.data.default === true,
     });
   }
-  return n;
+  return stores;
 }
 //@ chunk-82kqcve8.js:47832-48002 placement
-var discoveryCacheEntrySchema = DoctorLazy(() =>
-  u({
-    fetchedAt: E(),
-    account: string(),
-    stores: array(unknown()).nullable(),
-    candidates: unknown().optional(),
-    writeOptInAvailable: unknown().optional(),
-  }),
-);
-var discoveryCacheFileSchema = DoctorLazy(() =>
-  u({
-    entries: record(string(), unknown()),
-  }),
-);
+var discoveryCacheEntrySchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var discoveryCacheFileSchema;
+deferInit("chunk-82kqcve8.js:47832", () => {
+  discoveryCacheEntrySchema = DoctorLazy(() =>
+    objectSchema({
+      fetchedAt: numberSchema(),
+      account: stringSchema(),
+      stores: array(unknown()).nullable(),
+      candidates: unknown().optional(),
+      writeOptInAvailable: unknown().optional(),
+    }),
+  );
+  discoveryCacheFileSchema = DoctorLazy(() =>
+    objectSchema({
+      entries: record(stringSchema(), unknown()),
+    }),
+  );
+});
 //@ chunk-82kqcve8.js:48002-48043 placement = getCacheDir (1)
 /**
  * ~/.claude/cache/org-memory-discovery.json。旧版名 getCacheDir_2 为错配（记忆发现模块）。
@@ -161,26 +182,29 @@ function getOrgMemoryDiscoveryCachePath() {
   return join(getClaudeConfigDir(), "cache", ORG_MEMORY_DISCOVERY_JSON);
 }
 //@ chunk-82kqcve8.js:48043-48086 placement
-var la = STORAGE_SPACES.cache("org-memory-discovery", ORG_MEMORY_DISCOVERY_JSON);
+var DISCOVERY_CACHE_FILE; // deferred: uses ORG_MEMORY_MOUNTS_PATH of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-82kqcve8.js:48043", () => {
+  DISCOVERY_CACHE_FILE = STORAGE_SPACES.cache("org-memory-discovery", ORG_MEMORY_DISCOVERY_JSON);
+});
 //@ chunk-82kqcve8.js:48086-48518 placement
-async function readDiscoveryCache(e) {
-  if (isDisklessWithoutState(e)) return {};
+async function readDiscoveryCache(storageV5) {
+  if (isDisklessWithoutState(storageV5)) return {};
   try {
-    let n;
-    if (!isStorageV5Enabled() || e === undefined)
-      n = await getFileReader().read(getOrgMemoryDiscoveryCachePath());
+    let raw;
+    if (!isStorageV5Enabled() || storageV5 === undefined)
+      raw = await getFileReader().read(getOrgMemoryDiscoveryCachePath());
     else {
-      let s = await e.read([la]);
-      if (!s.ok) {
-        logForDebugging(`org-memory-discovery: cache read failed: ${formatStorageError(s.error)}`);
+      let readResult = await storageV5.read([DISCOVERY_CACHE_FILE]);
+      if (!readResult.ok) {
+        logForDebugging(`org-memory-discovery: cache read failed: ${formatStorageError(readResult.error)}`);
         return {};
       }
-      let h = s.value.items[0];
-      if (!h.found) return {};
-      n = Buffer.from(h.value).toString("utf8");
+      let item = readResult.value.items[0];
+      if (!item.found) return {};
+      raw = Buffer.from(item.value).toString("utf8");
     }
-    let r = discoveryCacheFileSchema().safeParse(jsonParse(n));
-    if (r.success) return r.data.entries;
+    let parsed = discoveryCacheFileSchema().safeParse(jsonParse(raw));
+    if (parsed.success) return parsed.data.entries;
   } catch (error) {
     if (!isENOENT(error)) logForDebugging(`org-memory-discovery: cache read failed: ${errorMessage(error)}`);
   }
@@ -188,41 +212,41 @@ async function readDiscoveryCache(e) {
 }
 //@ chunk-82kqcve8.js:48518-48650 placement
 async function readDiscoveryCacheEntries(storageV5) {
-  let n = {};
+  let entries = {};
   for (let [key, value] of Object.entries(await readDiscoveryCache(storageV5))) {
-    let h = discoveryCacheEntrySchema().safeParse(value);
-    if (h.success) n[key] = h.data;
+    let parsed = discoveryCacheEntrySchema().safeParse(value);
+    if (parsed.success) entries[key] = parsed.data;
   }
-  return n;
+  return entries;
 }
 //@ chunk-82kqcve8.js:48650-48711 placement
 /**
  * 判断发现条目是否新鲜（含账号匹配）。
  */
-function isDiscoveryEntryFresh(e) {
-  if (e === undefined) return false;
-  return isFreshTimestamp(e.fetchedAt);
+function isDiscoveryEntryFresh(entry) {
+  if (entry === undefined) return false;
+  return isFreshTimestamp(entry.fetchedAt);
 }
 //@ chunk-82kqcve8.js:48711-48763 placement
 /**
  * 判断时间戳是否在有效期内。
  */
 function isFreshTimestamp(fetchedAt) {
-  let n = Date.now() - fetchedAt;
-  return n >= 0 && n < DISCOVERY_TTL_MS;
+  let ageMs = Date.now() - fetchedAt;
+  return ageMs >= 0 && ageMs < DISCOVERY_TTL_MS;
 }
 //@ chunk-82kqcve8.js:48763-49244 placement
-async function writeDiscoveryCache(e, n, r) {
+async function writeDiscoveryCache(key, value, storageV5) {
   try {
-    let discoveryCache = await readDiscoveryCache(r);
+    let discoveryCache = await readDiscoveryCache(storageV5);
     for (let [key, value] of Object.entries(discoveryCache)) {
       let fetchedAt = value?.fetchedAt;
       if (typeof fetchedAt === "number" && !isFreshTimestamp(fetchedAt)) delete discoveryCache[key];
     }
-    discoveryCache[e] = n;
-    if (isStorageV5Enabled() && r !== undefined) {
-      let y = await r.write(
-        la,
+    discoveryCache[key] = value;
+    if (isStorageV5Enabled() && storageV5 !== undefined) {
+      let writeResult = await storageV5.write(
+        DISCOVERY_CACHE_FILE,
         jsonStringify({
           entries: discoveryCache,
         }),
@@ -230,10 +254,11 @@ async function writeDiscoveryCache(e, n, r) {
           mode: 438 & ~process.umask(),
         },
       );
-      if (!y.ok) logForDebugging(`org-memory-discovery: cache write failed: ${formatStorageError(y.error)}`);
+      if (!writeResult.ok)
+        logForDebugging(`org-memory-discovery: cache write failed: ${formatStorageError(writeResult.error)}`);
       return;
     }
-    if (isDisklessWithoutState(r)) return;
+    if (isDisklessWithoutState(storageV5)) return;
     let fileReader = getFileReader();
     await fileReader.mkdir(join(getClaudeConfigDir(), "cache"));
     await fileReader.atomicWrite(
@@ -249,12 +274,12 @@ async function writeDiscoveryCache(e, n, r) {
 //@ chunk-82kqcve8.js:49244-49454 placement
 function isMemoryApiPath(path) {
   try {
-    let r = new URL(path, "https://sentinel.invalid");
+    let parsedUrl = new URL(path, "https://sentinel.invalid");
     return (
-      r.origin === "https://sentinel.invalid" &&
-      path === r.pathname &&
-      !r.pathname.includes("%") &&
-      r.pathname.startsWith("/v1/code/memory/")
+      parsedUrl.origin === "https://sentinel.invalid" &&
+      path === parsedUrl.pathname &&
+      !parsedUrl.pathname.includes("%") &&
+      parsedUrl.pathname.startsWith("/v1/code/memory/")
     );
   } catch {
     return false;
@@ -270,40 +295,40 @@ function accountKeyForDiscovery() {
 //@ chunk-82kqcve8.js:49491-50121 placement
 async function fetchOrgMemoryDiscovery(credentials) {
   try {
-    let n = await apiClient.get(ORG_MEMORY_MOUNTS_PATH, {
+    let response = await apiClient.get(ORG_MEMORY_MOUNTS_PATH, {
       ...memoryApiTarget(),
       credentials,
       timeout: 5000,
-      validateStatus: (s) => s === 200 || s === 404,
+      validateStatus: (status) => status === 200 || status === 404,
     });
-    if (!n.ok) {
-      logForDebugging(`org-memory-discovery: skipped (${n.reason})`);
+    if (!response.ok) {
+      logForDebugging(`org-memory-discovery: skipped (${response.reason})`);
       return {
         kind: "transient",
       };
     }
-    if (n.status === 404)
+    if (response.status === 404)
       return {
         kind: "off",
       };
-    let r = discoveryResponseSchema().safeParse(n.data);
-    if (!r.success) {
-      logForDebugging(`org-memory-discovery: malformed response: ${r.error.message}`, {
+    let parsed = discoveryResponseSchema().safeParse(response.data);
+    if (!parsed.success) {
+      logForDebugging(`org-memory-discovery: malformed response: ${parsed.error.message}`, {
         level: "warn",
       });
       return {
         kind: "transient",
       };
     }
-    if (!r.data.enabled)
+    if (!parsed.data.enabled)
       return {
         kind: "off",
       };
     return {
       kind: "stores",
-      stores: r.data.stores,
-      candidates: r.data.candidates,
-      writeOptIn: r.data.write_opt_in_available,
+      stores: parsed.data.stores,
+      candidates: parsed.data.candidates,
+      writeOptIn: parsed.data.write_opt_in_available,
     };
   } catch (error) {
     logForDebugging(`org-memory-discovery: fetch failed: ${errorMessage(error)}`);
@@ -313,10 +338,10 @@ async function fetchOrgMemoryDiscovery(credentials) {
   }
 }
 //@ chunk-82kqcve8.js:50121-50732 placement
-function parseDiscoveryStores(stores) {
-  let n;
+function parseDiscoveryStores(raw) {
+  let validatedStores;
   try {
-    n = validateMemoryStores(stores, "org memory discovery");
+    validatedStores = validateMemoryStores(raw, "org memory discovery");
   } catch (error) {
     logForDebugging(`org-memory-discovery: invalid stores payload: ${errorMessage(error)}`, {
       level: "warn",
@@ -325,16 +350,19 @@ function parseDiscoveryStores(stores) {
       kind: "invalid",
     };
   }
-  if (n === null)
+  if (validatedStores === null)
     return {
       kind: "empty",
     };
-  let filtered = n.filter((h) => h.scope === "team");
-  if (filtered.length < n.length)
-    logForDebugging(`org-memory-discovery: dropped ${n.length - filtered.length} non-team store(s)`, {
-      level: "warn",
-    });
-  let filtered_2 = filtered.filter((h) => isMemoryApiPath(h.path));
+  let filtered = validatedStores.filter((store) => store.scope === "team");
+  if (filtered.length < validatedStores.length)
+    logForDebugging(
+      `org-memory-discovery: dropped ${validatedStores.length - filtered.length} non-team store(s)`,
+      {
+        level: "warn",
+      },
+    );
+  let filtered_2 = filtered.filter((store) => isMemoryApiPath(store.path));
   if (filtered_2.length < filtered.length)
     logForDebugging(
       `org-memory-discovery: dropped ${filtered.length - filtered_2.length} non-code-memory store path(s)`,
@@ -348,11 +376,11 @@ function parseDiscoveryStores(stores) {
     };
   return {
     kind: "configs",
-    configs: filtered_2.map((h) =>
-      h.mode === "ro"
-        ? h
+    configs: filtered_2.map((store) =>
+      store.mode === "ro"
+        ? store
         : {
-            ...h,
+            ...store,
             mode: "ro",
           },
     ),
@@ -362,28 +390,29 @@ function parseDiscoveryStores(stores) {
 var MEMORY_MD = "MEMORY.md";
 var PUBLIC_PROJECTS_2 = "public_projects";
 //@ chunk-82kqcve8.js:50772-50879 placement
-function getSelectionLayer(selection) {
-  if (isPublicProjects(selection)) return "root";
-  if (isSiloId(selection)) return "silo";
-  return isGroupingId(selection) && findGroupingStore(selection) === undefined ? "root" : "grouping";
+function getSelectionLayer(groupingName) {
+  if (isPublicProjects(groupingName)) return "root";
+  if (isSiloId(groupingName)) return "silo";
+  return isGroupingId(groupingName) && findGroupingStore(groupingName) === undefined ? "root" : "grouping";
 }
 //@ chunk-82kqcve8.js:50879-51146 placement
-function renameSquattingMount(e, n, r) {
-  let s = (h) => h.mount === n && stripTrailingSlashes(h.path) !== stripTrailingSlashes(r);
-  if (!e.some(s)) return e;
+function renameSquattingMount(configs, mountName, path) {
+  let isSquatting = (config) =>
+    config.mount === mountName && stripTrailingSlashes(config.path) !== stripTrailingSlashes(path);
+  if (!configs.some(isSquatting)) return configs;
   logForDebugging(
-    `org-memory-discovery: discovered config squatting the derived mount name ${n} \u2014 renamed aside`,
+    `org-memory-discovery: discovered config squatting the derived mount name ${mountName} \u2014 renamed aside`,
     {
       level: "warn",
     },
   );
-  return e.map((h) =>
-    s(h)
+  return configs.map((config) =>
+    isSquatting(config)
       ? {
-          ...h,
-          mount: `${h.mount}_discovered`,
+          ...config,
+          mount: `${config.mount}_discovered`,
         }
-      : h,
+      : config,
   );
 }
 //@ chunk-82kqcve8.js:51146-51163 placement
@@ -400,9 +429,9 @@ function waitForIdentity() {
   return sleep(IDENTITY_WAIT_MS);
 }
 //@ chunk-82kqcve8.js:51190-51393 placement
-async function writeDiscoveryCacheEntry(cwd, account, orgMemoryDiscovery, storageV5) {
+async function writeDiscoveryCacheEntry(key, account, orgMemoryDiscovery, storageV5) {
   await writeDiscoveryCache(
-    cwd,
+    key,
     {
       fetchedAt: Date.now(),
       account,
@@ -418,11 +447,17 @@ async function writeDiscoveryCacheEntry(cwd, account, orgMemoryDiscovery, storag
   );
 }
 //@ chunk-82kqcve8.js:51393-51592 placement
-function getCandidateTelemetry(e) {
+function getCandidateTelemetry(candidates) {
   return {
-    candidates: e.length,
-    candidate_count_public: count(e, (n) => n.kind === "project" && n.visibility === "public"),
-    candidate_count_private: count(e, (n) => n.kind === "project" && n.visibility === "private"),
+    candidates: candidates.length,
+    candidate_count_public: count(
+      candidates,
+      (candidate) => candidate.kind === "project" && candidate.visibility === "public",
+    ),
+    candidate_count_private: count(
+      candidates,
+      (candidate) => candidate.kind === "project" && candidate.visibility === "private",
+    ),
   };
 }
 //@ chunk-82kqcve8.js:51592-51616 placement
@@ -458,8 +493,8 @@ class OrgMemoryDiscovery {
   constructor(identityWaitDelay = waitForIdentity) {
     this.identityWaitDelay = identityWaitDelay;
   }
-  setIdentityWaitDelay(e) {
-    this.identityWaitDelay = e ?? waitForIdentity;
+  setIdentityWaitDelay(delay) {
+    this.identityWaitDelay = delay ?? waitForIdentity;
   }
   clearCaches() {
     this.lastPickerData = null;
@@ -487,16 +522,16 @@ class OrgMemoryDiscovery {
     this.credentials = undefined;
     this.clearCaches();
   }
-  adoptHandIns(e, n) {
-    if (e !== undefined) this.storageV5 = e;
-    if (n === undefined) return;
-    if (this.credentials !== undefined && this.credentials !== n) {
+  adoptHandIns(storageV5, credentials) {
+    if (storageV5 !== undefined) this.storageV5 = storageV5;
+    if (credentials === undefined) return;
+    if (this.credentials !== undefined && this.credentials !== credentials) {
       logForDebugging(
         "org-memory-discovery: a credentials store was already handed in; the later one is ignored",
       );
       return;
     }
-    this.credentials = n;
+    this.credentials = credentials;
   }
   emitGrantMissingOnce() {
     if (!this.grantMissingEmitted) {
@@ -504,15 +539,15 @@ class OrgMemoryDiscovery {
       logFeatureSad("org_memory_picker", "grant_missing");
     }
   }
-  pickedCandidateIsPrivate(e) {
+  pickedCandidateIsPrivate(candidateId) {
     return (
       this.lastPickerData?.candidates.some(
-        (candidate) => candidate.id === e && candidate.visibility === "private",
+        (candidate) => candidate.id === candidateId && candidate.visibility === "private",
       ) === true
     );
   }
-  rootPromptIndexFocus(e) {
-    let promptIndex = e.prompt_index;
+  rootPromptIndexFocus(rootStore) {
+    let promptIndex = rootStore.prompt_index;
     if (promptIndex !== undefined && isValidRelativeSegments(promptIndex))
       return {
         index: promptIndex,
@@ -527,12 +562,12 @@ class OrgMemoryDiscovery {
       source: "fallback",
     };
   }
-  withSelectedGroupingMounts(e, n, r) {
-    let s = hasMirror() ? e.filter((P) => grantedModeFor(P.path) !== undefined) : e;
-    let groupingStore = findGroupingStore(n);
+  withSelectedGroupingMounts(stores, groupingId, writeGranted) {
+    let selected = hasMirror() ? stores.filter((store) => grantedModeFor(store.path) !== undefined) : stores;
+    let groupingStore = findGroupingStore(groupingId);
     if (groupingStore === undefined) {
       if (!wasLastMintSelectionDegraded()) this.emitGrantMissingOnce();
-      return s;
+      return selected;
     }
     if (!isMemoryApiPath(groupingStore.path)) {
       logForDebugging(
@@ -542,19 +577,20 @@ class OrgMemoryDiscovery {
         },
       );
       this.emitGrantMissingOnce();
-      return s;
+      return selected;
     }
-    let y = [...s];
-    let w = (P) => y.some((L) => stripTrailingSlashes(L.path) === stripTrailingSlashes(P));
-    let S = (P, path) => {
-      if (w(path)) return true;
-      y = renameSquattingMount(y, P, path);
+    let mounts = [...selected];
+    let alreadyMounted = (path) =>
+      mounts.some((mount) => stripTrailingSlashes(mount.path) === stripTrailingSlashes(path));
+    let claimMount = (mountName, path) => {
+      if (alreadyMounted(path)) return true;
+      mounts = renameSquattingMount(mounts, mountName, path);
       return false;
     };
-    for (let P of grantedStoresCopy().filter(isSiloStore)) {
-      let L = stripTrailingSlashes(P.path);
-      let sliced = L.slice(L.lastIndexOf("/") + 1);
-      if (!sliced.startsWith("cagt_") || !isMemoryApiPath(P.path)) {
+    for (let store of grantedStoresCopy().filter(isSiloStore)) {
+      let normalizedPath = stripTrailingSlashes(store.path);
+      let sliced = normalizedPath.slice(normalizedPath.lastIndexOf("/") + 1);
+      if (!sliced.startsWith("cagt_") || !isMemoryApiPath(store.path)) {
         logForDebugging(
           "org-memory-discovery: granted silo entry failed the tag or partition pin \u2014 not mounting",
           {
@@ -563,21 +599,21 @@ class OrgMemoryDiscovery {
         );
         continue;
       }
-      let G = `silo_${sliced.replace(/[^A-Za-z0-9_-]/g, "-")}`;
-      if (S(G, P.path)) continue;
-      y.push({
-        path: P.path,
-        mount: G,
+      let siloMount = `silo_${sliced.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+      if (claimMount(siloMount, store.path)) continue;
+      mounts.push({
+        path: store.path,
+        mount: siloMount,
         scope: "team",
-        mode: r && P.mode === "rw" ? "rw" : "ro",
+        mode: writeGranted && store.mode === "rw" ? "rw" : "ro",
         promptIndex: "MEMORY.md",
       });
     }
-    let R = `project_${n.replace(/[^A-Za-z0-9_-]/g, "-")}`;
-    if (!S(R, groupingStore.path))
-      y.push({
+    let groupingMount = `project_${groupingId.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+    if (!claimMount(groupingMount, groupingStore.path))
+      mounts.push({
         path: groupingStore.path,
-        mount: R,
+        mount: groupingMount,
         scope: "team",
         mode: "ro",
         promptIndex: "MEMORY.md",
@@ -586,10 +622,10 @@ class OrgMemoryDiscovery {
         }),
       });
     else if (groupingStore.visibility === "private")
-      y.forEach((P, L) => {
-        if (stripTrailingSlashes(P.path) === stripTrailingSlashes(groupingStore.path))
-          y[L] = {
-            ...P,
+      mounts.forEach((mount, mountIndex) => {
+        if (stripTrailingSlashes(mount.path) === stripTrailingSlashes(groupingStore.path))
+          mounts[mountIndex] = {
+            ...mount,
             owned: true,
           };
       });
@@ -597,23 +633,23 @@ class OrgMemoryDiscovery {
     if (
       groupingRootStore !== undefined &&
       isMemoryApiPath(groupingRootStore.path) &&
-      !S(PUBLIC_PROJECTS_2, groupingRootStore.path)
+      !claimMount(PUBLIC_PROJECTS_2, groupingRootStore.path)
     )
-      y.push({
+      mounts.push({
         path: groupingRootStore.path,
         mount: PUBLIC_PROJECTS_2,
         scope: "team",
         mode: "ro",
         promptIndex: MEMORY_MD,
       });
-    return y;
+    return mounts;
   }
-  withSelectedGroupingRootMount(e, n, r) {
-    let s = hasMirror() ? e.filter((j) => grantedModeFor(j.path) !== undefined) : e;
+  withSelectedGroupingRootMount(stores, groupingId, writeGranted) {
+    let selected = hasMirror() ? stores.filter((store) => grantedModeFor(store.path) !== undefined) : stores;
     let groupingRootStore = findGroupingRootStore();
     if (groupingRootStore === undefined) {
       if (!wasLastMintSelectionDegraded()) this.emitGrantMissingOnce();
-      return s;
+      return selected;
     }
     if (!isMemoryApiPath(groupingRootStore.path)) {
       logForDebugging(
@@ -623,162 +659,170 @@ class OrgMemoryDiscovery {
         },
       );
       this.emitGrantMissingOnce();
-      return s;
+      return selected;
     }
-    let y = isPublicProjects(n) ? undefined : this.rootPromptIndexFocus(groupingRootStore);
-    let w = isPublicProjects(n);
-    let S = r && !w && isRootLiftable() ? "rw" : "ro";
-    if (r) {
-      let j = rootLiftReason();
+    let promptIndex = isPublicProjects(groupingId) ? undefined : this.rootPromptIndexFocus(groupingRootStore);
+    let isPublic = isPublicProjects(groupingId);
+    let mode = writeGranted && !isPublic && isRootLiftable() ? "rw" : "ro";
+    if (writeGranted) {
+      let liftReason = rootLiftReason();
       logEvent("tengu_org_memory_root_write_outcome", {
         outcome: fromEnum(
-          S === "rw"
+          mode === "rw"
             ? "rw_granted"
-            : w
+            : isPublic
               ? "legacy_selection"
-              : j === "private_candidate"
+              : liftReason === "private_candidate"
                 ? "private_candidate_veto"
-                : j === "conflicted_mirror"
+                : liftReason === "conflicted_mirror"
                   ? "conflicted_mirror"
-                  : j === "private_grouping"
+                  : liftReason === "private_grouping"
                     ? "private_grouping"
-                    : j === "mirror_ro"
+                    : liftReason === "mirror_ro"
                       ? "mirror_ro"
                       : "verdict_failed",
         ),
       });
     }
-    let any = s.some((j) => stripTrailingSlashes(j.path) === stripTrailingSlashes(groupingRootStore.path));
-    let O = any ? s : renameSquattingMount(s, PUBLIC_PROJECTS_2, groupingRootStore.path);
-    let P = any
-      ? y === undefined
-        ? O
-        : O.map((j) =>
-            stripTrailingSlashes(j.path) === stripTrailingSlashes(groupingRootStore.path)
+    let any = selected.some(
+      (mount) => stripTrailingSlashes(mount.path) === stripTrailingSlashes(groupingRootStore.path),
+    );
+    let mounted = any ? selected : renameSquattingMount(selected, PUBLIC_PROJECTS_2, groupingRootStore.path);
+    let result = any
+      ? promptIndex === undefined
+        ? mounted
+        : mounted.map((mount) =>
+            stripTrailingSlashes(mount.path) === stripTrailingSlashes(groupingRootStore.path)
               ? {
-                  ...j,
-                  promptIndex: y.index,
+                  ...mount,
+                  promptIndex: promptIndex.index,
                 }
-              : j,
+              : mount,
           )
       : [
-          ...O,
+          ...mounted,
           {
             path: groupingRootStore.path,
             mount: PUBLIC_PROJECTS_2,
             scope: "team",
-            mode: S,
-            promptIndex: y?.index ?? MEMORY_MD,
+            mode,
+            promptIndex: promptIndex?.index ?? MEMORY_MD,
           },
         ];
-    let found = P.find((j) => stripTrailingSlashes(j.path) === stripTrailingSlashes(groupingRootStore.path));
+    let found = result.find(
+      (mount) => stripTrailingSlashes(mount.path) === stripTrailingSlashes(groupingRootStore.path),
+    );
     logEvent("tengu_org_memory_root_mount_derived", {
       mount_name: found?.mount === PUBLIC_PROJECTS_2 ? lit(PUBLIC_PROJECTS_2) : lit("discovered"),
       mode: fromEnum(found?.mode ?? "ro"),
-      prompt_index_source: fromEnum(y?.source ?? "none"),
+      prompt_index_source: fromEnum(promptIndex?.source ?? "none"),
     });
-    return P;
+    return result;
   }
   async awaitSelectionIdentity() {
-    let e = selectionAccountKey();
-    if (e !== null) return e;
+    let accountKey = selectionAccountKey();
+    if (accountKey !== null) return accountKey;
     if (this.identityWaitSpentGen === this.discoveryGeneration) return null;
     this.identityWaitSpentGen = this.discoveryGeneration;
-    for (let j = 0; e === null && j < MAX_IDENTITY_WAIT_ROUNDS; j++) {
+    for (let j = 0; accountKey === null && j < MAX_IDENTITY_WAIT_ROUNDS; j++) {
       await this.identityWaitDelay();
-      e = selectionAccountKey();
+      accountKey = selectionAccountKey();
     }
-    return e;
+    return accountKey;
   }
-  async applyGrantAdjustments(e, n, r) {
+  async applyGrantAdjustments(generation, accountKey, stores) {
     let orgMemoryDecision = getOrgMemoryDecision();
     if (orgMemoryDecision.state !== "undecided")
       return orgMemoryDecision.state === "on" ? [...orgMemoryDecision.stores] : null;
     if (!this.decidingRun) return null;
-    let h = await this.awaitSelectionIdentity();
-    let y = () => {
-      if (this.discoveryGeneration !== e) return true;
-      let j = n ?? h;
-      if (j === null) return false;
-      let G = selectionAccountKey();
-      return G !== null && G !== j;
+    let identity = await this.awaitSelectionIdentity();
+    let isSuperseded = () => {
+      if (this.discoveryGeneration !== generation) return true;
+      let expectedIdentity = accountKey ?? identity;
+      if (expectedIdentity === null) return false;
+      let currentIdentity = selectionAccountKey();
+      return currentIdentity !== null && currentIdentity !== expectedIdentity;
     };
-    if (y()) {
+    if (isSuperseded()) {
       settleOrgMemoryDecisionOff("superseded");
       return null;
     }
-    if (h === null) {
+    if (identity === null) {
       settleOrgMemoryDecisionOff("identity_unresolved");
       logForDebugging(
         "org-memory-discovery: identity unresolved at decision time \u2014 org memory off for this session",
       );
       return null;
     }
-    let w;
+    let mint;
     try {
-      w = await negotiateOrgMemoryCredential(this.credentials, this.storageV5);
+      mint = await negotiateOrgMemoryCredential(this.credentials, this.storageV5);
     } catch (error) {
       logForDebugging(`org-memory-discovery: decision-time negotiation failed: ${errorMessage(error)}`);
-      settleOrgMemoryDecisionOff(this.discoveryGeneration === e ? "negotiation_failed" : "superseded");
+      settleOrgMemoryDecisionOff(
+        this.discoveryGeneration === generation ? "negotiation_failed" : "superseded",
+      );
       return null;
     }
-    let request = w.request;
-    let R = request.selection !== null && isGroupingId(request.selection) && isRootLiftable();
-    let O = request.writeAccess
-      ? r.map((j) => {
-          if (grantedModeFor(j.path) !== "rw") return j;
-          if (isGrantedSiloStore(j.path))
+    let request = mint.request;
+    let selectionIsGrouping =
+      request.selection !== null && isGroupingId(request.selection) && isRootLiftable();
+    let adjusted = request.writeAccess
+      ? stores.map((store) => {
+          if (grantedModeFor(store.path) !== "rw") return store;
+          if (isGrantedSiloStore(store.path))
             return {
-              ...j,
+              ...store,
               mode: "rw",
             };
-          if (R && isRootStorePath(j.path))
+          if (selectionIsGrouping && isRootStorePath(store.path))
             return {
-              ...j,
+              ...store,
               mode: "rw",
             };
-          return j;
+          return store;
         })
-      : r;
+      : stores;
     if (request.selection !== null) {
       let selectionLayer = getSelectionLayer(request.selection);
-      O =
+      adjusted =
         selectionLayer === "root"
-          ? this.withSelectedGroupingRootMount(O, request.selection, request.writeAccess)
+          ? this.withSelectedGroupingRootMount(adjusted, request.selection, request.writeAccess)
           : selectionLayer === "silo"
-            ? this.withSelectedSiloMount(O, request.selection, request.writeAccess)
-            : this.withSelectedGroupingMounts(O, request.selection, request.writeAccess);
-    } else if (hasMirror()) O = O.filter((j) => grantedModeFor(j.path) !== undefined);
-    if (y()) {
+            ? this.withSelectedSiloMount(adjusted, request.selection, request.writeAccess)
+            : this.withSelectedGroupingMounts(adjusted, request.selection, request.writeAccess);
+    } else if (hasMirror()) adjusted = adjusted.filter((store) => grantedModeFor(store.path) !== undefined);
+    if (isSuperseded()) {
       settleOrgMemoryDecisionOff("superseded");
       return null;
     }
-    if (O.length === 0) {
+    if (adjusted.length === 0) {
       settleOrgMemoryDecisionOff("no_stores");
       return null;
     }
-    let P = request.selection === null && !w.degraded ? getSingleSiloId() : null;
+    let pinnedDefault = request.selection === null && !mint.degraded ? getSingleSiloId() : null;
     if (
       !settleOrgMemoryDecisionOn({
-        identity: h,
-        stores: O,
+        identity,
+        stores: adjusted,
         request: {
           writeAccess: request.writeAccess,
-          selection: request.selection ?? P,
+          selection: request.selection ?? pinnedDefault,
         },
-        selectionKind: classifySelectionKind(request.selection ?? P),
-        selectionSource: request.selection !== null ? "preference" : P !== null ? "pinned_default" : "none",
+        selectionKind: classifySelectionKind(request.selection ?? pinnedDefault),
+        selectionSource:
+          request.selection !== null ? "preference" : pinnedDefault !== null ? "pinned_default" : "none",
         initialGrant: grantedStoresCopy(),
-        degraded: w.degraded,
+        degraded: mint.degraded,
       })
     )
       return null;
-    return O;
+    return adjusted;
   }
-  withSelectedSiloMount(e, n, r) {
-    if (!hasMirror()) return e;
-    let filtered = e.filter((w) => grantedModeFor(w.path) !== undefined);
-    let grantedSilo = findGrantedSilo(n);
+  withSelectedSiloMount(stores, selection, writeGranted) {
+    if (!hasMirror()) return stores;
+    let filtered = stores.filter((store) => grantedModeFor(store.path) !== undefined);
+    let grantedSilo = findGrantedSilo(selection);
     if (grantedSilo === undefined) {
       this.emitGrantMissingOnce();
       return filtered;
@@ -793,32 +837,32 @@ class OrgMemoryDiscovery {
       this.emitGrantMissingOnce();
       return filtered;
     }
-    if (!isStoreBasename(grantedSilo.path, n)) {
+    if (!isStoreBasename(grantedSilo.path, selection)) {
       if (!this.selectionNotGrantedEmitted && !wasLastMintSelectionDegraded()) {
         this.selectionNotGrantedEmitted = true;
         logFeatureSad("org_memory_picker", "selection_not_granted");
       }
       return filtered;
     }
-    if (filtered.some((w) => stripTrailingSlashes(w.path) === stripTrailingSlashes(grantedSilo.path)))
+    if (filtered.some((mount) => stripTrailingSlashes(mount.path) === stripTrailingSlashes(grantedSilo.path)))
       return filtered;
-    let y = `silo_${n.replace(/[^A-Za-z0-9_-]/g, "-")}`;
-    if (filtered.some((w) => w.mount === y)) return filtered;
+    let mountName = `silo_${selection.replace(/[^A-Za-z0-9_-]/g, "-")}`;
+    if (filtered.some((mount) => mount.mount === mountName)) return filtered;
     return [
       ...filtered,
       {
         path: grantedSilo.path,
-        mount: y,
+        mount: mountName,
         scope: "team",
-        mode: r && grantedSilo.mode === "rw" ? "rw" : "ro",
+        mode: writeGranted && grantedSilo.mode === "rw" ? "rw" : "ro",
         promptIndex: "MEMORY.md",
       },
     ];
   }
   async runDiscovery() {
     let discoveryGeneration = this.discoveryGeneration;
-    installPrivateProbe((O) => this.pickedCandidateIsPrivate(O));
-    let n = (lastPickerData) => {
+    installPrivateProbe((candidateId) => this.pickedCandidateIsPrivate(candidateId));
+    let setPickerData = (lastPickerData) => {
       if (discoveryGeneration === this.discoveryGeneration) this.lastPickerData = lastPickerData;
     };
     switch (getOrgMemoryPolicyState()) {
@@ -831,48 +875,48 @@ class OrgMemoryDiscovery {
       case "open":
         break;
     }
-    let cwd = getCwd();
+    let key = getCwd();
     let account = accountKeyForDiscovery();
-    let h = () =>
+    let identityUnchanged = () =>
       account !== null &&
       discoveryGeneration === this.discoveryGeneration &&
       accountKeyForDiscovery() === account;
-    let y = account === null ? undefined : (await readDiscoveryCacheEntries(this.storageV5))[cwd];
-    if (account !== null && isDiscoveryEntryFresh(y) && y.account === account) {
-      if (y.stores === null) {
+    let cachedEntry = account === null ? undefined : (await readDiscoveryCacheEntries(this.storageV5))[key];
+    if (account !== null && isDiscoveryEntryFresh(cachedEntry) && cachedEntry.account === account) {
+      if (cachedEntry.stores === null) {
         settleOrgMemoryDecisionOff("server_off");
-        n(null);
+        setPickerData(null);
         logFeatureOk("org_memory_discovery", {
           off: true,
           cached: true,
         });
         return null;
       }
-      let discoveryStores = parseDiscoveryStores(y.stores);
+      let discoveryStores = parseDiscoveryStores(cachedEntry.stores);
       if (discoveryStores.kind === "configs") {
-        let storeCandidates = parseStoreCandidates(y.candidates);
-        n({
-          candidates: storeCandidates,
-          writeOptInAvailable: y.writeOptInAvailable === true,
+        let candidates = parseStoreCandidates(cachedEntry.candidates);
+        setPickerData({
+          candidates,
+          writeOptInAvailable: cachedEntry.writeOptInAvailable === true,
         });
         logFeatureOk("org_memory_discovery", {
           stores: discoveryStores.configs.length,
           cached: true,
-          ...getCandidateTelemetry(storeCandidates),
+          ...getCandidateTelemetry(candidates),
         });
         return this.applyGrantAdjustments(discoveryGeneration, account, discoveryStores.configs);
       }
       if (discoveryStores.kind === "empty") {
-        let storeCandidates = parseStoreCandidates(y.candidates);
-        if (storeCandidates.length > 0) {
-          n({
-            candidates: storeCandidates,
-            writeOptInAvailable: y.writeOptInAvailable === true,
+        let candidates = parseStoreCandidates(cachedEntry.candidates);
+        if (candidates.length > 0) {
+          setPickerData({
+            candidates,
+            writeOptInAvailable: cachedEntry.writeOptInAvailable === true,
           });
           logFeatureOk("org_memory_discovery", {
             stores: 0,
             cached: true,
-            ...getCandidateTelemetry(storeCandidates),
+            ...getCandidateTelemetry(candidates),
           });
           if (
             getOrgMemoryDecision().state !== "undecided" ||
@@ -883,7 +927,7 @@ class OrgMemoryDiscovery {
           settleOrgMemoryDecisionOff("no_selection");
           return null;
         }
-        n(null);
+        setPickerData(null);
       }
       logForDebugging("org-memory-discovery: cached stores payload failed validation \u2014 refetching", {
         level: "warn",
@@ -903,14 +947,14 @@ class OrgMemoryDiscovery {
           }
         : null;
     if (orgMemoryDiscovery.kind === "off") {
-      n(null);
+      setPickerData(null);
       if (
         account !== null &&
         discoveryGeneration === this.discoveryGeneration &&
         accountKeyForDiscovery() === account
       )
         await writeDiscoveryCache(
-          cwd,
+          key,
           {
             fetchedAt: Date.now(),
             account,
@@ -928,17 +972,17 @@ class OrgMemoryDiscovery {
     let discoveryStores = parseDiscoveryStores(orgMemoryDiscovery.stores);
     if (discoveryStores.kind === "invalid") {
       settleOrgMemoryDecisionOff("invalid");
-      n(null);
+      setPickerData(null);
       logFeatureBad("org_memory_discovery", "invalid_stores");
       return null;
     }
-    if (discoveryStores.kind === "configs" && account !== null && h())
-      await writeDiscoveryCacheEntry(cwd, account, orgMemoryDiscovery, this.storageV5);
+    if (discoveryStores.kind === "configs" && account !== null && identityUnchanged())
+      await writeDiscoveryCacheEntry(key, account, orgMemoryDiscovery, this.storageV5);
     if (discoveryStores.kind === "empty") {
       if (lastPickerData !== null && lastPickerData.candidates.length > 0) {
-        if (orgMemoryDiscovery.stores.length === 0 && account !== null && h())
-          await writeDiscoveryCacheEntry(cwd, account, orgMemoryDiscovery, this.storageV5);
-        n(lastPickerData);
+        if (orgMemoryDiscovery.stores.length === 0 && account !== null && identityUnchanged())
+          await writeDiscoveryCacheEntry(key, account, orgMemoryDiscovery, this.storageV5);
+        setPickerData(lastPickerData);
         if (orgMemoryDiscovery.stores.length === 0)
           logFeatureOk("org_memory_discovery", {
             stores: 0,
@@ -961,7 +1005,7 @@ class OrgMemoryDiscovery {
         orgMemoryDiscovery.stores.length === 0 &&
         lastPickerData !== null
       ) {
-        n(lastPickerData);
+        setPickerData(lastPickerData);
         logFeatureOk("org_memory_discovery", {
           stores: 0,
           cached: false,
@@ -973,7 +1017,7 @@ class OrgMemoryDiscovery {
       }
       if (orgMemoryDiscovery.candidates === undefined && orgMemoryDiscovery.stores.length === 0) {
         settleOrgMemoryDecisionOff("empty");
-        n(null);
+        setPickerData(null);
         logFeatureOk("org_memory_discovery", {
           stores: 0,
           cached: false,
@@ -981,11 +1025,11 @@ class OrgMemoryDiscovery {
         return null;
       }
       settleOrgMemoryDecisionOff("empty");
-      n(null);
+      setPickerData(null);
       logFeatureSad("org_memory_discovery", "all_stores_dropped");
       return null;
     }
-    n(lastPickerData);
+    setPickerData(lastPickerData);
     logFeatureOk("org_memory_discovery", {
       stores: discoveryStores.configs.length,
       cached: false,
@@ -1009,8 +1053,8 @@ class OrgMemoryDiscovery {
       if (getDecisionStores().length > 0) invalidateMemorySections();
     });
   }
-  async discoverForDecision(e, n) {
-    this.adoptHandIns(e, n);
+  async discoverForDecision(storageV5, credentials) {
+    this.adoptHandIns(storageV5, credentials);
     this.ensureShrinkSubscription();
     this.decidingRun = true;
     this.decisionRunEverStarted = true;
@@ -1023,8 +1067,8 @@ class OrgMemoryDiscovery {
       this.decidingRun = false;
     }
   }
-  async discover(e, n) {
-    this.adoptHandIns(e, n);
+  async discover(storageV5, credentials) {
+    this.adoptHandIns(storageV5, credentials);
     this.ensureShrinkSubscription();
     if (getCurrentProjectConfig().orgMemoryRead === false) {
       settleOrgMemoryDecisionOff("read_disabled");
@@ -1032,14 +1076,14 @@ class OrgMemoryDiscovery {
     }
     return this.discoverMemoized();
   }
-  reconnect(e) {
-    let n = () => {
-      e?.();
+  reconnect(beforeReconnect) {
+    let run = () => {
+      beforeReconnect?.();
       return this.runReconnect();
     };
-    let r = this.reconnectChain.then(n, n);
-    this.reconnectChain = r;
-    return r;
+    let next = this.reconnectChain.then(run, run);
+    this.reconnectChain = next;
+    return next;
   }
   async runReconnect() {
     if (!checkHasTrustDialogAccepted())
@@ -1082,14 +1126,14 @@ class OrgMemoryDiscovery {
       current: getOrgMemoryDecision(),
     };
   }
-  disconnect(e) {
-    let n = () => {
-      e?.();
+  disconnect(beforeDisconnect) {
+    let run = () => {
+      beforeDisconnect?.();
       return this.runDisconnect();
     };
-    let r = this.reconnectChain.then(n, n);
-    this.reconnectChain = r;
-    return r;
+    let next = this.reconnectChain.then(run, run);
+    this.reconnectChain = next;
+    return next;
   }
   runDisconnect() {
     let orgMemoryDecision = getOrgMemoryDecision();
@@ -1108,7 +1152,10 @@ class OrgMemoryDiscovery {
 /**
  * 按宿主保存的发现状态。
  */
-var orgMemoryDiscoveryState = new HostScoped(() => new OrgMemoryDiscovery());
+var orgMemoryDiscoveryState; // deferred: uses OrgMemoryDiscovery of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-82kqcve8.js:62965", () => {
+  orgMemoryDiscoveryState = new HostScoped(() => new OrgMemoryDiscovery());
+});
 //@ chunk-82kqcve8.js:62990-63027 placement
 /**
  * 取当前宿主的发现状态。
@@ -1148,12 +1195,12 @@ function discoverOrgMemoryStores(storageV5, signal) {
   return getOrgMemoryDiscovery().discover(storageV5, signal);
 }
 //@ chunk-82kqcve8.js:63356-63397 placement
-function reconnectOrgMemory(e) {
-  return getOrgMemoryDiscovery().reconnect(e);
+function reconnectOrgMemory(beforeReconnect) {
+  return getOrgMemoryDiscovery().reconnect(beforeReconnect);
 }
 //@ chunk-82kqcve8.js:63397-63439 placement
-function disconnectOrgMemory(e) {
-  return getOrgMemoryDiscovery().disconnect(e);
+function disconnectOrgMemory(beforeDisconnect) {
+  return getOrgMemoryDiscovery().disconnect(beforeDisconnect);
 }
 //@ chunk-82kqcve8.js:63439-63690 placement
 function getPreferredStore() {
@@ -1162,22 +1209,22 @@ function getPreferredStore() {
   let selection = orgMemoryDecision.request.selection;
   if (selection === null || !hasMirror()) return;
   let selectionLayer = getSelectionLayer(selection);
-  let s =
+  let store =
     selectionLayer === "root"
       ? findGroupingRootStore()
       : selectionLayer === "silo"
         ? findGrantedSilo(selection)
         : findGroupingStore(selection);
-  if (s === undefined) return;
-  if (isSiloId(selection) && !isStoreBasename(s.path, selection)) return;
-  return s;
+  if (store === undefined) return;
+  if (isSiloId(selection) && !isStoreBasename(store.path, selection)) return;
+  return store;
 }
 //@ chunk-82kqcve8.js:63690-63773 placement
-function isSelectionMounted(e) {
+function isSelectionMounted(selection) {
   let preferredStore = getPreferredStore();
   return (
     preferredStore !== undefined &&
-    e.some((r) => stripTrailingSlashes(r.path) === stripTrailingSlashes(preferredStore.path))
+    selection.some((store) => stripTrailingSlashes(store.path) === stripTrailingSlashes(preferredStore.path))
   );
 }
 export {

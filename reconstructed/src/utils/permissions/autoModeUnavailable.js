@@ -5,22 +5,23 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (11)
- * attribution: placement 11
+ * pieces: chunk-e6aww6q8.js (9)
+ * attribution: placement 9
  */
 import { antEnv } from "../env.js";
 import { getAutoModeConfigOrDefault } from "./permissionSetup.js";
 import { HostScoped } from "../hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1277955-1278093 placement
 function shouldClassifyAskUserQuestion() {
-  let e = antEnv.CLAUDE_CODE_AUTO_MODE_CLASSIFY_ASK_USER_QUESTION;
-  if (e !== undefined) return e;
+  let override = antEnv.CLAUDE_CODE_AUTO_MODE_CLASSIFY_ASK_USER_QUESTION;
+  if (override !== undefined) return override;
   return getAutoModeConfigOrDefault()?.classifyAskUserQuestion !== false;
 }
 //@ chunk-e6aww6q8.js:1278093-1278266 placement
-function describeAutoModeUnavailableCause(e) {
-  return e === "no_classifier_for_session"
+function describeAutoModeUnavailableCause(cause) {
+  return cause === "no_classifier_for_session"
     ? "its safety check does not run for this session"
     : "its safety check keeps giving no result for this session's actions";
 }
@@ -28,13 +29,16 @@ function describeAutoModeUnavailableCause(e) {
 /**
  * autoModeUnavailableNotes：按宿主保存的 auto 模式不可用说明（Map）。
  */
-var autoModeUnavailableNotes = new HostScoped(() => new Map());
+var autoModeUnavailableNotes; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1278266", () => {
+  autoModeUnavailableNotes = new HostScoped(() => new Map());
+});
 //@ chunk-e6aww6q8.js:1278293-1278609 placement
 /**
  * 代理因 auto 模式不可用被停止时返回给父代理的说明文字。
  */
-function buildAutoModeStoppedMessage(e) {
-  return `Auto mode is unavailable: ${describeAutoModeUnavailableCause(e)}, so this agent was stopped before it finished. Nobody interrupted it; whatever it returned is partial. Starting it again ${e === "no_classifier_for_session" ? "will" : "may"} stop the same way. Finish what you can without it, then tell the user what is blocked.`;
+function buildAutoModeStoppedMessage(cause) {
+  return `Auto mode is unavailable: ${describeAutoModeUnavailableCause(cause)}, so this agent was stopped before it finished. Nobody interrupted it; whatever it returned is partial. Starting it again ${cause === "no_classifier_for_session" ? "will" : "may"} stop the same way. Finish what you can without it, then tell the user what is blocked.`;
 }
 //@ chunk-e6aww6q8.js:1278609-1278680 placement
 /**
@@ -44,14 +48,17 @@ function chromeGrantAllowlistWithoutClassifier() {
   return getAutoModeConfigOrDefault()?.chromeGrantAllowlistWithoutClassifier !== false;
 }
 //@ chunk-e6aww6q8.js:1278680-1278713 placement
-var AUTO_DENY_WINDOW_SYMBOL = Symbol("AutoDenyWindow");
+var AUTO_DENY_WINDOW_SYMBOL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1278680", () => {
+  AUTO_DENY_WINDOW_SYMBOL = Symbol("AutoDenyWindow");
+});
 //@ chunk-e6aww6q8.js:1278713-1278855 placement
-function buildAutoDenyMarker(e) {
+function buildAutoDenyMarker(details) {
   return {
     [AUTO_DENY_WINDOW_SYMBOL]: true,
-    autoDenyAfterMs: e.autoDenyAfterMs,
-    autoDenyResolution: e.resolution,
-    ...(e.notASafetyCheck && {
+    autoDenyAfterMs: details.autoDenyAfterMs,
+    autoDenyResolution: details.resolution,
+    ...(details.notASafetyCheck && {
       notASafetyCheck: true,
     }),
   };
@@ -73,20 +80,6 @@ function withAutoDenyDeadline(autoDenyWindow, deadlineEpochMs) {
     deadlineEpochMs,
   };
 }
-//@ chunk-e6aww6q8.js:1278962-1279002 placement
-/**
- * lacksCreateIfEmpty：输入未要求 createIfEmpty（只读工具判定）。
- */
-function lacksCreateIfEmpty(e) {
-  return !e?.createIfEmpty;
-}
-//@ chunk-e6aww6q8.js:1279002-1279034 placement
-/**
- * lacksClear：输入未要求 clear（只读工具判定）。
- */
-function lacksClear(e) {
-  return !e?.clear;
-}
 export {
   chromeGrantAllowlistWithoutClassifier,
   shouldClassifyAskUserQuestion,
@@ -94,8 +87,6 @@ export {
   describeAutoModeUnavailableCause,
   buildAutoDenyMarker,
   buildAutoModeStoppedMessage,
-  lacksClear,
-  lacksCreateIfEmpty,
   isRealAutoDenyWindow,
   withAutoDenyDeadline,
 };

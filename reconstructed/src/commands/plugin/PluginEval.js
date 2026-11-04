@@ -12,106 +12,114 @@ import { readdir, readFile } from "fs/promises";
 import * as pathModule from "path";
 import { homedir } from "os";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, booleanSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isENOENT, errorMessage } from "../../utils/errors.js";
 import { stripBom as stripBom_2 } from "../../utils/remoteFileState.js";
 import { FRONTMATTER_REGEX } from "../../utils/frontmatterParser.js";
 import { parseYaml } from "../../utils/yaml.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { count } from "../../utils/collections.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { R, P, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useRef, useEffect, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrb44rx7.js:97309-97386 placement = getToolUseSummary (0.537)
 /**
  * 触发判定 schema（{query, should_trigger}）与上限常量；与 WebSearch UI 关系不明。
  */
-var MIN_EVAL_QUERIES = 5;
-var evalQuerySchema = DoctorLazy(() =>
-  u({
-    query: string().min(1),
-    should_trigger: M(),
-  }),
-);
-var noEvalRunner = async () => null;
+var MIN_EVAL_QUERIES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var evalQuerySchema;
+var noEvalRunner;
+deferInit("chunk-vrb44rx7.js:97309", () => {
+  MIN_EVAL_QUERIES = 5;
+  evalQuerySchema = DoctorLazy(() =>
+    objectSchema({
+      query: stringSchema().min(1),
+      should_trigger: booleanSchema(),
+    }),
+  );
+  noEvalRunner = async () => null;
+});
 //@ chunk-vrb44rx7.js:97386-98463 placement
 /**
  * 读取 evals/*.md 的 query/should_trigger
  */
-async function loadEvalQueries(i) {
-  let h = [];
-  let k = [];
-  let C;
+async function loadEvalQueries(dir) {
+  let queries = [];
+  let warnings = [];
+  let files;
   try {
-    C = await readdir(i);
+    files = await readdir(dir);
   } catch (error) {
     if (isENOENT(error))
       return {
         queries: [],
         warnings: [
-          `No evals/ folder found at ${i}. Create one with at least ${MIN_EVAL_QUERIES} <name>.md files (frontmatter: query, should_trigger).`,
+          `No evals/ folder found at ${dir}. Create one with at least ${MIN_EVAL_QUERIES} <name>.md files (frontmatter: query, should_trigger).`,
         ],
       };
     throw error;
   }
-  for (let x of C.filter((T) => T.endsWith(".md")).sort()) {
-    let joined = pathModule.join(i, x);
-    let D;
+  for (let file of files.filter((name) => name.endsWith(".md")).sort()) {
+    let joined = pathModule.join(dir, file);
+    let source;
     try {
-      D = await readFile(joined, "utf8");
+      source = await readFile(joined, "utf8");
     } catch (error) {
-      k.push(`Could not read ${x}: ${errorMessage(error)}`);
+      warnings.push(`Could not read ${file}: ${errorMessage(error)}`);
       continue;
     }
-    D = stripBom_2(D);
-    let match = D.match(FRONTMATTER_REGEX);
+    source = stripBom_2(source);
+    let match = source.match(FRONTMATTER_REGEX);
     if (!match) {
-      k.push(`${x}: missing YAML frontmatter (expected ---\\nquery: \u2026\\nshould_trigger: \u2026\\n---).`);
+      warnings.push(
+        `${file}: missing YAML frontmatter (expected ---\\nquery: \u2026\\nshould_trigger: \u2026\\n---).`,
+      );
       continue;
     }
-    let L;
+    let frontmatter;
     try {
-      L = parseYaml(match[1] ?? "");
+      frontmatter = parseYaml(match[1] ?? "");
     } catch (error) {
-      k.push(`${x}: invalid YAML \u2014 ${errorMessage(error)}`);
+      warnings.push(`${file}: invalid YAML \u2014 ${errorMessage(error)}`);
       continue;
     }
-    let A = evalQuerySchema().safeParse(L);
-    if (!A.success) {
-      let joined = A.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
-      k.push(`${x}: ${joined}`);
+    let parsed = evalQuerySchema().safeParse(frontmatter);
+    if (!parsed.success) {
+      let joined = parsed.error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
+      warnings.push(`${file}: ${joined}`);
       continue;
     }
-    let trimmed = D.slice(match[0].length).trim();
-    h.push({
-      file: x,
-      query: A.data.query,
-      shouldTrigger: A.data.should_trigger,
+    let trimmed = source.slice(match[0].length).trim();
+    queries.push({
+      file,
+      query: parsed.data.query,
+      shouldTrigger: parsed.data.should_trigger,
       ...(trimmed && {
         notes: trimmed,
       }),
     });
   }
-  if (h.length > 0 && h.length < MIN_EVAL_QUERIES)
-    k.push(
-      `Only ${h.length} eval ${h.length === 1 ? "query" : "queries"} found; the spec recommends at least ${MIN_EVAL_QUERIES} for meaningful coverage.`,
+  if (queries.length > 0 && queries.length < MIN_EVAL_QUERIES)
+    warnings.push(
+      `Only ${queries.length} eval ${queries.length === 1 ? "query" : "queries"} found; the spec recommends at least ${MIN_EVAL_QUERIES} for meaningful coverage.`,
     );
   return {
-    queries: h,
-    warnings: k,
+    queries,
+    warnings,
   };
 }
 //@ chunk-vrb44rx7.js:98463-98700 placement
 /**
  * 读 SKILL.md frontmatter 的 description
  */
-async function readSkillDescription(i) {
+async function readSkillDescription(skill) {
   try {
-    let file = await readFile(pathModule.join(i, "SKILL.md"), "utf8");
+    let file = await readFile(pathModule.join(skill, "SKILL.md"), "utf8");
     let match = stripBom_2(file).match(FRONTMATTER_REGEX);
     if (!match) return "";
     let yaml = parseYaml(match[1] ?? "");
@@ -125,24 +133,25 @@ async function readSkillDescription(i) {
  * 对 evals/ 中每条查询跑触发测试
  */
 async function runSkillTriggerEvals(target, signal, noEvalRunner) {
-  let C = target === "~" || target.startsWith("~/") ? pathModule.join(homedir(), target.slice(1)) : target;
-  let resolved = pathModule.resolve(C);
-  let base = pathModule.basename(resolved);
-  let description = await readSkillDescription(resolved);
-  let joined = pathModule.join(resolved, "evals");
-  let { queries, warnings } = await loadEvalQueries(joined);
-  let K = [];
+  let resolvedTarget =
+    target === "~" || target.startsWith("~/") ? pathModule.join(homedir(), target.slice(1)) : target;
+  let skill = pathModule.resolve(resolvedTarget);
+  let base = pathModule.basename(skill);
+  let description = await readSkillDescription(skill);
+  let dir = pathModule.join(skill, "evals");
+  let { queries, warnings } = await loadEvalQueries(dir);
+  let results = [];
   for (let query of queries) {
     if (signal.aborted) break;
     try {
-      let B = await noEvalRunner({
+      let run = await noEvalRunner({
         skillName: base,
         description,
         query,
         signal,
       });
-      if (B === null) {
-        K.push({
+      if (run === null) {
+        results.push({
           query,
           modelWouldTrigger: null,
           reason: "Model evaluation not yet wired up \u2014 tracks the plugin evaluation framework.",
@@ -150,17 +159,17 @@ async function runSkillTriggerEvals(target, signal, noEvalRunner) {
         });
         continue;
       }
-      K.push({
+      results.push({
         query,
-        modelWouldTrigger: B.wouldTrigger,
-        reason: B.reason,
-        verdict: B.wouldTrigger === query.shouldTrigger ? "pass" : "fail",
+        modelWouldTrigger: run.wouldTrigger,
+        reason: run.reason,
+        verdict: run.wouldTrigger === query.shouldTrigger ? "pass" : "fail",
       });
     } catch (error) {
       logForDebugging(`plugin eval: trigger test for ${query.file} threw: ${errorMessage(error)}`, {
         level: "error",
       });
-      K.push({
+      results.push({
         query,
         modelWouldTrigger: null,
         reason: errorMessage(error),
@@ -170,53 +179,55 @@ async function runSkillTriggerEvals(target, signal, noEvalRunner) {
   }
   return {
     pluginName: base,
-    pluginPath: resolved,
-    evalsPath: joined,
+    pluginPath: skill,
+    evalsPath: dir,
     queries,
     warnings,
-    triggerResults: K,
-    passCount: count(K, (V) => V.verdict === "pass"),
-    failCount: count(K, (V) => V.verdict === "fail"),
-    skippedCount: count(K, (V) => V.verdict === "skipped"),
+    triggerResults: results,
+    passCount: count(results, (result) => result.verdict === "pass"),
+    failCount: count(results, (result) => result.verdict === "fail"),
+    skippedCount: count(results, (result) => result.verdict === "skipped"),
   };
 }
 //@ chunk-vrb44rx7.js:99647-100690 placement
 /**
  * 格式化插件评测报告
  */
-function formatEvalReport(i) {
-  let h = [];
-  h.push(`Evaluating ${i.pluginName} (${i.evalsPath})`);
-  h.push("");
-  for (let warning of i.warnings) h.push(`! ${warning}`);
-  if (i.warnings.length > 0) h.push("");
-  if (i.queries.length === 0) {
-    h.push("No eval queries to run.");
-    return h.join(`
+function formatEvalReport(report) {
+  let lines = [];
+  lines.push(`Evaluating ${report.pluginName} (${report.evalsPath})`);
+  lines.push("");
+  for (let warning of report.warnings) lines.push(`! ${warning}`);
+  if (report.warnings.length > 0) lines.push("");
+  if (report.queries.length === 0) {
+    lines.push("No eval queries to run.");
+    return lines.join(`
 `);
   }
-  h.push("Level 1 \u2014 trigger tests:");
-  for (let triggerResult of i.triggerResults) {
+  lines.push("Level 1 \u2014 trigger tests:");
+  for (let triggerResult of report.triggerResults) {
     let padded = triggerResult.verdict.toUpperCase().padEnd(7);
-    let x = triggerResult.query.shouldTrigger ? "trigger" : "skip";
+    let actualVerdict = triggerResult.query.shouldTrigger ? "trigger" : "skip";
     if (triggerResult.verdict === "skipped")
-      h.push(`  [${padded}] ${triggerResult.query.file} \u2014 expected ${x}`);
+      lines.push(`  [${padded}] ${triggerResult.query.file} \u2014 expected ${actualVerdict}`);
     else {
-      let T = triggerResult.modelWouldTrigger ? "trigger" : "skip";
-      h.push(`  [${padded}] ${triggerResult.query.file} \u2014 expected ${x}, got ${T}`);
-      if (triggerResult.verdict === "fail") h.push(`            ${triggerResult.reason}`);
+      let expectedVerdict = triggerResult.modelWouldTrigger ? "trigger" : "skip";
+      lines.push(
+        `  [${padded}] ${triggerResult.query.file} \u2014 expected ${actualVerdict}, got ${expectedVerdict}`,
+      );
+      if (triggerResult.verdict === "fail") lines.push(`            ${triggerResult.reason}`);
     }
   }
-  h.push("");
-  if (i.skippedCount === i.triggerResults.length)
-    h.push("All trigger tests skipped \u2014 model evaluation not yet wired up.");
+  lines.push("");
+  if (report.skippedCount === report.triggerResults.length)
+    lines.push("All trigger tests skipped \u2014 model evaluation not yet wired up.");
   else
-    h.push(
-      `${i.passCount}/${i.passCount + i.failCount} trigger tests passed${i.skippedCount > 0 ? ` (${i.skippedCount} skipped)` : ""}.`,
+    lines.push(
+      `${report.passCount}/${report.passCount + report.failCount} trigger tests passed${report.skippedCount > 0 ? ` (${report.skippedCount} skipped)` : ""}.`,
     );
-  h.push("");
-  h.push("Level 2 \u2014 interplay tests: not yet implemented. Tracks the plugin evaluation framework.");
-  return h.join(`
+  lines.push("");
+  lines.push("Level 2 \u2014 interplay tests: not yet implemented. Tracks the plugin evaluation framework.");
+  return lines.join(`
 `);
 }
 //@ chunk-vrb44rx7.js:100690-101918 placement
@@ -224,20 +235,20 @@ function formatEvalReport(i) {
  * /plugin eval 的运行组件
  */
 function PluginEvalRunner(props) {
-  let C = w(6);
+  let $ = useMemoCache(6);
   let { onComplete, target } = props;
-  let x;
-  if (C[0] === MEMO_CACHE_SENTINEL) {
-    x = new AbortController();
-    C[0] = x;
-  } else x = C[0];
-  let T = R(x);
-  let D;
-  let U;
-  if (C[1] !== onComplete || C[2] !== target) {
-    D = () => {
-      let L = T.current;
-      let _ = async function _() {
+  let signal;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    signal = new AbortController();
+    $[0] = signal;
+  } else signal = $[0];
+  let signalRef = useRef(signal);
+  let state;
+  let setState;
+  if ($[1] !== onComplete || $[2] !== target) {
+    state = () => {
+      let current = signalRef.current;
+      let runEvals = async function runEvals() {
         if (!target) {
           onComplete(`Usage: /plugin eval [path]
 
@@ -255,57 +266,60 @@ Or from the command line:
           return;
         }
         try {
-          let K = await runSkillTriggerEvals(target, L.signal, noEvalRunner);
-          process.exitCode = K.failCount > 0 ? 1 : 0;
-          let V =
-            K.queries.length === 0
+          let results = await runSkillTriggerEvals(target, current.signal, noEvalRunner);
+          process.exitCode = results.failCount > 0 ? 1 : 0;
+          let summary =
+            results.queries.length === 0
               ? ""
-              : K.failCount > 0
+              : results.failCount > 0
                 ? `
 
 ${figures_default.cross} Evaluation failed`
-                : K.skippedCount === K.queries.length
+                : results.skippedCount === results.queries.length
                   ? `
 
 ${figures_default.info} Eval queries validated; trigger tests pending model integration`
                   : `
 
 ${figures_default.tick} Evaluation passed`;
-          onComplete(formatEvalReport(K) + V);
+          onComplete(formatEvalReport(results) + summary);
         } catch (error) {
-          let B = error;
+          let caught = error;
           process.exitCode = 2;
-          logForDebugging(`Plugin eval failed for ${target}: ${errorMessage(B)}`, {
+          logForDebugging(`Plugin eval failed for ${target}: ${errorMessage(caught)}`, {
             level: "error",
           });
-          onComplete(`${figures_default.cross} ${errorMessage(B)}`);
+          onComplete(`${figures_default.cross} ${errorMessage(caught)}`);
         }
       };
-      _();
-      return () => L.abort();
+      runEvals();
+      return () => current.abort();
     };
-    U = [onComplete, target];
-    C[1] = onComplete;
-    C[2] = target;
-    C[3] = D;
-    C[4] = U;
+    setState = [onComplete, target];
+    $[1] = onComplete;
+    $[2] = target;
+    $[3] = state;
+    $[4] = setState;
   } else {
-    D = C[3];
-    U = C[4];
+    state = $[3];
+    setState = $[4];
   }
-  P(D, U);
-  let A;
-  if (C[5] === MEMO_CACHE_SENTINEL) {
-    A = jsxProd_default(Box, {
+  useEffect(state, setState);
+  let footer;
+  if ($[5] === MEMO_CACHE_SENTINEL) {
+    footer = jsxProd_default(Box, {
       flexDirection: "column",
       children: jsxProd_default(Text, {
         children: "Running evaluation\u2026",
       }),
     });
-    C[5] = A;
-  } else A = C[5];
-  return A;
+    $[5] = footer;
+  } else footer = $[5];
+  return footer;
 }
 //@ chunk-vrb44rx7.js:101918-101922 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:101918", () => {
+  init_react_production();
+});
 export { PluginEvalRunner };

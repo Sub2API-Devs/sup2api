@@ -36,10 +36,11 @@ import {
   isAtOrUnder,
   generateProxyEnvVars,
   encodeSandboxedCommand,
-  ITt,
+  orDefault,
   buildGitConfigEnv,
 } from "./sandbox-utils.js";
 import { literalReadings } from "./path-entries.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-fq0cr76a.js:777773-777887 esm-fingerprint
 class WindowsSandboxError extends Error {
@@ -133,11 +134,15 @@ function repoRoot() {
   return pathModule_2.resolve(here, "..", "..");
 }
 //@ chunk-fq0cr76a.js:779793-779891 esm-fingerprint
-var nodeArchToDir = {
-  x64: "x64",
-  arm64: "arm64",
-};
-var joined = pathModule_2.join(repoRoot(), "vendor", "srt-win", nodeArchToDir.x64 ?? "x64", "srt-win.exe");
+var nodeArchToDir; // deferred: uses repoRoot of its import cycle while loading; runs once the cycle is complete
+var joined;
+deferInit("chunk-fq0cr76a.js:779793", () => {
+  nodeArchToDir = {
+    x64: "x64",
+    arm64: "arm64",
+  };
+  joined = pathModule_2.join(repoRoot(), "vendor", "srt-win", nodeArchToDir.x64 ?? "x64", "srt-win.exe");
+});
 //@ chunk-fq0cr76a.js:779891-779910 esm-fingerprint
 var SRT_WIN_DISPATCH_ARG1 = "--srt-win";
 //@ chunk-fq0cr76a.js:779910-780278 esm-fingerprint
@@ -334,21 +339,21 @@ async function runSrtWinJsonAsync(args, opts) {
 }
 //@ chunk-fq0cr76a.js:783487-783733 esm-fingerprint
 function runSrtWinJsonAllowFail(args, opts) {
-  let r = runSrtWin(args, opts);
+  let args_2 = runSrtWin(args, opts);
   let json;
   try {
-    json = JSON.parse(r.stdout);
+    json = JSON.parse(args_2.stdout);
   } catch (e) {
     throw new WindowsSandboxError(
       "srt_win_bad_json",
-      `srt-win ${args.join(" ")}: unparseable JSON output ${JSON.stringify(r.stdout)}: ${e.message}`,
+      `srt-win ${args.join(" ")}: unparseable JSON output ${JSON.stringify(args_2.stdout)}: ${e.message}`,
       args[0],
     );
   }
   return {
-    ok: r.status === 0,
+    ok: args_2.status === 0,
     json,
-    stderr: r.stderr,
+    stderr: args_2.stderr,
   };
 }
 //@ chunk-fq0cr76a.js:783733-783813 esm-fingerprint
@@ -391,7 +396,7 @@ function capabilityList(v) {
   return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
 }
 //@ chunk-fq0cr76a.js:784357-784664 esm-layout
-function ax(capability, why) {
+function windowsSrtWinOutdatedError(capability, why) {
   return new WindowsSandboxError(
     "srt_win_outdated",
     `The srt-win in use is older than this library: it does not report the capability '${capability}', which ${why}. Update srt-win (the one shipped with the program embedding this library, or the package's own) to a build that matches the library. Nothing was granted.`,
@@ -458,8 +463,8 @@ function mapUserStatus(raw) {
   };
 }
 //@ chunk-fq0cr76a.js:785925-786273 esm-layout
-function seclogonDisabledMessage(e) {
-  return e === "missing"
+function seclogonDisabledMessage(seclogonState) {
+  return seclogonState === "missing"
     ? "The Windows Secondary Logon service (seclogon) is not present on this machine; the sandbox cannot start without it."
     : "The Windows Secondary Logon service (seclogon) is disabled; an administrator must set its startup type to Manual (`sc.exe config seclogon start= demand`). The sandbox cannot start without it.";
 }
@@ -708,11 +713,11 @@ async function getWindowsSandboxUserStatusAsync(opts = {}) {
 }
 //@ chunk-fq0cr76a.js:792691-792797 esm-fingerprint
 async function windowsTrustCaAsync(caCertPath, opts = {}) {
-  let r = await runSrtWinAsync(["user", "trust-ca", caCertPath], {
+  let args = await runSrtWinAsync(["user", "trust-ca", caCertPath], {
     timeoutMs: 60000,
     srtWin: opts.srtWin,
   });
-  checkTrustCaResult(caCertPath, r);
+  checkTrustCaResult(caCertPath, args);
 }
 //@ chunk-fq0cr76a.js:792797-793052 esm-fingerprint
 function checkTrustCaResult(caCertPath, r_2) {
@@ -874,17 +879,17 @@ function installArgs(opts) {
   return args;
 }
 //@ chunk-fq0cr76a.js:795808-796035 esm-fingerprint
-function remapInstallTimeout(e) {
-  if (e instanceof WindowsSandboxError && e.code === "srt_win_timeout")
+function remapInstallTimeout(error) {
+  if (error instanceof WindowsSandboxError && error.code === "srt_win_timeout")
     throw new WindowsSandboxError(
       "install_timeout",
       "srt-win install timed out \u2014 the UAC prompt may still be open. " +
-        `Re-run when ready to grant elevation. (${e.message})`,
+        `Re-run when ready to grant elevation. (${error.message})`,
     );
-  throw e;
+  throw error;
 }
 //@ chunk-fq0cr76a.js:796035-796957 esm-fingerprint
-function k9(r) {
+function throwOnInstallFailure(r) {
   logForDebugging_2(`[Sandbox Windows] install exit=${r.status}: ${r.stderr || r.stdout}`);
   if (r.status === 0 || r.status === 10) return;
   if (rejectsAllowLoopback(r)) throw srtWinTooOld(r.stderr);
@@ -917,21 +922,21 @@ function k9(r) {
 //@ chunk-fq0cr76a.js:796957-797387 esm-fingerprint
 async function installWindowsSandboxAsync(opts = {}) {
   let srtWin = opts.srtWin ?? resolveSrtWin();
-  let r;
+  let result;
   try {
-    r = await runSrtWinAsync(installArgs(opts), {
+    result = await runSrtWinAsync(installArgs(opts), {
       timeoutMs: installTimeoutMs(opts),
       srtWin,
     });
   } catch (e) {
     remapInstallTimeout(e);
   }
-  k9(r);
+  throwOnInstallFailure(result);
   let state = await checkWindowsSandboxStatusAsync({
     sublayerGuid: opts.sublayerGuid,
     srtWin,
   });
-  if (r.status === 10)
+  if (result.status === 10)
     return {
       ...state,
       cancelled: true,
@@ -958,7 +963,10 @@ async function installWindowsSandboxAsync(opts = {}) {
   }
 }
 //@ chunk-fq0cr76a.js:797387-797438 esm-fingerprint
-var WINDOWS_SERVICE_ACCOUNT_SIDS = new Set(["S-1-5-18", "S-1-5-19", "S-1-5-20"]);
+var WINDOWS_SERVICE_ACCOUNT_SIDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:797387", () => {
+  WINDOWS_SERVICE_ACCOUNT_SIDS = new Set(["S-1-5-18", "S-1-5-19", "S-1-5-20"]);
+});
 //@ chunk-fq0cr76a.js:797438-798181 esm-layout
 function windowsProfileGrantSkipReason(user, opts = {}) {
   if (opts.skipProfileGrant) return "skipProfileGrant was set";
@@ -996,8 +1004,8 @@ function installProfileGrantOptions(opts, srtWin) {
   };
 }
 //@ chunk-fq0cr76a.js:798872-799483 esm-fingerprint
-function throwInstallProfileGrantFailure(e) {
-  let cause = e;
+function throwInstallProfileGrantFailure(error) {
+  let cause = error;
   if (
     cause instanceof WindowsSandboxError &&
     (cause.code === "profile_grant_blocked_by_session" || cause.code === "profile_operation_in_progress")
@@ -1020,20 +1028,20 @@ function uninstallWindowsSandbox(opts = {}) {
   let args = ["uninstall"];
   if (opts.sublayerGuid) args.push("--sublayer-guid", opts.sublayerGuid);
   if (opts.keepUser) args.push("--keep-user");
-  let r = runSrtWin(args, {
+  let args_2 = runSrtWin(args, {
     timeoutMs:
       opts.timeoutMs ?? (opts.keepUser ? INSTALL_TIMEOUT_MS : INSTALL_TIMEOUT_MS + PROFILE_GRANT_TIMEOUT_MS),
     srtWin: opts.srtWin,
   });
-  logForDebugging_2(`[Sandbox Windows] uninstall exit=${r.status}: ${r.stderr || r.stdout}`);
-  if (r.status === 10)
+  logForDebugging_2(`[Sandbox Windows] uninstall exit=${args_2.status}: ${args_2.stderr || args_2.stdout}`);
+  if (args_2.status === 10)
     return {
       cancelled: true,
     };
-  if (r.status !== 0)
+  if (args_2.status !== 0)
     throw new WindowsSandboxError(
       "uninstall_failed",
-      `srt-win uninstall failed (exit ${r.status}): ${r.stderr || r.stdout}`,
+      `srt-win uninstall failed (exit ${args_2.status}): ${args_2.stderr || args_2.stdout}`,
     );
   return {};
 }
@@ -1098,8 +1106,8 @@ function isUnprobedWindowsPath(p) {
   return isUncPath(p) || /^[\\/]{2}[?.][\\/](?![a-z]:)/i.test(p);
 }
 //@ chunk-fq0cr76a.js:800620-800684 esm-fingerprint
-function isNotFoundErrorCode(e) {
-  let code = e?.code;
+function isNotFoundErrorCode(error) {
+  let code = error?.code;
   return code === "ENOENT" || code === "ENOTDIR";
 }
 //@ chunk-fq0cr76a.js:800684-800873 esm-fingerprint
@@ -1263,15 +1271,18 @@ function parseSrtWinLaunchError(stderr, subcommand) {
   return;
 }
 //@ chunk-fq0cr76a.js:803141-803231 esm-fingerprint
-var WINDOWS_ACL_GRANT_RELEASED_STATUSES = new Set([
-  "revoked",
-  "stillHeld",
-  "downgraded",
-  "relocated",
-  "noRow",
-  "gone",
-  "missing",
-]);
+var WINDOWS_ACL_GRANT_RELEASED_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:803141", () => {
+  WINDOWS_ACL_GRANT_RELEASED_STATUSES = new Set([
+    "revoked",
+    "stillHeld",
+    "downgraded",
+    "relocated",
+    "noRow",
+    "gone",
+    "missing",
+  ]);
+});
 //@ chunk-fq0cr76a.js:803231-803478 esm-fingerprint
 function windowsAclGrantReleased(o) {
   if (typeof o !== "object" || o === null) return false;
@@ -1290,21 +1301,21 @@ function windowsAclGrantReleased(o) {
 function restoreWindowsAcl(opts) {
   let holder = opts.holderPid ?? process.pid;
   try {
-    let r = runSrtWinJsonAllowFail(
+    let args = runSrtWinJsonAllowFail(
       ["acl", "restore", "--holder-pid", `${holder}`, "--sandbox-user-sid", opts.sandboxUserSid, "--json"],
       {
         timeoutMs: 300000,
         srtWin: opts.srtWin,
       },
     );
-    if (!r.ok)
+    if (!args.ok)
       logForDebugging_2(
-        `[Sandbox Windows] acl restore exited non-zero (per-path outcomes preserved): ${r.stderr}`,
+        `[Sandbox Windows] acl restore exited non-zero (per-path outcomes preserved): ${args.stderr}`,
         {
           level: "error",
         },
       );
-    return Array.isArray(r.json) ? r.json : [...(r.json.paths ?? []), ...(r.json.parents ?? [])];
+    return Array.isArray(args.json) ? args.json : [...(args.json.paths ?? []), ...(args.json.parents ?? [])];
   } catch (e) {
     logForDebugging_2(`[Sandbox Windows] acl restore: ${e.message}`, {
       level: "error",
@@ -1317,7 +1328,7 @@ function allowProfileExclusionArgs(opts) {
   return (opts.allowProfileExclusions ?? []).flatMap((p) => ["--allow-profile-exclusion", p]);
 }
 //@ chunk-fq0cr76a.js:804041-804616 esm-fingerprint
-async function tI(opts) {
+async function grantWindowsAclPersistent(opts) {
   let holder = opts.holderPid ?? process.pid;
   let stdin = JSON.stringify({
     read: opts.read,
@@ -1394,17 +1405,23 @@ function windowsAclRevokeResult(exitedZero, json, stderr) {
   };
 }
 //@ chunk-fq0cr76a.js:805255-805488 esm-fingerprint
-var PROFILE_GRANT_STATES = new Set(["none", "current", "outdated", "incomplete", "unknown"]);
-var PROFILE_PATH_KINDS = new Set(["container", "granted", "file", "denied"]);
-var WINDOWS_PROFILE_READ_ENV_VARS = [
-  "NPM_CONFIG_USERCONFIG",
-  "GIT_CONFIG_GLOBAL",
-  "PIP_CONFIG_FILE",
-  "MAVEN_ARGS",
-  "RUSTUP_HOME",
-  "CARGO_HOME",
-];
-var WINDOWS_PROFILE_RECORD_VERSION = 1;
+var PROFILE_GRANT_STATES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PROFILE_PATH_KINDS;
+var WINDOWS_PROFILE_READ_ENV_VARS;
+var WINDOWS_PROFILE_RECORD_VERSION;
+deferInit("chunk-fq0cr76a.js:805255", () => {
+  PROFILE_GRANT_STATES = new Set(["none", "current", "outdated", "incomplete", "unknown"]);
+  PROFILE_PATH_KINDS = new Set(["container", "granted", "file", "denied"]);
+  WINDOWS_PROFILE_READ_ENV_VARS = [
+    "NPM_CONFIG_USERCONFIG",
+    "GIT_CONFIG_GLOBAL",
+    "PIP_CONFIG_FILE",
+    "MAVEN_ARGS",
+    "RUSTUP_HOME",
+    "CARGO_HOME",
+  ];
+  WINDOWS_PROFILE_RECORD_VERSION = 1;
+});
 //@ chunk-fq0cr76a.js:805488-805579 esm-fingerprint
 function stringList(v) {
   return Array.isArray(v) && v.every((x) => typeof x === "string" && x !== "") ? v : undefined;
@@ -1765,7 +1782,7 @@ function wrapCommandWithSandboxWindows(p) {
       p.caCertPath?.replace(/\\/g, "/"),
       p.proxyAuthToken,
       undefined,
-      encodeSandboxedCommand(ITt(p.command, p.commandId)),
+      encodeSandboxedCommand(orDefault(p.command, p.commandId)),
     ),
   );
   delete generated.TMPDIR;
@@ -2056,12 +2073,12 @@ export {
   getWindowsProfileReadStatusAsync,
   missingWindowsSrtWinCapability,
   getWindowsProfileReadStatus,
-  ax,
+  windowsSrtWinOutdatedError,
   revokeWindowsAclChecked,
   restoreWindowsAcl,
   resolveSrtWin,
   windowsProfileExclusionConflicts,
-  tI,
+  grantWindowsAclPersistent,
   verifyWindowsWfpEgress,
   DEFAULT_WINDOWS_PROXY_PORT_RANGE,
   checkWindowsDependencies,

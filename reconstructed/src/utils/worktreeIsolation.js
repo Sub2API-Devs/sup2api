@@ -62,11 +62,15 @@ import { hasWorktreeCreateHook } from "./hooks/worktreeHooks.js";
 import { ENTER_WORKTREE_TOOL_NAME } from "../tools/EnterWorktreeTool/constants.js";
 import { getClaudeConfigDir } from "./envUtils.js";
 import { nativeRealpathLong } from "./windowsUncPaths.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:429820-429849 placement
-var worktreeFenceSchema = DoctorLazy(() => array(unknown()).min(1));
+var worktreeFenceSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:429820", () => {
+  worktreeFenceSchema = DoctorLazy(() => array(unknown()).min(1));
+});
 //@ chunk-s61vbvea.js:429849-429968 placement
-function isPathContainedIn(e, canonical) {
+function isPathContainedIn(path, canonical) {
   return (getPlatform_2() === "linux" ? isSameContainmentPath : isOutsideContainment)(
     {
       lexical: canonical,
@@ -74,33 +78,33 @@ function isPathContainedIn(e, canonical) {
       skipped: false,
     },
     {
-      lexical: e,
-      canonical: e,
+      lexical: path,
+      canonical: path,
       skipped: false,
     },
   );
 }
 //@ chunk-s61vbvea.js:429968-430158 placement
-function resolveFencePath(e) {
-  if (typeof e !== "string" || !isAbsolute(e))
+function resolveFencePath(value) {
+  if (typeof value !== "string" || !isAbsolute(value))
     return {
       code: "not_absolute",
-      value: e,
+      value,
     };
-  let { canonical, skipped } = resolveContainmentTarget(e);
+  let { canonical, skipped } = resolveContainmentTarget(value);
   return canonical === null
     ? {
         code: skipped ? "network_path" : "unresolvable_path",
-        value: e,
+        value,
       }
     : {
         at: canonical,
       };
 }
 //@ chunk-s61vbvea.js:430158-430705 placement
-function checkWorktreeFence(declared, declaredFence, r) {
-  let s = worktreeFenceSchema().safeParse(safeParseJSON(declaredFence, false));
-  if (!s.success)
+function checkWorktreeFence(declared, declaredFence, sessionDir) {
+  let fenceParse = worktreeFenceSchema().safeParse(safeParseJSON(declaredFence, false));
+  if (!fenceParse.success)
     return {
       problems: [
         {
@@ -114,7 +118,7 @@ function checkWorktreeFence(declared, declaredFence, r) {
     return {
       problems: [fencePath],
     };
-  let fencePath_2 = resolveFencePath(r);
+  let fencePath_2 = resolveFencePath(sessionDir);
   if ("code" in fencePath_2)
     return {
       problems: [fencePath_2],
@@ -124,33 +128,33 @@ function checkWorktreeFence(declared, declaredFence, r) {
       problems: [
         {
           code: "session_outside_worktree",
-          value: r,
+          value: sessionDir,
         },
       ],
     };
   let containmentTarget = resolveContainmentTarget(homedir());
-  let w = containmentTarget.canonical ?? containmentTarget.lexical;
-  let R = [];
-  let x = [];
-  for (let P of s.data) {
-    let fencePath = resolveFencePath(P);
-    if ("code" in fencePath) x.push(fencePath);
-    else if (isPathContainedIn(fencePath.at, w) && !isPathContainedIn(w, fencePath.at))
-      x.push({
+  let homePath = containmentTarget.canonical ?? containmentTarget.lexical;
+  let allowedFences = [];
+  let problems = [];
+  for (let fenceEntry of fenceParse.data) {
+    let fencePath = resolveFencePath(fenceEntry);
+    if ("code" in fencePath) problems.push(fencePath);
+    else if (isPathContainedIn(fencePath.at, homePath) && !isPathContainedIn(homePath, fencePath.at))
+      problems.push({
         code: "fence_too_wide",
-        value: P,
+        value: fenceEntry,
       });
-    else R.push(fencePath.at);
+    else allowedFences.push(fencePath.at);
   }
   return {
     answer:
-      R.length > 0
+      allowedFences.length > 0
         ? {
             tree: fencePath.at,
-            fence: R,
+            fence: allowedFences,
           }
         : undefined,
-    problems: x,
+    problems,
   };
 }
 //@ chunk-s61vbvea.js:430705-430855 placement
@@ -166,16 +170,16 @@ function hostWorktreeDeclaration() {
 }
 //@ chunk-s61vbvea.js:430855-431600 placement
 function describeWorktreeWriteFence() {
-  let e = hostWorktreeDeclaration();
-  if (e === undefined) return;
-  let { declared, declaredFence } = e;
-  let s = getCurrentWorktreeSession()?.preEnterOriginalCwd ?? getOriginalCwd();
-  let { answer, problems } = checkWorktreeFence(declared, declaredFence, s);
-  let S = `CLAUDE_CODE_HOST_WORKTREE=${declared ?? "(not set)"} CLAUDE_CODE_HOST_WORKTREE_FENCE=${declaredFence ?? "(not set)"}, session folder ${s}: ${answer === undefined ? "ignored, so they block no file write" : `file tools may not write in ${answer.fence.join(", ")}, except inside ${answer.tree}`}${problems.map((problem) => `; ${problem.code}${typeof problem.value === "string" ? ` ${JSON.stringify(problem.value)}` : ""}`).join("")}`;
+  let declaration = hostWorktreeDeclaration();
+  if (declaration === undefined) return;
+  let { declared, declaredFence } = declaration;
+  let sessionDir = getCurrentWorktreeSession()?.preEnterOriginalCwd ?? getOriginalCwd();
+  let { answer, problems } = checkWorktreeFence(declared, declaredFence, sessionDir);
+  let report = `CLAUDE_CODE_HOST_WORKTREE=${declared ?? "(not set)"} CLAUDE_CODE_HOST_WORKTREE_FENCE=${declaredFence ?? "(not set)"}, session folder ${sessionDir}: ${answer === undefined ? "ignored, so they block no file write" : `file tools may not write in ${answer.fence.join(", ")}, except inside ${answer.tree}`}${problems.map((problem) => `; ${problem.code}${typeof problem.value === "string" ? ` ${JSON.stringify(problem.value)}` : ""}`).join("")}`;
   let gitRepoCache = getGitRepoCache();
-  if (gitRepoCache.hostWorktreeReport !== S) {
-    gitRepoCache.hostWorktreeReport = S;
-    logForDebugging(S, {
+  if (gitRepoCache.hostWorktreeReport !== report) {
+    gitRepoCache.hostWorktreeReport = report;
+    logForDebugging(report, {
       level: problems.length > 0 ? "warn" : "debug",
     });
     if (problems.length === 0) logFeatureOk("worktree_host_declared");
@@ -188,10 +192,10 @@ function describeWorktreeWriteFence() {
 /**
  * 当前上下文的隔离 worktree：子代理自己的 worktree 优先，其次项目的 isolationRoot（非特定模式下），最后是当前 worktree 会话的路径。
  */
-function isolationWorktreeFor(e) {
-  if (e.agentWorktree) return e.agentWorktree;
+function isolationWorktreeFor(options) {
+  if (options.agentWorktree) return options.agentWorktree;
   if (!isBackgroundSession()) {
-    let isolationRoot = e.session.project?.isolationRoot;
+    let isolationRoot = options.session.project?.isolationRoot;
     if (isolationRoot && !hasHostWorktreeDeclaration()) return isolationRoot;
   }
   return getCurrentWorktreeSession()?.worktreePath || undefined;
@@ -232,11 +236,11 @@ function getWorktreesDirSpec(repoRoot) {
 /**
  * 生成 worktrees 目录规格。
  */
-function worktreesDirSpec(e, n) {
+function worktreesDirSpec(spec, anchor) {
   return {
-    dir: join(n, ...e.below),
-    anchor: n,
-    below: e.below,
+    dir: join(anchor, ...spec.below),
+    anchor,
+    below: spec.below,
   };
 }
 //@ chunk-s61vbvea.js:432527-432839 placement
@@ -247,46 +251,51 @@ function parseWorktreeAddError(createStderr, worktreeBranch) {
     `fatal: '${worktreeBranch}' is already checked out at `,
     `fatal: cannot force update the branch '${worktreeBranch}' used by worktree at `,
     `fatal: cannot force update the branch '${worktreeBranch}' checked out at `,
-  ].some((s) => lines.some((line) => line.startsWith(s)));
+  ].some((expectedPrefix) => lines.some((line) => line.startsWith(expectedPrefix)));
 }
 //@ chunk-s61vbvea.js:432839-433072 placement
 /**
  * 给出一个路径相对仓库的安全描述：仓库外或路径段含不安全字符时只说"仓库外/内某处（不显示）"，否则显示路径。
  */
-function describeRepoRelativeLocation(e, n) {
-  let r = relative(n, e);
-  if (r === ".." || r.startsWith(`..${sep}`) || isAbsolute(r))
+function describeRepoRelativeLocation(a, b) {
+  let relativePath = relative(b, a);
+  if (relativePath === ".." || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath))
     return "a location outside the repository (not shown)";
-  return r === "" || r.split(sep).every((s) => SAFE_SEGMENT_RE.test(s))
-    ? hideUnsafePath(e)
+  return relativePath === "" || relativePath.split(sep).every((segment) => SAFE_SEGMENT_RE.test(segment))
+    ? hideUnsafePath(a)
     : "a location inside the repository (not shown)";
 }
 //@ chunk-s61vbvea.js:433072-433100 placement
 var SAFE_SEGMENT_RE = /^[a-zA-Z0-9._+-]+$/;
 //@ chunk-s61vbvea.js:433100-433158 placement
-function repoRelativePath(anchor, n) {
-  return `${hideUnsafePath(relative(anchor, n))} in the repository`;
+function repoRelativePath(anchor, path) {
+  return `${hideUnsafePath(relative(anchor, path))} in the repository`;
 }
 //@ chunk-s61vbvea.js:433158-433773 placement
-async function checkWorktreePath(e, n) {
-  let r = [...e.below.map((s, h, y) => join(e.anchor, ...y.slice(0, h + 1))), n];
-  for (let s of r) {
-    let h;
+async function checkWorktreePath(a, b) {
+  let pathsToCheck = [
+    ...a.below.map((segment, segmentIndex, segments) =>
+      join(a.anchor, ...segments.slice(0, segmentIndex + 1)),
+    ),
+    b,
+  ];
+  for (let candidatePath of pathsToCheck) {
+    let stats;
     try {
-      h = await lstat(s);
+      stats = await lstat(candidatePath);
     } catch (error) {
       if (isENOENT(error)) continue;
       return {
         ok: false,
         reason: "lstat_failed",
-        message: `Cannot create worktree: failed to lstat ${repoRelativePath(e.anchor, s)}: it could not be read${getErrnoCode(error) ? ` (${getErrnoCode(error)})` : ""}`,
+        message: `Cannot create worktree: failed to lstat ${repoRelativePath(a.anchor, candidatePath)}: it could not be read${getErrnoCode(error) ? ` (${getErrnoCode(error)})` : ""}`,
       };
     }
-    if (h.isSymbolicLink())
+    if (stats.isSymbolicLink())
       return {
         ok: false,
         reason: "symlink",
-        message: `Cannot create worktree: ${repoRelativePath(e.anchor, s)} is a symlink. A repository-committed symlink at .claude, .claude/worktrees, or .claude/worktrees/<name> could redirect worktree creation outside the repository. Remove the symlink and retry.`,
+        message: `Cannot create worktree: ${repoRelativePath(a.anchor, candidatePath)} is a symlink. A repository-committed symlink at .claude, .claude/worktrees, or .claude/worktrees/<name> could redirect worktree creation outside the repository. Remove the symlink and retry.`,
       };
   }
   return {
@@ -304,8 +313,8 @@ function worktreesDirSpecs(repoRoot) {
 /**
  * worktrees 目录规格的数组形式。
  */
-function candidateWorktreeDirs(e) {
-  return [worktreesDirSpecs(e)];
+function candidateWorktreeDirs(options) {
+  return [worktreesDirSpecs(options)];
 }
 //@ chunk-s61vbvea.js:433834-433909 placement
 /**
@@ -325,24 +334,44 @@ function worktreeLocationOf(worktreePath) {
  * 异步检查 worktree 隔离是否可靠：读取该 worktree 与候选仓库根的 git 身份，交给 checkWorktreeIsolation_2 比对（选项控制自持 pin 的见证要求）。
  */
 async function checkWorktreeIsolation(worktreePath, repoRoots, extraRoots = [], options) {
-  let [gitIdentity, y] = await Promise.all([
+  let [gitIdentity, isSymlink] = await Promise.all([
     readGitIdentityAsync(worktreePath),
     isSymlinkAsync(worktreePath),
   ]);
-  let S = new Set(repoRoots);
-  let w = new Set(extraRoots);
-  let R = uniq([...repoRoots, ...extraRoots]);
-  let x = options?.requireWitnessForSelfOwningPins === true;
-  let P = options?.declineSelfOwningPinUnderLiveRoot === true;
+  let protectedRoots = new Set(repoRoots);
+  let launchTrees = new Set(extraRoots);
+  let allRoots = uniq([...repoRoots, ...extraRoots]);
+  let requireWitness = options?.requireWitnessForSelfOwningPins === true;
+  let declineSelfOwningPin = options?.declineSelfOwningPinUnderLiveRoot === true;
   if (typeof gitIdentity.ids !== "object")
-    return checkWorktreeIsolation_3(worktreePath, gitIdentity, y, R, S, w, [], x, P);
+    return checkWorktreeIsolation_3(
+      worktreePath,
+      gitIdentity,
+      isSymlink,
+      allRoots,
+      protectedRoots,
+      launchTrees,
+      [],
+      requireWitness,
+      declineSelfOwningPin,
+    );
   let results = await Promise.all(
-    candidateRepoRoots(worktreePath, R, gitIdentity.ids).map(async (G) => ({
-      root: G,
-      ...(await readGitIdentityAsync(G)),
+    candidateRepoRoots(worktreePath, allRoots, gitIdentity.ids).map(async (root) => ({
+      root,
+      ...(await readGitIdentityAsync(root)),
     })),
   );
-  return checkWorktreeIsolation_3(worktreePath, gitIdentity, y, R, S, w, results, x, P);
+  return checkWorktreeIsolation_3(
+    worktreePath,
+    gitIdentity,
+    isSymlink,
+    allRoots,
+    protectedRoots,
+    launchTrees,
+    results,
+    requireWitness,
+    declineSelfOwningPin,
+  );
 }
 //@ chunk-s61vbvea.js:434277-434587 placement
 /**
@@ -350,60 +379,87 @@ async function checkWorktreeIsolation(worktreePath, repoRoots, extraRoots = [], 
  */
 function checkWorktreeIsolationSync(worktreePath, repoRoots, extraRoots = [], options) {
   let gitIdentity = readGitIdentitySync(worktreePath);
-  let y = isSymlinkSync(worktreePath);
-  let S = new Set(repoRoots);
-  let w = new Set(extraRoots);
-  let R = uniq([...repoRoots, ...extraRoots]);
-  let x = options?.requireWitnessForSelfOwningPins === true;
-  let P = options?.declineSelfOwningPinUnderLiveRoot === true;
+  let isSymlink = isSymlinkSync(worktreePath);
+  let protectedRoots = new Set(repoRoots);
+  let launchTrees = new Set(extraRoots);
+  let allRoots = uniq([...repoRoots, ...extraRoots]);
+  let requireWitness = options?.requireWitnessForSelfOwningPins === true;
+  let declineSelfOwningPin = options?.declineSelfOwningPinUnderLiveRoot === true;
   if (typeof gitIdentity.ids !== "object")
-    return checkWorktreeIsolation_3(worktreePath, gitIdentity, y, R, S, w, [], x, P);
-  let mapped = candidateRepoRoots(worktreePath, R, gitIdentity.ids).map((G) => ({
-    root: G,
-    ...readGitIdentitySync(G),
+    return checkWorktreeIsolation_3(
+      worktreePath,
+      gitIdentity,
+      isSymlink,
+      allRoots,
+      protectedRoots,
+      launchTrees,
+      [],
+      requireWitness,
+      declineSelfOwningPin,
+    );
+  let mapped = candidateRepoRoots(worktreePath, allRoots, gitIdentity.ids).map((root) => ({
+    root,
+    ...readGitIdentitySync(root),
   }));
-  return checkWorktreeIsolation_3(worktreePath, gitIdentity, y, R, S, w, mapped, x, P);
+  return checkWorktreeIsolation_3(
+    worktreePath,
+    gitIdentity,
+    isSymlink,
+    allRoots,
+    protectedRoots,
+    launchTrees,
+    mapped,
+    requireWitness,
+    declineSelfOwningPin,
+  );
 }
 //@ chunk-s61vbvea.js:434587-441228 placement
 /**
  * 检查工作树隔离是否可靠（符号链接、.git 条目、仓库内外位置）
  */
-function checkWorktreeIsolation_3(worktreePath, gitIdentity, r, s, h, y, S, w = false, R = false) {
-  if (r)
+function checkWorktreeIsolation_3(
+  path,
+  gitIdentity,
+  isSymlink,
+  allRoots,
+  protectedRoots,
+  launchTrees,
+  rootResults,
+  requireWitness = false,
+  declineSelfOwningPin = false,
+) {
+  if (isSymlink)
     return unverifiableIsolationResult(
-      worktreePath,
+      path,
       "it is a symbolic link, so the tree it would isolate into cannot be pinned down",
     );
   if (gitIdentity.entry === "unverifiable")
-    return unverifiableIsolationResult(worktreePath, "its .git entry exists but could not be examined");
+    return unverifiableIsolationResult(path, "its .git entry exists but could not be examined");
   let ids = gitIdentity.ids;
-  if (ids === "error") return unverifiableIsolationResult(worktreePath, "git could not be run to resolve it");
+  if (ids === "error") return unverifiableIsolationResult(path, "git could not be run to resolve it");
   if (typeof ids === "object" && ids.isBare === true)
-    return unverifiableIsolationResult(worktreePath, "it is a bare repository, not a working tree");
+    return unverifiableIsolationResult(path, "it is a bare repository, not a working tree");
   if (ids === "no-repo") {
     if (gitIdentity.entry !== "absent")
-      return unverifiableIsolationResult(
-        worktreePath,
-        "a .git entry exists there but git could not resolve it",
-      );
-    for (let L of s) {
-      if (!h.has(L)) continue;
-      if (mayBeOutside(worktreePath, L))
+      return unverifiableIsolationResult(path, "a .git entry exists there but git could not resolve it");
+    for (let protectedRoot of allRoots) {
+      if (!protectedRoots.has(protectedRoot)) continue;
+      if (mayBeOutside(path, protectedRoot))
         return {
           ok: false,
           reason: "pin-is-protected-checkout",
           message: stripControlCharsForMessage(
-            `Refusing to use ${worktreePath} as an isolation worktree: it contains the protected checkout ${L}, so adopting it would disarm every isolation check for that checkout.`,
+            `Refusing to use ${path} as an isolation worktree: it contains the protected checkout ${protectedRoot}, so adopting it would disarm every isolation check for that checkout.`,
           ),
         };
     }
-    for (let L of y)
-      if (mayBeOutside(worktreePath, L))
+    for (let launchTree of launchTrees)
+      if (mayBeOutside(path, launchTree))
         return {
           ok: false,
           reason: "pin-is-own-launch-tree",
           message: stripControlCharsForMessage(
-            `This resume was started from inside ${worktreePath}, a non-git directory \u2014 nothing can confirm it as a separate isolation tree from there. Run the resume from the project checkout instead.`,
+            `This resume was started from inside ${path}, a non-git directory \u2014 nothing can confirm it as a separate isolation tree from there. Run the resume from the project checkout instead.`,
           ),
         };
     return {
@@ -416,135 +472,140 @@ function checkWorktreeIsolation_3(worktreePath, gitIdentity, r, s, h, y, S, w = 
       ok: false,
       reason: "invalid-linked-worktree",
       message: stripControlCharsForMessage(
-        `Refusing to use ${worktreePath} as an isolation worktree: its git metadata has symbolic links in place of ${ids.symlinkedRefStore.join(", ")}, which aliases another repository's refs into this tree. Recreate the worktree with git worktree add, then retry.`,
+        `Refusing to use ${path} as an isolation worktree: its git metadata has symbolic links in place of ${ids.symlinkedRefStore.join(", ")}, which aliases another repository's refs into this tree. Recreate the worktree with git worktree add, then retry.`,
       ),
     };
   if (ids.unexaminableRefStore.length > 0)
     return unverifiableIsolationResult(
-      worktreePath,
+      path,
       `its ref storage could not be fully examined (${ids.unexaminableRefStore[0]})`,
     );
-  let P = compareSameContainment(ids.topLevel, worktreePath);
-  if (P === "indeterminate")
+  let topLevelVerdict = compareSameContainment(ids.topLevel, path);
+  if (topLevelVerdict === "indeterminate")
     return unverifiableIsolationResult(
-      worktreePath,
+      path,
       `its working tree resolves to a path that cannot be safely compared (${ids.topLevel})`,
     );
-  if (P === "distinct")
+  if (topLevelVerdict === "distinct")
     return {
       ok: false,
       reason: "work-tree-elsewhere",
       message: stripControlCharsForMessage(
-        `Refusing to use ${worktreePath} as an isolation worktree: git resolves its working tree to ${ids.topLevel} (a core.worktree redirect, or a checkout discovered above it), so commands run there would write outside the worktree. Remove the redirect, restore the worktree's own .git, or recreate the worktree, then retry.`,
+        `Refusing to use ${path} as an isolation worktree: git resolves its working tree to ${ids.topLevel} (a core.worktree redirect, or a checkout discovered above it), so commands run there would write outside the worktree. Remove the redirect, restore the worktree's own .git, or recreate the worktree, then retry.`,
       ),
     };
-  let j = compareSameContainment(ids.commonDir, ids.gitDir) !== "distinct";
-  for (let L of S) {
-    let included = s.includes(L.root);
-    let Q = compareWithOutsideContainment(L.root, worktreePath);
-    if (Q !== "same" && y.has(L.root) && !h.has(L.root) && mayBeOutside(worktreePath, L.root)) {
-      if (!j && isOwnRepositoryCheckout(worktreePath, ids.commonDir)) continue;
-      if (!j)
+  let sharedGitDir = compareSameContainment(ids.commonDir, ids.gitDir) !== "distinct";
+  for (let pin of rootResults) {
+    let included = allRoots.includes(pin.root);
+    let containment = compareWithOutsideContainment(pin.root, path);
+    if (
+      containment !== "same" &&
+      launchTrees.has(pin.root) &&
+      !protectedRoots.has(pin.root) &&
+      mayBeOutside(path, pin.root)
+    ) {
+      if (!sharedGitDir && isOwnRepositoryCheckout(path, ids.commonDir)) continue;
+      if (!sharedGitDir)
         return {
           ok: false,
           reason: "pin-is-own-launch-tree",
           message: stripControlCharsForMessage(
-            `The worktree ${worktreePath} contains the directory this resume ran from, and nothing in this session vouches for its worktree registration \u2014 an isolation worktree never contains its own launch position. Run the resume from the project checkout instead.`,
+            `The worktree ${path} contains the directory this resume ran from, and nothing in this session vouches for its worktree registration \u2014 an isolation worktree never contains its own launch position. Run the resume from the project checkout instead.`,
           ),
         };
       return {
         ok: false,
         reason: "pin-is-own-launch-tree",
         message: stripControlCharsForMessage(
-          `This resume was started from inside ${worktreePath} (or a directory it contains), which is its own repository \u2014 it cannot be confirmed as a separate isolation worktree from there. Run the resume from the project checkout instead.`,
+          `This resume was started from inside ${path} (or a directory it contains), which is its own repository \u2014 it cannot be confirmed as a separate isolation worktree from there. Run the resume from the project checkout instead.`,
         ),
       };
     }
-    if (Q === "same") {
-      if (included && h.has(L.root))
+    if (containment === "same") {
+      if (included && protectedRoots.has(pin.root))
         return {
           ok: false,
           reason: "pin-is-protected-checkout",
           message: stripControlCharsForMessage(
-            `Refusing to use ${worktreePath} as an isolation worktree: it is the checkout this session launched from. An honest launch-from-inside and a forged record are indistinguishable here, so both are refused \u2014 launch from the parent checkout to enter or resume this worktree.`,
+            `Refusing to use ${path} as an isolation worktree: it is the checkout this session launched from. An honest launch-from-inside and a forged record are indistinguishable here, so both are refused \u2014 launch from the parent checkout to enter or resume this worktree.`,
           ),
         };
-      if (included && j)
+      if (included && sharedGitDir)
         return {
           ok: false,
           reason: "pin-is-own-launch-tree",
           message: stripControlCharsForMessage(
-            `This resume was started from inside ${worktreePath}, which is its own repository \u2014 it cannot be confirmed as a separate isolation worktree from there. Run the resume from the project checkout instead.`,
+            `This resume was started from inside ${path}, which is its own repository \u2014 it cannot be confirmed as a separate isolation worktree from there. Run the resume from the project checkout instead.`,
           ),
         };
       continue;
     }
-    if (L.entry === "unverifiable")
+    if (pin.entry === "unverifiable")
       return unverifiableIsolationResult(
-        worktreePath,
-        `the protected checkout ${L.root} has a .git entry that could not be examined`,
+        path,
+        `the protected checkout ${pin.root} has a .git entry that could not be examined`,
       );
-    if (typeof L.ids !== "object") {
-      if (L.ids === "no-repo") continue;
+    if (typeof pin.ids !== "object") {
+      if (pin.ids === "no-repo") continue;
       return unverifiableIsolationResult(
-        worktreePath,
-        `the protected checkout ${L.root} has git metadata that could not be resolved`,
+        path,
+        `the protected checkout ${pin.root} has git metadata that could not be resolved`,
       );
     }
-    let Z = compareWithOutsideContainment(ids.gitDir, L.ids.gitDir);
-    if (Z === "indeterminate")
+    let gitDirVerdict = compareWithOutsideContainment(ids.gitDir, pin.ids.gitDir);
+    if (gitDirVerdict === "indeterminate")
       return unverifiableIsolationResult(
-        worktreePath,
+        path,
         `its git directory (${ids.gitDir}) could not be safely compared with the protected checkout's`,
       );
-    if (Z === "same")
+    if (gitDirVerdict === "same")
       return {
         ok: false,
         reason: "shared-git-dir",
         message: stripControlCharsForMessage(
-          `Refusing to use ${worktreePath} as an isolation worktree: its git directory is the shared checkout's own (${ids.gitDir}), so git commands there move the protected checkout's branches and refs. This usually means the worktree's .git file is stale or was rewritten \u2014 recreate the worktree, then retry.`,
+          `Refusing to use ${path} as an isolation worktree: its git directory is the shared checkout's own (${ids.gitDir}), so git commands there move the protected checkout's branches and refs. This usually means the worktree's .git file is stale or was rewritten \u2014 recreate the worktree, then retry.`,
         ),
       };
   }
-  if (j && h.size === 0) {
-    if (w)
+  if (sharedGitDir && protectedRoots.size === 0) {
+    if (requireWitness)
       return {
         ok: false,
         reason: "pin-is-own-launch-tree",
         message: stripControlCharsForMessage(
-          `The worktree ${worktreePath} is its own repository and nothing vouches for it from this session \u2014 it cannot be resumed or re-entered. Re-create it (a fresh isolated tree); the existing tree and its work remain on disk at ${worktreePath} for manual recovery.`,
+          `The worktree ${path} is its own repository and nothing vouches for it from this session \u2014 it cannot be resumed or re-entered. Re-create it (a fresh isolated tree); the existing tree and its work remain on disk at ${path} for manual recovery.`,
         ),
       };
-    if (R) {
-      for (let L of y)
-        if (compareWithOutsideContainment(L, worktreePath) !== "same" && mayBeOutside(L, worktreePath))
+    if (declineSelfOwningPin) {
+      for (let launchTree of launchTrees)
+        if (compareWithOutsideContainment(launchTree, path) !== "same" && mayBeOutside(launchTree, path))
           return {
             ok: false,
             reason: "pin-is-own-launch-tree",
             message: stripControlCharsForMessage(
-              `The worktree ${worktreePath} sits under the directory this resume ran from, and nothing else vouches for it \u2014 it cannot be resumed or re-entered. Re-create it (a fresh isolated tree); the existing tree and its work remain on disk at ${worktreePath} for manual recovery. Where it has a parent checkout, resuming from there also works.`,
+              `The worktree ${path} sits under the directory this resume ran from, and nothing else vouches for it \u2014 it cannot be resumed or re-entered. Re-create it (a fresh isolated tree); the existing tree and its work remain on disk at ${path} for manual recovery. Where it has a parent checkout, resuming from there also works.`,
             ),
           };
     }
   }
-  for (let L of s) {
-    if (compareWithOutsideContainment(L, worktreePath) === "same") continue;
-    if (!mayBeOutside(worktreePath, L)) continue;
-    if (y.has(L) && !h.has(L)) {
-      if (!j && isOwnRepositoryCheckout(worktreePath, ids.commonDir)) continue;
-      if (!j)
+  for (let protectedRoot of allRoots) {
+    if (compareWithOutsideContainment(protectedRoot, path) === "same") continue;
+    if (!mayBeOutside(path, protectedRoot)) continue;
+    if (launchTrees.has(protectedRoot) && !protectedRoots.has(protectedRoot)) {
+      if (!sharedGitDir && isOwnRepositoryCheckout(path, ids.commonDir)) continue;
+      if (!sharedGitDir)
         return {
           ok: false,
           reason: "pin-is-own-launch-tree",
           message: stripControlCharsForMessage(
-            `The worktree ${worktreePath} contains the directory this resume ran from, and nothing in this session vouches for its worktree registration \u2014 an isolation worktree never contains its own launch position. Run the resume from the project checkout instead.`,
+            `The worktree ${path} contains the directory this resume ran from, and nothing in this session vouches for its worktree registration \u2014 an isolation worktree never contains its own launch position. Run the resume from the project checkout instead.`,
           ),
         };
       return {
         ok: false,
         reason: "pin-is-own-launch-tree",
         message: stripControlCharsForMessage(
-          `This resume was started from inside ${worktreePath} (or a directory it contains), which is its own repository \u2014 it cannot be confirmed as a separate isolation worktree from there. Run the resume from the project checkout instead.`,
+          `This resume was started from inside ${path} (or a directory it contains), which is its own repository \u2014 it cannot be confirmed as a separate isolation worktree from there. Run the resume from the project checkout instead.`,
         ),
       };
     }
@@ -552,27 +613,27 @@ function checkWorktreeIsolation_3(worktreePath, gitIdentity, r, s, h, y, S, w = 
       ok: false,
       reason: "pin-is-protected-checkout",
       message: stripControlCharsForMessage(
-        `Refusing to use ${worktreePath} as an isolation worktree: it contains the protected checkout ${L}, so adopting it would disarm every isolation check for that checkout.`,
+        `Refusing to use ${path} as an isolation worktree: it contains the protected checkout ${protectedRoot}, so adopting it would disarm every isolation check for that checkout.`,
       ),
     };
   }
-  let G = compareSameContainment(ids.commonDir, ids.gitDir);
-  if (G === "indeterminate")
+  let commonDirVerdict = compareSameContainment(ids.commonDir, ids.gitDir);
+  if (commonDirVerdict === "indeterminate")
     return unverifiableIsolationResult(
-      worktreePath,
+      path,
       `its git metadata (common dir ${ids.commonDir}) could not be safely compared`,
     );
-  if (G === "distinct") {
-    let L = compareSameContainment(dirname(ids.gitDir), join(ids.commonDir, "worktrees"));
-    let q =
+  if (commonDirVerdict === "distinct") {
+    let adminDirVerdict = compareSameContainment(dirname(ids.gitDir), join(ids.commonDir, "worktrees"));
+    let backPointerOk =
       ids.backPointer !== null &&
-      compareSameContainment(resolve(ids.gitDir, ids.backPointer), join(worktreePath, ".git")) === "same";
-    if (L !== "same" || !q)
+      compareSameContainment(resolve(ids.gitDir, ids.backPointer), join(path, ".git")) === "same";
+    if (adminDirVerdict !== "same" || !backPointerOk)
       return {
         ok: false,
         reason: "invalid-linked-worktree",
         message: stripControlCharsForMessage(
-          `Refusing to use ${worktreePath} as an isolation worktree: it uses another repository's refs (${ids.commonDir}) without being a registered worktree of it (its admin directory or back-pointer does not check out). Recreate the worktree with git worktree add, then retry.`,
+          `Refusing to use ${path} as an isolation worktree: it uses another repository's refs (${ids.commonDir}) without being a registered worktree of it (its admin directory or back-pointer does not check out). Recreate the worktree with git worktree add, then retry.`,
         ),
       };
   }
@@ -582,28 +643,28 @@ function checkWorktreeIsolation_3(worktreePath, gitIdentity, r, s, h, y, S, w = 
   };
 }
 //@ chunk-s61vbvea.js:441228-441335 placement
-function candidateRepoRoots(worktreePath, n, r) {
-  let s = basename(r.commonDir) === ".git" ? dirname(r.commonDir) : null;
-  return uniq([...n, ...(s !== null ? [s] : [])]);
+function candidateRepoRoots(worktreePath, repoRoots, gitIdentity) {
+  let commonDirRoot = basename(gitIdentity.commonDir) === ".git" ? dirname(gitIdentity.commonDir) : null;
+  return uniq([...repoRoots, ...(commonDirRoot !== null ? [commonDirRoot] : [])]);
 }
 //@ chunk-s61vbvea.js:441335-441614 placement
 /**
  * 返回 {ok:false, reason:"unverifiable"}：worktree 的 git 身份无法核验，拒绝用作隔离 worktree 的说明。
  */
-function unverifiableIsolationResult(e, n) {
+function unverifiableIsolationResult(a, b) {
   return {
     ok: false,
     reason: "unverifiable",
     message: stripControlCharsForMessage(
-      `Refusing to use ${e} as an isolation worktree: ${n}, so its git identity could not be verified. Isolation is refused rather than assumed \u2014 recreate the worktree (or remove the corrupt .git entry) and retry.`,
+      `Refusing to use ${a} as an isolation worktree: ${b}, so its git identity could not be verified. Isolation is refused rather than assumed \u2014 recreate the worktree (or remove the corrupt .git entry) and retry.`,
     ),
   };
 }
 //@ chunk-s61vbvea.js:441614-441710 placement
-async function readGitIdentityAsync(e) {
-  let [n, gitDirs] = await Promise.all([gitEntryPresenceAsync(join(e, ".git")), readGitDirs(e)]);
+async function readGitIdentityAsync(dir) {
+  let [entry, gitDirs] = await Promise.all([gitEntryPresenceAsync(join(dir, ".git")), readGitDirs(dir)]);
   return {
-    entry: n,
+    entry,
     ids: gitDirs,
   };
 }
@@ -615,18 +676,18 @@ function readGitIdentitySync(cwd) {
   };
 }
 //@ chunk-s61vbvea.js:441766-441843 placement
-async function gitEntryPresenceAsync(e) {
+async function gitEntryPresenceAsync(path) {
   try {
-    await lstat(e);
+    await lstat(path);
     return "present";
   } catch (error) {
     return classifyGitEntryError(error);
   }
 }
 //@ chunk-s61vbvea.js:441843-441908 placement
-function gitEntryPresenceSync(e) {
+function gitEntryPresenceSync(path) {
   try {
-    lstatSync(e);
+    lstatSync(path);
     return "present";
   } catch (error) {
     return classifyGitEntryError(error);
@@ -654,69 +715,73 @@ function classifyGitEntryError(error) {
   return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? "absent" : "unverifiable";
 }
 //@ chunk-s61vbvea.js:442136-442229 placement
-var GIT_IDENTITY_TIMEOUT_MS = 2000;
-var GIT_IDENTITY_ARGS = [
-  ...GIT_SAFE_GLOBAL_ARGS,
-  "rev-parse",
-  "--absolute-git-dir",
-  "--show-toplevel",
-  "--git-common-dir",
-];
+var GIT_IDENTITY_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GIT_IDENTITY_ARGS;
+deferInit("chunk-s61vbvea.js:442136", () => {
+  GIT_IDENTITY_TIMEOUT_MS = 2000;
+  GIT_IDENTITY_ARGS = [
+    ...GIT_SAFE_GLOBAL_ARGS,
+    "rev-parse",
+    "--absolute-git-dir",
+    "--show-toplevel",
+    "--git-common-dir",
+  ];
+});
 //@ chunk-s61vbvea.js:442229-443089 placement
-async function readGitDirs(realCandidate) {
-  let n = await execFileNoThrowWithCwd(gitExe(), [...GIT_IDENTITY_ARGS], {
-    cwd: realCandidate,
+async function readGitDirs(dir) {
+  let revParseResult = await execFileNoThrowWithCwd(gitExe(), [...GIT_IDENTITY_ARGS], {
+    cwd: dir,
     env: getRemoteHostSessionCount(),
     timeout: GIT_IDENTITY_TIMEOUT_MS,
     useToolMemoryCgroup: false,
     preserveOutputOnError: true,
   });
-  if (n.code !== 0) {
-    if (await readDirNamesCapped(realCandidate)) return "no-repo";
-    if (isNotWorkTreeError(n.stderr)) {
-      let y = await execFileNoThrowWithCwd(
+  if (revParseResult.code !== 0) {
+    if (await readDirNamesCapped(dir)) return "no-repo";
+    if (isNotWorkTreeError(revParseResult.stderr)) {
+      let bareResult = await execFileNoThrowWithCwd(
         gitExe(),
         [...GIT_SAFE_GLOBAL_ARGS, "rev-parse", "--absolute-git-dir", "--git-common-dir"],
         {
-          cwd: realCandidate,
+          cwd: dir,
           env: getRemoteHostSessionCount(),
           timeout: GIT_IDENTITY_TIMEOUT_MS,
           useToolMemoryCgroup: false,
           preserveOutputOnError: true,
         },
       );
-      if (y.code === 0) {
-        let bareRevParse = parseBareRevParse(realCandidate, y.stdout);
+      if (bareResult.code === 0) {
+        let bareRevParse = parseBareRevParse(dir, bareResult.stdout);
         if (bareRevParse !== null) {
-          let [gitdirFile, R] = await Promise.all([
+          let [gitdirFile, symlinkScan] = await Promise.all([
             readGitdirFile(bareRevParse.gitDir),
             scanGitDirSymlinks(bareRevParse.gitDir),
           ]);
           return {
             ...bareRevParse,
             backPointer: gitdirFile,
-            symlinkedRefStore: R.symlinks,
-            unexaminableRefStore: R.unexaminable,
+            symlinkedRefStore: symlinkScan.symlinks,
+            unexaminableRefStore: symlinkScan.unexaminable,
           };
         }
       }
       return "error";
     }
-    if (isNotGitRepoError(n.stderr)) return "no-repo";
-    if (typeof n.exitCode === "number" && (await noGitAncestorEntries(realCandidate))) return "no-repo";
+    if (isNotGitRepoError(revParseResult.stderr)) return "no-repo";
+    if (typeof revParseResult.exitCode === "number" && (await noGitAncestorEntries(dir))) return "no-repo";
     return "error";
   }
-  let revParseOutput = parseRevParseOutput(realCandidate, n.stdout);
+  let revParseOutput = parseRevParseOutput(dir, revParseResult.stdout);
   if (revParseOutput === null) return "error";
-  let [gitdirFile, h] = await Promise.all([
+  let [gitdirFile, symlinkScan] = await Promise.all([
     readGitdirFile(revParseOutput.gitDir),
     scanGitDirSymlinks(revParseOutput.gitDir),
   ]);
   return {
     ...revParseOutput,
     backPointer: gitdirFile,
-    symlinkedRefStore: h.symlinks,
-    unexaminableRefStore: h.unexaminable,
+    symlinkedRefStore: symlinkScan.symlinks,
+    unexaminableRefStore: symlinkScan.unexaminable,
   };
 }
 //@ chunk-s61vbvea.js:443089-443978 placement
@@ -790,47 +855,49 @@ function probeGitIdentitySync(cwd) {
 /**
  * 把控制字符替换为空格，用于提示文案。
  */
-function stripControlCharsForMessage(e) {
-  return e.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ");
+function stripControlCharsForMessage(text) {
+  return text.replace(/[\u0000-\u001f\u007f-\u009f]/g, " ");
 }
 //@ chunk-s61vbvea.js:444047-444157 placement
 function isNotGitRepoError(stderr) {
   return /not a git repository/i.test(stderr) || /gitfile does not point to a valid repository/i.test(stderr);
 }
 //@ chunk-s61vbvea.js:444157-444281 placement
-async function noGitAncestorEntries(e) {
-  let n = gitAncestorEntryPaths(e);
-  if (n === null) return false;
-  return (await Promise.all(n.map((s) => gitEntryPresenceAsync(s)))).every((s) => s === "absent");
+async function noGitAncestorEntries(cwd) {
+  let entries = gitAncestorEntryPaths(cwd);
+  if (entries === null) return false;
+  return (await Promise.all(entries.map((entryPath) => gitEntryPresenceAsync(entryPath)))).every(
+    (presence) => presence === "absent",
+  );
 }
 //@ chunk-s61vbvea.js:444281-444356 placement
-function hasNoRepoAncestor(cwd) {
-  let n = gitAncestorEntryPaths(cwd);
-  return n !== null && n.every((r) => gitEntryPresenceSync(r) === "absent");
+function hasNoRepoAncestor(path) {
+  let entries = gitAncestorEntryPaths(path);
+  return entries !== null && entries.every((entryPath) => gitEntryPresenceSync(entryPath) === "absent");
 }
 //@ chunk-s61vbvea.js:444356-444669 placement
 /**
  * 列出路径各级祖先下的 .git 与 HEAD 路径（Windows 或无法规范化、非 UTF-8 时返回 null），用于确认祖先中没有仓库。
  */
-function gitAncestorEntryPaths(e) {
+function gitAncestorEntryPaths(path) {
   if (getPlatform_2() === "windows") return null;
-  if (resolveContainmentTarget(e).canonical === null) return null;
-  let n;
+  if (resolveContainmentTarget(path).canonical === null) return null;
+  let realPath;
   try {
-    let s = realpathSync.native(e, {
+    let realBytes = realpathSync.native(path, {
       encoding: "buffer",
     });
-    n = s.toString("utf8");
-    if (!Buffer.from(n, "utf8").equals(s)) return null;
+    realPath = realBytes.toString("utf8");
+    if (!Buffer.from(realPath, "utf8").equals(realBytes)) return null;
   } catch {
     return null;
   }
-  let r = [];
-  for (let s = n; ;) {
-    r.push(join(s, ".git"), join(s, "HEAD"));
-    let h = dirname(s);
-    if (h === s) return r;
-    s = h;
+  let entries = [];
+  for (let dir = realPath; ;) {
+    entries.push(join(dir, ".git"), join(dir, "HEAD"));
+    let parentDir = dirname(dir);
+    if (parentDir === dir) return entries;
+    dir = parentDir;
   }
 }
 //@ chunk-s61vbvea.js:444669-444772 placement = isRealPathWithinTeamDir (1)
@@ -858,7 +925,7 @@ function isNotWorkTreeError(stderr) {
   return stderr.includes("this operation must be run in a work tree");
 }
 //@ chunk-s61vbvea.js:444941-445174 placement
-function parseBareRevParse(e, stdout) {
+function parseBareRevParse(topLevel, stdout) {
   let filtered = stdout
     .split(
       `
@@ -866,17 +933,17 @@ function parseBareRevParse(e, stdout) {
     )
     .filter((line) => line.length > 0);
   if (filtered.length !== 2) return null;
-  if (filtered.some((h) => /[\u0000-\u001f\u007f-\u009f]/.test(h))) return null;
-  let s = filtered[1];
+  if (filtered.some((line) => /[\u0000-\u001f\u007f-\u009f]/.test(line))) return null;
+  let commonDirRaw = filtered[1];
   return {
     gitDir: filtered[0],
-    topLevel: e,
-    commonDir: isAbsolute(s) ? s : join(e, s),
+    topLevel,
+    commonDir: isAbsolute(commonDirRaw) ? commonDirRaw : join(topLevel, commonDirRaw),
     isBare: true,
   };
 }
 //@ chunk-s61vbvea.js:445174-445400 placement
-function parseRevParseOutput(e, stdout) {
+function parseRevParseOutput(baseDir, stdout) {
   let filtered = stdout
     .split(
       `
@@ -884,12 +951,12 @@ function parseRevParseOutput(e, stdout) {
     )
     .filter((line) => line.length > 0);
   if (filtered.length !== 3) return null;
-  if (filtered.some((h) => /[\u0000-\u001f\u007f-\u009f]/.test(h))) return null;
-  let s = filtered[2];
+  if (filtered.some((line) => /[\u0000-\u001f\u007f-\u009f]/.test(line))) return null;
+  let commonDirRaw = filtered[2];
   return {
     gitDir: filtered[0],
     topLevel: filtered[1],
-    commonDir: isAbsolute(s) ? s : resolve(e, s),
+    commonDir: isAbsolute(commonDirRaw) ? commonDirRaw : resolve(baseDir, commonDirRaw),
   };
 }
 //@ chunk-s61vbvea.js:445400-445413 placement
@@ -898,14 +965,14 @@ var MAX_GITDIR_FILE_BYTES = 65536;
 async function readGitdirFile(gitDir) {
   try {
     if (!(await lstat(join(gitDir, "gitdir"))).isFile()) return null;
-    let r = await open(join(gitDir, "gitdir"), "r");
+    let handle = await open(join(gitDir, "gitdir"), "r");
     try {
-      if ((await r.stat()).size > MAX_GITDIR_FILE_BYTES) return null;
-      let s = Buffer.alloc(MAX_GITDIR_FILE_BYTES);
-      let { bytesRead } = await r.read(s, 0, MAX_GITDIR_FILE_BYTES, 0);
-      return s.toString("utf-8", 0, bytesRead).trim();
+      if ((await handle.stat()).size > MAX_GITDIR_FILE_BYTES) return null;
+      let buffer = Buffer.alloc(MAX_GITDIR_FILE_BYTES);
+      let { bytesRead } = await handle.read(buffer, 0, MAX_GITDIR_FILE_BYTES, 0);
+      return buffer.toString("utf-8", 0, bytesRead).trim();
     } finally {
-      await r.close();
+      await handle.close();
     }
   } catch {
     return null;
@@ -915,14 +982,14 @@ async function readGitdirFile(gitDir) {
 function readGitdirFileSync(gitDir) {
   try {
     if (!lstatSync(join(gitDir, "gitdir")).isFile()) return null;
-    let n = openSync(join(gitDir, "gitdir"), "r");
+    let fd = openSync(join(gitDir, "gitdir"), "r");
     try {
-      if (fstatSync(n).size > MAX_GITDIR_FILE_BYTES) return null;
-      let r = Buffer.alloc(MAX_GITDIR_FILE_BYTES);
-      let s = readSync(n, r, 0, MAX_GITDIR_FILE_BYTES, 0);
-      return r.toString("utf-8", 0, s).trim();
+      if (fstatSync(fd).size > MAX_GITDIR_FILE_BYTES) return null;
+      let buffer = Buffer.alloc(MAX_GITDIR_FILE_BYTES);
+      let bytesRead = readSync(fd, buffer, 0, MAX_GITDIR_FILE_BYTES, 0);
+      return buffer.toString("utf-8", 0, bytesRead).trim();
     } finally {
-      closeSync(n);
+      closeSync(fd);
     }
   } catch {
     return null;
@@ -938,23 +1005,23 @@ var MAX_SYMLINK_SCAN_ENTRIES = 4096;
 async function scanGitDirSymlinks(gitDir) {
   let symlinks = [];
   let unexaminable = [];
-  let s;
+  let names;
   try {
-    s = await readdir(gitDir);
+    names = await readdir(gitDir);
   } catch (error) {
     if (classifyGitEntryError(error) !== "absent") unexaminable.push("(git dir unreadable)");
-    s = [];
+    names = [];
   }
-  if (s.length > MAX_SYMLINK_SCAN_ENTRIES) {
+  if (names.length > MAX_SYMLINK_SCAN_ENTRIES) {
     unexaminable.push("(over-cap top-level entries)");
-    s = [];
+    names = [];
   }
   await Promise.all(
-    s.map(async (h) => {
+    names.map(async (name) => {
       try {
-        if ((await lstat(join(gitDir, h))).isSymbolicLink()) symlinks.push(h);
+        if ((await lstat(join(gitDir, name))).isSymbolicLink()) symlinks.push(name);
       } catch (error) {
-        if (classifyGitEntryError(error) !== "absent") unexaminable.push(h);
+        if (classifyGitEntryError(error) !== "absent") unexaminable.push(name);
       }
     }),
   );
@@ -979,24 +1046,24 @@ async function scanRefsSymlinks(dir, label, depth, symlinks, unexaminable, budge
     unexaminable.push(`${label} (too many entries to examine)`);
     return;
   }
-  let S;
+  let names;
   try {
-    S = await readdir(dir);
+    names = await readdir(dir);
   } catch (error) {
     if (classifyGitEntryError(error) !== "absent") unexaminable.push(`${label} (unreadable)`);
     return;
   }
-  for (let w of S) {
+  for (let name of names) {
     if (--budget.entries < 0) {
       unexaminable.push(`${label} (too many entries to examine)`);
       return;
     }
-    let dir_2 = join(dir, w);
-    let label_2 = `${label}/${w}`;
+    let dir_2 = join(dir, name);
+    let label_2 = `${label}/${name}`;
     try {
-      let P = await lstat(dir_2);
-      if (P.isSymbolicLink()) symlinks.push(label_2);
-      else if (P.isDirectory())
+      let stats = await lstat(dir_2);
+      if (stats.isSymbolicLink()) symlinks.push(label_2);
+      else if (stats.isDirectory())
         await scanRefsSymlinks(dir_2, label_2, depth + 1, symlinks, unexaminable, budget);
     } catch (error) {
       if (classifyGitEntryError(error) !== "absent") unexaminable.push(`${label_2} (unreadable)`);
@@ -1008,110 +1075,111 @@ async function scanRefsSymlinks(dir, label, depth, symlinks, unexaminable, budge
  * 同步扫描 git 目录顶层与 refs 下的符号链接，返回符号链接列表和无法检查的项（不可读、条目超限等）。
  */
 function scanGitDirSymlinksSync(gitDir) {
-  let n = [];
-  let r = [];
-  let s;
+  let symlinks = [];
+  let unexaminable = [];
+  let names;
   try {
-    s = readdirSync(gitDir);
+    names = readdirSync(gitDir);
   } catch (error) {
-    if (classifyGitEntryError(error) !== "absent") r.push("(git dir unreadable)");
-    s = [];
+    if (classifyGitEntryError(error) !== "absent") unexaminable.push("(git dir unreadable)");
+    names = [];
   }
-  if (s.length > MAX_SYMLINK_SCAN_ENTRIES) {
-    r.push("(over-cap top-level entries)");
-    s = [];
+  if (names.length > MAX_SYMLINK_SCAN_ENTRIES) {
+    unexaminable.push("(over-cap top-level entries)");
+    names = [];
   }
-  for (let h of s)
+  for (let name of names)
     try {
-      if (lstatSync(join(gitDir, h)).isSymbolicLink()) n.push(h);
+      if (lstatSync(join(gitDir, name)).isSymbolicLink()) symlinks.push(name);
     } catch (error) {
-      if (classifyGitEntryError(error) !== "absent") r.push(h);
+      if (classifyGitEntryError(error) !== "absent") unexaminable.push(name);
     }
-  scanRefsSymlinksSync(join(gitDir, "refs"), "refs", 0, n, r, {
+  scanRefsSymlinksSync(join(gitDir, "refs"), "refs", 0, symlinks, unexaminable, {
     entries: MAX_SYMLINK_SCAN_ENTRIES,
   });
   return {
-    symlinks: n,
-    unexaminable: r,
+    symlinks,
+    unexaminable,
   };
 }
 //@ chunk-s61vbvea.js:447222-447714 placement
 /**
  * 递归扫描 refs 目录中的符号链接：受深度与总条目数限制，超限或不可读的位置记入无法检查列表。
  */
-function scanRefsSymlinksSync(e, n, r, s, h, y) {
-  if (r > MAX_SYMLINK_SCAN_DEPTH) {
-    h.push(`${n} (too deep to examine)`);
+function scanRefsSymlinksSync(dir, relativePath, depth, symlinks, unexaminable, budget) {
+  if (depth > MAX_SYMLINK_SCAN_DEPTH) {
+    unexaminable.push(`${relativePath} (too deep to examine)`);
     return;
   }
-  if (y.entries <= 0) {
-    h.push(`${n} (too many entries to examine)`);
+  if (budget.entries <= 0) {
+    unexaminable.push(`${relativePath} (too many entries to examine)`);
     return;
   }
-  let S;
+  let names;
   try {
-    S = readdirSync(e);
+    names = readdirSync(dir);
   } catch (error) {
-    if (classifyGitEntryError(error) !== "absent") h.push(`${n} (unreadable)`);
+    if (classifyGitEntryError(error) !== "absent") unexaminable.push(`${relativePath} (unreadable)`);
     return;
   }
-  for (let w of S) {
-    if (--y.entries < 0) {
-      h.push(`${n} (too many entries to examine)`);
+  for (let name of names) {
+    if (--budget.entries < 0) {
+      unexaminable.push(`${relativePath} (too many entries to examine)`);
       return;
     }
-    let R = join(e, w);
-    let x = `${n}/${w}`;
+    let fullPath = join(dir, name);
+    let relativeChild = `${relativePath}/${name}`;
     try {
-      let P = lstatSync(R);
-      if (P.isSymbolicLink()) s.push(x);
-      else if (P.isDirectory()) scanRefsSymlinksSync(R, x, r + 1, s, h, y);
+      let stats = lstatSync(fullPath);
+      if (stats.isSymbolicLink()) symlinks.push(relativeChild);
+      else if (stats.isDirectory())
+        scanRefsSymlinksSync(fullPath, relativeChild, depth + 1, symlinks, unexaminable, budget);
     } catch (error) {
-      if (classifyGitEntryError(error) !== "absent") h.push(`${x} (unreadable)`);
+      if (classifyGitEntryError(error) !== "absent") unexaminable.push(`${relativeChild} (unreadable)`);
     }
   }
 }
 //@ chunk-s61vbvea.js:447714-447878 placement
-function comparePathTargets(e, n, r) {
-  let containmentTarget = resolveContainmentTarget(e);
-  let containmentTarget_2 = resolveContainmentTarget(n);
+function comparePathTargets(pathA, pathB, compare) {
+  let containmentTarget = resolveContainmentTarget(pathA);
+  let containmentTarget_2 = resolveContainmentTarget(pathB);
   if (hasUnresolvedCanonicalPath(containmentTarget) || hasUnresolvedCanonicalPath(containmentTarget_2))
     return "indeterminate";
   if (containmentTarget.skipped !== containmentTarget_2.skipped) return "indeterminate";
-  return r(containmentTarget, containmentTarget_2) && r(containmentTarget_2, containmentTarget)
+  return compare(containmentTarget, containmentTarget_2) && compare(containmentTarget_2, containmentTarget)
     ? "same"
     : "distinct";
 }
 //@ chunk-s61vbvea.js:447878-447990 placement
-function mayBeOutside(e, n) {
-  let containmentTarget = resolveContainmentTarget(e);
-  let containmentTarget_2 = resolveContainmentTarget(n);
+function mayBeOutside(pathA, pathB) {
+  let containmentTarget = resolveContainmentTarget(pathA);
+  let containmentTarget_2 = resolveContainmentTarget(pathB);
   if (hasUnresolvedCanonicalPath(containmentTarget) || hasUnresolvedCanonicalPath(containmentTarget_2))
     return true;
   if (containmentTarget.skipped !== containmentTarget_2.skipped) return true;
   return isOutsideContainment(containmentTarget_2, containmentTarget);
 }
 //@ chunk-s61vbvea.js:447990-448026 placement
-function compareWithOutsideContainment(e, n) {
-  return comparePathTargets(e, n, isOutsideContainment);
+function compareWithOutsideContainment(pathA, pathB) {
+  return comparePathTargets(pathA, pathB, isOutsideContainment);
 }
 //@ chunk-s61vbvea.js:448026-448062 placement
 /**
  * 两个路径的包含关系比较（同路径判定）。
  */
-function compareSameContainment(e, n) {
-  return comparePathTargets(e, n, isSameContainmentPath);
+function compareSameContainment(pathA, pathB) {
+  return comparePathTargets(pathA, pathB, isSameContainmentPath);
 }
 //@ chunk-s61vbvea.js:448062-448139 placement
-function isOwnRepositoryCheckout(e, commonDir) {
-  let r = worktreeLocationOf(e);
-  return r !== null && compareWithOutsideContainment(r.checkout, dirname(commonDir)) === "same";
+function isOwnRepositoryCheckout(path, commonDir) {
+  let location = worktreeLocationOf(path);
+  return location !== null && compareWithOutsideContainment(location.checkout, dirname(commonDir)) === "same";
 }
 //@ chunk-s61vbvea.js:448139-448361 placement
 /**
  * 判断 worktree 路径确属一个仓库，且该仓库与给定的某个目录的规范 git 根相同（三处 R6 身份比对都为 same）。
  */
-function isSameRepoWorktree(worktreePath, n) {
+function isSameRepoWorktree(worktreePath, roots) {
   let repoRootForWorktreePath = getRepoRootForWorktreePath(worktreePath);
   if (repoRootForWorktreePath === null) return false;
   let gitRootUncached = findGitRootUncached(worktreePath);
@@ -1123,8 +1191,8 @@ function isSameRepoWorktree(worktreePath, n) {
     compareSameContainment(repoRootForWorktreePath, canonicalGitRootUncached) !== "same"
   )
     return false;
-  return n.some((y) => {
-    let canonicalGitRoot = findCanonicalGitRoot(y);
+  return roots.some((root) => {
+    let canonicalGitRoot = findCanonicalGitRoot(root);
     return (
       canonicalGitRoot !== null &&
       compareSameContainment(repoRootForWorktreePath, canonicalGitRoot) === "same"
@@ -1135,38 +1203,38 @@ function isSameRepoWorktree(worktreePath, n) {
 /**
  * 求路径所属的 git 根目录（普通与规范化根，加上额外候选），排除特殊路径并去重。
  */
-function gitRootsForPath(e, ...n) {
-  if (isNonWslUncPath(e) || isNetworkMountRoot(e)) return [];
+function gitRootsForPath(path, ...extraRoots) {
+  if (isNonWslUncPath(path) || isNetworkMountRoot(path)) return [];
   return uniq(
-    [findGitRoot(e), findCanonicalGitRoot(e), ...n].filter(
-      (r) => r !== null && r !== undefined && !isNonWslUncPath(r) && !isNetworkMountRoot(r),
+    [findGitRoot(path), findCanonicalGitRoot(path), ...extraRoots].filter(
+      (root) => root !== null && root !== undefined && !isNonWslUncPath(root) && !isNetworkMountRoot(root),
     ),
   );
 }
 //@ chunk-s61vbvea.js:448485-449839 placement
-function BLOCKED_CWD_MESSAGES(path, worktreePath) {
+function BLOCKED_CWD_MESSAGES(path, isolationRoot) {
   {
-    let r = sharedCheckoutRoots(path, worktreePath);
-    if (r.escaped) {
-      if (hasUnresolvedCanonicalPath(r.dir))
-        return `This command was blocked because its working directory is spelled in a form that cannot be safely resolved (for example through a symlink storing a raw dot segment, a network-share or device-namespace shape, or an unreadable ancestor directory). If the directory is inside the worktree ${worktreePath}, re-run the command from its direct symlink-free path.`;
-      if (r.dir.skipped && !r.roots.some((root) => root.skipped || hasUnresolvedCanonicalPath(root)))
-        return `This command was blocked because its working directory is network-shaped (a UNC share or /net automount spelling) while the protected checkout is local. If the directory is genuinely inside the worktree ${worktreePath}, re-run the command from its local, plainly-spelled path.`;
-      let { noun, possessive } = isolationSubjectWords(worktreePath);
-      let y = hasHostWorktreeDeclaration() ? null : linkedWorktreeRepoRoot(r);
-      if (y !== null) {
-        let S = stripControlCharsForMessage(worktreePath);
-        return `${noun} is isolated in the worktree ${S}, but this command's working directory (${stripControlCharsForMessage(path)}) is in a different worktree (${stripControlCharsForMessage(y)}). Refusing to run it there \u2014 ${possessive} commands must run inside its own worktree. Re-run the command from ${S}.`;
+    let roots = sharedCheckoutRoots(path, isolationRoot);
+    if (roots.escaped) {
+      if (hasUnresolvedCanonicalPath(roots.dir))
+        return `This command was blocked because its working directory is spelled in a form that cannot be safely resolved (for example through a symlink storing a raw dot segment, a network-share or device-namespace shape, or an unreadable ancestor directory). If the directory is inside the worktree ${isolationRoot}, re-run the command from its direct symlink-free path.`;
+      if (roots.dir.skipped && !roots.roots.some((root) => root.skipped || hasUnresolvedCanonicalPath(root)))
+        return `This command was blocked because its working directory is network-shaped (a UNC share or /net automount spelling) while the protected checkout is local. If the directory is genuinely inside the worktree ${isolationRoot}, re-run the command from its local, plainly-spelled path.`;
+      let { noun, possessive } = isolationSubjectWords(isolationRoot);
+      let foreignRoot = hasHostWorktreeDeclaration() ? null : linkedWorktreeRepoRoot(roots);
+      if (foreignRoot !== null) {
+        let worktreeLabel = stripControlCharsForMessage(isolationRoot);
+        return `${noun} is isolated in the worktree ${worktreeLabel}, but this command's working directory (${stripControlCharsForMessage(path)}) is in a different worktree (${stripControlCharsForMessage(foreignRoot)}). Refusing to run it there \u2014 ${possessive} commands must run inside its own worktree. Re-run the command from ${worktreeLabel}.`;
       }
-      return `${noun} is isolated in the worktree ${worktreePath}, but this command's working directory resolved to the shared checkout (${path}). Refusing to run it there \u2014 ${possessive} commands must run inside its worktree. Re-run the command from ${worktreePath}.${describeCaseOnlyMismatch(r.dir.canonical, r.worktree.canonical, worktreePath)}`;
+      return `${noun} is isolated in the worktree ${isolationRoot}, but this command's working directory resolved to the shared checkout (${path}). Refusing to run it there \u2014 ${possessive} commands must run inside its worktree. Re-run the command from ${isolationRoot}.${describeCaseOnlyMismatch(roots.dir.canonical, roots.worktree.canonical, isolationRoot)}`;
     }
   }
   return null;
 }
 //@ chunk-s61vbvea.js:449839-449967 placement
-function linkedWorktreeRepoRoot(e) {
-  let canonical = e.dir.canonical;
-  let canonical_2 = e.worktree.canonical;
+function linkedWorktreeRepoRoot(roots) {
+  let canonical = roots.dir.canonical;
+  let canonical_2 = roots.worktree.canonical;
   if (canonical === null || canonical_2 === null || isCanonicalUnderRoot(canonical, canonical_2)) return null;
   return isLinkedWorktree(canonical) ? findGitRoot(canonical) : null;
 }
@@ -1174,8 +1242,8 @@ function linkedWorktreeRepoRoot(e) {
 /**
  * worktree 隔离提示中的主语：当前会话的 worktree 时称 This session，否则称 This agent。
  */
-function isolationSubjectWords(e) {
-  return getCurrentWorktreeSession()?.worktreePath === e
+function isolationSubjectWords(worktreePath) {
+  return getCurrentWorktreeSession()?.worktreePath === worktreePath
     ? {
         noun: "This session",
         possessive: "a worktree-isolated session's",
@@ -1189,8 +1257,8 @@ function isolationSubjectWords(e) {
 /**
  * 共享检出根的越界部分。
  */
-function escapedSharedRoots(path, worktreePath) {
-  return sharedCheckoutRoots(path, worktreePath).escaped;
+function escapedSharedRoots(path, worktreeDir) {
+  return sharedCheckoutRoots(path, worktreeDir).escaped;
 }
 //@ chunk-s61vbvea.js:450181-450855 placement
 /**
@@ -1199,97 +1267,105 @@ function escapedSharedRoots(path, worktreePath) {
 function sharedCheckoutRoots(path, worktreePath) {
   let containmentTarget = resolveContainmentTarget(path);
   let currentWorktreeSession = getCurrentWorktreeSession();
-  let h = null;
-  let y = uniq(
+  let worktreeTarget = null;
+  let checkoutDirs = uniq(
     (currentWorktreeSession !== null && currentWorktreeSession.worktreePath === worktreePath
       ? [currentWorktreeSession.originalCwd]
       : [getOriginalCwd(), currentWorktreeSession?.originalCwd]
-    ).filter((q) => q !== undefined && q !== ""),
+    ).filter((dir) => dir !== undefined && dir !== ""),
   );
   let liveLaunchAnchor =
     currentWorktreeSession?.liveLaunchAnchor !== undefined && currentWorktreeSession.liveLaunchAnchor !== ""
       ? currentWorktreeSession.liveLaunchAnchor
       : undefined;
-  let w =
+  let anchorOutOfReach =
     liveLaunchAnchor !== undefined &&
     (isNonWslUncPath(liveLaunchAnchor) || isNetworkMountRoot(liveLaunchAnchor));
-  let R = () => linkedRepoRootOf(worktreePath);
-  let x =
-    liveLaunchAnchor !== undefined && !w
+  let linkedRoot = () => linkedRepoRootOf(worktreePath);
+  let anchorRoots =
+    liveLaunchAnchor !== undefined && !anchorOutOfReach
       ? [findGitRoot(liveLaunchAnchor), findCanonicalGitRoot(liveLaunchAnchor)].filter(
-          (q) => q !== null && q !== undefined,
+          (root) => root !== null && root !== undefined,
         )
       : [];
-  let P = R();
-  let j = x.length > 0;
-  let G = [
-    ...y.flatMap((q) =>
-      isNonWslUncPath(q) || isNetworkMountRoot(q) ? [q] : [findGitRoot(q) ?? q, findCanonicalGitRoot(q)],
+  let linkedRootPath = linkedRoot();
+  let hasAnchorRoots = anchorRoots.length > 0;
+  let rawRoots = [
+    ...checkoutDirs.flatMap((dir) =>
+      isNonWslUncPath(dir) || isNetworkMountRoot(dir)
+        ? [dir]
+        : [findGitRoot(dir) ?? dir, findCanonicalGitRoot(dir)],
     ),
-    ...x,
-    ...(liveLaunchAnchor !== undefined && !j ? [liveLaunchAnchor] : []),
-    P,
+    ...anchorRoots,
+    ...(liveLaunchAnchor !== undefined && !hasAnchorRoots ? [liveLaunchAnchor] : []),
+    linkedRootPath,
   ];
-  let mapped = uniq(G.filter((q) => q !== null)).map((q) => resolveContainmentTarget(q));
-  if (!mapped.some((q) => isOutsideContainment(containmentTarget, q)))
+  let mapped = uniq(rawRoots.filter((root) => root !== null)).map((root) => resolveContainmentTarget(root));
+  if (!mapped.some((root) => isOutsideContainment(containmentTarget, root)))
     return {
       dir: containmentTarget,
-      worktree: h,
+      worktree: worktreeTarget,
       roots: mapped,
       escaped: false,
     };
-  h ??= resolveContainmentTarget(worktreePath);
-  if (isSameContainmentPath(containmentTarget, h))
+  worktreeTarget ??= resolveContainmentTarget(worktreePath);
+  if (isSameContainmentPath(containmentTarget, worktreeTarget))
     return {
       dir: containmentTarget,
-      worktree: h,
+      worktree: worktreeTarget,
       roots: mapped,
       escaped: false,
     };
   return {
     dir: containmentTarget,
-    worktree: h,
+    worktree: worktreeTarget,
     roots: mapped,
     escaped: true,
   };
 }
 //@ chunk-s61vbvea.js:450855-450956 placement
-function canonicalRepoRootOrSentinel(e) {
-  if (!isLinkedWorktree(e)) return REPO_NEGATIVE_RESULT;
-  let containmentTarget = resolveContainmentTarget(e);
-  if (!detectTerminal(findGitRoot(e), containmentTarget.lexical)) return REPO_NEGATIVE_RESULT;
-  return findCanonicalGitRoot(e) ?? REPO_NEGATIVE_RESULT;
+function canonicalRepoRootOrSentinel(path) {
+  if (!isLinkedWorktree(path)) return REPO_NEGATIVE_RESULT;
+  let containmentTarget = resolveContainmentTarget(path);
+  if (!detectTerminal(findGitRoot(path), containmentTarget.lexical)) return REPO_NEGATIVE_RESULT;
+  return findCanonicalGitRoot(path) ?? REPO_NEGATIVE_RESULT;
 }
 //@ chunk-s61vbvea.js:450956-451034 placement
 function linkedRepoRootOf(worktreePath) {
-  let n = memoizeMap(getGitRepoCache().linkedFromRootByPin, worktreePath, canonicalRepoRootOrSentinel);
-  return n === REPO_NEGATIVE_RESULT ? null : n;
+  let root = memoizeMap(getGitRepoCache().linkedFromRootByPin, worktreePath, canonicalRepoRootOrSentinel);
+  return root === REPO_NEGATIVE_RESULT ? null : root;
 }
 //@ chunk-s61vbvea.js:451034-451166 placement = detectTerminal (0.92)
-function detectTerminal(gitRoot, lexical, r = "linux") {
+function detectTerminal(gitRoot, lexical, platform = "linux") {
   if (gitRoot === null) return false;
-  let s = r === "darwin" ? isSystemVolumePath(gitRoot) : gitRoot;
-  if (r !== "win32") s = isNetworkMountPath_2(s, r);
-  else s = toWin32Backslashes(isWslLocalhostPath(s));
-  return s === lexical;
+  let spelledRoot = platform === "darwin" ? isSystemVolumePath(gitRoot) : gitRoot;
+  if (platform !== "win32") spelledRoot = isNetworkMountPath_2(spelledRoot, platform);
+  else spelledRoot = toWin32Backslashes(isWslLocalhostPath(spelledRoot));
+  return spelledRoot === lexical;
 }
 //@ chunk-s61vbvea.js:451166-451191 placement
-var z0 = Object.freeze({});
+var EMPTY_RUNTIME; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:451166", () => {
+  EMPTY_RUNTIME = Object.freeze({});
+});
 //@ chunk-s61vbvea.js:451191-451302 placement
 class IsolationRuntimeSlot {
   #e;
-  register(e) {
-    this.#e ??= e;
+  register(runtime) {
+    this.#e ??= runtime;
   }
   get runtime() {
-    return this.#e ?? z0;
+    return this.#e ?? EMPTY_RUNTIME;
   }
   get registered() {
     return this.#e !== undefined;
   }
 }
 //@ chunk-s61vbvea.js:451302-451327 placement
-var isolationRuntimeByHost = new HostScoped(() => new IsolationRuntimeSlot());
+var isolationRuntimeByHost; // deferred: uses IsolationRuntimeSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:451302", () => {
+  isolationRuntimeByHost = new HostScoped(() => new IsolationRuntimeSlot());
+});
 //@ chunk-s61vbvea.js:451327-451364 placement
 function isolationRuntime() {
   return isolationRuntimeByHost.of(getRootSession().host);
@@ -1298,8 +1374,8 @@ function isolationRuntime() {
 /**
  * 注册隔离运行时。
  */
-function registerIsolationRuntime(e) {
-  isolationRuntime().register(e);
+function registerIsolationRuntime(runtime) {
+  isolationRuntime().register(runtime);
 }
 //@ chunk-s61vbvea.js:451397-451432 placement
 /**
@@ -1323,42 +1399,42 @@ function getBgIsolationSetting() {
 /**
  * 检查路径是否在 worktree 隔离范围内，范围外时提示改写 worktree 中的副本。
  */
-function checkWorktreeIsolation_2(path, n) {
+function checkWorktreeIsolation_2(path, ctx) {
   {
-    let worktreePath = isolationWorktreeFor(n);
+    let worktreePath = isolationWorktreeFor(ctx);
     if (worktreePath) {
-      let G = sharedCheckoutRoots(path, worktreePath);
-      if (!G.escaped) return worktreeFenceWriteNotice(path, worktreePath);
-      let q = pathContainmentKind(G.dir, G.roots);
-      if (q === "unresolvable") return unresolvableWriteMessage(worktreePath);
-      if (q === "network") return networkWriteMessage(worktreePath);
+      let roots = sharedCheckoutRoots(path, worktreePath);
+      if (!roots.escaped) return worktreeFenceWriteNotice(path, worktreePath);
+      let containmentKind = pathContainmentKind(roots.dir, roots.roots);
+      if (containmentKind === "unresolvable") return unresolvableWriteMessage(worktreePath);
+      if (containmentKind === "network") return networkWriteMessage(worktreePath);
       let { noun } = isolationSubjectWords(worktreePath);
-      let Se = hasHostWorktreeDeclaration() ? null : linkedWorktreeRepoRoot(G);
-      if (Se !== null) {
-        let ke = stripControlCharsForMessage(worktreePath);
-        return `${noun} is isolated in the worktree ${ke}, so its writes are limited to that folder. This path is in a different worktree (${stripControlCharsForMessage(Se)}). Edit the copy of this file under ${ke} instead.`;
+      let foreignRepoRoot = hasHostWorktreeDeclaration() ? null : linkedWorktreeRepoRoot(roots);
+      if (foreignRepoRoot !== null) {
+        let worktreeLabel = stripControlCharsForMessage(worktreePath);
+        return `${noun} is isolated in the worktree ${worktreeLabel}, so its writes are limited to that folder. This path is in a different worktree (${stripControlCharsForMessage(foreignRepoRoot)}). Edit the copy of this file under ${worktreeLabel} instead.`;
       }
-      return isolatedWorktreeEditMessage(noun, worktreePath, G.dir.canonical, G.worktree.canonical);
+      return isolatedWorktreeEditMessage(noun, worktreePath, roots.dir.canonical, roots.worktree.canonical);
     }
-    let s = worktreeFenceWriteNotice(path);
-    if (s !== null) return s;
+    let fenceNotice = worktreeFenceWriteNotice(path);
+    if (fenceNotice !== null) return fenceNotice;
     if (!isBackgroundSession()) return null;
     if (getBgIsolationSetting() === "none") return null;
-    let h = n.agentId ? getOriginalCwd() : getCwd();
-    let containmentTarget = resolveContainmentTarget(path);
-    let containmentTarget_2 = resolveContainmentTarget(h);
-    if (!isOutsideContainment(containmentTarget, containmentTarget_2)) return null;
-    if (!findGitRoot(h) && (!hasWorktreeCreateHook() || isIsolationUnavailableForCwd(h))) return null;
-    if (isLinkedWorktree(h)) return null;
-    if (containmentTarget.canonical !== null && isLinkedWorktreeUncached(containmentTarget.canonical))
+    let baseCwd = ctx.agentId ? getOriginalCwd() : getCwd();
+    let target = resolveContainmentTarget(path);
+    let roots = resolveContainmentTarget(baseCwd);
+    if (!isOutsideContainment(target, roots)) return null;
+    if (!findGitRoot(baseCwd) && (!hasWorktreeCreateHook() || isIsolationUnavailableForCwd(baseCwd)))
       return null;
-    let w = pathContainmentKind(containmentTarget, containmentTarget_2);
-    if (w === "unresolvable") return unresolvableWriteMessage();
-    if (w === "network") return networkWriteMessage();
-    let L = containmentTarget_2.canonical !== null;
-    if (n.agentId)
-      return `This subagent's parent bg session hasn't isolated yet, so writes to the shared checkout are blocked. Re-spawn this agent with \`isolation: "worktree"\`${L ? `, have the parent call ${ENTER_WORKTREE_TOOL_NAME} before spawning, or make the edit inside a linked git worktree you create for this task with \`git worktree add\` \u2014 paths inside a worktree are accepted` : `, or have the parent call ${ENTER_WORKTREE_TOOL_NAME} before spawning`}. (To disable this guard for this repo, set \`"worktree": {"bgIsolation": "none"}\` in .claude/settings.json.)`;
-    return `This background session hasn't isolated its changes yet. Call ${ENTER_WORKTREE_TOOL_NAME} first so edits land in a worktree instead of the shared checkout, then retry this edit using the worktree path${L ? " (a path inside a linked git worktree, including one you create with `git worktree add`, is accepted)" : ""}. (To disable this guard for this repo, set \`"worktree": {"bgIsolation": "none"}\` in .claude/settings.json.)`;
+    if (isLinkedWorktree(baseCwd)) return null;
+    if (target.canonical !== null && isLinkedWorktreeUncached(target.canonical)) return null;
+    let containmentKind = pathContainmentKind(target, roots);
+    if (containmentKind === "unresolvable") return unresolvableWriteMessage();
+    if (containmentKind === "network") return networkWriteMessage();
+    let hasCanonical = roots.canonical !== null;
+    if (ctx.agentId)
+      return `This subagent's parent bg session hasn't isolated yet, so writes to the shared checkout are blocked. Re-spawn this agent with \`isolation: "worktree"\`${hasCanonical ? `, have the parent call ${ENTER_WORKTREE_TOOL_NAME} before spawning, or make the edit inside a linked git worktree you create for this task with \`git worktree add\` \u2014 paths inside a worktree are accepted` : `, or have the parent call ${ENTER_WORKTREE_TOOL_NAME} before spawning`}. (To disable this guard for this repo, set \`"worktree": {"bgIsolation": "none"}\` in .claude/settings.json.)`;
+    return `This background session hasn't isolated its changes yet. Call ${ENTER_WORKTREE_TOOL_NAME} first so edits land in a worktree instead of the shared checkout, then retry this edit using the worktree path${hasCanonical ? " (a path inside a linked git worktree, including one you create with `git worktree add`, is accepted)" : ""}. (To disable this guard for this repo, set \`"worktree": {"bgIsolation": "none"}\` in .claude/settings.json.)`;
   }
   return null;
 }
@@ -1366,54 +1442,60 @@ function checkWorktreeIsolation_2(path, n) {
 /**
  * 写入路径落在 worktree 围栏内的共享检出而非当前 worktree 时，返回提示"请编辑 worktree 中的副本"；在配置目录内等情况放行（返回 null）。
  */
-function worktreeFenceWriteNotice(e, n) {
-  let r = describeWorktreeWriteFence();
-  if (r === undefined) return null;
-  let canonical = resolveContainmentTarget(e).canonical;
-  let h = n === undefined ? r.tree : resolveContainmentTarget(n).canonical;
-  if (canonical === null || h === null) return null;
-  let filtered = r.fence.filter((L) => isPathContainedIn(L, canonical));
-  if (filtered.length === 0 || isPathContainedIn(r.tree, canonical) || isPathContainedIn(h, canonical))
+function worktreeFenceWriteNotice(path, worktreePath) {
+  let fence = describeWorktreeWriteFence();
+  if (fence === undefined) return null;
+  let canonical = resolveContainmentTarget(path).canonical;
+  let worktreeCanonical =
+    worktreePath === undefined ? fence.tree : resolveContainmentTarget(worktreePath).canonical;
+  if (canonical === null || worktreeCanonical === null) return null;
+  let filtered = fence.fence.filter((fencePath) => isPathContainedIn(fencePath, canonical));
+  if (
+    filtered.length === 0 ||
+    isPathContainedIn(fence.tree, canonical) ||
+    isPathContainedIn(worktreeCanonical, canonical)
+  )
     return null;
-  let S = resolve(getClaudeConfigDir());
-  let canonical_2 = resolveContainmentTarget(nativeRealpathLong(S) ?? S).canonical;
+  let configDir = resolve(getClaudeConfigDir());
+  let canonical_2 = resolveContainmentTarget(nativeRealpathLong(configDir) ?? configDir).canonical;
   if (
     canonical_2 !== null &&
     isPathContainedIn(canonical_2, canonical) &&
-    filtered.every((L) => isPathContainedIn(L, canonical_2))
+    filtered.every((fencePath) => isPathContainedIn(fencePath, canonical_2))
   )
     return null;
   return isolatedWorktreeEditMessage(
-    n === undefined ? "This session" : isolationSubjectWords(n).noun,
-    stripControlCharsForMessage(n ?? r.tree),
+    worktreePath === undefined ? "This session" : isolationSubjectWords(worktreePath).noun,
+    stripControlCharsForMessage(worktreePath ?? fence.tree),
     canonical,
-    h,
+    worktreeCanonical,
   );
 }
 //@ chunk-e6aww6q8.js:1371467-1371622 placement
-function isolatedWorktreeEditMessage(e, n, canonical, s) {
-  return `${e} is isolated in the worktree ${n}. Edit the worktree copy of this file instead of the shared-checkout path.${describeCaseOnlyMismatch(canonical, s, n)}`;
+function isolatedWorktreeEditMessage(noun, worktreePath, canonicalPath, worktreeCanonical) {
+  return `${noun} is isolated in the worktree ${worktreePath}. Edit the worktree copy of this file instead of the shared-checkout path.${describeCaseOnlyMismatch(canonicalPath, worktreeCanonical, worktreePath)}`;
 }
 //@ chunk-e6aww6q8.js:1371622-1371778 placement
-function pathContainmentKind(e, n) {
-  if (hasUnresolvedCanonicalPath(e)) return "unresolvable";
-  let r = Array.isArray(n) ? n : [n];
-  if (e.skipped && !r.some((s) => s.skipped || hasUnresolvedCanonicalPath(s))) return "network";
+function pathContainmentKind(target, roots) {
+  if (hasUnresolvedCanonicalPath(target)) return "unresolvable";
+  let rootList = Array.isArray(roots) ? roots : [roots];
+  if (target.skipped && !rootList.some((root) => root.skipped || hasUnresolvedCanonicalPath(root)))
+    return "network";
   return "contained";
 }
 //@ chunk-e6aww6q8.js:1371778-1372214 placement
 /**
  * 写入因路径无法安全解析（符号链接含原始点段、网络/设备命名空间、祖先目录不可读）被拦截时的说明，建议改用直接的普通路径（或 worktree 内的无链接路径）。
  */
-function unresolvableWriteMessage(e) {
-  return `This write was blocked because the path is spelled in a form that cannot be safely resolved (for example through a symlink storing a raw dot segment, a network-share or device-namespace shape, or an unreadable ancestor directory). ${e === undefined ? "Retry the edit addressing the file by a direct, plainly-spelled path." : `If the file is inside the worktree ${e}, address it by its direct symlink-free path instead.`}`;
+function unresolvableWriteMessage(worktreePath) {
+  return `This write was blocked because the path is spelled in a form that cannot be safely resolved (for example through a symlink storing a raw dot segment, a network-share or device-namespace shape, or an unreadable ancestor directory). ${worktreePath === undefined ? "Retry the edit addressing the file by a direct, plainly-spelled path." : `If the file is inside the worktree ${worktreePath}, address it by its direct symlink-free path instead.`}`;
 }
 //@ chunk-e6aww6q8.js:1372214-1372627 placement
 /**
  * 写入因路径是网络形态（UNC 共享或 /net 自动挂载）而本会话检出在本地被拦截时的说明，建议用本地普通路径访问。
  */
-function networkWriteMessage(e) {
-  return `This write was blocked because the path is network-shaped (a UNC share or /net automount spelling) while this session's checkout is local. Isolating cannot unblock it. ${e === undefined ? "If the file is genuinely local, retry the edit addressing it by its local, plainly-spelled path." : `If the file is genuinely inside the worktree ${e}, address it by its local, plainly-spelled path instead.`}`;
+function networkWriteMessage(worktreePath) {
+  return `This write was blocked because the path is network-shaped (a UNC share or /net automount spelling) while this session's checkout is local. Isolating cannot unblock it. ${worktreePath === undefined ? "If the file is genuinely local, retry the edit addressing it by its local, plainly-spelled path." : `If the file is genuinely inside the worktree ${worktreePath}, address it by its local, plainly-spelled path instead.`}`;
 }
 export {
   getBgIsolationSetting,

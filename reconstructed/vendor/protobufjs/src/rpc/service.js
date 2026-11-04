@@ -5,11 +5,11 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_minimal } from "../util/minimal.js";
 
 //@ chunk-798ashq9.js:39586-40656 cjs-fingerprint
-var require_service = x(function (cjsExports, cjsModule) {
+var require_service = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Service;
   var util = require_minimal();
   (Service.prototype = Object.create(util.EventEmitter.prototype)).constructor = Service;
@@ -22,40 +22,40 @@ var require_service = x(function (cjsExports, cjsModule) {
   }
   Service.prototype.rpcCall = function rpcCall(method, requestCtor, responseCtor, request, callback) {
     if (!request) throw TypeError("request must be specified");
-    var e = this;
-    if (!callback) return util.asPromise(rpcCall, e, method, requestCtor, responseCtor, request);
-    if (!e.rpcImpl) {
+    var serviceSelf = this;
+    if (!callback) return util.asPromise(rpcCall, serviceSelf, method, requestCtor, responseCtor, request);
+    if (!serviceSelf.rpcImpl) {
       setTimeout(function () {
         callback(Error("already ended"));
       }, 0);
       return;
     }
     try {
-      return e.rpcImpl(
+      return serviceSelf.rpcImpl(
         method,
-        requestCtor[e.requestDelimited ? "encodeDelimited" : "encode"](request).finish(),
+        requestCtor[serviceSelf.requestDelimited ? "encodeDelimited" : "encode"](request).finish(),
         function (err, response) {
           if (err) {
-            e.emit("error", err, method);
+            serviceSelf.emit("error", err, method);
             return callback(err);
           }
           if (response === null) {
-            e.end(true);
+            serviceSelf.end(true);
             return;
           }
           if (!(response instanceof responseCtor))
             try {
-              response = responseCtor[e.responseDelimited ? "decodeDelimited" : "decode"](response);
+              response = responseCtor[serviceSelf.responseDelimited ? "decodeDelimited" : "decode"](response);
             } catch (err) {
-              e.emit("error", err, method);
+              serviceSelf.emit("error", err, method);
               return callback(err);
             }
-          e.emit("data", response, method);
+          serviceSelf.emit("data", response, method);
           return callback(null, response);
         },
       );
     } catch (err) {
-      e.emit("error", err, method);
+      serviceSelf.emit("error", err, method);
       setTimeout(function () {
         callback(err);
       }, 0);

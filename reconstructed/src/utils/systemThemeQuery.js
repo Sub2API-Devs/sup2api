@@ -26,89 +26,90 @@ var DEFAULT_THEME_QUERY_TIMEOUT_MS = 2000;
 /**
  * 用 OSC 11 查询终端背景色推断系统主题（tmux/screen 下包装转发），在主题变化推送或获得焦点时重查；返回取消函数。
  */
-function watchSystemTheme(e, l, p) {
-  let n = false;
-  let u = false;
-  let muxTimeoutMs = p?.muxTimeoutMs ?? DEFAULT_THEME_QUERY_TIMEOUT_MS;
-  let a = Boolean(env.TMUX || env.STY) && !isTmuxControlMode();
-  async function c() {
-    if (u) return;
-    u = true;
+function watchSystemTheme(querier, onTheme, options) {
+  let disposed = false;
+  let querying = false;
+  let muxTimeoutMs = options?.muxTimeoutMs ?? DEFAULT_THEME_QUERY_TIMEOUT_MS;
+  let viaMultiplexer = Boolean(env.TMUX || env.STY) && !isTmuxControlMode();
+  async function queryOsc11() {
+    if (querying) return;
+    querying = true;
     try {
-      let r = oscColor(OSC.SET_BG_COLOR);
-      let s = a
+      let directRequest = oscColor(OSC.SET_BG_COLOR);
+      let muxRequest = viaMultiplexer
         ? {
-            ...r,
-            request: wrapForMultiplexer(r.request),
+            ...directRequest,
+            request: wrapForMultiplexer(directRequest.request),
           }
-        : r;
-      let o;
-      let f = a ? "dcs" : "direct";
-      if (a) {
-        o = await Promise.race([
-          e.send(s),
+        : directRequest;
+      let response;
+      let via = viaMultiplexer ? "dcs" : "direct";
+      if (viaMultiplexer) {
+        response = await Promise.race([
+          querier.send(muxRequest),
           sleep(muxTimeoutMs, undefined, {
             unref: true,
           }).then(() => {
             return;
           }),
         ]);
-        if (!o)
-          if (n) e.cancel(s);
+        if (!response)
+          if (disposed) querier.cancel(muxRequest);
           else {
-            e.flush();
-            f = "mux-bare";
-            [o] = await Promise.all([e.send(r), e.flush()]);
+            querier.flush();
+            via = "mux-bare";
+            [response] = await Promise.all([querier.send(directRequest), querier.flush()]);
           }
-      } else [o] = await Promise.all([e.send(s), e.flush()]);
-      if (n) return;
-      if (!o) {
-        logForDebugging(`systemTheme: OSC 11 query (via=${f}) got no response`, {
+      } else [response] = await Promise.all([querier.send(muxRequest), querier.flush()]);
+      if (disposed) return;
+      if (!response) {
+        logForDebugging(`systemTheme: OSC 11 query (via=${via}) got no response`, {
           level: "debug",
         });
         getTerminalProbeState().osc11Responsive = false;
         return;
       }
       getTerminalProbeState().osc11Responsive = true;
-      let m = themeFromOscColor(o.data);
-      logForDebugging(`systemTheme: OSC 11 response=${o.data} detected=${m} via=${f}`, {
+      let detectedTheme = themeFromOscColor(response.data);
+      logForDebugging(`systemTheme: OSC 11 response=${response.data} detected=${detectedTheme} via=${via}`, {
         level: "debug",
       });
-      if (m === undefined) return;
-      setSystemTheme(m);
-      l(m);
+      if (detectedTheme === undefined) return;
+      setSystemTheme(detectedTheme);
+      onTheme(detectedTheme);
     } finally {
-      u = false;
+      querying = false;
     }
   }
-  let d = env.CLAUDE_BG_BACKEND === "daemon";
-  if (getTerminalProbeState().osc11Responsive !== false && !d) c();
-  let T = e.subscribeThemeChange((r) => {
+  let isDaemonBackend = env.CLAUDE_BG_BACKEND === "daemon";
+  if (getTerminalProbeState().osc11Responsive !== false && !isDaemonBackend) queryOsc11();
+  let unsubscribe = querier.subscribeThemeChange((isDarkPush) => {
     if (getSecondRootError().get(process.stdout)?.modes.isSet("surface")) {
-      let s = r ? "dark" : "light";
+      let pushedTheme = isDarkPush ? "dark" : "light";
       logForDebugging(
-        `systemTheme: theme-change push reported=${s}; surface override active, skipping OSC 11 query`,
+        `systemTheme: theme-change push reported=${pushedTheme}; surface override active, skipping OSC 11 query`,
         {
           level: "debug",
         },
       );
-      setSystemTheme(s);
-      l(s);
+      setSystemTheme(pushedTheme);
+      onTheme(pushedTheme);
       return;
     }
-    c();
+    queryOsc11();
   });
-  let h = d
+  let unsubscribeFocus = isDaemonBackend
     ? onTerminalFocusChanged(() => {
         if (getTerminalFocus() === "focused")
           waitForAttachSettle().then(() => {
-            if (!n) c();
+            if (!disposed) queryOsc11();
           });
       })
     : undefined;
   return () => {
-    n = true;
-    T();
-    h?.();
+    disposed = true;
+    unsubscribe();
+    unsubscribeFocus?.();
   };
 }
+export { watchSystemTheme };

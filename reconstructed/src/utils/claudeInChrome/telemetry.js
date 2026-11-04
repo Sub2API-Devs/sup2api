@@ -31,16 +31,16 @@ import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
  */
 function chromeTimingFields() {
   let chromeAvailabilityAnchorMs = getChromeAvailabilityAnchorMs();
-  let n = chromeAvailabilityAnchorMs === undefined ? spawnTimestampMs() : undefined;
-  let [t, o] =
+  let spawnAnchorMs = chromeAvailabilityAnchorMs === undefined ? spawnTimestampMs() : undefined;
+  let [msSinceStart, startAnchor] =
     chromeAvailabilityAnchorMs !== undefined
       ? [Math.max(0, Date.now() - chromeAvailabilityAnchorMs), "session_switch"]
-      : n !== undefined
-        ? [Math.max(0, Date.now() - n), "spawn_stamp"]
+      : spawnAnchorMs !== undefined
+        ? [Math.max(0, Date.now() - spawnAnchorMs), "spawn_stamp"]
         : [isDiskless() ? undefined : Math.round(process.uptime() * 1000), "process_start"];
   return {
-    msSinceSessionStart: t,
-    startAnchor: fromEnum(o),
+    msSinceSessionStart: msSinceStart,
+    startAnchor: fromEnum(startAnchor),
     isRemoteSession: Boolean(env.CLAUDE_CODE_REMOTE_SESSION_ID),
   };
 }
@@ -48,22 +48,22 @@ function chromeTimingFields() {
 /**
  * 每个 Chrome 可用性阶段只记录一次（返回是否为首次）。
  */
-function markChromeStageOnce(e) {
+function markChromeStageOnce(stage) {
   let chromeAvailabilityStagesLogged = getChromeAvailabilityStagesLogged();
-  if (chromeAvailabilityStagesLogged.has(e)) return false;
-  chromeAvailabilityStagesLogged.add(e);
+  if (chromeAvailabilityStagesLogged.has(stage)) return false;
+  chromeAvailabilityStagesLogged.add(stage);
   return true;
 }
 //@ chunk-kqy8a853.js:1031-1156 placement
 /**
  * 记录 tengu_chrome_tools_added 事件（每会话一次，含工具数与发现来源）。
  */
-function logChromeToolsAdded(e, n) {
-  if (e === 0 || !markChromeStageOnce("tools_added")) return;
+function logChromeToolsAdded(toolCount, discoverySource) {
+  if (toolCount === 0 || !markChromeStageOnce("tools_added")) return;
   logEvent("tengu_chrome_tools_added", {
     ...chromeTimingFields(),
-    toolCount: e,
-    discoverySource: fromEnum(n),
+    toolCount,
+    discoverySource: fromEnum(discoverySource),
   });
 }
 //@ chunk-kqy8a853.js:1156-1281 placement
@@ -83,11 +83,11 @@ function logChromeToolAttempted(messageClientPlatform) {
 /**
  * 记录 tengu_chrome_bridge_connected 事件（每会话一次，附桥接状态）。
  */
-function logChromeBridgeConnected(e) {
+function logChromeBridgeConnected(status) {
   if (!markChromeStageOnce("bridge_connected")) return;
   logEvent("tengu_chrome_bridge_connected", {
     ...chromeTimingFields(),
-    bridgeStatus: fromEnumOpt(e),
+    bridgeStatus: fromEnumOpt(status),
   });
 }
 //@ chunk-kqy8a853.js:1393-1486 placement
@@ -122,9 +122,9 @@ var ROSTER_WAIT_MARGIN_MS = 250;
 /**
  * 递增浏览器名册版本并发出变更通知。
  */
-function bumpBrowserRoster(e) {
-  e.browserRosterVersion++;
-  e.browserRosterChanged.emit();
+function bumpBrowserRoster(state) {
+  state.browserRosterVersion++;
+  state.browserRosterChanged.emit();
 }
 //@ chunk-kqy8a853.js:1691-2565 placement
 /**
@@ -154,15 +154,15 @@ async function noBrowserConnected(signal) {
   ))
     return false;
   if (state.relayConnectFailed === socketClient && !socketClient.isConnected()) return false;
-  let p = socketClient.listConnectedExtensions.bind(socketClient);
-  let d = systemClock.monotonicNow();
-  let _ =
+  let listExtensions = socketClient.listConnectedExtensions.bind(socketClient);
+  let startedAt = systemClock.monotonicNow();
+  let cachedRoster =
     state.noBrowserFound?.client === socketClient &&
     state.noBrowserFound.rosterVersion === state.browserRosterVersion;
-  let r = _
+  let outcome = cachedRoster
     ? "none_cached"
     : await raceWithAbortSignal(
-        waitForBrowserRoster(state, socketClient, p),
+        waitForBrowserRoster(state, socketClient, listExtensions),
         signal,
         () => new AbortError(),
       ).catch((error) => {
@@ -170,11 +170,11 @@ async function noBrowserConnected(signal) {
         logError(error);
         return "failed";
       });
-  if (r !== "present" && r !== "roster_changed" && !_)
-    logFeatureSad("chrome_permission_prompt", `browser_check_${r}`, {
-      elapsed_ms: Math.round(systemClock.monotonicNow() - d),
+  if (outcome !== "present" && outcome !== "roster_changed" && !cachedRoster)
+    logFeatureSad("chrome_permission_prompt", `browser_check_${outcome}`, {
+      elapsed_ms: Math.round(systemClock.monotonicNow() - startedAt),
     });
-  return r === "none" || r === "none_short_wait" || r === "none_cached";
+  return outcome === "none" || outcome === "none_short_wait" || outcome === "none_cached";
 }
 //@ chunk-kqy8a853.js:2565-2852 placement
 /**
@@ -183,7 +183,7 @@ async function noBrowserConnected(signal) {
 async function noBrowserForSetupCard() {
   let socketClient = claudeInChromeSession().bridgeBinding?.socketClient;
   if (socketClient?.listConnectedExtensions === undefined) return false;
-  let n = await listBrowsersOnce(
+  let browsers = await listBrowsersOnce(
     socketClient,
     socketClient.listConnectedExtensions.bind(socketClient),
     PICK_ONE_RUN_TIMEOUT_MS,
@@ -191,37 +191,38 @@ async function noBrowserForSetupCard() {
     logError(error);
     return "failed";
   });
-  if (n !== "none" && n !== "present") logFeatureSad("chrome_setup_card_answer", `browser_check_${n}`);
-  return n === "none";
+  if (browsers !== "none" && browsers !== "present")
+    logFeatureSad("chrome_setup_card_answer", `browser_check_${browsers}`);
+  return browsers === "none";
 }
 //@ chunk-kqy8a853.js:2852-3561 placement
 /**
  * 连接中继后列出已连接扩展；无浏览器时在剩余时间内等待名册变化再查一次，返回 present / none / none_short_wait / roster_changed / connect_failed 等。
  */
-async function waitForBrowserRoster(state, socketClient, t) {
-  let o = systemClock.now() + BROWSER_CHECK_DEADLINE_MS;
+async function waitForBrowserRoster(state, socketClient, listExtensions) {
+  let deadlineMs = systemClock.now() + BROWSER_CHECK_DEADLINE_MS;
   if ((await withDeadline(socketClient.ensureConnected(), ENSURE_CONNECTED_TIMEOUT_MS)) !== true) {
     state.relayConnectFailed = socketClient;
     return "connect_failed";
   }
   state.relayConnectFailed = undefined;
   let browserRosterVersion = state.browserRosterVersion;
-  let p = systemClock.now();
-  let d = await listBrowsersOnce(socketClient, t, PICK_ONE_RUN_TIMEOUT_MS);
-  if (d !== "none" || state.browserRosterVersion !== browserRosterVersion)
-    return d === "none" ? "roster_changed" : d;
-  let min = Math.min(BROWSER_ROSTER_WAIT_MS, o - systemClock.now() - ROSTER_WAIT_MARGIN_MS);
+  let roundStart = systemClock.now();
+  let browsers = await listBrowsersOnce(socketClient, listExtensions, PICK_ONE_RUN_TIMEOUT_MS);
+  if (browsers !== "none" || state.browserRosterVersion !== browserRosterVersion)
+    return browsers === "none" ? "roster_changed" : browsers;
+  let min = Math.min(BROWSER_ROSTER_WAIT_MS, deadlineMs - systemClock.now() - ROSTER_WAIT_MARGIN_MS);
   if (min < MIN_ROSTER_WAIT_MS) return "no_time_to_wait";
-  let r = () => {};
+  let noop = () => {};
   let promise = new Promise((resolve) => {
-    r = state.browserRosterChanged.subscribe(resolve);
+    noop = state.browserRosterChanged.subscribe(resolve);
   });
-  await withDeadline(promise, min).finally(() => r());
+  await withDeadline(promise, min).finally(() => noop());
   if (state.browserRosterVersion !== browserRosterVersion) return "roster_changed";
-  let C = await listBrowsersOnce(socketClient, t, PICK_ONE_RUN_TIMEOUT_MS);
-  if (C !== "none" || state.browserRosterVersion !== browserRosterVersion)
-    return C === "none" ? "roster_changed" : C;
-  if (systemClock.now() - p < BROWSER_ROSTER_WAIT_MS) return "none_short_wait";
+  let browsers_2 = await listBrowsersOnce(socketClient, listExtensions, PICK_ONE_RUN_TIMEOUT_MS);
+  if (browsers_2 !== "none" || state.browserRosterVersion !== browserRosterVersion)
+    return browsers_2 === "none" ? "roster_changed" : browsers_2;
+  if (systemClock.now() - roundStart < BROWSER_ROSTER_WAIT_MS) return "none_short_wait";
   state.noBrowserFound = {
     client: socketClient,
     rosterVersion: browserRosterVersion,
@@ -229,11 +230,11 @@ async function waitForBrowserRoster(state, socketClient, t) {
   return "none";
 }
 //@ chunk-kqy8a853.js:3561-3721 placement
-async function listBrowsersOnce(e, n, t) {
-  let o = await withDeadline(n(), t);
-  if (!e.isConnected()) return "connection_lost";
-  if (o === undefined) return "list_timeout";
-  return o.length > 0 ? "present" : "none";
+async function listBrowsersOnce(socketClient, listExtensions, timeoutMs) {
+  let result = await withDeadline(listExtensions(), timeoutMs);
+  if (!socketClient.isConnected()) return "connection_lost";
+  if (result === undefined) return "list_timeout";
+  return result.length > 0 ? "present" : "none";
 }
 export {
   logChromeToolsAdded,

@@ -5,12 +5,12 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_reader } from "./reader.js";
 import { require_minimal } from "./util/minimal.js";
 
 //@ chunk-798ashq9.js:39108-39586 cjs-fingerprint
-var require_reader_buffer = x(function (cjsExports, cjsModule) {
+var require_reader_buffer = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = BufferReader;
   var Reader = require_reader();
   (BufferReader.prototype = Object.create(Reader.prototype)).constructor = BufferReader;

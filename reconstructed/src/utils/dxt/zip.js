@@ -30,7 +30,7 @@ var LIMITS = {
  */
 function isSafeZipPath(filePath) {
   if (containsPathTraversal(filePath)) return false;
-  for (let n of filePath.split(/[/\\]/)) if (/^\.\. [ .]*$/.test(n)) return false;
+  for (let segment of filePath.split(/[/\\]/)) if (/^\.\. [ .]*$/.test(segment)) return false;
   let normalized = normalize(filePath);
   if (isAbsolute(normalized)) return false;
   return true;
@@ -44,12 +44,12 @@ function validateZipFile(file, state) {
   let error;
   if (state.fileCount > LIMITS.MAX_FILE_COUNT)
     error = `Archive contains too many files: ${state.fileCount} (max: ${LIMITS.MAX_FILE_COUNT})`;
-  let s = printableName(file.name, 120);
+  let name = printableName(file.name, 120);
   if (!isSafeZipPath(file.name))
-    error = `Unsafe file path detected: "${s}". Path traversal or absolute paths are not allowed.`;
+    error = `Unsafe file path detected: "${name}". Path traversal or absolute paths are not allowed.`;
   let fileSize = file.originalSize || 0;
   if (fileSize > LIMITS.MAX_FILE_SIZE)
-    error = `File "${s}" is too large: ${Math.round(fileSize / 1024 / 1024)}MB (max: ${Math.round(LIMITS.MAX_FILE_SIZE / 1024 / 1024)}MB)`;
+    error = `File "${name}" is too large: ${Math.round(fileSize / 1024 / 1024)}MB (max: ${Math.round(LIMITS.MAX_FILE_SIZE / 1024 / 1024)}MB)`;
   state.totalUncompressedSize += fileSize;
   if (state.totalUncompressedSize > LIMITS.MAX_TOTAL_SIZE)
     error = `Archive total size is too large: ${Math.round(state.totalUncompressedSize / 1024 / 1024)}MB (max: ${Math.round(LIMITS.MAX_TOTAL_SIZE / 1024 / 1024)}MB)`;
@@ -108,11 +108,11 @@ var ZIP_METHOD_DEFLATE = 8;
 /**
  * 无效 zip 数据错误（遥测安全）。
  */
-function invalidZipError(e) {
-  return e === undefined
+function invalidZipError(detail) {
+  return detail === undefined
     ? Error("invalid zip data")
     : new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `invalid zip data: ${e}`,
+        `invalid zip data: ${detail}`,
         "invalid zip data",
       );
 }
@@ -120,100 +120,113 @@ function invalidZipError(e) {
 /**
  * 按小端读取 16 位整数（越界抛无效 zip 错误）。
  */
-function readUInt16LE(e, r) {
-  if (r + 2 > e.length) throw invalidZipError();
-  return e[r] | (e[r + 1] << 8);
+function readUInt16LE(bytes, offset) {
+  if (offset + 2 > bytes.length) throw invalidZipError();
+  return bytes[offset] | (bytes[offset + 1] << 8);
 }
 //@ chunk-vr8smdd9.js:8062-8153 placement
 /**
  * 按小端读取 32 位无符号整数（越界抛无效 zip 错误）。
  */
-function readUInt32LE(e, r) {
-  if (r + 4 > e.length) throw invalidZipError();
-  return (e[r] | (e[r + 1] << 8) | (e[r + 2] << 16) | (e[r + 3] << 24)) >>> 0;
+function readUInt32LE(bytes, offset) {
+  if (offset + 4 > bytes.length) throw invalidZipError();
+  return (
+    (bytes[offset] | (bytes[offset + 1] << 8) | (bytes[offset + 2] << 16) | (bytes[offset + 3] << 24)) >>> 0
+  );
 }
 //@ chunk-vr8smdd9.js:8153-8204 placement
 /**
  * 按小端读取 64 位整数。
  */
-function readUInt64LE(e, r) {
-  return readUInt32LE(e, r) + readUInt32LE(e, r + 4) * 4294967296;
+function readUInt64LE(bytes, offset) {
+  return readUInt32LE(bytes, offset) + readUInt32LE(bytes, offset + 4) * 4294967296;
 }
 //@ chunk-vr8smdd9.js:8204-8318 placement = c (0.707)
-function uint8ArrayToBinaryString(e) {
-  let r = "";
-  for (let n = 0; n < e.length; n += 16384) r += String.fromCharCode(...e.subarray(n, n + 16384));
-  return r;
+function uint8ArrayToBinaryString(bytes) {
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 16384)
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 16384));
+  return binary;
 }
 //@ chunk-vr8smdd9.js:8318-9561 placement
 /**
  * 读取 ZIP 中央目录（含 ZIP64）。
  */
-function readZipCentralDirectory(e, r) {
-  let n = {};
-  let s = e.length - 22;
-  while (s < 0 || readUInt32LE(e, s) !== ZIP_EOCD_SIGNATURE) {
-    if (s <= 0 || e.length - s > MAX_EOCD_SEARCH_BYTES) throw invalidZipError();
-    s--;
+function readZipCentralDirectory(bytes, limit) {
+  let directory = {};
+  let eocdSearchStart = bytes.length - 22;
+  while (eocdSearchStart < 0 || readUInt32LE(bytes, eocdSearchStart) !== ZIP_EOCD_SIGNATURE) {
+    if (eocdSearchStart <= 0 || bytes.length - eocdSearchStart > MAX_EOCD_SEARCH_BYTES)
+      throw invalidZipError();
+    eocdSearchStart--;
   }
-  let a = readUInt16LE(e, s + 8);
-  if (a === 0) return n;
-  let f = readUInt32LE(e, s + 16);
-  let m = false;
-  if ((f === 4294967295 || a === 65535) && s >= 20 && readUInt32LE(e, s - 20) === ZIP64_LOCATOR_SIGNATURE) {
-    let g = readUInt32LE(e, s - 12);
-    if (g + 56 <= e.length && readUInt32LE(e, g) === ZIP64_EOCD_SIGNATURE) {
-      m = true;
-      a = readUInt32LE(e, g + 32);
-      f = readUInt32LE(e, g + 48);
+  let commentLength = readUInt16LE(bytes, eocdSearchStart + 8);
+  if (commentLength === 0) return directory;
+  let centralDirOffset = readUInt32LE(bytes, eocdSearchStart + 16);
+  let zip64 = false;
+  if (
+    (centralDirOffset === 4294967295 || commentLength === 65535) &&
+    eocdSearchStart >= 20 &&
+    readUInt32LE(bytes, eocdSearchStart - 20) === ZIP64_LOCATOR_SIGNATURE
+  ) {
+    let entryCount = readUInt32LE(bytes, eocdSearchStart - 12);
+    if (entryCount + 56 <= bytes.length && readUInt32LE(bytes, entryCount) === ZIP64_EOCD_SIGNATURE) {
+      zip64 = true;
+      commentLength = readUInt32LE(bytes, entryCount + 32);
+      centralDirOffset = readUInt32LE(bytes, entryCount + 48);
     }
   }
   let textDecoder = new TextDecoder();
-  for (let idx = 0; idx < a; idx++) {
-    if (readUInt32LE(e, f) !== ZIP_CENTRAL_HEADER_SIGNATURE) throw invalidZipError();
-    let h = readUInt16LE(e, f + 8);
-    let x = readUInt16LE(e, f + 10);
-    let w = readUInt16LE(e, f + 28);
-    let y = readUInt16LE(e, f + 30);
-    let S = readUInt16LE(e, f + 32);
-    let b = f + 46;
-    if (b + w > e.length) throw invalidZipError();
-    let chunk = e.subarray(b, b + w);
-    let T = h & ZIP_FLAG_UTF8 ? textDecoder.decode(chunk) : uint8ArrayToBinaryString(chunk);
-    let O = readUInt32LE(e, f + 20);
-    let F = readUInt32LE(e, f + 24);
-    let v = readUInt32LE(e, f + 42);
-    let P = b + w;
-    if (m && O === 4294967295) {
-      let L = P + y;
-      let R = P;
-      while (R + 4 <= L && readUInt16LE(e, R) !== 1) R += 4 + readUInt16LE(e, R + 2);
-      if (R + 28 > L) throw invalidZipError();
-      F = readUInt64LE(e, R + 4);
-      O = readUInt64LE(e, R + 12);
-      v = readUInt64LE(e, R + 20);
+  for (let idx = 0; idx < commentLength; idx++) {
+    if (readUInt32LE(bytes, centralDirOffset) !== ZIP_CENTRAL_HEADER_SIGNATURE) throw invalidZipError();
+    let flags = readUInt16LE(bytes, centralDirOffset + 8);
+    let method = readUInt16LE(bytes, centralDirOffset + 10);
+    let nameLength = readUInt16LE(bytes, centralDirOffset + 28);
+    let extraLength = readUInt16LE(bytes, centralDirOffset + 30);
+    let commentLength = readUInt16LE(bytes, centralDirOffset + 32);
+    let cursor = centralDirOffset + 46;
+    if (cursor + nameLength > bytes.length) throw invalidZipError();
+    let bytes_2 = bytes.subarray(cursor, cursor + nameLength);
+    let name = flags & ZIP_FLAG_UTF8 ? textDecoder.decode(bytes_2) : uint8ArrayToBinaryString(bytes_2);
+    let compressedSize = readUInt32LE(bytes, centralDirOffset + 20);
+    let uncompressedSize = readUInt32LE(bytes, centralDirOffset + 24);
+    let localHeaderOffset = readUInt32LE(bytes, centralDirOffset + 42);
+    let entryStart = cursor + nameLength;
+    if (zip64 && compressedSize === 4294967295) {
+      let dataStart = entryStart + extraLength;
+      let headerStart = entryStart;
+      while (headerStart + 4 <= dataStart && readUInt16LE(bytes, headerStart) !== 1)
+        headerStart += 4 + readUInt16LE(bytes, headerStart + 2);
+      if (headerStart + 28 > dataStart) throw invalidZipError();
+      uncompressedSize = readUInt64LE(bytes, headerStart + 4);
+      compressedSize = readUInt64LE(bytes, headerStart + 12);
+      localHeaderOffset = readUInt64LE(bytes, headerStart + 20);
     }
-    f = P + y + S;
-    r({
-      name: T,
-      originalSize: F,
+    centralDirOffset = entryStart + extraLength + commentLength;
+    limit({
+      name,
+      originalSize: uncompressedSize,
     });
-    let K = v + 30 + readUInt16LE(e, v + 26) + readUInt16LE(e, v + 28);
-    if (K + O > e.length) throw invalidZipError();
-    let chunk_2 = e.subarray(K, K + O);
-    if (x === ZIP_METHOD_STORED) {
-      if (O !== F) throw invalidZipError("stored entry size mismatch");
-      n[T] = chunk_2.slice();
-    } else if (x === ZIP_METHOD_DEFLATE) {
-      if (O === 0 && F === 0) {
-        n[T] = new Uint8Array(0);
+    let nextOffset =
+      localHeaderOffset +
+      30 +
+      readUInt16LE(bytes, localHeaderOffset + 26) +
+      readUInt16LE(bytes, localHeaderOffset + 28);
+    if (nextOffset + compressedSize > bytes.length) throw invalidZipError();
+    let chunk = bytes.subarray(nextOffset, nextOffset + compressedSize);
+    if (method === ZIP_METHOD_STORED) {
+      if (compressedSize !== uncompressedSize) throw invalidZipError("stored entry size mismatch");
+      directory[name] = chunk.slice();
+    } else if (method === ZIP_METHOD_DEFLATE) {
+      if (compressedSize === 0 && uncompressedSize === 0) {
+        directory[name] = new Uint8Array(0);
         continue;
       }
-      let L;
+      let result;
       try {
-        L = inflateRawSync(chunk_2, {
-          maxOutputLength: Math.max(F, 1),
-          chunkSize: Math.min(Math.max(F, 64), 1048576),
+        result = inflateRawSync(chunk, {
+          maxOutputLength: Math.max(uncompressedSize, 1),
+          chunkSize: Math.min(Math.max(uncompressedSize, 64), 1048576),
         });
       } catch (error) {
         let code = error.code;
@@ -221,10 +234,10 @@ function readZipCentralDirectory(e, r) {
           typeof code === "string" && code.startsWith("Z_") ? code : "entry larger than declared",
         );
       }
-      n[T] = new Uint8Array(L.buffer, L.byteOffset, L.byteLength);
-    } else throw invalidZipError(`unsupported compression method ${x}`);
+      directory[name] = new Uint8Array(result.buffer, result.byteOffset, result.byteLength);
+    } else throw invalidZipError(`unsupported compression method ${method}`);
   }
-  return n;
+  return directory;
 }
 //@ chunk-vr8smdd9.js:9561-9573 placement
 /**
@@ -268,8 +281,8 @@ function parseZipModes(data) {
 /**
  * 读文件并解压到目录。
  */
-async function readAndUnzipFile(e, n, r) {
-  let zipData = await getFsImplementation().readFileBytes(e);
-  await extractZipToDirectory(zipData, n, r);
+async function readAndUnzipFile(filePath, targetDir, options) {
+  let zipData = await getFsImplementation().readFileBytes(filePath);
+  await extractZipToDirectory(zipData, targetDir, options);
 }
 export { isSafeZipPath, DEFAULT_FILE_MODE, unzipFile, parseZipModes, readAndUnzipFile };

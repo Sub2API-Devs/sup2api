@@ -10,12 +10,12 @@
  */
 
 //@ chunk-08945j39.js:4045-4170 fingerprint = emitTaskTerminatedSdk (0.565)
-function emitTaskTerminatedSdk(awaitingFinish, n) {
+function emitTaskTerminatedSdk(awaitingFinish, message) {
   return (
-    n.type === "system" &&
-    n.subtype === "task_notification" &&
-    typeof n.task_id === "string" &&
-    awaitingFinish.delete(n.task_id)
+    message.type === "system" &&
+    message.subtype === "task_notification" &&
+    typeof message.task_id === "string" &&
+    awaitingFinish.delete(message.task_id)
   );
 }
 //@ chunk-54xbtc53.js:27546-27635 fingerprint = drainSdkEvents (0.429)

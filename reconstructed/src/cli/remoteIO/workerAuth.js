@@ -40,18 +40,22 @@ import {
   APPROVAL_UNANSWERED_MESSAGE,
   isSyntheticApiErrorMessage,
 } from "../../utils/messages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-z4g2ta8k.js:42671-42747 placement
 /**
  * 允许启动 git 凭据引擎的入口点集合（remote / remote_projects / remote_desktop / sdk-cli / 空）。
  */
-var GIT_CREDENTIAL_ENTRYPOINTS = new Set(["remote", "remote_projects", "remote_desktop", "sdk-cli", ""]);
+var GIT_CREDENTIAL_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-z4g2ta8k.js:42671", () => {
+  GIT_CREDENTIAL_ENTRYPOINTS = new Set(["remote", "remote_projects", "remote_desktop", "sdk-cli", ""]);
+});
 //@ chunk-z4g2ta8k.js:42747-42898 placement
 /**
  * 判断 worker 是否启动 git 凭据引擎：入口不在允许集合时拒绝，否则按 git 开关启用。
  */
-function gitCredentialEngineAdmission(e) {
-  if (e.entrypoint !== undefined && !GIT_CREDENTIAL_ENTRYPOINTS.has(e.entrypoint))
+function gitCredentialEngineAdmission(options) {
+  if (options.entrypoint !== undefined && !GIT_CREDENTIAL_ENTRYPOINTS.has(options.entrypoint))
     return {
       start: false,
       reason: "entrypoint",
@@ -59,34 +63,37 @@ function gitCredentialEngineAdmission(e) {
   return {
     start: true,
     engines: {
-      git: e.gitSwitch,
+      git: options.gitSwitch,
       ...{},
     },
   };
 }
 //@ chunk-z4g2ta8k.js:42898-42909 placement
-var GIT_CREDENTIAL_ENTRYPOINTS_ALIAS = GIT_CREDENTIAL_ENTRYPOINTS;
+var GIT_CREDENTIAL_ENTRYPOINTS_ALIAS; // deferred: uses GIT_CREDENTIAL_ENTRYPOINTS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z4g2ta8k.js:42898", () => {
+  GIT_CREDENTIAL_ENTRYPOINTS_ALIAS = GIT_CREDENTIAL_ENTRYPOINTS;
+});
 //@ chunk-z4g2ta8k.js:42909-43252 placement
 /**
  * 判断托管云 worker 是否启用某项认证能力：需要 sdkUrl 与远程会话、入口在允许集合内、未禁用、非密闭环境。
  */
-function ccrAuthRefreshAdmission(e) {
-  if (!e.sdkUrl || !e.remoteSessionId || e.environmentKind !== undefined)
+function ccrAuthRefreshAdmission(options) {
+  if (!options.sdkUrl || !options.remoteSessionId || options.environmentKind !== undefined)
     return {
       admitted: false,
       reason: "not_managed_cloud_worker",
     };
-  if (e.entrypoint !== undefined && !GIT_CREDENTIAL_ENTRYPOINTS_ALIAS.has(e.entrypoint))
+  if (options.entrypoint !== undefined && !GIT_CREDENTIAL_ENTRYPOINTS_ALIAS.has(options.entrypoint))
     return {
       admitted: false,
       reason: "entrypoint",
     };
-  if (e.disabled)
+  if (options.disabled)
     return {
       admitted: false,
       reason: "disabled",
     };
-  if (e.hermetic)
+  if (options.hermetic)
     return {
       admitted: false,
       reason: "hermetic",
@@ -99,23 +106,23 @@ function ccrAuthRefreshAdmission(e) {
 /**
  * 与 jPr 同形的准入判断，只是入口白名单不同（WNt）。
  */
-function sessionAuthAdmission(e) {
-  if (!e.sdkUrl || !e.remoteSessionId || e.environmentKind !== undefined)
+function sessionAuthAdmission(options) {
+  if (!options.sdkUrl || !options.remoteSessionId || options.environmentKind !== undefined)
     return {
       admitted: false,
       reason: "not_managed_cloud_worker",
     };
-  if (e.entrypoint !== undefined && !GIT_CREDENTIAL_ENTRYPOINTS.has(e.entrypoint))
+  if (options.entrypoint !== undefined && !GIT_CREDENTIAL_ENTRYPOINTS.has(options.entrypoint))
     return {
       admitted: false,
       reason: "entrypoint",
     };
-  if (e.disabled)
+  if (options.disabled)
     return {
       admitted: false,
       reason: "disabled",
     };
-  if (e.hermetic)
+  if (options.hermetic)
     return {
       admitted: false,
       reason: "hermetic",
@@ -128,28 +135,28 @@ function sessionAuthAdmission(e) {
 /**
  * 下发文件存储写入裁决并记诊断：监听器抛错时记 file_store_verdict_listener_threw，乱序时记 file_store_verdict_out_of_order。
  */
-function reportFileStoreVerdict(e) {
-  let n = publishFileStoreVerdict(e, (first) => {
+function reportFileStoreVerdict(verdict) {
+  let result = publishFileStoreVerdict(verdict, (first) => {
     logForDiagnosticsNoPII("error", "file_store_verdict_listener_threw", {
-      verdict: e,
+      verdict,
       rejected: true,
       first,
     });
   });
-  switch (n.kind) {
+  switch (result.kind) {
     case "delivered":
-      if (n.threw.length > 0)
+      if (result.threw.length > 0)
         logForDiagnosticsNoPII("error", "file_store_verdict_listener_threw", {
-          verdict: e,
-          listeners: n.listeners,
-          threw: n.threw.length,
-          first: n.threw[0],
+          verdict,
+          listeners: result.listeners,
+          threw: result.threw.length,
+          first: result.threw[0],
         });
       return;
     case "out_of_order":
       logForDiagnosticsNoPII("error", "file_store_verdict_out_of_order", {
-        verdict: e,
-        basis: n.basis,
+        verdict,
+        basis: result.basis,
       });
       return;
     case "repeat":
@@ -184,9 +191,9 @@ async function settingsToCloudCapability(isLaterEpoch) {
  * 可用时打开设置同步闸门并返回是否可用（读取时顺手放行）。
  */
 async function openSettingsToCloudGateIfAvailable() {
-  let e = await isSettingsToCloudAvailable();
-  if (e) backgroundOutputGateSlots.of(getRootSession()).openGate();
-  return e;
+  let available = await isSettingsToCloudAvailable();
+  if (available) backgroundOutputGateSlots.of(getRootSession()).openGate();
+  return available;
 }
 //@ chunk-z4g2ta8k.js:44264-44319 placement
 var CCR_TOKEN_FILE_PATHS = {
@@ -197,14 +204,14 @@ var CCR_TOKEN_FILE_PATHS = {
 /**
  * 并行读取会话入口令牌文件与 OAuth 令牌文件；任一缺失或为空时告警并返回 null，保持当前凭证。
  */
-async function readCcrTokenFiles(e = CCR_TOKEN_FILE_PATHS) {
+async function readCcrTokenFiles(paths = CCR_TOKEN_FILE_PATHS) {
   let [smallFileOrNull, smallFileOrNull_2] = await Promise.all([
-    readSmallFileOrNull(e.sessionIngressTokenPath, MAX_CREDENTIAL_BYTES),
-    readSmallFileOrNull(e.oauthTokenPath, MAX_CREDENTIAL_BYTES),
+    readSmallFileOrNull(paths.sessionIngressTokenPath, MAX_CREDENTIAL_BYTES),
+    readSmallFileOrNull(paths.oauthTokenPath, MAX_CREDENTIAL_BYTES),
   ]);
-  let s = smallFileOrNull?.trim() ?? "";
-  let h = smallFileOrNull_2?.trim() ?? "";
-  if (!s || !h) {
+  let sessionToken = smallFileOrNull?.trim() ?? "";
+  let oauthToken = smallFileOrNull_2?.trim() ?? "";
+  if (!sessionToken || !oauthToken) {
     logForDebugging(
       "CCR auth refresh: token-file pair unreadable or incomplete, keeping current credentials",
       {
@@ -214,32 +221,32 @@ async function readCcrTokenFiles(e = CCR_TOKEN_FILE_PATHS) {
     return null;
   }
   return {
-    sessionIngressToken: s,
-    oauthToken: h,
+    sessionIngressToken: sessionToken,
+    oauthToken,
   };
 }
 //@ chunk-z4g2ta8k.js:44637-44697 placement
 var CLOCK_SKEW_TOLERANCE_SEC = 300;
 var SECRET_PLACEHOLDER_PATTERN = /^ANTHROPIC_SECRET_PLACEHOLDER_[0-9a-f]{32}$/;
 //@ chunk-z4g2ta8k.js:44697-44730 placement
-function isSecretPlaceholder(e) {
-  return SECRET_PLACEHOLDER_PATTERN.test(e);
+function isSecretPlaceholder(value) {
+  return SECRET_PLACEHOLDER_PATTERN.test(value);
 }
 //@ chunk-z4g2ta8k.js:44730-44754 placement
 var BEARER_TOKEN_PATTERN = /^[\w.~+/-]+=*$/;
 //@ chunk-z4g2ta8k.js:44754-46879 placement
-async function refreshCcrAuthFromFiles(e, n = CCR_TOKEN_FILE_PATHS) {
+async function refreshCcrAuthFromFiles(ttl, paths = CCR_TOKEN_FILE_PATHS) {
   if (!env.CLAUDE_CODE_REMOTE)
     return {
       adopted: false,
       reason: "not_remote",
     };
-  if (typeof e !== "number" || !Number.isFinite(e) || e <= 0)
+  if (typeof ttl !== "number" || !Number.isFinite(ttl) || ttl <= 0)
     return {
       adopted: false,
       reason: "no_advertised_ttl",
     };
-  let ccrTokenFiles = await readCcrTokenFiles(n);
+  let ccrTokenFiles = await readCcrTokenFiles(paths);
   if (!ccrTokenFiles)
     return {
       adopted: false,
@@ -257,19 +264,19 @@ async function refreshCcrAuthFromFiles(e, n = CCR_TOKEN_FILE_PATHS) {
       reason: "oauth_malformed",
     };
   }
-  let s = env.CLAUDE_CODE_SESSION_ACCESS_TOKEN || getSessionIngressToken();
-  let h = BEARER_TOKEN_PATTERN.test(ccrTokenFiles.sessionIngressToken)
+  let current = env.CLAUDE_CODE_SESSION_ACCESS_TOKEN || getSessionIngressToken();
+  let expiry = BEARER_TOKEN_PATTERN.test(ccrTokenFiles.sessionIngressToken)
     ? decodeJwtExpiry(ccrTokenFiles.sessionIngressToken)
     : null;
-  let y;
-  if (h !== null) {
-    if (s === ccrTokenFiles.sessionIngressToken)
+  let tokenKind;
+  if (expiry !== null) {
+    if (current === ccrTokenFiles.sessionIngressToken)
       return {
         adopted: false,
         reason: "unchanged",
       };
-    let S = Date.now() / 1000 + e;
-    if (Math.abs(h - S) > CLOCK_SKEW_TOLERANCE_SEC) {
+    let expected = Date.now() / 1000 + ttl;
+    if (Math.abs(expiry - expected) > CLOCK_SKEW_TOLERANCE_SEC) {
       logForDebugging(
         "CCR auth refresh: delivered token expiry does not match the advertised lifetime, keeping current credentials",
         {
@@ -281,8 +288,8 @@ async function refreshCcrAuthFromFiles(e, n = CCR_TOKEN_FILE_PATHS) {
         reason: "exp_mismatch",
       };
     }
-    let k = s ? decodeJwtExpiry(s) : null;
-    if (k !== null && h <= k) {
+    let currentExpiry = current ? decodeJwtExpiry(current) : null;
+    if (currentExpiry !== null && expiry <= currentExpiry) {
       logForDebugging(
         "CCR auth refresh: delivered token does not extend expiry, keeping current credentials",
         {
@@ -294,7 +301,7 @@ async function refreshCcrAuthFromFiles(e, n = CCR_TOKEN_FILE_PATHS) {
         reason: "not_newer",
       };
     }
-    y = "jwt";
+    tokenKind = "jwt";
   } else if (!isSecretPlaceholder(ccrTokenFiles.sessionIngressToken)) {
     logForDebugging(
       "CCR auth refresh: delivered session token is neither a well-formed decodable JWT nor a gateway placeholder, keeping current credentials",
@@ -306,14 +313,14 @@ async function refreshCcrAuthFromFiles(e, n = CCR_TOKEN_FILE_PATHS) {
       adopted: false,
       reason: "not_a_jwt",
     };
-  } else if (s === ccrTokenFiles.sessionIngressToken) {
+  } else if (current === ccrTokenFiles.sessionIngressToken) {
     if (ccrTokenFiles.oauthToken === (env.CLAUDE_CODE_OAUTH_TOKEN || getOauthTokenFromFd()))
       return {
         adopted: false,
         reason: "unchanged",
       };
-    y = "placeholder_unchanged";
-  } else if (s && decodeJwtExpiry(s) !== null) y = "placeholder_sealed";
+    tokenKind = "placeholder_unchanged";
+  } else if (current && decodeJwtExpiry(current) !== null) tokenKind = "placeholder_sealed";
   else {
     logForDebugging(
       "CCR auth refresh: delivered gateway placeholder is neither the session token held in process nor replacing a decodable JWT, keeping current credentials",
@@ -323,10 +330,11 @@ async function refreshCcrAuthFromFiles(e, n = CCR_TOKEN_FILE_PATHS) {
     );
     return {
       adopted: false,
-      reason: s && isSecretPlaceholder(s) ? "placeholder_mismatch" : "placeholder_current_unknown",
+      reason:
+        current && isSecretPlaceholder(current) ? "placeholder_mismatch" : "placeholder_current_unknown",
     };
   }
-  if (y !== "placeholder_unchanged") {
+  if (tokenKind !== "placeholder_unchanged") {
     if (env.CLAUDE_CODE_SESSION_ACCESS_TOKEN) getSessionIngressAuthToken_2(ccrTokenFiles.sessionIngressToken);
     setSessionIngressToken(ccrTokenFiles.sessionIngressToken);
   }
@@ -335,16 +343,16 @@ async function refreshCcrAuthFromFiles(e, n = CCR_TOKEN_FILE_PATHS) {
   clearOAuthTokenCache();
   resetFullCheckMark();
   logForDiagnosticsNoPII("info", "cli_worker_auth_refresh_adopted", {
-    session_token: y,
-    seconds_until_expiry: h === null ? undefined : Math.max(0, Math.floor(h - Date.now() / 1000)),
+    session_token: tokenKind,
+    seconds_until_expiry: expiry === null ? undefined : Math.max(0, Math.floor(expiry - Date.now() / 1000)),
   });
   return {
     adopted: true,
   };
 }
 //@ chunk-z4g2ta8k.js:46879-46920 placement
-function ccrAuthRefresherFor(e) {
-  return e === null ? refreshCcrAuthFromFiles : undefined;
+function ccrAuthRefresherFor(config) {
+  return config === null ? refreshCcrAuthFromFiles : undefined;
 }
 //@ chunk-z4g2ta8k.js:46920-47794 placement
 async function waitForSessionAuthHeaders({
@@ -359,19 +367,26 @@ async function waitForSessionAuthHeaders({
     "warn",
     "auth_headers_wait_started",
   );
-  let h = {};
-  for (let [y, S] of delaysMs.entries()) {
-    let k = y + 1;
-    logForDebugging(`[remote-io] no auth headers, re-reading in ${S}ms (attempt ${k}/${delaysMs.length})`, {
-      level: "warn",
-    });
-    await sleep(S);
-    h = rereadMiss().diag;
+  let diag = {};
+  for (let [index, delay] of delaysMs.entries()) {
+    let attempt = index + 1;
+    logForDebugging(
+      `[remote-io] no auth headers, re-reading in ${delay}ms (attempt ${attempt}/${delaysMs.length})`,
+      {
+        level: "warn",
+      },
+    );
+    await sleep(delay);
+    diag = rereadMiss().diag;
     if (Object.keys(getAuthHeaders()).length > 0) {
-      onDiagnostic?.(`session auth headers present after ${k} re-read(s)`, "info", "auth_headers_arrived");
+      onDiagnostic?.(
+        `session auth headers present after ${attempt} re-read(s)`,
+        "info",
+        "auth_headers_arrived",
+      );
       logForDiagnosticsNoPII("info", "cli_worker_lifecycle_init_auth_retried", {
-        attempts: k,
-        ...h,
+        attempts: attempt,
+        ...diag,
       });
       return true;
     }
@@ -386,31 +401,39 @@ async function waitForSessionAuthHeaders({
   );
   logForDiagnosticsNoPII("error", "cli_worker_lifecycle_init_auth_retry_exhausted", {
     attempts: delaysMs.length,
-    ...h,
+    ...diag,
   });
   return false;
 }
 //@ chunk-z4g2ta8k.js:47794-47893 placement
-var AUTH_REFRESH_DEBOUNCE_MS = 15000;
-var TRANSCRIPT_COPY_LIMITS = {
-  maxEvents: 2000,
-  maxBytes: 8388608,
-  maxTimestampChars: 32,
-};
-var SYNTHETIC_TOOL_RESULT_TEXTS = new Set([
-  TOOL_CALL_SESSION_ENDED,
-  TOOL_RESULT_NOT_IN_COPY,
-  APPROVAL_EXPIRED_MESSAGE,
-  APPROVAL_UNANSWERED_MESSAGE,
-]);
+var AUTH_REFRESH_DEBOUNCE_MS; // deferred: uses INTERRUPT_MESSAGE (../../utils/messages.js) of its import cycle while loading; runs once the cycle is complete
+var TRANSCRIPT_COPY_LIMITS;
+var SYNTHETIC_TOOL_RESULT_TEXTS;
+deferInit("chunk-z4g2ta8k.js:47794", () => {
+  AUTH_REFRESH_DEBOUNCE_MS = 15000;
+  TRANSCRIPT_COPY_LIMITS = {
+    maxEvents: 2000,
+    maxBytes: 8388608,
+    maxTimestampChars: 32,
+  };
+  SYNTHETIC_TOOL_RESULT_TEXTS = new Set([
+    TOOL_CALL_SESSION_ENDED,
+    TOOL_RESULT_NOT_IN_COPY,
+    APPROVAL_EXPIRED_MESSAGE,
+    APPROVAL_UNANSWERED_MESSAGE,
+  ]);
+});
 //@ chunk-z4g2ta8k.js:47893-48124 placement
-function isHiddenFromCatchUp(e) {
+function isHiddenFromCatchUp(row) {
   return (
-    isSyntheticApiErrorMessage(e) ||
-    ((e.type === "assistant" || e.type === "user") && (e.isVirtual === true || e.handedOff === true)) ||
-    (e.type === "user" &&
-      Array.isArray(e.message.content) &&
-      e.message.content.every((n) => n.type === "tool_result" && SYNTHETIC_TOOL_RESULT_TEXTS.has(n.content)))
+    isSyntheticApiErrorMessage(row) ||
+    ((row.type === "assistant" || row.type === "user") &&
+      (row.isVirtual === true || row.handedOff === true)) ||
+    (row.type === "user" &&
+      Array.isArray(row.message.content) &&
+      row.message.content.every(
+        (block) => block.type === "tool_result" && SYNTHETIC_TOOL_RESULT_TEXTS.has(block.content),
+      ))
   );
 }
 export {

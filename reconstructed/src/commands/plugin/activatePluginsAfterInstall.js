@@ -20,9 +20,13 @@ import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { getPluginNameFromError } from "./PluginSettings.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrb44rx7.js:36255-36259 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:36255", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:36259-36406 placement
 var NEEDS_CONFIG_NOTE =
   " Its bundled MCP server needs configuration before it can start \u2014 select the plugin in /plugin's Installed tab and choose Configure.";
@@ -30,39 +34,44 @@ var NEEDS_CONFIG_NOTE =
 /**
  * 安装后自动激活插件并记录 tengu_plugin_install_auto_activate；需要配置时返回 needs_config。
  */
-async function activatePluginsAfterInstall(i, activePlugins, k, storageV5) {
-  let x = await activateInstalledPlugin(i, activePlugins, k, storageV5);
-  let T = x === null || x === "needs_config";
+async function activatePluginsAfterInstall(names, activePlugins, context, storageV5) {
+  let activated = await activateInstalledPlugin(names, activePlugins, context, storageV5);
+  let didActivate = activated === null || activated === "needs_config";
   logEvent("tengu_plugin_install_auto_activate", {
-    activated: T,
-    ...(x !== null && {
-      reason: fromEnum(x),
+    activated: didActivate,
+    ...(activated !== null && {
+      reason: fromEnum(activated),
     }),
   });
-  if (T) logFeatureOk("plugin_install_auto_activate");
-  else if (x === "cache_impact") logFeatureSad("plugin_install_auto_activate", "cache_impact");
-  else logFeatureBad("plugin_install_auto_activate", x);
-  if (x === null) return "activated";
-  if (x === "needs_config") return "needs-config";
-  if (x === "plugin_load_error") return "load-failed";
+  if (didActivate) logFeatureOk("plugin_install_auto_activate");
+  else if (activated === "cache_impact") logFeatureSad("plugin_install_auto_activate", "cache_impact");
+  else logFeatureBad("plugin_install_auto_activate", activated);
+  if (activated === null) return "activated";
+  if (activated === "needs_config") return "needs-config";
+  if (activated === "plugin_load_error") return "load-failed";
   activePlugins.markNeedsRefresh();
   return "reload-required";
 }
 //@ chunk-vrb44rx7.js:36891-37510 placement
-async function activateInstalledPlugin(i, h, k, C) {
-  let x = k;
+async function activateInstalledPlugin(pluginName, activePlugins, context, storageV5) {
+  let previous = context;
   try {
-    if ((await computePluginReloadImpact(i())).wouldInvalidateCache) return "cache_impact";
-    let D = await refreshActivePlugins(h, C);
-    let missingDependencies = await resolveMissingDependencies(D.errors, C);
+    if ((await computePluginReloadImpact(pluginName())).wouldInvalidateCache) return "cache_impact";
+    let refreshed = await refreshActivePlugins(activePlugins, storageV5);
+    let missingDependencies = await resolveMissingDependencies(refreshed.errors, storageV5);
     if (missingDependencies.installed.length > 0) {
-      if ((await computePluginReloadImpact(i())).wouldInvalidateCache) return "cache_impact";
-      D = await refreshActivePlugins(h, C);
-      x = [...x, ...missingDependencies.installed];
+      if ((await computePluginReloadImpact(pluginName())).wouldInvalidateCache) return "cache_impact";
+      refreshed = await refreshActivePlugins(activePlugins, storageV5);
+      previous = [...previous, ...missingDependencies.installed];
     }
-    if (D.error_count > D.errors.length) return "refresh_failed";
-    if (D.errors.some((error) => findOrphanedPluginEntries(error, x))) return "plugin_load_error";
-    if (D.warnings.some((warning) => warning.type === "mcpb-needs-config" && k.includes(warning.source)))
+    if (refreshed.error_count > refreshed.errors.length) return "refresh_failed";
+    if (refreshed.errors.some((error) => findOrphanedPluginEntries(error, previous)))
+      return "plugin_load_error";
+    if (
+      refreshed.warnings.some(
+        (warning) => warning.type === "mcpb-needs-config" && context.includes(warning.source),
+      )
+    )
       return "needs_config";
     return null;
   } catch (error) {
@@ -74,19 +83,28 @@ async function activateInstalledPlugin(i, h, k, C) {
   }
 }
 //@ chunk-vrb44rx7.js:37510-37815 placement
-function findOrphanedPluginEntries(error, h) {
+function findOrphanedPluginEntries(error, known) {
   if ("orphan" in error && error.orphan) return false;
   if (getPluginNameFromError(error) === undefined) return false;
-  let k =
+  let pluginId =
     "pluginId" in error && error.pluginId
       ? error.pluginId
       : "plugin" in error && error.plugin
         ? error.plugin
         : undefined;
-  let C =
-    k !== undefined && k.includes("@") ? k : error.source.includes("@") ? error.source : (k ?? error.source);
-  return C.includes("@") ? h.includes(C) : h.some((x) => firstLineOf(x, "@") === C);
+  let errorPluginId =
+    pluginId !== undefined && pluginId.includes("@")
+      ? pluginId
+      : error.source.includes("@")
+        ? error.source
+        : (pluginId ?? error.source);
+  return errorPluginId.includes("@")
+    ? known.includes(errorPluginId)
+    : known.some((name) => firstLineOf(name, "@") === errorPluginId);
 }
 //@ chunk-vrb44rx7.js:37815-37819 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:37815", () => {
+  init_react_production();
+});
 export { NEEDS_CONFIG_NOTE, activatePluginsAfterInstall };

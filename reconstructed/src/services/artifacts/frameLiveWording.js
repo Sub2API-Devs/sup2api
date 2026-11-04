@@ -70,6 +70,7 @@ import { VER_SHAPE, isOwnPublishedVer, isPublishInFlight } from "./ownPublishes.
 import { PASSIVE } from "./pageScripts.js";
 import { isArtifactsAvailable } from "./artifactAvailability.js";
 import { pickByToolset, commentsToolAction } from "./artifactToolGates.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aqdf5t3e.js:25720-25795 placement
 /**
@@ -77,7 +78,7 @@ import { pickByToolset, commentsToolAction } from "./artifactToolGates.js";
  */
 var FRAME_LIVE_V1 = "frame-live.v1";
 var liveNotificationEnqueuer = {
-  enqueuePendingNotification: (e) => enqueuePendingNotification(e),
+  enqueuePendingNotification: (notice) => enqueuePendingNotification(notice),
 };
 var ARM_RETRY_DELAY_WORDING_MS = 25000;
 //@ chunk-aqdf5t3e.js:25795-25854 placement
@@ -97,67 +98,72 @@ var UNINTENDED_RESUME_HINT =
 /**
  * 把某 slug 的监听从"显式"降为自动布防：更新监听器标志与运行中监听任务的描述。
  */
-function demoteExplicitWatch(live, slug, r) {
-  let s = live.supervisors.get(slug);
-  if (s !== undefined) s.explicit = false;
-  for (let h of Object.values(r.all()))
-    if (isMonitorWsTask(h) && h.status === "running" && h.frameLive?.slug === slug && h.frameLive.explicit)
-      r.update(h.id, (a) =>
-        isMonitorWsTask(a) && a.frameLive !== undefined
+function demoteExplicitWatch(live, slug, registry) {
+  let supervisor = live.supervisors.get(slug);
+  if (supervisor !== undefined) supervisor.explicit = false;
+  for (let task of Object.values(registry.all()))
+    if (
+      isMonitorWsTask(task) &&
+      task.status === "running" &&
+      task.frameLive?.slug === slug &&
+      task.frameLive.explicit
+    )
+      registry.update(task.id, (task) =>
+        isMonitorWsTask(task) && task.frameLive !== undefined
           ? {
-              ...a,
+              ...task,
               description: liveUpdatesTaskLabel(
                 artifactViewerUrlFor({
                   slug,
                   env: claudeAiEnvironment(),
                 }),
                 false,
-                a.frameLive.armedVia,
+                task.frameLive.armedVia,
               ),
               frameLive: {
-                ...a.frameLive,
+                ...task.frameLive,
                 explicit: false,
               },
             }
-          : a,
+          : task,
       );
 }
 //@ chunk-aqdf5t3e.js:26548-27039 placement
 /**
  * 响应停止某个监听任务：任务被用户停止时确认停止锁存、停止评论监听意图并停掉同 slug 的其他任务；否则只在任务与监听器匹配时停掉监听器。非模型发起时记录停止。返回之前是否在监听。
  */
-function stopWatchFromTask(e, n) {
+function stopWatchFromTask(slug, event) {
   let live = getLiveState().live;
-  let s = live.supervisors.get(e)?.context.storageV5 ?? monitorStorage();
-  setLedgerStorage(s);
-  let h;
-  if (n.taskStop) {
-    getLiveState().durable.stopLatches.confirmStop(e);
-    if (!isSlugYielded(e)) {
-      stopCommentMonitorIntent(e, {
-        storageV5: s,
+  let storage = live.supervisors.get(slug)?.context.storageV5 ?? monitorStorage();
+  setLedgerStorage(storage);
+  let unsub;
+  if (event.taskStop) {
+    getLiveState().durable.stopLatches.confirmStop(slug);
+    if (!isSlugYielded(slug)) {
+      stopCommentMonitorIntent(slug, {
+        storageV5: storage,
       });
-      import("./chunk-4te7h8m1.js").then((d) => d.notifyTakenOverSlugStopped(e));
+      import("./replyYieldHolder.js").then((mod) => mod.notifyTakenOverSlugStopped(slug));
     }
     let { wasWatching } = stopWatchesForSlug({
-      slug: e,
-      taskRegistry: n.taskRegistry,
-      announce: !n.running,
-      killRow: (d) => {
-        if (d.id !== n.taskId)
-          stopMonitorWsTasks(d.id, n.taskRegistry, {
+      slug,
+      taskRegistry: event.taskRegistry,
+      announce: !event.running,
+      killRow: (row) => {
+        if (row.id !== event.taskId)
+          stopMonitorWsTasks(row.id, event.taskRegistry, {
             userStop: true,
           });
       },
     });
-    h = wasWatching;
+    unsub = wasWatching;
   } else {
-    if (!supervisorOwnsTask(live, e, n)) return false;
-    removeSupervisor(live, e);
-    h = true;
+    if (!supervisorOwnsTask(live, slug, event)) return false;
+    removeSupervisor(live, slug);
+    unsub = true;
   }
-  if (n.modelOrigin !== true) hasWatchArtifactArg(e, s);
-  return h;
+  if (event.modelOrigin !== true) hasWatchArtifactArg(slug, storage);
+  return unsub;
 }
 //@ chunk-aqdf5t3e.js:27039-27543 placement
 /**
@@ -184,9 +190,9 @@ function stopWatchesForSlug(options) {
   )
     endStoppedWatch(live, supervisor, "watching this artifact was stopped just now");
   else removeSupervisor(live, slug);
-  for (let b of filtered) {
+  for (let row of filtered) {
     wasWatching = true;
-    options.killRow(b);
+    options.killRow(row);
   }
   if (wasWatching && isSlugSwept(slug)) stopAutoReactForSlug(slug);
   forgetArtifactAndFlush(slug);
@@ -195,21 +201,21 @@ function stopWatchesForSlug(options) {
   };
 }
 //@ chunk-aqdf5t3e.js:27543-27786 placement
-function supervisorOwnsTask(live, n, r) {
-  let s = live.supervisors.get(n);
-  if (s === undefined || s.stopped) return false;
-  if (r.running) return s.taskId === undefined || s.taskId === r.taskId;
-  if (s.taskId === undefined || s.taskId !== r.taskId) return false;
-  return s.timer !== undefined || live.inFlightSubscribes.has(n);
+function supervisorOwnsTask(live, slug, taskId) {
+  let supervisor = live.supervisors.get(slug);
+  if (supervisor === undefined || supervisor.stopped) return false;
+  if (taskId.running) return supervisor.taskId === undefined || supervisor.taskId === taskId.taskId;
+  if (supervisor.taskId === undefined || supervisor.taskId !== taskId.taskId) return false;
+  return supervisor.timer !== undefined || live.inFlightSubscribes.has(slug);
 }
 //@ chunk-aqdf5t3e.js:27786-27901 placement
 /**
  * 停止并移除某 slug 的监听器，清除相关缓存，并通知头部订阅源结束。
  */
 function removeSupervisor(live, slug) {
-  let r = live.supervisors.get(slug);
-  if (r) {
-    stopSupervisor(r);
+  let supervisor = live.supervisors.get(slug);
+  if (supervisor) {
+    stopSupervisor(supervisor);
     live.supervisors.delete(slug);
   }
   forgetHeardVersion(slug);
@@ -220,16 +226,16 @@ function removeSupervisor(live, slug) {
 /**
  * 合并自动响应接线配置：人类回合快照时只打标记；否则用新的上下文与发布转录设置覆盖。
  */
-function mergeAutoReactWiring(autoReactWiring, autoReactWiring_2, r) {
-  if (r)
+function mergeAutoReactWiring(autoReactWiring, autoReactWiring_2, snapshot) {
+  if (snapshot)
     return {
       ...autoReactWiring_2,
       humanTurnSnapshot: true,
     };
   if (autoReactWiring === undefined) return autoReactWiring_2;
-  let { humanTurnSnapshot, ...h } = autoReactWiring_2;
+  let { humanTurnSnapshot, ...rest } = autoReactWiring_2;
   return {
-    ...h,
+    ...rest,
     context: autoReactWiring.context,
     publishTranscript: autoReactWiring.publishTranscript,
     ...(autoReactWiring.humanTurnSnapshot && {
@@ -241,8 +247,8 @@ function mergeAutoReactWiring(autoReactWiring, autoReactWiring_2, r) {
 /**
  * 判断监督器的人类回合快照接线是否已过期（新接线不是快照或上下文不同）。
  */
-function isHumanTurnWiringStale(e, slug, autoReactWiring) {
-  let autoReactWiring_2 = e.supervisors.get(slug)?.autoReactWiring;
+function isHumanTurnWiringStale(live, slug, autoReactWiring) {
+  let autoReactWiring_2 = live.supervisors.get(slug)?.autoReactWiring;
   return (
     autoReactWiring_2?.humanTurnSnapshot === true &&
     (autoReactWiring?.humanTurnSnapshot !== true || autoReactWiring_2.context !== autoReactWiring.context)
@@ -256,7 +262,7 @@ function upsertSupervisor(live, options) {
   let existing = live.supervisors.get(options.slug);
   if (existing && !existing.stopped) {
     if (options.carriedVer !== undefined) existing.carriedVer = options.carriedVer;
-    let h = existing.armedVia === "mcp_write";
+    let viaMcpWrite = existing.armedVia === "mcp_write";
     if (!options.machineArm) {
       existing.lastActivityAt = Date.now();
       if (existing.timer !== undefined) {
@@ -276,17 +282,17 @@ function upsertSupervisor(live, options) {
         touchCommentReadState(options.slug);
       } else if (options.armedVia === "publish") existing.armedVia = "publish";
       else if (existing.armedVia === "mcp_write") existing.armedVia = options.armedVia;
-      if (h && existing.armedVia !== "mcp_write") emitSummonArm(live, options.slug);
+      if (viaMcpWrite && existing.armedVia !== "mcp_write") emitSummonArm(live, options.slug);
     }
     existing.explicit = existing.explicit || options.explicit;
     if (options.autoReactWiring !== undefined) {
-      let a = existing.autoReactWiring !== undefined;
+      let hasWiring = existing.autoReactWiring !== undefined;
       existing.autoReactWiring = mergeAutoReactWiring(
         existing.autoReactWiring,
         options.autoReactWiring,
         options.humanTurnWiring === true,
       );
-      if (!a) emitSummonArm(live, options.slug);
+      if (!hasWiring) emitSummonArm(live, options.slug);
     }
     return existing;
   }
@@ -319,32 +325,36 @@ function upsertSupervisor(live, options) {
   return supervisor;
 }
 //@ chunk-aqdf5t3e.js:29636-29845 placement
-function isIdleAutoWatch(e, n) {
-  let { rewatchTiming } = e;
+function isIdleAutoWatch(state, slug) {
+  let { rewatchTiming } = state;
   if (rewatchTiming.idleTtlMs <= 0) return false;
-  if (n.explicit || isRecentOwnPublish(e, n) || Date.now() - n.lastActivityAt < rewatchTiming.idleTtlMs)
+  if (
+    slug.explicit ||
+    isRecentOwnPublish(state, slug) ||
+    Date.now() - slug.lastActivityAt < rewatchTiming.idleTtlMs
+  )
     return false;
   return !(
-    n.autoReactWiring !== undefined &&
+    slug.autoReactWiring !== undefined &&
     isAutoreactArmed() &&
-    (!isSlugStopped(n.slug) || isSlugSwept(n.slug))
+    (!isSlugStopped(slug.slug) || isSlugSwept(slug.slug))
   );
 }
 //@ chunk-aqdf5t3e.js:29845-29928 placement
-function isRecentOwnPublish(e, n) {
-  return n.slug === e.mostRecentPublishSlug && n.armedVia !== "mcp_write";
+function isRecentOwnPublish(state, slug) {
+  return slug.slug === state.mostRecentPublishSlug && slug.armedVia !== "mcp_write";
 }
 //@ chunk-aqdf5t3e.js:29928-29993 placement
-function labelledArmedVia(e, armedVia) {
-  return e ? "watch" : armedVia === "watch" ? "watch_stopped" : armedVia;
+function labelledArmedVia(options, armedVia) {
+  return options ? "watch" : armedVia === "watch" ? "watch_stopped" : armedVia;
 }
 //@ chunk-aqdf5t3e.js:29993-30048 placement
-function parseArmedVia(e) {
-  return MONITOR_WS_ACTIVITY_KINDS.find((n) => n === e) ?? "publish";
+function parseArmedVia(value) {
+  return MONITOR_WS_ACTIVITY_KINDS.find((kind) => kind === value) ?? "publish";
 }
 //@ chunk-aqdf5t3e.js:30048-31200 placement
-function armedViaWording(e) {
-  switch (e) {
+function armedViaWording(via) {
+  switch (via) {
     case "publish":
       return {
         task: "auto-armed on publish",
@@ -393,23 +403,26 @@ function armedViaWording(e) {
 /**
  * 描述空闲退役的原因：何时如何布防、超过多久没有活动。
  */
-function describeIdleRetirement(e, n) {
-  let idle = armedViaWording(n.armedVia).idle;
-  let s =
-    n.armedVia === "watch"
+function describeIdleRetirement(state, slug) {
+  let idle = armedViaWording(slug.armedVia).idle;
+  let text =
+    slug.armedVia === "watch"
       ? "(your watch request was later stopped; idle auto-armed watches are retired)"
       : "(idle auto-armed watches are retired)";
-  return `it was armed ${idle} and has seen no activity for over ${formatDuration(e.rewatchTiming.idleTtlMs, {
-    hideTrailingZeros: true,
-  })} ${s}`;
+  return `it was armed ${idle} and has seen no activity for over ${formatDuration(
+    state.rewatchTiming.idleTtlMs,
+    {
+      hideTrailingZeros: true,
+    },
+  )} ${text}`;
 }
 //@ chunk-aqdf5t3e.js:31506-31563 placement
-function isHandshakeStall(e, n, rewatchTiming) {
-  return e === HANDSHAKE_TIMEOUT || n >= rewatchTiming.stallThresholdMs;
+function isHandshakeStall(code, info, rewatchTiming) {
+  return code === HANDSHAKE_TIMEOUT || info >= rewatchTiming.stallThresholdMs;
 }
 //@ chunk-aqdf5t3e.js:31563-31638 placement
-function isRetryableUpgradeRejection(e) {
-  let upgradeRejection = parseUpgradeRejection(e);
+function isRetryableUpgradeRejection(code) {
+  let upgradeRejection = parseUpgradeRejection(code);
   return (
     upgradeRejection !== null && (isRetryableStatus(upgradeRejection.status) || upgradeRejection.cfMitigated)
   );
@@ -424,109 +437,115 @@ function maxStallAge(rewatchTiming) {
   );
 }
 //@ chunk-aqdf5t3e.js:31734-33741 placement
-function describeResumedWatchFailure(e, slug, r) {
-  let { uptimeMs, resumeNeverOpened = false, stalled = false } = r;
-  let { rewatchTiming } = e;
-  let b = e.supervisors.get(slug);
-  if (!b || b.stopped) return;
+function describeResumedWatchFailure(liveState, slug, failure) {
+  let { uptimeMs, resumeNeverOpened = false, stalled = false } = failure;
+  let { rewatchTiming } = liveState;
+  let supervisor = liveState.supervisors.get(slug);
+  if (!supervisor || supervisor.stopped) return;
   if (getLiveState().durable.stopLatches.isStopped(slug)) {
     logFeatureSad("artifact_live_subscribe", "stop_latched");
     if (resumeNeverOpened)
       endWatch(
-        e,
-        b,
+        liveState,
+        supervisor,
         "the resumed live watch could not connect, so the earlier stop stays in place and comment auto-replies were not resumed",
         "could not connect",
         {
           advice: "tell the user, and call resume_replies again only if they still want auto-replies resumed",
         },
       );
-    else endStoppedWatch(e, b);
+    else endStoppedWatch(liveState, supervisor);
     return;
   }
-  if (isIdleAutoWatch(e, b)) {
+  if (isIdleAutoWatch(liveState, supervisor)) {
     logFeatureOk("artifact_live_subscribe", {
       idle_retired: true,
     });
-    endWatch(e, b, describeIdleRetirement(e, b), "idle", {
+    endWatch(liveState, supervisor, describeIdleRetirement(liveState, supervisor), "idle", {
       advice: WATCH_LATER_ADVICE,
       passive: true,
     });
     return;
   }
-  let w = false;
-  let S = false;
+  let reconnected = false;
+  let retried = false;
   if (stalled) {
     let now = Date.now();
     if (
-      b.stalledSince === undefined ||
-      b.lastStalledAt === undefined ||
-      b.stallOutAfterMs === undefined ||
-      now - b.lastStalledAt > maxStallAge(rewatchTiming)
+      supervisor.stalledSince === undefined ||
+      supervisor.lastStalledAt === undefined ||
+      supervisor.stallOutAfterMs === undefined ||
+      now - supervisor.lastStalledAt > maxStallAge(rewatchTiming)
     ) {
-      b.stalledSince = now;
-      b.stallOutAfterMs =
+      supervisor.stalledSince = now;
+      supervisor.stallOutAfterMs =
         rewatchTiming.maxStallMs + Math.round(Math.random() * rewatchTiming.stallOutJitterMs);
-      let T = r.httpStatus ?? parseUpgradeRejection(r.closeCode)?.status;
+      let httpStatus = failure.httpStatus ?? parseUpgradeRejection(failure.closeCode)?.status;
       logFeatureSad("artifact_live_subscribe", "stall_run_started", {
-        boot: r.closeCode === undefined,
-        ...(T !== undefined && {
-          http_status: T,
+        boot: failure.closeCode === undefined,
+        ...(httpStatus !== undefined && {
+          http_status: httpStatus,
         }),
       });
-    } else S = true;
-    b.lastStalledAt = now;
-    w = now - b.stalledSince >= b.stallOutAfterMs;
+    } else retried = true;
+    supervisor.lastStalledAt = now;
+    reconnected = now - supervisor.stalledSince >= supervisor.stallOutAfterMs;
   } else {
-    b.stalledSince = undefined;
-    b.lastStalledAt = undefined;
-    b.stallOutAfterMs = undefined;
-    if (uptimeMs >= rewatchTiming.minUptimeMs) b.consecutiveFailures = 0;
-    else if (r.reuseRefused !== true) b.consecutiveFailures++;
+    supervisor.stalledSince = undefined;
+    supervisor.lastStalledAt = undefined;
+    supervisor.stallOutAfterMs = undefined;
+    if (uptimeMs >= rewatchTiming.minUptimeMs) supervisor.consecutiveFailures = 0;
+    else if (failure.reuseRefused !== true) supervisor.consecutiveFailures++;
   }
-  if (b.consecutiveFailures > rewatchTiming.maxConsecutiveFailures || w) {
-    if (w)
+  if (supervisor.consecutiveFailures > rewatchTiming.maxConsecutiveFailures || reconnected) {
+    if (reconnected)
       logFeatureSad("artifact_live_subscribe", "rewatch_gave_up", {
         stalled: true,
       });
     else logFeatureSad("artifact_live_subscribe", "rewatch_gave_up");
-    endWatch(e, b, "the live connection kept failing and reconnecting has stopped", CONNECTION_LOST_PHRASE, {
-      advice: NO_AUTO_RETURN_ADVICE,
-      passive: true,
-    });
+    endWatch(
+      liveState,
+      supervisor,
+      "the live connection kept failing and reconnecting has stopped",
+      CONNECTION_LOST_PHRASE,
+      {
+        advice: NO_AUTO_RETURN_ADVICE,
+        passive: true,
+      },
+    );
     return;
   }
-  let R = isFrameLiveTokenLeaseEnabled();
+  let leaseEnabled = isFrameLiveTokenLeaseEnabled();
   let longStall =
     stalled &&
-    S &&
-    (parseUpgradeRejection(r.closeCode)?.cfMitigated === true ||
-      !R ||
-      b.lease === undefined ||
+    retried &&
+    (parseUpgradeRejection(failure.closeCode)?.cfMitigated === true ||
+      !leaseEnabled ||
+      supervisor.lease === undefined ||
       !isLiveTokenFresh(
-        b.lease,
+        supervisor.lease,
         rewatchTiming,
         getLiveState().accountEpoch,
         Date.now() + rewatchTiming.stallMinMs,
       ));
-  let G =
+  let advice =
     uptimeMs > 0 &&
     uptimeMs >= rewatchTiming.minUptimeMs &&
-    r.closeCode !== undefined &&
-    !(r.expired === true && b.transport !== "sync");
+    failure.closeCode !== undefined &&
+    !(failure.expired === true && supervisor.transport !== "sync");
   let reconnectDelay = computeReconnectDelay({
     timing: rewatchTiming,
-    consecutiveFailures: b.consecutiveFailures,
-    leaseMode: R,
+    consecutiveFailures: supervisor.consecutiveFailures,
+    leaseMode: leaseEnabled,
     stalled,
     longStall,
-    spread: G,
+    spread: advice,
   });
-  if (R && G && r.expired !== true) b.spreadReconnect = true;
-  if (b.timer !== undefined) clearTimeout(b.timer);
-  b.timer = setTimeout(rewatchSupervisor, reconnectDelay, e, slug);
-  b.timer.unref?.();
-  b.nextRewatchAt = Date.now() + reconnectDelay;
+  if (leaseEnabled && advice && failure.expired !== true) supervisor.spreadReconnect = true;
+  if (supervisor.timer !== undefined) clearTimeout(supervisor.timer);
+  supervisor.timer = setTimeout(rewatchSupervisor, reconnectDelay, liveState, slug);
+  supervisor.timer.unref?.();
+  supervisor.nextRewatchAt = Date.now() + reconnectDelay;
 }
 //@ chunk-aqdf5t3e.js:33741-34559 placement
 /**
@@ -544,7 +563,7 @@ function endWatch(
     if (!getLiveState().durable.stopLatches.isStopped(supervisor.slug)) {
       recordArmFailureLive(live, supervisor.slug, "ended", shortReason);
       if (supervisor.autoReactWiring !== undefined)
-        import("./chunk-4te7h8m1.js").then((w) => w.handBackTakenOverSlug(supervisor.slug));
+        import("./replyYieldHolder.js").then((mod) => mod.handBackTakenOverSlug(supervisor.slug));
     }
   } else stopSupervisor(supervisor);
   let resumeAnnounce = supervisor.resumeAnnounce;
@@ -553,11 +572,11 @@ function endWatch(
     resumeAnnounce.onGiveUp();
   }
   if (supervisor.armedVia === "mcp_write") return;
-  let b = quoteArtifactName(() => supervisor.autoReactWiring?.title, supervisor.url);
+  let name = quoteArtifactName(() => supervisor.autoReactWiring?.title, supervisor.url);
   enqueuePendingNotification({
     value: formatTaskNotification({
       taskType: ARTIFACT_WATCH_LIFECYCLE,
-      summary: escapeXml(stoppedWatchingNotice(b, shortReason)),
+      summary: escapeXml(stoppedWatchingNotice(name, shortReason)),
       body: `
 <event>${escapeXml(`Watch on ${supervisor.url} ended \u2014 ${reason}. This session no longer keeps track of new versions of it; ${advice}.`)}</event>`,
     }),
@@ -570,7 +589,7 @@ function endWatch(
       kind: "task-notification",
       source: ARTIFACT_WATCH_LIFECYCLE,
       slug: supervisor.slug,
-      displayName: b,
+      displayName: name,
       watchEnded: true,
     },
     agentId: mainAgentId(),
@@ -580,9 +599,13 @@ function endWatch(
 /**
  * 以"本会话早先已停止监视"为由结束监视，并建议除非用户要求不要再监视。
  */
-function endStoppedWatch(live, supervisor, r = "watching this artifact was stopped earlier in this session") {
+function endStoppedWatch(
+  liveState,
+  supervisor,
+  reason = "watching this artifact was stopped earlier in this session",
+) {
   supervisor.resumeAnnounce = undefined;
-  endWatch(live, supervisor, r, "stopped", {
+  endWatch(liveState, supervisor, reason, "stopped", {
     advice: "do not watch it again unless the user asks you to",
   });
 }
@@ -590,21 +613,21 @@ function endStoppedWatch(live, supervisor, r = "watching this artifact was stopp
 /**
  * 布防被跳过时的统一处理：必要时描述恢复失败、记录布防失败，返回 skipped 结果（可带不可用与 HTTP 状态）。
  */
-function skipArm(e, slug, machineArm, s, h, { unavailable: a = false, httpStatus: d } = {}) {
-  describeSkippedResume(e, slug, machineArm, {
-    unavailable: a,
-    httpStatus: d,
+function skipArm(state, slug, machineArm, stateSlug, reason, { unavailable = false, httpStatus } = {}) {
+  describeSkippedResume(state, slug, machineArm, {
+    unavailable,
+    httpStatus,
   });
-  recordArmFailure(e, slug, machineArm, s, h);
+  recordArmFailure(state, slug, machineArm, stateSlug, reason);
   return {
     outcome: "skipped",
-    reason: s,
-    ...(a && {
+    reason: stateSlug,
+    ...(unavailable && {
       unavailable: true,
     }),
-    ...(a &&
-      d !== undefined && {
-        httpStatus: d,
+    ...(unavailable &&
+      httpStatus !== undefined && {
+        httpStatus,
       }),
   };
 }
@@ -612,15 +635,15 @@ function skipArm(e, slug, machineArm, s, h, { unavailable: a = false, httpStatus
 /**
  * 恢复监视被跳过时，若监督器仍在且没有定时器，则报告恢复失败（可带停滞与 HTTP 状态）。
  */
-function describeSkippedResume(e, slug, r, { unavailable: s = false, httpStatus: h } = {}) {
-  if (r) return;
-  let a = e.supervisors.get(slug);
-  if (a !== undefined && !a.stopped && a.timer === undefined)
-    describeResumedWatchFailure(e, slug, {
+function describeSkippedResume(state, slug, argSlug, { unavailable = false, httpStatus } = {}) {
+  if (argSlug) return;
+  let supervisor = state.supervisors.get(slug);
+  if (supervisor !== undefined && !supervisor.stopped && supervisor.timer === undefined)
+    describeResumedWatchFailure(state, slug, {
       uptimeMs: 0,
-      stalled: s,
-      ...(h !== undefined && {
-        httpStatus: h,
+      stalled: unavailable,
+      ...(httpStatus !== undefined && {
+        httpStatus,
       }),
     });
 }
@@ -693,72 +716,84 @@ async function rewatchSupervisor(live, slug) {
     }
 }
 //@ chunk-aqdf5t3e.js:36316-37357 placement
-async function describeSubscribeFailure(e, slug) {
-  let r = e.supervisors.get(slug);
-  let lease = r?.lease;
-  if (!isFrameLiveTokenLeaseEnabled() || r === undefined || r.stopped || lease === undefined || lease.probed)
+async function describeSubscribeFailure(state, slug) {
+  let supervisor = state.supervisors.get(slug);
+  let lease = supervisor?.lease;
+  if (
+    !isFrameLiveTokenLeaseEnabled() ||
+    supervisor === undefined ||
+    supervisor.stopped ||
+    lease === undefined ||
+    lease.probed
+  )
     return;
   lease.probed = true;
-  let h;
+  let failure;
   try {
-    h = await fetchArtifactBoot(
+    failure = await fetchArtifactBoot(
       {
         slug,
         env: claudeAiEnvironment(),
       },
-      r.abort.signal,
+      supervisor.abort.signal,
       {
         agentPeer: canArmFrameLive(slug),
         syncLive: canArmFrameLive(slug),
         watchBoot: true,
-        credentials: r.context.credentials,
+        credentials: supervisor.context.credentials,
       },
     );
   } catch {
     return;
   }
-  if (e.supervisors.get(slug) !== r || r.stopped) return;
-  let a =
-    h.err === null
-      ? h.assetToken === undefined
+  if (state.supervisors.get(slug) !== supervisor || supervisor.stopped) return;
+  let detail =
+    failure.err === null
+      ? failure.assetToken === undefined
         ? "public_outside_org"
         : undefined
-      : h.status === 404
+      : failure.status === 404
         ? "not_found"
-        : isOtherOrg(h)
+        : isOtherOrg(failure)
           ? "other_org"
           : undefined;
-  if (a !== undefined) {
-    logFeatureSad("artifact_live_subscribe", `read_stopped_${a}`);
-    endWatch(e, r, frameLiveSkipReasonPhrase(a) ?? a, SKIP_REASON_PHRASES[a] ?? a, {
-      advice: noRewatchAdvice(a),
-    });
-    for (let w of Object.values(r.context.taskRegistry.all()))
-      if (isMonitorWsTask(w) && w.status === "running" && w.frameLive?.slug === slug)
-        stopMonitorWsTasks(w.id, r.context.taskRegistry, {
+  if (detail !== undefined) {
+    logFeatureSad("artifact_live_subscribe", `read_stopped_${detail}`);
+    endWatch(
+      state,
+      supervisor,
+      frameLiveSkipReasonPhrase(detail) ?? detail,
+      SKIP_REASON_PHRASES[detail] ?? detail,
+      {
+        advice: noRewatchAdvice(detail),
+      },
+    );
+    for (let task of Object.values(supervisor.context.taskRegistry.all()))
+      if (isMonitorWsTask(task) && task.status === "running" && task.frameLive?.slug === slug)
+        stopMonitorWsTasks(task.id, supervisor.context.taskRegistry, {
           quiet: true,
         });
     return;
   }
-  if (h.err === null && getLiveSubscriptionToken(h.data) !== undefined) {
+  if (failure.err === null && getLiveSubscriptionToken(failure.data) !== undefined) {
     logFeatureOk("artifact_live_subscribe", {
       read_refused_boot_ok: true,
     });
     return;
   }
-  let d = h.err === null ? "tokenless" : (h.status ?? h.errorCode);
-  logFeatureSad("artifact_live_subscribe", `read_refused_boot_${d}`);
+  let code = failure.err === null ? "tokenless" : (failure.status ?? failure.errorCode);
+  logFeatureSad("artifact_live_subscribe", `read_refused_boot_${code}`);
   if (
-    (d === "tokenless" || (typeof d === "number" && d < 500 && d !== 408 && d !== 429)) &&
-    r.lease === lease
+    (code === "tokenless" || (typeof code === "number" && code < 500 && code !== 408 && code !== 429)) &&
+    supervisor.lease === lease
   ) {
-    delete r.lease;
-    delete r.renewable;
+    delete supervisor.lease;
+    delete supervisor.renewable;
   }
 }
 //@ chunk-aqdf5t3e.js:37357-37430 placement
-function frameLiveWsUrl(e) {
-  return toWebSocketUrl(new URL(`/edge-api/frame-live/${e}/ws`, getClaudeAiOrigin()));
+function frameLiveWsUrl(slug) {
+  return toWebSocketUrl(new URL(`/edge-api/frame-live/${slug}/ws`, getClaudeAiOrigin()));
 }
 //@ chunk-aqdf5t3e.js:37430-37439 placement
 var MAX_SURFACED_VERSIONS = 8;
@@ -769,16 +804,16 @@ var MAX_SURFACED_VERSIONS = 8;
 function createLiveEventHandlers(options) {
   let { slug, url, ownPublishes, getKnownVer, autoReact, onSurfaced } = options;
   let surfacedVers = options.surfacedVers ?? [];
-  function w(y) {
-    surfacedVers.push(y);
+  function rememberSurfaced(ver) {
+    surfacedVers.push(ver);
     if (surfacedVers.length > MAX_SURFACED_VERSIONS) surfacedVers.shift();
   }
   if (options.seedSurfacedVer !== undefined && !surfacedVers.includes(options.seedSurfacedVer))
-    w(options.seedSurfacedVer);
+    rememberSurfaced(options.seedSurfacedVer);
   let tokenBucket = createTokenBucket(BUCKET_CAPACITY, TOKEN_REFILL_MS);
-  let R = false;
-  let C = false;
-  function G() {
+  let suppressedCatchUp = false;
+  let suppressedOwn = false;
+  function onHeard() {
     touchSupervisorActivity(slug);
     markCensusDirty(slug);
     if (autoReact && isAutoreactArmed())
@@ -804,59 +839,59 @@ function createLiveEventHandlers(options) {
         }),
       });
   }
-  function L(y, T) {
-    if (!y || !VER_SHAPE.test(y)) return;
+  function surfaceVersion(ver, source) {
+    if (!ver || !VER_SHAPE.test(ver)) return;
     if (options.presenceOnly?.()) return;
-    recordHeardVersion(slug, y);
-    if (surfacedVers.includes(y)) return;
-    let P = T === "sync" && {
+    recordHeardVersion(slug, ver);
+    if (surfacedVers.includes(ver)) return;
+    let syncFields = source === "sync" && {
       via_sync: true,
     };
-    if (isOwnPublishedVer(ownPublishes, slug, y)) {
+    if (isOwnPublishedVer(ownPublishes, slug, ver)) {
       logFeatureOk("artifact_live_subscribe", {
-        ...(R
+        ...(suppressedCatchUp
           ? {
               suppressed_own: true,
             }
           : {
               suppressed_catch_up: true,
             }),
-        ...P,
+        ...syncFields,
       });
-      R = true;
+      suppressedCatchUp = true;
       return;
     }
-    if (y === getKnownVer()) return;
+    if (ver === getKnownVer()) return;
     if (isPublishInFlight(ownPublishes, slug)) {
       logFeatureOk("artifact_live_subscribe", {
         suppressed_in_flight: true,
-        ...P,
+        ...syncFields,
       });
       return;
     }
     if (!tokenBucket.tryConsume()) {
-      if (!C) {
-        C = true;
+      if (!suppressedOwn) {
+        suppressedOwn = true;
         logFeatureSad("artifact_live_subscribe", "ver_rate_suppressed", {
-          ...P,
+          ...syncFields,
         });
       }
       return;
     }
-    C = false;
-    w(y);
+    suppressedOwn = false;
+    rememberSurfaced(ver);
     try {
-      onSurfaced?.(y);
+      onSurfaced?.(ver);
     } catch {}
     logFeatureOk("artifact_live_subscribe", {
       surfaced: true,
       passive: PASSIVE === "passive",
-      ...P,
+      ...syncFields,
     });
   }
   return {
-    comment: G,
-    ver: L,
+    comment: onHeard,
+    ver: surfaceVersion,
   };
 }
 //@ chunk-aqdf5t3e.js:58569-59765 placement
@@ -879,8 +914,8 @@ function commentNotifyNote() {
 /**
  * 实时订阅不可用的原因文本（特性开关关闭、非主循环会话等）
  */
-function frameLiveSkipReasonPhrase(e) {
-  switch (e) {
+function frameLiveSkipReasonPhrase(reason) {
+  switch (reason) {
     case "flag_off":
       return "the live-subscribe feature flag is off in this session's cached config, so this session does not keep track of new versions of this artifact published elsewhere";
     case "publish_context":
@@ -922,8 +957,8 @@ function frameLiveSkipReasonPhrase(e) {
   }
 }
 //@ chunk-aqdf5t3e.js:62347-64058 placement
-function frameLiveSubscriptionLine(e) {
-  switch (e) {
+function frameLiveSubscriptionLine(state) {
+  switch (state) {
     case "arming":
       return `Live subscription: arming in the background \u2014 not connected yet, so this is not a watch until \`status\` shows it connected (you are told if it cannot connect, unless this turn is interrupted first). Once connected, this session keeps track of new versions of this artifact published elsewhere; a new version starts no turn and sends no notification${commentNotifyNote()}.`;
     case "connected":
@@ -933,14 +968,14 @@ function frameLiveSubscriptionLine(e) {
     case "publish_context":
       return "Live subscription: none \u2014 this is a print (-p), cloud, subagent, or teammate session, which does not keep track of new versions of this artifact published elsewhere (only the main conversation of a local interactive, background, or TypeScript/Python Agent SDK session does). Expected; not an error.";
     case "remote_unsupported": {
-      let n = isArtifactsAvailable();
-      return `Live subscription: not supported yet from remote sessions \u2014 nothing notifies this session of new versions${n ? " or of comments sent to Claude" : ""}; re-read the artifact${n ? " (and its comments)" : ""} when the user asks.`;
+      let available = isArtifactsAvailable();
+      return `Live subscription: not supported yet from remote sessions \u2014 nothing notifies this session of new versions${available ? " or of comments sent to Claude" : ""}; re-read the artifact${available ? " (and its comments)" : ""} when the user asks.`;
     }
     default: {
-      let n = frameLiveSkipReasonPhrase(e);
-      return n !== null
-        ? `Live subscription: skipped \u2014 ${n}.`
-        : `Live subscription: skipped (${sweepResultLineText(e, 64)}).`;
+      let phrase = frameLiveSkipReasonPhrase(state);
+      return phrase !== null
+        ? `Live subscription: skipped \u2014 ${phrase}.`
+        : `Live subscription: skipped (${sweepResultLineText(state, 64)}).`;
     }
   }
 }
@@ -951,16 +986,27 @@ var FRAME_LIVE_PUBLISH_CONTEXT_BRIEF_LINE =
 /**
  * 监听失败/结束的短语与建议文案：未找到、其他组织、组织外公开、不会自行恢复、下次工作时再监听、实时更新已关闭。
  */
-var ARTIFACT_NOT_FOUND_PHRASE = "artifact not found";
-var NOT_SHARED_ADVICE = "there is nothing to retry unless the artifact is shared with the user again";
-var OTHER_ORG_PHRASE = "other organization";
-var PUBLIC_OUTSIDE_ORG_PHRASE = "public, outside your organization";
-var RETRY_AFTER_ADVICE = `there is nothing to retry until ${LOGIN_OTHER_ORG_REMEDY}`;
-var READ_INSTEAD_ADVICE = "there is nothing to retry: read it with the read action instead";
-var NO_AUTO_RETURN_ADVICE =
-  "it will not come back on its own \u2014 watch it again only if the user asks or your current task still depends on its republishes";
-var WATCH_LATER_ADVICE = "watch it again when you next work on this artifact";
-var LIVE_OFF_ADVICE = "there is nothing to re-watch while live updates are switched off";
+var ARTIFACT_NOT_FOUND_PHRASE; // deferred: uses OTHER_ORG_PHRASE (./orgScope.js) of its import cycle while loading; runs once the cycle is complete
+var NOT_SHARED_ADVICE;
+var OTHER_ORG_PHRASE;
+var PUBLIC_OUTSIDE_ORG_PHRASE;
+var RETRY_AFTER_ADVICE;
+var READ_INSTEAD_ADVICE;
+var NO_AUTO_RETURN_ADVICE;
+var WATCH_LATER_ADVICE;
+var LIVE_OFF_ADVICE;
+deferInit("chunk-aqdf5t3e.js:86647", () => {
+  ARTIFACT_NOT_FOUND_PHRASE = "artifact not found";
+  NOT_SHARED_ADVICE = "there is nothing to retry unless the artifact is shared with the user again";
+  OTHER_ORG_PHRASE = "other organization";
+  PUBLIC_OUTSIDE_ORG_PHRASE = "public, outside your organization";
+  RETRY_AFTER_ADVICE = `there is nothing to retry until ${LOGIN_OTHER_ORG_REMEDY}`;
+  READ_INSTEAD_ADVICE = "there is nothing to retry: read it with the read action instead";
+  NO_AUTO_RETURN_ADVICE =
+    "it will not come back on its own \u2014 watch it again only if the user asks or your current task still depends on its republishes";
+  WATCH_LATER_ADVICE = "watch it again when you next work on this artifact";
+  LIVE_OFF_ADVICE = "there is nothing to re-watch while live updates are switched off";
+});
 //@ chunk-aqdf5t3e.js:87194-87380 placement
 function getEndWatchAdvice(reason) {
   switch (reason) {
@@ -983,8 +1029,8 @@ function getEndWatchAdvice(reason) {
   }
 }
 //@ chunk-aqdf5t3e.js:87380-87575 placement
-function noRewatchAdvice(e) {
-  switch (e) {
+function noRewatchAdvice(reason) {
+  switch (reason) {
     case "not_found":
     case ARTIFACT_NOT_FOUND_PHRASE:
       return NOT_SHARED_ADVICE;
@@ -1007,20 +1053,27 @@ function noRewatchAdvice(e) {
 /**
  * 监听状态短语：连接丢失、没有实时凭据、无法重连、为其他监听腾位置，以及各跳过原因对应的短语表。
  */
-var CONNECTION_LOST_PHRASE = "connection lost";
-var NO_LIVE_CREDENTIAL_PHRASE = "no live credential";
-var COULD_NOT_RECONNECT_PHRASE = "could not reconnect";
-var MADE_ROOM_PHRASE = "made room for another watch";
-var SKIP_REASON_PHRASES = {
-  boot_failed: "could not connect",
-  ws_open_error: "could not connect",
-  sync_unavailable: "could not connect",
-  not_found: ARTIFACT_NOT_FOUND_PHRASE,
-  other_org: OTHER_ORG_PHRASE,
-  public_outside_org: PUBLIC_OUTSIDE_ORG_PHRASE,
-  no_subscription_token: NO_LIVE_CREDENTIAL_PHRASE,
-  watch_cap: "watch limit reached",
-};
+var CONNECTION_LOST_PHRASE; // deferred: uses ARTIFACT_NOT_FOUND_PHRASE of its import cycle while loading; runs once the cycle is complete
+var NO_LIVE_CREDENTIAL_PHRASE;
+var COULD_NOT_RECONNECT_PHRASE;
+var MADE_ROOM_PHRASE;
+var SKIP_REASON_PHRASES;
+deferInit("chunk-aqdf5t3e.js:87575", () => {
+  CONNECTION_LOST_PHRASE = "connection lost";
+  NO_LIVE_CREDENTIAL_PHRASE = "no live credential";
+  COULD_NOT_RECONNECT_PHRASE = "could not reconnect";
+  MADE_ROOM_PHRASE = "made room for another watch";
+  SKIP_REASON_PHRASES = {
+    boot_failed: "could not connect",
+    ws_open_error: "could not connect",
+    sync_unavailable: "could not connect",
+    not_found: ARTIFACT_NOT_FOUND_PHRASE,
+    other_org: OTHER_ORG_PHRASE,
+    public_outside_org: PUBLIC_OUTSIDE_ORG_PHRASE,
+    no_subscription_token: NO_LIVE_CREDENTIAL_PHRASE,
+    watch_cap: "watch limit reached",
+  };
+});
 export {
   frameLiveSkipReasonPhrase,
   frameLiveSubscriptionLine,

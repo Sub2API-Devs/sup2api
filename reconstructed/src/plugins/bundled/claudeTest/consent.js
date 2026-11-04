@@ -16,6 +16,8 @@ import { errorMessage, toError } from "../../../utils/errors.js";
 import {
   helperServerState,
   portPortedFiles,
+  claudeTestInstalledRoot,
+  TEST_PLUGIN_ID,
   buildPlaywrightMcpServer,
   HELPER_TOOL_PREFIX,
   CLAUDE_TEST_APP_UP,
@@ -31,7 +33,6 @@ import {
   resolveTrustedNode,
   getTeammateEnvVarsToForward,
 } from "./nodeEnvironment.js";
-import { claudeTestInstalledRoot, TEST_PLUGIN_ID } from "../../../services/pluginTest/claudeTestPlugin.js";
 import { findDifferingInstalledFile, writeMadeHereKey, resolveAppDir } from "./runFiles.js";
 import { pluginDataDirPath } from "../../../utils/plugins/pluginDirectories.js";
 import {
@@ -49,6 +50,7 @@ import {
 import { HostScoped } from "../../../utils/hostScoped.js";
 import { TENGU_MELLOW_HOLLERITH } from "../../../services/api/withRetry.js";
 import { claudeTestState, isPlainObjectNonArray } from "./appFacts.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-ae5g0zb5.js:76654-76790 placement
 /**
@@ -62,60 +64,64 @@ var ALLOWED_STARTS_JSON = "allowed-starts.json";
 /**
  * 清理旧版本文件夹、过期的 live 页面与记住的同意记录。
  */
-async function cleanupOldClaudeTestFiles(e) {
+async function cleanupOldClaudeTestFiles(markerPath) {
   try {
     let date = new Date();
-    await utimes(e, date, date);
-    let r = (await isRetentionCleanupSafe(undefined, 0)) ? getCutoffDate() : null;
-    if (r === null) return;
-    let o = dirname(e);
-    let s = await readdir(o, {
+    await utimes(markerPath, date, date);
+    let cutoff = (await isRetentionCleanupSafe(undefined, 0)) ? getCutoffDate() : null;
+    if (cutoff === null) return;
+    let rootDir = dirname(markerPath);
+    let dirents = await readdir(rootDir, {
       withFileTypes: true,
     });
-    for (let f of s)
+    for (let dirent of dirents)
       if (
-        f.isDirectory() &&
-        f.name !== basename(e) &&
-        VERSION_DIR_RE.test(f.name) &&
-        (await stat(join(o, f.name))).mtime < r
+        dirent.isDirectory() &&
+        dirent.name !== basename(markerPath) &&
+        VERSION_DIR_RE.test(dirent.name) &&
+        (await stat(join(rootDir, dirent.name))).mtime < cutoff
       )
-        await rm(join(o, f.name), {
+        await rm(join(rootDir, dirent.name), {
           recursive: true,
           force: true,
         });
-    let a = join(o, "live");
-    let c = s.some((f) => f.name === "live" && f.isDirectory())
-      ? await readdir(a, {
+    let liveDir = join(rootDir, "live");
+    let liveDirs = dirents.some((dirent) => dirent.name === "live" && dirent.isDirectory())
+      ? await readdir(liveDir, {
           withFileTypes: true,
         }).catch(() => [])
       : [];
-    for (let f of c) {
-      if (!f.isDirectory() || !HASH_SUFFIX_RE.test(f.name)) continue;
-      let b = await readdir(join(a, f.name), {
+    for (let dirent of liveDirs) {
+      if (!dirent.isDirectory() || !HASH_SUFFIX_RE.test(dirent.name)) continue;
+      let runDirEntries = await readdir(join(liveDir, dirent.name), {
         withFileTypes: true,
       }).catch(() => []);
-      for (let P of b) {
-        let F = join(a, f.name, P.name);
-        if (P.isDirectory() && RUN_DIR_NAME_RE.test(P.name) && (await lstat(F)).mtime < r)
-          await rm(F, {
+      for (let entry of runDirEntries) {
+        let runDirPath = join(liveDir, dirent.name, entry.name);
+        if (
+          entry.isDirectory() &&
+          RUN_DIR_NAME_RE.test(entry.name) &&
+          (await lstat(runDirPath)).mtime < cutoff
+        )
+          await rm(runDirPath, {
             recursive: true,
             force: true,
           });
       }
-      await rmdir(join(a, f.name)).catch(() => {});
+      await rmdir(join(liveDir, dirent.name)).catch(() => {});
     }
-    let _ = join(o, "consent");
-    let w = s.some((f) => f.name === "consent" && f.isDirectory())
-      ? await readdir(_, {
+    let consentDir = join(rootDir, "consent");
+    let consentEntries = dirents.some((dirent) => dirent.name === "consent" && dirent.isDirectory())
+      ? await readdir(consentDir, {
           withFileTypes: true,
         }).catch(() => [])
       : [];
-    for (let f of w) {
-      if (!f.isDirectory()) continue;
-      let b = join(_, f.name, ALLOWED_STARTS_JSON);
-      let P = await lstat(b).catch(() => null);
-      if (P?.isFile() && P.mtime < r)
-        await rm(b, {
+    for (let entry of consentEntries) {
+      if (!entry.isDirectory()) continue;
+      let startsFile = join(consentDir, entry.name, ALLOWED_STARTS_JSON);
+      let startsStat = await lstat(startsFile).catch(() => null);
+      if (startsStat?.isFile() && startsStat.mtime < cutoff)
+        await rm(startsFile, {
           force: true,
         });
     }
@@ -132,9 +138,9 @@ async function cleanupOldClaudeTestFiles(e) {
 var describeHelperState = async () => {
   let server;
   try {
-    let { server: server_2, ...r } = await describeHelperFilesState();
+    let { server: server_2, ...rest } = await describeHelperFilesState();
     server = server_2;
-    return r;
+    return rest;
   } finally {
     helperServerState.server = server;
   }
@@ -149,33 +155,33 @@ async function describeHelperFilesState() {
     };
   }
   let { INSTALLED_FILES } = await loadInstalledFiles();
-  let n = portPortedFiles(INSTALLED_FILES);
-  let r = claudeTestInstalledRoot();
-  let o = await listProjectRoots();
-  let unsafeInheritedEnv = await findUnsafeInheritedEnv(buildAppEnvironment(), o);
-  let command = await resolveTrustedNode(unsafeInheritedEnv, o);
+  let installedFiles = portPortedFiles(INSTALLED_FILES);
+  let rootDir = claudeTestInstalledRoot();
+  let projectRoots = await listProjectRoots();
+  let unsafeInheritedEnv = await findUnsafeInheritedEnv(buildAppEnvironment(), projectRoots);
+  let command = await resolveTrustedNode(unsafeInheritedEnv, projectRoots);
   if (command === undefined) {
     logFeatureBad("claude_test_helper_files", "no_node");
     return {
-      folder: r,
+      folder: rootDir,
       problem: "no_node",
     };
   }
   try {
-    let symlinkedAncestor = await findSymlinkedAncestor(r, Object.keys(n));
+    let symlinkedAncestor = await findSymlinkedAncestor(rootDir, Object.keys(installedFiles));
     if (symlinkedAncestor !== undefined) {
       logFeatureBad("claude_test_helper_files", "linked");
       return {
-        folder: r,
+        folder: rootDir,
         problem: "linked",
-        what: symlinkedAncestor === "." ? r : join(r, symlinkedAncestor),
+        what: symlinkedAncestor === "." ? rootDir : join(rootDir, symlinkedAncestor),
       };
     }
-    let differingInstalledFile = await findDifferingInstalledFile(r, n);
+    let differingInstalledFile = await findDifferingInstalledFile(rootDir, installedFiles);
     if (differingInstalledFile !== undefined) {
       logFeatureBad("claude_test_helper_files", "differs");
       return {
-        folder: r,
+        folder: rootDir,
         problem: "differs",
         what: differingInstalledFile,
       };
@@ -183,26 +189,26 @@ async function describeHelperFilesState() {
   } catch (error) {
     logFeatureBad("claude_test_helper_files", "unwritable");
     return {
-      folder: r,
+      folder: rootDir,
       problem: "unwritable",
       what: errorMessage(error),
     };
   }
-  await cleanupOldClaudeTestFiles(r);
+  await cleanupOldClaudeTestFiles(rootDir);
   await writeMadeHereKey(pluginDataDirPath(TEST_PLUGIN_ID));
   logFeatureOk("claude_test_helper_files");
   let server = buildPlaywrightMcpServer(command, unsafeInheritedEnv);
   let teammateEnvVarsToForward = getTeammateEnvVarsToForward();
-  let _ = teammateEnvVarsToForward.join() !== helperServerState.toldIgnored;
+  let shouldTellIgnored = teammateEnvVarsToForward.join() !== helperServerState.toldIgnored;
   helperServerState.toldIgnored = teammateEnvVarsToForward.join();
-  return _ && teammateEnvVarsToForward.length > 0
+  return shouldTellIgnored && teammateEnvVarsToForward.length > 0
     ? {
-        folder: r,
+        folder: rootDir,
         server,
         ignored: teammateEnvVarsToForward,
       }
     : {
-        folder: r,
+        folder: rootDir,
         server,
       };
 }
@@ -210,18 +216,19 @@ async function describeHelperFilesState() {
 /**
  * 在要写入的文件的各级父目录中找符号链接目录。
  */
-async function findSymlinkedAncestor(e, n) {
-  let r = new Set(["."]);
-  for (let o of n) for (let s = dirname(o); s !== "."; s = dirname(s)) r.add(s);
-  for (let o of [...r].sort())
+async function findSymlinkedAncestor(rootDir, relativePaths) {
+  let dirs = new Set(["."]);
+  for (let relativePath of relativePaths)
+    for (let dir = dirname(relativePath); dir !== "."; dir = dirname(dir)) dirs.add(dir);
+  for (let dir of [...dirs].sort())
     if (
       (
-        await lstat(join(e, o)).catch(() => {
+        await lstat(join(rootDir, dir)).catch(() => {
           return;
         })
       )?.isSymbolicLink()
     )
-      return o;
+      return dir;
   return;
 }
 //@ chunk-ae5g0zb5.js:79040-79050 placement
@@ -294,33 +301,34 @@ function createGateNoteState() {
 /**
  * 读取 Claude Test 开关（override/disabled/payload）。
  */
-function readClaudeTestGate(e, n = createGateNoteState()) {
+function readClaudeTestGate(source, state = createGateNoteState()) {
   return {
     note() {
-      let r = n.noted === undefined;
-      n.noted = {
-        login: e.login(),
-        holdsAnswers: e.holdsFetchedAnswers(),
+      let isFirstNote = state.noted === undefined;
+      state.noted = {
+        login: source.login(),
+        holdsAnswers: source.holdsFetchedAnswers(),
       };
-      let { login, holdsAnswers } = n.noted;
-      if (!holdsAnswers) n.loginWhenLastEmpty = login;
-      else if (r && login !== undefined && login !== NO_STORED_LOGIN && e.wasToldStoredLogin())
-        n.loginWhenLastEmpty = login;
+      let { login, holdsAnswers } = state.noted;
+      if (!holdsAnswers) state.loginWhenLastEmpty = login;
+      else if (isFirstNote && login !== undefined && login !== NO_STORED_LOGIN && source.wasToldStoredLogin())
+        state.loginWhenLastEmpty = login;
     },
     isOn() {
-      let { value: r, source } = e.answer();
-      if (source === "override") return r;
-      if (source === "disabled") return e.isOnWithFlagsOff;
-      let { noted } = n;
+      let { value, source: source_2 } = source.answer();
+      if (source_2 === "override") return value;
+      if (source_2 === "disabled") return source.isOnWithFlagsOff;
+      let { noted } = state;
       if (noted?.login === undefined) return false;
-      let a = noted.login !== NO_STORED_LOGIN;
+      let hasStoredLogin = noted.login !== NO_STORED_LOGIN;
       if (noted.holdsAnswers) {
-        if (n.loginWhenLastEmpty !== noted.login || (a && !e.wasToldStoredLogin())) return false;
-        let i = source === "payload" && r === true;
-        if (a) n.keptByLogin.set(noted.login, i);
-        return i;
+        if (state.loginWhenLastEmpty !== noted.login || (hasStoredLogin && !source.wasToldStoredLogin()))
+          return false;
+        let isOn = source_2 === "payload" && value === true;
+        if (hasStoredLogin) state.keptByLogin.set(noted.login, isOn);
+        return isOn;
       }
-      return n.keptByLogin.get(noted.login) ?? false;
+      return state.keptByLogin.get(noted.login) ?? false;
     },
   };
 }
@@ -328,7 +336,10 @@ function readClaudeTestGate(e, n = createGateNoteState()) {
 /**
  * 按宿主保存 Claude Test 开关的评估状态。
  */
-var claudeTestGateStateSlot = new HostScoped(createGateNoteState);
+var claudeTestGateStateSlot; // deferred: uses createGateNoteState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ae5g0zb5.js:80457", () => {
+  claudeTestGateStateSlot = new HostScoped(createGateNoteState);
+});
 //@ chunk-ae5g0zb5.js:80474-80613 placement
 /**
  * 读取 Claude Test 开关（GrowthBook tengu_mellow_hollerith + 登录账号）。
@@ -409,25 +420,25 @@ var MAX_PANE_JSON_BYTES = 4000;
 /**
  * 取会话根目录对应的项目目录及其工具权限决定（异步）。
  */
-async function resolveProjectAndPermission(e) {
-  let n;
+async function resolveProjectAndPermission(ctx) {
+  let root;
   try {
-    n = await e.session.root();
+    root = await ctx.session.root();
   } catch {
     return;
   }
-  let dir = (await resolveAppDir(e, n, claudeTestState.typedArgs)).dir;
+  let dir = (await resolveAppDir(ctx, root, claudeTestState.typedArgs)).dir;
   return {
     project: dir,
-    answer: decideToolPermission(e, dir),
+    answer: decideToolPermission(ctx, dir),
   };
 }
 //@ chunk-ae5g0zb5.js:81160-81518 placement
-async function decideToolPermission(e, project) {
+async function decideToolPermission(ctx, project) {
   try {
     if (
       (
-        await e.tool.check({
+        await ctx.tool.check({
           tool: `${HELPER_TOOL_PREFIX}${CLAUDE_TEST_APP_UP}`,
           input: {
             project,
@@ -436,11 +447,11 @@ async function decideToolPermission(e, project) {
       ).decision !== "allow"
     )
       return;
-    let o = await e.mcp.call(HELPER_SERVER_NAME, CLAUDE_TEST_APP_UP, {
+    let answer = await ctx.mcp.call(HELPER_SERVER_NAME, CLAUDE_TEST_APP_UP, {
       project,
     });
-    if (o.isError) return;
-    let joined = o.content.map((c) => (c.type === "text" ? (c.text ?? "") : "")).join("");
+    if (answer.isError) return;
+    let joined = answer.content.map((part) => (part.type === "text" ? (part.text ?? "") : "")).join("");
     let parsed = JSON.parse(joined);
     if (!isPlainObjectNonArray(parsed) || !("up" in parsed)) return;
     let json = JSON.stringify(parsed);

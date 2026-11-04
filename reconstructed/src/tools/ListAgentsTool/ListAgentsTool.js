@@ -9,7 +9,13 @@
  * attribution: placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string, u, array, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  stringSchema,
+  objectSchema,
+  array,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import { LISTAGENTS, LISTPEERS, listAgentsPrompt } from "../SendMessageTool/listAgents.js";
 import { hasSendMessageTool } from "../SendMessageTool/constants.js";
@@ -23,32 +29,32 @@ import { isTeammateOrSubagentContext } from "../SendMessageTool/selfTarget.js";
 var LIST_AGENTS_MAX_CHARS = 1e4;
 var listAgentsInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    channel: string().max(256).optional().describe("Not available in this build; leave unset."),
-    q: string().max(256).optional().describe("Not available in this build; leave unset."),
+    channel: stringSchema().max(256).optional().describe("Not available in this build; leave unset."),
+    q: stringSchema().max(256).optional().describe("Not available in this build; leave unset."),
   }),
 );
 var listAgentsOutputSchema = DoctorLazy(() =>
-  u({
-    listing: string().describe("Formatted list of reachable agents"),
+  objectSchema({
+    listing: stringSchema().describe("Formatted list of reachable agents"),
     sections: array(
-      u({
-        kind: string(),
-        total: E(),
+      objectSchema({
+        kind: stringSchema(),
+        total: numberSchema(),
         rows: array(
-          u({
-            name: string().optional(),
-            ref: string().optional(),
-            id: string().optional(),
-            type: string().optional(),
-            status: string().optional(),
+          objectSchema({
+            name: stringSchema().optional(),
+            ref: stringSchema().optional(),
+            id: stringSchema().optional(),
+            type: stringSchema().optional(),
+            status: stringSchema().optional(),
           }),
         ),
       }),
     ).optional(),
     notes: array(
-      u({
-        kind: string(),
-        text: string(),
+      objectSchema({
+        kind: stringSchema(),
+        text: stringSchema(),
       }),
     ).optional(),
   }),
@@ -62,7 +68,7 @@ var ListAgentsTool = buildTool({
   toAutoClassifierInput() {
     return "list agents";
   },
-  async description(e, { tools: options }) {
+  async description(input, { tools: options }) {
     return listAgentsPrompt({
       canSendMessages: hasSendMessageTool(options),
     });
@@ -93,44 +99,49 @@ var ListAgentsTool = buildTool({
   renderToolUseMessage() {
     return null;
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async call(t) {
-        let { listAllPeers, listAgentsForModel, buildSubagentExtras } = require("./chunk-58q34e4p.js");
-        let channel = t.channel?.trim() || undefined;
-        let l = t.q?.trim() || undefined;
-        let [n, subagentExtras] = await Promise.all([
+      async call(input) {
+        let {
+          listAllPeers,
+          listAgentsForModel,
+          buildSubagentExtras,
+        } = require("../../utils/peerSessions/listAgents.js");
+        let channel = input.channel?.trim() || undefined;
+        let query = input.q?.trim() || undefined;
+        let [peersResult, subagentExtras] = await Promise.all([
           listAllPeers(
-            e.session,
+            toolContext.session,
             {
               channel,
-              q: l,
-              storageV5: e.storageV5,
+              q: query,
+              storageV5: toolContext.storageV5,
             },
-            e.credentials,
+            toolContext.credentials,
           ),
           buildSubagentExtras(
             {
-              ...e,
-              getAppState: e.resolverState,
+              ...toolContext,
+              getAppState: toolContext.resolverState,
             },
-            isTeammateOrSubagentContext(e),
+            isTeammateOrSubagentContext(toolContext),
           ),
         ]);
         return {
-          data: listAgentsForModel(n.peers, subagentExtras, {
-            ...n,
-            callerCanSend: hasSendMessageTool(e.tools),
+          data: listAgentsForModel(peersResult.peers, subagentExtras, {
+            ...peersResult,
+            callerCanSend: hasSendMessageTool(toolContext.tools),
           }),
         };
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: e.listing,
+      content: result.listing,
     };
   },
 });
+export { ListAgentsTool };

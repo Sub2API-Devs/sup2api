@@ -5,13 +5,20 @@
  * pieces: chunk-1ny7cxrt.js (1), chunk-7vp249v4.js (1)
  * attribution: cjs-fingerprint 1, esm-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
-import { require_util } from "./util.cjs";
 import { globalConfig, config } from "./core.js";
-import { yn } from "./memoizer.js";
+import { createMemoizer } from "./memoizer.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
+import { require_util } from "./util.cjs";
 
+//@ chunk-7vp249v4.js:79897-79949 esm-fingerprint
+function initMemoizer() {
+  if (!globalConfig.memoizer)
+    config({
+      memoizer: createMemoizer(),
+    });
+}
 //@ chunk-1ny7cxrt.js:181402-186033 cjs-fingerprint
-var require_memoizer = x(function (cjsExports) {
+var require_memoizer = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -348,11 +355,4 @@ var require_memoizer = x(function (cjsExports) {
     Object.freeze(cjsExports);
   })();
 });
-//@ chunk-7vp249v4.js:79897-79949 esm-fingerprint
-function ie() {
-  if (!globalConfig.memoizer)
-    config({
-      memoizer: yn(),
-    });
-}
-export { require_memoizer, ie };
+export { require_memoizer, initMemoizer };

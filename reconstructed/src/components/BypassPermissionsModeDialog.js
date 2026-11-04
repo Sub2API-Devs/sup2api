@@ -8,9 +8,9 @@
  * pieces: chunk-styvqsd2.js (3)
  * attribution: placement 1, fingerprint 2
  */
-import { init_react_production, P, R } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useEffect, useRef } from "../../vendor/react/cjs/react.production.js";
 import { logEvent } from "../services/analytics/index.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { isShuttingDown, gracefulShutdownSync } from "../utils/gracefulShutdown.js";
 import { updateSettingsForSource } from "../utils/settings/settings.js";
@@ -34,22 +34,22 @@ function logBypassDialogShown() {
  * Bypass Permissions 模式确认：说明不会再请求许可的风险，接受写入 userSettings，拒绝退出。
  */
 function BypassPermissionsModeDialog(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { onAccept, storageV5 } = props;
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t1 = [];
     $[0] = t1;
   } else t1 = $[0];
-  P(logBypassDialogShown, t1);
-  let p = R(false);
-  let u;
+  useEffect(logBypassDialogShown, t1);
+  let answeredRef = useRef(false);
+  let selectHandlerCached;
   if ($[1] !== onAccept || $[2] !== storageV5) {
-    u = function onChange(value) {
-      if (p.current || isShuttingDown()) {
+    selectHandlerCached = function onChange(value) {
+      if (answeredRef.current || isShuttingDown()) {
         return;
       }
-      q: switch (((p.current = true), value)) {
+      q: switch (((answeredRef.current = true), value)) {
         case "accept": {
           logEvent("tengu_bypass_permissions_mode_dialog_accept", {});
           updateSettingsForSource(
@@ -70,21 +70,21 @@ function BypassPermissionsModeDialog(props) {
     };
     $[1] = onAccept;
     $[2] = storageV5;
-    $[3] = u;
-  } else u = $[3];
-  let onChange = u;
-  let f;
+    $[3] = selectHandlerCached;
+  } else selectHandlerCached = $[3];
+  let onChange = selectHandlerCached;
+  let cancelHandler;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    f = () => {
-      p.current = true;
+    cancelHandler = () => {
+      answeredRef.current = true;
       gracefulShutdownSync(0);
     };
-    $[4] = f;
-  } else f = $[4];
-  let onCancel = f;
-  let g;
+    $[4] = cancelHandler;
+  } else cancelHandler = $[4];
+  let onCancel = cancelHandler;
+  let warningElement;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    g = jsxProd_default_2(Box, {
+    warningElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       children: [
@@ -104,8 +104,8 @@ function BypassPermissionsModeDialog(props) {
         }),
       ],
     });
-    $[5] = g;
-  } else g = $[5];
+    $[5] = warningElement;
+  } else warningElement = $[5];
   let t5;
   if ($[6] !== onChange) {
     t5 = jsxProd_default_2(Dialog, {
@@ -113,7 +113,7 @@ function BypassPermissionsModeDialog(props) {
       color: "error",
       onCancel,
       children: [
-        g,
+        warningElement,
         jsxProd_default(ConfirmSelect, {
           hideIndexes: true,
           cancelFirst: true,
@@ -130,3 +130,4 @@ function BypassPermissionsModeDialog(props) {
   } else t5 = $[7];
   return t5;
 }
+export { BypassPermissionsModeDialog };

@@ -8,7 +8,14 @@
  * pieces: chunk-v517dzda.js (17)
  * attribution: placement 17
  */
-import { init_react_production, y, R, ce, P, Q } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useMemo,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -47,56 +54,66 @@ import { ErrorText } from "../../components/ErrorText.js";
 import { StatusIcon } from "../../components/design-system/StatusIcon.js";
 import { stripCombiningRepeated } from "../../utils/sanitization.js";
 import { replaceControlChars } from "../../utils/resultError.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { TextInput } from "../../components/TextInput.js";
 import { WrappedTextBox } from "../../components/FeedbackSurvey/FeedbackDraftNotice.js";
 import { useScrollViewportSize, useHasScrollViewport } from "../../components/ScrollViewportContext.js";
 import { merged } from "../../components/CustomSelect/select.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-v517dzda.js:1297-1301 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v517dzda.js:1297", () => {
+  init_react_production();
+});
 //@ chunk-v517dzda.js:1301-1376 placement
-function renderThisSessionFeedbackItem(U) {
+function renderThisSessionFeedbackItem(draft) {
   return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      label: stripInvisibleChars(U.title),
-      meta: feedbackItemMeta(U),
+      label: stripInvisibleChars(draft.title),
+      meta: feedbackItemMeta(draft),
     },
-    U.draft_id,
+    draft.draft_id,
   );
 }
 //@ chunk-v517dzda.js:1376-1455 placement
-function renderOtherFeedbackItem(te) {
+function renderOtherFeedbackItem(draft) {
   return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      label: stripInvisibleChars(te.title),
-      meta: feedbackItemMeta(te),
+      label: stripInvisibleChars(draft.title),
+      meta: feedbackItemMeta(draft),
     },
-    te.draft_id,
+    draft.draft_id,
   );
 }
 //@ chunk-v517dzda.js:1455-1603 placement
-var FEEDBACK_TYPES = ["bug", "idea", "missing_capability"];
-var FEEDBACK_TYPE_LABELS = {
-  bug: "bug",
-  idea: "idea",
-  missing_capability: "missing capability",
-};
-var AREA_CHOICES = [undefined, ...FEEDBACK_FAILURE_MODES];
-var FAILURE_MODE_CHOICES = [undefined, ...FEEDBACK_TASK_CATEGORIES];
+var FEEDBACK_TYPES; // deferred: uses FEEDBACK_TYPES (../../services/feedback/feedbackDrafts.js) of its import cycle while loading; runs once the cycle is complete
+var FEEDBACK_TYPE_LABELS;
+var AREA_CHOICES;
+var FAILURE_MODE_CHOICES;
+deferInit("chunk-v517dzda.js:1455", () => {
+  FEEDBACK_TYPES = ["bug", "idea", "missing_capability"];
+  FEEDBACK_TYPE_LABELS = {
+    bug: "bug",
+    idea: "idea",
+    missing_capability: "missing capability",
+  };
+  AREA_CHOICES = [undefined, ...FEEDBACK_FAILURE_MODES];
+  FAILURE_MODE_CHOICES = [undefined, ...FEEDBACK_TASK_CATEGORIES];
+});
 //@ chunk-v517dzda.js:1603-1665 placement
-function snakeToWords(h) {
-  return h === undefined ? "(none)" : h.replace(/_/g, " ");
+function snakeToWords(text) {
+  return text === undefined ? "(none)" : text.replace(/_/g, " ");
 }
 //@ chunk-v517dzda.js:1665-1801 placement
 /**
  * 反馈编辑表单的字段顺序，transcript 可用时含 transcript。
  */
-function getFeedbackFormFields(h) {
+function getFeedbackFormFields(draft) {
   return [
     "type",
     "title",
@@ -104,7 +121,7 @@ function getFeedbackFormFields(h) {
     "failure_mode",
     "task_category",
     "details",
-    ...(h.transcriptAvailable ? ["transcript"] : []),
+    ...(draft.transcriptAvailable ? ["transcript"] : []),
     "send",
   ];
 }
@@ -118,125 +135,127 @@ var FEEDBACK_LIST_MIN_ROWS = 5;
  * /feedback 的反馈队列界面（2.1.316 新增）：列出本会话与其他会话的待发反馈，可打开、编辑字段、丢弃或新写一条。
  */
 function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
-  let [f, C] = y(null);
-  let [b, B] = y(0);
+  let [drafts, setDrafts] = useState(null);
+  let [cursor, setCursor] = useState(0);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let [m, L] = y("list");
-  let [i, A] = y(null);
-  let [D, K] = y(false);
-  let [H, _, M] = useLatestState(0);
-  let [T, k, G] = useLatestState(null);
-  let [Y, z] = y(null);
-  let de = R(-1 / 0);
-  let [se, E] = y(null);
-  let [oe, ue] = y(null);
+  let [view, setView] = useState("list");
+  let [activeDraft, setActiveDraft] = useState(null);
+  let [includeTranscript, setIncludeTranscript] = useState(false);
+  let [fieldIndex, setFieldIndex, getFieldIndex] = useLatestState(0);
+  let [form, setForm, getForm] = useLatestState(null);
+  let [listCursor, setListCursor] = useState(null);
+  let lastSaveAt = useRef(-1 / 0);
+  let [saveError, setSaveError] = useState(null);
+  let [statusMessage, setStatusMessage] = useState(null);
   let columns = useTerminalSize().columns - 6;
   let clock = useClock();
-  let ae = R(0);
-  let U = R(false);
-  let te = R(0);
-  let fe = R(false);
-  let ye = R(false);
+  let lastEditAt = useRef(0);
+  let savingRef = useRef(false);
+  let lastDiscardAt = useRef(0);
+  let discardingRef = useRef(false);
+  let submittedRef = useRef(false);
   let { storageV5, credentials } = useTheme_2();
   let host = useHost();
-  let ne = useSession((t) => t.id);
-  let me = onWriteNew !== undefined;
-  let le = ce(async () => {
+  let sessionId = useSession((session) => session.id);
+  let canWriteNew = onWriteNew !== undefined;
+  let reloadDrafts = useCallback(async () => {
     let { queued } = await listFeedbackDrafts(undefined, storageV5).catch(() => ({
       queued: [],
       expired: [],
     }));
-    setSessionDraftCount(count(queued, (l) => l.source_session_id === ne));
-    C(queued);
-    let o = queued.length - (me ? 0 : 1);
-    B((l) => Math.min(l, Math.max(0, o)));
+    setSessionDraftCount(count(queued, (draft) => draft.source_session_id === sessionId));
+    setDrafts(queued);
+    let maxCursor = queued.length - (canWriteNew ? 0 : 1);
+    setCursor((cursorValue) => Math.min(cursorValue, Math.max(0, maxCursor)));
     return queued;
-  }, [ne, me, storageV5, B]);
-  P(() => {
-    le().then((t) => {
+  }, [sessionId, canWriteNew, storageV5, setCursor]);
+  useEffect(() => {
+    reloadDrafts().then((loaded) => {
       logEvent("tengu_feedback_queue_opened", {
-        queued_count: fromNumber(t.length),
-        this_session_count: fromNumber(count(t, (o) => o.source_session_id === ne)),
+        queued_count: fromNumber(loaded.length),
+        this_session_count: fromNumber(count(loaded, (draft) => draft.source_session_id === sessionId)),
       });
     });
-  }, [le, ne]);
-  let filtered = (f ?? []).filter((t) => t.source_session_id === ne);
-  let filtered_2 = (f ?? []).filter((t) => t.source_session_id !== ne);
-  let ie = [...filtered, ...filtered_2];
-  let ze = me && b === ie.length;
-  let Qe = ie.length + (me ? 1 : 0);
-  let Dt = ie[b];
-  let Oe = i ? recentEntries(i.request_ids).length : 0;
-  let pe = ce(
-    (t) => {
-      if (t === undefined) onDone();
+  }, [reloadDrafts, sessionId]);
+  let filtered = (drafts ?? []).filter((draft) => draft.source_session_id === sessionId);
+  let filtered_2 = (drafts ?? []).filter((draft) => draft.source_session_id !== sessionId);
+  let orderedDrafts = [...filtered, ...filtered_2];
+  let newDraftSelected = canWriteNew && cursor === orderedDrafts.length;
+  let totalRows = orderedDrafts.length + (canWriteNew ? 1 : 0);
+  let selectedDraft = orderedDrafts[cursor];
+  let recentCount = activeDraft ? recentEntries(activeDraft.request_ids).length : 0;
+  let finishWith = useCallback(
+    (message) => {
+      if (message === undefined) onDone();
       else
-        onDone(t, {
+        onDone(message, {
           display: "system",
         });
     },
     [onDone],
   );
-  let I = Q(() => (i ? getFeedbackFormFields(i) : []), [i]);
-  let ke = ce(
-    (t) => {
-      ae.current = clock.now();
-      _(t.length - 1);
+  let formFields = useMemo(() => (activeDraft ? getFeedbackFormFields(activeDraft) : []), [activeDraft]);
+  let resetFormIndex = useCallback(
+    (fields) => {
+      lastEditAt.current = clock.now();
+      setFieldIndex(fields.length - 1);
     },
-    [clock, _],
+    [clock, setFieldIndex],
   );
-  let p = I[H];
-  let he = p === "title" || p === "area" || p === "details";
-  let onOpen = ce(
-    (t) => {
-      A(t);
-      K(t.transcriptAvailable);
-      E(null);
-      k({
-        type: t.type,
-        title: stripInvisibleChars(t.title),
-        area: stripInvisibleChars(t.area ?? ""),
-        failureMode: t.failure_mode,
-        taskCategory: t.task_category,
-        details: stripInvisibleCharsMultiLine(t.details),
+  let currentField = formFields[fieldIndex];
+  let isTextInputField = currentField === "title" || currentField === "area" || currentField === "details";
+  let onOpen = useCallback(
+    (draft) => {
+      setActiveDraft(draft);
+      setIncludeTranscript(draft.transcriptAvailable);
+      setSaveError(null);
+      setForm({
+        type: draft.type,
+        title: stripInvisibleChars(draft.title),
+        area: stripInvisibleChars(draft.area ?? ""),
+        failureMode: draft.failure_mode,
+        taskCategory: draft.task_category,
+        details: stripInvisibleCharsMultiLine(draft.details),
       });
-      z(null);
-      de.current = -1 / 0;
-      ke(getFeedbackFormFields(t));
-      te.current = clock.now();
-      U.current = false;
-      ye.current = false;
-      L("review");
+      setListCursor(null);
+      lastSaveAt.current = -1 / 0;
+      resetFormIndex(getFeedbackFormFields(draft));
+      lastDiscardAt.current = clock.now();
+      savingRef.current = false;
+      submittedRef.current = false;
+      setView("review");
     },
-    [clock, ke, k],
+    [clock, resetFormIndex, setForm],
   );
-  let Ze = ce(
-    async (t) => {
-      let o = clock.now();
-      let l = te.current;
-      te.current = Math.max(o, l);
-      if (o - l < DRAFT_DEBOUNCE_MS || fe.current || U.current) return;
-      fe.current = true;
+  let discardDraft = useCallback(
+    async (draft) => {
+      let now = clock.now();
+      let since = lastDiscardAt.current;
+      lastDiscardAt.current = Math.max(now, since);
+      if (now - since < DRAFT_DEBOUNCE_MS || discardingRef.current || savingRef.current) return;
+      discardingRef.current = true;
       try {
-        await discardFeedbackDraft(t, "panel", storageV5).catch(() => {});
-        await le();
-        L("list");
-        A(null);
+        await discardFeedbackDraft(draft, "panel", storageV5).catch(() => {});
+        await reloadDrafts();
+        setView("list");
+        setActiveDraft(null);
       } finally {
-        fe.current = false;
+        discardingRef.current = false;
       }
     },
-    [le, clock, storageV5],
+    [reloadDrafts, clock, storageV5],
   );
-  let xe = ce(
-    (t) => {
-      A(t);
-      C((g) => (g ? g.map((v) => (v.draft_id === t.draft_id ? t : v)) : g));
-      let { transcriptAvailable, ...l } = t;
-      return saveFeedbackDraft(l, new Date(), storageV5).then((g) => {
-        if (!g.success)
-          E(
-            g.reason === "too_large"
+  let saveEdits = useCallback(
+    (draft) => {
+      setActiveDraft(draft);
+      setDrafts((list) =>
+        list ? list.map((entry) => (entry.draft_id === draft.draft_id ? draft : entry)) : list,
+      );
+      let { transcriptAvailable, ...storedDraft } = draft;
+      return saveFeedbackDraft(storedDraft, new Date(), storageV5).then((result) => {
+        if (!result.success)
+          setSaveError(
+            result.reason === "too_large"
               ? "That draft is too large to save. Trim the details."
               : "Could not save the draft to disk.",
           );
@@ -244,115 +263,122 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
     },
     [storageV5],
   );
-  let ve = ce(() => {
-    let t = G();
-    if (!i || !t) return i;
-    let o = stripInvisibleChars(i.title);
-    let l = stripInvisibleChars(i.area ?? "");
-    let g = stripInvisibleCharsMultiLine(i.details);
-    let v = t.title === o || t.title.trim() === "" ? i.title : t.title.trim();
-    let Ce = t.area === l ? (i.area ?? "") : t.area.trim();
-    let rt = t.details === g ? i.details : t.details.trim() === "" ? "" : t.details;
+  let mergeEdits = useCallback(() => {
+    let edits = getForm();
+    if (!activeDraft || !edits) return activeDraft;
+    let titleText = stripInvisibleChars(activeDraft.title);
+    let areaText = stripInvisibleChars(activeDraft.area ?? "");
+    let detailsText = stripInvisibleCharsMultiLine(activeDraft.details);
+    let nextTitle =
+      edits.title === titleText || edits.title.trim() === "" ? activeDraft.title : edits.title.trim();
+    let nextArea = edits.area === areaText ? (activeDraft.area ?? "") : edits.area.trim();
+    let nextDetails =
+      edits.details === detailsText ? activeDraft.details : edits.details.trim() === "" ? "" : edits.details;
     if (
-      t.type === i.type &&
-      v === i.title &&
-      (Ce === "" ? undefined : Ce) === i.area &&
-      t.failureMode === i.failure_mode &&
-      t.taskCategory === i.task_category &&
-      rt === i.details
+      edits.type === activeDraft.type &&
+      nextTitle === activeDraft.title &&
+      (nextArea === "" ? undefined : nextArea) === activeDraft.area &&
+      edits.failureMode === activeDraft.failure_mode &&
+      edits.taskCategory === activeDraft.task_category &&
+      nextDetails === activeDraft.details
     )
-      return i;
+      return activeDraft;
     return {
-      ...i,
-      type: t.type,
-      title: v,
-      area: Ce === "" ? undefined : Ce,
-      failure_mode: t.failureMode,
-      task_category: t.taskCategory,
-      details: rt,
+      ...activeDraft,
+      type: edits.type,
+      title: nextTitle,
+      area: nextArea === "" ? undefined : nextArea,
+      failure_mode: edits.failureMode,
+      task_category: edits.taskCategory,
+      details: nextDetails,
     };
-  }, [i, G]);
-  let et = ce(() => {
-    let t = ve();
-    if (t && t !== i) {
-      if (i && t.details === "" && i.details !== "" && clock.now() - de.current < DRAFT_DEBOUNCE_MS)
-        t = {
-          ...t,
-          details: i.details,
+  }, [activeDraft, getForm]);
+  let persistEdits = useCallback(() => {
+    let merged = mergeEdits();
+    if (merged && merged !== activeDraft) {
+      if (
+        activeDraft &&
+        merged.details === "" &&
+        activeDraft.details !== "" &&
+        clock.now() - lastSaveAt.current < DRAFT_DEBOUNCE_MS
+      )
+        merged = {
+          ...merged,
+          details: activeDraft.details,
         };
-      xe(t);
+      saveEdits(merged);
     }
-  }, [ve, i, xe, clock]);
-  let W = ce(
-    (t) => {
-      z(null);
-      E((o) => (o === DETAILS_TOO_LARGE_MESSAGE ? null : o));
-      _((o) => {
-        let max = Math.max(0, Math.min(I.length - 1, o + t));
-        if (max !== o && I[max] === "send") ae.current = clock.now();
+  }, [mergeEdits, activeDraft, saveEdits, clock]);
+  let setFailureMode = useCallback(
+    (index) => {
+      setListCursor(null);
+      setSaveError((error) => (error === DETAILS_TOO_LARGE_MESSAGE ? null : error));
+      setFieldIndex((fieldCursor) => {
+        let max = Math.max(0, Math.min(formFields.length - 1, fieldCursor + index));
+        if (max !== fieldCursor && formFields[max] === "send") lastEditAt.current = clock.now();
         return max;
       });
     },
-    [I, clock, _],
+    [formFields, clock, setFieldIndex],
   );
-  let Tt = ce(
-    (t, o) => {
-      if (t === "type")
-        k((l) => {
-          if (!l) return l;
-          let index = FEEDBACK_TYPES.indexOf(l.type);
-          let v = FEEDBACK_TYPES[(index + o + FEEDBACK_TYPES.length) % FEEDBACK_TYPES.length];
-          return v
+  let onFieldKey = useCallback(
+    (field, delta) => {
+      if (field === "type")
+        setForm((prev) => {
+          if (!prev) return prev;
+          let index = FEEDBACK_TYPES.indexOf(prev.type);
+          let nextType = FEEDBACK_TYPES[(index + delta + FEEDBACK_TYPES.length) % FEEDBACK_TYPES.length];
+          return nextType
             ? {
-                ...l,
-                type: v,
+                ...prev,
+                type: nextType,
               }
-            : l;
+            : prev;
         });
-      else if (t === "failure_mode")
-        k((l) => {
-          if (!l) return l;
-          let index = AREA_CHOICES.indexOf(l.failureMode);
-          let v = AREA_CHOICES.length;
+      else if (field === "failure_mode")
+        setForm((prev) => {
+          if (!prev) return prev;
+          let index = AREA_CHOICES.indexOf(prev.failureMode);
+          let areaCount = AREA_CHOICES.length;
           return {
-            ...l,
-            failureMode: AREA_CHOICES[(index + o + v) % v],
+            ...prev,
+            failureMode: AREA_CHOICES[(index + delta + areaCount) % areaCount],
           };
         });
-      else if (t === "task_category")
-        k((l) => {
-          if (!l) return l;
-          let index = FAILURE_MODE_CHOICES.indexOf(l.taskCategory);
-          let v = FAILURE_MODE_CHOICES.length;
+      else if (field === "task_category")
+        setForm((prev) => {
+          if (!prev) return prev;
+          let index = FAILURE_MODE_CHOICES.indexOf(prev.taskCategory);
+          let failureModeCount = FAILURE_MODE_CHOICES.length;
           return {
-            ...l,
-            taskCategory: FAILURE_MODE_CHOICES[(index + o + v) % v],
+            ...prev,
+            taskCategory: FAILURE_MODE_CHOICES[(index + delta + failureModeCount) % failureModeCount],
           };
         });
-      else if (t === "transcript") K((l) => !l);
+      else if (field === "transcript") setIncludeTranscript((value) => !value);
     },
-    [k],
+    [setForm],
   );
-  let Rt = ce(async () => {
-    if (!i || U.current || fe.current) return;
-    let t = clock.now();
-    let o = ae.current;
-    ae.current = Math.max(t, o);
-    if (t - o < DRAFT_DEBOUNCE_MS) return;
-    if (G()?.title.trim() === "") {
-      E("Title is blank. Type a title, or press esc on the field to restore it.");
+  let submit = useCallback(async () => {
+    if (!activeDraft || savingRef.current || discardingRef.current) return;
+    let now = clock.now();
+    let lastSubmitAt = lastEditAt.current;
+    lastEditAt.current = Math.max(now, lastSubmitAt);
+    if (now - lastSubmitAt < DRAFT_DEBOUNCE_MS) return;
+    if (getForm()?.title.trim() === "") {
+      setSaveError("Title is blank. Type a title, or press esc on the field to restore it.");
       return;
     }
-    let l = ve() ?? i;
-    U.current = true;
-    L("submitting");
-    E(null);
-    if (l !== i) await xe(l);
-    let g;
+    let draft = mergeEdits() ?? activeDraft;
+    savingRef.current = true;
+    setView("submitting");
+    setSaveError(null);
+    if (draft !== activeDraft) await saveEdits(draft);
+    let result;
     try {
-      g = await submitFeedbackDraft({
-        draft: l,
-        includeTranscript: D && l.transcriptAvailable,
+      result = await submitFeedbackDraft({
+        draft,
+        includeTranscript: includeTranscript && draft.transcriptAvailable,
         currentSessionMessages: messages,
         signal: abortSignal,
         storageV5,
@@ -360,42 +386,57 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
         credentials,
       });
     } catch {
-      g = {
+      result = {
         success: false,
         error: "Couldn't send feedback. The draft is still queued. Try again later.",
       };
     }
-    U.current = false;
-    if (g.success) {
-      await le();
-      ue(g.feedbackId);
-      L("receipt");
+    savingRef.current = false;
+    if (result.success) {
+      await reloadDrafts();
+      setStatusMessage(result.feedbackId);
+      setView("receipt");
     } else {
-      E(g.error);
-      if (g.payloadTooLarge) {
-        let index = I.indexOf("transcript");
-        if (index >= 0) _(index);
+      setSaveError(result.error);
+      if (result.payloadTooLarge) {
+        let index = formFields.indexOf("transcript");
+        if (index >= 0) setFieldIndex(index);
       }
-      L("review");
+      setView("review");
     }
-  }, [i, G, D, messages, abortSignal, le, clock, ve, xe, storageV5, credentials, host, I, _]);
-  function St(event) {
+  }, [
+    activeDraft,
+    getForm,
+    includeTranscript,
+    messages,
+    abortSignal,
+    reloadDrafts,
+    clock,
+    mergeEdits,
+    saveEdits,
+    storageV5,
+    credentials,
+    host,
+    formFields,
+    setFieldIndex,
+  ]);
+  function handleKeyDown(event) {
     if (event.ctrl || event.meta) return;
-    if (m === "submitting") {
+    if (view === "submitting") {
       event.preventDefault();
       return;
     }
-    if (event.key === "escape" && !(m === "review" && he)) return;
-    if (m === "receipt") {
+    if (event.key === "escape" && !(view === "review" && isTextInputField)) return;
+    if (view === "receipt") {
       event.preventDefault();
-      if ((f?.length ?? 0) > 0) {
-        L("list");
-        A(null);
-      } else pe(`Feedback sent (receipt ${oe})`);
+      if ((drafts?.length ?? 0) > 0) {
+        setView("list");
+        setActiveDraft(null);
+      } else finishWith(`Feedback sent (receipt ${statusMessage})`);
       return;
     }
-    if (m === "list") {
-      if (!f) {
+    if (view === "list") {
+      if (!drafts) {
         event.preventDefault();
         return;
       }
@@ -404,100 +445,108 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
         onWriteNew();
         return;
       }
-      if (Qe === 0) {
+      if (totalRows === 0) {
         event.preventDefault();
-        pe();
+        finishWith();
         return;
       }
-      if (ie.length > 0) return;
+      if (orderedDrafts.length > 0) return;
       if (event.key === "up" || event.key === "down") event.preventDefault();
       else if (event.key === "return" && onWriteNew) {
         event.preventDefault();
         onWriteNew();
       } else if (event.key !== "escape") {
         event.preventDefault();
-        pe();
+        finishWith();
       }
       return;
     }
-    if (m === "review" && i) {
-      if (ye.current) {
+    if (view === "review" && activeDraft) {
+      if (submittedRef.current) {
         event.preventDefault();
         return;
       }
-      if (he) {
+      if (isTextInputField) {
         if (event.key === "escape") {
           event.preventDefault();
-          tt();
+          close();
         }
         return;
       }
-      let o = I[M()];
+      let field = formFields[getFieldIndex()];
       if (event.key === "up") {
         event.preventDefault();
-        W(-1);
+        setFailureMode(-1);
       } else if (event.key === "down") {
         event.preventDefault();
-        W(1);
+        setFailureMode(1);
       } else if (event.key === "left" || event.key === "right") {
         event.preventDefault();
-        Tt(o, event.key === "left" ? -1 : 1);
-      } else if (event.key === " " && o === "transcript") {
+        onFieldKey(field, event.key === "left" ? -1 : 1);
+      } else if (event.key === " " && field === "transcript") {
         event.preventDefault();
-        K((l) => !l);
+        setIncludeTranscript((value) => !value);
       } else if (event.key === "return") {
         event.preventDefault();
-        if (o === "send") Rt();
-        else W(1);
-      } else if (event.key.toLowerCase() === "d" && o !== "title" && o !== "area" && o !== "details") {
+        if (field === "send") submit();
+        else setFailureMode(1);
+      } else if (
+        event.key.toLowerCase() === "d" &&
+        field !== "title" &&
+        field !== "area" &&
+        field !== "details"
+      ) {
         event.preventDefault();
-        Ze(i);
+        discardDraft(activeDraft);
       }
     }
   }
-  let ge = ce(() => {
-    if (ye.current || U.current || fe.current) return;
-    ye.current = true;
-    et();
-    te.current = -1 / 0;
-    L("list");
-    A(null);
-  }, [et]);
-  let tt = ce(() => {
-    if (m !== "review") {
-      pe();
+  let closeToList = useCallback(() => {
+    if (submittedRef.current || savingRef.current || discardingRef.current) return;
+    submittedRef.current = true;
+    persistEdits();
+    lastDiscardAt.current = -1 / 0;
+    setView("list");
+    setActiveDraft(null);
+  }, [persistEdits]);
+  let close = useCallback(() => {
+    if (view !== "review") {
+      finishWith();
       return;
     }
-    let t = I[M()];
-    if (t !== "title" && t !== "area" && t !== "details") {
-      ge();
+    let field = formFields[getFieldIndex()];
+    if (field !== "title" && field !== "area" && field !== "details") {
+      closeToList();
       return;
     }
-    k((o) =>
-      o && i
+    setForm((prev) =>
+      prev && activeDraft
         ? {
-            ...o,
-            [t]: t === "details" ? stripInvisibleCharsMultiLine(i.details) : stripInvisibleChars(i[t] ?? ""),
+            ...prev,
+            [field]:
+              field === "details"
+                ? stripInvisibleCharsMultiLine(activeDraft.details)
+                : stripInvisibleChars(activeDraft[field] ?? ""),
           }
-        : o,
+        : prev,
     );
-    z(null);
-    ke(I);
-    E((o) => (o === DETAILS_TOO_LARGE_MESSAGE ? null : o));
-  }, [m, i, I, M, ge, k, ke, pe]);
-  let it = !(isScreenReaderEnabled && ie.length > 0);
+    setListCursor(null);
+    resetFormIndex(formFields);
+    setSaveError((error) => (error === DETAILS_TOO_LARGE_MESSAGE ? null : error));
+  }, [view, activeDraft, formFields, getFieldIndex, closeToList, setForm, resetFormIndex, finishWith]);
+  let inputEnabled = !(isScreenReaderEnabled && orderedDrafts.length > 0);
   let inputGuide =
-    m === "list"
+    view === "list"
       ? jsxProd_default_2(Byline, {
           children: [
-            Qe > 0 &&
-              it &&
+            totalRows > 0 &&
+              inputEnabled &&
               jsxProd_default(KeyboardShortcutHint, {
                 chord: "enter",
-                action: ze ? "write new feedback" : "review",
+                action: newDraftSelected ? "write new feedback" : "review",
               }),
-            Dt !== undefined &&
-              it &&
+            selectedDraft !== undefined &&
+              inputEnabled &&
               jsxProd_default(KeyboardShortcutHint, {
                 chord: "d",
                 action: "discard",
@@ -508,57 +557,60 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
             }),
           ],
         })
-      : m === "review"
+      : view === "review"
         ? jsxProd_default_2(Byline, {
             children: [
               jsxProd_default(KeyboardShortcutHint, {
                 chord: ["up", "down"],
                 action: "move",
               }),
-              (p === "type" || p === "failure_mode" || p === "task_category" || p === "transcript") &&
+              (currentField === "type" ||
+                currentField === "failure_mode" ||
+                currentField === "task_category" ||
+                currentField === "transcript") &&
                 jsxProd_default(KeyboardShortcutHint, {
                   chord: ["left", "right"],
                   action: "change",
                 }),
               jsxProd_default(KeyboardShortcutHint, {
                 chord: "enter",
-                action: p === "send" ? "send" : "next",
+                action: currentField === "send" ? "send" : "next",
               }),
-              p === "details" &&
+              currentField === "details" &&
                 jsxProd_default(KeyboardShortcutHint, {
                   chord: supportsShiftEnter() ? "shift+enter" : "ctrl+j",
                   action: "new line",
                 }),
-              !he &&
+              !isTextInputField &&
                 jsxProd_default(KeyboardShortcutHint, {
                   chord: "d",
                   action: "discard",
                 }),
               jsxProd_default(KeyboardShortcutHint, {
                 chord: "esc",
-                action: he ? "cancel edit" : "later",
+                action: isTextInputField ? "cancel edit" : "later",
               }),
             ],
           })
         : null;
   return jsxProd_default(FocusColumn, {
-    onKeyDown: St,
+    onKeyDown: handleKeyDown,
     children: jsxProd_default_2(Dialog, {
       title: "Feedback drafts",
-      onCancel: tt,
-      isCancelActive: m !== "submitting" && !he,
-      hideInputGuide: m === "receipt" || m === "submitting",
+      onCancel: close,
+      isCancelActive: view !== "submitting" && !isTextInputField,
+      hideInputGuide: view === "receipt" || view === "submitting",
       inputGuide,
       children: [
-        m === "list" &&
-          f === null &&
+        view === "list" &&
+          drafts === null &&
           jsxProd_default(Text, {
             dimColor: true,
             children: "Loading\u2026",
           }),
-        m === "list" &&
-          f !== null &&
-          ie.length === 0 &&
+        view === "list" &&
+          drafts !== null &&
+          orderedDrafts.length === 0 &&
           jsxProd_default_2(Box, {
             flexDirection: "column",
             gap: 1,
@@ -577,7 +629,7 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
                     gap: 1,
                     children: [
                       jsxProd_default(HideRow, {
-                        isSelected: ze,
+                        isSelected: newDraftSelected,
                       }),
                       jsxProd_default(Text, {
                         dimColor: true,
@@ -591,21 +643,21 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
                   }),
             ],
           }),
-        m === "list" &&
-          f !== null &&
-          ie.length > 0 &&
+        view === "list" &&
+          drafts !== null &&
+          orderedDrafts.length > 0 &&
           jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
               jsxProd_default(FeedbackQueueList, {
                 thisSession: filtered,
                 others: filtered_2,
-                hasWriteNew: me,
-                defaultFocusIndex: b,
-                onFocus: B,
+                hasWriteNew: canWriteNew,
+                defaultFocusIndex: cursor,
+                onFocus: setCursor,
                 onOpen,
                 onWriteNew: () => onWriteNew?.(),
-                onDiscard: (t) => void Ze(t),
+                onDiscard: (draft) => void discardDraft(draft),
               }),
               jsxProd_default(Box, {
                 marginTop: 1,
@@ -618,149 +670,156 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
               }),
             ],
           }),
-        m === "review" &&
-          i &&
-          T &&
+        view === "review" &&
+          activeDraft &&
+          form &&
           jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
               jsxProd_default_2(Box, {
                 children: [
                   jsxProd_default(FocusPointer, {
-                    isFocused: p === "type",
+                    isFocused: currentField === "type",
                   }),
                   jsxProd_default(Text, {
                     children: "Type: ",
                   }),
                   jsxProd_default(CycleValue, {
-                    value: FEEDBACK_TYPE_LABELS[T.type],
-                    isFocused: p === "type",
+                    value: FEEDBACK_TYPE_LABELS[form.type],
+                    isFocused: currentField === "type",
                   }),
                 ],
               }),
               jsxProd_default(FeedbackField, {
                 label: "Title:",
-                value: T.title,
-                isFocused: p === "title",
+                value: form.title,
+                isFocused: currentField === "title",
                 bold: true,
                 columns,
-                cursorOffset: Y,
+                cursorOffset: listCursor,
                 onChange: (title) =>
-                  k((o) =>
-                    o
+                  setForm((form) =>
+                    form
                       ? {
-                          ...o,
+                          ...form,
                           title,
                         }
-                      : o,
+                      : form,
                   ),
-                onCursorChange: z,
-                onNext: () => W(1),
-                onPrev: () => W(-1),
-                onExit: ge,
+                onCursorChange: setListCursor,
+                onNext: () => setFailureMode(1),
+                onPrev: () => setFailureMode(-1),
+                onExit: closeToList,
               }),
               jsxProd_default(FeedbackField, {
                 label: "Area:",
-                value: T.area,
-                isFocused: p === "area",
+                value: form.area,
+                isFocused: currentField === "area",
                 dim: true,
                 columns,
-                cursorOffset: Y,
+                cursorOffset: listCursor,
                 onChange: (area) =>
-                  k((o) =>
-                    o
+                  setForm((form) =>
+                    form
                       ? {
-                          ...o,
+                          ...form,
                           area,
                         }
-                      : o,
+                      : form,
                   ),
-                onCursorChange: z,
-                onNext: () => W(1),
-                onPrev: () => W(-1),
-                onExit: ge,
+                onCursorChange: setListCursor,
+                onNext: () => setFailureMode(1),
+                onPrev: () => setFailureMode(-1),
+                onExit: closeToList,
               }),
               jsxProd_default_2(Box, {
                 children: [
                   jsxProd_default(FocusPointer, {
-                    isFocused: p === "failure_mode",
+                    isFocused: currentField === "failure_mode",
                   }),
                   jsxProd_default(Text, {
                     children: "Failure mode: ",
                   }),
                   jsxProd_default(CycleValue, {
-                    value: snakeToWords(T.failureMode),
-                    isFocused: p === "failure_mode",
+                    value: snakeToWords(form.failureMode),
+                    isFocused: currentField === "failure_mode",
                   }),
                 ],
               }),
               jsxProd_default_2(Box, {
                 children: [
                   jsxProd_default(FocusPointer, {
-                    isFocused: p === "task_category",
+                    isFocused: currentField === "task_category",
                   }),
                   jsxProd_default(Text, {
                     children: "Task: ",
                   }),
                   jsxProd_default(CycleValue, {
-                    value: snakeToWords(T.taskCategory),
-                    isFocused: p === "task_category",
+                    value: snakeToWords(form.taskCategory),
+                    isFocused: currentField === "task_category",
                   }),
                 ],
               }),
               jsxProd_default(FeedbackField, {
                 label: "Details:",
-                value: T.details,
-                isFocused: p === "details",
+                value: form.details,
+                isFocused: currentField === "details",
                 dim: true,
                 multiline: true,
                 columns,
-                cursorOffset: Y,
-                onChange: (t) => {
-                  let o = Buffer.byteLength(t, "utf8");
-                  if (o > MAX_DETAILS_LENGTH && o >= Buffer.byteLength(T.details, "utf8")) {
-                    E(DETAILS_TOO_LARGE_MESSAGE);
+                cursorOffset: listCursor,
+                onChange: (text) => {
+                  let byteLength = Buffer.byteLength(text, "utf8");
+                  if (
+                    byteLength > MAX_DETAILS_LENGTH &&
+                    byteLength >= Buffer.byteLength(form.details, "utf8")
+                  ) {
+                    setSaveError(DETAILS_TOO_LARGE_MESSAGE);
                     return;
                   }
-                  k((l) => {
-                    if (l && l.details.trim() !== "" && t.trim() === "") de.current = clock.now();
-                    return l
+                  setForm((form) => {
+                    if (form && form.details.trim() !== "" && text.trim() === "")
+                      lastSaveAt.current = clock.now();
+                    return form
                       ? {
-                          ...l,
-                          details: t,
+                          ...form,
+                          details: text,
                         }
-                      : l;
+                      : form;
                   });
-                  E((l) => (l === DETAILS_TOO_LARGE_MESSAGE ? null : l));
+                  setSaveError((error) => (error === DETAILS_TOO_LARGE_MESSAGE ? null : error));
                 },
-                onCursorChange: z,
-                onNext: () => W(1),
-                onPrev: () => W(-1),
-                onExit: ge,
+                onCursorChange: setListCursor,
+                onNext: () => setFailureMode(1),
+                onPrev: () => setFailureMode(-1),
+                onExit: closeToList,
               }),
-              i.transcriptAvailable
+              activeDraft.transcriptAvailable
                 ? jsxProd_default_2(Box, {
                     flexDirection: "column",
                     children: [
                       jsxProd_default_2(Box, {
                         children: [
                           jsxProd_default(FocusPointer, {
-                            isFocused: p === "transcript",
+                            isFocused: currentField === "transcript",
                           }),
                           jsxProd_default(Text, {
                             children: "Send transcript: ",
                           }),
                           jsxProd_default(CycleValue, {
-                            value: D ? "yes" : "no",
-                            isFocused: p === "transcript",
+                            value: includeTranscript ? "yes" : "no",
+                            isFocused: currentField === "transcript",
                           }),
                           jsxProd_default_2(Text, {
                             dimColor: true,
-                            children: [" \xB7 ", D ? "sends this conversation to Anthropic" : "report only"],
+                            children: [
+                              " \xB7 ",
+                              includeTranscript ? "sends this conversation to Anthropic" : "report only",
+                            ],
                           }),
                         ],
                       }),
-                      i.source_session_id !== ne &&
+                      activeDraft.source_session_id !== sessionId &&
                         jsxProd_default(Box, {
                           marginLeft: 4,
                           children: jsxProd_default_2(Text, {
@@ -768,10 +827,10 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
                             wrap: "wrap",
                             children: [
                               "from ",
-                              stripInvisibleChars(i.cwd),
+                              stripInvisibleChars(activeDraft.cwd),
                               " \xB7 session",
                               " ",
-                              stripInvisibleChars(i.source_session_id),
+                              stripInvisibleChars(activeDraft.source_session_id),
                             ],
                           }),
                         }),
@@ -804,74 +863,76 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
                     wrap: "wrap",
                     children: [
                       "Environment info (",
-                      stripInvisibleChars(i.os),
+                      stripInvisibleChars(activeDraft.os),
                       ", v",
-                      stripInvisibleChars(i.cli_version),
+                      stripInvisibleChars(activeDraft.cli_version),
                       ",",
                       " ",
-                      stripInvisibleChars(i.model),
-                      i.effort !== undefined &&
+                      stripInvisibleChars(activeDraft.model),
+                      activeDraft.effort !== undefined &&
                         jsxProd_default_2(Fragment, {
-                          children: [", effort", " ", stripInvisibleChars(i.effort)],
+                          children: [", effort", " ", stripInvisibleChars(activeDraft.effort)],
                         }),
-                      i.thinking_type !== undefined &&
+                      activeDraft.thinking_type !== undefined &&
                         jsxProd_default_2(Fragment, {
                           children: [
                             ", thinking ",
-                            i.thinking_type,
-                            i.thinking_budget !== undefined &&
+                            activeDraft.thinking_type,
+                            activeDraft.thinking_budget !== undefined &&
                               jsxProd_default_2(Fragment, {
-                                children: [" (budget ", i.thinking_budget, ")"],
+                                children: [" (budget ", activeDraft.thinking_budget, ")"],
                               }),
                           ],
                         }),
-                      i.assistant_turn_count !== undefined &&
+                      activeDraft.assistant_turn_count !== undefined &&
                         jsxProd_default_2(Fragment, {
                           children: [
                             ", turn ",
-                            i.assistant_turn_count,
-                            i.message_count !== undefined &&
+                            activeDraft.assistant_turn_count,
+                            activeDraft.message_count !== undefined &&
                               jsxProd_default_2(Fragment, {
-                                children: ["/", i.message_count],
+                                children: ["/", activeDraft.message_count],
                               }),
-                            i.subagent_count !== undefined &&
-                              i.subagent_count > 0 &&
+                            activeDraft.subagent_count !== undefined &&
+                              activeDraft.subagent_count > 0 &&
                               jsxProd_default_2(Fragment, {
                                 children: [
                                   " ",
                                   "with ",
-                                  i.subagent_count,
+                                  activeDraft.subagent_count,
                                   " ",
-                                  plural(i.subagent_count, "subagent"),
+                                  plural(activeDraft.subagent_count, "subagent"),
                                 ],
                               }),
                           ],
                         }),
                       ", drafted ",
-                      formatAgeShort(i.created_at),
+                      formatAgeShort(activeDraft.created_at),
                       " ago)",
-                      Oe > 0 ? ` and ${Oe} API request ${plural(Oe, "id")} are` : " is",
+                      recentCount > 0
+                        ? ` and ${recentCount} API request ${plural(recentCount, "id")} are`
+                        : " is",
                       " ",
                       "always attached.",
                     ],
                   }),
                 ],
               }),
-              se &&
+              saveError &&
                 jsxProd_default(Box, {
                   marginTop: 1,
                   children: jsxProd_default(ErrorText, {
-                    error: se,
+                    error: saveError,
                   }),
                 }),
               jsxProd_default_2(Box, {
                 marginTop: 1,
                 children: [
                   jsxProd_default(FocusPointer, {
-                    isFocused: p === "send",
+                    isFocused: currentField === "send",
                   }),
                   jsxProd_default(Text, {
-                    bold: p === "send",
+                    bold: currentField === "send",
                     children: "Send feedback",
                   }),
                 ],
@@ -887,11 +948,11 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
               }),
             ],
           }),
-        m === "submitting" &&
+        view === "submitting" &&
           jsxProd_default(Text, {
             children: "Sending feedback\u2026",
           }),
-        m === "receipt" &&
+        view === "receipt" &&
           jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
@@ -903,7 +964,7 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
                     withSpace: true,
                   }),
                   "Feedback sent (receipt ",
-                  oe,
+                  statusMessage,
                   "). Thanks!",
                 ],
               }),
@@ -922,11 +983,14 @@ function FeedbackQueue({ messages, onDone, abortSignal, onWriteNew }) {
   });
 }
 //@ chunk-v517dzda.js:12269-12373 placement
-var DETAILS_TOO_LARGE_MESSAGE = `That edit would push Details past the ${Math.floor(MAX_DETAILS_LENGTH / 1024)}KB limit. Trim the details first.`;
+var DETAILS_TOO_LARGE_MESSAGE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v517dzda.js:12269", () => {
+  DETAILS_TOO_LARGE_MESSAGE = `That edit would push Details past the ${Math.floor(MAX_DETAILS_LENGTH / 1024)}KB limit. Trim the details first.`;
+});
 //@ chunk-v517dzda.js:12373-12470 placement
-function normalizeFeedbackInput(h, multiline) {
+function normalizeFeedbackInput(text, multiline) {
   return stripCombiningRepeated(
-    h.replace(
+    text.replace(
       /\r\n|\r/g,
       `
 `,
@@ -949,73 +1013,73 @@ function normalizeFeedbackInput(h, multiline) {
  * 聚焦时显示指针，否则两个空格。
  */
 function FocusPointer(props) {
-  let f = w(3);
+  let $ = useMemoCache(3);
   let { isFocused } = props;
   const color = isFocused ? "suggestion" : undefined;
   const children = isFocused ? `${figures_default.pointer} ` : "  ";
-  let C;
-  if (f[0] !== color || f[1] !== children) {
-    C = jsxProd_default(Text, {
+  let content;
+  if ($[0] !== color || $[1] !== children) {
+    content = jsxProd_default(Text, {
       color,
       children,
     });
-    f[0] = color;
-    f[1] = children;
-    f[2] = C;
-  } else C = f[2];
-  return C;
+    $[0] = color;
+    $[1] = children;
+    $[2] = content;
+  } else content = $[2];
+  return content;
 }
 //@ chunk-v517dzda.js:12665-13065 placement
 /**
  * 可左右切换的值：聚焦时两侧显示 ◀ ▶。
  */
 function CycleValue(props) {
-  let d = w(6);
-  let { value: u, isFocused } = props;
+  let $ = useMemoCache(6);
+  let { value, isFocused } = props;
   if (!isFocused) {
-    let f;
-    if (d[0] !== u) {
-      f = jsxProd_default(Text, {
+    let content;
+    if ($[0] !== value) {
+      content = jsxProd_default(Text, {
         dimColor: true,
-        children: u,
+        children: value,
       });
-      d[0] = u;
-      d[1] = f;
-    } else f = d[1];
-    return f;
+      $[0] = value;
+      $[1] = content;
+    } else content = $[1];
+    return content;
   }
-  let f;
-  if (d[2] === MEMO_CACHE_SENTINEL) {
-    f = jsxProd_default_2(Text, {
+  let footer;
+  if ($[2] === MEMO_CACHE_SENTINEL) {
+    footer = jsxProd_default_2(Text, {
       dimColor: true,
       children: [figures_default.triangleLeft, " "],
     });
-    d[2] = f;
-  } else f = d[2];
-  let C;
-  if (d[3] === MEMO_CACHE_SENTINEL) {
-    C = jsxProd_default_2(Text, {
+    $[2] = footer;
+  } else footer = $[2];
+  let rightArrow;
+  if ($[3] === MEMO_CACHE_SENTINEL) {
+    rightArrow = jsxProd_default_2(Text, {
       dimColor: true,
       children: [" ", figures_default.triangleRight],
     });
-    d[3] = C;
-  } else C = d[3];
-  let b;
-  if (d[4] !== u) {
-    b = jsxProd_default_2(Text, {
-      children: [f, u, C],
+    $[3] = rightArrow;
+  } else rightArrow = $[3];
+  let status;
+  if ($[4] !== value) {
+    status = jsxProd_default_2(Text, {
+      children: [footer, value, rightArrow],
     });
-    d[4] = u;
-    d[5] = b;
-  } else b = d[5];
-  return b;
+    $[4] = value;
+    $[5] = status;
+  } else status = $[5];
+  return status;
 }
 //@ chunk-v517dzda.js:13065-14448 placement
 function FeedbackField(props) {
-  let H = w(24);
+  let $ = useMemoCache(24);
   let {
     label,
-    value: c,
+    value,
     isFocused,
     bold,
     dim,
@@ -1029,48 +1093,48 @@ function FeedbackField(props) {
     onExit,
   } = props;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let _;
-  if (H[0] !== isFocused) {
-    _ = jsxProd_default(FocusPointer, {
+  let content;
+  if ($[0] !== isFocused) {
+    content = jsxProd_default(FocusPointer, {
       isFocused,
     });
-    H[0] = isFocused;
-    H[1] = _;
-  } else _ = H[1];
-  let M;
-  if (H[2] !== label) {
-    M = jsxProd_default(Text, {
+    $[0] = isFocused;
+    $[1] = content;
+  } else content = $[1];
+  let labelText;
+  if ($[2] !== label) {
+    labelText = jsxProd_default(Text, {
       children: label,
     });
-    H[2] = label;
-    H[3] = M;
-  } else M = H[3];
-  let T;
-  if (H[4] !== _ || H[5] !== M) {
-    T = jsxProd_default_2(Box, {
-      children: [_, M],
+    $[2] = label;
+    $[3] = labelText;
+  } else labelText = $[3];
+  let footer;
+  if ($[4] !== content || $[5] !== labelText) {
+    footer = jsxProd_default_2(Box, {
+      children: [content, labelText],
     });
-    H[4] = _;
-    H[5] = M;
-    H[6] = T;
-  } else T = H[6];
-  let k;
+    $[4] = content;
+    $[5] = labelText;
+    $[6] = footer;
+  } else footer = $[6];
+  let status;
   if (
-    H[7] !== bold ||
-    H[8] !== columns ||
-    H[9] !== cursorOffset ||
-    H[10] !== dim ||
-    H[11] !== isFocused ||
-    H[12] !== isScreenReaderEnabled ||
-    H[13] !== multiline ||
-    H[14] !== onChange ||
-    H[15] !== onCursorChange ||
-    H[16] !== onExit ||
-    H[17] !== onNext ||
-    H[18] !== onPrev ||
-    H[19] !== c
+    $[7] !== bold ||
+    $[8] !== columns ||
+    $[9] !== cursorOffset ||
+    $[10] !== dim ||
+    $[11] !== isFocused ||
+    $[12] !== isScreenReaderEnabled ||
+    $[13] !== multiline ||
+    $[14] !== onChange ||
+    $[15] !== onCursorChange ||
+    $[16] !== onExit ||
+    $[17] !== onNext ||
+    $[18] !== onPrev ||
+    $[19] !== value
   ) {
-    k = jsxProd_default(Box, {
+    status = jsxProd_default(Box, {
       marginLeft: 4,
       children: isFocused
         ? jsxProd_default(Box, {
@@ -1082,17 +1146,17 @@ function FeedbackField(props) {
             borderDimColor: true,
             paddingLeft: multiline && !isScreenReaderEnabled ? 1 : 0,
             children: jsxProd_default(TextInput, {
-              value: c,
+              value,
               onChange,
               columns: multiline && !isScreenReaderEnabled ? columns - 2 : columns,
               onSubmit: onNext,
               onExit,
               onHistoryUp: onPrev,
               onHistoryDown: onNext,
-              cursorOffset: cursorOffset ?? c.length,
+              cursorOffset: cursorOffset ?? value.length,
               onChangeCursorOffset: onCursorChange,
               multiline,
-              inputFilter: (G) => normalizeFeedbackInput(G, multiline),
+              inputFilter: (text) => normalizeFeedbackInput(text, multiline),
               clearOnSubmit: false,
               disableCtrlCClear: true,
               disableBackslashReturn: multiline,
@@ -1104,7 +1168,7 @@ function FeedbackField(props) {
           })
         : multiline
           ? jsxProd_default(WrappedTextBox, {
-              value: c,
+              value,
               bold,
               dim,
               columns,
@@ -1113,86 +1177,90 @@ function FeedbackField(props) {
               bold,
               dimColor: dim,
               wrap: "wrap",
-              children: stripInvisibleChars(c),
+              children: stripInvisibleChars(value),
             }),
     });
-    H[7] = bold;
-    H[8] = columns;
-    H[9] = cursorOffset;
-    H[10] = dim;
-    H[11] = isFocused;
-    H[12] = isScreenReaderEnabled;
-    H[13] = multiline;
-    H[14] = onChange;
-    H[15] = onCursorChange;
-    H[16] = onExit;
-    H[17] = onNext;
-    H[18] = onPrev;
-    H[19] = c;
-    H[20] = k;
-  } else k = H[20];
-  let Y;
-  if (H[21] !== T || H[22] !== k) {
-    Y = jsxProd_default_2(Box, {
+    $[7] = bold;
+    $[8] = columns;
+    $[9] = cursorOffset;
+    $[10] = dim;
+    $[11] = isFocused;
+    $[12] = isScreenReaderEnabled;
+    $[13] = multiline;
+    $[14] = onChange;
+    $[15] = onCursorChange;
+    $[16] = onExit;
+    $[17] = onNext;
+    $[18] = onPrev;
+    $[19] = value;
+    $[20] = status;
+  } else status = $[20];
+  let hint;
+  if ($[21] !== footer || $[22] !== status) {
+    hint = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [T, k],
+      children: [footer, status],
     });
-    H[21] = T;
-    H[22] = k;
-    H[23] = Y;
-  } else Y = H[23];
-  return Y;
+    $[21] = footer;
+    $[22] = status;
+    $[23] = hint;
+  } else hint = $[23];
+  return hint;
 }
 //@ chunk-v517dzda.js:14448-14478 placement
 var WRITE_NEW_FEEDBACK_LABEL = "+ Write new feedback";
 //@ chunk-v517dzda.js:14680-16295 placement
 function FeedbackQueueList(props) {
-  let i = w(34);
+  let $ = useMemoCache(34);
   let { thisSession, others, hasWriteNew, defaultFocusIndex, onFocus, onOpen, onWriteNew, onDiscard } = props;
   let { rows } = useScrollViewportSize(useTerminalSize());
   let hasScrollViewport = useHasScrollViewport();
-  let A;
-  if (i[0] !== others || i[1] !== thisSession) {
-    A = [...thisSession, ...others];
-    i[0] = others;
-    i[1] = thisSession;
-    i[2] = A;
-  } else A = i[2];
-  let D = A;
-  let K = (thisSession.length > 0 ? 1 : 0) + (others.length > 0 ? 1 : 0) + D.length + (hasWriteNew ? 2 : 0);
+  let content;
+  if ($[0] !== others || $[1] !== thisSession) {
+    content = [...thisSession, ...others];
+    $[0] = others;
+    $[1] = thisSession;
+    $[2] = content;
+  } else content = $[2];
+  let otherItems = content;
+  let rowOffset =
+    (thisSession.length > 0 ? 1 : 0) +
+    (others.length > 0 ? 1 : 0) +
+    otherItems.length +
+    (hasWriteNew ? 2 : 0);
   let max = Math.max(
     FEEDBACK_LIST_MIN_ROWS,
     rows - FEEDBACK_LIST_FIXED_ROWS - (hasScrollViewport ? 0 : FEEDBACK_LIST_CHROME_ROWS),
   );
-  const visibleCount = K > max ? max - 2 : max;
+  const visibleCount = rowOffset > max ? max - 2 : max;
   let onSelect;
-  if (i[3] !== onOpen || i[4] !== onWriteNew || i[5] !== D) {
-    onSelect = (T) => {
-      let k = D[T];
-      if (k) onOpen(k);
+  if ($[3] !== onOpen || $[4] !== onWriteNew || $[5] !== otherItems) {
+    onSelect = (index) => {
+      let selectedItem = otherItems[index];
+      if (selectedItem) onOpen(selectedItem);
       else onWriteNew();
     };
-    i[3] = onOpen;
-    i[4] = onWriteNew;
-    i[5] = D;
-    i[6] = onSelect;
-  } else onSelect = i[6];
+    $[3] = onOpen;
+    $[4] = onWriteNew;
+    $[5] = otherItems;
+    $[6] = onSelect;
+  } else onSelect = $[6];
   let onRowKeyDown;
-  if (i[7] !== onDiscard || i[8] !== D) {
-    onRowKeyDown = (event, z) => {
-      let de = D[z];
-      if (event.key.toLowerCase() === "d" && de && !event.ctrl && !event.meta) {
+  if ($[7] !== onDiscard || $[8] !== otherItems) {
+    onRowKeyDown = (event, index) => {
+      let rowItem = otherItems[index];
+      if (event.key.toLowerCase() === "d" && rowItem && !event.ctrl && !event.meta) {
         event.preventDefault();
-        onDiscard(de);
+        onDiscard(rowItem);
       }
     };
-    i[7] = onDiscard;
-    i[8] = D;
-    i[9] = onRowKeyDown;
-  } else onRowKeyDown = i[9];
-  let se;
-  if (i[10] !== thisSession.length) {
-    se =
+    $[7] = onDiscard;
+    $[8] = otherItems;
+    $[9] = onRowKeyDown;
+  } else onRowKeyDown = $[9];
+  let rowContent;
+  if ($[10] !== thisSession.length) {
+    rowContent =
       thisSession.length > 0 &&
       jsxProd_default(
         merged.Heading,
@@ -1204,18 +1272,18 @@ function FeedbackQueueList(props) {
         },
         "this-session",
       );
-    i[10] = thisSession.length;
-    i[11] = se;
-  } else se = i[11];
-  let E;
-  if (i[12] !== thisSession) {
-    E = thisSession.map(renderThisSessionFeedbackItem);
-    i[12] = thisSession;
-    i[13] = E;
-  } else E = i[13];
-  let oe;
-  if (i[14] !== others.length) {
-    oe =
+    $[10] = thisSession.length;
+    $[11] = rowContent;
+  } else rowContent = $[11];
+  let sessionRows;
+  if ($[12] !== thisSession) {
+    sessionRows = thisSession.map(renderThisSessionFeedbackItem);
+    $[12] = thisSession;
+    $[13] = sessionRows;
+  } else sessionRows = $[13];
+  let footer;
+  if ($[14] !== others.length) {
+    footer =
       others.length > 0 &&
       jsxProd_default(
         merged.Heading,
@@ -1227,24 +1295,24 @@ function FeedbackQueueList(props) {
         },
         "other-sessions",
       );
-    i[14] = others.length;
-    i[15] = oe;
-  } else oe = i[15];
-  let ue;
-  if (i[16] !== others) {
-    ue = others.map(renderOtherFeedbackItem);
-    i[16] = others;
-    i[17] = ue;
-  } else ue = i[17];
-  let ee;
-  if (i[18] !== hasWriteNew) {
-    ee = hasWriteNew && jsxProd_default(merged.Heading, {}, "gap");
-    i[18] = hasWriteNew;
-    i[19] = ee;
-  } else ee = i[19];
-  let x;
-  if (i[20] !== hasWriteNew) {
-    x =
+    $[14] = others.length;
+    $[15] = footer;
+  } else footer = $[15];
+  let status;
+  if ($[16] !== others) {
+    status = others.map(renderOtherFeedbackItem);
+    $[16] = others;
+    $[17] = status;
+  } else status = $[17];
+  let writeNewHint;
+  if ($[18] !== hasWriteNew) {
+    writeNewHint = hasWriteNew && jsxProd_default(merged.Heading, {}, "gap");
+    $[18] = hasWriteNew;
+    $[19] = writeNewHint;
+  } else writeNewHint = $[19];
+  let body;
+  if ($[20] !== hasWriteNew) {
+    body =
       hasWriteNew &&
       jsxProd_default(
         OrderedListWithItem.Item,
@@ -1253,64 +1321,64 @@ function FeedbackQueueList(props) {
         },
         "write-new",
       );
-    i[20] = hasWriteNew;
-    i[21] = x;
-  } else x = i[21];
-  let ae;
+    $[20] = hasWriteNew;
+    $[21] = body;
+  } else body = $[21];
+  let details;
   if (
-    i[22] !== defaultFocusIndex ||
-    i[23] !== onFocus ||
-    i[24] !== x ||
-    i[25] !== visibleCount ||
-    i[26] !== onSelect ||
-    i[27] !== onRowKeyDown ||
-    i[28] !== se ||
-    i[29] !== E ||
-    i[30] !== oe ||
-    i[31] !== ue ||
-    i[32] !== ee
+    $[22] !== defaultFocusIndex ||
+    $[23] !== onFocus ||
+    $[24] !== body ||
+    $[25] !== visibleCount ||
+    $[26] !== onSelect ||
+    $[27] !== onRowKeyDown ||
+    $[28] !== rowContent ||
+    $[29] !== sessionRows ||
+    $[30] !== footer ||
+    $[31] !== status ||
+    $[32] !== writeNewHint
   ) {
-    ae = jsxProd_default_2(OrderedListWithItem, {
+    details = jsxProd_default_2(OrderedListWithItem, {
       visibleCount,
       defaultFocusIndex,
       overflowHint: "count",
       onFocus,
       onSelect,
       onRowKeyDown,
-      children: [se, E, oe, ue, ee, x],
+      children: [rowContent, sessionRows, footer, status, writeNewHint, body],
     });
-    i[22] = defaultFocusIndex;
-    i[23] = onFocus;
-    i[24] = x;
-    i[25] = visibleCount;
-    i[26] = onSelect;
-    i[27] = onRowKeyDown;
-    i[28] = se;
-    i[29] = E;
-    i[30] = oe;
-    i[31] = ue;
-    i[32] = ee;
-    i[33] = ae;
-  } else ae = i[33];
-  return ae;
+    $[22] = defaultFocusIndex;
+    $[23] = onFocus;
+    $[24] = body;
+    $[25] = visibleCount;
+    $[26] = onSelect;
+    $[27] = onRowKeyDown;
+    $[28] = rowContent;
+    $[29] = sessionRows;
+    $[30] = footer;
+    $[31] = status;
+    $[32] = writeNewHint;
+    $[33] = details;
+  } else details = $[33];
+  return details;
 }
 //@ chunk-v517dzda.js:16295-16436 placement
 /**
  * 反馈条目的元信息：类型、多久前、目录、transcript 是否可用。
  */
-function feedbackItemMeta(h) {
+function feedbackItemMeta(meta) {
   return [
-    FEEDBACK_TYPE_LABELS[h.type],
-    formatAgeShort(h.created_at),
-    stripInvisibleChars(h.cwd),
-    h.transcriptAvailable ? "transcript available" : "transcript expired (report only)",
+    FEEDBACK_TYPE_LABELS[meta.type],
+    formatAgeShort(meta.created_at),
+    stripInvisibleChars(meta.cwd),
+    meta.transcriptAvailable ? "transcript available" : "transcript expired (report only)",
   ];
 }
 //@ chunk-v517dzda.js:16436-16660 placement
-function formatAgeShort(createdAt, u = Date.now()) {
-  let c = u - Date.parse(createdAt);
-  if (!Number.isFinite(c) || c < 0) return "now";
-  let floored = Math.floor(c / 60000);
+function formatAgeShort(createdAt, now = Date.now()) {
+  let ageMs = now - Date.parse(createdAt);
+  if (!Number.isFinite(ageMs) || ageMs < 0) return "now";
+  let floored = Math.floor(ageMs / 60000);
   if (floored < 60) return `${Math.max(1, floored)}m`;
   let floored_2 = Math.floor(floored / 60);
   if (floored_2 < 24) return `${floored_2}h`;

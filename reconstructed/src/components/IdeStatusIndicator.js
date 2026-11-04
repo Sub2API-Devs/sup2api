@@ -14,21 +14,21 @@ import { ideFileLabel, linesLabel } from "../screens/repl/sendNow.js";
 //@ chunk-18hwfzwa.js:119627-119644 placement
 var IDE_FILE_MARKER = "\u29C9 ";
 //@ chunk-18hwfzwa.js:119644-119927 placement
-function ideSelectionLabel(h, ideSelection) {
-  if (!ideSelection) return null;
-  let stagedFiles = getStagedFiles(ideSelection);
-  if (!stagedFiles && h !== "connected") return null;
-  if (ideSelection.text && ideSelection.lineCount > 0) {
-    let L =
-      stagedFiles && ideSelection.filePath
-        ? `from ${ideFileLabel(ideSelection.filePath)}`
+function ideSelectionLabel(connectionState, attribution) {
+  if (!attribution) return null;
+  let stagedFiles = getStagedFiles(attribution);
+  if (!stagedFiles && connectionState !== "connected") return null;
+  if (attribution.text && attribution.lineCount > 0) {
+    let sourceLabel =
+      stagedFiles && attribution.filePath
+        ? `from ${ideFileLabel(attribution.filePath)}`
         : stagedFiles
           ? "from diff"
           : "selected";
-    return `${IDE_FILE_MARKER}${linesLabel(ideSelection.lineCount)} ${L}`;
+    return `${IDE_FILE_MARKER}${linesLabel(attribution.lineCount)} ${sourceLabel}`;
   }
-  if (!stagedFiles && ideSelection.filePath)
-    return `${IDE_FILE_MARKER}In ${ideFileLabel(ideSelection.filePath)}`;
+  if (!stagedFiles && attribution.filePath)
+    return `${IDE_FILE_MARKER}In ${ideFileLabel(attribution.filePath)}`;
   return null;
 }
 //@ chunk-18hwfzwa.js:119927-120241 fingerprint = IdeStatusIndicator (0.31)

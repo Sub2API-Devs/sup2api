@@ -21,14 +21,20 @@ import { axios_default } from "../../vendor/axios/dist/esm/axios.js";
 import { getClientPlatform } from "../utils/http.js";
 import { lacksAuthorizationHeader } from "../services/oauth/sessionsBearerHooks.js";
 import { getTerminalFocus, onInteraction, onTerminalFocusChange } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-5mabxk9z.js:631-698 placement
-var PRESENCE_PULSE_MIN_INTERVAL_MS = 5000;
-var _ = Ude();
-var NOOP_PRESENCE_PULSE = {
-  teardown: () => {},
-  pulseIfClientPresent: () => {},
-};
+var PRESENCE_PULSE_MIN_INTERVAL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var _;
+var NOOP_PRESENCE_PULSE;
+deferInit("chunk-5mabxk9z.js:631", () => {
+  PRESENCE_PULSE_MIN_INTERVAL_MS = 5000;
+  _ = Ude();
+  NOOP_PRESENCE_PULSE = {
+    teardown: () => {},
+    pulseIfClientPresent: () => {},
+  };
+});
 //@ chunk-5mabxk9z.js:698-904 placement
 async function hasClientPresenceMarker() {
   let CLAUDE_CLIENT_PRESENCE_FILE = env.CLAUDE_CLIENT_PRESENCE_FILE;
@@ -44,36 +50,41 @@ async function hasClientPresenceMarker() {
   }
 }
 //@ chunk-5mabxk9z.js:904-3011 placement
-function startClientPresencePulse(a, baseUrl, getAuthHeaders, onUnauthorized = () => Promise.resolve(false)) {
+function startClientPresencePulse(
+  sessionId,
+  baseUrl,
+  getAuthHeaders,
+  onUnauthorized = () => Promise.resolve(false),
+) {
   if (isEssentialTrafficOnly()) return NOOP_PRESENCE_PULSE;
-  let u = {
-    sessionId: a,
+  let config = {
+    sessionId,
     baseUrl,
     getAuthHeaders,
     onUnauthorized,
   };
-  let r = `[presence session=${a}]`;
-  let d = null;
-  let f = 0;
+  let logPrefix = `[presence session=${sessionId}]`;
+  let connectedAt = null;
+  let lastPulseAt = 0;
   let resolved = Promise.resolve();
-  let h = async (e, s) => {
-    let authHeaders = await u.getAuthHeaders();
+  let sendPulse = async (kind, body) => {
+    let authHeaders = await config.getAuthHeaders();
     if (authHeaders === null) {
-      logForDebugging(`${r} ${e} skipped (no credential to send under)`);
+      logForDebugging(`${logPrefix} ${kind} skipped (no credential to send under)`);
       return null;
     }
     if (!isFirstPartyProvider()) {
-      logForDebugging(`${r} ${e} skipped (non-first-party provider)`);
+      logForDebugging(`${logPrefix} ${kind} skipped (non-first-party provider)`);
       return null;
     }
-    let l = `${u.baseUrl}/v1/code/sessions/${u.sessionId}/client/presence`;
-    logForDebugging(`${r} ${e} \u2192 ${l}`);
+    let url = `${config.baseUrl}/v1/code/sessions/${config.sessionId}/client/presence`;
+    logForDebugging(`${logPrefix} ${kind} \u2192 ${url}`);
     return axios_default
       .post(
-        l,
+        url,
         {
           client_id: _,
-          ...s,
+          ...body,
         },
         {
           headers: {
@@ -86,102 +97,105 @@ function startClientPresencePulse(a, baseUrl, getAuthHeaders, onUnauthorized = (
         },
       )
       .then(
-        (o) => {
-          if (o.status >= 400) logForDebugging(`${r} ${e} got ${o.status}`);
-          let E = o.config?.headers?.get?.("Authorization");
+        (response) => {
+          if (response.status >= 400) logForDebugging(`${logPrefix} ${kind} got ${response.status}`);
+          let authorizationHeader = response.config?.headers?.get?.("Authorization");
           return {
-            status: o.status,
+            status: response.status,
             sentHeaders:
-              typeof E === "string"
+              typeof authorizationHeader === "string"
                 ? {
                     ...authHeaders,
-                    Authorization: E,
+                    Authorization: authorizationHeader,
                   }
-                : lacksAuthorizationHeader(o.config)
+                : lacksAuthorizationHeader(response.config)
                   ? null
                   : authHeaders,
           };
         },
         (error) => {
           logForDebugging(
-            `${r} ${e} failed: ${axios_default.isAxiosError(error) ? (error.code ?? "request_error") : "error"}`,
+            `${logPrefix} ${kind} failed: ${axios_default.isAxiosError(error) ? (error.code ?? "request_error") : "error"}`,
           );
           return null;
         },
       );
   };
-  let P = async (e) => {
-    let s = e.clear === true ? "clear" : "pulse";
+  let pulse = async (options) => {
+    let pulseKind = options.clear === true ? "clear" : "pulse";
     if (!isFirstPartyProvider()) {
-      logForDebugging(`${r} ${s} skipped (non-first-party provider)`);
+      logForDebugging(`${logPrefix} ${pulseKind} skipped (non-first-party provider)`);
       return;
     }
     try {
-      let n = await h(s, e);
-      if (n?.status === 401 && (n.sentHeaders === null || (await u.onUnauthorized(n.sentHeaders, "first")))) {
+      let firstResult = await sendPulse(pulseKind, options);
+      if (
+        firstResult?.status === 401 &&
+        (firstResult.sentHeaders === null || (await config.onUnauthorized(firstResult.sentHeaders, "first")))
+      ) {
         logForDebugging(
-          `${r} ${s} retrying ${n.sentHeaders === null ? "once: the first went with no credential" : "after credential refresh"}`,
+          `${logPrefix} ${pulseKind} retrying ${firstResult.sentHeaders === null ? "once: the first went with no credential" : "after credential refresh"}`,
         );
-        let l = await h(s, e);
-        if (l?.status === 401 && l.sentHeaders !== null)
-          u.onUnauthorized(l.sentHeaders, "resend").catch(() => {});
+        let retryResult = await sendPulse(pulseKind, options);
+        if (retryResult?.status === 401 && retryResult.sentHeaders !== null)
+          config.onUnauthorized(retryResult.sentHeaders, "resend").catch(() => {});
       }
     } catch (error) {
       logForDebugging(
-        `${r} ${s} skipped (credential unavailable: ${error instanceof Error ? error.name : "error"})`,
+        `${logPrefix} ${pulseKind} skipped (credential unavailable: ${error instanceof Error ? error.name : "error"})`,
       );
     }
   };
-  let v = () => {
+  let pulseNow = () => {
     let now = Date.now();
-    f = now;
-    d ??= new Date(now).toISOString();
-    let s = P({
-      connected_at: d,
+    lastPulseAt = now;
+    connectedAt ??= new Date(now).toISOString();
+    let request = pulse({
+      connected_at: connectedAt,
     });
-    resolved = resolved.then(() => s);
-    return s;
+    resolved = resolved.then(() => request);
+    return request;
   };
-  let w = () => {
+  let pulseIfDue = () => {
     if (getTerminalFocus() === false) {
-      logForDebugging(`${r} pulse skipped (terminal blurred)`);
+      logForDebugging(`${logPrefix} pulse skipped (terminal blurred)`);
       return;
     }
-    if (Date.now() - f < PRESENCE_PULSE_MIN_INTERVAL_MS) return;
-    v();
+    if (Date.now() - lastPulseAt < PRESENCE_PULSE_MIN_INTERVAL_MS) return;
+    pulseNow();
   };
-  let H = onInteraction(w);
-  let C = onTerminalFocusChange(() => {
+  let unsubscribeInteraction = onInteraction(pulseIfDue);
+  let unsubscribeFocus = onTerminalFocusChange(() => {
     let terminalFocus = getTerminalFocus();
     logForDebugging(
-      `${r} terminal focus \u2192 ${terminalFocus === undefined ? "unknown" : terminalFocus ? "focused" : "blurred"}`,
+      `${logPrefix} terminal focus \u2192 ${terminalFocus === undefined ? "unknown" : terminalFocus ? "focused" : "blurred"}`,
     );
-    if (terminalFocus === true) w();
+    if (terminalFocus === true) pulseIfDue();
   });
-  logForDebugging(`${r} wired`);
-  let p = false;
+  logForDebugging(`${logPrefix} wired`);
+  let tornDown = false;
   return {
     teardown() {
-      if (p) return;
-      p = true;
-      H?.();
-      H = null;
-      C?.();
-      C = null;
-      if (d !== null)
+      if (tornDown) return;
+      tornDown = true;
+      unsubscribeInteraction?.();
+      unsubscribeInteraction = null;
+      unsubscribeFocus?.();
+      unsubscribeFocus = null;
+      if (connectedAt !== null)
         resolved.then(() =>
-          P({
+          pulse({
             clear: true,
           }),
         );
-      d = null;
+      connectedAt = null;
     },
     pulseIfClientPresent() {
-      if (p || Date.now() - f < PRESENCE_PULSE_MIN_INTERVAL_MS) return;
-      hasClientPresenceMarker().then((e) => {
-        if (e && !p && Date.now() - f >= PRESENCE_PULSE_MIN_INTERVAL_MS) {
-          logForDebugging(`${r} client-presence-marker active \u2192 pulse`);
-          v();
+      if (tornDown || Date.now() - lastPulseAt < PRESENCE_PULSE_MIN_INTERVAL_MS) return;
+      hasClientPresenceMarker().then((hasMarker) => {
+        if (hasMarker && !tornDown && Date.now() - lastPulseAt >= PRESENCE_PULSE_MIN_INTERVAL_MS) {
+          logForDebugging(`${logPrefix} client-presence-marker active \u2192 pulse`);
+          pulseNow();
         }
       });
     },

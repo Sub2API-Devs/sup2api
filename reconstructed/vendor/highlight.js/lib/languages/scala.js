@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:414424-416491 cjs-fingerprint
-var require_scala = x(function (cjsExports, cjsModule) {
+var require_scala = __commonJS(function (cjsExports, cjsModule) {
   function scala(hljs) {
     let regex = hljs.regex;
     let ANNOTATION = {

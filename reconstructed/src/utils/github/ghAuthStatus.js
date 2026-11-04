@@ -21,65 +21,68 @@ async function getGhAuthStatus({ allowNetworkFallbackForOldGh }) {
       status: "not_installed",
     };
   try {
-    let t = await safeExecFile("gh", ["auth", "token"], {
+    let tokenResult = await safeExecFile("gh", ["auth", "token"], {
       stdout: "ignore",
       stderr: "pipe",
       timeout: 5000,
       reject: false,
     });
-    if (t.exitCode === 0)
+    if (tokenResult.exitCode === 0)
       return {
         status: "authenticated",
         supportsAuthTokenCommand: true,
       };
-    if (t.timedOut)
+    if (tokenResult.timedOut)
       return {
         status: "unknown",
         error: "`gh auth token` timed out",
       };
-    if (/not logged in|no oauth token/i.test(t.stderr))
+    if (/not logged in|no oauth token/i.test(tokenResult.stderr))
       return {
         status: "not_authenticated",
       };
-    if (/unknown command/i.test(t.stderr) || (Number.isInteger(t.exitCode) && t.stderr.trim() === "")) {
+    if (
+      /unknown command/i.test(tokenResult.stderr) ||
+      (Number.isInteger(tokenResult.exitCode) && tokenResult.stderr.trim() === "")
+    ) {
       if (!allowNetworkFallbackForOldGh)
         return {
           status: "unknown",
           error: "this GitHub CLI version has no `gh auth token`",
         };
-      let e = await safeExecFile("gh", ["auth", "status"], {
+      let statusResult = await safeExecFile("gh", ["auth", "status"], {
         stdout: "ignore",
         stderr: "pipe",
         timeout: 5000,
         reject: false,
       });
-      if (e.exitCode === 0)
+      if (statusResult.exitCode === 0)
         return {
           status: "authenticated",
           supportsAuthTokenCommand: false,
         };
-      if (e.timedOut)
+      if (statusResult.timedOut)
         return {
           status: "unknown",
           error: "`gh auth status` timed out",
         };
-      if (/logged in to/i.test(e.stderr))
+      if (/logged in to/i.test(statusResult.stderr))
         return {
           status: "authenticated",
           supportsAuthTokenCommand: false,
         };
-      if (/not logged in/i.test(e.stderr))
+      if (/not logged in/i.test(statusResult.stderr))
         return {
           status: "not_authenticated",
         };
       return {
         status: "unknown",
-        error: e.stderr.trim() || "`gh auth status` failed to run",
+        error: statusResult.stderr.trim() || "`gh auth status` failed to run",
       };
     }
     return {
       status: "unknown",
-      error: t.stderr.trim() || "`gh auth token` failed to run",
+      error: tokenResult.stderr.trim() || "`gh auth token` failed to run",
     };
   } catch {
     return {

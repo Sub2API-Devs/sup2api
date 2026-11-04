@@ -17,26 +17,27 @@ import { USAGE_CREDITS_NONINTERACTIVE_HINT } from "../../services/api/adminReque
  * /extra-usage 的非交互（文本）实现：调用 runExtraUsage，返回管理员请求确认文案或"已在浏览器打开/请访问 URL"的提示。
  */
 async function callExtraUsageNonInteractive(args, context) {
-  let e = await runExtraUsage(
+  let result = await runExtraUsage(
     {
       openInBrowser: getIsNonInteractiveSession(),
     },
     context.credentials,
   );
-  if (e.type === "message")
+  if (result.type === "message")
     return {
       type: "text",
-      value: e.value,
+      value: result.value,
     };
-  if (e.type === "confirm-admin-request")
+  if (result.type === "confirm-admin-request")
     return {
       type: "text",
       value: USAGE_CREDITS_NONINTERACTIVE_HINT,
     };
   return {
     type: "text",
-    value: e.opened
-      ? `Browser opened to manage usage credits. If it didn't open, visit: ${e.url}`
-      : `Visit ${e.url} to manage usage credits.`,
+    value: result.opened
+      ? `Browser opened to manage usage credits. If it didn't open, visit: ${result.url}`
+      : `Visit ${result.url} to manage usage credits.`,
   };
 }
+export { callExtraUsageNonInteractive };

@@ -8,7 +8,7 @@
  * pieces: chunk-0e8j1zzj.js (9)
  * attribution: placement 9
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { collapseWhitespace } from "../../utils/stringUtils.js";
@@ -22,162 +22,166 @@ import { Text } from "../../ink/components/Text.js";
 import { TagTabs } from "../TagTabs.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { truncateToWidth } from "../../utils/format.js";
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useAppState, useAppStoreDirect } from "../../state/AppState.js";
 import { isInsideTmux } from "../../utils/swarm/backends/detection.js";
 import { useSwarmBanner, useStableBanner } from "./useSwarmBanner.js";
 import { stripAnsiAndControls } from "../../utils/printableName.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
-import { NO_BREAK_SPACE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { NO_BREAK_SPACE } from "../../constants/figures.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0e8j1zzj.js:12356-13587 placement
 function PromptBorderBanner(props) {
-  let i = w(27);
+  let $ = useMemoCache(27);
   let { banner, columns, fastModeTag, borderOnly } = props;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let color;
-  let k;
-  let f;
-  let g;
-  let M;
+  let fastModeWidth;
+  let bannerText;
+  let bannerWidth;
+  let earlyResult;
   if (
-    i[0] !== banner.bgColor ||
-    i[1] !== banner.text ||
-    i[2] !== borderOnly ||
-    i[3] !== columns ||
-    i[4] !== fastModeTag ||
-    i[5] !== isScreenReaderEnabled
+    $[0] !== banner.bgColor ||
+    $[1] !== banner.text ||
+    $[2] !== borderOnly ||
+    $[3] !== columns ||
+    $[4] !== fastModeTag ||
+    $[5] !== isScreenReaderEnabled
   ) {
-    M = EARLY_RETURN_SENTINEL;
+    earlyResult = EARLY_RETURN_SENTINEL;
     x: {
-      let N = collapseWhitespace(stripAnsiPerLine(banner.text));
+      let bannerLabel = collapseWhitespace(stripAnsiPerLine(banner.text));
       color = banner.bgColor === "promptBorder" ? undefined : banner.bgColor;
       if (isScreenReaderEnabled) {
-        if (borderOnly || (!N && !fastModeTag)) {
-          M = null;
+        if (borderOnly || (!bannerLabel && !fastModeTag)) {
+          earlyResult = null;
           break x;
         }
-        let A;
-        if (i[11] !== fastModeTag) {
-          A =
+        let fastModeElement;
+        if ($[11] !== fastModeTag) {
+          fastModeElement =
             fastModeTag &&
             jsxProd_default_2(Text, {
               color: "fastMode",
               children: [" ", fastModeTag],
             });
-          i[11] = fastModeTag;
-          i[12] = A;
-        } else A = i[12];
-        M = jsxProd_default_2(Text, {
+          $[11] = fastModeTag;
+          $[12] = fastModeElement;
+        } else fastModeElement = $[12];
+        earlyResult = jsxProd_default_2(Text, {
           color: banner.bgColor,
           children: [
-            N &&
+            bannerLabel &&
               jsxProd_default(TagTabs, {
                 color,
                 padded: true,
-                children: N,
+                children: bannerLabel,
               }),
-            A,
+            fastModeElement,
           ],
         });
         break x;
       }
-      k = fastModeTag ? bunStringWidth(fastModeTag) + 2 : 0;
-      let T = columns - k - 3;
-      f = T > 0 ? truncateToWidth(N, T) : "";
-      g = f ? bunStringWidth(f) + 2 : 0;
+      fastModeWidth = fastModeTag ? bunStringWidth(fastModeTag) + 2 : 0;
+      let textBudget = columns - fastModeWidth - 3;
+      bannerText = textBudget > 0 ? truncateToWidth(bannerLabel, textBudget) : "";
+      bannerWidth = bannerText ? bunStringWidth(bannerText) + 2 : 0;
     }
-    i[0] = banner.bgColor;
-    i[1] = banner.text;
-    i[2] = borderOnly;
-    i[3] = columns;
-    i[4] = fastModeTag;
-    i[5] = isScreenReaderEnabled;
-    i[6] = color;
-    i[7] = k;
-    i[8] = f;
-    i[9] = g;
-    i[10] = M;
+    $[0] = banner.bgColor;
+    $[1] = banner.text;
+    $[2] = borderOnly;
+    $[3] = columns;
+    $[4] = fastModeTag;
+    $[5] = isScreenReaderEnabled;
+    $[6] = color;
+    $[7] = fastModeWidth;
+    $[8] = bannerText;
+    $[9] = bannerWidth;
+    $[10] = earlyResult;
   } else {
-    color = i[6];
-    k = i[7];
-    f = i[8];
-    g = i[9];
-    M = i[10];
+    color = $[6];
+    fastModeWidth = $[7];
+    bannerText = $[8];
+    bannerWidth = $[9];
+    earlyResult = $[10];
   }
-  if (M !== EARLY_RETURN_SENTINEL) return M;
-  let v = g;
-  let I = k || v ? "\u2500" : "";
-  let max = Math.max(0, columns - k - v - I.length);
+  if (earlyResult !== EARLY_RETURN_SENTINEL) return earlyResult;
+  let leftWidth = bannerWidth;
+  let lineChar = fastModeWidth || leftWidth ? "\u2500" : "";
+  let max = Math.max(0, columns - fastModeWidth - leftWidth - lineChar.length);
   const color_2 = banner.bgColor;
-  let b;
-  if (i[13] !== max) {
-    b = "\u2500".repeat(max);
-    i[13] = max;
-    i[14] = b;
-  } else b = i[14];
-  let E;
+  let dashes;
+  if ($[13] !== max) {
+    dashes = "\u2500".repeat(max);
+    $[13] = max;
+    $[14] = dashes;
+  } else dashes = $[14];
+  let borderElement;
   if (
-    i[15] !== borderOnly ||
-    i[16] !== color ||
-    i[17] !== v ||
-    i[18] !== fastModeTag ||
-    i[19] !== k ||
-    i[20] !== f ||
-    i[21] !== I
+    $[15] !== borderOnly ||
+    $[16] !== color ||
+    $[17] !== leftWidth ||
+    $[18] !== fastModeTag ||
+    $[19] !== fastModeWidth ||
+    $[20] !== bannerText ||
+    $[21] !== lineChar
   ) {
-    E = borderOnly
-      ? "\u2500".repeat(k + v + I.length)
+    borderElement = borderOnly
+      ? "\u2500".repeat(fastModeWidth + leftWidth + lineChar.length)
       : jsxProd_default_2(Fragment, {
           children: [
             fastModeTag ? ` ${fastModeTag} ` : null,
-            f
+            bannerText
               ? jsxProd_default(TagTabs, {
                   color,
                   padded: true,
-                  children: f,
+                  children: bannerText,
                 })
               : null,
-            I,
+            lineChar,
           ],
         });
-    i[15] = borderOnly;
-    i[16] = color;
-    i[17] = v;
-    i[18] = fastModeTag;
-    i[19] = k;
-    i[20] = f;
-    i[21] = I;
-    i[22] = E;
-  } else E = i[22];
-  let W;
-  if (i[23] !== banner.bgColor || i[24] !== b || i[25] !== E) {
-    W = jsxProd_default_2(Text, {
+    $[15] = borderOnly;
+    $[16] = color;
+    $[17] = leftWidth;
+    $[18] = fastModeTag;
+    $[19] = fastModeWidth;
+    $[20] = bannerText;
+    $[21] = lineChar;
+    $[22] = borderElement;
+  } else borderElement = $[22];
+  let dashedTextElement;
+  if ($[23] !== banner.bgColor || $[24] !== dashes || $[25] !== borderElement) {
+    dashedTextElement = jsxProd_default_2(Text, {
       color: color_2,
-      children: [b, E],
+      children: [dashes, borderElement],
     });
-    i[23] = banner.bgColor;
-    i[24] = b;
-    i[25] = E;
-    i[26] = W;
-  } else W = i[26];
-  return W;
+    $[23] = banner.bgColor;
+    $[24] = dashes;
+    $[25] = borderElement;
+    $[26] = dashedTextElement;
+  } else dashedTextElement = $[26];
+  return dashedTextElement;
 }
 //@ chunk-0e8j1zzj.js:13587-13591 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0e8j1zzj.js:13587", () => {
+  init_react_production();
+});
 //@ chunk-0e8j1zzj.js:13591-13825 placement
 function useTeammateBanner() {
-  let teamContext = useAppState((i) => i.teamContext);
-  useAppState((i) => i.viewingAgentTaskId);
+  let teamContext = useAppState((state) => state.teamContext);
+  useAppState((state) => state.viewingAgentTaskId);
   let appStoreDirect = useAppStoreDirect();
-  let [d, c] = y(null);
-  P(() => {
-    isInsideTmux().then(c);
+  let [insideTmux, setInsideTmux] = useState(null);
+  useEffect(() => {
+    isInsideTmux().then(setInsideTmux);
   }, []);
   let { agent, tmuxHint } = useSwarmBanner({
     state: appStoreDirect.getState(),
     teamContext,
-    insideTmux: d,
+    insideTmux,
   });
   return {
     agent: useStableBanner(agent),
@@ -188,56 +192,56 @@ function useTeammateBanner() {
 var BORDER_COLOR_WIDTH = 24;
 //@ chunk-0e8j1zzj.js:15412-15909 placement
 function PromptModeBadge(props) {
-  let m = w(11);
+  let $ = useMemoCache(11);
   let { mode, agent, maxWidth } = props;
-  let u;
-  if (m[0] !== agent || m[1] !== maxWidth || m[2] !== mode) {
-    u = promptModeBadgeText({
+  let badgeText;
+  if ($[0] !== agent || $[1] !== maxWidth || $[2] !== mode) {
+    badgeText = promptModeBadgeText({
       mode,
       agent,
       maxWidth,
     });
-    m[0] = agent;
-    m[1] = maxWidth;
-    m[2] = mode;
-    m[3] = u;
-  } else u = m[3];
-  let children = u;
+    $[0] = agent;
+    $[1] = maxWidth;
+    $[2] = mode;
+    $[3] = badgeText;
+  } else badgeText = $[3];
+  let children = badgeText;
   if (mode === "bash") {
-    let h;
-    if (m[4] !== children) {
-      h = jsxProd_default(Text, {
+    let badgeElement;
+    if ($[4] !== children) {
+      badgeElement = jsxProd_default(Text, {
         color: "bashBorder",
         children,
       });
-      m[4] = children;
-      m[5] = h;
-    } else h = m[5];
-    return h;
+      $[4] = children;
+      $[5] = badgeElement;
+    } else badgeElement = $[5];
+    return badgeElement;
   }
   if (agent) {
-    let h;
-    if (m[6] !== agent.bgColor || m[7] !== children) {
-      h = jsxProd_default(Text, {
+    let borderColor;
+    if ($[6] !== agent.bgColor || $[7] !== children) {
+      borderColor = jsxProd_default(Text, {
         color: agent.bgColor,
         children,
       });
-      m[6] = agent.bgColor;
-      m[7] = children;
-      m[8] = h;
-    } else h = m[8];
-    return h;
+      $[6] = agent.bgColor;
+      $[7] = children;
+      $[8] = borderColor;
+    } else borderColor = $[8];
+    return borderColor;
   }
-  let h;
-  if (m[9] !== children) {
-    h = jsxProd_default(Text, {
+  let childrenElement;
+  if ($[9] !== children) {
+    childrenElement = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
-    m[9] = children;
-    m[10] = h;
-  } else h = m[10];
-  return h;
+    $[9] = children;
+    $[10] = childrenElement;
+  } else childrenElement = $[10];
+  return childrenElement;
 }
 //@ chunk-0e8j1zzj.js:15909-16035 placement
 function promptModeBadgeText({ mode, agent, maxWidth }) {
@@ -253,11 +257,14 @@ function promptModeBadgeText({ mode, agent, maxWidth }) {
   );
 }
 //@ chunk-0e8j1zzj.js:16035-16066 placement
-function badgeWidth(o) {
-  return bunStringWidth(o) + 1;
+function badgeWidth(badgeText) {
+  return bunStringWidth(badgeText) + 1;
 }
 //@ chunk-0e8j1zzj.js:16066-16070 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0e8j1zzj.js:16066", () => {
+  init_react_production();
+});
 //@ chunk-0e8j1zzj.js:16070-16079 placement
 var BANNER_PADDING = 4;
 export {

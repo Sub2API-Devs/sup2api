@@ -50,14 +50,14 @@ function redactHttpHeaderValues(config) {
   };
 }
 //@ chunk-w5j5chas.js:792-940 placement
-function countHooksInSource(t) {
-  let o = 0;
-  let hooks = getSettingsForSource(t)?.hooks ?? {};
-  for (let s of Object.values(hooks)) {
-    if (!Array.isArray(s)) continue;
-    for (let c of s) o += c.hooks?.length ?? 0;
+function countHooksInSource(source) {
+  let count = 0;
+  let hooks = getSettingsForSource(source)?.hooks ?? {};
+  for (let matchers of Object.values(hooks)) {
+    if (!Array.isArray(matchers)) continue;
+    for (let matcher of matchers) count += matcher.hooks?.length ?? 0;
   }
-  return o;
+  return count;
 }
 //@ chunk-w5j5chas.js:940-1181 placement
 function hookContentLabel(config) {
@@ -83,43 +83,44 @@ function hookCommandDisplayText(config) {
   return getHookDisplayText(config);
 }
 //@ chunk-w5j5chas.js:1257-1614 placement
-function isHookSourceActive(t) {
-  if (t.source === "sessionHook")
+function isHookSourceActive(hook) {
+  if (hook.source === "sessionHook")
     return (
-      (!shouldSkipSessionHooksByPolicy() || isHookEligible(t.config)) &&
-      (!isHookPolicyUnanswered() || isHookPluginSatisfied(t.config))
+      (!shouldSkipSessionHooksByPolicy() || isHookEligible(hook.config)) &&
+      (!isHookPolicyUnanswered() || isHookPluginSatisfied(hook.config))
     );
   if (isCustomizationDisabled("hooks")) return false;
-  if (t.source === "builtinHook") return true;
+  if (hook.source === "builtinHook") return true;
   if (shouldDisableAllHooksIncludingManaged()) return false;
-  if (t.source === "policySettings") return true;
-  let o = shouldAllowManagedHooksOnly() || isHookPolicyUnanswered();
-  if (t.source === "pluginHook") {
-    let pluginName = t.pluginName ?? "";
-    let s = isHookPolicyUnanswered()
+  if (hook.source === "policySettings") return true;
+  let managedOnly = shouldAllowManagedHooksOnly() || isHookPolicyUnanswered();
+  if (hook.source === "pluginHook") {
+    let pluginName = hook.pluginName ?? "";
+    let pluginAllowed = isHookPolicyUnanswered()
       ? isManagedOrAllowlistedHook(pluginName)
       : getPolicyAllowedSet()?.has(pluginName) === true;
-    return !isSafeMode() && (!o || s);
+    return !isSafeMode() && (!managedOnly || pluginAllowed);
   }
-  return !o && !isRestrictedToPluginOnly("hooks");
+  return !managedOnly && !isRestrictedToPluginOnly("hooks");
 }
 //@ chunk-w5j5chas.js:1614-2544 placement
-function hookSourceLabel(t) {
-  let config = t.config;
-  let n = t.source === "userSettings" || t.source === "projectSettings" || t.source === "localSettings";
-  let s = redactHttpHeaderValues(config);
+function hookSourceLabel(hook) {
+  let config = hook.config;
+  let editableSource =
+    hook.source === "userSettings" || hook.source === "projectSettings" || hook.source === "localSettings";
+  let redacted = redactHttpHeaderValues(config);
   return {
-    event: t.event,
-    matcher: escapeControlCharsForDisplay(t.matcher ?? ""),
-    source: t.source,
+    event: hook.event,
+    matcher: escapeControlCharsForDisplay(hook.matcher ?? ""),
+    source: hook.source,
     sourceLabel:
-      t.source === "flagSettings"
+      hook.source === "flagSettings"
         ? "Startup settings (--settings option)"
-        : t.source === "policySettings"
+        : hook.source === "policySettings"
           ? "Managed settings (set by your organization)"
-          : hookSourceDescriptionDisplayString(t.source),
-    ...(t.pluginName !== undefined && {
-      pluginName: escapeControlCharsForDisplay(t.pluginName),
+          : hookSourceDescriptionDisplayString(hook.source),
+    ...(hook.pluginName !== undefined && {
+      pluginName: escapeControlCharsForDisplay(hook.pluginName),
     }),
     type: config.type,
     displayText: getHookStatusText(config),
@@ -146,14 +147,14 @@ function hookSourceLabel(t) {
       (config.async === true || config.asyncRewake === true) && {
         runsInBackground: true,
       }),
-    ...(!isHookSourceActive(t) && {
+    ...(!isHookSourceActive(hook) && {
       disabled: true,
     }),
-    ...(n && {
+    ...(editableSource && {
       editable: {
-        matcher: t.matcher ?? "",
-        config: s,
-        ...(s !== config && {
+        matcher: hook.matcher ?? "",
+        config: redacted,
+        ...(redacted !== config && {
           headersRedacted: true,
         }),
       },
@@ -161,25 +162,25 @@ function hookSourceLabel(t) {
   };
 }
 //@ chunk-w5j5chas.js:2544-2798 placement = getEnabledSettingSources (0.773)
-function getManagedHooksForEventMatcher(t, o) {
-  let n = [];
-  for (let s of ["flagSettings", "policySettings"]) {
-    let c = getSettingsForSource(s)?.hooks?.[t];
-    if (!Array.isArray(c)) continue;
-    for (let u of c) {
-      if ((u.matcher ?? "") !== o) continue;
-      for (let config of u.hooks)
-        n.push(
+function getManagedHooksForEventMatcher(event, matcher) {
+  let labels = [];
+  for (let sourceName of ["flagSettings", "policySettings"]) {
+    let matchers = getSettingsForSource(sourceName)?.hooks?.[event];
+    if (!Array.isArray(matchers)) continue;
+    for (let matcher_2 of matchers) {
+      if ((matcher_2.matcher ?? "") !== matcher) continue;
+      for (let config of matcher_2.hooks)
+        labels.push(
           hookSourceLabel({
-            event: t,
+            event,
             config,
-            matcher: o,
-            source: s,
+            matcher,
+            source: sourceName,
           }),
         );
     }
   }
-  return n;
+  return labels;
 }
 //@ chunk-w5j5chas.js:2798-4160 placement
 /**
@@ -187,50 +188,53 @@ function getManagedHooksForEventMatcher(t, o) {
  */
 function hookPolicySummary(appState) {
   let settingsForSource = getSettingsForSource("policySettings");
-  let n = settingsForSource?.allowManagedHooksOnly === true;
-  let s = isRestrictedToPluginOnly("hooks");
+  let managedOnly = settingsForSource?.allowManagedHooksOnly === true;
+  let pluginOnly = isRestrictedToPluginOnly("hooks");
   let disabledByPolicy = settingsForSource?.disableAllHooks === true;
   let allDisabled = getSettings_DEPRECATED()?.disableAllHooks === true;
   let hookEventMetadata = getHookEventMetadata([]);
   let hooksByEventAndMatcher = groupHooksByEventAndMatcher(appState, []);
-  let b = (e) =>
-    e.source === "sessionHook" ||
-    e.source === "pluginHook" ||
-    e.source === "builtinHook" ||
-    isSettingSourceEnabled(e.source);
-  let p = !n && !s;
-  let g = [];
-  let d = [];
+  let isSourceEnabled = (entry) =>
+    entry.source === "sessionHook" ||
+    entry.source === "pluginHook" ||
+    entry.source === "builtinHook" ||
+    isSettingSourceEnabled(entry.source);
+  let includeManagedExtras = !managedOnly && !pluginOnly;
+  let eventSummaries = [];
+  let allLabels = [];
   for (let key of Object.keys(hookEventMetadata)) {
     let sortedMatchersForEvent = getSortedMatchersForEvent(hooksByEventAndMatcher, key);
-    let a = [];
-    let y = new Set();
-    for (let i of sortedMatchersForEvent) {
-      y.add(i);
-      a.push(...(hooksByEventAndMatcher[key]?.[i] ?? []).filter(b).map(hookSourceLabel));
-      if (p) a.push(...getManagedHooksForEventMatcher(key, i));
+    let labels = [];
+    let seenMatchers = new Set();
+    for (let matcherKey of sortedMatchersForEvent) {
+      seenMatchers.add(matcherKey);
+      labels.push(
+        ...(hooksByEventAndMatcher[key]?.[matcherKey] ?? []).filter(isSourceEnabled).map(hookSourceLabel),
+      );
+      if (includeManagedExtras) labels.push(...getManagedHooksForEventMatcher(key, matcherKey));
     }
-    if (p) {
-      let i = new Set();
-      for (let l of ["flagSettings", "policySettings"]) {
-        let k = getSettingsForSource(l)?.hooks?.[key];
-        if (!Array.isArray(k)) continue;
-        for (let C of k) {
-          let matcher = C.matcher ?? "";
-          if (!y.has(matcher)) i.add(matcher);
+    if (includeManagedExtras) {
+      let extraMatchers = new Set();
+      for (let sourceName of ["flagSettings", "policySettings"]) {
+        let matchers = getSettingsForSource(sourceName)?.hooks?.[key];
+        if (!Array.isArray(matchers)) continue;
+        for (let matcher of matchers) {
+          let matcher_2 = matcher.matcher ?? "";
+          if (!seenMatchers.has(matcher_2)) extraMatchers.add(matcher_2);
         }
       }
-      for (let l of [...i].sort()) a.push(...getManagedHooksForEventMatcher(key, l));
+      for (let matcherKey of [...extraMatchers].sort())
+        labels.push(...getManagedHooksForEventMatcher(key, matcherKey));
     }
-    if (a.length > 0) {
-      g.push({
+    if (labels.length > 0) {
+      eventSummaries.push({
         name: key,
         summary: hookEventMetadata[key].summary,
         supportsMatcher:
-          hookEventMetadata[key].matcherMetadata !== undefined || a.some((i) => i.matcher !== ""),
-        hookCount: a.length,
+          hookEventMetadata[key].matcherMetadata !== undefined || labels.some((hook) => hook.matcher !== ""),
+        hookCount: labels.length,
       });
-      d.push(...a);
+      allLabels.push(...labels);
     }
   }
   let mapped = getSettingsWithErrors_2()
@@ -241,8 +245,8 @@ function hookPolicySummary(appState) {
       message: error.message,
     }));
   return {
-    events: g,
-    hooks: d,
+    events: eventSummaries,
+    hooks: allLabels,
     eventCatalog: Object.keys(hookEventMetadata).map((key) => ({
       name: key,
       summary: hookEventMetadata[key].summary,
@@ -250,8 +254,8 @@ function hookPolicySummary(appState) {
     })),
     policy: {
       disabledByPolicy,
-      managedOnly: n,
-      pluginOnly: s,
+      managedOnly,
+      pluginOnly,
       allDisabled,
       policyHookCount: countHooksInSource("policySettings"),
       ...(policySettingsUnreadable() && {

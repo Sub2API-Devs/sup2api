@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../../runtime/bun-runtime.js";
 import { ao } from "./tokenize.js";
 import { xs } from "./root.js";
 import { Ps } from "./type.js";
@@ -54,8 +54,8 @@ var Qd = x(function (cjsExports, cjsModule) {
     }
     if (!options) options = parse.defaults;
     var preferTrailingComment = options.preferTrailingComment || false;
-    var s = tokenize(source, options.alternateCommentMode || false);
-    var { next, push, peek, skip, cmnt } = s;
+    var tokenizer = tokenize(source, options.alternateCommentMode || false);
+    var { next, push, peek, skip, cmnt } = tokenizer;
     var head = true;
     var pkg;
     var imports;
@@ -89,7 +89,7 @@ var Qd = x(function (cjsExports, cjsModule) {
           "' (" +
           (filename ? filename + ", " : "") +
           "line " +
-          s.line +
+          tokenizer.line +
           ")",
       );
     }
@@ -260,7 +260,7 @@ var Qd = x(function (cjsExports, cjsModule) {
       return false;
     }
     function ifBlock(obj, fnIf, fnElse) {
-      var trailingLine = s.line;
+      var trailingLine = tokenizer.line;
       if (obj) {
         if (typeof obj.comment !== "string") obj.comment = cmnt();
         obj.filename = parse.filename;

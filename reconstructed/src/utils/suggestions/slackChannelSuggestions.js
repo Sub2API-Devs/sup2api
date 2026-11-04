@@ -8,19 +8,92 @@
  * pieces: chunk-18hwfzwa.js (13), chunk-82kqcve8.js (4)
  * attribution: fingerprint 5, layout 5, file-local 4, callgraph-fingerprint 1, affinity 1, sole-consumer 1
  */
+import { logForDebugging } from "../debug.js";
+import { truncateToLength } from "../stringUtils.js";
 import { suggestionCacheBySessionRoot } from "./suggestionCache.js";
 import { callMcpTool } from "../../services/mcp/mcpWireUtils.js";
-import { logForDebugging } from "../debug.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { create, create_2 } from "../../../vendor/zod/lib/index.mjs";
 import { jsonParse } from "../slowOperations.js";
-import { truncateToLength } from "../stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-82kqcve8.js:86360-86411 fingerprint = unwrapResults (0.71)
+function unwrapResults(text) {
+  return findSlackChannelPositions(text, {
+    results: MAX_SLACK_CHANNELS,
+    bytes: MAX_SLACK_RESPONSE_BYTES,
+  });
+}
+//@ chunk-82kqcve8.js:86411-86767 file-local
+function findSlackChannelPositions(content, pattern) {
+  if (Array.isArray(content)) return content.flatMap((part) => findSlackChannelPositions(part, pattern));
+  if (typeof content !== "string") return [];
+  let positions = [];
+  let current = "";
+  let depth = 0;
+  for (let j = 0; j < content.length; j++) {
+    let char = content[j];
+    if (char === "{") {
+      depth++;
+      current += char;
+    } else if (char === "}") {
+      depth--;
+      current += char;
+    } else if (char === "," && depth === 0) {
+      let trimmed = current.trim();
+      if (trimmed) positions.push(trimmed);
+      current = "";
+    } else current += char;
+  }
+  let trimmed = current.trim();
+  if (trimmed) positions.push(trimmed);
+  return positions
+    .filter((position) => position.length > 0)
+    .flatMap((position) => expandBracePattern(position, pattern));
+}
+//@ chunk-82kqcve8.js:86767-86790 affinity
+var MAX_SLACK_CHANNELS = 1000;
+var MAX_SLACK_RESPONSE_BYTES = 4194304;
+//@ chunk-82kqcve8.js:86790-87346 sole-consumer
+/**
+ * 展开 {a,b} 花括号模式（受结果数与字节预算限制，超出时原样返回）。
+ */
+function expandBracePattern(position, budget) {
+  if (!position.includes("{")) return [position];
+  let results = [];
+  let pending = [position];
+  for (let candidate = pending.pop(); candidate !== undefined; candidate = pending.pop()) {
+    let match = candidate.match(/^([^{]*)\{([^}]+)\}(.*)$/);
+    if (!match) {
+      results.push(candidate);
+      continue;
+    }
+    let prefix = match[1] || "";
+    let group = match[2] || "";
+    let suffix = match[3] || "";
+    let mapped = group.split(",").map((option) => option.trim());
+    budget.bytes -= candidate.length;
+    let projected = results.length + pending.length + mapped.length;
+    if (budget.bytes < 0 || projected > budget.results || projected * position.length > budget.bytes) {
+      logForDebugging(
+        `Brace pattern expansion exceeds the budget; using it unexpanded: ${truncateToLength(position, 256)}`,
+        {
+          level: "warn",
+        },
+      );
+      return [position];
+    }
+    for (let j = mapped.length - 1; j >= 0; j--) pending.push(prefix + (mapped[j] ?? "") + suffix);
+  }
+  budget.results -= results.length;
+  budget.bytes -= results.length * position.length;
+  return results;
+}
 //@ chunk-18hwfzwa.js:608844-608876 fingerprint = SLACK_SEARCH_TOOL (1)
 var SLACK_SEARCH_TOOL = "slack_search_channels";
 //@ chunk-18hwfzwa.js:608876-608949 layout
-function onKnownSlackChannelsChanged(session, x) {
-  return suggestionCacheBySessionRoot.of(session).knownSlackChannelsChanged.subscribe(x);
+function onKnownSlackChannelsChanged(session, listener) {
+  return suggestionCacheBySessionRoot.of(session).knownSlackChannelsChanged.subscribe(listener);
 }
 //@ chunk-18hwfzwa.js:608949-609032 fingerprint = findSlackClient (1)
 function findSlackClient(clients) {
@@ -48,7 +121,7 @@ async function fetchChannels(clients, query) {
       )
     ).content;
     if (!Array.isArray(content)) return [];
-    let rawText = content.filter((Re) => Re.type === "text").map((Re) => Re.text).join(`
+    let rawText = content.filter((block) => block.type === "text").map((block) => block.text).join(`
 `);
     return parseChannels(unwrapResultsEnvelope(rawText));
   } catch (error) {
@@ -57,11 +130,14 @@ async function fetchChannels(clients, query) {
   }
 }
 //@ chunk-18hwfzwa.js:609424-609458 file-local
-var resultsEnvelopeSchema = DoctorLazy(() =>
-  create({
-    results: create_2(),
-  }),
-);
+var resultsEnvelopeSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:609424", () => {
+  resultsEnvelopeSchema = DoctorLazy(() =>
+    create({
+      results: create_2(),
+    }),
+  );
+});
 //@ chunk-18hwfzwa.js:609458-609604 layout
 function unwrapResultsEnvelope(text) {
   let trimmed = text.trim();
@@ -101,9 +177,9 @@ function getKnownSlackChannelsVersion(session) {
 function findSlackChannelMentions(session, displayedValue) {
   let { knownSlackChannels } = suggestionCacheBySessionRoot.of(session);
   let positions = [];
-  let ee = /(^|\s)#([a-z0-9][a-z0-9_-]{0,79})(?=\s|$)/g;
+  let channelPattern = /(^|\s)#([a-z0-9][a-z0-9_-]{0,79})(?=\s|$)/g;
   let m;
-  while ((m = ee.exec(displayedValue)) !== null) {
+  while ((m = channelPattern.exec(displayedValue)) !== null) {
     if (!knownSlackChannels.has(m[2])) continue;
     let start = m.index + m[1].length;
     positions.push({
@@ -138,28 +214,29 @@ async function getSlackChannelSuggestions(session, clients, searchToken) {
   if (!searchToken) return [];
   let mcpQuery = mcpQueryFor(searchToken);
   let lower = searchToken.toLowerCase();
-  let ke = suggestionCacheBySessionRoot.of(session);
+  let cache = suggestionCacheBySessionRoot.of(session);
   let channels =
-    ke.slackChannelsByQuery.get(mcpQuery) ?? findReusableCacheEntry(ke.slackChannelsByQuery, mcpQuery, lower);
+    cache.slackChannelsByQuery.get(mcpQuery) ??
+    findReusableCacheEntry(cache.slackChannelsByQuery, mcpQuery, lower);
   if (!channels)
-    if (ke.inflightSlackQuery === mcpQuery && ke.inflightSlackPromise)
-      channels = await ke.inflightSlackPromise;
+    if (cache.inflightSlackQuery === mcpQuery && cache.inflightSlackPromise)
+      channels = await cache.inflightSlackPromise;
     else {
-      ke.inflightSlackQuery = mcpQuery;
-      ke.inflightSlackPromise = fetchChannels(clients, mcpQuery);
-      channels = await ke.inflightSlackPromise;
-      ke.slackChannelsByQuery.set(mcpQuery, channels);
-      let before = ke.knownSlackChannels.size;
-      for (let channel of channels) ke.knownSlackChannels.add(channel);
-      if (ke.knownSlackChannels.size !== before) {
-        ke.knownSlackChannelsVersion++;
-        ke.knownSlackChannelsChanged.emit();
+      cache.inflightSlackQuery = mcpQuery;
+      cache.inflightSlackPromise = fetchChannels(clients, mcpQuery);
+      channels = await cache.inflightSlackPromise;
+      cache.slackChannelsByQuery.set(mcpQuery, channels);
+      let before = cache.knownSlackChannels.size;
+      for (let channel of channels) cache.knownSlackChannels.add(channel);
+      if (cache.knownSlackChannels.size !== before) {
+        cache.knownSlackChannelsVersion++;
+        cache.knownSlackChannelsChanged.emit();
       }
-      if (ke.slackChannelsByQuery.size > 50)
-        ke.slackChannelsByQuery.delete(ke.slackChannelsByQuery.keys().next().value);
-      if (ke.inflightSlackQuery === mcpQuery) {
-        ke.inflightSlackQuery = null;
-        ke.inflightSlackPromise = null;
+      if (cache.slackChannelsByQuery.size > 50)
+        cache.slackChannelsByQuery.delete(cache.slackChannelsByQuery.keys().next().value);
+      if (cache.inflightSlackQuery === mcpQuery) {
+        cache.inflightSlackQuery = null;
+        cache.inflightSlackPromise = null;
       }
     }
   return channels
@@ -170,78 +247,6 @@ async function getSlackChannelSuggestions(session, clients, searchToken) {
       id: `slack-channel-${channel}`,
       displayText: `#${channel}`,
     }));
-}
-//@ chunk-82kqcve8.js:86360-86411 fingerprint = unwrapResults (0.71)
-function unwrapResults(text) {
-  return findSlackChannelPositions(text, {
-    results: MAX_SLACK_CHANNELS,
-    bytes: MAX_SLACK_RESPONSE_BYTES,
-  });
-}
-//@ chunk-82kqcve8.js:86411-86767 file-local
-function findSlackChannelPositions(e, n) {
-  if (Array.isArray(e)) return e.flatMap((w) => findSlackChannelPositions(w, n));
-  if (typeof e !== "string") return [];
-  let positions = [];
-  let s = "";
-  let h = 0;
-  for (let j = 0; j < e.length; j++) {
-    let S = e[j];
-    if (S === "{") {
-      h++;
-      s += S;
-    } else if (S === "}") {
-      h--;
-      s += S;
-    } else if (S === "," && h === 0) {
-      let trimmed = s.trim();
-      if (trimmed) positions.push(trimmed);
-      s = "";
-    } else s += S;
-  }
-  let trimmed = s.trim();
-  if (trimmed) positions.push(trimmed);
-  return positions
-    .filter((position) => position.length > 0)
-    .flatMap((position) => expandBracePattern(position, n));
-}
-//@ chunk-82kqcve8.js:86767-86790 affinity
-var MAX_SLACK_CHANNELS = 1000;
-var MAX_SLACK_RESPONSE_BYTES = 4194304;
-//@ chunk-82kqcve8.js:86790-87346 sole-consumer
-/**
- * 展开 {a,b} 花括号模式（受结果数与字节预算限制，超出时原样返回）。
- */
-function expandBracePattern(position, n) {
-  if (!position.includes("{")) return [position];
-  let r = [];
-  let s = [position];
-  for (let h = s.pop(); h !== undefined; h = s.pop()) {
-    let match = h.match(/^([^{]*)\{([^}]+)\}(.*)$/);
-    if (!match) {
-      r.push(h);
-      continue;
-    }
-    let w = match[1] || "";
-    let S = match[2] || "";
-    let R = match[3] || "";
-    let mapped = S.split(",").map((L) => L.trim());
-    n.bytes -= h.length;
-    let P = r.length + s.length + mapped.length;
-    if (n.bytes < 0 || P > n.results || P * position.length > n.bytes) {
-      logForDebugging(
-        `Brace pattern expansion exceeds the budget; using it unexpanded: ${truncateToLength(position, 256)}`,
-        {
-          level: "warn",
-        },
-      );
-      return [position];
-    }
-    for (let j = mapped.length - 1; j >= 0; j--) s.push(w + (mapped[j] ?? "") + R);
-  }
-  n.results -= r.length;
-  n.bytes -= r.length * position.length;
-  return r;
 }
 export {
   onKnownSlackChannelsChanged,

@@ -8,7 +8,7 @@
 import { request } from "http";
 import { Buffer as ae } from "buffer";
 import { parse } from "url";
-import { Xa, Re } from "../../../../runtime/bun-runtime.js";
+import { __esm, __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_property_provider } from "../../property-provider/dist-cjs/index.js";
 import { require_node_config_provider } from "../../node-config-provider/dist-cjs/index.js";
 import { require_url_parser } from "../../url-parser/dist-cjs/index.js";
@@ -22,20 +22,30 @@ function httpRequest(options) {
       hostname: options.hostname?.replace(/^\[(.+)\]$/, "$1"),
     });
     req.on("error", (err) => {
-      reject(Object.assign(new A.ProviderError("Unable to connect to instance metadata service"), err));
+      reject(
+        Object.assign(
+          new propertyProviderModule.ProviderError("Unable to connect to instance metadata service"),
+          err,
+        ),
+      );
       req.destroy();
     });
     req.on("timeout", () => {
-      reject(new A.ProviderError("TimeoutError from instance metadata service"));
+      reject(new propertyProviderModule.ProviderError("TimeoutError from instance metadata service"));
       req.destroy();
     });
     req.on("response", (res) => {
       let { statusCode = 400 } = res;
       if (statusCode < 200 || 300 <= statusCode) {
         reject(
-          Object.assign(new A.ProviderError("Error response received from instance metadata service"), {
-            statusCode,
-          }),
+          Object.assign(
+            new propertyProviderModule.ProviderError(
+              "Error response received from instance metadata service",
+            ),
+            {
+              statusCode,
+            },
+          ),
         );
         req.destroy();
       }
@@ -52,20 +62,20 @@ function httpRequest(options) {
   });
 }
 //@ chunk-7bg2190x.js:1060-1066 esm-layout
-var A;
+var propertyProviderModule;
 //@ chunk-7bg2190x.js:1066-1093 esm-layout
-var init_credential_provider_imds = Xa(() => {
-  A = Re(require_property_provider());
+var init_credential_provider_imds = __esm(() => {
+  propertyProviderModule = __toESM(require_property_provider());
 });
 //@ chunk-7bg2190x.js:1093-1431 esm-fingerprint
-var N = (arg) =>
+var isImdsCredentials = (arg) =>
   Boolean(arg) &&
   typeof arg === "object" &&
   typeof arg.AccessKeyId === "string" &&
   typeof arg.SecretAccessKey === "string" &&
   typeof arg.Token === "string" &&
   typeof arg.Expiration === "string";
-var g = (creds) => ({
+var fromImdsCredentials = (creds) => ({
   accessKeyId: creds.AccessKeyId,
   secretAccessKey: creds.SecretAccessKey,
   sessionToken: creds.Token,
@@ -75,43 +85,46 @@ var g = (creds) => ({
   }),
 });
 //@ chunk-7bg2190x.js:1431-1444 esm-layout
-var O = () => {};
+var noopStub1 = () => {};
 //@ chunk-7bg2190x.js:1444-1512 esm-fingerprint
-var C = ({ maxRetries = 0, timeout = 1000 }) => ({
+var providerConfigFromInit = ({ maxRetries = 0, timeout = 1000 }) => ({
   maxRetries,
   timeout,
 });
 //@ chunk-7bg2190x.js:1512-1525 esm-layout
-var h = () => {};
+var noopStub2 = () => {};
 //@ chunk-7bg2190x.js:1525-1592 esm-layout
-var retry = (e, maxRetries) => {
-  let n = e();
-  for (let i = 0; i < maxRetries; i++) n = n.catch(e);
-  return n;
+var retry = (toRetry, maxRetries) => {
+  let promise = toRetry();
+  for (let i = 0; i < maxRetries; i++) promise = promise.catch(toRetry);
+  return promise;
 };
 //@ chunk-7bg2190x.js:1592-1605 esm-layout
-var D = () => {};
+var noopStub3 = () => {};
 //@ chunk-7bg2190x.js:1634-2878 esm-layout
-var T;
+var propertyProviderModule2;
 var AWS_CONTAINER_CREDENTIALS_FULL_URI = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
 var AWS_CONTAINER_CREDENTIALS_RELATIVE_URI = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
 var AWS_CONTAINER_AUTHORIZATION_TOKEN = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
-var Fe = (e = {}) => {
-  let { timeout, maxRetries } = C(e);
+var fromContainerMetadata = (init = {}) => {
+  let { timeout, maxRetries } = providerConfigFromInit(init);
   return () =>
     retry(async () => {
-      let options = await me({
-        logger: e.logger,
+      let options = await getCmdsUri({
+        logger: init.logger,
       });
-      let parsed = JSON.parse(await ce(timeout, options));
-      if (!N(parsed))
-        throw new T.CredentialsProviderError("Invalid response received from instance metadata service.", {
-          logger: e.logger,
-        });
-      return g(parsed);
+      let parsed = JSON.parse(await requestFromEcsImds(timeout, options));
+      if (!isImdsCredentials(parsed))
+        throw new propertyProviderModule2.CredentialsProviderError(
+          "Invalid response received from instance metadata service.",
+          {
+            logger: init.logger,
+          },
+        );
+      return fromImdsCredentials(parsed);
     }, maxRetries);
 };
-var ce = async (timeout, options) => {
+var requestFromEcsImds = async (timeout, options) => {
   if (process.env[AWS_CONTAINER_AUTHORIZATION_TOKEN])
     options.headers = {
       ...options.headers,
@@ -124,27 +137,27 @@ var ce = async (timeout, options) => {
     })
   ).toString();
 };
-var de = "169.254.170.2";
-var le;
-var pe;
-var me = async ({ logger }) => {
+var CMDS_IP = "169.254.170.2";
+var GREENGRASS_HOSTS;
+var GREENGRASS_PROTOCOLS;
+var getCmdsUri = async ({ logger }) => {
   if (process.env[AWS_CONTAINER_CREDENTIALS_RELATIVE_URI])
     return {
-      hostname: de,
+      hostname: CMDS_IP,
       path: process.env[AWS_CONTAINER_CREDENTIALS_RELATIVE_URI],
     };
   if (process.env[AWS_CONTAINER_CREDENTIALS_FULL_URI]) {
     let parsed = parse(process.env[AWS_CONTAINER_CREDENTIALS_FULL_URI]);
-    if (!parsed.hostname || !(parsed.hostname in le))
-      throw new T.CredentialsProviderError(
+    if (!parsed.hostname || !(parsed.hostname in GREENGRASS_HOSTS))
+      throw new propertyProviderModule2.CredentialsProviderError(
         `${parsed.hostname} is not a valid container metadata service hostname`,
         {
           tryNextLink: false,
           logger,
         },
       );
-    if (!parsed.protocol || !(parsed.protocol in pe))
-      throw new T.CredentialsProviderError(
+    if (!parsed.protocol || !(parsed.protocol in GREENGRASS_PROTOCOLS))
+      throw new propertyProviderModule2.CredentialsProviderError(
         `${parsed.protocol} is not a valid container metadata service protocol`,
         {
           tryNextLink: false,
@@ -156,7 +169,7 @@ var me = async ({ logger }) => {
       port: parsed.port ? parseInt(parsed.port, 10) : undefined,
     };
   }
-  throw new T.CredentialsProviderError(
+  throw new propertyProviderModule2.CredentialsProviderError(
     `The container metadata credential provider cannot be used unless the ${AWS_CONTAINER_CREDENTIALS_RELATIVE_URI} or ${AWS_CONTAINER_CREDENTIALS_FULL_URI} environment variable is set`,
     {
       tryNextLink: false,
@@ -165,28 +178,30 @@ var me = async ({ logger }) => {
   );
 };
 //@ chunk-7bg2190x.js:2878-2982 esm-layout
-var init_credential_provider_imds_2 = Xa(() => {
+var init_credential_provider_imds_2 = __esm(() => {
   init_credential_provider_imds();
-  O();
-  h();
-  D();
-  T = Re(require_property_provider());
-  le = {
+  noopStub1();
+  noopStub2();
+  noopStub3();
+  propertyProviderModule2 = __toESM(require_property_provider());
+  GREENGRASS_HOSTS = {
     localhost: true,
     "127.0.0.1": true,
   };
-  pe = {
+  GREENGRASS_PROTOCOLS = {
     "http:": true,
     "https:": true,
   };
 });
 //@ chunk-7bg2190x.js:2982-2990 esm-layout
-var U;
+var propertyProviderModule3;
 var InstanceMetadataV1FallbackError;
 //@ chunk-7bg2190x.js:2990-3205 esm-fingerprint
-var init_credential_provider_imds_3 = Xa(() => {
-  U = Re(require_property_provider());
-  InstanceMetadataV1FallbackError = class InstanceMetadataV1FallbackError extends U.CredentialsProviderError {
+var init_credential_provider_imds_3 = __esm(() => {
+  propertyProviderModule3 = __toESM(require_property_provider());
+  InstanceMetadataV1FallbackError = class InstanceMetadataV1FallbackError extends (
+    propertyProviderModule3.CredentialsProviderError
+  ) {
     tryNextLink;
     name = "InstanceMetadataV1FallbackError";
     constructor(message, tryNextLink = true) {
@@ -197,28 +212,28 @@ var init_credential_provider_imds_3 = Xa(() => {
   };
 });
 //@ chunk-7bg2190x.js:3205-3211 esm-layout
-var u;
+var Endpoint;
 //@ chunk-7bg2190x.js:3211-3317 esm-fingerprint
-var init_credential_provider_imds_4 = Xa(() => {
+var init_credential_provider_imds_4 = __esm(() => {
   (function (Endpoint) {
     Endpoint.IPv4 = "http://169.254.169.254";
     Endpoint.IPv6 = "http://[fd00:ec2::254]";
-  })(u || (u = {}));
+  })(Endpoint || (Endpoint = {}));
 });
 //@ chunk-7bg2190x.js:3317-3323 esm-layout
-var K;
+var ENDPOINT_CONFIG_OPTIONS;
 //@ chunk-7bg2190x.js:3323-3483 esm-layout
-var init_credential_provider_imds_5 = Xa(() => {
-  K = {
-    environmentVariableSelector: (e) => e.AWS_EC2_METADATA_SERVICE_ENDPOINT,
-    configFileSelector: (e) => e.ec2_metadata_service_endpoint,
+var init_credential_provider_imds_5 = __esm(() => {
+  ENDPOINT_CONFIG_OPTIONS = {
+    environmentVariableSelector: (env) => env.AWS_EC2_METADATA_SERVICE_ENDPOINT,
+    configFileSelector: (profile) => profile.ec2_metadata_service_endpoint,
     default: undefined,
   };
 });
 //@ chunk-7bg2190x.js:3483-3489 esm-layout
 var EndpointMode;
 //@ chunk-7bg2190x.js:3489-3559 esm-fingerprint
-var init_credential_provider_imds_6 = Xa(() => {
+var init_credential_provider_imds_6 = __esm(() => {
   (function (EndpointMode) {
     EndpointMode.IPv4 = "IPv4";
     EndpointMode.IPv6 = "IPv6";
@@ -229,7 +244,7 @@ var AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE = "AWS_EC2_METADATA_SERVICE_ENDPOINT_
 var EC2_METADATA_SERVICE_ENDPOINT_MODE = "ec2_metadata_service_endpoint_mode";
 var ENDPOINT_MODE_CONFIG_OPTIONS;
 //@ chunk-7bg2190x.js:3649-3757 esm-fingerprint
-var getExtendedInstanceMetadataCredentials = Xa(() => {
+var getExtendedInstanceMetadataCredentials = __esm(() => {
   init_credential_provider_imds_6();
   ENDPOINT_MODE_CONFIG_OPTIONS = {
     environmentVariableSelector: (env) => env[AWS_EC2_METADATA_SERVICE_ENDPOINT_MODE],
@@ -239,34 +254,34 @@ var getExtendedInstanceMetadataCredentials = Xa(() => {
 });
 //@ chunk-7bg2190x.js:3757-4036 esm-layout
 var config;
-var Y;
+var urlParserModule;
 var getInstanceMetadataEndpoint = async () =>
-  Y.parseUrl((await getFromEndpointConfig()) || (await getFromEndpointModeConfig()));
-var getFromEndpointConfig = async () => config.loadConfig(K)();
+  urlParserModule.parseUrl((await getFromEndpointConfig()) || (await getFromEndpointModeConfig()));
+var getFromEndpointConfig = async () => config.loadConfig(ENDPOINT_CONFIG_OPTIONS)();
 var getFromEndpointModeConfig = async () => {
   let endpointMode = await config.loadConfig(ENDPOINT_MODE_CONFIG_OPTIONS)();
   switch (endpointMode) {
     case EndpointMode.IPv4:
-      return u.IPv4;
+      return Endpoint.IPv4;
     case EndpointMode.IPv6:
-      return u.IPv6;
+      return Endpoint.IPv6;
     default:
       throw Error(`Unsupported endpoint mode: ${endpointMode}. Select from ${Object.values(EndpointMode)}`);
   }
 };
 //@ chunk-7bg2190x.js:4036-4090 esm-layout
-var init_credential_provider_imds_7 = Xa(() => {
+var init_credential_provider_imds_7 = __esm(() => {
   init_credential_provider_imds_4();
   init_credential_provider_imds_5();
   init_credential_provider_imds_6();
   getExtendedInstanceMetadataCredentials();
-  config = Re(require_node_config_provider());
-  Y = Re(require_url_parser());
+  config = __toESM(require_node_config_provider());
+  urlParserModule = __toESM(require_url_parser());
 });
 //@ chunk-7bg2190x.js:4090-4561 esm-fingerprint
-var b = (credentials, logger) => {
-  let n = 300 + Math.floor(Math.random() * 300);
-  let newExpiration = new Date(Date.now() + n * 1000);
+var extendInstanceMetadataCredentials = (credentials, logger) => {
+  let refreshInterval = 300 + Math.floor(Math.random() * 300);
+  let newExpiration = new Date(Date.now() + refreshInterval * 1000);
   logger.warn(`Attempting credential expiration extension due to a credential service availability issue. A refresh of these credentials will be attempted after ${new Date(newExpiration)}.
 For more information, please visit: https://docs.aws.amazon.com/sdkref/latest/guide/feature-static-credentials.html`);
   let originalExpiration = credentials.originalExpiration ?? credentials.expiration;
@@ -281,21 +296,21 @@ For more information, please visit: https://docs.aws.amazon.com/sdkref/latest/gu
   };
 };
 //@ chunk-7bg2190x.js:4561-4574 esm-layout
-var j = () => {};
+var noopStub4 = () => {};
 //@ chunk-7bg2190x.js:4574-4806 esm-fingerprint
-var staticStabilityProvider = (instanceMetadataProvider, t = {}) => {
-  let logger = t?.logger || console;
+var staticStabilityProvider = (instanceMetadataProvider, options = {}) => {
+  let logger = options?.logger || console;
   let pastCredentials;
   return async () => {
     let credentials;
     try {
       credentials = await instanceMetadataProvider();
       if (credentials.expiration && credentials.expiration.getTime() < Date.now())
-        credentials = b(credentials, logger);
+        credentials = extendInstanceMetadataCredentials(credentials, logger);
     } catch (e) {
       if (pastCredentials) {
         logger.warn("Credential renew failed: ", e);
-        credentials = b(pastCredentials, logger);
+        credentials = extendInstanceMetadataCredentials(pastCredentials, logger);
       } else throw e;
     }
     pastCredentials = credentials;
@@ -303,11 +318,11 @@ var staticStabilityProvider = (instanceMetadataProvider, t = {}) => {
   };
 };
 //@ chunk-7bg2190x.js:4806-4826 esm-layout
-var init_credential_provider_imds_8 = Xa(() => {
-  j();
+var init_credential_provider_imds_8 = __esm(() => {
+  noopStub4();
 });
 //@ chunk-7bg2190x.js:4826-6960 esm-layout
-var Q;
+var configModule;
 var config_2;
 var IMDS_PATH = "/latest/meta-data/iam/security-credentials/";
 var IMDS_TOKEN_PATH = "/latest/api/token";
@@ -321,12 +336,12 @@ var fromInstanceMetadata = (init = {}) =>
 var getInstanceMetadataProvider = (init = {}) => {
   let disableFetchToken = false;
   let { logger, profile } = init;
-  let { timeout, maxRetries } = C(init);
+  let { timeout, maxRetries } = providerConfigFromInit(init);
   let getCredentials = async (maxRetries, options) => {
     if (disableFetchToken || options.headers?.[X_AWS_EC2_METADATA_TOKEN] == null) {
       let fallbackBlockedFromProfile = false;
       let fallbackBlockedFromProcessEnv = false;
-      let configValue = await Q.loadConfig(
+      let configValue = await configModule.loadConfig(
         {
           environmentVariableSelector: (env) => {
             let envValue = env[AWS_EC2_METADATA_V1_DISABLED];
@@ -452,34 +467,42 @@ var getCredentialsFromProfile = async (profile, options, init) => {
       })
     ).toString(),
   );
-  if (!N(credentialsResponse))
+  if (!isImdsCredentials(credentialsResponse))
     throw new config_2.CredentialsProviderError("Invalid response received from instance metadata service.", {
       logger: init.logger,
     });
-  return g(credentialsResponse);
+  return fromImdsCredentials(credentialsResponse);
 };
 //@ chunk-7bg2190x.js:6960-7027 esm-layout
-var init_credential_provider_imds_9 = Xa(() => {
+var init_credential_provider_imds_9 = __esm(() => {
   init_credential_provider_imds_3();
   init_credential_provider_imds();
-  O();
-  h();
-  D();
+  noopStub1();
+  noopStub2();
+  noopStub3();
   init_credential_provider_imds_7();
   init_credential_provider_imds_8();
-  Q = Re(require_node_config_provider());
-  config_2 = Re(require_property_provider());
+  configModule = __toESM(require_node_config_provider());
+  config_2 = __toESM(require_property_provider());
 });
 //@ chunk-7bg2190x.js:7027-7041 esm-layout
-var oe = () => {};
+var noopStub5 = () => {};
 //@ chunk-7bg2190x.js:7041-7084 esm-layout
-var init_credential_provider_imds_10 = Xa(() => {
+var init_credential_provider_imds_10 = __esm(() => {
   init_credential_provider_imds();
   init_credential_provider_imds_7();
   init_credential_provider_imds_2();
   init_credential_provider_imds_9();
-  h();
-  oe();
+  noopStub2();
+  noopStub5();
 });
 //@ chunk-7bg2190x.js:7084-7089 esm-layout
 init_credential_provider_imds_10();
+export {
+  AWS_CONTAINER_CREDENTIALS_FULL_URI,
+  AWS_CONTAINER_CREDENTIALS_RELATIVE_URI,
+  fromContainerMetadata,
+  fromInstanceMetadata,
+  getInstanceMetadataEndpoint,
+  httpRequest,
+};

@@ -14,6 +14,15 @@ import { readFile, writeFile, unlink, access, stat, open, rmdir, mkdir } from "f
 import { constants, statSync } from "fs";
 import { execFile } from "child_process";
 import { X509Certificate } from "crypto";
+import { PROXY_INJECTED_MARKER, inheritedByChildren } from "../utils/subprocessEnv.js";
+import {
+  GITHUB_HOST,
+  GITHUB_SSH_PREFIXES,
+  normalizeHost,
+  HOST_LABEL_RE,
+  isGithubDotCom,
+  githubApiBase,
+} from "../utils/git/githubUrl.js";
 import {
   setProxyStatusUrl,
   startUpstreamProxyRelay,
@@ -61,7 +70,6 @@ import { sleep, withTimeout } from "../utils/sleep.js";
 import { AGENT_PROXY_PATH } from "../services/ccrAgentProxy/agentProxy.js";
 import { readCaBundleFile, compareCaBundles, compareBundleWithFile, parseCaBundle } from "./caBundle.js";
 import { configureToolTrust, buildJavaTrustOptions, firstPemCertAfterDifferent } from "./toolTrust.js";
-import { PROXY_INJECTED_MARKER, inheritedByChildren } from "../utils/subprocessEnv.js";
 import {
   caCertEnvVars,
   caCertEnvVarList,
@@ -69,14 +77,6 @@ import {
   CA_CERT_ENV_VARS,
 } from "../utils/settings/managedSettingsKeys.js";
 import { GIT_NO_PROMPT_ENV } from "../utils/plugins/marketplaceManager.js";
-import {
-  GITHUB_SSH_PREFIXES,
-  GITHUB_HOST,
-  normalizeHost,
-  HOST_LABEL_RE,
-  isGithubDotCom,
-  githubApiBase,
-} from "../utils/git/githubUrl.js";
 import { buildGitConfigEnv } from "../utils/gitSafeExec.js";
 import { plural } from "../utils/stringUtils.js";
 import { writeFileAtomic } from "../utils/atomicPublishWrite.js";
@@ -102,6 +102,77 @@ import { cgroupSpawnOptions } from "../utils/toolCgroup.js";
 import { getProxyFetchOptions } from "../utils/proxy.js";
 import { isTransientError } from "../utils/fsSafety/hardenedRead.js";
 
+//@ chunk-1k6d6j2b.js:263-2319 placement
+/**
+ * 生成 gh 包装脚本片段：已有用户令牌、非 github.com 主机或仓库/origin 指向其他主机时直接执行原 gh，否则继续走代理。
+ */
+function buildGhGuardScript(ghPath, allowInjectedToken = false) {
+  return (
+    (!allowInjectedToken
+      ? `if [ -n "\${GH_TOKEN:-}\${GITHUB_TOKEN:-}\${GH_ENTERPRISE_TOKEN:-}\${GITHUB_ENTERPRISE_TOKEN:-}" ]; then
+  exec '${ghPath}' "$@"
+fi
+`
+      : `case "\${GH_TOKEN:-}" in ''|'${PROXY_INJECTED_MARKER}') ;; *) exec '${ghPath}' "$@" ;; esac
+case "\${GITHUB_TOKEN:-}" in ''|'${PROXY_INJECTED_MARKER}') ;; *) exec '${ghPath}' "$@" ;; esac
+if [ -n "\${GH_ENTERPRISE_TOKEN:-}\${GITHUB_ENTERPRISE_TOKEN:-}" ]; then
+  exec '${ghPath}' "$@"
+fi
+`) +
+    `host="\${GH_HOST:-}"
+repo="\${GH_REPO:-}"
+prev=''
+for a in "$@"; do
+  if [ "$prev" = '--hostname' ]; then host="$a"; prev=''; continue; fi
+  if [ "$prev" = '--repo' ]; then repo="$a"; prev=''; continue; fi
+  case "$a" in
+    --hostname) prev='--hostname' ;;
+    --hostname=*) host="\${a#--hostname=}" ;;
+    -R|--repo) prev='--repo' ;;
+    --repo=*) repo="\${a#--repo=}" ;;
+    -R=*) repo="\${a#-R=}" ;;
+    -R?*) repo="\${a#-R}" ;;
+  esac
+done
+` +
+    `# Hostnames are case-insensitive \u2014 normalize before every compare.
+` +
+    `host="$(printf %s "$host" | tr '[:upper:]' '[:lower:]')"
+if [ -n "$host" ] && [ "$host" != '${GITHUB_HOST}' ]; then
+  exec '${ghPath}' "$@"
+fi
+# A -R/--repo/GH_REPO [HOST/]OWNER/REPO (or URL) carries its own host
+# and overrides the checkout. Otherwise repo-scoped commands resolve
+` +
+    `# their target from the checkout remote, not GH_HOST \u2014 treat a
+` +
+    `# non-github.com origin as a GHE signal. An EXPLICIT github.com host
+# above skips the origin probe: it must not be kicked off the relay
+# by the checkout heuristic.
+rhost=''
+if [ -n "$repo" ]; then
+  case "$repo" in
+    *://*) rhost="\${repo#*://}"; rhost="\${rhost%%/*}"; rhost="\${rhost##*@}"; rhost="\${rhost%%:*}" ;;
+    */*/*) rhost="\${repo%%/*}" ;;
+  esac
+elif [ -z "$host" ]; then
+  origin="$(git config --get remote.origin.url 2>/dev/null || true)"
+  case "$origin" in
+    *://*) rhost="\${origin#*://}"; rhost="\${rhost%%/*}"; rhost="\${rhost##*@}"; rhost="\${rhost%%:*}" ;;
+    *@*:*) rhost="\${origin#*@}"; rhost="\${rhost%%:*}" ;;
+  esac
+fi
+rhost="$(printf %s "$rhost" | tr '[:upper:]' '[:lower:]')"
+if [ -n "$rhost" ] && [ "$rhost" != '${GITHUB_HOST}' ]; then
+  exec '${ghPath}' "$@"
+fi
+`
+  );
+}
+//@ chunk-hm0ce8vc.js:54310-54413 fingerprint = SYSTEM_CA_BUNDLE (0.658)
+var SYSTEM_CA_BUNDLE = ["/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt"];
+var MAX_SYSTEM_CA_BYTES = 1048576;
+var MAX_CA_TOTAL_BYTES = 8388608;
 //@ chunk-awy329vy.js:2175-2300 fingerprint = NO_PROXY_LIST (0.446)
 var NO_PROXY_LIST = [
   "registry.npmjs.org",
@@ -184,10 +255,10 @@ class AgentProxyRuntime {
   };
   relay = undefined;
   generation = 0;
-  activate(state, e) {
+  activate(state, relay) {
     this.state = state;
-    this.relay = e;
-    setProxyStatusUrl(`${loopbackProxyUrl(e.port)}/__agentproxy/status`);
+    this.relay = relay;
+    setProxyStatusUrl(`${loopbackProxyUrl(relay.port)}/__agentproxy/status`);
   }
   reset() {
     this.generation++;
@@ -234,36 +305,36 @@ async function initAgentProxy(opts) {
   env.unset("CCR_AGENT_PROXY_CA_CERT_B64");
   if (!isEnvTruthy(process.env.CLAUDE_CODE_REMOTE)) return agentProxyState.state;
   let startTime = performance.now();
-  let w;
+  let source;
   if (CCR_AGENT_PROXY_RELAY_MODE === AGENT_PROXY_STANDALONE_RELAY_MODE || isAgentProxyStandaloneActive()) {
-    let D = agentProxyStandaloneProxyUrl();
-    if (D === undefined || !isGovernedGitArmed()) {
+    let standaloneUrl = agentProxyStandaloneProxyUrl();
+    if (standaloneUrl === undefined || !isGovernedGitArmed()) {
       logForDebugging("[agent-proxy] the agent proxy standalone relay mode is set; hosted relay not started");
       return agentProxyState.state;
     }
     logForDebugging(
       "[agent-proxy] the agent proxy standalone relay mode is set; governed git goes through its forwarder, and no relay is started",
     );
-    w = {
+    source = {
       kind: "standalone",
-      proxyUrl: D,
+      proxyUrl: standaloneUrl,
     };
   } else {
     if (!env.CCR_AGENT_PROXY_ENABLED) return agentProxyState.state;
-    let D = isHttpMcpServeInvocation();
-    let F;
+    let inToolContainer = isHttpMcpServeInvocation();
+    let containerToken;
     let sessionId = process.env.CLAUDE_CODE_REMOTE_SESSION_ID;
-    let K = "sessionIngressAuth";
-    if (D) {
-      F = opts?.toolContainerToken;
-      if (F === undefined) {
+    let tokenSourceLabel = "sessionIngressAuth";
+    if (inToolContainer) {
+      containerToken = opts?.toolContainerToken;
+      if (containerToken === undefined) {
         logForDebugging(
           "[agent-proxy] a tool container's daemon was handed no token (CCR_AGENT_PROXY_TOKEN_FILE_DESCRIPTOR, or agent_proxy_token with --session-tunnel); proxy disabled",
         );
         return agentProxyState.state;
       }
       sessionId = "tool-container";
-      K = "the launcher";
+      tokenSourceLabel = "the launcher";
     }
     if (!sessionId) {
       logForDebugging("[agent-proxy] CLAUDE_CODE_REMOTE_SESSION_ID unset; proxy disabled", {
@@ -273,59 +344,59 @@ async function initAgentProxy(opts) {
       return agentProxyState.state;
     }
     let tokenPath = opts?.tokenPath ?? SESSION_TOKEN_PATH;
-    let le = D
+    let tokenFileResult = inToolContainer
       ? {
           existed: false,
-          token: F ?? null,
+          token: containerToken ?? null,
         }
       : await readTokenFile(tokenPath);
-    let { existed, token } = le;
-    if (!token && !D) token = getSessionIngressAuthToken();
+    let { existed, token } = tokenFileResult;
+    if (!token && !inToolContainer) token = getSessionIngressAuthToken();
     if (!token) {
       logForDebugging("[agent-proxy] no session token; proxy disabled");
       logFeatureBad("agent_proxy_init", "agent_proxy_init_no_token");
       return agentProxyState.state;
     }
-    logForDebugging(`[agent-proxy] token via ${existed ? tokenPath : K}`);
-    disableCoreDumps((ke) =>
-      logForDebugging(`[agent-proxy] ${ke}`, {
+    logForDebugging(`[agent-proxy] token via ${existed ? tokenPath : tokenSourceLabel}`);
+    disableCoreDumps((warning) =>
+      logForDebugging(`[agent-proxy] ${warning}`, {
         level: "warn",
       }),
     );
-    w = {
+    source = {
       kind: "relay",
       sessionId,
       token,
-      tokenIsHandedOver: D,
+      tokenIsHandedOver: inToolContainer,
       unlinkTokenPath: existed ? tokenPath : undefined,
     };
   }
   let baseUrl = opts?.ccrBaseUrl ?? process.env.ANTHROPIC_BASE_URL ?? "https://api.anthropic.com";
-  let S =
+  let caBundlePath =
     opts?.caBundlePath ??
     (isGovernedGitArmed()
       ? join(getClaudeConfigDir(), "ccr", "ca-bundle.crt")
       : join(homedir(), ".ccr", "ca-bundle.crt"));
-  let x = opts?.systemCaPath
+  let systemCaText = opts?.systemCaPath
     ? await readFile(opts.systemCaPath, "utf8").catch(() => "")
     : await findSystemCaBundle();
-  let b = withoutBlockedCerts(x, "agent proxy trust") ?? "";
-  let C = await foldCustomerCaBundles(b, S);
-  let localCa = C
-    ? `${b}
-${C}`
-    : b;
-  let P;
+  let filteredSystemCa = withoutBlockedCerts(systemCaText, "agent proxy trust") ?? "";
+  let customerCa = await foldCustomerCaBundles(filteredSystemCa, caBundlePath);
+  let localCa = customerCa
+    ? `${filteredSystemCa}
+${customerCa}`
+    : filteredSystemCa;
+  let envCaPem;
   if (CCR_AGENT_PROXY_CA_CERT_B64 !== undefined && isEssentialTrafficOnly())
     logForDebugging(
       "[agent-proxy] CCR_AGENT_PROXY_CA_CERT_B64 ignored: essential traffic only; fetching the CA as before",
     );
   else if (CCR_AGENT_PROXY_CA_CERT_B64 !== undefined) {
-    let D = decodeCaCertEnv(CCR_AGENT_PROXY_CA_CERT_B64);
-    if (D.ok) P = D.pem;
+    let decodedCa = decodeCaCertEnv(CCR_AGENT_PROXY_CA_CERT_B64);
+    if (decodedCa.ok) envCaPem = decodedCa.pem;
     else {
       logForDebugging(
-        `[agent-proxy] CCR_AGENT_PROXY_CA_CERT_B64 ignored: ${D.reason}; fetching the CA instead`,
+        `[agent-proxy] CCR_AGENT_PROXY_CA_CERT_B64 ignored: ${decodedCa.reason}; fetching the CA instead`,
         {
           level: "warn",
         },
@@ -333,21 +404,21 @@ ${C}`
       logFeatureSad("agent_proxy_init", "agent_proxy_init_ca_env_invalid");
     }
   }
-  let E = isGovernedGitArmed();
-  let A = P !== undefined ? "env" : "fetch";
-  let M = {
+  let governedGit = isGovernedGitArmed();
+  let caSource = envCaPem !== undefined ? "env" : "fetch";
+  let scanOptions = {
     budgetMs: opts?.pathProbeBudgetMs ?? CA_POLL_INTERVAL_MS,
-    caSource: A,
+    caSource,
   };
-  let installedClisScan = E ? undefined : sweepInstalledClis(M);
-  let I;
+  let installedClisScan = governedGit ? undefined : sweepInstalledClis(scanOptions);
+  let selectiveConfig;
   if (CCR_AGENT_PROXY_RELAY_MODE === "selective") {
     let filtered = (CCR_AGENT_PROXY_INCLUDE_HOSTS ?? "")
       .split(",")
-      .map((F) => F.trim())
-      .filter((F) => F.length > 0);
+      .map((host) => host.trim())
+      .filter((host) => host.length > 0);
     if (filtered.length > 0) {
-      I = {
+      selectiveConfig = {
         includeHosts: filtered,
       };
       logForDebugging(
@@ -364,40 +435,45 @@ ${C}`
       logFeatureSad("agent_proxy_init", "agent_proxy_selective_empty_include");
     }
   }
-  let Y = NO_PROXY_LOCAL_ONLY;
-  let context = {
+  let noProxyValue = NO_PROXY_LOCAL_ONLY;
+  let proxyInputs = {
     runtime: agentProxyState,
     generation: agentProxyState.generation,
-    route: w,
+    route: source,
     baseUrl,
-    caBundlePath: S,
-    systemCa: x,
+    caBundlePath,
+    systemCa: systemCaText,
     localCa,
-    hasSystemCa: b !== "",
-    governedGitTools: E,
-    selective: I,
-    noProxy: CCR_AGENT_PROXY_NO_PROXY_LOCAL_ONLY ? Y : I ? NO_PROXY_SELECTIVE : NO_PROXY_EMBEDDED,
-    bundleCoversEveryHost: b !== "",
+    hasSystemCa: filteredSystemCa !== "",
+    governedGitTools: governedGit,
+    selective: selectiveConfig,
+    noProxy: CCR_AGENT_PROXY_NO_PROXY_LOCAL_ONLY
+      ? noProxyValue
+      : selectiveConfig
+        ? NO_PROXY_SELECTIVE
+        : NO_PROXY_EMBEDDED,
+    bundleCoversEveryHost: filteredSystemCa !== "",
     receiveGateDisabled: Boolean(CCR_AGENT_PROXY_RECEIVE_GATE_DISABLED),
     uploadGateDisabled: Boolean(CCR_AGENT_PROXY_UPLOAD_GATE_DISABLED),
     caWatchEnabled: Boolean(CCR_AGENT_PROXY_CA_WATCH_ENABLED),
-    pathProbes: M,
+    pathProbes: scanOptions,
     installedClisScan,
-    envCa: P,
-    caSource: A,
+    envCa: envCaPem,
+    caSource,
     opts: opts && {
       ...opts,
       toolContainerToken: undefined,
     },
   };
   recordPhase("agent_proxy_inputs_ms", performance.now() - startTime, startTime);
-  let lastResult = await bringUpAgentProxy(context, 1);
-  if (w.kind === "standalone" && lastResult.outcome === "fatal") setAgentProxyNote(GITHUB_TLS_FAILED_TEXT);
+  let lastResult = await bringUpAgentProxy(proxyInputs, 1);
+  if (source.kind === "standalone" && lastResult.outcome === "fatal")
+    setAgentProxyNote(GITHUB_TLS_FAILED_TEXT);
   if (lastResult.outcome === "retry") {
     logFeatureSad("agent_proxy_init", "agent_proxy_init_ca_exhausted_retrying", {
-      ca_source: fromEnum(A),
+      ca_source: fromEnum(caSource),
     });
-    retryAgentProxyInBackground(context, lastResult).catch((error) => {
+    retryAgentProxyInBackground(proxyInputs, lastResult).catch((error) => {
       logForDebugging(`[agent-proxy] retry loop crashed: ${errorMessage(error)}; proxy stays disabled`, {
         level: "warn",
       });
@@ -423,8 +499,8 @@ function shouldExitAgentProxy(runtime, generation) {
   return isShuttingDown() ? "defer" : null;
 }
 //@ chunk-awy329vy.js:65729-65780 placement
-function backgroundRetryDelayMs(n, e) {
-  return Math.min(getRetryDelay(n - 1, e, MAX_RETRY_DELAY_MS), MAX_RETRY_DELAY_MS);
+function backgroundRetryDelayMs(attempt, maxAttempts) {
+  return Math.min(getRetryDelay(attempt - 1, maxAttempts, MAX_RETRY_DELAY_MS), MAX_RETRY_DELAY_MS);
 }
 //@ chunk-awy329vy.js:65780-66461 placement
 /**
@@ -470,7 +546,7 @@ async function retryAgentProxyInBackground(context, lastResult) {
 /**
  * 启动 agent 代理：读取 CCR_AGENT_PROXY_* 环境变量，启动本地中继、写入 CA 信任与 git 配置。
  */
-async function bringUpAgentProxy(n, e) {
+async function bringUpAgentProxy(plan, attempt) {
   let {
     runtime,
     route,
@@ -491,35 +567,35 @@ async function bringUpAgentProxy(n, e) {
     envCa,
     caSource,
     opts,
-  } = n;
-  let R = (K, H) => {
-    if (e === 1) recordPhase(K, performance.now() - H, H);
+  } = plan;
+  let recordTiming = (phaseName, phaseStart) => {
+    if (attempt === 1) recordPhase(phaseName, performance.now() - phaseStart, phaseStart);
   };
-  let I;
-  if (envCa !== undefined) I = envCa;
+  let caText;
+  if (envCa !== undefined) caText = envCa;
   else {
     let startTime = performance.now();
-    let ccrCaCert = await fetchCcrCaCert(baseUrl, {
-      budgetMs: opts?.caFetchBudgetMs ?? (e === 1 ? 5000 : 15000),
-      tries: e === 1 ? 3 : 1,
+    let result = await fetchCcrCaCert(baseUrl, {
+      budgetMs: opts?.caFetchBudgetMs ?? (attempt === 1 ? 5000 : 15000),
+      tries: attempt === 1 ? 3 : 1,
       viaStandaloneProxy: route.kind === "standalone",
     });
-    R("agent_proxy_ca_fetch_ms", startTime);
-    if (ccrCaCert.outcome !== "ok") return reportCaFailure(ccrCaCert, caSource);
-    I = ccrCaCert.ccrCa;
+    recordTiming("agent_proxy_ca_fetch_ms", startTime);
+    if (result.outcome !== "ok") return reportCaFailure(result, caSource);
+    caText = result.ccrCa;
   }
   let startTime = performance.now();
-  let X = await writeCaBundle(localCa, I, caBundlePath);
-  if (X.outcome !== "ok") {
-    R("agent_proxy_trust_write_ms", startTime);
-    return reportCaFailure(X, caSource);
+  let writeResult = await writeCaBundle(localCa, caText, caBundlePath);
+  if (writeResult.outcome !== "ok") {
+    recordTiming("agent_proxy_trust_write_ms", startTime);
+    return reportCaFailure(writeResult, caSource);
   }
   if (!governedGitTools) await writeAwsConfigOnce(opts?.awsConfigPath ?? join(homedir(), ".aws", "config"));
-  R("agent_proxy_trust_write_ms", startTime);
+  recordTiming("agent_proxy_trust_write_ms", startTime);
   if (route.kind === "standalone") {
-    let K = shouldExitAgentProxy(runtime, n.generation);
-    if (K)
-      return K === "exit"
+    let staleState = shouldExitAgentProxy(runtime, plan.generation);
+    if (staleState)
+      return staleState === "exit"
         ? {
             outcome: "stale",
           }
@@ -528,7 +604,7 @@ async function bringUpAgentProxy(n, e) {
             detail: "shutdown claimed during bring-up",
             retryAfter: null,
           };
-    let H = {
+    let standaloneState = {
       enabled: true,
       caBundlePath,
       hasSystemCa,
@@ -537,24 +613,30 @@ async function bringUpAgentProxy(n, e) {
       selective: false,
       governedGitTools: true,
     };
-    runtime.state = H;
+    runtime.state = standaloneState;
     runtime.relay = undefined;
-    let le = await configureGovernedGit(H, caBundlePath, route, selective, pathProbes);
-    if (runtime.state !== H)
+    let gitConfigWritten = await configureGovernedGit(
+      standaloneState,
+      caBundlePath,
+      route,
+      selective,
+      pathProbes,
+    );
+    if (runtime.state !== standaloneState)
       return {
         outcome: "stale",
       };
-    setAgentProxyGhStandin(ghStandinConfig(H));
+    setAgentProxyGhStandin(ghStandinConfig(standaloneState));
     logForDebugging(
       `[agent-proxy] governed git routed through the agent proxy standalone forwarder (CA from ${caSource})`,
     );
     logFeatureOk("agent_proxy_init", {
-      attempts: e,
+      attempts: attempt,
       ca_source: fromEnum(caSource),
       standalone: true,
     });
     setAgentProxyNote(
-      env.CLAUDE_CODE_AGENT_PROXY_GIT_CONFIG && !le
+      env.CLAUDE_CODE_AGENT_PROXY_GIT_CONFIG && !gitConfigWritten
         ? GITHUB_TLS_FAILED_TEXT
         : describeProxyForPrompt(caBundlePath, undefined),
     );
@@ -565,22 +647,22 @@ async function bringUpAgentProxy(n, e) {
   let { sessionId, token, tokenIsHandedOver, unlinkTokenPath } = route;
   try {
     let wsUrl = baseUrl.replace(/^http/, "ws") + AGENT_PROXY_PATH + "/ws";
-    let H = agentProxyReadmePath(caBundlePath);
-    let le = token ?? "";
+    let readmePath = agentProxyReadmePath(caBundlePath);
+    let relayToken = token ?? "";
     let startTime = performance.now();
     let installedProxyPreconfiguredClis = await installedClisScan;
-    let ke;
-    let kr = () =>
-      (ke ??= readGlobalGitConfigKeys()
+    let gitConfigPromise;
+    let readGitConfigKeys = () =>
+      (gitConfigPromise ??= readGlobalGitConfigKeys()
         .catch(() => [])
         .finally(() => {
-          ke = undefined;
+          gitConfigPromise = undefined;
         }));
     let upstreamProxyRelay = await startUpstreamProxyRelay({
       wsUrl,
       sessionId,
-      token: le,
-      getToken: tokenIsHandedOver ? () => le : () => getSessionIngressAuthToken() || le,
+      token: relayToken,
+      getToken: tokenIsHandedOver ? () => relayToken : () => getSessionIngressAuthToken() || relayToken,
       selective,
       limits: {
         ...(receiveGateDisabled && {
@@ -592,17 +674,17 @@ async function bringUpAgentProxy(n, e) {
         }),
       },
       statusProvider: async () => {
-        let N = await kr();
-        if (N.length > 0)
-          logForDebugging(`[agent-proxy] git config may defeat proxy routing: ${N.join(", ")}`, {
+        let conflictKeys = await readGitConfigKeys();
+        if (conflictKeys.length > 0)
+          logForDebugging(`[agent-proxy] git config may defeat proxy routing: ${conflictKeys.join(", ")}`, {
             level: "warn",
           });
         return {
           ...runtime.state,
-          ...(N.length > 0 && {
-            gitConfigConflicts: N,
+          ...(conflictKeys.length > 0 && {
+            gitConfigConflicts: conflictKeys,
           }),
-          readmePath: H,
+          readmePath,
           gitConfigInjection: gitConfigCountUnset(),
           gitSshRewrite: gitConfigCountUnset() && sshAuthUnset(),
         };
@@ -610,8 +692,8 @@ async function bringUpAgentProxy(n, e) {
       onFailure: recordProxyRelayEvent,
       onConnectAnswer: notePolicyRefusedHost,
     });
-    let Rr = registerCleanup(async () => upstreamProxyRelay.stop());
-    let G = {
+    let unregisterCleanup = registerCleanup(async () => upstreamProxyRelay.stop());
+    let relayState = {
       enabled: true,
       port: upstreamProxyRelay.port,
       caBundlePath,
@@ -622,12 +704,12 @@ async function bringUpAgentProxy(n, e) {
       governedGitTools,
       installedProxyPreconfiguredClis,
     };
-    R("agent_proxy_relay_up_ms", startTime);
-    let Lt = shouldExitAgentProxy(runtime, n.generation);
-    if (Lt) {
+    recordTiming("agent_proxy_relay_up_ms", startTime);
+    let staleState = shouldExitAgentProxy(runtime, plan.generation);
+    if (staleState) {
       upstreamProxyRelay.stop();
-      Rr();
-      return Lt === "exit"
+      unregisterCleanup();
+      return staleState === "exit"
         ? {
             outcome: "stale",
           }
@@ -637,15 +719,15 @@ async function bringUpAgentProxy(n, e) {
             retryAfter: null,
           };
     }
-    runtime.activate(G, upstreamProxyRelay);
+    runtime.activate(relayState, upstreamProxyRelay);
     if (!selective && !governedGitTools)
       setAgentProxyEndpoint({
         proxyUrl: loopbackProxyUrl(upstreamProxyRelay.port),
-        gatewayCa: I,
+        gatewayCa: caText,
       });
     if (governedGitTools)
       await configureGovernedGit(
-        G,
+        relayState,
         caBundlePath,
         {
           kind: "relay",
@@ -655,7 +737,7 @@ async function bringUpAgentProxy(n, e) {
         pathProbes,
       );
     else {
-      let N = await installGhShim(
+      let ghShim = await installGhShim(
         {
           kind: "relay",
           port: upstreamProxyRelay.port,
@@ -671,68 +753,72 @@ async function bringUpAgentProxy(n, e) {
         logFeatureSad("agent_proxy_gh_shim", "arm_failed");
         return;
       });
-      if (N) {
-        G.ghShimDir = N.shimDir;
-        G.ghStandin = N.standin;
-        G.ghStandinEnterprise = N.enterprise;
-        G.ghStandinAnyHost = N.anyHost;
-        G.ghStandinNoJq = N.noJq;
+      if (ghShim) {
+        relayState.ghShimDir = ghShim.shimDir;
+        relayState.ghStandin = ghShim.standin;
+        relayState.ghStandinEnterprise = ghShim.enterprise;
+        relayState.ghStandinAnyHost = ghShim.anyHost;
+        relayState.ghStandinNoJq = ghShim.noJq;
       }
     }
-    if (runtime.state !== G)
+    if (runtime.state !== relayState)
       return {
         outcome: "stale",
       };
     upstreamProxyRelay.runStartupChecks();
-    setAgentProxyGhStandin(ghStandinConfig(G));
+    setAgentProxyGhStandin(ghStandinConfig(relayState));
     logForDebugging(`[agent-proxy] enabled on 127.0.0.1:${upstreamProxyRelay.port} (CA from ${caSource})`);
     logFeatureOk("agent_proxy_init", {
-      attempts: e,
+      attempts: attempt,
       ca_source: fromEnum(caSource),
     });
     setAgentProxyNote(describeProxyForPrompt(caBundlePath, undefined));
-    writeFile(H, buildAgentProxyReadme(upstreamProxyRelay.port, caBundlePath), "utf8")
+    writeFile(readmePath, buildAgentProxyReadme(upstreamProxyRelay.port, caBundlePath), "utf8")
       .then(() => {
-        if (runtime.state !== G) return;
-        setAgentProxyNote(describeProxyForPrompt(caBundlePath, H));
+        if (runtime.state !== relayState) return;
+        setAgentProxyNote(describeProxyForPrompt(caBundlePath, readmePath));
       })
       .catch((error) => {
         logForDebugging(
           `[agent-proxy] README write failed: ${error instanceof Error ? error.message : String(error)}`,
         );
-        if (runtime.state !== G) return;
+        if (runtime.state !== relayState) return;
         setAgentProxyNote(describeProxyForPrompt(caBundlePath, undefined));
       });
     let recordPath = systemTrustCaPath(caBundlePath);
-    let we = false;
+    let caDiffersFromRecord = false;
     if (!governedGitTools && caSource === "env") {
       let caBundleFile = await readCaBundleFile(recordPath);
-      we =
+      caDiffersFromRecord =
         caBundleFile.state === "read" &&
-        compareCaBundles(caBundleFile.text, I) !== "same" &&
+        compareCaBundles(caBundleFile.text, caText) !== "same" &&
         systemStoreHasCa(systemCa, caBundleFile.text);
     }
-    let Re = governedGitTools || we ? undefined : installCaIntoSystemTrust(n, I, recordPath, "start");
-    let Je = we ? Promise.withResolvers() : undefined;
-    let Be;
-    let Ht = false;
+    let systemTrustPromise =
+      governedGitTools || caDiffersFromRecord
+        ? undefined
+        : installCaIntoSystemTrust(plan, caText, recordPath, "start");
+    let installDeferred = caDiffersFromRecord ? Promise.withResolvers() : undefined;
+    let toolTrustPromise;
+    let toolTrustFailed = false;
     if (opts?.toolTrust !== false && !governedGitTools)
-      Be = configureToolTrust({
-        ccrCa: I,
+      toolTrustPromise = configureToolTrust({
+        ccrCa: caText,
         caBundlePath,
-        hasSystemCa: G.hasSystemCa ?? false,
+        hasSystemCa: relayState.hasSystemCa ?? false,
         stateDir: join(caBundlePath, ".."),
-        systemTrust: Re ?? Je?.promise,
+        systemTrust: systemTrustPromise ?? installDeferred?.promise,
         ...(opts?.toolTrust ?? {}),
       })
-        .then((N) => {
-          if (runtime.state !== G) return;
-          carryJavaTrustStore(G, N);
-          if (N.profileDPath) {
-            let profileDPath = N.profileDPath;
+        .then((toolTrustResult) => {
+          if (runtime.state !== relayState) return;
+          carryJavaTrustStore(relayState, toolTrustResult);
+          if (toolTrustResult.profileDPath) {
+            let profileDPath = toolTrustResult.profileDPath;
             registerCleanup(() => unlink(profileDPath).catch(() => {}));
           }
-          if (N.failureCodes.length > 0) G.toolTrustFailureCodes = N.failureCodes;
+          if (toolTrustResult.failureCodes.length > 0)
+            relayState.toolTrustFailureCodes = toolTrustResult.failureCodes;
         })
         .catch((error) => {
           logForDebugging(
@@ -742,35 +828,39 @@ async function bringUpAgentProxy(n, e) {
             },
           );
           logFeatureSad("agent_proxy_tool_trust", "setup_threw");
-          Ht = true;
+          toolTrustFailed = true;
         });
-    let De = {
-      ccrCa: I,
-      systemTrust: Re,
-      toolTrust: Be,
+    let trust = {
+      ccrCa: caText,
+      systemTrust: systemTrustPromise,
+      toolTrust: toolTrustPromise,
       installIncomplete: false,
       installRetries: 0,
     };
     if (caWatchEnabled && !governedGitTools)
-      Promise.all([Re, Be])
-        .then(async ([N]) => {
-          let be = opts?.toolTrust === false || (await matchesAgentProxyCa(caBundlePath, I));
-          if (runtime.state === G && De.ccrCa === I)
-            De.installIncomplete = we || Ht || !be || hasTrustStoreFailure(N, G.toolTrustFailureCodes ?? []);
+      Promise.all([systemTrustPromise, toolTrustPromise])
+        .then(async ([systemTrustOutcome]) => {
+          let caMatches = opts?.toolTrust === false || (await matchesAgentProxyCa(caBundlePath, caText));
+          if (runtime.state === relayState && trust.ccrCa === caText)
+            trust.installIncomplete =
+              caDiffersFromRecord ||
+              toolTrustFailed ||
+              !caMatches ||
+              hasTrustStoreFailure(systemTrustOutcome, relayState.toolTrustFailureCodes ?? []);
         })
         .catch(() => {});
     let embeddedEndpoint = !selective && !governedGitTools;
     let afterStart;
     if (caSource === "env")
-      afterStart = reconcileAgentProxyCa(n, G, I, {
-        systemTrust: Re,
-        toolTrust: Be,
-        installDeferred: we,
-        onInstallSettled: () => Je?.resolve(),
+      afterStart = reconcileAgentProxyCa(plan, relayState, caText, {
+        systemTrust: systemTrustPromise,
+        toolTrust: toolTrustPromise,
+        installDeferred: caDiffersFromRecord,
+        onInstallSettled: () => installDeferred?.resolve(),
         embeddedEndpoint,
         relayPort: upstreamProxyRelay.port,
         ...(caWatchEnabled && {
-          trust: De,
+          trust,
         }),
       })
         .catch((error) => {
@@ -779,10 +869,10 @@ async function bringUpAgentProxy(n, e) {
           });
           logFeatureSad("agent_proxy_ca_reconcile", "reconcile_threw");
         })
-        .finally(() => Je?.resolve());
+        .finally(() => installDeferred?.resolve());
     let caWatchIntervalMs = opts?.caWatchIntervalMs ?? DEFAULT_CA_WATCH_INTERVAL_MS;
     if (caWatchEnabled && !governedGitTools && caWatchIntervalMs > 0)
-      watchAgentProxyCa(n, G, De, {
+      watchAgentProxyCa(plan, relayState, trust, {
         intervalMs: caWatchIntervalMs,
         afterStart,
         embeddedEndpoint,
@@ -816,55 +906,55 @@ async function bringUpAgentProxy(n, e) {
   }
 }
 //@ chunk-awy329vy.js:71701-71876 placement
-function ghStandinConfig(n) {
-  return n.ghStandin
+function ghStandinConfig(config) {
+  return config.ghStandin
     ? proxyPromptVariant({
-        enterprise: n.ghStandinEnterprise === true,
-        anyHost: n.ghStandinAnyHost === true,
-        noJq: n.ghStandinNoJq === true,
-        runner: n.governedGitTools === true,
+        enterprise: config.ghStandinEnterprise === true,
+        anyHost: config.ghStandinAnyHost === true,
+        noJq: config.ghStandinNoJq === true,
+        runner: config.governedGitTools === true,
       })
     : undefined;
 }
 //@ chunk-awy329vy.js:71876-72598 placement
-async function configureGovernedGit(n, caBundlePath, r, selective, pathProbes) {
-  let h = false;
-  let [l, u] = await Promise.all([
+async function configureGovernedGit(state, caBundlePath, options, selective, budgetOptions) {
+  let anyFailure = false;
+  let [gitConfigWritten, ghShim] = await Promise.all([
     env.CLAUDE_CODE_AGENT_PROXY_GIT_CONFIG
-      ? writeGovernedGitConfig(r, caBundlePath).catch((error) => {
+      ? writeGovernedGitConfig(options, caBundlePath).catch((error) => {
           logForDebugging(`[agent-proxy] governed git config append failed: ${errorMessage(error)}`, {
             level: "warn",
           });
           logFeatureSad("agent_proxy_tool_scoped", "git_config_append_failed");
-          h = true;
+          anyFailure = true;
           return false;
         })
       : false,
     env.CLAUDE_CODE_AGENT_PROXY_GH_SHIM
-      ? installGhShim(r, caBundlePath, undefined, selective, pathProbes).catch((error) => {
+      ? installGhShim(options, caBundlePath, undefined, selective, budgetOptions).catch((error) => {
           logForDebugging(`[agent-proxy] gh shim write failed: ${errorMessage(error)}`, {
             level: "warn",
           });
           logFeatureSad("agent_proxy_tool_scoped", "gh_shim_write_failed");
           logFeatureSad("agent_proxy_gh_shim", "arm_failed");
-          h = true;
+          anyFailure = true;
           return;
         })
       : undefined,
   ]);
-  if (u) {
-    n.ghShimDir = u.shimDir;
-    n.ghStandin = u.standin;
-    n.ghStandinEnterprise = u.enterprise;
-    n.ghStandinAnyHost = u.anyHost;
-    n.ghStandinNoJq = u.noJq;
+  if (ghShim) {
+    state.ghShimDir = ghShim.shimDir;
+    state.ghStandin = ghShim.standin;
+    state.ghStandinEnterprise = ghShim.enterprise;
+    state.ghStandinAnyHost = ghShim.anyHost;
+    state.ghStandinNoJq = ghShim.noJq;
   }
-  if (!h)
+  if (!anyFailure)
     logFeatureOk("agent_proxy_tool_scoped", {
-      git_config: l,
-      gh_shim: Boolean(u),
+      git_config: gitConfigWritten,
+      gh_shim: Boolean(ghShim),
     });
-  return l;
+  return gitConfigWritten;
 }
 //@ chunk-awy329vy.js:72598-73271 placement
 /**
@@ -906,7 +996,7 @@ var CREDENTIAL_PLACEHOLDER_CLIS = [
     },
   },
 ];
-var PLACEHOLDER_CREDENTIAL_KEYS = CREDENTIAL_PLACEHOLDER_CLIS.flatMap((n) => Object.keys(n.placeholders));
+var PLACEHOLDER_CREDENTIAL_KEYS = CREDENTIAL_PLACEHOLDER_CLIS.flatMap((cli) => Object.keys(cli.placeholders));
 var CA_POLL_INTERVAL_MS = 1000;
 //@ chunk-awy329vy.js:73271-73316 placement
 function readToken(path) {
@@ -936,60 +1026,63 @@ function getRunningRelayForGit() {
 function getAgentProxyEnv() {
   let state = getAgentProxyState().state;
   if (state.enabled && state.governedGitTools) {
-    let o = {};
+    let extraEnv = {};
     if (state.ghShimDir) {
-      let s = inheritedByChildren("PATH") ?? "";
-      o.PATH = s ? `${state.ghShimDir}${delimiter}${s}` : state.ghShimDir;
-      if (state.ghStandin && s) o.PATH = `${s}${delimiter}${state.ghShimDir}`;
+      let inheritedPath = inheritedByChildren("PATH") ?? "";
+      extraEnv.PATH = inheritedPath ? `${state.ghShimDir}${delimiter}${inheritedPath}` : state.ghShimDir;
+      if (state.ghStandin && inheritedPath) extraEnv.PATH = `${inheritedPath}${delimiter}${state.ghShimDir}`;
     }
-    return o;
+    return extraEnv;
   }
   if (!state.enabled || !state.port || !state.caBundlePath) {
     if (process.env.HTTPS_PROXY && process.env.SSL_CERT_FILE) {
-      let o = {};
+      let envVars = {};
       for (let key of ["HTTPS_PROXY", "https_proxy", "NO_PROXY", "no_proxy", ...caCertEnvVars])
-        if (process.env[key]) o[key] = process.env[key];
-      for (let s of [...Object.keys(caCertEnvVarList), ...PLACEHOLDER_CREDENTIAL_KEYS]) {
-        let h = inheritedByChildren(s);
-        if (h) o[s] = h;
+        if (process.env[key]) envVars[key] = process.env[key];
+      for (let envVarName of [...Object.keys(caCertEnvVarList), ...PLACEHOLDER_CREDENTIAL_KEYS]) {
+        let inheritedValue = inheritedByChildren(envVarName);
+        if (inheritedValue) envVars[envVarName] = inheritedValue;
       }
-      return o;
+      return envVars;
     }
     return {};
   }
-  let e = loopbackProxyUrl(state.port);
-  let r = {
-    HTTPS_PROXY: e,
-    https_proxy: e,
+  let proxyUrl = loopbackProxyUrl(state.port);
+  let envVars = {
+    HTTPS_PROXY: proxyUrl,
+    https_proxy: proxyUrl,
     NO_PROXY: state.noProxy,
     no_proxy: state.noProxy,
   };
-  for (let o of CA_CERT_ENV_VARS_2) r[o] = state.caBundlePath;
+  for (let envVarName of CA_CERT_ENV_VARS_2) envVars[envVarName] = state.caBundlePath;
   if (state.bundleCoversEveryHost) {
-    for (let o of CA_CERT_ENV_VARS) r[o] = state.caBundlePath;
+    for (let envVarName of CA_CERT_ENV_VARS) envVars[envVarName] = state.caBundlePath;
     for (let [key, value] of Object.entries(caCertEnvVarList))
-      if (inheritedByChildren(key) === undefined) r[key] = value;
+      if (inheritedByChildren(key) === undefined) envVars[key] = value;
   }
   if (state.javaTrustStorePath && state.javaTrustStoreType)
-    r.JAVA_TOOL_OPTIONS = buildJavaTrustOptions(
+    envVars.JAVA_TOOL_OPTIONS = buildJavaTrustOptions(
       state.javaTrustStorePath,
       state.javaTrustStoreType,
       readToken("JAVA_TOOL_OPTIONS"),
     );
   if (readToken("GIT_TERMINAL_PROMPT") === undefined)
-    r.GIT_TERMINAL_PROMPT = GIT_NO_PROMPT_ENV.GIT_TERMINAL_PROMPT;
-  if (readToken("GIT_ASKPASS") === undefined) r.GIT_ASKPASS = GIT_NO_PROMPT_ENV.GIT_ASKPASS;
-  if (readToken("GCM_INTERACTIVE") === undefined) r.GCM_INTERACTIVE = GIT_NO_PROMPT_ENV.GCM_INTERACTIVE;
+    envVars.GIT_TERMINAL_PROMPT = GIT_NO_PROMPT_ENV.GIT_TERMINAL_PROMPT;
+  if (readToken("GIT_ASKPASS") === undefined) envVars.GIT_ASKPASS = GIT_NO_PROMPT_ENV.GIT_ASKPASS;
+  if (readToken("GCM_INTERACTIVE") === undefined) envVars.GCM_INTERACTIVE = GIT_NO_PROMPT_ENV.GCM_INTERACTIVE;
   if (gitConfigCountUnset()) {
-    let o = [["credential.interactive", "false"]];
+    let gitConfigPairs = [["credential.interactive", "false"]];
     if (sshAuthUnset())
-      o.push(...GITHUB_SSH_PREFIXES.map((s) => [`url.https://${GITHUB_HOST}/.insteadOf`, s]));
-    Object.assign(r, buildGitConfigEnv(undefined, o));
+      gitConfigPairs.push(
+        ...GITHUB_SSH_PREFIXES.map((sshPrefix) => [`url.https://${GITHUB_HOST}/.insteadOf`, sshPrefix]),
+      );
+    Object.assign(envVars, buildGitConfigEnv(undefined, gitConfigPairs));
   }
-  for (let o of CREDENTIAL_PLACEHOLDER_CLIS)
-    if (!o.realCredentialEnv.some((h) => inheritedByChildren(h))) Object.assign(r, o.placeholders);
-  if (state.ghShimDir) r.PATH = [readToken("PATH"), state.ghShimDir].filter(Boolean).join(delimiter);
-  return r;
+  for (let cli of CREDENTIAL_PLACEHOLDER_CLIS)
+    if (!cli.realCredentialEnv.some((realCredentialVar) => inheritedByChildren(realCredentialVar)))
+      Object.assign(envVars, cli.placeholders);
+  if (state.ghShimDir) envVars.PATH = [readToken("PATH"), state.ghShimDir].filter(Boolean).join(delimiter);
+  return envVars;
 }
 //@ chunk-awy329vy.js:74962-75043 placement
 /**
@@ -1012,40 +1105,40 @@ function getGovernedGitHosts() {
   let CLAUDE_CODE_AGENT_PROXY_GIT_HOSTS = env.CLAUDE_CODE_AGENT_PROXY_GIT_HOSTS;
   if (!CLAUDE_CODE_AGENT_PROXY_GIT_HOSTS || CLAUDE_CODE_AGENT_PROXY_GIT_HOSTS.trim() === "")
     return [GITHUB_HOST];
-  let e = [];
-  let r = 0;
-  for (let o of CLAUDE_CODE_AGENT_PROXY_GIT_HOSTS.split(",")) {
-    let trimmed = o.trim();
+  let hosts = [];
+  let ignoredCount = 0;
+  for (let entry of CLAUDE_CODE_AGENT_PROXY_GIT_HOSTS.split(",")) {
+    let trimmed = entry.trim();
     if (trimmed === "") continue;
-    let h = normalizeHost(trimmed);
-    if (h === "" || h.length > 255 || !HOST_LABEL_RE.test(h)) {
-      r++;
+    let normalized = normalizeHost(trimmed);
+    if (normalized === "" || normalized.length > 255 || !HOST_LABEL_RE.test(normalized)) {
+      ignoredCount++;
       continue;
     }
-    let l = isGithubDotCom(h) ? GITHUB_HOST : h;
-    if (!e.includes(l)) e.push(l);
+    let host = isGithubDotCom(normalized) ? GITHUB_HOST : normalized;
+    if (!hosts.includes(host)) hosts.push(host);
   }
-  if (r > 0)
+  if (ignoredCount > 0)
     logForDebugging(
-      `[agent-proxy] governed git: ignored ${r} governed-host ${plural(r, "entry", "entries")} that ${plural(r, "is", "are")} not a bare hostname`,
+      `[agent-proxy] governed git: ignored ${ignoredCount} governed-host ${plural(ignoredCount, "entry", "entries")} that ${plural(ignoredCount, "is", "are")} not a bare hostname`,
       {
         level: "warn",
       },
     );
-  return e;
+  return hosts;
 }
 //@ chunk-awy329vy.js:75764-77142 placement
 /**
  * 写入受治理 git 的全局配置块（代理、CA、凭证助手）。
  */
-async function writeGovernedGitConfig(n, e) {
-  let r;
-  switch (n.kind) {
+async function writeGovernedGitConfig(state, caBundlePath) {
+  let proxyUrl;
+  switch (state.kind) {
     case "relay":
-      r = loopbackProxyUrl(n.port);
+      proxyUrl = loopbackProxyUrl(state.port);
       break;
     case "standalone":
-      r = n.proxyUrl;
+      proxyUrl = state.proxyUrl;
       break;
   }
   let envGitConfigGlobal = process.env.GIT_CONFIG_GLOBAL;
@@ -1058,7 +1151,7 @@ async function writeGovernedGitConfig(n, e) {
     );
     return false;
   }
-  if ([e, r].some((y) => /[\n\r"]/.test(y))) {
+  if ([caBundlePath, proxyUrl].some((value) => /[\n\r"]/.test(value))) {
     logForDebugging(
       "[agent-proxy] governed git: the CA bundle path or the proxy URL contains a newline or quote; skipping git config arm",
       {
@@ -1077,47 +1170,50 @@ async function writeGovernedGitConfig(n, e) {
     );
     return false;
   }
-  let h = [GIT_CONFIG_BLOCK_BEGIN];
+  let lines = [GIT_CONFIG_BLOCK_BEGIN];
   for (let governedGitHost of governedGitHosts) {
-    h.push(
+    lines.push(
       `[http "https://${governedGitHost}/"]`,
-      `	proxy = ${r}`,
-      `	sslCAInfo = ${e}`,
+      `	proxy = ${proxyUrl}`,
+      `	sslCAInfo = ${caBundlePath}`,
       ...(governedGitHost === GITHUB_HOST ? [] : ["\textraHeader =", "\tcookieFile ="]),
       `[credential "https://${governedGitHost}/"]`,
       ...(governedGitHost === GITHUB_HOST ? [] : ["\thelper =", `	helper = ${GIT_CREDENTIAL_QUIT_HELPER}`]),
       "\tinteractive = false",
     );
     if (governedGitHost === GITHUB_HOST && sshAuthUnset())
-      h.push(`[url "https://${GITHUB_HOST}/"]`, ...GITHUB_SSH_PREFIXES.map((w) => `	insteadOf = ${w}`));
+      lines.push(
+        `[url "https://${GITHUB_HOST}/"]`,
+        ...GITHUB_SSH_PREFIXES.map((sshPrefix) => `	insteadOf = ${sshPrefix}`),
+      );
   }
-  h.push(GIT_CONFIG_BLOCK_END);
-  let l = "";
+  lines.push(GIT_CONFIG_BLOCK_END);
+  let current = "";
   try {
-    l = await readFile(envGitConfigGlobal, "utf8");
+    current = await readFile(envGitConfigGlobal, "utf8");
   } catch (error) {
     if (!isENOENT(error)) throw error;
   }
-  let index = l.indexOf(GIT_CONFIG_BLOCK_BEGIN);
+  let index = current.indexOf(GIT_CONFIG_BLOCK_BEGIN);
   if (index !== -1) {
-    let index_2 = l.indexOf(GIT_CONFIG_BLOCK_END, index);
-    l =
+    let index_2 = current.indexOf(GIT_CONFIG_BLOCK_END, index);
+    current =
       index_2 !== -1
-        ? l.slice(0, index) + l.slice(index_2 + GIT_CONFIG_BLOCK_END.length).replace(/^\n/, "")
-        : l.slice(0, index);
+        ? current.slice(0, index) + current.slice(index_2 + GIT_CONFIG_BLOCK_END.length).replace(/^\n/, "")
+        : current.slice(0, index);
   }
-  let p =
-    l.length > 0 &&
-    !l.endsWith(`
+  let normalized =
+    current.length > 0 &&
+    !current.endsWith(`
 `)
-      ? l +
+      ? current +
         `
 `
-      : l;
+      : current;
   await writeFileAtomic(
     envGitConfigGlobal,
-    p +
-      h.join(`
+    normalized +
+      lines.join(`
 `) +
       `
 `,
@@ -1129,47 +1225,47 @@ async function writeGovernedGitConfig(n, e) {
   return true;
 }
 //@ chunk-awy329vy.js:77142-77319 placement
-async function findOnPath(n, e) {
+async function findOnPath(name, skipDir) {
   let parts = (env.PATH ?? "").split(delimiter);
-  for (let o of parts) {
-    if (!o || o === e) continue;
-    let s = join(o, n);
+  for (let dir of parts) {
+    if (!dir || dir === skipDir) continue;
+    let candidatePath = join(dir, name);
     try {
-      await access(s, constants.X_OK);
-      if ((await stat(s)).isFile()) return s;
+      await access(candidatePath, constants.X_OK);
+      if ((await stat(candidatePath)).isFile()) return candidatePath;
     } catch {}
   }
   return;
 }
 //@ chunk-awy329vy.js:77319-77829 placement
-async function withTimeBudget(n, e, { budgetMs, caSource }) {
-  let s = `${n} timed out`;
+async function withTimeBudget(label, operation, { budgetMs, caSource }) {
+  let timeoutMessage = `${label} timed out`;
   let startTime = performance.now();
-  let l = sampleCpuAndPageFaults();
+  let startSample = sampleCpuAndPageFaults();
   let eventLoopLagMonitor = startEventLoopLagMonitor(LAG_SAMPLE_INTERVAL_MS);
   try {
     return {
-      value: await withTimeout(e(), budgetMs, s),
+      value: await withTimeout(operation(), budgetMs, timeoutMessage),
     };
   } catch (error) {
-    let y = sampleCpuAndPageFaults();
-    let w = errorMessage(error) === s;
-    let T = sanitizeErrnoForTelemetry(error);
+    let endSample = sampleCpuAndPageFaults();
+    let timedOut = errorMessage(error) === timeoutMessage;
+    let sanitizedErrno = sanitizeErrnoForTelemetry(error);
     return {
       failure: {
-        timedOut: w,
-        detail: w ? s : `${n} failed (${errorMessage(error)})`,
+        timedOut,
+        detail: timedOut ? timeoutMessage : `${label} failed (${errorMessage(error)})`,
         fields: {
           ca_source: fromEnum(caSource),
-          ...(T !== undefined && {
-            errno: T,
+          ...(sanitizedErrno !== undefined && {
+            errno: sanitizedErrno,
           }),
           elapsed_ms: Math.round(performance.now() - startTime),
           loop_lag_max_ms: Math.round(eventLoopLagMonitor.stop()),
-          ...(l &&
-            y && {
-              cpu_delta_ms: Math.round(y.cpuTimeMs - l.cpuTimeMs),
-              major_fault_delta: y.majorPageFaults - l.majorPageFaults,
+          ...(startSample &&
+            endSample && {
+              cpu_delta_ms: Math.round(endSample.cpuTimeMs - startSample.cpuTimeMs),
+              major_fault_delta: endSample.majorPageFaults - startSample.majorPageFaults,
             }),
         },
       },
@@ -1179,20 +1275,24 @@ async function withTimeBudget(n, e, { budgetMs, caSource }) {
   }
 }
 //@ chunk-awy329vy.js:77829-78185 placement
-async function sweepInstalledClis(n) {
-  let e = new Set();
-  let r = await withTimeBudget("installed-CLI PATH sweep", () => scanPathForExecutables(PROXIED_CLIS, e), n);
-  if ("failure" in r) {
-    logForDebugging(`[agent-proxy] ${r.failure.detail}; naming only the CLIs resolved so far`, {
+async function sweepInstalledClis(budgetOptions) {
+  let found = new Set();
+  let probeResult = await withTimeBudget(
+    "installed-CLI PATH sweep",
+    () => scanPathForExecutables(PROXIED_CLIS, found),
+    budgetOptions,
+  );
+  if ("failure" in probeResult) {
+    logForDebugging(`[agent-proxy] ${probeResult.failure.detail}; naming only the CLIs resolved so far`, {
       level: "warn",
     });
     logFeatureSad(
       "agent_proxy_init",
-      r.failure.timedOut ? "agent_proxy_path_probe_timeout" : "agent_proxy_path_probe_failed",
-      r.failure.fields,
+      probeResult.failure.timedOut ? "agent_proxy_path_probe_timeout" : "agent_proxy_path_probe_failed",
+      probeResult.failure.fields,
     );
   }
-  return PROXIED_CLIS.filter((o) => e.has(o));
+  return PROXIED_CLIS.filter((cli) => found.has(cli));
 }
 //@ chunk-awy329vy.js:78185-78287 placement
 var MAX_SHIM_BYTES = 65536;
@@ -1200,15 +1300,15 @@ var GH_SHIM_HEADER = `#!/bin/sh
 # claude agent-proxy governed-git gh shim (auto-generated; per-session).
 `;
 //@ chunk-awy329vy.js:78287-78554 placement
-async function readGhShim(n) {
+async function readGhShim(shimPath) {
   try {
-    await using e = await open(n, readOnlyNoFollowFlags());
-    let handleUpTo = await readHandleUpTo(e, MAX_SHIM_BYTES + 1);
+    await using handle = await open(shimPath, readOnlyNoFollowFlags());
+    let handleUpTo = await readHandleUpTo(handle, MAX_SHIM_BYTES + 1);
     return handleUpTo.length > MAX_SHIM_BYTES ? "" : handleUpTo.toString("utf8");
   } catch (error) {
     if (!isFsInaccessible(error))
       logForDebugging(
-        `[agent-proxy] gh shim at ${n} could not be read (${getErrnoCode(error) ?? "no error code"}); treated as not a shim`,
+        `[agent-proxy] gh shim at ${shimPath} could not be read (${getErrnoCode(error) ?? "no error code"}); treated as not a shim`,
         {
           level: "warn",
         },
@@ -1217,35 +1317,35 @@ async function readGhShim(n) {
   }
 }
 //@ chunk-awy329vy.js:78554-78632 placement
-function urlHostMatches(n, e) {
-  let hostname = URL.parse(githubApiBase(e))?.hostname;
-  return hostname !== undefined && hostMatchesSelectiveList(n, hostname);
+function urlHostMatches(requestedHost, apiBase) {
+  let hostname = URL.parse(githubApiBase(apiBase))?.hostname;
+  return hostname !== undefined && hostMatchesSelectiveList(requestedHost, hostname);
 }
 //@ chunk-awy329vy.js:78632-78941 placement
-async function isJqInstalled(n, e) {
-  let r = await withTimeBudget("jq PATH probe", () => findOnPath("jq", n), e);
-  if ("failure" in r) {
-    logForDebugging(`[agent-proxy] ${r.failure.detail}; taking jq as installed`, {
+async function isJqInstalled(skipDir, budgetOptions) {
+  let probeResult = await withTimeBudget("jq PATH probe", () => findOnPath("jq", skipDir), budgetOptions);
+  if ("failure" in probeResult) {
+    logForDebugging(`[agent-proxy] ${probeResult.failure.detail}; taking jq as installed`, {
       level: "warn",
     });
     logFeatureSad(
       "agent_proxy_gh_shim",
-      r.failure.timedOut ? "jq_path_probe_timeout" : "jq_path_probe_failed",
-      r.failure.fields,
+      probeResult.failure.timedOut ? "jq_path_probe_timeout" : "jq_path_probe_failed",
+      probeResult.failure.fields,
     );
     return false;
   }
-  return r.value === undefined;
+  return probeResult.value === undefined;
 }
 //@ chunk-awy329vy.js:78941-79100 placement
-function removeGhShimLater(n, e, r) {
+function removeGhShimLater(shimPath, expectedText, removeParentDirs) {
   registerCleanup(async () => {
-    if ((await readGhShim(n)) !== e) return;
-    await unlink(n).catch(() => {});
-    if (r) {
-      let o = join(n, "..");
-      await rmdir(o)
-        .then(() => rmdir(join(o, "..")))
+    if ((await readGhShim(shimPath)) !== expectedText) return;
+    await unlink(shimPath).catch(() => {});
+    if (removeParentDirs) {
+      let parentDir = join(shimPath, "..");
+      await rmdir(parentDir)
+        .then(() => rmdir(join(parentDir, "..")))
         .catch(() => {});
     }
   });
@@ -1254,28 +1354,28 @@ function removeGhShimLater(n, e, r) {
 /**
  * 为 agent 代理安装 gh 垫片（gh shim），没有 gh 时提供替身。
  */
-async function installGhShim(n, e, r, o, s) {
-  let h = r !== undefined;
-  let l =
-    r !== undefined
-      ? join(e, "..", "sessions", computeContentHash(r).slice(0, 32), "bin")
-      : join(e, "..", "bin");
-  let u = join(l, "gh");
-  let p = await withTimeBudget("gh PATH probe", () => findOnPath("gh", l), s);
-  if ("failure" in p) {
-    logForDebugging(`[agent-proxy] ${p.failure.detail}; skipping gh shim`, {
+async function installGhShim(state, caBundlePath, sessionKey, selective, budgetOptions) {
+  let perSession = sessionKey !== undefined;
+  let shimDir =
+    sessionKey !== undefined
+      ? join(caBundlePath, "..", "sessions", computeContentHash(sessionKey).slice(0, 32), "bin")
+      : join(caBundlePath, "..", "bin");
+  let shimPath = join(shimDir, "gh");
+  let probeResult = await withTimeBudget("gh PATH probe", () => findOnPath("gh", shimDir), budgetOptions);
+  if ("failure" in probeResult) {
+    logForDebugging(`[agent-proxy] ${probeResult.failure.detail}; skipping gh shim`, {
       level: "warn",
     });
-    if (!h) throw Error("gh PATH probe failed");
+    if (!perSession) throw Error("gh PATH probe failed");
     logFeatureSad(
       "agent_proxy_gh_shim",
-      p.failure.timedOut ? "gh_path_probe_timeout" : "gh_path_probe_failed",
-      p.failure.fields,
+      probeResult.failure.timedOut ? "gh_path_probe_timeout" : "gh_path_probe_failed",
+      probeResult.failure.fields,
     );
     return;
   }
-  let ghPath = p.value;
-  if (ghPath && h) {
+  let ghPath = probeResult.value;
+  if (ghPath && perSession) {
     logFeatureOk("agent_proxy_gh_shim", {
       standin: false,
       hosted: true,
@@ -1287,52 +1387,52 @@ async function installGhShim(n, e, r, o, s) {
     logFeatureSad("agent_proxy_gh_shim", "standin_essential_traffic_only");
     return;
   }
-  if (!ghPath && !urlHostMatches(o, GITHUB_HOST)) {
+  if (!ghPath && !urlHostMatches(selective, GITHUB_HOST)) {
     logForDebugging(
       "[agent-proxy] no gh on PATH and this relay does not send GitHub API requests to the session proxy (selective mode); skipping gh shim",
     );
     logFeatureSad("agent_proxy_gh_shim", "selective_relay");
     return;
   }
-  if ((env.PATH ?? "").split(delimiter).includes(l)) {
-    let ghShim = await readGhShim(u);
+  if ((env.PATH ?? "").split(delimiter).includes(shimDir)) {
+    let ghShim = await readGhShim(shimPath);
     let included = ghShim.includes(` '${GH_STANDIN_FLAG}' `);
-    let v = ghShim.startsWith(GH_SHIM_HEADER);
-    let P = !ghPath;
-    if (P ? included : v) {
-      logForDebugging(`[agent-proxy] gh shim at ${u} is the enclosing session's; left as it is`);
+    let hasShimHeader = ghShim.startsWith(GH_SHIM_HEADER);
+    let standinMode = !ghPath;
+    if (standinMode ? included : hasShimHeader) {
+      logForDebugging(`[agent-proxy] gh shim at ${shimPath} is the enclosing session's; left as it is`);
       logFeatureOk("agent_proxy_gh_shim", {
-        standin: P,
-        ...(h && {
+        standin: standinMode,
+        ...(perSession && {
           hosted: true,
         }),
         inherited: true,
       });
       return {
-        shimDir: l,
-        standin: P,
-        enterprise: P && ghShim.includes(" '--hosts="),
-        anyHost: P && ghShim.includes(` '${ANY_HOST_FLAG}' `),
-        noJq: P && (await isJqInstalled(l, s)),
+        shimDir,
+        standin: standinMode,
+        enterprise: standinMode && ghShim.includes(" '--hosts="),
+        anyHost: standinMode && ghShim.includes(` '${ANY_HOST_FLAG}' `),
+        noJq: standinMode && (await isJqInstalled(shimDir, budgetOptions)),
       };
     }
-    if (included || v) {
+    if (included || hasShimHeader) {
       logForDebugging(
-        `[agent-proxy] gh shim at ${u} is the enclosing session's, of another kind; no gh shim for this process`,
+        `[agent-proxy] gh shim at ${shimPath} is the enclosing session's, of another kind; no gh shim for this process`,
       );
       logFeatureSad("agent_proxy_gh_shim", "enclosing_shim_other_kind");
       return;
     }
   }
-  let w;
-  if (ghPath) w = [ghPath];
+  let commandParts;
+  if (ghPath) commandParts = [ghPath];
   else {
     let launchCommand = getLaunchCommand({
       pinToCurrentBinary: true,
     });
-    w = [launchCommand.cmd, ...launchCommand.prefixArgs];
+    commandParts = [launchCommand.cmd, ...launchCommand.prefixArgs];
   }
-  if ([e, ...w].some((b) => /['\n\r]/.test(b))) {
+  if ([caBundlePath, ...commandParts].some((part) => /['\n\r]/.test(part))) {
     logForDebugging(
       "[agent-proxy] governed git: a path or argument the gh shim would quote holds a quote or a line break; skipping gh shim",
       {
@@ -1342,63 +1442,64 @@ async function installGhShim(n, e, r, o, s) {
     logFeatureSad("agent_proxy_gh_shim", "unquotable_path");
     return;
   }
-  await mkdir(l, {
+  await mkdir(shimDir, {
     recursive: true,
     mode: 448,
   });
   if (!ghPath) {
-    let b = h && o === undefined;
-    let C = h
+    let anyHost = perSession && selective === undefined;
+    let ghesHosts = perSession
       ? []
       : getGovernedGitHosts().filter(
-          (E) => E !== GITHUB_HOST && !E.endsWith(GHE_HOST_SUFFIX) && urlHostMatches(o, E),
+          (host) =>
+            host !== GITHUB_HOST && !host.endsWith(GHE_HOST_SUFFIX) && urlHostMatches(selective, host),
         );
-    let v;
-    switch (n.kind) {
+    let port;
+    switch (state.kind) {
       case "relay":
-        v = n.port;
+        port = state.port;
         break;
       case "standalone":
-        v = STANDALONE_PROXY;
+        port = STANDALONE_PROXY;
         break;
     }
-    let P = describeGhStandinHosts({
-      command: w,
-      port: v,
-      caBundlePath: e,
-      ghesHosts: b ? ANY : C,
+    let standinShimContent = describeGhStandinHosts({
+      command: commandParts,
+      port,
+      caBundlePath,
+      ghesHosts: anyHost ? ANY : ghesHosts,
     });
-    await writeFileAtomic(u, P, 493);
-    removeGhShimLater(u, P, h);
-    logForDebugging(`[agent-proxy] no gh on PATH; gh stand-in shim at ${u}`);
+    await writeFileAtomic(shimPath, standinShimContent, 493);
+    removeGhShimLater(shimPath, standinShimContent, perSession);
+    logForDebugging(`[agent-proxy] no gh on PATH; gh stand-in shim at ${shimPath}`);
     logFeatureOk("agent_proxy_gh_shim", {
       standin: true,
-      ...(h && {
+      ...(perSession && {
         hosted: true,
       }),
     });
     return {
-      shimDir: l,
+      shimDir,
       standin: true,
-      enterprise: C.length > 0,
-      anyHost: b,
-      noJq: await isJqInstalled(l, s),
+      enterprise: ghesHosts.length > 0,
+      anyHost,
+      noJq: await isJqInstalled(shimDir, budgetOptions),
     };
   }
-  let T;
-  let S;
-  switch (n.kind) {
+  let standaloneCheck;
+  let relayEnv;
+  switch (state.kind) {
     case "relay":
-      T = "";
-      S = `HTTPS_PROXY='${loopbackProxyUrl(n.port)}' https_proxy='${loopbackProxyUrl(n.port)}' \\
+      standaloneCheck = "";
+      relayEnv = `HTTPS_PROXY='${loopbackProxyUrl(state.port)}' https_proxy='${loopbackProxyUrl(state.port)}' \\
 `;
       break;
     case "standalone":
-      T = buildGhProxyCheckScript();
-      S = "";
+      standaloneCheck = buildGhProxyCheckScript();
+      relayEnv = "";
       break;
   }
-  let x =
+  let shimContent =
     GH_SHIM_HEADER +
     `# Routes gh-to-github.com through the session relay ONLY when the
 # invocation carries no customer credential. GHE targets (GH_HOST,
@@ -1416,25 +1517,25 @@ async function installGhShim(n, e, r, o, s) {
     `# them through the tunnel.
 ` +
     buildGhGuardScript(ghPath) +
-    T +
+    standaloneCheck +
     `# NO_PROXY cleared: an ambient runner-host NO_PROXY covering
 # github.com would make gh skip the relay and send the literal dummy
 # token to the real GitHub API (hard 401).
 ` +
-    S +
+    relayEnv +
     `NO_PROXY='' no_proxy='' \\
-SSL_CERT_FILE='${e}' \\
+SSL_CERT_FILE='${caBundlePath}' \\
 GH_TOKEN='${PROXY_INJECTED_MARKER}' GITHUB_TOKEN='${PROXY_INJECTED_MARKER}' \\
 exec '${ghPath}' "$@"
 `;
-  await writeFileAtomic(u, x, 493);
-  removeGhShimLater(u, x, h);
-  logForDebugging(`[agent-proxy] governed git: gh shim at ${u} -> ${ghPath}`);
+  await writeFileAtomic(shimPath, shimContent, 493);
+  removeGhShimLater(shimPath, shimContent, perSession);
+  logForDebugging(`[agent-proxy] governed git: gh shim at ${shimPath} -> ${ghPath}`);
   logFeatureOk("agent_proxy_gh_shim", {
     standin: false,
   });
   return {
-    shimDir: l,
+    shimDir,
     standin: false,
     enterprise: false,
     anyHost: false,
@@ -1450,27 +1551,27 @@ function sshAuthUnset() {
   return readToken("SSH_AUTH_SOCK") === undefined && readToken("GIT_SSH_COMMAND") === undefined;
 }
 //@ chunk-awy329vy.js:82843-83944 placement
-function describeProxyForPrompt(caBundlePath, e) {
+function describeProxyForPrompt(caBundlePath, readmePath) {
   let state = getAgentProxyState().state;
   if (state.governedGitTools) {
-    let s = e ? `see ${e} and ` : "";
-    let h = state.ghStandin === true;
-    let l = isAgentProxyStandaloneActive()
+    let readmeHint = readmePath ? `see ${readmePath} and ` : "";
+    let hasStandin = state.ghStandin === true;
+    let otherTrafficNote = isAgentProxyStandaloneActive()
       ? "other network traffic goes through the same proxy, and other tools that reach github.com there (curl, npm, or gh run with a GitHub token of its own) fail TLS verification: only git and gh trust that CA bundle."
       : "other network traffic uses this machine's own egress.";
     return (
-      `GitHub access for git${h ? " and gh" : ""} goes through a pre-configured session proxy (CA bundle: ${caBundlePath}) via per-session git config${h ? " and a gh PATH shim" : ""}; ${l} If ${h ? "git or gh fail" : "git fails"} against github.com (TLS or HTTP errors, or a transfer cut off with connection reset / unexpected disconnect), ${s}check the git config file named by $GIT_CONFIG_GLOBAL; never disable TLS verification or remove the proxy/sslCAInfo entries there.` +
-      (state.ghShimDir && !h
+      `GitHub access for git${hasStandin ? " and gh" : ""} goes through a pre-configured session proxy (CA bundle: ${caBundlePath}) via per-session git config${hasStandin ? " and a gh PATH shim" : ""}; ${otherTrafficNote} If ${hasStandin ? "git or gh fail" : "git fails"} against github.com (TLS or HTTP errors, or a transfer cut off with connection reset / unexpected disconnect), ${readmeHint}check the git config file named by $GIT_CONFIG_GLOBAL; never disable TLS verification or remove the proxy/sslCAInfo entries there.` +
+      (state.ghShimDir && !hasStandin
         ? " `gh` in a Bash command is this machine's own GitHub CLI, with its own sign-in and network path."
         : "")
     );
   }
   let installedClis = (state.installedProxyPreconfiguredClis ?? []).filter(
-    (s) => !(state.ghStandin === true && s === "gh"),
+    (cli) => !(state.ghStandin === true && cli === "gh"),
   );
   return {
     caBundlePath,
-    hasReadme: e !== undefined,
+    hasReadme: readmePath !== undefined,
     installedClis,
   };
 }
@@ -1484,8 +1585,8 @@ var GIT_CONFIG_CONFLICT_PATTERNS = [
 function getGitProbeCwd() {
   let root = parse(tmpdir()).root;
   try {
-    let e = homedir();
-    if (e && statSync(e).isDirectory()) return e;
+    let homeDir = homedir();
+    if (homeDir && statSync(homeDir).isDirectory()) return homeDir;
     return root;
   } catch {
     return root;
@@ -1493,32 +1594,33 @@ function getGitProbeCwd() {
 }
 //@ chunk-awy329vy.js:84255-84538 placement
 async function readGlobalGitConfigKeys() {
-  let n = new Set();
+  let conflictKeys = new Set();
   let results = await Promise.all(
-    ["--global", "--system"].map((r) =>
-      execFileNoThrowWithCwd("git", ["config", r, "--list", "--name-only"], {
+    ["--global", "--system"].map((scopeFlag) =>
+      execFileNoThrowWithCwd("git", ["config", scopeFlag, "--list", "--name-only"], {
         timeout: 5000,
         preserveOutputOnError: true,
         cwd: getGitProbeCwd(),
       }),
     ),
   );
-  for (let r of results) {
-    if (r.code !== 0) continue;
-    for (let [o, s] of GIT_CONFIG_CONFLICT_PATTERNS) if (s.test(r.stdout)) n.add(o);
+  for (let result of results) {
+    if (result.code !== 0) continue;
+    for (let [configKey, pattern] of GIT_CONFIG_CONFLICT_PATTERNS)
+      if (pattern.test(result.stdout)) conflictKeys.add(configKey);
   }
-  return [...n];
+  return [...conflictKeys];
 }
 //@ chunk-awy329vy.js:84538-89559 placement
 /**
  * 生成写给模型/用户看的 agent 代理说明文档（本地代理地址、CA 位置、快速诊断步骤）。
  */
 function buildAgentProxyReadme(port, caBundlePath) {
-  let r = join(caBundlePath, "..");
-  let o = `http://127.0.0.1:${port}`;
+  let caDir = join(caBundlePath, "..");
+  let proxyUrl = `http://127.0.0.1:${port}`;
   return `# Claude Code agent proxy
 
-Outbound HTTPS from this session goes through a local proxy at ${o}
+Outbound HTTPS from this session goes through a local proxy at ${proxyUrl}
 (set via HTTPS_PROXY) which tunnels to a policy-enforcing egress proxy. TLS is
 re-terminated there, so every tool must trust the CA bundle at
 ${caBundlePath}. The standard CA environment variables, the system trust
@@ -1527,7 +1629,7 @@ browser NSS store, and gsutil's boto config are already set up.
 
 ## Quick diagnosis
 
-1. Run: curl -sS ${o}/__agentproxy/status
+1. Run: curl -sS ${proxyUrl}/__agentproxy/status
    It reports proxy state, which trust and git accommodations are active
    (javaTrustStorePath, toolTrustFailureCodes, gitSshRewrite,
    gitConfigConflicts), and the most recent proxy-side failures.
@@ -1554,12 +1656,12 @@ The failing tool is not reading the pre-set CA configuration. In order:
 - JVM tools (Maven, Gradle, plain Java): when a JDK is present,
   JAVA_TOOL_OPTIONS points JVMs at a truststore that holds the proxy CA: the
   JDK's own store if the system trust install already added the CA there,
-  otherwise ${r}/java-truststore.p12 (password "changeit"). Confirm
+  otherwise ${caDir}/java-truststore.p12 (password "changeit"). Confirm
   javaTrustStorePath is set in the status output before pointing a build at it
   (toolTrustFailureCodes explains why it is missing). If the image or the
   build sets its own trustStore, that one wins \u2014 import the proxy CA into it
   with
-  keytool -importcert -noprompt -alias ccr-agent-proxy -file ${r}/agent-proxy-ca.crt -keystore <their store>
+  keytool -importcert -noprompt -alias ccr-agent-proxy -file ${caDir}/agent-proxy-ca.crt -keystore <their store>
   or point the build at the ready-made one. Bazel reads the managed block in
   /etc/bazel.bazelrc rather than JAVA_TOOL_OPTIONS.
 
@@ -1643,29 +1745,35 @@ async function readTokenFile(path) {
 /**
  * 在常见路径中找系统 CA 包（/etc/ssl/certs/ca-certificates.crt 等），返回其内容。
  */
-async function findSystemCaBundle(n = SYSTEM_CA_BUNDLE_PATHS) {
-  for (let e of n)
+async function findSystemCaBundle(paths = SYSTEM_CA_BUNDLE_PATHS) {
+  for (let bundlePath of paths)
     try {
-      return await readFile(e, "utf8");
+      return await readFile(bundlePath, "utf8");
     } catch {}
   return "";
 }
 //@ chunk-awy329vy.js:89903-89918 placement
 var MAX_CA_BUNDLE_BYTES_2 = 1048576;
 //@ chunk-awy329vy.js:89918-90625 placement
-async function foldCustomerCaBundles(n, e) {
-  let r = new Set();
-  let o = [];
-  let s = n;
+async function foldCustomerCaBundles(systemBundle, systemBundlePath) {
+  let seenPaths = new Set();
+  let foldedCerts = [];
+  let combined = systemBundle;
   for (let caCertEnvVar of caCertEnvVars) {
     let trimmed = process.env[caCertEnvVar]?.trim();
-    if (!trimmed || trimmed === e || r.has(trimmed) || SYSTEM_CA_BUNDLE_PATHS.includes(trimmed)) continue;
-    r.add(trimmed);
-    let u;
+    if (
+      !trimmed ||
+      trimmed === systemBundlePath ||
+      seenPaths.has(trimmed) ||
+      SYSTEM_CA_BUNDLE_PATHS.includes(trimmed)
+    )
+      continue;
+    seenPaths.add(trimmed);
+    let content;
     try {
-      let w = await stat(trimmed);
-      if (!w.isFile() || w.size > MAX_CA_BUNDLE_BYTES_2) continue;
-      u = await readFile(trimmed, "utf8");
+      let stats = await stat(trimmed);
+      if (!stats.isFile() || stats.size > MAX_CA_BUNDLE_BYTES_2) continue;
+      content = await readFile(trimmed, "utf8");
     } catch (error) {
       if (!isENOENT(error))
         logForDebugging(
@@ -1676,29 +1784,29 @@ async function foldCustomerCaBundles(n, e) {
         );
       continue;
     }
-    let match = u.match(PEM_CERT_BLOCK_RE);
+    let match = content.match(PEM_CERT_BLOCK_RE);
     if (!match) continue;
-    let y = 0;
-    for (let w of match) {
-      if (s.includes(w)) continue;
-      o.push(w);
-      s += `
-${w}`;
-      y++;
+    let addedCount = 0;
+    for (let certBlock of match) {
+      if (combined.includes(certBlock)) continue;
+      foldedCerts.push(certBlock);
+      combined += `
+${certBlock}`;
+      addedCount++;
     }
-    if (y > 0)
+    if (addedCount > 0)
       logForDebugging(
-        `[agent-proxy] folded ${y} customer CA cert(s) from ${caCertEnvVar} into the relay bundle`,
+        `[agent-proxy] folded ${addedCount} customer CA cert(s) from ${caCertEnvVar} into the relay bundle`,
       );
   }
-  if (o.length === 0) return "";
+  if (foldedCerts.length === 0) return "";
   return (
     withoutBlockedCerts(
-      o.join(`
+      foldedCerts.join(`
 `),
       "agent proxy trust",
     ) ??
-    o.flatMap((h) => withoutBlockedCerts(h, "agent proxy trust") ?? []).join(`
+    foldedCerts.flatMap((certBlock) => withoutBlockedCerts(certBlock, "agent proxy trust") ?? []).join(`
 `)
   );
 }
@@ -1719,16 +1827,16 @@ var SYSTEM_TRUST_STORES = [
 ];
 var SYSTEM_TRUST_TIMEOUT_MS = 1e4;
 //@ chunk-awy329vy.js:90902-91211 placement
-function carryJavaTrustStore(n, e) {
-  if (e.javaTrustStorePath && e.javaTrustStoreType) {
-    n.javaTrustStorePath = e.javaTrustStorePath;
-    n.javaTrustStoreType = e.javaTrustStoreType;
+function carryJavaTrustStore(state, prevState) {
+  if (prevState.javaTrustStorePath && prevState.javaTrustStoreType) {
+    state.javaTrustStorePath = prevState.javaTrustStorePath;
+    state.javaTrustStoreType = prevState.javaTrustStoreType;
   } else if (
-    n.javaTrustStorePath === e.retiredJavaTrustStorePath ||
-    n.javaTrustStorePath === e.rejectedJdkStorePath
+    state.javaTrustStorePath === prevState.retiredJavaTrustStorePath ||
+    state.javaTrustStorePath === prevState.rejectedJdkStorePath
   ) {
-    n.javaTrustStorePath = undefined;
-    n.javaTrustStoreType = undefined;
+    state.javaTrustStorePath = undefined;
+    state.javaTrustStoreType = undefined;
   }
 }
 //@ chunk-awy329vy.js:91211-94075 placement
@@ -1736,83 +1844,84 @@ function carryJavaTrustStore(n, e) {
  * 安装/刷新系统 CA 信任（处理已有证书与 -2 链接、记录安装结果）。
  */
 async function installIntoSystemTrust(
-  n,
-  e,
+  caBundleText,
+  storeEntries,
   { systemCa, recordPath, timeoutMs = SYSTEM_TRUST_TIMEOUT_MS, caller },
 ) {
-  let l = await compareBundleWithFile(recordPath, n);
-  let u = systemStoreHasCa(systemCa, n) && l !== "different";
-  let p = () =>
-    writeFileAtomic(recordPath, n).catch((error) => {
+  let recordComparison = await compareBundleWithFile(recordPath, caBundleText);
+  let storeHasCa = systemStoreHasCa(systemCa, caBundleText) && recordComparison !== "different";
+  let recordInstall = () =>
+    writeFileAtomic(recordPath, caBundleText).catch((error) => {
       logForDebugging(`[agent-proxy] could not record the system trust install: ${errorMessage(error)}`);
     });
-  let y = {};
-  let w = firstPemCertAfterDifferent(n);
-  let T = firstCertificateLine(n);
-  let S = false;
-  for (let { dir, name, refresh, link, direct } of e)
+  let failureFields = {};
+  let secondCert = firstPemCertAfterDifferent(caBundleText);
+  let firstCertLine = firstCertificateLine(caBundleText);
+  let anyFailure = false;
+  for (let { dir, name, refresh, link, direct } of storeEntries)
     try {
-      let E = join(dir, name);
-      let A = link
+      let anchorPath = join(dir, name);
+      let secondAnchor = link
         ? {
             path: join(dir, name.replace(/\.crt$/, "-2.crt")),
             link: link.replace(/\.pem$/, "-2.pem"),
           }
         : undefined;
-      let M = A === undefined ? undefined : await readCaBundleFile(A.path);
-      let R = M === undefined || M.state === "missing";
-      let I = A !== undefined && w !== undefined && R;
-      let Y = u ? await readCaBundleFile(E) : undefined;
-      if (Y?.state === "read") {
-        let D = compareCaBundles(Y.text, n);
+      let secondAnchorRead =
+        secondAnchor === undefined ? undefined : await readCaBundleFile(secondAnchor.path);
+      let secondAnchorMissing = secondAnchorRead === undefined || secondAnchorRead.state === "missing";
+      let oldLayout = secondAnchor !== undefined && secondCert !== undefined && secondAnchorMissing;
+      let anchorRead = storeHasCa ? await readCaBundleFile(anchorPath) : undefined;
+      if (anchorRead?.state === "read") {
+        let comparison = compareCaBundles(anchorRead.text, caBundleText);
         if (
-          R
-            ? D === "same" && l === "same"
-            : D !== "different" &&
-              M?.state === "read" &&
-              compareCaBundles(M.text, firstCertificateLine(Y.text)) === "same"
+          secondAnchorMissing
+            ? comparison === "same" && recordComparison === "same"
+            : comparison !== "different" &&
+              secondAnchorRead?.state === "read" &&
+              compareCaBundles(secondAnchorRead.text, firstCertificateLine(anchorRead.text)) === "same"
         ) {
           logForDebugging(
-            `[agent-proxy] CA already in the system trust store${D === "swapped" ? ", its two certificates in the other order" : ""}; install skipped`,
+            `[agent-proxy] CA already in the system trust store${comparison === "swapped" ? ", its two certificates in the other order" : ""}; install skipped`,
           );
-          if (l === "swapped") await p();
+          if (recordComparison === "swapped") await recordInstall();
           logFeatureOk("agent_proxy_system_trust", {
             reused: true,
-            ...(I && {
+            ...(oldLayout && {
               old_layout: true,
             }),
-            ...(l === "swapped" && {
+            ...(recordComparison === "swapped" && {
               swapped: true,
             }),
           });
-          return S ? "failed" : "reused";
+          return anyFailure ? "failed" : "reused";
         }
       }
-      let X = false;
-      if (direct && link && R) {
-        let D = Date.now() + timeoutMs;
-        let F = false;
-        let V = await installSystemCaDirect(n, {
-          anchorPath: E,
+      let anchorPresent = false;
+      if (direct && link && secondAnchorMissing) {
+        let deadlineMs = Date.now() + timeoutMs;
+        let secondAttempt = false;
+        let attemptResult = await installSystemCaDirect(caBundleText, {
+          anchorPath,
           link,
           layout: direct,
           recordPath,
           timeoutMs,
         });
-        let javaStore = V.outcome === "installed" ? V.javaStore : undefined;
-        if (V.outcome === "installed" && w !== undefined && A) {
-          F = true;
-          V = await installSystemCaDirect(T, {
-            anchorPath: A.path,
-            link: A.link,
+        let javaStore = attemptResult.outcome === "installed" ? attemptResult.javaStore : undefined;
+        if (attemptResult.outcome === "installed" && secondCert !== undefined && secondAnchor) {
+          secondAttempt = true;
+          attemptResult = await installSystemCaDirect(firstCertLine, {
+            anchorPath: secondAnchor.path,
+            link: secondAnchor.link,
             layout: direct,
             recordPath,
-            timeoutMs: Math.max(1, D - Date.now()),
+            timeoutMs: Math.max(1, deadlineMs - Date.now()),
           });
         }
-        switch (V.outcome) {
+        switch (attemptResult.outcome) {
           case "installed":
-            await p();
+            await recordInstall();
             logForDebugging("[agent-proxy] CA installed to system trust directly");
             logFeatureOk("agent_proxy_system_trust", {
               reused: false,
@@ -1820,51 +1929,56 @@ async function installIntoSystemTrust(
               ...(javaStore && {
                 java_store: fromEnum(javaStore),
               }),
-              ...(F &&
-                V.javaStore && {
-                  second_anchor_java_store: fromEnum(V.javaStore),
+              ...(secondAttempt &&
+                attemptResult.javaStore && {
+                  second_anchor_java_store: fromEnum(attemptResult.javaStore),
                 }),
             });
-            return S ? "failed" : "installed";
+            return anyFailure ? "failed" : "installed";
           case "hook_incomplete":
             logFeatureSad("agent_proxy_system_trust", "hook_incomplete");
             return "failed";
           case "abandoned": {
-            let step = V.step;
-            y = {
+            let step = attemptResult.step;
+            failureFields = {
               direct_failed_step: fromEnum(step),
             };
             break;
           }
           case "not_attempted": {
-            let H = fromEnum(V.reason);
-            y = F
+            let skipReason = fromEnum(attemptResult.reason);
+            failureFields = secondAttempt
               ? {
-                  second_anchor_direct_skipped: H,
+                  second_anchor_direct_skipped: skipReason,
                 }
               : {
-                  direct_skipped: H,
+                  direct_skipped: skipReason,
                 };
-            X = !F && V.reason === "anchor_present";
+            anchorPresent = !secondAttempt && attemptResult.reason === "anchor_present";
             break;
           }
         }
       } else if (direct && link) {
-        y = {
+        failureFields = {
           direct_skipped: fromEnum("anchor_present"),
         };
-        X = true;
+        anchorPresent = true;
       }
-      if (X) {
-        let D = Y ?? (await readCaBundleFile(E));
-        y = {
-          ...y,
-          record_match: fromEnum(describeReadState(await readCaBundleFile(recordPath), n)),
-          store_has_ca: systemStoreHasCa(systemCa, n),
-          anchor_match: fromEnum(describeReadState(D, n)),
-          ...(M && {
+      if (anchorPresent) {
+        let anchorReadForFields = anchorRead ?? (await readCaBundleFile(anchorPath));
+        failureFields = {
+          ...failureFields,
+          record_match: fromEnum(describeReadState(await readCaBundleFile(recordPath), caBundleText)),
+          store_has_ca: systemStoreHasCa(systemCa, caBundleText),
+          anchor_match: fromEnum(describeReadState(anchorReadForFields, caBundleText)),
+          ...(secondAnchorRead && {
             second_anchor_match: fromEnum(
-              describeReadState(M, D.state === "read" ? firstCertificateLine(D.text) : T),
+              describeReadState(
+                secondAnchorRead,
+                anchorReadForFields.state === "read"
+                  ? firstCertificateLine(anchorReadForFields.text)
+                  : firstCertLine,
+              ),
             ),
           }),
           ...(caller && {
@@ -1872,11 +1986,11 @@ async function installIntoSystemTrust(
           }),
         };
       }
-      await writeFile(E, n, "utf8");
+      await writeFile(anchorPath, caBundleText, "utf8");
       await unlink(recordPath).catch(() => {});
-      if (A && (w !== undefined || !R)) {
-        await writeFile(A.path, T, "utf8");
-        await unlink(A.link).catch(() => {});
+      if (secondAnchor && (secondCert !== undefined || !secondAnchorMissing)) {
+        await writeFile(secondAnchor.path, firstCertLine, "utf8");
+        await unlink(secondAnchor.link).catch(() => {});
       }
       if (link) await unlink(link).catch(() => {});
       let promise = await new Promise((resolve) => {
@@ -1889,26 +2003,26 @@ async function installIntoSystemTrust(
             windowsHide: true,
             ...cgroupSpawnOptions("helper"),
           },
-          (F) => resolve(F ? (isENOENT(F) ? 127 : 1) : 0),
+          (spawnError) => resolve(spawnError ? (isENOENT(spawnError) ? 127 : 1) : 0),
         );
       });
       if (promise === 0) {
-        await p();
+        await recordInstall();
         logForDebugging(`[agent-proxy] CA installed to system trust via ${refresh[0]}`);
         logFeatureOk("agent_proxy_system_trust", {
           reused: false,
           method: fromEnum("refresh"),
-          ...y,
+          ...failureFields,
         });
-        return S ? "failed" : "installed";
+        return anyFailure ? "failed" : "installed";
       }
-      S = true;
+      anyFailure = true;
       logForDebugging(`[agent-proxy] ${refresh[0]} exited ${promise}; falling back to env-var trust`, {
         level: "warn",
       });
     } catch (error) {
       if (isENOENT(error)) continue;
-      S = true;
+      anyFailure = true;
       logForDebugging(
         `[agent-proxy] system trust install via ${dir} failed: ${error instanceof Error ? error.message : String(error)}`,
         {
@@ -1916,23 +2030,23 @@ async function installIntoSystemTrust(
         },
       );
     }
-  if (e.length > 0) logFeatureSad("agent_proxy_system_trust", "unavailable", y);
-  return S ? "failed" : "no_store";
+  if (storeEntries.length > 0) logFeatureSad("agent_proxy_system_trust", "unavailable", failureFields);
+  return anyFailure ? "failed" : "no_store";
 }
 //@ chunk-awy329vy.js:94075-94180 placement
-function describeReadState(n, e) {
-  if (n.state === "read") return compareCaBundles(n.text, e);
-  return n.state === "failed" ? "read_failed" : n.state;
+function describeReadState(readResult, referenceText) {
+  if (readResult.state === "read") return compareCaBundles(readResult.text, referenceText);
+  return readResult.state === "failed" ? "read_failed" : readResult.state;
 }
 //@ chunk-awy329vy.js:94180-94244 placement
-function firstCertificateLine(text) {
-  return `${firstPemCertAfterDifferent(text) ?? text.match(PEM_CERT_BLOCK_RE)?.[0] ?? text.trimEnd()}
+function firstCertificateLine(certificateText) {
+  return `${firstPemCertAfterDifferent(certificateText) ?? certificateText.match(PEM_CERT_BLOCK_RE)?.[0] ?? certificateText.trimEnd()}
 `;
 }
 //@ chunk-awy329vy.js:94244-94299 placement
-function isParsableCertificate(n) {
+function isParsableCertificate(pem) {
   try {
-    new X509Certificate(n);
+    new X509Certificate(pem);
     return true;
   } catch {
     return false;
@@ -1951,13 +2065,13 @@ var CA_BUNDLE_PROBLEM_MESSAGES = {
 /**
  * 校验 CA 响应：大小上限、至少一张可解析证书、无多余 PEM 标记。
  */
-function validateCaBundle(n) {
-  if (n.length > MAX_CA_RESPONSE_BYTES)
+function validateCaBundle(bundleText) {
+  if (bundleText.length > MAX_CA_RESPONSE_BYTES)
     return {
       ok: false,
       problem: "oversized",
     };
-  let match = n.match(PEM_CERT_BLOCK_RE);
+  let match = bundleText.match(PEM_CERT_BLOCK_RE);
   if (!match)
     return {
       ok: false,
@@ -1968,34 +2082,34 @@ function validateCaBundle(n) {
       ok: false,
       problem: "unparseable_certificate",
     };
-  if (n.replace(PEM_CERT_BLOCK_RE, "").includes("-----BEGIN"))
+  if (bundleText.replace(PEM_CERT_BLOCK_RE, "").includes("-----BEGIN"))
     return {
       ok: false,
       problem: "stray_marker",
     };
   return {
     ok: true,
-    bundle: n,
+    bundle: bundleText,
   };
 }
 //@ chunk-awy329vy.js:94937-95018 placement
 /**
  * 系统信任库是否已包含给定 PEM 里的全部证书。
  */
-function systemStoreHasCa(systemCa, e) {
-  let match = e.match(PEM_CERT_BLOCK_RE);
-  return match !== null && match.every((o) => systemCa.includes(o));
+function systemStoreHasCa(systemCa, caText) {
+  let match = caText.match(PEM_CERT_BLOCK_RE);
+  return match !== null && match.every((certBlock) => systemCa.includes(certBlock));
 }
 //@ chunk-awy329vy.js:95018-95209 fingerprint = downloadCaBundle (0.321)
-function reportCaFailure(n, caSource) {
-  if (n.outcome === "retry") return n;
-  logForDebugging(`[agent-proxy] ${n.detail}; proxy disabled`, {
+function reportCaFailure(result, caSource) {
+  if (result.outcome === "retry") return result;
+  logForDebugging(`[agent-proxy] ${result.detail}; proxy disabled`, {
     level: "warn",
   });
-  logFeatureBad("agent_proxy_init", `agent_proxy_init_ca_${n.code}`, {
+  logFeatureBad("agent_proxy_init", `agent_proxy_init_ca_${result.code}`, {
     ca_source: fromEnum(caSource),
   });
-  return n;
+  return result;
 }
 //@ chunk-awy329vy.js:95209-95222 placement
 /**
@@ -2003,8 +2117,8 @@ function reportCaFailure(n, caSource) {
  */
 var MAX_CA_FILE_READ_BYTES = 65536;
 //@ chunk-awy329vy.js:95222-95547 placement
-function decodeCaCertEnv(n) {
-  let trimmed = n.trim();
+function decodeCaCertEnv(value) {
+  let trimmed = value.trim();
   if (trimmed === "")
     return {
       ok: false,
@@ -2056,79 +2170,84 @@ var NSS_OR_JAVA_FAILURE_RE = /^(nss_|java_truststore_)/;
 /**
  * 代理 CA 文件与给定内容是否一致。
  */
-async function matchesAgentProxyCa(caBundlePath, e) {
-  return (await compareBundleWithFile(join(caBundlePath, "..", "agent-proxy-ca.crt"), e)) !== "different";
+async function matchesAgentProxyCa(caBundlePath, caText) {
+  return (
+    (await compareBundleWithFile(join(caBundlePath, "..", "agent-proxy-ca.crt"), caText)) !== "different"
+  );
 }
 //@ chunk-awy329vy.js:95747-95809 placement
 /**
  * 安装失败或有信任库未生效时返回 true。
  */
-function hasTrustStoreFailure(n, e) {
-  return n === "failed" || e.some((r) => NSS_OR_JAVA_FAILURE_RE.test(r));
+function hasTrustStoreFailure(systemTrustOutcome, failureCodes) {
+  return (
+    systemTrustOutcome === "failed" ||
+    failureCodes.some((failureCode) => NSS_OR_JAVA_FAILURE_RE.test(failureCode))
+  );
 }
 //@ chunk-awy329vy.js:95809-95966 placement
-function installCaIntoSystemTrust(n, e, recordPath, caller, s, systemCa = n.systemCa) {
-  return installIntoSystemTrust(e, n.opts?.systemTrustTargets ?? SYSTEM_TRUST_STORES, {
+function installCaIntoSystemTrust(plan, caText, recordPath, caller, onSettled, systemCa = plan.systemCa) {
+  return installIntoSystemTrust(caText, plan.opts?.systemTrustTargets ?? SYSTEM_TRUST_STORES, {
     systemCa,
     recordPath,
     caller,
   })
     .catch(() => "failed")
-    .then((l) => {
-      s?.();
-      return l;
+    .then((outcome) => {
+      onSettled?.();
+      return outcome;
     });
 }
 //@ chunk-awy329vy.js:95966-98306 placement
 async function reconcileAgentProxyCa(
-  n,
-  e,
-  r,
+  plan,
+  runtimeState,
+  previousCa,
   { systemTrust, toolTrust, installDeferred, onInstallSettled, embeddedEndpoint, relayPort, trust },
 ) {
-  let { runtime, baseUrl, localCa, caBundlePath, governedGitTools, opts } = n;
+  let { runtime, baseUrl, localCa, caBundlePath, governedGitTools, opts } = plan;
   let recordPath = systemTrustCaPath(caBundlePath);
-  let P = installDeferred;
-  let E = (L) => {
-    let caller = P ? "deferred" : "reconcile";
-    P = false;
-    let F = installCaIntoSystemTrust(n, L, recordPath, caller, onInstallSettled);
-    if (trust) trust.systemTrust = F;
-    return F;
+  let deferredInstall = installDeferred;
+  let runInstall = (caText) => {
+    let caller = deferredInstall ? "deferred" : "reconcile";
+    deferredInstall = false;
+    let installPromise = installCaIntoSystemTrust(plan, caText, recordPath, caller, onInstallSettled);
+    if (trust) trust.systemTrust = installPromise;
+    return installPromise;
   };
   let now = Date.now();
-  let M = false;
-  let R;
+  let retryLogged = false;
+  let fetchResult;
   for (let idx = 1; ; idx++) {
     if (idx > 1) {
-      let D = R?.outcome === "retry" ? R : undefined;
+      let retryableResult = fetchResult?.outcome === "retry" ? fetchResult : undefined;
       await sleep(
-        opts?.retryDelayMs?.(idx) ?? backgroundRetryDelayMs(idx, D?.retryAfter ?? null),
+        opts?.retryDelayMs?.(idx) ?? backgroundRetryDelayMs(idx, retryableResult?.retryAfter ?? null),
         undefined,
         {
           unref: true,
         },
       );
     }
-    if (runtime.state !== e) return;
+    if (runtime.state !== runtimeState) return;
     if (isEssentialTrafficOnly()) {
-      if (P) await E(r);
+      if (deferredInstall) await runInstall(previousCa);
       return;
     }
-    R = await fetchCcrCaCert(baseUrl, {
+    fetchResult = await fetchCcrCaCert(baseUrl, {
       budgetMs: opts?.caFetchBudgetMs ?? 15000,
       tries: 1,
     });
-    if (R.outcome !== "retry") break;
+    if (fetchResult.outcome !== "retry") break;
     onInstallSettled();
-    if (P && idx >= CA_INSTALL_MAX_ATTEMPTS) {
-      if (runtime.state !== e) return;
-      await E(r);
+    if (deferredInstall && idx >= CA_INSTALL_MAX_ATTEMPTS) {
+      if (runtime.state !== runtimeState) return;
+      await runInstall(previousCa);
     }
-    if (!M && Date.now() - now >= (opts?.retryBadAfterMs ?? RETRY_BAD_AFTER_MS)) {
-      M = true;
+    if (!retryLogged && Date.now() - now >= (opts?.retryBadAfterMs ?? RETRY_BAD_AFTER_MS)) {
+      retryLogged = true;
       logForDebugging(
-        `[agent-proxy] CA reconcile: ${R.detail}; still failing after ${idx} attempts, retrying anyway`,
+        `[agent-proxy] CA reconcile: ${fetchResult.detail}; still failing after ${idx} attempts, retrying anyway`,
         {
           level: "warn",
         },
@@ -2136,72 +2255,79 @@ async function reconcileAgentProxyCa(
       logFeatureSad("agent_proxy_ca_reconcile", "fetch_still_failing");
     }
   }
-  if (runtime.state !== e || R === undefined) return;
-  if (R.outcome !== "ok") {
-    logForDebugging(`[agent-proxy] CA reconcile: ${R.detail}; the bundle keeps the environment's CA`, {
-      level: "warn",
-    });
+  if (runtime.state !== runtimeState || fetchResult === undefined) return;
+  if (fetchResult.outcome !== "ok") {
+    logForDebugging(
+      `[agent-proxy] CA reconcile: ${fetchResult.detail}; the bundle keeps the environment's CA`,
+      {
+        level: "warn",
+      },
+    );
     logFeatureSad("agent_proxy_ca_reconcile", "fetch_http_error");
-    if (P) await E(r);
+    if (deferredInstall) await runInstall(previousCa);
     return;
   }
-  let I = compareCaBundles(R.ccrCa, r);
-  if (I === "same") {
+  let comparison = compareCaBundles(fetchResult.ccrCa, previousCa);
+  if (comparison === "same") {
     logFeatureOk("agent_proxy_ca_reconcile", {
       changed: false,
     });
-    if (P) await E(r);
+    if (deferredInstall) await runInstall(previousCa);
     return;
   }
-  let Y = await writeCaBundle(localCa, R.ccrCa, caBundlePath);
-  if (Y.outcome !== "ok") {
-    logForDebugging(`[agent-proxy] CA reconcile: ${Y.detail}; the bundle keeps the environment's CA`, {
-      level: "warn",
-    });
+  let writeResult = await writeCaBundle(localCa, fetchResult.ccrCa, caBundlePath);
+  if (writeResult.outcome !== "ok") {
+    logForDebugging(
+      `[agent-proxy] CA reconcile: ${writeResult.detail}; the bundle keeps the environment's CA`,
+      {
+        level: "warn",
+      },
+    );
     logFeatureSad("agent_proxy_ca_reconcile", "write_failed");
-    if (P && runtime.state === e) await E(R.ccrCa);
+    if (deferredInstall && runtime.state === runtimeState) await runInstall(fetchResult.ccrCa);
     return;
   }
   if (trust) {
-    trust.ccrCa = R.ccrCa;
+    trust.ccrCa = fetchResult.ccrCa;
     trust.systemTrust = undefined;
     trust.installIncomplete = true;
   }
-  if (runtime.state !== e) return;
+  if (runtime.state !== runtimeState) return;
   logForDebugging(
-    `[agent-proxy] CA reconcile: the served CA differs from the environment${I === "swapped" ? " (the same two certificates, in the other order)" : ""}; bundle rewritten`,
+    `[agent-proxy] CA reconcile: the served CA differs from the environment${comparison === "swapped" ? " (the same two certificates, in the other order)" : ""}; bundle rewritten`,
   );
   logFeatureOk("agent_proxy_ca_reconcile", {
     changed: true,
-    ...(I === "swapped" && {
+    ...(comparison === "swapped" && {
       swapped: true,
     }),
   });
   if (embeddedEndpoint)
     setAgentProxyEndpoint({
       proxyUrl: loopbackProxyUrl(relayPort),
-      gatewayCa: R.ccrCa,
+      gatewayCa: fetchResult.ccrCa,
     });
   if (governedGitTools) return;
   await systemTrust;
-  if (runtime.state !== e) return;
-  let X = E(R.ccrCa);
-  await X;
-  if (opts?.toolTrust === false || runtime.state !== e) return;
+  if (runtime.state !== runtimeState) return;
+  let systemTrustResult = runInstall(fetchResult.ccrCa);
+  await systemTrustResult;
+  if (opts?.toolTrust === false || runtime.state !== runtimeState) return;
   await toolTrust;
-  if (runtime.state !== e) return;
+  if (runtime.state !== runtimeState) return;
   await configureToolTrust({
-    ccrCa: R.ccrCa,
+    ccrCa: fetchResult.ccrCa,
     caBundlePath,
-    hasSystemCa: e.hasSystemCa ?? false,
+    hasSystemCa: runtimeState.hasSystemCa ?? false,
     stateDir: join(caBundlePath, ".."),
-    systemTrust: X,
+    systemTrust: systemTrustResult,
     ...(opts?.toolTrust ?? {}),
   })
-    .then((L) => {
-      if (runtime.state !== e) return;
-      carryJavaTrustStore(e, L);
-      e.toolTrustFailureCodes = L.failureCodes.length > 0 ? L.failureCodes : undefined;
+    .then((toolTrustResult) => {
+      if (runtime.state !== runtimeState) return;
+      carryJavaTrustStore(runtimeState, toolTrustResult);
+      runtimeState.toolTrustFailureCodes =
+        toolTrustResult.failureCodes.length > 0 ? toolTrustResult.failureCodes : undefined;
     })
     .catch((error) => {
       logForDebugging(`[agent-proxy] CA reconcile: tool trust rebuild failed: ${errorMessage(error)}`, {
@@ -2211,93 +2337,104 @@ async function reconcileAgentProxyCa(
     });
 }
 //@ chunk-awy329vy.js:98306-99268 placement
-function rebuildToolTrustOnCaChange(n, e, r, ccrCa) {
-  let { runtime, caBundlePath, opts } = n;
+function rebuildToolTrustOnCaChange(plan, runtimeState, trust, caText) {
+  let { runtime, caBundlePath, opts } = plan;
   let recordPath = systemTrustCaPath(caBundlePath);
-  let { systemTrust, toolTrust } = r;
-  let w = [];
-  let T = false;
-  let S = (async () => {
+  let { systemTrust, toolTrust } = trust;
+  let failureCodes = [];
+  let toolTrustFailed = false;
+  let systemTrustPromise = (async () => {
     await systemTrust;
-    if (runtime.state !== e) return;
+    if (runtime.state !== runtimeState) return;
     let systemCa = opts?.systemCaPath
       ? await readFile(opts.systemCaPath, "utf8").catch(() => "")
       : await findSystemCaBundle();
-    let v = await systemTrust;
-    if (v === "failed" || v === undefined) await unlink(recordPath).catch(() => {});
-    return installCaIntoSystemTrust(n, ccrCa, recordPath, "watch", undefined, systemCa);
+    let systemTrustOutcome = await systemTrust;
+    if (systemTrustOutcome === "failed" || systemTrustOutcome === undefined)
+      await unlink(recordPath).catch(() => {});
+    return installCaIntoSystemTrust(plan, caText, recordPath, "watch", undefined, systemCa);
   })();
-  let b = (async () => {
-    await S;
-    if (opts?.toolTrust === false || runtime.state !== e) return;
+  let toolTrustPromise = (async () => {
+    await systemTrustPromise;
+    if (opts?.toolTrust === false || runtime.state !== runtimeState) return;
     await toolTrust;
-    if (runtime.state !== e) return;
+    if (runtime.state !== runtimeState) return;
     await configureToolTrust({
-      ccrCa,
+      ccrCa: caText,
       caBundlePath,
-      hasSystemCa: e.hasSystemCa ?? false,
+      hasSystemCa: runtimeState.hasSystemCa ?? false,
       stateDir: join(caBundlePath, ".."),
-      systemTrust: S,
+      systemTrust: systemTrustPromise,
       ...(opts?.toolTrust ?? {}),
     })
-      .then((C) => {
-        if (runtime.state !== e) return;
-        carryJavaTrustStore(e, C);
-        e.toolTrustFailureCodes = C.failureCodes.length > 0 ? C.failureCodes : undefined;
-        w = C.failureCodes;
+      .then((toolTrustResult) => {
+        if (runtime.state !== runtimeState) return;
+        carryJavaTrustStore(runtimeState, toolTrustResult);
+        runtimeState.toolTrustFailureCodes =
+          toolTrustResult.failureCodes.length > 0 ? toolTrustResult.failureCodes : undefined;
+        failureCodes = toolTrustResult.failureCodes;
       })
       .catch((error) => {
         logForDebugging(`[agent-proxy] CA watch: tool trust rebuild failed: ${errorMessage(error)}`, {
           level: "warn",
         });
-        T = true;
+        toolTrustFailed = true;
       });
   })().then(async () => {
-    if (runtime.state !== e) return;
-    let C = opts?.toolTrust === false || (await matchesAgentProxyCa(caBundlePath, ccrCa));
-    let installIncomplete = T || !C || hasTrustStoreFailure(await S, w);
-    if (runtime.state === e) r.installIncomplete = installIncomplete;
+    if (runtime.state !== runtimeState) return;
+    let caMatches = opts?.toolTrust === false || (await matchesAgentProxyCa(caBundlePath, caText));
+    let installIncomplete =
+      toolTrustFailed || !caMatches || hasTrustStoreFailure(await systemTrustPromise, failureCodes);
+    if (runtime.state === runtimeState) trust.installIncomplete = installIncomplete;
   });
-  r.ccrCa = ccrCa;
-  r.systemTrust = S;
-  r.toolTrust = b;
-  return b;
+  trust.ccrCa = caText;
+  trust.systemTrust = systemTrustPromise;
+  trust.toolTrust = toolTrustPromise;
+  return toolTrustPromise;
 }
 //@ chunk-awy329vy.js:99268-100753 placement
-async function watchAgentProxyCa(n, e, r, { intervalMs, afterStart, embeddedEndpoint, relayPort }) {
-  let { runtime, baseUrl, localCa, caBundlePath, opts } = n;
+async function watchAgentProxyCa(
+  plan,
+  runtimeState,
+  trust,
+  { intervalMs, afterStart, embeddedEndpoint, relayPort },
+) {
+  let { runtime, baseUrl, localCa, caBundlePath, opts } = plan;
   await afterStart;
-  let S = false;
-  let x = (detail, C) => {
+  let watchFailureLogged = false;
+  let reportWatchFailure = (detail, failureCode) => {
     logForDebugging(`[agent-proxy] CA watch: ${detail}; checking again later`);
-    if (!S) {
-      S = true;
-      logFeatureSad("agent_proxy_ca_watch", C);
+    if (!watchFailureLogged) {
+      watchFailureLogged = true;
+      logFeatureSad("agent_proxy_ca_watch", failureCode);
     }
   };
   for (;;) {
     await sleep(intervalMs, undefined, {
       unref: true,
     });
-    if (runtime.state !== e || isCleanupStarted() || isEssentialTrafficOnly()) return;
+    if (runtime.state !== runtimeState || isCleanupStarted() || isEssentialTrafficOnly()) return;
     let ccrCaCert = await fetchCcrCaCert(baseUrl, {
       budgetMs: opts?.caFetchBudgetMs ?? 15000,
       tries: 1,
     });
-    if (runtime.state !== e) return;
+    if (runtime.state !== runtimeState) return;
     if (ccrCaCert.outcome !== "ok") {
-      x(ccrCaCert.detail, ccrCaCert.outcome === "retry" ? "fetch_failed" : "fetch_http_error");
+      reportWatchFailure(
+        ccrCaCert.detail,
+        ccrCaCert.outcome === "retry" ? "fetch_failed" : "fetch_http_error",
+      );
       continue;
     }
     if (!parseCaBundle(ccrCaCert.ccrCa).ok) {
-      x("the served CA does not parse", "unparsable");
+      reportWatchFailure("the served CA does not parse", "unparsable");
       continue;
     }
-    let C = compareCaBundles(ccrCaCert.ccrCa, r.ccrCa);
-    if (C === "same") {
-      S = false;
-      if (!r.installIncomplete) continue;
-      if (r.installRetries >= CA_INSTALL_RETRIES) {
+    let comparison = compareCaBundles(ccrCaCert.ccrCa, trust.ccrCa);
+    if (comparison === "same") {
+      watchFailureLogged = false;
+      if (!trust.installIncomplete) continue;
+      if (trust.installRetries >= CA_INSTALL_RETRIES) {
         logForDebugging(
           `[agent-proxy] CA watch: a trust store did not take the CA after ${CA_INSTALL_RETRIES} more tries; leaving it until the CA changes`,
           {
@@ -2305,28 +2442,28 @@ async function watchAgentProxyCa(n, e, r, { intervalMs, afterStart, embeddedEndp
           },
         );
         logFeatureSad("agent_proxy_ca_watch", "install_incomplete");
-        r.installIncomplete = false;
+        trust.installIncomplete = false;
         continue;
       }
-      r.installRetries++;
+      trust.installRetries++;
       logForDebugging("[agent-proxy] CA watch: trust stores refreshing again for the CA the bundle holds");
-      await rebuildToolTrustOnCaChange(n, e, r, ccrCaCert.ccrCa);
+      await rebuildToolTrustOnCaChange(plan, runtimeState, trust, ccrCaCert.ccrCa);
       continue;
     }
-    let v = await writeCaBundle(localCa, ccrCaCert.ccrCa, caBundlePath);
-    if (v.outcome !== "ok") {
-      x(v.detail, "write_failed");
+    let writeResult = await writeCaBundle(localCa, ccrCaCert.ccrCa, caBundlePath);
+    if (writeResult.outcome !== "ok") {
+      reportWatchFailure(writeResult.detail, "write_failed");
       continue;
     }
-    S = false;
-    r.installRetries = 0;
-    if (runtime.state !== e) return;
+    watchFailureLogged = false;
+    trust.installRetries = 0;
+    if (runtime.state !== runtimeState) return;
     logForDebugging(
-      `[agent-proxy] CA watch: the served CA changed${C === "swapped" ? " (the same two certificates, in the other order)" : ""}; bundle rewritten, trust stores refreshing`,
+      `[agent-proxy] CA watch: the served CA changed${comparison === "swapped" ? " (the same two certificates, in the other order)" : ""}; bundle rewritten, trust stores refreshing`,
     );
     logFeatureOk("agent_proxy_ca_watch", {
       changed: true,
-      ...(C === "swapped" && {
+      ...(comparison === "swapped" && {
         swapped: true,
       }),
     });
@@ -2335,7 +2472,7 @@ async function watchAgentProxyCa(n, e, r, { intervalMs, afterStart, embeddedEndp
         proxyUrl: loopbackProxyUrl(relayPort),
         gatewayCa: ccrCaCert.ccrCa,
       });
-    await rebuildToolTrustOnCaChange(n, e, r, ccrCaCert.ccrCa);
+    await rebuildToolTrustOnCaChange(plan, runtimeState, trust, ccrCaCert.ccrCa);
   }
 }
 //@ chunk-awy329vy.js:100753-101403 placement
@@ -2414,14 +2551,14 @@ async function writeCaBundle(localCa, ccrCa, caBundlePath) {
   };
 }
 //@ chunk-awy329vy.js:101670-101961 placement
-async function writeAwsConfigOnce(n) {
+async function writeAwsConfigOnce(configPath) {
   try {
-    await mkdir(join(n, ".."), {
+    await mkdir(join(configPath, ".."), {
       recursive: true,
       mode: 448,
     });
     await writeFile(
-      n,
+      configPath,
       `[default]
 s3 =
   payload_signing_enabled = false
@@ -2452,83 +2589,34 @@ function loopbackProxyUrl(port) {
 /**
  * 用换行连接两段文本。
  */
-function joinWithNewline(n, e) {
+function joinWithNewline(left, right) {
   return (
-    n +
+    left +
     `
 ` +
-    e
+    right
   );
 }
-//@ chunk-1k6d6j2b.js:263-2319 placement
-/**
- * 生成 gh 包装脚本片段：已有用户令牌、非 github.com 主机或仓库/origin 指向其他主机时直接执行原 gh，否则继续走代理。
- */
-function buildGhGuardScript(ghPath, allowInjectedToken = false) {
-  return (
-    (!allowInjectedToken
-      ? `if [ -n "\${GH_TOKEN:-}\${GITHUB_TOKEN:-}\${GH_ENTERPRISE_TOKEN:-}\${GITHUB_ENTERPRISE_TOKEN:-}" ]; then
-  exec '${ghPath}' "$@"
-fi
-`
-      : `case "\${GH_TOKEN:-}" in ''|'${PROXY_INJECTED_MARKER}') ;; *) exec '${ghPath}' "$@" ;; esac
-case "\${GITHUB_TOKEN:-}" in ''|'${PROXY_INJECTED_MARKER}') ;; *) exec '${ghPath}' "$@" ;; esac
-if [ -n "\${GH_ENTERPRISE_TOKEN:-}\${GITHUB_ENTERPRISE_TOKEN:-}" ]; then
-  exec '${ghPath}' "$@"
-fi
-`) +
-    `host="\${GH_HOST:-}"
-repo="\${GH_REPO:-}"
-prev=''
-for a in "$@"; do
-  if [ "$prev" = '--hostname' ]; then host="$a"; prev=''; continue; fi
-  if [ "$prev" = '--repo' ]; then repo="$a"; prev=''; continue; fi
-  case "$a" in
-    --hostname) prev='--hostname' ;;
-    --hostname=*) host="\${a#--hostname=}" ;;
-    -R|--repo) prev='--repo' ;;
-    --repo=*) repo="\${a#--repo=}" ;;
-    -R=*) repo="\${a#-R=}" ;;
-    -R?*) repo="\${a#-R}" ;;
-  esac
-done
-` +
-    `# Hostnames are case-insensitive \u2014 normalize before every compare.
-` +
-    `host="$(printf %s "$host" | tr '[:upper:]' '[:lower:]')"
-if [ -n "$host" ] && [ "$host" != '${GITHUB_HOST}' ]; then
-  exec '${ghPath}' "$@"
-fi
-# A -R/--repo/GH_REPO [HOST/]OWNER/REPO (or URL) carries its own host
-# and overrides the checkout. Otherwise repo-scoped commands resolve
-` +
-    `# their target from the checkout remote, not GH_HOST \u2014 treat a
-` +
-    `# non-github.com origin as a GHE signal. An EXPLICIT github.com host
-# above skips the origin probe: it must not be kicked off the relay
-# by the checkout heuristic.
-rhost=''
-if [ -n "$repo" ]; then
-  case "$repo" in
-    *://*) rhost="\${repo#*://}"; rhost="\${rhost%%/*}"; rhost="\${rhost##*@}"; rhost="\${rhost%%:*}" ;;
-    */*/*) rhost="\${repo%%/*}" ;;
-  esac
-elif [ -z "$host" ]; then
-  origin="$(git config --get remote.origin.url 2>/dev/null || true)"
-  case "$origin" in
-    *://*) rhost="\${origin#*://}"; rhost="\${rhost%%/*}"; rhost="\${rhost##*@}"; rhost="\${rhost%%:*}" ;;
-    *@*:*) rhost="\${origin#*@}"; rhost="\${rhost%%:*}" ;;
-  esac
-fi
-rhost="$(printf %s "$rhost" | tr '[:upper:]' '[:lower:]')"
-if [ -n "$rhost" ] && [ "$rhost" != '${GITHUB_HOST}' ]; then
-  exec '${ghPath}' "$@"
-fi
-`
-  );
-}
-//@ chunk-hm0ce8vc.js:54310-54413 fingerprint = SYSTEM_CA_BUNDLE (0.658)
-var SYSTEM_CA_BUNDLE = ["/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt"];
-var MAX_SYSTEM_CA_BYTES = 1048576;
-var MAX_CA_TOTAL_BYTES = 8388608;
-export { SYSTEM_CA_BUNDLE, MAX_SYSTEM_CA_BYTES, MAX_CA_TOTAL_BYTES, PLACEHOLDER_CREDENTIAL_KEYS };
+export {
+  SYSTEM_CA_BUNDLE,
+  MAX_SYSTEM_CA_BYTES,
+  MAX_CA_TOTAL_BYTES,
+  PLACEHOLDER_CREDENTIAL_KEYS,
+  NO_PROXY_ANT_ONLY,
+  NO_PROXY_COMMON,
+  NO_PROXY_EMBEDDED,
+  NO_PROXY_LOCAL_ONLY,
+  NO_PROXY_SELECTIVE,
+  SESSION_TOKEN_PATH,
+  agentProxies,
+  backgroundRetryDelayMs,
+  decodeCaCertEnv,
+  findSystemCaBundle,
+  getAgentProxyEnv,
+  getGhStandinDir,
+  getRunningRelayForGit,
+  initAgentProxy,
+  installIntoSystemTrust,
+  systemStoreHasCa,
+  validateCaBundle,
+};

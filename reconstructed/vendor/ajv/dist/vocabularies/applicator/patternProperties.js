@@ -5,13 +5,13 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_code_2 } from "../code.js";
 import { require_codegen_2 } from "../../compile/codegen/index.js";
 import { require_util_2 } from "../../compile/util.js";
 
 //@ chunk-s82q9s4x.js:101484-102646 cjs-fingerprint
-var require_patternProperties = x(function (cjsExports) {
+var require_patternProperties = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

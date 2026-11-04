@@ -47,47 +47,49 @@ function isMonitorPersistentAllowed() {
   return isDiskless() || getFeatureValue_SESSION_PINNED("tengu_breezy_crescent", true);
 }
 //@ chunk-yt6b774j.js:1171-1226 placement
-function formatMinutes(e) {
-  return `${Math.round(e / 60000)} minutes`;
+function formatMinutes(ms) {
+  return `${Math.round(ms / 60000)} minutes`;
 }
 //@ chunk-yt6b774j.js:1226-1467 placement
 /**
  * 按会话类型钳制 Monitor 的 timeout_ms 并决定是否允许 persistent。
  */
-function clampMonitorTimeout(e, t) {
-  if (t)
+function clampMonitorTimeout(input, bounded) {
+  if (bounded)
     return {
-      timeout_ms: Math.min(e.timeout_ms, monitorMaxTimeoutMs()),
+      timeout_ms: Math.min(input.timeout_ms, monitorMaxTimeoutMs()),
       persistent: false,
     };
-  let o = e.persistent === true;
+  let persistent = input.persistent === true;
   if (!env.CLAUDE_CODE_REMOTE)
     return {
-      timeout_ms: e.timeout_ms,
-      persistent: o,
+      timeout_ms: input.timeout_ms,
+      persistent,
     };
   return {
-    timeout_ms: o ? MONITOR_DEFAULT_MAX_TIMEOUT_MS : Math.min(e.timeout_ms, MONITOR_DEFAULT_MAX_TIMEOUT_MS),
+    timeout_ms: persistent
+      ? MONITOR_DEFAULT_MAX_TIMEOUT_MS
+      : Math.min(input.timeout_ms, MONITOR_DEFAULT_MAX_TIMEOUT_MS),
     persistent: false,
   };
 }
 //@ chunk-yt6b774j.js:1467-2297 placement
-function monitorTimedOutMessage(timeoutMs, t, bounded) {
+function monitorTimedOutMessage(timeoutMs, eventCount, bounded) {
   if (!bounded)
     return hasBackgroundBashStopAfterReply()
       ? "[Monitor timed out. Re-arm it only if you have more to do before you reply; a few minutes after your reply a new watch is likely stopped, so tell the user what to check instead.]"
       : MONITOR_TIMEOUT_TEXT;
-  let r = formatDuration(timeoutMs, {
+  let durationText = formatDuration(timeoutMs, {
     hideTrailingZeros: true,
   });
-  let s = isDiskless()
+  let rearmAdvice = isDiskless()
     ? "Re-arm it only if you have more to do before you reply; after your reply a new watch may stop within a minute, so tell the user what to check instead"
     : hasBackgroundBashStopAfterReply()
       ? "Re-arm it only if you have more to do before you reply; a few minutes after your reply a new watch is likely stopped, so tell the user what to check instead"
       : "Re-arm it if you still need the watch";
-  if (t === 0)
-    return `[Monitor expired after ${r} with no events delivered. ${s} \u2014 and widen the filter if silence was unexpected.]`;
-  return `[Monitor expired after ${r} with ${t} ${plural(t, "event")} delivered. ${s}.]`;
+  if (eventCount === 0)
+    return `[Monitor expired after ${durationText} with no events delivered. ${rearmAdvice} \u2014 and widen the filter if silence was unexpected.]`;
+  return `[Monitor expired after ${durationText} with ${eventCount} ${plural(eventCount, "event")} delivered. ${rearmAdvice}.]`;
 }
 //@ chunk-yt6b774j.js:2297-2557 placement
 function monitorEventGuidance() {
@@ -102,19 +104,20 @@ When an event lands that the user would want to act on now \u2014 an error appea
  * Monitor 工具的完整提示词：单次/持续/轮询等使用模式、事件源说明、超时规则。
  */
 function monitorToolPrompt() {
-  let e = isBackgroundShellDisabled() || isDiskless() || hasBackgroundBashStopAfterReply();
-  let t =
+  let backgroundWatchLimited =
+    isBackgroundShellDisabled() || isDiskless() || hasBackgroundBashStopAfterReply();
+  let oneNotificationGuidance =
     '- **One** ("tell me when the server is ready / the build finishes") \u2192 ' +
-    (e
+    (backgroundWatchLimited
       ? 'run the command in the **foreground with Bash**, exiting when the condition is true, e.g. `until grep -q "Ready in" dev.log; do sleep 0.5; done`.'
       : 'use **Bash with `run_in_background`** and a command that exits when the condition is true, e.g. `until grep -q "Ready in" dev.log; do sleep 0.5; done`. You get a single completion notification when it exits.');
-  let o = e
+  let singleNotificationAlternative = backgroundWatchLimited
     ? "use a foreground Bash `until` loop instead"
     : "use Bash `run_in_background` with an `until` loop instead (one notification, ends in seconds)";
   return `Start a background monitor that streams events from a long-running script. Each stdout line is an event \u2014 you keep working and notifications arrive in the chat. Events arrive on their own schedule and are not replies from the user, even if one lands while you're waiting for the user to answer a question.${isDiskless() ? ` ${MONITOR_SESSION_LIFETIME_NOTE}` : hasBackgroundBashStopAfterReply() ? ` ${MONITOR_SESSION_LIFETIME_NOTE_LONG} ${canLaunchBackgroundAgent() ? `To wait past your reply, have a background agent wait with foreground ${BASH_TOOL_NAME} commands, or tell the user what to check and when.` : "For anything longer, tell the user what to check and when."}` : ""}
 
 Pick by how many notifications you need:
-${t}
+${oneNotificationGuidance}
 ${
   isDiskless() || hasBackgroundBashStopAfterReply()
     ? `- **One per occurrence, while you work on this turn** ("show each ERROR line in the dev server's log while you try the change") \u2192 ${MONITOR} with an unbounded command (\`tail -f\`, \`inotifywait -m\`, \`while true\`).
@@ -153,7 +156,7 @@ Your script's stdout is the event stream. Each line becomes a notification. Exit
     sleep 30
   done
 
-**Don't use an unbounded command for a single notification.** \`tail -f\`, \`inotifywait -m\`, and \`while true\` never exit on their own, so the monitor stays armed until timeout even after the event has fired. For "tell me when X is ready," ${o}. Note that \`tail -f log | grep -m 1 ...\` does *not* fix this: if the log goes quiet after the match, \`tail\` never receives SIGPIPE and the pipeline hangs anyway.
+**Don't use an unbounded command for a single notification.** \`tail -f\`, \`inotifywait -m\`, and \`while true\` never exit on their own, so the monitor stays armed until timeout even after the event has fired. For "tell me when X is ready," ${singleNotificationAlternative}. Note that \`tail -f log | grep -m 1 ...\` does *not* fix this: if the log goes quiet after the match, \`tail\` never receives SIGPIPE and the pipeline hangs anyway.
 
 **Script quality:**
 - Every pipe stage must flush per line or matches sit in its buffer unseen: \`grep\` needs \`--line-buffered\`, \`awk\` needs \`fflush()\`. \`head\` cannot flush at all \u2014 \`| head -N\` delivers nothing until N matches accumulate, then ends the stream.

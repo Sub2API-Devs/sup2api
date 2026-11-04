@@ -55,40 +55,40 @@ var MAX_KEY_NAME_CHARS = 32;
 /**
  * 解析按键组合字符串（修饰键 + 普通键），校验并规范化。
  */
-function parseKeyChord(o, r) {
-  let flattened = o.flatMap((a) => {
-    let trimmed = a.trim();
-    return trimmed !== "" ? [trimmed] : a.length === 1 ? [a] : [];
+function parseKeyChord(components, label) {
+  let keys = components.flatMap((component) => {
+    let trimmed = component.trim();
+    return trimmed !== "" ? [trimmed] : component.length === 1 ? [component] : [];
   });
-  if (flattened.length > MAX_CHORD_COMPONENTS)
+  if (keys.length > MAX_CHORD_COMPONENTS)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r} ${describeChordKeys(flattened)} has ${flattened.length} components; at most ${MAX_CHORD_COMPONENTS} are allowed. Send one key, with its modifiers, per action.`,
+      `${label} ${describeChordKeys(keys)} has ${keys.length} components; at most ${MAX_CHORD_COMPONENTS} are allowed. Send one key, with its modifiers, per action.`,
       "key chord rejected: too many components",
     );
-  let filtered = flattened.filter((a) => MODIFIER_KEYS.has(a.toLowerCase()));
-  let filtered_2 = flattened.filter((a) => !MODIFIER_KEYS.has(a.toLowerCase()));
+  let filtered = keys.filter((key) => MODIFIER_KEYS.has(key.toLowerCase()));
+  let filtered_2 = keys.filter((key) => !MODIFIER_KEYS.has(key.toLowerCase()));
   if (
     filtered_2.length > 1 &&
     !(
-      r === "Key chord" &&
-      filtered.every((a) => MODIFIER_ALIASES.has(a.toLowerCase())) &&
-      filtered_2.every((a) => KEY_NAME_ALIASES.has(a.toLowerCase()))
+      label === "Key chord" &&
+      filtered.every((key) => MODIFIER_ALIASES.has(key.toLowerCase())) &&
+      filtered_2.every((key) => KEY_NAME_ALIASES.has(key.toLowerCase()))
     )
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${r} ${describeChordKeys(flattened)} has ${filtered_2.length} keys that are not modifiers (${filtered_2.map((a) => jsonStringify(truncateWithCount(a, MAX_KEY_NAME_CHARS))).join(", ")}); a chord is modifier keys plus at most one other key. Send a separate action for each key.`,
+      `${label} ${describeChordKeys(keys)} has ${filtered_2.length} keys that are not modifiers (${filtered_2.map((key) => jsonStringify(truncateWithCount(key, MAX_KEY_NAME_CHARS))).join(", ")}); a chord is modifier keys plus at most one other key. Send a separate action for each key.`,
       "key chord rejected: more than one non-modifier key",
     );
-  return flattened;
+  return keys;
 }
 //@ chunk-hrs3dad1.js:6897-7010 placement
-function describeChordKeys(o) {
-  let joined = o
+function describeChordKeys(keys) {
+  let joined = keys
     .slice(0, MAX_CHORD_COMPONENTS)
-    .map((l) => truncateWithCount(l, MAX_KEY_NAME_CHARS))
+    .map((key) => truncateWithCount(key, MAX_KEY_NAME_CHARS))
     .join("+");
-  let s = o.length - MAX_CHORD_COMPONENTS;
-  return s > 0 ? `${jsonStringify(joined)} (+${s} more)` : jsonStringify(joined);
+  let hiddenCount = keys.length - MAX_CHORD_COMPONENTS;
+  return hiddenCount > 0 ? `${jsonStringify(joined)} (+${hiddenCount} more)` : jsonStringify(joined);
 }
 //@ chunk-hrs3dad1.js:7010-7028 placement
 /**
@@ -100,8 +100,8 @@ var UNUSED_SCALE_TIMEOUT_MS = 5000;
 /**
  * 按比例缩放坐标点。
  */
-function scalePoint(o, r, s) {
-  let rounded = Math.round(o * s);
-  let rounded_2 = Math.round(r * s);
+function scalePoint(x, y, scale) {
+  let rounded = Math.round(x * scale);
+  let rounded_2 = Math.round(y * scale);
   return scaledImageSize(rounded, rounded_2, IMAGE_SCALING_DEFAULTS);
 }

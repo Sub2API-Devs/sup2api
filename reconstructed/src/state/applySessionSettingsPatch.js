@@ -16,73 +16,73 @@ import { readAutoCompactWindowSetting } from "../services/compact/autoCompactWin
  * 把会话设置补丁写入 AppState：逐项处理 cacheBreakerPhrase、autoCompactWindow、briefTranscript、isBriefOnly、slackTagConnected、fastMode 与 model（同时更新会话主循环模型），值未变化时保持原对象。
  */
 function applySessionSettingsPatch(patch, setAppState) {
-  setAppState((r) => {
-    let o = r;
+  setAppState((nextState) => {
+    let patchedState = nextState;
     if ("cacheBreakerPhrase" in patch) {
       let cacheBreakerPhrase = patch.cacheBreakerPhrase;
-      let n = cacheBreakerPhrase == null ? undefined : String(cacheBreakerPhrase);
-      if (o.cacheBreakerPhrase !== n)
-        o = {
-          ...o,
-          cacheBreakerPhrase: n,
+      let value = cacheBreakerPhrase == null ? undefined : String(cacheBreakerPhrase);
+      if (patchedState.cacheBreakerPhrase !== value)
+        patchedState = {
+          ...patchedState,
+          cacheBreakerPhrase: value,
         };
     }
     if ("autoCompactWindow" in patch) {
       let autoCompactWindow = patch.autoCompactWindow;
-      let n = autoCompactWindow == null ? readAutoCompactWindowSetting() : Number(autoCompactWindow);
-      if (!isDeepStrictEqual(o.autoCompactWindow, n))
-        o = {
-          ...o,
-          autoCompactWindow: n,
+      let value = autoCompactWindow == null ? readAutoCompactWindowSetting() : Number(autoCompactWindow);
+      if (!isDeepStrictEqual(patchedState.autoCompactWindow, value))
+        patchedState = {
+          ...patchedState,
+          autoCompactWindow: value,
         };
     }
     if ("briefTranscript" in patch) {
-      let e = Boolean(patch.briefTranscript);
-      if (o.briefTranscript !== e)
-        o = {
-          ...o,
-          briefTranscript: e,
+      let value = Boolean(patch.briefTranscript);
+      if (patchedState.briefTranscript !== value)
+        patchedState = {
+          ...patchedState,
+          briefTranscript: value,
         };
     }
     if ("isBriefOnly" in patch) {
-      let e = Boolean(patch.isBriefOnly);
-      if (o.isBriefOnly !== e)
-        o = {
-          ...o,
-          isBriefOnly: e,
+      let value = Boolean(patch.isBriefOnly);
+      if (patchedState.isBriefOnly !== value)
+        patchedState = {
+          ...patchedState,
+          isBriefOnly: value,
         };
     }
     if ("slackTagConnected" in patch) {
-      let e = Boolean(patch.slackTagConnected);
-      if (o.slackTagConnected !== e)
-        o = {
-          ...o,
-          slackTagConnected: e,
+      let value = Boolean(patch.slackTagConnected);
+      if (patchedState.slackTagConnected !== value)
+        patchedState = {
+          ...patchedState,
+          slackTagConnected: value,
         };
     }
     if ("fastMode" in patch) {
-      let e = Boolean(patch.fastMode);
-      if (o.fastMode !== e)
-        o = {
-          ...o,
-          fastMode: e,
+      let value = Boolean(patch.fastMode);
+      if (patchedState.fastMode !== value)
+        patchedState = {
+          ...patchedState,
+          fastMode: value,
         };
     }
     if ("model" in patch) {
       let model = patch.model;
-      let n = model == null ? null : String(model);
-      if (o.mainLoopModelForSession !== n)
-        o = {
-          ...o,
-          mainLoopModelForSession: n,
+      let value = model == null ? null : String(model);
+      if (patchedState.mainLoopModelForSession !== value)
+        patchedState = {
+          ...patchedState,
+          mainLoopModelForSession: value,
         };
-      if (o.mainLoopModel !== n)
-        o = {
-          ...o,
-          mainLoopModel: n,
+      if (patchedState.mainLoopModel !== value)
+        patchedState = {
+          ...patchedState,
+          mainLoopModel: value,
         };
     }
-    return o;
+    return patchedState;
   });
 }
 export { applySessionSettingsPatch };

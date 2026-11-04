@@ -20,21 +20,21 @@ function createProjectSyncCheck({
   storageV5,
   credentials,
   signal,
-  ...e
+  ...opts
 }) {
-  let { launchConsent } = e;
+  let { launchConsent } = opts;
   let plan = Promise.all([boundDeviceUuid, isOnSelfHostedRunner]).then(
-    async ([a, c]) => {
-      if (a === undefined)
+    async ([deviceUuid, isSelfHosted]) => {
+      if (deviceUuid === undefined)
         return {
           kind: "none",
           reason: "unbound",
         };
-      if (c) {
+      if (isSelfHosted) {
         logSelfHostedRunnerPlan();
         return SELF_HOSTED_RUNNER_PLAN;
       }
-      if (!("isProjectSynced" in e ? await e.isProjectSynced : !isLaunchConsentBlocked(launchConsent)))
+      if (!("isProjectSynced" in opts ? await opts.isProjectSynced : !isLaunchConsentBlocked(launchConsent)))
         return {
           kind: "none",
           reason: "no_project_files",
@@ -65,8 +65,9 @@ function createProjectSyncCheck({
     credentials,
     storageV5,
     launchConsent,
-    ...("isProjectStillSynced" in e && {
-      isProjectStillSynced: e.isProjectStillSynced,
+    ...("isProjectStillSynced" in opts && {
+      isProjectStillSynced: opts.isProjectStillSynced,
     }),
   });
 }
+export { createProjectSyncCheck };

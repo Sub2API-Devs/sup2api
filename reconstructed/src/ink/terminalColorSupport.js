@@ -10,42 +10,51 @@
  */
 import { csi } from "./termio/csi.js";
 import { sequential } from "../utils/sequential.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-g3xfp0ds.js:387-611 placement
 /**
  * 终端支持的标准 ANSI 颜色名表。
  */
-var ANSI_COLOR_NAMES = {
-  black: true,
-  red: true,
-  green: true,
-  yellow: true,
-  blue: true,
-  magenta: true,
-  cyan: true,
-  white: true,
-  blackBright: true,
-  redBright: true,
-  greenBright: true,
-  yellowBright: true,
-  blueBright: true,
-  magentaBright: true,
-  cyanBright: true,
-  whiteBright: true,
-};
-var ANSI_COLOR_NAME_SET = new Set(Object.keys(ANSI_COLOR_NAMES));
+var ANSI_COLOR_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ANSI_COLOR_NAME_SET;
+deferInit("chunk-g3xfp0ds.js:387", () => {
+  ANSI_COLOR_NAMES = {
+    black: true,
+    red: true,
+    green: true,
+    yellow: true,
+    blue: true,
+    magenta: true,
+    cyan: true,
+    white: true,
+    blackBright: true,
+    redBright: true,
+    greenBright: true,
+    yellowBright: true,
+    blueBright: true,
+    magentaBright: true,
+    cyanBright: true,
+    whiteBright: true,
+  };
+  ANSI_COLOR_NAME_SET = new Set(Object.keys(ANSI_COLOR_NAMES));
+});
 //@ chunk-g3xfp0ds.js:611-641 placement
 /**
  * SGR 30
  */
-var ANSI_FG_BLACK = csi(30, "m");
-var ANSI_FG_WHITE = csi(37, "m");
+var ANSI_FG_BLACK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ANSI_FG_WHITE;
+deferInit("chunk-g3xfp0ds.js:611", () => {
+  ANSI_FG_BLACK = csi(30, "m");
+  ANSI_FG_WHITE = csi(37, "m");
+});
 //@ chunk-g3xfp0ds.js:641-677 placement
 /**
  * 判断 SGR 序列是否为前景色 30 或 37（用作“默认色”近似）。
  */
-function isDefaultFgColor(r) {
-  return r === ANSI_FG_WHITE || r === ANSI_FG_BLACK;
+function isDefaultFgColor(color) {
+  return color === ANSI_FG_WHITE || color === ANSI_FG_BLACK;
 }
 //@ chunk-g3xfp0ds.js:677-2321 placement
 /**
@@ -65,11 +74,11 @@ class TerminalDetector {
   isGhostty() {
     return this.proc.env.TERM === "xterm-ghostty" || this.proc.env.TERM_PROGRAM === "ghostty";
   }
-  isVteBasedTerminal(r) {
+  isVteBasedTerminal(terminalKind) {
     let env = this.proc.env;
     return (
       isNonEmptyString(env.VTE_VERSION) &&
-      (r === "vte-based" || r === "gnome-terminal") &&
+      (terminalKind === "vte-based" || terminalKind === "gnome-terminal") &&
       (env.TERM ?? "").trim().startsWith("xterm") &&
       !isNonEmptyString(env.TMUX) &&
       !isNonEmptyString(env.STY) &&
@@ -103,8 +112,10 @@ class TerminalDetector {
   hasGeometricShapesInkBleedBug() {
     return this.isGhostty();
   }
-  hasUnknownSequencePrintingBug(r) {
-    return this.isVteBasedTerminal(r) && Number.parseInt(this.proc.env.VTE_VERSION ?? "", 10) < 5300;
+  hasUnknownSequencePrintingBug(terminalName) {
+    return (
+      this.isVteBasedTerminal(terminalName) && Number.parseInt(this.proc.env.VTE_VERSION ?? "", 10) < 5300
+    );
   }
   hasOsc52ClipboardUtf8Bug() {
     if (this.proc.env.TERM_PROGRAM !== "vscode") return false;
@@ -122,9 +133,9 @@ class TerminalDetector {
   }
 }
 //@ chunk-g3xfp0ds.js:2321-2443 placement
-function parseVersionNumber(r) {
-  if (!r) return null;
-  let match = /^(\d+)\.(\d+)\.(\d+)/.exec(r);
+function parseVersionNumber(versionText) {
+  if (!versionText) return null;
+  let match = /^(\d+)\.(\d+)\.(\d+)/.exec(versionText);
   if (!match) return null;
   return +match[1] * 1e6 + +match[2] * 1000 + +match[3];
 }
@@ -132,14 +143,17 @@ function parseVersionNumber(r) {
 /**
  * 去空白后非空
  */
-function isNonEmptyString(r) {
-  return (r ?? "").trim() !== "";
+function isNonEmptyString(text) {
+  return (text ?? "").trim() !== "";
 }
 //@ chunk-g3xfp0ds.js:2483-2496 placement
 /**
  * 终端识别单例。
  */
-var terminalDetector = new TerminalDetector();
+var terminalDetector; // deferred: uses TerminalDetector of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g3xfp0ds.js:2483", () => {
+  terminalDetector = new TerminalDetector();
+});
 //@ chunk-g3xfp0ds.js:2496-2541 placement
 /**
  * 24 位颜色 SGR 正则
@@ -149,22 +163,22 @@ var TRUECOLOR_SGR_RE = /^\x1b\[([34]8);2;(\d+);(\d+);(\d+)m$/;
 /**
  * 终端不支持真彩色时，把样式中的 24 位颜色代码降级为可用的颜色。
  */
-function downgradeTrueColorCodes(r) {
-  if (sequential.level >= 3 || r.length === 0) return r;
-  let e;
-  for (let j = 0; j < r.length; j++) {
-    let o = r[j];
-    let match = TRUECOLOR_SGR_RE.exec(o.code);
+function downgradeTrueColorCodes(codes) {
+  if (sequential.level >= 3 || codes.length === 0) return codes;
+  let downgradedCodes;
+  for (let j = 0; j < codes.length; j++) {
+    let code = codes[j];
+    let match = TRUECOLOR_SGR_RE.exec(code.code);
     if (match) {
-      e ??= r.slice(0, j);
-      e.push({
+      downgradedCodes ??= codes.slice(0, j);
+      downgradedCodes.push({
         type: "ansi",
         code: `\x1B[${match[1]};5;${rgbToAnsi256(+match[2], +match[3], +match[4])}m`,
-        endCode: o.endCode,
+        endCode: code.endCode,
       });
-    } else if (e) e.push(o);
+    } else if (downgradedCodes) downgradedCodes.push(code);
   }
-  return e ?? r;
+  return downgradedCodes ?? codes;
 }
 //@ chunk-g3xfp0ds.js:2798-2815 placement
 /**
@@ -175,11 +189,13 @@ var ANSI_ITALIC_OFF = "\x1B[23m";
 /**
  * 终端把斜体显示为反显时，去掉样式中的斜体。
  */
-function dropItalicIfStandout(r) {
-  for (let e of r)
-    if (e.endCode === ANSI_ITALIC_OFF)
-      return terminalDetector.rendersItalicAsStandout() ? r.filter((n) => n.endCode !== ANSI_ITALIC_OFF) : r;
-  return r;
+function dropItalicIfStandout(codes) {
+  for (let code of codes)
+    if (code.endCode === ANSI_ITALIC_OFF)
+      return terminalDetector.rendersItalicAsStandout()
+        ? codes.filter((code) => code.endCode !== ANSI_ITALIC_OFF)
+        : codes;
+  return codes;
 }
 //@ chunk-g3xfp0ds.js:2939-2968 placement
 var _ = [0, 95, 135, 175, 215, 255];
@@ -187,23 +203,26 @@ var _ = [0, 95, 135, 175, 215, 255];
 /**
  * 把 RGB 颜色转换为 256 色索引。
  */
-function rgbToAnsi256(r, e, n) {
-  let o = (d) => (d < 48 ? 0 : d < 115 ? 1 : d < 155 ? 2 : d < 195 ? 3 : d < 235 ? 4 : 5);
-  let g = o(r);
-  let t = o(e);
-  let s = o(n);
-  let b = 16 + 36 * g + 6 * t + s;
-  let rounded = Math.round((r + e + n) / 3);
+function rgbToAnsi256(red, green, blue) {
+  let levelOf = (channel) =>
+    channel < 48 ? 0 : channel < 115 ? 1 : channel < 155 ? 2 : channel < 195 ? 3 : channel < 235 ? 4 : 5;
+  let rLevel = levelOf(red);
+  let gLevel = levelOf(green);
+  let bLevel = levelOf(blue);
+  let cubeIndex = 16 + 36 * rLevel + 6 * gLevel + bLevel;
+  let rounded = Math.round((red + green + blue) / 3);
   if (rounded < 5) return 16;
-  if (rounded > 244 && g === t && t === s) return b;
+  if (rounded > 244 && rLevel === gLevel && gLevel === bLevel) return cubeIndex;
   let max = Math.max(0, Math.min(23, Math.round((rounded - 8) / 10)));
-  let N = 232 + max;
-  let m = 8 + max * 10;
-  let O = _[g];
-  let T = _[t];
-  let R = _[s];
-  let A = (r - O) ** 2 + (e - T) ** 2 + (n - R) ** 2;
-  return (r - m) ** 2 + (e - m) ** 2 + (n - m) ** 2 < A ? N : b;
+  let grayIndex = 232 + max;
+  let grayValue = 8 + max * 10;
+  let cubeRed = _[rLevel];
+  let cubeGreen = _[gLevel];
+  let cubeBlue = _[bLevel];
+  let cubeDistance = (red - cubeRed) ** 2 + (green - cubeGreen) ** 2 + (blue - cubeBlue) ** 2;
+  return (red - grayValue) ** 2 + (green - grayValue) ** 2 + (blue - grayValue) ** 2 < cubeDistance
+    ? grayIndex
+    : cubeIndex;
 }
 export {
   terminalDetector,

@@ -144,16 +144,17 @@ import { getProcessStartTimeAsync, isSameProcessAsync } from "../../utils/proces
 import { logError } from "../../utils/log.js";
 import { limitConcurrency, preloadThenLimit } from "../../utils/concurrencyLimit.js";
 import { isProcessRunning } from "../../utils/genericProcessUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hme9amad.js:13495-14841 placement = createSkillCommand (0.55)
 /**
  * 为尚未下载正文的同步 skill 创建占位命令；调用时等待下载完成再转交真正的命令，失败时返回「Skill X could not be downloaded … Proceed without it.」。
  */
-function createDeferredSyncedSkillCommand(e, n, baseDir) {
+function createDeferredSyncedSkillCommand(skillName, entry, baseDir) {
   let skillCommand = createSkillCommand({
-    skillName: e,
+    skillName,
     displayName: undefined,
-    description: escapeXmlInline(n.description),
+    description: escapeXmlInline(entry.description),
     hasUserSpecifiedDescription: true,
     markdownContent: "",
     allowedTools: [],
@@ -162,11 +163,11 @@ function createDeferredSyncedSkillCommand(e, n, baseDir) {
     whenToUse: undefined,
     version: undefined,
     model: undefined,
-    disableModelInvocation: n.disableModelInvocation ?? false,
-    userInvocable: n.userInvocable ?? true,
+    disableModelInvocation: entry.disableModelInvocation ?? false,
+    userInvocable: entry.userInvocable ?? true,
     source: "userSettings",
     baseDir,
-    serverAttribution: buildSkillAttribution(n.skillId, n.backingPluginId),
+    serverAttribution: buildSkillAttribution(entry.skillId, entry.backingPluginId),
     loadedFrom: "syncedSkills",
     hooks: undefined,
     executionContext: undefined,
@@ -179,20 +180,20 @@ function createDeferredSyncedSkillCommand(e, n, baseDir) {
     ),
   });
   if (skillCommand?.type === "prompt")
-    skillCommand.getPromptForCommand = async (d, w) => {
-      let h = await raceWithAbortSignal(
-        startPendingDownload(e),
-        w.abortController.signal,
+    skillCommand.getPromptForCommand = async (args, context) => {
+      let downloadResult = await raceWithAbortSignal(
+        startPendingDownload(skillName),
+        context.abortController.signal,
         () => new AbortError(),
       );
-      if (h.ok) {
-        let found = (await getCommands(getProjectRootOrNull(), w.storageV5)).find(
-          (D) =>
-            D.loadedFrom === "syncedSkills" &&
-            isHostCatalogSkill(D) === isHostCatalogSkill(skillCommand) &&
-            D.name === skillCommand.name &&
-            D.type === "prompt" &&
-            D.getPromptForCommand !== skillCommand.getPromptForCommand,
+      if (downloadResult.ok) {
+        let found = (await getCommands(getProjectRootOrNull(), context.storageV5)).find(
+          (command) =>
+            command.loadedFrom === "syncedSkills" &&
+            isHostCatalogSkill(command) === isHostCatalogSkill(skillCommand) &&
+            command.name === skillCommand.name &&
+            command.type === "prompt" &&
+            command.getPromptForCommand !== skillCommand.getPromptForCommand,
         );
         if (found && found.type === "prompt") {
           skillCommand.source = found.source;
@@ -201,26 +202,26 @@ function createDeferredSyncedSkillCommand(e, n, baseDir) {
           skillCommand.contentLength = found.contentLength;
           skillCommand.progressMessage = found.progressMessage;
           skillCommand.userInvocable = found.userInvocable;
-          return found.getPromptForCommand(d, w);
+          return found.getPromptForCommand(args, context);
         }
       }
-      let reason = h.ok ? "skill not found after download" : h.reason;
+      let reason = downloadResult.ok ? "skill not found after download" : downloadResult.reason;
       return [
         {
           type: "text",
           text:
-            !h.ok && h.withheld
+            !downloadResult.ok && downloadResult.withheld
               ? `${skillSwitchedOffText(skillCommand.name)} Proceed without it.`
-              : `Skill ${e} could not be downloaded (${reason}). Proceed without it.`,
+              : `Skill ${skillName} could not be downloaded (${reason}). Proceed without it.`,
         },
       ];
     };
   return skillCommand;
 }
 //@ chunk-hme9amad.js:14841-14955 placement
-function checkSkillsSyncRoot(storageV5, n) {
+function checkSkillsSyncRoot(storageV5, bucket) {
   return freshRootState({
-    root: () => n,
+    root: () => bucket,
     configHome: getClaudeConfigDir,
     rootLabel: SKILLS_SYNC_DIR_2,
     event: "skills_sync_root_refused",
@@ -228,11 +229,15 @@ function checkSkillsSyncRoot(storageV5, n) {
   });
 }
 //@ chunk-hme9amad.js:14955-15041 placement
-var ZIP_FETCH_FAILED_RESULT = downloadFailure("zip fetch failed");
-var ARCHIVE_UNUSABLE_RESULT = extractFailure("skill archive unusable or landing obstructed");
+var ZIP_FETCH_FAILED_RESULT; // deferred: uses downloadFailure (../../utils/claudeAiSync/syncOwnedRoot.js) of its import cycle while loading; runs once the cycle is complete
+var ARCHIVE_UNUSABLE_RESULT;
+deferInit("chunk-hme9amad.js:14955", () => {
+  ZIP_FETCH_FAILED_RESULT = downloadFailure("zip fetch failed");
+  ARCHIVE_UNUSABLE_RESULT = extractFailure("skill archive unusable or landing obstructed");
+});
 //@ chunk-hme9amad.js:15041-16971 placement
 async function downloadSyncedSkill(
-  e,
+  item,
   {
     round,
     credentials,
@@ -243,51 +248,56 @@ async function downloadSyncedSkill(
     markTargetDestroyed,
     noteDownloadedBytes,
   },
-  R,
+  zipBytes,
 ) {
   let root = round.root;
-  let M = syncedSkillDirPath(root, e.name);
-  let S = join(perProcessTempDir(root), relative(root, M));
-  let O = join(tmpdir(), `claude-skill-${process.pid}-${Math.random().toString(36).slice(2)}.zip`);
+  let targetDir = syncedSkillDirPath(root, item.name);
+  let stagingDir = join(perProcessTempDir(root), relative(root, targetDir));
+  let zipPath = join(tmpdir(), `claude-skill-${process.pid}-${Math.random().toString(36).slice(2)}.zip`);
   try {
     if (round.guard.refused()) return ROOT_REFUSED_RESULT;
-    if (R !== undefined) await writeFile(O, R);
+    if (zipBytes !== undefined) await writeFile(zipPath, zipBytes);
     else {
       if (
         !replacesAttributedCopy &&
         targetHeldSkillFile &&
-        (await classifyOccupant(basename(M))) === "inFlight"
+        (await classifyOccupant(basename(targetDir))) === "inFlight"
       ) {
         logForDiagnosticsNoPII("info", "skills_sync_target_in_flight_elsewhere");
         return DEFERRED_PLACEMENT;
       }
       if (
-        !(await downloadOrgSkillZip(e.skillId, O, e.requestedVersion, {
+        !(await downloadOrgSkillZip(item.skillId, zipPath, item.requestedVersion, {
           isBackground: true,
           credentials,
         }))
       )
         return ZIP_FETCH_FAILED_RESULT;
-      noteDownloadedBytes((await lstat(O).catch(() => null))?.size ?? 0);
+      noteDownloadedBytes((await lstat(zipPath).catch(() => null))?.size ?? 0);
     }
     if (!(await round.guard.verify())) return ROOT_REFUSED_RESULT;
-    await rm(S, {
+    await rm(stagingDir, {
       recursive: true,
       force: true,
     });
     await mkdir(perProcessTempDir(root), {
       recursive: true,
     });
-    await readAndUnzipFile(O, S, {
-      skipEntry: (C) => C.split(/[\\/]/).some((W) => isHiddenFoldName(W)),
+    await readAndUnzipFile(zipPath, stagingDir, {
+      skipEntry: (entryName) => entryName.split(/[\\/]/).some((segment) => isHiddenFoldName(segment)),
     });
-    let I = S;
-    let B = await readdir(S, {
+    let contentRoot = stagingDir;
+    let extracted = await readdir(stagingDir, {
       withFileTypes: true,
     });
-    if (!B.some((C) => C.name === "SKILL.md") && B.length === 1 && B[0].isDirectory()) I = join(S, B[0].name);
+    if (
+      !extracted.some((entry) => entry.name === "SKILL.md") &&
+      extracted.length === 1 &&
+      extracted[0].isDirectory()
+    )
+      contentRoot = join(stagingDir, extracted[0].name);
     try {
-      if (!(await stat(join(I, "SKILL.md"))).isFile()) {
+      if (!(await stat(join(contentRoot, "SKILL.md"))).isFile()) {
         logForDiagnosticsNoPII("warn", "skills_sync_extracted_zip_unusable");
         return ARCHIVE_UNUSABLE_RESULT;
       }
@@ -295,18 +305,18 @@ async function downloadSyncedSkill(
       logForDiagnosticsNoPII("warn", "skills_sync_extracted_zip_unusable");
       return ARCHIVE_UNUSABLE_RESULT;
     }
-    if (await containsGitDirectory(I)) {
+    if (await containsGitDirectory(contentRoot)) {
       logForDiagnosticsNoPII("warn", "skills_sync_extracted_zip_unusable");
       return ARCHIVE_UNUSABLE_RESULT;
     }
     if (!(await round.guard.verify())) return ROOT_REFUSED_RESULT;
     if (replacesAttributedCopy)
-      await rm(M, {
+      await rm(targetDir, {
         recursive: true,
         force: true,
       });
     try {
-      await rename(I, M);
+      await rename(contentRoot, targetDir);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (replacesAttributedCopy || !isDirConflictErrno(errnoCode)) {
@@ -316,19 +326,19 @@ async function downloadSyncedSkill(
         });
         return buildLocalPlacementFailure(errnoCode);
       }
-      let de = await classifyOccupant(basename(M));
-      if (de === "inFlight") {
+      let occupancy = await classifyOccupant(basename(targetDir));
+      if (occupancy === "inFlight") {
         logForDiagnosticsNoPII("info", "skills_sync_target_in_flight_elsewhere");
         return DEFERRED_PLACEMENT;
       }
-      if (de === "landed")
-        await rm(M, {
+      if (occupancy === "landed")
+        await rm(targetDir, {
           recursive: true,
           force: true,
         });
-      else if (!(await moveToSyncTrash(M, storageV5))) return LOCAL_PLACEMENT_FAILURE;
+      else if (!(await moveToSyncTrash(targetDir, storageV5))) return LOCAL_PLACEMENT_FAILURE;
       try {
-        await rename(I, M);
+        await rename(contentRoot, targetDir);
       } catch (error) {
         markTargetDestroyed();
         let errnoCode = getErrnoCode(error);
@@ -340,7 +350,7 @@ async function downloadSyncedSkill(
     }
     return SYNC_OK;
   } finally {
-    await rm(O, {
+    await rm(zipPath, {
       force: true,
     }).catch(() => {});
     if (
@@ -359,7 +369,7 @@ async function downloadSyncedSkill(
         },
       ).catch(() => null)) === "real"
     )
-      await rm(S, {
+      await rm(stagingDir, {
         recursive: true,
         force: true,
       }).catch(() => {});
@@ -368,178 +378,178 @@ async function downloadSyncedSkill(
 //@ chunk-hme9amad.js:16971-16982 placement
 var SYNC_RETRY_SLEEP_MS = 500;
 //@ chunk-hme9amad.js:16982-17116 placement
-async function downloadWithRetry(e, n) {
+async function downloadWithRetry(item, ctx) {
   try {
-    return await downloadSyncedSkill(e, n, undefined);
+    return await downloadSyncedSkill(item, ctx, undefined);
   } catch {
     logForDiagnosticsNoPII("warn", "skills_sync_extract_retry");
     await sleep(SYNC_RETRY_SLEEP_MS);
-    return downloadSyncedSkill(e, n, undefined);
+    return downloadSyncedSkill(item, ctx, undefined);
   }
 }
 //@ chunk-hme9amad.js:17116-17404 placement
-async function landSyncedSkill(e, n) {
-  let { fromHostMount } = n;
+async function landSyncedSkill(item, ctx) {
+  let { fromHostMount } = ctx;
   if (fromHostMount !== undefined) {
-    let t = await downloadSyncedSkill(e, n, fromHostMount.zip).catch(() => null);
-    if (t?.ok) n.markLandedFromHostMount();
-    if (t !== null && (t.ok || t.cause !== "extract")) return t;
+    let mountResult = await downloadSyncedSkill(item, ctx, fromHostMount.zip).catch(() => null);
+    if (mountResult?.ok) ctx.markLandedFromHostMount();
+    if (mountResult !== null && (mountResult.ok || mountResult.cause !== "extract")) return mountResult;
     recordMountMiss(
       fromHostMount.kind,
       {
-        reason: t === null ? "landing_threw" : "zip_unusable",
+        reason: mountResult === null ? "landing_threw" : "zip_unusable",
       },
-      n.hostMountMissCounts,
+      ctx.hostMountMissCounts,
     );
   }
-  return downloadWithRetry(e, n);
+  return downloadWithRetry(item, ctx);
 }
 //@ chunk-hme9amad.js:17404-17561 placement
 /**
  * 启动一轮技能同步；已有同步进行时复用同一 Promise。
  */
-async function runSyncRoundOnce(e, n, s, t) {
-  let d = remoteToolsState();
-  if (d.syncPromise) return d.syncPromise;
-  d.syncPromise = runSkillsSyncRound(e, n, s, t).finally(() => {
-    d.syncPromise = null;
+async function runSyncRoundOnce(sessionId, credentials, storageV5, trigger) {
+  let state = remoteToolsState();
+  if (state.syncPromise) return state.syncPromise;
+  state.syncPromise = runSkillsSyncRound(sessionId, credentials, storageV5, trigger).finally(() => {
+    state.syncPromise = null;
   });
-  return d.syncPromise;
+  return state.syncPromise;
 }
 //@ chunk-hme9amad.js:17561-18945 placement
-async function reconcileSkillsManifest(e, n) {
-  let s = join(e, SYNCED_MANIFEST_FILE);
-  let t;
-  let d;
-  let w;
+async function reconcileSkillsManifest(bucketDir, storageV5) {
+  let manifestPath = join(bucketDir, SYNCED_MANIFEST_FILE);
+  let manifest;
+  let originalText;
+  let parsedJson;
   try {
-    d = (await readFileChecked(s, MAX_SYNCED_SKILL_BYTES)).content;
-    w = jsonParse(d);
+    originalText = (await readFileChecked(manifestPath, MAX_SYNCED_SKILL_BYTES)).content;
+    parsedJson = jsonParse(originalText);
   } catch {
     return null;
   }
-  let h = syncedSkillsManifestSchema().safeParse(w);
-  if (h.success) {
-    let { lastUpdated, skills, staleDirs, pendingClaims, ...C } = h.data;
-    t = {
-      ...C,
+  let parsed = syncedSkillsManifestSchema().safeParse(parsedJson);
+  if (parsed.success) {
+    let { lastUpdated, skills, staleDirs, pendingClaims, ...rest } = parsed.data;
+    manifest = {
+      ...rest,
       lastUpdated,
       skills: parseValidRows(syncedSkillEntrySchema(), skills),
       staleDirs: stringArray(staleDirs),
       pendingClaims: stringArray(pendingClaims),
     };
   } else return null;
-  let y = [
-    ...t.skills.map((row) => ({
+  let rows = [
+    ...manifest.skills.map((row) => ({
       row,
       syntheticListName: null,
     })),
-    ...["staleDirs", "pendingClaims"].flatMap((S) =>
-      (t[S] ?? []).map((O) => ({
+    ...["staleDirs", "pendingClaims"].flatMap((listName) =>
+      (manifest[listName] ?? []).map((claim) => ({
         row: {
-          name: S === "pendingClaims" ? parsePendingClaim(O).name : O,
+          name: listName === "pendingClaims" ? parsePendingClaim(claim).name : claim,
         },
-        syntheticListName: S,
-        entry: O,
+        syntheticListName: listName,
+        entry: claim,
       })),
     ),
   ];
-  let b = 0;
-  let R = [];
-  let D = [];
-  let M = [];
-  for (let S of y) {
-    let row = S.row;
-    if (S.syntheticListName === "pendingClaims" && (await isClaimOwnerAlive(S.entry))) {
-      M.push(S.entry);
+  let trashedCount = 0;
+  let keptSkills = [];
+  let keptStaleDirs = [];
+  let keptClaims = [];
+  for (let rowEntry of rows) {
+    let row = rowEntry.row;
+    if (rowEntry.syntheticListName === "pendingClaims" && (await isClaimOwnerAlive(rowEntry.entry))) {
+      keptClaims.push(rowEntry.entry);
       continue;
     }
     try {
-      let I = syncedItemPath_2(row.name, e);
-      if (await isSameFileIdentity(I, skillsSyncDir())) {
+      let itemPath = syncedItemPath_2(row.name, bucketDir);
+      if (await isSameFileIdentity(itemPath, skillsSyncDir())) {
         logForDiagnosticsNoPII("info", "skills_sync_sibling_root_row_skipped");
         continue;
       }
-      if (await isSameFileIdentity(I, trashRootDir())) {
+      if (await isSameFileIdentity(itemPath, trashRootDir())) {
         logForDiagnosticsNoPII("info", "skills_sync_trash_root_row_skipped");
         continue;
       }
-      if (await moveToSyncTrash(I, n)) b++;
-      else if (S.syntheticListName === "staleDirs") D.push(S.entry);
-      else if (S.syntheticListName === "pendingClaims") M.push(S.entry);
-      else R.push(S.row);
+      if (await moveToSyncTrash(itemPath, storageV5)) trashedCount++;
+      else if (rowEntry.syntheticListName === "staleDirs") keptStaleDirs.push(rowEntry.entry);
+      else if (rowEntry.syntheticListName === "pendingClaims") keptClaims.push(rowEntry.entry);
+      else keptSkills.push(rowEntry.row);
     } catch (error) {
       if (error instanceof LegacyReservedSpellingError) {
-        if (S.syntheticListName === "staleDirs") D.push(S.entry);
-        else if (S.syntheticListName === "pendingClaims") M.push(S.entry);
-        else R.push(S.row);
+        if (rowEntry.syntheticListName === "staleDirs") keptStaleDirs.push(rowEntry.entry);
+        else if (rowEntry.syntheticListName === "pendingClaims") keptClaims.push(rowEntry.entry);
+        else keptSkills.push(rowEntry.row);
         continue;
       }
     }
   }
-  if (R.length > 0 || D.length > 0 || M.length > 0) {
-    let S = jsonStringify(
+  if (keptSkills.length > 0 || keptStaleDirs.length > 0 || keptClaims.length > 0) {
+    let nextText = jsonStringify(
       {
-        ...t,
-        skills: R,
-        staleDirs: D.length > 0 ? D : undefined,
-        pendingClaims: M.length > 0 ? M : undefined,
+        ...manifest,
+        skills: keptSkills,
+        staleDirs: keptStaleDirs.length > 0 ? keptStaleDirs : undefined,
+        pendingClaims: keptClaims.length > 0 ? keptClaims : undefined,
       },
       null,
       2,
     );
-    if (S !== d) await writeFileAtomic(s, S).catch(() => {});
+    if (nextText !== originalText) await writeFileAtomic(manifestPath, nextText).catch(() => {});
   } else
-    await rm(s, {
+    await rm(manifestPath, {
       force: true,
     }).catch(() => {});
-  return b;
+  return trashedCount;
 }
 //@ chunk-hme9amad.js:18945-30122 placement
 /**
  * claude.ai skills 同步一轮：检查开关与账号选择、解析 bucket、下载 skill zip 解压到同步目录、清理过期目录、记录 skills_sync_round 遥测；支持睡眠唤醒后的重同步。
  */
-async function runSkillsSyncRound(e, storageV5, s, t) {
+async function runSkillsSyncRound(sessionId, storageV5, credentials, trigger) {
   let now = Date.now();
   let startTime = performance.now();
-  let h = false;
-  let y = false;
-  let b = false;
+  let hadLandedFailure = false;
+  let changedLocally = false;
+  let accountOptIn = false;
   let idle = false;
-  let D = 0;
-  let M = 0;
-  let S = () => {
-    let x = Date.now() - now;
+  let keptCount = 0;
+  let downloadedBytes = 0;
+  let baseTelemetry = () => {
+    let durationMs = Date.now() - now;
     return {
-      account_opt_in: b,
+      account_opt_in: accountOptIn,
       idle,
-      woken: "woken" in t,
-      trigger: fromEnum(t.trigger),
-      ...("tickLateMs" in t && {
-        tick_late_ms: t.tickLateMs,
+      woken: "woken" in trigger,
+      trigger: fromEnum(trigger.trigger),
+      ...("tickLateMs" in trigger && {
+        tick_late_ms: trigger.tickLateMs,
       }),
-      ...(D > 0 && {
-        kept: D,
+      ...(keptCount > 0 && {
+        kept: keptCount,
       }),
-      ...(M > 0 && {
-        approx_downloaded_bytes: Number(M.toPrecision(2)),
+      ...(downloadedBytes > 0 && {
+        approx_downloaded_bytes: Number(downloadedBytes.toPrecision(2)),
       }),
-      duration_ms: x,
-      suspended_ms: Math.max(0, Math.round(x - (performance.now() - startTime))),
+      duration_ms: durationMs,
+      suspended_ms: Math.max(0, Math.round(durationMs - (performance.now() - startTime))),
     };
   };
-  let O = new Map();
-  let I = false;
-  let B = null;
-  let C = remoteToolsState();
-  let W = false;
-  let de = null;
-  let Me = new Set();
-  let ke = false;
+  let pendingResolvers = new Map();
+  let touchedBucket = false;
+  let round = null;
+  let state = remoteToolsState();
+  let notEntitled = false;
+  let previousLiveDirs = null;
+  let removalTriedDirs = new Set();
+  let started = false;
   try {
-    b = getAccountSkillsSyncEnabled();
-    if (refreshAccountSkillsSyncFlag()) b = true;
-    if (!isSkillsSyncActive(e) || !isSkillsCustomizationAllowed()) {
+    accountOptIn = getAccountSkillsSyncEnabled();
+    if (refreshAccountSkillsSyncFlag()) accountOptIn = true;
+    if (!isSkillsSyncActive(sessionId) || !isSkillsCustomizationAllowed()) {
       logForDiagnosticsNoPII("info", "skills_sync_gate_closed");
       let { placeholders, listedOwnerships } = remoteToolsState();
       listedOwnerships.clear();
@@ -547,154 +557,154 @@ async function runSkillsSyncRound(e, storageV5, s, t) {
         placeholders.clear();
         resetSkillSyncState();
       }
-      logFeatureSad("skills_sync_round", "gate_closed", S());
+      logFeatureSad("skills_sync_round", "gate_closed", baseTelemetry());
       return;
     }
     if (readSkillsSyncSetting()) {
       logForDiagnosticsNoPII("info", "skills_sync_policy_verdict_pending");
-      logFeatureSad("skills_sync_round", "policy_verdict_pending", S());
+      logFeatureSad("skills_sync_round", "policy_verdict_pending", baseTelemetry());
       return;
     }
-    let syncBucket = await getSyncBucket(s);
+    let syncBucket = await getSyncBucket(credentials);
     if (syncBucket === null) {
       logForDiagnosticsNoPII("info", "skills_sync_bucket_unresolved");
-      logFeatureSad("skills_sync_round", "bucket_unresolved", S());
+      logFeatureSad("skills_sync_round", "bucket_unresolved", baseTelemetry());
       return;
     }
-    let G = checkSkillsSyncRoot(storageV5, skillsSyncPath(syncBucket));
-    B = G;
-    let root = G.root;
+    let syncRound = checkSkillsSyncRoot(storageV5, skillsSyncPath(syncBucket));
+    round = syncRound;
+    let root = syncRound.root;
     idle =
-      t.trigger === "resync" &&
-      !("woken" in t) &&
-      C.consecutiveFailedRounds === 0 &&
-      !isSessionRefsSkillsSyncOn(e) &&
+      trigger.trigger === "resync" &&
+      !("woken" in trigger) &&
+      state.consecutiveFailedRounds === 0 &&
+      !isSessionRefsSkillsSyncOn(sessionId) &&
       shouldWeatherIdle();
-    let gn = convertedSkillsListPin(e);
-    if (gn !== undefined) await gn;
-    let se = shouldConvertSkillsListAsks(e);
-    updateSessionConvertedSkillsAsk(se, storageV5);
-    let ge = await reuseSkillsSyncRound({
+    let convertedPin = convertedSkillsListPin(sessionId);
+    if (convertedPin !== undefined) await convertedPin;
+    let convertAsk = shouldConvertSkillsListAsks(sessionId);
+    updateSessionConvertedSkillsAsk(convertAsk, storageV5);
+    let reuse = await reuseSkillsSyncRound({
       syncedRoot: skillsSyncDir(),
       bucket: syncBucket,
       root,
-      trigger: t.trigger,
-      pinned: isSessionRefsSyncEnabled(e),
-      lastGeneration: C.bucketGeneration,
-      holdsPlaceholders: C.placeholders.size > 0,
+      trigger: trigger.trigger,
+      pinned: isSessionRefsSyncEnabled(sessionId),
+      lastGeneration: state.bucketGeneration,
+      holdsPlaceholders: state.placeholders.size > 0,
       idle,
-      convertedSkillsAsPlugins: se,
+      convertedSkillsAsPlugins: convertAsk,
     });
-    if (!ge.list) {
-      C.bucketGeneration = ge.generation;
-      let r = await noteHidingFoldersGone(
-        async () => (await readSkillsSyncManifest(storageV5, G))?.skills ?? [],
+    if (!reuse.list) {
+      state.bucketGeneration = reuse.generation;
+      let hidingGone = await noteHidingFoldersGone(
+        async () => (await readSkillsSyncManifest(storageV5, syncRound))?.skills ?? [],
       );
-      if (ge.reload) {
-        let skillsSyncManifest = await readSkillsSyncManifest(storageV5, G);
+      if (reuse.reload) {
+        let skillsSyncManifest = await readSkillsSyncManifest(storageV5, syncRound);
         if (skillsSyncManifest) {
-          let L = new Set();
+          let liveNames = new Set();
           for (let skill of skillsSyncManifest.skills)
             try {
-              L.add(basename(syncedSkillDirPath(root, skill.name)));
+              liveNames.add(basename(syncedSkillDirPath(root, skill.name)));
             } catch {}
-          pruneDynamicSkillsNotIn(L);
+          pruneDynamicSkillsNotIn(liveNames);
         }
-        de = new Set();
+        previousLiveDirs = new Set();
         resetSkillSyncState();
-      } else if (r) resetSkillSyncState();
+      } else if (hidingGone) resetSkillSyncState();
       logFeatureOk("skills_sync_round", {
-        ...S(),
+        ...baseTelemetry(),
         reused: true,
-        reloaded: ge.reload || r,
+        reloaded: reuse.reload || hidingGone,
       });
       return;
     }
-    ke = true;
+    started = true;
     logForDiagnosticsNoPII("info", "skills_sync_starting");
-    let U;
-    let Re = [];
+    let listResult;
+    let sessionRefRows = [];
     let startTime_2 = performance.now();
-    if (isSessionRefsSyncEnabled(e)) {
-      let [r, u] = await Promise.all([
-        sessionSkillManifestSlot.of(e).listEntries("skills", {
-          startup: t.trigger === "startup",
+    if (isSessionRefsSyncEnabled(sessionId)) {
+      let [sessionManifest, orgList] = await Promise.all([
+        sessionSkillManifestSlot.of(sessionId).listEntries("skills", {
+          startup: trigger.trigger === "startup",
         }),
         env.CLAUDE_CODE_SYNC_SKILLS
           ? fetchOrgSkillsListWithRetry({
               isBackground: true,
-              credentials: s,
-              ...(se && {
+              credentials,
+              ...(convertAsk && {
                 convertedSkillsAsPlugins: true,
               }),
             })
           : null,
       ]);
-      if (!r.success) U = r;
+      if (!sessionManifest.success) listResult = sessionManifest;
       else {
-        Re = r.entries.map(sessionRefSkillEntry);
-        if (u === null)
-          U = {
+        sessionRefRows = sessionManifest.entries.map(sessionRefSkillEntry);
+        if (orgList === null)
+          listResult = {
             success: true,
-            skills: Re,
+            skills: sessionRefRows,
           };
-        else if (!u.success) U = u;
+        else if (!orgList.success) listResult = orgList;
         else
-          U = {
+          listResult = {
             success: true,
             skills: mergeRowsByKey(
-              Re,
-              u.skills,
-              (L) => L.skillId,
-              (L, T) => ({
-                ...carryBackingPluginId(L, T),
-                userInvocable: T.userInvocable,
-                disableModelInvocation: T.disableModelInvocation,
+              sessionRefRows,
+              orgList.skills,
+              (row) => row.skillId,
+              (sessionRow, orgRow) => ({
+                ...carryBackingPluginId(sessionRow, orgRow),
+                userInvocable: orgRow.userInvocable,
+                disableModelInvocation: orgRow.disableModelInvocation,
               }),
             ),
           };
       }
     } else
-      U = await fetchOrgSkillsListWithRetry({
+      listResult = await fetchOrgSkillsListWithRetry({
         isBackground: true,
-        credentials: s,
-        ...(se && {
+        credentials,
+        ...(convertAsk && {
           convertedSkillsAsPlugins: true,
         }),
       });
     let listMs = Math.round(performance.now() - startTime_2);
-    W = !U.success && isNotFoundServerError(U);
-    if (W) {
+    notEntitled = !listResult.success && isNotFoundServerError(listResult);
+    if (notEntitled) {
       logForDiagnosticsNoPII("warn", "skills_sync_list_refused");
-      C.listedOwnerships.clear();
-      U = {
+      state.listedOwnerships.clear();
+      listResult = {
         success: true,
-        skills: Re,
+        skills: sessionRefRows,
       };
     }
-    if (!U.success) {
-      C.consecutiveFailedRounds++;
-      let r = listErrorTelemetry(U);
-      let u = {
-        ...S(),
-        ...r,
+    if (!listResult.success) {
+      state.consecutiveFailedRounds++;
+      let errorTelemetry = listErrorTelemetry(listResult);
+      let failureTelemetry = {
+        ...baseTelemetry(),
+        ...errorTelemetry,
       };
-      logForDiagnosticsNoPII("warn", "skills_sync_list_failed", u);
-      logEvent("tengu_skills_sync_list_failed", u);
+      logForDiagnosticsNoPII("warn", "skills_sync_list_failed", failureTelemetry);
+      logEvent("tengu_skills_sync_list_failed", failureTelemetry);
       if (
-        (U.kind === "timeout" || U.kind === "network" || U.kind === "http") &&
-        u.suspended_ms > FIRST_FAILED_ROUND_THRESHOLD_MS
+        (listResult.kind === "timeout" || listResult.kind === "network" || listResult.kind === "http") &&
+        failureTelemetry.suspended_ms > FIRST_FAILED_ROUND_THRESHOLD_MS
       )
-        logFeatureSad("skills_sync_round", "suspended", u);
-      else logFeatureBad("skills_sync_round", "list_failed", u);
+        logFeatureSad("skills_sync_round", "suspended", failureTelemetry);
+      else logFeatureBad("skills_sync_round", "list_failed", failureTelemetry);
       return;
     }
-    C.consecutiveFailedRounds = W ? C.consecutiveFailedRounds + 1 : 0;
+    state.consecutiveFailedRounds = notEntitled ? state.consecutiveFailedRounds + 1 : 0;
     let syncMarker = await readSyncMarker(skillsSyncDir(), syncBucket);
     if (
       syncMarker === "unmarked" &&
       (await lstat(root).then(
-        (r) => r.isDirectory(),
+        (stats) => stats.isDirectory(),
         () => false,
       )) &&
       (await checkSyncRoots({
@@ -720,246 +730,260 @@ async function runSkillsSyncRound(e, storageV5, s, t) {
       });
     }
     await touchExclusive(skillsSyncDir(), syncBucket);
-    I = true;
-    let pe = await takeReuseStamp(root);
+    touchedBucket = true;
+    let reuseStamp = await takeReuseStamp(root);
     if (
-      (!W &&
+      (!notEntitled &&
         (await noteHidingFoldersGone(
-          async () => (await readSkillsSyncManifest(storageV5, G))?.skills ?? [],
+          async () => (await readSkillsSyncManifest(storageV5, syncRound))?.skills ?? [],
         ))) ||
-      (ge.shared && pe !== null && C.bucketGeneration !== null && pe.token !== C.bucketGeneration)
+      (reuse.shared &&
+        reuseStamp !== null &&
+        state.bucketGeneration !== null &&
+        reuseStamp.token !== state.bucketGeneration)
     )
       resetSkillSyncState();
     await trashStraySyncEntries(storageV5);
-    let skillsSyncManifest = await readSkillsSyncManifest(storageV5, G);
-    let Sn =
-      se && !W ? await resolveSkillsBucket(skillsSyncManifest?.skills ?? [], U.skills, syncBucket) : [];
-    D = Sn.length;
-    let wn = pe !== null && se ? onlyConvertedSkills(pe) : pe;
+    let skillsSyncManifest = await readSkillsSyncManifest(storageV5, syncRound);
+    let convertedRows =
+      convertAsk && !notEntitled
+        ? await resolveSkillsBucket(skillsSyncManifest?.skills ?? [], listResult.skills, syncBucket)
+        : [];
+    keptCount = convertedRows.length;
+    let stampRows = reuseStamp !== null && convertAsk ? onlyConvertedSkills(reuseStamp) : reuseStamp;
     let { toDownload, toRemove, carryover, liveDirs, carryoverOwningLiveDir } = assignSkillDirs(
       root,
-      [...U.skills, ...Sn],
+      [...listResult.skills, ...convertedRows],
       skillsSyncManifest?.skills ?? [],
     );
     let liveEntryClassifier = createLiveEntryClassifier(liveDirs);
-    let Ue = new Map();
-    let He = async (name) => {
-      let u;
+    let inflightTrash = new Map();
+    let trashIfNotLive = async (item) => {
+      let itemPath;
       try {
-        u = syncedItemPath_2(name, root);
+        itemPath = syncedItemPath_2(item, root);
       } catch (error) {
         if (error instanceof LegacyReservedSpellingError) return false;
         return true;
       }
-      let L = await liveEntryClassifier(u);
-      if (L === "live") return true;
-      if (L === "indeterminate") return false;
-      Me.add(u);
-      let T = Ue.get(u);
-      if (T !== undefined) return T;
-      let F = moveToSyncTrash(u, storageV5).finally(() => Ue.delete(u));
-      Ue.set(u, F);
-      return F;
+      let occupancy = await liveEntryClassifier(itemPath);
+      if (occupancy === "live") return true;
+      if (occupancy === "indeterminate") return false;
+      removalTriedDirs.add(itemPath);
+      let pendingTrash = inflightTrash.get(itemPath);
+      if (pendingTrash !== undefined) return pendingTrash;
+      let trashPromise = moveToSyncTrash(itemPath, storageV5).finally(() => inflightTrash.delete(itemPath));
+      inflightTrash.set(itemPath, trashPromise);
+      return trashPromise;
     };
-    let Ke = new Set(Array.from(liveDirs, (r) => basename(r)));
-    let pt = pruneDynamicSkillsNotIn(Ke);
-    if (pruneSyncedSkillState(Ke) + pt > 0) {
+    let liveDirNames = new Set(Array.from(liveDirs, (liveDir) => basename(liveDir)));
+    let dynamicPruned = pruneDynamicSkillsNotIn(liveDirNames);
+    if (pruneSyncedSkillState(liveDirNames) + dynamicPruned > 0) {
       clearCommandMemoizationCaches();
       markFirstRoundEmitted();
       skillsChangedSignal.emit();
     }
-    de = liveDirs;
+    previousLiveDirs = liveDirs;
     let results = await Promise.all(
-      carryover.map((r) =>
-        carryoverOwningLiveDir.has(r.skillId) ? hasSyncedSkillMd(root, r.name, storageV5) : null,
+      carryover.map((row) =>
+        carryoverOwningLiveDir.has(row.skillId) ? hasSyncedSkillMd(root, row.name, storageV5) : null,
       ),
     );
-    let We = new Set();
-    for (let [r, u] of carryover.entries()) {
-      let L = results[r];
-      if (L === null) continue;
-      if (!L) {
-        let found = U.skills.find((skill) => skill.skillId === u.skillId);
+    let reDownloadIds = new Set();
+    for (let [idx, row] of carryover.entries()) {
+      let hasMd = results[idx];
+      if (hasMd === null) continue;
+      if (!hasMd) {
+        let found = listResult.skills.find((skill) => skill.skillId === row.skillId);
         if (found) {
-          We.add(u.skillId);
+          reDownloadIds.add(row.skillId);
           toDownload.push({
             item: found,
           });
         }
         continue;
       }
-      let T = basename(syncedSkillDirPath(root, u.name));
-      if (C.placeholders.delete(T)) {
-        C.pendingDownloads.get(T)?.resolve({
+      let dirName = basename(syncedSkillDirPath(root, row.name));
+      if (state.placeholders.delete(dirName)) {
+        state.pendingDownloads.get(dirName)?.resolve({
           ok: true,
         });
-        C.pendingDownloads.delete(T);
+        state.pendingDownloads.delete(dirName);
         clearSkillCaches();
         clearCommandMemoizationCaches();
-        y = true;
+        changedLocally = true;
         logForDiagnosticsNoPII("info", "skills_sync_materialized_elsewhere");
       }
     }
-    let filtered = carryover.filter((r) => !We.has(r.skillId));
-    let Ge = new Map(carryover.filter((r) => We.has(r.skillId)).map((r) => [r.skillId, r]));
-    let j = new Set(skillsSyncManifest?.staleDirs ?? []);
-    let ue = new Set();
-    let Q = new Set();
-    let Ye = {
+    let filtered = carryover.filter((row) => !reDownloadIds.has(row.skillId));
+    let reDownloadRows = new Map(
+      carryover.filter((row) => reDownloadIds.has(row.skillId)).map((row) => [row.skillId, row]),
+    );
+    let staleDirs = new Set(skillsSyncManifest?.staleDirs ?? []);
+    let removedStaleDirs = new Set();
+    let newClaims = new Set();
+    let owner = {
       pid: process.pid,
       procStart: await getProcessStartTimeAsync(process.pid),
     };
-    let Xe = [];
+    let deadClaims = [];
     if (skillsSyncManifest?.pendingClaims) {
       let pendingClaims = skillsSyncManifest.pendingClaims;
-      let u = new Set();
+      let liveClaimNames = new Set();
       for (let pendingClaim of pendingClaims)
-        if (await isClaimOwnerAlive(pendingClaim)) u.add(parsePendingClaim(pendingClaim).name);
-        else Xe.push(pendingClaim);
-      for (let L of Xe) {
-        let { name: T } = parsePendingClaim(L);
-        if (u.has(T) || Ke.has(T)) continue;
-        j.add(T);
-        Q.add(L);
+        if (await isClaimOwnerAlive(pendingClaim)) liveClaimNames.add(parsePendingClaim(pendingClaim).name);
+        else deadClaims.push(pendingClaim);
+      for (let claim of deadClaims) {
+        let { name } = parsePendingClaim(claim);
+        if (liveClaimNames.has(name) || liveDirNames.has(name)) continue;
+        staleDirs.add(name);
+        newClaims.add(claim);
       }
     }
-    for (let r of j)
-      if (await He(r)) {
-        j.delete(r);
-        ue.add(r);
+    for (let dirName of staleDirs)
+      if (await trashIfNotLive(dirName)) {
+        staleDirs.delete(dirName);
+        removedStaleDirs.add(dirName);
       }
-    if (ue.size > 0 || Q.size > 0) y = true;
-    let ve = replaceRowsWithAttribution(
+    if (removedStaleDirs.size > 0 || newClaims.size > 0) changedLocally = true;
+    let mergeResult = replaceRowsWithAttribution(
       skillsSyncManifest?.skills ?? [],
       [...carryover, ...toDownload.flatMap(({ prev }) => prev ?? [])],
-      (r) => r.skillId,
-      (r, u) =>
-        r.backingPluginId === u.backingPluginId &&
-        (r.updatedAt === COLLISION_LOSER) === (u.updatedAt === COLLISION_LOSER),
+      (row) => row.skillId,
+      (prevRow, newRow) =>
+        prevRow.backingPluginId === newRow.backingPluginId &&
+        (prevRow.updatedAt === COLLISION_LOSER) === (newRow.updatedAt === COLLISION_LOSER),
     );
     if (toDownload.length === 0 && toRemove.length === 0) {
-      if (y) resetSkillSyncState();
-      if ((ue.size > 0 || Q.size > 0 || ve.attributionMoved) && skillsSyncManifest)
+      if (changedLocally) resetSkillSyncState();
+      if (
+        (removedStaleDirs.size > 0 || newClaims.size > 0 || mergeResult.attributionMoved) &&
+        skillsSyncManifest
+      )
         await writeSkillsSyncManifest(
           {
             lastUpdated: skillsSyncManifest.lastUpdated,
-            skills: ve.rows,
-            staleDirs: j.size > 0 ? Array.from(j) : undefined,
+            skills: mergeResult.rows,
+            staleDirs: staleDirs.size > 0 ? Array.from(staleDirs) : undefined,
             pendingClaims: undefined,
           },
           {
-            staleDirs: ue,
-            pendingClaims: Q,
+            staleDirs: removedStaleDirs,
+            pendingClaims: newClaims,
             removedSkillIds: SKILLS_MANIFEST_SCHEMA,
             deferredRows: SKILLS_MANIFEST_SCHEMA_PLACEHOLDER,
           },
           storageV5,
-          G,
+          syncRound,
         );
       if (skillsSyncManifest) {
         let date = new Date();
         await lutimes(manifestPathIn(root), date, date).catch(() => {});
       }
-      let r = y ? null : wn;
+      let reuseStampRows = changedLocally ? null : stampRows;
       noteBucketGeneration(
         await writeOrClearReuseStamp(
           root,
           "skills",
-          j.size === 0 && !W && !isSessionRefsSyncEnabled(e),
-          r,
-          listedForKey(se),
+          staleDirs.size === 0 && !notEntitled && !isSessionRefsSyncEnabled(sessionId),
+          reuseStampRows,
+          listedForKey(convertAsk),
         ),
-        r,
+        reuseStampRows,
       );
       logForDiagnosticsNoPII("info", "skills_sync_no_changes", {
         duration_ms: Date.now() - now,
         list_ms: listMs,
-        ...(t.trigger === "startup" && {
+        ...(trigger.trigger === "startup" && {
           first_message_gate_open_ms: Math.round(performance.now() - startTime),
         }),
       });
-      let u = {
-        ...S(),
+      let noChangesTelemetry = {
+        ...baseTelemetry(),
         no_changes: true,
       };
-      if (W) logFeatureSad("skills_sync_round", "not_entitled", u);
-      else logFeatureOk("skills_sync_round", u);
+      if (notEntitled) logFeatureSad("skills_sync_round", "not_entitled", noChangesTelemetry);
+      else logFeatureOk("skills_sync_round", noChangesTelemetry);
       return;
     }
-    let hn = 0;
+    let placeholderCount = 0;
     for (let { item, prev } of toDownload)
       if (!prev) {
         let baseDir = syncedSkillDirPath(root, item.name);
         let deferredSyncedSkillCommand = createDeferredSyncedSkillCommand(basename(baseDir), item, baseDir);
         if (deferredSyncedSkillCommand === undefined) continue;
         registerSkillPlaceholder(deferredSyncedSkillCommand);
-        hn++;
-        O.set(item.skillId, registerPendingDownload(basename(syncedSkillDirPath(root, item.name))));
+        placeholderCount++;
+        pendingResolvers.set(
+          item.skillId,
+          registerPendingDownload(basename(syncedSkillDirPath(root, item.name))),
+        );
       }
-    if (hn > 0) {
+    if (placeholderCount > 0) {
       clearCommandMemoizationCaches();
       markFirstRoundEmitted();
       skillsChangedSignal.emit();
     }
-    let Mn = true;
+    let claimsWritten = true;
     try {
-      let r = [];
+      let claimKeys = [];
       for (let { item } of toDownload)
         try {
-          r.push(syncKeyOf(basename(syncedSkillDirPath(root, item.name)), Ye));
+          claimKeys.push(syncKeyOf(basename(syncedSkillDirPath(root, item.name)), owner));
         } catch {}
-      if (r.length > 0)
+      if (claimKeys.length > 0)
         await writeSkillsSyncManifest(
           {
             lastUpdated: skillsSyncManifest?.lastUpdated ?? 0,
-            skills: ve.rows,
-            staleDirs: j.size > 0 ? Array.from(j) : undefined,
-            pendingClaims: r,
+            skills: mergeResult.rows,
+            staleDirs: staleDirs.size > 0 ? Array.from(staleDirs) : undefined,
+            pendingClaims: claimKeys,
           },
           {
-            staleDirs: ue,
-            pendingClaims: Q,
+            staleDirs: removedStaleDirs,
+            pendingClaims: newClaims,
             removedSkillIds: SKILLS_MANIFEST_SCHEMA,
             deferredRows: SKILLS_MANIFEST_SCHEMA_PLACEHOLDER,
           },
           storageV5,
-          G,
+          syncRound,
         );
     } catch (error) {
       if (error instanceof SyncOwnedRootRefusedError) throw error;
-      Mn = false;
+      claimsWritten = false;
       logForDiagnosticsNoPII("warn", "skills_sync_pending_claims_write_failed");
     }
     firstListDeferred().resolve();
     let firstMessageGateOpenMs = Math.round(performance.now() - startTime);
-    if (!Mn) {
-      logFeatureBad("skills_sync_round", "pending_claims_write_failed", S());
-      if (y) resetSkillSyncState();
+    if (!claimsWritten) {
+      logFeatureBad("skills_sync_round", "pending_claims_write_failed", baseTelemetry());
+      if (changedLocally) resetSkillSyncState();
       return;
     }
     let skills = [];
-    let Rn = [];
-    let Ze = [];
-    let De = 0;
-    let vn = 0;
-    let me = {};
-    let Dn = ({ item, prev }) =>
-      prev === undefined && !Ge.has(item.skillId) ? hostMountKindForRow(item) : undefined;
-    let flattened = toDownload.flatMap((r) => Dn(r) ?? []);
-    let En = new Set(flattened);
-    let Je = new Map();
-    let In = (r) => {
+    let failedPrevRows = [];
+    let deferredPrevRows = [];
+    let deferredCount = 0;
+    let deferredRenames = 0;
+    let failureCounts = {};
+    let mountKindOf = ({ item, prev }) =>
+      prev === undefined && !reDownloadRows.has(item.skillId) ? hostMountKindForRow(item) : undefined;
+    let flattened = toDownload.flatMap((entry) => mountKindOf(entry) ?? []);
+    let mountKinds = new Set(flattened);
+    let mountMissCounts = new Map();
+    let logMountError = (error) => {
       logForDiagnosticsNoPII("warn", "skills_sync_host_mount_threw");
-      logError(toError(r));
+      logError(toError(error));
       return null;
     };
-    let Cn = En.size > 0 ? createHostSkillReader(En, Je).catch(In) : null;
-    let Le = new Set();
-    let Tn = new Map();
+    let hostReader =
+      mountKinds.size > 0 ? createHostSkillReader(mountKinds, mountMissCounts).catch(logMountError) : null;
+    let landedFromMount = new Set();
+    let preloadedMd = new Map();
     await Promise.all(
       toDownload.map(
         limitConcurrency(MAX_INSTALL_WAIT_CHAIN, async ({ item }) => {
-          Tn.set(item, await readSyncedSkillMd(root, item.name, storageV5));
+          preloadedMd.set(item, await readSyncedSkillMd(root, item.name, storageV5));
         }),
       ),
     );
@@ -967,262 +991,273 @@ async function runSkillsSyncRound(e, storageV5, s, t) {
       toDownload.map(
         preloadThenLimit(
           MAX_INSTALL_WAIT_CHAIN,
-          async (r) => {
-            let u = Dn(r);
-            if (u === undefined) return;
-            let T = await (await Cn)?.readZip(u, r.item).catch(In);
-            return T
+          async (entry) => {
+            let mountKind = mountKindOf(entry);
+            if (mountKind === undefined) return;
+            let zip = await (await hostReader)?.readZip(mountKind, entry.item).catch(logMountError);
+            return zip
               ? {
-                  kind: u,
-                  zip: T,
+                  kind: mountKind,
+                  zip,
                 }
               : undefined;
           },
           async ({ item, prev }, fromHostMount) => {
-            let T = Tn.get(item) ?? null;
-            let F = ZIP_FETCH_FAILED_RESULT;
+            let md = preloadedMd.get(item) ?? null;
+            let result = ZIP_FETCH_FAILED_RESULT;
             try {
-              F = await landSyncedSkill(item, {
-                round: G,
-                credentials: s,
+              result = await landSyncedSkill(item, {
+                round: syncRound,
+                credentials,
                 storageV5,
-                classifyOccupant: (K) => skillDirOccupancy(K, storageV5, G),
+                classifyOccupant: (dirName) => skillDirOccupancy(dirName, storageV5, syncRound),
                 markTargetDestroyed: () => {
-                  h = true;
+                  hadLandedFailure = true;
                 },
                 replacesAttributedCopy:
                   (prev !== undefined && (await isSameSkillDir(root, prev.name, item.name))) ||
-                  Ge.has(item.skillId),
-                targetHeldSkillFile: isQuizzicalWirthOn() && T !== null,
+                  reDownloadRows.has(item.skillId),
+                targetHeldSkillFile: isQuizzicalWirthOn() && md !== null,
                 fromHostMount,
                 markLandedFromHostMount: () => {
-                  Le.add(item.skillId);
+                  landedFromMount.add(item.skillId);
                 },
-                hostMountMissCounts: Je,
-                noteDownloadedBytes: (K) => {
-                  M += K;
+                hostMountMissCounts: mountMissCounts,
+                noteDownloadedBytes: (bytes) => {
+                  downloadedBytes += bytes;
                 },
               });
             } catch {
-              F = ARCHIVE_UNUSABLE_RESULT;
+              result = ARCHIVE_UNUSABLE_RESULT;
               logForDiagnosticsNoPII("warn", "skills_sync_extract_failed");
             }
-            if (F.ok) {
+            if (result.ok) {
               skills.push(item);
               if (prev && prev.name !== item.name) {
-                if (!(await He(prev.name))) j.add(prev.name);
+                if (!(await trashIfNotLive(prev.name))) staleDirs.add(prev.name);
               }
               unregisterSkillPlaceholder(basename(syncedSkillDirPath(root, item.name)));
               clearSkillCaches();
               clearCommandMemoizationCaches();
               logFeatureOk("skills_sync_download", {
-                landed_from_mount: Le.has(item.skillId),
+                landed_from_mount: landedFromMount.has(item.skillId),
               });
             } else {
-              let syncFailureEvent = getSyncFailureEvent(F.cause);
+              let syncFailureEvent = getSyncFailureEvent(result.cause);
               if (syncFailureEvent === null) {
-                De++;
+                deferredCount++;
                 logForDiagnosticsNoPII("info", "skills_sync_landing_deferred");
               } else {
-                me[syncFailureEvent] = (me[syncFailureEvent] ?? 0) + 1;
+                failureCounts[syncFailureEvent] = (failureCounts[syncFailureEvent] ?? 0) + 1;
                 logFeatureBad("skills_sync_download", syncFailureEvent);
               }
-              let _e = prev ?? Ge.get(item.skillId);
-              if (_e && F.cause === "deferred") {
-                Ze.push(_e);
+              let prevRow = prev ?? reDownloadRows.get(item.skillId);
+              if (prevRow && result.cause === "deferred") {
+                deferredPrevRows.push(prevRow);
                 if (prev && prev.name !== item.name) {
-                  j.add(prev.name);
-                  vn++;
+                  staleDirs.add(prev.name);
+                  deferredRenames++;
                 }
-              } else if (_e) Rn.push(_e);
+              } else if (prevRow) failedPrevRows.push(prevRow);
               else
                 try {
-                  let ee = syncedSkillDirPath(root, item.name);
+                  let skillDir = syncedSkillDirPath(root, item.name);
                   if (
-                    await lstat(ee).then(
+                    await lstat(skillDir).then(
                       () => false,
                       (error) => isENOENT(error),
                     )
                   )
-                    Q.add(syncKeyOf(basename(ee), Ye));
+                    newClaims.add(syncKeyOf(basename(skillDir), owner));
                 } catch {}
             }
-            O.get(item.skillId)?.(
-              F.ok
+            pendingResolvers.get(item.skillId)?.(
+              result.ok
                 ? {
                     ok: true,
                   }
                 : {
                     ok: false,
-                    reason: describeSyncFailure(F.cause),
+                    reason: describeSyncFailure(result.cause),
                   },
             );
           },
         ),
       ),
     );
-    let we = [];
+    let keptRemovals = [];
     await Promise.all(
       toRemove.map(
-        limitConcurrency(MAX_INSTALL_WAIT_CHAIN, async (r) => {
-          if (!(await He(r.name))) we.push(r);
+        limitConcurrency(MAX_INSTALL_WAIT_CHAIN, async (row) => {
+          if (!(await trashIfNotLive(row.name))) keptRemovals.push(row);
         }),
       ),
     );
-    let Qe = new Set(toRemove.map((r) => r.skillId));
-    for (let r of we) Qe.delete(r.skillId);
-    let Ve = skills.length > 0 || h || we.length < toRemove.length || ue.size > 0 || Q.size > 0;
-    let Mt = Ve || vn > 0 || ve.attributionMoved;
-    if (Qe.size > 0) clearCommandMemoizationCaches();
-    if (Ve || y) resetSkillSyncState();
-    let Ee = false;
-    if (Mt) {
-      let skills_2 = [...filtered, ...skills, ...Rn, ...we];
-      let u = new Set();
-      for (let F of [...skills_2, ...Ze])
+    let removedIds = new Set(toRemove.map((row) => row.skillId));
+    for (let row of keptRemovals) removedIds.delete(row.skillId);
+    let localChanged =
+      skills.length > 0 ||
+      hadLandedFailure ||
+      keptRemovals.length < toRemove.length ||
+      removedStaleDirs.size > 0 ||
+      newClaims.size > 0;
+    let needWrite = localChanged || deferredRenames > 0 || mergeResult.attributionMoved;
+    if (removedIds.size > 0) clearCommandMemoizationCaches();
+    if (localChanged || changedLocally) resetSkillSyncState();
+    let rowsLost = false;
+    if (needWrite) {
+      let skills_2 = [...filtered, ...skills, ...failedPrevRows, ...keptRemovals];
+      let finalNames = new Set();
+      for (let row of [...skills_2, ...deferredPrevRows])
         try {
-          u.add(basename(syncedSkillDirPath(root, F.name)));
+          finalNames.add(basename(syncedSkillDirPath(root, row.name)));
         } catch {}
-      for (let F of u) Q.add(syncKeyOf(F, Ye));
-      for (let F of Xe) if (u.has(parsePendingClaim(F).name)) Q.add(F);
-      let L = (skills, onlyOverReadable) =>
+      for (let dirName of finalNames) newClaims.add(syncKeyOf(dirName, owner));
+      for (let claim of deadClaims) if (finalNames.has(parsePendingClaim(claim).name)) newClaims.add(claim);
+      let writeFinal = (skills, onlyOverReadable) =>
         writeSkillsSyncManifest(
           {
             lastUpdated: Date.now(),
             skills,
-            staleDirs: j.size > 0 ? Array.from(j) : undefined,
+            staleDirs: staleDirs.size > 0 ? Array.from(staleDirs) : undefined,
           },
           {
-            staleDirs: ue,
-            pendingClaims: Q,
-            removedSkillIds: Qe,
-            deferredRows: Ze,
+            staleDirs: removedStaleDirs,
+            pendingClaims: newClaims,
+            removedSkillIds: removedIds,
+            deferredRows: deferredPrevRows,
             onlyOverReadable,
           },
           storageV5,
-          G,
+          syncRound,
         );
-      await L(skills_2, false);
-      let T = skills.length > 0 && isQuizzicalWirthOn() ? 2 : 0;
-      for (let idx = 0; idx < T; idx++) {
-        await sleep(C.lostRowsRecheckMs * (1 + Math.random()));
-        let skillsSyncManifest = await readSkillsSyncManifest(storageV5, G);
-        let _e = new Set(skillsSyncManifest?.skills.map((skill) => skill.skillId));
-        Ee = !skills.every((ee) => _e.has(ee.skillId));
-        if (!Ee) break;
+      await writeFinal(skills_2, false);
+      let recheckRounds = skills.length > 0 && isQuizzicalWirthOn() ? 2 : 0;
+      for (let idx = 0; idx < recheckRounds; idx++) {
+        await sleep(state.lostRowsRecheckMs * (1 + Math.random()));
+        let skillsSyncManifest = await readSkillsSyncManifest(storageV5, syncRound);
+        let writtenIds = new Set(skillsSyncManifest?.skills.map((skill) => skill.skillId));
+        rowsLost = !skills.every((row) => writtenIds.has(row.skillId));
+        if (!rowsLost) break;
         if (skillsSyncManifest === null) continue;
         logForDiagnosticsNoPII("info", "skills_sync_manifest_rows_lost");
         try {
-          await L(skills, true);
+          await writeFinal(skills, true);
         } catch (error) {
           if (error instanceof SyncOwnedRootRefusedError) throw error;
           logError(toError(error));
           break;
         }
       }
-      if (Ee) logForDiagnosticsNoPII("warn", "skills_sync_manifest_rows_unconfirmed");
+      if (rowsLost) logForDiagnosticsNoPII("warn", "skills_sync_manifest_rows_unconfirmed");
     }
-    let en = toDownload.length - skills.length - De;
-    let Fn = await Cn;
-    let nn = {
-      downloaded: skills.length - Le.size,
-      from_mount: Le.size,
+    let failedDownloads = toDownload.length - skills.length - deferredCount;
+    let reader = await hostReader;
+    let downloadTelemetry = {
+      downloaded: skills.length - landedFromMount.size,
+      from_mount: landedFromMount.size,
       mount_eligible: flattened.length,
-      mount_read_ms: Fn?.spentMs() ?? 0,
-      mount_wait_ms: Fn?.waitedMs() ?? 0,
-      ...flattenMountMissCounts(Je),
+      mount_read_ms: reader?.spentMs() ?? 0,
+      mount_wait_ms: reader?.waitedMs() ?? 0,
+      ...flattenMountMissCounts(mountMissCounts),
     };
     logForDiagnosticsNoPII("info", "skills_sync_complete", {
-      ...nn,
+      ...downloadTelemetry,
       removed: toRemove.length,
       duration_ms: Date.now() - now,
       list_ms: listMs,
-      ...(t.trigger === "startup" && {
+      ...(trigger.trigger === "startup" && {
         first_message_gate_open_ms: firstMessageGateOpenMs,
       }),
     });
-    let Pn = S();
+    let summary = baseTelemetry();
     logEvent("tengu_skills_sync_success", {
-      ...Pn,
-      ...nn,
+      ...summary,
+      ...downloadTelemetry,
       removed: toRemove.length,
-      total: U.skills.length,
+      total: listResult.skills.length,
     });
-    let An = Ve || y ? null : wn;
+    let finalStampRows = localChanged || changedLocally ? null : stampRows;
     noteBucketGeneration(
       await writeOrClearReuseStamp(
         root,
         "skills",
-        !W && en === 0 && De === 0 && !Ee && we.length === 0 && j.size === 0 && !isSessionRefsSyncEnabled(e),
-        An,
-        listedForKey(se),
+        !notEntitled &&
+          failedDownloads === 0 &&
+          deferredCount === 0 &&
+          !rowsLost &&
+          keptRemovals.length === 0 &&
+          staleDirs.size === 0 &&
+          !isSessionRefsSyncEnabled(sessionId),
+        finalStampRows,
+        listedForKey(convertAsk),
       ),
-      An,
+      finalStampRows,
     );
-    let tn = {
-      ...Pn,
-      ...nn,
-      deferred: De,
+    let roundTelemetry = {
+      ...summary,
+      ...downloadTelemetry,
+      deferred: deferredCount,
       removed: toRemove.length,
-      total: U.skills.length,
+      total: listResult.skills.length,
     };
-    if (en > 0)
+    if (failedDownloads > 0)
       logFeatureSad("skills_sync_round", "download_failed", {
-        ...tn,
-        failed: en,
-        download_failed: me.download_failed ?? 0,
-        extract_failed: me.extract_failed ?? 0,
-        root_refused: me.root_refused ?? 0,
-        local_failed: me.local_failed ?? 0,
+        ...roundTelemetry,
+        failed: failedDownloads,
+        download_failed: failureCounts.download_failed ?? 0,
+        extract_failed: failureCounts.extract_failed ?? 0,
+        root_refused: failureCounts.root_refused ?? 0,
+        local_failed: failureCounts.local_failed ?? 0,
       });
-    else if (W) logFeatureSad("skills_sync_round", "not_entitled", tn);
-    else logFeatureOk("skills_sync_round", tn);
+    else if (notEntitled) logFeatureSad("skills_sync_round", "not_entitled", roundTelemetry);
+    else logFeatureOk("skills_sync_round", roundTelemetry);
   } catch (error) {
-    if (y || h) resetSkillSyncState();
-    if (error instanceof SyncOwnedRootRefusedError && I) {
+    if (changedLocally || hadLandedFailure) resetSkillSyncState();
+    if (error instanceof SyncOwnedRootRefusedError && touchedBucket) {
       logForDiagnosticsNoPII("warn", "skills_sync_late_root_refusal", {
         reason: error.reason,
         duration_ms: Date.now() - now,
       });
-      logFeatureSad("skills_sync_round", "root_refused", S());
-      I = false;
+      logFeatureSad("skills_sync_round", "root_refused", baseTelemetry());
+      touchedBucket = false;
     } else if (error instanceof SyncOwnedRootRefusedError) {
       logForDiagnosticsNoPII("warn", "skills_sync_root_refused_round", {
         reason: error.reason,
         duration_ms: Date.now() - now,
       });
-      logFeatureSad("skills_sync_round", "root_refused", S());
+      logFeatureSad("skills_sync_round", "root_refused", baseTelemetry());
     } else {
-      if (!W) C.consecutiveFailedRounds++;
+      if (!notEntitled) state.consecutiveFailedRounds++;
       logForDiagnosticsNoPII("error", "skills_sync_unexpected_error", {
         duration_ms: Date.now() - now,
       });
-      let G = S();
-      logEvent("tengu_skills_sync_error", G);
-      logFeatureBad("skills_sync_round", "unexpected_error", G);
+      let errorTelemetry = baseTelemetry();
+      logEvent("tengu_skills_sync_error", errorTelemetry);
+      logFeatureBad("skills_sync_round", "unexpected_error", errorTelemetry);
     }
   } finally {
-    if (ke) rescheduleResyncByBackoff();
-    for (let x of O.values())
-      x({
+    if (started) rescheduleResyncByBackoff();
+    for (let resolve of pendingResolvers.values())
+      resolve({
         ok: false,
         reason: "skills sync failed",
       });
     firstListDeferred().resolve();
-    if (de !== null && B !== null)
+    if (previousLiveDirs !== null && round !== null)
       await pruneGoneSkillDirs({
-        bucketRoot: B.root,
-        listedDirs: de,
-        removalTriedDirs: Me,
-        isSkillFileGone: (x) => isSkillMdMissing(x, storageV5),
+        bucketRoot: round.root,
+        listedDirs: previousLiveDirs,
+        removalTriedDirs,
+        isSkillFileGone: (dirPath) => isSkillMdMissing(dirPath, storageV5),
       }).catch(() => {
         logForDiagnosticsNoPII("warn", "skills_sync_hooks_removal_failed");
       });
-    if (B === null || B.guard.refused()) I = false;
-    if (I && B !== null) {
+    if (round === null || round.guard.refused()) touchedBucket = false;
+    if (touchedBucket && round !== null) {
       if (
         (await verifySyncRoot(
-          B.root,
+          round.root,
           getClaudeConfigDir(),
           {
             event: "skills_sync_root_refused",
@@ -1235,7 +1270,7 @@ async function runSkillsSyncRound(e, storageV5, s, t) {
           },
         ).catch(() => null)) === "real"
       )
-        await rm(perProcessTempDir(B.root), {
+        await rm(perProcessTempDir(round.root), {
           recursive: true,
           force: true,
         }).catch(() => {});
@@ -1243,8 +1278,8 @@ async function runSkillsSyncRound(e, storageV5, s, t) {
   }
 }
 //@ chunk-hme9amad.js:30122-30240 placement
-async function isClaimOwnerAlive(e) {
-  let { ownerPid, ownerProcStart } = parsePendingClaim(e);
+async function isClaimOwnerAlive(claim) {
+  let { ownerPid, ownerProcStart } = parsePendingClaim(claim);
   return (
     ownerPid !== undefined &&
     ownerPid !== process.pid &&
@@ -1256,16 +1291,16 @@ async function isClaimOwnerAlive(e) {
 /**
  * 判断技能目录被谁占用：已落地、进行中或无归属。
  */
-async function skillDirOccupancy(e, n, s) {
-  let skillsSyncManifest = await readSkillsSyncManifest(n, s);
+async function skillDirOccupancy(dirName, storageV5, round) {
+  let skillsSyncManifest = await readSkillsSyncManifest(storageV5, round);
   if (!skillsSyncManifest) return "unattributed";
   for (let skill of skillsSyncManifest.skills)
-    if (await isSameSkillDir(s.root, skill.name, e)) return "landed";
-  for (let d of skillsSyncManifest.pendingClaims ?? [])
-    if (parsePendingClaim(d).name === e && (await isClaimOwnerAlive(d))) {
+    if (await isSameSkillDir(round.root, skill.name, dirName)) return "landed";
+  for (let claim of skillsSyncManifest.pendingClaims ?? [])
+    if (parsePendingClaim(claim).name === dirName && (await isClaimOwnerAlive(claim))) {
       if (!isQuizzicalWirthOn()) return "inFlight";
-      let w = await lstat(join(s.root, e)).then(
-        (h) => Math.floor(h.ctimeMs),
+      let ctimeMs = await lstat(join(round.root, dirName)).then(
+        (stats) => Math.floor(stats.ctimeMs),
         (error) => {
           if (isENOENT(error)) return -1 / 0;
           logForDiagnosticsNoPII("warn", "skills_sync_occupant_unreadable", {
@@ -1274,18 +1309,18 @@ async function skillDirOccupancy(e, n, s) {
           return 1 / 0;
         },
       );
-      if (!(Date.now() - w >= INSTALL_WAIT_CEILING_MS)) return "inFlight";
+      if (!(Date.now() - ctimeMs >= INSTALL_WAIT_CEILING_MS)) return "inFlight";
       logForDiagnosticsNoPII("info", "skills_sync_live_claim_timed_out");
       return "unattributed";
     }
   return "unattributed";
 }
 //@ chunk-hme9amad.js:30763-30865 placement
-async function isSameSkillDir(root, name, s) {
+async function isSameSkillDir(root, name, otherName) {
   try {
-    let t = syncedSkillDirPath(root, name);
-    let d = syncedSkillDirPath(root, s);
-    return basename(t) === basename(d) || (await isSameFileIdentity(t, d));
+    let dirA = syncedSkillDirPath(root, name);
+    let dirB = syncedSkillDirPath(root, otherName);
+    return basename(dirA) === basename(dirB) || (await isSameFileIdentity(dirA, dirB));
   } catch {
     return false;
   }

@@ -12,7 +12,7 @@ import { dirname, basename, join } from "path";
 import { readdir, stat } from "fs/promises";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { cleanTaskDescription } from "../../utils/taskDescription.js";
 import {
   FEEDBACK_DISABLED_BY_POLICY,
@@ -24,7 +24,7 @@ import { containsProviderId, anyMessageHasProviderId } from "../api/providerIds.
 import { logForDebugging, getDebugLogPath, flushDebugLogs } from "../../utils/debug.js";
 import { redactTranscriptLines } from "../../utils/transcriptRequestBlobs.js";
 import { withholdTranscriptLine, withholdForExport } from "../../utils/transcriptWithholding.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   getTranscriptPath,
   extractTeammateTranscriptsFromTasks,
@@ -52,102 +52,111 @@ import { normalizeMessagesForAPI } from "../../utils/messages.js";
 import { nullStub } from "../../utils/externalBuildStubs.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { isUuidShaped } from "../../utils/sessionStoragePortable.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-xx1vmpsq.js:4432-4589 placement
-class FeedbackPayloadBuilder {
-  chunks = [];
-  static encoder = new TextEncoder();
-  push(e) {
-    if (e.length > 0) this.chunks.push(FeedbackPayloadBuilder.encoder.encode(e));
-  }
-  toBuffer() {
-    return Buffer.concat(this.chunks);
-  }
-}
+let FeedbackPayloadBuilder; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xx1vmpsq.js:4432", () => {
+  FeedbackPayloadBuilder = class FeedbackPayloadBuilder {
+    chunks = [];
+    static encoder = new TextEncoder();
+    push(text) {
+      if (text.length > 0) this.chunks.push(FeedbackPayloadBuilder.encoder.encode(text));
+    }
+    toBuffer() {
+      return Buffer.concat(this.chunks);
+    }
+  };
+});
 //@ chunk-xx1vmpsq.js:4589-5324 placement
 /**
  * 组装 /feedback 提交体：按字段集合挑出 transcript、子代理转录等，逐段 JSON 序列化并控制大小。
  */
-function buildFeedbackPayload(e, s, n, y) {
-  let r = new FeedbackPayloadBuilder();
-  let w = (M) => {
-    if (M.length > 0) r.push(jsonStringify(M).slice(1, -1));
+function buildFeedbackPayload(payload, transcriptFields, subagentFields, options) {
+  let builder = new FeedbackPayloadBuilder();
+  let push = (json) => {
+    if (json.length > 0) builder.push(jsonStringify(json).slice(1, -1));
   };
-  r.push('{"content":"');
-  w("{");
-  let T = true;
-  let C = (M) => {
-    if (!T) w(",");
-    T = false;
-    w(jsonStringify(M) + ":");
+  builder.push('{"content":"');
+  push("{");
+  let first = true;
+  let pushKey = (key) => {
+    if (!first) push(",");
+    first = false;
+    push(jsonStringify(key) + ":");
   };
-  for (let [key, value] of Object.entries(e)) {
+  for (let [key, value] of Object.entries(payload)) {
     if (value === undefined) continue;
-    if (s.has(key) && Array.isArray(value)) {
-      C(key);
-      w("[");
+    if (transcriptFields.has(key) && Array.isArray(value)) {
+      pushKey(key);
+      push("[");
       for (let j = 0; j < value.length; j++) {
-        if (j > 0) w(",");
-        w(jsonStringify(value[j]));
+        if (j > 0) push(",");
+        push(jsonStringify(value[j]));
       }
-      w("]");
-    } else if (n.has(key) && value !== null && typeof value === "object") {
-      C(key);
-      w("{");
+      push("]");
+    } else if (subagentFields.has(key) && value !== null && typeof value === "object") {
+      pushKey(key);
+      push("{");
       let entries = Object.entries(value);
       for (let j = 0; j < entries.length; j++) {
-        let [v, U] = entries[j] ?? ["", undefined];
-        if (j > 0) w(",");
-        w(jsonStringify(v) + ":[");
-        if (Array.isArray(U))
-          for (let j = 0; j < U.length; j++) {
-            if (j > 0) w(",");
-            w(jsonStringify(U[j]));
+        let [name, rows] = entries[j] ?? ["", undefined];
+        if (j > 0) push(",");
+        push(jsonStringify(name) + ":[");
+        if (Array.isArray(rows))
+          for (let j = 0; j < rows.length; j++) {
+            if (j > 0) push(",");
+            push(jsonStringify(rows[j]));
           }
-        w("]");
+        push("]");
       }
-      w("}");
+      push("}");
     } else {
-      C(key);
-      w(jsonStringify(value));
+      pushKey(key);
+      push(jsonStringify(value));
     }
   }
-  w("}");
-  r.push('"');
-  let extraOuterFields = y?.extraOuterFields;
+  push("}");
+  builder.push('"');
+  let extraOuterFields = options?.extraOuterFields;
   if (extraOuterFields)
     for (let [key, value] of Object.entries(extraOuterFields))
-      r.push(`,${jsonStringify(key)}:${jsonStringify(value)}`);
-  r.push("}");
-  return r.toBuffer();
+      builder.push(`,${jsonStringify(key)}:${jsonStringify(value)}`);
+  builder.push("}");
+  return builder.toBuffer();
 }
 //@ chunk-xx1vmpsq.js:5324-5635 placement
 /**
  * 反馈接口错误响应的 schema。
  */
-var FEEDBACK_DISABLED_MESSAGE = "Feedback has not been enabled for your organization.";
-var FEEDBACK_THIRD_PARTY_BLOCKED_MESSAGE =
-  "Feedback containing third-party provider content cannot be submitted.";
-var errorResponseSchema = DoctorLazy(() =>
-  u({
-    error: u({
-      type: string().optional().catch(undefined),
-      message: string().optional().catch(undefined),
-      details: u({
-        error_code: string().optional().catch(undefined),
-      })
-        .nullish()
-        .catch(undefined),
+var FEEDBACK_DISABLED_MESSAGE; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var FEEDBACK_THIRD_PARTY_BLOCKED_MESSAGE;
+var errorResponseSchema;
+deferInit("chunk-xx1vmpsq.js:5324", () => {
+  FEEDBACK_DISABLED_MESSAGE = "Feedback has not been enabled for your organization.";
+  FEEDBACK_THIRD_PARTY_BLOCKED_MESSAGE =
+    "Feedback containing third-party provider content cannot be submitted.";
+  errorResponseSchema = DoctorLazy(() =>
+    objectSchema({
+      error: objectSchema({
+        type: stringSchema().optional().catch(undefined),
+        message: stringSchema().optional().catch(undefined),
+        details: objectSchema({
+          error_code: stringSchema().optional().catch(undefined),
+        })
+          .nullish()
+          .catch(undefined),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-xx1vmpsq.js:5635-6631 placement
 /**
  * 解析反馈接口的错误响应：区分组织禁用、第三方内容拒收、ZDR 组织、OAuth 权限不足等拒绝类型。
  */
-function classifyFeedbackError(status, s) {
-  let n = errorResponseSchema().safeParse(s);
-  let error = n.success ? n.data.error : undefined;
+function classifyFeedbackError(status, body) {
+  let parsed = errorResponseSchema().safeParse(body);
+  let error = parsed.success ? parsed.data.error : undefined;
   let errorCode = error?.details?.error_code;
   let message = error?.message;
   let serverMessage = cleanTaskDescription(message);
@@ -198,13 +207,14 @@ function classifyFeedbackError(status, s) {
         serverMessage,
       },
     };
-  let C = errorCode === "feedback_check_unavailable" || status === 408 || status === 429 || status >= 500;
+  let context =
+    errorCode === "feedback_check_unavailable" || status === 408 || status === 429 || status >= 500;
   return {
     success: false,
     failureReason: "http_error",
     statusCode: status,
     refusal: {
-      kind: C ? "transient" : "other",
+      kind: context ? "transient" : "other",
       serverMessage,
     },
   };
@@ -213,29 +223,31 @@ function classifyFeedbackError(status, s) {
 var ZDR_FEEDBACK_MESSAGE =
   "Feedback collection is not available for organizations with custom data retention policies.";
 //@ chunk-xx1vmpsq.js:6732-6884 placement
-function orgFeedbackRefusalMessage(e) {
-  if (e.isZdrOrg) return ZDR_FEEDBACK_MESSAGE;
-  if (e.refusal?.kind !== "org") return;
-  return e.refusal.serverMessage ?? "Your organization does not accept feedback.";
+function orgFeedbackRefusalMessage(session) {
+  if (session.isZdrOrg) return ZDR_FEEDBACK_MESSAGE;
+  if (session.refusal?.kind !== "org") return;
+  return session.refusal.serverMessage ?? "Your organization does not accept feedback.";
 }
 //@ chunk-xx1vmpsq.js:6884-6976 placement
-function orgRefusalError(e) {
-  let s = orgFeedbackRefusalMessage(e);
-  return s === undefined ? undefined : appendBugReportHint(`Couldn't send feedback: ${s}`, s);
+function orgRefusalError(session) {
+  let message = orgFeedbackRefusalMessage(session);
+  return message === undefined
+    ? undefined
+    : appendBugReportHint(`Couldn't send feedback: ${message}`, message);
 }
 //@ chunk-xx1vmpsq.js:6976-7275 placement
-function credentialRefusalMessage(e) {
-  if (e.refusal?.kind !== "credential") return;
-  let s = serverStatusSuffix(e) ?? "";
-  return e.failureReason === "scope_refused"
-    ? `Couldn't send feedback: the sign-in this session uses is not allowed to send feedback${s}.`
-    : `Couldn't send feedback: the server did not accept the credentials this session uses${s}.`;
+function credentialRefusalMessage(session) {
+  if (session.refusal?.kind !== "credential") return;
+  let suffix = serverStatusSuffix(session) ?? "";
+  return session.failureReason === "scope_refused"
+    ? `Couldn't send feedback: the sign-in this session uses is not allowed to send feedback${suffix}.`
+    : `Couldn't send feedback: the server did not accept the credentials this session uses${suffix}.`;
 }
 //@ chunk-xx1vmpsq.js:7275-7433 placement
-function serverStatusSuffix(e) {
-  if (!e.statusCode) return;
-  let replaced = e.refusal?.serverMessage?.replace(/\.$/, "");
-  return ` (server returned ${e.statusCode}${replaced === undefined ? "" : `: ${replaced}`})`;
+function serverStatusSuffix(session) {
+  if (!session.statusCode) return;
+  let replaced = session.refusal?.serverMessage?.replace(/\.$/, "");
+  return ` (server returned ${session.statusCode}${replaced === undefined ? "" : `: ${replaced}`})`;
 }
 //@ chunk-xx1vmpsq.js:7541-7589 placement
 /**
@@ -249,33 +261,33 @@ var MAX_RECENT_TRANSCRIPT_BYTES = 1048576;
 //@ chunk-xx1vmpsq.js:7589-8138 placement
 async function readSessionTranscriptForFeedback(
   { transcriptPath, scope = "session", maxRawTranscriptBytes, excludeThirdPartyTranscripts = false, host },
-  w,
+  input,
 ) {
   let [taskOutput, recentSessionTranscripts] = await Promise.all([
-    getTaskOutput(transcriptPath, maxRawTranscriptBytes, w),
-    collectRecentSessionTranscripts(transcriptPath, scope, excludeThirdPartyTranscripts, w),
+    getTaskOutput(transcriptPath, maxRawTranscriptBytes, input),
+    collectRecentSessionTranscripts(transcriptPath, scope, excludeThirdPartyTranscripts, input),
   ]);
-  let I = taskOutput;
+  let opts = taskOutput;
   let rawTranscript = false;
-  if (excludeThirdPartyTranscripts && I !== null)
-    if (containsProviderId(I)) {
-      I = null;
+  if (excludeThirdPartyTranscripts && opts !== null)
+    if (containsProviderId(opts)) {
+      opts = null;
       rawTranscript = true;
       logForDebugging("rawTranscriptJsonl withheld from session history: contains_3p_transcript_markers");
-    } else I = redactTranscriptLines(I);
+    } else opts = redactTranscriptLines(opts);
   return {
     rawTranscriptJsonl:
-      I === null
+      opts === null
         ? null
-        : withholdTranscriptLine(I, {
+        : withholdTranscriptLine(opts, {
             host,
           }).jsonl,
     recentSessionTranscripts:
       recentSessionTranscripts.transcripts &&
-      xr(
+      import_mapValues(
         recentSessionTranscripts.transcripts,
-        (R) =>
-          withholdTranscriptLine(R, {
+        (result) =>
+          withholdTranscriptLine(result, {
             host: undefined,
           }).jsonl,
       ),
@@ -300,42 +312,42 @@ async function collectFeedbackTranscripts(
     excludeThirdPartyTranscripts = false,
     host,
   },
-  I,
+  storage,
 ) {
   let transcriptPath = getTranscriptPath();
-  let R = isRemoteSessionAvailable();
-  let [E, sessionTranscriptForFeedback, v, U] = await Promise.all([
+  let remote = isRemoteSessionAvailable();
+  let [diskSubagents, sessionTranscriptForFeedback, isGit, commitSha] = await Promise.all([
     diskSubagentTranscripts,
     readSessionTranscriptForFeedback(
       {
         transcriptPath,
-        scope: R ? "session" : scope,
+        scope: remote ? "session" : scope,
         maxRawTranscriptBytes,
         excludeThirdPartyTranscripts,
         host,
       },
-      I,
+      storage,
     ),
-    R ? false : getIsGit(),
-    R ? "" : getHead(),
+    remote ? false : getIsGit(),
+    remote ? "" : getHead(),
   ]);
   let teammateTranscriptsFromTasks = extractTeammateTranscriptsFromTasks(backgroundTasks, transcripts);
-  let re = {
-    ...E,
+  let allSubagents = {
+    ...diskSubagents,
     ...teammateTranscriptsFromTasks,
   };
   let teammateIds = new Set(Object.keys(teammateTranscriptsFromTasks));
-  let fe = 0;
+  let droppedSubagents = 0;
   if (excludeThirdPartyTranscripts) {
-    for (let [key, value] of Object.entries(re))
+    for (let [key, value] of Object.entries(allSubagents))
       if (anyMessageHasProviderId(value)) {
-        delete re[key];
-        fe++;
+        delete allSubagents[key];
+        droppedSubagents++;
         logForDebugging(`subagent transcript ${key} withheld: contains_3p_transcript_markers`);
       }
   }
-  let subagentTranscripts = xr(re, (ue) =>
-    withholdForExport(ue, {
+  let subagentTranscripts = import_mapValues(allSubagents, (messages) =>
+    withholdForExport(messages, {
       host,
     }),
   );
@@ -346,10 +358,10 @@ async function collectFeedbackTranscripts(
     recentSessionTranscripts: sessionTranscriptForFeedback.recentSessionTranscripts,
     subagentTranscripts,
     teammateIds,
-    isGit: v,
-    commitSha: U || null,
-    remoteWorkspace: R,
-    remoteSessionId: R ? (getRemoteCaps()?.sessionId ?? null) : null,
+    isGit,
+    commitSha: commitSha || null,
+    remoteWorkspace: remote,
+    remoteSessionId: remote ? (getRemoteCaps()?.sessionId ?? null) : null,
     workingDirectory: getOriginalCwd(),
     platform: env.platform,
     terminal: env.terminal,
@@ -368,157 +380,159 @@ async function collectFeedbackTranscripts(
     latestAssistantAPIMessageId: lastRealAssistantMessage?.message.id ?? null,
     thirdPartyExclusions: {
       ...sessionTranscriptForFeedback.thirdPartyExclusions,
-      subagents: fe,
+      subagents: droppedSubagents,
     },
   };
 }
 //@ chunk-xx1vmpsq.js:9698-9974 placement = getTaskOutput (1)
-async function getTaskOutput(transcriptPath, s, n) {
-  if (s === undefined) return null;
-  if (n !== undefined) {
-    let y = mainTranscriptKeyFor(transcriptPath);
-    if (y !== undefined) return readRecentRecords(n, y, s);
+async function getTaskOutput(dir, maxBytes, storage) {
+  if (maxBytes === undefined) return null;
+  if (storage !== undefined) {
+    let key = mainTranscriptKeyFor(dir);
+    if (key !== undefined) return readRecentRecords(storage, key, maxBytes);
   }
   try {
-    let { content, bytesRead, bytesTotal } = await tailFile(transcriptPath, s);
-    let T = content;
+    let { content, bytesRead, bytesTotal } = await tailFile(dir, maxBytes);
+    let text = content;
     if (bytesRead < bytesTotal) {
       let index = content.indexOf(`
 `);
-      T = index >= 0 ? content.slice(index + 1) : "";
+      text = index >= 0 ? content.slice(index + 1) : "";
     }
-    return T.trim().length > 0 ? T : null;
+    return text.trim().length > 0 ? text : null;
   } catch {
     return null;
   }
 }
 //@ chunk-xx1vmpsq.js:9974-10364 placement
-async function readRecentRecords(e, s, n) {
-  let records = await e.readRecords(s, {
+async function readRecentRecords(storage, key, maxBytes) {
+  let records = await storage.readRecords(key, {
     order: "backward",
-    maxBytes: n,
+    maxBytes,
   });
   if (!records.ok) return null;
   let items = records.value.items;
   let reduced = items.reduce((acc, item) => acc + item.data.byteLength, 0);
-  let T = items.length;
-  if (records.value.nextSeq !== undefined || reduced > n) {
-    T = 0;
-    let I = 0;
+  let take = items.length;
+  if (records.value.nextSeq !== undefined || reduced > maxBytes) {
+    take = 0;
+    let total = 0;
     for (let item of items) {
-      I += item.data.byteLength;
-      if (I >= n) break;
-      T += 1;
+      total += item.data.byteLength;
+      if (total >= maxBytes) break;
+      take += 1;
     }
   }
   let str = Buffer.concat(
     items
-      .slice(0, T)
+      .slice(0, take)
       .reverse()
       .map((item) => item.data),
   ).toString("utf8");
   return str.trim().length > 0 ? str : null;
 }
 //@ chunk-xx1vmpsq.js:10364-11267 placement
-async function collectRecentSessionTranscripts(transcriptPath, scope, excludeThirdPartyTranscripts, y) {
+async function collectRecentSessionTranscripts(dir, scope, excludeThirdParty, storage) {
   if (scope === "session")
     return {
       transcripts: undefined,
       droppedThirdParty: 0,
     };
-  if (y !== undefined) {
-    let A = mainTranscriptKeyFor(transcriptPath);
-    if (A !== undefined) return listRecentSessions(y, A, scope, excludeThirdPartyTranscripts);
+  if (storage !== undefined) {
+    let key = mainTranscriptKeyFor(dir);
+    if (key !== undefined) return listRecentSessions(storage, key, scope, excludeThirdParty);
   }
-  let r = dirname(transcriptPath);
-  let w = basename(transcriptPath);
-  let T = Date.now() - RETENTION_WINDOW_MS[scope];
-  let C;
+  let dir_2 = dirname(dir);
+  let currentName = basename(dir);
+  let cutoffMs = Date.now() - RETENTION_WINDOW_MS[scope];
+  let entries;
   try {
-    C = await readdir(r);
+    entries = await readdir(dir_2);
   } catch {
     return {
       transcripts: undefined,
       droppedThirdParty: 0,
     };
   }
-  let I = [];
+  let candidates = [];
   await Promise.all(
-    C.filter((A) => A.endsWith(".jsonl") && A !== w).map(async (A) => {
-      let v = join(r, A);
-      try {
-        let U = await stat(v);
-        if (U.isFile() && U.mtimeMs >= T)
-          I.push({
-            path: v,
-            sessionId: A.slice(0, -6),
-            mtimeMs: U.mtimeMs,
-            size: U.size,
-          });
-      } catch {}
-    }),
+    entries
+      .filter((name) => name.endsWith(".jsonl") && name !== currentName)
+      .map(async (name) => {
+        let fullPath = join(dir_2, name);
+        try {
+          let stats = await stat(fullPath);
+          if (stats.isFile() && stats.mtimeMs >= cutoffMs)
+            candidates.push({
+              path: fullPath,
+              sessionId: name.slice(0, -6),
+              mtimeMs: stats.mtimeMs,
+              size: stats.size,
+            });
+        } catch {}
+      }),
   );
-  I.sort((A, v) => v.mtimeMs - A.mtimeMs);
-  let M = {};
-  let R = 0;
-  let E = 0;
-  for (let A of I) {
-    if (A.size === 0 || R + A.size > MAX_RECENT_TRANSCRIPT_BYTES) continue;
+  candidates.sort((left, right) => right.mtimeMs - left.mtimeMs);
+  let transcripts = {};
+  let totalBytes = 0;
+  let droppedThirdParty = 0;
+  for (let candidate of candidates) {
+    if (candidate.size === 0 || totalBytes + candidate.size > MAX_RECENT_TRANSCRIPT_BYTES) continue;
     try {
-      let { content, bytesRead, bytesTotal } = await tailFile(A.path, MAX_RECENT_TRANSCRIPT_BYTES);
+      let { content, bytesRead, bytesTotal } = await tailFile(candidate.path, MAX_RECENT_TRANSCRIPT_BYTES);
       if (!content || bytesRead < bytesTotal) continue;
-      if (excludeThirdPartyTranscripts && containsProviderId(content)) {
-        E++;
-        logForDebugging(`recent session ${A.sessionId} withheld: contains_3p_transcript_markers`);
+      if (excludeThirdParty && containsProviderId(content)) {
+        droppedThirdParty++;
+        logForDebugging(`recent session ${candidate.sessionId} withheld: contains_3p_transcript_markers`);
         continue;
       }
-      M[A.sessionId] = excludeThirdPartyTranscripts ? redactTranscriptLines(content) : content;
-      R += A.size;
+      transcripts[candidate.sessionId] = excludeThirdParty ? redactTranscriptLines(content) : content;
+      totalBytes += candidate.size;
     } catch {}
   }
   return {
-    transcripts: Object.keys(M).length > 0 ? M : undefined,
-    droppedThirdParty: E,
+    transcripts: Object.keys(transcripts).length > 0 ? transcripts : undefined,
+    droppedThirdParty,
   };
 }
 //@ chunk-xx1vmpsq.js:11267-12540 placement
-async function listRecentSessions(e, s, n, y) {
-  let r = Date.now() - RETENTION_WINDOW_MS[n];
-  let w = [];
-  let T = 0;
+async function listRecentSessions(storage, current, scope, excludeThirdParty) {
+  let cutoffMs = Date.now() - RETENTION_WINDOW_MS[scope];
+  let candidates = [];
+  let pageCount = 0;
   let allPages = await readAllPages(
-    (E) =>
-      e.listEntries(
+    (cursor) =>
+      storage.listEntries(
         {
           namespace: "transcript",
-          projectKey: s.projectKey,
+          projectKey: current.projectKey,
         },
         {
           skipScopeStats: true,
-          ...(E !== undefined && {
-            cursor: E,
+          ...(cursor !== undefined && {
+            cursor,
           }),
         },
       ),
-    (E) => {
-      T++;
-      for (let A of E) {
-        if (A.kind !== "key" || A.key.namespace !== "transcript") continue;
-        if (A.key.agentId !== undefined || A.key.journal === true) continue;
-        if (A.key.projectKey !== s.projectKey) continue;
-        if (A.key.sessionId === s.sessionId) continue;
-        if (!isValidKeySegment(A.key.sessionId) || validateStorageKey(A.key) !== undefined) continue;
-        if ((A.mtimeMs ?? 0) >= r)
-          w.push({
-            key: A.key,
-            sessionId: A.key.sessionId,
-            mtimeMs: A.mtimeMs ?? 0,
-            size: A.size ?? 0,
+    (items) => {
+      pageCount++;
+      for (let item of items) {
+        if (item.kind !== "key" || item.key.namespace !== "transcript") continue;
+        if (item.key.agentId !== undefined || item.key.journal === true) continue;
+        if (item.key.projectKey !== current.projectKey) continue;
+        if (item.key.sessionId === current.sessionId) continue;
+        if (!isValidKeySegment(item.key.sessionId) || validateStorageKey(item.key) !== undefined) continue;
+        if ((item.mtimeMs ?? 0) >= cutoffMs)
+          candidates.push({
+            key: item.key,
+            sessionId: item.key.sessionId,
+            mtimeMs: item.mtimeMs ?? 0,
+            size: item.size ?? 0,
           });
       }
     },
   );
-  if (allPages.status === "error" && T === 0)
+  if (allPages.status === "error" && pageCount === 0)
     return {
       transcripts: undefined,
       droppedThirdParty: 0,
@@ -527,33 +541,33 @@ async function listRecentSessions(e, s, n, y) {
     logForDebugging(
       `recent sessions: listing cut short after ${DEFAULT_MAX_PAGES} pages; keeping what was listed`,
     );
-  w.sort((E, A) => A.mtimeMs - E.mtimeMs);
-  let I = {};
-  let M = 0;
-  let R = 0;
-  for (let E of w) {
-    if (E.size === 0 || M + E.size > MAX_RECENT_TRANSCRIPT_BYTES) continue;
-    let A = await e.read([
+  candidates.sort((left, right) => right.mtimeMs - left.mtimeMs);
+  let transcripts = {};
+  let totalBytes = 0;
+  let droppedThirdParty = 0;
+  for (let candidate of candidates) {
+    if (candidate.size === 0 || totalBytes + candidate.size > MAX_RECENT_TRANSCRIPT_BYTES) continue;
+    let readResult = await storage.read([
       {
-        key: E.key,
+        key: candidate.key,
         tail: MAX_RECENT_TRANSCRIPT_BYTES,
       },
     ]);
-    if (!A.ok) continue;
-    let v = A.value.items[0];
-    if (!v.found || v.value.byteLength === 0 || v.value.byteLength < v.totalBytes) continue;
-    let str = Buffer.from(v.value).toString("utf8");
-    if (y && containsProviderId(str)) {
-      R++;
-      logForDebugging(`recent session ${E.sessionId} withheld: contains_3p_transcript_markers`);
+    if (!readResult.ok) continue;
+    let item = readResult.value.items[0];
+    if (!item.found || item.value.byteLength === 0 || item.value.byteLength < item.totalBytes) continue;
+    let str = Buffer.from(item.value).toString("utf8");
+    if (excludeThirdParty && containsProviderId(str)) {
+      droppedThirdParty++;
+      logForDebugging(`recent session ${candidate.sessionId} withheld: contains_3p_transcript_markers`);
       continue;
     }
-    I[E.sessionId] = y ? redactTranscriptLines(str) : str;
-    M += E.size;
+    transcripts[candidate.sessionId] = excludeThirdParty ? redactTranscriptLines(str) : str;
+    totalBytes += candidate.size;
   }
   return {
-    transcripts: Object.keys(I).length > 0 ? I : undefined,
-    droppedThirdParty: R,
+    transcripts: Object.keys(transcripts).length > 0 ? transcripts : undefined,
+    droppedThirdParty,
   };
 }
 //@ chunk-xx1vmpsq.js:12540-12850 placement
@@ -575,12 +589,12 @@ var PROVIDER_LABELS = {
 /**
  * 判定 /feedback 的提交方式：post（发 Anthropic）、share、disabled（第三方提供商、非第一方认证等），返回 kind 与原因。
  */
-function feedbackMode(e = "/feedback") {
-  let s = checkProductFeedbackAllowed(e);
-  if (s !== null)
+function feedbackMode(command = "/feedback") {
+  let blockedReason = checkProductFeedbackAllowed(command);
+  if (blockedReason !== null)
     return {
       kind: "disabled",
-      reason: s,
+      reason: blockedReason,
     };
   let apiProvider = getAPIProvider();
   if (apiProvider !== "firstParty")
@@ -589,14 +603,14 @@ function feedbackMode(e = "/feedback") {
       cause: "provider",
       label: PROVIDER_LABELS[apiProvider],
     };
-  let y = feedbackCredentialStatus();
-  if (y)
+  let mode = feedbackCredentialStatus();
+  if (mode)
     return {
       kind: "bundle",
-      ...y,
+      ...mode,
     };
   if (
-    e === "/share" &&
+    command === "/share" &&
     (env.CLAUDE_CODE_ENABLE_SHARE_BUNDLE || getCachedClientData()?.[TENGU_HUMMING_WAVE] === true)
   )
     return {
@@ -615,8 +629,8 @@ function feedbackCredentialStatus() {
       cause: "no_creds",
       label: "no Anthropic credentials",
     };
-  let s = authHeaders.headers["x-api-key"];
-  return s && apiKeyForHost(s) === null
+  let header = authHeaders.headers["x-api-key"];
+  return header && apiKeyForHost(header) === null
     ? {
         cause: "gateway",
         label: PROVIDER_LABELS.gateway,
@@ -627,87 +641,96 @@ function feedbackCredentialStatus() {
 /**
  * 可从请求里挑选的字段名（model、system、tools 等）。
  */
-var TRANSCRIPT_FIELDS = new Set(["transcript"]);
-var SUBAGENT_TRANSCRIPT_FIELDS = new Set(["subagentTranscripts"]);
-var MAX_RAW_TRANSCRIPT_BYTES = 4194304;
-var MAX_PRECOMPACT_TRANSCRIPT_BYTES = 2097152;
-var MAX_PAYLOAD_PART_COUNT = 8388608;
-var MAX_RECOMMENDED_TRANSCRIPT_BYTES = 2097152;
-var PICKABLE_REQUEST_FIELDS = [
-  "model",
-  "system",
-  "tools",
-  "tool_choice",
-  "betas",
-  "max_tokens",
-  "thinking",
-  "temperature",
-  "context_management",
-  "output_config",
-];
+var TRANSCRIPT_FIELDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SUBAGENT_TRANSCRIPT_FIELDS;
+var MAX_RAW_TRANSCRIPT_BYTES;
+var MAX_PRECOMPACT_TRANSCRIPT_BYTES;
+var MAX_PAYLOAD_PART_COUNT;
+var MAX_RECOMMENDED_TRANSCRIPT_BYTES;
+var PICKABLE_REQUEST_FIELDS;
+deferInit("chunk-xx1vmpsq.js:13380", () => {
+  TRANSCRIPT_FIELDS = new Set(["transcript"]);
+  SUBAGENT_TRANSCRIPT_FIELDS = new Set(["subagentTranscripts"]);
+  MAX_RAW_TRANSCRIPT_BYTES = 4194304;
+  MAX_PRECOMPACT_TRANSCRIPT_BYTES = 2097152;
+  MAX_PAYLOAD_PART_COUNT = 8388608;
+  MAX_RECOMMENDED_TRANSCRIPT_BYTES = 2097152;
+  PICKABLE_REQUEST_FIELDS = [
+    "model",
+    "system",
+    "tools",
+    "tool_choice",
+    "betas",
+    "max_tokens",
+    "thinking",
+    "temperature",
+    "context_management",
+    "output_config",
+  ];
+});
 //@ chunk-xx1vmpsq.js:13620-13715 placement
-function pickFeedbackFields(e) {
-  let s = {};
-  for (let n of PICKABLE_REQUEST_FIELDS)
-    if (e[n] !== undefined)
-      Object.assign(s, {
-        [n]: e[n],
+function pickFeedbackFields(input) {
+  let picked = {};
+  for (let field of PICKABLE_REQUEST_FIELDS)
+    if (input[field] !== undefined)
+      Object.assign(picked, {
+        [field]: input[field],
       });
-  return s;
+  return picked;
 }
 //@ chunk-xx1vmpsq.js:13715-13758 placement
-function feedbackPayloadPartCount(e) {
-  return buildFeedbackPayload(e, TRANSCRIPT_FIELDS, SUBAGENT_TRANSCRIPT_FIELDS).length;
+function feedbackPayloadPartCount(input) {
+  return buildFeedbackPayload(input, TRANSCRIPT_FIELDS, SUBAGENT_TRANSCRIPT_FIELDS).length;
 }
 //@ chunk-xx1vmpsq.js:13758-13843 placement
 function headlessFeedbackMode() {
-  let e = feedbackMode();
-  if (e.kind === "disabled" && !isFeedbackDisabledByEnv()) return;
+  let mode = feedbackMode();
+  if (mode.kind === "disabled" && !isFeedbackDisabledByEnv()) return;
   return {
-    kind: e.kind,
+    kind: mode.kind,
   };
 }
 //@ chunk-xx1vmpsq.js:13843-14209 placement
 async function submitHeadlessFeedback({ messages, description, surface, storageV5, host }) {
-  let w = feedbackMode();
-  if (w.kind === "disabled")
+  let mode = feedbackMode();
+  if (mode.kind === "disabled")
     return {
       feedback_id: null,
-      unavailable_reason: w.reason,
+      unavailable_reason: mode.reason,
     };
-  let T = await saveFeedbackBundle({
+  let payload = await saveFeedbackBundle({
     messages,
     description,
     surface,
     storageV5,
     host,
   });
-  if (!T.success)
+  if (!payload.success)
     return {
       feedback_id: null,
       failure_reason: "bundle_write_failed",
     };
   return {
-    feedback_id: T.bundleId,
-    bundle_path: T.zipPath,
+    feedback_id: payload.bundleId,
+    bundle_path: payload.zipPath,
   };
 }
 //@ chunk-xx1vmpsq.js:14209-14596 placement
 function feedbackUnavailableReason() {
-  let e = feedbackMode();
-  switch (e.kind) {
+  let mode = feedbackMode();
+  switch (mode.kind) {
     case "post":
     case "share":
       return null;
     case "disabled":
-      return e.reason;
+      return mode.reason;
     case "bundle":
-      switch (e.cause) {
+      switch (mode.cause) {
         case "no_creds":
           return `/feedback requires Anthropic credentials (OAuth or API key). Report issues at ${FEEDBACK_ISSUES_URL}`;
         case "provider":
         case "gateway":
-          return `/feedback is not available when using ${e.label}. Report issues at ${FEEDBACK_ISSUES_URL}`;
+          return `/feedback is not available when using ${mode.label}. Report issues at ${FEEDBACK_ISSUES_URL}`;
         case "share_switch":
           return null;
       }
@@ -715,12 +738,12 @@ function feedbackUnavailableReason() {
 }
 //@ chunk-xx1vmpsq.js:14596-14709 placement
 function getRedactedInMemoryErrors() {
-  return getInMemoryErrors().map((e) => {
-    let s = {
-      ...e,
+  return getInMemoryErrors().map((entry) => {
+    let copy = {
+      ...entry,
     };
-    if (s && typeof s.error === "string") s.error = redactSecrets_2(s.error);
-    return s;
+    if (copy && typeof copy.error === "string") copy.error = redactSecrets_2(copy.error);
+    return copy;
   });
 }
 //@ chunk-xx1vmpsq.js:14709-15702 placement
@@ -733,52 +756,57 @@ function readPreCompactTranscript(jsonl, budget, seenUuids) {
 `);
   let messages = [];
   let sizes = [];
-  let T = new Set();
+  let seenIds = new Set();
   let boundaryIndex = -1;
   for (let line of lines) {
     if (!line) continue;
-    let A;
+    let entry;
     try {
-      A = jsonParse(line);
+      entry = jsonParse(line);
     } catch {
       continue;
     }
-    if (typeof A !== "object" || A === null) continue;
-    if (A.type === "system" && A.subtype === "compact_boundary") {
+    if (typeof entry !== "object" || entry === null) continue;
+    if (entry.type === "system" && entry.subtype === "compact_boundary") {
       boundaryIndex = messages.length;
       continue;
     }
-    if (A.type !== "user" && A.type !== "assistant") continue;
-    if (typeof A.uuid !== "string" || typeof A.timestamp !== "string" || A.isSidechain === true || !A.message)
+    if (entry.type !== "user" && entry.type !== "assistant") continue;
+    if (
+      typeof entry.uuid !== "string" ||
+      typeof entry.timestamp !== "string" ||
+      entry.isSidechain === true ||
+      !entry.message
+    )
       continue;
-    if (seenUuids.has(A.uuid) || T.has(A.uuid)) continue;
-    T.add(A.uuid);
+    if (seenUuids.has(entry.uuid) || seenIds.has(entry.uuid)) continue;
+    seenIds.add(entry.uuid);
     messages.push(
-      A.type === "user"
+      entry.type === "user"
         ? {
             type: "user",
-            uuid: A.uuid,
-            timestamp: A.timestamp,
-            message: A.message,
-            ...(A.isMeta === true && {
+            uuid: entry.uuid,
+            timestamp: entry.timestamp,
+            message: entry.message,
+            ...(entry.isMeta === true && {
               isMeta: true,
             }),
-            ...(A.toolUseResult !== undefined && {
-              toolUseResult: A.toolUseResult,
+            ...(entry.toolUseResult !== undefined && {
+              toolUseResult: entry.toolUseResult,
             }),
-            ...(A.isCompactSummary === true && {
+            ...(entry.isCompactSummary === true && {
               isCompactSummary: true,
             }),
-            ...(A.repeatsCompactSummary === true && {
+            ...(entry.repeatsCompactSummary === true && {
               repeatsCompactSummary: true,
             }),
           }
         : {
             type: "assistant",
-            uuid: A.uuid,
-            timestamp: A.timestamp,
-            message: A.message,
-            requestId: A.requestId,
+            uuid: entry.uuid,
+            timestamp: entry.timestamp,
+            message: entry.message,
+            requestId: entry.requestId,
           },
     );
     sizes.push(Buffer.byteLength(line));
@@ -786,53 +814,56 @@ function readPreCompactTranscript(jsonl, budget, seenUuids) {
   if (boundaryIndex <= 0) return [];
   let { start, oversized } = selectTailWithinBudget(sizes, budget, boundaryIndex);
   let sliced = messages.slice(start, boundaryIndex);
-  return oversized.size === 0 ? sliced : sliced.filter((E, A) => !oversized.has(start + A));
+  return oversized.size === 0 ? sliced : sliced.filter((message, index) => !oversized.has(start + index));
 }
 //@ chunk-xx1vmpsq.js:15702-15893 placement
 /**
  * 从末尾向前选择不超过字节预算的条目（单条超预算的跳过），返回保留范围与跳过的下标。
  */
-function selectTailWithinBudget(e, s, boundaryIndex = e.length) {
-  let y = 0;
-  let r = boundaryIndex;
-  let w = new Set();
-  while (r > 0) {
-    let T = e[r - 1];
-    if (T === undefined) break;
-    if (T > s) {
-      w.add(r - 1);
-      r--;
+function selectTailWithinBudget(sizes, budget, boundaryIndex = sizes.length) {
+  let keptBytes = 0;
+  let start = boundaryIndex;
+  let oversized = new Set();
+  while (start > 0) {
+    let size = sizes[start - 1];
+    if (size === undefined) break;
+    if (size > budget) {
+      oversized.add(start - 1);
+      start--;
       continue;
     }
-    if (y + T > s) break;
-    y += T;
-    r--;
+    if (keptBytes + size > budget) break;
+    keptBytes += size;
+    start--;
   }
   return {
-    start: r,
-    keptBytes: y,
-    oversized: w,
+    start,
+    keptBytes,
+    oversized,
   };
 }
 //@ chunk-xx1vmpsq.js:15893-16282 placement
 /**
  * 把压缩前的消息按时间合并进当前转录：早于最早消息的放在前面，其余插到最后一条压缩摘要之前。
  */
-function mergePreCompactMessages(e, s) {
-  let n;
-  for (let C of e) {
-    if (C.type === "user" && C.isCompactSummary === true) continue;
-    if (n === undefined || C.timestamp < n) n = C.timestamp;
+function mergePreCompactMessages(messages, preCompactMessages) {
+  let earliestTimestamp;
+  for (let message of messages) {
+    if (message.type === "user" && message.isCompactSummary === true) continue;
+    if (earliestTimestamp === undefined || message.timestamp < earliestTimestamp)
+      earliestTimestamp = message.timestamp;
   }
-  let y = [];
-  let r = [];
-  for (let C of s)
-    if (n === undefined || C.timestamp < n) y.push(C);
-    else r.push(C);
-  if (r.length === 0) return [...y, ...e];
-  let lastIndex = e.findLastIndex((C) => C.type === "user" && C.isCompactSummary === true);
-  let T = lastIndex === -1 ? e.length : lastIndex;
-  return [...y, ...e.slice(0, T), ...r, ...e.slice(T)];
+  let older = [];
+  let recent = [];
+  for (let message of preCompactMessages)
+    if (earliestTimestamp === undefined || message.timestamp < earliestTimestamp) older.push(message);
+    else recent.push(message);
+  if (recent.length === 0) return [...older, ...messages];
+  let lastIndex = messages.findLastIndex(
+    (message) => message.type === "user" && message.isCompactSummary === true,
+  );
+  let insertAt = lastIndex === -1 ? messages.length : lastIndex;
+  return [...older, ...messages.slice(0, insertAt), ...recent, ...messages.slice(insertAt)];
 }
 //@ chunk-xx1vmpsq.js:16282-16531 placement
 async function readDebugLogTail() {
@@ -841,16 +872,16 @@ async function readDebugLogTail() {
   try {
     await flushDebugLogs();
     let { content, bytesRead, bytesTotal } = await tailFile(debugLogPath, MAX_PRECOMPACT_TRANSCRIPT_BYTES);
-    let r = content;
+    let tail = content;
     if (bytesRead < bytesTotal) {
-      r = r.slice(
-        r.indexOf(`
+      tail = tail.slice(
+        tail.indexOf(`
 `) + 1,
       );
-      r = `[debug log truncated to last ${bytesRead} of ${bytesTotal} bytes]
-${r}`;
+      tail = `[debug log truncated to last ${bytesRead} of ${bytesTotal} bytes]
+${tail}`;
     }
-    return redactSecrets_2(r);
+    return redactSecrets_2(tail);
   } catch {
     return null;
   }
@@ -884,7 +915,7 @@ async function buildFeedbackRequest({
     }),
     readDebugLogTail(),
   ]);
-  let A =
+  let preCompactMessages =
     findCompactBoundaryIndex(messages) === -1
       ? []
       : withholdForExport(
@@ -897,15 +928,18 @@ async function buildFeedbackRequest({
             host,
           },
         );
-  let v = withholdForExport(messages, {
+  let keptMessages = withholdForExport(messages, {
     host,
   });
-  let laptopMemoryDroppedCount = messages.length - v.length;
-  let Q = normalizeMessagesForAPI(v);
-  let transcript = A.length === 0 ? Q : mergePreCompactMessages(Q, A);
+  let laptopMemoryDroppedCount = messages.length - keptMessages.length;
+  let normalizedMessages = normalizeMessagesForAPI(keptMessages);
+  let transcript =
+    preCompactMessages.length === 0
+      ? normalizedMessages
+      : mergePreCompactMessages(normalizedMessages, preCompactMessages);
   let lastAPIRequest = getLastAPIRequest();
-  let fe = nullStub();
-  let ee = {
+  let lastApiRequest = nullStub();
+  let payload = {
     latestAssistantMessageId: feedbackTranscripts.latestAssistantMessageId,
     latestAssistantAPIMessageId: feedbackTranscripts.latestAssistantAPIMessageId,
     lastInterruptedAssistantAPIMessageId: getLastCancelledAPIMessageId(),
@@ -952,13 +986,13 @@ async function buildFeedbackRequest({
     feedbackTranscripts.thirdPartyExclusions.recentSessions +
     feedbackTranscripts.thirdPartyExclusions.subagents +
     (feedbackTranscripts.thirdPartyExclusions.rawTranscript ? 1 : 0);
-  if (A.length > 0) {
-    if (feedbackPayloadPartCount(ee) > MAX_PAYLOAD_PART_COUNT) {
+  if (preCompactMessages.length > 0) {
+    if (feedbackPayloadPartCount(payload) > MAX_PAYLOAD_PART_COUNT) {
       logFeatureSad("feedback_precompact", "over_payload_cap");
       return {
         payload: {
-          ...ee,
-          transcript: Q,
+          ...payload,
+          transcript: normalizedMessages,
         },
         thirdPartyDroppedCount,
         laptopMemoryDroppedCount,
@@ -971,7 +1005,7 @@ async function buildFeedbackRequest({
   )
     logFeatureSad("feedback_precompact", "empty_recovery");
   return {
-    payload: ee,
+    payload,
     thirdPartyDroppedCount,
     laptopMemoryDroppedCount,
   };
@@ -979,12 +1013,12 @@ async function buildFeedbackRequest({
 //@ chunk-xx1vmpsq.js:18454-18593 placement
 function redactError(err) {
   if (err instanceof Error) {
-    let s = Error(redactSecrets_2(err.message));
-    if (err.stack) s.stack = redactSecrets_2(err.stack);
-    logError(s);
+    let copy = Error(redactSecrets_2(err.message));
+    if (err.stack) copy.stack = redactSecrets_2(err.stack);
+    logError(copy);
   } else {
-    let s = redactSecrets_2(String(err));
-    logError(Error(s));
+    let copy = redactSecrets_2(String(err));
+    logError(Error(copy));
   }
 }
 //@ chunk-xx1vmpsq.js:18593-18905 placement
@@ -996,22 +1030,24 @@ function findSessionIdForMessage(rawTranscriptJsonl, latestAssistantAPIMessageId
   let lines = rawTranscriptJsonl.split(`
 `);
   for (let j = lines.length - 1; j >= 0; j--) {
-    let r = lines[j];
-    if (!r) continue;
-    let w;
+    let prefix = lines[j];
+    if (!prefix) continue;
+    let messageId;
     try {
-      w = jsonParse(r);
+      messageId = jsonParse(prefix);
     } catch {
       continue;
     }
     if (
-      typeof w !== "object" ||
-      w === null ||
-      w.type !== "assistant" ||
-      w.message.id !== latestAssistantAPIMessageId
+      typeof messageId !== "object" ||
+      messageId === null ||
+      messageId.type !== "assistant" ||
+      messageId.message.id !== latestAssistantAPIMessageId
     )
       continue;
-    return typeof w.sessionId === "string" && isUuidShaped(w.sessionId) ? w.sessionId : undefined;
+    return typeof messageId.sessionId === "string" && isUuidShaped(messageId.sessionId)
+      ? messageId.sessionId
+      : undefined;
   }
   return;
 }
@@ -1026,13 +1062,13 @@ export {
   pickFeedbackFields,
   buildFeedbackPayload,
   MAX_PAYLOAD_PART_COUNT,
-  orgRefusalError,
-  credentialRefusalMessage,
-  serverStatusSuffix,
   TRANSCRIPT_FIELDS,
   SUBAGENT_TRANSCRIPT_FIELDS,
   redactError,
   classifyFeedbackError,
+  orgRefusalError,
+  credentialRefusalMessage,
+  serverStatusSuffix,
   feedbackPayloadPartCount,
   selectTailWithinBudget,
   feedbackCredentialStatus,

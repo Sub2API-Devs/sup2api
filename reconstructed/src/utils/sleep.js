@@ -9,6 +9,7 @@
  * attribution: placement 4, facade-exports 5, layout 3, fingerprint 1
  */
 import { createAbortController } from "./abortController.js";
+import { deferInit, runDeferredInits } from "../../runtime/deferred-init.js";
 
 //@ chunk-eabawhjj.js:191-516 placement
 /**
@@ -49,9 +50,9 @@ class SystemClock {
   monotonicNow() {
     return performance.now();
   }
-  setTimeout(t, r, e) {
-    let timer = setTimeout(t, r);
-    if (e?.unref) timer.unref();
+  setTimeout(callback, delayMs, options) {
+    let timer = setTimeout(callback, delayMs);
+    if (options?.unref) timer.unref();
     return () => clearTimeout(timer);
   }
 }
@@ -59,7 +60,10 @@ class SystemClock {
 /**
  * 系统时钟实现（sleep/超时用）。
  */
-var systemClock = new SystemClock();
+var systemClock; // deferred: uses SystemClock of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-eabawhjj.js:679", () => {
+  systemClock = new SystemClock();
+});
 //@ chunk-eabawhjj.js:694-1079 facade-exports = sleep (0.91)
 /**
  * 可被 AbortSignal 中断的 sleep；可选 abort 时抛错或静默返回、unref 定时器。
@@ -115,8 +119,8 @@ function fullJitterBackoffMs({
   );
 }
 //@ chunk-eabawhjj.js:1274-1302 layout
-function rejectWithMessage(t, r) {
-  t(Error(r));
+function rejectWithMessage(reject, message) {
+  reject(Error(message));
 }
 //@ chunk-eabawhjj.js:1302-1445 facade-exports = withTimeout (1)
 function withTimeout(promise, ms, message) {
@@ -129,8 +133,8 @@ function withTimeout(promise, ms, message) {
   });
 }
 //@ chunk-eabawhjj.js:1445-1508 layout
-var scheduleUnrefTimeout = (t, r) => {
-  let timer = setTimeout(t, r);
+var scheduleUnrefTimeout = (callback, delayMs) => {
+  let timer = setTimeout(callback, delayMs);
   return () => clearTimeout(timer);
 };
 //@ chunk-eabawhjj.js:1508-1623 facade-exports = withTimeout (1)
@@ -142,49 +146,49 @@ function withDeadline(promise, ms, message = scheduleUnrefTimeout) {
   return Promise.race([promise, timeoutPromise]).finally(timer);
 }
 //@ chunk-eabawhjj.js:1623-1889 facade-exports
-async function raceWithAbortSignal(t, r, e) {
-  let o = () => {
-    t.catch(() => {});
+async function raceWithAbortSignal(promise, signal, makeAbortError) {
+  let swallowLate = () => {
+    promise.catch(() => {});
   };
-  if (r.aborted) {
-    o();
-    throw e();
+  if (signal.aborted) {
+    swallowLate();
+    throw makeAbortError();
   }
-  let n = () => {};
+  let onAbort = () => {};
   try {
     return await Promise.race([
-      t,
+      promise,
       new Promise((resolve, reject) => {
-        n = () => reject(e());
-        r.addEventListener("abort", n, {
+        onAbort = () => reject(makeAbortError());
+        signal.addEventListener("abort", onAbort, {
           once: true,
         });
       }),
     ]);
   } catch (error) {
-    o();
+    swallowLate();
     throw error;
   } finally {
-    r.removeEventListener("abort", n);
+    signal.removeEventListener("abort", onAbort);
   }
 }
 //@ chunk-82kqcve8.js:187814-187944 placement = withTimeout (1)
 /**
  * 等待 promise 或 ms 毫秒超时，二者先到为准；返回 promise 是否在超时前结束（不抛错）。
  */
-async function raceWithTimeout(e, waitCapMs) {
+async function raceWithTimeout(promise, waitCapMs) {
   let abortController = createAbortController();
-  let s = false;
+  let finishedFirst = false;
   await Promise.race([
-    e
+    promise
       .catch(() => {})
       .finally(() => {
-        s = true;
+        finishedFirst = true;
         abortController.abort();
       }),
     sleep(waitCapMs, abortController.signal),
   ]);
-  return s;
+  return finishedFirst;
 }
 //@ chunk-p7xf186d.js:9239-9387 fingerprint = withTimeout (1)
 function withTimeout_2(promise, ms, message) {
@@ -195,6 +199,11 @@ function withTimeout_2(promise, ms, message) {
   });
   return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timer));
 }
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/utils/sleep.js");
+runDeferredInits("worker:src/utils/sleep.js");
 export {
   withDeadline,
   sleep,

@@ -22,15 +22,15 @@ import {
 import { boundedEditDistance } from "../settings/managedEnvKeys.js";
 
 //@ chunk-dcmhvw5a.js:417298-417414 affinity
-function sanitizeEntryForDisplay(e) {
-  let replaced = e.replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
+function sanitizeEntryForDisplay(entry) {
+  let replaced = entry.replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
   return replaced.length > 128 ? `${replaced.slice(0, 128)}\u2026` : replaced;
 }
 //@ chunk-dcmhvw5a.js:417414-417504 placement
 function formatModelFamilyList() {
-  let e = [...MODEL_KEY_NAMES];
-  let n = e.pop();
-  return e.length === 0 ? (n ?? "") : `${e.join(", ")} or ${n}`;
+  let names = [...MODEL_KEY_NAMES];
+  let last = names.pop();
+  return names.length === 0 ? (last ?? "") : `${names.join(", ")} or ${last}`;
 }
 //@ chunk-dcmhvw5a.js:417504-417563 placement = capitalize (1)
 function capitalize(str) {
@@ -40,10 +40,10 @@ function capitalize(str) {
 /**
  * 解析 deniedModels 的一个条目：族名（如 opus）、具体版本或字面量，并给出说明其屏蔽范围的警告文字；忽略 [1m] 等上下文标签。
  */
-function parseDeniedModelEntry(e) {
-  let lower = e.trim().toLowerCase();
+function parseDeniedModelEntry(raw) {
+  let lower = raw.trim().toLowerCase();
   let trimmed = stripAnyVersatileSuffix(lower).trim();
-  let s =
+  let contextSuffixNote =
     trimmed !== lower
       ? " Context-size tags such as [1m] are ignored: the entry blocks the model at every context size."
       : "";
@@ -58,29 +58,32 @@ function parseDeniedModelEntry(e) {
         kind: "family",
         family: trimmed,
       },
-      ...(s !== "" && {
-        warning: `"${sanitizeEntryForDisplay(e)}" blocks every ${capitalize(trimmed)} model.${s}`,
+      ...(contextSuffixNote !== "" && {
+        warning: `"${sanitizeEntryForDisplay(raw)}" blocks every ${capitalize(trimmed)} model.${contextSuffixNote}`,
       }),
     };
   if (isModelKeyAlias(trimmed) || trimmed === "default")
     return {
       entry: null,
-      warning: `"${sanitizeEntryForDisplay(e)}" was ignored: it names a different model depending on the release and settings. Name the model instead, for example "claude-opus-5-5".`,
+      warning: `"${sanitizeEntryForDisplay(raw)}" was ignored: it names a different model depending on the release and settings. Name the model instead, for example "claude-opus-5-5".`,
     };
   let modelId = parseModelId(trimmed);
-  let c = modelId !== null || trimmed.startsWith("claude-") ? trimmed : `claude-${trimmed}`;
-  let g = modelId ?? (c !== trimmed ? parseModelId(c) : null);
-  if (g) {
-    let index = c.lastIndexOf(g.base);
-    let f = index === -1 ? "" : c.slice(index + g.base.length);
-    let h = g.trailer === undefined && f !== "" ? ` "${sanitizeEntryForDisplay(f)}" is ignored.` : "";
+  let key = modelId !== null || trimmed.startsWith("claude-") ? trimmed : `claude-${trimmed}`;
+  let parsed = modelId ?? (key !== trimmed ? parseModelId(key) : null);
+  if (parsed) {
+    let index = key.lastIndexOf(parsed.base);
+    let suffix = index === -1 ? "" : key.slice(index + parsed.base.length);
+    let suffixNote =
+      parsed.trailer === undefined && suffix !== ""
+        ? ` "${sanitizeEntryForDisplay(suffix)}" is ignored.`
+        : "";
     return {
       entry: {
         kind: "model",
-        id: g,
+        id: parsed,
       },
-      ...((s !== "" || h !== "") && {
-        warning: `"${sanitizeEntryForDisplay(e)}" blocks ${describeVersionBlock(g)}.${h}${s}`,
+      ...((contextSuffixNote !== "" || suffixNote !== "") && {
+        warning: `"${sanitizeEntryForDisplay(raw)}" blocks ${describeVersionBlock(parsed)}.${suffixNote}${contextSuffixNote}`,
       }),
     };
   }
@@ -89,125 +92,127 @@ function parseDeniedModelEntry(e) {
       kind: "literal",
       value: trimmed,
     },
-    warning: getExactModelBlockWarning(e, trimmed),
+    warning: getExactModelBlockWarning(raw, trimmed),
   };
 }
 //@ chunk-dcmhvw5a.js:418499-418649 placement
-function describeVersionBlock(e) {
-  let n = capitalize(e.family);
-  return e.minor === undefined
-    ? `every ${n} ${e.major}.x model`
-    : `${n} ${e.major}.${e.minor} in every spelling and snapshot`;
+function describeVersionBlock(version) {
+  let familyLabel = capitalize(version.family);
+  return version.minor === undefined
+    ? `every ${familyLabel} ${version.major}.x model`
+    : `${familyLabel} ${version.major}.${version.minor} in every spelling and snapshot`;
 }
 //@ chunk-dcmhvw5a.js:418649-419484 placement
 /**
  * deniedModels 条目只按精确名字阻止时的提示（建议其他拼写）。
  */
-function getExactModelBlockWarning(e, n) {
-  let r = `"${sanitizeEntryForDisplay(e)}" blocks only the exact model name "${sanitizeEntryForDisplay(n)}"; other spellings of the same model are not blocked.`;
-  let replaced = n.replace(/(\d)\.(\d)/g, "$1-$2");
-  if (replaced !== n) {
-    let c = replaced.startsWith("claude-") ? replaced : `claude-${replaced}`;
-    if (parseModelId(c) !== null)
-      return `${r} To block a version, write it with a hyphen: "${sanitizeEntryForDisplay(c)}".`;
+function getExactModelBlockWarning(raw, value) {
+  let base = `"${sanitizeEntryForDisplay(raw)}" blocks only the exact model name "${sanitizeEntryForDisplay(value)}"; other spellings of the same model are not blocked.`;
+  let replaced = value.replace(/(\d)\.(\d)/g, "$1-$2");
+  if (replaced !== value) {
+    let candidate = replaced.startsWith("claude-") ? replaced : `claude-${replaced}`;
+    if (parseModelId(candidate) !== null)
+      return `${base} To block a version, write it with a hyphen: "${sanitizeEntryForDisplay(candidate)}".`;
   }
-  let match = new RegExp(`^(${MODEL_KEY_NAMES.join("|")})\\s+(\\d+)(?:\\.(\\d+))?$`).exec(n);
+  let match = new RegExp(`^(${MODEL_KEY_NAMES.join("|")})\\s+(\\d+)(?:\\.(\\d+))?$`).exec(value);
   if (match) {
-    let [, c, g, m] = match;
-    return m !== undefined
-      ? `${r} To block a version, write its model ID, for example "claude-${c}-${g}-${m}".`
-      : `${r} To block only version ${g}, write "claude-${c}-${g}-0"; "claude-${c}-${g}" blocks every ${capitalize(c)} ${g}.x model.`;
+    let [, family, major, minor] = match;
+    return minor !== undefined
+      ? `${base} To block a version, write its model ID, for example "claude-${family}-${major}-${minor}".`
+      : `${base} To block only version ${major}, write "claude-${family}-${major}-0"; "claude-${family}-${major}" blocks every ${capitalize(family)} ${major}.x model.`;
   }
-  if (/^[a-z]+$/.test(n)) {
-    let found = MODEL_KEY_NAMES.find((g) => boundedEditDistance(n, g, 1) === 1);
+  if (/^[a-z]+$/.test(value)) {
+    let found = MODEL_KEY_NAMES.find((name) => boundedEditDistance(value, name, 1) === 1);
     return found !== undefined
-      ? `${r} If you meant the ${capitalize(found)} family, write "${found}".`
-      : `${r} To block a model family other than ${formatModelFamilyList()}, list its versioned IDs.`;
+      ? `${base} If you meant the ${capitalize(found)} family, write "${found}".`
+      : `${base} To block a model family other than ${formatModelFamilyList()}, list its versioned IDs.`;
   }
-  return r;
+  return base;
 }
 //@ chunk-dcmhvw5a.js:419484-419709 placement
-function versionEntryMatches(id, n) {
-  if (id.family !== n.family || id.major !== n.major) return false;
-  if (id.minor !== undefined && (n.minor ?? 0) !== id.minor) return false;
+function versionEntryMatches(id, parsed) {
+  if (id.family !== parsed.family || id.major !== parsed.major) return false;
+  if (id.minor !== undefined && (parsed.minor ?? 0) !== id.minor) return false;
   if (id.trailer === undefined) return true;
-  let trailer = n.trailer ?? "";
+  let trailer = parsed.trailer ?? "";
   return trailer === id.trailer || trailer.startsWith(`${id.trailer}-`);
 }
 //@ chunk-dcmhvw5a.js:419709-420118 placement
 /**
  * 把模型名条目解析为 family / model / literal / ignored，供 availableModels 匹配。
  */
-function classifyModelListEntry(e) {
-  let n = strip1mSuffix(e.trim().toLowerCase());
-  if (n === "")
+function classifyModelListEntry(entry) {
+  let lower = strip1mSuffix(entry.trim().toLowerCase());
+  if (lower === "")
     return {
       kind: "ignored",
     };
-  if (isBaseModelKey(n))
+  if (isBaseModelKey(lower))
     return {
       kind: "family",
-      family: n,
+      family: lower,
     };
-  let r = n.startsWith("claude-") ? n.slice(7) : "";
-  if (isBaseModelKey(r))
+  let withoutPrefix = lower.startsWith("claude-") ? lower.slice(7) : "";
+  if (isBaseModelKey(withoutPrefix))
     return {
       kind: "family",
-      family: r,
+      family: withoutPrefix,
     };
-  if (isModelKeyAlias(n) || n === "default")
+  if (isModelKeyAlias(lower) || lower === "default")
     return {
       kind: "ignored",
     };
-  let s = parseModelId(n) !== null || n.startsWith("claude-") ? n : `claude-${n}`;
-  let modelId = parseModelId(s);
+  let key = parseModelId(lower) !== null || lower.startsWith("claude-") ? lower : `claude-${lower}`;
+  let modelId = parseModelId(key);
   return modelId !== null
     ? {
         kind: "model",
         id: modelId,
-        latest: isLatestAlias(s, modelId),
-        spelling: s,
+        latest: isLatestAlias(key, modelId),
+        spelling: key,
       }
     : {
         kind: "literal",
-        value: n,
+        value: lower,
       };
 }
 //@ chunk-dcmhvw5a.js:420118-420223 placement
-function getModelIdTrailer(e, n) {
-  let lower = e.toLowerCase();
-  let index = lower.lastIndexOf(n.base);
-  return index === -1 ? "" : lower.slice(index + n.base.length);
+function getModelIdTrailer(text, modelId) {
+  let lower = text.toLowerCase();
+  let index = lower.lastIndexOf(modelId.base);
+  return index === -1 ? "" : lower.slice(index + modelId.base.length);
 }
 //@ chunk-dcmhvw5a.js:420223-420394 placement
 var PROVIDER_MODEL_ID_PREFIX_PATTERN =
   /^(?:arn:aws(?:-[a-z]+)*:bedrock:[a-z0-9-]*:\d*:(?:foundation-model|inference-profile)\/|(?:projects\/[^/]+\/locations\/[^/]+\/)?publishers\/anthropic\/models\/)$/;
 //@ chunk-dcmhvw5a.js:420394-420543 placement
-function hasProviderModelPrefix(e, modelId) {
-  let lower = e.toLowerCase();
+function hasProviderModelPrefix(text, modelId) {
+  let lower = text.toLowerCase();
   let index = lower.lastIndexOf(modelId.base);
   if (index === -1) return false;
   let sliced = lower.slice(0, lower.lastIndexOf("/", index) + 1);
   return sliced === "" || PROVIDER_MODEL_ID_PREFIX_PATTERN.test(sliced);
 }
 //@ chunk-dcmhvw5a.js:420543-420618 placement
-function isLatestAlias(e, modelId) {
-  return modelId.trailer === undefined && getModelIdTrailer(e, modelId).startsWith("-latest");
+function isLatestAlias(text, modelId) {
+  return modelId.trailer === undefined && getModelIdTrailer(text, modelId).startsWith("-latest");
 }
 //@ chunk-dcmhvw5a.js:420618-420711 placement
-function modelEntryMatches(e, modelId, r) {
+function modelEntryMatches(entry, modelId, latestOnly) {
   return (
-    isSameModelVersion(e.id, modelId) && (e.id.trailer ?? "") === (modelId.trailer ?? "") && (!r || e.latest)
+    isSameModelVersion(entry.id, modelId) &&
+    (entry.id.trailer ?? "") === (modelId.trailer ?? "") &&
+    (!latestOnly || entry.latest)
   );
 }
 //@ chunk-dcmhvw5a.js:420711-420864 placement
-function anyEntryHasModelPrefix(e, n) {
-  for (let r of n) {
-    if (isBaseModelKey(r)) continue;
-    let index = r.indexOf(e);
+function anyEntryHasModelPrefix(base, entries) {
+  for (let entry of entries) {
+    if (isBaseModelKey(entry)) continue;
+    let index = entry.indexOf(base);
     if (index === -1) continue;
-    let a = index + e.length;
-    if (a === r.length || r[a] === "-") return true;
+    let endIndex = index + base.length;
+    if (endIndex === entry.length || entry[endIndex] === "-") return true;
   }
   return false;
 }
@@ -217,62 +222,62 @@ function capitalize_2(str) {
 }
 //@ chunk-dcmhvw5a.js:420923-421068 placement
 function findLatestLegacyBase(family) {
-  let n;
-  for (let r of LEGACY_MODEL_IDS_2) {
-    let modelId = parseModelId(r);
+  let best;
+  for (let id of LEGACY_MODEL_IDS_2) {
+    let modelId = parseModelId(id);
     if (
       modelId !== null &&
       modelId.family === family &&
       !modelId.legacyVersionFirst &&
-      (n === undefined || compareVersion(modelId, n) > 0)
+      (best === undefined || compareVersion(modelId, best) > 0)
     )
-      n = modelId;
+      best = modelId;
   }
-  return n?.base;
+  return best?.base;
 }
 //@ chunk-dcmhvw5a.js:421068-421939 placement
 /**
  * 生成 availableModels 条目被忽略或受限的说明。
  */
-function availableModelsEntryWarning(availableModel, availableModels) {
-  let r = classifyModelListEntry(availableModel);
-  switch (r.kind) {
+function availableModelsEntryWarning(raw, availableModels) {
+  let classified = classifyModelListEntry(raw);
+  switch (classified.kind) {
     case "ignored": {
-      if (availableModel.trim() === "") return "An empty availableModels entry was ignored.";
+      if (raw.trim() === "") return "An empty availableModels entry was ignored.";
       let latestLegacyBase = findLatestLegacyBase("opus");
-      return `"${sanitizeEntryForDisplay(availableModel)}" in availableModels was ignored, because "availableModelsMatch" is "exact" and this name means a different model depending on the release and settings. List the model IDs you want to allow instead${latestLegacyBase === undefined ? "" : `, for example "${latestLegacyBase}"`}.`;
+      return `"${sanitizeEntryForDisplay(raw)}" in availableModels was ignored, because "availableModelsMatch" is "exact" and this name means a different model depending on the release and settings. List the model IDs you want to allow instead${latestLegacyBase === undefined ? "" : `, for example "${latestLegacyBase}"`}.`;
     }
     case "family": {
-      let mapped = availableModels
-        .filter((c) => classifyModelListEntry(c).kind !== "ignored")
-        .map((c) => strip1mSuffix(c.trim().toLowerCase()));
-      if (isBaseModelKey(availableModel.trim().toLowerCase()) && anyEntryHasModelPrefix(r.family, mapped))
+      let entries = availableModels
+        .filter((entry) => classifyModelListEntry(entry).kind !== "ignored")
+        .map((entry) => strip1mSuffix(entry.trim().toLowerCase()));
+      if (isBaseModelKey(raw.trim().toLowerCase()) && anyEntryHasModelPrefix(classified.family, entries))
         return;
-      let latestLegacyBase = findLatestLegacyBase(r.family);
-      return `"${sanitizeEntryForDisplay(availableModel)}" in availableModels allows every ${capitalize_2(r.family)} model, including future releases, even though "availableModelsMatch" is "exact". To allow only some versions, list their model IDs instead${latestLegacyBase === undefined ? "" : `, for example "${latestLegacyBase}"`}.`;
+      let latestLegacyBase = findLatestLegacyBase(classified.family);
+      return `"${sanitizeEntryForDisplay(raw)}" in availableModels allows every ${capitalize_2(classified.family)} model, including future releases, even though "availableModelsMatch" is "exact". To allow only some versions, list their model IDs instead${latestLegacyBase === undefined ? "" : `, for example "${latestLegacyBase}"`}.`;
     }
     case "model":
       return;
     case "literal":
-      return exactAvailableNameWarning(availableModel, r.value);
+      return exactAvailableNameWarning(raw, classified.value);
   }
 }
 //@ chunk-dcmhvw5a.js:421939-422424 placement
 /**
  * availableModels 条目只允许精确名字时的提示。
  */
-function exactAvailableNameWarning(e, n) {
-  let r = `"${sanitizeEntryForDisplay(e)}" in availableModels allows only a model named exactly "${sanitizeEntryForDisplay(n)}".`;
-  let replaced = n.replace(/(\d)\.(\d)/g, "$1-$2");
-  if (replaced !== n) {
-    let c = replaced.startsWith("claude-") ? replaced : `claude-${replaced}`;
-    if (parseModelId(c) !== null)
-      return `${r} To allow a version, write it with a hyphen: "${sanitizeEntryForDisplay(c)}".`;
+function exactAvailableNameWarning(raw, value) {
+  let base = `"${sanitizeEntryForDisplay(raw)}" in availableModels allows only a model named exactly "${sanitizeEntryForDisplay(value)}".`;
+  let replaced = value.replace(/(\d)\.(\d)/g, "$1-$2");
+  if (replaced !== value) {
+    let candidate = replaced.startsWith("claude-") ? replaced : `claude-${replaced}`;
+    if (parseModelId(candidate) !== null)
+      return `${base} To allow a version, write it with a hyphen: "${sanitizeEntryForDisplay(candidate)}".`;
   }
-  let match = new RegExp(`^(${MODEL_KEY_NAMES.join("|")})\\s+(\\d+)(?:\\.(\\d+))?$`).exec(n);
+  let match = new RegExp(`^(${MODEL_KEY_NAMES.join("|")})\\s+(\\d+)(?:\\.(\\d+))?$`).exec(value);
   if (match) {
-    let [, c, g, m] = match;
-    return `${r} To allow a version, write its model ID, for example "claude-${c}-${g}${m !== undefined ? `-${m}` : ""}".`;
+    let [, family, major, minor] = match;
+    return `${base} To allow a version, write its model ID, for example "claude-${family}-${major}${minor !== undefined ? `-${minor}` : ""}".`;
   }
   return;
 }

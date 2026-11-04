@@ -38,25 +38,25 @@ import { countCharInString } from "./stringUtils.js";
 
 //@ chunk-e6aww6q8.js:1435498-1435631 placement
 async function getPluginCacheExclusionDirs(searchPath) {
-  let n = normalize(projectPluginCacheDir());
-  let r = await realpath(n).catch(() => n);
-  return (await getGlobExclusionsForPluginCache(searchPath)).map((h) =>
-    join(r, ...h.slice(4, -3).split("/")),
+  let cacheDir = normalize(projectPluginCacheDir());
+  let realCacheDir = await realpath(cacheDir).catch(() => cacheDir);
+  return (await getGlobExclusionsForPluginCache(searchPath)).map((glob) =>
+    join(realCacheDir, ...glob.slice(4, -3).split("/")),
   );
 }
 //@ chunk-e6aww6q8.js:1436520-1436772 placement
 /**
  * 把一个排除目录转为相对搜索根的 rg --glob 否定模式；排除根本身返回 "!**"，无关返回 null。
  */
-function toRipgrepExcludeGlob(e, ripgrepDisplayRoot, r = false) {
-  let s = relative(ripgrepDisplayRoot, e);
-  if (s === "") return "!**";
-  if (!(s === ".." || s.startsWith(`..${sep}`)) && !isAbsolute(s)) {
-    let replaced = s.replaceAll("\\", "/");
-    return r ? `!**/${replaced}/**` : `!/${replaced}/**`;
+function toRipgrepExcludeGlob(excludedPath, ripgrepDisplayRoot, insideWorktree = false) {
+  let relPath = relative(ripgrepDisplayRoot, excludedPath);
+  if (relPath === "") return "!**";
+  if (!(relPath === ".." || relPath.startsWith(`..${sep}`)) && !isAbsolute(relPath)) {
+    let replaced = relPath.replaceAll("\\", "/");
+    return insideWorktree ? `!**/${replaced}/**` : `!/${replaced}/**`;
   }
-  let h = relative(e, ripgrepDisplayRoot);
-  return !(h === ".." || h.startsWith(`..${sep}`)) && !isAbsolute(h) ? "!**" : null;
+  let upPath = relative(excludedPath, ripgrepDisplayRoot);
+  return !(upPath === ".." || upPath.startsWith(`..${sep}`)) && !isAbsolute(upPath) ? "!**" : null;
 }
 //@ chunk-e6aww6q8.js:1436772-1437164 fingerprint = extractGlobBaseDirectory (1)
 function extractGlobBaseDirectory(pattern) {
@@ -103,22 +103,25 @@ function resolveAbsoluteGlobPattern(pattern) {
 /**
  * Glob 主入口：处理绝对模式与和搜索目录重复的前缀，打开搜索根，调用 glob。
  */
-async function globFiles(pattern, n, { limit, offset }, abortSignal, y, S, timing) {
-  let L = n;
-  let G = pattern;
-  let q = false;
+async function globFiles(pattern, cwd, { limit, offset }, abortSignal, permissionContext, timing, timing_2) {
+  let searchDir = cwd;
+  let effectivePattern = pattern;
+  let rewrotePattern = false;
   let absoluteGlobPattern = resolveAbsoluteGlobPattern(pattern);
   if (absoluteGlobPattern) {
-    L = absoluteGlobPattern.searchDir;
-    G = absoluteGlobPattern.relativePattern;
+    searchDir = absoluteGlobPattern.searchDir;
+    effectivePattern = absoluteGlobPattern.relativePattern;
   } else {
-    let ke = stripPatternPrefixDuplicatingCwd(G, L);
-    if (ke !== G && !(await isRealDirectoryChain(L, getPatternBaseSegments(G, ke)))) {
-      G = ke;
-      q = true;
+    let strippedPattern = stripPatternPrefixDuplicatingCwd(effectivePattern, searchDir);
+    if (
+      strippedPattern !== effectivePattern &&
+      !(await isRealDirectoryChain(searchDir, getPatternBaseSegments(effectivePattern, strippedPattern)))
+    ) {
+      effectivePattern = strippedPattern;
+      rewrotePattern = true;
     }
   }
-  let ripgrepTarget = await resolveRipgrepTarget(L, S);
+  let ripgrepTarget = await resolveRipgrepTarget(searchDir, timing);
   if (ripgrepTarget === null)
     return {
       files: [],
@@ -127,27 +130,27 @@ async function globFiles(pattern, n, { limit, offset }, abortSignal, y, S, timin
       countIsComplete: true,
     };
   if (
-    q &&
-    G.startsWith("/") &&
+    rewrotePattern &&
+    effectivePattern.startsWith("/") &&
     !(ripgrepTarget.relativeOutput || ripgrepTarget.spawnCwd === ripgrepTarget.canonical)
   ) {
     let replaced = relative(ripgrepTarget.spawnCwd, ripgrepTarget.target).replaceAll("\\", "/");
-    G =
+    effectivePattern =
       replaced === "" || replaced === ".." || replaced.startsWith("../") || isAbsolute(replaced)
-        ? G.slice(1)
-        : `/${replaced}${G}`;
+        ? effectivePattern.slice(1)
+        : `/${replaced}${effectivePattern}`;
   }
   try {
     return await glob(
       ripgrepTarget,
-      G,
+      effectivePattern,
       {
         limit,
         offset,
       },
       abortSignal,
-      y,
-      timing,
+      permissionContext,
+      timing_2,
     );
   } finally {
     await ripgrepTarget.close();
@@ -157,128 +160,131 @@ async function globFiles(pattern, n, { limit, offset }, abortSignal, y, S, timin
 /**
  * 用 ripgrep --files --glob 列文件（--sort=modified，默认 --no-ignore 与 --hidden，可由 CLAUDE_CODE_GLOB_NO_IGNORE/CLAUDE_CODE_GLOB_HIDDEN 关闭），附读取忽略模式与排除目录，按 deny 规则过滤，分页返回。
  */
-async function glob(ripgrepTarget, n, { limit, offset }, abortSignal, toolPermissionContext, S) {
-  let canonical = ripgrepTarget.canonical;
-  let fileReadIgnorePatterns = getFileReadIgnorePatterns(toolPermissionContext);
-  let ignorePatterns = buildDenyRuleGlobs(fileReadIgnorePatterns, ripgrepTarget);
+async function glob(target, pattern, { limit, offset }, abortSignal, toolPermissionContext, timing) {
+  let canonical = target.canonical;
+  let patternsByRoot = getFileReadIgnorePatterns(toolPermissionContext);
+  let ignorePatterns = buildDenyRuleGlobs(patternsByRoot, target);
   let noIgnore = isEnvTruthy(process.env.CLAUDE_CODE_GLOB_NO_IGNORE || "true");
   let hidden = isEnvTruthy(process.env.CLAUDE_CODE_GLOB_HIDDEN || "true");
   let args = [
     "--files",
     "--null",
     "--glob",
-    n,
+    pattern,
     "--sort=modified",
     ...(noIgnore ? ["--no-ignore"] : []),
     ...(hidden ? ["--hidden"] : []),
   ];
   for (let pattern of ignorePatterns) args.push("--iglob", pattern);
   for (let exclusion of await getPluginCacheExclusionDirs(canonical)) {
-    let ripgrepExcludeGlob = toRipgrepExcludeGlob(exclusion, getRipgrepDisplayRoot(ripgrepTarget));
+    let ripgrepExcludeGlob = toRipgrepExcludeGlob(exclusion, getRipgrepDisplayRoot(target));
     if (ripgrepExcludeGlob === null) continue;
     args.push("--glob", ripgrepExcludeGlob);
   }
-  let ke = null;
-  let we;
-  let Ee = false;
+  let span = null;
+  let output;
+  let perhapsIncomplete = false;
   {
-    let Je = S?.mark("external");
-    we = await ripGrep_2(args, ripgrepTarget.target, abortSignal, {
+    let endSpan = timing?.mark("external");
+    output = await ripGrep_2(args, target.target, abortSignal, {
       rawLines: true,
       rejectOnInputError: true,
       searchOtherAppsData: true,
-      cwd: ripgrepTarget.spawnCwd,
-      inheritFd: ripgrepTarget.inheritFd,
+      cwd: target.spawnCwd,
+      inheritFd: target.inheritFd,
       beforeSpawn: () => {
-        ripgrepTarget.recheckBeforeSpawn();
-        assertDenyGlobsUnchanged(fileReadIgnorePatterns, ripgrepTarget, ignorePatterns);
+        target.recheckBeforeSpawn();
+        assertDenyGlobsUnchanged(patternsByRoot, target, ignorePatterns);
       },
-    }).finally(Je);
-    we = splitNulDelimitedOutput(we, "files_with_matches");
+    }).finally(endSpan);
+    output = splitNulDelimitedOutput(output, "files_with_matches");
   }
-  let Ae =
-    ripgrepTarget.judgeEveryResult === true ||
-    hasUnsafeDenyGlob(fileReadIgnorePatterns, ripgrepTarget) ||
-    (fileReadIgnorePatterns.size > 0 && mayBeGuardedFileSyncCopy(ripgrepTarget.canonical));
-  let absolutePaths = we.map((Je) => mapRipgrepOutputPath(Je, ripgrepTarget));
+  let needsDenyCheck =
+    target.judgeEveryResult === true ||
+    hasUnsafeDenyGlob(patternsByRoot, target) ||
+    (patternsByRoot.size > 0 && mayBeGuardedFileSyncCopy(target.canonical));
+  let absolutePaths = output.map((line) => mapRipgrepOutputPath(line, target));
   if (
-    !ripgrepTarget.isDirectory &&
-    [
-      ripgrepTarget.canonical,
-      ripgrepTarget.lexical,
-      ...getPathsForPermissionCheck(ripgrepTarget.lexical),
-    ].some((Je) => matchingRuleForInput(Je, toolPermissionContext, "read", "deny") !== null)
+    !target.isDirectory &&
+    [target.canonical, target.lexical, ...getPathsForPermissionCheck(target.lexical)].some(
+      (path) => matchingRuleForInput(path, toolPermissionContext, "read", "deny") !== null,
+    )
   )
     absolutePaths = [];
-  let Me;
-  let We;
+  let files;
+  let truncated;
   let totalMatches = absolutePaths.length;
-  let lt = true;
-  if (fileReadIgnorePatterns.size === 0) {
-    We = Ee || absolutePaths.length > offset + limit;
-    Me = absolutePaths.slice(offset, offset + limit);
+  let countIsComplete = true;
+  if (patternsByRoot.size === 0) {
+    truncated = perhapsIncomplete || absolutePaths.length > offset + limit;
+    files = absolutePaths.slice(offset, offset + limit);
   } else {
-    let Je = [];
-    let nt = 0;
-    let pt = 0;
-    for (; pt < absolutePaths.length && Je.length < limit; pt++) {
-      let Et = absolutePaths[pt];
+    let kept = [];
+    let seenCount = 0;
+    let index = 0;
+    for (; index < absolutePaths.length && kept.length < limit; index++) {
+      let filePath = absolutePaths[index];
       if (
-        (Ae || mayEscapeExclusionGlobs(Et)) &&
+        (needsDenyCheck || mayEscapeExclusionGlobs(filePath)) &&
         denyFoldVariantPaths(
-          [Et],
+          [filePath],
           toolPermissionContext,
-          (yt) => getAlternateRootSpellings(yt, ripgrepTarget),
-          Ae,
+          (path) => getAlternateRootSpellings(path, target),
+          needsDenyCheck,
         ).size > 0
       )
         continue;
-      if (nt++ < offset) continue;
-      Je.push(Et);
+      if (seenCount++ < offset) continue;
+      kept.push(filePath);
     }
-    Me = Je;
-    totalMatches = nt;
-    lt = pt >= absolutePaths.length;
-    We = Ee || !lt;
+    files = kept;
+    totalMatches = seenCount;
+    countIsComplete = index >= absolutePaths.length;
+    truncated = perhapsIncomplete || !countIsComplete;
   }
   return {
-    files: Me,
-    truncated: We,
+    files,
+    truncated,
     totalMatches,
-    countIsComplete: !Ee && lt,
+    countIsComplete: !perhapsIncomplete && countIsComplete,
   };
 }
 //@ chunk-e6aww6q8.js:1439124-1439401 affinity
 /**
  * 模式开头几段与搜索目录末尾几段重复时去掉重复部分。
  */
-function stripPatternPrefixDuplicatingCwd(e, n) {
-  let parts = e.split("/");
-  let s = 0;
-  while (s < parts.length - 1 && parts[s] !== "" && !/[*?[\]{}!]/.test(parts[s])) s++;
-  let filtered = n.split(/[\\/]+/).filter(Boolean);
-  for (let y = s; y > 0; y--) {
-    let sliced = parts.slice(0, y);
-    let sliced_2 = filtered.slice(-y);
-    if (sliced_2.length === y && sliced.every((L, G) => L === sliced_2[G]))
-      return "/" + parts.slice(y).join("/");
+function stripPatternPrefixDuplicatingCwd(pattern, cwd) {
+  let parts = pattern.split("/");
+  let prefixLength = 0;
+  while (
+    prefixLength < parts.length - 1 &&
+    parts[prefixLength] !== "" &&
+    !/[*?[\]{}!]/.test(parts[prefixLength])
+  )
+    prefixLength++;
+  let filtered = cwd.split(/[\\/]+/).filter(Boolean);
+  for (let length = prefixLength; length > 0; length--) {
+    let sliced = parts.slice(0, length);
+    let sliced_2 = filtered.slice(-length);
+    if (sliced_2.length === length && sliced.every((part, index) => part === sliced_2[index]))
+      return "/" + parts.slice(length).join("/");
   }
-  return e;
+  return pattern;
 }
 //@ chunk-e6aww6q8.js:1439401-1439511 sole-consumer
-function getPatternBaseSegments(e, n) {
-  let parts = e.split("/");
-  let s = countCharInString(n.replace(/^\//, ""), "/") + 1;
-  return parts.slice(0, Math.max(1, parts.length - s));
+function getPatternBaseSegments(pattern, strippedPattern) {
+  let parts = pattern.split("/");
+  let droppedCount = countCharInString(strippedPattern.replace(/^\//, ""), "/") + 1;
+  return parts.slice(0, Math.max(1, parts.length - droppedCount));
 }
 //@ chunk-e6aww6q8.js:1439511-1439687 sole-consumer
-async function isRealDirectoryChain(e, patternBaseSegments) {
+async function isRealDirectoryChain(baseDir, patternBaseSegments) {
   let fsImplementation = getFsImplementation();
-  let s = e;
-  for (let h of patternBaseSegments) {
-    s = join(s, h);
+  let currentDir = baseDir;
+  for (let segment of patternBaseSegments) {
+    currentDir = join(currentDir, segment);
     try {
-      let stats = await fsImplementation.lstat(s);
+      let stats = await fsImplementation.lstat(currentDir);
       if (!stats.isDirectory() || stats.isSymbolicLink()) return false;
     } catch {
       return false;

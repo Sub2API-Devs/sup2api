@@ -63,6 +63,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { readLines } from "../../utils/fsOperations.js";
 import { logError } from "../../utils/log.js";
 import { clippedMessage } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ya28b76p.js:753-1314 placement
 /**
@@ -87,21 +88,22 @@ var STATS_SCAN_POLICY = {
     "Not shown under your organization's policy: these stats are built by scanning the session transcripts saved on this machine.",
 };
 //@ chunk-ya28b76p.js:1314-1579 placement
-function checkUsagePolicy(e) {
-  if (isPolicyAllowed(e.policy))
+function checkUsagePolicy(request) {
+  if (isPolicyAllowed(request.policy))
     return {
       allowed: true,
     };
-  if (policyDenyKind(e.policy) === "org_denied" && getCurrentTaints().includes("hipaa"))
+  if (policyDenyKind(request.policy) === "org_denied" && getCurrentTaints().includes("hipaa"))
     return {
       allowed: false,
-      reason: e.hipaaReason,
+      reason: request.hipaaReason,
     };
-  let { featureLabel, verb } = policyKeyLabel(e.policy);
+  let { featureLabel, verb } = policyKeyLabel(request.policy);
   return {
     allowed: false,
     reason:
-      policyDeniedReason(e.policy, featureLabel, verb) ?? `${featureLabel} ${verb} unavailable right now.`,
+      policyDeniedReason(request.policy, featureLabel, verb) ??
+      `${featureLabel} ${verb} unavailable right now.`,
   };
 }
 //@ chunk-ya28b76p.js:1579-1607 placement
@@ -146,22 +148,22 @@ function createContextTracker() {
 /**
  * 会话尚未发出请求时，把当前内容计入首条提示的字节数。
  */
-function addFirstPromptBytes(e, n) {
-  if (e.lastRequest === undefined) e.firstPromptBytes += n;
+function addFirstPromptBytes(scanState, bytes) {
+  if (scanState.lastRequest === undefined) scanState.firstPromptBytes += bytes;
 }
 //@ chunk-ya28b76p.js:1990-2023 placement
 /**
  * 判断工具结果是否属于大体积。
  */
-function isLargeToolResultBytes(e) {
-  return e / 2.5 > 1e4;
+function isLargeToolResultBytes(bytes) {
+  return bytes / 2.5 > 1e4;
 }
 //@ chunk-ya28b76p.js:2023-2077 placement
 /**
  * 工具结果足够大时才把字节数计入待处理大结果。
  */
-function addLargeToolResultBytes(e, n) {
-  if (isLargeToolResultBytes(n)) e.pendingToolResultBytes += n;
+function addLargeToolResultBytes(scanState, bytes) {
+  if (isLargeToolResultBytes(bytes)) scanState.pendingToolResultBytes += bytes;
 }
 //@ chunk-ya28b76p.js:2077-2747 placement
 /**
@@ -196,203 +198,285 @@ function trackContextGrowth(tracker, record) {
 /**
  * 转录扫描的常量：读取分块、统计窗口、各种「行为」阈值（缓存未命中、长上下文、子代理、高并行、cron）与扫描用的字节标记。
  */
-var TRANSCRIPT_SCAN_MARKERS = 4;
-var TRANSCRIPT_READ_CHUNK_BYTES = 4194304;
-var TRANSCRIPT_READ_CHUNK_BYTES_2 = TRANSCRIPT_READ_CHUNK_BYTES;
-var USAGE_WINDOW_MS = 604800000;
-var CACHE_MISS_TOKEN_THRESHOLD = 1e5;
-var LONG_CONTEXT_THRESHOLD = 150000;
-var SUBAGENT_HEAVY_COUNT = 3;
-var SUBAGENT_HEAVY_COST_RATIO = 0.5;
-var PARALLEL_BUCKET_MS = 300000;
-var HIGH_PARALLEL_SESSIONS = 4;
-var CRON_SESSION_HOURS = 8;
-var SUBAGENT_TRANSCRIPT_MARK = `${sep}subagents${sep}${WORKFLOW_TRANSCRIPT_SUBDIR}${sep}`;
-var textEncoder = new TextEncoder();
-var KLr = textEncoder.encode('"type":"assistant"');
-var He = textEncoder.encode('"usage":{');
-var le = textEncoder.encode('"timestamp":"');
-var Ke = textEncoder.encode('"sessionId":"');
-var Ge = textEncoder.encode('"model":"');
-var qe = textEncoder.encode('"requestId":"');
-var VLr = textEncoder.encode('"id":"');
-var We = textEncoder.encode("msg_");
-var de = textEncoder.encode('"uuid":"');
-var $e = textEncoder.encode('"input_tokens":');
-var Ye = textEncoder.encode('"output_tokens":');
-var je = textEncoder.encode('"cache_creation_input_tokens":');
-var Xe = textEncoder.encode('"cache_read_input_tokens":');
-var ze = textEncoder.encode('"isSidechain":true');
-var Ve = textEncoder.encode('"isSidechain": true');
-var Qe = textEncoder.encode('"effort":"max"');
-var Je = textEncoder.encode('"attribution');
-var Ze = textEncoder.encode('"attributionAgent":"');
-var et = textEncoder.encode('"attributionSkill":"');
-var tt = textEncoder.encode('"attributionPlugin":"');
-var nt = textEncoder.encode('"attributionMcpServer":"');
-var hPo = textEncoder.encode('"type":"user"');
-var K = textEncoder.encode('"isMeta":true');
-var ot = textEncoder.encode('"subtype":"scheduled_task_fire"');
-var st = textEncoder.encode('"taskId":"');
-var G = textEncoder.encode('"scheduledTaskId":"');
-var rt = textEncoder.encode('"scheduledFireId":"');
-var yPo = textEncoder.encode('"type":"tool_result"');
-var _Po = textEncoder.encode('"toolUseResult":');
-var it = textEncoder.encode('"turnCompanion":true');
-var ct = textEncoder.encode(`"text":"${INTERRUPT_MESSAGE.slice(0, -1)}`);
-var ee = textEncoder.encode('"content":"[');
-var at = textEncoder.encode(" prior /loop wakeup");
-var ut = textEncoder.encode('"isCompactSummary":true');
-var COMPACT_BOUNDARY_BYTES = [textEncoder.encode('"subtype":"compact_boundary"'), ...[]];
-var dt = textEncoder.encode('"type":"attachment"');
-var pt = textEncoder.encode('"attachment":{"type":"file"');
-var ft = textEncoder.encode('"type":"queued_command"');
-var mt = textEncoder.encode('"origin":{');
-var Tt = textEncoder.encode('"origin":{"kind":"human"');
-var _t = textEncoder.encode('"promptSource":"');
-var St = textEncoder.encode('"type":"system"');
-var Rt = textEncoder.encode('"subtype":"local_command"');
-var contentOrTextMarker = (e) => [
-  textEncoder.encode(`"content":"<${e}>`),
-  textEncoder.encode(`"text":"<${e}>`),
-];
-var COMMAND_MESSAGE_MARKERS = [
-  ...contentOrTextMarker("command-message"),
-  ...contentOrTextMarker("command-name"),
-];
-var LOCAL_COMMAND_CAVEAT_MARKERS = contentOrTextMarker(LOCAL_COMMAND_CAVEAT);
-var LOCAL_COMMAND_OUTPUT_MARKERS = [
-  ...contentOrTextMarker(LOCAL_COMMAND_STDOUT),
-  ...contentOrTextMarker(LOCAL_COMMAND_STDERR),
-];
-var BASH_OUTPUT_MARKERS = [...contentOrTextMarker(BASH_STDOUT), ...contentOrTextMarker(BASH_STDERR)];
-var containsAnyMarker = (e, n, o) => n.some((s) => indexOfBytes(e, s, 0, o) >= 0);
-var HOOK_STOPPED_MARKERS = [
-  textEncoder.encode(`"content":${jsonStringify(HOOK_STOPPED_MESSAGE).slice(0, -1)}`),
-  textEncoder.encode(`"text":${jsonStringify(HOOK_STOPPED_MESSAGE).slice(0, -1)}`),
-];
-var messageMarkerPair = (e, n = false) => {
-  let o = n ? jsonStringify(e) : jsonStringify(e).slice(0, -1);
-  return [textEncoder.encode(`"content":${o}`), textEncoder.encode(`"text":${o}`)];
-};
-var flattened = [
-  ...HOOK_FEEDBACK_EVENTS.map((e) => `${e}${HOOK_FEEDBACK_SEPARATOR}`),
-  STRUCTURED_OUTPUT_ENFORCE_PREFIX,
-  EMPTY_SENTINEL,
-  PROJECTS_REPLY_GATE_PREFIX,
-  BRIEF_ENFORCE_SENTINEL,
-  LINKED_BUT_NOT_SENT_PREFIX,
-  GOAL_CHECK_IN_PREFIX,
-]
-  .filter((e) => e.length > 0)
-  .flatMap((e) => messageMarkerPair(e));
-var flattened_2 = [
-  MALFORMED_TOOL_CALL_RETRY,
-  MALFORMED_TOOL_CALL_TEXT,
-  NO_VISIBLE_OUTPUT_TEXT,
-  PERMISSION_DENIED_RETRY_TEXT,
-  TURN_NOT_ENDED_NOTICE,
-  OUTPUT_LIMIT_RESUME,
-  OUTPUT_LIMIT_REASONING_RESUME_TEXT,
-  OUTPUT_LIMIT_NO_VISIBLE_TEXT,
-  OUTPUT_LIMIT_CUT_TEXT,
-  STREAM_CUT_RESUME,
-  STREAM_CUT_REWRITE,
-].flatMap((e) => messageMarkerPair(e, true));
-var bt = textEncoder.encode('"cron":"');
-var Mt = textEncoder.encode('"prompt":"');
-var Ot = textEncoder.encode('"taskKind":"loop"');
-var At = textEncoder.encode('"content":"');
-var kt = textEncoder.encode('"text":"');
-var QUOTE_BYTE = 34;
-var BACKSLASH_BYTE = 92;
-var OPEN_BRACE_BYTE = 123;
-var CLOSE_BRACE_BYTE = 125;
-var OPEN_BRACKET_BYTE = 91;
-var CLOSE_BRACKET_BYTE = 93;
-var DIGIT_ZERO_BYTE = 48;
-var DIGIT_NINE_BYTE = 57;
+var TRANSCRIPT_SCAN_MARKERS; // deferred: uses INTERRUPT_MESSAGE (../../utils/messages.js) of its import cycle while loading; runs once the cycle is complete
+var TRANSCRIPT_READ_CHUNK_BYTES;
+var TRANSCRIPT_READ_CHUNK_BYTES_2;
+var USAGE_WINDOW_MS;
+var CACHE_MISS_TOKEN_THRESHOLD;
+var LONG_CONTEXT_THRESHOLD;
+var SUBAGENT_HEAVY_COUNT;
+var SUBAGENT_HEAVY_COST_RATIO;
+var PARALLEL_BUCKET_MS;
+var HIGH_PARALLEL_SESSIONS;
+var CRON_SESSION_HOURS;
+var SUBAGENT_TRANSCRIPT_MARK;
+var textEncoder;
+var ASSISTANT_RECORD_MARKER;
+var USAGE_FIELD_MARKER;
+var TIMESTAMP_FIELD_MARKER;
+var SESSION_ID_FIELD_MARKER;
+var MODEL_FIELD_MARKER;
+var REQUEST_ID_FIELD_MARKER;
+var ID_FIELD_MARKER;
+var MESSAGE_ID_PREFIX;
+var UUID_FIELD_MARKER;
+var INPUT_TOKENS_FIELD_MARKER;
+var OUTPUT_TOKENS_FIELD_MARKER;
+var CACHE_CREATION_TOKENS_FIELD_MARKER;
+var CACHE_READ_TOKENS_FIELD_MARKER;
+var SIDECHAIN_TIGHT_MARKER;
+var SIDECHAIN_SPACED_MARKER;
+var MAX_EFFORT_MARKER;
+var ATTRIBUTION_MARKER;
+var ATTRIBUTION_AGENT_FIELD_MARKER;
+var ATTRIBUTION_SKILL_FIELD_MARKER;
+var ATTRIBUTION_PLUGIN_FIELD_MARKER;
+var ATTRIBUTION_MCP_SERVER_FIELD_MARKER;
+var USER_RECORD_MARKER;
+var META_RECORD_MARKER;
+var SCHEDULED_FIRE_MARKER;
+var TASK_ID_FIELD_MARKER;
+var SCHEDULED_TASK_ID_FIELD_MARKER;
+var SCHEDULED_FIRE_ID_FIELD_MARKER;
+var TOOL_RESULT_RECORD_MARKER;
+var TOOL_USE_RESULT_FIELD_MARKER;
+var TURN_COMPANION_MARKER;
+var INTERRUPT_TEXT_MARKER;
+var CONTENT_ARRAY_MARKER;
+var LOOP_WAKEUP_SUFFIX_MARKER;
+var COMPACT_SUMMARY_MARKER;
+var COMPACT_BOUNDARY_BYTES;
+var ATTACHMENT_RECORD_MARKER;
+var FILE_ATTACHMENT_MARKER;
+var QUEUED_COMMAND_RECORD_MARKER;
+var ORIGIN_FIELD_MARKER;
+var HUMAN_ORIGIN_MARKER;
+var PROMPT_SOURCE_FIELD_MARKER;
+var SYSTEM_RECORD_MARKER;
+var LOCAL_COMMAND_MARKER;
+var contentOrTextMarker;
+var COMMAND_MESSAGE_MARKERS;
+var LOCAL_COMMAND_CAVEAT_MARKERS;
+var LOCAL_COMMAND_OUTPUT_MARKERS;
+var BASH_OUTPUT_MARKERS;
+var containsAnyMarker;
+var HOOK_STOPPED_MARKERS;
+var messageMarkerPair;
+var flattened;
+var flattened_2;
+var CRON_FIELD_MARKER;
+var PROMPT_FIELD_MARKER;
+var LOOP_TASK_KIND_MARKER;
+var CONTENT_FIELD_MARKER;
+var TEXT_FIELD_MARKER;
+var QUOTE_BYTE;
+var BACKSLASH_BYTE;
+var OPEN_BRACE_BYTE;
+var CLOSE_BRACE_BYTE;
+var OPEN_BRACKET_BYTE;
+var CLOSE_BRACKET_BYTE;
+var DIGIT_ZERO_BYTE;
+var DIGIT_NINE_BYTE;
+deferInit("chunk-ya28b76p.js:2747", () => {
+  TRANSCRIPT_SCAN_MARKERS = 4;
+  TRANSCRIPT_READ_CHUNK_BYTES = 4194304;
+  TRANSCRIPT_READ_CHUNK_BYTES_2 = TRANSCRIPT_READ_CHUNK_BYTES;
+  USAGE_WINDOW_MS = 604800000;
+  CACHE_MISS_TOKEN_THRESHOLD = 1e5;
+  LONG_CONTEXT_THRESHOLD = 150000;
+  SUBAGENT_HEAVY_COUNT = 3;
+  SUBAGENT_HEAVY_COST_RATIO = 0.5;
+  PARALLEL_BUCKET_MS = 300000;
+  HIGH_PARALLEL_SESSIONS = 4;
+  CRON_SESSION_HOURS = 8;
+  SUBAGENT_TRANSCRIPT_MARK = `${sep}subagents${sep}${WORKFLOW_TRANSCRIPT_SUBDIR}${sep}`;
+  textEncoder = new TextEncoder();
+  ASSISTANT_RECORD_MARKER = textEncoder.encode('"type":"assistant"');
+  USAGE_FIELD_MARKER = textEncoder.encode('"usage":{');
+  TIMESTAMP_FIELD_MARKER = textEncoder.encode('"timestamp":"');
+  SESSION_ID_FIELD_MARKER = textEncoder.encode('"sessionId":"');
+  MODEL_FIELD_MARKER = textEncoder.encode('"model":"');
+  REQUEST_ID_FIELD_MARKER = textEncoder.encode('"requestId":"');
+  ID_FIELD_MARKER = textEncoder.encode('"id":"');
+  MESSAGE_ID_PREFIX = textEncoder.encode("msg_");
+  UUID_FIELD_MARKER = textEncoder.encode('"uuid":"');
+  INPUT_TOKENS_FIELD_MARKER = textEncoder.encode('"input_tokens":');
+  OUTPUT_TOKENS_FIELD_MARKER = textEncoder.encode('"output_tokens":');
+  CACHE_CREATION_TOKENS_FIELD_MARKER = textEncoder.encode('"cache_creation_input_tokens":');
+  CACHE_READ_TOKENS_FIELD_MARKER = textEncoder.encode('"cache_read_input_tokens":');
+  SIDECHAIN_TIGHT_MARKER = textEncoder.encode('"isSidechain":true');
+  SIDECHAIN_SPACED_MARKER = textEncoder.encode('"isSidechain": true');
+  MAX_EFFORT_MARKER = textEncoder.encode('"effort":"max"');
+  ATTRIBUTION_MARKER = textEncoder.encode('"attribution');
+  ATTRIBUTION_AGENT_FIELD_MARKER = textEncoder.encode('"attributionAgent":"');
+  ATTRIBUTION_SKILL_FIELD_MARKER = textEncoder.encode('"attributionSkill":"');
+  ATTRIBUTION_PLUGIN_FIELD_MARKER = textEncoder.encode('"attributionPlugin":"');
+  ATTRIBUTION_MCP_SERVER_FIELD_MARKER = textEncoder.encode('"attributionMcpServer":"');
+  USER_RECORD_MARKER = textEncoder.encode('"type":"user"');
+  META_RECORD_MARKER = textEncoder.encode('"isMeta":true');
+  SCHEDULED_FIRE_MARKER = textEncoder.encode('"subtype":"scheduled_task_fire"');
+  TASK_ID_FIELD_MARKER = textEncoder.encode('"taskId":"');
+  SCHEDULED_TASK_ID_FIELD_MARKER = textEncoder.encode('"scheduledTaskId":"');
+  SCHEDULED_FIRE_ID_FIELD_MARKER = textEncoder.encode('"scheduledFireId":"');
+  TOOL_RESULT_RECORD_MARKER = textEncoder.encode('"type":"tool_result"');
+  TOOL_USE_RESULT_FIELD_MARKER = textEncoder.encode('"toolUseResult":');
+  TURN_COMPANION_MARKER = textEncoder.encode('"turnCompanion":true');
+  INTERRUPT_TEXT_MARKER = textEncoder.encode(`"text":"${INTERRUPT_MESSAGE.slice(0, -1)}`);
+  CONTENT_ARRAY_MARKER = textEncoder.encode('"content":"[');
+  LOOP_WAKEUP_SUFFIX_MARKER = textEncoder.encode(" prior /loop wakeup");
+  COMPACT_SUMMARY_MARKER = textEncoder.encode('"isCompactSummary":true');
+  COMPACT_BOUNDARY_BYTES = [textEncoder.encode('"subtype":"compact_boundary"'), ...[]];
+  ATTACHMENT_RECORD_MARKER = textEncoder.encode('"type":"attachment"');
+  FILE_ATTACHMENT_MARKER = textEncoder.encode('"attachment":{"type":"file"');
+  QUEUED_COMMAND_RECORD_MARKER = textEncoder.encode('"type":"queued_command"');
+  ORIGIN_FIELD_MARKER = textEncoder.encode('"origin":{');
+  HUMAN_ORIGIN_MARKER = textEncoder.encode('"origin":{"kind":"human"');
+  PROMPT_SOURCE_FIELD_MARKER = textEncoder.encode('"promptSource":"');
+  SYSTEM_RECORD_MARKER = textEncoder.encode('"type":"system"');
+  LOCAL_COMMAND_MARKER = textEncoder.encode('"subtype":"local_command"');
+  contentOrTextMarker = (tag) => [
+    textEncoder.encode(`"content":"<${tag}>`),
+    textEncoder.encode(`"text":"<${tag}>`),
+  ];
+  COMMAND_MESSAGE_MARKERS = [
+    ...contentOrTextMarker("command-message"),
+    ...contentOrTextMarker("command-name"),
+  ];
+  LOCAL_COMMAND_CAVEAT_MARKERS = contentOrTextMarker(LOCAL_COMMAND_CAVEAT);
+  LOCAL_COMMAND_OUTPUT_MARKERS = [
+    ...contentOrTextMarker(LOCAL_COMMAND_STDOUT),
+    ...contentOrTextMarker(LOCAL_COMMAND_STDERR),
+  ];
+  BASH_OUTPUT_MARKERS = [...contentOrTextMarker(BASH_STDOUT), ...contentOrTextMarker(BASH_STDERR)];
+  containsAnyMarker = (buffer, markers, end) =>
+    markers.some((marker) => indexOfBytes(buffer, marker, 0, end) >= 0);
+  HOOK_STOPPED_MARKERS = [
+    textEncoder.encode(`"content":${jsonStringify(HOOK_STOPPED_MESSAGE).slice(0, -1)}`),
+    textEncoder.encode(`"text":${jsonStringify(HOOK_STOPPED_MESSAGE).slice(0, -1)}`),
+  ];
+  messageMarkerPair = (value, keepClosingBrace = false) => {
+    let json = keepClosingBrace ? jsonStringify(value) : jsonStringify(value).slice(0, -1);
+    return [textEncoder.encode(`"content":${json}`), textEncoder.encode(`"text":${json}`)];
+  };
+  flattened = [
+    ...HOOK_FEEDBACK_EVENTS.map((event) => `${event}${HOOK_FEEDBACK_SEPARATOR}`),
+    STRUCTURED_OUTPUT_ENFORCE_PREFIX,
+    EMPTY_SENTINEL,
+    PROJECTS_REPLY_GATE_PREFIX,
+    BRIEF_ENFORCE_SENTINEL,
+    LINKED_BUT_NOT_SENT_PREFIX,
+    GOAL_CHECK_IN_PREFIX,
+  ]
+    .filter((text) => text.length > 0)
+    .flatMap((text) => messageMarkerPair(text));
+  flattened_2 = [
+    MALFORMED_TOOL_CALL_RETRY,
+    MALFORMED_TOOL_CALL_TEXT,
+    NO_VISIBLE_OUTPUT_TEXT,
+    PERMISSION_DENIED_RETRY_TEXT,
+    TURN_NOT_ENDED_NOTICE,
+    OUTPUT_LIMIT_RESUME,
+    OUTPUT_LIMIT_REASONING_RESUME_TEXT,
+    OUTPUT_LIMIT_NO_VISIBLE_TEXT,
+    OUTPUT_LIMIT_CUT_TEXT,
+    STREAM_CUT_RESUME,
+    STREAM_CUT_REWRITE,
+  ].flatMap((text) => messageMarkerPair(text, true));
+  CRON_FIELD_MARKER = textEncoder.encode('"cron":"');
+  PROMPT_FIELD_MARKER = textEncoder.encode('"prompt":"');
+  LOOP_TASK_KIND_MARKER = textEncoder.encode('"taskKind":"loop"');
+  CONTENT_FIELD_MARKER = textEncoder.encode('"content":"');
+  TEXT_FIELD_MARKER = textEncoder.encode('"text":"');
+  QUOTE_BYTE = 34;
+  BACKSLASH_BYTE = 92;
+  OPEN_BRACE_BYTE = 123;
+  CLOSE_BRACE_BYTE = 125;
+  OPEN_BRACKET_BYTE = 91;
+  CLOSE_BRACKET_BYTE = 93;
+  DIGIT_ZERO_BYTE = 48;
+  DIGIT_NINE_BYTE = 57;
+});
 //@ chunk-ya28b76p.js:5100-5172 placement
 /**
  * 在字节缓冲里查找子串位置。
  */
-function indexOfBytes(e, n, o, s) {
-  let index = e.subarray(o, s).indexOf(n);
-  return index < 0 ? -1 : o + index;
+function indexOfBytes(buffer, needle, start, end) {
+  let index = buffer.subarray(start, end).indexOf(needle);
+  return index < 0 ? -1 : start + index;
 }
 //@ chunk-ya28b76p.js:5172-5300 placement
 /**
  * 在缓冲区内找到指定 JSON 字段后读出其字符串值（到下一个引号为止）。
  */
-function readJsonStringField(e, n, o, s) {
-  let r = indexOfBytes(e, n, o, s);
-  if (r < 0) return;
-  let i = r + n.length;
-  let c = i;
-  while (c < s && e[c] !== QUOTE_BYTE) c++;
-  return e.toString("utf8", i, c);
+function readJsonStringField(buffer, key, start, end) {
+  let keyIndex = indexOfBytes(buffer, key, start, end);
+  if (keyIndex < 0) return;
+  let valueStart = keyIndex + key.length;
+  let cursor = valueStart;
+  while (cursor < end && buffer[cursor] !== QUOTE_BYTE) cursor++;
+  return buffer.toString("utf8", valueStart, cursor);
 }
 //@ chunk-ya28b76p.js:5300-5648 placement
 /**
  * 从原始 JSON 行字节中读取某键的字符串值（有长度上限，截断时修正 UTF-8 与半个 \u 转义），按 JSON 字符串解码。
  */
-function readJsonStringFieldBounded(e, n, o, s, r) {
-  let i = indexOfBytes(e, n, o, s);
-  if (i < 0) return;
-  let c = i + n.length;
-  let p = c;
-  let min = Math.min(s, c + r);
-  while (p < min && e[p] !== QUOTE_BYTE) {
-    if (e[p] === BACKSLASH_BYTE) p++;
-    p++;
+function readJsonStringFieldBounded(buffer, key, start, end, maxBytes) {
+  let keyIndex = indexOfBytes(buffer, key, start, end);
+  if (keyIndex < 0) return;
+  let valueStart = keyIndex + key.length;
+  let cursor = valueStart;
+  let min = Math.min(end, valueStart + maxBytes);
+  while (cursor < min && buffer[cursor] !== QUOTE_BYTE) {
+    if (buffer[cursor] === BACKSLASH_BYTE) cursor++;
+    cursor++;
   }
-  let a = p >= min;
-  if (p > min) p = min - 1;
-  if (a) p = trimPartialUtf8(e, c, p);
-  let str = e.toString("utf8", c, p);
-  if (a) str = str.replace(/(^|[^\\])((?:\\\\)*)\\u[0-9a-fA-F]{0,3}$/, "$1$2");
+  let wasTrimmed = cursor >= min;
+  if (cursor > min) cursor = min - 1;
+  if (wasTrimmed) cursor = trimPartialUtf8(buffer, valueStart, cursor);
+  let str = buffer.toString("utf8", valueStart, cursor);
+  if (wasTrimmed) str = str.replace(/(^|[^\\])((?:\\\\)*)\\u[0-9a-fA-F]{0,3}$/, "$1$2");
   try {
-    let g = jsonParseRaw(`"${str}"`);
-    return typeof g === "string" ? g : undefined;
+    let parsed = jsonParseRaw(`"${str}"`);
+    return typeof parsed === "string" ? parsed : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-ya28b76p.js:5648-5794 placement
-function trimPartialUtf8(e, n, o) {
-  let s = o;
-  while (s > n && (e[s - 1] & 192) === 128) s--;
-  if (s === n) return n;
-  let r = e[s - 1];
-  let i = r >= 240 ? 4 : r >= 224 ? 3 : r >= 192 ? 2 : 1;
-  return o - (s - 1) < i ? s - 1 : o;
+function trimPartialUtf8(buffer, start, end) {
+  let cursor = end;
+  while (cursor > start && (buffer[cursor - 1] & 192) === 128) cursor--;
+  if (cursor === start) return start;
+  let leadByte = buffer[cursor - 1];
+  let seqLength = leadByte >= 240 ? 4 : leadByte >= 224 ? 3 : leadByte >= 192 ? 2 : 1;
+  return end - (cursor - 1) < seqLength ? cursor - 1 : end;
 }
 //@ chunk-ya28b76p.js:5794-5970 placement
-function findCommandField(e, n, o) {
-  let s = n;
+function findCommandField(buffer, start, end) {
+  let cursor = start;
   while (true) {
-    s = indexOfBytes(e, VLr, s, o);
-    if (s < 0) return;
-    let r = s + VLr.length;
-    if (indexOfBytes(e, We, r, r + 4) === r) {
-      let i = r;
-      while (i < o && e[i] !== QUOTE_BYTE) i++;
-      return e.toString("utf8", r, i);
+    cursor = indexOfBytes(buffer, ID_FIELD_MARKER, cursor, end);
+    if (cursor < 0) return;
+    let idStart = cursor + ID_FIELD_MARKER.length;
+    if (indexOfBytes(buffer, MESSAGE_ID_PREFIX, idStart, idStart + 4) === idStart) {
+      let valueEnd = idStart;
+      while (valueEnd < end && buffer[valueEnd] !== QUOTE_BYTE) valueEnd++;
+      return buffer.toString("utf8", idStart, valueEnd);
     }
-    s = r;
+    cursor = idStart;
   }
 }
 //@ chunk-ya28b76p.js:5970-6103 placement
-function readJsonIntField(e, n, o, s) {
-  let r = indexOfBytes(e, n, o, s);
-  if (r < 0) return 0;
-  let i = r + n.length;
-  let c = 0;
-  while (i < s && e[i] >= DIGIT_ZERO_BYTE && e[i] <= DIGIT_NINE_BYTE) {
-    c = c * 10 + (e[i] - DIGIT_ZERO_BYTE);
-    i++;
+function readJsonIntField(buffer, key, start, end) {
+  let keyIndex = indexOfBytes(buffer, key, start, end);
+  if (keyIndex < 0) return 0;
+  let cursor = keyIndex + key.length;
+  let value = 0;
+  while (cursor < end && buffer[cursor] >= DIGIT_ZERO_BYTE && buffer[cursor] <= DIGIT_NINE_BYTE) {
+    value = value * 10 + (buffer[cursor] - DIGIT_ZERO_BYTE);
+    cursor++;
   }
-  return c;
+  return value;
 }
 //@ chunk-ya28b76p.js:6103-6260 placement
 function getModelCostWeight(model) {
@@ -407,30 +491,32 @@ function getModelCostWeight(model) {
 /**
  * 按模型价格加权的 token 数。
  */
-function costWeightedTokens(e) {
-  return (e.cached + e.uncached * 10 + e.cacheCreate * 12.5 + e.output * 50) * e.modelTier;
+function costWeightedTokens(record) {
+  return (
+    (record.cached + record.uncached * 10 + record.cacheCreate * 12.5 + record.output * 50) * record.modelTier
+  );
 }
 //@ chunk-ya28b76p.js:6350-6546 placement
 /**
  * 汇总最近 7 天与 1 天的转录用量：按行为聚合记录并统计 loop 运行，返回日/周的分桶结果。
  */
-async function aggregateRecentUsage_2(e, n) {
-  let o = Date.now() - USAGE_WINDOW_MS;
-  let s = Date.now() - 86400000;
+async function aggregateRecentUsage_2(storage, foldOptions) {
+  let weekStartMs = Date.now() - USAGE_WINDOW_MS;
+  let dayStartMs = Date.now() - 86400000;
   let usageAggregate = createUsageAggregate();
   let usageAggregate_2 = createUsageAggregate();
   await scanTranscripts(
-    o,
-    (c) => {
-      aggregateUsageByBehavior(usageAggregate_2, c);
-      if (c.ts >= s) aggregateUsageByBehavior(usageAggregate, c, s);
+    weekStartMs,
+    (record) => {
+      aggregateUsageByBehavior(usageAggregate_2, record);
+      if (record.ts >= dayStartMs) aggregateUsageByBehavior(usageAggregate, record, dayStartMs);
     },
-    e,
-    (c) => {
-      recordLoopRun(usageAggregate_2, c);
-      if (c.ts >= s) recordLoopRun(usageAggregate, c);
+    storage,
+    (fire) => {
+      recordLoopRun(usageAggregate_2, fire);
+      if (fire.ts >= dayStartMs) recordLoopRun(usageAggregate, fire);
     },
-    n,
+    foldOptions,
   );
   return {
     day: usageBuckets(usageAggregate),
@@ -444,39 +530,45 @@ async function aggregateRecentUsage_2(e, n) {
 async function scanTranscripts(minMtimeMs, foldSpec, storage, foldOptions, startSpan) {
   if (storage) return scanStoredTranscripts(storage, minMtimeMs, foldSpec, foldOptions, startSpan);
   let projectsDir = getProjectsDir();
-  let c;
+  let projectDirs;
   try {
-    c = await readdir(projectsDir);
+    projectDirs = await readdir(projectsDir);
   } catch (error) {
     if (isFsInaccessible(error)) return;
     throw error;
   }
-  let T = (await Promise.all(c.map((u) => loadAllSubagentTranscriptsFromDisk(join(projectsDir, u))))).flat();
+  let transcripts = (
+    await Promise.all(
+      projectDirs.map((projectDir) => loadAllSubagentTranscriptsFromDisk(join(projectsDir, projectDir))),
+    )
+  ).flat();
   let dedupingSink = makeDedupingSink(foldSpec, foldOptions);
-  for (let u = 0; u < T.length; u += TRANSCRIPT_SCAN_MARKERS) {
-    let sliced = T.slice(u, u + TRANSCRIPT_SCAN_MARKERS);
+  for (let offset = 0; offset < transcripts.length; offset += TRANSCRIPT_SCAN_MARKERS) {
+    let sliced = transcripts.slice(offset, offset + TRANSCRIPT_SCAN_MARKERS);
     let mapped = sliced.map(() => startSpan && safeLineSink(startSpan()));
-    (await Promise.all(sliced.map((y, b) => scanTranscriptIntoUsage(y, minMtimeMs, mapped[b])))).forEach(
-      (y, b) => {
-        dedupingSink(y);
-        mapped[b]?.end(y);
-      },
-    );
+    (
+      await Promise.all(
+        sliced.map((transcript, index) => scanTranscriptIntoUsage(transcript, minMtimeMs, mapped[index])),
+      )
+    ).forEach((partial, index) => {
+      dedupingSink(partial);
+      mapped[index]?.end(partial);
+    });
   }
 }
 //@ chunk-ya28b76p.js:6890-7085 placement
-function makeDedupingSink(e, n) {
-  let o = new Set();
-  let s = (uuid) => {
+function makeDedupingSink(foldSpec, foldOptions) {
+  let seenIds = new Set();
+  let isFirst = (uuid) => {
     if (!uuid) return true;
-    if (o.has(uuid)) return false;
-    o.add(uuid);
+    if (seenIds.has(uuid)) return false;
+    seenIds.add(uuid);
     return true;
   };
-  return (r) => {
-    for (let record of r.records) if (s(record.uuid)) e(record);
-    if (n) {
-      for (let fire of r.fires) if (s(fire.uuid)) n(fire);
+  return (partial) => {
+    for (let record of partial.records) if (isFirst(record.uuid)) foldSpec(record);
+    if (foldOptions) {
+      for (let fire of partial.fires) if (isFirst(fire.uuid)) foldOptions(fire);
     }
   };
 }
@@ -488,22 +580,22 @@ async function scanStoredTranscripts(storage, minMtimeMs, foldSpec, foldOptions,
   let projectKeys = [];
   let budget = createPageBudget();
   let pages = await readAllPages(
-    (R) =>
+    (cursor) =>
       storage.listEntries(
         {
           namespace: "transcript",
         },
         {
           skipScopeStats: true,
-          ...(R !== undefined && {
-            cursor: R,
+          ...(cursor !== undefined && {
+            cursor,
           }),
         },
       ),
-    (R) => {
-      for (let O of R) {
-        let y = listedProjectKey(O, isValidKeySegment);
-        if (y !== undefined) projectKeys.push(y);
+    (entries) => {
+      for (let entry of entries) {
+        let projectKey = listedProjectKey(entry, isValidKeySegment);
+        if (projectKey !== undefined) projectKeys.push(projectKey);
       }
     },
     {
@@ -511,20 +603,22 @@ async function scanStoredTranscripts(storage, minMtimeMs, foldSpec, foldOptions,
     },
   );
   logListingOutcome("project", pages, budget);
-  let a = (
+  let transcriptKeys = (
     await Promise.all(
       projectKeys.map((projectKey) => listProjectTranscriptKeys(storage, projectKey, minMtimeMs, budget)),
     )
   ).flat();
   let fold = makeDedupingSink(foldSpec, foldOptions);
-  for (let R = 0; R < a.length; R += TRANSCRIPT_SCAN_MARKERS) {
-    let sliced = a.slice(R, R + TRANSCRIPT_SCAN_MARKERS);
+  for (let offset = 0; offset < transcriptKeys.length; offset += TRANSCRIPT_SCAN_MARKERS) {
+    let sliced = transcriptKeys.slice(offset, offset + TRANSCRIPT_SCAN_MARKERS);
     let mapped = sliced.map(() => startSpan && safeLineSink(startSpan()));
     (
-      await Promise.all(sliced.map((L, N) => readStoredTranscript(storage, L, minMtimeMs, mapped[N])))
-    ).forEach((L, N) => {
-      fold(L);
-      mapped[N]?.end(L);
+      await Promise.all(
+        sliced.map((key, index) => readStoredTranscript(storage, key, minMtimeMs, mapped[index])),
+      )
+    ).forEach((partial, index) => {
+      fold(partial);
+      mapped[index]?.end(partial);
     });
   }
   let cappedPages = cappedPagesBeyondFirst(budget);
@@ -541,7 +635,7 @@ async function listProjectTranscriptKeys(storage, projectKey, minMtimeMs, budget
   let keys = [];
   let sessionIds = [];
   let pages = await readAllPages(
-    (u) =>
+    (cursor) =>
       storage.listEntries(
         {
           namespace: "transcript",
@@ -549,20 +643,20 @@ async function listProjectTranscriptKeys(storage, projectKey, minMtimeMs, budget
         },
         {
           skipScopeStats: true,
-          ...(u !== undefined && {
-            cursor: u,
+          ...(cursor !== undefined && {
+            cursor,
           }),
         },
       ),
-    (u) => {
-      for (let g of u)
-        if (g.kind === "key") pushTranscriptKey(keys, g);
+    (entries) => {
+      for (let entry of entries)
+        if (entry.kind === "key") pushTranscriptKey(keys, entry);
         else if (
-          g.scope.namespace === "transcript" &&
-          g.scope.sessionId !== undefined &&
-          isValidKeySegment(g.scope.sessionId)
+          entry.scope.namespace === "transcript" &&
+          entry.scope.sessionId !== undefined &&
+          isValidKeySegment(entry.scope.sessionId)
         )
-          sessionIds.push(g.scope.sessionId);
+          sessionIds.push(entry.scope.sessionId);
     },
     {
       budget,
@@ -575,7 +669,7 @@ async function listProjectTranscriptKeys(storage, projectKey, minMtimeMs, budget
       mtimeBySession.set(key.key.sessionId, key.mtimeMs);
   let filtered = sessionIds.filter((sessionId) => (mtimeBySession.get(sessionId) ?? 1 / 0) >= minMtimeMs);
   let results = await Promise.all(
-    filtered.map((u) => listSessionTranscriptKeys(storage, projectKey, u, budget)),
+    filtered.map((sessionId) => listSessionTranscriptKeys(storage, projectKey, sessionId, budget)),
   );
   return keys.concat(results.flat());
 }
@@ -587,7 +681,7 @@ async function listSessionTranscriptKeys(storage, projectKey, sessionId, budget,
   let keys = [];
   let childPaths = [];
   let pages = await readAllPages(
-    (a) =>
+    (cursor) =>
       storage.listEntries(
         {
           namespace: "transcript",
@@ -599,22 +693,25 @@ async function listSessionTranscriptKeys(storage, projectKey, sessionId, budget,
         },
         {
           skipScopeStats: true,
-          ...(a !== undefined && {
-            cursor: a,
+          ...(cursor !== undefined && {
+            cursor,
           }),
         },
       ),
-    (a) => {
-      for (let u of a)
-        if (u.kind === "key") {
-          if (u.key.namespace === "transcript" && (u.key.agentId !== undefined || u.key.journal === true))
-            pushTranscriptKey(keys, u);
+    (entries) => {
+      for (let entry of entries)
+        if (entry.kind === "key") {
+          if (
+            entry.key.namespace === "transcript" &&
+            (entry.key.agentId !== undefined || entry.key.journal === true)
+          )
+            pushTranscriptKey(keys, entry);
         } else if (
-          u.scope.namespace === "transcript" &&
-          u.scope.agentRelPath !== undefined &&
-          u.scope.agentRelPath.length > (agentRelPath?.length ?? 0)
+          entry.scope.namespace === "transcript" &&
+          entry.scope.agentRelPath !== undefined &&
+          entry.scope.agentRelPath.length > (agentRelPath?.length ?? 0)
         )
-          childPaths.push(u.scope.agentRelPath);
+          childPaths.push(entry.scope.agentRelPath);
     },
     {
       budget,
@@ -629,36 +726,41 @@ async function listSessionTranscriptKeys(storage, projectKey, sessionId, budget,
   return keys.concat(results.flat());
 }
 //@ chunk-ya28b76p.js:8863-9128 placement
-function logListingOutcome(e, pages, budget) {
-  let s = noteValidationIssue(pages, budget);
+function logListingOutcome(kind, pages, budget) {
+  let issue = noteValidationIssue(pages, budget);
   if (pages.status === "error")
-    logForDebugging(`foldRecentRecords: v5 ${e} listing failed: ${pages.error.code}`);
-  else if (s === "first-truncation")
+    logForDebugging(`foldRecentRecords: v5 ${kind} listing failed: ${pages.error.code}`);
+  else if (issue === "first-truncation")
     logForDebugging(
-      `foldRecentRecords: v5 ${e} listing cut short (the scan's ${DEFAULT_MAX_PAGES}-page budget is spent); keeping what was listed`,
+      `foldRecentRecords: v5 ${kind} listing cut short (the scan's ${DEFAULT_MAX_PAGES}-page budget is spent); keeping what was listed`,
     );
 }
 //@ chunk-ya28b76p.js:9128-9282 placement
-function pushTranscriptKey(keys, n) {
-  if (n.kind === "key" && n.key.namespace === "transcript" && n.size !== undefined && n.mtimeMs !== undefined)
+function pushTranscriptKey(keys, entry) {
+  if (
+    entry.kind === "key" &&
+    entry.key.namespace === "transcript" &&
+    entry.size !== undefined &&
+    entry.mtimeMs !== undefined
+  )
     keys.push({
-      key: n.key,
-      size: n.size,
-      mtimeMs: n.mtimeMs,
+      key: entry.key,
+      size: entry.size,
+      mtimeMs: entry.mtimeMs,
     });
 }
 //@ chunk-ya28b76p.js:9282-9431 placement
-async function readStoredTranscript(storage, n, minMtimeMs, s) {
+async function readStoredTranscript(storage, entry, sinceTs, span) {
   let usageTotals = newUsageTotals();
-  if (n.mtimeMs >= minMtimeMs)
+  if (entry.mtimeMs >= sinceTs)
     await readStoredTranscriptLines(
       storage,
-      n,
+      entry,
       transcriptReadPlan(
         usageTotals,
-        minMtimeMs,
-        n.key.namespace === "transcript" && n.key.agentRelPath?.[0] === WORKFLOW_TRANSCRIPT_SUBDIR,
-        s,
+        sinceTs,
+        entry.key.namespace === "transcript" && entry.key.agentRelPath?.[0] === WORKFLOW_TRANSCRIPT_SUBDIR,
+        span,
       ),
     );
   return usageTotals;
@@ -667,14 +769,14 @@ async function readStoredTranscript(storage, n, minMtimeMs, s) {
 /**
  * 按块从存储读取转录并按换行切分逐行回调（跨块拼接不完整的行）。
  */
-async function readStoredTranscriptLines(e, n, o) {
-  let { key } = n;
-  let readWhole = n.size <= TRANSCRIPT_READ_CHUNK_BYTES;
+async function readStoredTranscriptLines(storage, entry, onLine) {
+  let { key } = entry;
+  let readWhole = entry.size <= TRANSCRIPT_READ_CHUNK_BYTES;
   let offset = 0;
   let pendingChunks = [];
   let pendingBytes = 0;
   while (true) {
-    let T = await e.read([
+    let readResult = await storage.read([
       readWhole
         ? key
         : {
@@ -683,41 +785,50 @@ async function readStoredTranscriptLines(e, n, o) {
             length: TRANSCRIPT_READ_CHUNK_BYTES_2,
           },
     ]);
-    if (!T.ok) {
-      logForDebugging(`readRecordsFromStream: v5 read failed: ${T.error.code}`);
+    if (!readResult.ok) {
+      logForDebugging(`readRecordsFromStream: v5 read failed: ${readResult.error.code}`);
       return;
     }
-    let a = T.value.items[0];
-    if (!a.found) return;
-    let buffer = Buffer.from(a.value.buffer, a.value.byteOffset, a.value.byteLength);
-    let g = 0;
-    while (g < buffer.length) {
-      let index = buffer.indexOf(10, g);
+    let item = readResult.value.items[0];
+    if (!item.found) return;
+    let buffer = Buffer.from(item.value.buffer, item.value.byteOffset, item.value.byteLength);
+    let lineStart = 0;
+    while (lineStart < buffer.length) {
+      let index = buffer.indexOf(10, lineStart);
       if (index === -1) {
-        pendingChunks.push(Buffer.from(buffer.subarray(g)));
-        pendingBytes += buffer.length - g;
+        pendingChunks.push(Buffer.from(buffer.subarray(lineStart)));
+        pendingBytes += buffer.length - lineStart;
         break;
       }
-      if (pendingBytes === 0) o(buffer.subarray(g, index));
+      if (pendingBytes === 0) onLine(buffer.subarray(lineStart, index));
       else {
-        o(Buffer.concat([...pendingChunks, buffer.subarray(g, index)], pendingBytes + (index - g)));
+        onLine(
+          Buffer.concat(
+            [...pendingChunks, buffer.subarray(lineStart, index)],
+            pendingBytes + (index - lineStart),
+          ),
+        );
         pendingChunks = [];
         pendingBytes = 0;
       }
-      g = index + 1;
+      lineStart = index + 1;
     }
-    offset += a.value.byteLength;
-    if (readWhole || a.value.byteLength === 0 || offset >= a.totalBytes) break;
+    offset += item.value.byteLength;
+    if (readWhole || item.value.byteLength === 0 || offset >= item.totalBytes) break;
   }
   if (pendingBytes > 0)
-    o(pendingChunks.length === 1 ? pendingChunks[0] : Buffer.concat(pendingChunks, pendingBytes));
+    onLine(pendingChunks.length === 1 ? pendingChunks[0] : Buffer.concat(pendingChunks, pendingBytes));
 }
 //@ chunk-ya28b76p.js:10077-10224 placement
-function addSkillAttribution(e, n) {
-  if (!n.attributionSkill) return;
-  e.set(
-    n.attributionSkill,
-    (e.get(n.attributionSkill) ?? 0) + n.cached + n.cacheCreate + n.uncached + n.output,
+function addSkillAttribution(skillTokens, record) {
+  if (!record.attributionSkill) return;
+  skillTokens.set(
+    record.attributionSkill,
+    (skillTokens.get(record.attributionSkill) ?? 0) +
+      record.cached +
+      record.cacheCreate +
+      record.uncached +
+      record.output,
   );
 }
 //@ chunk-ya28b76p.js:10224-10312 placement
@@ -725,69 +836,69 @@ function addSkillAttribution(e, n) {
  * 汇总最近的用量记录。
  */
 async function aggregateRecentUsage(storageV5) {
-  let n = Date.now() - USAGE_WINDOW_MS;
-  let o = new Map();
-  await scanTranscripts(n, (s) => addSkillAttribution(o, s), storageV5);
-  return o;
+  let minMtimeMs = Date.now() - USAGE_WINDOW_MS;
+  let skillTokens = new Map();
+  await scanTranscripts(minMtimeMs, (record) => addSkillAttribution(skillTokens, record), storageV5);
+  return skillTokens;
 }
 //@ chunk-ya28b76p.js:10312-10772 placement = loadAllSubagentTranscriptsFromDisk (0.769)
-async function loadAllSubagentTranscriptsFromDisk(e) {
-  let n;
+async function loadAllSubagentTranscriptsFromDisk(projectDir) {
+  let entries;
   try {
-    n = await readdir(e, {
+    entries = await readdir(projectDir, {
       withFileTypes: true,
     });
   } catch (error) {
     if (isFsInaccessible(error)) return [];
     throw error;
   }
-  let o = [];
-  let s = [];
-  for (let i of n)
-    if (i.isFile() && extname(i.name) === ".jsonl") o.push(join(e, i.name));
-    else if (i.isDirectory()) s.push(i.name);
+  let paths = [];
+  let dirNames = [];
+  for (let entry of entries)
+    if (entry.isFile() && extname(entry.name) === ".jsonl") paths.push(join(projectDir, entry.name));
+    else if (entry.isDirectory()) dirNames.push(entry.name);
   let results = await Promise.all(
-    s.map(async (i) => {
-      let subagentsDir = join(e, i, "subagents");
+    dirNames.map(async (dirName) => {
+      let subagentsDir = join(projectDir, dirName, "subagents");
       try {
         return (
           await readdir(subagentsDir, {
             recursive: true,
           })
         )
-          .filter((T) => extname(T) === ".jsonl")
-          .map((T) => join(subagentsDir, T));
+          .filter((nestedPath) => extname(nestedPath) === ".jsonl")
+          .map((nestedPath) => join(subagentsDir, nestedPath));
       } catch (error) {
         if (isFsInaccessible(error)) return [];
         throw error;
       }
     }),
   );
-  for (let i of results) for (let c of i) o.push(c);
-  return o;
+  for (let nestedPaths of results) for (let nestedPath of nestedPaths) paths.push(nestedPath);
+  return paths;
 }
 //@ chunk-ya28b76p.js:10772-10856 placement
-async function scanTranscriptIntoUsage(e, n, o) {
+async function scanTranscriptIntoUsage(filePath, minMtimeMs, span) {
   let usageTotals = newUsageTotals();
   await readTranscriptFileLines(
-    e,
-    n,
-    transcriptReadPlan(usageTotals, n, e.includes(SUBAGENT_TRANSCRIPT_MARK), o),
+    filePath,
+    minMtimeMs,
+    transcriptReadPlan(usageTotals, minMtimeMs, filePath.includes(SUBAGENT_TRANSCRIPT_MARK), span),
   );
   return usageTotals;
 }
 //@ chunk-ya28b76p.js:10856-11042 placement
-async function readTranscriptFileLines(e, n, o) {
-  let s;
+async function readTranscriptFileLines(filePath, minMtimeMs, onLine) {
+  let stats;
   try {
-    s = await stat(e);
+    stats = await stat(filePath);
   } catch (error) {
     if (isFsInaccessible(error)) return;
     throw error;
   }
-  if (!s.isFile() || s.mtimeMs < n) return;
+  if (!stats.isFile() || stats.mtimeMs < minMtimeMs) return;
   try {
-    for await (let r of readLines(e)) o(r);
+    for await (let line of readLines(filePath)) onLine(line);
   } catch (error) {
     if (isFsInaccessible(error)) return;
     throw error;
@@ -801,29 +912,29 @@ function newUsageTotals() {
   };
 }
 //@ chunk-ya28b76p.js:11084-11166 placement
-function transcriptReadPlan(usageTotals, n, o, s) {
-  let r = attributeLoopRuns(usageTotals, n, o);
-  if (!s) return r;
-  return (i) => {
-    r(i);
-    s.line(i, usageTotals);
+function transcriptReadPlan(sink, sinceTs, isWorkflow, span) {
+  let lineSink = attributeLoopRuns(sink, sinceTs, isWorkflow);
+  if (!span) return lineSink;
+  return (line) => {
+    lineSink(line);
+    span.line(line, sink);
   };
 }
 //@ chunk-ya28b76p.js:11166-11304 placement
-function safeLineSink(e) {
-  let n = true;
-  let o = (s) => {
-    if (!n) return;
+function safeLineSink(inner) {
+  let isAlive = true;
+  let guarded = (fn) => {
+    if (!isAlive) return;
     try {
-      s();
+      fn();
     } catch (error) {
-      n = false;
+      isAlive = false;
       logError(error);
     }
   };
   return {
-    line: (s, r) => o(() => e.line(s, r)),
-    end: (s) => o(() => e.end(s)),
+    line: (line, sink) => guarded(() => inner.line(line, sink)),
+    end: (sink) => guarded(() => inner.end(sink)),
   };
 }
 //@ chunk-ya28b76p.js:11304-11369 placement
@@ -831,220 +942,237 @@ var COMMAND_NAME_REGEX = /<command-name>([^<]{1,200})<\/command-name>/;
 var MAX_COMMAND_NAME_CHARS = 200;
 var MAX_COMMAND_NAME_BOUND = 6 * MAX_COMMAND_NAME_CHARS;
 //@ chunk-ya28b76p.js:11369-13867 placement
-function attributeLoopRuns(e, n, isWorkflow) {
-  let s = 0;
-  let r = [];
-  let i = [];
-  let c = 0;
+function attributeLoopRuns(sink, sinceTs, isWorkflow) {
+  let phaseSeq = 0;
+  let loopQueue = [];
+  let activeFires = [];
+  let fireDepth = 0;
   let tracker = createContextTracker();
-  let T = true;
-  let a;
-  let u = new Map();
-  let g = () => {
-    s++;
-    i = [];
-    c = 0;
-    T = false;
+  let sawUsage = true;
+  let currentFire;
+  let lastBySubagent = new Map();
+  let startFire = () => {
+    phaseSeq++;
+    activeFires = [];
+    fireDepth = 0;
+    sawUsage = false;
   };
-  let R = () => {
-    s++;
-    i = [];
-    c = 0;
-    T = true;
-    b = undefined;
-    a = undefined;
+  let endFire = () => {
+    phaseSeq++;
+    activeFires = [];
+    fireDepth = 0;
+    sawUsage = true;
+    pendingReuse = undefined;
+    currentFire = undefined;
   };
-  let O = () => {
-    if (!a) return;
-    c = Math.max(0, c - 1);
-    if (a.run) {
-      e.fires.pop();
-      i.pop();
+  let popFire = () => {
+    if (!currentFire) return;
+    fireDepth = Math.max(0, fireDepth - 1);
+    if (currentFire.run) {
+      sink.fires.pop();
+      activeFires.pop();
     }
-    if (a.fire && a.fire.taskId === undefined) r.unshift(a.fire);
-    a = undefined;
+    if (currentFire.fire && currentFire.fire.taskId === undefined) loopQueue.unshift(currentFire.fire);
+    currentFire = undefined;
   };
-  let y = () => {
-    if (a?.isCommandRecord) {
-      O();
-      R();
+  let onCommandRecord = () => {
+    if (currentFire?.isCommandRecord) {
+      popFire();
+      endFire();
     }
   };
-  let b;
-  let L = (m, f) => {
-    let jsonStringField = readJsonStringField(m, rt, 0, f);
+  let pendingReuse;
+  let takeLoopRecord = (text, len) => {
+    let jsonStringField = readJsonStringField(text, SCHEDULED_FIRE_ID_FIELD_MARKER, 0, len);
     if (jsonStringField !== undefined) {
-      let index = r.findIndex((h) => h.uuid === jsonStringField);
-      return index < 0 ? undefined : r.splice(index, 1)[0];
+      let index = loopQueue.findIndex((entry) => entry.uuid === jsonStringField);
+      return index < 0 ? undefined : loopQueue.splice(index, 1)[0];
     }
-    let jsonStringField_2 = readJsonStringField(m, G, 0, f);
+    let jsonStringField_2 = readJsonStringField(text, SCHEDULED_TASK_ID_FIELD_MARKER, 0, len);
     if (jsonStringField_2 !== undefined) {
-      let lastIndex = r.findLastIndex((A) => A.taskId === jsonStringField_2);
+      let lastIndex = loopQueue.findLastIndex((entry) => entry.taskId === jsonStringField_2);
       if (lastIndex < 0) return;
-      let h = r[lastIndex];
-      r = r.filter((A) => A.taskId !== jsonStringField_2);
-      return h;
+      let entry = loopQueue[lastIndex];
+      loopQueue = loopQueue.filter((entry) => entry.taskId !== jsonStringField_2);
+      return entry;
     }
     if (!(
-      indexOfBytes(m, mt, 0, f) < 0 &&
-      (indexOfBytes(m, K, 0, f) >= 0 || containsAnyMarker(m, COMMAND_MESSAGE_MARKERS, f))
+      indexOfBytes(text, ORIGIN_FIELD_MARKER, 0, len) < 0 &&
+      (indexOfBytes(text, META_RECORD_MARKER, 0, len) >= 0 ||
+        containsAnyMarker(text, COMMAND_MESSAGE_MARKERS, len))
     )) {
-      r = r.filter((C) => C.taskId !== undefined);
+      loopQueue = loopQueue.filter((entry) => entry.taskId !== undefined);
       return;
     }
-    if (r[0]?.taskId === undefined) return r.shift();
+    if (loopQueue[0]?.taskId === undefined) return loopQueue.shift();
     return;
   };
-  let N = (m, f) =>
-    indexOfBytes(m, K, 0, f) >= 0 &&
-    (flattened.some((S) => indexOfBytes(m, S, 0, f) >= 0) ||
-      flattened_2.some((S) => indexOfBytes(m, S, 0, f) >= 0));
-  return (m) => {
-    let f = m.length;
-    if (indexOfBytes(m, KLr, 0, f) >= 0) {
-      let record = parseUsageRecord(m, 0, f, isWorkflow);
-      T = true;
-      a = undefined;
+  let isToolLine = (text, len) =>
+    indexOfBytes(text, META_RECORD_MARKER, 0, len) >= 0 &&
+    (flattened.some((marker) => indexOfBytes(text, marker, 0, len) >= 0) ||
+      flattened_2.some((marker) => indexOfBytes(text, marker, 0, len) >= 0));
+  return (text) => {
+    let len = text.length;
+    if (indexOfBytes(text, ASSISTANT_RECORD_MARKER, 0, len) >= 0) {
+      let record = parseUsageRecord(text, 0, len, isWorkflow);
+      sawUsage = true;
+      currentFire = undefined;
       if (record) {
         trackContextGrowth(tracker, record);
-        let E = u.get(record.isSubagent);
+        let previous = lastBySubagent.get(record.isSubagent);
         if (
-          E?.cached === record.cached &&
-          E.cacheCreate === record.cacheCreate &&
-          E.uncached === record.uncached
+          previous?.cached === record.cached &&
+          previous.cacheCreate === record.cacheCreate &&
+          previous.uncached === record.uncached
         )
-          record.recached = E.recached;
-        else if (E)
+          record.recached = previous.recached;
+        else if (previous)
           record.recached = Math.min(
             record.cacheCreate,
-            Math.max(0, E.cached + E.cacheCreate - record.cached),
+            Math.max(0, previous.cached + previous.cacheCreate - record.cached),
           );
-        u.set(record.isSubagent, record);
+        lastBySubagent.set(record.isSubagent, record);
       }
-      if (record && record.ts >= n) {
-        if (c > 1 && i.length > 0) {
-          let share = 1 / c;
-          record.loopShares = i.map((M) => ({
-            ...M,
+      if (record && record.ts >= sinceTs) {
+        if (fireDepth > 1 && activeFires.length > 0) {
+          let share = 1 / fireDepth;
+          record.loopShares = activeFires.map((fire) => ({
+            ...fire,
             share,
           }));
-        } else if (i[0]) {
-          record.loop = i[0].loop;
-          record.loopFireTs = i[0].fireTs;
+        } else if (activeFires[0]) {
+          record.loop = activeFires[0].loop;
+          record.loopFireTs = activeFires[0].fireTs;
         }
-        e.records.push(record);
+        sink.records.push(record);
       }
       return;
     }
-    if (indexOfBytes(m, hPo, 0, f) >= 0) {
-      let S = indexOfBytes(m, yPo, 0, f);
-      if (S < 0) addFirstPromptBytes(tracker, f);
-      else if (isLargeToolResultBytes(f - S)) {
-        let z = indexOfBytes(m, _Po, S, f);
-        addLargeToolResultBytes(tracker, (z < 0 ? f : z) - S);
+    if (indexOfBytes(text, USER_RECORD_MARKER, 0, len) >= 0) {
+      let promptStart = indexOfBytes(text, TOOL_RESULT_RECORD_MARKER, 0, len);
+      if (promptStart < 0) addFirstPromptBytes(tracker, len);
+      else if (isLargeToolResultBytes(len - promptStart)) {
+        let resultEnd = indexOfBytes(text, TOOL_USE_RESULT_FIELD_MARKER, promptStart, len);
+        addLargeToolResultBytes(tracker, (resultEnd < 0 ? len : resultEnd) - promptStart);
       }
       if (
-        S >= 0 ||
-        indexOfBytes(m, it, 0, f) >= 0 ||
-        indexOfBytes(m, ut, 0, f) >= 0 ||
-        containsAnyMarker(m, BASH_OUTPUT_MARKERS, f) ||
-        hasNumericTurnField(m, f) ||
-        N(m, f)
+        promptStart >= 0 ||
+        indexOfBytes(text, TURN_COMPANION_MARKER, 0, len) >= 0 ||
+        indexOfBytes(text, COMPACT_SUMMARY_MARKER, 0, len) >= 0 ||
+        containsAnyMarker(text, BASH_OUTPUT_MARKERS, len) ||
+        hasNumericTurnField(text, len) ||
+        isToolLine(text, len)
       )
         return;
-      if (indexOfBytes(m, ct, 0, f) >= 0) {
-        R();
+      if (indexOfBytes(text, INTERRUPT_TEXT_MARKER, 0, len) >= 0) {
+        endFire();
         return;
       }
-      let E = indexOfBytes(m, K, 0, f) >= 0;
-      if (E && containsAnyMarker(m, HOOK_STOPPED_MARKERS, f)) {
-        O();
-        if (c === 0) R();
+      let hasKMarker = indexOfBytes(text, META_RECORD_MARKER, 0, len) >= 0;
+      if (hasKMarker && containsAnyMarker(text, HOOK_STOPPED_MARKERS, len)) {
+        popFire();
+        if (fireDepth === 0) endFire();
         return;
       }
-      if (containsAnyMarker(m, LOCAL_COMMAND_OUTPUT_MARKERS, f)) {
-        y();
+      if (containsAnyMarker(text, LOCAL_COMMAND_OUTPUT_MARKERS, len)) {
+        onCommandRecord();
         return;
       }
-      let M = containsAnyMarker(m, COMMAND_MESSAGE_MARKERS, f);
+      let hasCommandMarker = containsAnyMarker(text, COMMAND_MESSAGE_MARKERS, len);
       if (
-        containsAnyMarker(m, LOCAL_COMMAND_CAVEAT_MARKERS, f) ||
-        (E && !M && indexOfBytes(m, _t, 0, f) < 0 && indexOfBytes(m, G, 0, f) < 0)
+        containsAnyMarker(text, LOCAL_COMMAND_CAVEAT_MARKERS, len) ||
+        (hasKMarker &&
+          !hasCommandMarker &&
+          indexOfBytes(text, PROMPT_SOURCE_FIELD_MARKER, 0, len) < 0 &&
+          indexOfBytes(text, SCHEDULED_TASK_ID_FIELD_MARKER, 0, len) < 0)
       )
         return;
-      let C = indexOfBytes(m, Tt, 0, f) >= 0 || (!E && !M && indexOfBytes(m, G, 0, f) < 0);
-      let h = L(m, f);
-      if (h?.openBatch === s && !T && c > 0) R();
-      if (T || C) g();
-      c++;
-      a = {
-        fire: h,
+      let toolLine =
+        indexOfBytes(text, HUMAN_ORIGIN_MARKER, 0, len) >= 0 ||
+        (!hasKMarker && !hasCommandMarker && indexOfBytes(text, SCHEDULED_TASK_ID_FIELD_MARKER, 0, len) < 0);
+      let taken = takeLoopRecord(text, len);
+      if (taken?.openBatch === phaseSeq && !sawUsage && fireDepth > 0) endFire();
+      if (sawUsage || toolLine) startFire();
+      fireDepth++;
+      currentFire = {
+        fire: taken,
         run: false,
-        isCommandRecord: M,
+        isCommandRecord: hasCommandMarker,
       };
-      if (!h) {
-        b = undefined;
+      if (!taken) {
+        pendingReuse = undefined;
         return;
       }
-      let A = h.loop ?? parseLoopRecord(m, f);
-      if (!A) return;
-      if (!A.isDynamic) b = undefined;
-      if (h.ts < n) return;
-      e.fires.push({
-        ts: h.ts,
-        uuid: h.uuid,
-        loop: A,
+      let loopRecord = taken.loop ?? parseLoopRecord(text, len);
+      if (!loopRecord) return;
+      if (!loopRecord.isDynamic) pendingReuse = undefined;
+      if (taken.ts < sinceTs) return;
+      sink.fires.push({
+        ts: taken.ts,
+        uuid: taken.uuid,
+        loop: loopRecord,
       });
-      i.push({
-        loop: A,
-        fireTs: h.ts,
+      activeFires.push({
+        loop: loopRecord,
+        fireTs: taken.ts,
       });
-      a.run = true;
+      currentFire.run = true;
       return;
     }
-    if (containsAnyMarker(m, COMPACT_BOUNDARY_BYTES, f)) {
-      u.clear();
+    if (containsAnyMarker(text, COMPACT_BOUNDARY_BYTES, len)) {
+      lastBySubagent.clear();
       return;
     }
-    if (tracker.lastRequest === undefined && indexOfBytes(m, pt, 0, f) >= 0) {
-      addFirstPromptBytes(tracker, f);
+    if (tracker.lastRequest === undefined && indexOfBytes(text, FILE_ATTACHMENT_MARKER, 0, len) >= 0) {
+      addFirstPromptBytes(tracker, len);
       return;
     }
     if (
-      indexOfBytes(m, St, 0, f) >= 0 &&
-      indexOfBytes(m, Rt, 0, f) >= 0 &&
-      containsAnyMarker(m, LOCAL_COMMAND_OUTPUT_MARKERS, f)
+      indexOfBytes(text, SYSTEM_RECORD_MARKER, 0, len) >= 0 &&
+      indexOfBytes(text, LOCAL_COMMAND_MARKER, 0, len) >= 0 &&
+      containsAnyMarker(text, LOCAL_COMMAND_OUTPUT_MARKERS, len)
     ) {
-      y();
+      onCommandRecord();
       return;
     }
-    if (indexOfBytes(m, dt, 0, f) >= 0 && indexOfBytes(m, ft, 0, f) >= 0) {
-      R();
+    if (
+      indexOfBytes(text, ATTACHMENT_RECORD_MARKER, 0, len) >= 0 &&
+      indexOfBytes(text, QUEUED_COMMAND_RECORD_MARKER, 0, len) >= 0
+    ) {
+      endFire();
       return;
     }
-    if (indexOfBytes(m, ot, 0, f) >= 0) {
-      let jsonStringField = readJsonStringField(m, le, 0, f);
-      let E = jsonStringField ? Date.parse(jsonStringField) : NaN;
-      if (Number.isNaN(E)) return;
-      let jsonStringFieldBounded = readJsonStringFieldBounded(m, Mt, 0, f, MAX_COMMAND_NAME_BOUND);
-      let C = jsonStringFieldBounded
+    if (indexOfBytes(text, SCHEDULED_FIRE_MARKER, 0, len) >= 0) {
+      let jsonStringField = readJsonStringField(text, TIMESTAMP_FIELD_MARKER, 0, len);
+      let ts = jsonStringField ? Date.parse(jsonStringField) : NaN;
+      if (Number.isNaN(ts)) return;
+      let jsonStringFieldBounded = readJsonStringFieldBounded(
+        text,
+        PROMPT_FIELD_MARKER,
+        0,
+        len,
+        MAX_COMMAND_NAME_BOUND,
+      );
+      let boundedField = jsonStringFieldBounded
         ? clippedMessage(jsonStringFieldBounded, MAX_COMMAND_NAME_CHARS)
         : undefined;
-      let h = indexOfBytes(m, Ot, 0, f) >= 0;
-      if (C && h) {
-        b ??= C;
-        C = b;
+      let isDynamic = indexOfBytes(text, LOOP_TASK_KIND_MARKER, 0, len) >= 0;
+      if (boundedField && isDynamic) {
+        pendingReuse ??= boundedField;
+        boundedField = pendingReuse;
       }
-      r.push({
-        ts: E,
-        openBatch: c > 0 && !T ? s : undefined,
-        uuid: readJsonStringField(m, de, 0, f) ?? "",
-        taskId: readJsonStringField(m, st, 0, f),
-        loop: C
+      loopQueue.push({
+        ts,
+        openBatch: fireDepth > 0 && !sawUsage ? phaseSeq : undefined,
+        uuid: readJsonStringField(text, UUID_FIELD_MARKER, 0, len) ?? "",
+        taskId: readJsonStringField(text, TASK_ID_FIELD_MARKER, 0, len),
+        loop: boundedField
           ? {
-              prompt: C,
-              cron: normalizeCronExpression(readJsonStringFieldBounded(m, bt, 0, f, MAX_CRON_FIELD_BOUND)),
-              isDynamic: h,
+              prompt: boundedField,
+              cron: normalizeCronExpression(
+                readJsonStringFieldBounded(text, CRON_FIELD_MARKER, 0, len, MAX_CRON_FIELD_BOUND),
+              ),
+              isDynamic,
             }
           : null,
       });
@@ -1052,13 +1180,13 @@ function attributeLoopRuns(e, n, isWorkflow) {
   };
 }
 //@ chunk-ya28b76p.js:13867-14003 placement
-function hasNumericTurnField(e, n) {
-  let o = indexOfBytes(e, ee, 0, n);
-  if (o < 0) return false;
-  let s = o + ee.length;
-  let r = s;
-  while (s < n && e[s] >= DIGIT_ZERO_BYTE && e[s] <= DIGIT_NINE_BYTE) s++;
-  return s > r && indexOfBytes(e, at, s, n) === s;
+function hasNumericTurnField(text, length) {
+  let markerIndex = indexOfBytes(text, CONTENT_ARRAY_MARKER, 0, length);
+  if (markerIndex < 0) return false;
+  let cursor = markerIndex + CONTENT_ARRAY_MARKER.length;
+  let digitsStart = cursor;
+  while (cursor < length && text[cursor] >= DIGIT_ZERO_BYTE && text[cursor] <= DIGIT_NINE_BYTE) cursor++;
+  return cursor > digitsStart && indexOfBytes(text, LOOP_WAKEUP_SUFFIX_MARKER, cursor, length) === cursor;
 }
 //@ chunk-ya28b76p.js:14003-14021 placement
 var MAX_CRON_FIELD_CHARS = 64;
@@ -1070,16 +1198,16 @@ function normalizeCronExpression(jsonStringFieldBounded) {
     : clippedMessage(jsonStringFieldBounded, MAX_CRON_FIELD_CHARS);
 }
 //@ chunk-ya28b76p.js:14070-14230 placement
-function parseLoopRecord(e, n) {
-  let o =
-    readJsonStringFieldBounded(e, At, 0, n, MAX_COMMAND_NAME_BOUND) ??
-    readJsonStringFieldBounded(e, kt, 0, n, MAX_COMMAND_NAME_BOUND);
-  if (!o) return null;
-  let s = o.match(COMMAND_NAME_REGEX)?.[1];
-  let r = clippedMessage(s ?? o, MAX_COMMAND_NAME_CHARS);
-  return r
+function parseLoopRecord(text, length) {
+  let rawPrompt =
+    readJsonStringFieldBounded(text, CONTENT_FIELD_MARKER, 0, length, MAX_COMMAND_NAME_BOUND) ??
+    readJsonStringFieldBounded(text, TEXT_FIELD_MARKER, 0, length, MAX_COMMAND_NAME_BOUND);
+  if (!rawPrompt) return null;
+  let commandName = rawPrompt.match(COMMAND_NAME_REGEX)?.[1];
+  let prompt = clippedMessage(commandName ?? rawPrompt, MAX_COMMAND_NAME_CHARS);
+  return prompt
     ? {
-        prompt: r,
+        prompt,
         cron: undefined,
         isDynamic: false,
       }
@@ -1089,21 +1217,21 @@ function parseLoopRecord(e, n) {
 /**
  * 从转录行字节中解析用量记录：时间戳、会话、各类 token、是否子代理/最大 effort/工作流、模型档位、uuid 及归属（代理、技能、插件、MCP 服务器）。
  */
-function parseUsageRecord(e, n, o, isWorkflow) {
-  if (indexOfBytes(e, KLr, n, o) < 0) return;
-  if (indexOfBytes(e, He, n, o) < 0) return;
-  let timestamp = readJsonStringField(e, le, n, o);
-  let sessionId = readJsonStringField(e, Ke, n, o);
+function parseUsageRecord(text, start, length, isWorkflow) {
+  if (indexOfBytes(text, ASSISTANT_RECORD_MARKER, start, length) < 0) return;
+  if (indexOfBytes(text, USAGE_FIELD_MARKER, start, length) < 0) return;
+  let timestamp = readJsonStringField(text, TIMESTAMP_FIELD_MARKER, start, length);
+  let sessionId = readJsonStringField(text, SESSION_ID_FIELD_MARKER, start, length);
   if (!timestamp || !sessionId) return;
   let timestamp_2 = Date.parse(timestamp);
   if (Number.isNaN(timestamp_2)) return;
-  let uncached = readJsonIntField(e, $e, n, o);
-  let output = readJsonIntField(e, Ye, n, o);
-  let cacheCreate = readJsonIntField(e, je, n, o);
-  let cached = readJsonIntField(e, Xe, n, o);
+  let uncached = readJsonIntField(text, INPUT_TOKENS_FIELD_MARKER, start, length);
+  let output = readJsonIntField(text, OUTPUT_TOKENS_FIELD_MARKER, start, length);
+  let cacheCreate = readJsonIntField(text, CACHE_CREATION_TOKENS_FIELD_MARKER, start, length);
+  let cached = readJsonIntField(text, CACHE_READ_TOKENS_FIELD_MARKER, start, length);
   if (uncached + output + cacheCreate + cached === 0) return;
-  let hasAttribution = indexOfBytes(e, Je, n, o) >= 0;
-  let model = readJsonStringField(e, Ge, n, o);
+  let hasAttribution = indexOfBytes(text, ATTRIBUTION_MARKER, start, length) >= 0;
+  let model = readJsonStringField(text, MODEL_FIELD_MARKER, start, length);
   return {
     ts: timestamp_2,
     sessionId,
@@ -1112,20 +1240,25 @@ function parseUsageRecord(e, n, o, isWorkflow) {
     recached: 0,
     uncached,
     output,
-    isSubagent: indexOfBytes(e, ze, n, o) >= 0 || indexOfBytes(e, Ve, n, o) >= 0,
-    isMaxEffort: isTrailingFieldOf(e.subarray(n, o), Qe),
+    isSubagent:
+      indexOfBytes(text, SIDECHAIN_TIGHT_MARKER, start, length) >= 0 ||
+      indexOfBytes(text, SIDECHAIN_SPACED_MARKER, start, length) >= 0,
+    isMaxEffort: isTrailingFieldOf(text.subarray(start, length), MAX_EFFORT_MARKER),
     isWorkflow,
     alwaysOnTokens: 0,
     largeToolResultTokens: 0,
     modelTier: getModelCostWeight(model),
     model,
     uuid:
-      readJsonStringField(e, qe, n, o) ?? findCommandField(e, n, o) ?? readJsonStringField(e, de, n, o) ?? "",
+      readJsonStringField(text, REQUEST_ID_FIELD_MARKER, start, length) ??
+      findCommandField(text, start, length) ??
+      readJsonStringField(text, UUID_FIELD_MARKER, start, length) ??
+      "",
     ...(hasAttribution && {
-      attributionAgent: readJsonStringField(e, Ze, n, o),
-      attributionSkill: readJsonStringField(e, et, n, o),
-      attributionPlugin: readJsonStringField(e, tt, n, o),
-      attributionMcpServer: readJsonStringField(e, nt, n, o),
+      attributionAgent: readJsonStringField(text, ATTRIBUTION_AGENT_FIELD_MARKER, start, length),
+      attributionSkill: readJsonStringField(text, ATTRIBUTION_SKILL_FIELD_MARKER, start, length),
+      attributionPlugin: readJsonStringField(text, ATTRIBUTION_PLUGIN_FIELD_MARKER, start, length),
+      attributionMcpServer: readJsonStringField(text, ATTRIBUTION_MCP_SERVER_FIELD_MARKER, start, length),
     }),
   };
 }
@@ -1133,26 +1266,26 @@ function parseUsageRecord(e, n, o, isWorkflow) {
 /**
  * 判断文本末尾的闭合括号是否正好闭合某个字段的值（跳过字符串与转义，配对括号）。
  */
-function isTrailingFieldOf(e, n) {
-  let index = e.lastIndexOf(CLOSE_BRACE_BYTE);
+function isTrailingFieldOf(buffer, marker) {
+  let index = buffer.lastIndexOf(CLOSE_BRACE_BYTE);
   for (
-    let index_2 = e.lastIndexOf(n);
+    let index_2 = buffer.lastIndexOf(marker);
     index_2 >= 0;
-    index_2 = index_2 === 0 ? -1 : e.lastIndexOf(n, index_2 - 1)
+    index_2 = index_2 === 0 ? -1 : buffer.lastIndexOf(marker, index_2 - 1)
   ) {
-    let r = 1;
-    let i = false;
-    let c = index_2 + n.length;
-    for (; c < e.length && r > 0; c++) {
-      let p = e[c];
-      if (i) {
-        if (p === BACKSLASH_BYTE) c++;
-        else if (p === QUOTE_BYTE) i = false;
-      } else if (p === QUOTE_BYTE) i = true;
-      else if (p === OPEN_BRACE_BYTE || p === OPEN_BRACKET_BYTE) r++;
-      else if (p === CLOSE_BRACE_BYTE || p === CLOSE_BRACKET_BYTE) r--;
+    let depth = 1;
+    let isInString = false;
+    let cursor = index_2 + marker.length;
+    for (; cursor < buffer.length && depth > 0; cursor++) {
+      let byte = buffer[cursor];
+      if (isInString) {
+        if (byte === BACKSLASH_BYTE) cursor++;
+        else if (byte === QUOTE_BYTE) isInString = false;
+      } else if (byte === QUOTE_BYTE) isInString = true;
+      else if (byte === OPEN_BRACE_BYTE || byte === OPEN_BRACKET_BYTE) depth++;
+      else if (byte === CLOSE_BRACE_BYTE || byte === CLOSE_BRACKET_BYTE) depth--;
     }
-    if (r === 0 && c - 1 === index) return true;
+    if (depth === 0 && cursor - 1 === index) return true;
   }
   return false;
 }
@@ -1186,10 +1319,10 @@ function createUsageAggregate() {
   };
 }
 //@ chunk-ya28b76p.js:15618-15784 placement
-function getLoopEntry(e, loop) {
-  let o = e.loops.get(loop.prompt);
-  if (!o) {
-    o = {
+function getLoopEntry(aggregate, loop) {
+  let entry = aggregate.loops.get(loop.prompt);
+  if (!entry) {
+    entry = {
       prompt: loop.prompt,
       cron: loop.cron,
       isDynamic: loop.isDynamic,
@@ -1197,135 +1330,136 @@ function getLoopEntry(e, loop) {
       tokens: 0,
       lastRunMs: 0,
     };
-    e.loops.set(loop.prompt, o);
+    aggregate.loops.set(loop.prompt, entry);
   }
-  return o;
+  return entry;
 }
 //@ chunk-ya28b76p.js:15784-15923 placement
-function recordLoopRun(usageAggregate, n) {
-  let loopEntry = getLoopEntry(usageAggregate, n.loop);
+function recordLoopRun(aggregate, fire) {
+  let loopEntry = getLoopEntry(aggregate, fire.loop);
   loopEntry.runs++;
-  if (n.ts >= loopEntry.lastRunMs) {
-    loopEntry.lastRunMs = n.ts;
-    loopEntry.cron = n.loop.cron ?? loopEntry.cron;
-    loopEntry.isDynamic = n.loop.isDynamic;
+  if (fire.ts >= loopEntry.lastRunMs) {
+    loopEntry.lastRunMs = fire.ts;
+    loopEntry.cron = fire.loop.cron ?? loopEntry.cron;
+    loopEntry.isDynamic = fire.loop.isDynamic;
   }
 }
 //@ chunk-ya28b76p.js:15923-15971 placement
 /**
  * 把一次请求的费用按名字累加到占比统计里。
  */
-function addToShare(e, n, o) {
-  if (n) e.set(n, (e.get(n) ?? 0) + o);
+function addToShare(target, name, tokens) {
+  if (name) target.set(name, (target.get(name) ?? 0) + tokens);
 }
 //@ chunk-ya28b76p.js:15971-17303 placement
-function aggregateUsageByBehavior(usageAggregate, n, o = -1 / 0) {
-  let s = costWeightedTokens(n);
-  usageAggregate.totalCost += s;
-  usageAggregate.requestCount++;
-  if (n.attributionAgent) addToShare(usageAggregate.byAgent, n.attributionSkill ?? n.attributionAgent, s);
-  else addToShare(usageAggregate.bySkill, n.attributionSkill, s);
-  addToShare(usageAggregate.byPlugin, n.attributionPlugin, s);
-  addToShare(usageAggregate.byMcpServer, n.attributionMcpServer, s);
-  if (n.loop || n.loopShares) {
-    let a = n.cached + n.cacheCreate + n.uncached + n.output;
-    for (let { loop, fireTs, share } of n.loopShares ?? [
+function aggregateUsageByBehavior(aggregate, record, sinceTs = -1 / 0) {
+  let cost = costWeightedTokens(record);
+  aggregate.totalCost += cost;
+  aggregate.requestCount++;
+  if (record.attributionAgent)
+    addToShare(aggregate.byAgent, record.attributionSkill ?? record.attributionAgent, cost);
+  else addToShare(aggregate.bySkill, record.attributionSkill, cost);
+  addToShare(aggregate.byPlugin, record.attributionPlugin, cost);
+  addToShare(aggregate.byMcpServer, record.attributionMcpServer, cost);
+  if (record.loop || record.loopShares) {
+    let inputTokens = record.cached + record.cacheCreate + record.uncached + record.output;
+    for (let { loop, fireTs, share } of record.loopShares ?? [
       {
-        loop: n.loop,
-        fireTs: n.loopFireTs ?? n.ts,
+        loop: record.loop,
+        fireTs: record.loopFireTs ?? record.ts,
         share: 1,
       },
     ])
-      if (fireTs >= o) getLoopEntry(usageAggregate, loop).tokens += a * share;
+      if (fireTs >= sinceTs) getLoopEntry(aggregate, loop).tokens += inputTokens * share;
   }
-  let r = n.cached + n.cacheCreate + n.uncached;
-  if (n.uncached + n.recached > CACHE_MISS_TOKEN_THRESHOLD) {
-    usageAggregate.cacheMissCost += s;
-    usageAggregate.cacheMissCount++;
+  let contextTokens = record.cached + record.cacheCreate + record.uncached;
+  if (record.uncached + record.recached > CACHE_MISS_TOKEN_THRESHOLD) {
+    aggregate.cacheMissCost += cost;
+    aggregate.cacheMissCount++;
   }
-  if (r > LONG_CONTEXT_THRESHOLD) {
-    usageAggregate.longCtxCost += s;
-    usageAggregate.longCtxCount++;
+  if (contextTokens > LONG_CONTEXT_THRESHOLD) {
+    aggregate.longCtxCost += cost;
+    aggregate.longCtxCount++;
   }
-  if (n.isMaxEffort) {
-    usageAggregate.maxEffortCost += s;
-    usageAggregate.maxEffortCount++;
+  if (record.isMaxEffort) {
+    aggregate.maxEffortCost += cost;
+    aggregate.maxEffortCount++;
   }
-  if (n.isWorkflow) {
-    usageAggregate.workflowCost += s;
-    usageAggregate.workflowCount++;
+  if (record.isWorkflow) {
+    aggregate.workflowCost += cost;
+    aggregate.workflowCount++;
   }
-  let i = s - n.output * 50 * n.modelTier;
-  if (n.alwaysOnTokens > 0) {
-    usageAggregate.alwaysOnCost += i * Math.min(1, n.alwaysOnTokens / r);
-    usageAggregate.alwaysOnCount++;
+  let contextCost = cost - record.output * 50 * record.modelTier;
+  if (record.alwaysOnTokens > 0) {
+    aggregate.alwaysOnCost += contextCost * Math.min(1, record.alwaysOnTokens / contextTokens);
+    aggregate.alwaysOnCount++;
   }
-  if (n.largeToolResultTokens > 0) {
-    usageAggregate.largeToolResultCost += i * Math.min(1, n.largeToolResultTokens / r);
-    usageAggregate.largeToolResultCount++;
+  if (record.largeToolResultTokens > 0) {
+    aggregate.largeToolResultCost += contextCost * Math.min(1, record.largeToolResultTokens / contextTokens);
+    aggregate.largeToolResultCount++;
   }
-  let c = usageAggregate.sessions.get(n.sessionId);
-  if (!c) {
-    c = {
+  let session = aggregate.sessions.get(record.sessionId);
+  if (!session) {
+    session = {
       cost: 0,
       requests: 0,
       subCost: 0,
       subCount: 0,
       hours: new Set(),
     };
-    usageAggregate.sessions.set(n.sessionId, c);
+    aggregate.sessions.set(record.sessionId, session);
   }
-  c.cost += s;
-  c.requests++;
-  if (n.isSubagent) {
-    c.subCost += s;
-    c.subCount++;
+  session.cost += cost;
+  session.requests++;
+  if (record.isSubagent) {
+    session.subCost += cost;
+    session.subCount++;
   }
-  c.hours.add(Math.floor(n.ts / 3600000));
-  let floored = Math.floor(n.ts / PARALLEL_BUCKET_MS);
-  let T = usageAggregate.buckets.get(floored);
-  if (!T) {
-    T = {
+  session.hours.add(Math.floor(record.ts / 3600000));
+  let floored = Math.floor(record.ts / PARALLEL_BUCKET_MS);
+  let bucket = aggregate.buckets.get(floored);
+  if (!bucket) {
+    bucket = {
       sids: new Set(),
       cost: 0,
       count: 0,
     };
-    usageAggregate.buckets.set(floored, T);
+    aggregate.buckets.set(floored, bucket);
   }
-  T.sids.add(n.sessionId);
-  T.cost += s;
-  T.count++;
+  bucket.sids.add(record.sessionId);
+  bucket.cost += cost;
+  bucket.count++;
 }
 //@ chunk-ya28b76p.js:17303-18479 placement
 function usageBuckets(usageAggregate) {
   let cost = 0;
   let count = 0;
-  let s = 0;
+  let peakParallel = 0;
   for (let bucket of usageAggregate.buckets.values()) {
-    s = Math.max(s, bucket.sids.size);
+    peakParallel = Math.max(peakParallel, bucket.sids.size);
     if (bucket.sids.size >= HIGH_PARALLEL_SESSIONS) {
       cost += bucket.cost;
       count += bucket.count;
     }
   }
   let cost_2 = 0;
-  let i = 0;
+  let subagentSessionCount = 0;
   let cost_3 = 0;
-  let p = 0;
+  let cronSessionCount = 0;
   for (let session of usageAggregate.sessions.values()) {
     if (
       session.subCount >= SUBAGENT_HEAVY_COUNT ||
       (session.cost > 0 && session.subCost / session.cost > SUBAGENT_HEAVY_COST_RATIO)
     ) {
       cost_2 += session.cost;
-      i++;
+      subagentSessionCount++;
     }
     if (session.hours.size >= CRON_SESSION_HOURS) {
       cost_3 += session.cost;
-      p++;
+      cronSessionCount++;
     }
   }
-  let T = [
+  let behaviors = [
     {
       key: "cache_miss",
       cost: usageAggregate.cacheMissCost,
@@ -1339,7 +1473,7 @@ function usageBuckets(usageAggregate) {
     {
       key: "subagent_heavy",
       cost: cost_2,
-      count: i,
+      count: subagentSessionCount,
     },
     {
       key: "high_parallel",
@@ -1349,7 +1483,7 @@ function usageBuckets(usageAggregate) {
     {
       key: "cron",
       cost: cost_3,
-      count: p,
+      count: cronSessionCount,
     },
     {
       key: "max_effort",
@@ -1372,12 +1506,12 @@ function usageBuckets(usageAggregate) {
       count: usageAggregate.largeToolResultCount,
     },
   ];
-  T.sort((a, u) => u.cost - a.cost);
+  behaviors.sort((left, right) => right.cost - left.cost);
   return {
     totalCost: usageAggregate.totalCost,
     requestCount: usageAggregate.requestCount,
     sessionCount: usageAggregate.sessions.size,
-    behaviors: T,
+    behaviors,
     agents: rankShares(usageAggregate.byAgent, usageAggregate.totalCost),
     skills: rankShares(usageAggregate.bySkill, usageAggregate.totalCost),
     plugins: rankShares(usageAggregate.byPlugin, usageAggregate.totalCost),
@@ -1387,34 +1521,34 @@ function usageBuckets(usageAggregate) {
         ...loop,
         tokens: Math.round(loop.tokens),
       }))
-      .sort((a, u) => u.tokens - a.tokens),
-    peakParallel: s,
+      .sort((left, right) => right.tokens - left.tokens),
+    peakParallel,
   };
 }
 //@ chunk-ya28b76p.js:18479-18641 placement
-function rankShares(e, totalCost) {
-  if (e.size === 0 || totalCost === 0) return [];
-  return [...e.entries()]
-    .sort((o, s) => s[1] - o[1])
-    .map(([o, s]) => ({
-      name: o,
-      pct: Math.round((s / totalCost) * 100),
+function rankShares(shares, totalCost) {
+  if (shares.size === 0 || totalCost === 0) return [];
+  return [...shares.entries()]
+    .sort((left, right) => right[1] - left[1])
+    .map(([name, tokens]) => ({
+      name,
+      pct: Math.round((tokens / totalCost) * 100),
     }))
-    .filter((o) => o.pct > 0);
+    .filter((share) => share.pct > 0);
 }
 export {
   readJsonStringField,
   indexOfBytes,
-  KLr,
+  ASSISTANT_RECORD_MARKER,
   readJsonStringFieldBounded,
   isLargeToolResultBytes,
-  hPo,
-  yPo,
-  _Po,
+  USER_RECORD_MARKER,
+  TOOL_RESULT_RECORD_MARKER,
+  TOOL_USE_RESULT_FIELD_MARKER,
   USD_PER_MTOK_SCALE,
   costWeightedTokens,
   aggregateRecentUsage_2,
-  VLr,
+  ID_FIELD_MARKER,
   isStatsScanAllowed,
   isUsageScanAllowed,
   isSkillDoctorScanAllowed,

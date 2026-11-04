@@ -31,6 +31,7 @@ import { isLegacyArtifactAction, ADDON_OF_LEGACY_ACTION, DB_WRITE_OPS } from "./
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { TOOL_SEARCH_TOOL_NAME } from "../../tools/ToolSearchTool/prompt.js";
 import { capitalize } from "../../utils/stringUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-w08rdxhd.js:1698-1816 placement
 /**
@@ -45,11 +46,11 @@ function isArtifactVerifyEnabled() {
 //@ chunk-w08rdxhd.js:1816-1829 placement
 var MAX_CONTENT_HALF_BYTES = 65536;
 //@ chunk-w08rdxhd.js:1829-3115 placement
-async function readArtifactDiagnostics(e, signal, credentials) {
+async function readArtifactDiagnostics(artifact, signal, credentials) {
   let artifactBootWithProbe = await fetchArtifactBootWithProbe(
     {
-      slug: e.slug,
-      env: e.env,
+      slug: artifact.slug,
+      env: artifact.env,
     },
     "artifact_verify_read",
     signal,
@@ -64,9 +65,9 @@ async function readArtifactDiagnostics(e, signal, credentials) {
         status: artifactBootWithProbe.status,
       }),
     };
-  let a;
+  let response;
   try {
-    a = await frameApi.get(`/api/frame/diag/${e.slug}/${artifactBootWithProbe.ver}`, {
+    response = await frameApi.get(`/api/frame/diag/${artifact.slug}/${artifactBootWithProbe.ver}`, {
       refreshOAuth: true,
       credentials,
       headers: buildFrameHeaders(),
@@ -81,13 +82,13 @@ async function readArtifactDiagnostics(e, signal, credentials) {
       err: "artifact diagnostics read failed (network error)",
     };
   }
-  if (!a.ok) {
-    logFeatureBad("artifact_verify_read", a.reason.replace(/-/g, "_"));
+  if (!response.ok) {
+    logFeatureBad("artifact_verify_read", response.reason.replace(/-/g, "_"));
     return {
-      err: `artifact diagnostics unavailable: ${a.reason}`,
+      err: `artifact diagnostics unavailable: ${response.reason}`,
     };
   }
-  if (a.status === 404) {
+  if (response.status === 404) {
     logFeatureOk("artifact_verify_read");
     return {
       err: null,
@@ -95,47 +96,47 @@ async function readArtifactDiagnostics(e, signal, credentials) {
       ver: artifactBootWithProbe.ver,
     };
   }
-  if (a.status < 200 || a.status >= 300) {
+  if (response.status < 200 || response.status >= 300) {
     logFeatureBad("artifact_verify_read", "diag_failed");
     return {
-      err: `artifact diagnostics unavailable right now (HTTP ${a.status})`,
-      status: a.status,
+      err: `artifact diagnostics unavailable right now (HTTP ${response.status})`,
+      status: response.status,
     };
   }
-  let l = a.data ?? {};
-  if (!Array.isArray(l.entries)) {
+  let body = response.data ?? {};
+  if (!Array.isArray(body.entries)) {
     logFeatureBad("artifact_verify_read", "diag_incomplete");
     return {
       err: "artifact diagnostics read failed: incomplete diagnostics response",
     };
   }
-  let entries = l.entries;
-  let S = [];
-  let x = 0;
+  let entries = body.entries;
+  let lines = [];
+  let count = 0;
   for (let entry of entries) {
-    let k;
+    let item;
     try {
-      k = Buffer.byteLength(jsonStringifyRaw(entry) ?? "", "utf8");
+      item = Buffer.byteLength(jsonStringifyRaw(entry) ?? "", "utf8");
     } catch {
       continue;
     }
-    if (x + k > MAX_CONTENT_HALF_BYTES) continue;
-    S.push(entry);
-    x += k;
+    if (count + item > MAX_CONTENT_HALF_BYTES) continue;
+    lines.push(entry);
+    count += item;
   }
   logFeatureOk("artifact_verify_read");
   return {
     err: null,
     state: "loaded",
     ver: artifactBootWithProbe.ver,
-    entries: S,
-    truncated: l.truncated === true,
-    dropped: entries.length - S.length,
+    entries: lines,
+    truncated: body.truncated === true,
+    dropped: entries.length - lines.length,
   };
 }
 //@ chunk-w08rdxhd.js:3115-3225 placement
-function isAddonEnabled(e) {
-  switch (e) {
+function isAddonEnabled(action) {
+  switch (action) {
     case "comments":
       return isArtifactCommentsEnabled();
     case "data":
@@ -148,20 +149,20 @@ function isAddonEnabled(e) {
 /**
  * 导出函数 `hasArtifactAddon`：参数 e，返回 ( isArtifactToolsetSplit() && isArtifactToolRegistered() && getArtifactPublishStubDir() === null && isAddonEna…。
  */
-function hasArtifactAddon(addon) {
+function hasArtifactAddon(action) {
   return (
     isArtifactToolsetSplit() &&
     isArtifactToolRegistered() &&
     getArtifactPublishStubDir() === null &&
-    isAddonEnabled(addon)
+    isAddonEnabled(action)
   );
 }
 //@ chunk-w08rdxhd.js:3279-3406 placement
-function isLegacyVerbOffered(e) {
-  if (!isLegacyArtifactAction(e)) return false;
-  if (!hasArtifactAddon(ADDON_OF_LEGACY_ACTION[e])) return false;
-  if (e === "verify") return isArtifactVerifyEnabled();
-  if (e === "preview") return isArtifactPreviewEnabled();
+function isLegacyVerbOffered(verb) {
+  if (!isLegacyArtifactAction(verb)) return false;
+  if (!hasArtifactAddon(ADDON_OF_LEGACY_ACTION[verb])) return false;
+  if (verb === "verify") return isArtifactVerifyEnabled();
+  if (verb === "preview") return isArtifactPreviewEnabled();
   return true;
 }
 //@ chunk-w08rdxhd.js:3406-3488 placement
@@ -174,15 +175,15 @@ function frozenDbStrReplace() {
 /**
  * 说明某个 addon 的旧动作在拆分后工具集里的写法（read_db/write_db → ArtifactData、watch/status/unwatch → ArtifactComments、verify/preview → ArtifactCheck）。
  */
-function describeAddonSpelling(e) {
-  switch (e) {
+function describeAddonSpelling(spelling) {
+  switch (spelling) {
     case "data":
       return `the \`${ARTIFACT_TOOL_NAME}\` tool's \`action: "read_db"\` / \`"write_db"\` with a \`db_op\` are the \`${ARTIFACT_DATA_TOOL_NAME}\` tool, whose \`action\` is that \`db_op\` ("get", "list", "query", "set", "update",${frozenDbStrReplace() ? ' "str_replace",' : ""} "delete", "batch") with the other fields unchanged`;
     case "comments":
       return `the \`${ARTIFACT_TOOL_NAME}\` tool's \`action: "watch"\` / \`"status"\` / \`"unwatch"\` and its comment verbs are the \`${ARTIFACT_COMMENTS_TOOL_NAME}\` tool (\`action: "watch"\` with the \`url\`; with no \`url\` it lists this session's watches; \`on: false\` stops one; \`"comments"\` is its \`action: "read"\`)`;
     case "check": {
       let filtered = ["verify", "preview"].filter(isLegacyVerbOffered);
-      return `the \`${ARTIFACT_TOOL_NAME}\` tool's ${filtered.map((s) => `\`action: "${s}"\``).join(" / ")} ${filtered.length === 1 ? "is" : "are"} the \`${ARTIFACT_CHECK_TOOL_NAME}\` tool's`;
+      return `the \`${ARTIFACT_TOOL_NAME}\` tool's ${filtered.map((action) => `\`action: "${action}"\``).join(" / ")} ${filtered.length === 1 ? "is" : "are"} the \`${ARTIFACT_CHECK_TOOL_NAME}\` tool's`;
     }
   }
 }
@@ -190,11 +191,11 @@ function describeAddonSpelling(e) {
 /**
  * 工具集拆分时生成"本会话的工具写法"提示行：列出相关 addon 旧动作对应的新工具，并提醒首次使用时用 ToolSearch 加载；未拆分或没有启用的 addon 时返回空串。
  */
-function buildToolSpellingNote(e, r = "Read the steps below with that substitution.") {
+function buildToolSpellingNote(toolName, fallback = "Read the steps below with that substitution.") {
   if (!isArtifactToolsetSplit()) return "";
-  let filtered = e.filter(hasArtifactAddon);
+  let filtered = toolName.filter(hasArtifactAddon);
   if (filtered.length === 0) return "";
-  return `> Tool spelling in this session: ${filtered.map(describeAddonSpelling).join("; ")} \u2014 load it with ${TOOL_SEARCH_TOOL_NAME} when you first need it. ${r}
+  return `> Tool spelling in this session: ${filtered.map(describeAddonSpelling).join("; ")} \u2014 load it with ${TOOL_SEARCH_TOOL_NAME} when you first need it. ${fallback}
 
 `;
 }
@@ -202,15 +203,23 @@ function buildToolSpellingNote(e, r = "Read the steps below with that substituti
 /**
  * 识别文本中旧 Artifact 动作引用的正则：action: "<动作>" 形式或数据库子操作名、ArtifactData 工具名、其他 addon 关键字。
  */
-var ADDON_ORDER = ["data", "comments", "check"];
-var LEGACY_VERBS = Object.keys(ADDON_OF_LEGACY_ACTION);
-var DATA_LEGACY_VERBS = LEGACY_VERBS.filter((e) => ADDON_OF_LEGACY_ACTION[e] === "data");
-var LEGACY_ACTION_RE = new RegExp(
-  `\\baction["'\`]?\\s*:\\s*["'\`](${LEGACY_VERBS.join("|")})["'\`]|["'\`](${DATA_LEGACY_VERBS.join("|")})["'\`]`,
-  "g",
-);
-var DATA_TOOL_NAME_RE = new RegExp(`["'\`]${ARTIFACT_DATA_TOOL_NAME}["'\`]`);
-var ADDON_KEYWORD_RE = new RegExp(`["'\`](${DB_WRITE_OPS.join("|")})["'\`]`);
+var ADDON_ORDER; // deferred: uses ADVANCED_ACTIONS (./artifactToolActions.js) of its import cycle while loading; runs once the cycle is complete
+var LEGACY_VERBS;
+var DATA_LEGACY_VERBS;
+var LEGACY_ACTION_RE;
+var DATA_TOOL_NAME_RE;
+var ADDON_KEYWORD_RE;
+deferInit("chunk-w08rdxhd.js:4512", () => {
+  ADDON_ORDER = ["data", "comments", "check"];
+  LEGACY_VERBS = Object.keys(ADDON_OF_LEGACY_ACTION);
+  DATA_LEGACY_VERBS = LEGACY_VERBS.filter((verb) => ADDON_OF_LEGACY_ACTION[verb] === "data");
+  LEGACY_ACTION_RE = new RegExp(
+    `\\baction["'\`]?\\s*:\\s*["'\`](${LEGACY_VERBS.join("|")})["'\`]|["'\`](${DATA_LEGACY_VERBS.join("|")})["'\`]`,
+    "g",
+  );
+  DATA_TOOL_NAME_RE = new RegExp(`["'\`]${ARTIFACT_DATA_TOOL_NAME}["'\`]`);
+  ADDON_KEYWORD_RE = new RegExp(`["'\`](${DB_WRITE_OPS.join("|")})["'\`]`);
+});
 //@ chunk-w08rdxhd.js:4789-4859 placement
 function usesWriteDb(text) {
   return (
@@ -220,12 +229,12 @@ function usesWriteDb(text) {
 }
 //@ chunk-w08rdxhd.js:4859-4975 placement
 function referencedAddonActions(text) {
-  let r = new Set();
-  for (let s of text.matchAll(LEGACY_ACTION_RE)) {
-    let n = s[1] ?? s[2];
-    if (n !== undefined && isLegacyArtifactAction(n)) r.add(n);
+  let actions = new Set();
+  for (let match of text.matchAll(LEGACY_ACTION_RE)) {
+    let action = match[1] ?? match[2];
+    if (action !== undefined && isLegacyArtifactAction(action)) actions.add(action);
   }
-  return r;
+  return actions;
 }
 //@ chunk-w08rdxhd.js:4975-5175 placement
 /**
@@ -233,10 +242,11 @@ function referencedAddonActions(text) {
  */
 function buildSpellingNoteForText(text) {
   if (!isArtifactToolsetSplit()) return "";
-  let r = new Set();
-  for (let s of referencedAddonActions(text)) if (isLegacyVerbOffered(s)) r.add(ADDON_OF_LEGACY_ACTION[s]);
+  let addons = new Set();
+  for (let action of referencedAddonActions(text))
+    if (isLegacyVerbOffered(action)) addons.add(ADDON_OF_LEGACY_ACTION[action]);
   return buildToolSpellingNote(
-    ADDON_ORDER.filter((s) => r.has(s)),
+    ADDON_ORDER.filter((addon) => addons.has(addon)),
     "Where the text below names those calls, that is the spelling it means.",
   );
 }
@@ -254,129 +264,141 @@ class ArtifactGatesSlot {
 /**
  * 导出常量或表 `artifactGatesSlot`：值为 new xe()。
  */
-var artifactGatesSlot = new ArtifactGatesSlot();
+var artifactGatesSlot; // deferred: uses ArtifactGatesSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-w08rdxhd.js:5252", () => {
+  artifactGatesSlot = new ArtifactGatesSlot();
+});
 //@ chunk-w08rdxhd.js:5267-5354 placement
 /**
  * 导出函数 `storeRouteMode`：返回 getStoreRoute(s && dbVerbsOn, s && runScriptOn)。
  */
 function storeRouteMode() {
   let { dbVerbsOn, runScriptOn } = artifactGatesSlot.gates();
-  let s = isArtifactToolRegistered();
-  return getStoreRoute(s && dbVerbsOn, s && runScriptOn);
+  let registered = isArtifactToolRegistered();
+  return getStoreRoute(registered && dbVerbsOn, registered && runScriptOn);
 }
 //@ chunk-w08rdxhd.js:5354-5456 placement
 /**
  * 决定 artifact 存储内容走哪条路径：ArtifactData 工具可用为 data；未拆分且支持数据库为 write_db；否则能跑脚本为 run_script，都不行为 null。
  */
-function getStoreRoute(e, r) {
+function getStoreRoute(typeSlug, options) {
   if (hasArtifactAddon("data")) return "data";
-  if (!isArtifactToolsetSplit() && e) return "write_db";
-  return r ? "run_script" : null;
+  if (!isArtifactToolsetSplit() && typeSlug) return "write_db";
+  return options ? "run_script" : null;
 }
 //@ chunk-w08rdxhd.js:5456-9776 placement
 /**
  * Artifact 种类（slides、design、migrated-design…）的文件布局说明：索引文件、每页文件、资源保存方式。
  */
-var ARTIFACT_KIND_LAYOUTS = new Map([
-  [
-    "slides",
-    {
-      index: "project/deck.json",
-      files:
-        "one `project/slides/<id>.html` per slide, <id> being its entry in the index's `order`, each holding exactly one `<section id=\"<id>\">` in the slide format with, as that section's last child, one `<aside>` of plain-text speaker notes when the slide has any",
-      filesInBrief: "one file per slide",
-      uploads:
-        " Images and font files stay uploaded assets, as the instructions say; a design system's `tokens.json`, where one is used, goes in as a file the way their reference for a deck kept as files says (`project/ds/<folder>/tokens.json` plus a record in the index's `designSystems` list).",
-      indexKeys:
-        '`"v": 4`, `title`, `order`: the slide ids in deck order, `sections`: the outline (an id \u2192 `{"description", "start": <slide id>}`), and `faces`: one entry per typeface, keyed by family-id (`{"family"}` plus a Google Fonts `href` or an uploaded `src`)',
-      storeDocs:
-        "`deck/meta`, `deck/design-systems`, `fonts/<family-id>`, `slides/<id>` or `notes/<id>` store documents",
-      alsoAside:
-        " about a store deck owning no files, about not creating `project/deck.json`, and about speaker notes going in `notes/<id>` rather than the slide's file (if their slide-file check rejects the `<aside>`, keep the `<aside>` anyway: that check predates notes in slide files)",
-      indexEdits: "retitle the deck, reorder, add or remove slides, or change its sections or faces",
-      firstPublish: {
-        indexHolds: "its `order` already naming every slide you are about to write",
-        first: "the cover slide's file",
-        written: "those two",
-        firstSent: "the cover slide's file by its `project/\u2026` path",
-        firstInBrief: "the cover slide",
-        rest: "the remaining slides",
-        restInBrief: "the other slides",
-        onlyOne: "a one-slide deck",
+var ARTIFACT_KIND_LAYOUTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-w08rdxhd.js:5456", () => {
+  ARTIFACT_KIND_LAYOUTS = new Map([
+    [
+      "slides",
+      {
+        index: "project/deck.json",
+        files:
+          "one `project/slides/<id>.html` per slide, <id> being its entry in the index's `order`, each holding exactly one `<section id=\"<id>\">` in the slide format with, as that section's last child, one `<aside>` of plain-text speaker notes when the slide has any",
+        filesInBrief: "one file per slide",
+        uploads:
+          " Images and font files stay uploaded assets, as the instructions say; a design system's `tokens.json`, where one is used, goes in as a file the way their reference for a deck kept as files says (`project/ds/<folder>/tokens.json` plus a record in the index's `designSystems` list).",
+        indexKeys:
+          '`"v": 4`, `title`, `order`: the slide ids in deck order, `sections`: the outline (an id \u2192 `{"description", "start": <slide id>}`), and `faces`: one entry per typeface, keyed by family-id (`{"family"}` plus a Google Fonts `href` or an uploaded `src`)',
+        storeDocs:
+          "`deck/meta`, `deck/design-systems`, `fonts/<family-id>`, `slides/<id>` or `notes/<id>` store documents",
+        alsoAside:
+          " about a store deck owning no files, about not creating `project/deck.json`, and about speaker notes going in `notes/<id>` rather than the slide's file (if their slide-file check rejects the `<aside>`, keep the `<aside>` anyway: that check predates notes in slide files)",
+        indexEdits: "retitle the deck, reorder, add or remove slides, or change its sections or faces",
+        firstPublish: {
+          indexHolds: "its `order` already naming every slide you are about to write",
+          first: "the cover slide's file",
+          written: "those two",
+          firstSent: "the cover slide's file by its `project/\u2026` path",
+          firstInBrief: "the cover slide",
+          rest: "the remaining slides",
+          restInBrief: "the other slides",
+          onlyOne: "a one-slide deck",
+        },
       },
-    },
-  ],
-  [
-    "design",
-    {
-      index: "project/canvas.json",
-      files:
-        "one `project/<name>` per artboard (`project/Main.dc.html`), <name> being its key in the index's `boards`, each holding that artboard's whole `.dc.html` source, and any support file an artboard links to by a relative path under `project/` beside it",
-      filesInBrief: "one file per artboard",
-      uploads:
-        " Images and font files that no artboard links to by a relative path stay uploaded assets, as the instructions say; a design system, where one is used, goes in as files under `project/ds/<folder>/` plus a record in the index's `designSystems` list, the way their reference on design-system components says for a canvas kept as files.",
-      indexKeys:
-        '`"v": 3`, `title`, `boards`: one entry per artboard, keyed by its file name, holding its frame on the canvas (`x`, `y`, `w`, `h` in CSS px) and its options, `order`: those names back to front, and `notes`, `pages` and `launch` when the canvas has them',
-      storeDocs:
-        "`design/meta`, `design/design-systems`, `boards/<fid>`, `notes/<id>` or `files/<fid>` store documents",
-      alsoAside: " about only the editor writing `project/canvas.json`",
-      indexEdits:
-        "add, remove, reorder, move or resize an artboard, retitle the canvas, or change its notes, pages or launch",
-      firstPublish: {
-        indexHolds: "its `boards` and `order` already holding every artboard you are about to write",
-        first:
-          "the entry artboard, `project/Main.dc.html`, and any support file it links to by a relative path",
-        written: "those",
-        firstSent: "those files by their `project/\u2026` paths",
-        firstInBrief: "the entry artboard",
-        rest: "the remaining artboards and support files",
-        restInBrief: "the other artboards",
-        onlyOne: "a one-artboard canvas",
+    ],
+    [
+      "design",
+      {
+        index: "project/canvas.json",
+        files:
+          "one `project/<name>` per artboard (`project/Main.dc.html`), <name> being its key in the index's `boards`, each holding that artboard's whole `.dc.html` source, and any support file an artboard links to by a relative path under `project/` beside it",
+        filesInBrief: "one file per artboard",
+        uploads:
+          " Images and font files that no artboard links to by a relative path stay uploaded assets, as the instructions say; a design system, where one is used, goes in as files under `project/ds/<folder>/` plus a record in the index's `designSystems` list, the way their reference on design-system components says for a canvas kept as files.",
+        indexKeys:
+          '`"v": 3`, `title`, `boards`: one entry per artboard, keyed by its file name, holding its frame on the canvas (`x`, `y`, `w`, `h` in CSS px) and its options, `order`: those names back to front, and `notes`, `pages` and `launch` when the canvas has them',
+        storeDocs:
+          "`design/meta`, `design/design-systems`, `boards/<fid>`, `notes/<id>` or `files/<fid>` store documents",
+        alsoAside: " about only the editor writing `project/canvas.json`",
+        indexEdits:
+          "add, remove, reorder, move or resize an artboard, retitle the canvas, or change its notes, pages or launch",
+        firstPublish: {
+          indexHolds: "its `boards` and `order` already holding every artboard you are about to write",
+          first:
+            "the entry artboard, `project/Main.dc.html`, and any support file it links to by a relative path",
+          written: "those",
+          firstSent: "those files by their `project/\u2026` paths",
+          firstInBrief: "the entry artboard",
+          rest: "the remaining artboards and support files",
+          restInBrief: "the other artboards",
+          onlyOne: "a one-artboard canvas",
+        },
       },
-    },
-  ],
-  [
-    "design-system",
-    {
-      index: "project/design-system.json",
-      files:
-        "each file of the instructions' table at `project/<its path>` (`project/README.md`, `project/tokens.json`, `project/components/<Name>/README.md`, and so on; never the generated `tokens.css`, `api/` cards or `manifest.json`), icons and images staying uploaded assets recorded in the index under `assetGroups.<Group>.files.<name>`, all as that section lays it out",
-      filesInBrief: "every file of its table",
-      uploads: "",
-      indexKeys:
-        '`"v": 3`, `"layout": "files"`, `title`, and the other keys listed in the instructions\' section on a system kept in files (`namespace`, `libraries`, `assetGroups`, and so on)',
-      storeDocs: "`ds/meta`, `ds/tokens` or one-document-per-file store collections",
-      alsoAside: " about writing `ds/meta` first so the page waits on the store",
-      indexEdits: "change one of the index's own keys (its title, libraries or an asset record)",
-      firstPublish: null,
-    },
-  ],
-]);
+    ],
+    [
+      "design-system",
+      {
+        index: "project/design-system.json",
+        files:
+          "each file of the instructions' table at `project/<its path>` (`project/README.md`, `project/tokens.json`, `project/components/<Name>/README.md`, and so on; never the generated `tokens.css`, `api/` cards or `manifest.json`), icons and images staying uploaded assets recorded in the index under `assetGroups.<Group>.files.<name>`, all as that section lays it out",
+        filesInBrief: "every file of its table",
+        uploads: "",
+        indexKeys:
+          '`"v": 3`, `"layout": "files"`, `title`, and the other keys listed in the instructions\' section on a system kept in files (`namespace`, `libraries`, `assetGroups`, and so on)',
+        storeDocs: "`ds/meta`, `ds/tokens` or one-document-per-file store collections",
+        alsoAside: " about writing `ds/meta` first so the page waits on the store",
+        indexEdits: "change one of the index's own keys (its title, libraries or an asset record)",
+        firstPublish: null,
+      },
+    ],
+  ]);
+});
 //@ chunk-w08rdxhd.js:9776-9820 placement
-function isKnownArtifactKind(e) {
-  return e !== undefined && ARTIFACT_KIND_LAYOUTS.has(e);
+function isKnownArtifactKind(kind) {
+  return kind !== undefined && ARTIFACT_KIND_LAYOUTS.has(kind);
 }
 //@ chunk-w08rdxhd.js:9820-9856 placement
-var DESIGN_TYPE_NAMES = new Set(["slides", "design"]);
+var DESIGN_TYPE_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-w08rdxhd.js:9820", () => {
+  DESIGN_TYPE_NAMES = new Set(["slides", "design"]);
+});
 //@ chunk-w08rdxhd.js:9856-9901 placement
 /**
  * 导出函数 `isDesignType`：参数 e，返回 e !== void 0 && rt.has(e)。
  */
-function isDesignType(e) {
-  return e !== undefined && DESIGN_TYPE_NAMES.has(e);
+function isDesignType(kind) {
+  return kind !== undefined && DESIGN_TYPE_NAMES.has(kind);
 }
 //@ chunk-w08rdxhd.js:9901-9937 placement
-var MIGRATED_DESIGN_TYPES = new Set(["migrated-design"]);
+var MIGRATED_DESIGN_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-w08rdxhd.js:9901", () => {
+  MIGRATED_DESIGN_TYPES = new Set(["migrated-design"]);
+});
 //@ chunk-w08rdxhd.js:9937-9982 placement
 /**
  * 导出函数 `isMigratedDesignType`：参数 e，返回 e !== void 0 && it.has(e)。
  */
-function isMigratedDesignType(e) {
-  return e !== undefined && MIGRATED_DESIGN_TYPES.has(e);
+function isMigratedDesignType(kind) {
+  return kind !== undefined && MIGRATED_DESIGN_TYPES.has(kind);
 }
 //@ chunk-w08rdxhd.js:9982-10039 placement
-function artifactKindIndexFile(e) {
-  return e === undefined ? undefined : ARTIFACT_KIND_LAYOUTS.get(e)?.index;
+function artifactKindIndexFile(kind) {
+  return kind === undefined ? undefined : ARTIFACT_KIND_LAYOUTS.get(kind)?.index;
 }
 //@ chunk-w08rdxhd.js:10039-10419 placement
 /**
@@ -393,10 +415,10 @@ function buildEditReadRule(read) {
 var PUBLISH_REFUSED_HINT = "If a publish is refused, follow the refusal.";
 var CREATED_ON_FILES_SNIPPET = '`"createdOnFiles": {"v": 1, "at": "<now, RFC 3339>"}`';
 //@ chunk-w08rdxhd.js:10746-10867 placement
-function describeNoStoreWrite(e) {
-  return e === null
+function describeNoStoreWrite(kind) {
+  return kind === null
     ? "never write its store for its content"
-    : `never write its store for its content (no ${e})`;
+    : `never write its store for its content (no ${kind})`;
 }
 //@ chunk-w08rdxhd.js:10867-11053 placement
 function describeStoreDocsRedirect(layout, storeDescribed) {
@@ -409,18 +431,18 @@ function describeStoreDocsRedirect(layout, storeDescribed) {
  * 生成新 artifact 首次写文件并发布的步骤：所有文件写在同一文件夹下，按布局一次或分两次发布（先入口文件与 createdOnFiles，再其余文件）。
  */
 function buildFirstPublishSteps(layout, url) {
-  let n = `\`url\`: ${jsonStringify(url)}, \`root\`: that folder, \`file_path\`: the absolute path of \`${layout.index}\` in it, \`files\`:`;
+  let layoutInfo = `\`url\`: ${jsonStringify(url)}, \`root\`: that folder, \`file_path\`: the absolute path of \`${layout.index}\` in it, \`files\`:`;
   let firstPublish = layout.firstPublish;
   if (firstPublish === null)
-    return `Write the files at those relative paths under one folder in your scratchpad directory (or the working directory) and publish them in ONE call: ${n} every other file by its \`project/\u2026\` path.`;
-  return `Write the files at those relative paths under one folder in your scratchpad directory (or the working directory), each written directly with your file-writing tool (it creates the folders: no shell step first, never a script that generates the files), in this order: \`${layout.index}\` FIRST, complete, ${firstPublish.indexHolds} (and its \`designSystems\` record where a design system is used), then ${firstPublish.first}, and publish ${firstPublish.written} right away, in one call: ${n} ${firstPublish.firstSent}, plus any design-system files. Then, without pausing for the user, write ${firstPublish.rest} and publish them with the same \`url\` and \`root\` \u2014 all in one more call, or a few files per call as you go (\`file_path\`: one new file's absolute path, \`files\`: the other new ones) \u2014 each call carrying only files no earlier call sent (each publish keeps the files earlier calls sent); ${firstPublish.onlyOne} is done after the first call.`;
+    return `Write the files at those relative paths under one folder in your scratchpad directory (or the working directory) and publish them in ONE call: ${layoutInfo} every other file by its \`project/\u2026\` path.`;
+  return `Write the files at those relative paths under one folder in your scratchpad directory (or the working directory), each written directly with your file-writing tool (it creates the folders: no shell step first, never a script that generates the files), in this order: \`${layout.index}\` FIRST, complete, ${firstPublish.indexHolds} (and its \`designSystems\` record where a design system is used), then ${firstPublish.first}, and publish ${firstPublish.written} right away, in one call: ${layoutInfo} ${firstPublish.firstSent}, plus any design-system files. Then, without pausing for the user, write ${firstPublish.rest} and publish them with the same \`url\` and \`root\` \u2014 all in one more call, or a few files per call as you go (\`file_path\`: one new file's absolute path, \`files\`: the other new ones) \u2014 each call carrying only files no earlier call sent (each publish keeps the files earlier calls sent); ${firstPublish.onlyOne} is done after the first call.`;
 }
 //@ chunk-w08rdxhd.js:12325-12603 placement
-function summarizeFirstPublish(e) {
-  let firstPublish = e.firstPublish;
+function summarizeFirstPublish(summary) {
+  let firstPublish = summary.firstPublish;
   return firstPublish === null
-    ? `\`${e.index}\` with its \`createdOnFiles\` object, and ${e.filesInBrief}, in one publish`
-    : `\`${e.index}\` with its \`createdOnFiles\` object and ${firstPublish.firstInBrief} in a first publish, then ${firstPublish.restInBrief}, ${e.filesInBrief}`;
+    ? `\`${summary.index}\` with its \`createdOnFiles\` object, and ${summary.filesInBrief}, in one publish`
+    : `\`${summary.index}\` with its \`createdOnFiles\` object and ${firstPublish.firstInBrief} in a first publish, then ${firstPublish.restInBrief}, ${summary.filesInBrief}`;
 }
 //@ chunk-w08rdxhd.js:12603-13820 placement
 /**
@@ -435,25 +457,25 @@ function describeNewArtifactFiles(kind, url, routeInfo) {
 /**
  * 读完类型说明后追加的提醒：新 artifact 内容放在 project/ 文件里（而非类型说明里可能提到的存储文档）。
  */
-function buildNewArtifactReminder(e, r, s) {
-  let n = e === undefined ? undefined : ARTIFACT_KIND_LAYOUTS.get(e);
-  if (n === undefined || !s) return "";
+function buildNewArtifactReminder(kind, url, saved) {
+  let layout = kind === undefined ? undefined : ARTIFACT_KIND_LAYOUTS.get(kind);
+  if (layout === undefined || !saved) return "";
   return `
 
-[Now that you have read the type's instructions: this new Artifact's content goes in files under \`project/\` as described before them (${summarizeFirstPublish(n)}), not in any store document they may describe: ${describeNoStoreWrite(r)}.]`;
+[Now that you have read the type's instructions: this new Artifact's content goes in files under \`project/\` as described before them (${summarizeFirstPublish(layout)}), not in any store document they may describe: ${describeNoStoreWrite(url)}.]`;
 }
 //@ chunk-w08rdxhd.js:14113-14848 placement
 /**
  * 说明一个还没有自身文件的 artifact：已发布的都是类型文件；若可能有旧存储内容，说明如何读取后迁移到文件。
  */
 function describeEmptyArtifact(kind, url, routeInfo) {
-  let n = kind === undefined ? undefined : ARTIFACT_KIND_LAYOUTS.get(kind);
-  if (n === undefined) return "";
-  let a = `every file published to it so far is the type's (${routeInfo.typeFiles})`;
+  let layout = kind === undefined ? undefined : ARTIFACT_KIND_LAYOUTS.get(kind);
+  if (layout === undefined) return "";
+  let typeFilesNote = `every file published to it so far is the type's (${routeInfo.typeFiles})`;
   if (!routeInfo.olderStore)
-    return `It is new and still empty \u2014 ${a} and it holds no content of its own, so there is no file or document of its own to list or read before writing. ${describeNewArtifactFiles(kind, url, routeInfo)}`;
-  let l = describeStoreReadCall(routeInfo.storeRoute);
-  return `It has no file of its own yet \u2014 ${a}, so there is no file of its own to list or read before writing. ${describeNewArtifactFiles(kind, url, routeInfo)} If the user says this Artifact already has content, it may be in its older store, as ${n.storeDocs}: ${l === null ? "this session has no call that reads that store, so ask them what it held" : `read those first (${l})`} and carry that into these files.`;
+    return `It is new and still empty \u2014 ${typeFilesNote} and it holds no content of its own, so there is no file or document of its own to list or read before writing. ${describeNewArtifactFiles(kind, url, routeInfo)}`;
+  let storeRead = describeStoreReadCall(routeInfo.storeRoute);
+  return `It has no file of its own yet \u2014 ${typeFilesNote}, so there is no file of its own to list or read before writing. ${describeNewArtifactFiles(kind, url, routeInfo)} If the user says this Artifact already has content, it may be in its older store, as ${layout.storeDocs}: ${storeRead === null ? "this session has no call that reads that store, so ask them what it held" : `read those first (${storeRead})`} and carry that into these files.`;
 }
 //@ chunk-w08rdxhd.js:14848-15059 placement
 function describeStoreReadCall(storeRoute) {
@@ -480,19 +502,19 @@ function describeExistingArtifactFiles(kind, url, routeInfo) {
 /**
  * 读完类型说明后追加的提醒：此 artifact 内容在 project/ 文件里，先列文件，不要写存储文档。
  */
-function buildExistingArtifactReminder(e, r, s, n) {
-  let a = e === undefined ? undefined : ARTIFACT_KIND_LAYOUTS.get(e);
-  if (a === undefined || !s) return "";
+function buildExistingArtifactReminder(kind, url, saved, version) {
+  let layout = kind === undefined ? undefined : ARTIFACT_KIND_LAYOUTS.get(kind);
+  if (layout === undefined || !saved) return "";
   return `
 
-[Now that you have read the type's instructions: this Artifact's content lives in files under \`project/\` as described before them, not in any store document they may describe: list its files (${n.list}), then edit and publish them as described there, and if no \`${a.index}\` is listed yet, start it on files as said there; ${describeNoStoreWrite(r)}.]`;
+[Now that you have read the type's instructions: this Artifact's content lives in files under \`project/\` as described before them, not in any store document they may describe: list its files (${version.list}), then edit and publish them as described there, and if no \`${layout.index}\` is listed yet, start it on files as said there; ${describeNoStoreWrite(url)}.]`;
 }
 //@ chunk-w08rdxhd.js:17191-17343 placement
 /**
  * 说明"写存储"的调用形式：ArtifactData 写入或 write_db 动作；脚本或无路由时为 null。
  */
-function describeStoreWriteCall(e) {
-  switch (e) {
+function describeStoreWriteCall(call) {
+  switch (call) {
     case "data":
       return `\`${ARTIFACT_DATA_TOOL_NAME}\` writes`;
     case "write_db":
@@ -506,12 +528,12 @@ function describeStoreWriteCall(e) {
 /**
  * 说明怎么写存储：用 ArtifactData 工具（未加载先用 ToolSearch）或 write_db 动作，传入该 artifact 的 url。
  */
-function describeStoreWriteHow(e, r) {
-  switch (e) {
+function describeStoreWriteHow(call, options) {
+  switch (call) {
     case "data":
-      return `with the \`${ARTIFACT_DATA_TOOL_NAME}\` tool (load it with ${TOOL_SEARCH_TOOL_NAME} if it is not loaded yet), passing \`url\`: ${jsonStringify(r)}`;
+      return `with the \`${ARTIFACT_DATA_TOOL_NAME}\` tool (load it with ${TOOL_SEARCH_TOOL_NAME} if it is not loaded yet), passing \`url\`: ${jsonStringify(options)}`;
     case "write_db":
-      return `with \`action: "write_db"\`, passing \`url\`: ${jsonStringify(r)}`;
+      return `with \`action: "write_db"\`, passing \`url\`: ${jsonStringify(options)}`;
   }
 }
 export {

@@ -8,8 +8,8 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../../vendor/react/compiler-runtime.js";
-import { y } from "../../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
+import { useState } from "../../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { resolveEditorCommand } from "../../../utils/editor.js";
 import { toIDEDisplayName } from "../../../utils/ide.js";
@@ -39,7 +39,7 @@ import { Byline } from "../../design-system/Byline.js";
 
 //@ chunk-18hwfzwa.js:1278846-1287012 fingerprint = PreviewQuestionView (0.787)
 function PreviewQuestionView(props) {
-  let $ = w(122);
+  let $ = useMemoCache(122);
   let {
     wouldTakeAnswer,
     question,
@@ -58,38 +58,38 @@ function PreviewQuestionView(props) {
     onRespondToClaude,
   } = props;
   let hideSubmitTab_2 = hideSubmitTab === undefined ? false : hideSubmitTab;
-  let [Et, Dt] = y(false);
-  let [Lt, oo] = y(false);
-  let [Xt, io] = y(0);
-  let po;
-  let ao;
+  let [isRespondingFocused, setIsRespondingFocused] = useState(false);
+  let [isTextInputActive, setTextInputActive] = useState(false);
+  let [cursorOffset, setCursorOffset] = useState(0);
+  let editorCommand;
+  let editorName;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    po = resolveEditorCommand();
-    ao = po ? toIDEDisplayName(po) : null;
-    $[0] = po;
-    $[1] = ao;
+    editorCommand = resolveEditorCommand();
+    editorName = editorCommand ? toIDEDisplayName(editorCommand) : null;
+    $[0] = editorCommand;
+    $[1] = editorName;
   } else {
-    po = $[0];
-    ao = $[1];
+    editorCommand = $[0];
+    editorName = $[1];
   }
-  let co = ao;
+  let editorDisplayName = editorName;
   let key = question.key;
-  let Ao = questionStates[key];
+  let questionState = questionStates[key];
   let allOptions = question.options;
-  let [Ro, Ho] = y(0);
-  let [Io, Wo] = y(false);
-  let [mn, Cn] = y(key);
-  if (mn !== key) {
-    Cn(key);
-    let selected = Ao?.selectedValue;
+  let [focusedOptionIndex, setFocusedOptionIndex] = useState(0);
+  let [forceSelectFocus, setForceSelectFocus] = useState(false);
+  let [lastQuestionKey, setLastQuestionKey] = useState(key);
+  if (lastQuestionKey !== key) {
+    setLastQuestionKey(key);
+    let selected = questionState?.selectedValue;
     let idx = selected ? allOptions.findIndex((opt) => opt.value === selected) : -1;
-    Ho(idx >= 0 ? idx : 0);
-    Wo(false);
+    setFocusedOptionIndex(idx >= 0 ? idx : 0);
+    setForceSelectFocus(false);
   }
-  let kn = allOptions[Ro];
-  let selectedValue = Ao?.selectedValue;
-  let textInputValue = Ao?.textInputValue || "";
-  let Go;
+  let focusedOption = allOptions[focusedOptionIndex];
+  let selectedValue = questionState?.selectedValue;
+  let textInputValue = questionState?.textInputValue || "";
+  let chooseOption;
   if (
     $[2] !== allOptions ||
     $[3] !== onAnswer ||
@@ -97,12 +97,12 @@ function PreviewQuestionView(props) {
     $[5] !== key ||
     $[6] !== wouldTakeAnswer
   ) {
-    Go = (index) => {
+    chooseOption = (index) => {
       let option = allOptions[index];
       if (!option) {
         return;
       }
-      Ho(index);
+      setFocusedOptionIndex(index);
       if (!wouldTakeAnswer()) {
         return;
       }
@@ -120,46 +120,53 @@ function PreviewQuestionView(props) {
     $[4] = onUpdateQuestionState;
     $[5] = key;
     $[6] = wouldTakeAnswer;
-    $[7] = Go;
-  } else Go = $[7];
-  let Xo = Go;
-  let Sn;
-  if ($[8] !== allOptions.length || $[9] !== Ro || $[10] !== Lt || $[11] !== wouldTakeAnswer) {
-    Sn = (direction) => {
-      if (Lt) {
+    $[7] = chooseOption;
+  } else chooseOption = $[7];
+  let chooseOptionStable = chooseOption;
+  let moveFocus;
+  if (
+    $[8] !== allOptions.length ||
+    $[9] !== focusedOptionIndex ||
+    $[10] !== isTextInputActive ||
+    $[11] !== wouldTakeAnswer
+  ) {
+    moveFocus = (direction) => {
+      if (isTextInputActive) {
         return;
       }
       let newIndex;
       if (typeof direction === "number") newIndex = direction;
-      else if (direction === "up") newIndex = Ro > 0 ? Ro - 1 : Ro;
-      else newIndex = Ro < allOptions.length - 1 ? Ro + 1 : Ro;
+      else if (direction === "up")
+        newIndex = focusedOptionIndex > 0 ? focusedOptionIndex - 1 : focusedOptionIndex;
+      else
+        newIndex = focusedOptionIndex < allOptions.length - 1 ? focusedOptionIndex + 1 : focusedOptionIndex;
       if (newIndex >= 0 && newIndex < allOptions.length) {
         if (!wouldTakeAnswer()) {
           return;
         }
-        Ho(newIndex);
-        if (newIndex !== Ro) Wo(true);
+        setFocusedOptionIndex(newIndex);
+        if (newIndex !== focusedOptionIndex) setForceSelectFocus(true);
       }
     };
     $[8] = allOptions.length;
-    $[9] = Ro;
-    $[10] = Lt;
+    $[9] = focusedOptionIndex;
+    $[10] = isTextInputActive;
     $[11] = wouldTakeAnswer;
-    $[12] = Sn;
-  } else Sn = $[12];
-  let _o = Sn;
-  let cn;
+    $[12] = moveFocus;
+  } else moveFocus = $[12];
+  let moveFocusStable = moveFocus;
+  let openEditor;
   if (
     $[13] !== onUpdateQuestionState ||
-    $[14] !== Ao?.textInputValue ||
+    $[14] !== questionState?.textInputValue ||
     $[15] !== key ||
     $[16] !== wouldTakeAnswer
   ) {
-    cn = async () => {
+    openEditor = async () => {
       if (!wouldTakeAnswer()) {
         return;
       }
-      let currentValue = Ao?.textInputValue || "";
+      let currentValue = questionState?.textInputValue || "";
       let result = await editPromptInEditor(currentValue);
       updateLastInteractionTime(true);
       if (result.content !== null && result.content !== currentValue) {
@@ -176,120 +183,120 @@ function PreviewQuestionView(props) {
       }
     };
     $[13] = onUpdateQuestionState;
-    $[14] = Ao?.textInputValue;
+    $[14] = questionState?.textInputValue;
     $[15] = key;
     $[16] = wouldTakeAnswer;
-    $[17] = cn;
-  } else cn = $[17];
-  const isActive = Lt && !!po;
-  let Kn;
+    $[17] = openEditor;
+  } else openEditor = $[17];
+  const isActive = isTextInputActive && !!editorCommand;
+  let editorKeyArgs;
   if ($[18] !== isActive) {
-    Kn = {
+    editorKeyArgs = {
       context: "Chat",
       isActive,
     };
     $[18] = isActive;
-    $[19] = Kn;
-  } else Kn = $[19];
-  useKeybinding("chat:externalEditor", cn, Kn);
-  let Wn;
+    $[19] = editorKeyArgs;
+  } else editorKeyArgs = $[19];
+  useKeybinding("chat:externalEditor", openEditor, editorKeyArgs);
+  let tabsKeybindings;
   if ($[20] !== onTabNext || $[21] !== onTabPrev) {
-    Wn = {
+    tabsKeybindings = {
       "tabs:previous": onTabPrev,
       "tabs:next": onTabNext,
     };
     $[20] = onTabNext;
     $[21] = onTabPrev;
-    $[22] = Wn;
-  } else Wn = $[22];
-  const isActive_2 = !Lt && !Et;
-  let Zn;
+    $[22] = tabsKeybindings;
+  } else tabsKeybindings = $[22];
+  const isActive_2 = !isTextInputActive && !isRespondingFocused;
+  let tabsKeyArgs;
   if ($[23] !== isActive_2) {
-    Zn = {
+    tabsKeyArgs = {
       context: "Tabs",
       isActive: isActive_2,
     };
     $[23] = isActive_2;
-    $[24] = Zn;
-  } else Zn = $[24];
-  MessageActionsKeybindings(Wn, Zn);
-  let Un;
+    $[24] = tabsKeyArgs;
+  } else tabsKeyArgs = $[24];
+  MessageActionsKeybindings(tabsKeybindings, tabsKeyArgs);
+  let onExitTextInput;
   if ($[25] !== onTextInputFocus) {
-    Un = () => {
-      oo(false);
+    onExitTextInput = () => {
+      setTextInputActive(false);
       onTextInputFocus(false);
     };
     $[25] = onTextInputFocus;
-    $[26] = Un;
-  } else Un = $[26];
-  let dr = Un;
-  let or;
+    $[26] = onExitTextInput;
+  } else onExitTextInput = $[26];
+  let onExitTextInputStable = onExitTextInput;
+  let submitAnswer;
   if (
-    $[27] !== Ro ||
-    $[28] !== dr ||
-    $[29] !== Xo ||
-    $[30] !== Io ||
+    $[27] !== focusedOptionIndex ||
+    $[28] !== onExitTextInputStable ||
+    $[29] !== chooseOptionStable ||
+    $[30] !== forceSelectFocus ||
     $[31] !== textInputValue ||
     $[32] !== onAnswer ||
     $[33] !== key ||
     $[34] !== selectedValue ||
     $[35] !== wouldTakeAnswer
   ) {
-    or = () => {
-      dr();
+    submitAnswer = () => {
+      onExitTextInputStable();
       if (!wouldTakeAnswer()) {
         return;
       }
-      if (textInputValue.trim() && Io) Xo(Ro);
+      if (textInputValue.trim() && forceSelectFocus) chooseOptionStable(focusedOptionIndex);
       else if (selectedValue) onAnswer(key, selectedValue);
       else if (textInputValue.trim()) onAnswer(key, NOTES_ONLY_ANSWER);
     };
-    $[27] = Ro;
-    $[28] = dr;
-    $[29] = Xo;
-    $[30] = Io;
+    $[27] = focusedOptionIndex;
+    $[28] = onExitTextInputStable;
+    $[29] = chooseOptionStable;
+    $[30] = forceSelectFocus;
     $[31] = textInputValue;
     $[32] = onAnswer;
     $[33] = key;
     $[34] = selectedValue;
     $[35] = wouldTakeAnswer;
-    $[36] = or;
-  } else or = $[36];
-  let onSubmit = or;
-  let Qn;
+    $[36] = submitAnswer;
+  } else submitAnswer = $[36];
+  let onSubmit = submitAnswer;
+  let showResponding;
   if ($[37] === MEMO_CACHE_SENTINEL) {
-    Qn = () => {
-      Dt(true);
+    showResponding = () => {
+      setIsRespondingFocused(true);
     };
-    $[37] = Qn;
-  } else Qn = $[37];
-  let ur = Qn;
-  let Ir;
+    $[37] = showResponding;
+  } else showResponding = $[37];
+  let showRespondingStable = showResponding;
+  let hideResponding;
   if ($[38] === MEMO_CACHE_SENTINEL) {
-    Ir = () => {
-      Dt(false);
+    hideResponding = () => {
+      setIsRespondingFocused(false);
     };
-    $[38] = Ir;
-  } else Ir = $[38];
-  let Pr = Ir;
-  let ts;
+    $[38] = hideResponding;
+  } else hideResponding = $[38];
+  let hideRespondingStable = hideResponding;
+  let onKeyDown;
   if (
     $[39] !== allOptions.length ||
-    $[40] !== Ro ||
-    $[41] !== _o ||
-    $[42] !== dr ||
-    $[43] !== Xo ||
-    $[44] !== Et ||
-    $[45] !== Lt ||
+    $[40] !== focusedOptionIndex ||
+    $[41] !== moveFocusStable ||
+    $[42] !== onExitTextInputStable ||
+    $[43] !== chooseOptionStable ||
+    $[44] !== isRespondingFocused ||
+    $[45] !== isTextInputActive ||
     $[46] !== onCancel ||
     $[47] !== onRespondToClaude ||
     $[48] !== onTextInputFocus
   ) {
-    ts = (e) => {
-      if (Et) {
+    onKeyDown = (e) => {
+      if (isRespondingFocused) {
         if (e.key === "up" || (e.ctrl && e.key === "p")) {
           e.preventDefault();
-          Pr();
+          hideRespondingStable();
           return;
         }
         if (e.key === "return") {
@@ -303,26 +310,26 @@ function PreviewQuestionView(props) {
         }
         return;
       }
-      if (Lt) {
+      if (isTextInputActive) {
         if (e.key === "escape") {
           e.preventDefault();
-          dr();
+          onExitTextInputStable();
         }
         return;
       }
       if (e.key === "up" || (e.ctrl && e.key === "p")) {
         e.preventDefault();
-        if (Ro > 0) _o("up");
+        if (focusedOptionIndex > 0) moveFocusStable("up");
       } else if (e.key === "down" || (e.ctrl && e.key === "n")) {
         e.preventDefault();
-        if (Ro === allOptions.length - 1) ur();
-        else _o("down");
+        if (focusedOptionIndex === allOptions.length - 1) showRespondingStable();
+        else moveFocusStable("down");
       } else if (e.key === "return") {
         e.preventDefault();
-        Xo(Ro);
+        chooseOptionStable(focusedOptionIndex);
       } else if (e.key === "n" && !e.ctrl && !e.meta) {
         e.preventDefault();
-        oo(true);
+        setTextInputActive(true);
         onTextInputFocus(true);
       } else if (e.key === "escape") {
         e.preventDefault();
@@ -330,48 +337,48 @@ function PreviewQuestionView(props) {
       } else if (e.key.length === 1 && e.key >= "1" && e.key <= "9") {
         e.preventDefault();
         let idx = parseInt(e.key, 10) - 1;
-        if (idx < allOptions.length) _o(idx);
+        if (idx < allOptions.length) moveFocusStable(idx);
       }
     };
     $[39] = allOptions.length;
-    $[40] = Ro;
-    $[41] = _o;
-    $[42] = dr;
-    $[43] = Xo;
-    $[44] = Et;
-    $[45] = Lt;
+    $[40] = focusedOptionIndex;
+    $[41] = moveFocusStable;
+    $[42] = onExitTextInputStable;
+    $[43] = chooseOptionStable;
+    $[44] = isRespondingFocused;
+    $[45] = isTextInputActive;
     $[46] = onCancel;
     $[47] = onRespondToClaude;
     $[48] = onTextInputFocus;
-    $[49] = ts;
-  } else ts = $[49];
-  let onKeyDown = ts;
-  let wr =
-    kn?.preview === undefined
+    $[49] = onKeyDown;
+  } else onKeyDown = $[49];
+  let onKeyDown_2 = onKeyDown;
+  let previewMarkdown =
+    focusedOption?.preview === undefined
       ? null
-      : kn.preview.kind === "full"
-        ? kn.preview.markdown
+      : focusedOption.preview.kind === "full"
+        ? focusedOption.preview.markdown
         : PREVIEW_WITHHELD_TEXT;
   let { columns, rows } = useTerminalSize();
-  let fr = columns - 30 - 4;
-  let columns_2 = Math.max(1, fr - bunStringWidth("Notes:") - 1);
+  let previewWidth = columns - 30 - 4;
+  let columns_2 = Math.max(1, previewWidth - bunStringWidth("Notes:") - 1);
   let unattendedNotice = useUnattendedNotice();
   let maxLines = Math.max(1, rows - 26 - unattendedNotice);
-  let Vr;
+  let topDivider;
   if ($[50] === MEMO_CACHE_SENTINEL) {
-    Vr = jsxProd_default(Divider, {
+    topDivider = jsxProd_default(Divider, {
       color: "inactive",
     });
-    $[50] = Vr;
-  } else Vr = $[50];
-  let ms;
+    $[50] = topDivider;
+  } else topDivider = $[50];
+  let navBar;
   if (
     $[51] !== answers ||
     $[52] !== currentQuestionIndex ||
     $[53] !== hideSubmitTab_2 ||
     $[54] !== questions
   ) {
-    ms = jsxProd_default(QuestionNavigationBar, {
+    navBar = jsxProd_default(QuestionNavigationBar, {
       questions,
       currentQuestionIndex,
       answers,
@@ -381,8 +388,8 @@ function PreviewQuestionView(props) {
     $[52] = currentQuestionIndex;
     $[53] = hideSubmitTab_2;
     $[54] = questions;
-    $[55] = ms;
-  } else ms = $[55];
+    $[55] = navBar;
+  } else navBar = $[55];
   let children;
   if ($[56] !== question.displayQuestion.text) {
     children = jsxProd_default(PermissionRequestTitle, {
@@ -392,22 +399,22 @@ function PreviewQuestionView(props) {
     $[56] = question.displayQuestion.text;
     $[57] = children;
   } else children = $[57];
-  let Ls;
+  let questionBlock;
   if ($[58] !== question.displayQuestion.needsGutter || $[59] !== children) {
-    Ls = jsxProd_default(Blockquote, {
+    questionBlock = jsxProd_default(Blockquote, {
       multiline: question.displayQuestion.needsGutter,
       children,
     });
     $[58] = question.displayQuestion.needsGutter;
     $[59] = children;
-    $[60] = Ls;
-  } else Ls = $[60];
+    $[60] = questionBlock;
+  } else questionBlock = $[60];
   let children_2;
-  if ($[61] !== allOptions || $[62] !== Ro || $[63] !== selectedValue) {
-    let ws;
-    if ($[65] !== Ro || $[66] !== selectedValue) {
-      ws = (option, index) => {
-        let isFocused = Ro === index;
+  if ($[61] !== allOptions || $[62] !== focusedOptionIndex || $[63] !== selectedValue) {
+    let renderOption;
+    if ($[65] !== focusedOptionIndex || $[66] !== selectedValue) {
+      renderOption = (option, index) => {
+        let isFocused = focusedOptionIndex === index;
         let isSelected = selectedValue === option.value;
         return jsxProd_default_2(
           Box,
@@ -441,71 +448,71 @@ function PreviewQuestionView(props) {
           option.value,
         );
       };
-      $[65] = Ro;
+      $[65] = focusedOptionIndex;
       $[66] = selectedValue;
-      $[67] = ws;
-    } else ws = $[67];
-    children_2 = allOptions.map(ws);
+      $[67] = renderOption;
+    } else renderOption = $[67];
+    children_2 = allOptions.map(renderOption);
     $[61] = allOptions;
-    $[62] = Ro;
+    $[62] = focusedOptionIndex;
     $[63] = selectedValue;
     $[64] = children_2;
   } else children_2 = $[64];
-  let ws;
+  let optionsBox;
   if ($[68] !== children_2) {
-    ws = jsxProd_default(Box, {
+    optionsBox = jsxProd_default(Box, {
       flexDirection: "column",
       width: 30,
       children: children_2,
     });
     $[68] = children_2;
-    $[69] = ws;
-  } else ws = $[69];
-  const content = wr || "No preview available";
-  let da;
-  if ($[70] !== minContentWidth || $[71] !== maxLines || $[72] !== fr || $[73] !== content) {
-    da = jsxProd_default(Markdown, {
+    $[69] = optionsBox;
+  } else optionsBox = $[69];
+  const content = previewMarkdown || "No preview available";
+  let previewView;
+  if ($[70] !== minContentWidth || $[71] !== maxLines || $[72] !== previewWidth || $[73] !== content) {
+    previewView = jsxProd_default(Markdown, {
       content,
       maxLines,
       minWidth: minContentWidth,
-      maxWidth: fr,
+      maxWidth: previewWidth,
     });
     $[70] = minContentWidth;
     $[71] = maxLines;
-    $[72] = fr;
+    $[72] = previewWidth;
     $[73] = content;
-    $[74] = da;
-  } else da = $[74];
-  let qn;
+    $[74] = previewView;
+  } else previewView = $[74];
+  let notesLabel;
   if ($[75] === MEMO_CACHE_SENTINEL) {
-    qn = jsxProd_default(Box, {
+    notesLabel = jsxProd_default(Box, {
       flexShrink: 0,
       children: jsxProd_default(Text, {
         color: "suggestion",
         children: "Notes:",
       }),
     });
-    $[75] = qn;
-  } else qn = $[75];
-  let ps;
+    $[75] = notesLabel;
+  } else notesLabel = $[75];
+  let notesBox;
   if (
-    $[76] !== Xt ||
-    $[77] !== dr ||
+    $[76] !== cursorOffset ||
+    $[77] !== onExitTextInputStable ||
     $[78] !== onSubmit ||
-    $[79] !== Lt ||
+    $[79] !== isTextInputActive ||
     $[80] !== columns_2 ||
     $[81] !== textInputValue ||
     $[82] !== onUpdateQuestionState ||
     $[83] !== key ||
     $[84] !== wouldTakeAnswer
   ) {
-    ps = jsxProd_default_2(Box, {
+    notesBox = jsxProd_default_2(Box, {
       marginTop: 1,
       flexDirection: "row",
       gap: 1,
       children: [
-        qn,
-        Lt
+        notesLabel,
+        isTextInputActive
           ? jsxProd_default(TextInput, {
               value: textInputValue,
               placeholder: "Add notes on this design\u2026",
@@ -522,13 +529,13 @@ function PreviewQuestionView(props) {
                 );
               },
               onSubmit,
-              onExit: dr,
+              onExit: onExitTextInputStable,
               focus: true,
               showCursor: true,
               columns: columns_2,
               maxVisibleLines: 5,
-              cursorOffset: Xt,
-              onChangeCursorOffset: io,
+              cursorOffset,
+              onChangeCursorOffset: setCursorOffset,
               disableEscapeDoublePress: true,
             })
           : jsxProd_default(Text, {
@@ -538,50 +545,50 @@ function PreviewQuestionView(props) {
             }),
       ],
     });
-    $[76] = Xt;
-    $[77] = dr;
+    $[76] = cursorOffset;
+    $[77] = onExitTextInputStable;
     $[78] = onSubmit;
-    $[79] = Lt;
+    $[79] = isTextInputActive;
     $[80] = columns_2;
     $[81] = textInputValue;
     $[82] = onUpdateQuestionState;
     $[83] = key;
     $[84] = wouldTakeAnswer;
-    $[85] = ps;
-  } else ps = $[85];
-  let kr;
-  if ($[86] !== da || $[87] !== ps) {
-    kr = jsxProd_default_2(Box, {
+    $[85] = notesBox;
+  } else notesBox = $[85];
+  let previewColumn;
+  if ($[86] !== previewView || $[87] !== notesBox) {
+    previewColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
       flexGrow: 1,
-      children: [da, ps],
+      children: [previewView, notesBox],
     });
-    $[86] = da;
-    $[87] = ps;
-    $[88] = kr;
-  } else kr = $[88];
-  let ls;
-  if ($[89] !== ws || $[90] !== kr) {
-    ls = jsxProd_default_2(Box, {
+    $[86] = previewView;
+    $[87] = notesBox;
+    $[88] = previewColumn;
+  } else previewColumn = $[88];
+  let mainRow;
+  if ($[89] !== optionsBox || $[90] !== previewColumn) {
+    mainRow = jsxProd_default_2(Box, {
       marginTop: 1,
       flexDirection: "row",
       gap: 4,
-      children: [ws, kr],
+      children: [optionsBox, previewColumn],
     });
-    $[89] = ws;
-    $[90] = kr;
-    $[91] = ls;
-  } else ls = $[91];
-  let Ms;
+    $[89] = optionsBox;
+    $[90] = previewColumn;
+    $[91] = mainRow;
+  } else mainRow = $[91];
+  let bottomDivider;
   if ($[92] === MEMO_CACHE_SENTINEL) {
-    Ms = jsxProd_default(Divider, {
+    bottomDivider = jsxProd_default(Divider, {
       color: "inactive",
     });
-    $[92] = Ms;
-  } else Ms = $[92];
-  let qs;
-  if ($[93] !== Et) {
-    qs = Et
+    $[92] = bottomDivider;
+  } else bottomDivider = $[92];
+  let chatPointer;
+  if ($[93] !== isRespondingFocused) {
+    chatPointer = isRespondingFocused
       ? jsxProd_default(Text, {
           color: "suggestion",
           children: figures_default.pointer,
@@ -589,146 +596,146 @@ function PreviewQuestionView(props) {
       : jsxProd_default(Text, {
           children: " ",
         });
-    $[93] = Et;
-    $[94] = qs;
-  } else qs = $[94];
-  const color = Et ? "suggestion" : undefined;
-  let es;
+    $[93] = isRespondingFocused;
+    $[94] = chatPointer;
+  } else chatPointer = $[94];
+  const color = isRespondingFocused ? "suggestion" : undefined;
+  let chatLabel;
   if ($[95] !== color) {
-    es = jsxProd_default(Text, {
+    chatLabel = jsxProd_default(Text, {
       color,
       children: "Chat about this",
     });
     $[95] = color;
-    $[96] = es;
-  } else es = $[96];
-  let ds;
-  if ($[97] !== qs || $[98] !== es) {
-    ds = jsxProd_default_2(Box, {
+    $[96] = chatLabel;
+  } else chatLabel = $[96];
+  let chatBox;
+  if ($[97] !== chatPointer || $[98] !== chatLabel) {
+    chatBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       children: [
-        Ms,
+        bottomDivider,
         jsxProd_default_2(Box, {
           flexDirection: "row",
           gap: 1,
-          children: [qs, es],
+          children: [chatPointer, chatLabel],
         }),
       ],
     });
-    $[97] = qs;
-    $[98] = es;
-    $[99] = ds;
-  } else ds = $[99];
-  let Hs;
+    $[97] = chatPointer;
+    $[98] = chatLabel;
+    $[99] = chatBox;
+  } else chatBox = $[99];
+  let selectHint;
   if ($[100] === MEMO_CACHE_SENTINEL) {
-    Hs = jsxProd_default(KeyboardShortcutHint, {
+    selectHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "enter",
       action: "select",
     });
-    $[100] = Hs;
-  } else Hs = $[100];
-  let _s;
-  let fs;
+    $[100] = selectHint;
+  } else selectHint = $[100];
+  let navigateHint;
+  let notesHint;
   if ($[101] === MEMO_CACHE_SENTINEL) {
-    _s = jsxProd_default(KeyboardShortcutHint, {
+    navigateHint = jsxProd_default(KeyboardShortcutHint, {
       chord: ["up", "down"],
       action: "navigate",
     });
-    fs = jsxProd_default(KeyboardShortcutHint, {
+    notesHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "n",
       action: "add notes",
     });
-    $[101] = _s;
-    $[102] = fs;
+    $[101] = navigateHint;
+    $[102] = notesHint;
   } else {
-    _s = $[101];
-    fs = $[102];
+    navigateHint = $[101];
+    notesHint = $[102];
   }
-  let ii;
+  let switchHint;
   if ($[103] !== questions.length) {
-    ii =
+    switchHint =
       questions.length > 1 &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "tab",
         action: "switch questions",
       });
     $[103] = questions.length;
-    $[104] = ii;
-  } else ii = $[104];
-  let ua;
-  if ($[105] !== Lt) {
-    ua =
-      Lt &&
-      co &&
+    $[104] = switchHint;
+  } else switchHint = $[104];
+  let editorHint;
+  if ($[105] !== isTextInputActive) {
+    editorHint =
+      isTextInputActive &&
+      editorDisplayName &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "ctrl+g",
-        action: `edit in ${co}`,
+        action: `edit in ${editorDisplayName}`,
       });
-    $[105] = Lt;
-    $[106] = ua;
-  } else ua = $[106];
-  let La;
+    $[105] = isTextInputActive;
+    $[106] = editorHint;
+  } else editorHint = $[106];
+  let cancelHint;
   if ($[107] === MEMO_CACHE_SENTINEL) {
-    La = jsxProd_default(KeyboardShortcutHint, {
+    cancelHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action: "cancel",
     });
-    $[107] = La;
-  } else La = $[107];
-  let Xa;
-  if ($[108] !== ii || $[109] !== ua) {
-    Xa = jsxProd_default(Box, {
+    $[107] = cancelHint;
+  } else cancelHint = $[107];
+  let hintsBox;
+  if ($[108] !== switchHint || $[109] !== editorHint) {
+    hintsBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         color: "inactive",
         dimColor: true,
         children: jsxProd_default_2(Byline, {
-          children: [Hs, _s, fs, ii, ua, La],
+          children: [selectHint, navigateHint, notesHint, switchHint, editorHint, cancelHint],
         }),
       }),
     });
-    $[108] = ii;
-    $[109] = ua;
-    $[110] = Xa;
-  } else Xa = $[110];
-  let dl;
-  if ($[111] !== ls || $[112] !== ds || $[113] !== Xa) {
-    dl = jsxProd_default_2(Box, {
+    $[108] = switchHint;
+    $[109] = editorHint;
+    $[110] = hintsBox;
+  } else hintsBox = $[110];
+  let contentBox;
+  if ($[111] !== mainRow || $[112] !== chatBox || $[113] !== hintsBox) {
+    contentBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [ls, ds, Xa],
+      children: [mainRow, chatBox, hintsBox],
     });
-    $[111] = ls;
-    $[112] = ds;
-    $[113] = Xa;
-    $[114] = dl;
-  } else dl = $[114];
-  let Vl;
-  if ($[115] !== ms || $[116] !== Ls || $[117] !== dl) {
-    Vl = jsxProd_default_2(Box, {
+    $[111] = mainRow;
+    $[112] = chatBox;
+    $[113] = hintsBox;
+    $[114] = contentBox;
+  } else contentBox = $[114];
+  let bodyBox;
+  if ($[115] !== navBar || $[116] !== questionBlock || $[117] !== contentBox) {
+    bodyBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingTop: 0,
-      children: [ms, Ls, dl],
+      children: [navBar, questionBlock, contentBox],
     });
-    $[115] = ms;
-    $[116] = Ls;
-    $[117] = dl;
-    $[118] = Vl;
-  } else Vl = $[118];
-  let Hd;
-  if ($[119] !== onKeyDown || $[120] !== Vl) {
-    Hd = jsxProd_default_2(Box, {
+    $[115] = navBar;
+    $[116] = questionBlock;
+    $[117] = contentBox;
+    $[118] = bodyBox;
+  } else bodyBox = $[118];
+  let container;
+  if ($[119] !== onKeyDown_2 || $[120] !== bodyBox) {
+    container = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       tabIndex: 0,
       autoFocus: true,
-      onKeyDown,
-      children: [Vr, Vl],
+      onKeyDown: onKeyDown_2,
+      children: [topDivider, bodyBox],
     });
-    $[119] = onKeyDown;
-    $[120] = Vl;
-    $[121] = Hd;
-  } else Hd = $[121];
-  return Hd;
+    $[119] = onKeyDown_2;
+    $[120] = bodyBox;
+    $[121] = container;
+  } else container = $[121];
+  return container;
 }
 export { PreviewQuestionView };

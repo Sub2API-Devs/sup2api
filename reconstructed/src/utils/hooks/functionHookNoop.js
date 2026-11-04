@@ -15,8 +15,8 @@ var NOOP_FUNCTION_HOOK_REGISTRY = {
     return;
   },
   add() {},
-  addFunctionHook(e, n, t, s, r, o) {
-    return o?.id ?? "function-hook-noop";
+  addFunctionHook(event, matcher, callback, source, options, extra) {
+    return extra?.id ?? "function-hook-noop";
   },
   remove() {},
   clear() {},

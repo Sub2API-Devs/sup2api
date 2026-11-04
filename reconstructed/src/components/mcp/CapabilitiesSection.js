@@ -15,7 +15,7 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { readMcpOAuthStore } from "../../services/mcp/credentialStoreRead.js";
 import { getServerKey } from "../../services/mcp/auth.js";
 import { hasExpiredAccessTokenOnly } from "../../services/mcp/registrationStatus.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -23,21 +23,25 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { Byline } from "../design-system/Byline.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrb44rx7.js:6073-6077 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:6073", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:6077-6273 placement
-function formatToolConnectionState(cacheSavedAt, h) {
-  let k = [
+function formatToolConnectionState(cacheSavedAt, toolCount) {
+  let facts = [
     `cached ${formatRelativeTimeAgo(new Date(cacheSavedAt))}`,
     "connects on first use",
-    ...(h !== undefined ? [`${h} ${plural(h, "tool")}`] : []),
+    ...(toolCount !== undefined ? [`${toolCount} ${plural(toolCount, "tool")}`] : []),
   ];
   return {
     glyph: figures_default.radioOn,
     tone: "inactive",
-    statusText: k.join(" \xB7 "),
-    facts: k,
+    statusText: facts.join(" \xB7 "),
+    facts,
   };
 }
 //@ chunk-vrb44rx7.js:6273-6381 placement
@@ -45,14 +49,16 @@ function formatToolConnectionState(cacheSavedAt, h) {
  * 该 MCP 服务器存有 access token 且未过期/未失效。
  */
 async function hasValidMcpOAuthToken(name, config) {
-  let k = await readMcpOAuthStore().catch(() => {
+  let store = await readMcpOAuthStore().catch(() => {
     return;
   });
-  return !!k?.[getServerKey(name, config)]?.accessToken && !hasExpiredAccessTokenOnly(name, config, k);
+  return (
+    !!store?.[getServerKey(name, config)]?.accessToken && !hasExpiredAccessTokenOnly(name, config, store)
+  );
 }
 //@ chunk-vrb44rx7.js:6381-6898 fingerprint = CapabilitiesSection (0.777)
 function CapabilitiesSection(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { serverToolsCount, serverPromptsCount, serverResourcesCount } = props;
   let capabilities;
   if ($[0] !== serverPromptsCount || $[1] !== serverResourcesCount || $[2] !== serverToolsCount) {

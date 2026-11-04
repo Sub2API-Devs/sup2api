@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (8)
  * attribution: placement 2, fingerprint 1, layout 4, callgraph-fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useHost } from "../../context/session.js";
 import {
   WEB_SETUP_PUSH_OFFER_SLOT,
@@ -28,18 +28,18 @@ import { useClock } from "../../ink/components/ClockContext.js";
 import { useStoreValue } from "../../screens/repl/storeHooks.js";
 import { normalizeDigitKey, useDigitHotkeys, DIGIT_HOTKEY_HOLD_MS } from "../pluginUi/digitHotkeys.js";
 import { loadSubagentTranscripts_2 } from "../../utils/sessionStorage.js";
-import { y, P } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { isUnattendedInteractiveSession } from "../../utils/concurrentSessions.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Box, Text } from "../../ink/components/Text.js";
-import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { Button } from "../../ink/components/ErrorBoundary.js";
 import { USER_MESSAGE_BACKGROUND } from "../CustomSelect/selectTypeahead.js";
 
 //@ chunk-18hwfzwa.js:994730-994775 placement
-function isShareAnswerKey(kt) {
-  return isTranscriptShareKey(kt.toLowerCase());
+function isShareAnswerKey(key) {
+  return isTranscriptShareKey(key.toLowerCase());
 }
 //@ chunk-18hwfzwa.js:994775-995118 placement
 /**
@@ -92,158 +92,165 @@ var WEB_SETUP_OPTIONS = [
   },
 ];
 //@ chunk-18hwfzwa.js:1084763-1084811 layout
-function isAnswerDigit(h) {
-  return h === "1" || h === "2" || h === "3";
+function isAnswerDigit(key) {
+  return key === "1" || key === "2" || key === "3";
 }
 //@ chunk-18hwfzwa.js:1084811-1084889 layout
-function webSetupPromptStatus(h) {
-  return h.status === "pending" || h.status === "shown" ? h.status : null;
+function webSetupPromptStatus(state) {
+  return state.status === "pending" || state.status === "shown" ? state.status : null;
 }
 //@ chunk-18hwfzwa.js:1084889-1085165 layout
 /**
  * 按宿主状态决定是否显示"运行 /web-setup"询问，显示时渲染 _Ce。
  */
-function WebSetupPromptGate(h) {
-  let $ = w(6);
+function WebSetupPromptGate(props) {
+  let $ = useMemoCache(6);
   let host = useHost();
-  let L;
+  let store;
   if ($[0] !== host) {
-    L = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
+    store = WEB_SETUP_PUSH_OFFER_SLOT.of(host);
     $[0] = host;
-    $[1] = L;
-  } else L = $[1];
-  let storeSelector = useStoreSelector(L, webSetupPromptStatus);
+    $[1] = store;
+  } else store = $[1];
+  let storeSelector = useStoreSelector(store, webSetupPromptStatus);
   if (storeSelector === null) {
     return null;
   }
   const shown = storeSelector === "shown";
-  let Re;
-  if ($[2] !== host || $[3] !== h || $[4] !== shown) {
-    Re = jsxProd_default(WebSetupPrompt, {
-      ...h,
+  let prompt;
+  if ($[2] !== host || $[3] !== props || $[4] !== shown) {
+    prompt = jsxProd_default(WebSetupPrompt, {
+      ...props,
       host,
       shown,
     });
     $[2] = host;
-    $[3] = h;
+    $[3] = props;
     $[4] = shown;
-    $[5] = Re;
-  } else Re = $[5];
-  return Re;
+    $[5] = prompt;
+  } else prompt = $[5];
+  return prompt;
 }
 //@ chunk-18hwfzwa.js:1085165-1086769 layout
 /**
  * "运行 /web-setup" 询问的状态与计时：输入框为空且非加载时延迟显示，记录展示/忽略/回答，选 1 时调用 onRunWebSetup。
  */
 function WebSetupPrompt(props) {
-  let $ = w(34);
+  let $ = useMemoCache(34);
   let { isLoading, bandHeld, transcript, setInputValue, onRunWebSetup, host, shown } = props;
   let { storageV5 } = useTheme_2();
   let clock = useClock();
   let storeValue = useStoreValue();
-  let rt;
+  let isAnswerDigitCached;
   if ($[0] !== storeValue) {
-    rt = storeValue.length === 1 && isAnswerDigit(normalizeDigitKey(storeValue));
+    isAnswerDigitCached = storeValue.length === 1 && isAnswerDigit(normalizeDigitKey(storeValue));
     $[0] = storeValue;
-    $[1] = rt;
-  } else rt = $[1];
-  let kt = rt;
-  let At = storeValue === "";
-  let It = At || kt;
-  let Ot =
+    $[1] = isAnswerDigitCached;
+  } else isAnswerDigitCached = $[1];
+  let hasAnswerDigit = isAnswerDigitCached;
+  let isEmptyInput = storeValue === "";
+  let isInputIdle = isEmptyInput || hasAnswerDigit;
+  let canOffer =
     loadSubagentTranscripts_2({
       isLoading,
       transcript,
     }) &&
     !bandHeld &&
-    It;
-  let [Et, Dt] = y(shown);
-  let Lt;
-  let oo;
-  if ($[2] !== Ot || $[3] !== clock || $[4] !== host || $[5] !== At || $[6] !== Et || $[7] !== storageV5) {
-    Lt = () => {
-      if (!Ot) {
-        Dt(false);
+    isInputIdle;
+  let [isShown, setIsShown] = useState(shown);
+  let revealEffect;
+  let revealDeps;
+  if (
+    $[2] !== canOffer ||
+    $[3] !== clock ||
+    $[4] !== host ||
+    $[5] !== isEmptyInput ||
+    $[6] !== isShown ||
+    $[7] !== storageV5
+  ) {
+    revealEffect = () => {
+      if (!canOffer) {
+        setIsShown(false);
         return;
       }
-      if (Et || !At) {
+      if (isShown || !isEmptyInput) {
         return;
       }
       return clock.setTimeout(() => {
-        if (!resolvePendingPushOffer(host, storageV5)) Dt(true);
+        if (!resolvePendingPushOffer(host, storageV5)) setIsShown(true);
       }, WEB_SETUP_PUSH_OFFER_DELAY_MS);
     };
-    oo = [Ot, Et, At, clock, host, storageV5];
-    $[2] = Ot;
+    revealDeps = [canOffer, isShown, isEmptyInput, clock, host, storageV5];
+    $[2] = canOffer;
     $[3] = clock;
     $[4] = host;
-    $[5] = At;
-    $[6] = Et;
+    $[5] = isEmptyInput;
+    $[6] = isShown;
     $[7] = storageV5;
-    $[8] = Lt;
-    $[9] = oo;
+    $[8] = revealEffect;
+    $[9] = revealDeps;
   } else {
-    Lt = $[8];
-    oo = $[9];
+    revealEffect = $[8];
+    revealDeps = $[9];
   }
-  P(Lt, oo);
-  let Xt = Ot && Et;
-  let io;
-  let so;
-  if ($[10] !== host || $[11] !== shown || $[12] !== storageV5 || $[13] !== Xt) {
-    io = () => {
-      if (Xt && !shown) markPushOfferShown(host, storageV5);
+  useEffect(revealEffect, revealDeps);
+  let shouldShow = canOffer && isShown;
+  let markShownEffect;
+  let markShownDeps;
+  if ($[10] !== host || $[11] !== shown || $[12] !== storageV5 || $[13] !== shouldShow) {
+    markShownEffect = () => {
+      if (shouldShow && !shown) markPushOfferShown(host, storageV5);
     };
-    so = [Xt, shown, host, storageV5];
+    markShownDeps = [shouldShow, shown, host, storageV5];
     $[10] = host;
     $[11] = shown;
     $[12] = storageV5;
-    $[13] = Xt;
-    $[14] = io;
-    $[15] = so;
+    $[13] = shouldShow;
+    $[14] = markShownEffect;
+    $[15] = markShownDeps;
   } else {
-    io = $[14];
-    so = $[15];
+    markShownEffect = $[14];
+    markShownDeps = $[15];
   }
-  P(io, so);
-  let po = isLoading || !It;
-  let ao;
-  let co;
-  if ($[16] !== host || $[17] !== po || $[18] !== shown || $[19] !== storageV5) {
-    ao = () => {
-      if (shown && po) resolveShownPushOffer(host, "ignored", storageV5);
+  useEffect(markShownEffect, markShownDeps);
+  let shouldIgnore = isLoading || !isInputIdle;
+  let ignoreEffect;
+  let ignoreDeps;
+  if ($[16] !== host || $[17] !== shouldIgnore || $[18] !== shown || $[19] !== storageV5) {
+    ignoreEffect = () => {
+      if (shown && shouldIgnore) resolveShownPushOffer(host, "ignored", storageV5);
     };
-    co = [shown, po, host, storageV5];
+    ignoreDeps = [shown, shouldIgnore, host, storageV5];
     $[16] = host;
-    $[17] = po;
+    $[17] = shouldIgnore;
     $[18] = shown;
     $[19] = storageV5;
-    $[20] = ao;
-    $[21] = co;
+    $[20] = ignoreEffect;
+    $[21] = ignoreDeps;
   } else {
-    ao = $[20];
-    co = $[21];
+    ignoreEffect = $[20];
+    ignoreDeps = $[21];
   }
-  P(ao, co);
-  let bo;
+  useEffect(ignoreEffect, ignoreDeps);
+  let answerHandlerCached;
   if ($[22] !== host || $[23] !== onRunWebSetup || $[24] !== setInputValue || $[25] !== storageV5) {
-    bo = function Bo(Ao) {
+    answerHandlerCached = function handleAnswer(digit) {
       setInputValue("");
       if (isUnattendedInteractiveSession()) {
         resolveShownPushOffer(host, "ignored", storageV5);
         return;
       }
-      resolveShownPushOffer(host, WEB_SETUP_RESPONSES[Ao], storageV5);
-      if (Ao === "1") onRunWebSetup();
+      resolveShownPushOffer(host, WEB_SETUP_RESPONSES[digit], storageV5);
+      if (digit === "1") onRunWebSetup();
     };
     $[22] = host;
     $[23] = onRunWebSetup;
     $[24] = setInputValue;
     $[25] = storageV5;
-    $[26] = bo;
-  } else bo = $[26];
-  let onAnswer = bo;
-  if (!Xt) {
+    $[26] = answerHandlerCached;
+  } else answerHandlerCached = $[26];
+  let onAnswer = answerHandlerCached;
+  if (!shouldShow) {
     return null;
   }
   let onDismiss;
@@ -253,9 +260,9 @@ function WebSetupPrompt(props) {
     $[28] = storageV5;
     $[29] = onDismiss;
   } else onDismiss = $[29];
-  let Ho;
+  let promptElement;
   if ($[30] !== onAnswer || $[31] !== storeValue || $[32] !== onDismiss) {
-    Ho = jsxProd_default(TranscriptSharePrompt, {
+    promptElement = jsxProd_default(TranscriptSharePrompt, {
       inputValue: storeValue,
       onAnswer,
       onDismiss,
@@ -263,17 +270,17 @@ function WebSetupPrompt(props) {
     $[30] = onAnswer;
     $[31] = storeValue;
     $[32] = onDismiss;
-    $[33] = Ho;
-  } else Ho = $[33];
-  return Ho;
+    $[33] = promptElement;
+  } else promptElement = $[33];
+  return promptElement;
 }
 //@ chunk-18hwfzwa.js:1086769-1087735 callgraph-fingerprint = TranscriptSharePrompt (0.411)
 function TranscriptSharePrompt(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { inputValue, onAnswer, onDismiss } = props;
-  let ke;
+  let digitHotkeyOptions;
   if ($[0] !== inputValue || $[1] !== onAnswer) {
-    ke = {
+    digitHotkeyOptions = {
       inputValue,
       isValidDigit: isAnswerDigit,
       onDigit: onAnswer,
@@ -281,23 +288,23 @@ function TranscriptSharePrompt(props) {
     };
     $[0] = inputValue;
     $[1] = onAnswer;
-    $[2] = ke;
-  } else ke = $[2];
-  useDigitHotkeys(ke);
+    $[2] = digitHotkeyOptions;
+  } else digitHotkeyOptions = $[2];
+  useDigitHotkeys(digitHotkeyOptions);
   const isActive = inputValue === "";
-  let Be;
+  let keybindingOptions;
   if ($[3] !== isActive) {
-    Be = {
+    keybindingOptions = {
       context: "Chat",
       isActive,
     };
     $[3] = isActive;
-    $[4] = Be;
-  } else Be = $[4];
-  useKeybinding("chat:cancel", onDismiss, Be);
-  let He;
+    $[4] = keybindingOptions;
+  } else keybindingOptions = $[4];
+  useKeybinding("chat:cancel", onDismiss, keybindingOptions);
+  let questionElement;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    He = jsxProd_default_2(Box, {
+    questionElement = jsxProd_default_2(Box, {
       children: [
         jsxProd_default(Box, {
           minWidth: 2,
@@ -313,12 +320,12 @@ function TranscriptSharePrompt(props) {
         }),
       ],
     });
-    $[5] = He;
-  } else He = $[5];
+    $[5] = questionElement;
+  } else questionElement = $[5];
   let children;
   if ($[6] !== onAnswer) {
-    children = WEB_SETUP_OPTIONS.map((ze) => {
-      let { key, label } = ze;
+    children = WEB_SETUP_OPTIONS.map((option) => {
+      let { key, label } = option;
       return jsxProd_default(
         Box,
         {
@@ -327,8 +334,8 @@ function TranscriptSharePrompt(props) {
             tabIndex: -1,
             mountSettleMs: DIGIT_HOTKEY_HOLD_MS,
             onAction: () => onAnswer(key),
-            children: (kt) => {
-              let { hovered } = kt;
+            children: (state) => {
+              let { hovered } = state;
               return jsxProd_default_2(Text, {
                 backgroundColor: hovered ? USER_MESSAGE_BACKGROUND : undefined,
                 children: [
@@ -349,13 +356,13 @@ function TranscriptSharePrompt(props) {
     $[6] = onAnswer;
     $[7] = children;
   } else children = $[7];
-  let ze;
+  let promptElement;
   if ($[8] !== children) {
-    ze = jsxProd_default_2(Box, {
+    promptElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       children: [
-        He,
+        questionElement,
         jsxProd_default(Box, {
           marginLeft: 2,
           children,
@@ -363,9 +370,9 @@ function TranscriptSharePrompt(props) {
       ],
     });
     $[8] = children;
-    $[9] = ze;
-  } else ze = $[9];
-  return ze;
+    $[9] = promptElement;
+  } else promptElement = $[9];
+  return promptElement;
 }
 export {
   WebSetupPromptGate,

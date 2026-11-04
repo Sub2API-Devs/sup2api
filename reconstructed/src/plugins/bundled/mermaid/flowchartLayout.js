@@ -26,24 +26,26 @@ import { labelEdgeBundles } from "./flowchartRender.js";
  * 把字符网格（字形、连线位、样式、圆角）转为文本行。
  */
 function gridToLines(boxCanvas) {
-  let t = [];
+  let lines = [];
   for (let k = 0; k < boxCanvas.height; k++) {
-    let o = "";
+    let line = "";
     for (let k_2 = 0; k_2 < boxCanvas.width; k_2++) {
-      let u = k * boxCanvas.width + k_2;
-      let r = boxCanvas.links[u] ?? 0;
-      let s = BOX_STYLE_GLYPHS[BOX_STYLES[boxCanvas.styles[u] ?? 0] ?? "solid"];
-      o +=
-        boxCanvas.glyphs[u] ??
-        (r === (BOX_DIRECTION_BITS | BOX_UP_BIT)
-          ? s.down
-          : r === (BOX_LEFT_BIT | BOX_RIGHT_BIT)
-            ? s.across
-            : ((boxCanvas.rounded[u] ? BOX_ROUND_CORNERS[r] : undefined) ?? BOX_LINE_GLYPHS[r] ?? " "));
+      let index = k * boxCanvas.width + k_2;
+      let links = boxCanvas.links[index] ?? 0;
+      let glyphs = BOX_STYLE_GLYPHS[BOX_STYLES[boxCanvas.styles[index] ?? 0] ?? "solid"];
+      line +=
+        boxCanvas.glyphs[index] ??
+        (links === (BOX_DIRECTION_BITS | BOX_UP_BIT)
+          ? glyphs.down
+          : links === (BOX_LEFT_BIT | BOX_RIGHT_BIT)
+            ? glyphs.across
+            : ((boxCanvas.rounded[index] ? BOX_ROUND_CORNERS[links] : undefined) ??
+              BOX_LINE_GLYPHS[links] ??
+              " "));
     }
-    t.push(o.trimEnd());
+    lines.push(line.trimEnd());
   }
-  return t;
+  return lines;
 }
 //@ chunk-yb0ajcmt.js:10213-10237 placement
 /**
@@ -56,72 +58,74 @@ var MAX_NODE_HEIGHT = 24;
 /**
  * 把解析后的 mermaid 流程图（节点/边/子图）按方向分层布局到字符网格坐标。
  */
-function layoutFlowchart(e, t, n) {
-  let o = e.direction === "TD" || e.direction === "BT";
-  let i = new Map(e.nodes.map((node, m) => [node.id, m]));
-  let mapped = e.edges.map((edge) => ({
-    from: i.get(edge.from) ?? 0,
-    to: i.get(edge.to) ?? 0,
+function layoutFlowchart(graph, isWide, maxSize) {
+  let isVertical = graph.direction === "TD" || graph.direction === "BT";
+  let indexById = new Map(graph.nodes.map((node, graphNode) => [node.id, graphNode]));
+  let mapped = graph.edges.map((edge) => ({
+    from: indexById.get(edge.from) ?? 0,
+    to: indexById.get(edge.to) ?? 0,
   }));
-  let mapped_2 = e.nodes.map(() => []);
-  mapped.forEach((d, m) => mapped_2[d.from]?.push(m));
-  let mapped_3 = mapped.map((d) => d.from === d.to);
-  let visited = new Uint8Array(e.nodes.length);
-  for (let k = 0; k < e.nodes.length; k++)
+  let mapped_2 = graph.nodes.map(() => []);
+  mapped.forEach((edge, index) => mapped_2[edge.from]?.push(index));
+  let mapped_3 = mapped.map((edge) => edge.from === edge.to);
+  let visited = new Uint8Array(graph.nodes.length);
+  for (let k = 0; k < graph.nodes.length; k++)
     markLoopEdges(k, {
       outgoing: mapped_2,
       links: mapped,
       visited,
       isLoop: mapped_3,
     });
-  let a = rankNodesTopologically(
-    e.nodes.length,
-    mapped.filter((d, m) => !mapped_3[m]),
+  let ranks = rankNodesTopologically(
+    graph.nodes.length,
+    mapped.filter((edge, index) => !mapped_3[index]),
   );
-  let mapped_4 = e.nodes.map(() => 0);
-  let mapped_5 = e.nodes.map(() => "");
-  e.edges.forEach((edge, m) => {
-    let to = mapped[m]?.to ?? 0;
+  let mapped_4 = graph.nodes.map(() => 0);
+  let mapped_5 = graph.nodes.map(() => "");
+  graph.edges.forEach((edge, edgeIndex) => {
+    let to = mapped[edgeIndex]?.to ?? 0;
     mapped_4[to] = (mapped_4[to] ?? 0) + 1;
     mapped_5[to] = edge.label === "" ? (mapped_5[to] ?? "") : edge.label;
   });
-  if (mapped_5.some((d, m) => d !== "" && (mapped_4[m] ?? 0) > 1)) return;
-  let mapped_6 = e.nodes.map((node, m) => {
-    let F = Math.max(...node.label.map(textDisplayWidth)) + 4;
-    let b = node.label.length + 2;
-    let k = o ? F : b;
-    let M = mapped_5[m] ?? "";
+  if (mapped_5.some((label, index) => label !== "" && (mapped_4[index] ?? 0) > 1)) return;
+  let nodes = graph.nodes.map((node, graphNode) => {
+    let width = Math.max(...node.label.map(textDisplayWidth)) + 4;
+    let height = node.label.length + 2;
+    let breadth = isVertical ? width : height;
+    let label = mapped_5[graphNode] ?? "";
     return {
       kind: "box",
       label: node.label,
       isRounded: node.isRounded,
       line: "solid",
-      rank: a[m] ?? 0,
+      rank: ranks[graphNode] ?? 0,
       center: 0,
-      breadth: k,
-      slot: o && M !== "" ? Math.max(k, textDisplayWidth(M) + 2) : k,
-      depth: o ? b : F,
+      breadth,
+      slot: isVertical && label !== "" ? Math.max(breadth, textDisplayWidth(label) + 2) : breadth,
+      depth: isVertical ? height : width,
       start: 0,
     };
   });
   if (
-    mapped.reduce((acc, m, F) => acc + (mapped_3[F] ? 2 : (a[m.to] ?? 0) - (a[m.from] ?? 0)), 0) >
-    MAX_LAYOUT_WIDTH
+    mapped.reduce(
+      (acc, edge, index) => acc + (mapped_3[index] ? 2 : (ranks[edge.to] ?? 0) - (ranks[edge.from] ?? 0)),
+      0,
+    ) > MAX_LAYOUT_WIDTH
   )
     return;
-  let S = [];
-  mapped.forEach((d, m) => {
-    let F = e.edges[m];
-    let b = a[d.to] ?? 0;
-    let from = d.from;
-    for (let idx = (a[d.from] ?? 0) + 1; idx <= b && F && !mapped_3[m]; idx++) {
-      let H = idx === b ? d.to : mapped_6.length;
-      if (idx !== b)
-        mapped_6.push({
+  let segments = [];
+  mapped.forEach((edge, index) => {
+    let source = graph.edges[index];
+    let to = ranks[edge.to] ?? 0;
+    let from = edge.from;
+    for (let idx = (ranks[edge.from] ?? 0) + 1; idx <= to && source && !mapped_3[index]; idx++) {
+      let target = idx === to ? edge.to : nodes.length;
+      if (idx !== to)
+        nodes.push({
           kind: "crossing",
           label: [],
           isRounded: false,
-          line: F.line,
+          line: source.line,
           rank: idx,
           center: 0,
           breadth: 1,
@@ -129,88 +133,98 @@ function layoutFlowchart(e, t, n) {
           depth: 0,
           start: 0,
         });
-      S.push({
+      segments.push({
         kind: "plain",
         gap: idx - 1,
         from,
-        to: H,
-        line: F.line,
-        label: idx === b ? F.label : "",
-        hasHead: F.hasArrow && idx === b,
+        to: target,
+        line: source.line,
+        label: idx === to ? source.label : "",
+        hasHead: source.hasArrow && idx === to,
         track: -1,
       });
-      from = H;
+      from = target;
     }
   });
-  let w = [];
-  mapped_6.forEach((d, m) => {
-    let F = w[d.rank] ?? [];
-    F.push(m);
-    w[d.rank] = F;
+  let byRank = [];
+  nodes.forEach((index, nodeIndex) => {
+    let rankNodes = byRank[index.rank] ?? [];
+    rankNodes.push(nodeIndex);
+    byRank[index.rank] = rankNodes;
   });
-  let mapped_7 = mapped_6.map(() => []);
-  let mapped_8 = mapped_6.map(() => []);
-  for (let d of S) {
-    mapped_7[d.to]?.push(d.from);
-    mapped_8[d.from]?.push(d.to);
+  let mapped_6 = nodes.map(() => []);
+  let mapped_7 = nodes.map(() => []);
+  for (let segment of segments) {
+    mapped_6[segment.to]?.push(segment.from);
+    mapped_7[segment.from]?.push(segment.to);
   }
   for (let idx = 0; idx < 4; idx++) {
-    let m = idx % 2 === 0;
-    for (let idx = 1; idx < w.length; idx++) {
-      let b = m ? idx : w.length - 1 - idx;
-      let k = w[m ? b - 1 : b + 1] ?? [];
-      let M = w[b] ?? [];
-      let H = new Map(k.map((N, P) => [N, P]));
-      let K = new Map(
-        M.map((N, P) => [N, averageOf(((m ? mapped_7 : mapped_8)[N] ?? []).map((Y) => H.get(Y) ?? 0)) ?? P]),
+    let isDown = idx % 2 === 0;
+    for (let idx = 1; idx < byRank.length; idx++) {
+      let rank = isDown ? idx : byRank.length - 1 - idx;
+      let neighbor = byRank[isDown ? rank - 1 : rank + 1] ?? [];
+      let nodes = byRank[rank] ?? [];
+      let positionOf = new Map(neighbor.map((id, position) => [id, position]));
+      let targets = new Map(
+        nodes.map((id, position) => [
+          id,
+          averageOf(((isDown ? mapped_6 : mapped_7)[id] ?? []).map((id) => positionOf.get(id) ?? 0)) ??
+            position,
+        ]),
       );
-      M.sort((N, P) => (K.get(N) ?? 0) - (K.get(P) ?? 0));
+      nodes.sort((a, b) => (targets.get(a) ?? 0) - (targets.get(b) ?? 0));
     }
   }
-  let I = o ? (t ? 1 : 3) : t ? 0 : 1;
-  for (let d of w)
-    d.forEach((m, F) => {
-      let b = mapped_6[m];
-      let k = mapped_6[d[F - 1] ?? -1];
-      if (b) b.center = k ? k.center + requiredCenterGap(k, b, I) : Math.floor(b.slot / 2);
+  let gap = isVertical ? (isWide ? 1 : 3) : isWide ? 0 : 1;
+  for (let rankNodes of byRank)
+    rankNodes.forEach((index, previousIndex) => {
+      let node = nodes[index];
+      let previous = nodes[rankNodes[previousIndex - 1] ?? -1];
+      if (node)
+        node.center = previous
+          ? previous.center + requiredCenterGap(previous, node, gap)
+          : Math.floor(node.slot / 2);
     });
   for (let idx = 0; idx < 4; idx++) {
-    let m = idx % 2 === 0;
-    for (let idx = 1; idx < w.length; idx++) {
-      let b = m ? idx : w.length - 1 - idx;
+    let isDown = idx % 2 === 0;
+    for (let idx = 1; idx < byRank.length; idx++) {
+      let rank = isDown ? idx : byRank.length - 1 - idx;
       spreadNodeCenters(
-        (w[b] ?? []).flatMap((k) => mapped_6[k] ?? []),
-        (w[b] ?? []).map((k) =>
-          averageOf(((m ? mapped_7 : mapped_8)[k] ?? []).map((M) => mapped_6[M]?.center ?? 0)),
+        (byRank[rank] ?? []).flatMap((index) => nodes[index] ?? []),
+        (byRank[rank] ?? []).map((index) =>
+          averageOf(((isDown ? mapped_6 : mapped_7)[index] ?? []).map((id) => nodes[id]?.center ?? 0)),
         ),
-        I,
+        gap,
       );
     }
   }
-  let min = Math.min(...mapped_6.map((d) => d.center - Math.floor(d.slot / 2)));
-  for (let d of mapped_6) d.center -= min;
-  let max = Math.max(...mapped_6.map((d) => d.center - Math.floor(d.slot / 2) + d.slot));
+  let min = Math.min(...nodes.map((node) => node.center - Math.floor(node.slot / 2)));
+  for (let node of nodes) node.center -= min;
+  let max = Math.max(...nodes.map((node) => node.center - Math.floor(node.slot / 2) + node.slot));
   let sorted = mapped
-    .flatMap((link, m) =>
-      mapped_3[m]
+    .flatMap((link, index) =>
+      mapped_3[index]
         ? [
             {
               link,
-              edge: m,
+              edge: index,
             },
           ]
         : [],
     )
     .sort(
-      (d, m) => (a[d.link.from] ?? 0) - (a[d.link.to] ?? 0) - ((a[m.link.from] ?? 0) - (a[m.link.to] ?? 0)),
+      (a, b) =>
+        (ranks[a.link.from] ?? 0) -
+        (ranks[a.link.to] ?? 0) -
+        ((ranks[b.link.from] ?? 0) - (ranks[b.link.to] ?? 0)),
     );
   for (let { link, edge } of sorted) {
-    let F = e.edges[edge];
-    let b = {
+    let loopEdge = graph.edges[edge];
+    let channel = {
       kind: "channel",
       label: [],
       isRounded: false,
-      line: F?.line ?? "solid",
+      line: loopEdge?.line ?? "solid",
       rank: -1,
       center: max + 1,
       breadth: 1,
@@ -219,67 +233,67 @@ function layoutFlowchart(e, t, n) {
       start: 0,
     };
     max += 2;
-    mapped_6.push(b);
-    S.push(
+    nodes.push(channel);
+    segments.push(
       {
         kind: "loopOut",
-        gap: a[link.from] ?? 0,
+        gap: ranks[link.from] ?? 0,
         from: link.from,
-        to: mapped_6.length - 1,
-        line: b.line,
+        to: nodes.length - 1,
+        line: channel.line,
         label: "",
         hasHead: false,
         track: -1,
       },
       {
         kind: "loopIn",
-        gap: (a[link.to] ?? 0) - 1,
-        from: mapped_6.length - 1,
+        gap: (ranks[link.to] ?? 0) - 1,
+        from: nodes.length - 1,
         to: link.to,
-        line: b.line,
-        label: F?.label ?? "",
-        hasHead: Boolean(F?.hasArrow),
+        line: channel.line,
+        label: loopEdge?.label ?? "",
+        hasHead: Boolean(loopEdge?.hasArrow),
         track: -1,
       },
     );
   }
-  if (o && max > n) return "too wide";
-  let V = new Map();
-  let B = 0;
-  for (let d = -1; d < w.length; d++) {
-    let flattened = (w[d] ?? []).flatMap((R) => mapped_6[R] ?? []);
-    let F = d < 0 ? 0 : Math.max(1, ...flattened.map((R) => R.depth));
-    for (let R of flattened) {
-      R.depth = R.kind === "crossing" ? F : R.depth;
-      R.start = B + Math.floor((F - R.depth) / 2);
+  if (isVertical && max > maxSize) return "too wide";
+  let gaps = new Map();
+  let cursor = 0;
+  for (let rank = -1; rank < byRank.length; rank++) {
+    let flattened = (byRank[rank] ?? []).flatMap((index) => nodes[index] ?? []);
+    let depth = rank < 0 ? 0 : Math.max(1, ...flattened.map((node) => node.depth));
+    for (let node of flattened) {
+      node.depth = node.kind === "crossing" ? depth : node.depth;
+      node.start = cursor + Math.floor((depth - node.depth) / 2);
     }
-    B += F;
-    let filtered = S.filter((R) => R.gap === d);
-    let k = d >= 0 && d < w.length - 1;
-    if (filtered.length === 0 && !k) continue;
-    if (!o && B > n) return "too wide";
-    let M = filtered.length > MAX_LABEL_LEN ? undefined : labelEdgeBundles(filtered, mapped_6);
-    if (M === undefined) return;
-    let max = Math.max(0, ...filtered.map((R) => textDisplayWidth(R.label)));
-    let K = o ? 1 : 2;
-    let N = max === 0 ? 0 : o ? 1 : max + 2;
-    let P = d < 0 ? B - 1 : B;
-    let Y = P + 1 + M * K;
-    V.set(d, {
-      start: P,
-      labelStart: Y,
-      labelSize: N,
-      stride: K,
+    cursor += depth;
+    let segments_2 = segments.filter((segment) => segment.gap === rank);
+    let hasNextRank = rank >= 0 && rank < byRank.length - 1;
+    if (segments_2.length === 0 && !hasNextRank) continue;
+    if (!isVertical && cursor > maxSize) return "too wide";
+    let lanes = segments_2.length > MAX_LABEL_LEN ? undefined : labelEdgeBundles(segments_2, nodes);
+    if (lanes === undefined) return;
+    let max = Math.max(0, ...segments_2.map((segment) => textDisplayWidth(segment.label)));
+    let stride = isVertical ? 1 : 2;
+    let labelSize = max === 0 ? 0 : isVertical ? 1 : max + 2;
+    let start = rank < 0 ? cursor - 1 : cursor;
+    let labelStart = start + 1 + lanes * stride;
+    gaps.set(rank, {
+      start,
+      labelStart,
+      labelSize,
+      stride,
     });
-    B = d === w.length - 1 ? Y : Y + N + (o ? 1 : 2);
+    cursor = rank === byRank.length - 1 ? labelStart : labelStart + labelSize + (isVertical ? 1 : 2);
   }
   return {
-    isVertical: o,
-    isFlipped: e.direction === "BT" || e.direction === "RL",
-    nodes: mapped_6,
-    segments: S,
-    gaps: V,
-    rankExtent: B,
+    isVertical,
+    isFlipped: graph.direction === "BT" || graph.direction === "RL",
+    nodes,
+    segments,
+    gaps,
+    rankExtent: cursor,
     orderExtent: max,
   };
 }
@@ -287,47 +301,47 @@ function layoutFlowchart(e, t, n) {
 /**
  * 深度优先遍历，标记形成环的边。
  */
-function markLoopEdges(e, t) {
-  if (t.visited[e] !== 0) return;
-  t.visited[e] = 1;
-  for (let n of t.outgoing[e] ?? []) {
-    let to = t.links[n]?.to ?? 0;
-    if (t.visited[to] === 1) t.isLoop[n] = true;
-    else markLoopEdges(to, t);
+function markLoopEdges(from, state) {
+  if (state.visited[from] !== 0) return;
+  state.visited[from] = 1;
+  for (let index of state.outgoing[from] ?? []) {
+    let to = state.links[index]?.to ?? 0;
+    if (state.visited[to] === 1) state.isLoop[index] = true;
+    else markLoopEdges(to, state);
   }
-  t.visited[e] = 2;
+  state.visited[from] = 2;
 }
 //@ chunk-yb0ajcmt.js:13911-14270 placement
-function rankNodesTopologically(e, t) {
+function rankNodesTopologically(count, edges) {
   let list = Array.from(
     {
-      length: e,
+      length: count,
     },
     () => 0,
   );
   let list_2 = Array.from(
     {
-      length: e,
+      length: count,
     },
     () => 0,
   );
   let list_3 = Array.from(
     {
-      length: e,
+      length: count,
     },
     () => [],
   );
-  for (let r of t) {
-    list_2[r.to] = (list_2[r.to] ?? 0) + 1;
-    list_3[r.from]?.push(r.to);
+  for (let edge of edges) {
+    list_2[edge.to] = (list_2[edge.to] ?? 0) + 1;
+    list_3[edge.from]?.push(edge.to);
   }
-  let flattened = list_2.flatMap((r, s) => (r === 0 ? [s] : []));
+  let flattened = list_2.flatMap((count, index) => (count === 0 ? [index] : []));
   for (let k = 0; k < flattened.length; k++) {
-    let s = flattened[k] ?? 0;
-    for (let l of list_3[s] ?? []) {
-      list[l] = Math.max(list[l] ?? 0, (list[s] ?? 0) + 1);
-      list_2[l] = (list_2[l] ?? 0) - 1;
-      if (list_2[l] === 0) flattened.push(l);
+    let node = flattened[k] ?? 0;
+    for (let next of list_3[node] ?? []) {
+      list[next] = Math.max(list[next] ?? 0, (list[node] ?? 0) + 1);
+      list_2[next] = (list_2[next] ?? 0) - 1;
+      if (list_2[next] === 0) flattened.push(next);
     }
   }
   return list;
@@ -336,41 +350,46 @@ function rankNodesTopologically(e, t) {
 /**
  * 求平均
  */
-function averageOf(e) {
-  return e.length === 0 ? undefined : e.reduce((acc, n) => acc + n, 0) / e.length;
+function averageOf(values) {
+  return values.length === 0 ? undefined : values.reduce((acc, value) => acc + value, 0) / values.length;
 }
 //@ chunk-yb0ajcmt.js:14344-14401 placement = percentile (0.62)
 /**
  * 图布局：两个相邻节点中心的最小间距。旧版名 percentile 为错配，归错文件。
  */
-function requiredCenterGap(e, t, n) {
-  return Math.ceil((e.slot + t.slot) / 2) + n;
+function requiredCenterGap(left, right, gap) {
+  return Math.ceil((left.slot + right.slot) / 2) + gap;
 }
 //@ chunk-yb0ajcmt.js:14401-14774 placement
 /**
  * 图布局：前向/后向两遍约束后取中点，调整节点中心位置。
  */
-function spreadNodeCenters(e, t, n) {
-  let o = [];
-  e.forEach((u, r) => {
-    let s = e[r - 1];
-    let rounded = Math.round(t[r] ?? u.center);
-    o.push(s ? Math.max(rounded, (o[r - 1] ?? 0) + requiredCenterGap(s, u, n)) : rounded);
+function spreadNodeCenters(nodes, targets, gap) {
+  let lefts = [];
+  nodes.forEach((node, index) => {
+    let previous = nodes[index - 1];
+    let rounded = Math.round(targets[index] ?? node.center);
+    lefts.push(
+      previous
+        ? Math.max(rounded, (lefts[index - 1] ?? 0) + requiredCenterGap(previous, node, gap))
+        : rounded,
+    );
   });
   let list = Array.from(
     {
-      length: e.length,
+      length: nodes.length,
     },
     () => 0,
   );
-  for (let k = e.length - 1; k >= 0; k--) {
-    let r = e[k];
-    let s = e[k + 1];
-    let rounded = Math.round(t[k] ?? r?.center ?? 0);
-    list[k] = r && s ? Math.min(rounded, (list[k + 1] ?? 0) - requiredCenterGap(r, s, n)) : rounded;
+  for (let k = nodes.length - 1; k >= 0; k--) {
+    let node = nodes[k];
+    let next = nodes[k + 1];
+    let rounded = Math.round(targets[k] ?? node?.center ?? 0);
+    list[k] =
+      node && next ? Math.min(rounded, (list[k + 1] ?? 0) - requiredCenterGap(node, next, gap)) : rounded;
   }
-  e.forEach((u, r) => {
-    u.center = Math.floor(((o[r] ?? 0) + (list[r] ?? 0)) / 2);
+  nodes.forEach((node, index) => {
+    node.center = Math.floor(((lefts[index] ?? 0) + (list[index] ?? 0)) / 2);
   });
 }
 export { MAX_NODE_HEIGHT, layoutFlowchart, gridToLines };

@@ -14,9 +14,9 @@ import { logFeatureOk } from "../analytics/featureTelemetry.js";
 //@ chunk-fgz849qw.js:262-651 placement
 function getSummonWakeState(slug) {
   let { wakes } = getLiveState().wakes;
-  let n = wakes.get(slug);
-  if (!n) {
-    n = {
+  let wake = wakes.get(slug);
+  if (!wake) {
+    wake = {
       coalesceTimer: null,
       rescanWanted: false,
       lastScanScheduledAt: 0,
@@ -35,35 +35,35 @@ function getSummonWakeState(slug) {
       readRetryTimer: null,
       readRetryAttempts: 0,
     };
-    wakes.set(slug, n);
+    wakes.set(slug, wake);
   }
-  return n;
+  return wake;
 }
 //@ chunk-fgz849qw.js:651-1142 placement
-function clearSummonWakeTimers(e) {
-  for (let [t, n] of getLiveState().wakes.wakes) {
-    if (e !== undefined && t !== e) continue;
-    if (n.coalesceTimer) {
-      clearTimeout(n.coalesceTimer);
-      n.coalesceTimer = null;
+function clearSummonWakeTimers(reason) {
+  for (let [slug, wake] of getLiveState().wakes.wakes) {
+    if (reason !== undefined && slug !== reason) continue;
+    if (wake.coalesceTimer) {
+      clearTimeout(wake.coalesceTimer);
+      wake.coalesceTimer = null;
     }
-    n.rescanWanted = false;
-    n.pendingConfirm = null;
-    n.pendingSeed = null;
-    n.newestKickAt = 0;
-    n.kickSettled = true;
-    n.lastScanScheduledAt = 0;
-    n.rescanArgs = null;
-    n.idleRescanCancel?.();
-    n.idleRescanCancel = null;
-    n.idleRescanUnmuted = false;
-    n.idlePassOwed = null;
-    if (n.readRetryTimer) {
-      clearTimeout(n.readRetryTimer);
-      n.readRetryTimer = null;
+    wake.rescanWanted = false;
+    wake.pendingConfirm = null;
+    wake.pendingSeed = null;
+    wake.newestKickAt = 0;
+    wake.kickSettled = true;
+    wake.lastScanScheduledAt = 0;
+    wake.rescanArgs = null;
+    wake.idleRescanCancel?.();
+    wake.idleRescanCancel = null;
+    wake.idleRescanUnmuted = false;
+    wake.idlePassOwed = null;
+    if (wake.readRetryTimer) {
+      clearTimeout(wake.readRetryTimer);
+      wake.readRetryTimer = null;
     }
-    n.readRetryAttempts = 0;
-    n.cancelGeneration++;
+    wake.readRetryAttempts = 0;
+    wake.cancelGeneration++;
   }
 }
 //@ chunk-fgz849qw.js:1142-1185 placement
@@ -71,13 +71,13 @@ function bumpScanGeneration() {
   getLiveState().wakes.scanGeneration++;
 }
 //@ chunk-fgz849qw.js:1185-1255 placement
-function bumpSlugEpoch(e) {
+function bumpSlugEpoch(slug) {
   let { slugEpochs } = getLiveState().wakes;
-  slugEpochs.set(e, (slugEpochs.get(e) ?? 0) + 1);
+  slugEpochs.set(slug, (slugEpochs.get(slug) ?? 0) + 1);
 }
 //@ chunk-fgz849qw.js:1255-1308 placement
-function slugEpoch(e) {
-  return getLiveState().wakes.slugEpochs.get(e) ?? 0;
+function slugEpoch(slug) {
+  return getLiveState().wakes.slugEpochs.get(slug) ?? 0;
 }
 //@ chunk-fgz849qw.js:1308-1361 placement
 function scanStamp(slug) {
@@ -88,32 +88,32 @@ function stopGeneration(slug) {
   return getLiveState().wakes.stopGenerations.get(slug) ?? 0;
 }
 //@ chunk-fgz849qw.js:1420-1493 placement
-function bumpStopGeneration(e) {
+function bumpStopGeneration(slug) {
   let { stopGenerations } = getLiveState().wakes;
-  stopGenerations.set(e, (stopGenerations.get(e) ?? 0) + 1);
+  stopGenerations.set(slug, (stopGenerations.get(slug) ?? 0) + 1);
 }
 //@ chunk-fgz849qw.js:1493-1654 placement
-function markLatchChanged(e, savedAt) {
+function markLatchChanged(slug, savedAt) {
   let { latchChangedAt } = getLiveState().wakes;
-  if (savedAt === undefined) latchChangedAt.set(e, Date.now());
-  else if (Number.isFinite(savedAt)) latchChangedAt.set(e, Math.min(savedAt, Date.now()));
-  else latchChangedAt.delete(e);
+  if (savedAt === undefined) latchChangedAt.set(slug, Date.now());
+  else if (Number.isFinite(savedAt)) latchChangedAt.set(slug, Math.min(savedAt, Date.now()));
+  else latchChangedAt.delete(slug);
 }
 //@ chunk-fgz849qw.js:1654-1664 placement
 var markLatchChangedArms = markLatchChanged;
 //@ chunk-fgz849qw.js:1664-1720 placement
-function latchChangedAt(e) {
-  return getLiveState().wakes.latchChangedAt.get(e);
+function latchChangedAt(slug) {
+  return getLiveState().wakes.latchChangedAt.get(slug);
 }
 //@ chunk-fgz849qw.js:1720-1876 placement
-function stopSummonWakes(e) {
+function stopSummonWakes(slug) {
   let { wakes } = getLiveState();
-  markLatchChangedArms(e);
-  wakes.stoppedSlugs.add(e);
-  wakes.sweptSlugs.delete(e);
-  wakes.orphanedSweptSlugs.delete(e);
-  bumpStopGeneration(e);
-  wakes.pendingResumeDisclosure.delete(e);
+  markLatchChangedArms(slug);
+  wakes.stoppedSlugs.add(slug);
+  wakes.sweptSlugs.delete(slug);
+  wakes.orphanedSweptSlugs.delete(slug);
+  bumpStopGeneration(slug);
+  wakes.pendingResumeDisclosure.delete(slug);
 }
 //@ chunk-fgz849qw.js:1876-2019 placement
 function resumeSummonWakes(slug) {
@@ -133,24 +133,24 @@ function isSlugStoppedAnywhere(slug) {
   return liveState.wakes.stoppedSlugs.has(slug) || liveState.durable.stopLatches.isStopped(slug);
 }
 //@ chunk-fgz849qw.js:2169-2483 placement
-function sweepSlug(e) {
+function sweepSlug(slug) {
   let { wakes } = getLiveState();
-  if (!wakes.stoppedSlugs.has(e)) {
-    markLatchChangedArms(e);
-    wakes.stoppedSlugs.add(e);
-    wakes.sweptSlugs.add(e);
-    bumpStopGeneration(e);
+  if (!wakes.stoppedSlugs.has(slug)) {
+    markLatchChangedArms(slug);
+    wakes.stoppedSlugs.add(slug);
+    wakes.sweptSlugs.add(slug);
+    bumpStopGeneration(slug);
   } else {
-    let n = wakes.yieldedSlugs.get(e);
-    if (n !== undefined) {
-      n.wasPaused = true;
-      bumpStopGeneration(e);
+    let entry = wakes.yieldedSlugs.get(slug);
+    if (entry !== undefined) {
+      entry.wasPaused = true;
+      bumpStopGeneration(slug);
     }
   }
   wakes.humanTurnAtScanGeneration = null;
-  wakes.liftedAtScanGeneration.delete(e);
-  wakes.orphanedSweptSlugs.delete(e);
-  wakes.pendingResumeDisclosure.delete(e);
+  wakes.liftedAtScanGeneration.delete(slug);
+  wakes.orphanedSweptSlugs.delete(slug);
+  wakes.pendingResumeDisclosure.delete(slug);
 }
 //@ chunk-fgz849qw.js:2483-2534 placement
 function isSlugSwept(slug) {
@@ -166,49 +166,53 @@ function orphanSweptSlugs() {
   for (let sweptSlug of wakes.sweptSlugs) wakes.orphanedSweptSlugs.add(sweptSlug);
 }
 //@ chunk-fgz849qw.js:2665-3133 placement
-function recordYieldedMessage(e, t) {
+function recordYieldedMessage(slug, msgId) {
   let { wakes } = getLiveState();
-  let o = wakes.yieldedSlugs.get(e);
-  if (o !== undefined) {
-    o.msgIds.add(t);
+  let entry = wakes.yieldedSlugs.get(slug);
+  if (entry !== undefined) {
+    entry.msgIds.add(msgId);
     return;
   }
-  let wasPaused = wakes.sweptSlugs.has(e) && !wakes.orphanedSweptSlugs.has(e);
-  let s = {
-    msgIds: new Set([t]),
+  let wasPaused = wakes.sweptSlugs.has(slug) && !wakes.orphanedSweptSlugs.has(slug);
+  let yielded = {
+    msgIds: new Set([msgId]),
     wasPaused,
     stopGeneration: -1,
     scanGeneration: wakes.scanGeneration,
     announced: false,
     stoppedElsewhere: false,
-    latchClockBefore: wakes.latchChangedAt.get(e),
+    latchClockBefore: wakes.latchChangedAt.get(slug),
   };
-  wakes.yieldedSlugs.set(e, s);
+  wakes.yieldedSlugs.set(slug, yielded);
   let humanTurnAtScanGeneration = wakes.humanTurnAtScanGeneration;
-  sweepSlug(e);
+  sweepSlug(slug);
   wakes.humanTurnAtScanGeneration = humanTurnAtScanGeneration;
-  markLatchChangedArms(e, s.latchClockBefore ?? Number.NaN);
-  s.stopGeneration = stopGeneration(e);
+  markLatchChangedArms(slug, yielded.latchClockBefore ?? Number.NaN);
+  yielded.stopGeneration = stopGeneration(slug);
 }
 //@ chunk-fgz849qw.js:3133-3215 placement
-function markYieldAnnounced(e) {
-  let t = getLiveState().wakes.yieldedSlugs.get(e);
-  if (t !== undefined) t.announced = true;
+function markYieldAnnounced(slug) {
+  let entry = getLiveState().wakes.yieldedSlugs.get(slug);
+  if (entry !== undefined) entry.announced = true;
 }
 //@ chunk-fgz849qw.js:3215-3285 placement
-function isYieldAnnounced(e) {
-  return getLiveState().wakes.yieldedSlugs.get(e)?.announced === true;
+function isYieldAnnounced(slug) {
+  return getLiveState().wakes.yieldedSlugs.get(slug)?.announced === true;
 }
 //@ chunk-fgz849qw.js:3285-3572 placement
-function settleYieldedMessage(e, t) {
+function settleYieldedMessage(slug, msgId) {
   let { wakes } = getLiveState();
-  let o = wakes.yieldedSlugs.get(e);
-  if (o === undefined || !o.msgIds.delete(t) || o.msgIds.size > 0) return false;
-  wakes.yieldedSlugs.delete(e);
-  if (!o.wasPaused && stopGeneration(e) === o.stopGeneration && wakes.scanGeneration === o.scanGeneration) {
-    resumeSummonWakes(e);
-    markLatchChangedArms(e, o.latchClockBefore ?? Number.NaN);
-  } else markLatchChangedArms(e);
+  let entry = wakes.yieldedSlugs.get(slug);
+  if (entry === undefined || !entry.msgIds.delete(msgId) || entry.msgIds.size > 0) return false;
+  wakes.yieldedSlugs.delete(slug);
+  if (
+    !entry.wasPaused &&
+    stopGeneration(slug) === entry.stopGeneration &&
+    wakes.scanGeneration === entry.scanGeneration
+  ) {
+    resumeSummonWakes(slug);
+    markLatchChangedArms(slug, entry.latchClockBefore ?? Number.NaN);
+  } else markLatchChangedArms(slug);
   return true;
 }
 //@ chunk-fgz849qw.js:3572-3622 placement
@@ -216,57 +220,57 @@ function forgetYieldedSlug(slug) {
   getLiveState().wakes.yieldedSlugs.delete(slug);
 }
 //@ chunk-fgz849qw.js:3622-3757 placement
-function isYieldedMessage(e, t) {
-  let n = getLiveState().wakes.yieldedSlugs.get(e);
-  if (n === undefined || !n.msgIds.has(t)) return false;
-  n.stoppedElsewhere = true;
-  stopSummonWakes(e);
+function isYieldedMessage(slug, msgId) {
+  let entry = getLiveState().wakes.yieldedSlugs.get(slug);
+  if (entry === undefined || !entry.msgIds.has(msgId)) return false;
+  entry.stoppedElsewhere = true;
+  stopSummonWakes(slug);
   return true;
 }
 //@ chunk-fgz849qw.js:3757-3834 placement
-function isStoppedElsewhere(e) {
-  return getLiveState().wakes.yieldedSlugs.get(e)?.stoppedElsewhere === true;
+function isStoppedElsewhere(slug) {
+  return getLiveState().wakes.yieldedSlugs.get(slug)?.stoppedElsewhere === true;
 }
 //@ chunk-fgz849qw.js:3834-3887 placement
-function isSlugYielded(e) {
-  return getLiveState().wakes.yieldedSlugs.has(e);
+function isSlugYielded(slug) {
+  return getLiveState().wakes.yieldedSlugs.has(slug);
 }
 //@ chunk-fgz849qw.js:3887-4040 placement
 function isYieldResumable(slug) {
   let { wakes } = getLiveState();
-  let n = wakes.yieldedSlugs.get(slug);
+  let entry = wakes.yieldedSlugs.get(slug);
   return (
-    n !== undefined &&
-    !n.wasPaused &&
-    stopGeneration(slug) === n.stopGeneration &&
-    wakes.scanGeneration === n.scanGeneration
+    entry !== undefined &&
+    !entry.wasPaused &&
+    stopGeneration(slug) === entry.stopGeneration &&
+    wakes.scanGeneration === entry.scanGeneration
   );
 }
 //@ chunk-fgz849qw.js:4040-4132 placement
-function isSlugOrphaned(e) {
+function isSlugOrphaned(slug) {
   let { wakes } = getLiveState();
-  return wakes.orphanedSweptSlugs.has(e) || wakes.yieldedSlugs.has(e);
+  return wakes.orphanedSweptSlugs.has(slug) || wakes.yieldedSlugs.has(slug);
 }
 //@ chunk-fgz849qw.js:4132-4486 placement
-function armSummonState(e) {
+function armSummonState(slug) {
   let { autoReact, live, builtInArtifactHiddenForMcp } = getLiveState();
-  let r = live.supervisors.get(e);
+  let supervisor = live.supervisors.get(slug);
   return (
     autoReact.userDisarmed ||
-    isSlugStoppedAnywhere(e) ||
+    isSlugStoppedAnywhere(slug) ||
     autoReact.wakeEnabledMemo === false ||
     (builtInArtifactHiddenForMcp
-      ? (r !== undefined && !r.stopped && r.autoReactWiring === undefined) ||
-        autoReact.artifacts.get(e)?.ruleWithheldNoted === true
-      : (autoReact.artifacts.get(e)?.lastProbeDeniedBy ?? null) !== null) ||
-    (r !== undefined && !r.stopped && r.armedVia === "mcp_write")
+      ? (supervisor !== undefined && !supervisor.stopped && supervisor.autoReactWiring === undefined) ||
+        autoReact.artifacts.get(slug)?.ruleWithheldNoted === true
+      : (autoReact.artifacts.get(slug)?.lastProbeDeniedBy ?? null) !== null) ||
+    (supervisor !== undefined && !supervisor.stopped && supervisor.armedVia === "mcp_write")
   );
 }
 //@ chunk-fgz849qw.js:4486-4590 placement
-function sendSummonArm(e, t, n) {
-  t(n);
-  if (!e.summonArmOkReported) {
-    e.summonArmOkReported = true;
+function sendSummonArm(live, slug, state) {
+  slug(state);
+  if (!live.summonArmOkReported) {
+    live.summonArmOkReported = true;
     logFeatureOk("artifact_summon_arm_emit");
   }
 }
@@ -274,16 +278,16 @@ function sendSummonArm(e, t, n) {
 /**
  * 根据是否布防，向该 slug 的活动发送端发送 arm:0 或 arm 并记录声明状态（状态未变时不发）。
  */
-function updateSummonDeclared(e, t, n) {
-  let o = e.activitySenders.get(t);
-  if (o === undefined) return;
-  let r = e.summonDeclared.get(t);
-  if (n && r !== true) {
-    e.summonDeclared.set(t, true);
-    sendSummonArm(e, o, "arm:0");
-  } else if (!n && r === true) {
-    e.summonDeclared.set(t, false);
-    sendSummonArm(e, o, "arm");
+function updateSummonDeclared(live, slug, declared) {
+  let senders = live.activitySenders.get(slug);
+  if (senders === undefined) return;
+  let existing = live.summonDeclared.get(slug);
+  if (declared && existing !== true) {
+    live.summonDeclared.set(slug, true);
+    sendSummonArm(live, senders, "arm:0");
+  } else if (!declared && existing === true) {
+    live.summonDeclared.set(slug, false);
+    sendSummonArm(live, senders, "arm");
   }
 }
 //@ chunk-fgz849qw.js:4804-4835 placement
@@ -295,13 +299,13 @@ function emitSummonArmsForActivity(live) {
   for (let key of live.activitySenders.keys()) emitSummonArm(live, key);
 }
 //@ chunk-fgz849qw.js:4897-4950 placement
-function undeclareSummon(e, t) {
-  e.summonDeclared.delete(t);
-  emitSummonArm(e, t);
+function undeclareSummon(live, slug) {
+  live.summonDeclared.delete(slug);
+  emitSummonArm(live, slug);
 }
 //@ chunk-fgz849qw.js:4950-4995 placement
-function dropSummonDeclaration(e, t) {
-  e.summonDeclared.delete(t);
+function dropSummonDeclaration(live, slug) {
+  live.summonDeclared.delete(slug);
 }
 export {
   isSlugStopped,

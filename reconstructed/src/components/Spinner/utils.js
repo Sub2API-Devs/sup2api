@@ -9,14 +9,23 @@
  * attribution: affinity 1, fingerprint 3, layout 5, callgraph-witnessed 2
  */
 import { env } from "../../utils/env.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-mww2ey7m.js:226-474 affinity
-var GHOSTTY_SPINNER_FRAMES = ["\xB7", "\u2722", "\u2733", "\u2736", "\u273B", "\u273B"];
-var DEFAULT_SPINNER_FRAMES_ALT = ["\xB7", "\u2722", "\u2733", "\u2736", "\u273B", "\u273D"];
-var DEFAULT_SPINNER_FRAMES = ["\xB7", "\u2722", "*", "\u2736", "\u273B", "\u273D"];
-var GHOSTTY_SPINNER_CYCLE = [...GHOSTTY_SPINNER_FRAMES, ...GHOSTTY_SPINNER_FRAMES.toReversed()];
-var DEFAULT_SPINNER_CYCLE_ALT = [...DEFAULT_SPINNER_FRAMES_ALT, ...DEFAULT_SPINNER_FRAMES_ALT.toReversed()];
-var DEFAULT_SPINNER_CYCLE = [...DEFAULT_SPINNER_FRAMES, ...DEFAULT_SPINNER_FRAMES.toReversed()];
+var GHOSTTY_SPINNER_FRAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DEFAULT_SPINNER_FRAMES_ALT;
+var DEFAULT_SPINNER_FRAMES;
+var GHOSTTY_SPINNER_CYCLE;
+var DEFAULT_SPINNER_CYCLE_ALT;
+var DEFAULT_SPINNER_CYCLE;
+deferInit("chunk-mww2ey7m.js:226", () => {
+  GHOSTTY_SPINNER_FRAMES = ["\xB7", "\u2722", "\u2733", "\u2736", "\u273B", "\u273B"];
+  DEFAULT_SPINNER_FRAMES_ALT = ["\xB7", "\u2722", "\u2733", "\u2736", "\u273B", "\u273D"];
+  DEFAULT_SPINNER_FRAMES = ["\xB7", "\u2722", "*", "\u2736", "\u273B", "\u273D"];
+  GHOSTTY_SPINNER_CYCLE = [...GHOSTTY_SPINNER_FRAMES, ...GHOSTTY_SPINNER_FRAMES.toReversed()];
+  DEFAULT_SPINNER_CYCLE_ALT = [...DEFAULT_SPINNER_FRAMES_ALT, ...DEFAULT_SPINNER_FRAMES_ALT.toReversed()];
+  DEFAULT_SPINNER_CYCLE = [...DEFAULT_SPINNER_FRAMES, ...DEFAULT_SPINNER_FRAMES.toReversed()];
+});
 //@ chunk-mww2ey7m.js:474-535 fingerprint = getDefaultCharacters (0.719)
 function getDefaultCharacters() {
   if (env.TERM === "xterm-ghostty") return GHOSTTY_SPINNER_FRAMES;
@@ -33,22 +42,22 @@ function spinnerFramesForTerminal() {
 //@ chunk-mww2ey7m.js:596-604 layout
 var GHOSTTY_FRAME_COUNT = 8;
 //@ chunk-mww2ey7m.js:604-644 layout
-function roundToStep(r) {
-  return Math.round(r * GHOSTTY_FRAME_COUNT) / GHOSTTY_FRAME_COUNT;
+function roundToStep(value) {
+  return Math.round(value * GHOSTTY_FRAME_COUNT) / GHOSTTY_FRAME_COUNT;
 }
 //@ chunk-mww2ey7m.js:644-681 layout
 /**
  * 函数 snapTo360（对齐到 360 度）；位于「Spinner 工具：默认字形帧（Ghostty 特判）、RGB 解析/插值、HSL 转 RGB」模块。
  */
-function snapTo360(r) {
-  return roundToStep(r / 360) * 360;
+function snapTo360(value) {
+  return roundToStep(value / 360) * 360;
 }
 //@ chunk-mww2ey7m.js:681-735 layout
 /**
  * 函数 cosineEase（余弦缓动）；位于「Spinner 工具：默认字形帧（Ghostty 特判）、RGB 解析/插值、HSL 转 RGB」模块。
  */
-function cosineEase(r, t) {
-  return (1 - Math.cos((2 * Math.PI * r) / t)) / 2;
+function cosineEase(progress, total) {
+  return (1 - Math.cos((2 * Math.PI * progress) / total)) / 2;
 }
 //@ chunk-mww2ey7m.js:735-852 callgraph-witnessed = parseRGB (1)
 function parseRGB(color1, color2, t) {
@@ -64,38 +73,38 @@ function toRGBColor(color) {
 }
 //@ chunk-mww2ey7m.js:901-1237 fingerprint = hueToRgb (1)
 function hueToRgb(hue) {
-  let t = ((hue % 360) + 360) % 360;
-  let a = 0.7;
-  let m = 0.6;
-  let e = (1 - Math.abs(0.19999999999999996)) * 0.7;
-  let x = e * (1 - Math.abs(((t / 60) % 2) - 1));
-  let m_2 = 0.6 - e / 2;
-  let o = 0;
-  let s = 0;
-  let u = 0;
-  if (t < 60) {
-    o = e;
-    s = x;
-  } else if (t < 120) {
-    o = x;
-    s = e;
-  } else if (t < 180) {
-    s = e;
-    u = x;
-  } else if (t < 240) {
-    s = x;
-    u = e;
-  } else if (t < 300) {
-    o = x;
-    u = e;
+  let hueDegrees = ((hue % 360) + 360) % 360;
+  let saturation = 0.7;
+  let lightness = 0.6;
+  let chroma = (1 - Math.abs(0.19999999999999996)) * 0.7;
+  let x = chroma * (1 - Math.abs(((hueDegrees / 60) % 2) - 1));
+  let m = 0.6 - chroma / 2;
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  if (hueDegrees < 60) {
+    red = chroma;
+    green = x;
+  } else if (hueDegrees < 120) {
+    red = x;
+    green = chroma;
+  } else if (hueDegrees < 180) {
+    green = chroma;
+    blue = x;
+  } else if (hueDegrees < 240) {
+    green = x;
+    blue = chroma;
+  } else if (hueDegrees < 300) {
+    red = x;
+    blue = chroma;
   } else {
-    o = e;
-    u = x;
+    red = chroma;
+    blue = x;
   }
   return {
-    r: Math.round((o + m_2) * 255),
-    g: Math.round((s + m_2) * 255),
-    b: Math.round((u + m_2) * 255),
+    r: Math.round((red + m) * 255),
+    g: Math.round((green + m) * 255),
+    b: Math.round((blue + m) * 255),
   };
 }
 //@ chunk-mww2ey7m.js:1237-1388 callgraph-witnessed = interpolateColor (1)

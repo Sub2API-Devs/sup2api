@@ -86,17 +86,18 @@ import { isActualFirstPartyAnthropicBaseUrl, getAPIProvider } from "../../utils/
 import { env } from "../../utils/env.js";
 import { CLAUDE_AI_INFERENCE_SCOPE } from "../../constants/oauth.js";
 import { isBareMode } from "../../utils/envUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-55ht3bcx.js:22780-23028 placement
 function markSessionVerdictUnattributed() {
   let policyLimitsState = getPolicyLimitsState();
-  let n = !policyLimitsState.sessionVerdictDisowned;
+  let notDisowned = !policyLimitsState.sessionVerdictDisowned;
   policyLimitsState.sessionAttributed = false;
   policyLimitsState.attributedBearerDigest = null;
   policyLimitsState.attributedPrincipalIdentity = null;
   policyLimitsState.sessionVerdictDisowned = true;
   policyLimitsState.evidenceRereadForBearer = undefined;
-  if (n) {
+  if (notDisowned) {
     policyLimitsState.cacheRevision++;
     policyLimitsState.emitVerdictChanged();
   }
@@ -130,11 +131,12 @@ function getHipaaEvidence() {
   return policyLimitsState.hipaaEvidence;
 }
 //@ chunk-55ht3bcx.js:23378-23540 placement
-function applyStampReadToState(e) {
+function applyStampReadToState(readResult) {
   let policyLimitsState = getPolicyLimitsState();
-  policyLimitsState.hipaaEvidenceLoaded = !isIoUnusableStamp(e);
-  if (e.kind === "ok") policyLimitsState.hipaaEvidence = stampToHipaaEvidence(e.stamp);
-  else if (e.kind === "unusable" && !isIoUnusableStamp(e)) policyLimitsState.hipaaSeenUnreadable = true;
+  policyLimitsState.hipaaEvidenceLoaded = !isIoUnusableStamp(readResult);
+  if (readResult.kind === "ok") policyLimitsState.hipaaEvidence = stampToHipaaEvidence(readResult.stamp);
+  else if (readResult.kind === "unusable" && !isIoUnusableStamp(readResult))
+    policyLimitsState.hipaaSeenUnreadable = true;
 }
 //@ chunk-55ht3bcx.js:23540-23578 placement
 /**
@@ -149,9 +151,9 @@ function getHeldHipaaEvidence() {
 }
 //@ chunk-55ht3bcx.js:23618-24246 placement
 function hasHipaaEvidenceForPrincipal() {
-  let e;
+  let principal;
   try {
-    e = getPolicyPrincipal();
+    principal = getPolicyPrincipal();
   } catch (error) {
     logForDebugging(
       `Policy limits: principal unreadable for the evidence tier (${errorMessage(error)}); judged on the machine's evidence`,
@@ -159,36 +161,42 @@ function hasHipaaEvidenceForPrincipal() {
         level: "error",
       },
     );
-    e = {
+    principal = {
       kind: "token",
       descriptor: "token:unreadable",
       unclassified: true,
     };
   }
-  if (e === null || e.admitsOnly === true) {
+  if (principal === null || principal.admitsOnly === true) {
     let oauthPrincipalMemo = getPolicyLimitsState().oauthPrincipalMemo;
-    if (e === null && (!oauthPrincipalMemo?.daemonSnapshotWorker || oauthPrincipalMemo.principal !== null))
+    if (
+      principal === null &&
+      (!oauthPrincipalMemo?.daemonSnapshotWorker || oauthPrincipalMemo.principal !== null)
+    )
       return false;
     let hipaaEvidence = getHipaaEvidence();
     return hipaaEvidence.seen.length > 0 || hipaaEvidence.incomplete;
   }
   let hipaaEvidence = getHipaaEvidence();
-  if (isUnattributablePrincipal(e)) {
-    let s =
-      e.storedLoginOrgless === true &&
-      e.unclassified !== true &&
-      hipaaEvidence.ruledOut.includes(identityDigestOfDescriptor(e));
-    return hipaaEvidence.seen.length > 0 || (hipaaEvidence.incomplete && !s);
+  if (isUnattributablePrincipal(principal)) {
+    let ruledOutHere =
+      principal.storedLoginOrgless === true &&
+      principal.unclassified !== true &&
+      hipaaEvidence.ruledOut.includes(identityDigestOfDescriptor(principal));
+    return hipaaEvidence.seen.length > 0 || (hipaaEvidence.incomplete && !ruledOutHere);
   }
-  let r = identityDigestOfDescriptor(e);
-  return hipaaEvidence.seen.includes(r) || (hipaaEvidence.incomplete && !hipaaEvidence.ruledOut.includes(r));
+  let digest = identityDigestOfDescriptor(principal);
+  return (
+    hipaaEvidence.seen.includes(digest) ||
+    (hipaaEvidence.incomplete && !hipaaEvidence.ruledOut.includes(digest))
+  );
 }
 //@ chunk-55ht3bcx.js:24246-24314 placement
 /**
  * 判断策略主体是否无法归属（未分类或存储登录无组织）。
  */
-function isUnattributablePrincipal(e) {
-  return e.unclassified === true || e.storedLoginOrgless === true;
+function isUnattributablePrincipal(principal) {
+  return principal.unclassified === true || principal.storedLoginOrgless === true;
 }
 //@ chunk-55ht3bcx.js:24314-24453 placement
 function recordPersistedPolicyCache(diskBodyChecksum, hipaaEvidence, diskConfirmedAtMs) {
@@ -217,9 +225,9 @@ function sameHipaaEvidence(hipaaEvidence, hipaaEvidence_2) {
   return (
     hipaaEvidence.incomplete === hipaaEvidence_2.incomplete &&
     hipaaEvidence.seen.length === hipaaEvidence_2.seen.length &&
-    hipaaEvidence.seen.every((r, s) => r === hipaaEvidence_2.seen[s]) &&
+    hipaaEvidence.seen.every((digest, index) => digest === hipaaEvidence_2.seen[index]) &&
     hipaaEvidence.ruledOut.length === hipaaEvidence_2.ruledOut.length &&
-    hipaaEvidence.ruledOut.every((r, s) => r === hipaaEvidence_2.ruledOut[s])
+    hipaaEvidence.ruledOut.every((digest, index) => digest === hipaaEvidence_2.ruledOut[index])
   );
 }
 //@ chunk-55ht3bcx.js:24822-24865 placement
@@ -243,28 +251,31 @@ function forgetPersistedPolicyCache() {
   policyLimitsState.dropHintedTaints();
 }
 //@ chunk-55ht3bcx.js:25140-25205 placement
-function parseCachedResponse(e) {
-  let n = projectPolicyLimitsBody(safeParseJSON(e, false));
-  return n.success ? n.data : null;
+function parseCachedResponse(text) {
+  let projected = projectPolicyLimitsBody(safeParseJSON(text, false));
+  return projected.success ? projected.data : null;
 }
 //@ chunk-55ht3bcx.js:25205-25224 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-55ht3bcx.js:25205", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-55ht3bcx.js:25224-25303 placement
-function projectPolicyLimitsBody(e) {
-  let n = PolicyLimitsResponseSchema().safeParse(e);
-  if (n.success) weakMap.set(n.data, e);
-  return n;
+function projectPolicyLimitsBody(body) {
+  let parsed = PolicyLimitsResponseSchema().safeParse(body);
+  if (parsed.success) weakMap.set(parsed.data, body);
+  return parsed;
 }
 //@ chunk-55ht3bcx.js:25303-25339 placement
-function serverBodyOf(e) {
-  return weakMap.get(e) ?? e;
+function serverBodyOf(body) {
+  return weakMap.get(body) ?? body;
 }
 //@ chunk-55ht3bcx.js:25339-25450 placement
-function seedSessionCacheFromPrime(storageV5, n) {
+function seedSessionCacheFromPrime(storageV5, prime) {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.storageV5 = storageV5;
-  if (n !== null && policyLimitsState.sessionCache === null && !policyLimitsState.diskAdoptionSuppressed)
-    installDiskDerivedVerdict(n);
+  if (prime !== null && policyLimitsState.sessionCache === null && !policyLimitsState.diskAdoptionSuppressed)
+    installDiskDerivedVerdict(prime);
 }
 //@ chunk-55ht3bcx.js:25450-30842 placement
 var CLIENT_POLICY_KEYS = {
@@ -556,22 +567,25 @@ var CLIENT_POLICY_KEYS = {
   },
 };
 //@ chunk-55ht3bcx.js:30842-30886 placement
-function isClientDerivedPolicyKey(e) {
-  return Object.hasOwn(CLIENT_POLICY_KEYS, e);
+function isClientDerivedPolicyKey(policyKey) {
+  return Object.hasOwn(CLIENT_POLICY_KEYS, policyKey);
 }
 //@ chunk-55ht3bcx.js:30886-30930 placement
-function clientPolicyKeySpec(e) {
-  return isClientDerivedPolicyKey(e) ? CLIENT_POLICY_KEYS[e] : undefined;
+function clientPolicyKeySpec(policyKey) {
+  return isClientDerivedPolicyKey(policyKey) ? CLIENT_POLICY_KEYS[policyKey] : undefined;
 }
 //@ chunk-55ht3bcx.js:30930-30956 placement
-var HIPAA_TAINTS_2 = new Set(["hipaa"]);
+var HIPAA_TAINTS_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-55ht3bcx.js:30930", () => {
+  HIPAA_TAINTS_2 = new Set(["hipaa"]);
+});
 //@ chunk-55ht3bcx.js:30956-31016 placement
-function isServerPopulatedPolicyKey(e) {
-  return clientPolicyKeySpec(e)?.serverPopulated === true && !isValidatedCloverOn();
+function isServerPopulatedPolicyKey(policyKey) {
+  return clientPolicyKeySpec(policyKey)?.serverPopulated === true && !isValidatedCloverOn();
 }
 //@ chunk-55ht3bcx.js:31016-31075 placement
-function isUnblockedTranscriptScanKey(e) {
-  return clientPolicyKeySpec(e)?.transcriptScan === true && !isHashedLarkOn();
+function isUnblockedTranscriptScanKey(policyKey) {
+  return clientPolicyKeySpec(policyKey)?.transcriptScan === true && !isHashedLarkOn();
 }
 //@ chunk-55ht3bcx.js:31075-31124 placement
 /**
@@ -581,42 +595,52 @@ function clientPolicyKeys() {
   return Object.keys(CLIENT_POLICY_KEYS).filter(isClientDerivedPolicyKey);
 }
 //@ chunk-55ht3bcx.js:31124-31205 placement
-function policyKeyLabel(policy) {
-  let n = clientPolicyKeySpec(policy);
+function policyKeyLabel(policyKey) {
+  let spec = clientPolicyKeySpec(policyKey);
   return {
-    featureLabel: n?.label ?? policy,
-    verb: n?.verb ?? "is",
+    featureLabel: spec?.label ?? policyKey,
+    verb: spec?.verb ?? "is",
   };
 }
 //@ chunk-55ht3bcx.js:31205-31638 placement
 /**
  * 策略证据计算中豁免与需要专门处理的字段集合。
  */
-var TAINT_DISABLED_POLICIES = clientPolicyKeys().flatMap((e) =>
-  (clientPolicyKeySpec(e)?.deniedUnder ?? []).map((n) => [n, e]),
-);
-var TAINT_HARD_BLOCKED_POLICIES = clientPolicyKeys().flatMap((e) =>
-  (clientPolicyKeySpec(e)?.hardBlockUnder ?? []).map((n) => [n, e]),
-);
-var FAIL_CLOSED_ON_MISS = new Set(
-  clientPolicyKeys().filter((e) => clientPolicyKeySpec(e)?.onCacheMiss !== "allow"),
-);
-var RELEASED_ON_SETTLED_MISS = new Set(
-  clientPolicyKeys().filter((e) => clientPolicyKeySpec(e)?.onCacheMiss === "hold"),
-);
-var DENIED_ON_FAIL_OPEN_VERDICT = new Set(
-  clientPolicyKeys().filter((e) => clientPolicyKeySpec(e)?.onFailOpenVerdict === "deny"),
-);
-var FEEDBACK_TAINT_EXEMPT_KEYS = new Set(["allow_product_feedback"]);
-var WEB_FETCH_AND_DESIGN_KEYS = new Set(["allow_web_fetch", "allow_design_sync", "allow_channels", ...[]]);
+var TAINT_DISABLED_POLICIES; // deferred: uses clientPolicyKeys of its import cycle while loading; runs once the cycle is complete
+var TAINT_HARD_BLOCKED_POLICIES;
+var FAIL_CLOSED_ON_MISS;
+var RELEASED_ON_SETTLED_MISS;
+var DENIED_ON_FAIL_OPEN_VERDICT;
+var FEEDBACK_TAINT_EXEMPT_KEYS;
+var WEB_FETCH_AND_DESIGN_KEYS;
+deferInit("chunk-55ht3bcx.js:31205", () => {
+  TAINT_DISABLED_POLICIES = clientPolicyKeys().flatMap((policyKey) =>
+    (clientPolicyKeySpec(policyKey)?.deniedUnder ?? []).map((taintName) => [taintName, policyKey]),
+  );
+  TAINT_HARD_BLOCKED_POLICIES = clientPolicyKeys().flatMap((policyKey) =>
+    (clientPolicyKeySpec(policyKey)?.hardBlockUnder ?? []).map((taintName) => [taintName, policyKey]),
+  );
+  FAIL_CLOSED_ON_MISS = new Set(
+    clientPolicyKeys().filter((policyKey) => clientPolicyKeySpec(policyKey)?.onCacheMiss !== "allow"),
+  );
+  RELEASED_ON_SETTLED_MISS = new Set(
+    clientPolicyKeys().filter((policyKey) => clientPolicyKeySpec(policyKey)?.onCacheMiss === "hold"),
+  );
+  DENIED_ON_FAIL_OPEN_VERDICT = new Set(
+    clientPolicyKeys().filter((policyKey) => clientPolicyKeySpec(policyKey)?.onFailOpenVerdict === "deny"),
+  );
+  FEEDBACK_TAINT_EXEMPT_KEYS = new Set(["allow_product_feedback"]);
+  WEB_FETCH_AND_DESIGN_KEYS = new Set(["allow_web_fetch", "allow_design_sync", "allow_channels", ...[]]);
+});
 //@ chunk-55ht3bcx.js:31638-31683 placement
-function isClientOnlyEgressKeyWithheld(e) {
-  let n = shouldRereadEvidence(e);
-  return isWithheldFromUnverifiedClaudeAiLogin(e) || n;
+function isClientOnlyEgressKeyWithheld(policyKey) {
+  let reread = shouldRereadEvidence(policyKey);
+  return isWithheldFromUnverifiedClaudeAiLogin(policyKey) || reread;
 }
 //@ chunk-55ht3bcx.js:31683-31993 placement
-function isWithheldFromUnverifiedClaudeAiLogin(e) {
-  if (!WEB_FETCH_AND_DESIGN_KEYS.has(e) || isSteadySunbeamOn() || !isPolicyLimitsEligible()) return false;
+function isWithheldFromUnverifiedClaudeAiLogin(policyKey) {
+  if (!WEB_FETCH_AND_DESIGN_KEYS.has(policyKey) || isSteadySunbeamOn() || !isPolicyLimitsEligible())
+    return false;
   let policyLimitsState = getPolicyLimitsState();
   if (
     policyLimitsState.sessionCache !== null &&
@@ -624,29 +648,30 @@ function isWithheldFromUnverifiedClaudeAiLogin(e) {
     !policyLimitsState.sessionVerdictDisowned
   )
     return false;
-  let r;
+  let rung;
   try {
     getPolicyPrincipal();
-    r = policyLimitsState.principalRung;
+    rung = policyLimitsState.principalRung;
   } catch {
     return true;
   }
-  if (r === "wif" && isClaudeAISubscriber()) return true;
-  if (r === "none" && effectiveAuthTokenEnv() !== undefined && isGateAOn()) return false;
-  return r === "oauth" || r === "tunnel" || r === "none";
+  if (rung === "wif" && isClaudeAISubscriber()) return true;
+  if (rung === "none" && effectiveAuthTokenEnv() !== undefined && isGateAOn()) return false;
+  return rung === "oauth" || rung === "tunnel" || rung === "none";
 }
 //@ chunk-55ht3bcx.js:31993-32326 placement
 /**
  * 是否需要重新读取策略证据（bearer 变化）。
  */
-function shouldRereadEvidence(e) {
-  if (!WEB_FETCH_AND_DESIGN_KEYS.has(e) || !isPolicyLimitsEligible() || isTranquilCrescentOn()) return false;
+function shouldRereadEvidence(policyKey) {
+  if (!WEB_FETCH_AND_DESIGN_KEYS.has(policyKey) || !isPolicyLimitsEligible() || isTranquilCrescentOn())
+    return false;
   let policyLimitsState = getPolicyLimitsState();
   if (policyLimitsState.sessionCache !== null && policyLimitsState.sessionAttributed) {
-    let r = currentAccessTokenHash();
-    if (r !== null && r === policyLimitsState.attributedBearerDigest) return false;
-    if (policyLimitsState.evidenceRereadForBearer !== r) {
-      policyLimitsState.evidenceRereadForBearer = r;
+    let tokenHash = currentAccessTokenHash();
+    if (tokenHash !== null && tokenHash === policyLimitsState.attributedBearerDigest) return false;
+    if (policyLimitsState.evidenceRereadForBearer !== tokenHash) {
+      policyLimitsState.evidenceRereadForBearer = tokenHash;
       policyLimitsState.hipaaEvidenceLoaded = false;
     }
     let hipaaEvidence = getHipaaEvidence();
@@ -661,64 +686,71 @@ function shouldRereadEvidence(e) {
  */
 function isCurrentPrincipalUnattributable() {
   try {
-    let policyPrincipal = getPolicyPrincipal();
-    return policyPrincipal !== null && isUnattributablePrincipal(policyPrincipal);
+    let principal = getPolicyPrincipal();
+    return principal !== null && isUnattributablePrincipal(principal);
   } catch {
     return true;
   }
 }
 //@ chunk-55ht3bcx.js:32393-33022 placement
-function isPolicyAllowed(e) {
+function isPolicyAllowed(policyKey) {
   let responseFromCache = getResponseFromCache();
-  if (isUnblockedTranscriptScanKey(e)) {
-    let r = responseFromCache?.restrictions[e];
-    if (r) return r.allowed;
-    return !(isPolicyLimitsEligible() && getPolicyLimitsState().hintedDeniedKeys.includes(e));
+  if (isUnblockedTranscriptScanKey(policyKey)) {
+    let restriction = responseFromCache?.restrictions[policyKey];
+    if (restriction) return restriction.allowed;
+    return !(isPolicyLimitsEligible() && getPolicyLimitsState().hintedDeniedKeys.includes(policyKey));
   }
   if (!responseFromCache) {
-    if (FAIL_CLOSED_ON_MISS.has(e)) {
+    if (FAIL_CLOSED_ON_MISS.has(policyKey)) {
       if (
         isPolicyLimitsEligible() &&
-        !(RELEASED_ON_SETTLED_MISS.has(e) && isPolicyVerdictUnobtainable() && !isPrincipalSeenUnderHipaa())
+        !(
+          RELEASED_ON_SETTLED_MISS.has(policyKey) &&
+          isPolicyVerdictUnobtainable() &&
+          !isPrincipalSeenUnderHipaa()
+        )
       )
         return false;
       if (
-        FEEDBACK_TAINT_EXEMPT_KEYS.has(e) &&
+        FEEDBACK_TAINT_EXEMPT_KEYS.has(policyKey) &&
         isEssentialTrafficOnly() &&
-        !(e === "allow_product_feedback" && isFeedbackSurveyForOtel())
+        !(policyKey === "allow_product_feedback" && isFeedbackSurveyForOtel())
       )
         return false;
     }
-    if (isDisabledByTaint(e, getLatchedTaints())) return false;
-    if (isClientOnlyEgressKeyWithheld(e)) return false;
+    if (isDisabledByTaint(policyKey, getLatchedTaints())) return false;
+    if (isClientOnlyEgressKeyWithheld(policyKey)) return false;
     let policyLimitsState = getPolicyLimitsState();
     if (policyLimitsState.hintedDeniedKeys.length === 0 && policyLimitsState.hintedTaints.length === 0)
       return true;
     if (!isPolicyLimitsEligible()) return true;
-    if (policyLimitsState.hintedDeniedKeys.includes(e)) return false;
+    if (policyLimitsState.hintedDeniedKeys.includes(policyKey)) return false;
     return isPolicyAllowedInResponse(
       {
         restrictions: {},
         compliance_taints: [],
       },
-      e,
+      policyKey,
       policyLimitsState.hintedTaints,
     );
   }
   if (
-    RELEASED_ON_SETTLED_MISS.has(e) &&
+    RELEASED_ON_SETTLED_MISS.has(policyKey) &&
     isPolicyVerdictAbsent() &&
     !(isPolicyVerdictUnobtainable() && !isPrincipalSeenUnderHipaa())
   )
     return false;
-  if (DENIED_ON_FAIL_OPEN_VERDICT.has(e) && isPolicyVerdictAbsent()) return false;
-  if (isClientOnlyEgressKeyWithheld(e)) return false;
-  return !isPolicyDeniedForKey(e, responseFromCache);
+  if (DENIED_ON_FAIL_OPEN_VERDICT.has(policyKey) && isPolicyVerdictAbsent()) return false;
+  if (isClientOnlyEgressKeyWithheld(policyKey)) return false;
+  return !isPolicyDeniedForKey(policyKey, responseFromCache);
 }
 //@ chunk-55ht3bcx.js:33022-33295 placement
-function isPolicyDeniedForKey(e, responseFromCache) {
+function isPolicyDeniedForKey(policyKey, responseFromCache) {
   let policyLimitsState = getPolicyLimitsState();
-  if (responseFromCache.restrictions[e] === undefined && policyLimitsState.hintedDeniedKeys.includes(e))
+  if (
+    responseFromCache.restrictions[policyKey] === undefined &&
+    policyLimitsState.hintedDeniedKeys.includes(policyKey)
+  )
     return true;
   let sessionFromServerFetch = policyLimitsState.sessionFromServerFetch;
   return !isPolicyAllowedInResponse(
@@ -726,7 +758,7 @@ function isPolicyDeniedForKey(e, responseFromCache) {
       restrictions: responseFromCache.restrictions,
       compliance_taints: sessionFromServerFetch ? responseFromCache.compliance_taints : [],
     },
-    e,
+    policyKey,
     [
       ...getLatchedTaints(),
       ...policyLimitsState.hintedTaints,
@@ -735,38 +767,44 @@ function isPolicyDeniedForKey(e, responseFromCache) {
   );
 }
 //@ chunk-55ht3bcx.js:33295-33594 placement = PolicyLimitsResponseSchema (0.452)
-function isPolicyAllowedInResponse(e, n, r = []) {
-  let complianceTaints = e.compliance_taints;
+function isPolicyAllowedInResponse(response, policyKey, extraTaints = []) {
+  let complianceTaints = response.compliance_taints;
   if (
-    TAINT_HARD_BLOCKED_POLICIES.some(([c, y]) => y === n && (complianceTaints.includes(c) || r.includes(c)))
+    TAINT_HARD_BLOCKED_POLICIES.some(
+      ([taintName, pairPolicyKey]) =>
+        pairPolicyKey === policyKey &&
+        (complianceTaints.includes(taintName) || extraTaints.includes(taintName)),
+    )
   )
     return false;
-  let l = e.restrictions[n];
-  if (l) return l.allowed;
-  if (isUnblockedTranscriptScanKey(n)) return true;
-  let f = isServerPopulatedPolicyKey(n)
+  let restriction = response.restrictions[policyKey];
+  if (restriction) return restriction.allowed;
+  if (isUnblockedTranscriptScanKey(policyKey)) return true;
+  let taints = isServerPopulatedPolicyKey(policyKey)
     ? [
-        ...r.filter((c) => !(HIPAA_TAINTS_2.has(c) && complianceTaints.includes(c))),
+        ...extraTaints.filter(
+          (taintName) => !(HIPAA_TAINTS_2.has(taintName) && complianceTaints.includes(taintName)),
+        ),
         ...complianceTaints.filter((complianceTaint) => !HIPAA_TAINTS_2.has(complianceTaint)),
       ]
-    : [...r, ...complianceTaints];
-  return !isDisabledByTaint(n, f);
+    : [...extraTaints, ...complianceTaints];
+  return !isDisabledByTaint(policyKey, taints);
 }
 //@ chunk-55ht3bcx.js:33594-33942 placement
-function isUnrestrictiveBody(e) {
+function isUnrestrictiveBody(body) {
   if (
-    e.compliance_taints.some((complianceTaint) =>
-      TAINT_DISABLED_POLICIES.some(([r]) => r === complianceTaint),
+    body.compliance_taints.some((complianceTaint) =>
+      TAINT_DISABLED_POLICIES.some(([taintName]) => taintName === complianceTaint),
     )
   )
     return false;
   if (
-    Object.keys(e.defaults ?? {}).length > 0 ||
-    (e.monitoring_notice !== null && e.monitoring_notice !== undefined) ||
-    (e.artifact_create_notice !== null && e.artifact_create_notice !== undefined)
+    Object.keys(body.defaults ?? {}).length > 0 ||
+    (body.monitoring_notice !== null && body.monitoring_notice !== undefined) ||
+    (body.artifact_create_notice !== null && body.artifact_create_notice !== undefined)
   )
     return false;
-  return Object.entries(e.restrictions).every(([key, value]) =>
+  return Object.entries(body.restrictions).every(([key, value]) =>
     isEnforcedPolicyKey(key) ? value?.allowed !== true : value?.allowed !== false,
   );
 }
@@ -774,31 +812,35 @@ function isUnrestrictiveBody(e) {
 /**
  * 策略键是否属于强制/要求类（enforce_ / require_ 前缀）。
  */
-function isEnforcedPolicyKey(e) {
-  return e.startsWith("enforce_") || e.startsWith("require_");
+function isEnforcedPolicyKey(policyKey) {
+  return policyKey.startsWith("enforce_") || policyKey.startsWith("require_");
 }
 //@ chunk-55ht3bcx.js:34014-34116 placement
-function isDisabledByTaint(e, n) {
-  if (n.length === 0) return false;
-  for (let [r, s] of TAINT_DISABLED_POLICIES) if (s === e && n.includes(r)) return true;
+function isDisabledByTaint(policyKey, taints) {
+  if (taints.length === 0) return false;
+  for (let [taintName, pairPolicyKey] of TAINT_DISABLED_POLICIES)
+    if (pairPolicyKey === policyKey && taints.includes(taintName)) return true;
   return false;
 }
 //@ chunk-55ht3bcx.js:34116-34566 placement
-registerPolicyVerdict({
-  isPolicyAllowed: (e) => isPolicyAllowed(e),
-  commandPolicyGateAllows: (e) => commandPolicyGateAllows(e),
-  policyDenyKind: (e) => policyDenyKind(e),
-  policyDeniedReason: (e, n, r) => policyDeniedReason(e, n, r),
-  complianceTaintsSettled: () => areComplianceTaintsSettled(),
-  policyLimitsCacheLoaded: () => isPolicyLimitsCacheLoaded(),
-  autoDefaultVerdictState: () => autoDefaultVerdictState(),
-  policyVerdictAbsent: () => isPolicyVerdictAbsent(),
-  sessionVerdictUnattributed: () => isSessionVerdictUnattributed(),
-  rowPrincipalStamp: () => rowPrincipalStamp(),
-  rowOfAnotherPrincipal: (e) => isRowOfAnotherPrincipal(e),
-  principalSeenUnderHipaa: () => hasHipaaEvidenceForPrincipal(),
-  coreSkills: () => getCoreSkillsFromCache(),
-  rememberedCoreSkills: () => getRememberedCoreSkills(),
+// deferred: uses registerPolicyVerdict (./policyVerdicts.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-55ht3bcx.js:34116", () => {
+  registerPolicyVerdict({
+    isPolicyAllowed: (policyKey) => isPolicyAllowed(policyKey),
+    commandPolicyGateAllows: (policyKey) => commandPolicyGateAllows(policyKey),
+    policyDenyKind: (policyKey) => policyDenyKind(policyKey),
+    policyDeniedReason: (policyKey, featureLabel, verb) => policyDeniedReason(policyKey, featureLabel, verb),
+    complianceTaintsSettled: () => areComplianceTaintsSettled(),
+    policyLimitsCacheLoaded: () => isPolicyLimitsCacheLoaded(),
+    autoDefaultVerdictState: () => autoDefaultVerdictState(),
+    policyVerdictAbsent: () => isPolicyVerdictAbsent(),
+    sessionVerdictUnattributed: () => isSessionVerdictUnattributed(),
+    rowPrincipalStamp: () => rowPrincipalStamp(),
+    rowOfAnotherPrincipal: (stamp) => isRowOfAnotherPrincipal(stamp),
+    principalSeenUnderHipaa: () => hasHipaaEvidenceForPrincipal(),
+    coreSkills: () => getCoreSkillsFromCache(),
+    rememberedCoreSkills: () => getRememberedCoreSkills(),
+  });
 });
 //@ chunk-55ht3bcx.js:34566-34683 placement
 function autoDefaultVerdictState() {
@@ -809,24 +851,24 @@ function autoDefaultVerdictState() {
 }
 //@ chunk-55ht3bcx.js:34683-34791 placement
 function isPrincipalHipaaSeen() {
-  let e;
+  let principal;
   try {
-    e = getPolicyPrincipal();
+    principal = getPolicyPrincipal();
   } catch {
     return false;
   }
-  if (e === null || isUnattributablePrincipal(e)) return false;
-  return getHipaaEvidence().seen.includes(identityDigestOfDescriptor(e));
+  if (principal === null || isUnattributablePrincipal(principal)) return false;
+  return getHipaaEvidence().seen.includes(identityDigestOfDescriptor(principal));
 }
 //@ chunk-55ht3bcx.js:34791-34922 placement
-function commandPolicyGateAllows(e) {
-  if (!isClientDerivedPolicyKey(e)) {
-    logForDebugging(`[policy] policyGate names unknown policy key "${e}"; denying`, {
+function commandPolicyGateAllows(policyKey) {
+  if (!isClientDerivedPolicyKey(policyKey)) {
+    logForDebugging(`[policy] policyGate names unknown policy key "${policyKey}"; denying`, {
       level: "warn",
     });
     return false;
   }
-  return isPolicyAllowed(e);
+  return isPolicyAllowed(policyKey);
 }
 //@ chunk-55ht3bcx.js:34922-34994 placement
 function isPolicyVerdictAbsent() {
@@ -842,8 +884,8 @@ function isSessionVerdictUnattributed() {
   if (!isPolicyLimitsEligible()) return false;
   let policyLimitsState = getPolicyLimitsState();
   if (!policyLimitsState.sessionAttributed) return true;
-  let n = envBearerVerdictOnWire();
-  if (n === "replaced" || n === "gone") return true;
+  let verdict = envBearerVerdictOnWire();
+  if (verdict === "replaced" || verdict === "gone") return true;
   if (
     policyLimitsState.attributedBearerDigest !== null &&
     currentAccessTokenHash() !== policyLimitsState.attributedBearerDigest &&
@@ -868,8 +910,8 @@ function principalEvidenceKey() {
   let policyLimitsState = getPolicyLimitsState();
   if (policyLimitsState.principalRung === "tunnel")
     return `tunnel:${policyLimitsState.tunnelEpochHeard ?? "unheard"}`;
-  let n = principalIdentityKey() || getCredentialIndependentIneligibleReason();
-  return n ? saltedTokenDigest(n) : UNREADABLE_PRINCIPAL;
+  let identity = principalIdentityKey() || getCredentialIndependentIneligibleReason();
+  return identity ? saltedTokenDigest(identity) : UNREADABLE_PRINCIPAL;
 }
 //@ chunk-55ht3bcx.js:35601-35909 placement
 /**
@@ -878,35 +920,42 @@ function principalEvidenceKey() {
 function principalIdentityKey() {
   let policyLimitsState = getPolicyLimitsState();
   if (policyLimitsState.principalRung === "wif") {
-    let s = policyLimitsState.wifAccountDiverged ? undefined : getWIFFederationIdentity();
-    return s && [s.organizationId, s.federationRuleId, s.workspaceId ?? ""].join("\x00");
+    let federationIdentity = policyLimitsState.wifAccountDiverged ? undefined : getWIFFederationIdentity();
+    return (
+      federationIdentity &&
+      [
+        federationIdentity.organizationId,
+        federationIdentity.federationRuleId,
+        federationIdentity.workspaceId ?? "",
+      ].join("\x00")
+    );
   }
   let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
-  let r = effectiveAuthTokenEnv();
+  let envToken = effectiveAuthTokenEnv();
   return policyLimitsState.principalRung === "helper"
     ? getAnthropicApiKeyWithSource().key
-    : r &&
+    : envToken &&
         !hasInferenceScope({
           anthropicAuthEnabled: isAnthropicAuthEnabled(),
           oauthScopes: claudeAIOAuthTokens?.scopes,
         })
-      ? r
+      ? envToken
       : claudeAIOAuthTokens?.accessToken;
 }
 //@ chunk-55ht3bcx.js:35909-35972 placement
 /**
  * 用未命名戳盐值对令牌做双重摘要。
  */
-function saltedTokenDigest(e) {
-  return tokenDigest(`${getPolicyLimitsState().unnamedStampSalt}:${tokenDigest(e)}`);
+function saltedTokenDigest(token) {
+  return tokenDigest(`${getPolicyLimitsState().unnamedStampSalt}:${tokenDigest(token)}`);
 }
 //@ chunk-55ht3bcx.js:35972-36006 placement
 function rowPrincipalStamp() {
   return getPolicyPrincipalIdentity() ?? principalEvidenceKey();
 }
 //@ chunk-55ht3bcx.js:36006-36048 placement
-function isRowOfAnotherPrincipal(e) {
-  return e === UNREADABLE_PRINCIPAL || rowPrincipalStamp() !== e;
+function isRowOfAnotherPrincipal(stamp) {
+  return stamp === UNREADABLE_PRINCIPAL || rowPrincipalStamp() !== stamp;
 }
 //@ chunk-55ht3bcx.js:36048-36087 placement
 function noteTunnelEpochHeard(tunnelEpochHeard) {
@@ -921,27 +970,27 @@ function isPolicyVerdictUnobtainable() {
   if (!isPolicyVerdictAbsent()) return false;
   let policyLimitsState = getPolicyLimitsState();
   if (policyLimitsState.settledWithoutVerdictFor === null) return false;
-  let n;
+  let identity;
   try {
-    n = getPolicyPrincipalIdentity();
+    identity = getPolicyPrincipalIdentity();
   } catch {
     return false;
   }
-  return policyLimitsState.settledWithoutVerdictFor === (n ?? "");
+  return policyLimitsState.settledWithoutVerdictFor === (identity ?? "");
 }
 //@ chunk-55ht3bcx.js:36302-36512 placement
 function isPrincipalSeenUnderHipaa() {
-  let e;
+  let principal;
   try {
-    e = getPolicyPrincipal();
+    principal = getPolicyPrincipal();
   } catch {
     return true;
   }
-  if (e === null || e.unclassified || e.admitsOnly) return true;
+  if (principal === null || principal.unclassified || principal.admitsOnly) return true;
   let policyLimitsState = getPolicyLimitsState();
   if (!policyLimitsState.hipaaSeenUnreadable) applyStampReadToState(currentPolicyStampOrMemoryFallback());
-  let r = hasHipaaEvidenceForPrincipal();
-  return policyLimitsState.hipaaSeenUnreadable || !policyLimitsState.hipaaEvidenceLoaded || r;
+  let hasEvidence = hasHipaaEvidenceForPrincipal();
+  return policyLimitsState.hipaaSeenUnreadable || !policyLimitsState.hipaaEvidenceLoaded || hasEvidence;
 }
 //@ chunk-55ht3bcx.js:36512-36576 placement
 function isPolicyRouteMissing() {
@@ -957,19 +1006,19 @@ function isPolicyRouteMissingByLastFetch() {
   return lastFetchOutcome !== null && !lastFetchOutcome.success && lastFetchOutcome.httpStatus === 404;
 }
 //@ chunk-55ht3bcx.js:36664-36890 placement
-function policyDeniedReason(e, n, r, s) {
-  if (isPolicyAllowed(e)) return null;
-  if (isPolicyRouteMissing()) return policy404Message(n);
-  switch (policyDenyKind(e)) {
+function policyDeniedReason(policyKey, featureLabel, verb, taints) {
+  if (isPolicyAllowed(policyKey)) return null;
+  if (isPolicyRouteMissing()) return policy404Message(featureLabel);
+  switch (policyDenyKind(policyKey)) {
     case "route_missing":
-      return policy404Message(n);
+      return policy404Message(featureLabel);
     case "cache_miss":
-      return policyUnverifiedMessage(n);
+      return policyUnverifiedMessage(featureLabel);
     case "latched":
-      return policyBlockedMessage(n, r);
+      return policyBlockedMessage(featureLabel, verb);
     case "org_denied":
     case null:
-      return formatPolicyDisabledMessage(n, r, getCurrentTaints(), s);
+      return formatPolicyDisabledMessage(featureLabel, verb, getCurrentTaints(), taints);
   }
 }
 //@ chunk-55ht3bcx.js:36890-36931 placement
@@ -977,34 +1026,36 @@ function hasNameableComplianceTaint() {
   return hipaaTaintsOnly(getComplianceTaints()).length > 0;
 }
 //@ chunk-55ht3bcx.js:36931-37221 placement
-function policyDenyKind(e) {
-  if (isPolicyAllowed(e)) return null;
-  if (isDeniedOnlyByLatch(e)) return "latched";
+function policyDenyKind(policyKey) {
+  if (isPolicyAllowed(policyKey)) return null;
+  if (isDeniedOnlyByLatch(policyKey)) return "latched";
   let responseFromCache = getResponseFromCache();
   if (responseFromCache !== null) {
     if (
-      (RELEASED_ON_SETTLED_MISS.has(e) ||
-        (DENIED_ON_FAIL_OPEN_VERDICT.has(e) && !isPolicyDeniedForKey(e, responseFromCache))) &&
+      (RELEASED_ON_SETTLED_MISS.has(policyKey) ||
+        (DENIED_ON_FAIL_OPEN_VERDICT.has(policyKey) &&
+          !isPolicyDeniedForKey(policyKey, responseFromCache))) &&
       isPolicyVerdictAbsent()
     )
       return isPolicyRouteMissingByLastFetch() ? "route_missing" : "cache_miss";
-    if (!isClientOnlyEgressKeyWithheld(e)) return "org_denied";
+    if (!isClientOnlyEgressKeyWithheld(policyKey)) return "org_denied";
     return isPolicyRouteMissingByLastFetch() && !isAnthropicHosted() ? "route_missing" : "cache_miss";
   }
   return isPolicyRouteMissing() ? "route_missing" : "cache_miss";
 }
 //@ chunk-55ht3bcx.js:37221-37327 placement
-function isDeniedOnlyByLatch(e) {
-  if (!isDisabledByTaint(e, getLatchedTaints()) || isDisabledByTaint(e, getCurrentTaints())) return false;
+function isDeniedOnlyByLatch(policyKey) {
+  if (!isDisabledByTaint(policyKey, getLatchedTaints()) || isDisabledByTaint(policyKey, getCurrentTaints()))
+    return false;
   if (getResponseFromCache() === null) return true;
-  return cachedRestrictions()?.[e]?.allowed !== false;
+  return cachedRestrictions()?.[policyKey]?.allowed !== false;
 }
 //@ chunk-55ht3bcx.js:37327-37537 placement
-function policyDeniedHint(e) {
-  let n = policyDenyKind(e);
-  if (n === null) return null;
+function policyDeniedHint(policyKey) {
+  let denyKind = policyDenyKind(policyKey);
+  if (denyKind === null) return null;
   if (isPolicyRouteMissing()) return policyEndpoint404Hint();
-  switch (n) {
+  switch (denyKind) {
     case "route_missing":
       return policyEndpoint404Hint();
     case "cache_miss":
@@ -1017,8 +1068,8 @@ function policyDeniedHint(e) {
 }
 //@ chunk-55ht3bcx.js:37537-38016 placement
 function areComplianceTaintsSettled() {
-  let e = envBearerVerdictOnWire();
-  if (e !== null && e !== "same") return false;
+  let verdict = envBearerVerdictOnWire();
+  if (verdict !== null && verdict !== "same") return false;
   if (
     hasCustomApiKeyHeader() ||
     hasCustomAuthorizationHeader() ||
@@ -1031,7 +1082,7 @@ function areComplianceTaintsSettled() {
         anthropicAuthEnabled: isAnthropicAuthEnabled(),
         oauthScopes: getClaudeAIOAuthTokens()?.scopes,
       }) &&
-      !(e === "same" && getResponseFromCache() !== null))
+      !(verdict === "same" && getResponseFromCache() !== null))
   )
     return false;
   if (getResponseFromCache() !== null) return true;
@@ -1065,25 +1116,25 @@ function isPolicyDeniedByRefusedCacheHint(policy) {
   );
 }
 //@ chunk-55ht3bcx.js:38161-38207 placement
-function isPolicyEnforced(e) {
-  return cachedRestrictions()?.[e]?.allowed === true;
+function isPolicyEnforced(policyKey) {
+  return cachedRestrictions()?.[policyKey]?.allowed === true;
 }
 //@ chunk-55ht3bcx.js:38207-38373 placement
-function isPolicyEnforcedOrHintedByRefusedCache(e) {
-  let n = cachedRestrictions();
-  if (n?.[e]?.allowed === true) return true;
+function isPolicyEnforcedOrHintedByRefusedCache(policyKey) {
+  let restrictions = cachedRestrictions();
+  if (restrictions?.[policyKey]?.allowed === true) return true;
   let policyLimitsState = getPolicyLimitsState();
   return (
-    policyLimitsState.hintedEnforcedKeys.includes(e) &&
-    n?.[e] === undefined &&
-    (n === null || !policyLimitsState.sessionAttributed) &&
+    policyLimitsState.hintedEnforcedKeys.includes(policyKey) &&
+    restrictions?.[policyKey] === undefined &&
+    (restrictions === null || !policyLimitsState.sessionAttributed) &&
     isPolicyLimitsEligible()
   );
 }
 //@ chunk-55ht3bcx.js:38373-38450 placement
-function getPolicyDefault(e) {
-  let n = getResponseFromCache()?.defaults[e];
-  return typeof n === "boolean" ? n : undefined;
+function getPolicyDefault(policyKey) {
+  let value = getResponseFromCache()?.defaults[policyKey];
+  return typeof value === "boolean" ? value : undefined;
 }
 //@ chunk-55ht3bcx.js:38450-38494 placement
 function getCoreSkillsFromCache() {
@@ -1132,17 +1183,17 @@ function cachedRestrictions() {
 //@ chunk-55ht3bcx.js:38972-39106 placement
 function federationProfileKey(wifPrecedenceSource) {
   if (wifPrecedenceSource === "env-quad") return env.ANTHROPIC_FEDERATION_RULE_ID?.trim() ?? "";
-  let configDir = resolveConfigDir();
-  return configDir === null || wifPrecedenceSource === null
+  let dir = resolveConfigDir();
+  return dir === null || wifPrecedenceSource === null
     ? ""
-    : principalPathKey(configDir, resolveLiveProfileName(configDir));
+    : principalPathKey(dir, resolveLiveProfileName(dir));
 }
 //@ chunk-55ht3bcx.js:39106-39160 placement
 /**
  * 拼出「规范化路径 + NUL + 主体」的键。
  */
-function principalPathKey(e, n) {
-  return e === null ? "" : `${resolve(e)}\x00${n}`;
+function principalPathKey(dir, rung) {
+  return dir === null ? "" : `${resolve(dir)}\x00${rung}`;
 }
 export {
   policyDenyKind,
@@ -1193,4 +1244,23 @@ export {
   policyDeniedHint,
   isPolicyAllowedInResponse,
   areComplianceTaintsSettled,
+  CLIENT_POLICY_KEYS,
+  DENIED_ON_FAIL_OPEN_VERDICT,
+  FAIL_CLOSED_ON_MISS,
+  RELEASED_ON_SETTLED_MISS,
+  TAINT_HARD_BLOCKED_POLICIES,
+  autoDefaultVerdictState,
+  clientPolicyKeySpec,
+  commandPolicyGateAllows,
+  getCoreSkillsFromCache,
+  getHipaaEvidence,
+  getRememberedCoreSkills,
+  hasHipaaEvidenceForPrincipal,
+  isClientDerivedPolicyKey,
+  isPolicyEnforced,
+  isRowOfAnotherPrincipal,
+  isServerPopulatedPolicyKey,
+  isSessionVerdictUnattributed,
+  isUnblockedTranscriptScanKey,
+  isWithheldFromUnverifiedClaudeAiLogin,
 };

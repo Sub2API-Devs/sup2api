@@ -49,19 +49,19 @@ import { AwayEpisodeTracker } from "../../services/awayEpisodes.js";
 //@ chunk-7egnrh1d.js:863-2075 facade-exports
 function clearSessionCaches(
   session,
-  preservedAgentIds = new Set(),
+  keptAgentIds = new Set(),
   setAppState,
   toolState,
   storageV5,
-  m = false,
+  conversationOnly = false,
 ) {
-  let hasPreserved = preservedAgentIds.size > 0;
+  let hasPreserved = keptAgentIds.size > 0;
   clearSessionContextCaches(session);
   clearIsGitMemoFor(session);
   sessionDateCellSlot.of(session).clear();
   resetFileIndexCache(globalFileIndexCache);
   clearCommandsCache();
-  recordSummaryFork(preservedAgentIds);
+  recordSummaryFork(keptAgentIds);
   if (!hasPreserved) deferredToolCacheSlot.peek(session)?.clear();
   let cleanupHelpers = loadCleanupHelpers();
   if (cleanupHelpers?.getTeleportCacheState().status === "active")
@@ -75,7 +75,7 @@ function clearSessionCaches(
   clearWebSearchHistoryRejected(getStickyBetas());
   clearMediaItemCap(getStickyBetas());
   clearRefusedToolSchemas(getStickyBetas());
-  if (!m) {
+  if (!conversationOnly) {
     invalidateToolDescriptions();
     clearDeclared(session.host);
   }
@@ -83,15 +83,15 @@ function clearSessionCaches(
   claudeMdAccessTrackerSlot.of(session).reset();
   promptCacheTrackers.of(session).clear();
   spawnStatsSlots.of(session).reset();
-  setAppState?.((e) => {
+  setAppState?.((state) => {
     if (
-      e.storedImagePaths.size === 0 &&
-      e.imageDescriptions.size === 0 &&
-      Object.keys(e.displayedMessageContent).length === 0
+      state.storedImagePaths.size === 0 &&
+      state.imageDescriptions.size === 0 &&
+      Object.keys(state.displayedMessageContent).length === 0
     )
-      return e;
+      return state;
     return {
-      ...e,
+      ...state,
       storedImagePaths: new Map(),
       imageDescriptions: new Map(),
       displayedMessageContent: {},
@@ -101,7 +101,7 @@ function clearSessionCaches(
   if (!hasPreserved) clearSwarmPermissions();
   clearRepositoryCaches();
   if (!hasPreserved) clearDumpPromptState();
-  clearInvokedSkills(preservedAgentIds);
+  clearInvokedSkills(keptAgentIds);
   clearResolveGitDirCache();
   clearDynamicSkills();
   resetProjectSkillDirectories().catch(() => {});
@@ -110,13 +110,21 @@ function clearSessionCaches(
     toolState.get(IdHolder).clear();
     toolState.get(RecentItemsCache).clear();
     toolState.get(AwayEpisodeTracker).clear();
-    import("./chunk-8esf3qf8.js").then(({ WebFetchCache }) => toolState.get(WebFetchCache).clear());
-    import("./chunk-mp05jpbx.js").then(({ WebFetchHistory }) => toolState.get(WebFetchHistory).clear());
-    import("./chunk-veja3kzs.js").then(({ BashRepeatMeter }) => toolState.get(BashRepeatMeter).clear());
-    import("./chunk-k9ccmfj2.js").then(({ ToolSearchDescriptionCache }) =>
+    import("../../tools/WebFetchTool/utils.js").then(({ WebFetchCache }) =>
+      toolState.get(WebFetchCache).clear(),
+    );
+    import("../../tools/WebFetchTool/fetchHistory.js").then(({ WebFetchHistory }) =>
+      toolState.get(WebFetchHistory).clear(),
+    );
+    import("../../tools/BashTool/repeatMeter.js").then(({ BashRepeatMeter }) =>
+      toolState.get(BashRepeatMeter).clear(),
+    );
+    import("../../tools/ToolSearchTool/ToolSearchTool.js").then(({ ToolSearchDescriptionCache }) =>
       toolState.get(ToolSearchDescriptionCache).clear(),
     );
   }
-  import("./chunk-t271r49x.js").then(({ clearAgentDefinitionsCache }) => clearAgentDefinitionsCache());
+  import("../../tools/AgentTool/loadAgentsDir.js").then(({ clearAgentDefinitionsCache }) =>
+    clearAgentDefinitionsCache(),
+  );
 }
 export { clearSessionCaches };

@@ -13,20 +13,20 @@
 /**
  * 归一化查找键（去连字符/下划线并转小写）。
  */
-function normalizeKey(n) {
-  return n.replace(/[-_]/g, "").toLowerCase();
+function normalizeKey(key) {
+  return key.replace(/[-_]/g, "").toLowerCase();
 }
 //@ chunk-hwmn0xfn.js:249-303 placement
 /**
  * 生成"归一化键 → 原名"的索引 Map。
  */
-function normalizeKeyIndex(n) {
-  return new Map(n.map((t) => [normalizeKey(t), t]));
+function normalizeKeyIndex(keys) {
+  return new Map(keys.map((key) => [normalizeKey(key), key]));
 }
 //@ chunk-hwmn0xfn.js:303-429 placement
-function isPlainObject(n) {
-  if (typeof n !== "object" || n === null) return false;
-  let prototypeOf = Object.getPrototypeOf(n);
+function isPlainObject(value) {
+  if (typeof value !== "object" || value === null) return false;
+  let prototypeOf = Object.getPrototypeOf(value);
   return prototypeOf === Object.prototype || prototypeOf === null;
 }
 export { isPlainObject, normalizeKey, normalizeKeyIndex };

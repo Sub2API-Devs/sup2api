@@ -15,6 +15,7 @@ import { logError } from "../../utils/log.js";
 import { toError, TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
 import { logEventAsync, logEvent } from "../analytics/index.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-7t4fmt2f.js:5202-5240 placement
 var ERROR_NAME_REGEX = /^[A-Za-z][A-Za-z0-9_]{0,47}$/;
@@ -47,30 +48,33 @@ class ManagedConfigStartupState {
   unregisterExitFlush = undefined;
 }
 //@ chunk-7t4fmt2f.js:5662-5687 placement
-var startupGateStateSlots = new HostScoped(() => new ManagedConfigStartupState());
+var startupGateStateSlots; // deferred: uses ManagedConfigStartupState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7t4fmt2f.js:5662", () => {
+  startupGateStateSlots = new HostScoped(() => new ManagedConfigStartupState());
+});
 //@ chunk-7t4fmt2f.js:5687-5753 placement
 /**
  * 相对启动的毫秒时间戳，无盘会话不记录。
  */
-function elapsedMsSinceStart(e = performance.now()) {
-  return isDisklessProcess() ? undefined : Math.round(e);
+function elapsedMsSinceStart(startTimestamp = performance.now()) {
+  return isDisklessProcess() ? undefined : Math.round(startTimestamp);
 }
 //@ chunk-7t4fmt2f.js:5753-5821 placement
 /**
  * 取两个时间中较晚者，任一未定义则 undefined。
  */
-function laterOf(e, r) {
-  return e === undefined || r === undefined ? undefined : Math.max(e, r);
+function laterOf(firstMs, secondMs) {
+  return firstMs === undefined || secondMs === undefined ? undefined : Math.max(firstMs, secondMs);
 }
 //@ chunk-7t4fmt2f.js:5821-5947 placement
-function withStartupState(e) {
+function withStartupState(fn) {
   try {
-    let r = onProcessRootHost(startupGateStateSlots);
-    if (r.logged) return;
-    r.unregisterExitFlush ??= registerCleanup(() =>
-      withStartupState((n) => emitManagedConfigReady(n, "exit")),
+    let startupState = onProcessRootHost(startupGateStateSlots);
+    if (startupState.logged) return;
+    startupState.unregisterExitFlush ??= registerCleanup(() =>
+      withStartupState((startupState) => emitManagedConfigReady(startupState, "exit")),
     );
-    e(r);
+    fn(startupState);
   } catch (error) {
     logError(toError(error));
   }
@@ -79,18 +83,18 @@ function withStartupState(e) {
 /**
  * 记录「是否默认命令」（只设一次）。
  */
-function setDefaultCommandFlag(e) {
-  withStartupState((r) => {
-    r.isDefaultCommand ??= e;
+function setDefaultCommandFlag(isDefaultCommand) {
+  withStartupState((startupState) => {
+    startupState.isDefaultCommand ??= isDefaultCommand;
   });
 }
 //@ chunk-7t4fmt2f.js:5996-6038 placement
 /**
  * 记录策略门控对象（只设一次）。
  */
-function setPolicyGate(e) {
-  withStartupState((r) => {
-    r.policyGate ??= e;
+function setPolicyGate(policyGate) {
+  withStartupState((startupState) => {
+    startupState.policyGate ??= policyGate;
   });
 }
 //@ chunk-7t4fmt2f.js:6038-6085 placement
@@ -98,75 +102,78 @@ function setPolicyGate(e) {
  * 记录设置读取器（只设一次）。
  */
 function setSettingsReader(settingsOutcomeFields) {
-  withStartupState((r) => {
-    r.settingsReader ??= settingsOutcomeFields;
+  withStartupState((startupState) => {
+    startupState.settingsReader ??= settingsOutcomeFields;
   });
 }
 //@ chunk-7t4fmt2f.js:6085-6159 placement
 /**
  * 设置组织门控影子模式（只记录不拦截）。
  */
-function setOrgGateShadow(e, r) {
-  withStartupState((n) => {
-    n.orgGateShadow ??= e;
-    n.orgGateShadowSettle ??= r;
+function setOrgGateShadow(orgGateShadow, orgGateShadowSettle) {
+  withStartupState((startupState) => {
+    startupState.orgGateShadow ??= orgGateShadow;
+    startupState.orgGateShadowSettle ??= orgGateShadowSettle;
   });
 }
 //@ chunk-7t4fmt2f.js:6159-6203 placement
-var SUPERSEDED_SOURCES = new Set(["ineligible", "superseded"]);
+var SUPERSEDED_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7t4fmt2f.js:6159", () => {
+  SUPERSEDED_SOURCES = new Set(["ineligible", "superseded"]);
+});
 //@ chunk-7t4fmt2f.js:6203-6315 placement
 /**
  * 记录设置或策略的加载结果。
  */
-function recordManagedConfigResult(e, r) {
-  withStartupState((n) => {
-    let o = n[e];
-    if (o !== undefined && !SUPERSEDED_SOURCES.has(o.source)) return;
-    n[e] = {
-      ...r,
+function recordManagedConfigResult(sourceName, outcome) {
+  withStartupState((startupState) => {
+    let existing = startupState[sourceName];
+    if (existing !== undefined && !SUPERSEDED_SOURCES.has(existing.source)) return;
+    startupState[sourceName] = {
+      ...outcome,
       settledMs: elapsedMsSinceStart(),
     };
-    maybeEmitWhenResolved(n);
+    maybeEmitWhenResolved(startupState);
   });
 }
 //@ chunk-7t4fmt2f.js:6315-6391 placement
 /**
  * 记录一次设置/策略加载屏障，并在可能时上报。
  */
-function recordLoadBarrier(e, r, { since: n, supersede: o = false } = {}) {
-  withStartupState((u) => {
-    recordBarrier(u, e, r, n, o);
-    maybeEmitWhenResolved(u);
+function recordLoadBarrier(sourceName, crossed, { since: sinceMs, supersede = false } = {}) {
+  withStartupState((startupState) => {
+    recordBarrier(startupState, sourceName, crossed, sinceMs, supersede);
+    maybeEmitWhenResolved(startupState);
   });
 }
 //@ chunk-7t4fmt2f.js:6391-6575 placement
 /**
  * 开始一个启动阻塞，返回结束回调（记录屏障）。
  */
-function beginStartupBlock(e, { supersede: r = false } = {}) {
+function beginStartupBlock(sourceName, { supersede = false } = {}) {
   let startTime = performance.now();
-  let o = false;
-  withStartupState((u) => {
-    u.openStartupBlocks++;
-    o = true;
+  let isOpen = false;
+  withStartupState((startupState) => {
+    startupState.openStartupBlocks++;
+    isOpen = true;
   });
-  return (u) =>
-    withStartupState((p) => {
-      if (!o) return;
-      o = false;
-      p.openStartupBlocks--;
-      recordBarrier(p, e, u, startTime, r);
-      maybeEmitWhenResolved(p);
+  return (result) =>
+    withStartupState((startupState) => {
+      if (!isOpen) return;
+      isOpen = false;
+      startupState.openStartupBlocks--;
+      recordBarrier(startupState, sourceName, result, startTime, supersede);
+      maybeEmitWhenResolved(startupState);
     });
 }
 //@ chunk-7t4fmt2f.js:6575-6799 placement
-function recordBarrier(e, r, n, o, u) {
-  let p = r === "settings" ? "settingsBarrier" : "policyBarrier";
-  if (e[p] !== undefined && !u) return;
+function recordBarrier(startupState, sourceName, result, sinceMs, supersede) {
+  let barrierKey = sourceName === "settings" ? "settingsBarrier" : "policyBarrier";
+  if (startupState[barrierKey] !== undefined && !supersede) return;
   let startTime = performance.now();
-  e[p] = {
-    result: typeof n === "function" ? n() : n,
-    waitMs: o === undefined ? 0 : Math.round(startTime - o),
+  startupState[barrierKey] = {
+    result: typeof result === "function" ? result() : result,
+    waitMs: sinceMs === undefined ? 0 : Math.round(startTime - sinceMs),
     crossedMs: elapsedMsSinceStart(startTime),
   };
 }
@@ -176,15 +183,15 @@ function recordBarrier(e, r, n, o, u) {
  */
 function emitManagedConfigReadyAtExit() {
   let resolved = Promise.resolve();
-  withStartupState((r) => {
-    let gateFields = readGateFieldsSafe(r.policyGate);
+  withStartupState((startupState) => {
+    let gateFields = readGateFieldsSafe(startupState.policyGate);
     resolved = logEventAsync(
       TENGU_MANAGED_CONFIG_READY,
-      buildManagedConfigReadyEvent(r, "exit", gateFields),
+      buildManagedConfigReadyEvent(startupState, "exit", gateFields),
     ).catch((error) => {
       logError(toError(error));
     });
-    maybeLogOrgGateShadow(r, gateFields, "exit");
+    maybeLogOrgGateShadow(startupState, gateFields, "exit");
   });
   return resolved;
 }
@@ -193,20 +200,20 @@ function emitManagedConfigReadyAtExit() {
  * 首条提示时上报托管配置就绪。
  */
 function logFirstPromptReady() {
-  withStartupState((e) => emitManagedConfigReady(e, "first_prompt"));
+  withStartupState((startupState) => emitManagedConfigReady(startupState, "first_prompt"));
 }
 //@ chunk-7t4fmt2f.js:6985-7161 placement
-function maybeEmitWhenResolved(e) {
+function maybeEmitWhenResolved(startupState) {
   if (
-    e.settings &&
-    e.policy &&
-    e.settingsBarrier &&
-    e.policyBarrier &&
-    !SUPERSEDED_SOURCES.has(e.settings.source) &&
-    !SUPERSEDED_SOURCES.has(e.policy.source) &&
-    e.openStartupBlocks === 0
+    startupState.settings &&
+    startupState.policy &&
+    startupState.settingsBarrier &&
+    startupState.policyBarrier &&
+    !SUPERSEDED_SOURCES.has(startupState.settings.source) &&
+    !SUPERSEDED_SOURCES.has(startupState.policy.source) &&
+    startupState.openStartupBlocks === 0
   )
-    emitManagedConfigReady(e, "both_resolved");
+    emitManagedConfigReady(startupState, "both_resolved");
 }
 //@ chunk-7t4fmt2f.js:7161-7231 placement
 var TENGU_MANAGED_CONFIG_READY = "tengu_managed_config_ready";
@@ -215,45 +222,46 @@ var TENGU_ORG_CONFIG_GATE_SHADOW = "tengu_org_config_gate_shadow";
 /**
  * 上报托管配置就绪事件，并记录组织门控影子结果。
  */
-function emitManagedConfigReady(e, r) {
-  let gateFields = readGateFieldsSafe(e.policyGate);
-  logEvent(TENGU_MANAGED_CONFIG_READY, buildManagedConfigReadyEvent(e, r, gateFields));
-  maybeLogOrgGateShadow(e, gateFields, r);
+function emitManagedConfigReady(startupState, trigger) {
+  let gateFields = readGateFieldsSafe(startupState.policyGate);
+  logEvent(TENGU_MANAGED_CONFIG_READY, buildManagedConfigReadyEvent(startupState, trigger, gateFields));
+  maybeLogOrgGateShadow(startupState, gateFields, trigger);
 }
 //@ chunk-7t4fmt2f.js:7297-7651 placement
 /**
  * 组织门控影子结果等待落定后上报。
  */
-function maybeLogOrgGateShadow(e, policyGateFields, n) {
-  if (e.orgGateShadow === undefined || e.orgGateShadowLogged) return;
-  if (n !== "exit" && e.orgGateShadowSettle !== undefined) {
-    if (e.unregisterOrgGateShadowExitFlush !== undefined) return;
-    e.unregisterOrgGateShadowExitFlush = registerCleanup(async () =>
-      logOrgGateShadow(e, readGateFieldsSafe(e.policyGate), "exit"),
+function maybeLogOrgGateShadow(startupState, policyGateFields, trigger) {
+  if (startupState.orgGateShadow === undefined || startupState.orgGateShadowLogged) return;
+  if (trigger !== "exit" && startupState.orgGateShadowSettle !== undefined) {
+    if (startupState.unregisterOrgGateShadowExitFlush !== undefined) return;
+    startupState.unregisterOrgGateShadowExitFlush = registerCleanup(async () =>
+      logOrgGateShadow(startupState, readGateFieldsSafe(startupState.policyGate), "exit"),
     );
-    e.orgGateShadowSettle()
+    startupState
+      .orgGateShadowSettle()
       .catch(() => {})
-      .then(() => logOrgGateShadow(e, readGateFieldsSafe(e.policyGate), "settled"));
+      .then(() => logOrgGateShadow(startupState, readGateFieldsSafe(startupState.policyGate), "settled"));
     return;
   }
-  logOrgGateShadow(e, policyGateFields, n);
+  logOrgGateShadow(startupState, policyGateFields, trigger);
 }
 //@ chunk-7t4fmt2f.js:7651-8036 placement
 /**
  * 上报组织门控影子结论（读取器出错记错误）。
  */
-function logOrgGateShadow(e, policyGateFields, n) {
-  if (e.orgGateShadow === undefined || e.orgGateShadowLogged) return;
-  e.orgGateShadowLogged = true;
-  e.unregisterOrgGateShadowExitFlush?.();
+function logOrgGateShadow(startupState, policyGateFields, trigger) {
+  if (startupState.orgGateShadow === undefined || startupState.orgGateShadowLogged) return;
+  startupState.orgGateShadowLogged = true;
+  startupState.unregisterOrgGateShadowExitFlush?.();
   try {
     logEvent(TENGU_ORG_CONFIG_GATE_SHADOW, {
-      ...e.orgGateShadow({
-        settings: e.settings,
-        policy: e.policy,
+      ...startupState.orgGateShadow({
+        settings: startupState.settings,
+        policy: startupState.policy,
         policyGateFields,
       }),
-      shadow_trigger: fromEnum(n),
+      shadow_trigger: fromEnum(trigger),
     });
   } catch (error) {
     logError(
@@ -268,19 +276,19 @@ function logOrgGateShadow(e, policyGateFields, n) {
 /**
  * 构造托管配置就绪事件字段。
  */
-function buildManagedConfigReadyEvent(e, r, gateFields) {
-  e.logged = true;
-  e.unregisterExitFlush?.();
-  let { settings, policy, settingsBarrier, policyBarrier } = e;
+function buildManagedConfigReadyEvent(startupState, trigger, gateFields) {
+  startupState.logged = true;
+  startupState.unregisterExitFlush?.();
+  let { settings, policy, settingsBarrier, policyBarrier } = startupState;
   return {
-    trigger: fromEnum(r),
+    trigger: fromEnum(trigger),
     emitted_ms: elapsedMsSinceStart(),
-    is_default_command: e.isDefaultCommand,
+    is_default_command: startupState.isDefaultCommand,
     settled_ms: laterOf(settings?.settledMs, policy?.settledMs),
     barrier_crossed_ms: laterOf(settingsBarrier?.crossedMs, policyBarrier?.crossedMs),
     ...sourceFields("settings", settings),
     ...barrierFields("settings", settingsBarrier),
-    ...readGateFieldsSafe(e.settingsReader),
+    ...readGateFieldsSafe(startupState.settingsReader),
     ...sourceFields("policy", policy),
     ...barrierFields("policy", policyBarrier),
     ...gateFields,
@@ -302,30 +310,30 @@ function readGateFieldsSafe(policyGate) {
   }
 }
 //@ chunk-7t4fmt2f.js:8630-8819 placement
-function sourceFields(e, r) {
+function sourceFields(sourceName, outcome) {
   return {
-    [`${e}_source`]: r ? fromEnum(r.source) : fromEnum("pending"),
-    [`${e}_had_cache`]: r?.hadCache,
-    [`${e}_awaited`]: r?.awaited,
-    [`${e}_fetch_ms`]: r?.fetchMs,
-    [`${e}_settled_ms`]: r?.settledMs,
+    [`${sourceName}_source`]: outcome ? fromEnum(outcome.source) : fromEnum("pending"),
+    [`${sourceName}_had_cache`]: outcome?.hadCache,
+    [`${sourceName}_awaited`]: outcome?.awaited,
+    [`${sourceName}_fetch_ms`]: outcome?.fetchMs,
+    [`${sourceName}_settled_ms`]: outcome?.settledMs,
   };
 }
 //@ chunk-7t4fmt2f.js:8819-8927 placement
-function barrierFields(e, r) {
+function barrierFields(sourceName, barrier) {
   return {
-    [`${e}_barrier`]: r ? fromEnum(r.result) : fromEnum("not_reached"),
-    [`${e}_barrier_wait_ms`]: r?.waitMs,
+    [`${sourceName}_barrier`]: barrier ? fromEnum(barrier.result) : fromEnum("not_reached"),
+    [`${sourceName}_barrier_wait_ms`]: barrier?.waitMs,
   };
 }
 //@ chunk-7t4fmt2f.js:8927-9017 placement
 /**
  * 把一次请求包成可中止的 attempt（abort 时中止）。
  */
-function abortableAttempt(e) {
+function abortableAttempt(startAttempt) {
   let abortController = new AbortController();
   return {
-    attempt: e(abortController.signal),
+    attempt: startAttempt(abortController.signal),
     abort: () => abortController.abort(),
   };
 }
@@ -342,69 +350,69 @@ function hedgedRequest({
   retryFollows = true,
 }) {
   return new Promise((resolve, reject) => {
-    let E = false;
-    let R;
-    let S = 1;
-    let K;
-    let b;
-    let w = (P) => {
-      E = true;
+    let settled = false;
+    let hedgeAttempt;
+    let pendingCount = 1;
+    let provisionalResult;
+    let retryResult;
+    let finish = (outcome) => {
+      settled = true;
       clearTimeout(timer);
       first.abort();
-      R?.abort();
-      if (P.ok)
+      hedgeAttempt?.abort();
+      if (outcome.ok)
         resolve({
-          result: P.value,
-          hedged: R !== undefined,
+          result: outcome.value,
+          hedged: hedgeAttempt !== undefined,
         });
-      else reject(P.error);
+      else reject(outcome.error);
     };
-    let A = (attempt) => {
+    let awaitAttempt = (attempt) => {
       attempt.then(
         (value) =>
-          O({
+          settle({
             ok: true,
             value,
           }),
         (error) =>
-          O({
+          settle({
             ok: false,
             error,
           }),
       );
     };
-    let O = (P) => {
-      if (E) return;
-      S--;
-      let M = S > 0;
-      if (P.ok && isAnswer(P.value, M)) {
-        w(b && !isAnswer(P.value, true) ? b : P);
+    let settle = (attemptOutcome) => {
+      if (settled) return;
+      pendingCount--;
+      let morePending = pendingCount > 0;
+      if (attemptOutcome.ok && isAnswer(attemptOutcome.value, morePending)) {
+        finish(retryResult && !isAnswer(attemptOutcome.value, true) ? retryResult : attemptOutcome);
         return;
       }
-      if (M) {
-        if (P.ok && isAnswer(P.value, false))
-          K ??= {
-            value: P.value,
+      if (morePending) {
+        if (attemptOutcome.ok && isAnswer(attemptOutcome.value, false))
+          provisionalResult ??= {
+            value: attemptOutcome.value,
           };
-        else if (P.ok && retryFollows) b ??= P;
+        else if (attemptOutcome.ok && retryFollows) retryResult ??= attemptOutcome;
         return;
       }
-      w(
-        K && !(P.ok && retryFollows)
+      finish(
+        provisionalResult && !(attemptOutcome.ok && retryFollows)
           ? {
               ok: true,
-              value: K.value,
+              value: provisionalResult.value,
             }
-          : P,
+          : attemptOutcome,
       );
     };
     let timer = setTimeout(() => {
-      if (E || !stillWanted()) return;
-      S++;
-      R = abortableAttempt(send);
-      A(R.attempt);
+      if (settled || !stillWanted()) return;
+      pendingCount++;
+      hedgeAttempt = abortableAttempt(send);
+      awaitAttempt(hedgeAttempt.attempt);
     }, delayMs);
-    A(first.attempt);
+    awaitAttempt(first.attempt);
   });
 }
 //@ chunk-7t4fmt2f.js:9627-10080 placement
@@ -413,34 +421,34 @@ function hedgedRequest({
  */
 class PrefetchSlot {
   entry = null;
-  set(key, r, n = () => true) {
+  set(key, send, isAnswer = () => true) {
     this.clear();
-    let o = abortableAttempt(r);
-    let u = {
+    let inFlight = abortableAttempt(send);
+    let entry = {
       key,
-      inFlight: o,
+      inFlight,
       sentAtMs: Date.now(),
       failed: false,
     };
-    o.attempt.then(
-      (p) => {
-        u.failed = !n(p);
+    inFlight.attempt.then(
+      (value) => {
+        entry.failed = !isAnswer(value);
       },
       () => {
-        u.failed = true;
+        entry.failed = true;
       },
     );
-    this.entry = u;
+    this.entry = entry;
   }
   get pending() {
     return this.entry !== null;
   }
-  take(e) {
+  take(acceptKey) {
     let entry = this.entry;
     this.entry = null;
     if (entry === null) return;
-    let n = Math.abs(Date.now() - entry.sentAtMs) <= 60000;
-    if (!entry.failed && n && e(entry.key)) return entry.inFlight;
+    let isFresh = Math.abs(Date.now() - entry.sentAtMs) <= 60000;
+    if (!entry.failed && isFresh && acceptKey(entry.key)) return entry.inFlight;
     entry.inFlight.abort();
     return;
   }
@@ -450,8 +458,8 @@ class PrefetchSlot {
   }
 }
 export {
-  emitManagedConfigReadyAtExit,
   setDefaultCommandFlag,
+  emitManagedConfigReadyAtExit,
   abortableAttempt,
   hedgedRequest,
   logFirstPromptReady,

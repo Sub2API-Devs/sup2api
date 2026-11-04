@@ -5,11 +5,11 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/components/permissions/AskUserQuestionPermissionRequest/QuestionNavigationBar.tsx
- * pieces: chunk-18hwfzwa.js (5), chunk-bwbq4xvm.js (1)
- * attribution: placement 3, layout 1, fingerprint 2
+ * pieces: chunk-18hwfzwa.js (5)
+ * attribution: placement 3, layout 1, fingerprint 1
  */
 import { bunStringWidth } from "../../../ink/stringWidth.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
 import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
@@ -23,24 +23,24 @@ import {
 import { TagTabs } from "../../TagTabs.js";
 
 //@ chunk-18hwfzwa.js:1275630-1275697 placement
-function ownLookup(h, key) {
-  return key !== undefined && Object.hasOwn(h, key) ? h[key] : undefined;
+function ownLookup(record, key) {
+  return key !== undefined && Object.hasOwn(record, key) ? record[key] : undefined;
 }
 //@ chunk-18hwfzwa.js:1275697-1275754 placement
-function questionTabHeader(_o, cn) {
-  return _o?.displayHeader || `Q${cn + 1}`;
+function questionTabHeader(questionDisplay, index) {
+  return questionDisplay?.displayHeader || `Q${index + 1}`;
 }
 //@ chunk-18hwfzwa.js:1275754-1275787 placement
-function tabWidth(Dn) {
-  return 4 + bunStringWidth(Dn);
+function tabWidth(header) {
+  return 4 + bunStringWidth(header);
 }
 //@ chunk-18hwfzwa.js:1275787-1275820 layout
-function addNumbers(wn, mr) {
-  return wn + mr;
+function addNumbers(left, right) {
+  return left + right;
 }
 //@ chunk-18hwfzwa.js:1275820-1278846 fingerprint = QuestionNavigationBar (0.703)
 function QuestionNavigationBar(props) {
-  let $ = w(55);
+  let $ = useMemoCache(55);
   let { questions, currentQuestionIndex, answers, hideSubmitTab } = props;
   let hideSubmitTab_2 = hideSubmitTab === undefined ? false : hideSubmitTab;
   let { columns } = useTerminalSize();
@@ -56,8 +56,8 @@ function QuestionNavigationBar(props) {
         if ($[5] !== currentQuestionIndex || $[6] !== questions) {
           let t4;
           if ($[8] !== currentQuestionIndex) {
-            t4 = (It, index) => {
-              let header = It?.displayHeader || `Q${index + 1}`;
+            t4 = (question, index) => {
+              let header = question?.displayHeader || `Q${index + 1}`;
               return index === currentQuestionIndex ? truncateToWidth(header, 3) : "";
             };
             $[8] = currentQuestionIndex;
@@ -108,70 +108,70 @@ function QuestionNavigationBar(props) {
   } else t2 = $[4];
   let tabDisplayTexts = t2;
   if (isScreenReaderEnabled) {
-    let Ho;
-    let Io;
-    let kt;
-    let At;
+    let headerComponent;
+    let containerComponent;
+    let labelText;
+    let summaryText;
     let marginBottom;
     if ($[14] !== answers || $[15] !== questions) {
-      let mn;
+      let formatTabLabel;
       if ($[21] !== answers) {
-        mn = (Cn, No) => {
-          let vo = Cn?.displayHeader || `Q${No + 1}`;
-          let Yo = vo.includes(",") || /answered/i.test(vo) ? jsonStringify(vo) : vo;
-          return ownLookup(answers, Cn?.key) ? `${Yo} (answered)` : Yo;
+        formatTabLabel = (question, index) => {
+          let header = question?.displayHeader || `Q${index + 1}`;
+          let label = header.includes(",") || /answered/i.test(header) ? jsonStringify(header) : header;
+          return ownLookup(answers, question?.key) ? `${label} (answered)` : label;
         };
         $[21] = answers;
-        $[22] = mn;
-      } else mn = $[22];
-      let mapped = questions.map(mn);
-      let Fn = questions.length === 1 ? "Question" : "Questions";
-      Io = Box;
+        $[22] = formatTabLabel;
+      } else formatTabLabel = $[22];
+      let mapped = questions.map(formatTabLabel);
+      let headingLabel = questions.length === 1 ? "Question" : "Questions";
+      containerComponent = Box;
       marginBottom = 1;
-      Ho = Text;
-      kt = Fn;
-      At = mapped.join(", ");
+      headerComponent = Text;
+      labelText = headingLabel;
+      summaryText = mapped.join(", ");
       $[14] = answers;
       $[15] = questions;
-      $[16] = Ho;
-      $[17] = Io;
-      $[18] = kt;
-      $[19] = At;
+      $[16] = headerComponent;
+      $[17] = containerComponent;
+      $[18] = labelText;
+      $[19] = summaryText;
       $[20] = marginBottom;
     } else {
-      Ho = $[16];
-      Io = $[17];
-      kt = $[18];
-      At = $[19];
+      headerComponent = $[16];
+      containerComponent = $[17];
+      labelText = $[18];
+      summaryText = $[19];
       marginBottom = $[20];
     }
-    const children = `${kt}: ${At}`;
+    const children = `${labelText}: ${summaryText}`;
     let children_2;
-    if ($[23] !== Ho || $[24] !== children) {
-      children_2 = jsxProd_default(Ho, {
+    if ($[23] !== headerComponent || $[24] !== children) {
+      children_2 = jsxProd_default(headerComponent, {
         children,
       });
-      $[23] = Ho;
+      $[23] = headerComponent;
       $[24] = children;
       $[25] = children_2;
     } else children_2 = $[25];
-    let Go;
-    if ($[26] !== Io || $[27] !== marginBottom || $[28] !== children_2) {
-      Go = jsxProd_default(Io, {
+    let headerRow;
+    if ($[26] !== containerComponent || $[27] !== marginBottom || $[28] !== children_2) {
+      headerRow = jsxProd_default(containerComponent, {
         marginBottom,
         children: children_2,
       });
-      $[26] = Io;
+      $[26] = containerComponent;
       $[27] = marginBottom;
       $[28] = children_2;
-      $[29] = Go;
-    } else Go = $[29];
-    return Go;
+      $[29] = headerRow;
+    } else headerRow = $[29];
+    return headerRow;
   }
   let hideArrows = questions.length === 1 && hideSubmitTab_2;
-  let kt;
+  let backArrowElement;
   if ($[30] !== currentQuestionIndex || $[31] !== hideArrows) {
-    kt =
+    backArrowElement =
       !hideArrows &&
       jsxProd_default_2(Text, {
         color: currentQuestionIndex === 0 ? "inactive" : undefined,
@@ -179,8 +179,8 @@ function QuestionNavigationBar(props) {
       });
     $[30] = currentQuestionIndex;
     $[31] = hideArrows;
-    $[32] = kt;
-  } else kt = $[32];
+    $[32] = backArrowElement;
+  } else backArrowElement = $[32];
   let t4;
   if (
     $[33] !== answers ||
@@ -192,7 +192,9 @@ function QuestionNavigationBar(props) {
     if ($[38] !== answers || $[39] !== currentQuestionIndex || $[40] !== tabDisplayTexts) {
       t5 = (q_1, index) => {
         let isSelected = index === currentQuestionIndex;
-        let $n = ownLookup(answers, q_1?.key) ? figures_default.checkboxOn : figures_default.checkboxOff;
+        let checkboxGlyph = ownLookup(answers, q_1?.key)
+          ? figures_default.checkboxOn
+          : figures_default.checkboxOff;
         let displayText = tabDisplayTexts[index] || q_1?.displayHeader || `Q${index + 1}`;
         return jsxProd_default(
           Box,
@@ -200,7 +202,7 @@ function QuestionNavigationBar(props) {
             children: jsxProd_default_2(TagTabs, {
               color: isSelected ? "permission" : undefined,
               padded: true,
-              children: [$n, " ", displayText],
+              children: [checkboxGlyph, " ", displayText],
             }),
           },
           q_1?.key || `question-${index}`,
@@ -252,13 +254,13 @@ function QuestionNavigationBar(props) {
     $[49] = t6;
   } else t6 = $[49];
   let t7;
-  if ($[50] !== kt || $[51] !== t4 || $[52] !== t5 || $[53] !== t6) {
+  if ($[50] !== backArrowElement || $[51] !== t4 || $[52] !== t5 || $[53] !== t6) {
     t7 = jsxProd_default_2(Box, {
       flexDirection: "row",
       marginBottom: 1,
-      children: [kt, t4, t5, t6],
+      children: [backArrowElement, t4, t5, t6],
     });
-    $[50] = kt;
+    $[50] = backArrowElement;
     $[51] = t4;
     $[52] = t5;
     $[53] = t6;
@@ -266,11 +268,4 @@ function QuestionNavigationBar(props) {
   } else t7 = $[54];
   return t7;
 }
-//@ chunk-bwbq4xvm.js:152526-152582 fingerprint = _temp (0.699)
-function freezeHeaderEntry(q_0, index_0) {
-  return Object.freeze({
-    name: q_0,
-    header: index_0,
-  });
-}
-export { QuestionNavigationBar, ownLookup, freezeHeaderEntry };
+export { QuestionNavigationBar, ownLookup };

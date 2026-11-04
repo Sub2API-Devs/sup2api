@@ -26,11 +26,11 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
  */
 var PENDING_SUBAGENT_ARMS_MAX = 32;
 //@ chunk-59vafc9k.js:494-712 placement
-function subagentPublishAdopter(n) {
+function subagentPublishAdopter(options) {
   if (
-    n.publishContext !== "subagent" ||
-    n.context.agentId === undefined ||
-    n.context.teammateContext !== undefined
+    options.publishContext !== "subagent" ||
+    options.context.agentId === undefined ||
+    options.context.teammateContext !== undefined
   )
     return null;
   let { publishContext } = derivePublishContextFrom({
@@ -40,21 +40,21 @@ function subagentPublishAdopter(n) {
   return isConsentUiKind(publishContext) ? publishContext : null;
 }
 //@ chunk-59vafc9k.js:712-1056 placement
-function stageSubagentPublishArm(agentId, e) {
+function stageSubagentPublishArm(agentId, arm) {
   let pendingSubagentArms = getLiveState().live.pendingSubagentArms;
-  let s = pendingSubagentArms.get(agentId) ?? [];
-  let index = s.findIndex((o) => o.slug === e.slug);
-  if (index === -1) s.push(e);
-  else s[index] = e;
+  let arms = pendingSubagentArms.get(agentId) ?? [];
+  let index = arms.findIndex((existing) => existing.slug === arm.slug);
+  if (index === -1) arms.push(arm);
+  else arms[index] = arm;
   pendingSubagentArms.delete(agentId);
-  pendingSubagentArms.set(agentId, s);
-  let r = 0;
-  for (let o of pendingSubagentArms.values()) r += o.length;
-  while (r > PENDING_SUBAGENT_ARMS_MAX) {
-    let [o, a] = pendingSubagentArms.entries().next().value;
-    a.shift();
-    if (a.length === 0) pendingSubagentArms.delete(o);
-    r--;
+  pendingSubagentArms.set(agentId, arms);
+  let total = 0;
+  for (let list of pendingSubagentArms.values()) total += list.length;
+  while (total > PENDING_SUBAGENT_ARMS_MAX) {
+    let [oldestId, oldestArms] = pendingSubagentArms.entries().next().value;
+    oldestArms.shift();
+    if (oldestArms.length === 0) pendingSubagentArms.delete(oldestId);
+    total--;
     logFeatureSad("artifact_live_subscribe", "subagent_arm_evicted");
   }
 }
@@ -64,9 +64,9 @@ function stageSubagentPublishArm(agentId, e) {
  */
 function takePendingSubagentArms(agentId) {
   let pendingSubagentArms = getLiveState().live.pendingSubagentArms;
-  let t = pendingSubagentArms.get(agentId) ?? [];
+  let arms = pendingSubagentArms.get(agentId) ?? [];
   pendingSubagentArms.delete(agentId);
-  return t;
+  return arms;
 }
 //@ chunk-59vafc9k.js:1142-1152 placement
 /**
@@ -85,22 +85,22 @@ function rememberSubagentAdopter(agentId) {
 /**
  * 子代理发布 artifact 后，主会话接管其实时订阅（artifact_live_subscribe）。
  */
-function adoptSubagentPublishArms(n) {
-  let { agentId, context } = n;
+function adoptSubagentPublishArms(request) {
+  let { agentId, context } = request;
   rememberSubagentAdopter(agentId);
-  let s = takePendingSubagentArms(agentId);
-  if (s.length === 0) return;
+  let arms = takePendingSubagentArms(agentId);
+  if (arms.length === 0) return;
   let { publishContext } = derivePublishContextFrom({
     agentId: context.agentId,
     agentType: context.agentContext?.agentType,
     isNonInteractiveSession: context.options.isNonInteractiveSession,
   });
   if (publishContext === "subagent" && context.agentId !== undefined) {
-    let o =
+    let isAdoptable =
       resolveVisibleSubagentId(context.agentId, context.taskRegistry) === context.agentId ||
       !getLiveState().live.finishedSubagentAdopters.has(context.agentId);
-    for (let a of s)
-      if (o) stageSubagentPublishArm(context.agentId, a);
+    for (let arm of arms)
+      if (isAdoptable) stageSubagentPublishArm(context.agentId, arm);
       else logFeatureSad("artifact_live_subscribe", "subagent_arm_orphaned");
     return;
   }
@@ -109,19 +109,19 @@ function adoptSubagentPublishArms(n) {
     ...context,
     abortController: new AbortController(),
   };
-  for (let o of s)
+  for (let arm of arms)
     maybeSubscribeFrameLive({
-      ...o,
+      ...arm,
       publishContext,
-      getKnownVer: makeMainObservedVersionReader(context.getArtifactReadObservation, o.slug),
+      getKnownVer: makeMainObservedVersionReader(context.getArtifactReadObservation, arm.slug),
       context: context_2,
       adoptedPublish: true,
       announceArmlessEnd: true,
     }).catch(() => {});
   logFeatureOk("artifact_live_subscribe", {
     subagent_publish_adopted: true,
-    count: s.length,
+    count: arms.length,
     publish_context: fromEnum(publishContext),
   });
 }
-export { subagentPublishAdopter, stageSubagentPublishArm };
+export { subagentPublishAdopter, stageSubagentPublishArm, adoptSubagentPublishArms };

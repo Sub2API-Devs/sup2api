@@ -37,16 +37,16 @@ import { VALID_INSTALLABLE_SCOPES, VALID_UPDATE_SCOPES } from "../../services/pl
 /**
  * 注册 claude plugin 命令组（init/install/list/validate/marketplace 等子命令与 --cowork 选项）。
  */
-function registerPluginCommands(b, r, l) {
-  let s = () => new Option("--cowork", "Use cowork_plugins directory").hideHelp();
-  let n = b
+function registerPluginCommands(program, withStorage, withStorageAndCredentials) {
+  let coworkOption = () => new Option("--cowork", "Use cowork_plugins directory").hideHelp();
+  let pluginCommand = program
     .command("plugin")
     .alias("plugins")
     .description("Manage Claude Code plugins")
     .configureHelp(createHelpConfig());
-  n.hook("preAction", async (o, t) => {
+  pluginCommand.hook("preAction", async (thisCommand, actionCommand) => {
     readResultNonce_2();
-    if (isPluginMutationCommand(t) && !(await awaitPluginPolicyColdStart())) {
+    if (isPluginMutationCommand(actionCommand) && !(await awaitPluginPolicyColdStart())) {
       if (!isTerminalShutdown())
         switch (unansweredSecuritySettingsDialog()) {
           case "not_asked":
@@ -59,7 +59,8 @@ function registerPluginCommands(b, r, l) {
       return heldUntilExit();
     }
   });
-  n.command("init <name>")
+  pluginCommand
+    .command("init <name>")
     .aliases(PLUGIN_SUBCOMMANDS.init.aliases)
     .description(PLUGIN_SUBCOMMANDS.init.description)
     .option("--description <text>", "Manifest description")
@@ -68,50 +69,53 @@ function registerPluginCommands(b, r, l) {
     .option("--with <components...>", `Also scaffold: ${PLUGIN_COMPONENT_KINDS.join(", ")}`)
     .option("-f, --force", "Overwrite an existing .claude-plugin/ at the target")
     .action(
-      r(async (o, t, a) => {
-        let [{ pluginInitHandler: e }, { createSubcommandRoot: i }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorage(async (storage, name, options) => {
+        let [{ pluginInitHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await e(await i(), t, a, o);
+        await pluginInitHandler(await createSubcommandRoot(), name, options, storage);
       }),
     );
-  n.command("validate <path>")
+  pluginCommand
+    .command("validate <path>")
     .description(PLUGIN_SUBCOMMANDS.validate.description)
     .option(
       "--strict",
       "Treat warnings as errors (exit 1). Use in CI to fail on unrecognized fields, missing metadata, and other issues that the runtime tolerates.",
     )
     .option("--json", "Output the validation report as JSON (same exit codes)")
-    .addOption(s())
+    .addOption(coworkOption())
     .addOption(
       new Option(
         "--profile <name>",
         "Also exit 1 when the plugin directory (the catalog that plugins are submitted to) would refuse a submission of the plugin on a check this command runs, such as a missing README, or when such a check could not be made: plugin.json lists more than 16 files for MCP servers or for hooks (16 of each are checked), or an MCP or hooks file is one these checks cannot use, such as one that is not valid JSON. With --strict, also fail on its warnings. The directory runs more checks.",
       ).choices(["directory"]),
     )
-    .action(async (o, t) => {
-      let [{ pluginValidateHandler: a }, { createSubcommandRoot: e }] = await Promise.all([
-        import("./chunk-hvrmg1vp.js"),
-        import("./chunk-tt9rxcw9.js"),
+    .action(async (path, options) => {
+      let [{ pluginValidateHandler }, { createSubcommandRoot }] = await Promise.all([
+        import("./plugins.js"),
+        import("./util.js"),
       ]);
-      await a(e, o, t);
+      await pluginValidateHandler(createSubcommandRoot, path, options);
     });
-  n.command("tag [path]")
+  pluginCommand
+    .command("tag [path]")
     .description(PLUGIN_SUBCOMMANDS.tag.description)
     .option("--push", "Push the tag to --remote after creating it")
     .option("--dry-run", "Print what would be tagged without creating it")
     .option("-f, --force", "Skip the dirty-working-tree and tag-already-exists checks")
     .option("-m, --message <msg>", "Tag annotation message (use %s for the version)")
     .option("--remote <name>", "Remote to push to with --push", "origin")
-    .action(async (o, t) => {
-      let [{ pluginTagHandler: a }, { createSubcommandRoot: e }] = await Promise.all([
-        import("./chunk-hvrmg1vp.js"),
-        import("./chunk-tt9rxcw9.js"),
+    .action(async (path, options) => {
+      let [{ pluginTagHandler }, { createSubcommandRoot }] = await Promise.all([
+        import("./plugins.js"),
+        import("./util.js"),
       ]);
-      await a(await e(), o, t);
+      await pluginTagHandler(await createSubcommandRoot(), path, options);
     });
-  n.command("list")
+  pluginCommand
+    .command("list")
     .description(PLUGIN_SUBCOMMANDS.list.description)
     .option("--json", "Output as JSON")
     .option("--available", "Include available plugins from marketplaces (requires --json)")
@@ -119,25 +123,25 @@ function registerPluginCommands(b, r, l) {
       "--data-size [plugin]",
       "Measure each installed plugin's saved data directory, or only the named plugin's (requires --json)",
     )
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      l(async (o, t, a) => {
-        let [{ pluginListHandler: e }, { createSubcommandRoot: i }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorageAndCredentials(async (storage, options, credentials) => {
+        let [{ pluginListHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await e(i, a, o, t);
+        await pluginListHandler(createSubcommandRoot, credentials, storage, options);
         return cliOkAfterAnalyticsFlush();
       }),
     );
-  let p = async () => {
+  let ensureModulesGate = async () => {
     {
-      let { initializeGrowthBook } = await import("./chunk-6df1d6re.js");
+      let { initializeGrowthBook } = await import("../../services/analytics/ATIS_REQUEST_HEADER.lazy.js");
       await withTimeout(initializeGrowthBook(), 3000, "feature settings fetch timed out").catch(() => {});
     }
     if (!shardedSnowflakeOff()) cliError("`plugin eval` is currently unavailable");
   };
-  let m = n
+  let evalCommand = pluginCommand
     .command("eval [target]")
     .description(PLUGIN_SUBCOMMANDS.eval.description)
     .option("--case <glob>", "Filter cases by name glob")
@@ -209,27 +213,32 @@ function registerPluginCommands(b, r, l) {
     )
     .option("--no-publish", "Keep the HTML report local only; skip publishing it to claude.ai")
     .action(
-      l(async (o, t, a, e) => {
-        await p();
-        if (e.ablation !== undefined && e.ablation !== "none" && e.ablation !== "with-without")
+      withStorageAndCredentials(async (storage, credentials, dir, options) => {
+        await ensureModulesGate();
+        if (
+          options.ablation !== undefined &&
+          options.ablation !== "none" &&
+          options.ablation !== "with-without"
+        )
           cliError('--ablation must be "none" or "with-without"');
-        let { pluginEvalHandler } = await import("./chunk-qchp9vrd.js");
+        let { pluginEvalHandler } = await import("../../services/pluginEval/pluginEvalCommand.js");
         await pluginEvalHandler(
-          a,
+          dir,
           {
-            ...e,
-            runs: e.runs ? parseIntLoose(e.runs) : undefined,
-            maxCostUsd: e.maxCostUsd ? parseFloat(e.maxCostUsd) : undefined,
-            threshold: e.threshold ? parseFloat(e.threshold) : undefined,
-            noScaffold: e.scaffold === undefined ? undefined : !e.scaffold,
-            ablation: e.ablation,
+            ...options,
+            runs: options.runs ? parseIntLoose(options.runs) : undefined,
+            maxCostUsd: options.maxCostUsd ? parseFloat(options.maxCostUsd) : undefined,
+            threshold: options.threshold ? parseFloat(options.threshold) : undefined,
+            noScaffold: options.scaffold === undefined ? undefined : !options.scaffold,
+            ablation: options.ablation,
           },
-          o,
-          t,
+          storage,
+          credentials,
         );
       }),
     );
-  m.command("init [name]")
+  evalCommand
+    .command("init [name]")
     .description(PLUGIN_SUBCOMMANDS.evalInit.description)
     .option(
       "--bare",
@@ -245,22 +254,22 @@ function registerPluginCommands(b, r, l) {
       "Directory (below the current directory) to write cases into (default: experimental.evals from the plugin.json in the current directory, else evals/)",
     )
     .action(
-      r(async (o, t, a) => {
-        await p();
-        let { pluginEvalInitHandler } = await import("./chunk-qchp9vrd.js");
+      withStorage(async (storage, name, options) => {
+        await ensureModulesGate();
+        let { pluginEvalInitHandler } = await import("../../services/pluginEval/pluginEvalCommand.js");
         await pluginEvalInitHandler(
-          t,
+          name,
           {
-            bare: a.bare,
-            forceInteractive: a.interactive || a.interview,
-            evalDir: a.evalDir ?? m.opts().evalDir,
+            bare: options.bare,
+            forceInteractive: options.interactive || options.interview,
+            evalDir: options.evalDir ?? evalCommand.opts().evalDir,
           },
-          o,
+          storage,
         );
         cliOk();
       }),
     );
-  let u = n
+  let testCommand = pluginCommand
     .command("test [dir]", {
       hidden: true,
     })
@@ -268,52 +277,54 @@ function registerPluginCommands(b, r, l) {
     .allowUnknownOption()
     .allowExcessArguments(true)
     .configureHelp({
-      formatHelp: () => (areHooksModulesActiveGbc() ? joined : h(n.args)),
+      formatHelp: () => (areHooksModulesActiveGbc() ? joined : reparseWithTest(pluginCommand.args)),
     })
     .action(() =>
       areHooksModulesActiveGbc()
         ? cliError(
             `claude plugin test: not run from this spelling. Use \`claude ${PLUGIN_SUBCOMMANDS.test.usage}\`, with no options before \`plugin\``,
           )
-        : h(["--", ...n.args]),
+        : reparseWithTest(["--", ...pluginCommand.args]),
     );
-  function h(o) {
-    Object.assign(n, {
-      commands: n.commands.filter((command) => command !== u),
+  function reparseWithTest(argv) {
+    Object.assign(pluginCommand, {
+      commands: pluginCommand.commands.filter((command) => command !== testCommand),
     });
-    n.parse(o, {
+    pluginCommand.parse(argv, {
       from: "user",
     });
     return cliError();
   }
-  n.configureHelp({
-    ...n.configureHelp(),
-    visibleCommands(o) {
-      let t = Help.prototype.visibleCommands.call(this, o);
-      if (o !== n || !areHooksModulesActiveGbc()) return t;
-      return [...t, u].sort((a, e) => a.name().localeCompare(e.name()));
+  pluginCommand.configureHelp({
+    ...pluginCommand.configureHelp(),
+    visibleCommands(cmd) {
+      let commands = Help.prototype.visibleCommands.call(this, cmd);
+      if (cmd !== pluginCommand || !areHooksModulesActiveGbc()) return commands;
+      return [...commands, testCommand].sort((leftCommand, b) => leftCommand.name().localeCompare(b.name()));
     },
   });
-  n.command("details <name>")
+  pluginCommand
+    .command("details <name>")
     .description(PLUGIN_SUBCOMMANDS.details.description)
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      l(async (o, t, a, e) => {
-        let [{ pluginDetailsHandler: i }, { createSubcommandRoot: d }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorageAndCredentials(async (storage, credentials, target, options) => {
+        let [{ pluginDetailsHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await i(d, a, e, o, t);
+        await pluginDetailsHandler(createSubcommandRoot, target, options, storage, credentials);
         return cliOkAfterAnalyticsFlush();
       }),
     );
-  let c = n
+  let marketplaceCommand = pluginCommand
     .command("marketplace")
     .description("Manage Claude Code marketplaces")
     .configureHelp(createHelpConfig());
-  c.command("add <source>")
+  marketplaceCommand
+    .command("add <source>")
     .description(PLUGIN_SUBCOMMANDS.marketplaceAdd.description)
-    .addOption(s())
+    .addOption(coworkOption())
     .option(
       "--sparse <paths...>",
       "Limit checkout to specific directories via git sparse-checkout (for monorepos). Example: --sparse .claude-plugin plugins",
@@ -337,29 +348,31 @@ function registerPluginCommands(b, r, l) {
     )
     .option("--json", "Print one machine-readable result line as the last line on stdout (same exit codes)")
     .action(
-      l(async (o, t, a, e) => {
-        let [{ marketplaceAddHandler: i }, { createSubcommandRoot: d }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorageAndCredentials(async (storage, credentials, source, options) => {
+        let [{ marketplaceAddHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await i(await d(), a, e, o, t);
+        await marketplaceAddHandler(await createSubcommandRoot(), source, options, storage, credentials);
       }),
     );
-  c.command("list")
+  marketplaceCommand
+    .command("list")
     .description(PLUGIN_SUBCOMMANDS.marketplaceList.description)
     .option("--json", "Output as JSON")
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      r(async (o, t) => {
-        let [{ marketplaceListHandler: a }, { createSubcommandRoot: e }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorage(async (storage, options) => {
+        let [{ marketplaceListHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await a(e, t, o);
+        await marketplaceListHandler(createSubcommandRoot, options, storage);
         return cliOkAfterAnalyticsFlush();
       }),
     );
-  c.command("remove <name>")
+  marketplaceCommand
+    .command("remove <name>")
     .aliases(PLUGIN_SUBCOMMANDS.marketplaceRemove.aliases)
     .description(PLUGIN_SUBCOMMANDS.marketplaceRemove.description)
     .option(
@@ -367,34 +380,35 @@ function registerPluginCommands(b, r, l) {
       "Remove the marketplace declaration from a specific settings scope: user, project, or local. Omit to remove it from every scope.",
     )
     .option("--json", "Print one machine-readable result line as the last line on stdout (same exit codes)")
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      r(async (o, t, a) => {
-        let [{ marketplaceRemoveHandler: e }, { createSubcommandRoot: i }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorage(async (storage, name, options) => {
+        let [{ marketplaceRemoveHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await e(await i(), t, a, o);
+        await marketplaceRemoveHandler(await createSubcommandRoot(), name, options, storage);
         return cliOkAfterAnalyticsFlush();
       }),
     );
-  c.command("update [name]")
+  marketplaceCommand
+    .command("update [name]")
     .description(PLUGIN_SUBCOMMANDS.marketplaceUpdate.description)
     .option(
       "--json",
       "With a marketplace name: print one machine-readable result line as the last line on stdout (same exit codes)",
     )
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      r(async (o, t, a) => {
-        let [{ marketplaceUpdateHandler: e }, { createSubcommandRoot: i }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorage(async (storage, name, options) => {
+        let [{ marketplaceUpdateHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await e(await i(), t, a, o);
+        await marketplaceUpdateHandler(await createSubcommandRoot(), name, options, storage);
       }),
     );
-  let g = n
+  let installCommand = pluginCommand
     .command("install <plugin>")
     .aliases(PLUGIN_SUBCOMMANDS.install.aliases)
     .description(PLUGIN_SUBCOMMANDS.install.description)
@@ -402,7 +416,7 @@ function registerPluginCommands(b, r, l) {
     .option(
       "--config <key=value>",
       "Set a userConfig option declared in the plugin's manifest, or a bundled .mcpb server's own user_config field as <server>.<key>=<value> (a bare key works when only one bundled server declares it). Repeatable. Values are validated against the schema and stored via the same path as the interactive /plugin configure flow.",
-      (o, t = []) => [...t, o],
+      (value, previous = []) => [...previous, value],
     )
     .option(
       "-y, --yes",
@@ -414,16 +428,17 @@ function registerPluginCommands(b, r, l) {
         "Accept the marketplace-declared command (a command-source install, or the headersHelper that fetches the archive) whose sha256 a previous --json run reported as shownCommand.sha256; counts as -y for exactly that command, for that plugin and marketplace catalog, and nothing else. If either changed (a refresh that moved the catalog counts), the run refuses and reports the command again, to be shown to a person again",
       ).conflicts("yes"),
     );
-  g.addOption(
+  installCommand.addOption(
     new Option(
       "--replace",
       "If this plugin is already installed from another marketplace, switch to this copy: install it, carry your plugin settings over, and uninstall the other. Only between Anthropic Directory and Anthropic's official marketplaces",
     ).hideHelp(true),
   );
-  g.option(
-    "--json",
-    "Print one machine-readable result line on stdout instead of the human message (same exit codes; a marketplace-declared command is still shown and must be confirmed \u2014 pass -y when not interactive)",
-  )
+  installCommand
+    .option(
+      "--json",
+      "Print one machine-readable result line on stdout instead of the human message (same exit codes; a marketplace-declared command is still shown and must be confirmed \u2014 pass -y when not interactive)",
+    )
     .option(
       "--registry <url>",
       "For a <package>@npm install: resolve and download from this npm registry instead of the one your npm configuration selects",
@@ -432,38 +447,39 @@ function registerPluginCommands(b, r, l) {
       "--marketplace <source>",
       "Install <plugin> (its bare name) from the marketplace at this source: owner/repo, a git or https URL, or a path. A marketplace not added yet is added first, in user settings, under the same checks as 'plugin marketplace add'",
     )
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      l(async (o, credentials, a, e, i) => {
-        let { marketplace, ...f } = e;
+      withStorageAndCredentials(async (storage, credentials, plugin, options, command) => {
+        let { marketplace, ...installOptions } = options;
         if (marketplace !== undefined) {
-          let [{ pluginInstallFromSourceHandler: v }, { createSubcommandRoot: k }] = await Promise.all([
-            import("./chunk-z2kk8ttr.js"),
-            import("./chunk-tt9rxcw9.js"),
+          let [{ pluginInstallFromSourceHandler }, { createSubcommandRoot }] = await Promise.all([
+            import("./pluginInstallFromSourceHandler.lazy.js"),
+            import("./util.js"),
           ]);
-          if (f.cowork) setUseCoworkPlugins(true);
-          await v(
-            k,
+          if (installOptions.cowork) setUseCoworkPlugins(true);
+          await pluginInstallFromSourceHandler(
+            createSubcommandRoot,
             {
-              plugins: i.args,
+              plugins: command.args,
               marketplaceSource: marketplace,
-              options: f,
+              options: installOptions,
             },
             {
-              storageV5: o,
+              storageV5: storage,
               credentials,
             },
           );
           return;
         }
-        let [{ pluginInstallHandler: w }, { createSubcommandRoot: y }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+        let [{ pluginInstallHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await w(y, a, e, o);
+        await pluginInstallHandler(createSubcommandRoot, plugin, options, storage);
       }),
     );
-  n.command("uninstall <plugin>")
+  pluginCommand
+    .command("uninstall <plugin>")
     .aliases(PLUGIN_SUBCOMMANDS.uninstall.aliases)
     .description(PLUGIN_SUBCOMMANDS.uninstall.description)
     .option("-s, --scope <scope>", "Uninstall from scope: user, project, or local", "user")
@@ -477,33 +493,35 @@ function registerPluginCommands(b, r, l) {
       "--json",
       "Print one machine-readable result line on stdout instead of the human message (same exit codes; not with --prune)",
     )
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      r(async (o, t, a) => {
-        let [{ pluginUninstallHandler: e }, { createSubcommandRoot: i }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorage(async (storage, plugin, options) => {
+        let [{ pluginUninstallHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await e(i, t, a, o);
+        await pluginUninstallHandler(createSubcommandRoot, plugin, options, storage);
       }),
     );
-  n.command("prune")
+  pluginCommand
+    .command("prune")
     .aliases(PLUGIN_SUBCOMMANDS.prune.aliases)
     .description(PLUGIN_SUBCOMMANDS.prune.description)
     .option("-s, --scope <scope>", "Prune at scope: user, project, or local", "user")
     .option("--dry-run", "List what would be removed without removing")
     .option("-y, --yes", "Skip the confirmation prompt (required when stdin or stdout is not a TTY)")
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      r(async (o, t) => {
-        let [{ pluginPruneHandler: a }, { createSubcommandRoot: e }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorage(async (storage, options) => {
+        let [{ pluginPruneHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await a(await e(), t, o);
+        await pluginPruneHandler(await createSubcommandRoot(), options, storage);
       }),
     );
-  n.command("enable <plugin>")
+  pluginCommand
+    .command("enable <plugin>")
     .description(PLUGIN_SUBCOMMANDS.enable.description)
     .option(
       "-s, --scope <scope>",
@@ -513,17 +531,18 @@ function registerPluginCommands(b, r, l) {
       "--json",
       "Print one machine-readable result line on stdout instead of the human message (same exit codes)",
     )
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      r(async (o, t, a) => {
-        let [{ pluginEnableHandler: e }, { createSubcommandRoot: i }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorage(async (storage, plugin, options) => {
+        let [{ pluginEnableHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await e(i, t, a, o);
+        await pluginEnableHandler(createSubcommandRoot, plugin, options, storage);
       }),
     );
-  n.command("disable [plugin]")
+  pluginCommand
+    .command("disable [plugin]")
     .description(PLUGIN_SUBCOMMANDS.disable.description)
     .option("-a, --all", "Disable all enabled plugins")
     .option(
@@ -534,17 +553,18 @@ function registerPluginCommands(b, r, l) {
       "--json",
       "Print one machine-readable result line on stdout instead of the human message (same exit codes)",
     )
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      r(async (o, t, a) => {
-        let [{ pluginDisableHandler: e }, { createSubcommandRoot: i }] = await Promise.all([
-          import("./chunk-hvrmg1vp.js"),
-          import("./chunk-tt9rxcw9.js"),
+      withStorage(async (storage, plugin, options) => {
+        let [{ pluginDisableHandler }, { createSubcommandRoot }] = await Promise.all([
+          import("./plugins.js"),
+          import("./util.js"),
         ]);
-        await e(i, t, a, o);
+        await pluginDisableHandler(createSubcommandRoot, plugin, options, storage);
       }),
     );
-  n.command("update <plugin>")
+  pluginCommand
+    .command("update <plugin>")
     .description(PLUGIN_SUBCOMMANDS.update.description)
     .option(
       "-s, --scope <scope>",
@@ -564,25 +584,27 @@ function registerPluginCommands(b, r, l) {
       "--json",
       "Print one machine-readable result line on stdout instead of the human message (same exit codes; a marketplace-declared command is still shown and must be confirmed \u2014 pass -y when not interactive)",
     )
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      r(async (o, t, a) => {
-        let { pluginUpdateHandler } = await import("./chunk-hvrmg1vp.js");
-        await pluginUpdateHandler(t, a, o);
+      withStorage(async (storage, plugin, options) => {
+        let { pluginUpdateHandler } = await import("./plugins.js");
+        await pluginUpdateHandler(plugin, options, storage);
       }),
     );
-  n.command("configure <plugin>")
+  pluginCommand
+    .command("configure <plugin>")
     .description(PLUGIN_SUBCOMMANDS.configure.description)
     .option("--json", "Output as JSON")
     .option(
       "--values-stdin",
       "Read option values from stdin as a JSON object of single-line strings; options left out keep their values",
     )
-    .addOption(s())
+    .addOption(coworkOption())
     .action(
-      l(async (o, t, a, e) => {
-        let { pluginConfigureHandler } = await import("./chunk-hvrmg1vp.js");
-        await pluginConfigureHandler(a, e, o, t);
+      withStorageAndCredentials(async (storage, credentials, plugin, options) => {
+        let { pluginConfigureHandler } = await import("./plugins.js");
+        await pluginConfigureHandler(plugin, options, storage, credentials);
       }),
     );
 }
+export { registerPluginCommands };

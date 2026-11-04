@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (5)
  * attribution: placement 5
  */
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import {
@@ -35,6 +35,7 @@ import {
 import { logEvent } from "../../../services/analytics/index.js";
 import { fromEnum } from "../../../services/analytics/safeMetadata.js";
 import { isBridgeInboundAllowed } from "../../../commands/bridge/bridge.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1781197-1781226 placement
 var RC_LONG_TURN_NUDGE = "rc-long-turn-nudge";
@@ -43,22 +44,22 @@ var RC_LONG_TURN_NUDGE = "rc-long-turn-nudge";
  * 长回合提醒："Still working. Check in from your phone"，附 Remote Control 链接（读屏模式下直接显示 URL）。
  */
 function StillWorkingPhoneLink(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { url } = props;
   let screenReader = useIsScreenReaderEnabled();
-  let ee;
+  let $_2;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    ee = jsxProd_default_2(Text, {
+    $_2 = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["Check in from your phone", " \xB7 "],
     });
-    $[0] = ee;
-  } else ee = $[0];
-  let ke;
+    $[0] = $_2;
+  } else $_2 = $[0];
+  let text;
   if ($[1] !== url) {
-    ke = jsxProd_default_2(Fragment, {
+    text = jsxProd_default_2(Fragment, {
       children: [
-        ee,
+        $_2,
         jsxProd_default(Text, {
           color: "suggestion",
           children: url,
@@ -66,26 +67,26 @@ function StillWorkingPhoneLink(props) {
       ],
     });
     $[1] = url;
-    $[2] = ke;
-  } else ke = $[2];
-  let Re = ke;
-  let Be;
+    $[2] = text;
+  } else text = $[2];
+  let text_ = text;
+  let linkElement;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    Be = jsxProd_default(Text, {
+    linkElement = jsxProd_default(Text, {
       children: "Still working. ",
     });
-    $[3] = Be;
-  } else Be = $[3];
-  let He;
-  if ($[4] !== Re || $[5] !== screenReader || $[6] !== url) {
-    He = jsxProd_default_2(Fragment, {
+    $[3] = linkElement;
+  } else linkElement = $[3];
+  let element;
+  if ($[4] !== text_ || $[5] !== screenReader || $[6] !== url) {
+    element = jsxProd_default_2(Fragment, {
       children: [
-        Be,
+        linkElement,
         screenReader
-          ? Re
+          ? text_
           : jsxProd_default(Link, {
               url,
-              fallback: Re,
+              fallback: text_,
               children: jsxProd_default(Text, {
                 color: "suggestion",
                 children: "Check in from your phone",
@@ -93,28 +94,28 @@ function StillWorkingPhoneLink(props) {
             }),
       ],
     });
-    $[4] = Re;
+    $[4] = text_;
     $[5] = screenReader;
     $[6] = url;
-    $[7] = He;
-  } else He = $[7];
-  return He;
+    $[7] = element;
+  } else element = $[7];
+  return element;
 }
 //@ chunk-18hwfzwa.js:1781785-1782573 placement
 var rcLongTurnNudgeNoticeSpec = {
   id: "rc-long-turn-nudge",
-  deps: (h) => [h.turnAtRender.isLoading, h.replBridgeActive, h.removeNotification, h.clock],
+  deps: (ctx) => [ctx.turnAtRender.isLoading, ctx.replBridgeActive, ctx.removeNotification, ctx.clock],
   setup() {
-    let h = false;
-    return ({ turnAtRender: { isLoading }, replBridgeActive, removeNotification, clock }, ke) => {
+    let cancelled = false;
+    return ({ turnAtRender: { isLoading }, replBridgeActive, removeNotification, clock }, timer) => {
       if (!isLoading) {
-        if (h) {
-          h = false;
+        if (cancelled) {
+          cancelled = false;
           removeNotification(RC_LONG_TURN_NUDGE);
         }
         return;
       }
-      if (!replBridgeActive || h || isRemoteSessionAvailable()) return;
+      if (!replBridgeActive || cancelled || isRemoteSessionAvailable()) return;
       let longTurnNudgeConfig = getLongTurnNudgeConfig();
       if (
         longTurnNudgeConfig === null ||
@@ -122,10 +123,10 @@ var rcLongTurnNudgeNoticeSpec = {
         !isWithinDayHours(longTurnNudgeConfig)
       )
         return;
-      let Be = clock.setTimeout(() => {
-        let { addNotification, replBridgeSessionUrl, store, storageV5 } = ke();
-        if (h || !replBridgeSessionUrl) return;
-        h = true;
+      let fired = clock.setTimeout(() => {
+        let { addNotification, replBridgeSessionUrl, store, storageV5 } = timer();
+        if (cancelled || !replBridgeSessionUrl) return;
+        cancelled = true;
         if (longTurnNudgeConfig.probability < 1 && Math.random() >= longTurnNudgeConfig.probability) return;
         recordLongTurnNudgeShown(longTurnNudgeConfig, storageV5);
         addNotification({
@@ -143,121 +144,130 @@ var rcLongTurnNudgeNoticeSpec = {
           threshold_sec: longTurnNudgeConfig.thresholdSec,
         });
       }, longTurnNudgeConfig.thresholdSec * 1000);
-      return () => Be();
+      return () => fired();
     };
   },
 };
 //@ chunk-18hwfzwa.js:1782573-1783832 placement
-var RC_PERMISSION_NUDGE = "rc-permission-nudge";
-var RC_NUDGE_MODES = new Set(["default", "plan", "acceptEdits"]);
-var rcPermissionNudgeNoticeSpec = {
-  id: "rc-permission-nudge",
-  deps: (h) => [
-    h.permissionPromptCount,
-    h.turnAtRender.isLoading,
-    h.replBridgeActive,
-    h.replBridgeSessionUrl,
-    h.permissionMode,
-    h.addNotification,
-    h.removeNotification,
-    h.storageV5,
-  ],
-  setup() {
-    let h = false;
-    let x = false;
-    let D = 0;
-    let L = null;
-    let ee = () => {};
-    function ke({
-      addNotification,
-      turnAtRender,
-      replBridgeActive,
-      replBridgeSessionUrl,
-      permissionMode,
-      permissionPromptCount,
-      storageV5,
-    }) {
-      if (permissionPromptCount < D) D = 0;
-      if (
-        h ||
-        !replBridgeActive ||
-        !replBridgeSessionUrl ||
-        !RC_NUDGE_MODES.has(permissionMode) ||
-        isRemoteSessionAvailable()
-      )
-        return;
-      if (!x) {
-        let permissionNudgeConfig = getPermissionNudgeConfig();
+var RC_PERMISSION_NUDGE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var RC_NUDGE_MODES;
+var rcPermissionNudgeNoticeSpec;
+deferInit("chunk-18hwfzwa.js:1782573", () => {
+  RC_PERMISSION_NUDGE = "rc-permission-nudge";
+  RC_NUDGE_MODES = new Set(["default", "plan", "acceptEdits"]);
+  rcPermissionNudgeNoticeSpec = {
+    id: "rc-permission-nudge",
+    deps: (ctx) => [
+      ctx.permissionPromptCount,
+      ctx.turnAtRender.isLoading,
+      ctx.replBridgeActive,
+      ctx.replBridgeSessionUrl,
+      ctx.permissionMode,
+      ctx.addNotification,
+      ctx.removeNotification,
+      ctx.storageV5,
+    ],
+    setup() {
+      let armed = false;
+      let firedOnce = false;
+      let requestId = 0;
+      let pendingTimer = null;
+      let cleanup = () => {};
+      function onRequest({
+        addNotification,
+        turnAtRender,
+        replBridgeActive,
+        replBridgeSessionUrl,
+        permissionMode,
+        permissionPromptCount,
+        storageV5,
+      }) {
+        if (permissionPromptCount < requestId) requestId = 0;
         if (
-          permissionNudgeConfig.probability <= 0 ||
-          permissionPromptCount < permissionNudgeConfig.afterPromptCount ||
-          permissionPromptCount <= D ||
-          !canShowPermissionNudge(permissionNudgeConfig.maxImpressions)
+          armed ||
+          !replBridgeActive ||
+          !replBridgeSessionUrl ||
+          !RC_NUDGE_MODES.has(permissionMode) ||
+          isRemoteSessionAvailable()
         )
           return;
-        D = permissionPromptCount;
-        if (Math.random() >= permissionNudgeConfig.probability) return;
-        x = true;
+        if (!firedOnce) {
+          let permissionNudgeConfig = getPermissionNudgeConfig();
+          if (
+            permissionNudgeConfig.probability <= 0 ||
+            permissionPromptCount < permissionNudgeConfig.afterPromptCount ||
+            permissionPromptCount <= requestId ||
+            !canShowPermissionNudge(permissionNudgeConfig.maxImpressions)
+          )
+            return;
+          requestId = permissionPromptCount;
+          if (Math.random() >= permissionNudgeConfig.probability) return;
+          firedOnce = true;
+        }
+        if (turnAtRender.isLoading) return;
+        armed = true;
+        recordPermissionNudgeShown(storageV5);
+        addNotification({
+          key: RC_PERMISSION_NUDGE,
+          kind: "upsell",
+          segments: [
+            {
+              text: "Approve tool calls from your phone \xB7 ",
+              dim: true,
+            },
+            {
+              text: replBridgeSessionUrl,
+              color: "suggestion",
+            },
+          ],
+          priority: "medium",
+          requeueOnPreempt: true,
+          timeoutMs: 2147483647,
+        });
+        logEvent("tengu_rc_permission_nudge_shown", {
+          permission_mode: fromEnum(permissionMode),
+          prompt_count: permissionPromptCount,
+        });
       }
-      if (turnAtRender.isLoading) return;
-      h = true;
-      recordPermissionNudgeShown(storageV5);
-      addNotification({
-        key: RC_PERMISSION_NUDGE,
-        kind: "upsell",
-        segments: [
-          {
-            text: "Approve tool calls from your phone \xB7 ",
-            dim: true,
-          },
-          {
-            text: replBridgeSessionUrl,
-            color: "suggestion",
-          },
-        ],
-        priority: "medium",
-        requeueOnPreempt: true,
-        timeoutMs: 2147483647,
-      });
-      logEvent("tengu_rc_permission_nudge_shown", {
-        permission_mode: fromEnum(permissionMode),
-        prompt_count: permissionPromptCount,
-      });
-    }
-    return {
-      effect: (Re) => {
-        ke(Re);
-        let Be = {
-          isLoading: Re.turnAtRender.isLoading,
-          rcReady: Re.replBridgeActive,
-        };
-        let He = L === null || L.isLoading !== Be.isLoading || L.rcReady !== Be.rcReady;
-        L = Be;
-        if (He && h && (Be.isLoading || !Be.rcReady)) Re.removeNotification(RC_PERMISSION_NUDGE);
-        ee = Re.removeNotification;
-      },
-      dispose: () => ee(RC_PERMISSION_NUDGE),
-    };
-  },
-};
+      return {
+        effect: (ctx) => {
+          onRequest(ctx);
+          let body = {
+            isLoading: ctx.turnAtRender.isLoading,
+            rcReady: ctx.replBridgeActive,
+          };
+          let element =
+            pendingTimer === null ||
+            pendingTimer.isLoading !== body.isLoading ||
+            pendingTimer.rcReady !== body.rcReady;
+          pendingTimer = body;
+          if (element && armed && (body.isLoading || !body.rcReady))
+            ctx.removeNotification(RC_PERMISSION_NUDGE);
+          cleanup = ctx.removeNotification;
+        },
+        dispose: () => cleanup(RC_PERMISSION_NUDGE),
+      };
+    },
+  };
+});
 //@ chunk-18hwfzwa.js:1783832-1785048 placement
 var RC_IDLE_UPSELL = "rc-idle-upsell";
 var PUSH_IDLE_UPSELL = "push-idle-upsell";
 var remoteControlUpsellNoticeSpec = {
   id: "remote-control-upsell",
-  deps: (h) => {
-    let turnAtRender = h.turnAtRender;
+  deps: (ctx) => {
+    let turnAtRender = ctx.turnAtRender;
     return [
       turnAtRender.lastQueryCompletionTime,
       turnAtRender.isLoading,
-      h.addNotification,
-      h.removeNotification,
-      h.clock,
-      h.storageV5,
+      ctx.addNotification,
+      ctx.removeNotification,
+      ctx.clock,
+      ctx.storageV5,
     ];
   },
   setup() {
-    let h = false;
+    let cancelled = false;
     return ({
       addNotification,
       removeNotification,
@@ -266,23 +276,23 @@ var remoteControlUpsellNoticeSpec = {
       turnAtRender: { isLoading, lastQueryCompletionTime },
       storageV5,
     }) => {
-      if (isRemoteSessionAvailable() || lastQueryCompletionTime === 0 || isLoading || h) return;
-      let He =
+      if (isRemoteSessionAvailable() || lastQueryCompletionTime === 0 || isLoading || cancelled) return;
+      let timer =
         !isBridgeInboundAllowed(store) && shouldShowRemoteControlUpsell()
           ? "rc"
           : canShowPushUpsell()
             ? "push"
             : null;
-      if (He === null) return;
-      let We = Date.now() - lastQueryCompletionTime;
-      let ze = RC_MIN_TURN_SECONDS * 60000 - We;
-      let Xe = clock.setTimeout(
+      if (timer === null) return;
+      let elapsedMs = Date.now() - lastQueryCompletionTime;
+      let remainingMs = RC_MIN_TURN_SECONDS * 60000 - elapsedMs;
+      let handle = clock.setTimeout(
         () => {
-          if (h) return;
+          if (cancelled) return;
           let idleMinutes = Math.round((Date.now() - lastQueryCompletionTime) / 60000);
-          if (He === "rc") {
+          if (timer === "rc") {
             if (isBridgeInboundAllowed(store) || !shouldShowRemoteControlUpsell()) return;
-            h = true;
+            cancelled = true;
             noteRcUpsellShown(storageV5);
             addNotification({
               key: RC_IDLE_UPSELL,
@@ -305,7 +315,7 @@ var remoteControlUpsellNoticeSpec = {
             });
           } else {
             if (!canShowPushUpsell()) return;
-            h = true;
+            cancelled = true;
             notePushUpsellShown(storageV5);
             addNotification({
               key: PUSH_IDLE_UPSELL,
@@ -328,10 +338,10 @@ var remoteControlUpsellNoticeSpec = {
             });
           }
         },
-        Math.max(0, ze),
+        Math.max(0, remainingMs),
       );
       return () => {
-        Xe();
+        handle();
         removeNotification(RC_IDLE_UPSELL);
         removeNotification(PUSH_IDLE_UPSELL);
       };

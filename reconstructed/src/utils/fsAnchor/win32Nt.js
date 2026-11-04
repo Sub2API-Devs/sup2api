@@ -160,12 +160,12 @@ var NT_STATUS_TO_ERRNO = new Map([
   [NT_STATUS.IO_TIMEOUT, "ETIMEDOUT"],
 ]);
 //@ chunk-9gakhe7s.js:3620-3758 placement
-function ntStatusError(syscall, n) {
-  let N = n >>> 0;
+function ntStatusError(syscall, status) {
+  let unsignedStatus = status >>> 0;
   return Object.assign(Error("Windows file-system call failed"), {
-    code: NT_STATUS_TO_ERRNO.get(N) ?? "EUNKNOWN",
+    code: NT_STATUS_TO_ERRNO.get(unsignedStatus) ?? "EUNKNOWN",
     syscall,
-    status: N,
+    status: unsignedStatus,
   });
 }
 //@ chunk-9gakhe7s.js:3758-3869 placement
@@ -179,22 +179,27 @@ function statusOf(error) {
  * NTSTATUS 是否表示不支持
  */
 function isUnsupportedNtStatus(error) {
-  let n = statusOf(error);
+  let status = statusOf(error);
   return (
-    n === NT_STATUS.NOT_IMPLEMENTED ||
-    n === NT_STATUS.INVALID_INFO_CLASS ||
-    n === NT_STATUS.INVALID_PARAMETER ||
-    n === NT_STATUS.NOT_SUPPORTED ||
-    n === NT_STATUS.INVALID_DEVICE_REQUEST ||
-    n === NT_STATUS.INVALID_LEVEL
+    status === NT_STATUS.NOT_IMPLEMENTED ||
+    status === NT_STATUS.INVALID_INFO_CLASS ||
+    status === NT_STATUS.INVALID_PARAMETER ||
+    status === NT_STATUS.NOT_SUPPORTED ||
+    status === NT_STATUS.INVALID_DEVICE_REQUEST ||
+    status === NT_STATUS.INVALID_LEVEL
   );
 }
 //@ chunk-9gakhe7s.js:4048-4421 placement
-function toNtPath(e) {
-  let n = e.startsWith("\\\\?\\UNC\\") ? "\\\\" + e.slice(8) : e.startsWith("\\\\?\\") ? e.slice(4) : e;
-  let N = !n.includes("/") && !/(^|\\)\.\.?(\\|$)/.test(n);
-  if (N && /^[a-zA-Z]:\\/.test(n)) return "\\??\\" + n;
-  if (N && /^\\\\[^\\?.][^\\]*\\[^\\]+/.test(n)) return "\\??\\UNC\\" + n.slice(2);
+function toNtPath(inputPath) {
+  let pathWithoutPrefix = inputPath.startsWith("\\\\?\\UNC\\")
+    ? "\\\\" + inputPath.slice(8)
+    : inputPath.startsWith("\\\\?\\")
+      ? inputPath.slice(4)
+      : inputPath;
+  let isPlainAbsolutePath = !pathWithoutPrefix.includes("/") && !/(^|\\)\.\.?(\\|$)/.test(pathWithoutPrefix);
+  if (isPlainAbsolutePath && /^[a-zA-Z]:\\/.test(pathWithoutPrefix)) return "\\??\\" + pathWithoutPrefix;
+  if (isPlainAbsolutePath && /^\\\\[^\\?.][^\\]*\\[^\\]+/.test(pathWithoutPrefix))
+    return "\\??\\UNC\\" + pathWithoutPrefix.slice(2);
   throw Object.assign(Error("not an absolute Windows drive or network-share path"), {
     code: "EINVAL",
   });
@@ -203,30 +208,30 @@ function toNtPath(e) {
 /**
  * 编码 Windows 符号链接重解析数据；本模块是基于 ntdll 的 Windows 文件锚定后端。
  */
-function encodeSymlinkReparseData(e) {
-  let buffer = Buffer.from(toNtPath(e), "utf16le");
-  let buffer_2 = Buffer.from(fromNtPath(toNtPath(e)), "utf16le");
-  let s = SYMLINK_NAME_HEADER_BYTES + buffer.length + buffer_2.length;
-  if (REPARSE_DATA_HEADER_BYTES + s > MAX_REPARSE_DATA_BYTES)
+function encodeSymlinkReparseData(targetPath) {
+  let buffer = Buffer.from(toNtPath(targetPath), "utf16le");
+  let buffer_2 = Buffer.from(fromNtPath(toNtPath(targetPath)), "utf16le");
+  let nameBytesLength = SYMLINK_NAME_HEADER_BYTES + buffer.length + buffer_2.length;
+  if (REPARSE_DATA_HEADER_BYTES + nameBytesLength > MAX_REPARSE_DATA_BYTES)
     throw Object.assign(Error("symbolic link target too long for a reparse point"), {
       code: "ENAMETOOLONG",
     });
-  let I = Buffer.alloc(REPARSE_DATA_HEADER_BYTES + s);
-  I.writeUInt32LE(SYMLINK_REPARSE_TAG, 0);
-  I.writeUInt16LE(s, 4);
-  I.writeUInt16LE(0, 8);
-  I.writeUInt16LE(buffer.length, 10);
-  I.writeUInt16LE(buffer.length, 12);
-  I.writeUInt16LE(buffer_2.length, 14);
-  I.writeUInt32LE(0, 16);
-  buffer.copy(I, REPARSE_DATA_HEADER_BYTES + SYMLINK_NAME_HEADER_BYTES);
-  buffer_2.copy(I, REPARSE_DATA_HEADER_BYTES + SYMLINK_NAME_HEADER_BYTES + buffer.length);
-  return I;
+  let buffer_3 = Buffer.alloc(REPARSE_DATA_HEADER_BYTES + nameBytesLength);
+  buffer_3.writeUInt32LE(SYMLINK_REPARSE_TAG, 0);
+  buffer_3.writeUInt16LE(nameBytesLength, 4);
+  buffer_3.writeUInt16LE(0, 8);
+  buffer_3.writeUInt16LE(buffer.length, 10);
+  buffer_3.writeUInt16LE(buffer.length, 12);
+  buffer_3.writeUInt16LE(buffer_2.length, 14);
+  buffer_3.writeUInt32LE(0, 16);
+  buffer.copy(buffer_3, REPARSE_DATA_HEADER_BYTES + SYMLINK_NAME_HEADER_BYTES);
+  buffer_2.copy(buffer_3, REPARSE_DATA_HEADER_BYTES + SYMLINK_NAME_HEADER_BYTES + buffer.length);
+  return buffer_3;
 }
 //@ chunk-9gakhe7s.js:4883-4998 placement
-function fromNtPath(e) {
-  if (/^\\\?\?\\UNC\\/i.test(e)) return "\\\\" + e.slice(8);
-  return /^\\\?\?\\[A-Za-z]:/.test(e) ? e.slice(4) : e;
+function fromNtPath(ntPath) {
+  if (/^\\\?\?\\UNC\\/i.test(ntPath)) return "\\\\" + ntPath.slice(8);
+  return /^\\\?\?\\[A-Za-z]:/.test(ntPath) ? ntPath.slice(4) : ntPath;
 }
 //@ chunk-9gakhe7s.js:4998-5004 placement
 var ntdllProbeMemo;
@@ -240,18 +245,18 @@ function loadNt() {
 /**
  * 把 NTSTATUS 异常转为 errno 错误
  */
-function wrapNtCall(e) {
-  return (...n) => {
+function wrapNtCall(ntCall) {
+  return (...args) => {
     try {
-      return e(...n);
+      return ntCall(...args);
     } catch (error) {
-      let s = statusOf(error);
-      if (s === undefined) throw error;
+      let status = statusOf(error);
+      if (status === undefined) throw error;
       throw ntStatusError(
         typeof error === "object" && error !== null && "syscall" in error && typeof error.syscall === "string"
           ? error.syscall
           : "ntdll",
-        s,
+        status,
       );
     }
   };
@@ -260,23 +265,23 @@ function wrapNtCall(e) {
 /**
  * 基于 ntdll 的锚定后端
  */
-function createNtBackend(e) {
-  if (typeof e?.open !== "function") throw Error("not in this runtime");
-  let n = wrapNtCall(e.deleteByHandle);
-  let N = wrapNtCall(e.renameByHandle);
-  let s = wrapNtCall(e.queryAttributes);
-  let I = wrapNtCall(e.setAttributes);
-  let S = wrapNtCall(e.listDirectory);
-  let x = wrapNtCall(e.open);
-  let f = wrapNtCall(e.linkByHandle);
-  let C = wrapNtCall(e.readSymlink);
-  let u = (r, error) => {
+function createNtBackend(nt) {
+  if (typeof nt?.open !== "function") throw Error("not in this runtime");
+  let deleteByHandle = wrapNtCall(nt.deleteByHandle);
+  let renameByHandle = wrapNtCall(nt.renameByHandle);
+  let queryAttributes = wrapNtCall(nt.queryAttributes);
+  let setAttributes = wrapNtCall(nt.setAttributes);
+  let listDirectory = wrapNtCall(nt.listDirectory);
+  let openHandle = wrapNtCall(nt.open);
+  let linkByHandle = wrapNtCall(nt.linkByHandle);
+  let readSymlink = wrapNtCall(nt.readSymlink);
+  let logOlderClassFallback = (infoClassName, error) => {
     logForDebugging(
-      `anchor (win32): ${r} failed (status 0x${((statusOf(error) ?? 0) >>> 0).toString(16)}); trying the older class`,
+      `anchor (win32): ${infoClassName} failed (status 0x${((statusOf(error) ?? 0) >>> 0).toString(16)}); trying the older class`,
     );
   };
-  let c = (r) => r !== "" && r !== "." && r !== ".." && !/[\\/:]/.test(r);
-  let l = () =>
+  let isPlainRelativeName = (name) => name !== "" && name !== "." && name !== ".." && !/[\\/:]/.test(name);
+  let plainNameError = () =>
     Object.assign(
       Error("directory-relative names must be a plain file name: not '.', '..', and no separator or ':'"),
       {
@@ -284,66 +289,72 @@ function createNtBackend(e) {
       },
     );
   return {
-    open: (r, o, i) => {
-      if (r !== 0 && !c(o)) throw l();
-      return x(r, o, i);
+    open: (dirHandle, name, options) => {
+      if (dirHandle !== 0 && !isPlainRelativeName(name)) throw plainNameError();
+      return openHandle(dirHandle, name, options);
     },
-    close: wrapNtCall(e.close),
-    write: wrapNtCall(e.write),
-    read: wrapNtCall(e.read),
-    queryInformation: wrapNtCall(e.queryInformation),
-    queryAttributes: s,
-    queryAttributeTag: wrapNtCall(e.queryAttributeTag),
-    queryId: wrapNtCall(e.queryId),
-    queryVolume: wrapNtCall(e.queryVolume),
-    queryDevice: wrapNtCall(e.queryDevice),
-    deleteByHandle: (r) => {
+    close: wrapNtCall(nt.close),
+    write: wrapNtCall(nt.write),
+    read: wrapNtCall(nt.read),
+    queryInformation: wrapNtCall(nt.queryInformation),
+    queryAttributes,
+    queryAttributeTag: wrapNtCall(nt.queryAttributeTag),
+    queryId: wrapNtCall(nt.queryId),
+    queryVolume: wrapNtCall(nt.queryVolume),
+    queryDevice: wrapNtCall(nt.queryDevice),
+    deleteByHandle: (handle) => {
       try {
-        n(r, true);
+        deleteByHandle(handle, true);
         return;
       } catch (error) {
         if (!isUnsupportedNtStatus(error) && statusOf(error) !== NT_STATUS.CANNOT_DELETE) throw error;
-        u("FileDispositionInformationEx", error);
+        logOlderClassFallback("FileDispositionInformationEx", error);
       }
       try {
-        n(r, false);
+        deleteByHandle(handle, false);
       } catch (error) {
         if (statusOf(error) !== NT_STATUS.CANNOT_DELETE) throw error;
-        let i = s(r);
-        if ((i & ATTRIBUTE.READONLY) === 0) throw error;
-        I(r, (i & ~ATTRIBUTE.READONLY) === 0 ? ATTRIBUTE.NORMAL : i & ~ATTRIBUTE.READONLY);
+        let attributes = queryAttributes(handle);
+        if ((attributes & ATTRIBUTE.READONLY) === 0) throw error;
+        setAttributes(
+          handle,
+          (attributes & ~ATTRIBUTE.READONLY) === 0 ? ATTRIBUTE.NORMAL : attributes & ~ATTRIBUTE.READONLY,
+        );
         try {
-          n(r, false);
+          deleteByHandle(handle, false);
         } catch (error) {
           try {
-            I(r, i);
+            setAttributes(handle, attributes);
           } catch {}
           throw error;
         }
       }
     },
-    renameByHandle: (r, o, i, O) => {
-      if (!c(i)) throw l();
+    renameByHandle: (handle, dirHandle, newName, replaceExisting) => {
+      if (!isPlainRelativeName(newName)) throw plainNameError();
       try {
-        N(r, o, i, O, true);
+        renameByHandle(handle, dirHandle, newName, replaceExisting, true);
         return;
       } catch (error) {
         if (!isUnsupportedNtStatus(error)) throw error;
-        u("FileRenameInformationEx", error);
+        logOlderClassFallback("FileRenameInformationEx", error);
       }
-      N(r, o, i, O, false);
+      renameByHandle(handle, dirHandle, newName, replaceExisting, false);
     },
-    linkByHandle: (r, o, i) => {
-      if (!c(i)) throw l();
-      f(r, o, i);
+    linkByHandle: (handle, dirHandle, name) => {
+      if (!isPlainRelativeName(name)) throw plainNameError();
+      linkByHandle(handle, dirHandle, name);
     },
-    setAttributes: I,
-    setTimes: wrapNtCall(e.setTimes),
-    setSymlink: wrapNtCall(e.setSymlink),
-    readSymlink: (r) => fromNtPath(C(r)),
-    listDirectory: (r, o) =>
-      S(r, o === undefined ? undefined : o >= 0 ? Math.min(Math.floor(o), 4294967295) : 0),
-    openHandleCount: e.openHandleCount,
+    setAttributes,
+    setTimes: wrapNtCall(nt.setTimes),
+    setSymlink: wrapNtCall(nt.setSymlink),
+    readSymlink: (handle) => fromNtPath(readSymlink(handle)),
+    listDirectory: (handle, maxNames) =>
+      listDirectory(
+        handle,
+        maxNames === undefined ? undefined : maxNames >= 0 ? Math.min(Math.floor(maxNames), 4294967295) : 0,
+      ),
+    openHandleCount: nt.openHandleCount,
   };
 }
 export {
@@ -358,4 +369,5 @@ export {
   FILE_GENERIC_READ,
   FILE_GENERIC_WRITE,
   encodeSymlinkReparseData,
+  loadNt,
 };

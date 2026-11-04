@@ -39,8 +39,8 @@ function quoteShellCommand(command, addStdinRedirect = true) {
     if (containsHeredoc(command)) return quoted;
     return addStdinRedirect ? `${quoted} < /dev/null` : quoted;
   }
-  let r = shellQuoteArgs([command]);
-  return addStdinRedirect ? `${r} < /dev/null` : r;
+  let quoted = shellQuoteArgs([command]);
+  return addStdinRedirect ? `${quoted} < /dev/null` : quoted;
 }
 //@ chunk-e6aww6q8.js:3065603-3065664 file-local
 function hasStdinRedirect(command) {

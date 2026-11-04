@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:981-1742 cjs-fingerprint
-var require_accesslog = x(function (cjsExports, cjsModule) {
+var require_accesslog = __commonJS(function (cjsExports, cjsModule) {
   function accesslog(hljs) {
     let regex = hljs.regex;
     let HTTP_VERBS = ["GET", "POST", "HEAD", "PUT", "DELETE", "CONNECT", "OPTIONS", "PATCH", "TRACE"];

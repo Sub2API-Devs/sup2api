@@ -8,39 +8,13 @@
  * pieces: chunk-1ny7cxrt.js (1), chunk-aepeg2w5.js (1), chunk-w5ndchqs.js (1), chunk-zv6whf9m.js (1)
  * attribution: fingerprint 4
  */
-import { MOCK_UTILIZATION_STEPS, roundUtilization } from "./claudeGateway/mockRateLimits.js";
 import {
   maybeMockRateLimitHeaders,
   buildRejectedLimits,
   refreshLimitsFromHeaders,
 } from "./claudeAiLimits.js";
+import { MOCK_UTILIZATION_STEPS, roundUtilization } from "./claudeGateway/mockRateLimits.js";
 
-//@ chunk-1ny7cxrt.js:1451847-1452744 fingerprint = updateRepresentativeClaim (0.494)
-/**
- * 按模拟的 overage 用量生成 unified-status/reset/overage 利用率与阈值头。旧版名 updateRepresentativeClaim 不准确。
- */
-function buildOverageMockHeaders(e, t) {
-  let n = String(Math.floor(e.resetsAt.getTime() / 1000));
-  let o = e.exceeded ? 1 : MOCK_UTILIZATION_STEPS.find((a) => e.utilization > a);
-  let r = e.exceeded ? "rejected" : o ? "allowed_warning" : "allowed";
-  let s = {
-    "anthropic-ratelimit-unified-status": r,
-    "anthropic-ratelimit-unified-reset": n,
-    "anthropic-ratelimit-unified-overage-reset": n,
-    "anthropic-ratelimit-unified-overage-utilization": String(roundUtilization(e)),
-  };
-  if (o) s["anthropic-ratelimit-unified-overage-surpassed-threshold"] = String(o);
-  if (e.exceeded) {
-    s["anthropic-ratelimit-unified-overage-period"] = e.period;
-    if (e.scope_type === "group_pool") s["anthropic-ratelimit-unified-overage-scope"] = e.scope_type;
-    s["anthropic-ratelimit-unified-overage-disabled-reason"] = "org_spend_cap_reached";
-    s["retry-after"] = String(Math.max(1, Math.ceil((e.resetsAt.getTime() - t.getTime()) / 1000)));
-  } else {
-    s["anthropic-ratelimit-unified-representative-claim"] = "overage";
-    s["anthropic-ratelimit-unified-overage-status"] = r;
-  }
-  return s;
-}
 //@ chunk-aepeg2w5.js:279587-288283 fingerprint = setMockRateLimitScenario (0.609)
 /**
  * 限额模拟状态类：enabled、伪造头、超限列表、无头 429 文案、订阅类型/档位、快速模式限额、overage、试用、宽限、计费权限等，含 reset 与场景设置方法。旧版名 setMockRateLimitScenario 指方法而非类。
@@ -144,15 +118,16 @@ class MockRateLimitState {
     if (this.exceededLimits.length > 0) this.headers["anthropic-ratelimit-unified-status"] = "rejected";
     this.updateRepresentativeClaim();
   }
-  setEarlyWarning(e, utilization, r) {
+  setEarlyWarning(windowKind, utilization, hoursFromNow) {
     this.enabled = true;
     this.clearEarlyWarning();
-    let h = r ?? (e === "5h" ? 4 : 120);
-    let y = Math.floor(Date.now() / 1000) + h * 3600;
-    this.headers[`anthropic-ratelimit-unified-${e}-utilization`] = String(utilization);
-    this.headers[`anthropic-ratelimit-unified-${e}-reset`] = String(y);
-    this.headers[`anthropic-ratelimit-unified-${e}-surpassed-threshold`] = String(utilization);
-    if (e !== "overage") this.headers[`anthropic-ratelimit-unified-${e}-status`] = "allowed_warning";
+    let hours = hoursFromNow ?? (windowKind === "5h" ? 4 : 120);
+    let resetsAt = Math.floor(Date.now() / 1000) + hours * 3600;
+    this.headers[`anthropic-ratelimit-unified-${windowKind}-utilization`] = String(utilization);
+    this.headers[`anthropic-ratelimit-unified-${windowKind}-reset`] = String(resetsAt);
+    this.headers[`anthropic-ratelimit-unified-${windowKind}-surpassed-threshold`] = String(utilization);
+    if (windowKind !== "overage")
+      this.headers[`anthropic-ratelimit-unified-${windowKind}-status`] = "allowed_warning";
     if (!this.headers["anthropic-ratelimit-unified-status"])
       this.headers["anthropic-ratelimit-unified-status"] = "allowed";
   }
@@ -166,8 +141,8 @@ class MockRateLimitState {
     delete this.headers["anthropic-ratelimit-unified-7d-surpassed-threshold"];
     delete this.headers["anthropic-ratelimit-unified-7d-status"];
   }
-  setScenario(e) {
-    if (e === "clear") {
+  setScenario(scenario) {
+    if (scenario === "clear") {
       this.headers = {};
       this.headerless429Message = null;
       this.overages = null;
@@ -175,24 +150,25 @@ class MockRateLimitState {
       return;
     }
     this.enabled = true;
-    let n = Math.floor(Date.now() / 1000) + 18000;
-    let r = Math.floor(Date.now() / 1000) + 604800;
+    let fiveHourReset = Math.floor(Date.now() / 1000) + 18000;
+    let weekReset = Math.floor(Date.now() / 1000) + 604800;
     this.headers = {};
     this.headerless429Message = null;
     this.overages = null;
-    if (!["overage-active", "overage-warning", "overage-exhausted"].includes(e)) this.exceededLimits = [];
-    switch (e) {
+    if (!["overage-active", "overage-warning", "overage-exhausted"].includes(scenario))
+      this.exceededLimits = [];
+    switch (scenario) {
       case "normal":
         this.headers = {
           "anthropic-ratelimit-unified-status": "allowed",
-          "anthropic-ratelimit-unified-reset": String(n),
+          "anthropic-ratelimit-unified-reset": String(fiveHourReset),
         };
         break;
       case "session-limit-reached":
         this.exceededLimits = [
           {
             type: "five_hour",
-            resetsAt: n,
+            resetsAt: fiveHourReset,
           },
         ];
         this.updateRepresentativeClaim();
@@ -201,7 +177,7 @@ class MockRateLimitState {
       case "approaching-weekly-limit":
         this.headers = {
           "anthropic-ratelimit-unified-status": "allowed_warning",
-          "anthropic-ratelimit-unified-reset": String(r),
+          "anthropic-ratelimit-unified-reset": String(weekReset),
           "anthropic-ratelimit-unified-representative-claim": "seven_day",
         };
         break;
@@ -209,29 +185,29 @@ class MockRateLimitState {
         this.exceededLimits = [
           {
             type: "seven_day",
-            resetsAt: r,
+            resetsAt: weekReset,
           },
         ];
         this.updateRepresentativeClaim();
         this.headers["anthropic-ratelimit-unified-status"] = "rejected";
         break;
       case "overage-active":
-        this.setOverageScenarioHeaders(n, "allowed");
+        this.setOverageScenarioHeaders(fiveHourReset, "allowed");
         break;
       case "overage-warning":
-        this.setOverageScenarioHeaders(n, "allowed_warning");
+        this.setOverageScenarioHeaders(fiveHourReset, "allowed_warning");
         break;
       case "overage-exhausted":
-        this.setOverageScenarioHeaders(n, "rejected");
+        this.setOverageScenarioHeaders(fiveHourReset, "rejected");
         break;
       case "out-of-credits":
-        this.setOverageScenarioHeaders(n, "rejected", "out_of_credits");
+        this.setOverageScenarioHeaders(fiveHourReset, "rejected", "out_of_credits");
         break;
       case "org-zero-credit-limit":
-        this.setOverageScenarioHeaders(n, "rejected", "org_service_level_disabled");
+        this.setOverageScenarioHeaders(fiveHourReset, "rejected", "org_service_level_disabled");
         break;
       case "org-spend-cap-hit":
-        this.setOverageScenarioHeaders(n, "rejected", "org_level_disabled_until");
+        this.setOverageScenarioHeaders(fiveHourReset, "rejected", "org_level_disabled_until");
         this.setOverages({
           isEnabled: true,
           balanceCents: 6532,
@@ -240,16 +216,16 @@ class MockRateLimitState {
         });
         break;
       case "member-zero-credit-limit":
-        this.setOverageScenarioHeaders(n, "rejected", "member_zero_credit_limit");
+        this.setOverageScenarioHeaders(fiveHourReset, "rejected", "member_zero_credit_limit");
         break;
       case "seat-tier-zero-credit-limit":
-        this.setOverageScenarioHeaders(n, "rejected", "seat_tier_zero_credit_limit");
+        this.setOverageScenarioHeaders(fiveHourReset, "rejected", "seat_tier_zero_credit_limit");
         break;
       case "opus-limit": {
         this.exceededLimits = [
           {
             type: "seven_day_opus",
-            resetsAt: r,
+            resetsAt: weekReset,
           },
         ];
         this.updateRepresentativeClaim();
@@ -259,7 +235,7 @@ class MockRateLimitState {
       case "opus-warning": {
         this.headers = {
           "anthropic-ratelimit-unified-status": "allowed_warning",
-          "anthropic-ratelimit-unified-reset": String(r),
+          "anthropic-ratelimit-unified-reset": String(weekReset),
           "anthropic-ratelimit-unified-representative-claim": "seven_day_opus",
         };
         break;
@@ -268,7 +244,7 @@ class MockRateLimitState {
         this.exceededLimits = [
           {
             type: "seven_day_sonnet",
-            resetsAt: r,
+            resetsAt: weekReset,
           },
         ];
         this.updateRepresentativeClaim();
@@ -278,7 +254,7 @@ class MockRateLimitState {
       case "sonnet-warning": {
         this.headers = {
           "anthropic-ratelimit-unified-status": "allowed_warning",
-          "anthropic-ratelimit-unified-reset": String(r),
+          "anthropic-ratelimit-unified-reset": String(weekReset),
           "anthropic-ratelimit-unified-representative-claim": "seven_day_sonnet",
         };
         break;
@@ -303,7 +279,7 @@ class MockRateLimitState {
         break;
     }
   }
-  setOverageScenarioHeaders(resetsAt, n, r) {
+  setOverageScenarioHeaders(resetsAt, overageStatus, disabledReason) {
     if (this.exceededLimits.length === 0)
       this.exceededLimits = [
         {
@@ -313,8 +289,8 @@ class MockRateLimitState {
       ];
     this.updateRepresentativeClaim();
     this.headers["anthropic-ratelimit-unified-status"] = "rejected";
-    this.headers["anthropic-ratelimit-unified-overage-status"] = n;
-    if (r) this.headers["anthropic-ratelimit-unified-overage-disabled-reason"] = r;
+    this.headers["anthropic-ratelimit-unified-overage-status"] = overageStatus;
+    if (disabledReason) this.headers["anthropic-ratelimit-unified-overage-disabled-reason"] = disabledReason;
     let date = new Date();
     date.setMonth(date.getMonth() + 1, 1);
     date.setHours(0, 0, 0, 0);
@@ -332,16 +308,16 @@ class MockRateLimitState {
     this.enabled = true;
     this.billingAccessOverride = billingAccessOverride;
   }
-  setTrial(e) {
-    if (e === null) {
+  setTrial(trial) {
+    if (trial === null) {
       this.trial = null;
       return;
     }
     this.enabled = true;
-    this.trial = e;
+    this.trial = trial;
   }
-  setOverages(e) {
-    if (e === null) {
+  setOverages(overages) {
+    if (overages === null) {
       this.overages = null;
       return;
     }
@@ -360,7 +336,7 @@ class MockRateLimitState {
       purchaseOutcome: "success",
       pollCount: 0,
       ...this.overages,
-      ...e,
+      ...overages,
     };
   }
   checkFastModeRateLimit(isFastModeActive) {
@@ -385,8 +361,8 @@ class MockRateLimitState {
  * 从（模拟或真实）响应头计算额度并构造被拒状态。
  */
 function applyMockHeaders(headers) {
-  let n = maybeMockRateLimitHeaders(headers.headers ?? new globalThis.Headers());
-  return buildRejectedLimits(refreshLimitsFromHeaders(n, false), headers);
+  let mockHeaders = maybeMockRateLimitHeaders(headers.headers ?? new globalThis.Headers());
+  return buildRejectedLimits(refreshLimitsFromHeaders(mockHeaders, false), headers);
 }
 //@ chunk-zv6whf9m.js:16736-16932 fingerprint = setMockHeader (0.357)
 /**
@@ -405,5 +381,37 @@ function getLimitScopeKind(rateLimitType) {
     default:
       return;
   }
+}
+//@ chunk-1ny7cxrt.js:1451847-1452744 fingerprint = updateRepresentativeClaim (0.494)
+/**
+ * 按模拟的 overage 用量生成 unified-status/reset/overage 利用率与阈值头。旧版名 updateRepresentativeClaim 不准确。
+ */
+function buildOverageMockHeaders(overage, now) {
+  let resetSeconds = String(Math.floor(overage.resetsAt.getTime() / 1000));
+  let surpassedStep = overage.exceeded
+    ? 1
+    : MOCK_UTILIZATION_STEPS.find((step) => overage.utilization > step);
+  let status = overage.exceeded ? "rejected" : surpassedStep ? "allowed_warning" : "allowed";
+  let headers = {
+    "anthropic-ratelimit-unified-status": status,
+    "anthropic-ratelimit-unified-reset": resetSeconds,
+    "anthropic-ratelimit-unified-overage-reset": resetSeconds,
+    "anthropic-ratelimit-unified-overage-utilization": String(roundUtilization(overage)),
+  };
+  if (surpassedStep)
+    headers["anthropic-ratelimit-unified-overage-surpassed-threshold"] = String(surpassedStep);
+  if (overage.exceeded) {
+    headers["anthropic-ratelimit-unified-overage-period"] = overage.period;
+    if (overage.scope_type === "group_pool")
+      headers["anthropic-ratelimit-unified-overage-scope"] = overage.scope_type;
+    headers["anthropic-ratelimit-unified-overage-disabled-reason"] = "org_spend_cap_reached";
+    headers["retry-after"] = String(
+      Math.max(1, Math.ceil((overage.resetsAt.getTime() - now.getTime()) / 1000)),
+    );
+  } else {
+    headers["anthropic-ratelimit-unified-representative-claim"] = "overage";
+    headers["anthropic-ratelimit-unified-overage-status"] = status;
+  }
+  return headers;
 }
 export { MockRateLimitState, applyMockHeaders, buildOverageMockHeaders, getLimitScopeKind };

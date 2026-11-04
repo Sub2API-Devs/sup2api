@@ -30,136 +30,170 @@ import { killProcessGroup } from "../../utils/auth/lockHolderLiveness.js";
 import { withTokenInUrl } from "../../selfHostedRunner/git/repoSources.js";
 import { isSafeRefName } from "../../utils/git/safeRefName.js";
 import { redactToken } from "../../selfHostedRunner/git/tokenRedact.js";
+import { beginDeferredInits } from "../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 5 modules closed by ./launcherHooks.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/services/selfHostedRunner/launcherHooks.js");
 //@ chunk-hm0ce8vc.js:204328-205881 placement
-async function fetchSourceBranch(e, n, onDebug, s, a, o, l = spawn, gitEnvironment) {
-  if (s?.aborted) return;
-  let h = {
+async function fetchSourceBranch(
+  repoDir,
+  branchName,
+  onDebug,
+  abortSignal,
+  isolateMode,
+  startPoint,
+  spawnImpl = spawn,
+  gitEnvironment,
+) {
+  if (abortSignal?.aborted) return;
+  let isolatedEnv = {
     GIT_CONFIG_GLOBAL: "/dev/null",
     CLAUDE_CODE_SESSION_ACCESS_TOKEN: undefined,
   };
-  let p = {
+  let baseEnv = {
     ...process.env,
     ...gitEnvironment?.envOverrides,
     ...SAFE_GIT_ENV,
-    ...(a === true ? h : undefined),
+    ...(isolateMode === true ? isolatedEnv : undefined),
   };
-  let S = gitConfigPairs(gitEnvironment?.commandScopeEntries ?? []);
-  let T = (v, w, E, A = [], env = p) =>
+  let configArgs = gitConfigPairs(gitEnvironment?.commandScopeEntries ?? []);
+  let runGit = (args, label, timeoutMs, extraArgs = [], env = baseEnv) =>
     new Promise((resolve) => {
-      let L = false;
-      let D = (Te) => {
-        if (L) return;
-        L = true;
+      let isSettled = false;
+      let finish = (outcome) => {
+        if (isSettled) return;
+        isSettled = true;
         clearTimeout(timer);
-        s?.removeEventListener("abort", Ne);
-        resolve(Te);
+        abortSignal?.removeEventListener("abort", onAbort);
+        resolve(outcome);
       };
-      let oe = l("git", [...SAFE_GIT_CONFIG_ARGS, ...A, ...S, "-C", e, ...v], {
-        cwd: undefined,
-        stdio: ["ignore", "ignore", "pipe"],
-        windowsHide: true,
-        ...cgroupSpawnOptions("helper"),
-        env,
-      });
-      let ge = "";
-      oe.stderr?.on("data", (Te) => (ge += String(Te)));
-      let Ne = () => {
-        oe.kill("SIGKILL");
-        D("unsettled");
+      let child = spawnImpl(
+        "git",
+        [...SAFE_GIT_CONFIG_ARGS, ...extraArgs, ...configArgs, "-C", repoDir, ...args],
+        {
+          cwd: undefined,
+          stdio: ["ignore", "ignore", "pipe"],
+          windowsHide: true,
+          ...cgroupSpawnOptions("helper"),
+          env,
+        },
+      );
+      let stderr = "";
+      child.stderr?.on("data", (data) => (stderr += String(data)));
+      let onAbort = () => {
+        child.kill("SIGKILL");
+        finish("unsettled");
       };
       let timer = setTimeout(
-        (Te, Ye, He, ae, fe, $e) => {
-          Te(`[runner:session] ${Ye} in ${He} timed out after ${fe}ms \u2014 continuing on current HEAD`);
-          ae.kill("SIGKILL");
-          $e("unsettled");
+        (onDebug, label, dir, child, timeoutMs, finish) => {
+          onDebug(
+            `[runner:session] ${label} in ${dir} timed out after ${timeoutMs}ms \u2014 continuing on current HEAD`,
+          );
+          child.kill("SIGKILL");
+          finish("unsettled");
         },
-        E,
+        timeoutMs,
         onDebug,
-        w,
-        e,
-        oe,
-        E,
-        D,
+        label,
+        repoDir,
+        child,
+        timeoutMs,
+        finish,
       );
-      if (s?.aborted) Ne();
+      if (abortSignal?.aborted) onAbort();
       else
-        s?.addEventListener("abort", Ne, {
+        abortSignal?.addEventListener("abort", onAbort, {
           once: true,
         });
-      oe.on("close", (Te) => {
-        if (Te === 0) {
-          onDebug(`[runner:session] created outcome branch '${n}' in ${e} (${w})`);
-          D("ok");
+      child.on("close", (exitCode) => {
+        if (exitCode === 0) {
+          onDebug(`[runner:session] created outcome branch '${branchName}' in ${repoDir} (${label})`);
+          finish("ok");
         } else {
-          onDebug(`[runner:session] ${w} in ${e} exited ${Te}: ${ge.trim()}`);
-          D("failed");
+          onDebug(`[runner:session] ${label} in ${repoDir} exited ${exitCode}: ${stderr.trim()}`);
+          finish("failed");
         }
       });
-      oe.on("error", (Te) => {
-        onDebug(`[runner:session] ${w} spawn failed: ${Te} \u2014 continuing on current HEAD`);
-        D("unsettled");
+      child.on("error", (error) => {
+        onDebug(`[runner:session] ${label} spawn failed: ${error} \u2014 continuing on current HEAD`);
+        finish("unsettled");
       });
     });
-  if (!o) {
+  if (!startPoint) {
     if (
-      (await T(["switch", "-q", "-C", n], `switch -C '${n}'`, SIGKILL_DELAY_MS, ["-c", "alias.switch="])) !==
-        "failed" ||
-      s?.aborted
+      (await runGit(["switch", "-q", "-C", branchName], `switch -C '${branchName}'`, SIGKILL_DELAY_MS, [
+        "-c",
+        "alias.switch=",
+      ])) !== "failed" ||
+      abortSignal?.aborted
     )
       return;
-    onDebug(`[runner:session] retrying outcome branch '${n}' as checkout -B`);
+    onDebug(`[runner:session] retrying outcome branch '${branchName}' as checkout -B`);
   }
   if (
-    (await T(
-      ["checkout", "-B", n, ...(o ? [o] : [])],
-      `checkout -B '${n}'`,
-      o ? GIT_WATCHDOG_MS : SIGKILL_DELAY_MS,
+    (await runGit(
+      ["checkout", "-B", branchName, ...(startPoint ? [startPoint] : [])],
+      `checkout -B '${branchName}'`,
+      startPoint ? GIT_WATCHDOG_MS : SIGKILL_DELAY_MS,
       [],
-      a === "checkout"
+      isolateMode === "checkout"
         ? {
-            ...p,
-            ...h,
+            ...baseEnv,
+            ...isolatedEnv,
             ...ISOLATED_HOME_ENV,
           }
-        : p,
+        : baseEnv,
     )) === "failed"
   )
-    onDebug(`[runner:session] outcome branch '${n}' not created in ${e} \u2014 continuing on current HEAD`);
+    onDebug(
+      `[runner:session] outcome branch '${branchName}' not created in ${repoDir} \u2014 continuing on current HEAD`,
+    );
 }
 //@ chunk-hm0ce8vc.js:205881-207509 placement
 /**
  * 从远端获取会话产出分支（hardenedGitUrl 与 governedAuth 互斥）。
  */
-async function fetchOutcomeBranches(e, n, onDebug, s, a = spawn, o = false, l, u, h) {
-  if (l && u) throw Error("fetchOutcomeBranches: hardenedGitUrl and governedAuth are mutually exclusive");
-  let p = 0;
-  let url = u?.url;
-  let T = gitConfigPairs(h?.commandScopeEntries ?? []);
-  for (let y of n) {
-    if (s?.aborted) return;
-    let v = `+refs/heads/${y}:refs/remotes/origin/${y}`;
+async function fetchOutcomeBranches(
+  repoDir,
+  branches,
+  onDebug,
+  abortSignal,
+  spawnImpl = spawn,
+  allowFileProtocol = false,
+  hardenedGitUrl,
+  governedAuth,
+  gitEnvironment,
+) {
+  if (hardenedGitUrl && governedAuth)
+    throw Error("fetchOutcomeBranches: hardenedGitUrl and governedAuth are mutually exclusive");
+  let fetchedCount = 0;
+  let url = governedAuth?.url;
+  let configArgs = gitConfigPairs(gitEnvironment?.commandScopeEntries ?? []);
+  for (let branch of branches) {
+    if (abortSignal?.aborted) return;
+    let refspec = `+refs/heads/${branch}:refs/remotes/origin/${branch}`;
     if (
       (await new Promise((resolve) => {
-        let A = false;
-        let G = (ge) => {
-          if (A) return;
-          A = true;
+        let isSettled = false;
+        let finish = (exitCode) => {
+          if (isSettled) return;
+          isSettled = true;
           clearTimeout(timer);
-          s?.removeEventListener("abort", D);
-          resolve(ge);
+          abortSignal?.removeEventListener("abort", onAbort);
+          resolve(exitCode);
         };
-        let K = a(
+        let child = spawnImpl(
           "git",
           [
             "-C",
-            e,
+            repoDir,
             ...SAFE_GIT_CONFIG_ARGS,
-            ...(l ? remoteProxyArgs(l) : []),
+            ...(hardenedGitUrl ? remoteProxyArgs(hardenedGitUrl) : []),
             ...(url
               ? [...remoteProxyArgs(url), ...credentialHelperArgs(url), ...LFS_NO_LOCKVERIFY_ARGS]
               : []),
-            ...T,
+            ...configArgs,
             "-c",
             "http.proxyAuthMethod=basic",
             "fetch",
@@ -167,7 +201,7 @@ async function fetchOutcomeBranches(e, n, onDebug, s, a = spawn, o = false, l, u
             "--no-tags",
             "--end-of-options",
             url ?? "origin",
-            v,
+            refspec,
           ],
           {
             stdio: ["ignore", "ignore", "pipe"],
@@ -175,20 +209,20 @@ async function fetchOutcomeBranches(e, n, onDebug, s, a = spawn, o = false, l, u
             ...cgroupSpawnOptions("helper"),
             env: {
               ...process.env,
-              ...h?.envOverrides,
+              ...gitEnvironment?.envOverrides,
               ...SAFE_GIT_ENV,
-              ...(l || url
+              ...(hardenedGitUrl || url
                 ? {
                     GIT_CONFIG_GLOBAL: "/dev/null",
                   }
                 : undefined),
-              ...(u
+              ...(governedAuth
                 ? {
-                    [SHR_GIT_PROXY_TOKEN]: u.getToken(),
+                    [SHR_GIT_PROXY_TOKEN]: governedAuth.getToken(),
                     CLAUDE_CODE_SESSION_ACCESS_TOKEN: undefined,
                   }
                 : undefined),
-              ...(o && {
+              ...(allowFileProtocol && {
                 GIT_ALLOW_PROTOCOL: `file:${SAFE_GIT_ENV.GIT_ALLOW_PROTOCOL}`,
               }),
               GIT_TERMINAL_PROMPT: "0",
@@ -196,87 +230,88 @@ async function fetchOutcomeBranches(e, n, onDebug, s, a = spawn, o = false, l, u
             },
           },
         );
-        let L = "";
-        K.stderr?.on("data", (ge) => (L += String(ge)));
-        let D = () => {
-          if (K.pid) killProcessGroup(K.pid);
-          G(null);
+        let stderr = "";
+        child.stderr?.on("data", (data) => (stderr += String(data)));
+        let onAbort = () => {
+          if (child.pid) killProcessGroup(child.pid);
+          finish(null);
         };
-        s?.addEventListener("abort", D, {
+        abortSignal?.addEventListener("abort", onAbort, {
           once: true,
         });
         let timer = setTimeout(
-          (ge, Ne, me, Te) => {
-            ge(
-              `[runner:session] fetch outcome branch in ${Ne} timed out after ${HOOK_WORKDIR_TIMEOUT_MS}ms \u2014 continuing`,
+          (onDebug, dir, child, finish) => {
+            onDebug(
+              `[runner:session] fetch outcome branch in ${dir} timed out after ${HOOK_WORKDIR_TIMEOUT_MS}ms \u2014 continuing`,
             );
-            if (me.pid) killProcessGroup(me.pid);
-            Te(null);
+            if (child.pid) killProcessGroup(child.pid);
+            finish(null);
           },
           HOOK_WORKDIR_TIMEOUT_MS,
           onDebug,
-          e,
-          K,
-          G,
+          repoDir,
+          child,
+          finish,
         );
-        K.on("close", (ge) => {
-          if (ge !== 0)
+        child.on("close", (exitCode) => {
+          if (exitCode !== 0)
             onDebug(
-              `[runner:session] fetch outcome branch in ${e} exited ${ge}: ${L.trim()} \u2014 continuing`,
+              `[runner:session] fetch outcome branch in ${repoDir} exited ${exitCode}: ${stderr.trim()} \u2014 continuing`,
             );
-          G(ge);
+          finish(exitCode);
         });
-        K.on("error", (ge) => {
-          onDebug(`[runner:session] fetch outcome branch spawn failed: ${ge} \u2014 continuing`);
-          G(null);
+        child.on("error", (error) => {
+          onDebug(`[runner:session] fetch outcome branch spawn failed: ${error} \u2014 continuing`);
+          finish(null);
         });
       })) === 0
     )
-      p++;
+      fetchedCount++;
   }
-  if (n.length > 0) onDebug(`[runner:session] fetched ${p}/${n.length} outcome branch(es) in ${e}`);
+  if (branches.length > 0)
+    onDebug(`[runner:session] fetched ${fetchedCount}/${branches.length} outcome branch(es) in ${repoDir}`);
 }
 //@ chunk-hm0ce8vc.js:207509-208603 placement
-function buildSslVerifyArgs(e, n) {
-  let url = e.url ?? "";
-  let s = e.getAuthToken ? e.getAuthToken() : e.token;
-  let authURL = e.getAuthToken ? url : withTokenInUrl(url, e.token);
-  let o;
+function buildSslVerifyArgs(source, gitEnvironment) {
+  let url = source.url ?? "";
+  let token = source.getAuthToken ? source.getAuthToken() : source.token;
+  let authURL = source.getAuthToken ? url : withTokenInUrl(url, source.token);
+  let urlOrigin;
   try {
-    let h = new URL(url);
-    if (h.protocol === "https:" || h.protocol === "http:") o = h.origin;
+    let parsedUrl = new URL(url);
+    if (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:") urlOrigin = parsedUrl.origin;
   } catch {}
-  let l =
+  let proxyUrl =
     process.env.HTTPS_PROXY ||
     process.env.https_proxy ||
     process.env.ALL_PROXY ||
     process.env.all_proxy ||
     "";
-  let u = [...SAFE_GIT_CONFIG_ARGS];
-  if (o) {
-    u.push("-c", "http.sslVerify=true");
-    u.push("-c", `http.${o}.sslVerify=true`);
-    u.push("-c", `http.${url}.sslVerify=true`);
-    if (l) {
-      u.push("-c", `http.proxy=${l}`);
-      u.push("-c", `http.${o}.proxy=${l}`);
-      u.push("-c", `http.${url}.proxy=${l}`);
+  let args = [...SAFE_GIT_CONFIG_ARGS];
+  if (urlOrigin) {
+    args.push("-c", "http.sslVerify=true");
+    args.push("-c", `http.${urlOrigin}.sslVerify=true`);
+    args.push("-c", `http.${url}.sslVerify=true`);
+    if (proxyUrl) {
+      args.push("-c", `http.proxy=${proxyUrl}`);
+      args.push("-c", `http.${urlOrigin}.proxy=${proxyUrl}`);
+      args.push("-c", `http.${url}.proxy=${proxyUrl}`);
     }
-    if (s)
-      if (e.getAuthToken) u.push(...credentialHelperArgs(url));
+    if (token)
+      if (source.getAuthToken) args.push(...credentialHelperArgs(url));
       else {
-        u.push("-c", "credential.helper=");
-        u.push("-c", `credential.${o}.helper=`);
+        args.push("-c", "credential.helper=");
+        args.push("-c", `credential.${urlOrigin}.helper=`);
       }
   }
-  u.push(...gitConfigPairs(n?.commandScopeEntries ?? []));
+  args.push(...gitConfigPairs(gitEnvironment?.commandScopeEntries ?? []));
   return {
-    args: u,
+    args,
     authURL,
-    token: s,
+    token,
     env: {
       ...process.env,
-      ...n?.envOverrides,
+      ...gitEnvironment?.envOverrides,
       GIT_TERMINAL_PROMPT: "0",
       ...SAFE_GIT_ENV,
       ...(url.startsWith("file://") && {
@@ -284,46 +319,54 @@ function buildSslVerifyArgs(e, n) {
       }),
       GIT_SSH_COMMAND: `${process.env.GIT_SSH_COMMAND || "ssh"} -o BatchMode=yes -o ConnectTimeout=30`,
       SELF_HOSTED_RUNNER_HOST_CONFIG_DIR: undefined,
-      ...(s && {
+      ...(token && {
         GIT_CONFIG_GLOBAL: "/dev/null",
-        [SHR_GIT_PROXY_TOKEN]: e.getAuthToken ? s : undefined,
+        [SHR_GIT_PROXY_TOKEN]: source.getAuthToken ? token : undefined,
       }),
     },
   };
 }
 //@ chunk-hm0ce8vc.js:208603-209793 placement
-async function resumePushOnRelease(e, n, r, s, onDebug, o, gitEnvironment) {
-  if (o?.aborted) return false;
-  if (!isSafeRefName(n)) {
+async function resumePushOnRelease(
+  canonicalPath,
+  branch,
+  source,
+  timeoutMs,
+  onDebug,
+  signal,
+  gitEnvironment,
+) {
+  if (signal?.aborted) return false;
+  if (!isSafeRefName(branch)) {
     onDebug(
-      `[runner:session] push-on-release resume: branch '${n}' rejected by isSafeRefName (refspec metachar guard); skipping fetch`,
+      `[runner:session] push-on-release resume: branch '${branch}' rejected by isSafeRefName (refspec metachar guard); skipping fetch`,
     );
     return false;
   }
-  let sslVerifyArgs = buildSslVerifyArgs(r, gitEnvironment);
+  let sslVerifyArgs = buildSslVerifyArgs(source, gitEnvironment);
   return new Promise((resolve) => {
-    let p = false;
-    let S = (E) => {
-      if (p) return;
-      p = true;
+    let settled = false;
+    let finish = (ok) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      o?.removeEventListener("abort", T);
-      resolve(E);
+      signal?.removeEventListener("abort", onAbort);
+      resolve(ok);
     };
-    let T = () => {
-      y.kill("SIGKILL");
-      S(false);
+    let onAbort = () => {
+      child.kill("SIGKILL");
+      finish(false);
     };
-    let y = spawn(
+    let child = spawn(
       "git",
       [
         ...sslVerifyArgs.args,
         "-C",
-        e,
+        canonicalPath,
         "fetch",
         "--no-write-fetch-head",
         sslVerifyArgs.authURL,
-        `+refs/heads/${n}:refs/remotes/origin/${n}`,
+        `+refs/heads/${branch}:refs/remotes/origin/${branch}`,
       ],
       {
         stdio: ["ignore", "ignore", "pipe"],
@@ -333,53 +376,53 @@ async function resumePushOnRelease(e, n, r, s, onDebug, o, gitEnvironment) {
         ...cgroupSpawnOptions("helper"),
       },
     );
-    let v = "";
-    y.stderr?.on("data", (E) => (v += String(E)));
-    o?.addEventListener("abort", T, {
+    let stderrText = "";
+    child.stderr?.on("data", (chunk) => (stderrText += String(chunk)));
+    signal?.addEventListener("abort", onAbort, {
       once: true,
     });
     let timer = setTimeout(
-      (E, A, G, K, L) => {
-        E(
-          `[runner:session] push-on-release resume: fetch '${A}' timed out after ${G}ms; starting from source HEAD (best-effort)`,
+      (log, branchName, limitMs, spawned, complete) => {
+        log(
+          `[runner:session] push-on-release resume: fetch '${branchName}' timed out after ${limitMs}ms; starting from source HEAD (best-effort)`,
         );
-        K.kill("SIGKILL");
-        L(false);
+        spawned.kill("SIGKILL");
+        complete(false);
       },
-      s,
+      timeoutMs,
       onDebug,
-      n,
-      s,
-      y,
-      S,
+      branch,
+      timeoutMs,
+      child,
+      finish,
     );
-    y.on("close", (E) => {
-      if (E === 0) {
+    child.on("close", (exitCode) => {
+      if (exitCode === 0) {
         onDebug(
-          `[runner:session] push-on-release resume: fetched prior '${n}' from source remote; starting from preserved work`,
+          `[runner:session] push-on-release resume: fetched prior '${branch}' from source remote; starting from preserved work`,
         );
-        S(true);
+        finish(true);
       } else {
         onDebug(
-          `[runner:session] push-on-release resume: no prior '${n}' on source remote (${redactToken(v, sslVerifyArgs.authURL, sslVerifyArgs.token).trim() || `exit ${E}`}); starting from source HEAD`,
+          `[runner:session] push-on-release resume: no prior '${branch}' on source remote (${redactToken(stderrText, sslVerifyArgs.authURL, sslVerifyArgs.token).trim() || `exit ${exitCode}`}); starting from source HEAD`,
         );
-        S(false);
+        finish(false);
       }
     });
-    y.on("error", () => S(false));
+    child.on("error", () => finish(false));
   });
 }
 //@ chunk-hm0ce8vc.js:209793-210238 placement
-async function revParseVerify(e, n, r = SIGKILL_DELAY_MS) {
+async function revParseVerify(canonicalPath, ref, timeoutMs = SIGKILL_DELAY_MS) {
   return new Promise((resolve) => {
-    let a = false;
-    let o = (p) => {
-      if (a) return;
-      a = true;
+    let settled = false;
+    let finish = (sha) => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
-      resolve(p);
+      resolve(sha);
     };
-    let l = spawn("git", [...SAFE_GIT_CONFIG_ARGS, "-C", e, "rev-parse", "--verify", n], {
+    let child = spawn("git", [...SAFE_GIT_CONFIG_ARGS, "-C", canonicalPath, "rev-parse", "--verify", ref], {
       stdio: ["ignore", "pipe", "ignore"],
       cwd: undefined,
       env: {
@@ -389,19 +432,19 @@ async function revParseVerify(e, n, r = SIGKILL_DELAY_MS) {
       windowsHide: true,
       ...cgroupSpawnOptions("helper"),
     });
-    let u = "";
-    l.stdout?.on("data", (p) => (u += String(p)));
+    let stdoutText = "";
+    child.stdout?.on("data", (chunk) => (stdoutText += String(chunk)));
     let timer = setTimeout(
-      (p, S) => {
-        p.kill("SIGKILL");
-        S(undefined);
+      (spawned, complete) => {
+        spawned.kill("SIGKILL");
+        complete(undefined);
       },
-      r,
-      l,
-      o,
+      timeoutMs,
+      child,
+      finish,
     );
-    l.on("close", (p) => o(p === 0 ? u.trim() : undefined));
-    l.on("error", () => o(undefined));
+    child.on("close", (exitCode) => finish(exitCode === 0 ? stdoutText.trim() : undefined));
+    child.on("error", () => finish(undefined));
   });
 }
 //@ chunk-hm0ce8vc.js:210238-210291 placement
@@ -415,23 +458,24 @@ function newRunnerUpstreamName() {
 /**
  * 判断是否同时有受管挂载与上游地址。
  */
-function hasGovernedMountAndUpstream(e) {
-  return Boolean(e.governedMount && e.upstreamUrl);
+function hasGovernedMountAndUpstream(source) {
+  return Boolean(source.governedMount && source.upstreamUrl);
 }
 //@ chunk-hm0ce8vc.js:210353-212031 placement
 /**
  * 会话释放时把分支推送到上游（校验 ref 名安全）。
  */
-async function pushOnRelease(canonicalPath, branch, source, s, onDebug, o) {
+async function pushOnRelease(canonicalPath, branch, source, timeoutMs, onDebug, gitEnvironment) {
   if (!isSafeRefName(branch)) {
     onDebug(
       `[runner:session] push-on-release '${branch}' rejected by isSafeRefName (refspec metachar guard); skipping (best-effort)`,
     );
     return;
   }
-  let l = hasGovernedMountAndUpstream(source);
-  let u = l && source.governedPushUrl !== undefined ? newRunnerUpstreamName() : undefined;
-  let h = l
+  let mountRouted = hasGovernedMountAndUpstream(source);
+  let upstreamName =
+    mountRouted && source.governedPushUrl !== undefined ? newRunnerUpstreamName() : undefined;
+  let pushSource = mountRouted
     ? {
         ...source,
         url: source.upstreamUrl,
@@ -439,29 +483,29 @@ async function pushOnRelease(canonicalPath, branch, source, s, onDebug, o) {
         governedMount: false,
       }
     : source;
-  let sslVerifyArgs = buildSslVerifyArgs(h, o);
+  let sslVerifyArgs = buildSslVerifyArgs(pushSource, gitEnvironment);
   return new Promise((resolve) => {
-    let T = false;
-    let y = () => {
-      if (T) return;
-      T = true;
+    let settled = false;
+    let finish = () => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
       resolve();
     };
-    let v = spawn(
+    let child = spawn(
       "git",
       [
         ...sslVerifyArgs.args,
         "-C",
         canonicalPath,
-        ...(u !== undefined
+        ...(upstreamName !== undefined
           ? [
               "-c",
-              `remote.${u}.url=${sslVerifyArgs.authURL}`,
+              `remote.${upstreamName}.url=${sslVerifyArgs.authURL}`,
               "-c",
-              `remote.${u}.pushurl=${sslVerifyArgs.authURL}`,
+              `remote.${upstreamName}.pushurl=${sslVerifyArgs.authURL}`,
               "push",
-              u,
+              upstreamName,
             ]
           : ["push", sslVerifyArgs.authURL]),
         `refs/heads/${branch}:refs/heads/${branch}`,
@@ -474,41 +518,43 @@ async function pushOnRelease(canonicalPath, branch, source, s, onDebug, o) {
         ...cgroupSpawnOptions("helper"),
       },
     );
-    let w = "";
-    v.stderr?.on("data", (A) => (w += String(A)));
+    let stderrText = "";
+    child.stderr?.on("data", (chunk) => (stderrText += String(chunk)));
     let timer = setTimeout(
-      (A, G, K, L, D, oe) => {
-        A(`[runner:session] push-on-release '${G}' from ${K} timed out after ${L}ms (best-effort)`);
-        D.kill("SIGKILL");
-        oe();
+      (log, branchName, repoPath, limitMs, spawned, complete) => {
+        log(
+          `[runner:session] push-on-release '${branchName}' from ${repoPath} timed out after ${limitMs}ms (best-effort)`,
+        );
+        spawned.kill("SIGKILL");
+        complete();
       },
-      s,
+      timeoutMs,
       onDebug,
       branch,
       canonicalPath,
-      s,
-      v,
-      y,
+      timeoutMs,
+      child,
+      finish,
     );
-    v.on("close", (A) => {
-      if (A === 0)
+    child.on("close", (exitCode) => {
+      if (exitCode === 0)
         onDebug(`[runner:session] push-on-release pushed '${branch}' to source remote from ${canonicalPath}`);
       else
         onDebug(
-          `[runner:session] push-on-release '${branch}' from ${canonicalPath} exited ${A}: ${redactToken(w, sslVerifyArgs.authURL, sslVerifyArgs.token).trim()} (best-effort)` +
-            (l
+          `[runner:session] push-on-release '${branch}' from ${canonicalPath} exited ${exitCode}: ${redactToken(stderrText, sslVerifyArgs.authURL, sslVerifyArgs.token).trim()} (best-effort)` +
+            (mountRouted
               ? " \u2014 governed git pushes --push-outcome-on-release branches to the plain " +
                 "upstream with customer-managed credentials (this runner-side push does not use the session's git-mount push URL); if this failed with an auth error, provide a git credential for the push target on the runner host or use the post-session hook" +
-                (u !== undefined
+                (upstreamName !== undefined
                   ? "; git skips every url.*.pushInsteadOf rule for this push (global and system ones too), so the credential must work without one"
                   : "")
               : ""),
         );
-      y();
+      finish();
     });
-    v.on("error", (A) => {
-      onDebug(`[runner:session] push-on-release '${branch}' spawn failed: ${A} (best-effort)`);
-      y();
+    child.on("error", (error) => {
+      onDebug(`[runner:session] push-on-release '${branch}' spawn failed: ${error} (best-effort)`);
+      finish();
     });
   });
 }
@@ -518,67 +564,71 @@ async function runGitQuiet(
   branch,
   needsDetach,
   onDebug,
-  a,
-  o = spawn,
-  l = SIGKILL_DELAY_MS,
-  u,
+  isolateMode,
+  spawnFn = spawn,
+  timeoutMs = SIGKILL_DELAY_MS,
+  gitEnvironment,
 ) {
-  let h = gitConfigPairs(u?.commandScopeEntries ?? []);
-  let p = (T, y) =>
+  let configArgs = gitConfigPairs(gitEnvironment?.commandScopeEntries ?? []);
+  let runGit = (gitArgs, label) =>
     new Promise((resolve) => {
-      let w = false;
-      let E = (L) => {
-        if (w) return;
-        w = true;
+      let settled = false;
+      let finish = (exitCode) => {
+        if (settled) return;
+        settled = true;
         clearTimeout(timer);
-        resolve(L);
+        resolve(exitCode);
       };
-      let A = o("git", [...SAFE_GIT_CONFIG_ARGS, ...h, "-C", canonicalPath, ...T], {
+      let child = spawnFn("git", [...SAFE_GIT_CONFIG_ARGS, ...configArgs, "-C", canonicalPath, ...gitArgs], {
         stdio: ["ignore", "ignore", "pipe"],
         cwd: undefined,
         windowsHide: true,
         ...cgroupSpawnOptions("helper"),
         env: {
           ...process.env,
-          ...u?.envOverrides,
+          ...gitEnvironment?.envOverrides,
           ...SAFE_GIT_ENV,
-          ...(a
+          ...(isolateMode
             ? {
                 GIT_CONFIG_GLOBAL: "/dev/null",
                 CLAUDE_CODE_SESSION_ACCESS_TOKEN: undefined,
               }
             : undefined),
-          ...(a === "checkout" ? ISOLATED_HOME_ENV : undefined),
+          ...(isolateMode === "checkout" ? ISOLATED_HOME_ENV : undefined),
         },
       });
-      let G = "";
-      A.stderr?.on("data", (L) => (G += String(L)));
+      let stderrText = "";
+      child.stderr?.on("data", (chunk) => (stderrText += String(chunk)));
       let timer = setTimeout(
-        (L, D, oe, ge, Ne, me) => {
-          oe(`[runner:session] ${ge} in ${Ne} timed out after ${me}ms (best-effort cleanup)`);
-          L.kill("SIGKILL");
-          D(null);
+        (spawned, complete, log, stepLabel, repoPath, limitMs) => {
+          log(
+            `[runner:session] ${stepLabel} in ${repoPath} timed out after ${limitMs}ms (best-effort cleanup)`,
+          );
+          spawned.kill("SIGKILL");
+          complete(null);
         },
-        l,
-        A,
-        E,
+        timeoutMs,
+        child,
+        finish,
         onDebug,
-        y,
+        label,
         canonicalPath,
-        l,
+        timeoutMs,
       );
-      A.on("close", (L) => {
-        if (L !== 0)
-          onDebug(`[runner:session] ${y} in ${canonicalPath} exited ${L}: ${G.trim()} (best-effort cleanup)`);
-        E(L);
+      child.on("close", (exitCode) => {
+        if (exitCode !== 0)
+          onDebug(
+            `[runner:session] ${label} in ${canonicalPath} exited ${exitCode}: ${stderrText.trim()} (best-effort cleanup)`,
+          );
+        finish(exitCode);
       });
-      A.on("error", (L) => {
-        onDebug(`[runner:session] ${y} spawn failed: ${L} (best-effort cleanup)`);
-        E(null);
+      child.on("error", (error) => {
+        onDebug(`[runner:session] ${label} spawn failed: ${error} (best-effort cleanup)`);
+        finish(null);
       });
     });
-  if (needsDetach) await p(["checkout", "--detach"], "checkout --detach");
-  if ((await p(["branch", "-D", "--end-of-options", branch], `branch -D '${branch}'`)) === 0)
+  if (needsDetach) await runGit(["checkout", "--detach"], "checkout --detach");
+  if ((await runGit(["branch", "-D", "--end-of-options", branch], `branch -D '${branch}'`)) === 0)
     onDebug(`[runner:session] deleted outcome branch '${branch}' from ${canonicalPath}`);
 }
 //@ chunk-hm0ce8vc.js:213081-213272 placement = ghIsDangerousCallback (0.82)
@@ -595,35 +645,35 @@ function getRemoteHostname(url) {
   }
 }
 //@ chunk-hm0ce8vc.js:213272-213454 placement = ghIsDangerousCallback (0.808)
-function getRemoteRepoPath(e) {
-  if (!e.includes("://")) {
-    let match = e.match(/^[^@]+@[^:]+:(.+)$/);
+function getRemoteRepoPath(url) {
+  if (!url.includes("://")) {
+    let match = url.match(/^[^@]+@[^:]+:(.+)$/);
     if (match) return stripGitSuffixAndTrailingSlash(match[1]);
   }
-  let n;
+  let parsedUrl;
   try {
-    n = new URL(e);
+    parsedUrl = new URL(url);
   } catch {
     return "";
   }
-  let replaced = n.pathname.replace(/^\/+/, "");
-  return stripGitSuffixAndTrailingSlash(replaced);
+  let path = parsedUrl.pathname.replace(/^\/+/, "");
+  return stripGitSuffixAndTrailingSlash(path);
 }
 //@ chunk-hm0ce8vc.js:213454-213518 placement
 /**
  * 去掉 .git 后缀与结尾斜杠。
  */
-function stripGitSuffixAndTrailingSlash(e) {
-  return e.replace(/\.git$/, "").replace(/\/+$/, "");
+function stripGitSuffixAndTrailingSlash(path) {
+  return path.replace(/\.git$/, "").replace(/\/+$/, "");
 }
 //@ chunk-hm0ce8vc.js:213518-213722 placement
-function isLocalhostUrl(apiBaseUrl, n) {
-  let r = apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1");
+function isLocalhostUrl(apiBaseUrl, sessionId) {
+  let isLocal = apiBaseUrl.includes("localhost") || apiBaseUrl.includes("127.0.0.1");
   let replaced = apiBaseUrl.replace(/^https?:\/\//, "").replace(/\/+$/, "");
-  let o = `${r ? "http" : "https"}://${replaced}/v1/code/sessions/${n}`;
+  let url = `${isLocal ? "http" : "https"}://${replaced}/v1/code/sessions/${sessionId}`;
   return {
-    sdkUrl: o,
-    resumeUrl: o,
+    sdkUrl: url,
+    resumeUrl: url,
   };
 }
 export {

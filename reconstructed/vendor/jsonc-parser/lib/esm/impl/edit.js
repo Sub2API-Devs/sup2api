@@ -5,18 +5,18 @@
  * pieces: chunk-kndsyy4v.js (3)
  * attribution: esm-fingerprint 3
  */
-import { parseTree, findNodeAtLocation } from "./parser.js";
+import { parseTree_2, findNodeAtLocation } from "./parser.js";
 import { isEOL, format } from "./format.js";
 
 //@ chunk-kndsyy4v.js:12432-14948 esm-fingerprint
-function ee(text, s, value, options) {
-  let path = s.slice();
-  let root = parseTree(text, []);
+function modify(text, path, value, options) {
+  let path_2 = path.slice();
+  let root = parseTree_2(text, []);
   let parent = undefined;
   let lastSegment = undefined;
-  while (path.length > 0) {
-    lastSegment = path.pop();
-    parent = findNodeAtLocation(root, path);
+  while (path_2.length > 0) {
+    lastSegment = path_2.pop();
+    parent = findNodeAtLocation(root, path_2);
     if (parent === undefined && value !== undefined) {
       if (typeof lastSegment === "string")
         value = {
@@ -220,4 +220,4 @@ function withFormatting(text, edit, options) {
 function applyEdit(text, edit) {
   return text.substring(0, edit.offset) + edit.content + text.substring(edit.offset + edit.length);
 }
-export { ee, applyEdit };
+export { modify, applyEdit };

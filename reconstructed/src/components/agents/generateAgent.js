@@ -11,7 +11,7 @@
 import { queryModelWithoutStreaming } from "../../services/api/claude.js";
 import { createUserMessage } from "../../utils/messages.js";
 import { asSystemPrompt } from "../../utils/systemPromptType.js";
-import { MEDIUM } from "../../services/artifacts/comments/autoEditPatch.js";
+import { MEDIUM_EFFORT } from "../../services/artifacts/comments/autoEditPatch.js";
 import { forkStickyBetaLatches } from "../../bootstrap/stateSlices.js";
 import { getStickyBetas } from "../../bootstrap/state.js";
 import { mainAgentContext } from "../../utils/agentContext.js";
@@ -24,18 +24,18 @@ import { getEmptyToolPermissionContext } from "../../Tool.js";
 async function generateAgent(userPrompt, model, existingIdentifiers, abortSignal) {
   let abortController = new AbortController();
   let signal = abortSignal.context.abortController.signal;
-  let s = () => abortController.abort();
+  let onParentAbort = () => abortController.abort();
   if (signal.aborted)
     return {
       kind: "canceled",
     };
-  signal.addEventListener("abort", s, {
+  signal.addEventListener("abort", onParentAbort, {
     once: true,
   });
-  let l = false;
+  let timedOut = false;
   let messagesWithContext = setTimeout(
     () => {
-      l = true;
+      timedOut = true;
       abortController.abort();
     },
     Math.max(0, existingIdentifiers),
@@ -60,7 +60,7 @@ async function generateAgent(userPrompt, model, existingIdentifiers, abortSignal
         hasAppendSystemPrompt: false,
         mcpTools: [],
         enablePromptCaching: false,
-        hookEffortValue: MEDIUM,
+        hookEffortValue: MEDIUM_EFFORT,
         stickyBetas: forkStickyBetaLatches(getStickyBetas()),
         agentContext: mainAgentContext(),
         async getToolPermissionContext() {
@@ -72,7 +72,7 @@ async function generateAgent(userPrompt, model, existingIdentifiers, abortSignal
       return {
         kind: "canceled",
       };
-    if (l)
+    if (timedOut)
       return {
         kind: "timeout",
       };
@@ -91,7 +91,7 @@ async function generateAgent(userPrompt, model, existingIdentifiers, abortSignal
       ? {
           kind: "canceled",
         }
-      : l
+      : timedOut
         ? {
             kind: "timeout",
           }
@@ -100,7 +100,7 @@ async function generateAgent(userPrompt, model, existingIdentifiers, abortSignal
           };
   } finally {
     clearTimeout(messagesWithContext);
-    signal.removeEventListener("abort", s);
+    signal.removeEventListener("abort", onParentAbort);
   }
 }
 export { generateAgent };

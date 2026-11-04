@@ -5,26 +5,60 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (4)
- * attribution: placement 4
+ * pieces: chunk-hwmsct5x.js (6)
+ * attribution: placement 6
  */
-import {
-  LF,
-  CR,
-  UTF8_BOM_BYTES,
-  EVENT_PREFIX_BYTES,
-  CONTENT_BLOCK_DELTA_EVENT_BYTES,
-  PING_EVENT_BYTES,
-  MAX_HELD_BYTES,
-  heldReplyState,
-  NEWLINE_EVENT_BYTES,
-} from "./requestHeaders.js";
+import { identity } from "../../utils/identity.js";
+import { env } from "../../utils/env.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { systemClock } from "../../utils/sleep.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-hwmsct5x.js:266151-266416 placement
+/**
+ * 未监视回复暂存流的常量：哪些查询来源的回复要暂存（subagent/auxiliary/compaction）、脉冲/增量事件字节前缀、LF/CR/BOM 字节、最多暂存 256 KB 与发送状态。
+ */
+var HELD_REPLY_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CONTENT_BLOCK_DELTA_EVENT_BYTES;
+var PING_EVENT_BYTES;
+var EVENT_PREFIX_BYTES;
+var NEWLINE_EVENT_BYTES;
+var LF;
+var CR;
+var UTF8_BOM_BYTES;
+var MAX_HELD_BYTES;
+var heldReplyState;
+deferInit("chunk-hwmsct5x.js:266151", () => {
+  HELD_REPLY_SOURCES = new Set(["subagent", "auxiliary", "compaction"]);
+  CONTENT_BLOCK_DELTA_EVENT_BYTES = Buffer.from(`event: content_block_delta
+`);
+  PING_EVENT_BYTES = Buffer.from(`event: ping
+`);
+  EVENT_PREFIX_BYTES = Buffer.from("event");
+  NEWLINE_EVENT_BYTES = Buffer.from(`
+event`);
+  LF = 10;
+  CR = 13;
+  UTF8_BOM_BYTES = Buffer.from("\uFEFF");
+  MAX_HELD_BYTES = 262144;
+  heldReplyState = identity(
+    {
+      isSent: false,
+    },
+    (state) => {
+      state.isSent = false;
+    },
+  );
+});
+//@ chunk-hwmsct5x.js:266416-266503 placement
+function heldReplyHoldMs(classKey) {
+  return classKey !== undefined && HELD_REPLY_SOURCES.has(classKey)
+    ? (env.CLAUDE_CODE_UNWATCHED_REPLY_HOLD_MS ?? 0)
+    : 0;
+}
 //@ chunk-hwmsct5x.js:266503-270138 placement
 /**
  * 流式回复读取器的缓冲器：在无人观看时按事件边界暂存 SSE 块，到期或结束时一次性交出，统计切分与空闲间隔。
@@ -65,7 +99,7 @@ class UnwatchedReplyHold {
       else if (!this.isReading) this.read();
     });
   }
-  cancel(e) {
+  cancel(reason) {
     this.isCancelled = true;
     this.held = [];
     this.cancelHold?.();
@@ -73,7 +107,7 @@ class UnwatchedReplyHold {
     this.pulling?.done();
     this.pulling = undefined;
     this.reportFirstReply();
-    return this.reader.cancel(e);
+    return this.reader.cancel(reason);
   }
   read() {
     this.isReading = true;
@@ -83,42 +117,48 @@ class UnwatchedReplyHold {
       this.onReadFailed(error);
     }
   }
-  onRead = (e) => {
+  onRead = (result) => {
     this.isReading = false;
     if (this.isCancelled) return;
     try {
-      if (e.done) {
+      if (result.done) {
         this.ending = {
           failed: false,
         };
         this.handOver();
         return;
       }
-      let n = e.value;
-      if (n.byteLength > 0) {
+      let chunk = result.value;
+      if (chunk.byteLength > 0) {
         this.chunksRead++;
-        this.held.push(n);
-        this.heldBytes += n.byteLength;
-        let buffer = Buffer.from(n.buffer, n.byteOffset, n.byteLength);
-        let s = this.isBetweenEvents && !this.holdsNothing;
-        let h = !this.isBetweenEvents && this.chunksRead > 1;
+        this.held.push(chunk);
+        this.heldBytes += chunk.byteLength;
+        let buffer = Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+        let canHold = this.isBetweenEvents && !this.holdsNothing;
+        let continuedMidEvent = !this.isBetweenEvents && this.chunksRead > 1;
         this.isBetweenEvents = buffer.at(-1) === LF && buffer.at(-2) === LF;
-        if ((h || !this.isBetweenEvents) && !buffer.includes(CR)) this.chunksSplitMidEvent++;
-        s &&= this.isBetweenEvents && !buffer.includes(CR) && !buffer.includes(UTF8_BOM_BYTES);
+        if ((continuedMidEvent || !this.isBetweenEvents) && !buffer.includes(CR)) this.chunksSplitMidEvent++;
+        canHold &&= this.isBetweenEvents && !buffer.includes(CR) && !buffer.includes(UTF8_BOM_BYTES);
         for (
-          let w = !s ? -1 : hasPrefix(buffer, 0, EVENT_PREFIX_BYTES) ? 0 : nextEventStart(buffer, 0);
-          s && w !== -1;
-          w = nextEventStart(buffer, w)
+          let offset = !canHold
+            ? -1
+            : hasPrefix(buffer, 0, EVENT_PREFIX_BYTES)
+              ? 0
+              : nextEventStart(buffer, 0);
+          canHold && offset !== -1;
+          offset = nextEventStart(buffer, offset)
         )
-          s = hasPrefix(buffer, w, CONTENT_BLOCK_DELTA_EVENT_BYTES) || hasPrefix(buffer, w, PING_EVENT_BYTES);
-        let y =
-          s &&
+          canHold =
+            hasPrefix(buffer, offset, CONTENT_BLOCK_DELTA_EVENT_BYTES) ||
+            hasPrefix(buffer, offset, PING_EVENT_BYTES);
+        let idleGap =
+          canHold &&
           (this.cancelHold === undefined
             ? this.clock.monotonicNow() - this.lastHandOverAt > this.holdMs ||
               this.clock.now() - this.lastHandOverWallAt > this.holdMs
             : this.hasStoodStillSinceHandOver(2));
-        if (y) this.chunksAfterIdleGap++;
-        if (!s || y || this.heldBytes >= MAX_HELD_BYTES) {
+        if (idleGap) this.chunksAfterIdleGap++;
+        if (!canHold || idleGap || this.heldBytes >= MAX_HELD_BYTES) {
           this.chunksNotHeld++;
           this.handOver();
           return;
@@ -154,16 +194,18 @@ class UnwatchedReplyHold {
     }
     this.handOver();
   };
-  hasStoodStillSinceHandOver(e) {
-    let n = this.clock.monotonicNow() - this.lastHandOverAt;
-    return this.clock.now() - this.lastHandOverWallAt - n > this.holdMs || n > e * this.holdMs;
+  hasStoodStillSinceHandOver(factor) {
+    let elapsedMs = this.clock.monotonicNow() - this.lastHandOverAt;
+    return (
+      this.clock.now() - this.lastHandOverWallAt - elapsedMs > this.holdMs || elapsedMs > factor * this.holdMs
+    );
   }
-  noteOwnThrow(e, n) {
+  noteOwnThrow(error, reason) {
     if (!this.holdsNothing) {
       this.holdsNothing = true;
       try {
-        logError(toError(e));
-        logFeatureSad("api_unwatched_reply_hold", n);
+        logError(toError(error));
+        logFeatureSad("api_unwatched_reply_hold", reason);
       } catch {}
     }
   }
@@ -192,16 +234,16 @@ class UnwatchedReplyHold {
     cancelHold?.();
     this.isDue = true;
     if (this.pulling === undefined) return;
-    let { controller, done: r } = this.pulling;
+    let { controller, done } = this.pulling;
     this.pulling = undefined;
     try {
       if (this.held.length > 0) {
-        let [s, ...h] = this.held;
-        let y = s !== undefined && h.length === 0 ? s : Buffer.concat(this.held);
+        let [first, ...others] = this.held;
+        let payload = first !== undefined && others.length === 0 ? first : Buffer.concat(this.held);
         this.held = [];
         this.heldBytes = 0;
         this.isDue = this.ending !== undefined;
-        controller.enqueue(y);
+        controller.enqueue(payload);
         this.piecesHandedOn++;
         this.lastHandOverAt = this.clock.monotonicNow();
         this.lastHandOverWallAt = this.clock.now();
@@ -216,16 +258,16 @@ class UnwatchedReplyHold {
       try {
         controller.error(error);
       } catch {}
-      r();
+      done();
       this.letGoOfBody(error);
       this.noteOwnThrow(error, "hand_over_threw");
       return;
     }
-    r();
+    done();
   }
-  letGoOfBody(e) {
+  letGoOfBody(reason) {
     try {
-      this.reader.cancel(e).catch(() => {});
+      this.reader.cancel(reason).catch(() => {});
     } catch {}
   }
 }
@@ -236,12 +278,15 @@ function wrapWithUnwatchedHold(body, holdMs, clock = systemClock) {
   });
 }
 //@ chunk-hwmsct5x.js:270231-270320 placement = hasPrefix (1)
-function hasPrefix(src, n, r) {
-  return n + r.length <= src.length && src.compare(r, 0, r.length, n, n + r.length) === 0;
+function hasPrefix(src, offset, bytes) {
+  return (
+    offset + bytes.length <= src.length &&
+    src.compare(bytes, 0, bytes.length, offset, offset + bytes.length) === 0
+  );
 }
 //@ chunk-hwmsct5x.js:270320-270380 placement
-function nextEventStart(e, n) {
-  let index = e.indexOf(NEWLINE_EVENT_BYTES, n);
+function nextEventStart(buffer, fromIndex) {
+  let index = buffer.indexOf(NEWLINE_EVENT_BYTES, fromIndex);
   return index === -1 ? -1 : index + 1;
 }
-export { wrapWithUnwatchedHold };
+export { heldReplyHoldMs, wrapWithUnwatchedHold };

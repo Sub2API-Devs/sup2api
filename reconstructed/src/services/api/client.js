@@ -9,9 +9,9 @@
  * attribution: fingerprint 5, layout 36, callgraph-fingerprint 1, sole-consumer 2
  */
 import { randomUUID } from "crypto";
+import { env } from "../../utils/env.js";
 import { systemClock } from "../../utils/sleep.js";
 import { isCcsCoworkSurface, desktopEntrypointSetting } from "../../utils/entrypointKinds.js";
-import { env } from "../../utils/env.js";
 import { isMainAgent } from "../../utils/agentContext.js";
 import { shouldSendGatewayHintHeaders, isLowPriorityActiveSafe } from "../lowPriority/lowPriorityMode.js";
 import {
@@ -28,7 +28,6 @@ import {
   validateAuthHeaders,
   X_COWORK_ENROLLMENT,
   attachSenderAddress,
-  heldReplyHoldMs,
 } from "./requestHeaders.js";
 import { envSessionKind } from "../../utils/concurrentSessions.js";
 import {
@@ -172,10 +171,35 @@ import {
   isSameUnredirectedUrl,
   markFirstPartyFetch,
 } from "./fetchOptions.js";
-import { wrapWithUnwatchedHold } from "./unwatchedReplyHold.js";
+import { heldReplyHoldMs, wrapWithUnwatchedHold } from "./unwatchedReplyHold.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
 import { APIUserAbortError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-vv0zxx69.js:1191-1249 fingerprint = configureApiKeyHeaders (0.627)
+/**
+ * API key 转 Authorization: Bearer 头（空时返回空对象）。
+ */
+function configureApiKeyHeaders(apiKey) {
+  return apiKey
+    ? {
+        Authorization: `Bearer ${apiKey}`,
+      }
+    : {};
+}
+//@ chunk-bwbq4xvm.js:156422-156608 fingerprint = getCustomHeaders (1)
+/**
+ * 解析 ANTHROPIC_CUSTOM_HEADERS（每行 "名: 值"）为 [名, 值] 数组；无冒号或名为空的行忽略。
+ */
+function getCustomHeaders(headerText = env.ANTHROPIC_CUSTOM_HEADERS ?? "") {
+  let pairs = [];
+  for (let headerString of headerText.split(/\r?\n/)) {
+    let colonIdx = headerString.indexOf(":");
+    let headerName = colonIdx === -1 ? "" : headerString.slice(0, colonIdx).trim();
+    if (headerName) pairs.push([headerName, headerString.slice(colonIdx + 1).trim()]);
+  }
+  return pairs;
+}
 //@ chunk-hwmsct5x.js:241005-241035 fingerprint = CLIENT_REQUEST_ID_HEADER (1)
 /**
  * 请求头名 x-client-request-id（第一方请求时由 buildFetch 生成 UUID）。
@@ -197,8 +221,8 @@ function createStderrLogger() {
 /**
  * 工具列表转名字：有 name 用 name，否则 mcp__<type>。旧版名 isSessionContainerCompatible 为错配。
  */
-function getToolNameList(e, messages = []) {
-  return e.map((s) => ("name" in s ? s.name : `mcp__${s.type}`));
+function getToolNameList(tools, messages = []) {
+  return tools.map((tool) => ("name" in tool ? tool.name : `mcp__${tool.type}`));
 }
 //@ chunk-hwmsct5x.js:270723-280488 fingerprint = getAnthropicClient (0.44)
 /**
@@ -374,13 +398,14 @@ async function getAnthropicClient(options) {
     });
   }
   if (provider === "bedrock") {
-    let { AnthropicBedrock } = await import("./chunk-h87x8cg3.js");
+    let { AnthropicBedrock } =
+      await import("../../../vendor/@anthropic-ai/bedrock-sdk/AnthropicBedrock.lazy.js");
     let resolvedFetch = getAwsRegionForModel(model, awsRegion);
     let CLAUDE_CODE_SKIP_BEDROCK_AUTH = env.CLAUDE_CODE_SKIP_BEDROCK_AUTH;
-    let he = splitAuthorizationHeader(clientOptions.defaultHeaders);
-    let any = Object.keys(he.rest).some((key) => key.toLowerCase() === "x-api-key");
-    let He = {
-      ...he.rest,
+    let bedrockSplitHeaders = splitAuthorizationHeader(clientOptions.defaultHeaders);
+    let any = Object.keys(bedrockSplitHeaders.rest).some((key) => key.toLowerCase() === "x-api-key");
+    let bedrockDefaultHeaders = {
+      ...bedrockSplitHeaders.rest,
       ...clearAuthorizationHeaders(),
       Authorization: null,
       ...(!CLAUDE_CODE_SKIP_BEDROCK_AUTH &&
@@ -392,36 +417,40 @@ async function getAnthropicClient(options) {
       }),
     };
     let trimmed = process.env.AWS_BEARER_TOKEN_BEDROCK?.trim();
-    let Ee = trimmed ? `Bearer ${trimmed}` : CLAUDE_CODE_SKIP_BEDROCK_AUTH ? he.value : undefined;
-    let Sn = isHostManagedProviderAuth();
-    let En =
-      !Ee && !CLAUDE_CODE_SKIP_BEDROCK_AUTH && !Sn
+    let bedrockBearerToken = trimmed
+      ? `Bearer ${trimmed}`
+      : CLAUDE_CODE_SKIP_BEDROCK_AUTH
+        ? bedrockSplitHeaders.value
+        : undefined;
+    let bedrockHostManagedAuth = isHostManagedProviderAuth();
+    let bedrockAwsCredentials =
+      !bedrockBearerToken && !CLAUDE_CODE_SKIP_BEDROCK_AUTH && !bedrockHostManagedAuth
         ? await awaitUnlessAborted(refreshAndGetAwsCredentials(signal, credentialPromptContext), signal)
         : null;
-    let $l = {
+    let bedrockOptions = {
       ...clientOptions,
-      defaultHeaders: He,
+      defaultHeaders: bedrockDefaultHeaders,
       awsRegion: resolvedFetch,
       apiKey: null,
       ...(CLAUDE_CODE_SKIP_BEDROCK_AUTH &&
-        !Ee && {
+        !bedrockBearerToken && {
           skipAuth: true,
         }),
-      ...(Ee && {
-        apiKey: Ee.match(/^Bearer (.+)$/i)?.[1] ?? Ee,
+      ...(bedrockBearerToken && {
+        apiKey: bedrockBearerToken.match(/^Bearer (.+)$/i)?.[1] ?? bedrockBearerToken,
         defaultHeaders: {
-          ...He,
-          Authorization: Ee,
-          ...(CLAUDE_CODE_SKIP_BEDROCK_AUTH && apiKeyHeaderFromEnv(he.rest)),
+          ...bedrockDefaultHeaders,
+          Authorization: bedrockBearerToken,
+          ...(CLAUDE_CODE_SKIP_BEDROCK_AUTH && apiKeyHeaderFromEnv(bedrockSplitHeaders.rest)),
         },
       }),
-      ...(Sn &&
-        !Ee &&
+      ...(bedrockHostManagedAuth &&
+        !bedrockBearerToken &&
         !CLAUDE_CODE_SKIP_BEDROCK_AUTH && {
           providerChainResolver: hostManagedAwsSdkCredentials("Bedrock").providerChainResolver,
         }),
-      ...(!Sn &&
-        !Ee &&
+      ...(!bedrockHostManagedAuth &&
+        !bedrockBearerToken &&
         !CLAUDE_CODE_SKIP_BEDROCK_AUTH && {
           providerChainResolver: defaultAwsProviderChainResolver(resolvedFetch),
         }),
@@ -429,29 +458,29 @@ async function getAnthropicClient(options) {
         logger: createStderrLogger(),
       }),
     };
-    return En
+    return bedrockAwsCredentials
       ? new AnthropicBedrock({
-          ...$l,
-          awsAccessKey: En.accessKeyId,
-          awsSecretKey: En.secretAccessKey,
-          awsSessionToken: En.sessionToken,
+          ...bedrockOptions,
+          awsAccessKey: bedrockAwsCredentials.accessKeyId,
+          awsSecretKey: bedrockAwsCredentials.secretAccessKey,
+          awsSessionToken: bedrockAwsCredentials.sessionToken,
         })
-      : new AnthropicBedrock($l);
+      : new AnthropicBedrock(bedrockOptions);
   }
   if (provider === "foundry") {
-    let { AnthropicFoundry } = await import("./chunk-q01xm7xp.js");
+    let { AnthropicFoundry } = await import("../../../vendor/@anthropic-ai/foundry-sdk/client.mjs");
     let azureADTokenProvider;
-    let we = false;
+    let skipFoundryAuth = false;
     if (env.ANTHROPIC_FOUNDRY_AUTH_TOKEN)
       azureADTokenProvider = async () => env.ANTHROPIC_FOUNDRY_AUTH_TOKEN ?? "";
     else if (!process.env.ANTHROPIC_FOUNDRY_API_KEY)
       if (env.CLAUDE_CODE_SKIP_FOUNDRY_AUTH) {
-        we = true;
+        skipFoundryAuth = true;
         azureADTokenProvider = () => Promise.resolve("skip-foundry-auth");
       } else if (isHostManagedProviderAuth()) throw hostManagedNoCredsError("Foundry");
       else {
         let { DefaultAzureCredential: AzureCredential, getBearerTokenProvider } =
-          await import("./chunk-mrx6y2r5.js");
+          await import("../../../vendor/@azure/identity/dist/esm/credentials/DefaultAzureCredential.lazy.js");
         azureADTokenProvider = getBearerTokenProvider(
           new AzureCredential(),
           "https://cognitiveservices.azure.com/.default",
@@ -466,29 +495,29 @@ async function getAnthropicClient(options) {
       throw Error(
         "ANTHROPIC_FOUNDRY_RESOURCE must be a Foundry resource name (2-64 letters, digits and hyphens, not starting or ending with a hyphen, such as my-resource), not a URL or host name. To use a full URL, set ANTHROPIC_FOUNDRY_BASE_URL instead.",
       );
-    let ce = splitAuthorizationHeader(clientOptions.defaultHeaders);
-    let He = {
+    let foundrySplitHeaders = splitAuthorizationHeader(clientOptions.defaultHeaders);
+    let foundryOptions = {
       ...clientOptions,
       ...(ANTHROPIC_FOUNDRY_RESOURCE !== undefined && {
         resource: ANTHROPIC_FOUNDRY_RESOURCE,
       }),
       defaultHeaders: {
-        ...ce.rest,
+        ...foundrySplitHeaders.rest,
         ...clearAuthorizationHeaders(),
         Authorization: null,
       },
       ...(azureADTokenProvider && {
         azureADTokenProvider,
         apiKey: null,
-        defaultHeaders: we
+        defaultHeaders: skipFoundryAuth
           ? {
-              ...ce.rest,
-              ...(ce.value !== undefined && {
-                Authorization: ce.value,
+              ...foundrySplitHeaders.rest,
+              ...(foundrySplitHeaders.value !== undefined && {
+                Authorization: foundrySplitHeaders.value,
               }),
             }
           : {
-              ...ce.rest,
+              ...foundrySplitHeaders.rest,
               ...clearAuthorizationHeaders(),
             },
       }),
@@ -496,24 +525,28 @@ async function getAnthropicClient(options) {
         logger: createStderrLogger(),
       }),
     };
-    return new AnthropicFoundry(He);
+    return new AnthropicFoundry(foundryOptions);
   }
   if (provider === "anthropicAws") {
-    let { AnthropicAws } = await import("./chunk-qhhcfyds.js");
+    let { AnthropicAws } = await import("../../../vendor/@anthropic-ai/bedrock-sdk/AnthropicAws.lazy.js");
     let CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH = env.CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH;
     let awsRegion = await resolveAwsRegion();
-    let he = splitAuthorizationHeader(clientOptions.defaultHeaders);
-    let ce = CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH ? he.value : undefined;
-    let He = Object.entries(he.rest).findLast(([key]) => key.toLowerCase() === "anthropic-workspace-id")?.[1];
-    let Me = {
+    let anthropicAwsSplitHeaders = splitAuthorizationHeader(clientOptions.defaultHeaders);
+    let anthropicAwsBearerToken = CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH
+      ? anthropicAwsSplitHeaders.value
+      : undefined;
+    let workspaceId = Object.entries(anthropicAwsSplitHeaders.rest).findLast(
+      ([key]) => key.toLowerCase() === "anthropic-workspace-id",
+    )?.[1];
+    let anthropicAwsOptions = {
       ...clientOptions,
       awsRegion,
-      ...(He &&
+      ...(workspaceId &&
         env.ANTHROPIC_AWS_WORKSPACE_ID && {
-          workspaceId: He,
+          workspaceId,
         }),
       defaultHeaders: {
-        ...he.rest,
+        ...anthropicAwsSplitHeaders.rest,
         ...clearAuthorizationHeaders(),
         Authorization: null,
       },
@@ -521,15 +554,15 @@ async function getAnthropicClient(options) {
         authToken: null,
       }),
       ...(CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH &&
-        !ce && {
+        !anthropicAwsBearerToken && {
           skipAuth: true,
         }),
-      ...(ce && {
-        apiKey: ce.match(/^Bearer (.+)$/i)?.[1] ?? ce,
+      ...(anthropicAwsBearerToken && {
+        apiKey: anthropicAwsBearerToken.match(/^Bearer (.+)$/i)?.[1] ?? anthropicAwsBearerToken,
         defaultHeaders: {
-          ...he.rest,
+          ...anthropicAwsSplitHeaders.rest,
           ...clearAuthorizationHeaders(),
-          Authorization: ce,
+          Authorization: anthropicAwsBearerToken,
         },
       }),
       ...(isDebugToStdErr() && {
@@ -538,19 +571,20 @@ async function getAnthropicClient(options) {
     };
     if (!process.env.ANTHROPIC_AWS_API_KEY && !CLAUDE_CODE_SKIP_ANTHROPIC_AWS_AUTH)
       if (isHostManagedProviderAuth())
-        Me.providerChainResolver = hostManagedAwsSdkCredentials("Anthropic-on-AWS").providerChainResolver;
+        anthropicAwsOptions.providerChainResolver =
+          hostManagedAwsSdkCredentials("Anthropic-on-AWS").providerChainResolver;
       else {
-        let Ee = await awaitUnlessAborted(
+        let anthropicAwsCredentials = await awaitUnlessAborted(
           refreshAndGetAwsCredentials(signal, credentialPromptContext),
           signal,
         );
-        if (Ee) {
-          Me.awsAccessKey = Ee.accessKeyId;
-          Me.awsSecretAccessKey = Ee.secretAccessKey;
-          Me.awsSessionToken = Ee.sessionToken;
-        } else Me.providerChainResolver = defaultAwsProviderChainResolver(awsRegion);
+        if (anthropicAwsCredentials) {
+          anthropicAwsOptions.awsAccessKey = anthropicAwsCredentials.accessKeyId;
+          anthropicAwsOptions.awsSecretAccessKey = anthropicAwsCredentials.secretAccessKey;
+          anthropicAwsOptions.awsSessionToken = anthropicAwsCredentials.sessionToken;
+        } else anthropicAwsOptions.providerChainResolver = defaultAwsProviderChainResolver(awsRegion);
       }
-    return new AnthropicAws(Me);
+    return new AnthropicAws(anthropicAwsOptions);
   }
   if (provider === "anthropicGoogleCloud") {
     assertGcpPathSegment("ANTHROPIC_GOOGLE_CLOUD_PROJECT", env.ANTHROPIC_GOOGLE_CLOUD_PROJECT);
@@ -560,64 +594,68 @@ async function getAnthropicClient(options) {
     assertGcpPathSegment("GOOGLE_CLOUD_PROJECT", env.GOOGLE_CLOUD_PROJECT);
     assertGcpPathSegment("gcloud_project", env.gcloud_project);
     assertGcpPathSegment("google_cloud_project", env.google_cloud_project);
-    let re = env.CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH;
-    let le = isHostManagedProviderAuth();
-    if (!re && !le)
+    let skipGoogleCloudAuth = env.CLAUDE_CODE_SKIP_ANTHROPIC_GOOGLE_CLOUD_AUTH;
+    let googleCloudHostManagedAuth = isHostManagedProviderAuth();
+    if (!skipGoogleCloudAuth && !googleCloudHostManagedAuth)
       await awaitUnlessAborted(refreshGcpCredentialsIfNeeded(signal, credentialPromptContext), signal);
-    let [{ AnthropicGoogleCloud: we }, { buildVertexGoogleAuth: he }] = await Promise.all([
-      import("./chunk-e7naa6k8.js"),
-      import("./chunk-hdpbq2vw.js"),
+    let [
+      { AnthropicGoogleCloud: AnthropicGoogleCloudClient },
+      { buildVertexGoogleAuth: buildGoogleCloudAuth },
+    ] = await Promise.all([
+      import("../../../vendor/_unknown/anthropic-google-cloud-client.js"),
+      import("./vertexAuth.js"),
     ]);
-    let ce = splitAuthorizationHeader(clientOptions.defaultHeaders);
-    let He = re ? ce.value : undefined;
-    let Me = {
+    let googleCloudSplitHeaders = splitAuthorizationHeader(clientOptions.defaultHeaders);
+    let googleCloudBearerToken = skipGoogleCloudAuth ? googleCloudSplitHeaders.value : undefined;
+    let googleCloudOptions = {
       ...clientOptions,
       defaultHeaders: {
-        ...ce.rest,
+        ...googleCloudSplitHeaders.rest,
         ...clearAuthorizationHeaders(),
       },
-      ...(re
+      ...(skipGoogleCloudAuth
         ? {
             skipAuth: true,
           }
         : {
-            googleAuth: await he(
+            googleAuth: await buildGoogleCloudAuth(
               {
                 kind: "default",
               },
               undefined,
             ),
           }),
-      ...(He && {
+      ...(googleCloudBearerToken && {
         defaultHeaders: {
-          ...ce.rest,
-          Authorization: He,
+          ...googleCloudSplitHeaders.rest,
+          Authorization: googleCloudBearerToken,
         },
       }),
       ...(isDebugToStdErr() && {
         logger: createStderrLogger(),
       }),
     };
-    return new we(Me);
+    return new AnthropicGoogleCloudClient(googleCloudOptions);
   }
   if (provider === "mantle") {
-    let { AnthropicBedrockMantle } = await import("./chunk-h87x8cg3.js");
+    let { AnthropicBedrockMantle } =
+      await import("../../../vendor/@anthropic-ai/bedrock-sdk/AnthropicBedrock.lazy.js");
     let CLAUDE_CODE_SKIP_MANTLE_AUTH = env.CLAUDE_CODE_SKIP_MANTLE_AUTH;
-    let we = splitAuthorizationHeader(clientOptions.defaultHeaders);
-    let he = CLAUDE_CODE_SKIP_MANTLE_AUTH ? we.value : undefined;
+    let mantleSplitHeaders = splitAuthorizationHeader(clientOptions.defaultHeaders);
+    let mantleBearerToken = CLAUDE_CODE_SKIP_MANTLE_AUTH ? mantleSplitHeaders.value : undefined;
     let trimmed = process.env.AWS_BEARER_TOKEN_BEDROCK?.trim();
-    let He = isHostManagedProviderAuth();
-    let Me =
-      !trimmed && !CLAUDE_CODE_SKIP_MANTLE_AUTH && !He
+    let mantleHostManagedAuth = isHostManagedProviderAuth();
+    let mantleAwsCredentials =
+      !trimmed && !CLAUDE_CODE_SKIP_MANTLE_AUTH && !mantleHostManagedAuth
         ? await awaitUnlessAborted(refreshAndGetAwsCredentials(signal, credentialPromptContext), signal)
         : null;
     let awsRegionForModel = getAwsRegionForModel(model, awsRegion);
-    let any = Object.keys(we.rest).some((key) => key.toLowerCase() === "x-api-key");
+    let any = Object.keys(mantleSplitHeaders.rest).some((key) => key.toLowerCase() === "x-api-key");
     return new AnthropicBedrockMantle({
       ...clientOptions,
       defaultHeaders: trimmed
         ? {
-            ...we.rest,
+            ...mantleSplitHeaders.rest,
             ...clearAuthorizationHeaders(),
             Authorization: `Bearer ${trimmed}`,
             ...(!any && {
@@ -625,7 +663,7 @@ async function getAnthropicClient(options) {
             }),
           }
         : {
-            ...we.rest,
+            ...mantleSplitHeaders.rest,
             ...clearAuthorizationHeaders(),
             Authorization: null,
             ...(!CLAUDE_CODE_SKIP_MANTLE_AUTH &&
@@ -639,28 +677,28 @@ async function getAnthropicClient(options) {
           authToken: null,
         }),
       ...(CLAUDE_CODE_SKIP_MANTLE_AUTH &&
-        !he && {
+        !mantleBearerToken && {
           skipAuth: true,
         }),
-      ...(he && {
-        apiKey: he.match(/^Bearer (.+)$/i)?.[1] ?? he,
+      ...(mantleBearerToken && {
+        apiKey: mantleBearerToken.match(/^Bearer (.+)$/i)?.[1] ?? mantleBearerToken,
         defaultHeaders: {
-          ...we.rest,
+          ...mantleSplitHeaders.rest,
           ...clearAuthorizationHeaders(),
-          Authorization: he,
+          Authorization: mantleBearerToken,
         },
       }),
-      ...(Me && {
-        awsAccessKey: Me.accessKeyId,
-        awsSecretAccessKey: Me.secretAccessKey,
-        awsSessionToken: Me.sessionToken,
+      ...(mantleAwsCredentials && {
+        awsAccessKey: mantleAwsCredentials.accessKeyId,
+        awsSecretAccessKey: mantleAwsCredentials.secretAccessKey,
+        awsSessionToken: mantleAwsCredentials.sessionToken,
       }),
-      ...(He &&
+      ...(mantleHostManagedAuth &&
         !trimmed &&
         !CLAUDE_CODE_SKIP_MANTLE_AUTH && {
           providerChainResolver: hostManagedAwsSdkCredentials("Mantle").providerChainResolver,
         }),
-      ...(!He &&
+      ...(!mantleHostManagedAuth &&
         !trimmed &&
         !CLAUDE_CODE_SKIP_MANTLE_AUTH && {
           providerChainResolver: defaultAwsProviderChainResolver(awsRegionForModel),
@@ -672,14 +710,14 @@ async function getAnthropicClient(options) {
   }
   if (provider === "vertex") {
     let CLAUDE_CODE_SKIP_VERTEX_AUTH = env.CLAUDE_CODE_SKIP_VERTEX_AUTH;
-    let le = isHostManagedProviderAuth();
-    if (!CLAUDE_CODE_SKIP_VERTEX_AUTH && !le)
+    let vertexHostManagedAuth = isHostManagedProviderAuth();
+    if (!CLAUDE_CODE_SKIP_VERTEX_AUTH && !vertexHostManagedAuth)
       await awaitUnlessAborted(refreshGcpCredentialsIfNeeded(signal, credentialPromptContext), signal);
-    let [{ AnthropicVertex: we }, { buildVertexGoogleAuth: he }] = await Promise.all([
-      import("./chunk-xa96axyz.js"),
-      import("./chunk-hdpbq2vw.js"),
+    let [{ AnthropicVertex: AnthropicVertexClient }, { buildVertexGoogleAuth }] = await Promise.all([
+      import("../../../vendor/@anthropic-ai/vertex-sdk/client.js"),
+      import("./vertexAuth.js"),
     ]);
-    let googleAuth = await he(
+    let googleAuth = await buildVertexGoogleAuth(
       CLAUDE_CODE_SKIP_VERTEX_AUTH
         ? {
             kind: "skip",
@@ -689,17 +727,17 @@ async function getAnthropicClient(options) {
           },
       getConfiguredVertexProjectId(),
     );
-    let He = splitAuthorizationHeader(clientOptions.defaultHeaders);
-    let wireAuthorization = CLAUDE_CODE_SKIP_VERTEX_AUTH ? He.value : undefined;
-    let Ee = {
+    let vertexSplitHeaders = splitAuthorizationHeader(clientOptions.defaultHeaders);
+    let wireAuthorization = CLAUDE_CODE_SKIP_VERTEX_AUTH ? vertexSplitHeaders.value : undefined;
+    let vertexOptions = {
       ...clientOptions,
       defaultHeaders: {
-        ...He.rest,
+        ...vertexSplitHeaders.rest,
         ...vertexResidualCredentialPins(
           CLAUDE_CODE_SKIP_VERTEX_AUTH
             ? {
                 wireAuthorization,
-                headers: He.rest,
+                headers: vertexSplitHeaders.rest,
               }
             : false,
         ),
@@ -710,7 +748,7 @@ async function getAnthropicClient(options) {
         logger: createStderrLogger(),
       }),
     };
-    return suppressVertexAuthRejection(new we(Ee));
+    return suppressVertexAuthRejection(new AnthropicVertexClient(vertexOptions));
   }
   let resolvedApiKey = apiKey || getAnthropicApiKey();
   if (!resolvedApiKey && shouldUseWIFAuth()) {
@@ -718,13 +756,13 @@ async function getAnthropicClient(options) {
     if (wifTokenCache !== null) {
       let wifCredentials = await getWIFCredentials();
       let { rest } = splitAuthorizationHeader(defaultHeaders);
-      let he = env.ANTHROPIC_BASE_URL || wifCredentials?.baseURL;
-      assertProviderAllowed(provider, he);
+      let baseURL = env.ANTHROPIC_BASE_URL || wifCredentials?.baseURL;
+      assertProviderAllowed(provider, baseURL);
       let token = await wifTokenCache.getToken();
       return new Anthropic({
         apiKey: null,
         authToken: token,
-        baseURL: he,
+        baseURL,
         ...clientOptions,
         defaultHeaders: {
           ...rest,
@@ -810,7 +848,7 @@ async function getAnthropicClient(options) {
         containerId && "x-claude-remote-container-id",
         remoteSessionId && "x-claude-remote-session-id",
         clientApp && "x-client-app",
-      ].filter((re) => Boolean(re)),
+      ].filter((value) => Boolean(value)),
     ),
   });
   if (authPair.authToken && isLauncherHostLoginRefusedNow(authPair.authToken))
@@ -836,15 +874,15 @@ async function getAnthropicClient(options) {
  * 把 ANTHROPIC_AUTH_TOKEN 或 apiKeyHelper 的令牌写成 Authorization: Bearer，返回来源名；都没有返回 null。
  */
 async function applyAuthTokenHeader(defaultHeaders, isNonInteractiveSession) {
-  let r =
+  let bareModeNoKey =
     isBareMode() &&
     getAnthropicApiKeyWithSourceSafe({
       skipRetrievingKeyFromApiKeyHelper: true,
     }).source === "none";
-  let ANTHROPIC_AUTH_TOKEN = isAntBuild() && !r ? undefined : env.ANTHROPIC_AUTH_TOKEN;
-  let y = ANTHROPIC_AUTH_TOKEN || (await getApiKeyFromApiKeyHelper(isNonInteractiveSession));
-  if (y) {
-    defaultHeaders.Authorization = `Bearer ${y}`;
+  let ANTHROPIC_AUTH_TOKEN = isAntBuild() && !bareModeNoKey ? undefined : env.ANTHROPIC_AUTH_TOKEN;
+  let token = ANTHROPIC_AUTH_TOKEN || (await getApiKeyFromApiKeyHelper(isNonInteractiveSession));
+  if (token) {
+    defaultHeaders.Authorization = `Bearer ${token}`;
     return ANTHROPIC_AUTH_TOKEN ? "ANTHROPIC_AUTH_TOKEN" : "apiKeyHelper";
   }
   return null;
@@ -889,8 +927,8 @@ function getProviderBaseUrl(provider, model, awsRegion) {
  * 小快模型且设置了 ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION 时用该区域，否则用给定或默认 AWS 区域。
  */
 function getAwsRegionForModel(model, awsRegion) {
-  let r = nonEmptyOrUndefined(env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION);
-  if (model && r && hasDedicatedSmallFastModel()) {
+  let region = nonEmptyOrUndefined(env.ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION);
+  if (model && region && hasDedicatedSmallFastModel()) {
     let smallFastModel = getSmallFastModel();
     if (
       smallFastModel !== getMainLoopModel() &&
@@ -901,7 +939,7 @@ function getAwsRegionForModel(model, awsRegion) {
           identity: true,
         })
     )
-      return r;
+      return region;
   }
   return awsRegion ?? getDefaultAwsRegion();
 }
@@ -910,14 +948,14 @@ function getAwsRegionForModel(model, awsRegion) {
  * 从头对象里分离出 Authorization（大小写不敏感），返回 {value, rest}。
  */
 function splitAuthorizationHeader(defaultHeaders) {
-  let n = {};
+  let rest = {};
   let value;
   for (let [key, value_2] of Object.entries(defaultHeaders))
     if (key.toLowerCase() === "authorization") value = value_2;
-    else n[key] = value_2;
+    else rest[key] = value_2;
   return {
     value,
-    rest: n,
+    rest,
   };
 }
 //@ chunk-hwmsct5x.js:281713-281760 layout
@@ -932,9 +970,9 @@ function hasCustomAuthorizationHeader() {
  * ANTHROPIC_CUSTOM_HEADERS 转对象（组织禁用实验 beta 时丢弃 anthropic-beta）；桌面版加 anthropic-client-platform/version；cowork 报名时加 x-cowork-enrollment。
  */
 function getCustomHeaderMap() {
-  let e = {};
-  for (let [s, h] of getCustomHeaders()) {
-    if (s.toLowerCase() === "anthropic-beta" && isHipaaOrg()) {
+  let out = {};
+  for (let [name, value] of getCustomHeaders()) {
+    if (name.toLowerCase() === "anthropic-beta" && isHipaaOrg()) {
       logForDebugging(
         "ANTHROPIC_CUSTOM_HEADERS anthropic-beta ignored: experimental betas are disabled by your organization's policy",
         {
@@ -943,16 +981,16 @@ function getCustomHeaderMap() {
       );
       continue;
     }
-    e[s] = h;
+    out[name] = value;
   }
-  let n = desktopEntrypointSetting();
-  if (n && !Object.keys(e).some((key) => /^anthropic-client-(platform|version)$/i.test(key))) {
-    e["anthropic-client-platform"] = "desktop_app";
-    e["anthropic-client-version"] = n;
+  let desktopVersion = desktopEntrypointSetting();
+  if (desktopVersion && !Object.keys(out).some((key) => /^anthropic-client-(platform|version)$/i.test(key))) {
+    out["anthropic-client-platform"] = "desktop_app";
+    out["anthropic-client-version"] = desktopVersion;
   }
   let coworkEnrollment = getCoworkEnrollment();
-  if (coworkEnrollment !== undefined) e[X_COWORK_ENROLLMENT] = coworkEnrollment;
-  return e;
+  if (coworkEnrollment !== undefined) out[X_COWORK_ENROLLMENT] = coworkEnrollment;
+  return out;
 }
 //@ chunk-hwmsct5x.js:282214-282261 layout
 /**
@@ -982,10 +1020,13 @@ function getApiTimeoutMs() {
 /**
  * 读托管网络配置里的整数超时项（1e4 到 int32 之间才有效）。
  */
-function getManagedTimeoutSetting(e) {
-  let n = getManagedNetworkConfig()?.[e];
-  return typeof n === "number" && Number.isInteger(n) && n >= MIN_TIMEOUT_MS && n <= MAX_TIMER_DELAY_MS
-    ? n
+function getManagedTimeoutSetting(settingName) {
+  let value = getManagedNetworkConfig()?.[settingName];
+  return typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= MIN_TIMEOUT_MS &&
+    value <= MAX_TIMER_DELAY_MS
+    ? value
     : undefined;
 }
 //@ chunk-hwmsct5x.js:282581-282618 layout
@@ -1006,13 +1047,13 @@ var FIRST_PARTY_BYTE_IDLE_TIMEOUT_MS = 180000;
 /**
  * 字节流空闲超时：CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS；第一方默认 180s（GrowthBook tengu_byte_stream_idle_timeout_ms），夹在 10s–30min。
  */
-function getByteStreamIdleTimeoutMs(e) {
+function getByteStreamIdleTimeoutMs(provider) {
   let streamIdleTimeoutMs = getStreamIdleTimeoutMs();
   let numberWithSeparators = parseNumberWithSeparators(process.env.CLAUDE_BYTE_STREAM_IDLE_TIMEOUT_MS);
-  let h = getConfiguredStreamIdleTimeoutMs() !== undefined;
+  let configured = getConfiguredStreamIdleTimeoutMs() !== undefined;
   if (Number.isFinite(numberWithSeparators) && numberWithSeparators > 0)
     streamIdleTimeoutMs = numberWithSeparators;
-  else if (!h && e === "firstParty") {
+  else if (!configured && provider === "firstParty") {
     streamIdleTimeoutMs = FIRST_PARTY_BYTE_IDLE_TIMEOUT_MS;
     let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(
       "tengu_byte_stream_idle_timeout_ms",
@@ -1031,8 +1072,8 @@ function getByteStreamIdleTimeoutMs(e) {
 /**
  * 直连 Anthropic 端点时按提供商取字节流空闲超时，否则用通用值。
  */
-function getByteIdleTimeoutForProvider(apiProvider) {
-  return getByteStreamIdleTimeoutMs(isDirectAnthropicEndpoint(apiProvider) ? apiProvider : undefined);
+function getByteIdleTimeoutForProvider(provider) {
+  return getByteStreamIdleTimeoutMs(isDirectAnthropicEndpoint(provider) ? provider : undefined);
 }
 //@ chunk-hwmsct5x.js:282989-283111 layout
 /**
@@ -1055,8 +1096,8 @@ var SLEEP_GAP_THRESHOLD_MS = 5000;
 /**
  * 记录某 client-request-id 需要首字节看门狗（是否已升级）。
  */
-function armFirstByteWatchdog(e, { escalated }) {
-  streamFallbackWarning().streamFirstByteArmedRequestIds.set(e, {
+function armFirstByteWatchdog(clientRequestId, { escalated }) {
+  streamFallbackWarning().streamFirstByteArmedRequestIds.set(clientRequestId, {
     escalated,
   });
 }
@@ -1067,9 +1108,9 @@ function armFirstByteWatchdog(e, { escalated }) {
 function takeFirstByteWatchdogArm(clientRequestId) {
   if (clientRequestId === undefined) return;
   let streamFirstByteArmedRequestIds = streamFallbackWarning().streamFirstByteArmedRequestIds;
-  let r = streamFirstByteArmedRequestIds.get(clientRequestId);
+  let arm = streamFirstByteArmedRequestIds.get(clientRequestId);
   streamFirstByteArmedRequestIds.delete(clientRequestId);
-  return r;
+  return arm;
 }
 //@ chunk-hwmsct5x.js:283337-283375 layout
 /**
@@ -1089,36 +1130,45 @@ function getFirstByteWatchdogPlan({
   body,
   noResponseRetryLedger,
 }) {
-  let S =
+  let isGatewayStream =
     routedProvider === "gateway" &&
     noResponseRetryLedger !== undefined &&
     env.CLAUDE_STREAM_FIRST_BYTE_TIMEOUT_MS !== undefined &&
     isByteWatchdogEnabled() &&
     method === "POST" &&
     isMessagesEndpoint(url);
-  let E = S
+  let escalation = isGatewayStream
     ? {
         escalated: noResponseRetryLedger.count > 0,
       }
     : takeFirstByteWatchdogArm(clientRequestId);
-  let R = E === undefined && provider === "bedrock" && method === "POST" && url.includes(BEDROCK_STREAM_PATH);
-  if ((E === undefined && !R) || (!S && !shouldUseBodyIdleWatchdog(routedProvider))) return;
-  let L = typeof body === "string" ? Buffer.byteLength(body) : isSerialisedBody(body) ? body.length : 0;
-  let O = Math.ceil(L / FIRST_BYTE_BYTES_PER_EXTRA_SECOND) * 1000;
-  let M = getApiTimeoutMs() ?? 600000;
-  let P = M <= 0 ? 1 / 0 : M - 1000;
-  if (P < MIN_TIMEOUT_MS) return;
-  let H = getFirstByteTimeoutMs(provider) + O;
-  let min = Math.min(H, P);
-  if (E === undefined)
+  let bedrockStream =
+    escalation === undefined &&
+    provider === "bedrock" &&
+    method === "POST" &&
+    url.includes(BEDROCK_STREAM_PATH);
+  if (
+    (escalation === undefined && !bedrockStream) ||
+    (!isGatewayStream && !shouldUseBodyIdleWatchdog(routedProvider))
+  )
+    return;
+  let bodyBytes =
+    typeof body === "string" ? Buffer.byteLength(body) : isSerialisedBody(body) ? body.length : 0;
+  let extraMs = Math.ceil(bodyBytes / FIRST_BYTE_BYTES_PER_EXTRA_SECOND) * 1000;
+  let apiTimeout = getApiTimeoutMs() ?? 600000;
+  let capped = apiTimeout <= 0 ? 1 / 0 : apiTimeout - 1000;
+  if (capped < MIN_TIMEOUT_MS) return;
+  let windowMs = getFirstByteTimeoutMs(provider) + extraMs;
+  let min = Math.min(windowMs, capped);
+  if (escalation === undefined)
     return {
       escalated: false,
       firstWindowMs: min,
       retryWindowMs: min,
     };
-  let retryWindowMs = Number.isFinite(P) ? P : Math.max(H, MAX_RETRY_WINDOW_MS + O);
+  let retryWindowMs = Number.isFinite(capped) ? capped : Math.max(windowMs, MAX_RETRY_WINDOW_MS + extraMs);
   return {
-    escalated: E.escalated,
+    escalated: escalation.escalated,
     firstWindowMs: min,
     retryWindowMs,
   };
@@ -1127,66 +1177,69 @@ function getFirstByteWatchdogPlan({
 /**
  * 包装 fetch：窗口内未收到响应头就中止（检测到系统睡眠则抛 StreamSuspendedError），记 tengu_api_no_response_timeout。
  */
-async function fetchWithFirstByteTimeout(e, n, r, deadline, h = systemClock) {
-  let y = retryWindowFor(deadline);
+async function fetchWithFirstByteTimeout(fetchImpl, url, init, deadline, clock = systemClock) {
+  let timeoutMs = retryWindowFor(deadline);
   let abortController = new AbortController();
-  let signal = r.signal ?? undefined;
+  let signal = init.signal ?? undefined;
   let signal_2 = signal ? AbortSignal.any([signal, abortController.signal]) : abortController.signal;
-  let R;
-  let L = h.now();
+  let timeoutError;
+  let lastSampleAt = clock.now();
   let sleptMs = 0;
-  let M = () => {
-    let z = h.now();
-    let G = z - L;
-    L = z;
-    if (G > SLEEP_GAP_THRESHOLD_MS) sleptMs += G;
+  let sampleSleepGap = () => {
+    let now = clock.now();
+    let elapsedMs = now - lastSampleAt;
+    lastSampleAt = now;
+    if (elapsedMs > SLEEP_GAP_THRESHOLD_MS) sleptMs += elapsedMs;
   };
-  let P = h.setTimeout(H, SLEEP_PROBE_INTERVAL_MS, {
+  let probeTimer = clock.setTimeout(probe, SLEEP_PROBE_INTERVAL_MS, {
     unref: true,
   });
-  function H() {
-    M();
-    P = h.setTimeout(H, SLEEP_PROBE_INTERVAL_MS, {
+  function probe() {
+    sampleSleepGap();
+    probeTimer = clock.setTimeout(probe, SLEEP_PROBE_INTERVAL_MS, {
       unref: true,
     });
   }
-  let j = h.setTimeout(() => {
-    M();
-    R = sleptMs > y / 2 ? new StreamSuspendedError(sleptMs) : new StreamNoResponseError(deadline, sleptMs);
-    abortController.abort(R);
-  }, y);
+  let deadlineTimer = clock.setTimeout(() => {
+    sampleSleepGap();
+    timeoutError =
+      sleptMs > timeoutMs / 2
+        ? new StreamSuspendedError(sleptMs)
+        : new StreamNoResponseError(deadline, sleptMs);
+    abortController.abort(timeoutError);
+  }, timeoutMs);
   try {
-    return await e(n, {
-      ...r,
+    return await fetchImpl(url, {
+      ...init,
       signal: signal_2,
     });
   } catch (error) {
-    if (R !== undefined && !signal?.aborted) {
+    if (timeoutError !== undefined && !signal?.aborted) {
       try {
         logForDebugging(
-          `[first-byte] no response headers ${y / 1000}s after dispatch${sleptMs > 0 ? ` (slept ${sleptMs}ms)` : ""} \u2014 aborting request`,
+          `[first-byte] no response headers ${timeoutMs / 1000}s after dispatch${sleptMs > 0 ? ` (slept ${sleptMs}ms)` : ""} \u2014 aborting request`,
           {
             level: "error",
           },
         );
         logEvent("tengu_api_no_response_timeout", {
           provider: getAPIProviderForAnalytics(),
-          timeout_ms: y,
+          timeout_ms: timeoutMs,
           ...(!isDiskless() && {
             slept_ms: sleptMs,
-            suspended: R instanceof StreamSuspendedError,
+            suspended: timeoutError instanceof StreamSuspendedError,
           }),
           escalated: deadline.escalated,
         });
       } catch (error) {
         logError(error);
       }
-      throw R;
+      throw timeoutError;
     }
     throw error;
   } finally {
-    j();
-    P();
+    deadlineTimer();
+    probeTimer();
   }
 }
 //@ chunk-hwmsct5x.js:284792-285084 layout
@@ -1200,10 +1253,10 @@ class StreamIdleTimeoutError extends Error {
   bodyReadPending;
   cfRay;
   sleptMs;
-  constructor(e, bytesReceived = 0, ttfbMs, bodyReadPending = true, cfRay, sleptMs = 0) {
-    super(`stream idle: no bytes for ${e}ms`);
+  constructor(idleMs, bytesReceived = 0, ttfbMs, bodyReadPending = true, cfRay, sleptMs = 0) {
+    super(`stream idle: no bytes for ${idleMs}ms`);
     this.name = "StreamIdleTimeoutError";
-    this.idleMs = e;
+    this.idleMs = idleMs;
     this.bytesReceived = bytesReceived;
     this.ttfbMs = ttfbMs;
     this.bodyReadPending = bodyReadPending;
@@ -1228,26 +1281,26 @@ class StreamSuspendedError extends Error {
 /**
  * 计时器触发的迟到量与墙钟睡眠量，判定是否跨越系统挂起。
  */
-function measureTimerLateness(e, { armedAt, wallArmedAt, idleMs }) {
-  let h = e.monotonicNow();
-  let y = e.now();
-  let rounded = Math.round(h - armedAt - idleMs);
-  let max = Math.max(0, Math.round(y - wallArmedAt - (h - armedAt)));
-  let E = rounded < -idleMs / 2;
-  let R = max > idleMs / 2;
+function measureTimerLateness(clock, { armedAt, wallArmedAt, idleMs }) {
+  let monotonicNow = clock.monotonicNow();
+  let wallNow = clock.now();
+  let rounded = Math.round(monotonicNow - armedAt - idleMs);
+  let max = Math.max(0, Math.round(wallNow - wallArmedAt - (monotonicNow - armedAt)));
+  let lateByTimer = rounded < -idleMs / 2;
+  let wallAhead = max > idleMs / 2;
   return {
     lateMs: rounded,
     sleptMs: max,
-    suspended: E && R,
+    suspended: lateByTimer && wallAhead,
   };
 }
 //@ chunk-hwmsct5x.js:285491-285724 layout
 /**
  * 流空闲计时器跨越睡眠触发时返回 StreamSuspendedError。
  */
-function checkSuspendedStreamIdle(clock, n) {
+function checkSuspendedStreamIdle(clock, timing) {
   try {
-    let { lateMs, sleptMs, suspended } = measureTimerLateness(clock, n);
+    let { lateMs, sleptMs, suspended } = measureTimerLateness(clock, timing);
     if (!suspended) return;
     logForDebugging(
       `Streaming idle timer fired across sleep/suspend: late=${lateMs}ms slept=${sleptMs}ms, aborting stream`,
@@ -1265,116 +1318,121 @@ function checkSuspendedStreamIdle(clock, n) {
 /**
  * Bedrock 流式响应 content-type 不是 application/vnd.amazon.eventstream 时抛出（多半有网关改写了响应）。
  */
-class BedrockUnexpectedContentTypeError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  contentType;
-  code = "BedrockUnexpectedContentType";
-  constructor(e) {
-    super(
-      `Bedrock streaming response has content-type ${JSON.stringify(e)}; expected "application/vnd.amazon.eventstream". A gateway or proxy between ` +
-        "Claude Code and Bedrock is likely transforming the response body \u2014 Bedrock's " +
-        "binary event-stream format must be passed through unmodified. Set CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_GUARD=1 to suppress this check while the gateway is being fixed.",
-      "Bedrock streaming response content-type is not application/vnd.amazon.eventstream",
-    );
-    this.contentType = e;
-    this.name = "BedrockUnexpectedContentTypeError";
-  }
-}
+let BedrockUnexpectedContentTypeError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hwmsct5x.js:285724", () => {
+  BedrockUnexpectedContentTypeError = class BedrockUnexpectedContentTypeError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    contentType;
+    code = "BedrockUnexpectedContentType";
+    constructor(contentType) {
+      super(
+        `Bedrock streaming response has content-type ${JSON.stringify(contentType)}; expected "application/vnd.amazon.eventstream". A gateway or proxy between ` +
+          "Claude Code and Bedrock is likely transforming the response body \u2014 Bedrock's " +
+          "binary event-stream format must be passed through unmodified. Set CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_GUARD=1 to suppress this check while the gateway is being fixed.",
+        "Bedrock streaming response content-type is not application/vnd.amazon.eventstream",
+      );
+      this.contentType = contentType;
+      this.name = "BedrockUnexpectedContentTypeError";
+    }
+  };
+});
 //@ chunk-hwmsct5x.js:286365-288145 layout
 /**
  * 包装响应体 ReadableStream：每块重置空闲计时，超时报 StreamIdleTimeoutError（或挂起时 StreamSuspendedError），并按 15/30/60/120s 记录部分停顿日志。
  */
-function withByteIdleWatchdog(e, byteIdleTimeoutForProvider, cfRay, s, h = systemClock) {
-  let y = null;
-  let w = null;
-  let S = 0;
+function withByteIdleWatchdog(body, idleMs, cfRay, progress, clock = systemClock) {
+  let idleTimer = null;
+  let pollTimer = null;
+  let checkpointStep = 0;
   let bytesReceived = 0;
-  let R = h.monotonicNow();
-  let L = null;
+  let startedAt = clock.monotonicNow();
+  let firstByteAt = null;
   let bodyReadPending = false;
-  let M = [15000, 30000, 60000, 120000];
-  let P = () => {
-    if (w !== null) {
-      w();
-      w = null;
+  let stallCheckpointMs = [15000, 30000, 60000, 120000];
+  let clearPollTimer = () => {
+    if (pollTimer !== null) {
+      pollTimer();
+      pollTimer = null;
     }
   };
-  let H = () => {
-    if (y !== null) {
-      y();
-      y = null;
+  let clearIdleTimer = () => {
+    if (idleTimer !== null) {
+      idleTimer();
+      idleTimer = null;
     }
   };
-  let j = () => {
-    H();
-    P();
+  let clearTimers = () => {
+    clearIdleTimer();
+    clearPollTimer();
   };
-  let z = 0;
+  let lastChunkAt = 0;
   let wallArmedAt = 0;
-  let q = (Q) => {
-    P();
-    if (S >= M.length) return;
-    let ne = M[S];
-    let te = h.monotonicNow() - z;
-    w = h.setTimeout(
+  let armPollTimer = (pollController) => {
+    clearPollTimer();
+    if (checkpointStep >= stallCheckpointMs.length) return;
+    let checkpointMs = stallCheckpointMs[checkpointStep];
+    let sinceLastChunkMs = clock.monotonicNow() - lastChunkAt;
+    pollTimer = clock.setTimeout(
       () => {
-        w = null;
-        if (Q.desiredSize === null) return;
-        if (h.monotonicNow() - z < ne / 2) {
-          q(Q);
+        pollTimer = null;
+        if (pollController.desiredSize === null) return;
+        if (clock.monotonicNow() - lastChunkAt < checkpointMs / 2) {
+          armPollTimer(pollController);
           return;
         }
         try {
           logForDebugging(
-            `[Stall] stream_idle_partial lastChunkAgeMs=${Math.round(h.monotonicNow() - z)} bytesTotal=${bytesReceived} idleDeadlineMs=${byteIdleTimeoutForProvider}`,
+            `[Stall] stream_idle_partial lastChunkAgeMs=${Math.round(clock.monotonicNow() - lastChunkAt)} bytesTotal=${bytesReceived} idleDeadlineMs=${idleMs}`,
             {
               level: "warn",
             },
           );
         } catch {}
-        S++;
-        q(Q);
+        checkpointStep++;
+        armPollTimer(pollController);
       },
-      Math.max(0, ne - te),
+      Math.max(0, checkpointMs - sinceLastChunkMs),
       {
         unref: true,
       },
     );
   };
-  let J = (Q) => {
-    j();
-    z = h.monotonicNow();
-    wallArmedAt = h.now();
-    S = 0;
-    q(Q);
-    y = h.setTimeout(() => {
-      y = null;
-      let { lateMs, sleptMs, suspended } = measureTimerLateness(h, {
-        armedAt: z,
+  let armIdleTimer = (streamController) => {
+    clearTimers();
+    lastChunkAt = clock.monotonicNow();
+    wallArmedAt = clock.now();
+    checkpointStep = 0;
+    armPollTimer(streamController);
+    idleTimer = clock.setTimeout(() => {
+      idleTimer = null;
+      let { lateMs, sleptMs, suspended } = measureTimerLateness(clock, {
+        armedAt: lastChunkAt,
         wallArmedAt,
-        idleMs: byteIdleTimeoutForProvider,
+        idleMs,
       });
-      let oe = Q.desiredSize === null;
+      let readableErrored = streamController.desiredSize === null;
       if (suspended) {
         logForDebugging(`[byte-watchdog] aborting: late=${lateMs}ms slept=${sleptMs}ms (sleep/suspend)`);
-        let De = new StreamSuspendedError(sleptMs);
+        let suspendedError = new StreamSuspendedError(sleptMs);
         try {
-          Q.error(De);
+          streamController.error(suspendedError);
         } catch {}
-        reader.cancel(De).catch(() => {});
+        reader.cancel(suspendedError).catch(() => {});
         return;
       }
-      let ttfbMs = L !== null ? Math.round(L - R) : undefined;
+      let ttfbMs = firstByteAt !== null ? Math.round(firstByteAt - startedAt) : undefined;
       try {
         logForDebugging(
-          `[byte-watchdog] firing: idle=${byteIdleTimeoutForProvider}ms late=${lateMs}ms errored=${oe} bodyReadPending=${bodyReadPending}`,
+          `[byte-watchdog] firing: idle=${idleMs}ms late=${lateMs}ms errored=${readableErrored} bodyReadPending=${bodyReadPending}`,
           {
             level: "warn",
           },
         );
         logForDiagnosticsNoPII("warn", "cli_byte_watchdog_fired", {
-          idle_ms: byteIdleTimeoutForProvider,
+          idle_ms: idleMs,
           late_ms: lateMs,
-          readable_errored: oe,
+          readable_errored: readableErrored,
           body_read_pending: bodyReadPending,
           slept_ms: sleptMs,
           bytes_received: bytesReceived,
@@ -1382,13 +1440,13 @@ function withByteIdleWatchdog(e, byteIdleTimeoutForProvider, cfRay, s, h = syste
         });
         if (lateMs >= 1000 && !isDiskless())
           logEvent("tengu_byte_watchdog_fired_late", {
-            idle_ms: byteIdleTimeoutForProvider,
+            idle_ms: idleMs,
             late_ms: lateMs,
-            readable_errored: oe,
+            readable_errored: readableErrored,
           });
       } catch {}
-      let Se = new StreamIdleTimeoutError(
-        byteIdleTimeoutForProvider,
+      let idleTimeoutError = new StreamIdleTimeoutError(
+        idleMs,
         bytesReceived,
         ttfbMs,
         bodyReadPending,
@@ -1396,54 +1454,54 @@ function withByteIdleWatchdog(e, byteIdleTimeoutForProvider, cfRay, s, h = syste
         sleptMs,
       );
       try {
-        Q.error(Se);
+        streamController.error(idleTimeoutError);
       } catch {}
-      reader.cancel(Se).catch(() => {});
-    }, byteIdleTimeoutForProvider);
+      reader.cancel(idleTimeoutError).catch(() => {});
+    }, idleMs);
   };
-  let reader = e.getReader();
+  let reader = body.getReader();
   return new ReadableStream({
-    start(Q) {
-      J(Q);
+    start(startController) {
+      armIdleTimer(startController);
     },
-    async pull(Q) {
+    async pull(pullController) {
       bodyReadPending = true;
-      let ne;
+      let readResult;
       try {
-        ne = await reader.read();
+        readResult = await reader.read();
       } catch (error) {
         bodyReadPending = false;
-        j();
+        clearTimers();
         try {
-          Q.error(error);
+          pullController.error(error);
         } catch {}
         return;
       }
       bodyReadPending = false;
-      if (ne.done) {
-        j();
+      if (readResult.done) {
+        clearTimers();
         try {
-          Q.close();
+          pullController.close();
         } catch {}
         return;
       }
-      let te = ne.value;
-      if (L === null && te.byteLength > 0) L = h.monotonicNow();
-      bytesReceived += te.byteLength;
-      if (s) {
-        s.lastAt = h.monotonicNow();
-        s.chunks = (s.chunks ?? 0) + 1;
+      let chunk = readResult.value;
+      if (firstByteAt === null && chunk.byteLength > 0) firstByteAt = clock.monotonicNow();
+      bytesReceived += chunk.byteLength;
+      if (progress) {
+        progress.lastAt = clock.monotonicNow();
+        progress.chunks = (progress.chunks ?? 0) + 1;
       }
-      J(Q);
+      armIdleTimer(pullController);
       try {
-        Q.enqueue(te);
+        pullController.enqueue(chunk);
       } catch {
-        j();
+        clearTimers();
       }
     },
-    cancel(Q) {
-      j();
-      return reader.cancel(Q);
+    cancel(cancelReason) {
+      clearTimers();
+      return reader.cancel(cancelReason);
     },
   });
 }
@@ -1460,18 +1518,18 @@ function isByteWatchdogEnabled() {
 /**
  * 第一方且是 Anthropic 官方 API，或 anthropicAws 未设自定义 base URL。
  */
-function isDirectAnthropicEndpoint(e) {
+function isDirectAnthropicEndpoint(provider) {
   return (
-    (e === "firstParty" && isFirstPartyAnthropicBaseUrl()) ||
-    (e === "anthropicAws" && !process.env.ANTHROPIC_AWS_BASE_URL)
+    (provider === "firstParty" && isFirstPartyAnthropicBaseUrl()) ||
+    (provider === "anthropicAws" && !process.env.ANTHROPIC_AWS_BASE_URL)
   );
 }
 //@ chunk-hwmsct5x.js:288368-288442 layout
 /**
  * firstParty/gateway/anthropicAws（响应为 text/event-stream）。
  */
-function isSseProvider(apiProvider) {
-  return apiProvider === "firstParty" || apiProvider === "gateway" || apiProvider === "anthropicAws";
+function isSseProvider(provider) {
+  return provider === "firstParty" || provider === "gateway" || provider === "anthropicAws";
 }
 //@ chunk-hwmsct5x.js:288442-288479 layout
 /**
@@ -1491,27 +1549,27 @@ function isBedrockByteWatchdogEnabled() {
 /**
  * 提供商支持字节看门狗：直连 Anthropic 端点，或 Bedrock 且开启了 Bedrock 看门狗。
  */
-function supportsByteWatchdog(e) {
-  return isDirectAnthropicEndpoint(e) || (e === "bedrock" && isBedrockByteWatchdogEnabled());
+function supportsByteWatchdog(provider) {
+  return isDirectAnthropicEndpoint(provider) || (provider === "bedrock" && isBedrockByteWatchdogEnabled());
 }
 //@ chunk-hwmsct5x.js:288587-288644 layout
 /**
  * 看门狗开启且路由提供商与当前提供商都支持时为真（传给代理层，避免重复的 body 空闲超时）。
  */
-function shouldUseBodyIdleWatchdog(e) {
+function shouldUseBodyIdleWatchdog(provider) {
   if (!isByteWatchdogEnabled()) return false;
-  return supportsByteWatchdog(e) && supportsByteWatchdog(getAPIProvider());
+  return supportsByteWatchdog(provider) && supportsByteWatchdog(getAPIProvider());
 }
 //@ chunk-hwmsct5x.js:288644-288739 layout = getServerUrl (1)
 /**
  * 用新 body 重建 Response 并保留 url。旧版名 getServerUrl 为错配。
  */
-function cloneResponseWithBody(e, n) {
-  let response = new Response(n, e);
-  Object.defineProperty(response, "url", {
-    value: e.url,
+function cloneResponseWithBody(response, body) {
+  let response_2 = new Response(body, response);
+  Object.defineProperty(response_2, "url", {
+    value: response.url,
   });
-  return response;
+  return response_2;
 }
 //@ chunk-hwmsct5x.js:288739-291521 callgraph-fingerprint = buildFetch (0.183)
 /**
@@ -1525,36 +1583,40 @@ function buildFetch(
   storageV5,
   clock,
   noResponseRetryLedger,
-  ccsSender,
-  requestClassValue,
+  sender,
+  classKey,
 ) {
-  let R = fetchOverride ?? fetchWithRequestBodyCompression;
+  let fetchFn = fetchOverride ?? fetchWithRequestBodyCompression;
   let apiProvider = getAPIProvider();
-  let O = isDirectAnthropicEndpoint(apiProvider);
+  let isDirectEndpoint = isDirectAnthropicEndpoint(apiProvider);
   return async (input, init) => {
     let headers = new Headers(init?.headers);
-    let j = input instanceof Request ? input.url : String(input);
+    let requestUrl = input instanceof Request ? input.url : String(input);
     let { method } = requestMethodAndUrl(input, init);
-    guardTestFetch(R, method, j);
-    let G = headers.get(CLIENT_REQUEST_ID_HEADER) ?? undefined;
-    if (O && !headers.has(CLIENT_REQUEST_ID_HEADER)) headers.set(CLIENT_REQUEST_ID_HEADER, randomUUID());
-    if (O && ((hasRefusalFallbackOccurred() && isSilentFallbackArmed()) || hasRefusalFallbackHeaderArmed())) {
+    guardTestFetch(fetchFn, method, requestUrl);
+    let incomingRequestId = headers.get(CLIENT_REQUEST_ID_HEADER) ?? undefined;
+    if (isDirectEndpoint && !headers.has(CLIENT_REQUEST_ID_HEADER))
+      headers.set(CLIENT_REQUEST_ID_HEADER, randomUUID());
+    if (
+      isDirectEndpoint &&
+      ((hasRefusalFallbackOccurred() && isSilentFallbackArmed()) || hasRefusalFallbackHeaderArmed())
+    ) {
       headers.set(REFUSAL_FALLBACK_HEADERS, "true");
-      let be = sanitizeHeaderValue(getRefusalFallbackLatchOriginRequestId());
-      if (be !== undefined) headers.set(X_CC_FALLBACK_LATCHED_BY, be);
+      let latchOriginRequestId = sanitizeHeaderValue(getRefusalFallbackLatchOriginRequestId());
+      if (latchOriginRequestId !== undefined) headers.set(X_CC_FALLBACK_LATCHED_BY, latchOriginRequestId);
     }
-    if (isMessagesEndpoint(j) && isFirstPartyApiBackend() && isLowPriorityActiveSafe())
+    if (isMessagesEndpoint(requestUrl) && isFirstPartyApiBackend() && isLowPriorityActiveSafe())
       headers.set(ANTHROPIC_USAGE_LIMIT, SLOW);
-    if (O) {
+    if (isDirectEndpoint) {
       let requestAtis = getRequestAtis();
       if (requestAtis !== undefined) headers.set(ATIS_REQUEST_HEADER, requestAtis);
     }
-    if (isMessagesEndpoint(j) && isSnugMittenAndSillyShoreOn()) {
-      let be = false;
+    if (isMessagesEndpoint(requestUrl) && isSnugMittenAndSillyShoreOn()) {
+      let isOfficialEndpoint = false;
       try {
-        be = isOfficialFirstPartyEndpoint(apiProvider);
+        isOfficialEndpoint = isOfficialFirstPartyEndpoint(apiProvider);
       } catch {}
-      if (be) {
+      if (isOfficialEndpoint) {
         headers.set(SANDY_PLOVER_HEADER, toolsUsedHeaderBuilder(getConversationToolsUsed()));
         if (streamFallbackWarning().once("tools_used_header")) logFeatureOk("api_tools_used_header");
       }
@@ -1562,75 +1624,76 @@ function buildFetch(
     try {
       let id = headers.get(CLIENT_REQUEST_ID_HEADER);
       logForDebugging(
-        `[API REQUEST] ${new URL(j).pathname}${id ? ` ${CLIENT_REQUEST_ID_HEADER}=${id}` : ""} source=${source ?? "unknown"}`,
+        `[API REQUEST] ${new URL(requestUrl).pathname}${id ? ` ${CLIENT_REQUEST_ID_HEADER}=${id}` : ""} source=${source ?? "unknown"}`,
       );
       if (getMinDebugLogLevel() === "verbose")
         logForDebugging(`[API REQUEST AUTH] ${jsonStringify(summarizeAuthHeadersForLog(headers))}`, {
           level: "verbose",
         });
     } catch {}
-    if (ccsSender && O && isMessagesEndpoint(j)) await attachSenderAddress(headers, ccsSender);
-    let q = {
+    if (sender && isDirectEndpoint && isMessagesEndpoint(requestUrl))
+      await attachSenderAddress(headers, sender);
+    let requestInit = {
       ...init,
       headers,
     };
     let body = init?.body;
-    let Z = takeDispatchAt(G);
-    let Q = ANT_KEY_PFX(j, body, storageV5);
-    let ne = Q?.gzip && (typeof body === "string" || isSerialisedBody(body));
-    let te = ne ? gzipLevelOverride() : undefined;
-    if (ne) {
-      q.compress =
-        te === undefined
+    let dispatchAt = takeDispatchAt(incomingRequestId);
+    let gzipPlan = ANT_KEY_PFX(requestUrl, body, storageV5);
+    let shouldCompress = gzipPlan?.gzip && (typeof body === "string" || isSerialisedBody(body));
+    let gzipLevel = shouldCompress ? gzipLevelOverride() : undefined;
+    if (shouldCompress) {
+      requestInit.compress =
+        gzipLevel === undefined
           ? "gzip"
           : {
               encoding: "gzip",
-              level: te,
+              level: gzipLevel,
             };
       logGzipSent();
-      q.body =
+      requestInit.body =
         typeof body === "string" ? appendWatermark(body) : appendWatermarkBuffer(body, "room_after_is_free");
     }
-    if (G !== undefined && Q !== undefined) {
-      let be = {
-        ...(Z !== undefined && {
-          requestPrepareMs: Math.round(performance.now() - Z),
+    if (incomingRequestId !== undefined && gzipPlan !== undefined) {
+      let timingTelemetry = {
+        ...(dispatchAt !== undefined && {
+          requestPrepareMs: Math.round(performance.now() - dispatchAt),
         }),
         ...reuseTelemetry(body),
       };
       recordGzipBlockTelemetry(
-        G,
-        Q.gzip
+        incomingRequestId,
+        gzipPlan.gzip
           ? {
               requestBodyEncoding: "gzip",
-              requestBodyChars: Q.bodyChars,
-              requestBodyGzipLevel: te,
+              requestBodyChars: gzipPlan.bodyChars,
+              requestBodyGzipLevel: gzipLevel,
               querySource,
-              ...be,
+              ...timingTelemetry,
             }
           : {
               requestBodyEncoding: "identity",
-              requestBodyChars: Q.bodyChars,
-              gzipSkipReason: Q.reason,
-              ...be,
+              requestBodyChars: gzipPlan.bodyChars,
+              gzipSkipReason: gzipPlan.reason,
+              ...timingTelemetry,
             },
       );
     }
     let firstByteWatchdogPlan = getFirstByteWatchdogPlan({
-      clientRequestId: G,
+      clientRequestId: incomingRequestId,
       provider: apiProvider,
       routedProvider,
       method,
-      url: j,
+      url: requestUrl,
       body,
       noResponseRetryLedger,
     });
-    let oe = (init) => {
+    let checkFirstPartyOptions = (init) => {
       try {
         return shouldUseFirstPartyFetchOptions({
           provider: apiProvider,
           routedProvider,
-          url: j,
+          url: requestUrl,
           init,
         });
       } catch (error) {
@@ -1638,89 +1701,92 @@ function buildFetch(
         return false;
       }
     };
-    let ie = {
-      init: q,
+    let dispatchState = {
+      init: requestInit,
       firstParty: false,
     };
-    let Se = (init) => {
-      ie.init = init;
-      ie.firstParty = oe(init);
+    let dispatch = (init) => {
+      dispatchState.init = init;
+      dispatchState.firstParty = checkFirstPartyOptions(init);
       return firstByteWatchdogPlan === undefined
-        ? R(input, init)
-        : fetchWithFirstByteTimeout(R, input, init, firstByteWatchdogPlan, clock);
+        ? fetchFn(input, init)
+        : fetchWithFirstByteTimeout(fetchFn, input, init, firstByteWatchdogPlan, clock);
     };
-    let De = O && isMessagesEndpoint(j);
-    if (De) noteModelRequestSent(clock.now());
-    let se = await Se(q);
-    guardTestFetchRedirect(R, method, se);
-    if (ne) {
-      se = await handleGzipRejectedResponse(se, () => Se(q));
-      se = await retryRejectedGzipRequest({
-        res: se,
-        dispatch: Se,
-        finalInit: q,
+    let isModelRequest = isDirectEndpoint && isMessagesEndpoint(requestUrl);
+    if (isModelRequest) noteModelRequestSent(clock.now());
+    let response = await dispatch(requestInit);
+    guardTestFetchRedirect(fetchFn, method, response);
+    if (shouldCompress) {
+      response = await handleGzipRejectedResponse(response, () => dispatch(requestInit));
+      response = await retryRejectedGzipRequest({
+        res: response,
+        dispatch,
+        finalInit: requestInit,
         identityBody: body,
-        clientRequestId: G,
+        clientRequestId: incomingRequestId,
         storageV5,
       });
     }
-    let bn = ie.firstParty && isSameUnredirectedUrl(se, j);
-    if (De)
+    let isFirstPartyResponse = dispatchState.firstParty && isSameUnredirectedUrl(response, requestUrl);
+    if (isModelRequest)
       markArmedFromResponse(
-        se.headers,
+        response.headers,
         () => apiProvider !== "firstParty" || isOfficialFirstPartyEndpoint(apiProvider),
       );
-    let ze = apiProvider === "bedrock" && se.ok && j.includes(BEDROCK_STREAM_PATH);
+    let isBedrockStream =
+      apiProvider === "bedrock" && response.ok && requestUrl.includes(BEDROCK_STREAM_PATH);
     if (
-      ze &&
-      se.body &&
-      !se.headers.get("content-type") &&
+      isBedrockStream &&
+      response.body &&
+      !response.headers.get("content-type") &&
       !env.CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_DEFAULT
     ) {
-      se = cloneResponseWithBody(se, se.body);
-      se.headers.set("content-type", "application/vnd.amazon.eventstream");
+      response = cloneResponseWithBody(response, response.body);
+      response.headers.set("content-type", "application/vnd.amazon.eventstream");
     }
-    let Qn = se.headers.get("content-type");
-    let lower = Qn?.toLowerCase();
+    let contentType = response.headers.get("content-type");
+    let lower = contentType?.toLowerCase();
     if (
-      ze &&
-      Qn &&
+      isBedrockStream &&
+      contentType &&
       !lower?.includes("vnd.amazon.eventstream") &&
       !env.CLAUDE_CODE_DISABLE_BEDROCK_CONTENT_TYPE_GUARD
     ) {
-      se.body?.cancel().catch(() => {});
-      throw new BedrockUnexpectedContentTypeError(Qn);
+      response.body?.cancel().catch(() => {});
+      throw new BedrockUnexpectedContentTypeError(contentType);
     }
-    let kt = (isSseProvider(apiProvider) || O) && lower?.includes("text/event-stream");
-    let Zn =
+    let isSse = (isSseProvider(apiProvider) || isDirectEndpoint) && lower?.includes("text/event-stream");
+    let isBedrockEventStream =
       apiProvider === "bedrock" &&
       lower?.includes("vnd.amazon.eventstream") &&
       isBedrockByteWatchdogEnabled();
-    if ((kt || Zn) && se.body && isByteWatchdogEnabled()) {
+    if ((isSse || isBedrockEventStream) && response.body && isByteWatchdogEnabled()) {
       let byteIdleTimeoutForProvider = getByteIdleTimeoutForProvider(apiProvider);
-      let $e =
-        se.headers.get("cf-ray") ?? (Zn ? (se.headers.get("x-amzn-requestid") ?? undefined) : undefined);
-      let yn = {
+      let cfRay =
+        response.headers.get("cf-ray") ??
+        (isBedrockEventStream ? (response.headers.get("x-amzn-requestid") ?? undefined) : undefined);
+      let chunkTimes = {
         lastAt: 0,
       };
-      let er = kt ? heldReplyHoldMs(requestClassValue) : 0;
-      let tr = cloneResponseWithBody(
-        se,
+      let holdMs = isSse ? heldReplyHoldMs(classKey) : 0;
+      let watchedResponse = cloneResponseWithBody(
+        response,
         withByteIdleWatchdog(
-          er > 0 ? wrapWithUnwatchedHold(se.body, er, clock) : se.body,
+          holdMs > 0 ? wrapWithUnwatchedHold(response.body, holdMs, clock) : response.body,
           byteIdleTimeoutForProvider,
-          $e,
-          yn,
+          cfRay,
+          chunkTimes,
           clock,
         ),
       );
-      Object.defineProperty(tr, "_chunkTimes", {
-        value: yn,
+      Object.defineProperty(watchedResponse, "_chunkTimes", {
+        value: chunkTimes,
       });
-      se = tr;
+      response = watchedResponse;
     }
-    if (bn && oe(ie.init)) markFirstPartyFetch(se.headers);
-    return se;
+    if (isFirstPartyResponse && checkFirstPartyOptions(dispatchState.init))
+      markFirstPartyFetch(response.headers);
+    return response;
   };
 }
 //@ chunk-hwmsct5x.js:291521-291734 sole-consumer
@@ -1728,49 +1794,27 @@ function buildFetch(
  * 调试日志用：Authorization 只保留方案名（"Bearer ***"），并列出 anthropic-beta 与 x-anthropic-* 头。
  */
 function summarizeAuthHeadersForLog(headers) {
-  let n = headers.get("authorization");
-  let auth = n ? `${n.includes(" ") ? firstLineOf(n, " ") : "<opaque>"} ***` : "none";
-  let s = {};
-  headers.forEach((h, y) => {
-    if (y === "anthropic-beta" || y.startsWith("x-anthropic-")) s[y] = h;
+  let authorization = headers.get("authorization");
+  let auth = authorization
+    ? `${authorization.includes(" ") ? firstLineOf(authorization, " ") : "<opaque>"} ***`
+    : "none";
+  let out = {};
+  headers.forEach((value, name) => {
+    if (name === "anthropic-beta" || name.startsWith("x-anthropic-")) out[name] = value;
   });
   return {
     auth,
-    headers: s,
+    headers: out,
   };
 }
 //@ chunk-hwmsct5x.js:291734-291807 sole-consumer
 /**
  * 等待 promise，完成后若 signal 已中止则抛 AbortError。
  */
-async function awaitUnlessAborted(e, signal) {
-  let r = await e;
+async function awaitUnlessAborted(promise, signal) {
+  let value = await promise;
   if (signal?.aborted) throw new APIUserAbortError();
-  return r;
-}
-//@ chunk-bwbq4xvm.js:156422-156608 fingerprint = getCustomHeaders (1)
-/**
- * 解析 ANTHROPIC_CUSTOM_HEADERS（每行 "名: 值"）为 [名, 值] 数组；无冒号或名为空的行忽略。
- */
-function getCustomHeaders(e = env.ANTHROPIC_CUSTOM_HEADERS ?? "") {
-  let s = [];
-  for (let headerString of e.split(/\r?\n/)) {
-    let colonIdx = headerString.indexOf(":");
-    let a = colonIdx === -1 ? "" : headerString.slice(0, colonIdx).trim();
-    if (a) s.push([a, headerString.slice(colonIdx + 1).trim()]);
-  }
-  return s;
-}
-//@ chunk-vv0zxx69.js:1191-1249 fingerprint = configureApiKeyHeaders (0.627)
-/**
- * API key 转 Authorization: Bearer 头（空时返回空对象）。
- */
-function configureApiKeyHeaders(e) {
-  return e
-    ? {
-        Authorization: `Bearer ${e}`,
-      }
-    : {};
+  return value;
 }
 export {
   getStreamIdleTimeoutMs,

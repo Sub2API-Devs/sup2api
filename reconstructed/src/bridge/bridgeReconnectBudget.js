@@ -10,7 +10,7 @@
  */
 import { count } from "../utils/collections.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { looseObject, E, string } from "../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, numberSchema, stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
 import { bridgeHostState } from "./bridgeHostState.js";
 import { ownProcStartAsync, isSameProcessAsync, isProcessProvablyGone } from "../utils/processIdentity.js";
@@ -26,6 +26,7 @@ import { logFeatureBad, logFeatureOk, logFeatureSad } from "../services/analytic
 import { sleep } from "../utils/sleep.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, lit } from "../services/analytics/safeMetadata.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-4cm44bmp.js:19536-19896 placement
 /**
@@ -53,36 +54,43 @@ var OWNER_REMINT_CAP = {
  * 桥接断线重连预算：charge(now, 计日上限) 按 24 小时与 1 小时滑动窗口计数，返回 daily_exhausted / hourly_exhausted / charged；noteHealthyBeat 在连接健康满 10 分钟后重置小时窗口的起点。
  */
 function createReconnectBudget() {
-  let n = [];
+  let chargeTimestamps = [];
   let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
   return {
-    charge(w, C) {
-      n = n.filter((x) => w - x < RECONNECT_DAILY_WINDOW_MS);
-      if (C && n.length >= MAX_RECONNECTS_PER_DAY) return "daily_exhausted";
+    charge(now, countsTowardDaily) {
+      chargeTimestamps = chargeTimestamps.filter((chargedAt) => now - chargedAt < RECONNECT_DAILY_WINDOW_MS);
+      if (countsTowardDaily && chargeTimestamps.length >= MAX_RECONNECTS_PER_DAY) return "daily_exhausted";
       if (
-        count(n, (x) => w - x < RECONNECT_HOURLY_WINDOW_MS && (!C || x >= NEGATIVE_INFINITY)) >=
-        MAX_RECONNECTS_PER_HOUR
+        count(
+          chargeTimestamps,
+          (chargedAt) =>
+            now - chargedAt < RECONNECT_HOURLY_WINDOW_MS &&
+            (!countsTowardDaily || chargedAt >= NEGATIVE_INFINITY),
+        ) >= MAX_RECONNECTS_PER_HOUR
       )
         return "hourly_exhausted";
-      n.push(w);
+      chargeTimestamps.push(now);
       return "charged";
     },
-    noteHealthyBeat(w) {
-      let last = n.at(-1);
-      if (last !== undefined && w - last >= HEALTHY_BEAT_RESET_MS) NEGATIVE_INFINITY = w;
+    noteHealthyBeat(now) {
+      let last = chargeTimestamps.at(-1);
+      if (last !== undefined && now - last >= HEALTHY_BEAT_RESET_MS) NEGATIVE_INFINITY = now;
     },
   };
 }
 //@ chunk-4cm44bmp.js:20184-20317 placement
-var bridgePlaceholderRecordSchema = DoctorLazy(() =>
-  looseObject({
-    pid: E().int(),
-    procStart: string().optional().catch(undefined),
-    createdAt: E(),
-    titleSha: string().optional(),
-    usedAt: E().optional(),
-  }),
-);
+var bridgePlaceholderRecordSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4cm44bmp.js:20184", () => {
+  bridgePlaceholderRecordSchema = DoctorLazy(() =>
+    looseObject({
+      pid: numberSchema().int(),
+      procStart: stringSchema().optional().catch(undefined),
+      createdAt: numberSchema(),
+      titleSha: stringSchema().optional(),
+      usedAt: numberSchema().optional(),
+    }),
+  );
+});
 //@ chunk-4cm44bmp.js:20317-20557 placement
 function readBridgePlaceholders(replBridgePlaceholders) {
   if (
@@ -92,16 +100,16 @@ function readBridgePlaceholders(replBridgePlaceholders) {
   )
     return [];
   return Object.entries(replBridgePlaceholders).flatMap(([key, value]) => {
-    let C = bridgePlaceholderRecordSchema().safeParse(value);
-    if (!C.success) return [];
-    let { procStart, ...x } = C.data;
+    let parsed = bridgePlaceholderRecordSchema().safeParse(value);
+    if (!parsed.success) return [];
+    let { procStart, ...recordWithoutProcStart } = parsed.data;
     return [
       [
         key,
         procStart === undefined
-          ? x
+          ? recordWithoutProcStart
           : {
-              ...x,
+              ...recordWithoutProcStart,
               procStart,
             },
       ],
@@ -117,56 +125,59 @@ var BRIDGE_SESSION_ID_PATTERN = /^(session|cse)_[A-Za-z0-9_-]+$/;
 //@ chunk-4cm44bmp.js:20636-20798 placement
 async function isPlaceholderSweepEnabled() {
   if (isEssentialTrafficOnly()) return false;
-  let { getFeatureValue_CACHED_MAY_BE_STALE } = await import("./chunk-6df1d6re.js");
+  let { getFeatureValue_CACHED_MAY_BE_STALE } =
+    await import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js");
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_bridge_placeholder_sweep", true);
 }
 //@ chunk-4cm44bmp.js:20798-20913 placement
-function enqueuePlaceholderWrite(n) {
-  let h = bridgeHostState();
-  h.placeholderWriteChain = h.placeholderWriteChain.then(n, n);
-  return h.placeholderWriteChain;
+function enqueuePlaceholderWrite(writeOp) {
+  let state = bridgeHostState();
+  state.placeholderWriteChain = state.placeholderWriteChain.then(writeOp, writeOp);
+  return state.placeholderWriteChain;
 }
 //@ chunk-4cm44bmp.js:20913-21561 placement
 /**
  * 在全局配置 replBridgePlaceholders 里记录一个桥接占位会话（pid、进程启动时间、标题哈希），超过上限时淘汰最旧的。
  */
-function recordBridgePlaceholder(sessionId, h, storageV5) {
+function recordBridgePlaceholder(sessionId, title, storageV5) {
   return enqueuePlaceholderWrite(async () => {
     if (!(await isPlaceholderSweepEnabled())) return;
     let procStart = await ownProcStartAsync();
-    let N = {
+    let record = {
       pid: process.pid,
       procStart,
       createdAt: Date.now(),
-      ...(h !== undefined && {
-        titleSha: shortHash(h),
+      ...(title !== undefined && {
+        titleSha: shortHash(title),
       }),
     };
-    await saveGlobalConfig((x) => {
-      let bridgePlaceholders = readBridgePlaceholders(x.replBridgePlaceholders);
-      let filtered = bridgePlaceholders.filter(([Y]) => !sameSessionBody(Y, sessionId));
-      let A =
-        h === undefined ? bridgePlaceholders.find(([Y]) => sameSessionBody(Y, sessionId))?.[1] : undefined;
+    await saveGlobalConfig((config) => {
+      let bridgePlaceholders = readBridgePlaceholders(config.replBridgePlaceholders);
+      let filtered = bridgePlaceholders.filter(([key]) => !sameSessionBody(key, sessionId));
+      let existing =
+        title === undefined
+          ? bridgePlaceholders.find(([key]) => sameSessionBody(key, sessionId))?.[1]
+          : undefined;
       filtered.push([
         sessionId,
         {
-          ...N,
-          ...(A?.titleSha !== undefined && {
-            titleSha: A.titleSha,
+          ...record,
+          ...(existing?.titleSha !== undefined && {
+            titleSha: existing.titleSha,
           }),
-          ...(A?.usedAt !== undefined && {
-            usedAt: A.usedAt,
+          ...(existing?.usedAt !== undefined && {
+            usedAt: existing.usedAt,
           }),
         },
       ]);
-      filtered.sort((Y, ie) => ie[1].createdAt - Y[1].createdAt);
+      filtered.sort((leftEntry, rightEntry) => rightEntry[1].createdAt - leftEntry[1].createdAt);
       let sliced = filtered.slice(MAX_BRIDGE_PLACEHOLDERS);
       if (sliced.length > 0)
         logForDebugging(
-          `[bridge:placeholder] evicting ${sliced.length} record(s) past cap: ${sliced.map(([Y]) => Y).join(", ")}`,
+          `[bridge:placeholder] evicting ${sliced.length} record(s) past cap: ${sliced.map(([key]) => key).join(", ")}`,
         );
       return {
-        ...x,
+        ...config,
         replBridgePlaceholders: Object.fromEntries(filtered.slice(0, MAX_BRIDGE_PLACEHOLDERS)),
       };
     }, storageV5);
@@ -178,21 +189,21 @@ function recordBridgePlaceholder(sessionId, h, storageV5) {
  */
 async function countLiveBridgeProcesses() {
   try {
-    let mapped = readBridgePlaceholders(getGlobalConfig().replBridgePlaceholders).map(([, C]) => C);
-    let h = 1;
-    let w = new Set();
-    for (let C of mapped) {
-      if (C.pid === process.pid || w.has(C.pid)) continue;
+    let mapped = readBridgePlaceholders(getGlobalConfig().replBridgePlaceholders).map(([, record]) => record);
+    let liveCount = 1;
+    let seenPids = new Set();
+    for (let record of mapped) {
+      if (record.pid === process.pid || seenPids.has(record.pid)) continue;
       if (
-        C.procStart !== undefined
-          ? isProcessRunning(C.pid) && (await isSameProcessAsync(C.pid, C.procStart))
-          : isProcessRunning(C.pid)
+        record.procStart !== undefined
+          ? isProcessRunning(record.pid) && (await isSameProcessAsync(record.pid, record.procStart))
+          : isProcessRunning(record.pid)
       ) {
-        w.add(C.pid);
-        h++;
+        seenPids.add(record.pid);
+        liveCount++;
       }
     }
-    return h;
+    return liveCount;
   } catch {
     return 0;
   }
@@ -200,18 +211,18 @@ async function countLiveBridgeProcesses() {
 //@ chunk-4cm44bmp.js:21830-22083 placement
 function removeBridgePlaceholdersFor(sessionId, storageV5) {
   return enqueuePlaceholderWrite(async () => {
-    await saveGlobalConfig((w) => {
-      let filtered = Object.keys(w.replBridgePlaceholders ?? {}).filter((key) =>
+    await saveGlobalConfig((config) => {
+      let filtered = Object.keys(config.replBridgePlaceholders ?? {}).filter((key) =>
         sameSessionBody(key, sessionId),
       );
-      if (filtered.length === 0) return w;
-      let N = {
-        ...w.replBridgePlaceholders,
+      if (filtered.length === 0) return config;
+      let nextPlaceholders = {
+        ...config.replBridgePlaceholders,
       };
-      for (let x of filtered) delete N[x];
+      for (let key of filtered) delete nextPlaceholders[key];
       return {
-        ...w,
-        replBridgePlaceholders: N,
+        ...config,
+        replBridgePlaceholders: nextPlaceholders,
       };
     }, storageV5);
   });
@@ -222,22 +233,22 @@ function removeBridgePlaceholdersFor(sessionId, storageV5) {
  */
 function markBridgePlaceholderUsed(sessionId, storageV5) {
   return enqueuePlaceholderWrite(async () => {
-    await saveGlobalConfig((w) => {
-      let filtered = readBridgePlaceholders(w.replBridgePlaceholders).filter(
-        ([x, Q]) => sameSessionBody(x, sessionId) && Q.usedAt === undefined,
+    await saveGlobalConfig((config) => {
+      let filtered = readBridgePlaceholders(config.replBridgePlaceholders).filter(
+        ([key, record]) => sameSessionBody(key, sessionId) && record.usedAt === undefined,
       );
-      if (filtered.length === 0) return w;
-      let N = {
-        ...w.replBridgePlaceholders,
+      if (filtered.length === 0) return config;
+      let nextPlaceholders = {
+        ...config.replBridgePlaceholders,
       };
-      for (let [x, Q] of filtered)
-        N[x] = {
-          ...Q,
+      for (let [key, record] of filtered)
+        nextPlaceholders[key] = {
+          ...record,
           usedAt: Date.now(),
         };
       return {
-        ...w,
-        replBridgePlaceholders: N,
+        ...config,
+        replBridgePlaceholders: nextPlaceholders,
       };
     }, storageV5);
   }).catch((error) => {
@@ -247,46 +258,51 @@ function markBridgePlaceholderUsed(sessionId, storageV5) {
   });
 }
 //@ chunk-4cm44bmp.js:22448-22486 placement
-function sameSessionBody(n, h) {
-  return sessionIdBody(n) === sessionIdBody(h);
+function sameSessionBody(leftId, rightId) {
+  return sessionIdBody(leftId) === sessionIdBody(rightId);
 }
 //@ chunk-4cm44bmp.js:22486-22576 placement
-async function isProcessGoneOrRestarted(n) {
-  if (isProcessProvablyGone(n.pid)) return true;
-  return isProcessRunning(n.pid) && !(await isSameProcessAsync(n.pid, n.procStart));
+async function isProcessGoneOrRestarted(placeholder) {
+  if (isProcessProvablyGone(placeholder.pid)) return true;
+  return (
+    isProcessRunning(placeholder.pid) && !(await isSameProcessAsync(placeholder.pid, placeholder.procStart))
+  );
 }
 //@ chunk-4cm44bmp.js:22576-22733 placement
-function isFinalArchiveOutcome(n) {
-  if (n === "invalid" || n === "skipped_superseded" || n === "skipped_owner_changed") return true;
-  return typeof n === "number" && n < 500 && n !== 401 && n !== 408 && n !== 429;
+function isFinalArchiveOutcome(outcome) {
+  if (outcome === "invalid" || outcome === "skipped_superseded" || outcome === "skipped_owner_changed")
+    return true;
+  return (
+    typeof outcome === "number" && outcome < 500 && outcome !== 401 && outcome !== 408 && outcome !== 429
+  );
 }
 //@ chunk-4cm44bmp.js:22733-22889 placement
-function toComparableTimestamp(n) {
-  if (!n) return;
-  let isoTimestamp = parseIsoTimestamp(n.replace(/\.\d+/, ""));
+function toComparableTimestamp(timestamp) {
+  if (!timestamp) return;
+  let isoTimestamp = parseIsoTimestamp(timestamp.replace(/\.\d+/, ""));
   if (Number.isNaN(isoTimestamp)) return;
-  let w = /\.(\d+)/.exec(n)?.[1] ?? "";
-  return `${isoTimestamp}.${w.replace(/0+$/, "")}`;
+  let fraction = /\.(\d+)/.exec(timestamp)?.[1] ?? "";
+  return `${isoTimestamp}.${fraction.replace(/0+$/, "")}`;
 }
 //@ chunk-4cm44bmp.js:22889-24085 placement
 /**
  * 判断一个占位记录是否该删除：进程仍活着则保留，已使用或服务端会话不存在则删除。
  */
-async function judgeBridgePlaceholder(n, h, w) {
-  if (!(await isProcessGoneOrRestarted(h))) return "keep";
-  if (h.usedAt !== undefined) return logPlaceholderUsedAndRemove("used_marker");
-  let { session, notFound } = await getBridgeSessionOrStatus(n, {
-    baseUrl: w.baseUrl,
-    getAccessToken: w.getAccessToken,
+async function judgeBridgePlaceholder(sessionId, placeholder, options) {
+  if (!(await isProcessGoneOrRestarted(placeholder))) return "keep";
+  if (placeholder.usedAt !== undefined) return logPlaceholderUsedAndRemove("used_marker");
+  let { session, notFound } = await getBridgeSessionOrStatus(sessionId, {
+    baseUrl: options.baseUrl,
+    getAccessToken: options.getAccessToken,
   });
   if (notFound) return "remove";
   if (!session) return "keep";
-  if (h.titleSha !== undefined) {
+  if (placeholder.titleSha !== undefined) {
     if (typeof session.title !== "string") {
-      logForDebugging(`[bridge:placeholder] session GET carried no title for ${n}; keeping`);
+      logForDebugging(`[bridge:placeholder] session GET carried no title for ${sessionId}; keeping`);
       return "keep";
     }
-    if (shortHash(session.title) !== h.titleSha) return logPlaceholderUsedAndRemove("retitled");
+    if (shortHash(session.title) !== placeholder.titleSha) return logPlaceholderUsedAndRemove("retitled");
   }
   let connectionStatus = session.connection_status;
   if (connectionStatus !== undefined && connectionStatus !== "disconnected")
@@ -300,76 +316,86 @@ async function judgeBridgePlaceholder(n, h, w) {
       ? "remove_active_no_connection_state"
       : "remove_active_disconnected";
   }
-  let A = readBridgePlaceholders(getGlobalConfig().replBridgePlaceholders).find(([Y]) =>
-    sameSessionBody(Y, n),
+  let current = readBridgePlaceholders(getGlobalConfig().replBridgePlaceholders).find(([key]) =>
+    sameSessionBody(key, sessionId),
   )?.[1];
-  if (A === undefined) return "remove";
-  if (A.pid !== h.pid || A.procStart !== h.procStart || A.createdAt !== h.createdAt) return "keep";
-  if (A.usedAt !== undefined) return logPlaceholderUsedAndRemove("used_marker");
-  let Z = await w.archive(n);
-  if (!isFinalArchiveOutcome(Z)) {
-    logFeatureBad("bridge_placeholder_sweep", typeof Z === "number" ? `http_${Z}` : Z);
+  if (current === undefined) return "remove";
+  if (
+    current.pid !== placeholder.pid ||
+    current.procStart !== placeholder.procStart ||
+    current.createdAt !== placeholder.createdAt
+  )
+    return "keep";
+  if (current.usedAt !== undefined) return logPlaceholderUsedAndRemove("used_marker");
+  let archiveOutcome = await options.archive(sessionId);
+  if (!isFinalArchiveOutcome(archiveOutcome)) {
+    logFeatureBad(
+      "bridge_placeholder_sweep",
+      typeof archiveOutcome === "number" ? `http_${archiveOutcome}` : archiveOutcome,
+    );
     return "keep";
   }
   logFeatureOk("bridge_placeholder_sweep");
-  logForDebugging(`[bridge:placeholder] archived orphaned placeholder ${n} (status=${Z})`);
+  logForDebugging(
+    `[bridge:placeholder] archived orphaned placeholder ${sessionId} (status=${archiveOutcome})`,
+  );
   return "remove";
 }
 //@ chunk-4cm44bmp.js:24085-25199 placement
 /**
  * 延迟启动一次性的占位记录清理：逐条查询服务端会话状态，删除失效记录并上报 tengu_bridge_placeholder_sweep。
  */
-function startBridgePlaceholderSweep(n) {
-  let h = bridgeHostState();
-  if (h.placeholderSweepStarted) return Promise.resolve();
-  h.placeholderSweepStarted = true;
+function startBridgePlaceholderSweep(options) {
+  let hostState = bridgeHostState();
+  if (hostState.placeholderSweepStarted) return Promise.resolve();
+  hostState.placeholderSweepStarted = true;
   return (async () => {
-    await sleep(n.startDelayMs ?? PLACEHOLDER_SWEEP_START_DELAY_MS);
+    await sleep(options.startDelayMs ?? PLACEHOLDER_SWEEP_START_DELAY_MS);
     if (!(await isPlaceholderSweepEnabled())) return;
     let replBridgePlaceholders = getGlobalConfig().replBridgePlaceholders;
     if (!replBridgePlaceholders) return;
-    let C = n.skipSessionId ? sessionIdBody(n.skipSessionId) : undefined;
+    let skipBody = options.skipSessionId ? sessionIdBody(options.skipSessionId) : undefined;
     let bridgePlaceholders = readBridgePlaceholders(replBridgePlaceholders);
-    let x = new Set(bridgePlaceholders.map(([A]) => A));
-    let filtered = Object.keys(replBridgePlaceholders).filter((key) => !x.has(key));
-    let q = {
+    let knownKeys = new Set(bridgePlaceholders.map(([key]) => key));
+    let filtered = Object.keys(replBridgePlaceholders).filter((key) => !knownKeys.has(key));
+    let counts = {
       keep_connected: 0,
       keep_unreadable: 0,
       remove_active_disconnected: 0,
       remove_active_no_connection_state: 0,
     };
-    for (let [A, Z] of bridgePlaceholders) {
-      let Y = Date.now() - Z.createdAt;
-      if (Math.abs(Y) < PLACEHOLDER_MIN_SESSION_AGE_MS || sessionIdBody(A) === C) continue;
-      if (!BRIDGE_SESSION_ID_PATTERN.test(A)) {
-        filtered.push(A);
+    for (let [sessionId, placeholder] of bridgePlaceholders) {
+      let ageMs = Date.now() - placeholder.createdAt;
+      if (Math.abs(ageMs) < PLACEHOLDER_MIN_SESSION_AGE_MS || sessionIdBody(sessionId) === skipBody) continue;
+      if (!BRIDGE_SESSION_ID_PATTERN.test(sessionId)) {
+        filtered.push(sessionId);
         continue;
       }
-      let ie = await judgeBridgePlaceholder(A, Z, n);
-      if (ie !== "remove" && ie !== "keep") {
-        q[ie]++;
-        logForDebugging(`[bridge:placeholder] ${A}: ${ie}`);
+      let verdict = await judgeBridgePlaceholder(sessionId, placeholder, options);
+      if (verdict !== "remove" && verdict !== "keep") {
+        counts[verdict]++;
+        logForDebugging(`[bridge:placeholder] ${sessionId}: ${verdict}`);
       }
       if (
-        !(ie === "keep" || ie === "keep_connected" || ie === "keep_unreadable") ||
-        Y > PLACEHOLDER_KEEP_MAX_AGE_MS
+        !(verdict === "keep" || verdict === "keep_connected" || verdict === "keep_unreadable") ||
+        ageMs > PLACEHOLDER_KEEP_MAX_AGE_MS
       )
-        filtered.push(A);
+        filtered.push(sessionId);
     }
-    if (Object.values(q).some((A) => A > 0))
-      logFeatureSad("bridge_placeholder_sweep", "not_archived_on_server_state", q);
+    if (Object.values(counts).some((total) => total > 0))
+      logFeatureSad("bridge_placeholder_sweep", "not_archived_on_server_state", counts);
     if (filtered.length > 0)
-      await saveGlobalConfig((A) => {
-        if (!A.replBridgePlaceholders) return A;
-        let Z = {
-          ...A.replBridgePlaceholders,
+      await saveGlobalConfig((config) => {
+        if (!config.replBridgePlaceholders) return config;
+        let nextPlaceholders = {
+          ...config.replBridgePlaceholders,
         };
-        for (let Y of filtered) delete Z[Y];
+        for (let key of filtered) delete nextPlaceholders[key];
         return {
-          ...A,
-          replBridgePlaceholders: Z,
+          ...config,
+          replBridgePlaceholders: nextPlaceholders,
         };
-      }, n.storageV5);
+      }, options.storageV5);
   })().catch((error) => {
     logForDebugging(`[bridge:placeholder] sweep failed: ${errorMessage(error)}`, {
       level: "error",
@@ -377,9 +403,9 @@ function startBridgePlaceholderSweep(n) {
   });
 }
 //@ chunk-4cm44bmp.js:25199-25287 placement
-function logPlaceholderUsedAndRemove(n) {
+function logPlaceholderUsedAndRemove(signal) {
   logEvent("tengu_bridge_placeholder_used_session", {
-    signal: fromEnum(n),
+    signal: fromEnum(signal),
   });
   return "remove";
 }

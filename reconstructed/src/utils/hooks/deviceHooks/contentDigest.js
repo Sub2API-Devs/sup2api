@@ -12,13 +12,14 @@ import { MAX_DISPLAY_UNITS, hasVisibleText } from "../../permissions/approvalPay
 import { emptyConsentState } from "../../../cli/headlessCloud/cloudPlugins.js";
 import { createSignal } from "../../signal.js";
 import { HostScoped } from "../../hostScoped.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-mthxbav8.js:2800-2824 placement
 var SHA256_HEX_RE = /^[0-9a-f]{64}$/;
 //@ chunk-mthxbav8.js:2824-3075 placement
-function isShowableToolInput(e) {
-  let { description } = e;
-  let input = e.input;
+function isShowableToolInput(call) {
+  let { description } = call;
+  let input = call.input;
   if (typeof input !== "object" || input === null) return false;
   let keys = Object.keys(input);
   let contentDigest = "content_digest" in input ? input.content_digest : undefined;
@@ -32,23 +33,23 @@ function isShowableToolInput(e) {
   );
 }
 //@ chunk-mthxbav8.js:3075-3162 placement
-function deviceProofState(e, n) {
-  if (!isShowableToolInput(e)) return "unshowable";
-  return n === false ? "proves_no_device" : undefined;
+function deviceProofState(call, provesNoDevice) {
+  if (!isShowableToolInput(call)) return "unshowable";
+  return provesNoDevice === false ? "proves_no_device" : undefined;
 }
 //@ chunk-mthxbav8.js:3162-3309 placement
 function createGenerationCounter() {
-  let e = new Map();
+  let counters = new Map();
   return {
-    known(n) {
-      let max = Math.max(e.get(n) ?? 0, 1);
-      e.set(n, max);
+    known(key) {
+      let max = Math.max(counters.get(key) ?? 0, 1);
+      counters.set(key, max);
       return max;
     },
-    next(n) {
-      let r = (e.get(n) ?? 0) + 1;
-      e.set(n, r);
-      return r;
+    next(key) {
+      let value = (counters.get(key) ?? 0) + 1;
+      counters.set(key, value);
+      return value;
     },
   };
 }
@@ -68,5 +69,8 @@ function createDeviceProofState() {
 /**
  * 宿主隔离的设备证明状态注册表。
  */
-var deviceProofStateRegistry = new HostScoped(createDeviceProofState);
+var deviceProofStateRegistry; // deferred: uses createDeviceProofState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-mthxbav8.js:3431", () => {
+  deviceProofStateRegistry = new HostScoped(createDeviceProofState);
+});
 export { deviceProofState, deviceProofStateRegistry };

@@ -74,7 +74,13 @@ import {
   onServingMuteRecheck,
 } from "../../../services/remoteTools/servingGates.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { looseObject, _enum, E, array, string } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  looseObject,
+  _enum,
+  numberSchema,
+  array,
+  stringSchema,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import { AbortError, errorMessage } from "../../errors.js";
 import { primeUnattendedServingConsent } from "../../../services/remoteTools/unattendedConsentStore.js";
 import { parseThinClientReply } from "../../../cli/thinClient.js";
@@ -86,6 +92,7 @@ import {
   STILL_HERE,
 } from "../../../remote/tools/protocolConstants.js";
 import { onceExport } from "../../../../vendor/lodash-es/once.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-mthxbav8.js:130516-132398 placement
 /**
@@ -101,17 +108,17 @@ function createDeviceHookSession({
   trustAccepted = isProjectScopeTrustAccepted,
   isMuted,
 }) {
-  let v = () => null;
-  let y = stageDeviceHooks(stagingFsDeps(), () => [
-    ...(v()?.cloudWritableRoots ?? [launchDir]),
+  let handlerState = () => null;
+  let staging = stageDeviceHooks(stagingFsDeps(), () => [
+    ...(handlerState()?.cloudWritableRoots ?? [launchDir]),
     ...settingsReachRoots(launchDir),
   ]);
-  let C = registerCleanup(() => y.dispose());
-  let O = projectConfigRootOr(launchDir);
-  let hookCwd = O;
-  realpath(O).then(
-    (P) => {
-      hookCwd = P;
+  let disposeStaging = registerCleanup(() => staging.dispose());
+  let projectDir = projectConfigRootOr(launchDir);
+  let hookCwd = projectDir;
+  realpath(projectDir).then(
+    (realPath) => {
+      hookCwd = realPath;
     },
     () => {},
   );
@@ -119,14 +126,14 @@ function createDeviceHookSession({
     ...subprocessEnv(),
   };
   latchLegacyPin(memory, legacyConfigFileOf(memory).env);
-  let j = memory.senderFor(launchDir);
-  let M = () => {
-    let P = subprocessEnv();
+  let sender = memory.senderFor(launchDir);
+  let hostEnv = () => {
+    let processEnv = subprocessEnv();
     return mergeHookEnv_2({
       attached,
       beforeSettings: getLatchedPreSettingsEnvSnapshot(),
-      ownEnv: settingsEnvInReach(j, legacyConfigFileOf(memory)),
-      childrenSee: (L) => Object.hasOwn(P, L),
+      ownEnv: settingsEnvInReach(sender, legacyConfigFileOf(memory)),
+      childrenSee: (name) => Object.hasOwn(processEnv, name),
     });
   };
   let servicer = createHookVouching({
@@ -139,57 +146,60 @@ function createDeviceHookSession({
     }),
     judgeSender: attestationFor,
     pin: scriptFileReaderDeps(),
-    staging: y,
-    run: (P, L, N) =>
-      runInRemoteCallFrameMain(L.launchDir, () => runDeviceHook(P, L, DEVICE_HOOK_EXECUTORS, N)),
-    evaluateCondition: (P, L) => evaluateHookIfCondition(P, L, getTools(), L.cwd),
-    parseTarget: (P) => {
-      let L = M();
-      return analyzeHookCommand(P, {
-        home: resolveOptions(L),
+    staging,
+    run: (request, runOptions, signal) =>
+      runInRemoteCallFrameMain(runOptions.launchDir, () =>
+        runDeviceHook(request, runOptions, DEVICE_HOOK_EXECUTORS, signal),
+      ),
+    evaluateCondition: (condition, runOptions) =>
+      evaluateHookIfCondition(condition, runOptions, getTools(), runOptions.cwd),
+    parseTarget: (command) => {
+      let env = hostEnv();
+      return analyzeHookCommand(command, {
+        home: resolveOptions(env),
         hookCwd,
-        projectDir: O,
+        projectDir,
         defaultShell: defaultShellKind(),
-        shellPrefix: shellPrefixOf(L),
+        shellPrefix: shellPrefixOf(env),
       });
     },
-    emptyTranscriptPath: () => y.placeholder("cloud-transcript.jsonl"),
+    emptyTranscriptPath: () => staging.placeholder("cloud-transcript.jsonl"),
     defaultTimeoutMs: deviceHookTimeoutMs,
     onLine: (line, level) =>
       onLine({
         line,
         level,
       }),
-    telemetry: (P) => {
-      let L = isQuietOutcome(P.outcome);
-      if (L === "ok") logFeatureOk("device_hooks_serve");
-      else if (L === "sad") logFeatureSad("device_hooks_serve", P.outcome);
-      else if (L === "bad") logFeatureBad("device_hooks_serve", P.outcome);
+    telemetry: (report) => {
+      let level = isQuietOutcome(report.outcome);
+      if (level === "ok") logFeatureOk("device_hooks_serve");
+      else if (level === "sad") logFeatureSad("device_hooks_serve", report.outcome);
+      else if (level === "bad") logFeatureBad("device_hooks_serve", report.outcome);
       logEvent("tengu_device_hook_served", {
-        event: fromEnumOpt(P.event),
-        kind: fromEnumOpt(P.kind),
-        outcome: fromEnum(P.outcome),
-        exit_class: fromEnumOpt(P.exitClass),
-        duration_ms: P.durationMs,
-        translated_paths: P.translatedPaths,
-        replay: P.replay,
-        blocked: P.blocked,
-        staged: P.staged,
-        project_frame: P.projectFrame,
-        repinned: P.repinned,
-        waited_ms: P.waitedMs,
-        ...(P.attestation !== undefined && {
-          attestation_mode: fromEnum(P.attestation.mode),
-          request_attestation: fromEnum(P.attestation.status),
-          attestation_verdict: fromEnum(P.attestation.verdict),
+        event: fromEnumOpt(report.event),
+        kind: fromEnumOpt(report.kind),
+        outcome: fromEnum(report.outcome),
+        exit_class: fromEnumOpt(report.exitClass),
+        duration_ms: report.durationMs,
+        translated_paths: report.translatedPaths,
+        replay: report.replay,
+        blocked: report.blocked,
+        staged: report.staged,
+        project_frame: report.projectFrame,
+        repinned: report.repinned,
+        waited_ms: report.waitedMs,
+        ...(report.attestation !== undefined && {
+          attestation_mode: fromEnum(report.attestation.mode),
+          request_attestation: fromEnum(report.attestation.status),
+          attestation_verdict: fromEnum(report.attestation.verdict),
         }),
       });
     },
-    debug: (P) => logForDebugging(P),
+    debug: (message) => logForDebugging(message),
     logError,
     extraWritableRoots: () => settingsReachRoots(launchDir),
-    hostEnv: M,
-    childEnvironment: (P, L) => resolveHookProgramOnPath(P, L, subprocessEnv()),
+    hostEnv,
+    childEnvironment: (program, options) => resolveHookProgramOnPath(program, options, subprocessEnv()),
     placePath: realpathAllowMissing,
     resolveProgram: resolveProgramOnPathInReach,
     defaultShell: () => defaultShellKind(),
@@ -198,18 +208,18 @@ function createDeviceHookSession({
     servicer,
     staging: {
       dispose: () => {
-        C();
-        return y.dispose();
+        disposeStaging();
+        return staging.dispose();
       },
     },
     respond,
     release,
-    logError: (P) => {
-      logError(P);
+    logError: (error) => {
+      logError(error);
       logFeatureBad("device_hooks_serve", "serve_threw");
     },
   });
-  v = forwardedHookHandler.state;
+  handlerState = forwardedHookHandler.state;
   logForDebugging("[deviceHooks] device hook session created for this attach");
   return forwardedHookHandler;
 }
@@ -239,32 +249,32 @@ function createRemoteToolsSender({
   storageV5,
 }) {
   let open = scriptFileReaderDeps().openNoFollow;
-  let C = realpath(launchDir).catch(() => launchDir);
+  let launchDirReal = realpath(launchDir).catch(() => launchDir);
   let projectDir = projectConfigRootOr(launchDir);
   let gitRootUncached = findGitRootUncached(launchDir);
-  let R = gitRootUncached ?? launchDir;
-  let j = memory.senderFor(launchDir);
+  let projectRoot = gitRootUncached ?? launchDir;
+  let sender = memory.senderFor(launchDir);
   let attached = {
     ...subprocessEnv(),
   };
   latchLegacyPin(memory, legacyConfigFileOf(memory).env);
-  let q = () => {
-    let T = subprocessEnv();
+  let hostEnv = () => {
+    let processEnv = subprocessEnv();
     return mergeHookEnv_2({
       attached,
       beforeSettings: getLatchedPreSettingsEnvSnapshot(),
-      ownEnv: settingsEnvInReach(j, legacyConfigFileOf(memory)),
-      childrenSee: (P) => Object.hasOwn(T, P),
+      ownEnv: settingsEnvInReach(sender, legacyConfigFileOf(memory)),
+      childrenSee: (name) => Object.hasOwn(processEnv, name),
     });
   };
   return DeviceHooksRegistration({
-    memory: j,
+    memory: sender,
     now: Date.now,
     setTimer: unrefTimeout,
     hookFlags: createAnsweredOnLatch(),
     capture: () => deviceHooksPolicyEligibility(collectDeviceHookSources()),
     buildInventory: ({ captured, instanceId, syncRoot, reachRoots, withoutTemplates }) => {
-      let X = q();
+      let env = hostEnv();
       return collectDeviceHookAttestations(
         captured,
         {
@@ -279,22 +289,22 @@ function createRemoteToolsSender({
             },
           }),
           inRepository: gitRootUncached !== null,
-          ...(R !== launchDir && {
-            repoRoot: R,
+          ...(projectRoot !== launchDir && {
+            repoRoot: projectRoot,
           }),
           extraReachRoots: reachRoots,
           allowLegacyTemplateDigests: true,
           refusedTemplateIds: [...withoutTemplates],
-          optInPins: j.optInPins,
-          reachMemory: j,
-          localSettingsLocation: j.localSettingsLocation,
+          optInPins: sender.optInPins,
+          reachMemory: sender,
+          localSettingsLocation: sender.localSettingsLocation,
         },
         {
           realpath,
           open,
-          home: resolveOptions(X),
+          home: resolveOptions(env),
           defaultShell: defaultShellKind(),
-          shellPrefix: shellPrefixOf(X),
+          shellPrefix: shellPrefixOf(env),
         },
       );
     },
@@ -302,26 +312,26 @@ function createRemoteToolsSender({
     displayName: shortHostname(),
     cloudSessionId,
     launchDir,
-    launchDirReal: () => C,
+    launchDirReal: () => launchDirReal,
     realpath,
-    projectRoot: R,
+    projectRoot,
     syncRoot: async () => {
-      let T = syncRoot();
-      return T === null
+      let root = syncRoot();
+      return root === null
         ? null
         : {
-            root: T,
-            real: await realpath(T).catch(() => T),
+            root,
+            real: await realpath(root).catch(() => root),
           };
     },
     servingMuted,
     commonWriteRoots: () => collectBaseReachRoots(launchDir),
-    scopeWriteRoots: (T, P) => settingsReachRootsForSource(launchDir, T, P),
-    scopeWriteEntries: (T) => collectSettingsWriteRoots(T, launchDir),
-    scopeSettingsFile: (T) => getSettingsFilePathForSource(T) ?? null,
-    sendRequest: async (T, { timeoutMs, onEchoed }) => {
+    scopeWriteRoots: (source, scope) => settingsReachRootsForSource(launchDir, source, scope),
+    scopeWriteEntries: (source) => collectSettingsWriteRoots(source, launchDir),
+    scopeSettingsFile: (source) => getSettingsFilePathForSource(source) ?? null,
+    sendRequest: async (request, { timeoutMs, onEchoed }) => {
       try {
-        return await sendControlRequest(T, {
+        return await sendControlRequest(request, {
           timeoutMs,
           background: true,
           ...(onEchoed && {
@@ -329,10 +339,10 @@ function createRemoteToolsSender({
           }),
         });
       } catch (error) {
-        let F = classifyControlRequestError(error);
-        if (F === "timeout" || F === "aborted")
+        let errorKind = classifyControlRequestError(error);
+        if (errorKind === "timeout" || errorKind === "aborted")
           throw Error("timeout: no answer from the cloud worker in time");
-        if (F === "disconnected" || F === "not_connected")
+        if (errorKind === "disconnected" || errorKind === "not_connected")
           throw Error("disconnected: the session stream is not connected");
         throw error;
       }
@@ -340,62 +350,62 @@ function createRemoteToolsSender({
     ensureConsent: resolveDeviceHooksConsent({
       deps: readDeviceHooksConsent(storageV5),
       pin: memory.consentPin,
-      onNotAsked: (T) => {
+      onNotAsked: (details) => {
         logEvent("tengu_device_hooks_consent_notice", {});
         onLine({
-          line: heldHooksNotice(T),
+          line: heldHooksNotice(details),
           level: "info",
         });
       },
-      isStoreInReach: (T) => probeWritability(deviceHooksConsentPath(), T, realpath),
-      onUntrustedStore: (T) => {
-        let P = stripInvisibleChars(deviceHooksConsentPath());
+      isStoreInReach: (probe) => probeWritability(deviceHooksConsentPath(), probe, realpath),
+      onUntrustedStore: (verdict) => {
+        let shownPath = stripInvisibleChars(deviceHooksConsentPath());
         onLine({
           line:
-            T === "writable"
-              ? `The saved answer about this machine's hooks is ignored here: this cloud session can itself write ${P}. Decide for it in /hooks.`
-              : `The saved answer about this machine's hooks is ignored here: ${P} could not be located to check who can write it. Decide for this session in /hooks.`,
+            verdict === "writable"
+              ? `The saved answer about this machine's hooks is ignored here: this cloud session can itself write ${shownPath}. Decide for it in /hooks.`
+              : `The saved answer about this machine's hooks is ignored here: ${shownPath} could not be located to check who can write it. Decide for this session in /hooks.`,
           level: "warning",
         });
       },
     }),
-    arm: (T) => session.setState(T),
+    arm: (state) => session.setState(state),
     onLine,
-    telemetry: (T) => {
-      if (T.trigger === "renewal" && T.outcome === "registered") return;
-      let P = {
-        held_after_edit: T.heldAfterEdit,
-        held_kind_unsupported: T.heldByReason.kind_unsupported ?? 0,
-        held_event_runs_locally: T.heldByReason.event_runs_locally ?? 0,
-        held_event_later: T.heldByReason.event_later ?? 0,
-        held_event_low_value: T.heldByReason.event_low_value ?? 0,
-        held_event_container_internal: T.heldByReason.event_container_internal ?? 0,
-        held_source_in_sync_root: T.heldByReason.source_in_sync_root ?? 0,
-        held_sync_root_is_config_dir: T.heldByReason.sync_root_is_config_dir ?? 0,
-        held_unverifiable_target: T.heldByReason.unverifiable_target ?? 0,
-        held_in_reach: T.heldByReason.in_reach ?? 0,
-        held_interpreter_unvouched: T.heldByReason.interpreter_unvouched ?? 0,
-        held_loads_from_reach: T.heldByReason.loads_from_reach ?? 0,
-        held_unpinned_command: T.heldByReason.unpinned_command ?? 0,
-        held_author_skip: T.heldByReason.author_skip ?? 0,
-        held_duplicate: T.heldByReason.duplicate ?? 0,
-        held_over_cap: T.heldByReason.over_cap ?? 0,
-        held_pattern_matcher: T.heldByReason.pattern_matcher ?? 0,
+    telemetry: (report) => {
+      if (report.trigger === "renewal" && report.outcome === "registered") return;
+      let counters = {
+        held_after_edit: report.heldAfterEdit,
+        held_kind_unsupported: report.heldByReason.kind_unsupported ?? 0,
+        held_event_runs_locally: report.heldByReason.event_runs_locally ?? 0,
+        held_event_later: report.heldByReason.event_later ?? 0,
+        held_event_low_value: report.heldByReason.event_low_value ?? 0,
+        held_event_container_internal: report.heldByReason.event_container_internal ?? 0,
+        held_source_in_sync_root: report.heldByReason.source_in_sync_root ?? 0,
+        held_sync_root_is_config_dir: report.heldByReason.sync_root_is_config_dir ?? 0,
+        held_unverifiable_target: report.heldByReason.unverifiable_target ?? 0,
+        held_in_reach: report.heldByReason.in_reach ?? 0,
+        held_interpreter_unvouched: report.heldByReason.interpreter_unvouched ?? 0,
+        held_loads_from_reach: report.heldByReason.loads_from_reach ?? 0,
+        held_unpinned_command: report.heldByReason.unpinned_command ?? 0,
+        held_author_skip: report.heldByReason.author_skip ?? 0,
+        held_duplicate: report.heldByReason.duplicate ?? 0,
+        held_over_cap: report.heldByReason.over_cap ?? 0,
+        held_pattern_matcher: report.heldByReason.pattern_matcher ?? 0,
       };
       switch (
         (logEvent("tengu_device_hooks_client_register", {
-          outcome: fromEnum(T.outcome),
-          trigger: fromEnum(T.trigger),
-          forwarded: T.forwarded,
-          templates: T.templates,
-          ...P,
-          held_other: T.heldOther,
-          accepted: T.accepted,
-          ignored: T.ignored,
-          attempt: T.attempt,
-          after_flags_unanswered: T.afterFlagsUnanswered,
+          outcome: fromEnum(report.outcome),
+          trigger: fromEnum(report.trigger),
+          forwarded: report.forwarded,
+          templates: report.templates,
+          ...counters,
+          held_other: report.heldOther,
+          accepted: report.accepted,
+          ignored: report.ignored,
+          attempt: report.attempt,
+          after_flags_unanswered: report.afterFlagsUnanswered,
         }),
-        T.outcome)
+        report.outcome)
       ) {
         case "registered":
         case "unregistered":
@@ -405,7 +415,7 @@ function createRemoteToolsSender({
         case "muted":
         case "flag_off":
           logFeatureOk("device_hooks_client_register", {
-            forwarded: T.forwarded,
+            forwarded: report.forwarded,
           });
           break;
         case "not_ready":
@@ -414,26 +424,26 @@ function createRemoteToolsSender({
         case "failed":
         case "consent_distrusted":
         case "flag_unanswered":
-          logFeatureSad("device_hooks_client_register", T.outcome);
+          logFeatureSad("device_hooks_client_register", report.outcome);
           break;
         default:
-          logFeatureBad("device_hooks_client_register", T.outcome);
+          logFeatureBad("device_hooks_client_register", report.outcome);
       }
     },
-    lapseTelemetry: (T) =>
+    lapseTelemetry: (kind) =>
       logEvent("tengu_device_hooks_lapse_line", {
-        kind: fromEnum(T),
+        kind: fromEnum(kind),
       }),
-    reachPinnedTelemetry: (T) =>
+    reachPinnedTelemetry: (source) =>
       logEvent("tengu_device_hooks_reach_pinned", {
-        source: fromEnum(T),
+        source: fromEnum(source),
       }),
-    sourcePinnedTelemetry: (T) =>
+    sourcePinnedTelemetry: (change) =>
       logEvent("tengu_device_hooks_source_pinned", {
-        source: fromEnum(T.source),
-        changed: T.changed,
-        appeared: T.appeared,
-        vanished: T.vanished,
+        source: fromEnum(change.source),
+        changed: change.changed,
+        appeared: change.appeared,
+        vanished: change.vanished,
       }),
     servicerDefaults: DEVICE_HOOK_SERVICER_DEFAULTS,
   });
@@ -481,114 +491,119 @@ function isQuietOutcome(outcome) {
   }
 }
 //@ chunk-mthxbav8.js:137468-137567 placement = SETTING_SOURCES (1)
-var SETTING_SOURCE_SET = new Set([
-  "userSettings",
-  "localSettings",
-  "flagSettings",
-  "projectSettings",
-  "policySettings",
-]);
+var SETTING_SOURCE_SET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mthxbav8.js:137468", () => {
+  SETTING_SOURCE_SET = new Set([
+    "userSettings",
+    "localSettings",
+    "flagSettings",
+    "projectSettings",
+    "policySettings",
+  ]);
+});
 //@ chunk-mthxbav8.js:137567-139389 placement
 /**
  * 启动设备钩子转发：组合会话与发送器，并按服务静音状态切换。
  */
-function startDeviceHookForwarding(e) {
-  let createSession = e.createSession ?? createDeviceHookSession;
-  let createSender = e.createSender ?? createRemoteToolsSender;
-  let isServingMuted = e.isServingMuted ?? isRemoteToolServingMuted;
-  let u = isServingMuted();
+function startDeviceHookForwarding(options) {
+  let createSession = options.createSession ?? createDeviceHookSession;
+  let createSender = options.createSender ?? createRemoteToolsSender;
+  let isServingMuted = options.isServingMuted ?? isRemoteToolServingMuted;
+  let servingMuted = isServingMuted();
   let session = createSession({
-    launchDir: e.launchDir,
-    memory: e.memory,
-    getTools: e.getTools,
-    respond: (q, T) => e.manager()?.respondToForwardedHook(q, T) ?? false,
-    release: (q) => e.manager()?.releaseForwardedHook(q),
-    onLine: e.onLine,
-    ...(e.trustAccepted && {
-      trustAccepted: e.trustAccepted,
+    launchDir: options.launchDir,
+    memory: options.memory,
+    getTools: options.getTools,
+    respond: (requestId, answer) => options.manager()?.respondToForwardedHook(requestId, answer) ?? false,
+    release: (requestId) => options.manager()?.releaseForwardedHook(requestId),
+    onLine: options.onLine,
+    ...(options.trustAccepted && {
+      trustAccepted: options.trustAccepted,
     }),
-    isMuted: () => u,
+    isMuted: () => servingMuted,
   });
   let sender = createSender({
-    launchDir: e.launchDir,
-    memory: e.memory,
-    cloudSessionId: e.cloudSessionId,
+    launchDir: options.launchDir,
+    memory: options.memory,
+    cloudSessionId: options.cloudSessionId,
     session,
-    sendControlRequest: (q, T) => {
-      let P = e.manager();
-      if (P === null) return Promise.reject(Error("[RemoteSessionManager] Cannot send: not connected"));
-      return P.sendControlRequest(q, T);
+    sendControlRequest: (request, options_2) => {
+      let manager = options.manager();
+      if (manager === null) return Promise.reject(Error("[RemoteSessionManager] Cannot send: not connected"));
+      return manager.sendControlRequest(request, options_2);
     },
-    syncRoot: e.syncRoot,
-    servingMuted: u,
-    onLine: e.onLine,
-    storageV5: e.storageV5,
+    syncRoot: options.syncRoot,
+    servingMuted,
+    onLine: options.onLine,
+    storageV5: options.storageV5,
   });
-  let h = (e.onServingMuteRecheck ?? onServingMuteRecheck)(() => {
+  let muteUnsubscribe = (options.onServingMuteRecheck ?? onServingMuteRecheck)(() => {
     try {
-      let q = isServingMuted();
-      if (q === u) return;
-      if (q) {
-        u = true;
+      let mutedNow = isServingMuted();
+      if (mutedNow === servingMuted) return;
+      if (mutedNow) {
+        servingMuted = true;
         sender.servingMute(true);
       } else {
         sender.servingMute(false);
-        u = false;
+        servingMuted = false;
       }
     } catch (error) {
       logError(error);
     }
   });
-  let v = e.registerCleanup(() => sender.unregister(UNREGISTER_TIMEOUT_MS));
-  let y = e.subscribeSettingsChanges((q) => {
-    if (SETTING_SOURCE_SET.has(q)) sender.settingsChanged();
+  let unregisterCleanup = options.registerCleanup(() => sender.unregister(UNREGISTER_TIMEOUT_MS));
+  let settingsUnsubscribe = options.subscribeSettingsChanges((source) => {
+    if (SETTING_SOURCE_SET.has(source)) sender.settingsChanged();
   });
-  let C = session.onStoppedWhileRunning(() => sender.requestRegistration("stopped_while_running"));
-  let x = (e.subscribeConsent ?? ((q) => subscribeConsent(e.memory.consentAnnounced, q)))((q) =>
-    sender.consentDecided(q),
+  let stoppedUnsubscribe = session.onStoppedWhileRunning(() =>
+    sender.requestRegistration("stopped_while_running"),
   );
-  let R = (q) => () => {
+  let consentUnsubscribe = (
+    options.subscribeConsent ?? ((handler) => subscribeConsent(options.memory.consentAnnounced, handler))
+  )((accepted) => sender.consentDecided(accepted));
+  let reason = (reason) => () => {
     try {
-      sender.requestRegistration(q);
+      sender.requestRegistration(reason);
     } catch (error) {
       logError(error);
     }
   };
-  let j = e.memory.noteAttached(e.launchDir);
-  let M = false;
+  let detachMemory = options.memory.noteAttached(options.launchDir);
+  let disposed = false;
   return {
     callbacks: {
-      onForwardedHookCallback: (q) => {
-        session.handleForwardedHook(q);
-        let instanceId = parseDeviceHookId(q.callbackId)?.instanceId;
+      onForwardedHookCallback: (callback) => {
+        session.handleForwardedHook(callback);
+        let instanceId = parseDeviceHookId(callback.callbackId)?.instanceId;
         let { registeredInstanceId, instanceId: instanceId_2 } = sender.snapshot();
         if (instanceId !== undefined && (instanceId === registeredInstanceId || instanceId === instanceId_2))
           sender.activity();
       },
-      onForwardedHookCancelled: (q, T) => {
-        session.handleCancelled(q, T);
+      onForwardedHookCancelled: (requestId, origin) => {
+        session.handleCancelled(requestId, origin);
       },
     },
-    onStreamConnected: R("connected"),
-    onWorkerInit: R("init"),
-    onWorkerUp: R("worker_up"),
+    onStreamConnected: reason("connected"),
+    onWorkerInit: reason("init"),
+    onWorkerUp: reason("worker_up"),
     onTurnInFlight: () => sender.turnInFlight(),
     onTurnEnded: () => sender.turnEnded(),
     beforeSend: () => sender.ensureRegistered(),
     snapshot: () => sender.snapshot(),
     dispose: () => {
-      if (M) return;
-      M = true;
-      j();
-      h();
-      y();
-      C();
-      x();
-      v();
-      let q = sender.unregister(UNREGISTER_TIMEOUT_MS);
+      if (disposed) return;
+      disposed = true;
+      detachMemory();
+      muteUnsubscribe();
+      settingsUnsubscribe();
+      stoppedUnsubscribe();
+      consentUnsubscribe();
+      unregisterCleanup();
+      let unregistered = sender.unregister(UNREGISTER_TIMEOUT_MS);
       sender.dispose();
-      let T = e.registerCleanup(() => q);
-      q.then(T, T);
+      let settle = options.registerCleanup(() => unregistered);
+      unregistered.then(settle, settle);
       session.dispose();
     },
   };
@@ -597,27 +612,33 @@ function startDeviceHookForwarding(e) {
 /**
  * 远程工具通告的响应 schema、超时、未验证发送者标记与失败原因列表。
  */
-var announceResponseSchema = DoctorLazy(() =>
-  looseObject({
-    status: _enum(["announced", "withdrawn"]),
-    passthrough_declined: _enum(["policy", "pending", "unavailable"]).optional().catch(undefined),
-    worker_epoch: E().int().positive().max(Number.MAX_SAFE_INTEGER).optional().catch(undefined),
-    protocol_version: E().nullable().optional().catch(undefined),
-    ignored_tools: array(string()).optional().catch(undefined),
-    passthrough_adopted: E().int().nonnegative().optional().catch(undefined),
-    worker_capabilities: array(string()).optional().catch(undefined),
-  }),
-);
-var UNVERIFIED_SENDER = 15000;
-var UNVERIFIED_SENDER_2 = "unverified_sender";
-var ANNOUNCE_FAILURE_REASONS = [
-  "aborted",
-  "no_answer",
-  "post_failed",
-  "post_lost",
-  "replaced",
-  "unreadable_ack",
-];
+var announceResponseSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var UNVERIFIED_SENDER;
+var UNVERIFIED_SENDER_2;
+var ANNOUNCE_FAILURE_REASONS;
+deferInit("chunk-mthxbav8.js:139426", () => {
+  announceResponseSchema = DoctorLazy(() =>
+    looseObject({
+      status: _enum(["announced", "withdrawn"]),
+      passthrough_declined: _enum(["policy", "pending", "unavailable"]).optional().catch(undefined),
+      worker_epoch: numberSchema().int().positive().max(Number.MAX_SAFE_INTEGER).optional().catch(undefined),
+      protocol_version: numberSchema().nullable().optional().catch(undefined),
+      ignored_tools: array(stringSchema()).optional().catch(undefined),
+      passthrough_adopted: numberSchema().int().nonnegative().optional().catch(undefined),
+      worker_capabilities: array(stringSchema()).optional().catch(undefined),
+    }),
+  );
+  UNVERIFIED_SENDER = 15000;
+  UNVERIFIED_SENDER_2 = "unverified_sender";
+  ANNOUNCE_FAILURE_REASONS = [
+    "aborted",
+    "no_answer",
+    "post_failed",
+    "post_lost",
+    "replaced",
+    "unreadable_ack",
+  ];
+});
 //@ chunk-mthxbav8.js:139992-140581 placement
 function classifyAnnounceError(error) {
   if (error instanceof ControlRequestNotDeliveredError)
@@ -635,69 +656,73 @@ function classifyAnnounceError(error) {
       kind: "failed",
       reason: "aborted",
     };
-  let n = errorMessage(error);
-  if (n.startsWith("Unsupported control request subtype"))
+  let message = errorMessage(error);
+  if (message.startsWith("Unsupported control request subtype"))
     return {
       kind: "unsupported",
     };
-  if (n.startsWith("remote_tools_disabled:") || n.startsWith("invalid_announce:"))
+  if (message.startsWith("remote_tools_disabled:") || message.startsWith("invalid_announce:"))
     return {
       kind: "refused",
-      reason: n,
+      reason: message,
     };
-  if (n.startsWith("remote_tools_not_ready:"))
+  if (message.startsWith("remote_tools_not_ready:"))
     return {
       kind: "retry",
-      reason: n,
+      reason: message,
     };
-  if (n.startsWith("stale_worker_epoch"))
+  if (message.startsWith("stale_worker_epoch"))
     return {
       kind: "retry",
       reason: "stale_worker_epoch",
     };
   return {
     kind: "failed",
-    reason: n,
+    reason: message,
   };
 }
 //@ chunk-mthxbav8.js:140581-141993 placement
-async function announceRemoteTools(e, n, r = {}) {
+async function announceRemoteTools(send, body, options = {}) {
   primeUnattendedServingConsent();
   let abortController = new AbortController();
-  let u;
-  let S = (y) => {
-    u ??= y;
+  let abortResult;
+  let recordAbort = (result) => {
+    abortResult ??= result;
     abortController.abort();
   };
-  let w = "none";
+  let waitState = "none";
   let now = Date.now();
-  let v = (y) => {
-    if (w !== "none") {
+  let runTelemetry = (result) => {
+    if (waitState !== "none") {
       let now_2 = Date.now();
-      let O = w === "waiting" ? now_2 : w.endedAt;
+      let waitedUntil = waitState === "waiting" ? now_2 : waitState.endedAt;
       logEvent("tengu_remote_tools_announce_waited_for_worker", {
-        waited_ms: O - now,
-        after_wait_ms: now_2 - O,
-        outcome: fromEnum(y.kind),
-        reason: fromEnumOpt(ANNOUNCE_FAILURE_REASONS.find((x) => y.kind === "failed" && x === y.reason)),
+        waited_ms: waitedUntil - now,
+        after_wait_ms: now_2 - waitedUntil,
+        outcome: fromEnum(result.kind),
+        reason: fromEnumOpt(
+          ANNOUNCE_FAILURE_REASONS.find((reason) => result.kind === "failed" && reason === result.reason),
+        ),
       });
     }
-    return y;
+    return result;
   };
   try {
-    let { posted, response } = e.postControlRequest(remoteToolsAnnounceRequest(n), {
-      signal: r.signal ? AbortSignal.any([r.signal, abortController.signal]) : abortController.signal,
-      ...(r.timeoutMs !== undefined && {
-        timeoutMs: r.timeoutMs,
+    let { posted, response } = send.postControlRequest(remoteToolsAnnounceRequest(body), {
+      signal: options.signal
+        ? AbortSignal.any([options.signal, abortController.signal])
+        : abortController.signal,
+      ...(options.timeoutMs !== undefined && {
+        timeoutMs: options.timeoutMs,
       }),
-      ...(r.answerExpected === false
+      ...(options.answerExpected === false
         ? {
             answerExpected: false,
           }
         : {
             awaitWorkerStart: {
-              onChange: (R) => {
-                w = R
+              onChange: (waiting) => {
+                waitState = waiting
                   ? "waiting"
                   : {
                       endedAt: Date.now(),
@@ -706,31 +731,33 @@ async function announceRemoteTools(e, n, r = {}) {
             },
           }),
       background: true,
-      onEchoed: (R) => {
-        if (R === "unverified")
-          S({
+      onEchoed: (echoState) => {
+        if (echoState === "unverified")
+          recordAbort({
             kind: "refused",
             reason: UNVERIFIED_SENDER_2,
           });
       },
     });
     posted
-      .then(({ outcome }) => (outcome === "accepted" ? r.replaced?.then(() => "replaced") : "post_lost"))
-      .then((R) => {
-        if (R !== undefined && w === "waiting")
-          S({
+      .then(({ outcome }) =>
+        outcome === "accepted" ? options.replaced?.then(() => "replaced") : "post_lost",
+      )
+      .then((postOutcome) => {
+        if (postOutcome !== undefined && waitState === "waiting")
+          recordAbort({
             kind: "failed",
-            reason: R,
+            reason: postOutcome,
           });
       });
-    let O = await response;
-    let thinClientReply = parseThinClientReply("remote_tools_announce", announceResponseSchema(), O);
+    let reply = await response;
+    let thinClientReply = parseThinClientReply("remote_tools_announce", announceResponseSchema(), reply);
     if (thinClientReply === null)
-      return v({
+      return runTelemetry({
         kind: "failed",
         reason: "unreadable_ack",
       });
-    return v({
+    return runTelemetry({
       kind: "announced",
       status: thinClientReply.status,
       ...(thinClientReply.passthrough_declined !== undefined && {
@@ -747,25 +774,27 @@ async function announceRemoteTools(e, n, r = {}) {
       }),
     });
   } catch (error) {
-    return v((error instanceof AbortError ? u : undefined) ?? classifyAnnounceError(error));
+    return runTelemetry(
+      (error instanceof AbortError ? abortResult : undefined) ?? classifyAnnounceError(error),
+    );
   }
 }
 //@ chunk-mthxbav8.js:141993-142325 placement
-function remoteToolsAnnounceRequest(e) {
+function remoteToolsAnnounceRequest(body) {
   return {
     subtype: "remote_tools_announce",
-    instance_id: e.instance_id,
-    ...(e.worker_epoch !== undefined && {
-      worker_epoch: e.worker_epoch,
+    instance_id: body.instance_id,
+    ...(body.worker_epoch !== undefined && {
+      worker_epoch: body.worker_epoch,
     }),
-    host: e.host,
-    tools: e.tools.map((tool) => ({
+    host: body.host,
+    tools: body.tools.map((tool) => ({
       ...tool,
       refused_input_fields: [...tool.refused_input_fields],
       protocol_versions: [...tool.protocol_versions],
     })),
-    passthrough: [...e.passthrough],
-    plumbing: [...e.plumbing],
+    passthrough: [...body.passthrough],
+    plumbing: [...body.plumbing],
   };
 }
 //@ chunk-mthxbav8.js:142325-142391 placement
@@ -777,24 +806,27 @@ var ANNOUNCE_BACKOFF_MAX_ATTEMPTS = 4;
 var ANNOUNCE_BACKOFF_BASE_MS = 2000;
 var MAX_ANNOUNCE_CHARS = 1048576;
 //@ chunk-mthxbav8.js:142419-142555 placement
-function trimAnnounceBody(e) {
-  if (e.passthrough.length === 0 || jsonStringify(remoteToolsAnnounceRequest(e)).length <= MAX_ANNOUNCE_CHARS)
+function trimAnnounceBody(body) {
+  if (
+    body.passthrough.length === 0 ||
+    jsonStringify(remoteToolsAnnounceRequest(body)).length <= MAX_ANNOUNCE_CHARS
+  )
     return {
-      body: e,
+      body,
       trimmed: false,
     };
   return {
     body: {
-      ...e,
+      ...body,
       passthrough: [],
     },
     trimmed: true,
   };
 }
 //@ chunk-mthxbav8.js:142555-142612 placement
-function dropPassthroughAdopted(e) {
-  let { passthroughAdopted, ...r } = e;
-  return r;
+function dropPassthroughAdopted(result) {
+  let { passthroughAdopted, ...rest } = result;
+  return rest;
 }
 //@ chunk-mthxbav8.js:142612-142684 placement
 var ANNOUNCE_MIN_GAP_MS = 60000;
@@ -810,215 +842,222 @@ var START_TIMEOUT_MS = 1500;
 /**
  * 带退避重试的远程工具通告循环。
  */
-function createAnnounceLoop(e) {
-  let n = (K) =>
-    e.backoffMs !== undefined
-      ? e.backoffMs[K]
-      : K < ANNOUNCE_BACKOFF_MAX_ATTEMPTS
+function createAnnounceLoop(options) {
+  let backoffFor = (attempt) =>
+    options.backoffMs !== undefined
+      ? options.backoffMs[attempt]
+      : attempt < ANNOUNCE_BACKOFF_MAX_ATTEMPTS
         ? fullJitterBackoffMs({
             baseMs: ANNOUNCE_BACKOFF_BASE_MS,
-            attempt: K,
-            floorMs: (ANNOUNCE_BACKOFF_BASE_MS * 2 ** K) / 2,
+            attempt,
+            floorMs: (ANNOUNCE_BACKOFF_BASE_MS * 2 ** attempt) / 2,
           })
         : undefined;
-  let r =
-    e.setTimer ??
-    ((K, re) => {
-      let timer = setTimeout(K, re);
+  let setTimer =
+    options.setTimer ??
+    ((callback, delayMs) => {
+      let timer = setTimeout(callback, delayMs);
       return {
         clear: () => clearTimeout(timer),
       };
     });
-  let s = false;
-  let u = null;
-  let S = null;
-  let w = 0;
-  let h = null;
-  let v = null;
-  let y = null;
-  let C = false;
-  let O;
-  let x = null;
-  let R = 0;
-  let j = 0;
-  let M = [];
-  let q = false;
-  let T = [];
-  let P = null;
-  let L = false;
-  let N = [];
-  let F = async (K) => {
-    if (X(K) || K === "reconnected") j = 0;
-    if (P !== null || e.hostAsleep?.() === true) {
-      S = Q(S, K);
+  let disposed = false;
+  let inFlight = null;
+  let pendingReason = null;
+  let attempt = 0;
+  let retryTimer = null;
+  let coalesced = null;
+  let coalesceTimer = null;
+  let notedOversize = false;
+  let lastBody;
+  let holdKind = null;
+  let staleRetries = 0;
+  let unansweredTries = 0;
+  let returnTries = [];
+  let refusedBefore = false;
+  let sleepTries = [];
+  let asleep = null;
+  let wasStaleReturn = false;
+  let stillHereTries = [];
+  let announce = async (reason) => {
+    if (reason_2(reason) || reason === "reconnected") unansweredTries = 0;
+    if (asleep !== null || options.hostAsleep?.() === true) {
+      pendingReason = reason_4(pendingReason, reason);
       return;
     }
-    let re = e.session();
-    let ne = e.build();
-    if (re === null || ne === undefined || !e.workerLive()) {
-      S = Q(S, K);
+    let session = options.session();
+    let built = options.build();
+    if (session === null || built === undefined || !options.workerLive()) {
+      pendingReason = reason_4(pendingReason, reason);
       return;
     }
-    let { body, trimmed } = trimAnnounceBody(ne);
-    if (trimmed && !C) {
-      C = true;
+    let { body, trimmed } = trimAnnounceBody(built);
+    if (trimmed && !notedOversize) {
+      notedOversize = true;
       logFeatureSad("remote_tools_client_announce", "passthrough_over_frame");
       logForDebugging(
-        `[remoteToolsAnnounce] the announce with this machine's ${ne.passthrough.length} MCP tools is larger than the worker reads (${MAX_ANNOUNCE_CHARS} chars); announcing without them \u2014 they are not offered to this worker`,
+        `[remoteToolsAnnounce] the announce with this machine's ${built.passthrough.length} MCP tools is larger than the worker reads (${MAX_ANNOUNCE_CHARS} chars); announcing without them \u2014 they are not offered to this worker`,
         {
           level: "warn",
         },
       );
     }
-    S = null;
-    D();
+    pendingReason = null;
+    clearCoalesce();
     let { promise, resolve } = Promise.withResolvers();
-    u = {
+    inFlight = {
       replace: resolve,
-      reason: K,
+      reason,
     };
-    O = body;
-    let V = q;
-    q = false;
-    if (K === "returned") M.push((e.now ?? Date.now)());
-    let te = await announceRemoteTools(re, body, {
-      ...(e.signal && {
-        signal: e.signal,
+    lastBody = body;
+    let refusedBeforeRun = refusedBefore;
+    refusedBefore = false;
+    if (reason === "returned") returnTries.push((options.now ?? Date.now)());
+    let result = await announceRemoteTools(session, body, {
+      ...(options.signal && {
+        signal: options.signal,
       }),
       timeoutMs: UNVERIFIED_SENDER,
       replaced: promise,
     });
-    u = null;
-    if (te.kind === "failed" && V) q = true;
-    if (s) return;
-    let le = trimmed && te.kind === "announced" ? dropPassthroughAdopted(te) : te;
-    let ue = K === "returned";
-    let we = le.kind === "failed" && le.reason === "no_answer";
-    let Se = le.kind === "refused" && le.reason === UNVERIFIED_SENDER_2;
-    j = !ue && (we || Se) ? j + 1 : 0;
-    let he =
-      ue && Se
+    inFlight = null;
+    if (result.kind === "failed" && refusedBeforeRun) refusedBefore = true;
+    if (disposed) return;
+    let reported = trimmed && result.kind === "announced" ? dropPassthroughAdopted(result) : result;
+    let isReturned = reason === "returned";
+    let noAnswer = reported.kind === "failed" && reported.reason === "no_answer";
+    let unverified = reported.kind === "refused" && reported.reason === UNVERIFIED_SENDER_2;
+    unansweredTries = !isReturned && (noAnswer || unverified) ? unansweredTries + 1 : 0;
+    let outcome =
+      isReturned && unverified
         ? {
             kind: "failed",
             reason: UNVERIFIED_SENDER_2,
           }
-        : we && j > 1
+        : noAnswer && unansweredTries > 1
           ? {
               kind: "refused",
               reason: "no_answer_parked",
             }
-          : Se && j === 1
+          : unverified && unansweredTries === 1
             ? {
                 kind: "retry",
                 reason: UNVERIFIED_SENDER_2,
               }
-            : le;
+            : reported;
     logForDebugging(
-      `[remoteToolsAnnounce] ${K}: ${he.kind}${"reason" in he ? ` (${sanitizeShortReason(he.reason)})` : ""}`,
+      `[remoteToolsAnnounce] ${reason}: ${outcome.kind}${"reason" in outcome ? ` (${sanitizeShortReason(outcome.reason)})` : ""}`,
     );
-    e.onOutcome?.(he, K);
-    let it = ue || (K === "retry" && L);
-    L = ue && he.kind === "retry" && he.reason === "stale_worker_epoch";
-    if (it && !L)
-      if (he.kind === "announced") logFeatureOk("rtc_return_announce");
-      else if (he.kind === "failed") {
-        let reason = he.reason;
-        if (ue && (reason === "post_failed" || reason === "post_lost")) M.pop();
+    options.onOutcome?.(outcome, reason);
+    let isReturn = isReturned || (reason === "retry" && wasStaleReturn);
+    wasStaleReturn = isReturned && outcome.kind === "retry" && outcome.reason === "stale_worker_epoch";
+    if (isReturn && !wasStaleReturn)
+      if (outcome.kind === "announced") logFeatureOk("rtc_return_announce");
+      else if (outcome.kind === "failed") {
+        let reason = outcome.reason;
+        if (isReturned && (reason === "post_failed" || reason === "post_lost")) returnTries.pop();
         logFeatureSad(
           "rtc_return_announce",
-          [...ANNOUNCE_FAILURE_REASONS, UNVERIFIED_SENDER_2].find((Wt) => Wt === reason) ?? "other",
+          [...ANNOUNCE_FAILURE_REASONS, UNVERIFIED_SENDER_2].find((reason_2) => reason_2 === reason) ??
+            "other",
         );
-      } else logFeatureSad("rtc_return_announce", he.kind);
-    switch (he.kind) {
+      } else logFeatureSad("rtc_return_announce", outcome.kind);
+    switch (outcome.kind) {
       case "announced":
-        ee();
-        R = 0;
+        clearRetry();
+        staleRetries = 0;
         break;
       case "refused":
       case "unsupported":
-        ee();
-        R = 0;
-        x = he.kind === "refused" && he.reason === "no_answer_parked" ? "silence" : "refusal";
+        clearRetry();
+        staleRetries = 0;
+        holdKind =
+          outcome.kind === "refused" && outcome.reason === "no_answer_parked" ? "silence" : "refusal";
         break;
       case "retry":
-        if ((he.reason === "stale_worker_epoch" && ++R === 1) || he.reason === UNVERIFIED_SENDER_2)
-          S ??= "retry";
-        else Y();
+        if (
+          (outcome.reason === "stale_worker_epoch" && ++staleRetries === 1) ||
+          outcome.reason === UNVERIFIED_SENDER_2
+        )
+          pendingReason ??= "retry";
+        else armRetry();
         break;
       case "failed":
-        if (!ue) Y();
+        if (!isReturned) armRetry();
         break;
     }
-    let Je = S;
-    if (Je !== null) {
-      S = null;
-      if (x === null || B(Je)) {
-        x = null;
-        ee();
-        F(Je);
+    let queued = pendingReason;
+    if (queued !== null) {
+      pendingReason = null;
+      if (holdKind === null || reason_3(queued)) {
+        holdKind = null;
+        clearRetry();
+        announce(queued);
       }
     }
   };
-  let X = (K) => K === "worker_init" || K === "tools_changed" || K === "worker_asked";
-  let B = (K) => X(K) || (x === "silence" && K === "reconnected");
-  let Q = (reason, re) => (reason !== null && X(reason) && !X(re) ? reason : re);
-  let ee = () => {
-    w = 0;
-    h?.clear();
-    h = null;
+  let reason_2 = (reason) =>
+    reason === "worker_init" || reason === "tools_changed" || reason === "worker_asked";
+  let reason_3 = (reason) => reason_2(reason) || (holdKind === "silence" && reason === "reconnected");
+  let reason_4 = (pendingReason, reason) =>
+    pendingReason !== null && reason_2(pendingReason) && !reason_2(reason) ? pendingReason : reason;
+  let clearRetry = () => {
+    attempt = 0;
+    retryTimer?.clear();
+    retryTimer = null;
   };
-  let D = () => {
-    y?.clear();
-    y = null;
-    v = null;
+  let clearCoalesce = () => {
+    coalesceTimer?.clear();
+    coalesceTimer = null;
+    coalesced = null;
   };
-  let G = (K, coalesceMs) => {
-    if (v !== null && v.ms <= coalesceMs) {
-      v = {
-        reason: Q(v.reason, K),
-        ms: v.ms,
+  let reason_5 = (coalesceMs, coalesceMs_2) => {
+    if (coalesced !== null && coalesced.ms <= coalesceMs_2) {
+      coalesced = {
+        reason: reason_4(coalesced.reason, coalesceMs),
+        ms: coalesced.ms,
       };
       return;
     }
-    let reason = v?.reason ?? null;
-    D();
-    v = {
-      reason: Q(reason, K),
-      ms: coalesceMs,
+    let reason = coalesced?.reason ?? null;
+    clearCoalesce();
+    coalesced = {
+      reason: reason_4(reason, coalesceMs),
+      ms: coalesceMs_2,
     };
-    y = r(() => {
-      let ae = v;
-      y = null;
-      v = null;
-      if (ae !== null) z.requestAnnounce(ae.reason);
-    }, coalesceMs);
+    coalesceTimer = setTimer(() => {
+      let coalesced_2 = coalesced;
+      coalesceTimer = null;
+      coalesced = null;
+      if (coalesced_2 !== null) loop.requestAnnounce(coalesced_2.reason);
+    }, coalesceMs_2);
   };
-  let Y = () => {
-    let K = h === null ? n(w) : undefined;
-    if (K === undefined) return;
-    w += 1;
-    h = r(() => {
-      h = null;
-      if (!s) F("retry");
-    }, K);
+  let armRetry = () => {
+    let delayMs = retryTimer === null ? backoffFor(attempt) : undefined;
+    if (delayMs === undefined) return;
+    attempt += 1;
+    retryTimer = setTimer(() => {
+      retryTimer = null;
+      if (!disposed) announce("retry");
+    }, delayMs);
   };
-  let Z = async (K) => {
-    let re = e.session();
-    let ne = O === undefined ? undefined : (e.build() ?? O);
-    let ae = e.workerLive();
-    if (re === null || ne === undefined || (!ae && K === undefined)) return;
+  let withdrawNow = async (leftState) => {
+    let session = options.session();
+    let body = lastBody === undefined ? undefined : (options.build() ?? lastBody);
+    let workerLive = options.workerLive();
+    if (session === null || body === undefined || (!workerLive && leftState === undefined)) return;
     let host =
-      K === undefined
-        ? ne.host
+      leftState === undefined
+        ? body.host
         : {
-            ...ne.host,
-            capabilities: [leftStateFor(K), ...(ne.host.capabilities ?? [])],
+            ...body.host,
+            capabilities: [leftStateFor(leftState), ...(body.host.capabilities ?? [])],
           };
     await announceRemoteTools(
-      re,
+      session,
       {
-        ...ne,
-        ...(!ae && {
+        ...body,
+        ...(!workerLive && {
           worker_epoch: undefined,
         }),
         host,
@@ -1033,71 +1072,76 @@ function createAnnounceLoop(e) {
       },
     );
   };
-  let z = {
-    requestAnnounce(K, re) {
-      if (s) return;
-      if (re?.coalesceMs !== undefined && re.coalesceMs > 0) {
-        G(K, re.coalesceMs);
+  let loop = {
+    requestAnnounce(reason, options_2) {
+      if (disposed) return;
+      if (options_2?.coalesceMs !== undefined && options_2.coalesceMs > 0) {
+        reason_5(reason, options_2.coalesceMs);
         return;
       }
-      let ne = v === null ? K : Q(v.reason, K);
-      D();
-      if (B(ne)) x = null;
-      w = 0;
-      if (x !== null) return;
-      if (ne === "returned" && !q) {
-        let ae = (e.now ?? Date.now)();
-        M = M.filter((ce) => ce <= ae && ae - ce < ANNOUNCE_ATTEMPT_WINDOW_MS);
-        let last = M.at(-1);
-        if (M.length >= MAX_ANNOUNCE_ATTEMPTS || (last !== undefined && ae - last < ANNOUNCE_MIN_GAP_MS)) {
+      let mergedReason = coalesced === null ? reason : reason_4(coalesced.reason, reason);
+      clearCoalesce();
+      if (reason_3(mergedReason)) holdKind = null;
+      attempt = 0;
+      if (holdKind !== null) return;
+      if (mergedReason === "returned" && !refusedBefore) {
+        let now = (options.now ?? Date.now)();
+        returnTries = returnTries.filter((at) => at <= now && now - at < ANNOUNCE_ATTEMPT_WINDOW_MS);
+        let last = returnTries.at(-1);
+        if (
+          returnTries.length >= MAX_ANNOUNCE_ATTEMPTS ||
+          (last !== undefined && now - last < ANNOUNCE_MIN_GAP_MS)
+        ) {
           logFeatureSad("rtc_return_announce", "rate_limited");
           return;
         }
       }
-      h?.clear();
-      h = null;
-      if (u) {
-        S = Q(S, ne);
-        if (ne === "tools_changed") u.replace();
+      retryTimer?.clear();
+      retryTimer = null;
+      if (inFlight) {
+        pendingReason = reason_4(pendingReason, mergedReason);
+        if (mergedReason === "tools_changed") inFlight.replace();
         return;
       }
-      F(ne);
+      announce(mergedReason);
     },
-    outstanding: () => (u !== null && u.reason !== "returned") || (S !== null && S !== "returned"),
+    outstanding: () =>
+      (inFlight !== null && inFlight.reason !== "returned") ||
+      (pendingReason !== null && pendingReason !== "returned"),
     workerLive() {
-      if (s || u || S === null || x !== null) return;
-      let K = S;
-      S = null;
-      h?.clear();
-      h = null;
-      F(K);
+      if (disposed || inFlight || pendingReason === null || holdKind !== null) return;
+      let reason = pendingReason;
+      pendingReason = null;
+      retryTimer?.clear();
+      retryTimer = null;
+      announce(reason);
     },
-    async withdraw(K) {
-      await z.disposeKeepingWithdraw(K)();
+    async withdraw(leftState) {
+      await loop.disposeKeepingWithdraw(leftState)();
     },
-    disposeKeepingWithdraw(K) {
-      if (s) return () => Promise.resolve();
-      z.dispose();
-      return onceExport(() => Z(K));
+    disposeKeepingWithdraw(leftState) {
+      if (disposed) return () => Promise.resolve();
+      loop.dispose();
+      return onceExport(() => withdrawNow(leftState));
     },
     sayAsleep(workerEpoch) {
-      let re = e.session();
-      if (s || re === null || O === undefined || !e.workerLive()) return null;
-      let ne = (e.now ?? Date.now)();
-      T = T.filter((oe) => oe <= ne && ne - oe < ANNOUNCE_ATTEMPT_WINDOW_MS);
-      if (q || T.length >= MAX_WITHDRAW_ATTEMPTS) {
-        logFeatureSad("rtc_sleep_notice", q ? "already_said" : "rate_limited");
+      let session = options.session();
+      if (disposed || session === null || lastBody === undefined || !options.workerLive()) return null;
+      let now = (options.now ?? Date.now)();
+      sleepTries = sleepTries.filter((at) => at <= now && now - at < ANNOUNCE_ATTEMPT_WINDOW_MS);
+      if (refusedBefore || sleepTries.length >= MAX_WITHDRAW_ATTEMPTS) {
+        logFeatureSad("rtc_sleep_notice", refusedBefore ? "already_said" : "rate_limited");
         return null;
       }
-      q = true;
-      T.push(ne);
-      let { posted, response } = re.postControlRequest(
+      refusedBefore = true;
+      sleepTries.push(now);
+      let { posted, response } = session.postControlRequest(
         remoteToolsAnnounceRequest({
-          ...O,
+          ...lastBody,
           worker_epoch: workerEpoch,
           host: {
-            ...O.host,
-            capabilities: [...(O.host.capabilities ?? []), MACHINE_PRESENCE_STATES],
+            ...lastBody.host,
+            capabilities: [...(lastBody.host.capabilities ?? []), MACHINE_PRESENCE_STATES],
           },
         }),
         {
@@ -1107,53 +1151,56 @@ function createAnnounceLoop(e) {
         },
       );
       response.catch(() => {});
-      let ce = withDeadline(
+      let settled = withDeadline(
         posted.then(({ outcome }) => {
           if (outcome === "accepted") {
             logFeatureOk("rtc_sleep_notice");
             return true;
           }
           logFeatureSad("rtc_sleep_notice", "post_failed");
-          q = false;
-          T.pop();
+          refusedBefore = false;
+          sleepTries.pop();
           return false;
         }),
         TEARDOWN_TIMEOUT_MS,
-        (oe, V) => r(oe, V).clear,
-      ).then((oe) => {
-        P = null;
-        z.workerLive();
-        return oe !== false;
+        (callback, delayMs) => setTimer(callback, delayMs).clear,
+      ).then((ok) => {
+        asleep = null;
+        loop.workerLive();
+        return ok !== false;
       });
-      P = ce;
-      return ce;
+      asleep = settled;
+      return settled;
     },
     sayStillHere(workerEpoch) {
-      let re = e.session();
+      let session = options.session();
       if (
-        s ||
-        re === null ||
-        O === undefined ||
-        q ||
-        P !== null ||
-        e.hostAsleep?.() === true ||
-        !e.workerLive()
+        disposed ||
+        session === null ||
+        lastBody === undefined ||
+        refusedBefore ||
+        asleep !== null ||
+        options.hostAsleep?.() === true ||
+        !options.workerLive()
       )
         return false;
-      let ne = (e.now ?? Date.now)();
-      N = N.filter((oe) => oe <= ne && ne - oe < ANNOUNCE_ATTEMPT_WINDOW_MS);
-      let last = N.at(-1);
-      if (N.length >= MAX_RETRY_ATTEMPTS || (last !== undefined && ne - last < RETRY_MIN_GAP_MS))
+      let now = (options.now ?? Date.now)();
+      stillHereTries = stillHereTries.filter((at) => at <= now && now - at < ANNOUNCE_ATTEMPT_WINDOW_MS);
+      let last = stillHereTries.at(-1);
+      if (
+        stillHereTries.length >= MAX_RETRY_ATTEMPTS ||
+        (last !== undefined && now - last < RETRY_MIN_GAP_MS)
+      )
         return false;
-      N.push(ne);
-      let { posted, response } = re.postControlRequest(
+      stillHereTries.push(now);
+      let { posted, response } = session.postControlRequest(
         remoteToolsAnnounceRequest({
-          ...O,
+          ...lastBody,
           passthrough: [],
           worker_epoch: workerEpoch,
           host: {
-            ...O.host,
-            capabilities: [STILL_HERE, ...(O.host.capabilities ?? [])],
+            ...lastBody.host,
+            capabilities: [STILL_HERE, ...(lastBody.host.capabilities ?? [])],
           },
         }),
         {
@@ -1163,24 +1210,25 @@ function createAnnounceLoop(e) {
         },
       );
       response.catch(() => {});
-      posted.then((oe) => {
-        if (oe.outcome === "accepted") {
+      posted.then((posted) => {
+        if (posted.outcome === "accepted") {
           logFeatureOk("rtc_still_here");
           return;
         }
-        if (!(oe.outcome === "failed" && (oe.cause === "network" || oe.cause === "timeout")))
-          N = N.filter((te) => te !== ne);
-        if (oe.outcome !== "failed" || oe.cause !== "closed") logFeatureSad("rtc_still_here", "post_failed");
+        if (!(posted.outcome === "failed" && (posted.cause === "network" || posted.cause === "timeout")))
+          stillHereTries = stillHereTries.filter((at) => at !== now);
+        if (posted.outcome !== "failed" || posted.cause !== "closed")
+          logFeatureSad("rtc_still_here", "post_failed");
       });
       return true;
     },
     dispose() {
-      s = true;
-      h?.clear();
-      h = null;
-      D();
+      disposed = true;
+      retryTimer?.clear();
+      retryTimer = null;
+      clearCoalesce();
     },
   };
-  return z;
+  return loop;
 }
 export { startDeviceHookForwarding, UNVERIFIED_SENDER_2, ANNOUNCE_FAILURE_REASONS, createAnnounceLoop };

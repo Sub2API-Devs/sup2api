@@ -9,7 +9,7 @@
  * attribution: placement 26
  */
 import { basename, parse } from "path";
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import {
   uuidSlugFromUrl,
   parseArtifactUrl,
@@ -35,35 +35,42 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { BOXED_DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BOXED_DIAMOND_GLYPH } from "../../constants/figures.js";
 import { formatRelativeTime, truncateToWidth } from "../../utils/format.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { isPublishToolEnabled } from "../../services/artifacts/artifactToolGates.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:649982-649986 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:649982", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:650033-650641 placement
 function visibleArtifactFrames(frameUrls) {
-  let x = new Map();
+  let frameBySlug = new Map();
   for (let [key, value] of Object.entries(frameUrls).reverse()) {
-    let ee = uuidSlugFromUrl(value.url);
-    if (ee === null || value.dismissed === true) continue;
-    let ke = x.get(ee);
-    let Re = ke !== undefined && ke.key.startsWith(OPENED) && !key.startsWith(OPENED);
-    if (ke !== undefined && !Re) continue;
-    let Be = isPersistableFrameUrl(key) ? undefined : stripAnsiAndControls(basename(key));
-    let He = value.title !== undefined ? sanitizeFrameTitle(value.title) : null;
-    x.set(ee, {
+    let slug = uuidSlugFromUrl(value.url);
+    if (slug === null || value.dismissed === true) continue;
+    let existing = frameBySlug.get(slug);
+    let preferNewKey = existing !== undefined && existing.key.startsWith(OPENED) && !key.startsWith(OPENED);
+    if (existing !== undefined && !preferNewKey) continue;
+    let sourceFile = isPersistableFrameUrl(key) ? undefined : stripAnsiAndControls(basename(key));
+    let title = value.title !== undefined ? sanitizeFrameTitle(value.title) : null;
+    frameBySlug.set(slug, {
       key,
       artifact: {
-        slug: ee,
+        slug,
         title:
-          He ?? (Be !== undefined ? parse(Be).name : stripAnsiAndControls(key.slice(key.indexOf(":") + 1))),
-        ...(Be !== undefined && {
-          sourceFile: Be,
+          title ??
+          (sourceFile !== undefined
+            ? parse(sourceFile).name
+            : stripAnsiAndControls(key.slice(key.indexOf(":") + 1))),
+        ...(sourceFile !== undefined && {
+          sourceFile,
         }),
         updatedAt: value.updatedAt,
         isAttached: value.mcpPublished === true || (!key.startsWith(OPENED) && !isCreatedFrameUrl(key)),
@@ -73,7 +80,7 @@ function visibleArtifactFrames(frameUrls) {
       },
     });
   }
-  return Array.from(x.values(), (D) => D.artifact);
+  return Array.from(frameBySlug.values(), (entry) => entry.artifact);
 }
 //@ chunk-18hwfzwa.js:650641-650674 placement
 function sanitizeFrameTitle(title) {
@@ -92,42 +99,42 @@ function framesForSlug(frameUrls, slug) {
 /**
  * 关闭某个 Artifact 帧：特定类型直接从 frameUrls 删除，否则标记 dismissed。
  */
-function dismissFrameUrl(h, x) {
-  let D = h.frameUrls[x];
-  if (D === undefined || D.dismissed === true) return h;
-  if (isPersistableFrameUrl(x)) {
-    let { [x]: L, ...ee } = h.frameUrls;
+function dismissFrameUrl(state, key) {
+  let entry = state.frameUrls[key];
+  if (entry === undefined || entry.dismissed === true) return state;
+  if (isPersistableFrameUrl(key)) {
+    let { [key]: removed, ...restFrames } = state.frameUrls;
     return {
-      ...h,
-      frameUrls: ee,
+      ...state,
+      frameUrls: restFrames,
     };
   }
   return {
-    ...h,
+    ...state,
     frameUrls: {
-      ...h.frameUrls,
-      [x]: {
-        ...D,
+      ...state.frameUrls,
+      [key]: {
+        ...entry,
         dismissed: true,
       },
     },
   };
 }
 //@ chunk-18hwfzwa.js:650971-651055 placement
-function frameOpenFailed(h) {
-  if (h.frameOpenFailedPath == null) return h.frameOpenFailedSeen;
+function frameOpenFailed(state) {
+  if (state.frameOpenFailedPath == null) return state.frameOpenFailedSeen;
   return true;
 }
 //@ chunk-18hwfzwa.js:651381-651414 placement
 var CLOUD_ARTIFACT_CHECKING = "cloud-artifact-checking";
 //@ chunk-18hwfzwa.js:651414-652537 placement
-function openArtifactRow(h, x, notifications, cloudRowCheck) {
-  if (h.fromCloudSession !== true && h.mcpPublished !== true) {
-    openArtifactInBrowser(h.url, x.setState, notifications);
+function openArtifactRow(row, store, notifications, cloudRowCheck) {
+  if (row.fromCloudSession !== true && row.mcpPublished !== true) {
+    openArtifactInBrowser(row.url, store.setState, notifications);
     return;
   }
-  let feature = h.fromCloudSession === true ? "artifact_cloud_row_open" : "artifact_mcp_row_open";
-  let target = parseArtifactUrl(h.url);
+  let feature = row.fromCloudSession === true ? "artifact_cloud_row_open" : "artifact_mcp_row_open";
+  let target = parseArtifactUrl(row.url);
   if (target === null) return;
   if (cloudRowCheck.inFlight) {
     notifications.addNotification({
@@ -153,12 +160,12 @@ function openArtifactRow(h, x, notifications, cloudRowCheck) {
     } finally {
       cloudRowCheck.inFlight = false;
     }
-    if (!hasLiveFrameUrl(x.getState().frameUrls, h.url)) return;
+    if (!hasLiveFrameUrl(store.getState().frameUrls, row.url)) return;
     if (result.ok) {
       if (feature === "artifact_cloud_row_open") logFeatureOk("artifact_cloud_row_open");
       else logFeatureOk("artifact_mcp_row_open");
       notifications.removeNotification(CLOUD_ARTIFACT_CHECKING);
-      openArtifactInBrowser(h.url, x.setState, notifications);
+      openArtifactInBrowser(row.url, store.setState, notifications);
       return;
     }
     if (result.reason === "public_outside_org")
@@ -176,13 +183,13 @@ function openArtifactRow(h, x, notifications, cloudRowCheck) {
 }
 //@ chunk-18hwfzwa.js:652537-652618 placement
 function hasLiveFrameUrl(frameUrls, url) {
-  return Object.values(frameUrls).some((D) => D.url === url && D.dismissed !== true);
+  return Object.values(frameUrls).some((entry) => entry.url === url && entry.dismissed !== true);
 }
 //@ chunk-18hwfzwa.js:652618-652969 placement
-function openArtifactInBrowser(url, setState, D) {
+function openArtifactInBrowser(url, setState, notifications) {
   openValidatedUrl(withBannerOpenVia(url)).then((validatedUrl) => {
     if (!validatedUrl.ok && validatedUrl.reason !== "timeout")
-      D.addNotification({
+      notifications.addNotification({
         key: "artifact-browser-not-opened",
         kind: "feedback",
         text: `Couldn't open your browser. Open ${stripAnsiAndControls(url)} yourself.`,
@@ -191,92 +198,101 @@ function openArtifactInBrowser(url, setState, D) {
       });
   });
   logFeatureOk("frame_link_open");
-  setState((L) => {
-    let ee = frameOpenFailed(L);
-    return ee === L.frameOpenFailedSeen
-      ? L
+  setState((prevState) => {
+    let failed = frameOpenFailed(prevState);
+    return failed === prevState.frameOpenFailedSeen
+      ? prevState
       : {
-          ...L,
-          frameOpenFailedSeen: ee,
+          ...prevState,
+          frameOpenFailedSeen: failed,
         };
   });
 }
 //@ chunk-18hwfzwa.js:652969-653062 placement
 function liveFramesForSlug(frameUrls, slug) {
   return Object.values(frameUrls)
-    .filter((D) => D.dismissed !== true && uuidSlugFromUrl(D.url) === slug)
+    .filter((entry) => entry.dismissed !== true && uuidSlugFromUrl(entry.url) === slug)
     .at(-1);
 }
 //@ chunk-18hwfzwa.js:653062-653157 placement
 function visibleFrameUrls(frameUrls) {
   return Object.values(frameUrls)
-    .filter((x) => x.dismissed !== true && uuidSlugFromUrl(x.url) !== null)
+    .filter((entry) => entry.dismissed !== true && uuidSlugFromUrl(entry.url) !== null)
     .at(-1);
 }
 //@ chunk-18hwfzwa.js:653157-653270 placement
-function withBannerOpenVia(h) {
+function withBannerOpenVia(url) {
   try {
-    let x = new URL(h);
-    x.searchParams.set("via", "banner_open");
-    return x.toString();
+    let parsedUrl = new URL(url);
+    parsedUrl.searchParams.set("via", "banner_open");
+    return parsedUrl.toString();
   } catch {
-    return h;
+    return url;
   }
 }
 //@ chunk-18hwfzwa.js:653270-653307 placement
-function selectFrameUrls(Lt) {
-  return Lt.frameUrls;
+function selectFrameUrls(appState) {
+  return appState.frameUrls;
 }
 //@ chunk-18hwfzwa.js:653307-653476 placement
 /**
  * 渲染 Artifact 列表中的一项：标题、图标、来源文件与相对更新时间。
  */
-function renderArtifactListItem(oo) {
+function renderArtifactListItem(artifact) {
   return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      label: oo.title,
+      label: artifact.title,
       icon: jsxProd_default(Text, {
         color: "claude",
         children: BOXED_DIAMOND_GLYPH,
       }),
-      meta: [oo.sourceFile ?? "", oo.updatedAt > 0 ? formatRelativeTime(new Date(oo.updatedAt)) : ""],
+      meta: [
+        artifact.sourceFile ?? "",
+        artifact.updatedAt > 0 ? formatRelativeTime(new Date(artifact.updatedAt)) : "",
+      ],
     },
-    oo.slug,
+    artifact.slug,
   );
 }
 //@ chunk-18hwfzwa.js:770990-770994 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:770990", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:771025-771073 placement
-function selectHasVisibleFrames(L) {
-  return visibleArtifactFrames(L.frameUrls).length > 0;
+function selectHasVisibleFrames(appState) {
+  return visibleArtifactFrames(appState.frameUrls).length > 0;
 }
 //@ chunk-18hwfzwa.js:771073-771229 placement
-function shouldShowFrameOpenFailure(h) {
-  let x = h.frameOpenFailedPath != null ? h.frameUrls[h.frameOpenFailedPath] : undefined;
-  return x !== undefined && x.dismissed !== true && h.frameOpenFailedSeen === false;
+function shouldShowFrameOpenFailure(appState) {
+  let failedEntry =
+    appState.frameOpenFailedPath != null ? appState.frameUrls[appState.frameOpenFailedPath] : undefined;
+  return (
+    failedEntry !== undefined && failedEntry.dismissed !== true && appState.frameOpenFailedSeen === false
+  );
 }
 //@ chunk-18hwfzwa.js:771229-771266 placement
-function selectFrameUrls2(io) {
-  return io.frameUrls;
+function selectFrameUrls2(appState) {
+  return appState.frameUrls;
 }
 //@ chunk-18hwfzwa.js:771266-771319 placement
-function selectFrameFooter(so) {
-  return so.footerSelection === "frame";
+function selectFrameFooter(appState) {
+  return appState.footerSelection === "frame";
 }
 //@ chunk-18hwfzwa.js:771319-771330 placement
 var MAX_FRAME_TITLE_WIDTH = 24;
 //@ chunk-18hwfzwa.js:771330-771424 placement
 function useFrameFooterState() {
-  let $ = w(2);
+  let $ = useMemoCache(2);
   let appState = useAppState(selectHasVisibleFrames);
-  let D;
+  let enabled;
   if ($[0] !== appState) {
-    D = appState && isPublishToolEnabled();
+    enabled = appState && isPublishToolEnabled();
     $[0] = appState;
-    $[1] = D;
-  } else D = $[1];
-  return D;
+    $[1] = enabled;
+  } else enabled = $[1];
+  return enabled;
 }
 //@ chunk-18hwfzwa.js:771424-771452 placement
 function useFrameOpenFailure() {
@@ -284,60 +300,60 @@ function useFrameOpenFailure() {
 }
 //@ chunk-18hwfzwa.js:771452-772576 placement
 function ArtifactFramesPill(props) {
-  let $ = w(16);
+  let $ = useMemoCache(16);
   let { onOpen } = props;
   let frameFooterState = useFrameFooterState();
   let appState = useAppState(selectFrameUrls2);
-  let ke;
+  let artifacts;
   if ($[0] !== appState) {
-    ke = visibleArtifactFrames(appState);
+    artifacts = visibleArtifactFrames(appState);
     $[0] = appState;
-    $[1] = ke;
-  } else ke = $[1];
-  let Re = ke;
+    $[1] = artifacts;
+  } else artifacts = $[1];
+  let visibleFrames = artifacts;
   let appState_2 = useAppState(selectFrameFooter);
   let frameOpenFailure = useFrameOpenFailure();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let [ze, Xe] = y(false);
+  let [isHovered, setIsHovered] = useState(false);
   if (!frameFooterState) {
     return null;
   }
-  let [rt] = Re;
-  let kt;
-  if ($[2] !== Re.length || $[3] !== rt) {
-    kt =
-      Re.length === 1 && rt
+  let [firstFrame] = visibleFrames;
+  let singleLabel;
+  if ($[2] !== visibleFrames.length || $[3] !== firstFrame) {
+    singleLabel =
+      visibleFrames.length === 1 && firstFrame
         ? truncateToWidth(
-            rt.sourceFile !== undefined ? parse(rt.sourceFile).name : rt.title,
+            firstFrame.sourceFile !== undefined ? parse(firstFrame.sourceFile).name : firstFrame.title,
             MAX_FRAME_TITLE_WIDTH,
           )
         : null;
-    $[2] = Re.length;
-    $[3] = rt;
-    $[4] = kt;
-  } else kt = $[4];
-  let At = kt;
+    $[2] = visibleFrames.length;
+    $[3] = firstFrame;
+    $[4] = singleLabel;
+  } else singleLabel = $[4];
+  let label = singleLabel;
   if (isScreenReaderEnabled) {
-    const children = At !== null ? `artifact ${At}` : `${Re.length} artifacts`;
-    let Ot;
+    const children = label !== null ? `artifact ${label}` : `${visibleFrames.length} artifacts`;
+    let accessibleText;
     if ($[5] !== children) {
-      Ot = jsxProd_default(Text, {
+      accessibleText = jsxProd_default(Text, {
         children,
       });
       $[5] = children;
-      $[6] = Ot;
-    } else Ot = $[6];
-    return Ot;
+      $[6] = accessibleText;
+    } else accessibleText = $[6];
+    return accessibleText;
   }
-  let Et = At ?? String(Re.length);
-  let Dt = appState_2 || ze;
-  let It;
-  if ($[7] !== Dt || $[8] !== Et || $[9] !== frameOpenFailure) {
-    It = Dt
+  let countText = label ?? String(visibleFrames.length);
+  let highlighted = appState_2 || isHovered;
+  let pillText;
+  if ($[7] !== highlighted || $[8] !== countText || $[9] !== frameOpenFailure) {
+    pillText = highlighted
       ? jsxProd_default_2(Text, {
           color: "claude",
           inverse: true,
-          children: [BOXED_DIAMOND_GLYPH, " ", Et],
+          children: [BOXED_DIAMOND_GLYPH, " ", countText],
         })
       : jsxProd_default_2(Text, {
           children: [
@@ -349,48 +365,54 @@ function ArtifactFramesPill(props) {
             jsxProd_default(Text, {
               color: frameOpenFailure ? "claude" : undefined,
               dimColor: !frameOpenFailure,
-              children: Et,
+              children: countText,
             }),
           ],
         });
-    $[7] = Dt;
-    $[8] = Et;
+    $[7] = highlighted;
+    $[8] = countText;
     $[9] = frameOpenFailure;
-    $[10] = It;
-  } else It = $[10];
-  let Lt = It;
+    $[10] = pillText;
+  } else pillText = $[10];
+  let pill = pillText;
   if (!onOpen || getArtifactPublishStubDir() !== null) {
-    return Lt;
+    return pill;
   }
   let onMouseEnter;
   let onMouseLeave;
   if ($[11] === MEMO_CACHE_SENTINEL) {
-    onMouseEnter = () => Xe(true);
-    onMouseLeave = () => Xe(false);
+    onMouseEnter = () => setIsHovered(true);
+    onMouseLeave = () => setIsHovered(false);
     $[11] = onMouseEnter;
     $[12] = onMouseLeave;
   } else {
     onMouseEnter = $[11];
     onMouseLeave = $[12];
   }
-  let Xt;
-  if ($[13] !== onOpen || $[14] !== Lt) {
-    Xt = jsxProd_default(Box, {
+  let clickablePill;
+  if ($[13] !== onOpen || $[14] !== pill) {
+    clickablePill = jsxProd_default(Box, {
       onClick: onOpen,
       onMouseEnter,
       onMouseLeave,
-      children: Lt,
+      children: pill,
     });
     $[13] = onOpen;
-    $[14] = Lt;
-    $[15] = Xt;
-  } else Xt = $[15];
-  return Xt;
+    $[14] = pill;
+    $[15] = clickablePill;
+  } else clickablePill = $[15];
+  return clickablePill;
 }
 //@ chunk-18hwfzwa.js:772576-772580 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:772576", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:772580-772584 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:772580", () => {
+  init_react_production();
+});
 export {
   useFrameFooterState,
   frameOpenFailed,

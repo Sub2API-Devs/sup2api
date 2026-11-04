@@ -9,7 +9,7 @@
  * attribution: placement 6
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { INODE_DIRECTORY } from "./mcpCallConstants.js";
 import { buildTool } from "../tools/permissionCheckGuard.js";
 import { greedyShoreEnabled } from "../../utils/permissions/permissionSetup.js";
@@ -44,13 +44,14 @@ import {
 import { plural } from "../../utils/stringUtils.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { escapeXmlAttribute } from "../../utils/permissions/checkRegistry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-9ycd12hk.js:3769-3820 placement
 /**
  * 懒加载 MCP 相关模块集合。
  */
 function mcpModules() {
-  return require("./chunk-asne9cp8.js");
+  return require("./emitTripwireEvent.lazy.js");
 }
 //@ chunk-9ycd12hk.js:3820-3878 placement
 /**
@@ -77,208 +78,225 @@ function mcpDirectoryReadModule() {
 /**
  * 列出目录资源的工具定义。
  */
-var listDirectoryResourceInputSchema = DoctorLazy(() =>
-  u({
-    server: string().describe("The MCP server name"),
-    uri: string().describe("The directory resource URI to list"),
-  }),
-);
-var directoryListingResultSchema = DoctorLazy(() =>
-  u({
-    resources: array(
-      u({
-        uri: string().describe("Child resource URI"),
-        name: string().describe("Child resource name"),
-        mimeType: string().optional().describe("Child MIME type"),
-      }),
-    ).describe(
-      `Direct children of the directory resource. Subdirectories appear with mimeType "${INODE_DIRECTORY}".`,
-    ),
-    error: string().optional().describe("Human-readable error when the server could not list the directory"),
-  }),
-);
-var DIRECTORY_LISTING_DISABLED_TEXT = "Directory listing is not enabled in this build.";
-var listDirectoryResourceTool = buildTool({
-  isConcurrencySafe() {
-    return true;
-  },
-  isReadOnly() {
-    return true;
-  },
-  toAutoClassifierInput(e) {
-    return `${e.server} ${e.uri}`;
-  },
-  suppressesAlwaysAllowRule() {
-    return greedyShoreEnabled();
-  },
-  shouldDefer: true,
-  name: READ_MCP_RESOURCE_DIR_TOOL_NAME,
-  aliases: ["ReadMcpResourceDir"],
-  searchHint: "list the children of an MCP directory resource",
-  backgrounding: "never",
-  maxResultSizeChars: 1e5,
-  async description() {
-    return READ_MCP_RESOURCE_DIR_DESCRIPTION;
-  },
-  async prompt() {
-    return READ_MCP_RESOURCE_DIR_PROMPT;
-  },
-  get inputSchema() {
-    return listDirectoryResourceInputSchema();
-  },
-  get outputSchema() {
-    return directoryListingResultSchema();
-  },
-  create(e) {
-    return {
-      async checkPermissions(updatedInput) {
-        if (!greedyShoreEnabled())
+var listDirectoryResourceInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var directoryListingResultSchema;
+var DIRECTORY_LISTING_DISABLED_TEXT;
+var listDirectoryResourceTool;
+deferInit("chunk-9ycd12hk.js:3969", () => {
+  listDirectoryResourceInputSchema = DoctorLazy(() =>
+    objectSchema({
+      server: stringSchema().describe("The MCP server name"),
+      uri: stringSchema().describe("The directory resource URI to list"),
+    }),
+  );
+  directoryListingResultSchema = DoctorLazy(() =>
+    objectSchema({
+      resources: array(
+        objectSchema({
+          uri: stringSchema().describe("Child resource URI"),
+          name: stringSchema().describe("Child resource name"),
+          mimeType: stringSchema().optional().describe("Child MIME type"),
+        }),
+      ).describe(
+        `Direct children of the directory resource. Subdirectories appear with mimeType "${INODE_DIRECTORY}".`,
+      ),
+      error: stringSchema()
+        .optional()
+        .describe("Human-readable error when the server could not list the directory"),
+    }),
+  );
+  DIRECTORY_LISTING_DISABLED_TEXT = "Directory listing is not enabled in this build.";
+  listDirectoryResourceTool = buildTool({
+    isConcurrencySafe() {
+      return true;
+    },
+    isReadOnly() {
+      return true;
+    },
+    toAutoClassifierInput(input) {
+      return `${input.server} ${input.uri}`;
+    },
+    suppressesAlwaysAllowRule() {
+      return greedyShoreEnabled();
+    },
+    shouldDefer: true,
+    name: READ_MCP_RESOURCE_DIR_TOOL_NAME,
+    aliases: ["ReadMcpResourceDir"],
+    searchHint: "list the children of an MCP directory resource",
+    backgrounding: "never",
+    maxResultSizeChars: 1e5,
+    async description() {
+      return READ_MCP_RESOURCE_DIR_DESCRIPTION;
+    },
+    async prompt() {
+      return READ_MCP_RESOURCE_DIR_PROMPT;
+    },
+    get inputSchema() {
+      return listDirectoryResourceInputSchema();
+    },
+    get outputSchema() {
+      return directoryListingResultSchema();
+    },
+    create(context) {
+      return {
+        async checkPermissions(updatedInput) {
+          if (!greedyShoreEnabled())
+            return {
+              behavior: "allow",
+              updatedInput,
+            };
+          if (!alwaysFalse())
+            return {
+              behavior: "deny",
+              message: DIRECTORY_LISTING_DISABLED_TEXT,
+              decisionReason: {
+                type: "other",
+                reason: "directory listing off",
+              },
+            };
           return {
-            behavior: "allow",
-            updatedInput,
+            behavior: "passthrough",
+            message: `${READ_MCP_RESOURCE_DIR_TOOL_NAME} requires permission.`,
           };
-        if (!alwaysFalse())
-          return {
-            behavior: "deny",
-            message: DIRECTORY_LISTING_DISABLED_TEXT,
-            decisionReason: {
-              type: "other",
-              reason: "directory listing off",
-            },
-          };
-        return {
-          behavior: "passthrough",
-          message: `${READ_MCP_RESOURCE_DIR_TOOL_NAME} requires permission.`,
-        };
-      },
-      async call(s, { signal }) {
-        let turnMcpClients = e.turnMcpClients;
-        let { server, uri } = s;
-        let connectedClient = ensureConnectedClient_2(turnMcpClients, server);
-        throwIfWithheldResources(connectedClient, e.agentId);
-        if (!alwaysFalse())
-          return {
-            data: {
-              resources: [],
-              error: DIRECTORY_LISTING_DISABLED_TEXT,
-            },
-          };
-        if (!mcpDirectoryReadModule().serverDeclaresDirectoryRead(connectedClient.capabilities))
-          return {
-            data: {
-              resources: [],
-              error: `Server "${connectedClient.name}" does not support directory listing.`,
-            },
-          };
-        if (connectedClient.config.pluginSource) {
-          recordPluginUsage(connectedClient.config.pluginSource);
-          recordPluginActivity(connectedClient.config.pluginSource, "mcp", {
-            kind: "mcp-server",
-            name: connectedClient.name,
+        },
+        async call(input, { signal }) {
+          let turnMcpClients = context.turnMcpClients;
+          let { server, uri } = input;
+          let connectedClient = ensureConnectedClient_2(turnMcpClients, server);
+          throwIfWithheldResources(connectedClient, context.agentId);
+          if (!alwaysFalse())
+            return {
+              data: {
+                resources: [],
+                error: DIRECTORY_LISTING_DISABLED_TEXT,
+              },
+            };
+          if (!mcpDirectoryReadModule().serverDeclaresDirectoryRead(connectedClient.capabilities))
+            return {
+              data: {
+                resources: [],
+                error: `Server "${connectedClient.name}" does not support directory listing.`,
+              },
+            };
+          if (connectedClient.config.pluginSource) {
+            recordPluginUsage(connectedClient.config.pluginSource);
+            recordPluginActivity(connectedClient.config.pluginSource, "mcp", {
+              kind: "mcp-server",
+              name: connectedClient.name,
+            });
+          }
+          let refusal = noopSkillFetch(
+            connectedClient.name,
+            uri,
+            context.messages(),
+            context.inheritedMcpSkillMessages(),
+          );
+          if (refusal !== undefined)
+            return {
+              data: {
+                resources: [],
+                error: refusal,
+              },
+            };
+          let skillListing = listSkillDirectory(
+            uri,
+            countUniqueFiles(connectedClient.name, context.messages(), context.inheritedMcpSkillMessages()),
+          );
+          if (skillListing !== undefined)
+            return {
+              data: skillListing,
+            };
+          let liveClient = await mcpClientModule().ensureConnectedClient(connectedClient, {
+            signal,
+            context: "MCP resource directory read",
           });
-        }
-        let i = noopSkillFetch(connectedClient.name, uri, e.messages(), e.inheritedMcpSkillMessages());
-        if (i !== undefined)
-          return {
-            data: {
-              resources: [],
-              error: i,
-            },
-          };
-        let M = listSkillDirectory(
-          uri,
-          countUniqueFiles(connectedClient.name, e.messages(), e.inheritedMcpSkillMessages()),
-        );
-        if (M !== undefined)
-          return {
-            data: M,
-          };
-        let y = await mcpClientModule().ensureConnectedClient(connectedClient, {
-          signal,
-          context: "MCP resource directory read",
-        });
-        throwIfWithheldResources(y, e.agentId);
-        let c;
-        try {
-          c = await mcpDirectoryReadModule().readMcpDirectory(y, uri, signal);
-        } catch (error) {
-          if (signal.aborted) throw new AbortError();
-          let r = mcpErrorClassificationModule();
-          if (r.isMcpNotADirectoryError(error)) {
+          throwIfWithheldResources(liveClient, context.agentId);
+          let entries;
+          try {
+            entries = await mcpDirectoryReadModule().readMcpDirectory(liveClient, uri, signal);
+          } catch (error) {
+            if (signal.aborted) throw new AbortError();
+            let classification = mcpErrorClassificationModule();
+            if (classification.isMcpNotADirectoryError(error)) {
+              logMCPError(
+                connectedClient.name,
+                `resources/directory/read returned ${classification.getMcpErrorCode(error)} \u2014 not a directory`,
+              );
+              return {
+                data: {
+                  resources: [],
+                  error: `Not a directory resource: ${uri}. If it is a file resource, use ${READMCPRESOURCETOOL} instead.`,
+                },
+              };
+            }
+            throw error;
+          }
+          let listingSanitizer = createListingSanitizer();
+          let listingSanitizer_2 = createListingSanitizer();
+          let children = (
+            await mapInTurns(entries, (resource) => {
+              if (!listingSanitizer([resource.uri, resource.name, resource.mimeType])) return [];
+              let child = {
+                uri: stripCombiningRepeated(resource.uri),
+                name: recursivelySanitizeUnicode(resource.name),
+                mimeType:
+                  resource.mimeType !== undefined ? recursivelySanitizeUnicode(resource.mimeType) : undefined,
+              };
+              return listingSanitizer_2([child.uri, child.name, child.mimeType]) ? [child] : [];
+            })
+          ).flat();
+          if (children.length < entries.length) {
             logMCPError(
               connectedClient.name,
-              `resources/directory/read returned ${r.getMcpErrorCode(error)} \u2014 not a directory`,
+              listingTruncatedNote("directory entries", entries.length, entries.length),
             );
             return {
               data: {
                 resources: [],
-                error: `Not a directory resource: ${uri}. If it is a file resource, use ${READMCPRESOURCETOOL} instead.`,
+                error: `The listing of ${uri} is too large to read.`,
               },
             };
           }
-          throw error;
-        }
-        let listingSanitizer = createListingSanitizer();
-        let listingSanitizer_2 = createListingSanitizer();
-        let S = (
-          await mapInTurns(c, (h) => {
-            if (!listingSanitizer([h.uri, h.name, h.mimeType])) return [];
-            let r = {
-              uri: stripCombiningRepeated(h.uri),
-              name: recursivelySanitizeUnicode(h.name),
-              mimeType: h.mimeType !== undefined ? recursivelySanitizeUnicode(h.mimeType) : undefined,
-            };
-            return listingSanitizer_2([r.uri, r.name, r.mimeType]) ? [r] : [];
-          })
-        ).flat();
-        if (S.length < c.length) {
-          logMCPError(connectedClient.name, listingTruncatedNote("directory entries", c.length, c.length));
           return {
             data: {
-              resources: [],
-              error: `The listing of ${uri} is too large to read.`,
+              resources: children,
             },
           };
-        }
+        },
+      };
+    },
+    renderToolUseMessage(input) {
+      if (!input.uri || !input.server) return null;
+      return `List directory resource "${input.uri}" from server "${input.server}"`;
+    },
+    userFacingName() {
+      return "readMcpResourceDir";
+    },
+    mapToolResultToToolResultBlockParam(output, toolUseId) {
+      if (output.error)
         return {
-          data: {
-            resources: S,
-          },
+          tool_use_id: toolUseId,
+          type: "tool_result",
+          content: output.error,
         };
-      },
-    };
-  },
-  renderToolUseMessage(e) {
-    if (!e.uri || !e.server) return null;
-    return `List directory resource "${e.uri}" from server "${e.server}"`;
-  },
-  userFacingName() {
-    return "readMcpResourceDir";
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    if (e.error)
+      let joined = output.resources.map(
+        (resource) => `${resource.name}${resource.mimeType === INODE_DIRECTORY ? "/" : ""}`,
+      ).join(`
+`);
+      let text =
+        output.resources.length > 0
+          ? `Directory listing (${output.resources.length} ${plural(output.resources.length, "entry", "entries")}):
+${joined}`
+          : "Directory is empty.";
       return {
         tool_use_id: toolUseId,
         type: "tool_result",
-        content: e.error,
-      };
-    let joined = e.resources.map(
-      (resource) => `${resource.name}${resource.mimeType === INODE_DIRECTORY ? "/" : ""}`,
-    ).join(`
-`);
-    let n =
-      e.resources.length > 0
-        ? `Directory listing (${e.resources.length} ${plural(e.resources.length, "entry", "entries")}):
-${joined}`
-        : "Directory is empty.";
-    return {
-      tool_use_id: toolUseId,
-      type: "tool_result",
-      content: `${n}
+        content: `${text}
 
-${jsonStringify(e)}`,
-    };
-  },
+${jsonStringify(output)}`,
+      };
+    },
+  });
 });
 //@ chunk-9ycd12hk.js:7229-8592 placement
 /**
@@ -295,7 +313,7 @@ function listSkillDirectory(uri, skills) {
     if (filtered.length > 0)
       return {
         resources: [],
-        error: `${escapeXmlAttribute(uri)}: This directory was not read, because its address begins with another spelling of the address of a loaded skill. Write that part exactly as the skill writes it.${filtered.map((m) => loadedSkillNote(m.skillName)).join("")}`,
+        error: `${escapeXmlAttribute(uri)}: This directory was not read, because its address begins with another spelling of the address of a loaded skill. Write that part exactly as the skill writes it.${filtered.map((skill) => loadedSkillNote(skill.skillName)).join("")}`,
       };
     return skills.length > 0 && !isParsableUri(uri)
       ? {

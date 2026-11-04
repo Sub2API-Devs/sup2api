@@ -28,6 +28,7 @@ import { logFeatureBad, logFeatureSad, logFeatureOk } from "../../analytics/feat
 import { describeArtifactAuthFailure } from "../frameFlags.js";
 import { COMMENT_ID_RE } from "./commentFormatting.js";
 import { rememberPostedReplyId } from "./commentState.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-b0a246e7.js:23031-23954 placement
 /**
@@ -51,10 +52,10 @@ var REPLY_RETRY_DELAY_RANGE_MS = {
 };
 var MAX_REPLY_RETRY_DELAY_MS = 5000;
 //@ chunk-b0a246e7.js:23954-24116 placement
-function computeRetryDelay(e) {
+function computeRetryDelay(retryAfter) {
   let { min, max } = REPLY_RETRY_DELAY_RANGE_MS;
   let floored = Math.floor(Math.random() * (max - min + 1));
-  let retryAfterMs = parseRetryAfterMs(typeof e === "string" ? e : undefined);
+  let retryAfterMs = parseRetryAfterMs(typeof retryAfter === "string" ? retryAfter : undefined);
   return retryAfterMs === undefined || retryAfterMs <= 0
     ? min + floored
     : Math.min(Math.max(retryAfterMs, min), MAX_REPLY_RETRY_DELAY_MS) + floored;
@@ -63,54 +64,62 @@ function computeRetryDelay(e) {
 /**
  * 评论回复不确定性的两段说明（可能已发出/连接未承载）与回复结果 schema。
  */
-var COMMENT_REPLY_TEXT =
-  "an earlier attempt may already have posted this reply; re-read the comments before retrying";
-var RELAY_UNAVAILABLE_REPLY_TEXT =
-  "comment reply not sent (this session's comment connection did not carry it on this attempt, so nothing was posted) \u2014 retry the reply once; if it fails again, tell the user you could not post the reply from this session";
-var replyResultSchema = DoctorLazy(() =>
-  create({
-    thread_id: create_2(),
-    comment_id: create_2(),
-    replayed: create_6().optional(),
-  }),
-);
+var COMMENT_REPLY_TEXT; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var RELAY_UNAVAILABLE_REPLY_TEXT;
+var replyResultSchema;
+deferInit("chunk-b0a246e7.js:24116", () => {
+  COMMENT_REPLY_TEXT =
+    "an earlier attempt may already have posted this reply; re-read the comments before retrying";
+  RELAY_UNAVAILABLE_REPLY_TEXT =
+    "comment reply not sent (this session's comment connection did not carry it on this attempt, so nothing was posted) \u2014 retry the reply once; if it fails again, tell the user you could not post the reply from this session";
+  replyResultSchema = DoctorLazy(() =>
+    create({
+      thread_id: create_2(),
+      comment_id: create_2(),
+      replayed: create_6().optional(),
+    }),
+  );
+});
 //@ chunk-b0a246e7.js:24518-24699 placement
-function pickErrorFields(e) {
-  if (!e || typeof e !== "object") return {};
+function pickErrorFields(error) {
+  if (!error || typeof error !== "object") return {};
   return {
-    ...("error" in e &&
-      typeof e.error === "string" && {
-        error: e.error,
+    ...("error" in error &&
+      typeof error.error === "string" && {
+        error: error.error,
       }),
-    ...("reason" in e &&
-      typeof e.reason === "string" && {
-        reason: e.reason,
+    ...("reason" in error &&
+      typeof error.reason === "string" && {
+        reason: error.reason,
       }),
   };
 }
 //@ chunk-b0a246e7.js:24699-24739 placement
-function errorReason(e) {
-  return pickErrorFields(e).reason ?? null;
+function errorReason(error) {
+  return pickErrorFields(error).reason ?? null;
 }
 //@ chunk-b0a246e7.js:24739-24797 placement
-var standingReplySchema = DoctorLazy(() =>
-  create({
-    standing_reply: create({
-      id: create_2(),
-      own: create_6(),
+var standingReplySchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-b0a246e7.js:24739", () => {
+  standingReplySchema = DoctorLazy(() =>
+    create({
+      standing_reply: create({
+        id: create_2(),
+        own: create_6(),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-b0a246e7.js:24797-24922 placement
-function parseStandingReply(e) {
-  let t = standingReplySchema().safeParse(e);
-  if (!t.success || !ARTIFACT_SLUG_RE.test(t.data.standing_reply.id)) return;
-  return t.data.standing_reply;
+function parseStandingReply(value) {
+  let parsed = standingReplySchema().safeParse(value);
+  if (!parsed.success || !ARTIFACT_SLUG_RE.test(parsed.data.standing_reply.id)) return;
+  return parsed.data.standing_reply;
 }
 //@ chunk-b0a246e7.js:24922-24997 placement
-function errorMessage(e) {
-  let error = pickErrorFields(e).error ?? e;
-  return typeof error === "string" ? scrubServerLine(error, 300) : "";
+function errorMessage(error) {
+  let error_2 = pickErrorFields(error).error ?? error;
+  return typeof error_2 === "string" ? scrubServerLine(error_2, 300) : "";
 }
 //@ chunk-b0a246e7.js:24997-25107 placement
 function frameRequestOptions(signal, credentials) {
@@ -128,30 +137,32 @@ async function readRecordedDecl(slug, context) {
   return (await readFrameDeclForComments(slug, context)).orRecorded;
 }
 //@ chunk-b0a246e7.js:25165-25525 placement
-async function readFrameDeclForComments(e, t) {
-  let n = relayIsOnlyRoute()
+async function readFrameDeclForComments(artifactId, frameOptions) {
+  let route = relayIsOnlyRoute()
     ? {
         err: "not read",
       }
-    : await readFrameDecl(e, t.abortController.signal, t.credentials).catch(() => null);
-  let r = (capabilities) => {
+    : await readFrameDecl(artifactId, frameOptions.abortController.signal, frameOptions.credentials).catch(
+        () => null,
+      );
+  let readNowFor = (capabilities) => {
     let comments = isPlainObject(capabilities) ? capabilities.comments : undefined;
     return isPlainObject(comments) && comments.headless === true;
   };
-  if (n === null)
+  if (route === null)
     return {
       readNow: undefined,
       orRecorded: false,
     };
-  if ("err" in n)
+  if ("err" in route)
     return {
       readNow: undefined,
-      orRecorded: r(getShareEntry(e)?.capabilities),
+      orRecorded: readNowFor(getShareEntry(artifactId)?.capabilities),
     };
-  let o = r(n.capabilities);
+  let readNow = readNowFor(route.capabilities);
   return {
-    readNow: o,
-    orRecorded: o,
+    readNow,
+    orRecorded: readNow,
   };
 }
 //@ chunk-b0a246e7.js:25525-25658 placement
@@ -162,11 +173,11 @@ function needsCapsReadForReply(slug) {
   return shareEntry?.lastCapsReadAt === undefined || shareEntry.capabilitiesUnknown === true;
 }
 //@ chunk-b0a246e7.js:25658-25792 placement
-function networkOffRefusal(e, t) {
-  return relayIsOnlyRoute() && e.gatewayPolicy === "network-off"
+function networkOffRefusal(shareEntry, action) {
+  return relayIsOnlyRoute() && shareEntry.gatewayPolicy === "network-off"
     ? {
         kind: "error",
-        message: `${t} refused: ${NO_NETWORK_ACCESS_TEXT}`,
+        message: `${action} refused: ${NO_NETWORK_ACCESS_TEXT}`,
         reason: "network_off",
       }
     : undefined;
@@ -181,7 +192,7 @@ async function postCommentReply(
 ) {
   let continues;
   let markerDropped = false;
-  let h = resend
+  let tag = resend
     ? {
         resend,
       }
@@ -190,7 +201,7 @@ async function postCommentReply(
     if (ARTIFACT_SLUG_RE.test(continuesReplyId)) continues = continuesReplyId;
     else markerDropped = true;
   let epoch = getLiveState().accountEpoch;
-  let x = {
+  let request = {
     slug,
     threadId,
     text,
@@ -198,44 +209,48 @@ async function postCommentReply(
     continues,
     markerDropped,
     epoch,
-    tag: h,
+    tag,
     credentials,
     signal,
   };
-  let E = clientId;
-  let y = await sendCommentReply(x, E, true);
-  if (y.kind === "id_unknown") {
-    E = undefined;
-    h.idless = true;
-    y = await sendCommentReply(x, E, false);
+  let replyClientId = clientId;
+  let firstResult = await sendCommentReply(request, replyClientId, true);
+  if (firstResult.kind === "id_unknown") {
+    replyClientId = undefined;
+    tag.idless = true;
+    firstResult = await sendCommentReply(request, replyClientId, false);
   }
-  if (y.kind !== "retryable") return y.kind === "id_unknown" ? y.fail() : y;
-  await sleep(y.waitMs, signal);
+  if (firstResult.kind !== "retryable")
+    return firstResult.kind === "id_unknown" ? firstResult.fail() : firstResult;
+  await sleep(firstResult.waitMs, signal);
   if (signal.aborted) throw new AbortError();
-  h.retried = true;
-  h.first_status = y.status;
-  let S = await sendCommentReply(x, E, false);
-  if (S.kind === "retryable" || S.kind === "id_unknown") return y.fail();
-  if (S.kind === "error" && !S.unknownOutcome) {
-    let T = y.status === 0 ? "an earlier attempt drew no answer" : `an earlier attempt met HTTP ${y.status}`;
-    let b =
-      S.reason === "relay_unavailable"
+  tag.retried = true;
+  tag.first_status = firstResult.status;
+  let retryResult = await sendCommentReply(request, replyClientId, false);
+  if (retryResult.kind === "retryable" || retryResult.kind === "id_unknown") return firstResult.fail();
+  if (retryResult.kind === "error" && !retryResult.unknownOutcome) {
+    let firstAttemptText =
+      firstResult.status === 0
+        ? "an earlier attempt drew no answer"
+        : `an earlier attempt met HTTP ${firstResult.status}`;
+    let retryText =
+      retryResult.reason === "relay_unavailable"
         ? "the retry was not carried"
-        : S.reason === "request_error"
+        : retryResult.reason === "request_error"
           ? "the retry failed on the network"
           : undefined;
     return {
-      ...S,
+      ...retryResult,
       message:
-        S.reason === "network_off"
-          ? `comment reply outcome unknown (${T}, and the retry was refused because network access for this session is turned off or could not be confirmed) \u2014 it may have posted; re-read the comments to find out, and do not retry: if it is not there, tell the user they can reply on the artifact's own page`
-          : b !== undefined
-            ? `comment reply outcome unknown (${T}, and ${b}) \u2014 it may have posted; re-read the comments before retrying`
-            : `${S.message} \u2014 ${COMMENT_REPLY_TEXT}`,
+        retryResult.reason === "network_off"
+          ? `comment reply outcome unknown (${firstAttemptText}, and the retry was refused because network access for this session is turned off or could not be confirmed) \u2014 it may have posted; re-read the comments to find out, and do not retry: if it is not there, tell the user they can reply on the artifact's own page`
+          : retryText !== undefined
+            ? `comment reply outcome unknown (${firstAttemptText}, and ${retryText}) \u2014 it may have posted; re-read the comments before retrying`
+            : `${retryResult.message} \u2014 ${COMMENT_REPLY_TEXT}`,
       unknownOutcome: true,
     };
   }
-  return S;
+  return retryResult;
 }
 //@ chunk-b0a246e7.js:27233-31546 placement
 /**
@@ -243,10 +258,10 @@ async function postCommentReply(
  */
 async function sendCommentReply(
   { slug, threadId, text, answersSummon, continues, markerDropped, epoch, tag, credentials, signal },
-  replyId,
-  h,
+  replyClientId,
+  allowRetry,
 ) {
-  let s =
+  let tagArgs =
     Object.keys(tag).length > 0
       ? [
           {
@@ -254,15 +269,15 @@ async function sendCommentReply(
           },
         ]
       : [];
-  let x = h && replyId !== undefined;
+  let mayRetry = allowRetry && replyClientId !== undefined;
   let startTime = performance.now();
-  let y;
+  let response;
   try {
-    y = await frameApi.postRelayBound(
+    response = await frameApi.postRelayBound(
       `/api/frame/comments/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}`,
       {
-        ...(replyId !== undefined && {
-          id: replyId,
+        ...(replyClientId !== undefined && {
+          id: replyClientId,
         }),
         text,
         ...(answersSummon === true && {
@@ -277,29 +292,29 @@ async function sendCommentReply(
   } catch (error) {
     if (isCancel(error)) throw error;
     let transportErrorProps = getTransportErrorProps(error, startTime);
-    let O = threwOnRelayLeg(error);
-    if (O || transportErrorProps.transport) {
-      let N = O ? "relay_request_error" : "request_error";
-      let F = () => {
-        logFeatureBad("artifact_comment_reply", N, {
+    let relayThrew = threwOnRelayLeg(error);
+    if (relayThrew || transportErrorProps.transport) {
+      let reason = relayThrew ? "relay_request_error" : "request_error";
+      let failUnknown = () => {
+        logFeatureBad("artifact_comment_reply", reason, {
           ...transportErrorProps,
           ...tag,
         });
         return {
           kind: "error",
-          message: `comment reply outcome unknown (${O ? "relay request failed" : "no answer: network error or timeout"}) \u2014 it may have posted; re-read the comments before retrying`,
-          reason: N,
+          message: `comment reply outcome unknown (${relayThrew ? "relay request failed" : "no answer: network error or timeout"}) \u2014 it may have posted; re-read the comments before retrying`,
+          reason,
           unknownOutcome: true,
         };
       };
-      return x
+      return mayRetry
         ? {
             kind: "retryable",
             waitMs: computeRetryDelay(undefined),
             status: 0,
-            fail: F,
+            fail: failUnknown,
           }
-        : F();
+        : failUnknown();
     }
     logFeatureBad("artifact_comment_reply", "request_error", {
       ...transportErrorProps,
@@ -311,10 +326,10 @@ async function sendCommentReply(
       reason: "request_error",
     };
   }
-  if (!y.ok) {
-    if (y.reason === "relay-unavailable") {
+  if (!response.ok) {
+    if (response.reason === "relay-unavailable") {
       logFeatureBad("artifact_comment_reply", "relay_unavailable", {
-        status: y.status,
+        status: response.status,
         ...tag,
       });
       return {
@@ -323,61 +338,62 @@ async function sendCommentReply(
         reason: "relay_unavailable",
       };
     }
-    logFeatureBad("artifact_comment_reply", y.reason.replace(/-/g, "_"), ...s);
+    logFeatureBad("artifact_comment_reply", response.reason.replace(/-/g, "_"), ...tagArgs);
     return {
       kind: "error",
       message:
-        y.reason === "no-auth"
-          ? describeArtifactAuthFailure(y.detail)
-          : `comment reply unavailable: ${y.reason}`,
+        response.reason === "no-auth"
+          ? describeArtifactAuthFailure(response.detail)
+          : `comment reply unavailable: ${response.reason}`,
       reason: "transport",
     };
   }
-  if (y.status === 201) {
-    let R = replyResultSchema().safeParse(y.data);
-    if (!R.success) {
-      logFeatureSad("artifact_comment_reply", "malformed_echo", ...s);
+  if (response.status === 201) {
+    let parsed = replyResultSchema().safeParse(response.data);
+    if (!parsed.success) {
+      logFeatureSad("artifact_comment_reply", "malformed_echo", ...tagArgs);
       return {
         kind: "ok",
         threadId,
         commentId: "",
       };
     }
-    let C = R.data.replayed === true;
-    let matches = ARTIFACT_SLUG_RE.test(R.data.thread_id);
-    let matches_2 = COMMENT_ID_RE.test(R.data.comment_id);
-    if (!matches || !matches_2) logFeatureSad("artifact_comment_reply", "malformed_echo", ...s);
-    else if (markerDropped) logFeatureSad("artifact_comment_reply", "continues_reply_id_malformed", ...s);
+    let replayed = parsed.data.replayed === true;
+    let matches = ARTIFACT_SLUG_RE.test(parsed.data.thread_id);
+    let matches_2 = COMMENT_ID_RE.test(parsed.data.comment_id);
+    if (!matches || !matches_2) logFeatureSad("artifact_comment_reply", "malformed_echo", ...tagArgs);
+    else if (markerDropped)
+      logFeatureSad("artifact_comment_reply", "continues_reply_id_malformed", ...tagArgs);
     else
       logFeatureOk(
         "artifact_comment_reply",
-        ...(C
+        ...(replayed
           ? [
               {
                 ...tag,
-                replayed: C,
+                replayed,
               },
             ]
-          : s),
+          : tagArgs),
       );
-    if (matches_2 && epoch === getLiveState().accountEpoch) rememberPostedReplyId(R.data.comment_id);
+    if (matches_2 && epoch === getLiveState().accountEpoch) rememberPostedReplyId(parsed.data.comment_id);
     return {
       kind: "ok",
-      threadId: matches ? R.data.thread_id : threadId,
-      commentId: matches_2 ? R.data.comment_id : "",
-      ...(C && {
-        replayed: C,
+      threadId: matches ? parsed.data.thread_id : threadId,
+      commentId: matches_2 ? parsed.data.comment_id : "",
+      ...(replayed && {
+        replayed,
       }),
     };
   }
-  let S = networkOffRefusal(y, "comment reply");
-  if (S) {
-    logFeatureSad("artifact_comment_reply", "network_off", ...s);
-    return S;
+  let refusal = networkOffRefusal(response, "comment reply");
+  if (refusal) {
+    logFeatureSad("artifact_comment_reply", "network_off", ...tagArgs);
+    return refusal;
   }
-  if (!y.fromFrame) {
-    let { status } = y;
-    let C = () => {
+  if (!response.fromFrame) {
+    let { status } = response;
+    let failNow = () => {
       logFeatureBad("artifact_comment_reply", "relay_error", {
         status,
         ...tag,
@@ -389,64 +405,64 @@ async function sendCommentReply(
         unknownOutcome: true,
       };
     };
-    return x && (status >= 500 || status === 499)
+    return mayRetry && (status >= 500 || status === 499)
       ? {
           kind: "retryable",
-          waitMs: computeRetryDelay(y.response?.headers?.["retry-after"]),
+          waitMs: computeRetryDelay(response.response?.headers?.["retry-after"]),
           status,
-          fail: C,
+          fail: failNow,
         }
-      : C();
+      : failNow();
   }
-  let T = errorMessage(y.data);
-  if (y.status === 403 && T.includes(COMMENT_ERROR_TEXT)) {
-    logFeatureSad("artifact_comment_reply", "not_activated", ...s);
+  let message = errorMessage(response.data);
+  if (response.status === 403 && message.includes(COMMENT_ERROR_TEXT)) {
+    logFeatureSad("artifact_comment_reply", "not_activated", ...tagArgs);
     return {
       kind: "not_activated",
     };
   }
-  if (y.status === 403 && T.includes(NO_USER_CREDENTIAL_TEXT)) {
-    logFeatureSad("artifact_comment_reply", "service_key_credential", ...s);
+  if (response.status === 403 && message.includes(NO_USER_CREDENTIAL_TEXT)) {
+    logFeatureSad("artifact_comment_reply", "service_key_credential", ...tagArgs);
     return {
       kind: "error",
       message: `comment reply refused: ${ORG_SERVICE_KEY_WRITE_TEXT}`,
       reason: "service_key_credential",
     };
   }
-  if (replyId !== undefined && y.status === 409 && errorReason(y.data) === ID_IN_USE) {
-    logFeatureSad("artifact_comment_reply", "id_in_use", ...s);
-    if (epoch === getLiveState().accountEpoch) rememberPostedReplyId(replyId);
+  if (replyClientId !== undefined && response.status === 409 && errorReason(response.data) === ID_IN_USE) {
+    logFeatureSad("artifact_comment_reply", "id_in_use", ...tagArgs);
+    if (epoch === getLiveState().accountEpoch) rememberPostedReplyId(replyClientId);
     return {
       kind: "ok",
       threadId,
-      commentId: replyId,
+      commentId: replyClientId,
       replayed: true,
     };
   }
-  if (y.status === 409 && errorReason(y.data) === SUMMON_ALREADY_ANSWERED) {
-    let R = epoch === getLiveState().accountEpoch ? parseStandingReply(y.data) : undefined;
+  if (response.status === 409 && errorReason(response.data) === SUMMON_ALREADY_ANSWERED) {
+    let standing = epoch === getLiveState().accountEpoch ? parseStandingReply(response.data) : undefined;
     logFeatureSad(
       "artifact_comment_reply",
-      R?.own === true ? "summon_answered_own" : "summon_answered_elsewhere",
-      ...s,
+      standing?.own === true ? "summon_answered_own" : "summon_answered_elsewhere",
+      ...tagArgs,
     );
     return {
       kind: "summon_answered",
-      ...(R && {
-        standing: R,
+      ...(standing && {
+        standing,
       }),
     };
   }
-  if (y.status === 403 && errorReason(y.data) === SUMMON_FOREIGN_SENDER) {
-    logFeatureSad("artifact_comment_reply", "summon_foreign_sender", ...s);
+  if (response.status === 403 && errorReason(response.data) === SUMMON_FOREIGN_SENDER) {
+    logFeatureSad("artifact_comment_reply", "summon_foreign_sender", ...tagArgs);
     return {
       kind: "summon_foreign",
     };
   }
-  let { status } = y;
-  let M = status === 502 || status === 503 || status === 504;
-  let P = () => {
-    let R =
+  let { status } = response;
+  let retryableStatus = status === 502 || status === 503 || status === 504;
+  let failIdUnknown = () => {
+    let body =
       status === 403
         ? "forbidden"
         : status === 404
@@ -457,20 +473,20 @@ async function sendCommentReply(
               ? "unembeddable"
               : status === 429
                 ? "rate_limited"
-                : M
+                : retryableStatus
                   ? "unavailable"
                   : "http_failed";
-    if (isOutsideOrgNotFound(slug, R))
+    if (isOutsideOrgNotFound(slug, body))
       logFeatureSad("artifact_comment_reply", "not_found_outside_org", {
         status,
         ...tag,
       });
     else
-      logFeatureBad("artifact_comment_reply", R, {
+      logFeatureBad("artifact_comment_reply", body, {
         status,
         ...tag,
       });
-    let C = T !== "" ? `: ${T}` : "";
+    let suffix = message !== "" ? `: ${message}` : "";
     return {
       kind: "error",
       message:
@@ -478,38 +494,38 @@ async function sendCommentReply(
           ? "artifact or comment thread not found \u2014 it may have been deleted, or you may not have access"
           : status === 429
             ? "rate limited \u2014 comment replies spend the user's budget; do not retry now"
-            : M
-              ? `comment reply temporarily unavailable (HTTP ${status})${C} \u2014 it may still have posted; re-read the comments before retrying later`
+            : retryableStatus
+              ? `comment reply temporarily unavailable (HTTP ${status})${suffix} \u2014 it may still have posted; re-read the comments before retrying later`
               : status === 409
-                ? `comment reply conflicted${C} \u2014 re-read the comments before retrying`
-                : `comment reply refused (HTTP ${status})${C}`,
-      reason: R,
-      ...(M && {
+                ? `comment reply conflicted${suffix} \u2014 re-read the comments before retrying`
+                : `comment reply refused (HTTP ${status})${suffix}`,
+      reason: body,
+      ...(retryableStatus && {
         unknownOutcome: true,
       }),
     };
   };
-  if (replyId !== undefined && status === 400 && isUnknownFieldErrorFor(y.data, "id"))
+  if (replyClientId !== undefined && status === 400 && isUnknownFieldErrorFor(response.data, "id"))
     return {
       kind: "id_unknown",
-      fail: P,
+      fail: failIdUnknown,
     };
-  if (x && M)
+  if (mayRetry && retryableStatus)
     return {
       kind: "retryable",
-      waitMs: computeRetryDelay(y.response?.headers?.["retry-after"]),
+      waitMs: computeRetryDelay(response.response?.headers?.["retry-after"]),
       status,
-      fail: P,
+      fail: failIdUnknown,
     };
-  return P();
+  return failIdUnknown();
 }
 //@ chunk-b0a246e7.js:31546-32199 placement
-async function readSummonStatus(slug, threadId, n) {
-  let r;
+async function readSummonStatus(slug, threadId, cursor) {
+  let response;
   try {
-    r = await frameApi.postRelayBound(
+    response = await frameApi.postRelayBound(
       `/api/frame/comments/${encodeURIComponent(slug)}/${encodeURIComponent(threadId)}/summon-status`,
-      n,
+      cursor,
       {
         isBackground: true,
         headers: buildFrameHeaders(),
@@ -523,32 +539,32 @@ async function readSummonStatus(slug, threadId, n) {
       reason: "request_error",
     };
   }
-  if (!r.ok) {
-    if (r.reason === "relay-unavailable" || r.reason === "relay-not-served")
+  if (!response.ok) {
+    if (response.reason === "relay-unavailable" || response.reason === "relay-not-served")
       return {
         kind: "unsent",
-        status: r.status,
+        status: response.status,
       };
     return {
       kind: "skipped",
-      reason: r.reason,
+      reason: response.reason,
     };
   }
-  if (!r.fromFrame)
+  if (!response.fromFrame)
     return {
       kind: "failed",
       reason: "relay_error",
-      status: r.status,
+      status: response.status,
     };
-  if (r.status === 404)
+  if (response.status === 404)
     return {
       kind: "route_absent",
     };
-  if (r.status < 200 || r.status >= 300)
+  if (response.status < 200 || response.status >= 300)
     return {
       kind: "failed",
       reason: "http_failed",
-      status: r.status,
+      status: response.status,
     };
   return {
     kind: "accepted",

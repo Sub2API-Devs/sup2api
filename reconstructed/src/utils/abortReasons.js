@@ -16,20 +16,20 @@ import { unwrapAbortReason } from "./abortController.js";
  */
 var isTurnLevelAbort = (reason, caller) => {
   if (caller !== "turn") return false;
-  let r = unwrapAbortReason(reason);
-  return r === "turn-abort" || r === "permission-stop";
+  let unwrappedReason = unwrapAbortReason(reason);
+  return unwrappedReason === "turn-abort" || unwrappedReason === "permission-stop";
 };
 //@ chunk-e6aww6q8.js:186593-186713 placement
 /**
  * 给中止信号注册一次性监听，返回可 dispose 的对象以便在作用域结束时移除。
  */
-function onAbortDisposable(signal, n) {
-  signal.addEventListener("abort", n, {
+function onAbortDisposable(signal, listener) {
+  signal.addEventListener("abort", listener, {
     once: true,
   });
   return {
     [Symbol.dispose]() {
-      signal.removeEventListener("abort", n);
+      signal.removeEventListener("abort", listener);
     },
   };
 }
@@ -38,8 +38,8 @@ function onAbortDisposable(signal, n) {
  * 按 innerCall 与 agentId 判断中止来源范围（inner/turn/agent）。
  */
 function abortScopeOf(toolUseContext) {
-  let n = toolUseContext.innerCall === true;
-  let r = toolUseContext.agentId === undefined;
-  return n ? "inner" : r ? "turn" : "agent";
+  let isInnerCall = toolUseContext.innerCall === true;
+  let hasNoAgentId = toolUseContext.agentId === undefined;
+  return isInnerCall ? "inner" : hasNoAgentId ? "turn" : "agent";
 }
 export { abortScopeOf, isTurnLevelAbort, onAbortDisposable };

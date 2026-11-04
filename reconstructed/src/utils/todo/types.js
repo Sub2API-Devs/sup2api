@@ -9,19 +9,25 @@
  * attribution: fingerprint 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { _enum, u, string, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { _enum, objectSchema, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1779327-1779529 fingerprint = TodoItemSchema (0.674)
 /**
  * TodoWrite 数据：TodoItem{content, status: pending|in_progress|completed, activeForm} 与列表 schema。
  */
-var TodoStatusSchema = DoctorLazy(() => _enum(["pending", "in_progress", "completed"]));
-var TodoItemSchema = DoctorLazy(() =>
-  u({
-    content: string().min(1, "Content cannot be empty"),
-    status: TodoStatusSchema(),
-    activeForm: string().min(1, "Active form cannot be empty"),
-  }),
-);
-var TodoListSchema = DoctorLazy(() => array(TodoItemSchema()));
+var TodoStatusSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var TodoItemSchema;
+var TodoListSchema;
+deferInit("chunk-e6aww6q8.js:1779327", () => {
+  TodoStatusSchema = DoctorLazy(() => _enum(["pending", "in_progress", "completed"]));
+  TodoItemSchema = DoctorLazy(() =>
+    objectSchema({
+      content: stringSchema().min(1, "Content cannot be empty"),
+      status: TodoStatusSchema(),
+      activeForm: stringSchema().min(1, "Active form cannot be empty"),
+    }),
+  );
+  TodoListSchema = DoctorLazy(() => array(TodoItemSchema()));
+});
 export { TodoListSchema };

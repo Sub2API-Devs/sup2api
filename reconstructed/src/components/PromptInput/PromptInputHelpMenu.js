@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (5)
  * attribution: fingerprint 2, layout 1, placement 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useShortcutDisplay as useShortcutDisplay_2 } from "../../keybindings/useShortcutDisplay.js";
 import { useShortcutDisplay } from "../../keybindings/useKeybindingDisplay.js";
 import { cycleModeActionName } from "./PromptInputFooterLeftSide.js";
@@ -28,6 +28,7 @@ import { isSuspendAllowed } from "../../ink/terminalProbe.js";
 import { isFastModeEnabled, isFastModeAvailable } from "../../utils/fastMode.js";
 import { isKeybindingCustomizationEnabled } from "../../keybindings/loadUserBindings.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:846384-846430 fingerprint = formatShortcut (1)
 function formatShortcut(shortcut) {
@@ -43,7 +44,7 @@ var SHORTCUT_FORMAT = {
  * "?" 帮助菜单：三列列出 ! bash 模式、/ 命令、@ 文件、& 后台、双击 esc 回退、shift+tab 模式切换、ctrl+o transcript、ctrl+t 任务、ctrl+_ 撤销等，按当前 keybinding 显示。
  */
 function PromptInputHelpMenu(props) {
-  let $ = w(93);
+  let $ = useMemoCache(93);
   let { dimColor, fixedWidth, gap, paddingX } = props;
   const t0 = useShortcutDisplay_2("app:toggleTranscript", "Global", "ctrl+o");
   let t1;
@@ -63,17 +64,17 @@ function PromptInputHelpMenu(props) {
   formatShortcut(useShortcutDisplay_2("app:toggleTerminal", "Global", "meta+j"));
   let chord_8 = useShortcutDisplay("chat:imagePaste", "Chat", "ctrl+v");
   useAppStateSlice(isViewingTeammate) ?? false;
-  let Et;
+  let effortHelp;
   if ($[2] !== dimColor) {
-    Et = shouldShowEffortHint(getMainLoopModel())
+    effortHelp = shouldShowEffortHint(getMainLoopModel())
       ? jsxProd_default(EffortKeysHelp, {
           dimColor,
         })
       : null;
     $[2] = dimColor;
-    $[3] = Et;
-  } else Et = $[3];
-  let Dt = Et;
+    $[3] = effortHelp;
+  } else effortHelp = $[3];
+  let effortHelpMemo = effortHelp;
   const width = fixedWidth ? 24 : undefined;
   let t22;
   if ($[4] !== dimColor) {
@@ -108,43 +109,43 @@ function PromptInputHelpMenu(props) {
     $[8] = dimColor;
     $[9] = t24;
   } else t24 = $[9];
-  let so;
+  let sideQuestionHint;
   if ($[10] !== dimColor) {
-    so = jsxProd_default(Box, {
+    sideQuestionHint = jsxProd_default(Box, {
       children: jsxProd_default(Text, {
         dimColor,
         children: "/btw for side question",
       }),
     });
     $[10] = dimColor;
-    $[11] = so;
-  } else so = $[11];
-  let po;
-  if ($[12] !== width || $[13] !== t22 || $[14] !== t23 || $[15] !== t24 || $[16] !== so) {
-    po = jsxProd_default_2(Box, {
+    $[11] = sideQuestionHint;
+  } else sideQuestionHint = $[11];
+  let basicColumn;
+  if ($[12] !== width || $[13] !== t22 || $[14] !== t23 || $[15] !== t24 || $[16] !== sideQuestionHint) {
+    basicColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
       width,
-      children: [t22, t23, t24, so],
+      children: [t22, t23, t24, sideQuestionHint],
     });
     $[12] = width;
     $[13] = t22;
     $[14] = t23;
     $[15] = t24;
-    $[16] = so;
-    $[17] = po;
-  } else po = $[17];
+    $[16] = sideQuestionHint;
+    $[17] = basicColumn;
+  } else basicColumn = $[17];
   const width_2 = fixedWidth ? 35 : undefined;
-  let co;
+  let clearInputHint;
   if ($[18] !== dimColor) {
-    co = jsxProd_default(Box, {
+    clearInputHint = jsxProd_default(Box, {
       children: jsxProd_default(Text, {
         dimColor,
         children: "double tap esc to clear input",
       }),
     });
     $[18] = dimColor;
-    $[19] = co;
-  } else co = $[19];
+    $[19] = clearInputHint;
+  } else clearInputHint = $[19];
   let children;
   if ($[20] !== chord_4) {
     children = jsxProd_default(KeyboardShortcutHint, {
@@ -167,9 +168,9 @@ function PromptInputHelpMenu(props) {
     $[23] = children;
     $[24] = t30;
   } else t30 = $[24];
-  let Bo;
+  let transcriptHint;
   if ($[25] !== dimColor || $[26] !== transcriptShortcut) {
-    Bo = jsxProd_default(Box, {
+    transcriptHint = jsxProd_default(Box, {
       children: jsxProd_default_2(Text, {
         dimColor,
         children: [transcriptShortcut, " for verbose output"],
@@ -177,8 +178,8 @@ function PromptInputHelpMenu(props) {
     });
     $[25] = dimColor;
     $[26] = transcriptShortcut;
-    $[27] = Bo;
-  } else Bo = $[27];
+    $[27] = transcriptHint;
+  } else transcriptHint = $[27];
   let children_2;
   if ($[28] !== chord) {
     children_2 = jsxProd_default(KeyboardShortcutHint, {
@@ -189,9 +190,9 @@ function PromptInputHelpMenu(props) {
     $[28] = chord;
     $[29] = children_2;
   } else children_2 = $[29];
-  let Ho;
+  let clearHistoryHint;
   if ($[30] !== dimColor || $[31] !== children_2) {
-    Ho = jsxProd_default(Box, {
+    clearHistoryHint = jsxProd_default(Box, {
       children: jsxProd_default(Text, {
         dimColor,
         children: children_2,
@@ -199,8 +200,8 @@ function PromptInputHelpMenu(props) {
     });
     $[30] = dimColor;
     $[31] = children_2;
-    $[32] = Ho;
-  } else Ho = $[32];
+    $[32] = clearHistoryHint;
+  } else clearHistoryHint = $[32];
   let children_3;
   if ($[33] === MEMO_CACHE_SENTINEL) {
     children_3 = getNewlineInstructions();
@@ -217,30 +218,30 @@ function PromptInputHelpMenu(props) {
     $[34] = dimColor;
     $[35] = t34;
   } else t34 = $[35];
-  let mn;
+  let editingColumn;
   if (
-    $[36] !== Dt ||
-    $[37] !== co ||
+    $[36] !== effortHelpMemo ||
+    $[37] !== clearInputHint ||
     $[38] !== t30 ||
-    $[39] !== Bo ||
-    $[40] !== Ho ||
+    $[39] !== transcriptHint ||
+    $[40] !== clearHistoryHint ||
     $[41] !== t34 ||
     $[42] !== width_2
   ) {
-    mn = jsxProd_default_2(Box, {
+    editingColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
       width: width_2,
-      children: [co, t30, Dt, Bo, Ho, null, null, t34],
+      children: [clearInputHint, t30, effortHelpMemo, transcriptHint, clearHistoryHint, null, null, t34],
     });
-    $[36] = Dt;
-    $[37] = co;
+    $[36] = effortHelpMemo;
+    $[37] = clearInputHint;
     $[38] = t30;
-    $[39] = Bo;
-    $[40] = Ho;
+    $[39] = transcriptHint;
+    $[40] = clearHistoryHint;
     $[41] = t34;
     $[42] = width_2;
-    $[43] = mn;
-  } else mn = $[43];
+    $[43] = editingColumn;
+  } else editingColumn = $[43];
   let children_4;
   if ($[44] !== chord_2) {
     children_4 = jsxProd_default(KeyboardShortcutHint, {
@@ -263,9 +264,9 @@ function PromptInputHelpMenu(props) {
     $[47] = children_4;
     $[48] = t36;
   } else t36 = $[48];
-  let vo;
+  let suspendHint;
   if ($[49] !== dimColor) {
-    vo =
+    suspendHint =
       isSuspendAllowed() &&
       jsxProd_default(Box, {
         children: jsxProd_default(Text, {
@@ -278,8 +279,8 @@ function PromptInputHelpMenu(props) {
         }),
       });
     $[49] = dimColor;
-    $[50] = vo;
-  } else vo = $[50];
+    $[50] = suspendHint;
+  } else suspendHint = $[50];
   let children_5;
   if ($[51] !== chord_8) {
     children_5 = jsxProd_default(KeyboardShortcutHint, {
@@ -290,9 +291,9 @@ function PromptInputHelpMenu(props) {
     $[51] = chord_8;
     $[52] = children_5;
   } else children_5 = $[52];
-  let kn;
+  let verboseHint;
   if ($[53] !== dimColor || $[54] !== children_5) {
-    kn = jsxProd_default(Box, {
+    verboseHint = jsxProd_default(Box, {
       children: jsxProd_default(Text, {
         dimColor,
         children: children_5,
@@ -300,8 +301,8 @@ function PromptInputHelpMenu(props) {
     });
     $[53] = dimColor;
     $[54] = children_5;
-    $[55] = kn;
-  } else kn = $[55];
+    $[55] = verboseHint;
+  } else verboseHint = $[55];
   let children_6;
   if ($[56] !== chord_5) {
     children_6 = jsxProd_default(KeyboardShortcutHint, {
@@ -324,9 +325,9 @@ function PromptInputHelpMenu(props) {
     $[59] = children_6;
     $[60] = t39;
   } else t39 = $[60];
-  let Go;
+  let fastModeHint;
   if ($[61] !== dimColor || $[62] !== chord_6) {
-    Go =
+    fastModeHint =
       isFastModeEnabled() &&
       isFastModeAvailable() &&
       jsxProd_default(Box, {
@@ -341,8 +342,8 @@ function PromptInputHelpMenu(props) {
       });
     $[61] = dimColor;
     $[62] = chord_6;
-    $[63] = Go;
-  } else Go = $[63];
+    $[63] = fastModeHint;
+  } else fastModeHint = $[63];
   let children_7;
   if ($[64] !== chord_3) {
     children_7 = jsxProd_default(KeyboardShortcutHint, {
@@ -353,9 +354,9 @@ function PromptInputHelpMenu(props) {
     $[64] = chord_3;
     $[65] = children_7;
   } else children_7 = $[65];
-  let Mn;
+  let backgroundHint;
   if ($[66] !== dimColor || $[67] !== children_7) {
-    Mn = jsxProd_default(Box, {
+    backgroundHint = jsxProd_default(Box, {
       children: jsxProd_default(Text, {
         dimColor,
         children: children_7,
@@ -363,8 +364,8 @@ function PromptInputHelpMenu(props) {
     });
     $[66] = dimColor;
     $[67] = children_7;
-    $[68] = Mn;
-  } else Mn = $[68];
+    $[68] = backgroundHint;
+  } else backgroundHint = $[68];
   let children_8;
   if ($[69] !== chord_7) {
     children_8 = jsxProd_default(KeyboardShortcutHint, {
@@ -401,71 +402,71 @@ function PromptInputHelpMenu(props) {
     $[74] = dimColor;
     $[75] = t43;
   } else t43 = $[75];
-  let on;
+  let sessionColumn;
   if (
     $[76] !== t36 ||
-    $[77] !== vo ||
-    $[78] !== kn ||
+    $[77] !== suspendHint ||
+    $[78] !== verboseHint ||
     $[79] !== t39 ||
-    $[80] !== Go ||
-    $[81] !== Mn ||
+    $[80] !== fastModeHint ||
+    $[81] !== backgroundHint ||
     $[82] !== t42 ||
     $[83] !== t43
   ) {
-    on = jsxProd_default_2(Box, {
+    sessionColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [t36, vo, kn, t39, Go, Mn, t42, t43],
+      children: [t36, suspendHint, verboseHint, t39, fastModeHint, backgroundHint, t42, t43],
     });
     $[76] = t36;
-    $[77] = vo;
-    $[78] = kn;
+    $[77] = suspendHint;
+    $[78] = verboseHint;
     $[79] = t39;
-    $[80] = Go;
-    $[81] = Mn;
+    $[80] = fastModeHint;
+    $[81] = backgroundHint;
     $[82] = t42;
     $[83] = t43;
-    $[84] = on;
-  } else on = $[84];
-  let _o;
-  if ($[85] !== gap || $[86] !== mn || $[87] !== on || $[88] !== po) {
-    _o = jsxProd_default_2(Box, {
+    $[84] = sessionColumn;
+  } else sessionColumn = $[84];
+  let columnsRow;
+  if ($[85] !== gap || $[86] !== editingColumn || $[87] !== sessionColumn || $[88] !== basicColumn) {
+    columnsRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap,
-      children: [po, mn, on],
+      children: [basicColumn, editingColumn, sessionColumn],
     });
     $[85] = gap;
-    $[86] = mn;
-    $[87] = on;
-    $[88] = po;
-    $[89] = _o;
-  } else _o = $[89];
-  let cn;
-  if ($[90] !== paddingX || $[91] !== _o) {
-    cn = jsxProd_default_2(Box, {
+    $[86] = editingColumn;
+    $[87] = sessionColumn;
+    $[88] = basicColumn;
+    $[89] = columnsRow;
+  } else columnsRow = $[89];
+  let menuBox;
+  if ($[90] !== paddingX || $[91] !== columnsRow) {
+    menuBox = jsxProd_default_2(Box, {
       paddingX,
       flexDirection: "column",
-      children: [_o, null],
+      children: [columnsRow, null],
     });
     $[90] = paddingX;
-    $[91] = _o;
-    $[92] = cn;
-  } else cn = $[92];
-  return cn;
+    $[91] = columnsRow;
+    $[92] = menuBox;
+  } else menuBox = $[92];
+  return menuBox;
 }
 //@ chunk-18hwfzwa.js:851347-851811 placement
 function EffortKeysHelp(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { dimColor } = props;
   const shortcutDisplay = useShortcutDisplay("chat:increaseEffort", "Chat", "shift+up");
   const shortcutDisplay_2 = useShortcutDisplay("chat:decreaseEffort", "Chat", "shift+down");
-  let ke;
+  let chordKeys;
   if ($[0] !== shortcutDisplay || $[1] !== shortcutDisplay_2) {
-    ke = [shortcutDisplay, shortcutDisplay_2];
+    chordKeys = [shortcutDisplay, shortcutDisplay_2];
     $[0] = shortcutDisplay;
     $[1] = shortcutDisplay_2;
-    $[2] = ke;
-  } else ke = $[2];
-  let chord = ke;
+    $[2] = chordKeys;
+  } else chordKeys = $[2];
+  let chord = chordKeys;
   let children;
   if ($[3] !== chord) {
     children = jsxProd_default(KeyboardShortcutHint, {
@@ -476,9 +477,9 @@ function EffortKeysHelp(props) {
     $[3] = chord;
     $[4] = children;
   } else children = $[4];
-  let He;
+  let rowElement;
   if ($[5] !== dimColor || $[6] !== children) {
-    He = jsxProd_default(Box, {
+    rowElement = jsxProd_default(Box, {
       children: jsxProd_default(Text, {
         dimColor,
         children,
@@ -486,10 +487,13 @@ function EffortKeysHelp(props) {
     });
     $[5] = dimColor;
     $[6] = children;
-    $[7] = He;
-  } else He = $[7];
-  return He;
+    $[7] = rowElement;
+  } else rowElement = $[7];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:851811-851815 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:851811", () => {
+  init_react_production();
+});
 export { PromptInputHelpMenu };

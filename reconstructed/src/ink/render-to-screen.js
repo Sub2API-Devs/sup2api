@@ -24,7 +24,7 @@ function scanPositions(screen, query) {
   if (!lq) return [];
   let qlen = lq.length;
   let { width, height, noSelect } = screen;
-  let T = [];
+  let positions = [];
   for (let row = 0; row < height; row++) {
     let rowOff = row * width;
     let text = "";
@@ -46,7 +46,7 @@ function scanPositions(screen, query) {
       let endCi = codeUnitToCell[pos + qlen - 1];
       let col = colOf[startCi];
       let endCol = colOf[endCi] + 1;
-      T.push({
+      positions.push({
         row,
         col,
         len: endCol - col,
@@ -54,7 +54,7 @@ function scanPositions(screen, query) {
       pos = text.indexOf(lq, pos + qlen);
     }
   }
-  return T;
+  return positions;
 }
 //@ chunk-bzr73sfg.js:320032-320291 fingerprint = applyPositionedHighlight (1)
 /**
@@ -62,12 +62,12 @@ function scanPositions(screen, query) {
  */
 function applyPositionedHighlight(screen, stylePool, positions, rowOffset, currentIdx) {
   if (currentIdx < 0 || currentIdx >= positions.length) return false;
-  let g = positions[currentIdx];
-  let row = g.row + rowOffset;
+  let position = positions[currentIdx];
+  let row = position.row + rowOffset;
   if (row < 0 || row >= screen.height) return false;
   let transform = (id) => stylePool.withCurrentMatch(id);
   let rowOff = row * screen.width;
-  for (let col = g.col; col < g.col + g.len; col++) {
+  for (let col = position.col; col < position.col + position.len; col++) {
     if (col < 0 || col >= screen.width) continue;
     let cell = cellAtIndex(screen, rowOff + col);
     setCellStyleId(screen, col, row, transform(cell.styleId));
@@ -79,41 +79,47 @@ function applyPositionedHighlight(screen, stylePool, positions, rowOffset, curre
  * 把滚动容器里 [fromRow, toRow) 范围的内容离屏渲染成 ANSI 文本行（新建 Screen+Output，从内容节点 renderNodeToOutput，渲染后恢复其 cachedLayout 并标脏），用于把已滚出的对话写入终端回滚区等。
  */
 function renderToScreen(scrollBox, fromRow, toRow, width, stylePool) {
-  let _ = scrollBox.childNodes[0];
-  if (!_) return [];
+  let contentBox = scrollBox.childNodes[0];
+  if (!contentBox) return [];
   if ((scrollBox.scrollHeight ?? 0) <= 0 || toRow <= fromRow) return [];
-  let D = getSecondRootError().get(process.stdout);
-  if (!D) return [];
+  let inkInstance = getSecondRootError().get(process.stdout);
+  if (!inkInstance) return [];
   let height = Math.ceil(toRow);
   let max = Math.max(0, Math.floor(fromRow), height - MAX_NATIVE_HISTORY_ROWS);
-  let V = height - max;
-  if (V <= 0) return [];
-  let screen = createScreen(width, V, stylePool, D.getCharPool(), D.getHyperlinkPool());
-  let z = new Output({
+  let rowsToRender = height - max;
+  if (rowsToRender <= 0) return [];
+  let screen = createScreen(
     width,
-    height: V,
+    rowsToRender,
+    stylePool,
+    inkInstance.getCharPool(),
+    inkInstance.getHyperlinkPool(),
+  );
+  let output = new Output({
+    width,
+    height: rowsToRender,
     stylePool,
     screen,
   });
-  z.clip({
+  output.clip({
     x1: undefined,
     x2: undefined,
     y1: 0,
-    y2: V,
+    y2: rowsToRender,
   });
-  let cachedLayout = _.cachedLayout;
-  renderNodeToOutputAlias(_, z, createRenderState(), {
+  let cachedLayout = contentBox.cachedLayout;
+  renderNodeToOutputAlias(contentBox, output, createRenderState(), {
     offsetX: 0,
     offsetY: -max,
     prevScreen: undefined,
   });
-  z.unclip();
-  dropSubtreeCache(_);
-  if (cachedLayout) _.cachedLayout = cachedLayout;
-  let rendered = z.get();
-  _.dirty = true;
-  let Y = [];
-  for (let idx = 0; idx < V; idx++) Y.push(serializeScreenRow(rendered, stylePool, idx));
-  return Y;
+  output.unclip();
+  dropSubtreeCache(contentBox);
+  if (cachedLayout) contentBox.cachedLayout = cachedLayout;
+  let rendered = output.get();
+  contentBox.dirty = true;
+  let lines = [];
+  for (let idx = 0; idx < rowsToRender; idx++) lines.push(serializeScreenRow(rendered, stylePool, idx));
+  return lines;
 }
 export { renderToScreen, applyPositionedHighlight, scanPositions };

@@ -17,7 +17,7 @@ var stickersCommandDefinition = {
   name: "stickers",
   description: "Order Claude Code stickers",
   supportsNonInteractive: false,
-  load: () => import("./chunk-ekn75w8p.js"),
+  load: () => import("./stickers.js"),
 };
 var stickersCommand = stickersCommandDefinition;
 export { stickersCommand };

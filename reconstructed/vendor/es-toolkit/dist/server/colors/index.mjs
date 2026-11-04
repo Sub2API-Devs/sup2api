@@ -10,58 +10,59 @@ import { sequential } from "../../../../../src/utils/sequential.js";
 //@ chunk-g3xfp0ds.js:3306-4974 esm-fingerprint
 var RGB_REGEX = /^rgb\(\s?(\d+),\s?(\d+),\s?(\d+)\s?\)$/;
 var ANSI_REGEX = /^ansi256\(\s?(\d+)\s?\)$/;
-var colorize = (r, e, n) => {
-  if (!e) return r;
-  if (e.startsWith("ansi:"))
-    switch (e.substring(5)) {
+var colorize = (text, style, mode) => {
+  if (!style) return text;
+  if (style.startsWith("ansi:"))
+    switch (style.substring(5)) {
       case "black":
-        return n === "foreground" ? sequential.black(r) : sequential.bgBlack(r);
+        return mode === "foreground" ? sequential.black(text) : sequential.bgBlack(text);
       case "red":
-        return n === "foreground" ? sequential.red(r) : sequential.bgRed(r);
+        return mode === "foreground" ? sequential.red(text) : sequential.bgRed(text);
       case "green":
-        return n === "foreground" ? sequential.green(r) : sequential.bgGreen(r);
+        return mode === "foreground" ? sequential.green(text) : sequential.bgGreen(text);
       case "yellow":
-        return n === "foreground" ? sequential.yellow(r) : sequential.bgYellow(r);
+        return mode === "foreground" ? sequential.yellow(text) : sequential.bgYellow(text);
       case "blue":
-        return n === "foreground" ? sequential.blue(r) : sequential.bgBlue(r);
+        return mode === "foreground" ? sequential.blue(text) : sequential.bgBlue(text);
       case "magenta":
-        return n === "foreground" ? sequential.magenta(r) : sequential.bgMagenta(r);
+        return mode === "foreground" ? sequential.magenta(text) : sequential.bgMagenta(text);
       case "cyan":
-        return n === "foreground" ? sequential.cyan(r) : sequential.bgCyan(r);
+        return mode === "foreground" ? sequential.cyan(text) : sequential.bgCyan(text);
       case "white":
-        return n === "foreground" ? sequential.white(r) : sequential.bgWhite(r);
+        return mode === "foreground" ? sequential.white(text) : sequential.bgWhite(text);
       case "blackBright":
-        return n === "foreground" ? sequential.blackBright(r) : sequential.bgBlackBright(r);
+        return mode === "foreground" ? sequential.blackBright(text) : sequential.bgBlackBright(text);
       case "redBright":
-        return n === "foreground" ? sequential.redBright(r) : sequential.bgRedBright(r);
+        return mode === "foreground" ? sequential.redBright(text) : sequential.bgRedBright(text);
       case "greenBright":
-        return n === "foreground" ? sequential.greenBright(r) : sequential.bgGreenBright(r);
+        return mode === "foreground" ? sequential.greenBright(text) : sequential.bgGreenBright(text);
       case "yellowBright":
-        return n === "foreground" ? sequential.yellowBright(r) : sequential.bgYellowBright(r);
+        return mode === "foreground" ? sequential.yellowBright(text) : sequential.bgYellowBright(text);
       case "blueBright":
-        return n === "foreground" ? sequential.blueBright(r) : sequential.bgBlueBright(r);
+        return mode === "foreground" ? sequential.blueBright(text) : sequential.bgBlueBright(text);
       case "magentaBright":
-        return n === "foreground" ? sequential.magentaBright(r) : sequential.bgMagentaBright(r);
+        return mode === "foreground" ? sequential.magentaBright(text) : sequential.bgMagentaBright(text);
       case "cyanBright":
-        return n === "foreground" ? sequential.cyanBright(r) : sequential.bgCyanBright(r);
+        return mode === "foreground" ? sequential.cyanBright(text) : sequential.bgCyanBright(text);
       case "whiteBright":
-        return n === "foreground" ? sequential.whiteBright(r) : sequential.bgWhiteBright(r);
+        return mode === "foreground" ? sequential.whiteBright(text) : sequential.bgWhiteBright(text);
     }
-  if (e.startsWith("#")) return n === "foreground" ? sequential.hex(e)(r) : sequential.bgHex(e)(r);
-  if (e.startsWith("ansi256")) {
-    let match = ANSI_REGEX.exec(e);
-    if (!match) return r;
-    let g = Number(match[1]);
-    return n === "foreground" ? sequential.ansi256(g)(r) : sequential.bgAnsi256(g)(r);
+  if (style.startsWith("#"))
+    return mode === "foreground" ? sequential.hex(style)(text) : sequential.bgHex(style)(text);
+  if (style.startsWith("ansi256")) {
+    let match = ANSI_REGEX.exec(style);
+    if (!match) return text;
+    let c1 = Number(match[1]);
+    return mode === "foreground" ? sequential.ansi256(c1)(text) : sequential.bgAnsi256(c1)(text);
   }
-  if (e.startsWith("rgb")) {
-    let match = RGB_REGEX.exec(e);
-    if (!match) return r;
-    let g = Number(match[1]);
-    let t = Number(match[2]);
-    let s = Number(match[3]);
-    return n === "foreground" ? sequential.rgb(g, t, s)(r) : sequential.bgRgb(g, t, s)(r);
+  if (style.startsWith("rgb")) {
+    let match = RGB_REGEX.exec(style);
+    if (!match) return text;
+    let c2 = Number(match[1]);
+    let c3 = Number(match[2]);
+    let c4 = Number(match[3]);
+    return mode === "foreground" ? sequential.rgb(c2, c3, c4)(text) : sequential.bgRgb(c2, c3, c4)(text);
   }
-  return r;
+  return text;
 };
 export { colorize };

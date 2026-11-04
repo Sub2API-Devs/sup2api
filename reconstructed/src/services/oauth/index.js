@@ -44,42 +44,42 @@ class OAuthService {
   constructor() {
     this.codeVerifier = generateCodeVerifier();
   }
-  async startOAuthFlow(authURLHandler, r) {
+  async startOAuthFlow(authURLHandler, options) {
     this.authorizationCodeReceived = false;
-    let i = null;
+    let port = null;
     this.authCodeListener = new AuthCodeListener();
     try {
-      i = await this.authCodeListener.start();
+      port = await this.authCodeListener.start();
     } catch (error) {
       this.authCodeListener = null;
       logForDebugging(`OAuth callback listener could not start: ${errorMessage(error)}`, {
         level: "error",
       });
-      let u = error instanceof Error ? getErrnoCode(error.cause) : undefined;
-      if (!r?.onCallbackListenerUnavailable || u === "EMFILE" || u === "ENFILE")
+      let errnoCode = error instanceof Error ? getErrnoCode(error.cause) : undefined;
+      if (!options?.onCallbackListenerUnavailable || errnoCode === "EMFILE" || errnoCode === "ENFILE")
         throw new CallbackListenerUnavailableError(error);
-      r.onCallbackListenerUnavailable();
+      options.onCallbackListenerUnavailable();
     }
     let codeChallenge = generateCodeChallenge(this.codeVerifier);
     let state = generateState();
     let opts = {
       codeChallenge,
       state,
-      port: i ?? 0,
-      loginWithClaudeAi: r?.loginWithClaudeAi,
-      inferenceOnly: r?.inferenceOnly,
-      orgUUID: r?.orgUUID,
-      loginHint: r?.loginHint,
-      loginMethod: r?.loginMethod,
-      oauthClient: r?.oauthClient,
-      alsoRequestScope: r?.settingsOnlyGrant?.scope,
+      port: port ?? 0,
+      loginWithClaudeAi: options?.loginWithClaudeAi,
+      inferenceOnly: options?.inferenceOnly,
+      orgUUID: options?.orgUUID,
+      loginHint: options?.loginHint,
+      loginMethod: options?.loginMethod,
+      oauthClient: options?.oauthClient,
+      alsoRequestScope: options?.settingsOnlyGrant?.scope,
     };
     let manualFlowUrl = buildAuthUrl({
       ...opts,
       isManual: true,
     });
     let automaticFlowUrl =
-      i === null
+      port === null
         ? undefined
         : buildAuthUrl({
             ...opts,
@@ -87,63 +87,63 @@ class OAuthService {
           });
     let authorizationCode = await this.waitForAuthorizationCode(state, async () => {
       if (automaticFlowUrl === undefined) await authURLHandler(manualFlowUrl);
-      else if (r?.skipBrowserOpen) await authURLHandler(manualFlowUrl, automaticFlowUrl);
+      else if (options?.skipBrowserOpen) await authURLHandler(manualFlowUrl, automaticFlowUrl);
       else {
         await authURLHandler(manualFlowUrl);
         await openValidatedUrlSucceeded(automaticFlowUrl);
       }
     });
-    let h = this.authCodeListener?.hasPendingResponse() ?? false;
+    let automaticFlow = this.authCodeListener?.hasPendingResponse() ?? false;
     logEvent("tengu_oauth_auth_code_received", {
-      automatic: h,
+      automatic: automaticFlow,
     });
     try {
-      let c = await exchangeCodeForTokens(authorizationCode, {
+      let tokenResponse = await exchangeCodeForTokens(authorizationCode, {
         state,
         codeVerifier: this.codeVerifier,
         port: opts.port,
-        useManualRedirect: !h,
-        expiresIn: r?.expiresIn,
-        clientId: r?.oauthClient?.clientId,
+        useManualRedirect: !automaticFlow,
+        expiresIn: options?.expiresIn,
+        clientId: options?.oauthClient?.clientId,
       });
-      if (h) {
-        let scopes = parseScopes(c.scope);
-        let settingsOnlyGrant = r?.settingsOnlyGrant;
+      if (automaticFlow) {
+        let scopes = parseScopes(tokenResponse.scope);
+        let settingsOnlyGrant = options?.settingsOnlyGrant;
         let successRedirectUrl =
           settingsOnlyGrant && scopes.includes(settingsOnlyGrant.scope) && !shouldUseClaudeAIAuth(scopes)
             ? settingsOnlyGrant.successRedirectUrl
-            : r?.successRedirectUrl;
+            : options?.successRedirectUrl;
         if (successRedirectUrl)
-          this.authCodeListener?.handleSuccessRedirect(scopes, (w) => {
-            w.writeHead(302, {
+          this.authCodeListener?.handleSuccessRedirect(scopes, (res) => {
+            res.writeHead(302, {
               Location: successRedirectUrl,
             });
-            w.end();
+            res.end();
           });
         else this.authCodeListener?.handleSuccessRedirect(scopes);
       }
-      let u = r?.skipProfileFetch ? null : await fetchProfileInfo(c.access_token);
-      if (i === null) logFeatureSad("oauth_login", "callback_listener_unavailable");
+      let profileInfo = options?.skipProfileFetch ? null : await fetchProfileInfo(tokenResponse.access_token);
+      if (port === null) logFeatureSad("oauth_login", "callback_listener_unavailable");
       else logFeatureOk("oauth_login");
-      return this.formatTokens(c, {
-        subscriptionType: u?.subscriptionType ?? null,
-        unconfirmedPlan: u?.originStamped !== true,
-        rateLimitTier: u?.rateLimitTier ?? null,
-        profile: u?.rawProfile,
-        clientId: r?.oauthClient?.clientId,
+      return this.formatTokens(tokenResponse, {
+        subscriptionType: profileInfo?.subscriptionType ?? null,
+        unconfirmedPlan: profileInfo?.originStamped !== true,
+        rateLimitTier: profileInfo?.rateLimitTier ?? null,
+        profile: profileInfo?.rawProfile,
+        clientId: options?.oauthClient?.clientId,
       });
     } catch (error) {
-      let u = !h && isInvalidGrantError(error);
-      logFeatureBad("oauth_login", u ? "oauth_pasted_code_refused" : "oauth_login_failed");
-      if (h) this.authCodeListener?.handleErrorRedirect();
-      if (!r?.inferenceOnly && !r?.oauthClient)
+      let pastedCodeRefused = !automaticFlow && isInvalidGrantError(error);
+      logFeatureBad("oauth_login", pastedCodeRefused ? "oauth_pasted_code_refused" : "oauth_login_failed");
+      if (automaticFlow) this.authCodeListener?.handleErrorRedirect();
+      if (!options?.inferenceOnly && !options?.oauthClient)
         logAuthEvent({
           action: "login",
           success: false,
           authMethod: "oauth",
           error,
         });
-      throw u ? new AuthCodeRefusedError() : error;
+      throw pastedCodeRefused ? new AuthCodeRefusedError() : error;
     } finally {
       this.authCodeListener?.close();
     }

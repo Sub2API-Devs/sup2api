@@ -82,16 +82,16 @@ async function findVertexUpgradeCandidates() {
           logForDebugging(`[vertex-upgrade] ${leftOutDebugLine(stalePin.tier, "upgrade", [vertex])}`);
           return null;
         }
-        let g = await probeVertexModel(vertex, {
+        let accessible = await probeVertexModel(vertex, {
           isDefault: true,
           versionTooOld: "unavailable",
         });
         logEvent("tengu_vertex_probe_result", {
           tier: fromEnum(stalePin.tier),
           model_id: telemetrySafeModelName(vertex),
-          accessible: g,
+          accessible,
         });
-        if (!g) return null;
+        if (!accessible) return null;
         let marketingNameForModel = getMarketingNameForModel(
           catalogEntriesByFirstPartyId[stalePin.pinnedKey].firstParty,
         );
@@ -110,13 +110,13 @@ async function findVertexUpgradeCandidates() {
         };
       }),
     )
-  ).filter((n) => n !== null);
+  ).filter((candidate) => candidate !== null);
   logForDebugging(`[vertex-upgrade] tiersWithPin=${stalePins.length} candidates=${filtered.length}`);
   return filtered;
 }
 //@ chunk-5wnerh16.js:4564-4597 placement
-function seedUserPinEnvDefault(e) {
-  return seedEnvDefaultForUserPin(e, defaultVertexOpusTier());
+function seedUserPinEnvDefault(value) {
+  return seedEnvDefaultForUserPin(value, defaultVertexOpusTier());
 }
 //@ chunk-5wnerh16.js:4597-6038 placement
 async function checkVertexDefaultAvailability() {
@@ -124,8 +124,8 @@ async function checkVertexDefaultAvailability() {
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return [];
   let deadline = lastLiveRoundStart(Date.now());
   let modelOverrides = getInitialSettings_2().modelOverrides;
-  let d = defaultVertexOpusTier();
-  let unpinnedTiers = collectUnpinnedTiers(d, modelOverrides);
+  let documentTiers = defaultVertexOpusTier();
+  let unpinnedTiers = collectUnpinnedTiers(documentTiers, modelOverrides);
   if (unpinnedTiers.length === 0) return [];
   logEvent("tengu_vertex_default_check", {
     unpinned_tiers: fromNumber(unpinnedTiers.length),
@@ -133,45 +133,55 @@ async function checkVertexDefaultAvailability() {
   let includeCrossTier = unpinnedTiers.some((unpinnedTier) => unpinnedTier.tier === "sonnet");
   let results = await Promise.all(
     unpinnedTiers.map(async (unpinnedTier) => {
-      let _ = catalogEntriesByFirstPartyId[unpinnedTier.defaultKey];
-      let documentTarget = d[unpinnedTier.tier].documentTarget;
-      let V = d[unpinnedTier.tier].fromDocument === true;
-      let y = documentTarget?.modelId ?? _.vertex;
-      if (y !== null && enforcedAllowlistLeavesOut(y)) {
-        logForDebugging(`[vertex-fallback] ${leftOutDebugLine(unpinnedTier.tier, "check", [y])}`);
+      let catalogEntry = catalogEntriesByFirstPartyId[unpinnedTier.defaultKey];
+      let documentTarget = documentTiers[unpinnedTier.tier].documentTarget;
+      let fromDocument = documentTiers[unpinnedTier.tier].fromDocument === true;
+      let modelId = documentTarget?.modelId ?? catalogEntry.vertex;
+      if (modelId !== null && enforcedAllowlistLeavesOut(modelId)) {
+        logForDebugging(`[vertex-fallback] ${leftOutDebugLine(unpinnedTier.tier, "check", [modelId])}`);
         return null;
       }
-      await registerVertexLadder(unpinnedTier, modelOverrides, documentTarget, V, includeCrossTier);
-      let p = {};
-      let b = await probeVertexModel(y, {
+      await registerVertexLadder(
+        unpinnedTier,
+        modelOverrides,
+        documentTarget,
+        fromDocument,
+        includeCrossTier,
+      );
+      let probeState = {};
+      let accessible = await probeVertexModel(modelId, {
         isDefault: true,
-        ...(d[unpinnedTier.tier].fromDocument && {
+        ...(documentTiers[unpinnedTier.tier].fromDocument && {
           versionTooOld: "unavailable",
         }),
         onVerdict: (verdict, at) => {
-          p.verdict = verdict;
-          p.at = at;
+          probeState.verdict = verdict;
+          probeState.at = at;
         },
       });
       logEvent("tengu_vertex_probe_result", {
         tier: fromEnum(unpinnedTier.tier),
-        model_id: telemetrySafeModelName(y),
-        accessible: b,
+        model_id: telemetrySafeModelName(modelId),
+        accessible,
       });
-      if (b || p.verdict === "temporary") return null;
-      if (y !== null && p.verdict === "refused")
-        markModelRefused(y, modelNotAvailableError(y), (p.at ?? Date.now()) + REFUSED_TTL_MS);
+      if (accessible || probeState.verdict === "temporary") return null;
+      if (modelId !== null && probeState.verdict === "refused")
+        markModelRefused(
+          modelId,
+          modelNotAvailableError(modelId),
+          (probeState.at ?? Date.now()) + REFUSED_TTL_MS,
+        );
       let vertexFallback = await findVertexFallback(
         unpinnedTier.defaultKey,
         unpinnedTier.tier,
         modelOverrides,
         deadline,
         documentTarget !== undefined,
-        V,
+        fromDocument,
       );
       if (!vertexFallback) return null;
       if (
-        p.verdict !== "refused" &&
+        probeState.verdict !== "refused" &&
         vertexFallback.answeredLive !== true &&
         vertexFallback.adminMapped !== true &&
         !(await probeVertexModel(vertexFallback.vertexId, {
@@ -179,16 +189,16 @@ async function checkVertexDefaultAvailability() {
         }))
       )
         return null;
-      let l = documentTarget?.name ?? getMarketingNameForModel(_.firstParty);
+      let defaultName = documentTarget?.name ?? getMarketingNameForModel(catalogEntry.firstParty);
       let marketingNameForModel = getMarketingNameForModel(
         catalogEntriesByFirstPartyId[vertexFallback.key].firstParty,
       );
-      if (!l || !marketingNameForModel) return null;
+      if (!defaultName || !marketingNameForModel) return null;
       return {
         tier: unpinnedTier.tier,
         envVar: unpinnedTier.envVar,
         defaultKey: unpinnedTier.defaultKey,
-        defaultName: l,
+        defaultName,
         ...(documentTarget !== undefined && {
           documentTargetId: documentTarget.modelId,
         }),
@@ -201,10 +211,10 @@ async function checkVertexDefaultAvailability() {
       };
     }),
   );
-  let v = [];
-  for (let o of results) if (o !== null) v.push(o);
-  logForDebugging(`[vertex-fallback] unpinnedTiers=${unpinnedTiers.length} fallbacks=${v.length}`);
-  return v;
+  let fallbacks = [];
+  for (let fallback of results) if (fallback !== null) fallbacks.push(fallback);
+  logForDebugging(`[vertex-fallback] unpinnedTiers=${unpinnedTiers.length} fallbacks=${fallbacks.length}`);
+  return fallbacks;
 }
 //@ chunk-5wnerh16.js:6038-7099 placement
 /**
@@ -218,18 +228,20 @@ async function findVertexFallback(
   isDefault = false,
   versionTooOld = false,
 ) {
-  let isMapped = (f) => Boolean(accessMap?.[catalogEntriesByFirstPartyId[f].firstParty]);
-  let isUsable = (f) => isMapped(f) && !enforcedAllowlistLeavesOut(String(getModelStrings()[f]));
+  let isMapped = (key) => Boolean(accessMap?.[catalogEntriesByFirstPartyId[key].firstParty]);
+  let isUsable = (key) => isMapped(key) && !enforcedAllowlistLeavesOut(String(getModelStrings()[key]));
   let predecessors = predecessorsInTier(defaultKey, tier, isDefault);
   let adminMapped = versionTooOld ? predecessors.find(isUsable) : undefined;
   let filtered = (
     adminMapped === undefined ? predecessors : predecessors.slice(0, predecessors.indexOf(adminMapped))
-  ).filter((f) => !isMapped(f));
-  let filtered_2 = filtered.filter((f) => !vertexVariantFor(f));
+  ).filter((key) => !isMapped(key));
+  let filtered_2 = filtered.filter((key) => !vertexVariantFor(key));
   let needsCrossTier = tier === "opus" && adminMapped === undefined;
   let crossTierKeys =
     needsCrossTier && !vertexVariantFor(DEFAULT_3P_SONNET_KEY) ? [DEFAULT_3P_SONNET_KEY] : [];
-  let mapped = filtered.filter(vertexVariantFor).map((f) => String(catalogEntriesByFirstPartyId[f].vertex));
+  let mapped = filtered
+    .filter(vertexVariantFor)
+    .map((key) => String(catalogEntriesByFirstPartyId[key].vertex));
   if (needsCrossTier && vertexVariantFor(DEFAULT_3P_SONNET_KEY))
     mapped.push(
       `${catalogEntriesByFirstPartyId[DEFAULT_3P_SONNET_KEY].vertex} (the cross-tier Sonnet default)`,
@@ -238,31 +250,31 @@ async function findVertexFallback(
   let answeredLive = new Set();
   let found = await findFirstAccessibleModel(
     [filtered_2, crossTierKeys],
-    (f, D) => {
-      let vertex = catalogEntriesByFirstPartyId[f].vertex;
+    (key, live) => {
+      let vertex = catalogEntriesByFirstPartyId[key].vertex;
       return probeVertexModel(vertex, {
-        ...(D && {
-          live: D,
+        ...(live && {
+          live,
         }),
         ...(isDefault &&
-          f === defaultKey && {
+          key === defaultKey && {
             isDefault: true,
           }),
         ...(versionTooOld && {
           versionTooOld: "unavailable",
         }),
-        onVerdict: (k, h) => {
-          if (k === "refused" && vertex !== null)
-            markModelRefused(vertex, modelNotAvailableError(vertex), (h ?? Date.now()) + REFUSED_TTL_MS);
-          else if (k === "accessible" && vertex !== null) {
+        onVerdict: (verdict, at) => {
+          if (verdict === "refused" && vertex !== null)
+            markModelRefused(vertex, modelNotAvailableError(vertex), (at ?? Date.now()) + REFUSED_TTL_MS);
+          else if (verdict === "accessible" && vertex !== null) {
             clearModelRefusal(vertex);
-            if (h === undefined) answeredLive.add(f);
+            if (at === undefined) answeredLive.add(key);
           }
         },
       });
     },
-    async (f) => {
-      let vertex = catalogEntriesByFirstPartyId[f].vertex;
+    async (key) => {
+      let vertex = catalogEntriesByFirstPartyId[key].vertex;
       if (vertex === null) return false;
       let vertexCacheKey = await getVertexCacheKey(vertex);
       return (
@@ -298,46 +310,46 @@ async function checkVertexDocumentDefaults() {
     !documentNamesCloudDefault()
   )
     return [];
-  let e = await refuteUnavailableDocumentDefaults(async (s, d) => {
-    let n = {};
-    let u = await probeVertexModel(s, {
+  let refuted = await refuteUnavailableDocumentDefaults(async (modelId, tier) => {
+    let probeState = {};
+    let accessible = await probeVertexModel(modelId, {
       isDefault: true,
       versionTooOld: "unavailable",
       onVerdict: (verdict) => {
-        n.verdict = verdict;
+        probeState.verdict = verdict;
       },
     });
     logEvent("tengu_vertex_probe_result", {
-      tier: fromEnum(d ?? "default"),
-      model_id: telemetrySafeModelName(s),
-      accessible: u,
+      tier: fromEnum(tier ?? "default"),
+      model_id: telemetrySafeModelName(modelId),
+      accessible,
     });
-    return u || n.verdict === "temporary";
+    return accessible || probeState.verdict === "temporary";
   }, getInitialSettings_2().modelOverrides);
-  logForDebugging(`[vertex-fallback] refutedDocumentDefaults=${e.length}`);
-  return e;
+  logForDebugging(`[vertex-fallback] refutedDocumentDefaults=${refuted.length}`);
+  return refuted;
 }
 //@ chunk-5wnerh16.js:7524-7660 placement
-async function probeVertexModel(e, s) {
-  if (e === null) {
-    s?.onVerdict?.("refused");
+async function probeVertexModel(modelId, options) {
+  if (modelId === null) {
+    options?.onVerdict?.("refused");
     return false;
   }
   return (
     (await checkRememberedModelAccess(
       "vertex",
-      await getVertexCacheKey(e),
-      e,
-      () => sendVertexStartupCheck(e),
-      s,
+      await getVertexCacheKey(modelId),
+      modelId,
+      () => sendVertexStartupCheck(modelId),
+      options,
     )) === "accessible"
   );
 }
 //@ chunk-5wnerh16.js:7660-7795 placement
-async function rememberVertexModelAccess(e, s) {
+async function rememberVertexModelAccess(modelId, verdict) {
   try {
-    let vertexCacheKey = await getVertexCacheKey(e);
-    if (vertexCacheKey !== undefined) await recordAccessVerdict(vertexCacheKey, e, s);
+    let vertexCacheKey = await getVertexCacheKey(modelId);
+    if (vertexCacheKey !== undefined) await recordAccessVerdict(vertexCacheKey, modelId, verdict);
   } catch (error) {
     logForDebugging(`[3p-model-memory] vertex record failed: ${error}`);
   }
@@ -347,13 +359,13 @@ async function rememberVertexModelAccess(e, s) {
  * 为 Vertex 某档注册回退阶梯（默认模型、前代模型、管理员映射或跨档 Sonnet），并把记忆中已被拒绝的阶梯模型标记为拒绝。
  */
 async function registerVertexLadder(tierInfo, accessMap, documentTarget, preferAdmin, includeCrossTier) {
-  let toRung = (r) => {
-    let l = catalogEntriesByFirstPartyId[r];
-    return l.vertex === null
+  let toRung = (key) => {
+    let catalogEntry = catalogEntriesByFirstPartyId[key];
+    return catalogEntry.vertex === null
       ? undefined
       : {
-          id: l.vertex,
-          name: getMarketingNameForModel(l.firstParty) ?? l.firstParty,
+          id: catalogEntry.vertex,
+          name: getMarketingNameForModel(catalogEntry.firstParty) ?? catalogEntry.firstParty,
         };
   };
   let head =
@@ -364,10 +376,11 @@ async function registerVertexLadder(tierInfo, accessMap, documentTarget, preferA
           name: documentTarget.name,
         };
   if (head === undefined) return;
-  let isMapped = (r) => Boolean(accessMap?.[catalogEntriesByFirstPartyId[r].firstParty]);
-  let isUsable = (r) => isMapped(r) && !enforcedAllowlistLeavesOut(String(getModelStrings()[r]));
-  let toRungs = (r) => r.filter((l) => !vertexVariantFor(l)).flatMap((l) => toRung(l) ?? []);
-  let predecessorRungs = (r, l) => toRungs(predecessorsInTier(r, l).filter((x) => !isMapped(x)));
+  let isMapped = (key) => Boolean(accessMap?.[catalogEntriesByFirstPartyId[key].firstParty]);
+  let isUsable = (key) => isMapped(key) && !enforcedAllowlistLeavesOut(String(getModelStrings()[key]));
+  let toRungs = (keys) => keys.filter((key) => !vertexVariantFor(key)).flatMap((key) => toRung(key) ?? []);
+  let predecessorRungs = (key, tier) =>
+    toRungs(predecessorsInTier(key, tier).filter((key) => !isMapped(key)));
   let predecessors = predecessorsInTier(tierInfo.defaultKey, tierInfo.tier, documentTarget !== undefined);
   let adminMapped = preferAdmin ? predecessors.find(isUsable) : undefined;
   let rungs = [
@@ -376,7 +389,7 @@ async function registerVertexLadder(tierInfo, accessMap, documentTarget, preferA
       (adminMapped === undefined
         ? predecessors
         : predecessors.slice(0, predecessors.indexOf(adminMapped))
-      ).filter((r) => !isMapped(r)),
+      ).filter((key) => !isMapped(key)),
     ),
   ];
   if (adminMapped !== undefined)
@@ -388,7 +401,7 @@ async function registerVertexLadder(tierInfo, accessMap, documentTarget, preferA
     });
   else if (tierInfo.tier === "opus") {
     let rung = toRung(DEFAULT_3P_SONNET_KEY);
-    let l =
+    let crossTierRungs =
       rung === undefined
         ? []
         : !vertexVariantFor(DEFAULT_3P_SONNET_KEY)
@@ -397,8 +410,8 @@ async function registerVertexLadder(tierInfo, accessMap, documentTarget, preferA
             ? predecessorRungs(DEFAULT_3P_SONNET_KEY, "sonnet")
             : [];
     rungs.push(
-      ...l.map((x) => ({
-        ...x,
+      ...crossTierRungs.map((rung) => ({
+        ...rung,
         crossTier: true,
       })),
     );
@@ -407,19 +420,20 @@ async function registerVertexLadder(tierInfo, accessMap, documentTarget, preferA
   await Promise.all(
     rungs.slice(1).map(async (rung) => {
       let vertexCacheKey = await getVertexCacheKey(rung.id);
-      let x = vertexCacheKey === undefined ? undefined : await rememberedAccess(vertexCacheKey, rung.id);
-      if (x?.state === "refused")
-        markModelRefused(rung.id, modelNotAvailableError(rung.id), x.at + REFUSED_TTL_MS);
+      let remembered =
+        vertexCacheKey === undefined ? undefined : await rememberedAccess(vertexCacheKey, rung.id);
+      if (remembered?.state === "refused")
+        markModelRefused(rung.id, modelNotAvailableError(rung.id), remembered.at + REFUSED_TTL_MS);
     }),
   ).catch(() => {});
 }
 //@ chunk-5wnerh16.js:8720-8972 placement
-function getVertexCacheKey(e) {
+function getVertexCacheKey(modelId) {
   return PACKAGE_INFO("vertex", () => [
     env.ANTHROPIC_VERTEX_PROJECT_ID,
     getConfiguredVertexProjectId(),
     env.ANTHROPIC_GOOGLE_CLOUD_PROJECT,
-    getVertexRegionForModel(e),
+    getVertexRegionForModel(modelId),
     env.ANTHROPIC_VERTEX_BASE_URL,
     env.GOOGLE_APPLICATION_CREDENTIALS,
     env.CLOUDSDK_CONFIG,
@@ -431,11 +445,11 @@ function getVertexCacheKey(e) {
 /**
  * 用 AnthropicVertex 客户端（按需刷新 GCP 凭据、8 秒超时、不重试）发送启动模型检查请求；成功或 429 视为可用，其他错误返回不可用及错误。
  */
-async function sendVertexStartupCheck(e) {
+async function sendVertexStartupCheck(modelId) {
   try {
     let [{ AnthropicVertex: AnthropicVertexClass }, { getProxyFetchOptions }] = await Promise.all([
-      import("./chunk-xa96axyz.js"),
-      import("./chunk-amdegp7s.js"),
+      import("../../../vendor/@anthropic-ai/vertex-sdk/client.js"),
+      import("../proxy.js"),
     ]);
     let CLAUDE_CODE_SKIP_VERTEX_AUTH = env.CLAUDE_CODE_SKIP_VERTEX_AUTH;
     let hostManaged = isHostManagedProviderAuth();
@@ -450,7 +464,7 @@ async function sendVertexStartupCheck(e) {
           },
       getConfiguredVertexProjectId(),
     );
-    let region = getVertexRegionForModel(e);
+    let region = getVertexRegionForModel(modelId);
     let bearer = CLAUDE_CODE_SKIP_VERTEX_AUTH ? bearerFromEnvOrHeaders() : undefined;
     await suppressVertexAuthRejection(
       new AnthropicVertexClass({
@@ -473,7 +487,7 @@ async function sendVertexStartupCheck(e) {
           url: env.ANTHROPIC_VERTEX_BASE_URL || getVertexBaseUrlForRegion(region),
         }),
       }),
-    ).messages.create(sendStartupModelCheck(e));
+    ).messages.create(sendStartupModelCheck(modelId));
     return {
       accessible: true,
     };
@@ -489,7 +503,15 @@ async function sendVertexStartupCheck(e) {
   }
 }
 //@ chunk-5wnerh16.js:9592-9648 placement
-function vertexVariantFor(e) {
-  let vertex = catalogEntriesByFirstPartyId[e].vertex;
+function vertexVariantFor(key) {
+  let vertex = catalogEntriesByFirstPartyId[key].vertex;
   return vertex !== null && enforcedAllowlistLeavesOut(vertex);
 }
+export {
+  checkVertexDefaultAvailability,
+  checkVertexDocumentDefaults,
+  findVertexUpgradeCandidates,
+  probeVertexModel,
+  rememberVertexModelAccess,
+  seedUserPinEnvDefault,
+};

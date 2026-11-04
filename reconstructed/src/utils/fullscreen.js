@@ -9,10 +9,13 @@
  * attribution: sole-consumer 1, affinity 2, fingerprint 4, placement 14, layout 15, callgraph-witnessed 1
  */
 import { spawnSync } from "child_process";
+import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
+import { isDiffPanelEnabled } from "./task/framework.js";
+import { hasRemoteSdkUrl } from "../services/ccrAgentProxy/agentProxy.js";
+import { getIsRemoteMode, getRootSession, getIsInteractive } from "../bootstrap/state.js";
 import { env, isSSHSession } from "./env.js";
 import { resolveExecutableSafely } from "./findExecutableWindows.js";
 import { HostScoped } from "./hostScoped.js";
-import { getRootSession, getIsInteractive, getIsRemoteMode } from "../bootstrap/state.js";
 import { getGlobalConfig } from "./config.js";
 import {
   isGrowthBookEnabled,
@@ -25,10 +28,20 @@ import { logForDebugging } from "./debug.js";
 import { getInitialSettings_2 } from "./settings/settings.js";
 import { createSignal } from "./signal.js";
 import { execFileNoThrow } from "./execFileNoThrow.js";
-import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
-import { isDiffPanelEnabled } from "./task/framework.js";
-import { hasRemoteSdkUrl } from "../services/ccrAgentProxy/agentProxy.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-s61vbvea.js:460728-460828 placement
+function resolveRenderMode(presentation, dispatchedAsImmediate = false) {
+  if (isRemoteSessionAvailable() || presentation !== "fullscreen") return "inline";
+  return isDiffPanelEnabled() || dispatchedAsImmediate ? "fullscreen" : "inline";
+}
+//@ chunk-s61vbvea.js:460828-460861 placement
+/**
+ * 判断是否处于远程 SDK 或远程模式会话。
+ */
+function isRemoteSdkOrRemoteMode() {
+  return hasRemoteSdkUrl() || getIsRemoteMode();
+}
 //@ chunk-cxdk9p3j.js:671-979 sole-consumer
 /**
  * 创建全屏模式探测状态：tmux 控制模式、鼠标与焦点提示是否已检查等。
@@ -50,7 +63,10 @@ function createFullscreenProbeState() {
   };
 }
 //@ chunk-cxdk9p3j.js:979-990 affinity
-var fullscreenProbeState = createFullscreenProbeState();
+var fullscreenProbeState; // deferred: uses createFullscreenProbeState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cxdk9p3j.js:979", () => {
+  fullscreenProbeState = createFullscreenProbeState();
+});
 //@ chunk-cxdk9p3j.js:990-1134 fingerprint = isTmuxControlModeEnvHeuristic (1)
 function isTmuxControlModeEnvHeuristic() {
   if (!env.TMUX) return false;
@@ -59,9 +75,9 @@ function isTmuxControlModeEnvHeuristic() {
   return !term.startsWith("screen") && !term.startsWith("tmux");
 }
 //@ chunk-cxdk9p3j.js:1134-1511 fingerprint = probeTmuxControlModeSync (0.896)
-function probeTmuxControlModeSync(e) {
-  e.tmuxControlModeProbed = isTmuxControlModeEnvHeuristic();
-  if (e.tmuxControlModeProbed) return;
+function probeTmuxControlModeSync(state) {
+  state.tmuxControlModeProbed = isTmuxControlModeEnvHeuristic();
+  if (state.tmuxControlModeProbed) return;
   if (!env.TMUX) return;
   if (env.TERM_PROGRAM) return;
   let executable = resolveExecutableSafely("tmux");
@@ -79,12 +95,12 @@ function probeTmuxControlModeSync(e) {
     return;
   }
   if (result.status !== 0) return;
-  e.tmuxControlModeProbed = result.stdout.trim() === "1";
+  state.tmuxControlModeProbed = result.stdout.trim() === "1";
 }
 //@ chunk-cxdk9p3j.js:1511-1606 affinity
-function isTmuxControlMode(e = fullscreenProbeState) {
-  if (e.tmuxControlModeProbed === undefined) probeTmuxControlModeSync(e);
-  return e.tmuxControlModeProbed ?? false;
+function isTmuxControlMode(state = fullscreenProbeState) {
+  if (state.tmuxControlModeProbed === undefined) probeTmuxControlModeSync(state);
+  return state.tmuxControlModeProbed ?? false;
 }
 //@ chunk-cxdk9p3j.js:1705-1930 placement
 class FullscreenTrialState {
@@ -100,7 +116,10 @@ class FullscreenTrialState {
   }
 }
 //@ chunk-cxdk9p3j.js:1930-1953 layout
-var fullscreenTrialRegistry = new HostScoped(() => new FullscreenTrialState());
+var fullscreenTrialRegistry; // deferred: uses FullscreenTrialState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cxdk9p3j.js:1930", () => {
+  fullscreenTrialRegistry = new HostScoped(() => new FullscreenTrialState());
+});
 //@ chunk-cxdk9p3j.js:1953-1990 placement
 /**
  * 取当前宿主的全屏试用状态。
@@ -120,9 +139,9 @@ function latchFullscreenTrialFromEnv() {
  * 解析当前全屏模式（先按环境变量锁定，再取状态）。
  */
 function resolveFullscreenMode() {
-  let e = currentFullscreenTrialState();
-  e.latchFromEnv();
-  return e.mode;
+  let trialState = currentFullscreenTrialState();
+  trialState.latchFromEnv();
+  return trialState.mode;
 }
 //@ chunk-cxdk9p3j.js:2084-2632 placement
 /**
@@ -167,23 +186,23 @@ function isFreshInstallForFullscreen() {
   }
 }
 //@ chunk-cxdk9p3j.js:2865-3000 layout
-function isFreshInstallCached(e) {
-  if (e.freshInstallCached !== undefined) return e.freshInstallCached;
-  let n = isFreshInstallForFullscreen();
-  if (n !== undefined) e.freshInstallCached = n;
-  return n ?? false;
+function isFreshInstallCached(state) {
+  if (state.freshInstallCached !== undefined) return state.freshInstallCached;
+  let freshInstall = isFreshInstallForFullscreen();
+  if (freshInstall !== undefined) state.freshInstallCached = freshInstall;
+  return freshInstall ?? false;
 }
 //@ chunk-cxdk9p3j.js:3000-3812 callgraph-witnessed = isFullscreenEnvEnabled (0.273)
-function isFullscreenEnvEnabled(e = fullscreenProbeState) {
+function isFullscreenEnvEnabled(state = fullscreenProbeState) {
   if (getEntrypointKind() === "local-agent") return false;
   if (env.CLAUDE_CODE_SESSION_KIND === "bg") return true;
   if (isScreenReaderMode()) return false;
   if (isFullscreenDisabledByEnv()) return false;
   if (env.CLAUDE_CODE_NO_FLICKER === true) return true;
-  if (e.crashAutoOff) return false;
-  if (isTmuxControlMode(e)) {
-    if (!e.loggedTmuxCcDisable) {
-      e.loggedTmuxCcDisable = true;
+  if (state.crashAutoOff) return false;
+  if (isTmuxControlMode(state)) {
+    if (!state.loggedTmuxCcDisable) {
+      state.loggedTmuxCcDisable = true;
       logForDebugging(
         "fullscreen disabled: tmux -CC (iTerm2 integration mode) detected \xB7 set CLAUDE_CODE_NO_FLICKER=1 to override",
       );
@@ -191,8 +210,8 @@ function isFullscreenEnvEnabled(e = fullscreenProbeState) {
     return false;
   }
   if (isSSHSession()) {
-    if (!e.loggedWinSshDisable) {
-      e.loggedWinSshDisable = true;
+    if (!state.loggedWinSshDisable) {
+      state.loggedWinSshDisable = true;
       logForDebugging(
         "fullscreen disabled: Windows over SSH (ConPTY re-rendering) detected \xB7 set CLAUDE_CODE_NO_FLICKER=1 to override",
       );
@@ -205,28 +224,28 @@ function isFullscreenEnvEnabled(e = fullscreenProbeState) {
     case "default":
       return false;
   }
-  if (isFreshInstallCached(e)) return true;
-  if (isFullscreenDownsellGateOn(e)) return true;
-  if (e.gbGateCached === undefined) {
-    let n = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_pewter_brook", false);
-    e.gbGateCached = n.value;
-    e.gbGateSource = n.source;
+  if (isFreshInstallCached(state)) return true;
+  if (isFullscreenDownsellGateOn(state)) return true;
+  if (state.gbGateCached === undefined) {
+    let featureValue = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_pewter_brook", false);
+    state.gbGateCached = featureValue.value;
+    state.gbGateSource = featureValue.source;
   }
-  return e.gbGateCached;
+  return state.gbGateCached;
 }
 //@ chunk-cxdk9p3j.js:3812-3906 layout
-function isFullscreenDownsellGateOn(e = fullscreenProbeState) {
-  e.downsellGateCached ??= getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_creek", false);
-  return e.downsellGateCached;
+function isFullscreenDownsellGateOn(state = fullscreenProbeState) {
+  state.downsellGateCached ??= getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_creek", false);
+  return state.downsellGateCached;
 }
 //@ chunk-cxdk9p3j.js:3906-4144 layout
-function shouldUseFullscreenByDefault(e = fullscreenProbeState) {
+function shouldUseFullscreenByDefault(state = fullscreenProbeState) {
   if (isScreenReaderMode()) return false;
   if (isFullscreenDisabledByEnv()) return false;
   if (env.CLAUDE_CODE_NO_FLICKER === true) return true;
-  if (e.crashAutoOff || isFullscreenAutoDisabledForThisVersion()) return false;
+  if (state.crashAutoOff || isFullscreenAutoDisabledForThisVersion()) return false;
   if (isSSHSession()) return false;
-  if (isTmuxControlMode(e)) return false;
+  if (isTmuxControlMode(state)) return false;
   switch (getInitialSettings_2().tui) {
     case "fullscreen":
       return true;
@@ -296,8 +315,8 @@ function isAutoOffDecision(fullscreenDecision) {
 /**
  * 判断全屏开关是否来自 GrowthBook 回退值。
  */
-function isFullscreenGateFromFallback(e = fullscreenProbeState) {
-  return isGrowthBookEnabled() && e.gbGateSource === "fallback";
+function isFullscreenGateFromFallback(state = fullscreenProbeState) {
+  return isGrowthBookEnabled() && state.gbGateSource === "fallback";
 }
 //@ chunk-cxdk9p3j.js:5259-5370 layout
 function getNoFlickerEnvOverride() {
@@ -327,7 +346,10 @@ class _ {
   }
 }
 //@ chunk-cxdk9p3j.js:5764-5787 layout
-var fullscreenObservationRegistry = new HostScoped(() => new _());
+var fullscreenObservationRegistry; // deferred: uses _ of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cxdk9p3j.js:5764", () => {
+  fullscreenObservationRegistry = new HostScoped(() => new _());
+});
 //@ chunk-cxdk9p3j.js:5787-5824 layout
 /**
  * 记录一次"观察到全屏"事件。
@@ -346,21 +368,21 @@ function hasFullscreenBeenObserved() {
 /**
  * 订阅"已观察到全屏"事件。
  */
-function subscribeFullscreenObserved(e) {
-  return fullscreenObservationRegistry.of(getRootSession().host).subscribe(e);
+function subscribeFullscreenObserved(listener) {
+  return fullscreenObservationRegistry.of(getRootSession().host).subscribe(listener);
 }
 //@ chunk-cxdk9p3j.js:5924-5961 layout
-function isFullscreenActive(e = fullscreenProbeState) {
-  return getIsInteractive() && isFullscreenEnvEnabled(e);
+function isFullscreenActive(state = fullscreenProbeState) {
+  return getIsInteractive() && isFullscreenEnvEnabled(state);
 }
 //@ chunk-cxdk9p3j.js:5961-6274 fingerprint = maybeGetTmuxMouseHint (0.566)
-async function maybeGetTmuxMouseHint(e = fullscreenProbeState) {
+async function maybeGetTmuxMouseHint(state = fullscreenProbeState) {
   if (!env.TMUX) return null;
-  if (!isFullscreenActive(e) || isTmuxControlMode(e)) return null;
-  if (e.checkedTmuxMouseHint) return null;
-  e.checkedTmuxMouseHint = true;
-  let n = await probeTmuxOption(e, "mouse");
-  if (n === null || n === "on") return null;
+  if (!isFullscreenActive(state) || isTmuxControlMode(state)) return null;
+  if (state.checkedTmuxMouseHint) return null;
+  state.checkedTmuxMouseHint = true;
+  let mouseOption = await probeTmuxOption(state, "mouse");
+  if (mouseOption === null || mouseOption === "on") return null;
   return "tmux detected \xB7 scroll with PgUp/PgDn \xB7 or add 'set -g mouse on' to ~/.tmux.conf for wheel scroll";
 }
 //@ chunk-cxdk9p3j.js:6274-6434 placement
@@ -375,52 +397,40 @@ var TMUX_OPTION_PROBES = {
   },
 };
 //@ chunk-cxdk9p3j.js:6434-6587 placement
-function probeTmuxOption(e, n) {
-  let { cacheKey, args } = TMUX_OPTION_PROBES[n];
-  e[cacheKey] ??= execFileNoThrow("tmux", [...args], {
+function probeTmuxOption(state, optionName) {
+  let { cacheKey, args } = TMUX_OPTION_PROBES[optionName];
+  state[cacheKey] ??= execFileNoThrow("tmux", [...args], {
     useCwd: false,
     timeout: 2000,
   }).then(({ stdout, code }) => (code === 0 ? stdout.trim() : null));
-  return e[cacheKey];
+  return state[cacheKey];
 }
 //@ chunk-cxdk9p3j.js:6587-6662 placement
 /**
  * 在 tmux 中探测 mouse 与 focus-events 选项（仅 tmux 且非控制模式时）。
  */
-function probeTmuxOptionsForFullscreen(e = fullscreenProbeState) {
+function probeTmuxOptionsForFullscreen(state = fullscreenProbeState) {
   if (!env.TMUX || isTmuxControlModeEnvHeuristic()) return;
-  probeTmuxOption(e, "mouse");
-  probeTmuxOption(e, "focus-events");
+  probeTmuxOption(state, "mouse");
+  probeTmuxOption(state, "focus-events");
 }
 //@ chunk-cxdk9p3j.js:6662-6974 placement
 /**
  * 在 tmux 中检查 focus-events 选项，未开启时返回提示（只检查一次）。
  */
-async function maybeGetTmuxFocusHint(e = fullscreenProbeState) {
+async function maybeGetTmuxFocusHint(state = fullscreenProbeState) {
   if (!env.TMUX) return null;
-  if (isTmuxControlMode(e)) return null;
-  if (e.checkedTmuxFocusHint) return null;
-  e.checkedTmuxFocusHint = true;
-  let n = await probeTmuxOption(e, "focus-events");
-  if (n === null || n === "on") return null;
+  if (isTmuxControlMode(state)) return null;
+  if (state.checkedTmuxFocusHint) return null;
+  state.checkedTmuxFocusHint = true;
+  let focusOption = await probeTmuxOption(state, "focus-events");
+  if (focusOption === null || focusOption === "on") return null;
   return "tmux focus-events off \xB7 add 'set -g focus-events on' to ~/.tmux.conf and reattach for focus tracking";
 }
-//@ chunk-s61vbvea.js:460728-460828 placement
-function resolveRenderMode(presentation, dispatchedAsImmediate = false) {
-  if (isRemoteSessionAvailable() || presentation !== "fullscreen") return "inline";
-  return isDiffPanelEnabled() || dispatchedAsImmediate ? "fullscreen" : "inline";
-}
-//@ chunk-s61vbvea.js:460828-460861 placement
-/**
- * 判断是否处于远程 SDK 或远程模式会话。
- */
-function isRemoteSdkOrRemoteMode() {
-  return hasRemoteSdkUrl() || getIsRemoteMode();
-}
 export {
-  latchFullscreenTrialFromEnv,
   getNoFlickerEnvOverride,
   getFullscreenDecision,
+  latchFullscreenTrialFromEnv,
   isFullscreenActive,
   isFullscreenEnvEnabled,
   subscribeFullscreenObserved,

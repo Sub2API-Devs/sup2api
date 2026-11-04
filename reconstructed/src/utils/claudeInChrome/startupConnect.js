@@ -23,10 +23,10 @@ import { isRestrictedSession } from "../../bootstrap/state.js";
 import { isChromeServerPolicyDenied } from "./serverPolicy.js";
 
 //@ chunk-e2839z0z.js:11888-12006 placement
-async function connectChromeAtStartup(e) {
+async function connectChromeAtStartup(options) {
   try {
     return await connectChromeAtStartupIfAllowed(
-      e?.settingOn ?? getGlobalConfig().claudeInChromeDefaultEnabled === true,
+      options?.settingOn ?? getGlobalConfig().claudeInChromeDefaultEnabled === true,
     );
   } catch (error) {
     logError(error);
@@ -37,8 +37,8 @@ async function connectChromeAtStartup(e) {
 /**
  * 启动时为编辑器连接 Claude in Chrome 的条件检查：设置开启、本会话未接入、组织策略允许且令牌可用、非安全模式/受限会话、Claude.ai 订阅用户等，满足后才连接。
  */
-async function connectChromeAtStartupIfAllowed(e) {
-  if (!e || !savedChromeDefaultCounts()) return false;
+async function connectChromeAtStartupIfAllowed(options) {
+  if (!options || !savedChromeDefaultCounts()) return false;
   if (isClaudeInChromeWiredThisSession()) return false;
   if (!isClaudeInChromeAllowed() || !canAuthenticateChromeBridge() || env.CLAUDE_CODE_ENABLE_CFC === false) {
     logForDebugging(
@@ -50,3 +50,4 @@ async function connectChromeAtStartupIfAllowed(e) {
   if (!isClaudeAISubscriber()) return false;
   return !isChromeServerPolicyDenied();
 }
+export { connectChromeAtStartup };

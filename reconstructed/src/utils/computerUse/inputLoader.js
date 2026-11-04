@@ -9,7 +9,7 @@
  * attribution: fingerprint 1
  */
 import { getComputerUseSession } from "./session.js";
-import { N } from "../../../vendor/unresolved-cjs/index.js";
+import { unsupportedModule } from "../../../vendor/unresolved-cjs/index.js";
 
 //@ chunk-hrs3dad1.js:5672-5858 fingerprint = requireComputerUseInput (0.855)
 /**
@@ -18,7 +18,7 @@ import { N } from "../../../vendor/unresolved-cjs/index.js";
 function requireComputerUseInput() {
   let cuState = getComputerUseSession();
   if (cuState.inputModule) return cuState.inputModule;
-  let inputModule = N();
+  let inputModule = unsupportedModule();
   if (!inputModule.isSupported) throw Error("@ant/computer-use-input is not supported on this platform");
   return (cuState.inputModule = inputModule);
 }

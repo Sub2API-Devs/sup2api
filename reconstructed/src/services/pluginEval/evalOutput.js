@@ -46,60 +46,64 @@ import { openNoFollow_2 } from "../../utils/fsSafety/hardenedRead.js";
 import { stripControlChars } from "../../utils/settings/writeQueues.js";
 
 //@ chunk-qchp9vrd.js:311651-312869 placement
-async function resolveEvalTargetPlugin(e, n, r, a) {
-  let resolved = path.resolve(getCwd(), e);
-  await (n === undefined ? checkRepoAuthoredPath(getCwd(), e, "target") : checkRepoAuthoredPathFromCwd(e, a));
+async function resolveEvalTargetPlugin(target, isPluginRoot, trust, cwdOverride) {
+  let targetPath = path.resolve(getCwd(), target);
+  await (isPluginRoot === undefined
+    ? checkRepoAuthoredPath(getCwd(), target, "target")
+    : checkRepoAuthoredPathFromCwd(target, cwdOverride));
   try {
-    resolved = await realpathKeepingPromptFile(resolved);
+    targetPath = await realpathKeepingPromptFile(targetPath);
   } catch (error) {
     if (!isFsInaccessible(error))
       logForDebugging(
-        `plugin eval: could not resolve ${escapeNonAscii(resolved)} to find its plugin: ${errorMessage(error)}`,
+        `plugin eval: could not resolve ${escapeNonAscii(targetPath)} to find its plugin: ${errorMessage(error)}`,
         {
           level: "warn",
         },
       );
     return {
-      targetDir: resolved,
-      targetIsCaseFile: !n && isMagicDocsPromptFile(path.basename(resolved)),
-      pluginRoot: n ? resolved : null,
+      targetDir: targetPath,
+      targetIsCaseFile: !isPluginRoot && isMagicDocsPromptFile(path.basename(targetPath)),
+      pluginRoot: isPluginRoot ? targetPath : null,
       untrustedManifestDir: null,
       targetResolved: false,
       enclosingVerdict: null,
     };
   }
-  if (n)
+  if (isPluginRoot)
     return {
-      targetDir: resolved,
+      targetDir: targetPath,
       targetIsCaseFile: false,
-      pluginRoot: resolved,
+      pluginRoot: targetPath,
       untrustedManifestDir: null,
       targetResolved: true,
       enclosingVerdict: null,
     };
-  let h = isMagicDocsPromptFile(path.basename(resolved));
-  let w = h ? path.dirname(resolved) : resolved;
-  if (!h) r.consentRoot ??= w;
-  let targetWithin = await resolveTargetWithin(w, r);
-  let resolved_2 = path.resolve(await realCwd(r), e);
-  let R = h ? path.dirname(resolved_2) : resolved_2;
-  let S = null;
-  if (R !== w) {
+  let targetIsCaseFile = isMagicDocsPromptFile(path.basename(targetPath));
+  let targetDir = targetIsCaseFile ? path.dirname(targetPath) : targetPath;
+  if (!targetIsCaseFile) trust.consentRoot ??= targetDir;
+  let targetWithin = await resolveTargetWithin(targetDir, trust);
+  let resolved = path.resolve(await realCwd(trust), target);
+  let targetReal = targetIsCaseFile ? path.dirname(resolved) : resolved;
+  let nearestSkillDir = null;
+  if (targetReal !== targetDir) {
     let nearestSkillFolder = await findNearestSkillFolder(
-      R,
-      await resolveTargetWithin(R, r),
-      r,
+      targetReal,
+      await resolveTargetWithin(targetReal, trust),
+      trust,
       Number.POSITIVE_INFINITY,
     );
-    if (nearestSkillFolder !== null) S = await realpath(nearestSkillFolder).catch(() => nearestSkillFolder);
+    if (nearestSkillFolder !== null)
+      nearestSkillDir = await realpath(nearestSkillFolder).catch(() => nearestSkillFolder);
   }
-  S ??= await findNearestSkillFolder(w, targetWithin, r, Number.POSITIVE_INFINITY);
-  let T = S !== null && (await getCachedPluginDirVerdict(S, r, "core"));
-  if (S === null && h) {
-    let parentPluginDir = await resolveParentPluginDir(w, r, "tree", targetWithin);
+  nearestSkillDir ??= await findNearestSkillFolder(targetDir, targetWithin, trust, Number.POSITIVE_INFINITY);
+  let skillDirTrusted =
+    nearestSkillDir !== null && (await getCachedPluginDirVerdict(nearestSkillDir, trust, "core"));
+  if (nearestSkillDir === null && targetIsCaseFile) {
+    let parentPluginDir = await resolveParentPluginDir(targetDir, trust, "tree", targetWithin);
     return {
-      targetDir: w,
-      targetIsCaseFile: h,
+      targetDir,
+      targetIsCaseFile,
       pluginRoot: parentPluginDir.adopted,
       untrustedManifestDir: parentPluginDir.refused,
       targetResolved: true,
@@ -111,12 +115,13 @@ async function resolveEvalTargetPlugin(e, n, r, a) {
     };
   }
   return {
-    targetDir: w,
-    targetIsCaseFile: h,
-    pluginRoot: T ? S : null,
-    untrustedManifestDir: S !== null && !T ? S : null,
+    targetDir,
+    targetIsCaseFile,
+    pluginRoot: skillDirTrusted ? nearestSkillDir : null,
+    untrustedManifestDir: nearestSkillDir !== null && !skillDirTrusted ? nearestSkillDir : null,
     targetResolved: true,
-    enclosingVerdict: S === null ? await resolveParentPluginDir(w, r, "core") : null,
+    enclosingVerdict:
+      nearestSkillDir === null ? await resolveParentPluginDir(targetDir, trust, "core") : null,
   };
 }
 //@ chunk-qchp9vrd.js:312869-312946 placement
@@ -128,52 +133,53 @@ class EscapesBaseError extends Error {
 }
 //@ chunk-qchp9vrd.js:312946-313584 placement
 async function ensureOutputBase(
-  e,
+  baseDir,
   segments,
-  r,
-  { vetOwnership: a = null, create: s = true, absentEndsChain: h = false } = {},
+  createdDirs,
+  { vetOwnership = null, create = true, absentEndsChain = false } = {},
 ) {
-  if (s)
-    await mkdir(e, {
+  if (create)
+    await mkdir(baseDir, {
       recursive: true,
     });
-  let w = await lstat(e);
-  if (w.isSymbolicLink())
-    throw new EscapesBaseError(`output base ${e} is a symlink \u2014 refusing to write beneath it`);
-  if (a !== null) {
-    let R = await checkWritableByOthers(w, e, a, e);
-    if (R)
+  let baseStats = await lstat(baseDir);
+  if (baseStats.isSymbolicLink())
+    throw new EscapesBaseError(`output base ${baseDir} is a symlink \u2014 refusing to write beneath it`);
+  if (vetOwnership !== null) {
+    let ownershipProblem = await checkWritableByOthers(baseStats, baseDir, vetOwnership, baseDir);
+    if (ownershipProblem)
       throw new EscapesBaseError(
-        `output base ${e} ${R.message} \u2014 refusing to write beneath a directory you did not name (pass --output-dir, or name the directory itself as the target)`,
+        `output base ${baseDir} ${ownershipProblem.message} \u2014 refusing to write beneath a directory you did not name (pass --output-dir, or name the directory itself as the target)`,
       );
   }
-  let b = await realpath(e).catch(() => {
+  let baseReal = await realpath(baseDir).catch(() => {
     return;
   });
-  let y = e;
-  for (let R of segments) {
-    y = path.join(y, R);
-    if (s)
+  let dir = baseDir;
+  for (let segment of segments) {
+    dir = path.join(dir, segment);
+    if (create)
       try {
-        await mkdir(y, {
+        await mkdir(dir, {
           mode: 493,
         });
-        r.push(y);
+        createdDirs.push(dir);
       } catch (error) {
         if (getErrnoCode(error) !== "EEXIST") throw error;
       }
-    if (!(await checkOutputLocation(y, e, b, a, !s && h))) return;
+    if (!(await checkOutputLocation(dir, baseDir, baseReal, vetOwnership, !create && absentEndsChain)))
+      return;
   }
 }
 //@ chunk-qchp9vrd.js:313584-313698 placement
 /**
  * 从深到浅删除空目录，遇到无法删除的目录即停止。
  */
-async function removeEmptyDirs(e) {
-  for (let j = e.length - 1; j >= 0; j--) {
-    let r = e[j];
+async function removeEmptyDirs(createdDirs) {
+  for (let j = createdDirs.length - 1; j >= 0; j--) {
+    let dir = createdDirs[j];
     try {
-      await rmdir(r);
+      await rmdir(dir);
     } catch (error) {
       if (isENOENT(error)) continue;
       return;
@@ -181,99 +187,100 @@ async function removeEmptyDirs(e) {
   }
 }
 //@ chunk-qchp9vrd.js:313698-314073 placement
-async function checkOutputLocation(e, n, r, a, s = false) {
-  let h;
+async function checkOutputLocation(dirPath, baseDir, baseReal, vetOwnership, allowAbsent = false) {
+  let problem;
   try {
-    let w = await lstat(e);
-    h = w.isSymbolicLink()
+    let dirStats = await lstat(dirPath);
+    problem = dirStats.isSymbolicLink()
       ? "is a symlink"
-      : !w.isDirectory()
+      : !dirStats.isDirectory()
         ? "is not a directory"
-        : a === null
+        : vetOwnership === null
           ? undefined
-          : (await checkWritableByOthers(w, e, a, n))?.message;
+          : (await checkWritableByOthers(dirStats, dirPath, vetOwnership, baseDir))?.message;
   } catch (error) {
-    if (s && isENOENT(error)) return false;
-    h = `could not be examined (${errorMessage(error)})`;
+    if (allowAbsent && isENOENT(error)) return false;
+    problem = `could not be examined (${errorMessage(error)})`;
   }
-  if (h !== undefined) throw new EscapesBaseError(`output location ${e} ${h} \u2014 refusing to write there`);
-  await checkInsideOutputBase(e, n, "output location", r);
+  if (problem !== undefined)
+    throw new EscapesBaseError(`output location ${dirPath} ${problem} \u2014 refusing to write there`);
+  await checkInsideOutputBase(dirPath, baseDir, "output location", baseReal);
   return true;
 }
 //@ chunk-qchp9vrd.js:314073-314212 placement
 /**
  * 判断目录中是否存在插件组件（.claude-plugin 以外的组件目录或文件）。
  */
-async function hasPluginComponents(e) {
-  for (let n of PLUGIN_ROOT_MARKERS) {
-    if (n === ".claude-plugin") continue;
-    if ((await lstat(path.join(e, n)).catch(() => null)) !== null) return true;
+async function hasPluginComponents(pluginDir) {
+  for (let marker of PLUGIN_ROOT_MARKERS) {
+    if (marker === ".claude-plugin") continue;
+    if ((await lstat(path.join(pluginDir, marker)).catch(() => null)) !== null) return true;
   }
   return false;
 }
 //@ chunk-qchp9vrd.js:314212-314510 placement
-async function checkInsideOutputBase(e, n, r, a) {
-  let s;
-  let h;
+async function checkInsideOutputBase(dirPath, baseDir, label, baseReal) {
+  let dirReal;
+  let baseRealPath;
   try {
-    [s, h] = await Promise.all([realpath(e), a ?? realpath(n)]);
+    [dirReal, baseRealPath] = await Promise.all([realpath(dirPath), baseReal ?? realpath(baseDir)]);
   } catch (error) {
     throw new EscapesBaseError(
-      `${r} ${e} could not be resolved (${errorMessage(error)}) \u2014 refusing to write there`,
+      `${label} ${dirPath} could not be resolved (${errorMessage(error)}) \u2014 refusing to write there`,
     );
   }
-  if (!isSameOrInside(s, h))
+  if (!isSameOrInside(dirReal, baseRealPath))
     throw new EscapesBaseError(
-      `${r} ${e} resolves to ${s}, outside ${h} \u2014 refusing to write there (is it a symlink?)`,
+      `${label} ${dirPath} resolves to ${dirReal}, outside ${baseRealPath} \u2014 refusing to write there (is it a symlink?)`,
     );
 }
 //@ chunk-qchp9vrd.js:314510-315130 placement
-async function resolveEvalDirSource(e, n) {
-  if (n.source === "default") return n;
-  let r;
+async function resolveEvalDirSource(pluginRoot, evalDirSource) {
+  if (evalDirSource.source === "default") return evalDirSource;
+  let dirReal;
   try {
     await checkRepoAuthoredPath(
-      e,
-      n.segments.join(path.sep),
-      n.source === "flag" ? "--eval-dir" : "the manifest's experimental.evals",
+      pluginRoot,
+      evalDirSource.segments.join(path.sep),
+      evalDirSource.source === "flag" ? "--eval-dir" : "the manifest's experimental.evals",
     );
-    r = await realpath(path.join(e, ...n.segments));
+    dirReal = await realpath(path.join(pluginRoot, ...evalDirSource.segments));
   } catch (error) {
     if (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS) throw error;
-    return n;
+    return evalDirSource;
   }
-  let relativePath = path.relative(e, r);
+  let relativePath = path.relative(pluginRoot, dirReal);
   let parts = relativePath.split(path.sep);
   if (
-    !toEvalPathError(e, r) ||
-    parts.length !== n.segments.length ||
-    parts.some((w, b) => w.toLowerCase() !== n.segments[b].toLowerCase())
+    !toEvalPathError(pluginRoot, dirReal) ||
+    parts.length !== evalDirSource.segments.length ||
+    parts.some((part, index) => part.toLowerCase() !== evalDirSource.segments[index].toLowerCase())
   )
-    return n;
-  if (relativePath === n.segments.join(path.sep)) return n;
-  let h = e;
-  for (let segment of n.segments) {
-    h = path.join(h, segment);
+    return evalDirSource;
+  if (relativePath === evalDirSource.segments.join(path.sep)) return evalDirSource;
+  let currentPath = pluginRoot;
+  for (let segment of evalDirSource.segments) {
+    currentPath = path.join(currentPath, segment);
     try {
-      if ((await lstat(h)).isSymbolicLink()) return n;
+      if ((await lstat(currentPath)).isSymbolicLink()) return evalDirSource;
     } catch {
-      return n;
+      return evalDirSource;
     }
   }
-  if (parts.some((w) => SKIPPED_SUBDIR_NAMES.has(w))) return n;
+  if (parts.some((part) => SKIPPED_SUBDIR_NAMES.has(part))) return evalDirSource;
   return {
-    ...n,
+    ...evalDirSource,
     dir: relativePath,
     segments: parts,
   };
 }
 //@ chunk-qchp9vrd.js:315130-315435 placement
-function describeEvalDirScanScope(targetDir, pluginRoot, r) {
-  let a = shellSafePath(toDisplayRelativePath(pluginRoot));
-  return a === null
-    ? `Only ${targetDir} was scanned; run claude plugin eval against the plugin directory ${pluginRoot}${r.source === "flag" ? ` (with --eval-dir ${displayDir(r)})` : ""} to scan the whole plugin.
+function describeEvalDirScanScope(targetDir, absolutePath, evalDirSource) {
+  let quotedPluginRoot = shellSafePath(toDisplayRelativePath(absolutePath));
+  return quotedPluginRoot === null
+    ? `Only ${targetDir} was scanned; run claude plugin eval against the plugin directory ${absolutePath}${evalDirSource.source === "flag" ? ` (with --eval-dir ${displayDir(evalDirSource)})` : ""} to scan the whole plugin.
 `
-    : `Only ${targetDir} was scanned; run \`claude plugin eval ${a}${isFromEvalDirFlag(r)}\` to scan the whole plugin.
+    : `Only ${targetDir} was scanned; run \`claude plugin eval ${quotedPluginRoot}${isFromEvalDirFlag(evalDirSource)}\` to scan the whole plugin.
 `;
 }
 //@ chunk-qchp9vrd.js:315435-315529 placement
@@ -285,19 +292,21 @@ function shellSafePath(displayRelativePath) {
   return /^[A-Za-z0-9_./:\\-]+$/.test(displayRelativePath) ? displayRelativePath : null;
 }
 //@ chunk-qchp9vrd.js:315529-315734 placement
-function toDisplayRelativePath(e) {
-  let relativePath = path.relative(getCwd(), e);
+function toDisplayRelativePath(absolutePath) {
+  let relativePath = path.relative(getCwd(), absolutePath);
   if (relativePath === "") return ".";
   if (path.isAbsolute(relativePath)) return relativePath;
-  let r = getPlatform() === "windows" ? relativePath.replaceAll("\\", "/") : relativePath;
-  return r === ".." || r.startsWith("./") || r.startsWith("../") ? r : `./${r}`;
+  let displayPath = getPlatform() === "windows" ? relativePath.replaceAll("\\", "/") : relativePath;
+  return displayPath === ".." || displayPath.startsWith("./") || displayPath.startsWith("../")
+    ? displayPath
+    : `./${displayPath}`;
 }
 //@ chunk-qchp9vrd.js:315734-316025 placement
 /**
  * 计算评测输出目录重叠检查要使用的根目录集合。
  */
-function resolveOverlapRoots(e) {
-  let { scopeDir, scopeIsNamedDirectory, trustedRoot, otherManifestDir, adoptedAbove } = e;
+function resolveOverlapRoots(scope) {
+  let { scopeDir, scopeIsNamedDirectory, trustedRoot, otherManifestDir, adoptedAbove } = scope;
   return {
     pluginRoot: trustedRoot,
     overlapRoot: trustedRoot ?? otherManifestDir ?? scopeDir,
@@ -316,12 +325,12 @@ function resolveOverlapRoots(e) {
 /**
  * 描述评测目录的来源：--eval-dir、manifest（提示可覆盖）或默认值。
  */
-function describeEvalDirSource(e) {
-  switch (e.source) {
+function describeEvalDirSource(evalDirSource) {
+  switch (evalDirSource.source) {
     case "flag":
       return "from --eval-dir";
     case "manifest":
-      return `from ${escapeNonAscii(e.manifestPath)}; pass --eval-dir to override`;
+      return `from ${escapeNonAscii(evalDirSource.manifestPath)}; pass --eval-dir to override`;
     case "default":
       return "the default";
   }
@@ -330,100 +339,103 @@ function describeEvalDirSource(e) {
 /**
  * 把本次运行的模拟录制写到输出目录（只覆盖本运行写的文件）。
  */
-async function writeMockRecordings(e, report, r) {
-  let joined = path.join(e, MOCK_RECORDINGS);
-  await checkRepoAuthoredPath(e, MOCK_RECORDINGS, "mock recordings");
+async function writeMockRecordings(pluginRoot, report, keepRecordings) {
+  let dir = path.join(pluginRoot, MOCK_RECORDINGS);
+  await checkRepoAuthoredPath(pluginRoot, MOCK_RECORDINGS, "mock recordings");
   if (
-    !report.cases.some((b) =>
-      [...b.runs, ...(b.runs_without ?? [])].some(
-        (y) => y.mocks !== undefined && y.mocks.servers.some((server) => server.withheld !== true),
+    !report.cases.some((caseReport) =>
+      [...caseReport.runs, ...(caseReport.runs_without ?? [])].some(
+        (run) => run.mocks !== undefined && run.mocks.servers.some((server) => server.withheld !== true),
       ),
     )
   ) {
     try {
-      await lstat(joined);
+      await lstat(dir);
     } catch (error) {
       if (isENOENT(error)) return;
       throw error;
     }
     throw new EscapesBaseError(
-      `${escapeNonAscii(joined)} was not written by this run (it served no mocks) \u2014 nothing there is to be adopted`,
+      `${escapeNonAscii(dir)} was not written by this run (it served no mocks) \u2014 nothing there is to be adopted`,
     );
   }
-  let h = new Map();
-  for (let b of report.cases.flatMap((y) => [...y.runs, ...(y.runs_without ?? [])])) {
-    let y = new Set();
-    for (let R of b.mockRecordings ?? []) {
-      if (y.has(R.server)) continue;
-      let joined = path.join(MOCK_RECORDINGS, R.server, R.file);
-      let T = h.get(joined);
-      if (T === undefined)
-        h.set(joined, {
-          rec: R,
-          adoptDirs: new Set([R.adoptDir]),
+  let recordsByPath = new Map();
+  for (let run of report.cases.flatMap((caseReport) => [
+    ...caseReport.runs,
+    ...(caseReport.runs_without ?? []),
+  ])) {
+    let conflictingServers = new Set();
+    for (let recording of run.mockRecordings ?? []) {
+      if (conflictingServers.has(recording.server)) continue;
+      let joined = path.join(MOCK_RECORDINGS, recording.server, recording.file);
+      let existing = recordsByPath.get(joined);
+      if (existing === undefined)
+        recordsByPath.set(joined, {
+          rec: recording,
+          adoptDirs: new Set([recording.adoptDir]),
         });
-      else if (T.rec.answerHash === R.answerHash) T.adoptDirs.add(R.adoptDir);
-      else y.add(R.server);
+      else if (existing.rec.answerHash === recording.answerHash) existing.adoptDirs.add(recording.adoptDir);
+      else conflictingServers.add(recording.server);
     }
   }
-  if (!r && (await writeAdoptInstructions(joined)))
-    await rm_2(joined, {
+  if (!keepRecordings && (await writeAdoptInstructions(dir)))
+    await rm_2(dir, {
       recursive: true,
       force: true,
     });
   try {
-    await mkdir(joined, {
+    await mkdir(dir, {
       mode: 493,
     });
   } catch (error) {
     if (getErrnoCode(error) === "EEXIST")
       throw new EscapesBaseError(
-        `${joined} already exists and was not written by this run \u2014 nothing there is to be adopted; remove it and rerun`,
+        `${dir} already exists and was not written by this run \u2014 nothing there is to be adopted; remove it and rerun`,
       );
     throw error;
   }
-  if (h.size === 0) {
-    await rmdir(joined);
+  if (recordsByPath.size === 0) {
+    await rmdir(dir);
     return;
   }
-  let flattened = [...h].flatMap(([b, { rec: y, adoptDirs: R }]) => [
-    `${escapeNonAscii(path.join(e, b))}  sha256=${createHash("sha256").update(y.json).digest("hex")}`,
-    ...[...R].map((S) => `    -> ${escapeNonAscii(`${S}${path.sep}`)}`),
+  let flattened = [...recordsByPath].flatMap(([relativePath, { rec: recording, adoptDirs }]) => [
+    `${escapeNonAscii(path.join(pluginRoot, relativePath))}  sha256=${createHash("sha256").update(recording.json).digest("hex")}`,
+    ...[...adoptDirs].map((adoptDir) => `    -> ${escapeNonAscii(`${adoptDir}${path.sep}`)}`),
   ]);
   try {
-    let b = new Set();
-    for (let [R, { rec: S }] of h) {
-      if (!b.has(S.server)) {
-        await ensureOutputBase(e, [MOCK_RECORDINGS, S.server], []);
-        b.add(S.server);
+    let createdServers = new Set();
+    for (let [relativePath, { rec: recording }] of recordsByPath) {
+      if (!createdServers.has(recording.server)) {
+        await ensureOutputBase(pluginRoot, [MOCK_RECORDINGS, recording.server], []);
+        createdServers.add(recording.server);
       }
-      await writeOutputFile(path.join(e, R), S.json, true);
+      await writeOutputFile(path.join(pluginRoot, relativePath), recording.json, true);
     }
-    let y = new Map([[joined, new Set(b)]]);
-    for (let [R, { rec: S }] of h) {
-      let joined_2 = path.join(joined, S.server);
-      let N = y.get(joined_2) ?? new Set();
-      N.add(path.basename(R));
-      y.set(joined_2, N);
+    let expectedFiles = new Map([[dir, new Set(createdServers)]]);
+    for (let [relativePath, { rec: recording }] of recordsByPath) {
+      let joined = path.join(dir, recording.server);
+      let expected = expectedFiles.get(joined) ?? new Set();
+      expected.add(path.basename(relativePath));
+      expectedFiles.set(joined, expected);
     }
-    for (let [R, S] of y) {
-      if (!(await lstat(R)).isDirectory())
+    for (let [serverDir, expected] of expectedFiles) {
+      if (!(await lstat(serverDir)).isDirectory())
         throw new EscapesBaseError(
-          `${escapeNonAscii(R)} is no longer the directory this run created \u2014 something else is writing into ${escapeNonAscii(joined)}`,
+          `${escapeNonAscii(serverDir)} is no longer the directory this run created \u2014 something else is writing into ${escapeNonAscii(dir)}`,
         );
-      for (let T of await readdir(R))
-        if (!S.has(T))
+      for (let fileName of await readdir(serverDir))
+        if (!expected.has(fileName))
           throw new EscapesBaseError(
-            `${escapeNonAscii(path.join(R, T))} was not written by this run \u2014 something else is writing into ${escapeNonAscii(joined)}`,
+            `${escapeNonAscii(path.join(serverDir, fileName))} was not written by this run \u2014 something else is writing into ${escapeNonAscii(dir)}`,
           );
     }
-    for (let [R, { rec: S }] of h)
-      if (!(await fileHasExactContent(path.join(e, R), S.json)))
+    for (let [relativePath, { rec: recording }] of recordsByPath)
+      if (!(await fileHasExactContent(path.join(pluginRoot, relativePath), recording.json)))
         throw new EscapesBaseError(
-          `${escapeNonAscii(path.join(e, R))} no longer holds what this run wrote \u2014 something else is writing into ${escapeNonAscii(joined)}`,
+          `${escapeNonAscii(path.join(pluginRoot, relativePath))} no longer holds what this run wrote \u2014 something else is writing into ${escapeNonAscii(dir)}`,
         );
     await writeOutputFile(
-      path.join(joined, "ADOPT.txt"),
+      path.join(dir, "ADOPT.txt"),
       `${MOCK_RECORDING_REPLAY_HINT}
 
 ${flattened.join(`
@@ -432,50 +444,50 @@ ${flattened.join(`
       true,
     );
   } catch (error) {
-    await rm_2(joined, {
+    await rm_2(dir, {
       recursive: true,
       force: true,
     }).catch(() => {});
     throw error;
   }
   writeStderrLine(
-    `${h.size} new agent-mock ${plural(h.size, "recording")} under ${joined} (listed in ADOPT.txt there). ${MOCK_RECORDING_REPLAY_HINT}`,
+    `${recordsByPath.size} new agent-mock ${plural(recordsByPath.size, "recording")} under ${dir} (listed in ADOPT.txt there). ${MOCK_RECORDING_REPLAY_HINT}`,
   );
-  for (let b of flattened) writeStderrLine(`  ${b}`);
+  for (let summaryLine of flattened) writeStderrLine(`  ${summaryLine}`);
 }
 //@ chunk-qchp9vrd.js:318414-318742 placement
 var MOCK_RECORDING_REPLAY_HINT =
   "To replay one on later runs (no model call), copy the file into the .replay/ directory shown after it - the one beside the mock that produced it. Each line carries the sha256 of the file as written; check the copy you take against the hash printed to the terminal (this file sits where the workload could still write):";
 //@ chunk-qchp9vrd.js:318742-319140 placement
-async function writeAdoptInstructions(e) {
+async function writeAdoptInstructions(dir) {
   try {
-    if (!(await lstat(e)).isDirectory()) return false;
+    if (!(await lstat(dir)).isDirectory()) return false;
   } catch (error) {
     if (isENOENT(error)) return false;
     throw error;
   }
-  let n = await readdir(e, {
+  let entries = await readdir(dir, {
     withFileTypes: true,
   });
-  for (let r of n) {
-    let joined = path.join(e, r.name);
-    let fileKind = await getFileKind(r, joined, "other");
-    if (r.name === "ADOPT.txt" && fileKind === "file") continue;
+  for (let entry of entries) {
+    let joined = path.join(dir, entry.name);
+    let fileKind = await getFileKind(entry, joined, "other");
+    if (entry.name === "ADOPT.txt" && fileKind === "file") continue;
     if (fileKind !== "dir") return false;
-    for (let h of await readdir(joined, {
+    for (let recording of await readdir(joined, {
       withFileTypes: true,
     }))
       if (
-        !RECORDING_FILE_RE.test(h.name) ||
-        (await getFileKind(h, path.join(joined, h.name), "other")) !== "file"
+        !RECORDING_FILE_RE.test(recording.name) ||
+        (await getFileKind(recording, path.join(joined, recording.name), "other")) !== "file"
       )
         return false;
   }
   return true;
 }
 //@ chunk-qchp9vrd.js:319140-319364 placement
-async function fileHasExactContent(e, json) {
-  let noFollow = await openNoFollow_2(e);
+async function fileHasExactContent(filePath, json) {
+  let noFollow = await openNoFollow_2(filePath);
   if (!noFollow.ok) return false;
   try {
     let stats = await noFollow.value.stat();
@@ -487,21 +499,22 @@ async function fileHasExactContent(e, json) {
   }
 }
 //@ chunk-qchp9vrd.js:319364-319722 placement
-async function writeOutputFile(e, n, r) {
-  let regularFile = await openRegularFileSafely(e, r ? "create" : "write", "output file");
+async function writeOutputFile(filePath, content, create) {
+  let regularFile = await openRegularFileSafely(filePath, create ? "create" : "write", "output file");
   try {
-    if (r) await regularFile.handle.writeFile(n);
+    if (create) await regularFile.handle.writeFile(content);
     else {
       await regularFile.handle.truncate(0);
-      let buffer = Buffer.from(n);
-      let h = 0;
-      while (h < buffer.length)
-        h += (await regularFile.handle.write(buffer, h, buffer.length - h, h)).bytesWritten;
+      let buffer = Buffer.from(content);
+      let written = 0;
+      while (written < buffer.length)
+        written += (await regularFile.handle.write(buffer, written, buffer.length - written, written))
+          .bytesWritten;
     }
     await regularFile.handle.close();
   } catch (error) {
     await regularFile.handle.close().catch(() => {});
-    if (regularFile.created) await getFileIdentity(e, regularFile.identity);
+    if (regularFile.created) await getFileIdentity(filePath, regularFile.identity);
     throw error;
   }
 }

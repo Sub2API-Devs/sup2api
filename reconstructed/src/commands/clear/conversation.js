@@ -166,38 +166,38 @@ async function* clearConversation({
       credentials,
     });
   endMaintenanceAndForget("conversation_clear");
-  let h = new Set();
+  let killedIds = new Set();
   let preservedAgentIds = new Map();
   if (getAppState && isolationLatch?.current != null) {
     let filtered = Object.values(getAppState().tasks).filter(
       (task) => !isBackgroundTask(task) && (isLocalAgent(task) || isInProcessTeammateTask(task)),
     );
     if (filtered.every(canDropCompletedAgentOnClear)) {
-      for (let r of filtered) {
-        h.add(r.id);
-        if (isLocalAgent(r)) preservedAgentIds.set(r.id, r.agentId);
+      for (let task of filtered) {
+        killedIds.add(task.id);
+        if (isLocalAgent(task)) preservedAgentIds.set(task.id, task.agentId);
       }
     }
   }
-  let shouldKillTask = (task) => isBackgroundTask(task) || h.has(task.id);
-  let S = new Set();
+  let shouldKillTask = (task) => isBackgroundTask(task) || killedIds.has(task.id);
+  let keptAgentIds = new Set();
   let tasks = [];
   if (getAppState)
     for (let task of Object.values(getAppState().tasks)) {
       if (shouldKillTask(task)) continue;
       if (isLocalAgent(task)) {
-        S.add(task.agentId);
+        keptAgentIds.add(task.agentId);
         tasks.push(task);
-      } else if (isInProcessTeammateTask(task)) S.add(task.identity.agentId);
+      } else if (isInProcessTeammateTask(task)) keptAgentIds.add(task.identity.agentId);
     }
   releaseDeferredSessionStartHooks?.();
   notePendingConversationEdit("clear");
   setCurrentForKey(session, undefined);
-  setMessages((e) => {
-    totalTokensReminderByRoot.of(session).rollOverContext("main", tokenCountFromLastAPIResponse(e));
+  setMessages((messages) => {
+    totalTokensReminderByRoot.of(session).rollOverContext("main", tokenCountFromLastAPIResponse(messages));
     return [];
   });
-  let oe = getAppState
+  let hasLiveAgents = getAppState
     ? Object.values(getAppState().tasks).some(
         (task) =>
           !shouldKillTask(task) &&
@@ -205,27 +205,27 @@ async function* clearConversation({
           (task.status === "running" || (isLocalAgent(task) && hasCompletedWithFindings(task))),
       )
     : false;
-  clearSessionCaches(session, S, setAppState, toolState, storageV5, oe);
+  clearSessionCaches(session, keptAgentIds, setAppState, toolState, storageV5, hasLiveAgents);
   if (!conversationOnly) restoreOriginalCwd();
   readFileState.clear();
   androidEvidenceByHost.of(session.host).reset();
   detachedCallSlots.of(session).discardAll();
   removeQueuedByFilter(
-    (e) =>
-      e.mode === "task-notification" &&
-      typeof e.value === "string" &&
-      parseTaskNotificationToolUseId(e.value) !== null,
+    (queued) =>
+      queued.mode === "task-notification" &&
+      typeof queued.value === "string" &&
+      parseTaskNotificationToolUseId(queued.value) !== null,
   );
   sessionEnvVars?.clear();
   resetPickerState(memorySelector);
-  if (isolationLatch && S.size === 0 && h.size === 0) isolationLatch.current = null;
+  if (isolationLatch && keptAgentIds.size === 0 && killedIds.size === 0) isolationLatch.current = null;
   if (getAppState) closeWebViews(getAppState);
   let currentSessionTitle = getCurrentSessionTitle(getSessionId());
   let currentSessionAgentName = getCurrentSessionAgentName();
-  let E = !clearedSessionTitle && currentSessionTitle !== undefined;
-  let re = E && isConversationEgressTainted(pinSessionId(getSessionId()));
-  let k;
-  let U;
+  let titleToKeep = !clearedSessionTitle && currentSessionTitle !== undefined;
+  let tainted = titleToKeep && isConversationEgressTainted(pinSessionId(getSessionId()));
+  let runningAgents;
+  let goal;
   clearRefusedPublishBodies();
   if (setAppState) {
     dialogStore?.dismissKind(GOAL_PROPOSAL_DIALOG.kind);
@@ -233,7 +233,7 @@ async function* clearConversation({
     retainPathLinks(new Set());
     setAppState((prev) => {
       let nextTasks = {};
-      let w = [];
+      let killedKeys = [];
       for (let [key, value] of Object.entries(prev.tasks)) {
         if (!shouldKillTask(value)) {
           nextTasks[key] =
@@ -245,7 +245,7 @@ async function* clearConversation({
               : value;
           continue;
         }
-        w.push(key);
+        killedKeys.push(key);
         try {
           if (value.status === "running") {
             if (isLocalShellTask(value)) {
@@ -259,17 +259,17 @@ async function* clearConversation({
         }
         evictTaskOutput(key);
       }
-      k = count(
+      runningAgents = count(
         Object.values(nextTasks),
-        (c) => !NON_AGENT_TASK_TYPES.has(c.type) && !isIdleCompletedAgent(c),
+        (task) => !NON_AGENT_TASK_TYPES.has(task.type) && !isIdleCompletedAgent(task),
       );
-      U = prev.activeGoal;
+      goal = prev.activeGoal;
       let transcripts = prev.transcripts;
-      if (transcripts && w.length > 0) {
+      if (transcripts && killedKeys.length > 0) {
         transcripts = {
           ...transcripts,
         };
-        for (let task of w) delete transcripts[task];
+        for (let task of killedKeys) delete transcripts[task];
       }
       return {
         ...resetArtifactReadState(prev),
@@ -278,11 +278,11 @@ async function* clearConversation({
           transcripts,
         }),
         ...(prev.viewingAgentTaskId !== undefined &&
-          w.includes(prev.viewingAgentTaskId) && {
+          killedKeys.includes(prev.viewingAgentTaskId) && {
             viewingAgentTaskId: undefined,
             viewSelectionMode: "none",
           }),
-        runningSubagents: k === 0 ? 0 : prev.runningSubagents,
+        runningSubagents: runningAgents === 0 ? 0 : prev.runningSubagents,
         ...{
           endedByModel: false,
         },
@@ -292,7 +292,7 @@ async function* clearConversation({
         agentNameRegistry: liveAgentNames(prev.agentNameRegistry, nextTasks),
         frameUrls: {},
         standaloneAgentContext:
-          E && prev.standaloneAgentContext?.name
+          titleToKeep && prev.standaloneAgentContext?.name
             ? {
                 name: prev.standaloneAgentContext.name,
               }
@@ -304,70 +304,72 @@ async function* clearConversation({
         },
       };
     });
-    if (U !== undefined) logGoalCleared(U, "session_clear");
+    if (goal !== undefined) logGoalCleared(goal, "session_clear");
     persistBridgeArtifactFrames({});
   }
   if (
     isolationLatch &&
-    S.size === 0 &&
-    h.size > 0 &&
+    keptAgentIds.size === 0 &&
+    killedIds.size > 0 &&
     getAppState &&
-    ![...h].some(
-      (e) => Object.hasOwn(getAppState().tasks, e) || hasPendingAgentWork(e, preservedAgentIds.get(e) ?? e),
+    ![...killedIds].some(
+      (id) =>
+        Object.hasOwn(getAppState().tasks, id) || hasPendingAgentWork(id, preservedAgentIds.get(id) ?? id),
     ) &&
     !Object.values(getAppState().tasks).some(
       (task) => isLocalAgent(task) && [...preservedAgentIds.values()].includes(task.agentId),
     )
   )
     isolationLatch.current = null;
-  if (taskRegistry && k === 0) taskRegistry.resetWebSearchBudget();
+  if (taskRegistry && runningAgents === 0) taskRegistry.resetWebSearchBudget();
   if (getAppState) {
     for (let client of getAppState().mcp.clients)
       if (client.name === "ide" && client.type === "connected") {
         setMcpOnClose(client, undefined);
-        let { clearServerCache } = require("./chunk-asne9cp8.js").mcpClientModule();
+        let { clearServerCache } = require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
         await clearServerCache(client.name, client.config).catch(() => {});
       }
   }
   clearAllPlanSlugs();
   let sessionId = getSessionId();
-  let ie = clearedSessionTitle ? (getMaterializedSessionFile() ?? getTranscriptPath()) : undefined;
-  let ne = isSessionHistorySuppressed();
-  let q = k === 0 && S.size === 0 ? undefined : getConversationAtisLatch();
-  let z = k === 0 && S.size === 0 ? undefined : getConversationToolsUsed().names();
+  let titlePath = clearedSessionTitle ? (getMaterializedSessionFile() ?? getTranscriptPath()) : undefined;
+  let suppressed = isSessionHistorySuppressed();
+  let atisLatch = runningAgents === 0 && keptAgentIds.size === 0 ? undefined : getConversationAtisLatch();
+  let toolsUsed =
+    runningAgents === 0 && keptAgentIds.size === 0 ? undefined : getConversationToolsUsed().names();
   let filtered = getConversationToolsUsed().names().filter(isGmailAttachmentTool);
-  let de = [...getCurrentSessionMemoryModeStamps()];
-  let me = false;
-  let le = false;
+  let stamps = [...getCurrentSessionMemoryModeStamps()];
+  let memoryOff = false;
+  let autoMemoryOff = false;
   clearSessionMetadata();
-  if (ne) holdSessionHistorySuppression();
-  if (me) {
+  if (suppressed) holdSessionHistorySuppression();
+  if (memoryOff) {
     setMemoryToggledOff(true);
     setRestoredMemoryPause(true);
   }
-  if (le) {
+  if (autoMemoryOff) {
     setAutoMemoryOffThisSession(true);
     setRestoredAutoMemoryOff(true);
   }
-  if (q !== undefined) setConversationAtisLatch(q);
-  if (z !== undefined) getConversationToolsUsed().replace(z);
+  if (atisLatch !== undefined) setConversationAtisLatch(atisLatch);
+  if (toolsUsed !== undefined) getConversationToolsUsed().replace(toolsUsed);
   else {
     getConversationToolsUsed().replace(filtered);
     markToolsUsedWritten();
   }
-  let I = randomUUID();
+  let newConversationId = randomUUID();
   if (getIsNonInteractiveSession() || (isReplBridgeActive() && isBridgeStateFramesEnabled())) {
-    let e = resetTrigger === "clear" ? normalizeUuidOrNull(resetUserMessageUuid) : null;
-    setCurrentForKey(session, I);
+    let userUuid = resetTrigger === "clear" ? normalizeUuidOrNull(resetUserMessageUuid) : null;
+    setCurrentForKey(session, newConversationId);
     enqueueTaskNotification({
       type: "conversation_reset",
-      new_conversation_id: I,
-      uuid: I,
+      new_conversation_id: newConversationId,
+      uuid: newConversationId,
       ...(resetTrigger !== undefined && {
         trigger: resetTrigger,
       }),
-      ...(e !== null && {
-        user_message_uuid: e,
+      ...(userUuid !== null && {
+        user_message_uuid: userUuid,
       }),
       timestamp: new Date().toISOString(),
     });
@@ -376,7 +378,7 @@ async function* clearConversation({
   devIntentTracker.of(session.host).conversationReset();
   yield {
     type: "conversation_reset",
-    newConversationId: I,
+    newConversationId,
   };
   if (!conversationOnly) {
     saveSessionCostsForTransition(storageV5);
@@ -384,19 +386,19 @@ async function* clearConversation({
   }
   if (getIsNonInteractiveSession() && isRemoteEnvironmentAny() && hasRemoteWorkerEventLog() && !isDiskless())
     queueLeafCheckpointWithdrawal();
-  let W = pinSessionId(getSessionId());
-  let he = re || (E && isConversationEgressTainted(W));
+  let pinnedSessionId = pinSessionId(getSessionId());
+  let taintedNow = tainted || (titleToKeep && isConversationEgressTainted(pinnedSessionId));
   let metadataPaths = new Map();
-  for (let e of tasks)
-    if (e.forkedSkillName === undefined) {
-      let r = identityAgentId2(e.agentId);
-      metadataPaths.set(r, getAgentMetadataPath(r));
+  for (let task of tasks)
+    if (task.forkedSkillName === undefined) {
+      let agentId = identityAgentId2(task.agentId);
+      metadataPaths.set(agentId, getAgentMetadataPath(agentId));
     }
   regenerateSessionId({
     setCurrentAsParent: true,
     next: conversationOnly?.nextSessionId,
   });
-  if (E && currentSessionTitle !== undefined) cacheSessionTitle(currentSessionTitle);
+  if (titleToKeep && currentSessionTitle !== undefined) cacheSessionTitle(currentSessionTitle);
   let resolved = Promise.resolve(true);
   runBundledSkillSessionResets();
   resetForNewConversation();
@@ -405,30 +407,35 @@ async function* clearConversation({
   ccrSessionIdForRefs(session);
   if (env.CLAUDE_CODE_SESSION_ID && !conversationOnly) process.env.CLAUDE_CODE_SESSION_ID = getSessionId();
   await resetSessionFilePointer();
-  for (let e of PAUSE_STAMPS_CARRY_HOOK?.pauseStampsCarriedAcrossClear(getAppState?.().mcp.clients, de) ?? [])
+  for (let stamp of PAUSE_STAMPS_CARRY_HOOK?.pauseStampsCarriedAcrossClear(
+    getAppState?.().mcp.clients,
+    stamps,
+  ) ?? [])
     saveMemoryMode(
       {
-        ...e,
+        ...stamp,
         afterUuid: null,
       },
       storageV5,
     );
   dropSessionHistorySuppression();
-  releasePrecautionarySuppressionFor(W);
+  releasePrecautionarySuppressionFor(pinnedSessionId);
   if (conversationOnly) {
     await stopAgentsAndCarrySettings(tasks, metadataPaths, storageV5);
     return;
   }
   await syncJobResumeSessionId(getSessionId(), getTranscriptPath(), storageV5);
-  if (isAgentSwarmsEnabled()) await (await import("./chunk-cpmshktc.js")).noteSessionTaskListAfterClear();
-  if (clearedSessionTitle) await saveCustomTitle(sessionId, clearedSessionTitle, ie, "user", storageV5);
+  if (isAgentSwarmsEnabled())
+    await (await import("../../utils/swarm/sessionTaskList.js")).noteSessionTaskListAfterClear();
+  if (clearedSessionTitle)
+    await saveCustomTitle(sessionId, clearedSessionTitle, titlePath, "user", storageV5);
   else if (currentSessionTitle) {
     await saveCustomTitle(getSessionId(), currentSessionTitle, undefined, "user", storageV5);
     if (currentSessionAgentName)
       await saveAgentName(getSessionId(), currentSessionAgentName, undefined, "user", storageV5);
   }
   await stopAgentsAndCarrySettings(tasks, metadataPaths, storageV5);
-  let { isCoordinatorMode } = require("./chunk-yxywkh50.js");
+  let { isCoordinatorMode } = require("../../coordinator/coordinatorMode.js");
   saveMode(isCoordinatorMode() ? "coordinator" : "normal");
   let worktreeSession = getCurrentWorktreeSession();
   if (worktreeSession) saveWorktreeState(worktreeSession, storageV5);
@@ -449,11 +456,11 @@ async function* clearConversation({
     if (hasCarriableCron()) setMessages(withCronCarryAttachment);
     return;
   }
-  let Q = await processSessionStartHooks(session, "clear", {
+  let hookRows = await processSessionStartHooks(session, "clear", {
     storageV5,
     credentials,
   });
-  if (Q.length > 0) setMessages(() => Q);
+  if (hookRows.length > 0) setMessages(() => hookRows);
   if (hasCarriableCron()) setMessages(withCronCarryAttachment);
 }
 //@ chunk-231n2j4w.js:6914-7185 layout
@@ -463,13 +470,13 @@ async function* clearConversation({
 async function stopAgentsAndCarrySettings(tasks, metadataPaths, storage) {
   for (let task of tasks) if (task.status === "running") initAgentOutputSymlink(task.agentId);
   await Promise.all(
-    Array.from(metadataPaths, async ([f, O]) => {
+    Array.from(metadataPaths, async ([agentId, path]) => {
       try {
-        let agentMetadataAtPath = await readAgentMetadataAtPath(O, storage);
-        if (agentMetadataAtPath) await writeAgentMetadata(f, agentMetadataAtPath, storage, true);
+        let agentMetadataAtPath = await readAgentMetadataAtPath(path, storage);
+        if (agentMetadataAtPath) await writeAgentMetadata(agentId, agentMetadataAtPath, storage, true);
       } catch (error) {
         logForDebugging(
-          `/clear did not carry the settings file of agent ${f}: ${describeStorageError(error)}`,
+          `/clear did not carry the settings file of agent ${agentId}: ${describeStorageError(error)}`,
           {
             level: "error",
           },
@@ -514,7 +521,10 @@ function hasPendingAgentWork(taskId, agentId) {
     getTaskRunState().resumesInFlight.has(agentId) ||
     commandQueueManager()
       .getCommandQueue()
-      .some((m) => m.mode === "task-notification" && (m.taskId === taskId || m.agentId === agentId))
+      .some(
+        (queued) =>
+          queued.mode === "task-notification" && (queued.taskId === taskId || queued.agentId === agentId),
+      )
   );
 }
 //@ chunk-231n2j4w.js:7700-7788 layout
@@ -526,9 +536,10 @@ var NON_AGENT_TASK_TYPES = new Set([
   "post_turn_memory",
 ]);
 //@ chunk-231n2j4w.js:7788-7877 facade-exports
-function hasAgentTaskSurvivingClear(o) {
-  return Object.values(o).some(
-    (s) => !isBackgroundTask(s) && AGENT_TASK_TYPES.has(s.type) && !isTerminalTaskStatus(s.status),
+function hasAgentTaskSurvivingClear(tasks) {
+  return Object.values(tasks).some(
+    (task) =>
+      !isBackgroundTask(task) && AGENT_TASK_TYPES.has(task.type) && !isTerminalTaskStatus(task.status),
   );
 }
 export { clearConversation, hasAgentTaskSurvivingClear };

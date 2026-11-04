@@ -9,22 +9,23 @@
  * attribution: placement 11
  */
 import { ASSET_ID_RE } from "../../tools/ArtifactTool/constants.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-4v4n55c3.js:227-304 placement
-function plainObjectOrNull(t) {
-  return typeof t === "object" && t !== null && !Array.isArray(t) ? t : null;
+function plainObjectOrNull(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value : null;
 }
 //@ chunk-4v4n55c3.js:304-372 placement
-function omitFields(fields, ...e) {
-  let r = {
+function omitFields(fields, ...omitted) {
+  let copy = {
     ...fields,
   };
-  for (let s of e) delete r[s];
-  return r;
+  for (let field of omitted) delete copy[field];
+  return copy;
 }
 //@ chunk-4v4n55c3.js:372-413 placement
-function isNonEmptyString(t) {
-  return typeof t === "string";
+function isNonEmptyString(value) {
+  return typeof value === "string";
 }
 //@ chunk-4v4n55c3.js:413-476 placement
 function isAssetPublishInput(fields) {
@@ -62,15 +63,19 @@ var ADDON_OF_LEGACY_ACTION = {
 /**
  * 导出函数 `isLegacyArtifactAction`：参数 t，返回 Object.hasOwn(ADDON_OF_LEGACY_ACTION, t)。
  */
-function isLegacyArtifactAction(t) {
-  return Object.hasOwn(ADDON_OF_LEGACY_ACTION, t);
+function isLegacyArtifactAction(action) {
+  return Object.hasOwn(ADDON_OF_LEGACY_ACTION, action);
 }
 //@ chunk-4v4n55c3.js:855-926 placement
 /**
  * 数据库写入动作名（set/update/str_replace/delete/batch），简写展开时归到 write_db。
  */
-var DB_WRITE_OPS = ["set", "update", "str_replace", "delete", "batch"];
-var DB_WRITE_OPS_SET = new Set(DB_WRITE_OPS);
+var DB_WRITE_OPS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DB_WRITE_OPS_SET;
+deferInit("chunk-4v4n55c3.js:855", () => {
+  DB_WRITE_OPS = ["set", "update", "str_replace", "delete", "batch"];
+  DB_WRITE_OPS_SET = new Set(DB_WRITE_OPS);
+});
 //@ chunk-4v4n55c3.js:926-1741 placement
 /**
  * 把 Artifact 工具的简写输入展开成细分动作：publish+asset → upload_asset/copy_from，read → describe_type/read_asset/read_file，list+scope → list_types/files/assets，delete+path → delete_asset；不认识时原样返回。
@@ -233,24 +238,24 @@ function toParentArtifactInput(addon, input) {
         action: "comments",
       };
     if (action === "watch") {
-      let o = omitFields(fields, "on", "replies");
+      let fieldsObj = omitFields(fields, "on", "replies");
       if (fields.replies === true)
         return {
-          ...o,
+          ...fieldsObj,
           action: "resume_replies",
         };
       if (fields.on === false)
         return {
-          ...o,
+          ...fieldsObj,
           action: "unwatch",
         };
       if (fields.url === undefined)
         return {
-          ...o,
+          ...fieldsObj,
           action: "status",
         };
       return {
-        ...o,
+        ...fieldsObj,
         action: "watch",
       };
     }
@@ -277,51 +282,51 @@ function toParentArtifactInput(addon, input) {
 /**
  * YHe 的逆过程：把主 Artifact 工具输入转回 addon 工具的写法（comments → read，unwatch → watch on:false，read_db/write_db → db_op 本身）。
  */
-function fromParentArtifactInput(t, e) {
-  let r = plainObjectOrNull(e);
-  if (r === null) return e;
-  let action = r.action;
-  if (t === "comments")
+function fromParentArtifactInput(parentInput, input) {
+  let obj = plainObjectOrNull(input);
+  if (obj === null) return input;
+  let action = obj.action;
+  if (parentInput === "comments")
     switch (action) {
       case "comments":
         return {
-          ...r,
+          ...obj,
           action: "read",
         };
       case "watch":
         return {
-          ...r,
+          ...obj,
           action: "watch",
         };
       case "unwatch":
         return {
-          ...r,
+          ...obj,
           action: "watch",
           on: false,
         };
       case "status":
         return {
-          ...omitFields(r, "url"),
+          ...omitFields(obj, "url"),
           action: "watch",
         };
       case "resume_replies":
         return {
-          ...r,
+          ...obj,
           action: "watch",
           replies: true,
         };
       default:
-        return e;
+        return input;
     }
-  if (t === "data") {
-    if ((action === "read_db" || action === "write_db") && isNonEmptyString(r.db_op))
+  if (parentInput === "data") {
+    if ((action === "read_db" || action === "write_db") && isNonEmptyString(obj.db_op))
       return {
-        ...omitFields(r, "db_op"),
-        action: r.db_op,
+        ...omitFields(obj, "db_op"),
+        action: obj.db_op,
       };
-    return e;
+    return input;
   }
-  return e;
+  return input;
 }
 export {
   fromParentArtifactInput,

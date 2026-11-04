@@ -8,7 +8,7 @@
  * pieces: chunk-4v9zy7gn.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default_2,
@@ -20,13 +20,13 @@ import { StatusIcon } from "../../components/design-system/StatusIcon.js";
 
 //@ chunk-4v9zy7gn.js:40689-42521 callgraph-fingerprint = SuccessStep (0.235)
 function SuccessStep(props) {
-  let $ = w(19);
+  let $ = useMemoCache(19);
   let { secretExists, useExistingSecret, secretName, skipWorkflow, appOnlyInstall } = props;
   let skipWorkflow_2 = skipWorkflow === undefined ? false : skipWorkflow;
   if (appOnlyInstall === undefined ? false : appOnlyInstall) {
-    let g;
+    let statusLine;
     if ($[0] === MEMO_CACHE_SENTINEL) {
-      g = jsxProd_default_2(Text, {
+      statusLine = jsxProd_default_2(Text, {
         color: "success",
         children: [
           jsxProd_default(StatusIcon, {
@@ -36,14 +36,14 @@ function SuccessStep(props) {
           "GitHub App installed",
         ],
       });
-      $[0] = g;
-    } else g = $[0];
-    let _;
+      $[0] = statusLine;
+    } else statusLine = $[0];
+    let workflowLine;
     if ($[1] === MEMO_CACHE_SENTINEL) {
-      _ = jsxProd_default_2(Box, {
+      workflowLine = jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
-          g,
+          statusLine,
           jsxProd_default(Box, {
             marginTop: 1,
             children: jsxProd_default(Text, {
@@ -52,13 +52,13 @@ function SuccessStep(props) {
           }),
         ],
       });
-      $[1] = _;
-    } else _ = $[1];
-    return _;
+      $[1] = workflowLine;
+    } else workflowLine = $[1];
+    return workflowLine;
   }
-  let g;
+  let branchLine;
   if ($[2] !== skipWorkflow_2) {
-    g =
+    branchLine =
       !skipWorkflow_2 &&
       jsxProd_default_2(Text, {
         color: "success",
@@ -71,8 +71,8 @@ function SuccessStep(props) {
         ],
       });
     $[2] = skipWorkflow_2;
-    $[3] = g;
-  } else g = $[3];
+    $[3] = branchLine;
+  } else branchLine = $[3];
   let t4;
   if ($[4] !== secretExists || $[5] !== useExistingSecret) {
     t4 =
@@ -95,9 +95,9 @@ function SuccessStep(props) {
     $[5] = useExistingSecret;
     $[6] = t4;
   } else t4 = $[6];
-  let k;
+  let secretLine;
   if ($[7] !== secretExists || $[8] !== secretName || $[9] !== useExistingSecret) {
-    k =
+    secretLine =
       (!secretExists || !useExistingSecret) &&
       jsxProd_default(Box, {
         marginTop: 1,
@@ -117,21 +117,21 @@ function SuccessStep(props) {
     $[7] = secretExists;
     $[8] = secretName;
     $[9] = useExistingSecret;
-    $[10] = k;
-  } else k = $[10];
-  let E;
+    $[10] = secretLine;
+  } else secretLine = $[10];
+  let helpText;
   if ($[11] === MEMO_CACHE_SENTINEL) {
-    E = jsxProd_default(Box, {
+    helpText = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         children: "Next steps:",
       }),
     });
-    $[11] = E;
-  } else E = $[11];
-  let x;
+    $[11] = helpText;
+  } else helpText = $[11];
+  let footer;
   if ($[12] !== skipWorkflow_2) {
-    x = skipWorkflow_2
+    footer = skipWorkflow_2
       ? jsxProd_default_2(Fragment, {
           children: [
             jsxProd_default(Text, {
@@ -159,20 +159,20 @@ function SuccessStep(props) {
           ],
         });
     $[12] = skipWorkflow_2;
-    $[13] = x;
-  } else x = $[13];
-  let T;
-  if ($[14] !== g || $[15] !== t4 || $[16] !== k || $[17] !== x) {
-    T = jsxProd_default_2(Box, {
+    $[13] = footer;
+  } else footer = $[13];
+  let contentBox;
+  if ($[14] !== branchLine || $[15] !== t4 || $[16] !== secretLine || $[17] !== footer) {
+    contentBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [g, t4, k, E, x],
+      children: [branchLine, t4, secretLine, helpText, footer],
     });
-    $[14] = g;
+    $[14] = branchLine;
     $[15] = t4;
-    $[16] = k;
-    $[17] = x;
-    $[18] = T;
-  } else T = $[18];
-  return T;
+    $[16] = secretLine;
+    $[17] = footer;
+    $[18] = contentBox;
+  } else contentBox = $[18];
+  return contentBox;
 }
 export { SuccessStep };

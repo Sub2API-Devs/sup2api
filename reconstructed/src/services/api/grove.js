@@ -9,7 +9,7 @@
  * attribution: sole-consumer 6, affinity 2, fingerprint 7, layout 3
  */
 import { getHostPlatformForAnalytics, env } from "../../utils/env.js";
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { withOAuth401Retry } from "../../utils/http.js";
 import { apiClient } from "../routines/routinesApi.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -27,9 +27,10 @@ import { logEvent } from "../analytics/index.js";
 import { writeToStderr } from "../../utils/process.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { record, string, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { record, stringSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrsqcfp3.js:687-719 sole-consumer
 /**
@@ -51,43 +52,49 @@ function getClientOsHeader() {
 /**
  * 读取账号设置 /api/oauth/account/settings（grove_enabled 等），带缓存。旧版名 updateGroveSettings 为错配，实际是 getGroveSettings。
  */
-var updateGroveSettings_2 = io(
-  async (groveEnabled) => {
-    try {
-      return {
-        success: true,
-        data: (
-          await withOAuth401Retry(
-            async () => {
-              let n = await apiClient.get("/api/oauth/account/settings", {
-                timeout: GROVE_REQUEST_TIMEOUT_MS,
+var updateGroveSettings_2; // deferred: uses withOAuth401Retry (../../utils/http.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-vrsqcfp3.js:768", () => {
+  updateGroveSettings_2 = memoizeAlias(
+    async (groveEnabled) => {
+      try {
+        return {
+          success: true,
+          data: (
+            await withOAuth401Retry(
+              async () => {
+                let response = await apiClient.get("/api/oauth/account/settings", {
+                  timeout: GROVE_REQUEST_TIMEOUT_MS,
+                  credentials: groveEnabled,
+                });
+                if (!response.ok) throw Error(`Failed to get Grove settings: ${response.reason}`);
+                assertGroveOkStatus(response.status);
+                if (
+                  response.data?.grove_enabled !== null &&
+                  typeof response.data?.grove_enabled !== "boolean"
+                )
+                  throw Error("Grove settings answer has no boolean or null grove_enabled");
+                return response;
+              },
+              {
                 credentials: groveEnabled,
-              });
-              if (!n.ok) throw Error(`Failed to get Grove settings: ${n.reason}`);
-              assertGroveOkStatus(n.status);
-              if (n.data?.grove_enabled !== null && typeof n.data?.grove_enabled !== "boolean")
-                throw Error("Grove settings answer has no boolean or null grove_enabled");
-              return n;
-            },
-            {
-              credentials: groveEnabled,
-            },
-          )
-        ).data,
-      };
-    } catch (err) {
-      if (!(err instanceof Error) || !/data-residency|essential-traffic-only|no-auth/.test(err.message))
-        logForDebugging(`Failed to fetch Grove settings: ${err}`, {
-          level: "error",
-        });
-      updateGroveSettings_2.cache.clear?.();
-      return {
-        success: false,
-      };
-    }
-  },
-  () => "account",
-);
+              },
+            )
+          ).data,
+        };
+      } catch (err) {
+        if (!(err instanceof Error) || !/data-residency|essential-traffic-only|no-auth/.test(err.message))
+          logForDebugging(`Failed to fetch Grove settings: ${err}`, {
+            level: "error",
+          });
+        updateGroveSettings_2.cache.clear?.();
+        return {
+          success: false,
+        };
+      }
+    },
+    () => "account",
+  );
+});
 //@ chunk-vrsqcfp3.js:1386-1856 fingerprint = markGroveNoticeViewed (0.453)
 /**
  * POST grove_notice_viewed。
@@ -96,7 +103,7 @@ async function markGroveNoticeViewed(credentials) {
   try {
     await withOAuth401Retry(
       async () => {
-        let e = await apiClient.post(
+        let response = await apiClient.post(
           "/api/oauth/account/grove_notice_viewed",
           {},
           {
@@ -104,9 +111,9 @@ async function markGroveNoticeViewed(credentials) {
             headers: getClientOsHeader(),
           },
         );
-        if (!e.ok) throw Error(`Failed to mark Grove notice viewed: ${e.reason}`);
-        assertGroveOkStatus(e.status);
-        return e;
+        if (!response.ok) throw Error(`Failed to mark Grove notice viewed: ${response.reason}`);
+        assertGroveOkStatus(response.status);
+        return response;
       },
       {
         credentials,
@@ -129,12 +136,12 @@ async function markGroveNoticeViewed(credentials) {
 /**
  * PATCH 账号 grove_enabled（可只在未设置时写入）。
  */
-async function updateGroveSettings(groveEnabled, credentials, { onlyIfUnset: n = false } = {}) {
+async function updateGroveSettings(groveEnabled, credentials, { onlyIfUnset = false } = {}) {
   try {
-    let { data: s } = await withOAuth401Retry(
+    let { data: body } = await withOAuth401Retry(
       async () => {
-        let c = await apiClient.patch(
-          n
+        let response = await apiClient.patch(
+          onlyIfUnset
             ? "/api/oauth/account/settings?opt_in_only_if_unset=grove_enabled"
             : "/api/oauth/account/settings",
           {
@@ -145,17 +152,20 @@ async function updateGroveSettings(groveEnabled, credentials, { onlyIfUnset: n =
             headers: getClientOsHeader(),
           },
         );
-        if (!c.ok) throw Error(`Failed to update Grove settings: ${c.reason}`);
-        assertGroveOkStatus(c.status);
-        return c;
+        if (!response.ok) throw Error(`Failed to update Grove settings: ${response.reason}`);
+        assertGroveOkStatus(response.status);
+        return response;
       },
       {
         credentials,
       },
     );
     logFeatureOk("api_grove_settings_update");
-    return typeof s === "object" && s !== null && "grove_enabled" in s && typeof s.grove_enabled === "boolean"
-      ? s.grove_enabled
+    return typeof body === "object" &&
+      body !== null &&
+      "grove_enabled" in body &&
+      typeof body.grove_enabled === "boolean"
+      ? body.grove_enabled
       : undefined;
   } catch (error) {
     logForDebugging(`updateGroveSettings failed: ${String(error)}`, {
@@ -171,7 +181,7 @@ async function updateGroveSettings(groveEnabled, credentials, { onlyIfUnset: n =
 /**
  * 是否需要 Grove：读缓存配置，无缓存时后台拉取。
  */
-async function isQualifiedForGrove(storageV5, credentials) {
+async function isQualifiedForGrove(configWriteSource, credentials) {
   if (!isConsumerSubscriber()) return false;
   if (!mayHaveProfileScope()) return false;
   let accountId = getOauthAccountInfo()?.accountUuid;
@@ -180,12 +190,12 @@ async function isQualifiedForGrove(storageV5, credentials) {
   let now = Date.now();
   if (!cachedEntry) {
     logForDebugging("Grove: No cache, fetching config in background (dialog skipped this session)");
-    fetchAndStoreGroveConfig(accountId, storageV5, credentials);
+    fetchAndStoreGroveConfig(accountId, configWriteSource, credentials);
     return false;
   }
   if (now - cachedEntry.timestamp > ONE_DAY_MS) {
     logForDebugging("Grove: Cache stale, returning cached data and refreshing in background");
-    fetchAndStoreGroveConfig(accountId, storageV5, credentials);
+    fetchAndStoreGroveConfig(accountId, configWriteSource, credentials);
     return cachedEntry.grove_enabled;
   }
   logForDebugging("Grove: Using fresh cached config");
@@ -195,32 +205,32 @@ async function isQualifiedForGrove(storageV5, credentials) {
 /**
  * 拉取 Grove 配置并存入全局缓存。
  */
-async function fetchAndStoreGroveConfig(accountId, e, n) {
+async function fetchAndStoreGroveConfig(accountId, configWriteSource, credentials) {
   try {
-    let s = credentialIsOwnStoredLogin();
-    let groveNoticeConfig = await getGroveNoticeConfig(n);
+    let ownLogin = credentialIsOwnStoredLogin();
+    let groveNoticeConfig = await getGroveNoticeConfig(credentials);
     if (!groveNoticeConfig.success) {
       if (
         groveNoticeConfig.errorStatus !== undefined &&
         groveNoticeConfig.errorStatus !== 401 &&
-        s &&
+        ownLogin &&
         getGlobalConfig().groveConfigCache?.[accountId]
       )
         await saveGlobalConfig((current) => {
-          let v = current.groveConfigCache?.[accountId];
-          return v
+          let cached = current.groveConfigCache?.[accountId];
+          return cached
             ? {
                 ...current,
                 groveConfigCache: {
                   ...current.groveConfigCache,
                   [accountId]: {
-                    ...v,
+                    ...cached,
                     timestamp: Date.now(),
                   },
                 },
               }
             : current;
-        }, e);
+        }, configWriteSource);
       return;
     }
     let groveEnabled = groveNoticeConfig.data.grove_enabled;
@@ -238,7 +248,7 @@ async function fetchAndStoreGroveConfig(accountId, e, n) {
           },
         },
       }),
-      e,
+      configWriteSource,
     );
   } catch (err) {
     logForDebugging(`Grove: Failed to fetch and store config: ${err}`);
@@ -248,57 +258,60 @@ async function fetchAndStoreGroveConfig(accountId, e, n) {
 /**
  * GET /api/claude_code_grove 通知配置。
  */
-var getGroveNoticeConfig = io(
-  async (credentials) => {
-    try {
-      let response = await withOAuth401Retry(
-        async () => {
-          let d = await apiClient.get("/api/claude_code_grove", {
-            timeout: GROVE_REQUEST_TIMEOUT_MS,
+var getGroveNoticeConfig; // deferred: uses withOAuth401Retry (../../utils/http.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-vrsqcfp3.js:3531", () => {
+  getGroveNoticeConfig = memoizeAlias(
+    async (credentials) => {
+      try {
+        let response = await withOAuth401Retry(
+          async () => {
+            let response = await apiClient.get("/api/claude_code_grove", {
+              timeout: GROVE_REQUEST_TIMEOUT_MS,
+              credentials,
+            });
+            if (!response.ok) throw Error(`Failed to fetch Grove notice config: ${response.reason}`);
+            assertGroveOkStatus(response.status);
+            if (typeof response.data?.grove_enabled !== "boolean")
+              throw Error("Grove notice config answer has no boolean grove_enabled");
+            return response;
+          },
+          {
             credentials,
-          });
-          if (!d.ok) throw Error(`Failed to fetch Grove notice config: ${d.reason}`);
-          assertGroveOkStatus(d.status);
-          if (typeof d.data?.grove_enabled !== "boolean")
-            throw Error("Grove notice config answer has no boolean grove_enabled");
-          return d;
-        },
-        {
-          credentials,
-        },
-      );
-      let {
-        grove_enabled,
-        domain_excluded,
-        notice_is_grace_period,
-        notice_reminder_frequency,
-        grove_locked_by_claude_science: groveLockedByClaudeScience,
-      } = response.data;
-      return {
-        success: true,
-        data: {
+          },
+        );
+        let {
           grove_enabled,
-          domain_excluded: domain_excluded ?? false,
-          notice_is_grace_period: notice_is_grace_period ?? true,
+          domain_excluded,
+          notice_is_grace_period,
           notice_reminder_frequency,
-          grove_locked_by_claude_science: groveLockedByClaudeScience === true,
-        },
-      };
-    } catch (err) {
-      logForDebugging(`Failed to fetch Grove notice config: ${err}`);
-      getGroveNoticeConfig.cache.clear?.();
-      return err instanceof GroveHttpError
-        ? {
-            success: false,
-            errorStatus: err.status,
-          }
-        : {
-            success: false,
-          };
-    }
-  },
-  () => "config",
-);
+          grove_locked_by_claude_science: groveLockedByClaudeScience,
+        } = response.data;
+        return {
+          success: true,
+          data: {
+            grove_enabled,
+            domain_excluded: domain_excluded ?? false,
+            notice_is_grace_period: notice_is_grace_period ?? true,
+            notice_reminder_frequency,
+            grove_locked_by_claude_science: groveLockedByClaudeScience === true,
+          },
+        };
+      } catch (err) {
+        logForDebugging(`Failed to fetch Grove notice config: ${err}`);
+        getGroveNoticeConfig.cache.clear?.();
+        return err instanceof GroveHttpError
+          ? {
+              success: false,
+              errorStatus: err.status,
+            }
+          : {
+              success: false,
+            };
+      }
+    },
+    () => "config",
+  );
+});
 //@ chunk-vrsqcfp3.js:4327-4829 fingerprint = calculateShouldShowGrove (0.821)
 /**
  * 是否显示 Grove 通知：未作出选择且（不在宽限期或到了提醒频率）。
@@ -327,41 +340,42 @@ function calculateShouldShowGrove(settingsResult, configResult, showIfAlreadyVie
 /**
  * 服务端一小时内已确认过 Consumer Terms 选择则不再询问。
  */
-async function wasGroveRecentlyConfirmed(r) {
-  let groveAccountUuid = await getGroveAccountUuid(r);
-  let n =
+async function wasGroveRecentlyConfirmed(credentials) {
+  let groveAccountUuid = await getGroveAccountUuid(credentials);
+  let recentlyConfirmed =
     groveAccountUuid !== undefined &&
     isWithinOneHour(getGroveChoiceSeenAt(getGlobalConfig())[groveAccountUuid]);
-  if (n) logForDebugging("Grove: the server recently confirmed a Consumer Terms answer; not asking again");
-  return n;
+  if (recentlyConfirmed)
+    logForDebugging("Grove: the server recently confirmed a Consumer Terms answer; not asking again");
+  return recentlyConfirmed;
 }
 //@ chunk-vrsqcfp3.js:4994-5415 layout
 /**
  * 记录服务端返回的 grove 选择时间。
  */
-async function recordGroveChoiceSeen(r, e, n) {
+async function recordGroveChoiceSeen(groveConfig, configWriteSource, credentials) {
   let now = Date.now();
   try {
-    let groveEnabled = r.grove_enabled;
+    let groveEnabled = groveConfig.grove_enabled;
     if (typeof groveEnabled !== "boolean" && groveEnabled !== null) return;
-    let u = groveEnabled !== null;
-    let groveAccountUuid = await getGroveAccountUuid(n);
+    let hasChoice = groveEnabled !== null;
+    let groveAccountUuid = await getGroveAccountUuid(credentials);
     if (
       groveAccountUuid === undefined ||
-      u === isWithinOneHour(getGroveChoiceSeenAt(getGlobalConfig())[groveAccountUuid])
+      hasChoice === isWithinOneHour(getGroveChoiceSeenAt(getGlobalConfig())[groveAccountUuid])
     )
       return;
-    await saveGlobalConfig((d) => {
-      let groveChoiceSeenAt = getGroveChoiceSeenAt(d);
-      if (u === isWithinOneHour(groveChoiceSeenAt[groveAccountUuid])) return d;
+    await saveGlobalConfig((current) => {
+      let groveChoiceSeenAt = getGroveChoiceSeenAt(current);
+      if (hasChoice === isWithinOneHour(groveChoiceSeenAt[groveAccountUuid])) return current;
       let filtered = Object.entries(groveChoiceSeenAt).filter(
         ([key, value]) => key !== groveAccountUuid && isWithinOneHour(value),
       );
       return {
-        ...d,
-        groveChoiceSeenAt: Object.fromEntries(u ? [...filtered, [groveAccountUuid, now]] : filtered),
+        ...current,
+        groveChoiceSeenAt: Object.fromEntries(hasChoice ? [...filtered, [groveAccountUuid, now]] : filtered),
       };
-    }, e);
+    }, configWriteSource);
   } catch (error) {
     logForDebugging(`Grove: could not save the Consumer Terms check: ${error}`);
   }
@@ -370,13 +384,13 @@ async function recordGroveChoiceSeen(r, e, n) {
 /**
  * 非交互模式下检查 Grove：需要时打印提示或退出。
  */
-async function checkGroveForNonInteractive(storageV5, credentials) {
+async function checkGroveForNonInteractive(configWriteSource, credentials) {
   if (await wasGroveRecentlyConfirmed(credentials)) return;
   let [settingsResult, configResult] = await Promise.all([
     updateGroveSettings_2(credentials),
     getGroveNoticeConfig(credentials),
   ]);
-  if (settingsResult.success) recordGroveChoiceSeen(settingsResult.data, storageV5, credentials);
+  if (settingsResult.success) recordGroveChoiceSeen(settingsResult.data, configWriteSource, credentials);
   if (calculateShouldShowGrove(settingsResult, configResult, false)) {
     let config = configResult.success ? configResult.data : null;
     logEvent("tengu_grove_print_viewed", {
@@ -401,31 +415,34 @@ An update to our Consumer Terms and Privacy Policy will take effect on October 8
 /**
  * 时间戳在一小时以内。
  */
-function isWithinOneHour(r) {
-  if (r === undefined) return false;
-  let e = Date.now() - r;
-  return e >= 0 && e < ONE_HOUR_MS;
+function isWithinOneHour(seenAt) {
+  if (seenAt === undefined) return false;
+  let ageMs = Date.now() - seenAt;
+  return ageMs >= 0 && ageMs < ONE_HOUR_MS;
 }
 //@ chunk-vrsqcfp3.js:6098-6123 sole-consumer
 /**
  * groveChoiceSeenAt 配置项（账号 → 时间）的 zod schema。
  */
-var groveChoiceSeenAtSchema = DoctorLazy(() => record(string(), E()));
+var groveChoiceSeenAtSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-vrsqcfp3.js:6098", () => {
+  groveChoiceSeenAtSchema = DoctorLazy(() => record(stringSchema(), numberSchema()));
+});
 //@ chunk-vrsqcfp3.js:6123-6205 sole-consumer
 /**
  * 读配置里的 groveChoiceSeenAt，校验失败返回 {}。
  */
 function getGroveChoiceSeenAt(globalConfig) {
-  let e = groveChoiceSeenAtSchema().safeParse(globalConfig.groveChoiceSeenAt);
-  return e.success ? e.data : {};
+  let parsed = groveChoiceSeenAtSchema().safeParse(globalConfig.groveChoiceSeenAt);
+  return parsed.success ? parsed.data : {};
 }
 //@ chunk-vrsqcfp3.js:6205-6469 sole-consumer
 /**
  * 按凭证来源取账号 uuid（store：OAuth 账号；env/fd：CLAUDE_CODE_ACCOUNT_UUID），小写；未知时返回 undefined 交给服务器判断。
  */
-async function getGroveAccountUuid(r) {
+async function getGroveAccountUuid(credentials) {
   try {
-    switch (await getClaudeAIOAuthTokenOriginAsync(r)) {
+    switch (await getClaudeAIOAuthTokenOriginAsync(credentials)) {
       case "store":
         return normalizeUuidOrNull(getOauthAccountInfo()?.accountUuid)?.toLowerCase();
       case "env":
@@ -443,13 +460,16 @@ async function getGroveAccountUuid(r) {
 /**
  * Grove 接口非 2xx 时抛出，携带 status。
  */
-class GroveHttpError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  status;
-  constructor(r) {
-    super(`HTTP ${r}`, "Grove request answered with an error status");
-    this.status = r;
-  }
-}
+let GroveHttpError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-vrsqcfp3.js:6469", () => {
+  GroveHttpError = class GroveHttpError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
+    status;
+    constructor(status) {
+      super(`HTTP ${status}`, "Grove request answered with an error status");
+      this.status = status;
+    }
+  };
+});
 //@ chunk-vrsqcfp3.js:6589-6635 sole-consumer
 /**
  * 状态码不在 200–299 时抛 GroveHttpError。

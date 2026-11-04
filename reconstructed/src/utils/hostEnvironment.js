@@ -14,6 +14,7 @@ import { getRootSession, getGatewayAuth } from "../bootstrap/state.js";
 import { env } from "./env.js";
 import { isFirstPartyProvider } from "./model/providers.js";
 import { isTelemetryDisabled } from "./privacyLevel.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-f22e0a61.js:407-419 placement
 var CLI = "cli";
@@ -67,23 +68,23 @@ class HostEnvironmentState {
   routines = new Map();
   routineCronTasks = new Map();
   allWorkflows = new Map();
-  reservedSpellingsFor(e, t) {
-    let n = this.reservedSpellingsByLoadedResult.get(e);
-    if (n) return n;
-    let l = t();
-    this.reservedSpellingsByLoadedResult.set(e, l);
-    return l;
+  reservedSpellingsFor(loadedResult, compute) {
+    let spellings = this.reservedSpellingsByLoadedResult.get(loadedResult);
+    if (spellings) return spellings;
+    let computedSpellings = compute();
+    this.reservedSpellingsByLoadedResult.set(loadedResult, computedSpellings);
+    return computedSpellings;
   }
   refusedReservedSkillNames() {
     return Array.from(
       this.dynamicSkillStates.get(this.dynamicSkillStateKey())?.refusedReservedNames.values() ?? [],
     );
   }
-  markLoadedResultMissingTrustedNames(e) {
-    this.loadedResultsMissingTrustedNames.add(e);
+  markLoadedResultMissingTrustedNames(loadedResult) {
+    this.loadedResultsMissingTrustedNames.add(loadedResult);
   }
-  loadedResultIsMissingTrustedNames(e) {
-    return this.loadedResultsMissingTrustedNames.has(e);
+  loadedResultIsMissingTrustedNames(loadedResult) {
+    return this.loadedResultsMissingTrustedNames.has(loadedResult);
   }
   clearLoadCaches() {
     this.invalidateCommands();
@@ -108,39 +109,42 @@ class HostEnvironmentState {
   }
   invalidateSkillDirs() {
     this.skillDirCommands.clear();
-    let e = this.dynamicSkillStates.get(this.dynamicSkillStateKey());
-    if (e) {
-      e.conditionalSkills.clear();
-      e.activatedConditionalSkillNames.clear();
+    let state = this.dynamicSkillStates.get(this.dynamicSkillStateKey());
+    if (state) {
+      state.conditionalSkills.clear();
+      state.activatedConditionalSkillNames.clear();
     }
   }
-  evictDynamicSkillState(e) {
-    this.dynamicSkillStates.delete(e);
-    let t = `${e}:`;
+  evictDynamicSkillState(stateKey) {
+    this.dynamicSkillStates.delete(stateKey);
+    let keyPrefix = `${stateKey}:`;
     for (let key of [...this.skillDirCommands.keys()])
-      if (key.startsWith(t)) this.skillDirCommands.delete(key);
+      if (key.startsWith(keyPrefix)) this.skillDirCommands.delete(key);
   }
 }
 //@ chunk-f22e0a61.js:3025-3113 placement
 /**
  * Map 中取值，缺失时创建。
  */
-function getOrCreate(e, t, n) {
-  let l = e.get(t);
-  if (l !== undefined) return l;
-  let s = n();
-  e.set(t, s);
-  return s;
+function getOrCreate(map, key, createValue) {
+  let existing = map.get(key);
+  if (existing !== undefined) return existing;
+  let value = createValue();
+  map.set(key, value);
+  return value;
 }
 //@ chunk-f22e0a61.js:3113-3146 placement
 /**
  * undefined 键映射为 \0。
  */
-function keyOrNull(e) {
-  return e ?? "\x00";
+function keyOrNull(key) {
+  return key ?? "\x00";
 }
 //@ chunk-f22e0a61.js:3146-3169 placement
-var providerManagedHostRegistry = new HostScoped(() => new HostEnvironmentState());
+var providerManagedHostRegistry; // deferred: uses HostEnvironmentState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-f22e0a61.js:3146", () => {
+  providerManagedHostRegistry = new HostScoped(() => new HostEnvironmentState());
+});
 //@ chunk-f22e0a61.js:3169-3205 placement
 /**
  * 取当前宿主状态。

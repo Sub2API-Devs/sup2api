@@ -24,8 +24,8 @@ import { Login, runPostLoginHooks, loginCompletion } from "../../services/oauth/
 import { logError } from "../../utils/log.js";
 
 //@ chunk-rw1dvz2v.js:468-576 placement
-function getUpgradeUrl(a) {
-  return `https://claude.ai/upgrade/max?utm_source=claude_code&utm_medium=cli&utm_campaign=${a}`;
+function getUpgradeUrl(surface) {
+  return `https://claude.ai/upgrade/max?utm_source=claude_code&utm_medium=cli&utm_campaign=${surface}`;
 }
 //@ chunk-rw1dvz2v.js:576-634 placement
 async function call(onDone, context) {
@@ -35,9 +35,9 @@ async function call(onDone, context) {
 /**
  * 从不同入口触发 /upgrade（打开升级页并重新登录）。
  */
-async function callUpgradeFromSurface(onDone, r, d) {
-  let u = withQuotaResumeFire(onDone);
-  let upgradeUrl = getUpgradeUrl(d);
+async function callUpgradeFromSurface(onDone, context, surface) {
+  let done = withQuotaResumeFire(onDone);
+  let upgradeUrl = getUpgradeUrl(surface);
   try {
     if (isClaudeAISubscriber()) {
       let tokens = getClaudeAIOAuthTokens();
@@ -53,7 +53,7 @@ async function callUpgradeFromSurface(onDone, r, d) {
       if (isMax20x) {
         let usageCreditsCommand = getUsageCreditsCommand();
         setTimeout(
-          u,
+          done,
           0,
           usageCreditsCommand
             ? `You\u2019re already on the highest Max subscription plan. For additional usage, run ${usageCreditsCommand}.`
@@ -67,14 +67,16 @@ async function callUpgradeFromSurface(onDone, r, d) {
         (billingType === "apple_subscription" || billingType === "google_play_subscription")
       ) {
         let usageCreditsCommand = getUsageCreditsCommand();
-        let p =
+        let billingNote =
           billingType === "apple_subscription"
             ? "Your plan is billed through the App Store. To change it, open Claude for iOS and go to Settings \u2192 Billing. After you change it, run /login here so the new plan takes effect."
             : "Your plan is billed through Google Play. To change it, open Claude for Android and go to Settings. After you change it, run /login here so the new plan takes effect.";
         setTimeout(
-          u,
+          done,
           0,
-          usageCreditsCommand ? `${p} For additional usage now, run ${usageCreditsCommand}.` : p,
+          usageCreditsCommand
+            ? `${billingNote} For additional usage now, run ${usageCreditsCommand}.`
+            : billingNote,
         );
         return null;
       }
@@ -88,19 +90,19 @@ async function callUpgradeFromSurface(onDone, r, d) {
     let previousGatewayAuth = getGatewayAuth();
     return jsxProd_default(Login, {
       startingMessage: "Starting new login following /upgrade. Exit with Ctrl-C to use existing account.",
-      onDone: async (t, s, setAppState) => {
-        let o = await runPostLoginHooks(r, t, {
+      onDone: async (token, url, setAppState) => {
+        let postLogin = await runPostLoginHooks(context, token, {
           setAppState,
           previousAccount,
           previousGatewayAuth,
         });
-        u(...loginCompletion(r, t, o));
+        done(...loginCompletion(context, token, postLogin));
       },
     });
   } catch (error) {
     logError(error);
-    setTimeout(u, 0, `Failed to open browser. Please visit ${upgradeUrl} to upgrade.`);
+    setTimeout(done, 0, `Failed to open browser. Please visit ${upgradeUrl} to upgrade.`);
   }
   return null;
 }
-export { callUpgradeFromSurface };
+export { callUpgradeFromSurface, call };

@@ -20,8 +20,8 @@ var SESSION_URL_HASH_SALT = "3ab19d7e-9f35-45c2-926e-75e271cc60b3";
 /**
  * hashSessionAddress：会话地址哈希。
  */
-function hashSessionAddress(e) {
-  return hashAgentId(e.trim(), SESSION_URL_HASH_SALT);
+function hashSessionAddress(address) {
+  return hashAgentId(address.trim(), SESSION_URL_HASH_SALT);
 }
 //@ chunk-ndmse9kj.js:771-864 placement
 /**

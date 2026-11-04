@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:118155-119920 cjs-fingerprint
-var require_django = x(function (cjsExports, cjsModule) {
+var require_django = __commonJS(function (cjsExports, cjsModule) {
   function django(hljs) {
     let FILTER = {
       begin: /\|[A-Za-z]+:?/,

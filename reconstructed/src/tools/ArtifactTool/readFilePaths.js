@@ -28,6 +28,7 @@ import { MAX_SEGMENT_WITH_SLASH } from "../../services/artifacts/artifactUrl.js"
 import { retryFsOp } from "../../utils/atomicPublishWrite.js";
 import { getErrnoCode } from "../../utils/errors.js";
 import { ATOMIC_WRITE_ERRNOS } from "../../utils/plugins/safeCopy.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-zad29gky.js:693-1114 placement
 /**
@@ -38,10 +39,10 @@ function windowsPathProblem(key) {
   let platform = getPlatform();
   if (
     platform === "windows" &&
-    parts.some((e) => /[<>"|*]/.test(e) || isReservedDeviceName(e) || /[. ]$/.test(e))
+    parts.some((segment) => /[<>"|*]/.test(segment) || isReservedDeviceName(segment) || /[. ]$/.test(segment))
   )
     return `path ${safeJsonQuote(key)} cannot be a file name on Windows (reserved device name, trailing dot or space, or one of < > " | *)`;
-  if ((platform === "windows" || platform === "wsl") && parts.some((e) => /~\d/.test(e)))
+  if ((platform === "windows" || platform === "wsl") && parts.some((segment) => /~\d/.test(segment)))
     return `path ${safeJsonQuote(key)} carries a NAME~1 short-name alias, which a Windows filesystem resolves to a differently named entry`;
   return;
 }
@@ -49,13 +50,13 @@ function windowsPathProblem(key) {
 /**
  * 读取 read_file 输入中的 path、paths（只保留字符串）与 out_dir。
  */
-function readFilePathArgs(n) {
-  let t = n;
-  let r = (i) => {
-    let o = t[i];
-    return typeof o === "string" ? o : undefined;
+function readFilePathArgs(input) {
+  let record = input;
+  let readField = (key) => {
+    let value = record[key];
+    return typeof value === "string" ? value : undefined;
   };
-  let untrustedArray = readUntrustedArray(t.paths);
+  let untrustedArray = readUntrustedArray(record.paths);
   let paths =
     untrustedArray === undefined
       ? undefined
@@ -63,92 +64,104 @@ function readFilePathArgs(n) {
         ? []
         : untrustedArray.filter((untrusted) => typeof untrusted === "string");
   return {
-    path: r("path"),
+    path: readField("path"),
     paths,
-    outDir: r("out_dir"),
+    outDir: readField("out_dir"),
   };
 }
 //@ chunk-zad29gky.js:1323-2368 placement
-function resolveReadFileOutput(n, { outDirJudged: t = false } = {}) {
-  let { path, outDir } = readFilePathArgs(n);
+function resolveReadFileOutput(input, { outDirJudged: options = false } = {}) {
+  let { path, outDir } = readFilePathArgs(input);
   if (path === undefined)
     return {
       reason: "read_file requires `path` \u2014 a published path from a list_files result",
     };
-  let s = validateReadPath(path);
-  if ("errMsg" in s)
+  let checked = validateReadPath(path);
+  if ("errMsg" in checked)
     return {
-      reason: s.errMsg,
+      reason: checked.errMsg,
     };
-  let parts = s.key.split("/");
-  let o = windowsPathProblem(s.key);
-  if (o !== undefined)
+  let parts = checked.key.split("/");
+  let pathProblem = windowsPathProblem(checked.key);
+  if (pathProblem !== undefined)
     return {
-      reason: o,
+      reason: pathProblem,
     };
   let platform = getPlatform();
-  let a = platform === "windows" || platform === "wsl";
-  let l;
-  let f = false;
+  let isWindowsLike = platform === "windows" || platform === "wsl";
+  let dir;
+  let isDefaultDir = false;
   try {
     if (outDir === undefined || outDir === "") {
-      let { url } = n;
-      let c = typeof url === "string" ? parseArtifactUrl(url) : null;
-      let p = c !== null ? scratchpadArtifactFilePath(c.slug) : null;
-      f = p !== null;
-      l = p ?? getCwd();
-    } else l = expandPath(outDir);
+      let { url } = input;
+      let artifactUrl = typeof url === "string" ? parseArtifactUrl(url) : null;
+      let scratchPath = artifactUrl !== null ? scratchpadArtifactFilePath(artifactUrl.slug) : null;
+      isDefaultDir = scratchPath !== null;
+      dir = scratchPath ?? getCwd();
+    } else dir = expandPath(outDir);
   } catch {
     return {
       reason: "out_dir cannot be resolved to a local directory",
     };
   }
-  if (!t && platform === "windows" && l.split(sep).some((u) => u !== "" && /[. ]$/.test(u)))
+  if (
+    !options &&
+    platform === "windows" &&
+    dir.split(sep).some((segment) => segment !== "" && /[. ]$/.test(segment))
+  )
     return {
       reason: `${outDir === undefined || outDir === "" ? "the default save directory" : `out_dir ${safeJsonQuote(outDir)}`} has a name ending in a dot or space, which Windows would save under a different name`,
     };
-  if (!t && a && outDir !== undefined && outDir.split(/[\\/]/).some((u) => /~\d/.test(u)))
+  if (
+    !options &&
+    isWindowsLike &&
+    outDir !== undefined &&
+    outDir.split(/[\\/]/).some((options) => /~\d/.test(options))
+  )
     return {
       reason: `out_dir ${safeJsonQuote(outDir)} names a directory by a NAME~1 short-name alias, which a Windows filesystem resolves to a differently named directory`,
     };
   return {
-    dest: join(l, ...parts),
-    base: l,
-    ...(f && {
+    dest: join(dir, ...parts),
+    base: dir,
+    ...(isDefaultDir && {
       defaultDir: true,
     }),
   };
 }
 //@ chunk-zad29gky.js:2368-2386 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-zad29gky.js:2368", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-zad29gky.js:2386-2739 placement
 /**
  * 带缓存的 read_file 路径校验：以 paths 对象为键，url、out_dir、是否已判定、cwd 与草稿目录组成的串一致时复用上次结果。
  */
-function validateReadFilePathsCached(n, t = {}) {
-  let r = n;
-  let { paths, url, out_dir: outDir } = r;
-  let o = typeof paths === "object" && paths !== null ? paths : undefined;
+function validateReadFilePathsCached(input, options = {}) {
+  let record = input;
+  let { paths, url, out_dir: outDir } = record;
+  let rawPaths = typeof paths === "object" && paths !== null ? paths : undefined;
   let joined = [
     typeof url === "string" ? url : "",
     typeof outDir === "string" ? outDir : "",
-    t.outDirJudged === true ? "judged" : "",
+    options.outDirJudged === true ? "judged" : "",
     getCwd(),
     (isScratchpadEnabled() ? getScratchpadDir() : null) ?? "",
   ].join("\x00");
-  let a = o === undefined ? undefined : weakMap.get(o);
-  if (a !== undefined && a.key === joined) return a.value;
-  let l = validateReadFilePaths(n, t);
-  if (o !== undefined)
-    weakMap.set(o, {
+  let key = rawPaths === undefined ? undefined : weakMap.get(rawPaths);
+  if (key !== undefined && key.key === joined) return key.value;
+  let cached = validateReadFilePaths(input, options);
+  if (rawPaths !== undefined)
+    weakMap.set(rawPaths, {
       key: joined,
-      value: l,
+      value: cached,
     });
-  return l;
+  return cached;
 }
 //@ chunk-zad29gky.js:2739-3552 placement
-function validateReadFilePaths(n, t) {
-  let { paths } = readFilePathArgs(n);
+function validateReadFilePaths(input, options) {
+  let { paths } = readFilePathArgs(input);
   if (paths === undefined || paths.length === 0)
     return {
       reason: "read_file requires `path`, or `paths` naming at least one published path",
@@ -157,50 +170,50 @@ function validateReadFilePaths(n, t) {
     return {
       reason: `\`paths\` names ${paths.length} paths; at most ${MAX_SEGMENT_WITH_SLASH} can be read in one call`,
     };
-  let e = {
-    ...n,
+  let singleInput = {
+    ...input,
   };
-  delete e.paths;
-  let s;
-  let i = [];
-  let o = new Map();
+  delete singleInput.paths;
+  let common;
+  let files = [];
+  let destByKey = new Map();
   for (let path of paths) {
     let readFileOutput = resolveReadFileOutput(
       {
-        ...e,
+        ...singleInput,
         path,
       },
-      t,
+      options,
     );
     if ("reason" in readFileOutput) return readFileOutput;
-    let l = validateReadPath(path);
-    let f = "key" in l ? l.key : path;
-    let u = normalizeCaseForComparison(
+    let checked = validateReadPath(path);
+    let key = "key" in checked ? checked.key : path;
+    let normalizedDest = normalizeCaseForComparison(
       normalize(readFileOutput.dest).normalize("NFC").toUpperCase().toLowerCase(),
     );
-    let c = o.get(u);
-    if (c !== undefined)
+    let existingKey = destByKey.get(normalizedDest);
+    if (existingKey !== undefined)
       return {
         reason:
-          c === f
+          existingKey === key
             ? `\`paths\` names ${safeJsonQuote(path)} more than once`
-            : `\`paths\` names ${safeJsonQuote(c)} and ${safeJsonQuote(path)}, which could save to the same file on a case-insensitive volume; read one of them on its own`,
+            : `\`paths\` names ${safeJsonQuote(existingKey)} and ${safeJsonQuote(path)}, which could save to the same file on a case-insensitive volume; read one of them on its own`,
       };
-    o.set(u, f);
-    s ??= {
+    destByKey.set(normalizedDest, key);
+    common ??= {
       base: readFileOutput.base,
       ...(readFileOutput.defaultDir && {
         defaultDir: readFileOutput.defaultDir,
       }),
     };
-    i.push({
-      path: f,
+    files.push({
+      path: key,
       dest: readFileOutput.dest,
     });
   }
   return {
-    ...s,
-    files: i,
+    ...common,
+    files,
   };
 }
 //@ chunk-zad29gky.js:3552-3577 placement
@@ -210,24 +223,31 @@ var ARTIFACT_FILES = "artifact-files";
  * 拼出 scratchpad 中制品相关文件的路径（未启用时为 null）。
  */
 function scratchpadArtifactFilePath(slug) {
-  let t = isScratchpadEnabled() ? getScratchpadDir() : null;
-  return t === null ? null : join(t, ARTIFACT_FILES, slug);
+  let scratchpadDir = isScratchpadEnabled() ? getScratchpadDir() : null;
+  return scratchpadDir === null ? null : join(scratchpadDir, ARTIFACT_FILES, slug);
 }
 //@ chunk-zad29gky.js:3645-3726 placement
 /**
  * 判断路径组非空且全部位于 scratchpad 内。
  */
-function isAllScratchpadPaths(n) {
-  return n.length > 0 && n.every((t) => t.length > 0 && t.every((r) => isScratchpadPath(r)));
+function isAllScratchpadPaths(spellings) {
+  return (
+    spellings.length > 0 &&
+    spellings.every(
+      (spellingList) =>
+        spellingList.length > 0 && spellingList.every((spelling) => isScratchpadPath(spelling)),
+    )
+  );
 }
 //@ chunk-zad29gky.js:3726-3809 placement
 /**
  * 判断路径是否位于 scratchpad 目录下（忽略大小写）。
  */
-function isWithinScratchpad(n) {
-  let t = isScratchpadEnabled() ? getScratchpadDir() : null;
+function isWithinScratchpad(path) {
+  let scratchpadDir = isScratchpadEnabled() ? getScratchpadDir() : null;
   return (
-    t !== null && normalizeCaseForComparison(normalize(n)).startsWith(normalizeCaseForComparison(t) + sep)
+    scratchpadDir !== null &&
+    normalizeCaseForComparison(normalize(path)).startsWith(normalizeCaseForComparison(scratchpadDir) + sep)
   );
 }
 //@ chunk-zad29gky.js:3809-4028 placement
@@ -247,23 +267,23 @@ class PartialKeptError extends Error {
 /**
  * 重命名文件，目标已存在导致失败时先删除目标再重试；第二次失败抛出"已部分保留"错误。
  */
-async function renameReplacing(tempSiblingPath, ioPath, r) {
-  let e = true;
+async function renameReplacing(tempSiblingPath, targetPath, rename) {
+  let removedOriginal = true;
   try {
-    await retryFsOp(tempSiblingPath, ioPath, r);
+    await retryFsOp(tempSiblingPath, targetPath, rename);
     return;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === undefined || !ATOMIC_WRITE_ERRNOS.has(errnoCode)) throw error;
-    await unlink(ioPath).catch((error_2) => {
+    await unlink(targetPath).catch((error_2) => {
       if (getErrnoCode(error_2) !== "ENOENT") throw error;
-      e = false;
+      removedOriginal = false;
     });
   }
   try {
-    await retryFsOp(tempSiblingPath, ioPath, r);
+    await retryFsOp(tempSiblingPath, targetPath, rename);
   } catch (error) {
-    throw new PartialKeptError(tempSiblingPath, error, e);
+    throw new PartialKeptError(tempSiblingPath, error, removedOriginal);
   }
 }
 export {

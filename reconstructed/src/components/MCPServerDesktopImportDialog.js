@@ -8,10 +8,10 @@
  * pieces: chunk-h2rjy0z4.js (5)
  * attribution: sole-consumer 3, affinity 1, fingerprint 1
  */
-import { init_react_production, y, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useTheme, useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
@@ -32,146 +32,158 @@ import { StatusIcon } from "./design-system/StatusIcon.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
 import { Byline } from "./design-system/Byline.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-h2rjy0z4.js:16185-16189 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-h2rjy0z4.js:16185", () => {
+  init_react_production();
+});
 //@ chunk-h2rjy0z4.js:16189-16193 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-h2rjy0z4.js:16189", () => {
+  init_react_production();
+});
 //@ chunk-h2rjy0z4.js:16193-16295 sole-consumer
-function logImportReadFailure(Ut) {
-  logForDebugging(`Failed to read existing MCP configs for Desktop import: ${errorMessage(Ut)}`, {
+function logImportReadFailure(error) {
+  logForDebugging(`Failed to read existing MCP configs for Desktop import: ${errorMessage(error)}`, {
     level: "error",
   });
 }
 //@ chunk-h2rjy0z4.js:16295-16328 affinity
-function isNotNull_2(Gt) {
-  return Gt !== null;
+function isNotNull_2(value) {
+  return value !== null;
 }
 //@ chunk-h2rjy0z4.js:16328-20032 fingerprint = MCPServerDesktopImportDialog (0.523)
 function MCPServerDesktopImportDialog(props) {
-  let $ = w(39);
+  let $ = useMemoCache(39);
   let { servers, scope, onDone } = props;
   let keys = Object.keys(servers);
-  let f;
+  let initialConfigs;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    f = {};
-    $[0] = f;
-  } else f = $[0];
-  let [i, _] = y(f);
-  let [g] = useTheme();
+    initialConfigs = {};
+    $[0] = initialConfigs;
+  } else initialConfigs = $[0];
+  let [existingServers, setExistingServers] = useState(initialConfigs);
+  let [theme] = useTheme();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let { storageV5 } = useTheme_2();
-  let x;
-  let R;
+  let loadConfigsEffect;
+  let loadConfigsDeps;
   if ($[1] !== storageV5) {
-    x = () => {
+    loadConfigsEffect = () => {
       getAllMcpConfigs({
         storageV5,
       })
         .then((t5) => {
           let { servers } = t5;
-          return _(servers);
+          return setExistingServers(servers);
         })
         .catch(logImportReadFailure);
     };
-    R = [storageV5];
+    loadConfigsDeps = [storageV5];
     $[1] = storageV5;
-    $[2] = x;
-    $[3] = R;
+    $[2] = loadConfigsEffect;
+    $[3] = loadConfigsDeps;
   } else {
-    x = $[2];
-    R = $[3];
+    loadConfigsEffect = $[2];
+    loadConfigsDeps = $[3];
   }
-  P(x, R);
-  let M;
-  if ($[4] !== i) {
-    M = (name) => i[name] !== undefined;
-    $[4] = i;
-    $[5] = M;
-  } else M = $[5];
-  let filtered = keys.filter(M);
+  useEffect(loadConfigsEffect, loadConfigsDeps);
+  let isServerExisting;
+  if ($[4] !== existingServers) {
+    isServerExisting = (name) => existingServers[name] !== undefined;
+    $[4] = existingServers;
+    $[5] = isServerExisting;
+  } else isServerExisting = $[5];
+  let filtered = keys.filter(isServerExisting);
   let joined = filtered.join(`
 `);
-  let [sr, yt] = y(null);
-  let L = sr?.collisionsKey === joined ? sr.names : keys.filter((Ct) => !filtered.includes(Ct));
-  let [nr, wt] = y(false);
-  let onSubmit = function Se(selectedServers) {
-    yt({
+  let [collisionSelection, setCollisionSelection] = useState(null);
+  let selectedNames =
+    collisionSelection?.collisionsKey === joined
+      ? collisionSelection.names
+      : keys.filter((serverName) => !filtered.includes(serverName));
+  let [isImporting, setIsImporting] = useState(false);
+  let onSubmit = function toggleSelection(selectedServers) {
+    setCollisionSelection({
       collisionsKey: joined,
-      names: L.includes(selectedServers) ? L.filter((_t) => _t !== selectedServers) : [...L, selectedServers],
+      names: selectedNames.includes(selectedServers)
+        ? selectedNames.filter((selectedName) => selectedName !== selectedServers)
+        : [...selectedNames, selectedServers],
     });
   };
-  let ir;
-  if ($[6] !== i) {
-    ir = function V(importedCount_0) {
-      if (i[importedCount_0] === undefined) {
+  let dedupeName;
+  if ($[6] !== existingServers) {
+    dedupeName = function dedupeName(importedCount_0) {
+      if (existingServers[importedCount_0] === undefined) {
         return importedCount_0;
       }
       let counter = 1;
-      while (i[`${importedCount_0}_${counter}`] !== undefined) counter++;
+      while (existingServers[`${importedCount_0}_${counter}`] !== undefined) counter++;
       return `${importedCount_0}_${counter}`;
     };
-    $[6] = i;
-    $[7] = ir;
-  } else ir = $[7];
-  let V = ir;
-  let cr;
-  if ($[8] !== V || $[9] !== scope || $[10] !== storageV5) {
-    cr = async function lr(ar, Mt) {
+    $[6] = existingServers;
+    $[7] = dedupeName;
+  } else dedupeName = $[7];
+  let makeUniqueName = dedupeName;
+  let importOne;
+  if ($[8] !== makeUniqueName || $[9] !== scope || $[10] !== storageV5) {
+    importOne = async function importOne(serverName, serverConfig) {
       try {
-        await addMcpConfig(V(ar), Mt, scope, storageV5);
+        await addMcpConfig(makeUniqueName(serverName), serverConfig, scope, storageV5);
         return null;
       } catch (error) {
-        let jt = error;
+        let caughtError = error;
         return {
-          serverName: ar,
-          reason: errorMessage(jt),
+          serverName,
+          reason: errorMessage(caughtError),
         };
       }
     };
-    $[8] = V;
+    $[8] = makeUniqueName;
     $[9] = scope;
     $[10] = storageV5;
-    $[11] = cr;
-  } else cr = $[11];
-  let lr = cr;
-  let gr = async function gr(kt) {
-    let reduced = await kt
-      .flatMap((pr) => {
-        let dr = servers[pr];
-        return dr
+    $[11] = importOne;
+  } else importOne = $[11];
+  let importOneStable = importOne;
+  let importServers = async function serverNames(serverNames) {
+    let reduced = await serverNames
+      .flatMap((serverName) => {
+        let serverConfig = servers[serverName];
+        return serverConfig
           ? [
               {
-                serverName: pr,
-                serverConfig: dr,
+                serverName,
+                serverConfig,
               },
             ]
           : [];
       })
-      .reduce(async (acc, ye) => {
-        let { serverName, serverConfig } = ye;
-        return [...(await acc), await lr(serverName, serverConfig)];
+      .reduce(async (acc, entry) => {
+        let { serverName, serverConfig } = entry;
+        return [...(await acc), await importOneStable(serverName, serverConfig)];
       }, Promise.resolve([]));
     let filtered = reduced.filter(isNotNull_2);
-    fr({
+    finishImport({
       importedCount: reduced.length - filtered.length,
       failures: filtered,
     });
   };
-  let vr = function vr(Pt) {
-    gr(Pt).catch((error) => {
+  let startImport = function serverNames(serverNames) {
+    importServers(serverNames).catch((error) => {
       writeToStdout(`
-${color("error", g)(errorMessage(error))}
+${color("error", theme)(errorMessage(error))}
 `);
       onDone();
       gracefulShutdown();
     });
   };
-  let fr = (xt) => {
-    let { importedCount, failures } = xt;
+  let finishImport = (result) => {
+    let { importedCount, failures } = result;
     if (importedCount > 0)
       writeToStdout(`
-${color("success", g)(`Successfully imported ${importedCount} MCP ${plural(importedCount, "server")} to ${scope} config.`)}
+${color("success", theme)(`Successfully imported ${importedCount} MCP ${plural(importedCount, "server")} to ${scope} config.`)}
 `);
     else
       writeToStdout(`
@@ -179,186 +191,186 @@ No servers were imported.`);
     failures.forEach((failure) => {
       let { serverName, reason } = failure;
       writeToStdout(`
-${color("error", g)(`Could not import ${serverName}: ${reason}`)}
+${color("error", theme)(`Could not import ${serverName}: ${reason}`)}
 `);
     });
     onDone();
     gracefulShutdown();
   };
   let onCancel = () => {
-    fr({
+    finishImport({
       importedCount: 0,
       failures: [],
     });
   };
-  const je = Dialog;
+  const DialogComponent = Dialog;
   const title = "Import MCP Servers from Claude Desktop";
   const t8 = keys.length;
-  let Sr;
+  let serverWord;
   if ($[12] !== keys) {
-    Sr = plural(keys.length, "server");
+    serverWord = plural(keys.length, "server");
     $[12] = keys;
-    $[13] = Sr;
-  } else Sr = $[13];
-  const subtitle = `Found ${t8} MCP ${Sr} in Claude Desktop.`;
+    $[13] = serverWord;
+  } else serverWord = $[13];
+  const subtitle = `Found ${t8} MCP ${serverWord} in Claude Desktop.`;
   const color_2 = "success";
   const hideInputGuide = true;
-  const be =
+  const collisionWarning =
     filtered.length > 0 &&
     jsxProd_default(Text, {
       color: "warning",
       children:
         "Note: Some servers already exist with the same name. If selected, they will be imported with a numbered suffix.",
     });
-  let W;
+  let introText;
   if ($[14] === MEMO_CACHE_SENTINEL) {
-    W = jsxProd_default(Text, {
+    introText = jsxProd_default(Text, {
       children: "Please select the servers you want to import:",
     });
-    $[14] = W;
-  } else W = $[14];
-  const $e = OrderedListWithItem;
-  const onSelect = (Lt) => {
-    if (nr) {
+    $[14] = introText;
+  } else introText = $[14];
+  const ListComponent = OrderedListWithItem;
+  const onSelect = (index) => {
+    if (isImporting) {
       return;
     }
-    let selectedServers = keys[Lt];
+    let selectedServers = keys[index];
     if (selectedServers === undefined) {
-      wt(true);
-      vr(keys.filter((Ht) => L.includes(Ht)));
+      setIsImporting(true);
+      startImport(keys.filter((serverName) => selectedNames.includes(serverName)));
       return;
     }
     onSubmit(selectedServers);
   };
-  const onRowKeyDown = (event, zt) => {
+  const onRowKeyDown = (event, index) => {
     if (event.key !== " ") {
       return;
     }
     event.preventDefault();
-    let selectedServers = keys[zt];
-    if (selectedServers !== undefined && !nr) onSubmit(selectedServers);
+    let selectedServers = keys[index];
+    if (selectedServers !== undefined && !isImporting) onSubmit(selectedServers);
   };
-  const mapped = keys.map((X) => {
-    let included = L.includes(X);
+  const mapped = keys.map((serverName) => {
+    let included = selectedNames.includes(serverName);
     return jsxProd_default(
       OrderedListWithItem.Item,
       {
-        label: X,
+        label: serverName,
         icon: jsxProd_default(StatusIcon, {
           status: included ? "on" : "off",
           "aria-label": included ? "checked:" : "unchecked:",
         }),
-        meta: filtered.includes(X) ? ["already exists"] : [],
+        meta: filtered.includes(serverName) ? ["already exists"] : [],
       },
-      X,
+      serverName,
     );
   });
-  let _r;
+  let importItem;
   if ($[15] === MEMO_CACHE_SENTINEL) {
-    _r = jsxProd_default(
+    importItem = jsxProd_default(
       OrderedListWithItem.Item,
       {
         label: "Import selected",
       },
       "import",
     );
-    $[15] = _r;
-  } else _r = $[15];
-  let Y;
-  if ($[16] !== $e || $[17] !== onSelect || $[18] !== onRowKeyDown || $[19] !== mapped) {
-    Y = jsxProd_default_2($e, {
+    $[15] = importItem;
+  } else importItem = $[15];
+  let listElement;
+  if ($[16] !== ListComponent || $[17] !== onSelect || $[18] !== onRowKeyDown || $[19] !== mapped) {
+    listElement = jsxProd_default_2(ListComponent, {
       onSelect,
       onRowKeyDown,
-      children: [mapped, _r],
+      children: [mapped, importItem],
     });
-    $[16] = $e;
+    $[16] = ListComponent;
     $[17] = onSelect;
     $[18] = onRowKeyDown;
     $[19] = mapped;
-    $[20] = Y;
-  } else Y = $[20];
-  let Q;
+    $[20] = listElement;
+  } else listElement = $[20];
+  let dialogElement;
   if (
-    $[21] !== je ||
+    $[21] !== DialogComponent ||
     $[22] !== onCancel ||
     $[23] !== subtitle ||
-    $[24] !== be ||
-    $[25] !== W ||
-    $[26] !== Y
+    $[24] !== collisionWarning ||
+    $[25] !== introText ||
+    $[26] !== listElement
   ) {
-    Q = jsxProd_default_2(je, {
+    dialogElement = jsxProd_default_2(DialogComponent, {
       title,
       subtitle,
       color: color_2,
       onCancel,
       hideInputGuide,
-      children: [be, W, Y],
+      children: [collisionWarning, introText, listElement],
     });
-    $[21] = je;
+    $[21] = DialogComponent;
     $[22] = onCancel;
     $[23] = subtitle;
-    $[24] = be;
-    $[25] = W;
-    $[26] = Y;
-    $[27] = Q;
-  } else Q = $[27];
-  let ee;
+    $[24] = collisionWarning;
+    $[25] = introText;
+    $[26] = listElement;
+    $[27] = dialogElement;
+  } else dialogElement = $[27];
+  let spaceHint;
   if ($[28] !== isScreenReaderEnabled) {
-    ee =
+    spaceHint =
       !isScreenReaderEnabled &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "space",
         action: "toggle",
       });
     $[28] = isScreenReaderEnabled;
-    $[29] = ee;
-  } else ee = $[29];
-  let te;
+    $[29] = spaceHint;
+  } else spaceHint = $[29];
+  let enterHint;
   if ($[30] !== isScreenReaderEnabled) {
-    te =
+    enterHint =
       !isScreenReaderEnabled &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "enter",
         action: "select",
       });
     $[30] = isScreenReaderEnabled;
-    $[31] = te;
-  } else te = $[31];
-  let Mr;
+    $[31] = enterHint;
+  } else enterHint = $[31];
+  let cancelHint;
   if ($[32] === MEMO_CACHE_SENTINEL) {
-    Mr = jsxProd_default(ConfigurableShortcutHint, {
+    cancelHint = jsxProd_default(ConfigurableShortcutHint, {
       action: "confirm:no",
       context: "Confirmation",
       fallback: "Esc",
       description: "cancel",
     });
-    $[32] = Mr;
-  } else Mr = $[32];
-  let oe;
-  if ($[33] !== ee || $[34] !== te) {
-    oe = jsxProd_default(Box, {
+    $[32] = cancelHint;
+  } else cancelHint = $[32];
+  let hintBar;
+  if ($[33] !== spaceHint || $[34] !== enterHint) {
+    hintBar = jsxProd_default(Box, {
       paddingX: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
         italic: true,
         children: jsxProd_default_2(Byline, {
-          children: [ee, te, Mr],
+          children: [spaceHint, enterHint, cancelHint],
         }),
       }),
     });
-    $[33] = ee;
-    $[34] = te;
-    $[35] = oe;
-  } else oe = $[35];
-  let kr;
-  if ($[36] !== Q || $[37] !== oe) {
-    kr = jsxProd_default_2(Fragment, {
-      children: [Q, oe],
+    $[33] = spaceHint;
+    $[34] = enterHint;
+    $[35] = hintBar;
+  } else hintBar = $[35];
+  let content;
+  if ($[36] !== dialogElement || $[37] !== hintBar) {
+    content = jsxProd_default_2(Fragment, {
+      children: [dialogElement, hintBar],
     });
-    $[36] = Q;
-    $[37] = oe;
-    $[38] = kr;
-  } else kr = $[38];
-  return kr;
+    $[36] = dialogElement;
+    $[37] = hintBar;
+    $[38] = content;
+  } else content = $[38];
+  return content;
 }
 export { MCPServerDesktopImportDialog };

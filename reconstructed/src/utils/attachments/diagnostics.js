@@ -36,42 +36,47 @@ function normalizeDiagnosticSeverity(severity) {
  */
 function sanitizeDiagnosticsAttachment(files) {
   if (!Array.isArray(files)) {
-    let h = files === undefined ? "missing" : "non-array";
-    let y = typeof files === "object" && files !== null;
-    if (!(y ? weakSet_5.has(files) : loggedAttachmentPaths().has(h))) {
-      if (y) weakSet_5.add(files);
-      else loggedAttachmentPaths().add(h);
-      logForDebugging(`Dropped a ${h} diagnostics files payload from a replayed attachment`);
+    let payloadKind = files === undefined ? "missing" : "non-array";
+    let payloadIsObject = typeof files === "object" && files !== null;
+    if (!(payloadIsObject ? weakSet_5.has(files) : loggedAttachmentPaths().has(payloadKind))) {
+      if (payloadIsObject) weakSet_5.add(files);
+      else loggedAttachmentPaths().add(payloadKind);
+      logForDebugging(`Dropped a ${payloadKind} diagnostics files payload from a replayed attachment`);
     }
     return [];
   }
-  let n = [];
-  let r = 0;
-  let s = 0;
-  for (let h of files) {
-    if (typeof h !== "object" || h === null || typeof h.uri !== "string" || !Array.isArray(h.diagnostics)) {
-      r++;
+  let validFiles = [];
+  let droppedFiles = 0;
+  let droppedDiagnostics = 0;
+  for (let file of files) {
+    if (
+      typeof file !== "object" ||
+      file === null ||
+      typeof file.uri !== "string" ||
+      !Array.isArray(file.diagnostics)
+    ) {
+      droppedFiles++;
       continue;
     }
-    let { uri, diagnostics } = h;
-    let flattened = diagnostics.flatMap((L) => {
-      if (typeof L !== "object" || L === null) return [];
-      let G = L;
-      let message = G.message;
-      let start = G.range?.start;
+    let { uri, diagnostics } = file;
+    let flattened = diagnostics.flatMap((diagnostic) => {
+      if (typeof diagnostic !== "object" || diagnostic === null) return [];
+      let raw = diagnostic;
+      let message = raw.message;
+      let start = raw.range?.start;
       if (
         typeof message !== "string" ||
         typeof start?.line !== "number" ||
         typeof start?.character !== "number"
       )
         return [];
-      let Se = normalizeDiagnosticSeverity(G.severity);
-      let end = G.range?.end;
+      let severity = normalizeDiagnosticSeverity(raw.severity);
+      let end = raw.range?.end;
       return [
         {
           message,
-          ...(Se !== undefined && {
-            severity: Se,
+          ...(severity !== undefined && {
+            severity,
           }),
           range: {
             start: {
@@ -89,46 +94,46 @@ function sanitizeDiagnosticsAttachment(files) {
                     character: start.character,
                   },
           },
-          ...(typeof G.code === "string" && {
-            code: G.code,
+          ...(typeof raw.code === "string" && {
+            code: raw.code,
           }),
-          ...(typeof G.source === "string" && {
-            source: G.source,
+          ...(typeof raw.source === "string" && {
+            source: raw.source,
           }),
         },
       ];
     });
-    s += diagnostics.length - flattened.length;
+    droppedDiagnostics += diagnostics.length - flattened.length;
     if (flattened.length === 0) {
-      r++;
+      droppedFiles++;
       continue;
     }
-    n.push({
+    validFiles.push({
       uri,
       diagnostics: flattened,
     });
   }
-  if ((r > 0 || s > 0) && !weakSet_5.has(files)) {
+  if ((droppedFiles > 0 || droppedDiagnostics > 0) && !weakSet_5.has(files)) {
     weakSet_5.add(files);
     logForDebugging(
-      `Dropped ${r} malformed file(s) and ${s} malformed diagnostic(s) from a replayed diagnostics attachment`,
+      `Dropped ${droppedFiles} malformed file(s) and ${droppedDiagnostics} malformed diagnostic(s) from a replayed diagnostics attachment`,
     );
   }
-  return n;
+  return validFiles;
 }
 //@ chunk-e6aww6q8.js:3251084-3251446 placement
 /**
  * 把各文件的诊断格式化为"文件名: 图标 [Line x:y] 消息 [code] (source)"文本，超出长度上限时截断并加 …[truncated]。
  */
-function formatDiagnosticsSummary(e) {
-  let joined = e.map((s) => {
-    let h = s.uri.split("/").pop() || s.uri;
-    let joined = s.diagnostics.map(
-      (S) =>
-        `  ${getSeverityIcon(S.severity)} [Line ${S.range.start.line + 1}:${S.range.start.character + 1}] ${S.message}${S.code ? ` [${S.code}]` : ""}${S.source ? ` (${S.source})` : ""}`,
+function formatDiagnosticsSummary(files) {
+  let joined = files.map((file) => {
+    let fileName = file.uri.split("/").pop() || file.uri;
+    let joined = file.diagnostics.map(
+      (diagnostic) =>
+        `  ${getSeverityIcon(diagnostic.severity)} [Line ${diagnostic.range.start.line + 1}:${diagnostic.range.start.character + 1}] ${diagnostic.message}${diagnostic.code ? ` [${diagnostic.code}]` : ""}${diagnostic.source ? ` (${diagnostic.source})` : ""}`,
     ).join(`
 `);
-    return `${h}:
+    return `${fileName}:
 ${joined}`;
   }).join(`
 
@@ -141,59 +146,59 @@ ${joined}`;
 /**
  * 把新诊断格式化为 <new-diagnostics> 附件文本。
  */
-function formatNewDiagnosticsAttachment(e) {
+function formatNewDiagnosticsAttachment(files) {
   return `<new-diagnostics>The following new diagnostic issues were detected:
 
-${formatDiagnosticsSummary(e)}</new-diagnostics>`;
+${formatDiagnosticsSummary(files)}</new-diagnostics>`;
 }
 //@ chunk-e6aww6q8.js:3251567-3251732 placement
 /**
  * 按诊断严重程度返回图标（错误、警告、信息、提示）。
  */
 function getSeverityIcon(severity) {
-  let n = {
+  let iconsBySeverity = {
     Error: figures_default.cross,
     Warning: figures_default.warning,
     Info: figures_default.info,
     Hint: figures_default.star,
   };
   if (typeof severity !== "string") return figures_default.bullet;
-  return Object.hasOwn(n, severity) ? n[severity] : figures_default.bullet;
+  return Object.hasOwn(iconsBySeverity, severity) ? iconsBySeverity[severity] : figures_default.bullet;
 }
 //@ chunk-e6aww6q8.js:3251770-3252265 placement
 /**
  * 用新文本替换消息内容中的文本：新文本为空时只保留非文本块；字符串内容直接替换；数组内容替换最后一个文本块，若新文本以前面文本块开头则去掉重复前缀并保留它们。
  */
-function replacePromptText(e, n) {
-  if (n.trim() === "") {
-    let S = typeof e === "string" ? [] : e.filter((w) => w.type !== "text");
-    return S.length > 0 ? S : NO_CONTENT_MESSAGE;
+function replacePromptText(prompt, newText) {
+  if (newText.trim() === "") {
+    let nonTextParts = typeof prompt === "string" ? [] : prompt.filter((part) => part.type !== "text");
+    return nonTextParts.length > 0 ? nonTextParts : NO_CONTENT_MESSAGE;
   }
-  if (typeof e === "string") return n;
-  let last = e.findLast((S) => S.type === "text");
+  if (typeof prompt === "string") return newText;
+  let last = prompt.findLast((part) => part.type === "text");
   if (last?.type !== "text")
     return [
-      ...e,
+      ...prompt,
       {
         type: "text",
-        text: n,
+        text: newText,
       },
     ];
-  let joined = e.flatMap((S) => (S.type === "text" && S !== last ? [S.text] : [])).join(`
+  let joined = prompt.flatMap((part) => (part.type === "text" && part !== last ? [part.text] : [])).join(`
 `);
-  let h =
+  let hasPrefix =
     joined !== "" &&
-    n.startsWith(`${joined}
+    newText.startsWith(`${joined}
 `) &&
-    n.slice(joined.length + 1).trim() !== "";
-  let y = [];
-  for (let S of e)
-    if (S === last)
-      y.push({
-        ...S,
-        text: h ? n.slice(joined.length + 1) : n,
+    newText.slice(joined.length + 1).trim() !== "";
+  let parts = [];
+  for (let part of prompt)
+    if (part === last)
+      parts.push({
+        ...part,
+        text: hasPrefix ? newText.slice(joined.length + 1) : newText,
       });
-    else if (S.type !== "text" || h) y.push(S);
-  return y;
+    else if (part.type !== "text" || hasPrefix) parts.push(part);
+  return parts;
 }
 export { sanitizeDiagnosticsAttachment, formatNewDiagnosticsAttachment, replacePromptText, getSeverityIcon };

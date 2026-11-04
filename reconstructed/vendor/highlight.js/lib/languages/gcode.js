@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:166152-167477 cjs-fingerprint
-var require_gcode = x(function (cjsExports, cjsModule) {
+var require_gcode = __commonJS(function (cjsExports, cjsModule) {
   function gcode(hljs) {
     let regex = hljs.regex;
     let GCODE_KEYWORDS = {

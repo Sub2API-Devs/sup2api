@@ -8,17 +8,17 @@
  * pieces: chunk-bc20zedk.js (1)
  * attribution: fingerprint 1
  */
-import { zt } from "../../vendor/react/cjs/react.production.js";
+import { useLayoutEffect } from "../../vendor/react/cjs/react.production.js";
 import { mountPluginImage, withSwap } from "../plugins/functionHooks/imageApi.js";
 
 //@ chunk-bc20zedk.js:37038-37224 fingerprint = useModalOrTerminalSize (0.669)
 /**
  * 插件请求的模态框 key 变化或终端尺寸变化时上报尺寸。
  */
-function useModalOrTerminalSize(o, p, swap) {
-  let { plugin, requestId, key } = o;
-  let { columns, rows } = p;
-  zt(() => {
+function useModalOrTerminalSize(modalWidth, modalHeight, swap) {
+  let { plugin, requestId, key } = modalWidth;
+  let { columns, rows } = modalHeight;
+  useLayoutEffect(() => {
     if (key === undefined) return;
     return mountPluginImage(
       withSwap(

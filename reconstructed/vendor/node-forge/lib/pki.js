@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_asn1 } from "./asn1.js";
 import { require_oids } from "./oids.js";
@@ -19,7 +19,7 @@ import { require_util } from "./util.js";
 import { require_x509 } from "./x509.js";
 
 //@ chunk-fq0cr76a.js:210710-211753 cjs-fingerprint
-var require_pki = x(function (cjsExports, cjsModule) {
+var require_pki = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_asn1();
   require_oids();

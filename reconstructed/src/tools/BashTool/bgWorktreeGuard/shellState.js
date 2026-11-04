@@ -26,20 +26,21 @@ function analyzeSimpleCommandForWorktree(tree) {
   return analyzeShellProgram(tree, true)?.replace(TOO_COMPLEX_SUFFIX, "in a plain command") ?? null;
 }
 //@ chunk-63f0f3kd.js:3888-4071 placement
-function isParseFailureNode(t) {
+function isParseFailureNode(analysis) {
   return (
-    t.nodeType === undefined ||
-    t.nodeType === "PARSE_ABORT" ||
-    t.nodeType === "ERROR" ||
-    (t.differential === true && !/^(?:heredoc_redirect|concatenation|word|string)$/.test(t.nodeType))
+    analysis.nodeType === undefined ||
+    analysis.nodeType === "PARSE_ABORT" ||
+    analysis.nodeType === "ERROR" ||
+    (analysis.differential === true &&
+      !/^(?:heredoc_redirect|concatenation|word|string)$/.test(analysis.nodeType))
   );
 }
 //@ chunk-63f0f3kd.js:4071-4764 placement
 /**
  * 建立分析状态（变量种类、整数/数组名、绑定位置、cwd 等）并遍历整棵语法树，产出第一条拒绝原因。
  */
-function analyzeShellProgram(t, simple) {
-  let i = {
+function analyzeShellProgram(tree, simple) {
+  let state = {
     simple,
     kinds: new Map(),
     integerNames: new Set(),
@@ -64,13 +65,15 @@ function analyzeShellProgram(t, simple) {
     scopes: [new Map()],
     depth: 0,
   };
-  i.pathAssigned = /(?:^|\W)(?:PATH|LD_\w*|DYLD_\w*)(?:\[[^\]]*\])?[+:]?=/i.test(t.text);
-  analyzeAssignment(t, i, false);
-  i.opaqueNames ||= [...i.kinds.values()].includes("other");
-  let n = withStdinState(t, i, false);
-  return n && / arithmetically |command output/.test(n)
-    ? n + (i.statPathDenied ? STAT_VALUE_NOTE : "") + (i.dateDirectiveDenied ? DATE_VALUE_NOTE : "")
-    : n;
+  state.pathAssigned = /(?:^|\W)(?:PATH|LD_\w*|DYLD_\w*)(?:\[[^\]]*\])?[+:]?=/i.test(tree.text);
+  analyzeAssignment(tree, state, false);
+  state.opaqueNames ||= [...state.kinds.values()].includes("other");
+  let reason = withStdinState(tree, state, false);
+  return reason && / arithmetically |command output/.test(reason)
+    ? reason +
+        (state.statPathDenied ? STAT_VALUE_NOTE : "") +
+        (state.dateDirectiveDenied ? DATE_VALUE_NOTE : "")
+    : reason;
 }
 //@ chunk-63f0f3kd.js:4764-4904 placement
 /**
@@ -91,8 +94,8 @@ var STATIC_VALUE_FLAGS = {
   written: false,
 };
 //@ chunk-63f0f3kd.js:4904-4956 placement
-function wordSet(t) {
-  return new Set(t.trim().split(/\s+/));
+function wordSet(words) {
+  return new Set(words.trim().split(/\s+/));
 }
 //@ chunk-63f0f3kd.js:4956-5126 placement
 /**
@@ -112,9 +115,9 @@ function isPlainWordText(text) {
     .every(
       (line) =>
         PLAIN_TEXT_RE.test(line) &&
-        line.split(/\s+/).every((i) => {
-          let n = programBaseName(i.replace(/^.*=/, ""));
-          return !GIT_COMMAND_PATTERN.test(n) && !DECLARATION_BUILTINS.has(n);
+        line.split(/\s+/).every((word) => {
+          let programName = programBaseName(word.replace(/^.*=/, ""));
+          return !GIT_COMMAND_PATTERN.test(programName) && !DECLARATION_BUILTINS.has(programName);
         }),
     );
 }
@@ -135,9 +138,9 @@ var ZSH_MANAGED_VARIABLES =
   /^(?:jobtexts|jobdirs|history|historywords|funcstack|functrace|funcfiletrace|funcsourcetrace|zsh_scheduled_events|keymaps|widgets|modules|zcurses_windows|zgdbm_tied|mapfile|terminfo|termcap|langinfo|dis_patchars|ZFTP_(?:SESSION|HOST|USER|ACCOUNT|PWD|SYSTEM|REPLY|FILE)|ZSH_DEBUG_CMD|ZSH_EXECUTION_STRING|BASH_EXECUTION_STRING)$/;
 var TENGU_MOSSY_KESTREL = "tengu_mossy_kestrel";
 //@ chunk-63f0f3kd.js:6183-6247 placement
-function isStartupHazardVariable(t) {
+function isStartupHazardVariable(name) {
   return (
-    (ZSH_MANAGED_VARIABLES.test(t) || SHELL_STATE_SETTING_VARIABLES.test(t)) &&
+    (ZSH_MANAGED_VARIABLES.test(name) || SHELL_STATE_SETTING_VARIABLES.test(name)) &&
     readFlagWithOverride(TENGU_MOSSY_KESTREL, {
       safe: true,
     })
@@ -147,8 +150,8 @@ function isStartupHazardVariable(t) {
 var COMPLETION_VARIABLE_PATTERN =
   /^(?:COMP_(?:CWORD|KEY|LINE|POINT|TYPE|WORDBREAKS|WORDS)|READLINE_(?:ARGUMENT|LINE|MARK|POINT))$/;
 //@ chunk-63f0f3kd.js:6352-6478 placement
-function isShellManagedVariable(t) {
-  let upper = t.toUpperCase();
+function isShellManagedVariable(name) {
+  let upper = name.toUpperCase();
   return (
     (SHELL_SPECIAL_VARIABLES.test(upper) &&
       (!/^(?:COMP|READLINE)_/.test(upper) || COMPLETION_VARIABLE_PATTERN.test(upper))) ||

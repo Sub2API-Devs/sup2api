@@ -51,33 +51,33 @@ function marketplaceSource(plugin) {
 /**
  * 按仓库或来源查找市场。
  */
-function findMarketplace(e, r) {
-  return e.find((n) => n.repository === r || n.source === r);
+function findMarketplace(plugins, id) {
+  return plugins.find((plugin) => plugin.repository === id || plugin.source === id);
 }
 //@ chunk-vr8smdd9.js:20270-20459 placement
 /**
  * 读取插件选项值（缓存）。
  */
-function loadPluginOptions(e, credentials) {
+function loadPluginOptions(pluginId, credentials) {
   if (getManagedPlugins()) return Promise.resolve({});
   let { optionValues } = getPluginRegistry();
-  let s = optionValues.get(e);
-  if (s !== undefined) return s;
-  let pluginOptions = readPluginOptions(e, credentials);
-  optionValues.set(e, pluginOptions);
+  let cached = optionValues.get(pluginId);
+  if (cached !== undefined) return cached;
+  let pluginOptions = readPluginOptions(pluginId, credentials);
+  optionValues.set(pluginId, pluginOptions);
   pluginOptions.catch(() => {
-    if (optionValues.get(e) === pluginOptions) optionValues.delete(e);
+    if (optionValues.get(pluginId) === pluginOptions) optionValues.delete(pluginId);
   });
   return pluginOptions;
 }
 //@ chunk-vr8smdd9.js:20459-20633 placement
-async function readPluginOptions(e, r) {
-  let options = trustedPluginSetting(e).options ?? {};
-  let pluginSecrets = (await getSecureStorage().readAsync(r))?.pluginSecrets;
-  let reduced = [...legacyPluginIds(e).toReversed(), e].reduce(
-    (acc, m) => ({
+async function readPluginOptions(pluginId, credentials) {
+  let options = trustedPluginSetting(pluginId).options ?? {};
+  let pluginSecrets = (await getSecureStorage().readAsync(credentials))?.pluginSecrets;
+  let reduced = [...legacyPluginIds(pluginId).toReversed(), pluginId].reduce(
+    (acc, id) => ({
       ...acc,
-      ...pluginSecrets?.[m],
+      ...pluginSecrets?.[id],
     }),
     {},
   );
@@ -97,79 +97,86 @@ function clearPluginOptionsCache() {
 /**
  * 保存插件选项：sensitive 字段写安全存储（keychain/凭据文件的 pluginSecrets），其余写 userSettings 的 pluginConfigs[插件].options；同时清掉另一侧的同名旧值。
  */
-async function savePluginOptions(pluginId, values, schema, s, credentials) {
-  let f = {};
+async function savePluginOptions(pluginId, values, schema, storageV5, credentials) {
+  let nonSensitive = {};
   let sensitive = {};
   for (let [key, value] of Object.entries(values))
     if (schema[key]?.sensitive === true) sensitive[key] = String(value);
-    else f[key] = value;
+    else nonSensitive[key] = value;
   let sensitiveKeysInThisSave = new Set(Object.keys(sensitive));
-  let nonSensitiveKeysInThisSave = new Set(Object.keys(f));
-  let h = await getSecureStorage().mutate((y) => {
-    let S = pluginSettingWriteTarget(y.pluginSecrets, pluginId);
-    let b =
-      S.replaced.length === 0
-        ? y.pluginSecrets?.[S.written]
-        : [...S.replaced.toReversed(), S.written].reduce(
-            (acc, F) => ({
+  let nonSensitiveKeysInThisSave = new Set(Object.keys(nonSensitive));
+  let mutationResult = await getSecureStorage().mutate((storage) => {
+    let writeTarget = pluginSettingWriteTarget(storage.pluginSecrets, pluginId);
+    let existingSecrets =
+      writeTarget.replaced.length === 0
+        ? storage.pluginSecrets?.[writeTarget.written]
+        : [...writeTarget.replaced.toReversed(), writeTarget.written].reduce(
+            (acc, id) => ({
               ...acc,
-              ...y.pluginSecrets?.[F],
+              ...storage.pluginSecrets?.[id],
             }),
             {},
           );
-    let secureScrubbed = b
-      ? filterEntriesToNullProto(b, (O, k) => !nonSensitiveKeysInThisSave.has(k))
+    let secureScrubbed = existingSecrets
+      ? filterEntriesToNullProto(existingSecrets, (key, k) => !nonSensitiveKeysInThisSave.has(k))
       : undefined;
-    let needSecureScrub = secureScrubbed && b && Object.keys(secureScrubbed).length !== Object.keys(b).length;
-    if (Object.keys(sensitive).length === 0 && !needSecureScrub && S.replaced.length === 0) return y;
+    let needSecureScrub =
+      secureScrubbed &&
+      existingSecrets &&
+      Object.keys(secureScrubbed).length !== Object.keys(existingSecrets).length;
+    if (Object.keys(sensitive).length === 0 && !needSecureScrub && writeTarget.replaced.length === 0)
+      return storage;
     return {
-      ...y,
+      ...storage,
       pluginSecrets: {
-        ...filterEntriesToNullProto(y.pluginSecrets ?? {}, (O, F) => !S.replaced.includes(F)),
-        [S.written]: {
+        ...filterEntriesToNullProto(
+          storage.pluginSecrets ?? {},
+          (key, key_2) => !writeTarget.replaced.includes(key_2),
+        ),
+        [writeTarget.written]: {
           ...secureScrubbed,
           ...sensitive,
         },
       },
     };
   }, credentials);
-  if (!h.success) {
+  if (!mutationResult.success) {
     let err = Error(`Failed to save sensitive plugin options for ${pluginId} to secure storage`);
     logForDebugging(err.message, {
       level: "error",
     });
     throw err;
   }
-  if (h.warning)
-    logForDebugging(`Plugin secrets save warning: ${h.warning}`, {
+  if (mutationResult.warning)
+    logForDebugging(`Plugin secrets save warning: ${mutationResult.warning}`, {
       level: "warn",
     });
   let pluginConfigs = getSettingsForSourceForUpkeep("userSettings")?.pluginConfigs;
-  let w = {};
-  for (let y of pluginIdAliases(pluginId)) {
-    let keysToScrubFromSettings = Object.keys(pluginConfigs?.[y]?.options ?? {}).filter((k) =>
+  let updates = {};
+  for (let alias of pluginIdAliases(pluginId)) {
+    let keysToScrubFromSettings = Object.keys(pluginConfigs?.[alias]?.options ?? {}).filter((k) =>
       sensitiveKeysInThisSave.has(k),
     );
     let scrubbed = Object.fromEntries(
       keysToScrubFromSettings.map((keysToScrubFromSetting) => [keysToScrubFromSetting, undefined]),
     );
-    let M = y === pluginId ? f : {};
-    if (Object.keys(M).length > 0 || keysToScrubFromSettings.length > 0)
-      w[y] = {
+    let values = alias === pluginId ? nonSensitive : {};
+    if (Object.keys(values).length > 0 || keysToScrubFromSettings.length > 0)
+      updates[alias] = {
         options: {
-          ...M,
+          ...values,
           ...scrubbed,
         },
       };
   }
-  if (Object.keys(w).length > 0) {
+  if (Object.keys(updates).length > 0) {
     let result = await updateSettingsForSource(
       "userSettings",
       {
-        pluginConfigs: mergeRenamedPluginSettings(pluginConfigs, pluginId, w),
+        pluginConfigs: mergeRenamedPluginSettings(pluginConfigs, pluginId, updates),
       },
       undefined,
-      s,
+      storageV5,
     );
     if (result.error) {
       logForDebugging(
@@ -188,39 +195,39 @@ async function savePluginOptions(pluginId, values, schema, s, credentials) {
  * 列出 settings.pluginConfigs 与安全存储里出现过的插件选项键（用于清理）。
  */
 async function listStoredPluginOptionKeys(credentials) {
-  let r = [];
-  let n = new Set();
+  let unreadable = [];
+  let ids = new Set();
   invalidateCommandNames();
   let settingsForSourceForUpkeep = getSettingsForSourceForUpkeep("userSettings");
   if (settingsForSourceForUpkeep === null || settingsForSourceForUpkeep === undefined) {
     let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
     if (settingsFilePathForSource !== undefined && (await pathPresence(settingsFilePathForSource)) !== "gone")
-      r.push("settings_unreadable");
+      unreadable.push("settings_unreadable");
   }
-  for (let key of Object.keys(settingsForSourceForUpkeep?.pluginConfigs ?? {})) n.add(key);
+  for (let key of Object.keys(settingsForSourceForUpkeep?.pluginConfigs ?? {})) ids.add(key);
   try {
     let secureStorage = getSecureStorage();
-    let f = secureStorage.readAsyncStrict
+    let read = secureStorage.readAsyncStrict
       ? await secureStorage.readAsyncStrict(credentials, {
           inaccessibleAs: "failure",
         })
       : await secureStorage.readAsync(credentials);
-    if (f === READ_FAILED) r.push("secrets_unreadable");
+    if (read === READ_FAILED) unreadable.push("secrets_unreadable");
     else
-      for (let key of Object.keys(f?.pluginSecrets ?? {})) {
+      for (let key of Object.keys(read?.pluginSecrets ?? {})) {
         let index = key.indexOf("/");
-        n.add(index === -1 ? key : key.slice(0, index));
+        ids.add(index === -1 ? key : key.slice(0, index));
       }
   } catch {
-    r.push("secrets_unreadable");
+    unreadable.push("secrets_unreadable");
   }
   return {
-    ids: [...n],
-    unreadable: r,
+    ids: [...ids],
+    unreadable,
   };
 }
 //@ chunk-vr8smdd9.js:22624-22935 layout
-async function readUserSettingsForOptions(e) {
+async function readUserSettingsForOptions(pluginId) {
   invalidateCommandNames();
   let settingsForSourceForUpkeep = getSettingsForSourceForUpkeep("userSettings");
   if (settingsForSourceForUpkeep !== null && settingsForSourceForUpkeep !== undefined)
@@ -229,7 +236,7 @@ async function readUserSettingsForOptions(e) {
   if (settingsFilePathForSource === undefined || (await pathPresence(settingsFilePathForSource)) === "gone")
     return;
   logForDebugging(
-    `deletePluginOptions: the user settings file (${settingsFilePathForSource}) is there and could not be read, so options of ${e} may remain in it`,
+    `deletePluginOptions: the user settings file (${settingsFilePathForSource}) is there and could not be read, so options of ${pluginId} may remain in it`,
     {
       level: "warn",
     },
@@ -240,17 +247,17 @@ async function readUserSettingsForOptions(e) {
 /**
  * 删除插件的全部选项（settings.pluginConfigs 与安全存储里的 pluginSecrets），卸载时调用。
  */
-async function deletePluginOptions(e, storageV5, credentials, s) {
-  let a = true;
-  let userSettingsForOptions = await readUserSettingsForOptions(e);
+async function deletePluginOptions(pluginId, storageV5, credentials, unreadable) {
+  let clean = true;
+  let userSettingsForOptions = await readUserSettingsForOptions(pluginId);
   if (userSettingsForOptions === "unreadable") {
-    a = false;
-    s?.push("settings_unreadable");
+    clean = false;
+    unreadable?.push("settings_unreadable");
   }
-  let m = userSettingsForOptions === "unreadable" ? undefined : userSettingsForOptions;
-  let filtered = pluginIdAliases(e).filter((x) => m?.pluginConfigs?.[x] !== undefined);
+  let settings = userSettingsForOptions === "unreadable" ? undefined : userSettingsForOptions;
+  let filtered = pluginIdAliases(pluginId).filter((id) => settings?.pluginConfigs?.[id] !== undefined);
   if (filtered.length > 0) {
-    let pluginConfigs = Object.fromEntries(filtered.map((y) => [y, undefined]));
+    let pluginConfigs = Object.fromEntries(filtered.map((id) => [id, undefined]));
     let { error } = await updateSettingsForSource(
       "userSettings",
       {
@@ -260,260 +267,293 @@ async function deletePluginOptions(e, storageV5, credentials, s) {
       storageV5,
     );
     if (error) {
-      logForDebugging(`deletePluginOptions: failed to clear settings.pluginConfigs[${e}]: ${error.message}`, {
-        level: "warn",
-      });
-      a = false;
-      s?.push("settings_write_failed");
+      logForDebugging(
+        `deletePluginOptions: failed to clear settings.pluginConfigs[${pluginId}]: ${error.message}`,
+        {
+          level: "warn",
+        },
+      );
+      clean = false;
+      unreadable?.push("settings_write_failed");
     } else {
-      let userSettingsForOptions = await readUserSettingsForOptions(e);
+      let userSettingsForOptions = await readUserSettingsForOptions(pluginId);
       if (userSettingsForOptions === "unreadable") {
-        a = false;
-        s?.push("settings_unreadable");
+        clean = false;
+        unreadable?.push("settings_unreadable");
       }
       let pluginConfigs =
         userSettingsForOptions === "unreadable" ? undefined : userSettingsForOptions?.pluginConfigs;
-      if (filtered.some((b) => pluginConfigs?.[b] !== undefined)) {
+      if (filtered.some((pluginId) => pluginConfigs?.[pluginId] !== undefined)) {
         logForDebugging(
-          `deletePluginOptions: settings.pluginConfigs[${e}] still reads back after a write that reported no error`,
+          `deletePluginOptions: settings.pluginConfigs[${pluginId}] still reads back after a write that reported no error`,
           {
             level: "warn",
           },
         );
-        a = false;
-        s?.push("settings_remain");
+        clean = false;
+        unreadable?.push("settings_remain");
       }
     }
   }
-  let g = [e, ...legacyPluginIds(e)];
-  let h = (x) => g.some((w) => x === w || x.startsWith(`${w}/`));
+  let pluginIds = [pluginId, ...legacyPluginIds(pluginId)];
+  let isOwnKey = (key) =>
+    pluginIds.some((candidateId) => key === candidateId || key.startsWith(`${candidateId}/`));
   try {
     let settings = getSecureStorage();
     if (
       !(
-        await settings.mutate((y) => {
-          if (!y.pluginSecrets) return y;
-          let survivingEntries = Object.entries(y.pluginSecrets).filter(([key]) => !h(key));
-          if (survivingEntries.length === Object.keys(y.pluginSecrets).length) return y;
+        await settings.mutate((storage) => {
+          if (!storage.pluginSecrets) return storage;
+          let survivingEntries = Object.entries(storage.pluginSecrets).filter(([key]) => !isOwnKey(key));
+          if (survivingEntries.length === Object.keys(storage.pluginSecrets).length) return storage;
           return {
-            ...y,
+            ...storage,
             pluginSecrets: survivingEntries.length > 0 ? Object.fromEntries(survivingEntries) : undefined,
           };
         }, credentials)
       ).success
     ) {
-      logForDebugging(`deletePluginOptions: failed to clear pluginSecrets for ${e} from keychain`, {
+      logForDebugging(`deletePluginOptions: failed to clear pluginSecrets for ${pluginId} from keychain`, {
         level: "warn",
       });
-      a = false;
-      s?.push("secrets_write_failed");
+      clean = false;
+      unreadable?.push("secrets_write_failed");
     } else {
-      let y = settings.readAsyncStrict
+      let stored = settings.readAsyncStrict
         ? await settings.readAsyncStrict(credentials, {
             inaccessibleAs: "failure",
           })
         : await settings.readAsync(credentials);
-      if (y === READ_FAILED || Object.keys(y?.pluginSecrets ?? {}).some(h)) {
+      if (stored === READ_FAILED || Object.keys(stored?.pluginSecrets ?? {}).some(isOwnKey)) {
         logForDebugging(
-          `deletePluginOptions: after the delete, secure storage could not be read or still holds pluginSecrets for ${e}`,
+          `deletePluginOptions: after the delete, secure storage could not be read or still holds pluginSecrets for ${pluginId}`,
           {
             level: "warn",
           },
         );
-        a = false;
-        s?.push(y === READ_FAILED ? "secrets_unreadable" : "secrets_remain");
+        clean = false;
+        unreadable?.push(stored === READ_FAILED ? "secrets_unreadable" : "secrets_remain");
       }
     }
   } catch (error) {
-    logForDebugging(`deletePluginOptions: storage lock unavailable for ${e}: ${errorMessage(error)}`, {
+    logForDebugging(`deletePluginOptions: storage lock unavailable for ${pluginId}: ${errorMessage(error)}`, {
       level: "warn",
     });
-    a = false;
-    s?.push("secrets_write_failed");
+    clean = false;
+    unreadable?.push("secrets_write_failed");
   }
   clearPluginOptionsCache();
-  return a;
+  return clean;
 }
 //@ chunk-vr8smdd9.js:24670-27533 layout
 /**
  * --replace 切换副本时把旧插件 ID 的选项与密钥复制到新 ID（目标已有值则不覆盖）。
  */
-async function copyPluginOptions(e, r, copyDir, s, a) {
+async function copyPluginOptions(fromId, toId, copyDir, storageV5, credentials) {
   {
-    let f = true;
-    let m = false;
+    let optionsOk = true;
+    let targetHadOwn = false;
     let { error } = await updateSettingsForSourceWithTransform(
       "userSettings",
-      (T) => {
-        let O = T?.pluginConfigs?.[e];
-        if (O === undefined) return null;
-        if (T?.pluginConfigs?.[r] !== undefined) {
-          m = true;
+      (settings) => {
+        let config = settings?.pluginConfigs?.[fromId];
+        if (config === undefined) return null;
+        if (settings?.pluginConfigs?.[toId] !== undefined) {
+          targetHadOwn = true;
           return null;
         }
         return {
           pluginConfigs: {
-            [r]: O,
+            [toId]: config,
           },
         };
       },
       undefined,
-      s,
+      storageV5,
     );
     if (error) {
-      f = false;
-      logForDebugging(`copyPluginOptions: failed to copy settings.pluginConfigs[${e}]: ${error.message}`, {
-        level: "warn",
-      });
-    }
-    if (!f) {
+      optionsOk = false;
       logForDebugging(
-        `copyPluginOptions: the settings write failed, so the secrets of ${e} were not copied`,
+        `copyPluginOptions: failed to copy settings.pluginConfigs[${fromId}]: ${error.message}`,
+        {
+          level: "warn",
+        },
+      );
+    }
+    if (!optionsOk) {
+      logForDebugging(
+        `copyPluginOptions: the settings write failed, so the secrets of ${fromId} were not copied`,
         {
           level: "warn",
         },
       );
       clearPluginOptionsCache();
       return {
-        optionsCarried: f,
+        optionsCarried: optionsOk,
         secretsCarried: false,
         oldDataDirDisposable: false,
         dataDirCopied: false,
-        targetHadOwn: m,
+        targetHadOwn,
       };
     }
-    let g = true;
+    let secretsOk = true;
     try {
       if (
         !(
-          await getSecureStorage().mutate((O) => {
-            if (!O.pluginSecrets) return O;
-            let F = {};
-            for (let [key, value] of Object.entries(O.pluginSecrets)) {
-              let K = remapSecretKey(key, e, r);
-              if (K === undefined) continue;
-              if (O.pluginSecrets[K] === undefined) F[K] = value;
-              else m = true;
+          await getSecureStorage().mutate((store) => {
+            if (!store.pluginSecrets) return store;
+            let newSecrets = {};
+            for (let [key, value] of Object.entries(store.pluginSecrets)) {
+              let key_2 = remapSecretKey(key, fromId, toId);
+              if (key_2 === undefined) continue;
+              if (store.pluginSecrets[key_2] === undefined) newSecrets[key_2] = value;
+              else targetHadOwn = true;
             }
-            return Object.keys(F).length === 0
-              ? O
+            return Object.keys(newSecrets).length === 0
+              ? store
               : {
-                  ...O,
+                  ...store,
                   pluginSecrets: {
-                    ...O.pluginSecrets,
-                    ...F,
+                    ...store.pluginSecrets,
+                    ...newSecrets,
                   },
                 };
-          }, a)
+          }, credentials)
         ).success
       ) {
-        g = false;
-        logForDebugging(`copyPluginOptions: failed to copy pluginSecrets for ${e}`, {
+        secretsOk = false;
+        logForDebugging(`copyPluginOptions: failed to copy pluginSecrets for ${fromId}`, {
           level: "warn",
         });
       }
     } catch {
-      g = false;
-      logForDebugging(`copyPluginOptions: secure storage unavailable for ${e}`, {
+      secretsOk = false;
+      logForDebugging(`copyPluginOptions: secure storage unavailable for ${fromId}`, {
         level: "warn",
       });
     }
-    if (!f || !g) {
+    if (!optionsOk || !secretsOk) {
       clearPluginOptionsCache();
       return {
-        optionsCarried: f,
-        secretsCarried: g,
+        optionsCarried: optionsOk,
+        secretsCarried: secretsOk,
         oldDataDirDisposable: false,
         dataDirCopied: false,
-        targetHadOwn: m,
+        targetHadOwn,
       };
     }
-    let h = pluginDataDirPath(e);
-    let x = pluginDataDirPath(r);
-    let w = `${x}.switching-${process.pid}`;
-    let y = false;
+    let oldDataDir = pluginDataDirPath(fromId);
+    let newDataDir = pluginDataDirPath(toId);
+    let stagingDir = `${newDataDir}.switching-${process.pid}`;
+    let oldDisposable = false;
     let dataDirCopied = false;
-    let b;
-    let M;
+    let keptReason;
+    let oldStat;
     try {
-      let T = await pathPresence(h);
-      if (T === "gone") y = true;
-      else if (T === "unreadable") {
-        b = "copy-failed";
+      let presence = await pathPresence(oldDataDir);
+      if (presence === "gone") oldDisposable = true;
+      else if (presence === "unreadable") {
+        keptReason = "copy-failed";
         logForDebugging(
-          `copyPluginOptions: the data directory of ${e} could not be examined; it is kept and was not copied`,
+          `copyPluginOptions: the data directory of ${fromId} could not be examined; it is kept and was not copied`,
           {
             level: "warn",
           },
         );
       } else if (
-        !(M = await lstat(h, {
+        !(oldStat = await lstat(oldDataDir, {
           bigint: true,
         })).isDirectory() ||
-        !(await isSameFilesystem(dirname(h), basename(h)))
+        !(await isSameFilesystem(dirname(oldDataDir), basename(oldDataDir)))
       ) {
-        b = "copy-failed";
+        keptReason = "copy-failed";
         logForDebugging(
-          `copyPluginOptions: the data directory of ${e} is not a real directory; it is kept and was not copied`,
+          `copyPluginOptions: the data directory of ${fromId} is not a real directory; it is kept and was not copied`,
           {
             level: "warn",
           },
         );
       } else {
-        let O = await rmdir(x).then(
+        let rmdirFailure = await rmdir(newDataDir).then(
           () => {
             return;
           },
           (error) => (isENOENT(error) ? undefined : getErrnoCode(error)),
         );
-        if (O === undefined) {
-          await removeDirectoryTreeNoFollow(w);
-          let F = await isSameFilesystem(dirname(h), basename(h));
-          let v = await lstat(h, {
-            bigint: true,
-          });
-          if (!F || !v.isDirectory() || v.dev !== M?.dev || v.ino !== M?.ino)
-            throw Error("the old data directory is not the real directory first seen");
-          await copyDir(h, w, h, w, h, true, new Set(), undefined, false, true);
-          let P = await lstat(h, {
+        if (rmdirFailure === undefined) {
+          await removeDirectoryTreeNoFollow(stagingDir);
+          let sameFs = await isSameFilesystem(dirname(oldDataDir), basename(oldDataDir));
+          let currentStat = await lstat(oldDataDir, {
             bigint: true,
           });
           if (
-            !P.isDirectory() ||
-            !(await isSameFilesystem(dirname(h), basename(h))) ||
-            P.dev !== v.dev ||
-            P.ino !== v.ino
+            !sameFs ||
+            !currentStat.isDirectory() ||
+            currentStat.dev !== oldStat?.dev ||
+            currentStat.ino !== oldStat?.ino
+          )
+            throw Error("the old data directory is not the real directory first seen");
+          await copyDir(
+            oldDataDir,
+            stagingDir,
+            oldDataDir,
+            stagingDir,
+            oldDataDir,
+            true,
+            new Set(),
+            undefined,
+            false,
+            true,
+          );
+          let afterStat = await lstat(oldDataDir, {
+            bigint: true,
+          });
+          if (
+            !afterStat.isDirectory() ||
+            !(await isSameFilesystem(dirname(oldDataDir), basename(oldDataDir))) ||
+            afterStat.dev !== currentStat.dev ||
+            afterStat.ino !== currentStat.ino
           )
             throw Error("the old data directory changed during the copy");
-          if (!(await lstat(w)).isDirectory() || !(await isSameFilesystem(dirname(w), basename(w))))
+          if (
+            !(await lstat(stagingDir)).isDirectory() ||
+            !(await isSameFilesystem(dirname(stagingDir), basename(stagingDir)))
+          )
             throw Error("the staging folder is not a real directory");
-          await retryFsOp(w, x);
-          if (!(await lstat(x)).isDirectory() || !(await isSameFilesystem(dirname(x), basename(x)))) {
-            await removePathEntry(x).catch(() => {});
+          await retryFsOp(stagingDir, newDataDir);
+          if (
+            !(await lstat(newDataDir)).isDirectory() ||
+            !(await isSameFilesystem(dirname(newDataDir), basename(newDataDir)))
+          ) {
+            await removePathEntry(newDataDir).catch(() => {});
             throw Error("what stands at the target after the move is not a real directory");
           }
-          y = true;
+          oldDisposable = true;
           dataDirCopied = true;
-        } else b = O === "ENOTEMPTY" || O === "EEXIST" || O === "ENOTDIR" ? "target-had-own" : "copy-failed";
+        } else
+          keptReason =
+            rmdirFailure === "ENOTEMPTY" || rmdirFailure === "EEXIST" || rmdirFailure === "ENOTDIR"
+              ? "target-had-own"
+              : "copy-failed";
       }
     } catch (error) {
-      b = "copy-failed";
+      keptReason = "copy-failed";
       logForDebugging(
-        `copyPluginOptions: failed to copy the data directory of ${e}: ${errorMessage(error)}`,
+        `copyPluginOptions: failed to copy the data directory of ${fromId}: ${errorMessage(error)}`,
         {
           level: "warn",
         },
       );
-      await removeDirectoryTreeNoFollow(w).catch(() => {});
+      await removeDirectoryTreeNoFollow(stagingDir).catch(() => {});
     }
     clearPluginOptionsCache();
     return {
-      optionsCarried: f,
-      secretsCarried: g,
-      oldDataDirDisposable: y,
+      optionsCarried: optionsOk,
+      secretsCarried: secretsOk,
+      oldDataDirDisposable: oldDisposable,
       dataDirCopied,
-      dataDirKeptReason: b,
-      targetHadOwn: m,
+      dataDirKeptReason: keptReason,
+      targetHadOwn,
     };
   }
   return {
@@ -525,10 +565,10 @@ async function copyPluginOptions(e, r, copyDir, s, a) {
   };
 }
 //@ chunk-vr8smdd9.js:27533-27640 layout
-function remapSecretKey(e, r, n) {
+function remapSecretKey(key, fromId, toId) {
   {
-    let s = `${r}/`;
-    return e === r ? n : e.startsWith(s) ? `${n}/${e.slice(s.length)}` : undefined;
+    let prefix = `${fromId}/`;
+    return key === fromId ? toId : key.startsWith(prefix) ? `${toId}/${key.slice(prefix.length)}` : undefined;
   }
   return;
 }
@@ -536,19 +576,19 @@ function remapSecretKey(e, r, n) {
 /**
  * --replace 切换时目标副本是否已有自己的选项（有则不复制）；安全存储读不到时为 unknown。
  */
-async function wouldTargetKeepOwnPluginOptions(e, pluginId) {
+async function wouldTargetKeepOwnPluginOptions(fromId, toId) {
   {
     let pluginConfigs = getSettingsForSourceForUpkeep("userSettings")?.pluginConfigs;
-    if (pluginConfigs?.[e] !== undefined && pluginConfigs[pluginId] !== undefined) return true;
+    if (pluginConfigs?.[fromId] !== undefined && pluginConfigs[toId] !== undefined) return true;
     try {
       let pluginSecrets = (await getSecureStorage().readAsync())?.pluginSecrets ?? {};
       return Object.keys(pluginSecrets).some((key) => {
-        let f = remapSecretKey(key, e, pluginId);
-        return f !== undefined && pluginSecrets[f] !== undefined;
+        let key_2 = remapSecretKey(key, fromId, toId);
+        return key_2 !== undefined && pluginSecrets[key_2] !== undefined;
       });
     } catch {
       logForDebugging(
-        `wouldTargetKeepOwnPluginOptions: secure storage could not be read (switch from ${e}), so the answer is 'unknown'`,
+        `wouldTargetKeepOwnPluginOptions: secure storage could not be read (switch from ${fromId}), so the answer is 'unknown'`,
         {
           level: "warn",
         },
@@ -562,10 +602,10 @@ async function wouldTargetKeepOwnPluginOptions(e, pluginId) {
 /**
  * 返回 manifest.userConfig 中尚未配置（或非敏感值不合法）的选项，启用插件时据此弹出配置对话框。
  */
-async function getUnconfiguredOptions(plugin, r) {
+async function getUnconfiguredOptions(plugin, credentials) {
   let manifestSchema = plugin.manifest.userConfig;
   if (!manifestSchema || Object.keys(manifestSchema).length === 0) return {};
-  let pluginOptions = await loadPluginOptions(marketplaceSource(plugin), r);
+  let pluginOptions = await loadPluginOptions(marketplaceSource(plugin), credentials);
   let unconfigured = {};
   for (let [key, fieldSchema] of Object.entries(manifestSchema)) {
     let single = getOwn(pluginOptions, key);
@@ -590,25 +630,25 @@ async function getUnconfiguredOptions(plugin, r) {
 /**
  * 值是否不在字段的 options 列表内。
  */
-function isOutsideOptions(e, r) {
-  let options = e?.options;
-  return options !== undefined && !(typeof r === "string" && options.includes(r));
+function isOutsideOptions(fieldSchema, value) {
+  let options = fieldSchema?.options;
+  return options !== undefined && !(typeof value === "string" && options.includes(value));
 }
 //@ chunk-vr8smdd9.js:28400-28736 layout
 /**
  * 已保存选项与 schema 默认值合并；值不在 options 列表内的视为未设置。
  */
-function applyUserConfigDefaults(e, userConfig) {
-  let n = {};
+function applyUserConfigDefaults(values, userConfig) {
+  let defaults = {};
   for (let [key, value] of Object.entries(userConfig)) {
     if (value.required && value.default === undefined) continue;
-    n[key] = value.default ?? "";
+    defaults[key] = value.default ?? "";
   }
-  let s = filterEntriesToNullProto(e, (a, f) => {
-    let options = userConfig[f]?.options;
-    if (options === undefined || !isOutsideOptions(userConfig[f], a)) return true;
+  let kept = filterEntriesToNullProto(values, (value, key) => {
+    let options = userConfig[key]?.options;
+    if (options === undefined || !isOutsideOptions(userConfig[key], value)) return true;
     logForDebugging(
-      `plugin option ${f} holds a value that is not one of ${options.join(", ")}; it reads as unset`,
+      `plugin option ${key} holds a value that is not one of ${options.join(", ")}; it reads as unset`,
       {
         level: "warn",
       },
@@ -616,25 +656,25 @@ function applyUserConfigDefaults(e, userConfig) {
     return false;
   });
   return {
-    ...n,
-    ...s,
+    ...defaults,
+    ...kept,
   };
 }
 //@ chunk-vr8smdd9.js:28736-29120 layout
 /**
  * 替换插件路径变量：${CLAUDE_PLUGIN_ROOT} → 插件目录，${CLAUDE_PROJECT_DIR} → 项目目录，${CLAUDE_PLUGIN_DATA} → 插件数据目录（远端无数据目录时抛 PluginDataDirUnknownError）；可传转义函数。
  */
-function substitutePluginVariables(value, r, n = (s) => s) {
-  let s = (f) => n(f);
-  let out = value.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, () => s(r.path));
-  if (r.projectDir !== null)
+function substitutePluginVariables(value, plugin, transform = (value) => value) {
+  let escaped = (value) => transform(value);
+  let out = value.replace(/\$\{CLAUDE_PLUGIN_ROOT\}/g, () => escaped(plugin.path));
+  if (plugin.projectDir !== null)
     out = out.replace(/\$\{CLAUDE_PROJECT_DIR\}/g, () => {
       let projectDirForTools = getProjectDirForTools();
       if (projectDirForTools === null) throw new NoProjectDirectoryError();
-      return s(projectDirForTools);
+      return escaped(projectDirForTools);
     });
-  if (r.source) {
-    let { source, dataDir } = r;
+  if (plugin.source) {
+    let { source, dataDir } = plugin;
     out = out.replace(/\$\{CLAUDE_PLUGIN_DATA\}/g, () => {
       let dataDir_2 = resolveDataDir(
         {
@@ -644,7 +684,7 @@ function substitutePluginVariables(value, r, n = (s) => s) {
         ensurePluginDataDir,
       );
       if (dataDir_2 === null) throw new PluginDataDirUnknownError();
-      return s(dataDir_2);
+      return escaped(dataDir_2);
     });
   }
   return out;
@@ -662,11 +702,11 @@ class PluginDataDirUnknownError extends Error {
 /**
  * 文本是否引用了本机无法确定的 ${CLAUDE_PLUGIN_DATA}。
  */
-function needsUnknownDataDir(e, r) {
-  if (r.dataDir !== null) return false;
+function needsUnknownDataDir(value, pluginInfo) {
+  if (pluginInfo.dataDir !== null) return false;
   try {
-    substitutePluginVariables(e, {
-      ...r,
+    substitutePluginVariables(value, {
+      ...pluginInfo,
       projectDir: null,
     });
     return false;
@@ -675,8 +715,8 @@ function needsUnknownDataDir(e, r) {
   }
 }
 //@ chunk-vr8smdd9.js:29445-29510 layout
-function resolveDataDir(e, r) {
-  return e.dataDir === undefined ? r(e.source) : e.dataDir;
+function resolveDataDir(pluginInfo, ensureDir) {
+  return pluginInfo.dataDir === undefined ? ensureDir(pluginInfo.source) : pluginInfo.dataDir;
 }
 //@ chunk-vr8smdd9.js:29510-29529 layout
 var CLAUDE_VAR_PREFIX = "${CLAUDE_";
@@ -684,19 +724,21 @@ var CLAUDE_VAR_PREFIX = "${CLAUDE_";
 /**
  * 估算变量替换后的最大增长长度（防止替换后超长）。
  */
-function estimateSubstitutedGrowth(e, r, filePath = "") {
-  let s = e.split(CLAUDE_VAR_PREFIX).length - 1;
-  if (s === 0) return 0;
+function estimateSubstitutedGrowth(value, substitutionInfo, filePath = "") {
+  let occurrences = value.split(CLAUDE_VAR_PREFIX).length - 1;
+  if (occurrences === 0) return 0;
   let projectDirForTools = getProjectDirForTools();
-  return r.path.includes(CLAUDE_VAR_PREFIX) || projectDirForTools?.includes("$") || r.dataDir?.includes("$")
+  return substitutionInfo.path.includes(CLAUDE_VAR_PREFIX) ||
+    projectDirForTools?.includes("$") ||
+    substitutionInfo.dataDir?.includes("$")
     ? 1 / 0
-    : s *
+    : occurrences *
         3 *
         Math.max(
-          r.path.length,
+          substitutionInfo.path.length,
           projectDirForTools?.length ?? 0,
           MAX_CLEAN_IDENTIFIER_LENGTH,
-          (resolveDataDir(r, pluginDataDirPath) ?? "").length,
+          (resolveDataDir(substitutionInfo, pluginDataDirPath) ?? "").length,
           filePath.length,
         );
 }
@@ -704,11 +746,11 @@ function estimateSubstitutedGrowth(e, r, filePath = "") {
 /**
  * 替换 ${user_config.KEY}：缺失时默认抛错（提示到 /plugin manage 配置），也可保留原文。
  */
-function substituteUserConfigVariables(e, userConfig, { missingKey: n = "throw" } = {}) {
-  return e.replace(/\$\{user_config\.([^}]+)\}/g, (s, key) => {
+function substituteUserConfigVariables(value, userConfig, { missingKey = "throw" } = {}) {
+  return value.replace(/\$\{user_config\.([^}]+)\}/g, (wholeMatch, key) => {
     let configValue = getOwn(userConfig, key);
     if (configValue === undefined) {
-      if (n === "literal") return s;
+      if (missingKey === "literal") return wholeMatch;
       throw Error(
         `Plugin option "${key}" isn't set. Open /plugin manage to configure it, or check that the plugin's userConfig schema declares "${key}".`,
       );
@@ -720,9 +762,9 @@ function substituteUserConfigVariables(e, userConfig, { missingKey: n = "throw" 
 /**
  * 文本中是否含 ${user_config.*} 引用。
  */
-function hasUserConfigVariables(e, userConfig) {
+function hasUserConfigVariables(value, userConfig) {
   try {
-    return substituteUserConfigVariables(e, userConfig) !== e;
+    return substituteUserConfigVariables(value, userConfig) !== value;
   } catch {
     return true;
   }
@@ -731,54 +773,54 @@ function hasUserConfigVariables(e, userConfig) {
 /**
  * 在技能/代理正文中替换 ${user_config.KEY}：sensitive 值不替换，改为占位说明。
  */
-function substituteUserConfigInContent(content, options, schema, s) {
+function substituteUserConfigInContent(content, options, schema, transform) {
   return content.replace(/\$\{user_config\.([^}]+)\}/g, (match, key) => {
     if (schema[key]?.sensitive === true) return `[sensitive option '${key}' not available in skill content]`;
     let value = getOwn(options, key);
     if (value === undefined) return match;
-    let c = String(value);
-    return s ? s(c) : c;
+    let valueText = String(value);
+    return transform ? transform(valueText) : valueText;
   });
 }
 //@ chunk-vr8smdd9.js:30373-30936 sole-consumer
 /**
  * 插件改名时合并旧 id 的选项与 MCP 配置到新 id。
  */
-function mergeRenamedPluginSettings(pluginConfigs, pluginId, n) {
-  let s = pluginSettingWriteTarget(pluginConfigs, pluginId);
-  if (s.replaced.length === 0) return n;
-  let a = [...s.replaced.toReversed(), s.written];
-  let f = filterEntriesToNullProto(n, (g, h) => !s.replaced.includes(h));
+function mergeRenamedPluginSettings(pluginConfigs, pluginId, updates) {
+  let target = pluginSettingWriteTarget(pluginConfigs, pluginId);
+  if (target.replaced.length === 0) return updates;
+  let sources = [...target.replaced.toReversed(), target.written];
+  let rest = filterEntriesToNullProto(updates, (value, key) => !target.replaced.includes(key));
   let options = {
     ...filterEntriesToNullProto(
-      a.reduce(
-        (acc, h) => ({
+      sources.reduce(
+        (acc, id) => ({
           ...acc,
-          ...pluginConfigs?.[h]?.options,
-          ...(h === s.written ? undefined : n[h]?.options),
+          ...pluginConfigs?.[id]?.options,
+          ...(id === target.written ? undefined : updates[id]?.options),
         }),
         {},
       ),
-      (g) => g !== undefined,
+      (value) => value !== undefined,
     ),
-    ...f[s.written]?.options,
+    ...rest[target.written]?.options,
   };
-  let c = uniq(a.flatMap((g) => Object.keys(pluginConfigs?.[g]?.mcpServers ?? {})));
+  let serverNames = uniq(sources.flatMap((id) => Object.keys(pluginConfigs?.[id]?.mcpServers ?? {})));
   return {
-    ...f,
-    ...Object.fromEntries(s.replaced.map((g) => [g, undefined])),
-    [s.written]: {
+    ...rest,
+    ...Object.fromEntries(target.replaced.map((id) => [id, undefined])),
+    [target.written]: {
       options,
-      ...(c.length === 0
+      ...(serverNames.length === 0
         ? {}
         : {
             mcpServers: Object.fromEntries(
-              c.map((g) => [
-                g,
-                a.reduce(
-                  (acc, x) => ({
+              serverNames.map((serverName) => [
+                serverName,
+                sources.reduce(
+                  (acc, id) => ({
                     ...acc,
-                    ...pluginConfigs?.[x]?.mcpServers?.[g],
+                    ...pluginConfigs?.[id]?.mcpServers?.[serverName],
                   }),
                   {},
                 ),
@@ -796,8 +838,10 @@ var TRUSTED_SETTING_SOURCES = ["userSettings", "flagSettings"];
  */
 var pluginOptionsFingerprint = (pluginId) =>
   jsonStringify(
-    TRUSTED_SETTING_SOURCES.map((n) =>
-      pluginIdAliases(pluginId).map((r) => getSettingsForSource(n)?.pluginConfigs?.[r]?.options ?? null),
+    TRUSTED_SETTING_SOURCES.map((source) =>
+      pluginIdAliases(pluginId).map(
+        (alias) => getSettingsForSource(source)?.pluginConfigs?.[alias]?.options ?? null,
+      ),
     ),
   );
 export {

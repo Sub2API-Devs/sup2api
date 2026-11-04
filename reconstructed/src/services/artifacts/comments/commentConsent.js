@@ -43,12 +43,12 @@ var COMMENT_TARGET_MAX_CHARS = 120;
 var COMMENT_TEXT_MAX_CHARS = 4000;
 var MENTION_MAX_CHARS = 32;
 //@ chunk-grzs9chm.js:686-720 placement
-function _(slug, t) {
-  return `${slug}/${t}`;
+function _(slug, slugArg) {
+  return `${slug}/${slugArg}`;
 }
 //@ chunk-grzs9chm.js:720-866 placement
-function flattenCommentText(e) {
-  return stripControlChars(e)
+function flattenCommentText(text) {
+  return stripControlChars(text)
     .replace(/[\n\t]/g, " ")
     .replace(INVISIBLE_BLANKS, " ")
     .replace(/\s+/g, " ")
@@ -58,19 +58,22 @@ function flattenCommentText(e) {
     .trim();
 }
 //@ chunk-grzs9chm.js:866-950 placement
-function truncateCommentText(e, t) {
-  let o = flattenCommentText(e);
-  return Array.from(o).length > t ? `${extractPageText(truncateCodePoints(o, t))}\u2026` : o;
+function truncateCommentText(text, limit) {
+  let flat = flattenCommentText(text);
+  return Array.from(flat).length > limit ? `${extractPageText(truncateCodePoints(flat, limit))}\u2026` : flat;
 }
 //@ chunk-grzs9chm.js:950-1524 placement
-function openingCommentExcerpt(threads, t, o) {
-  let found = threads.find((s) => s.id === t);
-  let n = found?.comments[0];
-  if (found === undefined || n === undefined || found.commentsDegraded) return;
-  let a = spacedFromClosingQuote(
+function openingCommentExcerpt(threads, threadList, threadId) {
+  let found = threads.find((thread) => thread.id === threadList);
+  let comment = found?.comments[0];
+  if (found === undefined || comment === undefined || found.commentsDegraded) return;
+  let spaced = spacedFromClosingQuote(
     characterReferencesAsBrackets(
       sweepProvenanceMarker(
-        truncateCommentText(n.text.replace(DECISION_SURFACE_BRACKETS_RE, " "), COMMENT_TARGET_MAX_CHARS),
+        truncateCommentText(
+          comment.text.replace(DECISION_SURFACE_BRACKETS_RE, " "),
+          COMMENT_TARGET_MAX_CHARS,
+        ),
       ),
     )
       .replace(ANGLE_BRACKET_RUN_RE, " ")
@@ -78,40 +81,40 @@ function openingCommentExcerpt(threads, t, o) {
       .replace(/ {2,}/g, " ")
       .trim(),
   );
-  if (a === "") return;
-  let i = isOwnPrincipal(n.account, o);
-  let commentAuthorKind = getCommentAuthorKind(n);
-  let d =
-    n.postedByArtifact || commentAuthorKind === "unknown"
+  if (spaced === "") return;
+  let own = isOwnPrincipal(comment.account, threadId);
+  let commentAuthorKind = getCommentAuthorKind(comment);
+  let detail =
+    comment.postedByArtifact || commentAuthorKind === "unknown"
       ? "unknown"
-      : n.role === "assistant"
-        ? i
+      : comment.role === "assistant"
+        ? own
           ? "claude"
           : "unknown"
         : commentAuthorKind === "agent"
           ? "unknown"
-          : i
+          : own
             ? "user"
             : "viewer";
   return {
     display: {
-      thread_id: t,
-      by: d,
-      excerpt: a,
+      thread_id: threadList,
+      by: detail,
+      excerpt: spaced,
       replies: found.comments.length - 1,
       resolved: found.resolved && found.resolvedDegraded !== true,
     },
-    ...(d === "viewer" &&
-      n.access !== undefined && {
-        access: n.access,
+    ...(detail === "viewer" &&
+      comment.access !== undefined && {
+        access: comment.access,
       }),
   };
 }
 //@ chunk-grzs9chm.js:1524-1637 placement
-function canAskCommentConsent(e) {
-  let toolPermissionContext = getToolPermissionContext(e);
+function canAskCommentConsent(options) {
+  let toolPermissionContext = getToolPermissionContext(options);
   return (
-    e.toolUseId !== undefined &&
+    options.toolUseId !== undefined &&
     toolPermissionContext.mode !== "dontAsk" &&
     toolPermissionContext.shouldAvoidPermissionPrompts !== true
   );
@@ -120,51 +123,52 @@ function canAskCommentConsent(e) {
 /**
  * 读取 artifact 评论线程开头评论，用于构造"Claude 想读取此评论线程"的同意提示。
  */
-async function readCommentConsentTarget(e, t, o) {
-  if (!ARTIFACT_SLUG_RE.test(t)) return;
-  let r = _(e.slug, t);
+async function readCommentConsentTarget(target, threadId, account) {
+  if (!ARTIFACT_SLUG_RE.test(threadId)) return;
+  let key = _(target.slug, threadId);
   let commentTargets = getLiveState().commentTargets;
   let accountEpoch = getLiveState().accountEpoch;
-  let i = commentTargets.get(r);
-  if (i !== undefined && o.toolUseId !== undefined && i.toolUseId === o.toolUseId) return i.target;
-  let { signal, cleanup } = createCombinedAbortSignal(o.abortController.signal, {
+  let existing = commentTargets.get(key);
+  if (existing !== undefined && account.toolUseId !== undefined && existing.toolUseId === account.toolUseId)
+    return existing.target;
+  let { signal, cleanup } = createCombinedAbortSignal(account.abortController.signal, {
     timeoutMs: COMMENT_TEXT_MAX_CHARS,
     refTimer: true,
   });
   try {
     let [artifactComments, gatewayAccountInfo] = await Promise.all([
-      readArtifactComments(e, signal, o.credentials, "artifact_comment_consent_read", {
+      readArtifactComments(target, signal, account.credentials, "artifact_comment_consent_read", {
         skipBootProbe: true,
       }),
-      getGatewayAccountInfoAsync(o.credentials),
+      getGatewayAccountInfoAsync(account.credentials),
     ]);
     if (artifactComments.err !== null) {
-      commentTargets.delete(r);
+      commentTargets.delete(key);
       return;
     }
-    let m = openingCommentExcerpt(artifactComments.threads, t, {
+    let excerpt = openingCommentExcerpt(artifactComments.threads, threadId, {
       account: gatewayAccountInfo?.accountUuid?.toLowerCase(),
       tokens: ownPrincipalTokens(),
     });
-    if (m === undefined) {
+    if (excerpt === undefined) {
       logFeatureSad("artifact_comment_consent_read", "no_opening_comment");
-      commentTargets.delete(r);
+      commentTargets.delete(key);
       return;
     }
     if (getLiveState().accountEpoch !== accountEpoch) return;
-    commentTargets.delete(r);
-    commentTargets.set(r, {
-      target: m,
-      toolUseId: o.toolUseId,
+    commentTargets.delete(key);
+    commentTargets.set(key, {
+      target: excerpt,
+      toolUseId: account.toolUseId,
     });
     while (commentTargets.size > MENTION_MAX_CHARS) {
-      let u = commentTargets.keys().next().value;
-      if (u === undefined) break;
-      commentTargets.delete(u);
+      let oldest = commentTargets.keys().next().value;
+      if (oldest === undefined) break;
+      commentTargets.delete(oldest);
     }
-    return m;
+    return excerpt;
   } catch (error) {
-    if (o.abortController.signal.aborted) throw error;
+    if (account.abortController.signal.aborted) throw error;
     logFeatureSad("artifact_comment_consent_read", isAbortError(error) ? "deadline" : "read_threw");
     return;
   } finally {
@@ -211,14 +215,14 @@ function describeThreadForConsent({ display, access }) {
   }
 }
 //@ chunk-grzs9chm.js:3175-3282 placement
-function withCommentTarget(e, t) {
-  if (t === undefined && !(COMMENT_TARGET_KEY in e)) return;
-  let { [COMMENT_TARGET_KEY]: o, ...r } = e;
-  return t === undefined
-    ? r
+function withCommentTarget(input, target) {
+  if (target === undefined && !(COMMENT_TARGET_KEY in input)) return;
+  let { [COMMENT_TARGET_KEY]: targetKey, ...rest } = input;
+  return target === undefined
+    ? rest
     : {
-        ...r,
-        [COMMENT_TARGET_KEY]: t,
+        ...rest,
+        [COMMENT_TARGET_KEY]: target,
       };
 }
 export {

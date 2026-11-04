@@ -17,11 +17,11 @@ import { isStorageV5Enabled } from "../hoverRest.js";
 /**
  * 固定 v5 存储后端选择。
  */
-function pinStorageV5(e) {
+function pinStorageV5(pin) {
   recordHoverRestDecision(
     env.CLAUDE_CODE_HOVER_REST ?? getFeatureValue_CACHED_MAY_BE_STALE("tengu_hover_rest", false),
   );
-  if (e === undefined) return isStorageV5Enabled() ? tryCreateV5Backend() : undefined;
-  return adoptStorageV5EnvPin(e);
+  if (pin === undefined) return isStorageV5Enabled() ? tryCreateV5Backend() : undefined;
+  return adoptStorageV5EnvPin(pin);
 }
 export { pinStorageV5 };

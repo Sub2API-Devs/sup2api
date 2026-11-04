@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_descriptors } from "../cjs/descriptors.js";
 import { require_names } from "../cjs/reflect/names.js";
 import { require_reflect } from "../cjs/reflect/reflect.js";
@@ -15,7 +15,7 @@ import { require_extensions } from "./extensions.js";
 import { require_reflect_check } from "../cjs/reflect/reflect-check.js";
 
 //@ chunk-fq0cr76a.js:449273-456071 cjs-fingerprint
-var require_to_json = x(function (cjsExports) {
+var require_to_json = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

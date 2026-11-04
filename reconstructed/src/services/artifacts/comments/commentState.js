@@ -22,8 +22,8 @@ function rememberPostedReplyId(replyId) {
   let postedReplyIds = getLiveState().postedReplyIds;
   postedReplyIds.add(replyId);
   if (postedReplyIds.size > MAX_TRACKED_REPLY_IDS) {
-    let n = postedReplyIds.values().next().value;
-    if (n !== undefined) postedReplyIds.delete(n);
+    let replyId = postedReplyIds.values().next().value;
+    if (replyId !== undefined) postedReplyIds.delete(replyId);
   }
 }
 //@ chunk-b0a246e7.js:3701-3759 placement
@@ -42,8 +42,8 @@ function markReplyClean(replyId) {
   let cleanReplyIds = getLiveState().cleanReplyIds;
   cleanReplyIds.add(replyId);
   if (cleanReplyIds.size > MAX_TRACKED_REPLY_IDS) {
-    let n = cleanReplyIds.values().next().value;
-    if (n !== undefined) cleanReplyIds.delete(n);
+    let replyId = cleanReplyIds.values().next().value;
+    if (replyId !== undefined) cleanReplyIds.delete(replyId);
   }
 }
 //@ chunk-b0a246e7.js:3898-3947 placement
@@ -80,7 +80,7 @@ function isTrustedComment(comment, account) {
       : commentAuthorKind === "human" &&
         comment.postedByArtifact !== true &&
         isOwnPrincipal(comment.account, account)) &&
-    extractMentions(comment.text).every((r) => isOwnPrincipal(r, account))
+    extractMentions(comment.text).every((mention) => isOwnPrincipal(mention, account))
   );
 }
 //@ chunk-b0a246e7.js:4305-4399 placement
@@ -116,8 +116,8 @@ function getCommentsAwaitingReply(thread) {
   )
     return [];
   let lastIndex = thread.comments.findLastIndex((comment) => getCommentAuthorKind(comment) === "agent");
-  let n = lastIndex >= 0 ? thread.comments[lastIndex] : undefined;
-  let r = thread.resolved
+  let lastComment = lastIndex >= 0 ? thread.comments[lastIndex] : undefined;
+  let resolvedComment = thread.resolved
     ? {
         id: "resolution-gesture",
         account: "",
@@ -126,11 +126,13 @@ function getCommentsAwaitingReply(thread) {
       }
     : undefined;
   return thread.comments.filter(
-    (comment, u) =>
+    (comment, commentIndex) =>
       getCommentAuthorKind(comment) === "human" &&
       parseTimestamp(comment.toClaudeAt) !== null &&
-      (n === undefined || u > lastIndex || hasCommentSentAfter([comment], n)) &&
-      (r === undefined || hasCommentSentAfter([comment], r)),
+      (lastComment === undefined ||
+        commentIndex > lastIndex ||
+        hasCommentSentAfter([comment], lastComment)) &&
+      (resolvedComment === undefined || hasCommentSentAfter([comment], resolvedComment)),
   );
 }
 //@ chunk-b0a246e7.js:4944-6506 placement
@@ -138,63 +140,64 @@ function getCommentsAwaitingReply(thread) {
  * 把评论线程序列化为给模型的结构（锚点、评论、awaiting_reply 等字段）。
  */
 function serializeCommentThreads(threads) {
-  return threads.map((t) => {
-    let n = new Set(getCommentsAwaitingReply(t));
+  return threads.map((thread) => {
+    let awaiting = new Set(getCommentsAwaitingReply(thread));
     return {
-      id: t.id,
-      ...(t.createdAt !== undefined && {
-        created_at: t.createdAt,
+      id: thread.id,
+      ...(thread.createdAt !== undefined && {
+        created_at: thread.createdAt,
       }),
-      resolved: t.resolved,
-      ...(t.resolvedDegraded && {
+      resolved: thread.resolved,
+      ...(thread.resolvedDegraded && {
         resolved_degraded: true,
       }),
-      ...(t.resolvedByClaude && {
+      ...(thread.resolvedByClaude && {
         resolved_by_claude: true,
       }),
-      claude_activated: t.claudeActivated,
-      ...(t.activatedAtDegraded && {
+      claude_activated: thread.claudeActivated,
+      ...(thread.activatedAtDegraded && {
         activated_degraded: true,
       }),
-      ...(t.carried && {
+      ...(thread.carried && {
         carried: true,
       }),
-      ...(t.commentsDegraded && {
+      ...(thread.commentsDegraded && {
         comments_degraded: true,
       }),
-      ...(t.anchorPath !== undefined &&
-        !t.anchorPathUnreadable && {
-          anchor_path: t.anchorPath,
+      ...(thread.anchorPath !== undefined &&
+        !thread.anchorPathUnreadable && {
+          anchor_path: thread.anchorPath,
         }),
-      ...(t.spanQuote !== undefined && {
-        span_quote: t.spanQuote,
+      ...(thread.spanQuote !== undefined && {
+        span_quote: thread.spanQuote,
       }),
-      ...(t.anchorFile !== undefined && {
-        anchor_file: t.anchorFile,
+      ...(thread.anchorFile !== undefined && {
+        anchor_file: thread.anchorFile,
       }),
-      ...(t.anchorFileDegraded && {
+      ...(thread.anchorFileDegraded && {
         anchor_file_degraded: true,
       }),
-      ...(t.anchorFileSha !== undefined && {
-        anchor_file_sha: t.anchorFileSha,
+      ...(thread.anchorFileSha !== undefined && {
+        anchor_file_sha: thread.anchorFileSha,
       }),
-      ...(t.anchorMovedAt !== undefined && {
-        anchor_moved_at: t.anchorMovedAt,
+      ...(thread.anchorMovedAt !== undefined && {
+        anchor_moved_at: thread.anchorMovedAt,
       }),
-      ...(t.anchorLabel !== undefined && {
-        anchor_label: t.anchorLabel,
+      ...(thread.anchorLabel !== undefined && {
+        anchor_label: thread.anchorLabel,
       }),
-      ...(t.anchorDetail !== undefined && {
-        anchor_detail: t.anchorDetail,
+      ...(thread.anchorDetail !== undefined && {
+        anchor_detail: thread.anchorDetail,
       }),
-      ...(t.region && {
+      ...(thread.region && {
         anchor_region: true,
       }),
-      comments: t.comments.map((comment) => {
+      comments: thread.comments.map((comment) => {
         let commentAuthorKind = getCommentAuthorKind(comment);
-        let u = parseTimestamp(comment.toClaudeAt) !== null;
-        let c = comment.toClaudeAtDegraded === true || (comment.toClaudeAt !== undefined && !u);
-        let a = u || c;
+        let hasValidTimestamp = parseTimestamp(comment.toClaudeAt) !== null;
+        let timestampDegraded =
+          comment.toClaudeAtDegraded === true || (comment.toClaudeAt !== undefined && !hasValidTimestamp);
+        let sentDegraded = hasValidTimestamp || timestampDegraded;
         return {
           id: comment.id,
           account: comment.account,
@@ -206,19 +209,20 @@ function serializeCommentThreads(threads) {
             created_at: comment.createdAt,
           }),
           ...(commentAuthorKind === "human" &&
-            u && {
+            hasValidTimestamp && {
               sent_to_claude: true,
               ...(comment.sentByViewer !== undefined && {
                 sent_by_viewer: comment.sentByViewer,
               }),
             }),
-          ...(((commentAuthorKind === "human" && c) || (commentAuthorKind === "unknown" && a)) && {
+          ...(((commentAuthorKind === "human" && timestampDegraded) ||
+            (commentAuthorKind === "unknown" && sentDegraded)) && {
             sent_to_claude_degraded: true,
           }),
           ...(comment.postedByArtifact && {
             posted_by_artifact: true,
           }),
-          ...(n.has(comment) && {
+          ...(awaiting.has(comment) && {
             awaiting_reply: true,
           }),
           ...(commentAuthorKind === "human" &&

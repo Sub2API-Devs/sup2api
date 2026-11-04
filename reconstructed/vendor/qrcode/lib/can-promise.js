@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:229-357 cjs-require-graph
-var require_can_promise = x(function (cjsExports, cjsModule) {
+var require_can_promise = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = function () {
     return typeof Promise === "function" && Promise.prototype && Promise.prototype.then;
   };

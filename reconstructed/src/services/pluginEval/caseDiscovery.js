@@ -8,7 +8,7 @@
  * pieces: chunk-qchp9vrd.js (55)
  * attribution: placement 55
  */
-import path from "path";
+import { default as path_2 } from "path";
 import {
   readdir,
   realpath,
@@ -75,43 +75,51 @@ import { enumeratePluginMcpServers } from "./mocks/pluginMcpEnumeration.js";
 /**
  * （切分错误，属插件评测）按 "模式:目录" 缓存插件目录的属主/权限检查结果；已信任时直接 true。
  */
-function getCachedPluginDirVerdict(e, n, r = "tree") {
-  if (isInsideConsentRoot(n, e)) return Promise.resolve(true);
-  let a = `${r}:${e}`;
-  let s = n.verdicts.get(a);
-  if (s === undefined) {
-    s = checkPluginDirTrust(e, n, r);
-    n.verdicts.set(a, s);
+function getCachedPluginDirVerdict(dir, state, mode = "tree") {
+  if (isInsideConsentRoot(state, dir)) return Promise.resolve(true);
+  let cacheKey = `${mode}:${dir}`;
+  let verdict = state.verdicts.get(cacheKey);
+  if (verdict === undefined) {
+    verdict = checkPluginDirTrust(dir, state, mode);
+    state.verdicts.set(cacheKey, verdict);
   }
-  return s;
+  return verdict;
 }
 //@ chunk-qchp9vrd.js:75527-76060 placement
-async function checkPluginDirTrust(e, n, r) {
+async function checkPluginDirTrust(pluginDir, state, mode) {
   if (typeof process.getuid !== "function") return true;
-  await groupNamespaceInfo(n);
-  let a = [
-    [e, "dir"],
-    [path.join(e, ".claude-plugin"), "dir-or-absent"],
+  await groupNamespaceInfo(state);
+  let requiredDirs = [
+    [pluginDir, "dir"],
+    [path_2.join(pluginDir, ".claude-plugin"), "dir-or-absent"],
   ];
-  let s = [
-    [path.join(e, ".claude-plugin", "plugin.json"), "file"],
-    [path.join(e, "plugin.json"), "file"],
-    [path.join(e, "SKILL.md"), "file"],
+  let requiredFiles = [
+    [path_2.join(pluginDir, ".claude-plugin", "plugin.json"), "file"],
+    [path_2.join(pluginDir, "plugin.json"), "file"],
+    [path_2.join(pluginDir, "SKILL.md"), "file"],
   ];
-  if (!(await probeEntriesInBatches(e, a, n, r)) || !(await probeEntriesInBatches(e, s, n, r))) return false;
-  if (r === "core") return true;
-  let h;
+  if (
+    !(await probeEntriesInBatches(pluginDir, requiredDirs, state, mode)) ||
+    !(await probeEntriesInBatches(pluginDir, requiredFiles, state, mode))
+  )
+    return false;
+  if (mode === "core") return true;
+  let limits;
   try {
-    h = await examineTreeLimits(e, n);
+    limits = await examineTreeLimits(pluginDir, state);
   } catch (error) {
-    return logManifestNotConsulted(e, n, `its tree could not be examined (${errorMessage(error)})`);
+    return logManifestNotConsulted(
+      pluginDir,
+      state,
+      `its tree could not be examined (${errorMessage(error)})`,
+    );
   }
-  if (h.kind === "problem") return logManifestNotConsulted(e, n, h.problem);
+  if (limits.kind === "problem") return logManifestNotConsulted(pluginDir, state, limits.problem);
   return probeEntriesInBatches(
-    e,
-    h.entries.map((entry) => [entry, "in-tree"]),
-    n,
-    r,
+    pluginDir,
+    limits.entries.map((entry) => [entry, "in-tree"]),
+    state,
+    mode,
   );
 }
 //@ chunk-qchp9vrd.js:76060-76139 placement
@@ -126,19 +134,20 @@ var MAX_GIT_OBJECTS = 200000;
 var MAX_GIT_OBJECT_NESTING = 8;
 var MAX_WALK_DIRECTORIES = 20000;
 //@ chunk-qchp9vrd.js:76139-76300 placement
-function getGroupWritableHint(e) {
-  return e === "tree"
+function getGroupWritableHint(targetKind) {
+  return targetKind === "tree"
     ? "chmod -R g-w it, or run from / name the plugin directory"
     : "chmod -R g-w it, or pass --eval-dir to name the directory yourself";
 }
 //@ chunk-qchp9vrd.js:76300-76484 placement
-function isNestedModulesPath(e, n) {
-  if (e === null) return false;
-  let relativePath = path.relative(e, n);
+function isNestedModulesPath(root, target) {
+  if (root === null) return false;
+  let relativePath = path_2.relative(root, target);
   if (relativePath === "") return true;
-  let parts = relativePath.split(path.sep);
+  let parts = relativePath.split(path_2.sep);
   return (
-    parts.length % 2 === 0 && parts.every((s, h) => (h % 2 === 0 ? s.toLowerCase() === "modules" : s !== ""))
+    parts.length % 2 === 0 &&
+    parts.every((part, partIndex) => (partIndex % 2 === 0 ? part.toLowerCase() === "modules" : part !== ""))
   );
 }
 //@ chunk-qchp9vrd.js:76484-76531 placement
@@ -152,20 +161,20 @@ function isGitDir(name) {
 /**
  * 检查目录树能否完整检查（不可读目录、条目/层级上限、.git 对象库大小）。
  */
-async function examineTreeLimits(e, n) {
-  let r = `its tree cannot be fully examined (a directory is unreadable, or it holds more than ${n.treeMaxEntries} entries / ${MAX_TREE_DEPTH} levels \u2014 name the plugin directory itself to evaluate it)`;
+async function examineTreeLimits(rootPath, limits) {
+  let treeProblem = `its tree cannot be fully examined (a directory is unreadable, or it holds more than ${limits.treeMaxEntries} entries / ${MAX_TREE_DEPTH} levels \u2014 name the plugin directory itself to evaluate it)`;
   let problem = `its .git object stores hold more than ${MAX_GIT_OBJECTS} entries, nest deeper than ${MAX_GIT_OBJECT_NESTING} levels, or one is unreadable \u2014 they cannot be fully examined; name the plugin directory itself to evaluate it`;
-  let s = [];
-  let h = [];
-  let w = null;
-  let b = [[e, 0]];
-  let y = (R) => isInsideConsentRoot(n, R);
-  while (b.length > 0) {
-    let [R, S] = b.pop();
-    if (y(R)) continue;
-    let T;
+  let entries = [];
+  let gitObjectEntries = [];
+  let lastGitObjectStore = null;
+  let pending = [[rootPath, 0]];
+  let isInsideConsent = (path) => isInsideConsentRoot(limits, path);
+  while (pending.length > 0) {
+    let [dir, depth] = pending.pop();
+    if (isInsideConsent(dir)) continue;
+    let children;
     try {
-      T = await readdir(R, {
+      children = await readdir(dir, {
         withFileTypes: true,
       });
     } catch (error) {
@@ -173,51 +182,51 @@ async function examineTreeLimits(e, n) {
       if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") continue;
       return {
         kind: "problem",
-        problem: r,
+        problem: treeProblem,
       };
     }
-    for (let N of T) {
-      let joined = path.join(R, N.name);
-      if (isGitDir(N.name)) {
-        let fileKind = await getFileKind(N, joined, "unknown");
+    for (let entry of children) {
+      let joinedPath = path_2.join(dir, entry.name);
+      if (isGitDir(entry.name)) {
+        let fileKind = await getFileKind(entry, joinedPath, "unknown");
         if (fileKind === "unknown")
           return {
             kind: "problem",
-            problem: `${escapeNonAscii(joined)} could not be examined (its type could not be read); name the plugin directory itself to evaluate it`,
+            problem: `${escapeNonAscii(joinedPath)} could not be examined (its type could not be read); name the plugin directory itself to evaluate it`,
           };
-        if (R !== e || fileKind !== "dir")
+        if (dir !== rootPath || fileKind !== "dir")
           return {
             kind: "problem",
-            problem: `${escapeNonAscii(joined)} \u2014 the tree contains repository metadata that was not created here (${fileKind === "symlink" ? "a symlinked .git" : fileKind === "file" ? "a gitdir file" : fileKind === "other" ? "a .git that is not a directory" : "a nested .git directory"}); name the plugin directory itself to evaluate it`,
+            problem: `${escapeNonAscii(joinedPath)} \u2014 the tree contains repository metadata that was not created here (${fileKind === "symlink" ? "a symlinked .git" : fileKind === "file" ? "a gitdir file" : fileKind === "other" ? "a .git that is not a directory" : "a nested .git directory"}); name the plugin directory itself to evaluate it`,
           };
-        if (!y(joined)) s.push(joined);
-        if (s.length > n.treeMaxEntries)
+        if (!isInsideConsent(joinedPath)) entries.push(joinedPath);
+        if (entries.length > limits.treeMaxEntries)
           return {
             kind: "problem",
-            problem: r,
+            problem: treeProblem,
           };
-        w = joined;
-        b.push([joined, MAX_TREE_ENTRIES]);
+        lastGitObjectStore = joinedPath;
+        pending.push([joinedPath, MAX_TREE_ENTRIES]);
         continue;
       }
       if (
-        S >= MAX_TREE_ENTRIES &&
-        GIT_OBJECT_DIR_NAMES.has(N.name.toLowerCase()) &&
-        isNestedModulesPath(w, R) &&
-        (await isDirectory(N, joined))
+        depth >= MAX_TREE_ENTRIES &&
+        GIT_OBJECT_DIR_NAMES.has(entry.name.toLowerCase()) &&
+        isNestedModulesPath(lastGitObjectStore, dir) &&
+        (await isDirectory(entry, joinedPath))
       ) {
-        h.push(joined);
-        if (h.length > MAX_GIT_OBJECTS)
+        gitObjectEntries.push(joinedPath);
+        if (gitObjectEntries.length > MAX_GIT_OBJECTS)
           return {
             kind: "problem",
             problem,
           };
-        let j = [[joined, 1]];
-        while (j.length > 0) {
-          let [K, X] = j.pop();
-          let W;
+        let objectPending = [[joinedPath, 1]];
+        while (objectPending.length > 0) {
+          let [objectDir, objectDepth] = objectPending.pop();
+          let objectEntries;
           try {
-            W = await readdir(K, {
+            objectEntries = await readdir(objectDir, {
               withFileTypes: true,
             });
           } catch (error) {
@@ -228,242 +237,253 @@ async function examineTreeLimits(e, n) {
               problem,
             };
           }
-          for (let G of W) {
-            let joined = path.join(K, G.name);
-            if (isGitDir(G.name))
+          for (let entry of objectEntries) {
+            let joinedPath = path_2.join(objectDir, entry.name);
+            if (isGitDir(entry.name))
               return {
                 kind: "problem",
-                problem: `${escapeNonAscii(joined)} \u2014 the tree contains repository metadata that was not created here (a .git inside an object store); name the plugin directory itself to evaluate it`,
+                problem: `${escapeNonAscii(joinedPath)} \u2014 the tree contains repository metadata that was not created here (a .git inside an object store); name the plugin directory itself to evaluate it`,
               };
-            h.push(joined);
-            if (h.length > MAX_GIT_OBJECTS)
+            gitObjectEntries.push(joinedPath);
+            if (gitObjectEntries.length > MAX_GIT_OBJECTS)
               return {
                 kind: "problem",
                 problem,
               };
-            if (await isDirectory(G, joined)) {
-              if (X + 1 > MAX_GIT_OBJECT_NESTING)
+            if (await isDirectory(entry, joinedPath)) {
+              if (objectDepth + 1 > MAX_GIT_OBJECT_NESTING)
                 return {
                   kind: "problem",
                   problem,
                 };
-              j.push([joined, X + 1]);
+              objectPending.push([joinedPath, objectDepth + 1]);
             }
           }
         }
         continue;
       }
-      if (!y(joined)) s.push(joined);
-      if (s.length > n.treeMaxEntries)
+      if (!isInsideConsent(joinedPath)) entries.push(joinedPath);
+      if (entries.length > limits.treeMaxEntries)
         return {
           kind: "problem",
-          problem: r,
+          problem: treeProblem,
         };
-      if (!y(joined) && (await isDirectory(N, joined))) {
-        let j = S >= MAX_TREE_ENTRIES ? MAX_GIT_OBJECT_DEPTH : MAX_TREE_DEPTH;
-        if (S + 1 > j)
+      if (!isInsideConsent(joinedPath) && (await isDirectory(entry, joinedPath))) {
+        let depthLimit = depth >= MAX_TREE_ENTRIES ? MAX_GIT_OBJECT_DEPTH : MAX_TREE_DEPTH;
+        if (depth + 1 > depthLimit)
           return {
             kind: "problem",
             problem:
-              S >= MAX_TREE_ENTRIES
+              depth >= MAX_TREE_ENTRIES
                 ? `a .git directory in its tree nests deeper than ${MAX_GIT_OBJECT_DEPTH - MAX_TREE_ENTRIES} levels \u2014 it cannot be fully examined; name the plugin directory itself to evaluate it`
-                : r,
+                : treeProblem,
           };
-        b.push([joined, S + 1]);
+        pending.push([joinedPath, depth + 1]);
       }
     }
   }
   return {
     kind: "entries",
-    entries: s.concat(h),
+    entries: entries.concat(gitObjectEntries),
   };
 }
 //@ chunk-qchp9vrd.js:78920-79022 placement
-function getCachedRootRealpath(e, n) {
-  let r = n.rootRealpaths.get(e);
-  if (r === undefined) {
-    r = realpath(e);
-    n.rootRealpaths.set(e, r);
+function getCachedRootRealpath(root, state) {
+  let real = state.rootRealpaths.get(root);
+  if (real === undefined) {
+    real = realpath(root);
+    state.rootRealpaths.set(root, real);
   }
-  return r;
+  return real;
 }
 //@ chunk-qchp9vrd.js:79022-79080 placement
 /**
  * 判断路径是否为目录。
  */
-async function isDirectory(e, n) {
-  return (await getFileKind(e, n, "dir")) === "dir";
+async function isDirectory(entry, joinedPath) {
+  return (await getFileKind(entry, joinedPath, "dir")) === "dir";
 }
 //@ chunk-qchp9vrd.js:79080-79266 placement
-async function probeEntriesInBatches(e, n, r, a) {
-  for (let h = 0; h < n.length; h += 64) {
-    let sliced = n.slice(h, h + 64);
+async function probeEntriesInBatches(pluginDir, entries, state, mode) {
+  for (let start = 0; start < entries.length; start += 64) {
+    let manifestEntries = entries.slice(start, start + 64);
     let results = await Promise.all(
-      sliced.map(([y]) =>
-        lstat(y).catch((error) => ({
+      manifestEntries.map(([entryPath]) =>
+        lstat(entryPath).catch((error) => ({
           error,
         })),
       ),
     );
-    if (!(await probeManifestDir(e, sliced, results, r, a))) return false;
+    if (!(await probeManifestDir(pluginDir, manifestEntries, results, state, mode))) return false;
   }
   return true;
 }
 //@ chunk-qchp9vrd.js:79266-80000 placement
-async function probeManifestDir(e, n, r, a, s) {
-  for (let [h, [w, b]] of n.entries()) {
-    let y = r[h];
-    if ("error" in y) {
-      let errnoCode = getErrnoCode(y.error);
+async function probeManifestDir(rootPath, manifestEntries, statsByPath, trust, targetKind) {
+  for (let [manifestPath, [joinedPath, expectedKind]] of manifestEntries.entries()) {
+    let statsOrError = statsByPath[manifestPath];
+    if ("error" in statsOrError) {
+      let errnoCode = getErrnoCode(statsOrError.error);
       if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") continue;
       return logManifestNotConsulted(
-        e,
-        a,
-        `${escapeNonAscii(w)} could not be examined (${errnoCode ?? "unknown error"})`,
+        rootPath,
+        trust,
+        `${escapeNonAscii(joinedPath)} could not be examined (${errnoCode ?? "unknown error"})`,
       );
     }
-    let R = y;
-    if (b === "dir-or-absent" && !R.isDirectory() && !R.isSymbolicLink()) continue;
-    let S =
-      (b === "dir" && !R.isDirectory() && !R.isSymbolicLink()) ||
-      (b === "file" && !R.isFile() && !R.isSymbolicLink());
-    let T = b === "file" && R.isFile() && R.nlink > 1;
-    let N = S || T ? undefined : await checkWritableByOthers(R, w, a, e);
-    let x = S
-      ? `is not a regular ${b === "file" ? "file" : "directory"}`
-      : T
+    let stats = statsOrError;
+    if (expectedKind === "dir-or-absent" && !stats.isDirectory() && !stats.isSymbolicLink()) continue;
+    let wrongKind =
+      (expectedKind === "dir" && !stats.isDirectory() && !stats.isSymbolicLink()) ||
+      (expectedKind === "file" && !stats.isFile() && !stats.isSymbolicLink());
+    let hardLinked = expectedKind === "file" && stats.isFile() && stats.nlink > 1;
+    let writableCheck =
+      wrongKind || hardLinked ? undefined : await checkWritableByOthers(stats, joinedPath, trust, rootPath);
+    let problem = wrongKind
+      ? `is not a regular ${expectedKind === "file" ? "file" : "directory"}`
+      : hardLinked
         ? "is hard-linked elsewhere"
-        : N?.message;
-    if (N?.code === "symlink" && b === "in-tree") x = (await checkSymlinkInTree(w, e, a)) ?? undefined;
-    if (x !== undefined)
+        : writableCheck?.message;
+    if (writableCheck?.code === "symlink" && expectedKind === "in-tree")
+      problem = (await checkSymlinkInTree(joinedPath, rootPath, trust)) ?? undefined;
+    if (problem !== undefined)
       return logManifestNotConsulted(
-        e,
-        a,
-        `${escapeNonAscii(w)} ${x}${N?.code === "group_unverifiable" ? ` \u2014 ${getGroupWritableHint(s)}` : ""}`,
+        rootPath,
+        trust,
+        `${escapeNonAscii(joinedPath)} ${problem}${writableCheck?.code === "group_unverifiable" ? ` \u2014 ${getGroupWritableHint(targetKind)}` : ""}`,
       );
   }
   return true;
 }
 //@ chunk-qchp9vrd.js:80000-81464 placement
-async function checkSymlinkInTree(e, n, r) {
-  let a = (S, T) => (T === S || toEvalPathError(S, T)) && path.relative(S, T).split(path.sep).some(isGitDir);
-  if (a(n, e)) return "is a symlink inside repository metadata";
+async function checkSymlinkInTree(linkPath, rootPath, trust) {
+  let crossesGitDir = (fromPath, toPath) =>
+    (toPath === fromPath || toEvalPathError(fromPath, toPath)) &&
+    path_2.relative(fromPath, toPath).split(path_2.sep).some(isGitDir);
+  if (crossesGitDir(rootPath, linkPath)) return "is a symlink inside repository metadata";
   try {
-    await checkRepoAuthoredPath(n, path.relative(n, e), "in-tree link");
+    await checkRepoAuthoredPath(rootPath, path_2.relative(rootPath, linkPath), "in-tree link");
   } catch (error) {
     return `is a symlink that is refused: ${errorMessage(error)}`;
   }
-  let s;
+  let linkTarget;
   try {
-    s = await readlink(e);
+    linkTarget = await readlink(linkPath);
   } catch (error) {
     return `is a symlink that could not be read (${getErrnoCode(error) ?? "unknown error"})`;
   }
-  let h =
+  let leavesTreeMessage =
     "is a symlink that leaves the plugin tree (this plugin was not named, so only its own examined entries may load)";
-  if (path.isAbsolute(s))
+  if (path_2.isAbsolute(linkTarget))
     return "is an absolute symlink (this plugin was not named, so only relative links inside its own tree may load)";
-  let dir = path.dirname(e);
-  for (let S of s.split("/").filter((T) => T.length > 0)) {
-    dir = path.resolve(dir, S);
-    if (dir !== n && !toEvalPathError(n, dir))
-      return toEvalPathError(dir, n) ? "is a symlink that routes above the plugin directory" : h;
+  let dir = path_2.dirname(linkPath);
+  for (let segment of linkTarget.split("/").filter((segment) => segment.length > 0)) {
+    dir = path_2.resolve(dir, segment);
+    if (dir !== rootPath && !toEvalPathError(rootPath, dir))
+      return toEvalPathError(dir, rootPath)
+        ? "is a symlink that routes above the plugin directory"
+        : leavesTreeMessage;
   }
-  if (dir === n) return "is a symlink to the plugin directory itself";
-  let b;
+  if (dir === rootPath) return "is a symlink to the plugin directory itself";
+  let linkRealpath;
   try {
-    b = await realpath(e);
+    linkRealpath = await realpath(linkPath);
   } catch (error) {
     return `is a symlink whose target could not be resolved (${getErrnoCode(error) ?? "unknown error"})`;
   }
-  let y;
+  let rootRealpath;
   try {
-    y = await getCachedRootRealpath(n, r);
+    rootRealpath = await getCachedRootRealpath(rootPath, trust);
   } catch (error) {
     return `is a symlink whose tree root could not be resolved (${getErrnoCode(error) ?? "unknown error"})`;
   }
-  if (b === y || toEvalPathError(b, y)) return "is a symlink to the plugin directory or one above it";
-  if (!toEvalPathError(y, b)) return h;
-  let R;
+  if (linkRealpath === rootRealpath || toEvalPathError(linkRealpath, rootRealpath))
+    return "is a symlink to the plugin directory or one above it";
+  if (!toEvalPathError(rootRealpath, linkRealpath)) return leavesTreeMessage;
+  let dirRealpath;
   try {
-    R = await realpath(path.dirname(e));
+    dirRealpath = await realpath(path_2.dirname(linkPath));
   } catch (error) {
     return `is a symlink whose directory could not be resolved (${getErrnoCode(error) ?? "unknown error"})`;
   }
-  if (b === R || toEvalPathError(b, R)) return "is a symlink to its own directory or one above it";
-  if (a(y, b)) return "is a symlink into repository metadata";
+  if (linkRealpath === dirRealpath || toEvalPathError(linkRealpath, dirRealpath))
+    return "is a symlink to its own directory or one above it";
+  if (crossesGitDir(rootRealpath, linkRealpath)) return "is a symlink into repository metadata";
   return null;
 }
 //@ chunk-qchp9vrd.js:81464-81544 placement
 /**
  * 是否能在目标处创建临时目录（判断可写）。
  */
-async function canMakeTempDir(e, n) {
-  return typeof process.getuid === "function" && (await makeTempModeProbeDir(e, n));
+async function canMakeTempDir(dirPath, cache) {
+  return typeof process.getuid === "function" && (await makeTempModeProbeDir(dirPath, cache));
 }
 //@ chunk-qchp9vrd.js:81544-81693 placement
-async function checkWritableByOthers(e, n, r, a) {
-  await groupNamespaceInfo(r);
-  let s = checkEntryOwnership(e, r);
-  return (s?.code === "other_writable" || s?.code === "group_unverifiable") &&
-    !(await makeTempModeProbeDir(n, r, a, e))
+async function checkWritableByOthers(path, probeDir, state, label) {
+  await groupNamespaceInfo(state);
+  let ownership = checkEntryOwnership(path, state);
+  return (ownership?.code === "other_writable" || ownership?.code === "group_unverifiable") &&
+    !(await makeTempModeProbeDir(probeDir, state, label, path))
     ? undefined
-    : s;
+    : ownership;
 }
 //@ chunk-qchp9vrd.js:81693-82799 placement
-async function makeTempModeProbeDir(e, n, r, a) {
-  let s;
-  if (a !== undefined) s = a;
+async function makeTempModeProbeDir(probePath, cache, dirPathHint, stats) {
+  let probeStats;
+  if (stats !== undefined) probeStats = stats;
   else
     try {
-      s = await lstat(e);
+      probeStats = await lstat(probePath);
     } catch {
       return true;
     }
-  let dev = s.dev;
-  let w = n.modesByDevice.get(dev);
-  if (w !== undefined) return w;
-  let b = typeof process.getuid === "function" ? process.getuid() : -1;
-  let y = r ?? (s.isDirectory() ? e : path.dirname(e));
-  n.tmpdirDevice ??= await lstat(tmpdir()).then(
-    (S) => S.dev,
+  let dev = probeStats.dev;
+  let knownResult = cache.modesByDevice.get(dev);
+  if (knownResult !== undefined) return knownResult;
+  let uid = typeof process.getuid === "function" ? process.getuid() : -1;
+  let probeParentDir = dirPathHint ?? (probeStats.isDirectory() ? probePath : path_2.dirname(probePath));
+  cache.tmpdirDevice ??= await lstat(tmpdir()).then(
+    (tmpStats) => tmpStats.dev,
     () => -1,
   );
-  let R = n.tmpdirDevice === dev ? [tmpdir(), y] : [y];
-  for (let S of R) {
-    let T;
-    let N;
+  let candidateDirs = cache.tmpdirDevice === dev ? [tmpdir(), probeParentDir] : [probeParentDir];
+  for (let parentDir of candidateDirs) {
+    let tempDir;
+    let dirHandle;
     try {
-      T = await mkdtemp(path.join(S, ".claude-eval-modes-"));
-      N = await open(T, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
-      let stats = await N.stat();
+      tempDir = await mkdtemp(path_2.join(parentDir, ".claude-eval-modes-"));
+      dirHandle = await open(tempDir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+      let stats = await dirHandle.stat();
       if (stats.dev !== dev) continue;
-      if (b !== -1 && stats.uid !== b) {
-        n.modesByDevice.set(dev, true);
+      if (uid !== -1 && stats.uid !== uid) {
+        cache.modesByDevice.set(dev, true);
         return true;
       }
-      await N.chmod(448);
-      let stats_2 = await N.stat();
-      n.modesByDevice.set(dev, (stats_2.mode & 2) === 0);
+      await dirHandle.chmod(448);
+      let stats_2 = await dirHandle.stat();
+      cache.modesByDevice.set(dev, (stats_2.mode & 2) === 0);
       return (stats_2.mode & 2) === 0;
     } catch {
       continue;
     } finally {
-      await N?.close().catch(() => {});
-      if (T !== undefined) await rmdir(T).catch(() => {});
+      await dirHandle?.close().catch(() => {});
+      if (tempDir !== undefined) await rmdir(tempDir).catch(() => {});
       {
-        let x = (n.sweptProbeParents ??= new Set());
-        if (!x.has(S)) {
-          x.add(S);
-          let j = Date.now() - 600000;
-          await readdir(S)
-            .then((K) =>
+        let sweptParents = (cache.sweptProbeParents ??= new Set());
+        if (!sweptParents.has(parentDir)) {
+          sweptParents.add(parentDir);
+          let sweepCutoffMs = Date.now() - 600000;
+          await readdir(parentDir)
+            .then((entries) =>
               Promise.all(
-                K.filter((X) => X.startsWith(".claude-eval-modes-")).map(async (X) => {
-                  let joined = path.join(S, X);
-                  let G = await lstat(joined).catch(() => null);
-                  if (G !== null && G.mtimeMs < j) await rmdir(joined).catch(() => {});
-                }),
+                entries
+                  .filter((entryName) => entryName.startsWith(".claude-eval-modes-"))
+                  .map(async (entryName) => {
+                    let joined = path_2.join(parentDir, entryName);
+                    let entryStats = await lstat(joined).catch(() => null);
+                    if (entryStats !== null && entryStats.mtimeMs < sweepCutoffMs)
+                      await rmdir(joined).catch(() => {});
+                  }),
               ),
             )
             .catch(() => {});
@@ -471,7 +491,7 @@ async function makeTempModeProbeDir(e, n, r, a) {
       }
     }
   }
-  n.modesByDevice.set(dev, true);
+  cache.modesByDevice.set(dev, true);
   return true;
 }
 //@ chunk-qchp9vrd.js:82941-82989 placement
@@ -480,64 +500,64 @@ async function makeTempModeProbeDir(e, n, r, a) {
  */
 var DIR_OPEN_FLAGS = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
 //@ chunk-qchp9vrd.js:82989-83652 placement
-async function detectPlatformFlavor(e, { harnessOwned: n = false } = {}) {
+async function detectPlatformFlavor(dirPath, { harnessOwned = false } = {}) {
   if (getPlatform() === "windows") return;
-  let r = n || getPlatform() === "linux" || getPlatform() === "wsl";
-  let a;
+  let canRepairModes = harnessOwned || getPlatform() === "linux" || getPlatform() === "wsl";
+  let childDirs;
   try {
-    let s = await lstat(e, {
+    let dirStats = await lstat(dirPath, {
       bigint: true,
     });
-    if (!s.isDirectory() || s.isSymbolicLink()) return;
-    let h = (b) => b.ino === s.ino && b.dev === s.dev;
-    if ((Number(s.mode) & 448) !== 448) {
-      if (!r) return;
-      await chmod(e, 448);
+    if (!dirStats.isDirectory() || dirStats.isSymbolicLink()) return;
+    let isSameDir = (stats) => stats.ino === dirStats.ino && stats.dev === dirStats.dev;
+    if ((Number(dirStats.mode) & 448) !== 448) {
+      if (!canRepairModes) return;
+      await chmod(dirPath, 448);
       if (
-        !h(
-          await lstat(e, {
+        !isSameDir(
+          await lstat(dirPath, {
             bigint: true,
           }),
         )
       )
         return;
     }
-    if ((await realpath(e)) !== e) return;
-    let w = await open(e, DIR_OPEN_FLAGS);
+    if ((await realpath(dirPath)) !== dirPath) return;
+    let dirHandle = await open(dirPath, DIR_OPEN_FLAGS);
     try {
       if (
-        !h(
-          await w.stat({
+        !isSameDir(
+          await dirHandle.stat({
             bigint: true,
           }),
         )
       )
         return;
-      await w.chmod(448);
-      a = (
-        await readdir(e, {
+      await dirHandle.chmod(448);
+      childDirs = (
+        await readdir(dirPath, {
           withFileTypes: true,
         })
       )
-        .filter((b) => b.isDirectory())
-        .map((b) => b.name);
+        .filter((entry) => entry.isDirectory())
+        .map((entry) => entry.name);
       if (
-        !h(
-          await lstat(e, {
+        !isSameDir(
+          await lstat(dirPath, {
             bigint: true,
           }),
         )
       )
         return;
     } finally {
-      await w.close().catch(() => {});
+      await dirHandle.close().catch(() => {});
     }
   } catch {
     return;
   }
-  for (let s of a)
-    await detectPlatformFlavor(path.join(e, s), {
-      harnessOwned: n,
+  for (let childName of childDirs)
+    await detectPlatformFlavor(path_2.join(dirPath, childName), {
+      harnessOwned,
     });
 }
 //@ chunk-qchp9vrd.js:83652-83680 placement
@@ -551,48 +571,50 @@ var MAX_WALK_BUDGET = 1e5;
 /**
  * 从目标出发发现评测用例：处理指向父目录的符号链接、不可检查路径等。
  */
-async function discoverEvalCases(rootPath, n = {}, r = {}) {
-  if (r.targetScreened !== true) await checkRepoAuthoredPath(getCwd(), rootPath, "target");
-  let a = r.trust ?? checkTreeTrust();
+async function discoverEvalCases(rootPath, filter = {}, options = {}) {
+  if (options.targetScreened !== true) await checkRepoAuthoredPath(getCwd(), rootPath, "target");
+  let trust = options.trust ?? checkTreeTrust();
   let {
     evalDirSegments = [EVALS_DIR_NAME],
     frameRoot = null,
     adoptionDecided = false,
     consentDecided = false,
-  } = r;
-  let y;
+  } = options;
+  let rootReal;
   let typedAncestorReals = [];
   try {
-    let resolved = path.resolve(getCwd(), rootPath);
-    y = await realpathKeepingPromptFile(resolved);
-    if (!consentDecided && !isMagicDocsPromptFile(path.basename(y))) a.consentRoot ??= y;
-    let J = isMagicDocsPromptFile(path.basename(resolved)) ? path.dirname(resolved) : resolved;
-    let Z = await describeUnexaminable(J);
-    if (Z.kind !== "ok")
+    let targetPath = path_2.resolve(getCwd(), rootPath);
+    rootReal = await realpathKeepingPromptFile(targetPath);
+    if (!consentDecided && !isMagicDocsPromptFile(path_2.basename(rootReal))) trust.consentRoot ??= rootReal;
+    let suiteDir = isMagicDocsPromptFile(path_2.basename(targetPath))
+      ? path_2.dirname(targetPath)
+      : targetPath;
+    let description = await describeUnexaminable(suiteDir);
+    if (description.kind !== "ok")
       return {
         cases: [],
-        root: resolved,
+        root: targetPath,
         suite: null,
         errors: [
           {
-            file: Z.segment,
+            file: description.segment,
             error:
-              Z.kind === "climb"
-                ? `${escapeNonAscii(path.basename(Z.segment))} is a symbolic link to its own parent directory or one above it \u2014 refusing to treat that as the suite`
-                : `${escapeNonAscii(path.basename(Z.segment))} could not be examined (${Z.code}) \u2014 refusing to treat that as the suite`,
+              description.kind === "climb"
+                ? `${escapeNonAscii(path_2.basename(description.segment))} is a symbolic link to its own parent directory or one above it \u2014 refusing to treat that as the suite`
+                : `${escapeNonAscii(path_2.basename(description.segment))} could not be examined (${description.code}) \u2014 refusing to treat that as the suite`,
           },
         ],
       };
-    typedAncestorReals = Z.ancestorReals;
+    typedAncestorReals = description.ancestorReals;
   } catch (error) {
     if (isENOENT(error) || isFsInaccessible(error))
       return {
         cases: [],
-        root: path.resolve(getCwd(), rootPath),
+        root: path_2.resolve(getCwd(), rootPath),
         suite: null,
         errors: [
           {
-            file: path.resolve(getCwd(), rootPath),
+            file: path_2.resolve(getCwd(), rootPath),
             error: isENOENT(error)
               ? "no such file or directory (or not readable)"
               : `cannot be read (${getErrnoCode(error) ?? "unknown error"})`,
@@ -601,130 +623,146 @@ async function discoverEvalCases(rootPath, n = {}, r = {}) {
       };
     throw error;
   }
-  let S;
-  let T = true;
-  let N = null;
-  if (isMagicDocsPromptFile(path.basename(y))) {
-    let dir = path.dirname(y);
-    let J =
-      frameRoot && isSameOrInside(dir, frameRoot)
+  let containmentRoot;
+  let rootTrusted = true;
+  let outsideFrameRoot = null;
+  if (isMagicDocsPromptFile(path_2.basename(rootReal))) {
+    let pluginDir = path_2.dirname(rootReal);
+    let adoptedDir =
+      frameRoot && isSameOrInside(pluginDir, frameRoot)
         ? frameRoot
         : adoptionDecided
           ? null
-          : (await resolvePluginDir(dir, a)).adopted;
-    S = J ?? dir;
-    T = J !== null;
-    if (J === null && frameRoot && !isSameOrInside(dir, frameRoot)) N = frameRoot;
-  } else if (frameRoot && y !== frameRoot && isSameOrInside(y, frameRoot)) S = frameRoot;
+          : (await resolvePluginDir(pluginDir, trust)).adopted;
+    containmentRoot = adoptedDir ?? pluginDir;
+    rootTrusted = adoptedDir !== null;
+    if (adoptedDir === null && frameRoot && !isSameOrInside(pluginDir, frameRoot))
+      outsideFrameRoot = frameRoot;
+  } else if (frameRoot && rootReal !== frameRoot && isSameOrInside(rootReal, frameRoot))
+    containmentRoot = frameRoot;
   else {
-    S = y;
-    if (frameRoot && y !== frameRoot && !isSameOrInside(y, frameRoot)) N = frameRoot;
+    containmentRoot = rootReal;
+    if (frameRoot && rootReal !== frameRoot && !isSameOrInside(rootReal, frameRoot))
+      outsideFrameRoot = frameRoot;
   }
-  let x = null;
-  if (N !== null && evalDirSegments.length > 0) {
-    let G = isMagicDocsPromptFile(path.basename(rootPath))
-      ? path.dirname(path.resolve(getCwd(), rootPath))
-      : path.resolve(getCwd(), rootPath);
-    let J = await relativeSegmentsWithin(N, G);
-    let Z = J === null ? null : await canonicalizeSegmentCase(N, J, evalDirSegments);
+  let evalSubdir = null;
+  if (outsideFrameRoot !== null && evalDirSegments.length > 0) {
+    let targetDir = isMagicDocsPromptFile(path_2.basename(rootPath))
+      ? path_2.dirname(path_2.resolve(getCwd(), rootPath))
+      : path_2.resolve(getCwd(), rootPath);
+    let relativeSegments = await relativeSegmentsWithin(outsideFrameRoot, targetDir);
+    let canonicalSegments =
+      relativeSegments === null
+        ? null
+        : await canonicalizeSegmentCase(outsideFrameRoot, relativeSegments, evalDirSegments);
     if (
-      Z !== null &&
-      (foldPathCase(Z, evalDirSegments, "exact") || foldPathCase(evalDirSegments, Z, "exact"))
+      canonicalSegments !== null &&
+      (foldPathCase(canonicalSegments, evalDirSegments, "exact") ||
+        foldPathCase(evalDirSegments, canonicalSegments, "exact"))
     ) {
-      let evalSubdir = await resolveEvalSubdir(N, evalDirSegments);
+      let evalSubdir_2 = await resolveEvalSubdir(outsideFrameRoot, evalDirSegments);
       if (
-        evalSubdir !== null &&
-        !isSameOrInside(N, evalSubdir) &&
-        (isSameOrInside(evalSubdir, y) || isSameOrInside(y, evalSubdir))
+        evalSubdir_2 !== null &&
+        !isSameOrInside(outsideFrameRoot, evalSubdir_2) &&
+        (isSameOrInside(evalSubdir_2, rootReal) || isSameOrInside(rootReal, evalSubdir_2))
       ) {
-        x = evalSubdir;
-        if (S !== x && isSameOrInside(S, x)) {
-          S = x;
-          T = false;
+        evalSubdir = evalSubdir_2;
+        if (containmentRoot !== evalSubdir && isSameOrInside(containmentRoot, evalSubdir)) {
+          containmentRoot = evalSubdir;
+          rootTrusted = false;
         }
       }
     }
   }
   let { caseDirs, skipped } = await compareCaseNames(
-    y,
+    rootReal,
     evalDirSegments,
     frameRoot,
-    path.resolve(getCwd(), rootPath),
+    path_2.resolve(getCwd(), rootPath),
     typedAncestorReals,
   );
-  let X = [];
-  let W = [...skipped];
+  let cases = [];
+  let errors = [...skipped];
   for (let caseDir of caseDirs) {
-    let joined = path.join(caseDir, "case.yaml");
+    let joined = path_2.join(caseDir, "case.yaml");
     try {
       let [caseYamlFile, promptMdCase] = await Promise.all([
         parseCaseYamlFile(joined),
         parsePromptMdCase(caseDir),
       ]);
-      let Q = promptMdCase ? normalizeCaseObject(caseYamlFile, promptMdCase, caseDir) : caseYamlFile;
+      let caseObject = promptMdCase ? normalizeCaseObject(caseYamlFile, promptMdCase, caseDir) : caseYamlFile;
       let caseSource = promptMdCase && caseYamlFile ? "mixed" : promptMdCase ? "prose" : "case_yaml";
-      let we =
-        Q === null
-          ? path.basename(caseDir)
-          : typeof Q.name === "string" && Q.name.length > 0
-            ? Q.name
+      let caseName =
+        caseObject === null
+          ? path_2.basename(caseDir)
+          : typeof caseObject.name === "string" && caseObject.name.length > 0
+            ? caseObject.name
             : undefined;
-      let Be =
-        Q === null || Q.tags === undefined
+      let caseTags =
+        caseObject === null || caseObject.tags === undefined
           ? []
-          : Array.isArray(Q.tags) && Q.tags.every((tag) => typeof tag === "string")
-            ? Q.tags
+          : Array.isArray(caseObject.tags) && caseObject.tags.every((tag) => typeof tag === "string")
+            ? caseObject.tags
             : undefined;
       if (
-        we !== undefined &&
-        Be !== undefined &&
+        caseName !== undefined &&
+        caseTags !== undefined &&
         !matchesCaseFilter(
           {
-            name: we,
-            tags: Be,
+            name: caseName,
+            tags: caseTags,
           },
-          n,
+          filter,
         )
       )
         continue;
-      if (Q === null) {
-        W.push({
+      if (caseObject === null) {
+        errors.push({
           file: caseDir,
           error:
             "no case definition: case.yaml and prompt.md are empty or missing here (write the user prompt to test in prompt.md, or define the case in case.yaml)",
         });
         continue;
       }
-      let caseYaml = parseCaseYaml(Q);
+      let caseYaml = parseCaseYaml(caseObject);
       if (!caseYaml.ok) {
-        W.push({
+        errors.push({
           file: caseYamlFile !== null ? joined : caseDir,
           error: caseYaml.error,
         });
         continue;
       }
-      X.push(
-        await checkCaseInUntrustedFolder(caseYaml.case, joined, S, caseSource, a, T, N, evalDirSegments),
+      cases.push(
+        await checkCaseInUntrustedFolder(
+          caseYaml.case,
+          joined,
+          containmentRoot,
+          caseSource,
+          trust,
+          rootTrusted,
+          outsideFrameRoot,
+          evalDirSegments,
+        ),
       );
     } catch (error) {
-      W.push({
+      errors.push({
         file: caseDir,
         error: error instanceof Error ? error.message : String(error),
       });
     }
   }
   return {
-    cases: X,
-    errors: W,
-    root: S,
-    suite: x,
+    cases,
+    errors,
+    root: containmentRoot,
+    suite: evalSubdir,
   };
 }
 //@ chunk-qchp9vrd.js:86039-86190 placement
-function matchesCaseFilter(e, n) {
-  if (n.caseGlob && !urlPatternToRegex(n.caseGlob, e.name)) return false;
-  if (n.tags && n.tags.length > 0) {
-    if (!n.tags.some((tag) => e.tags.includes(tag))) return false;
+function matchesCaseFilter(caseSpec, filter) {
+  if (filter.caseGlob && !urlPatternToRegex(filter.caseGlob, caseSpec.name)) return false;
+  if (filter.tags && filter.tags.length > 0) {
+    if (!filter.tags.some((tag) => caseSpec.tags.includes(tag))) return false;
   }
   return true;
 }
@@ -739,228 +777,250 @@ function urlPatternToRegex(caseGlob, name) {
 }
 //@ chunk-qchp9vrd.js:86318-88019 placement
 async function checkCaseInUntrustedFolder(
-  e,
-  n,
-  r,
+  caseSpec,
+  caseFile,
+  containmentRoot,
   caseSource,
-  s,
-  h,
-  w = null,
+  trust,
+  trustedRoot,
+  frameRoot = null,
   evalDirSegments = [EVALS_DIR_NAME],
 ) {
-  let y = (N) => getCachedPluginDirVerdict(N, s);
-  let dir = path.dirname(n);
-  let S = await probeSkillFolders(dir, r, s);
+  let isLoadedPluginDir = (pluginDir) => getCachedPluginDirVerdict(pluginDir, trust);
+  let startDir = path_2.dirname(caseFile);
+  let skillFolders = await probeSkillFolders(startDir, containmentRoot, trust);
   if (
-    S.nearest !== null &&
-    !(h && S.nearest === r) &&
-    !(await getCachedPluginDirVerdict(S.nearest, s, "core"))
+    skillFolders.nearest !== null &&
+    !(trustedRoot && skillFolders.nearest === containmentRoot) &&
+    !(await getCachedPluginDirVerdict(skillFolders.nearest, trust, "core"))
   )
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      describeNearestPluginNotLoaded(e.name, S.nearest, s),
+      describeNearestPluginNotLoaded(caseSpec.name, skillFolders.nearest, trust),
       "plugin eval: case inside an untrusted plugin/skill folder refused",
     );
-  let T;
-  if (e.plugins && e.plugins.length > 0) {
-    T = [];
-    for (let plugin of e.plugins) {
-      let x = path.isAbsolute(plugin) ? plugin : path.resolve(dir, plugin);
-      await checkRepoAuthoredPath(dir, plugin, `case ${formatGuardValueJson(e.name)}: plugins entry`);
-      let j;
+  let pluginDirs;
+  if (caseSpec.plugins && caseSpec.plugins.length > 0) {
+    pluginDirs = [];
+    for (let plugin of caseSpec.plugins) {
+      let entryPath = path_2.isAbsolute(plugin) ? plugin : path_2.resolve(startDir, plugin);
+      await checkRepoAuthoredPath(
+        startDir,
+        plugin,
+        `case ${formatGuardValueJson(caseSpec.name)}: plugins entry`,
+      );
+      let resolvedEntry;
       try {
-        j = await realpath(x);
+        resolvedEntry = await realpath(entryPath);
       } catch (error) {
         let errnoCode = getErrnoCode(error);
-        let G =
+        let isMissingSymlink =
           errnoCode === "ENOENT" &&
-          (await lstat(x)
-            .then((J) => J.isSymbolicLink())
+          (await lstat(entryPath)
+            .then((linkStats) => linkStats.isSymbolicLink())
             .catch(() => false));
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          G
-            ? `case ${formatGuardValueJson(e.name)}: plugins entry ${formatGuardValueJson(plugin)} is a symbolic link whose target does not exist`
+          isMissingSymlink
+            ? `case ${formatGuardValueJson(caseSpec.name)}: plugins entry ${formatGuardValueJson(plugin)} is a symbolic link whose target does not exist`
             : errnoCode === "ENOENT" || errnoCode === "ENOTDIR"
-              ? `case ${formatGuardValueJson(e.name)}: plugins entry ${formatGuardValueJson(plugin)} does not exist`
-              : `case ${formatGuardValueJson(e.name)}: plugins entry ${formatGuardValueJson(plugin)} is unreadable (${errnoCode ?? "unknown error"})`,
+              ? `case ${formatGuardValueJson(caseSpec.name)}: plugins entry ${formatGuardValueJson(plugin)} does not exist`
+              : `case ${formatGuardValueJson(caseSpec.name)}: plugins entry ${formatGuardValueJson(plugin)} is unreadable (${errnoCode ?? "unknown error"})`,
           "plugin eval: plugins entry absent or unreadable",
         );
       }
-      let K = w !== null && (j === w || isSameOrInside(j, w));
-      if (!isSameOrInside(j, r) && !K)
+      let insideFrameRoot =
+        frameRoot !== null && (resolvedEntry === frameRoot || isSameOrInside(resolvedEntry, frameRoot));
+      if (!isSameOrInside(resolvedEntry, containmentRoot) && !insideFrameRoot)
         throw Error(
-          `case ${formatGuardValueJson(e.name)}: plugins entry ${formatGuardValueJson(plugin)} resolves to ${escapeNonAscii(j)}, outside the containment root ${escapeNonAscii(r)} (the enclosing plugin for a target inside one you control, else the directory you ran 'claude plugin eval' against). Only plugins under it can be loaded from case.yaml.`,
+          `case ${formatGuardValueJson(caseSpec.name)}: plugins entry ${formatGuardValueJson(plugin)} resolves to ${escapeNonAscii(resolvedEntry)}, outside the containment root ${escapeNonAscii(containmentRoot)} (the enclosing plugin for a target inside one you control, else the directory you ran 'claude plugin eval' against). Only plugins under it can be loaded from case.yaml.`,
         );
-      if (!(h && j === r) && !(w !== null && j === w) && !(await y(j)))
+      if (
+        !(trustedRoot && resolvedEntry === containmentRoot) &&
+        !(frameRoot !== null && resolvedEntry === frameRoot) &&
+        !(await isLoadedPluginDir(resolvedEntry))
+      )
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `case ${formatGuardValueJson(e.name)}: plugins entry ${formatGuardValueJson(plugin)} resolves to ${escapeNonAscii(j)}, which is not loaded: ${reasonFor(j, s)}.`,
+          `case ${formatGuardValueJson(caseSpec.name)}: plugins entry ${formatGuardValueJson(plugin)} resolves to ${escapeNonAscii(resolvedEntry)}, which is not loaded: ${reasonFor(resolvedEntry, trust)}.`,
           "plugin eval: untrusted plugins entry refused",
         );
-      T.push(j);
+      pluginDirs.push(resolvedEntry);
     }
   } else {
-    let byManifest = S.byManifest;
-    if (byManifest !== null && !(h && byManifest === r) && !(await y(byManifest)))
+    let byManifest = skillFolders.byManifest;
+    if (
+      byManifest !== null &&
+      !(trustedRoot && byManifest === containmentRoot) &&
+      !(await isLoadedPluginDir(byManifest))
+    )
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        describeNearestPluginNotLoaded(e.name, byManifest, s),
+        describeNearestPluginNotLoaded(caseSpec.name, byManifest, trust),
         "plugin eval: untrusted auto-detected plugin refused",
       );
-    T = byManifest ? [byManifest] : w !== null ? [w] : [];
+    pluginDirs = byManifest ? [byManifest] : frameRoot !== null ? [frameRoot] : [];
   }
   return {
-    ...e,
-    caseFile: n,
-    caseDir: dir,
+    ...caseSpec,
+    caseFile,
+    caseDir: startDir,
     caseSource,
-    pluginDirs: T,
-    pluginDirsUnderTest: T,
+    pluginDirs,
+    pluginDirsUnderTest: pluginDirs,
     evalDirSegments,
   };
 }
 //@ chunk-qchp9vrd.js:88019-88196 placement
-function describeNearestPluginNotLoaded(name, n, r) {
-  return `case ${formatGuardValueJson(name)}: the nearest plugin, ${escapeNonAscii(n)}, is not loaded: ${reasonFor(n, r)} (fix its ownership/modes, or name that plugin directory itself as the target).`;
+function describeNearestPluginNotLoaded(name, pluginDir, trust) {
+  return `case ${formatGuardValueJson(name)}: the nearest plugin, ${escapeNonAscii(pluginDir)}, is not loaded: ${reasonFor(pluginDir, trust)} (fix its ownership/modes, or name that plugin directory itself as the target).`;
 }
 //@ chunk-qchp9vrd.js:88196-88235 placement
 /**
  * 判断路径是否就是或在目标目录内。
  */
-function isSameOrInside(e, n) {
-  return e === n || toEvalPathError(n, e);
+function isSameOrInside(path, rootPath) {
+  return path === rootPath || toEvalPathError(rootPath, path);
 }
 //@ chunk-qchp9vrd.js:88235-88295 placement
 /**
  * 把路径限制在目标目录内（解析真实路径后比较）。
  */
-async function resolveTargetWithin(e, n) {
-  let r = await realCwd(n);
-  return isSameOrInside(e, r) ? r : e;
+async function resolveTargetWithin(target, state) {
+  let cwd = await realCwd(state);
+  return isSameOrInside(target, cwd) ? cwd : target;
 }
 //@ chunk-qchp9vrd.js:88295-88364 placement
 /**
  * 取缓存的工作目录真实路径。
  */
-function realCwd(e) {
-  e.realCwd ??= realpath(getCwd()).catch(() => getCwd());
-  return e.realCwd;
+function realCwd(cache) {
+  cache.realCwd ??= realpath(getCwd()).catch(() => getCwd());
+  return cache.realCwd;
 }
 //@ chunk-qchp9vrd.js:88364-90572 placement
 /**
  * 解析用例引用的路径，拒绝穿出目录树或指向其他主机的链接。
  */
-async function resolveCaseTargetPath(e, root, frameRoot) {
-  let a = [];
-  let s = new Set();
-  for (let h of e) {
-    if (s.has(h)) continue;
-    s.add(h);
-    let w = frameRoot !== null && !isSameOrInside(h, root) && isSameOrInside(h, frameRoot) ? frameRoot : root;
-    let base = path.basename(h);
-    let y = null;
-    let R = false;
-    let S = isZipPathCaseInsensitive(h);
-    for (let T of S ? [] : MANIFEST_IDENTITY_READ_RELPATHS) {
-      let joined = path.join(h, T);
-      let x = {
+async function resolveCaseTargetPath(paths, root, frameRoot) {
+  let plugins = [];
+  let seen = new Set();
+  for (let pluginPath of paths) {
+    if (seen.has(pluginPath)) continue;
+    seen.add(pluginPath);
+    let containmentRoot =
+      frameRoot !== null && !isSameOrInside(pluginPath, root) && isSameOrInside(pluginPath, frameRoot)
+        ? frameRoot
+        : root;
+    let base = path_2.basename(pluginPath);
+    let problemDetail = null;
+    let manifestMissing = false;
+    let isZipName = isZipPathCaseInsensitive(pluginPath);
+    for (let relativePath of isZipName ? [] : MANIFEST_IDENTITY_READ_RELPATHS) {
+      let joined = path_2.join(pluginPath, relativePath);
+      let linkState = {
         link: false,
       };
-      let j = await checkAutomounterPath(h, T, w, undefined, x);
-      if (j !== null) {
-        y =
-          j === UNINSPECTABLE_LABEL
-            ? `${T} is reached through a component that could not be inspected \u2014 not resolved or read here`
-            : j === ESCAPING_LINK_LABEL
-              ? `${T} is reached through a symbolic link that leaves the tree \u2014 not resolved or read here`
-              : `${T} is reached through a symbolic link naming another host (${j}) \u2014 not resolved or read here`;
+      let specialPath = await checkAutomounterPath(
+        pluginPath,
+        relativePath,
+        containmentRoot,
+        undefined,
+        linkState,
+      );
+      if (specialPath !== null) {
+        problemDetail =
+          specialPath === UNINSPECTABLE_LABEL
+            ? `${relativePath} is reached through a component that could not be inspected \u2014 not resolved or read here`
+            : specialPath === ESCAPING_LINK_LABEL
+              ? `${relativePath} is reached through a symbolic link that leaves the tree \u2014 not resolved or read here`
+              : `${relativePath} is reached through a symbolic link naming another host (${specialPath}) \u2014 not resolved or read here`;
         break;
       }
-      let K;
+      let realFile;
       try {
-        K = await realpath(joined);
+        realFile = await realpath(joined);
       } catch (error) {
         let errnoCode = getErrnoCode(error);
-        if ((errnoCode === "ENOENT" || errnoCode === "ENOTDIR") && x.link) {
-          y = `${T} is reached through a symbolic link that does not resolve to a file in the tree \u2014 not read here`;
+        if ((errnoCode === "ENOENT" || errnoCode === "ENOTDIR") && linkState.link) {
+          problemDetail = `${relativePath} is reached through a symbolic link that does not resolve to a file in the tree \u2014 not read here`;
           break;
         }
         if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") {
-          if (T === PLUGIN_MANIFEST_PATH) R = true;
+          if (relativePath === PLUGIN_MANIFEST_PATH) manifestMissing = true;
           continue;
         }
-        y = `${T}: ${errorMessage(error)} \u2014 not read here`;
+        problemDetail = `${relativePath}: ${errorMessage(error)} \u2014 not read here`;
         break;
       }
-      if (!isSameOrInside(K, w)) {
-        y = `${T} resolves outside the eval tree through a symbolic link \u2014 not read here`;
+      if (!isSameOrInside(realFile, containmentRoot)) {
+        problemDetail = `${relativePath} resolves outside the eval tree through a symbolic link \u2014 not read here`;
         break;
       }
-      let X;
+      let fileStats;
       try {
-        X = await lstat(K);
+        fileStats = await lstat(realFile);
       } catch (error) {
-        y = `${T}: ${errorMessage(error)} \u2014 not read here`;
+        problemDetail = `${relativePath}: ${errorMessage(error)} \u2014 not read here`;
         break;
       }
-      if (!X.isFile()) {
-        y = `${T} is not a regular file \u2014 not read here`;
+      if (!fileStats.isFile()) {
+        problemDetail = `${relativePath} is not a regular file \u2014 not read here`;
         break;
       }
-      if (X.size > MAX_TEXT_FILE_BYTES) {
-        y = `${T} is ${X.size} bytes, over the ${MAX_TEXT_FILE_BYTES}-byte cap \u2014 not read here`;
+      if (fileStats.size > MAX_TEXT_FILE_BYTES) {
+        problemDetail = `${relativePath} is ${fileStats.size} bytes, over the ${MAX_TEXT_FILE_BYTES}-byte cap \u2014 not read here`;
         break;
       }
     }
-    if (S || (y === null && R)) {
-      let T = null;
+    if (isZipName || (problemDetail === null && manifestMissing)) {
+      let isDirectory = null;
       try {
-        T = (await lstat(h)).isDirectory();
+        isDirectory = (await lstat(pluginPath)).isDirectory();
       } catch {}
-      if (S) {
-        a.push(
-          T === true
+      if (isZipName) {
+        plugins.push(
+          isDirectory === true
             ? {
                 name: base,
-                path: h,
+                path: pluginPath,
                 problem: "will_not_load",
                 problemDetail:
                   "a directory whose name ends in .zip \u2014 the child treats that name as an archive and fails to load it; rename the directory",
               }
             : {
                 name: base,
-                path: h,
+                path: pluginPath,
                 problem: "archive_not_probed",
               },
         );
         continue;
       }
-      if (T === false) {
-        a.push({
+      if (isDirectory === false) {
+        plugins.push({
           name: base,
-          path: h,
+          path: pluginPath,
           problem: "will_not_load",
           problemDetail: "not a directory or .zip archive \u2014 the child loads it as an empty plugin",
         });
         continue;
       }
     }
-    if (y !== null) {
-      a.push({
+    if (problemDetail !== null) {
+      plugins.push({
         name: base,
-        path: h,
+        path: pluginPath,
         problem: "identity_unverified",
-        problemDetail: y,
+        problemDetail,
       });
       continue;
     }
     try {
-      let { manifest } = await loadPluginManifest(h, base, "plugin eval", [], {
+      let { manifest } = await loadPluginManifest(pluginPath, base, "plugin eval", [], {
         noTelemetry: true,
       });
-      a.push({
+      plugins.push({
         name: manifest.name,
         ...(manifest.version !== undefined && {
           version: manifest.version,
         }),
-        path: h,
+        path: pluginPath,
         ...(manifest.defaultEnabled === false && {
           problem: "disabled_by_default",
         }),
@@ -970,9 +1030,9 @@ async function resolveCaseTargetPath(e, root, frameRoot) {
         error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
           ? error.errorClass
           : undefined;
-      a.push({
+      plugins.push({
         name: base,
-        path: h,
+        path: pluginPath,
         problem:
           errorClass === MANIFEST_ERROR_CLASSES.jsonInvalid ||
           errorClass === MANIFEST_ERROR_CLASSES.schemaInvalid
@@ -982,58 +1042,60 @@ async function resolveCaseTargetPath(e, root, frameRoot) {
       });
     }
   }
-  return a;
+  return plugins;
 }
 //@ chunk-qchp9vrd.js:90572-90636 placement
-async function findNearestSkillFolder(e, targetWithin, r, a = 32) {
-  return (await probeSkillFolders(e, targetWithin, r, a)).nearest;
+async function findNearestSkillFolder(startDir, stopDir, state, maxUp = 32) {
+  return (await probeSkillFolders(startDir, stopDir, state, maxUp)).nearest;
 }
 //@ chunk-qchp9vrd.js:90636-91125 placement
-async function probeSkillFolders(e, n, r, a = 32) {
-  let s = (y) => {
-    let R = r.skillFolderProbes.get(y);
-    if (R === undefined) {
-      R = (async () => {
-        if (!(await hasSkillFile(y))) return false;
-        for (let S of MAGIC_DOCS_PROMPT_FILES) if (await pathExistsLstat(path.join(y, S))) return false;
+async function probeSkillFolders(startDir, stopDir, cache, maxHops = 32) {
+  let hasSkill = (dir) => {
+    let probe = cache.skillFolderProbes.get(dir);
+    if (probe === undefined) {
+      probe = (async () => {
+        if (!(await hasSkillFile(dir))) return false;
+        for (let promptFile of MAGIC_DOCS_PROMPT_FILES)
+          if (await pathExistsLstat(path_2.join(dir, promptFile))) return false;
         return true;
       })();
-      r.skillFolderProbes.set(y, R);
+      cache.skillFolderProbes.set(dir, probe);
     }
-    return R;
+    return probe;
   };
-  let h = e;
-  let w = null;
-  let b = (y) => ({
-    nearest: w ?? y,
-    byManifest: y,
+  let dir = startDir;
+  let nearestSkillDir = null;
+  let result = (pluginDir) => ({
+    nearest: nearestSkillDir ?? pluginDir,
+    byManifest: pluginDir,
   });
-  for (let j = 0; j < a; j++) {
-    if (isNetworkMountRoot_2(h)) return b(w);
-    if ((await pathExistsLstat(path.join(h, "plugin.json"))) || (await hasClaudePluginDir(h))) return b(h);
-    if (w === null && (await s(h))) w = h;
-    if (h === n) return b(w);
-    let dir = path.dirname(h);
-    if (dir === h) return b(w);
-    h = dir;
+  for (let j = 0; j < maxHops; j++) {
+    if (isNetworkMountRoot_2(dir)) return result(nearestSkillDir);
+    if ((await pathExistsLstat(path_2.join(dir, "plugin.json"))) || (await hasClaudePluginDir(dir)))
+      return result(dir);
+    if (nearestSkillDir === null && (await hasSkill(dir))) nearestSkillDir = dir;
+    if (dir === stopDir) return result(nearestSkillDir);
+    let dir_2 = path_2.dirname(dir);
+    if (dir_2 === dir) return result(nearestSkillDir);
+    dir = dir_2;
   }
-  return b(w);
+  return result(nearestSkillDir);
 }
 //@ chunk-qchp9vrd.js:91125-91329 placement
-async function hasClaudePluginDir(e) {
+async function hasClaudePluginDir(dir) {
   try {
-    let n = await lstat(path.join(e, ".claude-plugin"));
-    if (n.isSymbolicLink()) return true;
-    if (!n.isDirectory()) return false;
+    let dirStats = await lstat(path_2.join(dir, ".claude-plugin"));
+    if (dirStats.isSymbolicLink()) return true;
+    if (!dirStats.isDirectory()) return false;
   } catch (error) {
     return !isNotFoundErrno_3(error);
   }
-  return pathExistsLstat(path.join(e, ".claude-plugin", "plugin.json"));
+  return pathExistsLstat(path_2.join(dir, ".claude-plugin", "plugin.json"));
 }
 //@ chunk-qchp9vrd.js:91329-91399 placement
-async function pathExistsLstat(e) {
+async function pathExistsLstat(filePath) {
   try {
-    await lstat(e);
+    await lstat(filePath);
     return true;
   } catch (error) {
     return !isNotFoundErrno_3(error);
@@ -1045,77 +1107,87 @@ function isNotFoundErrno_3(realCandidate) {
   return code === "ENOENT" || code === "ENOTDIR";
 }
 //@ chunk-qchp9vrd.js:91460-91776 placement
-async function parseCaseYamlFile(e) {
-  let textFile = await readTextFile(e, MAX_CASE_FILE_BYTES, "case.yaml");
+async function parseCaseYamlFile(caseFilePath) {
+  let textFile = await readTextFile(caseFilePath, MAX_CASE_FILE_BYTES, "case.yaml");
   if (textFile === null) return null;
-  let r;
+  let parsed;
   try {
-    r = parseYaml(textFile);
+    parsed = parseYaml(textFile);
   } catch (error) {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `YAML parse failed: ${String(error)}`,
       "case.yaml: YAML parse failed",
     );
   }
-  if (r === null || r === undefined) return null;
-  if (typeof r !== "object" || Array.isArray(r)) throw Error("case.yaml must be a YAML object");
-  return r;
+  if (parsed === null || parsed === undefined) return null;
+  if (typeof parsed !== "object" || Array.isArray(parsed)) throw Error("case.yaml must be a YAML object");
+  return parsed;
 }
 //@ chunk-qchp9vrd.js:91776-91809 placement = loadMagicDocsPrompt (0.476)
 var MAGIC_DOCS_PROMPT_FILES = ["case.yaml", "prompt.md"];
 //@ chunk-qchp9vrd.js:91809-91846 placement
-function isMagicDocsPromptFile(e) {
-  return MAGIC_DOCS_PROMPT_FILES.includes(e);
+function isMagicDocsPromptFile(basename) {
+  return MAGIC_DOCS_PROMPT_FILES.includes(basename);
 }
 //@ chunk-qchp9vrd.js:91846-91970 placement
-async function realpathKeepingPromptFile(e) {
-  if (!isMagicDocsPromptFile(path.basename(e))) return realpath(e);
-  await lstat(e);
-  return path.join(await realpath(path.dirname(e)), path.basename(e));
+async function realpathKeepingPromptFile(targetPath) {
+  if (!isMagicDocsPromptFile(path_2.basename(targetPath))) return realpath(targetPath);
+  await lstat(targetPath);
+  return path_2.join(await realpath(path_2.dirname(targetPath)), path_2.basename(targetPath));
 }
 //@ chunk-qchp9vrd.js:91970-92345 placement
-async function describeUnexaminable(e) {
-  let n = [];
-  for (let a = e; ; a = path.dirname(a)) {
-    n.unshift(a);
-    if (path.dirname(a) === a) break;
+async function describeUnexaminable(targetPath) {
+  let segments = [];
+  for (let current = targetPath; ; current = path_2.dirname(current)) {
+    segments.unshift(current);
+    if (path_2.dirname(current) === current) break;
   }
-  let r = [];
-  for (let a of n) {
-    let s;
-    let h;
+  let ancestorReals = [];
+  for (let segment of segments) {
+    let isLink;
+    let segmentReal;
     try {
-      s = (await lstat(a)).isSymbolicLink();
-      h = await realpath(a);
+      isLink = (await lstat(segment)).isSymbolicLink();
+      segmentReal = await realpath(segment);
     } catch (error) {
       return {
         kind: "unexaminable",
-        segment: a,
+        segment,
         code: getErrnoCode(error) ?? "unknown error",
       };
     }
-    if (s && r.some((w) => h === w || toEvalPathError(h, w)))
+    if (
+      isLink &&
+      ancestorReals.some(
+        (ancestorReal) => segmentReal === ancestorReal || toEvalPathError(segmentReal, ancestorReal),
+      )
+    )
       return {
         kind: "climb",
-        segment: a,
+        segment,
       };
-    r.push(h);
+    ancestorReals.push(segmentReal);
   }
-  r.pop();
+  ancestorReals.pop();
   return {
     kind: "ok",
-    ancestorReals: r,
+    ancestorReals,
   };
 }
 //@ chunk-qchp9vrd.js:92345-92574 placement
 /**
  * 解析评测用的插件目录：最近的技能目录可信则采用，否则拒绝；没有时按其他方式查找。
  */
-async function resolvePluginDir(e, n, r = "tree") {
-  let targetWithin = await resolveTargetWithin(e, n);
-  let nearestSkillFolder = await findNearestSkillFolder(e, targetWithin, n, Number.POSITIVE_INFINITY);
+async function resolvePluginDir(pluginDir, state, mode = "tree") {
+  let targetWithin = await resolveTargetWithin(pluginDir, state);
+  let nearestSkillFolder = await findNearestSkillFolder(
+    pluginDir,
+    targetWithin,
+    state,
+    Number.POSITIVE_INFINITY,
+  );
   if (nearestSkillFolder !== null)
-    return (await getCachedPluginDirVerdict(nearestSkillFolder, n, r))
+    return (await getCachedPluginDirVerdict(nearestSkillFolder, state, mode))
       ? {
           adopted: nearestSkillFolder,
           refused: null,
@@ -1126,61 +1198,64 @@ async function resolvePluginDir(e, n, r = "tree") {
           refused: nearestSkillFolder,
           namedOnly: null,
         };
-  return resolveParentPluginDir(e, n, r, targetWithin);
+  return resolveParentPluginDir(pluginDir, state, mode, targetWithin);
 }
 //@ chunk-qchp9vrd.js:92574-92923 placement
 /**
  * 从目标的上一级向上查找最近的插件目录；目标或插件目录不可信时只给出名称，否则按缓存的目录判定结果采纳或拒绝。
  */
-async function resolveParentPluginDir(e, n, r = "tree", targetWithin) {
-  let s = targetWithin ?? (await resolveTargetWithin(e, n));
-  let dir = path.dirname(s);
-  let w = dir === s ? null : await findNearestSkillFolder(dir, null, n);
-  if (w === null)
+async function resolveParentPluginDir(pluginDir, state, mode = "tree", targetWithin) {
+  let target = targetWithin ?? (await resolveTargetWithin(pluginDir, state));
+  let dir = path_2.dirname(target);
+  let nearest = dir === target ? null : await findNearestSkillFolder(dir, null, state);
+  if (nearest === null)
     return {
       adopted: null,
       refused: null,
       namedOnly: null,
     };
-  if (!(await canMakeTempDir(e, n)) || !(await canMakeTempDir(w, n)))
+  if (!(await canMakeTempDir(pluginDir, state)) || !(await canMakeTempDir(nearest, state)))
     return {
       adopted: null,
       refused: null,
-      namedOnly: w,
+      namedOnly: nearest,
     };
-  return (await getCachedPluginDirVerdict(w, n, r))
+  return (await getCachedPluginDirVerdict(nearest, state, mode))
     ? {
-        adopted: w,
+        adopted: nearest,
         refused: null,
         namedOnly: null,
       }
     : {
         adopted: null,
-        refused: w,
+        refused: nearest,
         namedOnly: null,
       };
 }
 //@ chunk-qchp9vrd.js:92923-93046 placement
-async function resolveEvalSubdir(e, evalDirSegments) {
+async function resolveEvalSubdir(rootPath, evalDirSegments) {
   try {
-    await checkRepoAuthoredPath(e, evalDirSegments.join(path.sep), "eval directory");
-    return await realpath(path.join(e, ...evalDirSegments));
+    await checkRepoAuthoredPath(rootPath, evalDirSegments.join(path_2.sep), "eval directory");
+    return await realpath(path_2.join(rootPath, ...evalDirSegments));
   } catch {
     return null;
   }
 }
 //@ chunk-qchp9vrd.js:93046-93304 placement
-async function relativeSegmentsWithin(e, n) {
-  let r = [];
-  for (let a = n; ; a = path.dirname(a)) {
-    r.unshift(a);
-    if (path.dirname(a) === a) break;
+async function relativeSegmentsWithin(root, target) {
+  let ancestors = [];
+  for (let dir = target; ; dir = path_2.dirname(dir)) {
+    ancestors.unshift(dir);
+    if (path_2.dirname(dir) === dir) break;
   }
-  for (let a of r) {
-    let s = await realpath(a).catch(() => null);
-    if (s === null) continue;
-    if (s === e || isSameOrInside(s, e))
-      return [...pathSegments(path.relative(e, s)), ...pathSegments(path.relative(a, n))];
+  for (let ancestor of ancestors) {
+    let real = await realpath(ancestor).catch(() => null);
+    if (real === null) continue;
+    if (real === root || isSameOrInside(real, root))
+      return [
+        ...pathSegments(path_2.relative(root, real)),
+        ...pathSegments(path_2.relative(ancestor, target)),
+      ];
   }
   return null;
 }
@@ -1188,29 +1263,36 @@ async function relativeSegmentsWithin(e, n) {
 /**
  * 在大小写不敏感的文件系统上把路径各段改成磁盘上的实际大小写（仅当两种写法指向同一 inode 时替换）。
  */
-async function canonicalizeSegmentCase(e, n, r) {
-  let sliced = n.slice();
-  for (let j = 0; j < sliced.length && j < r.length; j++) {
-    let h = sliced[j];
-    let w = r[j];
-    if (h === w) continue;
-    if (h.toLowerCase() !== w.toLowerCase()) break;
-    let joined = path.join(e, ...sliced.slice(0, j));
+async function canonicalizeSegmentCase(baseDir, segments, expectedSegments) {
+  let sliced = segments.slice();
+  for (let j = 0; j < sliced.length && j < expectedSegments.length; j++) {
+    let actualSegment = sliced[j];
+    let expectedSegment = expectedSegments[j];
+    if (actualSegment === expectedSegment) continue;
+    if (actualSegment.toLowerCase() !== expectedSegment.toLowerCase()) break;
+    let joined = path_2.join(baseDir, ...sliced.slice(0, j));
     try {
-      await checkRepoAuthoredPath(joined, w, "eval directory");
+      await checkRepoAuthoredPath(joined, expectedSegment, "eval directory");
     } catch {
       break;
     }
-    let [y, R] = await Promise.all([
-      stat(path.join(joined, h), {
+    let [actualStats, expectedStats] = await Promise.all([
+      stat(path_2.join(joined, actualSegment), {
         bigint: true,
       }).catch(() => null),
-      stat(path.join(joined, w), {
+      stat(path_2.join(joined, expectedSegment), {
         bigint: true,
       }).catch(() => null),
     ]);
-    if (y === null || R === null || y.ino === 0n || y.dev !== R.dev || y.ino !== R.ino) break;
-    sliced[j] = w;
+    if (
+      actualStats === null ||
+      expectedStats === null ||
+      actualStats.ino === 0n ||
+      actualStats.dev !== expectedStats.dev ||
+      actualStats.ino !== expectedStats.ino
+    )
+      break;
+    sliced[j] = expectedSegment;
   }
   return sliced;
 }
@@ -1218,49 +1300,76 @@ async function canonicalizeSegmentCase(e, n, r) {
 /**
  * 把路径按分隔符拆成非空段。
  */
-function pathSegments(e) {
-  return e.split(path.sep).filter((n) => n !== "");
+function pathSegments(filePath) {
+  return filePath.split(path_2.sep).filter((segment) => segment !== "");
 }
 //@ chunk-qchp9vrd.js:93808-94884 placement
-async function compareCaseNames(e, evalDirSegments, frameRoot, a, typedAncestorReals = []) {
-  if (isMagicDocsPromptFile(path.basename(e)))
+async function compareCaseNames(
+  targetPath,
+  expectedSegments,
+  frameRoot,
+  originalPath,
+  typedAncestorReals = [],
+) {
+  if (isMagicDocsPromptFile(path_2.basename(targetPath)))
     return {
-      caseDirs: [path.dirname(e)],
+      caseDirs: [path_2.dirname(targetPath)],
       skipped: [],
     };
-  let h = new Set();
-  let w = [];
-  let b = evalDirSegments.length === 1 && evalDirSegments[0] === EVALS_DIR_NAME;
-  let y;
-  let R;
-  let S;
-  let T = frameRoot === null || b ? null : await relativeSegmentsWithin(frameRoot, a);
-  if (b) {
-    y = pathSegments(e).includes(evalDirSegments[0]) || pathSegments(a).includes(evalDirSegments[0]);
-    R = (j) => pathEndsWith(pathSegments(j), evalDirSegments);
-    S = () => true;
-  } else if (frameRoot !== null && (isSameOrInside(e, frameRoot) || T !== null)) {
-    let j = pathSegments(path.relative(frameRoot, e));
-    let K = T === null ? j : await canonicalizeSegmentCase(frameRoot, T, evalDirSegments);
-    let X = (G) => pathSegments(path.relative(frameRoot, G));
-    let W = (G) => [...K, ...pathSegments(path.relative(e, G))];
-    y = foldPathCase(j, evalDirSegments, "exact") || foldPathCase(K, evalDirSegments, "exact");
-    R = (G) => isSameLengthAndPath(X(G), evalDirSegments) || isSameLengthAndPath(W(G), evalDirSegments);
-    S = (G) => foldPathCase(evalDirSegments, X(G), "exact") || foldPathCase(evalDirSegments, W(G), "exact");
+  let caseDirs = new Set();
+  let skipped = [];
+  let defaultEvalDirName = expectedSegments.length === 1 && expectedSegments[0] === EVALS_DIR_NAME;
+  let opensEvalDir;
+  let mayLeadToEvalDir;
+  let routeIndependentCheck;
+  let frameRelativeSegments =
+    frameRoot === null || defaultEvalDirName ? null : await relativeSegmentsWithin(frameRoot, originalPath);
+  if (defaultEvalDirName) {
+    opensEvalDir =
+      pathSegments(targetPath).includes(expectedSegments[0]) ||
+      pathSegments(originalPath).includes(expectedSegments[0]);
+    mayLeadToEvalDir = (path) => pathEndsWith(pathSegments(path), expectedSegments);
+    routeIndependentCheck = () => true;
+  } else if (
+    frameRoot !== null &&
+    (isSameOrInside(targetPath, frameRoot) || frameRelativeSegments !== null)
+  ) {
+    let targetSegments = pathSegments(path_2.relative(frameRoot, targetPath));
+    let canonicalSegments =
+      frameRelativeSegments === null
+        ? targetSegments
+        : await canonicalizeSegmentCase(frameRoot, frameRelativeSegments, expectedSegments);
+    let frameSegmentsOf = (path) => pathSegments(path_2.relative(frameRoot, path));
+    let segmentsFromTarget = (path) => [
+      ...canonicalSegments,
+      ...pathSegments(path_2.relative(targetPath, path)),
+    ];
+    opensEvalDir =
+      foldPathCase(targetSegments, expectedSegments, "exact") ||
+      foldPathCase(canonicalSegments, expectedSegments, "exact");
+    mayLeadToEvalDir = (path) =>
+      isSameLengthAndPath(frameSegmentsOf(path), expectedSegments) ||
+      isSameLengthAndPath(segmentsFromTarget(path), expectedSegments);
+    routeIndependentCheck = (path) =>
+      foldPathCase(expectedSegments, frameSegmentsOf(path), "exact") ||
+      foldPathCase(expectedSegments, segmentsFromTarget(path), "exact");
   } else {
-    let j = getPlatform() === "macos" || getPlatform() === "windows" ? "folded" : "exact";
-    y =
-      pathEndsWith(pathSegments(e), evalDirSegments, j) || pathEndsWith(pathSegments(a), evalDirSegments, j);
-    R = (K) => isSameLengthAndPath(pathSegments(path.relative(e, K)), evalDirSegments);
-    S = (K) => foldPathCase(evalDirSegments, pathSegments(path.relative(e, K)), "exact");
+    let caseFoldMode = getPlatform() === "macos" || getPlatform() === "windows" ? "folded" : "exact";
+    opensEvalDir =
+      pathEndsWith(pathSegments(targetPath), expectedSegments, caseFoldMode) ||
+      pathEndsWith(pathSegments(originalPath), expectedSegments, caseFoldMode);
+    mayLeadToEvalDir = (candidate) =>
+      isSameLengthAndPath(pathSegments(path_2.relative(targetPath, candidate)), expectedSegments);
+    routeIndependentCheck = (candidate) =>
+      foldPathCase(expectedSegments, pathSegments(path_2.relative(targetPath, candidate)), "exact");
   }
-  let N = await realpath(e).catch(() => e);
-  let x = {
-    opensEvalDir: R,
-    mayLeadToEvalDir: S,
-    routeIndependent: b,
-    skipped: w,
-    rootReal: N,
+  let rootRealpath = await realpath(targetPath).catch(() => targetPath);
+  let walkState = {
+    opensEvalDir: mayLeadToEvalDir,
+    mayLeadToEvalDir: routeIndependentCheck,
+    routeIndependent: defaultEvalDirName,
+    skipped,
+    rootReal: rootRealpath,
     typedAncestorReals,
     reported: new Set(),
     foundReal: new Set(),
@@ -1272,192 +1381,210 @@ async function compareCaseNames(e, evalDirSegments, frameRoot, a, typedAncestorR
       reported: false,
     },
   };
-  await scanSuiteDirectory(e, N, h, 0, y, x);
-  for (let [j, K] of x.deferredCuts) if (!x.listedAt.has(j)) w.push(K);
+  await scanSuiteDirectory(targetPath, rootRealpath, caseDirs, 0, opensEvalDir, walkState);
+  for (let [cutKey, deferredCut] of walkState.deferredCuts)
+    if (!walkState.listedAt.has(cutKey)) skipped.push(deferredCut);
   return {
-    caseDirs: [...h].sort(),
-    skipped: w,
+    caseDirs: [...caseDirs].sort(),
+    skipped,
   };
 }
 //@ chunk-qchp9vrd.js:94884-98795 placement
 /**
  * 扫描套件目录（嵌套层级上限、.git 等），收集用例。
  */
-async function scanSuiteDirectory(e, n, r, a, s, h) {
-  let w = (N, file, error) => {
-    if (!h.reported.has(N)) {
-      h.reported.add(N);
-      h.skipped.push({
+async function scanSuiteDirectory(dirPath, dirReal, caseDirs, depth, isSuiteRoute, walkState) {
+  let reportSkip = (skipKey, file, error) => {
+    if (!walkState.reported.has(skipKey)) {
+      walkState.reported.add(skipKey);
+      walkState.skipped.push({
         file,
         error,
       });
     }
   };
-  let b = s || !h.routeIndependent || a === 0;
-  let y = (N) => {
-    if (b) w(n, e, N);
-    else logForDebugging(`plugin eval: ${escapeNonAscii(e)}: ${N}`);
+  let reportHere = isSuiteRoute || !walkState.routeIndependent || depth === 0;
+  let reportOrLog = (message) => {
+    if (reportHere) reportSkip(dirReal, dirPath, message);
+    else logForDebugging(`plugin eval: ${escapeNonAscii(dirPath)}: ${message}`);
   };
-  if (a > MAX_ROUTE_DEPTH) {
-    let N = `nested more than ${MAX_ROUTE_DEPTH} directories below the target by this route \u2014 not scanned from here (move the suite higher, or target it directly)`;
-    if (b) {
-      let x = `${s ? "suite" : "tree"}:${n}`;
-      if (!h.deferredCuts.has(x))
-        h.deferredCuts.set(x, {
-          file: e,
-          error: N,
+  if (depth > MAX_ROUTE_DEPTH) {
+    let problem = `nested more than ${MAX_ROUTE_DEPTH} directories below the target by this route \u2014 not scanned from here (move the suite higher, or target it directly)`;
+    if (reportHere) {
+      let cutKey = `${isSuiteRoute ? "suite" : "tree"}:${dirReal}`;
+      if (!walkState.deferredCuts.has(cutKey))
+        walkState.deferredCuts.set(cutKey, {
+          file: dirPath,
+          error: problem,
         });
-    } else logForDebugging(`plugin eval: ${escapeNonAscii(e)}: ${N}`);
+    } else logForDebugging(`plugin eval: ${escapeNonAscii(dirPath)}: ${problem}`);
     return;
   }
-  let R;
+  let entries;
   try {
-    R = await readdir(e, {
+    entries = await readdir(dirPath, {
       withFileTypes: true,
     });
   } catch (error) {
     let errnoCode = getErrnoCode(error);
-    if (errnoCode === "ENOTDIR" && a === 0) {
-      y("is a file, not a directory or a case file (case.yaml / prompt.md) \u2014 nothing to scan");
+    if (errnoCode === "ENOTDIR" && depth === 0) {
+      reportOrLog("is a file, not a directory or a case file (case.yaml / prompt.md) \u2014 nothing to scan");
       return;
     }
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return;
     if (isFsInaccessible(error)) {
-      y(`cannot be read (${errnoCode ?? "unknown error"}) \u2014 not scanned`);
+      reportOrLog(`cannot be read (${errnoCode ?? "unknown error"}) \u2014 not scanned`);
       return;
     }
     throw error;
   }
-  let S = `${s ? "suite" : "tree"}:${n}`;
-  let T = h.listedAt.get(S);
-  if (T === undefined || a < T) h.listedAt.set(S, a);
-  if (s && R.some((N) => !N.isDirectory() && isMagicDocsPromptFile(N.name))) {
-    if (h.foundReal.has(n)) {
+  let routeKey = `${isSuiteRoute ? "suite" : "tree"}:${dirReal}`;
+  let listedDepth = walkState.listedAt.get(routeKey);
+  if (listedDepth === undefined || depth < listedDepth) walkState.listedAt.set(routeKey, depth);
+  if (isSuiteRoute && entries.some((entry) => !entry.isDirectory() && isMagicDocsPromptFile(entry.name))) {
+    if (walkState.foundReal.has(dirReal)) {
       logForDebugging(
-        `plugin eval: ${escapeNonAscii(e)} is the same case directory as one already found \u2014 counted once`,
+        `plugin eval: ${escapeNonAscii(dirPath)} is the same case directory as one already found \u2014 counted once`,
       );
       return;
     }
-    h.foundReal.add(n);
-    r.add(e);
+    walkState.foundReal.add(dirReal);
+    caseDirs.add(dirPath);
     return;
   }
-  if (s && a > 0 && !h.opensEvalDir(e))
+  if (isSuiteRoute && depth > 0 && !walkState.opensEvalDir(dirPath))
     logForDebugging(
-      `plugin eval: ${escapeNonAscii(e)} has no prompt.md or case.yaml \u2014 not a case; scanning its subdirectories`,
+      `plugin eval: ${escapeNonAscii(dirPath)} has no prompt.md or case.yaml \u2014 not a case; scanning its subdirectories`,
     );
-  h.onRoute.add(S);
+  walkState.onRoute.add(routeKey);
   try {
-    for (let N of R) {
-      let joined = path.join(e, N.name);
-      if (isGitDir(N.name) || SKIPPED_SUBDIR_NAMES.has(N.name)) {
+    for (let entry of entries) {
+      let dirPath_2 = path_2.join(dirPath, entry.name);
+      if (isGitDir(entry.name) || SKIPPED_SUBDIR_NAMES.has(entry.name)) {
         if (
-          N.name === "mocks" &&
-          s &&
-          (await getFileKind(N, joined, "unknown")) === "dir" &&
-          (await looksLikeEvalSuite(e, N.name))
+          entry.name === "mocks" &&
+          isSuiteRoute &&
+          (await getFileKind(entry, dirPath_2, "unknown")) === "dir" &&
+          (await looksLikeEvalSuite(dirPath, entry.name))
         )
-          w(
-            joined,
-            joined,
+          reportSkip(
+            dirPath_2,
+            dirPath_2,
             "mocks/ is reserved for mock responders \u2014 cases placed there (or in a case group by that name) are not run, and their files would be read as mock responders; rename the directory",
           );
         continue;
       }
-      let fileKind = await getFileKind(N, joined, "unknown");
+      let fileKind = await getFileKind(entry, dirPath_2, "unknown");
       if (fileKind === "unknown") {
-        let W = `${N.name} could not be examined (its type is unknown and it cannot be stat'ed) \u2014 not scanned`;
-        if (s || h.opensEvalDir(joined) || (!h.routeIndependent && h.mayLeadToEvalDir(joined)))
-          w(`${n}${path.sep}${N.name}`, joined, W);
-        else logForDebugging(`plugin eval: ${escapeNonAscii(joined)}: ${W}`);
+        let problem = `${entry.name} could not be examined (its type is unknown and it cannot be stat'ed) \u2014 not scanned`;
+        if (
+          isSuiteRoute ||
+          walkState.opensEvalDir(dirPath_2) ||
+          (!walkState.routeIndependent && walkState.mayLeadToEvalDir(dirPath_2))
+        )
+          reportSkip(`${dirReal}${path_2.sep}${entry.name}`, dirPath_2, problem);
+        else logForDebugging(`plugin eval: ${escapeNonAscii(dirPath_2)}: ${problem}`);
         continue;
       }
-      let joined_2 = path.join(n, N.name);
-      let X = s || h.opensEvalDir(joined);
+      let dirReal_2 = path_2.join(dirReal, entry.name);
+      let opensCaseDir = isSuiteRoute || walkState.opensEvalDir(dirPath_2);
       if (fileKind === "symlink") {
-        let W = s || h.opensEvalDir(joined) || (!h.routeIndependent && h.mayLeadToEvalDir(joined));
-        let G = (Z) => {
-          if (W) w(`${n}${path.sep}${N.name}`, joined, Z);
-          else logForDebugging(`plugin eval: ${escapeNonAscii(joined)}: ${Z}`);
+        let shouldReport =
+          isSuiteRoute ||
+          walkState.opensEvalDir(dirPath_2) ||
+          (!walkState.routeIndependent && walkState.mayLeadToEvalDir(dirPath_2));
+        let reportOrLog = (message) => {
+          if (shouldReport) reportSkip(`${dirReal}${path_2.sep}${entry.name}`, dirPath_2, message);
+          else logForDebugging(`plugin eval: ${escapeNonAscii(dirPath_2)}: ${message}`);
         };
         try {
-          await checkRepoAuthoredPath(e, N.name, "plugin eval");
+          await checkRepoAuthoredPath(dirPath, entry.name, "plugin eval");
         } catch (error) {
-          G(errorMessage(error));
+          reportOrLog(errorMessage(error));
           continue;
         }
-        let J;
+        let linkStats;
         try {
-          J = await stat(joined);
+          linkStats = await stat(dirPath_2);
         } catch (error) {
-          G(
-            `${N.name} is a symbolic link whose target ${isENOENT(error) ? "does not exist" : `cannot be read (${getErrnoCode(error) ?? "unknown error"})`} \u2014 skipped`,
+          reportOrLog(
+            `${entry.name} is a symbolic link whose target ${isENOENT(error) ? "does not exist" : `cannot be read (${getErrnoCode(error) ?? "unknown error"})`} \u2014 skipped`,
           );
           continue;
         }
-        fileKind = J.isDirectory() ? "dir" : "other";
+        fileKind = linkStats.isDirectory() ? "dir" : "other";
         if (fileKind === "dir") {
-          let Z = await realpath(joined).catch(() => null);
-          if (Z === null) {
-            G(`${N.name} is a symbolic link whose target could not be resolved \u2014 not followed`);
+          let linkReal = await realpath(dirPath_2).catch(() => null);
+          if (linkReal === null) {
+            reportOrLog(
+              `${entry.name} is a symbolic link whose target could not be resolved \u2014 not followed`,
+            );
             continue;
           }
-          joined_2 = Z;
-          if (joined_2 === n || toEvalPathError(joined_2, n)) {
-            G(`${N.name} is a symbolic link to its own directory or one above it \u2014 not followed`);
+          dirReal_2 = linkReal;
+          if (dirReal_2 === dirReal || toEvalPathError(dirReal_2, dirReal)) {
+            reportOrLog(
+              `${entry.name} is a symbolic link to its own directory or one above it \u2014 not followed`,
+            );
             continue;
           }
           if (
-            joined_2 === h.rootReal ||
-            h.typedAncestorReals.some(
+            dirReal_2 === walkState.rootReal ||
+            walkState.typedAncestorReals.some(
               (typedAncestorReal) =>
-                joined_2 === typedAncestorReal || toEvalPathError(joined_2, typedAncestorReal),
+                dirReal_2 === typedAncestorReal || toEvalPathError(dirReal_2, typedAncestorReal),
             ) ||
-            toEvalPathError(joined_2, h.rootReal)
+            toEvalPathError(dirReal_2, walkState.rootReal)
           ) {
-            G(`${N.name} is a symbolic link to the directory under test or one above it \u2014 not followed`);
+            reportOrLog(
+              `${entry.name} is a symbolic link to the directory under test or one above it \u2014 not followed`,
+            );
             continue;
           }
-          if ((X || h.routeIndependent) && h.onRoute.has(`${X ? "suite" : "tree"}:${joined_2}`)) {
+          if (
+            (opensCaseDir || walkState.routeIndependent) &&
+            walkState.onRoute.has(`${opensCaseDir ? "suite" : "tree"}:${dirReal_2}`)
+          ) {
             logForDebugging(
-              `plugin eval: ${escapeNonAscii(joined)} links back into a directory on the current route \u2014 not followed again`,
+              `plugin eval: ${escapeNonAscii(dirPath_2)} links back into a directory on the current route \u2014 not followed again`,
             );
             continue;
           }
         }
       }
       if (fileKind !== "dir") continue;
-      if (!X && !h.mayLeadToEvalDir(joined)) continue;
-      if (isNetworkMountRoot_2(joined_2) || isNetworkMountRoot_2(joined)) {
-        let W = `${N.name} is an automounter map directory \u2014 not scanned (listing it would reach network hosts)`;
-        if (X || !h.routeIndependent) w(`${n}${path.sep}${N.name}`, joined, W);
-        else logForDebugging(`plugin eval: ${escapeNonAscii(joined)}: ${W}`);
+      if (!opensCaseDir && !walkState.mayLeadToEvalDir(dirPath_2)) continue;
+      if (isNetworkMountRoot_2(dirReal_2) || isNetworkMountRoot_2(dirPath_2)) {
+        let problem = `${entry.name} is an automounter map directory \u2014 not scanned (listing it would reach network hosts)`;
+        if (opensCaseDir || !walkState.routeIndependent)
+          reportSkip(`${dirReal}${path_2.sep}${entry.name}`, dirPath_2, problem);
+        else logForDebugging(`plugin eval: ${escapeNonAscii(dirPath_2)}: ${problem}`);
         continue;
       }
-      if (X || h.routeIndependent) {
-        let W = h.listedAt.get(`${X ? "suite" : "tree"}:${joined_2}`);
-        if (W !== undefined && W <= a + 1) {
+      if (opensCaseDir || walkState.routeIndependent) {
+        let listedDepth = walkState.listedAt.get(`${opensCaseDir ? "suite" : "tree"}:${dirReal_2}`);
+        if (listedDepth !== undefined && listedDepth <= depth + 1) {
           logForDebugging(
-            `plugin eval: ${escapeNonAscii(joined)} was already listed by another route at this depth or shallower \u2014 not walked again`,
+            `plugin eval: ${escapeNonAscii(dirPath_2)} was already listed by another route at this depth or shallower \u2014 not walked again`,
           );
           continue;
         }
       }
-      if (h.budget.remaining <= 0) {
-        if (!h.budget.reported) {
-          h.budget.reported = true;
-          h.skipped.push({
-            file: joined,
+      if (walkState.budget.remaining <= 0) {
+        if (!walkState.budget.reported) {
+          walkState.budget.reported = true;
+          walkState.skipped.push({
+            file: dirPath_2,
             error: `the tree under the target has more than ${MAX_WALK_BUDGET} directories to walk (links can inflate it) \u2014 the rest was not scanned`,
           });
         }
         continue;
       }
-      h.budget.remaining--;
-      await scanSuiteDirectory(joined, joined_2, r, a + 1, X, h);
+      walkState.budget.remaining--;
+      await scanSuiteDirectory(dirPath_2, dirReal_2, caseDirs, depth + 1, opensCaseDir, walkState);
     }
   } finally {
-    h.onRoute.delete(S);
+    walkState.onRoute.delete(routeKey);
   }
 }
 //@ chunk-qchp9vrd.js:98795-98855 placement
@@ -1470,14 +1597,14 @@ var GIT_DIR_CONFIG = `[core]
 `;
 //@ chunk-qchp9vrd.js:98855-99860 placement
 async function createEvalTempDir() {
-  let e = getPlatform() === "macos" ? "/tmp" : os_2.tmpdir();
-  let n = getPlatform() === "macos" ? "e-" : "claude-eval-";
-  let r = await realpath(await mkdtemp(path.join(e, n)));
-  let joined = path.join(r, "config");
-  let joined_2 = path.join(r, "home");
-  let joined_3 = path.join(joined_2, "cwd");
-  let joined_4 = path.join(r, "out");
-  let joined_5 = path.join(r, "tmp");
+  let baseDir = getPlatform() === "macos" ? "/tmp" : os_2.tmpdir();
+  let prefix = getPlatform() === "macos" ? "e-" : "claude-eval-";
+  let root = await realpath(await mkdtemp(path_2.join(baseDir, prefix)));
+  let joined = path_2.join(root, "config");
+  let joined_2 = path_2.join(root, "home");
+  let joined_3 = path_2.join(joined_2, "cwd");
+  let joined_4 = path_2.join(root, "out");
+  let joined_5 = path_2.join(root, "tmp");
   await mkdir(joined_3, {
     recursive: true,
   });
@@ -1492,7 +1619,7 @@ async function createEvalTempDir() {
     mode: 448,
   });
   await writeFile(
-    path.join(joined, ".claude.json"),
+    path_2.join(joined, ".claude.json"),
     jsonStringify({
       hasCompletedOnboarding: true,
       autoUpdates: false,
@@ -1500,35 +1627,35 @@ async function createEvalTempDir() {
     }),
   );
   await writeFile(
-    path.join(joined_2, ".gitconfig"),
+    path_2.join(joined_2, ".gitconfig"),
     `[user]
 	name = Plugin Eval
 	email = eval@example.invalid
 `,
   );
-  let joined_6 = path.join(joined_2, ".git");
-  await mkdir(path.join(joined_6, "objects"), {
+  let joined_6 = path_2.join(joined_2, ".git");
+  await mkdir(path_2.join(joined_6, "objects"), {
     recursive: true,
   });
-  await mkdir(path.join(joined_6, "refs", "heads"), {
+  await mkdir(path_2.join(joined_6, "refs", "heads"), {
     recursive: true,
   });
-  await mkdir(path.join(joined_6, "hooks"), {
+  await mkdir(path_2.join(joined_6, "hooks"), {
     recursive: true,
   });
   await writeFile(
-    path.join(joined_6, "HEAD"),
+    path_2.join(joined_6, "HEAD"),
     `ref: refs/heads/main
 `,
   );
-  await writeFile(path.join(joined_6, "config"), GIT_DIR_CONFIG);
+  await writeFile(path_2.join(joined_6, "config"), GIT_DIR_CONFIG);
   await writeFile(
-    path.join(joined_6, "commondir"),
+    path_2.join(joined_6, "commondir"),
     `.
 `,
   );
   return {
-    root: r,
+    root,
     cwd: joined_3,
     configDir: joined,
     home: joined_2,
@@ -1536,8 +1663,8 @@ async function createEvalTempDir() {
     tmpDir: joined_5,
     operatorConfigDir: getClaudeConfigDir(),
     cleanup: async () => {
-      await detectPlatformFlavor(r);
-      await rm_2(r, {
+      await detectPlatformFlavor(root);
+      await rm_2(root, {
         recursive: true,
         force: true,
         maxRetries: 2,
@@ -1553,85 +1680,90 @@ var UNINSPECTABLE_LABEL = "a component that could not be inspected";
 var ESCAPING_LINK_LABEL = "a link that leaves the tree";
 //@ chunk-qchp9vrd.js:99942-100486 placement
 async function checkAutomounterPath(
-  e,
-  n,
-  r,
-  a = {
+  baseDir,
+  relativePath,
+  treeRoot,
+  budget = {
     hops: 16,
   },
-  s = {
+  linkState = {
     link: false,
   },
 ) {
-  let h = e;
-  let parts = n.split(path.sep);
-  for (let [b, y] of parts.entries()) {
-    h = path.join(h, y);
-    let R;
+  let currentPath = baseDir;
+  let parts = relativePath.split(path_2.sep);
+  for (let [partIndex, part] of parts.entries()) {
+    currentPath = path_2.join(currentPath, part);
+    let linkTarget;
     try {
-      if (!(await lstat(h)).isSymbolicLink()) continue;
-      s.link = true;
-      R = await readlink(h);
+      if (!(await lstat(currentPath)).isSymbolicLink()) continue;
+      linkState.link = true;
+      linkTarget = await readlink(currentPath);
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       return errnoCode === "ENOENT" || errnoCode === "ENOTDIR" ? null : UNINSPECTABLE_LABEL;
     }
-    if (escapesAfterDescent(R)) return UNINSPECTABLE_LABEL;
-    let S = describeSpecialPath(R);
-    if (S !== null) return S;
-    let resolved = path.resolve(path.dirname(h), R);
-    if (resolved === r || isSameOrInside(resolved, r)) {
-      if (--a.hops < 0) return UNINSPECTABLE_LABEL;
-      let N = await checkAutomounterPath(r, path.relative(r, resolved), r, a);
-      if (N !== null) return N;
-      if (b !== parts.length - 1) return UNINSPECTABLE_LABEL;
+    if (escapesAfterDescent(linkTarget)) return UNINSPECTABLE_LABEL;
+    let specialPath = describeSpecialPath(linkTarget);
+    if (specialPath !== null) return specialPath;
+    let linkTarget_2 = path_2.resolve(path_2.dirname(currentPath), linkTarget);
+    if (linkTarget_2 === treeRoot || isSameOrInside(linkTarget_2, treeRoot)) {
+      if (--budget.hops < 0) return UNINSPECTABLE_LABEL;
+      let nestedProblem = await checkAutomounterPath(
+        treeRoot,
+        path_2.relative(treeRoot, linkTarget_2),
+        treeRoot,
+        budget,
+      );
+      if (nestedProblem !== null) return nestedProblem;
+      if (partIndex !== parts.length - 1) return UNINSPECTABLE_LABEL;
       continue;
     }
     return (
-      describeSpecialPath(resolved) ??
-      (isNetworkRelatedPath(resolved) ? "an automounter path" : ESCAPING_LINK_LABEL)
+      describeSpecialPath(linkTarget_2) ??
+      (isNetworkRelatedPath(linkTarget_2) ? "an automounter path" : ESCAPING_LINK_LABEL)
     );
   }
   return null;
 }
 //@ chunk-qchp9vrd.js:100486-100620 placement
-function escapesAfterDescent(e) {
-  let n = false;
-  for (let r of e.replace(/\\/g, "/").split("/"))
-    if (r === "..") {
-      if (n) return true;
-    } else if (r !== "" && r !== ".") n = true;
+function escapesAfterDescent(path) {
+  let descended = false;
+  for (let part of path.replace(/\\/g, "/").split("/"))
+    if (part === "..") {
+      if (descended) return true;
+    } else if (part !== "" && part !== ".") descended = true;
   return false;
 }
 //@ chunk-qchp9vrd.js:100620-100676 placement
 /**
  * 描述特殊路径（网络共享等）。
  */
-function describeSpecialPath(e) {
-  return isUncOrDeviceSpelling(e) ? "a network share path" : null;
+function describeSpecialPath(linkTarget) {
+  return isUncOrDeviceSpelling(linkTarget) ? "a network share path" : null;
 }
 //@ chunk-qchp9vrd.js:100676-100978 placement
 /**
  * 判断目录是否像插件评测套件：路径须为仓库内文件，存在套件文件或任一子目录（最多 64 个）含 case.yaml。
  */
-async function looksLikeEvalSuite(e, name) {
+async function looksLikeEvalSuite(parentDir, name) {
   try {
-    await checkRepoAuthoredPath(e, name, "plugin eval");
+    await checkRepoAuthoredPath(parentDir, name, "plugin eval");
   } catch {
     return false;
   }
-  if (await hasMagicDocsPromptFile(path.join(e, name))) return true;
-  let r;
+  if (await hasMagicDocsPromptFile(path_2.join(parentDir, name))) return true;
+  let entries;
   try {
-    r = await readdir(path.join(e, name), {
+    entries = await readdir(path_2.join(parentDir, name), {
       withFileTypes: true,
     });
   } catch {
     return false;
   }
-  for (let a of r.filter((s) => s.isDirectory()).slice(0, 64))
+  for (let entry of entries.filter((entry) => entry.isDirectory()).slice(0, 64))
     try {
-      await lstat(path.join(e, name, a.name, "case.yaml"));
+      await lstat(path_2.join(parentDir, name, entry.name, "case.yaml"));
       return true;
     } catch {}
   return false;
@@ -1640,10 +1772,10 @@ async function looksLikeEvalSuite(e, name) {
 /**
  * 目录里是否有魔法文档提示文件。
  */
-async function hasMagicDocsPromptFile(e) {
-  for (let n of MAGIC_DOCS_PROMPT_FILES)
+async function hasMagicDocsPromptFile(dirPath) {
+  for (let promptFile of MAGIC_DOCS_PROMPT_FILES)
     try {
-      await lstat(path.join(e, n));
+      await lstat(path_2.join(dirPath, promptFile));
       return true;
     } catch {}
   return false;
@@ -1651,8 +1783,8 @@ async function hasMagicDocsPromptFile(e) {
 //@ chunk-qchp9vrd.js:101143-101262 placement
 class UnenumerablePluginError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   unenumerable;
-  constructor(unenumerable, n, r) {
-    super(n, r);
+  constructor(unenumerable, message, telemetryMessage) {
+    super(message, telemetryMessage);
     this.unenumerable = unenumerable;
     this.name = "UnenumerablePluginError";
   }
@@ -1661,19 +1793,19 @@ class UnenumerablePluginError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_
 /**
  * 汇总多个插件的 MCP 服务器（无法枚举的插件记录到列表中）。
  */
-async function collectPluginMcpServers(pluginDirs, n) {
-  let r = new Map();
-  for (let a of pluginDirs)
+async function collectPluginMcpServers(pluginDirs, failures) {
+  let servers = new Map();
+  for (let pluginDir of pluginDirs)
     try {
-      for (let [s, h] of await enumeratePluginMcpServers(a)) r.set(s, h);
+      for (let [name, config] of await enumeratePluginMcpServers(pluginDir)) servers.set(name, config);
     } catch (error) {
-      if (n !== undefined && error instanceof UnenumerablePluginError) {
-        n.push(error.unenumerable);
+      if (failures !== undefined && error instanceof UnenumerablePluginError) {
+        failures.push(error.unenumerable);
         continue;
       }
       throw error;
     }
-  return r;
+  return servers;
 }
 export {
   MAX_WALK_DIRECTORIES,

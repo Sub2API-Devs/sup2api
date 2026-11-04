@@ -9,13 +9,13 @@
  * attribution: fingerprint 2, layout 1
  */
 import { extname } from "path";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../state/AppState.js";
 import { useNotifications } from "../context/notifications.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { useHost } from "../context/session.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
-import { R, P } from "../../vendor/react/cjs/react.production.js";
+import { useRef, useEffect } from "../../vendor/react/cjs/react.production.js";
 import {
   hasShownLspRecommendationThisSession,
   setLspRecommendationShownThisSession,
@@ -46,19 +46,19 @@ function selectFileHistoryTrackedFiles(s) {
  * 文件历史里出现新的被跟踪文件时，查找匹配该扩展名的 LSP 插件，弹出推荐对话框；用户取消时把未检查的文件放回，接受/拒绝后本会话不再推荐。
  */
 function useLspRecommendationWatcher(requestDialog, schedule) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let trackedFiles = useAppState(selectFileHistoryTrackedFiles);
   let { addNotification } = useNotifications();
   let { storageV5 } = useTheme_2();
   let host = useHost();
-  let Be;
+  let initialCheckedSet;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    Be = new Set();
-    $[0] = Be;
-  } else Be = $[0];
-  let checkedFilesRef = R(Be);
-  let We;
-  let ze;
+    initialCheckedSet = new Set();
+    $[0] = initialCheckedSet;
+  } else initialCheckedSet = $[0];
+  let checkedFilesRef = useRef(initialCheckedSet);
+  let watchEffect;
+  let watchDeps;
   if (
     $[1] !== addNotification ||
     $[2] !== schedule ||
@@ -67,113 +67,119 @@ function useLspRecommendationWatcher(requestDialog, schedule) {
     $[5] !== storageV5 ||
     $[6] !== trackedFiles
   ) {
-    We = () => {
+    watchEffect = () => {
       schedule("lsp", async () => {
         if (hasShownLspRecommendationThisSession()) {
           return;
         }
-        let Xe = [];
+        let uncheckedFiles = [];
         for (const file of trackedFiles) {
           if (!checkedFilesRef.current.has(file)) {
             checkedFilesRef.current.add(file);
-            Xe.push(file);
+            uncheckedFiles.push(file);
           }
         }
-        for (const [kt, At] of Xe.entries()) {
+        for (const [fileIndex, file] of uncheckedFiles.entries()) {
           try {
-            let Ot = (await getMatchingLspPlugins(host, At, storageV5))[0];
-            if (Ot) {
-              logForDebugging(`[useLspPluginRecommendation] Found match: ${Ot.pluginName} for ${At}`);
-              let Et = {
-                pluginId: Ot.pluginId,
-                pluginName: Ot.pluginName,
-                pluginDescription: Ot.description,
-                marketplaceName: Ot.marketplaceName,
-                fileExtension: extname(At),
+            let match = (await getMatchingLspPlugins(host, file, storageV5))[0];
+            if (match) {
+              logForDebugging(`[useLspPluginRecommendation] Found match: ${match.pluginName} for ${file}`);
+              let recommendation = {
+                pluginId: match.pluginId,
+                pluginName: match.pluginName,
+                pluginDescription: match.description,
+                marketplaceName: match.marketplaceName,
+                fileExtension: extname(file),
               };
-              let Dt = await requestDialog(
+              let response = await requestDialog(
                 LSP_RECOMMENDATION_DIALOG,
                 {
-                  pluginName: Et.pluginName,
-                  pluginDescription: Et.pluginDescription,
-                  marketplaceName: Et.marketplaceName,
-                  fileExtension: Et.fileExtension,
+                  pluginName: recommendation.pluginName,
+                  pluginDescription: recommendation.pluginDescription,
+                  marketplaceName: recommendation.marketplaceName,
+                  fileExtension: recommendation.fileExtension,
                 },
                 {
                   place: "under",
                 },
               );
-              if (Dt === "cancelled") {
-                for (const Lt of Xe.slice(kt)) checkedFilesRef.current.delete(Lt);
+              if (response === "cancelled") {
+                for (const checkedFile of uncheckedFiles.slice(fileIndex))
+                  checkedFilesRef.current.delete(checkedFile);
                 return;
               }
               setLspRecommendationShownThisSession(true);
-              useLspPluginRecommendation(Et, Dt, addNotification, storageV5);
+              useLspPluginRecommendation(recommendation, response, addNotification, storageV5);
               return;
             }
           } catch (error) {
-            let oo = error;
-            logForDebugging(`[useLspPluginRecommendation] Failed to check for LSP plugins for ${At}: ${oo}`, {
-              level: "error",
-            });
+            let caughtError = error;
+            logForDebugging(
+              `[useLspPluginRecommendation] Failed to check for LSP plugins for ${file}: ${caughtError}`,
+              {
+                level: "error",
+              },
+            );
           }
         }
       });
     };
-    ze = [trackedFiles, schedule, requestDialog, addNotification, storageV5, host];
+    watchDeps = [trackedFiles, schedule, requestDialog, addNotification, storageV5, host];
     $[1] = addNotification;
     $[2] = schedule;
     $[3] = host;
     $[4] = requestDialog;
     $[5] = storageV5;
     $[6] = trackedFiles;
-    $[7] = We;
-    $[8] = ze;
+    $[7] = watchEffect;
+    $[8] = watchDeps;
   } else {
-    We = $[7];
-    ze = $[8];
+    watchEffect = $[7];
+    watchDeps = $[8];
   }
-  P(We, ze);
+  useEffect(watchEffect, watchDeps);
 }
 //@ chunk-18hwfzwa.js:1803844-1804920 fingerprint = useLspPluginRecommendation (0.614)
-function useLspPluginRecommendation({ pluginId, pluginName }, D, addNotification, storageV5) {
-  switch ((logForDebugging(`[useLspPluginRecommendation] User response: ${D} for ${pluginName}`), D)) {
+function useLspPluginRecommendation({ pluginId, pluginName }, response, addNotification, storageV5) {
+  switch (
+    (logForDebugging(`[useLspPluginRecommendation] User response: ${response} for ${pluginName}`), response)
+  ) {
     case "yes":
       installPluginAndNotify(
         pluginId,
         pluginName,
         "lsp-plugin",
         addNotification,
-        async (ke) => {
+        async (pluginData) => {
           logForDebugging(`[useLspPluginRecommendation] Installing plugin: ${pluginId}`);
           let matches = await loadKnownMarketplacesSafe(storageV5);
-          let Be;
-          if (typeof ke.entry.source === "string") {
+          let entryPath;
+          if (typeof pluginData.entry.source === "string") {
             let pluginEntryPath = await resolvePluginEntryPath(
               pluginId,
-              ke.marketplaceInstallLocation,
-              ke.entry.source,
+              pluginData.marketplaceInstallLocation,
+              pluginData.entry.source,
               matches,
               tryUnwrapTextPayload(),
               storageV5,
             );
-            let We = entryPathOrReason(pluginEntryPath);
-            if (We.entryPath === undefined)
+            let resolvedPath = entryPathOrReason(pluginEntryPath);
+            if (resolvedPath.entryPath === undefined)
               throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-                `Plugin ${printableName(pluginId, 120)}: ${We.reason}`,
+                `Plugin ${printableName(pluginId, 120)}: ${resolvedPath.reason}`,
                 "lsp plugin recommendation marketplace path refused",
               );
-            Be = We.entryPath;
+            entryPath = resolvedPath.entryPath;
           }
           await installPluginWithRecords(
             pluginId,
-            ke.entry,
+            pluginData.entry,
             "user",
             undefined,
-            Be,
+            entryPath,
             undefined,
             undefined,
-            ke.marketplaceInstallLocation,
+            pluginData.marketplaceInstallLocation,
             marketplaceSourceOfEntry(pluginId, matches),
             undefined,
             storageV5,

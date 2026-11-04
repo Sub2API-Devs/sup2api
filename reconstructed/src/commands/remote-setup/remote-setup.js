@@ -8,7 +8,12 @@
  * pieces: chunk-ajkmgejw.js (8)
  * attribution: sole-consumer 3, fingerprint 3, layout 1, placement 1
  */
-import { init_react_production, y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { safeExecFile } from "../../utils/safeSpawn.js";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
@@ -22,7 +27,7 @@ import {
 } from "./api.js";
 import { getGhAuthStatus } from "../../utils/github/ghAuthStatus.js";
 import { getProxyUrlWithSource } from "../../utils/proxy.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -77,13 +82,13 @@ async function checkGhTokenWorkflowScope() {
 }
 //@ chunk-ajkmgejw.js:15219-15423 sole-consumer
 function parseOAuthScopesHeader(stdout) {
-  let o = stripAnsi(stdout).split(/\r?\n\r?\n/, 1)[0] ?? "";
-  let match = /^x-oauth-scopes:[ \t]*(.*)$/im.exec(o);
+  let headerBlock = stripAnsi(stdout).split(/\r?\n\r?\n/, 1)[0] ?? "";
+  let match = /^x-oauth-scopes:[ \t]*(.*)$/im.exec(headerBlock);
   if (!match) return null;
   let filtered = match[1]
     .split(",")
-    .map((h) => h.trim())
-    .filter((h) => h !== "");
+    .map((scope) => scope.trim())
+    .filter((scope) => scope !== "");
   return filtered.length === 0 ? null : filtered;
 }
 //@ chunk-ajkmgejw.js:15423-16011 fingerprint = checkLoginState (0.853)
@@ -152,10 +157,10 @@ function errorMessage(err, codeUrl) {
  * 提示 GitHub CLI 令牌缺少 workflow 权限的警告组件。
  */
 function WorkflowScopeWarning() {
-  let i = w(1);
-  let o;
-  if (i[0] === MEMO_CACHE_SENTINEL) {
-    o = jsxProd_default(Box, {
+  let $ = useMemoCache(1);
+  let warningBox;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    warningBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default_2(Text, {
         color: "warning",
@@ -166,32 +171,32 @@ function WorkflowScopeWarning() {
         ],
       }),
     });
-    i[0] = o;
-  } else o = i[0];
-  return o;
+    $[0] = warningBox;
+  } else warningBox = $[0];
+  return warningBox;
 }
 //@ chunk-ajkmgejw.js:17082-21764 fingerprint = Web (0.691)
 /**
  * remote-setup 的 Web 连接向导组件（Web，4.6KB）：选择/生成 Remote Control 会话名并展示连接信息。
  */
 function Web(props) {
-  let u = w(38);
+  let $ = useMemoCache(38);
   let { onDone, host, storageV5, credentials } = props;
-  let ae;
-  if (u[0] === MEMO_CACHE_SENTINEL) {
-    ae = {
+  let initialState;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    initialState = {
       name: "checking",
     };
-    u[0] = ae;
-  } else ae = u[0];
-  let [l, ie] = y(ae);
-  let _ = R(false);
-  let ue;
-  if (u[1] !== credentials || u[2] !== onDone) {
-    ue = () => {
+    $[0] = initialState;
+  } else initialState = $[0];
+  let [state, setState] = useState(initialState);
+  let unmountedRef = useRef(false);
+  let checkLoginEffect;
+  if ($[1] !== credentials || $[2] !== onDone) {
+    checkLoginEffect = () => {
       logEvent("tengu_remote_setup_started", {});
       checkLoginState(credentials).then(async (result) => {
-        if (_.current) {
+        if (unmountedRef.current) {
           return;
         }
         switch (result.status) {
@@ -206,7 +211,7 @@ function Web(props) {
           case "gh_not_authenticated": {
             let url = `${getCodeWebUrl()}/onboarding?step=alt-auth`;
             await openValidatedUrlSucceeded(url);
-            if (_.current) {
+            if (unmountedRef.current) {
               return;
             }
             logEvent("tengu_remote_setup_result", {
@@ -220,16 +225,16 @@ function Web(props) {
             return;
           }
           case "gh_too_old": {
-            let ce = `${getCodeWebUrl()}/onboarding?step=alt-auth`;
-            await openValidatedUrlSucceeded(ce);
-            if (_.current) {
+            let altAuthUrl = `${getCodeWebUrl()}/onboarding?step=alt-auth`;
+            await openValidatedUrlSucceeded(altAuthUrl);
+            if (unmountedRef.current) {
               return;
             }
             logEvent("tengu_remote_setup_result", {
               result: lit("gh_too_old"),
             });
             onDone(
-              `GitHub CLI is logged in, but this version is too old to share its login (\`gh auth token\` needs GitHub CLI 2.17.0 or newer). Update it via https://cli.github.com/, or connect GitHub on the web: ${ce}`,
+              `GitHub CLI is logged in, but this version is too old to share its login (\`gh auth token\` needs GitHub CLI 2.17.0 or newer). Update it via https://cli.github.com/, or connect GitHub on the web: ${altAuthUrl}`,
             );
             return;
           }
@@ -241,160 +246,160 @@ function Web(props) {
               result: lit("gh_check_failed"),
             });
             let replaced = oneLineClipped(result.error).replace(/[.\s]+$/, "");
-            let Re = replaced ? ` (${replaced})` : "";
+            let errorSuffix = replaced ? ` (${replaced})` : "";
             onDone(
-              `Couldn't check GitHub CLI login status${Re}. Run \`gh auth status\` to check, or connect GitHub on the web: ${getCodeWebUrl()}/onboarding?step=alt-auth`,
+              `Couldn't check GitHub CLI login status${errorSuffix}. Run \`gh auth status\` to check, or connect GitHub on the web: ${getCodeWebUrl()}/onboarding?step=alt-auth`,
             );
             return;
           }
           case "has_gh_token": {
-            let [githubAuthSource, xe] = await Promise.all([
+            let [githubAuthSource, workflowScope] = await Promise.all([
               getGithubAuthSource(credentials),
               checkGhTokenWorkflowScope(),
             ]);
-            if (_.current) {
+            if (unmountedRef.current) {
               return;
             }
-            ie({
+            setState({
               name: "confirm",
               token: result.token,
               existingOAuth: githubAuthSource === "oauth",
-              ghTokenWorkflowScope: xe,
+              ghTokenWorkflowScope: workflowScope,
             });
           }
         }
       });
     };
-    u[1] = credentials;
-    u[2] = onDone;
-    u[3] = ue;
-  } else ue = u[3];
-  let he;
-  if (u[4] === MEMO_CACHE_SENTINEL) {
-    he = [];
-    u[4] = he;
-  } else he = u[4];
-  P(ue, he);
-  let de;
-  if (u[5] !== onDone) {
-    de = () => {
-      _.current = true;
+    $[1] = credentials;
+    $[2] = onDone;
+    $[3] = checkLoginEffect;
+  } else checkLoginEffect = $[3];
+  let checkLoginDeps;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    checkLoginDeps = [];
+    $[4] = checkLoginDeps;
+  } else checkLoginDeps = $[4];
+  useEffect(checkLoginEffect, checkLoginDeps);
+  let handleCancel;
+  if ($[5] !== onDone) {
+    handleCancel = () => {
+      unmountedRef.current = true;
       logEvent("tengu_remote_setup_result", {
         result: lit("cancelled"),
       });
       onDone();
     };
-    u[5] = onDone;
-    u[6] = de;
-  } else de = u[6];
-  let onCancel = de;
-  let pe;
-  if (u[7] !== credentials || u[8] !== host || u[9] !== onDone || u[10] !== storageV5) {
-    pe = async (token, ge) => {
-      ie({
+    $[5] = onDone;
+    $[6] = handleCancel;
+  } else handleCancel = $[6];
+  let onCancel = handleCancel;
+  let handleConfirm;
+  if ($[7] !== credentials || $[8] !== host || $[9] !== onDone || $[10] !== storageV5) {
+    handleConfirm = async (token, workflowScope) => {
+      setState({
         name: "uploading",
       });
-      let I = await importGithubToken(token, credentials);
-      if (I.ok) GITHUB_CONNECTION_STATUS_CACHE.of(host).markConnected(storageV5);
-      if (_.current) {
+      let importResult = await importGithubToken(token, credentials);
+      if (importResult.ok) GITHUB_CONNECTION_STATUS_CACHE.of(host).markConnected(storageV5);
+      if (unmountedRef.current) {
         return;
       }
-      if (!I.ok) {
+      if (!importResult.ok) {
         logEvent("tengu_remote_setup_result", {
           result: lit("import_failed"),
-          error_kind: fromEnum(I.error.kind),
-          gh_token_workflow_scope: fromEnum(ge),
+          error_kind: fromEnum(importResult.error.kind),
+          gh_token_workflow_scope: fromEnum(workflowScope),
         });
-        onDone(errorMessage(I.error, getCodeWebUrl()));
+        onDone(errorMessage(importResult.error, getCodeWebUrl()));
         return;
       }
-      let z;
+      let needsEnvironment;
       try {
-        z = (await fetchEnvironments(undefined, storageV5, credentials)).length === 0;
+        needsEnvironment = (await fetchEnvironments(undefined, storageV5, credentials)).length === 0;
       } catch {
-        z = true;
+        needsEnvironment = true;
       }
-      if (_.current) {
+      if (unmountedRef.current) {
         return;
       }
-      if (z) {
+      if (needsEnvironment) {
         try {
           await createDefaultCloudEnvironment();
         } catch (error) {
-          let Ae = error;
-          logForDebugging(`[web-setup] Failed to create default environment: ${Ae}`, {
+          let failure = error;
+          logForDebugging(`[web-setup] Failed to create default environment: ${failure}`, {
             level: "warn",
           });
         }
-        if (_.current) {
+        if (unmountedRef.current) {
           return;
         }
       }
       let url = getCodeWebUrl();
       await openValidatedUrlSucceeded(url);
-      if (_.current) {
+      if (unmountedRef.current) {
         return;
       }
       logEvent("tengu_remote_setup_result", {
         result: lit("success"),
-        gh_token_workflow_scope: fromEnum(ge),
+        gh_token_workflow_scope: fromEnum(workflowScope),
       });
-      onDone(`Connected as ${I.result.github_username}. Opened ${url}`);
+      onDone(`Connected as ${importResult.result.github_username}. Opened ${url}`);
     };
-    u[7] = credentials;
-    u[8] = host;
-    u[9] = onDone;
-    u[10] = storageV5;
-    u[11] = pe;
-  } else pe = u[11];
-  let K = pe;
-  if (l.name === "checking" || l.name === "uploading") {
+    $[7] = credentials;
+    $[8] = host;
+    $[9] = onDone;
+    $[10] = storageV5;
+    $[11] = handleConfirm;
+  } else handleConfirm = $[11];
+  let uploadToken = handleConfirm;
+  if (state.name === "checking" || state.name === "uploading") {
     const message =
-      l.name === "uploading" ? "Connecting GitHub to Claude\u2026" : "Checking login status\u2026";
+      state.name === "uploading" ? "Connecting GitHub to Claude\u2026" : "Checking login status\u2026";
     let children;
-    if (u[12] !== message) {
+    if ($[12] !== message) {
       children = jsxProd_default(WorkerBadge, {
         message,
       });
-      u[12] = message;
-      u[13] = children;
-    } else children = u[13];
-    let x;
-    if (u[14] !== onCancel || u[15] !== children) {
-      x = jsxProd_default(Dialog, {
+      $[12] = message;
+      $[13] = children;
+    } else children = $[13];
+    let busyDialog;
+    if ($[14] !== onCancel || $[15] !== children) {
+      busyDialog = jsxProd_default(Dialog, {
         title: "Connect cloud sessions to GitHub?",
         onCancel,
         hideInputGuide: true,
         children,
       });
-      u[14] = onCancel;
-      u[15] = children;
-      u[16] = x;
-    } else x = u[16];
-    return x;
+      $[14] = onCancel;
+      $[15] = children;
+      $[16] = busyDialog;
+    } else busyDialog = $[16];
+    return busyDialog;
   }
-  let token = l.token;
-  let G;
-  let T;
-  if (u[17] === MEMO_CACHE_SENTINEL) {
-    G = jsxProd_default(Text, {
+  let token = state.token;
+  let introText;
+  let credentialsNote;
+  if ($[17] === MEMO_CACHE_SENTINEL) {
+    introText = jsxProd_default(Text, {
       children:
         "Cloud sessions require connecting to your GitHub account to clone and push code on your behalf.",
     });
-    T = jsxProd_default(Text, {
+    credentialsNote = jsxProd_default(Text, {
       dimColor: true,
       children: "Your local credentials are used to authenticate with GitHub",
     });
-    u[17] = G;
-    u[18] = T;
+    $[17] = introText;
+    $[18] = credentialsNote;
   } else {
-    G = u[17];
-    T = u[18];
+    introText = $[17];
+    credentialsNote = $[18];
   }
-  let x;
-  if (u[19] !== l.existingOAuth) {
-    x =
-      l.existingOAuth &&
+  let existingOAuthWarning;
+  if ($[19] !== state.existingOAuth) {
+    existingOAuthWarning =
+      state.existingOAuth &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default_2(Text, {
@@ -407,61 +412,62 @@ function Web(props) {
           ],
         }),
       });
-    u[19] = l.existingOAuth;
-    u[20] = x;
-  } else x = u[20];
-  let O;
-  if (u[21] !== l.ghTokenWorkflowScope) {
-    O = l.ghTokenWorkflowScope === "missing" && jsxProd_default(WorkflowScopeWarning, {});
-    u[21] = l.ghTokenWorkflowScope;
-    u[22] = O;
-  } else O = u[22];
-  let W;
-  if (u[23] !== x || u[24] !== O) {
-    W = jsxProd_default_2(Box, {
+    $[19] = state.existingOAuth;
+    $[20] = existingOAuthWarning;
+  } else existingOAuthWarning = $[20];
+  let workflowScopeWarning;
+  if ($[21] !== state.ghTokenWorkflowScope) {
+    workflowScopeWarning =
+      state.ghTokenWorkflowScope === "missing" && jsxProd_default(WorkflowScopeWarning, {});
+    $[21] = state.ghTokenWorkflowScope;
+    $[22] = workflowScopeWarning;
+  } else workflowScopeWarning = $[22];
+  let bodyContent;
+  if ($[23] !== existingOAuthWarning || $[24] !== workflowScopeWarning) {
+    bodyContent = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [G, T, x, O],
+      children: [introText, credentialsNote, existingOAuthWarning, workflowScopeWarning],
     });
-    u[23] = x;
-    u[24] = O;
-    u[25] = W;
-  } else W = u[25];
-  const confirmLabel = l.existingOAuth ? "Replace connection" : "Continue";
+    $[23] = existingOAuthWarning;
+    $[24] = workflowScopeWarning;
+    $[25] = bodyContent;
+  } else bodyContent = $[25];
+  const confirmLabel = state.existingOAuth ? "Replace connection" : "Continue";
   let onConfirm;
-  if (u[26] !== K || u[27] !== l.ghTokenWorkflowScope || u[28] !== token) {
-    onConfirm = () => void K(token, l.ghTokenWorkflowScope);
-    u[26] = K;
-    u[27] = l.ghTokenWorkflowScope;
-    u[28] = token;
-    u[29] = onConfirm;
-  } else onConfirm = u[29];
-  let Y;
-  if (u[30] !== onCancel || u[31] !== confirmLabel || u[32] !== onConfirm) {
-    Y = jsxProd_default(ConfirmSelect, {
+  if ($[26] !== uploadToken || $[27] !== state.ghTokenWorkflowScope || $[28] !== token) {
+    onConfirm = () => void uploadToken(token, state.ghTokenWorkflowScope);
+    $[26] = uploadToken;
+    $[27] = state.ghTokenWorkflowScope;
+    $[28] = token;
+    $[29] = onConfirm;
+  } else onConfirm = $[29];
+  let confirmSelect;
+  if ($[30] !== onCancel || $[31] !== confirmLabel || $[32] !== onConfirm) {
+    confirmSelect = jsxProd_default(ConfirmSelect, {
       confirmLabel,
       cancelLabel: "Cancel",
       onConfirm,
       onCancel,
     });
-    u[30] = onCancel;
-    u[31] = confirmLabel;
-    u[32] = onConfirm;
-    u[33] = Y;
-  } else Y = u[33];
-  let fe;
-  if (u[34] !== onCancel || u[35] !== W || u[36] !== Y) {
-    fe = jsxProd_default_2(Dialog, {
+    $[30] = onCancel;
+    $[31] = confirmLabel;
+    $[32] = onConfirm;
+    $[33] = confirmSelect;
+  } else confirmSelect = $[33];
+  let dialog;
+  if ($[34] !== onCancel || $[35] !== bodyContent || $[36] !== confirmSelect) {
+    dialog = jsxProd_default_2(Dialog, {
       title: "Connect cloud sessions to GitHub?",
       onCancel,
       hideInputGuide: true,
-      children: [W, Y],
+      children: [bodyContent, confirmSelect],
     });
-    u[34] = onCancel;
-    u[35] = W;
-    u[36] = Y;
-    u[37] = fe;
-  } else fe = u[37];
-  return fe;
+    $[34] = onCancel;
+    $[35] = bodyContent;
+    $[36] = confirmSelect;
+    $[37] = dialog;
+  } else dialog = $[37];
+  return dialog;
 }
 //@ chunk-ajkmgejw.js:21764-21868 placement
 /**
@@ -474,3 +480,4 @@ var call = async (onDone, context) =>
     storageV5: context.storageV5,
     credentials: context.credentials,
   });
+export { call };

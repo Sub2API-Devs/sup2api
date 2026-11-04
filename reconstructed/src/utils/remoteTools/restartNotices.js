@@ -9,7 +9,7 @@
  * attribution: placement 19
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   MACHINE_SLUG_PATTERN,
   requestedMachineLabel,
@@ -17,7 +17,7 @@ import {
 } from "../../bridge/deviceRegistration.js";
 import { SAFE_ID_PATTERN } from "../../remote/tools/protocolConstants.js";
 import { logForDebugging } from "../debug.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { mcpInfoFromString } from "../../services/mcp/mcpStringUtils.js";
 import { CLAUDE_DEVICE } from "../permissions/browserToolNames.js";
 import { errorMessage, isAbortError } from "../errors.js";
@@ -27,36 +27,42 @@ import { logError } from "../log.js";
 import { findToolByName, getToolRemoteExecution } from "../../Tool.js";
 import { isHostOnlyNativeTool } from "../../services/api/deferredToolsState.js";
 import { REMOTE_DEVICES } from "../../services/mcp/firstPartyServerIds.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1400928-1401236 placement
 /**
  * 远程工具重启通知限额与 schema。
  */
-var MAX_RESTART_NOTICES = 32;
-var REQUEST_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$/;
-var RestartNoticeSchema = DoctorLazy(() =>
-  u({
-    tool_use_id: string().min(1).max(256),
-    tool: string().min(1).max(256),
-    host: string().regex(MACHINE_SLUG_PATTERN),
-    host_epoch: string().min(1).max(256).optional(),
-    request_id: string().regex(REQUEST_ID_RE).optional().catch(undefined),
-    instance_id: string().regex(SAFE_ID_PATTERN).optional().catch(undefined),
-    dispatched_at: E(),
-  }),
-);
+var MAX_RESTART_NOTICES; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var REQUEST_ID_RE;
+var RestartNoticeSchema;
+deferInit("chunk-e6aww6q8.js:1400928", () => {
+  MAX_RESTART_NOTICES = 32;
+  REQUEST_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,255}$/;
+  RestartNoticeSchema = DoctorLazy(() =>
+    objectSchema({
+      tool_use_id: stringSchema().min(1).max(256),
+      tool: stringSchema().min(1).max(256),
+      host: stringSchema().regex(MACHINE_SLUG_PATTERN),
+      host_epoch: stringSchema().min(1).max(256).optional(),
+      request_id: stringSchema().regex(REQUEST_ID_RE).optional().catch(undefined),
+      instance_id: stringSchema().regex(SAFE_ID_PATTERN).optional().catch(undefined),
+      dispatched_at: numberSchema(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:1401236-1401451 placement
 /**
  * 解析重启前仍在远程执行的调用（去重、有上限）。
  */
 function parseInFlightServedCalls(inFlightServedCalls) {
   if (!Array.isArray(inFlightServedCalls)) return [];
-  let n = new Set();
-  return inFlightServedCalls.slice(0, MAX_RESTART_NOTICES).flatMap((r) => {
-    let s = RestartNoticeSchema().safeParse(r);
-    if (!s.success || n.has(s.data.tool_use_id)) return [];
-    n.add(s.data.tool_use_id);
-    return [s.data];
+  let seenIds = new Set();
+  return inFlightServedCalls.slice(0, MAX_RESTART_NOTICES).flatMap((rawNotice) => {
+    let parsed = RestartNoticeSchema().safeParse(rawNotice);
+    if (!parsed.success || seenIds.has(parsed.data.tool_use_id)) return [];
+    seenIds.add(parsed.data.tool_use_id);
+    return [parsed.data];
   });
 }
 //@ chunk-e6aww6q8.js:1401451-1402000 placement
@@ -67,44 +73,44 @@ class ServedCallRegistry {
   #e = new Map();
   #t = new Map();
   #n = new Map();
-  adopt(e) {
-    this.#t.set(e.tool_use_id, e);
+  adopt(notice) {
+    this.#t.set(notice.tool_use_id, notice);
   }
-  adopted(e) {
-    return this.#t.get(e);
+  adopted(toolUseId) {
+    return this.#t.get(toolUseId);
   }
-  takeAdopted(e) {
-    return this.#t.delete(e);
+  takeAdopted(toolUseId) {
+    return this.#t.delete(toolUseId);
   }
-  noteParkedAtRestart(e) {
-    let n = this.#t.get(e);
-    if (n !== undefined)
-      this.#t.set(e, {
-        ...n,
+  noteParkedAtRestart(toolUseId) {
+    let existing = this.#t.get(toolUseId);
+    if (existing !== undefined)
+      this.#t.set(toolUseId, {
+        ...existing,
         parkedAtRestart: true,
       });
   }
-  offerInheritedAnswer(e, n) {
-    this.#n.set(e, n);
+  offerInheritedAnswer(toolUseId, answer) {
+    this.#n.set(toolUseId, answer);
   }
-  takeInheritedAnswer(e) {
-    let n = this.#n.get(e);
-    this.#n.delete(e);
-    return n;
+  takeInheritedAnswer(toolUseId) {
+    let answer = this.#n.get(toolUseId);
+    this.#n.delete(toolUseId);
+    return answer;
   }
-  add(e) {
-    this.#e.set(e.tool_use_id, e);
+  add(call) {
+    this.#e.set(call.tool_use_id, call);
     return this.#o();
   }
-  remove(e) {
-    this.#e.delete(e);
+  remove(toolUseId) {
+    this.#e.delete(toolUseId);
   }
   current() {
     return this.#o();
   }
   #o() {
-    let e = [...this.#e.values()];
-    return e.length === 0 ? null : e.slice(0, MAX_RESTART_NOTICES);
+    let calls = [...this.#e.values()];
+    return calls.length === 0 ? null : calls.slice(0, MAX_RESTART_NOTICES);
   }
 }
 //@ chunk-e6aww6q8.js:1402000-1402100 placement
@@ -112,20 +118,20 @@ class ServedCallRegistry {
  * 会话元数据中仍在执行且属于给定集合的调用。
  */
 function inFlightCallsFor(restored, supersededToolUseIds) {
-  return parseInFlightServedCalls(restored?.internal?.in_flight_served_calls).filter((r) =>
-    supersededToolUseIds.has(r.tool_use_id),
+  return parseInFlightServedCalls(restored?.internal?.in_flight_served_calls).filter((call) =>
+    supersededToolUseIds.has(call.tool_use_id),
   );
 }
 //@ chunk-e6aww6q8.js:1402100-1402220 placement
 /**
  * 宿主名与 epoch 是否一致（宿主未重启）。
  */
-function isSameHostEpoch(e, host) {
+function isSameHostEpoch(notice, host) {
   return (
     host.kind === "remote" &&
-    host.name === e.host &&
-    e.host_epoch !== undefined &&
-    host.description?.epoch === e.host_epoch
+    host.name === notice.host &&
+    notice.host_epoch !== undefined &&
+    host.description?.epoch === notice.host_epoch
   );
 }
 //@ chunk-e6aww6q8.js:1402220-1402298 placement
@@ -135,57 +141,57 @@ var restartedWhileRunningMessage = (host) =>
 /**
  * 远程宿主已重启或不可达、命令结果未知的说明。
  */
-function hostRestartedNotice(e) {
-  return `${restartedWhileRunningMessage(e.host)}, and the Claude Code serving ${e.host} has restarted, is not attached, or could not be reached since \u2014 what became of the command is unknown. It may have run there (partially or fully): check its effect before repeating it.`;
+function hostRestartedNotice(notice) {
+  return `${restartedWhileRunningMessage(notice.host)}, and the Claude Code serving ${notice.host} has restarted, is not attached, or could not be reached since \u2014 what became of the command is unknown. It may have run there (partially or fully): check its effect before repeating it.`;
 }
 //@ chunk-e6aww6q8.js:1402565-1402759 placement
 /**
  * 命令仍在远程运行、结果未到的说明。
  */
-function stillRunningNotice(e) {
-  return `${restartedWhileRunningMessage(e.host)}; ${e.host} reports it is still running there, and its result has not reached this session yet. Do not repeat it \u2014 check its effect on ${e.host} first.`;
+function stillRunningNotice(notice) {
+  return `${restartedWhileRunningMessage(notice.host)}; ${notice.host} reports it is still running there, and its result has not reached this session yet. Do not repeat it \u2014 check its effect on ${notice.host} first.`;
 }
 //@ chunk-e6aww6q8.js:1402759-1403089 placement
 /**
  * 等待批准的命令已撤回、未运行的说明。
  */
-function approvalWithdrawnNotice(e) {
-  return `${restartedWhileRunningMessage(e.host)} \u2014 it was waiting there for this session's approval, and that question could not be carried over the restart, so it has been withdrawn: the command was NOT run on ${e.host}. If it is still wanted, issue it again \u2014 ${e.host} will ask for approval again where its settings require it.`;
+function approvalWithdrawnNotice(notice) {
+  return `${restartedWhileRunningMessage(notice.host)} \u2014 it was waiting there for this session's approval, and that question could not be carried over the restart, so it has been withdrawn: the command was NOT run on ${notice.host}. If it is still wanted, issue it again \u2014 ${notice.host} will ask for approval again where its settings require it.`;
 }
 //@ chunk-e6aww6q8.js:1403089-1403462 placement
 /**
  * 等待批准的命令撤回未确认的说明。
  */
-function approvalWithdrawUnconfirmedNotice(e) {
-  return `${restartedWhileRunningMessage(e.host)} \u2014 it was waiting there for this session's approval; that question could not be carried over the restart and its withdrawal could not be confirmed. It has not run on ${e.host} unless an approval reached it meanwhile. If it is still wanted, issue it again \u2014 ${e.host} will ask for approval again where its settings require it.`;
+function approvalWithdrawUnconfirmedNotice(notice) {
+  return `${restartedWhileRunningMessage(notice.host)} \u2014 it was waiting there for this session's approval; that question could not be carried over the restart and its withdrawal could not be confirmed. It has not run on ${notice.host} unless an approval reached it meanwhile. If it is still wanted, issue it again \u2014 ${notice.host} will ask for approval again where its settings require it.`;
 }
 //@ chunk-e6aww6q8.js:1403462-1403744 placement
 /**
  * 远程等待权限决定、是否运行未定的说明。
  */
-function pendingPermissionNotice(e) {
-  return `${restartedWhileRunningMessage(e.host)} \u2014 ${e.host} reports it was waiting on a permission decision there and nothing had run when asked, but an answer may still reach it, so whether it runs is not settled. Check its effect on ${e.host} before issuing it again, or ask the user.`;
+function pendingPermissionNotice(notice) {
+  return `${restartedWhileRunningMessage(notice.host)} \u2014 ${notice.host} reports it was waiting on a permission decision there and nothing had run when asked, but an answer may still reach it, so whether it runs is not settled. Check its effect on ${notice.host} before issuing it again, or ask the user.`;
 }
 //@ chunk-e6aww6q8.js:1403744-1404096 placement
 /**
  * 重启时命令在等待批准、未运行的说明。
  */
-function parkedApprovalNotice(e) {
-  return `This command was waiting for approval on ${e.host} when the session restarted and was not run there \u2014 unless an approval reached ${e.host} in the moment before the restart, which this session cannot rule out. If it is still wanted, issue it again \u2014 ${e.host} will ask for approval again where its settings require it.`;
+function parkedApprovalNotice(notice) {
+  return `This command was waiting for approval on ${notice.host} when the session restarted and was not run there \u2014 unless an approval reached ${notice.host} in the moment before the restart, which this session cannot rule out. If it is still wanted, issue it again \u2014 ${notice.host} will ask for approval again where its settings require it.`;
 }
 //@ chunk-e6aww6q8.js:1404096-1404153 placement
 /**
  * restartNoticeFor：重启相关提示（挂起或重启）。
  */
-function restartNoticeFor(e, n) {
-  return n.parkedAtRestart ? parkedApprovalNotice(e) : hostRestartedNotice(e);
+function restartNoticeFor(notice, call) {
+  return call.parkedAtRestart ? parkedApprovalNotice(notice) : hostRestartedNotice(notice);
 }
 //@ chunk-e6aww6q8.js:1404153-1404339 placement
 /**
  * 命令未到达宿主、未运行的说明。
  */
-function neverReceivedNotice(e) {
-  return `This session restarted before this command reached ${e.host}; ${e.host} reports it never received it: it did not run there. Issue it again if it is still wanted.`;
+function neverReceivedNotice(notice) {
+  return `This session restarted before this command reached ${notice.host}; ${notice.host} reports it never received it: it did not run there. Issue it again if it is still wanted.`;
 }
 //@ chunk-e6aww6q8.js:1404339-1404635 placement
 /**
@@ -201,17 +207,17 @@ var DEVICE_CALL_NOT_SENT_TEXT =
 /**
  * 权限卡之后、发往用户设备的工具调用。
  */
-function deviceCallsBehindCard(e, n, supersededToolUseIds) {
+function deviceCallsBehindCard(messageRows, cardToolUseId, supersededToolUseIds) {
   try {
-    let s = Ji(
-      (e ?? []).flatMap((y) =>
-        Array.isArray(y.message.content)
-          ? y.message.content.flatMap((S) =>
-              S.type === "tool_use"
+    let toolUses = uniqByExport(
+      (messageRows ?? []).flatMap((assistantMessage) =>
+        Array.isArray(assistantMessage.message.content)
+          ? assistantMessage.message.content.flatMap((block) =>
+              block.type === "tool_use"
                 ? [
                     {
-                      block: S,
-                      assistantMessage: y,
+                      block,
+                      assistantMessage,
                     },
                   ]
                 : [],
@@ -220,10 +226,10 @@ function deviceCallsBehindCard(e, n, supersededToolUseIds) {
       ),
       ({ block }) => block.id,
     );
-    let index = s.findIndex(({ block }) => block.id === n);
-    return s.flatMap(({ block, assistantMessage }, w) =>
+    let index = toolUses.findIndex(({ block }) => block.id === cardToolUseId);
+    return toolUses.flatMap(({ block, assistantMessage }, rowIndex) =>
       index >= 0 &&
-      w > index &&
+      rowIndex > index &&
       supersededToolUseIds?.has(block.id) &&
       mcpInfoFromString(block.name)?.serverName === CLAUDE_DEVICE
         ? [
@@ -238,7 +244,7 @@ function deviceCallsBehindCard(e, n, supersededToolUseIds) {
     );
   } catch (error) {
     logForDebugging(
-      `deviceCallsBehindCard: could not read the rows of the reply of tool_use ${n}; writing no result for the calls behind it: ${errorMessage(error)}`,
+      `deviceCallsBehindCard: could not read the rows of the reply of tool_use ${cardToolUseId}; writing no result for the calls behind it: ${errorMessage(error)}`,
       {
         level: "warn",
       },
@@ -260,26 +266,27 @@ async function remoteCallsBehindLastSent({
   tools,
   findUnresolved,
 }) {
-  let L = new Set(journaled.map((q) => q.tool_use_id));
-  if (parkedToolUseId !== undefined) L.add(parkedToolUseId);
-  let filtered = [...superseded].filter((q) => !L.has(q));
-  if (!forwarding || L.size === 0 || filtered.length === 0) return [];
+  let resolvedIds = new Set(journaled.map((notice) => notice.tool_use_id));
+  if (parkedToolUseId !== undefined) resolvedIds.add(parkedToolUseId);
+  let filtered = [...superseded].filter((toolUseId) => !resolvedIds.has(toolUseId));
+  if (!forwarding || resolvedIds.size === 0 || filtered.length === 0) return [];
   try {
-    let unresolved = await findUnresolved([...L, ...filtered]);
-    let Z = [...unresolved.keys()];
-    let lastIndex = Z.findLastIndex((Ee) => L.has(Ee));
-    let flattened = (lastIndex < 0 ? [] : Z.slice(lastIndex + 1)).flatMap((Ee) => {
-      let Ae = unresolved.get(Ee);
-      if (Ae === undefined || !isRemoteCapableCall(Ae, Ee, tools)) return [];
-      let content = Ae.message.content;
-      let Me = Array.isArray(content)
-        ? content.find((ze) => ze.type === "tool_use" && ze.id === Ee)
+    let unresolved = await findUnresolved([...resolvedIds, ...filtered]);
+    let unresolvedIds = [...unresolved.keys()];
+    let lastIndex = unresolvedIds.findLastIndex((toolUseId) => resolvedIds.has(toolUseId));
+    let flattened = (lastIndex < 0 ? [] : unresolvedIds.slice(lastIndex + 1)).flatMap((toolUseId) => {
+      let assistantMessage = unresolved.get(toolUseId);
+      if (assistantMessage === undefined || !isRemoteCapableCall(assistantMessage, toolUseId, tools))
+        return [];
+      let content = assistantMessage.message.content;
+      let toolUseBlock = Array.isArray(content)
+        ? content.find((block) => block.type === "tool_use" && block.id === toolUseId)
         : undefined;
-      let input = Me?.type === "tool_use" ? Me.input : undefined;
+      let input = toolUseBlock?.type === "tool_use" ? toolUseBlock.input : undefined;
       return [
         {
-          toolUseID: Ee,
-          assistantMessage: Ae,
+          toolUseID: toolUseId,
+          assistantMessage,
           host: requestedMachineLabel(input),
         },
       ];
@@ -303,16 +310,16 @@ async function remoteCallsBehindLastSent({
 /**
  * 该工具调用能否远程执行。
  */
-function isRemoteCapableCall(e, toolUseId, r, host) {
-  let h = Array.isArray(e.message.content)
-    ? e.message.content.find((S) => S.type === "tool_use" && S.id === toolUseId)
+function isRemoteCapableCall(assistantMessage, toolUseId, tools, host) {
+  let toolUseBlock = Array.isArray(assistantMessage.message.content)
+    ? assistantMessage.message.content.find((block) => block.type === "tool_use" && block.id === toolUseId)
     : undefined;
-  if (h?.type !== "tool_use") return false;
-  let toolByName = findToolByName(r, h.name);
-  if (toolByName === undefined) return host !== undefined && mcpInfoFromString(h.name) === null;
+  if (toolUseBlock?.type !== "tool_use") return false;
+  let toolByName = findToolByName(tools, toolUseBlock.name);
+  if (toolByName === undefined) return host !== undefined && mcpInfoFromString(toolUseBlock.name) === null;
   return (
     (getToolRemoteExecution(toolByName).supported &&
-      (hasHostField(h.input) || isHostOnlyNativeTool(toolByName))) ||
+      (hasHostField(toolUseBlock.input) || isHostOnlyNativeTool(toolByName))) ||
     toolByName.mcpInfo?.serverName === REMOTE_DEVICES
   );
 }

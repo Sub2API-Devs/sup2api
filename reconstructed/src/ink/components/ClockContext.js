@@ -9,11 +9,18 @@
  * attribution: placement 8, fingerprint 1
  */
 import { SCROLL_JUMP_LINES } from "../scrollConstants.js";
-import { qt, y, P, init_react_production, Se } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import {
+  createContext,
+  useState,
+  useEffect,
+  init_react_production,
+  useContext,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalFocus } from "../hooks/use-terminal-focus.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BaseText } from "./Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-cg10fy59.js:902-928 placement
 function useClockTick() {
@@ -23,8 +30,8 @@ function useClockTick() {
 /**
  * 导出值：同一声明里的多个绑定：defaultSetTimeout（setTimeout 包装）；noopClock（空时钟）；nullClock（恒 null）；位于「并入时钟上下文 useClock 与 StyledText」模块。
  */
-var defaultSetTimeout = (c, r) => {
-  let timer = setTimeout(c, r);
+var defaultSetTimeout = (fn, ms) => {
+  let timer = setTimeout(fn, ms);
   return () => clearTimeout(timer);
 };
 var noopClock = () => () => {};
@@ -50,7 +57,7 @@ function ClockProvider_2(tickIntervalMs) {
       interval = null;
     }
   }
-  function f(onChange, keepAlive) {
+  function subscribe(onChange, keepAlive) {
     subscribers.set(onChange, keepAlive);
     updateInterval();
     return () => {
@@ -60,10 +67,10 @@ function ClockProvider_2(tickIntervalMs) {
   }
   return {
     subscribeKeepAlive(onChange) {
-      return f(onChange, true);
+      return subscribe(onChange, true);
     },
     subscribeFollower(onChange) {
-      return f(onChange, false);
+      return subscribe(onChange, false);
     },
     now() {
       if (interval !== null) return tickTime;
@@ -74,8 +81,8 @@ function ClockProvider_2(tickIntervalMs) {
       currentTickIntervalMs = ms;
       updateInterval();
     },
-    setTimeout(o, m) {
-      let timer = setTimeout(o, m);
+    setTimeout(fn, ms) {
+      let timer = setTimeout(fn, ms);
       return () => clearTimeout(timer);
     },
   };
@@ -84,16 +91,20 @@ function ClockProvider_2(tickIntervalMs) {
 /**
  * 导出值：同一声明里的多个绑定：clockContext（时钟上下文）；CLOCK_INTERVAL_MS（tick 的两倍）；位于「并入时钟上下文 useClock 与 StyledText」模块。
  */
-var clockContext = qt(null);
-var CLOCK_INTERVAL_MS = SCROLL_JUMP_LINES * 2;
+var clockContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CLOCK_INTERVAL_MS;
+deferInit("chunk-cg10fy59.js:1614", () => {
+  clockContext = createContext(null);
+  CLOCK_INTERVAL_MS = SCROLL_JUMP_LINES * 2;
+});
 //@ chunk-cg10fy59.js:1637-1925 fingerprint = createClock (0.744)
 /**
  * 动画时钟 Provider：终端有焦点时按正常帧间隔滴答，失焦时放慢，供 useAnimationFrame 等订阅。
  */
 function ClockProvider(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { children } = props;
-  let [clock] = y(useClockTick);
+  let [clock] = useState(useClockTick);
   let isFocused = useTerminalFocus();
   let t1;
   let t2;
@@ -110,7 +121,7 @@ function ClockProvider(props) {
     t1 = $[2];
     t2 = $[3];
   }
-  P(t1, t2);
+  useEffect(t1, t2);
   let t3;
   if ($[4] !== children || $[5] !== clock) {
     t3 = jsxProd_default(clockContext.Provider, {
@@ -128,7 +139,7 @@ function ClockProvider(props) {
  * <Ansi> 渲染每个样式段用的小组件：粗体与暗不能同时生效时优先暗，否则粗体，再否则普通 <Text>。
  */
 function StyledText(t0) {
-  let $ = w(14);
+  let $ = useMemoCache(14);
   let bold;
   let children;
   let dim;
@@ -187,13 +198,19 @@ function StyledText(t0) {
   return t1;
 }
 //@ chunk-x6v6jz2y.js:17463-17467 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:17463", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:17467-17471 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:17467", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:17471-17573 placement
 function useClock() {
-  let o = Se(clockContext);
-  if (!o) throw Error("useClock must be used within a ClockProvider");
-  return o;
+  let clock = useContext(clockContext);
+  if (!clock) throw Error("useClock must be used within a ClockProvider");
+  return clock;
 }
 export { useClock, clockContext, defaultSetTimeout, ClockProvider, noopClock, StyledText, nullClock };

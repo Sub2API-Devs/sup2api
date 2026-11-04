@@ -5,21 +5,21 @@
  * pieces: chunk-3cddmtk7.js (2)
  * attribution: esm-fingerprint 2
  */
-import { A, We } from "../../../../_unknown/bedrockRuntimeConfig.js";
-import { Ue } from "./ruleset.js";
+import { import_index_browser, import_util_endpoints } from "../../../../_unknown/bedrockRuntimeConfig.js";
+import { ruleSet } from "./ruleset.js";
 
 //@ chunk-3cddmtk7.js:23181-23357 esm-fingerprint
-var $t = new A.EndpointCache({
+var ruleSet_2 = new import_index_browser.EndpointCache({
   size: 50,
   params: ["Endpoint", "Region", "UseDualStack", "UseFIPS"],
 });
 var defaultEndpointResolver = (endpointParams, context = {}) =>
-  $t.get(endpointParams, () =>
-    A.resolveEndpoint(Ue, {
+  ruleSet_2.get(endpointParams, () =>
+    import_index_browser.resolveEndpoint(ruleSet, {
       endpointParams,
       logger: context.logger,
     }),
   );
 //@ chunk-3cddmtk7.js:23357-23411 esm-fingerprint
-A.customEndpointFunctions.aws = We.awsEndpointFunctions;
+import_index_browser.customEndpointFunctions.aws = import_util_endpoints.awsEndpointFunctions;
 export { defaultEndpointResolver };

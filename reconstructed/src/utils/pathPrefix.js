@@ -8,40 +8,41 @@
  * pieces: chunk-6vnxsn99.js (4), chunk-bk27acrr.js (1)
  * attribution: placement 5
  */
-import { sep, relative, isAbsolute } from "path";
+import { relative, sep, isAbsolute } from "path";
 import { getPlatform } from "./platform.js";
 
-//@ chunk-6vnxsn99.js:21142-21281 placement
-function isPathUnder(e, n) {
-  let r = n.endsWith(sep) ? n : n + sep;
-  if (getPlatform() === "windows") return e.toLowerCase().startsWith(r.toLowerCase());
-  return e.startsWith(r);
-}
-//@ chunk-6vnxsn99.js:21281-21392 placement
-function isSameOrUnderPath(e, n) {
-  if (getPlatform() === "windows") return e.toLowerCase() === n.toLowerCase() || isPathUnder(e, n);
-  return e === n || isPathUnder(e, n);
-}
-//@ chunk-6vnxsn99.js:21392-21441 placement
-function separatorForPath(e) {
-  return e.startsWith("/") ? "/" : "\\";
-}
-//@ chunk-6vnxsn99.js:21441-21583 placement
-function isPathWithinCaseAware(e, n, r) {
-  let o = r ? e.toLowerCase() : e;
-  let s = r ? n.toLowerCase() : n;
-  if (o === s) return true;
-  let a = separatorForPath(s);
-  let u = s.endsWith(a) ? s : s + a;
-  return o.startsWith(u);
-}
 //@ chunk-bk27acrr.js:248-347 placement
 /**
  * isSubpathOf：relative() 判断 child 是否位于 parent 之下（相等时返回给定默认值）。
  */
-function isSubpathOf(r, i, e) {
-  let t = relative(r, i);
-  if (t === "") return e;
-  return t !== ".." && !t.startsWith(`..${sep}`) && !isAbsolute(t);
+function isSubpathOf(fromPath, toPath, includeSelf) {
+  let relativePath = relative(fromPath, toPath);
+  if (relativePath === "") return includeSelf;
+  return relativePath !== ".." && !relativePath.startsWith(`..${sep}`) && !isAbsolute(relativePath);
+}
+//@ chunk-6vnxsn99.js:21142-21281 placement
+function isPathUnder(childPath, parentPath) {
+  let parentPrefix = parentPath.endsWith(sep) ? parentPath : parentPath + sep;
+  if (getPlatform() === "windows") return childPath.toLowerCase().startsWith(parentPrefix.toLowerCase());
+  return childPath.startsWith(parentPrefix);
+}
+//@ chunk-6vnxsn99.js:21281-21392 placement
+function isSameOrUnderPath(childPath, parentPath) {
+  if (getPlatform() === "windows")
+    return childPath.toLowerCase() === parentPath.toLowerCase() || isPathUnder(childPath, parentPath);
+  return childPath === parentPath || isPathUnder(childPath, parentPath);
+}
+//@ chunk-6vnxsn99.js:21392-21441 placement
+function separatorForPath(inputPath) {
+  return inputPath.startsWith("/") ? "/" : "\\";
+}
+//@ chunk-6vnxsn99.js:21441-21583 placement
+function isPathWithinCaseAware(childPath, parentPath, ignoreCase) {
+  let foldedChild = ignoreCase ? childPath.toLowerCase() : childPath;
+  let foldedParent = ignoreCase ? parentPath.toLowerCase() : parentPath;
+  if (foldedChild === foldedParent) return true;
+  let separator = separatorForPath(foldedParent);
+  let parentPrefix = foldedParent.endsWith(separator) ? foldedParent : foldedParent + separator;
+  return foldedChild.startsWith(parentPrefix);
 }
 export { isSubpathOf, isPathWithinCaseAware, isPathUnder, isSameOrUnderPath };

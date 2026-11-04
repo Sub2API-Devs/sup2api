@@ -80,43 +80,49 @@ var UNREAD_TEXT_WIDTH = 66;
 /**
  * 统计非空点数
  */
-var countNonNullPoints = (e) =>
-  stableSum(e.series.flatMap((t) => t.samples).map((t) => (t.value === null ? 0 : 1)));
+var countNonNullPoints = (chart) =>
+  stableSum(
+    chart.series.flatMap((series) => series.samples).map((sample) => (sample.value === null ? 0 : 1)),
+  );
 //@ chunk-3s7ydtfd.js:81624-81768 placement
 /**
  * 已绘制图表的用量遥测（形式、格式、系列数、点数、是否省略）。
  */
-var drawnUsage = (e, t) => ({
-  ...e,
+var drawnUsage = (usage, chart) => ({
+  ...usage,
   outcome: "drawn",
-  form: t.form,
-  format: formatLabel(t),
-  seriesCount: t.series.length,
-  pointCount: countNonNullPoints(t),
-  hasLeftOut: t.leftOutNotes.length > 0,
+  form: chart.form,
+  format: formatLabel(chart),
+  seriesCount: chart.series.length,
+  pointCount: countNonNullPoints(chart),
+  hasLeftOut: chart.leftOutNotes.length > 0,
 });
 //@ chunk-3s7ydtfd.js:81768-81828 placement
 /**
  * NaN 用默认值，否则向下取整并封顶
  */
-var clampRounded = (e, t, o) => (Number.isNaN(e) ? o : Math.min(Math.floor(e), t));
+var clampRounded = (value, max, fallback) =>
+  Number.isNaN(value) ? fallback : Math.min(Math.floor(value), max);
 //@ chunk-3s7ydtfd.js:81828-82020 placement
 /**
  * 由请求与数据生成图表结果：给模型的图例文本、终端行渲染器与 SVG 渲染器。
  */
-function buildChartResult(e, t, o) {
-  let r = planChartLayout(e, t);
+function buildChartResult(chart, layout, usage) {
+  let plan = planChartLayout(chart, layout);
   return {
     kind: "chart",
-    modelText: renderLegend(r).join(`
+    modelText: renderLegend(plan).join(`
 `),
-    terminalRows: (s) =>
-      rasterizeChart(layoutChart(r, Math.max(0, clampRounded(s, DEFAULT_TERMINAL_ROWS, 0)))),
-    svg: (s = DEFAULT_SVG_WIDTH) =>
+    terminalRows: (rows) =>
+      rasterizeChart(layoutChart(plan, Math.max(0, clampRounded(rows, DEFAULT_TERMINAL_ROWS, 0)))),
+    svg: (width = DEFAULT_SVG_WIDTH) =>
       ansiToSvg(
-        layoutChart(r, Math.max(MIN_PLOT_WIDTH, clampRounded(s, DEFAULT_SVG_WIDTH, DEFAULT_SVG_WIDTH))),
+        layoutChart(
+          plan,
+          Math.max(MIN_PLOT_WIDTH, clampRounded(width, DEFAULT_SVG_WIDTH, DEFAULT_SVG_WIDTH)),
+        ),
       ),
-    usage: drawnUsage(o, e),
+    usage: drawnUsage(usage, chart),
   };
 }
 //@ chunk-3s7ydtfd.js:82020-82038 placement
@@ -128,11 +134,11 @@ var NOT_DRAWN_SUMMARY_LINES = 1 + MAX_TABLE_DESCRIPTION_CHARS + UNKNOWN_FIELD_CO
 /**
  * 未绘制的结果文本（Not drawn + 原因列表，按宽度折行）。
  */
-var refusedResult_2 = (outcome, t, o) => ({
+var refusedResult_2 = (outcome, lines, usage) => ({
   kind: "refused",
   modelText: (
     "Not drawn. " +
-    elideList(t, NOT_DRAWN_SUMMARY_LINES, "more line").join(`
+    elideList(lines, NOT_DRAWN_SUMMARY_LINES, "more line").join(`
 - `)
   )
     .split(
@@ -145,7 +151,7 @@ var refusedResult_2 = (outcome, t, o) => ({
     ).join(`
 `),
   usage: {
-    ...o,
+    ...usage,
     outcome,
   },
 });
@@ -153,43 +159,46 @@ var refusedResult_2 = (outcome, t, o) => ({
 /**
  * x 列是名称而非时间时改画为柱状并加说明。
  */
-var redrawAsBars = (e, t, o) =>
+var redrawAsBars = (chart, form, usage) =>
   buildChartResult(
     {
-      ...e,
-      notes: [`drawn as bars, not as ${t.form ?? "line"}: ${t.x ?? "x"} holds names, not times`, ...e.notes],
+      ...chart,
+      notes: [
+        `drawn as bars, not as ${form.form ?? "line"}: ${form.x ?? "x"} holds names, not times`,
+        ...chart.notes,
+      ],
     },
-    asBarsForm(t),
+    asBarsForm(form),
     {
-      ...o,
+      ...usage,
       isFormReplaced: true,
     },
   );
 //@ chunk-3s7ydtfd.js:82366-82574 placement
-function describeOtherResults(e, t, o) {
-  let mapped = t
+function describeOtherResults(refusal, results, usage) {
+  let mapped = results
     .slice(-MAX_LISTED_TBL_ROWS)
     .map(
       ({ id, tool, text }) =>
         `${cleanCellText(id, MAX_LABEL_CHARS)} (${cleanCellText(tool, MAX_LABEL_CHARS)}, ${formatCount(text.length, "character")})`,
     );
-  let s = mapped.length > 0;
+  let hasResults = mapped.length > 0;
   return refusedResult_2(
-    e.code,
+    refusal.code,
     [
-      e.why +
-        (s
+      refusal.why +
+        (hasResults
           ? `
 Or name another tool result:`
           : ""),
       ...mapped,
     ],
-    o,
+    usage,
   );
 }
 //@ chunk-3s7ydtfd.js:82574-82814 placement
-var NO_DATA_MESSAGES = (e) =>
-  e
+var NO_DATA_MESSAGES = (noToolResults) =>
+  noToolResults
     ? {
         code: "no_result",
         why: "No tool has answered yet. Pass the rows as data",
@@ -207,94 +216,108 @@ var JSON_LOOKING_RE = /\n|^[[{]/;
 /**
  * 取输入里的 JSON 数据文本
  */
-function jsonDataFromInput(e) {
-  let t = isPlainObject(e) ? e.data : undefined;
-  return typeof t === "string" && JSON_LOOKING_RE.test(t.trim()) ? t : undefined;
+function jsonDataFromInput(input) {
+  let data = isPlainObject(input) ? input.data : undefined;
+  return typeof data === "string" && JSON_LOOKING_RE.test(data.trim()) ? data : undefined;
 }
 //@ chunk-3s7ydtfd.js:82927-82976 placement
 /**
  * 补上推导出的格式
  */
-var withDerivedFormat = (e, t, o) => ({
-  ...e,
-  format: o ? formatLabel(t) : e.format,
+var withDerivedFormat = (usage, table, deriveFormat) => ({
+  ...usage,
+  format: deriveFormat ? formatLabel(table) : usage.format,
 });
 //@ chunk-3s7ydtfd.js:82976-83087 placement
 /**
  * y/by 为字符串时包成数组。
  */
-function normalizeChartInput(e) {
-  return isPlainObject(e)
+function normalizeChartInput(input) {
+  return isPlainObject(input)
     ? {
-        ...e,
-        ...(typeof e.y === "string" && {
-          y: [e.y],
+        ...input,
+        ...(typeof input.y === "string" && {
+          y: [input.y],
         }),
-        ...(typeof e.by === "string" && {
-          by: [e.by],
+        ...(typeof input.by === "string" && {
+          by: [input.by],
         }),
       }
-    : e;
+    : input;
 }
 //@ chunk-3s7ydtfd.js:83087-83150 placement
 /**
  * share 图默认 combine=sum
  */
-var defaultShareCombine = (e) =>
-  e.form === "share"
+var defaultShareCombine = (input) =>
+  input.form === "share"
     ? {
-        ...e,
-        combine: e.combine ?? "sum",
+        ...input,
+        combine: input.combine ?? "sum",
       }
-    : e;
+    : input;
 //@ chunk-3s7ydtfd.js:83150-83903 placement
 /**
  * 处理 easel chart 调用：校验输入、选定数据来源（指定结果或上一个工具结果）、绘图并返回说明。
  */
-function handleChartCall(e) {
-  let t = normalizeChartInput(cleanAllStrings(e.input ?? {}));
-  if (!isValidChartInput(t)) return refusedResult_2("bad_call", validateChartInput(t), FAILED_USAGE);
-  let r = defaultShareCombine(t);
-  let { data: s } = r;
-  let filtered = e.results.filter((oe) => oe.tool !== MCP_EASEL_CHART);
-  let m = s === undefined;
-  let n = m ? filtered.findLast((oe) => oe.text.trim() !== "") : filtered.find((oe) => oe.id === s);
-  let filtered_2 = filtered.filter((oe) => oe !== n);
-  let f = jsonDataFromInput(e.input);
-  let i = typeof s === "object" ? JSON.stringify(s) : undefined;
-  let x = i ?? n?.text ?? f;
-  let c = failedUsageWithForm(
-    r,
-    i ? "rows" : n ? (m ? "last_result" : "result_id") : f === undefined ? "none" : "text",
+function handleChartCall(event) {
+  let input = normalizeChartInput(cleanAllStrings(event.input ?? {}));
+  if (!isValidChartInput(input)) return refusedResult_2("bad_call", validateChartInput(input), FAILED_USAGE);
+  let request = defaultShareCombine(input);
+  let { data: dataRef } = request;
+  let filtered = event.results.filter((result) => result.tool !== MCP_EASEL_CHART);
+  let usesLastResult = dataRef === undefined;
+  let picked = usesLastResult
+    ? filtered.findLast((result) => result.text.trim() !== "")
+    : filtered.find((result) => result.id === dataRef);
+  let results = filtered.filter((result) => result !== picked);
+  let inlineJson = jsonDataFromInput(event.input);
+  let dataJson = typeof dataRef === "object" ? JSON.stringify(dataRef) : undefined;
+  let rawData = dataJson ?? picked?.text ?? inlineJson;
+  let usage = failedUsageWithForm(
+    request,
+    dataJson
+      ? "rows"
+      : picked
+        ? usesLastResult
+          ? "last_result"
+          : "result_id"
+        : inlineJson === undefined
+          ? "none"
+          : "text",
   );
-  if (x === undefined) return describeOtherResults(NO_DATA_MESSAGES(m), filtered_2, c);
-  let g = {
-    zone: r.zone === "local" ? e.zone : "UTC",
-    nowMs: e.nowMs,
+  if (rawData === undefined) return describeOtherResults(NO_DATA_MESSAGES(usesLastResult), results, usage);
+  let options = {
+    zone: request.zone === "local" ? event.zone : "UTC",
+    nowMs: event.nowMs,
   };
-  let chartRequestData = readChartRequestData(x, r, g);
-  if (chartRequestData.kind === "data") return buildChartResult(chartRequestData, r, c);
-  let _ = chartRequestData.problem.fitsBars
-    ? describeNamesReadAsBars(chartRequestData, readChartRequestData(x, asBarsForm(r), g), r)
-    : chartRequestData;
-  if (_.kind === "data") return redrawAsBars(_, r, c);
-  let [A, ...Fe] = _.tables;
-  return A !== undefined
-    ? refusedResult_2(
-        _.problem.code,
-        [_.problem.why, ...describeTables(_.tables)],
-        withDerivedFormat(c, A, Fe.length === 0),
+  let chartRequestData = readChartRequestData(rawData, request, options);
+  if (chartRequestData.kind === "data") return buildChartResult(chartRequestData, request, usage);
+  let attempt = chartRequestData.problem.fitsBars
+    ? describeNamesReadAsBars(
+        chartRequestData,
+        readChartRequestData(rawData, asBarsForm(request), options),
+        request,
       )
-    : describeOtherResults(_.problem, filtered_2, c);
+    : chartRequestData;
+  if (attempt.kind === "data") return redrawAsBars(attempt, request, usage);
+  let [firstTable, ...otherTables] = attempt.tables;
+  return firstTable !== undefined
+    ? refusedResult_2(
+        attempt.problem.code,
+        [attempt.problem.why, ...describeTables(attempt.tables)],
+        withDerivedFormat(usage, firstTable, otherTables.length === 0),
+      )
+    : describeOtherResults(attempt.problem, results, usage);
 }
 //@ chunk-3s7ydtfd.js:83903-84269 placement
-function describeRequestShape(e, t) {
-  let o = {
+function describeRequestShape(input, context) {
+  let request = {
     form: "line",
   };
-  let chartRequestData = readChartRequestData(e, o, {
+  let chartRequestData = readChartRequestData(input, request, {
     zone: "UTC",
-    nowMs: t.nowMs,
+    nowMs: context.nowMs,
   });
   if (!(
     chartRequestData.kind === "data" &&
@@ -304,28 +327,29 @@ function describeRequestShape(e, t) {
     return {
       kind: "none",
     };
-  let p = cleanCellText(
-    t.query.replaceAll(
+  let query = cleanCellText(
+    context.query.replaceAll(
       `
 `,
       " ",
     ),
   );
-  let n = chartRequestData.subject.toLowerCase() === VALUE && p !== "" ? p : chartRequestData.subject;
+  let subject =
+    chartRequestData.subject.toLowerCase() === VALUE && query !== "" ? query : chartRequestData.subject;
   return buildChartResult(
     {
       ...chartRequestData,
-      subject: n,
-      series: chartRequestData.series.map((a) =>
-        a.name === chartRequestData.subject
+      subject,
+      series: chartRequestData.series.map((series) =>
+        series.name === chartRequestData.subject
           ? {
-              ...a,
-              name: n,
+              ...series,
+              name: subject,
             }
-          : a,
+          : series,
       ),
     },
-    o,
+    request,
     {
       ...FAILED_USAGE,
       dataFrom: "last_result",
@@ -336,12 +360,12 @@ function describeRequestShape(e, t) {
 /**
  * 注册 chart 工具（设置了代理时不注册并记录）。
  */
-function registerChartTool(e, t, o) {
-  if (o.isProxySet?.() === true) {
-    e.ui.log("no chart tool: a proxy is set", {
+function registerChartTool(host, settings, env) {
+  if (env.isProxySet?.() === true) {
+    host.ui.log("no chart tool: a proxy is set", {
       to: "debug",
     });
-    e.telemetry
+    host.telemetry
       .mark({
         feature: "easel_chart",
         kind: "sad",
@@ -351,13 +375,13 @@ function registerChartTool(e, t, o) {
         return;
       });
   } else
-    e.tool.register(CHART_TOOL_DEF).catch((error) =>
-      e.ui.log(`no chart tool: ${String(error)}`, {
+    host.tool.register(CHART_TOOL_DEF).catch((error) =>
+      host.ui.log(`no chart tool: ${String(error)}`, {
         to: "debug",
       }),
     );
-  if (t)
-    e.telemetry.log(easelSettingsEvent(t)).catch(() => {
+  if (settings)
+    host.telemetry.log(easelSettingsEvent(settings)).catch(() => {
       return;
     });
 }
@@ -365,20 +389,20 @@ function registerChartTool(e, t, o) {
 /**
  * 记录 easel 遥测（mark 与带界面列表的 log 事件）。
  */
-function logEaselUsage(error, usage, o) {
-  error.telemetry.mark(usageEventFor(usage, o.isAsked)).catch(() => {
+function logEaselUsage(ctx, usage, info) {
+  ctx.telemetry.mark(usageEventFor(usage, info.isAsked)).catch(() => {
     return;
   });
-  error.session
+  ctx.session
     .surfaces()
     .catch(() => [])
     .then((surfaces) =>
-      error.telemetry.log(
+      ctx.telemetry.log(
         buildEaselTelemetryEvent(usage, {
-          isAsked: o.isAsked,
-          isInSubagent: o.agentId !== undefined,
+          isAsked: info.isAsked,
+          isInSubagent: info.agentId !== undefined,
           surfaces,
-          elapsedMs: o.elapsedMs,
+          elapsedMs: info.elapsedMs,
         }),
       ),
     )
@@ -405,23 +429,23 @@ var DEFAULT_COLUMNS = 80;
 /**
  * 缓存图表结果（满了淘汰最后一个），无图表时记入 chartlessIds。
  */
-function cacheChart(e, toolUseId, o) {
-  if (o.kind === "none") {
-    e.chartlessIds.add(toolUseId);
-    return o;
+function cacheChart(cache, toolUseId, chart) {
+  if (chart.kind === "none") {
+    cache.chartlessIds.add(toolUseId);
+    return chart;
   }
-  let last = [...e.charts.keys()].at(-1);
-  if (e.charts.size >= MAX_CACHED_CHARTS && last !== undefined) e.charts.delete(last);
-  e.charts.set(toolUseId, o);
-  return o;
+  let last = [...cache.charts.keys()].at(-1);
+  if (cache.charts.size >= MAX_CACHED_CHARTS && last !== undefined) cache.charts.delete(last);
+  cache.charts.set(toolUseId, chart);
+  return chart;
 }
 //@ chunk-3s7ydtfd.js:85073-85107 placement
 /**
  * 合并普通对象
  */
-var mergePlainObject = (e, t) => ({
-  ...e,
-  ...(isPlainObject(t) && t),
+var mergePlainObject = (base, extra) => ({
+  ...base,
+  ...(isPlainObject(extra) && extra),
 });
 //@ chunk-3s7ydtfd.js:85107-85160 placement
 /**
@@ -443,7 +467,7 @@ var isNonTerminalSurface = (surface) => surface !== "terminal";
 /**
  * 非空
  */
-var isNonEmpty = (e) => e.length > 0;
+var isNonEmpty = (value) => value.length > 0;
 //@ chunk-3s7ydtfd.js:85210-85239 placement
 /**
  * 0/false/no/off
@@ -463,11 +487,11 @@ var NON_EASEL_MCP_RE = /^mcp__(?!easel__)/;
 /**
  * 从工具输入的 query/expr/query_expr 中取第一个非空查询文本。
  */
-function queryTextOf(e) {
+function queryTextOf(input) {
   return (
     ["query", "expr", "query_expr"]
-      .flatMap((t) => selectPath(e, t))
-      .find((t) => typeof t === "string" && t.trim() !== "") ?? ""
+      .flatMap((key) => selectPath(input, key))
+      .find((value) => typeof value === "string" && value.trim() !== "") ?? ""
   );
 }
 //@ chunk-3s7ydtfd.js:85416-85442 placement
@@ -479,19 +503,19 @@ var withAutoChartHint = (context) => [...(context ?? []), AUTO_CHART_HINT];
 /**
  * 是否按读屏模式输出图表。
  */
-function isScreenReaderRequest(e, t) {
-  let o = e?.trim() ?? "";
-  let matches = FALSEY_RE.test(o);
-  let found = t.find((p) => p.axScreenReader !== undefined);
-  return matches ? false : TRUTHY_RE.test(o) || found?.axScreenReader === true;
+function isScreenReaderRequest(flag, toolResults) {
+  let normalized = flag?.trim() ?? "";
+  let matches = FALSEY_RE.test(normalized);
+  let found = toolResults.find((result) => result.axScreenReader !== undefined);
+  return matches ? false : TRUTHY_RE.test(normalized) || found?.axScreenReader === true;
 }
 //@ chunk-3s7ydtfd.js:85580-85724 placement
 /**
  * 读结果里的 _meta.easel（nowMs、时区，默认 UTC）。
  */
 function readEaselMeta(storedResult) {
-  let [t] = selectPath(storedResult, "0._meta.easel");
-  let { nowMs, zone } = isPlainObject(t) ? t : {};
+  let [meta] = selectPath(storedResult, "0._meta.easel");
+  let { nowMs, zone } = isPlainObject(meta) ? meta : {};
   return {
     nowMs: typeof nowMs === "number" ? nowMs : null,
     zone: typeof zone === "string" ? zone : "UTC",
@@ -501,7 +525,7 @@ function readEaselMeta(storedResult) {
 /**
  * 非空
  */
-var nonEmpty2 = (e) => e.length > 0;
+var nonEmpty2 = (value) => value.length > 0;
 //@ chunk-3s7ydtfd.js:85747-85768 placement
 /**
  * 无图表的固定结果
@@ -513,56 +537,58 @@ var NO_CHART = {
 /**
  * 复用进行中的会话消息读取，失败时清除缓存。
  */
-function cachedTranscript(e, t, o) {
-  if (t.transcript && t.transcript !== o) return t.transcript;
-  let r = e();
-  t.transcript = r;
-  r.catch(() => {
-    if (t.transcript === r) t.transcript = undefined;
+function cachedTranscript(load, cache, generation) {
+  if (cache.transcript && cache.transcript !== generation) return cache.transcript;
+  let promise = load();
+  cache.transcript = promise;
+  promise.catch(() => {
+    if (cache.transcript === promise) cache.transcript = undefined;
   });
-  return r;
+  return promise;
 }
 //@ chunk-3s7ydtfd.js:85930-86506 placement
-async function memoizeChartRender(e, cache, o) {
-  let { tool_use_id: toolUseId, tool, input, output, isErrored } = o.row;
+async function memoizeChartRender(loadTranscript, cache, options) {
+  let { tool_use_id: toolUseId, tool, input, output, isErrored } = options.row;
   if (isErrored || output === undefined || toolUseId === undefined) return NO_CHART;
-  let i = cache.chartlessIds.has(toolUseId) ? NO_CHART : cache.charts.get(toolUseId);
-  if (i) return i;
-  let x = tool !== MCP_EASEL_CHART;
-  let hasWholeOutput = x && o.hasWholeOutput;
-  let u = cache.autoChartCalls.get(toolUseId);
+  let cached = cache.chartlessIds.has(toolUseId) ? NO_CHART : cache.charts.get(toolUseId);
+  if (cached) return cached;
+  let isOtherTool = tool !== MCP_EASEL_CHART;
+  let hasWholeOutput = isOtherTool && options.hasWholeOutput;
+  let autoChartCall = cache.autoChartCalls.get(toolUseId);
   if (hasWholeOutput)
     return cacheChart(
       cache,
       toolUseId,
       describeRequestShape(
         toolResultText(output),
-        u ?? {
+        autoChartCall ?? {
           nowMs: null,
           query: queryTextOf(input),
         },
       ),
     );
-  let d = cachedTranscript(e, cache);
-  let g = await ((await d).some((_) => _.id === toolUseId) ? d : cachedTranscript(e, cache, d));
-  let index = g.findIndex((_) => _.id === toolUseId);
-  let L = g[index];
-  if (!L) return nonEmpty2(g) ? cacheChart(cache, toolUseId, NO_CHART) : NO_CHART;
+  let transcript = cachedTranscript(loadTranscript, cache);
+  let entries = await ((await transcript).some((entry) => entry.id === toolUseId)
+    ? transcript
+    : cachedTranscript(loadTranscript, cache, transcript));
+  let index = entries.findIndex((entry) => entry.id === toolUseId);
+  let entry = entries[index];
+  if (!entry) return nonEmpty2(entries) ? cacheChart(cache, toolUseId, NO_CHART) : NO_CHART;
   return cacheChart(
     cache,
     toolUseId,
-    x
+    isOtherTool
       ? describeRequestShape(
-          toolResultText(L.storedResult),
-          u ?? {
+          toolResultText(entry.storedResult),
+          autoChartCall ?? {
             nowMs: null,
-            query: queryTextOf(L.input),
+            query: queryTextOf(entry.input),
           },
         )
       : handleChartCall({
-          input: L.input,
-          results: g.slice(0, index),
-          ...readEaselMeta(L.storedResult),
+          input: entry.input,
+          results: entries.slice(0, index),
+          ...readEaselMeta(entry.storedResult),
         }),
   );
 }
@@ -570,34 +596,34 @@ async function memoizeChartRender(e, cache, o) {
 /**
  * 渲染宿主的纵向布局
  */
-var renderHostColumn = (e, t, o) =>
+var renderHostColumn = (host, props, header) =>
   h(
-    e.Box,
+    host.Box,
     {
       flexDirection: "column",
     },
-    t.hostRow,
-    o,
+    props.hostRow,
+    header,
   );
 //@ chunk-3s7ydtfd.js:86568-86827 placement
-function formatChartGroupHeader(e) {
-  let t = e.callCount > 1;
+function formatChartGroupHeader(props) {
+  let hasManyCalls = props.callCount > 1;
   return h(
-    e.elements.Box,
+    props.elements.Box,
     {
       flexDirection: "column",
     },
-    h(e.elements.Svg, {
-      source: e.chart.svg(e.columns),
-      alt: e.chart.modelText,
+    h(props.elements.Svg, {
+      source: props.chart.svg(props.columns),
+      alt: props.chart.modelText,
     }),
-    t
+    hasManyCalls
       ? h(
-          e.elements.Text,
+          props.elements.Text,
           {
             dimColor: true,
           },
-          `newest of ${e.callCount} calls: open the group for the rest`,
+          `newest of ${props.callCount} calls: open the group for the rest`,
         )
       : null,
   );
@@ -611,46 +637,47 @@ var PANE_HORIZONTAL_MARGIN = 6;
 /**
  * “最新 N 次调用”的提示片段
  */
-var autoChartCountHint = (e) => (e > 1 ? `newest of ${e} calls, ctrl+o for the rest \xB7 ` : "");
+var autoChartCountHint = (callCount) =>
+  callCount > 1 ? `newest of ${callCount} calls, ctrl+o for the rest \xB7 ` : "";
 //@ chunk-3s7ydtfd.js:86905-86976 placement
 /**
  * 自动图表脚注
  */
-var autoChartFooter = (e) => `auto chart \xB7 ${autoChartCountHint(e)}turn off in /config: Auto charts`;
+var autoChartFooter = (callCount) =>
+  `auto chart \xB7 ${autoChartCountHint(callCount)}turn off in /config: Auto charts`;
 //@ chunk-3s7ydtfd.js:86976-87010 placement
 /**
  * 脚注行
  */
-var autoChartFooterLines = (autoCallCount) =>
-  autoCallCount === undefined ? [] : [autoChartFooter(autoCallCount)];
+var autoChartFooterLines = (callCount) => (callCount === undefined ? [] : [autoChartFooter(callCount)]);
 //@ chunk-3s7ydtfd.js:87010-87030 placement
 /**
  * "  ⏿  "
  */
 var TREE_BRANCH_GLYPH = "  \u23BF  ";
 //@ chunk-3s7ydtfd.js:87030-87428 placement
-function renderChartTitle(e, t) {
-  let o = e.columns - PANE_HORIZONTAL_MARGIN;
+function renderChartTitle(props, footerLines) {
+  let width = props.columns - PANE_HORIZONTAL_MARGIN;
   return h(
-    e.elements.Box,
+    props.elements.Box,
     {
       flexDirection: "row",
     },
     h(
-      e.elements.Text,
+      props.elements.Text,
       {
         dimColor: true,
       },
       TREE_BRANCH_GLYPH,
     ),
     h(
-      e.elements.Text,
+      props.elements.Text,
       null,
-      e.chart
-        .terminalRows(o)
+      props.chart
+        .terminalRows(width)
         .concat(
-          t
-            .flatMap((r) => wrapToWidth(r, o))
+          footerLines
+            .flatMap((line) => wrapToWidth(line, width))
             .map((text) => [
               {
                 text,
@@ -658,20 +685,20 @@ function renderChartTitle(e, t) {
               },
             ]),
         )
-        .flatMap((r, s) => [
-          s > 0
+        .flatMap((row, rowIndex) => [
+          rowIndex > 0
             ? `
 `
             : "",
-          ...r.map((p) =>
+          ...row.map((cell) =>
             h(
-              e.elements.Text,
+              props.elements.Text,
               {
-                color: CHART_THEME_COLORS[p.ink].host,
-                backgroundColor: p.background && CHART_THEME_COLORS[p.background].host,
-                bold: p.ink === "title",
+                color: CHART_THEME_COLORS[cell.ink].host,
+                backgroundColor: cell.background && CHART_THEME_COLORS[cell.background].host,
+                bold: cell.ink === "title",
               },
-              p.text,
+              cell.text,
             ),
           ),
         ]),
@@ -682,150 +709,154 @@ function renderChartTitle(e, t) {
 /**
  * 渲染自动图表：读屏模式输出文本，否则渲染标题与图。
  */
-function renderAutoChart(e) {
-  let t = autoChartFooterLines(e.autoCallCount);
-  return e.isScreenReader
+function renderAutoChart(props) {
+  let footerLines = autoChartFooterLines(props.autoCallCount);
+  return props.isScreenReader
     ? h(
-        e.elements.Text,
+        props.elements.Text,
         null,
-        [e.chart.modelText, ...t].join(`
+        [props.chart.modelText, ...footerLines].join(`
 `),
       )
-    : renderChartTitle(e, t);
+    : renderChartTitle(props, footerLines);
 }
 //@ chunk-3s7ydtfd.js:87560-88318 placement
 /**
  * 为显示中的行重新渲染图表（按视口宽度缓存）。
  */
-async function renderChartsForRows(e, t) {
-  let { cache, event, rows } = t;
+async function renderChartsForRows(host, group) {
+  let { cache, event, rows } = group;
   let columns = event.viewport?.columns;
-  for (let m of rows.toReversed()) {
-    let n = await memoizeChartRender(async () => collectToolUses(await e.session.messages({})), cache, {
-      row: m,
-      hasWholeOutput: event.surface === "terminal",
-    });
-    if (n.kind !== "chart") continue;
+  for (let row of rows.toReversed()) {
+    let chart = await memoizeChartRender(
+      async () => collectToolUses(await host.session.messages({})),
+      cache,
+      {
+        row,
+        hasWholeOutput: event.surface === "terminal",
+      },
+    );
+    if (chart.kind !== "chart") continue;
     if (event.surface !== "terminal") {
-      let i = formatChartGroupHeader({
-        elements: e.ui.resolve(event),
-        chart: n,
+      let header = formatChartGroupHeader({
+        elements: host.ui.resolve(event),
+        chart,
         columns,
         callCount: rows.length,
       });
-      return renderHostColumn(e.ui.resolve(event), t, i);
+      return renderHostColumn(host.ui.resolve(event), group, header);
     }
     if (cache.screenReader === "unread") {
-      let i = await e.env.get("CLAUDE_AX_SCREEN_READER");
-      let x = [];
+      let envValue = await host.env.get("CLAUDE_AX_SCREEN_READER");
+      let settingsSources = [];
       for (let source of ["policy", "flag", "user"])
-        x.push(
-          await e.settings.read({
+        settingsSources.push(
+          await host.settings.read({
             source,
           }),
         );
-      cache.screenReader = isScreenReaderRequest(i, x) ? "on" : "off";
+      cache.screenReader = isScreenReaderRequest(envValue, settingsSources) ? "on" : "off";
     }
-    let a = m.tool === MCP_EASEL_CHART;
-    let f = renderAutoChart({
-      elements: e.ui.resolve(event),
-      chart: n,
+    let isManualCall = row.tool === MCP_EASEL_CHART;
+    let element = renderAutoChart({
+      elements: host.ui.resolve(event),
+      chart,
       columns: columns ?? DEFAULT_COLUMNS,
       isScreenReader: cache.screenReader === "on",
-      autoCallCount: a ? undefined : rows.length,
+      autoCallCount: isManualCall ? undefined : rows.length,
     });
-    return renderHostColumn(e.ui.resolve(event), t, f);
+    return renderHostColumn(host.ui.resolve(event), group, element);
   }
-  return t.hostRow;
+  return group.hostRow;
 }
 //@ chunk-3s7ydtfd.js:88318-90767 placement
 /**
  * easel 插件注册：维护图表与自动图表状态、读屏器开关，挂接 tool.call/ui.render 钩子。
  */
-function registerEasel(e, t, o = {}) {
-  let r = o.isReaderOn?.();
-  let s = {
+function registerEasel(on, settings, env = {}) {
+  let readerOn = env.isReaderOn?.();
+  let cache = {
     charts: new Map(),
     chartlessIds: new Set(),
     autoChartCalls: new Map(),
-    screenReader: r === undefined ? "unread" : r ? "on" : "off",
+    screenReader: readerOn === undefined ? "unread" : readerOn ? "on" : "off",
   };
-  let parts = String(t.autoChartSkip ?? "").split(/[\s,]+/);
-  let m = (tool) =>
+  let parts = String(settings.autoChartSkip ?? "").split(/[\s,]+/);
+  let mayAutoChart = (tool) =>
     NON_EASEL_MCP_RE.test(tool) &&
-    t.autoCharts !== false &&
-    o.isRegulated?.() !== true &&
-    !parts.some((i) => tool.startsWith(`mcp__${i}__`));
-  let any = parts.some((f) => f !== "");
-  let a = t.autoCharts === false ? "off" : any && "skips_servers";
-  e("session.start", async (f, i, x) => {
-    if (isNonEmpty(await f.session.surfaces())) registerChartTool(f, a, o);
-    return x(i);
+    settings.autoCharts !== false &&
+    env.isRegulated?.() !== true &&
+    !parts.some((skipServer) => tool.startsWith(`mcp__${skipServer}__`));
+  let any = parts.some((skipServer) => skipServer !== "");
+  let autoChartMode = settings.autoCharts === false ? "off" : any && "skips_servers";
+  on("session.start", async (ctx, payload, next) => {
+    if (isNonEmpty(await ctx.session.surfaces())) registerChartTool(ctx, autoChartMode, env);
+    return next(payload);
   });
-  e("session.attach", (f, i, x) => {
-    registerChartTool(f, a, o);
-    return x(i);
+  on("session.attach", (ctx, payload, next) => {
+    registerChartTool(ctx, autoChartMode, env);
+    return next(payload);
   });
-  e(
+  on(
     "prompt.section",
     {
       name: "env_info_simple",
     },
-    async (f, i, x) => {
-      let l = await x(i);
-      return l.text === null
-        ? l
+    async (ctx, payload, next) => {
+      let section = await next(payload);
+      return section.text === null
+        ? section
         : {
-            text: `${l.text}
+            text: `${section.text}
 ${CHART_TOOL_HINT}`,
           };
     },
   );
-  e(
+  on(
     "tool.call",
     {
       tool: MCP_EASEL_CHART,
     },
-    async (f, i, x) => {
-      if (o.isRegulated?.() === true)
+    async (ctx, payload, next) => {
+      if (env.isRegulated?.() === true)
         return {
           deny: POLICY_WITHHOLDS_TEXT,
         };
-      let { tool, tool_use_id: toolUseId, agentId, consent, $shadowed, ...T } = i;
-      let input = mergePlainObject(T, $shadowed);
-      s.transcript = undefined;
-      let _ = T.data === undefined && agentId === undefined && o.isBatchAwaited?.() === true;
-      let w = await waitForToolUses(
-        f,
+      let { tool, tool_use_id: toolUseId, agentId, consent, $shadowed, ...rest } = payload;
+      let input = mergePlainObject(rest, $shadowed);
+      cache.transcript = undefined;
+      let isBatch = rest.data === undefined && agentId === undefined && env.isBatchAwaited?.() === true;
+      let toolResults = await waitForToolUses(
+        ctx,
         {
           tool_use_id: toolUseId,
           agentId,
-          signal: x.signal,
+          signal: next.signal,
         },
-        _ ? TERMINAL_WIDTH_STEPS : [],
+        isBatch ? TERMINAL_WIDTH_STEPS : [],
       );
-      if (w === undefined)
+      if (toolResults === undefined)
         return {
           deny: NO_CONVERSATION_MESSAGE,
         };
       let easel = {
-        nowMs: await f.clock.now(),
+        nowMs: await ctx.clock.now(),
         zone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       };
       let startTime = performance.now();
-      let et = handleChartCall({
+      let result = handleChartCall({
         input,
-        results: w,
+        results: toolResults,
         ...easel,
       });
-      cacheChart(s, toolUseId, et);
-      logEaselUsage(f, et.usage, {
+      cacheChart(cache, toolUseId, result);
+      logEaselUsage(ctx, result.usage, {
         isAsked: true,
         agentId,
         elapsedMs: performance.now() - startTime,
       });
-      let modelText = et.modelText;
-      return et.kind === "chart"
+      let modelText = result.modelText;
+      return result.kind === "chart"
         ? {
             result: [textResultWithMeta(modelText, easel)],
           }
@@ -833,63 +864,63 @@ ${CHART_TOOL_HINT}`,
             deny: modelText,
           };
     },
-  ).catch((error, i) => {
+  ).catch((error, payload) => {
     logEaselUsage(error, FAILED_USAGE, {
       isAsked: true,
-      agentId: i.agentId,
+      agentId: payload.agentId,
       elapsedMs: 0,
     });
     return {
       deny: EASEL_FAILED_MESSAGE,
     };
   });
-  e(
+  on(
     "tool.call",
     {
       tool: NON_EASEL_MCP_RE,
     },
-    async (f, i, x) => {
-      let l = await x(i);
-      s.transcript = undefined;
+    async (ctx, payload, next) => {
+      let result = await next(payload);
+      cache.transcript = undefined;
       if (
-        "deny" in l ||
-        l.isError ||
-        !m(i.tool) ||
-        i.agentId !== undefined ||
-        !isNonEmpty(await f.session.surfaces())
+        "deny" in result ||
+        result.isError ||
+        !mayAutoChart(payload.tool) ||
+        payload.agentId !== undefined ||
+        !isNonEmpty(await ctx.session.surfaces())
       )
-        return l;
-      let d = {
-        nowMs: await f.clock.now(),
-        query: queryTextOf(i),
+        return result;
+      let context = {
+        nowMs: await ctx.clock.now(),
+        query: queryTextOf(payload),
       };
       let startTime = performance.now();
-      let g = describeRequestShape(toolResultText(l.result), d);
-      if (g.kind !== "chart") {
-        cacheChart(s, i.tool_use_id, g);
-        return l;
+      let shape = describeRequestShape(toolResultText(result.result), context);
+      if (shape.kind !== "chart") {
+        cacheChart(cache, payload.tool_use_id, shape);
+        return result;
       }
-      s.autoChartCalls.set(i.tool_use_id, d);
-      logEaselUsage(f, g.usage, {
+      cache.autoChartCalls.set(payload.tool_use_id, context);
+      logEaselUsage(ctx, shape.usage, {
         isAsked: false,
-        agentId: i.agentId,
+        agentId: payload.agentId,
         elapsedMs: performance.now() - startTime,
       });
       return {
-        ...l,
-        context: withAutoChartHint(l.context),
+        ...result,
+        context: withAutoChartHint(result.context),
       };
     },
-  ).catch(async (error, i, x) => {
-    let l = await x(i);
+  ).catch(async (error, payload, next) => {
+    let result = await next(payload);
     logEaselUsage(error, FAILED_USAGE, {
       isAsked: false,
-      agentId: i.agentId,
+      agentId: payload.agentId,
       elapsedMs: 0,
     });
-    return l;
+    return result;
   });
-  e(
+  on(
     "ui.render",
     {
       component: "ToolResult",
@@ -898,20 +929,20 @@ ${CHART_TOOL_HINT}`,
         tool: MCP_EASEL_CHART,
       },
     },
-    async (f, i, x) =>
-      (await renderChartsForRows(f, {
-        cache: s,
-        event: i,
+    async (ctx, payload, next) =>
+      (await renderChartsForRows(ctx, {
+        cache,
+        event: payload,
         hostRow: null,
         rows: [
           {
-            ...i.props,
+            ...payload.props,
             input: undefined,
           },
         ],
-      })) ?? x(i),
+      })) ?? next(payload),
   );
-  e(
+  on(
     "ui.render",
     {
       component: "ToolUse",
@@ -919,18 +950,20 @@ ${CHART_TOOL_HINT}`,
         tool: /^mcp__/,
       },
     },
-    async (f, i, x) => {
-      let { tool } = i.props;
-      let rows = (tool === MCP_EASEL_CHART ? isNonTerminalSurface(i.surface) : m(tool)) ? [i.props] : [];
-      return renderChartsForRows(f, {
-        cache: s,
-        event: i,
-        hostRow: await x(i),
+    async (ctx, payload, next) => {
+      let { tool } = payload.props;
+      let rows = (tool === MCP_EASEL_CHART ? isNonTerminalSurface(payload.surface) : mayAutoChart(tool))
+        ? [payload.props]
+        : [];
+      return renderChartsForRows(ctx, {
+        cache,
+        event: payload,
+        hostRow: await next(payload),
         rows,
       });
     },
   );
-  e(
+  on(
     "ui.render",
     {
       component: "ToolGroup",
@@ -938,12 +971,12 @@ ${CHART_TOOL_HINT}`,
         isExpanded: false,
       },
     },
-    async (f, i, x) => {
-      let rows = i.props.calls.filter((u) => m(u.tool));
-      return renderChartsForRows(f, {
-        cache: s,
-        event: i,
-        hostRow: await x(i),
+    async (ctx, payload, next) => {
+      let rows = payload.props.calls.filter((call) => mayAutoChart(call.tool));
+      return renderChartsForRows(ctx, {
+        cache,
+        event: payload,
+        hostRow: await next(payload),
         rows,
       });
     },

@@ -16,7 +16,14 @@ import { randomBytes } from "crypto";
 import { pipeline } from "stream/promises";
 import { promisify } from "util";
 import { inflateRaw } from "zlib";
-import { string, zodStrictObject, E, u, M, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  stringSchema,
+  zodStrictObject,
+  numberSchema,
+  objectSchema,
+  booleanSchema,
+  array,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { hasDotDotSegment } from "../../utils/pathClassification.js";
 import { isUntouchableSpelling } from "../../utils/networkPaths.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
@@ -131,56 +138,56 @@ var FILE_LIMITS = {
 };
 var MAX_SINGLE_WRITE_BYTES = 6291456;
 var absoluteLocalPathSchema = () =>
-  string().refine(
-    (e) => posix.isAbsolute(e) && !hasDotDotSegment(e) && !isUntouchableSpelling(e),
+  stringSchema().refine(
+    (path) => posix.isAbsolute(path) && !hasDotDotSegment(path) && !isUntouchableSpelling(path),
     "must be an absolute local path",
   );
 var readFileBytesInputSchema = DoctorLazy(() =>
   zodStrictObject({
     path: absoluteLocalPathSchema(),
-    offset: E().int().min(0),
-    length: E().int().min(0).max(MAX_SINGLE_WRITE_BYTES),
+    offset: numberSchema().int().min(0),
+    length: numberSchema().int().min(0).max(MAX_SINGLE_WRITE_BYTES),
   }),
 );
 var writeBytesResultSchema = DoctorLazy(() =>
-  u({
-    size: E(),
-    bytes: string(),
+  objectSchema({
+    size: numberSchema(),
+    bytes: stringSchema(),
   }),
 );
-var writeIdSchema = () => string().regex(/^[0-9a-f-]{8,36}$/);
+var writeIdSchema = () => stringSchema().regex(/^[0-9a-f-]{8,36}$/);
 var writeFileBytesInputSchema = DoctorLazy(() =>
   zodStrictObject({
     path: absoluteLocalPathSchema(),
     write_id: writeIdSchema(),
-    offset: E().int().min(0),
-    bytes: string().max(Math.ceil(MAX_SINGLE_WRITE_BYTES / 3) * 4),
-    last: M(),
-    mode: E().int().min(0).max(511).optional(),
-    staged: string().max(64).optional(),
-    abandon: M().optional(),
-    keep_existing: M().optional(),
-    stop_if_caller_gone: M().optional(),
+    offset: numberSchema().int().min(0),
+    bytes: stringSchema().max(Math.ceil(MAX_SINGLE_WRITE_BYTES / 3) * 4),
+    last: booleanSchema(),
+    mode: numberSchema().int().min(0).max(511).optional(),
+    staged: stringSchema().max(64).optional(),
+    abandon: booleanSchema().optional(),
+    keep_existing: booleanSchema().optional(),
+    stop_if_caller_gone: booleanSchema().optional(),
   }),
 );
 var placeFilesResultSchema = DoctorLazy(() =>
-  u({
-    written: E(),
-    placed: M(),
-    staged: string(),
-    kept: M().optional(),
-    keeps_existing: M().optional(),
-    stops_for_gone_caller: M().optional(),
+  objectSchema({
+    written: numberSchema(),
+    placed: booleanSchema(),
+    staged: stringSchema(),
+    kept: booleanSchema().optional(),
+    keeps_existing: booleanSchema().optional(),
+    stops_for_gone_caller: booleanSchema().optional(),
   }),
 );
 //@ chunk-wy9dbk5f.js:54010-54116 placement
-function isPlaceableFileName(e) {
+function isPlaceableFileName(fileName) {
   return (
-    e !== "." &&
-    e !== ".." &&
-    !/[/\\\0]/.test(e) &&
-    !e.startsWith(STAGE_TMP_PREFIX) &&
-    Buffer.byteLength(e) <= 255
+    fileName !== "." &&
+    fileName !== ".." &&
+    !/[/\\\0]/.test(fileName) &&
+    !fileName.startsWith(STAGE_TMP_PREFIX) &&
+    Buffer.byteLength(fileName) <= 255
   );
 }
 //@ chunk-wy9dbk5f.js:54116-57151 placement
@@ -192,35 +199,35 @@ var placeFilesInputSchema_2 = DoctorLazy(() =>
     directory: absoluteLocalPathSchema(),
     archive: zodStrictObject({
       write_id: writeIdSchema(),
-      staged: string().min(1).max(64),
+      staged: stringSchema().min(1).max(64),
     }).optional(),
     files: array(
       zodStrictObject({
-        name: string()
+        name: stringSchema()
           .min(1)
           .refine(
             isPlaceableFileName,
             "must be a file name of at most 255 bytes, with no directory, that is not a staging name",
           ),
-        size: E().int().min(0).max(FILE_LIMITS.maxFileBytes),
-        sha256: string().regex(/^[0-9a-f]{64}$/),
-        offset: E().int().min(0).max(FILE_LIMITS.maxTotalBytes),
-        length: E().int().min(0).max(FILE_LIMITS.maxTotalBytes),
-        mode: E().int().min(0).max(511).optional(),
+        size: numberSchema().int().min(0).max(FILE_LIMITS.maxFileBytes),
+        sha256: stringSchema().regex(/^[0-9a-f]{64}$/),
+        offset: numberSchema().int().min(0).max(FILE_LIMITS.maxTotalBytes),
+        length: numberSchema().int().min(0).max(FILE_LIMITS.maxTotalBytes),
+        mode: numberSchema().int().min(0).max(511).optional(),
       }),
     ).max(FILE_LIMITS.maxFiles),
-    keep_existing: M().optional(),
+    keep_existing: booleanSchema().optional(),
   }),
 );
 var placeFilesOutputSchema = DoctorLazy(() =>
-  u({
-    placed: array(M()),
-    kept: array(M()).optional(),
-    keeps_existing: M().optional(),
-    limits: u({
-      max_files: E(),
-      max_file_bytes: E(),
-      max_total_bytes: E(),
+  objectSchema({
+    placed: array(booleanSchema()),
+    kept: array(booleanSchema()).optional(),
+    keeps_existing: booleanSchema().optional(),
+    limits: objectSchema({
+      max_files: numberSchema(),
+      max_file_bytes: numberSchema(),
+      max_total_bytes: numberSchema(),
     }),
   }),
 );
@@ -231,10 +238,10 @@ var SERVED_CALL_HANDLERS = new Map([
   [STAGEFILE, serveStageFile],
   [
     "FetchAttachment",
-    async (e, r, n) =>
-      (await import("./chunk-8rjc1mgh.js")).fetchAttachmentHere(
-        e,
-        n.callerGone === undefined ? r : AbortSignal.any([r, n.callerGone]),
+    async (input, signal, context) =>
+      (await import("../../bridge/fetchAttachmentHere.lazy.js")).fetchAttachmentHere(
+        input,
+        context.callerGone === undefined ? signal : AbortSignal.any([signal, context.callerGone]),
         {
           heldDirectory: openHeldDirectory,
           isPlaceableName: isPlaceableFileName,
@@ -284,53 +291,72 @@ var SERVED_CALL_HANDLERS = new Map([
   [REGISTERREPOROOT, callRegisterRepoRoot],
   [
     "ReadChromeUpload",
-    async (e, r, n) => (await import("./chunk-d2swv9w7.js")).readChromeUploadHere(e, r, n),
+    async (input, signal, context) =>
+      (await import("../../entrypoints/mcpServe/readChromeUploadHere.lazy.js")).readChromeUploadHere(
+        input,
+        signal,
+        context,
+      ),
   ],
   [
     "ReadFileReference",
-    async (e, r, n) => (await import("./chunk-d2swv9w7.js")).readChromeUploadHere(e, r, n, true),
+    async (input, signal, context) =>
+      (await import("../../entrypoints/mcpServe/readChromeUploadHere.lazy.js")).readChromeUploadHere(
+        input,
+        signal,
+        context,
+        true,
+      ),
   ],
   [
     "UploadTaskFile",
-    async (e, r, n) => {
-      let s = await (await import("./chunk-4qg8be4t.js")).uploadRulesForRequest("UploadTaskFile", n);
-      return (await import("./chunk-ff61chg3.js")).uploadTaskFile(
-        e,
-        r,
-        n.session,
+    async (input, signal, context) => {
+      let launchRules = await (
+        await import("./uploadRules.js")
+      ).uploadRulesForRequest("UploadTaskFile", context);
+      return (await import("../taskFiles/taskFileUpload.js")).uploadTaskFile(
+        input,
+        signal,
+        context.session,
         {
           localFileAt: resolveLocalFilePath,
           realDirectory: tryRealpath,
           home: homedir(),
         },
-        s,
+        launchRules,
       );
     },
   ],
-  ["DeleteTaskFile", async (e, r, n) => (await import("./chunk-ff61chg3.js")).deleteTaskFile(e, n.session)],
+  [
+    "DeleteTaskFile",
+    async (input, signal, context) =>
+      (await import("../taskFiles/taskFileUpload.js")).deleteTaskFile(input, context.session),
+  ],
   [
     "ReadProjectUploadText",
-    async (e, r, n) => {
-      let s = await (await import("./chunk-4qg8be4t.js")).uploadRulesForRequest("ReadProjectUploadText", n);
-      return (await import("./chunk-pf54t43m.js")).readProjectUpload(
-        e,
-        n.session,
+    async (input, signal, context) => {
+      let launchRules = await (
+        await import("./uploadRules.js")
+      ).uploadRulesForRequest("ReadProjectUploadText", context);
+      return (await import("../taskFiles/readProjectUpload.lazy.js")).readProjectUpload(
+        input,
+        context.session,
         {
           localFileAt: resolveLocalFilePath,
           realDirectory: tryRealpath,
           home: homedir(),
         },
-        s,
+        launchRules,
       );
     },
   ],
   [
     "DownloadTaskFile",
-    async (e, r, n) =>
-      (await import("./chunk-ff61chg3.js")).downloadTaskFile(
-        e,
-        n.callerGone === undefined ? r : AbortSignal.any([r, n.callerGone]),
-        n.session,
+    async (input, signal, context) =>
+      (await import("../taskFiles/taskFileUpload.js")).downloadTaskFile(
+        input,
+        context.callerGone === undefined ? signal : AbortSignal.any([signal, context.callerGone]),
+        context.session,
         {
           makeFoldersAsWritten: makeDownloadFolders,
           placeStreamedFile,
@@ -339,33 +365,33 @@ var SERVED_CALL_HANDLERS = new Map([
   ],
   [
     HASHFILES,
-    async (e, r, n) => {
-      let launchRules = await (await import("./chunk-4qg8be4t.js")).uploadRulesForRequest(HASHFILES, n);
-      return (await import("./chunk-amf531m0.js")).hashFiles(e, r, {
-        session: n.session,
+    async (input, signal, context) => {
+      let launchRules = await (await import("./uploadRules.js")).uploadRulesForRequest(HASHFILES, context);
+      return (await import("../mcp/fileReference/fileUploads.js")).hashFiles(input, signal, {
+        session: context.session,
         paths: {
           localFileAt: resolveLocalFilePath,
           realDirectory: tryRealpath,
           home: homedir(),
         },
         launchRules,
-        heldAtLaunch: n.launchPermissionContext !== undefined,
+        heldAtLaunch: context.launchPermissionContext !== undefined,
       });
     },
   ],
   [
     PUTFILES,
-    async (e, r, n) => {
-      let launchRules = await (await import("./chunk-4qg8be4t.js")).uploadRulesForRequest(PUTFILES, n);
-      return (await import("./chunk-amf531m0.js")).putFiles(e, r, {
-        session: n.session,
+    async (input, signal, context) => {
+      let launchRules = await (await import("./uploadRules.js")).uploadRulesForRequest(PUTFILES, context);
+      return (await import("../mcp/fileReference/fileUploads.js")).putFiles(input, signal, {
+        session: context.session,
         paths: {
           localFileAt: resolveLocalFilePath,
           realDirectory: tryRealpath,
           home: homedir(),
         },
         launchRules,
-        heldAtLaunch: n.launchPermissionContext !== undefined,
+        heldAtLaunch: context.launchPermissionContext !== undefined,
       });
     },
   ],
@@ -378,45 +404,45 @@ var FILE_CALL_FAILURE_EVENTS = new Map([
   [LISTDIRECTORYFORREMOTE, "list_directory_failed"],
 ]);
 //@ chunk-wy9dbk5f.js:57151-57305 placement
-async function countedUnlessRepeated(e, r) {
-  let n = FILE_CALL_FAILURE_EVENTS.get(e);
-  if (n === undefined) return withFeatureTelemetry("mcp_serve_file_call", r);
+async function countedUnlessRepeated(event, run) {
+  let failureEvent = FILE_CALL_FAILURE_EVENTS.get(event);
+  if (failureEvent === undefined) return withFeatureTelemetry("mcp_serve_file_call", run);
   try {
-    return await r();
+    return await run();
   } catch (error) {
-    logFeatureBad("mcp_serve_file_call", n);
+    logFeatureBad("mcp_serve_file_call", failureEvent);
     throw error;
   }
 }
 //@ chunk-wy9dbk5f.js:57305-57440 placement
 async function resolveLocalFilePath(path) {
-  let r = absoluteLocalPathSchema().parse(path);
-  await assertNoNetworkJunction(r);
-  let n = await realpath(r);
-  if (isUntouchableSpelling(n)) throw Error("must be an absolute local path");
-  return n;
+  let candidatePath = absoluteLocalPathSchema().parse(path);
+  await assertNoNetworkJunction(candidatePath);
+  let realPath = await realpath(candidatePath);
+  if (isUntouchableSpelling(realPath)) throw Error("must be an absolute local path");
+  return realPath;
 }
 //@ chunk-wy9dbk5f.js:57440-57488 placement
 /**
  * 解析真实路径，失败返回 undefined。
  */
-function tryRealpath(e) {
-  return realpath(e).catch(() => {
+function tryRealpath(filePath) {
+  return realpath(filePath).catch(() => {
     return;
   });
 }
 //@ chunk-wy9dbk5f.js:57488-57936 placement
-async function serveReadFileBytes(e, r) {
-  let { path, offset, length: a } = readFileBytesInputSchema().parse(e);
-  let localFilePath = await resolveLocalFilePath(path);
-  let y = await open(localFilePath, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
+async function serveReadFileBytes(input, signal) {
+  let { path, offset, length } = readFileBytesInputSchema().parse(input);
+  let expectedPath = await resolveLocalFilePath(path);
+  let handle = await open(expectedPath, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS);
   try {
-    let stats = await y.stat();
+    let stats = await handle.stat();
     if (!stats.isFile()) throw Error("not a regular file");
-    await assertFdPath(y, localFilePath);
-    r.throwIfAborted();
-    let max = Math.max(0, Math.min(a, stats.size - offset));
-    let { bytesRead, buffer } = await y.read(Buffer.alloc(max), 0, max, offset);
+    await assertFdPath(handle, expectedPath);
+    signal.throwIfAborted();
+    let max = Math.max(0, Math.min(length, stats.size - offset));
+    let { bytesRead, buffer } = await handle.read(Buffer.alloc(max), 0, max, offset);
     return {
       summary: `read ${bytesRead} of ${stats.size} bytes`,
       output: {
@@ -425,22 +451,22 @@ async function serveReadFileBytes(e, r) {
       },
     };
   } finally {
-    await y.close();
+    await handle.close();
   }
 }
 //@ chunk-wy9dbk5f.js:57936-59643 placement
-async function serveWriteFileBytes(e, r, { callerGone }) {
-  let s = writeFileBytesInputSchema().parse(e);
-  let a = s.offset === 0;
-  let dir = posix.dirname(s.path);
-  await assertNoNetworkJunction(dir);
-  if (s.abandon) {
-    let x = await realLocalPath(dir).catch((error) => {
+async function serveWriteFileBytes(input, signal, { callerGone }) {
+  let request = writeFileBytesInputSchema().parse(input);
+  let isFirstPart = request.offset === 0;
+  let inputPath = posix.dirname(request.path);
+  await assertNoNetworkJunction(inputPath);
+  if (request.abandon) {
+    let realDir = await realLocalPath(inputPath).catch((error) => {
       if (isENOENT(error)) return;
       throw error;
     });
-    if (x !== undefined)
-      await rm(posix.join(x, `${STAGE_TMP_PREFIX}${s.write_id}`), {
+    if (realDir !== undefined)
+      await rm(posix.join(realDir, `${STAGE_TMP_PREFIX}${request.write_id}`), {
         force: true,
       });
     return {
@@ -456,56 +482,63 @@ async function serveWriteFileBytes(e, r, { callerGone }) {
       },
     };
   }
-  let buffer = Buffer.from(s.bytes, "base64");
-  if (buffer.length !== base64DecodedLength(s.bytes)) throw Error("bytes is not base64");
-  if (a)
-    await mkdir(dir, {
+  let buffer = Buffer.from(request.bytes, "base64");
+  if (buffer.length !== base64DecodedLength(request.bytes)) throw Error("bytes is not base64");
+  if (isFirstPart)
+    await mkdir(inputPath, {
       recursive: true,
     });
-  await using heldDirectory = await openHeldDirectory(dir);
-  let joined = posix.join(heldDirectory.path, `${STAGE_TMP_PREFIX}${s.write_id}`);
-  let S = await SAFE_WRITE_FLAGS(joined, a);
-  let C;
-  let b;
+  await using heldDirectory = await openHeldDirectory(inputPath);
+  let joined = posix.join(heldDirectory.path, `${STAGE_TMP_PREFIX}${request.write_id}`);
+  let handle = await SAFE_WRITE_FLAGS(joined, isFirstPart);
+  let writtenBytes;
+  let stagedIdentity;
   try {
-    let stats = await S.stat();
-    b = `${stats.dev}:${stats.ino}`;
+    let stats = await handle.stat();
+    stagedIdentity = `${stats.dev}:${stats.ino}`;
     if (!stats.isFile() || stats.nlink !== 1) throw Error("the staged file is not a file of this write");
-    if (!a && s.staged !== b) throw Error("the staged file is not the one this write began");
-    if (stats.size !== s.offset) throw Error("part does not follow the bytes already written");
-    for (let w = 0; w < buffer.length;) {
-      let { bytesWritten } = await S.write(buffer, w, buffer.length - w, s.offset + w);
+    if (!isFirstPart && request.staged !== stagedIdentity)
+      throw Error("the staged file is not the one this write began");
+    if (stats.size !== request.offset) throw Error("part does not follow the bytes already written");
+    for (let chunkStart = 0; chunkStart < buffer.length;) {
+      let { bytesWritten } = await handle.write(
+        buffer,
+        chunkStart,
+        buffer.length - chunkStart,
+        request.offset + chunkStart,
+      );
       if (bytesWritten === 0) throw Error("the staged file could not take the whole part");
-      w += bytesWritten;
+      chunkStart += bytesWritten;
     }
-    C = stats.size + buffer.length;
-    r.throwIfAborted();
-    if (s.last) {
-      await S.chmod(s.mode ?? 420);
-      let w = await lstat(joined);
-      if (`${w.dev}:${w.ino}` !== b) throw Error("the staged file was replaced before it was placed");
+    writtenBytes = stats.size + buffer.length;
+    signal.throwIfAborted();
+    if (request.last) {
+      await handle.chmod(request.mode ?? 420);
+      let placeStats = await lstat(joined);
+      if (`${placeStats.dev}:${placeStats.ino}` !== stagedIdentity)
+        throw Error("the staged file was replaced before it was placed");
     }
   } finally {
-    await S.close();
+    await handle.close();
   }
-  if (s.stop_if_caller_gone && callerGone?.aborted) {
+  if (request.stop_if_caller_gone && callerGone?.aborted) {
     await rm(joined, {
       force: true,
     });
     callerGone.throwIfAborted();
   }
-  let R = false;
-  if (s.last) {
-    let joined_2 = posix.join(heldDirectory.path, posix.basename(s.path));
+  let placed = false;
+  if (request.last) {
+    let targetPath = posix.join(heldDirectory.path, posix.basename(request.path));
     try {
-      if (s.keep_existing) {
-        R = await linkUnlessFileExists(joined, joined_2);
+      if (request.keep_existing) {
+        placed = await linkUnlessFileExists(joined, targetPath);
         await rm(joined, {
           force: true,
         }).catch(() => {});
       } else {
-        await retryFsOp(joined, joined_2);
-        R = true;
+        await retryFsOp(joined, targetPath);
+        placed = true;
       }
     } catch (error) {
       await rm(joined, {
@@ -515,22 +548,26 @@ async function serveWriteFileBytes(e, r, { callerGone }) {
     }
   }
   return {
-    summary: R ? `placed ${C} bytes` : s.last ? "left the file that was there" : `${C} bytes written`,
+    summary: placed
+      ? `placed ${writtenBytes} bytes`
+      : request.last
+        ? "left the file that was there"
+        : `${writtenBytes} bytes written`,
     output: {
-      written: C,
-      placed: R,
-      staged: b,
-      ...(s.last &&
-        s.keep_existing && {
-          kept: !R,
+      written: writtenBytes,
+      placed,
+      staged: stagedIdentity,
+      ...(request.last &&
+        request.keep_existing && {
+          kept: !placed,
         }),
     },
   };
 }
 //@ chunk-wy9dbk5f.js:59643-59809 placement
-async function linkUnlessFileExists(e, r) {
+async function linkUnlessFileExists(stagedPath, targetPath) {
   if (
-    await link(e, r).then(
+    await link(stagedPath, targetPath).then(
       () => true,
       () => false,
     )
@@ -538,69 +575,72 @@ async function linkUnlessFileExists(e, r) {
     return true;
   if (
     (
-      await lstat(r).catch((error) => {
+      await lstat(targetPath).catch((error) => {
         if (isENOENT(error)) return;
         throw error;
       })
     )?.isFile()
   )
     return false;
-  await retryFsOp(e, r);
+  await retryFsOp(stagedPath, targetPath);
   return true;
 }
 //@ chunk-wy9dbk5f.js:59809-60294 placement
 /**
  * 逐级创建下载目录（0700，仅 Linux），并确认每级都是本用户拥有的真实目录。
  */
-async function makeDownloadFolders(e) {
+async function makeDownloadFolders(directories) {
   if (process.getuid === undefined)
     throw Error("refusing to create the download folders: this is supported only on Linux");
   let getuid = process.getuid;
-  let last = e.at(-1);
+  let last = directories.at(-1);
   if (last !== undefined) await assertNoNetworkJunction(last);
-  for (let s of e) {
+  for (let directory of directories) {
     try {
-      await mkdir(s, {
+      await mkdir(directory, {
         mode: 448,
       });
     } catch (error) {
       if (getErrnoCode(error) !== "EEXIST") throw error;
     }
-    let a = await lstat(s);
-    if (!a.isDirectory())
+    let stats = await lstat(directory);
+    if (!stats.isDirectory())
       throw Error("one of the folders to write into is a symbolic link or not a directory");
-    if (a.uid !== getuid()) throw Error("one of the folders to write into belongs to another user");
+    if (stats.uid !== getuid()) throw Error("one of the folders to write into belongs to another user");
   }
 }
 //@ chunk-wy9dbk5f.js:60294-60888 placement
 /**
  * 把流写入目录下的临时暂存文件，校验未被替换后依次尝试链接到候选文件名，返回放置的路径；最后删除暂存文件。
  */
-async function placeStreamedFile(e, r, n, s) {
-  await assertNoNetworkJunction(e);
-  await using heldDirectory = await openHeldDirectory(e, {
+async function placeStreamedFile(directory, fileNames, source, signal) {
+  await assertNoNetworkJunction(directory);
+  await using heldDirectory = await openHeldDirectory(directory, {
     asWritten: true,
   });
   let joined = posix.join(heldDirectory.path, `${STAGE_TMP_PREFIX}${randomBytes(8).toString("hex")}`);
-  let y = await SAFE_WRITE_FLAGS(joined, true);
+  let handle = await SAFE_WRITE_FLAGS(joined, true);
   try {
-    let { dev, ino } = await y.stat();
-    await pipeline(n, y.createWriteStream());
-    s.throwIfAborted();
-    let S = await open(joined, NOFOLLOW_NONBLOCK_FLAGS | READ_LIMITS);
+    let { dev, ino } = await handle.stat();
+    await pipeline(source, handle.createWriteStream());
+    signal.throwIfAborted();
+    let readHandle = await open(joined, NOFOLLOW_NONBLOCK_FLAGS | READ_LIMITS);
     try {
-      let stats = await S.stat();
+      let stats = await readHandle.stat();
       if (!stats.isFile() || stats.dev !== dev || stats.ino !== ino)
         throw Error("the staged file was replaced before it was placed");
-      for (let b of r)
-        if ((await linkIntoHome(joined, S, posix.join(heldDirectory.path, b), 384)) !== undefined)
-          return posix.join(e, b);
+      for (let fileName of fileNames)
+        if (
+          (await linkIntoHome(joined, readHandle, posix.join(heldDirectory.path, fileName), 384)) !==
+          undefined
+        )
+          return posix.join(directory, fileName);
       return;
     } finally {
-      await S.close().catch(() => {});
+      await readHandle.close().catch(() => {});
     }
   } finally {
-    await y.close().catch(() => {});
+    await handle.close().catch(() => {});
     await rm(joined, {
       force: true,
     }).catch(() => {});
@@ -612,33 +652,33 @@ async function placeStreamedFile(e, r, n, s) {
  */
 var inflateRawAsync = promisify(inflateRaw);
 var placeFilesInputSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     directory: absoluteLocalPathSchema(),
-    archive: u({
+    archive: objectSchema({
       write_id: writeIdSchema(),
     }),
   }),
 );
 //@ chunk-wy9dbk5f.js:60959-61175 placement
-async function removeStagedArchive(e) {
-  let r = placeFilesInputSchema().safeParse(e);
-  if (!r.success) return;
+async function removeStagedArchive(input) {
+  let parsed = placeFilesInputSchema().safeParse(input);
+  if (!parsed.success) return;
   try {
-    await assertNoNetworkJunction(r.data.directory);
-    await using heldDirectory = await openHeldDirectory(r.data.directory);
-    await rm(posix.join(heldDirectory.path, `${STAGE_TMP_PREFIX}${r.data.archive.write_id}`), {
+    await assertNoNetworkJunction(parsed.data.directory);
+    await using heldDirectory = await openHeldDirectory(parsed.data.directory);
+    await rm(posix.join(heldDirectory.path, `${STAGE_TMP_PREFIX}${parsed.data.archive.write_id}`), {
       force: true,
     });
   } catch {}
 }
 //@ chunk-wy9dbk5f.js:61175-63032 placement
-async function servePlaceFiles(e, r) {
-  let n = placeFilesInputSchema_2().safeParse(e);
-  if (!n.success) {
-    await removeStagedArchive(e);
-    throw n.error;
+async function servePlaceFiles(input, signal) {
+  let parsed = placeFilesInputSchema_2().safeParse(input);
+  if (!parsed.success) {
+    await removeStagedArchive(input);
+    throw parsed.error;
   }
-  let { directory, archive, files, keep_existing: keepExisting } = n.data;
+  let { directory, archive, files, keep_existing: keepExisting } = parsed.data;
   let limits = {
     max_files: FILE_LIMITS.maxFiles,
     max_file_bytes: FILE_LIMITS.maxFileBytes,
@@ -655,53 +695,55 @@ async function servePlaceFiles(e, r) {
     };
   if (archive === undefined) throw Error("a list of files needs the archive that holds them");
   await assertNoNetworkJunction(directory);
-  await using h = await openHeldDirectory(directory).catch(() => {
+  await using heldDirectory = await openHeldDirectory(directory).catch(() => {
     throw Error("the directory cannot be opened");
   });
-  let joined = posix.join(h.path, `${STAGE_TMP_PREFIX}${archive.write_id}`);
-  let C = [];
+  let joined = posix.join(heldDirectory.path, `${STAGE_TMP_PREFIX}${archive.write_id}`);
+  let extractedEntries = [];
   try {
     if (new Set(files.map((file) => file.name)).size !== files.length)
       throw Error("a name is in the list twice");
     if (files.reduce((acc, file) => acc + file.size, 0) > FILE_LIMITS.maxTotalBytes)
       throw Error("the files together are larger than one call places");
-    let b = await open(joined, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS).catch(() => {
+    let archiveHandle = await open(joined, constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS).catch(() => {
       throw Error("the staged archive is missing, or is not the file this write staged");
     });
     try {
-      let stats = await b.stat();
+      let stats = await archiveHandle.stat();
       if (!stats.isFile() || stats.nlink !== 1 || `${stats.dev}:${stats.ino}` !== archive.staged)
         throw Error("the staged archive is missing, or is not the file this write staged");
       if (files.some((file) => file.offset + file.length > stats.size))
         throw Error("a file's offset and length reach past the end of the archive");
       for (let file of files) {
-        r.throwIfAborted();
-        C.push(await extractArchiveEntry(b, h.path, archive.write_id, file));
+        signal.throwIfAborted();
+        extractedEntries.push(
+          await extractArchiveEntry(archiveHandle, heldDirectory.path, archive.write_id, file),
+        );
       }
     } finally {
-      await b.close();
+      await archiveHandle.close();
     }
-    r.throwIfAborted();
+    signal.throwIfAborted();
     let mapped = files.map(() => false);
     let mapped_2 = files.map(() => false);
-    for (let [w, O] of files.entries()) {
-      let P = C[w];
-      if (P === undefined) break;
-      let joined = posix.join(h.path, O.name);
+    for (let [fileIndex, file] of files.entries()) {
+      let extracted = extractedEntries[fileIndex];
+      if (extracted === undefined) break;
+      let targetPath = posix.join(heldDirectory.path, file.name);
       try {
-        let j = await lstat(P.path);
-        if (`${j.dev}:${j.ino}` !== P.identity) break;
+        let stats = await lstat(extracted.path);
+        if (`${stats.dev}:${stats.ino}` !== extracted.identity) break;
         if (keepExisting) {
-          mapped[w] = await linkUnlessFileExists(P.path, joined);
-          mapped_2[w] = !mapped[w];
+          mapped[fileIndex] = await linkUnlessFileExists(extracted.path, targetPath);
+          mapped_2[fileIndex] = !mapped[fileIndex];
           continue;
         }
-        await retryFsOp(P.path, joined);
+        await retryFsOp(extracted.path, targetPath);
       } catch {
         break;
       }
-      C[w] = undefined;
-      mapped[w] = true;
+      extractedEntries[fileIndex] = undefined;
+      mapped[fileIndex] = true;
     }
     return {
       summary: `placed ${count(mapped, Boolean)} of ${files.length} files${keepExisting ? `, and left ${count(mapped_2, Boolean)} already there` : ""}`,
@@ -717,9 +759,9 @@ async function servePlaceFiles(e, r) {
     await rm(joined, {
       force: true,
     }).catch(() => {});
-    for (let b of C)
-      if (b !== undefined)
-        await rm(b.path, {
+    for (let extractedEntry of extractedEntries)
+      if (extractedEntry !== undefined)
+        await rm(extractedEntry.path, {
           force: true,
         }).catch(() => {});
   }
@@ -728,23 +770,28 @@ async function servePlaceFiles(e, r) {
 /**
  * 从归档中按偏移读出一个文件，解压并校验大小与 SHA-256，写入暂存文件并设置权限，返回暂存路径与 dev:ino 身份。
  */
-async function extractArchiveEntry(e, path, writeId, file) {
-  let a = Buffer.alloc(file.length);
-  for (let h = 0; h < a.length;) {
-    let { bytesRead } = await e.read(a, h, a.length - h, file.offset + h);
+async function extractArchiveEntry(archiveHandle, path, writeId, file) {
+  let rawBytes = Buffer.alloc(file.length);
+  for (let offset = 0; offset < rawBytes.length;) {
+    let { bytesRead } = await archiveHandle.read(
+      rawBytes,
+      offset,
+      rawBytes.length - offset,
+      file.offset + offset,
+    );
     if (bytesRead === 0) throw Error("a file's offset and length reach past the end of the archive");
-    h += bytesRead;
+    offset += bytesRead;
   }
-  let c = await inflateRawAsync(a, {
+  let content = await inflateRawAsync(rawBytes, {
     maxOutputLength: file.size + 1,
   }).catch(() => {
     return;
   });
-  if (c === undefined) throw Error("a file could not be inflated, or holds more than its stated size");
-  if (c.length !== file.size) throw Error("a file does not inflate to its stated size");
-  if (computeContentHash(c) !== file.sha256) throw Error("a file does not match its stated SHA-256");
+  if (content === undefined) throw Error("a file could not be inflated, or holds more than its stated size");
+  if (content.length !== file.size) throw Error("a file does not inflate to its stated size");
+  if (computeContentHash(content) !== file.sha256) throw Error("a file does not match its stated SHA-256");
   let joined = posix.join(path, `${STAGE_TMP_PREFIX}${writeId}-${randomBytes(6).toString("hex")}`);
-  let g = await open(
+  let handle = await open(
     joined,
     constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | NOFOLLOW_NONBLOCK_FLAGS,
     384,
@@ -752,13 +799,13 @@ async function extractArchiveEntry(e, path, writeId, file) {
     throw fileErrorMessage(error);
   });
   try {
-    for (let S = 0; S < c.length;) {
-      let { bytesWritten } = await g.write(c, S, c.length - S, S);
+    for (let offset = 0; offset < content.length;) {
+      let { bytesWritten } = await handle.write(content, offset, content.length - offset, offset);
       if (bytesWritten === 0) throw fileErrorMessage(undefined);
-      S += bytesWritten;
+      offset += bytesWritten;
     }
-    await g.chmod(file.mode ?? 420);
-    let stats = await g.stat();
+    await handle.chmod(file.mode ?? 420);
+    let stats = await handle.stat();
     return {
       path: joined,
       identity: `${stats.dev}:${stats.ino}`,
@@ -769,7 +816,7 @@ async function extractArchiveEntry(e, path, writeId, file) {
     }).catch(() => {});
     throw fileErrorMessage(error);
   } finally {
-    await g.close();
+    await handle.close();
   }
 }
 //@ chunk-wy9dbk5f.js:63991-64304 placement
@@ -787,15 +834,15 @@ function fileErrorMessage(error) {
   }
 }
 //@ chunk-wy9dbk5f.js:64304-64407 placement
-async function realLocalPath(e) {
-  let r = await realpath(e);
-  if (isUntouchableSpelling(r)) throw Error("must be an absolute local path");
-  return r;
+async function realLocalPath(inputPath) {
+  let resolvedPath = await realpath(inputPath);
+  if (isUntouchableSpelling(resolvedPath)) throw Error("must be an absolute local path");
+  return resolvedPath;
 }
 //@ chunk-wy9dbk5f.js:64407-64558 placement
-async function assertNoNetworkJunction(e) {
+async function assertNoNetworkJunction(inputPath) {
   if (
-    (await findIntermediateUncJunctionAsync(getFsImplementation(), e, {
+    (await findIntermediateUncJunctionAsync(getFsImplementation(), inputPath, {
       unreadableAncestry: "unverified",
       surfaceNetworkRaw: true,
     })) !== undefined
@@ -806,33 +853,35 @@ async function assertNoNetworkJunction(e) {
 /**
  * 以 O_DIRECTORY|O_NOFOLLOW 打开目录并核对 /proc/self/fd 路径未变，返回可 await using 的 /proc/self/fd 路径句柄。
  */
-async function openHeldDirectory(directory, r = {}) {
-  let n = await realLocalPath(directory);
-  r.asWritten;
-  if (r.asWritten && n !== directory)
+async function openHeldDirectory(directory, options = {}) {
+  let realDirectory = await realLocalPath(directory);
+  options.asWritten;
+  if (options.asWritten && realDirectory !== directory)
     throw Error(
       "the directory is not its own real path: a link is at it or above it, or it is not in normal form",
     );
-  let s = await open(n, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+  let handle = await open(realDirectory, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
   try {
-    await assertFdPath(s, n);
+    await assertFdPath(handle, realDirectory);
   } catch (error) {
-    await s.close();
+    await handle.close();
     throw error;
   }
   return {
-    path: `/proc/self/fd/${s.fd}`,
-    [Symbol.asyncDispose]: () => s.close(),
+    path: `/proc/self/fd/${handle.fd}`,
+    [Symbol.asyncDispose]: () => handle.close(),
   };
 }
 //@ chunk-wy9dbk5f.js:64928-65065 placement
-async function assertFdPath(e, r) {
-  let n = await readlink(`/proc/self/fd/${e.fd}`);
-  if (n !== r || isUntouchableSpelling(n)) throw Error("the path changed while it was being opened");
+async function assertFdPath(handle, expectedPath) {
+  let actualPath = await readlink(`/proc/self/fd/${handle.fd}`);
+  if (actualPath !== expectedPath || isUntouchableSpelling(actualPath))
+    throw Error("the path changed while it was being opened");
 }
 //@ chunk-wy9dbk5f.js:65138-65247 placement
 function base64DecodedLength(bytes) {
   if (bytes.length % 4 !== 0) return -1;
-  let r = bytes.endsWith("==") ? 2 : bytes.endsWith("=") ? 1 : 0;
-  return (bytes.length / 4) * 3 - r;
+  let paddingBytes = bytes.endsWith("==") ? 2 : bytes.endsWith("=") ? 1 : 0;
+  return (bytes.length / 4) * 3 - paddingBytes;
 }
+export { SERVED_CALL_HANDLERS, countedUnlessRepeated };

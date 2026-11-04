@@ -10,7 +10,14 @@
  */
 import { setMaxListeners } from "events";
 import { raceWithAbortSignal } from "./sleep.js";
+import { deferInit, beginDeferredInits } from "../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ./sleep.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/utils/sleep.js");
+// This module is the first evaluated of an import cycle of 2 modules closed by ./sleep.js (in the hooks worker thread);
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("worker:src/utils/sleep.js");
 //@ chunk-mq9v2gw5.js:268-281 placement
 /**
  * 单调时钟定时器重排的阈值（1 秒）。
@@ -22,51 +29,51 @@ var MONOTONIC_TIMER_RECHECK_MS = 1000;
  */
 function setMonotonicTimeout(
   onExpire,
-  r,
+  timeoutMs,
   clock,
-  { unref: t } = {
+  { unref } = {
     unref: true,
   },
 ) {
-  let n = {
+  let timer = {
     onExpire,
     clock,
-    expiresAt: clock.monotonicNow() + r,
-    unref: t,
+    expiresAt: clock.monotonicNow() + timeoutMs,
+    unref,
     cancel: undefined,
   };
-  armMonotonicTimer(n, r);
+  armMonotonicTimer(timer, timeoutMs);
   return {
-    clear: cancelTimer.bind(undefined, n),
+    clear: cancelTimer.bind(undefined, timer),
   };
 }
 //@ chunk-mq9v2gw5.js:439-555 placement
-function armMonotonicTimer(e, r) {
-  e.cancel = e.clock.setTimeout(
-    onMonotonicTimer.bind(undefined, e),
-    Math.min(Math.max(0, r || 0), 2147483647),
+function armMonotonicTimer(timer, delayMs) {
+  timer.cancel = timer.clock.setTimeout(
+    onMonotonicTimer.bind(undefined, timer),
+    Math.min(Math.max(0, delayMs || 0), 2147483647),
     {
-      unref: e.unref,
+      unref: timer.unref,
     },
   );
 }
 //@ chunk-mq9v2gw5.js:555-667 placement
-function onMonotonicTimer(e) {
-  e.cancel = undefined;
-  let r = e.expiresAt - e.clock.monotonicNow();
-  if (!(r > 1000)) {
-    e.onExpire();
+function onMonotonicTimer(timer) {
+  timer.cancel = undefined;
+  let remainingMs = timer.expiresAt - timer.clock.monotonicNow();
+  if (!(remainingMs > 1000)) {
+    timer.onExpire();
     return;
   }
-  armMonotonicTimer(e, r);
+  armMonotonicTimer(timer, remainingMs);
 }
 //@ chunk-mq9v2gw5.js:667-710 placement
 /**
  * 取消定时器并清空其句柄。
  */
-function cancelTimer(e) {
-  e.cancel?.();
-  e.cancel = undefined;
+function cancelTimer(timer) {
+  timer.cancel?.();
+  timer.cancel = undefined;
 }
 //@ chunk-mq9v2gw5.js:710-719 placement
 /**
@@ -80,51 +87,58 @@ function createAbortController(maxListeners = DEFAULT_MAX_LISTENERS) {
   return controller;
 }
 //@ chunk-mq9v2gw5.js:785-853 fingerprint = propagateAbort (1)
-function propagateAbort(e) {
+function propagateAbort(childRef) {
   let parent = this.deref();
-  e.deref()?.abort(parent?.signal.reason);
+  childRef.deref()?.abort(parent?.signal.reason);
 }
 //@ chunk-mq9v2gw5.js:853-946 fingerprint = removeAbortHandler (1)
-function removeAbortHandler(e) {
+function removeAbortHandler(handlerRef) {
   let parent = this.deref();
-  let handler = e.deref();
+  let handler = handlerRef.deref();
   if (parent && handler) parent.signal.removeEventListener("abort", handler);
 }
 //@ chunk-mq9v2gw5.js:946-1055 placement
-var abortHandlerFinalizer = new FinalizationRegistry(({ parentSignalRef, handler }) => {
-  parentSignalRef.deref()?.removeEventListener("abort", handler);
+var abortHandlerFinalizer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mq9v2gw5.js:946", () => {
+  abortHandlerFinalizer = new FinalizationRegistry(({ parentSignalRef, handler }) => {
+    parentSignalRef.deref()?.removeEventListener("abort", handler);
+  });
 });
 //@ chunk-mq9v2gw5.js:1055-1350 placement
 /**
  * 把子控制器挂到父控制器上：父已 abort 则立刻调用 handler；否则注册一次性 abort 监听，子 abort 时反向移除监听。
  */
-function linkAbortToParent(e, abortController, o) {
-  let weakRef = new WeakRef(abortController);
-  let weakRef_2 = new WeakRef(e);
-  if (e.signal.aborted) {
-    o.call(weakRef_2, weakRef);
+function linkAbortToParent(parentController, childController, notifyParentAborted) {
+  let weakRef = new WeakRef(childController);
+  let weakRef_2 = new WeakRef(parentController);
+  if (parentController.signal.aborted) {
+    notifyParentAborted.call(weakRef_2, weakRef);
     return;
   }
-  let a = o.bind(weakRef_2, weakRef);
-  e.signal.addEventListener("abort", a, {
+  let abortHandler = notifyParentAborted.bind(weakRef_2, weakRef);
+  parentController.signal.addEventListener("abort", abortHandler, {
     once: true,
   });
-  abortHandlerFinalizer.register(abortController, {
-    parentSignalRef: new WeakRef(e.signal),
-    handler: a,
+  abortHandlerFinalizer.register(childController, {
+    parentSignalRef: new WeakRef(parentController.signal),
+    handler: abortHandler,
   });
-  abortController.signal.addEventListener("abort", removeAbortHandler.bind(weakRef_2, new WeakRef(a)), {
-    once: true,
-  });
+  childController.signal.addEventListener(
+    "abort",
+    removeAbortHandler.bind(weakRef_2, new WeakRef(abortHandler)),
+    {
+      once: true,
+    },
+  );
 }
 //@ chunk-mq9v2gw5.js:1350-1397 placement
 /**
  * 创建子 AbortController：父 signal abort 时子也 abort（reason 透传）。用 WeakRef 引用父子，子被回收时 FinalizationRegistry 自动移除父上的监听，避免长会话泄漏。
  */
-function createChildAbortController(e, maxListeners) {
-  let abortController = createAbortController(maxListeners);
-  linkAbortToParent(e, abortController, propagateAbort);
-  return abortController;
+function createChildAbortController(parentController, maxListeners) {
+  let childController = createAbortController(maxListeners);
+  linkAbortToParent(parentController, childController, propagateAbort);
+  return childController;
 }
 //@ chunk-mq9v2gw5.js:1397-1521 placement
 /**
@@ -132,22 +146,26 @@ function createChildAbortController(e, maxListeners) {
  */
 class PromptScopedAbortController extends AbortController {
   turnController;
-  constructor(abortController) {
+  constructor(parentController) {
     super();
-    this.turnController = abortController;
+    this.turnController = parentController;
     setMaxListeners(DEFAULT_MAX_LISTENERS, this.signal);
-    linkAbortToParent(abortController, this, propagateAbort);
+    linkAbortToParent(parentController, this, propagateAbort);
   }
 }
 //@ chunk-mq9v2gw5.js:1521-1587 placement
-var ASK_WITHDRAWN_BY_ASKER = "ask-withdrawn-by-asker";
-var ASK_WITHDRAWN_ABORT_REASON = new DOMException(ASK_WITHDRAWN_BY_ASKER, "AbortError");
+var ASK_WITHDRAWN_BY_ASKER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ASK_WITHDRAWN_ABORT_REASON;
+deferInit("chunk-mq9v2gw5.js:1521", () => {
+  ASK_WITHDRAWN_BY_ASKER = "ask-withdrawn-by-asker";
+  ASK_WITHDRAWN_ABORT_REASON = new DOMException(ASK_WITHDRAWN_BY_ASKER, "AbortError");
+});
 //@ chunk-mq9v2gw5.js:1587-1638 placement
 /**
  * signal 是否因提问方撤回（ask-withdrawn-by-asker）而 abort。
  */
-function isAskWithdrawnByAsker(e) {
-  return e.aborted && unwrapAbortReason(e.reason) === ASK_WITHDRAWN_BY_ASKER;
+function isAskWithdrawnByAsker(signal) {
+  return signal.aborted && unwrapAbortReason(signal.reason) === ASK_WITHDRAWN_BY_ASKER;
 }
 //@ chunk-mq9v2gw5.js:1638-1873 placement = createChildAbortController (0.879)
 /**
@@ -173,9 +191,9 @@ function withdrawablePromptScope(parent, withdrawSignal) {
 }
 //@ chunk-mq9v2gw5.js:1873-1947 placement
 function turnAbortControllerOf(abortController) {
-  let r = abortController;
-  while (r instanceof PromptScopedAbortController) r = r.turnController;
-  return r;
+  let controller = abortController;
+  while (controller instanceof PromptScopedAbortController) controller = controller.turnController;
+  return controller;
 }
 //@ chunk-mq9v2gw5.js:1947-2157 placement = createCapacityWake (0.799)
 /**
@@ -196,62 +214,74 @@ function attachDetachableAbortRelay(sourceController, targetController) {
 /**
  * 各种中断原因对应的 AbortError（用户取消、远程取消、关机、打断、回合中止、转后台、拒绝回退编辑、恢复超时、权限停止）。
  */
-var ABORT_REASONS = {
-  "user-cancel": new DOMException("user-cancel", "AbortError"),
-  "remote-cancel": new DOMException("remote-cancel", "AbortError"),
-  shutdown: new DOMException("shutdown", "AbortError"),
-  interrupt: new DOMException("interrupt", "AbortError"),
-  "turn-abort": new DOMException("turn-abort", "AbortError"),
-  background: new DOMException("background", "AbortError"),
-  "refusal-fallback-edit": new DOMException("refusal-fallback-edit", "AbortError"),
-  "recovery-timeout": new DOMException("recovery-timeout", "AbortError"),
-  "permission-stop": new DOMException("permission-stop", "AbortError"),
-};
+var ABORT_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mq9v2gw5.js:2157", () => {
+  ABORT_REASONS = {
+    "user-cancel": new DOMException("user-cancel", "AbortError"),
+    "remote-cancel": new DOMException("remote-cancel", "AbortError"),
+    shutdown: new DOMException("shutdown", "AbortError"),
+    interrupt: new DOMException("interrupt", "AbortError"),
+    "turn-abort": new DOMException("turn-abort", "AbortError"),
+    background: new DOMException("background", "AbortError"),
+    "refusal-fallback-edit": new DOMException("refusal-fallback-edit", "AbortError"),
+    "recovery-timeout": new DOMException("recovery-timeout", "AbortError"),
+    "permission-stop": new DOMException("permission-stop", "AbortError"),
+  };
+});
 //@ chunk-mq9v2gw5.js:2718-2745 placement
-function userAbortReason(e) {
-  return ABORT_REASONS[e];
+function userAbortReason(abortKind) {
+  return ABORT_REASONS[abortKind];
 }
 //@ chunk-mq9v2gw5.js:2745-2828 placement = AbortError (1)
 function unwrapAbortReason(reason) {
   return reason instanceof DOMException && reason.name === "AbortError" ? reason.message : reason;
 }
 //@ chunk-mq9v2gw5.js:2828-3071 placement
-async function raceWithAbortSignalPastInterrupt(definition, r, o) {
+async function raceWithAbortSignalPastInterrupt(definition, parentSignal, options) {
   let abortController = new AbortController();
-  function n() {
-    if (unwrapAbortReason(r.reason) !== "interrupt") abortController.abort();
+  function onAbort() {
+    if (unwrapAbortReason(parentSignal.reason) !== "interrupt") abortController.abort();
   }
-  if (r.aborted) n();
+  if (parentSignal.aborted) onAbort();
   else
-    r.addEventListener("abort", n, {
+    parentSignal.addEventListener("abort", onAbort, {
       once: true,
     });
   try {
-    return await raceWithAbortSignal(definition, abortController.signal, o);
+    return await raceWithAbortSignal(definition, abortController.signal, options);
   } finally {
-    r.removeEventListener("abort", n);
+    parentSignal.removeEventListener("abort", onAbort);
   }
 }
 //@ chunk-mq9v2gw5.js:3071-3154 placement
-var _ = new Set(["user-cancel", "remote-cancel", "shutdown", "interrupt", "turn-abort"]);
+var _; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mq9v2gw5.js:3071", () => {
+  _ = new Set(["user-cancel", "remote-cancel", "shutdown", "interrupt", "turn-abort"]);
+});
 //@ chunk-mq9v2gw5.js:3154-3190 placement
-function isUserInitiatedAbortReason(e) {
-  return _.has(unwrapAbortReason(e));
+function isUserInitiatedAbortReason(abortKind) {
+  return _.has(unwrapAbortReason(abortKind));
 }
 //@ chunk-mq9v2gw5.js:3190-3237 placement
 /**
  * 视为“用户取消/远端取消”的中止原因集合。
  */
-var CANCEL_ABORT_REASONS = new Set(["user-cancel", "remote-cancel"]);
+var CANCEL_ABORT_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mq9v2gw5.js:3190", () => {
+  CANCEL_ABORT_REASONS = new Set(["user-cancel", "remote-cancel"]);
+});
 //@ chunk-mq9v2gw5.js:3237-3273 placement
-function isCancelAbortReason(reason) {
-  return CANCEL_ABORT_REASONS.has(unwrapAbortReason(reason));
+function isCancelAbortReason(abortReason) {
+  return CANCEL_ABORT_REASONS.has(unwrapAbortReason(abortReason));
 }
 //@ chunk-mq9v2gw5.js:3273-3357 placement
 /**
  * 无需提示用户的静默中止原因集合。
  */
-var SILENT_ABORT_REASONS = new Set(["interrupt", "turn-abort", "refusal-fallback-edit", "permission-stop"]);
+var SILENT_ABORT_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mq9v2gw5.js:3273", () => {
+  SILENT_ABORT_REASONS = new Set(["interrupt", "turn-abort", "refusal-fallback-edit", "permission-stop"]);
+});
 //@ chunk-mq9v2gw5.js:3357-3392 placement
 function isSilentAbortReason(reason) {
   return SILENT_ABORT_REASONS.has(unwrapAbortReason(reason));
@@ -270,14 +300,21 @@ function isServerFallbackDiscard(signal) {
   return signal.aborted && unwrapAbortReason(signal.reason) === SERVER_FALLBACK_TOMBSTONE;
 }
 //@ chunk-mq9v2gw5.js:3535-3574 placement
-var dOMException = new DOMException(SERVER_FALLBACK_TOMBSTONE, "AbortError");
+var dOMException; // deferred: uses SERVER_FALLBACK_TOMBSTONE of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-mq9v2gw5.js:3535", () => {
+  dOMException = new DOMException(SERVER_FALLBACK_TOMBSTONE, "AbortError");
+});
 //@ chunk-mq9v2gw5.js:3574-3598 placement
 function serverFallbackTombstoneAbortReason() {
   return dOMException;
 }
 //@ chunk-mq9v2gw5.js:3598-3655 placement
-var SUBAGENT_PARK = "subagent-park";
-var dOMException_2 = new DOMException(SUBAGENT_PARK, "AbortError");
+var SUBAGENT_PARK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var dOMException_2;
+deferInit("chunk-mq9v2gw5.js:3598", () => {
+  SUBAGENT_PARK = "subagent-park";
+  dOMException_2 = new DOMException(SUBAGENT_PARK, "AbortError");
+});
 //@ chunk-mq9v2gw5.js:3655-3679 placement
 function subagentParkAbortReason() {
   return dOMException_2;
@@ -314,8 +351,8 @@ function classifyAbortReasonForTelemetry(reason) {
   }
 }
 //@ chunk-mq9v2gw5.js:4170-4396 placement
-function isUserAttributableAbortKind(e) {
-  switch (e) {
+function isUserAttributableAbortKind(abortKind) {
+  switch (abortKind) {
     case "user_cancel":
     case "remote_cancel":
     case "shutdown":
@@ -330,10 +367,10 @@ function isUserAttributableAbortKind(e) {
   }
 }
 //@ chunk-mq9v2gw5.js:4396-4499 placement = propagateAbort (1)
-function propagateRecoverableAbort(e) {
+function propagateRecoverableAbort(controllerRef) {
   let parent = this.deref();
   if (!parent || !isUserInitiatedAbortReason(parent.signal.reason)) return;
-  e.deref()?.abort(parent.signal.reason);
+  controllerRef.deref()?.abort(parent.signal.reason);
 }
 //@ chunk-mq9v2gw5.js:4499-4512 placement
 var MIN_RECOVERY_TIMEOUT_MS = 600000;
@@ -341,30 +378,38 @@ var MIN_RECOVERY_TIMEOUT_MS = 600000;
 /**
  * 恢复超时：输入毫秒 ×1.5，夹在 10 分钟到 1 小时之间；NaN 取 10 分钟。
  */
-function recoveryTimeoutForContextTokens(e) {
-  if (Number.isNaN(e)) return MIN_RECOVERY_TIMEOUT_MS;
-  return Math.min(3600000, Math.max(MIN_RECOVERY_TIMEOUT_MS, Math.round(e * 1.5)));
+function recoveryTimeoutForContextTokens(contextTokens) {
+  if (Number.isNaN(contextTokens)) return MIN_RECOVERY_TIMEOUT_MS;
+  return Math.min(3600000, Math.max(MIN_RECOVERY_TIMEOUT_MS, Math.round(contextTokens * 1.5)));
 }
 //@ chunk-mq9v2gw5.js:4611-4666 placement
-function abortWithRecoveryTimeout(e) {
-  e.deref()?.abort(userAbortReason("recovery-timeout"));
+function abortWithRecoveryTimeout(controllerRef) {
+  controllerRef.deref()?.abort(userAbortReason("recovery-timeout"));
 }
 //@ chunk-mq9v2gw5.js:4666-4732 placement
-function armRecoveryCeiling(e, r, o) {
-  return setMonotonicTimeout(abortWithRecoveryTimeout.bind(undefined, new WeakRef(e)), r, o);
+function armRecoveryCeiling(abortController, timeoutMs, clock) {
+  return setMonotonicTimeout(
+    abortWithRecoveryTimeout.bind(undefined, new WeakRef(abortController)),
+    timeoutMs,
+    clock,
+  );
 }
 //@ chunk-mq9v2gw5.js:4732-4872 placement = createChildAbortController (0.879)
 /**
  * 创建只传播可恢复类 abort 原因的子控制器，并挂 recovery-timeout 定时器，到期自动 abort。
  */
-function createRecoveryAbortController(abortController, r, clock) {
-  let abortController_2 = createAbortController();
-  linkAbortToParent(abortController, abortController_2, propagateRecoverableAbort);
-  if (abortController_2.signal.aborted) return abortController_2;
-  abortController_2.signal.addEventListener("abort", armRecoveryCeiling(abortController_2, r, clock).clear, {
-    once: true,
-  });
-  return abortController_2;
+function createRecoveryAbortController(parentController, recoveryTimeoutMs, clock) {
+  let abortController = createAbortController();
+  linkAbortToParent(parentController, abortController, propagateRecoverableAbort);
+  if (abortController.signal.aborted) return abortController;
+  abortController.signal.addEventListener(
+    "abort",
+    armRecoveryCeiling(abortController, recoveryTimeoutMs, clock).clear,
+    {
+      once: true,
+    },
+  );
+  return abortController;
 }
 //@ chunk-ad2e1aj6.js:43157-43267 fingerprint = createChildAbortController (0.879)
 function createChildAbortController_2(signal) {

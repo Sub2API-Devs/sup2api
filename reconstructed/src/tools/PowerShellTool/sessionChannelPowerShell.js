@@ -11,7 +11,7 @@
 import { getPowerShellTool } from "../../tools.js";
 import { getPrompt } from "./prompt.js";
 import { HOST_TOOL_INPUT_FIELD } from "../../bridge/deviceRegistration.js";
-import { string, B1e } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema, ZodObject } from "../../../vendor/zod/v4/classic/schemas.js";
 import { PLACED_BY_NAME_TOOL_SPEC } from "../../utils/filePersistence/placedByName.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, toError } from "../../utils/errors.js";
 import { markHostOnlyNativeTool } from "../../services/api/deferredToolsState.js";
@@ -25,22 +25,22 @@ import { joined } from "../../services/homeSeed/workingFiles.js";
 import { logForDiagnosticsNoPII } from "../../utils/diagLogs.js";
 
 //@ chunk-azz22fvc.js:4123-5156 placement
-function sessionChannelPowerShellPrompt(e, t) {
+function sessionChannelPowerShellPrompt(machine, options) {
   let powerShellTool = getPowerShellTool();
   let prompt = getPrompt({
-    edition: t?.powershell?.edition ?? null,
+    edition: options?.powershell?.edition ?? null,
     buildTools: [],
     onWindows: true,
     backgroundRuns: false,
   });
   let value = omitSchemaFields(powerShellTool.inputSchema, ["run_in_background"]).extend({
-    [HOST_TOOL_INPUT_FIELD]: string()
+    [HOST_TOOL_INPUT_FIELD]: stringSchema()
       .optional()
       .describe(
         "Optional. Names the attached computer this runs on \u2014 the attached-machines note says which computers serve PowerShell. While exactly one does it may be omitted and the call runs there; when several do, name one. It never runs in this session's own environment, which has no PowerShell. The result says where it ran.",
       ),
   });
-  let s = Object.defineProperties(
+  let toolStub = Object.defineProperties(
     {},
     {
       ...Object.getOwnPropertyDescriptors(powerShellTool),
@@ -67,7 +67,7 @@ function sessionChannelPowerShellPrompt(e, t) {
       call: {
         value: async () => {
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `PowerShell runs only on ${e}; the session runs it there and it cannot run here.`,
+            `PowerShell runs only on ${machine}; the session runs it there and it cannot run here.`,
             "session-channel PowerShell tool called without being routed to its machine",
           );
         },
@@ -75,32 +75,35 @@ function sessionChannelPowerShellPrompt(e, t) {
       },
     },
   );
-  return markHostOnlyNativeTool(s);
+  return markHostOnlyNativeTool(toolStub);
 }
 //@ chunk-azz22fvc.js:5156-5398 placement
-function countPowerShellCallsWhenDisabled(e, t) {
+function countPowerShellCallsWhenDisabled(announcer, toolUses) {
   if (isPowerShellToolEnabled()) return 0;
-  let r = uniq(t.filter((n) => n.tool === POWERSHELL_TOOL_NAME).map((n) => n.host));
-  if (r.length === 0) return 0;
-  let a;
+  let hosts = uniq(
+    toolUses.filter((toolUse) => toolUse.tool === POWERSHELL_TOOL_NAME).map((toolUse) => toolUse.host),
+  );
+  if (hosts.length === 0) return 0;
+  let announcements;
   try {
-    a = r.map((n) => ({
-      tool: sessionChannelPowerShellPrompt(n, undefined),
-      machine: n,
+    announcements = hosts.map((machine) => ({
+      tool: sessionChannelPowerShellPrompt(machine, undefined),
+      machine,
     }));
   } catch (error) {
     logError(toError(error));
     return 0;
   }
-  e.presentUntilAnnounced(a, isRemoteToolForwardingEnabledCached);
-  return a.length;
+  announcer.presentUntilAnnounced(announcements, isRemoteToolForwardingEnabledCached);
+  return announcements.length;
 }
 //@ chunk-azz22fvc.js:5398-5616 placement
-function omitSchemaFields(inputSchema, t) {
-  if (!(inputSchema instanceof B1e)) throw TypeError("PowerShellTool no longer declares an object schema");
-  let filtered = t.filter((n) => n in inputSchema.shape);
-  let a = Object.fromEntries(filtered.map((n) => [n, true]));
-  return filtered.length === 0 ? inputSchema : inputSchema.omit(a);
+function omitSchemaFields(inputSchema, fields) {
+  if (!(inputSchema instanceof ZodObject))
+    throw TypeError("PowerShellTool no longer declares an object schema");
+  let filtered = fields.filter((fieldName) => fieldName in inputSchema.shape);
+  let dropMask = Object.fromEntries(filtered.map((fieldName) => [fieldName, true]));
+  return filtered.length === 0 ? inputSchema : inputSchema.omit(dropMask);
 }
 //@ chunk-azz22fvc.js:5616-5632 placement
 /**
@@ -109,91 +112,91 @@ function omitSchemaFields(inputSchema, t) {
 var MAX_STAGED_ROWS = 8;
 var MAX_CONTENT_HASH_CHARS = 256;
 //@ chunk-azz22fvc.js:5632-6742 placement
-function createStagedRowTracker(e = () => performance.now()) {
-  let t = [];
-  let r = [];
-  let a = 0;
-  let n = 0;
-  let s = false;
-  let c = false;
-  let f = false;
+function createStagedRowTracker(now = () => performance.now()) {
+  let announcements = [];
+  let pendingRows = [];
+  let turnAtHold = 0;
+  let announcementCount = 0;
+  let firstCommandDequeued = false;
+  let userFrameDelivered = false;
+  let loggedMissingEtag = false;
   let signal = createSignal();
   return {
-    noteStagedRow(m) {
-      if (m.mount_path !== joined) return false;
-      let contentSha256 = m.content_sha256;
-      let u =
+    noteStagedRow(row) {
+      if (row.mount_path !== joined) return false;
+      let contentSha256 = row.content_sha256;
+      let etag =
         typeof contentSha256 === "string" &&
         contentSha256.length > 0 &&
         contentSha256.length <= MAX_CONTENT_HASH_CHARS
           ? contentSha256
           : null;
-      if (u === null) {
-        if (!f) {
-          f = true;
+      if (etag === null) {
+        if (!loggedMissingEtag) {
+          loggedMissingEtag = true;
           logForDiagnosticsNoPII("warn", "home_seed_stage_without_usable_etag", {});
         }
         return false;
       }
-      n++;
-      let y = {
-        etag: u,
-        beforeFirstCommand: !s && !c,
-        ordinal: n,
+      announcementCount++;
+      let announcement = {
+        etag,
+        beforeFirstCommand: !firstCommandDequeued && !userFrameDelivered,
+        ordinal: announcementCount,
       };
-      t = [...t, y].slice(-MAX_STAGED_ROWS);
-      r = [
-        ...r,
+      announcements = [...announcements, announcement].slice(-MAX_STAGED_ROWS);
+      pendingRows = [
+        ...pendingRows,
         {
-          etag: u,
-          ordinal: n,
-          heardAtMs: e(),
-          turnsAtHoldBefore: a,
+          etag,
+          ordinal: announcementCount,
+          heardAtMs: now(),
+          turnsAtHoldBefore: turnAtHold,
         },
       ].slice(-MAX_STAGED_ROWS);
       try {
-        signal.emit(y);
+        signal.emit(announcement);
       } catch {
         logForDiagnosticsNoPII("error", "home_seed_announcement_listener_threw", {});
       }
       return true;
     },
-    noteStagedRowRead(m) {
-      if (m.mount_path !== joined) return;
-      let found = r.find((u) => u.etag === m.content_sha256);
+    noteStagedRowRead(row) {
+      if (row.mount_path !== joined) return;
+      let found = pendingRows.find((pendingRow) => pendingRow.etag === row.content_sha256);
       if (found === undefined)
         return {
           onRecord: false,
         };
-      r = r.filter((u) => u !== found);
+      pendingRows = pendingRows.filter((pendingRow) => pendingRow !== found);
       return {
         onRecord: true,
         ordinal: found.ordinal,
-        behindMs: Math.round(e() - found.heardAtMs),
+        behindMs: Math.round(now() - found.heardAtMs),
         turnsAtHoldBefore: found.turnsAtHoldBefore,
-        turnAtHoldMeanwhile: a > found.turnsAtHoldBefore,
+        turnAtHoldMeanwhile: turnAtHold > found.turnsAtHoldBefore,
       };
     },
     markTurnAtHold() {
-      a++;
+      turnAtHold++;
     },
     markUserFrameDelivered() {
-      c = true;
+      userFrameDelivered = true;
     },
     markFirstCommandDequeued() {
-      s = true;
+      firstCommandDequeued = true;
     },
     firstCommandDequeued() {
-      return s;
+      return firstCommandDequeued;
     },
     announcements() {
-      return t;
+      return announcements;
     },
     announcementCount() {
-      return n;
+      return announcementCount;
     },
-    announcementForEtag(m) {
-      return t.findLast((d) => d.etag === m);
+    announcementForEtag(etag) {
+      return announcements.findLast((announcement) => announcement.etag === etag);
     },
     announced: {
       subscribe: signal.subscribe,

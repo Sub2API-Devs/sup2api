@@ -13,7 +13,7 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { fireDeadProbe, readProcessStartTicks, killIfSameProcess } from "../../daemon/deadProbe.js";
 import { TaskOutput } from "../../utils/task/TaskOutput.js";
@@ -34,12 +34,12 @@ class DetachedShellProcess {
   #s = null;
   #r;
   result;
-  constructor(h) {
-    this.#e = h.pid;
-    this.#t = h.procStart;
-    this.#o = h.startTimeTicks;
+  constructor(options) {
+    this.#e = options.pid;
+    this.#t = options.procStart;
+    this.#o = options.startTimeTicks;
     if (this.#t === undefined && this.#o !== undefined) fireDeadProbe("liveness");
-    this.taskOutput = new TaskOutput(h.taskId, null, true);
+    this.taskOutput = new TaskOutput(options.taskId, null, true);
     this.result = new Promise((resolve) => {
       this.#r = resolve;
     });
@@ -48,30 +48,30 @@ class DetachedShellProcess {
   }
   async #c() {
     if (this.#n !== "backgrounded") return;
-    let h = true;
+    let isAlive = true;
     try {
       process.kill(this.#e, 0);
       if (this.#t !== undefined) {
-        if (!(await isSameProcessAsync(this.#e, this.#t))) h = false;
+        if (!(await isSameProcessAsync(this.#e, this.#t))) isAlive = false;
       } else if (this.#o !== undefined) {
         let processStartTicks = await readProcessStartTicks(this.#e);
-        if (processStartTicks !== null && processStartTicks !== this.#o) h = false;
+        if (processStartTicks !== null && processStartTicks !== this.#o) isAlive = false;
       }
     } catch {
-      h = false;
+      isAlive = false;
     }
-    if (!h) await this.#i(false);
+    if (!isAlive) await this.#i(false);
   }
-  async #i(h) {
+  async #i(wasKilled) {
     if (this.#n !== "backgrounded") return;
     if (this.#s) {
       clearInterval(this.#s);
       this.#s = null;
     }
-    this.#n = h ? "killed" : "completed";
-    let x = this.#t !== undefined || this.#o !== undefined;
-    let D = h
-      ? x
+    this.#n = wasKilled ? "killed" : "completed";
+    let hasIdentity = this.#t !== undefined || this.#o !== undefined;
+    let notice = wasKilled
+      ? hasIdentity
         ? "[SIGTERM requested for detached process tree (sent if identity still matched) \u2014 adopted handle released]"
         : "[detached process still running \u2014 adopted handle released]"
       : "[process exited while detached; exit code unknown]";
@@ -79,7 +79,7 @@ class DetachedShellProcess {
       .then(async (taskOutputForAppend) => {
         try {
           await taskOutputForAppend.appendFile(`
-${D}
+${notice}
 `);
         } finally {
           await taskOutputForAppend.close();
@@ -91,7 +91,7 @@ ${D}
       code: -1,
       stdout,
       stderr: "",
-      interrupted: h,
+      interrupted: wasKilled,
       backgroundTaskId: this.taskOutput.taskId,
     });
   }

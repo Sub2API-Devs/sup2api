@@ -18,58 +18,65 @@ import {
 } from "../../bootstrap/state.js";
 import { HostScoped } from "../hostScoped.js";
 import { setBgExitCause } from "../bgExitSidecars.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:224638-224825 placement
 /**
  * 沿原型链判断对象是否为不可信对象（Proxy、vm 上下文），最多 128 层。
  */
-function isUntrustedObject(e) {
-  if (e === null || (typeof e !== "object" && typeof e !== "function")) return false;
-  let n = e;
+function isUntrustedObject(value) {
+  if (value === null || (typeof value !== "object" && typeof value !== "function")) return false;
+  let current = value;
   for (let idx = 0; idx < 128; idx++) {
-    if (n === null) return false;
-    if (isUntrustedObject_2(n)) return true;
-    n = Object.getPrototypeOf(n);
+    if (current === null) return false;
+    if (isUntrustedObject_2(current)) return true;
+    current = Object.getPrototypeOf(current);
   }
   return true;
 }
 //@ chunk-e6aww6q8.js:224825-224978 placement
 function createLineClaimers() {
-  let e = new Set();
+  let claimers = new Set();
   return {
-    claim: (n) => {
-      e.add(n);
+    claim: (claimer) => {
+      claimers.add(claimer);
       return () => {
-        e.delete(n);
+        claimers.delete(claimer);
       };
     },
-    lineFor: (n, r) => {
-      for (let s of e) {
-        let h = s(n, r);
-        if (h !== undefined) return h;
+    lineFor: (line, context) => {
+      for (let claimer of claimers) {
+        let claimed = claimer(line, context);
+        if (claimed !== undefined) return claimed;
       }
       return;
     },
   };
 }
 //@ chunk-e6aww6q8.js:224978-225027 placement
-var { claim, lineFor } = createLineClaimers();
-var claimPendingWriteLine = claim;
-var findPendingWriteLine = lineFor;
+var claim; // deferred: uses createLineClaimers of its import cycle while loading; runs once the cycle is complete
+var lineFor;
+var claimPendingWriteLine;
+var findPendingWriteLine;
+deferInit("chunk-e6aww6q8.js:224978", () => {
+  ({ claim, lineFor } = createLineClaimers());
+  claimPendingWriteLine = claim;
+  findPendingWriteLine = lineFor;
+});
 //@ chunk-e6aww6q8.js:225027-225130 placement
 /**
  * 给「被吞掉的重置信号」注册观察者：同一对象只报告一次。
  */
-function registerSwallowedRejectionObserver(e) {
+function registerSwallowedRejectionObserver(line) {
   let weakSet = new WeakSet();
-  claim((r) => (isObjectLike_3(r) && weakSet.has(r) ? e : undefined));
-  return (r) => {
-    if (isObjectLike_3(r)) weakSet.add(r);
+  claim((rejection) => (isObjectLike_3(rejection) && weakSet.has(rejection) ? line : undefined));
+  return (rejection) => {
+    if (isObjectLike_3(rejection)) weakSet.add(rejection);
   };
 }
 //@ chunk-e6aww6q8.js:225130-225206 placement
-function isObjectLike_3(e) {
-  return (typeof e === "object" && e !== null) || typeof e === "function";
+function isObjectLike_3(value) {
+  return (typeof value === "object" && value !== null) || typeof value === "function";
 }
 //@ chunk-e6aww6q8.js:225269-225378 placement
 function getSessionIdentity() {
@@ -95,9 +102,9 @@ class PendingWritesTracker {
   unresumedAdopt = new Map();
   unresumedFrameLive = new Map();
   exitRetryFrameLive = new Map();
-  track(e) {
-    this.pendingWrites.add(e);
-    e.finally(() => this.pendingWrites.delete(e));
+  track(promise) {
+    this.pendingWrites.add(promise);
+    promise.finally(() => this.pendingWrites.delete(promise));
   }
   hasPending() {
     return this.pendingWrites.size > 0;
@@ -107,7 +114,10 @@ class PendingWritesTracker {
   }
 }
 //@ chunk-e6aww6q8.js:225684-225711 placement
-var pendingWritesTrackerByHost = new HostScoped(() => new PendingWritesTracker());
+var pendingWritesTrackerByHost; // deferred: uses PendingWritesTracker of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:225684", () => {
+  pendingWritesTrackerByHost = new HostScoped(() => new PendingWritesTracker());
+});
 //@ chunk-e6aww6q8.js:225711-225741 placement
 /**
  * 按进程根缓存的待完成写入跟踪器。
@@ -119,8 +129,8 @@ function pendingWritesTracker() {
 /**
  * 登记一个待完成写入。
  */
-function trackPendingWrite(e) {
-  pendingWritesTracker().track(e);
+function trackPendingWrite(promise) {
+  pendingWritesTracker().track(promise);
 }
 //@ chunk-e6aww6q8.js:225772-225813 placement
 function hasPendingWrites() {
@@ -142,8 +152,8 @@ function isWorktreeCloudClaimEnabled() {
   return false;
 }
 //@ chunk-e6aww6q8.js:270788-270819 placement
-function recordBgExitCause(e) {
-  if (!isDisklessProcess()) setBgExitCause(e);
+function recordBgExitCause(cause) {
+  if (!isDisklessProcess()) setBgExitCause(cause);
 }
 export {
   getSessionIdentity,

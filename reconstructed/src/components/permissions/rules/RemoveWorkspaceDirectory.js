@@ -8,7 +8,7 @@
  * pieces: chunk-p2qwpk2k.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { applyValidatedPermissionUpdate } from "../../../utils/permissions/PermissionUpdate.js";
 import {
   jsxProd_default,
@@ -21,7 +21,7 @@ import { Dialog } from "../../design-system/Dialog.js";
 
 //@ chunk-p2qwpk2k.js:32506-33366 fingerprint = RemoveWorkspaceDirectory (0.681)
 function RemoveWorkspaceDirectory(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { directoryPath, onRemove, onCancel, permissionContext, setPermissionContext } = props;
   let t1;
   if (
@@ -46,9 +46,9 @@ function RemoveWorkspaceDirectory(props) {
     $[4] = t1;
   } else t1 = $[4];
   let onConfirm = t1;
-  let M;
+  let rowBox;
   if ($[5] !== directoryPath) {
-    M = jsxProd_default(Box, {
+    rowBox = jsxProd_default(Box, {
       marginX: 2,
       flexDirection: "column",
       children: jsxProd_default(Text, {
@@ -57,15 +57,15 @@ function RemoveWorkspaceDirectory(props) {
       }),
     });
     $[5] = directoryPath;
-    $[6] = M;
-  } else M = $[6];
-  let b;
+    $[6] = rowBox;
+  } else rowBox = $[6];
+  let headerText;
   if ($[7] === MEMO_CACHE_SENTINEL) {
-    b = jsxProd_default(Text, {
+    headerText = jsxProd_default(Text, {
       children: "Claude Code will no longer have access to files in this directory.",
     });
-    $[7] = b;
-  } else b = $[7];
+    $[7] = headerText;
+  } else headerText = $[7];
   let t6;
   if ($[8] !== onConfirm || $[9] !== onCancel) {
     t6 = jsxProd_default(ConfirmSelect, {
@@ -79,15 +79,15 @@ function RemoveWorkspaceDirectory(props) {
     $[10] = t6;
   } else t6 = $[10];
   let t7;
-  if ($[11] !== onCancel || $[12] !== M || $[13] !== t6) {
+  if ($[11] !== onCancel || $[12] !== rowBox || $[13] !== t6) {
     t7 = jsxProd_default_2(Dialog, {
       title: "Remove directory from workspace?",
       onCancel,
       color: "error",
-      children: [M, b, t6],
+      children: [rowBox, headerText, t6],
     });
     $[11] = onCancel;
-    $[12] = M;
+    $[12] = rowBox;
     $[13] = t6;
     $[14] = t7;
   } else t7 = $[14];

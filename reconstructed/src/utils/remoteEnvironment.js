@@ -20,21 +20,22 @@ import {
 import { identity } from "./identity.js";
 import { isOnForeignMount } from "./networkPaths.js";
 import { isChildSession } from "./sessionShape.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-4vzb3taj.js:458-672 placement
 /**
  * Windows 映射盘路径与其网络共享路径（同一共享时）。
  */
-function mappedDriveSpellings(e) {
-  if (!/^[A-Za-z]:[\\/]/.test(e)) return [];
-  let r = nativeRealpathLong(e.slice(0, 3));
-  if (r == null || !isUncOrDevicePath(r)) return [];
-  let n = nativeRealpathLong(e);
-  if (n == null || !isUncOrDevicePath(n)) return [];
-  let t = uncHostOf(r);
-  let o = uncHostOf(n);
-  if (t == null || o == null || t !== o) return [];
-  return [e, n];
+function mappedDriveSpellings(drivePath) {
+  if (!/^[A-Za-z]:[\\/]/.test(drivePath)) return [];
+  let driveRootRealPath = nativeRealpathLong(drivePath.slice(0, 3));
+  if (driveRootRealPath == null || !isUncOrDevicePath(driveRootRealPath)) return [];
+  let fullRealPath = nativeRealpathLong(drivePath);
+  if (fullRealPath == null || !isUncOrDevicePath(fullRealPath)) return [];
+  let driveRootUncHost = uncHostOf(driveRootRealPath);
+  let fullPathUncHost = uncHostOf(fullRealPath);
+  if (driveRootUncHost == null || fullPathUncHost == null || driveRootUncHost !== fullPathUncHost) return [];
+  return [drivePath, fullRealPath];
 }
 //@ chunk-4vzb3taj.js:672-760 placement
 /**
@@ -72,9 +73,9 @@ function isSelfHostedRemoteEnvironment() {
 /**
  * 远程会话工作目录同步是否接纳（not_admitted/admitted/moved_directory）。
  */
-function workingSyncAdmission(e, cwd) {
+function workingSyncAdmission(gitSwitchEnabled, cwd) {
   return !(
-    e &&
+    gitSwitchEnabled &&
     isSelfHostedRemoteEnvironment() &&
     Boolean(env.CLAUDE_CODE_REMOTE_SESSION_ID) &&
     !env.CLAUDE_CODE_DISABLE_WORKING_SYNC
@@ -99,29 +100,36 @@ function initialCwdKey() {
   return INITIAL_CWD_KEY;
 }
 //@ chunk-4vzb3taj.js:1279-1320 placement
-var sharedPathCache = identity(new Map(), (e) => e.clear());
-var sharedPathCacheTtlMs = 60000;
+var sharedPathCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var sharedPathCacheTtlMs;
+deferInit("chunk-4vzb3taj.js:1279", () => {
+  sharedPathCache = identity(new Map(), (cache) => cache.clear());
+  sharedPathCacheTtlMs = 60000;
+});
 //@ chunk-4vzb3taj.js:1320-1493 placement
 /**
  * 缓存把映射盘路径解析为网络共享路径。
  */
-function resolveNetworkShareCached(e) {
-  let r = sharedPathCache.get(e);
-  if (r !== undefined && (r.share !== undefined || Date.now() - r.askedAt < sharedPathCacheTtlMs))
-    return r.share ?? e;
-  let n = mappedDriveSpellings(e)[1];
-  sharedPathCache.set(e, {
-    share: n,
+function resolveNetworkShareCached(requestedPath) {
+  let cachedEntry = sharedPathCache.get(requestedPath);
+  if (
+    cachedEntry !== undefined &&
+    (cachedEntry.share !== undefined || Date.now() - cachedEntry.askedAt < sharedPathCacheTtlMs)
+  )
+    return cachedEntry.share ?? requestedPath;
+  let sharePath = mappedDriveSpellings(requestedPath)[1];
+  sharedPathCache.set(requestedPath, {
+    share: sharePath,
     askedAt: Date.now(),
   });
-  return n ?? e;
+  return sharePath ?? requestedPath;
 }
 //@ chunk-4vzb3taj.js:1493-1541 placement
 /**
  * isLocalAbsolutePath：绝对路径且不在外部挂载。
  */
-function isLocalAbsolutePath(e, r) {
-  return isAbsolute(e) && !hasBackslash(e) && !isOnForeignMount(e, r);
+function isLocalAbsolutePath(path, referenceDir) {
+  return isAbsolute(path) && !hasBackslash(path) && !isOnForeignMount(path, referenceDir);
 }
 //@ chunk-4vzb3taj.js:1541-1575 placement
 /**
@@ -148,8 +156,8 @@ function isTopLevelBridgeSession() {
 /**
  * persistsTransport：托管 worker 或 bridge 下传输持久。
  */
-function persistsTransport(e) {
-  return e.hostedWorker || (isBridgeEnvironment() && e.transportPersists !== false);
+function persistsTransport(session) {
+  return session.hostedWorker || (isBridgeEnvironment() && session.transportPersists !== false);
 }
 export {
   isRemoteManagedEnvironment,

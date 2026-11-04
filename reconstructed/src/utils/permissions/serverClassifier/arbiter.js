@@ -15,7 +15,7 @@ import {
   getClassifierProviderKind,
   isServerClassifierUnsupported,
   knownValueOrOther,
-  dangerousToolUseCombinedSchema,
+  DANGEROUS_TOOL_USE_COMBINED_REASONS,
   asClassifierResult,
   wasSentForJudging,
   buildClassifierParseFailureReason,
@@ -40,7 +40,7 @@ import { getAPIProvider, isClaudePlatformProvider } from "../../model/providers.
 import { canSendFirstPartyBetas, isHipaaOrg, BETA_DANGEROUS_TOOL_USE } from "../../betas.js";
 import { env } from "../../env.js";
 import { isEnvTruthy } from "../../envUtils.js";
-import { withHostEnvRestored_2 } from "../../settings/managedSettingsFiles.js";
+import { withHostEnvRestored_2 } from "../../settings/hostEnvWrites.js";
 import { getAdminTierEnvValue } from "../../settings/settings.js";
 import { holdsNoServedSettings } from "../../../services/remoteManagedSettings/remoteSettingsCache.js";
 import { getEligibilityMemo } from "../../../services/remoteManagedSettings/remoteSettingsState.js";
@@ -65,13 +65,14 @@ import { NOTEBOOK_EDIT_TOOL_NAME } from "../../../tools/NotebookEditTool/constan
 import { SERVER_CLASSIFIER_NO_EXPLANATION_REASON } from "../../../types/permissions.js";
 import { isPlainModeAtRequest, getToolPermissionContext } from "../toolPermissionContext.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../../services/analytics/growthbook.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1033954-1034005 placement = countTokensWithAPI (0.658)
 /**
  * 自动模式服务端分类器角色（off/arbiter/arbiterWithLocalFallback）。旧版名 countTokensWithAPI 为错配，归错文件。
  */
-function getAutoModeClassifierRole(mode, { peek: n = false } = {}) {
-  return checkServerClassifierEligibility(mode, n).role;
+function getAutoModeClassifierRole(mode, { peek = false } = {}) {
+  return checkServerClassifierEligibility(mode, peek).role;
 }
 //@ chunk-e6aww6q8.js:1034005-1034045 placement
 /**
@@ -97,15 +98,15 @@ function getServerClassifierRoleTelemetry(mode) {
   }
 }
 //@ chunk-e6aww6q8.js:1034190-1034817 placement
-function checkServerClassifierEligibility(e, n = false) {
-  if (!isAutoClassifierActive(e))
+function checkServerClassifierEligibility(mode, peek = false) {
+  if (!isAutoClassifierActive(mode))
     return {
       role: "off",
       offReason: "not_auto_mode",
     };
   if (
     !canUseServerClassifier({
-      peek: n,
+      peek,
     })
   )
     return {
@@ -113,7 +114,7 @@ function checkServerClassifierEligibility(e, n = false) {
       offReason: "betas_disabled",
     };
   if (getClassifierProviderKind() === "thirdParty") {
-    let h = !isThirdPartyServerClassifierEnabled()
+    let offReason = !isThirdPartyServerClassifierEnabled()
       ? "third_party_switch_off"
       : isThirdPartyServerClassifierRefused()
         ? "refused_latch"
@@ -122,13 +123,13 @@ function checkServerClassifierEligibility(e, n = false) {
           : getAPIProvider() === "firstParty" && isIridescentCrystalOn()
             ? "kill_switch"
             : undefined;
-    return h === undefined
+    return offReason === undefined
       ? {
           role: "arbiterWithLocalFallback",
         }
       : {
           role: "off",
-          offReason: h,
+          offReason,
         };
   }
   let userServerClassifierSwitch = getUserServerClassifierSwitch();
@@ -137,7 +138,9 @@ function checkServerClassifierEligibility(e, n = false) {
       role: "off",
       offReason: "user_switch_off",
     };
-  let s = !(userServerClassifierSwitch ?? (n ? cachedAutoModeContextEnabled() : autoModeContextEnabled()))
+  let firstPartyOffReason = !(
+    userServerClassifierSwitch ?? (peek ? cachedAutoModeContextEnabled() : autoModeContextEnabled())
+  )
     ? "rollout_flag_off"
     : isIridescentCrystalOn()
       ? "kill_switch"
@@ -146,26 +149,26 @@ function checkServerClassifierEligibility(e, n = false) {
         : neverTrue()
           ? "batch_file_tools"
           : undefined;
-  if (s === undefined)
+  if (firstPartyOffReason === undefined)
     return {
       role: "arbiter",
     };
   return {
     role: "off",
-    offReason: s,
+    offReason: firstPartyOffReason,
   };
 }
 //@ chunk-e6aww6q8.js:1034817-1035178 placement
 /**
  * 当前提供方能否使用服务端分类器：第一方看能否发 beta 或搁置开关；第三方在宿主托管、显式开启且未禁用实验 beta 时可用（HIPAA 除外）。
  */
-function canUseServerClassifier({ peek: e = false } = {}) {
+function canUseServerClassifier({ peek = false } = {}) {
   switch (getClassifierProviderKind()) {
     case "firstParty":
       return (
         canSendFirstPartyBetas() ||
         isBetasSwitchSetAside({
-          peek: e,
+          peek,
         })
       );
     case "thirdParty": {
@@ -194,11 +197,11 @@ function isArbiterRole(autoModeClassifierRole) {
   return autoModeClassifierRole === "arbiter" || autoModeClassifierRole === "arbiterWithLocalFallback";
 }
 //@ chunk-e6aww6q8.js:1035247-1035424 placement
-function isServerClassifierActive(mode, autoModeClassifierRole, { handoffReview: r = false } = {}) {
+function isServerClassifierActive(mode, autoModeClassifierRole, { handoffReview = false } = {}) {
   if (!isAutoClassifierActive(mode)) return false;
   if (
     isLocalClassifierSwitchedOff({
-      handoffReview: r,
+      handoffReview,
     })
   )
     return true;
@@ -241,10 +244,10 @@ function isServerArbiterActive() {
 /**
  * canAttachServerClassifierBeta：需要附加分类器 beta 头。
  */
-function canAttachServerClassifierBeta(e) {
+function canAttachServerClassifierBeta(mode) {
   return (
     isArbiterRole(
-      getAutoModeClassifierRole(e, {
+      getAutoModeClassifierRole(mode, {
         peek: true,
       }),
     ) && !isBetaRejected_2(getStickyBetas(), BETA_DANGEROUS_TOOL_USE)
@@ -270,27 +273,27 @@ function sanitizeServerExplanation(explanation) {
 //@ chunk-e6aww6q8.js:1035938-1035987 placement
 var SERVER_CALL_UNAVAILABLE_INPUT_TOO_LONG = "server_call_unavailable_input_too_long";
 //@ chunk-e6aww6q8.js:1035987-1036137 placement
-function getCallVerdictStatus(e, n) {
-  if (e.kind !== "per_call") return;
-  let r = e.statuses.get(n);
-  if (r !== undefined) return r;
-  let s = stripSuffixNumber(n);
-  return s === undefined ? undefined : e.statuses.get(s);
+function getCallVerdictStatus(verdict, toolUseID) {
+  if (verdict.kind !== "per_call") return;
+  let status = verdict.statuses.get(toolUseID);
+  if (status !== undefined) return status;
+  let baseId = stripSuffixNumber(toolUseID);
+  return baseId === undefined ? undefined : verdict.statuses.get(baseId);
 }
 //@ chunk-e6aww6q8.js:1036137-1036213 placement
 /**
  * noVerdictReasonFor：未判定时给出原因。
  */
-function noVerdictReasonFor(e, toolUseID) {
-  let callVerdictStatus = getCallVerdictStatus(e, toolUseID);
-  return callVerdictStatus?.type === "evaluated" ? undefined : getNoVerdictReason(e, callVerdictStatus);
+function noVerdictReasonFor(verdict, toolUseID) {
+  let callVerdictStatus = getCallVerdictStatus(verdict, toolUseID);
+  return callVerdictStatus?.type === "evaluated" ? undefined : getNoVerdictReason(verdict, callVerdictStatus);
 }
 //@ chunk-e6aww6q8.js:1036213-1036293 placement
 /**
  * isServerNotRequestedReason：服务端未请求或输入被改写的失败原因。
  */
-function isServerNotRequestedReason(e) {
-  return e === "server_not_requested" || e === "server_input_rewritten";
+function isServerNotRequestedReason(reason) {
+  return reason === "server_not_requested" || reason === "server_input_rewritten";
 }
 //@ chunk-e6aww6q8.js:1036293-1036366 placement
 /**
@@ -304,50 +307,45 @@ function isInputRewrittenWithFallbackOff(errorKind) {
   );
 }
 //@ chunk-e6aww6q8.js:1036366-1036530 placement
-function shouldFallBackToLocalEarly(e, n) {
+function shouldFallBackToLocalEarly(role, verdict) {
   return (
-    e === "arbiterWithLocalFallback" &&
-    (isServerClassifierUnsupported(n) ||
-      (n.kind === "none" &&
-        (n.why === "server_not_requested" ||
-          (n.why === "server_input_rewritten" && getServerClassifierFallbackMode() === "off"))))
+    role === "arbiterWithLocalFallback" &&
+    (isServerClassifierUnsupported(verdict) ||
+      (verdict.kind === "none" &&
+        (verdict.why === "server_not_requested" ||
+          (verdict.why === "server_input_rewritten" && getServerClassifierFallbackMode() === "off"))))
   );
 }
 //@ chunk-e6aww6q8.js:1036530-1036979 placement
 /**
  * 按分类器角色判断是否回退到本地分类器：arbiter 仅在无结果/不支持时；带本地回退的角色在服务端不可用、无结果或该调用不可用时回退。
  */
-function shouldFallBackToLocal(
-  serverClassifierRoleForCall,
-  n,
-  toolUseID,
-  { outsideAutoMode: s = false } = {},
-) {
-  if (serverClassifierRoleForCall === "arbiter")
+function shouldFallBackToLocal(role, verdict, toolUseID, { outsideAutoMode = false } = {}) {
+  if (role === "arbiter")
     return (
       isQuietLanternOn() &&
-      n.kind === "none" &&
-      (n.why === "server_no_result" ||
-        n.why === "server_unsupported" ||
-        (s && n.why === "server_thread_unsupported"))
+      verdict.kind === "none" &&
+      (verdict.why === "server_no_result" ||
+        verdict.why === "server_unsupported" ||
+        (outsideAutoMode && verdict.why === "server_thread_unsupported"))
     );
-  if (serverClassifierRoleForCall !== "arbiterWithLocalFallback") return false;
-  if (shouldFallBackToLocalEarly(serverClassifierRoleForCall, n)) return true;
-  if (n.kind === "none")
-    return n.why.startsWith("server_unavailable_") || n.why === "server_results_not_held";
-  let callVerdictStatus = getCallVerdictStatus(n, toolUseID);
+  if (role !== "arbiterWithLocalFallback") return false;
+  if (shouldFallBackToLocalEarly(role, verdict)) return true;
+  if (verdict.kind === "none")
+    return verdict.why.startsWith("server_unavailable_") || verdict.why === "server_results_not_held";
+  let callVerdictStatus = getCallVerdictStatus(verdict, toolUseID);
   if (callVerdictStatus === undefined) return true;
   return callVerdictStatus.type === "unavailable" && callVerdictStatus.reason !== "truncated";
 }
 //@ chunk-e6aww6q8.js:1036979-1037251 placement
-function getNoVerdictReason(e, callVerdictStatus) {
-  if (e.kind === "none") return e.why;
+function getNoVerdictReason(verdict, callVerdictStatus) {
+  if (verdict.kind === "none") return verdict.why;
   if (callVerdictStatus === undefined) return "server_no_result";
   switch (callVerdictStatus.type) {
     case "skipped":
       return "server_call_skipped";
     case "unavailable":
-      return `server_call_unavailable_${knownValueOrOther(dangerousToolUseCombinedSchema, callVerdictStatus.reason)}`;
+      return `server_call_unavailable_${knownValueOrOther(DANGEROUS_TOOL_USE_COMBINED_REASONS, callVerdictStatus.reason)}`;
     case "unrecognized":
       return "server_unrecognized_result";
   }
@@ -356,55 +354,62 @@ function getNoVerdictReason(e, callVerdictStatus) {
 /**
  * 取服务端分类器结果：输入被改写、未持有结果或未请求时返回 kind=none 及原因。
  */
-function getUnheldServerResults(e) {
-  if (e.serverClassifierInputRewritten === true)
+function getUnheldServerResults(assistantMessage) {
+  if (assistantMessage.serverClassifierInputRewritten === true)
     return Promise.resolve({
       kind: "none",
       why: "server_input_rewritten",
     });
-  let n = asClassifierResult(e.serverClassifierResults);
-  if (n !== undefined) return n.results();
+  let result = asClassifierResult(assistantMessage.serverClassifierResults);
+  if (result !== undefined) return result.results();
   return Promise.resolve({
     kind: "none",
-    why: e.serverClassifierRequest !== undefined ? "server_results_not_held" : "server_not_requested",
+    why:
+      assistantMessage.serverClassifierRequest !== undefined
+        ? "server_results_not_held"
+        : "server_not_requested",
   });
 }
 //@ chunk-e6aww6q8.js:1037570-1037999 placement
 /**
  * 等待某调用的服务端分类结果；输入被改写或该调用的结论已被别的调用作废时返回 server_input_rewritten。
  */
-function awaitServerVerdict(e, n, r = true) {
-  let s = e.serverClassifierInputRewritten === true;
-  let h = asClassifierResult(s ? e.serverClassifierReviewLeftBehind : e.serverClassifierResults);
-  if (h === undefined) return getUnheldServerResults(e);
-  if (!wasSentForJudging(h, e, n))
+function awaitServerVerdict(assistantMessage, toolUseID, requireSent = true) {
+  let isRewritten = assistantMessage.serverClassifierInputRewritten === true;
+  let result = asClassifierResult(
+    isRewritten
+      ? assistantMessage.serverClassifierReviewLeftBehind
+      : assistantMessage.serverClassifierResults,
+  );
+  if (result === undefined) return getUnheldServerResults(assistantMessage);
+  if (!wasSentForJudging(result, assistantMessage, toolUseID))
     return Promise.resolve({
       kind: "none",
       why: "server_not_requested",
     });
-  return h.results().then((y) => {
-    let callVerdictStatus = getCallVerdictStatus(y, n);
+  return result.results().then((verdicts) => {
+    let callVerdictStatus = getCallVerdictStatus(verdicts, toolUseID);
     return (
-      s
+      isRewritten
         ? callVerdictStatus?.type === "evaluated" || callVerdictStatus?.type === "skipped"
-        : (!r || h.isVoidedByAnotherCall(n)) && isNotFlaggedVerdict(callVerdictStatus)
+        : (!requireSent || result.isVoidedByAnotherCall(toolUseID)) && isNotFlaggedVerdict(callVerdictStatus)
     )
       ? {
           kind: "none",
           why: "server_input_rewritten",
         }
-      : y;
+      : verdicts;
   });
 }
 //@ chunk-e6aww6q8.js:1037999-1038071 placement
-function isNotFlaggedVerdict(e) {
-  return e?.type === "evaluated" && e.outcome === "not_flagged";
+function isNotFlaggedVerdict(status) {
+  return status?.type === "evaluated" && status.outcome === "not_flagged";
 }
 //@ chunk-e6aww6q8.js:1038071-1038179 placement = countToolCallsSince (1)
 function countToolCallsSince_6(messages, sinceUuid) {
-  let r = stripSuffixNumber(sinceUuid);
+  let baseId = stripSuffixNumber(sinceUuid);
   return messages.message.content.some(
-    (block) => block.type === "tool_use" && (block.id === sinceUuid || block.id === r),
+    (block) => block.type === "tool_use" && (block.id === sinceUuid || block.id === baseId),
   );
 }
 //@ chunk-e6aww6q8.js:1038179-1038238 placement
@@ -419,28 +424,30 @@ function isClassifierTargetToolUse(assistantMessage, toolUseID, clientRequestedT
 /**
  * cloneIfServerResults：有服务端结果时克隆输入。
  */
-function cloneIfServerResults(assistantMessage, n) {
-  return asClassifierResult(assistantMessage.serverClassifierResults) === undefined ? undefined : clone(n);
+function cloneIfServerResults(assistantMessage, value) {
+  return asClassifierResult(assistantMessage.serverClassifierResults) === undefined
+    ? undefined
+    : clone(value);
 }
 //@ chunk-e6aww6q8.js:1038315-1038361 placement
 /**
  * lacksServerResult：没有服务端结果。
  */
-function lacksServerResult(e, n) {
-  return e === undefined || !deepEqualIgnoringUndefined(n, e);
+function lacksServerResult(previous, next) {
+  return previous === undefined || !deepEqualIgnoringUndefined(next, previous);
 }
 //@ chunk-e6aww6q8.js:1038361-1038591 placement
-function buildInputRewriteFields(e, n, keptVerdict) {
-  if (e === undefined) return {};
+function buildInputRewriteFields(rewrite, shape, keptVerdict) {
+  if (rewrite === undefined) return {};
   return {
     [inputAsWrittenSymbol]:
-      getServerClassifierFallbackMode() !== "off" ? structuredClone(e.written) : undefined,
+      getServerClassifierFallbackMode() !== "off" ? structuredClone(rewrite.written) : undefined,
     serverClassifierInputRewrite: {
-      cause: e.cause,
-      source: e.source,
-      byLocalCode: e.byLocalCode,
-      ...(n !== undefined && {
-        shape: n,
+      cause: rewrite.cause,
+      source: rewrite.source,
+      byLocalCode: rewrite.byLocalCode,
+      ...(shape !== undefined && {
+        shape,
       }),
       keptVerdict,
     },
@@ -453,120 +460,127 @@ function buildInputRewriteFields(e, n, keptVerdict) {
 async function applyServerClassifierVerdict(
   assistantMessage,
   toolUseID,
-  hookUpdatedInput,
-  s,
-  sameTurnToolUses,
+  rewrittenInput,
+  hookRewrite,
+  toolUses,
 ) {
-  let y = asClassifierResult(assistantMessage.serverClassifierResults);
-  if (y === undefined || !countToolCallsSince_6(assistantMessage, toolUseID)) return assistantMessage;
-  let S =
-    !y.isVoidedByAnotherCall(toolUseID) &&
-    sameTurnToolUses !== undefined &&
-    sameTurnToolUses.every((Ie) => asClassifierResult(Ie.serverClassifierResults) === y);
-  if (s === undefined && S) return assistantMessage;
-  let w = s !== undefined;
-  let L =
-    s !== undefined
-      ? s.cause
-      : sameTurnToolUses === undefined
+  let result = asClassifierResult(assistantMessage.serverClassifierResults);
+  if (result === undefined || !countToolCallsSince_6(assistantMessage, toolUseID)) return assistantMessage;
+  let siblingsAgree =
+    !result.isVoidedByAnotherCall(toolUseID) &&
+    toolUses !== undefined &&
+    toolUses.every((sibling) => asClassifierResult(sibling.serverClassifierResults) === result);
+  if (hookRewrite === undefined && siblingsAgree) return assistantMessage;
+  let hasRewrite = hookRewrite !== undefined;
+  let cause =
+    hookRewrite !== undefined
+      ? hookRewrite.cause
+      : toolUses === undefined
         ? "siblings_unknown"
-        : sameTurnToolUses.every((Ie) => asClassifierResult(Ie.serverClassifierResults) === y)
-          ? y.siblingNoteCause()
+        : toolUses.every((sibling) => asClassifierResult(sibling.serverClassifierResults) === result)
+          ? result.siblingNoteCause()
           : "sibling_not_reviewed";
-  y.noteRewriteCause(L);
-  y.noteRewrittenCall(
+  result.noteRewriteCause(cause);
+  result.noteRewrittenCall(
     toolUseID,
-    getServerClassifierFallbackMode() !== "off" ? countToolCallsSince_7(sameTurnToolUses) : undefined,
+    getServerClassifierFallbackMode() !== "off" ? countToolCallsSince_7(toolUses) : undefined,
   );
   let message = {
     ...assistantMessage.message,
-    content: assistantMessage.message.content.map((Ie) =>
-      Ie.type === "tool_use" && Ie.id === toolUseID
+    content: assistantMessage.message.content.map((block) =>
+      block.type === "tool_use" && block.id === toolUseID
         ? {
-            ...Ie,
-            input: hookUpdatedInput,
+            ...block,
+            input: rewrittenInput,
           }
-        : Ie,
+        : block,
     ),
   };
-  let q = wasSentForJudging(y, assistantMessage, toolUseID)
-    ? getCallVerdictStatus(await y.results(), toolUseID)
+  let verdictStatus = wasSentForJudging(result, assistantMessage, toolUseID)
+    ? getCallVerdictStatus(await result.results(), toolUseID)
     : undefined;
-  let found = assistantMessage.message.content.find((Ie) => Ie.type === "tool_use" && Ie.id === toolUseID);
-  let Se = w ? compareBashCommandInputs(found, hookUpdatedInput) : undefined;
-  if (s !== undefined && S && keepsLocalClassifierVerdict(s))
+  let toolUseBlock = assistantMessage.message.content.find(
+    (block) => block.type === "tool_use" && block.id === toolUseID,
+  );
+  let shape = hasRewrite ? compareBashCommandInputs(toolUseBlock, rewrittenInput) : undefined;
+  if (hookRewrite !== undefined && siblingsAgree && keepsLocalClassifierVerdict(hookRewrite))
     return {
       ...assistantMessage,
-      ...buildInputRewriteFields(s, Se, isNotFlaggedVerdict(q)),
+      ...buildInputRewriteFields(hookRewrite, shape, isNotFlaggedVerdict(verdictStatus)),
       message,
     };
-  if (!(w ? q?.type === "evaluated" : isNotFlaggedVerdict(q)))
-    return w
+  if (!(hasRewrite ? verdictStatus?.type === "evaluated" : isNotFlaggedVerdict(verdictStatus)))
+    return hasRewrite
       ? {
           ...assistantMessage,
-          ...buildInputRewriteFields(s, Se, false),
+          ...buildInputRewriteFields(hookRewrite, shape, false),
           message,
         }
       : assistantMessage;
-  let { serverClassifierRequest, serverClassifierResults, ...Ae } = assistantMessage;
+  let { serverClassifierRequest, serverClassifierResults, ...rest } = assistantMessage;
   return {
-    ...Ae,
+    ...rest,
     serverClassifierInputRewritten: true,
-    ...(w && {
+    ...(hasRewrite && {
       serverClassifierOwnInputRewritten: true,
     }),
-    ...buildInputRewriteFields(s, Se, false),
+    ...buildInputRewriteFields(hookRewrite, shape, false),
     message,
     serverClassifierRewrite: {
-      cause: L,
-      lostVerdict: isNotFlaggedVerdict(q) ? "cleared" : "flagged",
+      cause,
+      lostVerdict: isNotFlaggedVerdict(verdictStatus) ? "cleared" : "flagged",
     },
   };
 }
 //@ chunk-e6aww6q8.js:1039693-1039930 placement
-function compareBashCommandInputs(e, n) {
-  let command = e?.type === "tool_use" && isPlainObject_5(e.input) ? e.input.command : undefined;
-  let command_2 = n.command;
+function compareBashCommandInputs(toolUseBlock, rewrittenInput) {
+  let command =
+    toolUseBlock?.type === "tool_use" && isPlainObject_5(toolUseBlock.input)
+      ? toolUseBlock.input.command
+      : undefined;
+  let command_2 = rewrittenInput.command;
   if (typeof command !== "string" || typeof command_2 !== "string") return;
   if (command_2 === command) return "same";
   if (command_2.endsWith(command)) return "prefix";
   return command_2.includes(command) ? "contains" : "other";
 }
 //@ chunk-e6aww6q8.js:1039930-1040058 placement = countToolCallsSince (1)
-function countToolCallsSince_7(e) {
-  return e === undefined
+function countToolCallsSince_7(toolUses) {
+  return toolUses === undefined
     ? undefined
     : new Set(
-        e.flatMap((n) => n.message.content.flatMap((block) => (block.type === "tool_use" ? [block.id] : []))),
+        toolUses.flatMap((assistantMessage) =>
+          assistantMessage.message.content.flatMap((block) => (block.type === "tool_use" ? [block.id] : [])),
+        ),
       );
 }
 //@ chunk-e6aww6q8.js:1040058-1040453 placement
 /**
  * 描述服务端分类后调用输入被改写的情况：原因（工具链或钩子）、来源、是否全由本地代码改写，以及 keep_local 模式下的附加判断。
  */
-function describeInputRewrite(hookRewrite, n, r, s) {
-  if (!hookRewrite.changed && !n.changed) return;
-  let h = (kinds) => kinds.every((w) => w === "local_code");
-  let y = getServerClassifierFallbackMode() === "keep_local";
+function describeInputRewrite(hookRewrite, chainRewrite, classifiesAll, shellOrFileTool) {
+  if (!hookRewrite.changed && !chainRewrite.changed) return;
+  let isLocalOnly = (kinds) => kinds.every((kind) => kind === "local_code");
+  let keepLocal = getServerClassifierFallbackMode() === "keep_local";
   return {
     cause: hookRewrite.changed ? "tool_call_chain" : "hook",
     source: summarizeRewriteSources([
       ...(hookRewrite.changed ? hookRewrite.sources : []),
-      ...(n.changed ? n.sources : []),
+      ...(chainRewrite.changed ? chainRewrite.sources : []),
     ]),
     byLocalCode:
-      h(hookRewrite.kinds) &&
-      h(n.kinds) &&
+      isLocalOnly(hookRewrite.kinds) &&
+      isLocalOnly(chainRewrite.kinds) &&
       (!hookRewrite.changed || hookRewrite.kinds.length > 0) &&
-      (!n.changed || n.kinds.length > 0),
-    classifiesAll: y && r(),
-    shellOrFileTool: y && s(),
+      (!chainRewrite.changed || chainRewrite.kinds.length > 0),
+    classifiesAll: keepLocal && classifiesAll(),
+    shellOrFileTool: keepLocal && shellOrFileTool(),
     written: hookRewrite.written,
   };
 }
 //@ chunk-e6aww6q8.js:1040453-1040701 placement
-function classifyRewriteSource(e) {
-  switch (e === undefined ? undefined : firstLineOf(e, ":")) {
+function classifyRewriteSource(source) {
+  switch (source === undefined ? undefined : firstLineOf(source, ":")) {
     case "settings":
       return "settings";
     case "policySettings":
@@ -584,13 +598,16 @@ function classifyRewriteSource(e) {
   }
 }
 //@ chunk-e6aww6q8.js:1040701-1040809 placement
-function summarizeRewriteSources(e) {
-  let n = new Set(e.map(classifyRewriteSource));
-  if (n.size === 0) return "unknown";
-  return n.size === 1 ? [...n][0] : "mixed";
+function summarizeRewriteSources(sources) {
+  let kinds = new Set(sources.map(classifyRewriteSource));
+  if (kinds.size === 0) return "unknown";
+  return kinds.size === 1 ? [...kinds][0] : "mixed";
 }
 //@ chunk-e6aww6q8.js:1040809-1040837 placement
-var SHELL_TOOL_NAMES_2 = new Set([BASH_TOOL_NAME, MONITOR, POWERSHELL_TOOL_NAME]);
+var SHELL_TOOL_NAMES_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1040809", () => {
+  SHELL_TOOL_NAMES_2 = new Set([BASH_TOOL_NAME, MONITOR, POWERSHELL_TOOL_NAME]);
+});
 //@ chunk-e6aww6q8.js:1040837-1040878 placement
 /**
  * isShellToolClassified：shell 工具且分类器启用。
@@ -599,12 +616,15 @@ function isShellToolClassified(name) {
   return SHELL_TOOL_NAMES_2.has(name) && classifyAllShellEnabled();
 }
 //@ chunk-e6aww6q8.js:1040878-1040913 placement
-var SHELL_AND_FILE_TOOL_NAMES = new Set([
-  ...SHELL_TOOL_NAMES_2,
-  FILE_EDIT_TOOL_NAME,
-  FILE_WRITE_TOOL_NAME,
-  NOTEBOOK_EDIT_TOOL_NAME,
-]);
+var SHELL_AND_FILE_TOOL_NAMES; // deferred: uses SHELL_TOOL_NAMES_2 of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1040878", () => {
+  SHELL_AND_FILE_TOOL_NAMES = new Set([
+    ...SHELL_TOOL_NAMES_2,
+    FILE_EDIT_TOOL_NAME,
+    FILE_WRITE_TOOL_NAME,
+    NOTEBOOK_EDIT_TOOL_NAME,
+  ]);
+});
 //@ chunk-e6aww6q8.js:1040913-1040995 placement
 /**
  * isShellOrFileToolForClassifier：非 MCP 的 shell/文件工具。
@@ -618,17 +638,17 @@ function isShellOrFileToolForClassifier(tool) {
   );
 }
 //@ chunk-e6aww6q8.js:1040995-1041090 placement
-function keepsLocalClassifierVerdict(e) {
+function keepsLocalClassifierVerdict(rewrite) {
   return (
     getServerClassifierFallbackMode() === "keep_local" &&
-    e.byLocalCode &&
-    e.shellOrFileTool &&
-    !e.classifiesAll
+    rewrite.byLocalCode &&
+    rewrite.shellOrFileTool &&
+    !rewrite.classifiesAll
   );
 }
 //@ chunk-e6aww6q8.js:1041090-1041347 placement
-function getRewriteLostVerdictNote(assistantMessage, n) {
-  if (n !== "server_input_rewritten") return;
+function getRewriteLostVerdictNote(assistantMessage, reason) {
+  if (reason !== "server_input_rewritten") return;
   if (assistantMessage.serverClassifierInputRewritten !== true)
     return {
       cause:
@@ -645,12 +665,12 @@ function getRewriteLostVerdictNote(assistantMessage, n) {
 /**
  * 把某调用的服务端结果概括为 verdict（含是否带解释）或 no_verdict（含原因码）。
  */
-function summarizeServerVerdict(e, n) {
-  let callVerdictStatus = getCallVerdictStatus(e, n);
+function summarizeServerVerdict(verdict, toolUseID) {
+  let callVerdictStatus = getCallVerdictStatus(verdict, toolUseID);
   if (callVerdictStatus?.type !== "evaluated")
     return {
       kind: "no_verdict",
-      why: getNoVerdictReason(e, callVerdictStatus),
+      why: getNoVerdictReason(verdict, callVerdictStatus),
     };
   return {
     kind: "verdict",
@@ -661,8 +681,8 @@ function summarizeServerVerdict(e, n) {
   };
 }
 //@ chunk-e6aww6q8.js:1041551-1042315 placement
-function classifyServerVerdict(e, n, r) {
-  let callVerdictStatus = getCallVerdictStatus(e, n);
+function classifyServerVerdict(verdict, toolUseID, fallback) {
+  let callVerdictStatus = getCallVerdictStatus(verdict, toolUseID);
   if (callVerdictStatus?.type !== "evaluated") {
     if (callVerdictStatus?.type === "unavailable" && callVerdictStatus.reason === "refused")
       return {
@@ -671,38 +691,38 @@ function classifyServerVerdict(e, n, r) {
         shouldBlock: true,
         refusedBySafeguard: true,
         failureMode: "policy_refusal",
-        errorKind: noVerdictReasonFor(e, n),
+        errorKind: noVerdictReasonFor(verdict, toolUseID),
         reason: buildClassifierParseFailureReason("server", "policy_refusal", "refusal"),
       };
-    let S =
+    let mayAskFallback =
       callVerdictStatus === undefined
-        ? e.kind !== "none" || e.why !== "server_unrecognized_result"
+        ? verdict.kind !== "none" || verdict.why !== "server_unrecognized_result"
         : callVerdictStatus.type === "skipped";
-    let w = noVerdictReasonFor(e, n);
+    let noVerdictReason = noVerdictReasonFor(verdict, toolUseID);
     return (
-      (S ? r() : undefined) ?? {
+      (mayAskFallback ? fallback() : undefined) ?? {
         model: SERVER_CLASSIFIER_LABEL,
         durationMs: 0,
         shouldBlock: true,
         unavailable: true,
-        ...(w === SERVER_CALL_UNAVAILABLE_INPUT_TOO_LONG &&
+        ...(noVerdictReason === SERVER_CALL_UNAVAILABLE_INPUT_TOO_LONG &&
           isVividCrayonOn() && {
             transcriptTooLong: true,
           }),
-        errorKind: w,
+        errorKind: noVerdictReason,
         reason: "Classifier unavailable - blocking for safety",
       }
     );
   }
-  let h = callVerdictStatus.outcome === "flagged";
-  let y = h ? sanitizeServerExplanation(callVerdictStatus.explanation) : undefined;
+  let isFlagged = callVerdictStatus.outcome === "flagged";
+  let explanation = isFlagged ? sanitizeServerExplanation(callVerdictStatus.explanation) : undefined;
   return {
     model: SERVER_CLASSIFIER_LABEL,
     durationMs: 0,
-    shouldBlock: h,
-    reason: h
-      ? y !== undefined && y.length > 0
-        ? y.slice(0, SERVER_CLASSIFIER_NOTE_LIMIT)
+    shouldBlock: isFlagged,
+    reason: isFlagged
+      ? explanation !== undefined && explanation.length > 0
+        ? explanation.slice(0, SERVER_CLASSIFIER_NOTE_LIMIT)
         : SERVER_CLASSIFIER_NO_EXPLANATION_REASON
       : "Not flagged by the server-side auto mode classifier",
   };
@@ -710,15 +730,17 @@ function classifyServerVerdict(e, n, r) {
 //@ chunk-e6aww6q8.js:1042315-1042347 placement
 var TENGU_FLICKERING_RAIN = "tengu_flickering_rain";
 //@ chunk-e6aww6q8.js:1308790-1309037 placement
-function getPermissionModeAtRequestForArbiter(assistantMessage, toolUseID, r) {
+function getPermissionModeAtRequestForArbiter(assistantMessage, toolUseID, context) {
   let permissionModeAtRequest = assistantMessage.permissionModeAtRequest;
   if (
     !isPlainModeAtRequest(permissionModeAtRequest) ||
-    !assistantMessage.message.content.some((y) => y.type === "tool_use" && y.id === toolUseID)
+    !assistantMessage.message.content.some(
+      (contentBlock) => contentBlock.type === "tool_use" && contentBlock.id === toolUseID,
+    )
   )
     return;
   let mode = getToolPermissionContext({
-    ...r,
+    ...context,
     permissionModeAtRequest: undefined,
   }).mode;
   return getAutoModeClassifierRole(mode) === "arbiter" &&

@@ -17,10 +17,10 @@ var SPAWN_SESSIONS_DEFAULT = 32;
  * 打印 claude remote-control 的帮助。
  */
 async function printRemoteControlHelp() {
-  let { EXTERNAL_PERMISSION_MODES } = await import("./chunk-k6t7e4cb.js");
+  let { EXTERNAL_PERMISSION_MODES } = await import("../types/permissions.js");
   let modes = EXTERNAL_PERMISSION_MODES.join(", ");
-  let { isViolinWoodEnabledCached } = await import("./chunk-m288yvvf.js");
-  let e = isViolinWoodEnabledCached();
+  let { isViolinWoodEnabledCached } = await import("../services/analytics/violinGates.js");
+  let unattended = isViolinWoodEnabledCached();
   let help = `
 Remote Control - Control local sessions from claude.ai/code or the Claude mobile app
 
@@ -60,7 +60,7 @@ OPTIONS
                                    stays in cwd while on-demand sessions get
                                    isolated worktrees (default: on)
 ${
-  e
+  unattended
     ? `  --allow-unattended-tool-calls    Let your cloud sessions use this folder for
                                    this run. Their auto-mode commands run
                                    without asking, inside the sandbox only
@@ -87,7 +87,7 @@ DESCRIPTION
   the session stops. (A Cloud session is the opposite: Claude runs in the
   cloud and this computer can be off.)
 ${
-  e
+  unattended
     ? `
   Your cloud sessions can also run file, shell and MCP tools in this
   folder (see --allow-unattended-tool-calls), under this computer's

@@ -8,8 +8,8 @@
  * pieces: chunk-55w3ydvj.js (5)
  * attribution: placement 5
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y, fo, Qr } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState, suspenseTypeExport, use } from "../../../vendor/react/cjs/react.production.js";
 import {
   probeSandboxDependencies,
   isWindowsSandboxBlockingError,
@@ -26,53 +26,54 @@ import { toInlineCode, SANDBOX_NOT_CHANGED_PREFIX } from "../../commands/model/m
 import { escapeControlCharsForDisplay } from "../../utils/stringUtils.js";
 import { getErrnoCode } from "../../utils/errors.js";
 import { getSettingsFilePathForSource } from "../../utils/settings/settings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-55w3ydvj.js:19789-20078 placement
 function SandboxDepCheckLine(props) {
-  let o = w(4);
+  let $ = useMemoCache(4);
   let { depCheck } = props;
-  let [l] = y(probeSandboxDependencies);
+  let [depCheckResult] = useState(probeSandboxDependencies);
   let fallback;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
+  if ($[0] === MEMO_CACHE_SENTINEL) {
     fallback = jsxProd_default(Text, {
       dimColor: true,
       children: "Checking Windows sandbox status\u2026",
     });
-    o[0] = fallback;
-  } else fallback = o[0];
-  let u;
-  if (o[1] !== depCheck || o[2] !== l) {
-    u = jsxProd_default(fo, {
+    $[0] = fallback;
+  } else fallback = $[0];
+  let statusElement;
+  if ($[1] !== depCheck || $[2] !== depCheckResult) {
+    statusElement = jsxProd_default(suspenseTypeExport, {
       fallback,
       children: jsxProd_default(WindowsSandboxStatus, {
-        statusPromise: l,
+        statusPromise: depCheckResult,
         depCheck,
       }),
     });
-    o[1] = depCheck;
-    o[2] = l;
-    o[3] = u;
-  } else u = o[3];
-  return u;
+    $[1] = depCheck;
+    $[2] = depCheckResult;
+    $[3] = statusElement;
+  } else statusElement = $[3];
+  return statusElement;
 }
 //@ chunk-55w3ydvj.js:20078-21857 placement
 /**
  * 显示 Windows 沙箱状态与依赖检查结果。
  */
 function WindowsSandboxStatus(props) {
-  let m = w(10);
+  let $ = useMemoCache(10);
   let { statusPromise, depCheck } = props;
-  let o = Qr(statusPromise);
-  let u;
-  if (m[0] !== o) {
-    u =
-      "probeError" in o
+  let statusResult = use(statusPromise);
+  let content;
+  if ($[0] !== statusResult) {
+    content =
+      "probeError" in statusResult
         ? jsxProd_default_2(Box, {
             flexDirection: "column",
             children: [
               jsxProd_default_2(Text, {
                 color: "error",
-                children: ["could not check sandbox status: ", o.probeError],
+                children: ["could not check sandbox status: ", statusResult.probeError],
               }),
               jsxProd_default_2(Text, {
                 dimColor: true,
@@ -90,12 +91,12 @@ function WindowsSandboxStatus(props) {
                 children: [
                   "sandbox user:",
                   " ",
-                  o.user.provisioned && o.user.credPresent
+                  statusResult.user.provisioned && statusResult.user.credPresent
                     ? jsxProd_default(Text, {
                         color: "success",
                         children: "provisioned",
                       })
-                    : o.user.provisioned
+                    : statusResult.user.provisioned
                       ? jsxProd_default(Text, {
                           color: "warning",
                           children: "provisioned \u2014 credential not readable",
@@ -110,12 +111,12 @@ function WindowsSandboxStatus(props) {
                 children: [
                   "network filters (WFP):",
                   " ",
-                  o.wfp.state === "installed"
+                  statusResult.wfp.state === "installed"
                     ? jsxProd_default(Text, {
                         color: "success",
                         children: "installed",
                       })
-                    : o.wfp.state === "cannot-read"
+                    : statusResult.wfp.state === "cannot-read"
                       ? jsxProd_default(Text, {
                           color: "warning",
                           children: "cannot read (run elevated to check)",
@@ -126,12 +127,12 @@ function WindowsSandboxStatus(props) {
                         }),
                 ],
               }),
-              o.caTrusted !== null &&
+              statusResult.caTrusted !== null &&
                 jsxProd_default_2(Text, {
                   children: [
                     "TLS inspection CA:",
                     " ",
-                    o.caTrusted
+                    statusResult.caTrusted
                       ? jsxProd_default(Text, {
                           color: "success",
                           children: "trusted",
@@ -142,16 +143,16 @@ function WindowsSandboxStatus(props) {
                         }),
                   ],
                 }),
-              (!o.user.provisioned ||
-                !o.user.credPresent ||
-                o.wfp.state === "absent" ||
-                (o.caTrusted === false && o.caManaged)) &&
+              (!statusResult.user.provisioned ||
+                !statusResult.user.credPresent ||
+                statusResult.wfp.state === "absent" ||
+                (statusResult.caTrusted === false && statusResult.caManaged)) &&
                 jsxProd_default_2(Text, {
                   dimColor: true,
                   children: ["  ", "\xB7 run /sandbox install"],
                 }),
-              o.caTrusted === false &&
-                !o.caManaged &&
+              statusResult.caTrusted === false &&
+                !statusResult.caManaged &&
                 jsxProd_default_2(Text, {
                   dimColor: true,
                   children: [
@@ -161,51 +162,55 @@ function WindowsSandboxStatus(props) {
                 }),
             ],
           });
-    m[0] = o;
-    m[1] = u;
-  } else u = m[1];
-  let i;
-  if (m[2] !== depCheck.errors || m[3] !== o) {
-    i = "probeError" in o ? depCheck.errors : depCheck.errors.filter(isWindowsSandboxBlockingError);
-    m[2] = depCheck.errors;
-    m[3] = o;
-    m[4] = i;
-  } else i = m[4];
-  let p;
-  if (m[5] !== i) {
-    p = i.map(describeProbeResult).map(renderProbeError);
-    m[5] = i;
-    m[6] = p;
-  } else p = m[6];
-  let a;
-  if (m[7] !== u || m[8] !== p) {
-    a = jsxProd_default_2(Box, {
+    $[0] = statusResult;
+    $[1] = content;
+  } else content = $[1];
+  let errorNotice;
+  if ($[2] !== depCheck.errors || $[3] !== statusResult) {
+    errorNotice =
+      "probeError" in statusResult ? depCheck.errors : depCheck.errors.filter(isWindowsSandboxBlockingError);
+    $[2] = depCheck.errors;
+    $[3] = statusResult;
+    $[4] = errorNotice;
+  } else errorNotice = $[4];
+  let body;
+  if ($[5] !== errorNotice) {
+    body = errorNotice.map(describeProbeResult).map(renderProbeError);
+    $[5] = errorNotice;
+    $[6] = body;
+  } else body = $[6];
+  let boxElement;
+  if ($[7] !== content || $[8] !== body) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [u, p],
+      children: [content, body],
     });
-    m[7] = u;
-    m[8] = p;
-    m[9] = a;
-  } else a = m[9];
-  return a;
+    $[7] = content;
+    $[8] = body;
+    $[9] = boxElement;
+  } else boxElement = $[9];
+  return boxElement;
 }
 //@ chunk-55w3ydvj.js:21857-21900 placement
-var WINDOWS_SANDBOX_DENIED_ERRORS = new Set(["EACCES", "EPERM", "EROFS"]);
+var WINDOWS_SANDBOX_DENIED_ERRORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-55w3ydvj.js:21857", () => {
+  WINDOWS_SANDBOX_DENIED_ERRORS = new Set(["EACCES", "EPERM", "EROFS"]);
+});
 //@ chunk-55w3ydvj.js:21900-21932 placement
-function describeWindowsSandboxState(f) {
-  return toInlineCode(escapeControlCharsForDisplay(f));
+function describeWindowsSandboxState(state) {
+  return toInlineCode(escapeControlCharsForDisplay(state));
 }
 //@ chunk-55w3ydvj.js:21932-22234 placement
-function sandboxSettingsErrorText({ error }, t) {
-  if (error === null) return t;
-  let l = error.cause instanceof Error ? error.cause : error;
-  let errnoCode = getErrnoCode(l);
-  let m = getSettingsFilePathForSource("localSettings") ?? ".claude/settings.local.json";
-  let u =
+function sandboxSettingsErrorText({ error }, fallback) {
+  if (error === null) return fallback;
+  let cause = error.cause instanceof Error ? error.cause : error;
+  let errnoCode = getErrnoCode(cause);
+  let causeErrno = getSettingsFilePathForSource("localSettings") ?? ".claude/settings.local.json";
+  let path =
     errnoCode !== undefined && WINDOWS_SANDBOX_DENIED_ERRORS.has(errnoCode)
       ? " Start Claude Code in a project folder you can write to."
       : "";
-  return `${SANDBOX_NOT_CHANGED_PREFIX}${describeWindowsSandboxState(m)} couldn't be updated (${describeWindowsSandboxState(errnoCode ?? l.message)}).${u}`;
+  return `${SANDBOX_NOT_CHANGED_PREFIX}${describeWindowsSandboxState(causeErrno)} couldn't be updated (${describeWindowsSandboxState(errnoCode ?? cause.message)}).${path}`;
 }
 export { SandboxDepCheckLine, sandboxSettingsErrorText };

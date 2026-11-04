@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_create } from "../cjs/create.js";
 import { require_from_binary } from "./from-binary.js";
 import { require_reflect } from "../cjs/reflect/reflect.js";
@@ -15,7 +15,7 @@ import { require_binary_encoding } from "./wire/binary-encoding.js";
 import { require_wrappers } from "../cjs/wkt/wrappers.js";
 
 //@ chunk-fq0cr76a.js:441299-443249 cjs-require-graph
-var require_extensions = x(function (cjsExports) {
+var require_extensions = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

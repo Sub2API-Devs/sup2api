@@ -10,10 +10,10 @@
  */
 
 //@ chunk-0777tkjc.js:585-771 placement
-function isSafeRefName(e) {
-  if (!e || e.startsWith("-") || e.startsWith("/")) return false;
-  if (e.includes("..")) return false;
-  if (e.split("/").some((n) => n === "." || n === "")) return false;
-  return /^[a-zA-Z0-9/._+@-]+$/.test(e);
+function isSafeRefName(name) {
+  if (!name || name.startsWith("-") || name.startsWith("/")) return false;
+  if (name.includes("..")) return false;
+  if (name.split("/").some((segment) => segment === "." || segment === "")) return false;
+  return /^[a-zA-Z0-9/._+@-]+$/.test(name);
 }
 export { isSafeRefName };

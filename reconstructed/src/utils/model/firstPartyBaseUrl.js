@@ -30,13 +30,13 @@ function isOfficialFirstPartyEndpoint(apiProvider = getAPIProvider()) {
 /**
  * 第一方提供商下 base URL 是否指向 Anthropic 官方。
  */
-function isFirstPartyBaseUrl(r = getAPIProvider()) {
-  if (r !== "firstParty" || !isActualFirstPartyAnthropicBaseUrl()) return false;
+function isFirstPartyBaseUrl(provider = getAPIProvider()) {
+  if (provider !== "firstParty" || !isActualFirstPartyAnthropicBaseUrl()) return false;
   if (env.ANTHROPIC_BASE_URL !== undefined || !shouldUseWIFAuth() || !isWIFDispatchAuth()) return true;
   let resolvedWIFBaseUrlSnapshot = getResolvedWIFBaseUrlSnapshot();
-  let e =
+  let baseUrl =
     resolvedWIFBaseUrlSnapshot === undefined ? (getWIFProfileBaseUrl() ?? null) : resolvedWIFBaseUrlSnapshot;
-  return e === null || isFirstPartyAnthropicHost(e);
+  return baseUrl === null || isFirstPartyAnthropicHost(baseUrl);
 }
 //@ chunk-w7m8zp6e.js:647-756 placement
 function isFirstPartyAnthropicBaseUrl() {

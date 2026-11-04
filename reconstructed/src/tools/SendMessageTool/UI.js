@@ -13,7 +13,7 @@
 /**
  * 结果对象是否带 target 字段（MCP 面板用，切分误归 SendMessage UI）。
  */
-function renderToolResultMessage(ui) {
-  return "target" in ui;
+function renderToolResultMessage(result) {
+  return "target" in result;
 }
 export { renderToolResultMessage };

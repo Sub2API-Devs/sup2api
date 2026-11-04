@@ -5,10 +5,10 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:8285-8355 cjs-require-graph
-var require_gOPD = x(function (cjsExports, cjsModule) {
+var require_gOPD = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Object.getOwnPropertyDescriptor;
 });
 export { require_gOPD };

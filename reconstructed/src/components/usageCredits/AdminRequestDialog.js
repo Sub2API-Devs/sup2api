@@ -12,9 +12,9 @@ import { logForDebugging } from "../../utils/debug.js";
 import { RECENT_INPUT_GUARD_MS_2 } from "../../hooks/useRecentInputGuard.js";
 import { isAbortError } from "../../utils/errors.js";
 import { logError } from "../../utils/log.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
-import { y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   useInputRefusalWindow,
   useRefusalTracker,
@@ -37,24 +37,24 @@ import { Dialog } from "../design-system/Dialog.js";
 //@ chunk-18hwfzwa.js:1181445-1181456 placement
 var MAX_RESOLVE_RETRIES = 40;
 //@ chunk-18hwfzwa.js:1181456-1181480 placement
-function resolveWhenTaken(h) {
-  resolveWhenTaken_2(h, 1);
+function resolveWhenTaken(resolveFn) {
+  resolveWhenTaken_2(resolveFn, 1);
 }
 //@ chunk-18hwfzwa.js:1181480-1181636 placement
-function resolveWhenTaken_2(h, x) {
-  if (h() !== false) return;
-  if (x >= MAX_RESOLVE_RETRIES) {
+function resolveWhenTaken_2(resolveFn, retryCount) {
+  if (resolveFn() !== false) return;
+  if (retryCount >= MAX_RESOLVE_RETRIES) {
     logForDebugging("resolveWhenTaken: gave up retrying a refused resolution", {
       level: "warn",
     });
     return;
   }
-  setTimeout(retryResolveWhenTaken, RECENT_INPUT_GUARD_MS_2, h, x + 1);
+  setTimeout(retryResolveWhenTaken, RECENT_INPUT_GUARD_MS_2, resolveFn, retryCount + 1);
 }
 //@ chunk-18hwfzwa.js:1181636-1181772 placement
-function retryResolveWhenTaken(h, x) {
+function retryResolveWhenTaken(resolveFn, retryCount) {
   try {
-    resolveWhenTaken_2(h, x);
+    resolveWhenTaken_2(resolveFn, retryCount);
   } catch (error) {
     if (isAbortError(error)) {
       logForDebugging("resolveWhenTaken: retry abandoned, its flow aborted", {
@@ -70,16 +70,16 @@ function retryResolveWhenTaken(h, x) {
  * 向管理员申请额度的确认对话框。
  */
 function AdminRequestConfirmDialog(props) {
-  let $ = w(50);
+  let $ = useMemoCache(50);
   let { extraUsage, flag, onDone, onOutcome, wouldTakeAnswer } = props;
   let { credentials } = useTheme_2();
-  let [Be, He] = y(false);
-  let We = R(false);
+  let [isSubmitting, setIsSubmitting] = useState(false);
+  let hasAnsweredRef = useRef(false);
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let It;
+  let isInputRefused;
   if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
-    It = function Ot() {
+    isInputRefused = function isInputRefused_() {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return true;
@@ -89,51 +89,51 @@ function AdminRequestConfirmDialog(props) {
     $[0] = inputRefusalWindow;
     $[1] = noteRefused;
     $[2] = refusedWithin;
-    $[3] = It;
-  } else It = $[3];
-  let refuseInput = It;
+    $[3] = isInputRefused;
+  } else isInputRefused = $[3];
+  let refuseInput = isInputRefused;
   let openedAt = useMountTime();
-  let Dt = settleKey(epoch);
-  let Lt = flag?.mode === "confirm" ? flag : undefined;
+  let remount = settleKey(epoch);
+  let flagOverride = flag?.mode === "confirm" ? flag : undefined;
   const mode = flag?.mode ?? "default";
-  let Xt;
+  let mode_2;
   if ($[4] !== mode) {
-    Xt = fromEnum(mode);
+    mode_2 = fromEnum(mode);
     $[4] = mode;
-    $[5] = Xt;
-  } else Xt = $[5];
-  let io = Xt;
-  let so;
-  let po;
-  if ($[6] !== io) {
-    so = () => {
+    $[5] = mode_2;
+  } else mode_2 = $[5];
+  let modeName = mode_2;
+  let logShown;
+  let logShownDeps;
+  if ($[6] !== modeName) {
+    logShown = () => {
       logEvent("tengu_usage_credits_admin_request_confirm_shown", {
-        mode: io,
+        mode: modeName,
       });
     };
-    po = [io];
-    $[6] = io;
-    $[7] = so;
-    $[8] = po;
+    logShownDeps = [modeName];
+    $[6] = modeName;
+    $[7] = logShown;
+    $[8] = logShownDeps;
   } else {
-    so = $[7];
-    po = $[8];
+    logShown = $[7];
+    logShownDeps = $[8];
   }
-  P(so, po);
-  let ao;
+  useEffect(logShown, logShownDeps);
+  let onConfirm;
   if (
     $[9] !== credentials ||
     $[10] !== extraUsage ||
     $[11] !== inputRefusalWindow ||
-    $[12] !== io ||
+    $[12] !== modeName ||
     $[13] !== noteRefused ||
     $[14] !== onDone ||
     $[15] !== onOutcome ||
     $[16] !== refusedWithin ||
     $[17] !== wouldTakeAnswer
   ) {
-    ao = function bo() {
-      if (We.current) {
+    onConfirm = function onConfirm_() {
+      if (hasAnsweredRef.current) {
         return;
       }
       if (inputRefusalWindow() || refusedWithin()) {
@@ -143,48 +143,48 @@ function AdminRequestConfirmDialog(props) {
       if (!wouldTakeAnswer()) {
         return;
       }
-      We.current = true;
+      hasAnsweredRef.current = true;
       logEvent("tengu_usage_credits_admin_request_confirm_result", {
         action: lit_2("confirmed"),
-        mode: io,
+        mode: modeName,
       });
-      He(true);
-      fileAdminLimitRequest(extraUsage, credentials).then((co) => {
-        if (co.outcome === "granted" && co.grantLine !== undefined)
+      setIsSubmitting(true);
+      fileAdminLimitRequest(extraUsage, credentials).then((result) => {
+        if (result.outcome === "granted" && result.grantLine !== undefined)
           onOutcome?.({
             outcome: "granted",
-            grantLine: co.grantLine,
+            grantLine: result.grantLine,
           });
         else
           onOutcome?.({
-            outcome: co.filed ? "filed" : "failed",
+            outcome: result.filed ? "filed" : "failed",
           });
-        resolveWhenTaken(() => onDone(co.value));
+        resolveWhenTaken(() => onDone(result.value));
       });
     };
     $[9] = credentials;
     $[10] = extraUsage;
     $[11] = inputRefusalWindow;
-    $[12] = io;
+    $[12] = modeName;
     $[13] = noteRefused;
     $[14] = onDone;
     $[15] = onOutcome;
     $[16] = refusedWithin;
     $[17] = wouldTakeAnswer;
-    $[18] = ao;
-  } else ao = $[18];
-  let onConfirm = ao;
-  let Ao;
+    $[18] = onConfirm;
+  } else onConfirm = $[18];
+  let onConfirm_2 = onConfirm;
+  let onCancel;
   if (
     $[19] !== inputRefusalWindow ||
-    $[20] !== io ||
+    $[20] !== modeName ||
     $[21] !== noteRefused ||
     $[22] !== onDone ||
     $[23] !== onOutcome ||
     $[24] !== refusedWithin
   ) {
-    Ao = function Bo() {
-      if (We.current) {
+    onCancel = function onCancel_() {
+      if (hasAnsweredRef.current) {
         return;
       }
       if (inputRefusalWindow() || refusedWithin()) {
@@ -197,87 +197,88 @@ function AdminRequestConfirmDialog(props) {
       onOutcome?.({
         outcome: "cancelled",
       });
-      We.current = true;
+      hasAnsweredRef.current = true;
       logEvent("tengu_usage_credits_admin_request_confirm_result", {
         action: lit_2("cancelled"),
-        mode: io,
+        mode: modeName,
       });
     };
     $[19] = inputRefusalWindow;
-    $[20] = io;
+    $[20] = modeName;
     $[21] = noteRefused;
     $[22] = onDone;
     $[23] = onOutcome;
     $[24] = refusedWithin;
-    $[25] = Ao;
-  } else Ao = $[25];
-  let onCancel = Ao;
-  if (Be) {
-    let Ro;
+    $[25] = onCancel;
+  } else onCancel = $[25];
+  let onCancel_2 = onCancel;
+  if (isSubmitting) {
+    let sendingElement;
     if ($[26] === MEMO_CACHE_SENTINEL) {
-      Ro = jsxProd_default(Box, {
+      sendingElement = jsxProd_default(Box, {
         paddingTop: 1,
         children: jsxProd_default(WorkerBadge, {
           message: "Sending request to your admin\u2026",
         }),
       });
-      $[26] = Ro;
-    } else Ro = $[26];
-    return Ro;
+      $[26] = sendingElement;
+    } else sendingElement = $[26];
+    return sendingElement;
   }
-  let Ho =
+  let askPhrase =
     extraUsage == null
       ? "turn on or increase your usage credits"
       : extraUsage.is_enabled
         ? "increase your usage credit limit"
         : "turn on usage credits";
-  let Ro;
-  if ($[27] !== Ho || $[28] !== Lt?.body) {
-    Ro =
-      Lt?.body?.replaceAll("{ask}", Ho) ?? `This will send a request to your organization's admins to ${Ho}.`;
-    $[27] = Ho;
-    $[28] = Lt?.body;
-    $[29] = Ro;
-  } else Ro = $[29];
-  let Io = Ro;
+  let bodyText;
+  if ($[27] !== askPhrase || $[28] !== flagOverride?.body) {
+    bodyText =
+      flagOverride?.body?.replaceAll("{ask}", askPhrase) ??
+      `This will send a request to your organization's admins to ${askPhrase}.`;
+    $[27] = askPhrase;
+    $[28] = flagOverride?.body;
+    $[29] = bodyText;
+  } else bodyText = $[29];
+  let bodyText_ = bodyText;
   let note =
-    Lt?.note ??
+    flagOverride?.note ??
     "Only send this if you're running into usage limits \u2014 your admins are notified and review each request.";
-  const title = Lt?.title ?? "Request usage credits from your admin";
-  let Cn;
-  if ($[30] !== Io) {
-    Cn =
-      Io !== "" &&
+  const title = flagOverride?.title ?? "Request usage credits from your admin";
+  let bodyElement;
+  if ($[30] !== bodyText_) {
+    bodyElement =
+      bodyText_ !== "" &&
       jsxProd_default(Text, {
-        children: Io,
+        children: bodyText_,
       });
-    $[30] = Io;
-    $[31] = Cn;
-  } else Cn = $[31];
-  let No;
+    $[30] = bodyText_;
+    $[31] = bodyElement;
+  } else bodyElement = $[31];
+  let noteElement;
   if ($[32] !== note) {
-    No =
+    noteElement =
       note !== "" &&
       jsxProd_default(Text, {
         dimColor: true,
         children: note,
       });
     $[32] = note;
-    $[33] = No;
-  } else No = $[33];
-  const confirmLabel = Lt?.send ?? "Send request";
-  const cancelLabel = Lt?.cancel ?? "Cancel";
-  let kn;
+    $[33] = noteElement;
+  } else noteElement = $[33];
+  const confirmLabel = flagOverride?.send ?? "Send request";
+  const cancelLabel = flagOverride?.cancel ?? "Cancel";
+  let confirmElement;
   if (
-    $[34] !== Dt.remountKey ||
-    $[35] !== onCancel ||
-    $[36] !== onConfirm ||
+    $[34] !== remount.remountKey ||
+    $[35] !== onCancel_2 ||
+    $[36] !== onConfirm_2 ||
     $[37] !== refuseInput ||
     $[38] !== openedAt ||
     $[39] !== confirmLabel ||
     $[40] !== cancelLabel
   ) {
-    kn = jsxProd_default(
+    confirmElement = jsxProd_default(
       ConfirmSelect,
       {
         refuseInput,
@@ -286,45 +287,45 @@ function AdminRequestConfirmDialog(props) {
         confirmLabel,
         cancelLabel,
         focus: "cancel",
-        onConfirm,
-        onCancel,
+        onConfirm: onConfirm_2,
+        onCancel: onCancel_2,
       },
-      Dt.remountKey,
+      remount.remountKey,
     );
-    $[34] = Dt.remountKey;
-    $[35] = onCancel;
-    $[36] = onConfirm;
+    $[34] = remount.remountKey;
+    $[35] = onCancel_2;
+    $[36] = onConfirm_2;
     $[37] = refuseInput;
     $[38] = openedAt;
     $[39] = confirmLabel;
     $[40] = cancelLabel;
-    $[41] = kn;
-  } else kn = $[41];
+    $[41] = confirmElement;
+  } else confirmElement = $[41];
   let children;
-  if ($[42] !== Cn || $[43] !== No || $[44] !== kn) {
+  if ($[42] !== bodyElement || $[43] !== noteElement || $[44] !== confirmElement) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [Cn, No, kn],
+      children: [bodyElement, noteElement, confirmElement],
     });
-    $[42] = Cn;
-    $[43] = No;
-    $[44] = kn;
+    $[42] = bodyElement;
+    $[43] = noteElement;
+    $[44] = confirmElement;
     $[45] = children;
   } else children = $[45];
-  let bn;
-  if ($[46] !== onCancel || $[47] !== children || $[48] !== title) {
-    bn = jsxProd_default(Dialog, {
+  let dialogElement;
+  if ($[46] !== onCancel_2 || $[47] !== children || $[48] !== title) {
+    dialogElement = jsxProd_default(Dialog, {
       title,
-      onCancel,
+      onCancel: onCancel_2,
       color: "suggestion",
       children,
     });
-    $[46] = onCancel;
+    $[46] = onCancel_2;
     $[47] = children;
     $[48] = title;
-    $[49] = bn;
-  } else bn = $[49];
-  return bn;
+    $[49] = dialogElement;
+  } else dialogElement = $[49];
+  return dialogElement;
 }
 export { resolveWhenTaken, AdminRequestConfirmDialog };

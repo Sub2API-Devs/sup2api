@@ -113,7 +113,7 @@ var fences =
 var hr = /^ {0,3}((?:-[\t ]*){3,}|(?:_[ \t]*){3,}|(?:\*[ \t]*){3,})(?:\n+|$)/;
 var heading = /^ {0,3}(#{1,6})(?=\s|$)(.*)(?:\n+|$)/;
 var bullet = /(?:[*+-]|\d{1,9}[.)])/;
-var B_ = edit(
+var lheading = edit(
   /^(?!bull |blockCode|fences|blockquote|heading|html)((?:.|\n(?!\s*?\n|bull |blockCode|fences|blockquote|heading|html))+?)\n {0,3}(=+|-+) *(?:\n+|$)/,
 )
   .replace(/bull/g, bullet)
@@ -168,7 +168,7 @@ var blockNormal = {
   heading,
   hr,
   html,
-  lheading: B_,
+  lheading,
   list,
   newline,
   paragraph,
@@ -187,7 +187,7 @@ var gfmTable = edit(
   .replace("html", "</?(?:tag)(?: +|\\n|/?>)|<(?:script|pre|style|textarea|!--)")
   .replace("tag", _tag)
   .getRegex();
-var gL = {
+var blockGfm = {
   ...blockNormal,
   table: gfmTable,
   paragraph: edit(_paragraph)
@@ -202,7 +202,7 @@ var gL = {
     .replace("tag", _tag)
     .getRegex(),
 };
-var yL = {
+var blockPedantic = {
   ...blockNormal,
   html: edit(
     `^ *(?:comment *(?:\\n|\\s*$)|<(tag)[\\s\\S]+?</\\1> *(?:\\n{2,}|\\s*$)|<tag(?:"[^"]*"|'[^']*'|\\s[^'"/>\\s]*)*?/?> *(?:\\n{2,}|\\s*$))`,
@@ -224,7 +224,7 @@ var yL = {
       ` *#{1,6} *[^
 ]`,
     )
-    .replace("lheading", B_)
+    .replace("lheading", lheading)
     .replace("|table", "")
     .replace("blockquote", " {0,3}>")
     .replace("|fences", "")
@@ -233,7 +233,7 @@ var yL = {
     .replace("|tag", "")
     .getRegex(),
 };
-var SL = /^\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])/;
+var escapeRegex = /^\\([!"#$%&'()*+,\-./:;<=>?@\[\]\\^_`{|}~])/;
 var inlineCode = /^(`+)([^`]|[^`][\s\S]*?[^`])\1(?!`)/;
 var br = /^( {2,}|\\)\n(?!\s*$)/;
 var inlineText = /^(`+|[^`])(?:(?= {2,}\n)|[\s\S]*?(?:(?=[\\<!\[`*_]|\b_|$)|[^ ](?= {2,}\n)))/;
@@ -288,7 +288,7 @@ var tag = edit(
   .replace("attribute", /\s+[a-zA-Z:_][\w.:-]*(?:\s*=\s*"[^"]*"|\s*=\s*'[^']*'|\s*=\s*[^\s"'=<>`]+)?/)
   .getRegex();
 var _inlineLabel = /(?:\[(?:\\.|[^\[\]\\])*\]|\\.|`[^`]*`|[^\[\]\\`])*?/;
-var NL = edit(/^!?\[(label)\]\(\s*(href)(?:\s+(title))?\s*\)/)
+var inlineLink = edit(/^!?\[(label)\]\(\s*(href)(?:\s+(title))?\s*\)/)
   .replace("label", _inlineLabel)
   .replace("href", /<(?:\\.|[^\n<>\\])+>|[^\s\x00-\x1f]*/)
   .replace("title", /"(?:\\"?|[^"\\])*"|'(?:\\'?|[^'\\])*'|\((?:\\\)?|[^)\\])*\)/)
@@ -315,8 +315,8 @@ var inlineNormal = {
   emStrongLDelim,
   emStrongRDelimAst,
   emStrongRDelimUnd,
-  escape: SL,
-  link: NL,
+  escape: escapeRegex,
+  link: inlineLink,
   nolink,
   punctuation,
   reflink,
@@ -355,8 +355,8 @@ var inlineBreaks = {
 };
 var block = {
   normal: blockNormal,
-  gfm: gL,
-  pedantic: yL,
+  gfm: blockGfm,
+  pedantic: blockPedantic,
 };
 var inline = {
   normal: inlineNormal,
@@ -373,7 +373,7 @@ var escapeReplacements = {
 };
 var getEscapeReplacement = (ch) => escapeReplacements[ch];
 //@ chunk-s61vbvea.js:389047-389226 esm-fingerprint
-function Qn(html, encode) {
+function escapeHtml(html, encode) {
   if (encode) {
     if (other.escapeTest.test(html)) return html.replace(other.escapeReplace, getEscapeReplacement);
   } else if (other.escapeTestNoEncode.test(html))
@@ -409,12 +409,12 @@ function splitCells(tableRow, count) {
   return cells;
 }
 //@ chunk-s61vbvea.js:389680-389810 esm-fingerprint
-function rtrim(str, n, r) {
+function rtrim(str, c, chars) {
   let l = str.length;
   if (l === 0) return "";
   let suffLen = 0;
   while (suffLen < l)
-    if (str.charAt(l - suffLen - 1) === n) suffLen++;
+    if (str.charAt(l - suffLen - 1) === c) suffLen++;
     else break;
   return str.slice(0, l - suffLen);
 }
@@ -1537,15 +1537,15 @@ class _Renderer {
     if (!langString)
       return (
         "<pre><code>" +
-        (escaped ? code : Qn(code, true)) +
+        (escaped ? code : escapeHtml(code, true)) +
         `</code></pre>
 `
       );
     return (
       '<pre><code class="language-' +
-      Qn(langString) +
+      escapeHtml(langString) +
       '">' +
-      (escaped ? code : Qn(code, true)) +
+      (escaped ? code : escapeHtml(code, true)) +
       `</code></pre>
 `
     );
@@ -1602,7 +1602,7 @@ ${this.parser.parse(tokens)}</blockquote>
             item.tokens[0].tokens.length > 0 &&
             item.tokens[0].tokens[0].type === "text"
           ) {
-            item.tokens[0].tokens[0].text = checkbox + " " + Qn(item.tokens[0].tokens[0].text);
+            item.tokens[0].tokens[0].text = checkbox + " " + escapeHtml(item.tokens[0].tokens[0].text);
             item.tokens[0].tokens[0].escaped = true;
           }
         } else
@@ -1676,7 +1676,7 @@ ${text}</tr>
     return `<em>${this.parser.parseInline(tokens)}</em>`;
   }
   codespan({ text }) {
-    return `<code>${Qn(text, true)}</code>`;
+    return `<code>${escapeHtml(text, true)}</code>`;
   }
   br(token) {
     return "<br>";
@@ -1690,16 +1690,16 @@ ${text}</tr>
     if (cleanHref === null) return text;
     href = cleanHref;
     let out = '<a href="' + href + '"';
-    if (title) out += ' title="' + Qn(title) + '"';
+    if (title) out += ' title="' + escapeHtml(title) + '"';
     out += ">" + text + "</a>";
     return out;
   }
   image({ href, title, text }) {
     let cleanHref = cleanUrl(href);
-    if (cleanHref === null) return Qn(text);
+    if (cleanHref === null) return escapeHtml(text);
     href = cleanHref;
     let out = `<img src="${href}" alt="${text}"`;
-    if (title) out += ` title="${Qn(title)}"`;
+    if (title) out += ` title="${escapeHtml(title)}"`;
     out += ">";
     return out;
   }
@@ -1708,7 +1708,7 @@ ${text}</tr>
       ? this.parser.parseInline(token.tokens)
       : "escaped" in token && token.escaped
         ? token.text
-        : Qn(token.text);
+        : escapeHtml(token.text);
   }
 }
 //@ chunk-s61vbvea.js:408973-409197 esm-fingerprint
@@ -2197,7 +2197,7 @@ class Marked {
       e.message += `
 Please report this to https://github.com/markedjs/marked.`;
       if (silent) {
-        let msg = "<p>An error occurred:</p><pre>" + Qn(e.message + "", true) + "</pre>";
+        let msg = "<p>An error occurred:</p><pre>" + escapeHtml(e.message + "", true) + "</pre>";
         if (async) return Promise.resolve(msg);
         return msg;
       }

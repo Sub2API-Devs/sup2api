@@ -45,7 +45,7 @@ import {
   buildSnapshotGitEnv,
   cleanupSandboxAfterGit,
 } from "./bashEditDiff/gitEnv.js";
-import { P3 } from "../../../vendor/diff/libesm/patch/create.js";
+import { structuredPatch } from "../../../vendor/diff/libesm/patch/create.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { gitExe } from "../../utils/git.js";
 import { safeSpawn } from "../../utils/safeSpawn.js";
@@ -56,76 +56,76 @@ import { hasNulByteInHead } from "../../utils/fileRead.js";
 /**
  * 把观察到的写入路径记录到编辑记录器：目录写入展开为其下已知文件，过滤被忽略的路径，读取文件内容（总量有上限）存入 lastSeen，溢出或异常时放弃记录。
  */
-async function recordObservedWrites(e) {
-  let n = takeOutsideWrites(e);
-  let r = await recordersByCwd.get(e)?.catch(() => null);
-  if (!r || !n || (n.paths.length === 0 && !n.overflow)) return;
-  if (n.overflow) {
-    forgetRecorder(e);
+async function recordObservedWrites(cwd) {
+  let writeSet = takeOutsideWrites(cwd);
+  let recorder = await recordersByCwd.get(cwd)?.catch(() => null);
+  if (!recorder || !writeSet || (writeSet.paths.length === 0 && !writeSet.overflow)) return;
+  if (writeSet.overflow) {
+    forgetRecorder(cwd);
     return;
   }
-  let filtered = n.paths.filter((path) => /[\\/]$/.test(path));
-  let h = await expandDirectoryWrites(r, filtered);
-  if (h === null) {
-    forgetRecorder(e);
+  let directoryPaths = writeSet.paths.filter((path) => /[\\/]$/.test(path));
+  let expandedDirs = await expandDirectoryWrites(recorder, directoryPaths);
+  if (expandedDirs === null) {
+    forgetRecorder(cwd);
     return;
   }
-  for (let q of h) rememberFileContent(r, q, null);
+  for (let path of expandedDirs) rememberFileContent(recorder, path, null);
   let repoRelativePaths = await toRepoRelativePaths(
-    r,
-    n.paths.filter((path) => !/[\\/]$/.test(path)),
+    recorder,
+    writeSet.paths.filter((path) => !/[\\/]$/.test(path)),
   );
-  let S = (repoRelativePath) =>
-    r.lastSeen.has(repoRelativePath) || (r.basePaths?.has(repoRelativePath) ?? false);
-  let filtered_2 = repoRelativePaths.filter((repoRelativePath) => !S(repoRelativePath));
-  if (filtered_2.length > 0 && !(await verifyKnownPrivateGitDir(r.base))) {
-    forgetRecorder(e);
+  let isAlreadySeen = (repoRelativePath) =>
+    recorder.lastSeen.has(repoRelativePath) || (recorder.basePaths?.has(repoRelativePath) ?? false);
+  let paths = repoRelativePaths.filter((repoRelativePath) => !isAlreadySeen(repoRelativePath));
+  if (paths.length > 0 && !(await verifyKnownPrivateGitDir(recorder.base))) {
+    forgetRecorder(cwd);
     return;
   }
-  let L = filtered_2.length > 0 ? await checkIgnoredPaths(r.base, filtered_2) : new Set();
-  if (L === null) {
-    forgetRecorder(e);
+  let ignoredPaths = paths.length > 0 ? await checkIgnoredPaths(recorder.base, paths) : new Set();
+  if (ignoredPaths === null) {
+    forgetRecorder(cwd);
     return;
   }
-  let G = 0;
+  let recordedBytes = 0;
   for (let repoRelativePath of repoRelativePaths) {
-    if (L.has(repoRelativePath)) continue;
-    let min = Math.min(MAX_RECORDED_FILE_BYTES, MAX_RECORD_BATCH_BYTES - G);
-    let Se = await statForRecorder(join(r.realRoot, repoRelativePath), min);
-    if (Se === "missing" || Se === "not-a-file") {
-      if (S(repoRelativePath)) rememberFileContent(r, repoRelativePath, null);
-    } else if (Buffer.isBuffer(Se)) {
-      G += Se.length;
-      rememberFileContent(r, repoRelativePath, Se);
-    } else if (typeof Se === "object") {
-      G += Se.link.length;
-      rememberFileContent(r, repoRelativePath, Se.link);
-    } else if (Se === "too-large" && min < MAX_RECORDED_FILE_BYTES) {
-      forgetRecorder(e);
+    if (ignoredPaths.has(repoRelativePath)) continue;
+    let min = Math.min(MAX_RECORDED_FILE_BYTES, MAX_RECORD_BATCH_BYTES - recordedBytes);
+    let entry = await statForRecorder(join(recorder.realRoot, repoRelativePath), min);
+    if (entry === "missing" || entry === "not-a-file") {
+      if (isAlreadySeen(repoRelativePath)) rememberFileContent(recorder, repoRelativePath, null);
+    } else if (Buffer.isBuffer(entry)) {
+      recordedBytes += entry.length;
+      rememberFileContent(recorder, repoRelativePath, entry);
+    } else if (typeof entry === "object") {
+      recordedBytes += entry.link.length;
+      rememberFileContent(recorder, repoRelativePath, entry.link);
+    } else if (entry === "too-large" && min < MAX_RECORDED_FILE_BYTES) {
+      forgetRecorder(cwd);
       return;
-    } else if (Se === "too-large" || Se === "unreadable") {
-      r.lastSeenBytes -= r.lastSeen.get(repoRelativePath)?.content?.length ?? 0;
-      r.lastSeen.delete(repoRelativePath);
+    } else if (entry === "too-large" || entry === "unreadable") {
+      recorder.lastSeenBytes -= recorder.lastSeen.get(repoRelativePath)?.content?.length ?? 0;
+      recorder.lastSeen.delete(repoRelativePath);
     }
   }
-  if (r.evicted) forgetRecorder(e);
+  if (recorder.evicted) forgetRecorder(cwd);
 }
 //@ chunk-e6aww6q8.js:4803544-4803925 placement
 /**
  * 为仓库启动编辑记录器（每个 cwd 一个）：拍快照、取真实根路径与基线文件列表，失败时清除。
  */
-function startEditRecorder(e) {
-  let n = recordersByCwd.get(e);
-  if (!n) {
+function startEditRecorder(cwd) {
+  let recorderPromise = recordersByCwd.get(cwd);
+  if (!recorderPromise) {
     let takenAt = Date.now();
-    let s = takeBashSnapshot(e)
-      .then(async (h) => {
-        let y = await realpath(e).catch(() => null);
-        return h && h !== "unavailable" && y !== null
+    let createdRecorderPromise = takeBashSnapshot(cwd)
+      .then(async (snapshot) => {
+        let realRoot = await realpath(cwd).catch(() => null);
+        return snapshot && snapshot !== "unavailable" && realRoot !== null
           ? {
-              base: h,
-              realRoot: y,
-              basePaths: await listBaseTreePaths(h),
+              base: snapshot,
+              realRoot,
+              basePaths: await listBaseTreePaths(snapshot),
               lastSeen: new Map(),
               lastSeenBytes: 0,
               evicted: false,
@@ -134,29 +134,39 @@ function startEditRecorder(e) {
           : null;
       })
       .catch(() => null)
-      .then((h) => {
-        if (h === null && recordersByCwd.get(e) === s) recordersByCwd.delete(e);
-        return h;
+      .then((recorder) => {
+        if (recorder === null && recordersByCwd.get(cwd) === createdRecorderPromise)
+          recordersByCwd.delete(cwd);
+        return recorder;
       });
-    n = s;
-    recordersByCwd.set(e, s);
+    recorderPromise = createdRecorderPromise;
+    recordersByCwd.set(cwd, createdRecorderPromise);
   }
-  return n.then((r) => r !== null);
+  return recorderPromise.then((recorder) => recorder !== null);
 }
 //@ chunk-e6aww6q8.js:4803925-4804014 placement
 /**
  * 串行地记录命令改动过的文件内容（缺失、过大、不可读分别标记）。
  */
-function recordEditedFilesSerially(e, paths, overflow, s, h = Number.POSITIVE_INFINITY, shared = false) {
-  return runSerialForRecorder(e, () => recordEditedFiles(e, paths, overflow, s, h, shared));
+function recordEditedFilesSerially(
+  cwd,
+  paths,
+  overflow,
+  snapshotTakenAt,
+  maxAge = Number.POSITIVE_INFINITY,
+  shared = false,
+) {
+  return runSerialForRecorder(cwd, () =>
+    recordEditedFiles(cwd, paths, overflow, snapshotTakenAt, maxAge, shared),
+  );
 }
 //@ chunk-e6aww6q8.js:4804014-4806455 placement
 /**
  * 记录 Bash 命令改动过的文件内容（缺失、过大、不可读都单独标记）。
  */
-async function recordEditedFiles(e, n, r, s, h, y) {
-  let w = () => {
-    forgetRecorder(e);
+async function recordEditedFiles(cwd, paths, overflow, snapshotTakenAt, maxAge, shared) {
+  let unavailableResult = () => {
+    forgetRecorder(cwd);
     return {
       files: [],
       moreFiles: 0,
@@ -164,108 +174,129 @@ async function recordEditedFiles(e, n, r, s, h, y) {
     };
   };
   try {
-    let L = await recordersByCwd.get(e);
-    if (!L || L.takenAt > h || r || n.length > MAX_EXPANDED_PATHS) return w();
-    let G = new Set(n.filter((gt) => gt.endsWith(sep) && gt.length > 1));
-    let q = new Set(
+    let recorder = await recordersByCwd.get(cwd);
+    if (!recorder || recorder.takenAt > maxAge || overflow || paths.length > MAX_EXPANDED_PATHS)
+      return unavailableResult();
+    let directoryPaths = new Set(paths.filter((path) => path.endsWith(sep) && path.length > 1));
+    let repoPaths = new Set(
       await toRepoRelativePaths(
-        L,
-        n.filter((gt) => !G.has(gt)),
+        recorder,
+        paths.filter((path) => !directoryPaths.has(path)),
       ),
     );
-    let Z = await expandDirectoryWrites(L, [...G]);
-    if (Z === null) return w();
-    for (let gt of Z) q.add(gt);
-    if (q.size > MAX_EXPANDED_PATHS) return w();
-    if (q.size === 0) return null;
-    let Se = new Map();
-    let ke = 0;
-    let we = [];
-    for (let gt of q) {
-      let At = await statForRecorder(
-        join(L.realRoot, gt),
-        Math.min(MAX_RECORDED_FILE_BYTES, MAX_RECORD_BATCH_BYTES - ke),
+    let expandedDirs = await expandDirectoryWrites(recorder, [...directoryPaths]);
+    if (expandedDirs === null) return unavailableResult();
+    for (let path of expandedDirs) repoPaths.add(path);
+    if (repoPaths.size > MAX_EXPANDED_PATHS) return unavailableResult();
+    if (repoPaths.size === 0) return null;
+    let contentsByPath = new Map();
+    let recordedBytes = 0;
+    let unreadablePaths = [];
+    for (let repoPath of repoPaths) {
+      let entry = await statForRecorder(
+        join(recorder.realRoot, repoPath),
+        Math.min(MAX_RECORDED_FILE_BYTES, MAX_RECORD_BATCH_BYTES - recordedBytes),
       );
-      if (At === "missing") Se.set(gt, null);
-      else if (At === "too-large" || At === "unreadable") {
-        we.push(gt);
-        L.lastSeenBytes -= L.lastSeen.get(gt)?.content?.length ?? 0;
-        L.lastSeen.delete(gt);
-      } else if (At === "not-a-file") {
-        if (L.lastSeen.has(gt) || L.basePaths === null || L.basePaths.has(gt)) Se.set(gt, null);
-      } else if (Buffer.isBuffer(At)) {
-        ke += At.length;
-        Se.set(gt, At);
-      } else Se.set(gt, At.link);
+      if (entry === "missing") contentsByPath.set(repoPath, null);
+      else if (entry === "too-large" || entry === "unreadable") {
+        unreadablePaths.push(repoPath);
+        recorder.lastSeenBytes -= recorder.lastSeen.get(repoPath)?.content?.length ?? 0;
+        recorder.lastSeen.delete(repoPath);
+      } else if (entry === "not-a-file") {
+        if (
+          recorder.lastSeen.has(repoPath) ||
+          recorder.basePaths === null ||
+          recorder.basePaths.has(repoPath)
+        )
+          contentsByPath.set(repoPath, null);
+      } else if (Buffer.isBuffer(entry)) {
+        recordedBytes += entry.length;
+        contentsByPath.set(repoPath, entry);
+      } else contentsByPath.set(repoPath, entry.link);
     }
-    if (!(await verifyKnownPrivateGitDir(L.base))) return w();
-    let blobsFromGit = await readBlobsFromGit(L, Se, s, h);
-    if (blobsFromGit === null) return w();
+    if (!(await verifyKnownPrivateGitDir(recorder.base))) return unavailableResult();
+    let blobsFromGit = await readBlobsFromGit(recorder, contentsByPath, snapshotTakenAt, maxAge);
+    if (blobsFromGit === null) return unavailableResult();
     let { before, fromHost, converted, tooLarge } = blobsFromGit;
-    for (let gt of tooLarge) {
-      Se.delete(gt);
-      we.push(gt);
+    for (let path of tooLarge) {
+      contentsByPath.delete(path);
+      unreadablePaths.push(path);
     }
-    let ze = (gt) => !L.lastSeen.has(gt) && (L.basePaths ? !L.basePaths.has(gt) : true);
-    let filtered = [
-      ...[...Se].filter(([gt, At]) => At !== null && (before.get(gt) ?? null) === null).map(([gt]) => gt),
-      ...we,
-    ].filter(ze);
-    let Je = filtered.length > 0 ? await checkIgnoredPaths(L.base, filtered) : new Set();
-    if (Je === null) return w();
-    let nt = count(we, (gt) => !Je.has(gt));
-    let pt = [];
-    let Et = [];
-    let yt = performance.now() + RECORDER_POLL_MS;
-    for (let [gt, At] of Se) {
-      let It = before.get(gt) ?? null;
-      if (Je.has(gt) || (It === null && At === null)) continue;
-      let Yt =
-        At !== null && fromHost.has(gt) && !isTrackedLargeOrUnreadable(At)
-          ? Buffer.from(stripBomAndCarriageReturn(At.toString("utf8")), "utf8")
-          : At;
-      let qt = converted.get(gt);
+    let isNewPath = (repoPath) =>
+      !recorder.lastSeen.has(repoPath) && (recorder.basePaths ? !recorder.basePaths.has(repoPath) : true);
+    let paths_2 = [
+      ...[...contentsByPath]
+        .filter(([repoPath, content]) => content !== null && (before.get(repoPath) ?? null) === null)
+        .map(([repoPath]) => repoPath),
+      ...unreadablePaths,
+    ].filter(isNewPath);
+    let ignoredPaths = paths_2.length > 0 ? await checkIgnoredPaths(recorder.base, paths_2) : new Set();
+    if (ignoredPaths === null) return unavailableResult();
+    let unavailableCount = count(unreadablePaths, (path) => !ignoredPaths.has(path));
+    let files = [];
+    let changedFiles = [];
+    let diffDeadline = performance.now() + RECORDER_POLL_MS;
+    for (let [repoPath, content] of contentsByPath) {
+      let previousContent = before.get(repoPath) ?? null;
+      if (ignoredPaths.has(repoPath) || (previousContent === null && content === null)) continue;
+      let after =
+        content !== null && fromHost.has(repoPath) && !isTrackedLargeOrUnreadable(content)
+          ? Buffer.from(stripBomAndCarriageReturn(content.toString("utf8")), "utf8")
+          : content;
+      let convertedSize = converted.get(repoPath);
       if (
-        qt !== undefined &&
-        At !== null &&
-        It !== null &&
-        !It.includes(`\r
+        convertedSize !== undefined &&
+        content !== null &&
+        previousContent !== null &&
+        !previousContent.includes(`\r
 `)
       ) {
-        let pn = normalizeCrlf(At) ?? At;
-        if (!pn.equals(It) || At.length === qt) Yt = pn;
+        let normalized = normalizeCrlf(content) ?? content;
+        if (!normalized.equals(previousContent) || content.length === convertedSize) after = normalized;
       }
-      if (It !== null && Yt !== null && It.equals(Yt)) {
-        rememberFileContent(L, gt, At);
+      if (previousContent !== null && after !== null && previousContent.equals(after)) {
+        rememberFileContent(recorder, repoPath, content);
         continue;
       }
-      rememberFileContent(L, gt, At);
-      let Zt = join(e, gt);
-      Et.push(Zt);
-      if (pt.length >= MAX_DIFF_FILES || isTrackedLargeOrUnreadable(It) || isTrackedLargeOrUnreadable(Yt))
+      rememberFileContent(recorder, repoPath, content);
+      let absPath = join(cwd, repoPath);
+      changedFiles.push(absPath);
+      if (
+        files.length >= MAX_DIFF_FILES ||
+        isTrackedLargeOrUnreadable(previousContent) ||
+        isTrackedLargeOrUnreadable(after)
+      )
         continue;
-      let rn = P3(gt, gt, It?.toString("utf8") ?? "", Yt?.toString("utf8") ?? "", "", "", {
-        context: 3,
-        timeout: Math.max(1, yt - performance.now()),
-      });
-      if (rn === undefined || !isDiffSmallEnough(rn.hunks)) continue;
-      pt.push({
-        filePath: Zt,
-        hunks: rn.hunks.map((hunk) => ({
+      let diff = structuredPatch(
+        repoPath,
+        repoPath,
+        previousContent?.toString("utf8") ?? "",
+        after?.toString("utf8") ?? "",
+        "",
+        "",
+        {
+          context: 3,
+          timeout: Math.max(1, diffDeadline - performance.now()),
+        },
+      );
+      if (diff === undefined || !isDiffSmallEnough(diff.hunks)) continue;
+      files.push({
+        filePath: absPath,
+        hunks: diff.hunks.map((hunk) => ({
           ...hunk,
           lines: hunk.lines.filter((line) => line !== ""),
         })),
-        ...(It === null && {
+        ...(previousContent === null && {
           created: true,
         }),
-        ...(Yt === null && {
+        ...(after === null && {
           deleted: true,
         }),
       });
     }
-    if (L.evicted) forgetRecorder(e);
-    if (Et.length === 0 && nt === 0)
-      return y
+    if (recorder.evicted) forgetRecorder(cwd);
+    if (changedFiles.length === 0 && unavailableCount === 0)
+      return shared
         ? {
             files: [],
             moreFiles: 0,
@@ -273,123 +304,132 @@ async function recordEditedFiles(e, n, r, s, h, y) {
           }
         : null;
     return {
-      files: pt,
-      moreFiles: Et.length - pt.length + nt,
-      changedFiles: [...Et, ...we.filter((gt) => !Je.has(gt)).map((gt) => join(e, gt))].slice(
-        0,
-        SHARED_READ_SPACING_MS,
-      ),
-      ...(nt > 0 && {
+      files,
+      moreFiles: changedFiles.length - files.length + unavailableCount,
+      changedFiles: [
+        ...changedFiles,
+        ...unreadablePaths.filter((path) => !ignoredPaths.has(path)).map((path) => join(cwd, path)),
+      ].slice(0, SHARED_READ_SPACING_MS),
+      ...(unavailableCount > 0 && {
         unavailable: true,
       }),
-      ...(y && {
+      ...(shared && {
         shared: true,
       }),
     };
   } catch (error) {
     logForDebugging(`bashEditRecorder: ${String(error)}`);
-    return w();
+    return unavailableResult();
   }
 }
 //@ chunk-e6aww6q8.js:4806455-4806859 placement
 /**
  * 把被写入的目录展开为其下的已知文件（来自基线列表与上次见过的文件），超过上限或缺少基线时返回 null。
  */
-async function expandDirectoryWrites(e, n) {
-  let r = new Set();
-  if (n.length > 0 && e.basePaths === null) return null;
-  if (n.length === 0) return r;
+async function expandDirectoryWrites(recorder, directoryPaths) {
+  let expanded = new Set();
+  if (directoryPaths.length > 0 && recorder.basePaths === null) return null;
+  if (directoryPaths.length === 0) return expanded;
   let repoRelativePaths = await toRepoRelativePaths(
-    e,
-    n.map((y) => y.slice(0, -1)),
+    recorder,
+    directoryPaths.map((path) => path.slice(0, -1)),
   );
-  let h = [];
+  let prefixes = [];
   for (let repoRelativePath of repoRelativePaths.sort()) {
-    let S = `${repoRelativePath}/`;
-    if (!S.startsWith(h.at(-1) ?? "\x00")) h.push(S);
+    let prefix = `${repoRelativePath}/`;
+    if (!prefix.startsWith(prefixes.at(-1) ?? "\x00")) prefixes.push(prefix);
   }
-  if (h.length === 0) return r;
-  for (let y of [...(e.basePaths ?? []), ...e.lastSeen.keys()])
-    if (isSafeRepoPath(y) && h.some((S) => y.startsWith(S))) {
-      r.add(y);
-      if (r.size > MAX_EXPANDED_PATHS) return null;
+  if (prefixes.length === 0) return expanded;
+  for (let repoPath of [...(recorder.basePaths ?? []), ...recorder.lastSeen.keys()])
+    if (isSafeRepoPath(repoPath) && prefixes.some((prefix) => repoPath.startsWith(prefix))) {
+      expanded.add(repoPath);
+      if (expanded.size > MAX_EXPANDED_PATHS) return null;
     }
-  return r;
+  return expanded;
 }
 //@ chunk-e6aww6q8.js:4806859-4807327 placement
 /**
  * 把绝对写入路径转换为仓库内的安全相对路径（解析父目录真实路径，排除嵌套仓库中的未知文件）。
  */
-async function toRepoRelativePaths(e, n) {
-  let realRoot = e.realRoot;
-  let s = new Set();
-  let h = new Map();
-  let y = new Map();
-  for (let S of n) {
-    let w = resolve_2(S);
+async function toRepoRelativePaths(recorder, paths) {
+  let realRoot = recorder.realRoot;
+  let repoPaths = new Set();
+  let realDirByDir = new Map();
+  let nestedRepoCache = new Map();
+  for (let path of paths) {
+    let resolvedPath = resolve_2(path);
     if (
-      /[\0-\x1f\x7f]/.test(S) ||
-      (!w.startsWith(realRoot + sep) && !w.startsWith(resolve_2(e.base.repoRoot) + sep))
+      /[\0-\x1f\x7f]/.test(path) ||
+      (!resolvedPath.startsWith(realRoot + sep) &&
+        !resolvedPath.startsWith(resolve_2(recorder.base.repoRoot) + sep))
     )
       continue;
-    let L = dirname(w);
-    let G = h.get(L);
-    if (G === undefined) {
-      G = await realpathOfNearestAncestor(L);
-      h.set(L, G);
+    let dir = dirname(resolvedPath);
+    let realDir = realDirByDir.get(dir);
+    if (realDir === undefined) {
+      realDir = await realpathOfNearestAncestor(dir);
+      realDirByDir.set(dir, realDir);
     }
-    if (G === null || (G !== realRoot && !G.startsWith(realRoot + sep))) continue;
-    let joined = relative(realRoot, join(G, basename(w)))
+    if (realDir === null || (realDir !== realRoot && !realDir.startsWith(realRoot + sep))) continue;
+    let joined = relative(realRoot, join(realDir, basename(resolvedPath)))
       .split(sep)
       .join("/");
     if (!isSafeRepoPath(joined)) continue;
-    if (!e.lastSeen.has(joined) && !e.basePaths?.has(joined) && (await isInsideNestedRepo(G, realRoot, y)))
+    if (
+      !recorder.lastSeen.has(joined) &&
+      !recorder.basePaths?.has(joined) &&
+      (await isInsideNestedRepo(realDir, realRoot, nestedRepoCache))
+    )
       continue;
-    s.add(joined);
+    repoPaths.add(joined);
   }
-  return [...s];
+  return [...repoPaths];
 }
 //@ chunk-e6aww6q8.js:4807327-4807540 placement
-async function isInsideNestedRepo(e, realRoot, r) {
-  let s = [];
-  let h = false;
-  for (let y = e; y !== realRoot && y.startsWith(realRoot + sep); y = dirname(y)) {
-    let S = r.get(y);
-    if (S !== undefined) {
-      h = S;
+async function isInsideNestedRepo(dir, realRoot, nestedRepoCache) {
+  let visitedDirs = [];
+  let isNestedRepo = false;
+  for (
+    let currentDir = dir;
+    currentDir !== realRoot && currentDir.startsWith(realRoot + sep);
+    currentDir = dirname(currentDir)
+  ) {
+    let cached = nestedRepoCache.get(currentDir);
+    if (cached !== undefined) {
+      isNestedRepo = cached;
       break;
     }
-    s.push(y);
-    if (await looksLikeGitDir(join(y, ".git"))) {
-      h = true;
+    visitedDirs.push(currentDir);
+    if (await looksLikeGitDir(join(currentDir, ".git"))) {
+      isNestedRepo = true;
       break;
     }
   }
-  for (let y of s) r.set(y, h);
-  return h;
+  for (let visitedDir of visitedDirs) nestedRepoCache.set(visitedDir, isNestedRepo);
+  return isNestedRepo;
 }
 //@ chunk-e6aww6q8.js:4807540-4807826 placement
-async function looksLikeGitDir(e) {
-  let n = await lstat(e).catch(() => null);
-  if (n === null) return false;
-  if (n.isDirectory())
-    return lstat(join(e, "HEAD")).then(
-      (s) => s.isFile(),
+async function looksLikeGitDir(gitPath) {
+  let stat = await lstat(gitPath).catch(() => null);
+  if (stat === null) return false;
+  if (stat.isDirectory())
+    return lstat(join(gitPath, "HEAD")).then(
+      (headStat) => headStat.isFile(),
       () => false,
     );
-  if (!n.isFile() || n.size > 4096) return false;
-  let r = await statForRecorder(e, 4096);
-  return Buffer.isBuffer(r) && r.subarray(0, 7).equals(Buffer.from("gitdir:"));
+  if (!stat.isFile() || stat.size > 4096) return false;
+  let content = await statForRecorder(gitPath, 4096);
+  return Buffer.isBuffer(content) && content.subarray(0, 7).equals(Buffer.from("gitdir:"));
 }
 //@ chunk-e6aww6q8.js:4807826-4808157 placement
 /**
  * 求路径最近的已存在祖先的真实路径并拼回剩余部分（最多 64 层）；出错返回 null。
  */
-async function realpathOfNearestAncestor(e) {
-  let n = [];
-  let r = e;
+async function realpathOfNearestAncestor(dir) {
+  let descendants = [];
+  let currentDir = dir;
   for (let idx = 0; idx < 64; idx++) {
-    let h = await realpath(r).catch((error) =>
+    let realPath = await realpath(currentDir).catch((error) =>
       typeof error === "object" &&
       error !== null &&
       "code" in error &&
@@ -397,12 +437,13 @@ async function realpathOfNearestAncestor(e) {
         ? null
         : undefined,
     );
-    if (h === undefined) return null;
-    if (h !== null) return n.length === 0 ? h : join(h, ...n.reverse());
-    let y = dirname(r);
-    if (y === r) return null;
-    n.push(basename(r));
-    r = y;
+    if (realPath === undefined) return null;
+    if (realPath !== null)
+      return descendants.length === 0 ? realPath : join(realPath, ...descendants.reverse());
+    let parentDir = dirname(currentDir);
+    if (parentDir === currentDir) return null;
+    descendants.push(basename(currentDir));
+    currentDir = parentDir;
   }
   return null;
 }
@@ -410,107 +451,113 @@ async function realpathOfNearestAncestor(e) {
 /**
  * 用 git cat-file --batch 批量读取 blob 内容。
  */
-async function readBlobsFromGit(e, n, r, s) {
-  let h = new Map();
-  let y = new Set();
-  let S = new Set();
-  let w = [];
-  for (let key of n.keys()) {
-    let Ee = e.lastSeen.get(key);
-    let Ae = r?.get(join(e.base.repoRoot, key));
-    if (Ae && Ae.content !== "" && isFullFileView(Ae) && Ae.timestamp < s && (!Ee || Ae.timestamp > Ee.at)) {
-      h.set(key, Buffer.from(Ae.content, "utf8"));
-      y.add(key);
-    } else if (Ee) h.set(key, Ee.content);
-    else if (e.basePaths && !e.basePaths.has(key)) h.set(key, null);
-    else w.push(key);
+async function readBlobsFromGit(recorder, contentsByPath, hostRecords, maxAge) {
+  let before = new Map();
+  let fromHost = new Set();
+  let tooLarge = new Set();
+  let pendingPaths = [];
+  for (let key of contentsByPath.keys()) {
+    let lastSeen = recorder.lastSeen.get(key);
+    let hostRecord = hostRecords?.get(join(recorder.base.repoRoot, key));
+    if (
+      hostRecord &&
+      hostRecord.content !== "" &&
+      isFullFileView(hostRecord) &&
+      hostRecord.timestamp < maxAge &&
+      (!lastSeen || hostRecord.timestamp > lastSeen.at)
+    ) {
+      before.set(key, Buffer.from(hostRecord.content, "utf8"));
+      fromHost.add(key);
+    } else if (lastSeen) before.set(key, lastSeen.content);
+    else if (recorder.basePaths && !recorder.basePaths.has(key)) before.set(key, null);
+    else pendingPaths.push(key);
   }
-  if (w.length === 0)
+  if (pendingPaths.length === 0)
     return {
-      before: h,
-      fromHost: y,
+      before,
+      fromHost,
       converted: new Map(),
-      tooLarge: S,
+      tooLarge,
     };
-  let L = await runGitCapped(
-    e.base,
+  let batchResult = await runGitCapped(
+    recorder.base,
     ["cat-file", "--batch-check"],
-    `${w.map((we) => `${e.base.tree}:${we}`).join(`
+    `${pendingPaths.map((path) => `${recorder.base.tree}:${path}`).join(`
 `)}
 `,
   );
-  if (L === null) return null;
-  let lines = L.toString("utf8").split(`
+  if (batchResult === null) return null;
+  let lines = batchResult.toString("utf8").split(`
 `);
-  let q = [[]];
-  let Z = 0;
-  let Se = 0;
-  for (let [we, Ee] of w.entries()) {
-    let Ae = lines[we] ?? "";
-    if (Ae === "") return null;
-    let parts = Ae.split(" ");
-    let Me = Number(parts.at(-1));
-    if (Ae.endsWith(" missing") || parts.at(-2) !== "blob") h.set(Ee, null);
-    else if (!Number.isInteger(Me) || Me < 0) return null;
-    else if (Me > MAX_RECORDED_FILE_BYTES || Se + Me > MAX_RECORD_BATCH_BYTES) S.add(Ee);
+  let batches = [[]];
+  let batchBytes = 0;
+  let totalBytes = 0;
+  for (let [idx, path] of pendingPaths.entries()) {
+    let line = lines[idx] ?? "";
+    if (line === "") return null;
+    let parts = line.split(" ");
+    let size = Number(parts.at(-1));
+    if (line.endsWith(" missing") || parts.at(-2) !== "blob") before.set(path, null);
+    else if (!Number.isInteger(size) || size < 0) return null;
+    else if (size > MAX_RECORDED_FILE_BYTES || totalBytes + size > MAX_RECORD_BATCH_BYTES) tooLarge.add(path);
     else {
-      Se += Me;
-      if (Z + Me + 128 > MAX_GIT_OUTPUT_BYTES - MAX_RECORDED_FILE_BYTES) {
-        q.push([]);
-        Z = 0;
+      totalBytes += size;
+      if (batchBytes + size + 128 > MAX_GIT_OUTPUT_BYTES - MAX_RECORDED_FILE_BYTES) {
+        batches.push([]);
+        batchBytes = 0;
       }
-      q.at(-1).push(Ee);
-      Z += Me + 128;
+      batches.at(-1).push(path);
+      batchBytes += size + 128;
     }
   }
-  for (let we of q) {
-    if (we.length === 0) continue;
-    let Ee = await runGitCapped(
-      e.base,
+  for (let batch of batches) {
+    if (batch.length === 0) continue;
+    let output = await runGitCapped(
+      recorder.base,
       ["cat-file", "--batch"],
-      `${we.map((Ie) => `${e.base.tree}:${Ie}`).join(`
+      `${batch.map((path) => `${recorder.base.tree}:${path}`).join(`
 `)}
 `,
     );
-    if (Ee === null) return null;
-    let Ae = 0;
-    for (let Ie of we) {
-      let index = Ee.indexOf(10, Ae);
+    if (output === null) return null;
+    let offset = 0;
+    for (let path of batch) {
+      let index = output.indexOf(10, offset);
       if (index === -1) return null;
-      let str = Ee.subarray(Ae, index).toString("utf8");
-      Ae = index + 1;
+      let str = output.subarray(offset, index).toString("utf8");
+      offset = index + 1;
       if (str.endsWith(" missing")) {
-        h.set(Ie, null);
+        before.set(path, null);
         continue;
       }
       let parts = str.split(" ");
-      let lt = Number(parts.at(-1));
-      if (!Number.isInteger(lt) || lt < 0 || Ae + lt + 1 > Ee.length) return null;
-      h.set(Ie, parts.at(-2) === "blob" ? Buffer.from(Ee.subarray(Ae, Ae + lt)) : null);
-      Ae += lt + 1;
+      let size = Number(parts.at(-1));
+      if (!Number.isInteger(size) || size < 0 || offset + size + 1 > output.length) return null;
+      before.set(path, parts.at(-2) === "blob" ? Buffer.from(output.subarray(offset, offset + size)) : null);
+      offset += size + 1;
     }
   }
   let converted = await findConvertedFiles(
-    e.base.repoRoot,
-    e.base.gitDirectory,
-    w.filter((we) =>
-      n.get(we)?.includes(`\r
+    recorder.base.repoRoot,
+    recorder.base.gitDirectory,
+    pendingPaths.filter((path) =>
+      contentsByPath.get(path)?.includes(`\r
 `),
     ),
   );
   return {
-    before: h,
-    fromHost: y,
+    before,
+    fromHost,
     converted,
-    tooLarge: S,
+    tooLarge,
   };
 }
 //@ chunk-e6aww6q8.js:4809805-4810136 placement
 /**
  * 用 git check-ignore --stdin 批量检查哪些路径被忽略，返回被忽略路径集合；git 失败返回 null。
  */
-async function checkIgnoredPaths(base, n) {
-  let filtered = n.filter((y) => !y.startsWith(":"));
+async function checkIgnoredPaths(base, paths) {
+  let filtered = paths.filter((path) => !path.startsWith(":"));
   if (filtered.length === 0) return new Set();
   let { stdout, code } = await runSnapshotGit(
     base.repoRoot,
@@ -522,15 +569,15 @@ async function checkIgnoredPaths(base, n) {
       literalPathspecs: false,
     },
   );
-  return code === 0 || code === 1 ? new Set(stdout.split("\x00").filter((y) => y !== "")) : null;
+  return code === 0 || code === 1 ? new Set(stdout.split("\x00").filter((path) => path !== "")) : null;
 }
 //@ chunk-e6aww6q8.js:4810136-4810394 placement
-async function listBaseTreePaths(e) {
-  if (!(await verifyKnownPrivateGitDir(e))) return null;
+async function listBaseTreePaths(base) {
+  if (!(await verifyKnownPrivateGitDir(base))) return null;
   let { stdout, code } = await runSnapshotGit(
-    e.repoRoot,
-    e.gitDirectory,
-    ["ls-tree", "-r", "-z", "--name-only", e.tree],
+    base.repoRoot,
+    base.gitDirectory,
+    ["ls-tree", "-r", "-z", "--name-only", base.tree],
     {
       timeout: RECORDER_GIT_TIMEOUT_MS,
       maxBuffer: MAX_BASE_LISTING_BYTES,
@@ -543,16 +590,16 @@ async function listBaseTreePaths(e) {
 /**
  * 在快照用的隔离 git 环境中运行 git 命令（可传入标准输入、有超时），输出超过上限时强杀，返回输出或 null。
  */
-async function runGitCapped(base, n, input) {
+async function runGitCapped(base, args, input) {
   try {
     let snapshotGitEnv = await buildSnapshotGitEnv(
-      [gitExe(), ...getSnapshotGitArgs(), ...n],
+      [gitExe(), ...getSnapshotGitArgs(), ...args],
       getSnapshotGitEnv(base.gitDirectory, base.repoRoot),
       base.gitDirectory,
     );
     if (snapshotGitEnv === null) return null;
     try {
-      let h = safeSpawn(snapshotGitEnv.file, snapshotGitEnv.args, {
+      let child = safeSpawn(snapshotGitEnv.file, snapshotGitEnv.args, {
         cwd: base.repoRoot,
         env: snapshotGitEnv.env,
         input,
@@ -560,14 +607,16 @@ async function runGitCapped(base, n, input) {
         stderr: "ignore",
         windowsHide: true,
       });
-      let y = [];
-      let S = 0;
-      h.stdout?.on("data", (L) => {
-        S += L.length;
-        if (S > MAX_GIT_OUTPUT_BYTES) h.kill("SIGKILL");
-        else y.push(L);
+      let chunks = [];
+      let totalBytes = 0;
+      child.stdout?.on("data", (chunk) => {
+        totalBytes += chunk.length;
+        if (totalBytes > MAX_GIT_OUTPUT_BYTES) child.kill("SIGKILL");
+        else chunks.push(chunk);
       });
-      return (await h).exitCode === 0 && S <= MAX_GIT_OUTPUT_BYTES ? Buffer.concat(y) : null;
+      return (await child).exitCode === 0 && totalBytes <= MAX_GIT_OUTPUT_BYTES
+        ? Buffer.concat(chunks)
+        : null;
     } finally {
       cleanupSandboxAfterGit(snapshotGitEnv);
     }
@@ -576,11 +625,11 @@ async function runGitCapped(base, n, input) {
   }
 }
 //@ chunk-e6aww6q8.js:4810824-4811789 placement
-async function statForRecorder(e, n) {
-  let r;
+async function statForRecorder(path, maxBytes) {
+  let handle;
   try {
-    r = await open(
-      e,
+    handle = await open(
+      path,
       constants.O_RDONLY |
         (getPlatform() === "windows"
           ? 0
@@ -592,80 +641,80 @@ async function statForRecorder(e, n) {
     let code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
     if (code === "ENOENT" || code === "ENOTDIR") return "missing";
     if (code === "ELOOP")
-      return readlink(e, {
+      return readlink(path, {
         encoding: "buffer",
       }).then(
-        (y) =>
-          y.length > n
+        (link) =>
+          link.length > maxBytes
             ? "too-large"
             : {
-                link: y,
+                link,
               },
         () => "unreadable",
       );
     return code === "EISDIR" || code === "ENXIO" ? "not-a-file" : "unreadable";
   }
   try {
-    let stats = await r.stat();
+    let stats = await handle.stat();
     if (!stats.isFile()) return "not-a-file";
-    if (!(await isSameOpenFile(r.fd, e, stats)))
-      return (await lstat(e).catch(() => null))?.isSymbolicLink() ? "not-a-file" : "unreadable";
-    if (stats.size > n) return "too-large";
-    let h = Buffer.allocUnsafe(Math.min(n, stats.size) + 1);
-    let y = 0;
+    if (!(await isSameOpenFile(handle.fd, path, stats)))
+      return (await lstat(path).catch(() => null))?.isSymbolicLink() ? "not-a-file" : "unreadable";
+    if (stats.size > maxBytes) return "too-large";
+    let buffer = Buffer.allocUnsafe(Math.min(maxBytes, stats.size) + 1);
+    let bytesRead = 0;
     for (;;) {
-      if (y === h.length) {
-        if (y > n) return "too-large";
-        let w = Buffer.allocUnsafe(Math.min(n + 1, h.length * 2));
-        h.copy(w, 0, 0, y);
-        h = w;
+      if (bytesRead === buffer.length) {
+        if (bytesRead > maxBytes) return "too-large";
+        let biggerBuffer = Buffer.allocUnsafe(Math.min(maxBytes + 1, buffer.length * 2));
+        buffer.copy(biggerBuffer, 0, 0, bytesRead);
+        buffer = biggerBuffer;
       }
-      let { bytesRead } = await r.read(h, y, h.length - y);
-      if (bytesRead === 0) break;
-      y += bytesRead;
+      let { bytesRead: bytesRead_2 } = await handle.read(buffer, bytesRead, buffer.length - bytesRead);
+      if (bytesRead_2 === 0) break;
+      bytesRead += bytesRead_2;
     }
-    return y > n ? "too-large" : h.subarray(0, y);
+    return bytesRead > maxBytes ? "too-large" : buffer.subarray(0, bytesRead);
   } catch {
     return "unreadable";
   } finally {
-    await r.close();
+    await handle.close();
   }
 }
 //@ chunk-e6aww6q8.js:4811789-4811984 placement
-async function isSameOpenFile(e, n, r) {
-  if (getPlatform() === "linux") return (await readlink(`/proc/self/fd/${e}`).catch(() => null)) === n;
-  let s = await lstat(n).catch(() => null);
-  return s !== null && s.isFile() && s.dev === r.dev && s.ino === r.ino;
+async function isSameOpenFile(fd, path, stats) {
+  if (getPlatform() === "linux") return (await readlink(`/proc/self/fd/${fd}`).catch(() => null)) === path;
+  let pathStat = await lstat(path).catch(() => null);
+  return pathStat !== null && pathStat.isFile() && pathStat.dev === stats.dev && pathStat.ino === stats.ino;
 }
 //@ chunk-e6aww6q8.js:4811984-4812367 placement
 /**
  * 记住文件的最近内容（LRU）：替换旧记录，总字节超过上限时从最旧开始逐出并标记 evicted。
  */
-function rememberFileContent(e, repoRelativePath, r) {
-  let s = e.lastSeen.get(repoRelativePath);
-  if (s) {
-    e.lastSeenBytes -= s.content?.length ?? 0;
-    e.lastSeen.delete(repoRelativePath);
+function rememberFileContent(recorder, filePath, content) {
+  let previous = recorder.lastSeen.get(filePath);
+  if (previous) {
+    recorder.lastSeenBytes -= previous.content?.length ?? 0;
+    recorder.lastSeen.delete(filePath);
   }
-  let h = r?.length ?? 0;
-  while (e.lastSeenBytes + h > MAX_LAST_SEEN_BYTES && e.lastSeen.size > 0) {
-    let y = e.lastSeen.keys().next().value;
-    if (y === undefined) break;
-    e.lastSeenBytes -= e.lastSeen.get(y)?.content?.length ?? 0;
-    e.lastSeen.delete(y);
-    e.evicted = true;
+  let contentBytes = content?.length ?? 0;
+  while (recorder.lastSeenBytes + contentBytes > MAX_LAST_SEEN_BYTES && recorder.lastSeen.size > 0) {
+    let oldestPath = recorder.lastSeen.keys().next().value;
+    if (oldestPath === undefined) break;
+    recorder.lastSeenBytes -= recorder.lastSeen.get(oldestPath)?.content?.length ?? 0;
+    recorder.lastSeen.delete(oldestPath);
+    recorder.evicted = true;
   }
-  e.lastSeen.set(repoRelativePath, {
-    content: r,
+  recorder.lastSeen.set(filePath, {
+    content,
     at: Date.now(),
   });
-  e.lastSeenBytes += h;
+  recorder.lastSeenBytes += contentBytes;
 }
 //@ chunk-e6aww6q8.js:4812367-4812407 placement
 /**
  * 判断快照中的文件内容不可直接逐字比较（二进制/过大/不可读，由 Vys 判定）。
  */
-function isTrackedLargeOrUnreadable(e) {
-  return e !== null && hasNulByteInHead(e);
+function isTrackedLargeOrUnreadable(content) {
+  return content !== null && hasNulByteInHead(content);
 }
 export { startEditRecorder, recordEditedFilesSerially, recordObservedWrites };

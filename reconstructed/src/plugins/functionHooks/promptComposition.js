@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (34)
  * attribution: placement 34
  */
-import { pu } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
+import { subscribe } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { identity as identity_2 } from "../../utils/identity.js";
 import { hasModuleHookingSite } from "../hooksModules/loadedModuleFilters.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
@@ -16,27 +16,32 @@ import { attachedSurfaces, whenBound } from "./surfaceBinding.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { isLoneSecDefaultShortcut } from "./modAdmission.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:45582-45792 placement
 /**
  * 排列系统提示词分段：先 shared 分段，有 shared 时插入边界标记 n，再接 session 分段。
  */
-function orderPromptSections(e, n) {
-  let filtered = e.filter((S) => S.text !== n);
-  let filtered_2 = filtered.filter((S) => S.scope === "shared");
-  let filtered_3 = filtered.filter((S) => S.scope === "session");
-  let y = n !== null && filtered_2.length > 0;
-  return [...filtered_2.map((S) => S.text), ...(y ? [n] : []), ...filtered_3.map((S) => S.text)];
+function orderPromptSections(sections, userText) {
+  let filtered = sections.filter((section) => section.text !== userText);
+  let filtered_2 = filtered.filter((section) => section.scope === "shared");
+  let filtered_3 = filtered.filter((section) => section.scope === "session");
+  let hasUserSection = userText !== null && filtered_2.length > 0;
+  return [
+    ...filtered_2.map((section) => section.text),
+    ...(hasUserSection ? [userText] : []),
+    ...filtered_3.map((section) => section.text),
+  ];
 }
 //@ chunk-e6aww6q8.js:45792-45966 placement
 function createPromptComposeSlot() {
-  let e = pu();
-  let n = pu();
+  let resolverSlot = subscribe();
+  let composerSlot = subscribe();
   return {
-    setPromptComposeResolver: e.set,
-    setPromptComposer: n.set,
-    promptComposer: () => n.get() ?? undefined,
-    composeSections: (r, s) => e.get()?.(r, s) ?? s(),
+    setPromptComposeResolver: resolverSlot.set,
+    setPromptComposer: composerSlot.set,
+    promptComposer: () => composerSlot.get() ?? undefined,
+    composeSections: (facts, fallback) => resolverSlot.get()?.(facts, fallback) ?? fallback(),
   };
 }
 //@ chunk-e6aww6q8.js:45966-46307 placement
@@ -44,57 +49,79 @@ function createPromptComposeSlot() {
  * prompt.section 解析器槽：设置解析器、解析分段与失效回调。
  */
 function createPromptSectionSlot() {
-  let e = pu();
-  let n = pu();
-  let r = new Map();
+  let resolverSlot = subscribe();
+  let invalidatorSlot = subscribe();
+  let answers = new Map();
   return {
-    setPromptSectionResolver: e.set,
-    resolvePromptSection: (s, h, y) => e.get()?.(s, h, y) ?? Promise.resolve(h),
-    setPromptSectionInvalidator: n.set,
-    invalidatePromptSections: () => n.get()?.(),
-    noteSectionAnswer: (s, text, answer) =>
-      void r.set(s, {
+    setPromptSectionResolver: resolverSlot.set,
+    resolvePromptSection: (name, text, origin) =>
+      resolverSlot.get()?.(name, text, origin) ?? Promise.resolve(text),
+    setPromptSectionInvalidator: invalidatorSlot.set,
+    invalidatePromptSections: () => invalidatorSlot.get()?.(),
+    noteSectionAnswer: (key, text, answer) =>
+      void answers.set(key, {
         text,
         answer,
       }),
-    sectionAnswers: () => new Map(r),
-    forgetAnswers: () => r.clear(),
+    sectionAnswers: () => new Map(answers),
+    forgetAnswers: () => answers.clear(),
   };
 }
 //@ chunk-e6aww6q8.js:46307-46343 placement
 /**
  * 取段落 id
  */
-var sectionIdOf = (e) => e.replace(/:.*$/su, "");
+var sectionIdOf = (key) => key.replace(/:.*$/su, "");
 //@ chunk-e6aww6q8.js:46343-46383 placement
 /**
  * 提示段落槽
  */
-var promptSectionSlot = identity_2(createPromptSectionSlot(), (e) => e.forgetAnswers());
+var promptSectionSlot; // deferred: uses createPromptSectionSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46343", () => {
+  promptSectionSlot = identity_2(createPromptSectionSlot(), (slot) => slot.forgetAnswers());
+});
 //@ chunk-e6aww6q8.js:46383-46419 placement
-var invalidatePromptSections = promptSectionSlot.invalidatePromptSections;
+var invalidatePromptSections; // deferred: uses promptSectionSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46383", () => {
+  invalidatePromptSections = promptSectionSlot.invalidatePromptSections;
+});
 //@ chunk-e6aww6q8.js:46419-46451 placement
-var resolvePromptSection = promptSectionSlot.resolvePromptSection;
+var resolvePromptSection; // deferred: uses promptSectionSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46419", () => {
+  resolvePromptSection = promptSectionSlot.resolvePromptSection;
+});
 //@ chunk-e6aww6q8.js:46451-46480 placement
-var noteSectionAnswer = promptSectionSlot.noteSectionAnswer;
+var noteSectionAnswer; // deferred: uses promptSectionSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46451", () => {
+  noteSectionAnswer = promptSectionSlot.noteSectionAnswer;
+});
 //@ chunk-e6aww6q8.js:46480-46506 placement
-var sectionAnswers = promptSectionSlot.sectionAnswers;
+var sectionAnswers; // deferred: uses promptSectionSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46480", () => {
+  sectionAnswers = promptSectionSlot.sectionAnswers;
+});
 //@ chunk-e6aww6q8.js:46506-46545 placement
-var setPromptSectionInvalidator = promptSectionSlot.setPromptSectionInvalidator;
+var setPromptSectionInvalidator; // deferred: uses promptSectionSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46506", () => {
+  setPromptSectionInvalidator = promptSectionSlot.setPromptSectionInvalidator;
+});
 //@ chunk-e6aww6q8.js:46545-46581 placement
-var setPromptSectionResolver = promptSectionSlot.setPromptSectionResolver;
+var setPromptSectionResolver; // deferred: uses promptSectionSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46545", () => {
+  setPromptSectionResolver = promptSectionSlot.setPromptSectionResolver;
+});
 //@ chunk-e6aww6q8.js:46581-46657 placement
 /**
  * 由答案生成段落
  */
-var sectionsFromAnswers = (scope, n) =>
-  n.flatMap(([r, s]) =>
-    s === null
+var sectionsFromAnswers = (scope, entries) =>
+  entries.flatMap(([key, text]) =>
+    text === null
       ? []
       : [
           {
-            id: sectionIdOf(r),
-            text: s,
+            id: sectionIdOf(key),
+            text,
             scope,
           },
         ],
@@ -103,63 +130,78 @@ var sectionsFromAnswers = (scope, n) =>
 /**
  * 提示组装槽
  */
-var promptComposeSlot = createPromptComposeSlot();
+var promptComposeSlot; // deferred: uses createPromptComposeSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46657", () => {
+  promptComposeSlot = createPromptComposeSlot();
+});
 //@ chunk-e6aww6q8.js:46670-46697 placement
-var composeSections = promptComposeSlot.composeSections;
+var composeSections; // deferred: uses promptComposeSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46670", () => {
+  composeSections = promptComposeSlot.composeSections;
+});
 //@ chunk-e6aww6q8.js:46697-46723 placement
-var promptComposer = promptComposeSlot.promptComposer;
+var promptComposer; // deferred: uses promptComposeSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46697", () => {
+  promptComposer = promptComposeSlot.promptComposer;
+});
 //@ chunk-e6aww6q8.js:46723-46759 placement
-var setPromptComposeResolver = promptComposeSlot.setPromptComposeResolver;
+var setPromptComposeResolver; // deferred: uses promptComposeSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46723", () => {
+  setPromptComposeResolver = promptComposeSlot.setPromptComposeResolver;
+});
 //@ chunk-e6aww6q8.js:46759-46788 placement
-var setPromptComposer = promptComposeSlot.setPromptComposer;
+var setPromptComposer; // deferred: uses promptComposeSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:46759", () => {
+  setPromptComposer = promptComposeSlot.setPromptComposer;
+});
 //@ chunk-e6aww6q8.js:46788-46982 placement
 /**
  * 单值绑定槽：bind 设置当前值并触发等待者，release 只释放同一值，whenBound 在已绑定或绑定时回调。
  */
 function createBindingSlot() {
-  let e;
-  let n = new Set();
+  let current;
+  let waiters = new Set();
   return {
-    bind: (r) => {
-      e = r;
-      let s = [...n];
-      n.clear();
-      if (!r) return;
-      for (let h of s) h(r);
+    bind: (value) => {
+      current = value;
+      let pendingWaiters = [...waiters];
+      waiters.clear();
+      if (!value) return;
+      for (let waiter of pendingWaiters) waiter(value);
     },
-    release: (r) => {
-      if (e === r) e = undefined;
+    release: (value) => {
+      if (current === value) current = undefined;
     },
-    current: () => e,
-    whenBound: (r) => (e ? r(e) : void n.add(r)),
+    current: () => current,
+    whenBound: (waiter) => (current ? waiter(current) : void waiters.add(waiter)),
   };
 }
 //@ chunk-e6aww6q8.js:47247-47585 placement
 /**
  * 有 prompt.compose 钩子时让钩子决定系统提示词分段（核心处理器生成默认分段），失败时回退到默认组装。
  */
-var composeWithHooks = (e, n) =>
+var composeWithHooks = (resolveFacts, compose) =>
   hasModuleHookingSite("prompt.compose")
-    ? e()
-        .then((r) =>
+    ? resolveFacts()
+        .then((facts) =>
           NO_CORE_AT_CHAIN_BOTTOM("prompt.compose", {
             core: {
               "prompt.compose": {
                 name: "core",
                 isCore: true,
                 budgetMs: 0,
-                run: async (s) => ({
-                  sections: await n(s),
+                run: async (sections) => ({
+                  sections: await compose(sections),
                 }),
               },
             },
           })({
-            ...r,
+            ...facts,
             surfaces: attachedSurfaces(),
           }),
         )
         .then(
-          (r) => r.sections,
+          (answer) => answer.sections,
           (error) => {
             logForDebugging(
               `prompt.compose: the dispatch failed, the engine composes the prompt itself: ${errorMessage(error)}`,
@@ -167,42 +209,45 @@ var composeWithHooks = (e, n) =>
                 level: "error",
               },
             );
-            return n();
+            return compose();
           },
         )
     : undefined;
 //@ chunk-e6aww6q8.js:47585-47594 placement
-setPromptComposeResolver(composeWithHooks);
+// deferred: uses setPromptComposeResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:47585", () => {
+  setPromptComposeResolver(composeWithHooks);
+});
 //@ chunk-e6aww6q8.js:47594-47629 placement
 /**
  * 刷新提示上下文
  */
-function refreshPromptContext(e) {
-  e.refreshContext();
+function refreshPromptContext(context) {
+  context.refreshContext();
 }
 //@ chunk-e6aww6q8.js:47629-47929 placement
 /**
  * prompt.context 解析器槽：设置解析器、解析上下文（缓存结果）与失效回调。
  */
 function createPromptContextSlot() {
-  let e = pu();
-  let n = pu();
-  let r;
-  function s() {
-    r = undefined;
-    n.get()?.();
+  let resolverSlot = subscribe();
+  let invalidatorSlot = subscribe();
+  let lastResolved;
+  function invalidate() {
+    lastResolved = undefined;
+    invalidatorSlot.get()?.();
   }
   return {
-    setPromptContextResolver: e.set,
-    resolvePromptContext: (h) => {
-      let y = e.get()?.(h);
-      r = y !== undefined;
-      return y;
+    setPromptContextResolver: resolverSlot.set,
+    resolvePromptContext: (facts) => {
+      let resolved = resolverSlot.get()?.(facts);
+      lastResolved = resolved !== undefined;
+      return resolved;
     },
-    setPromptContextInvalidator: n.set,
-    invalidatePromptContext: s,
-    invalidateHookedPromptContext: (h) => {
-      if (r !== undefined && (r || h)) s();
+    setPromptContextInvalidator: invalidatorSlot.set,
+    invalidatePromptContext: invalidate,
+    invalidateHookedPromptContext: (isHooked) => {
+      if (lastResolved !== undefined && (lastResolved || isHooked)) invalidate();
     },
   };
 }
@@ -210,38 +255,59 @@ function createPromptContextSlot() {
 /**
  * 提示上下文槽
  */
-var promptContextSlot = createPromptContextSlot();
+var promptContextSlot; // deferred: uses createPromptContextSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:47929", () => {
+  promptContextSlot = createPromptContextSlot();
+});
 //@ chunk-e6aww6q8.js:47942-47983 placement
-var invalidateHookedPromptContext = promptContextSlot.invalidateHookedPromptContext;
+var invalidateHookedPromptContext; // deferred: uses promptContextSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:47942", () => {
+  invalidateHookedPromptContext = promptContextSlot.invalidateHookedPromptContext;
+});
 //@ chunk-e6aww6q8.js:47983-48018 placement
-var invalidatePromptContext = promptContextSlot.invalidatePromptContext;
+var invalidatePromptContext; // deferred: uses promptContextSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:47983", () => {
+  invalidatePromptContext = promptContextSlot.invalidatePromptContext;
+});
 //@ chunk-e6aww6q8.js:48018-48050 placement
-var resolvePromptContext = promptContextSlot.resolvePromptContext;
+var resolvePromptContext; // deferred: uses promptContextSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:48018", () => {
+  resolvePromptContext = promptContextSlot.resolvePromptContext;
+});
 //@ chunk-e6aww6q8.js:48050-48089 placement
-var setPromptContextInvalidator = promptContextSlot.setPromptContextInvalidator;
+var setPromptContextInvalidator; // deferred: uses promptContextSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:48050", () => {
+  setPromptContextInvalidator = promptContextSlot.setPromptContextInvalidator;
+});
 //@ chunk-e6aww6q8.js:48089-48125 placement
-var setPromptContextResolver = promptContextSlot.setPromptContextResolver;
+var setPromptContextResolver; // deferred: uses promptContextSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:48089", () => {
+  setPromptContextResolver = promptContextSlot.setPromptContextResolver;
+});
 //@ chunk-e6aww6q8.js:48125-48146 placement
 /**
  * 上下文绑定后才执行
  */
 var whenPromptContextBound = () => whenBound(refreshPromptContext);
 //@ chunk-e6aww6q8.js:48146-48155 placement
-setPromptContextInvalidator(whenPromptContextBound);
+// deferred: uses setPromptContextInvalidator of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:48146", () => {
+  setPromptContextInvalidator(whenPromptContextBound);
+});
 //@ chunk-e6aww6q8.js:48155-48428 placement
 /**
  * 有 prompt.context 钩子时经钩子改写上下文块与指令文件，失败则保持核心结果。
  */
-var resolvePromptContextWithHooks = (e) => {
+var resolvePromptContextWithHooks = (computeContext) => {
   if (!hasModuleHookingSite("prompt.context")) return;
-  let n = e();
+  let context = computeContext();
   return NO_CORE_AT_CHAIN_BOTTOM(
     "prompt.context",
     {},
-  )(n).then(
-    (r) => ({
-      blocks: r.blocks,
-      instructionFiles: r.instructionFiles,
+  )(context).then(
+    (answer) => ({
+      blocks: answer.blocks,
+      instructionFiles: answer.instructionFiles,
     }),
     (error) => {
       logForDebugging(
@@ -250,29 +316,35 @@ var resolvePromptContextWithHooks = (e) => {
           level: "error",
         },
       );
-      return n;
+      return context;
     },
   );
 };
 //@ chunk-e6aww6q8.js:48428-48437 placement
-setPromptContextResolver(resolvePromptContextWithHooks);
+// deferred: uses setPromptContextResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:48428", () => {
+  setPromptContextResolver(resolvePromptContextWithHooks);
+});
 //@ chunk-e6aww6q8.js:48437-48604 placement
 /**
  * 有 prompt.section 钩子（且不只是默认安全插件）时让钩子改写某个分段的文本。
  */
-var resolvePromptSectionWithHooks = (name, n, r) =>
-  hasModuleHookingSite("prompt.section") && !isLoneSecDefaultShortcut("prompt.section", r)
+var resolvePromptSectionWithHooks = (name, text, origin) =>
+  hasModuleHookingSite("prompt.section") && !isLoneSecDefaultShortcut("prompt.section", origin)
     ? NO_CORE_AT_CHAIN_BOTTOM("prompt.section", {
-        ...(r !== undefined && {
-          origin: r,
+        ...(origin !== undefined && {
+          origin,
         }),
       })({
         name,
-        text: n,
-      }).then((s) => s.text)
-    : Promise.resolve(n);
+        text,
+      }).then((answer) => answer.text)
+    : Promise.resolve(text);
 //@ chunk-e6aww6q8.js:48604-48613 placement
-setPromptSectionResolver(resolvePromptSectionWithHooks);
+// deferred: uses setPromptSectionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:48604", () => {
+  setPromptSectionResolver(resolvePromptSectionWithHooks);
+});
 export {
   composeSections,
   orderPromptSections,

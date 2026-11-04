@@ -11,7 +11,7 @@
 import { useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
 import { useTerminalNotification } from "../ink/useTerminalNotification.js";
 import { useHost } from "../context/session.js";
-import { ce } from "../../vendor/react/cjs/react.production.js";
+import { useCallback } from "../../vendor/react/cjs/react.production.js";
 import { claimOnceStore } from "../services/api/verificationRequired.js";
 import { MAX_LIST_ENTRIES_WITHOUT_UUID_LOGGED } from "../bridge/inboundMessages.js";
 
@@ -23,12 +23,12 @@ function useScreenReaderBell() {
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let terminalNotification = useTerminalNotification();
   let host = useHost();
-  return ce(() => {
+  return useCallback(() => {
     if (!isScreenReaderEnabled) return;
-    let g = claimOnceStore.of(host);
+    let claimState = claimOnceStore.of(host);
     let now = Date.now();
-    if (now - g.lastBellAt < MAX_LIST_ENTRIES_WITHOUT_UUID_LOGGED) return;
-    g.lastBellAt = now;
+    if (now - claimState.lastBellAt < MAX_LIST_ENTRIES_WITHOUT_UUID_LOGGED) return;
+    claimState.lastBellAt = now;
     terminalNotification.notifyBell();
   }, [isScreenReaderEnabled, terminalNotification, host]);
 }

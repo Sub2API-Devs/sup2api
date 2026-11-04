@@ -24,47 +24,50 @@ import { bridgeAddressFromToken } from "../utils/peerMessageHeaders.js";
 /**
  * 句柄切换时替换丢弃消息的写出器
  */
-function swapDropSenderWriter(e, r) {
+function swapDropSenderWriter(previousHandle, nextHandle) {
   let dropSenderWriterByHandle = bridgeHostState().dropSenderWriterByHandle;
-  if (e !== null && e !== r) {
-    let o = dropSenderWriterByHandle.get(e);
-    if (o) clearSenderDropWriter(o);
+  if (previousHandle !== null && previousHandle !== nextHandle) {
+    let previousWriter = dropSenderWriterByHandle.get(previousHandle);
+    if (previousWriter) clearSenderDropWriter(previousWriter);
   }
-  if (r !== null && r !== e && !r.outboundOnly) {
-    let senderDropWriter = dropSenderWriterByHandle.get(r);
+  if (nextHandle !== null && nextHandle !== previousHandle && !nextHandle.outboundOnly) {
+    let senderDropWriter = dropSenderWriterByHandle.get(nextHandle);
     if (!senderDropWriter) {
-      senderDropWriter = (s) => {
-        r.writeSdkMessages([s]);
+      senderDropWriter = (event) => {
+        nextHandle.writeSdkMessages([event]);
       };
-      dropSenderWriterByHandle.set(r, senderDropWriter);
+      dropSenderWriterByHandle.set(nextHandle, senderDropWriter);
     }
     setSenderDropWriter(senderDropWriter);
   }
 }
 //@ chunk-5ktj1vf9.js:711-1357 placement
-function setSdkHostedBridgeHandle(e, storageV5) {
-  let n = bridgeHostState();
-  let o = visibleBridgeHandle(e);
-  let sdkHostedHandle = n.sdkHostedHandle;
-  n.sdkHostedHandle = o;
-  updateSessionBridgeId(o ? toCompatSessionId(o.bridgeSessionId) : null, storageV5).catch(() => {});
-  n.lastReportedPermissionMode = undefined;
-  n.lastKnownPermissionMode = undefined;
-  n.lastReportedEffort = undefined;
-  n.lastKnownEffort = undefined;
-  n.lastReportedUltracodeActive = undefined;
-  n.lastKnownUltracodeActive = undefined;
-  n.lastKnownEffortRequestId = undefined;
-  n.lastReportedModel = undefined;
-  n.lastKnownModel = undefined;
-  n.contextUsageMirror = undefined;
-  n.lastReportedArtifacts = undefined;
-  n.lastKnownArtifacts = undefined;
-  n.artifactsEgressSuppressed = undefined;
-  n.lastReportedCrossSessionInbound = undefined;
-  n.lastKnownCrossSessionInbound = undefined;
-  n.lastKnownPostTurnSummary = undefined;
-  swapDropSenderWriter(sdkHostedHandle, o);
+function setSdkHostedBridgeHandle(handle, storageV5) {
+  let hostState = bridgeHostState();
+  let visibleHandle = visibleBridgeHandle(handle);
+  let sdkHostedHandle = hostState.sdkHostedHandle;
+  hostState.sdkHostedHandle = visibleHandle;
+  updateSessionBridgeId(
+    visibleHandle ? toCompatSessionId(visibleHandle.bridgeSessionId) : null,
+    storageV5,
+  ).catch(() => {});
+  hostState.lastReportedPermissionMode = undefined;
+  hostState.lastKnownPermissionMode = undefined;
+  hostState.lastReportedEffort = undefined;
+  hostState.lastKnownEffort = undefined;
+  hostState.lastReportedUltracodeActive = undefined;
+  hostState.lastKnownUltracodeActive = undefined;
+  hostState.lastKnownEffortRequestId = undefined;
+  hostState.lastReportedModel = undefined;
+  hostState.lastKnownModel = undefined;
+  hostState.contextUsageMirror = undefined;
+  hostState.lastReportedArtifacts = undefined;
+  hostState.lastKnownArtifacts = undefined;
+  hostState.artifactsEgressSuppressed = undefined;
+  hostState.lastReportedCrossSessionInbound = undefined;
+  hostState.lastKnownCrossSessionInbound = undefined;
+  hostState.lastKnownPostTurnSummary = undefined;
+  swapDropSenderWriter(sdkHostedHandle, visibleHandle);
 }
 //@ chunk-5ktj1vf9.js:1357-1399 placement
 function getSdkHostedBridgeHandle() {
@@ -74,55 +77,55 @@ function getSdkHostedBridgeHandle() {
 /**
  * 保存当前 REPL 桥接句柄，并向桥接上报权限模式、模型、上下文用量、回合后摘要、artifact 等元数据。
  */
-function setReplBridgeHandle(e, storageV5) {
-  let n = bridgeHostState();
-  let o = visibleBridgeHandle(e);
-  let replHandle = n.replHandle;
-  n.replHandle = o;
-  n.lastReportedPermissionMode = undefined;
-  n.lastKnownPermissionMode = undefined;
-  n.lastReportedEffort = undefined;
-  n.lastKnownEffort = undefined;
-  n.lastReportedUltracodeActive = undefined;
-  n.lastKnownUltracodeActive = undefined;
-  n.lastKnownEffortRequestId = undefined;
-  n.lastReportedModel = undefined;
-  n.lastKnownModel = undefined;
-  n.contextUsageMirror = undefined;
-  n.lastReportedArtifacts = undefined;
-  n.lastKnownArtifacts = undefined;
-  n.artifactsEgressSuppressed = undefined;
-  n.lastReportedCrossSessionInbound = undefined;
-  n.lastKnownCrossSessionInbound = undefined;
-  n.lastKnownPostTurnSummary = undefined;
-  swapDropSenderWriter(replHandle, o);
-  let i = o ? toCompatSessionId(o.bridgeSessionId) : undefined;
-  if (i !== undefined) process.env.CLAUDE_CODE_BRIDGE_SESSION_ID = i;
+function setReplBridgeHandle(handle, storageV5) {
+  let hostState = bridgeHostState();
+  let visibleHandle = visibleBridgeHandle(handle);
+  let replHandle = hostState.replHandle;
+  hostState.replHandle = visibleHandle;
+  hostState.lastReportedPermissionMode = undefined;
+  hostState.lastKnownPermissionMode = undefined;
+  hostState.lastReportedEffort = undefined;
+  hostState.lastKnownEffort = undefined;
+  hostState.lastReportedUltracodeActive = undefined;
+  hostState.lastKnownUltracodeActive = undefined;
+  hostState.lastKnownEffortRequestId = undefined;
+  hostState.lastReportedModel = undefined;
+  hostState.lastKnownModel = undefined;
+  hostState.contextUsageMirror = undefined;
+  hostState.lastReportedArtifacts = undefined;
+  hostState.lastKnownArtifacts = undefined;
+  hostState.artifactsEgressSuppressed = undefined;
+  hostState.lastReportedCrossSessionInbound = undefined;
+  hostState.lastKnownCrossSessionInbound = undefined;
+  hostState.lastKnownPostTurnSummary = undefined;
+  swapDropSenderWriter(replHandle, visibleHandle);
+  let compatSessionId = visibleHandle ? toCompatSessionId(visibleHandle.bridgeSessionId) : undefined;
+  if (compatSessionId !== undefined) process.env.CLAUDE_CODE_BRIDGE_SESSION_ID = compatSessionId;
   else delete process.env.CLAUDE_CODE_BRIDGE_SESSION_ID;
-  updateSessionBridgeId(i ?? null, storageV5).catch(() => {});
+  updateSessionBridgeId(compatSessionId ?? null, storageV5).catch(() => {});
 }
 //@ chunk-5ktj1vf9.js:2163-2200 placement
 function getReplBridgeHandle() {
   return bridgeHostState().replHandle;
 }
 //@ chunk-5ktj1vf9.js:2200-2322 placement
-function retireBridgeHandle(e, storageV5) {
-  let n = bridgeHostState();
-  n.retiredHandles.add(e);
-  if (n.replHandle === e) setReplBridgeHandle(null, storageV5);
-  if (n.sdkHostedHandle === e) setSdkHostedBridgeHandle(null, storageV5);
+function retireBridgeHandle(handle, storageV5) {
+  let hostState = bridgeHostState();
+  hostState.retiredHandles.add(handle);
+  if (hostState.replHandle === handle) setReplBridgeHandle(null, storageV5);
+  if (hostState.sdkHostedHandle === handle) setSdkHostedBridgeHandle(null, storageV5);
 }
 //@ chunk-5ktj1vf9.js:2322-2637 placement
 function reportBridgePermissionMode(mode, isUltraplanMode) {
-  let n = bridgeHostState();
-  let o = n.replHandle ?? n.sdkHostedHandle;
-  if (!o || o.outboundOnly) return;
-  n.lastKnownPermissionMode = mode;
+  let hostState = bridgeHostState();
+  let handle = hostState.replHandle ?? hostState.sdkHostedHandle;
+  if (!handle || handle.outboundOnly) return;
+  hostState.lastKnownPermissionMode = mode;
   if (mode === "bypassPermissions") return;
   let externalPermissionMode = toExternalPermissionMode(mode);
-  if (n.lastReportedPermissionMode === externalPermissionMode) return;
-  n.lastReportedPermissionMode = externalPermissionMode;
-  o.reportMetadata({
+  if (hostState.lastReportedPermissionMode === externalPermissionMode) return;
+  hostState.lastReportedPermissionMode = externalPermissionMode;
+  handle.reportMetadata({
     permission_mode: externalPermissionMode,
     ...(isUltraplanMode !== undefined && {
       is_ultraplan_mode: isUltraplanMode,
@@ -131,33 +134,34 @@ function reportBridgePermissionMode(mode, isUltraplanMode) {
 }
 //@ chunk-5ktj1vf9.js:2637-2768 placement
 function reseedBridgePermissionMode() {
-  let e = bridgeHostState();
-  e.lastReportedPermissionMode = undefined;
-  if (e.lastKnownPermissionMode !== undefined) reportBridgePermissionMode(e.lastKnownPermissionMode);
+  let hostState = bridgeHostState();
+  hostState.lastReportedPermissionMode = undefined;
+  if (hostState.lastKnownPermissionMode !== undefined)
+    reportBridgePermissionMode(hostState.lastKnownPermissionMode);
 }
 //@ chunk-5ktj1vf9.js:2768-2819 placement
 function getLastKnownBridgePermissionMode() {
   return bridgeHostState().lastKnownPermissionMode;
 }
 //@ chunk-5ktj1vf9.js:2819-3136 placement
-function setSupervisedBridgeSession(e, storageV5, owner) {
-  let o = isSelfAddressableSessionId(e);
-  if (!o)
+function setSupervisedBridgeSession(sessionId, storageV5, owner) {
+  let isSelfAddressable = isSelfAddressableSessionId(sessionId);
+  if (!isSelfAddressable)
     logForDebugging(
       "[bridge] supervised session id refused (not a safe bridge id) \u2014 this child has no Remote Control identity for the peer surface",
       {
         level: "warn",
       },
     );
-  bridgeHostState().supervisedBridgeSession = o
+  bridgeHostState().supervisedBridgeSession = isSelfAddressable
     ? {
-        bridgeSessionId: e,
+        bridgeSessionId: sessionId,
         owner,
         storageV5,
         selfTitle: undefined,
       }
     : null;
-  updateSessionBridgeId(o ? toCompatSessionId(e) : null, storageV5).catch(() => {});
+  updateSessionBridgeId(isSelfAddressable ? toCompatSessionId(sessionId) : null, storageV5).catch(() => {});
 }
 //@ chunk-5ktj1vf9.js:3136-3204 placement
 function getSupervisedBridgeSessionId() {
@@ -179,52 +183,59 @@ function adoptSelfBridgeTitleFromRoster(title) {
     );
 }
 //@ chunk-5ktj1vf9.js:3379-3441 placement
-function safeSelfTitle(e) {
-  return typeof e === "string" && clipTeammateText(e) !== "" ? e : undefined;
+function safeSelfTitle(title) {
+  return typeof title === "string" && clipTeammateText(title) !== "" ? title : undefined;
 }
 //@ chunk-5ktj1vf9.js:3441-3602 placement
 /**
  * 按主机与凭据缓存对端身份键
  */
-function getPeerIdentityKey(e) {
-  let r = walkCredentialKey();
-  let n = bridgeHostState();
-  let peerIdentityKey = n.peerIdentityKey;
-  if (peerIdentityKey !== null && peerIdentityKey.host === e && peerIdentityKey.credential === r)
+function getPeerIdentityKey(host) {
+  let credentialKey = walkCredentialKey();
+  let hostState = bridgeHostState();
+  let peerIdentityKey = hostState.peerIdentityKey;
+  if (
+    peerIdentityKey !== null &&
+    peerIdentityKey.host === host &&
+    peerIdentityKey.credential === credentialKey
+  )
     return peerIdentityKey;
-  let s = {
-    host: e,
-    credential: r,
+  let key = {
+    host,
+    credential: credentialKey,
   };
-  n.peerIdentityKey = s;
-  return s;
+  hostState.peerIdentityKey = key;
+  return key;
 }
 //@ chunk-5ktj1vf9.js:3602-3789 placement
 function walkCredentialKey() {
-  let { sameOwnerAccount } = require("./chunk-7v0gj88m.js");
+  let { sameOwnerAccount } = require("../utils/auth.js");
   let bridgeCredentialKey = resolveBridgeCredentialKey();
-  let n = bridgeHostState();
-  let walkCredentialKey = n.walkCredentialKey;
+  let hostState = bridgeHostState();
+  let walkCredentialKey = hostState.walkCredentialKey;
   if (walkCredentialKey !== null && sameOwnerAccount(walkCredentialKey.owner, bridgeCredentialKey))
     return walkCredentialKey;
-  let s = {
+  let key = {
     owner: bridgeCredentialKey,
   };
-  n.walkCredentialKey = s;
-  return s;
+  hostState.walkCredentialKey = key;
+  return key;
 }
 //@ chunk-5ktj1vf9.js:3789-4222 placement
 /**
  * 推导桥接凭据键（会话 API bearer 指纹/OAuth/WIF 账号）
  */
 function resolveBridgeCredentialKey() {
-  let { sessionsApiBearerFingerprint, isConsoleProfileSessionsCredential } = require("./chunk-6phxatm7.js");
-  let { getStoredOauthAccountInfo } = require("./chunk-7v0gj88m.js");
-  let { getWIFAccountInfo } = require("./chunk-z7cz2amc.js");
-  let { env } = require("./chunk-sa88k60q.js");
-  let i = sessionsApiBearerFingerprint();
+  let {
+    sessionsApiBearerFingerprint,
+    isConsoleProfileSessionsCredential,
+  } = require("../utils/teleport/api.js");
+  let { getStoredOauthAccountInfo } = require("../utils/auth.js");
+  let { getWIFAccountInfo } = require("../utils/clearWIFAccountInfoCache.lazy.js");
+  let { env } = require("../utils/env.js");
+  let bearerFingerprint = sessionsApiBearerFingerprint();
   return {
-    accountUuid: i ? `bearer:${i}` : undefined,
+    accountUuid: bearerFingerprint ? `bearer:${bearerFingerprint}` : undefined,
     organizationUuid: isConsoleProfileSessionsCredential()
       ? getWIFAccountInfo()?.organizationUuid?.trim() || undefined
       : env.CLAUDE_CODE_ORGANIZATION_UUID || getStoredOauthAccountInfo()?.organizationUuid,
@@ -232,38 +243,38 @@ function resolveBridgeCredentialKey() {
 }
 //@ chunk-5ktj1vf9.js:4222-4684 placement
 async function primePeerIdentityOwner({ refresh, credentials }) {
-  let { isCrossSessionMessagingEnabled } = require("./chunk-nv1s3402.js");
+  let { isCrossSessionMessagingEnabled } = require("../utils/crossSessionMessagingGate.js");
   if (!isCrossSessionMessagingEnabled()) return;
   if (!(
     getReplBridgeHandle() !== null ||
     getSdkHostedBridgeHandle() !== null ||
     bridgeHostState().supervisedBridgeSession !== null
   )) {
-    let { hasCloudPeerAccess } = require("./chunk-96k5yyba.js");
+    let { hasCloudPeerAccess } = require("./hasCloudPeerAccess.lazy.js");
     if (!hasCloudPeerAccess()) return;
   }
-  let { primeSessionsApiBearer } = require("./chunk-6phxatm7.js");
-  let i = primeSessionsApiBearer({
+  let { primeSessionsApiBearer } = require("../utils/teleport/api.js");
+  let primePromise = primeSessionsApiBearer({
     refresh,
     credentials,
   }).catch(() => {});
   if (refresh) {
-    await i;
+    await primePromise;
     return;
   }
-  let { withDeadline } = require("./chunk-c1wxfrj3.js");
-  await withDeadline(i, PEER_IDENTITY_DEADLINE_MS);
+  let { withDeadline } = require("../utils/sleep.js");
+  await withDeadline(primePromise, PEER_IDENTITY_DEADLINE_MS);
 }
 //@ chunk-5ktj1vf9.js:4684-4694 placement
 var PEER_IDENTITY_DEADLINE_MS = 750;
 //@ chunk-5ktj1vf9.js:4694-4938 placement
 function getPeerBridgeIdentity() {
-  let e = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
-  if (e)
+  let handle = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
+  if (handle)
     return {
-      key: getPeerIdentityKey(e),
-      bridgeSessionId: e.bridgeSessionId,
-      selfTitle: e.selfTitle,
+      key: getPeerIdentityKey(handle),
+      bridgeSessionId: handle.bridgeSessionId,
+      selfTitle: handle.selfTitle,
       live: isReplBridgeActive(),
     };
   let supervisedBridgeSession = bridgeHostState().supervisedBridgeSession;
@@ -278,55 +289,55 @@ function getPeerBridgeIdentity() {
 }
 //@ chunk-5ktj1vf9.js:4938-5223 placement
 function reportBridgeCrossSessionInbound(lastKnownCrossSessionInbound) {
-  let r = bridgeHostState();
-  let n = r.replHandle ?? r.sdkHostedHandle;
-  if (!n || n.outboundOnly) return;
-  r.lastKnownCrossSessionInbound = lastKnownCrossSessionInbound;
-  let o = lastKnownCrossSessionInbound ? "available" : "unavailable";
-  if (r.lastReportedCrossSessionInbound === o) return;
-  r.lastReportedCrossSessionInbound = o;
-  n.reportMetadata({
-    cross_session_inbound: o,
+  let hostState = bridgeHostState();
+  let handle = hostState.replHandle ?? hostState.sdkHostedHandle;
+  if (!handle || handle.outboundOnly) return;
+  hostState.lastKnownCrossSessionInbound = lastKnownCrossSessionInbound;
+  let value = lastKnownCrossSessionInbound ? "available" : "unavailable";
+  if (hostState.lastReportedCrossSessionInbound === value) return;
+  hostState.lastReportedCrossSessionInbound = value;
+  handle.reportMetadata({
+    cross_session_inbound: value,
   });
 }
 //@ chunk-5ktj1vf9.js:5223-5369 placement
 function reseedBridgeCrossSessionInbound() {
-  let e = bridgeHostState();
-  e.lastReportedCrossSessionInbound = undefined;
-  if (e.lastKnownCrossSessionInbound !== undefined)
-    reportBridgeCrossSessionInbound(e.lastKnownCrossSessionInbound);
+  let hostState = bridgeHostState();
+  hostState.lastReportedCrossSessionInbound = undefined;
+  if (hostState.lastKnownCrossSessionInbound !== undefined)
+    reportBridgeCrossSessionInbound(hostState.lastKnownCrossSessionInbound);
 }
 //@ chunk-5ktj1vf9.js:5369-5589 placement
 /**
  * 把回合后摘要上报到桥接句柄元数据
  */
-function reportPostTurnSummary(e) {
-  let r = bridgeHostState();
-  let n = r.replHandle ?? r.sdkHostedHandle;
-  let remoteEgressSuppressed = r.remoteEgressSuppressed;
+function reportPostTurnSummary(summary) {
+  let hostState = bridgeHostState();
+  let handle = hostState.replHandle ?? hostState.sdkHostedHandle;
+  let remoteEgressSuppressed = hostState.remoteEgressSuppressed;
   if (
-    !n ||
-    n.outboundOnly ||
-    n.noHistoryBackfill ||
+    !handle ||
+    handle.outboundOnly ||
+    handle.noHistoryBackfill ||
     remoteEgressSuppressed === null ||
     remoteEgressSuppressed()
   )
     return;
-  r.lastKnownPostTurnSummary = e;
-  n.reportMetadata({
-    post_turn_summary: e,
+  hostState.lastKnownPostTurnSummary = summary;
+  handle.reportMetadata({
+    post_turn_summary: summary,
   });
 }
 //@ chunk-5ktj1vf9.js:5589-5760 placement
-function publishPostTurnSummary(sessionState, r, n) {
-  let o = {
-    post_turn_summary: r,
+function publishPostTurnSummary(handle, summary, options) {
+  let metadata = {
+    post_turn_summary: summary,
   };
-  if (n) sessionState?.notifyMetadataChanged(o, n);
-  else sessionState?.notifyMetadataChanged(o);
-  if (sessionState?.onMetadataChanged) return;
+  if (options) handle?.notifyMetadataChanged(metadata, options);
+  else handle?.notifyMetadataChanged(metadata);
+  if (handle?.onMetadataChanged) return;
   try {
-    reportPostTurnSummary(r);
+    reportPostTurnSummary(summary);
   } catch (error) {
     logError(error);
   }
@@ -341,54 +352,54 @@ function reseedBridgePostTurnSummary() {
   if (lastKnownPostTurnSummary) reportPostTurnSummary(lastKnownPostTurnSummary);
 }
 //@ chunk-5ktj1vf9.js:5871-6064 placement
-function reportBridgeModel(e) {
-  let r = bridgeHostState();
-  let n = r.replHandle ?? r.sdkHostedHandle;
-  if (!n || n.outboundOnly) return;
-  r.lastKnownModel = e;
-  if (r.lastReportedModel === e) return;
-  r.lastReportedModel = e;
-  n.reportMetadata({
-    model: e,
+function reportBridgeModel(model) {
+  let hostState = bridgeHostState();
+  let handle = hostState.replHandle ?? hostState.sdkHostedHandle;
+  if (!handle || handle.outboundOnly) return;
+  hostState.lastKnownModel = model;
+  if (hostState.lastReportedModel === model) return;
+  hostState.lastReportedModel = model;
+  handle.reportMetadata({
+    model,
   });
 }
 //@ chunk-5ktj1vf9.js:6064-6168 placement
 function reseedBridgeModel() {
-  let e = bridgeHostState();
-  e.lastReportedModel = undefined;
-  if (e.lastKnownModel !== undefined) reportBridgeModel(e.lastKnownModel);
+  let hostState = bridgeHostState();
+  hostState.lastReportedModel = undefined;
+  if (hostState.lastKnownModel !== undefined) reportBridgeModel(hostState.lastKnownModel);
 }
 //@ chunk-5ktj1vf9.js:6168-6217 placement
 function reseedBridgeContextUsage() {
   bridgeHostState().contextUsageMirror?.resend();
 }
 //@ chunk-5ktj1vf9.js:6217-6545 placement
-function reportBridgeArtifacts(e, r) {
-  let n = bridgeHostState();
-  let o = n.replHandle ?? n.sdkHostedHandle;
-  let s = jsonStringify(e);
+function reportBridgeArtifacts(artifacts, isSuppressed) {
+  let hostState = bridgeHostState();
+  let handle = hostState.replHandle ?? hostState.sdkHostedHandle;
+  let serialized = jsonStringify(artifacts);
   if (
-    !o ||
-    o.outboundOnly ||
-    o.noHistoryBackfill ||
-    r() ||
-    n.lastReportedArtifacts === s ||
-    (e.length === 0 && n.lastKnownArtifacts === undefined)
+    !handle ||
+    handle.outboundOnly ||
+    handle.noHistoryBackfill ||
+    isSuppressed() ||
+    hostState.lastReportedArtifacts === serialized ||
+    (artifacts.length === 0 && hostState.lastKnownArtifacts === undefined)
   )
     return;
-  n.lastKnownArtifacts = e;
-  n.lastReportedArtifacts = s;
-  n.artifactsEgressSuppressed = r;
-  o.reportMetadata({
-    artifacts: e.length === 0 ? null : e,
+  hostState.lastKnownArtifacts = artifacts;
+  hostState.lastReportedArtifacts = serialized;
+  hostState.artifactsEgressSuppressed = isSuppressed;
+  handle.reportMetadata({
+    artifacts: artifacts.length === 0 ? null : artifacts,
   });
 }
 //@ chunk-5ktj1vf9.js:6545-6709 placement
 function reseedBridgeArtifacts() {
-  let e = bridgeHostState();
-  e.lastReportedArtifacts = undefined;
-  if (e.lastKnownArtifacts && e.artifactsEgressSuppressed)
-    reportBridgeArtifacts(e.lastKnownArtifacts, e.artifactsEgressSuppressed);
+  let state = bridgeHostState();
+  state.lastReportedArtifacts = undefined;
+  if (state.lastKnownArtifacts && state.artifactsEgressSuppressed)
+    reportBridgeArtifacts(state.lastKnownArtifacts, state.artifactsEgressSuppressed);
 }
 //@ chunk-5ktj1vf9.js:6709-6774 placement
 function getSelfBridgeCompatId() {
@@ -416,13 +427,13 @@ function getSelfBridgeTitle() {
 }
 //@ chunk-5ktj1vf9.js:6944-7032 placement
 function setSelfBridgeTitle(bridgeSessionId, title) {
-  let n = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
-  if (n && sessionIdBody(n.bridgeSessionId) === sessionIdBody(bridgeSessionId))
-    n.selfTitle = safeSelfTitle(title);
+  let handle = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
+  if (handle && sessionIdBody(handle.bridgeSessionId) === sessionIdBody(bridgeSessionId))
+    handle.selfTitle = safeSelfTitle(title);
 }
 //@ chunk-5ktj1vf9.js:7032-7097 placement
-function visibleBridgeHandle(e) {
-  return e !== null && bridgeHostState().retiredHandles.has(e) ? null : e;
+function visibleBridgeHandle(handle) {
+  return handle !== null && bridgeHostState().retiredHandles.has(handle) ? null : handle;
 }
 export {
   getReplBridgeHandle,
@@ -453,4 +464,5 @@ export {
   publishPostTurnSummary,
   getLastKnownBridgePermissionMode,
   getSupervisedBridgeSessionId,
+  walkCredentialKey,
 };

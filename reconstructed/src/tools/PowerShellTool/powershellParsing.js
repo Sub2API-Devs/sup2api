@@ -21,17 +21,17 @@ var regExp_2 = new RegExp(`${`['"\u2018-\u201F]`}+`, "g");
 /**
  * 跳过 PowerShell 文本开头的空白、<# #> 块注释和 # 行注释。
  */
-function skipLeadingWhitespaceAndComments(e) {
-  let replaced = e.replace(regExp, "");
+function skipLeadingWhitespaceAndComments(text) {
+  let replaced = text.replace(regExp, "");
   for (;;)
     if (replaced.startsWith("<#")) {
       let index = replaced.indexOf("#>", 2);
       if (index < 0) break;
       replaced = replaced.slice(index + 2).replace(regExp, "");
     } else if (replaced.startsWith("#")) {
-      let n = replaced.search(/[\r\n]/);
-      if (n < 0) break;
-      replaced = replaced.slice(n).replace(regExp, "");
+      let lineEnd = replaced.search(/[\r\n]/);
+      if (lineEnd < 0) break;
+      replaced = replaced.slice(lineEnd).replace(regExp, "");
     } else break;
   return replaced;
 }
@@ -39,8 +39,8 @@ function skipLeadingWhitespaceAndComments(e) {
 /**
  * 去掉 PowerShell 参数值前的 -Param: 之类的前缀。
  */
-function stripPsParameterPrefix(e) {
-  return e.replace(regExp_2, "");
+function stripPsParameterPrefix(paramText) {
+  return paramText.replace(regExp_2, "");
 }
 //@ chunk-s67vc0kc.js:952-1027 placement
 var regExp_3 = new RegExp(`^${`['"\u2018-\u201F]`}+|${`['"\u2018-\u201F]`}+$`, "g");
@@ -48,15 +48,15 @@ var regExp_3 = new RegExp(`^${`['"\u2018-\u201F]`}+|${`['"\u2018-\u201F]`}+$`, "
 /**
  * 去掉 FileSystem:: 之类的提供程序前缀。
  */
-function stripFileSystemProviderPrefix(e) {
-  return e.replace(regExp_3, "");
+function stripFileSystemProviderPrefix(pathText) {
+  return pathText.replace(regExp_3, "");
 }
 //@ chunk-s67vc0kc.js:1510-1544 placement
 /**
  * 反转义 PowerShell 双引号字符串里的转义序列。
  */
-function unescapePsDoubleQuoted(e) {
-  return unescapePowerShell(e, undefined);
+function unescapePsDoubleQuoted(text) {
+  return unescapePowerShell(text, undefined);
 }
 //@ chunk-s67vc0kc.js:1544-1587 placement
 /**
@@ -74,8 +74,8 @@ var PS_SIMPLE_ESCAPES = {
 /**
  * 只解码常见转义字符。
  */
-function unescapePsSimpleEscapes(e) {
-  return unescapePowerShell(e, PS_SIMPLE_ESCAPES);
+function unescapePsSimpleEscapes(text) {
+  return unescapePowerShell(text, PS_SIMPLE_ESCAPES);
 }
 //@ chunk-s67vc0kc.js:1616-1636 placement
 /**
@@ -88,21 +88,24 @@ var PS_NULL_ESCAPE = {
 /**
  * 把 \0 解码成 NUL 字符。
  */
-function unescapePsNullEscape(e) {
-  return unescapePowerShell(e, PS_NULL_ESCAPE);
+function unescapePsNullEscape(text) {
+  return unescapePowerShell(text, PS_NULL_ESCAPE);
 }
 //@ chunk-s67vc0kc.js:1665-1937 placement
-function unescapePowerShell(e, t) {
-  return e.replace(/`(?:(`)|[\r\n]+\s*|u\{([0-9a-fA-F]{1,6})\}|([\s\S]?))/g, (n, r, a, s) => {
-    if (r !== undefined) return "`";
-    if (a !== undefined) {
-      let c = parseInt(a, 16);
-      return c <= 1114111 ? String.fromCodePoint(c) : "\uFFFD";
-    }
-    if (s === undefined) return "";
-    if (t && s in t) return t[s];
-    return s;
-  });
+function unescapePowerShell(text, escapeMap) {
+  return text.replace(
+    /`(?:(`)|[\r\n]+\s*|u\{([0-9a-fA-F]{1,6})\}|([\s\S]?))/g,
+    (wholeMatch, escapedBacktick, codePointHex, escapedChar) => {
+      if (escapedBacktick !== undefined) return "`";
+      if (codePointHex !== undefined) {
+        let codePoint = parseInt(codePointHex, 16);
+        return codePoint <= 1114111 ? String.fromCodePoint(codePoint) : "\uFFFD";
+      }
+      if (escapedChar === undefined) return "";
+      if (escapeMap && escapedChar in escapeMap) return escapeMap[escapedChar];
+      return escapedChar;
+    },
+  );
 }
 //@ chunk-s67vc0kc.js:1937-1995 placement
 /**

@@ -8,7 +8,7 @@
  * pieces: chunk-e6aww6q8.js (36)
  * attribution: placement 36
  */
-import { join, relative, sep, isAbsolute } from "path";
+import { join, relative as relative_2, sep, isAbsolute } from "path";
 import { realpath } from "fs/promises";
 import {
   checkManagedConfigFile,
@@ -44,7 +44,7 @@ import {
 import { getEmptyToolPermissionContext } from "../../Tool.js";
 import { FILE_READ_TOOL_NAME } from "../../tools/FileReadTool/constants.js";
 import { getOriginalCwd, getOriginalCwdOrNull, getProjectConfigRoot } from "../../bootstrap/state.js";
-import { Ji } from "../../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../../vendor/lodash-es/uniqBy.js";
 import { jsonStringify } from "../slowOperations.js";
 import { countCharInString } from "../stringUtils.js";
 import { runInRemoteCallFrameMain } from "../../remote/remoteMode.js";
@@ -85,104 +85,107 @@ import { env } from "../env.js";
 import { readHeadAndTail } from "../printableName.js";
 import { sanitizeDisplayText } from "../resultError.js";
 import { tildify } from "../path.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1897069-1899609 placement
 /**
  * 解析目录同步规则（启动位置、项目设置、根目录规则）。
  */
 function resolveDirSyncRules(
-  e,
+  root,
   {
-    realRoot: n = e,
-    readRules: r = resolveUploadFilterRules({}),
-    narrowRules: s,
-    onlyAsLaunched: h = false,
-    readsDenialsNarrowly: y = false,
-    hostConfig: S,
-    namesCredential: w,
+    realRoot = root,
+    readRules = resolveUploadFilterRules({}),
+    narrowRules,
+    onlyAsLaunched = false,
+    readsDenialsNarrowly = false,
+    hostConfig,
+    namesCredential,
   } = {},
 ) {
-  let L = r;
-  let G = n === e ? [e] : [e, n];
-  let q = S ?? checkManagedConfigFile(e, n);
-  if (q.ground !== null)
+  let readRuleSet = readRules;
+  let rootSpellings = realRoot === root ? [root] : [root, realRoot];
+  let hostConfigCheck = hostConfig ?? checkManagedConfigFile(root, realRoot);
+  if (hostConfigCheck.ground !== null)
     return Object.assign(() => "rules_unreadable", {
-      unreadableSettingsFiles: L.unreadableSettingsFiles,
-      hostConfigGround: q.ground,
-      hostConfig: q,
+      unreadableSettingsFiles: readRuleSet.unreadableSettingsFiles,
+      hostConfigGround: hostConfigCheck.ground,
+      hostConfig: hostConfigCheck,
       deniesWrite: () => true,
     });
-  let namesCredential = isSensitiveNameOrVariant;
-  let Se = launchDirInfo(G, n, L.fromRoot?.root);
-  let ke = !h
-    ? Se
-    : Se === "unknown"
+  let namesCredential_2 = isSensitiveNameOrVariant;
+  let launchDir = launchDirInfo(rootSpellings, realRoot, readRuleSet.fromRoot?.root);
+  let launchPlaceInfo = !onlyAsLaunched
+    ? launchDir
+    : launchDir === "unknown"
       ? EMPTY_LAUNCH_DIR_INFO
       : {
-          ...Se,
+          ...launchDir,
           isBelowRoot: false,
         };
-  if (!h)
+  if (!onlyAsLaunched)
     logUploadFilterEvent(
-      n,
+      realRoot,
       "launch_place",
-      Se === "unknown"
+      launchDir === "unknown"
         ? {
             placed: false,
           }
         : {
             placed: true,
-            launch_dir_resolved: Se.isLaunchDirResolved,
-            respelled: Se.launchDirSpellings.length > 1,
-            below_root: Se.isBelowRoot,
-            root_was_read: Se.isRootThatWasRead,
+            launch_dir_resolved: launchDir.isLaunchDirResolved,
+            respelled: launchDir.launchDirSpellings.length > 1,
+            below_root: launchDir.isBelowRoot,
+            root_was_read: launchDir.isRootThatWasRead,
             ...{},
           },
     );
-  if (ke === "unknown")
+  if (launchPlaceInfo === "unknown")
     return Object.assign(() => "rules_unreadable", {
-      unreadableSettingsFiles: L.unreadableSettingsFiles,
+      unreadableSettingsFiles: readRuleSet.unreadableSettingsFiles,
       isLaunchPlaceUnknown: true,
-      hostConfig: q,
+      hostConfig: hostConfigCheck,
       deniesWrite: () => true,
       ...{},
     });
-  let isBelowRoot = ke.isBelowRoot;
-  let fromRoot = ke.isRootThatWasRead ? L.fromRoot : undefined;
-  let any = (L.ruleSetsApart ?? [])
+  let isBelowRoot = launchPlaceInfo.isBelowRoot;
+  let fromRoot = launchPlaceInfo.isRootThatWasRead ? readRuleSet.fromRoot : undefined;
+  let any = (readRuleSet.ruleSetsApart ?? [])
     .flat()
     .some(({ ruleValue: { ruleContent = "" } }) =>
-      [ruleContent, foldPathCase(ruleContent)].some((At) => At.includes("!")),
+      [ruleContent, foldPathCase(ruleContent)].some((ruleContent) => ruleContent.includes("!")),
     );
-  let Me = ((gt, At) => {
-    let It = (rules, rn) =>
+  let readReasonChecks = ((ctx, readDenialsNarrowly) => {
+    let checkRules = (rules, depth) =>
       checkDirSyncRule(
-        G,
+        rootSpellings,
         {
-          ...L,
+          ...readRuleSet,
           rules,
         },
-        gt,
-        rn,
-        ke.resolvedPathBelowRoot,
-        At,
-        y,
+        ctx,
+        depth,
+        launchPlaceInfo.resolvedPathBelowRoot,
+        readDenialsNarrowly,
+        readsDenialsNarrowly,
       );
-    let Yt = [L.rules, ...(any ? (L.ruleSetsApart ?? []) : [])];
-    let qt = [
-      ...Yt.map((Zt) => It(Zt, "as_given")),
+    let ruleSets = [readRuleSet.rules, ...(any ? (readRuleSet.ruleSetsApart ?? []) : [])];
+    let checks = [
+      ...ruleSets.map((ruleSet) => checkRules(ruleSet, "as_given")),
       ...(isBelowRoot
         ? [
-            ...Yt.map((Zt) =>
-              It(
-                Zt.filter((rn) => rn.source !== "projectSettings" && isRuleAnchoredAtProjectRoot(rn)),
+            ...ruleSets.map((ruleSet) =>
+              checkRules(
+                ruleSet.filter(
+                  (rule) => rule.source !== "projectSettings" && isRuleAnchoredAtProjectRoot(rule),
+                ),
                 "as_from_root",
               ),
             ),
-            ...(fromRoot?.ruleSets ?? []).flatMap((Zt) => [
-              It(Zt.filter(isRuleAnchoredAtProjectRoot), "as_from_root"),
-              It(
-                Zt.filter((rn) => !isRuleAnchoredAtProjectRoot(rn)),
+            ...(fromRoot?.ruleSets ?? []).flatMap((ruleSet) => [
+              checkRules(ruleSet.filter(isRuleAnchoredAtProjectRoot), "as_from_root"),
+              checkRules(
+                ruleSet.filter((rule) => !isRuleAnchoredAtProjectRoot(rule)),
                 "as_given",
               ),
             ]),
@@ -190,67 +193,83 @@ function resolveDirSyncRules(
         : []),
     ];
     return {
-      getReasonForFile: (Zt) => qt.reduce((acc, pn) => acc ?? pn.getReasonForFile(Zt), null),
-      reasonForEveryFile: qt.reduce((acc, rn) => acc ?? rn.reasonForEveryFile, null),
+      getReasonForFile: (filePath) =>
+        checks.reduce((acc, check) => acc ?? check.getReasonForFile(filePath), null),
+      reasonForEveryFile: checks.reduce((acc, check) => acc ?? check.reasonForEveryFile, null),
     };
   })("read");
-  let We = () => null;
-  let ze = null;
-  let syncDenyFilter = createSyncDenyFilter(G, L.sandbox, getPlatform(), y);
+  let noExtraDenial = () => null;
+  let syncDenyFilter = null;
   let syncDenyFilter_2 = createSyncDenyFilter(
-    ke.launchDirSpellings,
+    rootSpellings,
+    readRuleSet.sandbox,
+    getPlatform(),
+    readsDenialsNarrowly,
+  );
+  let syncDenyFilter_3 = createSyncDenyFilter(
+    launchPlaceInfo.launchDirSpellings,
     fromRoot?.sandbox ?? EMPTY_DIR_SYNC_RULES,
     getPlatform(),
-    y,
+    readsDenialsNarrowly,
   );
-  let sandboxMovedToRoot = L.sandboxMovedToRoot ?? EMPTY_DIR_SYNC_RULES;
-  let syncDenyFilter_3 = createSyncDenyFilter(
-    ke.launchDirSpellings,
+  let sandboxMovedToRoot = readRuleSet.sandboxMovedToRoot ?? EMPTY_DIR_SYNC_RULES;
+  let syncDenyFilter_4 = createSyncDenyFilter(
+    launchPlaceInfo.launchDirSpellings,
     {
       ...sandboxMovedToRoot,
       reopens: [
         ...sandboxMovedToRoot.reopens,
         ...uniq(
-          L.sandbox.reopens
+          readRuleSet.sandbox.reopens
             .filter((reopen) => !sandboxMovedToRoot.reopens.includes(reopen))
-            .flatMap((reopen) => G.flatMap((At) => relativePosixPath(At, reopen) ?? [])),
-        ).flatMap((gt) => ke.launchDirSpellings.map((launchDirSpelling) => join(launchDirSpelling, gt))),
+            .flatMap((reopen) =>
+              rootSpellings.flatMap((rootSpelling) => relativePosixPath(rootSpelling, reopen) ?? []),
+            ),
+        ).flatMap((reopenRel) =>
+          launchPlaceInfo.launchDirSpellings.map((launchDirSpelling) => join(launchDirSpelling, reopenRel)),
+        ),
       ],
     },
     getPlatform(),
-    y,
+    readsDenialsNarrowly,
   );
-  let Et = (gt) => syncDenyFilter(gt) || (isBelowRoot && (syncDenyFilter_2(gt) || syncDenyFilter_3(gt)));
+  let isReadDenied = (path) =>
+    syncDenyFilter_2(path) || (isBelowRoot && (syncDenyFilter_3(path) || syncDenyFilter_4(path)));
   return Object.assign(
-    (gt, At) => {
-      if (exceedsPathVariantBudget(gt))
-        return Me.reasonForEveryFile ?? (At ? "sensitive_tracked" : "sensitive");
-      let pathNormalizationVariants = getPathNormalizationVariants(gt);
-      let Yt = [gt, ...(pathNormalizationVariants ?? [])];
-      let qt =
-        Yt.reduce((acc, rn) => acc ?? Me.getReasonForFile(rn), null) ?? (Yt.some(Et) ? "read_denied" : null);
-      if (pathNormalizationVariants === null) return qt ?? (At ? "sensitive_tracked" : "sensitive");
+    (path, tracked) => {
+      if (exceedsPathVariantBudget(path))
+        return readReasonChecks.reasonForEveryFile ?? (tracked ? "sensitive_tracked" : "sensitive");
+      let pathNormalizationVariants = getPathNormalizationVariants(path);
+      let candidatePaths = [path, ...(pathNormalizationVariants ?? [])];
+      let reason =
+        candidatePaths.reduce(
+          (acc, candidate) => acc ?? readReasonChecks.getReasonForFile(candidate),
+          null,
+        ) ?? (candidatePaths.some(isReadDenied) ? "read_denied" : null);
+      if (pathNormalizationVariants === null) return reason ?? (tracked ? "sensitive_tracked" : "sensitive");
       return (
-        qt ??
-        (isSensitiveSyncedPath(gt, {
-          tracked: At,
+        reason ??
+        (isSensitiveSyncedPath(path, {
+          tracked,
           readings: pathNormalizationVariants,
-          namesCredential,
+          namesCredential: namesCredential_2,
         })
-          ? At
+          ? tracked
             ? "sensitive_tracked"
             : "sensitive"
           : null) ??
-        (q.covers(gt) ||
-        pathNormalizationVariants.some((pathNormalizationVariant) => q.covers(pathNormalizationVariant))
+        (hostConfigCheck.covers(path) ||
+        pathNormalizationVariants.some((pathNormalizationVariant) =>
+          hostConfigCheck.covers(pathNormalizationVariant),
+        )
           ? "host_config"
           : null)
       );
     },
     {
-      unreadableSettingsFiles: L.unreadableSettingsFiles,
-      hostConfig: q,
-      deniesWrite: (gt) => We(gt) !== null,
+      unreadableSettingsFiles: readRuleSet.unreadableSettingsFiles,
+      hostConfig: hostConfigCheck,
+      deniesWrite: (path) => noExtraDenial(path) !== null,
       ...{},
     },
   );
@@ -262,30 +281,45 @@ function isRuleAnchoredAtProjectRoot({ source, ruleValue }) {
   return root === null || root === rootPathForSource("projectSettings");
 }
 //@ chunk-e6aww6q8.js:1899758-1899938 placement
-var DENY_OR_ASK_BEHAVIORS = ["deny", "ask"];
-var EDIT_WRITE_TOOL_STUBS = [FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME].map((name) => ({
-  name,
-  mcpInfo: undefined,
-  familyParentToolName: undefined,
-  aliasSkillToolNames: undefined,
-}));
-var ASCII_ONLY_RE_2 = /^[\x00-\x7f]*$/;
-var LINE_BREAK_RE = /[\n\r\u2028\u2029]/g;
-var MAX_LINE_BREAK_VARIANTS = 16;
+var DENY_OR_ASK_BEHAVIORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EDIT_WRITE_TOOL_STUBS;
+var ASCII_ONLY_RE_2;
+var LINE_BREAK_RE;
+var MAX_LINE_BREAK_VARIANTS;
+deferInit("chunk-e6aww6q8.js:1899758", () => {
+  DENY_OR_ASK_BEHAVIORS = ["deny", "ask"];
+  EDIT_WRITE_TOOL_STUBS = [FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME].map((name) => ({
+    name,
+    mcpInfo: undefined,
+    familyParentToolName: undefined,
+    aliasSkillToolNames: undefined,
+  }));
+  ASCII_ONLY_RE_2 = /^[\x00-\x7f]*$/;
+  LINE_BREAK_RE = /[\n\r\u2028\u2029]/g;
+  MAX_LINE_BREAK_VARIANTS = 16;
+});
 //@ chunk-e6aww6q8.js:1899938-1900070 placement
-function lineBreakVariants(e) {
+function lineBreakVariants(text) {
   return [
-    e,
-    ...Array.from(e.matchAll(LINE_BREAK_RE))
+    text,
+    ...Array.from(text.matchAll(LINE_BREAK_RE))
       .slice(0, MAX_LINE_BREAK_VARIANTS)
-      .map(({ index }) => e.slice(0, index) + e.slice(index).replace(LINE_BREAK_RE, "\x01")),
+      .map(({ index }) => text.slice(0, index) + text.slice(index).replace(LINE_BREAK_RE, "\x01")),
   ];
 }
 //@ chunk-e6aww6q8.js:1900070-1902037 placement
 /**
  * 检查一条路径是否被目录同步规则拒绝读取或编辑。
  */
-function checkDirSyncRule(e, { rules, complete }, s, h, resolvedPathBelowRoot, S = "deny", w) {
+function checkDirSyncRule(
+  target,
+  { rules, complete },
+  ctx,
+  depth,
+  resolvedPathBelowRoot,
+  behavior = "deny",
+  options,
+) {
   if (!complete) return staticReasonResult("rules_unreadable");
   if (rules.length === 0) return staticReasonResult(null);
   let mapped = rules.map((rule) => ({
@@ -299,62 +333,67 @@ function checkDirSyncRule(e, { rules, complete }, s, h, resolvedPathBelowRoot, S
           }),
     },
   }));
-  let q = ((yt) => ({
-    asWritten: applyPermissionRulesToPermissionContext(getEmptyToolPermissionContext(), [...rules], yt),
-    folded: applyPermissionRulesToPermissionContext(getEmptyToolPermissionContext(), mapped, yt),
+  let contexts = ((rule) => ({
+    asWritten: applyPermissionRulesToPermissionContext(getEmptyToolPermissionContext(), [...rules], rule),
+    folded: applyPermissionRulesToPermissionContext(getEmptyToolPermissionContext(), mapped, rule),
   }))();
   if (
-    s === "read"
-      ? getDenyRuleForTool(q.asWritten, READ_PATH_PROBE) !== null ||
-        getAskRuleForTool(q.asWritten, READ_PATH_PROBE) !== null
+    ctx === "read"
+      ? getDenyRuleForTool(contexts.asWritten, READ_PATH_PROBE) !== null ||
+        getAskRuleForTool(contexts.asWritten, READ_PATH_PROBE) !== null
       : EDIT_WRITE_TOOL_STUBS.some(
-          (yt) => (S === "deny" ? getDenyRuleForTool : getAskRuleForTool)(q.asWritten, yt) !== null,
+          (rule_2) =>
+            (behavior === "deny" ? getDenyRuleForTool : getAskRuleForTool)(contexts.asWritten, rule_2) !==
+            null,
         )
   )
     return staticReasonResult("read_denied");
-  let filtered = (s === "read" ? DENY_OR_ASK_BEHAVIORS : [S]).filter(
-    (yt) =>
-      getContentRulesMapForToolName(q.asWritten, s === "read" ? FILE_READ_TOOL_NAME : FILE_EDIT_TOOL_NAME, yt)
-        .size > 0,
+  let filtered = (ctx === "read" ? DENY_OR_ASK_BEHAVIORS : [behavior]).filter(
+    (rule_3) =>
+      getContentRulesMapForToolName(
+        contexts.asWritten,
+        ctx === "read" ? FILE_READ_TOOL_NAME : FILE_EDIT_TOOL_NAME,
+        rule_3,
+      ).size > 0,
   );
   if (filtered.length === 0) return staticReasonResult(null);
-  let all = [...e, ...rules.map((rule) => rule.ruleValue.ruleContent ?? "")].every((yt) =>
-    ASCII_ONLY_RE_2.test(yt),
+  let all = [...target, ...rules.map((rule) => rule.ruleValue.ruleContent ?? "")].every((rule_4) =>
+    ASCII_ONLY_RE_2.test(rule_4),
   );
   let originalCwd = getOriginalCwd();
-  let Ee = () => {};
-  let Ae = {
-    unjudgedCountsAsMatched: !w,
+  let onUnjudged = () => {};
+  let matchOptions = {
+    unjudgedCountsAsMatched: !options,
     asSpelledOnly: true,
   };
-  let Ie = (yt, gt, At) => {
-    Ee(yt);
-    return matchingRuleForInput(yt, q[gt], s, At, Ae) !== null;
+  let matchesToolRule = (candidate, variant, behavior) => {
+    onUnjudged(candidate);
+    return matchingRuleForInput(candidate, contexts[variant], ctx, behavior, matchOptions) !== null;
   };
-  let Me = (yt, gt) =>
-    yt.some((At) => (At.match(LINE_BREAK_RE)?.length ?? 0) > MAX_LINE_BREAK_VARIANTS) ||
-    uniq(yt.flatMap(lineBreakVariants)).some((At) =>
+  let anyMatch = (rules, tool) =>
+    rules.some((rule) => (rule.match(LINE_BREAK_RE)?.length ?? 0) > MAX_LINE_BREAK_VARIANTS) ||
+    uniq(rules.flatMap(lineBreakVariants)).some((variant) =>
       filtered.some(
-        (It) =>
-          (s === "edit" && S === "deny" && At !== At.trim()) ||
-          Ie(At, gt, It) ||
-          (At !== At.trimEnd() && Ie(`${At}/.`, gt, It)),
+        (trialBehavior) =>
+          (ctx === "edit" && behavior === "deny" && variant !== variant.trim()) ||
+          matchesToolRule(variant, tool, trialBehavior) ||
+          (variant !== variant.trimEnd() && matchesToolRule(`${variant}/.`, tool, trialBehavior)),
       ),
     );
-  let mapped_2 = Ji(
+  let mapped_2 = uniqByExport(
     [
-      ...e.flatMap((yt) => {
-        let gt = relativePosixPath(yt, originalCwd);
-        return gt === null
+      ...target.flatMap((targetPath) => {
+        let relativeBelow = relativePosixPath(targetPath, originalCwd);
+        return relativeBelow === null
           ? []
           : [
               {
-                directory: join(yt, gt),
-                below: gt,
+                directory: join(targetPath, relativeBelow),
+                below: relativeBelow,
               },
             ];
       }),
-      ...(resolvedPathBelowRoot !== null && !(resolvedPathBelowRoot === "" && e.includes(originalCwd))
+      ...(resolvedPathBelowRoot !== null && !(resolvedPathBelowRoot === "" && target.includes(originalCwd))
         ? [
             {
               directory: originalCwd,
@@ -369,40 +408,50 @@ function checkDirSyncRule(e, { rules, complete }, s, h, resolvedPathBelowRoot, S
     depth: below === "" ? 0 : countCharInString(below, "/") + 1,
     foldedBelow: foldPathCase(below),
   }));
-  let ze = (yt, gt) => {
-    let At = mapped_2.length > 0 ? yt.split("/") : [];
+  let belowVariants = (filePath, asWritten) => {
+    let segments = mapped_2.length > 0 ? filePath.split("/") : [];
     return mapped_2.flatMap(({ directory, depth, foldedBelow }) =>
-      At.length > depth && foldPathCase(At.slice(0, depth).join("/")) === foldedBelow
-        ? [join(directory, gt(At.slice(depth).join("/")))]
+      segments.length > depth && foldPathCase(segments.slice(0, depth).join("/")) === foldedBelow
+        ? [join(directory, asWritten(segments.slice(depth).join("/")))]
         : [],
     );
   };
-  let lt = (yt) => [join(originalCwd, yt)];
-  let Je = (yt) =>
-    h === "as_from_root" ? lt(yt) : uniq([...e.map((gt) => join(gt, yt)), ...ze(yt, (gt) => gt)]);
-  let nt = (yt) =>
-    h === "as_from_root"
-      ? lt(foldPathCase(yt))
+  let fromRootCwd = (relativePath) => [join(originalCwd, relativePath)];
+  let asWrittenPaths = (relativePath) =>
+    depth === "as_from_root"
+      ? fromRootCwd(relativePath)
+      : uniq([
+          ...target.map((root) => join(root, relativePath)),
+          ...belowVariants(relativePath, (segment) => segment),
+        ]);
+  let foldedPaths = (relativePath) =>
+    depth === "as_from_root"
+      ? fromRootCwd(foldPathCase(relativePath))
       : [
-          ...ze(yt, foldPathCase),
-          ...e.flatMap((gt) => [join(gt, foldPathCase(yt)), foldPathCase(join(gt, yt))]),
+          ...belowVariants(relativePath, foldPathCase),
+          ...target.flatMap((root) => [
+            join(root, foldPathCase(relativePath)),
+            foldPathCase(join(root, relativePath)),
+          ]),
         ];
-  let pt = (yt) => {
-    let gt = nt(yt);
+  let matchesTrimmed = (relativePath) => {
+    let paths = foldedPaths(relativePath);
     try {
-      return Me(gt, "asWritten") || Me(gt, "folded");
+      return anyMatch(paths, "asWritten") || anyMatch(paths, "folded");
     } catch {
       return true;
     }
   };
   return {
-    getReasonForFile: (yt) =>
+    getReasonForFile: (filePath) =>
       runInRemoteCallFrameMain(
         originalCwd,
         () =>
-          Me(Je(yt), "asWritten") ||
-          (!(all && ASCII_ONLY_RE_2.test(yt)) &&
-            pt(yt.trimEnd() + yt.slice(yt.trimEnd().length).replaceAll("\uFEFF", " "))),
+          anyMatch(asWrittenPaths(filePath), "asWritten") ||
+          (!(all && ASCII_ONLY_RE_2.test(filePath)) &&
+            matchesTrimmed(
+              filePath.trimEnd() + filePath.slice(filePath.trimEnd().length).replaceAll("\uFEFF", " "),
+            )),
       )
         ? "read_denied"
         : null,
@@ -410,10 +459,10 @@ function checkDirSyncRule(e, { rules, complete }, s, h, resolvedPathBelowRoot, S
   };
 }
 //@ chunk-e6aww6q8.js:1902037-1902105 placement
-function staticReasonResult(e) {
+function staticReasonResult(reason) {
   return {
-    getReasonForFile: () => e,
-    reasonForEveryFile: e,
+    getReasonForFile: () => reason,
+    reasonForEveryFile: reason,
   };
 }
 //@ chunk-e6aww6q8.js:1902105-1902716 placement
@@ -422,7 +471,7 @@ function staticReasonResult(e) {
  */
 function resolveUploadFilterRules({
   filterRoot,
-  isCredentialListCountedFromOutsideRoot: n = false,
+  isCredentialListCountedFromOutsideRoot: countedFromOutside = false,
   syncedRoot,
   launchRules = collectLaunchRules(syncedRoot),
 } = {}) {
@@ -432,34 +481,34 @@ function resolveUploadFilterRules({
     syncedRoot,
   });
   if (filterRoot === undefined || originalCwdOrNull === null) return rules;
-  let w = (ke, we) => ke;
-  if (filterRoot === root) return w(rules, relativePosixPath(filterRoot, originalCwdOrNull) !== null);
-  let [L, G, q] = [filterRoot, originalCwdOrNull, root].map((ke) =>
-    ke === null ? null : nativeRealpathLong(ke),
+  let finish = (rules, belowRoot) => rules;
+  if (filterRoot === root) return finish(rules, relativePosixPath(filterRoot, originalCwdOrNull) !== null);
+  let [filterRootReal, cwdReal, rootReal] = [filterRoot, originalCwdOrNull, root].map((path) =>
+    path === null ? null : nativeRealpathLong(path),
   );
-  if (root !== null && (q === L || (q === null && rules.fromRoot !== undefined)))
-    return w(rules, relativePosixPath(root, originalCwdOrNull) !== null);
-  let Z = {
+  if (root !== null && (rootReal === filterRootReal || (rootReal === null && rules.fromRoot !== undefined)))
+    return finish(rules, relativePosixPath(root, originalCwdOrNull) !== null);
+  let asFiltersOwnRoot = {
     isLaunchDirBelowRoot:
       relativePosixPath(filterRoot, originalCwdOrNull) !== null ||
-      (L != null && G != null && relativePosixPath(L, G) !== null),
+      (filterRootReal != null && cwdReal != null && relativePosixPath(filterRootReal, cwdReal) !== null),
   };
-  let Se = addLaunchRules(
+  let mergedRules = addLaunchRules(
     filterRoot,
     addLaunchRules(filterRoot, rules, {
-      asFiltersOwnRoot: Z,
+      asFiltersOwnRoot,
       syncedRoot,
     }),
     {
-      asFiltersOwnRoot: Z,
+      asFiltersOwnRoot,
       source: "localSettings",
       syncedRoot,
     },
   );
-  return w(Se, Z.isLaunchDirBelowRoot);
+  return finish(mergedRules, asFiltersOwnRoot.isLaunchDirBelowRoot);
 }
 //@ chunk-e6aww6q8.js:1902716-1902757 placement
-function filterPermissionErrors(errors, n, r) {
+function filterPermissionErrors(errors, errors_2, root) {
   return errors.filter(isPermissionSettingsError);
 }
 //@ chunk-e6aww6q8.js:1902757-1903680 placement
@@ -479,11 +528,11 @@ function collectLaunchRules(syncedRoot) {
   }
   let frozenRules = loadDirSyncRules(false, userRules, syncedRoot);
   let liveRules = withRepoTiersLive(() => loadDirSyncRules(true, userRules, syncedRoot));
-  let h = (rule) => jsonStringify([rule.source, rule.ruleBehavior, rule.ruleValue]);
-  let y = new Set(frozenRules.rules.map(h));
+  let userRules_2 = (rule) => jsonStringify([rule.source, rule.ruleBehavior, rule.ruleValue]);
+  let result = new Set(frozenRules.rules.map(userRules_2));
   return {
-    rules: [...frozenRules.rules, ...liveRules.rules.filter((rule) => !y.has(h(rule)))],
-    ruleSetsApart: Ji(
+    rules: [...frozenRules.rules, ...liveRules.rules.filter((rule) => !result.has(userRules_2(rule)))],
+    ruleSetsApart: uniqByExport(
       [...(frozenRules.ruleSetsApart ?? []), ...(liveRules.ruleSetsApart ?? [])],
       jsonStringify,
     ),
@@ -514,43 +563,45 @@ function collectLaunchRules(syncedRoot) {
 /**
  * 汇总目录同步上传要遵守的规则：磁盘上的 deny/ask 权限规则（含用户设置补充）、各设置源的沙箱 denyRead/凭据文件/allowRead（reopen），并记录无法解析的来源。
  */
-function loadDirSyncRules(e, userRules, syncedRoot) {
+function loadDirSyncRules(includeAll, userRules, syncedRoot) {
   invalidateCommandNames();
   let { errors } = getSettingsWithErrors_2();
   let filtered = loadAllPermissionRulesFromDisk().filter(
-    (lt) => lt.ruleBehavior === "deny" || lt.ruleBehavior === "ask",
+    (rule) => rule.ruleBehavior === "deny" || rule.ruleBehavior === "ask",
   );
-  let y = new Set(filtered.map((lt) => jsonStringify(lt)));
+  let seenRules = new Set(filtered.map((rule_2) => jsonStringify(rule_2)));
   let filtered_2 = settingsJsonToRules(userRules ?? null, "userSettings").filter(
-    (lt) => lt.ruleBehavior !== "allow",
+    (rule_3) => rule_3.ruleBehavior !== "allow",
   );
-  let w = [...filtered, ...filtered_2.filter((lt) => !y.has(jsonStringify(lt)))];
-  let L = launchDenyRulesForRead(FILE_READ_TOOL_NAME, [READ_PATH_PROBE]);
-  let G = [];
-  let q = shouldAllowManagedReadPathsOnly();
-  let flattened = SETTING_SOURCES.flatMap((lt) => sandboxReadEntriesForSource(lt, q));
-  let Se =
+  let readRules = [...filtered, ...filtered_2.filter((rule_4) => !seenRules.has(jsonStringify(rule_4)))];
+  let startupReadRules = launchDenyRulesForRead(FILE_READ_TOOL_NAME, [READ_PATH_PROBE]);
+  let extraRules = [];
+  let managedReadOnly = shouldAllowManagedReadPathsOnly();
+  let flattened = SETTING_SOURCES.flatMap((rule_5) => sandboxReadEntriesForSource(rule_5, managedReadOnly));
+  let userReadEntries =
     userRules === undefined
       ? []
-      : sandboxReadEntriesForSource("userSettings", q, {
+      : sandboxReadEntriesForSource("userSettings", managedReadOnly, {
           settings: withWindowsSandboxSpellings(userRules),
         });
-  let ke = new Set(Se.flatMap((lt) => (lt.kind === "reopen" ? lt.resolved : [])));
-  let we = [
+  let userReopenResolved = new Set(
+    userReadEntries.flatMap((rule_6) => (rule_6.kind === "reopen" ? rule_6.resolved : [])),
+  );
+  let sandboxEntries = [
     ...flattened.filter(
-      (lt) =>
+      (rule_7) =>
         userRules === undefined ||
-        lt.kind !== "reopen" ||
-        lt.source !== "userSettings" ||
-        lt.resolved.every((Je) => ke.has(Je)),
+        rule_7.kind !== "reopen" ||
+        rule_7.source !== "userSettings" ||
+        rule_7.resolved.every((resolvedPath) => userReopenResolved.has(resolvedPath)),
     ),
-    ...Se.filter((lt) => lt.kind !== "reopen"),
+    ...userReadEntries.filter((entry) => entry.kind !== "reopen"),
   ];
-  let Ae = filterPermissionErrors(errors, syncedRoot, () =>
+  let permissionErrors = filterPermissionErrors(errors, syncedRoot, () =>
     [
-      ...REPO_DIR_SETTING_SOURCE_LIST.map((lt) => ({
-        source: lt,
-        file: getSettingsFilePathForSource(lt),
+      ...REPO_DIR_SETTING_SOURCE_LIST.map((source) => ({
+        source,
+        file: getSettingsFilePathForSource(source),
       })),
       {
         source: "localSettings",
@@ -562,52 +613,55 @@ function loadDirSyncRules(e, userRules, syncedRoot) {
         : [file],
     ),
   );
-  let filtered_3 = we.filter((lt) => lt.kind === "unresolvable");
-  let complete = Ae.length === 0 && filtered_3.length === 0;
-  let We = (lt, Je = we) => uniq(Je.flatMap((nt) => (nt.kind === lt ? nt.resolved : [])));
-  let filtered_4 = we.filter((lt) => lt.isMovedToRoot === true);
-  if (e)
+  let filtered_3 = sandboxEntries.filter((entry) => entry.kind === "unresolvable");
+  let complete = permissionErrors.length === 0 && filtered_3.length === 0;
+  let resolvedOfKind = (kind, entries = sandboxEntries) =>
+    uniq(entries.flatMap((entry) => (entry.kind === kind ? entry.resolved : [])));
+  let entries = sandboxEntries.filter((entry) => entry.isMovedToRoot === true);
+  if (includeAll)
     logDirSyncUploadRules({
-      read_rules: w.length,
-      startup_read_rules: L.length,
-      sandbox_deny_read: count(we, (lt) => lt.kind === "deny_read"),
-      sandbox_credential_files: count(we, (lt) => lt.kind === "credential_file"),
-      sandbox_reopens: count(we, (lt) => lt.kind === "reopen"),
-      sandbox_from_user: we.some((lt) => lt.source === "userSettings"),
-      sandbox_from_project: we.some((lt) => REPO_DIR_SETTING_SOURCES.has(lt.source)),
-      sandbox_from_flag: we.some((lt) => lt.source === "flagSettings"),
-      sandbox_from_managed: we.some((lt) => lt.source === "policySettings"),
+      read_rules: readRules.length,
+      startup_read_rules: startupReadRules.length,
+      sandbox_deny_read: count(sandboxEntries, (entry) => entry.kind === "deny_read"),
+      sandbox_credential_files: count(sandboxEntries, (entry) => entry.kind === "credential_file"),
+      sandbox_reopens: count(sandboxEntries, (entry) => entry.kind === "reopen"),
+      sandbox_from_user: sandboxEntries.some((entry) => entry.source === "userSettings"),
+      sandbox_from_project: sandboxEntries.some((entry) => REPO_DIR_SETTING_SOURCES.has(entry.source)),
+      sandbox_from_flag: sandboxEntries.some((entry) => entry.source === "flagSettings"),
+      sandbox_from_managed: sandboxEntries.some((entry) => entry.source === "policySettings"),
       complete,
       ...{},
     });
   return {
-    rules: [...w, ...L, ...G],
+    rules: [...readRules, ...startupReadRules, ...extraRules],
     ruleSetsApart: [filtered, filtered_2],
     sandbox: {
-      denies: We("deny_read"),
-      credentials: We("credential_file"),
-      reopens: We("reopen"),
+      denies: resolvedOfKind("deny_read"),
+      credentials: resolvedOfKind("credential_file"),
+      reopens: resolvedOfKind("reopen"),
     },
     sandboxMovedToRoot: {
-      denies: We("deny_read", filtered_4),
-      credentials: We("credential_file", filtered_4),
-      reopens: We("reopen", filtered_4),
+      denies: resolvedOfKind("deny_read", entries),
+      credentials: resolvedOfKind("credential_file", entries),
+      reopens: resolvedOfKind("reopen", entries),
     },
     complete,
     unreadableSettingsFiles: uniq([
-      ...Ae.flatMap((lt) => lt.file ?? []),
-      ...filtered_3.flatMap((lt) => lt.file ?? []),
+      ...permissionErrors.flatMap((error) => error.file ?? []),
+      ...filtered_3.flatMap((entry) => entry.file ?? []),
     ]),
   };
 }
 //@ chunk-e6aww6q8.js:1905458-1905574 placement
-function relativePosixPath(e, n) {
-  let r = relative(e, n);
-  return r === "" || r === ".." || r.startsWith(".." + sep) || isAbsolute(r) ? null : r.split(sep).join("/");
+function relativePosixPath(from, to) {
+  let relative = relative_2(from, to);
+  return relative === "" || relative === ".." || relative.startsWith(".." + sep) || isAbsolute(relative)
+    ? null
+    : relative.split(sep).join("/");
 }
 //@ chunk-e6aww6q8.js:1905574-1905624 placement
-function relativePosixOrNull(e, n) {
-  return relative(e, n) === "" ? "" : relativePosixPath(e, n);
+function relativePosixOrNull(from, to) {
+  return relative_2(from, to) === "" ? "" : relativePosixPath(from, to);
 }
 //@ chunk-e6aww6q8.js:1905624-1905742 placement
 var EMPTY_LAUNCH_DIR_INFO = {
@@ -621,42 +675,47 @@ var EMPTY_LAUNCH_DIR_INFO = {
 /**
  * 计算启动目录的同步信息（拼写、是否已解析、是否在根下、根是否被读过）。
  */
-function launchDirInfo(e, n, root) {
+function launchDirInfo(dirs, realRoot, root) {
   let originalCwdOrNull = getOriginalCwdOrNull();
   if (originalCwdOrNull === null) return EMPTY_LAUNCH_DIR_INFO;
-  let h = nativeRealpathLong(originalCwdOrNull);
-  let y = root === undefined || e.includes(root) ? n : nativeRealpathLong(root);
-  if (y === null || (h === null && !e.some((w) => relativePosixOrNull(w, originalCwdOrNull) !== null)))
+  let cwdReal = nativeRealpathLong(originalCwdOrNull);
+  let rootReal = root === undefined || dirs.includes(root) ? realRoot : nativeRealpathLong(root);
+  if (
+    rootReal === null ||
+    (cwdReal === null && !dirs.some((dir) => relativePosixOrNull(dir, originalCwdOrNull) !== null))
+  )
     return "unknown";
-  let S = h === null ? null : relativePosixOrNull(n, h);
+  let relative = cwdReal === null ? null : relativePosixOrNull(realRoot, cwdReal);
   return {
-    launchDirSpellings: uniq([originalCwdOrNull, h ?? originalCwdOrNull]),
-    isLaunchDirResolved: h !== null,
-    resolvedPathBelowRoot: S,
-    isBelowRoot: (S !== null && S !== "") || e.some((w) => relativePosixPath(w, originalCwdOrNull) !== null),
-    isRootThatWasRead: root !== undefined && relativePosixOrNull(n, y) === "",
+    launchDirSpellings: uniq([originalCwdOrNull, cwdReal ?? originalCwdOrNull]),
+    isLaunchDirResolved: cwdReal !== null,
+    resolvedPathBelowRoot: relative,
+    isBelowRoot:
+      (relative !== null && relative !== "") ||
+      dirs.some((dir) => relativePosixPath(dir, originalCwdOrNull) !== null),
+    isRootThatWasRead: root !== undefined && relativePosixOrNull(realRoot, rootReal) === "",
   };
 }
 //@ chunk-e6aww6q8.js:1906136-1906426 placement
-function isPermissionSettingsError(e) {
+function isPermissionSettingsError(error) {
   return (
-    isBlockingSandboxSettingsError(e) ||
-    (!e.removal &&
-      (e.path === "permissions" ||
-        (e.path.startsWith("permissions.") && !e.path.startsWith("permissions.allow")) ||
-        (e.path.startsWith("sandbox.filesystem") &&
-          !e.path.startsWith("sandbox.filesystem.allowRead") &&
-          !e.path.startsWith("sandbox.filesystem.allowWrite"))))
+    isBlockingSandboxSettingsError(error) ||
+    (!error.removal &&
+      (error.path === "permissions" ||
+        (error.path.startsWith("permissions.") && !error.path.startsWith("permissions.allow")) ||
+        (error.path.startsWith("sandbox.filesystem") &&
+          !error.path.startsWith("sandbox.filesystem.allowRead") &&
+          !error.path.startsWith("sandbox.filesystem.allowWrite"))))
   );
 }
 //@ chunk-e6aww6q8.js:1906426-1906585 placement
-function isBlockingSandboxSettingsError(e) {
+function isBlockingSandboxSettingsError(error) {
   return (
-    !e.removal &&
-    (e.severity !== "warning" ||
-      e.path === "sandbox" ||
-      e.path === "sandbox.credentials" ||
-      e.path.startsWith("sandbox.credentials.files"))
+    !error.removal &&
+    (error.severity !== "warning" ||
+      error.path === "sandbox" ||
+      error.path === "sandbox.credentials" ||
+      error.path.startsWith("sandbox.credentials.files"))
   );
 }
 //@ chunk-e6aww6q8.js:1906585-1908176 placement
@@ -675,175 +734,195 @@ function addLaunchRules(root, rules, { asFiltersOwnRoot, source = "projectSettin
     return rules;
   let settingsPath = join(root, getRelativeSettingsFilePathForSource(source));
   let { settings, errors } = parseSettingsFile(settingsPath);
-  let G = withWindowsSandboxSpellings(settings);
-  let q = filterPermissionErrors(errors, syncedRoot, () => [settingsPath]);
-  let filtered = settingsJsonToRules(G, source).filter((ze) => ze.ruleBehavior !== "allow");
-  let Se = (isSandboxFilesystemPathRelative) =>
+  let spelledSettings = withWindowsSandboxSpellings(settings);
+  let settingsErrors = filterPermissionErrors(errors, syncedRoot, () => [settingsPath]);
+  let filtered = settingsJsonToRules(spelledSettings, source).filter((rule) => rule.ruleBehavior !== "allow");
+  let readEntriesFor = (isSandboxFilesystemPathRelative) =>
     sandboxReadEntriesForSource(source, true, {
       settings: {
         sandbox: {
           filesystem: {
-            denyRead: G?.sandbox?.filesystem?.denyRead?.filter(isSandboxFilesystemPathRelative),
+            denyRead: spelledSettings?.sandbox?.filesystem?.denyRead?.filter(isSandboxFilesystemPathRelative),
           },
           credentials: {
-            files: G?.sandbox?.credentials?.files?.filter((file) =>
+            files: spelledSettings?.sandbox?.credentials?.files?.filter((file) =>
               isSandboxFilesystemPathRelative(file.path),
             ),
           },
         },
       },
     });
-  let ke = Se(isSandboxFilesystemPathRelative);
-  let we = Se((ze) => !isSandboxFilesystemPathRelative(ze));
-  let Ee = q.length === 0 && ![...ke, ...we].some((ze) => ze.kind === "unresolvable");
+  let relativeEntries = readEntriesFor(isSandboxFilesystemPathRelative);
+  let otherEntries = readEntriesFor((entry) => !isSandboxFilesystemPathRelative(entry));
+  let complete =
+    settingsErrors.length === 0 &&
+    ![...relativeEntries, ...otherEntries].some((entry) => entry.kind === "unresolvable");
   logUploadFilterEvent(settingsPath, "root_project_rules", {
     rules: filtered.length,
-    sandbox_entries: ke.length + we.length,
-    complete: Ee,
+    sandbox_entries: relativeEntries.length + otherEntries.length,
+    complete,
     ...(asFiltersOwnRoot !== undefined && {
       read_as_filters_own_root: true,
       local_settings: source === "localSettings",
     }),
   });
-  let Ae = (ze, lt) => ze.flatMap((Je) => (Je.kind === lt ? Je.resolved : []));
-  let Ie = rulesWithFrozenRepo(settingsPath, Ee && !errors.some(isPermissionSettingsError), {
+  let resolvedOfKind = (entries, kind) =>
+    entries.flatMap((sandboxEntry) => (sandboxEntry.kind === kind ? sandboxEntry.resolved : []));
+  let repoRuleSet = rulesWithFrozenRepo(settingsPath, complete && !errors.some(isPermissionSettingsError), {
     rules: filtered,
     relative: {
-      denies: Ae(ke, "deny_read"),
-      credentials: Ae(ke, "credential_file"),
+      denies: resolvedOfKind(relativeEntries, "deny_read"),
+      credentials: resolvedOfKind(relativeEntries, "credential_file"),
     },
     other: {
-      denies: Ae(we, "deny_read"),
-      credentials: Ae(we, "credential_file"),
+      denies: resolvedOfKind(otherEntries, "deny_read"),
+      credentials: resolvedOfKind(otherEntries, "credential_file"),
     },
   });
-  let Me = (ze, lt = []) => uniq([...lt, ...Ie.flatMap(ze)]);
+  let mergeEntries = (rule, existing = []) => uniq([...existing, ...repoRuleSet.flatMap(rule)]);
   let fromRoot = rules.fromRoot?.root === root ? rules.fromRoot : undefined;
   return {
     ...rules,
     sandbox: {
       ...rules.sandbox,
-      denies: Me((ze) => ze.other.denies, rules.sandbox.denies),
-      credentials: Me((ze) => ze.other.credentials, rules.sandbox.credentials),
+      denies: mergeEntries((ruleSet) => ruleSet.other.denies, rules.sandbox.denies),
+      credentials: mergeEntries((ruleSet) => ruleSet.other.credentials, rules.sandbox.credentials),
     },
     fromRoot: {
       root,
-      ruleSets: [...(fromRoot?.ruleSets ?? []), ...Ie.map((ze) => ze.rules)],
+      ruleSets: [...(fromRoot?.ruleSets ?? []), ...repoRuleSet.map((ruleSet) => ruleSet.rules)],
       sandbox: {
-        denies: Me((ze) => ze.relative.denies, fromRoot?.sandbox.denies),
-        credentials: Me((ze) => ze.relative.credentials, fromRoot?.sandbox.credentials),
+        denies: mergeEntries((ruleSet) => ruleSet.relative.denies, fromRoot?.sandbox.denies),
+        credentials: mergeEntries((ruleSet) => ruleSet.relative.credentials, fromRoot?.sandbox.credentials),
         reopens: [],
       },
     },
-    complete: rules.complete && Ee,
-    unreadableSettingsFiles: Ee
+    complete: rules.complete && complete,
+    unreadableSettingsFiles: complete
       ? rules.unreadableSettingsFiles
       : uniq([...(rules.unreadableSettingsFiles ?? []), settingsPath]),
   };
 }
 //@ chunk-e6aww6q8.js:1908176-1908227 placement
-var repoFreezeRuleCache = identity_2(new Map(), (e) => e.clear());
-var weakSet_4 = new WeakSet();
+var repoFreezeRuleCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakSet_4;
+deferInit("chunk-e6aww6q8.js:1908176", () => {
+  repoFreezeRuleCache = identity_2(new Map(), (map) => map.clear());
+  weakSet_4 = new WeakSet();
+});
 //@ chunk-e6aww6q8.js:1908227-1908419 placement
-function rulesWithFrozenRepo(settingsPath, n, r) {
-  if (!isRepoTierFreezeHeld()) return [r];
-  let s = commandSyncNameState();
-  if (!weakSet_4.has(s)) {
-    weakSet_4.add(s);
-    s.onInvalidate(() => {
+function rulesWithFrozenRepo(settingsPath, settingsPath_2, rules) {
+  if (!isRepoTierFreezeHeld()) return [rules];
+  let state = commandSyncNameState();
+  if (!weakSet_4.has(state)) {
+    weakSet_4.add(state);
+    state.onInvalidate(() => {
       if (!isRepoTierFreezeHeld()) repoFreezeRuleCache.clear();
     });
   }
-  let h = repoFreezeRuleCache.get(settingsPath);
-  if (h !== undefined) return [h, r];
-  if (n) repoFreezeRuleCache.set(settingsPath, r);
-  return [r];
+  let frozenRules = repoFreezeRuleCache.get(settingsPath);
+  if (frozenRules !== undefined) return [frozenRules, rules];
+  if (settingsPath_2) repoFreezeRuleCache.set(settingsPath, rules);
+  return [rules];
 }
 //@ chunk-e6aww6q8.js:1908419-1908583 placement
-function launchDenyRulesForRead(e, n) {
-  return launchDenyRules(getLaunchPermissions()).filter((r) =>
-    r.ruleValue.ruleContent !== undefined
-      ? r.ruleValue.toolName === e
-      : r.source === "session" &&
-        n.some((s) => getDenyRuleForTool(getEmptyToolPermissionContext(), s, [r]) !== null),
+function launchDenyRulesForRead(toolName, ruleContent) {
+  return launchDenyRules(getLaunchPermissions()).filter((rule) =>
+    rule.ruleValue.ruleContent !== undefined
+      ? rule.ruleValue.toolName === toolName
+      : rule.source === "session" &&
+        ruleContent.some(
+          (ruleContent) => getDenyRuleForTool(getEmptyToolPermissionContext(), ruleContent, [rule]) !== null,
+        ),
   );
 }
 //@ chunk-e6aww6q8.js:1908583-1908627 placement
-var lastLoggedUploadRules = null;
-var lastLoggedHostConfig = identity_2(new Map(), (e) => e.clear());
+var lastLoggedUploadRules; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var lastLoggedHostConfig;
+deferInit("chunk-e6aww6q8.js:1908583", () => {
+  lastLoggedUploadRules = null;
+  lastLoggedHostConfig = identity_2(new Map(), (map) => map.clear());
+});
 //@ chunk-e6aww6q8.js:1908627-1908740 placement
-function logDirSyncHostConfig(e, n, r) {
-  let s = jsonStringify(n);
-  if (lastLoggedHostConfig.get(e) === s) return;
-  lastLoggedHostConfig.set(e, s);
+function logDirSyncHostConfig(source, hostConfig, extra) {
+  let json = jsonStringify(hostConfig);
+  if (lastLoggedHostConfig.get(source) === json) return;
+  lastLoggedHostConfig.set(source, json);
   logEvent("tengu_dir_sync_host_config", {
-    ...n,
-    ...r,
+    ...hostConfig,
+    ...extra,
   });
 }
 //@ chunk-e6aww6q8.js:1908740-1908775 placement
-var lastLoggedFilterEvent = identity_2(new Map(), (e) => e.clear());
+var lastLoggedFilterEvent; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1908740", () => {
+  lastLoggedFilterEvent = identity_2(new Map(), (map) => map.clear());
+});
 //@ chunk-e6aww6q8.js:1908775-1908876 placement
-function logUploadFilterEvent(e, n, r) {
-  let s = jsonStringify(r);
-  if (lastLoggedFilterEvent.get(e) === s) return;
-  lastLoggedFilterEvent.set(e, s);
-  logEvent(`tengu_upload_filter_${n}`, r);
+function logUploadFilterEvent(key, value, extra) {
+  let json = jsonStringify(extra);
+  if (lastLoggedFilterEvent.get(key) === json) return;
+  lastLoggedFilterEvent.set(key, json);
+  logEvent(`tengu_upload_filter_${value}`, extra);
 }
 //@ chunk-e6aww6q8.js:1908876-1909100 placement
-function logDirSyncUploadRules(e) {
-  let n =
-    e.complete &&
-    e.dropped_entries_ignored === undefined &&
-    e.read_rules + e.startup_read_rules + e.sandbox_deny_read + e.sandbox_credential_files === 0;
-  let r = jsonStringify(e);
-  if (n || r === lastLoggedUploadRules) return;
-  lastLoggedUploadRules = r;
-  logEvent("tengu_dir_sync_upload_rules", e);
+function logDirSyncUploadRules(rulesResult) {
+  let complete =
+    rulesResult.complete &&
+    rulesResult.dropped_entries_ignored === undefined &&
+    rulesResult.read_rules +
+      rulesResult.startup_read_rules +
+      rulesResult.sandbox_deny_read +
+      rulesResult.sandbox_credential_files ===
+      0;
+  let reason = jsonStringify(rulesResult);
+  if (complete || reason === lastLoggedUploadRules) return;
+  lastLoggedUploadRules = reason;
+  logEvent("tengu_dir_sync_upload_rules", rulesResult);
 }
 //@ chunk-e6aww6q8.js:1909192-1909843 placement
 /**
  * 收集某个设置源的沙箱读取相关条目，无法解析时标记为 unresolvable。
  */
-function sandboxReadEntriesForSource(source, n, r) {
-  let s = isSettingSourceEnabled(source);
-  let h = REPO_DIR_SETTING_SOURCES.has(source);
-  if (!s && h) return [];
-  let y = s ? undefined : getWritableSettingsPathForSource(source);
-  if (y !== undefined && !isReadableSettingsFile(y))
+function sandboxReadEntriesForSource(source, source_2, extra) {
+  let enabled = isSettingSourceEnabled(source);
+  let isRepoSource = REPO_DIR_SETTING_SOURCES.has(source);
+  if (!enabled && isRepoSource) return [];
+  let entries = enabled ? undefined : getWritableSettingsPathForSource(source);
+  if (entries !== undefined && !isReadableSettingsFile(entries))
     return [
       {
         kind: "unresolvable",
         source,
         resolved: [],
-        file: y,
+        file: entries,
       },
     ];
-  let sandbox = (r?.settings ?? withWindowsSandboxSpellings(getSettingsForSourceTightenOnly(source)))
+  let sandbox = (extra?.settings ?? withWindowsSandboxSpellings(getSettingsForSourceTightenOnly(source)))
     ?.sandbox;
-  let w = s ? (sandbox?.filesystem?.denyRead ?? []) : [];
-  let mapped = (sandbox?.credentials?.files ?? []).map((q) => q.path);
-  let G =
-    s &&
-    !h &&
+  let denyReadEntries = enabled ? (sandbox?.filesystem?.denyRead ?? []) : [];
+  let mapped = (sandbox?.credentials?.files ?? []).map((file) => file.path);
+  let allowReadEntries =
+    enabled &&
+    !isRepoSource &&
     (!env.CLAUDE_CODE_EVAL_CONFINED || source === "userSettings") &&
-    (!n || source === "policySettings")
-      ? (sandbox?.filesystem?.allowRead ?? []).filter((q) => q.trim() !== "")
+    (!source_2 || source === "policySettings")
+      ? (sandbox?.filesystem?.allowRead ?? []).filter((path) => path.trim() !== "")
       : [];
   return [
-    ...w.map((q) =>
-      resolveSandboxReadEntry("deny_read", source, q, () =>
-        maskSweepSpellings(resolveSandboxDenyReadEntry(q, source)),
+    ...denyReadEntries.map((entry) =>
+      resolveSandboxReadEntry("deny_read", source, entry, () =>
+        maskSweepSpellings(resolveSandboxDenyReadEntry(entry, source)),
       ),
     ),
-    ...mapped.map((q) =>
-      resolveSandboxReadEntry("credential_file", source, q, () =>
-        maskSweepSpellings(resolveSandboxDenyReadEntry(q, source)),
+    ...mapped.map((entry) =>
+      resolveSandboxReadEntry("credential_file", source, entry, () =>
+        maskSweepSpellings(resolveSandboxDenyReadEntry(entry, source)),
       ),
     ),
-    ...G.flatMap((q) => {
-      let sandboxReadEntry = resolveSandboxReadEntry("reopen", source, q, () => [
-        resolveSandboxFilesystemPath(q, source),
+    ...allowReadEntries.flatMap((allowReadEntry) => {
+      let sandboxReadEntry = resolveSandboxReadEntry("reopen", source, allowReadEntry, () => [
+        resolveSandboxFilesystemPath(allowReadEntry, source),
       ]);
       return sandboxReadEntry.kind === "reopen" ? [sandboxReadEntry] : [];
     }),
@@ -853,31 +932,31 @@ function sandboxReadEntriesForSource(source, n, r) {
 /**
  * 在 Windows 上为沙箱拒绝路径补上大小写/别名拼写，避免漏拒。
  */
-function withWindowsSandboxSpellings(e) {
-  let sandbox = e?.sandbox;
-  if (getPlatform() !== "windows" || !e || !sandbox) return e;
+function withWindowsSandboxSpellings(settings) {
+  let sandbox = settings?.sandbox;
+  if (getPlatform() !== "windows" || !settings || !sandbox) return settings;
   return {
-    ...e,
+    ...settings,
     sandbox: {
       ...sandbox,
       filesystem: sandbox.filesystem && {
         ...sandbox.filesystem,
-        denyRead: sandbox.filesystem.denyRead?.flatMap((r) => {
-          let s = sandboxFilesystemPathAsReadEarlier(r);
-          return s === null ? [r] : [r, s];
+        denyRead: sandbox.filesystem.denyRead?.flatMap((denyReadEntry) => {
+          let canonicalEntry = sandboxFilesystemPathAsReadEarlier(denyReadEntry);
+          return canonicalEntry === null ? [denyReadEntry] : [denyReadEntry, canonicalEntry];
         }),
       },
       credentials: sandbox.credentials && {
         ...sandbox.credentials,
         files: sandbox.credentials.files?.flatMap((file) => {
-          let s = sandboxFilesystemPathAsReadEarlier(file.path);
-          return s === null
+          let extra = sandboxFilesystemPathAsReadEarlier(file.path);
+          return extra === null
             ? [file]
             : [
                 file,
                 {
                   ...file,
-                  path: s,
+                  path: extra,
                 },
               ];
         }),
@@ -886,24 +965,26 @@ function withWindowsSandboxSpellings(e) {
   };
 }
 //@ chunk-e6aww6q8.js:1910215-1910292 placement = getEnabledSettingSources (1)
-function getWritableSettingsPathForSource(e) {
-  return e === "policySettings" || e === "flagSettings" ? undefined : getSettingsFilePathForSource(e);
+function getWritableSettingsPathForSource(source) {
+  return source === "policySettings" || source === "flagSettings"
+    ? undefined
+    : getSettingsFilePathForSource(source);
 }
 //@ chunk-e6aww6q8.js:1910292-1910338 placement
-function isReadableSettingsFile(e) {
-  return !parseSettingsFile(e).errors.some(isBlockingSandboxSettingsError);
+function isReadableSettingsFile(path) {
+  return !parseSettingsFile(path).errors.some(isBlockingSandboxSettingsError);
 }
 //@ chunk-e6aww6q8.js:1910338-1910559 placement
-function resolveSandboxReadEntry(kind, source, r, s) {
+function resolveSandboxReadEntry(kind, source, resolve, extra) {
   try {
     return {
       kind,
       source,
-      resolved: s(),
+      resolved: extra(),
       isMovedToRoot:
         getOriginalCwdOrNull() !== null &&
         source !== "projectSettings" &&
-        isSandboxFilesystemPathRelative(r) &&
+        isSandboxFilesystemPathRelative(resolve) &&
         getRuleAnchorRootForSource(source) === getRuleAnchorRootForSource("projectSettings"),
     };
   } catch {
@@ -917,42 +998,45 @@ function resolveSandboxReadEntry(kind, source, r, s) {
 }
 //@ chunk-e6aww6q8.js:1910559-1910780 placement
 function maskSweepSpellings(sandboxDenyReadEntry) {
-  let n = getPlatform() === "windows";
-  let r = sandboxDenyReadEntry.search(n ? /[*?]/ : /[*?[\]]/);
-  let s =
-    r === -1
+  let isWindows = getPlatform() === "windows";
+  let index = sandboxDenyReadEntry.search(isWindows ? /[*?]/ : /[*?[\]]/);
+  let prefix =
+    index === -1
       ? sandboxDenyReadEntry.length
       : Math.max(
-          sandboxDenyReadEntry.lastIndexOf("/", r),
-          n ? sandboxDenyReadEntry.lastIndexOf("\\", r) : -1,
+          sandboxDenyReadEntry.lastIndexOf("/", index),
+          isWindows ? sandboxDenyReadEntry.lastIndexOf("\\", index) : -1,
         );
-  if (s <= 0) return [sandboxDenyReadEntry];
-  let h = canonicalizePathForMaskSweep(sandboxDenyReadEntry.slice(0, s)) + sandboxDenyReadEntry.slice(s);
-  return h === sandboxDenyReadEntry ? [sandboxDenyReadEntry] : [sandboxDenyReadEntry, h];
+  if (prefix <= 0) return [sandboxDenyReadEntry];
+  let canonicalizedEntry =
+    canonicalizePathForMaskSweep(sandboxDenyReadEntry.slice(0, prefix)) + sandboxDenyReadEntry.slice(prefix);
+  return canonicalizedEntry === sandboxDenyReadEntry
+    ? [sandboxDenyReadEntry]
+    : [sandboxDenyReadEntry, canonicalizedEntry];
 }
 //@ chunk-e6aww6q8.js:1910780-1911738 placement
 function classifySyncedFileSensitivity(
-  e = resolveUploadFilterRules(),
+  options = resolveUploadFilterRules(),
   {
-    isCredentialListCountedFromOutsideRoot: n = false,
-    onLaunchPlaceUnknown: r = () => {},
-    onlyAsLaunched: s = false,
+    isCredentialListCountedFromOutsideRoot: countedOutside = false,
+    onLaunchPlaceUnknown: onUnknown = () => {},
+    onlyAsLaunched = false,
   } = {},
 ) {
-  let y = (S, w) => e;
+  let ignoreOptions = (root, realRoot) => options;
   return {
-    withholdFor: async (S) => {
-      let w = await realpath(S).catch(() => null);
-      if (w === null) return () => true;
-      let dirSyncRules = resolveDirSyncRules(S, {
-        realRoot: w,
-        readRules: y(S, w),
-        onlyAsLaunched: s,
+    withholdFor: async (root) => {
+      let realRoot = await realpath(root).catch(() => null);
+      if (realRoot === null) return () => true;
+      let dirSyncRules = resolveDirSyncRules(root, {
+        realRoot,
+        readRules: ignoreOptions(root, realRoot),
+        onlyAsLaunched,
         readsDenialsNarrowly: true,
       });
-      if (dirSyncRules.isLaunchPlaceUnknown) r();
-      return (G) => {
-        switch (dirSyncRules(G, true)) {
+      if (dirSyncRules.isLaunchPlaceUnknown) onUnknown();
+      return (path) => {
+        switch (dirSyncRules(path, true)) {
           case "read_denied":
           case "rules_unreadable":
           case "sensitive":
@@ -965,18 +1049,18 @@ function classifySyncedFileSensitivity(
         }
       };
     },
-    neverReadFor: async (S) => {
-      let w = await realpath(S).catch(() => null);
-      if (w === null) return () => true;
-      let dirSyncRules = resolveDirSyncRules(S, {
-        realRoot: w,
-        readRules: e,
-        onlyAsLaunched: s,
+    neverReadFor: async (root) => {
+      let realRoot = await realpath(root).catch(() => null);
+      if (realRoot === null) return () => true;
+      let dirSyncRules = resolveDirSyncRules(root, {
+        realRoot,
+        readRules: options,
+        onlyAsLaunched,
         readsDenialsNarrowly: true,
         hostConfig: UNCOVERED_ROOT,
       });
-      return (G) => {
-        switch (dirSyncRules(G, true)) {
+      return (filePath) => {
+        switch (dirSyncRules(filePath, true)) {
           case "read_denied":
           case "rules_unreadable":
             return true;
@@ -989,32 +1073,32 @@ function classifySyncedFileSensitivity(
         }
       };
     },
-    rulesUnreadable: !e.complete,
-    unreadableSettingsFiles: e.unreadableSettingsFiles ?? [],
+    rulesUnreadable: !options.complete,
+    unreadableSettingsFiles: options.unreadableSettingsFiles ?? [],
   };
 }
 //@ chunk-e6aww6q8.js:1911738-1911748 placement
 var MAX_LISTED_FAILURES = 3;
 //@ chunk-e6aww6q8.js:1911748-1911921 placement = formatFailureDetails (0.777)
-function formatFailureDetails_3(e) {
-  if (e === undefined || e.length === 0) return "";
-  let mapped = e
+function formatFailureDetails_3(errors) {
+  if (errors === undefined || errors.length === 0) return "";
+  let mapped = errors
     .slice(0, MAX_LISTED_FAILURES)
-    .map((s) => readHeadAndTail(sanitizeDisplayText(tildify(s)), 120));
-  let remaining = e.length - mapped.length;
+    .map((failure) => readHeadAndTail(sanitizeDisplayText(tildify(failure)), 120));
+  let remaining = errors.length - mapped.length;
   return `${mapped.join(", ")}${remaining > 0 ? ` and ${remaining} more` : ""}`;
 }
 //@ chunk-e6aww6q8.js:1911921-1911987 placement
-function settingsReadErrorsSuffix(e) {
-  let n = formatFailureDetails_3(e);
-  return n === "" ? "" : ` (errors in ${n})`;
+function settingsReadErrorsSuffix(errors) {
+  let details = formatFailureDetails_3(errors);
+  return details === "" ? "" : ` (errors in ${details})`;
 }
 //@ chunk-e6aww6q8.js:1911987-1912056 placement
 /**
  * 「设置未能全部读取」提示。
  */
-function settingsReadFailureText(e) {
-  return `your settings could not all be read${settingsReadErrorsSuffix(e)}`;
+function settingsReadFailureText(errors) {
+  return `your settings could not all be read${settingsReadErrorsSuffix(errors)}`;
 }
 export {
   collectLaunchRules,

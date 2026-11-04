@@ -47,7 +47,7 @@ import { BG_PROTO } from "../services/daemon/leaseProtocol.js";
 import { sleep } from "../utils/sleep.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, lit } from "../services/analytics/safeMetadata.js";
-import { redactDaemonPipeKey, redactErrorPaths } from "../utils/sandbox/userNamespace.js";
+import { redactDaemonPipeKey, redactErrorPaths } from "../services/daemon/paths.js";
 import { getPlatform } from "../utils/platform.js";
 import { logFeatureSad, logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { daemonExecutablePath, uninstallDaemonService } from "../services/daemon/serviceInstall.js";
@@ -70,25 +70,29 @@ import { isDaemonServiceRecalled } from "../utils/fleetGates.js";
 import { readRoster } from "../services/daemon/roster.js";
 
 //@ chunk-ss669z1x.js:50966-51051 placement
-function targetChanged(r, e) {
-  if (r.target !== e.target) return true;
-  return !isRunningFromVersionsDir_2() && r.mtimeMs !== e.mtimeMs;
+function targetChanged(previous, current) {
+  if (previous.target !== current.target) return true;
+  return !isRunningFromVersionsDir_2() && previous.mtimeMs !== current.mtimeMs;
 }
 //@ chunk-ss669z1x.js:51051-51231 placement
-function logBgManagerStartError(r) {
-  if (isSyscallError(r) && r.syscall === "listen" && (r.code === "EADDRINUSE" || r.code === "EACCES")) {
-    logForDebugging(`bg manager start failed (listen): ${r.code} ${r.message}`, {
+function logBgManagerStartError(error) {
+  if (
+    isSyscallError(error) &&
+    error.syscall === "listen" &&
+    (error.code === "EADDRINUSE" || error.code === "EACCES")
+  ) {
+    logForDebugging(`bg manager start failed (listen): ${error.code} ${error.message}`, {
       level: "warn",
     });
     return;
   }
-  logError(r);
+  logError(error);
 }
 //@ chunk-ss669z1x.js:51231-64258 placement
 /**
  * 后台管理器（bg manager）入口：监听、过期检查、空闲退出、升级。
  */
-async function runBgManager(r) {
+async function runBgManager(options) {
   let {
     jsonPath,
     logPath,
@@ -102,8 +106,8 @@ async function runBgManager(r) {
     startupIdleGraceMs = SHUTDOWN_TOTAL_MS,
     upgradeBusyDeferCapMs = SHUTDOWN_FORCE_MS,
     storageV5,
-  } = r;
-  let R = credentialsStoreFor(storageV5);
+  } = options;
+  let credentials = credentialsStoreFor(storageV5);
   let bgDispatchLog = await openBgDispatchLog(logPath);
   bgDispatchLog.write(
     "supervisor",
@@ -123,20 +127,20 @@ async function runBgManager(r) {
   );
   initializeGrowthBook();
   let liveServerLock = await readLiveServerLock(LOCK_PROBE_LIMITS, storageV5);
-  let U = false;
+  let askedTransientToYield = false;
   if (liveServerLock && liveServerLock.origin === "transient" && origin !== "transient") {
-    U = true;
+    askedTransientToYield = true;
     bgDispatchLog.write(
       "supervisor",
       `transient daemon running (pid=${liveServerLock.pid}, origin=transient) \u2014 asking it to yield to origin=${origin}`,
     );
-    let s = await controlRequest({
+    let yieldResponse = await controlRequest({
       proto: BG_PROTO,
       op: "yield",
     });
-    if (s.ok && s.op === "yield" && s.yielding) {
-      let M = Date.now() + 5000;
-      while (liveServerLock && Date.now() < M) {
+    if (yieldResponse.ok && yieldResponse.op === "yield" && yieldResponse.yielding) {
+      let yieldDeadline = Date.now() + 5000;
+      while (liveServerLock && Date.now() < yieldDeadline) {
         await sleep(100);
         liveServerLock = await readLiveServerLock(LOCK_PROBE_LIMITS, storageV5);
       }
@@ -152,26 +156,26 @@ async function runBgManager(r) {
     } else
       bgDispatchLog.write(
         "supervisor",
-        s.ok
+        yieldResponse.ok
           ? "existing daemon refused to yield (it reports origin!=transient)"
-          : `existing daemon unreachable on control socket (${redactDaemonPipeKey(s.error)}); not taking over`,
+          : `existing daemon unreachable on control socket (${redactDaemonPipeKey(yieldResponse.error)}); not taking over`,
       );
   }
   if (liveServerLock) {
-    let s = U
+    let lockReason = askedTransientToYield
       ? `origin=${liveServerLock.origin ?? "unknown"}; asked it to yield but the handover failed (see above)`
       : origin === "transient"
         ? `origin=${liveServerLock.origin ?? "unknown"}; an on-demand daemon never displaces a running one`
         : `origin=${liveServerLock.origin ?? "unknown"}; only a transient daemon can be displaced`;
-    let M =
+    let stopHint =
       getPlatform() === "windows"
         ? `Stop it with \`taskkill /PID ${liveServerLock.pid}\`, then retry.`
         : "Run `claude daemon stop` to stop it, then retry.";
     bgDispatchLog.write(
       "supervisor",
-      `another daemon is already running (pid=${liveServerLock.pid}, version=${liveServerLock.version}, ${s}). ${M}`,
+      `another daemon is already running (pid=${liveServerLock.pid}, version=${liveServerLock.version}, ${lockReason}). ${stopHint}`,
     );
-    if (U) logFeatureSad("daemon_start", "daemon_start_yield_failed");
+    if (askedTransientToYield) logFeatureSad("daemon_start", "daemon_start_yield_failed");
     else logFeatureOk("daemon_start");
     await bgDispatchLog.close();
     return {
@@ -182,10 +186,10 @@ async function runBgManager(r) {
   let launchCommand = getLaunchCommand({
     pinToCurrentBinary: true,
   });
-  let X = isRunningFromVersionsDir_2() ? daemonExecutablePath() : launchCommand.target;
-  let Q = await statRealPath(X).catch((error) => {
+  let binaryPath = isRunningFromVersionsDir_2() ? daemonExecutablePath() : launchCommand.target;
+  let binaryIdentity = await statRealPath(binaryPath).catch((error) => {
     if (isSyscallError(error))
-      logForDebugging(`binaryIdentity(${X}) failed at startup: ${error.code}`, {
+      logForDebugging(`binaryIdentity(${binaryPath}) failed at startup: ${error.code}`, {
         level: "error",
       });
     else logError(error);
@@ -203,7 +207,7 @@ async function runBgManager(r) {
         "own process start-time probe failed twice \u2014 writing a procStart-less lock; kill paths will refuse to signal this daemon",
       );
   }
-  let le = {
+  let lockPayload = {
     pid: process.pid,
     version: {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -222,35 +226,35 @@ async function runBgManager(r) {
     origin,
     spawnedBy,
     ...procIdentityFields(processStartTime),
-    launchTarget: Q?.target,
+    launchTarget: binaryIdentity?.target,
     processWrapper: processWrapperRecord(),
   };
-  let _e = await writeDaemonLockRemote(le, storageV5);
-  if (!_e) {
-    let daemonLock = await readDaemonLock(storageV5);
-    if (daemonLock) {
-      let G = false;
-      let de = null;
+  let gotLock = await writeDaemonLockRemote(lockPayload, storageV5);
+  if (!gotLock) {
+    let lock = await readDaemonLock(storageV5);
+    if (lock) {
+      let holderStillAlive = false;
+      let staleProof = null;
       try {
-        process.kill(daemonLock.pid, 0);
-        G =
-          (await isClaudeProcess(daemonLock.pid)) &&
-          (await waitForProcessExit(daemonLock.pid, procIdentityOf(daemonLock), LOCK_PROBE_LIMITS));
+        process.kill(lock.pid, 0);
+        holderStillAlive =
+          (await isClaudeProcess(lock.pid)) &&
+          (await waitForProcessExit(lock.pid, procIdentityOf(lock), LOCK_PROBE_LIMITS));
       } catch (error) {
         if (getErrnoCode(error) !== "ESRCH") {
-          de = await verifyLockHolder(daemonLock);
-          G = de === null;
-          if (de !== null)
+          staleProof = await verifyLockHolder(lock);
+          holderStillAlive = staleProof === null;
+          if (staleProof !== null)
             bgDispatchLog.write(
               "supervisor",
-              `daemon.lock names pid=${daemonLock.pid}, which this user cannot signal, but ${de === "predates_boot" ? "the lock predates this boot" : "that pid now belongs to another process"} \u2014 replacing the stale lock`,
+              `daemon.lock names pid=${lock.pid}, which this user cannot signal, but ${staleProof === "predates_boot" ? "the lock predates this boot" : "that pid now belongs to another process"} \u2014 replacing the stale lock`,
             );
         }
       }
-      if (G) {
+      if (holderStillAlive) {
         bgDispatchLog.write(
           "supervisor",
-          `another daemon won the lock race (pid=${daemonLock.pid}) \u2014 exiting`,
+          `another daemon won the lock race (pid=${lock.pid}) \u2014 exiting`,
         );
         logFeatureOk("daemon_start");
         await bgDispatchLog.close();
@@ -259,14 +263,14 @@ async function runBgManager(r) {
           exitCode: 1,
         };
       }
-      _e = await writeDaemonLock(le, storageV5);
-      if (de !== null)
+      gotLock = await writeDaemonLock(lockPayload, storageV5);
+      if (staleProof !== null)
         logEvent("tengu_daemon_stale_lock_replaced", {
-          proof: de === "predates_boot" ? lit("predates_boot") : lit("pid_recycled"),
-          acquired: _e,
-          holder_age_ms: Math.max(0, Date.now() - daemonLock.startedAt),
+          proof: staleProof === "predates_boot" ? lit("predates_boot") : lit("pid_recycled"),
+          acquired: gotLock,
+          holder_age_ms: Math.max(0, Date.now() - lock.startedAt),
           holder_version_skew:
-            daemonLock.version !==
+            lock.version !==
             {
               ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
               PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -279,8 +283,8 @@ async function runBgManager(r) {
               DD_SOURCEMAP_GROUP: "default",
             }.VERSION,
         });
-    } else _e = await writeDaemonLock(le, storageV5);
-    if (!_e) {
+    } else gotLock = await writeDaemonLock(lockPayload, storageV5);
+    if (!gotLock) {
       bgDispatchLog.write("supervisor", "another daemon won the lock race \u2014 exiting");
       logFeatureOk("daemon_start");
       await bgDispatchLog.close();
@@ -290,13 +294,13 @@ async function runBgManager(r) {
       };
     }
     await sleep(SHUTDOWN_CLOSE_TIMEOUT_MS);
-    let M = await readDaemonLock(storageV5).catch(() => le);
-    if (!M || M.pid !== le.pid || M.startedAt !== le.startedAt) {
+    let rereadLock = await readDaemonLock(storageV5).catch(() => lockPayload);
+    if (!rereadLock || rereadLock.pid !== lockPayload.pid || rereadLock.startedAt !== lockPayload.startedAt) {
       bgDispatchLog.write(
         "supervisor",
-        `another daemon won the lock race (lock now ${M ? `held by pid=${M.pid}` : "gone"}) \u2014 exiting`,
+        `another daemon won the lock race (lock now ${rereadLock ? `held by pid=${rereadLock.pid}` : "gone"}) \u2014 exiting`,
       );
-      if (M) logFeatureOk("daemon_start");
+      if (rereadLock) logFeatureOk("daemon_start");
       else logFeatureSad("daemon_start", "lock_vanished_after_replace");
       await bgDispatchLog.close();
       return {
@@ -305,11 +309,11 @@ async function runBgManager(r) {
       };
     }
   }
-  let q = async () => {
+  let probeDisplacingDaemon = async () => {
     for (let idx = 0; ; idx++)
       try {
         let liveServerLock = await readLiveServerLock(LOCK_PROBE_LIMITS, storageV5);
-        return liveServerLock !== null && liveServerLock.pid !== le.pid ? liveServerLock.pid : null;
+        return liveServerLock !== null && liveServerLock.pid !== lockPayload.pid ? liveServerLock.pid : null;
       } catch (error) {
         if (idx === 0) {
           await sleep(LOCK_PROBE_RETRY_MS);
@@ -324,280 +328,300 @@ async function runBgManager(r) {
         return null;
       }
   };
-  let Z = null;
-  let B = {
+  let manager = null;
+  let managerHolder = {
     manager: null,
   };
   let auth = createAuth(
     signal,
-    (s) => bgDispatchLog.write("supervisor", s),
-    () => Z?.hasOAuthConsumer() ?? false,
+    (line) => bgDispatchLog.write("supervisor", line),
+    () => manager?.hasOAuthConsumer() ?? false,
     storageV5,
-    R,
-    () => origin === "service" && getPlatform() === "macos" && (B.manager?.snapshotConsumerCount() ?? 0) > 0,
+    credentials,
+    () =>
+      origin === "service" &&
+      getPlatform() === "macos" &&
+      (managerHolder.manager?.snapshotConsumerCount() ?? 0) > 0,
   );
-  let x = false;
-  let ee = null;
-  let ae = false;
-  let W = null;
-  let ge = false;
-  let ce = false;
-  let se = false;
-  let be = false;
-  let ve = false;
-  let Ee = false;
-  let Re = () => signal.aborted || se || ge || ve || x || ce || be || Ee;
-  let Pe = null;
+  let isUpgrading = false;
+  let lastRefusedTarget = null;
+  let launcherUnrunnableLogged = false;
+  let busyDeferState = null;
+  let isShutdownRequested = false;
+  let isServiceRecall = false;
+  let isYielding = false;
+  let bgManagerFailed = false;
+  let isIdleExit = false;
+  let wasDisplaced = false;
+  let isShuttingDown = () =>
+    signal.aborted ||
+    isYielding ||
+    isShutdownRequested ||
+    isIdleExit ||
+    isUpgrading ||
+    isServiceRecall ||
+    bgManagerFailed ||
+    wasDisplaced;
+  let resolveMainPromise = null;
   let onYield = () => {
     if (origin !== "transient") return false;
-    if (!se) {
-      se = true;
+    if (!isYielding) {
+      isYielding = true;
       bgDispatchLog.write(
         "supervisor",
         "yielding to a foreground/service daemon \u2014 bg workers will be re-adopted",
       );
       logEvent("tengu_daemon_yield", {});
-      Pe?.();
+      resolveMainPromise?.();
     }
     return true;
   };
-  let Oe = async () => {
-    if (x || !Q) return x;
-    if (Re()) return false;
-    let s;
+  let pollUpgrade = async () => {
+    if (isUpgrading || !binaryIdentity) return isUpgrading;
+    if (isShuttingDown()) return false;
+    let currentIdentity;
     try {
-      s = await statRealPath(X);
+      currentIdentity = await statRealPath(binaryPath);
     } catch (error) {
       if (isSyscallError(error))
-        logForDebugging(`binaryIdentity(${X}) poll failed: ${error.code}`, {
+        logForDebugging(`binaryIdentity(${binaryPath}) poll failed: ${error.code}`, {
           level: "error",
         });
       else logError(error);
-      if (W !== null) {
-        if ((Z?.busyWorkerCount() ?? 0) === 0) {
-          if (!W.capExpiredEmitted)
+      if (busyDeferState !== null) {
+        if ((manager?.busyWorkerCount() ?? 0) === 0) {
+          if (!busyDeferState.capExpiredEmitted)
             logEvent("tengu_daemon_upgrade_deferred_busy", {
               busy_workers: 0,
-              deferred_ms: (W.suspendedAt ?? Date.now()) - W.start,
+              deferred_ms: (busyDeferState.suspendedAt ?? Date.now()) - busyDeferState.start,
               cap_expired: false,
               phase: lit("resolved"),
             });
-          W = null;
-        } else if (W.suspendedAt === null) W.suspendedAt = Date.now();
+          busyDeferState = null;
+        } else if (busyDeferState.suspendedAt === null) busyDeferState.suspendedAt = Date.now();
       }
       return false;
     }
-    if (Re()) return false;
-    if (W !== null && W.suspendedAt !== null) {
-      W.start += Date.now() - W.suspendedAt;
-      W.suspendedAt = null;
+    if (isShuttingDown()) return false;
+    if (busyDeferState !== null && busyDeferState.suspendedAt !== null) {
+      busyDeferState.start += Date.now() - busyDeferState.suspendedAt;
+      busyDeferState.suspendedAt = null;
     }
-    if (s !== null && !targetChanged(Q, s)) {
-      ee = null;
-      W = null;
+    if (currentIdentity !== null && !targetChanged(binaryIdentity, currentIdentity)) {
+      lastRefusedTarget = null;
+      busyDeferState = null;
       return false;
     }
     if (
-      s !== null &&
-      isOlderRcVersion(Q.target, s.target) &&
+      currentIdentity !== null &&
+      isOlderRcVersion(binaryIdentity.target, currentIdentity.target) &&
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_daemon_refuse_stale_upgrade", true)
     ) {
-      W = null;
-      if (ee !== s.target) {
-        ee = s.target;
+      busyDeferState = null;
+      if (lastRefusedTarget !== currentIdentity.target) {
+        lastRefusedTarget = currentIdentity.target;
         bgDispatchLog.write(
           "supervisor",
-          `binary at ${X} changed to an OLDER build (${Q.target} \u2192 ${s.target}) \u2014 refusing self-restart for upgrade; keeping the running build (\`claude daemon stop --any\` to override)`,
+          `binary at ${binaryPath} changed to an OLDER build (${binaryIdentity.target} \u2192 ${currentIdentity.target}) \u2014 refusing self-restart for upgrade; keeping the running build (\`claude daemon stop --any\` to override)`,
         );
         logEvent("tengu_daemon_upgrade_refused_stale_binary", {});
       }
       return false;
     }
-    let M = processWrapperError();
-    let G = processWrapperArgv();
-    if (origin !== "service" && (G.length > 0 || M !== null)) {
+    let wrapperError = processWrapperError();
+    let wrapperArgv = processWrapperArgv();
+    if (origin !== "service" && (wrapperArgv.length > 0 || wrapperError !== null)) {
       if (!(await isProcessWrapperUsable())) {
-        if (!ae) {
-          ae = true;
+        if (!launcherUnrunnableLogged) {
+          launcherUnrunnableLogged = true;
           bgDispatchLog.write(
             "supervisor",
-            M !== null
-              ? `binary at ${X} changed but CLAUDE_CODE_PROCESS_WRAPPER cannot be used (${M}) \u2014 deferring the upgrade restart until it is fixed (re-checked every poll)`
-              : `binary at ${X} changed but launcher \`${G[0]}\` is not runnable right now \u2014 deferring the upgrade restart until it is (re-checked every poll)`,
+            wrapperError !== null
+              ? `binary at ${binaryPath} changed but CLAUDE_CODE_PROCESS_WRAPPER cannot be used (${wrapperError}) \u2014 deferring the upgrade restart until it is fixed (re-checked every poll)`
+              : `binary at ${binaryPath} changed but launcher \`${wrapperArgv[0]}\` is not runnable right now \u2014 deferring the upgrade restart until it is (re-checked every poll)`,
           );
           logFeatureSad("agent_launcher", "upgrade_deferred_launcher_unrunnable");
         }
-        W = null;
+        busyDeferState = null;
         return false;
       }
-      ae = false;
+      launcherUnrunnableLogged = false;
     }
-    let de = Z?.busyWorkerCount() ?? 0;
+    let busyWorkerCount = manager?.busyWorkerCount() ?? 0;
     if (
-      de > 0 &&
-      s !== null &&
+      busyWorkerCount > 0 &&
+      currentIdentity !== null &&
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_daemon_upgrade_defer_busy", true)
     ) {
-      if (W === null)
-        W = {
-          target: s.target,
+      if (busyDeferState === null)
+        busyDeferState = {
+          target: currentIdentity.target,
           start: Date.now(),
           logged: false,
           suspendedAt: null,
           capExpiredEmitted: false,
         };
-      else if (W.target !== s.target) {
-        W.target = s.target;
-        W.logged = false;
+      else if (busyDeferState.target !== currentIdentity.target) {
+        busyDeferState.target = currentIdentity.target;
+        busyDeferState.logged = false;
       }
-      if (Date.now() - W.start < upgradeBusyDeferCapMs) {
-        if (!W.logged) {
-          W.logged = true;
+      if (Date.now() - busyDeferState.start < upgradeBusyDeferCapMs) {
+        if (!busyDeferState.logged) {
+          busyDeferState.logged = true;
           bgDispatchLog.write(
             "supervisor",
-            `binary at ${X} changed but ${de} registry worker(s) report a mid-turn session \u2014 deferring the upgrade restart until idle (re-checked every poll, capped at ${Math.round(upgradeBusyDeferCapMs / 60000)}m)`,
+            `binary at ${binaryPath} changed but ${busyWorkerCount} registry worker(s) report a mid-turn session \u2014 deferring the upgrade restart until idle (re-checked every poll, capped at ${Math.round(upgradeBusyDeferCapMs / 60000)}m)`,
           );
           logEvent("tengu_daemon_upgrade_deferred_busy", {
-            busy_workers: de,
+            busy_workers: busyWorkerCount,
             cap_expired: false,
             phase: lit("start"),
           });
         }
         return false;
       }
-      if (!W.capExpiredEmitted) {
-        W.capExpiredEmitted = true;
+      if (!busyDeferState.capExpiredEmitted) {
+        busyDeferState.capExpiredEmitted = true;
         bgDispatchLog.write(
           "supervisor",
-          `busy-worker upgrade defer cap reached \u2014 proceeding with the restart while ${de} worker(s) are still busy`,
+          `busy-worker upgrade defer cap reached \u2014 proceeding with the restart while ${busyWorkerCount} worker(s) are still busy`,
         );
         logEvent("tengu_daemon_upgrade_deferred_busy", {
-          busy_workers: de,
-          deferred_ms: Date.now() - W.start,
+          busy_workers: busyWorkerCount,
+          deferred_ms: Date.now() - busyDeferState.start,
           cap_expired: true,
           phase: lit("cap_expired"),
         });
       }
     } else {
-      if (W !== null)
+      if (busyDeferState !== null)
         logEvent("tengu_daemon_upgrade_deferred_busy", {
-          busy_workers: de,
-          deferred_ms: Date.now() - W.start,
+          busy_workers: busyWorkerCount,
+          deferred_ms: Date.now() - busyDeferState.start,
           cap_expired: false,
           phase: lit("resolved"),
         });
-      W = null;
+      busyDeferState = null;
     }
-    if (Re()) return false;
-    x = true;
-    if (s === null)
+    if (isShuttingDown()) return false;
+    isUpgrading = true;
+    if (currentIdentity === null)
       bgDispatchLog.write(
         "supervisor",
-        `binary at ${X} was deleted (was ${Q.target}) \u2014 exiting for upgrade`,
+        `binary at ${binaryPath} was deleted (was ${binaryIdentity.target}) \u2014 exiting for upgrade`,
       );
     else {
-      let Se = Q.target === s.target ? "mtime changed" : `${Q.target} \u2192 ${s.target}`;
-      bgDispatchLog.write("supervisor", `binary at ${X} changed (${Se}) \u2014 self-restarting for upgrade`);
+      let changeDescription =
+        binaryIdentity.target === currentIdentity.target
+          ? "mtime changed"
+          : `${binaryIdentity.target} \u2192 ${currentIdentity.target}`;
+      bgDispatchLog.write(
+        "supervisor",
+        `binary at ${binaryPath} changed (${changeDescription}) \u2014 self-restarting for upgrade`,
+      );
     }
-    Pe?.();
+    resolveMainPromise?.();
     return true;
   };
-  let p = null;
-  let T = false;
-  let K = () => (B.manager?.leaseCount() ?? 0) + (B.manager?.liveHandleCount() ?? 0);
-  let oe = () => {
+  let idleTimer = null;
+  let everHadClient = false;
+  let liveClientCount = () =>
+    (managerHolder.manager?.leaseCount() ?? 0) + (managerHolder.manager?.liveHandleCount() ?? 0);
+  let scheduleIdleCheck = () => {
     if (origin !== "transient") return;
-    if (ve || x || ge || se || be || signal.aborted) return;
-    if (K() > 0) {
-      T = true;
-      if (p) {
-        clearTimeout(p);
-        p = null;
+    if (isIdleExit || isUpgrading || isShutdownRequested || isYielding || bgManagerFailed || signal.aborted)
+      return;
+    if (liveClientCount() > 0) {
+      everHadClient = true;
+      if (idleTimer) {
+        clearTimeout(idleTimer);
+        idleTimer = null;
       }
       return;
     }
-    if (p) return;
-    let s = T ? idleGraceMs : startupIdleGraceMs;
-    p = setTimeout(() => {
-      p = null;
-      if (K() > 0) {
-        T = true;
+    if (idleTimer) return;
+    let graceMs = everHadClient ? idleGraceMs : startupIdleGraceMs;
+    idleTimer = setTimeout(() => {
+      idleTimer = null;
+      if (liveClientCount() > 0) {
+        everHadClient = true;
         return;
       }
-      if (signal.aborted || x) return;
-      if (W !== null) {
-        oe();
+      if (signal.aborted || isUpgrading) return;
+      if (busyDeferState !== null) {
+        scheduleIdleCheck();
         return;
       }
-      ve = true;
-      let M = Z?.workerCount() ?? 0;
+      isIdleExit = true;
+      let configuredWorkerCount = manager?.workerCount() ?? 0;
       bgDispatchLog.write(
         "supervisor",
-        `idle ${Math.round(s / 1000)}s with no clients \u2014 exiting` +
-          (M > 0 ? ` (stopping ${M} configured workers)` : ""),
+        `idle ${Math.round(graceMs / 1000)}s with no clients \u2014 exiting` +
+          (configuredWorkerCount > 0 ? ` (stopping ${configuredWorkerCount} configured workers)` : ""),
       );
       logEvent("tengu_daemon_idle_exit", {
-        grace_ms: s,
-        never_had_client: !T,
-        cfg_workers: M,
+        grace_ms: graceMs,
+        never_had_client: !everHadClient,
+        cfg_workers: configuredWorkerCount,
       });
-      Pe?.();
-    }, s);
+      resolveMainPromise?.();
+    }, graceMs);
   };
   auth.ready
     .then(() =>
-      runBgManagerLoop((s) => bgDispatchLog.write("bg", s), {
+      runBgManagerLoop((line) => bgDispatchLog.write("bg", line), {
         getAuthSnapshot: origin === "service" ? () => auth.getAuthSnapshot() : undefined,
         onNudge: async () => ({
-          restarting: await Oe(),
-          upgradePending: W !== null,
+          restarting: await pollUpgrade(),
+          upgradePending: busyDeferState !== null,
         }),
         onShutdown: () => {
-          ge = true;
+          isShutdownRequested = true;
           bgDispatchLog.write("supervisor", "shutdown requested via control socket");
-          Pe?.();
+          resolveMainPromise?.();
         },
         onYield,
-        onKeepAliveChange: oe,
+        onKeepAliveChange: scheduleIdleCheck,
         storageV5,
-        credentials: R,
-        isShuttingDown: Re,
+        credentials,
+        isShuttingDown,
       }),
     )
-    .then((s) => {
-      if (Re())
+    .then((bgManager) => {
+      if (isShuttingDown())
         return void (async () => {
-          if (ce && !Ee && (await q()) === null) s.killAll("SIGTERM");
-          await s.close({
+          if (isServiceRecall && !wasDisplaced && (await probeDisplacingDaemon()) === null)
+            bgManager.killAll("SIGTERM");
+          await bgManager.close({
             skipPathCleanup: true,
           });
         })().catch((error) => logError(redactErrorPaths(error)));
-      B.manager = s;
-      oe();
+      managerHolder.manager = bgManager;
+      scheduleIdleCheck();
     })
     .catch((error) => {
       logBgManagerStartError(redactErrorPaths(error));
-      if (Re()) return;
+      if (isShuttingDown()) return;
       let errnoCode = getErrnoCode(error);
-      let G = `${errnoCode ? `[${errnoCode}] ` : ""}${redactDaemonPipeKey(toError(error).message.replace(/\s*\n\s*/g, " "))}`;
+      let errorText = `${errnoCode ? `[${errnoCode}] ` : ""}${redactDaemonPipeKey(toError(error).message.replace(/\s*\n\s*/g, " "))}`;
       if (origin === "service") {
         bgDispatchLog.write(
           "supervisor",
-          `bg manager failed to start: ${G} \u2014 control pipe unavailable; bg sessions disabled (registry workers keep running)`,
+          `bg manager failed to start: ${errorText} \u2014 control pipe unavailable; bg sessions disabled (registry workers keep running)`,
         );
-        releaseDaemonLock(le, storageV5).catch(logError);
+        releaseDaemonLock(lockPayload, storageV5).catch(logError);
         return;
       }
       bgDispatchLog.write(
         "supervisor",
-        `bg manager failed to start: ${G} \u2014 control pipe unavailable; exiting`,
+        `bg manager failed to start: ${errorText} \u2014 control pipe unavailable; exiting`,
       );
-      process.stderr.write(`bg manager failed to start: ${G}
+      process.stderr.write(`bg manager failed to start: ${errorText}
 `);
-      be = true;
-      Pe?.();
+      bgManagerFailed = true;
+      resolveMainPromise?.();
     });
-  Z = await runDaemonSupervisor({
+  manager = await runDaemonSupervisor({
     jsonPath,
     invocation: launchCommand,
     logger: bgDispatchLog,
@@ -605,167 +629,174 @@ async function runBgManager(r) {
     watch,
     storageV5,
   });
-  let me = Z.workerCount();
-  bgDispatchLog.write("supervisor", `workers=${me}`);
-  if (me > 0)
+  let configuredWorkerCount = manager.workerCount();
+  bgDispatchLog.write("supervisor", `workers=${configuredWorkerCount}`);
+  if (configuredWorkerCount > 0)
     bgDispatchLog.write(
       "supervisor",
       "daemon.json has configured workers but they do not pin the supervisor \u2014 they stop when the last client lease and bg job are gone",
     );
   logEvent("tengu_daemon_start", {
     worker_kinds: Object.keys(WORKER_KINDS).length,
-    worker_count: me,
+    worker_count: configuredWorkerCount,
     origin: fromEnum(origin),
   });
   logFeatureOk("daemon_start");
-  oe();
-  let he = null;
+  scheduleIdleCheck();
+  let staleCheckTimer = null;
   try {
     await new Promise((resolve) => {
-      Pe = resolve;
-      if (signal.aborted || x || ve || ge || se || be) return void resolve();
+      resolveMainPromise = resolve;
+      if (signal.aborted || isUpgrading || isIdleExit || isShutdownRequested || isYielding || bgManagerFailed)
+        return void resolve();
       signal.addEventListener("abort", () => resolve(), {
         once: true,
       });
-      if (!Q)
-        bgDispatchLog.write("supervisor", `binary identity unresolvable at ${X}; upgrade polling disabled`);
-      he = setInterval(() => {
-        if (signal.aborted || x || ce || se) {
-          if (he) {
-            clearInterval(he);
-            he = null;
+      if (!binaryIdentity)
+        bgDispatchLog.write(
+          "supervisor",
+          `binary identity unresolvable at ${binaryPath}; upgrade polling disabled`,
+        );
+      staleCheckTimer = setInterval(() => {
+        if (signal.aborted || isUpgrading || isServiceRecall || isYielding) {
+          if (staleCheckTimer) {
+            clearInterval(staleCheckTimer);
+            staleCheckTimer = null;
           }
           return;
         }
-        Oe();
+        pollUpgrade();
         if (origin === "service" && isDaemonServiceRecalled()) {
-          ce = true;
+          isServiceRecall = true;
           bgDispatchLog.write(
             "supervisor",
             "service recall flag set \u2014 draining workers and uninstalling service",
           );
-          Pe?.();
+          resolveMainPromise?.();
         }
-        if (origin === "transient" && !se)
-          q()
-            .then((M) => {
-              if (M !== null && !se && !signal.aborted) {
-                Ee = true;
-                se = true;
-                bgDispatchLog.write("supervisor", `lockfile now held by pid=${M} \u2014 displaced, yielding`);
+        if (origin === "transient" && !isYielding)
+          probeDisplacingDaemon()
+            .then((displacingPid) => {
+              if (displacingPid !== null && !isYielding && !signal.aborted) {
+                wasDisplaced = true;
+                isYielding = true;
+                bgDispatchLog.write(
+                  "supervisor",
+                  `lockfile now held by pid=${displacingPid} \u2014 displaced, yielding`,
+                );
                 logEvent("tengu_daemon_yield", {
                   displaced: true,
-                  displaced_by_pid: M,
+                  displaced_by_pid: displacingPid,
                 });
-                Pe?.();
+                resolveMainPromise?.();
               }
             })
             .catch((error) => logError(redactErrorPaths(error)));
       }, staleCheckIntervalMs);
     });
   } finally {
-    Pe = null;
-    if (he) {
-      clearInterval(he);
-      he = null;
+    resolveMainPromise = null;
+    if (staleCheckTimer) {
+      clearInterval(staleCheckTimer);
+      staleCheckTimer = null;
     }
-    if (p) {
-      clearTimeout(p);
-      p = null;
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
     }
   }
-  if (x) logEvent("tengu_daemon_self_restart_on_upgrade", {});
-  if (ce) logEvent("tengu_copper_lantern", {});
-  Z.disposeWatcher();
-  await Z.drainReloads();
-  if (!Ee) {
-    let s = await q();
-    if (s !== null) {
-      Ee = true;
+  if (isUpgrading) logEvent("tengu_daemon_self_restart_on_upgrade", {});
+  if (isServiceRecall) logEvent("tengu_copper_lantern", {});
+  manager.disposeWatcher();
+  await manager.drainReloads();
+  if (!wasDisplaced) {
+    let displacingPid = await probeDisplacingDaemon();
+    if (displacingPid !== null) {
+      wasDisplaced = true;
       bgDispatchLog.write(
         "supervisor",
-        `lockfile now held by pid=${s} \u2014 displaced; leaving successor's control.sock in place`,
+        `lockfile now held by pid=${displacingPid} \u2014 displaced; leaving successor's control.sock in place`,
       );
     }
   }
-  let pe =
-    x && !Ee
+  let exitCause =
+    isUpgrading && !wasDisplaced
       ? "upgrade"
-      : ce
+      : isServiceRecall
         ? "service_recall"
-        : Ee
+        : wasDisplaced
           ? "displaced"
-          : se
+          : isYielding
             ? "yield"
-            : ge
+            : isShutdownRequested
               ? "shutdown_op"
-              : ve
+              : isIdleExit
                 ? "idle_exit"
-                : be
+                : bgManagerFailed
                   ? "bg_manager_failed"
                   : signal.aborted
                     ? "signal"
                     : "unknown";
-  let ke = Date.now() - le.startedAt;
+  let uptimeMs = Date.now() - lockPayload.startedAt;
   bgDispatchLog.write(
     "supervisor",
-    `shutting down (cause=${pe}, uptime=${Math.round(ke / 1000)}s, leases=${B.manager?.leaseCount() ?? -1}, live_workers=${B.manager?.liveHandleCount() ?? -1})`,
+    `shutting down (cause=${exitCause}, uptime=${Math.round(uptimeMs / 1000)}s, leases=${managerHolder.manager?.leaseCount() ?? -1}, live_workers=${managerHolder.manager?.liveHandleCount() ?? -1})`,
   );
   logEvent("tengu_daemon_exit", {
-    cause: fromEnum(pe),
-    uptime_ms: ke,
-    lease_count: B.manager?.leaseCount() ?? -1,
-    live_handles: B.manager?.liveHandleCount() ?? -1,
-    ever_had_keep_alive: T,
+    cause: fromEnum(exitCause),
+    uptime_ms: uptimeMs,
+    lease_count: managerHolder.manager?.leaseCount() ?? -1,
+    live_handles: managerHolder.manager?.liveHandleCount() ?? -1,
+    ever_had_keep_alive: everHadClient,
     origin: fromEnum(origin),
   });
-  B.manager?.announceExit(pe);
-  let De = false;
-  let $e = async () => {
-    if (De) return;
-    De = true;
+  managerHolder.manager?.announceExit(exitCause);
+  let lockReleased = false;
+  let releaseOwnLock = async () => {
+    if (lockReleased) return;
+    lockReleased = true;
     let daemonLock = await readDaemonLock(storageV5);
-    if (daemonLock && daemonLock.pid === le.pid && daemonLock.startedAt === le.startedAt)
+    if (daemonLock && daemonLock.pid === lockPayload.pid && daemonLock.startedAt === lockPayload.startedAt)
       await deleteDaemonLock(storageV5);
   };
-  if (se) {
-    await B.manager?.close({
-      displaced: Ee,
+  if (isYielding) {
+    await managerHolder.manager?.close({
+      displaced: wasDisplaced,
     });
-    B.manager = null;
+    managerHolder.manager = null;
   }
-  if (ve || ce || se || be) {
-    await $e();
-    if (ce && !Ee) {
-      B.manager?.killAll("SIGTERM");
-      if (!B.manager) {
-        let s = await readRoster(
+  if (isIdleExit || isServiceRecall || isYielding || bgManagerFailed) {
+    await releaseOwnLock();
+    if (isServiceRecall && !wasDisplaced) {
+      managerHolder.manager?.killAll("SIGTERM");
+      if (!managerHolder.manager) {
+        let roster = await readRoster(
           {
             silent: true,
           },
           storageV5,
         ).catch(() => null);
-        for (let M of Object.values(s?.workers ?? {}))
-          if (M.pid > 0) {
-            await killVerifiedProcess(M.pid, M.procStart).catch(() => false);
-            await reapDetachedRepl(M.replPid, M.replProcStart).catch(() => false);
+        for (let worker of Object.values(roster?.workers ?? {}))
+          if (worker.pid > 0) {
+            await killVerifiedProcess(worker.pid, worker.procStart).catch(() => false);
+            await reapDetachedRepl(worker.replPid, worker.replProcStart).catch(() => false);
           }
       }
     }
   }
   await Promise.all([
-    B.manager?.close({
-      displaced: Ee,
+    managerHolder.manager?.close({
+      displaced: wasDisplaced,
     }),
-    Z.stop(pe === "upgrade" ? "upgrade" : pe === "yield" ? "yield" : undefined),
+    manager.stop(exitCause === "upgrade" ? "upgrade" : exitCause === "yield" ? "yield" : undefined),
   ]);
-  await $e();
-  if (ce) await uninstallDaemonService();
+  await releaseOwnLock();
+  if (isServiceRecall) await uninstallDaemonService();
   await bgDispatchLog.close();
   auth.dispose();
   return {
-    upgradeDetected: x,
-    exitCode: be ? 1 : 0,
+    upgradeDetected: isUpgrading,
+    exitCode: bgManagerFailed ? 1 : 0,
   };
 }
 export { runBgManager };

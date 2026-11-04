@@ -22,18 +22,18 @@ import {
 } from "./constants.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
+  objectSchema,
   looseObject,
-  string,
+  stringSchema,
   zodStrictObject,
   literal,
   _enum,
   record,
   unknown,
-  E,
+  numberSchema,
   array,
   union,
-  zg,
+  nullSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { formatZodValidationError } from "../../utils/toolErrors.js";
 import { MAX_URL_SEGMENT_CHARS, readExactBytes } from "../../services/artifacts/artifactUrl.js";
@@ -66,19 +66,19 @@ import {
 import { errorMessage, isAbortError } from "../../utils/errors.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { normalizeForDisplay, sanitizeDisplayText } from "../../utils/resultError.js";
-import { Ph } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { sniffImageMediaType } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { maybeResizeAndDownsampleImageBlock } from "../../utils/imageResizer.js";
-import { MODEL_COPY_IMAGE_BYTES } from "../../utils/truncateGraphemes.js";
+import { MODEL_COPY_IMAGE_BYTES } from "../../utils/mediaLimits.js";
 import { count } from "../../utils/collections.js";
 
 //@ chunk-tmx5d02z.js:12695-12971 placement
-function parseArtifactId(e) {
-  let lower = e.trim().toLowerCase();
+function parseArtifactId(value) {
+  let lower = value.trim().toLowerCase();
   if (ARTIFACT_SLUG_RE.test(lower))
     return {
       id: lower,
     };
-  let artifactUrlAnyCase = parseArtifactUrlAnyCase(e.trim());
+  let artifactUrlAnyCase = parseArtifactUrlAnyCase(value.trim());
   if (artifactUrlAnyCase !== null && ARTIFACT_SLUG_RE.test(artifactUrlAnyCase.slug.toLowerCase()))
     return {
       id: artifactUrlAnyCase.slug.toLowerCase(),
@@ -112,10 +112,10 @@ var APPIFACT_ARTIFACT_URL = "APPIFACT_ARTIFACT_URL";
  * artifact_call 页面调用的协议常量：动词集合（数据库读写、读文件、资源、publish/open）、调用 id 格式、结果大小上限与严格 schema。
  */
 var fileReadResultSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     file_read: looseObject({
-      path: string(),
-      saved_to: string(),
+      path: stringSchema(),
+      saved_to: stringSchema(),
     }),
   }),
 );
@@ -138,9 +138,9 @@ var ARTIFACT_CALL_VERBS = [
 var artifactCallSchema = DoctorLazy(() =>
   zodStrictObject({
     type: literal(ARTIFACT_CALL),
-    id: string().regex(CALL_ID_RE),
+    id: stringSchema().regex(CALL_ID_RE),
     verb: _enum(ARTIFACT_CALL_VERBS),
-    args: record(string(), unknown()),
+    args: record(stringSchema(), unknown()),
   }),
 );
 var CALL_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
@@ -148,14 +148,14 @@ var CALL_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
 /**
  * 校验 artifact_call 的参数：成功返回 frame，失败返回格式化的校验错误。
  */
-function parseArtifactCallArgs(e) {
-  let n = artifactCallSchema().safeParse(e);
-  return n.success
+function parseArtifactCallArgs(args) {
+  let parsed = artifactCallSchema().safeParse(args);
+  return parsed.success
     ? {
-        frame: n.data,
+        frame: parsed.data,
       }
     : {
-        invalid: formatZodValidationError(ARTIFACT_CALL, n.error),
+        invalid: formatZodValidationError(ARTIFACT_CALL, parsed.error),
       };
 }
 //@ chunk-tmx5d02z.js:13963-14340 placement
@@ -164,19 +164,19 @@ function parseArtifactCallArgs(e) {
  */
 var dbCallArgsSchema = DoctorLazy(() =>
   zodStrictObject({
-    url: string().max(2048),
-    collection: string().max(2048).optional(),
-    doc_id: string().max(2048).optional(),
-    data: record(string(), unknown()).optional(),
-    query: record(string(), unknown()).optional(),
-    if_version: E().int().positive().optional(),
+    url: stringSchema().max(2048),
+    collection: stringSchema().max(2048).optional(),
+    doc_id: stringSchema().max(2048).optional(),
+    data: record(stringSchema(), unknown()).optional(),
+    query: record(stringSchema(), unknown()).optional(),
+    if_version: numberSchema().int().positive().optional(),
     writes: array(
       zodStrictObject({
-        op: string().max(16),
-        collection: string().max(2048),
-        doc_id: string().max(2048),
-        data: record(string(), unknown()).optional(),
-        if_version: E().int().positive().optional(),
+        op: stringSchema().max(16),
+        collection: stringSchema().max(2048),
+        doc_id: stringSchema().max(2048),
+        data: record(stringSchema(), unknown()).optional(),
+        if_version: numberSchema().int().positive().optional(),
       }),
     )
       .max(100)
@@ -184,12 +184,12 @@ var dbCallArgsSchema = DoctorLazy(() =>
   }),
 );
 //@ chunk-tmx5d02z.js:14340-14448 placement
-function stripIfVersion({ if_version: ifVersion, writes, ...r }) {
+function stripIfVersion({ if_version: ifVersion, writes, ...rest }) {
   return writes === undefined
-    ? r
+    ? rest
     : {
-        ...r,
-        writes: writes.map(({ if_version: ifVersion, ...a }) => a),
+        ...rest,
+        writes: writes.map(({ if_version: ifVersion, ...write }) => write),
       };
 }
 //@ chunk-tmx5d02z.js:14448-15408 placement
@@ -198,76 +198,76 @@ function stripIfVersion({ if_version: ifVersion, writes, ...r }) {
  */
 var ARTIFACT_CALL_SCHEMAS = DoctorLazy(() =>
   zodStrictObject({
-    url: string().max(2048),
+    url: stringSchema().max(2048),
   }),
 );
 var assetPathReadSchema = DoctorLazy(() =>
   zodStrictObject({
-    url: string().max(2048),
-    path: string()
+    url: stringSchema().max(2048),
+    path: stringSchema()
       .min(1)
       .max(512)
-      .refine((e) => !ASSET_ID_RE.test(e), {
+      .refine((path) => !ASSET_ID_RE.test(path), {
         message: "path looks like an asset id; read_file takes a published path",
       }),
   }),
 );
 var assetPathsReadSchema = DoctorLazy(() =>
   zodStrictObject({
-    url: string().max(2048),
+    url: stringSchema().max(2048),
     paths: array(assetPathReadSchema().shape.path).min(1).max(MAX_CALL_ID_LENGTH),
   }),
 );
 var filePathReadSchema = DoctorLazy(() =>
   zodStrictObject({
-    url: string().max(2048),
-    file_path: string().min(1).max(4096),
+    url: stringSchema().max(2048),
+    file_path: stringSchema().min(1).max(4096),
   }),
 );
 var assetIdReadSchema = DoctorLazy(() =>
   zodStrictObject({
-    url: string().max(2048),
-    asset_id: string().regex(ASSET_ID_RE),
+    url: stringSchema().max(2048),
+    asset_id: stringSchema().regex(ASSET_ID_RE),
   }),
 );
 var publishInputSchema = DoctorLazy(() =>
   zodStrictObject({
-    file_path: string().max(4096),
-    root: string().min(1).max(1024).optional(),
+    file_path: stringSchema().max(4096),
+    root: stringSchema().min(1).max(1024).optional(),
     files: record(
-      string().min(1).max(512),
+      stringSchema().min(1).max(512),
       union([
-        string().min(1).max(512),
+        stringSchema().min(1).max(512),
         zodStrictObject({
-          from: string().min(1).max(512),
-          contentType: string().optional(),
+          from: stringSchema().min(1).max(512),
+          contentType: stringSchema().optional(),
         }),
-        zg(),
+        nullSchema(),
       ]),
     )
-      .refine((e) => Object.keys(e).length < MAX_URL_SEGMENT_CHARS, {
+      .refine((files) => Object.keys(files).length < MAX_URL_SEGMENT_CHARS, {
         message: `files lists more than ${MAX_URL_SEGMENT_CHARS - 1} entries`,
       })
       .optional(),
-    url: string().max(2048).optional(),
-    title: string().max(512).optional(),
-    favicon: string().min(1).max(32).optional(),
-    icon: string().max(40).optional(),
-    capabilities: record(string(), unknown()).optional(),
-    contract: string().max(32).optional(),
-    session_context: string().max(20000).optional(),
-    description: string().max(1000).optional(),
+    url: stringSchema().max(2048).optional(),
+    title: stringSchema().max(512).optional(),
+    favicon: stringSchema().min(1).max(32).optional(),
+    icon: stringSchema().max(40).optional(),
+    capabilities: record(stringSchema(), unknown()).optional(),
+    contract: stringSchema().max(32).optional(),
+    session_context: stringSchema().max(20000).optional(),
+    description: stringSchema().max(1000).optional(),
   }),
 );
 //@ chunk-tmx5d02z.js:15408-15504 placement
 /**
  * 生成失败结果对象（错误码、消息与可选原因码）。
  */
-function errorResult(code, message, r) {
+function errorResult(code, message, reason) {
   return {
     ok: false,
     error:
-      r === undefined
+      reason === undefined
         ? {
             code,
             message,
@@ -275,7 +275,7 @@ function errorResult(code, message, r) {
         : {
             code,
             message,
-            reason: r,
+            reason,
           },
   };
 }
@@ -297,17 +297,19 @@ var UPLOAD_INCOMPLETE = {
 var APPIFACT_PUBLISH_DIR_RE = /^\.appifact-publish-[A-Za-z0-9]{6}$/;
 var INDEX_HTML = "index.html";
 //@ chunk-tmx5d02z.js:15716-15818 placement
-function publishStagingDir(e, n) {
-  let [r, ...i] = relative(n, e).split(sep);
-  return r !== undefined && i.length > 0 && APPIFACT_PUBLISH_DIR_RE.test(r) ? join(n, r) : null;
+function publishStagingDir(path, cwd) {
+  let [firstSegment, ...restSegments] = relative(cwd, path).split(sep);
+  return firstSegment !== undefined && restSegments.length > 0 && APPIFACT_PUBLISH_DIR_RE.test(firstSegment)
+    ? join(cwd, firstSegment)
+    : null;
 }
 //@ chunk-tmx5d02z.js:15818-15968 placement
-async function readStagedPage(e, cwd, r = false) {
+async function readStagedPage(path, cwd, allowRoot = false) {
   try {
-    let i = await realpath(cwd);
-    return await readSingleLinkFile(resolve(cwd, e), (a) => {
-      let c = publishStagingDir(a, i);
-      return c !== null && (r || a === join(c, INDEX_HTML));
+    let realCwd = await realpath(cwd);
+    return await readSingleLinkFile(resolve(cwd, path), (realFilePath) => {
+      let stagingDir = publishStagingDir(realFilePath, realCwd);
+      return stagingDir !== null && (allowRoot || realFilePath === join(stagingDir, INDEX_HTML));
     });
   } catch {
     return null;
@@ -317,26 +319,26 @@ async function readStagedPage(e, cwd, r = false) {
 /**
  * 以 O_NOFOLLOW 打开文件，要求普通单链接且不超过 Artifact 大小上限，经 /proc/self/fd 取真实路径并通过 n 校验后读出全部字节，返回 {path, sha256, size}；任何异常返回 null。
  */
-async function readSingleLinkFile(e, n) {
+async function readSingleLinkFile(filePath, acceptPath) {
   try {
-    let r = await open(e, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+    let handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
     try {
-      let stats = await r.stat({
+      let stats = await handle.stat({
         bigint: true,
       });
       if (!stats.isFile() || stats.nlink !== 1n || stats.size > BigInt(MAX_ARTIFACT_BYTES)) return null;
-      let a = await readlink(`/proc/self/fd/${r.fd}`);
-      if (!n(a)) return null;
-      let exactBytes = await readExactBytes(r, Number(stats.size));
+      let realPath = await readlink(`/proc/self/fd/${handle.fd}`);
+      if (!acceptPath(realPath)) return null;
+      let exactBytes = await readExactBytes(handle, Number(stats.size));
       return exactBytes === null
         ? null
         : {
-            path: a,
+            path: realPath,
             sha256: computeContentHash(exactBytes),
             size: exactBytes.length,
           };
     } finally {
-      await r.close();
+      await handle.close();
     }
   } catch {
     return null;
@@ -346,38 +348,41 @@ async function readSingleLinkFile(e, n) {
 /**
  * 校验发布暂存目录中的 files 来源：必须在同一暂存目录内、不含绝对路径或 ..，逐个安全读取并累计大小不超过请求预算，返回 {dir, admitted}。
  */
-async function admitStagedFiles(path, n, root, files, cwd) {
+async function admitStagedFiles(path, totalBytes, root, files, cwd) {
   try {
-    let c = publishStagingDir(path, await realpath(cwd));
-    if (c === null || (await realpath(resolve(cwd, root))) !== c) return null;
-    let s = n;
-    let l = new Map();
+    let stagingDir = publishStagingDir(path, await realpath(cwd));
+    if (stagingDir === null || (await realpath(resolve(cwd, root))) !== stagingDir) return null;
+    let runningBytes = totalBytes;
+    let admitted = new Map();
     for (let [key, value] of Object.entries(files ?? {})) {
       if (value === null) continue;
-      let z = typeof value === "string" ? value : value.from;
-      if (isAbsolute(z) || z.split(/[\\/]/).includes("..")) return null;
-      let singleLinkFile = await readSingleLinkFile(resolve(c, z), (y) => y.startsWith(c + sep));
-      if (singleLinkFile === null || (s += singleLinkFile.size) > MANIFEST_REQUEST_BUDGET) return null;
-      l.set(key.normalize("NFC"), {
+      let relativePath = typeof value === "string" ? value : value.from;
+      if (isAbsolute(relativePath) || relativePath.split(/[\\/]/).includes("..")) return null;
+      let singleLinkFile = await readSingleLinkFile(resolve(stagingDir, relativePath), (path) =>
+        path.startsWith(stagingDir + sep),
+      );
+      if (singleLinkFile === null || (runningBytes += singleLinkFile.size) > MANIFEST_REQUEST_BUDGET)
+        return null;
+      admitted.set(key.normalize("NFC"), {
         path: singleLinkFile.path,
         sha256: singleLinkFile.sha256,
       });
     }
     return {
-      dir: c,
-      admitted: l,
+      dir: stagingDir,
+      admitted,
     };
   } catch {
     return null;
   }
 }
 //@ chunk-tmx5d02z.js:16802-18604 placement
-function runArtifactCall(tools, n) {
-  if (n.verb === "open") {
-    let l = ARTIFACT_CALL_SCHEMAS().safeParse(n.args);
-    if (!l.success)
+function runArtifactCall(tools, call) {
+  if (call.verb === "open") {
+    let parsed = ARTIFACT_CALL_SCHEMAS().safeParse(call.args);
+    if (!parsed.success)
       return {
-        invalid: formatZodValidationError(ARTIFACT_CALL, l.error),
+        invalid: formatZodValidationError(ARTIFACT_CALL, parsed.error),
       };
     let toolByName = findToolByName(tools, ARTIFACT_TOOL_NAME);
     return toolByName === undefined
@@ -388,35 +393,39 @@ function runArtifactCall(tools, n) {
           tool: toolByName,
           input: {
             action: "open",
-            url: l.data.url,
+            url: parsed.data.url,
           },
         };
   }
-  if (n.verb === "read_file" || n.verb === "list_files") {
-    let l = (n.verb === "read_file" ? assetPathReadSchema() : ARTIFACT_CALL_SCHEMAS()).safeParse(n.args);
-    if (!l.success)
+  if (call.verb === "read_file" || call.verb === "list_files") {
+    let parsed = (call.verb === "read_file" ? assetPathReadSchema() : ARTIFACT_CALL_SCHEMAS()).safeParse(
+      call.args,
+    );
+    if (!parsed.success)
       return {
-        invalid: formatZodValidationError(ARTIFACT_CALL, l.error),
+        invalid: formatZodValidationError(ARTIFACT_CALL, parsed.error),
       };
     let toolByName = findToolByName(tools, ARTIFACT_TOOL_NAME);
     if (toolByName === undefined)
       return {
         unavailable: "the Artifact tool is not available in this session",
       };
-    let h = {
-      ...l.data,
-      action: n.verb,
+    let withAction = {
+      ...parsed.data,
+      action: call.verb,
     };
     return {
       tool: toolByName,
-      input: isArtifactToolsetSplit() ? collapseArtifactAction(h) : h,
+      input: isArtifactToolsetSplit() ? collapseArtifactAction(withAction) : withAction,
     };
   }
-  if (n.verb === "upload_asset" || n.verb === "read_asset") {
-    let l = (n.verb === "upload_asset" ? filePathReadSchema() : assetIdReadSchema()).safeParse(n.args);
-    if (!l.success)
+  if (call.verb === "upload_asset" || call.verb === "read_asset") {
+    let parsed = (call.verb === "upload_asset" ? filePathReadSchema() : assetIdReadSchema()).safeParse(
+      call.args,
+    );
+    if (!parsed.success)
       return {
-        invalid: formatZodValidationError(ARTIFACT_CALL, l.error),
+        invalid: formatZodValidationError(ARTIFACT_CALL, parsed.error),
       };
     if (!isArtifactAssetsEnabled())
       return {
@@ -428,21 +437,21 @@ function runArtifactCall(tools, n) {
       return {
         unavailable: "the Artifact tool is not available in this session",
       };
-    let h = {
-      ...l.data,
-      action: n.verb,
+    let withAction = {
+      ...parsed.data,
+      action: call.verb,
     };
     return {
       tool: toolByName,
-      input: isArtifactToolsetSplit() ? collapseArtifactAction(h) : h,
+      input: isArtifactToolsetSplit() ? collapseArtifactAction(withAction) : withAction,
     };
   }
-  if (n.verb === "publish") {
-    let l = normalizeArtifactInput(n.args);
-    let b = publishInputSchema().safeParse(l === null ? n.args : l.input);
-    if (!b.success)
+  if (call.verb === "publish") {
+    let normalized = normalizeArtifactInput(call.args);
+    let parsed = publishInputSchema().safeParse(normalized === null ? call.args : normalized.input);
+    if (!parsed.success)
       return {
-        invalid: formatZodValidationError(ARTIFACT_CALL, b.error),
+        invalid: formatZodValidationError(ARTIFACT_CALL, parsed.error),
       };
     let toolByName = findToolByName(tools, ARTIFACT_TOOL_NAME);
     return toolByName === undefined
@@ -452,14 +461,14 @@ function runArtifactCall(tools, n) {
       : {
           tool: toolByName,
           input: {
-            ...b.data,
+            ...parsed.data,
           },
         };
   }
-  let r = dbCallArgsSchema().safeParse(n.args);
-  if (!r.success)
+  let parsed = dbCallArgsSchema().safeParse(call.args);
+  if (!parsed.success)
     return {
-      invalid: formatZodValidationError(ARTIFACT_CALL, r.error),
+      invalid: formatZodValidationError(ARTIFACT_CALL, parsed.error),
     };
   if (!isArtifactDbEnabled())
     return {
@@ -467,14 +476,14 @@ function runArtifactCall(tools, n) {
     };
   let liveState = getLiveState();
   liveState.frozenDbStrReplace ??= isArtifactDbStrReplaceEnabled();
-  let a = liveState.frozenDbStrReplace ? r.data : stripIfVersion(r.data);
+  let input = liveState.frozenDbStrReplace ? parsed.data : stripIfVersion(parsed.data);
   let toolByName = findToolByName(tools, ARTIFACT_DATA_TOOL_NAME);
   if (toolByName !== undefined)
     return {
       tool: toolByName,
       input: {
-        ...a,
-        action: n.verb,
+        ...input,
+        action: call.verb,
       },
     };
   let toolByName_2 = findToolByName(tools, ARTIFACT_TOOL_NAME);
@@ -485,9 +494,9 @@ function runArtifactCall(tools, n) {
   return {
     tool: toolByName_2,
     input: {
-      ...a,
-      action: DB_READ_OP_SET.has(n.verb) ? "read_db" : "write_db",
-      db_op: n.verb,
+      ...input,
+      action: DB_READ_OP_SET.has(call.verb) ? "read_db" : "write_db",
+      db_op: call.verb,
     },
   };
 }
@@ -495,40 +504,46 @@ function runArtifactCall(tools, n) {
 /**
  * read_files 动作：对 paths 中每个路径依次执行 read_file 发布调用，汇总保存位置，返回 {files_read}；任一失败返回该路径的错误。
  */
-async function readFilesCall(e, n, r) {
-  let i = assetPathsReadSchema().safeParse(e.args);
-  if (!i.success) return errorResult("invalid_args", formatZodValidationError(ARTIFACT_CALL, i.error));
-  let a = [];
-  let c = [];
-  for (let path of i.data.paths) {
-    let l = await runArtifactPublish(
+async function readFilesCall(call, context, isStillWanted) {
+  let parsed = assetPathsReadSchema().safeParse(call.args);
+  if (!parsed.success)
+    return errorResult("invalid_args", formatZodValidationError(ARTIFACT_CALL, parsed.error));
+  let filesRead = [];
+  let cleanups = [];
+  for (let path of parsed.data.paths) {
+    let result = await runArtifactPublish(
       {
-        ...e,
+        ...call,
         verb: "read_file",
         args: {
-          url: i.data.url,
+          url: parsed.data.url,
           path,
         },
       },
-      n,
-      r,
-      c,
+      context,
+      isStillWanted,
+      cleanups,
     );
-    if (!l.ok) return errorResult(l.error.code, `${jsonStringify(path)}: ${l.error.message}`, l.error.reason);
-    let b = fileReadResultSchema().safeParse(l.result);
-    if (!b.success)
+    if (!result.ok)
+      return errorResult(
+        result.error.code,
+        `${jsonStringify(path)}: ${result.error.message}`,
+        result.error.reason,
+      );
+    let parsedRead = fileReadResultSchema().safeParse(result.result);
+    if (!parsedRead.success)
       return errorResult(
         "tool_error",
         `${jsonStringify(path)}: the read did not say where it saved the file`,
       );
-    let { content, content_scrubbed: contentScrubbed, ...m } = b.data.file_read;
-    a.push(m);
+    let { content, content_scrubbed: contentScrubbed, ...rest } = parsedRead.data.file_read;
+    filesRead.push(rest);
   }
-  for (let s of c) s();
+  for (let cleanup of cleanups) cleanup();
   return {
     ok: true,
     result: {
-      files_read: a,
+      files_read: filesRead,
     },
   };
 }
@@ -536,137 +551,143 @@ async function readFilesCall(e, n, r) {
 /**
  * Artifact 发布调用：读取文件、上传资源并发布。
  */
-async function runArtifactPublish(e, n, r, i) {
-  if (e.verb === "read_files") return readFilesCall(e, n, r);
-  let { toolUseContext, canUseTool, parentMessage } = n;
-  let l = runArtifactCall(toolUseContext.options.tools, e);
-  if ("unavailable" in l) return errorResult("unavailable", l.unavailable);
-  if ("invalid" in l) return errorResult("invalid_args", l.invalid);
-  let b;
-  let h;
-  if (e.verb === "publish") {
-    let { file_path: filePath, root, files } = l.input;
-    let K =
+async function runArtifactPublish(call, context, isStillWanted, cleanups) {
+  if (call.verb === "read_files") return readFilesCall(call, context, isStillWanted);
+  let { toolUseContext, canUseTool, parentMessage } = context;
+  let resolution = runArtifactCall(toolUseContext.options.tools, call);
+  if ("unavailable" in resolution) return errorResult("unavailable", resolution.unavailable);
+  if ("invalid" in resolution) return errorResult("invalid_args", resolution.invalid);
+  let stagedPage;
+  let admittedFiles;
+  if (call.verb === "publish") {
+    let { file_path: filePath, root, files } = resolution.input;
+    let page =
       root === undefined && files !== undefined
         ? null
-        : await readStagedPage(filePath, n.cwd, root !== undefined);
-    let H =
-      K === null || root === undefined
+        : await readStagedPage(filePath, context.cwd, root !== undefined);
+    let filesAdmission =
+      page === null || root === undefined
         ? undefined
-        : await admitStagedFiles(K.path, K.size, root, files, n.cwd);
-    if (K === null || H === null)
+        : await admitStagedFiles(page.path, page.size, root, files, context.cwd);
+    if (page === null || filesAdmission === null)
       return errorResult(
         "invalid_args",
         root === undefined && files === undefined
           ? "file_path must be a page the script wrote in its own publish directory under the working directory"
           : `file_path and every local source in files must be a regular file the script wrote inside its own publish folder (files.dir(); root must be that folder, and files cannot be sent without it), named by a relative path with no "..", at most ${MAX_ARTIFACT_BYTES >> 20} MiB each and ${MANIFEST_REQUEST_BUDGET >> 20} MiB in one publish`,
       );
-    b = K;
-    l.input.file_path = K.path;
-    if (H !== undefined) {
-      l.input.root = H.dir;
-      h = H.admitted;
+    stagedPage = page;
+    resolution.input.file_path = page.path;
+    if (filesAdmission !== undefined) {
+      resolution.input.root = filesAdmission.dir;
+      admittedFiles = filesAdmission.admitted;
     }
   }
-  if (e.verb === "upload_asset") {
-    let stagedPage = await readStagedPage(String(l.input.file_path), n.cwd, true);
-    if (stagedPage === null)
+  if (call.verb === "upload_asset") {
+    let stagedPage_2 = await readStagedPage(String(resolution.input.file_path), context.cwd, true);
+    if (stagedPage_2 === null)
       return errorResult(
         "invalid_args",
         `file_path must be a regular file the script wrote inside its own publish folder (files.dir(); copy a file from elsewhere into it first), at most ${MAX_ARTIFACT_BYTES >> 20} MiB`,
       );
-    b = stagedPage;
-    l.input.file_path = stagedPage.path;
+    stagedPage = stagedPage_2;
+    resolution.input.file_path = stagedPage_2.path;
   }
-  let z = e.verb === "upload_asset" ? UPLOAD_INCOMPLETE : PUBLISH_INCOMPLETE;
-  let { tool } = l;
-  let toolUseID = `artifact_repl_${randomUUID()}`;
-  let S = {
+  let incompleteResult = call.verb === "upload_asset" ? UPLOAD_INCOMPLETE : PUBLISH_INCOMPLETE;
+  let { tool } = resolution;
+  let toolUseId = `artifact_repl_${randomUUID()}`;
+  let verifiedFlag = {
     value: false,
   };
-  let x = {
+  let innerToolUseContext = {
     ...toolUseContext,
-    toolUseId: toolUseID,
+    toolUseId,
     permissionPhase: undefined,
     autoModeClassified: undefined,
     ...false,
-    ...(n.abortController && {
-      abortController: n.abortController,
+    ...(context.abortController && {
+      abortController: context.abortController,
     }),
-    ...(b && {
-      publishSourceSha256: b.sha256,
-      publishSourceVerified: S,
+    ...(stagedPage && {
+      publishSourceSha256: stagedPage.sha256,
+      publishSourceVerified: verifiedFlag,
     }),
-    ...(h && {
-      publishFilesSha256: h,
+    ...(admittedFiles && {
+      publishFilesSha256: admittedFiles,
     }),
   };
-  let L = tool.inputSchema.safeParse(l.input);
-  if (!L.success) return errorResult("invalid_args", formatZodValidationError(tool.name, L.error));
-  let validateInput = (w) => tool.validateInput?.(w, x);
-  let M = await validateInput(L.data);
-  if (M?.result === false) return errorResult("validation", M.message);
-  let toolInput = L.data;
+  let parsedInput = tool.inputSchema.safeParse(resolution.input);
+  if (!parsedInput.success)
+    return errorResult("invalid_args", formatZodValidationError(tool.name, parsedInput.error));
+  let validateInput = (candidate) => tool.validateInput?.(candidate, innerToolUseContext);
+  let validation = await validateInput(parsedInput.data);
+  if (validation?.result === false) return errorResult("validation", validation.message);
+  let toolInput = parsedInput.data;
   let hookPermissionResult;
-  let R;
-  for await (let w of runPreToolUseHooks(
+  let stopReason;
+  for await (let hookResult of runPreToolUseHooks(
     toolUseContext,
     tool,
     toolInput,
-    toolUseID,
+    toolUseId,
     parentMessage.message.id,
     parentMessage.requestId,
     undefined,
     undefined,
     validateInput,
   ))
-    if (w.type === "hookPermissionResult") hookPermissionResult = w.hookPermissionResult;
-    else if (w.type === "hookUpdatedInput") toolInput = w.updatedInput;
-    else if (w.type === "stopReason") R = w.stopReason;
-    else if (w.type === "stop")
-      return b !== undefined ? z : errorResult("denied", w.stopReason ?? R ?? "Blocked by PreToolUse hook");
-  let permissionRound = startPermissionRound(toolUseContext, toolUseID, tool.name);
-  let D = await resolvePermissionDecisionForCall(
+    if (hookResult.type === "hookPermissionResult") hookPermissionResult = hookResult.hookPermissionResult;
+    else if (hookResult.type === "hookUpdatedInput") toolInput = hookResult.updatedInput;
+    else if (hookResult.type === "stopReason") stopReason = hookResult.stopReason;
+    else if (hookResult.type === "stop")
+      return stagedPage !== undefined
+        ? incompleteResult
+        : errorResult("denied", hookResult.stopReason ?? stopReason ?? "Blocked by PreToolUse hook");
+  let permissionRound = startPermissionRound(toolUseContext, toolUseId, tool.name);
+  let permissionResult = await resolvePermissionDecisionForCall(
     hookPermissionResult,
     tool,
     toolInput,
     {
-      ...x,
+      ...innerToolUseContext,
       permissionRound,
     },
     canUseTool,
     parentMessage,
-    toolUseID,
+    toolUseId,
   ).catch((error) => {
-    takePermissionRecord(toolUseContext, toolUseID, permissionRound);
+    takePermissionRecord(toolUseContext, toolUseId, permissionRound);
     throw error;
   });
-  let permissionPhase = takePermissionRecord(toolUseContext, toolUseID, permissionRound) ?? {};
-  if (D.decision.behavior !== "allow") {
-    clearToolUsePermissionState(toolUseContext.session, toolUseID);
-    toolUseContext.onPermissionDenial?.(tool, toolUseID, D.input);
-    if (b !== undefined) return z;
+  let permissionPhase = takePermissionRecord(toolUseContext, toolUseId, permissionRound) ?? {};
+  if (permissionResult.decision.behavior !== "allow") {
+    clearToolUsePermissionState(toolUseContext.session, toolUseId);
+    toolUseContext.onPermissionDenial?.(tool, toolUseId, permissionResult.input);
+    if (stagedPage !== undefined) return incompleteResult;
     return errorResult(
       "denied",
-      D.decision.behavior === "deny" ? (D.decision.message ?? "Permission denied") : "Permission denied",
+      permissionResult.decision.behavior === "deny"
+        ? (permissionResult.decision.message ?? "Permission denied")
+        : "Permission denied",
     );
   }
   let toolInput_2 =
-    D.decision.updatedInput !== undefined && !isEmptyObject(D.decision.updatedInput)
-      ? D.decision.updatedInput
-      : D.input;
-  if (!r()) {
-    clearToolUsePermissionState(toolUseContext.session, toolUseID);
+    permissionResult.decision.updatedInput !== undefined &&
+    !isEmptyObject(permissionResult.decision.updatedInput)
+      ? permissionResult.decision.updatedInput
+      : permissionResult.input;
+  if (!isStillWanted()) {
+    clearToolUsePermissionState(toolUseContext.session, toolUseId);
     return errorResult("unavailable", "the caller went away before the call ran");
   }
   let now = Date.now();
   recordToolUsed(tool.name);
-  n.onToolCalled?.(tool.name);
+  context.onToolCalled?.(tool.name);
   try {
-    let w = await tool.call(
+    let toolResult = await tool.call(
       toolInput_2,
       {
-        ...x,
+        ...innerToolUseContext,
         permissionPhase,
         innerCall: true,
       },
@@ -674,53 +695,60 @@ async function runArtifactPublish(e, n, r, i) {
       parentMessage,
       undefined,
       {
-        userModified: D.decision.userModified ?? false,
+        userModified: permissionResult.decision.userModified ?? false,
       },
     );
-    let B = w.data;
-    let X = watchWithheldResults(toolUseID);
-    let K = false;
+    let data = toolResult.data;
+    let withheldWatch = watchWithheldResults(toolUseId);
+    let delivered = false;
     try {
-      for await (let H of runPostToolUseHooks(
+      for await (let hookResult of runPostToolUseHooks(
         toolUseContext,
         tool,
-        toolUseID,
+        toolUseId,
         parentMessage.message.id,
         toolInput_2,
-        w.data,
+        toolResult.data,
         parentMessage.requestId,
         undefined,
         undefined,
         Date.now() - now,
       ))
-        if ("updatedToolOutput" in H && tool.outputSchema?.safeParse(H.updatedToolOutput)?.success !== false)
-          B = H.updatedToolOutput;
+        if (
+          "updatedToolOutput" in hookResult &&
+          tool.outputSchema?.safeParse(hookResult.updatedToolOutput)?.success !== false
+        )
+          data = hookResult.updatedToolOutput;
     } finally {
-      K = releaseWithheldWatch(toolUseID, X);
+      delivered = releaseWithheldWatch(toolUseId, withheldWatch);
     }
-    if (K) return errorResult("tool_error", withheldResultText(tool.name));
-    if (e.verb === "read_file") {
-      let H = fileReadResultSchema().safeParse(B);
-      if (H.success && "title" in H.data.file_read) {
-        let { title, ...St } = H.data.file_read;
-        B = {
-          ...B,
-          file_read: St,
+    if (delivered) return errorResult("tool_error", withheldResultText(tool.name));
+    if (call.verb === "read_file") {
+      let validateInput = fileReadResultSchema().safeParse(data);
+      if (validateInput.success && "title" in validateInput.data.file_read) {
+        let { title, ...stagedPage } = validateInput.data.file_read;
+        data = {
+          ...data,
+          file_read: stagedPage,
         };
       }
     }
-    if (e.verb === "read_file" && w.afterResultCommitted && fileReadResultSchema().safeParse(w.data).success)
-      if (i) i.push(w.afterResultCommitted);
-      else w.afterResultCommitted();
+    if (
+      call.verb === "read_file" &&
+      toolResult.afterResultCommitted &&
+      fileReadResultSchema().safeParse(toolResult.data).success
+    )
+      if (cleanups) cleanups.push(toolResult.afterResultCommitted);
+      else toolResult.afterResultCommitted();
     return {
       ok: true,
-      result: B,
+      result: data,
     };
   } catch (error) {
-    for await (let B of runPostToolUseFailureHooks(
+    for await (let hookPermissionResult of runPostToolUseFailureHooks(
       toolUseContext,
       tool,
-      toolUseID,
+      toolUseId,
       parentMessage.message.id,
       toolInput_2,
       errorMessage(error),
@@ -730,9 +758,9 @@ async function runArtifactPublish(e, n, r, i) {
       undefined,
       Date.now() - now,
     ));
-    if (b !== undefined && !S.value) return z;
+    if (stagedPage !== undefined && !verifiedFlag.value) return incompleteResult;
     if (
-      e.verb === "publish" &&
+      call.verb === "publish" &&
       error instanceof ArtifactInputError &&
       error.reasonCode?.startsWith("path_pin_") === true &&
       hasAfterResultCommitted(error)
@@ -744,7 +772,7 @@ async function runArtifactPublish(e, n, r, i) {
       error instanceof ArtifactInputError ? error.reasonCode : undefined,
     );
   } finally {
-    clearToolUsePermissionState(toolUseContext.session, toolUseID);
+    clearToolUsePermissionState(toolUseContext.session, toolUseId);
   }
 }
 //@ chunk-tmx5d02z.js:22956-23459 placement
@@ -766,20 +794,20 @@ var UNPROCESSABLE_SEE = "could not be processed";
 var seeLineSchema = DoctorLazy(() =>
   zodStrictObject({
     type: literal(SEE_KIND),
-    id: string(),
-    text: string(),
+    id: stringSchema(),
+    text: stringSchema(),
   }),
 );
 var seeImageSchema = DoctorLazy(() =>
   zodStrictObject({
     type: literal(IMAGE),
-    id: string(),
-    media_type: string(),
-    data: string(),
-    label: string().optional(),
+    id: stringSchema(),
+    media_type: stringSchema(),
+    data: stringSchema(),
+    label: stringSchema().optional(),
   }),
 );
-var isSupportedImageMediaType = (e) => e === "image/png" || e === "image/jpeg";
+var isSupportedImageMediaType = (mediaType) => mediaType === "image/png" || mediaType === "image/jpeg";
 var refusedResult = (message) => ({
   ok: false,
   error: {
@@ -787,20 +815,21 @@ var refusedResult = (message) => ({
     message,
   },
 });
-var seeEntryKind = (e) => (typeof e === "object" && e !== null && "type" in e ? e.type : undefined);
+var seeEntryKind = (value) =>
+  typeof value === "object" && value !== null && "type" in value ? value.type : undefined;
 //@ chunk-tmx5d02z.js:23459-23508 placement
 /**
  * 判断条目是否是 see 或 image 类型。
  */
-function isSeeEntry(e) {
-  let n = seeEntryKind(e);
-  return n === SEE_KIND || n === IMAGE;
+function isSeeEntry(value) {
+  let kind = seeEntryKind(value);
+  return kind === SEE_KIND || kind === IMAGE;
 }
 //@ chunk-tmx5d02z.js:23508-23616 placement
 function truncateDisplayText(text) {
-  let n = truncateToLength(text, MAX_SEE_TEXT_CHARS);
+  let kept = truncateToLength(text, MAX_SEE_TEXT_CHARS);
   return {
-    text: n
+    text: kept
       .split(
         `
 `,
@@ -811,21 +840,21 @@ function truncateDisplayText(text) {
 `,
       )
       .trim(),
-    dropped: text.length - n.length,
+    dropped: text.length - kept.length,
   };
 }
 //@ chunk-tmx5d02z.js:23616-24012 placement
 /**
  * 解析页面发来的一行图片：校验 id、大小上限与声明/实际媒体类型（只接受支持的图片格式），返回清洗后的标签、类型与字节；否则返回 refused 原因。
  */
-function parseImageLine(e, n) {
-  let r = seeImageSchema().safeParse(e);
-  if (!r.success || !n.test(r.data.id))
+function parseImageLine(line, idPattern) {
+  let parsed = seeImageSchema().safeParse(line);
+  if (!parsed.success || !idPattern.test(parsed.data.id))
     return {
       refused: "not a valid image line",
     };
-  let { media_type: mediaType, data: a, label } = r.data;
-  if (a.length > Math.ceil(MAX_SEE_IMAGE_BYTES / 3) * 4)
+  let { media_type: mediaType, data, label } = parsed.data;
+  if (data.length > Math.ceil(MAX_SEE_IMAGE_BYTES / 3) * 4)
     return {
       refused: `larger than ${MAX_SEE_IMAGE_BYTES} bytes`,
     };
@@ -833,9 +862,9 @@ function parseImageLine(e, n) {
     return {
       refused: NOT_PNG_OR_JPEG,
     };
-  let buffer = Buffer.from(a, "base64");
-  let l = Ph(buffer);
-  if (!isSupportedImageMediaType(l))
+  let buffer = Buffer.from(data, "base64");
+  let actualType = sniffImageMediaType(buffer);
+  if (!isSupportedImageMediaType(actualType))
     return {
       refused: NOT_PNG_OR_JPEG,
     };
@@ -844,7 +873,7 @@ function parseImageLine(e, n) {
       sanitizeDisplayText(label ?? "", {
         maxCodeUnits: 80,
       }) || "image",
-    media_type: l,
+    media_type: actualType,
     bytes: buffer,
   };
 }
@@ -853,7 +882,7 @@ function parseImageLine(e, n) {
  * 图片压缩为 PNG/JPEG base64，失败或过大返回 {refused}。归属存疑（某工具的图片收集）。
  */
 async function encodeImageForAttachment(data, mediaType, limits) {
-  let i = await maybeResizeAndDownsampleImageBlock({
+  let resized = await maybeResizeAndDownsampleImageBlock({
     data,
     mediaType,
     limits,
@@ -861,11 +890,11 @@ async function encodeImageForAttachment(data, mediaType, limits) {
   }).catch(() => {
     return;
   });
-  if (i === undefined)
+  if (resized === undefined)
     return {
       refused: UNPROCESSABLE_SEE,
     };
-  let { block } = i;
+  let { block } = resized;
   if (block.type === "text") {
     let replaced = block.text.replace(/^\[|\]$/g, "");
     return {
@@ -880,8 +909,8 @@ async function encodeImageForAttachment(data, mediaType, limits) {
       refused: UNPROCESSABLE_SEE,
     };
   let buffer = Buffer.from(block.source.data, "base64");
-  let s = Ph(buffer);
-  if (!isSupportedImageMediaType(s))
+  let actualType = sniffImageMediaType(buffer);
+  if (!isSupportedImageMediaType(actualType))
     return {
       refused: UNPROCESSABLE_SEE,
     };
@@ -890,7 +919,7 @@ async function encodeImageForAttachment(data, mediaType, limits) {
       refused: "too large after recompression",
     };
   return {
-    media_type: s,
+    media_type: actualType,
     data: block.source.data,
     size: buffer.length,
   };
@@ -899,112 +928,114 @@ async function encodeImageForAttachment(data, mediaType, limits) {
 /**
  * 收集文本与图片（最多 4 张），attach 时转成内容块。归属存疑。
  */
-function createImageCollector(e) {
-  let n = [];
-  let r = [];
-  let i = 0;
-  let a = new Map();
-  let c = (message) => {
-    a.set(message, (a.get(message) ?? 0) + 1);
+function createImageCollector(idPattern) {
+  let groups = [];
+  let images = [];
+  let overflowImages = 0;
+  let refusedSeeCounts = new Map();
+  let refuse = (message) => {
+    refusedSeeCounts.set(message, (refusedSeeCounts.get(message) ?? 0) + 1);
     return refusedResult(message);
   };
   return {
-    take(s) {
-      if (seeEntryKind(s) === SEE_KIND) {
-        let b = seeLineSchema().safeParse(s);
-        if (!b.success || !e.test(b.data.id)) return c(BAD_SEE_LINE);
-        if (n.length >= MAX_SEE_CALLS) return c(TOO_MANY_SEE_CALLS_REFUSAL);
-        n.push(truncateDisplayText(b.data.text));
+    take(entry) {
+      if (seeEntryKind(entry) === SEE_KIND) {
+        let parsed = seeLineSchema().safeParse(entry);
+        if (!parsed.success || !idPattern.test(parsed.data.id)) return refuse(BAD_SEE_LINE);
+        if (groups.length >= MAX_SEE_CALLS) return refuse(TOO_MANY_SEE_CALLS_REFUSAL);
+        groups.push(truncateDisplayText(parsed.data.text));
         return {
           ok: true,
           result: {
-            index: n.length,
+            index: groups.length,
           },
         };
       }
-      if (r.length >= MAX_SEE_IMAGES) {
-        i++;
+      if (images.length >= MAX_SEE_IMAGES) {
+        overflowImages++;
         return refusedResult(TOO_MANY_IMAGES_REFUSAL);
       }
-      if (n.length === 0)
-        n.push({
+      if (groups.length === 0)
+        groups.push({
           text: "",
           dropped: 0,
         });
-      let l = {
-        ...parseImageLine(s, e),
-        group: n.length - 1,
+      let image = {
+        ...parseImageLine(entry, idPattern),
+        group: groups.length - 1,
       };
-      r.push(l);
-      return "refused" in l
-        ? refusedResult(l.refused)
+      images.push(image);
+      return "refused" in image
+        ? refusedResult(image.refused)
         : {
             ok: true,
             result: {
-              index: r.length,
+              index: images.length,
             },
           };
     },
     kept: () => ({
-      texts: count(n, (s) => s.text !== ""),
-      images: count(r, (s) => "bytes" in s),
+      texts: count(groups, (group) => group.text !== ""),
+      images: count(images, (image) => "bytes" in image),
     }),
-    textChars: () => n.reduce((acc, l) => acc + l.text.length, 0),
+    textChars: () => groups.reduce((acc, group) => acc + group.text.length, 0),
     async attach(limits) {
-      let l = [];
-      let mapped = n.map(() => []);
-      let mapped_2 = n.map(() => []);
-      let z = (S, refused) => void l.push(`image ${S} refused: ${refused}`);
-      let m = 0;
-      for (let [S, x] of r.entries()) {
-        let L = S + 1;
-        if ("refused" in x) {
-          z(L, x.refused);
+      let refusals = [];
+      let mapped = groups.map(() => []);
+      let mapped_2 = groups.map(() => []);
+      let noteRefusal = (index, refused) => void refusals.push(`image ${index} refused: ${refused}`);
+      let totalBytes = 0;
+      for (let [index, image] of images.entries()) {
+        let displayIndex = index + 1;
+        if ("refused" in image) {
+          noteRefusal(displayIndex, image.refused);
           continue;
         }
         if (limits === undefined) continue;
-        let v = await encodeImageForAttachment(x.bytes, x.media_type, limits);
-        if ("refused" in v) {
-          z(L, v.refused);
+        let encoded = await encodeImageForAttachment(image.bytes, image.media_type, limits);
+        if ("refused" in encoded) {
+          noteRefusal(displayIndex, encoded.refused);
           continue;
         }
-        if (m + v.size > MAX_SEE_TOTAL_IMAGE_BYTES) {
-          z(L, "over the 700 KB total");
+        if (totalBytes + encoded.size > MAX_SEE_TOTAL_IMAGE_BYTES) {
+          noteRefusal(displayIndex, "over the 700 KB total");
           continue;
         }
-        m += v.size;
-        mapped[x.group]?.push(`image ${L}: ${x.label}`);
-        mapped_2[x.group]?.push({
-          media_type: v.media_type,
-          data: v.data,
+        totalBytes += encoded.size;
+        mapped[image.group]?.push(`image ${displayIndex}: ${image.label}`);
+        mapped_2[image.group]?.push({
+          media_type: encoded.media_type,
+          data: encoded.data,
         });
       }
-      if (i > 0) {
-        let S = MAX_SEE_IMAGES + 1;
-        l.push(
-          i === 1
-            ? `image ${S} refused: ${TOO_MANY_IMAGES_REFUSAL}`
-            : `images ${S} to ${MAX_SEE_IMAGES + i} refused: ${TOO_MANY_IMAGES_REFUSAL}`,
+      if (overflowImages > 0) {
+        let firstRefused = MAX_SEE_IMAGES + 1;
+        refusals.push(
+          overflowImages === 1
+            ? `image ${firstRefused} refused: ${TOO_MANY_IMAGES_REFUSAL}`
+            : `images ${firstRefused} to ${MAX_SEE_IMAGES + overflowImages} refused: ${TOO_MANY_IMAGES_REFUSAL}`,
         );
       }
-      for (let [S, x] of a) l.push(`${x} claude.see() ${x === 1 ? "call" : "calls"} refused: ${S}`);
-      let y = [];
+      for (let [index, count] of refusedSeeCounts)
+        refusals.push(`${count} claude.see() ${count === 1 ? "call" : "calls"} refused: ${index}`);
+      let output = [];
       if (limits !== undefined)
-        for (let [S, x] of n.entries()) {
-          let filtered = [x.text === "" ? undefined : `see ${S + 1}: ${x.text}`, ...(mapped[S] ?? [])].filter(
-            (v) => v !== undefined,
-          );
+        for (let [index, group] of groups.entries()) {
+          let filtered = [
+            group.text === "" ? undefined : `see ${index + 1}: ${group.text}`,
+            ...(mapped[index] ?? []),
+          ].filter((part) => part !== undefined);
           if (filtered.length > 0)
-            y.push({
-              dropped: x.text === "" ? 0 : x.dropped,
+            output.push({
+              dropped: group.text === "" ? 0 : group.dropped,
               body: filtered.join(`
 `),
-              images: mapped_2[S] ?? [],
+              images: mapped_2[index] ?? [],
             });
         }
       return {
-        lines: l,
-        groups: y,
+        lines: refusals,
+        groups: output,
       };
     },
   };

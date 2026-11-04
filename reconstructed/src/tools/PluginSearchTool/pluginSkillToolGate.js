@@ -42,20 +42,20 @@ function _registerSuggestRolloutPinReader(isSuggestRolloutEnabled) {
  * 插件技能搜索工具是否可用（组织策略 allow_plugin_skill_search、HIPAA）。
  */
 function isPluginSkillToolEnabled() {
-  let e = policyDenyKind("allow_plugin_skill_search");
+  let denyKind = policyDenyKind("allow_plugin_skill_search");
   if (
-    e === "org_denied" ||
-    e === "latched" ||
-    e === "unregistered" ||
-    (e !== null && hasComplianceTaint("hipaa"))
+    denyKind === "org_denied" ||
+    denyKind === "latched" ||
+    denyKind === "unregistered" ||
+    (denyKind !== null && hasComplianceTaint("hipaa"))
   )
     return false;
   if (isRemoteFirstPartySession()) return true;
   return isTopHostSession() && isFirstPartyProvider() && suggestRolloutPinReader.read();
 }
 //@ chunk-dbbfk5a2.js:687-745 placement
-function isPluginSkillToolAdvertised(e) {
-  if (!PLUGIN_DISCOVERY_SEARCH_TOOL_NAMES.includes(e)) return true;
+function isPluginSkillToolAdvertised(input) {
+  if (!PLUGIN_DISCOVERY_SEARCH_TOOL_NAMES.includes(input)) return true;
   return isPluginSkillToolEnabled();
 }
-export { isPluginSkillToolEnabled, _registerSuggestRolloutPinReader };
+export { isPluginSkillToolEnabled, _registerSuggestRolloutPinReader, isPluginSkillToolAdvertised };

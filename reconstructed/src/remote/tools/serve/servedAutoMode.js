@@ -35,16 +35,16 @@ function autoModeRefusedForServedCalls() {
 /**
  * 远端服务调用拒绝 auto 模式的原因。
  */
-function autoModeRefusedForServedCallsWhy(n) {
+function autoModeRefusedForServedCallsWhy(session) {
   try {
     if (autoModeRefusedHere()) return getAutoModeUnavailableReason() === "settings" ? "settings" : "breaker";
     if (isServedSettingRefused("auto_mode_off")) return "settings";
-    let e = isServedSettingRefused("unattended_serving_off");
-    if (!unattendedServingConsentPending(n) && !e) return "none";
-    if (managedSettingsForbidUnattendedServing() || e) return "consent_forced_off";
-    let t = unattendedServingConsentView();
-    if (t === "declined") return "consent_declined";
-    if (t === "accepted" || unattendedServingConsentUnreadable()) return "consent_unknown";
+    let servingOff = isServedSettingRefused("unattended_serving_off");
+    if (!unattendedServingConsentPending(session) && !servingOff) return "none";
+    if (managedSettingsForbidUnattendedServing() || servingOff) return "consent_forced_off";
+    let consentView = unattendedServingConsentView();
+    if (consentView === "declined") return "consent_declined";
+    if (consentView === "accepted" || unattendedServingConsentUnreadable()) return "consent_unknown";
     return hostGrantOutsideSandbox() ? "sandbox_off" : "consent_unset";
   } catch {
     return "consent_unknown";
@@ -52,13 +52,13 @@ function autoModeRefusedForServedCallsWhy(n) {
 }
 //@ chunk-vpphf2a1.js:838-1030 placement
 function autoOffNotice(targetName) {
-  let e = autoModeRefusedForServedCallsWhy();
-  if (e === "none") return;
+  let reason = autoModeRefusedForServedCallsWhy();
+  if (reason === "none") return;
   return {
-    key: `served-auto-off-${e === "consent_unset" || e === "consent_declined" ? "consent" : e}`,
+    key: `served-auto-off-${reason === "consent_unset" || reason === "consent_declined" ? "consent" : reason}`,
     text: REMOTE_TOOLS_CONSENT_TEXT.auto_off_notice(
       targetName,
-      REMOTE_TOOLS_CONSENT_TEXT[`auto_off.reason.${e}`],
+      REMOTE_TOOLS_CONSENT_TEXT[`auto_off.reason.${reason}`],
     ),
   };
 }

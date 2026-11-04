@@ -43,6 +43,7 @@ import { sideQueryWithCounter } from "../../utils/sideQuery.js";
 import { safeParseJSON, stripJsonCodeFence } from "../../utils/json.js";
 import { APIConnectionTimeoutError } from "../../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { resolveTaskNotificationOrigin } from "../../utils/backgroundSessionResume.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-xr4xc2mq.js:2141-2681 placement
 /**
@@ -53,14 +54,14 @@ async function resyncMemoryWrites(context, notice) {
   let resolvedPaths = [];
   for (let path of notice.paths)
     try {
-      let s = expandPath(path);
-      resolvedPaths.push(s);
-      let u = await logFileStateResync(context.readFileState, s, {
+      let expanded = expandPath(path);
+      resolvedPaths.push(expanded);
+      let result = await logFileStateResync(context.readFileState, expanded, {
         requireReadBeforeWrite: true,
       });
-      if (u !== null)
+      if (result !== null)
         logForDebugging(
-          `[memdir] re-synced readFileState for ${path} after the background ${notice.source} pass wrote it (${u === "changed" ? "content changed" : "mtime only, content identical"})`,
+          `[memdir] re-synced readFileState for ${path} after the background ${notice.source} pass wrote it (${result === "changed" ? "content changed" : "mtime only, content identical"})`,
         );
     } catch (error) {
       logForDebugging(
@@ -74,27 +75,30 @@ async function resyncMemoryWrites(context, notice) {
   });
 }
 //@ chunk-xr4xc2mq.js:2740-2759 placement
-var weakSet = new WeakSet();
+var weakSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xr4xc2mq.js:2740", () => {
+  weakSet = new WeakSet();
+});
 //@ chunk-xr4xc2mq.js:2759-2831 placement
 /**
  * 把规则描述成 “the <行为> rule \"<规则>\"”。
  */
-function describeRuleBlock(e) {
-  return `the ${e.ruleBehavior} rule "${formatPermissionRule(e.ruleValue)}"`;
+function describeRuleBlock(block) {
+  return `the ${block.ruleBehavior} rule "${formatPermissionRule(block.ruleValue)}"`;
 }
 //@ chunk-xr4xc2mq.js:2831-3233 placement
 /**
  * 每个上下文只提示一次：某权限规则（拒绝或需逐次批准）阻止后台向记忆目录保存，规则移除后会恢复保存。
  */
-function describeMemoryRuleBlock(e, r, autoMemPath) {
-  if (weakSet.has(e)) return;
-  weakSet.add(e);
-  let o = `${describeRuleBlock(r)} (from ${getSettingSourceDisplayNameLowercase(r.source)})`;
-  let s =
-    r.ruleBehavior === "deny"
-      ? `${o} blocks those writes`
-      : `${o} needs your approval for each write, and background saving can't ask`;
-  return `Claude isn't saving memories to ${autoMemPath} in the background: ${s}. Saving resumes once that rule is removed or no longer covers that folder, and may then include what was skipped.`;
+function describeMemoryRuleBlock(message, ruleBlock, autoMemPath) {
+  if (weakSet.has(message)) return;
+  weakSet.add(message);
+  let blockDescription = `${describeRuleBlock(ruleBlock)} (from ${getSettingSourceDisplayNameLowercase(ruleBlock.source)})`;
+  let effect =
+    ruleBlock.ruleBehavior === "deny"
+      ? `${blockDescription} blocks those writes`
+      : `${blockDescription} needs your approval for each write, and background saving can't ask`;
+  return `Claude isn't saving memories to ${autoMemPath} in the background: ${effect}. Saving resumes once that rule is removed or no longer covers that folder, and may then include what was skipped.`;
 }
 //@ chunk-xr4xc2mq.js:3233-3429 placement
 /**
@@ -102,35 +106,35 @@ function describeMemoryRuleBlock(e, r, autoMemPath) {
  */
 function registerPostTurnMemoryTask(taskRegistry, abortController) {
   let taskId = generateTaskId("post_turn_memory");
-  let o = {
+  let task = {
     ...createTaskStateBase(taskId, "post_turn_memory", "saving memories"),
     type: "post_turn_memory",
     status: "running",
     skipTranscript: true,
     abortController,
   };
-  taskRegistry.register(o);
+  taskRegistry.register(task);
   return taskId;
 }
 //@ chunk-xr4xc2mq.js:3429-3658 placement
 /**
  * 把运行中的记忆任务标为结束状态（completed/failed/killed），并发出不写入记录的环境型任务通知。
  */
-function finishMemoryTask(e, taskRegistry, n) {
-  let o = false;
-  taskRegistry.update(e, (s) => {
-    if (s.status !== "running") return s;
-    o = true;
+function finishMemoryTask(taskId, taskRegistry, status) {
+  let finished = false;
+  taskRegistry.update(taskId, (task) => {
+    if (task.status !== "running") return task;
+    finished = true;
     return {
-      ...s,
-      status: n,
+      ...task,
+      status,
       endTime: Date.now(),
       notified: true,
       abortController: undefined,
     };
   });
-  if (o)
-    emitTaskNotification(e, n === "killed" ? "stopped" : n, {
+  if (finished)
+    emitTaskNotification(taskId, status === "killed" ? "stopped" : status, {
       skipTranscript: true,
       ambient: true,
     });
@@ -151,61 +155,70 @@ class MemoryExtractorSlots {
 /**
  * 按宿主保存的记忆提取器槽位。
  */
-var memoryExtractorSlots = new HostScoped(() => new MemoryExtractorSlots());
+var memoryExtractorSlots; // deferred: uses MemoryExtractorSlots of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-xr4xc2mq.js:3825", () => {
+  memoryExtractorSlots = new HostScoped(() => new MemoryExtractorSlots());
+});
 //@ chunk-xr4xc2mq.js:3850-4066 placement
 /**
  * 判断用户文字是否算"实质内容"的常量：最少词数、按字计词的文字系统正则（汉字/假名/泰文等）、问号字符集、可忽略的结尾字符正则。
  */
-var MIN_PROSE_WORDS = 2;
-var CHAR_COUNTED_SCRIPTS_RE =
-  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}]/gu;
-var QUESTION_MARKS = new Set(["?", "\uFF1F", "\u061F"]);
-var TRAILING_IGNORABLE_RE = /^[\s\p{P}\p{S}\p{M}]$/u;
+var MIN_PROSE_WORDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CHAR_COUNTED_SCRIPTS_RE;
+var QUESTION_MARKS;
+var TRAILING_IGNORABLE_RE;
+deferInit("chunk-xr4xc2mq.js:3850", () => {
+  MIN_PROSE_WORDS = 2;
+  CHAR_COUNTED_SCRIPTS_RE =
+    /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}\p{Script=Tibetan}]/gu;
+  QUESTION_MARKS = new Set(["?", "\uFF1F", "\u061F"]);
+  TRAILING_IGNORABLE_RE = /^[\s\p{P}\p{S}\p{M}]$/u;
+});
 //@ chunk-xr4xc2mq.js:4066-4114 placement
 /**
  * 统计按空白切分的词数。
  */
-function countWords(e) {
-  return count(e.split(/\s+/), Boolean);
+function countWords(text) {
+  return count(text.split(/\s+/), Boolean);
 }
 //@ chunk-xr4xc2mq.js:4114-4159 placement
 /**
  * 统计按字计词文字系统（汉字、假名、泰文等）的字符数。
  */
-function countScriptChars(e) {
-  return e.match(CHAR_COUNTED_SCRIPTS_RE)?.length ?? 0;
+function countScriptChars(text) {
+  return text.match(CHAR_COUNTED_SCRIPTS_RE)?.length ?? 0;
 }
 //@ chunk-xr4xc2mq.js:4159-4205 placement
 /**
  * 文字是否达到要求的词数（按字计词的文字按比例折算）。
  */
-function hasEnoughProse(e, r) {
-  return countWords(e) >= r || countScriptChars(e) >= r * MIN_PROSE_WORDS;
+function hasEnoughProse(text, minWords) {
+  return countWords(text) >= minWords || countScriptChars(text) >= minWords * MIN_PROSE_WORDS;
 }
 //@ chunk-xr4xc2mq.js:4205-4264 placement
 /**
  * 文字折算成“散文词数”。
  */
-function proseWordEquivalent(e) {
-  return Math.max(countWords(e), Math.floor(countScriptChars(e) / MIN_PROSE_WORDS));
+function proseWordEquivalent(text) {
+  return Math.max(countWords(text), Math.floor(countScriptChars(text) / MIN_PROSE_WORDS));
 }
 //@ chunk-xr4xc2mq.js:4264-4352 placement
 /**
  * 把回合数分档（0-2、3-9、10-39、40+）。
  */
-function turnCountBucket(e) {
-  if (e < 3) return "0-2";
-  if (e < 10) return "3-9";
-  if (e < 40) return "10-39";
+function turnCountBucket(turns) {
+  if (turns < 3) return "0-2";
+  if (turns < 10) return "3-9";
+  if (turns < 40) return "10-39";
   return "40+";
 }
 //@ chunk-xr4xc2mq.js:4352-4477 placement
 function endsWithQuestion(assistantPlainText) {
-  let r = [...assistantPlainText];
-  for (let j = r.length - 1; j >= 0; j--) {
-    let o = r[j];
-    if (QUESTION_MARKS.has(o)) return true;
-    if (!TRAILING_IGNORABLE_RE.test(o)) return false;
+  let chars = [...assistantPlainText];
+  for (let j = chars.length - 1; j >= 0; j--) {
+    let char = chars[j];
+    if (QUESTION_MARKS.has(char)) return true;
+    if (!TRAILING_IGNORABLE_RE.test(char)) return false;
   }
   return false;
 }
@@ -213,26 +226,26 @@ function endsWithQuestion(assistantPlainText) {
 /**
  * 判断消息是否为对话回合（user 或 assistant）。
  */
-function isConversationTurn(e) {
-  return e.type === "user" || e.type === "assistant";
+function isConversationTurn(message) {
+  return message.type === "user" || message.type === "assistant";
 }
 //@ chunk-xr4xc2mq.js:4537-4700 placement
 /**
  * 统计指定消息之后的有效回合数；找不到该消息或未指定时统计全部。
  */
-function countTurnsSince(messages, r) {
-  if (r === null || r === undefined) return count(messages, isConversationTurn);
-  let n = false;
-  let o = 0;
-  for (let s of messages) {
-    if (!n) {
-      if (s.uuid === r) n = true;
+function countTurnsSince(messages, sinceUuid) {
+  if (sinceUuid === null || sinceUuid === undefined) return count(messages, isConversationTurn);
+  let found = false;
+  let turnCount = 0;
+  for (let message of messages) {
+    if (!found) {
+      if (message.uuid === sinceUuid) found = true;
       continue;
     }
-    if (isConversationTurn(s)) o++;
+    if (isConversationTurn(message)) turnCount++;
   }
-  if (!n) return count(messages, isConversationTurn);
-  return o;
+  if (!found) return count(messages, isConversationTurn);
+  return turnCount;
 }
 //@ chunk-xr4xc2mq.js:4700-4709 placement
 /**
@@ -244,57 +257,62 @@ var MIN_TURNS_SINCE = 3;
  * 过滤掉 uuid 在给定集合里的消息。
  */
 function messagesNotIn(messages, messages_2) {
-  let n = new Set(messages_2.map((o) => o.uuid));
-  return messages.filter((o) => !n.has(o.uuid));
+  let excludedUuids = new Set(messages_2.map((message) => message.uuid));
+  return messages.filter((message) => !excludedUuids.has(message.uuid));
 }
 //@ chunk-xr4xc2mq.js:4797-4895 placement
 /**
  * 消息里是否有 max_turns_reached 附件。
  */
-function hasMaxTurnsReached(e) {
-  return e.some((r) => r.type === "attachment" && r.attachment.type === "max_turns_reached");
+function hasMaxTurnsReached(messages) {
+  return messages.some(
+    (message) => message.type === "attachment" && message.attachment.type === "max_turns_reached",
+  );
 }
 //@ chunk-xr4xc2mq.js:4895-4979 placement
 /**
  * 最后一条助手消息是否为 API 错误。
  */
-function lastAssistantWasApiError(e) {
-  return e.findLast((r) => r.type === "assistant")?.isApiErrorMessage === true;
+function lastAssistantWasApiError(messages) {
+  return messages.findLast((message) => message.type === "assistant")?.isApiErrorMessage === true;
 }
 //@ chunk-xr4xc2mq.js:4979-5520 placement = hasSuccessfulToolCall (1)
-function hasSuccessfulToolCall(e, r, n) {
-  let o = r === undefined;
-  let s = new Set();
-  for (let u of e) {
-    if (!o) {
-      if (u.uuid === r) o = true;
+function hasSuccessfulToolCall(messages, sinceUuid, countMutating) {
+  let inRange = sinceUuid === undefined;
+  let successfulWriteIds = new Set();
+  for (let message of messages) {
+    if (!inRange) {
+      if (message.uuid === sinceUuid) inRange = true;
       continue;
     }
-    if (u.type === "user") {
-      let content = u.message.content;
+    if (message.type === "user") {
+      let content = message.message.content;
       if (
         Array.isArray(content) &&
         content.some(
-          (block) => block.type === "tool_result" && block.is_error !== true && s.has(block.tool_use_id),
+          (block) =>
+            block.type === "tool_result" &&
+            block.is_error !== true &&
+            successfulWriteIds.has(block.tool_use_id),
         )
       )
         return true;
       continue;
     }
-    if (u.type !== "assistant") continue;
-    let content = u.message.content;
+    if (message.type !== "assistant") continue;
+    let content = message.message.content;
     if (!Array.isArray(content)) continue;
-    for (let h of content) {
-      if (n && h.type === "tool_use" && MEMORY_MUTATING_TOOLS.has(h.name)) return true;
-      if (h.type === "tool_use" && h.name === MEMORY_WRITE) {
-        s.add(h.id);
+    for (let block of content) {
+      if (countMutating && block.type === "tool_use" && MEMORY_MUTATING_TOOLS.has(block.name)) return true;
+      if (block.type === "tool_use" && block.name === MEMORY_WRITE) {
+        successfulWriteIds.add(block.id);
         continue;
       }
-      let readToolFilePaths = collectReadToolFilePaths(h);
+      let readToolFilePaths = collectReadToolFilePaths(block);
       if (readToolFilePaths !== undefined && isAutoMemPath(readToolFilePaths)) return true;
     }
   }
-  return n && !o && hasSuccessfulToolCall(e, undefined, true);
+  return countMutating && !inRange && hasSuccessfulToolCall(messages, undefined, true);
 }
 //@ chunk-xr4xc2mq.js:5520-5529 placement
 /**
@@ -302,12 +320,12 @@ function hasSuccessfulToolCall(e, r, n) {
  */
 var MIN_CONTENT_WORDS = 3;
 //@ chunk-xr4xc2mq.js:5529-5728 placement
-function isSubstantialUserMessage(e) {
-  if (e.type !== "user" || e.isMeta) return false;
-  let content = e.message.content;
+function isSubstantialUserMessage(message) {
+  if (message.type !== "user" || message.isMeta) return false;
+  let content = message.message.content;
   if (typeof content === "string") return countWords(content) >= MIN_CONTENT_WORDS;
   if (!Array.isArray(content)) return false;
-  return content.some((n) => n.type === "text" && countWords(n.text) >= MIN_CONTENT_WORDS);
+  return content.some((content) => content.type === "text" && countWords(content.text) >= MIN_CONTENT_WORDS);
 }
 //@ chunk-xr4xc2mq.js:5728-6037 placement
 /**
@@ -315,17 +333,17 @@ function isSubstantialUserMessage(e) {
  */
 function getLastHumanTurnUuid(messages, personPrompt) {
   for (let j = messages.length - 1; j >= 0; j--) {
-    let o = messages[j];
-    if (o === undefined || !isHumanTurn(o)) continue;
-    if (o.type === "user") {
-      if (!o.isMeta) return o.uuid;
+    let message = messages[j];
+    if (message === undefined || !isHumanTurn(message)) continue;
+    if (message.type === "user") {
+      if (!message.isMeta) return message.uuid;
     } else if (
-      o.type === "attachment" &&
-      o.attachment.type === "queued_command" &&
-      !o.attachment.isMeta &&
-      o.attachment.source_uuid !== undefined
+      message.type === "attachment" &&
+      message.attachment.type === "queued_command" &&
+      !message.attachment.isMeta &&
+      message.attachment.source_uuid !== undefined
     )
-      return o.attachment.source_uuid;
+      return message.attachment.source_uuid;
   }
   return personPrompt?.uuid;
 }
@@ -333,58 +351,58 @@ function getLastHumanTurnUuid(messages, personPrompt) {
 /**
  * 判断指定消息之后是否有实质性的回合；找不到该消息时检查全部。
  */
-function hasSubstantialTurnSince(messages, r) {
-  let n = r === undefined;
-  for (let o of messages) {
-    if (!n) {
-      if (o.uuid === r) n = true;
+function hasSubstantialTurnSince(messages, sinceUuid) {
+  let started = sinceUuid === undefined;
+  for (let message of messages) {
+    if (!started) {
+      if (message.uuid === sinceUuid) started = true;
       continue;
     }
-    if (isSubstantialUserMessage(o)) return true;
+    if (isSubstantialUserMessage(message)) return true;
   }
-  if (!n) return messages.some(isSubstantialUserMessage);
+  if (!started) return messages.some(isSubstantialUserMessage);
   return false;
 }
 //@ chunk-xr4xc2mq.js:6173-6277 placement
 function sliceAfterUuid(messages, sinceUuid) {
   if (sinceUuid === undefined) return messages;
-  let index = messages.findIndex((o) => o.uuid === sinceUuid);
+  let index = messages.findIndex((message) => message.uuid === sinceUuid);
   return index === -1 ? messages : messages.slice(index + 1);
 }
 //@ chunk-xr4xc2mq.js:6277-6560 placement
-function getUserTurnText(e) {
-  if (e.type === "attachment") {
-    let { attachment } = e;
+function getUserTurnText(message) {
+  if (message.type === "attachment") {
+    let { attachment } = message;
     return attachment.type === "queued_command" && !attachment.isMeta
       ? contentToText(attachment.prompt)
       : undefined;
   }
-  if (e.type !== "user" || e.isMeta || e.isCompactSummary) return;
-  let content = e.message.content;
-  if (Array.isArray(content) && content.every((n) => n.type === "tool_result")) return;
+  if (message.type !== "user" || message.isMeta || message.isCompactSummary) return;
+  let content = message.message.content;
+  if (Array.isArray(content) && content.every((prompt) => prompt.type === "tool_result")) return;
   return contentToText(content);
 }
 //@ chunk-xr4xc2mq.js:6560-6662 placement
-function contentToText(e) {
-  return typeof e === "string"
-    ? e
-    : e.filter((r) => r.type === "text").map((r) => r.text).join(`
+function contentToText(content) {
+  return typeof content === "string"
+    ? content
+    : content.filter((block) => block.type === "text").map((block) => block.text).join(`
 `);
 }
 //@ chunk-xr4xc2mq.js:6662-6769 placement
-function getAssistantPlainText(e) {
-  if (e.type !== "assistant") return;
-  let content = e.message.content;
+function getAssistantPlainText(message) {
+  if (message.type !== "assistant") return;
+  let content = message.message.content;
   return Array.isArray(content) ? contentToText(content) : undefined;
 }
 //@ chunk-xr4xc2mq.js:6769-6952 placement
 /**
  * 判断最近一个用户回合是否值得记忆提取：窗口内有实质内容，或最后的用户文字非空且是在回答助手的提问。
  */
-function isMemoryCandidateTurn(messages, minProseWords, n) {
+function isMemoryCandidateTurn(messages, minWords, minWords_2) {
   let last = messages
-    .flatMap((u, index) => {
-      let userTurnText = getUserTurnText(u);
+    .flatMap((message, index) => {
+      let userTurnText = getUserTurnText(message);
       return userTurnText === undefined
         ? []
         : [
@@ -397,7 +415,7 @@ function isMemoryCandidateTurn(messages, minProseWords, n) {
     .at(-1);
   if (last === undefined) return false;
   return (
-    hasEnoughProse(lastUserTurnText(messages, n), minProseWords) ||
+    hasEnoughProse(lastUserTurnText(messages, minWords_2), minWords) ||
     (last.text.trim() !== "" && answersAssistantQuestion(messages, last.index))
   );
 }
@@ -405,16 +423,16 @@ function isMemoryCandidateTurn(messages, minProseWords, n) {
 /**
  * 取最后 r 个用户回合的文本。
  */
-function lastUserTurnText(e, r) {
-  return e.flatMap((n) => getUserTurnText(n) ?? []).slice(-Math.max(r, 1)).join(`
+function lastUserTurnText(messages, count) {
+  return messages.flatMap((message) => getUserTurnText(message) ?? []).slice(-Math.max(count, 1)).join(`
 `);
 }
 //@ chunk-xr4xc2mq.js:7034-7176 placement
-function answersAssistantQuestion(e, index) {
+function answersAssistantQuestion(messages, index) {
   for (let j = index - 1; j >= 0; j--) {
-    let o = e[j];
-    if (getUserTurnText(o) !== undefined) return false;
-    let assistantPlainText = getAssistantPlainText(o);
+    let message = messages[j];
+    if (getUserTurnText(message) !== undefined) return false;
+    let assistantPlainText = getAssistantPlainText(message);
     if (assistantPlainText !== undefined && assistantPlainText.trim() !== "")
       return endsWithQuestion(assistantPlainText);
   }
@@ -425,18 +443,18 @@ function answersAssistantQuestion(e, index) {
  * 统计某 uuid 之后的用户回合：总回合数、人类亲写回合数与字数、任务通知回合数、无来源标记回合数、正文词数。
  */
 function summarizeUserTurns(messages, sinceUuid) {
-  let turns = sliceAfterUuid(messages, sinceUuid).flatMap((s) => {
-    let userTurnText = getUserTurnText(s);
+  let turns = sliceAfterUuid(messages, sinceUuid).flatMap((message) => {
+    let userTurnText = getUserTurnText(message);
     if (userTurnText === undefined) return [];
     let origin =
-      s.type === "attachment" && s.attachment.type === "queued_command"
-        ? s.attachment.origin
-        : s.type === "user"
-          ? s.origin
+      message.type === "attachment" && message.attachment.type === "queued_command"
+        ? message.attachment.origin
+        : message.type === "user"
+          ? message.origin
           : undefined;
     return [
       {
-        message: s,
+        message,
         text: userTurnText,
         origin,
       },
@@ -447,8 +465,8 @@ function summarizeUserTurns(messages, sinceUuid) {
     userTurns: turns.length,
     ownWordsTurns: ownWordsTurns.length,
     ownWordsChars: ownWordsTurns.reduce((acc, ownWordsTurn) => acc + ownWordsTurn.text.length, 0),
-    taskNotificationTurns: count(turns, (s) => s.origin?.kind === "task-notification"),
-    unstampedTurns: count(turns, (s) => s.origin === undefined),
+    taskNotificationTurns: count(turns, (turn) => turn.origin?.kind === "task-notification"),
+    unstampedTurns: count(turns, (turn) => turn.origin === undefined),
     proseWords: proseWordEquivalent(
       turns.map((turn) => turn.text).join(`
 `),
@@ -504,27 +522,27 @@ var FILL_PRIORITY = [
  * 为记忆"初看"挑选最近的对话片段：从后往前收集最多 N 个用户回合（跳过 API 错误、合成模型与任务通知），按"新的用户、新的助手、旧的用户、旧的助手"优先级装入字符预算（超出部分截取尾部），最新一条不是新消息时返回空。
  */
 function buildFirstLookExchanges(messages, sinceUuid, maxUserTurns, maxChars) {
-  let s = sinceUuid === undefined ? -1 : messages.findIndex((message) => message.uuid === sinceUuid);
+  let sinceIndex = sinceUuid === undefined ? -1 : messages.findIndex((message) => message.uuid === sinceUuid);
   let entries = [];
-  let y = 0;
+  let userTurnCount = 0;
   for (let j = messages.length - 1; j >= 0; j--) {
-    let S = messages[j];
-    let M =
-      S.type === "assistant"
-        ? S.isApiErrorMessage || S.message.model === SYNTHETIC_MODEL
+    let message = messages[j];
+    let body =
+      message.type === "assistant"
+        ? message.isApiErrorMessage || message.message.model === SYNTHETIC_MODEL
           ? undefined
-          : getAssistantPlainText(S)
-        : isTaskNotificationTurn(S)
+          : getAssistantPlainText(message)
+        : isTaskNotificationTurn(message)
           ? undefined
-          : getUserTurnText(S);
-    if (M === undefined || M.trim() === "") continue;
-    let E = S.type !== "assistant";
+          : getUserTurnText(message);
+    if (body === undefined || body.trim() === "") continue;
+    let isUser = message.type !== "assistant";
     entries.push({
-      user: E,
-      fresh: j > s,
-      body: M.trim(),
+      user: isUser,
+      fresh: j > sinceIndex,
+      body: body.trim(),
     });
-    if (E && ++y >= maxUserTurns) break;
+    if (isUser && ++userTurnCount >= maxUserTurns) break;
   }
   if (!entries[0]?.fresh)
     return {
@@ -534,43 +552,50 @@ function buildFirstLookExchanges(messages, sinceUuid, maxUserTurns, maxChars) {
   let chosen = new Map();
   let budgetLeft = maxChars;
   for (let { fresh, user } of FILL_PRIORITY)
-    for (let [M, E] of entries.entries()) {
-      if (E.fresh !== fresh || E.user !== user) continue;
-      let j = user ? "User: " : "Assistant: ";
-      let U = (chosen.size > 0 ? EXCHANGE_SEPARATOR.length : 0) + j.length;
-      if (U + E.body.length <= budgetLeft) {
-        chosen.set(M, j + E.body);
-        budgetLeft -= U + E.body.length;
+    for (let [index, entry] of entries.entries()) {
+      if (entry.fresh !== fresh || entry.user !== user) continue;
+      let prefix = user ? "User: " : "Assistant: ";
+      let overhead = (chosen.size > 0 ? EXCHANGE_SEPARATOR.length : 0) + prefix.length;
+      if (overhead + entry.body.length <= budgetLeft) {
+        chosen.set(index, prefix + entry.body);
+        budgetLeft -= overhead + entry.body.length;
         continue;
       }
-      let R = budgetLeft - U - ELLIPSIS.length;
-      if (R > 0) chosen.set(M, j + ELLIPSIS + takeLastChars(E.body, R));
+      let roomForTail = budgetLeft - overhead - ELLIPSIS.length;
+      if (roomForTail > 0) chosen.set(index, prefix + ELLIPSIS + takeLastChars(entry.body, roomForTail));
       budgetLeft = 0;
       break;
     }
   return {
     text: entries
-      .map((entry, S) => chosen.get(S))
-      .filter((w) => w !== undefined)
+      .map((entry, index) => chosen.get(index))
+      .filter((segment) => segment !== undefined)
       .reverse()
       .join(EXCHANGE_SEPARATOR),
-    userTurns: y,
+    userTurns: userTurnCount,
   };
 }
 //@ chunk-xr4xc2mq.js:8881-10840 placement
 /**
  * 用小模型做记忆提取前的"初看"：在超时内问模型最近对话是否可能需要写记忆（JSON 布尔），检查组织模型策略与托管拒绝；无法判断或出错时返回 error（不跳过本次提取）；返回判定、模型、耗时、输入长度与用户回合数。
  */
-async function runMemoryFirstLook({ config: options, messages, sinceUuid, window: o, signal, credentials }) {
+async function runMemoryFirstLook({
+  config: options,
+  messages,
+  sinceUuid,
+  window: maxUserTurns,
+  signal,
+  credentials,
+}) {
   let now = Date.now();
   let model = options.model ?? "";
   let inputText = "";
   let userTurns = 0;
-  let finish = (M, exchanges) => {
+  let finish = (verdict, exchanges) => {
     if (exchanges !== undefined) logFeatureSad("ccr_memory_first_look", exchanges);
-    else if (M !== "empty") logFeatureOk("ccr_memory_first_look");
+    else if (verdict !== "empty") logFeatureOk("ccr_memory_first_look");
     return {
-      verdict: M,
+      verdict,
       error: exchanges,
       model,
       durationMs: Date.now() - now,
@@ -583,9 +608,14 @@ async function runMemoryFirstLook({ config: options, messages, sinceUuid, window
     refTimer: true,
   });
   try {
-    let M = options.model ?? env.ANTHROPIC_SMALL_FAST_MODEL ?? getDefaultHaikuModel();
+    let policyModel = options.model ?? env.ANTHROPIC_SMALL_FAST_MODEL ?? getDefaultHaikuModel();
     model = options.model ?? getSmallFastModel();
-    let firstLookExchanges = buildFirstLookExchanges(messages, sinceUuid, o, options.maxInputChars);
+    let firstLookExchanges = buildFirstLookExchanges(
+      messages,
+      sinceUuid,
+      maxUserTurns,
+      options.maxInputChars,
+    );
     inputText = firstLookExchanges.text;
     userTurns = firstLookExchanges.userTurns;
     if (inputText === "") return finish("empty");
@@ -595,15 +625,15 @@ async function runMemoryFirstLook({ config: options, messages, sinceUuid, window
       );
       return finish("error", "policy");
     }
-    if (unlessManagedDeniedModel(M) !== M || unlessManagedDeniedModel(model) !== model) {
+    if (unlessManagedDeniedModel(policyModel) !== policyModel || unlessManagedDeniedModel(model) !== model) {
       logForDebugging(
-        `[extractMemories] first look: managed settings deny the first look's model (${M}, sent as ${model}); the pass is not skipped`,
+        `[extractMemories] first look: managed settings deny the first look's model (${policyModel}, sent as ${model}); the pass is not skipped`,
       );
       return finish("error", "managed_denied");
     }
-    let [j, U] = getSideQueryThinkingSettings(model);
-    let R = tagUntrustedArtifactContent(messages, undefined, false);
-    let X = R.length > 0 ? toolsUsedManifestText(R) : "";
+    let [thinking, thinkingBudget] = getSideQueryThinkingSettings(model);
+    let toolsUsed = tagUntrustedArtifactContent(messages, undefined, false);
+    let manifestText = toolsUsed.length > 0 ? toolsUsedManifestText(toolsUsed) : "";
     let response = await raceWithAbortSignal(
       sideQueryWithCounter({
         model,
@@ -612,15 +642,15 @@ async function runMemoryFirstLook({ config: options, messages, sinceUuid, window
         messages: [
           {
             role: "user",
-            content: `${X}<exchanges>
+            content: `${manifestText}<exchanges>
 ${inputText}
 </exchanges>
 
 ${FIRST_LOOK_ANSWER_INSTRUCTION}`,
           },
         ],
-        max_tokens: FIRST_LOOK_MAX_TOKENS + U,
-        thinking: j,
+        max_tokens: FIRST_LOOK_MAX_TOKENS + thinkingBudget,
+        thinking,
         output_format: {
           type: "json_schema",
           schema: {
@@ -644,9 +674,12 @@ ${FIRST_LOOK_ANSWER_INSTRUCTION}`,
       deadline.signal,
       () => new AbortError(),
     );
-    let found = response.content.find((le) => le.type === "text");
-    let B = found?.type === "text" ? safeParseJSON(stripJsonCodeFence(found.text), false) : null;
-    let writeLikely = typeof B === "object" && B !== null && "write_likely" in B ? B.write_likely : undefined;
+    let found = response.content.find((block) => block.type === "text");
+    let parsed = found?.type === "text" ? safeParseJSON(stripJsonCodeFence(found.text), false) : null;
+    let writeLikely =
+      typeof parsed === "object" && parsed !== null && "write_likely" in parsed
+        ? parsed.write_likely
+        : undefined;
     if (typeof writeLikely !== "boolean") {
       logForDebugging(
         `[extractMemories] first look: the model did not answer {"write_likely": true|false} (stop reason ${response.stop_reason}); the pass is not skipped`,
@@ -669,14 +702,14 @@ ${FIRST_LOOK_ANSWER_INSTRUCTION}`,
   }
 }
 //@ chunk-xr4xc2mq.js:10840-11072 placement
-function isTaskNotificationTurn(e) {
-  let r =
-    e.type === "attachment" && e.attachment.type === "queued_command"
-      ? resolveTaskNotificationOrigin(e.attachment.origin, e.attachment.commandMode)
-      : e.type === "user"
-        ? e.origin
+function isTaskNotificationTurn(message) {
+  let origin =
+    message.type === "attachment" && message.attachment.type === "queued_command"
+      ? resolveTaskNotificationOrigin(message.attachment.origin, message.attachment.commandMode)
+      : message.type === "user"
+        ? message.origin
         : undefined;
-  return r?.kind === "task-notification" && r.subkind !== "scheduled-trigger";
+  return origin?.kind === "task-notification" && origin.subkind !== "scheduled-trigger";
 }
 export {
   collectReadToolFilePaths,

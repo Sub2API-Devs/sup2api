@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:1074-1578 cjs-fingerprint
-var require_error_correction_level = x(function (cjsExports) {
+var require_error_correction_level = __commonJS(function (cjsExports) {
   cjsExports.L = {
     bit: 1,
   };

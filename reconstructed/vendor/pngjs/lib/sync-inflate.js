@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:43714-45541 cjs-fingerprint
-var require_sync_inflate = x(function (cjsExports, cjsModule) {
+var require_sync_inflate = __commonJS(function (cjsExports, cjsModule) {
   var assert = importMetaRequire("assert").ok;
   var zlib = importMetaRequire("zlib");
   var util = importMetaRequire("util");
@@ -33,7 +33,7 @@ var require_sync_inflate = x(function (cjsExports, cjsModule) {
   Inflate.prototype._processChunk = function (chunk, flushFlag, asyncCb) {
     if (typeof asyncCb === "function")
       return zlib.Inflate._processChunk.call(this, chunk, flushFlag, asyncCb);
-    let n = this;
+    let selfRef = this;
     let availInBefore = chunk && chunk.length;
     let availOutBefore = this._chunkSize - this._offset;
     let leftToInflate = this._maxLength;
@@ -45,22 +45,22 @@ var require_sync_inflate = x(function (cjsExports, cjsModule) {
       error = err;
     });
     function handleChunk(availInAfter, availOutAfter) {
-      if (n._hadError) return;
+      if (selfRef._hadError) return;
       let have = availOutBefore - availOutAfter;
       assert(have >= 0, "have should not go down");
       if (have > 0) {
-        let out = n._buffer.slice(n._offset, n._offset + have);
-        n._offset += have;
+        let out = selfRef._buffer.slice(selfRef._offset, selfRef._offset + have);
+        selfRef._offset += have;
         if (out.length > leftToInflate) out = out.slice(0, leftToInflate);
         buffers.push(out);
         nread += out.length;
         leftToInflate -= out.length;
         if (leftToInflate === 0) return false;
       }
-      if (availOutAfter === 0 || n._offset >= n._chunkSize) {
-        availOutBefore = n._chunkSize;
-        n._offset = 0;
-        n._buffer = Buffer.allocUnsafe(n._chunkSize);
+      if (availOutAfter === 0 || selfRef._offset >= selfRef._chunkSize) {
+        availOutBefore = selfRef._chunkSize;
+        selfRef._offset = 0;
+        selfRef._buffer = Buffer.allocUnsafe(selfRef._chunkSize);
       }
       if (availOutAfter === 0) {
         inOff += availInBefore - availInAfter;

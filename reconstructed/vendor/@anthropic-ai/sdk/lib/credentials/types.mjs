@@ -7,6 +7,7 @@
  */
 import { AnthropicError } from "../../core/error.mjs";
 import { classifyOAuthErrorResponse } from "../../../../../src/services/oauth/oauthErrors.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-640x3zn9.js:2962-3145 esm-fingerprint
 var GRANT_TYPE_JWT_BEARER = "urn:ietf:params:oauth:grant-type:jwt-bearer";
@@ -15,11 +16,11 @@ var TOKEN_ENDPOINT = "/v1/oauth/token";
 var OAUTH_API_BETA_HEADER = "oauth-2025-04-20";
 var FEDERATION_BETA_HEADER = "oidc-federation-2026-04-01";
 var ADVISORY_REFRESH_THRESHOLD_IN_SECONDS = 120;
-var hMt = 30;
-var uIi = 5;
+var MAX_FEDERATION_TOKEN_TTL_SECONDS = 30;
+var MIN_REFRESH_MARGIN_SECONDS = 5;
 var MAX_TOKEN_RESPONSE_BYTES = 1048576;
 //@ chunk-640x3zn9.js:3145-3512 esm-fingerprint
-function Jao(baseURL) {
+function requireSecureTokenEndpoint(baseURL) {
   if (!baseURL) return;
   let u;
   try {
@@ -63,8 +64,12 @@ async function parseTokenResponse(resp, requestId) {
   return data;
 }
 //@ chunk-640x3zn9.js:3982-4047 esm-fingerprint
-var MAX_ERROR_BODY_CHARS = 2000;
-var SAFE_ERROR_KEYS = new Set(["error", "error_description", "error_uri"]);
+var MAX_ERROR_BODY_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SAFE_ERROR_KEYS;
+deferInit("chunk-640x3zn9.js:3982", () => {
+  MAX_ERROR_BODY_CHARS = 2000;
+  SAFE_ERROR_KEYS = new Set(["error", "error_description", "error_uri"]);
+});
 //@ chunk-640x3zn9.js:4047-4372 esm-fingerprint
 function redactSensitive(body) {
   if (body == null) return body;
@@ -88,7 +93,7 @@ function redactSensitive(body) {
 //@ chunk-640x3zn9.js:4372-5111 esm-fingerprint
 async function checkCredentialsFileSafety(path, onWarn = (m) => console.warn(`anthropic-sdk: ${m}`)) {
   if (typeof process === "undefined") return;
-  let { fs } = await import("./chunk-a60jm9e8.js");
+  let { fs } = await import("../../../../../src/child_process.lazy.js");
   let resolved = path;
   let st;
   try {
@@ -113,7 +118,7 @@ async function checkCredentialsFileSafety(path, onWarn = (m) => console.warn(`an
 }
 //@ chunk-640x3zn9.js:5111-5632 esm-fingerprint
 async function writeCredentialsFileAtomic(targetPath, data) {
-  let { fs, path } = await import("./chunk-a60jm9e8.js");
+  let { fs, path } = await import("../../../../../src/child_process.lazy.js");
   let dir = path.dirname(targetPath);
   await fs.promises.mkdir(dir, {
     recursive: true,
@@ -173,14 +178,17 @@ async function readLimitedText(resp) {
   return new TextDecoder("utf-8").decode(merged);
 }
 //@ chunk-640x3zn9.js:6034-6147 esm-fingerprint
-class WorkloadIdentityError extends AnthropicError {
-  constructor(message, statusCode = null, body = null, requestId = null) {
-    super(message);
-    this.statusCode = statusCode;
-    this.body = body;
-    this.requestId = requestId;
-  }
-}
+let WorkloadIdentityError; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-640x3zn9.js:6034", () => {
+  WorkloadIdentityError = class WorkloadIdentityError extends AnthropicError {
+    constructor(message, statusCode = null, body = null, requestId = null) {
+      super(message);
+      this.statusCode = statusCode;
+      this.body = body;
+      this.requestId = requestId;
+    }
+  };
+});
 //@ chunk-640x3zn9.js:6356-6485 esm-fingerprint
 function getWIFAccountOnHold(error) {
   if (
@@ -192,9 +200,9 @@ function getWIFAccountOnHold(error) {
 }
 export {
   ADVISORY_REFRESH_THRESHOLD_IN_SECONDS,
-  hMt,
-  uIi,
-  Jao,
+  MAX_FEDERATION_TOKEN_TTL_SECONDS,
+  MIN_REFRESH_MARGIN_SECONDS,
+  requireSecureTokenEndpoint,
   WorkloadIdentityError,
   GRANT_TYPE_JWT_BEARER,
   TOKEN_ENDPOINT,

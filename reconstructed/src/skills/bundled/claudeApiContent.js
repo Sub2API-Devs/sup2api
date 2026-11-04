@@ -8,6 +8,7 @@
  * pieces: chunk-6z63wjt0.js (7), chunk-7wwf2tct.js (172), chunk-g13xw617.js (2)
  * attribution: placement 181
  */
+import __cc_resource_0_2 from "../../../assets/plugin-eval-quickref-e95bcd1b.md.zst" with { type: "file" };
 import __cc_resource_0 from "../../../assets/batches-azab338a.md" with { type: "text" };
 import __cc_resource_1 from "../../../assets/files-api-h174sj6q.md" with { type: "text" };
 import __cc_resource_2 from "../../../assets/opentelemetry-a5cc3j2q.md" with { type: "text" };
@@ -114,14 +115,20 @@ import __cc_resource_102 from "../../../assets/structured-extractor-rec1wxww.md"
 import __cc_resource_103 from "../../../assets/support-agent-drb7j85g.md" with { type: "file" };
 import __cc_resource_104 from "../../../assets/support-to-eng-escalator-qqj4c1c7.md" with { type: "file" };
 import __cc_resource_105 from "../../../assets/watchlist-scanner-kfkrzjrr.md" with { type: "file" };
-import __cc_resource_0_2 from "../../../assets/claude-tag-dht2qzjm.md" with { type: "text" };
+import __cc_resource_0_3 from "../../../assets/claude-tag-dht2qzjm.md" with { type: "text" };
 import __cc_resource_1_2 from "../../../assets/live-sources-pvws3ftv.md" with { type: "text" };
 import __cc_resource_2_2 from "../../../assets/plugin-eval-8fcbd81e.md.zst" with { type: "file" };
 import __cc_resource_3_2 from "../../../assets/recent-changes-g7ehqj27.md" with { type: "text" };
 import __cc_resource_4 from "../../../assets/SKILL-0vb5xk0r.md" with { type: "text" };
-import __cc_resource_0_3 from "../../../assets/plugin-eval-quickref-e95bcd1b.md.zst" with { type: "file" };
 import { readEmbeddedTextSync } from "../../utils/embeddedAssets.js";
 
+//@ chunk-g13xw617.js:318-340 placement
+var pluginEvalQuickrefPath = __cc_resource_0_2;
+//@ chunk-g13xw617.js:340-374 placement
+/**
+ * claude-api 技能附带的 plugin-eval 速查参考文本。
+ */
+var referencesPluginEvalQuickref = readEmbeddedTextSync(pluginEvalQuickrefPath, import.meta.dirname);
 //@ chunk-7wwf2tct.js:9317-9339 placement
 var claudeApiBatches = __cc_resource_0;
 //@ chunk-7wwf2tct.js:9339-9361 placement
@@ -631,7 +638,7 @@ var API_SKILL_FILES = {
   "typescript/managed-agents/README.md": managedAgentsReadme5,
 };
 //@ chunk-6z63wjt0.js:695-717 placement
-var referencesClaudeTag = __cc_resource_0_2;
+var referencesClaudeTag = __cc_resource_0_3;
 //@ chunk-6z63wjt0.js:717-739 placement
 var referencesLiveSources = __cc_resource_1_2;
 //@ chunk-6z63wjt0.js:739-761 placement
@@ -651,10 +658,11 @@ var CLAUDE_CODE_DOCS_REFERENCE_FILES = {
   "references/plugin-eval.md": referencesPluginEval,
   "references/recent-changes.md": referencesRecentChanges,
 };
-//@ chunk-g13xw617.js:318-340 placement
-var pluginEvalQuickrefPath = __cc_resource_0_3;
-//@ chunk-g13xw617.js:340-374 placement
-/**
- * claude-api 技能附带的 plugin-eval 速查参考文本。
- */
-var referencesPluginEvalQuickref = readEmbeddedTextSync(pluginEvalQuickrefPath, import.meta.dirname);
+export {
+  API_SKILL_FILES,
+  SKILL_MODEL_VARS,
+  API_SKILL_PROMPT_TEXT,
+  referencesPluginEvalQuickref,
+  CLAUDE_CODE_DOCS_REFERENCE_FILES,
+  SKILL_PROMPT_CONTENT,
+};

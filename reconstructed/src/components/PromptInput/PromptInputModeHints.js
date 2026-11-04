@@ -16,23 +16,24 @@ var VOICE_MODE_HINTS = {
   processing: "processing\u2026",
 };
 //@ chunk-18hwfzwa.js:133034-133715 placement
-function PromptModeHints(h) {
-  if (h.exitConfirm !== null) {
-    let { keyName, detaches } = h.exitConfirm;
+function PromptModeHints(props) {
+  if (props.exitConfirm !== null) {
+    let { keyName, detaches } = props.exitConfirm;
     return buildModeHint(
       "exit-confirm",
       `${formatKeyName(keyName)} again to ${detaches ? "detach (session keeps running)" : "exit"}`,
     );
   }
-  if (h.isPasting) return buildModeHint("pasting", "Pasting\u2026");
-  if (h.voice !== null) return buildModeHint("voice", VOICE_MODE_HINTS[h.voice]);
-  if (h.footerNavActive) return null;
-  if (h.timed !== null) return buildModeHint("timed", h.timed);
-  if (h.showExpandPaste) return buildModeHint("expand-paste", "paste again to expand");
-  if (h.selectionCopyShortcut !== null)
-    return buildModeHint("selection-copy", `${h.selectionCopyShortcut} to copy`);
-  if (h.permissionParked) return buildModeHint("permission-parked", "permission needed \xB7 pause to answer");
-  if (h.shellMode) return buildModeHint("shell-mode", "shell mode");
+  if (props.isPasting) return buildModeHint("pasting", "Pasting\u2026");
+  if (props.voice !== null) return buildModeHint("voice", VOICE_MODE_HINTS[props.voice]);
+  if (props.footerNavActive) return null;
+  if (props.timed !== null) return buildModeHint("timed", props.timed);
+  if (props.showExpandPaste) return buildModeHint("expand-paste", "paste again to expand");
+  if (props.selectionCopyShortcut !== null)
+    return buildModeHint("selection-copy", `${props.selectionCopyShortcut} to copy`);
+  if (props.permissionParked)
+    return buildModeHint("permission-parked", "permission needed \xB7 pause to answer");
+  if (props.shellMode) return buildModeHint("shell-mode", "shell mode");
   return null;
 }
 //@ chunk-18hwfzwa.js:133715-133752 placement

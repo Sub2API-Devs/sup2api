@@ -64,14 +64,14 @@ var OFFSET_INSTRUCTION =
 /**
  * 生成 Read 提示词：lean 模式短版；完整版说明绝对路径、默认 2000 行、图片、PDF（模型支持时，超过 10 页必须给 pages，每次最多 20 页）、notebook、目录不可读、截图。
  */
-function renderPromptTemplate(model, n, leanPrompt, leanRewrite) {
+function renderPromptTemplate(model, lineFormatInstruction, leanPrompt, leanRewrite) {
   if (
     leanPromptOf({
       model,
       leanPrompt,
     })
   ) {
-    let h = leanRewriteOf({
+    let rereadNote = leanRewriteOf({
       model,
       leanRewrite,
     })
@@ -82,9 +82,9 @@ function renderPromptTemplate(model, n, leanPrompt, leanRewrite) {
 - \`file_path\` must be an absolute path.
 - Reads up to ${MAX_LINES_TO_READ} lines by default.
 ${OFFSET_INSTRUCTION}
-${n}
+${lineFormatInstruction}
 - Reads images (PNG, JPG, \u2026) and presents them visually.${isNotClaude3Model(model) ? ' Reads PDFs via the `pages` parameter (e.g. "1-5", max 20 pages/request; required for PDFs over 10 pages).' : ""} Reads Jupyter notebooks (.ipynb) as cells with outputs.
-- Reading a directory, a missing file, or an empty file returns an error or system reminder rather than content.${h}`;
+- Reading a directory, a missing file, or an empty file returns an error or system reminder rather than content.${rereadNote}`;
   }
   return `Reads a file from the local filesystem. You can access any file directly by using this tool.
 Assume this tool is able to read all files on the machine. If the User provides a path to a file assume that path is valid. It is okay to read a file that does not exist; an error will be returned.
@@ -93,7 +93,7 @@ Usage:
 - The file_path parameter must be an absolute path, not a relative path
 - By default, it reads up to ${MAX_LINES_TO_READ} lines starting from the beginning of the file
 ${OFFSET_INSTRUCTION}
-${n}
+${lineFormatInstruction}
 - This tool allows Claude Code to read images (eg PNG, JPG, etc). When reading an image file the contents are presented visually as Claude Code is a multimodal LLM.${
     isNotClaude3Model(model)
       ? `

@@ -45,7 +45,7 @@ import { getSessionIngressAuthToken } from "../../utils/sessionIngressAuth.js";
 import { getPresentedCredentialLog } from "./discoveryIdentity.js";
 import { getCurrentCallId, X_CCR_TURN_ID } from "./ccrTurnId.js";
 import { getConnectionCache } from "./needsAuthCache.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { safeParseJSON } from "../../utils/json.js";
 import {
   runBeforeRequestHook,
@@ -86,61 +86,65 @@ import {
 import { getToolPermissionContext } from "../../utils/permissions/toolPermissionContext.js";
 import { isFirstPartyProvider } from "../../utils/model/providers.js";
 import { getMCPUserAgent } from "../../utils/http.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-z1n5m6nf.js:46289-46748 placement
 /**
  * logMcpConnectionOtelEvent（v1 副本）。
  */
-function logMcpConnectionOtelEvent_2(serverName, serverRef, n) {
-  let s = isToolDetailsLoggingEnabled();
-  let h = serverRef.pluginSource ? parsePluginIdentifier_2(serverRef.pluginSource) : undefined;
-  let y = h && (isAnthropicPluginSource(getTelemetryPluginScope(h.name, h.marketplace, null)) || s);
+function logMcpConnectionOtelEvent_2(serverName, serverRef, result) {
+  let detailsLogging = isToolDetailsLoggingEnabled();
+  let pluginId = serverRef.pluginSource ? parsePluginIdentifier_2(serverRef.pluginSource) : undefined;
+  let isAnthropicPlugin =
+    pluginId &&
+    (isAnthropicPluginSource(getTelemetryPluginScope(pluginId.name, pluginId.marketplace, null)) ||
+      detailsLogging);
   logOTelEvent("mcp_server_connection", {
-    status: n.status,
+    status: result.status,
     transport_type: serverRef.type ?? "stdio",
     server_scope: serverRef.scope,
-    duration_ms: String(Math.round(n.durationMs)),
-    is_plugin: h !== undefined,
-    ...(h && {
-      plugin_id_hash: pluginIdHash(h.name, h.marketplace),
-      "plugin.name": y ? h.name : THIRD_PARTY,
+    duration_ms: String(Math.round(result.durationMs)),
+    is_plugin: pluginId !== undefined,
+    ...(pluginId && {
+      plugin_id_hash: pluginIdHash(pluginId.name, pluginId.marketplace),
+      "plugin.name": isAnthropicPlugin ? pluginId.name : THIRD_PARTY,
     }),
-    ...(n.errorCode && {
-      error_code: String(sanitizeConnectErrorCodeForTelemetry_2(n.errorCode)),
+    ...(result.errorCode && {
+      error_code: String(sanitizeConnectErrorCodeForTelemetry_2(result.errorCode)),
     }),
-    ...(s && {
+    ...(detailsLogging && {
       server_name: serverName,
-      ...(n.error && {
-        error: n.error,
+      ...(result.error && {
+        error: result.error,
       }),
     }),
   });
 }
 //@ chunk-z1n5m6nf.js:46748-47381 placement
 async function handleRemoteAuthFailure_2(
-  serverId,
+  serverName,
   serverRef,
   transportType,
   error,
-  h,
+  isRefreshPath401,
   roundEpoch,
   storageV5,
 ) {
   isLegacyProtocolEra();
-  let T = error instanceof ZodError;
-  let M = T ? error.issues[0] : undefined;
-  let error_2 = M
-    ? `Server OAuth metadata invalid: ${M.path.join(".") || "(root)"} \u2014 ${M.message}`
+  let isZodError = error instanceof ZodError;
+  let firstIssue = isZodError ? error.issues[0] : undefined;
+  let error_2 = firstIssue
+    ? `Server OAuth metadata invalid: ${firstIssue.path.join(".") || "(root)"} \u2014 ${firstIssue.message}`
     : undefined;
   logEvent("tengu_mcp_server_needs_auth", {
     transportType: fromEnum(transportType),
-    ...(T && {
+    ...(isZodError && {
       cause: lit("discovery_schema"),
     }),
-    ...mcpBaseUrlAnalytics(serverRef, serverId),
+    ...mcpBaseUrlAnalytics(serverRef, serverName),
   });
   logMCPDebug(
-    serverId,
+    serverName,
     `Authentication required for ${
       {
         sse: "SSE",
@@ -149,34 +153,34 @@ async function handleRemoteAuthFailure_2(
       }[transportType]
     } server`,
   );
-  let E =
-    h &&
+  let canRefresh =
+    isRefreshPath401 &&
     (serverRef.type === "http" || serverRef.type === "sse") &&
-    (await hasStoredRefreshToken(serverId, serverRef));
+    (await hasStoredRefreshToken(serverName, serverRef));
   if (roundEpoch === undefined || isCurrentIdentityEpoch(roundEpoch))
     isMcpAuthCached_3(
-      serverId,
+      serverName,
       serverRef.type === "claudeai-proxy" ? serverRef.id : undefined,
-      E ? NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS_2 : undefined,
+      canRefresh ? NEEDS_AUTH_CACHE_REFRESHABLE_TTL_MS_2 : undefined,
       storageV5,
     );
-  await purgeDiscoveryCacheOnAuthFailure(serverId, serverRef, roundEpoch);
+  await purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoch);
   logFeatureSad("mcp_connect", "mcp_connect_needs_auth");
   return {
-    name: serverId,
+    name: serverName,
     type: "needs-auth",
     config: serverRef,
     error: error_2,
   };
 }
 //@ chunk-z1n5m6nf.js:47381-47613 placement
-async function purgeDiscoveryCacheOnAuthFailure(e, r, n) {
-  let s = n === undefined || isCurrentIdentityEpoch(n);
+async function purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoch) {
+  let identityCurrent = roundEpoch === undefined || isCurrentIdentityEpoch(roundEpoch);
   if (isDiscoveryCacheUsable())
-    if (s) await flushDiscoveryCache(deleteDiscoveryCache(e, r));
+    if (identityCurrent) await flushDiscoveryCache(deleteDiscoveryCache(serverName, serverRef));
     else
       logMCPDebug(
-        e,
+        serverName,
         "Discovery cache 401/403 purge skipped: identity changed since this connect round started (the current entry belongs to the new principal)",
       );
 }
@@ -200,20 +204,27 @@ var AUTH_REJECTION_SEVERITY = {
   },
 };
 //@ chunk-z1n5m6nf.js:48018-48422 placement
-function failWithAuthRejection({ name: e, serverRef, transportType, errorCode, message, displayDetail }) {
+function failWithAuthRejection({
+  name: serverName,
+  serverRef,
+  transportType,
+  errorCode,
+  message,
+  displayDetail,
+}) {
   logEvent("tengu_mcp_server_connection_failed", {
     transportType: fromEnum(transportType),
     errorCode: fromEnum(errorCode),
     sdkGeneration: fromEnum(mcpSdkGeneration()),
-    ...mcpBaseUrlAnalytics(serverRef, e),
+    ...mcpBaseUrlAnalytics(serverRef, serverName),
     ...buildPluginSourceFields(serverRef),
   });
   let { severity, featureErrorCode } = AUTH_REJECTION_SEVERITY[errorCode];
   if (severity === "bad") logFeatureBad("mcp_connect", featureErrorCode);
   else logFeatureSad("mcp_connect", featureErrorCode);
-  logMCPError(e, message);
+  logMCPError(serverName, message);
   return {
-    name: e,
+    name: serverName,
     type: "failed",
     config: serverRef,
     error: message,
@@ -224,60 +235,65 @@ function failWithAuthRejection({ name: e, serverRef, transportType, errorCode, m
   };
 }
 //@ chunk-z1n5m6nf.js:48422-49991 placement
-function failFirstPartyAuthRejected(e, name, config, transportType, statusCode) {
-  let y = "api.anthropic.com";
+function failFirstPartyAuthRejected(credentialKind, name, config, transportType, statusCode) {
+  let host = "api.anthropic.com";
   try {
-    if ("url" in config) y = new URL(config.url).host;
+    if ("url" in config) host = new URL(config.url).host;
   } catch {}
-  let S = `HTTP ${statusCode ?? 401}`;
-  let T = isDesignServerConfig(config);
-  let M;
-  switch (e) {
+  let statusLabel = `HTTP ${statusCode ?? 401}`;
+  let isDesignServer = isDesignServerConfig(config);
+  let message;
+  switch (credentialKind) {
     case "design_credential":
-      M =
+      message =
         statusCode === 403
-          ? `${y} rejected your /design-login credential (HTTP 403). Check that your account has access to Claude Design, or run /design-login to re-authorize it and retry.`
-          : `${y} rejected your /design-login credential (${S}). Run /design-login to re-authorize it and retry.`;
+          ? `${host} rejected your /design-login credential (HTTP 403). Check that your account has access to Claude Design, or run /design-login to re-authorize it and retry.`
+          : `${host} rejected your /design-login credential (${statusLabel}). Run /design-login to re-authorize it and retry.`;
       break;
     case "none":
-      M = `${y} needs a claude.ai sign-in and Claude Code had no usable credential to send (${S}). Run ${T ? "/design-login" : "/login"} and retry.`;
+      message = `${host} needs a claude.ai sign-in and Claude Code had no usable credential to send (${statusLabel}). Run ${isDesignServer ? "/design-login" : "/login"} and retry.`;
       break;
     case "design_scoped_login":
     case "login": {
-      if (statusCode === 403 && T)
-        M =
-          e === "design_scoped_login"
-            ? `${y} rejected your claude.ai login for Claude Design (HTTP 403) even though that login already includes Claude Design permissions, so this is most likely an account or project access problem. Check that your account has access to Claude Design; if it does, run /design-login and retry.`
-            : `${y} rejected your claude.ai login for Claude Design (HTTP 403), most likely because a /login token carries no Claude Design access. Run /design-login and retry, or check that your account has access to Claude Design.`;
+      if (statusCode === 403 && isDesignServer)
+        message =
+          credentialKind === "design_scoped_login"
+            ? `${host} rejected your claude.ai login for Claude Design (HTTP 403) even though that login already includes Claude Design permissions, so this is most likely an account or project access problem. Check that your account has access to Claude Design; if it does, run /design-login and retry.`
+            : `${host} rejected your claude.ai login for Claude Design (HTTP 403), most likely because a /login token carries no Claude Design access. Run /design-login and retry, or check that your account has access to Claude Design.`;
       else
-        M =
+        message =
           statusCode === 403
-            ? `${y} rejected your claude.ai login (HTTP 403). Check that your account has access to this server. If it does, your ` +
+            ? `${host} rejected your claude.ai login (HTTP 403). Check that your account has access to this server. If it does, your ` +
               `token may be missing a scope \u2014 run ${"/login"} and retry.`
-            : `${y} rejected your claude.ai login (${S}). Run /login and retry.`;
+            : `${host} rejected your claude.ai login (${statusLabel}). Run /login and retry.`;
       break;
     }
     default:
-      return e;
+      return credentialKind;
   }
   return failWithAuthRejection({
     name,
     serverRef: config,
     transportType,
     errorCode: "FIRST_PARTY_AUTH_REJECTED",
-    message: M,
+    message,
   });
 }
 //@ chunk-z1n5m6nf.js:49991-50071 placement
 /**
  * 判断错误是否属于认证失败（401/403 或认证错误）。
  */
-function isAuthFailure_2(error, r, n) {
-  return error instanceof UnauthorizedError || (error instanceof ZodError && n) || r === 401 || r === 403;
+function isAuthFailure_2(error, statusCode, sawAuthChallenge) {
+  return (
+    error instanceof UnauthorizedError ||
+    (error instanceof ZodError && sawAuthChallenge) ||
+    statusCode === 401 ||
+    statusCode === 403
+  );
 }
 //@ chunk-z1n5m6nf.js:50071-51610 placement
 async function handleRemoteConnectAuthError_2({
-  name,
+  name: serverName,
   serverRef,
   transportType,
   error,
@@ -292,12 +308,12 @@ async function handleRemoteConnectAuthError_2({
   roundEpoch,
   storageV5,
 }) {
-  await recordTokenlessRejection(name, serverRef, authProvider);
+  await recordTokenlessRejection(serverName, serverRef, authProvider);
   if (!isAuthFailure_2(error, statusCode, sawAuthChallenge)) return;
   if (hasUserAuthHeader) {
-    let he = sanitizeErrorDetail(redactMcpErrorDetail(name, serverRef, error.message));
+    let errorDetail = sanitizeErrorDetail(redactMcpErrorDetail(serverName, serverRef, error.message));
     return failWithAuthRejection({
-      name,
+      name: serverName,
       serverRef,
       transportType,
       errorCode: "AUTH_HEADER_REJECTED",
@@ -305,15 +321,15 @@ async function handleRemoteConnectAuthError_2({
         `Server rejected the configured Authorization header (HTTP ${statusCode ?? 401}). ` +
         "Check that the token is valid for this MCP endpoint \u2014 OAuth fallback is " +
         "disabled when headers.Authorization is set.",
-      ...(he !== "" && {
-        displayDetail: `Error detail: ${he}`,
+      ...(errorDetail !== "" && {
+        displayDetail: `Error detail: ${errorDetail}`,
       }),
     });
   }
   if (helperMintsAuthHeader) {
-    let he = sanitizeErrorDetail(redactMcpErrorDetail(name, serverRef, error.message));
+    let errorDetail = sanitizeErrorDetail(redactMcpErrorDetail(serverName, serverRef, error.message));
     return failWithAuthRejection({
-      name,
+      name: serverName,
       serverRef,
       transportType,
       errorCode: "HEADERS_HELPER_AUTH_REJECTED",
@@ -321,44 +337,66 @@ async function handleRemoteConnectAuthError_2({
         `Server rejected the Authorization header minted by the configured headersHelper (HTTP ${statusCode ?? 401}). ` +
         "Check that the helper command returns a valid credential for this MCP endpoint \u2014 OAuth fallback is " +
         "disabled when the helper supplies Authorization.",
-      ...(he !== "" && {
-        displayDetail: `Error detail: ${he}`,
+      ...(errorDetail !== "" && {
+        displayDetail: `Error detail: ${errorDetail}`,
       }),
     });
   }
   if (cliOwnedBearer)
     return failWithAuthRejection({
-      name,
+      name: serverName,
       serverRef,
       transportType,
       errorCode: "CLI_OWNED_BEARER_REJECTED",
       message: `Server rejected the session credential (HTTP ${statusCode ?? 401}). It will be retried when the session credential is refreshed.`,
     });
   if (useFirstPartyAuth)
-    return failFirstPartyAuthRejected(firstPartyBearer ?? "none", name, serverRef, transportType, statusCode);
-  let U = error instanceof UnauthorizedError || statusCode === 401;
-  let re = await handleRejectedToken({
-    name,
+    return failFirstPartyAuthRejected(
+      firstPartyBearer ?? "none",
+      serverName,
+      serverRef,
+      transportType,
+      statusCode,
+    );
+  let isRefreshPath401 = error instanceof UnauthorizedError || statusCode === 401;
+  let rejectedTokenResult = await handleRejectedToken({
+    name: serverName,
     serverRef,
     authProvider,
-    isRefreshPath401: U,
+    isRefreshPath401,
     needsAuth: () =>
-      handleRemoteAuthFailure_2(name, serverRef, transportType, error, U, roundEpoch, storageV5),
+      handleRemoteAuthFailure_2(
+        serverName,
+        serverRef,
+        transportType,
+        error,
+        isRefreshPath401,
+        roundEpoch,
+        storageV5,
+      ),
   });
-  if (re !== undefined) {
-    await purgeDiscoveryCacheOnAuthFailure(name, serverRef, roundEpoch);
-    return re;
+  if (rejectedTokenResult !== undefined) {
+    await purgeDiscoveryCacheOnAuthFailure(serverName, serverRef, roundEpoch);
+    return rejectedTokenResult;
   }
-  return handleRemoteAuthFailure_2(name, serverRef, transportType, error, U, roundEpoch, storageV5);
+  return handleRemoteAuthFailure_2(
+    serverName,
+    serverRef,
+    transportType,
+    error,
+    isRefreshPath401,
+    roundEpoch,
+    storageV5,
+  );
 }
 //@ chunk-z1n5m6nf.js:51610-52203 placement
 /**
  * wrapFetchWithCcrSessionAuth（v1 副本）。
  */
-function wrapFetchWithCcrSessionAuth_2(wsHeadersForLogging, r, n) {
+function wrapFetchWithCcrSessionAuth_2(wsHeadersForLogging, dialOptions, connectionKey) {
   wsHeadersForLogging = stripRedirectLocation(wsHeadersForLogging);
-  return async (s, h) => {
-    let headers = new Headers(h?.headers);
+  return async (url, init) => {
+    let headers = new Headers(init?.headers);
     if (!headers.has("Authorization")) {
       let sessionIngressAuthToken = getSessionIngressAuthToken();
       if (sessionIngressAuthToken) {
@@ -370,35 +408,35 @@ function wrapFetchWithCcrSessionAuth_2(wsHeadersForLogging, r, n) {
     headers.delete(X_CCR_TURN_ID);
     if (currentCallId) headers.set(X_CCR_TURN_ID, currentCallId);
     headers.delete(X_CCR_DIAL_TOOL_USE_ID);
-    if (r?.toolUseId !== undefined) {
-      let R = classifyHandshakeRequest(h);
-      if (R === "handshake" || (R === "listing" && r.withListings))
-        headers.set(X_CCR_DIAL_TOOL_USE_ID, r.toolUseId);
+    if (dialOptions?.toolUseId !== undefined) {
+      let handshakeKind = classifyHandshakeRequest(init);
+      if (handshakeKind === "handshake" || (handshakeKind === "listing" && dialOptions.withListings))
+        headers.set(X_CCR_DIAL_TOOL_USE_ID, dialOptions.toolUseId);
     }
-    getConnectionCache().attachCcrTicket(s, headers);
-    let redirect = h?.redirect === "error" ? "error" : "manual";
-    let M = await wsHeadersForLogging(s, {
-      ...h,
+    getConnectionCache().attachCcrTicket(url, headers);
+    let redirect = init?.redirect === "error" ? "error" : "manual";
+    let response = await wsHeadersForLogging(url, {
+      ...init,
       headers,
       redirect,
     });
     let connectionCache = getConnectionCache();
-    connectionCache.noteCcrTicket(s, headers, M);
+    connectionCache.noteCcrTicket(url, headers, response);
     if (
-      n !== undefined &&
-      (M.status === 401 || connectionCache.lapsedCcrSignIns.has(n)) &&
-      classifyHandshakeRequest(h) !== undefined
+      connectionKey !== undefined &&
+      (response.status === 401 || connectionCache.lapsedCcrSignIns.has(connectionKey)) &&
+      classifyHandshakeRequest(init) !== undefined
     )
-      connectionCache.noteCcrDialAnswer(n, M);
-    return M;
+      connectionCache.noteCcrDialAnswer(connectionKey, response);
+    return response;
   };
 }
 //@ chunk-z1n5m6nf.js:52203-52460 placement
-function classifyHandshakeRequest(e) {
-  if (e?.method?.toUpperCase() !== "POST" || typeof e.body !== "string") return;
-  let method = u({
-    method: string(),
-  }).safeParse(safeParseJSON(e.body, false)).data?.method;
+function classifyHandshakeRequest(init) {
+  if (init?.method?.toUpperCase() !== "POST" || typeof init.body !== "string") return;
+  let method = objectSchema({
+    method: stringSchema(),
+  }).safeParse(safeParseJSON(init.body, false)).data?.method;
   if (method === "initialize" || method === "notifications/initialized") return "handshake";
   return method === "tools/list" ? "listing" : undefined;
 }
@@ -409,71 +447,71 @@ var TOOL_USE_ID_PATTERN = /^toolu_[A-Za-z0-9_-]{1,64}$/;
 /**
  * wrapFetchWithCliOwnedBearer（v1 副本）。
  */
-function wrapFetchWithCliOwnedBearer_2(wsHeadersForLogging, serverRef) {
-  let n = async (...[s, h]) => {
-    let y = {
-      method: (h?.method ?? "GET").toUpperCase(),
-      body: h?.body,
+function wrapFetchWithCliOwnedBearer_2(wsHeadersForLogging, config) {
+  let attemptRequest = async (...[url, init]) => {
+    let requestMeta = {
+      method: (init?.method ?? "GET").toUpperCase(),
+      body: init?.body,
     };
-    await runBeforeRequestHook(serverRef, y);
-    let headers = new Headers(h?.headers);
+    await runBeforeRequestHook(config, requestMeta);
+    let headers = new Headers(init?.headers);
     let bearerFingerprint = null;
-    let M = false;
+    let isBearerWithheld = false;
     if (!headers.has("Authorization")) {
-      let bearerTokenFor = await resolveBearerTokenFor(serverRef);
+      let bearerTokenFor = await resolveBearerTokenFor(config);
       if (bearerTokenFor) {
         getPresentedCredentialLog().record(bearerTokenFor);
         headers.set("Authorization", `Bearer ${bearerTokenFor}`);
         bearerFingerprint = shortHash(bearerTokenFor);
       } else {
-        M = true;
-        let Q = withheldBearerRefusalFor(serverRef);
-        if (Q !== undefined)
+        isBearerWithheld = true;
+        let refusalMessage = withheldBearerRefusalFor(config);
+        if (refusalMessage !== undefined)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            Q,
+            refusalMessage,
             "CLI-owned MCP request not sent: its bearer was withheld",
           );
       }
     }
-    let w = {};
-    for (let [key, value] of Object.entries(cliOwnedRequestHeaders(serverRef, y)))
+    let ownedHeaders = {};
+    for (let [key, value] of Object.entries(cliOwnedRequestHeaders(config, requestMeta)))
       if (
         !headers.has(key) &&
         key.toLowerCase() !== "authorization" &&
-        !(M && isCredentialRequestHeader(serverRef, key))
+        !(isBearerWithheld && isCredentialRequestHeader(config, key))
       ) {
         headers.set(key, value);
-        w[key] = value;
+        ownedHeaders[key] = value;
       }
-    let R = await wsHeadersForLogging(s, {
-      ...h,
+    let response = await wsHeadersForLogging(url, {
+      ...init,
       headers,
       redirect: "error",
     });
-    notifyResponseObserver(serverRef, {
-      method: y.method,
-      status: R.status,
-      headers: R.headers,
+    notifyResponseObserver(config, {
+      method: requestMeta.method,
+      status: response.status,
+      headers: response.headers,
       requestHeaders: {
-        get: (E) =>
-          E.toLowerCase() === "authorization" || isCredentialRequestHeader(serverRef, E)
+        get: (headerName) =>
+          headerName.toLowerCase() === "authorization" || isCredentialRequestHeader(config, headerName)
             ? null
-            : headers.get(E),
+            : headers.get(headerName),
       },
       bearerFingerprint,
     });
     return {
-      response: R,
-      owned: w,
+      response,
+      owned: ownedHeaders,
     };
   };
-  return async (s, h) => {
-    let { response, owned } = await n(s, h);
-    if (!(await shouldResendRequest(serverRef, response, owned))) return response;
+  return async (url, init) => {
+    let { response, owned } = await attemptRequest(url, init);
+    if (!(await shouldResendRequest(config, response, owned))) return response;
     await response.body?.cancel().catch(() => {});
-    let T = await n(s, h);
-    shouldResendRequest(serverRef, T.response, T.owned);
-    return T.response;
+    let retryResult = await attemptRequest(url, init);
+    shouldResendRequest(config, retryResult.response, retryResult.owned);
+    return retryResult.response;
   };
 }
 //@ chunk-z1n5m6nf.js:53469-53731 placement
@@ -494,8 +532,8 @@ class ClaudeAiProxyBearerRejectedError extends Error {
 /**
  * createClaudeAiProxyFetch（v1 副本）。
  */
-function createClaudeAiProxyFetch_2(e, credentials) {
-  e = stripRedirectLocation(e);
+function createClaudeAiProxyFetch_2(fetchFn, credentials) {
+  fetchFn = stripRedirectLocation(fetchFn);
   return async (url, init) => {
     let doRequest = async () => {
       await checkAndRefreshOAuthTokenIfNeeded({
@@ -511,7 +549,7 @@ function createClaudeAiProxyFetch_2(e, credentials) {
       headers.set("Authorization", `Bearer ${currentTokens.accessToken}`);
       let redirect = init?.redirect === "error" ? "error" : "manual";
       return {
-        response: await e(url, {
+        response: await fetchFn(url, {
           ...init,
           headers,
           redirect,
@@ -519,7 +557,7 @@ function createClaudeAiProxyFetch_2(e, credentials) {
         sentToken: currentTokens.accessToken,
       };
     };
-    async function y(response) {
+    async function normalizeErrorResponse(response) {
       if (response.status >= 400 && response.headers.get("content-type")?.includes("text/event-stream")) {
         let text = await response.text();
         let found = text
@@ -537,20 +575,20 @@ function createClaudeAiProxyFetch_2(e, credentials) {
       return response;
     }
     let { response, sentToken } = await doRequest();
-    if (response.status !== 401) return y(response);
-    let M = response.headers.get("X-Mcp-Error-Code") ?? undefined;
-    if (M) {
+    if (response.status !== 401) return normalizeErrorResponse(response);
+    let proxyErrorCode = response.headers.get("X-Mcp-Error-Code") ?? undefined;
+    if (proxyErrorCode) {
       logEvent("tengu_mcp_claudeai_proxy_401", {
         tokenChanged: false,
-        proxyErrorCode: sanitizedFeatureErrorCodeForTelemetry(M),
+        proxyErrorCode: sanitizedFeatureErrorCodeForTelemetry(proxyErrorCode),
       });
       return response;
     }
-    let w = await handleOAuth401Error(sentToken, credentials).catch(() => false);
+    let tokenChanged = await handleOAuth401Error(sentToken, credentials).catch(() => false);
     logEvent("tengu_mcp_claudeai_proxy_401", {
-      tokenChanged: w,
+      tokenChanged,
     });
-    if (!w) {
+    if (!tokenChanged) {
       let now =
         isStorageV5Enabled() && credentials !== undefined
           ? await readFreshOAuthAccessToken(credentials)
@@ -560,15 +598,15 @@ function createClaudeAiProxyFetch_2(e, credentials) {
     let response_2 = (await doRequest()).response;
     if (response_2.status === 401 && !response_2.headers.get("X-Mcp-Error-Code"))
       throw new ClaudeAiProxyBearerRejectedError();
-    return y(response_2);
+    return normalizeErrorResponse(response_2);
   };
 }
 //@ chunk-z1n5m6nf.js:54902-55414 placement
-async function expandFirstPartyDesignScopes(e, r) {
-  if (isDesignMcpUrl(e)) {
-    let s = await getScaffoldResolver()?.(r);
-    if (s?.ok) {
-      if (s.expanded) {
+async function expandFirstPartyDesignScopes(url, credentials) {
+  if (isDesignMcpUrl(url)) {
+    let scaffoldResult = await getScaffoldResolver()?.(credentials);
+    if (scaffoldResult?.ok) {
+      if (scaffoldResult.expanded) {
         noteScopeExpansion(
           "Added user:design:read and user:design:write to your claude.ai login (for the Design MCP connector).",
         );
@@ -577,20 +615,22 @@ async function expandFirstPartyDesignScopes(e, r) {
         });
       }
       return {
-        accessToken: s.accessToken,
-        bearer: s.bearer,
+        accessToken: scaffoldResult.accessToken,
+        bearer: scaffoldResult.bearer,
       };
     }
   }
   await checkAndRefreshOAuthTokenIfNeeded({
-    credentials: r,
+    credentials,
   });
-  let n =
-    isStorageV5Enabled() && r !== undefined ? await getClaudeAIOAuthTokensAsync(r) : getClaudeAIOAuthTokens();
-  if (!n?.accessToken) return;
+  let tokens =
+    isStorageV5Enabled() && credentials !== undefined
+      ? await getClaudeAIOAuthTokensAsync(credentials)
+      : getClaudeAIOAuthTokens();
+  if (!tokens?.accessToken) return;
   return {
-    accessToken: n.accessToken,
-    bearer: n.scopes?.includes("user:design:read") ? "design_scoped_login" : "login",
+    accessToken: tokens.accessToken,
+    bearer: tokens.scopes?.includes("user:design:read") ? "design_scoped_login" : "login",
   };
 }
 //@ chunk-z1n5m6nf.js:55414-55643 placement
@@ -598,38 +638,41 @@ async function expandFirstPartyDesignScopes(e, r) {
  * readNeedsConsentBit（v1 副本）。
  */
 async function readNeedsConsentBit(response) {
-  let r = peekScopeExpansionNotice();
-  if (r === null) return null;
-  let n;
+  let notice = peekScopeExpansionNotice();
+  if (notice === null) return null;
+  let body;
   try {
-    n = await response.clone().json();
+    body = await response.clone().json();
   } catch {
     return null;
   }
-  if (n == null || typeof n !== "object" || n.error !== "needs_consent") return null;
-  let consent = n.consent;
-  return r.isConsentBit(consent) ? consent : null;
+  if (body == null || typeof body !== "object" || body.error !== "needs_consent") return null;
+  let consent = body.consent;
+  return notice.isConsentBit(consent) ? consent : null;
 }
 //@ chunk-z1n5m6nf.js:55643-55780 placement
-function noteDesignProjectId(e, r, name, s) {
-  if (!r || !MEMBERSHIP_METHODS.has(name)) return;
-  let projectId = s.project_id;
+function noteDesignProjectId(designSession, isDesignServer, name, payload) {
+  if (!isDesignServer || !MEMBERSHIP_METHODS.has(name)) return;
+  let projectId = payload.project_id;
   if (typeof projectId === "string" && projectId.length > 0) {
-    clearApprovedPlans(e, projectId);
-    clearPlansForProject(e, projectId);
-    clearVerifiedProjectGrant(e, projectId);
-    markRecardProject(e, projectId);
+    clearApprovedPlans(designSession, projectId);
+    clearPlansForProject(designSession, projectId);
+    clearVerifiedProjectGrant(designSession, projectId);
+    markRecardProject(designSession, projectId);
   }
 }
 //@ chunk-z1n5m6nf.js:55780-55845 placement
-var DESIGN_WRITE_TOOLS = new Set(["write_files", "create_support_js", "copy_files"]);
+var DESIGN_WRITE_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-z1n5m6nf.js:55780", () => {
+  DESIGN_WRITE_TOOLS = new Set(["write_files", "create_support_js", "copy_files"]);
+});
 //@ chunk-z1n5m6nf.js:55845-56372 placement
 /**
  * gateDesignWriteWithoutPlanToken（v1 副本）。
  */
-function gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, name, n) {
+function gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, name, input) {
   if (!isFirstPartyDesignServer || !DESIGN_WRITE_TOOLS.has(name)) return null;
-  let planToken = n?.plan_token;
+  let planToken = input?.plan_token;
   if (typeof planToken === "string" && planToken.length > 0) return null;
   return {
     behavior: "deny",
@@ -643,12 +686,15 @@ function gateDesignWriteWithoutPlanToken(isFirstPartyDesignServer, name, n) {
   };
 }
 //@ chunk-z1n5m6nf.js:56372-56434 placement
-var DESIGN_PLAN_TOOLS = new Set([
-  ...DESIGN_WRITE_TOOLS,
-  "finalize_plan",
-  "delete_files",
-  ...MEMBERSHIP_METHODS,
-]);
+var DESIGN_PLAN_TOOLS; // deferred: uses DESIGN_WRITE_TOOLS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z1n5m6nf.js:56372", () => {
+  DESIGN_PLAN_TOOLS = new Set([
+    ...DESIGN_WRITE_TOOLS,
+    "finalize_plan",
+    "delete_files",
+    ...MEMBERSHIP_METHODS,
+  ]);
+});
 //@ chunk-z1n5m6nf.js:56434-56471 placement
 function isDesignGatedTool(isFirstPartyDesignServer, name) {
   return isFirstPartyDesignServer && DESIGN_PLAN_TOOLS.has(name);
@@ -657,12 +703,12 @@ function isDesignGatedTool(isFirstPartyDesignServer, name) {
 /**
  * askDesignConsent（v1 副本）。
  */
-function askDesignConsent(message, r, __consentNonce) {
+function askDesignConsent(message, input, __consentNonce) {
   return {
     behavior: "ask",
     message,
     updatedInput: {
-      ...r,
+      ...input,
       __consentNonce,
     },
     localDisplayOnly: true,
@@ -686,10 +732,10 @@ function isDesignServerConfig(config) {
 /**
  * canAskDesignConsent（v1 副本）。
  */
-function canAskDesignConsent(e) {
-  let toolPermissionContext = getToolPermissionContext(e);
+function canAskDesignConsent(tool) {
+  let toolPermissionContext = getToolPermissionContext(tool);
   return (
-    !e.options.isNonInteractiveSession &&
+    !tool.options.isNonInteractiveSession &&
     toolPermissionContext.mode !== "bypassPermissions" &&
     !(toolPermissionContext.mode === "plan" && toolPermissionContext.isBypassPermissionsModeAvailable)
   );
@@ -698,8 +744,8 @@ function canAskDesignConsent(e) {
 /**
  * canPromptForPermission（v1 副本）。
  */
-function canPromptForPermission(e) {
-  let toolPermissionContext = getToolPermissionContext(e);
+function canPromptForPermission(tool) {
+  let toolPermissionContext = getToolPermissionContext(tool);
   return (
     toolPermissionContext.mode !== "bypassPermissions" &&
     toolPermissionContext.mode !== "dontAsk" &&
@@ -713,71 +759,71 @@ var MAX_DESIGN_CONSENT_ASKS = 100;
 /**
  * rememberDesignConsentAsk（v1 副本）。
  */
-function rememberDesignConsentAsk(toolUseId, r, n) {
+function rememberDesignConsentAsk(toolUseId, consentBit, askReachesUser) {
   let firstPartyDesignConsentAsks = getCliOwnedState().firstPartyDesignConsentAsks;
-  let h = firstPartyDesignConsentAsks.get(toolUseId);
-  let y = h !== undefined && h.bit === r;
-  let S = y ? h.nonce : randomUUID();
+  let existingAsk = firstPartyDesignConsentAsks.get(toolUseId);
+  let sameBit = existingAsk !== undefined && existingAsk.bit === consentBit;
+  let nonce = sameBit ? existingAsk.nonce : randomUUID();
   firstPartyDesignConsentAsks.delete(toolUseId);
   firstPartyDesignConsentAsks.set(toolUseId, {
-    bit: r,
-    nonce: S,
-    askReachesUser: y ? h.askReachesUser && n : n,
+    bit: consentBit,
+    nonce,
+    askReachesUser: sameBit ? existingAsk.askReachesUser && askReachesUser : askReachesUser,
   });
   while (firstPartyDesignConsentAsks.size > MAX_DESIGN_CONSENT_ASKS) {
-    let T = firstPartyDesignConsentAsks.keys().next().value;
-    if (T === undefined) break;
-    firstPartyDesignConsentAsks.delete(T);
+    let oldestToolUseId = firstPartyDesignConsentAsks.keys().next().value;
+    if (oldestToolUseId === undefined) break;
+    firstPartyDesignConsentAsks.delete(oldestToolUseId);
   }
-  return S;
+  return nonce;
 }
 //@ chunk-z1n5m6nf.js:57446-57656 placement
 /**
  * takeDesignConsentAsk（v1 副本）。
  */
-function takeDesignConsentAsk(e, r) {
-  if (e === undefined) return null;
+function takeDesignConsentAsk(toolUseId, nonce) {
+  if (toolUseId === undefined) return null;
   let firstPartyDesignConsentAsks = getCliOwnedState().firstPartyDesignConsentAsks;
-  let s = firstPartyDesignConsentAsks.get(e) ?? null;
-  firstPartyDesignConsentAsks.delete(e);
-  if (s === null || r === undefined || s.nonce !== r) return null;
+  let ask = firstPartyDesignConsentAsks.get(toolUseId) ?? null;
+  firstPartyDesignConsentAsks.delete(toolUseId);
+  if (ask === null || nonce === undefined || ask.nonce !== nonce) return null;
   return {
-    bit: s.bit,
-    askReachesUser: s.askReachesUser,
+    bit: ask.bit,
+    askReachesUser: ask.askReachesUser,
   };
 }
 //@ chunk-z1n5m6nf.js:57656-58489 placement
 /**
  * wrapCallWithDesignConsent（v1 副本）。
  */
-function wrapCallWithDesignConsent(e, r) {
-  let { designSession, approvedConsentBit, consentAskReachesUser, credentials } = r;
-  return async (S) => {
-    let T = peekScopeExpansionNotice();
+function wrapCallWithDesignConsent(callTool, options) {
+  let { designSession, approvedConsentBit, consentAskReachesUser, credentials } = options;
+  return async (requestOptions) => {
+    let notice = peekScopeExpansionNotice();
     try {
-      let M = await e(S);
-      if (approvedConsentBit !== null && !S.aborted)
-        T?.seedDesignConsentBit(designSession, approvedConsentBit, true);
-      return M;
+      let result = await callTool(requestOptions);
+      if (approvedConsentBit !== null && !requestOptions.aborted)
+        notice?.seedDesignConsentBit(designSession, approvedConsentBit, true);
+      return result;
     } catch (error) {
-      if (!(error instanceof FirstPartyDesignNeedsConsentError) || !T) throw error;
+      if (!(error instanceof FirstPartyDesignNeedsConsentError) || !notice) throw error;
       let consent = error.consent;
       if (consent !== approvedConsentBit) {
-        T.seedDesignConsentBit(designSession, consent, false);
+        notice.seedDesignConsentBit(designSession, consent, false);
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${T.consentPromptFor(consent)} The user hasn't granted this yet \u2014 ask them to retry (the prompt will show on the next call) or run /design consent.`,
+          `${notice.consentPromptFor(consent)} The user hasn't granted this yet \u2014 ask them to retry (the prompt will show on the next call) or run /design consent.`,
           "first-party design MCP needs_consent (not shown)",
         );
       }
       if (!consentAskReachesUser) {
-        T.seedDesignConsentBit(designSession, consent, false);
+        notice.seedDesignConsentBit(designSession, consent, false);
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `${T.consentPromptFor(consent)} The user hasn't granted this \u2014 run /design consent to grant it (it can't be approved automatically in this permission mode).`,
+          `${notice.consentPromptFor(consent)} The user hasn't granted this \u2014 run /design consent to grant it (it can't be approved automatically in this permission mode).`,
           "first-party design MCP needs_consent (no prompt)",
         );
       }
-      await T.postDesignConsent(designSession, consent, credentials);
-      return e(S);
+      await notice.postDesignConsent(designSession, consent, credentials);
+      return callTool(requestOptions);
     }
   };
 }
@@ -785,81 +831,81 @@ function wrapCallWithDesignConsent(e, r) {
 /**
  * wrapFetchWithFirstPartyAuth（v1 副本）。
  */
-function wrapFetchWithFirstPartyAuth_2(e, credentials, n) {
-  e = stripRedirectLocation(e);
-  return async (s, h) => {
-    let headers = new Headers(h?.headers);
-    let redirect = h?.redirect === "error" ? "error" : "manual";
-    if (headers.has("Authorization") || !isFirstPartyMcpUrl(s) || !isFirstPartyProvider())
-      return e(s, {
-        ...h,
+function wrapFetchWithFirstPartyAuth_2(fetchFn, credentials, bearerTracker) {
+  fetchFn = stripRedirectLocation(fetchFn);
+  return async (url, init) => {
+    let headers = new Headers(init?.headers);
+    let redirect = init?.redirect === "error" ? "error" : "manual";
+    if (headers.has("Authorization") || !isFirstPartyMcpUrl(url) || !isFirstPartyProvider())
+      return fetchFn(url, {
+        ...init,
         redirect,
       });
-    let T = async () => {
-      let U = await expandFirstPartyDesignScopes(s, credentials);
-      n.last = U?.bearer ?? "none";
-      if (!U)
+    let sendWithAuth = async () => {
+      let designAuth = await expandFirstPartyDesignScopes(url, credentials);
+      bearerTracker.last = designAuth?.bearer ?? "none";
+      if (!designAuth)
         return {
-          response: await e(s, {
-            ...h,
+          response: await fetchFn(url, {
+            ...init,
             redirect,
           }),
           sentToken: undefined,
         };
-      let accessToken = U.accessToken;
+      let accessToken = designAuth.accessToken;
       getPresentedCredentialLog().record(accessToken);
       let headers = {
-        ...Object.fromEntries(new Headers(h?.headers)),
+        ...Object.fromEntries(new Headers(init?.headers)),
         Authorization: `Bearer ${accessToken}`,
       };
       return {
-        response: await e(s, {
-          ...h,
+        response: await fetchFn(url, {
+          ...init,
           headers,
           redirect,
         }),
         sentToken: accessToken,
       };
     };
-    let M = async (U) => {
-      if (U.response.status === 403 && U.sentToken && isDesignMcpUrl(s)) {
-        let consent = await readNeedsConsentBit(U.response);
+    let checkConsent = async (attempt) => {
+      if (attempt.response.status === 403 && attempt.sentToken && isDesignMcpUrl(url)) {
+        let consent = await readNeedsConsentBit(attempt.response);
         if (consent !== null) throw new FirstPartyDesignNeedsConsentError(consent);
       }
     };
-    let w = await T();
-    await M(w);
-    let { response, sentToken } = w;
+    let firstAttempt = await sendWithAuth();
+    await checkConsent(firstAttempt);
+    let { response, sentToken } = firstAttempt;
     if (response.status !== 401 || !sentToken) return response;
     if (!(await handleOAuth401Error(sentToken, credentials).catch(() => false))) {
-      let U =
+      let freshToken =
         isStorageV5Enabled() && credentials !== undefined
           ? await readFreshOAuthAccessToken(credentials)
           : getClaudeAIOAuthTokens()?.accessToken;
-      if (!U || U === sentToken) return response;
+      if (!freshToken || freshToken === sentToken) return response;
     }
-    let H;
+    let retryAttempt;
     try {
-      H = await T();
+      retryAttempt = await sendWithAuth();
     } catch {
       return response;
     }
-    await M(H);
-    return H.response;
+    await checkConsent(retryAttempt);
+    return retryAttempt.response;
   };
 }
 //@ chunk-z1n5m6nf.js:59383-59606 placement
 /**
  * mergeRequestHeaders（v1 副本）。
  */
-function mergeRequestHeaders_2(headers, authHeaders, n) {
+function mergeRequestHeaders_2(headers, authHeaders, extraHeaders) {
   let headers_2 = new Headers({
     "User-Agent": getMCPUserAgent(),
     "Accept-Encoding": "identity",
     ...authHeaders,
   });
-  new Headers(headers).forEach((h, y) => headers_2.set(y, h));
-  for (let [key, value] of Object.entries(n)) headers_2.set(key, value);
+  new Headers(headers).forEach((value, key) => headers_2.set(key, value));
+  for (let [key, value] of Object.entries(extraHeaders)) headers_2.set(key, value);
   headers_2.set("Accept", "text/event-stream");
   return headers_2;
 }
@@ -884,4 +930,7 @@ export {
   noteDesignProjectId,
   canPromptForPermission,
   wrapCallWithDesignConsent,
+  ClaudeAiProxyBearerRejectedError,
+  DESIGN_WRITE_TOOLS,
+  readNeedsConsentBit,
 };

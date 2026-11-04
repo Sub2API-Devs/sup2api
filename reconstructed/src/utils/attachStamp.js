@@ -11,6 +11,7 @@
 import { HostScoped } from "./hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { sleep } from "./sleep.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-qmbda0jr.js:333-434 placement
 class AttachStampState {
@@ -25,7 +26,10 @@ class AttachStampState {
 /**
  * 按宿主隔离的附加时间戳状态。
  */
-var attachStampByHost = new HostScoped(() => new AttachStampState());
+var attachStampByHost; // deferred: uses AttachStampState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-qmbda0jr.js:434", () => {
+  attachStampByHost = new HostScoped(() => new AttachStampState());
+});
 //@ chunk-qmbda0jr.js:457-492 placement
 /**
  * 取出当前宿主的附加时间戳状态。
@@ -37,14 +41,14 @@ function getAttachStampState() {
 /**
  * 记录附加时间戳（0 重置）。
  */
-function noteAttachStamp(e) {
+function noteAttachStamp(nowMs) {
   let attachStampState = getAttachStampState();
-  if (e === 0) {
+  if (nowMs === 0) {
     attachStampState.reset();
     return;
   }
   if (attachStampState.detachedSinceLastAttach || attachStampState.stampMs === 0)
-    attachStampState.stampMs = e;
+    attachStampState.stampMs = nowMs;
   attachStampState.detachedSinceLastAttach = false;
 }
 //@ chunk-qmbda0jr.js:630-676 placement
@@ -72,7 +76,7 @@ function getAttachStampMs() {
 /**
  * 附加是否已稳定（当前恒返回 false）。
  */
-function isAttachSettled(e) {
+function isAttachSettled(nowMs) {
   return false;
 }
 //@ chunk-qmbda0jr.js:785-945 placement
@@ -84,8 +88,8 @@ async function waitForAttachSettle() {
     let now = Date.now();
     if (!isAttachSettled(now)) return;
     let { detachedSinceLastAttach, stampMs } = getAttachStampState();
-    let c = detachedSinceLastAttach || stampMs === 0 ? 500 : stampMs + 500 - now;
-    await sleep(Math.max(25, c) + 25);
+    let waitMs = detachedSinceLastAttach || stampMs === 0 ? 500 : stampMs + 500 - now;
+    await sleep(Math.max(25, waitMs) + 25);
   }
 }
 export {

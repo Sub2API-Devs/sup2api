@@ -297,26 +297,26 @@ var PATH_READ_COMMANDS = new Set([
   "return",
 ]);
 //@ chunk-tr0s0d0k.js:44632-45067 placement
-async function parseServedShellLine(command) {
+async function parseServedShellLine(source) {
   try {
-    if (!/^[\t\n\x20-\x7e]*$/.test(command)) return;
-    let commandRaw = await parseCommandRaw(command);
+    if (!/^[\t\n\x20-\x7e]*$/.test(source)) return;
+    let commandRaw = await parseCommandRaw(source);
     if (commandRaw === null || commandRaw === PARSE_ABORTED) return;
-    let programVariables = collectProgramVariables(commandRaw, command, false);
+    let programVariables = collectProgramVariables(commandRaw, source, false);
     if (programVariables === undefined || programVariables.replacements.length === 0) return;
-    let r = "";
-    let s = 0;
+    let replaced = "";
+    let cursor = 0;
     for (let replacement of programVariables.replacements) {
-      if (replacement.start < s) return;
-      r += command.slice(s, replacement.start) + replacement.value;
-      s = replacement.end;
+      if (replacement.start < cursor) return;
+      replaced += source.slice(cursor, replacement.start) + replacement.value;
+      cursor = replacement.end;
     }
-    r += command.slice(s);
-    let commandRaw_2 = await parseCommandRaw(r);
+    replaced += source.slice(cursor);
+    let commandRaw_2 = await parseCommandRaw(replaced);
     if (commandRaw_2 === null || commandRaw_2 === PARSE_ABORTED) return;
-    let programVariables_2 = collectProgramVariables(commandRaw_2, r, true);
+    let programVariables_2 = collectProgramVariables(commandRaw_2, replaced, true);
     return programVariables_2 !== undefined && programVariables_2.skeleton === programVariables.skeleton
-      ? r
+      ? replaced
       : undefined;
   } catch (error) {
     if (!isAbortError(error)) logError(error);
@@ -324,159 +324,169 @@ async function parseServedShellLine(command) {
   }
 }
 //@ chunk-tr0s0d0k.js:45067-46024 placement
-function collectProgramVariables(commandRaw, n, o) {
+function collectProgramVariables(commandRaw, source, secondPass) {
   if (commandRaw.type !== "program") return;
-  let r = new Map();
-  let s = new Set();
-  let d = [];
-  let u = "";
-  for (let [p, h] of commandRaw.children.entries()) {
-    if (h.type === ";" || h.type === "&") {
-      u += h.type;
+  let values = new Map();
+  let names = new Set();
+  let replacements = [];
+  let skeleton = "";
+  for (let [index, child] of commandRaw.children.entries()) {
+    if (child.type === ";" || child.type === "&") {
+      skeleton += child.type;
       continue;
     }
-    if (h.type !== "variable_assignment") {
-      let shellNode = readShellNode(h, n, r, d);
+    if (child.type !== "variable_assignment") {
+      let shellNode = readShellNode(child, source, values, replacements);
       if (shellNode === undefined) return;
-      u += shellNode;
+      skeleton += shellNode;
       continue;
     }
-    let [_, S, R] = h.children;
+    let [nameNode, equals, valueNode] = child.children;
     if (
-      h.children.length !== 3 ||
-      _ === undefined ||
-      S === undefined ||
-      R === undefined ||
-      _.type !== "variable_name" ||
-      S.type !== "=" ||
-      !SHELL_VARIABLE_NAME_RE.test(_.text) ||
-      s.has(_.text) ||
-      s.size >= SERVED_SHELL_LIMITS ||
-      commandRaw.children[p + 1]?.type === "&"
+      child.children.length !== 3 ||
+      nameNode === undefined ||
+      equals === undefined ||
+      valueNode === undefined ||
+      nameNode.type !== "variable_name" ||
+      equals.type !== "=" ||
+      !SHELL_VARIABLE_NAME_RE.test(nameNode.text) ||
+      names.has(nameNode.text) ||
+      names.size >= SERVED_SHELL_LIMITS ||
+      commandRaw.children[index + 1]?.type === "&"
     )
       return;
-    let lower = _.text.toLowerCase();
+    let lower = nameNode.text.toLowerCase();
     if (
-      isAssignmentNameUnsafeForSandbox(_.text) ||
+      isAssignmentNameUnsafeForSandbox(nameNode.text) ||
       RESERVED_SHELL_VARIABLES.has(lower) ||
-      RESERVED_SHELL_VARIABLE_PREFIXES.some((A) => lower.startsWith(A))
+      RESERVED_SHELL_VARIABLE_PREFIXES.some((prefix) => lower.startsWith(prefix))
     )
       return;
-    let L = R.children[1];
-    let V =
-      R.type === "word" || R.type === "number"
-        ? R.text
-        : R.type === "raw_string" && R.text.length > 2 && R.text.startsWith("'") && R.text.endsWith("'")
-          ? R.text.slice(1, -1)
-          : R.type === "string" &&
-              R.children.length === 3 &&
-              L !== undefined &&
-              L.type === "string_content" &&
-              R.text === `"${L.text}"`
-            ? L.text
+    let innerContent = valueNode.children[1];
+    let literal =
+      valueNode.type === "word" || valueNode.type === "number"
+        ? valueNode.text
+        : valueNode.type === "raw_string" &&
+            valueNode.text.length > 2 &&
+            valueNode.text.startsWith("'") &&
+            valueNode.text.endsWith("'")
+          ? valueNode.text.slice(1, -1)
+          : valueNode.type === "string" &&
+              valueNode.children.length === 3 &&
+              innerContent !== undefined &&
+              innerContent.type === "string_content" &&
+              valueNode.text === `"${innerContent.text}"`
+            ? innerContent.text
             : undefined;
-    if (V === undefined || !SAFE_PATH_CHARS_RE.test(V)) return;
-    s.add(_.text);
-    if (!o) r.set(_.text, V);
-    u += "assignment";
+    if (literal === undefined || !SAFE_PATH_CHARS_RE.test(literal)) return;
+    names.add(nameNode.text);
+    if (!secondPass) values.set(nameNode.text, literal);
+    skeleton += "assignment";
   }
   return {
-    skeleton: u,
-    replacements: d,
+    skeleton,
+    replacements,
   };
 }
 //@ chunk-tr0s0d0k.js:46024-47218 placement
-function readShellNode(e, n, o, r) {
-  if (e.type === "list" || e.type === "pipeline") {
-    let u = `${e.type}(`;
-    for (let [p, h] of e.children.entries()) {
-      let _ = e.type === "list" ? ["&&", "||"] : ["|", "|&"];
-      let S = p % 2 === 0 ? readShellNode(h, n, o, r) : _.includes(h.type) ? h.type : undefined;
-      if (S === undefined) return;
-      u += S;
+function readShellNode(node, source, values, replacements) {
+  if (node.type === "list" || node.type === "pipeline") {
+    let out = `${node.type}(`;
+    for (let [index, child] of node.children.entries()) {
+      let separators = node.type === "list" ? ["&&", "||"] : ["|", "|&"];
+      let piece =
+        index % 2 === 0
+          ? readShellNode(child, source, values, replacements)
+          : separators.includes(child.type)
+            ? child.type
+            : undefined;
+      if (piece === undefined) return;
+      out += piece;
     }
-    return e.children.length % 2 === 1 ? `${u})` : undefined;
+    return node.children.length % 2 === 1 ? `${out})` : undefined;
   }
-  if (e.type !== "command" && e.type !== "redirected_statement") return;
-  let s = `${e.type}(`;
-  let d = e.type === "redirected_statement";
-  for (let [u, p] of e.children.entries())
-    if (p.type === "file_redirect") {
-      let last = p.children.at(-1);
-      let _ = p.children.at(-2);
-      let S = p.children.length === 3 ? p.children[0] : undefined;
+  if (node.type !== "command" && node.type !== "redirected_statement") return;
+  let out = `${node.type}(`;
+  let sawName = node.type === "redirected_statement";
+  for (let [index, child] of node.children.entries())
+    if (child.type === "file_redirect") {
+      let last = child.children.at(-1);
+      let operator = child.children.at(-2);
+      let fd = child.children.length === 3 ? child.children[0] : undefined;
       if (
-        u === 0 ||
+        index === 0 ||
         last === undefined ||
-        _ === undefined ||
-        p.children.length > 3 ||
-        !REDIRECT_OPERATORS.has(_.type) ||
-        (p.children.length === 3 && (S?.type !== "file_descriptor" || !/^[0-9]+$/.test(S.text))) ||
-        !isStaticWord(last, n, o, r)
+        operator === undefined ||
+        child.children.length > 3 ||
+        !REDIRECT_OPERATORS.has(operator.type) ||
+        (child.children.length === 3 && (fd?.type !== "file_descriptor" || !/^[0-9]+$/.test(fd.text))) ||
+        !isStaticWord(last, source, values, replacements)
       )
         return;
-      s += `redirect(${S?.text ?? ""}${_.type})`;
-    } else if (e.type === "redirected_statement") {
-      let h = u === 0 ? readShellNode(p, n, o, r) : undefined;
-      if (h === undefined) return;
-      s += h;
-    } else if (p.type === "command_name") {
-      let h = p.children[0];
-      if (d || h === undefined || p.children.length !== 1) return;
-      d = true;
-      let _ = r.length;
+      out += `redirect(${fd?.text ?? ""}${operator.type})`;
+    } else if (node.type === "redirected_statement") {
+      let nested = index === 0 ? readShellNode(child, source, values, replacements) : undefined;
+      if (nested === undefined) return;
+      out += nested;
+    } else if (child.type === "command_name") {
+      let nameNode = child.children[0];
+      if (sawName || nameNode === undefined || child.children.length !== 1) return;
+      sawName = true;
+      let beforeLength = replacements.length;
       if (
-        !(h.type === "word" || h.type === "number"
-          ? SAFE_PATH_CHARS_RE.test(h.text) && (h.text.includes("/") || !PATH_READ_COMMANDS.has(h.text))
-          : isStaticWord(h, n, o, r) && r.length > _)
+        !(nameNode.type === "word" || nameNode.type === "number"
+          ? SAFE_PATH_CHARS_RE.test(nameNode.text) &&
+            (nameNode.text.includes("/") || !PATH_READ_COMMANDS.has(nameNode.text))
+          : isStaticWord(nameNode, source, values, replacements) && replacements.length > beforeLength)
       )
         return;
-      s += "head";
+      out += "head";
     } else {
-      if (!d || !isStaticWord(p, n, o, r)) return;
-      s += " word";
+      if (!sawName || !isStaticWord(child, source, values, replacements)) return;
+      out += " word";
     }
-  return d ? `${s})` : undefined;
+  return sawName ? `${out})` : undefined;
 }
 //@ chunk-tr0s0d0k.js:47218-47933 placement
-function isStaticWord(e, n, o, r) {
-  switch (e.type) {
+function isStaticWord(node, source, values, replacements) {
+  switch (node.type) {
     case "word":
     case "number":
     case "raw_string":
       return true;
     case "simple_expansion":
     case "expansion": {
-      let s = e.type === "expansion";
-      let [d, u, p] = e.children;
-      let h = u?.type === "variable_name" ? o.get(u.text) : undefined;
+      let braced = node.type === "expansion";
+      let [prefixNode, nameNode, closing] = node.children;
+      let value = nameNode?.type === "variable_name" ? values.get(nameNode.text) : undefined;
       if (
-        h === undefined ||
-        e.children.length !== (s ? 3 : 2) ||
-        d?.type !== (s ? "${" : "$") ||
-        (s && p?.type !== "}") ||
-        (!s && !NON_ASSIGNMENT_NEXT_CHARS.has(n[e.endIndex] ?? ""))
+        value === undefined ||
+        node.children.length !== (braced ? 3 : 2) ||
+        prefixNode?.type !== (braced ? "${" : "$") ||
+        (braced && closing?.type !== "}") ||
+        (!braced && !NON_ASSIGNMENT_NEXT_CHARS.has(source[node.endIndex] ?? ""))
       )
         return false;
-      r.push({
-        start: e.startIndex,
-        end: e.endIndex,
-        value: h,
+      replacements.push({
+        start: node.startIndex,
+        end: node.endIndex,
+        value,
       });
       return true;
     }
     case "string":
-      return e.children.every(
+      return node.children.every(
         (child) =>
           child.type === '"' ||
           child.type === "string_content" ||
-          ((child.type === "simple_expansion" || child.type === "expansion") && isStaticWord(child, n, o, r)),
+          ((child.type === "simple_expansion" || child.type === "expansion") &&
+            isStaticWord(child, source, values, replacements)),
       );
     case "concatenation":
-      return e.children.every((child) =>
+      return node.children.every((child) =>
         child.type === "word" || child.type === "number"
           ? SAFE_ASSIGNMENT_CHARS_RE.test(child.text)
-          : child.type !== "concatenation" && isStaticWord(child, n, o, r),
+          : child.type !== "concatenation" && isStaticWord(child, source, values, replacements),
       );
     default:
       return false;

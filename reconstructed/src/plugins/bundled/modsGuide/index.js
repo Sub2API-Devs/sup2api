@@ -8,7 +8,7 @@
  * pieces: chunk-sc72x544.js (5)
  * attribution: placement 5
  */
-import { x, Ar } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
 import {
   PLUGIN_DESCRIPTION,
   PLUGIN_NAME,
@@ -38,8 +38,8 @@ import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugi
 /**
  * modsGuide 插件扫描清单。
  */
-var MODS_GUIDE_MANIFEST = x(function (ai, kt) {
-  kt.exports = {
+var MODS_GUIDE_MANIFEST = __commonJS(function (requireFn, moduleObject) {
+  moduleObject.exports = {
     scan: {
       hooks: ["ui.render"],
       calls: ["clock.every", "clock.now", "env.get", "settings.read", "ui.blit", "ui.resolve"],
@@ -54,7 +54,7 @@ var MODS_GUIDE_MANIFEST = x(function (ai, kt) {
 //@ chunk-sc72x544.js:3691-3700 placement
 var indexNamespace = {};
 //@ chunk-sc72x544.js:3700-3848 placement
-Ar(indexNamespace, {
+__export(indexNamespace, {
   PLUGIN_DESCRIPTION: () => PLUGIN_DESCRIPTION,
   PLUGIN_NAME: () => PLUGIN_NAME,
   availabilityFlag: () => availabilityFlag,
@@ -64,9 +64,9 @@ Ar(indexNamespace, {
   registerPlugin: () => registerPlugin,
 });
 //@ chunk-sc72x544.js:19803-20600 placement
-function register(i) {
-  let r = new Map();
-  i(
+function register(on) {
+  let playedUntil = new Map();
+  on(
     "ui.render",
     {
       component: "AskUserQuestion",
@@ -75,44 +75,45 @@ function register(i) {
         metadataSource: "mod_hot_reload",
       },
     },
-    async (t, e, f) => {
-      let o = await f(e);
-      if (!(e.component === "AskUserQuestion" && isExplained(e.props.questions))) return o;
-      let l = (await t.settings.read()).prefersReducedMotion === true;
-      if (e.surface !== "terminal") return remoteGuide(t.ui.resolve(e), o, l);
-      let columns = e.viewport?.columns ?? UNMEASURED_COLUMNS;
-      let rows = e.viewport?.rows ?? PANEL_ROWS_MIN;
-      let c = columns >= SCENE_COLUMNS + CARD_INSET && rows >= PANEL_ROWS_MIN;
+    async (ctx, payload, next) => {
+      let hostRow = await next(payload);
+      if (!(payload.component === "AskUserQuestion" && isExplained(payload.props.questions))) return hostRow;
+      let prefersReducedMotion = (await ctx.settings.read()).prefersReducedMotion === true;
+      if (payload.surface !== "terminal")
+        return remoteGuide(ctx.ui.resolve(payload), hostRow, prefersReducedMotion);
+      let columns = payload.viewport?.columns ?? UNMEASURED_COLUMNS;
+      let rows = payload.viewport?.rows ?? PANEL_ROWS_MIN;
+      let fits = columns >= SCENE_COLUMNS + CARD_INSET && rows >= PANEL_ROWS_MIN;
       if (
         isPlainTerminal({
-          noColor: await t.env.get("NO_COLOR"),
-          forceColor: await t.env.get("FORCE_COLOR"),
-          term: await t.env.get("TERM"),
+          noColor: await ctx.env.get("NO_COLOR"),
+          forceColor: await ctx.env.get("FORCE_COLOR"),
+          term: await ctx.env.get("TERM"),
         }) ||
-        !c
+        !fits
       )
-        return o;
-      let S = l || columns < MOVING_COLUMNS_MIN;
-      let requestId = e.requestId;
-      let K = await t.clock.now();
-      if (!S && (r.get(requestId) ?? 0) <= K) {
-        r.set(requestId, K + RUN_MS_MAX);
+        return hostRow;
+      let isStill = prefersReducedMotion || columns < MOVING_COLUMNS_MIN;
+      let requestId = payload.requestId;
+      let now = await ctx.clock.now();
+      if (!isStill && (playedUntil.get(requestId) ?? 0) <= now) {
+        playedUntil.set(requestId, now + RUN_MS_MAX);
         playScene(
           {
             paint: async (cells) =>
               (
-                await t.ui.blit({
+                await ctx.ui.blit({
                   requestId,
                   key: SCENE_KEY,
                   cells,
                 })
               ).deny === undefined,
-            ended: () => r.delete(requestId),
+            ended: () => playedUntil.delete(requestId),
           },
-          (v, It) => t.clock.every(v, It),
+          (ms, fn) => ctx.clock.every(ms, fn),
         );
       }
-      return terminalGuide(t.ui.resolve(e), o, cellsOf(frameOf(0)));
+      return terminalGuide(ctx.ui.resolve(payload), hostRow, cellsOf(frameOf(0)));
     },
   );
 }
@@ -124,4 +125,4 @@ var registerPlugin = () =>
     isAvailable,
     hooksModule: builtinHooksModuleRef(import.meta.dir, clawdCookingNamespace, () => MODS_GUIDE_MANIFEST()),
   });
-export { register };
+export { register, indexNamespace, registerPlugin };

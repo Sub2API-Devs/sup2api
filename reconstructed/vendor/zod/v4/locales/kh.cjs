@@ -5,12 +5,12 @@
  * pieces: chunk-1ny7cxrt.js (2)
  * attribution: cjs-fingerprint 2
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_km } from "./km.cjs";
 import { require_uk } from "./uk.cjs";
 
 //@ chunk-1ny7cxrt.js:345460-345707 cjs-fingerprint
-var require_kh = x(function (cjsExports, cjsModule) {
+var require_kh = __commonJS(function (cjsExports, cjsModule) {
   var __importDefault =
     (cjsExports && cjsExports.__importDefault) ||
     function (mod) {
@@ -31,7 +31,7 @@ var require_kh = x(function (cjsExports, cjsModule) {
   cjsModule.exports = cjsExports.default;
 });
 //@ chunk-1ny7cxrt.js:473491-473738 cjs-fingerprint
-var require_kh_2 = x(function (cjsExports, cjsModule) {
+var require_kh_2 = __commonJS(function (cjsExports, cjsModule) {
   var __importDefault =
     (cjsExports && cjsExports.__importDefault) ||
     function (mod) {

@@ -5,111 +5,112 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 import { require_serde } from "../serde/index.js";
 import { require_util_utf8 } from "../../../../util-utf8/dist-cjs/index.js";
 import { require_protocols as require_protocols_2 } from "../protocols/index.js";
-import { require_protocol_http } from "../../../../protocol-http/dist-cjs/index.js";
-import { ss } from "../../../../../unresolved-cjs/index.js";
+import { require_protocol_http as require_protocol_http_3 } from "../../../../protocol-http/dist-cjs/index.js";
+import { calculateBodyLengthModule } from "../../../../../unresolved-cjs/index.js";
 import { require_schema } from "../schema/index.js";
 import { require_util_middleware } from "../../../../util-middleware/dist-cjs/index.js";
 import { base64Module } from "../../../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:12632-26640 cjs-fingerprint
-var require_cbor = x(function (cjsExports) {
-  var Ze = require_serde();
-  var as = require_util_utf8();
-  var $e = require_protocols_2();
-  var HttpRequest = require_protocol_http();
-  var qo = ss();
+var require_cbor = __commonJS(function (cjsExports) {
+  var serde = require_serde();
+  var utilUtf8 = require_util_utf8();
+  var protocols = require_protocols_2();
+  var HttpRequest = require_protocol_http_3();
+  var hasOwn = calculateBodyLengthModule();
   var NormalizedSchema = require_schema();
   var getSmithyContext = require_util_middleware();
   var fromBase64 = base64Module();
   var majorUint64 = 0;
   var majorNegativeInt64 = 1;
-  var Ne = 2;
-  var fe = 3;
-  var ze = 4;
-  var Ke = 5;
+  var majorUnstructuredByteString = 2;
+  var majorUtf8String = 3;
+  var majorList = 4;
+  var majorMap = 5;
   var majorTag = 6;
   var majorSpecial = 7;
   var specialFalse = 20;
   var specialTrue = 21;
   var specialNull = 22;
   var specialUndefined = 23;
-  var Dt = 24;
-  var Te = 25;
+  var extendedOneByte = 24;
+  var extendedFloat16 = 25;
   var extendedFloat32 = 26;
   var extendedFloat64 = 27;
-  var Pt = 31;
-  function Re(e) {
-    return typeof Buffer !== "undefined" ? Buffer.alloc(e) : new Uint8Array(e);
+  var minorIndefinite = 31;
+  function alloc(size) {
+    return typeof Buffer !== "undefined" ? Buffer.alloc(size) : new Uint8Array(size);
   }
-  var kt = Symbol("@smithy/core/cbor::tagSymbol");
-  function tag(e) {
-    e[kt] = true;
-    return e;
+  var tagSymbol = Symbol("@smithy/core/cbor::tagSymbol");
+  function tag(data) {
+    data[tagSymbol] = true;
+    return data;
   }
-  var Xo = typeof TextDecoder !== "undefined";
-  var Wo = typeof Buffer !== "undefined";
-  var payload = Re(0);
+  var textDecoder = typeof TextDecoder !== "undefined";
+  var USE_BUFFER = typeof Buffer !== "undefined";
+  var payload = alloc(0);
   var dataView$1 = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
-  var ns = Xo ? new TextDecoder() : null;
+  var decoder = textDecoder ? new TextDecoder() : null;
   var _offset = 0;
-  function Ko(bytes) {
+  function setPayload(bytes) {
     payload = bytes;
     dataView$1 = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
   }
-  function le(e, t) {
-    if (e >= t) throw Error("unexpected end of (decode) payload.");
-    let major = (payload[e] & 224) >> 5;
-    let s = payload[e] & 31;
+  function decode(at, to) {
+    if (at >= to) throw Error("unexpected end of (decode) payload.");
+    let major = (payload[at] & 224) >> 5;
+    let minor = payload[at] & 31;
     switch (major) {
       case majorUint64:
       case majorNegativeInt64:
       case majorTag:
         let unsignedInt;
-        let a;
-        if (s < 24) {
-          unsignedInt = s;
-          a = 1;
+        let offset;
+        if (minor < 24) {
+          unsignedInt = minor;
+          offset = 1;
         } else
-          switch (s) {
-            case Dt:
-            case Te:
+          switch (minor) {
+            case extendedOneByte:
+            case extendedFloat16:
             case extendedFloat32:
             case extendedFloat64:
-              let c = fs[s];
-              let d = c + 1;
-              a = d;
-              if (t - e < d) throw Error(`countLength ${c} greater than remaining buf len.`);
-              let f = e + 1;
-              if (c === 1) unsignedInt = payload[f];
-              else if (c === 2) unsignedInt = dataView$1.getUint16(f);
-              else if (c === 4) unsignedInt = dataView$1.getUint32(f);
-              else unsignedInt = dataView$1.getBigUint64(f);
+              let countLength = byteLengths[minor];
+              let totalLength = countLength + 1;
+              offset = totalLength;
+              if (to - at < totalLength)
+                throw Error(`countLength ${countLength} greater than remaining buf len.`);
+              let valueIndex = at + 1;
+              if (countLength === 1) unsignedInt = payload[valueIndex];
+              else if (countLength === 2) unsignedInt = dataView$1.getUint16(valueIndex);
+              else if (countLength === 4) unsignedInt = dataView$1.getUint32(valueIndex);
+              else unsignedInt = dataView$1.getBigUint64(valueIndex);
               break;
             default:
-              throw Error(`unexpected minor value ${s}.`);
+              throw Error(`unexpected minor value ${minor}.`);
           }
         if (major === majorUint64) {
-          _offset = a;
-          return Rt(unsignedInt);
+          _offset = offset;
+          return demoteOrKeepBigInt(unsignedInt);
         } else if (major === majorNegativeInt64) {
           let negativeInt;
           if (typeof unsignedInt === "bigint") negativeInt = BigInt(-1) - unsignedInt;
           else negativeInt = -1 - unsignedInt;
-          _offset = a;
-          return Rt(negativeInt);
-        } else if (s === 2 || s === 3) {
-          let length = Le(e + a, t);
+          _offset = offset;
+          return demoteOrKeepBigInt(negativeInt);
+        } else if (minor === 2 || minor === 3) {
+          let length = readCountLength(at + offset, to);
           let b = BigInt(0);
-          let start = e + a + _offset;
+          let start = at + offset + _offset;
           for (let i = start; i < start + length; ++i) b = (b << BigInt(8)) | BigInt(payload[i]);
-          _offset = a + _offset + length;
-          return s === 3 ? -b - BigInt(1) : b;
-        } else if (s === 4) {
-          let decimalFraction = le(e + a, t);
+          _offset = offset + _offset + length;
+          return minor === 3 ? -b - BigInt(1) : b;
+        } else if (minor === 4) {
+          let decimalFraction = decode(at + offset, to);
           let [exponent, mantissa] = decimalFraction;
           let normalizer = mantissa < 0 ? -1 : 1;
           let mantissaStr =
@@ -124,50 +125,50 @@ var require_cbor = x(function (cjsExports) {
           if (numericString === "") numericString = "0";
           if (numericString[0] === ".") numericString = "0" + numericString;
           numericString = sign + numericString;
-          _offset = a + _offset;
-          return Ze.nv(numericString);
+          _offset = offset + _offset;
+          return serde.nv(numericString);
         } else {
-          let value = le(e + a, t);
-          _offset = a + _offset;
+          let value = decode(at + offset, to);
+          _offset = offset + _offset;
           return tag({
-            tag: Rt(unsignedInt),
+            tag: demoteOrKeepBigInt(unsignedInt),
             value,
           });
         }
-      case fe:
-      case Ke:
-      case ze:
-      case Ne:
-        if (s === Pt)
+      case majorUtf8String:
+      case majorMap:
+      case majorList:
+      case majorUnstructuredByteString:
+        if (minor === minorIndefinite)
           switch (major) {
-            case fe:
-              return Zo(e, t);
-            case Ke:
-              return na(e, t);
-            case ze:
-              return ra(e, t);
-            case Ne:
-              return ea(e, t);
+            case majorUtf8String:
+              return decodeIndefiniteString(at, to);
+            case majorMap:
+              return decodeIndefiniteMap(at, to);
+            case majorList:
+              return decodeIndefiniteList(at, to);
+            case majorUnstructuredByteString:
+              return decodeIndefiniteBytes(at, to);
           }
         else
           switch (major) {
-            case fe:
-              return Jo(e, t);
-            case Ke:
-              return sa(e, t);
-            case ze:
-              return ta(e, t);
-            case Ne:
-              return zt(e, t);
+            case majorUtf8String:
+              return decodeString(at, to);
+            case majorMap:
+              return decodeMap(at, to);
+            case majorList:
+              return decodeList(at, to);
+            case majorUnstructuredByteString:
+              return decodeBytes(at, to);
           }
       default:
-        return decodeSpecial(e, t);
+        return decodeSpecial(at, to);
     }
   }
-  function hs(e, t, r) {
-    if (Wo && e.constructor?.name === "Buffer") return e.toString("utf-8", t, r);
-    if (ns) return ns.decode(e.subarray(t, r));
-    return as.toUtf8(e.subarray(t, r));
+  function decodeUtf8(bytes, start, end) {
+    if (USE_BUFFER && bytes.constructor?.name === "Buffer") return bytes.toString("utf-8", start, end);
+    if (decoder) return decoder.decode(bytes.subarray(start, end));
+    return utilUtf8.toUtf8(bytes.subarray(start, end));
   }
   function demote(bigInteger) {
     let num = Number(bigInteger);
@@ -177,176 +178,184 @@ var require_cbor = x(function (cjsExports) {
       );
     return num;
   }
-  var fs = {
-    [Dt]: 1,
-    [Te]: 2,
+  var byteLengths = {
+    [extendedOneByte]: 1,
+    [extendedFloat16]: 2,
     [extendedFloat32]: 4,
     [extendedFloat64]: 8,
   };
-  function bytesToFloat16(a_2, t) {
-    let r = a_2 >> 7;
+  function bytesToFloat16(a_2, lowByte) {
+    let sign = a_2 >> 7;
     let exponent = (a_2 & 124) >> 2;
-    let fraction = ((a_2 & 3) << 8) | t;
-    let a = r === 0 ? 1 : -1;
-    let c;
-    let d;
+    let fraction = ((a_2 & 3) << 8) | lowByte;
+    let signMultiplier = sign === 0 ? 1 : -1;
+    let base;
+    let mantissa;
     if (exponent === 0) {
       if (fraction === 0) return 0;
       else {
-        c = Math.pow(2, -14);
-        d = 0;
+        base = Math.pow(2, -14);
+        mantissa = 0;
       }
     } else if (exponent === 31) {
-      if (fraction === 0) return a * (1 / 0);
+      if (fraction === 0) return signMultiplier * (1 / 0);
       else return NaN;
     } else {
-      c = Math.pow(2, exponent - 15);
-      d = 1;
+      base = Math.pow(2, exponent - 15);
+      mantissa = 1;
     }
-    d += fraction / 1024;
-    return a * (c * d);
+    mantissa += fraction / 1024;
+    return signMultiplier * (base * mantissa);
   }
-  function Le(e, t) {
-    let r = payload[e] & 31;
-    if (r < 24) {
+  function readCountLength(at, to) {
+    let minor = payload[at] & 31;
+    if (minor < 24) {
       _offset = 1;
-      return r;
+      return minor;
     }
-    if (r === Dt || r === Te || r === extendedFloat32 || r === extendedFloat64) {
-      let s = fs[r];
-      _offset = s + 1;
-      if (t - e < _offset) throw Error(`countLength ${s} greater than remaining buf len.`);
-      let o = e + 1;
-      if (s === 1) return payload[o];
-      else if (s === 2) return dataView$1.getUint16(o);
-      else if (s === 4) return dataView$1.getUint32(o);
-      return demote(dataView$1.getBigUint64(o));
+    if (
+      minor === extendedOneByte ||
+      minor === extendedFloat16 ||
+      minor === extendedFloat32 ||
+      minor === extendedFloat64
+    ) {
+      let byteLength = byteLengths[minor];
+      _offset = byteLength + 1;
+      if (to - at < _offset) throw Error(`countLength ${byteLength} greater than remaining buf len.`);
+      let valueIndex = at + 1;
+      if (byteLength === 1) return payload[valueIndex];
+      else if (byteLength === 2) return dataView$1.getUint16(valueIndex);
+      else if (byteLength === 4) return dataView$1.getUint32(valueIndex);
+      return demote(dataView$1.getBigUint64(valueIndex));
     }
-    throw Error(`unexpected minor value ${r}.`);
+    throw Error(`unexpected minor value ${minor}.`);
   }
-  function Jo(e, t) {
-    let r = Le(e, t);
-    let s = _offset;
-    e += s;
-    if (t - e < r) throw Error(`string len ${r} greater than remaining buf len.`);
-    let o = hs(payload, e, e + r);
-    _offset = s + r;
-    return o;
+  function decodeString(at, to) {
+    let length = readCountLength(at, to);
+    let offsetSnapshot = _offset;
+    at += offsetSnapshot;
+    if (to - at < length) throw Error(`string len ${length} greater than remaining buf len.`);
+    let str = decodeUtf8(payload, at, at + length);
+    _offset = offsetSnapshot + length;
+    return str;
   }
-  function Zo(e, t) {
-    e += 1;
-    let r = [];
-    for (let s = e; e < t;) {
-      if (payload[e] === 255) {
-        let f = Re(r.length);
-        f.set(r, 0);
-        _offset = e - s + 2;
-        return hs(f, 0, f.length);
+  function decodeIndefiniteString(at, to) {
+    at += 1;
+    let chunks = [];
+    for (let start = at; at < to;) {
+      if (payload[at] === 255) {
+        let merged = alloc(chunks.length);
+        merged.set(chunks, 0);
+        _offset = at - start + 2;
+        return decodeUtf8(merged, 0, merged.length);
       }
-      let o = (payload[e] & 224) >> 5;
-      let a = payload[e] & 31;
-      if (o !== fe) throw Error(`unexpected major type ${o} in indefinite string.`);
-      if (a === Pt) throw Error("nested indefinite string.");
-      let c = zt(e, t);
-      e += _offset;
-      for (let i = 0; i < c.length; ++i) r.push(c[i]);
+      let major = (payload[at] & 224) >> 5;
+      let minor = payload[at] & 31;
+      if (major !== majorUtf8String) throw Error(`unexpected major type ${major} in indefinite string.`);
+      if (minor === minorIndefinite) throw Error("nested indefinite string.");
+      let chunk = decodeBytes(at, to);
+      at += _offset;
+      for (let i = 0; i < chunk.length; ++i) chunks.push(chunk[i]);
     }
     throw Error("expected break marker.");
   }
-  function zt(e, t) {
-    let r = Le(e, t);
-    let s = _offset;
-    e += s;
-    if (t - e < r) throw Error(`unstructured byte string len ${r} greater than remaining buf len.`);
-    let chunk = payload.subarray(e, e + r);
-    _offset = s + r;
+  function decodeBytes(at, to) {
+    let length = readCountLength(at, to);
+    let offsetSnapshot = _offset;
+    at += offsetSnapshot;
+    if (to - at < length)
+      throw Error(`unstructured byte string len ${length} greater than remaining buf len.`);
+    let chunk = payload.subarray(at, at + length);
+    _offset = offsetSnapshot + length;
     return chunk;
   }
-  function ea(e, t) {
-    e += 1;
-    let r = [];
-    for (let s = e; e < t;) {
-      if (payload[e] === 255) {
-        let data = Re(r.length);
-        data.set(r, 0);
-        _offset = e - s + 2;
+  function decodeIndefiniteBytes(at, to) {
+    at += 1;
+    let chunks = [];
+    for (let start = at; at < to;) {
+      if (payload[at] === 255) {
+        let data = alloc(chunks.length);
+        data.set(chunks, 0);
+        _offset = at - start + 2;
         return data;
       }
-      let o = (payload[e] & 224) >> 5;
-      let a = payload[e] & 31;
-      if (o !== Ne) throw Error(`unexpected major type ${o} in indefinite string.`);
-      if (a === Pt) throw Error("nested indefinite string.");
-      let c = zt(e, t);
-      e += _offset;
-      for (let i = 0; i < c.length; ++i) r.push(c[i]);
+      let major = (payload[at] & 224) >> 5;
+      let minor = payload[at] & 31;
+      if (major !== majorUnstructuredByteString)
+        throw Error(`unexpected major type ${major} in indefinite string.`);
+      if (minor === minorIndefinite) throw Error("nested indefinite string.");
+      let chunk = decodeBytes(at, to);
+      at += _offset;
+      for (let i = 0; i < chunk.length; ++i) chunks.push(chunk[i]);
     }
     throw Error("expected break marker.");
   }
-  function ta(e, t) {
-    let listDataLength = Le(e, t);
-    let s = _offset;
-    e += s;
-    let o = e;
-    let a = Array(listDataLength);
+  function decodeList(at, to) {
+    let listDataLength = readCountLength(at, to);
+    let offsetSnapshot = _offset;
+    at += offsetSnapshot;
+    let start = at;
+    let list = Array(listDataLength);
     for (let i = 0; i < listDataLength; ++i) {
-      let d = le(e, t);
-      let f = _offset;
-      a[i] = d;
-      e += f;
+      let item = decode(at, to);
+      let consumed = _offset;
+      list[i] = item;
+      at += consumed;
     }
-    _offset = s + (e - o);
-    return a;
+    _offset = offsetSnapshot + (at - start);
+    return list;
   }
-  function ra(e, t) {
-    e += 1;
-    let r = [];
-    for (let s = e; e < t;) {
-      if (payload[e] === 255) {
-        _offset = e - s + 2;
-        return r;
+  function decodeIndefiniteList(at, to) {
+    at += 1;
+    let list = [];
+    for (let start = at; at < to;) {
+      if (payload[at] === 255) {
+        _offset = at - start + 2;
+        return list;
       }
-      let o = le(e, t);
-      e += _offset;
-      r.push(o);
+      let item = decode(at, to);
+      at += _offset;
+      list.push(item);
     }
     throw Error("expected break marker.");
   }
-  function sa(e, t) {
-    let r = Le(e, t);
-    let s = _offset;
-    e += s;
-    let o = e;
-    let a = {};
-    for (let i = 0; i < r; ++i) {
-      if (e >= t) throw Error("unexpected end of map payload.");
-      let major = (payload[e] & 224) >> 5;
-      if (major !== fe) throw Error(`unexpected major type ${major} for map key at index ${e}.`);
-      let f = le(e, t);
-      e += _offset;
-      let m = le(e, t);
-      e += _offset;
-      a[f] = m;
+  function decodeMap(at, to) {
+    let entryCount = readCountLength(at, to);
+    let offsetSnapshot = _offset;
+    at += offsetSnapshot;
+    let start = at;
+    let map = {};
+    for (let i = 0; i < entryCount; ++i) {
+      if (at >= to) throw Error("unexpected end of map payload.");
+      let major = (payload[at] & 224) >> 5;
+      if (major !== majorUtf8String)
+        throw Error(`unexpected major type ${major} for map key at index ${at}.`);
+      let key = decode(at, to);
+      at += _offset;
+      let value = decode(at, to);
+      at += _offset;
+      map[key] = value;
     }
-    _offset = s + (e - o);
-    return a;
+    _offset = offsetSnapshot + (at - start);
+    return map;
   }
-  function na(e, t) {
-    e += 1;
-    let r = e;
-    let s = {};
-    for (; e < t;) {
-      if (e >= t) throw Error("unexpected end of map payload.");
-      if (payload[e] === 255) {
-        _offset = e - r + 2;
-        return s;
+  function decodeIndefiniteMap(at, to) {
+    at += 1;
+    let start = at;
+    let map = {};
+    for (; at < to;) {
+      if (at >= to) throw Error("unexpected end of map payload.");
+      if (payload[at] === 255) {
+        _offset = at - start + 2;
+        return map;
       }
-      let o = (payload[e] & 224) >> 5;
-      if (o !== fe) throw Error(`unexpected major type ${o} for map key.`);
-      let a = le(e, t);
-      e += _offset;
-      let c = le(e, t);
-      e += _offset;
-      s[a] = c;
+      let major = (payload[at] & 224) >> 5;
+      if (major !== majorUtf8String) throw Error(`unexpected major type ${major} for map key.`);
+      let key = decode(at, to);
+      at += _offset;
+      let value = decode(at, to);
+      at += _offset;
+      map[key] = value;
     }
     throw Error("expected break marker.");
   }
@@ -363,7 +372,7 @@ var require_cbor = x(function (cjsExports) {
       case specialUndefined:
         _offset = 1;
         return null;
-      case Te:
+      case extendedFloat16:
         if (to - at < 3) throw Error("incomplete float16 at end of buf.");
         _offset = 3;
         return bytesToFloat16(payload[at + 1], payload[at + 2]);
@@ -379,51 +388,51 @@ var require_cbor = x(function (cjsExports) {
         throw Error(`unexpected minor value ${minor}.`);
     }
   }
-  function Rt(bigInt) {
+  function demoteOrKeepBigInt(bigInt) {
     if (typeof bigInt === "number") return bigInt;
     let num = Number(bigInt);
     if (Number.MIN_SAFE_INTEGER <= num && num <= Number.MAX_SAFE_INTEGER) return num;
     return bigInt;
   }
-  var is = typeof Buffer !== "undefined";
-  var oa = 2048;
-  var data = Re(oa);
+  var isBuffer = typeof Buffer !== "undefined";
+  var INITIAL_BUFFER_SIZE = 2048;
+  var data = alloc(INITIAL_BUFFER_SIZE);
   var dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   var cursor = 0;
-  function It(e) {
-    if (data.byteLength - cursor < e)
-      if (cursor < 16000000) resize(Math.max(data.byteLength * 4, data.byteLength + e));
-      else resize(data.byteLength + e + 16000000);
+  function ensureCapacity(needed) {
+    if (data.byteLength - cursor < needed)
+      if (cursor < 16000000) resize(Math.max(data.byteLength * 4, data.byteLength + needed));
+      else resize(data.byteLength + needed + 16000000);
   }
   function toUint8Array() {
-    let e = Re(cursor);
-    e.set(data.subarray(0, cursor), 0);
+    let output = alloc(cursor);
+    output.set(data.subarray(0, cursor), 0);
     cursor = 0;
-    return e;
+    return output;
   }
-  function resize(e) {
-    let t = data;
-    data = Re(e);
-    if (t)
-      if (t.copy) t.copy(data, 0, 0, t.byteLength);
-      else data.set(t, 0);
+  function resize(size) {
+    let previous = data;
+    data = alloc(size);
+    if (previous)
+      if (previous.copy) previous.copy(data, 0, 0, previous.byteLength);
+      else data.set(previous, 0);
     dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
   }
-  function encodeHeader(e, value) {
-    if (value < 24) data[cursor++] = (e << 5) | value;
+  function encodeHeader(major, value) {
+    if (value < 24) data[cursor++] = (major << 5) | value;
     else if (value < 256) {
-      data[cursor++] = (e << 5) | 24;
+      data[cursor++] = (major << 5) | 24;
       data[cursor++] = value;
     } else if (value < 65536) {
-      data[cursor++] = (e << 5) | Te;
+      data[cursor++] = (major << 5) | extendedFloat16;
       dataView.setUint16(cursor, value);
       cursor += 2;
     } else if (value < 4294967296) {
-      data[cursor++] = (e << 5) | extendedFloat32;
+      data[cursor++] = (major << 5) | extendedFloat32;
       dataView.setUint32(cursor, value);
       cursor += 4;
     } else {
-      data[cursor++] = (e << 5) | extendedFloat64;
+      data[cursor++] = (major << 5) | extendedFloat64;
       dataView.setBigUint64(cursor, typeof value === "bigint" ? value : BigInt(value));
       cursor += 8;
     }
@@ -432,16 +441,16 @@ var require_cbor = x(function (cjsExports) {
     let encodeStack = [_input];
     while (encodeStack.length) {
       let input = encodeStack.pop();
-      It(typeof input === "string" ? input.length * 4 : 64);
+      ensureCapacity(typeof input === "string" ? input.length * 4 : 64);
       if (typeof input === "string") {
-        if (is) {
-          encodeHeader(fe, Buffer.byteLength(input));
+        if (isBuffer) {
+          encodeHeader(majorUtf8String, Buffer.byteLength(input));
           cursor += data.write(input, cursor);
         } else {
-          let s = as.fromUtf8(input);
-          encodeHeader(fe, s.byteLength);
-          data.set(s, cursor);
-          cursor += s.byteLength;
+          let utf8Bytes = utilUtf8.fromUtf8(input);
+          encodeHeader(majorUtf8String, utf8Bytes.byteLength);
+          data.set(utf8Bytes, cursor);
+          cursor += utf8Bytes.byteLength;
         }
         continue;
       } else if (typeof input === "number") {
@@ -454,7 +463,7 @@ var require_cbor = x(function (cjsExports) {
             data[cursor++] = (major << 5) | 24;
             data[cursor++] = value;
           } else if (value < 65536) {
-            data[cursor++] = (major << 5) | Te;
+            data[cursor++] = (major << 5) | extendedFloat16;
             data[cursor++] = value >> 8;
             data[cursor++] = value;
           } else if (value < 4294967296) {
@@ -474,23 +483,23 @@ var require_cbor = x(function (cjsExports) {
         continue;
       } else if (typeof input === "bigint") {
         let nonNegative = input >= 0;
-        let o = nonNegative ? majorUint64 : majorNegativeInt64;
+        let major = nonNegative ? majorUint64 : majorNegativeInt64;
         let value = nonNegative ? input : -input - BigInt(1);
-        let c = Number(value);
-        if (c < 24) data[cursor++] = (o << 5) | c;
-        else if (c < 256) {
-          data[cursor++] = (o << 5) | 24;
-          data[cursor++] = c;
-        } else if (c < 65536) {
-          data[cursor++] = (o << 5) | Te;
-          data[cursor++] = c >> 8;
-          data[cursor++] = c & 255;
-        } else if (c < 4294967296) {
-          data[cursor++] = (o << 5) | extendedFloat32;
-          dataView.setUint32(cursor, c);
+        let valueNumber = Number(value);
+        if (valueNumber < 24) data[cursor++] = (major << 5) | valueNumber;
+        else if (valueNumber < 256) {
+          data[cursor++] = (major << 5) | 24;
+          data[cursor++] = valueNumber;
+        } else if (valueNumber < 65536) {
+          data[cursor++] = (major << 5) | extendedFloat16;
+          data[cursor++] = valueNumber >> 8;
+          data[cursor++] = valueNumber & 255;
+        } else if (valueNumber < 4294967296) {
+          data[cursor++] = (major << 5) | extendedFloat32;
+          dataView.setUint32(cursor, valueNumber);
           cursor += 4;
         } else if (value < BigInt("18446744073709551616")) {
-          data[cursor++] = (o << 5) | extendedFloat64;
+          data[cursor++] = (major << 5) | extendedFloat64;
           dataView.setBigUint64(cursor, value);
           cursor += 8;
         } else {
@@ -502,10 +511,10 @@ var require_cbor = x(function (cjsExports) {
             bigIntBytes[bigIntBytes.byteLength - i] = Number(b & BigInt(255));
             b >>= BigInt(8);
           }
-          It(bigIntBytes.byteLength * 2);
+          ensureCapacity(bigIntBytes.byteLength * 2);
           data[cursor++] = nonNegative ? 194 : 195;
-          if (is) encodeHeader(Ne, Buffer.byteLength(bigIntBytes));
-          else encodeHeader(Ne, bigIntBytes.byteLength);
+          if (isBuffer) encodeHeader(majorUnstructuredByteString, Buffer.byteLength(bigIntBytes));
+          else encodeHeader(majorUnstructuredByteString, bigIntBytes.byteLength);
           data.set(bigIntBytes, cursor);
           cursor += bigIntBytes.byteLength;
         }
@@ -520,26 +529,26 @@ var require_cbor = x(function (cjsExports) {
         throw Error("@smithy/core/cbor: client may not serialize undefined value.");
       else if (Array.isArray(input)) {
         for (let i = input.length - 1; i >= 0; --i) encodeStack.push(input[i]);
-        encodeHeader(ze, input.length);
+        encodeHeader(majorList, input.length);
         continue;
       } else if (typeof input.byteLength === "number") {
-        It(input.length * 2);
-        encodeHeader(Ne, input.length);
+        ensureCapacity(input.length * 2);
+        encodeHeader(majorUnstructuredByteString, input.length);
         data.set(input, cursor);
         cursor += input.byteLength;
         continue;
       } else if (typeof input === "object") {
-        if (input instanceof Ze.NumericValue) {
+        if (input instanceof serde.NumericValue) {
           let decimalIndex = input.string.indexOf(".");
-          let a = decimalIndex === -1 ? 0 : decimalIndex - input.string.length + 1;
-          let c = BigInt(input.string.replace(".", ""));
+          let exponent = decimalIndex === -1 ? 0 : decimalIndex - input.string.length + 1;
+          let mantissa = BigInt(input.string.replace(".", ""));
           data[cursor++] = 196;
-          encodeStack.push(c);
-          encodeStack.push(a);
-          encodeHeader(ze, 2);
+          encodeStack.push(mantissa);
+          encodeStack.push(exponent);
+          encodeHeader(majorList, 2);
           continue;
         }
-        if (input[kt])
+        if (input[tagSymbol])
           if ("tag" in input && "value" in input) {
             encodeStack.push(input.value);
             encodeHeader(majorTag, input.tag);
@@ -550,11 +559,11 @@ var require_cbor = x(function (cjsExports) {
             );
         let keys = Object.keys(input);
         for (let i = keys.length - 1; i >= 0; --i) {
-          let a = keys[i];
-          encodeStack.push(input[a]);
-          encodeStack.push(a);
+          let key = keys[i];
+          encodeStack.push(input[key]);
+          encodeStack.push(key);
         }
-        encodeHeader(Ke, keys.length);
+        encodeHeader(majorMap, keys.length);
         continue;
       }
       throw Error(`data type ${input?.constructor?.name ?? typeof input} not compatible for encoding.`);
@@ -562,8 +571,8 @@ var require_cbor = x(function (cjsExports) {
   }
   var cbor = {
     deserialize(bytes) {
-      Ko(bytes);
-      return le(0, bytes.length);
+      setPayload(bytes);
+      return decode(0, bytes.length);
     },
     serialize(input) {
       try {
@@ -579,7 +588,7 @@ var require_cbor = x(function (cjsExports) {
     },
   };
   var parseCborBody = (streamBody, context) =>
-    $e.collectBody(streamBody, context).then(async (bytes) => {
+    protocols.collectBody(streamBody, context).then(async (bytes) => {
       if (bytes.length)
         try {
           return cbor.deserialize(bytes);
@@ -634,12 +643,12 @@ var require_cbor = x(function (cjsExports) {
     if (body !== undefined) {
       contents.body = body;
       try {
-        contents.headers["content-length"] = String(qo.calculateBodyLength(body));
+        contents.headers["content-length"] = String(hasOwn.calculateBodyLength(body));
       } catch (ignored) {}
     }
     return new HttpRequest.HttpRequest(contents);
   };
-  class CborCodec extends $e.SerdeContext {
+  class CborCodec extends protocols.SerdeContext {
     createSerializer() {
       let serializer = new CborShapeSerializer();
       serializer.setSerdeContext(this.serdeContext);
@@ -651,7 +660,7 @@ var require_cbor = x(function (cjsExports) {
       return deserializer;
     }
   }
-  class CborShapeSerializer extends $e.SerdeContext {
+  class CborShapeSerializer extends protocols.SerdeContext {
     value;
     write(schema, value) {
       this.value = this.serialize(schema, value);
@@ -659,7 +668,7 @@ var require_cbor = x(function (cjsExports) {
     serialize(schema, source) {
       let ns = NormalizedSchema.NormalizedSchema.of(schema);
       if (source == null) {
-        if (ns.isIdempotencyToken()) return Ze.generateIdempotencyToken();
+        if (ns.isIdempotencyToken()) return serde.generateIdempotencyToken();
         return source;
       }
       if (ns.isBlobSchema()) {
@@ -677,10 +686,10 @@ var require_cbor = x(function (cjsExports) {
         if (ns.isListSchema() && Array.isArray(sourceObject)) {
           let sparse = !!ns.getMergedTraits().sparse;
           let newArray = [];
-          let d = 0;
+          let index = 0;
           for (let item of sourceObject) {
             let value = this.serialize(ns.getValueSchema(), item);
-            if (value != null || sparse) newArray[d++] = value;
+            if (value != null || sparse) newArray[index++] = value;
           }
           return newArray;
         }
@@ -710,14 +719,14 @@ var require_cbor = x(function (cjsExports) {
       return buffer;
     }
   }
-  class CborShapeDeserializer extends $e.SerdeContext {
+  class CborShapeDeserializer extends protocols.SerdeContext {
     read(schema, bytes) {
       let data = cbor.deserialize(bytes);
       return this.readValue(schema, data);
     }
     readValue(_schema, value) {
       let ns = NormalizedSchema.NormalizedSchema.of(_schema);
-      if (ns.isTimestampSchema() && typeof value === "number") return Ze._parseEpochTimestamp(value);
+      if (ns.isTimestampSchema() && typeof value === "number") return serde._parseEpochTimestamp(value);
       if (ns.isBlobSchema()) {
         if (typeof value === "string")
           return (this.serdeContext?.base64Decoder ?? fromBase64.fromBase64)(value);
@@ -740,31 +749,31 @@ var require_cbor = x(function (cjsExports) {
         if (ns.isListSchema()) {
           let newArray = [];
           let memberSchema = ns.getValueSchema();
-          let c = !!ns.getMergedTraits().sparse;
+          let sparse = !!ns.getMergedTraits().sparse;
           for (let item of value) {
-            let f = this.readValue(memberSchema, item);
-            if (f != null || c) newArray.push(f);
+            let readValue = this.readValue(memberSchema, item);
+            if (readValue != null || sparse) newArray.push(readValue);
           }
           return newArray;
         }
-        let s = {};
+        let result = {};
         if (ns.isMapSchema()) {
-          let o = !!ns.getMergedTraits().sparse;
+          let sparse = !!ns.getMergedTraits().sparse;
           let valueSchema = ns.getValueSchema();
           for (let key of Object.keys(value)) {
-            let d = this.readValue(valueSchema, value[key]);
-            if (d != null || o) s[key] = d;
+            let deserialized = this.readValue(valueSchema, value[key]);
+            if (deserialized != null || sparse) result[key] = deserialized;
           }
         } else if (ns.isStructSchema())
           for (let [key, memberSchema] of ns.structIterator()) {
             let isUnion = this.readValue(memberSchema, value[key]);
-            if (isUnion != null) s[key] = isUnion;
+            if (isUnion != null) result[key] = isUnion;
           }
-        return s;
+        return result;
       } else return value;
     }
   }
-  class SmithyRpcV2CborProtocol extends $e.RpcProtocol {
+  class SmithyRpcV2CborProtocol extends protocols.RpcProtocol {
     codec = new CborCodec();
     serializer = this.codec.createSerializer();
     deserializer = this.codec.createDeserializer();
@@ -815,16 +824,18 @@ var require_cbor = x(function (cjsExports) {
         $metadata: metadata,
         $fault: response.statusCode <= 500 ? "client" : "server",
       };
-      let f = NormalizedSchema.TypeRegistry.for(defaultNamespace);
+      let typeRegistry = NormalizedSchema.TypeRegistry.for(defaultNamespace);
       let errorSchema;
       try {
-        errorSchema = f.getSchema(errorName);
+        errorSchema = typeRegistry.getSchema(errorName);
       } catch (ignored) {
         if (dataObject.Message) dataObject.message = dataObject.Message;
-        let F = NormalizedSchema.TypeRegistry.for("smithy.ts.sdk.synthetic." + defaultNamespace);
-        let baseExceptionSchema = F.getBaseException();
+        let syntheticRegistry = NormalizedSchema.TypeRegistry.for(
+          "smithy.ts.sdk.synthetic." + defaultNamespace,
+        );
+        let baseExceptionSchema = syntheticRegistry.getBaseException();
         if (baseExceptionSchema) {
-          let ErrorCtor = F.getErrorCtor(baseExceptionSchema);
+          let ErrorCtor = syntheticRegistry.getErrorCtor(baseExceptionSchema);
           throw Object.assign(
             new ErrorCtor({
               name: errorName,
@@ -836,7 +847,7 @@ var require_cbor = x(function (cjsExports) {
         throw Object.assign(Error(errorName), errorMetadata, dataObject);
       }
       let ns = NormalizedSchema.NormalizedSchema.of(errorSchema);
-      let ErrorCtor = f.getErrorCtor(errorSchema);
+      let ErrorCtor = typeRegistry.getErrorCtor(errorSchema);
       let message = dataObject.message ?? dataObject.Message ?? "Unknown";
       let exception = new ErrorCtor(message);
       let output = {};
@@ -868,6 +879,6 @@ var require_cbor = x(function (cjsExports) {
   cjsExports.parseCborBody = parseCborBody;
   cjsExports.parseCborErrorBody = parseCborErrorBody;
   cjsExports.tag = tag;
-  cjsExports.tagSymbol = kt;
+  cjsExports.tagSymbol = tagSymbol;
 });
 export { require_cbor };

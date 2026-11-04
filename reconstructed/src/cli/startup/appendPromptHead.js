@@ -23,27 +23,27 @@ import { joinCacheablePrompt, isUncachedPromptBoundary } from "../../utils/confi
 import { withAddedSections } from "../../utils/systemPromptBoundary.js";
 
 //@ chunk-3wek6r2k.js:66663-67121 placement
-function parseAppendPromptHead(e, o) {
+function parseAppendPromptHead(designator, append) {
   if (!env.CLAUDE_CODE_REMOTE)
     return {
       outcome: "not_remote",
     };
-  if (!o)
+  if (!append)
     return {
       outcome: "no_append",
     };
-  let match = MODEL_PIN_PATTERNS.exec(e);
+  let match = MODEL_PIN_PATTERNS.exec(designator);
   if (!match)
     return {
       outcome: "bad_designator",
     };
-  let r = Number(match[1]);
-  let buffer = Buffer.from(o, "utf8");
-  let chunk = buffer.subarray(0, r);
+  let length = Number(match[1]);
+  let buffer = Buffer.from(append, "utf8");
+  let chunk = buffer.subarray(0, length);
   if (
-    buffer.length < r + 2 ||
-    buffer[r] !== 10 ||
-    buffer[r + 1] !== 10 ||
+    buffer.length < length + 2 ||
+    buffer[length] !== 10 ||
+    buffer[length + 1] !== 10 ||
     createHash("sha256").update(chunk).digest("hex") !== match[2]
   )
     return {
@@ -51,7 +51,7 @@ function parseAppendPromptHead(e, o) {
     };
   let str = chunk.toString("utf8");
   if (
-    !o.startsWith(`${str}
+    !append.startsWith(`${str}
 
 `)
   )
@@ -67,11 +67,11 @@ function parseAppendPromptHead(e, o) {
 /**
  * 读取 CLAUDE_CODE_APPEND_PROMPT_HEAD（仅远程会话），解析追加系统提示的"头"标识并上报。
  */
-function readAppendPromptHead(appendSystemPrompt) {
+function readAppendPromptHead(append) {
   try {
     let CLAUDE_CODE_APPEND_PROMPT_HEAD = env.CLAUDE_CODE_APPEND_PROMPT_HEAD;
     if (!CLAUDE_CODE_APPEND_PROMPT_HEAD) return;
-    let { outcome, head } = parseAppendPromptHead(CLAUDE_CODE_APPEND_PROMPT_HEAD, appendSystemPrompt);
+    let { outcome, head } = parseAppendPromptHead(CLAUDE_CODE_APPEND_PROMPT_HEAD, append);
     logEvent("tengu_append_head_designator", {
       outcome: fromEnum(outcome),
       appendHeadBytes: head === undefined ? 0 : Buffer.byteLength(head, "utf8"),
@@ -85,18 +85,18 @@ function readAppendPromptHead(appendSystemPrompt) {
   }
 }
 //@ chunk-3wek6r2k.js:67409-67649 placement
-function renderAppendPromptHead(e, appendSystemPrompt, appendSystemPromptHead, r) {
-  if (!appendSystemPromptHead) return;
+function renderAppendPromptHead(base, append, head, scope) {
+  if (!head) return;
   try {
-    let u = insertAppendPromptHead(e, appendSystemPrompt, appendSystemPromptHead, r);
+    let result = insertAppendPromptHead(base, append, head, scope);
     logEvent("tengu_append_head_render", {
-      outcome: fromEnum(u.outcome),
-      appendHeadBytes: Buffer.byteLength(appendSystemPromptHead, "utf8"),
+      outcome: fromEnum(result.outcome),
+      appendHeadBytes: Buffer.byteLength(head, "utf8"),
     });
-    return u.outcome === "moved"
+    return result.outcome === "moved"
       ? {
-          base: u.base,
-          append: u.append,
+          base: result.base,
+          append: result.append,
         }
       : undefined;
   } catch (error) {
@@ -105,34 +105,34 @@ function renderAppendPromptHead(e, appendSystemPrompt, appendSystemPromptHead, r
   }
 }
 //@ chunk-3wek6r2k.js:67649-68365 placement
-function insertAppendPromptHead(e, o, n, r) {
-  if (!r)
+function insertAppendPromptHead(base, append, head, scope) {
+  if (!scope)
     return {
       outcome: "no_cache_scope",
     };
-  if (!o)
+  if (!append)
     return {
       outcome: "no_append",
     };
-  let index = e.indexOf(SYSTEM_PROMPT_DYNAMIC_BOUNDARY);
+  let index = base.indexOf(SYSTEM_PROMPT_DYNAMIC_BOUNDARY);
   if (index === -1)
     return {
       outcome: "no_boundary",
     };
-  let index_2 = o.indexOf(n);
-  let h = index_2 + n.length;
+  let index_2 = append.indexOf(head);
+  let end = index_2 + head.length;
   if (
     index_2 === -1 ||
-    o.indexOf(n, index_2 + 1) !== -1 ||
-    !o.startsWith(
+    append.indexOf(head, index_2 + 1) !== -1 ||
+    !append.startsWith(
       `
 
 `,
-      h,
+      end,
     ) ||
     (index_2 !== 0 &&
       (index_2 < 2 ||
-        o.slice(index_2 - 2, index_2) !==
+        append.slice(index_2 - 2, index_2) !==
           `
 
 `))
@@ -140,39 +140,42 @@ function insertAppendPromptHead(e, o, n, r) {
     return {
       outcome: "head_not_found",
     };
-  let S = o.slice(0, index_2) + o.slice(h + 2);
-  let sliced = e.slice(0, index);
-  let sliced_2 = e.slice(index + 1);
-  let E = joinCacheablePrompt([...sliced, n]);
-  let w = joinCacheablePrompt([...sliced_2, S]);
+  let stripped = append.slice(0, index_2) + append.slice(end + 2);
+  let promptParts = base.slice(0, index);
+  let sliced = base.slice(index + 1);
+  let baseBlock = joinCacheablePrompt([...promptParts, head]);
+  let appendBlock = joinCacheablePrompt([...sliced, stripped]);
   if (
     [
-      n,
-      S,
-      o,
-      E,
-      w,
-      joinCacheablePrompt([...sliced, n, ...sliced_2, S]),
-      joinCacheablePrompt(sliced),
-      joinCacheablePrompt([...sliced_2, o]),
-      joinCacheablePrompt([...sliced, ...sliced_2, o]),
+      head,
+      stripped,
+      append,
+      baseBlock,
+      appendBlock,
+      joinCacheablePrompt([...promptParts, head, ...sliced, stripped]),
+      joinCacheablePrompt(promptParts),
+      joinCacheablePrompt([...sliced, append]),
+      joinCacheablePrompt([...promptParts, ...sliced, append]),
     ].some(isUncachedPromptBoundary)
   )
     return {
       outcome: "own_block_text",
     };
-  if ([S, E, w].some((P) => BLANK_NOTICE_RE.test(P)))
+  if ([stripped, baseBlock, appendBlock].some((block) => BLANK_NOTICE_RE.test(block)))
     return {
       outcome: "blank_text",
     };
-  if (E.length <= 2 * MAX_OVERRIDE_NOTICE_CHARS && Array.from(E).length <= MAX_OVERRIDE_NOTICE_CHARS)
+  if (
+    baseBlock.length <= 2 * MAX_OVERRIDE_NOTICE_CHARS &&
+    Array.from(baseBlock).length <= MAX_OVERRIDE_NOTICE_CHARS
+  )
     return {
       outcome: "short_block",
     };
   return {
     outcome: "moved",
-    base: withAddedSections(e, [["shared", n]], r),
-    append: S,
+    base: withAddedSections(base, [["shared", head]], scope),
+    append: stripped,
   };
 }
 export { renderAppendPromptHead, readAppendPromptHead };

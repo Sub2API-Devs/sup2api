@@ -44,9 +44,9 @@ import {
 import { isArtifactRoomViewNotification, TeammateDmMessage } from "./TeammateResultMessage.js";
 import { hasTaskNotificationToolUseId } from "../../services/tools/detachedToolCalls.js";
 import { parseUpdates } from "./UserResourceUpdateMessage.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { shouldShowNotice } from "../SlashCommandLink.js";
-import { Se, Kc } from "../../../vendor/react/cjs/react.production.js";
+import { useContext, fragmentTypeExport } from "../../../vendor/react/cjs/react.production.js";
 import {
   interruptedByUserSignal,
   RejectedToolUseMessage,
@@ -61,7 +61,7 @@ import { UserPlanMessage } from "./UserPlanMessage.js";
 import { UserPromptText } from "./UserPromptMessage.js";
 import { UserCommandMessage, BashOutputBlock } from "./UserCommandMessage.js";
 import { UserBashInputMessage } from "./UserBashInputMessage.js";
-import { INBOUND_MESSAGES_MODULE_EXPORTS } from "../../bridge/inboundMessages.js";
+import { INBOUND_MESSAGES_MODULE_EXPORTS } from "../pluginUi/renderSiteExports.js";
 import { interruptedRow, parseLocalCommandOutput } from "./CompactBoundaryMessage.js";
 import { NoticeRowMessage } from "./teamMemSaved.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -123,7 +123,7 @@ function isTaggedSystemUserText(text) {
  * 用户文本消息总渲染（计划、命令、插件提示、任务投递、发言人标签等分支）。
  */
 function UserTextMessage(props) {
-  let V = w(140);
+  let $ = useMemoCache(140);
   let {
     addMargin,
     param,
@@ -140,38 +140,38 @@ function UserTextMessage(props) {
     followsInboundLabel,
     followsCoordinatorLabel,
   } = props;
-  let W = shouldShowNotice(verbose);
-  let isBySendNow = Se(interruptedByUserSignal);
+  let showNotice = shouldShowNotice(verbose);
+  let isBySendNow = useContext(interruptedByUserSignal);
   let isExpanded = resolveTranscriptMode(verbose, isTranscriptMode);
   if (typeof param.text !== "string" || !param.text || param.text.trim() === NO_CONTENT_MESSAGE) {
     return null;
   }
   if (planContent) {
-    let Y;
-    if (V[0] !== addMargin || V[1] !== planContent) {
-      Y = jsxProd_default(UserPlanMessage, {
+    let planMessage;
+    if ($[0] !== addMargin || $[1] !== planContent) {
+      planMessage = jsxProd_default(UserPlanMessage, {
         addMargin,
         planContent,
       });
-      V[0] = addMargin;
-      V[1] = planContent;
-      V[2] = Y;
-    } else Y = V[2];
-    return Y;
+      $[0] = addMargin;
+      $[1] = planContent;
+      $[2] = planMessage;
+    } else planMessage = $[2];
+    return planMessage;
   }
   if (followsCoordinatorLabel) {
-    let Y;
+    let promptText;
     if (
-      V[3] !== addMargin ||
-      V[4] !== followsSpeakerLabel ||
-      V[5] !== isExpanded ||
-      V[6] !== isTranscriptMode ||
-      V[7] !== messageId ||
-      V[8] !== origin ||
-      V[9] !== param ||
-      V[10] !== timestamp
+      $[3] !== addMargin ||
+      $[4] !== followsSpeakerLabel ||
+      $[5] !== isExpanded ||
+      $[6] !== isTranscriptMode ||
+      $[7] !== messageId ||
+      $[8] !== origin ||
+      $[9] !== param ||
+      $[10] !== timestamp
     ) {
-      Y = jsxProd_default(UserPromptText, {
+      promptText = jsxProd_default(UserPromptText, {
         addMargin,
         param,
         isTranscriptMode,
@@ -182,32 +182,32 @@ function UserTextMessage(props) {
         followsSpeakerLabel,
         followsInboundLabel: true,
       });
-      V[3] = addMargin;
-      V[4] = followsSpeakerLabel;
-      V[5] = isExpanded;
-      V[6] = isTranscriptMode;
-      V[7] = messageId;
-      V[8] = origin;
-      V[9] = param;
-      V[10] = timestamp;
-      V[11] = Y;
-    } else Y = V[11];
-    return Y;
+      $[3] = addMargin;
+      $[4] = followsSpeakerLabel;
+      $[5] = isExpanded;
+      $[6] = isTranscriptMode;
+      $[7] = messageId;
+      $[8] = origin;
+      $[9] = param;
+      $[10] = timestamp;
+      $[11] = promptText;
+    } else promptText = $[11];
+    return promptText;
   }
   let followsSpeakerLabel_2 = followsSpeakerLabel || followsInboundLabel;
-  let z = null;
+  let wake = null;
   if (isAgentSwarmsEnabled() && isTeammateMessageText(param.text)) {
-    let Y;
+    let teammateMessage;
     if (
-      V[12] !== addMargin ||
-      V[13] !== isTranscriptMode ||
-      V[14] !== messageId ||
-      V[15] !== origin ||
-      V[16] !== param ||
-      V[17] !== followsSpeakerLabel_2 ||
-      V[18] !== verbose
+      $[12] !== addMargin ||
+      $[13] !== isTranscriptMode ||
+      $[14] !== messageId ||
+      $[15] !== origin ||
+      $[16] !== param ||
+      $[17] !== followsSpeakerLabel_2 ||
+      $[18] !== verbose
     ) {
-      Y = jsxProd_default(UserTeammateMessage, {
+      teammateMessage = jsxProd_default(UserTeammateMessage, {
         addMargin,
         param,
         verbose,
@@ -216,29 +216,29 @@ function UserTextMessage(props) {
         origin,
         followsSpeakerLabel: followsSpeakerLabel_2,
       });
-      V[12] = addMargin;
-      V[13] = isTranscriptMode;
-      V[14] = messageId;
-      V[15] = origin;
-      V[16] = param;
-      V[17] = followsSpeakerLabel_2;
-      V[18] = verbose;
-      V[19] = Y;
-    } else Y = V[19];
-    return Y;
+      $[12] = addMargin;
+      $[13] = isTranscriptMode;
+      $[14] = messageId;
+      $[15] = origin;
+      $[16] = param;
+      $[17] = followsSpeakerLabel_2;
+      $[18] = verbose;
+      $[19] = teammateMessage;
+    } else teammateMessage = $[19];
+    return teammateMessage;
   }
   if (isChannelSourcedMessage(param.text)) {
-    let { UserChannelMessage } = require("./chunk-e67761vs.js");
-    let Y;
+    let { UserChannelMessage } = require("./UserChannelMessage.lazy.js");
+    let channelMessage;
     if (
-      V[20] !== addMargin ||
-      V[21] !== isExpanded ||
-      V[22] !== messageId ||
-      V[23] !== origin ||
-      V[24] !== param ||
-      V[25] !== followsSpeakerLabel_2
+      $[20] !== addMargin ||
+      $[21] !== isExpanded ||
+      $[22] !== messageId ||
+      $[23] !== origin ||
+      $[24] !== param ||
+      $[25] !== followsSpeakerLabel_2
     ) {
-      Y = jsxProd_default(UserChannelMessage, {
+      channelMessage = jsxProd_default(UserChannelMessage, {
         addMargin,
         param,
         messageId,
@@ -246,47 +246,47 @@ function UserTextMessage(props) {
         isExpanded,
         followsSpeakerLabel: followsSpeakerLabel_2,
       });
-      V[20] = addMargin;
-      V[21] = isExpanded;
-      V[22] = messageId;
-      V[23] = origin;
-      V[24] = param;
-      V[25] = followsSpeakerLabel_2;
-      V[26] = Y;
-    } else Y = V[26];
-    return Y;
+      $[20] = addMargin;
+      $[21] = isExpanded;
+      $[22] = messageId;
+      $[23] = origin;
+      $[24] = param;
+      $[25] = followsSpeakerLabel_2;
+      $[26] = channelMessage;
+    } else channelMessage = $[26];
+    return channelMessage;
   }
   if (param.text.startsWith('<wake reason="external-event"')) {
-    let { parseExternalEventWake, isSessionInboxWake } = require("./chunk-7v894jnd.js");
-    let Y;
-    let ae;
-    if (V[27] !== param.text) {
-      ae = parseExternalEventWake(param.text);
-      Y = ae !== null && isSessionInboxWake(ae);
-      V[27] = param.text;
-      V[28] = Y;
-      V[29] = ae;
+    let { parseExternalEventWake, isSessionInboxWake } = require("../../utils/externalEventWake.js");
+    let inboxWake;
+    let wakePayload;
+    if ($[27] !== param.text) {
+      wakePayload = parseExternalEventWake(param.text);
+      inboxWake = wakePayload !== null && isSessionInboxWake(wakePayload);
+      $[27] = param.text;
+      $[28] = inboxWake;
+      $[29] = wakePayload;
     } else {
-      Y = V[28];
-      ae = V[29];
+      inboxWake = $[28];
+      wakePayload = $[29];
     }
-    if (Y) z = ae;
+    if (inboxWake) wake = wakePayload;
   }
   if (isTaggedPeerText(param.text)) {
-    let { UserCrossSessionMessage } = require("./chunk-n8ka2zfw.js");
+    let { UserCrossSessionMessage } = require("./UserCrossSessionMessage.js");
     const hostInjected = origin?.kind === "peer" && origin.hostInjected === true;
-    let te;
+    let crossSessionMessage;
     if (
-      V[30] !== addMargin ||
-      V[31] !== isTranscriptMode ||
-      V[32] !== messageId ||
-      V[33] !== origin ||
-      V[34] !== param ||
-      V[35] !== hostInjected ||
-      V[36] !== followsSpeakerLabel_2 ||
-      V[37] !== verbose
+      $[30] !== addMargin ||
+      $[31] !== isTranscriptMode ||
+      $[32] !== messageId ||
+      $[33] !== origin ||
+      $[34] !== param ||
+      $[35] !== hostInjected ||
+      $[36] !== followsSpeakerLabel_2 ||
+      $[37] !== verbose
     ) {
-      te = jsxProd_default(UserCrossSessionMessage, {
+      crossSessionMessage = jsxProd_default(UserCrossSessionMessage, {
         addMargin,
         param,
         hostInjected,
@@ -296,32 +296,32 @@ function UserTextMessage(props) {
         origin,
         followsSpeakerLabel: followsSpeakerLabel_2,
       });
-      V[30] = addMargin;
-      V[31] = isTranscriptMode;
-      V[32] = messageId;
-      V[33] = origin;
-      V[34] = param;
-      V[35] = hostInjected;
-      V[36] = followsSpeakerLabel_2;
-      V[37] = verbose;
-      V[38] = te;
-    } else te = V[38];
-    return te;
+      $[30] = addMargin;
+      $[31] = isTranscriptMode;
+      $[32] = messageId;
+      $[33] = origin;
+      $[34] = param;
+      $[35] = hostInjected;
+      $[36] = followsSpeakerLabel_2;
+      $[37] = verbose;
+      $[38] = crossSessionMessage;
+    } else crossSessionMessage = $[38];
+    return crossSessionMessage;
   }
   if (followsInboundLabel) {
-    let Y;
+    let promptText;
     if (
-      V[39] !== addMargin ||
-      V[40] !== followsSpeakerLabel ||
-      V[41] !== isExpanded ||
-      V[42] !== isTranscriptMode ||
-      V[43] !== messageId ||
-      V[44] !== origin ||
-      V[45] !== param ||
-      V[46] !== pluginPrompt ||
-      V[47] !== timestamp
+      $[39] !== addMargin ||
+      $[40] !== followsSpeakerLabel ||
+      $[41] !== isExpanded ||
+      $[42] !== isTranscriptMode ||
+      $[43] !== messageId ||
+      $[44] !== origin ||
+      $[45] !== param ||
+      $[46] !== pluginPrompt ||
+      $[47] !== timestamp
     ) {
-      Y = jsxProd_default(UserPromptText, {
+      promptText = jsxProd_default(UserPromptText, {
         addMargin,
         param,
         isTranscriptMode,
@@ -333,61 +333,61 @@ function UserTextMessage(props) {
         followsSpeakerLabel,
         followsInboundLabel: true,
       });
-      V[39] = addMargin;
-      V[40] = followsSpeakerLabel;
-      V[41] = isExpanded;
-      V[42] = isTranscriptMode;
-      V[43] = messageId;
-      V[44] = origin;
-      V[45] = param;
-      V[46] = pluginPrompt;
-      V[47] = timestamp;
-      V[48] = Y;
-    } else Y = V[48];
-    return Y;
+      $[39] = addMargin;
+      $[40] = followsSpeakerLabel;
+      $[41] = isExpanded;
+      $[42] = isTranscriptMode;
+      $[43] = messageId;
+      $[44] = origin;
+      $[45] = param;
+      $[46] = pluginPrompt;
+      $[47] = timestamp;
+      $[48] = promptText;
+    } else promptText = $[48];
+    return promptText;
   }
   if (param.text.startsWith('<wake reason="external-event"')) {
-    if (z !== null) {
-      let { UserSessionInboxWakeMessage } = require("./chunk-nwq3j1yh.js");
-      let Y;
+    if (wake !== null) {
+      let { UserSessionInboxWakeMessage } = require("./UserSessionInboxWakeMessage.lazy.js");
+      let inboxWakeMessage;
       if (
-        V[49] !== addMargin ||
-        V[50] !== z ||
-        V[51] !== isTranscriptMode ||
-        V[52] !== origin ||
-        V[53] !== param.text ||
-        V[54] !== verbose
+        $[49] !== addMargin ||
+        $[50] !== wake ||
+        $[51] !== isTranscriptMode ||
+        $[52] !== origin ||
+        $[53] !== param.text ||
+        $[54] !== verbose
       ) {
-        Y = jsxProd_default(UserSessionInboxWakeMessage, {
+        inboxWakeMessage = jsxProd_default(UserSessionInboxWakeMessage, {
           addMargin,
-          wake: z,
+          wake,
           origin,
           rawText: param.text,
           verbose,
           isTranscriptMode,
         });
-        V[49] = addMargin;
-        V[50] = z;
-        V[51] = isTranscriptMode;
-        V[52] = origin;
-        V[53] = param.text;
-        V[54] = verbose;
-        V[55] = Y;
-      } else Y = V[55];
-      return Y;
+        $[49] = addMargin;
+        $[50] = wake;
+        $[51] = isTranscriptMode;
+        $[52] = origin;
+        $[53] = param.text;
+        $[54] = verbose;
+        $[55] = inboxWakeMessage;
+      } else inboxWakeMessage = $[55];
+      return inboxWakeMessage;
     }
-    let Y;
+    let promptText;
     if (
-      V[56] !== addMargin ||
-      V[57] !== followsSpeakerLabel ||
-      V[58] !== isExpanded ||
-      V[59] !== isTranscriptMode ||
-      V[60] !== messageId ||
-      V[61] !== origin ||
-      V[62] !== param ||
-      V[63] !== timestamp
+      $[56] !== addMargin ||
+      $[57] !== followsSpeakerLabel ||
+      $[58] !== isExpanded ||
+      $[59] !== isTranscriptMode ||
+      $[60] !== messageId ||
+      $[61] !== origin ||
+      $[62] !== param ||
+      $[63] !== timestamp
     ) {
-      Y = jsxProd_default(UserPromptText, {
+      promptText = jsxProd_default(UserPromptText, {
         addMargin,
         param,
         isTranscriptMode,
@@ -397,33 +397,33 @@ function UserTextMessage(props) {
         origin,
         followsSpeakerLabel,
       });
-      V[56] = addMargin;
-      V[57] = followsSpeakerLabel;
-      V[58] = isExpanded;
-      V[59] = isTranscriptMode;
-      V[60] = messageId;
-      V[61] = origin;
-      V[62] = param;
-      V[63] = timestamp;
-      V[64] = Y;
-    } else Y = V[64];
-    return Y;
+      $[56] = addMargin;
+      $[57] = followsSpeakerLabel;
+      $[58] = isExpanded;
+      $[59] = isTranscriptMode;
+      $[60] = messageId;
+      $[61] = origin;
+      $[62] = param;
+      $[63] = timestamp;
+      $[64] = promptText;
+    } else promptText = $[64];
+    return promptText;
   }
   if (startsWithCommandTag(param.text)) {
-    let Y;
+    let commandMessage;
     if (
-      V[65] !== addMargin ||
-      V[66] !== followsSpeakerLabel ||
-      V[67] !== isExpanded ||
-      V[68] !== isTranscriptMode ||
-      V[69] !== messageId ||
-      V[70] !== origin ||
-      V[71] !== param ||
-      V[72] !== timestamp
+      $[65] !== addMargin ||
+      $[66] !== followsSpeakerLabel ||
+      $[67] !== isExpanded ||
+      $[68] !== isTranscriptMode ||
+      $[69] !== messageId ||
+      $[70] !== origin ||
+      $[71] !== param ||
+      $[72] !== timestamp
     ) {
-      let commandMessage = parseCommandMessage(param.text);
-      Y =
-        commandMessage && isUsableCommandMessage(commandMessage)
+      let commandMessage_2 = parseCommandMessage(param.text);
+      commandMessage =
+        commandMessage_2 && isUsableCommandMessage(commandMessage_2)
           ? jsxProd_default(UserCommandMessage, {
               addMargin,
               param,
@@ -439,30 +439,30 @@ function UserTextMessage(props) {
               origin,
               followsSpeakerLabel,
             });
-      V[65] = addMargin;
-      V[66] = followsSpeakerLabel;
-      V[67] = isExpanded;
-      V[68] = isTranscriptMode;
-      V[69] = messageId;
-      V[70] = origin;
-      V[71] = param;
-      V[72] = timestamp;
-      V[73] = Y;
-    } else Y = V[73];
-    return Y;
+      $[65] = addMargin;
+      $[66] = followsSpeakerLabel;
+      $[67] = isExpanded;
+      $[68] = isTranscriptMode;
+      $[69] = messageId;
+      $[70] = origin;
+      $[71] = param;
+      $[72] = timestamp;
+      $[73] = commandMessage;
+    } else commandMessage = $[73];
+    return commandMessage;
   }
   if (extractBashInput(param.text) !== null) {
-    let Y;
-    if (V[74] !== addMargin || V[75] !== param) {
-      Y = jsxProd_default(UserBashInputMessage, {
+    let bashInputMessage;
+    if ($[74] !== addMargin || $[75] !== param) {
+      bashInputMessage = jsxProd_default(UserBashInputMessage, {
         addMargin,
         param,
       });
-      V[74] = addMargin;
-      V[75] = param;
-      V[76] = Y;
-    } else Y = V[76];
-    return Y;
+      $[74] = addMargin;
+      $[75] = param;
+      $[76] = bashInputMessage;
+    } else bashInputMessage = $[76];
+    return bashInputMessage;
   }
   if (extractTag(param.text, TICK)) {
     return null;
@@ -471,174 +471,175 @@ function UserTextMessage(props) {
     return null;
   }
   if (isBashOutputText(param.text)) {
-    let Y;
-    if (V[77] !== param.text || V[78] !== verbose) {
-      Y = jsxProd_default(BashOutputBlock, {
+    let bashOutput;
+    if ($[77] !== param.text || $[78] !== verbose) {
+      bashOutput = jsxProd_default(BashOutputBlock, {
         content: param.text,
         verbose,
       });
-      V[77] = param.text;
-      V[78] = verbose;
-      V[79] = Y;
-    } else Y = V[79];
-    return Y;
+      $[77] = param.text;
+      $[78] = verbose;
+      $[79] = bashOutput;
+    } else bashOutput = $[79];
+    return bashOutput;
   }
   if (param.text.startsWith("<local-command-stdout") || param.text.startsWith("<local-command-stderr")) {
-    let Y;
-    if (V[80] !== commandRun || V[81] !== param.text) {
-      Y = commandRun === undefined ? undefined : INBOUND_MESSAGES_MODULE_EXPORTS.printedTextOf(param.text);
-      V[80] = commandRun;
-      V[81] = param.text;
-      V[82] = Y;
-    } else Y = V[82];
-    let J = Y;
+    let printedText;
+    if ($[80] !== commandRun || $[81] !== param.text) {
+      printedText =
+        commandRun === undefined ? undefined : INBOUND_MESSAGES_MODULE_EXPORTS.printedTextOf(param.text);
+      $[80] = commandRun;
+      $[81] = param.text;
+      $[82] = printedText;
+    } else printedText = $[82];
+    let printedText_2 = printedText;
     let capProseWidth = commandRun?.command === "recap";
-    if (commandRun === undefined || J === undefined) {
+    if (commandRun === undefined || printedText_2 === undefined) {
       const command = commandRun?.command;
-      let ye;
+      let textContent;
       if (
-        V[83] !== addMargin ||
-        V[84] !== capProseWidth ||
-        V[85] !== param.text ||
-        V[86] !== command ||
-        V[87] !== W
+        $[83] !== addMargin ||
+        $[84] !== capProseWidth ||
+        $[85] !== param.text ||
+        $[86] !== command ||
+        $[87] !== showNotice
       ) {
-        ye = jsxProd_default(UserTextContent, {
+        textContent = jsxProd_default(UserTextContent, {
           content: param.text,
           addMargin,
-          systemLine: W,
+          systemLine: showNotice,
           command,
           capProseWidth,
         });
-        V[83] = addMargin;
-        V[84] = capProseWidth;
-        V[85] = param.text;
-        V[86] = command;
-        V[87] = W;
-        V[88] = ye;
-      } else ye = V[88];
-      return ye;
+        $[83] = addMargin;
+        $[84] = capProseWidth;
+        $[85] = param.text;
+        $[86] = command;
+        $[87] = showNotice;
+        $[88] = textContent;
+      } else textContent = $[88];
+      return textContent;
     }
     let draw;
     if (
-      V[89] !== addMargin ||
-      V[90] !== capProseWidth ||
-      V[91] !== commandRun ||
-      V[92] !== param.text ||
-      V[93] !== W
+      $[89] !== addMargin ||
+      $[90] !== capProseWidth ||
+      $[91] !== commandRun ||
+      $[92] !== param.text ||
+      $[93] !== showNotice
     ) {
-      draw = (Te) =>
+      draw = (content) =>
         jsxProd_default(UserTextContent, {
-          content: Te,
+          content,
           addMargin,
-          systemLine: W,
-          command: Te === param.text ? commandRun.command : undefined,
+          systemLine: showNotice,
+          command: content === param.text ? commandRun.command : undefined,
           capProseWidth,
         });
-      V[89] = addMargin;
-      V[90] = capProseWidth;
-      V[91] = commandRun;
-      V[92] = param.text;
-      V[93] = W;
-      V[94] = draw;
-    } else draw = V[94];
-    let ye;
+      $[89] = addMargin;
+      $[90] = capProseWidth;
+      $[91] = commandRun;
+      $[92] = param.text;
+      $[93] = showNotice;
+      $[94] = draw;
+    } else draw = $[94];
+    let commandOutput;
     if (
-      V[95] !== commandRun ||
-      V[96] !== messageId ||
-      V[97] !== param.text ||
-      V[98] !== J ||
-      V[99] !== draw
+      $[95] !== commandRun ||
+      $[96] !== messageId ||
+      $[97] !== param.text ||
+      $[98] !== printedText_2 ||
+      $[99] !== draw
     ) {
-      ye = jsxProd_default(INBOUND_MESSAGES_MODULE_EXPORTS.CommandOutputSite, {
+      commandOutput = jsxProd_default(INBOUND_MESSAGES_MODULE_EXPORTS.CommandOutputSite, {
         content: param.text,
         commandRun,
-        printed: J,
+        printed: printedText_2,
         messageId,
         draw,
       });
-      V[95] = commandRun;
-      V[96] = messageId;
-      V[97] = param.text;
-      V[98] = J;
-      V[99] = draw;
-      V[100] = ye;
-    } else ye = V[100];
-    return ye;
+      $[95] = commandRun;
+      $[96] = messageId;
+      $[97] = param.text;
+      $[98] = printedText_2;
+      $[99] = draw;
+      $[100] = commandOutput;
+    } else commandOutput = $[100];
+    return commandOutput;
   }
   if (param.text === INTERRUPT_MESSAGE || param.text === INTERRUPT_MESSAGE_FOR_TOOL_USE) {
-    if (W) {
+    if (showNotice) {
       let row;
-      if (V[101] !== isBySendNow) {
+      if ($[101] !== isBySendNow) {
         row = interruptedRow({
           isBySendNow,
         });
-        V[101] = isBySendNow;
-        V[102] = row;
-      } else row = V[102];
-      let te;
-      if (V[103] !== addMargin || V[104] !== row) {
-        te = jsxProd_default(NoticeRowMessage, {
+        $[101] = isBySendNow;
+        $[102] = row;
+      } else row = $[102];
+      let interruptNotice;
+      if ($[103] !== addMargin || $[104] !== row) {
+        interruptNotice = jsxProd_default(NoticeRowMessage, {
           row,
           addMargin,
         });
-        V[103] = addMargin;
-        V[104] = row;
-        V[105] = te;
-      } else te = V[105];
-      return te;
+        $[103] = addMargin;
+        $[104] = row;
+        $[105] = interruptNotice;
+      } else interruptNotice = $[105];
+      return interruptNotice;
     }
-    let Y;
-    if (V[106] === MEMO_CACHE_SENTINEL) {
-      Y = jsxProd_default(RejectedToolUseMessage, {});
-      V[106] = Y;
-    } else Y = V[106];
-    return Y;
+    let rejectedToolUse;
+    if ($[106] === MEMO_CACHE_SENTINEL) {
+      rejectedToolUse = jsxProd_default(RejectedToolUseMessage, {});
+      $[106] = rejectedToolUse;
+    } else rejectedToolUse = $[106];
+    return rejectedToolUse;
   }
   if (param.text.includes("<user-memory-input>")) {
-    let Y;
-    if (V[107] !== addMargin || V[108] !== param.text) {
-      Y = jsxProd_default(UserMemoryInputMessage, {
+    let memoryInputMessage;
+    if ($[107] !== addMargin || $[108] !== param.text) {
+      memoryInputMessage = jsxProd_default(UserMemoryInputMessage, {
         addMargin,
         text: param.text,
       });
-      V[107] = addMargin;
-      V[108] = param.text;
-      V[109] = Y;
-    } else Y = V[109];
-    return Y;
+      $[107] = addMargin;
+      $[108] = param.text;
+      $[109] = memoryInputMessage;
+    } else memoryInputMessage = $[109];
+    return memoryInputMessage;
   }
   if (param.text.includes(`<${TASK_NOTIFICATION}`)) {
     if (isArtifactRoomViewNotification(param.text)) {
       return null;
     }
     if (hasTaskNotificationToolUseId(param.text)) {
-      let Y;
-      if (V[110] !== addMargin || V[111] !== param.text || V[112] !== verbose) {
-        Y = jsxProd_default(TeammateDmMessage, {
+      let teammateDm;
+      if ($[110] !== addMargin || $[111] !== param.text || $[112] !== verbose) {
+        teammateDm = jsxProd_default(TeammateDmMessage, {
           addMargin,
           text: param.text,
           verbose,
         });
-        V[110] = addMargin;
-        V[111] = param.text;
-        V[112] = verbose;
-        V[113] = Y;
-      } else Y = V[113];
-      return Y;
+        $[110] = addMargin;
+        $[111] = param.text;
+        $[112] = verbose;
+        $[113] = teammateDm;
+      } else teammateDm = $[113];
+      return teammateDm;
     }
     const verbose_2 = verbose || isTranscriptMode;
-    let te;
+    let taskNotification;
     if (
-      V[114] !== addMargin ||
-      V[115] !== isExpanded ||
-      V[116] !== messageId ||
-      V[117] !== origin ||
-      V[118] !== param ||
-      V[119] !== verbose_2 ||
-      V[120] !== taskDelivery
+      $[114] !== addMargin ||
+      $[115] !== isExpanded ||
+      $[116] !== messageId ||
+      $[117] !== origin ||
+      $[118] !== param ||
+      $[119] !== verbose_2 ||
+      $[120] !== taskDelivery
     ) {
-      te = jsxProd_default(renderToolUseErrorMessage_5, {
+      taskNotification = jsxProd_default(renderToolUseErrorMessage_5, {
         addMargin,
         param,
         taskDelivery,
@@ -647,63 +648,63 @@ function UserTextMessage(props) {
         verbose: verbose_2,
         isExpanded,
       });
-      V[114] = addMargin;
-      V[115] = isExpanded;
-      V[116] = messageId;
-      V[117] = origin;
-      V[118] = param;
-      V[119] = verbose_2;
-      V[120] = taskDelivery;
-      V[121] = te;
-    } else te = V[121];
-    return te;
+      $[114] = addMargin;
+      $[115] = isExpanded;
+      $[116] = messageId;
+      $[117] = origin;
+      $[118] = param;
+      $[119] = verbose_2;
+      $[120] = taskDelivery;
+      $[121] = taskNotification;
+    } else taskNotification = $[121];
+    return taskNotification;
   }
   if (param.text.includes("<mcp-resource-update") || param.text.includes("<mcp-polling-update")) {
-    let Y;
-    if (V[122] !== addMargin || V[123] !== param) {
-      Y = jsxProd_default(UserAgentNotificationMessage, {
+    let agentNotification;
+    if ($[122] !== addMargin || $[123] !== param) {
+      agentNotification = jsxProd_default(UserAgentNotificationMessage, {
         addMargin,
         param,
       });
-      V[122] = addMargin;
-      V[123] = param;
-      V[124] = Y;
-    } else Y = V[124];
-    return Y;
+      $[122] = addMargin;
+      $[123] = param;
+      $[124] = agentNotification;
+    } else agentNotification = $[124];
+    return agentNotification;
   }
-  let Y;
-  if (V[125] !== param.text) {
-    Y = param.text.includes("<fork-boilerplate>") ? parseForkDirective(param.text) : undefined;
-    V[125] = param.text;
-    V[126] = Y;
-  } else Y = V[126];
-  let Me = Y;
-  if (Me !== undefined) {
-    let te;
-    if (V[127] !== addMargin || V[128] !== Me) {
-      te = jsxProd_default(ForkDirectiveLine, {
+  let directive;
+  if ($[125] !== param.text) {
+    directive = param.text.includes("<fork-boilerplate>") ? parseForkDirective(param.text) : undefined;
+    $[125] = param.text;
+    $[126] = directive;
+  } else directive = $[126];
+  let directive_2 = directive;
+  if (directive_2 !== undefined) {
+    let forkDirectiveLine;
+    if ($[127] !== addMargin || $[128] !== directive_2) {
+      forkDirectiveLine = jsxProd_default(ForkDirectiveLine, {
         addMargin,
-        directive: Me,
+        directive: directive_2,
       });
-      V[127] = addMargin;
-      V[128] = Me;
-      V[129] = te;
-    } else te = V[129];
-    return te;
+      $[127] = addMargin;
+      $[128] = directive_2;
+      $[129] = forkDirectiveLine;
+    } else forkDirectiveLine = $[129];
+    return forkDirectiveLine;
   }
-  let te;
+  let promptText;
   if (
-    V[130] !== addMargin ||
-    V[131] !== followsSpeakerLabel ||
-    V[132] !== isExpanded ||
-    V[133] !== isTranscriptMode ||
-    V[134] !== messageId ||
-    V[135] !== origin ||
-    V[136] !== param ||
-    V[137] !== pluginPrompt ||
-    V[138] !== timestamp
+    $[130] !== addMargin ||
+    $[131] !== followsSpeakerLabel ||
+    $[132] !== isExpanded ||
+    $[133] !== isTranscriptMode ||
+    $[134] !== messageId ||
+    $[135] !== origin ||
+    $[136] !== param ||
+    $[137] !== pluginPrompt ||
+    $[138] !== timestamp
   ) {
-    te = jsxProd_default(UserPromptText, {
+    promptText = jsxProd_default(UserPromptText, {
       addMargin,
       param,
       isTranscriptMode,
@@ -714,136 +715,136 @@ function UserTextMessage(props) {
       pluginPrompt,
       followsSpeakerLabel,
     });
-    V[130] = addMargin;
-    V[131] = followsSpeakerLabel;
-    V[132] = isExpanded;
-    V[133] = isTranscriptMode;
-    V[134] = messageId;
-    V[135] = origin;
-    V[136] = param;
-    V[137] = pluginPrompt;
-    V[138] = timestamp;
-    V[139] = te;
-  } else te = V[139];
-  return te;
+    $[130] = addMargin;
+    $[131] = followsSpeakerLabel;
+    $[132] = isExpanded;
+    $[133] = isTranscriptMode;
+    $[134] = messageId;
+    $[135] = origin;
+    $[136] = param;
+    $[137] = pluginPrompt;
+    $[138] = timestamp;
+    $[139] = promptText;
+  } else promptText = $[139];
+  return promptText;
 }
 //@ chunk-ah34pb7m.js:126618-127031 placement
 /**
  * 用户文本内容或系统行显示。
  */
 function UserTextContent(props) {
-  let M = w(9);
+  let $ = useMemoCache(9);
   let { content, addMargin, systemLine, command, capProseWidth } = props;
   if (systemLine) {
-    let T;
-    if (M[0] !== command || M[1] !== content) {
-      T = parseLocalCommandOutput(content, command);
-      M[0] = command;
-      M[1] = content;
-      M[2] = T;
-    } else T = M[2];
-    let x = T;
-    if (x.kind === "line") {
-      let k;
-      if (M[3] !== addMargin || M[4] !== x.row) {
-        k = jsxProd_default(NoticeRowMessage, {
-          row: x.row,
+    let localOutput;
+    if ($[0] !== command || $[1] !== content) {
+      localOutput = parseLocalCommandOutput(content, command);
+      $[0] = command;
+      $[1] = content;
+      $[2] = localOutput;
+    } else localOutput = $[2];
+    let output = localOutput;
+    if (output.kind === "line") {
+      let noticeRowMessageElement;
+      if ($[3] !== addMargin || $[4] !== output.row) {
+        noticeRowMessageElement = jsxProd_default(NoticeRowMessage, {
+          row: output.row,
           addMargin,
         });
-        M[3] = addMargin;
-        M[4] = x.row;
-        M[5] = k;
-      } else k = M[5];
-      return k;
+        $[3] = addMargin;
+        $[4] = output.row;
+        $[5] = noticeRowMessageElement;
+      } else noticeRowMessageElement = $[5];
+      return noticeRowMessageElement;
     }
   }
-  let T;
-  if (M[6] !== capProseWidth || M[7] !== content) {
-    T = jsxProd_default(UserLocalCommandOutputMessage, {
+  let userLocalCommandOutputMessageElement;
+  if ($[6] !== capProseWidth || $[7] !== content) {
+    userLocalCommandOutputMessageElement = jsxProd_default(UserLocalCommandOutputMessage, {
       content,
       capProseWidth,
     });
-    M[6] = capProseWidth;
-    M[7] = content;
-    M[8] = T;
-  } else T = M[8];
-  return T;
+    $[6] = capProseWidth;
+    $[7] = content;
+    $[8] = userLocalCommandOutputMessageElement;
+  } else userLocalCommandOutputMessageElement = $[8];
+  return userLocalCommandOutputMessageElement;
 }
 //@ chunk-ah34pb7m.js:127031-127180 placement
 /**
  * 渲染队友消息项：panel 直接返回节点，否则渲染 TeammateMessageContent。
  */
-function renderTeammateContentItem(Ms, Xm) {
-  return Ms.kind === "panel"
-    ? Ms.node
+function renderTeammateContentItem(item, key) {
+  return item.kind === "panel"
+    ? item.node
     : jsxProd_default(
         TeammateMessageContent,
         {
-          displayName: Ms.displayName,
-          inkColor: Ms.inkColor,
-          content: Ms.content,
-          summary: Ms.summary,
+          displayName: item.displayName,
+          inkColor: item.inkColor,
+          content: item.content,
+          summary: item.summary,
         },
-        Xm,
+        key,
       );
 }
 //@ chunk-ah34pb7m.js:127180-127346 placement
 /**
  * 渲染合并后的队友消息项：panel 直接返回，否则显示 ctrl+o 展开提示（含未验证标记与计数）。
  */
-function renderCoalescedTeammateItem(as, Qh) {
-  return as.kind === "panel"
-    ? as.node
+function renderCoalescedTeammateItem(item, key) {
+  return item.kind === "panel"
+    ? item.node
     : jsxProd_default(
         CtrlOToExpandHint,
         {
-          displayName: as.senderName,
-          qualifier: as.isUnverified ? UNVERIFIED : undefined,
-          count: as.count,
+          displayName: item.senderName,
+          qualifier: item.isUnverified ? UNVERIFIED : undefined,
+          count: item.count,
           fallbackLabel: "teammate",
         },
-        Qh,
+        key,
       );
 }
 //@ chunk-ah34pb7m.js:127346-127377 placement
-function hookDisplayName(ni) {
-  return ni.name;
+function hookDisplayName(hook) {
+  return hook.name;
 }
 //@ chunk-ah34pb7m.js:127377-127634 placement
 /**
  * "Async hook X completed" / "N async X hooks completed" 片段（多个时以逗号连接）。
  */
-function renderAsyncHookCompletedItem(qs, Xh) {
+function renderAsyncHookCompletedItem(group, index) {
   return jsxProd_default_2(
-    Kc,
+    fragmentTypeExport,
     {
       children: [
-        Xh > 0 && ", ",
-        qs.count === 1
+        index > 0 && ", ",
+        group.count === 1
           ? jsxProd_default_2(Fragment, {
               children: [
                 "Async hook ",
                 jsxProd_default(Text, {
                   bold: true,
-                  children: qs.hookEvent,
+                  children: group.hookEvent,
                 }),
                 " completed",
               ],
             })
           : jsxProd_default_2(Fragment, {
               children: [
-                qs.count,
+                group.count,
                 " async ",
                 jsxProd_default(Text, {
                   bold: true,
-                  children: qs.hookEvent,
+                  children: group.hookEvent,
                 }),
                 " hooks completed",
               ],
             }),
       ],
     },
-    qs.hookEvent,
+    group.hookEvent,
   );
 }
 export {

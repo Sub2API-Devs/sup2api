@@ -14,9 +14,9 @@ import { truncateToLength } from "./stringUtils.js";
 /**
  * 从 WebSocket 选项中取出字符串子协议列表。
  */
-function websocketSubprotocols(n) {
-  if (n === null || typeof n !== "object") return;
-  let protocols = n.protocols;
+function websocketSubprotocols(info) {
+  if (info === null || typeof info !== "object") return;
+  let protocols = info.protocols;
   if (!Array.isArray(protocols)) return;
   let filtered = protocols.filter((protocol) => typeof protocol === "string");
   return filtered.length > 0 ? filtered : undefined;
@@ -25,10 +25,10 @@ function websocketSubprotocols(n) {
 /**
  * 生成"(subprotocols: ...)"说明后缀，无子协议时为空串。
  */
-function subprotocolsSuffix(n) {
-  let o = websocketSubprotocols(n);
-  if (o === undefined) return "";
-  return ` (subprotocols: ${o.map((t) => `"${t}"`).join(", ")})`;
+function subprotocolsSuffix(info) {
+  let list = websocketSubprotocols(info);
+  if (list === undefined) return "";
+  return ` (subprotocols: ${list.map((protocol) => `"${protocol}"`).join(", ")})`;
 }
 //@ chunk-8ktrtjfp.js:509-524 placement
 /**
@@ -43,10 +43,12 @@ var MAX_QUOTED_ITEM_CHARS = 48;
 function formatQuotedList(protocols) {
   let mapped = protocols
     .slice(0, MAX_QUOTED_ITEMS)
-    .map((r) =>
-      r.length > MAX_QUOTED_ITEM_CHARS ? `${truncateToLength(r, MAX_QUOTED_ITEM_CHARS)}\u2026` : r,
+    .map((protocol) =>
+      protocol.length > MAX_QUOTED_ITEM_CHARS
+        ? `${truncateToLength(protocol, MAX_QUOTED_ITEM_CHARS)}\u2026`
+        : protocol,
     );
-  let t = protocols.length - mapped.length;
-  return `${mapped.map((r) => `"${r}"`).join(", ")}${t > 0 ? ` (+${t} more)` : ""}`;
+  let omittedCount = protocols.length - mapped.length;
+  return `${mapped.map((protocol) => `"${protocol}"`).join(", ")}${omittedCount > 0 ? ` (+${omittedCount} more)` : ""}`;
 }
 export { formatQuotedList, subprotocolsSuffix, websocketSubprotocols, MAX_QUOTED_ITEMS };

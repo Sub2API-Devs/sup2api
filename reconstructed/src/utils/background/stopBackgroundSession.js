@@ -36,20 +36,20 @@ function jobDir() {
 /**
  * 停止当前后台会话：记录 tengu_bg_agent_action（stop），取消待定的 loop 唤醒；在后台会话中把未结束的任务状态写为 stopped 后再退出。
  */
-async function stopBackgroundSession(source, sessionId, s) {
+async function stopBackgroundSession(source, sessionId, finalMessage) {
   logEvent("tengu_bg_agent_action", {
     action: lit("stop"),
     source: fromEnum(source),
     jobSessionId: sanitizeMarkName(getSessionId()),
   });
   announcePendingLoopWakeup(undefined);
-  let o = jobDir();
-  if (isBgSession() && o) {
+  let jobDirPath = jobDir();
+  if (isBgSession() && jobDirPath) {
     let iso = new Date().toISOString();
-    let jobState = await readJobState(o, sessionId);
+    let jobState = await readJobState(jobDirPath, sessionId);
     if (jobState && !isSettled(jobState))
       await writeStateAtomic(
-        o,
+        jobDirPath,
         {
           ...jobState,
           state: "stopped",
@@ -63,8 +63,8 @@ async function stopBackgroundSession(source, sessionId, s) {
         },
         sessionId,
       ).catch(logJobWriteError);
-    else await markJobStoppedOnRow(o, sessionId);
-    if (isDaemonBgWorker()) process.stdout.write(daemonDetachApc(s ?? "Session stopped."));
+    else await markJobStoppedOnRow(jobDirPath, sessionId);
+    if (isDaemonBgWorker()) process.stdout.write(daemonDetachApc(finalMessage ?? "Session stopped."));
   }
   logFeatureOk("job_stop_self");
   return gracefulShutdown(0, "prompt_input_exit", {

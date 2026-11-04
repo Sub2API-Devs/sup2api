@@ -11,8 +11,8 @@
 import { WEB_FETCH_AGENT, isWebFetchAgent_2 } from "../WebFetchTool/harnessNotes.js";
 
 //@ chunk-e6aww6q8.js:2206709-2206783 placement = updateAgentFile (1)
-function updateAgentFile(e) {
-  return e.find((n) => n.agentType === WEB_FETCH_AGENT)?.source === "built-in";
+function updateAgentFile(agents) {
+  return agents.find((agent) => agent.agentType === WEB_FETCH_AGENT)?.source === "built-in";
 }
 //@ chunk-e6aww6q8.js:2206783-2206915 placement
 function resolveAgentOverrides(allAgents, activeAgents) {
@@ -29,18 +29,20 @@ function resolveAgentOverrides(allAgents, activeAgents) {
 /**
  * 判断输入是否指定了可解析的 subagent_type 覆盖。
  */
-function hasSubagentOverride(e, activeAgents) {
+function hasSubagentOverride(input, activeAgents) {
   return (
-    typeof e === "object" &&
-    e !== null &&
-    "subagent_type" in e &&
-    resolveAgentOverrides(e.subagent_type, activeAgents)
+    typeof input === "object" &&
+    input !== null &&
+    "subagent_type" in input &&
+    resolveAgentOverrides(input.subagent_type, activeAgents)
   );
 }
 //@ chunk-e6aww6q8.js:2207014-2207198 placement
-function compareAgentsByName(progressMessagesForMessage, activeAgents, r = false) {
-  let found = progressMessagesForMessage.find((h) => h.data.type === "agent_progress");
-  if (!found) return r;
+function compareAgentsByName(progressMessagesForMessage, activeAgents, fallback = false) {
+  let found = progressMessagesForMessage.find(
+    (progressMessage) => progressMessage.data.type === "agent_progress",
+  );
+  if (!found) return fallback;
   return found.data.isBuiltIn === undefined
     ? resolveAgentOverrides(found.data.agentType, activeAgents)
     : found.data.isBuiltIn && found.data.agentType === WEB_FETCH_AGENT;

@@ -7,14 +7,18 @@
  */
 import Ro from "process";
 import { PassThrough } from "stream";
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_cross_spawn } from "../../../cross-spawn/index.js";
 import { ReadBuffer, SdkError, SdkErrorCode, serializeMessage } from "./src-D_zzAWoS.mjs";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-8t8n4kdh.js:16826-16845 esm-layout
-var import_cross_spawn = Re(require_cross_spawn(), 1);
+var import_cross_spawn; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8t8n4kdh.js:16826", () => {
+  import_cross_spawn = __toESM(require_cross_spawn(), 1);
+});
 //@ chunk-8t8n4kdh.js:16907-17140 esm-fingerprint
-var Zi =
+var DEFAULT_INHERITED_ENV_VARS =
   Ro.platform === "win32"
     ? [
         "APPDATA",
@@ -34,7 +38,7 @@ var Zi =
 //@ chunk-8t8n4kdh.js:17140-17266 esm-fingerprint
 function getDefaultEnvironment() {
   let env = {};
-  for (let key of Zi) {
+  for (let key of DEFAULT_INHERITED_ENV_VARS) {
     let value = Ro.env[key];
     if (value === undefined) continue;
     if (value.startsWith("()")) continue;

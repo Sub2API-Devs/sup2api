@@ -5,34 +5,34 @@
  * pieces: chunk-9h8dr0qb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-9h8dr0qb.js:4572-6534 cjs-fingerprint
-var require_asciichart = x(function (cjsExports) {
-  (function (o) {
-    o.black = "\x1B[30m";
-    o.red = "\x1B[31m";
-    o.green = "\x1B[32m";
-    o.yellow = "\x1B[33m";
-    o.blue = "\x1B[34m";
-    o.magenta = "\x1B[35m";
-    o.cyan = "\x1B[36m";
-    o.lightgray = "\x1B[37m";
-    o.default = "\x1B[39m";
-    o.darkgray = "\x1B[90m";
-    o.lightred = "\x1B[91m";
-    o.lightgreen = "\x1B[92m";
-    o.lightyellow = "\x1B[93m";
-    o.lightblue = "\x1B[94m";
-    o.lightmagenta = "\x1B[95m";
-    o.lightcyan = "\x1B[96m";
-    o.white = "\x1B[97m";
-    o.reset = "\x1B[0m";
+var require_asciichart = __commonJS(function (cjsExports) {
+  (function (colors) {
+    colors.black = "\x1B[30m";
+    colors.red = "\x1B[31m";
+    colors.green = "\x1B[32m";
+    colors.yellow = "\x1B[33m";
+    colors.blue = "\x1B[34m";
+    colors.magenta = "\x1B[35m";
+    colors.cyan = "\x1B[36m";
+    colors.lightgray = "\x1B[37m";
+    colors.default = "\x1B[39m";
+    colors.darkgray = "\x1B[90m";
+    colors.lightred = "\x1B[91m";
+    colors.lightgreen = "\x1B[92m";
+    colors.lightyellow = "\x1B[93m";
+    colors.lightblue = "\x1B[94m";
+    colors.lightmagenta = "\x1B[95m";
+    colors.lightcyan = "\x1B[96m";
+    colors.white = "\x1B[97m";
+    colors.reset = "\x1B[0m";
     function colored(char, color) {
-      return color === undefined ? char : color + char + o.reset;
+      return color === undefined ? char : color + char + colors.reset;
     }
-    o.colored = colored;
-    o.plot = function (series, cfg = undefined) {
+    colors.colored = colored;
+    colors.plot = function (series, cfg = undefined) {
       if (typeof series[0] == "number") series = [series];
       cfg = typeof cfg !== "undefined" ? cfg : {};
       let min = typeof cfg.min !== "undefined" ? cfg.min : series[0][0];

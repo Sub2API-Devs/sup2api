@@ -156,33 +156,34 @@ import {
 } from "../../bridge/deviceBinding.js";
 import { markableRepositoryTrust, reportableRepositoryTrust } from "../../remote/tools/repositoryTrust.js";
 import { isTrustedDeviceActiveForOrg } from "../../bridge/trustedDevice.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-fe6rs39h.js:128747-128919 placement
 function takeDirSyncHandle(id, laptop = {}) {
-  let s = (laptop.takeDirSync ?? takeDirSyncHandle_2)(id);
-  return s === undefined
+  let takeDirSync = (laptop.takeDirSync ?? takeDirSyncHandle_2)(id);
+  return takeDirSync === undefined
     ? Promise.resolve(undefined)
-    : s.catch((error) => {
+    : takeDirSync.catch((error) => {
         logForDebugging(`[headlessCloud] session handle unavailable: ${errorMessage(error)}`);
         return;
       });
 }
 //@ chunk-fe6rs39h.js:128919-129093 placement
-async function releaseDirSyncHandle(e, laptop = {}) {
+async function releaseDirSyncHandle(handlePromise, laptop = {}) {
   try {
-    let s = await e;
-    if (s === undefined) return;
-    await (laptop.releaseDirSync ?? retireDirSync)(s.sessionId);
+    let handle = await handlePromise;
+    if (handle === undefined) return;
+    await (laptop.releaseDirSync ?? retireDirSync)(handle.sessionId);
   } catch (error) {
     logForDebugging(`[headlessCloud] session handle not released: ${errorMessage(error)}`);
   }
 }
 //@ chunk-fe6rs39h.js:129093-129129 placement
-async function retireDirSync(e) {
-  dirSyncSession().retire(e);
+async function retireDirSync(sessionId) {
+  dirSyncSession().retire(sessionId);
 }
 //@ chunk-fe6rs39h.js:129129-129172 placement
-async function remoteFileModeUnspecified(e, n) {
+async function remoteFileModeUnspecified(sessionId, target) {
   return "unspecified";
 }
 //@ chunk-fe6rs39h.js:129172-129512 placement
@@ -204,8 +205,8 @@ function startCloudDeviceRegistration(
     ...(servedSettingsChanged && {
       servedSettingsChanged,
     }),
-    onNotice: (R, k) =>
-      logForDebugging(`[remote-tools] ${R}: ${k}`, {
+    onNotice: (what, detail) =>
+      logForDebugging(`[remote-tools] ${what}: ${detail}`, {
         level: "warn",
       }),
   });
@@ -220,22 +221,22 @@ function dirSyncState({ dirSync, fileMode, sessionId }) {
 }
 //@ chunk-fe6rs39h.js:129743-130085 placement
 function dirSyncReport({ dirSync, fileMode, sessionId }) {
-  let r = dirSyncState({
+  let options = dirSyncState({
     dirSync,
     fileMode,
     sessionId,
   });
   return {
-    state: r.state,
-    ...("reason" in r &&
-      r.reason !== undefined && {
-        reason: r.reason,
+    state: options.state,
+    ...("reason" in options &&
+      options.reason !== undefined && {
+        reason: options.reason,
       }),
-    ...("message" in r &&
-      r.message !== undefined && {
-        message: r.message,
+    ...("message" in options &&
+      options.message !== undefined && {
+        message: options.message,
       }),
-    ...armedDirSyncFields(r),
+    ...armedDirSyncFields(options),
     ...(nullOnError_2(dirSync?.createFacts?.origin).fromUpload && {
       started_from_upload: true,
     }),
@@ -244,41 +245,41 @@ function dirSyncReport({ dirSync, fileMode, sessionId }) {
   };
 }
 //@ chunk-fe6rs39h.js:130085-130503 placement
-function armedDirSyncFields(e) {
-  if (e.state !== "armed") return {};
+function armedDirSyncFields(state) {
+  if (state.state !== "armed") return {};
   return {
-    ...(e.firstUpload !== null && {
-      first_upload: e.firstUpload,
+    ...(state.firstUpload !== null && {
+      first_upload: state.firstUpload,
     }),
-    ...(e.syncedFiles !== null && {
-      synced_files: e.syncedFiles,
+    ...(state.syncedFiles !== null && {
+      synced_files: state.syncedFiles,
     }),
-    ...(e.writerElsewhere && {
+    ...(state.writerElsewhere && {
       other_window: true,
     }),
-    ...(e.switchedOffByAnthropic === true && {
+    ...(state.switchedOffByAnthropic === true && {
       muted: true,
     }),
-    ...(e.versionDisagreement !== undefined && {
+    ...(state.versionDisagreement !== undefined && {
       muted: true,
-      reason: e.versionDisagreement.reason,
-      message: e.versionDisagreement.message,
+      reason: state.versionDisagreement.reason,
+      message: state.versionDisagreement.message,
     }),
-    ...(e.direction !== "pending" && {
-      direction: e.direction,
+    ...(state.direction !== "pending" && {
+      direction: state.direction,
     }),
   };
 }
 //@ chunk-fe6rs39h.js:130503-130745 placement
 function logLaptopLinked({ dirSync, fileMode, sessionId }) {
-  let r = dirSyncState({
+  let options = dirSyncState({
     dirSync,
     fileMode,
     sessionId,
   });
   logEvent("tengu_remote_headless_laptop_linked", {
-    sync_state: fromEnum(r.state),
-    sync_reason: fromEnumOpt("reason" in r ? r.reason : undefined),
+    sync_state: fromEnum(options.state),
+    sync_reason: fromEnumOpt("reason" in options ? options.reason : undefined),
     file_mode: fromEnum(fileMode),
     has_dir_sync: dirSync !== undefined,
   });
@@ -294,19 +295,19 @@ function cloudSessionContext(apiCreds, sessionId) {
     orgUuid: apiCreds.orgUUID,
     getAccessToken: () => sessionsApiAccessTokenWithCcrFallback(apiCreds.profile) ?? apiCreds.accessToken,
     consoleProfileBearer: apiCreds.profile,
-    onAuth401: (s) => recoverSessionsApiBearer(s, undefined, undefined, apiCreds.profile),
-    onDerivedSessionId: (s) => {
-      switchSession(identityAgentId(s), "remote_attach");
+    onAuth401: (token) => recoverSessionsApiBearer(token, undefined, undefined, apiCreds.profile),
+    onDerivedSessionId: (sessionId) => {
+      switchSession(identityAgentId(sessionId), "remote_attach");
     },
   };
 }
 //@ chunk-fe6rs39h.js:131100-131207 placement
 async function checkLocalBindIdentity() {
   if (isConsoleProfileSessionsCredential()) return "profile";
-  let e = await localBindIdentity({
+  let result = await localBindIdentity({
     accountUuid: currentAccountUuid(),
   });
-  return e.ok ? undefined : e.error;
+  return result.ok ? undefined : result.error;
 }
 //@ chunk-fe6rs39h.js:131207-131246 placement
 function currentAccountUuid() {
@@ -318,24 +319,29 @@ function currentAccountUuid() {
  */
 function attachOpeningRequests(permissionModeCli, { serveOnly }) {
   if (serveOnly) return [];
-  let s = cloudPermissionModeFrom(permissionModeCli);
-  return s === undefined || (s === "default" && permissionModeCli !== PERMISSION_MODE_MANUAL_ALIAS)
+  let mode = cloudPermissionModeFrom(permissionModeCli);
+  return mode === undefined || (mode === "default" && permissionModeCli !== PERMISSION_MODE_MANUAL_ALIAS)
     ? []
     : [
         {
           request: {
             subtype: "set_permission_mode",
-            mode: s,
+            mode,
           },
-          required: s === "plan" || s === "dontAsk",
-          describe: `--permission-mode ${s}`,
+          required: mode === "plan" || mode === "dontAsk",
+          describe: `--permission-mode ${mode}`,
         },
       ];
 }
 //@ chunk-fe6rs39h.js:131467-131514 placement
-var signal = new AbortController().signal;
-var SESSION_HISTORY_PAGE_SIZE = 50;
-var SESSION_HISTORY_MAX_PAGES = 5;
+var signal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SESSION_HISTORY_PAGE_SIZE;
+var SESSION_HISTORY_MAX_PAGES;
+deferInit("chunk-fe6rs39h.js:131467", () => {
+  signal = new AbortController().signal;
+  SESSION_HISTORY_PAGE_SIZE = 50;
+  SESSION_HISTORY_MAX_PAGES = 5;
+});
 //@ chunk-fe6rs39h.js:131514-131755 placement
 function normalizeOpenOptions({
   signal: signal_2,
@@ -343,11 +349,11 @@ function normalizeOpenOptions({
   homeSeed,
   servedTools,
   servedToolsUnavailable,
-  ...y
+  ...options
 }) {
   return {
-    ...y,
-    bound: y.binding === "bound",
+    ...options,
+    bound: options.binding === "bound",
     signal: signal_2 ?? signal,
     ...(credentials && {
       credentials,
@@ -364,23 +370,34 @@ function normalizeOpenOptions({
   };
 }
 //@ chunk-fe6rs39h.js:131755-131818 placement
-function logRemoteToolsWarning(e, n) {
-  logForDebugging(`[remote-tools] ${e}: ${n}`, {
+function logRemoteToolsWarning(what, detail) {
+  logForDebugging(`[remote-tools] ${what}: ${detail}`, {
     level: "warn",
   });
 }
 //@ chunk-fe6rs39h.js:131818-132413 placement
-async function startServedTools(e, n, deviceId, cloudClient, deviceBridge, onNotice, S, w, R) {
+async function startServedTools(
+  options,
+  sessionId,
+  deviceId,
+  cloudClient,
+  deviceBridge,
+  onNotice,
+  credentials,
+  cloudClientFlag,
+  deviceBridgeArg,
+) {
   if (!isViolinWoodEnabledCached())
     return {
       servedToolsUnavailable: "flag_off",
     };
-  if (!isKnownBindingState(n))
+  if (!isKnownBindingState(sessionId))
     return {
       servedToolsUnavailable: "helper_only",
     };
-  let { servedToolsAttachOptions, servedToolsUnavailableReason } = await import("./chunk-012rhzq5.js");
-  let O = servedToolsAttachOptions({
+  let { servedToolsAttachOptions, servedToolsUnavailableReason } =
+    await import("../../remote/tools/servedToolsAttachOptions.lazy.js");
+  let servedTools = servedToolsAttachOptions({
     owner: () => ({
       owner: true,
       deviceId,
@@ -388,88 +405,90 @@ async function startServedTools(e, n, deviceId, cloudClient, deviceBridge, onNot
     cloudClient,
     deviceBridge,
     onNotice,
-    ...(S && {
-      repositoryTrust: S,
+    ...(credentials && {
+      repositoryTrust: credentials,
     }),
     stillBound: async () => {
-      let linkedStatus = await readLinkedStatus(deviceId, w, R);
+      let linkedStatus = await readLinkedStatus(deviceId, cloudClientFlag, deviceBridgeArg);
       if (linkedStatus === "linked") return true;
       return linkedStatus === "ended" ? false : undefined;
     },
-    plumbing: (await import("./chunk-2s19t0f2.js")).servedSessionPlumbing(e),
+    plumbing: (
+      await import("../../services/remoteTools/servedSessionPlumbing.lazy.js")
+    ).servedSessionPlumbing(options),
   });
-  return O === undefined
+  return servedTools === undefined
     ? {
         servedToolsUnavailable: servedToolsUnavailableReason() ?? "flag_off",
       }
     : {
-        servedTools: O,
+        servedTools,
       };
 }
 //@ chunk-fe6rs39h.js:132413-132471 placement
-function disposeHandles(e) {
-  let n = new HeadlessFeatureHandles();
-  n.adopt(e);
-  return n.dispose();
+function disposeHandles(features) {
+  let adopted = new HeadlessFeatureHandles();
+  adopted.adopt(features);
+  return adopted.dispose();
 }
 //@ chunk-fe6rs39h.js:132471-133445 placement
-async function openWithFeatures(e, n, { entry, opener, features = [], attachHonours = [] }) {
-  let S = entry === "create" ? PROMPT_OPTION_KEYS : attachHonours;
-  let w = await checkCloudGates(e, n, entry);
-  if (w.kind === "refused") {
-    await logFeatureBadAsync("remote_headless_session", w.code);
-    printCliError(w.message);
+async function openWithFeatures(options, host, { entry, opener, features = [], attachHonours = [] }) {
+  let honours = entry === "create" ? PROMPT_OPTION_KEYS : attachHonours;
+  let gated = await checkCloudGates(options, host, entry);
+  if (gated.kind === "refused") {
+    await logFeatureBadAsync("remote_headless_session", gated.code);
+    printCliError(gated.message);
     await gracefulShutdown(1);
     return;
   }
-  let { input, policy } = w;
+  let { input, policy } = gated;
   policy.notices.forEach(noteHeadless);
   setHasFormattedOutput(true);
   setIsRemoteMode(true);
-  let O = await runHeadlessCloudClient({
+  let client = await runHeadlessCloudClient({
     input,
     builtInToolNames: registeredBuiltInToolNames,
-    replayUserMessages: e.effectiveReplayUserMessages,
-    includePartialMessages: e.effectiveIncludePartialMessages,
+    replayUserMessages: options.effectiveReplayUserMessages,
+    includePartialMessages: options.effectiveIncludePartialMessages,
     initializePolicy: "strict",
     ignoredOptions:
       entry === "create"
         ? policy.ignored
         : uniq([
             ...policy.ignored,
-            ...sdkHostOptionEntries(policy.forwarded, e, e.effectiveModel ?? env.ANTHROPIC_MODEL),
+            ...sdkHostOptionEntries(policy.forwarded, options, options.effectiveModel ?? env.ANTHROPIC_MODEL),
           ]),
-    openingInitializeHonours: S,
-    openSession: (P) =>
-      authenticateThenOpen(e.credentials, async (apiCreds) => {
-        let L = await opener({
+    openingInitializeHonours: honours,
+    openSession: (openRequest) =>
+      authenticateThenOpen(options.credentials, async (apiCreds) => {
+        let request = await opener({
           apiCreds,
-          host: P,
-          forwarded: entry === "create" ? cloudPromptOverrides(policy.forwarded, P.initialize) : {},
+          host: openRequest,
+          forwarded: entry === "create" ? cloudPromptOverrides(policy.forwarded, openRequest.initialize) : {},
           features,
-          storageV5: e.storageV5,
-          credentials: e.credentials,
+          storageV5: options.storageV5,
+          credentials: options.credentials,
         });
         return withNotApplied(
-          L,
+          request,
           notAppliedReport(
-            [...getUnconfirmedOptions(policy.forwarded, L), ...policy.notApplied],
-            P.initialize,
+            [...getUnconfirmedOptions(policy.forwarded, request), ...policy.notApplied],
+            openRequest.initialize,
             entry,
-            S,
+            honours,
           ),
         );
       }),
   }).done;
-  if (O.message && O.exitCode === 0) noteHeadless(O.message);
-  else if (O.message) printCliError(O.message);
-  await gracefulShutdown(O.exitCode);
+  if (client.message && client.exitCode === 0) noteHeadless(client.message);
+  else if (client.message) printCliError(client.message);
+  await gracefulShutdown(client.exitCode);
 }
 //@ chunk-fe6rs39h.js:133445-133798 placement
-async function authenticateThenOpen(credentials, n) {
-  let s;
+async function authenticateThenOpen(credentials, credArgs) {
+  let apiCreds;
   try {
-    s = await prepareApiRequest(credentials);
+    apiCreds = await prepareApiRequest(credentials);
   } catch (error) {
     await logFeatureBadAsync("remote_headless_session", "auth");
     return {
@@ -478,7 +497,7 @@ async function authenticateThenOpen(credentials, n) {
     };
   }
   try {
-    return await n(s);
+    return await credArgs(apiCreds);
   } catch (error) {
     await logFeatureBadAsync("remote_headless_session", "open_threw");
     return {
@@ -492,45 +511,50 @@ var MAX_LISTED_REFUSAL_GROUPS = 12;
 var MAX_ERROR_MESSAGE_CHARS = 2000;
 var MAX_LISTED_ENTRIES = 40;
 //@ chunk-fe6rs39h.js:133822-134757 placement
-function notAppliedReport(e, initialize, entry, r) {
-  let h = new Set(entry === "attach" ? PROMPT_OPTION_KEYS : []);
-  let y =
-    initialize === null
+function notAppliedReport(notAppliedEntries, options, entry, supplied) {
+  let openEntry = new Set(entry === "attach" ? PROMPT_OPTION_KEYS : []);
+  let keptKinds =
+    options === null
       ? []
-      : lostSdkFeatures(initialize, "strict", new Set([...r, "supportedDialogKinds"])).ignored.map((L) => ({
-          kind: h.has(L) ? "kept" : cloudOptionTreatment(L),
-          name: `initialize.${L}`,
-        }));
-  let S = {
+      : lostSdkFeatures(options, "strict", new Set([...supplied, "supportedDialogKinds"])).ignored.map(
+          (feature) => ({
+            kind: openEntry.has(feature) ? "kept" : cloudOptionTreatment(feature),
+            name: `initialize.${feature}`,
+          }),
+        );
+  let order = {
     lost: 0,
     kept: 1,
     preference: 2,
   };
-  let sorted = [...e, ...y].sort((L, z) => S[L.kind] - S[z.kind]);
-  let R = (L) => sorted.filter((z) => z.kind === L);
-  let k = R("lost");
-  let I = R("kept");
-  let O = R("preference");
-  let P = (L) => (L.kind === "lost" && L.why !== undefined ? `${L.name} (${L.why})` : L.name);
+  let sorted = [...notAppliedEntries, ...keptKinds].sort(
+    (combined, kinds) => order[combined.kind] - order[kinds.kind],
+  );
+  let lost = (kind) => sorted.filter((feature) => feature.kind === kind);
+  let lostEntries = lost("lost");
+  let kept = lost("kept");
+  let preference = lost("preference");
+  let label = (entry) =>
+    entry.kind === "lost" && entry.why !== undefined ? `${entry.name} (${entry.why})` : entry.name;
   let joined = [
-    ...(I.length > 0
+    ...(kept.length > 0
       ? [
-          `An existing cloud session keeps the configuration it was created with; not applied: ${listWithOverflow(I.map(P))}.`,
+          `An existing cloud session keeps the configuration it was created with; not applied: ${listWithOverflow(kept.map(label))}.`,
         ]
       : []),
-    ...(O.length > 0
+    ...(preference.length > 0
       ? [
-          `Host options not applied to this cloud session (it runs with the cloud container's own configuration): ${listWithOverflow(O.map(P))}.`,
+          `Host options not applied to this cloud session (it runs with the cloud container's own configuration): ${listWithOverflow(preference.map(label))}.`,
         ]
       : []),
   ].join(" ");
   return {
     notices: [
-      ...(k.length > 0
+      ...(lostEntries.length > 0
         ? [
             {
               level: "warning",
-              text: `Not applied to this cloud session, where the agent runs with the cloud container's own configuration: ${listWithOverflow(k.map(P))}.`,
+              text: `Not applied to this cloud session, where the agent runs with the cloud container's own configuration: ${listWithOverflow(lostEntries.map(label))}.`,
             },
           ]
         : []),
@@ -547,29 +571,32 @@ function notAppliedReport(e, initialize, entry, r) {
   };
 }
 //@ chunk-fe6rs39h.js:134757-134901 placement
-function getUnconfirmedOptions(forwarded, n) {
-  let s = n.kind === "opened" && n.session.entry === "create" && n.session.maxTurnsConfirmed === true;
-  return forwarded.maxTurns !== undefined && !s ? [MAX_TURNS_UNCONFIRMED_ENTRY] : [];
+function getUnconfirmedOptions(forwarded, result) {
+  let maxTurnsSettled =
+    result.kind === "opened" &&
+    result.session.entry === "create" &&
+    result.session.maxTurnsConfirmed === true;
+  return forwarded.maxTurns !== undefined && !maxTurnsSettled ? [MAX_TURNS_UNCONFIRMED_ENTRY] : [];
 }
 //@ chunk-fe6rs39h.js:134901-135004 placement
-function listWithOverflow(e) {
-  return e.length > MAX_LISTED_REFUSAL_GROUPS
-    ? `${e.slice(0, MAX_LISTED_REFUSAL_GROUPS).join(", ")} (and ${e.length - MAX_LISTED_REFUSAL_GROUPS} more)`
-    : e.join(", ");
+function listWithOverflow(names) {
+  return names.length > MAX_LISTED_REFUSAL_GROUPS
+    ? `${names.slice(0, MAX_LISTED_REFUSAL_GROUPS).join(", ")} (and ${names.length - MAX_LISTED_REFUSAL_GROUPS} more)`
+    : names.join(", ");
 }
 //@ chunk-fe6rs39h.js:135004-135264 placement
-function withNotApplied(e, n) {
-  if (e.kind !== "opened" || n.entries.length === 0) return e;
-  let { session } = e;
+function withNotApplied(result, report) {
+  if (result.kind !== "opened" || report.entries.length === 0) return result;
+  let { session } = result;
   return {
-    ...e,
+    ...result,
     session: {
       ...session,
-      notices: [...(session.notices ?? []), ...n.notices],
+      notices: [...(session.notices ?? []), ...report.notices],
       cloudSession: () => ({
         ...session.cloudSession(),
-        not_applied: n.entries.map(({ kind, name: h }) => ({
-          name: h,
+        not_applied: report.entries.map(({ kind, name: entry }) => ({
+          name: entry,
           kind,
         })),
       }),
@@ -585,63 +612,68 @@ function noteHeadless(text) {
 }
 //@ chunk-fe6rs39h.js:135359-135403 placement
 function registeredBuiltInToolNames() {
-  return getAllBaseTools().map((e) => e.name);
+  return getAllBaseTools().map((line) => line.name);
 }
 //@ chunk-fe6rs39h.js:135403-136151 placement
-async function cloudCreateGates(e, n, entry, { isDeviceLess: r = false, poolLaunchFolder: h } = {}) {
-  let y = e.orgValidation ?? (await validateForceLoginOrg());
-  if (!y.valid) {
-    if (y.policyUnreadable) recordManagedSettingsRefusal("policy_invalid");
+async function cloudCreateGates(
+  options,
+  host,
+  entry,
+  { isDeviceLess: openEntry = false, poolLaunchFolder: isDeviceLess } = {},
+) {
+  let orgCheck = options.orgValidation ?? (await validateForceLoginOrg());
+  if (!orgCheck.valid) {
+    if (orgCheck.policyUnreadable) recordManagedSettingsRefusal("policy_invalid");
     return {
       kind: "refused",
-      code: y.reason === "provider_not_allowed" ? "provider_not_allowed" : "org_pin",
-      message: y.message,
+      code: orgCheck.reason === "provider_not_allowed" ? "provider_not_allowed" : "org_pin",
+      message: orgCheck.message,
     };
   }
   await waitForPolicyLimitsToLoad();
-  let S = cloudSessionsUnavailableReason();
-  if (S) {
+  let reference = cloudSessionsUnavailableReason();
+  if (reference) {
     await logOrgPolicyDeniedAsync("allow_remote_sessions", "cloud_session");
     return {
       kind: "refused",
       code: "unavailable",
-      message: `Error: ${S}`,
+      message: `Error: ${reference}`,
     };
   }
-  let w = withMaxTurns(n, e.resolvedMaxTurns);
-  let R = cloudLaunchOptionsFrom(e, getSettingsForSource("flagSettings"));
-  let k;
-  let I = checkCloudLaunchFlags(w, {
+  let forwarded = withMaxTurns(host, options.resolvedMaxTurns);
+  let flagSettings = cloudLaunchOptionsFrom(options, getSettingsForSource("flagSettings"));
+  let selectedAgent;
+  let rejected = checkCloudLaunchFlags(forwarded, {
     entry,
-    isDeviceLess: r,
-    ...R,
-    ...(k !== undefined && {
+    isDeviceLess: openEntry,
+    ...flagSettings,
+    ...(selectedAgent !== undefined && {
       selectedAgentDefinition: null,
     }),
   });
-  if (I.kind === "rejected")
+  if (rejected.kind === "rejected")
     return {
       kind: "refused",
-      code: CLOUD_REFUSAL_SUBTYPES[I.reason],
-      message: I.message,
+      code: CLOUD_REFUSAL_SUBTYPES[rejected.reason],
+      message: rejected.message,
     };
   return {
     kind: "ready",
     policy:
-      k === undefined
-        ? I
+      selectedAgent === undefined
+        ? rejected
         : {
-            ...I,
-            repositoryAgent: k.name,
-            notices: [...I.notices, k.notice],
+            ...rejected,
+            repositoryAgent: selectedAgent.name,
+            notices: [...rejected.notices, selectedAgent.notice],
           },
   };
 }
 //@ chunk-fe6rs39h.js:136151-136371 placement
-async function checkCloudGates(e, n, entry) {
-  let inputPrompt = e.inputPrompt;
-  let h = await cloudCreateGates(e, n, entry);
-  if (h.kind === "refused") return h;
+async function checkCloudGates(options, host, entry) {
+  let inputPrompt = options.inputPrompt;
+  let openEntry = await cloudCreateGates(options, host, entry);
+  if (openEntry.kind === "refused") return openEntry;
   if (typeof inputPrompt === "string")
     return {
       kind: "refused",
@@ -651,49 +683,49 @@ async function checkCloudGates(e, n, entry) {
   return {
     kind: "ready",
     input: inputPrompt,
-    policy: h.policy,
+    policy: openEntry.policy,
   };
 }
 //@ chunk-fe6rs39h.js:136371-136515 placement
-function runHeadlessCloudCreate(e, n, s) {
-  return openWithFeatures(e, n, {
+function runHeadlessCloudCreate(options, host, openerOptions) {
+  return openWithFeatures(options, host, {
     entry: "create",
-    opener: (r) =>
-      createBareCloudSession(e, {
-        ...r,
-        sessionHost: s,
-        carriedMode: n.inheritPermissionMode,
+    opener: (sessionHost) =>
+      createBareCloudSession(options, {
+        ...sessionHost,
+        sessionHost: openerOptions,
+        carriedMode: host.inheritPermissionMode,
       }),
-    features: createCloudSessionFeatures(e, s),
+    features: createCloudSessionFeatures(options, openerOptions),
   });
 }
 //@ chunk-fe6rs39h.js:136515-136672 placement
 function createAttachFeatures() {
-  let e = env.CLAUDE_CODE_REMOTE_TOOLS_HOST_IDLE_RELEASE_MINUTES;
+  let idleMinutes = env.CLAUDE_CODE_REMOTE_TOOLS_HOST_IDLE_RELEASE_MINUTES;
   return [
     createServedToolsFeature({
       openChannel: createRemoteSessionConnection,
       controlOnly: true,
-      ...(e !== undefined && {
-        idleReleaseMs: e * 60000,
+      ...(idleMinutes !== undefined && {
+        idleReleaseMs: idleMinutes * 60000,
       }),
     }),
   ];
 }
 //@ chunk-fe6rs39h.js:136672-136889 placement
-function createCloudSessionFeatures(e, n) {
+function createCloudSessionFeatures(options, sessionHost) {
   return [
     createHomeSettingsFeature({
-      forwardHomeSettings: e.forwardHomeSettings,
-      hostConsent: e.homeSettingsConsent,
+      forwardHomeSettings: options.forwardHomeSettings,
+      hostConsent: options.homeSettingsConsent,
     }),
     createPluginForwardingFeature({
-      memory: deviceProofStateRegistry.of(n),
-      reachMemory: reachStateRegistry.of(n),
+      memory: deviceProofStateRegistry.of(sessionHost),
+      reachMemory: reachStateRegistry.of(sessionHost),
     }),
     createDeviceHooksFeature({
-      getTools: () => e.tools,
-      memory: deviceHooksProcessMemories.of(n),
+      getTools: () => options.tools,
+      memory: deviceHooksProcessMemories.of(sessionHost),
     }),
     createServedToolsFeature({
       openChannel: createRemoteSessionConnection,
@@ -702,10 +734,10 @@ function createCloudSessionFeatures(e, n) {
 }
 //@ chunk-fe6rs39h.js:136889-143545 placement
 /**
- * 无头 --cloud 创建新云会话：校验门禁、准备分支/引用、转发设置与特性、创建会话并启动客户端（失败记 tengu_remote_create_session_error）。
+ * 官方行为，保留：createBareCloudSession 中 if (V_K137841 !== null) 整段不可达（恒 null），G_K137777/x_K137771 只赋值不使用；本版构建里是死代码。
  */
 async function createBareCloudSession(
-  e,
+  options,
   {
     apiCreds,
     forwarded,
@@ -718,36 +750,36 @@ async function createBareCloudSession(
     sessionHost,
     carriedMode,
   },
-  k = {},
+  seams = {},
 ) {
-  let teleport = k.teleport ?? teleportToRemote;
-  let branchMode = branchModeForTelemetry(e.poolOnBranch, e.poolRef);
-  let P = await (k.bindPreflight ?? checkLocalBindIdentity)();
-  if (P !== undefined) {
+  let teleport = seams.teleport ?? teleportToRemote;
+  let branchMode = branchModeForTelemetry(options.poolOnBranch, options.poolRef);
+  let teleportFn = await (seams.bindPreflight ?? checkLocalBindIdentity)();
+  if (teleportFn !== undefined) {
     await logFeatureBadAsync("remote_headless_session", "bind_unavailable", {
-      reason: fromEnum(P),
-      ...launchLocationFacts(P),
+      reason: fromEnum(teleportFn),
+      ...launchLocationFacts(teleportFn),
       ...null?.fields,
     });
     return {
       kind: "failed",
-      message: formatUnboundCreateError(P, null?.why),
+      message: formatUnboundCreateError(teleportFn, null?.why),
     };
   }
   let abortController = new AbortController();
-  let L = registerCleanup(() => abortController.abort());
+  let releaseAbort = registerCleanup(() => abortController.abort());
   let combinedAbortSignal = createCombinedAbortSignal(abortController.signal, {
     signalB: host.signal,
   });
-  let j = onceExport(() => false);
-  let Y = e.poolOnBranch
+  let hasConsented = onceExport(() => false);
+  let poolRevision = options.poolOnBranch
     ? {
-        revision: e.poolOnBranch,
+        revision: options.poolOnBranch,
         flag: "--on-branch",
       }
-    : e.poolRef
+    : options.poolRef
       ? {
-          revision: e.poolRef,
+          revision: options.poolRef,
           flag: "--ref",
         }
       : undefined;
@@ -761,51 +793,51 @@ async function createBareCloudSession(
   let aborted = combinedAbortSignal.signal.aborted;
   combinedAbortSignal.cleanup();
   if (aborted) {
-    L();
+    releaseAbort();
     return {
       kind: "failed",
       message: "Error: Unable to create cloud session",
     };
   }
-  let x = j();
-  let G = false;
-  let Q = await (k.settingsToCloudEnabled ?? isSettingsToCloudEnabled)().catch(() => false);
-  let q = false;
-  let V = null;
-  if (V !== null) {
-    L();
+  let consented = hasConsented();
+  let projectSyncedState = false;
+  let settingsToCloud = await (seams.settingsToCloudEnabled ?? isSettingsToCloudEnabled)().catch(() => false);
+  let projectSyncEnabled = false;
+  let versionRefusal = null;
+  if (versionRefusal !== null) {
+    releaseAbort();
     return {
       kind: "failed",
-      message: V,
+      message: versionRefusal,
       startupFailureReason: "cli_version_too_old",
     };
   }
   let hostConsentMode = resolveHostConsentMode({
-    hostConsent: e.homeSettingsConsent,
-    areOwnFlagsOn: Q,
+    hostConsent: options.homeSettingsConsent,
+    areOwnFlagsOn: settingsToCloud,
     stored: storedHomeSettingsMode(),
-    isProjectSynced: q,
+    isProjectSynced: projectSyncEnabled,
   });
-  if (Q || q)
+  if (settingsToCloud || projectSyncEnabled)
     noteHomeSettingsPrompt({
       launchConsent: hostConsentMode,
-      isProjectSynced: q,
-      launchMayForward: e.forwardHomeSettings,
+      isProjectSynced: projectSyncEnabled,
+      launchMayForward: options.forwardHomeSettings,
       surface: "sdk_host",
       trigger: "create",
     });
   let settings = getInitialSettings_2();
   let { model, explicitMode, decision, isModeFromSettings, noticeOnRunner } = buildCloudCreateOptions(
-    e,
+    options,
     {
-      settingsToCloudEnabled: Q || isLaunchConsentBlocked(hostConsentMode),
+      settingsToCloudEnabled: settingsToCloud || isLaunchConsentBlocked(hostConsentMode),
       launchConsent: hostConsentMode,
       settings,
       hostFillsDefault: true,
       typedLevel: forwarded.proactivityLevel,
       carriedMode,
     },
-    k,
+    seams,
   );
   if (decision.notice !== undefined) noteHeadless(decision.notice.text);
   if (decision.action !== "none")
@@ -833,53 +865,53 @@ async function createBareCloudSession(
     dialogs: host.dialogs,
     permissionMode: decision.permissionMode,
     signal: combinedAbortSignal_2.signal,
-    seams: k.unattendedConsent,
+    seams: seams.unattendedConsent,
   });
   let aborted_2 = combinedAbortSignal_2.signal.aborted;
   combinedAbortSignal_2.cleanup();
   if (aborted_2) {
-    L();
+    releaseAbort();
     return {
       kind: "failed",
       message: "Error: Unable to create cloud session",
     };
   }
-  let Be = {
+  let bindingState = {
     status: "unbound",
     reason: undefined,
   };
-  let it = () => Be;
+  let getBindingState = () => bindingState;
   let deviceBinding = {
     orgUuid: apiCreds.orgUUID,
     accountUuid: currentAccountUuid(),
     onBound: (deviceId) => {
-      Be = {
+      bindingState = {
         status: "bound",
         deviceId,
       };
     },
     onUnbound: (reason) => {
-      Be = {
+      bindingState = {
         status: "unbound",
         reason,
       };
     },
     abandonsUnbound: true,
   };
-  let ke;
-  let vt = e.poolOnBranch ?? e.poolRef ?? (await (k.currentBranch ?? getBranch)());
-  let We = [];
-  let Z = await teleport({
+  let createFailure;
+  let branchName = options.poolOnBranch ?? options.poolRef ?? (await (seams.currentBranch ?? getBranch)());
+  let bundleNotices = [];
+  let teleportResult = await teleport({
     initialMessage: null,
     signal: abortController.signal,
     source: "remote",
-    branchName: vt || undefined,
-    title: e.sessionNameArg || undefined,
-    description: e.remote || undefined,
-    reuseOutcomeBranch: e.poolOnBranch ?? undefined,
-    explicitRef: e.poolOnBranch ?? e.poolRef ?? undefined,
-    branchFromHead: (e.poolOnBranch ?? e.poolRef) == null,
-    personal: e.personal,
+    branchName: branchName || undefined,
+    title: options.sessionNameArg || undefined,
+    description: options.remote || undefined,
+    reuseOutcomeBranch: options.poolOnBranch ?? undefined,
+    explicitRef: options.poolOnBranch ?? options.poolRef ?? undefined,
+    branchFromHead: (options.poolOnBranch ?? options.poolRef) == null,
+    personal: options.personal,
     deviceBinding,
     model,
     permissionMode: decision.permissionMode,
@@ -903,176 +935,186 @@ async function createBareCloudSession(
     firstUpload: undefined,
     seedSignal: abortController.signal,
     staysAttached: true,
-    forwardHomeSettings: e.forwardHomeSettings,
+    forwardHomeSettings: options.forwardHomeSettings,
     ...(hostConsentMode && {
       homeSettingsConsent: hostConsentMode,
     }),
-    onBundleNotice: (text, ze) => {
-      We.push({
-        level: ze ?? "notice",
+    onBundleNotice: (text, level) => {
+      bundleNotices.push({
+        level: level ?? "notice",
         text,
       });
     },
-    onBundleFail: (message, ze) => {
-      ke = {
+    onBundleFail: (message, reason) => {
+      createFailure = {
         message,
-        reason: ze === "env_create" ? "env_create_failed" : "bundle_failed",
+        reason: reason === "env_create" ? "env_create_failed" : "bundle_failed",
         detail: undefined,
       };
     },
     onCreateFail: (message, reason, detail) => {
-      ke = {
+      createFailure = {
         message,
         reason,
         detail,
       };
     },
-  }).finally(L);
-  if (Z === null)
-    return reportCreateSessionError(ke, abortController.signal.aborted, branchMode, "cloud_headless");
-  let permissionMode = Z.settingsModeOnRunner === undefined ? decision.permissionMode : undefined;
-  let Fe = Z.settingsModeOnRunner === undefined ? decision.notice : noticeOnRunner;
-  if (Z.settingsModeOnRunner !== undefined && noticeOnRunner !== undefined) noteHeadless(noticeOnRunner.text);
-  let Ie = takeDirSyncHandle(Z.id, k.laptop);
-  let Re = async () => {
+  }).finally(releaseAbort);
+  if (teleportResult === null)
+    return reportCreateSessionError(
+      createFailure,
+      abortController.signal.aborted,
+      branchMode,
+      "cloud_headless",
+    );
+  let permissionMode =
+    teleportResult.settingsModeOnRunner === undefined ? decision.permissionMode : undefined;
+  let runnerNotice = teleportResult.settingsModeOnRunner === undefined ? decision.notice : noticeOnRunner;
+  if (teleportResult.settingsModeOnRunner !== undefined && noticeOnRunner !== undefined)
+    noteHeadless(noticeOnRunner.text);
+  let dirSyncHandle = takeDirSyncHandle(teleportResult.id, seams.laptop);
+  let releaseSession = async () => {
     abortController.abort();
-    await releaseDirSyncHandle(Ie, k.laptop);
+    await releaseDirSyncHandle(dirSyncHandle, seams.laptop);
   };
-  let ge = it();
-  if (ge.status === "unbound") await Re();
+  let binding = getBindingState();
+  if (binding.status === "unbound") await releaseSession();
   await logEventAsync("tengu_remote_create_session_success", {
-    session_id: shortHash(Z.id),
+    session_id: shortHash(teleportResult.id),
     entry_point: fromEnum("cloud_headless"),
     branch_mode: branchMode,
     ...(forwarded.maxTurns !== undefined && {
-      max_turns_confirmed: Z.maxTurnsConfirmed === true,
+      max_turns_confirmed: teleportResult.maxTurnsConfirmed === true,
     }),
-    home_seed_started: Z.homeSeed !== undefined,
-    ...(Z.settingsPackUnsent !== undefined && {
-      settings_pack_unsent: fromEnum(Z.settingsPackUnsent),
+    home_seed_started: teleportResult.homeSeed !== undefined,
+    ...(teleportResult.settingsPackUnsent !== undefined && {
+      settings_pack_unsent: fromEnum(teleportResult.settingsPackUnsent),
     }),
-    ...(Z.settingsModeOnRunner !== undefined && {
-      settings_mode_on_runner: fromEnum(Z.settingsModeOnRunner),
-      settings_mode_warned: Fe?.level === "warning",
+    ...(teleportResult.settingsModeOnRunner !== undefined && {
+      settings_mode_on_runner: fromEnum(teleportResult.settingsModeOnRunner),
+      settings_mode_warned: runnerNotice?.level === "warning",
     }),
-    ...(e.homeSettingsConsent && {
-      home_settings_host_consent: fromEnum(e.homeSettingsConsent),
+    ...(options.homeSettingsConsent && {
+      home_settings_host_consent: fromEnum(options.homeSettingsConsent),
     }),
   });
-  let remoteSessionUrl = getRemoteSessionUrl(Z.id, undefined, {
+  let remoteSessionUrl = getRemoteSessionUrl(teleportResult.id, undefined, {
     from: "cli",
     m: "0",
   });
-  let he = () => (k.archiveSession ?? archiveRemoteSession)(Z.id, CLOUD_START_TIMEOUT_MS).catch(() => false);
-  if (ge.status === "unbound") {
-    let re = await he();
+  let archiveSession = () =>
+    (seams.archiveSession ?? archiveRemoteSession)(teleportResult.id, CLOUD_START_TIMEOUT_MS).catch(
+      () => false,
+    );
+  if (binding.status === "unbound") {
+    let archived = await archiveSession();
     await logFeatureBadAsync("remote_headless_session", "unbound", {
-      reason: fromEnumOpt(ge.reason) ?? lit("unknown"),
-      archived: re,
+      reason: fromEnumOpt(binding.reason) ?? lit("unknown"),
+      archived,
     });
     return {
       kind: "failed",
-      message: formatBindFailure(Z.id, ge.reason, remoteSessionUrl, re),
+      message: formatBindFailure(teleportResult.id, binding.reason, remoteSessionUrl, archived),
     };
   }
-  let Ee = cloudSessionContext(apiCreds, Z.id);
-  let Oe = await Ie;
-  noopDialogWiring(Oe, host.dialogs);
-  let Ct = await startDeviceBridgeForAttach(
+  let sessionContext = cloudSessionContext(apiCreds, teleportResult.id);
+  let createFacts = await dirSyncHandle;
+  noopDialogWiring(createFacts, host.dialogs);
+  let bridgeOutcome = await startDeviceBridgeForAttach(
     {
-      sessionId: Z.id,
+      sessionId: teleportResult.id,
       orgUuid: apiCreds.orgUUID,
-      deviceId: ge.deviceId,
+      deviceId: binding.deviceId,
       getAccessToken: () => deviceBridgeAccessToken(apiCreds),
       storageV5,
       servedSettingsChanged: servedSettingsChangedOf(sessionHost),
-      seams: k,
+      seams,
     },
-    Oe,
+    createFacts,
   ).then(
     (link) => ({
       link,
     }),
     async (error) => {
-      await Re();
+      await releaseSession();
       logError(error);
       return {
         error: errorMessage(error),
       };
     },
   );
-  if ("error" in Ct) {
-    let re = await he();
+  if ("error" in bridgeOutcome) {
+    let archived = await archiveSession();
     await logFeatureBadAsync("remote_headless_session", "link_failed", {
-      archived: re,
+      archived,
     });
     return {
       kind: "failed",
-      message: formatServeSetupFailure(Z.id, Ct.error, remoteSessionUrl, re),
+      message: formatServeSetupFailure(teleportResult.id, bridgeOutcome.error, remoteSessionUrl, archived),
     };
   }
-  let { link } = Ct;
-  let wt = sessionRepositoryTrustReader({
-    sessionId: Z.id,
-    getAccessToken: Ee.getAccessToken,
+  let { link } = bridgeOutcome;
+  let trustReader = sessionRepositoryTrustReader({
+    sessionId: teleportResult.id,
+    getAccessToken: sessionContext.getAccessToken,
     fetchSession,
-    createOrigin: Oe?.createFacts?.origin,
+    createOrigin: createFacts?.createFacts?.origin,
   });
-  wt?.refresh();
-  let hn = await attachHeadlessFeatures(
+  trustReader?.refresh();
+  let featureHandles = await attachHeadlessFeatures(
     features,
     normalizeOpenOptions({
-      sessionId: Z.id,
+      sessionId: teleportResult.id,
       binding: "bound",
-      boundDeviceUuid: ge.deviceId,
+      boundDeviceUuid: binding.deviceId,
       trigger: "create",
       storageV5,
       credentials,
-      settingsToCloud: Q,
-      isProjectSynced: q,
-      ...(Oe && {
-        dirSync: Oe,
+      settingsToCloud,
+      isProjectSynced: projectSyncEnabled,
+      ...(createFacts && {
+        dirSync: createFacts,
       }),
-      homeSeed: Z.homeSeed,
+      homeSeed: teleportResult.homeSeed,
       ...(await startServedTools(
-        Z.id,
+        teleportResult.id,
         "none",
-        ge.deviceId,
+        binding.deviceId,
         true,
         link.bridge,
         logRemoteToolsWarning,
-        wt,
+        trustReader,
         () =>
-          fetchSession(Z.id, {
+          fetchSession(teleportResult.id, {
             ...apiCreds,
-            accessToken: Ee.getAccessToken(),
+            accessToken: sessionContext.getAccessToken(),
           }),
       )),
       signal: host.signal,
     }),
   );
   logFeatureOk("remote_headless_session");
-  let at = servedFolderConfigNotice("create");
-  if (at !== undefined) logRemoteToolsWarning(SERVED_FOLDER_CONFIG_NOT_USED, at);
-  let dt = servedProjectEnvNotice("create");
-  if (dt !== undefined) logRemoteToolsWarning(SERVED_PROJECT_ENV_NOT_APPLIED, dt);
-  let fn = [
+  let folderNotice = servedFolderConfigNotice("create");
+  if (folderNotice !== undefined) logRemoteToolsWarning(SERVED_FOLDER_CONFIG_NOT_USED, folderNotice);
+  let envNotice = servedProjectEnvNotice("create");
+  if (envNotice !== undefined) logRemoteToolsWarning(SERVED_PROJECT_ENV_NOT_APPLIED, envNotice);
+  let allNotices = [
     ...notices,
-    ...We,
-    ...(Fe !== undefined ? [Fe] : []),
-    ...(at !== undefined
+    ...bundleNotices,
+    ...(runnerNotice !== undefined ? [runnerNotice] : []),
+    ...(folderNotice !== undefined
       ? [
           {
             level: "notice",
-            text: at,
+            text: folderNotice,
           },
         ]
       : []),
-    ...(dt !== undefined
+    ...(envNotice !== undefined
       ? [
           {
             level: "notice",
-            text: dt,
+            text: envNotice,
           },
         ]
       : []),
@@ -1081,72 +1123,72 @@ async function createBareCloudSession(
     kind: "opened",
     session: {
       entry: "create",
-      ...Ee,
-      ...(ge.status === "bound" && {
-        eventSigner: deviceEventSignerFor(ge.deviceId, credentials),
+      ...sessionContext,
+      ...(binding.status === "bound" && {
+        eventSigner: deviceEventSignerFor(binding.deviceId, credentials),
       }),
-      featureHandles: hn,
-      hasTitle: Boolean(e.sessionNameArg || e.remote),
-      ...(fn.length > 0 && {
-        notices: fn,
+      featureHandles,
+      hasTitle: Boolean(options.sessionNameArg || options.remote),
+      ...(allNotices.length > 0 && {
+        notices: allNotices,
       }),
       ...(permissionMode !== undefined && {
         requestedPermissionMode: permissionMode,
       }),
-      maxTurnsConfirmed: Z.maxTurnsConfirmed,
-      dirSync: Oe,
-      settle: (re) => emitHookStarted(Z.id, abortController, re, k.laptop),
+      maxTurnsConfirmed: teleportResult.maxTurnsConfirmed,
+      dirSync: createFacts,
+      settle: (hookState) => emitHookStarted(teleportResult.id, abortController, hookState, seams.laptop),
       dispose: async () => {
-        await Re();
+        await releaseSession();
         await link.bridge.stop();
-        await disposeHandles(hn);
+        await disposeHandles(featureHandles);
       },
       cloudSession: () =>
         cloudSessionJsonSummary({
-          sessionId: Z.id,
+          sessionId: teleportResult.id,
           viewUrl: remoteSessionUrl,
           device: {
             status: "bound",
-            device_id: ge.deviceId,
+            device_id: binding.deviceId,
             display_name: link.displayName,
           },
           directorySync: dirSyncReport({
-            dirSync: Oe,
+            dirSync: createFacts,
             fileMode: link.fileMode,
-            sessionId: Z.id,
+            sessionId: teleportResult.id,
           }),
-          repositoryTrust: repositoryTrustOf(wt),
+          repositoryTrust: repositoryTrustOf(trustReader),
         }),
     },
   };
 }
 //@ chunk-fe6rs39h.js:143545-144254 placement
-async function reportCreateSessionError(e, aborted, branchMode, r) {
+async function reportCreateSessionError(failure, aborted, branchMode, isAborted) {
   await logEventAsync("tengu_remote_create_session_error", {
-    error: aborted ? lit("aborted") : e ? fromEnum(e.reason) : lit("unknown"),
-    entry_point: fromEnum(r),
+    error: aborted ? lit("aborted") : failure ? fromEnum(failure.reason) : lit("unknown"),
+    entry_point: fromEnum(isAborted),
     branch_mode: branchMode,
-    ...(e?.detail?.endpoint && {
-      create_endpoint: fromEnum(e.detail.endpoint),
+    ...(failure?.detail?.endpoint && {
+      create_endpoint: fromEnum(failure.detail.endpoint),
     }),
-    ...(e?.detail?.serverReason && {
-      server_reason: fromEnum(e.detail.serverReason),
+    ...(failure?.detail?.serverReason && {
+      server_reason: fromEnum(failure.detail.serverReason),
     }),
-    ...(e?.detail?.messageHidden && {
+    ...(failure?.detail?.messageHidden && {
       message_hidden: lit("true"),
     }),
-    ...(e?.detail?.preflightTransient !== undefined && {
-      deny_transient: lit(e.detail.preflightTransient ? "true" : "false"),
+    ...(failure?.detail?.preflightTransient !== undefined && {
+      deny_transient: lit(failure.detail.preflightTransient ? "true" : "false"),
     }),
-    ...(e?.detail?.sessionArchived !== undefined && {
-      session_archived: lit(e.detail.sessionArchived ? "true" : "false"),
+    ...(failure?.detail?.sessionArchived !== undefined && {
+      session_archived: lit(failure.detail.sessionArchived ? "true" : "false"),
     }),
   });
   if (!aborted) await logFeatureBadAsync("remote_headless_session", "create_failed");
   return {
     kind: "failed",
-    message: e
-      ? `Error: ${printableName(e.message, MAX_ERROR_MESSAGE_CHARS)}`
+    message: failure
+      ? `Error: ${printableName(failure.message, MAX_ERROR_MESSAGE_CHARS)}`
       : "Error: Unable to create cloud session",
   };
 }
@@ -1155,7 +1197,7 @@ async function reportCreateSessionError(e, aborted, branchMode, r) {
  * runHeadlessCloudCreate：`claude -p --cloud` 新建云会话入口（需要 prompt），处理模型门禁提示、bare 模式与退出码。
  */
 async function openBareCloudSession(
-  e,
+  options,
   {
     apiCreds,
     prompt,
@@ -1168,35 +1210,35 @@ async function openBareCloudSession(
     storageV5,
     credentials,
   },
-  O = {},
+  seams = {},
 ) {
   if (!hasPromptContent(prompt))
     return {
       kind: "failed",
       message: "Error: a cloud session needs a prompt",
     };
-  let teleport = O.teleport ?? teleportToRemote;
-  let branchMode = branchModeForTelemetry(e.poolOnBranch, e.poolRef);
+  let teleport = seams.teleport ?? teleportToRemote;
+  let branchMode = branchModeForTelemetry(options.poolOnBranch, options.poolRef);
   let abortController = new AbortController();
-  let z = registerCleanup(() => abortController.abort());
+  let teleportFn = registerCleanup(() => abortController.abort());
   if (signal?.aborted) abortController.abort();
   signal?.addEventListener("abort", () => abortController.abort(), {
     once: true,
   });
-  let settingsToCloudEnabled = e.noMonorepo
+  let settingsToCloudEnabled = options.noMonorepo
     ? false
-    : await (O.settingsToCloudEnabled ?? isSettingsToCloudEnabled)().catch(() => false);
+    : await (seams.settingsToCloudEnabled ?? isSettingsToCloudEnabled)().catch(() => false);
   let { model, explicitMode, decision, isModeFromSettings, noticeOnRunner } = buildCloudCreateOptions(
-    e,
+    options,
     {
       settingsToCloudEnabled,
-      settingsNeverForwarded: e.noMonorepo,
+      settingsNeverForwarded: options.noMonorepo,
       settings: getInitialSettings_2(),
       hostFillsDefault,
       typedLevel: forwarded.proactivityLevel,
       carriedMode,
     },
-    O,
+    seams,
   );
   if (decision.notice !== undefined) noteHeadless(decision.notice.text);
   if (decision.action !== "none")
@@ -1220,22 +1262,22 @@ async function openBareCloudSession(
     builtin_tools_count: forwarded.builtinTools?.length ?? 0,
     entry_point: fromEnum("cloud_headless_bare"),
     branch_mode: branchMode,
-    has_environment_query: e.environmentQuery !== null,
+    has_environment_query: options.environmentQuery !== null,
   });
-  let ee =
-    e.environmentQuery === null
+  let branch =
+    options.environmentQuery === null
       ? null
       : await environmentUnresolvedOutcome(
-          e.environmentQuery,
+          options.environmentQuery,
           () => fetchEnvironments(apiCreds.accessToken, storageV5, credentials),
           cloudCreateRefusal(),
         );
-  if (ee?.ok === false) {
-    z();
+  if (branch?.ok === false) {
+    teleportFn();
     return reportCreateSessionError(
       {
-        message: ee.error,
-        reason: ee.reason,
+        message: branch.error,
+        reason: branch.reason,
         detail: undefined,
       },
       abortController.signal.aborted,
@@ -1243,30 +1285,32 @@ async function openBareCloudSession(
       "cloud_headless_bare",
     );
   }
-  let se;
-  let x = [];
-  let ie = randomUUID();
-  let G = await teleport({
+  let environment;
+  let promptUuid = [];
+  let notices = randomUUID();
+  let opened = await teleport({
     ...buildInitialMessageOptions({
       prompt,
-      promptUuid: ie,
+      promptUuid: notices,
       currentBranch:
-        (e.poolOnBranch ?? e.poolRef) == null ? await (O.currentBranch ?? getBranch)() : undefined,
-      poolOnBranch: e.poolOnBranch,
-      poolRef: e.poolRef,
-      title: e.sessionNameArg || undefined,
+        (options.poolOnBranch ?? options.poolRef) == null
+          ? await (seams.currentBranch ?? getBranch)()
+          : undefined,
+      poolOnBranch: options.poolOnBranch,
+      poolRef: options.poolRef,
+      title: options.sessionNameArg || undefined,
       permissionMode: decision.permissionMode,
       model,
       signal: abortController.signal,
     }),
     ...{},
-    chosenEnvironment: ee?.environment,
-    monorepo: e.monorepo,
-    poolId: e.poolId ?? undefined,
-    noMonorepo: e.noMonorepo,
-    correlationId: e.correlationId ?? undefined,
+    chosenEnvironment: branch?.environment,
+    monorepo: options.monorepo,
+    poolId: options.poolId ?? undefined,
+    noMonorepo: options.noMonorepo,
+    correlationId: options.correlationId ?? undefined,
     repositoryRequiredBy: repositoryAgent === undefined ? undefined : `The agent "${repositoryAgent}"`,
-    personal: e.personal,
+    personal: options.personal,
     isModeFromSettings,
     proactivityLevel: forwarded.proactivityLevel,
     appendSystemPrompt: forwarded.appendSystemPrompt,
@@ -1283,11 +1327,11 @@ async function openBareCloudSession(
     environmentVariables: forwarded.environmentVariables,
     storageV5,
     credentials,
-    onProgress: (ue) => {
-      if (ue.kind === "session_exists")
+    onProgress: (progress) => {
+      if (progress.kind === "session_exists")
         onSessionExists(
           printableName(
-            getRemoteSessionUrl(ue.sessionId, undefined, {
+            getRemoteSessionUrl(progress.sessionId, undefined, {
               from: "cli",
               m: "0",
             }),
@@ -1295,91 +1339,98 @@ async function openBareCloudSession(
           ),
         );
     },
-    onBundleNotice: (text, Se) => {
-      x.push({
-        level: Se ?? "notice",
+    onBundleNotice: (text, bundleNotice) => {
+      promptUuid.push({
+        level: bundleNotice ?? "notice",
         text,
       });
     },
-    onBundleFail: (message, Se) => {
-      se = {
+    onBundleFail: (message, level) => {
+      environment = {
         message,
-        reason: Se === "env_create" ? "env_create_failed" : "bundle_failed",
+        reason: level === "env_create" ? "env_create_failed" : "bundle_failed",
         detail: undefined,
       };
     },
     onCreateFail: (message, reason, detail) => {
-      se = {
+      environment = {
         message,
         reason,
         detail,
       };
     },
-  }).finally(z);
-  if (G === null)
-    return reportCreateSessionError(se, abortController.signal.aborted, branchMode, "cloud_headless_bare");
-  let permissionMode = G.settingsModeOnRunner === undefined ? decision.permissionMode : undefined;
-  let me = G.settingsModeOnRunner === undefined ? decision.notice : noticeOnRunner;
-  if (G.settingsModeOnRunner !== undefined && noticeOnRunner !== undefined)
+  }).finally(teleportFn);
+  if (opened === null)
+    return reportCreateSessionError(
+      environment,
+      abortController.signal.aborted,
+      branchMode,
+      "cloud_headless_bare",
+    );
+  let permissionMode = opened.settingsModeOnRunner === undefined ? decision.permissionMode : undefined;
+  let modeNotice = opened.settingsModeOnRunner === undefined ? decision.notice : noticeOnRunner;
+  if (opened.settingsModeOnRunner !== undefined && noticeOnRunner !== undefined)
     logForDebugging(`[headlessCloud] ${noticeOnRunner.text}`);
   await logEventAsync("tengu_remote_create_session_success", {
-    session_id: shortHash(G.id),
+    session_id: shortHash(opened.id),
     entry_point: fromEnum("cloud_headless_bare"),
     branch_mode: branchMode,
     ...(forwarded.maxTurns !== undefined && {
-      max_turns_confirmed: G.maxTurnsConfirmed === true,
+      max_turns_confirmed: opened.maxTurnsConfirmed === true,
     }),
-    ...(G.settingsModeOnRunner !== undefined && {
-      settings_mode_on_runner: fromEnum(G.settingsModeOnRunner),
-      settings_mode_warned: me?.level === "warning",
+    ...(opened.settingsModeOnRunner !== undefined && {
+      settings_mode_on_runner: fromEnum(opened.settingsModeOnRunner),
+      settings_mode_warned: modeNotice?.level === "warning",
     }),
   });
   logFeatureOk("remote_headless_session");
-  let viewUrl = getRemoteSessionUrl(G.id, undefined, {
+  let viewUrl = getRemoteSessionUrl(opened.id, undefined, {
     from: "cli",
     m: "0",
   });
-  let le = [
-    ...(ee?.notice && !G.chosenEnvironmentMoved
+  let allNotices = [
+    ...(branch?.notice && !opened.chosenEnvironmentMoved
       ? [
           {
             level: "notice",
-            text: ee.notice,
+            text: branch.notice,
           },
         ]
       : []),
-    ...x,
-    ...(me !== undefined ? [me] : []),
+    ...promptUuid,
+    ...(modeNotice !== undefined ? [modeNotice] : []),
   ];
   return {
     kind: "opened",
     session: {
       entry: "create",
-      ...cloudSessionContext(apiCreds, G.id),
+      ...cloudSessionContext(apiCreds, opened.id),
       initialPrompt: {
-        uuid: ie,
+        uuid: notices,
         content: prompt,
       },
       hasTitle: true,
-      ...(le.length > 0 && {
-        notices: le,
+      ...(allNotices.length > 0 && {
+        notices: allNotices,
       }),
       ...(permissionMode !== undefined && {
         requestedPermissionMode: permissionMode,
       }),
-      maxTurnsConfirmed: G.maxTurnsConfirmed,
+      maxTurnsConfirmed: opened.maxTurnsConfirmed,
       dispose: async () => {
-        await (O.archiveSession ?? archiveRemoteSession)(G.id, CLOUD_START_TIMEOUT_MS).catch(() => false);
+        await (seams.archiveSession ?? archiveRemoteSession)(opened.id, CLOUD_START_TIMEOUT_MS).catch(
+          () => false,
+        );
       },
       cloudSession: () =>
         cloudSessionJsonSummary({
-          sessionId: G.id,
+          sessionId: opened.id,
           viewUrl,
           device: unboundStatus("session_unbound"),
           directorySync: dirSyncReport({
             dirSync: undefined,
             fileMode: "unspecified",
-            sessionId: G.id,
+            sessionId: opened.id,
           }),
         }),
     },
@@ -1389,7 +1440,11 @@ async function openBareCloudSession(
 /**
  * runHeadlessCloudAttach：附加到已有云会话（archived/requires_action/running 等状态分支），可选本机提供工具。
  */
-async function openBareAttachedSession({ apiCreds, credentials, openingRequests = [] }, sessionId, h = {}) {
+async function openBareAttachedSession(
+  { apiCreds, credentials, openingRequests = [] },
+  sessionId,
+  openArgs = {},
+) {
   let compatSessionId = toCompatSessionId(sessionId);
   logEvent("tengu_remote_attach_session", {
     session_id: sanitizeMarkName(compatSessionId),
@@ -1399,13 +1454,13 @@ async function openBareAttachedSession({ apiCreds, credentials, openingRequests 
     from: "cli",
     m: "0",
   });
-  let w = await (h.fetchSession ?? fetchSession)(compatSessionId, apiCreds).then(
-    (k) => ({
-      archived: k.session_status === "archived",
-      awaitsAnswer: k.session_status === "requires_action",
-      busy: k.session_status === "running",
-      wontStart: k.startup_failure,
-      boundDeviceUuid: k.bound_device_uuid,
+  let viewUrl = await (openArgs.fetchSession ?? fetchSession)(compatSessionId, apiCreds).then(
+    (session) => ({
+      archived: session.session_status === "archived",
+      awaitsAnswer: session.session_status === "requires_action",
+      busy: session.session_status === "running",
+      wontStart: session.startup_failure,
+      boundDeviceUuid: session.bound_device_uuid,
     }),
     (error) => ({
       refused:
@@ -1414,14 +1469,14 @@ async function openBareAttachedSession({ apiCreds, credentials, openingRequests 
           : errorMessage(error),
     }),
   );
-  if ("refused" in w) {
+  if ("refused" in viewUrl) {
     await logFeatureBadAsync("remote_headless_session", "attach_refused");
     return {
       kind: "failed",
-      message: `Error: ${printableName(w.refused, 300)}`,
+      message: `Error: ${printableName(viewUrl.refused, 300)}`,
     };
   }
-  if (w.archived) {
+  if (viewUrl.archived) {
     logEvent("tengu_remote_attach_session_rejected", {
       reason: lit("archived"),
       entry_point: fromEnum("cloud_headless_bare"),
@@ -1432,28 +1487,31 @@ async function openBareAttachedSession({ apiCreds, credentials, openingRequests 
       message: formatArchivedSessionError(compatSessionId, remoteSessionUrl),
     };
   }
-  if (w.wontStart !== undefined) {
+  if (viewUrl.wontStart !== undefined) {
     await logFeatureBadAsync("remote_headless_session", "attach_wont_start");
     return {
       kind: "failed",
-      message: `Error: cloud session ${displaySessionId(compatSessionId)} will not start: ${printableName(w.wontStart, 200)} (${remoteSessionUrl})`,
+      message: `Error: cloud session ${displaySessionId(compatSessionId)} will not start: ${printableName(viewUrl.wontStart, 200)} (${remoteSessionUrl})`,
     };
   }
-  if (w.busy && ((await (h.turnInFlight ?? isRemoteTurnUnderWay)(compatSessionId, credentials)) ?? true)) {
+  if (
+    viewUrl.busy &&
+    ((await (openArgs.turnInFlight ?? isRemoteTurnUnderWay)(compatSessionId, credentials)) ?? true)
+  ) {
     await logFeatureBadAsync("remote_headless_session", "attach_busy");
     return {
       kind: "failed",
       message: `Error: cloud session ${displaySessionId(compatSessionId)} is busy with a turn; wait for it to finish, or watch it at ${remoteSessionUrl}, then send the message again.`,
     };
   }
-  if (w.awaitsAnswer) {
+  if (viewUrl.awaitsAnswer) {
     await logFeatureBadAsync("remote_headless_session", "attach_requires_action");
     return {
       kind: "failed",
       message: `Error: cloud session ${displaySessionId(compatSessionId)} is waiting on a question; answer it where it was asked (${remoteSessionUrl}) before sending it another message.`,
     };
   }
-  let R = await latestStreamPosition(compatSessionId, credentials, h, false).then(
+  let attach = await latestStreamPosition(compatSessionId, credentials, openArgs, false).then(
     (at) => ({
       at,
     }),
@@ -1461,11 +1519,11 @@ async function openBareAttachedSession({ apiCreds, credentials, openingRequests 
       error: errorMessage(error),
     }),
   );
-  if ("error" in R) {
+  if ("error" in attach) {
     await logFeatureBadAsync("remote_headless_session", "attach_stream_position");
     return {
       kind: "failed",
-      message: `Error: could not read where cloud session ${displaySessionId(compatSessionId)}'s stream stands (${printableName(R.error, 200)}).`,
+      message: `Error: could not read where cloud session ${displaySessionId(compatSessionId)}'s stream stands (${printableName(attach.error, 200)}).`,
     };
   }
   logFeatureOk("remote_headless_session");
@@ -1474,13 +1532,13 @@ async function openBareAttachedSession({ apiCreds, credentials, openingRequests 
     session: {
       entry: "attach",
       ...cloudSessionContext(apiCreds, compatSessionId),
-      initialSequenceNum: R.at,
+      initialSequenceNum: attach.at,
       ...(openingRequests.length > 0 && {
         openingRequests,
       }),
-      ...(w.boundDeviceUuid !== undefined &&
+      ...(viewUrl.boundDeviceUuid !== undefined &&
         isDeviceIdentityEnabledCached() && {
-          eventSigner: deviceEventSignerIfBoundHere(w.boundDeviceUuid, credentials),
+          eventSigner: deviceEventSignerIfBoundHere(viewUrl.boundDeviceUuid, credentials),
         }),
       cloudSession: () =>
         cloudSessionJsonSummary({
@@ -1500,14 +1558,16 @@ async function openBareAttachedSession({ apiCreds, credentials, openingRequests 
 function hasPromptContent(prompt) {
   return typeof prompt === "string"
     ? prompt.trim() !== ""
-    : prompt.some((n) => n.type !== "text" || (typeof n.text === "string" && n.text.trim() !== ""));
+    : prompt.some(
+        (prompt) => prompt.type !== "text" || (typeof prompt.text === "string" && prompt.text.trim() !== ""),
+      );
 }
 //@ chunk-fe6rs39h.js:151199-151768 placement
 async function startDeviceBridgeForAttach(
   { sessionId, orgUuid, deviceId, getAccessToken, storageV5, servedSettingsChanged, seams },
-  w,
+  options,
 ) {
-  let fileMode = await (seams.remoteFileMode ?? remoteFileModeUnspecified)(w?.gitRoot);
+  let fileMode = await (seams.remoteFileMode ?? remoteFileModeUnspecified)(options?.gitRoot);
   let displayName = (seams.deviceDisplayName ?? deviceDisplayName)();
   let cloudDeviceRegistration = startCloudDeviceRegistration(
     {
@@ -1516,19 +1576,19 @@ async function startDeviceBridgeForAttach(
       deviceId,
       getAccessToken,
       storageV5,
-      dirSync: w !== undefined,
+      dirSync: options !== undefined,
       servedSettingsChanged,
     },
     seams.laptop,
   );
-  cloudDeviceRegistration.started.then((O) => {
-    if (!O)
+  cloudDeviceRegistration.started.then((dirSync) => {
+    if (!dirSync)
       logForDebugging(
         "[headlessCloud] the device bridge did not start (gate off or account not fully configured); the session stays bound without laptop tools",
       );
   });
   logLaptopLinked({
-    dirSync: w,
+    dirSync: options,
     fileMode,
     sessionId,
   });
@@ -1539,23 +1599,23 @@ async function startDeviceBridgeForAttach(
   };
 }
 //@ chunk-fe6rs39h.js:151768-152017 placement
-function runHeadlessCloudAttach(e, n, s, r, { serveOnly: h = false } = {}) {
-  return openWithFeatures(e, n, {
+function runHeadlessCloudAttach(options, host, storage, sessionHost, { serveOnly = false } = {}) {
+  return openWithFeatures(options, host, {
     entry: "attach",
-    opener: (y) =>
+    opener: (openerArgs) =>
       attachBareCloudSession(
         {
-          ...y,
-          openingRequests: attachOpeningRequests(e.permissionModeCli, {
-            serveOnly: h,
+          ...openerArgs,
+          openingRequests: attachOpeningRequests(options.permissionModeCli, {
+            serveOnly,
           }),
-          sessionHost: r,
-          serveOnly: h,
+          sessionHost,
+          serveOnly,
         },
-        s,
+        storage,
       ),
-    features: h ? createAttachFeatures() : createCloudSessionFeatures(e, r),
-    ...(h && {
+    features: serveOnly ? createAttachFeatures() : createCloudSessionFeatures(options, sessionHost),
+    ...(serveOnly && {
       attachHonours: ["attachServeRequest"],
     }),
   });
@@ -1567,9 +1627,9 @@ function servedSettingsChangedOf(sessionHost) {
     : deviceHooksProcessMemories.of(sessionHost).servedSettingsChanged;
 }
 //@ chunk-fe6rs39h.js:152088-152106 placement
-function noopDialogWiring(e, dialogs) {}
+function noopDialogWiring(unused, dialogs) {}
 //@ chunk-fe6rs39h.js:152106-152539 placement
-function sdkHostOptionEntries(forwarded, n, s) {
+function sdkHostOptionEntries(forwarded, options, host) {
   return [
     ["appendSystemPrompt", forwarded.appendSystemPrompt],
     ["systemPrompt", forwarded.customSystemPrompt],
@@ -1580,11 +1640,11 @@ function sdkHostOptionEntries(forwarded, n, s) {
     ["allowedTools", forwarded.allowedTools?.length],
     ["thinking", forwarded.thinking],
     ["proactivity", forwarded.proactivityLevel],
-    ["model", s],
-    ["name", n.sessionNameArg],
+    ["model", host],
+    ["name", options.sessionNameArg],
   ]
-    .filter(([, h]) => Boolean(h))
-    .map(([h]) => h);
+    .filter(([, name]) => Boolean(name))
+    .map(([name]) => name);
 }
 //@ chunk-fe6rs39h.js:152539-158893 placement
 /**
@@ -1603,10 +1663,10 @@ async function attachBareCloudSession(
     openingRequests = [],
     serveOnly = false,
   },
-  R,
-  k = {},
+  sessionId,
+  seams = {},
 ) {
-  let compatSessionId = toCompatSessionId(R);
+  let compatSessionId = toCompatSessionId(sessionId);
   logEvent("tengu_remote_attach_session", {
     session_id: sanitizeMarkName(compatSessionId),
     entry_point: fromEnum("cloud_headless"),
@@ -1615,25 +1675,25 @@ async function attachBareCloudSession(
     from: "cli",
     m: "0",
   });
-  let P = cloudSessionContext(apiCreds, compatSessionId);
-  let N = (k.fetchSession ?? fetchSession)(compatSessionId, apiCreds);
-  let L = () =>
-    (k.fetchSession ?? fetchSession)(compatSessionId, {
+  let viewUrl = cloudSessionContext(apiCreds, compatSessionId);
+  let tokenSource = (seams.fetchSession ?? fetchSession)(compatSessionId, apiCreds);
+  let sessionReader = () =>
+    (seams.fetchSession ?? fetchSession)(compatSessionId, {
       ...apiCreds,
-      accessToken: P.getAccessToken(),
+      accessToken: viewUrl.getAccessToken(),
     });
-  let z = sessionRepositoryTrustReader({
+  let repositoryTrust = sessionRepositoryTrustReader({
     sessionId: compatSessionId,
-    getAccessToken: P.getAccessToken,
-    fetchSession: k.fetchSession ?? fetchSession,
-    initial: N,
+    getAccessToken: viewUrl.getAccessToken,
+    fetchSession: seams.fetchSession ?? fetchSession,
+    initial: tokenSource,
     createOrigin: undefined,
   });
-  let j = await N.then(
-    (B) => ({
-      archived: B.session_status === "archived",
-      awaitsAnswer: B.session_status === "requires_action",
-      isOnSelfHostedRunner: isSelfHostedEnvironment(B),
+  let sessionState = await tokenSource.then(
+    (session) => ({
+      archived: session.session_status === "archived",
+      awaitsAnswer: session.session_status === "requires_action",
+      isOnSelfHostedRunner: isSelfHostedEnvironment(session),
       unreadable: false,
     }),
     (error) => {
@@ -1652,14 +1712,14 @@ async function attachBareCloudSession(
       };
     },
   );
-  if ("refused" in j) {
+  if ("refused" in sessionState) {
     await logFeatureBadAsync("remote_headless_session", "attach_refused");
     return {
       kind: "failed",
-      message: `Error: ${printableName(j.refused ?? "", 300)}`,
+      message: `Error: ${printableName(sessionState.refused ?? "", 300)}`,
     };
   }
-  if (j.archived) {
+  if (sessionState.archived) {
     logEvent("tengu_remote_attach_session_rejected", {
       reason: lit("archived"),
       entry_point: fromEnum("cloud_headless"),
@@ -1670,17 +1730,19 @@ async function attachBareCloudSession(
       message: formatArchivedSessionError(compatSessionId, remoteSessionUrl),
     };
   }
-  let Y = false;
-  let D;
+  let canServe = false;
+  let localIdentity;
   if (serveOnly) {
-    let B = await (k.localServeLinkIdentity ?? checkAttachServeLocally)({
+    let localResult = await (seams.localServeLinkIdentity ?? checkAttachServeLocally)({
       sessionId: compatSessionId,
       credentials,
     });
-    Y = B.ok || (B.refusal.kind === "local" && B.refusal.reason === "no_device_proof");
-    D = B.ok ? B : undefined;
+    canServe =
+      localResult.ok ||
+      (localResult.refusal.kind === "local" && localResult.refusal.reason === "no_device_proof");
+    localIdentity = localResult.ok ? localResult : undefined;
   }
-  let W = latestStreamPosition(compatSessionId, credentials, k, Y).then(
+  let streamPosition = latestStreamPosition(compatSessionId, credentials, seams, canServe).then(
     (position) => ({
       position,
     }),
@@ -1688,90 +1750,97 @@ async function attachBareCloudSession(
       error: errorMessage(error),
     }),
   );
-  let te = k.prepareLink ?? (k.linkForServing === undefined ? registerAndLinkDevice : undefined);
-  let X =
-    D !== undefined && te !== undefined && (k.linkPreparationOverlapOn ?? isLinkPreparationOverlapOn)()
-      ? te({
+  let prepareLink =
+    seams.prepareLink ?? (seams.linkForServing === undefined ? registerAndLinkDevice : undefined);
+  let preparedLink =
+    localIdentity !== undefined &&
+    prepareLink !== undefined &&
+    (seams.linkPreparationOverlapOn ?? isLinkPreparationOverlapOn)()
+      ? prepareLink({
           sessionId: compatSessionId,
           credentials,
-          localIdentity: D,
+          localIdentity,
           handsKeyToLaterReaders: true,
         })
       : undefined;
-  X?.catch(() => {});
-  let ee = await W;
-  if ("error" in ee) {
+  preparedLink?.catch(() => {});
+  let position = await streamPosition;
+  if ("error" in position) {
     await logFeatureBadAsync("remote_headless_session", "attach_stream_position");
     return {
       kind: "failed",
-      message: `Error: could not read where cloud session ${displaySessionId(compatSessionId)}'s stream stands (${printableName(ee.error, 200)}).`,
+      message: `Error: could not read where cloud session ${displaySessionId(compatSessionId)}'s stream stands (${printableName(position.error, 200)}).`,
     };
   }
-  let se;
-  let x;
-  let ie;
+  let linkResult;
+  let boundDeviceId;
+  let heldKey;
   if (serveOnly) {
     let request = readAttachServeRequest(host.initialize);
-    let he = await (k.linkForServing ?? linkAttachServe)({
+    let serveLink = await (seams.linkForServing ?? linkAttachServe)({
       sessionId: compatSessionId,
       orgUuid: apiCreds.orgUUID,
       credentials,
       request,
-      ...(D && {
-        localIdentity: D,
+      ...(localIdentity && {
+        localIdentity,
       }),
-      ...(X && {
-        prepared: X,
+      ...(preparedLink && {
+        prepared: preparedLink,
       }),
       handsKeyToLaterReaders: true,
     });
-    if (!he.ok) {
+    if (!serveLink.ok) {
       await logFeatureBadAsync("remote_headless_session", "attach_serve_link");
       return {
         kind: "failed",
-        message: he.message,
+        message: serveLink.message,
       };
     }
-    se = he.deviceId;
-    x = he.heldKey;
-    ie = maybeResumeAttach({
+    linkResult = serveLink.deviceId;
+    boundDeviceId = serveLink.heldKey;
+    heldKey = maybeResumeAttach({
       sessionId: compatSessionId,
       orgUuid: apiCreds.orgUUID,
-      deviceId: he.deviceId,
-      held: he.heldKey,
+      deviceId: serveLink.deviceId,
+      held: serveLink.heldKey,
       request,
-      linkedStatus: he.toolHostStatus,
-      readSession: L,
+      linkedStatus: serveLink.toolHostStatus,
+      readSession: sessionReader,
       credentials,
     });
   }
-  let G = serveOnly && (await (k.hostedServeDialogsGateOn ?? isAttachServeEnabled)().catch(() => false));
-  let Q = G ? createServedSettingsTracker() : undefined;
-  let me =
-    Q &&
-    ((B, he) => {
-      logRemoteToolsWarning(B, he);
-      Q.add(B, he);
+  let dialogsOn =
+    serveOnly && (await (seams.hostedServeDialogsGateOn ?? isAttachServeEnabled)().catch(() => false));
+  let dialogWarnings = dialogsOn ? createServedSettingsTracker() : undefined;
+  let onNotice =
+    dialogWarnings &&
+    ((what, detail) => {
+      logRemoteToolsWarning(what, detail);
+      dialogWarnings.add(what, detail);
     });
-  let q = G
+  let deviceMcpQuestion = dialogsOn
     ? Promise.resolve(
-        k.askDeviceMcpConsent ?? import("./chunk-8fq1kyxh.js").then((B) => B.askHostDeviceMcpConsent),
+        seams.askDeviceMcpConsent ??
+          import("../../components/cloud/HostDeviceMcpConsent.js").then(
+            (consent) => consent.askHostDeviceMcpConsent,
+          ),
       )
-        .then((B) =>
-          B({
+        .then((ask) =>
+          ask({
             dialogs: host.dialogs,
             storageV5,
             signal: host.signal ?? signal,
-            ...(k.deviceMcpConsent && {
-              seams: k.deviceMcpConsent,
+            ...(seams.deviceMcpConsent && {
+              seams: seams.deviceMcpConsent,
             }),
           }),
         )
         .then(
-          (B) => {
-            switch (B.kind) {
+          (asked) => {
+            switch (asked.kind) {
               case "asked":
-                return B.answer;
+                return asked.answer;
               case "not_asked":
                 return "as_stored";
             }
@@ -1782,32 +1851,32 @@ async function attachBareCloudSession(
           },
         )
     : undefined;
-  let V = (k.resolveBinding ?? resolveAttachDeviceBinding)({
+  let bindingPromise = (seams.resolveBinding ?? resolveAttachDeviceBinding)({
     sessionId: compatSessionId,
     storageV5,
     credentials,
     session:
-      se !== undefined
+      linkResult !== undefined
         ? Promise.resolve({
             archived: false,
-            boundDeviceId: se,
+            boundDeviceId: linkResult,
             toolHostLink: "this_helper",
           })
-        : N.then(sessionBindingFields),
-    ...(x && {
-      loadLocalDevice: (B) => resolveRegisteredDevice(B, credentials, x),
+        : tokenSource.then(sessionBindingFields),
+    ...(boundDeviceId && {
+      loadLocalDevice: (accountUuid) => resolveRegisteredDevice(accountUuid, credentials, boundDeviceId),
     }),
   });
-  let le = (k.keepSettings ?? keepSettingsBesideAHelper)(V, {
-    ...(me && {
-      onNotice: me,
+  let keepSettings = (seams.keepSettings ?? keepSettingsBesideAHelper)(bindingPromise, {
+    ...(onNotice && {
+      onNotice,
     }),
   });
-  registerCleanup(async () => le.end());
-  let { binding } = le;
+  registerCleanup(async () => keepSettings.end());
+  let { binding } = keepSettings;
   let held = boundDeviceKeyOf(binding);
-  let xe = false;
-  let fe = (k.attachDirSync ?? findLocalSessionRecord)(
+  let didStop = false;
+  let dirSync = (seams.attachDirSync ?? findLocalSessionRecord)(
     compatSessionId,
     pullsBackToThisMachine(binding),
     boundDeviceOf(binding),
@@ -1815,9 +1884,9 @@ async function attachBareCloudSession(
     storageV5,
     sessionHost,
     held,
-    xe,
+    didStop,
   );
-  let deviceBridge = (k.registerDevice ?? registerAttachedDevice)({
+  let deviceBridge = (seams.registerDevice ?? registerAttachedDevice)({
     sessionId: compatSessionId,
     getAccessToken: () => deviceBridgeAccessToken(apiCreds),
     orgUuid: apiCreds.orgUUID,
@@ -1825,30 +1894,30 @@ async function attachBareCloudSession(
     cloudClient: !serveOnly,
     toolServingOn: isViolinWoodEnabledCached(),
     storageV5,
-    dirSync: fe.then(
-      (B) => B.handle !== undefined,
+    dirSync: dirSync.then(
+      (sessionState) => sessionState.handle !== undefined,
       () => false,
     ),
     folderRelation: serveOnly
       ? Promise.all([
-          fe,
-          N.then(
-            (B) => ({
-              boundDeviceId: B.bound_device_uuid,
-              createdAt: B.created_at,
+          dirSync,
+          tokenSource.then(
+            (session) => ({
+              boundDeviceId: session.bound_device_uuid,
+              createdAt: session.created_at,
             }),
             () => {
               return;
             },
           ),
-          (k.syncRecordSweep ?? readRetentionCutoff)(),
+          (seams.syncRecordSweep ?? readRetentionCutoff)(),
         ]).then(
-          ([B, he, Ee]) =>
+          ([lookup, before, sweep]) =>
             shouldServeOnlyNotArmed({
               serveOnly,
-              lookup: B,
-              sessionBefore: he,
-              sweep: Ee,
+              lookup,
+              sessionBefore: before,
+              sweep,
             }),
           () => {
             return;
@@ -1856,22 +1925,22 @@ async function attachBareCloudSession(
         )
       : Promise.resolve(undefined),
     servedSettingsChanged: servedSettingsChangedOf(sessionHost),
-    ...(me && {
-      onNotice: me,
+    ...(onNotice && {
+      onNotice,
     }),
-    ...(q && {
-      deviceMcpQuestion: q,
+    ...(deviceMcpQuestion && {
+      deviceMcpQuestion,
     }),
   });
   registerCleanup(() => deviceBridge.stop());
-  let [pe, ce, yt, Be] = await Promise.all([
+  let [bindingState, dirSyncResult, settingsToCloud, settingsKept] = await Promise.all([
     binding,
-    fe,
-    (k.settingsToCloudEnabled ?? isSettingsToCloudEnabled)().catch(() => false),
-    le.kept,
+    dirSync,
+    (seams.settingsToCloudEnabled ?? isSettingsToCloudEnabled)().catch(() => false),
+    keepSettings.kept,
   ]);
-  if (!Be) {
-    le.end();
+  if (!settingsKept) {
+    keepSettings.end();
     await deviceBridge.stop();
     await logFeatureBadAsync("remote_headless_session", "attach_settings_not_kept");
     return {
@@ -1879,96 +1948,107 @@ async function attachBareCloudSession(
       message: `Error: ${SETTINGS_NOT_KEPT_REFUSAL}`,
     };
   }
-  let it = false;
-  logAttachRecordLookup(sessionRecordState(ce), serveOnly ? "attach_serve" : "cloud_headless");
-  let Ae = undefined;
-  let handle = ce.handle;
+  let fromUpload = false;
+  logAttachRecordLookup(sessionRecordState(dirSyncResult), serveOnly ? "attach_serve" : "cloud_headless");
+  let handleHost = undefined;
+  let handle = dirSyncResult.handle;
   noopDialogWiring(handle, host.dialogs);
-  let vt = await (k.remoteFileMode ?? remoteFileModeUnspecified)(handle?.gitRoot, it);
-  if (j.unreadable) logFeatureSad("remote_headless_session", "attach_session_unreadable");
-  else if (ce.handle === undefined && ce.why === "lookup_failed")
+  let fileMode = await (seams.remoteFileMode ?? remoteFileModeUnspecified)(handle?.gitRoot, fromUpload);
+  if (sessionState.unreadable) logFeatureSad("remote_headless_session", "attach_session_unreadable");
+  else if (dirSyncResult.handle === undefined && dirSyncResult.why === "lookup_failed")
     logFeatureSad("remote_headless_session", "attach_dir_sync_lookup_failed");
-  else if (ce.handle === undefined && ce.why === "elsewhere_unknown")
+  else if (dirSyncResult.handle === undefined && dirSyncResult.why === "elsewhere_unknown")
     logFeatureSad("remote_headless_session", "attach_dir_sync_elsewhere_unknown");
   else logFeatureOk("remote_headless_session");
   let toolHostLink =
-    pe.status === "bound" && !isKnownBindingState(pe.toolHostLink) ? pe.toolHostLink : undefined;
-  let Z =
-    pe.status === "bound"
+    bindingState.status === "bound" && !isKnownBindingState(bindingState.toolHostLink)
+      ? bindingState.toolHostLink
+      : undefined;
+  let servedTools =
+    bindingState.status === "bound"
       ? await startServedTools(
           compatSessionId,
-          pe.toolHostLink,
-          pe.deviceId,
+          bindingState.toolHostLink,
+          bindingState.deviceId,
           !serveOnly,
           deviceBridge,
-          me ?? logRemoteToolsWarning,
-          z,
-          L,
-          ie,
+          onNotice ?? logRemoteToolsWarning,
+          repositoryTrust,
+          sessionReader,
+          heldKey,
         )
       : {};
-  let je =
-    toolHostLink !== undefined && Z.servedToolsUnavailable === "helper_only"
+  let helperOnly =
+    toolHostLink !== undefined && servedTools.servedToolsUnavailable === "helper_only"
       ? getBareSessionNoToolsNotice(toolHostLink)
       : undefined;
-  let Fe = await attachHeadlessFeatures(
+  let featureHandles = await attachHeadlessFeatures(
     features,
     normalizeOpenOptions({
       sessionId: compatSessionId,
-      binding: bindingState(pe),
+      binding: bindingState_2(bindingState),
       trigger: "attach",
-      isOnSelfHostedRunner: j.isOnSelfHostedRunner,
+      isOnSelfHostedRunner: sessionState.isOnSelfHostedRunner,
       storageV5,
       credentials,
-      settingsToCloud: yt,
+      settingsToCloud,
       isProjectSynced: false,
       ...(handle && {
         dirSync: handle,
       }),
-      ...(!(ce.handle === undefined && ce.why === "not_looked") && {
-        sessionRecordMayBeElsewhere: ce.handle === undefined && ce.why !== "not_armed_here",
+      ...(!(dirSyncResult.handle === undefined && dirSyncResult.why === "not_looked") && {
+        sessionRecordMayBeElsewhere:
+          dirSyncResult.handle === undefined && dirSyncResult.why !== "not_armed_here",
       }),
-      ...(pe.status === "bound" && {
-        boundDeviceUuid: pe.deviceId,
+      ...(bindingState.status === "bound" && {
+        boundDeviceUuid: bindingState.deviceId,
       }),
-      ...Z,
+      ...servedTools,
       signal: host.signal,
     }),
   );
-  let Ie = pe.status === "bound" ? servedFolderConfigNotice(serveOnly ? "serve_only" : "attach") : undefined;
-  if (Ie !== undefined) (me ?? logRemoteToolsWarning)(SERVED_FOLDER_CONFIG_NOT_USED, Ie);
-  let Re = pe.status === "bound" ? servedProjectEnvNotice(serveOnly ? "serve_only" : "attach") : undefined;
-  if (Re !== undefined) (me ?? logRemoteToolsWarning)(SERVED_PROJECT_ENV_NOT_APPLIED, Re);
-  let ge = [
-    ...(ce.handle === undefined && ce.why === "elsewhere" && ce.line !== undefined
+  let syncNotice =
+    bindingState.status === "bound"
+      ? servedFolderConfigNotice(serveOnly ? "serve_only" : "attach")
+      : undefined;
+  if (syncNotice !== undefined)
+    (onNotice ?? logRemoteToolsWarning)(SERVED_FOLDER_CONFIG_NOT_USED, syncNotice);
+  let syncWarning =
+    bindingState.status === "bound" ? servedProjectEnvNotice(serveOnly ? "serve_only" : "attach") : undefined;
+  if (syncWarning !== undefined)
+    (onNotice ?? logRemoteToolsWarning)(SERVED_PROJECT_ENV_NOT_APPLIED, syncWarning);
+  let notices = [
+    ...(dirSyncResult.handle === undefined &&
+    dirSyncResult.why === "elsewhere" &&
+    dirSyncResult.line !== undefined
       ? [
           {
             level: "warning",
-            text: ce.line,
+            text: dirSyncResult.line,
           },
         ]
       : []),
-    ...(Ie !== undefined && !serveOnly
+    ...(syncNotice !== undefined && !serveOnly
       ? [
           {
             level: "notice",
-            text: Ie,
+            text: syncNotice,
           },
         ]
       : []),
-    ...(Re !== undefined && !serveOnly
+    ...(syncWarning !== undefined && !serveOnly
       ? [
           {
             level: "notice",
-            text: Re,
+            text: syncWarning,
           },
         ]
       : []),
-    ...(je !== undefined
+    ...(helperOnly !== undefined
       ? [
           {
             level: "notice",
-            text: je,
+            text: helperOnly,
           },
         ]
       : []),
@@ -1977,96 +2057,96 @@ async function attachBareCloudSession(
     kind: "opened",
     session: {
       entry: "attach",
-      ...P,
-      ...(pe.status === "bound" && {
-        eventSigner: deviceEventSignerFor(pe.deviceId, credentials, await held),
+      ...viewUrl,
+      ...(bindingState.status === "bound" && {
+        eventSigner: deviceEventSignerFor(bindingState.deviceId, credentials, await held),
       }),
       ...(serveOnly && {
         controlOnly: true,
       }),
-      ...(se !== undefined && {
-        stillLinkedHere: () => waitForLinkedStatus(se, L, ie),
+      ...(linkResult !== undefined && {
+        stillLinkedHere: () => waitForLinkedStatus(linkResult, sessionReader, heldKey),
       }),
-      ...(ie && {
-        resumeLinkHere: ie.resume,
+      ...(heldKey && {
+        resumeLinkHere: heldKey.resume,
       }),
-      initialSequenceNum: ee.position,
+      initialSequenceNum: position.position,
       ...(openingRequests.length > 0 && {
         openingRequests,
       }),
-      ...(j.awaitsAnswer && {
+      ...(sessionState.awaitsAnswer && {
         workerAwaitsAnswer: true,
       }),
-      ...(ge.length > 0 && {
-        notices: ge,
+      ...(notices.length > 0 && {
+        notices,
       }),
       ...{},
-      dirSync: handle ?? Ae,
-      featureHandles: Fe,
-      dispose: () => disposeHandles(Fe),
+      dirSync: handle ?? handleHost,
+      featureHandles,
+      dispose: () => disposeHandles(featureHandles),
       cloudSession: () => {
-        let B = Ae !== undefined && Ae.sync.state().state !== "off";
-        let he = B ? "container_sync" : vt;
-        let Ee = Q?.list() ?? [];
+        let isSyncing = handleHost !== undefined && handleHost.sync.state().state !== "off";
+        let reportedFileMode = isSyncing ? "container_sync" : fileMode;
+        let dialogList = dialogWarnings?.list() ?? [];
         return {
           ...cloudSessionJsonSummary({
             sessionId: compatSessionId,
             viewUrl: remoteSessionUrl,
-            device: toDeviceBindingStatus(pe),
+            device: toDeviceBindingStatus(bindingState),
             directorySync: {
               ...sessionRecordReport(
-                B
+                isSyncing
                   ? {
-                      handle: Ae,
+                      handle: handleHost,
                     }
-                  : ce,
-                he,
-                it,
+                  : dirSyncResult,
+                reportedFileMode,
+                fromUpload,
               ),
-              file_mode: he,
+              file_mode: reportedFileMode,
               file_mode_source: "stored",
             },
-            repositoryTrust: repositoryTrustOf(z),
+            repositoryTrust: repositoryTrustOf(repositoryTrust),
           }),
-          ...(Ee.length > 0 && {
-            notices: Ee,
+          ...(dialogList.length > 0 && {
+            notices: dialogList,
           }),
         };
       },
-      ...((Q || z) && {
-        onCloudSessionChanged: (B) => {
-          Q?.onChanged(B);
-          z?.onChanged(B);
+      ...((dialogWarnings || repositoryTrust) && {
+        onCloudSessionChanged: (details) => {
+          dialogWarnings?.onChanged(details);
+          repositoryTrust?.onChanged(details);
         },
       }),
     },
   };
 }
 //@ chunk-fe6rs39h.js:158893-158961 placement
-function repositoryTrustOf(e) {
-  return e === undefined
+function repositoryTrustOf(reader) {
+  return reader === undefined
     ? undefined
-    : markableRepositoryTrust(reportableRepositoryTrust(e.current(), isTrustedDeviceActiveForOrg()));
+    : markableRepositoryTrust(reportableRepositoryTrust(reader.current(), isTrustedDeviceActiveForOrg()));
 }
 //@ chunk-fe6rs39h.js:158961-159220 placement
-function sessionRecordState(e) {
-  if (e.handle !== undefined) return "held";
-  switch (e.why) {
+function sessionRecordState(refusal) {
+  if (refusal.handle !== undefined) return "held";
+  switch (refusal.why) {
     case "not_looked":
     case "elsewhere":
-      return e.why;
+      return refusal.why;
     case "elsewhere_unknown":
       return "unknown";
     case "lookup_failed":
       return "failed";
     case "not_armed_here":
-      return e.noRecordOnThisMachine ? "nowhere" : "here_only";
+      return refusal.noRecordOnThisMachine ? "nowhere" : "here_only";
   }
 }
 //@ chunk-fe6rs39h.js:159220-159812 placement
-function sessionRecordReport(e, n, s) {
-  if (e.handle === undefined)
-    switch (e.why) {
+function sessionRecordReport(state, detail, label) {
+  if (state.handle === undefined)
+    switch (state.why) {
       case "lookup_failed":
         return {
           state: "off",
@@ -2087,47 +2167,47 @@ function sessionRecordReport(e, n, s) {
           reason: "not_opted_in",
         };
     }
-  let r = e.handle.sync.state();
+  let inner = state.handle.sync.state();
   return {
-    state: r.state,
-    ...("reason" in r && {
-      reason: r.reason,
+    state: inner.state,
+    ...("reason" in inner && {
+      reason: inner.reason,
     }),
-    ...("message" in r && {
-      message: r.message,
+    ...("message" in inner && {
+      message: inner.message,
     }),
-    ...armedDirSyncFields(r),
+    ...armedDirSyncFields(inner),
   };
 }
 //@ chunk-fe6rs39h.js:159812-160033 placement
-function bindingState(e) {
-  switch (e.status) {
+function bindingState_2(binding) {
+  switch (binding.status) {
     case "bound":
       return "bound";
     case "not_applicable":
     case "created_unbound":
       return "none";
     case "unbound":
-      return e.reason === "session_unreadable" ? "unknown" : "elsewhere";
+      return binding.reason === "session_unreadable" ? "unknown" : "elsewhere";
     case "disabled":
       return "unknown";
   }
 }
 //@ chunk-fe6rs39h.js:160033-160345 placement
-function toDeviceBindingStatus(e) {
-  switch (e.status) {
+function toDeviceBindingStatus(binding) {
+  switch (binding.status) {
     case "bound":
       return {
         status: "bound",
-        device_id: e.deviceId,
+        device_id: binding.deviceId,
       };
     case "unbound":
-      return unboundStatus(e.reason);
+      return unboundStatus(binding.reason);
     case "created_unbound":
       return {
         status: "unbound",
         reason: "session_unbound",
-        message: formatUnboundSessionNotice(e.reason),
+        message: formatUnboundSessionNotice(binding.reason),
       };
     case "not_applicable":
       return unboundStatus("session_unbound");
@@ -2155,4 +2235,6 @@ export {
   withNotApplied,
   notAppliedReport,
   getUnconfirmedOptions,
+  runHeadlessCloudAttach,
+  runHeadlessCloudCreate,
 };

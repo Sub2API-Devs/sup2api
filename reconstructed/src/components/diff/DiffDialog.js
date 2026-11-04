@@ -14,13 +14,13 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { merged } from "../CustomSelect/select.js";
 import { FileItem } from "./DiffFileList.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { HintText } from "../design-system/HintText.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { useWorkspaceDiff } from "../../hooks/useWorkspaceDiff.js";
 import { useTurnDiffs } from "../../hooks/useTurnDiffs.js";
-import { y, P } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { useScrollViewportHandle } from "../ScrollViewportContext.js";
 import { jumpBy } from "../ScrollKeybindingHandler.js";
@@ -40,15 +40,15 @@ import { Dialog } from "../design-system/Dialog.js";
 //@ chunk-mtx4csef.js:17021-17036 placement
 function noop() {}
 //@ chunk-mtx4csef.js:17036-17102 placement
-function renderFileItem(U) {
+function renderFileItem(file) {
   return jsxProd_default(
     merged.Item,
     {
       children: jsxProd_default(FileItem, {
-        file: U,
+        file,
       }),
     },
-    U.path,
+    file.path,
   );
 }
 //@ chunk-mtx4csef.js:17102-17111 placement
@@ -58,33 +58,33 @@ var DIFF_LIST_VISIBLE_COUNT = 7;
  * /diff 对话框的变更文件列表；没有文件时显示 “No changed files”。
  */
 function DiffFileList(props) {
-  let T = w(9);
+  let $ = useMemoCache(9);
   let { files, defaultFocusIndex, resetKey, onFocus, onSelect } = props;
   if (files.length === 0) {
-    let m;
-    if (T[0] === MEMO_CACHE_SENTINEL) {
-      m = jsxProd_default(HintText, {
+    let emptyHint;
+    if ($[0] === MEMO_CACHE_SENTINEL) {
+      emptyHint = jsxProd_default(HintText, {
         children: "No changed files",
       });
-      T[0] = m;
-    } else m = T[0];
-    return m;
+      $[0] = emptyHint;
+    } else emptyHint = $[0];
+    return emptyHint;
   }
   let children;
-  if (T[1] !== files) {
+  if ($[1] !== files) {
     children = files.map(renderFileItem);
-    T[1] = files;
-    T[2] = children;
-  } else children = T[2];
-  let d;
+    $[1] = files;
+    $[2] = children;
+  } else children = $[2];
+  let list;
   if (
-    T[3] !== defaultFocusIndex ||
-    T[4] !== onFocus ||
-    T[5] !== onSelect ||
-    T[6] !== resetKey ||
-    T[7] !== children
+    $[3] !== defaultFocusIndex ||
+    $[4] !== onFocus ||
+    $[5] !== onSelect ||
+    $[6] !== resetKey ||
+    $[7] !== children
   ) {
-    d = jsxProd_default(merged, {
+    list = jsxProd_default(merged, {
       visibleCount: DIFF_LIST_VISIBLE_COUNT,
       defaultFocusIndex,
       resetKey,
@@ -93,14 +93,14 @@ function DiffFileList(props) {
       onUpFromFirstItem: noop,
       children,
     });
-    T[3] = defaultFocusIndex;
-    T[4] = onFocus;
-    T[5] = onSelect;
-    T[6] = resetKey;
-    T[7] = children;
-    T[8] = d;
-  } else d = T[8];
-  return d;
+    $[3] = defaultFocusIndex;
+    $[4] = onFocus;
+    $[5] = onSelect;
+    $[6] = resetKey;
+    $[7] = children;
+    $[8] = list;
+  } else list = $[8];
+  return list;
 }
 //@ chunk-mtx4csef.js:19087-19131 fingerprint = _temp (1)
 function turnDiffEntry(turn) {
@@ -121,7 +121,7 @@ function turnDiffToDiffData(turn) {
       isTruncated: false,
       isNewFile: file.isNewFile,
     }))
-    .sort((t, u) => t.path.localeCompare(u.path));
+    .sort((left, right) => left.path.localeCompare(right.path));
   let hunks = new Map();
   for (let file of turn.files.values()) hunks.set(file.filePath, file.hunks);
   return {
@@ -141,89 +141,89 @@ function turnDiffToDiffData(turn) {
 }
 //@ chunk-mtx4csef.js:19619-25927 fingerprint = DiffDialog (0.557)
 function DiffDialog(props) {
-  let $ = w(83);
+  let $ = useMemoCache(83);
   let { messages, onDone } = props;
-  let u;
+  let isRemote;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    u = isRemoteSessionAvailable();
-    $[0] = u;
-  } else u = $[0];
-  let { data: l, notice } = useWorkspaceDiff(u);
+    isRemote = isRemoteSessionAvailable();
+    $[0] = isRemote;
+  } else isRemote = $[0];
+  let { data: workspaceDiff, notice } = useWorkspaceDiff(isRemote);
   let turnDiffs = useTurnDiffs(messages);
-  let [d, U] = y("list");
-  let [g, D] = y(0);
-  let L;
+  let [viewMode, setViewMode] = useState("list");
+  let [sourceIndex, setSourceIndex] = useState(0);
+  let initialFileSelection;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    L = {
+    initialFileSelection = {
       source: 0,
       index: 0,
       mount: 0,
     };
-    $[1] = L;
-  } else L = $[1];
-  let [b, J] = y(L);
-  let index = b.source === g ? b.index : 0;
-  let Ke;
+    $[1] = initialFileSelection;
+  } else initialFileSelection = $[1];
+  let [fileSelection, setFileSelection] = useState(initialFileSelection);
+  let index = fileSelection.source === sourceIndex ? fileSelection.index : 0;
+  let workspaceSource;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    Ke = {
+    workspaceSource = {
       type: "current",
     };
-    $[2] = Ke;
-  } else Ke = $[2];
-  let _e;
+    $[2] = workspaceSource;
+  } else workspaceSource = $[2];
+  let sourcesCached;
   if ($[3] !== turnDiffs) {
-    _e = [Ke, ...turnDiffs.map(turnDiffEntry)];
+    sourcesCached = [workspaceSource, ...turnDiffs.map(turnDiffEntry)];
     $[3] = turnDiffs;
-    $[4] = _e;
-  } else _e = $[4];
-  let p = _e;
-  let currentSource = p[g];
+    $[4] = sourcesCached;
+  } else sourcesCached = $[4];
+  let sources = sourcesCached;
+  let currentSource = sources[sourceIndex];
   let currentTurn = currentSource?.type === "turn" ? currentSource.turn : null;
-  let Je;
-  if ($[5] !== currentTurn || $[6] !== l) {
-    Je = currentTurn ? turnDiffToDiffData(currentTurn) : l;
+  let diffDataCached;
+  if ($[5] !== currentTurn || $[6] !== workspaceDiff) {
+    diffDataCached = currentTurn ? turnDiffToDiffData(currentTurn) : workspaceDiff;
     $[5] = currentTurn;
-    $[6] = l;
-    $[7] = Je;
-  } else Je = $[7];
-  let c = Je;
-  let f = c.files[index];
-  let Qe;
-  if ($[8] !== c.hunks || $[9] !== f) {
-    Qe = f ? c.hunks.get(f.path) || [] : [];
-    $[8] = c.hunks;
-    $[9] = f;
-    $[10] = Qe;
-  } else Qe = $[10];
-  let hunks = Qe;
-  let Xe;
-  let Ye;
-  if ($[11] !== g || $[12] !== p.length) {
-    Xe = () => {
-      if (g >= p.length) D(Math.max(0, p.length - 1));
+    $[6] = workspaceDiff;
+    $[7] = diffDataCached;
+  } else diffDataCached = $[7];
+  let diffData = diffDataCached;
+  let selectedFile = diffData.files[index];
+  let hunksCached;
+  if ($[8] !== diffData.hunks || $[9] !== selectedFile) {
+    hunksCached = selectedFile ? diffData.hunks.get(selectedFile.path) || [] : [];
+    $[8] = diffData.hunks;
+    $[9] = selectedFile;
+    $[10] = hunksCached;
+  } else hunksCached = $[10];
+  let hunks = hunksCached;
+  let clampSourceEffect;
+  let clampSourceDeps;
+  if ($[11] !== sourceIndex || $[12] !== sources.length) {
+    clampSourceEffect = () => {
+      if (sourceIndex >= sources.length) setSourceIndex(Math.max(0, sources.length - 1));
     };
-    Ye = [p.length, g];
-    $[11] = g;
-    $[12] = p.length;
-    $[13] = Xe;
-    $[14] = Ye;
+    clampSourceDeps = [sources.length, sourceIndex];
+    $[11] = sourceIndex;
+    $[12] = sources.length;
+    $[13] = clampSourceEffect;
+    $[14] = clampSourceDeps;
   } else {
-    Xe = $[13];
-    Ye = $[14];
+    clampSourceEffect = $[13];
+    clampSourceDeps = $[14];
   }
-  P(Xe, Ye);
+  useEffect(clampSourceEffect, clampSourceDeps);
   useRegisterOverlay("diff-dialog");
   let scrollViewportHandle = useScrollViewportHandle();
-  let Ze;
-  if ($[15] !== scrollViewportHandle?.handle || $[16] !== d) {
-    Ze = function M(ni) {
+  let scrollCommandCached;
+  if ($[15] !== scrollViewportHandle?.handle || $[16] !== viewMode) {
+    scrollCommandCached = function handleScrollCommand(command) {
       let handle = scrollViewportHandle?.handle;
-      if (d !== "detail" || !handle) {
+      if (viewMode !== "detail" || !handle) {
         return false;
       }
       let max = Math.max(1, Math.floor(handle.getViewportHeight() / 2));
       let max_2 = Math.max(1, handle.getViewportHeight());
-      Xi: switch (ni) {
+      Xi: switch (command) {
         case "up": {
           handle.scrollBy(-1);
           break Xi;
@@ -258,242 +258,244 @@ function DiffDialog(props) {
       }
     };
     $[15] = scrollViewportHandle?.handle;
-    $[16] = d;
-    $[17] = Ze;
-  } else Ze = $[17];
-  let M = Ze;
-  let it;
-  let rt;
-  if ($[18] !== p.length || $[19] !== d) {
-    it = () => {
-      if (d === "list" && p.length > 1) D((oi) => (oi - 1 + p.length) % p.length);
+    $[16] = viewMode;
+    $[17] = scrollCommandCached;
+  } else scrollCommandCached = $[17];
+  let runScrollCommand = scrollCommandCached;
+  let previousSource;
+  let nextSource;
+  if ($[18] !== sources.length || $[19] !== viewMode) {
+    previousSource = () => {
+      if (viewMode === "list" && sources.length > 1)
+        setSourceIndex((previous) => (previous - 1 + sources.length) % sources.length);
     };
-    rt = () => {
-      if (d === "list" && p.length > 1) D((li) => (li + 1) % p.length);
+    nextSource = () => {
+      if (viewMode === "list" && sources.length > 1)
+        setSourceIndex((previous) => (previous + 1) % sources.length);
     };
-    $[18] = p.length;
-    $[19] = d;
-    $[20] = it;
-    $[21] = rt;
+    $[18] = sources.length;
+    $[19] = viewMode;
+    $[20] = previousSource;
+    $[21] = nextSource;
   } else {
-    it = $[20];
-    rt = $[21];
+    previousSource = $[20];
+    nextSource = $[21];
   }
-  let st;
-  if ($[22] !== d) {
-    st = () => {
-      if (d === "detail") U("list");
+  let backToList;
+  if ($[22] !== viewMode) {
+    backToList = () => {
+      if (viewMode === "detail") setViewMode("list");
     };
-    $[22] = d;
-    $[23] = st;
-  } else st = $[23];
-  let nt;
-  let ot;
-  let lt;
-  let at;
-  let ct;
-  let dt;
-  let ut;
-  let ft;
-  if ($[24] !== M) {
-    nt = () => M("up");
-    ot = () => M("down");
-    lt = () => M("pageUp");
-    at = () => M("pageDown");
-    ct = () => M("fullPageUp");
-    dt = () => M("fullPageDown");
-    ut = () => M("top");
-    ft = () => M("bottom");
-    $[24] = M;
-    $[25] = nt;
-    $[26] = ot;
-    $[27] = lt;
-    $[28] = at;
-    $[29] = ct;
-    $[30] = dt;
-    $[31] = ut;
-    $[32] = ft;
+    $[22] = viewMode;
+    $[23] = backToList;
+  } else backToList = $[23];
+  let previousFile;
+  let nextFile;
+  let pageUp;
+  let pageDown;
+  let fullPageUp;
+  let fullPageDown;
+  let scrollTop;
+  let scrollBottom;
+  if ($[24] !== runScrollCommand) {
+    previousFile = () => runScrollCommand("up");
+    nextFile = () => runScrollCommand("down");
+    pageUp = () => runScrollCommand("pageUp");
+    pageDown = () => runScrollCommand("pageDown");
+    fullPageUp = () => runScrollCommand("fullPageUp");
+    fullPageDown = () => runScrollCommand("fullPageDown");
+    scrollTop = () => runScrollCommand("top");
+    scrollBottom = () => runScrollCommand("bottom");
+    $[24] = runScrollCommand;
+    $[25] = previousFile;
+    $[26] = nextFile;
+    $[27] = pageUp;
+    $[28] = pageDown;
+    $[29] = fullPageUp;
+    $[30] = fullPageDown;
+    $[31] = scrollTop;
+    $[32] = scrollBottom;
   } else {
-    nt = $[25];
-    ot = $[26];
-    lt = $[27];
-    at = $[28];
-    ct = $[29];
-    dt = $[30];
-    ut = $[31];
-    ft = $[32];
+    previousFile = $[25];
+    nextFile = $[26];
+    pageUp = $[27];
+    pageDown = $[28];
+    fullPageUp = $[29];
+    fullPageDown = $[30];
+    scrollTop = $[31];
+    scrollBottom = $[32];
   }
-  let mt;
+  let diffKeybindingOptions;
   if ($[33] === MEMO_CACHE_SENTINEL) {
-    mt = {
+    diffKeybindingOptions = {
       context: "DiffDialog",
     };
-    $[33] = mt;
-  } else mt = $[33];
+    $[33] = diffKeybindingOptions;
+  } else diffKeybindingOptions = $[33];
   MessageActionsKeybindings(
     {
       "diff:dismiss": handleCancel,
-      "diff:previousSource": it,
-      "diff:nextSource": rt,
-      "diff:back": st,
-      "diff:previousFile": nt,
-      "diff:nextFile": ot,
-      "scroll:pageUp": lt,
-      "scroll:pageDown": at,
-      "scroll:fullPageUp": ct,
-      "scroll:fullPageDown": dt,
-      "scroll:top": ut,
-      "scroll:bottom": ft,
+      "diff:previousSource": previousSource,
+      "diff:nextSource": nextSource,
+      "diff:back": backToList,
+      "diff:previousFile": previousFile,
+      "diff:nextFile": nextFile,
+      "scroll:pageUp": pageUp,
+      "scroll:pageDown": pageDown,
+      "scroll:fullPageUp": fullPageUp,
+      "scroll:fullPageDown": fullPageDown,
+      "scroll:top": scrollTop,
+      "scroll:bottom": scrollBottom,
     },
-    mt,
+    diffKeybindingOptions,
   );
   useRegisterKeybindingContext("DiffDialog");
-  let ht;
-  if ($[34] !== c.files.length || $[35] !== g) {
-    ht = (prev_2) =>
-      J((X) => {
-        let index = X.source === g ? X.index : 0;
-        let max = Math.max(0, Math.min(c.files.length - 1, index + prev_2));
+  let changeFileCached;
+  if ($[34] !== diffData.files.length || $[35] !== sourceIndex) {
+    changeFileCached = (prev_2) =>
+      setFileSelection((previous) => {
+        let index = previous.source === sourceIndex ? previous.index : 0;
+        let max = Math.max(0, Math.min(diffData.files.length - 1, index + prev_2));
         if (max === index) {
-          return X;
+          return previous;
         }
         return {
-          source: g,
+          source: sourceIndex,
           index: max,
-          mount: X.mount + 1,
+          mount: previous.mount + 1,
         };
       });
-    $[34] = c.files.length;
-    $[35] = g;
-    $[36] = ht;
-  } else ht = $[36];
-  let Y = ht;
-  let xt;
-  if ($[37] !== Y) {
-    xt = {
-      "diff:previousFile": () => Y(-1),
-      "diff:nextFile": () => Y(1),
+    $[34] = diffData.files.length;
+    $[35] = sourceIndex;
+    $[36] = changeFileCached;
+  } else changeFileCached = $[36];
+  let changeFile = changeFileCached;
+  let listBindings;
+  if ($[37] !== changeFile) {
+    listBindings = {
+      "diff:previousFile": () => changeFile(-1),
+      "diff:nextFile": () => changeFile(1),
     };
-    $[37] = Y;
-    $[38] = xt;
-  } else xt = $[38];
-  const isActive = d === "list";
-  let yt;
+    $[37] = changeFile;
+    $[38] = listBindings;
+  } else listBindings = $[38];
+  const isActive = viewMode === "list";
+  let listKeybindingOptions;
   if ($[39] !== isActive) {
-    yt = {
+    listKeybindingOptions = {
       context: "Select",
       isActive,
     };
     $[39] = isActive;
-    $[40] = yt;
-  } else yt = $[40];
-  MessageActionsKeybindings(xt, yt);
-  let Tt;
-  if ($[41] !== c.stats) {
-    Tt = c.stats
+    $[40] = listKeybindingOptions;
+  } else listKeybindingOptions = $[40];
+  MessageActionsKeybindings(listBindings, listKeybindingOptions);
+  let statsElement;
+  if ($[41] !== diffData.stats) {
+    statsElement = diffData.stats
       ? jsxProd_default_2(Text, {
           dimColor: true,
           children: [
-            c.stats.filesCount,
+            diffData.stats.filesCount,
             " ",
-            plural(c.stats.filesCount, "file"),
+            plural(diffData.stats.filesCount, "file"),
             " ",
             "changed",
             " ",
             jsxProd_default(DiffStatCounts, {
-              added: c.stats.linesAdded,
-              removed: c.stats.linesRemoved,
+              added: diffData.stats.linesAdded,
+              removed: diffData.stats.linesRemoved,
             }),
           ],
         })
       : null;
-    $[41] = c.stats;
-    $[42] = Tt;
-  } else Tt = $[42];
-  let me = Tt;
-  let vt = !currentTurn && c.noCommits === true;
-  let ci = !currentTurn && c.source.kind === "branch";
+    $[41] = diffData.stats;
+    $[42] = statsElement;
+  } else statsElement = $[42];
+  let stats = statsElement;
+  let isStagedFiles = !currentTurn && diffData.noCommits === true;
+  let isBranchSource = !currentTurn && diffData.source.kind === "branch";
   let headerTitle = currentTurn
     ? `Turn ${currentTurn.turnIndex}`
-    : vt
+    : isStagedFiles
       ? "Staged and new files"
-      : ci
+      : isBranchSource
         ? "Branch changes"
         : "Uncommitted changes";
   let headerSubtitle = currentTurn
     ? currentTurn.userPromptPreview
       ? `"${currentTurn.userPromptPreview}"`
       : ""
-    : vt
+    : isStagedFiles
       ? "(no commits yet)"
-      : c.source.kind === "branch"
-        ? `(vs ${c.source.baseBranch})`
+      : diffData.source.kind === "branch"
+        ? `(vs ${diffData.source.baseBranch})`
         : "(git diff HEAD)";
-  let z;
+  let titleCached;
   Yi: {
     if (currentTurn) {
-      z = "No file changes in this turn";
+      titleCached = "No file changes in this turn";
       break Yi;
     }
     if (notice) {
-      z = notice;
+      titleCached = notice;
       break Yi;
     }
-    if (c.stats && c.stats.filesCount > 0 && c.files.length === 0) {
-      z = "Too many files to display details";
+    if (diffData.stats && diffData.stats.filesCount > 0 && diffData.files.length === 0) {
+      titleCached = "Too many files to display details";
       break Yi;
     }
-    z = "No changes yet";
+    titleCached = "No changes yet";
   }
-  let children = z;
-  let ee;
+  let children = titleCached;
+  let subtitleElement;
   if ($[43] !== headerSubtitle) {
-    ee =
+    subtitleElement =
       headerSubtitle &&
       jsxProd_default_2(Text, {
         dimColor: true,
         children: [" ", headerSubtitle],
       });
     $[43] = headerSubtitle;
-    $[44] = ee;
-  } else ee = $[44];
-  let Ft;
-  if ($[45] !== headerTitle || $[46] !== ee) {
-    Ft = jsxProd_default_2(Text, {
-      children: [headerTitle, ee],
+    $[44] = subtitleElement;
+  } else subtitleElement = $[44];
+  let titleElement;
+  if ($[45] !== headerTitle || $[46] !== subtitleElement) {
+    titleElement = jsxProd_default_2(Text, {
+      children: [headerTitle, subtitleElement],
     });
     $[45] = headerTitle;
-    $[46] = ee;
-    $[47] = Ft;
-  } else Ft = $[47];
-  let title = Ft;
+    $[46] = subtitleElement;
+    $[47] = titleElement;
+  } else titleElement = $[47];
+  let title = titleElement;
   function handleCancel() {
-    if (d === "detail") U("list");
+    if (viewMode === "detail") setViewMode("list");
     else
       onDone("Diff dialog dismissed", {
         display: "system",
       });
   }
-  let te;
+  let bodyElement;
   if (
-    $[48] !== c.files ||
-    $[49] !== c.loading ||
+    $[48] !== diffData.files ||
+    $[49] !== diffData.loading ||
     $[50] !== children ||
-    $[51] !== b.mount ||
-    $[52] !== f?.isBinary ||
-    $[53] !== f?.isLargeFile ||
-    $[54] !== f?.isRestricted ||
-    $[55] !== f?.isTruncated ||
-    $[56] !== f?.isUntracked ||
-    $[57] !== f?.path ||
+    $[51] !== fileSelection.mount ||
+    $[52] !== selectedFile?.isBinary ||
+    $[53] !== selectedFile?.isLargeFile ||
+    $[54] !== selectedFile?.isRestricted ||
+    $[55] !== selectedFile?.isTruncated ||
+    $[56] !== selectedFile?.isUntracked ||
+    $[57] !== selectedFile?.path ||
     $[58] !== hunks ||
     $[59] !== index ||
-    $[60] !== g ||
-    $[61] !== d
+    $[60] !== sourceIndex ||
+    $[61] !== viewMode
   ) {
-    te =
-      c.files.length === 0
-        ? c.loading
+    bodyElement =
+      diffData.files.length === 0
+        ? diffData.loading
           ? jsxProd_default(WorkerBadge, {
               message: "Loading diff\u2026",
               dimColor: true,
@@ -502,74 +504,74 @@ function DiffDialog(props) {
               dimColor: true,
               children,
             })
-        : d === "list"
+        : viewMode === "list"
           ? jsxProd_default(Box, {
               flexDirection: "column",
               children: jsxProd_default(
                 DiffFileList,
                 {
-                  files: c.files,
+                  files: diffData.files,
                   defaultFocusIndex: index,
-                  resetKey: g,
+                  resetKey: sourceIndex,
                   onFocus: (index) =>
-                    J((ui) => ({
-                      ...ui,
-                      source: g,
+                    setFileSelection((selection) => ({
+                      ...selection,
+                      source: sourceIndex,
                       index,
                     })),
-                  onSelect: () => U("detail"),
+                  onSelect: () => setViewMode("detail"),
                 },
-                b.mount,
+                fileSelection.mount,
               ),
             })
           : jsxProd_default(Box, {
               flexDirection: "column",
               children: jsxProd_default(DiffDetailView, {
-                filePath: f?.path || "",
+                filePath: selectedFile?.path || "",
                 hunks,
-                isLargeFile: f?.isLargeFile,
-                isBinary: f?.isBinary,
-                isTruncated: f?.isTruncated,
-                isUntracked: f?.isUntracked,
-                isRestricted: f?.isRestricted,
+                isLargeFile: selectedFile?.isLargeFile,
+                isBinary: selectedFile?.isBinary,
+                isTruncated: selectedFile?.isTruncated,
+                isUntracked: selectedFile?.isUntracked,
+                isRestricted: selectedFile?.isRestricted,
               }),
             });
-    $[48] = c.files;
-    $[49] = c.loading;
+    $[48] = diffData.files;
+    $[49] = diffData.loading;
     $[50] = children;
-    $[51] = b.mount;
-    $[52] = f?.isBinary;
-    $[53] = f?.isLargeFile;
-    $[54] = f?.isRestricted;
-    $[55] = f?.isTruncated;
-    $[56] = f?.isUntracked;
-    $[57] = f?.path;
+    $[51] = fileSelection.mount;
+    $[52] = selectedFile?.isBinary;
+    $[53] = selectedFile?.isLargeFile;
+    $[54] = selectedFile?.isRestricted;
+    $[55] = selectedFile?.isTruncated;
+    $[56] = selectedFile?.isUntracked;
+    $[57] = selectedFile?.path;
     $[58] = hunks;
     $[59] = index;
-    $[60] = g;
-    $[61] = d;
-    $[62] = te;
-  } else te = $[62];
-  let Pt;
-  if ($[63] !== me || $[64] !== te) {
-    Pt = jsxProd_default_2(Box, {
+    $[60] = sourceIndex;
+    $[61] = viewMode;
+    $[62] = bodyElement;
+  } else bodyElement = $[62];
+  let contentElement;
+  if ($[63] !== stats || $[64] !== bodyElement) {
+    contentElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [me, te],
+      children: [stats, bodyElement],
     });
-    $[63] = me;
-    $[64] = te;
-    $[65] = Pt;
-  } else Pt = $[65];
-  let children_2 = Pt;
+    $[63] = stats;
+    $[64] = bodyElement;
+    $[65] = contentElement;
+  } else contentElement = $[65];
+  let children_2 = contentElement;
   const onCancel = handleCancel;
   let inputGuide;
-  if ($[66] !== p.length || $[67] !== d) {
+  if ($[66] !== sources.length || $[67] !== viewMode) {
     inputGuide =
-      d === "list"
+      viewMode === "list"
         ? jsxProd_default_2(Byline, {
             children: [
-              p.length > 1 &&
+              sources.length > 1 &&
                 jsxProd_default(KeyboardShortcutHint, {
                   chord: ["left", "right"],
                   action: "switch source",
@@ -604,33 +606,33 @@ function DiffDialog(props) {
               }),
             ],
           });
-    $[66] = p.length;
-    $[67] = d;
+    $[66] = sources.length;
+    $[67] = viewMode;
     $[68] = inputGuide;
   } else inputGuide = $[68];
-  const hidden = p.length <= 1;
-  const selectedTab = String(g);
+  const hidden = sources.length <= 1;
+  const selectedTab = String(sourceIndex);
   let onTabChange;
   if ($[69] === MEMO_CACHE_SENTINEL) {
-    onTabChange = (exitState) => D(Number(exitState));
+    onTabChange = (exitState) => setSourceIndex(Number(exitState));
     $[69] = onTabChange;
   } else onTabChange = $[69];
-  const disableNavigation = d === "detail";
+  const disableNavigation = viewMode === "detail";
   let children_3;
-  if ($[70] !== children_2 || $[71] !== p) {
-    children_3 = p.map((bt, It) =>
+  if ($[70] !== children_2 || $[71] !== sources) {
+    children_3 = sources.map((source, index) =>
       jsxProd_default(
         Tab,
         {
-          id: String(It),
-          title: bt.type === "current" ? "Current" : `T${bt.turn.turnIndex}`,
+          id: String(index),
+          title: source.type === "current" ? "Current" : `T${source.turn.turnIndex}`,
           children: children_2,
         },
-        It,
+        index,
       ),
     );
     $[70] = children_2;
-    $[71] = p;
+    $[71] = sources;
     $[72] = children_3;
   } else children_3 = $[72];
   let children_4;
@@ -649,9 +651,9 @@ function DiffDialog(props) {
     $[76] = children_3;
     $[77] = children_4;
   } else children_4 = $[77];
-  let Rt;
+  let dialogElement;
   if ($[78] !== handleCancel || $[79] !== inputGuide || $[80] !== children_4 || $[81] !== title) {
-    Rt = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title,
       onCancel,
       color: "background",
@@ -662,7 +664,8 @@ function DiffDialog(props) {
     $[79] = inputGuide;
     $[80] = children_4;
     $[81] = title;
-    $[82] = Rt;
-  } else Rt = $[82];
-  return Rt;
+    $[82] = dialogElement;
+  } else dialogElement = $[82];
+  return dialogElement;
 }
+export { DiffDialog };

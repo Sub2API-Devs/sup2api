@@ -30,8 +30,8 @@ import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTel
 /**
  * 判断通知是否来自 worker-checkin。
  */
-function isWorkerCheckinNotification(e) {
-  return e.origin?.kind === "task-notification" && e.origin.source === "worker-checkin";
+function isWorkerCheckinNotification(message) {
+  return message.origin?.kind === "task-notification" && message.origin.source === "worker-checkin";
 }
 //@ chunk-e6aww6q8.js:4709477-4709491 placement
 var MAX_CHECKIN_POLL_MS = 60000;
@@ -39,9 +39,9 @@ var MAX_CHECKIN_POLL_MS = 60000;
 /**
  * 按调度表与轮询间隔计算还要几轮才检查。
  */
-function ticksUntilCheckin(e, scheduleMs, pollMs) {
-  let s = scheduleMs[Math.min(e, scheduleMs.length - 1)];
-  return Math.ceil(s / pollMs);
+function ticksUntilCheckin(checkinCount, scheduleMs, pollMs) {
+  let delayMs = scheduleMs[Math.min(checkinCount, scheduleMs.length - 1)];
+  return Math.ceil(delayMs / pollMs);
 }
 //@ chunk-e6aww6q8.js:4709812-4709911 placement = isPanelAgentTask (0.77)
 /**
@@ -70,7 +70,9 @@ function isSubagentWaitingOnChildren(task) {
     !isObserverAgentTask(task) &&
     task.agentType !== "main-session" &&
     isWaitingOnChildren(task) &&
-    [...keepaliveReasons(task)].some((n) => CHILD_WORK_KEEPALIVE_PREFIXES.some((r) => n.startsWith(r)))
+    [...keepaliveReasons(task)].some((reason) =>
+      CHILD_WORK_KEEPALIVE_PREFIXES.some((prefix) => reason.startsWith(prefix)),
+    )
   );
 }
 //@ chunk-e6aww6q8.js:4710095-4710120 placement
@@ -81,67 +83,70 @@ var MAX_ACTIVITY_CHARS = 60;
 /**
  * 去不可见字符、去掉易混字符、转义并按长度截断。
  */
-function escapeAndTruncate(e, n) {
-  return escapeXml(truncateWithCount(foldLookalikeChars(stripIgnorables(e)), n));
+function escapeAndTruncate(text, maxChars) {
+  return escapeXml(truncateWithCount(foldLookalikeChars(stripIgnorables(text)), maxChars));
 }
 //@ chunk-e6aww6q8.js:4710165-4710225 placement
 /**
  * 拼出「约 N 分钟前」。
  */
-function minutesAgoText(e) {
-  return `~${Math.floor(e / 60000)} minutes ago`;
+function minutesAgoText(elapsedMs) {
+  return `~${Math.floor(elapsedMs / 60000)} minutes ago`;
 }
 //@ chunk-e6aww6q8.js:4710225-4710724 placement
 /**
  * 生成工作代理的状态行：工具调用次数、最近一次调用及时间、是否在等子代理。
  */
-function workerStatusLine(e, n) {
-  let r = [];
-  let toolUseCount = e.progress?.toolUseCount ?? 0;
-  if (toolUseCount === 0) r.push("no tool calls yet");
+function workerStatusLine(task, nowMs) {
+  let parts = [];
+  let toolUseCount = task.progress?.toolUseCount ?? 0;
+  if (toolUseCount === 0) parts.push("no tool calls yet");
   else {
-    r.push(`${toolUseCount} ${plural(toolUseCount, "tool call")}`);
-    let lastActivity = e.progress?.lastActivity;
-    let y = lastActivity?.activityDescription ?? lastActivity?.toolName;
-    if (y) {
-      let S = escapeAndTruncate(y, MAX_ACTIVITY_CHARS);
-      r.push(
+    parts.push(`${toolUseCount} ${plural(toolUseCount, "tool call")}`);
+    let lastActivity = task.progress?.lastActivity;
+    let activityText = lastActivity?.activityDescription ?? lastActivity?.toolName;
+    if (activityText) {
+      let escaped = escapeAndTruncate(activityText, MAX_ACTIVITY_CHARS);
+      parts.push(
         lastActivity?.recordedAtMs !== undefined
-          ? `last tool call ${minutesAgoText(n - lastActivity.recordedAtMs)}: ${S}`
-          : `last tool call: ${S}`,
+          ? `last tool call ${minutesAgoText(nowMs - lastActivity.recordedAtMs)}: ${escaped}`
+          : `last tool call: ${escaped}`,
       );
     }
   }
-  if (e.isIdle) r.push("waiting on a subagent");
-  if (isSubagentWaitingOnChildren(e)) r.push("agent finished; parked on pending background work");
-  return `- ${escapeAndTruncate(e.description, MAX_WORKER_DESCRIPTION_CHARS)} (${r.join(", ")})`;
+  if (task.isIdle) parts.push("waiting on a subagent");
+  if (isSubagentWaitingOnChildren(task)) parts.push("agent finished; parked on pending background work");
+  return `- ${escapeAndTruncate(task.description, MAX_WORKER_DESCRIPTION_CHARS)} (${parts.join(", ")})`;
 }
 //@ chunk-e6aww6q8.js:4710724-4710978 placement
-function stillRunningSummary(e, n) {
-  let r = e.toSorted((w, L) => w.startTime - L.startTime);
-  let filtered = r.filter((w) => !isSubagentWaitingOnChildren(w));
-  let filtered_2 = r.filter((w) => isSubagentWaitingOnChildren(w));
-  let mapped = [...filtered, ...filtered_2].slice(0, MAX_WORKERS_LISTED).map((w) => workerStatusLine(w, n));
-  let S = r.length - MAX_WORKERS_LISTED;
-  if (S > 0) mapped.push(`- \u2026and ${S} more`);
+function stillRunningSummary(agents, nowMs) {
+  let sorted = agents.toSorted((left, right) => left.startTime - right.startTime);
+  let filtered = sorted.filter((agent) => !isSubagentWaitingOnChildren(agent));
+  let filtered_2 = sorted.filter((agent) => isSubagentWaitingOnChildren(agent));
+  let mapped = [...filtered, ...filtered_2]
+    .slice(0, MAX_WORKERS_LISTED)
+    .map((agent) => workerStatusLine(agent, nowMs));
+  let omittedCount = sorted.length - MAX_WORKERS_LISTED;
+  if (omittedCount > 0) mapped.push(`- \u2026and ${omittedCount} more`);
   return `Still running:
 ${mapped.join(`
 `)}`;
 }
 //@ chunk-e6aww6q8.js:4710978-4711247 placement
-function trackWorkerForCheckin(e, taskRegistry, r, armedAtMs = Date.now()) {
+function trackWorkerForCheckin(task, taskRegistry, sessionScratch, armedAtMs = Date.now()) {
   try {
-    if (!isRunningVisibleSubagent(e)) return;
-    let h = r.workerCheckin();
-    if (h !== undefined) {
-      h.taskRegistry = taskRegistry;
-      if (h.knownWorkerIds.has(e.id)) return;
-      h.knownWorkerIds.add(e.id);
-      if (!hasOtherRunningWorker(taskRegistry, e.id)) restartCheckin(e, taskRegistry, r, armedAtMs);
-      else resetCheckinIfOnlyWorker(h, taskRegistry, e);
+    if (!isRunningVisibleSubagent(task)) return;
+    let checkin = sessionScratch.workerCheckin();
+    if (checkin !== undefined) {
+      checkin.taskRegistry = taskRegistry;
+      if (checkin.knownWorkerIds.has(task.id)) return;
+      checkin.knownWorkerIds.add(task.id);
+      if (!hasOtherRunningWorker(taskRegistry, task.id))
+        restartCheckin(task, taskRegistry, sessionScratch, armedAtMs);
+      else resetCheckinIfOnlyWorker(checkin, taskRegistry, task);
       return;
     }
-    armWorkerCheckin(r, taskRegistry, new Set([e.id]), armedAtMs);
+    armWorkerCheckin(sessionScratch, taskRegistry, new Set([task.id]), armedAtMs);
   } catch (error) {
     logError(error);
   }
@@ -150,37 +155,41 @@ function trackWorkerForCheckin(e, taskRegistry, r, armedAtMs = Date.now()) {
 /**
  * 除该 worker 外是否还有运行中或等子工作的 worker。
  */
-function hasOtherRunningWorker(e, id) {
-  return Object.values(e.all()).some(
-    (r) => (isRunningVisibleSubagent(r) || isSubagentWaitingOnChildren(r)) && r.id !== id,
+function hasOtherRunningWorker(taskRegistry, id) {
+  return Object.values(taskRegistry.all()).some(
+    (task) => (isRunningVisibleSubagent(task) || isSubagentWaitingOnChildren(task)) && task.id !== id,
   );
 }
 //@ chunk-e6aww6q8.js:4711333-4711495 placement
-function resetCheckinIfOnlyWorker(e, n, r) {
-  if (!isRunningVisibleSubagent(r)) return;
-  if (!Object.values(n.all()).some((h) => isRunningVisibleSubagent(h) && h.id !== r.id)) {
-    e.checkinCount = 0;
-    e.ticksUntilCheckin = ticksUntilCheckin(0, e.scheduleMs, e.pollMs);
+function resetCheckinIfOnlyWorker(checkin, taskRegistry, task) {
+  if (!isRunningVisibleSubagent(task)) return;
+  if (
+    !Object.values(taskRegistry.all()).some(
+      (other) => isRunningVisibleSubagent(other) && other.id !== task.id,
+    )
+  ) {
+    checkin.checkinCount = 0;
+    checkin.ticksUntilCheckin = ticksUntilCheckin(0, checkin.scheduleMs, checkin.pollMs);
   }
 }
 //@ chunk-e6aww6q8.js:4711495-4711626 placement
-function restartCheckin(e, taskRegistry, r, armedAtMs) {
-  let h = r.workerCheckin();
-  if (h === undefined) return;
-  let knownWorkerIds = new Set(h.knownWorkerIds);
-  knownWorkerIds.add(e.id);
-  disarmWorkerCheckin(r);
-  armWorkerCheckin(r, taskRegistry, knownWorkerIds, armedAtMs);
+function restartCheckin(task, taskRegistry, sessionScratch, armedAtMs) {
+  let checkin = sessionScratch.workerCheckin();
+  if (checkin === undefined) return;
+  let knownWorkerIds = new Set(checkin.knownWorkerIds);
+  knownWorkerIds.add(task.id);
+  disarmWorkerCheckin(sessionScratch);
+  armWorkerCheckin(sessionScratch, taskRegistry, knownWorkerIds, armedAtMs);
 }
 //@ chunk-e6aww6q8.js:4711626-4711887 placement
-function armWorkerCheckin(e, taskRegistry, knownWorkerIds, armedAtMs) {
+function armWorkerCheckin(sessionScratch, taskRegistry, knownWorkerIds, armedAtMs) {
   let workerCheckinScheduleMs = getWorkerCheckinScheduleMs();
   if (workerCheckinScheduleMs === undefined) return;
   let min = Math.min(MAX_CHECKIN_POLL_MS, ...workerCheckinScheduleMs);
   let ticksUntilCheckin_2 = ticksUntilCheckin(0, workerCheckinScheduleMs, min);
-  let interval = setInterval(runWorkerCheckin, min, e);
+  let interval = setInterval(runWorkerCheckin, min, sessionScratch);
   interval.unref();
-  e.replaceWorkerCheckin({
+  sessionScratch.replaceWorkerCheckin({
     timer: interval,
     scheduleMs: workerCheckinScheduleMs,
     pollMs: min,
@@ -195,11 +204,11 @@ function armWorkerCheckin(e, taskRegistry, knownWorkerIds, armedAtMs) {
 /**
  * 停止工作代理定期检查的计时器。
  */
-function disarmWorkerCheckin(e) {
-  let n = e.workerCheckin();
-  if (n !== undefined) {
-    clearInterval(n.timer);
-    e.replaceWorkerCheckin(undefined);
+function disarmWorkerCheckin(sessionScratch) {
+  let checkin = sessionScratch.workerCheckin();
+  if (checkin !== undefined) {
+    clearInterval(checkin.timer);
+    sessionScratch.replaceWorkerCheckin(undefined);
     removeQueuedByFilter(isWorkerCheckinNotification);
   }
 }
@@ -207,27 +216,27 @@ function disarmWorkerCheckin(e) {
 /**
  * 协调者模式下的定时 check-in：派出的工作仍在运行时提醒模型查看进度。
  */
-function runWorkerCheckin(e) {
-  let n = e.workerCheckin();
-  if (n === undefined) return;
+function runWorkerCheckin(sessionScratch) {
+  let checkin = sessionScratch.workerCheckin();
+  if (checkin === undefined) return;
   try {
     let workerCheckinScheduleMs = getWorkerCheckinScheduleMs();
     if (workerCheckinScheduleMs === undefined) {
-      disarmWorkerCheckin(e);
+      disarmWorkerCheckin(sessionScratch);
       return;
     }
-    if (workerCheckinScheduleMs.join() !== n.scheduleMs.join()) {
-      let knownWorkerIds = new Set(n.knownWorkerIds);
-      let { taskRegistry, armedAtMs } = n;
-      disarmWorkerCheckin(e);
-      armWorkerCheckin(e, taskRegistry, knownWorkerIds, armedAtMs);
+    if (workerCheckinScheduleMs.join() !== checkin.scheduleMs.join()) {
+      let knownWorkerIds = new Set(checkin.knownWorkerIds);
+      let { taskRegistry, armedAtMs } = checkin;
+      disarmWorkerCheckin(sessionScratch);
+      armWorkerCheckin(sessionScratch, taskRegistry, knownWorkerIds, armedAtMs);
       return;
     }
-    let filtered = Object.values(n.taskRegistry.all()).filter(
-      (S) => isRunningVisibleSubagent(S) || isSubagentWaitingOnChildren(S),
+    let agents = Object.values(checkin.taskRegistry.all()).filter(
+      (task) => isRunningVisibleSubagent(task) || isSubagentWaitingOnChildren(task),
     );
-    if (filtered.length === 0) {
-      disarmWorkerCheckin(e);
+    if (agents.length === 0) {
+      disarmWorkerCheckin(sessionScratch);
       return;
     }
     if (
@@ -235,19 +244,19 @@ function runWorkerCheckin(e) {
       someInFlightDrainCommand(isWorkerCheckinNotification)
     )
       return;
-    n.ticksUntilCheckin -= 1;
-    if (n.ticksUntilCheckin > 0) return;
+    checkin.ticksUntilCheckin -= 1;
+    if (checkin.ticksUntilCheckin > 0) return;
     let now = Date.now();
-    let floored = Math.floor((now - n.armedAtMs) / 60000);
+    let floored = Math.floor((now - checkin.armedAtMs) / 60000);
     enqueueHookTaskNotification({
       summary: "Worker check-in: dispatched work still running",
       body: `Check-in: it has been ~${floored} minutes since you dispatched work that is still running. Check your dispatched workers. If the task is taking longer than expected, change approach and tell the user how much longer you expect the work to take; if the work is on track, keep going \u2014 no update needed. If no response is needed, ignore this check-in.
-${stillRunningSummary(filtered, now)}`,
+${stillRunningSummary(agents, now)}`,
       origin: WORKER_CHECKIN_ORIGIN,
       turnAttribution: "inherit",
     });
-    n.checkinCount += 1;
-    n.ticksUntilCheckin = ticksUntilCheckin(n.checkinCount, n.scheduleMs, n.pollMs);
+    checkin.checkinCount += 1;
+    checkin.ticksUntilCheckin = ticksUntilCheckin(checkin.checkinCount, checkin.scheduleMs, checkin.pollMs);
     logFeatureOk("coordinator_worker_checkin");
   } catch (error) {
     logError(error);

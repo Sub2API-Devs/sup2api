@@ -5,10 +5,10 @@
  * pieces: chunk-7vb8p3zb.js (2)
  * attribution: esm-fingerprint 2
  */
-import { Y5e } from "../diff/line.js";
+import { diffLines } from "../diff/line.js";
 
 //@ chunk-7vb8p3zb.js:9181-10494 esm-fingerprint
-function P3(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
+function structuredPatch(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, options) {
   let optionsObj;
   if (!options) optionsObj = {};
   else if (typeof options === "function")
@@ -22,10 +22,10 @@ function P3(oldFileName, newFileName, oldStr, newStr, oldHeader, newHeader, opti
     throw Error(
       "newlineIsToken may not be used with patch-generation functions, only with diffing functions",
     );
-  if (!optionsObj.callback) return diffLinesResultToPatch(Y5e(oldStr, newStr, optionsObj));
+  if (!optionsObj.callback) return diffLinesResultToPatch(diffLines(oldStr, newStr, optionsObj));
   else {
     let { callback } = optionsObj;
-    Y5e(
+    diffLines(
       oldStr,
       newStr,
       Object.assign(Object.assign({}, optionsObj), {
@@ -133,4 +133,4 @@ function splitLines(text) {
   else result.push(result.pop().slice(0, -1));
   return result;
 }
-export { P3 };
+export { structuredPatch };

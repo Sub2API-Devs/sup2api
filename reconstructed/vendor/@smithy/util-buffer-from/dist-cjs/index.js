@@ -5,11 +5,11 @@
  * pieces: chunk-wr8v03d0.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_is_array_buffer } from "../../is-array-buffer/dist-cjs/index.js";
 
 //@ chunk-wr8v03d0.js:440-877 cjs-fingerprint
-var require_util_buffer_from = x(function (cjsExports) {
+var require_util_buffer_from = __commonJS(function (cjsExports) {
   var import_is_array_buffer = require_is_array_buffer();
   var import_buffer = importMetaRequire("buffer");
   var fromArrayBuffer = (input, offset = 0, length = input.byteLength - offset) => {

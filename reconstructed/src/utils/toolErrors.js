@@ -9,18 +9,19 @@
  * attribution: placement 10, fingerprint 3, file-local 1
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, record, unknown } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, record, unknown } from "../../vendor/zod/v4/classic/schemas.js";
 import { AbortError as AbortError_2, ShellError } from "./errors.js";
 import { INTERRUPT_MESSAGE_FOR_TOOL_USE } from "./messages.js";
 import { truncateMiddle as truncateMiddle_2 } from "../memdir/memoryTool.js";
 import { MODEL_FACING_MESSAGE_KEY } from "../tools/ArtifactTool/publishEdits.js";
 import { truncateWithCount, plural } from "./stringUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:50738-50779 placement
 /**
  * 等待中且未结束。
  */
-var isPendingNotOver = (e) => !e.isOver && e.isPending === true;
+var isPendingNotOver = (state) => !state.isOver && state.isPending === true;
 //@ chunk-aepeg2w5.js:50779-50861 placement
 var createPendingFlagState = () => ({
   isPending: undefined,
@@ -29,27 +30,34 @@ var createPendingFlagState = () => ({
   over: Promise.withResolvers(),
 });
 //@ chunk-aepeg2w5.js:51173-51223 placement
-var doctorHintSchema = DoctorLazy(() =>
-  u({
-    root: string(),
-    primary: string().nullish(),
-  }),
-);
+var doctorHintSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:51173", () => {
+  doctorHintSchema = DoctorLazy(() =>
+    objectSchema({
+      root: stringSchema(),
+      primary: stringSchema().nullish(),
+    }),
+  );
+});
 //@ chunk-aepeg2w5.js:51223-51256 placement
-async function noToolErrorText(e) {
+async function noToolErrorText(context) {
   return null;
 }
 //@ chunk-aepeg2w5.js:51256-51283 placement
-var doctorTextSchema = DoctorLazy(() => record(string(), unknown()));
+var doctorTextSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:51256", () => {
+  doctorTextSchema = DoctorLazy(() => record(stringSchema(), unknown()));
+});
 //@ chunk-aepeg2w5.js:51283-51303 placement
 var VERSIONED_MODEL_RE = /^[a-z]+-\d/;
 //@ chunk-aepeg2w5.js:51303-51440 placement
 /**
  * 不区分大小写判断文本是否包含任一非空关键字。
  */
-function includesAnyIgnoreCase(e, n) {
-  let lower = e.toLowerCase();
-  for (let s of n) if (typeof s === "string" && s.length > 0 && lower.includes(s.toLowerCase())) return true;
+function includesAnyIgnoreCase(haystack, needles) {
+  let lower = haystack.toLowerCase();
+  for (let needle of needles)
+    if (typeof needle === "string" && needle.length > 0 && lower.includes(needle.toLowerCase())) return true;
   return false;
 }
 //@ chunk-aepeg2w5.js:51477-51548 placement
@@ -159,14 +167,16 @@ function formatZodValidationError(toolName, error) {
         !(issue.code === "custom" && issue.params?.[MODEL_FACING_MESSAGE_KEY] === true),
     )
     .map((issue) => {
-      let q = formatValidationPath(issue.path);
-      let Z = q === "" ? "The input" : `The parameter \`${q}\``;
-      let Se = truncateWithCount(
+      let pathText = formatValidationPath(issue.path);
+      let subject = pathText === "" ? "The input" : `The parameter \`${pathText}\``;
+      let detail = truncateWithCount(
         (issue.message ?? "").replace(/^Invalid input(?:: |$)/, ""),
         MAX_ZOD_MESSAGE_CHARS,
       );
-      if (Se !== "") return `${Z} is invalid: ${Se}`;
-      return issue.code === "invalid_union" ? `${Z} matches none of the accepted forms` : `${Z} is invalid`;
+      if (detail !== "") return `${subject} is invalid: ${detail}`;
+      return issue.code === "invalid_union"
+        ? `${subject} matches none of the accepted forms`
+        : `${subject} is invalid`;
     });
   let errorParts = [];
   if (missingParams.length > 0) {
@@ -188,8 +198,9 @@ function formatZodValidationError(toolName, error) {
   }
   if (errorParts.length === 0 && errorContent.length === 0) return error.message;
   errorParts.push(...mapped.slice(0, MAX_ZOD_ERROR_PARTS));
-  let L = mapped.length - MAX_ZOD_ERROR_PARTS;
-  if (L > 0) errorParts.push(`(${L} more ${plural(L, "issue")} not listed)`);
+  let remainingIssues = mapped.length - MAX_ZOD_ERROR_PARTS;
+  if (remainingIssues > 0)
+    errorParts.push(`(${remainingIssues} more ${plural(remainingIssues, "issue")} not listed)`);
   errorParts.push(...errorContent);
   return `${toolName} failed due to the following ${errorParts.length > 1 ? "issues" : "issue"}:
 ${errorParts.join(`

@@ -8,9 +8,9 @@
  * pieces: chunk-b7gstm5r.js (10)
  * attribution: placement 10
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTabHeaderFocus } from "../design-system/Tabs.js";
-import { y, P } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { MessageActionsKeybindings } from "../messageActions.js";
 import {
   consentSelectAction,
@@ -42,10 +42,10 @@ import { plural } from "../../utils/stringUtils.js";
  * 后台守护进程服务列表视图：定时任务与常驻服务两类，可选择、新建、操作。
  */
 function DaemonServicesView(props) {
-  let g = w(72);
+  let $ = useMemoCache(72);
   let {
     kind,
-    data: o,
+    data,
     now,
     busy,
     message,
@@ -57,191 +57,202 @@ function DaemonServicesView(props) {
     onCancel,
   } = props;
   let { headerFocused, focusHeader } = useTabHeaderFocus();
-  let m = kind === "scheduled" ? o.tasks : o.servers;
-  let serviceActions = getServiceActions(o);
-  let C = m.length;
-  let visible = kind === "remoteControl" && o.unattendedServing.visible;
-  let U = visible ? C + 1 : -1;
-  let B = C + 1 + (visible ? 1 : 0);
-  let A = B + serviceActions.length;
-  let [c, te] = y(0);
-  let L;
-  let W;
-  if (g[0] !== c || g[1] !== A) {
-    L = () => {
-      if (c >= A) te(Math.max(0, A - 1));
+  let items = kind === "scheduled" ? data.tasks : data.servers;
+  let serviceActions = getServiceActions(data);
+  let itemCount = items.length;
+  let visible = kind === "remoteControl" && data.unattendedServing.visible;
+  let consentRowIndex = visible ? itemCount + 1 : -1;
+  let actionRowStart = itemCount + 1 + (visible ? 1 : 0);
+  let rowCount = actionRowStart + serviceActions.length;
+  let [focusedRow, setFocusedRow] = useState(0);
+  let clampEffect;
+  let clampDeps;
+  if ($[0] !== focusedRow || $[1] !== rowCount) {
+    clampEffect = () => {
+      if (focusedRow >= rowCount) setFocusedRow(Math.max(0, rowCount - 1));
     };
-    W = [A, c];
-    g[0] = c;
-    g[1] = A;
-    g[2] = L;
-    g[3] = W;
+    clampDeps = [rowCount, focusedRow];
+    $[0] = focusedRow;
+    $[1] = rowCount;
+    $[2] = clampEffect;
+    $[3] = clampDeps;
   } else {
-    L = g[2];
-    W = g[3];
+    clampEffect = $[2];
+    clampDeps = $[3];
   }
-  P(L, W);
-  let z;
-  if (g[4] !== focusHeader || g[5] !== c) {
-    z = () => {
-      if (c === 0) focusHeader();
-      else te(c - 1);
+  useEffect(clampEffect, clampDeps);
+  let focusPrevious;
+  if ($[4] !== focusHeader || $[5] !== focusedRow) {
+    focusPrevious = () => {
+      if (focusedRow === 0) focusHeader();
+      else setFocusedRow(focusedRow - 1);
     };
-    g[4] = focusHeader;
-    g[5] = c;
-    g[6] = z;
-  } else z = g[6];
-  let J;
-  if (g[7] !== c || g[8] !== A) {
-    J = () => te(Math.min(A - 1, c + 1));
-    g[7] = c;
-    g[8] = A;
-    g[9] = J;
-  } else J = g[9];
+    $[4] = focusHeader;
+    $[5] = focusedRow;
+    $[6] = focusPrevious;
+  } else focusPrevious = $[6];
+  let focusNext;
+  if ($[7] !== focusedRow || $[8] !== rowCount) {
+    focusNext = () => setFocusedRow(Math.min(rowCount - 1, focusedRow + 1));
+    $[7] = focusedRow;
+    $[8] = rowCount;
+    $[9] = focusNext;
+  } else focusNext = $[9];
   const isActive = !headerFocused;
-  let ce;
-  if (g[10] !== isActive) {
-    ce = {
+  let selectKeybindingOptions;
+  if ($[10] !== isActive) {
+    selectKeybindingOptions = {
       context: "Select",
       isActive,
     };
-    g[10] = isActive;
-    g[11] = ce;
-  } else ce = g[11];
+    $[10] = isActive;
+    $[11] = selectKeybindingOptions;
+  } else selectKeybindingOptions = $[11];
   MessageActionsKeybindings(
     {
-      "select:previous": z,
-      "select:next": J,
+      "select:previous": focusPrevious,
+      "select:next": focusNext,
       "select:accept": () => {
         if (busy) {
           return;
         }
-        if (c < m.length) onSelect(m[c]);
-        else if (c === C) onAddNew();
-        else if (c === U) onUnattendedServing();
-        else onService(serviceActions[c - B]);
+        if (focusedRow < items.length) onSelect(items[focusedRow]);
+        else if (focusedRow === itemCount) onAddNew();
+        else if (focusedRow === consentRowIndex) onUnattendedServing();
+        else onService(serviceActions[focusedRow - actionRowStart]);
       },
       "select:cancel": onCancel,
     },
-    ce,
+    selectKeybindingOptions,
   );
-  let h;
-  if (g[12] !== o || g[13] !== m || g[14] !== kind || g[15] !== now) {
-    h = serviceTableColumns(kind, m, o, now);
-    g[12] = o;
-    g[13] = m;
-    g[14] = kind;
-    g[15] = now;
-    g[16] = h;
-  } else h = g[16];
-  let x = h;
-  let ge =
-    !headerFocused && c === U
-      ? consentSelectAction(o.unattendedServing) === "none"
+  let table;
+  if ($[12] !== data || $[13] !== items || $[14] !== kind || $[15] !== now) {
+    table = serviceTableColumns(kind, items, data, now);
+    $[12] = data;
+    $[13] = items;
+    $[14] = kind;
+    $[15] = now;
+    $[16] = table;
+  } else table = $[16];
+  let tableData = table;
+  let enterAction =
+    !headerFocused && focusedRow === consentRowIndex
+      ? consentSelectAction(data.unattendedServing) === "none"
         ? null
         : "change"
       : "select";
-  const ke = Box;
+  const BodyBox = Box;
   const flexDirection = "column";
-  const children = "  " + x.header;
-  let ne;
-  if (g[17] !== children) {
-    ne = jsxProd_default(Text, {
+  const children = "  " + tableData.header;
+  let headerElement;
+  if ($[17] !== children) {
+    headerElement = jsxProd_default(Text, {
       dimColor: true,
       children,
     });
-    g[17] = children;
-    g[18] = ne;
-  } else ne = g[18];
-  let Ce;
-  if (g[19] !== m.length || g[20] !== kind) {
-    Ce =
-      m.length === 0 &&
+    $[17] = children;
+    $[18] = headerElement;
+  } else headerElement = $[18];
+  let emptyElement;
+  if ($[19] !== items.length || $[20] !== kind) {
+    emptyElement =
+      items.length === 0 &&
       jsxProd_default(HintText, {
         children: `  (no ${SERVICE_KIND_LABELS[kind]}s)`,
       });
-    g[19] = m.length;
-    g[20] = kind;
-    g[21] = Ce;
-  } else Ce = g[21];
-  let E;
-  if (g[22] !== m || g[23] !== c || g[24] !== headerFocused || g[25] !== x.keys || g[26] !== x.rows) {
-    let X;
-    if (g[28] !== c || g[29] !== headerFocused || g[30] !== x.keys || g[31] !== x.rows) {
-      X = (In, K) => {
-        let oe = !headerFocused && c === K;
+    $[19] = items.length;
+    $[20] = kind;
+    $[21] = emptyElement;
+  } else emptyElement = $[21];
+  let itemRows;
+  if (
+    $[22] !== items ||
+    $[23] !== focusedRow ||
+    $[24] !== headerFocused ||
+    $[25] !== tableData.keys ||
+    $[26] !== tableData.rows
+  ) {
+    let renderRow;
+    if (
+      $[28] !== focusedRow ||
+      $[29] !== headerFocused ||
+      $[30] !== tableData.keys ||
+      $[31] !== tableData.rows
+    ) {
+      renderRow = (row, index) => {
+        let isRowFocused = !headerFocused && focusedRow === index;
         return jsxProd_default_2(
           Box,
           {
             children: [
               jsxProd_default_2(Text, {
-                color: oe ? "suggestion" : undefined,
-                children: [oe ? figures_default.pointer : " ", " "],
+                color: isRowFocused ? "suggestion" : undefined,
+                children: [isRowFocused ? figures_default.pointer : " ", " "],
               }),
               jsxProd_default(Text, {
-                bold: oe,
-                children: x.rows[K].text,
+                bold: isRowFocused,
+                children: tableData.rows[index].text,
               }),
-              x.rows[K].suffix,
+              tableData.rows[index].suffix,
             ],
           },
-          x.keys[K],
+          tableData.keys[index],
         );
       };
-      g[28] = c;
-      g[29] = headerFocused;
-      g[30] = x.keys;
-      g[31] = x.rows;
-      g[32] = X;
-    } else X = g[32];
-    E = m.map(X);
-    g[22] = m;
-    g[23] = c;
-    g[24] = headerFocused;
-    g[25] = x.keys;
-    g[26] = x.rows;
-    g[27] = E;
-  } else E = g[27];
-  const isFocused = !headerFocused && c === C;
+      $[28] = focusedRow;
+      $[29] = headerFocused;
+      $[30] = tableData.keys;
+      $[31] = tableData.rows;
+      $[32] = renderRow;
+    } else renderRow = $[32];
+    itemRows = items.map(renderRow);
+    $[22] = items;
+    $[23] = focusedRow;
+    $[24] = headerFocused;
+    $[25] = tableData.keys;
+    $[26] = tableData.rows;
+    $[27] = itemRows;
+  } else itemRows = $[27];
+  const isFocused = !headerFocused && focusedRow === itemCount;
   const label = `+ Add new ${SERVICE_KIND_LABELS[kind]}\u2026`;
-  let he;
-  if (g[33] !== isFocused || g[34] !== label) {
-    he = jsxProd_default(Box, {
+  let addNewElement;
+  if ($[33] !== isFocused || $[34] !== label) {
+    addNewElement = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(TabLabel, {
         isFocused,
         label,
       }),
     });
-    g[33] = isFocused;
-    g[34] = label;
-    g[35] = he;
-  } else he = g[35];
-  let ae;
+    $[33] = isFocused;
+    $[34] = label;
+    $[35] = addNewElement;
+  } else addNewElement = $[35];
+  let consentElement;
   if (
-    g[36] !== o.unattendedServing ||
-    g[37] !== c ||
-    g[38] !== headerFocused ||
-    g[39] !== visible ||
-    g[40] !== U ||
-    g[41] !== unattendedNotice
+    $[36] !== data.unattendedServing ||
+    $[37] !== focusedRow ||
+    $[38] !== headerFocused ||
+    $[39] !== visible ||
+    $[40] !== consentRowIndex ||
+    $[41] !== unattendedNotice
   ) {
-    ae =
+    consentElement =
       visible &&
       jsxProd_default(DevBar, {
-        state: o.unattendedServing,
-        isFocused: !headerFocused && c === U,
+        state: data.unattendedServing,
+        isFocused: !headerFocused && focusedRow === consentRowIndex,
         notice: unattendedNotice,
       });
-    g[36] = o.unattendedServing;
-    g[37] = c;
-    g[38] = headerFocused;
-    g[39] = visible;
-    g[40] = U;
-    g[41] = unattendedNotice;
-    g[42] = ae;
-  } else ae = g[42];
-  const Re = Box;
+    $[36] = data.unattendedServing;
+    $[37] = focusedRow;
+    $[38] = headerFocused;
+    $[39] = visible;
+    $[40] = consentRowIndex;
+    $[41] = unattendedNotice;
+    $[42] = consentElement;
+  } else consentElement = $[42];
+  const DetailBox = Box;
   const marginTop = 1;
   const flexDirection_2 = "column";
   const borderStyle = "single";
@@ -249,61 +260,61 @@ function DaemonServicesView(props) {
   const borderLeft = false;
   const borderRight = false;
   const borderDimColor = true;
-  let Ht;
-  let $t;
-  if (g[43] === MEMO_CACHE_SENTINEL) {
-    Ht = jsxProd_default(Text, {
+  let detailTitle;
+  let detailSeparator;
+  if ($[43] === MEMO_CACHE_SENTINEL) {
+    detailTitle = jsxProd_default(Text, {
       bold: true,
       children: "Daemon service",
     });
-    $t = jsxProd_default(Text, {
+    detailSeparator = jsxProd_default(Text, {
       dimColor: true,
       children: " \xB7 ",
     });
-    g[43] = Ht;
-    g[44] = $t;
+    $[43] = detailTitle;
+    $[44] = detailSeparator;
   } else {
-    Ht = g[43];
-    $t = g[44];
+    detailTitle = $[43];
+    detailSeparator = $[44];
   }
   const message_2 = busy ? "working\u2026" : message;
-  let Ve;
-  if (g[45] !== o || g[46] !== message_2) {
-    Ve = jsxProd_default_2(Box, {
+  let detailRow;
+  if ($[45] !== data || $[46] !== message_2) {
+    detailRow = jsxProd_default_2(Box, {
       children: [
-        Ht,
-        $t,
+        detailTitle,
+        detailSeparator,
         jsxProd_default(DaemonServiceDetail, {
-          data: o,
+          data,
           message: message_2,
         }),
       ],
     });
-    g[45] = o;
-    g[46] = message_2;
-    g[47] = Ve;
-  } else Ve = g[47];
-  let Et;
-  if (g[48] !== c || g[49] !== headerFocused || g[50] !== B) {
-    Et = (dt, Ln) =>
+    $[45] = data;
+    $[46] = message_2;
+    $[47] = detailRow;
+  } else detailRow = $[47];
+  let renderAction;
+  if ($[48] !== focusedRow || $[49] !== headerFocused || $[50] !== actionRowStart) {
+    renderAction = (action, index) =>
       jsxProd_default(
         TabLabel,
         {
-          isFocused: !headerFocused && c === B + Ln,
-          label: SERVICE_ACTION_LABELS[dt],
-          color: dt === "uninstall" ? "error" : undefined,
+          isFocused: !headerFocused && focusedRow === actionRowStart + index,
+          label: SERVICE_ACTION_LABELS[action],
+          color: action === "uninstall" ? "error" : undefined,
         },
-        dt,
+        action,
       );
-    g[48] = c;
-    g[49] = headerFocused;
-    g[50] = B;
-    g[51] = Et;
-  } else Et = g[51];
-  const mapped = serviceActions.map(Et);
-  let Le;
-  if (g[52] !== Re || g[53] !== Ve || g[54] !== mapped) {
-    Le = jsxProd_default_2(Re, {
+    $[48] = focusedRow;
+    $[49] = headerFocused;
+    $[50] = actionRowStart;
+    $[51] = renderAction;
+  } else renderAction = $[51];
+  const mapped = serviceActions.map(renderAction);
+  let detailSection;
+  if ($[52] !== DetailBox || $[53] !== detailRow || $[54] !== mapped) {
+    detailSection = jsxProd_default_2(DetailBox, {
       marginTop,
       flexDirection: flexDirection_2,
       borderStyle,
@@ -311,186 +322,197 @@ function DaemonServicesView(props) {
       borderLeft,
       borderRight,
       borderDimColor,
-      children: [Ve, mapped],
+      children: [detailRow, mapped],
     });
-    g[52] = Re;
-    g[53] = Ve;
-    g[54] = mapped;
-    g[55] = Le;
-  } else Le = g[55];
-  let Kt;
-  if (g[56] === MEMO_CACHE_SENTINEL) {
-    Kt = jsxProd_default(KeyboardShortcutHint, {
+    $[52] = DetailBox;
+    $[53] = detailRow;
+    $[54] = mapped;
+    $[55] = detailSection;
+  } else detailSection = $[55];
+  let tabsHint;
+  if ($[56] === MEMO_CACHE_SENTINEL) {
+    tabsHint = jsxProd_default(KeyboardShortcutHint, {
       chord: ["left", "right"],
       action: "tabs",
     });
-    g[56] = Kt;
-  } else Kt = g[56];
-  let Wt;
-  if (g[57] === MEMO_CACHE_SENTINEL) {
-    Wt = jsxProd_default(KeyboardShortcutHint, {
+    $[56] = tabsHint;
+  } else tabsHint = $[56];
+  let moveHint;
+  if ($[57] === MEMO_CACHE_SENTINEL) {
+    moveHint = jsxProd_default(KeyboardShortcutHint, {
       chord: ["up", "down"],
       action: "move",
     });
-    g[57] = Wt;
-  } else Wt = g[57];
-  let He;
-  if (g[58] !== ge) {
-    He =
-      ge !== null &&
+    $[57] = moveHint;
+  } else moveHint = $[57];
+  let enterHint;
+  if ($[58] !== enterAction) {
+    enterHint =
+      enterAction !== null &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "enter",
-        action: ge,
+        action: enterAction,
       });
-    g[58] = ge;
-    g[59] = He;
-  } else He = g[59];
-  let jt;
-  if (g[60] === MEMO_CACHE_SENTINEL) {
-    jt = jsxProd_default(KeyboardShortcutHint, {
+    $[58] = enterAction;
+    $[59] = enterHint;
+  } else enterHint = $[59];
+  let closeHint;
+  if ($[60] === MEMO_CACHE_SENTINEL) {
+    closeHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action: "close",
     });
-    g[60] = jt;
-  } else jt = g[60];
-  let $e;
-  if (g[61] !== He) {
-    $e = jsxProd_default(Box, {
+    $[60] = closeHint;
+  } else closeHint = $[60];
+  let hintsRow;
+  if ($[61] !== enterHint) {
+    hintsRow = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
         children: jsxProd_default_2(Byline, {
-          children: [Kt, Wt, He, jt],
+          children: [tabsHint, moveHint, enterHint, closeHint],
         }),
       }),
     });
-    g[61] = He;
-    g[62] = $e;
-  } else $e = g[62];
-  let Jt;
+    $[61] = enterHint;
+    $[62] = hintsRow;
+  } else hintsRow = $[62];
+  let viewElement;
   if (
-    g[63] !== ke ||
-    g[64] !== ne ||
-    g[65] !== Ce ||
-    g[66] !== E ||
-    g[67] !== he ||
-    g[68] !== ae ||
-    g[69] !== Le ||
-    g[70] !== $e
+    $[63] !== BodyBox ||
+    $[64] !== headerElement ||
+    $[65] !== emptyElement ||
+    $[66] !== itemRows ||
+    $[67] !== addNewElement ||
+    $[68] !== consentElement ||
+    $[69] !== detailSection ||
+    $[70] !== hintsRow
   ) {
-    Jt = jsxProd_default_2(ke, {
+    viewElement = jsxProd_default_2(BodyBox, {
       flexDirection,
-      children: [ne, Ce, E, he, ae, Le, $e],
+      children: [
+        headerElement,
+        emptyElement,
+        itemRows,
+        addNewElement,
+        consentElement,
+        detailSection,
+        hintsRow,
+      ],
     });
-    g[63] = ke;
-    g[64] = ne;
-    g[65] = Ce;
-    g[66] = E;
-    g[67] = he;
-    g[68] = ae;
-    g[69] = Le;
-    g[70] = $e;
-    g[71] = Jt;
-  } else Jt = g[71];
-  return Jt;
+    $[63] = BodyBox;
+    $[64] = headerElement;
+    $[65] = emptyElement;
+    $[66] = itemRows;
+    $[67] = addNewElement;
+    $[68] = consentElement;
+    $[69] = detailSection;
+    $[70] = hintsRow;
+    $[71] = viewElement;
+  } else viewElement = $[71];
+  return viewElement;
 }
 //@ chunk-b7gstm5r.js:29460-29763 placement
 function TabLabel(props) {
-  let v = w(7);
+  let $ = useMemoCache(7);
   let { isFocused, label, color } = props;
   const color_2 = isFocused ? undefined : color;
   let children;
-  if (v[0] !== isFocused || v[1] !== label || v[2] !== color_2) {
+  if ($[0] !== isFocused || $[1] !== label || $[2] !== color_2) {
     children = jsxProd_default(Text, {
       bold: isFocused,
       color: color_2,
       children: label,
     });
-    v[0] = isFocused;
-    v[1] = label;
-    v[2] = color_2;
-    v[3] = children;
-  } else children = v[3];
-  let N;
-  if (v[4] !== isFocused || v[5] !== children) {
-    N = jsxProd_default(ListItem, {
+    $[0] = isFocused;
+    $[1] = label;
+    $[2] = color_2;
+    $[3] = children;
+  } else children = $[3];
+  let listItemElement;
+  if ($[4] !== isFocused || $[5] !== children) {
+    listItemElement = jsxProd_default(ListItem, {
       isFocused,
       styled: false,
       children,
     });
-    v[4] = isFocused;
-    v[5] = children;
-    v[6] = N;
-  } else N = v[6];
-  return N;
+    $[4] = isFocused;
+    $[5] = children;
+    $[6] = listItemElement;
+  } else listItemElement = $[6];
+  return listItemElement;
 }
 //@ chunk-b7gstm5r.js:29763-30873 placement
-function serviceTableColumns(kind, t, o, now) {
+function serviceTableColumns(kind, items, data, now) {
   let date = new Date(now);
-  let v = o.lock !== null;
-  let b;
-  let N;
-  let k;
-  let I;
+  let isRunning = data.lock !== null;
+  let headers;
+  let cells;
+  let keys;
+  let statusColumnIndex;
   if (kind === "scheduled") {
-    b = ["Name", "Schedule", "Next run", "Last run", "PID"];
-    I = 2;
-    let m = t;
-    let D = o.scheduledStatus?.workerPid ?? o.status?.workers["scheduled:0"]?.pid;
-    k = m.map((C) => C.id);
-    N = m.map((C) => {
-      let F = o.scheduledStatus?.tasks[C.id];
-      let U = C.enabled ? nextCronRunAt(C.cron, date) : null;
+    headers = ["Name", "Schedule", "Next run", "Last run", "PID"];
+    statusColumnIndex = 2;
+    let taskList = items;
+    let schedulerPid = data.scheduledStatus?.workerPid ?? data.status?.workers["scheduled:0"]?.pid;
+    keys = taskList.map((task) => task.id);
+    cells = taskList.map((task) => {
+      let taskStatus = data.scheduledStatus?.tasks[task.id];
+      let nextRunAt = task.enabled ? nextCronRunAt(task.cron, date) : null;
       return [
-        C.id,
-        cronToHuman(C.cron),
-        !C.enabled
+        task.id,
+        cronToHuman(task.cron),
+        !task.enabled
           ? "disabled"
-          : !v
+          : !isRunning
             ? "daemon stopped"
-            : F?.running
+            : taskStatus?.running
               ? "running"
-              : U
-                ? formatRelativeTime(U, {
+              : nextRunAt
+                ? formatRelativeTime(nextRunAt, {
                     now: date,
                   })
                 : "\u2014",
-        F?.lastFiredAt
-          ? formatRelativeTime(new Date(F.lastFiredAt), {
+        taskStatus?.lastFiredAt
+          ? formatRelativeTime(new Date(taskStatus.lastFiredAt), {
               now: date,
             })
           : "\u2014",
-        F?.running && D !== undefined ? String(D) : "\u2014",
+        taskStatus?.running && schedulerPid !== undefined ? String(schedulerPid) : "\u2014",
       ];
     });
   } else {
-    b = ["Name", "Directory", "Status", "PID"];
-    I = 2;
-    let m = t;
-    k = m.map((D) => D.dir);
-    N = m.map((D, C) => {
-      let pid = o.status?.workers[`${kind}:${C}`]?.pid;
-      let U = v && (o.status === null || pid !== undefined);
+    headers = ["Name", "Directory", "Status", "PID"];
+    statusColumnIndex = 2;
+    let serverList = items;
+    keys = serverList.map((server) => server.dir);
+    cells = serverList.map((server, index) => {
+      let pid = data.status?.workers[`${kind}:${index}`]?.pid;
+      let isActive = isRunning && (data.status === null || pid !== undefined);
       return [
-        D.name,
-        truncateDirName(D.dir),
-        U ? "running" : "stopped",
-        pid !== undefined ? String(pid) : U ? "\u2014" : "",
+        server.name,
+        truncateDirName(server.dir),
+        isActive ? "running" : "stopped",
+        pid !== undefined ? String(pid) : isActive ? "\u2014" : "",
       ];
     });
   }
-  let mapped = b.map((m, D) => Math.max(bunStringWidth(m), ...N.map((C) => bunStringWidth(C[D] ?? ""))));
-  let T = (m, D) => m + " ".repeat(Math.max(0, mapped[D] - bunStringWidth(m)));
-  let header = b.map(T).join("  ");
-  let rows = N.map((m) => ({
-    text: m.slice(0, I).map(T).join("  ") + "  ",
+  let mapped = headers.map((header, columnIndex) =>
+    Math.max(bunStringWidth(header), ...cells.map((row) => bunStringWidth(row[columnIndex] ?? ""))),
+  );
+  let padCell = (text, columnIndex) =>
+    text + " ".repeat(Math.max(0, mapped[columnIndex] - bunStringWidth(text)));
+  let header = headers.map(padCell).join("  ");
+  let rows = cells.map((row) => ({
+    text: row.slice(0, statusColumnIndex).map(padCell).join("  ") + "  ",
     suffix: jsxProd_default_2(Fragment, {
       children: [
-        renderPaddedStatus(m[I], mapped[I]),
+        renderPaddedStatus(row[statusColumnIndex], mapped[statusColumnIndex]),
         jsxProd_default(Text, {
-          children: m
-            .slice(I + 1)
-            .map((D, C) => "  " + T(D, I + 1 + C))
+          children: row
+            .slice(statusColumnIndex + 1)
+            .map((cell, offset) => "  " + padCell(cell, statusColumnIndex + 1 + offset))
             .join(""),
         }),
       ],
@@ -499,16 +521,16 @@ function serviceTableColumns(kind, t, o, now) {
   return {
     header,
     rows,
-    keys: k,
+    keys,
   };
 }
 //@ chunk-b7gstm5r.js:30873-31015 placement
 /**
  * 补齐宽度的状态文本，running 显示为成功色。
  */
-function renderPaddedStatus(a, t) {
-  let children = a + " ".repeat(Math.max(0, t - bunStringWidth(a)));
-  return a === "running"
+function renderPaddedStatus(status, width) {
+  let children = status + " ".repeat(Math.max(0, width - bunStringWidth(status)));
+  return status === "running"
     ? jsxProd_default(Text, {
         color: "success",
         children,
@@ -536,56 +558,56 @@ var SERVICE_ACTION_LABELS = {
 /**
  * 服务可执行的操作：未安装/不支持为空，无锁只能卸载，否则停止和卸载。
  */
-function getServiceActions(a) {
-  if (!a.serviceSupported || !a.serviceInstalled) return [];
-  if (a.lock === null) return ["uninstall"];
+function getServiceActions(service) {
+  if (!service.serviceSupported || !service.serviceInstalled) return [];
+  if (service.lock === null) return ["uninstall"];
   return ["stop", "uninstall"];
 }
 //@ chunk-b7gstm5r.js:31281-33299 placement
 function DaemonServiceDetail(props) {
-  let f = w(25);
-  let { data: t, message } = props;
+  let $ = useMemoCache(25);
+  let { data, message } = props;
   if (message) {
-    let i;
-    if (f[0] !== message) {
-      i = jsxProd_default(Text, {
+    let messageElement;
+    if ($[0] !== message) {
+      messageElement = jsxProd_default(Text, {
         dimColor: true,
         children: message,
       });
-      f[0] = message;
-      f[1] = i;
-    } else i = f[1];
-    return i;
+      $[0] = message;
+      $[1] = messageElement;
+    } else messageElement = $[1];
+    return messageElement;
   }
-  if (!t.serviceSupported) {
-    let i;
-    if (f[2] === MEMO_CACHE_SENTINEL) {
-      i = jsxProd_default(Text, {
+  if (!data.serviceSupported) {
+    let unsupportedElement;
+    if ($[2] === MEMO_CACHE_SENTINEL) {
+      unsupportedElement = jsxProd_default(Text, {
         dimColor: true,
         children: "service install not available on this platform \u2014 runs on demand",
       });
-      f[2] = i;
-    } else i = f[2];
-    return i;
+      $[2] = unsupportedElement;
+    } else unsupportedElement = $[2];
+    return unsupportedElement;
   }
-  if (t.lock === null) {
-    const children = t.serviceInstalled ? "installed \xB7 not running" : "not installed (runs on demand)";
-    let v;
-    if (f[3] !== children) {
-      v = jsxProd_default(Text, {
+  if (data.lock === null) {
+    const children = data.serviceInstalled ? "installed \xB7 not running" : "not installed (runs on demand)";
+    let notRunningElement;
+    if ($[3] !== children) {
+      notRunningElement = jsxProd_default(Text, {
         dimColor: true,
         children,
       });
-      f[3] = children;
-      f[4] = v;
-    } else v = f[4];
-    return v;
+      $[3] = children;
+      $[4] = notRunningElement;
+    } else notRunningElement = $[4];
+    return notRunningElement;
   }
-  let i;
-  if (f[5] !== t.lock.version || f[6] !== t.status) {
-    i =
-      t.status === null ||
-      t.lock.version !==
+  let isVersionMismatch;
+  if ($[5] !== data.lock.version || $[6] !== data.status) {
+    isVersionMismatch =
+      data.status === null ||
+      data.lock.version !==
         {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -597,105 +619,118 @@ function DaemonServiceDetail(props) {
           HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION;
-    f[5] = t.lock.version;
-    f[6] = t.status;
-    f[7] = i;
-  } else i = f[7];
-  let b = i;
-  let v;
-  if (f[8] === MEMO_CACHE_SENTINEL) {
-    v = jsxProd_default(Text, {
+    $[5] = data.lock.version;
+    $[6] = data.status;
+    $[7] = isVersionMismatch;
+  } else isVersionMismatch = $[7];
+  let versionMismatch = isVersionMismatch;
+  let runningText;
+  if ($[8] === MEMO_CACHE_SENTINEL) {
+    runningText = jsxProd_default(Text, {
       color: "success",
       children: "running",
     });
-    f[8] = v;
-  } else v = f[8];
-  let N;
-  if (f[9] !== t.lock.pid) {
-    N = jsxProd_default_2(Fragment, {
-      children: ["pid ", t.lock.pid],
+    $[8] = runningText;
+  } else runningText = $[8];
+  let pidFragment;
+  if ($[9] !== data.lock.pid) {
+    pidFragment = jsxProd_default_2(Fragment, {
+      children: ["pid ", data.lock.pid],
     });
-    f[9] = t.lock.pid;
-    f[10] = N;
-  } else N = f[10];
-  let k;
-  if (f[11] !== t.lock.version) {
-    k = jsxProd_default_2(Fragment, {
-      children: ["v", t.lock.version],
+    $[9] = data.lock.pid;
+    $[10] = pidFragment;
+  } else pidFragment = $[10];
+  let versionFragment;
+  if ($[11] !== data.lock.version) {
+    versionFragment = jsxProd_default_2(Fragment, {
+      children: ["v", data.lock.version],
     });
-    f[11] = t.lock.version;
-    f[12] = k;
-  } else k = f[12];
-  let I;
-  if (f[13] !== t.bgCount) {
-    I =
-      t.bgCount > 0 &&
+    $[11] = data.lock.version;
+    $[12] = versionFragment;
+  } else versionFragment = $[12];
+  let bgCountFragment;
+  if ($[13] !== data.bgCount) {
+    bgCountFragment =
+      data.bgCount > 0 &&
       jsxProd_default_2(Fragment, {
-        children: [t.bgCount, " ", plural(t.bgCount, "background session")],
+        children: [data.bgCount, " ", plural(data.bgCount, "background session")],
       });
-    f[13] = t.bgCount;
-    f[14] = I;
-  } else I = f[14];
-  let u;
-  if (f[15] !== t.serviceInstalled) {
-    u =
-      !t.serviceInstalled &&
+    $[13] = data.bgCount;
+    $[14] = bgCountFragment;
+  } else bgCountFragment = $[14];
+  let notInstalledFragment;
+  if ($[15] !== data.serviceInstalled) {
+    notInstalledFragment =
+      !data.serviceInstalled &&
       jsxProd_default(Fragment, {
         children: "not installed as service",
       });
-    f[15] = t.serviceInstalled;
-    f[16] = u;
-  } else u = f[16];
-  let T;
-  if (f[17] !== b) {
-    T =
-      b &&
+    $[15] = data.serviceInstalled;
+    $[16] = notInstalledFragment;
+  } else notInstalledFragment = $[16];
+  let updateWarning;
+  if ($[17] !== versionMismatch) {
+    updateWarning =
+      versionMismatch &&
       jsxProd_default(Text, {
         color: "warning",
         children: "restart to update",
       });
-    f[17] = b;
-    f[18] = T;
-  } else T = f[18];
-  let p;
-  if (f[19] !== N || f[20] !== k || f[21] !== I || f[22] !== u || f[23] !== T) {
-    p = jsxProd_default(Text, {
+    $[17] = versionMismatch;
+    $[18] = updateWarning;
+  } else updateWarning = $[18];
+  let detailElement;
+  if (
+    $[19] !== pidFragment ||
+    $[20] !== versionFragment ||
+    $[21] !== bgCountFragment ||
+    $[22] !== notInstalledFragment ||
+    $[23] !== updateWarning
+  ) {
+    detailElement = jsxProd_default(Text, {
       dimColor: true,
       children: jsxProd_default_2(Byline, {
-        children: [v, N, k, I, u, T],
+        children: [
+          runningText,
+          pidFragment,
+          versionFragment,
+          bgCountFragment,
+          notInstalledFragment,
+          updateWarning,
+        ],
       }),
     });
-    f[19] = N;
-    f[20] = k;
-    f[21] = I;
-    f[22] = u;
-    f[23] = T;
-    f[24] = p;
-  } else p = f[24];
-  return p;
+    $[19] = pidFragment;
+    $[20] = versionFragment;
+    $[21] = bgCountFragment;
+    $[22] = notInstalledFragment;
+    $[23] = updateWarning;
+    $[24] = detailElement;
+  } else detailElement = $[24];
+  return detailElement;
 }
 //@ chunk-b7gstm5r.js:33299-33785 placement
-async function renderDaemonServicesView(a) {
-  let [{ createRoot: t }, { getBaseRenderOptions: o }] = await Promise.all([
-    import("./chunk-1m6xc21j.js"),
-    import("./chunk-92g44ry1.js"),
+async function renderDaemonServicesView(storageV5) {
+  let [{ createRoot }, { getBaseRenderOptions }] = await Promise.all([
+    import("../../ink/components/Ansi.lazy.js"),
+    import("../../utils/renderOptions.js"),
   ]);
-  let { AppRoot } = await import("./chunk-f6d8289b.js");
-  let { getEraseScreenSequence } = await import("./chunk-89vt2tgg.js");
-  let initialData = await loadDaemonOverview(a);
+  let { AppRoot } = await import("../AppRoot.js");
+  let { getEraseScreenSequence } = await import("../../ink/clearTerminal.js");
+  let initialData = await loadDaemonOverview(storageV5);
   process.stdout.write(getEraseScreenSequence());
-  let b = await t(o(false));
+  let root = await createRoot(getBaseRenderOptions(false));
   await new Promise((resolve) => {
-    b.render(
+    root.render(
       jsxProd_default(AppRoot, {
         children: jsxProd_default(DaemonSetupFlow, {
           initialData,
           modelOptions: modelSelectOptions(),
-          storageV5: a,
-          onDone: (k) => {
-            if (k)
+          storageV5,
+          onDone: (message) => {
+            if (message)
               process.stdout.write(
-                k +
+                message +
                   `
 `,
               );
@@ -705,6 +740,6 @@ async function renderDaemonServicesView(a) {
       }),
     );
   });
-  b.unmount();
+  root.unmount();
 }
-export { DaemonServicesView };
+export { DaemonServicesView, renderDaemonServicesView };

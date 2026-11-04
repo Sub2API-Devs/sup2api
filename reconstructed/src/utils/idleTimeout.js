@@ -17,11 +17,11 @@ import { gracefulShutdownSync } from "./gracefulShutdown.js";
 /**
  * 空闲退出管理：设置 CLAUDE_CODE_EXIT_AFTER_STOP_DELAY 时，回合结束后空闲超过该毫秒数即退出进程。
  */
-function createIdleTimeoutManager(e, n) {
+function createIdleTimeoutManager(isIdle, onExit) {
   let exitAfterStopDelay = env.CLAUDE_CODE_EXIT_AFTER_STOP_DELAY;
   let isValidDelay = exitAfterStopDelay !== undefined && exitAfterStopDelay > 0;
   let timer = null;
-  let y = null;
+  let idleSince = null;
   let lastIdleTime = 0;
   return {
     start() {
@@ -32,15 +32,15 @@ function createIdleTimeoutManager(e, n) {
       }
       if (isValidDelay) {
         try {
-          y = e() ? Date.now() : null;
+          idleSince = isIdle() ? Date.now() : null;
         } catch {
-          y = null;
+          idleSince = null;
         }
-        let R = lastIdleTime;
-        let w = () => {
-          if (R !== lastIdleTime) return;
+        let generation = lastIdleTime;
+        let tick = () => {
+          if (generation !== lastIdleTime) return;
           try {
-            P();
+            checkIdle();
           } catch (error) {
             timer = null;
             logError(error);
@@ -52,25 +52,25 @@ function createIdleTimeoutManager(e, n) {
             );
           }
         };
-        let P = () => {
+        let checkIdle = () => {
           let now = Date.now();
-          if (!e()) {
-            y = null;
-            timer = setTimeout(w, exitAfterStopDelay);
-          } else if (y !== null && now - y >= exitAfterStopDelay) {
+          if (!isIdle()) {
+            idleSince = null;
+            timer = setTimeout(tick, exitAfterStopDelay);
+          } else if (idleSince !== null && now - idleSince >= exitAfterStopDelay) {
             logForDebugging(`Exiting after ${exitAfterStopDelay}ms of idle time`);
             try {
-              n();
+              onExit();
             } catch (error) {
               logError(error);
             }
             gracefulShutdownSync();
           } else {
-            y ??= now;
-            timer = setTimeout(w, Math.max(1, exitAfterStopDelay - (now - y)));
+            idleSince ??= now;
+            timer = setTimeout(tick, Math.max(1, exitAfterStopDelay - (now - idleSince)));
           }
         };
-        timer = setTimeout(w, exitAfterStopDelay);
+        timer = setTimeout(tick, exitAfterStopDelay);
       }
     },
     stop() {

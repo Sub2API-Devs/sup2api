@@ -181,7 +181,56 @@ import { toolResultsDir } from "../toolResultStorage.js";
 import { isLoopbackHost } from "../localhost.js";
 import { getAliasSpellings } from "../../services/homeSeed/homeInventory.js";
 import { isSensitiveWithGitConfig } from "./sensitivePaths.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-bhhkxwra.js:191-788 fingerprint = DANGEROUS_FILES (0.395)
+/**
+ * 不允许自动编辑的危险文件名（shell 配置、git 配置、包管理器与构建工具配置等）及其小写集合。
+ */
+var DANGEROUS_FILES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DANGEROUS_FILES_LOWER;
+deferInit("chunk-bhhkxwra.js:191", () => {
+  DANGEROUS_FILES = [
+    ".gitconfig",
+    ".gitmodules",
+    ".bashrc",
+    ".bash_profile",
+    ".zshrc",
+    ".zprofile",
+    ".profile",
+    ".zshenv",
+    ".zlogin",
+    ".zlogout",
+    ".bash_login",
+    ".bash_aliases",
+    ".bash_logout",
+    ".envrc",
+    ".ripgreprc",
+    ".mcp.json",
+    ".claude.json",
+    ".npmrc",
+    ".yarnrc",
+    ".yarnrc.yml",
+    ".pnp.cjs",
+    ".pnp.loader.mjs",
+    ".pnpmfile.cjs",
+    "bunfig.toml",
+    ".bunfig.toml",
+    ".bazelrc",
+    ".bazelversion",
+    ".bazeliskrc",
+    ".pre-commit-config.yaml",
+    "lefthook.yml",
+    ".lefthook.yml",
+    "lefthook.yaml",
+    ".lefthook.yaml",
+    "gradle-wrapper.properties",
+    "maven-wrapper.properties",
+    ".devcontainer.json",
+    "pyrightconfig.json",
+  ];
+  DANGEROUS_FILES_LOWER = new Set(DANGEROUS_FILES.map((fileName) => fileName.toLowerCase()));
+});
 //@ chunk-82kqcve8.js:231561-231674 facade-majority = DANGEROUS_DIRECTORIES (0.514)
 /**
  * 自动编辑的危险目录名表：.git .vscode .idea .claude .husky .cargo .devcontainer .yarn .mvn（比 2.1.88 多后五个）；同一语句还定义多段危险子路径 DANGEROUS_SUBPATHS = ['.config/git']。checkPathSafetyForAutoEdit 用它判定是否需要人工确认。
@@ -228,9 +277,9 @@ function getClaudeSkillScope(filePath) {
   ];
   for (let { dir, prefix } of bases) {
     let dirLower = normalizeCaseForComparison(dir);
-    for (let S of [sep, "/"])
-      if (absolutePathLower.startsWith(dirLower + S.toLowerCase())) {
-        let rest = absolutePath.slice(dir.length + S.length);
+    for (let separator of [sep, "/"])
+      if (absolutePathLower.startsWith(dirLower + separator.toLowerCase())) {
+        let rest = absolutePath.slice(dir.length + separator.length);
         let slash = rest.indexOf("/");
         let bslash = sep === "\\" ? rest.indexOf("\\") : -1;
         let cut = slash === -1 ? bslash : bslash === -1 ? slash : Math.min(slash, bslash);
@@ -244,7 +293,8 @@ function getClaudeSkillScope(filePath) {
         )
           return null;
         let parts = rest.slice(cut + 1).split(/[/\\]/);
-        if (foldName(skillName) === ".claude" || parts.some((Z) => foldName(Z) === ".claude")) return null;
+        if (foldName(skillName) === ".claude" || parts.some((part) => foldName(part) === ".claude"))
+          return null;
         return {
           skillName,
           pattern: prefix + skillName + "/**",
@@ -280,9 +330,11 @@ function toPosixPath(path) {
  * 所有设置文件路径：各 SETTING_SOURCES 的文件、每个配置目录下的用户设置文件名，WSL 下再加 Windows 侧 managed-settings.json。
  */
 function getAllSettingsFilePaths() {
-  let filtered = SETTING_SOURCES.map((n) => getSettingsFilePathForSource(n)).filter((n) => n !== undefined);
-  for (let n of getClaudeConfigDirCandidates())
-    for (let r of Object.values(USER_SETTINGS_FILE_NAMES)) filtered.push(join(n, r));
+  let filtered = SETTING_SOURCES.map((source) => getSettingsFilePathForSource(source)).filter(
+    (path) => path !== undefined,
+  );
+  for (let configDir of getClaudeConfigDirCandidates())
+    for (let fileName of Object.values(USER_SETTINGS_FILE_NAMES)) filtered.push(join(configDir, fileName));
   if (getPlatform() === "wsl" && wslInheritsSettings())
     filtered.push(join(WSL_MANAGED_SETTINGS_DIR, "managed-settings.json"));
   return filtered;
@@ -294,7 +346,7 @@ var SETTINGS_LINKS_CACHE_MS = 2000;
  * 遍历每个设置文件的路径链，若末端是符号链接，把链上每种拼写（规范化后）映射回该设置文件；结果按路径集合缓存 2 秒。出错时 2 秒内视为没有链接。
  */
 function getSettingsFileLinkSpellings() {
-  let e = new Map();
+  let empty = new Map();
   try {
     let legacyLocalSettingsFilePath = getLegacyLocalSettingsFilePath();
     let settingsPaths = uniq(
@@ -304,34 +356,35 @@ function getSettingsFileLinkSpellings() {
     );
     let fsState = getSessionPathsCache();
     let joined = settingsPaths.join("\x00");
-    let y = sessionClock().monotonicNow();
+    let now = sessionClock().monotonicNow();
     let settingsFileLinks = fsState.settingsFileLinks;
     if (
       settingsFileLinks !== undefined &&
       settingsFileLinks.key === joined &&
-      y - settingsFileLinks.builtAt < SETTINGS_LINKS_CACHE_MS
+      now - settingsFileLinks.builtAt < SETTINGS_LINKS_CACHE_MS
     )
       return settingsFileLinks.files;
     fsState.settingsFileLinks = {
       key: joined,
-      builtAt: y,
-      files: e,
+      builtAt: now,
+      files: empty,
     };
     let linkMap = new Map();
     for (let settingsPath of settingsPaths) {
-      let O = walkPermissionCheckPaths(settingsPath);
-      if (O.unresolved)
+      let walk = walkPermissionCheckPaths(settingsPath);
+      if (walk.unresolved)
         logForDebugging(
           `permissions: the walk of settings file ${settingsPath} did not reach its end; only the links it met are recorded`,
         );
-      if (!O.leafIsSymlink) continue;
-      for (let spelling of O.spellings)
-        for (let L of uniq([spelling, identity(spelling)]))
-          if (!isClaudeSettingsPath_2(L)) linkMap.set(foldPathSegments(L), settingsPath);
+      if (!walk.leafIsSymlink) continue;
+      for (let spelling of walk.spellings)
+        for (let candidateSpelling of uniq([spelling, identity(spelling)]))
+          if (!isClaudeSettingsPath_2(candidateSpelling))
+            linkMap.set(foldPathSegments(candidateSpelling), settingsPath);
     }
     fsState.settingsFileLinks = {
       key: joined,
-      builtAt: y,
+      builtAt: now,
       files: linkMap,
     };
     return linkMap;
@@ -341,7 +394,7 @@ function getSettingsFileLinkSpellings() {
         cause: error,
       }),
     );
-    return e;
+    return empty;
   }
 }
 //@ chunk-82kqcve8.js:233605-233662 layout
@@ -377,17 +430,20 @@ function isClaudeSettingsPath_2(filePath) {
   if (getAllSettingsFilePaths().some((settingsPath) => foldPathSegments(settingsPath) === normalizedPath))
     return true;
   if (pathInAllowedWorkingPath_2(expandedPath, normalizedPath, managedDropInDirs())) return true;
-  let s = basename(normalizedPath);
-  if (!SETTINGS_FILE_BASENAMES.map(foldName).includes(s)) return false;
+  let baseName = basename(normalizedPath);
+  if (!SETTINGS_FILE_BASENAMES.map(foldName).includes(baseName)) return false;
   let mapped = Object.values(USER_SETTINGS_FILE_NAMES).map(foldName);
   return [
-    ...getClaudeConfigDirCandidates().map((w) => [w, mapped]),
-    ...getProjectRootDirs().map((w) => [join(w, ".claude"), PROJECT_SETTINGS_FILE_BASENAMES]),
-  ].some(([w, S]) => {
-    if (!S.includes(s)) return false;
+    ...getClaudeConfigDirCandidates().map((dir) => [dir, mapped]),
+    ...getProjectRootDirs().map((projectRoot) => [
+      join(projectRoot, ".claude"),
+      PROJECT_SETTINGS_FILE_BASENAMES,
+    ]),
+  ].some(([dir, names]) => {
+    if (!names.includes(baseName)) return false;
     try {
-      let R = getFsImplementation().realpathSync(w);
-      return join(foldPathSegments(R), s) === normalizedPath;
+      let realDir = getFsImplementation().realpathSync(dir);
+      return join(foldPathSegments(realDir), baseName) === normalizedPath;
     } catch {
       return false;
     }
@@ -397,9 +453,9 @@ function isClaudeSettingsPath_2(filePath) {
 /**
  * 路径是否为 Claude 设置/配置文件：设置路径、--agents/--mcp-config 指定的文件、配置目录候选里的主体与凭据文件；同名时再按真实路径比较。
  */
-function isProtectedClaudeConfigFile(e) {
-  if (isClaudeSettingsPath(e)) return true;
-  let n = foldPathSegments(expandPath(e));
+function isProtectedClaudeConfigFile(filePath) {
+  if (isClaudeSettingsPath(filePath)) return true;
+  let folded = foldPathSegments(expandPath(filePath));
   let settingsWatchPaths = getSettingsWatchPaths(getClaudeConfigDirCandidates());
   let mapped = [
     ...getFlagAgentsFilePaths(),
@@ -407,20 +463,20 @@ function isProtectedClaudeConfigFile(e) {
     ...settingsWatchPaths.bodies,
     ...settingsWatchPaths.vouchers,
   ].map(foldPathSegments);
-  if (mapped.includes(n)) return true;
-  let h = basename(n);
-  if (!mapped.some((w) => basename(w) === h)) return false;
+  if (mapped.includes(folded)) return true;
+  let baseName = basename(folded);
+  if (!mapped.some((watchPath) => basename(watchPath) === baseName)) return false;
   let settingsWatchPaths_2 = getSettingsWatchPaths(
-    getClaudeConfigDirCandidates().flatMap((w) => {
+    getClaudeConfigDirCandidates().flatMap((dir) => {
       try {
-        return [getFsImplementation().realpathSync(w)];
+        return [getFsImplementation().realpathSync(dir)];
       } catch {
         return [];
       }
     }),
   );
   return [...settingsWatchPaths_2.bodies, ...settingsWatchPaths_2.vouchers].some(
-    (w) => foldPathSegments(w) === n,
+    (watchPath) => foldPathSegments(watchPath) === folded,
   );
 }
 //@ chunk-82kqcve8.js:234512-234562 layout = isInGlobalClaudeFolder (1)
@@ -428,34 +484,35 @@ function getClaudeConfigDirCandidates() {
   return uniq([getClaudeConfigDir(), join(homedir(), ".claude")]);
 }
 //@ chunk-82kqcve8.js:234562-234620 facade-majority
-function isManagedSettingsDropInPath(e, { dirs }) {
-  let path = expandPath(e);
+function isManagedSettingsDropInPath(filePath, { dirs }) {
+  let path = expandPath(filePath);
   return pathInAllowedWorkingPath_2(path, foldPathSegments(path), dirs);
 }
 //@ chunk-82kqcve8.js:234620-234667 facade-majority
-function isJsonSpelling(e) {
-  let n = expandPath(e);
-  return hasSettingsFileSpelling(n, foldPathSegments(n));
+function isJsonSpelling(filePath) {
+  let expanded = expandPath(filePath);
+  return hasSettingsFileSpelling(expanded, foldPathSegments(expanded));
 }
 //@ chunk-82kqcve8.js:234667-234744 layout
-function hasSettingsFileSpelling(e, n) {
-  let r = basename(e);
+function hasSettingsFileSpelling(filePath, folded) {
+  let baseName = basename(filePath);
   return (
-    n.endsWith(".json") ||
-    isManagedSettingsDropInName(foldProtectedDirNameLower(r)) ||
-    isManagedSettingsDropInName(r)
+    folded.endsWith(".json") ||
+    isManagedSettingsDropInName(foldProtectedDirNameLower(baseName)) ||
+    isManagedSettingsDropInName(baseName)
   );
 }
 //@ chunk-82kqcve8.js:234744-234945 facade-majority
 /**
  * 判断一组路径拼写是否指向 Claude 设置文件：命中已知设置路径或托管目录即 certain；没有 .json 拼写为 none；有 .json 但托管 drop-in 目录尚未全部解析时为 possible。写阻断（blockWritesOutsideWorkingDirectories）据此决定是否拒绝。
  */
-function settingsFileCertainty(e) {
-  if (e.some((s) => isProtectedClaudeConfigFile(s) || isClaudeSettingsDir(s))) return "certain";
-  let filtered = e.filter(isJsonSpelling);
+function settingsFileCertainty(filePaths) {
+  if (filePaths.some((filePath) => isProtectedClaudeConfigFile(filePath) || isClaudeSettingsDir(filePath)))
+    return "certain";
+  let filtered = filePaths.filter(isJsonSpelling);
   if (filtered.length === 0) return "none";
   let managedDropInDirs = resolveManagedDropInDirs();
-  if (filtered.some((s) => isManagedSettingsDropInPath(s, managedDropInDirs))) return "certain";
+  if (filtered.some((jsonPath) => isManagedSettingsDropInPath(jsonPath, managedDropInDirs))) return "certain";
   return managedDropInDirs.allResolved ? "none" : "possible";
 }
 //@ chunk-82kqcve8.js:234945-235019 file-local
@@ -466,15 +523,15 @@ function pathInAllowedWorkingPath_2(path, toolPermissionContext, precomputedPath
 //@ chunk-82kqcve8.js:235019-235126 layout
 function resolveManagedDropInDirs() {
   return summarizeDropInDirResolution(
-    managedDropInDirs().map((e) => {
+    managedDropInDirs().map((dir) => {
       try {
         return {
-          dir: e,
-          located: normalizeFilePath(e),
+          dir,
+          located: normalizeFilePath(dir),
         };
       } catch (error) {
         return {
-          dir: e,
+          dir,
           error,
         };
       }
@@ -488,15 +545,15 @@ function resolveManagedDropInDirs() {
 async function managedDropInDirSpellingsAsync(realpathAllowMissing) {
   return summarizeDropInDirResolution(
     await Promise.all(
-      managedDropInDirs().map(async (n) => {
+      managedDropInDirs().map(async (dir) => {
         try {
           return {
-            dir: n,
-            located: await realpathAllowMissing(n),
+            dir,
+            located: await realpathAllowMissing(dir),
           };
         } catch (error) {
           return {
-            dir: n,
+            dir,
             error,
           };
         }
@@ -505,34 +562,34 @@ async function managedDropInDirSpellingsAsync(realpathAllowMissing) {
   );
 }
 //@ chunk-82kqcve8.js:235270-235497 sole-consumer
-function summarizeDropInDirResolution(e) {
-  let n = [];
+function summarizeDropInDirResolution(results) {
+  let dirs = [];
   let allResolved = true;
   let allLocated = true;
-  for (let h of e) {
-    n.push(h.dir);
-    if (!("located" in h)) {
+  for (let result of results) {
+    dirs.push(result.dir);
+    if (!("located" in result)) {
       allLocated = false;
-      if (!logDropInResolveFailure(h.error, "a managed drop-in directory")) allResolved = false;
+      if (!logDropInResolveFailure(result.error, "a managed drop-in directory")) allResolved = false;
       continue;
     }
-    n.push(h.located, identity(h.located));
+    dirs.push(result.located, identity(result.located));
   }
   return {
-    dirs: uniq(n),
+    dirs: uniq(dirs),
     allResolved,
     allLocated,
   };
 }
 //@ chunk-82kqcve8.js:235497-235773 sole-consumer
-function logDropInResolveFailure(error, n) {
+function logDropInResolveFailure(error, label) {
   let errnoCode = getErrnoCode(error);
   if (errnoCode === "EACCES" || errnoCode === "EPERM" || errnoCode === "ENOTDIR") {
-    logForDebugging(`permissions: ${n} cannot be entered (${errnoCode}); compared by name`);
+    logForDebugging(`permissions: ${label} cannot be entered (${errnoCode}); compared by name`);
     return true;
   }
   logForDebugging(
-    `permissions: ${n} did not resolve (${errnoCode ?? "unknown"}); any .json write counts as a possible drop-in`,
+    `permissions: ${label} did not resolve (${errnoCode ?? "unknown"}); any .json write counts as a possible drop-in`,
     {
       level: "warn",
     },
@@ -552,20 +609,24 @@ function managedDropInDirs() {
   ];
 }
 //@ chunk-82kqcve8.js:235969-236052 facade-majority = SETTINGS_FILES (1)
-var PROJECT_SETTINGS_FILE_BASENAMES = ["settings.json", "settings.local.json"];
-var SETTINGS_FILE_BASENAMES = uniq([
-  ...Object.values(USER_SETTINGS_FILE_NAMES),
-  ...PROJECT_SETTINGS_FILE_BASENAMES,
-]);
+var PROJECT_SETTINGS_FILE_BASENAMES; // deferred: uses USER_SETTINGS_FILE_NAMES (../settings/settingsFileParsing.js) of its import cycle while loading; runs once the cycle is complete
+var SETTINGS_FILE_BASENAMES;
+deferInit("chunk-82kqcve8.js:235969", () => {
+  PROJECT_SETTINGS_FILE_BASENAMES = ["settings.json", "settings.local.json"];
+  SETTINGS_FILE_BASENAMES = uniq([
+    ...Object.values(USER_SETTINGS_FILE_NAMES),
+    ...PROJECT_SETTINGS_FILE_BASENAMES,
+  ]);
+});
 //@ chunk-82kqcve8.js:236052-236250 layout
-function isClaudeSettingsDir(e) {
-  let replaced = foldPathSegments(expandPath(e)).replace(/[\\/]+$/, "");
+function isClaudeSettingsDir(dirPath) {
+  let replaced = foldPathSegments(expandPath(dirPath)).replace(/[\\/]+$/, "");
   if (basename(replaced) === foldName(".claude")) return true;
-  return getClaudeSettingsDirs().some((r) => {
-    if (foldPathSegments(r) === replaced) return true;
+  return getClaudeSettingsDirs().some((settingsDir) => {
+    if (foldPathSegments(settingsDir) === replaced) return true;
     try {
-      let s = getFsImplementation().realpathSync(r);
-      return foldPathSegments(s) === replaced;
+      let realDir = getFsImplementation().realpathSync(settingsDir);
+      return foldPathSegments(realDir) === replaced;
     } catch {
       return false;
     }
@@ -576,7 +637,7 @@ function getClaudeSettingsDirs() {
   let settingsFilePathForSource = getSettingsFilePathForSource("policySettings");
   return uniq([
     ...getClaudeConfigDirCandidates(),
-    ...getProjectRootDirs().map((n) => join(n, ".claude")),
+    ...getProjectRootDirs().map((projectRoot) => join(projectRoot, ".claude")),
     ...(settingsFilePathForSource !== undefined ? [dirname(settingsFilePathForSource)] : []),
     ...managedDropInDirs(),
   ]);
@@ -588,7 +649,7 @@ function getClaudeSettingsDirs() {
 function settingsLocationPaths() {
   return {
     files: uniq([...getAllSettingsFilePaths(), ...getFlagAgentsFilePaths(), ...getFlagMcpConfigFilePaths()]),
-    dirs: uniq([...getClaudeSettingsDirs(), ...managedDropInDirs().map((e) => dirname(e))]),
+    dirs: uniq([...getClaudeSettingsDirs(), ...managedDropInDirs().map((dir) => dirname(dir))]),
   };
 }
 //@ chunk-82kqcve8.js:236482-236765 facade-majority
@@ -596,7 +657,7 @@ function settingsLocationPaths() {
  * 生成用于在命令/路径文本里粗查“是否提到设置文件”的小写关键串：cowork 设置名、managed-settings.json、managed-settings.d/、策略设置所在目录、drop-in 目录，以及 .claude 和配置目录名下各设置文件名的 / 与 \ 两种拼写。
  */
 function settingsTextNeedles() {
-  let e = uniq([".claude", basename(getClaudeConfigDir())]);
+  let dirNames = uniq([".claude", basename(getClaudeConfigDir())]);
   let settingsFilePathForSource = getSettingsFilePathForSource("policySettings");
   return uniq([
     USER_SETTINGS_FILE_NAMES.cowork,
@@ -605,39 +666,41 @@ function settingsTextNeedles() {
     "managed-settings.d\\",
     ...(settingsFilePathForSource !== undefined ? [dirname(settingsFilePathForSource)] : []),
     ...managedDropInDirs(),
-    ...e.flatMap((r) => SETTINGS_FILE_BASENAMES.flatMap((s) => [`${r}/${s}`, `${r}\\${s}`])),
-  ]).map((r) => r.toLowerCase());
+    ...dirNames.flatMap((dirName) =>
+      SETTINGS_FILE_BASENAMES.flatMap((fileName) => [`${dirName}/${fileName}`, `${dirName}\\${fileName}`]),
+    ),
+  ]).map((needle) => needle.toLowerCase());
 }
 //@ chunk-82kqcve8.js:236765-236880 facade-majority = isInGlobalClaudeFolder (1)
 /**
  * 返回 .claude 与配置目录基名中以点开头、长度大于 1 的小写目录词，用于文本级判断路径是否落在 Claude 设置目录。旧版名 isInGlobalClaudeFolder 与实际行为不符。
  */
 function settingsDirectoryWords() {
-  return uniq([".claude", basename(getClaudeConfigDir())].map((e) => e.toLowerCase())).filter(
-    (e) => e.length > 1 && e.startsWith("."),
+  return uniq([".claude", basename(getClaudeConfigDir())].map((name) => name.toLowerCase())).filter(
+    (word) => word.length > 1 && word.startsWith("."),
   );
 }
 //@ chunk-82kqcve8.js:236880-237188 facade-majority
 /**
  * 拼装 safetyCheck 决策原因里的分类器字段：普通情况透传 classifierApprovable/circuitBreaker/also；restricted 模式下强制 classifierApprovable=false、circuitBreaker='restrictedMode'，原熔断标签并入 also。
  */
-function safetyCheckReasonFields(e, restricted) {
+function safetyCheckReasonFields(reason, restricted) {
   if (!restricted)
     return {
-      classifierApprovable: e.classifierApprovable,
-      ...(e.circuitBreaker && {
-        circuitBreaker: e.circuitBreaker,
+      classifierApprovable: reason.classifierApprovable,
+      ...(reason.circuitBreaker && {
+        circuitBreaker: reason.circuitBreaker,
       }),
-      ...(e.also && {
-        also: e.also,
+      ...(reason.also && {
+        also: reason.also,
       }),
     };
-  let r = [...(e.circuitBreaker ? [e.circuitBreaker] : []), ...(e.also ?? [])];
+  let allReasons = [...(reason.circuitBreaker ? [reason.circuitBreaker] : []), ...(reason.also ?? [])];
   return {
     classifierApprovable: false,
     circuitBreaker: "restrictedMode",
-    ...(r.length > 0 && {
-      also: r,
+    ...(allReasons.length > 0 && {
+      also: allReasons,
     }),
   };
 }
@@ -648,22 +711,22 @@ function safetyCheckReasonFields(e, restricted) {
 function isClaudeConfigFilePath(filePath) {
   if (isClaudeSettingsPath(filePath)) return true;
   return getProjectRootDirs().some(
-    (n) =>
-      pathInWorkingPath(filePath, join(n, ".claude", "commands")) ||
-      pathInWorkingPath(filePath, join(n, ".claude", "agents")) ||
-      pathInWorkingPath(filePath, join(n, ".claude", "skills")),
+    (root) =>
+      pathInWorkingPath(filePath, join(root, ".claude", "commands")) ||
+      pathInWorkingPath(filePath, join(root, ".claude", "agents")) ||
+      pathInWorkingPath(filePath, join(root, ".claude", "skills")),
   );
 }
 //@ chunk-82kqcve8.js:237506-237579 sole-consumer
-function isWorkflowScriptPath(e) {
-  let n = normalize(e);
-  return n.startsWith(workflowScriptsDir()) && n.endsWith(".js");
+function isWorkflowScriptPath(filePath) {
+  let normalized = normalize(filePath);
+  return normalized.startsWith(workflowScriptsDir()) && normalized.endsWith(".js");
 }
 //@ chunk-82kqcve8.js:237579-237654 file-local
-function isSessionMemoryPath(normalizedPath, n = getCwd()) {
-  let normalizedPath_2 = getProjectDir(n);
-  let s = normalize(normalizedPath);
-  return s === normalizedPath_2 || s.startsWith(normalizedPath_2 + sep);
+function isSessionMemoryPath(normalizedPath, cwd = getCwd()) {
+  let normalizedPath_2 = getProjectDir(cwd);
+  let normalizedInput = normalize(normalizedPath);
+  return normalizedInput === normalizedPath_2 || normalizedInput.startsWith(normalizedPath_2 + sep);
 }
 //@ chunk-82kqcve8.js:237654-237784 facade-majority = isScratchpadGateEnabled (0.594)
 /**
@@ -672,7 +735,7 @@ function isSessionMemoryPath(normalizedPath, n = getCwd()) {
 function isScratchpadEnabled() {
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_scratch", false)) return true;
   {
-    let { isArtifactToolEligible } = require("./chunk-tbts81qj.js");
+    let { isArtifactToolEligible } = require("../../services/artifacts/artifactToolGates.js");
     return isArtifactToolEligible();
   }
   return false;
@@ -710,16 +773,17 @@ function getBundledSkillsRoot() {
  */
 function getScratchpadDir(sessionId = getSessionId()) {
   let sessionPathsCache = getSessionPathsCache();
-  let r = sessionPathsCache.scratchpadDirBySessionId.get(sessionId);
-  if (r !== undefined && (r === null || !isDiskless())) return r;
-  let s;
+  let cached = sessionPathsCache.scratchpadDirBySessionId.get(sessionId);
+  if (cached !== undefined && (cached === null || !isDiskless())) return cached;
+  let scratchpadDir;
   try {
-    s = getOriginalCwdOrNull() === null ? null : join(sessionTempDirRealpath(), sessionId, "scratchpad");
+    scratchpadDir =
+      getOriginalCwdOrNull() === null ? null : join(sessionTempDirRealpath(), sessionId, "scratchpad");
   } catch {
-    s = null;
+    scratchpadDir = null;
   }
-  sessionPathsCache.scratchpadDirBySessionId.set(sessionId, s);
-  return s;
+  sessionPathsCache.scratchpadDirBySessionId.set(sessionId, scratchpadDir);
+  return scratchpadDir;
 }
 //@ chunk-82kqcve8.js:238684-238806 facade-majority
 /**
@@ -740,11 +804,11 @@ function getScratchpadComparePaths(path) {
   let scratchpadDir = getScratchpadDir();
   if (scratchpadDir === null) return null;
   let comparePath = normalizeCaseForComparison(normalize(path));
-  let s = normalizeCaseForComparison(scratchpadDir);
+  let compareDir = normalizeCaseForComparison(scratchpadDir);
   return {
     comparePath,
-    compareDir: s,
-    prefix: s + sep,
+    compareDir,
+    prefix: compareDir + sep,
   };
 }
 //@ chunk-82kqcve8.js:238948-239101 facade-majority
@@ -782,18 +846,18 @@ function isScratchpadDisplayPath(path) {
 }
 //@ chunk-82kqcve8.js:239214-239341 layout
 function getSeedAdminPaths(configDir) {
-  let n = [foldPathSegments(join(configDir, "seed-admin"))];
+  let paths = [foldPathSegments(join(configDir, "seed-admin"))];
   try {
-    let r = getFsImplementation().realpathSync(configDir);
-    n.push(foldPathSegments(join(r, "seed-admin")));
+    let realConfigDir = getFsImplementation().realpathSync(configDir);
+    paths.push(foldPathSegments(join(realConfigDir, "seed-admin")));
   } catch {}
-  return uniq(n);
+  return uniq(paths);
 }
 //@ chunk-82kqcve8.js:239341-239421 file-local
 function isSeedAdminPath(absolutePath) {
   let projectDir = foldPathSegments(absolutePath);
   return getSeedAdminPaths(getClaudeConfigDir()).some(
-    (r) => projectDir === r || projectDir.startsWith(r + sep),
+    (seedAdminPath) => projectDir === seedAdminPath || projectDir.startsWith(seedAdminPath + sep),
   );
 }
 //@ chunk-82kqcve8.js:239421-239899 layout
@@ -801,38 +865,43 @@ function isSeedAdminPath(absolutePath) {
  * 在每个配置目录候选路径下查找名为 entryName 的条目（jobs、daemon、shell-snapshots…），与给定路径的各拼写逐段比较（含 Windows 短名），返回每个命中的 {written, folded} 余下路径段。
  */
 function findConfigDirEntryMatches(spellings, entryName, spellingMode, pathCache, shortNameRe) {
-  let y = (P) => uniq([P, isSystemVolumePath(P)]);
-  let w =
-    pathCache.get(entryName) ?? getConfigDirEntryPaths(entryName).map((P) => getPathsForPermissionCheck(P));
-  pathCache.set(entryName, w);
-  let mapped = w
-    .flatMap((P) => (spellingMode === "exact" ? P : expandWindowsPathSpellings(P, spellingMode).spellings))
-    .flatMap(y)
-    .map((P) => foldPathSegments(P).split(sep));
-  let flattened = spellings.flatMap((spelling) => y(normalizeMsysDrivePath(spelling)));
-  let O = getPlatform() === "windows";
-  return flattened.flatMap((P) => {
-    let parts = normalize(P).split(sep);
-    let parts_2 = foldPathSegments(P).split(sep);
-    let G = parts_2.at(-1) === "" ? -1 : undefined;
-    let Z = O && spellingMode === "widest" ? classifyWindowsPathPrefix(P) : "named";
-    return mapped.flatMap((ae) =>
-      findTokenSequenceMatches(parts_2, ae, entryName, shortNameRe, Z).map((ee) => ({
-        get written() {
-          return parts.slice(ee, G);
-        },
-        get folded() {
-          return parts_2.slice(ee, G);
-        },
-      })),
+  let withSystemSpelling = (path) => uniq([path, isSystemVolumePath(path)]);
+  let entryPaths =
+    pathCache.get(entryName) ??
+    getConfigDirEntryPaths(entryName).map((entryPath) => getPathsForPermissionCheck(entryPath));
+  pathCache.set(entryName, entryPaths);
+  let mapped = entryPaths
+    .flatMap((entryPath) =>
+      spellingMode === "exact" ? entryPath : expandWindowsPathSpellings(entryPath, spellingMode).spellings,
+    )
+    .flatMap(withSystemSpelling)
+    .map((spelling) => foldPathSegments(spelling).split(sep));
+  let flattened = spellings.flatMap((spelling) => withSystemSpelling(normalizeMsysDrivePath(spelling)));
+  let isWindows = getPlatform() === "windows";
+  return flattened.flatMap((spelling) => {
+    let parts = normalize(spelling).split(sep);
+    let pathSegments = foldPathSegments(spelling).split(sep);
+    let endIndex = pathSegments.at(-1) === "" ? -1 : undefined;
+    let prefixKind = isWindows && spellingMode === "widest" ? classifyWindowsPathPrefix(spelling) : "named";
+    return mapped.flatMap((entryParts) =>
+      findTokenSequenceMatches(pathSegments, entryParts, entryName, shortNameRe, prefixKind).map(
+        (matchIndex) => ({
+          get written() {
+            return parts.slice(matchIndex, endIndex);
+          },
+          get folded() {
+            return pathSegments.slice(matchIndex, endIndex);
+          },
+        }),
+      ),
     );
   });
 }
 //@ chunk-82kqcve8.js:239899-239981 layout
 function getConfigDirEntryPaths(entryName) {
   return uniq(
-    getClaudeConfigDirCandidates().flatMap((n) =>
-      ["", launchedCwd ?? "", homedir()].map((source) => resolve(source, n, entryName)),
+    getClaudeConfigDirCandidates().flatMap((configDir) =>
+      ["", launchedCwd ?? "", homedir()].map((source) => resolve(source, configDir, entryName)),
     ),
   );
 }
@@ -855,19 +924,19 @@ function expandWindowsPathSpellings(paths, spellingMode) {
   let visited = new Set();
   let lookupBudget = MAX_WINDOWS_SPELLING_LOOKUPS;
   let notFollowed;
-  for (let w of pending)
-    for (let S of uniq([w, normalizeWin32Path(w)])) {
-      let R = uncToDrivePath(S);
-      if (pending.has(R) || visited.has(R)) continue;
-      visited.add(R);
-      if (isUncOrDevicePath(R)) continue;
+  for (let spelling of pending)
+    for (let candidate of uniq([spelling, normalizeWin32Path(spelling)])) {
+      let drivePath = uncToDrivePath(candidate);
+      if (pending.has(drivePath) || visited.has(drivePath)) continue;
+      visited.add(drivePath);
+      if (isUncOrDevicePath(drivePath)) continue;
       if (lookupBudget-- <= 0) {
-        notFollowed ??= R;
+        notFollowed ??= drivePath;
         continue;
       }
-      let O = walkPermissionCheckPaths(R);
-      if (O.unresolved) notFollowed ??= R;
-      for (let P of permissionCheckSpellings(O)) pending.add(P);
+      let walk = walkPermissionCheckPaths(drivePath);
+      if (walk.unresolved) notFollowed ??= drivePath;
+      for (let extraSpelling of permissionCheckSpellings(walk)) pending.add(extraSpelling);
     }
   return {
     spellings: uniq([...pending, ...visited]),
@@ -923,7 +992,7 @@ function checkConfigDirInternalWrite(paths, spellingMode, pathCache) {
   if (
     configDirEntryMatches.some(
       ({ written, folded }) =>
-        written[1] !== "tmp" || folded.some((O) => /^[. ]*(:|$)/.test(O.replace(regExp_3, ""))),
+        written[1] !== "tmp" || folded.some((part) => /^[. ]*(:|$)/.test(part.replace(regExp_3, ""))),
     )
   )
     return withRelativeConfigDirNote(withWindowsSpellingNote(JOBS_DIR_WRITE_DENIAL, spellingMode));
@@ -966,17 +1035,19 @@ var SESSION_ENV_SHORT_NAME_RE = /^se[0-9a-z]{0,4}~\d+$/;
 function isHostCredsFilePath(path) {
   let CLAUDE_CODE_HOST_CREDS_FILE = env.CLAUDE_CODE_HOST_CREDS_FILE;
   if (!CLAUDE_CODE_HOST_CREDS_FILE) return false;
-  let s =
+  let configuredPath =
     CLAUDE_CODE_HOST_CREDS_FILE.replace(getPlatform() === "windows" ? /[\\/]+$/ : /\/+$/, "") ||
     CLAUDE_CODE_HOST_CREDS_FILE;
-  let h = normalizeCaseForComparison(normalize(path));
-  return getPathsForPermissionCheck(s).some((y) => normalizeCaseForComparison(normalize(y)) === h);
+  let normalizedPath = normalizeCaseForComparison(normalize(path));
+  return getPathsForPermissionCheck(configuredPath).some(
+    (candidate) => normalizeCaseForComparison(normalize(candidate)) === normalizedPath,
+  );
 }
 //@ chunk-82kqcve8.js:243745-244009 layout
 function isProfileStorePath(path) {
   let wifProfileStoreDenyPaths = getWIFProfileStoreDenyPaths();
   if (wifProfileStoreDenyPaths === null) return false;
-  let r = normalizeCaseForComparison(normalize(path));
+  let normalizedPath = normalizeCaseForComparison(normalize(path));
   if (
     wifProfileStoreDenyPaths.dirs.some((dir) =>
       [
@@ -984,28 +1055,30 @@ function isProfileStorePath(path) {
         getPhysicalTwinPath(dir, {
           liveRoutesOnly: true,
         }),
-      ].some((h) => {
-        if (h === null) return false;
-        let y = normalizeCaseForComparison(normalize(h));
-        return r === y || r.startsWith(y + sep);
+      ].some((dirSpelling) => {
+        if (dirSpelling === null) return false;
+        let normalizedDir = normalizeCaseForComparison(normalize(dirSpelling));
+        return normalizedPath === normalizedDir || normalizedPath.startsWith(normalizedDir + sep);
       }),
     )
   )
     return true;
   return wifProfileStoreDenyPaths.files.some((file) =>
-    getPathsForPermissionCheck(file).some((h) => normalizeCaseForComparison(normalize(h)) === r),
+    getPathsForPermissionCheck(file).some(
+      (fileSpelling) => normalizeCaseForComparison(normalize(fileSpelling)) === normalizedPath,
+    ),
   );
 }
 //@ chunk-82kqcve8.js:244009-244170 layout
 function getPhysicalTwinPath(path, options) {
-  let r;
+  let resolved;
   try {
-    r = resolveDeepestExistingAncestorSync(getFsImplementation(), path, options);
+    resolved = resolveDeepestExistingAncestorSync(getFsImplementation(), path, options);
   } catch (error) {
     logForDebugging(`Could not resolve the physical twin of ${path}: ${error}`);
     return null;
   }
-  return r === undefined || r === path || dirname(r) === r ? null : r;
+  return resolved === undefined || resolved === path || dirname(resolved) === resolved ? null : resolved;
 }
 //@ chunk-82kqcve8.js:244170-244486 layout
 var PROFILE_STORE_WRITE_DENIAL = {
@@ -1020,10 +1093,10 @@ var PROFILE_STORE_WRITE_DENIAL = {
 };
 //@ chunk-82kqcve8.js:244486-244619 layout
 function isSettingsReviewStorePath(path) {
-  let n = foldPathSegments(path);
-  let r = join(homedir(), ".claude", "state");
-  return [r, join(r, "settings-review.json")].some((s) =>
-    getPathsForPermissionCheck(s).some((h) => foldPathSegments(h) === n),
+  let foldedPath = foldPathSegments(path);
+  let stateDir = join(homedir(), ".claude", "state");
+  return [stateDir, join(stateDir, "settings-review.json")].some((storePath) =>
+    getPathsForPermissionCheck(storePath).some((spelling) => foldPathSegments(spelling) === foldedPath),
   );
 }
 //@ chunk-82kqcve8.js:244619-244971 layout
@@ -1039,11 +1112,11 @@ var SETTINGS_REVIEW_STORE_WRITE_DENIAL = {
   },
 };
 //@ chunk-82kqcve8.js:244971-244993 layout
-function noConfigDirWriteDenialForPlan(e) {
+function noConfigDirWriteDenialForPlan(inputPath) {
   return;
 }
 //@ chunk-82kqcve8.js:244993-245015 layout
-function noConfigDirWriteDenialForRead(e) {
+function noConfigDirWriteDenialForRead(inputPath) {
   return;
 }
 //@ chunk-82kqcve8.js:245015-245258 layout
@@ -1063,109 +1136,121 @@ function normalizeMsysDrivePath(path) {
     : path;
 }
 //@ chunk-82kqcve8.js:245344-249937 layout
-var MEMORY_PAUSED_WRITE_DENIAL = {
-  behavior: "deny",
-  message: "Cannot write to memory while it is paused for this session; only the user can turn it back on.",
-  decisionReason: {
-    type: "safetyCheck",
-    reason: MEMORY_TOGGLED_OFF_REASON,
-    classifierApprovable: false,
-  },
-};
-var MEMORY_PAUSED_READ_DENIAL = {
-  behavior: "deny",
-  message: "Cannot read memory while it is paused for this session; only the user can turn it back on.",
-  decisionReason: {
-    type: "safetyCheck",
-    reason: MEMORY_TOGGLED_OFF_REASON,
-    classifierApprovable: false,
-  },
-};
-var SEED_ADMIN_WRITE_DENIAL = {
-  behavior: "deny",
-  message:
-    "~/.claude/seed-admin holds the private git directories of cloud-session uploads and is managed by Claude Code; it cannot be written directly",
-  decisionReason: {
-    type: "safetyCheck",
-    reason: "seed-admin git configuration is a code-execution surface for the upload",
-    classifierApprovable: false,
-  },
-};
-var ADOPT_JSON_WRITE_DENIAL = {
-  behavior: "deny",
-  message:
-    "adopt.json is the bg-fork handoff carrier and is managed by the harness; it cannot be written directly",
-  decisionReason: {
-    type: "safetyCheck",
-    reason: "adopt.json is a code-execution surface for the fork",
-    classifierApprovable: false,
-  },
-};
-var JOBS_DIR_WRITE_DENIAL = {
-  behavior: "deny",
-  message:
-    "This path is in, or leads into, the jobs folder of the Claude Code config directory ($CLAUDE_CONFIG_DIR or ~/.claude); a Windows short name such as CLAUDE~1 counts as the folder in its place. Claude Code restarts background sessions from the files there, so they cannot be written directly. Scratch files of a background session go in $CLAUDE_JOB_DIR/tmp. A person can stop, restart or remove a session in `claude agents`, or with `claude stop <id>`, `claude respawn <id>` or `claude rm <id>`.",
-  decisionReason: {
-    type: "safetyCheck",
-    reason:
-      "This writes to the Claude Code jobs folder. A file there can give a background session more permissions or run a command without asking anyone.",
-    classifierApprovable: false,
-  },
-};
-var DAEMON_DIR_WRITE_DENIAL = {
-  behavior: "deny",
-  message:
-    "This path is in, or leads into, the daemon folder of the Claude Code config directory ($CLAUDE_CONFIG_DIR or ~/.claude); a Windows short name such as CLAUDE~1 counts as the folder in its place. The service that runs background sessions acts on the files there, so they cannot be written directly. A person can check the service with `claude daemon status`.",
-  decisionReason: {
-    type: "safetyCheck",
-    reason:
-      "This writes to the Claude Code daemon folder. A file there can start a background session without asking anyone.",
-    classifierApprovable: false,
-  },
-};
-var DAEMON_JSON_WRITE_DENIAL = {
-  behavior: "deny",
-  message:
-    "This path is daemon.json in the Claude Code config directory ($CLAUDE_CONFIG_DIR or ~/.claude), or a link, temp file or short name that stands in for it; above it, a Windows short name such as CLAUDE~1 counts as the folder in its place. The service that runs background sessions starts the workers listed there, so it cannot be written directly. A person can change it in an editor.",
-  decisionReason: {
-    type: "safetyCheck",
-    reason:
-      "This writes to the Claude Code daemon.json, or to a file that stands in for it. The service that runs background sessions starts the workers listed there without asking anyone.",
-    classifierApprovable: false,
-  },
-};
-var SHELL_SNAPSHOTS_WRITE_DENIAL = {
-  behavior: "deny",
-  message:
-    "This path is in, or leads into, the shell-snapshots folder of the Claude Code config directory ($CLAUDE_CONFIG_DIR or ~/.claude); a Windows short name such as SHELL-~1 or CLAUDE~1 counts as the folder in its place. Each Bash command first runs a snapshot, kept there, of the shell setup (aliases, functions, options), so the files cannot be written directly. Claude Code takes a new snapshot each time it starts, so a person can change their shell startup file, such as ~/.bashrc or ~/.zshrc, and restart Claude Code.",
-  decisionReason: {
-    type: "safetyCheck",
-    reason:
-      "This writes to the Claude Code shell-snapshots folder. Each Bash command first runs a file from there, without asking anyone.",
-    classifierApprovable: false,
-  },
-};
-var SESSION_ENV_WRITE_DENIAL = {
-  behavior: "deny",
-  message:
-    "This path is in, or leads into, the session-env folder of the Claude Code config directory ($CLAUDE_CONFIG_DIR or ~/.claude); a Windows short name such as SESSIO~1 or CLAUDE~1 counts as the folder in its place. Claude Code runs the scripts that hooks leave there ahead of Bash commands, so they cannot be written directly. To set variables for later Bash commands, a person can add a SessionStart hook that appends export lines to the file named in $CLAUDE_ENV_FILE.",
-  decisionReason: {
-    type: "safetyCheck",
-    reason:
-      "This writes to the Claude Code session-env folder. Claude Code runs the scripts there ahead of Bash commands, without asking anyone.",
-    classifierApprovable: false,
-  },
-};
-var NO_CONFIG_DIR_WRITE_DENIAL = {
-  behavior: "deny",
-  message:
-    "This session has no config folder to check the path against, so the write is denied. A retry is denied the same way.",
-  decisionReason: {
-    type: "safetyCheck",
-    reason: NO_CONFIG_HOME_DENY_REASON,
-    classifierApprovable: false,
-  },
-};
+var MEMORY_PAUSED_WRITE_DENIAL; // deferred: uses MEMORY_PAUSED_MESSAGE (../../types/permissions.js) of its import cycle while loading; runs once the cycle is complete
+var MEMORY_PAUSED_READ_DENIAL;
+var SEED_ADMIN_WRITE_DENIAL;
+var ADOPT_JSON_WRITE_DENIAL;
+var JOBS_DIR_WRITE_DENIAL;
+var DAEMON_DIR_WRITE_DENIAL;
+var DAEMON_JSON_WRITE_DENIAL;
+var SHELL_SNAPSHOTS_WRITE_DENIAL;
+var SESSION_ENV_WRITE_DENIAL;
+var NO_CONFIG_DIR_WRITE_DENIAL;
+deferInit("chunk-82kqcve8.js:245344", () => {
+  MEMORY_PAUSED_WRITE_DENIAL = {
+    behavior: "deny",
+    message: "Cannot write to memory while it is paused for this session; only the user can turn it back on.",
+    decisionReason: {
+      type: "safetyCheck",
+      reason: MEMORY_TOGGLED_OFF_REASON,
+      classifierApprovable: false,
+    },
+  };
+  MEMORY_PAUSED_READ_DENIAL = {
+    behavior: "deny",
+    message: "Cannot read memory while it is paused for this session; only the user can turn it back on.",
+    decisionReason: {
+      type: "safetyCheck",
+      reason: MEMORY_TOGGLED_OFF_REASON,
+      classifierApprovable: false,
+    },
+  };
+  SEED_ADMIN_WRITE_DENIAL = {
+    behavior: "deny",
+    message:
+      "~/.claude/seed-admin holds the private git directories of cloud-session uploads and is managed by Claude Code; it cannot be written directly",
+    decisionReason: {
+      type: "safetyCheck",
+      reason: "seed-admin git configuration is a code-execution surface for the upload",
+      classifierApprovable: false,
+    },
+  };
+  ADOPT_JSON_WRITE_DENIAL = {
+    behavior: "deny",
+    message:
+      "adopt.json is the bg-fork handoff carrier and is managed by the harness; it cannot be written directly",
+    decisionReason: {
+      type: "safetyCheck",
+      reason: "adopt.json is a code-execution surface for the fork",
+      classifierApprovable: false,
+    },
+  };
+  JOBS_DIR_WRITE_DENIAL = {
+    behavior: "deny",
+    message:
+      "This path is in, or leads into, the jobs folder of the Claude Code config directory ($CLAUDE_CONFIG_DIR or ~/.claude); a Windows short name such as CLAUDE~1 counts as the folder in its place. Claude Code restarts background sessions from the files there, so they cannot be written directly. Scratch files of a background session go in $CLAUDE_JOB_DIR/tmp. A person can stop, restart or remove a session in `claude agents`, or with `claude stop <id>`, `claude respawn <id>` or `claude rm <id>`.",
+    decisionReason: {
+      type: "safetyCheck",
+      reason:
+        "This writes to the Claude Code jobs folder. A file there can give a background session more permissions or run a command without asking anyone.",
+      classifierApprovable: false,
+    },
+  };
+  DAEMON_DIR_WRITE_DENIAL = {
+    behavior: "deny",
+    message:
+      "This path is in, or leads into, the daemon folder of the Claude Code config directory ($CLAUDE_CONFIG_DIR or ~/.claude); a Windows short name such as CLAUDE~1 counts as the folder in its place. The service that runs background sessions acts on the files there, so they cannot be written directly. A person can check the service with `claude daemon status`.",
+    decisionReason: {
+      type: "safetyCheck",
+      reason:
+        "This writes to the Claude Code daemon folder. A file there can start a background session without asking anyone.",
+      classifierApprovable: false,
+    },
+  };
+  DAEMON_JSON_WRITE_DENIAL = {
+    behavior: "deny",
+    message:
+      "This path is daemon.json in the Claude Code config directory ($CLAUDE_CONFIG_DIR or ~/.claude), or a link, temp file or short name that stands in for it; above it, a Windows short name such as CLAUDE~1 counts as the folder in its place. The service that runs background sessions starts the workers listed there, so it cannot be written directly. A person can change it in an editor.",
+    decisionReason: {
+      type: "safetyCheck",
+      reason:
+        "This writes to the Claude Code daemon.json, or to a file that stands in for it. The service that runs background sessions starts the workers listed there without asking anyone.",
+      classifierApprovable: false,
+    },
+  };
+  SHELL_SNAPSHOTS_WRITE_DENIAL = {
+    behavior: "deny",
+    message:
+      "This path is in, or leads into, the shell-snapshots folder of the Claude Code config directory ($CLAUDE_CONFIG_DIR or ~/.claude); a Windows short name such as SHELL-~1 or CLAUDE~1 counts as the folder in its place. Each Bash command first runs a snapshot, kept there, of the shell setup (aliases, functions, options), so the files cannot be written directly. Claude Code takes a new snapshot each time it starts, so a person can change their shell startup file, such as ~/.bashrc or ~/.zshrc, and restart Claude Code.",
+    decisionReason: {
+      type: "safetyCheck",
+      reason:
+        "This writes to the Claude Code shell-snapshots folder. Each Bash command first runs a file from there, without asking anyone.",
+      classifierApprovable: false,
+    },
+  };
+  SESSION_ENV_WRITE_DENIAL = {
+    behavior: "deny",
+    message:
+      "This path is in, or leads into, the session-env folder of the Claude Code config directory ($CLAUDE_CONFIG_DIR or ~/.claude); a Windows short name such as SESSIO~1 or CLAUDE~1 counts as the folder in its place. Claude Code runs the scripts that hooks leave there ahead of Bash commands, so they cannot be written directly. To set variables for later Bash commands, a person can add a SessionStart hook that appends export lines to the file named in $CLAUDE_ENV_FILE.",
+    decisionReason: {
+      type: "safetyCheck",
+      reason:
+        "This writes to the Claude Code session-env folder. Claude Code runs the scripts there ahead of Bash commands, without asking anyone.",
+      classifierApprovable: false,
+    },
+  };
+  NO_CONFIG_DIR_WRITE_DENIAL = {
+    behavior: "deny",
+    message:
+      "This session has no config folder to check the path against, so the write is denied. A retry is denied the same way.",
+    decisionReason: {
+      type: "safetyCheck",
+      reason: NO_CONFIG_HOME_DENY_REASON,
+      classifierApprovable: false,
+    },
+  };
+});
 //@ chunk-82kqcve8.js:249937-250184 layout
 /**
  * 后台会话（CLAUDE_CODE_SESSION_KIND=bg）中，路径是否落在 $CLAUDE_JOB_DIR/tmp/ 下（且 CLAUDE_JOB_DIR 在配置目录 jobs/ 内）。
@@ -1174,12 +1259,12 @@ function isBgJobTmpPath(path) {
   if (env.CLAUDE_CODE_SESSION_KIND !== "bg") return false;
   let envClaudeJobDir = process.env.CLAUDE_JOB_DIR;
   if (!envClaudeJobDir) return false;
-  let r = join(getClaudeConfigDir(), "jobs") + sep;
-  let s = normalize(envClaudeJobDir);
-  if (!s.startsWith(r)) return false;
-  let h = s + sep + "tmp" + sep;
-  if (!normalizeCaseForComparison(path).startsWith(normalizeCaseForComparison(h))) return false;
-  return !isProtectedDirPath(path, h, DANGEROUS_FILES_LOWER);
+  let jobsPrefix = join(getClaudeConfigDir(), "jobs") + sep;
+  let jobDir = normalize(envClaudeJobDir);
+  if (!jobDir.startsWith(jobsPrefix)) return false;
+  let tmpPrefix = jobDir + sep + "tmp" + sep;
+  if (!normalizeCaseForComparison(path).startsWith(normalizeCaseForComparison(tmpPrefix))) return false;
+  return !isProtectedDirPath(path, tmpPrefix, DANGEROUS_FILES_LOWER);
 }
 //@ chunk-82kqcve8.js:250184-250341 facade-majority
 /**
@@ -1188,10 +1273,10 @@ function isBgJobTmpPath(path) {
 function isPathInTrustedNetworkRoot(path, trustedNetworkDirectories) {
   if (!trustedNetworkDirectories || trustedNetworkDirectories.size === 0) return false;
   if (hasDotSegment(path)) return false;
-  for (let r of trustedNetworkDirectories.values())
-    for (let s of r) {
-      if (isUncOrDevicePath(path) !== isUncOrDevicePath(s)) continue;
-      if (pathInWorkingPath(path, s)) return true;
+  for (let roots of trustedNetworkDirectories.values())
+    for (let root of roots) {
+      if (isUncOrDevicePath(path) !== isUncOrDevicePath(root)) continue;
+      if (pathInWorkingPath(path, root)) return true;
     }
   return false;
 }
@@ -1213,51 +1298,56 @@ function isUntrustedAutomountPath(path, trustedNetworkDirectories) {
 }
 //@ chunk-82kqcve8.js:250449-250814 layout = isDangerousFilePathToAutoEdit (0.9)
 function getProjectRootSegmentDepth(pathSegments) {
-  let n = 0;
-  for (let r of getResolvedWorkingDirPaths(getOriginalCwd())) {
-    let pathSegments_2 = expandPath(r).split(sep);
+  let depth = 0;
+  for (let workingDirPath of getResolvedWorkingDirPaths(getOriginalCwd())) {
+    let pathSegments_2 = expandPath(workingDirPath).split(sep);
     if (pathSegments_2.length > 1 && pathSegments_2.at(-1) === "") pathSegments_2.pop();
-    let h = 0;
+    let commonLength = 0;
     while (
-      h < pathSegments_2.length &&
-      h < pathSegments.length &&
-      (pathSegments[h] === pathSegments_2[h] ||
-        (h === 0 &&
-          /^[a-z]:$/i.test(pathSegments[h]) &&
-          pathSegments[h].toLowerCase() === pathSegments_2[h].toLowerCase()))
+      commonLength < pathSegments_2.length &&
+      commonLength < pathSegments.length &&
+      (pathSegments[commonLength] === pathSegments_2[commonLength] ||
+        (commonLength === 0 &&
+          /^[a-z]:$/i.test(pathSegments[commonLength]) &&
+          pathSegments[commonLength].toLowerCase() === pathSegments_2[commonLength].toLowerCase()))
     )
-      h++;
-    if (h === pathSegments_2.length) {
-      let y = h;
-      for (let j = 0; j < h; j++)
+      commonLength++;
+    if (commonLength === pathSegments_2.length) {
+      let claudeDirIndex = commonLength;
+      for (let j = 0; j < commonLength; j++)
         if (
           foldName(pathSegments_2[j]) === ".claude" &&
           foldName(pathSegments_2[j + 1] ?? "") !== "worktrees"
         ) {
-          y = j;
+          claudeDirIndex = j;
           break;
         }
-      if (y > n) n = y;
+      if (claudeDirIndex > depth) depth = claudeDirIndex;
     }
   }
-  return n;
+  return depth;
 }
 //@ chunk-82kqcve8.js:250814-250927 layout = isInGlobalClaudeFolder (1)
 function isInGlobalClaudeFolder(filePath) {
   let pathSegments = expandPath(filePath).split(sep);
   let absolutePath = getProjectRootSegmentDepth(pathSegments);
-  let s = 0;
-  for (let h = absolutePath; h < pathSegments.length; h++) if (foldName(pathSegments[h]) === ".claude") s++;
-  return s;
+  let count = 0;
+  for (let index = absolutePath; index < pathSegments.length; index++)
+    if (foldName(pathSegments[index]) === ".claude") count++;
+  return count;
 }
 //@ chunk-82kqcve8.js:250927-251340 layout
 /**
  * 规则以 ~/.claude/ 或 /.claude/ 开头时，判断路径是否在对应根的 .claude 之下、且其后还有名为 .claude 的段。
  */
-function hasNestedClaudeDirBelowRuleRoot(spelling, n) {
-  let r = n.startsWith("~/.claude/") ? homedir() : n.startsWith("/.claude/") ? getOriginalCwd() : null;
-  if (r === null) return false;
-  let parts = expandPath(join(r, ".claude")).split(sep);
+function hasNestedClaudeDirBelowRuleRoot(spelling, ruleSpelling) {
+  let base = ruleSpelling.startsWith("~/.claude/")
+    ? homedir()
+    : ruleSpelling.startsWith("/.claude/")
+      ? getOriginalCwd()
+      : null;
+  if (base === null) return false;
+  let parts = expandPath(join(base, ".claude")).split(sep);
   if (parts.length > 1 && parts.at(-1) === "") parts.pop();
   let parts_2 = expandPath(spelling).split(sep);
   for (let j = 0; j < parts.length; j++)
@@ -1266,7 +1356,8 @@ function hasNestedClaudeDirBelowRuleRoot(spelling, n) {
       !(j === 0 && /^[a-z]:$/i.test(parts_2[j] ?? "") && parts_2[j].toLowerCase() === parts[j].toLowerCase())
     )
       return false;
-  for (let y = parts.length; y < parts_2.length; y++) if (foldName(parts_2[y]) === ".claude") return true;
+  for (let index = parts.length; index < parts_2.length; index++)
+    if (foldName(parts_2[index]) === ".claude") return true;
   return false;
 }
 //@ chunk-82kqcve8.js:251340-252091 layout
@@ -1292,67 +1383,81 @@ function isDangerousFilePathToAutoEdit(filePath, allowClaudeSubdirs, options) {
   let sawProjectClaudeDir = false;
   let projectRootDepth = getProjectRootSegmentDepth(pathSegments);
   for (let idx = 0; idx < pathSegments.length; idx++) {
-    let O = pathSegments[idx];
-    let P = foldName(O);
-    if (isProtectedDirAlwaysFalse(P)) return true;
-    for (let L of DANGEROUS_DIRECTORIES) {
-      if (P !== normalizeCaseForComparison(L)) continue;
-      if (L === ".claude") {
-        let j = idx >= projectRootDepth;
+    let segment = pathSegments[idx];
+    let foldedSegment = foldName(segment);
+    if (isProtectedDirAlwaysFalse(foldedSegment)) return true;
+    for (let dangerousDir of DANGEROUS_DIRECTORIES) {
+      if (foldedSegment !== normalizeCaseForComparison(dangerousDir)) continue;
+      if (dangerousDir === ".claude") {
+        let isProjectLevel = idx >= projectRootDepth;
         if (sawProjectClaudeDir) return true;
-        let G = pathSegments[idx + 1];
-        let Z = G ? foldName(G) : undefined;
-        if (allowClaudeSubdirs && Z) {
-          if (Z === "skills" || Z === "agents" || Z === "commands") {
-            if (j) sawProjectClaudeDir = true;
+        let nextSegment = pathSegments[idx + 1];
+        let foldedNext = nextSegment ? foldName(nextSegment) : undefined;
+        if (allowClaudeSubdirs && foldedNext) {
+          if (foldedNext === "skills" || foldedNext === "agents" || foldedNext === "commands") {
+            if (isProjectLevel) sawProjectClaudeDir = true;
             break;
           }
-          if (Z === "scheduled_tasks.json" && idx + 1 === pathSegments.length - 1) break;
+          if (foldedNext === "scheduled_tasks.json" && idx + 1 === pathSegments.length - 1) break;
         }
-        if (Z === "worktrees") {
-          if (j) sawProjectClaudeDir = true;
+        if (foldedNext === "worktrees") {
+          if (isProjectLevel) sawProjectClaudeDir = true;
           break;
         }
       }
       return true;
     }
   }
-  for (let R of DANGEROUS_SUBPATHS) {
-    let parts = R.split("/");
+  for (let subPath of DANGEROUS_SUBPATHS) {
+    let parts = subPath.split("/");
     for (let idx = 0; idx + parts.length <= pathSegments.length; idx++)
-      if (parts.every((L, j) => foldName(pathSegments[idx + j]) === normalizeCaseForComparison(L)))
+      if (
+        parts.every(
+          (part, offset) => foldName(pathSegments[idx + offset]) === normalizeCaseForComparison(part),
+        )
+      )
         return true;
   }
   if (last) {
-    let R = foldName(last);
-    if (DANGEROUS_FILES.some((O) => normalizeCaseForComparison(O) === R)) return true;
+    let foldedLast = foldName(last);
+    if (DANGEROUS_FILES.some((dangerousFile) => normalizeCaseForComparison(dangerousFile) === foldedLast))
+      return true;
   }
   return false;
 }
 //@ chunk-82kqcve8.js:252091-252133 facade-majority
-function hasSuspiciousWindowsPathPattern(e, trustedNetworkDirectories) {
-  return classifySuspiciousWindowsPathPattern(e, trustedNetworkDirectories) !== undefined;
+function hasSuspiciousWindowsPathPattern(inputPath, trustedNetworkDirectories) {
+  return classifySuspiciousWindowsPathPattern(inputPath, trustedNetworkDirectories) !== undefined;
 }
 //@ chunk-82kqcve8.js:252133-252732 facade-majority
 /**
  * 给可疑 Windows 路径形状分类并返回原因码：nt_device_namespace、colon_past_drive_position（Windows/WSL 上盘符后再出现冒号，即 ADS）、tilde_digit（8.3 短名）、device_path_prefix（\\?\ 等）、trailing_dot_or_whitespace、dos_device_suffix、dot_run_segment（...）、unc_or_webdav_form（不可信网络根）。无可疑返回 undefined。
  */
-function classifySuspiciousWindowsPathPattern(e, n) {
-  if (hasWin32DevicePrefixSpelling(e)) return "nt_device_namespace";
+function classifySuspiciousWindowsPathPattern(inputPath, trustedNetworkDirectories) {
+  if (hasWin32DevicePrefixSpelling(inputPath)) return "nt_device_namespace";
   if (getPlatform() === "windows" || getPlatform() === "wsl") {
-    if (e.indexOf(":", 2) !== -1) return "colon_past_drive_position";
+    if (inputPath.indexOf(":", 2) !== -1) return "colon_past_drive_position";
   }
-  if (DOS_TILDE_RE.test(e)) return "tilde_digit";
-  if (e.startsWith("\\\\?\\") || e.startsWith("\\\\.\\") || e.startsWith("//?/") || e.startsWith("//./"))
+  if (DOS_TILDE_RE.test(inputPath)) return "tilde_digit";
+  if (
+    inputPath.startsWith("\\\\?\\") ||
+    inputPath.startsWith("\\\\.\\") ||
+    inputPath.startsWith("//?/") ||
+    inputPath.startsWith("//./")
+  )
     return "device_path_prefix";
-  let parts = e.split(/[/\\]/);
-  for (let s of parts) {
-    if (s === "" || s === "." || s === "..") continue;
-    if (TRAILING_DOTS_OR_SPACES_RE.test(s)) return "trailing_dot_or_whitespace";
+  let parts = inputPath.split(/[/\\]/);
+  for (let part of parts) {
+    if (part === "" || part === "." || part === "..") continue;
+    if (TRAILING_DOTS_OR_SPACES_RE.test(part)) return "trailing_dot_or_whitespace";
   }
-  if (RESERVED_NAME_SUFFIX_RE.test(e)) return "dos_device_suffix";
-  if (/(^|\/|\\)\.{3,}(\/|\\|$)/.test(e)) return "dot_run_segment";
-  if (containsVulnerableUncPath(e, true) && !isWslUncPath(e) && !isPathInTrustedNetworkRoot(e, n))
+  if (RESERVED_NAME_SUFFIX_RE.test(inputPath)) return "dos_device_suffix";
+  if (/(^|\/|\\)\.{3,}(\/|\\|$)/.test(inputPath)) return "dot_run_segment";
+  if (
+    containsVulnerableUncPath(inputPath, true) &&
+    !isWslUncPath(inputPath) &&
+    !isPathInTrustedNetworkRoot(inputPath, trustedNetworkDirectories)
+  )
     return "unc_or_webdav_form";
   return;
 }
@@ -1361,14 +1466,14 @@ function classifySuspiciousWindowsPathPattern(e, n) {
  * 远程模式下编辑 Claude 配置的豁免是否适用：要求 isRemoteMode、非 restricted、当前与改写前都不是 auto、且不是沿用 auto 分类器的 plan。
  */
 function remoteConfigEditExemptionApplies(toolPermissionContext) {
-  let n =
+  let inPlanModeFromAuto =
     toolPermissionContext.mode === "plan" &&
     (toolPermissionContext.prePlanMode === "auto" || !!toolPermissionContext.strippedDangerousRules);
   return (
     toolPermissionContext.isRemoteMode === true &&
     !toolPermissionContext.restricted &&
     toolPermissionContext.mode !== "auto" &&
-    !n &&
+    !inPlanModeFromAuto &&
     toolPermissionContext.modeBeforeRewrite !== "auto"
   );
 }
@@ -1382,24 +1487,30 @@ function acceptEditsSuggestionApplies(toolPermissionContext) {
   return toolPermissionContext.mode === "plan" && !isAutoEditingMode(toolPermissionContext.prePlanMode);
 }
 //@ chunk-82kqcve8.js:253043-253135 layout
-function isAutoEditingMode(e) {
-  return e === "auto" || e === "bypassPermissions" || e === "acceptEdits" || e === "dontAsk";
+function isAutoEditingMode(mode) {
+  return mode === "auto" || mode === "bypassPermissions" || mode === "acceptEdits" || mode === "dontAsk";
 }
 //@ chunk-82kqcve8.js:253135-254319 facade-majority = checkPathSafetyForAutoEdit (0.702)
 /**
  * 自动编辑（acceptEdits/自动放行）前的路径安全检查：远程模式一律不安全；可疑 Windows 路径（设备命名空间、短名、尾点、UNC…）；Claude 设置文件（含经链接，classifierApprovable 取决于是否经链接）；Claude 配置文件（commands/agents/skills）；危险文件/目录（Xp）。返回 {safe:true} 或 {safe:false, message, classifierApprovable, circuitBreaker?}。
  */
-function checkPathSafetyForAutoEdit(path, pathsToCheck, r, s, trustedNetworkDirectories) {
+function checkPathSafetyForAutoEdit(
+  path,
+  pathsToCheck,
+  allowClaudeSubdirs,
+  allowProtected,
+  trustedNetworkDirectories,
+) {
   if (isDiskless())
     return {
       safe: false,
       message: `Claude requested permissions to write to ${encodeControlChars(path)}, but you haven't granted it yet.`,
       classifierApprovable: false,
     };
-  let allowClaudeSubdirs = r || s;
-  let w = pathsToCheck ?? getPathsForPermissionCheck(path);
-  let touchesSettingsFile = settingsFileCertainty(w) !== "none";
-  for (let pathToCheck of w)
+  let allowClaudeSubdirs_2 = allowClaudeSubdirs || allowProtected;
+  let spellings = pathsToCheck ?? getPathsForPermissionCheck(path);
+  let touchesSettingsFile = settingsFileCertainty(spellings) !== "none";
+  for (let pathToCheck of spellings)
     if (hasSuspiciousWindowsPathPattern(pathToCheck, trustedNetworkDirectories))
       return {
         safe: false,
@@ -1412,28 +1523,30 @@ function checkPathSafetyForAutoEdit(path, pathsToCheck, r, s, trustedNetworkDire
       };
   if (touchesSettingsFile) {
     let settingsFileLinkSpellings = getSettingsFileLinkSpellings();
-    let mapped = w.map((j) => foldPathSegments(expandPath(j)));
-    let found = mapped.map((j) => settingsFileLinkSpellings.get(j)).find((j) => j !== undefined);
-    let L =
+    let mapped = spellings.map((pathToCheck) => foldPathSegments(expandPath(pathToCheck)));
+    let found = mapped
+      .map((folded) => settingsFileLinkSpellings.get(folded))
+      .find((linkSource) => linkSource !== undefined);
+    let linkNote =
       found === undefined || mapped.includes(foldPathSegments(found))
         ? ""
         : ` The Claude Code settings file ${truncatePathForDisplay(found)} leads here through a link.`;
     return {
       safe: false,
-      message: `Claude requested permissions to write to ${encodeControlChars(path)}, but you haven't granted it yet.${L}`,
+      message: `Claude requested permissions to write to ${encodeControlChars(path)}, but you haven't granted it yet.${linkNote}`,
       classifierApprovable: found === undefined,
       circuitBreaker: "claudeSettingsFile",
     };
   }
-  for (let pathToCheck of w)
-    if (!allowClaudeSubdirs && isClaudeConfigFilePath(pathToCheck))
+  for (let pathToCheck of spellings)
+    if (!allowClaudeSubdirs_2 && isClaudeConfigFilePath(pathToCheck))
       return {
         safe: false,
         message: `Claude requested permissions to write to ${encodeControlChars(path)}, but you haven't granted it yet.`,
         classifierApprovable: true,
       };
-  for (let pathToCheck of w)
-    if (isDangerousFilePathToAutoEdit(pathToCheck, allowClaudeSubdirs, trustedNetworkDirectories))
+  for (let pathToCheck of spellings)
+    if (isDangerousFilePathToAutoEdit(pathToCheck, allowClaudeSubdirs_2, trustedNetworkDirectories))
       return {
         safe: false,
         message: `Claude requested permissions to edit ${encodeControlChars(path)} which is a sensitive file.`,
@@ -1447,107 +1560,128 @@ function checkPathSafetyForAutoEdit(path, pathsToCheck, r, s, trustedNetworkDire
 /**
  * 工作目录集合 = 当前原始 cwd + toolPermissionContext.additionalWorkingDirectories 的键（--add-dir、settings additionalDirectories、会话内添加）。
  */
-function allWorkingDirectories(e) {
-  return new Set([getOriginalCwd(), ...e.additionalWorkingDirectories.keys()]);
+function allWorkingDirectories(toolPermissionContext) {
+  return new Set([getOriginalCwd(), ...toolPermissionContext.additionalWorkingDirectories.keys()]);
 }
 //@ chunk-82kqcve8.js:254398-254435 facade-majority
-function spellingsToJudge(e) {
-  return isDiskless() ? [e] : getPathsForPermissionCheck(e);
+function spellingsToJudge(filePath) {
+  return isDiskless() ? [filePath] : getPathsForPermissionCheck(filePath);
 }
 //@ chunk-82kqcve8.js:254435-254619 facade-majority
 /**
  * 取某工作目录的全部真实拼写（符号链接解析等），结果缓存在权限状态里；CLAUDE_CODE_EVAL_CONFINED 下对 cwd 只用原拼写。
  */
-function getResolvedWorkingDirPaths(e) {
+function getResolvedWorkingDirPaths(workingDir) {
   let sessionPathsCache = getSessionPathsCache();
-  let r = sessionPathsCache.resolvedWorkingDirPaths.get(e);
-  if (r !== undefined) return r;
-  let s = env.CLAUDE_CODE_EVAL_CONFINED && e === getOriginalCwd() ? [e] : spellingsToJudge(e);
-  sessionPathsCache.resolvedWorkingDirPaths.set(e, s);
-  return s;
+  let cached = sessionPathsCache.resolvedWorkingDirPaths.get(workingDir);
+  if (cached !== undefined) return cached;
+  let paths =
+    env.CLAUDE_CODE_EVAL_CONFINED && workingDir === getOriginalCwd()
+      ? [workingDir]
+      : spellingsToJudge(workingDir);
+  sessionPathsCache.resolvedWorkingDirPaths.set(workingDir, paths);
+  return paths;
 }
 //@ chunk-82kqcve8.js:254619-254719 facade-majority
 /**
  * 把某工作目录钉为只按原名比较（解析结果设为自身，并加入“按名持有”集合），用于不允许跟随符号链接的目录。
  */
-function pinResolvedWorkingDirPath(e) {
+function pinResolvedWorkingDirPath(workingDir) {
   let sessionPathsCache = getSessionPathsCache();
-  sessionPathsCache.resolvedWorkingDirPaths.set(e, [e]);
-  sessionPathsCache.workingDirPathsHeldAsNamed.add(e);
+  sessionPathsCache.resolvedWorkingDirPaths.set(workingDir, [workingDir]);
+  sessionPathsCache.workingDirPathsHeldAsNamed.add(workingDir);
 }
 //@ chunk-82kqcve8.js:254719-254819 facade-majority
 /**
  * 若该工作目录尚未解析过，则把它登记为“按名持有”，后续只按字面路径比较。
  */
-function holdUnresolvedWorkingDirPathAsNamed(e) {
+function holdUnresolvedWorkingDirPathAsNamed(workingDir) {
   let sessionPathsCache = getSessionPathsCache();
-  if (!sessionPathsCache.resolvedWorkingDirPaths.has(e)) sessionPathsCache.workingDirPathsHeldAsNamed.add(e);
+  if (!sessionPathsCache.resolvedWorkingDirPaths.has(workingDir))
+    sessionPathsCache.workingDirPathsHeldAsNamed.add(workingDir);
 }
 //@ chunk-82kqcve8.js:254819-254881 facade-majority
 /**
  * 查询工作目录是否被登记为“按名持有”（只按字面路径比较，不展开真实拼写）。
  */
-function isWorkingDirPathHeldAsNamed(e) {
-  return getSessionPathsCache().workingDirPathsHeldAsNamed.has(e);
+function isWorkingDirPathHeldAsNamed(namedPath) {
+  return getSessionPathsCache().workingDirPathsHeldAsNamed.has(namedPath);
 }
 //@ chunk-82kqcve8.js:255014-255062 facade-majority
 function declaredAbsoluteAdditionalDirectories(source) {
   return getNonProjectAdditionalDirectories(source).filter((path) => isAbsolute(path));
 }
 //@ chunk-82kqcve8.js:255062-255110 facade-majority
-function blockReadsWorkingDirectories(e) {
-  return new Set([getOriginalCwd(), ...getNonProjectAdditionalDirectories(e)]);
+function blockReadsWorkingDirectories(toolPermissionContext) {
+  return new Set([getOriginalCwd(), ...getNonProjectAdditionalDirectories(toolPermissionContext)]);
 }
 //@ chunk-82kqcve8.js:255110-255175 layout
-function readBlockExemptPaths(e) {
-  return e.restricted ? [] : (e.readBlockExemptPaths ?? []);
+function readBlockExemptPaths(toolPermissionContext) {
+  return toolPermissionContext.restricted ? [] : (toolPermissionContext.readBlockExemptPaths ?? []);
 }
 //@ chunk-82kqcve8.js:255175-255262 layout
-function isReadInsideWorkingPath(e, n, r, s, h, y = []) {
-  return n.length > 0 && (pathInAllowedWorkingPath(e, r, n, s, y) || h().behavior === "allow");
+function isReadInsideWorkingPath(
+  filePath,
+  spellings,
+  toolPermissionContext,
+  workingDirectories,
+  checkInternal,
+  exemptPaths = [],
+) {
+  return (
+    spellings.length > 0 &&
+    (pathInAllowedWorkingPath(filePath, toolPermissionContext, spellings, workingDirectories, exemptPaths) ||
+      checkInternal().behavior === "allow")
+  );
 }
 //@ chunk-82kqcve8.js:255262-255464 facade-majority
 /**
  * blockReadsOutsideWorkingDirectories 打开时判断这次读是否被拦：路径不在读允许的工作目录内、且不是内部可读路径（readBlockFence 模式下的 checkReadableInternalPath）即返回 true。
  */
-function outsideReadBlocked(e, n, r) {
-  if (n.blockReadsOutsideWorkingDirectories !== true) return false;
-  let s = r ?? spellingsToJudge(e);
+function outsideReadBlocked(filePath, toolPermissionContext, spellings) {
+  if (toolPermissionContext.blockReadsOutsideWorkingDirectories !== true) return false;
+  let judgedSpellings = spellings ?? spellingsToJudge(filePath);
   return !isReadInsideWorkingPath(
-    e,
-    s,
-    n,
-    blockReadsWorkingDirectories(n),
+    filePath,
+    judgedSpellings,
+    toolPermissionContext,
+    blockReadsWorkingDirectories(toolPermissionContext),
     () =>
-      checkReadableInternalPath(e, {}, s, {
-        restricted: n.restricted,
+      checkReadableInternalPath(filePath, {}, judgedSpellings, {
+        restricted: toolPermissionContext.restricted,
         blockOutsideReads: true,
         readBlockFence: true,
       }),
-    readBlockExemptPaths(n),
+    readBlockExemptPaths(toolPermissionContext),
   );
 }
 //@ chunk-82kqcve8.js:255464-255760 facade-majority
 /**
  * 判断路径的全部拼写是否都落在某个工作目录（含其真实拼写，按名持有的目录只用原名）或额外根之内；比较时不折叠大小写、要求 UNC 形状一致，非 macOS 的额外根跳过 /private 别名。
  */
-function pathInAllowedWorkingPath(e, n, r, s = allWorkingDirectories(n), h = []) {
-  let y = r ?? getPathsForPermissionCheck(e);
+function pathInAllowedWorkingPath(
+  filePath,
+  toolPermissionContext,
+  spellings,
+  workingDirectories = allWorkingDirectories(toolPermissionContext),
+  exemptPaths = [],
+) {
+  let judgedSpellings = spellings ?? getPathsForPermissionCheck(filePath);
   let { workingDirPathsHeldAsNamed } = getSessionPathsCache();
-  let flattened = Array.from(s).flatMap((O) =>
-    workingDirPathsHeldAsNamed.has(O) ? [O] : getResolvedWorkingDirPaths(O),
+  let flattened = Array.from(workingDirectories).flatMap((workingDir) =>
+    workingDirPathsHeldAsNamed.has(workingDir) ? [workingDir] : getResolvedWorkingDirPaths(workingDir),
   );
   let skipPrivateAlias = getPlatform() !== "macos";
-  return y.every(
-    (O) =>
-      flattened.some((P) =>
-        pathInWorkingPath(O, P, {
+  return judgedSpellings.every(
+    (spelling) =>
+      flattened.some((workingPath) =>
+        pathInWorkingPath(spelling, workingPath, {
           caseFold: false,
           uncShapeParity: true,
         }),
       ) ||
-      h.some((P) =>
-        pathInWorkingPath(O, P, {
+      exemptPaths.some((exemptPath) =>
+        pathInWorkingPath(spelling, exemptPath, {
           caseFold: false,
           uncShapeParity: true,
           skipPrivateAlias,
@@ -1556,9 +1690,9 @@ function pathInAllowedWorkingPath(e, n, r, s = allWorkingDirectories(n), h = [])
   );
 }
 //@ chunk-82kqcve8.js:255760-255846 layout
-function editableInternalPathDecision(e, n, r) {
-  return checkEditableInternalPath(e, {}, n, {
-    restricted: r.restricted,
+function editableInternalPathDecision(filePath, spellings, toolPermissionContext) {
+  return checkEditableInternalPath(filePath, {}, spellings, {
+    restricted: toolPermissionContext.restricted,
     blockOutsideWrites: true,
   });
 }
@@ -1566,17 +1700,21 @@ function editableInternalPathDecision(e, n, r) {
 /**
  * Shell 写目标的阻断说明：先查内部硬拒绝；blockWritesOutsideWorkingDirectories 打开时，目录外写返回“工作目录外”消息，写到可能是设置文件的路径返回设置文件消息；否则返回 undefined。
  */
-function writeBlockRefusal(absolutePath, n, r) {
-  let editDenyForSpellings = findEditDenyForSpellings(absolutePath, r, n);
+function writeBlockRefusal(absolutePath, toolPermissionContext, spellings) {
+  let editDenyForSpellings = findEditDenyForSpellings(absolutePath, spellings, toolPermissionContext);
   if (editDenyForSpellings !== undefined) return editDenyForSpellings.message;
-  if (n.blockWritesOutsideWorkingDirectories !== true) return;
+  if (toolPermissionContext.blockWritesOutsideWorkingDirectories !== true) return;
   if (
-    !isReadInsideWorkingPath(absolutePath, r, n, blockReadsWorkingDirectories(n), () =>
-      editableInternalPathDecision(absolutePath, r, n),
+    !isReadInsideWorkingPath(
+      absolutePath,
+      spellings,
+      toolPermissionContext,
+      blockReadsWorkingDirectories(toolPermissionContext),
+      () => editableInternalPathDecision(absolutePath, spellings, toolPermissionContext),
     )
   )
     return encodeControlChars(`${absolutePath}: ${OUTSIDE_WRITES_BLOCKED_DENY_REASON}`);
-  return settingsFileCertainty(r) === "none"
+  return settingsFileCertainty(spellings) === "none"
     ? undefined
     : encodeControlChars(`${absolutePath}: ${SETTINGS_WRITES_BLOCKED_DENY_REASON}`);
 }
@@ -1584,47 +1722,70 @@ function writeBlockRefusal(absolutePath, n, r) {
 /**
  * --restricted 与 blockReads/WritesOutsideWorkingDirectories 三种工作目录约束的说明文字与拒绝原因。
  */
-var RESTRICTED_MODE_CONSTRAINT = {
-  why: "--restricted confines the file tools to the working directory.",
-  reason: RESTRICTED_MODE_DENY_REASON,
-};
-var OUTSIDE_READS_CONSTRAINT = {
-  why: "the permissions.blockReadsOutsideWorkingDirectories setting blocks reads outside the working directories. Ask the user to add the directory with /add-dir, or to remove that setting.",
-  reason: OUTSIDE_READS_BLOCKED_DENY_REASON,
-};
-var OUTSIDE_WRITES_CONSTRAINT = {
-  why: "the permissions.blockWritesOutsideWorkingDirectories setting blocks writes outside the working directories. Ask the user to add the directory with /add-dir, or to remove that setting.",
-  reason: OUTSIDE_WRITES_BLOCKED_DENY_REASON,
-};
+var RESTRICTED_MODE_CONSTRAINT; // deferred: uses PERMISSION_REQUEST_TOOL_KINDS (../../types/permissions.js) of its import cycle while loading; runs once the cycle is complete
+var OUTSIDE_READS_CONSTRAINT;
+var OUTSIDE_WRITES_CONSTRAINT;
+deferInit("chunk-82kqcve8.js:256077", () => {
+  RESTRICTED_MODE_CONSTRAINT = {
+    why: "--restricted confines the file tools to the working directory.",
+    reason: RESTRICTED_MODE_DENY_REASON,
+  };
+  OUTSIDE_READS_CONSTRAINT = {
+    why: "the permissions.blockReadsOutsideWorkingDirectories setting blocks reads outside the working directories. Ask the user to add the directory with /add-dir, or to remove that setting.",
+    reason: OUTSIDE_READS_BLOCKED_DENY_REASON,
+  };
+  OUTSIDE_WRITES_CONSTRAINT = {
+    why: "the permissions.blockWritesOutsideWorkingDirectories setting blocks writes outside the working directories. Ask the user to add the directory with /add-dir, or to remove that setting.",
+    reason: OUTSIDE_WRITES_BLOCKED_DENY_REASON,
+  };
+});
 //@ chunk-82kqcve8.js:256575-257027 layout
 /**
  * 按工作目录约束检查路径：无法解析直接拒绝；在允许目录内返回 null；否则给出拒绝（含符号链接落点说明与 blockedPath）。
  */
-function denyIfOutsideWorkingDirs(e, n, r, s, h, y, blockExemptPaths = []) {
-  if (n.unresolved)
+function denyIfOutsideWorkingDirs(
+  filePath,
+  walk,
+  toolPermissionContext,
+  checkInternal,
+  denyText,
+  workingDirectories,
+  exemptPaths = [],
+) {
+  if (walk.unresolved)
     return {
       behavior: "deny",
-      message: `${unresolvablePathMessage(e)}; ${h.why}`,
+      message: `${unresolvablePathMessage(filePath)}; ${denyText.why}`,
       decisionReason: {
         type: "other",
-        reason: h.reason,
+        reason: denyText.reason,
       },
     };
-  if (isReadInsideWorkingPath(e, n.spellings, r, y, s, blockExemptPaths)) return null;
-  let joined = Array.from(y).join(", ");
-  let R = symlinkRedirect(n, r, y);
+  if (
+    isReadInsideWorkingPath(
+      filePath,
+      walk.spellings,
+      toolPermissionContext,
+      workingDirectories,
+      checkInternal,
+      exemptPaths,
+    )
+  )
+    return null;
+  let joined = Array.from(workingDirectories).join(", ");
+  let redirect = symlinkRedirect(walk, toolPermissionContext, workingDirectories);
   return {
     behavior: "deny",
     message: encodeControlChars(
-      R?.carriedOut
-        ? `${formatSymlinkResolution(e, R.landing)}, which is outside ${joined}; ${h.why}`
-        : `${e} is outside ${joined}; ${h.why}`,
+      redirect?.carriedOut
+        ? `${formatSymlinkResolution(filePath, redirect.landing)}, which is outside ${joined}; ${denyText.why}`
+        : `${filePath} is outside ${joined}; ${denyText.why}`,
     ),
     decisionReason: {
       type: "other",
-      reason: h.reason,
+      reason: denyText.reason,
     },
-    blockedPath: R?.carriedOut ? R.landing : e,
+    blockedPath: redirect?.carriedOut ? redirect.landing : filePath,
   };
 }
 //@ chunk-82kqcve8.js:257027-257092 facade-majority
@@ -1640,15 +1801,15 @@ function isLinkedWorktreeFastPathEnabled() {
  */
 async function verifiedLinkedWorktreeDirectories(toolPermissionContext) {
   if (!isLinkedWorktreeFastPathEnabled() || isDiskless()) return [];
-  let n = new Set();
-  let r = new Set();
-  for (let s of allWorkingDirectories(toolPermissionContext)) {
-    if (await hasUntouchableRecordSpellingStrictAsync(s)) continue;
-    let canonicalGitRoot = findCanonicalGitRoot(s);
-    if (canonicalGitRoot === null && findGitRootRecheckingNegative(s))
-      canonicalGitRoot = findCanonicalGitRoot(s);
-    if (canonicalGitRoot === null || r.has(canonicalGitRoot)) continue;
-    r.add(canonicalGitRoot);
+  let directories = new Set();
+  let seenGitRoots = new Set();
+  for (let workingDir of allWorkingDirectories(toolPermissionContext)) {
+    if (await hasUntouchableRecordSpellingStrictAsync(workingDir)) continue;
+    let canonicalGitRoot = findCanonicalGitRoot(workingDir);
+    if (canonicalGitRoot === null && findGitRootRecheckingNegative(workingDir))
+      canonicalGitRoot = findCanonicalGitRoot(workingDir);
+    if (canonicalGitRoot === null || seenGitRoots.has(canonicalGitRoot)) continue;
+    seenGitRoots.add(canonicalGitRoot);
     if (
       !pathInAllowedWorkingPath(
         canonicalGitRoot,
@@ -1657,23 +1818,23 @@ async function verifiedLinkedWorktreeDirectories(toolPermissionContext) {
       )
     )
       continue;
-    let y;
+    let realGitRoot;
     try {
-      y = identity(await getFsImplementation().realpath(canonicalGitRoot));
+      realGitRoot = identity(await getFsImplementation().realpath(canonicalGitRoot));
     } catch {
       continue;
     }
-    if (isDifferentNetworkLocation(canonicalGitRoot, y, null)) continue;
-    if (y !== canonicalGitRoot) {
-      if (r.has(y)) continue;
-      r.add(y);
+    if (isDifferentNetworkLocation(canonicalGitRoot, realGitRoot, null)) continue;
+    if (realGitRoot !== canonicalGitRoot) {
+      if (seenGitRoots.has(realGitRoot)) continue;
+      seenGitRoots.add(realGitRoot);
     }
-    for (let w of await resolveWslGitDir(canonicalGitRoot)) {
-      if (await hasUntouchableRecordSpellingStrictAsync(w)) continue;
-      n.add(w);
+    for (let gitDir of await resolveWslGitDir(canonicalGitRoot)) {
+      if (await hasUntouchableRecordSpellingStrictAsync(gitDir)) continue;
+      directories.add(gitDir);
     }
   }
-  return Array.from(n);
+  return Array.from(directories);
 }
 //@ chunk-82kqcve8.js:257516-257927 facade-majority = pathInWorkingPath (0.775)
 /**
@@ -1682,32 +1843,35 @@ async function verifiedLinkedWorktreeDirectories(toolPermissionContext) {
 function pathInWorkingPath(
   path,
   workingPath,
-  { caseFold: r, skipPrivateAlias: s = false, uncShapeParity: h = false } = {
+  { caseFold, skipPrivateAlias = false, uncShapeParity = false } = {
     caseFold: true,
   },
 ) {
   let absolutePath = expandPath(path);
   let absoluteWorkingPath = expandPath(workingPath);
   if (
-    h &&
+    uncShapeParity &&
     (isUncOrDevicePath(absolutePath) !== isUncOrDevicePath(absoluteWorkingPath) ||
       isUncOrDevicePath(path) !== isUncOrDevicePath(workingPath))
   )
     return false;
-  let S = r ? /^\/private\/var\//i : /^\/private\/var\//;
-  let R = r ? /^\/private\/tmp(\/|$)/i : /^\/private\/tmp(\/|$)/;
-  let O = (G) => (s ? G : G.replace(S, "/var/").replace(R, "/tmp$1"));
-  let caseNormalizedPath = O(absolutePath);
-  let caseNormalizedWorkingPath = O(absoluteWorkingPath);
-  let j = r
+  let privateVarPattern = caseFold ? /^\/private\/var\//i : /^\/private\/var\//;
+  let privateTmpPattern = caseFold ? /^\/private\/tmp(\/|$)/i : /^\/private\/tmp(\/|$)/;
+  let stripPrivateAlias = (inputPath) =>
+    skipPrivateAlias
+      ? inputPath
+      : inputPath.replace(privateVarPattern, "/var/").replace(privateTmpPattern, "/tmp$1");
+  let caseNormalizedPath = stripPrivateAlias(absolutePath);
+  let caseNormalizedWorkingPath = stripPrivateAlias(absoluteWorkingPath);
+  let relativeSubpath = caseFold
     ? relativePath(
         normalizeCaseForComparison(caseNormalizedWorkingPath),
         normalizeCaseForComparison(caseNormalizedPath),
       )
     : relativePath(caseNormalizedWorkingPath, caseNormalizedPath);
-  if (j === "") return true;
-  if (containsPathTraversal(j)) return false;
-  return !posix.isAbsolute(j);
+  if (relativeSubpath === "") return true;
+  if (containsPathTraversal(relativeSubpath)) return false;
+  return !posix.isAbsolute(relativeSubpath);
 }
 //@ chunk-82kqcve8.js:257927-258205 facade-majority = rootPathForSource (0.728)
 /**
@@ -1741,16 +1905,16 @@ function prependDirSep(path) {
  */
 function normalizePatternToPath({ patternRoot, pattern, rootPath }) {
   let fullPattern = posix.join(patternRoot, pattern);
-  let h = normalizeCaseForComparison(patternRoot);
-  let y = normalizeCaseForComparison(rootPath);
-  if (h === y) return [prependDirSep(pattern)];
-  else if (normalizeCaseForComparison(fullPattern).startsWith(`${y}${DIR_SEP}`)) {
+  let normalizedPatternRoot = normalizeCaseForComparison(patternRoot);
+  let normalizedRoot = normalizeCaseForComparison(rootPath);
+  if (normalizedPatternRoot === normalizedRoot) return [prependDirSep(pattern)];
+  else if (normalizeCaseForComparison(fullPattern).startsWith(`${normalizedRoot}${DIR_SEP}`)) {
     let relativePart = fullPattern.slice(rootPath.length);
     return [prependDirSep(relativePart)];
   } else {
-    let relativePath = posix.relative(y, h);
+    let relativePath = posix.relative(normalizedRoot, normalizedPatternRoot);
     if (!relativePath || relativePath.startsWith(`..${DIR_SEP}`) || relativePath === "..") {
-      let relativePath = posix.relative(h, y);
+      let relativePath = posix.relative(normalizedPatternRoot, normalizedRoot);
       if (!relativePath || relativePath === ".." || relativePath.startsWith(`..${DIR_SEP}`)) return [];
       return stripPatternPrefixSegments(pattern, relativePath.split(DIR_SEP)).map(prependDirSep);
     } else {
@@ -1764,49 +1928,51 @@ function normalizePatternToPath({ patternRoot, pattern, rootPath }) {
  * 用 gitignore 语义让模式逐段匹配并消耗前缀目录段（支持 **），返回剩余模式集合（全部消耗则为 **）。
  */
 function stripPatternPrefixSegments(pattern, prefixSegments) {
-  let rest = pattern.split(DIR_SEP).filter((S) => S !== "" && S !== ".");
-  let s = pattern.endsWith(DIR_SEP) ? DIR_SEP : "";
-  let h = new Set();
-  let y = [
+  let rest = pattern.split(DIR_SEP).filter((segment) => segment !== "" && segment !== ".");
+  let trailingSep = pattern.endsWith(DIR_SEP) ? DIR_SEP : "";
+  let results = new Set();
+  let stack = [
     {
       rest,
       at: 0,
     },
   ];
-  let w = new Set();
-  for (let S = y.pop(); S !== undefined; S = y.pop()) {
-    let { rest, at } = S;
-    let P = `${at}:${rest.join(DIR_SEP)}`;
-    if (w.has(P)) continue;
-    w.add(P);
+  let seen = new Set();
+  for (let frame = stack.pop(); frame !== undefined; frame = stack.pop()) {
+    let { rest, at } = frame;
+    let frameKey = `${at}:${rest.join(DIR_SEP)}`;
+    if (seen.has(frameKey)) continue;
+    seen.add(frameKey);
     if (at === prefixSegments.length) {
-      h.add(rest.length === 0 ? "**" : rest.join(DIR_SEP) + s);
+      results.add(rest.length === 0 ? "**" : rest.join(DIR_SEP) + trailingSep);
       continue;
     }
-    let L = rest[0];
-    if (L === undefined) {
-      h.add("**");
+    let head = rest[0];
+    if (head === undefined) {
+      results.add("**");
       continue;
     }
-    if (L === "**") {
-      y.push({
+    if (head === "**") {
+      stack.push({
         rest,
         at: at + 1,
       });
-      y.push({
+      stack.push({
         rest: rest.slice(1),
         at,
       });
       continue;
     }
-    let replaced = (/^[!#]/.test(L) ? `\\${L}` : L).replace(/ +$/, (G) => G.replace(/ /g, "\\ "));
+    let replaced = (/^[!#]/.test(head) ? `\\${head}` : head).replace(/ +$/, (trailingSpaces) =>
+      trailingSpaces.replace(/ /g, "\\ "),
+    );
     if (memoryStoresEnvModule.default().add(replaced).ignores(prefixSegments[at]))
-      y.push({
+      stack.push({
         rest: rest.slice(1),
         at: at + 1,
       });
   }
-  return Array.from(h);
+  return Array.from(results);
 }
 //@ chunk-82kqcve8.js:259235-259355 layout
 function toComparablePosixPath(path) {
@@ -1820,28 +1986,28 @@ function toComparablePosixPath(path) {
  */
 function normalizePatternsToPath(patternsByRoot, root) {
   let realpathCache = new Map();
-  let s = patternsByRoot.get(null) ?? [];
-  let result = new Set(s);
+  let rootPatterns = patternsByRoot.get(null) ?? [];
+  let result = new Set(rootPatterns);
   let rootPath = toComparablePosixPath(root);
   let patternRoot = toComparablePosixPath(getCwd());
-  for (let pattern of s) {
+  for (let pattern of rootPatterns) {
     if (!pattern.replace(/\/+$/, "").includes(DIR_SEP)) continue;
-    for (let R of withResolvedPatternRoot(patternRoot, pattern, realpathCache))
-      for (let O of normalizePatternToPath({
-        patternRoot: R.patternRoot,
-        pattern: R.pattern,
+    for (let resolved of withResolvedPatternRoot(patternRoot, pattern, realpathCache))
+      for (let normalized of normalizePatternToPath({
+        patternRoot: resolved.patternRoot,
+        pattern: resolved.pattern,
         rootPath,
       }))
-        result.add(O);
+        result.add(normalized);
   }
-  for (let [patternRoot, R] of patternsByRoot.entries()) {
+  for (let [patternRoot, patterns] of patternsByRoot.entries()) {
     if (patternRoot === null) continue;
     let normalizedPattern = toComparablePosixPath(patternRoot);
-    for (let P of R)
-      for (let L of withResolvedPatternRoot(normalizedPattern, P, realpathCache))
+    for (let pattern of patterns)
+      for (let resolvedPattern of withResolvedPatternRoot(normalizedPattern, pattern, realpathCache))
         for (let normalizedPattern of normalizePatternToPath({
-          patternRoot: L.patternRoot,
-          pattern: L.pattern,
+          patternRoot: resolvedPattern.patternRoot,
+          pattern: resolvedPattern.pattern,
           rootPath,
         }))
           result.add(normalizedPattern);
@@ -1850,31 +2016,31 @@ function normalizePatternsToPath(patternsByRoot, root) {
 }
 //@ chunk-82kqcve8.js:259809-260189 layout
 function withResolvedPatternRoot(patternRoot, pattern, realpathCache) {
-  let s = {
+  let baseEntry = {
     patternRoot,
     pattern,
   };
-  let h = pattern.endsWith(DIR_SEP) ? DIR_SEP : "";
-  let filtered = pattern.split(DIR_SEP).filter((P) => P !== "" && P !== ".");
-  let index = filtered.findIndex((P) => /[*?[{]/.test(P));
-  let S = index === -1 ? Math.max(0, filtered.length - 1) : index;
-  let joined = posix.join(patternRoot, ...filtered.slice(0, S));
-  let O = realpathCache.get(joined);
-  if (O === undefined) {
-    O = toComparablePosixPath(
+  let trailingSep = pattern.endsWith(DIR_SEP) ? DIR_SEP : "";
+  let filtered = pattern.split(DIR_SEP).filter((segment) => segment !== "" && segment !== ".");
+  let index = filtered.findIndex((segment) => /[*?[{]/.test(segment));
+  let splitIndex = index === -1 ? Math.max(0, filtered.length - 1) : index;
+  let joined = posix.join(patternRoot, ...filtered.slice(0, splitIndex));
+  let realRoot = realpathCache.get(joined);
+  if (realRoot === undefined) {
+    realRoot = toComparablePosixPath(
       safeResolvePath(
         getFsImplementation(),
         getPlatform() === "windows" ? posixPathToWindowsPath(joined) : joined,
       ).resolvedPath,
     );
-    realpathCache.set(joined, O);
+    realpathCache.set(joined, realRoot);
   }
-  if (O === joined) return [s];
+  if (realRoot === joined) return [baseEntry];
   return [
-    s,
+    baseEntry,
     {
-      patternRoot: O,
-      pattern: filtered.slice(S).join(DIR_SEP) + h,
+      patternRoot: realRoot,
+      pattern: filtered.slice(splitIndex).join(DIR_SEP) + trailingSep,
     },
   ];
 }
@@ -1885,18 +2051,18 @@ function withResolvedPatternRoot(patternRoot, pattern, realpathCache) {
 function getFileReadIgnorePatterns(toolPermissionContext) {
   let patternsByRoot = getPatternsByRoot(toolPermissionContext, "read", "deny");
   let result = new Map();
-  for (let [patternRoot, { patternMap: y }] of patternsByRoot.entries())
+  for (let [patternRoot, { patternMap }] of patternsByRoot.entries())
     result.set(
       patternRoot,
-      Array.from(y.keys()).filter((key) => !key.startsWith("!")),
+      Array.from(patternMap.keys()).filter((key) => !key.startsWith("!")),
     );
   if (result.size === 0 || !isWslSecondRootMountEnabled()) return result;
-  let s = [...result];
-  for (let h of rootAliasMountPoints())
-    for (let [y, w] of s) {
-      let S = y ?? getCwd();
-      let R = S === DIR_SEP ? h : h + S;
-      result.set(R, [...(result.get(R) ?? []), ...w]);
+  let originalEntries = [...result];
+  for (let mountPoint of rootAliasMountPoints())
+    for (let [root, patterns] of originalEntries) {
+      let rootPath = root ?? getCwd();
+      let aliasRoot = rootPath === DIR_SEP ? mountPoint : mountPoint + rootPath;
+      result.set(aliasRoot, [...(result.get(aliasRoot) ?? []), ...patterns]);
     }
   return result;
 }
@@ -1957,7 +2123,9 @@ function patternWithRoot_2(pattern, source) {
 function normalizeRulePattern(pattern) {
   let replaced = pattern.replace(/\/{2,}/g, "/");
   if (/^\s*(?:\/\*\*)?$/.test(replaced)) return replaced;
-  return replaced.replace(/^\uFEFF([!#]?)/, (r, s) => (s ? "\\" + s : "")).replace(/^\uFEFF/, "[\uFEFF]");
+  return replaced
+    .replace(/^\uFEFF([!#]?)/, (bomMatch, bomMarker) => (bomMarker ? "\\" + bomMarker : ""))
+    .replace(/^\uFEFF/, "[\uFEFF]");
 }
 //@ chunk-82kqcve8.js:261478-261520 facade-majority
 function patternWithRoot(pattern, source) {
@@ -1969,49 +2137,52 @@ function patternWithRoot(pattern, source) {
  */
 function compiledPathRulePattern(ruleContent, source, behavior) {
   let { relativePattern, root } = patternWithRoot(ruleContent, source);
-  let y = behavior === "allow";
-  let w = sanitizeRulePattern(normalizeRulePattern(relativePattern), y);
-  return w === null
+  let isAllow = behavior === "allow";
+  let sanitizedPattern = sanitizeRulePattern(normalizeRulePattern(relativePattern), isAllow);
+  return sanitizedPattern === null
     ? null
     : {
         root,
-        pattern: normalizeGitignoreGlob(w, y),
+        pattern: normalizeGitignoreGlob(sanitizedPattern, isAllow),
       };
 }
 //@ chunk-82kqcve8.js:261653-261664 layout
 var MAX_RULE_PATTERN_LENGTH = 1e4;
 //@ chunk-82kqcve8.js:261664-261804 layout = parseSkillPaths (0.822)
-function normalizeGitignoreGlob(e, n) {
-  if (e.endsWith("/**")) {
-    let sliced = e.slice(0, -3);
+function normalizeGitignoreGlob(glob, allowMode) {
+  if (glob.endsWith("/**")) {
+    let sliced = glob.slice(0, -3);
     return /[^/]/.test(sliced)
-      ? sliced.includes("/") || !n || /^[!#]/.test(sliced)
+      ? sliced.includes("/") || !allowMode || /^[!#]/.test(sliced)
         ? sliced
         : "/" + sliced
       : "/**";
   }
-  return e;
+  return glob;
 }
 //@ chunk-82kqcve8.js:261804-262144 layout
 /**
  * 规整权限规则模式：按 gitignore 语义检查，有问题时记警告，allow（或否定 deny）规则直接丢弃，其余改为匹配字面路径。
  */
-function sanitizeRulePattern(e, n) {
-  let r = normalizeGitignoreGlob(e, n);
-  let s = !n && /^!\s*$/.test(r) ? "a negation of every path" : describeIgnorePatternSkip(r);
-  if (s === null) return e;
-  let h = e.startsWith("!") ? "!" : "";
-  let y = h ? !n : n;
+function sanitizeRulePattern(pattern, allowMode) {
+  let normalized = normalizeGitignoreGlob(pattern, allowMode);
+  let skipReason =
+    !allowMode && /^!\s*$/.test(normalized)
+      ? "a negation of every path"
+      : describeIgnorePatternSkip(normalized);
+  if (skipReason === null) return pattern;
+  let negationPrefix = pattern.startsWith("!") ? "!" : "";
+  let shouldSkip = negationPrefix ? !allowMode : allowMode;
   warnUnusableIgnorePattern(
     "permission_rules",
-    e,
-    s,
-    y ? "dropping it" : "matching the literal path it spells",
+    pattern,
+    skipReason,
+    shouldSkip ? "dropping it" : "matching the literal path it spells",
   );
-  if (y) return null;
-  let w = e.endsWith("/**") ? "/**" : "";
-  let content = e.slice(h.length, e.length - w.length);
-  return h + escapeRuleContent(unescapeRuleContent_2(content)) + w;
+  if (shouldSkip) return null;
+  let suffix = pattern.endsWith("/**") ? "/**" : "";
+  let content = pattern.slice(negationPrefix.length, pattern.length - suffix.length);
+  return negationPrefix + escapeRuleContent(unescapeRuleContent_2(content)) + suffix;
 }
 //@ chunk-82kqcve8.js:262144-262179 layout
 var GLOB_METACHAR_IN_SEGMENT_RE = /(?:^|[^\\])(?:\\\\)*[*?[]/;
@@ -2019,24 +2190,33 @@ var GLOB_METACHAR_IN_SEGMENT_RE = /(?:^|[^\\])(?:\\\\)*[*?[]/;
 /**
  * 非 Windows 下把规则前缀的目录换成物理路径孪生（如符号链接目标），得到等价的绝对规则模式；无法安全转换返回 null。
  */
-function getPhysicalTwinPattern(root, n) {
-  if (getPlatform() === "windows" || isDiskless() || !n.startsWith("/")) return null;
-  let parts = n.slice(1).split("/");
-  let s = 0;
-  while (s < parts.length && parts[s] !== "" && !GLOB_METACHAR_IN_SEGMENT_RE.test(parts[s])) s++;
-  if (s === 0) return null;
-  let path = join(root, ...parts.slice(0, s).map(unescapeRuleContent_2));
+function getPhysicalTwinPattern(root, relativePattern) {
+  if (getPlatform() === "windows" || isDiskless() || !relativePattern.startsWith("/")) return null;
+  let parts = relativePattern.slice(1).split("/");
+  let literalSegments = 0;
+  while (
+    literalSegments < parts.length &&
+    parts[literalSegments] !== "" &&
+    !GLOB_METACHAR_IN_SEGMENT_RE.test(parts[literalSegments])
+  )
+    literalSegments++;
+  if (literalSegments === 0) return null;
+  let path = join(root, ...parts.slice(0, literalSegments).map(unescapeRuleContent_2));
   let physicalTwinPath = getPhysicalTwinPath(path);
   if (physicalTwinPath === null) return null;
-  let sliced = parts.slice(s);
-  let S = normalizeRulePattern(
+  let sliced = parts.slice(literalSegments);
+  let pattern = normalizeRulePattern(
     escapeRuleContent(physicalTwinPath, {
       escapeGlobs: true,
     }) + (sliced.length > 0 ? "/" + sliced.join("/") : ""),
   );
-  let R = normalizeGitignoreGlob(S, false);
-  if (describeIgnorePatternSkip(R) !== null || (R !== S && R + "/**" !== S)) return null;
-  return S;
+  let ignorePattern = normalizeGitignoreGlob(pattern, false);
+  if (
+    describeIgnorePatternSkip(ignorePattern) !== null ||
+    (ignorePattern !== pattern && ignorePattern + "/**" !== pattern)
+  )
+    return null;
+  return pattern;
 }
 //@ chunk-82kqcve8.js:262569-264250 layout
 /**
@@ -2066,12 +2246,12 @@ function getPatternsByRoot(permissionContext, toolType, behavior) {
       : null;
   if (cacheEntry !== null) {
     let { compiledPatternsByRules } = getSessionPathsCache();
-    let G = compiledPatternsByRules.get(cacheEntry.rules);
-    let Z = G?.get(cacheEntry.key);
-    if (Z !== undefined && G !== undefined) {
-      G.delete(cacheEntry.key);
-      G.set(cacheEntry.key, Z);
-      return Z;
+    let byKey = compiledPatternsByRules.get(cacheEntry.rules);
+    let cached = byKey?.get(cacheEntry.key);
+    if (cached !== undefined && byKey !== undefined) {
+      byKey.delete(cacheEntry.key);
+      byKey.set(cacheEntry.key, cached);
+      return cached;
     }
   }
   let toolName = (() => {
@@ -2091,37 +2271,37 @@ function getPatternsByRoot(permissionContext, toolType, behavior) {
     : contentRules;
   let { physicalTwinsByPattern } = getSessionPathsCache();
   let byRoot = new Map();
-  let getBucketMatcher = (j, source) => {
-    let Z = byRoot.get(j);
-    if (Z === undefined) {
-      Z = {
+  let getBucketMatcher = (root, source) => {
+    let bucket = byRoot.get(root);
+    if (bucket === undefined) {
+      bucket = {
         patternMap: new Map(),
         matchers: [],
       };
-      byRoot.set(j, Z);
+      byRoot.set(root, bucket);
     }
-    let found = Z.matchers.find((matcher) => matcher.source === source);
+    let found = bucket.matchers.find((matcher) => matcher.source === source);
     if (found === undefined) {
-      let ee = new Map();
-      let re;
-      let ce = 0;
+      let patternMap = new Map();
+      let ignoreInstance;
+      let ruleCount = 0;
       found = {
         source,
-        patternMap: ee,
+        patternMap,
         getIg: () => {
-          if (re === undefined || ++ce > MAX_RULE_PATTERN_LENGTH) {
-            ce = 1;
-            re = memoryStoresEnvModule
+          if (ignoreInstance === undefined || ++ruleCount > MAX_RULE_PATTERN_LENGTH) {
+            ruleCount = 1;
+            ignoreInstance = memoryStoresEnvModule
               .default()
-              .add(Array.from(ee.keys(), (we) => normalizeGitignoreGlob(we, isAllow)));
+              .add(Array.from(patternMap.keys(), (pattern) => normalizeGitignoreGlob(pattern, isAllow)));
           }
-          return re;
+          return ignoreInstance;
         },
       };
-      Z.matchers.push(found);
+      bucket.matchers.push(found);
     }
     return {
-      bucket: Z,
+      bucket,
       matcher: found,
     };
   };
@@ -2129,69 +2309,71 @@ function getPatternsByRoot(permissionContext, toolType, behavior) {
     let ruleContent = uniqueRule.ruleValue.ruleContent;
     if (ruleContent === undefined) continue;
     let { relativePattern, root } = patternWithRoot(ruleContent, uniqueRule.source);
-    let ee = sanitizeRulePattern(normalizeRulePattern(relativePattern), isAllow);
-    if (ee === null) continue;
+    let normalizedPattern = sanitizeRulePattern(normalizeRulePattern(relativePattern), isAllow);
+    if (normalizedPattern === null) continue;
     let source = isAllow ? null : uniqueRule.source;
     let { bucket, matcher } = getBucketMatcher(root, source);
-    if (!isAllow) matcher.patternMap.delete(ee);
-    matcher.patternMap.set(ee, uniqueRule);
-    bucket.patternMap.set(ee, uniqueRule);
+    if (!isAllow) matcher.patternMap.delete(normalizedPattern);
+    matcher.patternMap.set(normalizedPattern, uniqueRule);
+    bucket.patternMap.set(normalizedPattern, uniqueRule);
     if (isAllow || root === null) continue;
-    let me = `${root}\x00${ee}`;
-    let se = physicalTwinsByPattern.get(me);
-    if (se === undefined) {
-      se = new Set();
-      physicalTwinsByPattern.set(me, se);
+    let twinKey = `${root}\x00${normalizedPattern}`;
+    let twins = physicalTwinsByPattern.get(twinKey);
+    if (twins === undefined) {
+      twins = new Set();
+      physicalTwinsByPattern.set(twinKey, twins);
     }
-    let physicalTwinPattern = getPhysicalTwinPattern(root, ee);
-    if (physicalTwinPattern !== null) se.add(physicalTwinPattern);
-    for (let Ee of se) {
+    let physicalTwinPattern = getPhysicalTwinPattern(root, normalizedPattern);
+    if (physicalTwinPattern !== null) twins.add(physicalTwinPattern);
+    for (let twinPattern of twins) {
       let bucketMatcher = getBucketMatcher(DIR_SEP, source);
-      if (!bucketMatcher.matcher.patternMap.has(Ee)) bucketMatcher.matcher.patternMap.set(Ee, uniqueRule);
-      if (!bucketMatcher.bucket.patternMap.has(Ee)) bucketMatcher.bucket.patternMap.set(Ee, uniqueRule);
+      if (!bucketMatcher.matcher.patternMap.has(twinPattern))
+        bucketMatcher.matcher.patternMap.set(twinPattern, uniqueRule);
+      if (!bucketMatcher.bucket.patternMap.has(twinPattern))
+        bucketMatcher.bucket.patternMap.set(twinPattern, uniqueRule);
     }
   }
   if (cacheEntry !== null) {
     let { compiledPatternsByRules } = getSessionPathsCache();
-    let G = compiledPatternsByRules.get(cacheEntry.rules);
-    if (G === undefined) {
-      G = new Map();
-      compiledPatternsByRules.set(cacheEntry.rules, G);
+    let cacheMap = compiledPatternsByRules.get(cacheEntry.rules);
+    if (cacheMap === undefined) {
+      cacheMap = new Map();
+      compiledPatternsByRules.set(cacheEntry.rules, cacheMap);
     }
-    if (G.size >= 16) {
-      let Z = G.keys().next().value;
-      if (Z !== undefined) G.delete(Z);
+    if (cacheMap.size >= 16) {
+      let oldestKey = cacheMap.keys().next().value;
+      if (oldestKey !== undefined) cacheMap.delete(oldestKey);
     }
-    G.set(cacheEntry.key, byRoot);
+    cacheMap.set(cacheEntry.key, byRoot);
   }
   return byRoot;
 }
 //@ chunk-82kqcve8.js:264250-264273 layout
 var NON_ASCII_RE = /[^\p{ASCII}]/u;
 //@ chunk-82kqcve8.js:264273-264298 facade-majority
-function mayBeGuardedFileSyncCopy(canonical) {
+function mayBeGuardedFileSyncCopy(e) {
   return false;
 }
 //@ chunk-82kqcve8.js:264298-264340 facade-majority
-function mayEscapeExclusionGlobs(e) {
-  return NON_ASCII_RE.test(e) || mayBeGuardedFileSyncCopy(e);
+function mayEscapeExclusionGlobs(path) {
+  return NON_ASCII_RE.test(path) || mayBeGuardedFileSyncCopy(path);
 }
 //@ chunk-82kqcve8.js:264340-264516 facade-majority = isFileReadDenied (1)
 /**
  * 找出可能借大小写折叠或排除 glob 逃逸的路径中、其任一拼写命中 Read deny 规则的那些，返回集合；用于搜索类工具补做 deny 过滤。旧版名 isFileReadDenied 不准确。
  */
-function denyFoldVariantPaths(e, n, r = () => [], s = false) {
-  let h = new Set();
-  for (let y of e) {
-    if ((!s && !mayEscapeExclusionGlobs(y)) || h.has(y)) continue;
+function denyFoldVariantPaths(paths, toolPermissionContext, extraSpellings = () => [], includeAll = false) {
+  let denied = new Set();
+  for (let inputPath of paths) {
+    if ((!includeAll && !mayEscapeExclusionGlobs(inputPath)) || denied.has(inputPath)) continue;
     if (
-      [...getPathsForPermissionCheck(y), ...r(y)].some(
-        (w) => matchingRuleForInput(w, n, "read", "deny") !== null,
+      [...getPathsForPermissionCheck(inputPath), ...extraSpellings(inputPath)].some(
+        (spelling) => matchingRuleForInput(spelling, toolPermissionContext, "read", "deny") !== null,
       )
     )
-      h.add(y);
+      denied.add(inputPath);
   }
-  return h;
+  return denied;
 }
 //@ chunk-82kqcve8.js:264516-264567 facade-majority
 function isSearchResultRootRespellEnabled() {
@@ -2202,10 +2384,10 @@ function isSearchResultRootRespellEnabled() {
  * 对相对或含 .. 的路径，把它的尾部依次拼到每条 Read/Edit deny 规则的根（及根下各前缀）后再匹配，返回第一条命中的 deny 规则（用于 shell 命令里写法不定的路径）。
  */
 function denyRuleMatchingAnywhere(path, toolPermissionContext, operation) {
-  let s = expandPath(path);
+  let expandedPath = expandPath(path);
   if (isAbsolute(path) || path.startsWith("~"))
-    return matchingRuleForInput(s, toolPermissionContext, operation, "deny");
-  let filtered = path.split(/[\\/]+/).filter((R) => R !== "" && R !== ".");
+    return matchingRuleForInput(expandedPath, toolPermissionContext, operation, "deny");
+  let filtered = path.split(/[\\/]+/).filter((segment) => segment !== "" && segment !== ".");
   while (filtered[0] === "..") filtered.shift();
   if (filtered.length === 0) return null;
   let joined = filtered.join("/");
@@ -2215,20 +2397,20 @@ function denyRuleMatchingAnywhere(path, toolPermissionContext, operation) {
     "deny",
   );
   let patternsByRoot = new Set();
-  for (let R of contentRulesForToolName) {
-    let ruleContent = R.ruleValue.ruleContent;
+  for (let rule of contentRulesForToolName) {
+    let ruleContent = rule.ruleValue.ruleContent;
     if (ruleContent === undefined) continue;
-    let { relativePattern, root } = patternWithRoot(ruleContent, R.source);
-    let j = root ?? getOriginalCwd();
+    let { relativePattern, root } = patternWithRoot(ruleContent, rule.source);
+    let ruleRoot = root ?? getOriginalCwd();
     let filtered = normalizeRulePattern(relativePattern)
       .split("/")
-      .filter((Z) => Z !== "");
+      .filter((ruleSegment) => ruleSegment !== "");
     for (let idx = 0; idx < Math.max(1, filtered.length); idx++) {
-      let joined_2 = [j, ...filtered.slice(0, idx), joined].join("/");
+      let joined_2 = [ruleRoot, ...filtered.slice(0, idx), joined].join("/");
       if (patternsByRoot.has(joined_2)) continue;
       patternsByRoot.add(joined_2);
-      let ee = matchingRuleForInput(joined_2, toolPermissionContext, operation, "deny");
-      if (ee !== null) return ee;
+      let match = matchingRuleForInput(joined_2, toolPermissionContext, operation, "deny");
+      if (match !== null) return match;
     }
   }
   return null;
@@ -2245,52 +2427,54 @@ function readDenyRuleMayMatchBeneath(searchRoot, toolPermissionContext) {
   );
   if (contentRulesForToolName.length === 0) return null;
   let paths = getPathsForPermissionCheck(searchRoot);
-  let y =
+  let rootSpellings =
     isWslSecondRootMountEnabled() &&
-    rootAliasMountPoints().some((w) => paths.some((S) => w.startsWith(`${S}${DIR_SEP}`)))
+    rootAliasMountPoints().some((mountPoint) =>
+      paths.some((spelling) => mountPoint.startsWith(`${spelling}${DIR_SEP}`)),
+    )
       ? [...paths, DIR_SEP]
       : withSecondRootMountSpellings(paths);
-  for (let w of contentRulesForToolName) {
-    let ruleContent = w.ruleValue.ruleContent;
+  for (let rule of contentRulesForToolName) {
+    let ruleContent = rule.ruleValue.ruleContent;
     if (ruleContent === undefined) continue;
-    let { relativePattern, root } = patternWithRoot(ruleContent, w.source);
-    let P = normalizeRulePattern(relativePattern);
-    if (P.startsWith("!")) continue;
-    let filtered = P.split("/").filter((Z) => Z !== "");
-    let j = filtered.length <= 1 && !P.startsWith("/");
-    let G = root ?? getCwd();
-    for (let Z of y) {
-      let filtered_2 = relativePath(G, Z)
+    let { relativePattern, root } = patternWithRoot(ruleContent, rule.source);
+    let rulePattern = normalizeRulePattern(relativePattern);
+    if (rulePattern.startsWith("!")) continue;
+    let ruleSegments = rulePattern.split("/").filter((ruleSegment) => ruleSegment !== "");
+    let isBareName = ruleSegments.length <= 1 && !rulePattern.startsWith("/");
+    let ruleRoot = root ?? getCwd();
+    for (let spelling of rootSpellings) {
+      let pathSegments = relativePath(ruleRoot, spelling)
         .split("/")
-        .filter((ee) => ee !== "" && ee !== ".");
-      if (filtered_2[0] === "..") {
-        if (!relativePath(Z, G).split("/").includes("..")) return w;
+        .filter((pathSegment) => pathSegment !== "" && pathSegment !== ".");
+      if (pathSegments[0] === "..") {
+        if (!relativePath(spelling, ruleRoot).split("/").includes("..")) return rule;
         continue;
       }
-      if (j || segmentsMatchPattern(filtered, filtered_2)) return w;
+      if (isBareName || segmentsMatchPattern(ruleSegments, pathSegments)) return rule;
     }
   }
   return null;
 }
 //@ chunk-82kqcve8.js:265739-266059 layout
-function segmentsMatchPattern(e, n) {
-  for (let [r, s] of n.entries()) {
-    let h = e[r];
-    if (h === undefined || h === "**") return true;
-    let y = normalizeCaseForComparison(s);
-    let w = normalizeCaseForComparison(h);
-    if (!/[*?[\]{}\\]/.test(w)) {
-      if (w !== y) return false;
+function segmentsMatchPattern(ruleSegments, pathSegments) {
+  for (let [index, pathSegment] of pathSegments.entries()) {
+    let ruleSegment = ruleSegments[index];
+    if (ruleSegment === undefined || ruleSegment === "**") return true;
+    let foldedPath = normalizeCaseForComparison(pathSegment);
+    let foldedRule = normalizeCaseForComparison(ruleSegment);
+    if (!/[*?[\]{}\\]/.test(foldedRule)) {
+      if (foldedRule !== foldedPath) return false;
       continue;
     }
-    if (/[[\]{}\\]/.test(w)) continue;
+    if (/[[\]{}\\]/.test(foldedRule)) continue;
     if (
       !new RegExp(
-        `^${w
+        `^${foldedRule
           .replace(/[.+^$()|]/g, "\\$&")
           .replace(/\*/g, "[^/]*")
           .replace(/\?/g, "[^/]")}$`,
-      ).test(y)
+      ).test(foldedPath)
     )
       return false;
   }
@@ -2301,22 +2485,28 @@ function segmentsMatchPattern(e, n) {
  * matchingRuleForInput 的外层：先按原路径匹配；deny/ask 未命中时再查（WSL 第二根挂载开启时）路径在另一挂载根下的拼写，命中则上报 tengu_path_rule_matched_through_second_root_mount。
  */
 function matchingRuleForInput(path, toolPermissionContext, toolType, behavior, options = {}) {
-  let y = matchingRuleForInput_2(path, toolPermissionContext, toolType, behavior, options);
-  if (y !== null || behavior === "allow" || options.asSpelledOnly === true) return y;
-  let w = matchingRuleForInputSecondRoot(path, toolPermissionContext, toolType, behavior, options);
-  if (w !== null) return w;
+  let primaryMatch = matchingRuleForInput_2(path, toolPermissionContext, toolType, behavior, options);
+  if (primaryMatch !== null || behavior === "allow" || options.asSpelledOnly === true) return primaryMatch;
+  let secondRootMatch = matchingRuleForInputSecondRoot(
+    path,
+    toolPermissionContext,
+    toolType,
+    behavior,
+    options,
+  );
+  if (secondRootMatch !== null) return secondRootMatch;
   if (
     !isWslSecondRootMountEnabled() ||
     getPatternsByRoot(toolPermissionContext, toolType, behavior).size === 0
   )
-    return y;
+    return primaryMatch;
   let path_2 = pathBelowRootAlias(expandPath(path));
-  let R =
+  let aliasMatch =
     path_2 === undefined
       ? null
       : matchingRuleForInput_2(path_2, toolPermissionContext, toolType, behavior, options);
-  if (R !== null) reportSecondRootMountMatch(toolType, behavior);
-  return R;
+  if (aliasMatch !== null) reportSecondRootMountMatch(toolType, behavior);
+  return aliasMatch;
 }
 //@ chunk-82kqcve8.js:266317-266352 layout
 function matchingRuleForInputSecondRoot(path, toolPermissionContext, toolType, behavior, options) {
@@ -2324,10 +2514,10 @@ function matchingRuleForInputSecondRoot(path, toolPermissionContext, toolType, b
 }
 //@ chunk-82kqcve8.js:266352-266564 layout
 function reportSecondRootMountMatch(toolType, behavior) {
-  let r = `${toolType} ${behavior}`;
+  let key = `${toolType} ${behavior}`;
   let { reportedSecondRootMountMatches } = getSessionPathsCache();
-  if (!reportedSecondRootMountMatches.has(r)) {
-    reportedSecondRootMountMatches.add(r);
+  if (!reportedSecondRootMountMatches.has(key)) {
+    reportedSecondRootMountMatches.add(key);
     logEvent("tengu_path_rule_matched_through_second_root_mount", {
       behavior: fromEnum(behavior),
       tool_type: fromEnum(toolType),
@@ -2364,32 +2554,38 @@ function matchingRuleForInput_2(path, toolPermissionContext, toolType, behavior,
   if (getPlatform() === "windows" && fileAbsolutePath.includes("\\"))
     fileAbsolutePath = windowsPathToPosixPath(fileAbsolutePath);
   let patternsByRoot = getPatternsByRoot(toolPermissionContext, toolType, behavior);
-  let S = behavior !== "allow" && (getPlatform() === "windows" || options.caseInsensitiveTarget === true);
-  let R = fileAbsolutePath ?? getCwd();
-  let O = S ? normalizeCaseForComparison(R) : R;
-  for (let [P, { matchers: L }] of orderRootEntries(patternsByRoot)) {
-    let j = P ?? getCwd();
-    let relativePathStr = relativePath(S ? normalizeCaseForComparison(j) : j, O);
+  let caseInsensitive =
+    behavior !== "allow" && (getPlatform() === "windows" || options.caseInsensitiveTarget === true);
+  let targetPath = fileAbsolutePath ?? getCwd();
+  let comparedTarget = caseInsensitive ? normalizeCaseForComparison(targetPath) : targetPath;
+  for (let [root, { matchers }] of orderRootEntries(patternsByRoot)) {
+    let rootPath = root ?? getCwd();
+    let relativePathStr = relativePath(
+      caseInsensitive ? normalizeCaseForComparison(rootPath) : rootPath,
+      comparedTarget,
+    );
     if (!relativePathStr || !memoryStoresEnvModule.default.isPathValid(relativePathStr)) continue;
-    let Z = `${relativePathStr}/`;
-    let ae =
-      options.isDirectory === true && memoryStoresEnvModule.default.isPathValid(Z) ? Z : relativePathStr;
-    for (let idx = L.length - 1; idx >= 0; idx--) {
-      let re = L[idx];
-      if (re === undefined) continue;
-      let { patternMap, getIg } = re;
-      let igResult = getIg().test(ae);
+    let withSlash = `${relativePathStr}/`;
+    let testPath =
+      options.isDirectory === true && memoryStoresEnvModule.default.isPathValid(withSlash)
+        ? withSlash
+        : relativePathStr;
+    for (let idx = matchers.length - 1; idx >= 0; idx--) {
+      let matcher = matchers[idx];
+      if (matcher === undefined) continue;
+      let { patternMap, getIg } = matcher;
+      let igResult = getIg().test(testPath);
       if (!igResult.ignored || !igResult.rule) continue;
       let originalPattern = igResult.rule.pattern;
-      let Ee = originalPattern + "/**";
-      if (patternMap.has(Ee) && (originalPattern.includes("/") || behavior !== "allow"))
-        return patternMap.get(Ee) ?? null;
+      let recursivePattern = originalPattern + "/**";
+      if (patternMap.has(recursivePattern) && (originalPattern.includes("/") || behavior !== "allow"))
+        return patternMap.get(recursivePattern) ?? null;
       if (originalPattern.startsWith("/")) {
         let withWildcard = originalPattern.slice(1) + "/**";
         if (patternMap.has(withWildcard)) return patternMap.get(withWildcard) ?? null;
       }
-      let ie = patternMap.get(originalPattern);
-      if (ie !== undefined || behavior === "allow") return ie ?? null;
+      let matchedRule = patternMap.get(originalPattern);
+      if (matchedRule !== undefined || behavior === "allow") return matchedRule ?? null;
     }
   }
   return null;
@@ -2398,19 +2594,22 @@ function matchingRuleForInput_2(path, toolPermissionContext, toolType, behavior,
 /**
  * 若某目录本身就是一条 deny（或指定行为）路径规则的根、且该规则是 /** 或 **（整目录内容），返回该规则；Windows 上按大小写折叠比较，并补 WSL 第二挂载根拼写。用于判断整个目录的内容是否被拒。
  */
-function matchingDenyRuleForDirectoryContents(e, n, r, s = "deny") {
-  let patternsByRoot = getPatternsByRoot(n, r, s);
+function matchingDenyRuleForDirectoryContents(dirPath, toolPermissionContext, toolType, behavior = "deny") {
+  let patternsByRoot = getPatternsByRoot(toolPermissionContext, toolType, behavior);
   if (patternsByRoot.size === 0) return null;
-  let y = expandPath(e);
-  if (getPlatform() === "windows" && y.includes("\\")) y = windowsPathToPosixPath(y);
-  let w = getPlatform() === "windows";
-  let S = withSecondRootMountSpellings([w ? normalizeCaseForComparison(y) : y]);
-  for (let [R, { patternMap: O }] of orderRootEntries(patternsByRoot)) {
-    let P = R ?? getCwd();
-    let L = w ? normalizeCaseForComparison(P) : P;
-    if (!S.some((G) => relativePath(L, G) === "")) continue;
-    let j = O.get("/**") ?? O.get("**");
-    if (j !== undefined) return j;
+  let targetPath = expandPath(dirPath);
+  if (getPlatform() === "windows" && targetPath.includes("\\"))
+    targetPath = windowsPathToPosixPath(targetPath);
+  let isWindows = getPlatform() === "windows";
+  let spellings = withSecondRootMountSpellings([
+    isWindows ? normalizeCaseForComparison(targetPath) : targetPath,
+  ]);
+  for (let [root, { patternMap }] of orderRootEntries(patternsByRoot)) {
+    let rootPath = root ?? getCwd();
+    let comparedRoot = isWindows ? normalizeCaseForComparison(rootPath) : rootPath;
+    if (!spellings.some((spelling) => relativePath(comparedRoot, spelling) === "")) continue;
+    let catchAllRule = patternMap.get("/**") ?? patternMap.get("**");
+    if (catchAllRule !== undefined) return catchAllRule;
   }
   return null;
 }
@@ -2419,24 +2618,28 @@ function matchingDenyRuleForDirectoryContents(e, n, r, s = "deny") {
  * 判断一个路径是否匹配给定规则串：按 session 来源解析根，用 ignore 库做 gitignore 匹配；不匹配时，若规则以 * 开头或不像路径且不是 :* 前缀规则，再退回通配匹配。
  */
 function matchesPathRule(pattern, filePath) {
-  let r = expandPath(filePath);
-  if (getPlatform() === "windows" && r.includes("\\")) r = windowsPathToPosixPath(r);
+  let expandedPath = expandPath(filePath);
+  if (getPlatform() === "windows" && expandedPath.includes("\\"))
+    expandedPath = windowsPathToPosixPath(expandedPath);
   let { relativePattern, root } = patternWithRoot(pattern, "session");
-  let y = sanitizeRulePattern(normalizeRulePattern(relativePattern), true);
-  let w = y === null ? null : normalizeGitignoreGlob(y, true);
-  let S = getPlatform() === "windows";
-  let R = root ?? getCwd();
-  let O = relativePath(S ? normalizeCaseForComparison(R) : R, S ? normalizeCaseForComparison(r) : r);
+  let sanitizedPattern = sanitizeRulePattern(normalizeRulePattern(relativePattern), true);
+  let gitignoreGlob = sanitizedPattern === null ? null : normalizeGitignoreGlob(sanitizedPattern, true);
+  let isWindows = getPlatform() === "windows";
+  let rootPath = root ?? getCwd();
+  let relativePathStr = relativePath(
+    isWindows ? normalizeCaseForComparison(rootPath) : rootPath,
+    isWindows ? normalizeCaseForComparison(expandedPath) : expandedPath,
+  );
   if (
-    w !== null &&
-    O &&
-    memoryStoresEnvModule.default.isPathValid(O) &&
-    memoryStoresEnvModule.default().add(w).test(O).ignored
+    gitignoreGlob !== null &&
+    relativePathStr &&
+    memoryStoresEnvModule.default.isPathValid(relativePathStr) &&
+    memoryStoresEnvModule.default().add(gitignoreGlob).test(relativePathStr).ignored
   )
     return true;
   let pattern_2 = pattern.trim();
-  let L = !hasWildcards(pattern_2) && !pattern_2.endsWith(":*");
-  if (pattern_2.startsWith("*") || L) return matchWildcardPattern(pattern, filePath);
+  let isBarePattern = !hasWildcards(pattern_2) && !pattern_2.endsWith(":*");
+  if (pattern_2.startsWith("*") || isBarePattern) return matchWildcardPattern(pattern, filePath);
   return false;
 }
 //@ chunk-82kqcve8.js:268334-268699 layout
@@ -2447,7 +2650,7 @@ function getTrustedSymlinkEquivalences() {
   let sessionPathsCache = getSessionPathsCache();
   if (sessionPathsCache.trustedSymlinkEquivalences !== undefined)
     return sessionPathsCache.trustedSymlinkEquivalences;
-  let n = [
+  let pairs = [
     ["/private/tmp", "/tmp"],
     ["/private/var", "/var"],
     ["/private/etc", "/etc"],
@@ -2455,49 +2658,50 @@ function getTrustedSymlinkEquivalences() {
     ["/usr/lib", "/lib"],
     ["/usr/sbin", "/sbin"],
   ];
-  let r = new Map();
+  let equivalences = new Map();
   let fsImplementation = getFsImplementation();
-  for (let [h, y] of n)
+  for (let [realPath, aliasPath] of pairs)
     try {
-      if (fsImplementation.realpathSync(y) === h) r.set(h, y);
+      if (fsImplementation.realpathSync(aliasPath) === realPath) equivalences.set(realPath, aliasPath);
     } catch {}
-  sessionPathsCache.trustedSymlinkEquivalences = r;
-  return r;
+  sessionPathsCache.trustedSymlinkEquivalences = equivalences;
+  return equivalences;
 }
 //@ chunk-82kqcve8.js:268699-268800 facade-majority
 /**
  * 把位于可信符号链接前缀下的路径改写为其目标前缀，用于 allow 规则匹配时补一次拼写。
  */
 function normalizeTrustedSymlink(absolutePath) {
-  for (let [scratchpadDir, r] of getTrustedSymlinkEquivalences())
+  for (let [scratchpadDir, aliasPath] of getTrustedSymlinkEquivalences())
     if (absolutePath === scratchpadDir || absolutePath.startsWith(scratchpadDir + sep))
-      return r + absolutePath.slice(scratchpadDir.length);
+      return aliasPath + absolutePath.slice(scratchpadDir.length);
   return absolutePath;
 }
 //@ chunk-82kqcve8.js:268800-268953 facade-majority
 /**
  * 要求所有路径拼写都命中某条 allow 规则（必要时用可信符号链接改写后的拼写再试），全部命中返回第一条规则，否则 null。
  */
-function matchingAllowRuleForAllPaths(spellings, toolPermissionContext, r) {
-  let s = null;
-  for (let h of spellings) {
-    let y = matchingRuleForInput(h, toolPermissionContext, r, "allow");
-    if (!y) {
-      let w = normalizeTrustedSymlink(h);
-      if (w !== h) y = matchingRuleForInput(w, toolPermissionContext, r, "allow");
+function matchingAllowRuleForAllPaths(spellings, toolPermissionContext, toolType) {
+  let firstMatch = null;
+  for (let spelling of spellings) {
+    let match = matchingRuleForInput(spelling, toolPermissionContext, toolType, "allow");
+    if (!match) {
+      let normalizedSpelling = normalizeTrustedSymlink(spelling);
+      if (normalizedSpelling !== spelling)
+        match = matchingRuleForInput(normalizedSpelling, toolPermissionContext, toolType, "allow");
     }
-    if (!y) return null;
-    s ??= y;
+    if (!match) return null;
+    firstMatch ??= match;
   }
-  return s;
+  return firstMatch;
 }
 //@ chunk-82kqcve8.js:268953-272628 facade-majority
 /**
  * 读权限的网络路径防御：对 /net、/Network 自动挂载、macOS 内核重定向前缀（/.vol 等）和 UNC 路径（含所有解析拼写），若不在可信网络根下则返回 ask，并说明可能触发 DNS 查询或远程挂载。
  */
-function checkReadNetworkPathSafety(tool, n, toolPermissionContext, s) {
+function checkReadNetworkPathSafety(tool, input, toolPermissionContext, options) {
   if (typeof tool.getPath !== "function") return null;
-  let path = tool.getPath(n);
+  let path = tool.getPath(input);
   let trustedNetworkDirectories = toolPermissionContext.trustedNetworkDirectories;
   if (
     (isNetworkMountPath(path) || isNetDir(path)) &&
@@ -2517,31 +2721,44 @@ function checkReadNetworkPathSafety(tool, n, toolPermissionContext, s) {
       `Claude requested permissions to read from ${encodeControlChars(path)}, which is under /.vol, /.file, /.nofollow or /.resolve (paths the macOS kernel redirects) and could reach a network mount, triggering a DNS lookup and mount to a remote host.`,
       "Kernel-resolved path prefix (/.vol etc.) detected (defense-in-depth check)",
     );
-  let w = s ?? getPathsForPermissionCheck(path);
-  for (let S of w) {
-    if (isUncOrDevicePath(S) && !isWslUncPath(S) && !isPathInTrustedNetworkRoot(S, trustedNetworkDirectories))
+  let pathsToCheck = options ?? getPathsForPermissionCheck(path);
+  for (let candidatePath of pathsToCheck) {
+    if (
+      isUncOrDevicePath(candidatePath) &&
+      !isWslUncPath(candidatePath) &&
+      !isPathInTrustedNetworkRoot(candidatePath, trustedNetworkDirectories)
+    )
       return buildSafetyCheckAsk(
         `Claude requested permissions to read from ${encodeControlChars(path)}, which appears to be a UNC path that could access network resources.`,
         "UNC path detected (defense-in-depth check)",
       );
-    if ((isNetworkMountPath(S) || isNetDir(S)) && !isPathInTrustedNetworkRoot(S, trustedNetworkDirectories))
+    if (
+      (isNetworkMountPath(candidatePath) || isNetDir(candidatePath)) &&
+      !isPathInTrustedNetworkRoot(candidatePath, trustedNetworkDirectories)
+    )
       return buildSafetyCheckAsk(
         `Claude requested permissions to read from ${encodeControlChars(path)}, which is under the /net automount map and could trigger a DNS lookup and NFS mount to a remote host.`,
         "Automount -hosts path detected (defense-in-depth check)",
       );
-    if (neverOtherHostMount(S) && !isPathInTrustedNetworkRoot(S, trustedNetworkDirectories))
+    if (
+      neverOtherHostMount(candidatePath) &&
+      !isPathInTrustedNetworkRoot(candidatePath, trustedNetworkDirectories)
+    )
       return buildSafetyCheckAsk(
         `Claude requested permissions to read from ${encodeControlChars(path)}, which is under the /Network automount browse surface and could trigger a directory-service lookup and mount to a remote host.`,
         "Automount browse surface detected (defense-in-depth check)",
       );
-    if (isMacSpecialPath(S) && !isPathInTrustedNetworkRoot(S, trustedNetworkDirectories))
+    if (
+      isMacSpecialPath(candidatePath) &&
+      !isPathInTrustedNetworkRoot(candidatePath, trustedNetworkDirectories)
+    )
       return buildSafetyCheckAsk(
         `Claude requested permissions to read from ${encodeControlChars(path)}, which is under /.vol, /.file, /.nofollow or /.resolve (paths the macOS kernel redirects) and could reach a network mount, triggering a DNS lookup and mount to a remote host.`,
         "Kernel-resolved path prefix (/.vol etc.) detected (defense-in-depth check)",
       );
   }
   if (tool.name === GLOB_TOOL_NAME) {
-    let pattern = n.pattern;
+    let pattern = input.pattern;
     if (
       typeof pattern === "string" &&
       isUncOrDevicePath(pattern) &&
@@ -2580,8 +2797,8 @@ function checkReadNetworkPathSafety(tool, n, toolPermissionContext, s) {
         "Kernel-resolved path prefix (/.vol etc.) glob pattern detected (defense-in-depth check)",
       );
   }
-  for (let S of w)
-    if (hasSuspiciousWindowsPathPattern(S, trustedNetworkDirectories))
+  for (let globPath of pathsToCheck)
+    if (hasSuspiciousWindowsPathPattern(globPath, trustedNetworkDirectories))
       return {
         behavior: "ask",
         message: `Claude requested permissions to read from ${encodeControlChars(path)}, which contains a suspicious Windows path pattern that requires manual approval.`,
@@ -2594,17 +2811,20 @@ function checkReadNetworkPathSafety(tool, n, toolPermissionContext, s) {
   return null;
 }
 //@ chunk-82kqcve8.js:272628-272682 layout
-var NARROWING_RULE_SOURCES = new Set(["toolsNarrowing", "cliArg", "command"]);
+var NARROWING_RULE_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-82kqcve8.js:272628", () => {
+  NARROWING_RULE_SOURCES = new Set(["toolsNarrowing", "cliArg", "command"]);
+});
 //@ chunk-82kqcve8.js:272682-272725 facade-majority
-function hasPermissionAuthoredBareReadDeny(e, n = READ_PATH_PROBE) {
-  return denyRuleForReadProbe(e, n) !== null;
+function hasPermissionAuthoredBareReadDeny(tool, probePath = READ_PATH_PROBE) {
+  return denyRuleForReadProbe(tool, probePath) !== null;
 }
 //@ chunk-82kqcve8.js:272725-272797 layout
-function denyRuleForReadProbe(e, n = READ_PATH_PROBE) {
+function denyRuleForReadProbe(tool, probePath = READ_PATH_PROBE) {
   return getDenyRuleForTool(
-    e,
-    n,
-    getDenyRules(e).filter((r) => !NARROWING_RULE_SOURCES.has(r.source)),
+    tool,
+    probePath,
+    getDenyRules(tool).filter((rule) => !NARROWING_RULE_SOURCES.has(rule.source)),
   );
 }
 //@ chunk-82kqcve8.js:272797-272855 facade-majority = isFileReadDenied (1)
@@ -2612,19 +2832,19 @@ function hasReadDenyRuleInForce(filePath) {
   return hasPermissionAuthoredBareReadDeny(filePath) || getPatternsByRoot(filePath, "read", "deny").size > 0;
 }
 //@ chunk-82kqcve8.js:272855-272901 facade-majority
-function hasReadDenyRuleForPath(filePath, toolPermissionContext, r) {
-  return readDenyRuleForPath(filePath, toolPermissionContext, r) !== undefined;
+function hasReadDenyRuleForPath(filePath, toolPermissionContext, restriction) {
+  return readDenyRuleForPath(filePath, toolPermissionContext, restriction) !== undefined;
 }
 //@ chunk-82kqcve8.js:272901-273072 facade-majority = isFileReadDenied (1)
 /**
  * 返回命中某路径的 Read deny 规则：先查整工具 deny；没有路径级 deny 规则时直接返回；否则逐个拼写用 matchingRuleForInput 查。
  */
-function readDenyRuleForPath(e, n, r) {
-  let s = denyRuleForReadProbe(n);
-  if (s !== null) return s;
-  if (getPatternsByRoot(n, "read", "deny").size === 0) return;
-  for (let h of r ?? getPathsForPermissionCheck(e)) {
-    let denyRule = matchingRuleForInput(h, n, "read", "deny");
+function readDenyRuleForPath(inputPath, toolPermissionContext, spellings) {
+  let probeRule = denyRuleForReadProbe(toolPermissionContext);
+  if (probeRule !== null) return probeRule;
+  if (getPatternsByRoot(toolPermissionContext, "read", "deny").size === 0) return;
+  for (let spelling of spellings ?? getPathsForPermissionCheck(inputPath)) {
+    let denyRule = matchingRuleForInput(spelling, toolPermissionContext, "read", "deny");
     if (denyRule !== null) return denyRule;
   }
   return;
@@ -2633,25 +2853,28 @@ function readDenyRuleForPath(e, n, r) {
 /**
  * 只支持 Read 工具最小属性集（name、getPath 等）的探针对象，用 Proxy 包装，访问其他属性即抛错；供“按路径算读权限”的函数在没有真实工具对象时调用规则检查。
  */
-var READ_PATH_PROBE = new Proxy(
-  {
-    name: FILE_READ_TOOL_NAME,
-    mcpInfo: undefined,
-    familyParentToolName: undefined,
-    aliasSkillToolNames: undefined,
-    getPath: (e) => String(e.file_path),
-  },
-  {
-    get(e, n) {
-      if (typeof n === "symbol") return;
-      if (n in e) return e[n];
-      throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `readPermissionDecisionForPath probe consulted unsupported tool property: ${n}`,
-        "readPermissionDecisionForPath probe consulted unsupported tool property",
-      );
+var READ_PATH_PROBE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-82kqcve8.js:273072", () => {
+  READ_PATH_PROBE = new Proxy(
+    {
+      name: FILE_READ_TOOL_NAME,
+      mcpInfo: undefined,
+      familyParentToolName: undefined,
+      aliasSkillToolNames: undefined,
+      getPath: (readRequest) => String(readRequest.file_path),
     },
-  },
-);
+    {
+      get(probeTarget, propertyKey) {
+        if (typeof propertyKey === "symbol") return;
+        if (propertyKey in probeTarget) return probeTarget[propertyKey];
+        throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+          `readPermissionDecisionForPath probe consulted unsupported tool property: ${propertyKey}`,
+          "readPermissionDecisionForPath probe consulted unsupported tool property",
+        );
+      },
+    },
+  );
+});
 //@ chunk-82kqcve8.js:273434-273481 facade-majority
 function readPermissionDecisionForPath(filePath, toolPermissionContext) {
   return checkReadPermissionForTool(
@@ -2666,13 +2889,13 @@ function readPermissionDecisionForPath(filePath, toolPermissionContext) {
 /**
  * 判断读某路径是否会被自动放行：有整工具 Read deny/ask 规则则否；按分层读判定，allow 层为是，path-mode-ask 仅在 bypassPermissions 下为是，其余（各类 deny/ask）为否。
  */
-function readWouldBeAutoAllowedForPath(e, toolPermissionContext) {
+function readWouldBeAutoAllowedForPath(filePath, toolPermissionContext) {
   if (
     getDenyRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null ||
     getAskRuleForTool(toolPermissionContext, READ_PATH_PROBE) !== null
   )
     return false;
-  switch (layeredReadVerdictForPaths([e], toolPermissionContext).layer) {
+  switch (layeredReadVerdictForPaths([filePath], toolPermissionContext).layer) {
     case "allow":
       return true;
     case "path-mode-ask":
@@ -2691,27 +2914,27 @@ var AUTOMOUNTER_PATH_REASON =
 /**
  * 对一组路径做分层读判定，返回最先命中的层：bare-deny（整工具 deny）、path-deny（可选拒绝自动挂载查找路径，或某路径被拒）、path-rule-ask（路径级 ask 规则）、bare-ask（整工具 ask）、path-mode-ask（其他需询问）、allow。toolsNarrowing/command 来源的规则不参与。
  */
-function layeredReadVerdictForPaths(e, n, r) {
+function layeredReadVerdictForPaths(paths, toolPermissionContext, options) {
   let denyRuleForTool = getDenyRuleForTool(
-    n,
+    toolPermissionContext,
     READ_PATH_PROBE,
-    getDenyRules(n).filter((P) => !NARROWING_RULE_SOURCES_2.includes(P.source)),
+    getDenyRules(toolPermissionContext).filter((rule) => !NARROWING_RULE_SOURCES_2.includes(rule.source)),
   );
   if (denyRuleForTool !== null)
     return {
       layer: "bare-deny",
       rule: denyRuleForTool,
     };
-  if (r?.refuseAutomounterShapes) {
-    for (let P of e)
-      if (classifyHomeMount(anchorPathUnnormalized(P)) || classifyHomeMount(expandPath(P)))
+  if (options?.refuseAutomounterShapes) {
+    for (let inputPath of paths)
+      if (classifyHomeMount(anchorPathUnnormalized(inputPath)) || classifyHomeMount(expandPath(inputPath)))
         return {
           layer: "path-deny",
-          path: P,
+          path: inputPath,
           decision: {
             behavior: "deny",
             message: stripNonPrintable(
-              `${encodeControlChars(P)} names an automounter lookup path (its lookup is itself a network request); it was not read.`,
+              `${encodeControlChars(inputPath)} names an automounter lookup path (its lookup is itself a network request); it was not read.`,
             ),
             decisionReason: {
               type: "other",
@@ -2720,30 +2943,34 @@ function layeredReadVerdictForPaths(e, n, r) {
           },
         };
   }
-  let h = [];
-  let y = [];
-  for (let P of e) {
-    let permissionDecisionForPath = readPermissionDecisionForPath(anchorPathUnnormalized(P), n);
+  let denied = [];
+  let asked = [];
+  for (let inputPath of paths) {
+    let permissionDecisionForPath = readPermissionDecisionForPath(
+      anchorPathUnnormalized(inputPath),
+      toolPermissionContext,
+    );
     if (permissionDecisionForPath.behavior === "deny")
-      h.push({
-        path: P,
+      denied.push({
+        path: inputPath,
         decision: permissionDecisionForPath,
       });
     else if (permissionDecisionForPath.behavior === "ask")
-      y.push({
-        path: P,
+      asked.push({
+        path: inputPath,
         decision: permissionDecisionForPath,
       });
   }
-  let [w] = h;
-  if (w)
+  let [deniedEntry] = denied;
+  if (deniedEntry)
     return {
       layer: "path-deny",
-      ...w,
+      ...deniedEntry,
     };
-  let found = y.find(
-    (P) =>
-      P.decision.decisionReason?.type === "rule" && P.decision.decisionReason.rule.ruleBehavior === "ask",
+  let found = asked.find(
+    (askEntry) =>
+      askEntry.decision.decisionReason?.type === "rule" &&
+      askEntry.decision.decisionReason.rule.ruleBehavior === "ask",
   );
   if (found)
     return {
@@ -2751,43 +2978,46 @@ function layeredReadVerdictForPaths(e, n, r) {
       ...found,
     };
   let askRuleForTool = getAskRuleForTool(
-    n,
+    toolPermissionContext,
     READ_PATH_PROBE,
-    getAskRules(n).filter((P) => !NARROWING_RULE_SOURCES_2.includes(P.source)),
+    getAskRules(toolPermissionContext).filter((rule) => !NARROWING_RULE_SOURCES_2.includes(rule.source)),
   );
   if (askRuleForTool !== null)
     return {
       layer: "bare-ask",
       rule: askRuleForTool,
     };
-  let [O] = y;
-  if (O)
+  let [askedEntry] = asked;
+  if (askedEntry)
     return {
       layer: "path-mode-ask",
-      ...O,
+      ...askedEntry,
     };
   return {
     layer: "allow",
   };
 }
 //@ chunk-82kqcve8.js:274748-274808 layout
-function toolPoolCannotRead(e, n) {
-  return n.tools.some((tool) => toolMatchesName(tool, e)) && !poolCanRead(n);
+function toolPoolCannotRead(toolName, callContext) {
+  return callContext.tools.some((tool) => toolMatchesName(tool, toolName)) && !poolCanRead(callContext);
 }
 //@ chunk-82kqcve8.js:274808-274895 facade-majority
 /**
  * 工具池里是否有能读文件的工具（Read，或另一读类工具）。
  */
-function poolCanRead(e) {
-  let { tools } = e;
+function poolCanRead(callContext) {
+  let { tools } = callContext;
   return (
     tools.some((tool) => toolMatchesName(tool, FILE_READ_TOOL_NAME)) ||
     (tools.some((tool) => toolMatchesName(tool, REPL_TOOL_NAME)) && true)
   );
 }
 //@ chunk-82kqcve8.js:274895-274942 facade-majority
-function readAutoAllowedForMutation(e, absolutePath, callContext, s) {
-  return !toolPoolCannotRead(e, callContext) && readWouldBeAutoAllowedForPath(absolutePath, s);
+function readAutoAllowedForMutation(toolName, absolutePath, callContext, toolPermissionContext) {
+  return (
+    !toolPoolCannotRead(toolName, callContext) &&
+    readWouldBeAutoAllowedForPath(absolutePath, toolPermissionContext)
+  );
 }
 //@ chunk-82kqcve8.js:274942-274993 layout
 function playfulLobsterEnabled() {
@@ -2798,7 +3028,10 @@ class LoggedPathCache {
   loggedPaths = new Set();
 }
 //@ chunk-82kqcve8.js:275022-275047 layout
-var loggedPathCacheSlot = new HostScoped(() => new LoggedPathCache());
+var loggedPathCacheSlot; // deferred: uses LoggedPathCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-82kqcve8.js:275022", () => {
+  loggedPathCacheSlot = new HostScoped(() => new LoggedPathCache());
+});
 //@ chunk-82kqcve8.js:275047-275096 layout
 function loggedPaths() {
   return loggedPathCacheSlot.of(getRootSession().host).loggedPaths;
@@ -2806,17 +3039,17 @@ function loggedPaths() {
 //@ chunk-82kqcve8.js:275096-275107 layout
 var MAX_LOGGED_PATHS = 256;
 //@ chunk-82kqcve8.js:275107-275161 layout
-function markPathLoggedOnce(e) {
-  let n = loggedPaths();
-  return n.size < MAX_LOGGED_PATHS && !n.has(e);
+function markPathLoggedOnce(key) {
+  let logged = loggedPaths();
+  return logged.size < MAX_LOGGED_PATHS && !logged.has(key);
 }
 //@ chunk-82kqcve8.js:275161-275309 layout
-function logPlayfulLobsterOnce(absolutePath, n, mode) {
-  let s = `${mode}:${absolutePath}`;
-  if (!markPathLoggedOnce(s)) return;
-  loggedPaths().add(s);
+function logPlayfulLobsterOnce(absolutePath, step, mode) {
+  let key = `${mode}:${absolutePath}`;
+  if (!markPathLoggedOnce(key)) return;
+  loggedPaths().add(key);
   logEvent("tengu_playful_lobster_fired", {
-    step: fromEnum(n),
+    step: fromEnum(step),
     mode: lit("shadow"),
     permissionMode: fromEnum(mode),
   });
@@ -2843,20 +3076,20 @@ function checkReadPermissionForTool(tool, input, toolPermissionContext, precompu
   let path = tool.getPath(input);
   let pathsToCheck = precomputedPathsToCheck ?? walkPermissionCheckPaths(path);
   let spellings = pathsToCheck.spellings;
-  let S;
-  let getAbsolutePath = () => (S ??= expandPath(path));
-  let O;
+  let absolutePathCache;
+  let getAbsolutePath = () => (absolutePathCache ??= expandPath(path));
+  let implicitReadCache;
   let shouldRecordImplicitRead = () => {
-    if (O === undefined)
+    if (implicitReadCache === undefined)
       try {
-        O =
+        implicitReadCache =
           playfulLobsterEnabled() &&
           markPathLoggedOnce(`${toolPermissionContext.mode}:${getAbsolutePath()}`) &&
           hasMultipleHardLinks(getAbsolutePath());
       } catch {
-        O = false;
+        implicitReadCache = false;
       }
-    return O;
+    return implicitReadCache;
   };
   for (let pathToCheck of spellings) {
     let denyRule = matchingRuleForInput(pathToCheck, toolPermissionContext, "read", "deny");
@@ -2871,11 +3104,12 @@ function checkReadPermissionForTool(tool, input, toolPermissionContext, precompu
       };
   }
   if (isAutoMemoryHeldForSession()) {
-    let ce = expandPathOrNull(path);
-    if (isHeldMemoryPath(ce === null ? spellings : [...spellings, ce])) return MEMORY_PAUSED_READ_DENIAL;
+    let expandedPath = expandPathOrNull(path);
+    if (isHeldMemoryPath(expandedPath === null ? spellings : [...spellings, expandedPath]))
+      return MEMORY_PAUSED_READ_DENIAL;
   }
   if (toolPermissionContext.restricted || toolPermissionContext.blockReadsOutsideWorkingDirectories) {
-    let ce = denyIfOutsideWorkingDirs(
+    let outsideDecision = denyIfOutsideWorkingDirs(
       path,
       pathsToCheck,
       toolPermissionContext,
@@ -2892,16 +3126,16 @@ function checkReadPermissionForTool(tool, input, toolPermissionContext, precompu
         : allWorkingDirectories(toolPermissionContext),
       readBlockExemptPaths(toolPermissionContext),
     );
-    if (ce) {
+    if (outsideDecision) {
       if (
         toolPermissionContext.servedCall === true &&
         !toolPermissionContext.restricted &&
-        ce.behavior === "deny" &&
+        outsideDecision.behavior === "deny" &&
         !blocksReadsOutsideWorkingDirs()
       )
         return {
           behavior: "ask",
-          message: ce.message,
+          message: outsideDecision.message,
           decisionReason: {
             type: "safetyCheck",
             reason: OUTSIDE_READS_BLOCKED_DENY_REASON,
@@ -2909,7 +3143,7 @@ function checkReadPermissionForTool(tool, input, toolPermissionContext, precompu
             circuitBreaker: "outsideReadsBlocked",
           },
         };
-      return ce;
+      return outsideDecision;
     }
   } else if (pathsToCheck.unresolved) return denyUnresolvablePath("read from", path);
   let denyRule = checkReadNetworkPathSafety(tool, input, toolPermissionContext, spellings);
@@ -2996,8 +3230,8 @@ function checkWritePermissionForTool(tool, input, toolPermissionContext, precomp
   let absolutePathForEdit = expandPath(path);
   let earlyDecision = writeDenyPrefix(path, pathsToCheck, absolutePathForEdit, toolPermissionContext);
   if (earlyDecision !== undefined) return earlyDecision;
-  let sessionSkillRules = (toolPermissionContext.alwaysAllowRules.session ?? []).filter((ae) => {
-    let ruleContent = permissionRuleValueFromString(ae).ruleContent;
+  let sessionSkillRules = (toolPermissionContext.alwaysAllowRules.session ?? []).filter((ruleString) => {
+    let ruleContent = permissionRuleValueFromString(ruleString).ruleContent;
     return (
       isSkillDirGlob(ruleContent) &&
       !spellings.some((spelling) => hasNestedClaudeDirBelowRuleRoot(spelling, ruleContent ?? ""))
@@ -3085,17 +3319,18 @@ function checkWritePermissionForTool(tool, input, toolPermissionContext, precomp
         ]
       : generateSuggestions(path, "write", toolPermissionContext, spellings);
     let isInWorkingDir = sensitiveWriteRedirect(path, pathsToCheck, toolPermissionContext);
-    let ce = isInWorkingDir === null ? safety.message : `${safety.message} ${isInWorkingDir.sentence}.`;
+    let askMessage =
+      isInWorkingDir === null ? safety.message : `${safety.message} ${isInWorkingDir.sentence}.`;
     return {
       behavior: "ask",
-      message: ce,
+      message: askMessage,
       suggestions: safetySuggestions,
       ...(isInWorkingDir !== null && {
         blockedPath: isInWorkingDir.landing,
       }),
       decisionReason: {
         type: "safetyCheck",
-        reason: ce,
+        reason: askMessage,
         ...safetyCheckReasonFields(safety, toolPermissionContext.restricted),
         ...(isInWorkingDir?.personOnly && {
           classifierApprovable: false,
@@ -3150,12 +3385,12 @@ function checkWritePermissionForTool(tool, input, toolPermissionContext, precomp
  */
 function leafSymlinkWriteRefusal(path, pathsToCheck) {
   if (!pathsToCheck.leafIsSymlink) return null;
-  let r = pathsToCheck.unresolved
+  let linkTarget = pathsToCheck.unresolved
     ? "a target that could not be determined"
     : truncatePathForDisplay(pathsToCheck.landing);
   return {
     behavior: "deny",
-    message: `Refusing to write ${truncatePathForDisplay(path)}: it is a symbolic link. Write to the link's target path instead: ${r}.`,
+    message: `Refusing to write ${truncatePathForDisplay(path)}: it is a symbolic link. Write to the link's target path instead: ${linkTarget}.`,
     decisionReason: {
       type: "other",
       reason: "Write target is a symbolic link",
@@ -3170,16 +3405,17 @@ function leafSymlinkWriteRefusal(path, pathsToCheck) {
  * 请求路径经符号链接后落点与原拼写不同时，返回 {landing, landingOutside, spellingInside, carriedOut}（carriedOut=原拼写在工作目录内而落点在外）。
  */
 function symlinkRedirect(pathsToCheck, toolPermissionContext, extraDirs) {
-  let s = symlinkLanding(pathsToCheck);
-  if (s === null) return null;
-  let h = (S) => pathInAllowedWorkingPath(S, toolPermissionContext, [S], extraDirs);
-  let y = !h(s);
-  let w = h(pathsToCheck.requested);
+  let landing = symlinkLanding(pathsToCheck);
+  if (landing === null) return null;
+  let isInsideWorkingPath = (candidate) =>
+    pathInAllowedWorkingPath(candidate, toolPermissionContext, [candidate], extraDirs);
+  let landingOutside = !isInsideWorkingPath(landing);
+  let spellingInside = isInsideWorkingPath(pathsToCheck.requested);
   return {
-    landing: s,
-    landingOutside: y,
-    spellingInside: w,
-    carriedOut: w && y,
+    landing,
+    landingOutside,
+    spellingInside,
+    carriedOut: spellingInside && landingOutside,
   };
 }
 //@ chunk-82kqcve8.js:280180-280278 facade-majority
@@ -3193,16 +3429,16 @@ function symlinkLanding(pathsToCheck) {
     : pathsToCheck.landing;
 }
 //@ chunk-82kqcve8.js:280278-280315 layout
-function canonicalPathKey(e) {
-  return normalizeTrustedSymlink(identity(resolve(e)));
+function canonicalPathKey(spelling) {
+  return normalizeTrustedSymlink(identity(resolve(spelling)));
 }
 //@ chunk-82kqcve8.js:280315-280528 facade-majority
 /**
  * 写目标经符号链接重定向时生成说明：返回 {landing, sentence, personOnly}；请求路径本身安全或已实际落到目录外时 personOnly=true，要求必须由人确认。
  */
 function sensitiveWriteRedirect(path, pathsToCheck, toolPermissionContext) {
-  let s = symlinkRedirect(pathsToCheck, toolPermissionContext);
-  if (s === null) return null;
+  let redirect = symlinkRedirect(pathsToCheck, toolPermissionContext);
+  if (redirect === null) return null;
   let safe = checkPathSafetyForAutoEdit(
     pathsToCheck.requested,
     [pathsToCheck.requested],
@@ -3211,9 +3447,9 @@ function sensitiveWriteRedirect(path, pathsToCheck, toolPermissionContext) {
     toolPermissionContext.trustedNetworkDirectories,
   ).safe;
   return {
-    landing: s.landing,
-    sentence: symlinkRedirectSentence(path, s),
-    personOnly: safe || s.carriedOut,
+    landing: redirect.landing,
+    sentence: symlinkRedirectSentence(path, redirect),
+    personOnly: safe || redirect.carriedOut,
   };
 }
 //@ chunk-82kqcve8.js:280528-280624 facade-majority
@@ -3232,35 +3468,35 @@ function hardDeniedAsSpelled(path, toolPermissionContext) {
 /**
  * 拼出“X 解析到 Y”的符号链接说明句；落点在工作目录外时追加“which is outside the allowed working directories”。
  */
-function symlinkRedirectSentence(e, n) {
-  return `${formatSymlinkResolution(e, n.landing)}${n.landingOutside ? ", which is outside the allowed working directories" : ""}`;
+function symlinkRedirectSentence(path, redirect) {
+  return `${formatSymlinkResolution(path, redirect.landing)}${redirect.landingOutside ? ", which is outside the allowed working directories" : ""}`;
 }
 //@ chunk-82kqcve8.js:280744-281133 layout
 function buildOutsideWorkingDirAsk(verb, path, pathsToCheck, toolPermissionContext) {
-  let h = `Claude requested permissions to ${verb} ${encodeControlChars(path)}, but you haven't granted it yet.`;
-  let y = symlinkRedirect(pathsToCheck, toolPermissionContext);
-  if (y === null || !y.carriedOut)
+  let askMessage = `Claude requested permissions to ${verb} ${encodeControlChars(path)}, but you haven't granted it yet.`;
+  let redirect = symlinkRedirect(pathsToCheck, toolPermissionContext);
+  if (redirect === null || !redirect.carriedOut)
     return {
-      message: h,
+      message: askMessage,
       decisionReason: {
         type: "workingDir",
         reason: OUTSIDE_WORKING_DIRECTORIES_ASK_REASON,
       },
     };
-  let w = symlinkRedirectSentence(path, y);
+  let redirectSentence = symlinkRedirectSentence(path, redirect);
   return {
-    message: `${h} ${w}.`,
-    blockedPath: y.landing,
+    message: `${askMessage} ${redirectSentence}.`,
+    blockedPath: redirect.landing,
     decisionReason:
       verb === "write to"
         ? {
             type: "safetyCheck",
-            reason: w,
+            reason: redirectSentence,
             classifierApprovable: false,
           }
         : {
             type: "workingDir",
-            reason: w,
+            reason: redirectSentence,
           },
   };
 }
@@ -3276,8 +3512,8 @@ function denyUnresolvablePath(verb, path) {
   };
 }
 //@ chunk-82kqcve8.js:281402-281475 layout
-function formatSymlinkResolution(e, landing) {
-  return `${truncatePathForDisplay(e)} resolves through a symlink to ${truncatePathForDisplay(landing)}`;
+function formatSymlinkResolution(path, landing) {
+  return `${truncatePathForDisplay(path)} resolves through a symlink to ${truncatePathForDisplay(landing)}`;
 }
 //@ chunk-82kqcve8.js:281475-281897 facade-majority = generateSuggestions (0.949)
 /**
@@ -3293,7 +3529,7 @@ function generateSuggestions(filePath, operationType, toolPermissionContext, pre
     let dirPath = getDirectoryForPath(filePath);
     return getPathsForPermissionCheck(dirPath)
       .map((dir) => createReadRuleSuggestion(dir, "session"))
-      .filter((S) => S !== undefined);
+      .filter((suggestion) => suggestion !== undefined);
   }
   let shouldSuggestAcceptEdits = acceptEditsSuggestionApplies(toolPermissionContext);
   if (operationType === "write" || operationType === "create") {
@@ -3331,8 +3567,8 @@ function generateSuggestions(filePath, operationType, toolPermissionContext, pre
 /**
  * 把内部路径的真实拼写还原成规范根：若路径以 cwd、原始 cwd、配置目录、家目录等根的某个解析拼写开头，就换回原根；否则按可信符号链接改写。
  */
-function normalizeInternalPathRoot(e) {
-  for (let n of [
+function normalizeInternalPathRoot(absolutePath) {
+  for (let root of [
     getCwd(),
     getOriginalCwd(),
     getProjectRoot(),
@@ -3340,20 +3576,24 @@ function normalizeInternalPathRoot(e) {
     getMemoryBaseDirOrNull(),
     homedir(),
   ]) {
-    if (n === null) continue;
-    for (let r of getResolvedWorkingDirPaths(n)) {
-      if (r === n) continue;
-      if (e === r || e.startsWith(r + sep)) return n + e.slice(r.length);
+    if (root === null) continue;
+    for (let resolvedRoot of getResolvedWorkingDirPaths(root)) {
+      if (resolvedRoot === root) continue;
+      if (absolutePath === resolvedRoot || absolutePath.startsWith(resolvedRoot + sep))
+        return root + absolutePath.slice(resolvedRoot.length);
     }
   }
-  return normalizeTrustedSymlink(e);
+  return normalizeTrustedSymlink(absolutePath);
 }
 //@ chunk-82kqcve8.js:282356-282430 sole-consumer
-function isHeldMemoryPath(e) {
+function isHeldMemoryPath(paths) {
   return (
     isAutoMemoryHeldForSession() &&
     (hasNoAutoMemPath() ||
-      e.some((n) => isAutoMemPath(n + sep) || isAutoMemPath(normalizeInternalPathRoot(n) + sep)))
+      paths.some(
+        (inputPath) =>
+          isAutoMemPath(inputPath + sep) || isAutoMemPath(normalizeInternalPathRoot(inputPath) + sep),
+      ))
   );
 }
 //@ chunk-82kqcve8.js:282430-282537 facade-majority
@@ -3382,64 +3622,75 @@ function internalPathDecisionStands(decision, toolPermissionContext) {
 function checkEditableInternalPath(absolutePath, input, pathsToCheck, options) {
   if (isDiskless()) return NO_CONFIG_DIR_WRITE_DENIAL;
   if (pathsToCheck && pathsToCheck.length > 0) {
-    let mapped = pathsToCheck.map(normalizeMsysDrivePath);
-    if (mapped.some(isHostCredsFilePath)) return HOST_CREDS_WRITE_DENIAL;
-    let L = new Map();
-    let j = checkConfigDirInternalWrite(mapped, "exact", L);
-    if (j !== undefined) return j;
-    if (mapped.some(isSeedAdminPath)) return SEED_ADMIN_WRITE_DENIAL;
-    if (mapped.some(isProfileStorePath)) return PROFILE_STORE_WRITE_DENIAL;
-    if (mapped.some(isSettingsReviewStorePath)) return SETTINGS_REVIEW_STORE_WRITE_DENIAL;
-    let normalizedPath = noConfigDirWriteDenialForRead(mapped);
+    let inputPath = pathsToCheck.map(normalizeMsysDrivePath);
+    if (inputPath.some(isHostCredsFilePath)) return HOST_CREDS_WRITE_DENIAL;
+    let pathCache = new Map();
+    let denial = checkConfigDirInternalWrite(inputPath, "exact", pathCache);
+    if (denial !== undefined) return denial;
+    if (inputPath.some(isSeedAdminPath)) return SEED_ADMIN_WRITE_DENIAL;
+    if (inputPath.some(isProfileStorePath)) return PROFILE_STORE_WRITE_DENIAL;
+    if (inputPath.some(isSettingsReviewStorePath)) return SETTINGS_REVIEW_STORE_WRITE_DENIAL;
+    let normalizedPath = noConfigDirWriteDenialForRead(inputPath);
     if (normalizedPath !== undefined) return normalizedPath;
-    let Z = noConfigDirWriteDenialForPlan(mapped);
-    if (Z !== undefined) return Z;
+    let planDenial = noConfigDirWriteDenialForPlan(inputPath);
+    if (planDenial !== undefined) return planDenial;
     if (options?.exactOnly !== true) {
-      let ae = checkConfigDirInternalWrite(mapped, "widest", L);
-      if (ae !== undefined) return ae;
+      let widestDenial = checkConfigDirInternalWrite(inputPath, "widest", pathCache);
+      if (widestDenial !== undefined) return widestDenial;
     }
     return requireAllAllowed(
       pathsToCheck,
-      (ae, ee) => checkEditableInternalPath(ae, ee, undefined, options),
+      (spelling, spellingInput) => checkEditableInternalPath(spelling, spellingInput, undefined, options),
       input,
     );
   }
-  let h = normalize(absolutePath);
-  let path = normalize(normalizeMsysDrivePath(absolutePath));
-  let w = new Map();
-  let S =
-    checkConfigDirInternalWrite([path], "exact", w) ??
-    (options?.exactOnly === true ? undefined : checkConfigDirInternalWrite([path], "widest", w));
-  if (S !== undefined) return S;
-  if (getPlanFilePath_2(h))
+  let normalizedPath = normalize(absolutePath);
+  let normalizedMsysPath = normalize(normalizeMsysDrivePath(absolutePath));
+  let pathCache = new Map();
+  let configDirDenial =
+    checkConfigDirInternalWrite([normalizedMsysPath], "exact", pathCache) ??
+    (options?.exactOnly === true
+      ? undefined
+      : checkConfigDirInternalWrite([normalizedMsysPath], "widest", pathCache));
+  if (configDirDenial !== undefined) return configDirDenial;
+  if (getPlanFilePath_2(normalizedPath))
     return allowWithReason(input, "Plan files for current session are allowed for writing");
-  if (!options?.restricted && !options?.blockOutsideWrites && isWorkflowScriptPath(h))
+  if (!options?.restricted && !options?.blockOutsideWrites && isWorkflowScriptPath(normalizedPath))
     return allowWithReason(input, "Workflow script files for current session are allowed for writing");
-  if (isScratchpadPath(h))
+  if (isScratchpadPath(normalizedPath))
     return allowWithReason(input, "Scratchpad files for current session are allowed for writing");
-  if (isBgJobTmpPath(h))
+  if (isBgJobTmpPath(normalizedPath))
     return allowWithReason(input, "Job tmp/ subtree for current bg session is allowed for writing");
-  if (!options?.restricted && !options?.blockOutsideWrites && h.endsWith(".md") && isInsideAgentMemoryDir(h))
+  if (
+    !options?.restricted &&
+    !options?.blockOutsideWrites &&
+    normalizedPath.endsWith(".md") &&
+    isInsideAgentMemoryDir(normalizedPath)
+  )
     return allowWithReason(input, "Agent memory files are allowed for writing");
-  if ((mayBeAutoMemPath(h) || mayBeAutoMemPath(path)) && isAutoMemoryHeldForSession())
+  if (
+    (mayBeAutoMemPath(normalizedPath) || mayBeAutoMemPath(normalizedMsysPath)) &&
+    isAutoMemoryHeldForSession()
+  )
     return MEMORY_PAUSED_WRITE_DENIAL;
   if (
     !options?.restricted &&
     (!hasAutoMemPathOverride() || options?.blockOutsideWrites) &&
-    h.endsWith(".md") &&
-    ((isAutoMemPathSafeForCarveout(h) && !(options?.blockOutsideWrites && isAutoMemPathFromRepoSettings())) ||
-      isOwnProjectAutoMemPathSafeForCarveout(h))
+    normalizedPath.endsWith(".md") &&
+    ((isAutoMemPathSafeForCarveout(normalizedPath) &&
+      !(options?.blockOutsideWrites && isAutoMemPathFromRepoSettings())) ||
+      isOwnProjectAutoMemPathSafeForCarveout(normalizedPath))
   )
     return allowWithReason(input, AUTO_MEM_WRITE_ALLOW_REASON);
-  if (!options?.restricted && h === join(getOriginalCwd(), ".claude", "launch.json"))
+  if (!options?.restricted && normalizedPath === join(getOriginalCwd(), ".claude", "launch.json"))
     return allowWithReason(input, "Preview launch config is allowed for writing");
-  if (isSeedAdminPath(path)) return SEED_ADMIN_WRITE_DENIAL;
-  if (isHostCredsFilePath(path)) return HOST_CREDS_WRITE_DENIAL;
-  if (isProfileStorePath(path)) return PROFILE_STORE_WRITE_DENIAL;
-  if (isSettingsReviewStorePath(path)) return SETTINGS_REVIEW_STORE_WRITE_DENIAL;
-  let targetForms = noConfigDirWriteDenialForRead([absolutePath, h, path]);
+  if (isSeedAdminPath(normalizedMsysPath)) return SEED_ADMIN_WRITE_DENIAL;
+  if (isHostCredsFilePath(normalizedMsysPath)) return HOST_CREDS_WRITE_DENIAL;
+  if (isProfileStorePath(normalizedMsysPath)) return PROFILE_STORE_WRITE_DENIAL;
+  if (isSettingsReviewStorePath(normalizedMsysPath)) return SETTINGS_REVIEW_STORE_WRITE_DENIAL;
+  let targetForms = noConfigDirWriteDenialForRead([absolutePath, normalizedPath, normalizedMsysPath]);
   if (targetForms !== undefined) return targetForms;
-  let np = noConfigDirWriteDenialForPlan([absolutePath, h, path]);
+  let np = noConfigDirWriteDenialForPlan([absolutePath, normalizedPath, normalizedMsysPath]);
   if (np !== undefined) return np;
   return {
     behavior: "passthrough",
@@ -3461,7 +3712,7 @@ function checkReadableInternalPath(absolutePath, input, pathsToCheck, options) {
   if (pathsToCheck && pathsToCheck.length > 0)
     return requireAllAllowed(
       pathsToCheck,
-      (L, j) => checkReadableInternalPath(L, j, undefined, options),
+      (spelling, spellingInput) => checkReadableInternalPath(spelling, spellingInput, undefined, options),
       input,
     );
   let normalizedPath = normalize(absolutePath);
@@ -3483,30 +3734,36 @@ function checkReadableInternalPath(absolutePath, input, pathsToCheck, options) {
     return allowWithReason(input, "Job tmp/ subtree for current bg session is allowed for reading");
   if (normalizedPath.startsWith(sessionTempDirRealpath()))
     return allowWithReason(input, "Project temp directory files are allowed for reading");
-  let S = options?.remoteSurface || options?.restricted;
-  let R = S || options?.blockOutsideReads;
-  if (!R && isInsideAgentMemoryDir(normalizedPath))
+  let isRestricted = options?.remoteSurface || options?.restricted;
+  let blocksOutside = isRestricted || options?.blockOutsideReads;
+  if (!blocksOutside && isInsideAgentMemoryDir(normalizedPath))
     return allowWithReason(input, "Agent memory files are allowed for reading");
   if (
-    !S &&
+    !isRestricted &&
     (isAutoMemPathSafeForCarveout(normalizedPath) ||
       (options?.searchRootFence && isAutoMemPathSafeForCarveout(normalizedPath + sep))) &&
     !(options?.blockOutsideReads && isAutoMemPathFromRepoSettings())
   )
     return allowWithReason(input, "auto memory files are allowed for reading");
-  let O = join(getClaudeConfigDir(), "tasks") + sep;
-  if (!R && (normalizedPath === O.slice(0, -1) || normalizedPath.startsWith(O)))
+  let tasksPrefix = join(getClaudeConfigDir(), "tasks") + sep;
+  if (
+    !blocksOutside &&
+    (normalizedPath === tasksPrefix.slice(0, -1) || normalizedPath.startsWith(tasksPrefix))
+  )
     return allowWithReason(input, "Task files are allowed for reading");
-  let P = join(getClaudeConfigDir(), "teams") + sep;
-  if (!R && (normalizedPath === P.slice(0, -1) || normalizedPath.startsWith(P)))
+  let teamsPrefix = join(getClaudeConfigDir(), "teams") + sep;
+  if (
+    !blocksOutside &&
+    (normalizedPath === teamsPrefix.slice(0, -1) || normalizedPath.startsWith(teamsPrefix))
+  )
     return allowWithReason(input, "Team files are allowed for reading");
   if (options?.readBlockFence && !options.restricted) {
     if (normalizedPath === join(getClaudeConfigDir(), "CLAUDE.md"))
       return allowWithReason(input, "The user memory file is allowed for reading");
-    for (let L of ["skills", "plugins", "rules", "agents", "commands"]) {
-      let j = join(getClaudeConfigDir(), L) + sep;
-      if (normalizedPath === j.slice(0, -1) || normalizedPath.startsWith(j))
-        return allowWithReason(input, `User ${L} files are allowed for reading`);
+    for (let subdir of ["skills", "plugins", "rules", "agents", "commands"]) {
+      let prefix = join(getClaudeConfigDir(), subdir) + sep;
+      if (normalizedPath === prefix.slice(0, -1) || normalizedPath.startsWith(prefix))
+        return allowWithReason(input, `User ${subdir} files are allowed for reading`);
     }
   }
   if (!options?.remoteSurface && normalizedPath.startsWith(getBundledSkillsRoot() + sep))
@@ -3546,13 +3803,13 @@ function buildSafetyCheckAsk(message, reason) {
 /**
  * 是否为读闸门产生的安全询问：behavior 为 ask，且原因是 other，或是不可由分类器批准、也没有熔断标签的 safetyCheck。
  */
-function isReadGateSafetyAsk(e) {
+function isReadGateSafetyAsk(decision) {
   return (
-    e?.behavior === "ask" &&
-    (e.decisionReason?.type === "other" ||
-      (e.decisionReason?.type === "safetyCheck" &&
-        e.decisionReason.classifierApprovable === false &&
-        e.decisionReason.circuitBreaker === undefined))
+    decision?.behavior === "ask" &&
+    (decision.decisionReason?.type === "other" ||
+      (decision.decisionReason?.type === "safetyCheck" &&
+        decision.decisionReason.classifierApprovable === false &&
+        decision.decisionReason.circuitBreaker === undefined))
   );
 }
 //@ chunk-82kqcve8.js:286275-286619 layout
@@ -3564,61 +3821,66 @@ function getUserSkillsBaseSpellings() {
   if (sessionPathsCache.userSkillsBaseSpellingsFolded !== undefined)
     return sessionPathsCache.userSkillsBaseSpellingsFolded;
   let fsImplementation = getFsImplementation();
-  let r = new Set();
-  let s = (y) => {
-    r.add(normalizeCaseForComparison(y));
+  let spellings = new Set();
+  let addSpellings = (path) => {
+    spellings.add(normalizeCaseForComparison(path));
     try {
-      r.add(normalizeCaseForComparison(fsImplementation.realpathSync(y)));
+      spellings.add(normalizeCaseForComparison(fsImplementation.realpathSync(path)));
     } catch {}
   };
-  let h = expandPath(getClaudeConfigDir());
-  s(join(h, "skills"));
+  let expandedConfigDir = expandPath(getClaudeConfigDir());
+  addSpellings(join(expandedConfigDir, "skills"));
   try {
-    s(join(fsImplementation.realpathSync(h), "skills"));
+    addSpellings(join(fsImplementation.realpathSync(expandedConfigDir), "skills"));
   } catch {}
-  sessionPathsCache.userSkillsBaseSpellingsFolded = [...r];
+  sessionPathsCache.userSkillsBaseSpellingsFolded = [...spellings];
   return sessionPathsCache.userSkillsBaseSpellingsFolded;
 }
 //@ chunk-82kqcve8.js:286619-287050 facade-majority
 /**
  * 写判定的前置拒绝：先查内部硬拒绝；restricted 或 blockWritesOutsideWorkingDirectories 下检查工作目录约束；阻写模式下可能是设置文件则直接 deny；最后交给 yh 做剩余前置检查。
  */
-function writeDenyPrefix(e, n, r, s) {
-  let editDenyForSpellings = findEditDenyForSpellings(e, n.spellings, s);
+function writeDenyPrefix(path, pathsToCheck, absolutePath, toolPermissionContext) {
+  let editDenyForSpellings = findEditDenyForSpellings(path, pathsToCheck.spellings, toolPermissionContext);
   if (editDenyForSpellings !== undefined) return editDenyForSpellings;
-  if (s.restricted || s.blockWritesOutsideWorkingDirectories) {
-    let y = denyIfOutsideWorkingDirs(
-      e,
-      n,
-      s,
-      () => editableInternalPathDecision(r, n.spellings, s),
-      s.restricted ? RESTRICTED_MODE_CONSTRAINT : OUTSIDE_WRITES_CONSTRAINT,
-      s.blockWritesOutsideWorkingDirectories ? blockReadsWorkingDirectories(s) : allWorkingDirectories(s),
+  if (toolPermissionContext.restricted || toolPermissionContext.blockWritesOutsideWorkingDirectories) {
+    let outsideDecision = denyIfOutsideWorkingDirs(
+      path,
+      pathsToCheck,
+      toolPermissionContext,
+      () => editableInternalPathDecision(absolutePath, pathsToCheck.spellings, toolPermissionContext),
+      toolPermissionContext.restricted ? RESTRICTED_MODE_CONSTRAINT : OUTSIDE_WRITES_CONSTRAINT,
+      toolPermissionContext.blockWritesOutsideWorkingDirectories
+        ? blockReadsWorkingDirectories(toolPermissionContext)
+        : allWorkingDirectories(toolPermissionContext),
     );
-    if (y) return y;
+    if (outsideDecision) return outsideDecision;
   }
-  if (s.blockWritesOutsideWorkingDirectories && settingsFileCertainty(n.spellings) !== "none")
+  if (
+    toolPermissionContext.blockWritesOutsideWorkingDirectories &&
+    settingsFileCertainty(pathsToCheck.spellings) !== "none"
+  )
     return {
       behavior: "deny",
-      message: encodeControlChars(`${e}: ${SETTINGS_WRITES_BLOCKED_DENY_REASON}`),
+      message: encodeControlChars(`${path}: ${SETTINGS_WRITES_BLOCKED_DENY_REASON}`),
       decisionReason: {
         type: "other",
         reason: SETTINGS_WRITES_BLOCKED_DENY_REASON,
       },
     };
-  return getInternalWriteDenial(e, n, r);
+  return getInternalWriteDenial(path, pathsToCheck, absolutePath);
 }
 //@ chunk-82kqcve8.js:287050-287240 affinity
-function findEditDenyForSpellings(e, n, r) {
-  for (let s of n) {
-    let h = matchingRuleForInput(s, r, "edit", "deny");
-    if (h)
+function findEditDenyForSpellings(path, spellings, toolPermissionContext) {
+  for (let spelling of spellings) {
+    let denyRule = matchingRuleForInput(spelling, toolPermissionContext, "edit", "deny");
+    if (denyRule)
       return {
         behavior: "deny",
-        message: `Permission to edit ${encodeControlChars(e)} has been denied.`,
+        message: `Permission to edit ${encodeControlChars(path)} has been denied.`,
         decisionReason: {
           type: "rule",
-          rule: h,
+          rule: denyRule,
         },
       };
   }
@@ -3628,27 +3890,29 @@ function findEditDenyForSpellings(e, n, r) {
 /**
  * 内部写路径的硬拒绝：无磁盘模式、记忆暂停、配置目录内部文件、种子管理/宿主凭据/档案/设置审阅存储，以及其他内部禁区；路径无法解析时拒绝。
  */
-function getInternalWriteDenial(path, n, r) {
+function getInternalWriteDenial(path, pathsToCheck, absolutePath) {
   if (isDiskless()) return NO_CONFIG_DIR_WRITE_DENIAL;
-  if (isHeldMemoryPath([...n.spellings, r])) return MEMORY_PAUSED_WRITE_DENIAL;
-  let s = new Map();
-  let h = checkConfigDirInternalWrite(n.spellings, "exact", s);
-  if (h !== undefined) return h;
-  if (n.spellings.some(isSeedAdminPath)) return SEED_ADMIN_WRITE_DENIAL;
-  if (n.spellings.some(isHostCredsFilePath)) return HOST_CREDS_WRITE_DENIAL;
-  if (n.spellings.some(isProfileStorePath)) return PROFILE_STORE_WRITE_DENIAL;
-  if (n.spellings.some(isSettingsReviewStorePath)) return SETTINGS_REVIEW_STORE_WRITE_DENIAL;
-  let y = noConfigDirWriteDenialForRead(n.spellings);
-  if (y !== undefined) return y;
-  let w = noConfigDirWriteDenialForPlan(n.spellings);
-  if (w !== undefined) return w;
-  if (n.unresolved) return denyUnresolvablePath("write to", path);
-  return checkConfigDirInternalWrite(n.spellings, "widest", s);
+  if (isHeldMemoryPath([...pathsToCheck.spellings, absolutePath])) return MEMORY_PAUSED_WRITE_DENIAL;
+  let pathCache = new Map();
+  let denial = checkConfigDirInternalWrite(pathsToCheck.spellings, "exact", pathCache);
+  if (denial !== undefined) return denial;
+  if (pathsToCheck.spellings.some(isSeedAdminPath)) return SEED_ADMIN_WRITE_DENIAL;
+  if (pathsToCheck.spellings.some(isHostCredsFilePath)) return HOST_CREDS_WRITE_DENIAL;
+  if (pathsToCheck.spellings.some(isProfileStorePath)) return PROFILE_STORE_WRITE_DENIAL;
+  if (pathsToCheck.spellings.some(isSettingsReviewStorePath)) return SETTINGS_REVIEW_STORE_WRITE_DENIAL;
+  let configDirDenial = noConfigDirWriteDenialForRead(pathsToCheck.spellings);
+  if (configDirDenial !== undefined) return configDirDenial;
+  let planDenial = noConfigDirWriteDenialForPlan(pathsToCheck.spellings);
+  if (planDenial !== undefined) return planDenial;
+  if (pathsToCheck.unresolved) return denyUnresolvablePath("write to", path);
+  return checkConfigDirInternalWrite(pathsToCheck.spellings, "widest", pathCache);
 }
 //@ chunk-82kqcve8.js:287677-287804 affinity
 function orderRootEntries(patternsByRoot) {
   return patternsByRoot.has(null) && getCwdOrNull() === null
-    ? [...patternsByRoot.entries()].sort(([n], [r]) => Number(n === null) - Number(r === null))
+    ? [...patternsByRoot.entries()].sort(
+        ([entryA], [entryB]) => Number(entryA === null) - Number(entryB === null),
+      )
     : patternsByRoot.entries();
 }
 //@ chunk-fq0cr76a.js:876912-876997 placement = normalizeGitPathArg (0.677)
@@ -3659,67 +3923,86 @@ function normalizeGitPathArg(arg) {
   return win32.normalize(realPathOfAdminShare(arg)).toUpperCase().split("\\").filter(Boolean);
 }
 //@ chunk-fq0cr76a.js:876997-877058 placement
-function realPathOfAdminShare(e) {
-  let n = realPathOrSelf(adminShareToDrivePath(e));
-  let r = adminShareToDrivePath(n);
-  return r === n ? n : realPathOrSelf(r);
+function realPathOfAdminShare(sharePath) {
+  let drivePath = realPathOrSelf(adminShareToDrivePath(sharePath));
+  let roundTripPath = adminShareToDrivePath(drivePath);
+  return roundTripPath === drivePath ? drivePath : realPathOrSelf(roundTripPath);
 }
 //@ chunk-fq0cr76a.js:877058-877095 placement
-function realPathOrSelf(e) {
-  return realpathNativeLongSync(e).real ?? e;
+function realPathOrSelf(path) {
+  return realpathNativeLongSync(path).real ?? path;
 }
 //@ chunk-fq0cr76a.js:877095-877365 placement
-function adminShareToDrivePath(e) {
-  let replaced = uncHostOf(e)?.replace(/\.$/, "");
-  let match = /^[\\/]{2}(?:[?.][\\/]unc[\\/])?[^\\/]+[\\/]+([a-z])\$(?:[\\/](.*))?$/is.exec(e);
+function adminShareToDrivePath(inputPath) {
+  let replaced = uncHostOf(inputPath)?.replace(/\.$/, "");
+  let match = /^[\\/]{2}(?:[?.][\\/]unc[\\/])?[^\\/]+[\\/]+([a-z])\$(?:[\\/](.*))?$/is.exec(inputPath);
   return match !== null &&
     replaced !== undefined &&
     (isLoopbackHost(replaced) ||
       replaced === "--1.ipv6-literal.net" ||
-      replaced === hostname().replace(/[A-Z]/g, (s) => s.toLowerCase()))
+      replaced === hostname().replace(/[A-Z]/g, (letter) => letter.toLowerCase()))
     ? `${match[1]}:\\${match[2] ?? ""}`
-    : e;
+    : inputPath;
+}
+//@ chunk-8wvtd8sr.js:32501-32736 fingerprint = getScratchpadDir (0.842)
+/**
+ * 在路径中找出 scratchpad 根（形如 .../claude[-N]/<x>/<UUID>/scratchpad），返回到 scratchpad 为止的前缀；找不到返回 undefined。
+ */
+function findScratchpadRootInPath(inputPath) {
+  let parts = inputPath.split(sep);
+  let lastIndex = parts.findLastIndex(
+    (part, index) =>
+      index >= 3 &&
+      part.toLowerCase() === "scratchpad" &&
+      /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(parts[index - 1]) &&
+      /^claude(-\d+)?$/i.test(parts[index - 3]),
+  );
+  return lastIndex === -1 ? undefined : parts.slice(0, lastIndex + 1).join(sep);
 }
 //@ chunk-axmbhcjg.js:23906-23956 placement
 /**
  * 返回 classifySensitivePath 的 reason 或 null。与模型无关（切分错误）。
  */
-function getSensitivePathReason(e, n, location) {
-  return classifySensitivePath(e, n, location)?.reason ?? null;
+function getSensitivePathReason(cwd, classifier, location) {
+  return classifySensitivePath(cwd, classifier, location)?.reason ?? null;
 }
 //@ chunk-axmbhcjg.js:23956-24047 placement = resolveAntModel (0.385)
 /**
  * 敏感或拒绝读时返回 {path: 别名或原路径, reason}。旧版名 resolveAntModel 为错配。
  */
-function resolveSensitivePath(e, n, location, lexicalRel) {
-  let i = classifySensitivePath(e, n, location);
-  return i === null
+function resolveSensitivePath(cwd, classifier, location, lexicalRel) {
+  let match = classifySensitivePath(cwd, classifier, location);
+  return match === null
     ? null
     : {
-        path: i.alias ?? lexicalRel,
-        reason: i.reason,
+        path: match.alias ?? lexicalRel,
+        reason: match.reason,
       };
 }
 //@ chunk-axmbhcjg.js:24047-24585 placement
 /**
  * 把路径（词法/真实/原始相对路径及其别名、配置目录下的对应路径）逐一交给判定函数：sensitive/host_config 归 sensitive，read_denied/rules_unreadable 归 read_denied，否则 null。
  */
-function classifySensitivePath(e, n, r) {
-  let o = uniq([r.lexicalRel, r.rel, ...r.rawRels]);
-  let filtered = uniq(o.flatMap((d) => getAliasSpellings(e, d))).filter((d) => !o.includes(d));
-  let s = [...o, ...filtered];
+function classifySensitivePath(cwd, classifyRelative, location) {
+  let rawRels = uniq([location.lexicalRel, location.rel, ...location.rawRels]);
+  let filtered = uniq(rawRels.flatMap((rel) => getAliasSpellings(cwd, rel))).filter(
+    (alias) => !rawRels.includes(alias),
+  );
+  let candidates = [...rawRels, ...filtered];
   if (
-    [...s, ...s.map((d) => join(e.configHome, ...d.split("/"))), r.realPath].some((d) =>
-      isSensitiveWithGitConfig(d),
-    )
+    [
+      ...candidates,
+      ...candidates.map((candidate) => join(cwd.configHome, ...candidate.split("/"))),
+      location.realPath,
+    ].some((candidatePath) => isSensitiveWithGitConfig(candidatePath))
   )
     return {
       reason: "sensitive",
       alias: null,
     };
-  for (let d of s) {
-    let alias = filtered.includes(d) ? d : null;
-    switch (n(d, false)) {
+  for (let candidate of candidates) {
+    let alias = filtered.includes(candidate) ? candidate : null;
+    switch (classifyRelative(candidate, false)) {
       case "sensitive":
       case "sensitive_tracked":
       case "host_config":
@@ -3747,65 +4030,6 @@ function classifySensitivePath(e, n, r) {
 function allWorkingDirectories_2(context) {
   return context.toolPermissionContext.additionalWorkingDirectories;
 }
-//@ chunk-8wvtd8sr.js:32501-32736 fingerprint = getScratchpadDir (0.842)
-/**
- * 在路径中找出 scratchpad 根（形如 .../claude[-N]/<x>/<UUID>/scratchpad），返回到 scratchpad 为止的前缀；找不到返回 undefined。
- */
-function findScratchpadRootInPath(e) {
-  let parts = e.split(sep);
-  let lastIndex = parts.findLastIndex(
-    (r, h) =>
-      h >= 3 &&
-      r.toLowerCase() === "scratchpad" &&
-      /^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(parts[h - 1]) &&
-      /^claude(-\d+)?$/i.test(parts[h - 3]),
-  );
-  return lastIndex === -1 ? undefined : parts.slice(0, lastIndex + 1).join(sep);
-}
-//@ chunk-bhhkxwra.js:191-788 fingerprint = DANGEROUS_FILES (0.395)
-/**
- * 不允许自动编辑的危险文件名（shell 配置、git 配置、包管理器与构建工具配置等）及其小写集合。
- */
-var DANGEROUS_FILES = [
-  ".gitconfig",
-  ".gitmodules",
-  ".bashrc",
-  ".bash_profile",
-  ".zshrc",
-  ".zprofile",
-  ".profile",
-  ".zshenv",
-  ".zlogin",
-  ".zlogout",
-  ".bash_login",
-  ".bash_aliases",
-  ".bash_logout",
-  ".envrc",
-  ".ripgreprc",
-  ".mcp.json",
-  ".claude.json",
-  ".npmrc",
-  ".yarnrc",
-  ".yarnrc.yml",
-  ".pnp.cjs",
-  ".pnp.loader.mjs",
-  ".pnpmfile.cjs",
-  "bunfig.toml",
-  ".bunfig.toml",
-  ".bazelrc",
-  ".bazelversion",
-  ".bazeliskrc",
-  ".pre-commit-config.yaml",
-  "lefthook.yml",
-  ".lefthook.yml",
-  "lefthook.yaml",
-  ".lefthook.yaml",
-  "gradle-wrapper.properties",
-  "maven-wrapper.properties",
-  ".devcontainer.json",
-  "pyrightconfig.json",
-];
-var DANGEROUS_FILES_LOWER = new Set(DANGEROUS_FILES.map((o) => o.toLowerCase()));
 //@ chunk-tb11za84.js:5160-5281 fingerprint = hasSuspiciousWindowsPathPattern (0.569)
 /**
  * 是否 UNC 路径：\\?\UNC\ 前缀，或以 \\ 开头但不是 \\?\、\\.\ 设备前缀。旧版名 hasSuspiciousWindowsPathPattern 误配。
@@ -3852,7 +4076,6 @@ export {
   relativePath,
   poolCanRead,
   readAutoAllowedForMutation,
-  getBundledSkillsRoot,
   patternWithRootFor,
   ensureScratchpadDir,
   checkReadNetworkPathSafety,
@@ -3861,8 +4084,8 @@ export {
   isManagedSettingsDropInPath,
   managedDropInDirSpellingsAsync,
   isUntrustedAutomountPath,
-  safetyCheckReasonFields,
   normalizeInternalPathRoot,
+  safetyCheckReasonFields,
   matchesPathRule,
   findScratchpadRootInPath,
   leafSymlinkWriteRefusal,
@@ -3874,6 +4097,7 @@ export {
   isSearchResultRootRespellEnabled,
   resolveSensitivePath,
   getSensitivePathReason,
+  getBundledSkillsRoot,
   outsideReadBlocked,
   getFileReadIgnorePatterns,
   acceptEditsSuggestionApplies,

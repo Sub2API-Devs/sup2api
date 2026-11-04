@@ -40,8 +40,12 @@ import { tailFile } from "../../utils/fsOperations.js";
 import { registerCleanup } from "../../utils/cleanupRegistry.js";
 
 //@ chunk-rr1dnehg.js:1854-1938 placement
-function recordTeleportArmVerdict(e) {
-  logForDiagnosticsNoPII(e.outcome === "refused" ? "warn" : "info", "cli_teleport_arm_verdict", e);
+function recordTeleportArmVerdict(verdict) {
+  logForDiagnosticsNoPII(
+    verdict.outcome === "refused" ? "warn" : "info",
+    "cli_teleport_arm_verdict",
+    verdict,
+  );
 }
 //@ chunk-rr1dnehg.js:1938-1953 placement
 var MAX_SEED_TRANSCRIPT_BYTES = 67108864;
@@ -49,11 +53,11 @@ var MAX_SEED_TRANSCRIPT_BYTES = 67108864;
 /**
  * 解析一行种子转录，返回符合 schema 的对象或 null。
  */
-function parseSeedLine(e) {
+function parseSeedLine(line) {
   try {
-    let i = jsonParseRaw(e);
-    let a = SEED_LINE_SCHEMA().safeParse(i);
-    return a.success ? a.data : null;
+    let parsed = jsonParseRaw(line);
+    let result = SEED_LINE_SCHEMA().safeParse(parsed);
+    return result.success ? result.data : null;
   } catch {
     return null;
   }
@@ -64,24 +68,24 @@ function parseSeedLine(e) {
  */
 function armRelayFromSeed({ rawSeedLines, liveMessages, ingressOrigin, remoteSessionId }) {
   if (getTeleportCacheState().status !== "inactive") return NOT_INACTIVE_RESULT;
-  let d = null;
+  let markerLine = null;
   for (let j = rawSeedLines.length - 1; j >= 0; j--) {
-    let m = rawSeedLines[j];
-    if (m.trim() === "") continue;
-    let seedLine = parseSeedLine(m);
+    let line = rawSeedLines[j];
+    if (line.trim() === "") continue;
+    let seedLine = parseSeedLine(line);
     if (seedLine?.type === "system" && isUpgradeRelayMarker(seedLine.subtype)) {
-      d = seedLine;
+      markerLine = seedLine;
       break;
     }
   }
-  if (d === null)
+  if (markerLine === null)
     return {
       armed: false,
       code: "no_marker_line",
       reason: "no teleport marker line in the seed transcript",
     };
-  let uuid = d.uuid;
-  let content = d.content;
+  let uuid = markerLine.uuid;
+  let content = markerLine.content;
   if (typeof uuid !== "string" || typeof content !== "string")
     return {
       armed: false,
@@ -154,7 +158,7 @@ function armRelayFromMarker({ markerLineUuid, markerContent, liveMessages, ingre
   };
 }
 //@ chunk-rr1dnehg.js:3855-4186 placement
-function noteTeleportBootUnreached(e, i) {
+function noteTeleportBootUnreached(stage, holdOpen) {
   noteRelayBootSettled();
   if (!teleportRelayCarrierPresent()) {
     recordTeleportArmVerdict({
@@ -162,17 +166,17 @@ function noteTeleportBootUnreached(e, i) {
     });
     return;
   }
-  if (i) {
-    holdRelayVerdictOpen(`boot_unreached_${e}`);
+  if (holdOpen) {
+    holdRelayVerdictOpen(`boot_unreached_${stage}`);
     return;
   }
-  logFeatureSad("upgrade_teleport_cache", `boot_unreached_${e}`);
+  logFeatureSad("upgrade_teleport_cache", `boot_unreached_${stage}`);
   recordTeleportArmVerdict({
     outcome: "refused",
-    error_code: `boot_unreached_${e}`,
+    error_code: `boot_unreached_${stage}`,
   });
   logForDebugging(
-    `teleport relay carriers present but the resume lane exited before boot (${e}) \u2014 standard path`,
+    `teleport relay carriers present but the resume lane exited before boot (${stage}) \u2014 standard path`,
     {
       level: "warn",
     },
@@ -182,11 +186,11 @@ function noteTeleportBootUnreached(e, i) {
 /**
  * 读取种子 transcript 尾部（优先存储后端，链接文件被拒，其余回退读文件）。
  */
-async function readSeedTranscriptTail(e, i) {
-  let transcriptPathForSession = getTranscriptPathForSession(e);
-  let transcriptStorageKey = getTranscriptStorageKey(transcriptPathForSession, i);
+async function readSeedTranscriptTail(sessionId, storage) {
+  let transcriptPathForSession = getTranscriptPathForSession(sessionId);
+  let transcriptStorageKey = getTranscriptStorageKey(transcriptPathForSession, storage);
   if (transcriptStorageKey !== undefined) {
-    let r = await readTranscriptTailV5(
+    let readResult = await readTranscriptTailV5(
       transcriptStorageKey.key,
       MAX_SEED_TRANSCRIPT_BYTES,
       transcriptStorageKey.backend,
@@ -199,10 +203,10 @@ async function readSeedTranscriptTail(e, i) {
       );
       return;
     });
-    if (r === null) throw Error("seed transcript stream not found");
-    if (r?.ok) return r.content;
-    if (r !== undefined) {
-      let telemetryCode = "telemetryCode" in r.error ? r.error.telemetryCode : undefined;
+    if (readResult === null) throw Error("seed transcript stream not found");
+    if (readResult?.ok) return readResult.content;
+    if (readResult !== undefined) {
+      let telemetryCode = "telemetryCode" in readResult.error ? readResult.error.telemetryCode : undefined;
       if (telemetryCode === "ELOOP" || telemetryCode === "ENXIO") {
         logForDebugging(
           `teleport relay seed read refused by storage (${telemetryCode}); the file is not re-read directly`,
@@ -213,7 +217,7 @@ async function readSeedTranscriptTail(e, i) {
         throw Error("seed transcript refused by storage: a linked or indirect transcript file is not read");
       }
       logForDebugging(
-        `teleport relay seed read through storage failed (${r.error.code}); falling back to the file`,
+        `teleport relay seed read through storage failed (${readResult.error.code}); falling back to the file`,
         {
           level: "warn",
         },
@@ -224,20 +228,20 @@ async function readSeedTranscriptTail(e, i) {
   return content;
 }
 //@ chunk-rr1dnehg.js:4954-5841 placement
-async function bootTeleportFromTranscript(e, liveMessages, a, s) {
+async function bootTeleportFromTranscript(sessionId, liveMessages, storage, holdOpen) {
   try {
     let teleportRelayEnvConfig = getTeleportRelayEnvConfig();
     if (!teleportRelayEnvConfig) {
-      let r = explainTeleportEnvRefusal();
-      if (r !== null) {
+      let refusalReason = explainTeleportEnvRefusal();
+      if (refusalReason !== null) {
         logFeatureSad("upgrade_teleport_cache", "env_config_refused");
         recordTeleportArmVerdict({
           outcome: "refused",
           error_code: "env_config_refused",
-          cause: r,
+          cause: refusalReason,
         });
         logForDebugging(
-          `teleport relay carriers present but env config refused (${r}) \u2014 standard path`,
+          `teleport relay carriers present but env config refused (${refusalReason}) \u2014 standard path`,
           {
             level: "warn",
           },
@@ -249,22 +253,23 @@ async function bootTeleportFromTranscript(e, liveMessages, a, s) {
       return;
     }
     try {
-      let seedTranscriptTail = await readSeedTranscriptTail(e, a);
-      let n = armRelayFromSeed({
+      let seedTranscriptTail = await readSeedTranscriptTail(sessionId, storage);
+      let armResult = armRelayFromSeed({
         rawSeedLines: seedTranscriptTail.split(`
 `),
         liveMessages,
         ingressOrigin: teleportRelayEnvConfig.ingressOrigin,
         remoteSessionId: teleportRelayEnvConfig.remoteSessionId,
       });
-      if (s && !n.armed && n.code === "no_marker_line") holdRelayVerdictOpen(n.code);
-      else if (!n.armed) {
-        logFeatureSad("upgrade_teleport_cache", n.code);
+      if (holdOpen && !armResult.armed && armResult.code === "no_marker_line")
+        holdRelayVerdictOpen(armResult.code);
+      else if (!armResult.armed) {
+        logFeatureSad("upgrade_teleport_cache", armResult.code);
         recordTeleportArmVerdict({
           outcome: "refused",
-          error_code: n.code,
+          error_code: armResult.code,
         });
-        logForDebugging(`teleport relay not armed: ${n.reason}`);
+        logForDebugging(`teleport relay not armed: ${armResult.reason}`);
       } else {
         logFeatureOk("upgrade_teleport_cache");
         recordTeleportArmVerdict({
@@ -297,4 +302,9 @@ function holdRelayVerdictOpen(openBootVerdict) {
   });
   logForDebugging(`prompt-cache relay not armed at boot (${openBootVerdict}); a hand-off may still arm it`);
 }
-export { armRelayFromMarker, recordTeleportArmVerdict };
+export {
+  armRelayFromMarker,
+  recordTeleportArmVerdict,
+  bootTeleportFromTranscript,
+  noteTeleportBootUnreached,
+};

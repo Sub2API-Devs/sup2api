@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-8wvtd8sr.js (10)
- * attribution: placement 10
+ * pieces: chunk-8wvtd8sr.js (9)
+ * attribution: placement 9
  */
 import { basename } from "path";
 import {
@@ -16,13 +16,13 @@ import {
 import { isArtifactsAvailable } from "../../services/artifacts/artifactAvailability.js";
 import { parseArtifactUrl } from "./constants.js";
 import { durableRowFor } from "../../services/artifacts/durableWatch.js";
-import { artifactCardTitle } from "./artifactUrls.js";
 import {
   getShareEntry,
   getShareEntryForPath,
   shareAudienceMark,
 } from "../../services/artifacts/shareEntries.js";
 import { expandPath } from "../../utils/path.js";
+import { artifactCardTitleOf } from "./artifactUrls.js";
 import { publishShimModule } from "./publishEdits.js";
 
 //@ chunk-8wvtd8sr.js:358250-358533 placement
@@ -45,8 +45,8 @@ var regExp_2 = new RegExp(`^${DURABLE_UNRELAYED}(\\d{3})$`);
 /**
  * 判断持久唤醒是否未就位（服务拒绝或网关未承载）。
  */
-function isDurableNotArmed(e) {
-  return e === "durable_refused" || e.startsWith(DURABLE_UNRELAYED);
+function isDurableNotArmed(status) {
+  return status === "durable_refused" || status.startsWith(DURABLE_UNRELAYED);
 }
 //@ chunk-8wvtd8sr.js:358897-359464 placement
 /**
@@ -68,19 +68,19 @@ var DURABLE_DECLINED_LINE =
 /**
  * 根据发布结果的 liveSubscription 生成附加说明行：发布上下文简报、durable 被拒、arming/registered/未中继等状态。
  */
-function liveSubscriptionLine(e) {
-  if (typeof e.liveSubscription !== "string") return "";
-  if (e.watchBrief === true && e.liveSubscription === "publish_context")
+function liveSubscriptionLine(result) {
+  if (typeof result.liveSubscription !== "string") return "";
+  if (result.watchBrief === true && result.liveSubscription === "publish_context")
     return `
 
 ${FRAME_LIVE_PUBLISH_CONTEXT_BRIEF_LINE}`;
-  if (e.liveSubscription === "durable_declined")
+  if (result.liveSubscription === "durable_declined")
     return `
 
 ${DURABLE_DECLINED_LINE}`;
   return `
 
-${e.liveSubscription === "durable_arming" || e.liveSubscription === "durable_registered" || isDurableNotArmed(e.liveSubscription) ? durableWakeStatusLine(e.liveSubscription, typeof e.url === "string" ? e.url : "") : frameLiveSubscriptionLine(e.liveSubscription)}`;
+${result.liveSubscription === "durable_arming" || result.liveSubscription === "durable_registered" || isDurableNotArmed(result.liveSubscription) ? durableWakeStatusLine(result.liveSubscription, typeof result.url === "string" ? result.url : "") : frameLiveSubscriptionLine(result.liveSubscription)}`;
 }
 //@ chunk-8wvtd8sr.js:360151-360984 placement
 /**
@@ -101,31 +101,24 @@ function durableWakeStatusLine(state, url) {
       : `Durable wake subscription: already registered from earlier in this session \u2014 ${wakeClause}.`
     : `Durable wake subscription: arming in the background \u2014 not registered yet, so this is not a subscription until \`status\` lists it (you are told if it cannot be registered). Once registered, ${wakeClause}.`;
 }
-//@ chunk-8wvtd8sr.js:360984-361012 placement
-/**
- * 取 Artifact 卡片标题。
- */
-function artifactCardTitleOf(title) {
-  return artifactCardTitle(title);
-}
 //@ chunk-8wvtd8sr.js:361012-361259 placement
-function publishUpdateTarget(e) {
-  let n = typeof e?.url === "string";
+function publishUpdateTarget(input) {
+  let hasUrl = typeof input?.url === "string";
   try {
-    let s = n ? parseArtifactUrl(e.url) : null;
-    let r =
-      s !== null
-        ? getShareEntry(s.slug)
-        : !n && typeof e?.file_path === "string" && e.file_path
-          ? getShareEntryForPath(expandPath(e.file_path))
+    let artifactUrl = hasUrl ? parseArtifactUrl(input.url) : null;
+    let shareEntry =
+      artifactUrl !== null
+        ? getShareEntry(artifactUrl.slug)
+        : !hasUrl && typeof input?.file_path === "string" && input.file_path
+          ? getShareEntryForPath(expandPath(input.file_path))
           : undefined;
     return {
-      updates: n || r !== undefined,
-      share: r,
+      updates: hasUrl || shareEntry !== undefined,
+      share: shareEntry,
     };
   } catch {
     return {
-      updates: n,
+      updates: hasUrl,
       share: undefined,
     };
   }
@@ -134,44 +127,43 @@ function publishUpdateTarget(e) {
 /**
  * 生成发布询问/摘要的开头：实时文档垫片、更新已有 Artifact（标题或源文件名）或发布新 Artifact，附受众标记。
  */
-function publishSummaryLead(e) {
-  let n = typeof e?.file_path === "string" ? artifactCardTitleOf(basename(e.file_path)) : "";
-  let { updates, share } = publishUpdateTarget(e);
-  if (publishShimModule != null && e !== undefined) {
-    let p = publishShimModule.publishShimSlug(publishShimModule.fillShimUrl(e));
-    if (p !== undefined && publishShimModule.isPublishShim(e)) {
-      let shareEntry = getShareEntry(p);
+function publishSummaryLead(input) {
+  let fileTitle = typeof input?.file_path === "string" ? artifactCardTitleOf(basename(input.file_path)) : "";
+  let { updates, share } = publishUpdateTarget(input);
+  if (publishShimModule != null && input !== undefined) {
+    let shimSlug = publishShimModule.publishShimSlug(publishShimModule.fillShimUrl(input));
+    if (shimSlug !== undefined && publishShimModule.isPublishShim(input)) {
+      let shareEntry = getShareEntry(shimSlug);
       return {
-        lead: publishShimModule.liveDocShimSummaryLead(n, artifactCardTitleOf(shareEntry?.title)),
+        lead: publishShimModule.liveDocShimSummaryLead(fileTitle, artifactCardTitleOf(shareEntry?.title)),
         marks: shareAudienceMark(shareEntry),
       };
     }
   }
   if (updates) {
-    let p = artifactCardTitleOf(share?.title);
+    let shareTitle = artifactCardTitleOf(share?.title);
     return {
       lead:
-        publishShimModule?.liveDocVersionSource(e) !== undefined && publishShimModule != null
-          ? publishShimModule.liveDocVersionSummaryLead(p)
-          : p !== ""
-            ? `update the artifact "${p}"`
-            : n !== ""
-              ? `update an existing artifact from "${n}"`
+        publishShimModule?.liveDocVersionSource(input) !== undefined && publishShimModule != null
+          ? publishShimModule.liveDocVersionSummaryLead(shareTitle)
+          : shareTitle !== ""
+            ? `update the artifact "${shareTitle}"`
+            : fileTitle !== ""
+              ? `update an existing artifact from "${fileTitle}"`
               : "update an existing artifact",
       marks: shareAudienceMark(share),
     };
   }
-  let h = typeof e?.title === "string" ? artifactCardTitleOf(e.title) : "";
-  let y = h !== "" ? h : n;
+  let titleText = typeof input?.title === "string" ? artifactCardTitleOf(input.title) : "";
+  let bestTitle = titleText !== "" ? titleText : fileTitle;
   return {
-    lead: y !== "" ? `publish "${y}" as an artifact` : "publish an artifact",
+    lead: bestTitle !== "" ? `publish "${bestTitle}" as an artifact` : "publish an artifact",
     marks: "",
   };
 }
 export {
   OTHERS_READ_FORM_CLAUSE,
   REREAD_APPROVAL_CLAUSE,
-  artifactCardTitleOf,
   publishSummaryLead,
   liveSubscriptionLine,
   isDurableNotArmed,

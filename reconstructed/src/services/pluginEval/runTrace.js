@@ -91,82 +91,82 @@ var AssistantMessageSchema = DoctorLazy(() =>
   }).passthrough(),
 );
 //@ chunk-qchp9vrd.js:193781-194060 placement
-function findPublishToolUses(e) {
-  let n = new Map();
-  for (let r of e) {
-    if (r.type !== "assistant") continue;
-    for (let a of assistantContent(r)) {
-      let s = ToolUseBlockSchema().safeParse(a);
-      if (!s.success) continue;
-      let action = s.data.input?.action;
+function findPublishToolUses(trace) {
+  let toolUseIds = new Map();
+  for (let message of trace) {
+    if (message.type !== "assistant") continue;
+    for (let block of assistantContent(message)) {
+      let toolUse = ToolUseBlockSchema().safeParse(block);
+      if (!toolUse.success) continue;
+      let action = toolUse.data.input?.action;
       if (
-        s.data.name === ARTIFACT_TOOL_NAME
+        toolUse.data.name === ARTIFACT_TOOL_NAME
           ? action === undefined || action === "publish"
-          : HARNESS_TOOL_NAMES().has(s.data.name)
+          : HARNESS_TOOL_NAMES().has(toolUse.data.name)
       )
-        n.set(s.data.id, s.data.name);
+        toolUseIds.set(toolUse.data.id, toolUse.data.name);
     }
   }
-  return n;
+  return toolUseIds;
 }
 //@ chunk-qchp9vrd.js:194060-194324 placement
-function* iteratePublishResults(e) {
-  let publishToolUses = findPublishToolUses(e);
+function* iteratePublishResults(trace) {
+  let publishToolUses = findPublishToolUses(trace);
   if (publishToolUses.size === 0) return;
-  for (let r of e) {
-    if (r.type !== "user") continue;
-    for (let a of assistantContent(r)) {
-      let s = ToolResultBlockSchema().safeParse(a);
-      let h = s.success ? publishToolUses.get(s.data.tool_use_id) : undefined;
-      if (!s.success || s.data.is_error === true || h === undefined) continue;
+  for (let message of trace) {
+    if (message.type !== "user") continue;
+    for (let block of assistantContent(message)) {
+      let result = ToolResultBlockSchema().safeParse(block);
+      let toolName = result.success ? publishToolUses.get(result.data.tool_use_id) : undefined;
+      if (!result.success || result.data.is_error === true || toolName === undefined) continue;
       yield {
-        message: r,
-        tool: h,
+        message,
+        tool: toolName,
       };
     }
   }
 }
 //@ chunk-qchp9vrd.js:194324-194551 placement
-function collectPublishedArtifacts(e) {
-  let n = new Set();
-  let r = [];
-  for (let { message, tool } of iteratePublishResults(e)) {
+function collectPublishedArtifacts(trace) {
+  let seenSlugs = new Set();
+  let artifacts = [];
+  for (let { message, tool } of iteratePublishResults(trace)) {
     if (tool !== ARTIFACT_TOOL_NAME) continue;
     let toolResultUrl = getToolResultUrl(message);
-    let w = toolResultUrl === undefined ? null : parseArtifactUrl(toolResultUrl);
-    if (toolResultUrl === undefined || !w || n.has(w.slug)) continue;
-    n.add(w.slug);
-    r.push({
+    let parsedUrl = toolResultUrl === undefined ? null : parseArtifactUrl(toolResultUrl);
+    if (toolResultUrl === undefined || !parsedUrl || seenSlugs.has(parsedUrl.slug)) continue;
+    seenSlugs.add(parsedUrl.slug);
+    artifacts.push({
       url: toolResultUrl,
-      slug: w.slug,
-      env: w.env,
+      slug: parsedUrl.slug,
+      env: parsedUrl.env,
     });
   }
-  return r;
+  return artifacts;
 }
 //@ chunk-qchp9vrd.js:194551-194673 placement
 /**
  * 从运行轨迹的消息中收集桩工件 URL 的 slug。
  */
-function collectStubArtifactSlugs(e) {
-  let n = new Set();
-  for (let { message } of iteratePublishResults(e)) {
+function collectStubArtifactSlugs(trace) {
+  let slugs = new Set();
+  for (let { message } of iteratePublishResults(trace)) {
     let toolResultUrl = getToolResultUrl(message);
-    let s = toolResultUrl === undefined ? null : parseStubArtifactUrl(toolResultUrl);
-    if (s) n.add(s.slug);
+    let parsedUrl = toolResultUrl === undefined ? null : parseStubArtifactUrl(toolResultUrl);
+    if (parsedUrl) slugs.add(parsedUrl.slug);
   }
-  return n;
+  return slugs;
 }
 //@ chunk-qchp9vrd.js:194673-194914 placement
 function getToolResultUrl(message) {
-  let n = toolUseResultSchema().safeParse(message);
-  if (!n.success) return;
-  let toolUseResult = n.data.tool_use_result;
+  let parsed = toolUseResultSchema().safeParse(message);
+  if (!parsed.success) return;
+  let toolUseResult = parsed.data.tool_use_result;
   if (typeof toolUseResult !== "string" && !Array.isArray(toolUseResult)) return toolUseResult.url;
-  let a = urlResultSchema().safeParse(
+  let urlResult = urlResultSchema().safeParse(
     safeParseJSON(typeof toolUseResult === "string" ? toolUseResult : toolUseResult[0]?.text, false),
   );
-  return a.success ? a.data.url : undefined;
+  return urlResult.success ? urlResult.data.url : undefined;
 }
 //@ chunk-qchp9vrd.js:194914-195143 placement
 var urlResultSchema = DoctorLazy(() =>
@@ -195,19 +195,19 @@ var artifactStubSchema = DoctorLazy(() =>
   }).passthrough(),
 );
 //@ chunk-qchp9vrd.js:195143-196768 placement
-async function readStubPublishDir(e, n) {
-  let r;
+async function readStubPublishDir(dirPath, expectedSlugs) {
+  let entries;
   try {
-    let s = await lstat(e);
-    if (!s.isDirectory() || s.isSymbolicLink())
+    let dirStats = await lstat(dirPath);
+    if (!dirStats.isDirectory() || dirStats.isSymbolicLink())
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "the stub publish directory is not a real directory",
         "eval: stub publish dir not a directory",
       );
-    r = await readdir(e);
+    entries = await readdir(dirPath);
   } catch (error) {
     if (error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS) throw error;
-    logForDebugging(`eval: cannot read stub publish dir ${e}: ${errorMessage(error)}`, {
+    logForDebugging(`eval: cannot read stub publish dir ${dirPath}: ${errorMessage(error)}`, {
       level: "warn",
     });
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -215,84 +215,89 @@ async function readStubPublishDir(e, n) {
       "eval: stub publish dir unreadable",
     );
   }
-  r = r.filter((s) => ARTIFACT_SLUG_RE.test(s) && n.has(s));
-  if (r.length < n.size)
+  entries = entries.filter((slug) => ARTIFACT_SLUG_RE.test(slug) && expectedSlugs.has(slug));
+  if (entries.length < expectedSlugs.size)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `a corroborated artifact publish is missing from the staging directory (${n.size - r.length} of ${n.size})`,
+      `a corroborated artifact publish is missing from the staging directory (${expectedSlugs.size - entries.length} of ${expectedSlugs.size})`,
       "eval: stub publish payload missing",
     );
-  if (r.length > MAX_DEBUG_LATEST_LINK_ATTEMPTS)
+  if (entries.length > MAX_DEBUG_LATEST_LINK_ATTEMPTS)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `the run made more artifact publishes (${r.length}) than the harness indexes (${MAX_DEBUG_LATEST_LINK_ATTEMPTS})`,
+      `the run made more artifact publishes (${entries.length}) than the harness indexes (${MAX_DEBUG_LATEST_LINK_ATTEMPTS})`,
       "eval: too many stub publishes",
     );
-  let a = [];
-  for (let s of r) {
-    let joined = path.join(e, s);
-    let joined_2 = path.join(joined, "manifest.json");
-    let b = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+  let records = [];
+  for (let slug of entries) {
+    let joined = path.join(dirPath, slug);
+    let filePath = path.join(joined, "manifest.json");
+    let manifestError = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `a corroborated artifact publish's payload is not a real directory holding a regular manifest (or is over ${MAX_DEBUG_LOG_ROTATE_BYTES} bytes)`,
       "eval: stub publish manifest unreadable",
     );
     if (
-      !(await Promise.all([lstat(joined), lstat(joined_2)])
-        .then(([j, K]) => j.isDirectory() && K.isFile())
+      !(await Promise.all([lstat(joined), lstat(filePath)])
+        .then(([payloadStats, manifestStats]) => payloadStats.isDirectory() && manifestStats.isFile())
         .catch(() => false))
     )
-      throw b;
-    let singleLinkFile = await readSingleLinkFile(joined_2, MAX_DEBUG_LOG_ROTATE_BYTES);
-    if (singleLinkFile === null) throw b;
+      throw manifestError;
+    let singleLinkFile = await readSingleLinkFile(filePath, MAX_DEBUG_LOG_ROTATE_BYTES);
+    if (singleLinkFile === null) throw manifestError;
     let str = singleLinkFile.toString("utf8");
-    let T = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+    let invalidManifestError = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "a corroborated artifact publish's manifest is corrupt, or does not name its own slug and stub URL",
       "eval: stub publish manifest invalid",
     );
-    let N;
+    let manifestJson;
     try {
-      N = jsonParse(str);
+      manifestJson = jsonParse(str);
     } catch {
-      throw T;
+      throw invalidManifestError;
     }
-    let x = artifactStubSchema().safeParse(N);
-    if (!x.success || x.data.slug !== s || x.data.url !== `${ARTIFACT_STUB_URL_PREFIX}${s}`) throw T;
-    a.push({
+    let manifest = artifactStubSchema().safeParse(manifestJson);
+    if (
+      !manifest.success ||
+      manifest.data.slug !== slug ||
+      manifest.data.url !== `${ARTIFACT_STUB_URL_PREFIX}${slug}`
+    )
+      throw invalidManifestError;
+    records.push({
       record: {
-        url: x.data.url,
-        slug: x.data.slug,
+        url: manifest.data.url,
+        slug: manifest.data.slug,
         env: "stub",
         payloadDir: joined,
       },
-      at: x.data.publishedAtMs ?? 0,
+      at: manifest.data.publishedAtMs ?? 0,
     });
   }
-  return a.sort((s, h) => s.at - h.at).map((s) => s.record);
+  return records.sort((left, right) => left.at - right.at).map((item) => item.record);
 }
 //@ chunk-qchp9vrd.js:196814-197062 placement
-async function readSingleLinkFile(e, n) {
-  let noFollow = await openNoFollow_2(e);
+async function readSingleLinkFile(filePath, maxBytes) {
+  let noFollow = await openNoFollow_2(filePath);
   if (!noFollow.ok) return null;
-  let a = noFollow.value;
+  let handle = noFollow.value;
   try {
-    let stats = await a.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
-    if (!stats.isFile() || stats.nlink !== 1n || stats.size > BigInt(n)) return null;
-    return await readExactBytes(a, Number(stats.size));
+    if (!stats.isFile() || stats.nlink !== 1n || stats.size > BigInt(maxBytes)) return null;
+    return await readExactBytes(handle, Number(stats.size));
   } catch {
     return null;
   } finally {
-    await a.close();
+    await handle.close();
   }
 }
 //@ chunk-qchp9vrd.js:197062-197564 placement
-async function readStubPublishesJson(e, stubPublishDir) {
-  let r = await lstat(e).catch((error) => {
+async function readStubPublishesJson(outDir, stubPublishDir) {
+  let outStats = await lstat(outDir).catch((error) => {
     if (isENOENT(error)) return null;
     throw error;
   });
-  if (r === null || !r.isDirectory()) return;
-  let joined = path.join(e, "publishes.json");
-  let joined_2 = path.join(e, LATEST_DEBUG_LOG_LINK);
+  if (outStats === null || !outStats.isDirectory()) return;
+  let joined = path.join(outDir, "publishes.json");
+  let joined_2 = path.join(outDir, LATEST_DEBUG_LOG_LINK);
   await detectPlatformFlavor(joined_2, {
     harnessOwned: true,
   });
@@ -311,10 +316,13 @@ async function readStubPublishesJson(e, stubPublishDir) {
   let last = stubPublishDir.at(-1);
   if (last && last.env === "stub") {
     await mkdir(joined_2);
-    for (let w of ["index.html", "manifest.json"]) {
-      let singleLinkFile = await readSingleLinkFile(path.join(last.payloadDir, w), MAX_DEBUG_LOG_TOTAL_BYTES);
+    for (let fileName of ["index.html", "manifest.json"]) {
+      let singleLinkFile = await readSingleLinkFile(
+        path.join(last.payloadDir, fileName),
+        MAX_DEBUG_LOG_TOTAL_BYTES,
+      );
       if (singleLinkFile === null) continue;
-      await replaceFileExclusive(path.join(joined_2, w), singleLinkFile);
+      await replaceFileExclusive(path.join(joined_2, fileName), singleLinkFile);
     }
   }
 }
@@ -322,130 +330,133 @@ async function readStubPublishesJson(e, stubPublishDir) {
 /**
  * 取助手消息内容数组。
  */
-function assistantContent(e) {
-  let n = AssistantMessageSchema().safeParse(e);
-  return n.success ? n.data.message.content : [];
+function assistantContent(message) {
+  let parsed = AssistantMessageSchema().safeParse(message);
+  return parsed.success ? parsed.data.message.content : [];
 }
 //@ chunk-qchp9vrd.js:197646-199801 placement
 /**
  * 从 trace 汇总助手消息、工具调用、成本与用量。
  */
-function summarizeRunTrace(e, n, r, tracePath, { shellGranted, restoredCostUsd }) {
-  let w = [];
-  let b = new Map();
+function summarizeRunTrace(trace, timedOut, exitInfo, tracePath, { shellGranted, restoredCostUsd }) {
+  let toolCalls = [];
+  let callsById = new Map();
   let lastAssistantText = "";
-  let R = 0;
-  let S = 0;
-  let T = 0;
-  let N = 0;
-  let x = new Set();
-  let j = null;
-  let K = false;
-  let X = false;
+  let numTurns = 0;
+  let costUsd = 0;
+  let computedCostUsd = 0;
+  let requestCount = 0;
+  let seenMessageIds = new Set();
+  let resultText = null;
+  let sawResult = false;
+  let authRejected = false;
   let endedOnApiError = false;
-  for (let J of e) {
-    if (J.type === "assistant") {
-      let message = J.message;
+  for (let event of trace) {
+    if (event.type === "assistant") {
+      let message = event.message;
       let id = typeof message?.id === "string" ? message.id : null;
-      if (id === null || !x.has(id)) {
-        if (id !== null) x.add(id);
-        N++;
+      if (id === null || !seenMessageIds.has(id)) {
+        if (id !== null) seenMessageIds.add(id);
+        requestCount++;
         if (typeof message?.model === "string" && message.usage !== null && typeof message.usage === "object")
           try {
-            T += calculateUSDCost(message.model, message.usage);
+            computedCostUsd += calculateUSDCost(message.model, message.usage);
           } catch {}
       }
       let content = message?.content;
       if (Array.isArray(content)) {
-        let Se = [];
-        for (let we of content)
-          if (we?.type === "tool_use") {
-            let input = we.input;
-            let Je = {
-              name: String(we.name ?? ""),
+        let textParts = [];
+        for (let block of content)
+          if (block?.type === "tool_use") {
+            let input = block.input;
+            let toolCall = {
+              name: String(block.name ?? ""),
               input,
               inputText: safeStringify(input),
             };
-            w.push(Je);
-            let id = we.id;
-            if (typeof id === "string") b.set(id, Je);
-          } else if (we?.type === "text") Se.push(String(we.text ?? ""));
-        if (Se.length > 0)
-          lastAssistantText = Se.join(`
+            toolCalls.push(toolCall);
+            let id = block.id;
+            if (typeof id === "string") callsById.set(id, toolCall);
+          } else if (block?.type === "text") textParts.push(String(block.text ?? ""));
+        if (textParts.length > 0)
+          lastAssistantText = textParts.join(`
 `);
       }
-    } else if (J.type === "user")
-      for (let Z of assistantContent(J)) {
-        let se = ToolResultBlockSchema().safeParse(Z);
-        if (!se.success) continue;
-        let Q = b.get(se.data.tool_use_id);
-        if (Q) {
-          Q.output = toolResultText(se.data.content);
-          Q.isError = se.data.is_error === true;
+    } else if (event.type === "user")
+      for (let block of assistantContent(event)) {
+        let result = ToolResultBlockSchema().safeParse(block);
+        if (!result.success) continue;
+        let toolCall = callsById.get(result.data.tool_use_id);
+        if (toolCall) {
+          toolCall.output = toolResultText(result.data.content);
+          toolCall.isError = result.data.is_error === true;
         }
       }
-    else if (J.type === "result") {
-      let Z = J;
-      R = Z.num_turns ?? R;
-      S = Z.total_cost_usd === undefined ? S : Math.max(0, Z.total_cost_usd - restoredCostUsd);
-      K = true;
-      endedOnApiError = Z.is_error === true && typeof Z.api_error_status === "number";
-      if (Array.isArray(Z.permission_denials))
-        for (let permissionDenial of Z.permission_denials) {
+    else if (event.type === "result") {
+      let resultEvent = event;
+      numTurns = resultEvent.num_turns ?? numTurns;
+      costUsd =
+        resultEvent.total_cost_usd === undefined
+          ? costUsd
+          : Math.max(0, resultEvent.total_cost_usd - restoredCostUsd);
+      sawResult = true;
+      endedOnApiError = resultEvent.is_error === true && typeof resultEvent.api_error_status === "number";
+      if (Array.isArray(resultEvent.permission_denials))
+        for (let permissionDenial of resultEvent.permission_denials) {
           let toolUseId = permissionDenial?.tool_use_id;
-          let Se = typeof toolUseId === "string" ? b.get(toolUseId) : undefined;
-          if (Se !== undefined) Se.deniedByChild = true;
+          let toolCall = typeof toolUseId === "string" ? callsById.get(toolUseId) : undefined;
+          if (toolCall !== undefined) toolCall.deniedByChild = true;
         }
-      if (Z.is_error === true) {
-        if (typeof Z.result === "string") j = Z.result;
-        else if (Array.isArray(Z.errors) && Z.errors.length > 0) {
-          let mapped = Z.errors.map(String);
-          j =
-            shellGranted && mapped.some((Q) => Q.startsWith(SANDBOX_UNAVAILABLE_MESSAGE))
-              ? `${SANDBOX_UNAVAILABLE_TEXT} ${mapped.map((Q) => Q.replace(/\s*Set sandbox\.failIfUnavailable=false[^.]*\.?/, "")).join(" ")}`
+      if (resultEvent.is_error === true) {
+        if (typeof resultEvent.result === "string") resultText = resultEvent.result;
+        else if (Array.isArray(resultEvent.errors) && resultEvent.errors.length > 0) {
+          let mapped = resultEvent.errors.map(String);
+          resultText =
+            shellGranted && mapped.some((message) => message.startsWith(SANDBOX_UNAVAILABLE_MESSAGE))
+              ? `${SANDBOX_UNAVAILABLE_TEXT} ${mapped.map((message) => message.replace(/\s*Set sandbox\.failIfUnavailable=false[^.]*\.?/, "")).join(" ")}`
               : mapped.join(" ");
         }
       }
     }
     if (
-      J.type === "assistant" &&
-      J.parent_tool_use_id == null &&
-      (J.error === "authentication_failed" || J.error === "oauth_org_not_allowed")
+      event.type === "assistant" &&
+      event.parent_tool_use_id == null &&
+      (event.error === "authentication_failed" || event.error === "oauth_org_not_allowed")
     )
-      X = true;
+      authRejected = true;
   }
-  let G;
-  switch (r.kind) {
+  let errorMessage;
+  switch (exitInfo.kind) {
     case "ok":
-      G = null;
+      errorMessage = null;
       break;
     case "error":
-      G = r.message;
+      errorMessage = exitInfo.message;
       break;
     case "exit": {
-      let stderrTail = r.stderrTail;
-      G =
-        j !== null
-          ? `exit ${r.code}: ${truncateWithCount(j, 2000)}${stderrTail ? ` \xB7 stderr: ${stderrTail}` : ""}`
-          : `exit ${r.code}: ${stderrTail || NO_STDERR_TEXT}`;
+      let stderrTail = exitInfo.stderrTail;
+      errorMessage =
+        resultText !== null
+          ? `exit ${exitInfo.code}: ${truncateWithCount(resultText, 2000)}${stderrTail ? ` \xB7 stderr: ${stderrTail}` : ""}`
+          : `exit ${exitInfo.code}: ${stderrTail || NO_STDERR_TEXT}`;
       break;
     }
   }
-  if (!K) {
-    S = T;
-    if (R === 0) R = N;
+  if (!sawResult) {
+    costUsd = computedCostUsd;
+    if (numTurns === 0) numTurns = requestCount;
   }
   return {
-    trace: e,
-    toolCalls: w,
-    artifactPublishes: collectPublishedArtifacts(e),
+    trace,
+    toolCalls,
+    artifactPublishes: collectPublishedArtifacts(trace),
     lastAssistantText,
-    numTurns: R,
-    costUsd: S,
-    timedOut: n,
-    killedInFlight: n,
-    error: G,
-    authRejected: K ? X && G !== null : null,
+    numTurns,
+    costUsd,
+    timedOut,
+    killedInFlight: timedOut,
+    error: errorMessage,
+    authRejected: sawResult ? authRejected && errorMessage !== null : null,
     endedOnApiError,
     tracePath,
     mockCalls: [],
@@ -466,9 +477,9 @@ var SANDBOX_UNAVAILABLE_TEXT =
 /**
  * 安全地把值转成 JSON 文本。
  */
-function safeStringify(e) {
+function safeStringify(value) {
   try {
-    return jsonStringify(e) ?? "";
+    return jsonStringify(value) ?? "";
   } catch {
     return "";
   }
@@ -491,41 +502,41 @@ function getEvalGitConfigPairs() {
  */
 var MIN_GIT_VERSION = [2, 31];
 var GIT_VERSION_TIMEOUT_MS = 1e4;
-var gitVersionCache = identity_2(new Map(), (e) => e.clear());
+var gitVersionCache = identity_2(new Map(), (map) => map.clear());
 //@ chunk-qchp9vrd.js:200291-201628 placement
 /**
  * 检查本机 git 版本是否足够新（超时无回应则无法判断）。
  */
-async function checkGitVersionForEval(e) {
-  let PATH = e.PATH ?? "";
-  let r = gitVersionCache.get(PATH);
-  if (r === undefined) {
-    let b = await execFileNoThrow("git", ["--version"], {
-      env: e,
+async function checkGitVersionForEval(env) {
+  let PATH = env.PATH ?? "";
+  let cachedVersion = gitVersionCache.get(PATH);
+  if (cachedVersion === undefined) {
+    let result = await execFileNoThrow("git", ["--version"], {
+      env,
       timeout: GIT_VERSION_TIMEOUT_MS,
     });
-    let match = /git version (\d+)\.(\d+)/.exec(b.stdout);
-    if (b.timedOut)
+    let match = /git version (\d+)\.(\d+)/.exec(result.stdout);
+    if (result.timedOut)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `git on this host did not report its version within ${GIT_VERSION_TIMEOUT_MS / 1000} seconds, so claude plugin eval cannot tell whether it is new enough (git ${MIN_GIT_VERSION[0]}.${MIN_GIT_VERSION[1]} or newer) to switch off the repository's git hooks and helper programs for the run. Try again, or install git ${MIN_GIT_VERSION[0]}.${MIN_GIT_VERSION[1]} or newer.`,
         "eval: git version probe timed out",
       );
     if (match === null) {
-      if (b.code !== 0) r = "absent";
+      if (result.code !== 0) cachedVersion = "absent";
       else
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           `git on this host did not print a version claude plugin eval can read, so it cannot tell whether git is new enough (git ${MIN_GIT_VERSION[0]}.${MIN_GIT_VERSION[1]} or newer) to switch off the repository's git hooks and helper programs for the run. Run git --version to see what it prints, and install git ${MIN_GIT_VERSION[0]}.${MIN_GIT_VERSION[1]} or newer.`,
           "eval: git version probe unreadable",
         );
-    } else r = [Number(match[1]), Number(match[2])];
-    gitVersionCache.set(PATH, r);
+    } else cachedVersion = [Number(match[1]), Number(match[2])];
+    gitVersionCache.set(PATH, cachedVersion);
   }
-  if (r === "absent") return;
-  let [a, s] = r;
-  let [h, w] = MIN_GIT_VERSION;
-  if (a > h || (a === h && s >= w)) return;
+  if (cachedVersion === "absent") return;
+  let [major, minor] = cachedVersion;
+  let [minMajor, minMinor] = MIN_GIT_VERSION;
+  if (major > minMajor || (major === minMajor && minor >= minMinor)) return;
   throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `git ${a}.${s} is too old for claude plugin eval: it ignores the environment configuration (GIT_CONFIG_COUNT, added in git ${h}.${w}) that switches off the repository's git hooks and helper programs for the run. Install git ${h}.${w} or newer.`,
+    `git ${major}.${minor} is too old for claude plugin eval: it ignores the environment configuration (GIT_CONFIG_COUNT, added in git ${minMajor}.${minMinor}) that switches off the repository's git hooks and helper programs for the run. Install git ${minMajor}.${minMinor} or newer.`,
     "eval: git too old for env-scoped config",
   );
 }

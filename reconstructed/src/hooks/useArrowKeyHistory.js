@@ -10,7 +10,7 @@
  */
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../utils/debug.js";
-import { string } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { Text } from "../ink/components/Text.js";
 import { getModeFromInput as getModeFromInput_2 } from "../components/PromptInput/inputModes.js";
 import { HostScoped } from "../utils/hostScoped.js";
@@ -18,7 +18,7 @@ import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { useHost } from "../context/session.js";
 import { useStoreSelector } from "./useStoreSelector.js";
 import { selectDraftValue } from "../screens/repl/PromptDraft.js";
-import { y, R, ce } from "../../vendor/react/cjs/react.production.js";
+import { useState, useRef, useCallback } from "../../vendor/react/cjs/react.production.js";
 import { useNotifications } from "../context/notifications.js";
 import {
   collapseSmallPastedBlocks,
@@ -30,6 +30,7 @@ import {
 import { mergeTurnTags } from "../utils/userTurnTags.js";
 import { ConfigurableShortcutHint } from "../components/ConfigurableShortcutHint.js";
 import { NOTIFICATION_TIMEOUT_MS } from "../components/PromptInput/Notifications.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:858877-858888 affinity
 var HISTORY_BATCH_SIZE = 10;
@@ -42,33 +43,33 @@ class HistoryLoader {
   get pending() {
     return this.#e;
   }
-  async load(minCount, x, D, L) {
-    let ee = Math.ceil(minCount / HISTORY_BATCH_SIZE) * HISTORY_BATCH_SIZE;
+  async load(minCount, mode, generation, readEntries) {
+    let targetCount = Math.ceil(minCount / HISTORY_BATCH_SIZE) * HISTORY_BATCH_SIZE;
     while (this.#e) {
-      if (this.#t >= ee && this.#o === x && this.#n === D) return this.#e;
+      if (this.#t >= targetCount && this.#o === mode && this.#n === generation) return this.#e;
       await this.#e;
     }
-    this.#t = ee;
-    this.#o = x;
-    this.#n = D;
-    let ke = (async () => {
+    this.#t = targetCount;
+    this.#o = mode;
+    this.#n = generation;
+    let loadPromise = (async () => {
       let entries = [];
       let loaded = 0;
-      for await (let entry of L()) {
-        if (x) {
-          if (getModeFromInput_2(entry.display) !== x) continue;
+      for await (let entry of readEntries()) {
+        if (mode) {
+          if (getModeFromInput_2(entry.display) !== mode) continue;
         }
         entries.push(entry);
         loaded++;
-        if (loaded >= ee) break;
+        if (loaded >= targetCount) break;
       }
       return entries;
     })();
-    this.#e = ke;
+    this.#e = loadPromise;
     try {
-      return await ke;
+      return await loadPromise;
     } finally {
-      if (this.#e === ke) {
+      if (this.#e === loadPromise) {
         this.#e = null;
         this.#t = 0;
         this.#o = undefined;
@@ -78,19 +79,22 @@ class HistoryLoader {
   }
 }
 //@ chunk-18hwfzwa.js:859366-859393 layout
-var historyLoaderByHost = new HostScoped(() => new HistoryLoader());
+var historyLoaderByHost; // deferred: uses HistoryLoader of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:859366", () => {
+  historyLoaderByHost = new HostScoped(() => new HistoryLoader());
+});
 //@ chunk-18hwfzwa.js:859393-859603 layout
-function findHistoryOverlapIndex(h, x) {
-  if (x.length === 0) return 0;
-  for (let idx = 0; idx < h.length; idx++) {
-    let min = Math.min(x.length, h.length - idx);
-    let ee = true;
+function findHistoryOverlapIndex(history, nextHistory) {
+  if (nextHistory.length === 0) return 0;
+  for (let idx = 0; idx < history.length; idx++) {
+    let min = Math.min(nextHistory.length, history.length - idx);
+    let matches = true;
     for (let idx_2 = 0; idx_2 < min; idx_2++)
-      if (h[idx + idx_2]?.display !== x[idx_2]?.display) {
-        ee = false;
+      if (history[idx + idx_2]?.display !== nextHistory[idx_2]?.display) {
+        matches = false;
         break;
       }
-    if (ee) return idx;
+    if (matches) return idx;
   }
   return -1;
 }
@@ -98,69 +102,69 @@ function findHistoryOverlapIndex(h, x) {
 /**
  * 上下箭头历史：按批（10 条）从历史文件加载，按 bash/prompt 模式过滤，记住当前草稿以便回到底部；第一次使用时弹出 "ctrl+r to search history" 提示；返回 onHistoryUp/Down/Reset。
  */
-function useArrowKeyHistory(draft, x, D) {
+function useArrowKeyHistory(draft, applyDraft, restrictedHistory) {
   let { storageV5 } = useTheme_2();
-  let ee = historyLoaderByHost.of(useHost());
+  let historyLoader = historyLoaderByHost.of(useHost());
   let value = useStoreSelector(draft, selectDraftValue);
-  let Re = D !== undefined;
-  let [Be, He] = y(0);
-  let [We, ze] = y(null);
-  let hasShownSearchHintRef = R(0);
-  let rt = R(false);
-  let kt = R(null);
-  let At = R(false);
+  let hasPastedContents = restrictedHistory !== undefined;
+  let [historyIndex, setHistoryIndex] = useState(0);
+  let [historyTotal, setHistoryTotal] = useState(null);
+  let hasShownSearchHintRef = useRef(0);
+  let isCountingHistory = useRef(false);
+  let savedDraft = useRef(null);
+  let hasShownHint = useRef(false);
   let { addNotification, removeNotification } = useNotifications();
-  let historyCache = R([]);
-  let historyCacheModeFilter = R(undefined);
-  let historyIndexRef = R(0);
-  let initialModeFilterRef = R(0);
-  let currentInputRef = R(null);
-  let pastedContentsRef = R(undefined);
-  let currentModeRef = R(new Map());
-  let historyOverlapIndexRef = R(0);
-  let ao = R(false);
-  let co = R(0);
-  let setInputWithCursor = ce(
+  let historyCache = useRef([]);
+  let historyCacheModeFilter = useRef(undefined);
+  let historyIndexRef = useRef(0);
+  let initialModeFilterRef = useRef(0);
+  let currentInputRef = useRef(null);
+  let pastedContentsRef = useRef(undefined);
+  let currentModeRef = useRef(new Map());
+  let nextIndexRef = useRef(0);
+  let isLoadingHistory = useRef(false);
+  let loadGeneration = useRef(0);
+  let setInputWithCursor = useCallback(
     (value, mode, contents, cursorToStart) => {
       value = value.replaceAll("\t", "    ");
       currentInputRef.current = value;
-      x(value, mode, contents, cursorToStart === "end" ? value.length : 0);
+      applyDraft(value, mode, contents, cursorToStart === "end" ? value.length : 0);
     },
-    [x],
+    [applyDraft],
   );
-  let updateInput = ce(
+  let updateInput = useCallback(
     (input, cursorToStart) => {
       if (!input || !input.display) return false;
-      let Fn = Re
+      let collapsedInput = hasPastedContents
         ? collapseSmallPastedBlocks(input.display)
         : {
             text: input.display,
             pastedContents: {},
           };
       let mode_0 = renumberPastedContents({
-        display: Fn.text,
+        display: collapsedInput.text,
         pastedContents: input.pastedContents ?? {},
       });
-      let Go = mergeTurnTags(mode_0.pastedContents, Object.values(Fn.pastedContents));
+      let mergedContents = mergeTurnTags(mode_0.pastedContents, Object.values(collapsedInput.pastedContents));
       let modeFromInput = getModeFromInput_2(input.display);
       let value = modeFromInput === "bash" ? mode_0.display.slice(1) : mode_0.display;
-      setInputWithCursor(value, modeFromInput, Go, cursorToStart);
+      setInputWithCursor(value, modeFromInput, mergedContents, cursorToStart);
       return true;
     },
-    [setInputWithCursor, Re],
+    [setInputWithCursor, hasPastedContents],
   );
-  let showSearchHint = ce(
-    (Yo, kn) => {
-      let Fn = currentModeRef.current.get(Yo);
-      if (Fn) {
-        setInputWithCursor(Fn.display, Fn.mode, Fn.pastedContents, kn);
+  let showSearchHint = useCallback(
+    (index, cursorToStart) => {
+      let editedEntry = currentModeRef.current.get(index);
+      if (editedEntry) {
+        setInputWithCursor(editedEntry.display, editedEntry.mode, editedEntry.pastedContents, cursorToStart);
         return true;
       }
-      return updateInput(historyCache.current[Yo], kn);
+      return updateInput(historyCache.current[index], cursorToStart);
     },
     [setInputWithCursor, updateInput],
   );
-  let onHistoryUp = ce(() => {
+  let onHistoryUp = useCallback(() => {
     addNotification({
       key: "search-history-hint",
       kind: "contextual",
@@ -177,211 +181,224 @@ function useArrowKeyHistory(draft, x, D) {
       timeoutMs: NOTIFICATION_TIMEOUT_MS,
     });
   }, [addNotification]);
-  let Ho = ce(() => {
-    let targetIndex = kt.current;
+  let restoreCurrentDraft = useCallback(() => {
+    let targetIndex = savedDraft.current;
     if (targetIndex)
       setInputWithCursor(targetIndex.display, targetIndex.mode, targetIndex.pastedContents ?? {}, "start");
     else setInputWithCursor("", pastedContentsRef.current ?? "prompt", {}, "start");
   }, [setInputWithCursor]);
-  let Io = ce(
-    (Yo) => {
-      let historyOverlapIndex = findHistoryOverlapIndex(Yo, historyCache.current);
-      historyCache.current = Yo;
+  let adoptHistory = useCallback(
+    (nextHistory) => {
+      let historyOverlapIndex = findHistoryOverlapIndex(nextHistory, historyCache.current);
+      historyCache.current = nextHistory;
       if (historyOverlapIndex === 0) return historyOverlapIndex;
       hasShownSearchHintRef.current++;
-      rt.current = false;
+      isCountingHistory.current = false;
       if (historyOverlapIndex < 0) {
-        if (historyOverlapIndexRef.current > 0 && draft.value === currentInputRef.current) Ho();
+        if (nextIndexRef.current > 0 && draft.value === currentInputRef.current) restoreCurrentDraft();
         initialModeFilterRef.current = 0;
-        He(0);
-        historyOverlapIndexRef.current = 0;
+        setHistoryIndex(0);
+        nextIndexRef.current = 0;
         currentModeRef.current.clear();
-        ze(null);
+        setHistoryTotal(null);
         return historyOverlapIndex;
       }
-      ze((Fn) => (Fn === null ? Fn : Fn + historyOverlapIndex));
+      setHistoryTotal((currentTotal) =>
+        currentTotal === null ? currentTotal : currentTotal + historyOverlapIndex,
+      );
       if (initialModeFilterRef.current > 0) {
         initialModeFilterRef.current += historyOverlapIndex;
-        He(initialModeFilterRef.current);
+        setHistoryIndex(initialModeFilterRef.current);
       }
-      if (historyOverlapIndexRef.current > 0) historyOverlapIndexRef.current += historyOverlapIndex;
+      if (nextIndexRef.current > 0) nextIndexRef.current += historyOverlapIndex;
       if (currentModeRef.current.size > 0)
         currentModeRef.current = new Map(
-          [...currentModeRef.current].map(([Fn, bn]) => [Fn + historyOverlapIndex, bn]),
+          [...currentModeRef.current].map(([entryIndex, entry]) => [entryIndex + historyOverlapIndex, entry]),
         );
       return historyOverlapIndex;
     },
-    [draft, Ho],
+    [draft, restoreCurrentDraft],
   );
-  let Wo = ce(
-    async (Yo, kn, Fn) => {
+  let loadHistoryBatch = useCallback(
+    async (generation, modeFilter, currentIndex) => {
       for (;;) {
         let historyGeneration = getHistoryGeneration();
-        let Go = await ee.load(
-          Math.max(Fn() + 1, historyCache.current.length + HISTORY_BATCH_SIZE),
-          kn,
+        let loadedHistory = await historyLoader.load(
+          Math.max(currentIndex() + 1, historyCache.current.length + HISTORY_BATCH_SIZE),
+          modeFilter,
           historyGeneration,
           () =>
             readProjectHistory(storageV5, {
               withClearedDrafts: true,
             }),
         );
-        if (co.current !== Yo) return "cancelled";
+        if (loadGeneration.current !== generation) return "cancelled";
         if (getHistoryGeneration() !== historyGeneration) continue;
         if (
-          historyCacheModeFilter.current !== kn ||
-          (Go.length <= historyCache.current.length && historyIndexRef.current === historyGeneration)
+          historyCacheModeFilter.current !== modeFilter ||
+          (loadedHistory.length <= historyCache.current.length &&
+            historyIndexRef.current === historyGeneration)
         )
           return "unchanged";
-        let hn = Io(Go);
+        let overlapIndex = adoptHistory(loadedHistory);
         historyIndexRef.current = historyGeneration;
-        if (hn < 0) return "restarted";
-        if (hn > 0 && Fn() >= Go.length) continue;
+        if (overlapIndex < 0) return "restarted";
+        if (overlapIndex > 0 && currentIndex() >= loadedHistory.length) continue;
         return "adopted";
       }
     },
-    [Io, ee, storageV5],
+    [adoptHistory, historyLoader, storageV5],
   );
-  let onHistoryUp_2 = ce(() => {
+  let onHistoryUp_2 = useCallback(() => {
     let inputAtPress = initialModeFilterRef.current;
-    let { value: kn, pastedContents, mode } = draft.getSnapshot();
-    let Go = historyOverlapIndexRef.current === 0;
+    let { value: draftValue, pastedContents, mode } = draft.getSnapshot();
+    let isFreshHistory = nextIndexRef.current === 0;
     if (inputAtPress === 0) pastedContentsRef.current = mode === "bash" ? mode : undefined;
     let pastedContentsAtPress = pastedContentsRef.current;
     let historyGeneration = getHistoryGeneration();
     if (
       historyCacheModeFilter.current !== pastedContentsAtPress ||
-      (inputAtPress === 0 && !D && historyIndexRef.current !== historyGeneration)
+      (inputAtPress === 0 && !restrictedHistory && historyIndexRef.current !== historyGeneration)
     ) {
       historyCache.current = [];
       historyCacheModeFilter.current = pastedContentsAtPress;
       historyIndexRef.current = historyGeneration;
       currentModeRef.current.clear();
       hasShownSearchHintRef.current++;
-      rt.current = false;
-      ze(null);
+      isCountingHistory.current = false;
+      setHistoryTotal(null);
     }
-    let Xo = D;
-    if (Xo) {
-      let on = pastedContentsAtPress
-        ? Xo.filter((cn) => getModeFromInput_2(cn.display) === pastedContentsAtPress)
-        : Xo;
-      let _o = false;
-      if (on.length > historyCache.current.length) {
-        _o = Io(on) < 0;
+    let providedHistory = restrictedHistory;
+    if (providedHistory) {
+      let filteredHistory = pastedContentsAtPress
+        ? providedHistory.filter((entry) => getModeFromInput_2(entry.display) === pastedContentsAtPress)
+        : providedHistory;
+      let isOverlapNegative = false;
+      if (filteredHistory.length > historyCache.current.length) {
+        isOverlapNegative = adoptHistory(filteredHistory) < 0;
         inputAtPress = initialModeFilterRef.current;
       }
-      ze(historyCache.current.length);
-      if (_o) return;
+      setHistoryTotal(historyCache.current.length);
+      if (isOverlapNegative) return;
     }
-    if (inputAtPress === 0 && !Xo && !rt.current) {
-      rt.current = true;
+    if (inputAtPress === 0 && !providedHistory && !isCountingHistory.current) {
+      isCountingHistory.current = true;
       let modeAtPress = hasShownSearchHintRef.current;
       countHistoryForProject(
-        pastedContentsAtPress ? (_o) => getModeFromInput_2(_o) === pastedContentsAtPress : undefined,
+        pastedContentsAtPress ? (entry) => getModeFromInput_2(entry) === pastedContentsAtPress : undefined,
         storageV5,
-      ).then((_o) => {
+      ).then((count) => {
         if (hasShownSearchHintRef.current !== modeAtPress) return;
-        rt.current = false;
-        ze(_o);
+        isCountingHistory.current = false;
+        setHistoryTotal(count);
       });
     }
-    let Sn = () => {
+    let moveUp = () => {
       if (initialModeFilterRef.current !== inputAtPress) return;
       if (inputAtPress >= historyCache.current.length) return;
       if (inputAtPress === 0) {
-        if (Go && kn.trim() !== "")
-          kt.current = {
-            display: kn,
+        if (isFreshHistory && draftValue.trim() !== "")
+          savedDraft.current = {
+            display: draftValue,
             pastedContents,
             mode,
           };
-      } else if (inputAtPress === historyOverlapIndexRef.current)
+      } else if (inputAtPress === nextIndexRef.current)
         currentModeRef.current.set(inputAtPress - 1, {
-          display: kn,
+          display: draftValue,
           pastedContents,
           mode,
         });
-      let on = inputAtPress + 1;
-      initialModeFilterRef.current = on;
-      He(on);
-      if (showSearchHint(inputAtPress, "end")) historyOverlapIndexRef.current = on;
-      if (on >= 2 && !Xo && !At.current) {
-        At.current = true;
+      let nextIndex = inputAtPress + 1;
+      initialModeFilterRef.current = nextIndex;
+      setHistoryIndex(nextIndex);
+      if (showSearchHint(inputAtPress, "end")) nextIndexRef.current = nextIndex;
+      if (nextIndex >= 2 && !providedHistory && !hasShownHint.current) {
+        hasShownHint.current = true;
         onHistoryUp();
       }
     };
-    if (Xo || (inputAtPress < historyCache.current.length && historyIndexRef.current === historyGeneration)) {
-      Sn();
+    if (
+      providedHistory ||
+      (inputAtPress < historyCache.current.length && historyIndexRef.current === historyGeneration)
+    ) {
+      moveUp();
       return;
     }
-    ao.current = true;
-    let $n = ++co.current;
+    isLoadingHistory.current = true;
+    let generation = ++loadGeneration.current;
     (async () => {
       try {
-        let on = await Wo($n, pastedContentsAtPress, () => initialModeFilterRef.current);
-        if (on === "cancelled" || on === "restarted") return;
-        if (on === "adopted") inputAtPress = initialModeFilterRef.current;
-        if (draft.value !== kn) return;
-        Sn();
+        let loadOutcome = await loadHistoryBatch(
+          generation,
+          pastedContentsAtPress,
+          () => initialModeFilterRef.current,
+        );
+        if (loadOutcome === "cancelled" || loadOutcome === "restarted") return;
+        if (loadOutcome === "adopted") inputAtPress = initialModeFilterRef.current;
+        if (draft.value !== draftValue) return;
+        moveUp();
       } catch {
       } finally {
-        if (co.current === $n) ao.current = false;
+        if (loadGeneration.current === generation) isLoadingHistory.current = false;
       }
     })();
-  }, [draft, D, Io, Wo, showSearchHint, onHistoryUp, storageV5]);
-  let onHistoryDown = ce(() => {
-    let modeFilter = ao.current;
+  }, [draft, restrictedHistory, adoptHistory, loadHistoryBatch, showSearchHint, onHistoryUp, storageV5]);
+  let onHistoryDown = useCallback(() => {
+    let modeFilter = isLoadingHistory.current;
     if (modeFilter) {
-      co.current++;
-      ao.current = false;
+      loadGeneration.current++;
+      isLoadingHistory.current = false;
     }
-    let kn = initialModeFilterRef.current;
-    if (kn > 0 && kn === historyOverlapIndexRef.current) {
-      let { value: bn, pastedContents, mode } = draft.getSnapshot();
-      currentModeRef.current.set(kn - 1, {
-        display: bn,
+    let indexAtPress = initialModeFilterRef.current;
+    if (indexAtPress > 0 && indexAtPress === nextIndexRef.current) {
+      let { value: draftValue, pastedContents, mode } = draft.getSnapshot();
+      currentModeRef.current.set(indexAtPress - 1, {
+        display: draftValue,
         pastedContents,
         mode,
       });
     }
-    let Fn = () => {
+    let moveDown = () => {
       let currentIndex = initialModeFilterRef.current;
       if (currentIndex > 1) {
         initialModeFilterRef.current = currentIndex - 1;
-        He(currentIndex - 1);
-        if (showSearchHint(currentIndex - 2, "start")) historyOverlapIndexRef.current = currentIndex - 1;
+        setHistoryIndex(currentIndex - 1);
+        if (showSearchHint(currentIndex - 2, "start")) nextIndexRef.current = currentIndex - 1;
       } else if (currentIndex === 1) {
         initialModeFilterRef.current = 0;
-        He(0);
-        Ho();
-        historyOverlapIndexRef.current = 0;
+        setHistoryIndex(0);
+        restoreCurrentDraft();
+        nextIndexRef.current = 0;
       }
     };
-    if (kn > 0 && !D && historyIndexRef.current !== getHistoryGeneration()) {
-      let bn = ++co.current;
-      let Go = draft.value;
-      Wo(bn, pastedContentsRef.current, () => Math.max(initialModeFilterRef.current - 2, 0)).then(
-        (hn) => {
-          if ((hn === "adopted" || hn === "unchanged") && draft.value === Go) Fn();
+    if (indexAtPress > 0 && !restrictedHistory && historyIndexRef.current !== getHistoryGeneration()) {
+      let generation = ++loadGeneration.current;
+      let draftValue = draft.value;
+      loadHistoryBatch(generation, pastedContentsRef.current, () =>
+        Math.max(initialModeFilterRef.current - 2, 0),
+      ).then(
+        (loadOutcome) => {
+          if ((loadOutcome === "adopted" || loadOutcome === "unchanged") && draft.value === draftValue)
+            moveDown();
         },
         () => {},
       );
       return false;
     }
-    Fn();
-    return kn <= 0 && !modeFilter;
-  }, [draft, D, Wo, Ho, showSearchHint]);
-  let resetHistory = ce(() => {
-    kt.current = null;
-    He(0);
-    ze(null);
+    moveDown();
+    return indexAtPress <= 0 && !modeFilter;
+  }, [draft, restrictedHistory, loadHistoryBatch, restoreCurrentDraft, showSearchHint]);
+  let resetHistory = useCallback(() => {
+    savedDraft.current = null;
+    setHistoryIndex(0);
+    setHistoryTotal(null);
     hasShownSearchHintRef.current++;
-    rt.current = false;
+    isCountingHistory.current = false;
     initialModeFilterRef.current = 0;
-    historyOverlapIndexRef.current = 0;
-    co.current++;
-    ao.current = false;
+    nextIndexRef.current = 0;
+    loadGeneration.current++;
+    isLoadingHistory.current = false;
     currentInputRef.current = null;
     pastedContentsRef.current = undefined;
     removeNotification("search-history-hint");
@@ -389,13 +406,13 @@ function useArrowKeyHistory(draft, x, D) {
     historyCacheModeFilter.current = undefined;
     currentModeRef.current.clear();
   }, [removeNotification]);
-  let dismissSearchHint = ce(() => {
+  let dismissSearchHint = useCallback(() => {
     removeNotification("search-history-hint");
   }, [removeNotification]);
   return {
-    historyIndex: Be,
-    historyTotal: We,
-    historyEdited: Be > 0 && value !== currentInputRef.current,
+    historyIndex,
+    historyTotal,
+    historyEdited: historyIndex > 0 && value !== currentInputRef.current,
     onHistoryUp: onHistoryUp_2,
     onHistoryDown,
     resetHistory,

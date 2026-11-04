@@ -47,9 +47,9 @@ import {
   zodStrictObject,
   _enum,
   literal,
-  hu,
+  custom,
   union,
-  string,
+  stringSchema,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { classifyCcrContainerAsk } from "./servedSafetyChecks.js";
 import { getPlatform } from "../../../utils/platform.js";
@@ -59,29 +59,29 @@ import { expandPath } from "../../../utils/path.js";
 
 //@ chunk-ad2e1aj6.js:9982-10423 placement
 function servedAskWaitMs() {
-  let e;
+  let reason;
   try {
     let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_violin_spruce", null);
-    let s = ASK_WAIT_SCHEMA().safeParse(featureValue_CACHED_MAY_BE_STALE);
-    if (s.success && Number.isInteger(s.data.askWaitMs)) {
+    let parsed = ASK_WAIT_SCHEMA().safeParse(featureValue_CACHED_MAY_BE_STALE);
+    if (parsed.success && Number.isInteger(parsed.data.askWaitMs)) {
       if (
-        s.data.askWaitMs >= DEFAULT_SERVING_LIMITS.max_ask_ms &&
-        s.data.askWaitMs <= SYNC_ANSWER_TTL_MS - SESSION_APPROVAL_STALE_MS
+        parsed.data.askWaitMs >= DEFAULT_SERVING_LIMITS.max_ask_ms &&
+        parsed.data.askWaitMs <= SYNC_ANSWER_TTL_MS - SESSION_APPROVAL_STALE_MS
       )
-        return s.data.askWaitMs;
-      e = "out_of_range";
+        return parsed.data.askWaitMs;
+      reason = "out_of_range";
     } else
-      e =
+      reason =
         featureValue_CACHED_MAY_BE_STALE === null || featureValue_CACHED_MAY_BE_STALE === undefined
           ? "absent"
           : "wrong_type";
   } catch {
-    e = "unreadable";
+    reason = "unreadable";
   }
   logForDebugging(
-    `[remote-tools] tengu_violin_spruce not used (${e}): approval cards keep the built-in wait`,
+    `[remote-tools] tengu_violin_spruce not used (${reason}): approval cards keep the built-in wait`,
     {
-      level: e === "absent" ? "debug" : "warn",
+      level: reason === "absent" ? "debug" : "warn",
     },
   );
   return;
@@ -118,8 +118,8 @@ var BACKGROUND_ALLOWED_NOTE = `Up to ${SERVED_BACKGROUND_LIMITS} background Bash
 /**
  * "local_parity" 服务策略：个人机器、需要信封、设备绑定准入、沙箱/后台/凭证擦除等约束。
  */
-function localParityPolicy(e = {}) {
-  let n = e.backgroundShells?.() === true;
+function localParityPolicy(options = {}) {
+  let backgroundOn = options.backgroundShells?.() === true;
   return {
     name: "local_parity",
     kind: "personal_machine",
@@ -148,31 +148,36 @@ function localParityPolicy(e = {}) {
       "progress_checks",
       "standing_approvals",
       "plan_classifier",
-      ...(n ? ["background_shells"] : []),
+      ...(backgroundOn ? ["background_shells"] : []),
     ],
-    serves: (h) =>
-      (DEVICE_PASSTHROUGH_TOOL_NAMES.has(h.name) || (n && h.name === TASKSTOP)) &&
-      getToolRemoteExecution(h).supported,
-    constraints: (h, r, i = DEFAULT_SERVING_POLICY) => {
-      let toolRemoteExecution = getToolRemoteExecution(h);
+    serves: (tool) =>
+      (DEVICE_PASSTHROUGH_TOOL_NAMES.has(tool.name) || (backgroundOn && tool.name === TASKSTOP)) &&
+      getToolRemoteExecution(tool).supported,
+    constraints: (tool, launchDir, call = DEFAULT_SERVING_POLICY) => {
+      let toolRemoteExecution = getToolRemoteExecution(tool);
       return mergeServingPolicy(
         BASE_SERVING_POLICY,
         toolRemoteExecution.supported ? toolRemoteExecution.tighten : undefined,
       );
     },
-    refusedInputFields: (h) => {
-      let toolRemoteExecution = getToolRemoteExecution(h);
+    refusedInputFields: (tool) => {
+      let toolRemoteExecution = getToolRemoteExecution(tool);
       return (toolRemoteExecution.supported ? (toolRemoteExecution.refusedInputFields ?? []) : []).filter(
-        (y) =>
-          !SANDBOX_OVERRIDE_KEYS.has(y) &&
-          !(y === "run_in_background" && h.name === BASH_TOOL_NAME && n && e.backgroundShells?.() === true),
+        (field) =>
+          !SANDBOX_OVERRIDE_KEYS.has(field) &&
+          !(
+            field === "run_in_background" &&
+            tool.name === BASH_TOOL_NAME &&
+            backgroundOn &&
+            options.backgroundShells?.() === true
+          ),
       );
     },
-    ...(n &&
-      e.backgroundShells && {
+    ...(backgroundOn &&
+      options.backgroundShells && {
         backgroundShells: {
           maxPerSession: SERVED_BACKGROUND_LIMITS,
-          enabled: e.backgroundShells,
+          enabled: options.backgroundShells,
         },
       }),
     notes: () =>
@@ -180,50 +185,50 @@ function localParityPolicy(e = {}) {
         START_IN_PROJECT_NOTE,
         shouldMaintainProjectWorkingDir() ? CD_NOT_CARRIES_OVER_NOTE : CD_CARRIES_OVER_NOTE,
         MACHINE_RULES_NOTE,
-        n ? BACKGROUND_ALLOWED_NOTE : NO_BACKGROUND_NOTE,
+        backgroundOn ? BACKGROUND_ALLOWED_NOTE : NO_BACKGROUND_NOTE,
       ].join(" "),
   };
 }
 //@ chunk-ad2e1aj6.js:12063-12149 placement
-function resolveServingPolicy(e = remoteToolServingPolicyName()) {
-  return e === "parity"
+function resolveServingPolicy(policyName = remoteToolServingPolicyName()) {
+  return policyName === "parity"
     ? localParityPolicy({
         backgroundShells: () => isViolinVarnishOn() && !isBackgroundTasksOff(),
       })
     : sandboxDefaultPolicy();
 }
 //@ chunk-ad2e1aj6.js:12186-12559 placement
-function deviceFrame(e, instanceId, sequence) {
-  let h = e.kind !== "not_running";
+function deviceFrame(capture, instanceId, sequence) {
+  let running = capture.kind !== "not_running";
   return toWireSyncAnswer({
     v: SYNC_ANSWER_VERSION,
     frame: {
       side: "device",
-      generation: h ? e.generation : 0,
-      tree: h ? e.tree : null,
-      appliedGeneration: h ? e.taken : 0,
-      mayHaveUnuploadedChanges: h,
+      generation: running ? capture.generation : 0,
+      tree: running ? capture.tree : null,
+      appliedGeneration: running ? capture.taken : 0,
+      mayHaveUnuploadedChanges: running,
       shipping: null,
-      appliesOtherSide: h,
+      appliesOtherSide: running,
       instanceId,
       sequence,
     },
     outcome:
-      e.kind === "failed" || e.kind === "kept_here"
+      capture.kind === "failed" || capture.kind === "kept_here"
         ? {
-            kind: e.kind,
-            reason: e.reason,
+            kind: capture.kind,
+            reason: capture.reason,
           }
         : {
-            kind: e.kind === "queued" ? "unchanged" : e.kind,
+            kind: capture.kind === "queued" ? "unchanged" : capture.kind,
           },
   });
 }
 //@ chunk-ad2e1aj6.js:12559-12675 placement
 function parseExecutionMode(execution) {
-  let n = executionModeSchema().safeParse(execution);
-  return n.success
-    ? n.data
+  let parsed = executionModeSchema().safeParse(execution);
+  return parsed.success
+    ? parsed.data
     : {
         mode: "vm",
         availability: () => ({
@@ -248,7 +253,7 @@ var inProcessModeSchema = DoctorLazy(() =>
 var vmModeSchema = DoctorLazy(() =>
   zodStrictObject({
     mode: literal("vm"),
-    availability: hu((e) => typeof e === "function"),
+    availability: custom((value) => typeof value === "function"),
   }),
 );
 var executionModeSchema = DoctorLazy(() => union([inProcessModeSchema(), vmModeSchema()]));
@@ -257,20 +262,20 @@ var servedExecutionModeSchema = DoctorLazy(() =>
     inProcessModeSchema(),
     zodStrictObject({
       ...vmModeSchema().shape,
-      executor: hu((e) => typeof e === "function"),
-      notes: string().max(REMOTE_TOOL_LIMITS).optional(),
+      executor: custom((value) => typeof value === "function"),
+      notes: stringSchema().max(REMOTE_TOOL_LIMITS).optional(),
       copy: zodStrictObject({
-        platform: string(),
-        workingDir: string(),
-        shell: string(),
-        tools: hu((e) => typeof e === "function"),
+        platform: stringSchema(),
+        workingDir: stringSchema(),
+        shell: stringSchema(),
+        tools: custom((value) => typeof value === "function"),
       }).optional(),
     }),
   ]),
 );
 //@ chunk-ad2e1aj6.js:13083-13206 placement
-function arrivesOverSession(e) {
-  switch (e) {
+function arrivesOverSession(transport) {
+  switch (transport) {
     case "session":
       return true;
     case "bridge":
@@ -278,7 +283,7 @@ function arrivesOverSession(e) {
     case "relay":
       return false;
     default: {
-      let n = e;
+      let other = transport;
       return false;
     }
   }
@@ -294,23 +299,23 @@ function acceptsArrival(raisedOver, arrivedOver) {
     case "relay":
       return arrivedOver === "relay";
     default: {
-      let s = raisedOver;
+      let other = raisedOver;
       return false;
     }
   }
 }
 //@ chunk-ad2e1aj6.js:13372-13583 placement
-function callerKindForArrival(arrivedOver, n, s, trust = DEFAULT_SERVING_POLICY) {
+function callerKindForArrival(arrivedOver, transport, facts, trust = DEFAULT_SERVING_POLICY) {
   switch (arrivedOver) {
     case "session":
-      return classifyCcrContainerAsk(s);
+      return classifyCcrContainerAsk(facts);
     case "bridge":
     case "direct":
-      return n === "bridge" ? "bridge" : undefined;
+      return transport === "bridge" ? "bridge" : undefined;
     case "relay":
       return trust.approvalAttested === true ? "relayed" : undefined;
     default: {
-      let r = arrivedOver;
+      let other = arrivedOver;
       return;
     }
   }
@@ -322,15 +327,16 @@ var PIPE_BUFFER_BYTES_BY_PLATFORM = {
   wsl: 4096,
 };
 //@ chunk-ad2e1aj6.js:13623-13877 placement
-function platformPathGuard(tool, n, s) {
-  let h = PIPE_BUFFER_BYTES_BY_PLATFORM[getPlatform()];
-  if (h === undefined || tool.isMcp === true || tool.getPath === undefined || !useSecurityParser()) return;
+function platformPathGuard(tool, input, cwd) {
+  let limitBytes = PIPE_BUFFER_BYTES_BY_PLATFORM[getPlatform()];
+  if (limitBytes === undefined || tool.isMcp === true || tool.getPath === undefined || !useSecurityParser())
+    return;
   try {
-    let r = runInRemoteCallFrameMain(s, () => {
-      let path = tool.getPath?.(n);
+    let path = runInRemoteCallFrameMain(cwd, () => {
+      let path = tool.getPath?.(input);
       return typeof path === "string" ? expandPath(path) : undefined;
     });
-    return typeof r === "string" && Buffer.byteLength(r) >= h ? h : undefined;
+    return typeof path === "string" && Buffer.byteLength(path) >= limitBytes ? limitBytes : undefined;
   } catch {
     return;
   }

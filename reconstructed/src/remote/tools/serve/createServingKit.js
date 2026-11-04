@@ -45,7 +45,7 @@ import { createCallerSessions } from "./pendingAsks.js";
 import { createAbortController } from "../../../utils/abortController.js";
 import { freezeServedSettings } from "./servedSettingsFreeze.js";
 import {
-  fti,
+  UNBOUND_MANAGED_HOLD,
   recordServedUserRulesAtAttach,
   getHeldServedOwnerSettings,
   keepEmptyOwnerSettings,
@@ -67,205 +67,213 @@ import { ANTHROPIC_REMOTETOOLEXECUTION } from "../protocolSchemas.js";
 import { CURRENT_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } from "../protocolConstants.js";
 import { admitServedCall } from "./callAdmission.js";
 import { toolInputJsonSchema } from "../../../plugins/functionHooks/types/builtinToolSchemas.js";
-import { Uo } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import {
   looseObject,
   literal,
   record,
-  string,
+  stringSchema,
   unknown,
   array,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
 
 //@ chunk-ad2e1aj6.js:80196-81783 placement
-function remoteToolServingGroupProvider(e = {}) {
-  let tools = e.tools ?? getAllBaseTools;
-  let policy = e.policy ?? resolveServingPolicy;
-  return (h) => {
-    let { registry, getDeviceId, onNotice, serving } = h;
-    let R = policy();
-    let w = serving !== undefined ? serving.offReason : remoteToolServingOffReason();
-    if (w !== undefined) {
-      let Y = getDeviceId() !== undefined;
+function remoteToolServingGroupProvider(options = {}) {
+  let tools = options.tools ?? getAllBaseTools;
+  let policy = options.policy ?? resolveServingPolicy;
+  return (ctx) => {
+    let { registry, getDeviceId, onNotice, serving } = ctx;
+    let policyValue = policy();
+    let offReason = serving !== undefined ? serving.offReason : remoteToolServingOffReason();
+    if (offReason !== undefined) {
+      let isBound = getDeviceId() !== undefined;
       logEvent("tengu_remote_tool_serving", {
         event: lit("gate_off"),
         served_tool_count: 0,
-        policy: fromEnum(R.name),
-        reason: fromEnum(w),
-        ...launchLocationFacts(w),
-        bound: Y,
+        policy: fromEnum(policyValue.name),
+        reason: fromEnum(offReason),
+        ...launchLocationFacts(offReason),
+        bound: isBound,
       });
-      if (Y && isPersonFixableOffReason(w))
+      if (isBound && isPersonFixableOffReason(offReason))
         onNotice?.(SERVED_BASH_LAUNCHED_FROM_HOME, SERVED_BASH_FROM_HOME_NOTICE);
       return;
     }
-    let C = h.servingKit.current === undefined;
-    let P = servingKitFor(h, {
+    let isFirstKit = ctx.servingKit.current === undefined;
+    let kit = servingKitFor(ctx, {
       tools,
       policy,
     });
-    let x = () => {
-      let Y = (ae) => {
-        let mapped = servableTools(P.deps).map((V) => servedToolDefinition(V, P.deps, P.description));
+    let attachGroup = () => {
+      let publish = (event) => {
+        let mapped = servableTools(kit.deps).map((tool) =>
+          servedToolDefinition(tool, kit.deps, kit.description),
+        );
         registry.setGroup(REMOTE_TOOLS, mapped);
         logEvent("tengu_remote_tool_serving", {
-          event: lit(ae),
+          event: lit(event),
           served_tool_count: mapped.length,
-          policy: fromEnum(P.policy.name),
-          project_sync: fromEnum(P.description.project_sync ?? "unknown"),
+          policy: fromEnum(kit.policy.name),
+          project_sync: fromEnum(kit.description.project_sync ?? "unknown"),
         });
       };
-      Y("announced");
-      let F = false;
-      let D;
+      publish("announced");
+      let disposed = false;
+      let stopWatch;
       let { attachSyncs } = dirSyncSession();
-      let j = () => {
-        if (P.description.project_sync !== "unknown" && !attachSyncs.concerns(h.sessionId)) {
-          D?.();
-          D = undefined;
+      let stopWatchIfUnwatched = () => {
+        if (kit.description.project_sync !== "unknown" && !attachSyncs.concerns(ctx.sessionId)) {
+          stopWatch?.();
+          stopWatch = undefined;
         }
       };
-      let M;
-      let Q = (ae, fe) => {
-        if (F) return;
-        M = fe ?? M;
-        let V = ae === "unknown" && attachSyncs.concerns(h.sessionId) ? "off" : ae;
-        if (P.redescribe(V, M)) Y("redescribed");
-        j();
+      let folderRelation;
+      let onSyncDirection = (direction, relation) => {
+        if (disposed) return;
+        folderRelation = relation ?? folderRelation;
+        let effectiveDirection =
+          direction === "unknown" && attachSyncs.concerns(ctx.sessionId) ? "off" : direction;
+        if (kit.redescribe(effectiveDirection, folderRelation)) publish("redescribed");
+        stopWatchIfUnwatched();
       };
-      let ee = () => {
+      let startWatch = () => {
         if (
-          F ||
-          D !== undefined ||
-          (P.description.project_sync !== "unknown" && !attachSyncs.concerns(h.sessionId))
+          disposed ||
+          stopWatch !== undefined ||
+          (kit.description.project_sync !== "unknown" && !attachSyncs.concerns(ctx.sessionId))
         )
           return;
-        D = (e.watchProjectSync ?? watchProjectSyncState)(h.sessionId, (ae) => Q(projectSyncDirection(ae)));
-        j();
+        stopWatch = (options.watchProjectSync ?? watchProjectSyncState)(ctx.sessionId, (sync) =>
+          onSyncDirection(projectSyncDirection(sync)),
+        );
+        stopWatchIfUnwatched();
       };
-      if (h.dirSync instanceof Promise) {
-        let ae = h.folderRelation?.catch(() => {
+      if (ctx.dirSync instanceof Promise) {
+        let relationPromise = ctx.folderRelation?.catch(() => {
           return;
         });
-        h.dirSync
+        ctx.dirSync
           .then(
-            (fe) => {
-              if (!fe) {
-                if (ae === undefined) {
-                  Q("off");
+            (ok) => {
+              if (!ok) {
+                if (relationPromise === undefined) {
+                  onSyncDirection("off");
                   return;
                 }
-                return ae.then((V) => Q("off", V));
+                return relationPromise.then((relation) => onSyncDirection("off", relation));
               }
-              Q(projectSyncDirectionOf(h.sessionId));
-              ee();
+              onSyncDirection(projectSyncDirectionOf(ctx.sessionId));
+              startWatch();
             },
-            () => Q("off"),
+            () => onSyncDirection("off"),
           )
           .catch((error) => logError(toError(error)));
       }
-      ee();
-      let q = attachSyncs.onChanged(h.sessionId, () => {
-        Q(projectSyncDirectionOf(h.sessionId));
-        ee();
+      startWatch();
+      let unsubscribe = attachSyncs.onChanged(ctx.sessionId, () => {
+        onSyncDirection(projectSyncDirectionOf(ctx.sessionId));
+        startWatch();
       });
       return () => {
-        F = true;
-        q();
-        D?.();
-        P.dispose();
+        disposed = true;
+        unsubscribe();
+        stopWatch?.();
+        kit.dispose();
         registry.setGroup(REMOTE_TOOLS, []);
         logEvent("tengu_remote_tool_serving", {
           event: lit("withdrawn"),
           served_tool_count: 0,
-          policy: fromEnum(P.policy.name),
+          policy: fromEnum(kit.policy.name),
         });
       };
     };
     try {
-      return x();
+      return attachGroup();
     } catch (error) {
-      if (C) P.dispose();
+      if (isFirstKit) kit.dispose();
       throw error;
     }
   };
 }
 //@ chunk-ad2e1aj6.js:81783-82732 placement
-function servingKitFor(e, n = {}) {
-  let s = e.servingKit.current;
-  if (s !== undefined) {
-    if ((n.tools !== undefined && n.tools !== s.tools) || (n.policy !== undefined && n.policy !== s.policy))
+function servingKitFor(ctx, options = {}) {
+  let current = ctx.servingKit.current;
+  if (current !== undefined) {
+    if (
+      (options.tools !== undefined && options.tools !== current.tools) ||
+      (options.policy !== undefined && options.policy !== current.policy)
+    )
       throw Error(
         "servingKitFor: a second tool group asked for a different tool set or policy than the kit was built with",
       );
-    return s.kit;
+    return current.kit;
   }
-  let tools = n.tools ?? getAllBaseTools;
-  let policy = n.policy ?? resolveServingPolicy;
+  let tools = options.tools ?? getAllBaseTools;
+  let policy = options.policy ?? resolveServingPolicy;
   let servingKit = createServingKit({
-    sessionId: e.sessionId,
-    limiter: e.limiter,
-    getDeviceId: e.getDeviceId,
-    onNotice: e.onNotice,
+    sessionId: ctx.sessionId,
+    limiter: ctx.limiter,
+    getDeviceId: ctx.getDeviceId,
+    onNotice: ctx.onNotice,
     tools,
     policy,
-    ...(e.dirSync !== undefined && {
-      dirSync: e.dirSync,
+    ...(ctx.dirSync !== undefined && {
+      dirSync: ctx.dirSync,
     }),
-    ...(e.transport !== undefined && {
-      registrationTransport: e.transport,
+    ...(ctx.transport !== undefined && {
+      registrationTransport: ctx.transport,
     }),
-    ...(e.readiness !== undefined && {
-      readiness: e.readiness,
+    ...(ctx.readiness !== undefined && {
+      readiness: ctx.readiness,
     }),
-    ...(e.hostInventory !== undefined && {
-      hostInventory: e.hostInventory,
+    ...(ctx.hostInventory !== undefined && {
+      hostInventory: ctx.hostInventory,
     }),
-    ...(e.execution !== undefined && {
-      execution: e.execution,
+    ...(ctx.execution !== undefined && {
+      execution: ctx.execution,
     }),
-    ...(e.sandboxRequiredNow !== undefined && {
-      sandboxRequiredNow: e.sandboxRequiredNow,
+    ...(ctx.sandboxRequiredNow !== undefined && {
+      sandboxRequiredNow: ctx.sandboxRequiredNow,
     }),
   });
-  let y = {
+  let kit = {
     ...servingKit,
     get description() {
       return servingKit.description;
     },
     dispose: () => {
       servingKit.dispose();
-      if (e.servingKit.current?.kit === y) e.servingKit.current = undefined;
+      if (ctx.servingKit.current?.kit === kit) ctx.servingKit.current = undefined;
     },
   };
-  e.servingKit.current = {
-    kit: y,
+  ctx.servingKit.current = {
+    kit,
     tools,
     policy,
   };
-  return y;
+  return kit;
 }
 //@ chunk-ad2e1aj6.js:82732-82744 placement
 var PRE_EXIT_FLUSH_TIMEOUT_MS = 1000;
 //@ chunk-ad2e1aj6.js:82744-86452 placement
-function createServingKit(e) {
-  let { limiter, onNotice, sessionId } = e;
-  let r = e.execution ?? {
+function createServingKit(options) {
+  let { limiter, onNotice, sessionId } = options;
+  let execution = options.execution ?? {
     mode: "in_process",
   };
-  let tools = e.tools ?? getAllBaseTools;
-  let y = (e.policy ?? resolveServingPolicy)();
-  let O = e.launchDir ?? getOriginalCwd();
+  let tools = options.tools ?? getAllBaseTools;
+  let policyValue = (options.policy ?? resolveServingPolicy)();
+  let launchDir = options.launchDir ?? getOriginalCwd();
   let epoch = randomUUID();
   let signal = createSignal();
-  let deviceId = e.getDeviceId();
-  let copy = r.mode === "vm" ? r.copy : undefined;
+  let deviceId = options.getDeviceId();
+  let copy = execution.mode === "vm" ? execution.copy : undefined;
   let tools_2 = copy === undefined ? tools() : copy.tools(tools());
-  let { hostName } = e;
+  let { hostName } = options;
   let servingAnnouncement = buildServingAnnouncement({
-    policy: y,
-    launchDir: copy?.workingDir ?? O,
+    policy: policyValue,
+    launchDir: copy?.workingDir ?? launchDir,
     ...(hostName !== undefined && {
       getHostname: () => hostName,
     }),
@@ -275,7 +283,7 @@ function createServingKit(e) {
           folderRelation: "separate_copy",
         }
       : {
-          projectSync: e.dirSync === false ? "off" : projectSyncDirectionOf(sessionId),
+          projectSync: options.dirSync === false ? "off" : projectSyncDirectionOf(sessionId),
           syncRoot: dirSyncSession().rootOf(sessionId),
           readyToSyncAtAttach: syncReadyAtAttach(sessionId),
         }),
@@ -284,52 +292,52 @@ function createServingKit(e) {
       deviceId,
     }),
     servedToolNames: servableTools({
-      policy: y,
+      policy: policyValue,
       tools: tools_2,
-    }).map((te) => te.name),
-    ...(e.hostInventory !== undefined && {
-      inventory: e.hostInventory,
+    }).map((tool) => tool.name),
+    ...(options.hostInventory !== undefined && {
+      inventory: options.hostInventory,
     }),
   });
-  if (r.mode === "vm" && r.notes !== undefined) {
-    let { shell, inventory, ...me } = servingAnnouncement;
+  if (execution.mode === "vm" && execution.notes !== undefined) {
+    let { shell, inventory, ...rest } = servingAnnouncement;
     servingAnnouncement = {
-      ...me,
-      notes: r.notes,
+      ...rest,
+      notes: execution.notes,
     };
   }
   if (copy !== undefined) {
-    let { home_dir: homeDir, platform, ...me } = servingAnnouncement;
+    let { home_dir: homeDir, platform, ...rest } = servingAnnouncement;
     servingAnnouncement = {
-      ...me,
+      ...rest,
       platform: copy.platform,
       shell: copy.shell,
       copy_of: {
         platform,
-        dir: O,
+        dir: launchDir,
         ...(homeDir !== undefined && {
           home_dir: homeDir,
         }),
       },
     };
   }
-  let D = writeServedCallLog({
+  let logHandle = writeServedCallLog({
     epoch,
     targetName: servingAnnouncement.name,
   });
-  let L =
-    e.readsNoPriorCalls === true
+  let callLog =
+    options.readsNoPriorCalls === true
       ? {
-          note: D.note,
-          flush: D.flush,
+          note: logHandle.note,
+          flush: logHandle.flush,
           priorLoaded: true,
           loadPrior: () => Promise.resolve(),
           priorCallsFor: () => [],
         }
-      : D;
+      : logHandle;
   registerPreExitFlush(() =>
     Promise.race([
-      L.flush(),
+      callLog.flush(),
       sleep(PRE_EXIT_FLUSH_TIMEOUT_MS, undefined, {
         unref: true,
       }),
@@ -338,174 +346,178 @@ function createServingKit(e) {
   let callerSessions = createCallerSessions({
     limit: callerSessionsLimit(),
     epoch,
-    priorCallsFor: L.priorCallsFor,
+    priorCallsFor: callLog.priorCallsFor,
   });
   let abortController = createAbortController();
-  let Q = new Set();
-  let ee =
+  let notifiedKeys = new Set();
+  let noticeOnce =
     onNotice === undefined
       ? undefined
-      : (te, Re) => {
-          if (!Q.has(te)) {
-            Q.add(te);
-            onNotice(te, Re);
+      : (key, text) => {
+          if (!notifiedKeys.has(key)) {
+            notifiedKeys.add(key);
+            onNotice(key, text);
           }
         };
-  let q = new Map();
-  let ae = new Map();
-  let fe;
-  let V = false;
-  let K = () => {
-    if (!V && !abortController.signal.aborted) {
-      fe = freezeServedSettings(ee);
-      V = true;
+  let servedMcpTools = new Map();
+  let servedMcpWireArguments = new Map();
+  let heldSettings;
+  let settingsFrozen = false;
+  let freezeSettings = () => {
+    if (!settingsFrozen && !abortController.signal.aborted) {
+      heldSettings = freezeServedSettings(noticeOnce);
+      settingsFrozen = true;
     }
   };
-  let Se = new Set();
-  let projectHookWaitingFor = (te) => {
-    if (fe?.hookWaiting !== true || Se.has(te)) return false;
-    Se.add(te);
+  let projectHookNotified = new Set();
+  let projectHookWaitingFor = (key) => {
+    if (heldSettings?.hookWaiting !== true || projectHookNotified.has(key)) return false;
+    projectHookNotified.add(key);
     return true;
   };
-  let Z = fti;
-  let X = false;
-  let ce = false;
-  let ge = new Set();
-  let ownSettingsWaitingFor = (te) => {
-    if (!ce || ge.has(te)) return false;
-    ge.add(te);
+  let ownerSettings = UNBOUND_MANAGED_HOLD;
+  let ownerSettingsTaken = false;
+  let ownSettingsWaiting = false;
+  let ownSettingsNotified = new Set();
+  let ownSettingsWaitingFor = (key) => {
+    if (!ownSettingsWaiting || ownSettingsNotified.has(key)) return false;
+    ownSettingsNotified.add(key);
     return true;
   };
-  let we = () => {
-    if (!V || X) return;
-    X = true;
+  let takeOwnerSettings = () => {
+    if (!settingsFrozen || ownerSettingsTaken) return;
+    ownerSettingsTaken = true;
     try {
       recordServedUserRulesAtAttach(createAcceptedSettingsStore());
-      Z = getHeldServedOwnerSettings();
+      ownerSettings = getHeldServedOwnerSettings();
     } catch (error) {
       logError(toError(error));
       keepEmptyOwnerSettings();
-      Z = {
+      ownerSettings = {
         held: true,
         settings: {},
         took: "failed",
       };
     }
     try {
-      ce = hasUserSettingsChangedSinceAttach(createAcceptedSettingsStore());
-      if (ce) ee?.(SERVED_OWN_SETTINGS_WAITING, REMOTE_TOOLS_CONSENT_TEXT["served_settings.own_waiting"]);
+      ownSettingsWaiting = hasUserSettingsChangedSinceAttach(createAcceptedSettingsStore());
+      if (ownSettingsWaiting)
+        noticeOnce?.(SERVED_OWN_SETTINGS_WAITING, REMOTE_TOOLS_CONSENT_TEXT["served_settings.own_waiting"]);
     } catch (error) {
       logError(toError(error));
     }
   };
   if (deviceId !== undefined) {
-    K();
-    we();
+    freezeSettings();
+    takeOwnerSettings();
   }
   try {
     let reach = createHostPathReach({
-      launchDir: O,
+      launchDir,
       projectDir: getProjectRoot(),
       originalCwd: getOriginalCwd(),
     });
-    let Re = {
-      policy: y,
+    let deps = {
+      policy: policyValue,
       targetName: servingAnnouncement.name,
       ...(deviceId !== undefined && {
         deviceId,
       }),
-      launchDir: O,
+      launchDir,
       ...(copy !== undefined && {
         announcedDir: copy.workingDir,
       }),
       reach,
-      ...(ee !== undefined && {
-        onNotice: ee,
+      ...(noticeOnce !== undefined && {
+        onNotice: noticeOnce,
       }),
       ...(copy === undefined && {
-        dirSyncOf: (me) => dirSyncSession().syncOf(me),
+        dirSyncOf: (sessionId) => dirSyncSession().syncOf(sessionId),
       }),
       tools: tools_2,
-      gate: admissionGateFor(y, {
+      gate: admissionGateFor(policyValue, {
         limiter,
         getDeviceId: () => {
-          let deviceId = e.getDeviceId();
+          let deviceId = options.getDeviceId();
           if (deviceId === undefined) return;
           try {
-            K();
+            freezeSettings();
           } catch (error) {
             logError(toError(error));
             return;
           }
-          we();
+          takeOwnerSettings();
           return deviceId;
         },
         isModeCurrent: () => true,
       }),
       sessions: callerSessions,
-      ...(r.mode === "vm"
+      ...(execution.mode === "vm"
         ? {
             execution: {
               mode: "vm",
-              availability: r.availability,
+              availability: execution.availability,
             },
-            executor: r.executor,
+            executor: execution.executor,
           }
         : {
-            execution: r,
+            execution,
           }),
-      sandboxRequiredNow: e.sandboxRequiredNow ?? (() => false),
+      sandboxRequiredNow: options.sandboxRequiredNow ?? (() => false),
       ownerSettingsLost: userSettingsErrorWatcher(),
-      callLog: L,
-      readiness: e.readiness ?? createServingReadiness(),
+      callLog,
+      readiness: options.readiness ?? createServingReadiness(),
       lifetime: abortController.signal,
-      servedMcpTools: () => q,
-      servedMcpWireArguments: (me) => ae.get(me),
-      userSettingsAtAttach: () => Z,
-      sandboxTurnedOnByHeldFile: () => fe?.sandboxTurnedOn === true,
+      servedMcpTools: () => servedMcpTools,
+      servedMcpWireArguments: (toolName) => servedMcpWireArguments.get(toolName),
+      userSettingsAtAttach: () => ownerSettings,
+      sandboxTurnedOnByHeldFile: () => heldSettings?.sandboxTurnedOn === true,
       projectHookWaitingFor,
       ownSettingsWaitingFor,
-      ...(e.registrationTransport !== undefined && {
-        registrationTransport: e.registrationTransport,
+      ...(options.registrationTransport !== undefined && {
+        registrationTransport: options.registrationTransport,
       }),
     };
-    if (Re.reach.projectHooks !== undefined) registerPreExitFlush(() => saveSeenHookPins(Re.reach));
+    if (deps.reach.projectHooks !== undefined) registerPreExitFlush(() => saveSeenHookPins(deps.reach));
     return {
-      policy: y,
+      policy: policyValue,
       get description() {
         if (servingAnnouncement.inventory !== undefined && !isHostInventoryShared()) {
-          let { inventory, ...ke } = servingAnnouncement;
-          servingAnnouncement = ke;
+          let { inventory, ...withoutInventory } = servingAnnouncement;
+          servingAnnouncement = withoutInventory;
         }
         return servingAnnouncement;
       },
-      redescribe: (me, ke) => {
+      redescribe: (projectSync, folderRelation) => {
         if (copy !== undefined) return false;
-        let Qe = folderRelationField(me, ke);
-        let je = withSyncAtAttach(servingAnnouncement.capabilities ?? [], syncReadyAtAttach(sessionId));
+        let relationField = folderRelationField(projectSync, folderRelation);
+        let capabilities = withSyncAtAttach(
+          servingAnnouncement.capabilities ?? [],
+          syncReadyAtAttach(sessionId),
+        );
         if (
-          me === servingAnnouncement.project_sync &&
-          Qe.folder_relation === servingAnnouncement.folder_relation &&
-          isDeepStrictEqual(je, servingAnnouncement.capabilities ?? [])
+          projectSync === servingAnnouncement.project_sync &&
+          relationField.folder_relation === servingAnnouncement.folder_relation &&
+          isDeepStrictEqual(capabilities, servingAnnouncement.capabilities ?? [])
         )
           return false;
         let {
           sync_root: syncRoot,
-          folder_relation: folderRelation,
-          capabilities,
-          ...Ie
+          folder_relation: folderRelation_2,
+          capabilities: capabilities_2,
+          ...rest
         } = servingAnnouncement;
-        let He = dirSyncSession().rootOf(sessionId);
+        let currentSyncRoot = dirSyncSession().rootOf(sessionId);
         servingAnnouncement = {
-          ...Ie,
-          project_sync: me,
-          ...(He !== undefined &&
-            isSyncingFolder(me) && {
-              sync_root: He,
+          ...rest,
+          project_sync: projectSync,
+          ...(currentSyncRoot !== undefined &&
+            isSyncingFolder(projectSync) && {
+              sync_root: currentSyncRoot,
             }),
-          ...Qe,
-          ...(je.length > 0 && {
-            capabilities: je,
+          ...relationField,
+          ...(capabilities.length > 0 && {
+            capabilities,
           }),
         };
         try {
@@ -517,29 +529,29 @@ function createServingKit(e) {
       },
       onRedescribed: signal.subscribe,
       ensureSettingsHeld: () => {
-        if (e.getDeviceId() !== undefined) {
-          K();
-          we();
+        if (options.getDeviceId() !== undefined) {
+          freezeSettings();
+          takeOwnerSettings();
         }
       },
-      deps: Re,
-      setServedMcp: (me, ke) => {
-        q = me;
-        ae = ke;
+      deps,
+      setServedMcp: (tools, wireArguments) => {
+        servedMcpTools = tools;
+        servedMcpWireArguments = wireArguments;
       },
-      heldServedCall: (me) => {
-        let ke = callerSessions.heldAsk(
+      heldServedCall: (held) => {
+        let ask = callerSessions.heldAsk(
           callerKey({
             sessionId,
           }),
-          me.toolUseId,
+          held.toolUseId,
         );
-        if (ke === undefined) return NOT_HELD_LEASE;
-        return splitHostField(me.input).requested === servingAnnouncement.name &&
-          matchesApprovedCall(ke, me.toolName, me.input)
+        if (ask === undefined) return NOT_HELD_LEASE;
+        return splitHostField(held.input).requested === servingAnnouncement.name &&
+          matchesApprovedCall(ask, held.toolName, held.input)
           ? {
               held: true,
-              startCwd: ke.startCwd,
+              startCwd: ask.startCwd,
             }
           : {
               held: false,
@@ -548,12 +560,12 @@ function createServingKit(e) {
       },
       dispose: () => {
         abortController.abort();
-        fe?.end();
-        saveSeenHookPins(Re.reach);
+        heldSettings?.end();
+        saveSeenHookPins(deps.reach);
       },
     };
   } catch (error) {
-    fe?.end();
+    heldSettings?.end();
     throw error;
   }
 }
@@ -566,14 +578,14 @@ function projectSyncDirectionOf(sessionId) {
   return projectSyncDirection(dirSyncSession().stateOf(sessionId));
 }
 //@ chunk-ad2e1aj6.js:86542-86587 placement
-function watchProjectSyncState(e, n) {
-  return dirSyncSession().watchState(e, n);
+function watchProjectSyncState(sessionId, onChange) {
+  return dirSyncSession().watchState(sessionId, onChange);
 }
 //@ chunk-ad2e1aj6.js:86587-86763 placement
-function projectSyncDirection(e) {
-  switch (e?.state) {
+function projectSyncDirection(state) {
+  switch (state?.state) {
     case "armed":
-      return e.direction === "pending" ? "unknown" : e.direction;
+      return state.direction === "pending" ? "unknown" : state.direction;
     case "off":
     case "stopped":
       return "off";
@@ -583,23 +595,23 @@ function projectSyncDirection(e) {
   }
 }
 //@ chunk-ad2e1aj6.js:86763-86894 placement
-function getRefusedInputFields(policy, n) {
-  if (policy.refusedInputFields) return policy.refusedInputFields(n);
-  let toolRemoteExecution = getToolRemoteExecution(n);
+function getRefusedInputFields(policy, tool) {
+  if (policy.refusedInputFields) return policy.refusedInputFields(tool);
+  let toolRemoteExecution = getToolRemoteExecution(tool);
   return toolRemoteExecution.supported ? (toolRemoteExecution.refusedInputFields ?? []) : [];
 }
 //@ chunk-ad2e1aj6.js:86894-87204 placement
-function servedToolDefinition(e, deps, description) {
-  let refusedInputFields = getRefusedInputFields(deps.policy, e);
+function servedToolDefinition(tool, deps, description) {
+  let refusedInputFields = getRefusedInputFields(deps.policy, tool);
   return {
     definition: {
-      name: e.name,
-      description: servedToolDescription(e, description),
-      inputSchema: servedInputSchema(e, [...refusedInputFields, HOST_TOOL_INPUT_FIELD]),
+      name: tool.name,
+      description: servedToolDescription(tool, description),
+      inputSchema: servedInputSchema(tool, [...refusedInputFields, HOST_TOOL_INPUT_FIELD]),
       _meta: {
         [ANTHROPIC_REMOTETOOLEXECUTION]: {
           v: CURRENT_PROTOCOL_VERSION,
-          tool: e.name,
+          tool: tool.name,
           refused_input_fields: refusedInputFields,
           target: description,
           protocol_versions: SUPPORTED_PROTOCOL_VERSIONS,
@@ -608,33 +620,33 @@ function servedToolDefinition(e, deps, description) {
     },
     analyticsName: lit("remote_served_tool"),
     senderJudgedBy: "handler",
-    call: (r, i) => admitServedCall(e.name, r, i, deps, "bridge"),
+    call: (toolInput, ctx) => admitServedCall(tool.name, toolInput, ctx, deps, "bridge"),
   };
 }
 //@ chunk-ad2e1aj6.js:87204-87359 placement
-function announcedToolFor(e, deps, description) {
-  let refusedInputFields = getRefusedInputFields(deps.policy, e);
+function announcedToolFor(tool, deps, description) {
+  let refusedInputFields = getRefusedInputFields(deps.policy, tool);
   return {
-    name: e.name,
+    name: tool.name,
     refused_input_fields: refusedInputFields,
     protocol_versions: SUPPORTED_PROTOCOL_VERSIONS,
-    description: servedToolDescription(e, description),
-    input_schema: servedInputSchema(e, [...refusedInputFields, HOST_TOOL_INPUT_FIELD]),
+    description: servedToolDescription(tool, description),
+    input_schema: servedInputSchema(tool, [...refusedInputFields, HOST_TOOL_INPUT_FIELD]),
   };
 }
 //@ chunk-ad2e1aj6.js:87359-87507 placement
-function servedToolDescription(e, n) {
-  return `Claude Code ${e.name} served by ${n.name} for its bound cloud session; called by that session's own routing, not directly.`;
+function servedToolDescription(tool, description) {
+  return `Claude Code ${tool.name} served by ${description.name} for its bound cloud session; called by that session's own routing, not directly.`;
 }
 //@ chunk-ad2e1aj6.js:87507-87777 placement
-function servedInputSchema(e, n) {
-  let s = toolInputJsonSchemaValidator().safeParse(toolInputJsonSchema(e.inputSchema));
-  if (!s.success) throw Error("a served tool must have an object input schema");
-  let { properties, required } = s.data;
-  let filtered = required?.filter((y) => !n.includes(y));
+function servedInputSchema(tool, refusedFields) {
+  let parsed = toolInputJsonSchemaValidator().safeParse(toolInputJsonSchema(tool.inputSchema));
+  if (!parsed.success) throw Error("a served tool must have an object input schema");
+  let { properties, required } = parsed.data;
+  let filtered = required?.filter((name) => !refusedFields.includes(name));
   return {
     type: "object",
-    properties: Uo(properties, n),
+    properties: omitAlias(properties, refusedFields),
     ...(filtered?.length && {
       required: filtered,
     }),
@@ -644,8 +656,8 @@ function servedInputSchema(e, n) {
 var toolInputJsonSchemaValidator = DoctorLazy(() =>
   looseObject({
     type: literal("object"),
-    properties: record(string(), record(string(), unknown())),
-    required: array(string()).optional(),
+    properties: record(stringSchema(), record(stringSchema(), unknown())),
+    required: array(stringSchema()).optional(),
   }),
 );
-export { createServingKit, announcedToolFor, servingKitFor };
+export { createServingKit, announcedToolFor, servingKitFor, remoteToolServingGroupProvider };

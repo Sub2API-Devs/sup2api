@@ -13,18 +13,19 @@ import { getLocale } from "../utils/formatBriefTimestamp.js";
 import { isPeerOrObserver, isHumanOrAutoContinuation, joinTextContent } from "../utils/messageProvenance.js";
 import { isNonHumanInboundOrigin } from "../utils/backgroundSessionResume.js";
 import { isTaggedSystemUserText, isSystemishUserText } from "./messages/UserTextMessage.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL } from "../../runtime/bun-runtime.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { init_react_production } from "../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:139447-139548 placement
-function formatMessageTimestamp(m, h) {
-  let date = new Date(m);
+function formatMessageTimestamp(timestamp, timeFormat) {
+  let date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "";
-  return formatFullTimestamp(resolvedTimeFormat(), date, getLocale(), h);
+  return formatFullTimestamp(resolvedTimeFormat(), date, getLocale(), timeFormat);
 }
 //@ chunk-ag5x7vhf.js:139548-139688 placement
 function messageTimestampOf(message) {
@@ -54,19 +55,19 @@ function shouldShowMessageTimestamp(message, showAssistant, showUser, isContinua
     return (message.attachment.imagePasteIds?.length ?? 0) > 0 || !isTaggedSystemUserText(trimmed);
   }
   if (message.type === "assistant")
-    return (showUser || showAssistant) && message.message.content.some((k) => k.type === "text");
+    return (showUser || showAssistant) && message.message.content.some((block) => block.type === "text");
   if (message.type === "user") {
     if (!showUser || message.isCompactSummary || isContinuation) return false;
-    let k = message.message.content[0];
-    if (k?.type === "image") return true;
-    if (k?.type !== "text" || typeof k.text !== "string") return false;
-    return !isSystemishUserText(message, k.text);
+    let block = message.message.content[0];
+    if (block?.type === "image") return true;
+    if (block?.type !== "text" || typeof block.text !== "string") return false;
+    return !isSystemishUserText(message, block.text);
   }
   return false;
 }
 //@ chunk-ag5x7vhf.js:140413-140985 callgraph-fingerprint = MessageTimestamp (0.251)
 function MessageTimestamp(props) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   let { message, isTranscriptMode, showMessageTimestamps, isSplitUserContinuation } = props;
   let showUser = showMessageTimestamps === undefined ? false : showMessageTimestamps;
   if (
@@ -79,51 +80,53 @@ function MessageTimestamp(props) {
   ) {
     return null;
   }
-  let A;
-  let L;
+  let dateElement;
+  let timeElement;
   let minWidth;
-  let W;
+  let rowElement;
   if ($[0] !== message || $[1] !== showUser) {
-    W = EARLY_RETURN_SENTINEL;
+    rowElement = EARLY_RETURN_SENTINEL;
     K: {
-      let z = messageTimestampOf(message) ?? "";
-      L = showUser ? formatMessageTimestamp(z) : formatHeuristicTimestamp(z);
-      if (!L) {
-        W = null;
+      let timestampText = messageTimestampOf(message) ?? "";
+      timeElement = showUser
+        ? formatMessageTimestamp(timestampText)
+        : formatHeuristicTimestamp(timestampText);
+      if (!timeElement) {
+        rowElement = null;
         break K;
       }
-      A = Box;
-      minWidth = bunStringWidth(L);
+      dateElement = Box;
+      minWidth = bunStringWidth(timeElement);
     }
     $[0] = message;
     $[1] = showUser;
-    $[2] = A;
-    $[3] = L;
+    $[2] = dateElement;
+    $[3] = timeElement;
     $[4] = minWidth;
-    $[5] = W;
+    $[5] = rowElement;
   } else {
-    A = $[2];
-    L = $[3];
+    dateElement = $[2];
+    timeElement = $[3];
     minWidth = $[4];
-    W = $[5];
+    rowElement = $[5];
   }
-  if (W !== EARLY_RETURN_SENTINEL) return W;
+  if (rowElement !== EARLY_RETURN_SENTINEL) return rowElement;
   let children;
-  if ($[6] !== L) {
+  if ($[6] !== timeElement) {
     children = jsxProd_default(Text, {
       dimColor: true,
-      children: L,
+      children: timeElement,
     });
-    $[6] = L;
+    $[6] = timeElement;
     $[7] = children;
   } else children = $[7];
   let t3;
-  if ($[8] !== A || $[9] !== minWidth || $[10] !== children) {
-    t3 = jsxProd_default(A, {
+  if ($[8] !== dateElement || $[9] !== minWidth || $[10] !== children) {
+    t3 = jsxProd_default(dateElement, {
       minWidth,
       children,
     });
-    $[8] = A;
+    $[8] = dateElement;
     $[9] = minWidth;
     $[10] = children;
     $[11] = t3;
@@ -131,11 +134,14 @@ function MessageTimestamp(props) {
   return t3;
 }
 //@ chunk-ag5x7vhf.js:140985-141082 sole-consumer
-function formatHeuristicTimestamp(m) {
-  let date = new Date(m);
+function formatHeuristicTimestamp(timestamp) {
+  let date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) return "";
   return formatClockTime(resolvedTimeFormat(), date, getLocale());
 }
 //@ chunk-ag5x7vhf.js:148064-148068 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:148064", () => {
+  init_react_production();
+});
 export { shouldShowMessageTimestamp, MessageTimestamp };

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:219323-219540 cjs-fingerprint
-var require_julia_repl = x(function (cjsExports, cjsModule) {
+var require_julia_repl = __commonJS(function (cjsExports, cjsModule) {
   function juliaRepl(hljs) {
     return {
       name: "Julia REPL",

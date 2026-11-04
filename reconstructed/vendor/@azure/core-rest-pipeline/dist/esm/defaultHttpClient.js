@@ -5,12 +5,12 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Vs } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
+import { createDefaultHttpClient } from "../../../../@typespec/ts-http-runtime/dist/esm/policies/agentPolicy.js";
 import { wrapAbortSignalLike } from "./util/wrapAbortSignal.js";
 
 //@ chunk-mrx6y2r5.js:62693-62897 esm-fingerprint
-function createDefaultHttpClient() {
-  let client = Vs();
+function createDefaultHttpClient_2() {
+  let client = createDefaultHttpClient();
   return {
     async sendRequest(request) {
       let { abortSignal, cleanup } = request.abortSignal ? wrapAbortSignalLike(request.abortSignal) : {};
@@ -23,4 +23,4 @@ function createDefaultHttpClient() {
     },
   };
 }
-export { createDefaultHttpClient };
+export { createDefaultHttpClient_2 };

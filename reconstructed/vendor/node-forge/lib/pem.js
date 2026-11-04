@@ -5,12 +5,12 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:68269-70895 cjs-fingerprint
-var require_pem = x(function (cjsExports, cjsModule) {
+var require_pem = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_util();
   var pem = (cjsModule.exports = forge.pem = forge.pem || {});

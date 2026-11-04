@@ -5,15 +5,23 @@
  * pieces: chunk-3cddmtk7.js (1)
  * attribution: esm-fingerprint 1
  */
-import { G, He, qe, je, Ve, $e, k } from "../../../_unknown/bedrockRuntimeConfig.js";
+import {
+  base64Module,
+  import_core_2,
+  import_core,
+  import_client,
+  import_protocols,
+  import_url_parser,
+  import_util_utf8,
+} from "../../../_unknown/bedrockRuntimeConfig.js";
 import { defaultEndpointResolver } from "./endpoint/endpointResolver.js";
 import { defaultBedrockRuntimeHttpAuthSchemeProvider } from "./auth/httpAuthSchemeProvider.js";
 
 //@ chunk-3cddmtk7.js:23411-24302 esm-fingerprint
 var getRuntimeConfig = (config) => ({
   apiVersion: "2023-09-30",
-  base64Decoder: config?.base64Decoder ?? G.fromBase64,
-  base64Encoder: config?.base64Encoder ?? G.toBase64,
+  base64Decoder: config?.base64Decoder ?? base64Module.fromBase64,
+  base64Encoder: config?.base64Encoder ?? base64Module.toBase64,
   disableHostPrefix: config?.disableHostPrefix ?? false,
   endpointProvider: config?.endpointProvider ?? defaultEndpointResolver,
   extensions: config?.extensions ?? [],
@@ -22,23 +30,23 @@ var getRuntimeConfig = (config) => ({
     {
       schemeId: "aws.auth#sigv4",
       identityProvider: (ipc) => ipc.getIdentityProvider("aws.auth#sigv4"),
-      signer: new He.AwsSdkSigV4Signer(),
+      signer: new import_core_2.AwsSdkSigV4Signer(),
     },
     {
       schemeId: "smithy.api#httpBearerAuth",
       identityProvider: (ipc) => ipc.getIdentityProvider("smithy.api#httpBearerAuth"),
-      signer: new qe.HttpBearerAuthSigner(),
+      signer: new import_core.HttpBearerAuthSigner(),
     },
   ],
-  logger: config?.logger ?? new je.NoOpLogger(),
+  logger: config?.logger ?? new import_client.NoOpLogger(),
   protocol:
     config?.protocol ??
-    new Ve.AwsRestJsonProtocol({
+    new import_protocols.AwsRestJsonProtocol({
       defaultNamespace: "com.amazonaws.bedrockruntime",
     }),
   serviceId: config?.serviceId ?? "Bedrock Runtime",
-  urlParser: config?.urlParser ?? $e.parseUrl,
-  utf8Decoder: config?.utf8Decoder ?? k.fromUtf8,
-  utf8Encoder: config?.utf8Encoder ?? k.toUtf8,
+  urlParser: config?.urlParser ?? import_url_parser.parseUrl,
+  utf8Decoder: config?.utf8Decoder ?? import_util_utf8.fromUtf8,
+  utf8Encoder: config?.utf8Encoder ?? import_util_utf8.toUtf8,
 });
 export { getRuntimeConfig };

@@ -30,13 +30,13 @@ import {
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
-  string,
+  objectSchema,
+  stringSchema,
   unknown,
   record,
-  M,
+  booleanSchema,
   array,
-  E,
+  numberSchema,
   literal,
   _enum,
   looseObject,
@@ -133,200 +133,208 @@ import { describeTooLargePage } from "./publishReadChecks.js";
 import { decodeTextStrict } from "./contentTypes.js";
 import { logFeatureBad } from "../analytics/featureTelemetry.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0wdgqhcf.js:12464-13399 placement
-function describePublishFiles(e, t) {
-  if (e === undefined) return "";
-  let n = ARTIFACT_EMBED_ERRORS().safeParse(e);
-  if (!n.success) return "";
-  let r = n.data;
-  let s = [];
-  if (r.pins.length > 0) {
-    let joined = r.pins
+function describePublishFiles(errors, options) {
+  if (errors === undefined) return "";
+  let parsed = ARTIFACT_EMBED_ERRORS().safeParse(errors);
+  if (!parsed.success) return "";
+  let data = parsed.data;
+  let lines = [];
+  if (data.pins.length > 0) {
+    let joined = data.pins
       .slice(0, MAX_EMBED_WARNINGS)
       .map((pin) => {
-        let S = escapeXml(pin.uuid, 8);
-        let y =
+        let uuidPrefix = escapeXml(pin.uuid, 8);
+        let fileCountText =
           pin.files !== undefined && Number.isInteger(pin.files) && pin.files >= 0
             ? `, ${pin.files} ${pin.files === 1 ? "file" : "files"}`
             : "";
         let path = DEP_MODULE_PATH_RE.test(pin.path) ? pin.path : "?";
-        return `${S}\u2026 \u2192 ${path}${pin.module ? ", module" : ""}${y}`;
+        return `${uuidPrefix}\u2026 \u2192 ${path}${pin.module ? ", module" : ""}${fileCountText}`;
       })
       .join("; ");
-    s.push(`Embedded parts pinned: ${r.pins.length} (${joined}).`);
+    lines.push(`Embedded parts pinned: ${data.pins.length} (${joined}).`);
   }
-  for (let warning of r.warnings.slice(0, MAX_EMBED_PINS)) {
-    let b = warning.src === undefined ? "" : escapeXml(warning.src);
-    let S = b !== "" ? `<artifact-embed src="${b}">` : "<artifact-embed>";
-    let y =
+  for (let warning of data.warnings.slice(0, MAX_EMBED_PINS)) {
+    let srcXml = warning.src === undefined ? "" : escapeXml(warning.src);
+    let embedTag = srcXml !== "" ? `<artifact-embed src="${srcXml}">` : "<artifact-embed>";
+    let detail =
       warning.count !== undefined && Number.isInteger(warning.count) && warning.count > 1
         ? ` \xD7${warning.count}`
         : "";
     let reason = Object.hasOwn(EMBED_ERROR_TEXTS, warning.reason) ? warning.reason : "unknown";
-    let v = Object.hasOwn(EMBED_ERROR_TEXTS, reason)
-      ? `: ${EMBED_ERROR_TEXTS[reason]}${reason === "not_embeddable" ? (t ?? "") : ""}`
+    let knownReason = Object.hasOwn(EMBED_ERROR_TEXTS, reason)
+      ? `: ${EMBED_ERROR_TEXTS[reason]}${reason === "not_embeddable" ? (options ?? "") : ""}`
       : "";
-    s.push(`${S}${y} not resolved \u2014 ${reason}${v}.`);
+    lines.push(`${embedTag}${detail} not resolved \u2014 ${reason}${knownReason}.`);
   }
-  if (s.length === 0) return "";
-  let joined = s.join(`
+  if (lines.length === 0) return "";
+  let joined = lines.join(`
 `);
-  let a = ARTIFACT_MAX_RESULT_SIZE_CHARS / 2;
+  let halfLimit = ARTIFACT_MAX_RESULT_SIZE_CHARS / 2;
   return `
 
-${joined.length > a ? `${truncateToLength(joined, a)} \u2026 (embeds truncated)` : joined}`;
+${joined.length > halfLimit ? `${truncateToLength(joined, halfLimit)} \u2026 (embeds truncated)` : joined}`;
 }
 //@ chunk-0wdgqhcf.js:13399-13426 placement
 /**
- * 导出常量或表 `MAX_TITLE_CHARS`：值为 256, Ye = null, at = null。
+ * 导出常量或表：vt = 256 是 schema 里 title 字段的字符上限（o().max(vt)）；Ye / at 是外部构建为 null、内部构建才赋值的可选 schema 槽，与字符上限无关。
  */
 var MAX_TITLE_CHARS = 256;
 var COLLAB_SCHEMA_INCLUDED = null;
-var HANDLERS_SCHEMA = null;
+var handlersSchemas = null;
 //@ chunk-0wdgqhcf.js:13426-15845 placement
 /**
  * Artifact 发布结果 schema 的编译期开关（嵌入错误、路由声明、提示字段，均为 false）与发布结果 schema（url、路径、版本、能力声明与存储契约、警告、剩余发布次数、图标、受众、合并信息、实时订阅、编辑应用情况、种子线程、复制来源等），以及合并基线 schema。
  */
-var EMBEDS_RESULT_ENABLED = false;
-var DECLARED_BY_ROUTE_ENABLED = false;
-var PUBLISH_HINTS_ENABLED = false;
-var PUBLISH_RESULT_SCHEMA = DoctorLazy(() =>
-  u({
-    url: string(),
-    path: string(),
-    artifact_id: string().regex(ARTIFACT_SLUG_RE).optional(),
-    title: string().optional(),
-    version: string().regex(VER_SHAPE).optional(),
-    capabilities: unknown().optional(),
-    stored: u({
-      contract: string(),
-      preferredContract: string().optional(),
-      capabilities: record(string(), unknown()).optional(),
-      carried: M().optional(),
-      ...(DECLARED_BY_ROUTE_ENABLED && {
-        declaredByRoute: M().optional(),
+var EMBEDS_RESULT_ENABLED; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var DECLARED_BY_ROUTE_ENABLED;
+var PUBLISH_HINTS_ENABLED;
+var PUBLISH_RESULT_SCHEMA;
+var MERGED_OVER_SCHEMA;
+deferInit("chunk-0wdgqhcf.js:13426", () => {
+  EMBEDS_RESULT_ENABLED = false;
+  DECLARED_BY_ROUTE_ENABLED = false;
+  PUBLISH_HINTS_ENABLED = false;
+  PUBLISH_RESULT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      url: stringSchema(),
+      path: stringSchema(),
+      artifact_id: stringSchema().regex(ARTIFACT_SLUG_RE).optional(),
+      title: stringSchema().optional(),
+      version: stringSchema().regex(VER_SHAPE).optional(),
+      capabilities: unknown().optional(),
+      stored: objectSchema({
+        contract: stringSchema(),
+        preferredContract: stringSchema().optional(),
+        capabilities: record(stringSchema(), unknown()).optional(),
+        carried: booleanSchema().optional(),
+        ...(DECLARED_BY_ROUTE_ENABLED && {
+          declaredByRoute: booleanSchema().optional(),
+        }),
+        read: stringSchema().optional(),
+      }).optional(),
+      warnings: array(stringSchema()).optional(),
+      publishesRemaining: numberSchema().int().min(0).optional().catch(undefined),
+      publishesResetAt: numberSchema().int().positive().optional().catch(undefined),
+      ...(EMBEDS_RESULT_ENABLED && {
+        embeds: ARTIFACT_EMBED_ERRORS().optional().catch(undefined),
       }),
-      read: string().optional(),
-    }).optional(),
-    warnings: array(string()).optional(),
-    publishesRemaining: E().int().min(0).optional().catch(undefined),
-    publishesResetAt: E().int().positive().optional().catch(undefined),
-    ...(EMBEDS_RESULT_ENABLED && {
-      embeds: ARTIFACT_EMBED_ERRORS().optional().catch(undefined),
-    }),
-    contract: string().optional(),
-    updated: M().optional(),
-    owned: M().optional().catch(undefined),
-    icon: string().max(40).optional().catch(undefined),
-    faviconSent: literal(true).optional().catch(undefined),
-    iconDropped: literal(true).optional().catch(undefined),
-    audience: string().optional(),
-    seq: E().int().nonnegative().optional().catch(undefined),
-    unchanged: literal(true).optional().catch(undefined),
-    merged_over: MERGED_OVER_SCHEMA().optional().catch(undefined),
-    ...(hotUpdateOn() && {
-      deadline: u({
-        until: E().int().positive().max(MAX_EPOCH_MS),
-      })
+      contract: stringSchema().optional(),
+      updated: booleanSchema().optional(),
+      owned: booleanSchema().optional().catch(undefined),
+      icon: stringSchema().max(40).optional().catch(undefined),
+      faviconSent: literal(true).optional().catch(undefined),
+      iconDropped: literal(true).optional().catch(undefined),
+      audience: stringSchema().optional(),
+      seq: numberSchema().int().nonnegative().optional().catch(undefined),
+      unchanged: literal(true).optional().catch(undefined),
+      merged_over: MERGED_OVER_SCHEMA().optional().catch(undefined),
+      ...(hotUpdateOn() && {
+        deadline: objectSchema({
+          until: numberSchema().int().positive().max(MAX_EPOCH_MS),
+        })
+          .optional()
+          .catch(undefined),
+        deadlineDropped: literal(true).optional().catch(undefined),
+      }),
+      liveSubscription: stringSchema().optional(),
+      verifyGuide: stringSchema().optional(),
+      editsApplied: numberSchema().int().positive().optional().catch(undefined),
+      editsNotWritten: _enum(["write_failed", "not_writable", "changed_during_publish", "hard_linked"])
         .optional()
         .catch(undefined),
-      deadlineDropped: literal(true).optional().catch(undefined),
+      ...(PUBLISH_HINTS_ENABLED && {
+        kindNote: literal(true).optional().catch(undefined),
+        watchBrief: literal(true).optional().catch(undefined),
+        previewHint: literal(true).optional().catch(undefined),
+      }),
+      seededThread: stringSchema().regex(ARTIFACT_SLUG_RE).optional(),
+      ...(isArtifactRoomEnabledStub() && {
+        room: stringSchema().optional(),
+      }),
+      ...(copyFromOn() && {
+        copied: array(
+          objectSchema({
+            path: stringSchema().max(MAX_PUBLISHED_PATH_LENGTH),
+            from_url: stringSchema(),
+            from_path: stringSchema().max(MAX_PUBLISHED_PATH_LENGTH),
+          }),
+        )
+          .max(MAX_URL_SEGMENT_CHARS)
+          .optional(),
+      }),
+      ...(pathPinsOn() && filesWrittenFields()),
+      ...(artifactPinsOn() && {
+        pinned: booleanSchema().optional(),
+      }),
+      ...(COLLAB_SCHEMA_INCLUDED && {
+        kind: stringSchema().optional(),
+      }),
+      ...(COLLAB_SCHEMA_INCLUDED && {
+        liveDocCollab: stringSchema().optional(),
+      }),
+      ...(COLLAB_SCHEMA_INCLUDED && {
+        liveDocWorkingCopy: stringSchema().optional(),
+      }),
+      ...(COLLAB_SCHEMA_INCLUDED && {
+        liveFileWorkingCopies: stringSchema().max(8192).optional(),
+      }),
+      ...(COLLAB_SCHEMA_INCLUDED && {
+        ldxBuild: stringSchema().max(8192).optional(),
+      }),
+      ...(COLLAB_SCHEMA_INCLUDED && {
+        liveDocVersion: booleanSchema().optional(),
+      }),
+      ...(COLLAB_SCHEMA_INCLUDED && {
+        liveDocShim: objectSchema({
+          file: stringSchema().max(4096),
+          edits: numberSchema().int().min(0).max(1e6),
+          ontoCurrent: booleanSchema().optional(),
+          complete: booleanSchema().optional(),
+          sourceIsCopy: booleanSchema().optional(),
+          copyPath: stringSchema().max(4096).optional(),
+          livePath: stringSchema().max(512).optional(),
+        }).optional(),
+      }),
+      ...(COLLAB_SCHEMA_INCLUDED && {
+        capabilitiesDefaulted: booleanSchema().optional(),
+      }),
+      ...(artifactTypesOn() && typeInfoFields()),
     }),
-    liveSubscription: string().optional(),
-    verifyGuide: string().optional(),
-    editsApplied: E().int().positive().optional().catch(undefined),
-    editsNotWritten: _enum(["write_failed", "not_writable", "changed_during_publish", "hard_linked"])
-      .optional()
-      .catch(undefined),
-    ...(PUBLISH_HINTS_ENABLED && {
-      kindNote: literal(true).optional().catch(undefined),
-      watchBrief: literal(true).optional().catch(undefined),
-      previewHint: literal(true).optional().catch(undefined),
-    }),
-    seededThread: string().regex(ARTIFACT_SLUG_RE).optional(),
-    ...(isArtifactRoomEnabledStub() && {
-      room: string().optional(),
-    }),
-    ...(copyFromOn() && {
-      copied: array(
-        u({
-          path: string().max(MAX_PUBLISHED_PATH_LENGTH),
-          from_url: string(),
-          from_path: string().max(MAX_PUBLISHED_PATH_LENGTH),
+  );
+  MERGED_OVER_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      base: stringSchema().regex(VER_SHAPE),
+      live: stringSchema().regex(VER_SHAPE).optional().catch(undefined),
+      changed: array(
+        objectSchema({
+          path: stringSchema().max(MAX_ECHO_MANIFEST_PATH),
+          sha256: stringSchema().regex(SHA256_HEX_RE).nullable(),
         }),
       )
-        .max(MAX_URL_SEGMENT_CHARS)
-        .optional(),
+        .max(MERGED_CHANGED_KEEP)
+        .optional()
+        .catch(undefined),
+      omitted: numberSchema().int().positive().optional().catch(undefined),
     }),
-    ...(pathPinsOn() && filesWrittenFields()),
-    ...(artifactPinsOn() && {
-      pinned: M().optional(),
-    }),
-    ...(COLLAB_SCHEMA_INCLUDED && {
-      kind: string().optional(),
-    }),
-    ...(COLLAB_SCHEMA_INCLUDED && {
-      liveDocCollab: string().optional(),
-    }),
-    ...(COLLAB_SCHEMA_INCLUDED && {
-      liveDocWorkingCopy: string().optional(),
-    }),
-    ...(COLLAB_SCHEMA_INCLUDED && {
-      liveFileWorkingCopies: string().max(8192).optional(),
-    }),
-    ...(COLLAB_SCHEMA_INCLUDED && {
-      ldxBuild: string().max(8192).optional(),
-    }),
-    ...(COLLAB_SCHEMA_INCLUDED && {
-      liveDocVersion: M().optional(),
-    }),
-    ...(COLLAB_SCHEMA_INCLUDED && {
-      liveDocShim: u({
-        file: string().max(4096),
-        edits: E().int().min(0).max(1e6),
-        ontoCurrent: M().optional(),
-        complete: M().optional(),
-        sourceIsCopy: M().optional(),
-        copyPath: string().max(4096).optional(),
-        livePath: string().max(512).optional(),
-      }).optional(),
-    }),
-    ...(COLLAB_SCHEMA_INCLUDED && {
-      capabilitiesDefaulted: M().optional(),
-    }),
-    ...(artifactTypesOn() && typeInfoFields()),
-  }),
-);
-var MERGED_OVER_SCHEMA = DoctorLazy(() =>
-  u({
-    base: string().regex(VER_SHAPE),
-    live: string().regex(VER_SHAPE).optional().catch(undefined),
-    changed: array(
-      u({
-        path: string().max(MAX_ECHO_MANIFEST_PATH),
-        sha256: string().regex(SHA256_HEX_RE).nullable(),
-      }),
-    )
-      .max(MERGED_CHANGED_KEEP)
-      .optional()
-      .catch(undefined),
-    omitted: E().int().positive().optional().catch(undefined),
-  }),
-);
+  );
+});
 //@ chunk-0wdgqhcf.js:15845-16022 placement
 function filesWrittenFields() {
   return {
     files_written: array(
-      u({
-        path: string().max(MAX_PUBLISHED_PATH_LENGTH),
-        sha256: string().regex(SHA256_HEX_RE),
+      objectSchema({
+        path: stringSchema().max(MAX_PUBLISHED_PATH_LENGTH),
+        sha256: stringSchema().regex(SHA256_HEX_RE),
       }),
     )
       .max(MAX_URL_SEGMENT_CHARS)
       .optional()
       .catch(undefined),
-    files_removed: array(string().max(MAX_PUBLISHED_PATH_LENGTH))
+    files_removed: array(stringSchema().max(MAX_PUBLISHED_PATH_LENGTH))
       .max(MAX_URL_SEGMENT_CHARS)
       .optional()
       .catch(undefined),
@@ -352,22 +360,25 @@ function artifactTypesOn() {
 /**
  * artifact 类型锁的 schema：类型链接、当前发行版、最新发行版、阻止升级的信息（目标版本、原因、冲突数、路径）。
  */
-var TYPE_LOCK_SCHEMA = DoctorLazy(() =>
-  u({
-    url: string(),
-    release: string(),
-    latest: string().optional(),
-    blocked: u({
-      to: string().optional(),
-      reason: string(),
-      conflict_count: E().int().min(0).max(1e6).optional(),
-      paths: array(string().max(MAX_ECHO_MANIFEST_PATH))
-        .max(MAX_ECHO_MANIFEST_ENTRIES)
-        .optional()
-        .catch(undefined),
-    }).optional(),
-  }),
-);
+var TYPE_LOCK_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0wdgqhcf.js:16244", () => {
+  TYPE_LOCK_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      url: stringSchema(),
+      release: stringSchema(),
+      latest: stringSchema().optional(),
+      blocked: objectSchema({
+        to: stringSchema().optional(),
+        reason: stringSchema(),
+        conflict_count: numberSchema().int().min(0).max(1e6).optional(),
+        paths: array(stringSchema().max(MAX_ECHO_MANIFEST_PATH))
+          .max(MAX_ECHO_MANIFEST_ENTRIES)
+          .optional()
+          .catch(undefined),
+      }).optional(),
+    }),
+  );
+});
 //@ chunk-0wdgqhcf.js:16467-16813 placement
 /**
  * 发布参数中与 artifact 类型相关的字段 schema（类型、自有文件、类型文件、服务位置与新增文件等）。
@@ -377,81 +388,86 @@ function typeInfoFields() {
     type: TYPE_LOCK_SCHEMA()
       .optional()
       .describe("The Artifact type (and release) this Artifact was created from"),
-    own_files: array(string()).optional(),
-    type_files: array(string()).optional(),
-    served_at: string().optional().catch(undefined),
-    served_root: string().optional().catch(undefined),
-    new_files: array(string()).optional().catch(undefined),
-    unchanged_files: array(string()).optional().catch(undefined),
+    own_files: array(stringSchema()).optional(),
+    type_files: array(stringSchema()).optional(),
+    served_at: stringSchema().optional().catch(undefined),
+    served_root: stringSchema().optional().catch(undefined),
+    new_files: array(stringSchema()).optional().catch(undefined),
+    unchanged_files: array(stringSchema()).optional().catch(undefined),
   };
 }
 //@ chunk-0wdgqhcf.js:16813-17997 placement
 /**
  * 从类型创建 artifact 的结果 schema（类型、自有/类型文件、服务路径、自动打开时机、预配存储、类型说明、快速开始与设计系统信息等），以及可在存储/压缩时剥离的大字段键表。
  */
-var CREATED_FROM_TYPE_SCHEMA = DoctorLazy(() =>
-  u({
-    created_from_type: literal(true),
-    already_created: literal(true).optional(),
-    url: string(),
-    version: string(),
-    owned: M().optional().catch(undefined),
-    path: string().optional(),
-    title: string().optional(),
-    type: u({
-      url: string(),
-      release: string(),
+var CREATED_FROM_TYPE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var QUICKSTART_STRIPPABLE_KEYS;
+var CREATE_STRIPPABLE_KEYS;
+deferInit("chunk-0wdgqhcf.js:16813", () => {
+  CREATED_FROM_TYPE_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      created_from_type: literal(true),
+      already_created: literal(true).optional(),
+      url: stringSchema(),
+      version: stringSchema(),
+      owned: booleanSchema().optional().catch(undefined),
+      path: stringSchema().optional(),
+      title: stringSchema().optional(),
+      type: objectSchema({
+        url: stringSchema(),
+        release: stringSchema(),
+      }),
+      own_files: array(stringSchema()),
+      type_files: array(stringSchema()),
+      served_at: stringSchema().optional().catch(undefined),
+      served_root: stringSchema().optional().catch(undefined),
+      ...(pathPinsOn() && filesWrittenFields()),
+      auto_open: _enum(["at_create", "after_first_write"]).optional(),
+      warnings: array(stringSchema()).optional(),
+      files_error: stringSchema().optional(),
+      files_error_kind: _enum(["type_owned_path"]).optional(),
+      provisioned: objectSchema({
+        store: stringSchema(),
+        project_id: stringSchema(),
+        file_id: stringSchema().optional(),
+        node_id: stringSchema().optional(),
+      }).optional(),
+      liveSubscription: stringSchema().optional(),
+      ...(isArtifactRoomEnabledStub() && {
+        room: stringSchema().optional(),
+      }),
+      ...(artifactPinsOn() && {
+        pinned: booleanSchema().optional(),
+      }),
+      ...instructionsFields(),
+      ...initReferencesSchema(),
+      after_quickstart: objectSchema({
+        design_system: stringSchema().optional(),
+        saved_system: stringSchema().optional(),
+        saved_system_dir: stringSchema().optional(),
+        saved_pages_dir: stringSchema().optional(),
+        not_listed: booleanSchema().optional(),
+      }).optional(),
+      design_systems: TYPE_INSTANCES_RESULT_SCHEMA().shape.type_instances.optional(),
+      design_systems_note: stringSchema().optional(),
+      ...designSystemSchema(),
     }),
-    own_files: array(string()),
-    type_files: array(string()),
-    served_at: string().optional().catch(undefined),
-    served_root: string().optional().catch(undefined),
-    ...(pathPinsOn() && filesWrittenFields()),
-    auto_open: _enum(["at_create", "after_first_write"]).optional(),
-    warnings: array(string()).optional(),
-    files_error: string().optional(),
-    files_error_kind: _enum(["type_owned_path"]).optional(),
-    provisioned: u({
-      store: string(),
-      project_id: string(),
-      file_id: string().optional(),
-      node_id: string().optional(),
-    }).optional(),
-    liveSubscription: string().optional(),
-    ...(isArtifactRoomEnabledStub() && {
-      room: string().optional(),
-    }),
-    ...(artifactPinsOn() && {
-      pinned: M().optional(),
-    }),
-    ...instructionsFields(),
-    ...initReferencesSchema(),
-    after_quickstart: u({
-      design_system: string().optional(),
-      saved_system: string().optional(),
-      saved_system_dir: string().optional(),
-      saved_pages_dir: string().optional(),
-      not_listed: M().optional(),
-    }).optional(),
-    design_systems: TYPE_INSTANCES_RESULT_SCHEMA().shape.type_instances.optional(),
-    design_systems_note: string().optional(),
-    ...designSystemSchema(),
-  }),
-);
-var QUICKSTART_STRIPPABLE_KEYS = {
-  init_references: true,
-  after_quickstart: true,
-  design_systems: true,
-  design_systems_note: true,
-  design_system: true,
-};
-var CREATE_STRIPPABLE_KEYS = {
-  instructions: true,
-  instructions_chars: true,
-  instructions_clipped: true,
-  instructions_unavailable: true,
-  ...QUICKSTART_STRIPPABLE_KEYS,
-};
+  );
+  QUICKSTART_STRIPPABLE_KEYS = {
+    init_references: true,
+    after_quickstart: true,
+    design_systems: true,
+    design_systems_note: true,
+    design_system: true,
+  };
+  CREATE_STRIPPABLE_KEYS = {
+    instructions: true,
+    instructions_chars: true,
+    instructions_clipped: true,
+    instructions_unavailable: true,
+    ...QUICKSTART_STRIPPABLE_KEYS,
+  };
+});
 //@ chunk-0wdgqhcf.js:17997-18049 placement
 function artifactPinsOn() {
   return getLiveState().frozenArtifactPins ?? isArtifactPinEnabled();
@@ -459,962 +475,1015 @@ function artifactPinsOn() {
 //@ chunk-0wdgqhcf.js:18049-18222 placement
 function instructionsFields() {
   return {
-    instructions: string().optional(),
-    instructions_chars: E().int().min(0).optional(),
-    instructions_clipped: M().optional(),
-    instructions_unavailable: string().optional(),
+    instructions: stringSchema().optional(),
+    instructions_chars: numberSchema().int().min(0).optional(),
+    instructions_clipped: booleanSchema().optional(),
+    instructions_unavailable: stringSchema().optional(),
   };
 }
 //@ chunk-0wdgqhcf.js:18222-20310 placement
 /**
  * 类型目录相关的结果 schema：类型列表、类型实例列表、类型条目、快速开始（意图匹配、候选类型、设计系统、起步套件等）、类型文件读取结果及未读原因、类型详情。
  */
-var TYPES_LIST_RESULT_SCHEMA = DoctorLazy(() =>
-  u({
-    artifact_types: array(
-      u({
-        title: string(),
-        type_url: string(),
-        description: string().optional(),
-        tier: string().optional(),
-      }),
-    ),
-    query: string().optional(),
-    more: M().optional(),
-    dropped: E().int().min(0).optional(),
-    unavailable: M().optional(),
-    docs_unfillable: M().optional(),
-  }),
-);
-var TYPE_INSTANCES_RESULT_SCHEMA = DoctorLazy(() =>
-  u({
-    type_instances: u({
-      type: string().optional(),
-      type_url: string().optional(),
-      scope: string(),
-      instances: array(
-        u({
-          title: string(),
-          url: string(),
-          description: string().optional(),
-          created_at: string().optional(),
-          rel: string().optional(),
-          audience: string().optional(),
-          outsiders_may_have_written: literal(true).optional(),
-          default: string().optional(),
+var TYPES_LIST_RESULT_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var TYPE_INSTANCES_RESULT_SCHEMA;
+var TYPE_ENTRY_SCHEMA;
+var QUICKSTART_RESULT_SCHEMA;
+var TYPE_FILE_UNREAD_REASONS;
+var TYPE_FILE_RESULT_SCHEMA;
+var DESCRIBE_TYPE_RESULT_SCHEMA;
+deferInit("chunk-0wdgqhcf.js:18222", () => {
+  TYPES_LIST_RESULT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      artifact_types: array(
+        objectSchema({
+          title: stringSchema(),
+          type_url: stringSchema(),
+          description: stringSchema().optional(),
+          tier: stringSchema().optional(),
         }),
       ),
-      more: M().optional(),
-      overflow: M().optional(),
-      dropped: E().int().min(0).optional(),
-      unavailable: M().optional(),
+      query: stringSchema().optional(),
+      more: booleanSchema().optional(),
+      dropped: numberSchema().int().min(0).optional(),
+      unavailable: booleanSchema().optional(),
+      docs_unfillable: booleanSchema().optional(),
     }),
-  }),
-);
-var TYPE_ENTRY_SCHEMA = DoctorLazy(() =>
-  u({
-    title: string(),
-    type_url: string(),
-    description: string().optional(),
-    tier: string().optional(),
-  }),
-);
-var QUICKSTART_RESULT_SCHEMA = DoctorLazy(() =>
-  u({
-    quickstart: u({
-      intent: string(),
-      match: TYPE_ENTRY_SCHEMA().optional(),
-      match_of: E().optional(),
-      ask_first: M().optional(),
-      types: array(TYPE_ENTRY_SCHEMA()).optional(),
-      types_more: M().optional(),
-      dashboard_type: TYPE_ENTRY_SCHEMA().optional(),
-      motion_type: TYPE_ENTRY_SCHEMA().optional(),
-      ...false,
-      ...false,
-      types_unavailable: M().optional(),
-      types_ruled: M().optional(),
-      types_ambiguous: M().optional(),
-      types_partial: M().optional(),
-      types_note: string().optional(),
-      types_hooked: M().optional(),
-      docs_connector: M().optional(),
-      design_systems: TYPE_INSTANCES_RESULT_SCHEMA().shape.type_instances.optional(),
-      design_systems_note: string().optional(),
-      design_systems_off: M().optional(),
-      ...designSystemSchema(),
-      design_guidance: M().optional(),
-      start_kit: startKitSchema().optional(),
+  );
+  TYPE_INSTANCES_RESULT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      type_instances: objectSchema({
+        type: stringSchema().optional(),
+        type_url: stringSchema().optional(),
+        scope: stringSchema(),
+        instances: array(
+          objectSchema({
+            title: stringSchema(),
+            url: stringSchema(),
+            description: stringSchema().optional(),
+            created_at: stringSchema().optional(),
+            rel: stringSchema().optional(),
+            audience: stringSchema().optional(),
+            outsiders_may_have_written: literal(true).optional(),
+            default: stringSchema().optional(),
+          }),
+        ),
+        more: booleanSchema().optional(),
+        overflow: booleanSchema().optional(),
+        dropped: numberSchema().int().min(0).optional(),
+        unavailable: booleanSchema().optional(),
+      }),
     }),
-  }),
-);
-var TYPE_FILE_UNREAD_REASONS = [
-  "withheld",
-  "not_listed",
-  "not_text",
-  "too_large",
-  "unavailable",
-  "result_full",
-];
-var TYPE_FILE_RESULT_SCHEMA = DoctorLazy(() =>
-  u({
-    path: string(),
-    content: string().optional(),
-    chars: E().int().min(0).optional(),
-    clipped: M().optional(),
-    unread: _enum(TYPE_FILE_UNREAD_REASONS).optional(),
-    why: string().optional(),
-  }),
-);
-var DESCRIBE_TYPE_RESULT_SCHEMA = DoctorLazy(() =>
-  u({
-    artifact_type: u({
-      title: string(),
-      type_url: string(),
-      description: string().optional(),
-      tier: string().optional(),
-      release: string().optional(),
-      files: array(string()),
-      files_omitted: E().int().min(0).optional(),
-      instructions_file: M(),
-      instructions: string().optional(),
-      instructions_chars: E().int().min(0).optional(),
-      instructions_clipped: M().optional(),
-      instructions_unavailable: string().optional(),
-      capabilities: array(string()),
-      creatable: M().optional(),
+  );
+  TYPE_ENTRY_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      title: stringSchema(),
+      type_url: stringSchema(),
+      description: stringSchema().optional(),
+      tier: stringSchema().optional(),
     }),
-    read_of_type_link: literal(true).optional(),
-    type_file: TYPE_FILE_RESULT_SCHEMA().optional(),
-    type_files_read: array(TYPE_FILE_RESULT_SCHEMA()).max(MAX_SEGMENT_WITH_SLASH).optional(),
-  }),
-);
+  );
+  QUICKSTART_RESULT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      quickstart: objectSchema({
+        intent: stringSchema(),
+        match: TYPE_ENTRY_SCHEMA().optional(),
+        match_of: numberSchema().optional(),
+        ask_first: booleanSchema().optional(),
+        types: array(TYPE_ENTRY_SCHEMA()).optional(),
+        types_more: booleanSchema().optional(),
+        dashboard_type: TYPE_ENTRY_SCHEMA().optional(),
+        motion_type: TYPE_ENTRY_SCHEMA().optional(),
+        ...false,
+        ...false,
+        types_unavailable: booleanSchema().optional(),
+        types_ruled: booleanSchema().optional(),
+        types_ambiguous: booleanSchema().optional(),
+        types_partial: booleanSchema().optional(),
+        types_note: stringSchema().optional(),
+        types_hooked: booleanSchema().optional(),
+        docs_connector: booleanSchema().optional(),
+        design_systems: TYPE_INSTANCES_RESULT_SCHEMA().shape.type_instances.optional(),
+        design_systems_note: stringSchema().optional(),
+        design_systems_off: booleanSchema().optional(),
+        ...designSystemSchema(),
+        design_guidance: booleanSchema().optional(),
+        start_kit: startKitSchema().optional(),
+      }),
+    }),
+  );
+  TYPE_FILE_UNREAD_REASONS = [
+    "withheld",
+    "not_listed",
+    "not_text",
+    "too_large",
+    "unavailable",
+    "result_full",
+  ];
+  TYPE_FILE_RESULT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      path: stringSchema(),
+      content: stringSchema().optional(),
+      chars: numberSchema().int().min(0).optional(),
+      clipped: booleanSchema().optional(),
+      unread: _enum(TYPE_FILE_UNREAD_REASONS).optional(),
+      why: stringSchema().optional(),
+    }),
+  );
+  DESCRIBE_TYPE_RESULT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      artifact_type: objectSchema({
+        title: stringSchema(),
+        type_url: stringSchema(),
+        description: stringSchema().optional(),
+        tier: stringSchema().optional(),
+        release: stringSchema().optional(),
+        files: array(stringSchema()),
+        files_omitted: numberSchema().int().min(0).optional(),
+        instructions_file: booleanSchema(),
+        instructions: stringSchema().optional(),
+        instructions_chars: numberSchema().int().min(0).optional(),
+        instructions_clipped: booleanSchema().optional(),
+        instructions_unavailable: stringSchema().optional(),
+        capabilities: array(stringSchema()),
+        creatable: booleanSchema().optional(),
+      }),
+      read_of_type_link: literal(true).optional(),
+      type_file: TYPE_FILE_RESULT_SCHEMA().optional(),
+      type_files_read: array(TYPE_FILE_RESULT_SCHEMA()).max(MAX_SEGMENT_WITH_SLASH).optional(),
+    }),
+  );
+});
 //@ chunk-0wdgqhcf.js:20310-20559 placement
 function artifactListRowSchema() {
-  let e = {
-    title: string(),
-    url: string(),
-    favicon: string().optional(),
-    updatedAt: string().optional(),
+  let call = {
+    title: stringSchema(),
+    url: stringSchema(),
+    favicon: stringSchema().optional(),
+    updatedAt: stringSchema().optional(),
     rel: _enum(ARTIFACT_LIST_RELS).optional(),
     external: literal(true).optional(),
     role: _enum(SHARE_ROLES).optional(),
     outsidersMayHaveWritten: literal(true).optional(),
   };
   return artifactPinsOn()
-    ? u({
-        ...e,
-        pinned: M().optional(),
+    ? objectSchema({
+        ...call,
+        pinned: booleanSchema().optional(),
       })
-    : u(e);
+    : objectSchema(call);
 }
 //@ chunk-0wdgqhcf.js:20559-32269 placement
 /**
  * Artifact 发布来源相关的提示文本表（共享范围、持久唤醒、实时订阅停止等）
  */
-var PUBLISH_SOURCE_TEXTS = DoctorLazy(() =>
-  u({
-    artifacts: array(artifactListRowSchema()),
-    truncated: M().optional(),
-    total: E().int().min(0).optional(),
-    total_at_least: literal(true).optional(),
-    ...(artifactPinsOn() && {
-      pins_enabled: M().optional(),
-    }),
-    scope: _enum(["shared", "all"]).optional(),
-    external_listed: literal(true).optional(),
-  }),
-);
-var readSourceSchema = DoctorLazy(() =>
-  u({
-    read: u({
-      url: string(),
-      bytes: E(),
-      code: E(),
-      codeText: string(),
-      result: string(),
-      durationMs: E(),
-      title: string().max(MAX_TITLE_CHARS).optional(),
-    }),
-    owned: M().optional().catch(undefined),
-    artifactRead: u({
-      slug: string(),
-      ver: string().optional(),
-      seeded: literal(false).optional(),
-    }).optional(),
-  }),
-);
-var commentsListSourceSchema = DoctorLazy(() =>
-  u({
-    threads_dropped: M().optional(),
-    thread_filter: string().optional(),
-    scoped_dispatch: M().optional(),
-    foreign: literal(true).optional(),
-    cursor: string().optional(),
-    outside_org: M().optional(),
-    page_owns_threads: M().optional(),
-    names: record(string(), string()).optional(),
-    threads: array(
-      u({
-        id: string(),
-        created_at: string().optional(),
-        resolved: M(),
-        resolved_degraded: M().optional(),
-        resolved_by_claude: M().optional(),
-        claude_activated: M(),
-        activated_degraded: M().optional(),
-        carried: M().optional(),
-        anchor_path: string().optional(),
-        span_quote: string().optional(),
-        anchor_file: string().optional(),
-        anchor_file_degraded: M().optional(),
-        anchor_file_sha: string().optional(),
-        anchor_moved_at: string().optional(),
-        anchor_label: string().optional(),
-        anchor_detail: string().optional(),
-        anchor_snippet: string().optional(),
-        anchor_region: M().optional(),
-        region_inside: array(string()).optional(),
-        comments_degraded: M().optional(),
-        comments: array(
-          u({
-            id: string(),
-            account: string(),
-            role: string().optional(),
-            text: string(),
-            created_at: string().optional(),
-            sent_to_claude: M().optional(),
-            sent_to_claude_degraded: M().optional(),
-            sent_by_viewer: M().optional(),
-            posted_by_artifact: M().optional(),
-            awaiting_reply: M().optional(),
-            presence: string().optional(),
-            access: string().optional(),
-            outside: literal(true).optional(),
-          }),
-        ),
+var PUBLISH_SOURCE_TEXTS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var readSourceSchema;
+var commentsListSourceSchema;
+var replyCommentSourceSchema;
+var resolveCommentSourceSchema;
+var liveEditSourceSchema;
+var liveSyncSourceSchema;
+var versionedPublishSourceSchema;
+var watchSourceSchema;
+var unwatchSourceSchema;
+var resumeRepliesSourceSchema;
+var roomPeerSourceSchema;
+var watchesListSourceSchema;
+var roomSendSourceSchema;
+var dbReadSourceSchema;
+var dbProfilesSourceSchema;
+var dbWriteOpSourceSchema;
+var dbUsageSourceSchema;
+var embeddedUsageSourceSchema;
+var warningsSourceSchema;
+var writtenCommonFields;
+var dbWriteSourceSchema;
+var assetRecordSchema;
+var assetUploadSourceSchema;
+var assetUploadsSourceSchema;
+var assetListSourceSchema;
+var assetReadSourceSchema;
+var assetCopySourceSchema;
+var assetDeleteSourceSchema;
+var artifactTitleRefSchema;
+var fileListSourceSchema;
+var fileReadSourceSchema;
+var filesReadSourceSchema;
+var artifactDeleteSourceSchema;
+var pinSourceSchema;
+var verifySourceSchema;
+var previewSourceSchema;
+var emulatorPreviewSourceSchema;
+var openSourceSchema;
+var pageVersionsSourceSchema;
+var sharedSourceSchema;
+var allActionSourceSchemas;
+deferInit("chunk-0wdgqhcf.js:20559", () => {
+  PUBLISH_SOURCE_TEXTS = DoctorLazy(() =>
+    objectSchema({
+      artifacts: array(artifactListRowSchema()),
+      truncated: booleanSchema().optional(),
+      total: numberSchema().int().min(0).optional(),
+      total_at_least: literal(true).optional(),
+      ...(artifactPinsOn() && {
+        pins_enabled: booleanSchema().optional(),
       }),
-    ),
-  }),
-);
-var replyCommentSourceSchema = DoctorLazy(() =>
-  u({
-    replied: M(),
-    thread_id: string(),
-    comment_id: string().optional(),
-    replayed: M().optional(),
-    not_activated: M().optional(),
-    summon_answered: M().optional(),
-    summon_foreign: M().optional(),
-    already_answered: M().optional(),
-    page_owns_threads: M().optional(),
-    standing_reply_id: string().optional(),
-  }),
-);
-var resolveCommentSourceSchema = DoctorLazy(() =>
-  u({
-    thread_resolved: M(),
-    thread_id: string(),
-    not_activated: M().optional(),
-    not_authorized: M().optional(),
-    summon_foreign: M().optional(),
-    relayed_credential: M().optional(),
-    page_owns_threads: M().optional(),
-  }),
-);
-var liveEditSourceSchema = () =>
-  u({
-    liveEdit: u({
-      version: E().int().min(-1),
-      replayed: M(),
-      noop: M().optional(),
-      opCount: E(),
-      created: array(string()),
-      rttMs: E().optional(),
-      collab: string().optional(),
+      scope: _enum(["shared", "all"]).optional(),
+      external_listed: literal(true).optional(),
     }),
-  });
-var liveSyncSourceSchema = () =>
-  u({
-    sync: u({
-      seq: E().int().min(-1),
-      path: string().max(4096),
-      live_path: string().max(512).optional(),
-      pushed: u({
-        version: E().int().min(0),
-        touched: E().int().min(0),
-        created: array(string().max(64)).max(64),
-        createdUnlisted: E().int().min(0).optional(),
-        ontoCurrent: M(),
-        complete: M().optional(),
+  );
+  readSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      read: objectSchema({
+        url: stringSchema(),
+        bytes: numberSchema(),
+        code: numberSchema(),
+        codeText: stringSchema(),
+        result: stringSchema(),
+        durationMs: numberSchema(),
+        title: stringSchema().max(MAX_TITLE_CHARS).optional(),
+      }),
+      owned: booleanSchema().optional().catch(undefined),
+      artifactRead: objectSchema({
+        slug: stringSchema(),
+        ver: stringSchema().optional(),
+        seeded: literal(false).optional(),
       }).optional(),
-      pulled: array(string().max(4096)).max(64),
-      pulledUnlisted: E().int().min(0).optional(),
-      fileChanged: M(),
-      fileMissing: M().optional(),
-      newlyBound: M().optional(),
-      diverged: literal(true).optional(),
-      refused: string().max(2048).optional(),
-      size: string().max(MAX_SIZE_CLAUSE_CHARS).optional(),
-      ldx_build: string().max(8192).optional(),
     }),
-  });
-var versionedPublishSourceSchema = () =>
-  u({
-    versioned: u({
-      url: string(),
-      artifact_id: string().regex(ARTIFACT_SLUG_RE),
-      version: string().regex(VER_SHAPE),
-      label: versionLabelSchema().optional(),
-      warnings: array(string().max(4096)).max(64).optional(),
-    }),
-  });
-var watchSourceSchema = DoctorLazy(() =>
-  u({
-    watch: u({
-      url: string(),
-      watching: M(),
-      outcome: string(),
-      reason: string().optional(),
-      durable_skip_reason: string().optional(),
-      task_id: string().optional(),
-      since: E().optional(),
-      token_expires_at: E().optional(),
-      ...(isArtifactCommentsEnabled() && {
-        auto_reply: string().optional(),
-        can_edit: M().optional(),
-        user_turn: M().optional(),
-        named_by_user: M().optional(),
-        replies_declined: M().optional(),
-      }),
-      ...(COLLAB_SCHEMA_INCLUDED && {
-        liveDocCollab: string().optional(),
-        liveDocPath: string().optional(),
-      }),
-      rail: string().optional(),
-      trigger_id: string().optional(),
-      durable_since: string().optional(),
-      status: E().optional(),
-      detail: string().optional(),
-      note: string().optional(),
-      events: array(string()).optional(),
-    }),
-  }),
-);
-var unwatchSourceSchema = DoctorLazy(() =>
-  u({
-    unwatch: u({
-      url: string(),
-      was_watching: M(),
-    }),
-  }),
-);
-var resumeRepliesSourceSchema = DoctorLazy(() =>
-  u({
-    resume_replies: u({
-      url: string(),
-      resumed: M(),
-      outcome: string(),
-      reason: string().optional(),
-      task_id: string().optional(),
-      stop_kind: string().optional(),
-      in_place: M().optional(),
-      connecting: M().optional(),
-    }),
-  }),
-);
-var roomPeerSourceSchema = DoctorLazy(() =>
-  u({
-    url: string(),
-    connected: M(),
-    peers: E(),
-    viewers: array(
-      u({
-        peer: string(),
-        presence: looseObject({}),
-        updated_ago_ms: E(),
-      }),
-    ).optional(),
-  }),
-);
-var watchesListSourceSchema = DoctorLazy(() =>
-  u({
-    watches: array(
-      union([
-        u({
-          url: string(),
-          task_id: string(),
-          since: E(),
-          explicit: M(),
-          connected: M(),
-          connecting: M().optional(),
-          token_expires_at: E(),
-          armed_via: string().optional(),
-          ...(isArtifactCommentsEnabled() && {
-            auto_reply: string().optional(),
-            unread_plain_comments: E().optional(),
-            summons_awaiting_reply: E().optional(),
-            comments_uncounted: M().optional(),
-            comments_partially_counted: M().optional(),
-          }),
+  );
+  commentsListSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      threads_dropped: booleanSchema().optional(),
+      thread_filter: stringSchema().optional(),
+      scoped_dispatch: booleanSchema().optional(),
+      foreign: literal(true).optional(),
+      cursor: stringSchema().optional(),
+      outside_org: booleanSchema().optional(),
+      page_owns_threads: booleanSchema().optional(),
+      names: record(stringSchema(), stringSchema()).optional(),
+      threads: array(
+        objectSchema({
+          id: stringSchema(),
+          created_at: stringSchema().optional(),
+          resolved: booleanSchema(),
+          resolved_degraded: booleanSchema().optional(),
+          resolved_by_claude: booleanSchema().optional(),
+          claude_activated: booleanSchema(),
+          activated_degraded: booleanSchema().optional(),
+          carried: booleanSchema().optional(),
+          anchor_path: stringSchema().optional(),
+          span_quote: stringSchema().optional(),
+          anchor_file: stringSchema().optional(),
+          anchor_file_degraded: booleanSchema().optional(),
+          anchor_file_sha: stringSchema().optional(),
+          anchor_moved_at: stringSchema().optional(),
+          anchor_label: stringSchema().optional(),
+          anchor_detail: stringSchema().optional(),
+          anchor_snippet: stringSchema().optional(),
+          anchor_region: booleanSchema().optional(),
+          region_inside: array(stringSchema()).optional(),
+          comments_degraded: booleanSchema().optional(),
+          comments: array(
+            objectSchema({
+              id: stringSchema(),
+              account: stringSchema(),
+              role: stringSchema().optional(),
+              text: stringSchema(),
+              created_at: stringSchema().optional(),
+              sent_to_claude: booleanSchema().optional(),
+              sent_to_claude_degraded: booleanSchema().optional(),
+              sent_by_viewer: booleanSchema().optional(),
+              posted_by_artifact: booleanSchema().optional(),
+              awaiting_reply: booleanSchema().optional(),
+              presence: stringSchema().optional(),
+              access: stringSchema().optional(),
+              outside: literal(true).optional(),
+            }),
+          ),
         }),
-        u({
-          url: string(),
-          rail: literal("durable_wake"),
-          trigger_id: string(),
-          since: string(),
-          events: array(string()).optional(),
-          restored: M().optional(),
+      ),
+    }),
+  );
+  replyCommentSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      replied: booleanSchema(),
+      thread_id: stringSchema(),
+      comment_id: stringSchema().optional(),
+      replayed: booleanSchema().optional(),
+      not_activated: booleanSchema().optional(),
+      summon_answered: booleanSchema().optional(),
+      summon_foreign: booleanSchema().optional(),
+      already_answered: booleanSchema().optional(),
+      page_owns_threads: booleanSchema().optional(),
+      standing_reply_id: stringSchema().optional(),
+    }),
+  );
+  resolveCommentSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      thread_resolved: booleanSchema(),
+      thread_id: stringSchema(),
+      not_activated: booleanSchema().optional(),
+      not_authorized: booleanSchema().optional(),
+      summon_foreign: booleanSchema().optional(),
+      relayed_credential: booleanSchema().optional(),
+      page_owns_threads: booleanSchema().optional(),
+    }),
+  );
+  liveEditSourceSchema = () =>
+    objectSchema({
+      liveEdit: objectSchema({
+        version: numberSchema().int().min(-1),
+        replayed: booleanSchema(),
+        noop: booleanSchema().optional(),
+        opCount: numberSchema(),
+        created: array(stringSchema()),
+        rttMs: numberSchema().optional(),
+        collab: stringSchema().optional(),
+      }),
+    });
+  liveSyncSourceSchema = () =>
+    objectSchema({
+      sync: objectSchema({
+        seq: numberSchema().int().min(-1),
+        path: stringSchema().max(4096),
+        live_path: stringSchema().max(512).optional(),
+        pushed: objectSchema({
+          version: numberSchema().int().min(0),
+          touched: numberSchema().int().min(0),
+          created: array(stringSchema().max(64)).max(64),
+          createdUnlisted: numberSchema().int().min(0).optional(),
+          ontoCurrent: booleanSchema(),
+          complete: booleanSchema().optional(),
+        }).optional(),
+        pulled: array(stringSchema().max(4096)).max(64),
+        pulledUnlisted: numberSchema().int().min(0).optional(),
+        fileChanged: booleanSchema(),
+        fileMissing: booleanSchema().optional(),
+        newlyBound: booleanSchema().optional(),
+        diverged: literal(true).optional(),
+        refused: stringSchema().max(2048).optional(),
+        size: stringSchema().max(MAX_SIZE_CLAUSE_CHARS).optional(),
+        ldx_build: stringSchema().max(8192).optional(),
+      }),
+    });
+  versionedPublishSourceSchema = () =>
+    objectSchema({
+      versioned: objectSchema({
+        url: stringSchema(),
+        artifact_id: stringSchema().regex(ARTIFACT_SLUG_RE),
+        version: stringSchema().regex(VER_SHAPE),
+        label: versionLabelSchema().optional(),
+        warnings: array(stringSchema().max(4096)).max(64).optional(),
+      }),
+    });
+  watchSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      watch: objectSchema({
+        url: stringSchema(),
+        watching: booleanSchema(),
+        outcome: stringSchema(),
+        reason: stringSchema().optional(),
+        durable_skip_reason: stringSchema().optional(),
+        task_id: stringSchema().optional(),
+        since: numberSchema().optional(),
+        token_expires_at: numberSchema().optional(),
+        ...(isArtifactCommentsEnabled() && {
+          auto_reply: stringSchema().optional(),
+          can_edit: booleanSchema().optional(),
+          user_turn: booleanSchema().optional(),
+          named_by_user: booleanSchema().optional(),
+          replies_declined: booleanSchema().optional(),
         }),
-        u({
-          url: string(),
-          rail: literal("live_stopped"),
-          since: E().optional(),
-          explicit: M().optional(),
-          armed_via: string().optional(),
-          ...(isArtifactCommentsEnabled() && {
-            auto_reply: string(),
+        ...(COLLAB_SCHEMA_INCLUDED && {
+          liveDocCollab: stringSchema().optional(),
+          liveDocPath: stringSchema().optional(),
+        }),
+        rail: stringSchema().optional(),
+        trigger_id: stringSchema().optional(),
+        durable_since: stringSchema().optional(),
+        status: numberSchema().optional(),
+        detail: stringSchema().optional(),
+        note: stringSchema().optional(),
+        events: array(stringSchema()).optional(),
+      }),
+    }),
+  );
+  unwatchSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      unwatch: objectSchema({
+        url: stringSchema(),
+        was_watching: booleanSchema(),
+      }),
+    }),
+  );
+  resumeRepliesSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      resume_replies: objectSchema({
+        url: stringSchema(),
+        resumed: booleanSchema(),
+        outcome: stringSchema(),
+        reason: stringSchema().optional(),
+        task_id: stringSchema().optional(),
+        stop_kind: stringSchema().optional(),
+        in_place: booleanSchema().optional(),
+        connecting: booleanSchema().optional(),
+      }),
+    }),
+  );
+  roomPeerSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      url: stringSchema(),
+      connected: booleanSchema(),
+      peers: numberSchema(),
+      viewers: array(
+        objectSchema({
+          peer: stringSchema(),
+          presence: looseObject({}),
+          updated_ago_ms: numberSchema(),
+        }),
+      ).optional(),
+    }),
+  );
+  watchesListSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      watches: array(
+        union([
+          objectSchema({
+            url: stringSchema(),
+            task_id: stringSchema(),
+            since: numberSchema(),
+            explicit: booleanSchema(),
+            connected: booleanSchema(),
+            connecting: booleanSchema().optional(),
+            token_expires_at: numberSchema(),
+            armed_via: stringSchema().optional(),
+            ...(isArtifactCommentsEnabled() && {
+              auto_reply: stringSchema().optional(),
+              unread_plain_comments: numberSchema().optional(),
+              summons_awaiting_reply: numberSchema().optional(),
+              comments_uncounted: booleanSchema().optional(),
+              comments_partially_counted: booleanSchema().optional(),
+            }),
           }),
-          stop_kind: string(),
+          objectSchema({
+            url: stringSchema(),
+            rail: literal("durable_wake"),
+            trigger_id: stringSchema(),
+            since: stringSchema(),
+            events: array(stringSchema()).optional(),
+            restored: booleanSchema().optional(),
+          }),
+          objectSchema({
+            url: stringSchema(),
+            rail: literal("live_stopped"),
+            since: numberSchema().optional(),
+            explicit: booleanSchema().optional(),
+            armed_via: stringSchema().optional(),
+            ...(isArtifactCommentsEnabled() && {
+              auto_reply: stringSchema(),
+            }),
+            stop_kind: stringSchema(),
+          }),
+        ]),
+      ),
+      filter_url: stringSchema().optional(),
+      arms: array(
+        objectSchema({
+          url: stringSchema(),
+          rail: stringSchema().optional(),
+          state: stringSchema(),
+          reconnect: booleanSchema().optional(),
+          failures: numberSchema().optional(),
+          max_failures: numberSchema().optional(),
+          next_in_s: numberSchema().optional(),
+          last_failure: stringSchema().optional(),
+          reason: stringSchema().optional(),
+          detail: stringSchema().optional(),
+          server_message: stringSchema().optional(),
+          at: numberSchema().optional(),
+        }),
+      ).optional(),
+      ...(isArtifactRoomEnabledStub() && {
+        rooms: array(roomPeerSourceSchema()).optional(),
+      }),
+    }),
+  );
+  roomSendSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      room_send: objectSchema({
+        url: stringSchema(),
+        topic: stringSchema(),
+        delivered: booleanSchema(),
+        peers: numberSchema().optional(),
+        reason: stringSchema().optional(),
+      }),
+    }),
+  );
+  dbReadSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      db_read: objectSchema({
+        op: stringSchema(),
+        collection: stringSchema(),
+        doc_id: stringSchema().optional(),
+        found: booleanSchema().optional(),
+        as_level: stringSchema().max(16).optional(),
+        as_level_confirmed: booleanSchema().optional(),
+        docs: array(
+          objectSchema({
+            id: stringSchema(),
+            data: record(stringSchema(), unknown()),
+            version: numberSchema().int().optional(),
+            updatedAt: stringSchema().optional(),
+          }),
+        ).optional(),
+        next_cursor: stringSchema().optional(),
+        me_id: stringSchema().max(200).optional(),
+        ordered_by: objectSchema({
+          field: stringSchema(),
+          limit: numberSchema().int().positive(),
+        }).optional(),
+        foreign: literal(true).optional(),
+        outside_writer: literal(true).optional(),
+        saved: objectSchema({
+          dir: stringSchema().max(8192),
+          files: array(
+            objectSchema({
+              id: stringSchema(),
+              path: stringSchema().max(8192),
+              bytes: numberSchema().int().nonnegative(),
+              compact: booleanSchema().optional(),
+              version: numberSchema().int().optional(),
+              updatedAt: stringSchema().optional(),
+            }),
+          ),
+          skipped: array(
+            objectSchema({
+              id: stringSchema(),
+              reason: stringSchema(),
+            }),
+          ),
+        }).optional(),
+      }),
+    }),
+  );
+  dbProfilesSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      db_profiles: objectSchema({
+        ids: array(stringSchema()),
+        profiles: record(
+          stringSchema(),
+          objectSchema({
+            name: stringSchema().optional(),
+            guest: literal(true).optional(),
+          }),
+        ).optional(),
+        unavailable: literal(true).optional(),
+      }),
+    }),
+  );
+  dbWriteOpSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      op: stringSchema(),
+      collection: stringSchema(),
+      doc_id: stringSchema(),
+      field: stringSchema().max(MAX_EDITS_PER_CALL).optional(),
+      replace_all: literal(true).optional(),
+      version: numberSchema().int().optional(),
+    }),
+  );
+  dbUsageSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      documents: numberSchema().int().nonnegative(),
+      max_documents: numberSchema().int().positive(),
+    })
+      .optional()
+      .catch(undefined),
+  );
+  embeddedUsageSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      strings: numberSchema().int().positive(),
+      kb: numberSchema().int().positive(),
+    })
+      .optional()
+      .catch(undefined),
+  );
+  warningsSourceSchema = DoctorLazy(() => array(stringSchema()).optional().catch(undefined));
+  writtenCommonFields = {
+    written: objectSchema({
+      url: stringSchema(),
+    })
+      .optional()
+      .catch(undefined),
+    owned: booleanSchema().optional().catch(undefined),
+  };
+  dbWriteSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      ...writtenCommonFields,
+      as_level: stringSchema().max(16).optional(),
+      as_level_confirmed: booleanSchema().optional(),
+      db_write: union([
+        dbWriteOpSourceSchema().extend({
+          committed: booleanSchema(),
+          usage: dbUsageSourceSchema(),
+          embedded: embeddedUsageSourceSchema(),
+          warnings: warningsSourceSchema(),
+        }),
+        objectSchema({
+          op: literal(DB_BATCH_OP),
+          committed: booleanSchema(),
+          results: array(dbWriteOpSourceSchema()),
+          usage: dbUsageSourceSchema(),
+          embedded: embeddedUsageSourceSchema(),
+          warnings: warningsSourceSchema(),
+          fallback: literal("sequential").optional(),
         }),
       ]),
-    ),
-    filter_url: string().optional(),
-    arms: array(
-      u({
-        url: string(),
-        rail: string().optional(),
-        state: string(),
-        reconnect: M().optional(),
-        failures: E().optional(),
-        max_failures: E().optional(),
-        next_in_s: E().optional(),
-        last_failure: string().optional(),
-        reason: string().optional(),
-        detail: string().optional(),
-        server_message: string().optional(),
-        at: E().optional(),
+    }),
+  );
+  assetRecordSchema = {
+    id: stringSchema().regex(ASSET_ID_RE),
+    url: stringSchema().regex(ASSET_BLOB_URL_RE),
+    size_bytes: numberSchema().int().positive().max(MAX_FRAME_RESPONSE_BYTES),
+    content_type: stringSchema().regex(CONTENT_TYPE_RE).max(100),
+    sha256: stringSchema().regex(SHA256_HEX_RE).optional(),
+    file_name: stringSchema().max(1024),
+  };
+  assetUploadSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      ...writtenCommonFields,
+      asset_upload: objectSchema(assetRecordSchema),
+    }),
+  );
+  assetUploadsSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      ...writtenCommonFields,
+      asset_uploads: objectSchema({
+        url: stringSchema(),
+        results: array(
+          union([
+            objectSchema({
+              file_path: stringSchema(),
+              status: literal("uploaded"),
+              ...assetRecordSchema,
+            }),
+            objectSchema({
+              file_path: stringSchema(),
+              status: _enum(["failed", "not_attempted"]),
+              reason: stringSchema(),
+              message: stringSchema(),
+              may_be_stored: literal(true).optional(),
+            }),
+          ]),
+        )
+          .min(1)
+          .max(MAX_UPLOAD_FILE_PATHS),
       }),
-    ).optional(),
-    ...(isArtifactRoomEnabledStub() && {
-      rooms: array(roomPeerSourceSchema()).optional(),
     }),
-  }),
-);
-var roomSendSourceSchema = DoctorLazy(() =>
-  u({
-    room_send: u({
-      url: string(),
-      topic: string(),
-      delivered: M(),
-      peers: E().optional(),
-      reason: string().optional(),
-    }),
-  }),
-);
-var dbReadSourceSchema = DoctorLazy(() =>
-  u({
-    db_read: u({
-      op: string(),
-      collection: string(),
-      doc_id: string().optional(),
-      found: M().optional(),
-      as_level: string().max(16).optional(),
-      as_level_confirmed: M().optional(),
-      docs: array(
-        u({
-          id: string(),
-          data: record(string(), unknown()),
-          version: E().int().optional(),
-          updatedAt: string().optional(),
+  );
+  assetListSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      asset_list: objectSchema({
+        url: stringSchema(),
+        assets: array(
+          objectSchema({
+            id: stringSchema().regex(ASSET_ID_RE),
+            url: stringSchema().regex(ASSET_BLOB_URL_RE),
+            content_type: stringSchema().regex(CONTENT_TYPE_RE).max(MAX_CONTENT_TYPE_LENGTH),
+            size_bytes: numberSchema().int().nonnegative().max(MAX_FRAME_RESPONSE_BYTES),
+            sha256: stringSchema().regex(SHA256_HEX_RE).optional(),
+            created_at: stringSchema().max(MAX_CONTENT_TYPE_LENGTH),
+          }),
+        ).max(1000),
+        usage: objectSchema({
+          files: numberSchema().int().nonnegative(),
+          bytes: numberSchema().int().nonnegative(),
+          max_files: numberSchema().int().nonnegative(),
+          max_bytes: numberSchema().int().nonnegative(),
         }),
-      ).optional(),
-      next_cursor: string().optional(),
-      me_id: string().max(200).optional(),
-      ordered_by: u({
-        field: string(),
-        limit: E().int().positive(),
-      }).optional(),
-      foreign: literal(true).optional(),
-      outside_writer: literal(true).optional(),
-      saved: u({
-        dir: string().max(8192),
+        next: stringSchema().regex(ASSET_CURSOR_RE).optional(),
+        cowritten: literal(true).optional(),
+        outside_writer: literal(true).optional(),
+      }),
+    }),
+  );
+  assetReadSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      asset_read: objectSchema({
+        id: stringSchema().regex(ASSET_ID_RE),
+        path: stringSchema().max(8192),
+        size_bytes: numberSchema().int().positive().max(MAX_FRAME_RESPONSE_BYTES),
+        content_type: stringSchema().regex(CONTENT_TYPE_RE).max(100),
+        sha256: stringSchema().regex(SHA256_HEX_RE),
+        cowritten: literal(true).optional(),
+        outside_writer: literal(true).optional(),
+        public_read: literal(true).optional(),
+        foreign: literal(true).optional(),
+      }),
+    }),
+  );
+  assetCopySourceSchema = DoctorLazy(() =>
+    objectSchema({
+      asset_copy: objectSchema({
+        url: stringSchema(),
+        from_url: stringSchema(),
+        assets: array(
+          objectSchema({
+            from_id: stringSchema().regex(ASSET_ID_RE),
+            id: stringSchema().regex(ASSET_ID_RE),
+            url: stringSchema().regex(ASSET_BLOB_URL_RE),
+            size_bytes: numberSchema().int().positive().max(MAX_FRAME_RESPONSE_BYTES),
+            content_type: stringSchema().regex(CONTENT_TYPE_RE).max(100),
+            sha256: stringSchema().regex(SHA256_HEX_RE).optional(),
+          }),
+        ).max(MAX_COPY_ASSET_IDS),
+      }),
+    }),
+  );
+  assetDeleteSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      ...writtenCommonFields,
+      asset_delete: objectSchema({
+        id: stringSchema().regex(ASSET_ID_RE),
+        deleted: booleanSchema(),
+      }),
+    }),
+  );
+  artifactTitleRefSchema = DoctorLazy(() =>
+    objectSchema({
+      url: stringSchema(),
+      title: stringSchema().max(256).optional(),
+    }),
+  );
+  fileListSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      file_list: objectSchema({
+        url: stringSchema(),
+        ver: stringSchema().regex(SAFE_ERROR_CODE_RE),
         files: array(
-          u({
-            id: string(),
-            path: string().max(8192),
-            bytes: E().int().nonnegative(),
-            compact: M().optional(),
-            version: E().int().optional(),
-            updatedAt: string().optional(),
+          objectSchema({
+            path: stringSchema().max(MAX_PUBLISHED_PATH_LENGTH),
+            content_type: stringSchema().regex(CONTENT_TYPE_RE),
+            size_bytes: numberSchema().int().nonnegative().max(MAX_FILE_SIZE),
+            sha256: stringSchema().regex(SHA256_HEX_RE),
+            live: literal(true).optional(),
+          }),
+        ).max(MAX_LISTED_FILES),
+        cowritten: literal(true).optional(),
+        outside_writer: literal(true).optional(),
+        public_read: literal(true).optional(),
+        narrowed: literal(true).optional(),
+        single_page: literal(true).optional(),
+        from_type: literal(true).optional(),
+        type: artifactTitleRefSchema().optional(),
+        foreign: literal(true).optional(),
+        stored: objectSchema({
+          contract: stringSchema().max(64),
+          capabilities: record(stringSchema().max(64), unknown()).optional(),
+        })
+          .optional()
+          .catch(undefined),
+      }),
+    }),
+  );
+  fileReadSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      file_read: objectSchema({
+        url: stringSchema().optional(),
+        title: stringSchema().max(MAX_TITLE_CHARS).optional(),
+        path: stringSchema().max(MAX_PUBLISHED_PATH_LENGTH),
+        saved_to: stringSchema().max(8192),
+        ver: stringSchema().regex(SAFE_ERROR_CODE_RE),
+        size_bytes: numberSchema().int().nonnegative().max(MAX_MOUNT_FILE_BYTES),
+        content_type: stringSchema().regex(CONTENT_TYPE_RE),
+        sha256: stringSchema().regex(SHA256_HEX_RE),
+        content: stringSchema().max(ARTIFACT_FILE_INLINE_RESULT_CAP).optional(),
+        content_scrubbed: literal(true).optional(),
+        as_served: literal(true).optional(),
+        source: literal(true).optional(),
+        live: literal(true).optional(),
+        live_verified: literal(true).optional(),
+        seq: numberSchema().int().nonnegative().optional(),
+        ...(COLLAB_SCHEMA_INCLUDED && {
+          working_copy: _enum(["bound", "left"]).optional(),
+          note: stringSchema().max(8192).optional(),
+        }),
+        cowritten: literal(true).optional(),
+        outside_writer: literal(true).optional(),
+        public_read: literal(true).optional(),
+        from_type: literal(true).optional(),
+        type: artifactTitleRefSchema().optional(),
+        foreign: literal(true).optional(),
+      }),
+    }),
+  );
+  filesReadSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      files_read: objectSchema({
+        url: stringSchema(),
+        title: stringSchema().max(MAX_TITLE_CHARS).optional(),
+        ver: stringSchema().regex(SAFE_ERROR_CODE_RE),
+        saved_dir: stringSchema().max(8192),
+        files: array(
+          union([
+            objectSchema({
+              path: stringSchema().max(MAX_PUBLISHED_PATH_LENGTH),
+              saved_to: stringSchema().max(8192),
+              size_bytes: numberSchema().int().nonnegative().max(MAX_MOUNT_FILE_BYTES),
+              content_type: stringSchema().regex(CONTENT_TYPE_RE),
+              sha256: stringSchema().regex(SHA256_HEX_RE),
+              content: stringSchema().max(ARTIFACT_FILE_INLINE_RESULT_CAP).optional(),
+              content_scrubbed: literal(true).optional(),
+              as_served: literal(true).optional(),
+              source: literal(true).optional(),
+              foreign: literal(true).optional(),
+            }),
+            objectSchema({
+              path: stringSchema().max(MAX_PUBLISHED_PATH_LENGTH),
+              error: stringSchema().max(8192),
+            }),
+          ]),
+        ).max(MAX_SEGMENT_WITH_SLASH),
+        cowritten: literal(true).optional(),
+        outside_writer: literal(true).optional(),
+        public_read: literal(true).optional(),
+        from_type: literal(true).optional(),
+        type: artifactTitleRefSchema().optional(),
+        foreign: literal(true).optional(),
+      }),
+    }),
+  );
+  artifactDeleteSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      artifact_delete: objectSchema({
+        url: stringSchema(),
+        deleted: literal(true),
+        already_gone: booleanSchema().optional(),
+      }),
+    }),
+  );
+  pinSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      pin: objectSchema({
+        action: _enum(["pin", "unpin"]),
+        url: stringSchema(),
+        pinned: booleanSchema(),
+        title: stringSchema().optional(),
+      }),
+    }),
+  );
+  verifySourceSchema = DoctorLazy(() =>
+    objectSchema({
+      verify: objectSchema({
+        url: stringSchema(),
+        ver: stringSchema(),
+        state: stringSchema(),
+        entries: array(unknown()),
+        truncated: booleanSchema().optional(),
+        dropped: numberSchema().int().optional(),
+        waited: booleanSchema().optional(),
+        foreign: literal(true).optional(),
+      }),
+    }),
+  );
+  previewSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      preview: objectSchema({
+        file: stringSchema().max(4096),
+        bytes: numberSchema().int(),
+        widths: array(numberSchema()),
+        themes: array(stringSchema().max(32)),
+        shots: array(
+          objectSchema({
+            width: numberSchema(),
+            theme: stringSchema().max(32),
+            height: numberSchema().optional(),
+            pageHeight: numberSchema().optional(),
+            path: stringSchema().optional(),
+            base64: stringSchema().optional(),
+            error: stringSchema().optional(),
           }),
         ),
-        skipped: array(
-          u({
-            id: string(),
-            reason: string(),
+        issues: array(
+          objectSchema({
+            kind: stringSchema(),
+            text: stringSchema(),
           }),
         ),
-      }).optional(),
-    }),
-  }),
-);
-var dbProfilesSourceSchema = DoctorLazy(() =>
-  u({
-    db_profiles: u({
-      ids: array(string()),
-      profiles: record(
-        string(),
-        u({
-          name: string().optional(),
-          guest: literal(true).optional(),
-        }),
-      ).optional(),
-      unavailable: literal(true).optional(),
-    }),
-  }),
-);
-var dbWriteOpSourceSchema = DoctorLazy(() =>
-  u({
-    op: string(),
-    collection: string(),
-    doc_id: string(),
-    field: string().max(MAX_EDITS_PER_CALL).optional(),
-    replace_all: literal(true).optional(),
-    version: E().int().optional(),
-  }),
-);
-var dbUsageSourceSchema = DoctorLazy(() =>
-  u({
-    documents: E().int().nonnegative(),
-    max_documents: E().int().positive(),
-  })
-    .optional()
-    .catch(undefined),
-);
-var embeddedUsageSourceSchema = DoctorLazy(() =>
-  u({
-    strings: E().int().positive(),
-    kb: E().int().positive(),
-  })
-    .optional()
-    .catch(undefined),
-);
-var warningsSourceSchema = DoctorLazy(() => array(string()).optional().catch(undefined));
-var writtenCommonFields = {
-  written: u({
-    url: string(),
-  })
-    .optional()
-    .catch(undefined),
-  owned: M().optional().catch(undefined),
-};
-var dbWriteSourceSchema = DoctorLazy(() =>
-  u({
-    ...writtenCommonFields,
-    as_level: string().max(16).optional(),
-    as_level_confirmed: M().optional(),
-    db_write: union([
-      dbWriteOpSourceSchema().extend({
-        committed: M(),
-        usage: dbUsageSourceSchema(),
-        embedded: embeddedUsageSourceSchema(),
-        warnings: warningsSourceSchema(),
+        issuesDropped: numberSchema().int().optional(),
+        renderError: stringSchema().optional(),
       }),
-      u({
-        op: literal(DB_BATCH_OP),
-        committed: M(),
-        results: array(dbWriteOpSourceSchema()),
-        usage: dbUsageSourceSchema(),
-        embedded: embeddedUsageSourceSchema(),
-        warnings: warningsSourceSchema(),
-        fallback: literal("sequential").optional(),
-      }),
-    ]),
-  }),
-);
-var assetRecordSchema = {
-  id: string().regex(ASSET_ID_RE),
-  url: string().regex(ASSET_BLOB_URL_RE),
-  size_bytes: E().int().positive().max(MAX_FRAME_RESPONSE_BYTES),
-  content_type: string().regex(CONTENT_TYPE_RE).max(100),
-  sha256: string().regex(SHA256_HEX_RE).optional(),
-  file_name: string().max(1024),
-};
-var assetUploadSourceSchema = DoctorLazy(() =>
-  u({
-    ...writtenCommonFields,
-    asset_upload: u(assetRecordSchema),
-  }),
-);
-var assetUploadsSourceSchema = DoctorLazy(() =>
-  u({
-    ...writtenCommonFields,
-    asset_uploads: u({
-      url: string(),
-      results: array(
-        union([
-          u({
-            file_path: string(),
-            status: literal("uploaded"),
-            ...assetRecordSchema,
-          }),
-          u({
-            file_path: string(),
-            status: _enum(["failed", "not_attempted"]),
-            reason: string(),
-            message: string(),
-            may_be_stored: literal(true).optional(),
-          }),
-        ]),
-      )
-        .min(1)
-        .max(MAX_UPLOAD_FILE_PATHS),
     }),
-  }),
-);
-var assetListSourceSchema = DoctorLazy(() =>
-  u({
-    asset_list: u({
-      url: string(),
-      assets: array(
-        u({
-          id: string().regex(ASSET_ID_RE),
-          url: string().regex(ASSET_BLOB_URL_RE),
-          content_type: string().regex(CONTENT_TYPE_RE).max(MAX_CONTENT_TYPE_LENGTH),
-          size_bytes: E().int().nonnegative().max(MAX_FRAME_RESPONSE_BYTES),
-          sha256: string().regex(SHA256_HEX_RE).optional(),
-          created_at: string().max(MAX_CONTENT_TYPE_LENGTH),
-        }),
-      ).max(1000),
-      usage: u({
-        files: E().int().nonnegative(),
-        bytes: E().int().nonnegative(),
-        max_files: E().int().nonnegative(),
-        max_bytes: E().int().nonnegative(),
-      }),
-      next: string().regex(ASSET_CURSOR_RE).optional(),
-      cowritten: literal(true).optional(),
-      outside_writer: literal(true).optional(),
-    }),
-  }),
-);
-var assetReadSourceSchema = DoctorLazy(() =>
-  u({
-    asset_read: u({
-      id: string().regex(ASSET_ID_RE),
-      path: string().max(8192),
-      size_bytes: E().int().positive().max(MAX_FRAME_RESPONSE_BYTES),
-      content_type: string().regex(CONTENT_TYPE_RE).max(100),
-      sha256: string().regex(SHA256_HEX_RE),
-      cowritten: literal(true).optional(),
-      outside_writer: literal(true).optional(),
-      public_read: literal(true).optional(),
-      foreign: literal(true).optional(),
-    }),
-  }),
-);
-var assetCopySourceSchema = DoctorLazy(() =>
-  u({
-    asset_copy: u({
-      url: string(),
-      from_url: string(),
-      assets: array(
-        u({
-          from_id: string().regex(ASSET_ID_RE),
-          id: string().regex(ASSET_ID_RE),
-          url: string().regex(ASSET_BLOB_URL_RE),
-          size_bytes: E().int().positive().max(MAX_FRAME_RESPONSE_BYTES),
-          content_type: string().regex(CONTENT_TYPE_RE).max(100),
-          sha256: string().regex(SHA256_HEX_RE).optional(),
-        }),
-      ).max(MAX_COPY_ASSET_IDS),
-    }),
-  }),
-);
-var assetDeleteSourceSchema = DoctorLazy(() =>
-  u({
-    ...writtenCommonFields,
-    asset_delete: u({
-      id: string().regex(ASSET_ID_RE),
-      deleted: M(),
-    }),
-  }),
-);
-var artifactTitleRefSchema = DoctorLazy(() =>
-  u({
-    url: string(),
-    title: string().max(256).optional(),
-  }),
-);
-var fileListSourceSchema = DoctorLazy(() =>
-  u({
-    file_list: u({
-      url: string(),
-      ver: string().regex(SAFE_ERROR_CODE_RE),
-      files: array(
-        u({
-          path: string().max(MAX_PUBLISHED_PATH_LENGTH),
-          content_type: string().regex(CONTENT_TYPE_RE),
-          size_bytes: E().int().nonnegative().max(MAX_FILE_SIZE),
-          sha256: string().regex(SHA256_HEX_RE),
-          live: literal(true).optional(),
-        }),
-      ).max(MAX_LISTED_FILES),
-      cowritten: literal(true).optional(),
-      outside_writer: literal(true).optional(),
-      public_read: literal(true).optional(),
-      narrowed: literal(true).optional(),
-      single_page: literal(true).optional(),
-      from_type: literal(true).optional(),
-      type: artifactTitleRefSchema().optional(),
-      foreign: literal(true).optional(),
-      stored: u({
-        contract: string().max(64),
-        capabilities: record(string().max(64), unknown()).optional(),
-      })
-        .optional()
-        .catch(undefined),
-    }),
-  }),
-);
-var fileReadSourceSchema = DoctorLazy(() =>
-  u({
-    file_read: u({
-      url: string().optional(),
-      title: string().max(MAX_TITLE_CHARS).optional(),
-      path: string().max(MAX_PUBLISHED_PATH_LENGTH),
-      saved_to: string().max(8192),
-      ver: string().regex(SAFE_ERROR_CODE_RE),
-      size_bytes: E().int().nonnegative().max(MAX_MOUNT_FILE_BYTES),
-      content_type: string().regex(CONTENT_TYPE_RE),
-      sha256: string().regex(SHA256_HEX_RE),
-      content: string().max(ARTIFACT_FILE_INLINE_RESULT_CAP).optional(),
-      content_scrubbed: literal(true).optional(),
-      as_served: literal(true).optional(),
-      source: literal(true).optional(),
-      live: literal(true).optional(),
-      live_verified: literal(true).optional(),
-      seq: E().int().nonnegative().optional(),
-      ...(COLLAB_SCHEMA_INCLUDED && {
-        working_copy: _enum(["bound", "left"]).optional(),
-        note: string().max(8192).optional(),
-      }),
-      cowritten: literal(true).optional(),
-      outside_writer: literal(true).optional(),
-      public_read: literal(true).optional(),
-      from_type: literal(true).optional(),
-      type: artifactTitleRefSchema().optional(),
-      foreign: literal(true).optional(),
-    }),
-  }),
-);
-var filesReadSourceSchema = DoctorLazy(() =>
-  u({
-    files_read: u({
-      url: string(),
-      title: string().max(MAX_TITLE_CHARS).optional(),
-      ver: string().regex(SAFE_ERROR_CODE_RE),
-      saved_dir: string().max(8192),
-      files: array(
-        union([
-          u({
-            path: string().max(MAX_PUBLISHED_PATH_LENGTH),
-            saved_to: string().max(8192),
-            size_bytes: E().int().nonnegative().max(MAX_MOUNT_FILE_BYTES),
-            content_type: string().regex(CONTENT_TYPE_RE),
-            sha256: string().regex(SHA256_HEX_RE),
-            content: string().max(ARTIFACT_FILE_INLINE_RESULT_CAP).optional(),
-            content_scrubbed: literal(true).optional(),
-            as_served: literal(true).optional(),
-            source: literal(true).optional(),
-            foreign: literal(true).optional(),
-          }),
-          u({
-            path: string().max(MAX_PUBLISHED_PATH_LENGTH),
-            error: string().max(8192),
-          }),
-        ]),
-      ).max(MAX_SEGMENT_WITH_SLASH),
-      cowritten: literal(true).optional(),
-      outside_writer: literal(true).optional(),
-      public_read: literal(true).optional(),
-      from_type: literal(true).optional(),
-      type: artifactTitleRefSchema().optional(),
-      foreign: literal(true).optional(),
-    }),
-  }),
-);
-var artifactDeleteSourceSchema = DoctorLazy(() =>
-  u({
-    artifact_delete: u({
-      url: string(),
-      deleted: literal(true),
-      already_gone: M().optional(),
-    }),
-  }),
-);
-var pinSourceSchema = DoctorLazy(() =>
-  u({
-    pin: u({
-      action: _enum(["pin", "unpin"]),
-      url: string(),
-      pinned: M(),
-      title: string().optional(),
-    }),
-  }),
-);
-var verifySourceSchema = DoctorLazy(() =>
-  u({
-    verify: u({
-      url: string(),
-      ver: string(),
-      state: string(),
-      entries: array(unknown()),
-      truncated: M().optional(),
-      dropped: E().int().optional(),
-      waited: M().optional(),
-      foreign: literal(true).optional(),
-    }),
-  }),
-);
-var previewSourceSchema = DoctorLazy(() =>
-  u({
-    preview: u({
-      file: string().max(4096),
-      bytes: E().int(),
-      widths: array(E()),
-      themes: array(string().max(32)),
-      shots: array(
-        u({
-          width: E(),
-          theme: string().max(32),
-          height: E().optional(),
-          pageHeight: E().optional(),
-          path: string().optional(),
-          base64: string().optional(),
-          error: string().optional(),
-        }),
-      ),
-      issues: array(
-        u({
-          kind: string(),
-          text: string(),
-        }),
-      ),
-      issuesDropped: E().int().optional(),
-      renderError: string().optional(),
-    }),
-  }),
-);
-var emulatorPreviewSourceSchema = DoctorLazy(() =>
-  u({
-    emulatorPreview: u({
-      file: string().max(4096),
-      outcome: string().max(64),
-      pictures: array(
-        u({
-          path: string().max(4096),
-          base64: string().optional(),
-        }),
-      ).max(8),
-      marks: array(string()).optional(),
-      errors: array(string()).optional(),
-      outline: string().optional(),
-      stopped: string().optional(),
-    }),
-  }),
-);
-var openSourceSchema = DoctorLazy(() =>
-  u({
-    opened: literal(true),
-    url: string(),
-    artifact_id: string().regex(ARTIFACT_SLUG_RE),
-    title: string().optional(),
-    owned: M().optional().catch(undefined),
-  }),
-);
-var pageVersionsSourceSchema = DoctorLazy(() =>
-  u({
-    page_versions: u({
-      url: string(),
-      rows: array(
-        u({
-          id: string(),
-          createdAt: string().optional(),
-          current: literal(true).optional(),
-        }),
-      ),
-      degraded: literal(true).optional(),
-      cut: literal(true).optional(),
-    }),
-  }),
-);
-var sharedSourceSchema = DoctorLazy(() =>
-  u({
-    shared: u({
-      url: string(),
-      mode: string().max(16),
-      access: string().max(16),
-      read_mode: string().max(32),
-      added: E().int().min(0),
-      editors: E().int().min(0).optional(),
-      unchanged: M().optional(),
-      org_name: string().max(200).optional(),
-      title: string().optional(),
-    }),
-  }),
-);
-var allActionSourceSchemas = DoctorLazy(() => {
-  let options = [
-    CREATED_FROM_TYPE_SCHEMA(),
-    openSourceSchema(),
-    PUBLISH_RESULT_SCHEMA(),
-    PUBLISH_SOURCE_TEXTS(),
-    readSourceSchema(),
-    TYPES_LIST_RESULT_SCHEMA(),
-    DESCRIBE_TYPE_RESULT_SCHEMA(),
-    TYPE_INSTANCES_RESULT_SCHEMA(),
-    QUICKSTART_RESULT_SCHEMA(),
-    commentsListSourceSchema(),
-    replyCommentSourceSchema(),
-    resolveCommentSourceSchema(),
-  ];
-  if (COLLAB_SCHEMA_INCLUDED)
-    options.push(liveEditSourceSchema(), liveSyncSourceSchema(), versionedPublishSourceSchema());
-  options.push(
-    watchSourceSchema(),
-    unwatchSourceSchema(),
-    resumeRepliesSourceSchema(),
-    watchesListSourceSchema(),
   );
-  options.push(
-    dbReadSourceSchema(),
-    dbProfilesSourceSchema(),
-    dbWriteSourceSchema(),
-    roomSendSourceSchema(),
-    assetUploadSourceSchema(),
-    assetUploadsSourceSchema(),
-    assetListSourceSchema(),
-    assetReadSourceSchema(),
-    assetDeleteSourceSchema(),
-    assetCopySourceSchema(),
-    fileListSourceSchema(),
-    fileReadSourceSchema(),
-    filesReadSourceSchema(),
-    artifactDeleteSourceSchema(),
-    pinSourceSchema(),
-    sharedSourceSchema(),
-    pageVersionsSourceSchema(),
+  emulatorPreviewSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      emulatorPreview: objectSchema({
+        file: stringSchema().max(4096),
+        outcome: stringSchema().max(64),
+        pictures: array(
+          objectSchema({
+            path: stringSchema().max(4096),
+            base64: stringSchema().optional(),
+          }),
+        ).max(8),
+        marks: array(stringSchema()).optional(),
+        errors: array(stringSchema()).optional(),
+        outline: stringSchema().optional(),
+        stopped: stringSchema().optional(),
+      }),
+    }),
   );
-  if (HANDLERS_SCHEMA)
+  openSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      opened: literal(true),
+      url: stringSchema(),
+      artifact_id: stringSchema().regex(ARTIFACT_SLUG_RE),
+      title: stringSchema().optional(),
+      owned: booleanSchema().optional().catch(undefined),
+    }),
+  );
+  pageVersionsSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      page_versions: objectSchema({
+        url: stringSchema(),
+        rows: array(
+          objectSchema({
+            id: stringSchema(),
+            createdAt: stringSchema().optional(),
+            current: literal(true).optional(),
+          }),
+        ),
+        degraded: literal(true).optional(),
+        cut: literal(true).optional(),
+      }),
+    }),
+  );
+  sharedSourceSchema = DoctorLazy(() =>
+    objectSchema({
+      shared: objectSchema({
+        url: stringSchema(),
+        mode: stringSchema().max(16),
+        access: stringSchema().max(16),
+        read_mode: stringSchema().max(32),
+        added: numberSchema().int().min(0),
+        editors: numberSchema().int().min(0).optional(),
+        unchanged: booleanSchema().optional(),
+        org_name: stringSchema().max(200).optional(),
+        title: stringSchema().optional(),
+      }),
+    }),
+  );
+  allActionSourceSchemas = DoctorLazy(() => {
+    let options = [
+      CREATED_FROM_TYPE_SCHEMA(),
+      openSourceSchema(),
+      PUBLISH_RESULT_SCHEMA(),
+      PUBLISH_SOURCE_TEXTS(),
+      readSourceSchema(),
+      TYPES_LIST_RESULT_SCHEMA(),
+      DESCRIBE_TYPE_RESULT_SCHEMA(),
+      TYPE_INSTANCES_RESULT_SCHEMA(),
+      QUICKSTART_RESULT_SCHEMA(),
+      commentsListSourceSchema(),
+      replyCommentSourceSchema(),
+      resolveCommentSourceSchema(),
+    ];
+    if (COLLAB_SCHEMA_INCLUDED)
+      options.push(liveEditSourceSchema(), liveSyncSourceSchema(), versionedPublishSourceSchema());
     options.push(
-      HANDLERS_SCHEMA.handlersDocOutputSchema(),
-      HANDLERS_SCHEMA.handlerResultOutputSchema(),
-      HANDLERS_SCHEMA.scriptResultOutputSchema(),
+      watchSourceSchema(),
+      unwatchSourceSchema(),
+      resumeRepliesSourceSchema(),
+      watchesListSourceSchema(),
     );
-  options.push(verifySourceSchema(), previewSourceSchema(), emulatorPreviewSourceSchema());
-  return union(options);
+    options.push(
+      dbReadSourceSchema(),
+      dbProfilesSourceSchema(),
+      dbWriteSourceSchema(),
+      roomSendSourceSchema(),
+      assetUploadSourceSchema(),
+      assetUploadsSourceSchema(),
+      assetListSourceSchema(),
+      assetReadSourceSchema(),
+      assetDeleteSourceSchema(),
+      assetCopySourceSchema(),
+      fileListSourceSchema(),
+      fileReadSourceSchema(),
+      filesReadSourceSchema(),
+      artifactDeleteSourceSchema(),
+      pinSourceSchema(),
+      sharedSourceSchema(),
+      pageVersionsSourceSchema(),
+    );
+    if (handlersSchemas)
+      options.push(
+        handlersSchemas.handlersDocOutputSchema(),
+        handlersSchemas.handlerResultOutputSchema(),
+        handlersSchemas.scriptResultOutputSchema(),
+      );
+    options.push(verifySourceSchema(), previewSourceSchema(), emulatorPreviewSourceSchema());
+    return union(options);
+  });
 });
 //@ chunk-0wdgqhcf.js:32383-32596 placement
 function getRemoteStageRoot() {
@@ -1432,8 +1501,8 @@ function getRemoteStageRoot() {
 }
 //@ chunk-0wdgqhcf.js:32596-32674 placement
 function allPathsInWorkingPath(pathsForPermissionCheck, remoteStageRoot) {
-  return pathsForPermissionCheck.every((n) =>
-    pathInWorkingPath(n, remoteStageRoot, {
+  return pathsForPermissionCheck.every((path) =>
+    pathInWorkingPath(path, remoteStageRoot, {
       caseFold: false,
       uncShapeParity: true,
     }),
@@ -1445,137 +1514,142 @@ var MAX_ATTACHMENT_BYTES = 67108864;
 /**
  * 判断路径是否是本会话的聊天附件：位于暂存根或上传目录且非硬链接；暂存根下按目录认定；上传目录下需核验文件身份与内容摘要并记入已验证附件表。返回是否在内及路径固定信息。
  */
-function checkChatAttachment(e, t, n) {
-  let pathsForPermissionCheck = getPathsForPermissionCheck(e);
+function checkChatAttachment(context, path, identity) {
+  let pathsForPermissionCheck = getPathsForPermissionCheck(context);
   let remoteStageRoot = getRemoteStageRoot();
-  let d = remoteStageRoot !== null && allPathsInWorkingPath(pathsForPermissionCheck, remoteStageRoot);
-  if (!d && !allPathsInWorkingPath(pathsForPermissionCheck, sessionUploadsDir()))
+  let inStageRoot =
+    remoteStageRoot !== null && allPathsInWorkingPath(pathsForPermissionCheck, remoteStageRoot);
+  if (!inStageRoot && !allPathsInWorkingPath(pathsForPermissionCheck, sessionUploadsDir()))
     return {
       inside: false,
     };
-  let a = n ?? statFileIdentity(t);
-  if (a.linked === true)
+  let fileIdentity = identity ?? statFileIdentity(path);
+  if (fileIdentity.linked === true)
     return {
       inside: false,
-      pin: a,
+      pin: fileIdentity,
     };
-  if (d)
+  if (inStageRoot)
     return {
-      inside: isVerifiedAttachmentFile(a),
-      pin: a,
+      inside: isVerifiedAttachmentFile(fileIdentity),
+      pin: fileIdentity,
       byDirectory: true,
     };
-  let h = verifyAttachmentDigest(a);
+  let digest = verifyAttachmentDigest(fileIdentity);
   let { verifiedAttachments } = getLiveState();
-  if (h === undefined || a.identity === null) {
-    verifiedAttachments.delete(a.real);
+  if (digest === undefined || fileIdentity.identity === null) {
+    verifiedAttachments.delete(fileIdentity.real);
     return {
       inside: false,
-      pin: a,
+      pin: fileIdentity,
     };
   }
-  verifiedAttachments.set(a.real, a.identity);
+  verifiedAttachments.set(fileIdentity.real, fileIdentity.identity);
   return {
     inside: true,
     pin: {
-      ...a,
-      digest: h,
+      ...fileIdentity,
+      digest,
     },
   };
 }
 //@ chunk-0wdgqhcf.js:33069-33150 placement
-function isVerifiedAttachmentFile(e) {
+function isVerifiedAttachmentFile(input) {
   try {
-    return e.identity !== null && lstatSync(e.real).isFile();
+    return input.identity !== null && lstatSync(input.real).isFile();
   } catch {
     return false;
   }
 }
 //@ chunk-0wdgqhcf.js:33150-33262 placement
 function listStageRoots() {
-  let e = new Set();
-  for (let t of [undefined, env.CLAUDE_STAGE_FILE_ROOT])
+  let roots = new Set();
+  for (let root of [undefined, env.CLAUDE_STAGE_FILE_ROOT])
     try {
-      e.add(resolveStageFileRoot(t));
+      roots.add(resolveStageFileRoot(root));
     } catch {}
-  return [...e];
+  return [...roots];
 }
 //@ chunk-0wdgqhcf.js:33262-33447 placement
 /**
  * 判断上传文件是否位于需要验证的目录且尚未验证（可选先做一次解析验证）。
  */
-function isUnverifiedUpload(e, t = {}) {
-  let n = (s) =>
-    pathInWorkingPath(e, s, {
+function isUnverifiedUpload(path, options = {}) {
+  let check = (candidate) =>
+    pathInWorkingPath(path, candidate, {
       caseFold: true,
     });
-  if (!(n(sessionUploadsDir()) || uploadsRootCandidates().some(n) || listStageRoots().some(n))) return false;
-  if (t.verify === true) {
-    let localUploadPath = resolveLocalUploadPath(e);
-    if (localUploadPath.kind === "resolved") checkChatAttachment(e, localUploadPath.real);
+  if (!(check(sessionUploadsDir()) || uploadsRootCandidates().some(check) || listStageRoots().some(check)))
+    return false;
+  if (options.verify === true) {
+    let localUploadPath = resolveLocalUploadPath(path);
+    if (localUploadPath.kind === "resolved") checkChatAttachment(path, localUploadPath.real);
   }
-  return !isVerifiedAttachment(e);
+  return !isVerifiedAttachment(path);
 }
 //@ chunk-0wdgqhcf.js:33447-33679 placement
 /**
  * 判断路径是已核验的聊天附件（位于暂存根，或在上传目录且身份与已验证记录一致、非硬链接）。
  */
-function isVerifiedAttachment(e) {
-  let pathsForPermissionCheck = getPathsForPermissionCheck(e);
+function isVerifiedAttachment(input) {
+  let pathsForPermissionCheck = getPathsForPermissionCheck(input);
   let remoteStageRoot = getRemoteStageRoot();
-  let r = remoteStageRoot !== null && allPathsInWorkingPath(pathsForPermissionCheck, remoteStageRoot);
-  if (!r && !allPathsInWorkingPath(pathsForPermissionCheck, sessionUploadsDir())) return false;
-  let s = statFileIdentity(pathsForPermissionCheck.at(-1) ?? e);
-  if (s.linked === true || s.identity === null) return false;
+  let inStageRoot =
+    remoteStageRoot !== null && allPathsInWorkingPath(pathsForPermissionCheck, remoteStageRoot);
+  if (!inStageRoot && !allPathsInWorkingPath(pathsForPermissionCheck, sessionUploadsDir())) return false;
+  let identity = statFileIdentity(pathsForPermissionCheck.at(-1) ?? input);
+  if (identity.linked === true || identity.identity === null) return false;
   return (
-    r ||
-    (attachmentDigestOf(s.real) !== undefined &&
-      getLiveState().verifiedAttachments.get(s.real) === s.identity)
+    inStageRoot ||
+    (attachmentDigestOf(identity.real) !== undefined &&
+      getLiveState().verifiedAttachments.get(identity.real) === identity.identity)
   );
 }
 //@ chunk-0wdgqhcf.js:33679-34062 placement
 /**
  * 以不跟随链接的方式打开上传文件，核对文件身份与大小上限，计算内容哈希并与清单摘要比对，一致时返回摘要。
  */
-function verifyAttachmentDigest(e) {
-  let t = attachmentDigestOf(e.real);
-  let n = e.identity === null ? undefined : fileIdentityDev(e.identity);
-  if (t === undefined || n === undefined || n > MAX_ATTACHMENT_BYTES) return;
-  let r = constants.O_NOFOLLOW | constants.O_NONBLOCK;
-  let s;
+function verifyAttachmentDigest(attachment) {
+  let expectedDigest = attachmentDigestOf(attachment.real);
+  let dev = attachment.identity === null ? undefined : fileIdentityDev(attachment.identity);
+  if (expectedDigest === undefined || dev === undefined || dev > MAX_ATTACHMENT_BYTES) return;
+  let openFlags = constants.O_NOFOLLOW | constants.O_NONBLOCK;
+  let fd;
   try {
-    let d = lstatSync(e.real, {
+    let before = lstatSync(attachment.real, {
       bigint: true,
     });
-    if (!d.isFile() || fileIdentityOf(d) !== e.identity) return;
-    s = openSync(e.real, constants.O_RDONLY | r);
-    let a = fstatSync(s, {
+    if (!before.isFile() || fileIdentityOf(before) !== attachment.identity) return;
+    fd = openSync(attachment.real, constants.O_RDONLY | openFlags);
+    let after = fstatSync(fd, {
       bigint: true,
     });
-    return a.isFile() && fileIdentityOf(a) === e.identity && computeContentHash(readFileSync(s)) === t
-      ? t
+    return after.isFile() &&
+      fileIdentityOf(after) === attachment.identity &&
+      computeContentHash(readFileSync(fd)) === expectedDigest
+      ? expectedDigest
       : undefined;
   } catch {
     return;
   } finally {
-    if (s !== undefined) closeSync(s);
+    if (fd !== undefined) closeSync(fd);
   }
 }
 //@ chunk-0wdgqhcf.js:34062-34269 placement
 /**
  * 检查附件能否发布：服务端调用或 Cowork 绕过权限模式下视为不在工作目录内，否则按常规检查。
  */
-function checkAttachmentForPublish(e, real, n, r) {
-  let s =
+function checkAttachmentForPublish(path, path_2, realPath, options) {
+  let check =
     isCoworkFramePublishSession() &&
-    (n.mode === "bypassPermissions" ||
-      isPlanBypass(n.mode, n.isBypassPermissionsModeAvailable) ||
-      n.shouldAvoidPermissionPrompts === true);
-  if (n.servedCall === true || s)
+    (realPath.mode === "bypassPermissions" ||
+      isPlanBypass(realPath.mode, realPath.isBypassPermissionsModeAvailable) ||
+      realPath.shouldAvoidPermissionPrompts === true);
+  if (realPath.servedCall === true || check)
     return {
       inside: false,
     };
-  return checkChatAttachment(e, real, r);
+  return checkChatAttachment(path, path_2, options);
 }
 //@ chunk-0wdgqhcf.js:34557-34812 placement
 /**
@@ -1595,35 +1669,35 @@ var MAX_QUERY_CURSOR_CHARS = 128;
 var MAX_COMMENT_TEXT_CHARS = 1024;
 var MAX_PAGE_NAMES = 128;
 //@ chunk-0wdgqhcf.js:34812-34890 placement
-function pathForCompare(e) {
-  let t = normalizeCaseForComparison(identity(e));
-  return getPlatform() === "windows" ? t.replace(/\//g, "\\") : t;
+function pathForCompare(path) {
+  let normalized = normalizeCaseForComparison(identity(path));
+  return getPlatform() === "windows" ? normalized.replace(/\//g, "\\") : normalized;
 }
 //@ chunk-0wdgqhcf.js:34890-35150 placement
-function findLongestRootPrefix(e, t) {
-  let n = pathForCompare(e);
-  return t
-    .map((s) => {
-      let replaced = s.replace(/[\\/]+$/, "");
+function findLongestRootPrefix(path, roots) {
+  let comparison = pathForCompare(path);
+  return roots
+    .map((root) => {
+      let replaced = root.replace(/[\\/]+$/, "");
       return replaced === ""
-        ? s.slice(0, 1)
+        ? root.slice(0, 1)
         : /^[A-Za-z]:$/.test(replaced)
-          ? replaced + s.charAt(2)
+          ? replaced + root.charAt(2)
           : replaced;
     })
-    .filter((s) => {
-      let d = pathForCompare(s);
-      let a = d.endsWith(sep) ? d : d + sep;
-      return n === d || n.startsWith(a);
+    .filter((root) => {
+      let normalized = pathForCompare(root);
+      let withSep = normalized.endsWith(sep) ? normalized : normalized + sep;
+      return comparison === normalized || comparison.startsWith(withSep);
     })
-    .sort((s, d) => d.length - s.length)[0];
+    .sort((a, b) => b.length - a.length)[0];
 }
 //@ chunk-0wdgqhcf.js:35150-35475 placement
 /**
  * 判断主机名是否指向本机：localhost、::1、127.*、本机主机名或任一网卡地址。
  */
-function isLocalHostname(e) {
-  let replaced = e.toLowerCase().replace(/\.+$/, "");
+function isLocalHostname(host) {
+  let replaced = host.toLowerCase().replace(/\.+$/, "");
   if (
     replaced === "localhost" ||
     replaced === "::1" ||
@@ -1633,50 +1707,50 @@ function isLocalHostname(e) {
   )
     return true;
   let replaced_2 = replaced.replace(/^\[|\]$/g, "");
-  for (let r of Object.values(networkInterfaces()))
-    for (let s of r ?? []) if (s.address.toLowerCase() === replaced_2) return true;
+  for (let ifaces of Object.values(networkInterfaces()))
+    for (let addr of ifaces ?? []) if (addr.address.toLowerCase() === replaced_2) return true;
   return false;
 }
 //@ chunk-0wdgqhcf.js:35475-35560 placement
-function isLocalUncPath(e) {
-  let match = /^[\\/]{2}([^\\/]+)[\\/]/.exec(e);
+function isLocalUncPath(path) {
+  let match = /^[\\/]{2}([^\\/]+)[\\/]/.exec(path);
   return match !== null && isLocalHostname(match[1] ?? "");
 }
 //@ chunk-0wdgqhcf.js:35560-35630 placement
-function isLocalPathWithHost(e) {
-  if (!isNetworkMountPath(e)) return false;
-  let t = networkMountName(e);
-  return t !== null && isLocalHostname(t);
+function isLocalPathWithHost(path) {
+  if (!isNetworkMountPath(path)) return false;
+  let mountName = networkMountName(path);
+  return mountName !== null && isLocalHostname(mountName);
 }
 //@ chunk-0wdgqhcf.js:35630-35952 placement
 /**
  * 收集发布可用的目录：当前 cwd、去重后的额外工作目录，以及（是目录且非链接的）scratchpad 目录。
  */
 async function collectPublishDirs(toolPermissionContext) {
-  let cwd = getCwd();
-  let n = (b) => normalizeTrailingSlash(normalize(expandPath(b)));
-  let r = n(cwd);
-  let s = new Set([r]);
-  let d = [];
-  for (let b of allWorkingDirectories(toolPermissionContext)) {
-    let S = n(b);
-    if (!s.has(S)) {
-      s.add(S);
-      d.push(S);
+  let dir = getCwd();
+  let normalizeDir = (dir) => normalizeTrailingSlash(normalize(expandPath(dir)));
+  let cwdDir = normalizeDir(dir);
+  let seen = new Set([cwdDir]);
+  let dirs = [];
+  for (let dir of allWorkingDirectories(toolPermissionContext)) {
+    let normalized = normalizeDir(dir);
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      dirs.push(normalized);
     }
   }
-  let h = (isScratchpadEnabled() ? getScratchpadDir() : null) ?? undefined;
-  if (h !== undefined)
+  let scratchpad = (isScratchpadEnabled() ? getScratchpadDir() : null) ?? undefined;
+  if (scratchpad !== undefined)
     try {
-      let b = await lstat(h);
-      if (b.isSymbolicLink() || !b.isDirectory()) h = undefined;
+      let stat = await lstat(scratchpad);
+      if (stat.isSymbolicLink() || !stat.isDirectory()) scratchpad = undefined;
     } catch (error) {
-      if (!isENOENT(error)) h = undefined;
+      if (!isENOENT(error)) scratchpad = undefined;
     }
   return {
-    cwd,
-    dirs: d,
-    scratchpad: h,
+    cwd: dir,
+    dirs,
+    scratchpad,
   };
 }
 //@ chunk-0wdgqhcf.js:35952-36060 placement
@@ -1700,19 +1774,21 @@ function toPublishAnchorOptions({ dirs, scratchpad }) {
 async function getScratchpadPairs(publishDirs) {
   let { scratchpad } = publishDirs;
   if (scratchpad === undefined) return [];
-  let n = (a) => !a.isSymbolicLink() && a.isDirectory();
-  let r;
+  let isDir = (entry) => !entry.isSymbolicLink() && entry.isDirectory();
+  let realPath;
   try {
-    r = await lstat(scratchpad);
+    realPath = await lstat(scratchpad);
   } catch (error) {
     return isENOENT(error) ? [[scratchpad, scratchpad]] : [];
   }
-  if (!n(r) || (await isUnsafeSymlinkChain(scratchpad))) return [];
-  let s = await realpath(scratchpad).catch(() => scratchpad);
-  let d = await lstat(scratchpad).catch(() => {
+  if (!isDir(realPath) || (await isUnsafeSymlinkChain(scratchpad))) return [];
+  let real = await realpath(scratchpad).catch(() => scratchpad);
+  let stat = await lstat(scratchpad).catch(() => {
     return;
   });
-  return d !== undefined && n(d) && d.ino === r.ino && d.dev === r.dev ? [[scratchpad, s]] : [];
+  return stat !== undefined && isDir(stat) && stat.ino === realPath.ino && stat.dev === realPath.dev
+    ? [[scratchpad, real]]
+    : [];
 }
 //@ chunk-0wdgqhcf.js:36386-36493 placement
 /**
@@ -1725,18 +1801,18 @@ async function getWorkingDirPairs(publishDirs) {
       lex: publishDirs.cwd,
       real: publishDirs.cwd,
     })
-  ).map((n) => [n.lex, n.real]);
+  ).map((pair) => [pair.lex, pair.real]);
 }
 //@ chunk-0wdgqhcf.js:36493-36627 placement
 /**
  * 判断路径是否位于 cwd、scratchpad 或任一工作目录之下。
  */
-function isUnderPublishDirs(e, publishDirs, scratchpadPairs, workingDirPairs = []) {
+function isUnderPublishDirs(path, publishDirs, scratchpadPairs, workingDirPairs = []) {
   return [
     publishDirs.cwd,
-    ...workingDirPairs.flatMap(([s, d]) => [s, d]),
-    ...scratchpadPairs.flatMap(([s, d]) => [s, d]),
-  ].some((s) => e === s || e.startsWith(s + sep));
+    ...workingDirPairs.flatMap(([lex, real]) => [lex, real]),
+    ...scratchpadPairs.flatMap(([lex, real]) => [lex, real]),
+  ].some((prefix) => path === prefix || path.startsWith(prefix + sep));
 }
 //@ chunk-0wdgqhcf.js:36627-37219 placement
 /**
@@ -1750,29 +1826,38 @@ async function resolvePublishBaseRealpath(base, dirs, workingPairs = []) {
       base: resolved,
       redirected,
     };
-  let d = (base, v) => base === v || base.startsWith(v + sep);
+  let under = (base, parent) => base === parent || base.startsWith(parent + sep);
   let { scratchpad } = dirs;
-  let h;
+  let realScratchpad;
   if (scratchpad !== undefined && !(await isUnsafeSymlinkChain(scratchpad)))
-    h = await realpath(scratchpad).catch((error) => (isENOENT(error) ? scratchpad : undefined));
-  let b = d(base, dirs.cwd) ? dirs.cwd : workingPairs.flatMap(([R, v]) => [R, v]).find((R) => d(base, R));
-  let S =
-    scratchpad !== undefined && b === undefined && (d(base, scratchpad) || (h !== undefined && d(base, h)));
-  let y = S && scratchpad !== undefined ? scratchpad : (b ?? dirs.cwd);
+    realScratchpad = await realpath(scratchpad).catch((error) => (isENOENT(error) ? scratchpad : undefined));
+  let matchedWorkingDir = under(base, dirs.cwd)
+    ? dirs.cwd
+    : workingPairs.flatMap(([lex, real]) => [lex, real]).find((candidate) => under(base, candidate));
+  let inScratchpad =
+    scratchpad !== undefined &&
+    matchedWorkingDir === undefined &&
+    (under(base, scratchpad) || (realScratchpad !== undefined && under(base, realScratchpad)));
+  let root = inScratchpad && scratchpad !== undefined ? scratchpad : (matchedWorkingDir ?? dirs.cwd);
   if (
-    (S ? h !== undefined : !(await isUnsafeSymlinkChain(y))) &&
+    (inScratchpad ? realScratchpad !== undefined : !(await isUnsafeSymlinkChain(root))) &&
     !pathTouchesProtected(base) &&
     !(await isUnsafeSymlinkChain(base))
   )
     try {
-      let R = await realpath(base);
-      let v = h;
-      if (!S) v = await realpath(y);
-      if (v !== undefined && !isNonWslUncPath(R) && !isNetworkMountPath(R) && d(R, v)) {
-        resolved = R;
-        let P = S && !d(base, y) ? v : y;
-        let V = base === P ? v : join(v, relative(P, base));
-        redirected = resolved !== V;
+      let realBase = await realpath(base);
+      let realRoot = realScratchpad;
+      if (!inScratchpad) realRoot = await realpath(root);
+      if (
+        realRoot !== undefined &&
+        !isNonWslUncPath(realBase) &&
+        !isNetworkMountPath(realBase) &&
+        under(realBase, realRoot)
+      ) {
+        resolved = realBase;
+        let chosenRoot = inScratchpad && !under(base, root) ? realRoot : root;
+        let relativePath = base === chosenRoot ? realRoot : join(realRoot, relative(chosenRoot, base));
+        redirected = resolved !== relativePath;
       }
     } catch {}
   return {
@@ -1784,18 +1869,18 @@ async function resolvePublishBaseRealpath(base, dirs, workingPairs = []) {
 /**
  * 审批暂存表满时淘汰最旧条目并标记发生过淘汰。
  */
-function evictOldestStash(e, t) {
-  if (e.size >= t) {
-    let n = e.keys().next().value;
-    if (n !== undefined) {
-      e.delete(n);
+function evictOldestStash(stash, limit) {
+  if (stash.size >= limit) {
+    let oldest = stash.keys().next().value;
+    if (oldest !== undefined) {
+      stash.delete(oldest);
       getLiveState().approvalStashEvicted = true;
     }
   }
 }
 //@ chunk-0wdgqhcf.js:37335-37412 placement
-function publishingReadDeniedText(e, denyRuleForTool, n = "") {
-  return `${e}, and ${denyRulePhrase(denyRuleForTool)} forbids reading files${n}.`;
+function publishingReadDeniedText(path, denyRuleForTool, suffix = "") {
+  return `${path}, and ${denyRulePhrase(denyRuleForTool)} forbids reading files${suffix}.`;
 }
 //@ chunk-0wdgqhcf.js:37412-37693 placement
 /**
@@ -1807,43 +1892,43 @@ var SOURCE_CHANGED_MESSAGE =
   "file_path: the source file changed between approval and publish \u2014 retry the publish";
 var RETRY_ONCE_NOTE = "Retry once; if the retry is refused the same way, stop and tell the user.";
 //@ chunk-0wdgqhcf.js:37693-39421 placement
-function checkPublishSourcePin(e) {
-  switch (e) {
+function checkPublishSourcePin(input) {
+  switch (input) {
     case "source_pin_stale_build":
       return new ArtifactInputError(
         `file_path: this publish was approved under an earlier Claude Code version and needs to be approved again. ${RETRY_ONCE_NOTE}`,
-        e,
+        input,
       );
     case "source_pin_missing":
     case "source_pin_unreadable":
       return new ArtifactInputError(
         `file_path: the approval for this publish cannot be matched to the source file (another Claude Code version gave it, or a hook or SDK host rewrote it), so nothing was published. ${RETRY_ONCE_NOTE}`,
-        e,
+        input,
       );
     case "approval_replayed":
       return new ArtifactInputError(
         "file_path: the approval for this publish was already used by an earlier run of the same tool call, so nothing was published by this run \u2014 retry the publish as a new call",
-        e,
+        input,
       );
     case "source_pin_evicted":
       return new ArtifactInputError(
         "file_path: could not verify the source file is unchanged since approval (this session may have dropped its record of the approval) \u2014 retry the publish",
-        e,
+        input,
       );
     case "source_pin_unobserved":
       return new ArtifactInputError(
         "file_path: the permission check for this publish did not record this file, so it cannot be verified and nothing was published. Retrying the same call will not help: do not retry; tell the user.",
-        e,
+        input,
       );
     case "source_check_failed":
       return new ArtifactInputError(
         "file_path: the permission check for this publish hit an internal error before it recorded the file, so nothing was published. Retrying is unlikely to help: do not retry; tell the user Claude Code could not check this publish.",
-        e,
+        input,
       );
     case "source_redirected_on_resume":
       return new ArtifactInputError(
         "file_path: the source is a symlink, a hard link, or not a plain file, and its approval came from another process, so it cannot be verified here and nothing was published. Retrying this path will likely fail again: publish the file at its resolved path (for a hard link, a plain copy), or tell the user.",
-        e,
+        input,
       );
   }
 }
@@ -1851,17 +1936,17 @@ function checkPublishSourcePin(e) {
 /**
  * 导出函数 `quotedSweptPath`：参数 e，返回 `"${truncatePathMiddle(sweptPagePath(e) || "(unprintable path)", 300)}"`。
  */
-function quotedSweptPath(e) {
-  return `"${truncatePathMiddle(sweptPagePath(e) || "(unprintable path)", 300)}"`;
+function quotedSweptPath(text) {
+  return `"${truncatePathMiddle(sweptPagePath(text) || "(unprintable path)", 300)}"`;
 }
 //@ chunk-0wdgqhcf.js:39486-39831 placement
 /**
  * 审批后 file_path 被（钩子或 SDK 宿主）改动时抛出的输入错误：未发布，不要重试。
  */
-function sourcePathChangedError(e, t) {
-  let n = t === undefined ? "after approval" : `after ${quotedSweptPath(t)} was approved`;
+function sourcePathChangedError(path, shownPath) {
+  let when = shownPath === undefined ? "after approval" : `after ${quotedSweptPath(shownPath)} was approved`;
   return new ArtifactInputError(
-    `file_path: the path was changed to ${quotedSweptPath(e)} ${n} (usually by a hook or SDK host), so nothing was published. Do not retry this call; if the new path is the file you mean, publish it in a new call, otherwise tell the user.`,
+    `file_path: the path was changed to ${quotedSweptPath(path)} ${when} (usually by a hook or SDK host), so nothing was published. Do not retry this call; if the new path is the file you mean, publish it in a new call, otherwise tell the user.`,
     "source_path_mismatch",
   );
 }
@@ -1892,19 +1977,23 @@ function getPublishReadDenial(toolPermissionContext) {
 /**
  * 判断路径是否在受信任的网络根下：UNC 路径需主机一致的根才算。
  */
-function isInTrustedNetworkRoot(e, t) {
-  if (!isUncOrDevicePath(e)) return isPathInTrustedNetworkRoot(e, t);
-  let n = uncHostOf(e);
-  if (n === null) return false;
-  for (let [r, s] of t ?? [])
-    for (let d of s)
-      if (isUncOrDevicePath(d) && uncHostOf(d) === n && isPathInTrustedNetworkRoot(e, new Map([[r, [d]]])))
+function isInTrustedNetworkRoot(path, roots) {
+  if (!isUncOrDevicePath(path)) return isPathInTrustedNetworkRoot(path, roots);
+  let host = uncHostOf(path);
+  if (host === null) return false;
+  for (let [root, paths] of roots ?? [])
+    for (let rootPath of paths)
+      if (
+        isUncOrDevicePath(rootPath) &&
+        uncHostOf(rootPath) === host &&
+        isPathInTrustedNetworkRoot(path, new Map([[root, [rootPath]]]))
+      )
         return true;
   return false;
 }
 //@ chunk-0wdgqhcf.js:40292-42093 placement
-async function checkDeviceNamespacePath(e, t, trustedNetworkDirectories) {
-  if (isDeviceNamespacePath(e) || isDevicePrefixPath(e))
+async function checkDeviceNamespacePath(path, trustedDirs, roots) {
+  if (isDeviceNamespacePath(path) || isDevicePrefixPath(path))
     return {
       refused: {
         behavior: "deny",
@@ -1915,7 +2004,7 @@ async function checkDeviceNamespacePath(e, t, trustedNetworkDirectories) {
         },
       },
     };
-  if (isLocalUncPath(e) || isLocalPathWithHost(e))
+  if (isLocalUncPath(path) || isLocalPathWithHost(path))
     return {
       refused: {
         behavior: "deny",
@@ -1927,8 +2016,8 @@ async function checkDeviceNamespacePath(e, t, trustedNetworkDirectories) {
         },
       },
     };
-  let r = isNonWslUncPath(e) || isNetworkMountPath(e) || classifyHomeMount(e);
-  if (r && !isInTrustedNetworkRoot(e, trustedNetworkDirectories))
+  let isNetwork = isNonWslUncPath(path) || isNetworkMountPath(path) || classifyHomeMount(path);
+  if (isNetwork && !isInTrustedNetworkRoot(path, roots))
     return {
       refused: {
         behavior: "deny",
@@ -1940,79 +2029,81 @@ async function checkDeviceNamespacePath(e, t, trustedNetworkDirectories) {
         },
       },
     };
-  let s = false;
-  let d = false;
-  let a = {
+  let isLink = false;
+  let unreadable = false;
+  let result = {
     kind: "network",
   };
-  if (!r) {
-    if (pathTouchesProtected(e) || (await isUnsafeSymlinkChain(e)))
+  if (!isNetwork) {
+    if (pathTouchesProtected(path) || (await isUnsafeSymlinkChain(path)))
       return {
         refused: UNVERIFIABLE_SOURCE_DENIAL,
       };
-    a = {
+    result = {
       kind: "absent",
     };
-    let h = false;
-    let b;
+    let hasLink = false;
+    let linkStat;
     try {
-      let S = await lstat(e, {
+      let lstatResult = await lstat(path, {
         bigint: true,
       });
-      h = S.isSymbolicLink();
-      if (!h)
-        b = {
-          dev: S.dev,
-          ino: S.ino,
+      hasLink = lstatResult.isSymbolicLink();
+      if (!hasLink)
+        linkStat = {
+          dev: lstatResult.dev,
+          ino: lstatResult.ino,
         };
     } catch {}
-    if (h || b !== undefined) {
-      s = h;
+    if (hasLink || linkStat !== undefined) {
+      isLink = hasLink;
       try {
-        let S = await realpath(e);
-        let y = await stat(S, {
+        let real = await realpath(path);
+        let realStat = await stat(real, {
           bigint: true,
         });
-        if (b !== undefined && (y.dev !== b.dev || y.ino !== b.ino)) s = true;
-        else if (!y.isFile()) s = true;
+        if (linkStat !== undefined && (realStat.dev !== linkStat.dev || realStat.ino !== linkStat.ino))
+          isLink = true;
+        else if (!realStat.isFile()) isLink = true;
         else {
-          a = {
+          result = {
             kind: "file",
-            dev: y.dev,
-            ino: y.ino,
-            sizeBytes: y.size,
-            mtimeNs: y.mtimeNs,
-            leafWasLink: h,
+            dev: realStat.dev,
+            ino: realStat.ino,
+            sizeBytes: realStat.size,
+            mtimeNs: realStat.mtimeNs,
+            leafWasLink: hasLink,
           };
-          d = y.nlink > 1n;
-          if (!s) {
-            let R = [];
-            for (let P of t) {
-              R.push(P);
-              if (isNonWslUncPath(P) || isNetworkMountPath(P) || (await isUnsafeSymlinkChain(P))) continue;
+          unreadable = realStat.nlink > 1n;
+          if (!isLink) {
+            let hits = [];
+            for (let dir of trustedDirs) {
+              hits.push(dir);
+              if (isNonWslUncPath(dir) || isNetworkMountPath(dir) || (await isUnsafeSymlinkChain(dir)))
+                continue;
               try {
-                R.push(await realpath(P));
+                hits.push(await realpath(dir));
               } catch {}
             }
-            let longestRootPrefix = findLongestRootPrefix(e, R);
+            let longestRootPrefix = findLongestRootPrefix(path, hits);
             if (longestRootPrefix !== undefined) {
-              let P = getPlatform() === "windows" ? /[\\/]+/ : /\/+/;
-              let filtered = longestRootPrefix.split(P).filter(Boolean);
-              let filtered_2 = e.split(P).filter(Boolean);
-              let root = parse(e).root;
-              let G = count(parse(e).root.split(P), Boolean);
-              let ue = true;
-              for (let ie = G; ie < filtered_2.length - 1; ie++) {
-                root = join(root, filtered_2[ie] ?? "");
-                if (ue && ie < filtered.length && filtered_2[ie] === filtered[ie]) continue;
-                ue = false;
+              let sepRe = getPlatform() === "windows" ? /[\\/]+/ : /\/+/;
+              let filtered = longestRootPrefix.split(sepRe).filter(Boolean);
+              let filtered_2 = path.split(sepRe).filter(Boolean);
+              let root = parse(path).root;
+              let rootDepth = count(parse(path).root.split(sepRe), Boolean);
+              let sawSymlink = true;
+              for (let depth = rootDepth; depth < filtered_2.length - 1; depth++) {
+                root = join(root, filtered_2[depth] ?? "");
+                if (sawSymlink && depth < filtered.length && filtered_2[depth] === filtered[depth]) continue;
+                sawSymlink = false;
                 try {
                   if ((await lstat(root)).isSymbolicLink()) {
-                    s = true;
+                    isLink = true;
                     break;
                   }
                 } catch {
-                  s = true;
+                  isLink = true;
                   break;
                 }
               }
@@ -2020,31 +2111,31 @@ async function checkDeviceNamespacePath(e, t, trustedNetworkDirectories) {
           }
         }
       } catch {
-        a = {
+        result = {
           kind: "absent",
         };
-        s = true;
+        isLink = true;
       }
     }
   }
   return {
-    pin: a,
-    redirected: s || d,
-    unverifiedSpelling: s,
+    pin: result,
+    redirected: isLink || unreadable,
+    unverifiedSpelling: isLink,
   };
 }
 //@ chunk-0wdgqhcf.js:42093-42178 placement
-async function readFdTarget(e) {
+async function readFdTarget(fd) {
   try {
-    return await readlink(`/proc/self/fd/${e.fd}`);
+    return await readlink(`/proc/self/fd/${fd.fd}`);
   } catch {
     return null;
   }
 }
 //@ chunk-0wdgqhcf.js:42178-42242 placement
-async function fdPointsAtPath(e, t) {
-  let fdTarget = await readFdTarget(e);
-  return fdTarget !== null && fdTarget === t;
+async function fdPointsAtPath(fd, path) {
+  let fdTarget = await readFdTarget(fd);
+  return fdTarget !== null && fdTarget === path;
 }
 //@ chunk-0wdgqhcf.js:42242-42786 placement
 /**
@@ -2094,53 +2185,53 @@ async function readPinnedSource(path, expectedHash) {
   }
 }
 //@ chunk-0wdgqhcf.js:42786-43908 placement
-async function checkSourceUnchanged(e, t, n) {
-  let filtered = n.digests.filter((digest) => digest !== undefined);
-  let s = filtered.length > 0;
-  if (pathTouchesProtected(e) || (await isUnsafeSymlinkChain(e)))
+async function checkSourceUnchanged(path, lstatInfo, expected) {
+  let filtered = expected.digests.filter((digest) => digest !== undefined);
+  let hasDigests = filtered.length > 0;
+  if (pathTouchesProtected(path) || (await isUnsafeSymlinkChain(path)))
     return {
       kind: "changed",
     };
-  let d = t.kind === "absent" || !t.leafWasLink;
-  if (d)
+  let followOk = lstatInfo.kind === "absent" || !lstatInfo.leafWasLink;
+  if (followOk)
     try {
-      if ((await lstat(e)).isSymbolicLink())
+      if ((await lstat(path)).isSymbolicLink())
         return {
           kind: "changed",
         };
     } catch {}
-  let a;
+  let handle;
   try {
-    a = await open(e, constants.O_RDONLY | (d ? NOFOLLOW_NONBLOCK_FLAGS : O_NONBLOCK));
+    handle = await open(path, constants.O_RDONLY | (followOk ? NOFOLLOW_NONBLOCK_FLAGS : O_NONBLOCK));
   } catch (error) {
     if (isENOENT(error))
       return {
         kind: "missing",
       };
-    if (isErrnoCode(error, "ELOOP") && d)
+    if (isErrnoCode(error, "ELOOP") && followOk)
       return {
         kind: "changed",
       };
     throw error;
   }
   try {
-    if (n.admittedPath !== undefined && !(await fdPointsAtPath(a, n.admittedPath)))
+    if (expected.admittedPath !== undefined && !(await fdPointsAtPath(handle, expected.admittedPath)))
       return {
         kind: "changed",
       };
-    let stats = await a.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
-    if (n.admittedPath !== undefined && stats.nlink !== 1n)
+    if (expected.admittedPath !== undefined && stats.nlink !== 1n)
       return {
         kind: "changed",
       };
     if (
-      t.kind === "absent" ||
-      stats.dev !== t.dev ||
-      stats.ino !== t.ino ||
-      stats.size !== t.sizeBytes ||
-      (!s && stats.mtimeNs !== t.mtimeNs)
+      lstatInfo.kind === "absent" ||
+      stats.dev !== lstatInfo.dev ||
+      stats.ino !== lstatInfo.ino ||
+      stats.size !== lstatInfo.sizeBytes ||
+      (!hasDigests && stats.mtimeNs !== lstatInfo.mtimeNs)
     )
       return {
         kind: "changed",
@@ -2154,19 +2245,19 @@ async function checkSourceUnchanged(e, t, n) {
       return {
         kind: "changed",
       };
-    let exactBytes = await readExactBytes(a, Number(stats.size));
+    let exactBytes = await readExactBytes(handle, Number(stats.size));
     if (exactBytes === null)
       return {
         kind: "changed",
       };
-    if (s) {
+    if (hasDigests) {
       let contentHash = computeContentHash(exactBytes);
-      if (!filtered.every((y) => y === contentHash))
+      if (!filtered.every((digest) => digest === contentHash))
         return {
           kind: "changed",
         };
     } else {
-      let stats_2 = await a.stat({
+      let stats_2 = await handle.stat({
         bigint: true,
       });
       if (stats_2.mtimeNs !== stats.mtimeNs || stats_2.size !== stats.size)
@@ -2180,19 +2271,19 @@ async function checkSourceUnchanged(e, t, n) {
       mtimeMs: Number(stats.mtimeMs),
     };
   } finally {
-    await a.close();
+    await handle.close();
   }
 }
 //@ chunk-0wdgqhcf.js:43908-44024 placement
 /**
  * 确认源文件未变化后计算内容哈希，出错或已变化返回 undefined。
  */
-async function hashSourceIfUnchanged(e, t) {
+async function hashSourceIfUnchanged(path, pin) {
   try {
-    let n = await checkSourceUnchanged(e, t, {
+    let check = await checkSourceUnchanged(path, pin, {
       digests: [],
     });
-    return n.kind === "ok" ? computeContentHash(n.bytes) : undefined;
+    return check.kind === "ok" ? computeContentHash(check.bytes) : undefined;
   } catch {
     return;
   }
@@ -2201,44 +2292,45 @@ async function hashSourceIfUnchanged(e, t) {
 /**
  * 判断两次固定的文件身份是否一致（设备、inode、叶子是否链接、大小，无哈希时还比较修改时间）。
  */
-function samePinIdentity(e, t) {
-  if (e.pin.kind !== "file" || t.kind !== "file") return e.pin.kind === t.kind;
+function samePinIdentity(a, b) {
+  if (a.pin.kind !== "file" || b.kind !== "file") return a.pin.kind === b.kind;
   return (
-    e.pin.dev === t.dev &&
-    e.pin.ino === t.ino &&
-    e.pin.leafWasLink === t.leafWasLink &&
-    e.pin.sizeBytes === t.sizeBytes &&
-    (e.sha256 !== undefined || e.pin.mtimeNs === t.mtimeNs)
+    a.pin.dev === b.dev &&
+    a.pin.ino === b.ino &&
+    a.pin.leafWasLink === b.leafWasLink &&
+    a.pin.sizeBytes === b.sizeBytes &&
+    (a.sha256 !== undefined || a.pin.mtimeNs === b.mtimeNs)
   );
 }
 //@ chunk-0wdgqhcf.js:44267-44328 placement
 /**
  * 导出函数 `assertArtifactWithinLimit`：参数 e。
  */
-function assertArtifactWithinLimit(e) {
-  if (e > MAX_ARTIFACT_BYTES) throw new ArtifactInputError(describeTooLargePage(e), "too_large_raw");
+function assertArtifactWithinLimit(artifact) {
+  if (artifact > MAX_ARTIFACT_BYTES)
+    throw new ArtifactInputError(describeTooLargePage(artifact), "too_large_raw");
 }
 //@ chunk-0wdgqhcf.js:44328-44907 placement
-function describeUndecodableSource({ kind, encoding, where }, r) {
-  let s = r === "publish" ? "then publish again. Nothing was published." : "then preview again.";
+function describeUndecodableSource({ kind, encoding, where }, desc) {
+  let text = desc === "publish" ? "then publish again. Nothing was published." : "then preview again.";
   return kind === "undecodable"
-    ? `file_path: the source file is not valid ${encoding === "utf-16le" ? "UTF-16" : "UTF-8"} text (first invalid byte at ${where}). It may be saved in another encoding or contain binary data. Rewrite it as UTF-8, ${s}`
-    : `file_path: the source file has the replacement character U+FFFD at ${where}, usually left where an earlier edit or paste lost a character. Replace it with the intended text (in HTML, write an intended U+FFFD as &#xFFFD;), ${s}`;
+    ? `file_path: the source file is not valid ${encoding === "utf-16le" ? "UTF-16" : "UTF-8"} text (first invalid byte at ${where}). It may be saved in another encoding or contain binary data. Rewrite it as UTF-8, ${text}`
+    : `file_path: the source file has the replacement character U+FFFD at ${where}, usually left where an earlier edit or paste lost a character. Replace it with the intended text (in HTML, write an intended U+FFFD as &#xFFFD;), ${text}`;
 }
 //@ chunk-0wdgqhcf.js:44907-45183 placement
 /**
  * 严格把发布源文件字节解码为文本；无法解码或含替换字符时打点并抛出输入错误。
  */
-function decodeSourceText(e, t) {
-  let n = decodeTextStrict(e);
-  if (n.problem === undefined) return n.text;
-  let r = n.problem.kind === "undecodable" ? "source_encoding" : "source_replacement_char";
-  logFeatureBad("artifact_publish", r, {
-    source_bytes: e.length,
-    encoding: fromEnum(n.problem.encoding),
-    md: t.md,
+function decodeSourceText(buffer, whose) {
+  let decoded = decodeTextStrict(buffer);
+  if (decoded.problem === undefined) return decoded.text;
+  let kind = decoded.problem.kind === "undecodable" ? "source_encoding" : "source_replacement_char";
+  logFeatureBad("artifact_publish", kind, {
+    source_bytes: buffer.length,
+    encoding: fromEnum(decoded.problem.encoding),
+    md: whose.md,
   });
-  throw new ArtifactInputError(describeUndecodableSource(n.problem, "publish"), r);
+  throw new ArtifactInputError(describeUndecodableSource(decoded.problem, "publish"), kind);
 }
 export {
   checkAttachmentForPublish,

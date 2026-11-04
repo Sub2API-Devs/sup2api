@@ -5,11 +5,11 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_shebang_regex } from "../shebang-regex/index.js";
 
 //@ chunk-m4p5zn6n.js:4922-5128 cjs-fingerprint
-var require_shebang_command = x(function (cjsExports, cjsModule) {
+var require_shebang_command = __commonJS(function (cjsExports, cjsModule) {
   var shebangRegex = require_shebang_regex();
   cjsModule.exports = (string = "") => {
     let match = string.match(shebangRegex);

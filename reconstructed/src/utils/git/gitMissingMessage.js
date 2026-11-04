@@ -19,7 +19,7 @@ var GIT_MISSING_MAC_MESSAGE =
 /**
  * 判断当前平台是否需要"未安装 git"的提示（此构建恒为 false）。
  */
-function isGitMissingMessageSupported(n, env) {
+function isGitMissingMessageSupported(env, env_2) {
   return false;
 }
 export { isGitMissingMessageSupported, GIT_MISSING_MAC_MESSAGE };

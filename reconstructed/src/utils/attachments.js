@@ -8,10 +8,11 @@
  * pieces: chunk-bnwcqde4.js (1), chunk-e6aww6q8.js (133)
  * attribution: fingerprint 49, placement 8, layout 70, file-local 5, callgraph-fingerprint 2
  */
+import { randomUUID } from "crypto";
 import { join, relative, dirname, resolve as resolve_2, parse, basename, isAbsolute, sep } from "path";
 import { setImmediate as THo } from "timers/promises";
-import { randomUUID } from "crypto";
 import { stat, readdir, lstat } from "fs/promises";
+import { buildGoalSentinelAttachment } from "../commands/goal/goal.js";
 import { memoryFreshnessText } from "../memdir/memoryAge.js";
 import {
   singleLineMemoryText,
@@ -448,7 +449,7 @@ import { getOrgMemoryDecision } from "../services/orgMemory/orgMemoryDecision.js
 import { withDeadline } from "./sleep.js";
 import { addSkillDirectories } from "../skills/loadSkillsDir.js";
 import { memorySkillCommands, pendingMemorySkillQueue } from "../services/memorySync/memorySkills.js";
-import { Ji } from "../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../vendor/lodash-es/uniqBy.js";
 import { getSkillListingDigest, formatCommandsWithinBudget } from "../tools/SkillTool/prompt.js";
 import { getContextWindow } from "./model/configs.js";
 import { getSkillUsageScore } from "./suggestions/skillUsageTracking.js";
@@ -461,7 +462,7 @@ import { checkForLSPDiagnostics, clearAllLSPDiagnostics } from "../services/lsp/
 import { roughTokenCountEstimationForObject } from "../services/tokenEstimation.js";
 import { isDocumentExtension, isNotClaude3Model } from "./model/claude3Models.js";
 import { getPdfPageCount } from "./pdf.js";
-import { MAX_PDF_PAGES_PER_TURN } from "./truncateGraphemes.js";
+import { MAX_PDF_PAGES_PER_TURN } from "./mediaLimits.js";
 import { isInboundFileArriving } from "../bridge/attachmentFilesWait.js";
 import { SymlinkReadRefusedError } from "./fsSafety/atomicWriteStaging.js";
 import { TODO_WRITE_TOOL_NAME } from "../tools/TodoWriteTool/constants.js";
@@ -482,39 +483,51 @@ import { tokenCountFromLastAPIResponse, getTokenUsage } from "./tokens.js";
 import { isForkBoilerplateMessage } from "../constants/xml.js";
 import { getTokenCountFromUsage as getTokenCountFromUsage_5 } from "./messages/usageAndStopReason.js";
 import { getSessionCostUSD } from "../cost-tracker.js";
-import { buildGoalSentinelAttachment } from "../commands/goal/goal.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-bnwcqde4.js:4394-4502 fingerprint = createAttachmentMessage (1)
+/**
+ * 把一个 Attachment 包成内部 attachment 消息 {type:"attachment", uuid, timestamp, attachment}（jlr 规整附件字段）。
+ */
+function createAttachmentMessage(condition, condition_2) {
+  return {
+    type: "attachment",
+    uuid: randomUUID(),
+    timestamp: new Date().toISOString(),
+    attachment: buildGoalSentinelAttachment(condition, condition_2),
+  };
+}
 //@ chunk-e6aww6q8.js:117298-117385 fingerprint = memoryHeader (1)
 /**
  * 记忆文件标题行："<相对时间> Memory: <路径>:"，无时间时 "Memory: <路径>:"；relevant_memories 附件与 normalizeAttachmentForAPI 共用。
  */
 function memoryHeader(path, mtimeMs) {
   let staleness = memoryFreshnessText(mtimeMs);
-  let s = singleLineMemoryText(path);
+  let displayPath = singleLineMemoryText(path);
   return staleness
     ? `${staleness}
 
-Memory: ${s}:`
-    : `Memory: ${s}:`;
+Memory: ${displayPath}:`
+    : `Memory: ${displayPath}:`;
 }
 //@ chunk-e6aww6q8.js:195424-195506 fingerprint = INLINE_NOTIFICATION_MODES (1)
 /**
  * origin.kind 为 task-notification 时返回 "task-notification"，否则 "prompt"。旧版名 INLINE_NOTIFICATION_MODES 为错配（那是常量集合 jxr）。
  */
-function getQueuedNotificationMode(e) {
-  return e?.kind === "task-notification" ? "task-notification" : "prompt";
+function getQueuedNotificationMode(notification) {
+  return notification?.kind === "task-notification" ? "task-notification" : "prompt";
 }
 //@ chunk-e6aww6q8.js:1327724-1327982 placement
 /**
  * （误归 computerUse）判断目录项在读权限下是否应隐藏。
  */
-async function isEntryHiddenByPermissions(entry, ctx, r) {
+async function isEntryHiddenByPermissions(entry, ctx, signal) {
   let mapped = ctx.spellings.map((spelling) => join(spelling, entry.name));
   let [primaryPath] = mapped;
   if (primaryPath === undefined || ctx.isDenied(primaryPath, ctx.context)) return true;
   let filePath =
     !entry.isFile() && !entry.isDirectory() && isInstructionReadRestricted(ctx.context)
-      ? await readableInstructionSpellings(primaryPath, ctx, r)
+      ? await readableInstructionSpellings(primaryPath, ctx, signal)
       : mapped;
   return (
     filePath === undefined ||
@@ -537,17 +550,18 @@ var MAX_LISTED_ENTRIES = 1000;
  * （误归 computerUse）过滤被拒绝的目录项，最多扫描 1 万、列出 1000，超出追加 "… and N more entries"。
  */
 async function filterListableEntries(entries, ctx, signal) {
-  let s = isInstructionReadRestricted(ctx.context);
+  let instructionRestricted = isInstructionReadRestricted(ctx.context);
   let names = [];
   let min = Math.min(entries.length, MAX_SCANNED_ENTRIES);
   let index = 0;
   while (index < min && names.length < MAX_LISTED_ENTRIES) {
-    if (s && index > 0 && index % WALK_FLUSH_INTERVAL === 0) await THo();
+    if (instructionRestricted && index > 0 && index % WALK_FLUSH_INTERVAL === 0) await THo();
     let entry = entries[index];
-    let q = entry === undefined || (await isEntryHiddenByPermissions(entry, ctx, signal).catch(() => true));
-    if (s && signal.aborted) break;
+    let hidden =
+      entry === undefined || (await isEntryHiddenByPermissions(entry, ctx, signal).catch(() => true));
+    if (instructionRestricted && signal.aborted) break;
     index++;
-    if (entry !== undefined && !q) names.push(entry.name);
+    if (entry !== undefined && !hidden) names.push(entry.name);
   }
   return index < entries.length ? [...names, `\u2026 and ${entries.length - index} more entries`] : names;
 }
@@ -555,26 +569,30 @@ async function filterListableEntries(entries, ctx, signal) {
 /**
  * 记忆文件是否计入：tengu_paper_halyard 开时排除 Project/Local 类型，其余要求有内容。旧版名 getNestedMemoryAttachmentsForFile 为错配。
  */
-function shouldIncludeMemoryFile(e) {
+function shouldIncludeMemoryFile(memoryFile) {
   if (
-    (e.type === "Project" || e.type === "Local") &&
+    (memoryFile.type === "Project" || memoryFile.type === "Local") &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_paper_halyard", false)
   )
     return false;
-  return Boolean(e.content);
+  return Boolean(memoryFile.content);
 }
 //@ chunk-e6aww6q8.js:2305550-2305865 placement
 /**
  * URL 是否为 https://mcp.slack.com（严格校验）。
  */
-function isSlackMcpUrl(e) {
-  if (typeof e !== "string" || /[^\u0021-\u007e]|[\\@]/.test(e)) return false;
-  let lower = e.slice(0, 21).toLowerCase();
-  let r = e.charAt(21);
-  if (lower !== "https://mcp.slack.com" || (r !== "" && r !== "/" && r !== "?" && r !== "#")) return false;
+function isSlackMcpUrl(urlText) {
+  if (typeof urlText !== "string" || /[^\u0021-\u007e]|[\\@]/.test(urlText)) return false;
+  let lower = urlText.slice(0, 21).toLowerCase();
+  let nextChar = urlText.charAt(21);
+  if (
+    lower !== "https://mcp.slack.com" ||
+    (nextChar !== "" && nextChar !== "/" && nextChar !== "?" && nextChar !== "#")
+  )
+    return false;
   try {
-    let s = new URL(e);
-    return s.origin === "https://mcp.slack.com" && !s.pathname.startsWith("//");
+    let parsedUrl = new URL(urlText);
+    return parsedUrl.origin === "https://mcp.slack.com" && !parsedUrl.pathname.startsWith("//");
   } catch {
     return false;
   }
@@ -623,15 +641,15 @@ var SLACK_MCP_POSTING_GUIDANCE =
 /**
  * MCP 服务器附加说明块：Slack MCP 的发帖提示，以及（未禁用时）computer-use 说明。旧版名 pinCacheEdits 为错配；属于 MCP 说明，归错文件。
  */
-function getMcpServerInstructionBlocks(e) {
+function getMcpServerInstructionBlocks(mcpClients) {
   let mapped = [
     ...new Set(
-      e
-        .filter((s) => {
-          let url = getServerUrl_2(s.config);
+      mcpClients
+        .filter((mcpClient) => {
+          let url = getServerUrl_2(mcpClient.config);
           return url !== null && isSlackMcpUrl(unwrapCcrProxyUrl(url));
         })
-        .map((s) => s.name),
+        .map((mcpClient) => mcpClient.name),
     ),
   ].map((serverName) => ({
     serverName,
@@ -682,9 +700,9 @@ var ULTRA_EFFORT_CONFIG = {
 /**
  * 有限数字向下取整且至少为 1，否则 undefined。
  */
-function toPositiveInt(e) {
-  if (typeof e !== "number" || !Number.isFinite(e)) return;
-  return Math.max(1, Math.floor(e));
+function toPositiveInt(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return;
+  return Math.max(1, Math.floor(value));
 }
 //@ chunk-e6aww6q8.js:3310652-3310891 layout
 /**
@@ -710,8 +728,10 @@ var RELEVANT_MEMORIES_CONFIG = {
 /**
  * CLAUDE_CODE_DISABLE_ATTACHMENTS、CLAUDE_CODE_SIMPLE 或 bareFork 时为真；此时 getAttachments 只产出队列命令与少数必需增量。
  */
-function areAttachmentsDisabled(e) {
-  return Boolean(env.CLAUDE_CODE_DISABLE_ATTACHMENTS || env.CLAUDE_CODE_SIMPLE || e.options.bareFork);
+function areAttachmentsDisabled(toolUseContext) {
+  return Boolean(
+    env.CLAUDE_CODE_DISABLE_ATTACHMENTS || env.CLAUDE_CODE_SIMPLE || toolUseContext.options.bareFork,
+  );
 }
 //@ chunk-e6aww6q8.js:3311033-3319176 fingerprint = getAttachments (0.511)
 /**
@@ -750,33 +770,38 @@ async function getAttachments(
         );
   if (messages !== undefined)
     try {
-      let betas = options?.conversationLatches ?? stickyBetasForRequest(toolUseContext);
-      if (betas !== undefined && !betas.declaredToolsDecided) {
+      let seedingLatches = options?.conversationLatches ?? stickyBetasForRequest(toolUseContext);
+      if (seedingLatches !== undefined && !seedingLatches.declaredToolsDecided) {
         seedWireShapeFromRecord(
-          betas,
+          seedingLatches,
           snapshotIfEnabled(messages, toolUseContext.options)?.wireShape,
           toolUseContext.options.mainLoopModel,
         );
-        let pn = recordedDeferredTools(normalizedMessages);
-        mergeNameOnlyAnnouncements(betas, pn);
-        seedDeferredToolReferences(normalizedMessages, [...pn.entries.values()], {
-          strippedReferences: pn.strippedReferences,
+        let recordedDeferred = recordedDeferredTools(normalizedMessages);
+        mergeNameOnlyAnnouncements(seedingLatches, recordedDeferred);
+        seedDeferredToolReferences(normalizedMessages, [...recordedDeferred.entries.values()], {
+          strippedReferences: recordedDeferred.strippedReferences,
         });
-        if (pn.toolInputCopies.size > 0 && isEchoWireToolInputsEnabled(normalizedMessages))
-          adoptWireToolInputCopies(normalizedMessages, pn.toolInputCopies);
+        if (recordedDeferred.toolInputCopies.size > 0 && isEchoWireToolInputsEnabled(normalizedMessages))
+          adoptWireToolInputCopies(normalizedMessages, recordedDeferred.toolInputCopies);
       }
     } catch (error) {
       logError(error);
     }
   let toolPoolRefreshes = toolUseContext.options.refreshTools !== undefined;
   let modelImageLimits = imageLimitsForModel(toolUseContext.options.mainLoopModel);
-  let ke = toolUseContext.messageQueue.countRemainingWakePollEventsAfter(queuedCommands);
+  let remainingWakePolls = toolUseContext.messageQueue.countRemainingWakePollEventsAfter(queuedCommands);
   if (areAttachmentsDisabled(toolUseContext)) {
     if (options?.inputMentionsOnly) return [];
-    let queuedCommandAttachments = await getQueuedCommandAttachments(queuedCommands, modelImageLimits, ke, {
-      tools: toolUseContext.options.tools,
-      messages: toolUseContext.messages,
-    });
+    let queuedCommandAttachments = await getQueuedCommandAttachments(
+      queuedCommands,
+      modelImageLimits,
+      remainingWakePolls,
+      {
+        tools: toolUseContext.options.tools,
+        messages: toolUseContext.messages,
+      },
+    );
     if (env.CLAUDE_CODE_SIMPLE) return queuedCommandAttachments;
     return [
       ...queuedCommandAttachments,
@@ -854,8 +879,8 @@ async function getAttachments(
         ),
         maybe("peer_mentions", () =>
           options?.isHumanTypedPrompt && options.preExpansionInput !== undefined
-            ? atMentionedFilesPromise.then((rn) =>
-                getPeerMentionAttachments(options.preExpansionInput, toolUseContext, rn),
+            ? atMentionedFilesPromise.then((mentionedAttachments) =>
+                getPeerMentionAttachments(options.preExpansionInput, toolUseContext, mentionedAttachments),
               )
             : Promise.resolve([]),
         ),
@@ -867,15 +892,19 @@ async function getAttachments(
   let userAttachmentResults = await Promise.all(userInputProducers);
   abortController?.mark("prompt_producers");
   if (options?.inputMentionsOnly) {
-    let rn = await maybe("nested_memory", () => getNestedMemoryTriggerAttachments(timedContext));
+    let nestedMemoryAttachments = await maybe("nested_memory", () =>
+      getNestedMemoryTriggerAttachments(timedContext),
+    );
     abortController?.mark("ambient_wait");
     clearTimeout(timeoutId);
-    return [...userAttachmentResults.flat(), ...rn].filter((pn) => pn !== undefined && pn !== null);
+    return [...userAttachmentResults.flat(), ...nestedMemoryAttachments].filter(
+      (attachment) => attachment !== undefined && attachment !== null,
+    );
   }
   let getTodoOrTaskReminders = (() => {
-    let rn;
+    let cachedReminders;
     return () =>
-      (rn ??= todoToolsEnabled()
+      (cachedReminders ??= todoToolsEnabled()
         ? isTaskToolsEnabled()
           ? getTaskReminderAttachments(messages, toolUseContext.options.tools, toolUseContext.storageV5)
           : getTodoReminderAttachments(messages, toolUseContext)
@@ -895,7 +924,7 @@ async function getAttachments(
     isForwardingOffNoticeOn();
   let allThreadProducers = [
     maybe("queued_commands", () =>
-      getQueuedCommandAttachments(queuedCommands, modelImageLimits, ke, {
+      getQueuedCommandAttachments(queuedCommands, modelImageLimits, remainingWakePolls, {
         tools: toolUseContext.options.tools,
         messages: toolUseContext.messages,
       }),
@@ -938,21 +967,24 @@ async function getAttachments(
             : undefined,
           () => {
             let tools = toolUseContext.options.tools;
-            let pn = true;
-            let no = keptDeferredToolNames(normalizedMessages, tools, {
+            let reminderBudgetOnTop = true;
+            let keptDeferred = keptDeferredToolNames(normalizedMessages, tools, {
               keepMcp: true,
               surfacedOnWire: (toolUseContext.stickyBetas ?? getStickyBetas()).surfacedOnWire,
             });
-            let hn = [];
+            let revokedToolNames = [];
             try {
-              hn = hasDeclaredToolSet(declaredToolSource, tools, true);
+              revokedToolNames = hasDeclaredToolSet(declaredToolSource, tools, true);
             } catch (error) {
               logRetractionFailure(error);
-              let yn = new Set(tools.map((tool) => tool.name));
-              hn = declaredToolSource?.names.filter((Kn) => !yn.has(Kn)) ?? [];
+              let currentToolNames = new Set(tools.map((tool) => tool.name));
+              revokedToolNames =
+                declaredToolSource?.names.filter((toolName) => !currentToolNames.has(toolName)) ?? [];
             }
             return classifyRevokedTools(
-              no === undefined && hn.length === 0 ? undefined : uniq([...(no ?? []), ...hn]),
+              keptDeferred === undefined && revokedToolNames.length === 0
+                ? undefined
+                : uniq([...(keptDeferred ?? []), ...revokedToolNames]),
               toolUseContext.options.mcpClients,
               getToolPermissionContext(toolUseContext),
               declaredToolSource,
@@ -969,7 +1001,7 @@ async function getAttachments(
                 ...buildToolRevocationClassifier(toolUseContext),
                 serversDeclaredInline: new Set(
                   declaredToolSource?.names.flatMap(
-                    (rn) => declaredToolSource.sourceFor(rn)?.mcpInfo?.serverName ?? [],
+                    (toolName) => declaredToolSource.sourceFor(toolName)?.mcpInfo?.serverName ?? [],
                   ),
                 ),
               }
@@ -1139,18 +1171,18 @@ async function getAttachments(
         ]
       : []),
     maybe("total_tokens_reminder", () => {
-      let rn =
+      let shouldRemindAfterTurn =
         (options?.isRegularUserPrompt ?? false) &&
         getTotalTokensReminderMode(toolUseContext.options.mainLoopModel, undefined) !== "off" &&
         shouldRemindAfterUserTurn();
       return Promise.resolve(
-        (input === null && !options?.deliveredTurnStart) || rn
+        (input === null && !options?.deliveredTurnStart) || shouldRemindAfterTurn
           ? getTotalTokensReminderAttachment(
               toolUseContext.session,
               messages ?? [],
               toolUseContext.options.mainLoopModel,
               toolUseContext.agentId,
-              rn,
+              shouldRemindAfterTurn,
               toolUseContext.options.totalTokensReminderBudget,
               toolUseContext.options.isTotalTokensReminderBudgetOnTopOfStart === true,
             )
@@ -1270,7 +1302,7 @@ async function getAttachments(
   clearTimeout(timeoutId);
   return dedupeWithheldMemory(
     [...userAttachmentResults.flat(), ...allThreadResults.flat(), ...mainThreadResults.flat()].filter(
-      (rn) => rn !== undefined && rn !== null,
+      (attachment) => attachment !== undefined && attachment !== null,
     ),
   );
 }
@@ -1278,16 +1310,20 @@ async function getAttachments(
 /**
  * 去掉 withheld_memory 里已作为 nested_memory 出现或重复的路径，条目为空则丢弃整条附件。
  */
-function dedupeWithheldMemory(e) {
-  let n = new Set(e.flatMap((r) => (r.type === "nested_memory" ? [r.path] : [])));
-  return e.flatMap((r) => {
-    if (r.type !== "withheld_memory") return [r];
-    let filtered = r.entries.filter(({ path }) => !n.has(path) && n.add(path));
+function dedupeWithheldMemory(attachments) {
+  let nestedMemoryPaths = new Set(
+    attachments.flatMap((attachment) => (attachment.type === "nested_memory" ? [attachment.path] : [])),
+  );
+  return attachments.flatMap((attachment) => {
+    if (attachment.type !== "withheld_memory") return [attachment];
+    let filtered = attachment.entries.filter(
+      ({ path }) => !nestedMemoryPaths.has(path) && nestedMemoryPaths.add(path),
+    );
     return filtered.length === 0
       ? []
       : [
           {
-            ...r,
+            ...attachment,
             entries: filtered,
           },
         ];
@@ -1302,14 +1338,14 @@ async function maybe(label, f) {
   let startTime_2 = performance.now();
   let attachmentTimingStore = getAttachmentTimingStore();
   attachmentTimingStore?.producerBegan();
-  let y = Math.random() < 0.05;
+  let shouldLogTiming = Math.random() < 0.05;
   try {
     let result = await f();
     let duration = Date.now() - startTime;
     noteAttachmentProducer(label, startTime_2, attachmentTimingStore?.markedAt);
-    if (y) {
+    if (shouldLogTiming) {
       let attachmentSizeBytes = result
-        .filter((G) => G !== undefined && G !== null)
+        .filter((attachment) => attachment !== undefined && attachment !== null)
         .reduce((total, attachment) => total + jsonStringify(attachment).length, 0);
       logEvent("tengu_attachment_compute_duration", {
         label: fromEnum(label),
@@ -1322,7 +1358,7 @@ async function maybe(label, f) {
   } catch (e) {
     let duration = Date.now() - startTime;
     noteAttachmentProducer(label, startTime_2, attachmentTimingStore?.markedAt);
-    if (y)
+    if (shouldLogTiming)
       logEvent("tengu_attachment_compute_duration", {
         label: fromEnum(label),
         duration_ms: duration,
@@ -1341,35 +1377,40 @@ async function maybe(label, f) {
 /**
  * 能作为队列命令附件送入的模式集合：prompt、task-notification。
  */
-var INLINE_NOTIFICATION_MODES = new Set(["prompt", "task-notification"]);
+var INLINE_NOTIFICATION_MODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3320109", () => {
+  INLINE_NOTIFICATION_MODES = new Set(["prompt", "task-notification"]);
+});
 //@ chunk-e6aww6q8.js:3320157-3320260 layout
 /**
  * 队列命令自带 toolsUsed 且开关开启时，算出与对话里已用工具的差集 {toolsUsedDelta}。
  */
-function getToolsUsedDelta(toolsUsed, n) {
-  let r =
-    toolsUsed === undefined || !isGlimmeringFinchGateOn() ? undefined : unreadableToolsUsed(toolsUsed, n);
-  return r === undefined
+function getToolsUsedDelta(toolsUsed, messages) {
+  let unreadable =
+    toolsUsed === undefined || !isGlimmeringFinchGateOn()
+      ? undefined
+      : unreadableToolsUsed(toolsUsed, messages);
+  return unreadable === undefined
     ? undefined
     : {
-        toolsUsedDelta: r,
+        toolsUsedDelta: unreadable,
       };
 }
 //@ chunk-e6aww6q8.js:3320260-3320322 layout
 /**
  * 开关关闭时把队列命令 toolsUsed 说明拼进提示词文本；开启时原样返回（改由 toolsUsedDelta 字段携带）。
  */
-function appendToolsUsedNote(e, toolsUsed, r) {
+function appendToolsUsedNote(text, toolsUsed, messages) {
   return toolsUsed === undefined || isGlimmeringFinchGateOn()
-    ? e
-    : joinWithNewlineIfAny(e, unreadableToolsLine(toolsUsed, r));
+    ? text
+    : joinWithNewlineIfAny(text, unreadableToolsLine(toolsUsed, messages));
 }
 //@ chunk-e6aww6q8.js:3320322-3320361 layout
 /**
  * 队列命令模式是否在 INLINE_NOTIFICATION_MODES 里。
  */
-function isInlineNotificationMode(e) {
-  return INLINE_NOTIFICATION_MODES.has(e.mode);
+function isInlineNotificationMode(command) {
+  return INLINE_NOTIFICATION_MODES.has(command.mode);
 }
 //@ chunk-e6aww6q8.js:3320361-3323197 layout
 /**
@@ -1377,27 +1418,27 @@ function isInlineNotificationMode(e) {
  */
 async function getQueuedCommandAttachments(commands, imageLimits, remainingWakePollEvents = 0, opts) {
   if (!commands) return [];
-  let h = opts?.tools !== undefined && !hasSendMessageTool(opts.tools);
-  let y = opts?.tools !== undefined && isMessagingLimitedToOwnAgents();
+  let sendMessageToolAbsent = opts?.tools !== undefined && !hasSendMessageTool(opts.tools);
+  let messagingLimitedToOwnAgents = opts?.tools !== undefined && isMessagingLimitedToOwnAgents();
   let pollEventsAttachment = buildPollEventsAttachment(
     commands,
     remainingWakePollEvents,
     opts?.messages ?? [],
   );
   let filtered = commands.filter(isInlineNotificationMode);
-  for (let L of filtered)
+  for (let command of filtered)
     if (
-      L.mode === "prompt" &&
-      !L.isMeta &&
-      L.shouldQuery !== false &&
-      L.textNotTyped !== true &&
-      isHumanOrUnset(L.origin)
+      command.mode === "prompt" &&
+      !command.isMeta &&
+      command.shouldQuery !== false &&
+      command.textNotTyped !== true &&
+      isHumanOrUnset(command.origin)
     )
       notifySetupGuidePasted(
-        typeof L.value === "string"
-          ? L.value
+        typeof command.value === "string"
+          ? command.value
           : extractTextContent_2(
-              L.value,
+              command.value,
               `
 `,
             ),
@@ -1416,24 +1457,25 @@ async function getQueuedCommandAttachments(commands, imageLimits, remainingWakeP
         !command.verifiedSlackHumanTurn
       )
         notePersonPrompt(uuid, new Date().toISOString(), command.clientPlatform);
-      let q = [];
-      let Z = [];
+      let imageBlocks = [];
+      let imagePasteIds = [];
       let text =
         command.isMeta === true && isAutoContinuationOrigin(command.origin)
           ? undefined
           : command.promptSubmitted?.text;
-      let we = text === undefined ? command.value : replacePromptText(command.value, text);
-      if (typeof we === "string") we = appendToolsUsedNote(we, command.toolsUsed, opts?.messages ?? []);
+      let promptValue = text === undefined ? command.value : replacePromptText(command.value, text);
+      if (typeof promptValue === "string")
+        promptValue = appendToolsUsedNote(promptValue, command.toolsUsed, opts?.messages ?? []);
       try {
-        if (typeof we !== "string")
-          we = await Promise.all(
-            we.map(async (Ie) =>
-              Ie.type === "image" ? (await checkImageBlockSource(Ie, imageLimits)).block : Ie,
+        if (typeof promptValue !== "string")
+          promptValue = await Promise.all(
+            promptValue.map(async (block) =>
+              block.type === "image" ? (await checkImageBlockSource(block, imageLimits)).block : block,
             ),
           );
         let pastedImageBlocks = await buildPastedImageBlocks(command.pastedContents, imageLimits);
-        q = pastedImageBlocks.blocks;
-        Z = pastedImageBlocks.ids;
+        imageBlocks = pastedImageBlocks.blocks;
+        imagePasteIds = pastedImageBlocks.ids;
       } catch (error) {
         if (error instanceof ImageResizeError)
           logForDebugging(
@@ -1451,10 +1493,10 @@ async function getQueuedCommandAttachments(commands, imageLimits, remainingWakeP
         command.taskDelivery && !getTaskRunState().bashTaskSnapshots.get(command.taskDelivery.taskId)?.fetched
           ? command.taskDelivery
           : undefined;
-      if (q.length > 0) {
+      if (imageBlocks.length > 0) {
         let text_2 =
-          typeof we === "string"
-            ? we
+          typeof promptValue === "string"
+            ? promptValue
             : (text ??
               (typeof command.value === "string"
                 ? command.value
@@ -1463,27 +1505,27 @@ async function getQueuedCommandAttachments(commands, imageLimits, remainingWakeP
                     `
 `,
                   )));
-        we =
+        promptValue =
           text !== undefined && text.trim() === ""
-            ? [...q]
+            ? [...imageBlocks]
             : [
                 {
                   type: "text",
                   text: text_2,
                 },
-                ...q,
+                ...imageBlocks,
               ];
       }
       command.deliveryId ??= randomUUID();
       return {
         type: "queued_command",
-        prompt: we,
+        prompt: promptValue,
         source_uuid: uuid,
         delivery_id: command.deliveryId,
-        imagePasteIds: q.length > 0 ? Z : undefined,
+        imagePasteIds: imageBlocks.length > 0 ? imagePasteIds : undefined,
         fileAttachments: command.fileAttachments,
         inlinedImagePaths: command.inlinedImagePaths,
-        imageFileUuids: keepBridgeFileIds(command.imageFileUuids, command.value, we),
+        imageFileUuids: keepBridgeFileIds(command.imageFileUuids, command.value, promptValue),
         commandMode: command.mode,
         origin: normalizeTaskNotificationOrigin(command.origin),
         ...(text !== undefined &&
@@ -1522,7 +1564,8 @@ async function getQueuedCommandAttachments(commands, imageLimits, remainingWakeP
           inputSource: command.inputSource,
         }),
         ...(command.origin?.kind === "peer" &&
-          (h || (y && command.origin.senderTaskId === undefined)) && {
+          (sendMessageToolAbsent ||
+            (messagingLimitedToOwnAgents && command.origin.senderTaskId === undefined)) && {
             sendMessageToolAbsent: true,
           }),
         ...(command.hearthRelayRows && {
@@ -1539,10 +1582,10 @@ async function getQueuedCommandAttachments(commands, imageLimits, remainingWakeP
           isHumanOrigin(command.origin) &&
           !command.verifiedSlackHumanTurn &&
           !isOnlySystemReminders(
-            (typeof we === "string"
-              ? we
+            (typeof promptValue === "string"
+              ? promptValue
               : extractTextContent_2(
-                  we,
+                  promptValue,
                   `
 `,
                 )
@@ -1565,33 +1608,33 @@ async function getQueuedCommandAttachments(commands, imageLimits, remainingWakeP
     }),
   )
     .then(batchRelayedSlackPrompts)
-    .then((L) => (pollEventsAttachment ? [pollEventsAttachment, ...L] : L));
+    .then((attachments) => (pollEventsAttachment ? [pollEventsAttachment, ...attachments] : attachments));
 }
 //@ chunk-e6aww6q8.js:3323197-3323716 layout
 /**
  * 队列中的轮询事件（poll event）合并成一个 poll_events 附件：envelopes、kinds、toolsUsed、媒体、剩余唤醒数、来源等。
  */
-function buildPollEventsAttachment(commands, remainingWakeCount, r) {
-  let filtered = commands.filter(isPollEventMode);
-  if (filtered.length === 0) return null;
-  let declaredPollEvents = collectDeclaredPollEvents(filtered);
-  let mapped = filtered.map((w) => w.pollEvent?.kind ?? "unknown");
-  let S = mapped.every(mentionsSessionNoticeKind)
+function buildPollEventsAttachment(commands, remainingWakeCount, messages) {
+  let entries = commands.filter(isPollEventMode);
+  if (entries.length === 0) return null;
+  let declaredPollEvents = collectDeclaredPollEvents(entries);
+  let mapped = entries.map((command) => command.pollEvent?.kind ?? "unknown");
+  let toolsUsed = mapped.every(mentionsSessionNoticeKind)
     ? []
-    : listUnreadableToolsUsed(getConversationToolsUsed().names(), r);
+    : listUnreadableToolsUsed(getConversationToolsUsed().names(), messages);
   return {
     type: "poll_events",
-    envelopes: filtered.map(getPollEventEnvelope),
+    envelopes: entries.map(getPollEventEnvelope),
     kinds: mapped,
-    ...(S.length > 0 && {
-      toolsUsed: S,
+    ...(toolsUsed.length > 0 && {
+      toolsUsed,
     }),
-    ...(filtered.some((w) => w.pollEvent?.media !== undefined) && {
-      media: filtered.map((w) => w.pollEvent?.media ?? []),
+    ...(entries.some((command) => command.pollEvent?.media !== undefined) && {
+      media: entries.map((command) => command.pollEvent?.media ?? []),
     }),
     remainingWakeCount,
-    timestamp: filtered.at(-1)?.timestamp,
-    provenance: filtered.map((w) => w.pollEvent?.provenance ?? null),
+    timestamp: entries.at(-1)?.timestamp,
+    provenance: entries.map((command) => command.pollEvent?.provenance ?? null),
     ...(declaredPollEvents !== undefined && {
       declared: declaredPollEvents,
     }),
@@ -1600,37 +1643,37 @@ function buildPollEventsAttachment(commands, remainingWakeCount, r) {
       isVelvetyRippleOn() && {
         userRoleGuard: true,
       }),
-    ...declaredRoundStamp(filtered),
+    ...declaredRoundStamp(entries),
   };
 }
 //@ chunk-e6aww6q8.js:3323716-3324119 layout
 /**
  * 连续的已验证 Slack 人工轮次提示词合并：第一条带 batchedRelayPrompts，其余标记 renderedByBatchHead。
  */
-function batchRelayedSlackPrompts(e) {
-  let n = (s) =>
-    s.verifiedSlackHumanTurn === true &&
-    s.isMeta !== true &&
-    isHumanOrUnset(s.origin) &&
-    typeof s.prompt === "string" &&
-    !s.inlinedImagePaths?.length &&
-    !s.toolsUsedDelta?.length;
-  let r = 0;
-  while (r < e.length) {
-    if (!n(e[r])) {
-      r++;
+function batchRelayedSlackPrompts(attachments) {
+  let isRelayable = (attachment) =>
+    attachment.verifiedSlackHumanTurn === true &&
+    attachment.isMeta !== true &&
+    isHumanOrUnset(attachment.origin) &&
+    typeof attachment.prompt === "string" &&
+    !attachment.inlinedImagePaths?.length &&
+    !attachment.toolsUsedDelta?.length;
+  let index = 0;
+  while (index < attachments.length) {
+    if (!isRelayable(attachments[index])) {
+      index++;
       continue;
     }
-    let s = r + 1;
-    while (s < e.length && n(e[s])) s++;
-    if (s - r >= 2) {
-      let sliced = e.slice(r, s);
-      sliced[0].batchedRelayPrompts = sliced.map((y) => y.prompt);
+    let runEnd = index + 1;
+    while (runEnd < attachments.length && isRelayable(attachments[runEnd])) runEnd++;
+    if (runEnd - index >= 2) {
+      let sliced = attachments.slice(index, runEnd);
+      sliced[0].batchedRelayPrompts = sliced.map((attachment) => attachment.prompt);
       for (let idx = 1; idx < sliced.length; idx++) sliced[idx].renderedByBatchHead = true;
     }
-    r = s;
+    index = runEnd;
   }
-  return e;
+  return attachments;
 }
 //@ chunk-e6aww6q8.js:3324119-3324744 layout
 /**
@@ -1638,48 +1681,48 @@ function batchRelayedSlackPrompts(e) {
  */
 async function getAgentPendingMessageAttachments(agentId, taskRegistry, tools, messages = []) {
   if (!agentId) return [];
-  let h = drainPendingMessages(agentId, taskRegistry);
-  let y = [];
-  for (let L of h) {
-    let G = agentMessageOrigin(L.origin);
-    if (G === undefined) {
-      y.push(L);
+  let pendingMessages = drainPendingMessages(agentId, taskRegistry);
+  let keptMessages = [];
+  for (let message of pendingMessages) {
+    let messageOrigin = agentMessageOrigin(message.origin);
+    if (messageOrigin === undefined) {
+      keptMessages.push(message);
       continue;
     }
-    let q = await receiveAgentMessage(G, L.text, agentId);
-    if (q.consumed === undefined)
-      y.push(
-        q.text === L.text
-          ? L
+    let received = await receiveAgentMessage(messageOrigin, message.text, agentId);
+    if (received.consumed === undefined)
+      keptMessages.push(
+        received.text === message.text
+          ? message
           : {
-              ...L,
-              text: q.text,
-              ...(L.origin?.kind === "peer" && {
-                origin: stripPeerMessageBody(L.origin, q.text, L.text),
+              ...message,
+              text: received.text,
+              ...(message.origin?.kind === "peer" && {
+                origin: stripPeerMessageBody(message.origin, received.text, message.text),
               }),
             },
       );
   }
-  dropIfAnyMessages(y);
-  let S = !hasSendMessageTool(tools);
-  let w = mintedDeliveries(y.map((L) => L.forwarded));
-  return y.flatMap((L, G) => [
-    ...(w[G] ?? []),
+  dropIfAnyMessages(keptMessages);
+  let sendMessageToolAbsent = !hasSendMessageTool(tools);
+  let forwardedDeliveries = mintedDeliveries(keptMessages.map((message) => message.forwarded));
+  return keptMessages.flatMap((message, index) => [
+    ...(forwardedDeliveries[index] ?? []),
     {
       type: "queued_command",
-      prompt: appendToolsUsedNote(L.text, L.toolsUsed, messages),
-      source_uuid: L.shownAs ?? randomUUID(),
-      origin: L.origin,
-      isMeta: L.isMeta,
-      ...(S &&
-        L.origin?.kind === "peer" && {
+      prompt: appendToolsUsedNote(message.text, message.toolsUsed, messages),
+      source_uuid: message.shownAs ?? randomUUID(),
+      origin: message.origin,
+      isMeta: message.isMeta,
+      ...(sendMessageToolAbsent &&
+        message.origin?.kind === "peer" && {
           sendMessageToolAbsent: true,
         }),
       ...forwardedTurnReminder({
-        origin: L.origin,
-        isMeta: L.isMeta,
+        origin: message.origin,
+        isMeta: message.isMeta,
       }),
-      ...getToolsUsedDelta(L.toolsUsed, messages),
+      ...getToolsUsedDelta(message.toolsUsed, messages),
     },
   ]);
 }
@@ -1701,16 +1744,16 @@ async function buildPastedImageBlocks(pastedContents, limits) {
     };
   return {
     blocks: await Promise.all(
-      filtered.map(async (h) => {
+      filtered.map(async (attachment) => {
         let { block } = await maybeResizeAndDownsampleImageBlock({
-          data: h.content,
-          mediaType: h.mediaType,
+          data: attachment.content,
+          mediaType: attachment.mediaType,
           limits,
         });
         return block;
       }),
     ),
-    ids: filtered.map((h) => h.id),
+    ids: filtered.map((attachment) => attachment.id),
   };
 }
 //@ chunk-e6aww6q8.js:3325029-3325400 fingerprint = getPlanModeAttachmentTurnCount (0.9)
@@ -1749,78 +1792,81 @@ function isMeaningfulText(text) {
 /**
  * AskUserQuestion、ExitPlanMode、SendUserFile、Brief 等会被视为"对用户说话"的工具名集合（静默轮判断用）。
  */
-var USER_FACING_TOOL_NAMES = new Set([
-  ASKUSERQUESTION,
-  BRIEF_TOOL_NAME,
-  LEGACY_BRIEF_TOOL_NAME,
-  EXITPLANMODE,
-  SEND_USER_FILE_TOOL_NAME,
-]);
+var USER_FACING_TOOL_NAMES; // deferred: uses briefToolModule (./conversationRecovery.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3325461", () => {
+  USER_FACING_TOOL_NAMES = new Set([
+    ASKUSERQUESTION,
+    BRIEF_TOOL_NAME,
+    LEGACY_BRIEF_TOOL_NAME,
+    EXITPLANMODE,
+    SEND_USER_FILE_TOOL_NAME,
+  ]);
+});
 //@ chunk-e6aww6q8.js:3325497-3326453 file-local
 /**
  * 统计静默轮：从最新往回数没有对用户输出（文本/可见思考/用户可见工具）的助手轮数、本段内已发 silent_turn_reminder 次数、静默开始时间。旧版名 getAutoModeAttachmentTurnCount 为错配。
  */
 function getSilentTurnStats(messages) {
-  let n = 0;
-  let r = 0;
-  let s;
-  let h;
-  let y;
-  let S = false;
-  let w;
-  let L = () => {
-    if (h === undefined) return false;
-    if (S) {
-      s ??= y;
+  let turnsSinceLastReminder = 0;
+  let remindersInStretch = 0;
+  let silentSince;
+  let currentMessageId;
+  let currentTurnTimestamp;
+  let turnHadVisibleOutput = false;
+  let lastTimestamp;
+  let finishTurn = () => {
+    if (currentMessageId === undefined) return false;
+    if (turnHadVisibleOutput) {
+      silentSince ??= currentTurnTimestamp;
       return true;
     }
-    if (r === 0) n++;
-    h = undefined;
-    S = false;
+    if (remindersInStretch === 0) turnsSinceLastReminder++;
+    currentMessageId = undefined;
+    turnHadVisibleOutput = false;
     return false;
   };
   for (let idx = messages.length - 1; idx >= 0; idx--) {
     let message = messages[idx];
     if (message !== undefined && isVirtualConversationMessage(message)) continue;
-    w = message?.timestamp;
+    lastTimestamp = message?.timestamp;
     if (message?.type === "assistant") {
       let id = message.message.id;
-      if (id !== h) {
-        if (L())
+      if (id !== currentMessageId) {
+        if (finishTurn())
           return {
-            turnsSinceLastReminder: n,
-            remindersInStretch: r,
-            silentSince: s,
+            turnsSinceLastReminder,
+            remindersInStretch,
+            silentSince,
           };
-        h = id;
-        y = message.timestamp;
+        currentMessageId = id;
+        currentTurnTimestamp = message.timestamp;
       }
       let content = message.message.content;
       if (
         Array.isArray(content) &&
         content.some(
-          (ke) =>
-            (ke.type === "text" && isMeaningfulText(ke.text)) ||
-            (ke.type === "thinking" && hasNarrationThinking(ke)) ||
-            (ke.type === "tool_use" && USER_FACING_TOOL_NAMES.has(ke.name)),
+          (block) =>
+            (block.type === "text" && isMeaningfulText(block.text)) ||
+            (block.type === "thinking" && hasNarrationThinking(block)) ||
+            (block.type === "tool_use" && USER_FACING_TOOL_NAMES.has(block.name)),
         )
       )
-        S = true;
+        turnHadVisibleOutput = true;
       continue;
     }
-    if (L())
+    if (finishTurn())
       return {
-        turnsSinceLastReminder: n,
-        remindersInStretch: r,
-        silentSince: s,
+        turnsSinceLastReminder,
+        remindersInStretch,
+        silentSince,
       };
     if (message?.type === "attachment" && message.attachment.type === "silent_turn_reminder") {
-      r++;
-      s ??= message.timestamp;
+      remindersInStretch++;
+      silentSince ??= message.timestamp;
       continue;
     }
     if (message?.type === "user" && !message.isMeta && !hasToolResultContent(message.message.content)) {
-      s ??= message.timestamp;
+      silentSince ??= message.timestamp;
       break;
     }
     if (
@@ -1829,36 +1875,38 @@ function getSilentTurnStats(messages) {
       !hasToolResultContent(message.message.content) &&
       !isTurnCompanion(message)
     )
-      s ??= message.timestamp;
+      silentSince ??= message.timestamp;
   }
-  L();
-  s ??= w;
+  finishTurn();
+  silentSince ??= lastTimestamp;
   return {
-    turnsSinceLastReminder: n,
-    remindersInStretch: r,
-    silentSince: s,
+    turnsSinceLastReminder,
+    remindersInStretch,
+    silentSince,
   };
 }
 //@ chunk-e6aww6q8.js:3326453-3326819 layout
 /**
  * 静默轮达到阈值（轮数或秒数，按模型配置）时产出 silent_turn_reminder 附件。
  */
-function getSilentTurnReminderAttachment(messages, mainLoopModel, r) {
+function getSilentTurnReminderAttachment(messages, mainLoopModel, nowMs) {
   let { turnsSinceLastReminder, remindersInStretch, silentSince } = getSilentTurnStats(messages);
-  let S = silentSince === undefined ? NaN : r - Date.parse(silentSince);
-  let w = Number.isFinite(S) ? Math.floor(S / 1000) : undefined;
+  let silentMs = silentSince === undefined ? NaN : nowMs - Date.parse(silentSince);
+  let silentSeconds = Number.isFinite(silentMs) ? Math.floor(silentMs / 1000) : undefined;
   let silentTurnReminderSeconds = getSilentTurnReminderSeconds(mainLoopModel);
   if (
     !(silentTurnReminderSeconds === undefined
       ? remindersInStretch < SILENT_TURN_REMINDER_MIN_GAP &&
         turnsSinceLastReminder >= cachedSilentTurnReminderTurns()
-      : turnsSinceLastReminder >= 1 && w !== undefined && w >= silentTurnReminderSeconds)
+      : turnsSinceLastReminder >= 1 &&
+        silentSeconds !== undefined &&
+        silentSeconds >= silentTurnReminderSeconds)
   )
     return [];
   logFeatureOk("silent_turn_reminder", {
     turns: turnsSinceLastReminder,
-    ...(w !== undefined && {
-      silent_seconds: w,
+    ...(silentSeconds !== undefined && {
+      silent_seconds: silentSeconds,
     }),
   });
   return [
@@ -1905,8 +1953,8 @@ function getLastPlanModeAttachmentInfo(messages) {
 /**
  * 工具列表里有 ExitPlanMode。
  */
-function hasExitPlanModeTool(e) {
-  return e.some((n) => toolMatchesName(n, EXITPLANMODE));
+function hasExitPlanModeTool(tools) {
+  return tools.some((tool) => toolMatchesName(tool, EXITPLANMODE));
 }
 //@ chunk-e6aww6q8.js:3327384-3327508 layout
 /**
@@ -1927,34 +1975,34 @@ function buildPlanModeAttachment(reminderType, agentId, tools) {
 /**
  * 计划模式（permission mode=plan）时产出 plan_mode 附件：首轮或每 5 轮一次，每 5 次一次完整版，其余精简；计划文件状态变化时立即重发；曾退出后重新进入时给 plan_mode_reentry。
  */
-async function getPlanModeAttachments(e, messages, toolUseContext, options) {
+async function getPlanModeAttachments(planSlugSeed, messages, toolUseContext, options) {
   if (getToolPermissionContext(toolUseContext).mode !== "plan") return [];
   let lastPlanModeAttachmentInfo = getLastPlanModeAttachmentInfo(messages ?? []);
-  let S =
+  let needsRefresh =
     lastPlanModeAttachmentInfo !== null &&
     ((lastPlanModeAttachmentInfo.planFilePath === undefined) !== isDiskless() ||
       (isDiskless() &&
         (lastPlanModeAttachmentInfo.planGoesToExitTool === true) !==
           hasExitPlanModeTool(toolUseContext.options.tools)));
-  if (messages && messages.length > 0 && !S) {
+  if (messages && messages.length > 0 && !needsRefresh) {
     let { turnCount, foundPlanModeAttachment } = getPlanModeAttachmentTurnCount(messages);
     if (foundPlanModeAttachment && turnCount < PLAN_MODE_ATTACHMENT_CONFIG.TURNS_BETWEEN_ATTACHMENTS)
       return [];
   }
-  let L =
+  let useFullReminder =
     (countPlanModeAttachmentsSinceLastExit(messages ?? []) + 1) %
       PLAN_MODE_ATTACHMENT_CONFIG.FULL_REMINDER_EVERY_N_ATTACHMENTS ===
     1;
   if (isDiskless())
     return [
       buildPlanModeAttachment(
-        L || S ? "full" : "sparse",
+        useFullReminder || needsRefresh ? "full" : "sparse",
         toolUseContext.agentId,
         toolUseContext.options.tools,
       ),
     ];
   if (isStorageV5Enabled() && toolUseContext.storageV5 !== undefined) await settlePlanFileCachePrime();
-  getPlanSlug(getSessionId(), options?.planSlugSeed ?? e ?? undefined);
+  getPlanSlug(getSessionId(), options?.planSlugSeed ?? planSlugSeed ?? undefined);
   let planFilePath = getPlanFilePath(toolUseContext.agentId);
   let existingPlan = getPlan(toolUseContext.agentId);
   let attachments = [];
@@ -1965,7 +2013,7 @@ async function getPlanModeAttachments(e, messages, toolUseContext, options) {
     });
     setHasExitedPlanMode(false);
   }
-  let reminderType = S || L ? "full" : "sparse";
+  let reminderType = needsRefresh || useFullReminder ? "full" : "sparse";
   attachments.push({
     type: "plan_mode",
     reminderType,
@@ -2024,11 +2072,11 @@ function getLastAutoModeAttachment(messages) {
  */
 async function getAutoModeAttachments(messages, toolUseContext) {
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
-  let s = toolPermissionContext.mode === "bypassPermissions";
-  if (toolPermissionContext.mode !== "auto" && !s) return [];
-  let h = s || leanPromptFor(getPromptModel(toolUseContext.options.mainLoopModel));
+  let isBypassMode = toolPermissionContext.mode === "bypassPermissions";
+  if (toolPermissionContext.mode !== "auto" && !isBypassMode) return [];
+  let steerOnly = isBypassMode || leanPromptFor(getPromptModel(toolUseContext.options.mainLoopModel));
   let tools = toolUseContext.options.tools;
-  let S =
+  let bashFirst =
     tools.some((tool) => toolMatchesName(tool, BASH_TOOL_NAME)) &&
     tools.some(
       (tool) => toolMatchesName(tool, FILE_EDIT_TOOL_NAME) || toolMatchesName(tool, FILE_WRITE_TOOL_NAME),
@@ -2036,33 +2084,38 @@ async function getAutoModeAttachments(messages, toolUseContext) {
     true &&
     true &&
     isThriftySonicEnabled();
-  let w =
-    !s &&
+  let canFinishExposedWork =
+    !isBypassMode &&
     toolUseContext.agentId === undefined &&
     !isTeammate() &&
     (!isProactivityActive() || toolUseContext.getProactivityLevel() === "default");
-  if (h && !S && !w) return [];
+  if (steerOnly && !bashFirst && !canFinishExposedWork) return [];
   let lastAutoModeAttachment = getLastAutoModeAttachment(messages ?? []);
-  let G =
-    lastAutoModeAttachment?.steerOnly === true && lastAutoModeAttachment.bashFirst === false && h && S && !s;
-  if (lastAutoModeAttachment && !(lastAutoModeAttachment.steerOnly && !h) && !G) return [];
-  let reminderType = G
+  let finishExposedWork =
+    lastAutoModeAttachment?.steerOnly === true &&
+    lastAutoModeAttachment.bashFirst === false &&
+    steerOnly &&
+    bashFirst &&
+    !isBypassMode;
+  if (lastAutoModeAttachment && !(lastAutoModeAttachment.steerOnly && !steerOnly) && !finishExposedWork)
+    return [];
+  let reminderType = finishExposedWork
     ? lastAutoModeAttachment?.finishExposedWork === true
-    : w && getFeatureValue_SESSION_PINNED("tengu_vivid_crown", false);
-  if (h && !S && !reminderType) return [];
+    : canFinishExposedWork && getFeatureValue_SESSION_PINNED("tengu_vivid_crown", false);
+  if (steerOnly && !bashFirst && !reminderType) return [];
   return [
     {
       type: "auto_mode",
-      autoModeConsentFlow: !s && isAutoModeConsentFlowEnabled(toolUseContext.agentId),
+      autoModeConsentFlow: !isBypassMode && isAutoModeConsentFlowEnabled(toolUseContext.agentId),
       finishExposedWork: reminderType,
-      bashFirst: S,
-      ...(S && {
+      bashFirst,
+      ...(bashFirst && {
         bashFirstSteer: lastAutoModeAttachment?.bashFirst
           ? (lastAutoModeAttachment.bashFirstSteer ?? "strict")
           : bashFirstSteerVariant(),
       }),
-      steerOnly: h,
-      bypass: s,
+      steerOnly,
+      bypass: isBypassMode,
       ...false,
     },
   ];
@@ -2118,26 +2171,30 @@ function getWorkflowKeywordAttachment(input) {
  * effort 为 ultra 时：首次给完整 ultra_effort_enter，之后每 N 轮给精简版；退出 ultra 时给 ultra_effort_exit。
  */
 function getUltraEffortAttachments(messages, toolUseContext) {
-  let r = isUltracodeActive(getUltracodeRequested(toolUseContext), toolUseContext.options.mainLoopModel);
-  let s = "none";
-  let h = 0;
+  let isUltracode = isUltracodeActive(
+    getUltracodeRequested(toolUseContext),
+    toolUseContext.options.mainLoopModel,
+  );
+  let lastUltraMode = "none";
+  let userTurnsSinceMarker = 0;
   if (messages)
     for (let idx = messages.length - 1; idx >= 0; idx--) {
-      let S = messages[idx];
-      if (S === undefined) continue;
-      if (S.type === "attachment") {
-        if (S.attachment.type === "ultra_effort_enter") {
-          s = "enter";
+      let message = messages[idx];
+      if (message === undefined) continue;
+      if (message.type === "attachment") {
+        if (message.attachment.type === "ultra_effort_enter") {
+          lastUltraMode = "enter";
           break;
         }
-        if (S.attachment.type === "ultra_effort_exit") {
-          s = "exit";
+        if (message.attachment.type === "ultra_effort_exit") {
+          lastUltraMode = "exit";
           break;
         }
-      } else if (S.type === "user" && !S.isMeta && !hasToolResultContent(S.message.content)) h++;
+      } else if (message.type === "user" && !message.isMeta && !hasToolResultContent(message.message.content))
+        userTurnsSinceMarker++;
     }
-  if (r) {
-    if (s !== "enter") {
+  if (isUltracode) {
+    if (lastUltraMode !== "enter") {
       logEvent("tengu_ultra_effort", {
         is_enter: true,
         is_full: true,
@@ -2149,7 +2206,7 @@ function getUltraEffortAttachments(messages, toolUseContext) {
         },
       ];
     }
-    if (h >= getUltraEffortReminderInterval()) {
+    if (userTurnsSinceMarker >= getUltraEffortReminderInterval()) {
       logEvent("tengu_ultra_effort", {
         is_enter: true,
         is_full: false,
@@ -2163,7 +2220,7 @@ function getUltraEffortAttachments(messages, toolUseContext) {
     }
     return [];
   }
-  if (s === "enter") {
+  if (lastUltraMode === "enter") {
     logEvent("tengu_ultra_effort", {
       is_enter: false,
     });
@@ -2179,29 +2236,29 @@ function getUltraEffortAttachments(messages, toolUseContext) {
 /**
  * 无已记录工具声明时，从对话推断上次请求声明的工具集合（Fmn）。
  */
-function inferDeclaredToolsFromHistory(betas, tools, context, s) {
+function inferDeclaredToolsFromHistory(betas, tools, context, messages) {
   let nonDeferrableBuiltins = getNonDeferrableBuiltins();
   return computeDeclaredToolSet(
     betas,
     tools,
-    (y) => isDeferredTool_2(y, nonDeferrableBuiltins),
+    (tool) => isDeferredTool_2(tool, nonDeferrableBuiltins),
     context,
-    !s.some((y) => y.type === "assistant"),
+    !messages.some((message) => message.type === "assistant"),
   );
 }
 //@ chunk-e6aww6q8.js:3335333-3335492 layout
 /**
  * 由 toolUseContext 构造延迟工具增量所需的上下文 {latches, toolPoolRefreshes, byValue}。
  */
-function buildDeferredToolsLatchContext(e, n, querySource) {
-  return e === undefined
+function buildDeferredToolsLatchContext(latches, toolUseContext, querySource) {
+  return latches === undefined
     ? undefined
     : {
-        latches: e,
-        toolPoolRefreshes: n.options.refreshTools !== undefined,
+        latches,
+        toolPoolRefreshes: toolUseContext.options.refreshTools !== undefined,
         byValue: buildToolListingRenderer(
-          () => getToolPermissionContext(n),
-          n.options.agentDefinitions,
+          () => getToolPermissionContext(toolUseContext),
+          toolUseContext.options.agentDefinitions,
           querySource,
         ),
       };
@@ -2210,31 +2267,38 @@ function buildDeferredToolsLatchContext(e, n, querySource) {
 /**
  * 同上，参数直接给出（runAgent 用）。
  */
-function buildDeferredToolsLatchContextFrom(latches, toolPoolRefreshes, r, agentDefinitions, querySource) {
+function buildDeferredToolsLatchContextFrom(
+  latches,
+  toolPoolRefreshes,
+  getToolPermissionContext,
+  agentDefinitions,
+  querySource,
+) {
   return {
     latches,
     toolPoolRefreshes,
-    byValue: buildToolListingRenderer(() => r, agentDefinitions, querySource),
+    byValue: buildToolListingRenderer(() => getToolPermissionContext, agentDefinitions, querySource),
   };
 }
 //@ chunk-e6aww6q8.js:3335577-3335663 layout
 /**
  * 把历史里只宣布名字的延迟工具并入会话门闩。
  */
-function mergeNameOnlyAnnouncements(e, n) {
-  for (let nameOnlyAnnouncement of n.nameOnlyAnnouncements) e.nameOnlyAnnouncements.add(nameOnlyAnnouncement);
+function mergeNameOnlyAnnouncements(latches, recorded) {
+  for (let nameOnlyAnnouncement of recorded.nameOnlyAnnouncements)
+    latches.nameOnlyAnnouncements.add(nameOnlyAnnouncement);
 }
 //@ chunk-e6aww6q8.js:3335663-3335862 layout
 /**
  * 生成工具描述渲染参数（权限上下文、代理列表、listed/deferred 放置）与 querySource。
  */
-function buildToolListingRenderer(e, n, querySource) {
+function buildToolListingRenderer(getToolPermissionContext, agentDefinitions, querySource) {
   return {
     render: {
-      getToolPermissionContext: async () => e(),
-      agents: n.activeAgents,
-      allowedAgentTypes: n.allowedAgentTypes,
-      enginePlacementOf: (s) => (isDeferredToolByEngine(s) ? "deferred" : "listed"),
+      getToolPermissionContext: async () => getToolPermissionContext(),
+      agents: agentDefinitions.activeAgents,
+      allowedAgentTypes: agentDefinitions.allowedAgentTypes,
+      enginePlacementOf: (tool) => (isDeferredToolByEngine(tool) ? "deferred" : "listed"),
     },
     querySource,
   };
@@ -2243,27 +2307,27 @@ function buildToolListingRenderer(e, n, querySource) {
 /**
  * 取上次请求声明的工具（名字/服务器/条目），没有记录时推断。
  */
-function getDeclaredToolSource(e, n, r, s, permissionContext) {
+function getDeclaredToolSource(latches, messages, options, tools, permissionContext) {
   try {
     return (
       resolveDeclaredToolSet(
-        e,
+        latches,
         () => {
-          let y = snapshotIfEnabled(n, r);
+          let snapshot = snapshotIfEnabled(messages, options);
           return (
-            y && {
-              names: y.toolDescriptions.keys(),
-              servers: y.toolServers,
-              entries: y.toolEntries,
+            snapshot && {
+              names: snapshot.toolDescriptions.keys(),
+              servers: snapshot.toolServers,
+              entries: snapshot.toolEntries,
             }
           );
         },
-        s,
+        tools,
         {
           latch: false,
           permissionContext,
         },
-      ) ?? inferDeclaredToolsFromHistory(e, s, r.mainLoopModel, n)
+      ) ?? inferDeclaredToolsFromHistory(latches, tools, options.mainLoopModel, messages)
     );
   } catch (error) {
     logError(error);
@@ -2277,56 +2341,56 @@ function getDeclaredToolSource(e, n, r, s, permissionContext) {
 async function getDeferredToolsDeltaAttachments(
   tools,
   model,
-  r,
+  messages,
   scanContext,
   pendingMcpServers,
   needsAuthMcpServers,
   failedMcpServers,
-  w,
+  getKeptDeferredNames,
   heldInlineTools,
-  G,
+  latchContext,
   departures,
-  options = {},
+  requestOptions = {},
 ) {
-  let Se = false;
-  if (G !== undefined)
+  let announceDeferred = false;
+  if (latchContext !== undefined)
     try {
-      Se = shouldAnnounceDeferredTools(G.latches, model, {
-        toolSearchToolFilteredOut: toolSearchToolFilteredOut(model, tools, G.latches),
-        toolPoolRefreshes: G.toolPoolRefreshes,
+      announceDeferred = shouldAnnounceDeferredTools(latchContext.latches, model, {
+        toolSearchToolFilteredOut: toolSearchToolFilteredOut(model, tools, latchContext.latches),
+        toolPoolRefreshes: latchContext.toolPoolRefreshes,
         aheadOfRequest: true,
       });
     } catch (error) {
       logError(toError(error));
     }
-  if (!Se) {
+  if (!announceDeferred) {
     if (!isToolSearchEnabledOptimistic()) return [];
     if (!modelSupportsToolReference(model)) return [];
     if (isVertexModelWithoutToolSearch(getCanonicalName(model))) return [];
     if (!isToolSearchToolAvailable(tools)) return [];
     if (
       toolSearchDeclaredIn(
-        snapshotIfEnabled(messagesSinceCompactBoundary(r ?? []), options)?.toolDescriptions,
+        snapshotIfEnabled(messagesSinceCompactBoundary(messages ?? []), requestOptions)?.toolDescriptions,
       ) === false
     )
       return [];
-    if (G && toolSearchRejectedOn(G.latches, model)) return [];
+    if (latchContext && toolSearchRejectedOn(latchContext.latches, model)) return [];
   }
   let deferredToolsDelta = getDeferredToolsDelta(
     tools,
-    r ?? [],
+    messages ?? [],
     scanContext,
     pendingMcpServers,
     needsAuthMcpServers,
     failedMcpServers,
-    w?.(),
+    getKeptDeferredNames?.(),
     heldInlineTools,
-    Se && G !== undefined
+    announceDeferred && latchContext !== undefined
       ? {
-          nameOnlyAnnouncements: G.latches.nameOnlyAnnouncements,
+          nameOnlyAnnouncements: latchContext.latches.nameOnlyAnnouncements,
         }
       : undefined,
-    G?.latches.nameOnlyAnnouncements,
+    latchContext?.latches.nameOnlyAnnouncements,
     departures,
   );
   if (
@@ -2334,7 +2398,7 @@ async function getDeferredToolsDeltaAttachments(
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_composed_treehouse", false)
   )
     deferredToolsDelta.deniedLead = true;
-  let we = deferredToolsDelta
+  let baseAttachments = deferredToolsDelta
     ? [
         {
           type: "deferred_tools_delta",
@@ -2342,67 +2406,83 @@ async function getDeferredToolsDeltaAttachments(
         },
       ]
     : [];
-  if (G === undefined) return we;
+  if (latchContext === undefined) return baseAttachments;
   try {
-    if (!canInlineToolAdditions(G.latches, model)) return we;
-    let Ee = await computeByValueToolsDelta(deferredToolsDelta, tools, model, r ?? [], G);
-    return Ee
+    if (!canInlineToolAdditions(latchContext.latches, model)) return baseAttachments;
+    let byValueDelta = await computeByValueToolsDelta(
+      deferredToolsDelta,
+      tools,
+      model,
+      messages ?? [],
+      latchContext,
+    );
+    return byValueDelta
       ? [
           {
             type: "deferred_tools_delta",
-            ...Ee,
+            ...byValueDelta,
           },
         ]
       : [];
   } catch (error) {
     logError(toError(error));
-    return we;
+    return baseAttachments;
   }
 }
 //@ chunk-e6aww6q8.js:3336970-3338419 layout
 /**
  * 按值内联声明的工具：比较当前描述与已声明描述，得出需要重新声明、移除的工具。
  */
-async function computeByValueToolsDelta(deferredToolsDelta, getToolPermissionContext, model, s, h) {
-  let { definedByValue, withdrawn } = findLatestDeferredToolsDelta(s, h.latches.nameOnlyAnnouncements);
-  let w = (name) => definedByValue.has(name) && !withdrawn.has(name);
-  let { render, querySource } = h.byValue;
-  let q = (tools) => getToolListingHash(tools, getToolPermissionContext, render);
-  let Z = new Map();
-  for (let Je of deferredToolsDelta?.readdedNames ?? []) {
-    let nt = definedByValue.get(Je);
-    let found = getToolPermissionContext.find((yt) => toolMatchesName(yt, Je));
-    if (!withdrawn.has(Je) || nt === undefined || found === undefined) continue;
-    let Et = await q(found);
-    Z.set(
-      Je,
-      Et === nt.listing
+async function computeByValueToolsDelta(
+  deferredToolsDelta,
+  getToolPermissionContext,
+  model,
+  messages,
+  latchContext,
+) {
+  let { definedByValue, withdrawn } = findLatestDeferredToolsDelta(
+    messages,
+    latchContext.latches.nameOnlyAnnouncements,
+  );
+  let isKnownDefinition = (name) => definedByValue.has(name) && !withdrawn.has(name);
+  let { render, querySource } = latchContext.byValue;
+  let hashForTool = (tools) => getToolListingHash(tools, getToolPermissionContext, render);
+  let readdedListings = new Map();
+  for (let toolName of deferredToolsDelta?.readdedNames ?? []) {
+    let defined = definedByValue.get(toolName);
+    let found = getToolPermissionContext.find((tool) => toolMatchesName(tool, toolName));
+    if (!withdrawn.has(toolName) || defined === undefined || found === undefined) continue;
+    let listing = await hashForTool(found);
+    readdedListings.set(
+      toolName,
+      listing === defined.listing
         ? {
-            name: Je,
-            listing: Et,
-            sameAs: nt.definedIn,
+            name: toolName,
+            listing,
+            sameAs: defined.definedIn,
           }
         : "afresh",
     );
   }
-  let Se = new Set([...(deferredToolsDelta?.surfacedNames ?? []), ...Z.keys()]);
-  let ke = new Set(deferredToolsDelta?.removedNames ?? []);
-  let we = [];
-  for (let Je of getToolPermissionContext)
+  let surfacedNames = new Set([...(deferredToolsDelta?.surfacedNames ?? []), ...readdedListings.keys()]);
+  let removedNames = new Set(deferredToolsDelta?.removedNames ?? []);
+  let changedTools = [];
+  for (let tool of getToolPermissionContext)
     if (
-      w(Je.name) &&
-      !Se.has(Je.name) &&
-      !ke.has(Je.name) &&
-      (await q(Je)) !== definedByValue.get(Je.name)?.listing
+      isKnownDefinition(tool.name) &&
+      !surfacedNames.has(tool.name) &&
+      !removedNames.has(tool.name) &&
+      (await hashForTool(tool)) !== definedByValue.get(tool.name)?.listing
     )
-      we.push(Je);
-  let filtered = [...ke].filter(w);
-  if (deferredToolsDelta === null && we.length === 0) return null;
+      changedTools.push(tool);
+  let filtered = [...removedNames].filter(isKnownDefinition);
+  if (deferredToolsDelta === null && changedTools.length === 0) return null;
   let toolListingEntries = await buildToolListingEntries(
     getToolPermissionContext.filter(
-      (Je) =>
-        (Se.has(Je.name) && Z.get(Je.name) !== undefined ? Z.get(Je.name) === "afresh" : Se.has(Je.name)) ||
-        we.includes(Je),
+      (tool) =>
+        (surfacedNames.has(tool.name) && readdedListings.get(tool.name) !== undefined
+          ? readdedListings.get(tool.name) === "afresh"
+          : surfacedNames.has(tool.name)) || changedTools.includes(tool),
     ),
     getToolPermissionContext,
     model,
@@ -2410,27 +2490,29 @@ async function computeByValueToolsDelta(deferredToolsDelta, getToolPermissionCon
     querySource,
   );
   if (toolListingEntries === undefined) return deferredToolsDelta;
-  let Ie = deferredToolsDelta ?? {
+  let baseDelta = deferredToolsDelta ?? {
     addedNames: [],
     addedLines: [],
     removedNames: [],
     wireHiddenNames: [],
     readdedNames: [],
   };
-  let filtered_2 = [...Z.values()].filter((Je) => Je !== "afresh");
-  let sorted = [...toolListingEntries, ...filtered_2].sort((Je, nt) => Je.name.localeCompare(nt.name));
-  let sorted_2 = we.map((Je) => Je.name).sort();
-  let lt = {
+  let filtered_2 = [...readdedListings.values()].filter((entry) => entry !== "afresh");
+  let sorted = [...toolListingEntries, ...filtered_2].sort((leftEntry, rightEntry) =>
+    leftEntry.name.localeCompare(rightEntry.name),
+  );
+  let sorted_2 = changedTools.map((tool) => tool.name).sort();
+  let stats = {
     definitions: toolListingEntries.length - sorted_2.length,
     replacements: sorted_2.length,
     pointers: filtered_2.length,
     withdrawals: filtered.length,
   };
-  if (Object.values(lt).some((Je) => Je > 0)) logEvent("tengu_inline_tools_announced", lt);
+  if (Object.values(stats).some((count) => count > 0)) logEvent("tengu_inline_tools_announced", stats);
   return {
-    ...Ie,
-    ...(Se.size > 0 && {
-      surfacedNames: [...Se].sort(),
+    ...baseDelta,
+    ...(surfacedNames.size > 0 && {
+      surfacedNames: [...surfacedNames].sort(),
     }),
     ...(sorted.length > 0 && {
       surfacedDefinitions: sorted,
@@ -2447,59 +2529,65 @@ async function computeByValueToolsDelta(deferredToolsDelta, getToolPermissionCon
 /**
  * 已声明但现在被撤回（权限或配置变化，不含未配置/替换）的工具名。压缩时使用。
  */
-function getRevokedDeferredToolNames(e, context) {
-  let r;
+function getRevokedDeferredToolNames(declaredToolSource, context) {
+  let revokedNames;
   try {
-    r = hasDeclaredToolSet(e, context.options.tools, true);
+    revokedNames = hasDeclaredToolSet(declaredToolSource, context.options.tools, true);
   } catch (error) {
     logRetractionFailure(error);
     return [];
   }
-  if (r.length === 0) return [];
+  if (revokedNames.length === 0) return [];
   let toolPermissionContext = getToolPermissionContext(context);
   return (
-    classifyRevokedTools(r, context.options.mcpClients, toolPermissionContext, e)
+    classifyRevokedTools(revokedNames, context.options.mcpClients, toolPermissionContext, declaredToolSource)
       ?.revoked.filter(
-        (h) =>
-          h.cause !== "not_configured" &&
-          h.cause !== "replaced" &&
-          h.cause !== UNCLASSIFIED_2 &&
+        (revokedTool) =>
+          revokedTool.cause !== "not_configured" &&
+          revokedTool.cause !== "replaced" &&
+          revokedTool.cause !== UNCLASSIFIED_2 &&
           !isToolDisallowedThisTurn(toolPermissionContext, {
-            name: h.name,
-            mcpInfo: e?.sourceFor(h.name)?.mcpInfo,
+            name: revokedTool.name,
+            mcpInfo: declaredToolSource?.sourceFor(revokedTool.name)?.mcpInfo,
           }),
       )
-      .map((h) => h.name) ?? []
+      .map((revokedTool) => revokedTool.name) ?? []
   );
 }
 //@ chunk-e6aww6q8.js:3338745-3339051 layout
 /**
  * 对一组工具名逐个判断撤回原因，返回 {revoked:[{name,cause}], causeCounts}。
  */
-function classifyRevokedTools(e, mcpClients, toolPermissionContext, s) {
-  if (e === undefined) return;
+function classifyRevokedTools(toolNames, mcpClients, toolPermissionContext, declaredToolSource) {
+  if (toolNames === undefined) return;
   try {
-    let h = [];
-    let y = {};
-    let S;
-    for (let w of e) {
-      S ??= getDenyRuleIndex(toolPermissionContext);
-      let L = describeToolAvailability(w, mcpClients, toolPermissionContext, s?.sourceFor(w), S);
-      y[L.kind] = (y[L.kind] ?? 0) + 1;
-      if (isPermanentUnavailability(L))
-        h.push({
-          name: w,
-          cause: L.kind,
+    let revoked = [];
+    let causeCounts = {};
+    let denyRuleIndex;
+    for (let toolName of toolNames) {
+      denyRuleIndex ??= getDenyRuleIndex(toolPermissionContext);
+      let availability = describeToolAvailability(
+        toolName,
+        mcpClients,
+        toolPermissionContext,
+        declaredToolSource?.sourceFor(toolName),
+        denyRuleIndex,
+      );
+      causeCounts[availability.kind] = (causeCounts[availability.kind] ?? 0) + 1;
+      if (isPermanentUnavailability(availability))
+        revoked.push({
+          name: toolName,
+          cause: availability.kind,
         });
     }
     return {
-      revoked: h,
-      causeCounts: y,
+      revoked,
+      causeCounts,
     };
   } catch (error) {
     logRetractionFailure(error);
     return {
-      revoked: e.map((name) => ({
+      revoked: toolNames.map((name) => ({
         name,
         cause: UNCLASSIFIED_2,
       })),
@@ -2511,22 +2599,28 @@ function classifyRevokedTools(e, mcpClients, toolPermissionContext, s) {
 /**
  * 返回 causeKindOf/holdWhileConnecting/connectingServersOf，供延迟工具增量判断 MCP 连接中的工具。
  */
-function buildToolRevocationClassifier(e) {
-  let n;
-  let r;
+function buildToolRevocationClassifier(toolUseContext) {
+  let permissionContext;
+  let denyRuleIndex;
   return {
-    causeKindOf: (s) => {
+    causeKindOf: (toolName) => {
       try {
-        n ??= getToolPermissionContext(e);
-        r ??= getDenyRuleIndex(n);
-        return describeToolAvailability(s, e.options.mcpClients, n, undefined, r).kind;
+        permissionContext ??= getToolPermissionContext(toolUseContext);
+        denyRuleIndex ??= getDenyRuleIndex(permissionContext);
+        return describeToolAvailability(
+          toolName,
+          toolUseContext.options.mcpClients,
+          permissionContext,
+          undefined,
+          denyRuleIndex,
+        ).kind;
       } catch (error) {
         logRetractionFailure(error);
         return UNCLASSIFIED_2;
       }
     },
     holdWhileConnecting: isSortedOtterOn(),
-    connectingServersOf: (s) => pendingServersForTool(s, e.options.mcpClients),
+    connectingServersOf: (toolName) => pendingServersForTool(toolName, toolUseContext.options.mcpClients),
   };
 }
 //@ chunk-e6aww6q8.js:3339285-3340409 fingerprint = getAgentListingDeltaAttachment (0.709)
@@ -2560,18 +2654,18 @@ async function getAgentListingDeltaAttachment(toolUseContext, messages) {
   let removed = [];
   for (let t of announced) if (!currentTypes.has(t)) removed.push(t);
   if (added.length === 0 && removed.length === 0) return [];
-  added.sort((Z, Se) => compareStringsGrouped(Z.agentType, Se.agentType));
+  added.sort((leftAgent, rightAgent) => compareStringsGrouped(leftAgent.agentType, rightAgent.agentType));
   removed.sort();
-  let q = leanPromptFor(getPromptModel(toolUseContext.options.mainLoopModel));
+  let isLeanPrompt = leanPromptFor(getPromptModel(toolUseContext.options.mainLoopModel));
   return [
     {
       type: "agent_listing_delta",
-      addedTypes: added.map((Z) => Z.agentType),
-      addedLines: added.map((Z) => formatAgentLine(Z, q)),
-      builtInTypes: added.filter((Z) => Z.source === "built-in").map((Z) => Z.agentType),
+      addedTypes: added.map((agent) => agent.agentType),
+      addedLines: added.map((agent) => formatAgentLine(agent, isLeanPrompt)),
+      builtInTypes: added.filter((agent) => agent.source === "built-in").map((agent) => agent.agentType),
       builtInPluginTypes: added
-        .filter((Z) => Z.source === "plugin" && marketplaceSuffix(Z.plugin) === BUILTIN)
-        .map((Z) => Z.agentType),
+        .filter((agent) => agent.source === "plugin" && marketplaceSuffix(agent.plugin) === BUILTIN)
+        .map((agent) => agent.agentType),
       removedTypes: removed,
       isInitial: announced.size === 0,
       showConcurrencyNote: !shouldSteerCostToHost() && getSubagentSteer() === "default",
@@ -2583,19 +2677,21 @@ async function getAgentListingDeltaAttachment(toolUseContext, messages) {
  * 需要认证（needs-auth）且未有认证占位工具的 MCP 服务器名。
  */
 function getNeedsAuthMcpServerNames(mcpClients, tools = []) {
-  let r = new Set(tools.flatMap((s) => (s.mcpInfo?.isAuthStub ? [s.mcpInfo.serverName] : [])));
+  let authStubServers = new Set(
+    tools.flatMap((tool) => (tool.mcpInfo?.isAuthStub ? [tool.mcpInfo.serverName] : [])),
+  );
   return mcpClients
     .filter(
-      (s) =>
-        s.type === "needs-auth" &&
-        !r.has(s.name) &&
+      (mcpClient) =>
+        mcpClient.type === "needs-auth" &&
+        !authStubServers.has(mcpClient.name) &&
         !(
           claudeInChromeSession().attachedInstructions &&
-          s.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME &&
-          isClaudeAiProxyServer(s.config)
+          mcpClient.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME &&
+          isClaudeAiProxyServer(mcpClient.config)
         ),
     )
-    .map((s) => s.name);
+    .map((mcpClient) => mcpClient.name);
 }
 //@ chunk-e6aww6q8.js:3340643-3340968 fingerprint = getMcpInstructionsDeltaAttachment (0.777)
 /**
@@ -2606,7 +2702,7 @@ function getMcpInstructionsDeltaAttachment(
   tools,
   model,
   messages,
-  h,
+  runtimeModel,
   holdRetractionsWhilePending = false,
 ) {
   let clientSideInstructions = [...getMcpServerInstructionBlocks(mcpClients)];
@@ -2622,9 +2718,9 @@ function getMcpInstructionsDeltaAttachment(
     !isVertexModelWithoutToolSearch(getCanonicalName(model)) &&
     isToolSearchToolAvailable(tools) &&
     tools.some(
-      (G) =>
-        G.mcpInfo?.serverName === CLAUDE_IN_CHROME_MCP_SERVER_NAME &&
-        isDeferredToolInConversation(G, h, tools),
+      (tool) =>
+        tool.mcpInfo?.serverName === CLAUDE_IN_CHROME_MCP_SERVER_NAME &&
+        isDeferredToolInConversation(tool, runtimeModel, tools),
     )
   )
     clientSideInstructions.push({
@@ -2649,11 +2745,11 @@ function getMcpInstructionsDeltaAttachment(
 /**
  * MCP 工具被丢弃时产出 mcp_dropped_tools_delta。
  */
-function getMcpDroppedToolsAttachment(e, n) {
+function getMcpDroppedToolsAttachment(toolUseContext, messages) {
   let mcpDroppedToolsDelta = buildMcpDroppedToolsDelta(
-    e.options.mcpClients,
-    n ?? [],
-    getToolPermissionContext(e),
+    toolUseContext.options.mcpClients,
+    messages ?? [],
+    getToolPermissionContext(toolUseContext),
   );
   if (!mcpDroppedToolsDelta) return [];
   return [
@@ -2684,23 +2780,24 @@ async function getOutputStyleAttachment(toolUseContext) {
   if ((getSettings_DEPRECATED()?.outputStyle || "default") === "default") return [];
   let outputStyleConfig = await getOutputStyleConfig();
   if (!outputStyleConfig) return [];
-  let h = !hasBackgroundBashStopAfterReply();
-  let y = h && (isTidySlothGateOn() || !getIsNonInteractiveSession());
-  let S =
+  let noStopAfterReply = !hasBackgroundBashStopAfterReply();
+  let monitorOrLocalShell = noStopAfterReply && (isTidySlothGateOn() || !getIsNonInteractiveSession());
+  let waitingTurn =
     outputStyleConfig.waitingTurnReminder !== undefined &&
     toolUseContext.agentId === undefined &&
     Object.values(toolUseContext.taskRegistry.all()).some(
-      (w) =>
-        w.status === "running" &&
-        w.toolUseId !== undefined &&
-        !("agentId" in w && w.agentId !== undefined) &&
-        ((h && isMonitorShellTask(w)) || (y && isLocalShellTask(w) && w.isBackgrounded)),
+      (task) =>
+        task.status === "running" &&
+        task.toolUseId !== undefined &&
+        !("agentId" in task && task.agentId !== undefined) &&
+        ((noStopAfterReply && isMonitorShellTask(task)) ||
+          (monitorOrLocalShell && isLocalShellTask(task) && task.isBackgrounded)),
     );
   return [
     {
       type: "output_style",
       style: outputStyleConfig.name,
-      turnReminder: S ? outputStyleConfig.waitingTurnReminder : outputStyleConfig.turnReminder,
+      turnReminder: waitingTurn ? outputStyleConfig.waitingTurnReminder : outputStyleConfig.turnReminder,
     },
   ];
 }
@@ -2754,42 +2851,43 @@ function getDirectoriesToProcess(targetPath, originalCwd) {
   let targetDir = dirname(resolve_2(targetPath));
   if (!isPathWithinOrEqual(targetDir, originalCwd))
     try {
-      let G = getFsImplementation().realpathSync(targetDir);
-      if (isPathWithinOrEqual(G, originalCwd)) targetDir = G;
+      let realTargetDir = getFsImplementation().realpathSync(targetDir);
+      if (isPathWithinOrEqual(realTargetDir, originalCwd)) targetDir = realTargetDir;
     } catch {}
   let worktreeForPath = findWorktreeForPath(targetDir, originalCwd);
-  let h = mapCheckoutPathIntoWorktree(targetDir, worktreeForPath);
-  let y = [];
-  for (let G = h; G !== originalCwd && G !== parse(G).root; G = dirname(G))
-    if (isPathWithinOrEqual(G, originalCwd)) y.push(mapPathIntoWorktree(G, worktreeForPath));
-  y.reverse();
+  let checkoutTargetDir = mapCheckoutPathIntoWorktree(targetDir, worktreeForPath);
+  let nestedDirs = [];
+  for (let dir = checkoutTargetDir; dir !== originalCwd && dir !== parse(dir).root; dir = dirname(dir))
+    if (isPathWithinOrEqual(dir, originalCwd)) nestedDirs.push(mapPathIntoWorktree(dir, worktreeForPath));
+  nestedDirs.reverse();
   let cwdLevelDirs = [];
-  let w = originalCwd;
-  while (w !== parse(w).root) {
-    cwdLevelDirs.push(w);
-    w = dirname(w);
+  let dir = originalCwd;
+  while (dir !== parse(dir).root) {
+    cwdLevelDirs.push(dir);
+    dir = dirname(dir);
   }
   cwdLevelDirs.reverse();
   let worktreeRoots = getWorktreeRoots(originalCwd);
   return {
-    nestedDirs: y,
+    nestedDirs,
     cwdLevelDirs: cwdLevelDirs.filter(
       (cwdLevelDir) => !isInMainRepoOutsideWorktree(cwdLevelDir, worktreeRoots),
     ),
     worktree: worktreeForPath,
-    checkoutTargetPath: worktreeForPath === null ? targetPath : join(h, basename(resolve_2(targetPath))),
+    checkoutTargetPath:
+      worktreeForPath === null ? targetPath : join(checkoutTargetDir, basename(resolve_2(targetPath))),
   };
 }
 //@ chunk-e6aww6q8.js:3342595-3342705 layout
 /**
  * 附加工作目录不在 cwd 下且其 CLAUDE.md 没有嵌套目录。
  */
-function isAdditionalDirWithoutNestedMemory(e) {
+function isAdditionalDirWithoutNestedMemory(dir) {
   let originalCwd = getOriginalCwd();
   return (
-    getAdditionalClaudeMdDirs().includes(e) &&
-    !isPathWithinOrEqual(e, originalCwd) &&
-    getDirectoriesToProcess(join(e, "CLAUDE.md"), originalCwd).nestedDirs.length === 0
+    getAdditionalClaudeMdDirs().includes(dir) &&
+    !isPathWithinOrEqual(dir, originalCwd) &&
+    getDirectoriesToProcess(join(dir, "CLAUDE.md"), originalCwd).nestedDirs.length === 0
   );
 }
 //@ chunk-e6aww6q8.js:3342705-3342782 callgraph-fingerprint = isInstructionsMemoryType (1)
@@ -2809,43 +2907,47 @@ async function memoryFilesToAttachments(
   triggerPath,
   announcementState,
   worktree = null,
-  y = false,
+  isTriggerRead = false,
 ) {
   let attachments = [];
   let shouldFireHook = hasInstructionsLoadedHook();
   let maxMemoryFileChars = getMaxMemoryFileChars(toolUseContext.options.mainLoopModel);
   for (let memoryFile of memoryFiles) {
     if (toolUseContext.readFileState.has(memoryFile.path)) continue;
-    let timestamp = await getReadTimestamp(memoryFile, !y, toolUseContext.storageV5);
+    let timestamp = await getReadTimestamp(memoryFile, !isTriggerRead, toolUseContext.storageV5);
     if (toolUseContext.readFileState.has(memoryFile.path)) continue;
     let trimmed = memoryFile.content.trim();
     let flattened = uniq([memoryFile.path, mapCheckoutPathIntoWorktree(memoryFile.path, worktree)]).flatMap(
-      (lt) => announcementState?.announced?.get(lt) ?? [],
+      (path) => announcementState?.announced?.get(path) ?? [],
     );
-    let any = flattened.some((lt) => lt.content === trimmed);
-    let we = !any && flattened.some((lt) => isTruncatedCopyOf(lt, trimmed));
-    let Ee = any || we;
-    let Ae = we || (!any && memoryFile.type !== "Managed" && trimmed.length > maxMemoryFileChars);
-    let Ie = Ae ? truncateInstructionsAtLine(trimmed, memoryFile.path, maxMemoryFileChars) : trimmed;
-    let Me = announcementState?.nested.get(memoryFile.path);
-    let We = Me === Ie || Me === trimmed;
-    if (!Ee && !We) {
-      if (Ae) logFeatureSad("context_claude_md_load", "nested_file_cut");
+    let any = flattened.some((announced) => announced.content === trimmed);
+    let isTruncatedCopyOfPrior = !any && flattened.some((announced) => isTruncatedCopyOf(announced, trimmed));
+    let alreadyAnnounced = any || isTruncatedCopyOfPrior;
+    let isTruncated =
+      isTruncatedCopyOfPrior ||
+      (!any && memoryFile.type !== "Managed" && trimmed.length > maxMemoryFileChars);
+    let content = isTruncated
+      ? truncateInstructionsAtLine(trimmed, memoryFile.path, maxMemoryFileChars)
+      : trimmed;
+    let nestedAnnounced = announcementState?.nested.get(memoryFile.path);
+    let isNestedAnnounced = nestedAnnounced === content || nestedAnnounced === trimmed;
+    if (!alreadyAnnounced && !isNestedAnnounced) {
+      if (isTruncated) logFeatureSad("context_claude_md_load", "nested_file_cut");
       attachments.push({
         type: "nested_memory",
         path: memoryFile.path,
-        content: Ae
+        content: isTruncated
           ? {
               ...memoryFile,
-              content: Ie,
+              content,
               rawContent: undefined,
             }
           : memoryFile,
-        displayPath: y ? memoryFile.path : relative(getCwd(), memoryFile.path),
+        displayPath: isTriggerRead ? memoryFile.path : relative(getCwd(), memoryFile.path),
       });
     }
-    if (y) announcementState?.nested.set(memoryFile.path, Ie);
-    let readFileState = y ? undefined : toolUseContext.readFileState;
+    if (isTriggerRead) announcementState?.nested.set(memoryFile.path, content);
+    let readFileState = isTriggerRead ? undefined : toolUseContext.readFileState;
     readFileState?.set(memoryFile.path, {
       content: memoryFile.contentDiffersFromDisk
         ? (memoryFile.rawContent ?? memoryFile.content)
@@ -2853,14 +2955,14 @@ async function memoryFilesToAttachments(
       timestamp,
       offset: undefined,
       limit: undefined,
-      isPartialView: Ae || memoryFile.contentDiffersFromDisk,
+      isPartialView: isTruncated || memoryFile.contentDiffersFromDisk,
       seededFromContext: true,
       keepContent: true,
     });
-    if (Ae && getFeatureValue_CACHED_MAY_BE_STALE("tengu_quizzical_mango", true))
+    if (isTruncated && getFeatureValue_CACHED_MAY_BE_STALE("tengu_quizzical_mango", true))
       readFileState?.markStartOnly(memoryFile.path);
-    if (Ee) continue;
-    if (We) continue;
+    if (alreadyAnnounced) continue;
+    if (isNestedAnnounced) continue;
     if (isInstructionsMemoryType_2(memoryFile.type))
       notifySetupGuideLoaded(
         memoryFile.content,
@@ -2891,23 +2993,28 @@ async function memoryFilesToAttachments(
 /**
  * 汇总对话里已宣布/嵌套/withheld 的记忆文件，用于去重。
  */
-async function getMemoryAnnouncementState(e, n) {
+async function getMemoryAnnouncementState(toolUseContext, messages) {
   try {
-    let r = messagesSinceCompactBoundary(n);
-    let s = latestInstructionFiles(r);
-    if (s && s.size > 0) {
-      let h = await lexMarkdownWith(
-        e.session,
-        isStorageV5Enabled() ? e.storageV5 : undefined,
-        isStorageV5Enabled() ? e.credentials : undefined,
+    let normalizedMessages = messagesSinceCompactBoundary(messages);
+    let announced = latestInstructionFiles(normalizedMessages);
+    if (announced && announced.size > 0) {
+      let lexed = await lexMarkdownWith(
+        toolUseContext.session,
+        isStorageV5Enabled() ? toolUseContext.storageV5 : undefined,
+        isStorageV5Enabled() ? toolUseContext.credentials : undefined,
       );
-      let y = new Set(h && filterManagedInstructions(h, e.options).map((S) => S.path));
-      for (let key of [...s.keys()]) if (!y.has(key)) s.delete(key);
+      let managedPaths = new Set(
+        lexed &&
+          filterManagedInstructions(lexed, toolUseContext.options).map(
+            (instructionFile) => instructionFile.path,
+          ),
+      );
+      for (let key of [...announced.keys()]) if (!managedPaths.has(key)) announced.delete(key);
     }
     return {
-      announced: s,
-      nested: collectNestedMemoryContents(r),
-      withheld: seenWithheldPaths(e, n),
+      announced,
+      nested: collectNestedMemoryContents(normalizedMessages),
+      withheld: seenWithheldPaths(toolUseContext, messages),
     };
   } catch (error) {
     logError(error);
@@ -2920,18 +3027,18 @@ async function getMemoryAnnouncementState(e, n) {
  */
 async function* iterateMemoryFilesForPath(
   targetPath,
-  storageV5,
-  r = getDirectoriesToProcess(targetPath, getOriginalCwd()),
+  excludeMatcher,
+  directories = getDirectoriesToProcess(targetPath, getOriginalCwd()),
   heldOutsideTracker,
 ) {
   let processedPaths = new Set();
-  let { nestedDirs, cwdLevelDirs, worktree, checkoutTargetPath } = r;
-  yield await getManagedAndUserConditionalRules(checkoutTargetPath, processedPaths, storageV5);
+  let { nestedDirs, cwdLevelDirs, worktree, checkoutTargetPath } = directories;
+  yield await getManagedAndUserConditionalRules(checkoutTargetPath, processedPaths, excludeMatcher);
   for (let nestedDir of nestedDirs) {
-    let q = worktree !== null && isPathWithinOrEqual(nestedDir, worktree.worktreeRoot);
+    let isWithinWorktree = worktree !== null && isPathWithinOrEqual(nestedDir, worktree.worktreeRoot);
     yield await getMemoryFilesForNestedDirectory(
       nestedDir,
-      q ? targetPath : checkoutTargetPath,
+      isWithinWorktree ? targetPath : checkoutTargetPath,
       processedPaths,
       {
         held: heldOutsideTracker?.within,
@@ -2952,15 +3059,15 @@ async function* iterateMemoryFilesForPath(
 /**
  * 读取受限时返回记录"被拦在外面"的记忆文件的跟踪器。
  */
-function buildHeldOutsideTracker(context, n) {
-  let r = mergePersistedDenyRules(context);
-  return isInstructionReadRestricted(r)
+function buildHeldOutsideTracker(context, onHeldOutside) {
+  let permissionContext = mergePersistedDenyRules(context);
+  return isInstructionReadRestricted(permissionContext)
     ? rulesInstructionReaders(
         {
-          context: r,
+          context: permissionContext,
           isHeldOutside: isRestrictedReadBlocked,
         },
-        n,
+        onHeldOutside,
       )
     : undefined;
 }
@@ -2968,21 +3075,21 @@ function buildHeldOutsideTracker(context, n) {
 /**
  * 因权限未显示的记忆文件 → withheld_memory 附件。
  */
-function getWithheldMemoryAttachment(session, n) {
-  let r = new Set(
-    takeShownInstructionFiles(getWithheldInstructionFiles(session)).shown.map(({ path }) => path),
+function getWithheldMemoryAttachment(context, files) {
+  let shownPaths = new Set(
+    takeShownInstructionFiles(getWithheldInstructionFiles(context)).shown.map(({ path }) => path),
   );
-  takeOwedInstructionFiles(session, r);
-  let filtered = n.filter(({ path }) => !r.has(path));
+  takeOwedInstructionFiles(context, shownPaths);
+  let filtered = files.filter(({ path }) => !shownPaths.has(path));
   if (filtered.length === 0 || getIsNonInteractiveSession()) return [];
   return [
     {
       type: "withheld_memory",
-      entries: filtered.map((h) => ({
-        ...h,
-        displayPath: relative(getCwd(), h.path),
+      entries: filtered.map((file) => ({
+        ...file,
+        displayPath: relative(getCwd(), file.path),
       })),
-      by: withheldInstructionStateSlot.of(session).token,
+      by: withheldInstructionStateSlot.of(context).token,
     },
   ];
 }
@@ -2998,19 +3105,19 @@ async function getNestedMemoryAttachmentsForFile(
   includeTriggerFile = false,
 ) {
   if (env.CLAUDE_CODE_DISABLE_CLAUDE_MDS) return [];
-  let y = [];
+  let attachments = [];
   try {
     let readFor = claudeMdExtraState.peek(toolUseContext.session)?.readFor;
     if (readFor)
       return getFeatureValue_CACHED_MAY_BE_STALE("tengu_paper_halyard", false)
-        ? y
+        ? attachments
         : await memoryFilesToAttachments(
             applyClaudeMdExcludesToInjected(
               await readFor(filePath, toolUseContext.abortController.signal, function () {
                 return getToolPermissionContext(toolUseContext);
               }),
-            ).filter(function (ke) {
-              return includeTriggerFile || ke.path !== filePath;
+            ).filter(function (memoryFile) {
+              return includeTriggerFile || memoryFile.path !== filePath;
             }),
             toolUseContext,
             filePath,
@@ -3018,58 +3125,60 @@ async function getNestedMemoryAttachmentsForFile(
             null,
             true,
           );
-    if (!pathInAllowedWorkingPath(filePath, permissionState.toolPermissionContext)) return y;
-    let directoriesToProcess = getDirectoriesToProcess(filePath, getOriginalCwd());
+    if (!pathInAllowedWorkingPath(filePath, permissionState.toolPermissionContext)) return attachments;
+    let directories = getDirectoriesToProcess(filePath, getOriginalCwd());
     let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_paper_halyard", false);
-    let G = new Map();
-    for await (let Se of iterateMemoryFilesForPath(
+    let heldOutsideFiles = new Map();
+    for await (let memoryFiles of iterateMemoryFilesForPath(
       filePath,
       toolUseContext.storageV5,
-      directoriesToProcess,
-      buildHeldOutsideTracker(permissionState.toolPermissionContext, (ke, we) => {
-        G.set(ke, we);
+      directories,
+      buildHeldOutsideTracker(permissionState.toolPermissionContext, (path, reason) => {
+        heldOutsideFiles.set(path, reason);
       }),
     ))
-      y.push(
+      attachments.push(
         ...(await memoryFilesToAttachments(
-          Se.filter(
-            (ke) => !featureValue_CACHED_MAY_BE_STALE || (ke.type !== "Project" && ke.type !== "Local"),
+          memoryFiles.filter(
+            (memoryFile) =>
+              !featureValue_CACHED_MAY_BE_STALE ||
+              (memoryFile.type !== "Project" && memoryFile.type !== "Local"),
           ),
           toolUseContext,
           filePath,
           announcementState,
-          directoriesToProcess.worktree,
+          directories.worktree,
         )),
       );
-    let flattened = Array.from(G).flatMap(([Se, ke]) =>
-      ke === undefined
+    let withheldFiles = Array.from(heldOutsideFiles).flatMap(([path, why]) =>
+      why === undefined
         ? []
         : [
             {
-              path: Se,
-              why: ke,
+              path,
+              why,
             },
           ],
     );
     let { session } = toolUseContext;
     clearOwedInstructionFiles(
       session,
-      Array.from(G).flatMap(([Se, ke]) => (ke === undefined ? [Se] : [])),
+      Array.from(heldOutsideFiles).flatMap(([path, why]) => (why === undefined ? [path] : [])),
     );
-    if (toolUseContext.agentId !== undefined) recordWithheldInstructionFiles(session, flattened);
+    if (toolUseContext.agentId !== undefined) recordWithheldInstructionFiles(session, withheldFiles);
     else {
-      logWithheldInstructionFiles(session, flattened);
+      logWithheldInstructionFiles(session, withheldFiles);
       let { owed } = withheldInstructionStateSlot.of(session);
-      let sliced = flattened
+      let files = withheldFiles
         .filter(({ path }) => announcementState?.withheld.has(path) !== true && !owed.has(path))
         .slice(0, MAX_TRACKED_INSTRUCTION_PATHS);
-      y.push(...getWithheldMemoryAttachment(session, sliced));
-      for (let { path } of sliced) announcementState?.withheld.add(path);
+      attachments.push(...getWithheldMemoryAttachment(session, files));
+      for (let { path } of files) announcementState?.withheld.add(path);
     }
   } catch (error) {
     logError(error);
   }
-  return y;
+  return attachments;
 }
 //@ chunk-e6aww6q8.js:3346117-3346436 fingerprint = getOpenedFileFromIDE (0.784)
 /**
@@ -3110,98 +3219,100 @@ async function getOpenedFileFromIDE(ideSelection, toolUseContext, messages) {
 /**
  * 文件提及只作引用（CLAUDE_CODE_DISABLE_FILE_MENTIONS 或宿主不读时）：已缓存内容能内联的读出，其余汇成 at_mention_reference。
  */
-async function getFileMentionReferences(mentionedFiles, toolUseContext, r) {
-  let s = memoryPickerMaps.peek(toolUseContext.session);
-  let h;
+async function getFileMentionReferences(mentionedFiles, toolUseContext, messages) {
+  let pickerMap = memoryPickerMaps.peek(toolUseContext.session);
+  let tokenBudget;
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_snuggly_goblet", false)) {
     let { mainLoopModel, autoCompactWindow } = toolUseContext.options;
     let modelContextInfo = getModelContextInfo(mainLoopModel);
     let autoCompactThresholdTokens = getAutoCompactThresholdTokens(modelContextInfo, autoCompactWindow);
     if (autoCompactThresholdTokens > SECONDARY_CONTEXT_WINDOW) {
-      let Ee =
-        estimateTokensWithAnchor(r, modelContextInfo.bytesPerToken) +
-        stripInProgressAssistantMessage(r) +
-        (hasUsageAnchor(r) ? 0 : SECONDARY_CONTEXT_WINDOW);
-      let Ae = 0;
-      h = {
+      let heldTokens =
+        estimateTokensWithAnchor(messages, modelContextInfo.bytesPerToken) +
+        stripInProgressAssistantMessage(messages) +
+        (hasUsageAnchor(messages) ? 0 : SECONDARY_CONTEXT_WINDOW);
+      let claimedTokens = 0;
+      tokenBudget = {
         threshold: autoCompactThresholdTokens,
-        held: () => Ee,
-        claimed: () => Ae,
-        claim: (Ie) => {
-          Ae += Ie;
+        held: () => heldTokens,
+        claimed: () => claimedTokens,
+        claim: (count) => {
+          claimedTokens += count;
         },
       };
     }
   }
-  let y = memoryPickerSets.peek(toolUseContext.session);
-  let S = [];
-  let w = [];
-  let L = [];
-  let G = () => isCoworkAny() && getToolsMachine()?.directory?.isGitRepo === false;
+  let pickerSet = memoryPickerSets.peek(toolUseContext.session);
+  let attachments = [];
+  let unreadPaths = [];
+  let plainPdfPaths = [];
+  let isCoworkNonGitRepo = () => isCoworkAny() && getToolsMachine()?.directory?.isGitRepo === false;
   let maxSizeBytes = getDefaultFileReadingLimits().maxSizeBytes;
-  for (let Z of mentionedFiles) {
-    if (y?.delete(Z)) {
-      L.push(Z);
+  for (let mentionedPath of mentionedFiles) {
+    if (pickerSet?.delete(mentionedPath)) {
+      plainPdfPaths.push(mentionedPath);
       continue;
     }
-    let Se = s?.get(Z);
-    s?.delete(Z);
-    let ke = Buffer.isBuffer(Se) ? Se.length : 0;
-    let we =
-      Se &&
-      ke <= maxSizeBytes &&
-      getAttachmentReadBlockReason(Z, getToolPermissionContext(toolUseContext), "person") === undefined &&
-      (await readCachedMentionContent(Z, Se, toolUseContext, h));
-    if (we) {
-      S.push(we);
-      maxSizeBytes -= ke;
-    } else if (isAbsolute(Z) || !G()) w.push(Z);
+    let cachedContent = pickerMap?.get(mentionedPath);
+    pickerMap?.delete(mentionedPath);
+    let contentBytes = Buffer.isBuffer(cachedContent) ? cachedContent.length : 0;
+    let fileAttachment =
+      cachedContent &&
+      contentBytes <= maxSizeBytes &&
+      getAttachmentReadBlockReason(mentionedPath, getToolPermissionContext(toolUseContext), "person") ===
+        undefined &&
+      (await readCachedMentionContent(mentionedPath, cachedContent, toolUseContext, tokenBudget));
+    if (fileAttachment) {
+      attachments.push(fileAttachment);
+      maxSizeBytes -= contentBytes;
+    } else if (isAbsolute(mentionedPath) || !isCoworkNonGitRepo()) unreadPaths.push(mentionedPath);
   }
-  if (w.length + L.length > 0) logFeatureSad("input_file_at_mention", "referenced_not_read");
-  if (w.length > 0)
-    S.push({
+  if (unreadPaths.length + plainPdfPaths.length > 0)
+    logFeatureSad("input_file_at_mention", "referenced_not_read");
+  if (unreadPaths.length > 0)
+    attachments.push({
       type: "at_mention_reference",
-      mentions: w,
+      mentions: unreadPaths,
     });
-  if (L.length > 0)
-    S.push({
+  if (plainPdfPaths.length > 0)
+    attachments.push({
       type: "at_mention_reference",
-      mentions: L,
+      mentions: plainPdfPaths,
       arePdfsToReadPlainly: true,
     });
-  return S;
+  return attachments;
 }
 //@ chunk-e6aww6q8.js:3347306-3348215 layout
 /**
  * 宿主提供的提及文件内容：太大给 at_mention_reference（too_large），否则按读取上限截断后生成文件附件。
  */
-async function readCachedMentionContent(e, n, { credentials }, s) {
+async function readCachedMentionContent(filePath, buffer, { credentials }, tokenBudget) {
   let cwdOrNull = getCwdOrNull();
-  let displayPath = cwdOrNull === null ? e : relative(cwdOrNull, e);
-  if ("tooLargeBytes" in n) {
+  let displayPath = cwdOrNull === null ? filePath : relative(cwdOrNull, filePath);
+  if ("tooLargeBytes" in buffer) {
     logFeatureSad("input_file_at_mention", "too_large");
     return {
       type: "at_mention_reference",
-      mentions: [e],
+      mentions: [filePath],
       unread: "too_large",
-      fileSize: n.tooLargeBytes,
+      fileSize: buffer.tooLargeBytes,
       displayPath,
     };
   }
   let { maxTokens } = getDefaultFileReadingLimits();
-  let ext = parse(e).ext.toLowerCase().slice(1);
-  for (let L of [undefined, MAX_LINES_TO_READ]) {
+  let ext = parse(filePath).ext.toLowerCase().slice(1);
+  for (let lineLimit of [undefined, MAX_LINES_TO_READ]) {
     let { content, lineCount, totalLines } = readFileInRangeFast(
-      n.toString("utf8"),
-      n.length,
+      buffer.toString("utf8"),
+      buffer.length,
       0,
       0,
-      L,
+      lineLimit,
       undefined,
       undefined,
     );
-    let Se =
-      s === undefined
+    let numberedBytes =
+      tokenBudget === undefined
         ? 0
         : Buffer.byteLength(
             addLineNumbers({
@@ -3209,7 +3320,7 @@ async function readCachedMentionContent(e, n, { credentials }, s) {
               startLine: 1,
             }),
           );
-    let ke = false;
+    let overTokenLimit = false;
     try {
       await validateContentTokens(content, ext, maxTokens, credentials, false, true);
     } catch (error) {
@@ -3217,29 +3328,29 @@ async function readCachedMentionContent(e, n, { credentials }, s) {
         logError(error);
         return;
       }
-      if (s === undefined || Se > allowLargeRoomTokens(s, 0)) continue;
-      ke = true;
+      if (tokenBudget === undefined || numberedBytes > allowLargeRoomTokens(tokenBudget, 0)) continue;
+      overTokenLimit = true;
     }
-    s?.claim(Se);
-    if (L === undefined) logFeatureOk("input_file_at_mention");
+    tokenBudget?.claim(numberedBytes);
+    if (lineLimit === undefined) logFeatureOk("input_file_at_mention");
     else logFeatureSad("input_file_at_mention", "first_lines_only");
     return {
       type: "file",
-      filename: e,
+      filename: filePath,
       content: {
         type: "text",
         file: {
-          filePath: e,
+          filePath,
           content,
           numLines: lineCount,
           startLine: 1,
           totalLines,
         },
       },
-      ...(L !== undefined && {
+      ...(lineLimit !== undefined && {
         truncated: true,
       }),
-      ...(ke && {
+      ...(overTokenLimit && {
         overTokenLimit: true,
       }),
       displayPath,
@@ -3257,13 +3368,13 @@ async function getAtMentionedFileAttachments(
   parentAbortController,
   agentIdOverride,
 ) {
-  let h = await processAtMentionedFiles(
+  let result = await processAtMentionedFiles(
     mentionedPaths,
     toolUseContext,
     parentAbortController,
     agentIdOverride,
   );
-  return [...h.attached, ...h.hookContexts].filter(Boolean);
+  return [...result.attached, ...result.hookContexts].filter(Boolean);
 }
 //@ chunk-e6aww6q8.js:3348324-3352037 fingerprint = processAtMentionedFiles (0.3)
 /**
@@ -3276,16 +3387,16 @@ async function processAtMentionedFiles(
   agentIdOverride,
 ) {
   let permissionContext = getToolPermissionContext(toolUseContext);
-  let y = [];
-  let S = agentIdOverride ?? toolUseContext.agentId;
+  let hookContexts = [];
+  let targetAgentId = agentIdOverride ?? toolUseContext.agentId;
   let readThrottle = createReadThrottle();
   return {
     attached: await Promise.all(
-      mentionedPaths.map(async (mentionedPath, q) => {
-        let Z;
+      mentionedPaths.map(async (mentionedPath, index) => {
+        let releaseThrottle;
         try {
           let { filename, lineStart, lineEnd } = parseAtMentionedFileLines(mentionedPath);
-          let Ee =
+          let isPathLike =
             isAbsolute(filename) || filename.startsWith("~") || /(^|[\\/])\.\.([\\/]|$)/.test(filename);
           let attachmentReadBlockReason = getAttachmentReadBlockReason(filename, permissionContext, "person");
           if (attachmentReadBlockReason === "network") {
@@ -3294,18 +3405,18 @@ async function processAtMentionedFiles(
           }
           let absoluteFilename = expandPath(filename);
           if (attachmentReadBlockReason === "denied") {
-            if (Ee) logFeatureBad("input_file_at_mention", "denied");
+            if (isPathLike) logFeatureBad("input_file_at_mention", "denied");
             return null;
           }
-          let Me = isInstructionReadRestricted(permissionContext);
-          Z = Me ? await readThrottle() : undefined;
-          let We = Me
+          let instructionRestricted = isInstructionReadRestricted(permissionContext);
+          releaseThrottle = instructionRestricted ? await readThrottle() : undefined;
+          let filePathSpellings = instructionRestricted
             ? await pathSpellingsForRead(absoluteFilename, toolUseContext.abortController.signal)
             : [absoluteFilename];
           if (
-            Me &&
-            We !== undefined &&
-            isInstructionPathRefused(We, {
+            instructionRestricted &&
+            filePathSpellings !== undefined &&
+            isInstructionPathRefused(filePathSpellings, {
               context: permissionContext,
               isHeldOutside: isRestrictedReadBlocked,
             })
@@ -3313,9 +3424,9 @@ async function processAtMentionedFiles(
             logFeatureBad("input_file_at_mention", "denied_at_landing");
             return null;
           }
-          let filePath = We;
-          let aborted = filePath === undefined && toolUseContext.abortController.signal.aborted;
-          if (filePath === undefined && !aborted) {
+          let readSpellings = filePathSpellings;
+          let aborted = readSpellings === undefined && toolUseContext.abortController.signal.aborted;
+          if (readSpellings === undefined && !aborted) {
             logFeatureBad("input_file_at_mention", "landing_unsettled");
             return {
               type: "at_mention_reference",
@@ -3325,17 +3436,17 @@ async function processAtMentionedFiles(
           }
           let sizeProbe = "none";
           try {
-            let ho = aborted ? undefined : await stat(absoluteFilename);
-            sizeProbe = Me && ho?.isFile() ? "through-open" : "none";
-            if (ho?.isDirectory() && filePath !== undefined)
+            let stats = aborted ? undefined : await stat(absoluteFilename);
+            sizeProbe = instructionRestricted && stats?.isFile() ? "through-open" : "none";
+            if (stats?.isDirectory() && readSpellings !== undefined)
               try {
-                if (Me && isFileReadDenied(filePath, permissionContext)) {
+                if (instructionRestricted && isFileReadDenied(readSpellings, permissionContext)) {
                   logFeatureBad("input_dir_at_mention", "denied");
                   return null;
                 }
-                let entries = Me
-                  ? await readDirIfSpellingsStable(absoluteFilename, filePath, (Xn) =>
-                      readdir(Xn, {
+                let entries = instructionRestricted
+                  ? await readDirIfSpellingsStable(absoluteFilename, readSpellings, (dir) =>
+                      readdir(dir, {
                         withFileTypes: true,
                       }),
                     )
@@ -3354,7 +3465,7 @@ async function processAtMentionedFiles(
                   await filterListableEntries(
                     entries,
                     {
-                      spellings: filePath,
+                      spellings: readSpellings,
                       context: permissionContext,
                       isDenied: isAttachmentReadDeniedOrThrown,
                       isHeldOutside: isRestrictedReadBlocked,
@@ -3381,57 +3492,61 @@ async function processAtMentionedFiles(
                 return null;
               }
           } catch {}
-          let nt = lineStart;
-          let pt = lineEnd && lineStart ? lineEnd - lineStart + 1 : undefined;
-          let Et = (ho) => (ho.path === absoluteFilename ? absoluteFilename : expandPath(ho.path));
-          let yt = new Map();
-          let gt = false;
-          let At = false;
-          let It = false;
-          let Yt = false;
-          let qt = [];
-          Z?.();
-          Z = undefined;
-          let { readThroughMention } = await import("./chunk-hg7yd2v7.js");
+          let offset = lineStart;
+          let limit = lineEnd && lineStart ? lineEnd - lineStart + 1 : undefined;
+          let normalizePath = (raised) =>
+            raised.path === absoluteFilename ? absoluteFilename : expandPath(raised.path);
+          let readStateBackup = new Map();
+          let sawAbort = false;
+          let sawLiveRead = false;
+          let forgotten = false;
+          let refusedAtOpen = false;
+          let tooLargeFiles = [];
+          releaseThrottle?.();
+          releaseThrottle = undefined;
+          let { readThroughMention } = await import("./plugins/functionHooks/attachedNameOf.lazy.js");
           let stats = await readThroughMention({
             raised: {
               mention: mentionedPath,
               path: absoluteFilename,
-              ...(nt !== undefined && {
-                offset: nt,
+              ...(offset !== undefined && {
+                offset,
               }),
-              ...(pt !== undefined && {
-                limit: pt,
+              ...(limit !== undefined && {
+                limit,
               }),
-              ...(S !== undefined && {
-                agentId: S,
+              ...(targetAgentId !== undefined && {
+                agentId: targetAgentId,
               }),
             },
             signalOf: () => (parentAbortController ?? toolUseContext.abortController).signal,
             skipping: toolUseContext.hookOrigin,
             isIsolated: toolUseContext.options.settingsHooksOff === true,
             storageV5: toolUseContext.storageV5,
-            refusal: (ho) =>
-              ho.path !== absoluteFilename &&
-              getAttachmentReadBlockReason(ho.path, getToolPermissionContext(toolUseContext), "hook") !==
+            refusal: (raised) =>
+              raised.path !== absoluteFilename &&
+              getAttachmentReadBlockReason(raised.path, getToolPermissionContext(toolUseContext), "hook") !==
                 undefined
                 ? "the path may not be read here"
                 : undefined,
-            read: (ho, yn) => {
-              let filename = Et(ho);
-              yt.set(filename, {
+            read: (raised, kind) => {
+              let filename = normalizePath(raised);
+              readStateBackup.set(filename, {
                 state: toolUseContext.readFileState.get(filename),
-                triggers: count(toolUseContext.nestedMemoryAttachmentTriggers ?? [], (fo) => fo === filename),
+                triggers: count(
+                  toolUseContext.nestedMemoryAttachmentTriggers ?? [],
+                  (trigger) => trigger === filename,
+                ),
               });
               let toolUseContext_2 =
-                yn === "hooked" && parentAbortController !== undefined
+                kind === "hooked" && parentAbortController !== undefined
                   ? {
                       ...toolUseContext,
                       abortController: createChildAbortController(parentAbortController),
                     }
                   : toolUseContext;
-              gt ||= toolUseContext_2.abortController.signal.aborted;
-              At ||= !toolUseContext_2.abortController.signal.aborted;
+              sawAbort ||= toolUseContext_2.abortController.signal.aborted;
+              sawLiveRead ||= !toolUseContext_2.abortController.signal.aborted;
               return generateFileAttachment(
                 filename,
                 toolUseContext_2,
@@ -3439,57 +3554,62 @@ async function processAtMentionedFiles(
                 "tengu_at_mention_extracting_filename_error",
                 "at-mention",
                 {
-                  offset: ho.offset,
-                  limit: ho.limit,
+                  offset: raised.offset,
+                  limit: raised.limit,
                   pdfAbortParent: parentAbortController,
                   onRefusedAtOpen: () => {
-                    Yt = true;
+                    refusedAtOpen = true;
                   },
                   onTooLarge: (fileSize) => {
-                    qt.push({
+                    tooLargeFiles.push({
                       path: filename,
                       fileSize,
                     });
                   },
-                  ...(Me &&
+                  ...(instructionRestricted &&
                     filename === absoluteFilename &&
-                    filePath !== undefined && {
-                      landing: filePath,
+                    readSpellings !== undefined && {
+                      landing: readSpellings,
                       sizeProbe,
                     }),
                 },
               );
             },
-            forget: (ho) => {
-              It = true;
-              let yn = Et(ho);
-              let Kn = yt.get(yn);
-              if (Kn?.state === undefined) toolUseContext.readFileState.delete(yn);
-              else toolUseContext.readFileState.set(yn, Kn.state);
+            forget: (raised) => {
+              forgotten = true;
+              let path = normalizePath(raised);
+              let backup = readStateBackup.get(path);
+              if (backup?.state === undefined) toolUseContext.readFileState.delete(path);
+              else toolUseContext.readFileState.set(path, backup.state);
               let nestedMemoryAttachmentTriggers = toolUseContext.nestedMemoryAttachmentTriggers;
-              let triggers = Kn?.triggers ?? 0;
+              let triggers = backup?.triggers ?? 0;
               while (
                 nestedMemoryAttachmentTriggers !== undefined &&
-                count(nestedMemoryAttachmentTriggers, (To) => To === yn) > triggers
+                count(nestedMemoryAttachmentTriggers, (trigger) => trigger === path) > triggers
               )
-                nestedMemoryAttachmentTriggers.splice(nestedMemoryAttachmentTriggers.lastIndexOf(yn), 1);
+                nestedMemoryAttachmentTriggers.splice(nestedMemoryAttachmentTriggers.lastIndexOf(path), 1);
             },
           });
           let attachment = stats.attachment;
-          if (stats.context) y[q] = stats.context;
+          if (stats.context) hookContexts[index] = stats.context;
           if (attachment) logFeatureOk("input_file_at_mention");
-          if (!attachment && !It && (Yt || (aborted && (Ee || lineStart !== undefined) && gt && !At))) {
-            if (Yt) logFeatureBad("input_file_at_mention", "refused_at_open");
+          if (
+            !attachment &&
+            !forgotten &&
+            (refusedAtOpen ||
+              (aborted && (isPathLike || lineStart !== undefined) && sawAbort && !sawLiveRead))
+          ) {
+            if (refusedAtOpen) logFeatureBad("input_file_at_mention", "refused_at_open");
             return {
               type: "at_mention_reference",
               mentions: [filename],
               unread: "unexamined",
             };
           }
-          let last = qt.at(-1);
+          let last = tooLargeFiles.at(-1);
           if (
             !attachment &&
-            !It &&
+            !forgotten &&
             last !== undefined &&
             parse(last.path).ext !== "" &&
             !hasBinaryExtension(last.path) &&
@@ -3512,11 +3632,11 @@ async function processAtMentionedFiles(
             success: false,
           });
         } finally {
-          Z?.();
+          releaseThrottle?.();
         }
       }),
     ),
-    hookContexts: y,
+    hookContexts,
   };
 }
 //@ chunk-e6aww6q8.js:3352037-3352324 fingerprint = processAgentMentions (0.595)
@@ -3528,14 +3648,14 @@ function processAgentMentions(input, agents) {
   if (agentMentions.length === 0) return [];
   logUnreportedMentions("agent", agentMentions.length);
   return agentMentions
-    .map((mention, y) => {
+    .map((mention, index) => {
       let agentType = mention.replace("agent-", "");
       let agentDef = agents.find((def) => def.agentType === agentType);
       if (!agentDef) {
-        logMentionResult(y, "agent", false);
+        logMentionResult(index, "agent", false);
         return null;
       }
-      logMentionResult(y, "agent", true);
+      logMentionResult(index, "agent", true);
       return {
         type: "agent_mention",
         agentType: agentDef.agentType,
@@ -3547,35 +3667,37 @@ function processAgentMentions(input, agents) {
 /**
  * @ 同伴提及解析：唯一匹配给 resolved，多个候选给 ask（peer_mention）。
  */
-async function getPeerMentionAttachments(preExpansionInput, toolUseContext, r) {
+async function getPeerMentionAttachments(text, toolUseContext, attachments) {
   if (isCrossSessionMessagingEnabled()) {
-    let s = new Set(
-      r.flatMap((S) => [
-        ...("displayPath" in S ? [S.displayPath] : []),
-        ...("filename" in S ? [S.filename] : []),
-        ...(S.type === "directory" ? [S.path] : []),
+    let attachmentPaths = new Set(
+      attachments.flatMap((attachment) => [
+        ...("displayPath" in attachment ? [attachment.displayPath] : []),
+        ...("filename" in attachment ? [attachment.filename] : []),
+        ...(attachment.type === "directory" ? [attachment.path] : []),
       ]),
     );
-    let mentions = parsePeerMentions(preExpansionInput).filter((S) => S.ref !== undefined || !s.has(S.name));
+    let mentions = parsePeerMentions(text).filter(
+      (mention) => mention.ref !== undefined || !attachmentPaths.has(mention.name),
+    );
     if (mentions.length === 0) return [];
     let peers = await resolveTeamName(toolUseContext.session, toolUseContext.getAppState(), {
       storageV5: toolUseContext.storageV5,
     });
-    return resolvePeerMentions(mentions, peers).map((S) =>
-      S.kind === "resolved"
+    return resolvePeerMentions(mentions, peers).map((resolved) =>
+      resolved.kind === "resolved"
         ? {
             type: "peer_mention",
-            mention: S.mention,
+            mention: resolved.mention,
             status: "resolved",
-            candidates: [S.candidate],
+            candidates: [resolved.candidate],
             total: 1,
           }
         : {
             type: "peer_mention",
-            mention: S.mention,
+            mention: resolved.mention,
             status: "ask",
-            candidates: S.candidates,
-            total: S.total,
+            candidates: resolved.candidates,
+            total: resolved.total,
           },
     );
   }
@@ -3586,78 +3708,78 @@ async function getPeerMentionAttachments(preExpansionInput, toolUseContext, r) {
  * @server:uri 提及的 MCP 资源读取成 mcp_resource 附件（检查连接、权限与资源存在）。
  */
 async function getMcpResourceAttachments(
-  e,
+  input,
   mcpClients,
   mcpResources,
-  s,
-  inheritedMcpSkillMessages,
+  context,
+  extraFiles,
   signal,
   signal_2,
 ) {
-  let mcpResourceMentions = extractMcpResourceMentions(e);
+  let mcpResourceMentions = extractMcpResourceMentions(input);
   if (mcpResourceMentions.length === 0) return [];
-  let L = mcpClients || [];
+  let clients = mcpClients || [];
   logUnreportedMentions("mcp_resource", mcpResourceMentions.length);
   return (
     await Promise.all(
-      mcpResourceMentions.map(async (mcpResourceMention, Z) => {
+      mcpResourceMentions.map(async (mcpResourceMention, index) => {
         try {
-          let [Se, ...ke] = mcpResourceMention.split(":");
-          let uri = ke.join(":");
-          if (!Se || !uri) {
-            logMentionResult(Z, "mcp_resource", false);
+          let [serverName, ...uriParts] = mcpResourceMention.split(":");
+          let uri = uriParts.join(":");
+          if (!serverName || !uri) {
+            logMentionResult(index, "mcp_resource", false);
             return null;
           }
-          let found = L.find((ze) => ze.name === Se);
+          let found = clients.find((mcpClient) => mcpClient.name === serverName);
           if (!found || !isConnectedOrCached(found)) {
-            logMentionResult(Z, "mcp_resource", false);
+            logMentionResult(index, "mcp_resource", false);
             return null;
           }
           if (hasWithheldResources(found, undefined)) {
-            logMentionResult(Z, "mcp_resource", false);
+            logMentionResult(index, "mcp_resource", false);
             return null;
           }
-          let found_2 = (mcpResources?.[Se] || []).find((ze) => ze.uri === uri);
+          let found_2 = (mcpResources?.[serverName] || []).find((resource) => resource.uri === uri);
           if (!found_2) {
-            logMentionResult(Z, "mcp_resource", false);
+            logMentionResult(index, "mcp_resource", false);
             return null;
           }
-          let Me = noopSkillFetch(found.name, uri, s, inheritedMcpSkillMessages);
-          if (Me !== undefined) {
-            logMentionResult(Z, "mcp_resource", false);
-            logForDebugging(`MCP resource ${Se} ${uri} not read: ${Me}`, {
+          let refusal = noopSkillFetch(found.name, uri, context, extraFiles);
+          if (refusal !== undefined) {
+            logMentionResult(index, "mcp_resource", false);
+            logForDebugging(`MCP resource ${serverName} ${uri} not read: ${refusal}`, {
               level: "warn",
             });
             return null;
           }
           let ensureConnectedClient = getEnsureConnectedClient();
           if (!ensureConnectedClient) {
-            logMentionResult(Z, "mcp_resource", false);
+            logMentionResult(index, "mcp_resource", false);
             return null;
           }
           try {
-            let connectedClient = await ensureConnectedClient(found, {
+            let connection = await ensureConnectedClient(found, {
               signal,
               context: "MCP @-mention resource read",
             });
-            if (hasWithheldResources(connectedClient, undefined)) {
-              logMentionResult(Z, "mcp_resource", false);
+            if (hasWithheldResources(connection, undefined)) {
+              logMentionResult(index, "mcp_resource", false);
               return null;
             }
-            let lt = classifySkillResourceUri(
+            let listing = classifySkillResourceUri(
               uri,
-              countUniqueFiles(connectedClient.name, s, inheritedMcpSkillMessages),
+              countUniqueFiles(connection.name, context, extraFiles),
             );
-            if (lt.case === "unlisted") {
-              logMentionResult(Z, "mcp_resource", false);
+            if (listing.case === "unlisted") {
+              logMentionResult(index, "mcp_resource", false);
               logForDebugging(
-                lt.reason === "uri_too_long"
-                  ? `MCP resource ${Se} (an address of ${Buffer.byteLength(uri)} bytes) not read: its address is longer than 2048 bytes, and ${plural(lt.skills.length, "skill")} ${lt.skills.map((skill) => skill.skillName).join(", ")} from this server ${lt.skills.length === 1 ? "is" : "are"} loaded`
-                  : lt.reason === "unparseable_uri"
-                    ? `MCP resource ${Se} ${uri} not read: its address is not a valid URL, and ${plural(lt.skills.length, "skill")} ${lt.skills.map((skill) => skill.skillName).join(", ")} from this server ${lt.skills.length === 1 ? "is" : "are"} loaded`
-                    : lt.reason === "other_spelling"
-                      ? `MCP resource ${Se} ${uri} not read: its address begins with another spelling of the address of loaded ${plural(lt.skills.length, "skill")} ${lt.skills.map((skill) => skill.skillName).join(", ")}`
-                      : `MCP resource ${Se} ${uri} not read: it is in the directory of loaded ${plural(lt.skills.length, "skill")} ${lt.skills.map((skill) => skill.skillName).join(", ")}, but ${lt.skills.length === 1 ? "that skill does not list it" : "none of them lists it"}, or MCP skills are turned off`,
+                listing.reason === "uri_too_long"
+                  ? `MCP resource ${serverName} (an address of ${Buffer.byteLength(uri)} bytes) not read: its address is longer than 2048 bytes, and ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")} from this server ${listing.skills.length === 1 ? "is" : "are"} loaded`
+                  : listing.reason === "unparseable_uri"
+                    ? `MCP resource ${serverName} ${uri} not read: its address is not a valid URL, and ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")} from this server ${listing.skills.length === 1 ? "is" : "are"} loaded`
+                    : listing.reason === "other_spelling"
+                      ? `MCP resource ${serverName} ${uri} not read: its address begins with another spelling of the address of loaded ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")}`
+                      : `MCP resource ${serverName} ${uri} not read: it is in the directory of loaded ${plural(listing.skills.length, "skill")} ${listing.skills.map((skill) => skill.skillName).join(", ")}, but ${listing.skills.length === 1 ? "that skill does not list it" : "none of them lists it"}, or MCP skills are turned off`,
                 {
                   level: "warn",
                 },
@@ -3665,40 +3787,43 @@ async function getMcpResourceAttachments(
               return null;
             }
             recordToolUsed(READMCPRESOURCETOOL);
-            let mcpResource = await readMcpResource(connectedClient, uri, {
+            let mcpResource = await readMcpResource(connection, uri, {
               signal: signal_2,
             });
-            let nt = lt.case === "listed" ? verifySkillFile(mcpResource.contents, uri, lt.rows) : undefined;
-            if (nt !== undefined && !nt.ok) {
-              logMentionResult(Z, "mcp_resource", false);
+            let verification =
+              listing.case === "listed"
+                ? verifySkillFile(mcpResource.contents, uri, listing.rows)
+                : undefined;
+            if (verification !== undefined && !verification.ok) {
+              logMentionResult(index, "mcp_resource", false);
               logForDebugging(
-                `MCP resource ${Se} ${uri} not attached: ${MCP_SKILL_FILE_PROBLEMS[nt.reason]}`,
+                `MCP resource ${serverName} ${uri} not attached: ${MCP_SKILL_FILE_PROBLEMS[verification.reason]}`,
                 {
                   level: "warn",
                 },
               );
               return null;
             }
-            logMentionResult(Z, "mcp_resource", true);
+            logMentionResult(index, "mcp_resource", true);
             return {
               type: "mcp_resource",
-              server: Se,
+              server: serverName,
               uri,
               name: found_2.name || uri,
               description: found_2.description,
               content:
-                nt !== undefined && nt.ok
+                verification !== undefined && verification.ok
                   ? {
                       ...mcpResource,
-                      contents: [nt.item],
+                      contents: [verification.item],
                     }
                   : mcpResource,
             };
           } catch (error) {
             if (isAbortError(error) || signal_2.aborted) return null;
-            logMentionResult(Z, "mcp_resource", false);
+            logMentionResult(index, "mcp_resource", false);
             logForDebugging(
-              `MCP resource read failed for ${Se} ${uri}: ${error instanceof Error ? error.message : String(error)}`,
+              `MCP resource read failed for ${serverName} ${uri}: ${error instanceof Error ? error.message : String(error)}`,
               {
                 level: "error",
               },
@@ -3706,12 +3831,12 @@ async function getMcpResourceAttachments(
             return null;
           }
         } catch {
-          logMentionResult(Z, "mcp_resource", false);
+          logMentionResult(index, "mcp_resource", false);
           return null;
         }
       }),
     )
-  ).filter((q) => q !== null);
+  ).filter((attachment) => attachment !== null);
 }
 //@ chunk-e6aww6q8.js:3355459-3355471 layout
 /**
@@ -3722,32 +3847,38 @@ var MAX_REPORTED_MENTIONS = 100;
 /**
  * 记录一个提及处理结果事件（agent/mcp_resource 成功或失败）。旧版名 processMcpResourceAttachments 为错配。
  */
-function logMentionResult(e, n, r) {
-  if (e >= MAX_REPORTED_MENTIONS) return;
-  if (n === "agent") logEvent(r ? "tengu_at_mention_agent_success" : "tengu_at_mention_agent_not_found", {});
-  else logEvent(r ? "tengu_at_mention_mcp_resource_success" : "tengu_at_mention_mcp_resource_error", {});
+function logMentionResult(index, mentionType, success) {
+  if (index >= MAX_REPORTED_MENTIONS) return;
+  if (mentionType === "agent")
+    logEvent(success ? "tengu_at_mention_agent_success" : "tengu_at_mention_agent_not_found", {});
+  else
+    logEvent(success ? "tengu_at_mention_mcp_resource_success" : "tengu_at_mention_mcp_resource_error", {});
   logAtMention({
-    mentionType: n,
-    success: r,
+    mentionType,
+    success,
   });
 }
 //@ chunk-e6aww6q8.js:3355720-3355812 layout
 /**
  * 提及数超过上限时记 tengu_at_mention_unreported。
  */
-function logUnreportedMentions(e, n) {
-  if (n > MAX_REPORTED_MENTIONS)
+function logUnreportedMentions(mentionType, mentionCount) {
+  if (mentionCount > MAX_REPORTED_MENTIONS)
     logEvent("tengu_at_mention_unreported", {
-      mention_type: fromEnum(e),
-      count: n - MAX_REPORTED_MENTIONS,
+      mention_type: fromEnum(mentionType),
+      count: mentionCount - MAX_REPORTED_MENTIONS,
     });
 }
 //@ chunk-e6aww6q8.js:3355812-3355842 layout
 /**
  * 按 readFileState 记录变更文件检查顺序的 WeakMap。
  */
-var MAX_CHANGED_FILE_SNIPPET_CHARS = 16384;
-var changedFilesOrderByState = new WeakMap();
+var MAX_CHANGED_FILE_SNIPPET_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var changedFilesOrderByState;
+deferInit("chunk-e6aww6q8.js:3355812", () => {
+  MAX_CHANGED_FILE_SNIPPET_CHARS = 16384;
+  changedFilesOrderByState = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:3355842-3358973 fingerprint = getChangedFiles (0.432)
 /**
  * 检查已读文件（readFileState）在磁盘上是否变化：变化的文本文件给 edited_text_file（diff 片段，总长 16KB 内），图片给 edited_image_file；计划模式下跳过。
@@ -3759,21 +3890,23 @@ async function getChangedFiles(toolUseContext) {
     reportOnce("changed_files");
     return [];
   }
-  let r = changedFilesOrderByState.get(toolUseContext.readFileState) ?? [];
-  let s = new Set(filePaths);
-  let h = new Set(r);
-  let combined = r.filter((We) => s.has(We)).concat(filePaths.filter((filePath) => !h.has(filePath)));
-  let S = new Set();
-  let w = new Set();
+  let previousOrder = changedFilesOrderByState.get(toolUseContext.readFileState) ?? [];
+  let currentPaths = new Set(filePaths);
+  let previousPaths = new Set(previousOrder);
+  let combined = previousOrder
+    .filter((filePath) => currentPaths.has(filePath))
+    .concat(filePaths.filter((filePath) => !previousPaths.has(filePath)));
+  let abortedPaths = new Set();
+  let unexaminedPaths = new Set();
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_fallow_plover", false);
   let outputsLink =
     featureValue_CACHED_MAY_BE_STALE && getFeatureValue_CACHED_MAY_BE_STALE("tengu_mossy_thrush", false)
       ? defaultOutputRoots()
       : undefined;
-  let Z = {};
-  let Se = 0;
-  let ke = isInstructionReadRestricted(toolPermissionContext);
+  let outcomeCounts = {};
+  let rereadCount = 0;
+  let instructionRestricted = isInstructionReadRestricted(toolPermissionContext);
   let readThrottle = createReadThrottle();
   let results = await Promise.all(
     combined.map(async (filePath) => {
@@ -3782,11 +3915,11 @@ async function getChangedFiles(toolUseContext) {
       if (fileState.offset !== undefined || fileState.limit !== undefined) return null;
       let normalizedPath = expandPath(filePath);
       if (isAttachmentReadDeniedOrThrown(normalizedPath, toolPermissionContext)) return null;
-      let Je;
+      let releaseThrottle;
       try {
-        Je = ke ? await readThrottle() : undefined;
-        let nt = toolUseContext.abortController.signal.aborted ? S : w;
-        let pt = ke
+        releaseThrottle = instructionRestricted ? await readThrottle() : undefined;
+        let unexaminedSet = toolUseContext.abortController.signal.aborted ? abortedPaths : unexaminedPaths;
+        let pathSpellings = instructionRestricted
           ? await readableInstructionSpellings(
               normalizedPath,
               {
@@ -3796,8 +3929,8 @@ async function getChangedFiles(toolUseContext) {
               toolUseContext.abortController.signal,
             )
           : [normalizedPath];
-        if (pt === undefined) {
-          if (toolUseContext.abortController.signal.aborted) nt.add(filePath);
+        if (pathSpellings === undefined) {
+          if (toolUseContext.abortController.signal.aborted) unexaminedSet.add(filePath);
           return null;
         }
         if ((await getFileModificationTimeAsync(normalizedPath)) <= fileState.timestamp) return null;
@@ -3815,13 +3948,16 @@ async function getChangedFiles(toolUseContext) {
             toolUseContext.abortController.signal,
             {
               outputsLink,
-              isLandingJudged: ke ? (Zt) => pt.includes(Zt) : () => true,
-              onOutcome: (Zt, rn, pn) => {
-                Z[Zt] = (Z[Zt] ?? 0) + 1;
-                if (rn) Z.via_outputs_link = (Z.via_outputs_link ?? 0) + 1;
-                if (Zt === "differs" && pn !== undefined)
+              isLandingJudged: instructionRestricted
+                ? (spelling) => pathSpellings.includes(spelling)
+                : () => true,
+              onOutcome: (outcome, viaOutputsLink, differsFile) => {
+                outcomeCounts[outcome] = (outcomeCounts[outcome] ?? 0) + 1;
+                if (viaOutputsLink)
+                  outcomeCounts.via_outputs_link = (outcomeCounts.via_outputs_link ?? 0) + 1;
+                if (outcome === "differs" && differsFile !== undefined)
                   getAttachmentTimingStore()?.noteDiffersFile(
-                    pn,
+                    differsFile,
                     fileState.content === "" && (fileState.contentLength ?? 0) > 0,
                   );
               },
@@ -3829,29 +3965,33 @@ async function getChangedFiles(toolUseContext) {
           ))
         )
           return null;
-        Se++;
-        let At = toolUseContext.readFileState.holdsOnlyStartOf(normalizedPath);
+        rereadCount++;
+        let onlyStartHeld = toolUseContext.readFileState.holdsOnlyStartOf(normalizedPath);
         recordToolUsed(FileReadTool.name);
-        let It = ke ? await stashAttachedReadPermission(normalizedPath, pt, toolUseContext) : toolUseContext;
-        let Yt = timeAttachment("changed_file_read", () => FileReadTool.call(fileInput, It));
-        Je?.();
-        let qt = await Yt;
-        if (fileState.isPartialView || At) {
-          let Zt = toolUseContext.readFileState.get(normalizedPath);
-          if (Zt)
+        let readContext = instructionRestricted
+          ? await stashAttachedReadPermission(normalizedPath, pathSpellings, toolUseContext)
+          : toolUseContext;
+        let readPromise = timeAttachment("changed_file_read", () =>
+          FileReadTool.call(fileInput, readContext),
+        );
+        releaseThrottle?.();
+        let readResult = await readPromise;
+        if (fileState.isPartialView || onlyStartHeld) {
+          let currentState = toolUseContext.readFileState.get(normalizedPath);
+          if (currentState)
             toolUseContext.readFileState.set(normalizedPath, {
-              ...Zt,
+              ...currentState,
               ...(fileState.isPartialView && {
                 isPartialView: true,
               }),
-              ...(At && {
+              ...(onlyStartHeld && {
                 contentNotInModelContext: true,
               }),
             });
         }
-        if (qt.data.type === "text") {
-          if (qt.data.file.truncatedByTokenCap === true) return null;
-          if (matchesContentHash(fileState, qt.data.file.content)) return null;
+        if (readResult.data.type === "text") {
+          if (readResult.data.file.truncatedByTokenCap === true) return null;
+          if (matchesContentHash(fileState, readResult.data.file.content)) return null;
           if (fileState.content === "" && (fileState.contentLength ?? 0) > 0) {
             markContentNotInModelContext(toolUseContext.readFileState, normalizedPath);
             return {
@@ -3860,7 +4000,7 @@ async function getChangedFiles(toolUseContext) {
               snippet: "",
             };
           }
-          let snippet = getSnippetForTwoFileDiff(fileState.content, qt.data.file.content);
+          let snippet = getSnippetForTwoFileDiff(fileState.content, readResult.data.file.content);
           if (snippet === "") return null;
           if (isSensitiveFileName(normalizedPath)) {
             markContentNotInModelContext(toolUseContext.readFileState, normalizedPath);
@@ -3876,14 +4016,14 @@ async function getChangedFiles(toolUseContext) {
             snippet,
           };
         }
-        if (qt.data.type === "image")
+        if (readResult.data.type === "image")
           try {
-            let Zt = ke
-              ? await checkPathRefused(normalizedPath, pt, toolUseContext.abortController.signal)
+            let heldFile = instructionRestricted
+              ? await checkPathRefused(normalizedPath, pathSpellings, toolUseContext.abortController.signal)
               : undefined;
             try {
               let content = await readImageWithTokenBudget(
-                Zt ?? normalizedPath,
+                heldFile ?? normalizedPath,
                 undefined,
                 undefined,
                 imageLimitsForModel(toolUseContext.options.mainLoopModel),
@@ -3894,7 +4034,7 @@ async function getChangedFiles(toolUseContext) {
                 content,
               };
             } finally {
-              if (Zt !== undefined) await Zt.close().catch(() => {});
+              if (heldFile !== undefined) await heldFile.close().catch(() => {});
             }
           } catch (compressionError) {
             logForDebugging(
@@ -3914,36 +4054,38 @@ async function getChangedFiles(toolUseContext) {
         if (isENOENT(err)) toolUseContext.readFileState.delete(filePath);
         return null;
       } finally {
-        Je?.();
+        releaseThrottle?.();
       }
     }),
   );
-  let Ae = S.size + w.size;
-  if (Ae === 0) changedFilesOrderByState.delete(toolUseContext.readFileState);
+  let unexaminedCount = abortedPaths.size + unexaminedPaths.size;
+  if (unexaminedCount === 0) changedFilesOrderByState.delete(toolUseContext.readFileState);
   else {
     changedFilesOrderByState.set(
       toolUseContext.readFileState,
-      combined.filter((result) => S.has(result)).concat(combined.filter((We) => w.has(We))),
+      combined
+        .filter((result) => abortedPaths.has(result))
+        .concat(combined.filter((filePath) => unexaminedPaths.has(filePath))),
     );
     logForDebugging(
-      `Changed files: the pass ended with ${Ae} of ${combined.length} tracked files not examined; the next pass begins with them.`,
+      `Changed files: the pass ended with ${unexaminedCount} of ${combined.length} tracked files not examined; the next pass begins with them.`,
       {
         level: "warn",
       },
     );
   }
   if (!toolUseContext.agentId) {
-    noteChangedFilesReread(Se);
-    noteChangedFilesCompared(Z);
+    noteChangedFilesReread(rereadCount);
+    noteChangedFilesCompared(outcomeCounts);
   }
   let filtered = results.filter((result) => result != null);
-  let Me = 0;
-  for (let We of filtered) {
-    if (We.type !== "edited_text_file") continue;
-    if (Me >= MAX_CHANGED_FILE_SNIPPET_CHARS) {
-      We.snippet = "";
-      markContentNotInModelContext(toolUseContext.readFileState, We.filename);
-    } else Me += We.snippet.length;
+  let snippetChars = 0;
+  for (let attachment of filtered) {
+    if (attachment.type !== "edited_text_file") continue;
+    if (snippetChars >= MAX_CHANGED_FILE_SNIPPET_CHARS) {
+      attachment.snippet = "";
+      markContentNotInModelContext(toolUseContext.readFileState, attachment.filename);
+    } else snippetChars += attachment.snippet.length;
   }
   return filtered;
 }
@@ -3953,12 +4095,12 @@ async function getChangedFiles(toolUseContext) {
  */
 async function getNestedMemoryTriggerAttachments(toolUseContext, messages) {
   let { nestedMemoryAttachmentTriggers, pendingNestedMemoryTriggers } = toolUseContext;
-  let h = new Set();
+  let newlyAddedTriggers = new Set();
   if (nestedMemoryAttachmentTriggers && pendingNestedMemoryTriggers && !toolUseContext.agentId) {
     for (let pendingNestedMemoryTrigger of pendingNestedMemoryTriggers)
       if (!nestedMemoryAttachmentTriggers.includes(pendingNestedMemoryTrigger)) {
         nestedMemoryAttachmentTriggers.push(pendingNestedMemoryTrigger);
-        h.add(pendingNestedMemoryTrigger);
+        newlyAddedTriggers.add(pendingNestedMemoryTrigger);
       }
     toolUseContext.consumedNestedMemoryTriggers?.push(...pendingNestedMemoryTriggers);
     pendingNestedMemoryTriggers.length = 0;
@@ -3969,7 +4111,7 @@ async function getNestedMemoryTriggerAttachments(toolUseContext, messages) {
   }
   if (!nestedMemoryAttachmentTriggers || nestedMemoryAttachmentTriggers.length === 0) return [];
   let toolPermissionContext = getToolPermissionContext(toolUseContext);
-  let S = [];
+  let attachments = [];
   let announcementState = messages && (await getMemoryAnnouncementState(toolUseContext, messages));
   for (let nestedMemoryAttachmentTrigger of nestedMemoryAttachmentTriggers) {
     let nestedMemoryAttachmentsForFile = await getNestedMemoryAttachmentsForFile(
@@ -3979,20 +4121,21 @@ async function getNestedMemoryTriggerAttachments(toolUseContext, messages) {
         toolPermissionContext,
       },
       announcementState,
-      h.has(nestedMemoryAttachmentTrigger),
+      newlyAddedTriggers.has(nestedMemoryAttachmentTrigger),
     );
-    S.push(...nestedMemoryAttachmentsForFile);
+    attachments.push(...nestedMemoryAttachmentsForFile);
   }
   nestedMemoryAttachmentTriggers.length = 0;
-  return S;
+  return attachments;
 }
 //@ chunk-e6aww6q8.js:3359439-3359508 layout
 /**
  * readFileState 已有该路径（可选要求完整读取）。
  */
-function isAlreadyReadWhole(readFileState, path, earlierReadsMayBeCleared) {
+function isAlreadyReadWhole(readFileState, filePath, earlierReadsMayBeCleared) {
   return (
-    readFileState.has(path) && (!earlierReadsMayBeCleared || readFileState.get(path)?.offset === undefined)
+    readFileState.has(filePath) &&
+    (!earlierReadsMayBeCleared || readFileState.get(filePath)?.offset === undefined)
   );
 }
 //@ chunk-e6aww6q8.js:3359508-3360723 fingerprint = getRelevantMemoryAttachments (0.541)
@@ -4015,7 +4158,7 @@ async function getRelevantMemoryAttachments(
   autoMemoryOn,
   accountRecall,
 ) {
-  let we = autoMemoryOn
+  let agentMemoryScopes = autoMemoryOn
     ? extractAgentMentions(input).flatMap((mention) => {
         let agentType = mention.replace("agent-", "");
         let agentDef = activeAgents.find((def) => def.agentType === agentType);
@@ -4029,17 +4172,17 @@ async function getRelevantMemoryAttachments(
           : [];
       })
     : [];
-  let Ee = we.length === 0 ? accountRecall?.listing() : undefined;
+  let accountListingPromise = agentMemoryScopes.length === 0 ? accountRecall?.listing() : undefined;
   await getAutoMemPathState().warmCanonicalWcRoot();
-  let Ae = autoMemoryOn && !(we.length === 0 && isAutoMemReadFenced());
-  let Ie = await Ee;
-  if (!Ae && Ie === undefined) return [];
+  let isAutoMemoryActive = autoMemoryOn && !(agentMemoryScopes.length === 0 && isAutoMemReadFenced());
+  let accountListing = await accountListingPromise;
+  if (!isAutoMemoryActive && accountListing === undefined) return [];
   await waitForFirstStorePull(signal);
   let dirs =
-    we.length > 0
+    agentMemoryScopes.length > 0
       ? (
           await Promise.all(
-            we.map(({ agentType, scope }) => resolveAgentMemoryDirForRecall(agentType, scope)),
+            agentMemoryScopes.map(({ agentType, scope }) => resolveAgentMemoryDirForRecall(agentType, scope)),
           )
         ).filter((dir) => dir !== null)
       : [
@@ -4062,21 +4205,21 @@ async function getRelevantMemoryAttachments(
           isIndexRecallEnabled(),
           activeSessionLogExcluder(),
           dir === getAutoMemPath(),
-          (yt) => isAlreadyReadWhole(readFileState, yt, earlierReadsMayBeCleared),
+          (recalledPath) => isAlreadyReadWhole(readFileState, recalledPath, earlierReadsMayBeCleared),
           isMultiStoreSyncAvailable,
           storageV5,
           credentials,
           selectorTurnReverts,
           regularFilesOnly,
-          dir === getAutoMemPath() ? Ie : undefined,
-          Ae,
+          dir === getAutoMemPath() ? accountListing : undefined,
+          isAutoMemoryActive,
           dir === getAutoMemPath()
             ? (accountRecall?.scope() ?? accountMemoryRecall?.NO_ACCOUNT_SCOPE)
             : undefined,
         )
           .then((memoryRecall) =>
-            memoryRecall.map((gt) => ({
-              ...gt,
+            memoryRecall.map((memoryEntry) => ({
+              ...memoryEntry,
               regularFilesOnly,
               containedIn,
             })),
@@ -4086,21 +4229,23 @@ async function getRelevantMemoryAttachments(
     )
   )
     .flat()
-    .filter((nt) =>
-      nt.account
-        ? accountRecall?.pickable(nt.path) === true
-        : !isAlreadyReadWhole(readFileState, nt.path, earlierReadsMayBeCleared) &&
-          !surfaced.paths.has(nt.path) &&
-          !isBlockedPath(nt.path),
+    .filter((selectedMemory) =>
+      selectedMemory.account
+        ? accountRecall?.pickable(selectedMemory.path) === true
+        : !isAlreadyReadWhole(readFileState, selectedMemory.path, earlierReadsMayBeCleared) &&
+          !surfaced.paths.has(selectedMemory.path) &&
+          !isBlockedPath(selectedMemory.path),
     )
     .slice(0, 5);
-  let [memoriesForSurfacing, Je] = await Promise.all([
+  let [memoriesForSurfacing, accountAttachments] = await Promise.all([
     readMemoriesForSurfacing(
-      selected.filter((nt) => !nt.account),
+      selected.filter((fileMemoryEntry) => !fileMemoryEntry.account),
       signal,
     ),
     accountRecall?.attachmentsFor(
-      selected.filter((nt) => nt.account).map((nt) => nt.path),
+      selected
+        .filter((accountMemoryEntry) => accountMemoryEntry.account)
+        .map((accountMemoryPath) => accountMemoryPath.path),
       RELEVANT_MEMORIES_CONFIG.MAX_SESSION_BYTES - surfaced.totalBytes,
       signal,
     ) ?? [],
@@ -4114,7 +4259,7 @@ async function getRelevantMemoryAttachments(
           },
         ]
       : []),
-    ...Je,
+    ...accountAttachments,
   ];
 }
 //@ chunk-e6aww6q8.js:3360723-3361031 fingerprint = collectSurfacedMemories (0.869)
@@ -4145,20 +4290,20 @@ function collectSurfacedMemories(messages) {
 async function readMemoriesForSurfacing(selected, signal) {
   return (
     await Promise.all(
-      selected.map(async (s) => {
-        let { path: filePath, mtimeMs, regularFilesOnly, containedIn } = s;
+      selected.map(async (selectedMemory) => {
+        let { path: filePath, mtimeMs, regularFilesOnly, containedIn } = selectedMemory;
         try {
           if (regularFilesOnly && !(await lstat(filePath)).isFile()) return null;
           if (containedIn !== undefined && !(await isRealpathWithin(filePath, containedIn))) return null;
           let memoryFileForRecall = await readMemoryFileForRecall(filePath, signal);
           if (memoryFileForRecall === undefined) return null;
-          let G = sanitizeMemoryText(memoryFileForRecall.content);
+          let sanitizedContent = sanitizeMemoryText(memoryFileForRecall.content);
           let content = memoryFileForRecall.truncated
-            ? G +
+            ? sanitizedContent +
               `
 
 > This memory file was truncated (${memoryFileForRecall.truncatedByBytes ? `${MEMORY_FILE_RECALL_BYTES} byte limit` : `first ${MAX_ENTRYPOINT_TAIL_LINES} lines`}). Use the ${FILE_READ_TOOL_NAME} tool to view the complete file at: ${singleLineMemoryText(filePath)}`
-            : G;
+            : sanitizedContent;
           return {
             path: filePath,
             content,
@@ -4167,7 +4312,7 @@ async function readMemoriesForSurfacing(selected, signal) {
             limit:
               memoryFileForRecall.truncated ||
               memoryFileForRecall.itemBlockRemoved ||
-              G !== memoryFileForRecall.content
+              sanitizedContent !== memoryFileForRecall.content
                 ? memoryFileForRecall.lineCount
                 : undefined,
           };
@@ -4176,19 +4321,22 @@ async function readMemoriesForSurfacing(selected, signal) {
         }
       }),
     )
-  ).filter((s) => s !== null);
+  ).filter((memory) => memory !== null);
 }
 //@ chunk-e6aww6q8.js:3361660-3361745 layout
 /**
  * 不做相关记忆预取的 querySource：extract_memories、auto_dream、prompt_suggestion、compact 等。
  */
-var MEMORY_PREFETCH_SKIP_SOURCES = new Set([
-  "extract_memories",
-  "auto_dream",
-  MEMDIR_RELEVANCE,
-  "prompt_suggestion",
-  "compact",
-]);
+var MEMORY_PREFETCH_SKIP_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3361660", () => {
+  MEMORY_PREFETCH_SKIP_SOURCES = new Set([
+    "extract_memories",
+    "auto_dream",
+    MEMDIR_RELEVANCE,
+    "prompt_suggestion",
+    "compact",
+  ]);
+});
 //@ chunk-e6aww6q8.js:3361745-3363462 fingerprint = startRelevantMemoryPrefetch (0.544)
 /**
  * 在 queryLoop 入口启动相关记忆预取：主线程、非跳过来源、自动记忆或账户召回开启、最后一条用户消息有空白（或含 CJK）、会话预算未超 60KB 时，异步调用 getRelevantMemoryAttachments，返回可 using 释放的句柄。
@@ -4197,8 +4345,8 @@ function startRelevantMemoryPrefetch(messages, toolUseContext, querySource, memo
   let memorySelector = toolUseContext.memorySelector;
   if (!memorySelector || toolUseContext.agentId || MEMORY_PREFETCH_SKIP_SOURCES.has(querySource)) return;
   let autoMemoryOn = isAutoMemoryEnabled() && isMemoryRecallEnabled();
-  let S = accountMemoryRecall?.isAccountRecallOn() === true && !isIndexRecallEnabled();
-  if (!autoMemoryOn && !S) return;
+  let isAccountRecallActive = accountMemoryRecall?.isAccountRecallOn() === true && !isIndexRecallEnabled();
+  if (!autoMemoryOn && !isAccountRecallActive) return;
   let lastUserMessage = messages.findLast((m) => m.type === "user" && !m.isMeta);
   if (!lastUserMessage) return;
   let input = getUserMessageText(lastUserMessage);
@@ -4217,7 +4365,7 @@ function startRelevantMemoryPrefetch(messages, toolUseContext, querySource, memo
     return;
   }
   let accountRecall =
-    S && accountMemoryRecall
+    isAccountRecallActive && accountMemoryRecall
       ? accountMemoryRecall.startAccountRecall(
           messagesSinceCompactBoundary([...messages]),
           toolUseContext,
@@ -4238,7 +4386,7 @@ function startRelevantMemoryPrefetch(messages, toolUseContext, querySource, memo
   );
   let controller = createChildAbortController(toolUseContext.abortController);
   let firedAt = Date.now();
-  let we = [];
+  let deferredReleaseCallbacks = [];
   let promise = getRelevantMemoryAttachments(
     toolUseContext.session,
     input,
@@ -4249,12 +4397,12 @@ function startRelevantMemoryPrefetch(messages, toolUseContext, querySource, memo
     surfaced,
     toolUseContext.storageV5,
     toolUseContext.credentials,
-    we,
-    (Ie) => {
+    deferredReleaseCallbacks,
+    (pathToCheck) => {
       let toolPermissionContext = getToolPermissionContext(toolUseContext);
       if (toolPermissionContext?.blockReadsOutsideWorkingDirectories !== true) return false;
       try {
-        return outsideReadBlocked(Ie, toolPermissionContext);
+        return outsideReadBlocked(pathToCheck, toolPermissionContext);
       } catch {
         return true;
       }
@@ -4272,12 +4420,13 @@ function startRelevantMemoryPrefetch(messages, toolUseContext, querySource, memo
     consumedOnIteration: -1,
     consumedBlocking: false,
     earlierReadsMayBeCleared,
-    screen(Ie, Me) {
-      return accountRecall ? accountRecall.screen(Ie, Me) : [...Ie];
+    screen(entries, screenContext) {
+      return accountRecall ? accountRecall.screen(entries, screenContext) : [...entries];
     },
     [Symbol.dispose]() {
       controller.abort();
-      if (prefetchHandle.consumedOnIteration === -1) promise.then(() => we.forEach((Me) => Me()));
+      if (prefetchHandle.consumedOnIteration === -1)
+        promise.then(() => deferredReleaseCallbacks.forEach((release) => release()));
       accountRecall?.finish(prefetchHandle);
       let lastUsage = memorySelector.lastUsage;
       logEvent("tengu_memdir_prefetch_collected", {
@@ -4321,35 +4470,35 @@ function shouldBlockOnMemoryPrefetch() {
  */
 async function awaitMemoryPrefetch(memoryRecallPrefetch, signal) {
   let now = Date.now();
-  let s;
+  let onAbort;
   let promise = new Promise((resolve) => {
     if (signal.aborted) {
       resolve(undefined);
       return;
     }
-    s = () => resolve(undefined);
-    signal.addEventListener("abort", s, {
+    onAbort = () => resolve(undefined);
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
   });
-  let y;
+  let attachments;
   try {
-    y = await Promise.race([
+    attachments = await Promise.race([
       withDeadline(memoryRecallPrefetch.promise, MEMORY_PREFETCH_DEADLINE_MS),
       promise,
     ]);
   } finally {
-    if (s !== undefined) signal.removeEventListener("abort", s);
+    if (onAbort !== undefined) signal.removeEventListener("abort", onAbort);
   }
   let blockingWaitMs = Date.now() - now;
   logEvent("tengu_memdir_prefetch_blocking_wait", {
-    outcome: fromEnum(signal.aborted ? "aborted" : y !== undefined ? "consumed" : "deadline"),
+    outcome: fromEnum(signal.aborted ? "aborted" : attachments !== undefined ? "consumed" : "deadline"),
     blocking_wait_ms: blockingWaitMs,
-    deadline_fired: y === undefined && !signal.aborted,
-    result_in_time: y !== undefined && !signal.aborted,
-    attachment_count: y?.length ?? -1,
+    deadline_fired: attachments === undefined && !signal.aborted,
+    result_in_time: attachments !== undefined && !signal.aborted,
+    attachment_count: attachments?.length ?? -1,
   });
-  return signal.aborted ? undefined : y;
+  return signal.aborted ? undefined : attachments;
 }
 //@ chunk-e6aww6q8.js:3364082-3364192 file-local
 /**
@@ -4370,7 +4519,7 @@ function hasToolResultContent(content) {
  * 去掉已读过的相关记忆，把新记忆写入 readFileState 并记入已呈现集合；空的附件丢弃。
  */
 function filterDuplicateMemoryAttachments(attachments, readFileState, session, earlierReadsMayBeCleared) {
-  let h = claudeMdAccessTrackerSlot.of(session);
+  let claudeMdTracker = claudeMdAccessTrackerSlot.of(session);
   return attachments
     .map((attachment) => {
       if (attachment.type !== "relevant_memories") return attachment;
@@ -4384,7 +4533,7 @@ function filterDuplicateMemoryAttachments(attachments, readFileState, session, e
           offset: undefined,
           limit: m.limit,
         });
-      h.recordSurfaced(filtered.map((w) => w.path));
+      claudeMdTracker.recordSurfaced(filtered.map((memory) => memory.path));
       return filtered.length > 0
         ? {
             ...attachment,
@@ -4392,7 +4541,7 @@ function filterDuplicateMemoryAttachments(attachments, readFileState, session, e
           }
         : null;
     })
-    .filter((y) => y !== null);
+    .filter((attachment) => attachment !== null);
 }
 //@ chunk-e6aww6q8.js:3364589-3364614 layout
 /**
@@ -4408,23 +4557,23 @@ function getSkillAttachmentExtras(tools) {
 async function getDynamicSkillAttachments(toolUseContext) {
   let dynamicSkillDirTriggers = toolUseContext.dynamicSkillDirTriggers;
   if (!dynamicSkillDirTriggers || dynamicSkillDirTriggers.length === 0) return [];
-  let r = [...dynamicSkillDirTriggers];
+  let pendingDirs = [...dynamicSkillDirTriggers];
   dynamicSkillDirTriggers.length = 0;
   if (getDisableSlashCommands()) return [];
   if (!toolUseContext.options.tools.some((tool) => toolMatchesName(tool, SKILL))) return [];
-  await addSkillDirectories(r).catch(() => {});
+  await addSkillDirectories(pendingDirs).catch(() => {});
   let projectRoot = getProjectRoot();
-  let h = projectRoot.endsWith(sep) ? projectRoot : projectRoot + sep;
+  let projectRootPrefix = projectRoot.endsWith(sep) ? projectRoot : projectRoot + sep;
   let skillToolCommands = await getSkillToolCommands(getProjectRoot(), toolUseContext.storageV5);
   if (toolUseContext.agentId === undefined)
     skillToolCommands = filterCommandsByAllowlist(skillToolCommands, getSessionSkillAllowlist());
-  let S = new Map();
+  let namesBySkillRoot = new Map();
   for (let skillToolCommand of skillToolCommands)
     if (skillToolCommand.type === "prompt" && skillToolCommand.skillRoot)
-      S.set(skillToolCommand.skillRoot, skillToolCommand.name);
+      namesBySkillRoot.set(skillToolCommand.skillRoot, skillToolCommand.name);
   let attachments = [];
   let perDirResults = await Promise.all(
-    r.map(async (skillDir) => {
+    pendingDirs.map(async (skillDir) => {
       try {
         let candidates = (
           await readdir(skillDir, {
@@ -4440,9 +4589,9 @@ async function getDynamicSkillAttachments(toolUseContext) {
             } catch {
               return null;
             }
-            let we = S.get(resolve_2(skillDir, name));
-            if (!we || !isNonEmptyIdentifier(we)) return null;
-            return we;
+            let skillName = namesBySkillRoot.get(resolve_2(skillDir, name));
+            if (!skillName || !isNonEmptyIdentifier(skillName)) return null;
+            return skillName;
           }),
         );
         return {
@@ -4459,13 +4608,13 @@ async function getDynamicSkillAttachments(toolUseContext) {
   );
   for (let { skillDir, skillNames } of perDirResults) {
     if (skillNames.length === 0) continue;
-    let Z = relative(projectRoot, skillDir);
-    if (CONTROL_CHARS_OR_ANGLE_RE.test(Z) || !skillDir.startsWith(h)) continue;
+    let displayPath = relative(projectRoot, skillDir);
+    if (CONTROL_CHARS_OR_ANGLE_RE.test(displayPath) || !skillDir.startsWith(projectRootPrefix)) continue;
     attachments.push({
       type: "dynamic_skill",
       skillDir,
       skillNames,
-      displayPath: Z,
+      displayPath,
       ...getSkillAttachmentExtras(toolUseContext.options.tools),
     });
   }
@@ -4475,8 +4624,8 @@ async function getDynamicSkillAttachments(toolUseContext) {
 /**
  * getSkillListingAttachments 的转发包装。
  */
-async function getSkillListingAttachmentsLazy(...e) {
-  return getSkillListingAttachments(...e);
+async function getSkillListingAttachmentsLazy(...args) {
+  return getSkillListingAttachments(...args);
 }
 //@ chunk-e6aww6q8.js:3365687-3366805 fingerprint = getSkillListingAttachments (0.674)
 /**
@@ -4486,14 +4635,16 @@ async function getSkillListingAttachments(toolUseContext, messages) {
   if (getDisableSlashCommands()) return [];
   if (!toolUseContext.options.tools.some((t) => toolMatchesName(t, SKILL))) return [];
   let skillToolCommands = await getSkillToolCommands(getProjectRootOrNull(), toolUseContext.storageV5);
-  let s = hiddenCommandsWhenSlashDisabled(toolUseContext.getMcp().commands);
-  let filtered = memorySkillCommands().filter((we) => !we.disableModelInvocation && !isHiddenFromModel(we));
-  let y = mcpPromptCommandsWithReserved(toolUseContext.getMcp().commands);
-  let S = dropSyncedNameClashes(skillToolCommands, y);
+  let hiddenCommands = hiddenCommandsWhenSlashDisabled(toolUseContext.getMcp().commands);
+  let filtered = memorySkillCommands().filter(
+    (command) => !command.disableModelInvocation && !isHiddenFromModel(command),
+  );
+  let mcpPromptCommands = mcpPromptCommandsWithReserved(toolUseContext.getMcp().commands);
+  let unclashedSkills = dropSyncedNameClashes(skillToolCommands, mcpPromptCommands);
   let mcpSkills = dedupeBundledSkills(
-    s.length > 0
-      ? dropShadowedFallbackSkills(Ji([...S, ...filtered, ...s], "name"))
-      : Ji([...S, ...filtered], "name"),
+    hiddenCommands.length > 0
+      ? dropShadowedFallbackSkills(uniqByExport([...unclashedSkills, ...filtered, ...hiddenCommands], "name"))
+      : uniqByExport([...unclashedSkills, ...filtered], "name"),
   );
   let { agentContext } = toolUseContext;
   if (
@@ -4503,18 +4654,19 @@ async function getSkillListingAttachments(toolUseContext, messages) {
       agentContext.subagentName === FORK)
   )
     mcpSkills = filterCommandsByAllowlist(mcpSkills, getSessionSkillAllowlist());
-  let G = new Map();
+  let announcedDigests = new Map();
   for (let cmd of messages)
     if (cmd.type === "attachment" && cmd.attachment.type === "skill_listing") {
       let { names = [], digests } = cmd.attachment;
-      for (let [Ie, Me] of names.entries()) G.set(Me, (G.get(Me) ?? new Set()).add(digests?.[Ie]));
+      for (let [index, name] of names.entries())
+        announcedDigests.set(name, (announcedDigests.get(name) ?? new Set()).add(digests?.[index]));
     }
   let newSkills = mcpSkills.filter((cmd) => {
-    let Ee = G.get(cmd.name);
-    return !Ee?.has(undefined) && !Ee?.has(getSkillListingDigest(cmd));
+    let digestSet = announcedDigests.get(cmd.name);
+    return !digestSet?.has(undefined) && !digestSet?.has(getSkillListingDigest(cmd));
   });
   if (newSkills.length === 0) return [];
-  let isInitial = G.size === 0;
+  let isInitial = announcedDigests.size === 0;
   logForDebugging(`Sending ${newSkills.length} skills via attachment (${isInitial ? "initial" : "dynamic"})`);
   let contextWindowTokens = getContextWindow(toolUseContext.options.mainLoopModel, getSdkBetas());
   return [
@@ -4522,10 +4674,10 @@ async function getSkillListingAttachments(toolUseContext, messages) {
       type: "skill_listing",
       content: formatCommandsWithinBudget(
         newSkills,
-        (we) => getSkillUsageScore(we.name),
+        (skill) => getSkillUsageScore(skill.name),
         contextWindowTokens,
         bytesPerTokenForModel(toolUseContext.options.mainLoopModel),
-        [...(await getCommands(getProjectRootOrNull(), toolUseContext.storageV5)), ...y],
+        [...(await getCommands(getProjectRootOrNull(), toolUseContext.storageV5)), ...mcpPromptCommands],
       ),
       skillCount: newSkills.length,
       isInitial,
@@ -4541,38 +4693,42 @@ async function getSkillListingAttachments(toolUseContext, messages) {
  */
 function extractAtMentionedFiles(content) {
   let quotedAtMentionRegex = new RegExp(String.raw`(^|${WORD_BOUNDARY_PATTERN})@"([^"]+)"`, "g");
-  let r = [];
+  let quotedMentions = [];
   let match;
   while ((match = quotedAtMentionRegex.exec(content)) !== null)
-    if (match[2] && !match[2].endsWith(" (agent)")) r.push(match[2]);
+    if (match[2] && !match[2].endsWith(" (agent)")) quotedMentions.push(match[2]);
   let filtered = extractAtTokens(content, false).filter((match) => !match.startsWith('"'));
-  return uniq([...r, ...filtered]);
+  return uniq([...quotedMentions, ...filtered]);
 }
 //@ chunk-e6aww6q8.js:3367028-3367064 layout
 /**
  * 提取 @server:uri 形式的 MCP 资源提及。
  */
-function extractMcpResourceMentions(e) {
-  return uniq(extractAtTokens(e, true));
+function extractMcpResourceMentions(input) {
+  return uniq(extractAtTokens(input, true));
 }
 //@ chunk-e6aww6q8.js:3367064-3367395 layout
 /**
  * 按空白切词找 @ 后的 token（可要求含冒号），去掉尾部成对标点。
  */
-function extractAtTokens(e, n) {
-  let r = [];
-  if (!e.includes("@")) return r;
-  for (let [s] of e.matchAll(/[^\s]+/g)) {
-    let index = s.indexOf("@");
-    while (index > 0 && !CJK_PUNCTUATION.includes(s[index - 1])) index = s.indexOf("@", index + 1);
+function extractAtTokens(text, requireResourceUri) {
+  let tokens = [];
+  if (!text.includes("@")) return tokens;
+  for (let [word] of text.matchAll(/[^\s]+/g)) {
+    let index = word.indexOf("@");
+    while (index > 0 && !CJK_PUNCTUATION.includes(word[index - 1])) index = word.indexOf("@", index + 1);
     if (index === -1) continue;
-    let y = n ? s.indexOf(":", index + 2) : index;
-    if (y === -1) continue;
-    let S = s.length;
-    while (S >= y + 2 && isWordCharCodeAt(s, S - 1) === isWordCharCodeAt(s, S)) S--;
-    if (S >= y + 2) r.push(s.slice(index + 1, S));
+    let tokenStart = requireResourceUri ? word.indexOf(":", index + 2) : index;
+    if (tokenStart === -1) continue;
+    let tokenEnd = word.length;
+    while (
+      tokenEnd >= tokenStart + 2 &&
+      isWordCharCodeAt(word, tokenEnd - 1) === isWordCharCodeAt(word, tokenEnd)
+    )
+      tokenEnd--;
+    if (tokenEnd >= tokenStart + 2) tokens.push(word.slice(index + 1, tokenEnd));
   }
-  return r;
+  return tokens;
 }
 //@ chunk-e6aww6q8.js:3367395-3367674 layout
 /**
@@ -4611,20 +4767,23 @@ function parseAtMentionedFileLines(mention) {
 /**
  * 记 tengu_lsp_diagnostics_injected（字符数、诊断数、文件数、来源）。
  */
-function logDiagnosticsInjected(e, n) {
+function logDiagnosticsInjected(fileDiagnostics, source) {
   logEvent("tengu_lsp_diagnostics_injected", {
-    diagnostics_chars: formatNewDiagnosticsAttachment(e).length,
-    diagnostic_count: e.reduce((acc, s) => acc + s.diagnostics.length, 0),
-    file_count: e.length,
-    source: fromEnum(n),
+    diagnostics_chars: formatNewDiagnosticsAttachment(fileDiagnostics).length,
+    diagnostic_count: fileDiagnostics.reduce((acc, entry) => acc + entry.diagnostics.length, 0),
+    file_count: fileDiagnostics.length,
+    source: fromEnum(source),
   });
 }
 //@ chunk-e6aww6q8.js:3368060-3368126 layout
 /**
  * 工具列表含编辑类工具（诊断附件前提）。
  */
-function hasFileEditTools(e) {
-  return e.some((n) => SHELL_TOOL_NAMES_3.some((r) => toolMatchesName(n, r))) || alwaysFalseStream(e);
+function hasFileEditTools(tools) {
+  return (
+    tools.some((tool) => SHELL_TOOL_NAMES_3.some((toolName) => toolMatchesName(tool, toolName))) ||
+    alwaysFalseStream(tools)
+  );
 }
 //@ chunk-e6aww6q8.js:3368126-3368301 fingerprint = getDiagnosticAttachments (0.782)
 /**
@@ -4647,11 +4806,11 @@ async function getDiagnosticAttachments(tools, session) {
 /**
  * LSP 待发诊断 → diagnostics 附件。
  */
-async function getLSPDiagnosticAttachments(tools, session) {
+async function getLSPDiagnosticAttachments(tools, toolUseContext) {
   if (!hasFileEditTools(tools)) return [];
   logForDebugging("LSP Diagnostics: getLSPDiagnosticAttachments called");
   try {
-    let diagnosticSets = checkForLSPDiagnostics(session);
+    let diagnosticSets = checkForLSPDiagnostics(toolUseContext);
     if (diagnosticSets.length === 0) return [];
     logForDebugging(`LSP Diagnostics: Found ${diagnosticSets.length} pending diagnostic set(s)`);
     let attachments = diagnosticSets.map(({ files }) => {
@@ -4663,7 +4822,7 @@ async function getLSPDiagnosticAttachments(tools, session) {
       };
     });
     if (diagnosticSets.length > 0) {
-      clearAllLSPDiagnostics(session);
+      clearAllLSPDiagnostics(toolUseContext);
       logForDebugging(
         `LSP Diagnostics: Cleared ${diagnosticSets.length} delivered diagnostic(s) from registry`,
       );
@@ -4685,42 +4844,44 @@ async function* getAttachmentMessages(
   toolUseContext,
   ideSelection,
   queuedCommands,
-  h,
+  toolUseId,
   messages,
   querySource,
   options,
 ) {
-  let L = new AttachmentTimingProfile();
-  let G = await runWithQueryProfile(L, () =>
+  let timingProfile = new AttachmentTimingProfile();
+  let attachments = await runWithQueryProfile(timingProfile, () =>
     getAttachments(input, toolUseContext, ideSelection, queuedCommands, messages, querySource, options),
   );
-  if (G.length > 0) {
-    logEvent("tengu_attachments", buildAttachmentsEventPayload(G, querySource));
-    for (let attachment of G) yield createAttachmentMessage_2(attachment, h);
+  if (attachments.length > 0) {
+    logEvent("tengu_attachments", buildAttachmentsEventPayload(attachments, querySource));
+    for (let attachment of attachments) yield createAttachmentMessage_2(attachment, toolUseId);
   }
-  let q = L.finish();
-  if (!toolUseContext.agentId) noteAttachmentPass(q);
+  let timing = timingProfile.finish();
+  if (!toolUseContext.agentId) noteAttachmentPass(timing);
 }
 //@ chunk-e6aww6q8.js:3369068-3369320 layout
 /**
  * tengu_attachments 事件字段：附件类型、token 估算、技能列表是否完整、querySource。
  */
-function buildAttachmentsEventPayload(e, n) {
-  let found = e.find((h) => h.type === "skill_listing");
+function buildAttachmentsEventPayload(attachments, querySource) {
+  let found = attachments.find((attachment) => attachment.type === "skill_listing");
   let attachmentTokenEstimates;
   try {
-    attachmentTokenEstimates = e.map((h) => fromNumber(roughTokenCountEstimationForObject(h)));
+    attachmentTokenEstimates = attachments.map((attachment) =>
+      fromNumber(roughTokenCountEstimationForObject(attachment)),
+    );
   } catch (error) {
     logError(error);
   }
   return {
-    attachment_types: e.map((h) => fromEnum(h.type)),
+    attachment_types: attachments.map((attachment) => fromEnum(attachment.type)),
     attachment_token_estimates: attachmentTokenEstimates,
     ...(found && {
       skill_listing_is_full: found.isInitial,
     }),
-    ...(n && {
-      query_source: agentTypeForTelemetry(n),
+    ...(querySource && {
+      query_source: agentTypeForTelemetry(querySource),
     }),
   };
 }
@@ -4728,23 +4889,23 @@ function buildAttachmentsEventPayload(e, n) {
 /**
  * PDF 超过页数/大小阈值或模型按页读取时，返回 pdf_reference（只给引用，不内联内容）。
  */
-async function tryGetPDFReference(filename, mainLoopModel, r) {
+async function tryGetPDFReference(filename, mainLoopModel, fileHandle) {
   let ext = parse(filename).ext.toLowerCase();
   if (!isDocumentExtension(ext)) return null;
   try {
     let [stats, pdfPageCount] = await Promise.all([
-      r ?? getFsImplementation().stat(filename),
-      getPdfPageCount(r?.ioPath ?? filename, r),
+      fileHandle ?? getFsImplementation().stat(filename),
+      getPdfPageCount(fileHandle?.ioPath ?? filename, fileHandle),
     ]);
     let effectivePageCount = Math.ceil(stats.size / 102400);
-    let w =
+    let tooManyPages =
       pdfPageCount.pageCount !== null
         ? pdfPageCount.pageCount > MAX_PDF_PAGES_PER_TURN
         : effectivePageCount > MAX_PDF_PAGES_PER_TURN ||
           (await isUncountedPDFOverWholeReadCap(stats.size, pdfPageCount.pdfinfoFailure));
-    let L = !isNotClaude3Model(mainLoopModel);
-    let effectivePageCount_2 = !w && L;
-    if (w || effectivePageCount_2) {
+    let modelReadsByPage = !isNotClaude3Model(mainLoopModel);
+    let effectivePageCount_2 = !tooManyPages && modelReadsByPage;
+    if (tooManyPages || effectivePageCount_2) {
       logEvent("tengu_pdf_reference_attachment", {
         pageCount: pdfPageCount.pageCount ?? effectivePageCount,
         fileSize: stats.size,
@@ -4752,8 +4913,8 @@ async function tryGetPDFReference(filename, mainLoopModel, r) {
         ...(effectivePageCount_2 && {
           wholeRefusedByModel: effectivePageCount_2,
         }),
-        ...(L && {
-          modelReadsByPage: L,
+        ...(modelReadsByPage && {
+          modelReadsByPage,
         }),
         ...(pdfPageCount.pageCount === null && {
           pdfinfoFailure: fromEnum(pdfPageCount.pdfinfoFailure.reason),
@@ -4771,8 +4932,8 @@ async function tryGetPDFReference(filename, mainLoopModel, r) {
         ...(effectivePageCount_2 && {
           wholeRefusedByModel: effectivePageCount_2,
         }),
-        ...(L && {
-          modelReadsByPage: L,
+        ...(modelReadsByPage && {
+          modelReadsByPage,
         }),
       };
     }
@@ -4815,7 +4976,7 @@ async function generateFileAttachment(
     })
   )
     return null;
-  let q = landingPaths;
+  let landing = landingPaths;
   if (mode === "at-mention" && isDocumentExtension(parse(filename).ext) && isInboundFileArriving(filename)) {
     logEvent("tengu_pdf_reference_attachment", {
       stillArriving: true,
@@ -4850,56 +5011,56 @@ async function generateFileAttachment(
       } catch {}
   }
   if (!isReadRestricted && mode === "at-mention") {
-    let we = await tryGetPDFReference(filename, toolUseContext.options.mainLoopModel);
-    if (we) {
+    let pdfReference = await tryGetPDFReference(filename, toolUseContext.options.mainLoopModel);
+    if (pdfReference) {
       logEvent(successEventName, {});
       logAtMention({
         mentionType: "file",
         success: true,
       });
-      return we;
+      return pdfReference;
     }
   }
-  let Z;
+  let probedModified;
   if (isReadRestricted && mode === "at-mention" && options?.sizeProbe !== "none") {
-    let we = await readPinnedFile(
+    let probe = await readPinnedFile(
       filename,
-      q,
+      landing,
       toolUseContext.abortController.signal,
-    )(async (Ee, Ae) => ({
-      size: Number(Ae.size),
-      modified: Number(Ae.mtimeMs),
+    )(async (pinned, stats) => ({
+      size: Number(stats.size),
+      modified: Number(stats.mtimeMs),
       pdfRef: await tryGetPDFReference(filename, toolUseContext.options.mainLoopModel, {
-        ioPath: Ee.ioPath,
-        size: Number(Ae.size),
-        handle: Ee.handle,
+        ioPath: pinned.ioPath,
+        size: Number(stats.size),
+        handle: pinned.handle,
         signal: toolUseContext.abortController.signal,
       }),
     }));
-    Z = we?.modified;
+    probedModified = probe?.modified;
     if (
-      we !== undefined &&
-      we.size > getDefaultFileReadingLimits().maxSizeBytes &&
+      probe !== undefined &&
+      probe.size > getDefaultFileReadingLimits().maxSizeBytes &&
       !isDocumentExtension(parse(filename).ext.toLowerCase())
     ) {
       logEvent("tengu_attachment_file_too_large", {
-        size_bytes: we.size,
+        size_bytes: probe.size,
         mode: fromEnum(mode),
       });
-      options?.onTooLarge?.(we.size);
+      options?.onTooLarge?.(probe.size);
       return null;
     }
-    if (we?.pdfRef) {
+    if (probe?.pdfRef) {
       logEvent(successEventName, {});
       logAtMention({
         mentionType: "file",
         success: true,
       });
-      return we.pdfRef;
+      return probe.pdfRef;
     }
   }
   let existingFileState = toolUseContext.readFileState.get(filename);
-  let ke =
+  let clearedAfterIdle =
     existingFileState !== undefined &&
     mode === "at-mention" &&
     hasClearedToolResultsAfterIdle(
@@ -4909,14 +5070,15 @@ async function generateFileAttachment(
       toolUseContext.session,
     );
   if (existingFileState && mode === "at-mention") {
-    let we =
+    let canReuseRead =
       hasFullFileContent(existingFileState) &&
       (existingFileState.content !== "" || (existingFileState.contentLength ?? 0) === 0) &&
-      !ke;
+      !clearedAfterIdle;
     try {
       if (
-        we &&
-        (isReadRestricted ? Z : await getFileModificationTimeAsync(filename)) === existingFileState.timestamp
+        canReuseRead &&
+        (isReadRestricted ? probedModified : await getFileModificationTimeAsync(filename)) ===
+          existingFileState.timestamp
       ) {
         logEvent(successEventName, {});
         if (mode === "at-mention")
@@ -4972,7 +5134,7 @@ async function generateFileAttachment(
           offset: offset ?? 1,
           limit: MAX_LINES_TO_READ,
         };
-        let We = ke
+        let readContext = clearedAfterIdle
           ? {
               ...toolUseContext,
               dedupUnchangedReads: false,
@@ -4980,7 +5142,7 @@ async function generateFileAttachment(
           : toolUseContext;
         let result = await FileReadTool.call(
           truncatedInput,
-          isReadRestricted ? await stashAttachedReadPermission(filename, q, We) : We,
+          isReadRestricted ? await stashAttachedReadPermission(filename, landing, readContext) : readContext,
         );
         recordToolUsed(FileReadTool.name);
         logEvent(successEventName, {});
@@ -5008,29 +5170,29 @@ async function generateFileAttachment(
       }
     }
     if (!(await FileReadTool.validateInput(fileInput, toolUseContext)).result) return null;
-    let Ie =
+    let pdfController =
       options?.pdfAbortParent !== undefined && isImageOrPdfExtension(filename)
         ? createChildAbortController(options.pdfAbortParent)
         : undefined;
     try {
-      let Me = ke
+      let readContext = clearedAfterIdle
         ? {
             ...toolUseContext,
             dedupUnchangedReads: false,
           }
         : toolUseContext;
-      let We = await FileReadTool.call(
+      let readResult = await FileReadTool.call(
         fileInput,
-        isReadRestricted ? await stashAttachedReadPermission(filename, q, Me) : Me,
+        isReadRestricted ? await stashAttachedReadPermission(filename, landing, readContext) : readContext,
         undefined,
         undefined,
         undefined,
         {
-          pdfRenderSignal: Ie?.signal,
+          pdfRenderSignal: pdfController?.signal,
         },
       );
       recordToolUsed(FileReadTool.name);
-      if (We.data.type === "file_unchanged") {
+      if (readResult.data.type === "file_unchanged") {
         logEvent(successEventName, {});
         if (mode === "at-mention")
           logAtMention({
@@ -5041,10 +5203,10 @@ async function generateFileAttachment(
           type: "already_read_file",
           filename,
           displayPath: relative(getCwd(), filename),
-          content: We.data,
+          content: readResult.data,
         };
       }
-      if (We.data.type === "text" && We.data.file.truncatedByTokenCap === true)
+      if (readResult.data.type === "text" && readResult.data.file.truncatedByTokenCap === true)
         return await readTruncatedFile();
       logEvent(successEventName, {});
       if (mode === "at-mention")
@@ -5056,15 +5218,15 @@ async function generateFileAttachment(
         type: "file",
         filename,
         content:
-          We.data.type === "pdf"
+          readResult.data.type === "pdf"
             ? {
-                ...We.data,
+                ...readResult.data,
                 file: {
-                  ...We.data.file,
+                  ...readResult.data.file,
                   base64: "",
                 },
               }
-            : We.data,
+            : readResult.data,
         displayPath: relative(getCwd(), filename),
       };
     } catch (error) {
@@ -5074,10 +5236,10 @@ async function generateFileAttachment(
         error instanceof SelectedRangeTooLargeError
       )
         return await readTruncatedFile();
-      if (Ie?.signal.aborted && error instanceof AbortError_2) return null;
+      if (pdfController?.signal.aborted && error instanceof AbortError_2) return null;
       throw error;
     } finally {
-      Ie?.abort();
+      pdfController?.abort();
     }
   } catch (error) {
     if (isReadRestricted && error instanceof SymlinkReadRefusedError) options?.onRefusedAtOpen?.();
@@ -5140,12 +5302,12 @@ async function getTodoReminderAttachments(messages, toolUseContext) {
     turnsSinceLastReminder >= TODO_REMINDER_CONFIG.TURNS_BETWEEN_REMINDERS
   ) {
     let todoKey = toolUseContext.agentId ?? getSessionId();
-    let S = toolUseContext.getAppState().todos[todoKey] ?? [];
+    let todoItems = toolUseContext.getAppState().todos[todoKey] ?? [];
     return [
       {
         type: "todo_reminder",
-        content: S,
-        itemCount: S.length,
+        content: todoItems,
+        itemCount: todoItems.length,
       },
     ];
   }
@@ -5220,62 +5382,78 @@ async function getTaskReminderAttachments(messages, tools, storageV5) {
 /**
  * 统计距上次 ToolSearch 调用与上次 tool_search_usage_reminder 的轮数。
  */
-function getToolSearchReminderTurnCounts(e) {
-  let n = -1;
-  let r = -1;
-  let s = 0;
-  let h = 0;
-  for (let idx = e.length - 1; idx >= 0; idx--) {
-    let S = e[idx];
-    if (S?.type === "assistant") {
-      if (isThinkingOnlyMessage(S)) continue;
+function getToolSearchReminderTurnCounts(messages) {
+  let lastToolSearchIndex = -1;
+  let lastReminderIndex = -1;
+  let turnsSinceLastToolSearch = 0;
+  let turnsSinceLastReminder = 0;
+  for (let idx = messages.length - 1; idx >= 0; idx--) {
+    let message = messages[idx];
+    if (message?.type === "assistant") {
+      if (isThinkingOnlyMessage(message)) continue;
       if (
-        n === -1 &&
-        "message" in S &&
-        Array.isArray(S.message?.content) &&
-        S.message.content.some((w) => w.type === "tool_use" && w.name === TOOL_SEARCH_TOOL_NAME)
+        lastToolSearchIndex === -1 &&
+        "message" in message &&
+        Array.isArray(message.message?.content) &&
+        message.message.content.some(
+          (block) => block.type === "tool_use" && block.name === TOOL_SEARCH_TOOL_NAME,
+        )
       )
-        n = idx;
-      if (n === -1) s++;
-      if (r === -1) h++;
-    } else if (r === -1 && S?.type === "attachment" && S.attachment.type === "tool_search_usage_reminder")
-      r = idx;
-    if (n !== -1 && r !== -1) break;
+        lastToolSearchIndex = idx;
+      if (lastToolSearchIndex === -1) turnsSinceLastToolSearch++;
+      if (lastReminderIndex === -1) turnsSinceLastReminder++;
+    } else if (
+      lastReminderIndex === -1 &&
+      message?.type === "attachment" &&
+      message.attachment.type === "tool_search_usage_reminder"
+    )
+      lastReminderIndex = idx;
+    if (lastToolSearchIndex !== -1 && lastReminderIndex !== -1) break;
   }
   return {
-    turnsSinceLastToolSearch: s,
-    turnsSinceLastReminder: h,
+    turnsSinceLastToolSearch,
+    turnsSinceLastReminder,
   };
 }
 //@ chunk-e6aww6q8.js:3376308-3377501 layout
 /**
  * 实验配置开启时每 N 轮提醒使用 ToolSearch（tool_search_usage_reminder），不满足条件记 tengu_juniper_shoal_shown。
  */
-async function getToolSearchUsageReminderAttachment(messages, toolUseContext, r, declaredToolSource) {
-  let h = toolSearchReminderConfig();
-  if (h === null) return [];
+async function getToolSearchUsageReminderAttachment(
+  messages,
+  toolUseContext,
+  hasTaskReminderThisTurn,
+  declaredToolSource,
+) {
+  let reminderConfig = toolSearchReminderConfig();
+  if (reminderConfig === null) return [];
   if (!messages || messages.length === 0) return [];
   let { turnsSinceLastToolSearch, turnsSinceLastReminder } = getToolSearchReminderTurnCounts(messages);
-  if (turnsSinceLastToolSearch < h.everyNTurns || turnsSinceLastReminder < h.everyNTurns) return [];
-  let w = (Z) => {
-    if (turnsSinceLastReminder % h.everyNTurns === 0)
+  if (
+    turnsSinceLastToolSearch < reminderConfig.everyNTurns ||
+    turnsSinceLastReminder < reminderConfig.everyNTurns
+  )
+    return [];
+  let skipWithTelemetry = (reason) => {
+    if (turnsSinceLastReminder % reminderConfig.everyNTurns === 0)
       logEvent("tengu_juniper_shoal_shown", {
         delivered: false,
-        skipReason: fromEnum(Z),
-        everyNTurns: h.everyNTurns,
+        skipReason: fromEnum(reason),
+        everyNTurns: reminderConfig.everyNTurns,
         turnsSinceLastReminder,
       });
     return [];
   };
-  if (getToolSearchMode() !== "tst") return w("mode_not_tst");
-  if (!modelSupportsToolReference(toolUseContext.options.mainLoopModel)) return w("model_unsupported");
+  if (getToolSearchMode() !== "tst") return skipWithTelemetry("mode_not_tst");
+  if (!modelSupportsToolReference(toolUseContext.options.mainLoopModel))
+    return skipWithTelemetry("model_unsupported");
   if (isVertexModelWithoutToolSearch(getCanonicalName(toolUseContext.options.mainLoopModel)))
-    return w("vertex_model_unsupported");
+    return skipWithTelemetry("vertex_model_unsupported");
   if (
     !isToolSearchToolAvailable(toolUseContext.options.tools) ||
     toolSearchRejectedOn(toolUseContext.stickyBetas ?? getStickyBetas(), toolUseContext.options.mainLoopModel)
   )
-    return w("toolsearch_unavailable");
+    return skipWithTelemetry("toolsearch_unavailable");
   let discoveredToolNames = extractDiscoveredToolNames(messages, {
     surfaced: getSurfacedToolNames(toolUseContext.stickyBetas ?? getStickyBetas()),
   });
@@ -5287,25 +5465,25 @@ async function getToolSearchUsageReminderAttachment(messages, toolUseContext, r,
     )
     .map((tool) => tool.name)
     .sort();
-  if (sorted.length === 0) return w("no_undiscovered_tools");
-  let q = false;
+  if (sorted.length === 0) return skipWithTelemetry("no_undiscovered_tools");
+  let taskReminderSameTurn = false;
   try {
-    q = await r();
+    taskReminderSameTurn = await hasTaskReminderThisTurn();
   } catch {
-    q = false;
+    taskReminderSameTurn = false;
   }
-  if (q) return w("task_reminder_same_turn");
+  if (taskReminderSameTurn) return skipWithTelemetry("task_reminder_same_turn");
   logEvent("tengu_juniper_shoal_shown", {
     delivered: true,
     undiscoveredCount: sorted.length,
-    listedCount: Math.min(sorted.length, h.maxNames),
-    everyNTurns: h.everyNTurns,
-    maxNames: h.maxNames,
+    listedCount: Math.min(sorted.length, reminderConfig.maxNames),
+    everyNTurns: reminderConfig.everyNTurns,
+    maxNames: reminderConfig.maxNames,
   });
   return [
     {
       type: "tool_search_usage_reminder",
-      undiscoveredToolNames: sorted.slice(0, h.maxNames),
+      undiscoveredToolNames: sorted.slice(0, reminderConfig.maxNames),
       undiscoveredCount: sorted.length,
     },
   ];
@@ -5346,20 +5524,23 @@ function getMemoryUpdateAttachments(toolUseContext, messages = []) {
     }));
   let pendingMemoryUpdates = toolUseContext.getAppState().pendingMemoryUpdates;
   if (pendingMemoryUpdates.length === 0) return mapped;
-  let h =
+  let autoMemEntrypoint =
     isAutoMemoryEnabled() && process.env.CLAUDE_COWORK_MEMORY_INDEX_CONTENT !== ""
       ? getAutoMemEntrypoint()
       : null;
-  let y = messagesSinceCompactBoundary(messages);
-  let S = latestInstructionFiles(y);
-  let nestedMemoryContents = collectNestedMemoryContents(y);
-  let L = (G) =>
-    G === h || toolUseContext.readFileState.has(G) || S?.has(G) === true || nestedMemoryContents.has(G);
-  toolUseContext.setAppState((G) =>
-    G.pendingMemoryUpdates.length === 0
-      ? G
+  let normalizedMessages = messagesSinceCompactBoundary(messages);
+  let announcedFiles = latestInstructionFiles(normalizedMessages);
+  let nestedMemoryContents = collectNestedMemoryContents(normalizedMessages);
+  let isInContext = (path) =>
+    path === autoMemEntrypoint ||
+    toolUseContext.readFileState.has(path) ||
+    announcedFiles?.has(path) === true ||
+    nestedMemoryContents.has(path);
+  toolUseContext.setAppState((prevState) =>
+    prevState.pendingMemoryUpdates.length === 0
+      ? prevState
       : {
-          ...G,
+          ...prevState,
           pendingMemoryUpdates: [],
         },
   );
@@ -5369,7 +5550,7 @@ function getMemoryUpdateAttachments(toolUseContext, messages = []) {
       source: pendingMemoryUpdate.source,
       summary: pendingMemoryUpdate.summary,
       paths: pendingMemoryUpdate.paths,
-      inContextPaths: pendingMemoryUpdate.paths.filter(L),
+      inContextPaths: pendingMemoryUpdate.paths.filter(isInContext),
     })),
   );
 }
@@ -5377,14 +5558,16 @@ function getMemoryUpdateAttachments(toolUseContext, messages = []) {
 /**
  * 已完成的异步钩子响应 → async_hook_response 系列附件（SessionStart 重复输出跳过）。
  */
-async function getAsyncHookResponseAttachments(e) {
+async function getAsyncHookResponseAttachments(messages) {
   let responses = await checkForNewAsyncHookResponses();
   if (responses.length === 0) return [];
   logForDebugging(`Hooks: getAsyncHookResponseAttachments found ${responses.length} responses`);
-  let r = responses.some((response) => response.hookEvent === "SessionStart")
-    ? messagesSinceCompactBoundary(e).flatMap((h) => (h?.type === "attachment" ? [h.attachment] : []))
+  let priorAttachments = responses.some((response) => response.hookEvent === "SessionStart")
+    ? messagesSinceCompactBoundary(messages).flatMap((message) =>
+        message?.type === "attachment" ? [message.attachment] : [],
+      )
     : [];
-  let s = [];
+  let attachments = [];
   for (let {
     processId,
     response,
@@ -5406,7 +5589,7 @@ async function getAsyncHookResponseAttachments(e) {
           command,
           pluginId,
         },
-        r,
+        priorAttachments,
       )
     ) {
       logForDebugging(
@@ -5415,7 +5598,7 @@ async function getAsyncHookResponseAttachments(e) {
       continue;
     }
     logForDebugging(`Hooks: Creating attachment for ${processId} (${hookName}): ${jsonStringify(response)}`);
-    let we = {
+    let attachment = {
       type: "async_hook_response",
       processId,
       hookName,
@@ -5430,31 +5613,31 @@ async function getAsyncHookResponseAttachments(e) {
       stderr,
       exitCode,
     };
-    s.push(we);
-    r.push(we);
+    attachments.push(attachment);
+    priorAttachments.push(attachment);
   }
-  logForDebugging(`Hooks: getAsyncHookResponseAttachments found ${s.length} attachments`);
-  return s;
+  logForDebugging(`Hooks: getAsyncHookResponseAttachments found ${attachments.length} attachments`);
+  return attachments;
 }
 //@ chunk-e6aww6q8.js:3379394-3379803 file-local
 /**
  * 把已附加的非结构化邮箱消息标记为已读（失败则下轮再附加）。旧版名 getTeammateMailboxAttachments 不准确。
  */
-async function markMailboxMessagesRead(agentName, teamName, r, store) {
-  if (r.length === 0) return;
-  let pendingIds = new Set(r.map(messageIdentityKey));
-  let y = await markMessagesAsReadByPredicate(
+async function markMailboxMessagesRead(agentName, teamName, messages, store) {
+  if (messages.length === 0) return;
+  let pendingIds = new Set(messages.map(messageIdentityKey));
+  let marked = await markMessagesAsReadByPredicate(
     agentName,
-    (S) => pendingIds.has(messageIdentityKey(S)),
+    (storedMessage) => pendingIds.has(messageIdentityKey(storedMessage)),
     teamName,
     store,
   );
   logForDebugging(
-    y
-      ? `[MailboxBridge] marked ${r.length} non-structured message(s) as read for agent="${agentName}" team="${teamName || "default"}"`
-      : `[MailboxBridge] could not mark ${r.length} non-structured message(s) read for agent="${agentName}" team="${teamName || "default"}"; they will be attached again next turn`,
+    marked
+      ? `[MailboxBridge] marked ${messages.length} non-structured message(s) as read for agent="${agentName}" team="${teamName || "default"}"`
+      : `[MailboxBridge] could not mark ${messages.length} non-structured message(s) read for agent="${agentName}" team="${teamName || "default"}"; they will be attached again next turn`,
     {
-      level: y ? "debug" : "warn",
+      level: marked ? "debug" : "warn",
     },
   );
 }
@@ -5476,15 +5659,15 @@ function getTeamContextAttachment(messages) {
   let agentName = getAgentName();
   if (!teamName || !agentId) return [];
   if (messages.some((m) => m.type === "assistant")) return [];
-  let y;
+  let hasTaskListTools;
   let configDir = getTeammateContext();
   if (configDir) {
     for (let message of messages)
       if (message.type === "attachment" && message.attachment.type === "team_context") {
-        y = message.attachment.hasTaskListTools;
+        hasTaskListTools = message.attachment.hasTaskListTools;
         break;
       }
-    y ??= configDir.hasTaskListTools;
+    hasTaskListTools ??= configDir.hasTaskListTools;
   }
   let configDir_2 = getClaudeConfigDir();
   let teamConfigPath = `${configDir_2}/teams/${teamName}/config.json`;
@@ -5497,7 +5680,7 @@ function getTeamContextAttachment(messages) {
       teamName,
       teamConfigPath,
       taskListPath,
-      hasTaskListTools: y,
+      hasTaskListTools,
     },
   ];
 }
@@ -5525,30 +5708,34 @@ function getTokenUsageAttachment(messages, model, autoCompactWindow) {
 function getTotalTokensReminderAttachment(
   session,
   usage,
-  mainLoopModel,
+  model,
   agentId,
-  h,
+  reanchor,
   totalTokensReminderBudget,
-  S,
+  excludeStart,
 ) {
-  let totalTokensReminderMode = getTotalTokensReminderMode(mainLoopModel, totalTokensReminderBudget);
-  if (totalTokensReminderMode === "off") return [];
-  let L = agentId ?? "main";
-  let G = tokenCountFromLastAPIResponse(usage);
-  let q = totalTokensReminderByRoot.of(session);
-  if (h) q.reanchorTaskBudget(L, G);
-  if (totalTokensReminderBudget !== undefined && S)
-    q.excludeStartContext(L, () => getMinInputTokensSinceLastCompact(usage));
-  let Z =
-    totalTokensReminderMode === "countdown"
-      ? getContextWindow(mainLoopModel, getSdkBetas()) - G
-      : totalTokensReminderMode === "padded-countdown"
-        ? q.remaining(L, G, totalTokensReminderBudget ?? getTotalTokensReminderBudget())
+  let mode = getTotalTokensReminderMode(model, totalTokensReminderBudget);
+  if (mode === "off") return [];
+  let budgetKey = agentId ?? "main";
+  let currentTokens = tokenCountFromLastAPIResponse(usage);
+  let budgetState = totalTokensReminderByRoot.of(session);
+  if (reanchor) budgetState.reanchorTaskBudget(budgetKey, currentTokens);
+  if (totalTokensReminderBudget !== undefined && excludeStart)
+    budgetState.excludeStartContext(budgetKey, () => getMinInputTokensSinceLastCompact(usage));
+  let remainingTokens =
+    mode === "countdown"
+      ? getContextWindow(model, getSdkBetas()) - currentTokens
+      : mode === "padded-countdown"
+        ? budgetState.remaining(
+            budgetKey,
+            currentTokens,
+            totalTokensReminderBudget ?? getTotalTokensReminderBudget(),
+          )
         : 0;
   return [
     {
       type: "total_tokens_reminder",
-      text: formatTotalTokensTag(totalTokensReminderMode, Z),
+      text: formatTotalTokensTag(mode, remainingTokens),
     },
   ];
 }
@@ -5557,23 +5744,23 @@ function getTotalTokensReminderAttachment(
  * 最近一次压缩边界之后各回答 usage 的输入 token（首个与最后一个中较小者）。
  */
 function getMinInputTokensSinceLastCompact(usage) {
-  let n = usage.findLastIndex(isForkBoilerplateMessage) + 1;
-  let r;
-  let s;
-  for (let h = n; h < usage.length; h++) {
-    let tokenUsage = getTokenUsage(usage[h]);
+  let startIndex = usage.findLastIndex(isForkBoilerplateMessage) + 1;
+  let firstTotal;
+  let lastTotal;
+  for (let index = startIndex; index < usage.length; index++) {
+    let tokenUsage = getTokenUsage(usage[index]);
     if (!tokenUsage) continue;
     let tokenCountFromUsage = getTokenCountFromUsage_5(tokenUsage);
-    let w =
+    let totalTokens =
       tokenCountFromUsage.input_tokens +
       tokenCountFromUsage.cache_creation_input_tokens +
       tokenCountFromUsage.cache_read_input_tokens;
-    if (w > 0) {
-      r ??= w;
-      s = w;
+    if (totalTokens > 0) {
+      firstTotal ??= totalTokens;
+      lastTotal = totalTokens;
     }
   }
-  return r === undefined || s === undefined ? undefined : Math.min(r, s);
+  return firstTotal === undefined || lastTotal === undefined ? undefined : Math.min(firstTotal, lastTotal);
 }
 //@ chunk-e6aww6q8.js:3381047-3381159 fingerprint = getMaxBudgetUsdAttachment (1)
 /**
@@ -5591,18 +5778,6 @@ function getMaxBudgetUsdAttachment(maxBudgetUsd) {
       remaining: remainingBudget,
     },
   ];
-}
-//@ chunk-bnwcqde4.js:4394-4502 fingerprint = createAttachmentMessage (1)
-/**
- * 把一个 Attachment 包成内部 attachment 消息 {type:"attachment", uuid, timestamp, attachment}（jlr 规整附件字段）。
- */
-function createAttachmentMessage(t, condition) {
-  return {
-    type: "attachment",
-    uuid: randomUUID(),
-    timestamp: new Date().toISOString(),
-    attachment: buildGoalSentinelAttachment(t, condition),
-  };
 }
 export {
   memoryHeader,

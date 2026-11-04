@@ -55,6 +55,7 @@ import { getAdditionalModelOptionsCache } from "../auth.js";
 import { isNonCustomFableModel, isNonCustomMythosModel } from "./smallFastModel.js";
 import { getPublicModelDisplayName } from "./modelDisplay.js";
 import { getUltraplanModel } from "../../commands/ultraplan.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:433227-433312 placement = resolveSkillModelOverride (1)
 /**
@@ -89,64 +90,74 @@ function isAllowedAutoModeClassifierPin(model) {
  * 从 ANTHROPIC_DEFAULT_SONNET_MODEL 推出分类器固定模型。
  */
 function classifierPinFromEnv(currentModel) {
-  let n = strippedCanonicalName(currentModel);
-  if (n === "claude-sonnet-4-6" || n === "claude-sonnet-4-5") return;
+  let strippedModel = strippedCanonicalName(currentModel);
+  if (strippedModel === "claude-sonnet-4-6" || strippedModel === "claude-sonnet-4-5") return;
   let ANTHROPIC_DEFAULT_SONNET_MODEL = env.ANTHROPIC_DEFAULT_SONNET_MODEL;
-  let h =
+  let candidate =
     ANTHROPIC_DEFAULT_SONNET_MODEL !== undefined &&
     ANTHROPIC_DEFAULT_SONNET_MODEL === env.CLAUDE_CODE_3P_PROBE_WROTE_SONNET_DEFAULT
       ? undefined
       : ANTHROPIC_DEFAULT_SONNET_MODEL;
-  if (h !== undefined && CLASSIFIER_PREFERRED_MODELS.includes(strippedCanonicalName(identityModelId(h)))) {
+  if (
+    candidate !== undefined &&
+    CLASSIFIER_PREFERRED_MODELS.includes(strippedCanonicalName(identityModelId(candidate)))
+  ) {
     if (!classifierFallbackNoticed) {
       classifierFallbackNoticed = true;
       logForDebugging(
-        `Auto mode classifier: ANTHROPIC_DEFAULT_SONNET_MODEL=${h} cannot serve as the classifier; using the Sonnet 5 default instead`,
+        `Auto mode classifier: ANTHROPIC_DEFAULT_SONNET_MODEL=${candidate} cannot serve as the classifier; using the Sonnet 5 default instead`,
       );
     }
-    h = undefined;
+    candidate = undefined;
   }
   if (
-    h !== undefined &&
+    candidate !== undefined &&
     !(
-      (isModelAllowedUnderActiveEnforcement(h) ?? isModelAllowed(h)) &&
-      !isModelDenied(h, getModelEntitlementDenySet())
+      (isModelAllowedUnderActiveEnforcement(candidate) ?? isModelAllowed(candidate)) &&
+      !isModelDenied(candidate, getModelEntitlementDenySet())
     )
   )
     return;
-  if (h === undefined) {
+  if (candidate === undefined) {
     let sonnet5 = getModelStrings().sonnet5;
     if (!isModelAllowed(sonnet5)) return;
-    h = sonnet5;
+    candidate = sonnet5;
   }
-  return inherit1mSuffix(identityModelId(h), currentModel);
+  return inherit1mSuffix(identityModelId(candidate), currentModel);
 }
 //@ chunk-aepeg2w5.js:433983-434020 placement
 function getPermissionClassifierExternalDefault(mainModel) {
   return withCatalogSuppressed(() => classifierPinFromEnv(mainModel));
 }
 //@ chunk-aepeg2w5.js:434020-434075 placement
-function classifierFlagshipRerouteTarget(e) {
-  if (isFableFamilyOrPinnedModel(e) || isMythosModelValue_2(e)) return resolveDefaultOpusModel(e);
-  return e;
+function classifierFlagshipRerouteTarget(model) {
+  if (isFableFamilyOrPinnedModel(model) || isMythosModelValue_2(model)) return resolveDefaultOpusModel(model);
+  return model;
 }
 //@ chunk-aepeg2w5.js:434075-434113 placement
-function getPermissionClassifierFlagshipRerouteTarget(mainModel) {
-  return withCatalogSuppressed(() => classifierFlagshipRerouteTarget(mainModel));
+function getPermissionClassifierFlagshipRerouteTarget(model) {
+  return withCatalogSuppressed(() => classifierFlagshipRerouteTarget(model));
 }
 //@ chunk-aepeg2w5.js:434113-434135 placement
-var OPUS5 = "opus5";
-var OPUS_FALLBACK_ORDER = OPUS_FALLBACK_ORDER_2;
+var OPUS5; // deferred: uses MODEL_CONFIGS (./configs.js) of its import cycle while loading; runs once the cycle is complete
+var OPUS_FALLBACK_ORDER;
+deferInit("chunk-aepeg2w5.js:434113", () => {
+  OPUS5 = "opus5";
+  OPUS_FALLBACK_ORDER = OPUS_FALLBACK_ORDER_2;
+});
 //@ chunk-aepeg2w5.js:434135-434233 placement
 function preferredOpusKey() {
-  let e = usesFirstPartyModelIds() ? catalogDefaultKeyForFamily("opus") : undefined;
-  return e !== undefined && OPUS_FALLBACK_ORDER.indexOf(e) > OPUS_FALLBACK_ORDER_2.indexOf(OPUS5) ? e : OPUS5;
+  let catalogKey = usesFirstPartyModelIds() ? catalogDefaultKeyForFamily("opus") : undefined;
+  return catalogKey !== undefined &&
+    OPUS_FALLBACK_ORDER.indexOf(catalogKey) > OPUS_FALLBACK_ORDER_2.indexOf(OPUS5)
+    ? catalogKey
+    : OPUS5;
 }
 //@ chunk-aepeg2w5.js:434233-434308 placement
 function getRefusalFallbackOpusLineupIds() {
   let modelStrings = getModelStrings();
   return OPUS_FALLBACK_ORDER.slice(OPUS_FALLBACK_ORDER.indexOf(preferredOpusKey())).map(
-    (n) => modelStrings[n],
+    (key) => modelStrings[key],
   );
 }
 //@ chunk-aepeg2w5.js:434308-434395 placement
@@ -161,29 +172,29 @@ function enforcementRefusalFallbackOpusModel() {
   return getRawModelStrings()[preferredOpusKey()];
 }
 //@ chunk-aepeg2w5.js:434429-436118 placement
-function getModelUnavailabilityReason(e, n) {
-  let modelAliasSpelling = resolveModelAliasSpelling(e);
-  let s = n?.ignoreModelOverrides
-    ? (re) => firstPartyNameToCanonical(strip1mSuffix(re.toLowerCase()).trim())
+function getModelUnavailabilityReason(modelId, options) {
+  let modelAliasSpelling = resolveModelAliasSpelling(modelId);
+  let toKey = options?.ignoreModelOverrides
+    ? (value) => firstPartyNameToCanonical(strip1mSuffix(value.toLowerCase()).trim())
     : canonicalFromLowercase;
-  let h = s(e);
-  let y = s(modelAliasSpelling);
-  let S = (re) =>
-    n?.ignoreModelOverrides
-      ? s(re)
-      : getCanonicalName(strip1mSuffix(re.toLowerCase()).trim(), {
+  let requestedKey = toKey(modelId);
+  let aliasKey = toKey(modelAliasSpelling);
+  let identityKeyOf = (value) =>
+    options?.ignoreModelOverrides
+      ? toKey(value)
+      : getCanonicalName(strip1mSuffix(value.toLowerCase()).trim(), {
           identity: true,
         });
-  let w = S(e);
-  let R = S(modelAliasSpelling);
+  let requestedIdentity = identityKeyOf(modelId);
+  let aliasIdentity = identityKeyOf(modelAliasSpelling);
   let any = getGatewayModelOptions().some(
-    (re) =>
-      re.disabled !== true &&
-      typeof re.value === "string" &&
-      (sameModelSpelling(re.value, e) ||
-        sameModelSpelling(re.value, modelAliasSpelling) ||
-        S(re.value) === w ||
-        S(re.value) === R),
+    (option) =>
+      option.disabled !== true &&
+      typeof option.value === "string" &&
+      (sameModelSpelling(option.value, modelId) ||
+        sameModelSpelling(option.value, modelAliasSpelling) ||
+        identityKeyOf(option.value) === requestedIdentity ||
+        identityKeyOf(option.value) === aliasIdentity),
   );
   let any_2 = (
     getAPIProvider() !== "firstParty" || !isFirstPartyAnthropicBaseUrl()
@@ -195,47 +206,56 @@ function getModelUnavailabilityReason(e, n) {
           env.ANTHROPIC_CUSTOM_MODEL_OPTION,
           ...(supportsFamilyOverride()
             ? []
-            : ["opus", "sonnet", "haiku"].map((re) =>
-                resolveCatalogAlias(re, providerCatalogKey(getAPIProvider())),
+            : ["opus", "sonnet", "haiku"].map((alias) =>
+                resolveCatalogAlias(alias, providerCatalogKey(getAPIProvider())),
               )),
         ]
       : []
   ).some(
-    (re) =>
-      re !== undefined &&
-      (sameModelSpelling(re, e) || sameModelSpelling(re, modelAliasSpelling) || S(re) === w || S(re) === R),
+    (candidate) =>
+      candidate !== undefined &&
+      (sameModelSpelling(candidate, modelId) ||
+        sameModelSpelling(candidate, modelAliasSpelling) ||
+        identityKeyOf(candidate) === requestedIdentity ||
+        identityKeyOf(candidate) === aliasIdentity),
   );
-  let L =
+  let served =
     any || any_2
       ? undefined
-      : (findServedModel(e, modelAliasSpelling, h, y) ??
-        activeCatalogModels().find((re) => !isActiveCatalogModel(re) && (s(re.id) === h || s(re.id) === y)));
-  let G = any || any_2 ? undefined : findActiveServedByIdentity(e);
-  let ee =
-    G !== undefined &&
-    (!isActiveCatalogModel(G) || (isFirstPartyApiBackend() && !activeCatalogRowKnown(G))) &&
-    (L === undefined || isActiveCatalogModel(L))
-      ? G
-      : L;
-  if (ee !== undefined && !isActiveCatalogModel(ee))
+      : (findServedModel(modelId, modelAliasSpelling, requestedKey, aliasKey) ??
+        activeCatalogModels().find(
+          (row) =>
+            !isActiveCatalogModel(row) && (toKey(row.id) === requestedKey || toKey(row.id) === aliasKey),
+        ));
+  let activeServed = any || any_2 ? undefined : findActiveServedByIdentity(modelId);
+  let match =
+    activeServed !== undefined &&
+    (!isActiveCatalogModel(activeServed) ||
+      (isFirstPartyApiBackend() && !activeCatalogRowKnown(activeServed))) &&
+    (served === undefined || isActiveCatalogModel(served))
+      ? activeServed
+      : served;
+  if (match !== undefined && !isActiveCatalogModel(match))
     return {
       reason: "disabled",
       description:
-        markdownSafeText(ee.selection_notice?.text ?? ee.notice?.text ?? "") ||
-        markdownSafeText(ee.description ?? "") ||
+        markdownSafeText(match.selection_notice?.text ?? match.notice?.text ?? "") ||
+        markdownSafeText(match.description ?? "") ||
         "Not available",
     };
-  if (ee !== undefined && isFirstPartyApiBackend() && !activeCatalogRowKnown(ee))
+  if (match !== undefined && isFirstPartyApiBackend() && !activeCatalogRowKnown(match))
     return {
       reason: "disabled",
-      description: getUnsupportedModelMessage(ee),
+      description: getUnsupportedModelMessage(match),
       notOffered: true,
     };
   if (getAPIProvider() !== "firstParty" || !isFirstPartyAnthropicBaseUrl()) return null;
   if (!isServedCatalogActive()) {
     let found = getAdditionalModelOptionsCache().find(
-      (se) =>
-        se.disabled === true && typeof se.value === "string" && (s(se.value) === h || s(se.value) === y),
+      (option) =>
+        option.disabled === true &&
+        typeof option.value === "string" &&
+        (toKey(option.value) === requestedKey || toKey(option.value) === aliasKey),
     );
     if (found)
       return {
@@ -243,23 +263,27 @@ function getModelUnavailabilityReason(e, n) {
         description: found.description,
       };
   }
-  let q = n?.ignoreModelOverrides
+  let aliasCanonical = options?.ignoreModelOverrides
     ? firstPartyNameToCanonical(modelAliasSpelling)
     : getCanonicalName(modelAliasSpelling, {
         identity: true,
       });
-  let Q = isServedCatalogActive()
-    ? activeCatalogModels().some((re) => isActiveCatalogModel(re) && (s(re.id) === h || s(re.id) === y))
+  let isAvailable = isServedCatalogActive()
+    ? activeCatalogModels().some(
+        (row) => isActiveCatalogModel(row) && (toKey(row.id) === requestedKey || toKey(row.id) === aliasKey),
+      )
     : getAdditionalModelOptionsCache().some(
-        (re) =>
-          re.disabled !== true && typeof re.value === "string" && (s(re.value) === h || s(re.value) === y),
+        (option) =>
+          option.disabled !== true &&
+          typeof option.value === "string" &&
+          (toKey(option.value) === requestedKey || toKey(option.value) === aliasKey),
       );
-  if (!Q && !isFableAvailable() && isNonCustomFableModel(q))
+  if (!isAvailable && !isFableAvailable() && isNonCustomFableModel(aliasCanonical))
     return {
       reason: "absent",
       displayName: getPublicModelDisplayName(modelAliasSpelling) ?? "That model",
     };
-  if (!Q && !isMythosAvailable(q) && isNonCustomMythosModel(q))
+  if (!isAvailable && !isMythosAvailable(aliasCanonical) && isNonCustomMythosModel(aliasCanonical))
     return {
       reason: "absent",
       displayName: getPublicModelDisplayName(modelAliasSpelling) ?? "That model",
@@ -267,28 +291,28 @@ function getModelUnavailabilityReason(e, n) {
   return null;
 }
 //@ chunk-aepeg2w5.js:436118-436171 placement
-function canonicalFromLowercase(e) {
-  return getCanonicalName(strip1mSuffix(e.toLowerCase()).trim());
+function canonicalFromLowercase(modelId) {
+  return getCanonicalName(strip1mSuffix(modelId.toLowerCase()).trim());
 }
 //@ chunk-aepeg2w5.js:436171-436194 placement
 function antUpstreamContextWindow(model) {
   return;
 }
 //@ chunk-aepeg2w5.js:436194-436219 placement
-function antGrants1MContext(e) {
+function antGrants1MContext(modelId) {
   return false;
 }
 //@ chunk-aepeg2w5.js:436219-436288 placement
 /**
  * 取某模型族在目录中的默认键对应的值。
  */
-function catalogFamilyDefaultKey(e, n, r = getAPIProvider()) {
-  let s = catalogDefaultKeyForFamily(e, r);
-  return s !== undefined ? n[s] : undefined;
+function catalogFamilyDefaultKey(family, modelStrings, provider = getAPIProvider()) {
+  let key = catalogDefaultKeyForFamily(family, provider);
+  return key !== undefined ? modelStrings[key] : undefined;
 }
 //@ chunk-aepeg2w5.js:436288-436421 placement
-function catalogDefaultKeyForFamily(e, n = getAPIProvider()) {
-  let catalogAlias = resolveCatalogAlias(e, providerCatalogKey(n));
+function catalogDefaultKeyForFamily(family, provider = getAPIProvider()) {
+  let catalogAlias = resolveCatalogAlias(family, providerCatalogKey(provider));
   if (catalogAlias === undefined) return;
   let firstParty = getCatalogEntry(catalogAlias)?.provider_ids.first_party;
   return firstParty !== undefined ? MODEL_KEY_BY_FIRST_PARTY_ID[firstParty] : undefined;
@@ -297,9 +321,9 @@ function catalogDefaultKeyForFamily(e, n = getAPIProvider()) {
 /**
  * 取 ultraplan 模型（不可用或超计划模型时返回 undefined）。
  */
-function ultraplanModelOrUndefined(e) {
-  let n = activeFamilyDefault(e);
-  return n === undefined || getUltraplanModel(e, n) ? undefined : n;
+function ultraplanModelOrUndefined(model) {
+  let familyDefault = activeFamilyDefault(model);
+  return familyDefault === undefined || getUltraplanModel(model, familyDefault) ? undefined : familyDefault;
 }
 export {
   inherit1mSuffix,

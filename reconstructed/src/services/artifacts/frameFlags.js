@@ -8,6 +8,7 @@
  * pieces: chunk-06y4szbn.js (16), chunk-99h01h55.js (3)
  * attribution: placement 19
  */
+import { isDiskless } from "../../bootstrap/state.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
 import {
   ARTIFACT_DB_READ_MAX_RESULT_SIZE_CHARS,
@@ -15,8 +16,24 @@ import {
 } from "../../tools/ArtifactTool/constants.js";
 import { env } from "../../utils/env.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
-import { isDiskless } from "../../bootstrap/state.js";
 
+//@ chunk-99h01h55.js:1400-1518 placement
+/**
+ * 无法访问 Artifacts 时的提示：无盘会话说明无法连接，否则提示运行 /login。
+ */
+function describeArtifactAuthFailure(detail) {
+  return isDiskless()
+    ? `This session could not reach Artifacts: ${detail}`
+    : `Not authenticated \u2014 run /login (${detail})`;
+}
+//@ chunk-99h01h55.js:1518-1573 placement
+function isFramePublicReadEnabled() {
+  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_sedge", false);
+}
+//@ chunk-99h01h55.js:1573-1732 placement
+var PUBLIC_READ_UNASKED_REASON = "public_unasked";
+var PUBLIC_READ_UNASKED_WORDS =
+  "this is a public artifact from outside your organization, and no person has approved reading it here \u2014 nothing was fetched";
 //@ chunk-06y4szbn.js:41496-41552 placement
 /**
  * 导出常量或表 `FRAME_CONSTANTS`：值为 null, MAX_ARTIFACT_BYTES = 16777216, tl = "/api/frame/contract/latest"。
@@ -95,23 +112,6 @@ function isHotUpdateFrozenOn() {
 function isFrameDeclaredThumbnailEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_campion", false) === true;
 }
-//@ chunk-99h01h55.js:1400-1518 placement
-/**
- * 无法访问 Artifacts 时的提示：无盘会话说明无法连接，否则提示运行 /login。
- */
-function describeArtifactAuthFailure(detail) {
-  return isDiskless()
-    ? `This session could not reach Artifacts: ${detail}`
-    : `Not authenticated \u2014 run /login (${detail})`;
-}
-//@ chunk-99h01h55.js:1518-1573 placement
-function isFramePublicReadEnabled() {
-  return getFeatureValue_CACHED_MAY_BE_STALE("tengu_cobalt_plinth_sedge", false);
-}
-//@ chunk-99h01h55.js:1573-1732 placement
-var PUBLIC_READ_UNASKED_REASON = "public_unasked";
-var PUBLIC_READ_UNASKED_WORDS =
-  "this is a public artifact from outside your organization, and no person has approved reading it here \u2014 nothing was fetched";
 export {
   isFramePublicReadEnabled,
   isFrameDeclaredThumbnailEnabled,

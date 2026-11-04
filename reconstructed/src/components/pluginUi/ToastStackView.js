@@ -8,21 +8,27 @@
  * pieces: chunk-18hwfzwa.js (36)
  * attribution: placement 36
  */
-import { Ar, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { __export, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { max } from "../PromptInput/promptInputState.js";
 import { DOCK_MIN_COLUMNS } from "./PaneDock.js";
 import { useAutoDialogKindAlt } from "../../screens/repl/storeHooks.js";
 import { useDialogSelector, topAutoDialog } from "../../state/dialogQueue.js";
 import { MCP_ELICITATION_DIALOG } from "../../services/mcp/elicitationDialogs.js";
 import { hasPluginUserConfig } from "../../plugins/bundled/claudeTest/userConfig.js";
-import { init_react_production, P, y, Se, R } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useEffect,
+  useState,
+  useContext,
+  useRef,
+} from "../../../vendor/react/cjs/react.production.js";
 import { drawnToasts, TOAST_FADE_MS, toastStackNamespace, pauseToasts } from "./toastStack.js";
 import { toldRefusals } from "../../plugins/functionHooks/ui/renderNotices.js";
 import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { count } from "../../utils/collections.js";
 import { sayPlainCode, logLine, loadOf, leadOf } from "../../plugins/functionHooks/ui/renderDispatch.js";
 import { errorMessage } from "../../utils/errors.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { usePrefersReducedMotion } from "../Spinner/spinnerFlags.js";
 import {
   jsxProd_default,
@@ -41,59 +47,67 @@ import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { paneRegistry, holdsToasts } from "../../plugins/functionHooks/panes.js";
 import { EMPTY_STATE_EXPORTS } from "../../plugins/functionHooks/api/state.js";
 import { SentryErrorBoundary } from "../SentryErrorBoundary.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:36759-36769 placement
 var ToastStackViewNamespace = {};
 //@ chunk-18hwfzwa.js:36769-37274 placement
-Ar(ToastStackViewNamespace, {
-  DrawnNote: () => DrawnNote,
-  TOAST_BOX_COLUMNS: () => TOAST_BOX_COLUMNS,
-  TOAST_EDGE_COLUMNS: () => TOAST_EDGE_COLUMNS,
-  TOAST_FRAME_COLUMNS: () => TOAST_FRAME_COLUMNS,
-  TOAST_FRAME_MS: () => TOAST_FRAME_MS,
-  TOAST_RESERVED_ROWS: () => TOAST_RESERVED_ROWS,
-  TOAST_STACK_VISIBLE: () => TOAST_STACK_VISIBLE,
-  TOAST_TEXT_ROWS: () => TOAST_TEXT_ROWS,
-  ToastBox: () => ToastBox,
-  ToastBoxes: () => ToastBoxes,
-  ToastStackView: () => ToastStackView,
-  default: () => ToastStackViewNamespace,
-  firstToastsReport: () => firstToastsReport,
-  fittingToasts: () => fittingToasts,
-  seatedToasts: () => seatedToasts,
-  slideColumnsOf: () => slideColumnsOf,
-  stackedTops: () => stackedTops,
-  tellToastsThrown: () => tellToastsThrown,
-  toastShapeOf: () => toastShapeOf,
-  toastsTeller: () => toastsTeller,
-  useSlideColumns: () => useSlideColumns,
-  useToastPause: () => useToastPause,
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:36769", () => {
+  __export(ToastStackViewNamespace, {
+    DrawnNote: () => DrawnNote,
+    TOAST_BOX_COLUMNS: () => TOAST_BOX_COLUMNS,
+    TOAST_EDGE_COLUMNS: () => TOAST_EDGE_COLUMNS,
+    TOAST_FRAME_COLUMNS: () => TOAST_FRAME_COLUMNS,
+    TOAST_FRAME_MS: () => TOAST_FRAME_MS,
+    TOAST_RESERVED_ROWS: () => TOAST_RESERVED_ROWS,
+    TOAST_STACK_VISIBLE: () => TOAST_STACK_VISIBLE,
+    TOAST_TEXT_ROWS: () => TOAST_TEXT_ROWS,
+    ToastBox: () => ToastBox,
+    ToastBoxes: () => ToastBoxes,
+    ToastStackView: () => ToastStackView,
+    default: () => ToastStackViewNamespace,
+    firstToastsReport: () => firstToastsReport,
+    fittingToasts: () => fittingToasts,
+    seatedToasts: () => seatedToasts,
+    slideColumnsOf: () => slideColumnsOf,
+    stackedTops: () => stackedTops,
+    tellToastsThrown: () => tellToastsThrown,
+    toastShapeOf: () => toastShapeOf,
+    toastsTeller: () => toastsTeller,
+    useSlideColumns: () => useSlideColumns,
+    useToastPause: () => useToastPause,
+  });
 });
 //@ chunk-18hwfzwa.js:1810342-1810364 placement
-var TOAST_MIN_VISIBLE_COLUMNS = 72;
-var TOAST_RESERVED_COLUMNS = TOAST_MIN_VISIBLE_COLUMNS + max;
+var TOAST_MIN_VISIBLE_COLUMNS; // deferred: uses MAX_DEFAULT_TRUNCATE_LINES (../PromptInput/promptInputState.js) of its import cycle while loading; runs once the cycle is complete
+var TOAST_RESERVED_COLUMNS;
+deferInit("chunk-18hwfzwa.js:1810342", () => {
+  TOAST_MIN_VISIBLE_COLUMNS = 72;
+  TOAST_RESERVED_COLUMNS = TOAST_MIN_VISIBLE_COLUMNS + max;
+});
 //@ chunk-18hwfzwa.js:1810364-1810428 placement
-function fitToastWidth(h, x) {
-  let D = x - TOAST_RESERVED_COLUMNS;
-  if (h <= D) return h;
-  return D >= DOCK_MIN_COLUMNS ? D : 0;
+function fitToastWidth(requestedColumns, columns) {
+  let availableColumns = columns - TOAST_RESERVED_COLUMNS;
+  if (requestedColumns <= availableColumns) return requestedColumns;
+  return availableColumns >= DOCK_MIN_COLUMNS ? availableColumns : 0;
 }
 //@ chunk-18hwfzwa.js:1810428-1810495 placement
-function toastRegionWidth(h, x, D) {
+function toastRegionWidth(isShown, columns, terminalColumns) {
   let hasPluginConfigDialog = useHasPluginConfigDialog();
-  if (!h) return 0;
-  return hasPluginConfigDialog ? fitToastWidth(x, D) : x;
+  if (!isShown) return 0;
+  return hasPluginConfigDialog ? fitToastWidth(columns, terminalColumns) : columns;
 }
 //@ chunk-18hwfzwa.js:1810495-1810806 placement
 /**
  * 当前是否显示插件 MCP 用户配置对话框。
  */
 function useHasPluginConfigDialog() {
-  let h = useAutoDialogKindAlt() !== undefined;
-  let x = useDialogSelector((D) => {
-    let L = topAutoDialog(D);
-    if (L === null || L.kind !== MCP_ELICITATION_DIALOG.kind) return false;
-    let payload = L.payload;
+  let hasAutoDialog = useAutoDialogKindAlt() !== undefined;
+  let isPluginConfigDialog = useDialogSelector((dialogState) => {
+    let dialog = topAutoDialog(dialogState);
+    if (dialog === null || dialog.kind !== MCP_ELICITATION_DIALOG.kind) return false;
+    let payload = dialog.payload;
     return (
       typeof payload === "object" &&
       payload !== null &&
@@ -104,89 +118,103 @@ function useHasPluginConfigDialog() {
       hasPluginUserConfig(payload.serverName, payload.pluginSource)
     );
   });
-  return h && x;
+  return hasAutoDialog && isPluginConfigDialog;
 }
 //@ chunk-18hwfzwa.js:1810806-1810810 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1810806", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1810810-1810866 placement
 function DrawnNote({ id }) {
-  P(() => {
+  useEffect(() => {
     drawnToasts.add(id);
   }, [id]);
   return null;
 }
 //@ chunk-18hwfzwa.js:1810866-1811075 placement
-function firstToastsReport(h) {
-  let x = `reported ${h.load} ${h.lead} ui.toast`;
-  if (toldRefusals.has(x)) return null;
-  toldRefusals.add(x);
+function firstToastsReport(error) {
+  let reportKey = `reported ${error.load} ${error.lead} ui.toast`;
+  if (toldRefusals.has(reportKey)) return null;
+  toldRefusals.add(reportKey);
   logFeatureBad("plugin_function_hooks_toast_stack", "threw_while_drawn");
   return "ui.toast: the toast stack threw while drawn";
 }
 //@ chunk-18hwfzwa.js:1811075-1811143 placement
-var stackedTops = (h, x) => h.map((D, L) => x + h.slice(0, L).reduce((acc, ke) => acc + ke, 0));
+var stackedTops = (sizes, start) =>
+  sizes.map((size, index) => start + sizes.slice(0, index).reduce((acc, size) => acc + size, 0));
 //@ chunk-18hwfzwa.js:1811143-1811345 placement
-function fittingToasts(h) {
-  let { heights, mostBoxes, roomRows } = h;
-  let sliced = heights.toReversed().slice(0, mostBoxes);
-  let ke = stackedTops(sliced, 0);
+function fittingToasts(layout) {
+  let { heights, mostBoxes, roomRows } = layout;
+  let sizes = heights.toReversed().slice(0, mostBoxes);
+  let tops = stackedTops(sizes, 0);
   return Math.min(
     heights.length,
     Math.max(
       1,
       count(
-        sliced.map((Re, Be) => (ke[Be] ?? 0) + Re + (heights.length > Be + 1 ? 1 : 0) <= roomRows),
-        (Re) => Re,
+        sizes.map(
+          (height, index) => (tops[index] ?? 0) + height + (heights.length > index + 1 ? 1 : 0) <= roomRows,
+        ),
+        (fits) => fits,
       ),
     ),
   );
 }
 //@ chunk-18hwfzwa.js:1811345-1811645 placement
 function seatedToasts(toasts) {
-  let x = new Map(toasts.map((D, L) => [D.id, L]));
-  return [...Map.groupBy(toasts, (D) => D.owner).values()]
-    .flatMap((D) =>
-      D.map((L, ee) => ({
-        toast: L,
-        turn: D.length - ee,
-        place: x.get(L.id) ?? 0,
+  let placeById = new Map(toasts.map((toast, index) => [toast.id, index]));
+  return [...Map.groupBy(toasts, (toast) => toast.owner).values()]
+    .flatMap((owned) =>
+      owned.map((toast, index) => ({
+        toast,
+        turn: owned.length - index,
+        place: placeById.get(toast.id) ?? 0,
       })),
     )
     .toSorted(
-      (D, L) => Number(D.toast.isManaged) - Number(L.toast.isManaged) || L.turn - D.turn || D.place - L.place,
+      (a, b) => Number(a.toast.isManaged) - Number(b.toast.isManaged) || b.turn - a.turn || a.place - b.place,
     )
-    .map((D) => D.toast);
+    .map((seated) => seated.toast);
 }
 //@ chunk-18hwfzwa.js:1811645-1811750 placement
-function slideColumnsOf(h) {
-  let max = Math.max(0, h.at - h.shownAt);
-  return h.isStill || max >= TOAST_FADE_MS ? 0 : Math.ceil(h.columns * (1 - max / TOAST_FADE_MS));
+function slideColumnsOf(animation) {
+  let max = Math.max(0, animation.at - animation.shownAt);
+  return animation.isStill || max >= TOAST_FADE_MS
+    ? 0
+    : Math.ceil(animation.columns * (1 - max / TOAST_FADE_MS));
 }
 //@ chunk-18hwfzwa.js:1811750-1811936 placement
-var tellToastsThrown = (h, x) =>
+var tellToastsThrown = (error, thrown) =>
   sayPlainCode({
-    key: `${h.load} ${h.lead} ui.toast threw while drawn`,
-    lead: h.lead,
-    text: `ui.toast threw while drawn: ${logLine(String(errorMessage(x)))}; no toast is drawn until the stack changes`,
+    key: `${error.load} ${error.lead} ui.toast threw while drawn`,
+    lead: error.lead,
+    text: `ui.toast threw while drawn: ${logLine(String(errorMessage(thrown)))}; no toast is drawn until the stack changes`,
   });
 //@ chunk-18hwfzwa.js:1811936-1811940 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1811936", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1811940-1811944 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1811940", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1811944-1811955 placement
 var TOAST_FRAME_MS = 48;
 //@ chunk-18hwfzwa.js:1811955-1812128 placement
-function useSlideColumns(h) {
-  let [now, setNow] = y(Date.now);
-  let L = slideColumnsOf({
-    ...h,
+function useSlideColumns(animation) {
+  let [now, setNow] = useState(Date.now);
+  let slideColumns = slideColumnsOf({
+    ...animation,
     at: now,
   });
-  P(() => {
-    if (L === 0) return;
+  useEffect(() => {
+    if (slideColumns === 0) return;
     let timer = setTimeout(
-      (ke) => {
-        ke(Date.now());
+      (setNow) => {
+        setNow(Date.now());
       },
       TOAST_FRAME_MS,
       setNow,
@@ -194,20 +222,20 @@ function useSlideColumns(h) {
     return () => {
       clearTimeout(timer);
     };
-  }, [now, L]);
-  return L;
+  }, [now, slideColumns]);
+  return slideColumns;
 }
 //@ chunk-18hwfzwa.js:1812128-1813870 placement
 function ToastBox(props) {
-  let $ = w(31);
+  let $ = useMemoCache(31);
   let { toast, shape, top, isFramed } = props;
-  let [ke, Re] = y(false);
+  let [isHovered, setIsHovered] = useState(false);
   const shownAt = toast.shownAt;
   const columns = shape.columns;
   const isStill = usePrefersReducedMotion() || !isFramed;
-  let Xe;
+  let animation;
   if ($[0] !== shape.columns || $[1] !== isStill || $[2] !== toast.shownAt) {
-    Xe = {
+    animation = {
       shownAt,
       columns,
       isStill,
@@ -215,31 +243,31 @@ function ToastBox(props) {
     $[0] = shape.columns;
     $[1] = isStill;
     $[2] = toast.shownAt;
-    $[3] = Xe;
-  } else Xe = $[3];
-  let slideColumns = useSlideColumns(Xe);
+    $[3] = animation;
+  } else animation = $[3];
+  let slideColumns = useSlideColumns(animation);
   let dimColor = toast.phase === "leaving";
-  let At;
-  let It;
+  let releaseHoldEffect;
+  let releaseHoldDeps;
   if ($[4] !== toast.id) {
-    At = () => () =>
+    releaseHoldEffect = () => () =>
       toastStackNamespace.holdToast({
         id: toast.id,
         isHeld: false,
       });
-    It = [toast.id];
+    releaseHoldDeps = [toast.id];
     $[4] = toast.id;
-    $[5] = At;
-    $[6] = It;
+    $[5] = releaseHoldEffect;
+    $[6] = releaseHoldDeps;
   } else {
-    At = $[5];
-    It = $[6];
+    releaseHoldEffect = $[5];
+    releaseHoldDeps = $[6];
   }
-  P(At, It);
+  useEffect(releaseHoldEffect, releaseHoldDeps);
   const right = -slideColumns;
   const { columns: columns_2, rows } = shape;
   const borderStyle = isFramed ? "round" : undefined;
-  const borderDimColor = !ke;
+  const borderDimColor = !isHovered;
   const paddingX = isFramed ? 1 : 0;
   let onClick;
   let onMouseEnter;
@@ -250,14 +278,14 @@ function ToastBox(props) {
       if (!event.isWindowActivation) toastStackNamespace.dismissToast(toast.id);
     };
     onMouseEnter = () => {
-      Re(true);
+      setIsHovered(true);
       toastStackNamespace.holdToast({
         id: toast.id,
         isHeld: true,
       });
     };
     onMouseLeave = () => {
-      Re(false);
+      setIsHovered(false);
       toastStackNamespace.holdToast({
         id: toast.id,
         isHeld: false,
@@ -272,21 +300,21 @@ function ToastBox(props) {
     onMouseEnter = $[9];
     onMouseLeave = $[10];
   }
-  let co;
+  let pluginLabel;
   if ($[11] !== toast.plugin) {
-    co = jsxProd_default(Text, {
+    pluginLabel = jsxProd_default(Text, {
       dimColor: true,
       wrap: "truncate-end",
       children: toast.plugin,
     });
     $[11] = toast.plugin;
-    $[12] = co;
-  } else co = $[12];
-  let bo;
+    $[12] = pluginLabel;
+  } else pluginLabel = $[12];
+  let lineElements;
   if ($[13] !== dimColor || $[14] !== shape.lines) {
-    let Ao;
+    let renderLine;
     if ($[16] !== dimColor) {
-      Ao = (children, Ro) =>
+      renderLine = (children, key) =>
         jsxProd_default(
           Text,
           {
@@ -294,17 +322,17 @@ function ToastBox(props) {
             wrap: "truncate-end",
             children,
           },
-          Ro,
+          key,
         );
       $[16] = dimColor;
-      $[17] = Ao;
-    } else Ao = $[17];
-    bo = shape.lines.map(Ao);
+      $[17] = renderLine;
+    } else renderLine = $[17];
+    lineElements = shape.lines.map(renderLine);
     $[13] = dimColor;
     $[14] = shape.lines;
-    $[15] = bo;
-  } else bo = $[15];
-  let Ao;
+    $[15] = lineElements;
+  } else lineElements = $[15];
+  let toastBox;
   if (
     $[18] !== shape.columns ||
     $[19] !== shape.rows ||
@@ -313,13 +341,13 @@ function ToastBox(props) {
     $[22] !== onClick ||
     $[23] !== onMouseEnter ||
     $[24] !== onMouseLeave ||
-    $[25] !== co ||
-    $[26] !== bo ||
+    $[25] !== pluginLabel ||
+    $[26] !== lineElements ||
     $[27] !== right ||
     $[28] !== borderStyle ||
     $[29] !== top
   ) {
-    Ao = jsxProd_default_2(Box, {
+    toastBox = jsxProd_default_2(Box, {
       position: "absolute",
       top,
       right,
@@ -334,7 +362,7 @@ function ToastBox(props) {
       onClick,
       onMouseEnter,
       onMouseLeave,
-      children: [co, bo],
+      children: [pluginLabel, lineElements],
     });
     $[18] = shape.columns;
     $[19] = shape.rows;
@@ -343,19 +371,22 @@ function ToastBox(props) {
     $[22] = onClick;
     $[23] = onMouseEnter;
     $[24] = onMouseLeave;
-    $[25] = co;
-    $[26] = bo;
+    $[25] = pluginLabel;
+    $[26] = lineElements;
     $[27] = right;
     $[28] = borderStyle;
     $[29] = top;
-    $[30] = Ao;
-  } else Ao = $[30];
-  return Ao;
+    $[30] = toastBox;
+  } else toastBox = $[30];
+  return toastBox;
 }
 //@ chunk-18hwfzwa.js:1813870-1813881 placement
 var TOAST_BOX_COLUMNS = 44;
 //@ chunk-18hwfzwa.js:1813881-1813885 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1813881", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1813885-1813895 placement
 var TOAST_EDGE_COLUMNS = 2;
 //@ chunk-18hwfzwa.js:1813895-1813905 placement
@@ -365,17 +396,20 @@ var TOAST_FRAME_COLUMNS = 4;
 //@ chunk-18hwfzwa.js:1813915-1813925 placement
 var TOAST_TEXT_ROWS = 3;
 //@ chunk-18hwfzwa.js:1813925-1814260 placement
-function toastShapeOf(h) {
-  let { toast, roomColumns, isFramed } = h;
-  let ee = isFramed ? TOAST_FRAME_COLUMNS : 0;
+function toastShapeOf(options) {
+  let { toast, roomColumns, isFramed } = options;
+  let frameWidth = isFramed ? TOAST_FRAME_COLUMNS : 0;
   let max = Math.max(1, Math.min(roomColumns, TOAST_BOX_COLUMNS));
-  let lines = wrapText(toast.text, Math.max(1, max - ee), "wrap").split(`
+  let lines = wrapText(toast.text, Math.max(1, max - frameWidth), "wrap").split(`
 `);
   let filtered = [...lines.slice(0, TOAST_TEXT_ROWS - 1), lines.slice(TOAST_TEXT_ROWS - 1).join(" ")].filter(
-    (He, We) => We === 0 || He !== "",
+    (line, index) => index === 0 || line !== "",
   );
   return {
-    columns: Math.min(max, Math.max(bunStringWidth(toast.plugin), ...filtered.map(bunStringWidth)) + ee),
+    columns: Math.min(
+      max,
+      Math.max(bunStringWidth(toast.plugin), ...filtered.map(bunStringWidth)) + frameWidth,
+    ),
     lines: filtered,
     rows: filtered.length + 1 + (isFramed ? 2 : 0),
   };
@@ -383,50 +417,50 @@ function toastShapeOf(h) {
 //@ chunk-18hwfzwa.js:1814260-1814270 placement
 var TOAST_STACK_VISIBLE = 3;
 //@ chunk-18hwfzwa.js:1814270-1814302 placement
-function selectRows(Bo) {
-  return Bo.rows;
+function selectRows(shape) {
+  return shape.rows;
 }
 //@ chunk-18hwfzwa.js:1814302-1814350 placement
-function renderToastNote(Ro) {
+function renderToastNote(toast) {
   return jsxProd_default(
     DrawnNote,
     {
-      id: Ro.id,
+      id: toast.id,
     },
-    Ro.id,
+    toast.id,
   );
 }
 //@ chunk-18hwfzwa.js:1814350-1815941 placement
 function ToastBoxes(props) {
-  let $ = w(26);
+  let $ = useMemoCache(26);
   let { toasts, isPaused } = props;
   let isFramed = !useIsScreenReaderEnabled();
   let { columns, rows } = useTerminalSize();
-  let Re = Se(TranscriptOverlaySlot);
-  let Be = R(null);
-  let We;
+  let overlayOffset = useContext(TranscriptOverlaySlot);
+  let containerRef = useRef(null);
+  let measureHeight;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    We = () => Be.current?.yogaNode?.getComputedHeight() ?? 0;
-    $[0] = We;
-  } else We = $[0];
-  let measured = useMeasured(We);
+    measureHeight = () => containerRef.current?.yogaNode?.getComputedHeight() ?? 0;
+    $[0] = measureHeight;
+  } else measureHeight = $[0];
+  let measured = useMeasured(measureHeight);
   if (isPaused || toasts.length === 0) {
     return null;
   }
   let roomColumns = Math.max(1, columns - TOAST_EDGE_COLUMNS);
-  let rt;
+  let visibleIds;
   if (
     $[1] !== measured ||
-    $[2] !== Re ||
+    $[2] !== overlayOffset ||
     $[3] !== isFramed ||
     $[4] !== roomColumns ||
     $[5] !== rows ||
     $[6] !== toasts
   ) {
-    let kt = seatedToasts(toasts);
-    let At;
+    let seated = seatedToasts(toasts);
+    let shapeRows;
     if ($[8] !== isFramed || $[9] !== roomColumns) {
-      At = (toast) =>
+      shapeRows = (toast) =>
         toastShapeOf({
           toast,
           roomColumns,
@@ -434,39 +468,45 @@ function ToastBoxes(props) {
         }).rows;
       $[8] = isFramed;
       $[9] = roomColumns;
-      $[10] = At;
-    } else At = $[10];
-    rt = new Set(
-      kt.slice(
+      $[10] = shapeRows;
+    } else shapeRows = $[10];
+    visibleIds = new Set(
+      seated.slice(
         -fittingToasts({
-          heights: kt.map(At),
+          heights: seated.map(shapeRows),
           mostBoxes: TOAST_STACK_VISIBLE,
-          roomRows: (measured > 0 ? measured : rows - TOAST_RESERVED_ROWS) - Re,
+          roomRows: (measured > 0 ? measured : rows - TOAST_RESERVED_ROWS) - overlayOffset,
         }),
       ),
     );
     $[1] = measured;
-    $[2] = Re;
+    $[2] = overlayOffset;
     $[3] = isFramed;
     $[4] = roomColumns;
     $[5] = rows;
     $[6] = toasts;
-    $[7] = rt;
-  } else rt = $[7];
-  let Ot = rt;
-  let At;
-  if ($[11] !== Ot || $[12] !== Re || $[13] !== isFramed || $[14] !== roomColumns || $[15] !== toasts) {
-    let Et;
-    if ($[17] !== Ot) {
-      Et = (Dt) => Ot.has(Dt);
-      $[17] = Ot;
-      $[18] = Et;
-    } else Et = $[18];
-    let filtered = toasts.filter(Et);
-    let oo = toasts.length - filtered.length;
-    let Xt;
+    $[7] = visibleIds;
+  } else visibleIds = $[7];
+  let visibleIdSet = visibleIds;
+  let content;
+  if (
+    $[11] !== visibleIdSet ||
+    $[12] !== overlayOffset ||
+    $[13] !== isFramed ||
+    $[14] !== roomColumns ||
+    $[15] !== toasts
+  ) {
+    let isVisible;
+    if ($[17] !== visibleIdSet) {
+      isVisible = (toast) => visibleIdSet.has(toast);
+      $[17] = visibleIdSet;
+      $[18] = isVisible;
+    } else isVisible = $[18];
+    let filtered = toasts.filter(isVisible);
+    let hiddenCount = toasts.length - filtered.length;
+    let shapeOf;
     if ($[19] !== isFramed || $[20] !== roomColumns) {
-      Xt = (toast) =>
+      shapeOf = (toast) =>
         toastShapeOf({
           toast,
           roomColumns,
@@ -474,87 +514,90 @@ function ToastBoxes(props) {
         });
       $[19] = isFramed;
       $[20] = roomColumns;
-      $[21] = Xt;
-    } else Xt = $[21];
-    let mapped = filtered.map(Xt);
-    let po = stackedTops(mapped.map(selectRows), Re + (oo > 0 ? 1 : 0));
-    let ao;
+      $[21] = shapeOf;
+    } else shapeOf = $[21];
+    let mapped = filtered.map(shapeOf);
+    let tops = stackedTops(mapped.map(selectRows), overlayOffset + (hiddenCount > 0 ? 1 : 0));
+    let placeholderBox;
     if ($[22] === MEMO_CACHE_SENTINEL) {
-      ao = jsxProd_default(Box, {
-        ref: Be,
+      placeholderBox = jsxProd_default(Box, {
+        ref: containerRef,
         position: "absolute",
         top: 0,
         bottom: 0,
         right: 0,
         width: 0,
       });
-      $[22] = ao;
-    } else ao = $[22];
-    let co;
-    if ($[23] !== Re || $[24] !== oo) {
-      co =
-        oo > 0 &&
+      $[22] = placeholderBox;
+    } else placeholderBox = $[22];
+    let moreIndicator;
+    if ($[23] !== overlayOffset || $[24] !== hiddenCount) {
+      moreIndicator =
+        hiddenCount > 0 &&
         jsxProd_default(Box, {
           position: "absolute",
-          top: Re,
+          top: overlayOffset,
           right: 0,
           opaque: true,
           noSelect: true,
           children: jsxProd_default(Text, {
             dimColor: true,
-            children: ` +${oo} more `,
+            children: ` +${hiddenCount} more `,
           }),
         });
-      $[23] = Re;
-      $[24] = oo;
-      $[25] = co;
-    } else co = $[25];
-    At = jsxProd_default_2(Fragment, {
+      $[23] = overlayOffset;
+      $[24] = hiddenCount;
+      $[25] = moreIndicator;
+    } else moreIndicator = $[25];
+    content = jsxProd_default_2(Fragment, {
       children: [
-        ao,
-        co,
-        filtered.map((bo, Ao) =>
+        placeholderBox,
+        moreIndicator,
+        filtered.map((toast, index) =>
           jsxProd_default(
             ToastBox,
             {
-              toast: bo,
-              shape: mapped[Ao] ?? {
+              toast,
+              shape: mapped[index] ?? {
                 columns: 1,
                 lines: [],
                 rows: 1,
               },
-              top: po[Ao] ?? 0,
+              top: tops[index] ?? 0,
               isFramed,
             },
-            bo.id,
+            toast.id,
           ),
         ),
         filtered.map(renderToastNote),
       ],
     });
-    $[11] = Ot;
-    $[12] = Re;
+    $[11] = visibleIdSet;
+    $[12] = overlayOffset;
     $[13] = isFramed;
     $[14] = roomColumns;
     $[15] = toasts;
-    $[16] = At;
-  } else At = $[16];
-  return At;
+    $[16] = content;
+  } else content = $[16];
+  return content;
 }
 //@ chunk-18hwfzwa.js:1815941-1816072 placement
 function toastsTeller(storeSelector) {
-  let x = new Set(storeSelector.map((D) => D.owner));
+  let owners = new Set(storeSelector.map((toast) => toast.owner));
   return {
-    load: loadOf(getPluginRegistry().loadedModules.filter((loadedModule) => x.has(loadedModule.name))),
-    lead: leadOf([...x]),
+    load: loadOf(getPluginRegistry().loadedModules.filter((loadedModule) => owners.has(loadedModule.name))),
+    lead: leadOf([...owners]),
   };
 }
 //@ chunk-18hwfzwa.js:1816072-1816076 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1816072", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1816076-1816175 placement
 function useToastPause() {
   let storeSelector = useStoreSelector(paneRegistry(), holdsToasts);
-  P(() => {
+  useEffect(() => {
     pauseToasts({
       isPaused: storeSelector,
     });
@@ -568,19 +611,19 @@ function useToastPause() {
 }
 //@ chunk-18hwfzwa.js:1816175-1816681 placement
 function ToastStackView() {
-  let $ = w(12);
-  let x;
+  let $ = useMemoCache(12);
+  let sessionState;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    x = EMPTY_STATE_EXPORTS.stateSession();
-    $[0] = x;
-  } else x = $[0];
-  let storeSelector = useStoreSelector(x.values, toastStackNamespace.stackedToasts);
+    sessionState = EMPTY_STATE_EXPORTS.stateSession();
+    $[0] = sessionState;
+  } else sessionState = $[0];
+  let storeSelector = useStoreSelector(sessionState.values, toastStackNamespace.stackedToasts);
   let isPaused = useToastPause();
   let telemetryMessage;
   let onError;
   if ($[1] !== storeSelector) {
     telemetryMessage = () => firstToastsReport(toastsTeller(storeSelector));
-    onError = (Re) => tellToastsThrown(toastsTeller(storeSelector), Re);
+    onError = (error) => tellToastsThrown(toastsTeller(storeSelector), error);
     $[1] = storeSelector;
     $[2] = telemetryMessage;
     $[3] = onError;
@@ -598,9 +641,9 @@ function ToastStackView() {
     $[5] = storeSelector;
     $[6] = children;
   } else children = $[6];
-  let He;
+  let boundaryElement;
   if ($[7] !== telemetryMessage || $[8] !== onError || $[9] !== children || $[10] !== storeSelector) {
-    He = jsxProd_default(SentryErrorBoundary, {
+    boundaryElement = jsxProd_default(SentryErrorBoundary, {
       resetKey: storeSelector,
       telemetryMessage,
       onError,
@@ -610,12 +653,18 @@ function ToastStackView() {
     $[8] = onError;
     $[9] = children;
     $[10] = storeSelector;
-    $[11] = He;
-  } else He = $[11];
-  return He;
+    $[11] = boundaryElement;
+  } else boundaryElement = $[11];
+  return boundaryElement;
 }
 //@ chunk-18hwfzwa.js:1816681-1816685 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1816681", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1816718-1816722 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1816718", () => {
+  init_react_production();
+});
 export { toastRegionWidth, ToastStackViewNamespace };

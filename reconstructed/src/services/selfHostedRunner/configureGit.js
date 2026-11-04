@@ -37,94 +37,96 @@ var execFileAsync = promisify(execFile);
 var SAFE_GIT_KEY_REGEX = /^[a-zA-Z0-9_-]+$/;
 var MIN_GIT_VERSION = [2, 34];
 //@ chunk-qcqdqsn4.js:745-854 placement
-function parseGitVersion(e) {
-  let match = /git version (\d+)\.(\d+)/.exec(e);
+function parseGitVersion(output) {
+  let match = /git version (\d+)\.(\d+)/.exec(output);
   if (!match) return null;
   return [Number(match[1]), Number(match[2])];
 }
 //@ chunk-qcqdqsn4.js:854-949 placement
-function isGitVersionSupported(stdout) {
-  let gitVersion = parseGitVersion(stdout);
+function isGitVersionSupported(output) {
+  let gitVersion = parseGitVersion(output);
   if (gitVersion === null) return null;
-  let [o, s] = gitVersion;
-  let [t, r] = MIN_GIT_VERSION;
-  return o > t || (o === t && s >= r);
+  let [major, minor] = gitVersion;
+  let [minMajor, minMinor] = MIN_GIT_VERSION;
+  return major > minMajor || (major === minMajor && minor >= minMinor);
 }
 //@ chunk-qcqdqsn4.js:949-2145 placement
-async function configureGitForSigning(e) {
+async function configureGitForSigning(options) {
   let stdout = (
     await execFileAsync("git", ["--version"], {
       windowsHide: true,
     })
   ).stdout;
-  let o = isGitVersionSupported(stdout);
-  if (o === null)
-    e.onStatus(
+  let versionSupported = isGitVersionSupported(stdout);
+  if (versionSupported === null)
+    options.onStatus(
       `[runner:git] --configure-git: could not parse git version from "${stdout.trim()}"; proceeding without version check`,
     );
-  else if (!o) {
-    let [d, u] = MIN_GIT_VERSION;
+  else if (!versionSupported) {
+    let [minMajor, minMinor] = MIN_GIT_VERSION;
     throw Error(
-      `--configure-git requires git >= ${d}.${u} for SSH commit signing (found: ${stdout.trim()}). Upgrade git in your runner image, or omit --configure-git and manage git identity yourself`,
+      `--configure-git requires git >= ${minMajor}.${minMinor} for SSH commit signing (found: ${stdout.trim()}). Upgrade git in your runner image, or omit --configure-git and manage git identity yourself`,
     );
   }
-  let s = join(e.baseDir, ".runner");
-  await mkdir(s, {
+  let runnerDir = join(options.baseDir, ".runner");
+  await mkdir(runnerDir, {
     recursive: true,
   });
-  let t = join(s, "code-sign");
-  let r = join(s, "commit_signing_key.pub");
-  let a = codeSignWrapperScript(e.execPath);
-  await writeFile(t, a, {
+  let codeSignPath = join(runnerDir, "code-sign");
+  let pubKeyPath = join(runnerDir, "commit_signing_key.pub");
+  let wrapperScript = codeSignWrapperScript(options.execPath);
+  await writeFile(codeSignPath, wrapperScript, {
     mode: 493,
   });
-  await chmod(t, 493);
-  await writeFile(r, "");
-  let g = [
+  await chmod(codeSignPath, 493);
+  await writeFile(pubKeyPath, "");
+  let configEntries = [
     ["user.name", "Claude"],
     ["user.email", "noreply@anthropic.com"],
     ["gpg.format", "ssh"],
-    ["gpg.ssh.program", t],
-    ["user.signingkey", r],
+    ["gpg.ssh.program", codeSignPath],
+    ["user.signingkey", pubKeyPath],
     ["commit.gpgsign", "true"],
     ["tag.gpgsign", "true"],
     ["push.negotiate", "true"],
   ];
-  let h = e.gitConfigPath ? ["--file", e.gitConfigPath] : ["--global"];
-  for (let [d, u] of g)
-    await execFileAsync("git", ["config", ...h, "--replace-all", d, u], {
+  let configTarget = options.gitConfigPath ? ["--file", options.gitConfigPath] : ["--global"];
+  for (let [configKey, configValue] of configEntries)
+    await execFileAsync("git", ["config", ...configTarget, "--replace-all", configKey, configValue], {
       windowsHide: true,
     });
-  e.onStatus(`[runner:git] --configure-git: identity=Claude <noreply@anthropic.com>, gpg.ssh.program=${t}`);
-  let f = await installCoauthorHooks(s, h, e.onStatus);
-  return f.installed
+  options.onStatus(
+    `[runner:git] --configure-git: identity=Claude <noreply@anthropic.com>, gpg.ssh.program=${codeSignPath}`,
+  );
+  let hookInstall = await installCoauthorHooks(runnerDir, configTarget, options.onStatus);
+  return hookInstall.installed
     ? {
-        shimPath: t,
+        shimPath: codeSignPath,
       }
     : {
-        shimPath: t,
-        operatorHooksPath: f.existingHooksPath,
+        shimPath: codeSignPath,
+        operatorHooksPath: hookInstall.existingHooksPath,
       };
 }
 //@ chunk-qcqdqsn4.js:2145-2287 placement
-function codeSignWrapperScript(e) {
+function codeSignWrapperScript(execPath) {
   return `#!/bin/sh
 BIN="$CLAUDE_RUNNER_CLAUDE_BIN"
-[ -n "$BIN" ] || BIN='${shellQuote(e)}'
+[ -n "$BIN" ] || BIN='${shellQuote(execPath)}'
 exec "$BIN" self-hosted-runner code-sign "$@"
 `;
 }
 //@ chunk-qcqdqsn4.js:2287-2437 placement
-function codeSignArtifacts(e, n) {
-  let o = join(e, ".runner");
+function codeSignArtifacts(baseDir, execPath) {
+  let runnerDir = join(baseDir, ".runner");
   return [
     {
-      path: join(o, "code-sign"),
-      content: codeSignWrapperScript(n),
+      path: join(runnerDir, "code-sign"),
+      content: codeSignWrapperScript(execPath),
       mode: 493,
     },
     {
-      path: join(o, "commit_signing_key.pub"),
+      path: join(runnerDir, "commit_signing_key.pub"),
       content: "",
       mode: 420,
     },
@@ -135,28 +137,28 @@ function configureGitGovernedEntries(baseDir) {
   return configureGitOverlayEntries(join(baseDir, ".runner"));
 }
 //@ chunk-qcqdqsn4.js:2480-2785 placement
-function configureGitOverlayEntries(e) {
+function configureGitOverlayEntries(runnerDir) {
   return [
     ["user.name", "Claude"],
     ["user.email", "noreply@anthropic.com"],
-    ["user.signingkey", join(e, "commit_signing_key.pub")],
+    ["user.signingkey", join(runnerDir, "commit_signing_key.pub")],
     ["gpg.format", "ssh"],
-    ["gpg.ssh.program", join(e, "code-sign")],
+    ["gpg.ssh.program", join(runnerDir, "code-sign")],
     ["commit.gpgsign", "true"],
     ["tag.gpgsign", "true"],
     ["push.negotiate", "true"],
-    ["core.hooksPath", join(e, "git-hooks")],
+    ["core.hooksPath", join(runnerDir, "git-hooks")],
   ];
 }
 //@ chunk-qcqdqsn4.js:2785-3012 placement
-function relocateConfigureGitArtifacts(e, baseDir, o) {
-  let s = join(baseDir, ".runner") + sep;
-  return e.map((t) => {
-    if (!t.path.startsWith(s))
+function relocateConfigureGitArtifacts(artifacts, baseDir, targetDir) {
+  let runnerPrefix = join(baseDir, ".runner") + sep;
+  return artifacts.map((artifact) => {
+    if (!artifact.path.startsWith(runnerPrefix))
       throw Error("relocateConfigureGitArtifacts: artifact path is not under {baseDir}/.runner/");
     return {
-      ...t,
-      path: join(o, t.path.slice(s.length)),
+      ...artifact,
+      path: join(targetDir, artifact.path.slice(runnerPrefix.length)),
     };
   });
 }
@@ -181,270 +183,288 @@ function gitProxyCredHelperPath(baseDir) {
   return join(baseDir, ".runner", "git-proxy-cred");
 }
 //@ chunk-qcqdqsn4.js:3302-3475 placement
-function coauthorHookStubs(e) {
-  let n = join(e, ".runner", "git-hooks");
+function coauthorHookStubs(baseDir) {
+  let hooksDir = join(baseDir, ".runner", "git-hooks");
   return [
-    ...GIT_HOOK_NAMES.map((o) => ({
-      path: join(n, o),
+    ...GIT_HOOK_NAMES.map((hookName) => ({
+      path: join(hooksDir, hookName),
       content: COAUTHOR_HOOK_SCRIPT,
     })),
-    ...["commit-msg", "prepare-commit-msg"].map((o) => ({
-      path: join(n, o),
+    ...["commit-msg", "prepare-commit-msg"].map((hookName) => ({
+      path: join(hooksDir, hookName),
       content: COMMIT_MSG_HOOK_SCRIPT,
     })),
   ];
 }
 //@ chunk-qcqdqsn4.js:3475-4214 placement
-async function configureGitProxyCredential(e) {
-  let replaced = e.apiBaseUrl.replace(/\/+$/, "");
-  let o;
+async function configureGitProxyCredential(options) {
+  let replaced = options.apiBaseUrl.replace(/\/+$/, "");
+  let apiHost;
   try {
-    o = new URL(replaced).host;
+    apiHost = new URL(replaced).host;
   } catch {
     throw Error(`--use-anthropic-git-proxy: apiBaseUrl is not a valid URL: ${replaced}`);
   }
-  let s = join(e.baseDir, ".runner");
-  await mkdir(s, {
+  let runnerDir = join(options.baseDir, ".runner");
+  await mkdir(runnerDir, {
     recursive: true,
   });
-  let t = gitProxyCredHelperPath(e.baseDir);
-  await writeFile(t, GIT_PROXY_CRED_HELPER_CONTENT, {
+  let helperPath = gitProxyCredHelperPath(options.baseDir);
+  await writeFile(helperPath, GIT_PROXY_CRED_HELPER_CONTENT, {
     mode: 448,
   });
-  await chmod(t, 448);
-  let r = e.gitConfigPath ? ["--file", e.gitConfigPath] : ["--global"];
-  let a = [
-    [`credential.https://${o}.helper`, `!'${shellQuote(t)}'`],
-    [`credential.https://${o}.useHttpPath`, "false"],
-    [`credential.https://${o}.username`, "unused"],
-    [`http.https://${o}/.proactiveAuth`, "basic"],
+  await chmod(helperPath, 448);
+  let configTarget = options.gitConfigPath ? ["--file", options.gitConfigPath] : ["--global"];
+  let configEntries = [
+    [`credential.https://${apiHost}.helper`, `!'${shellQuote(helperPath)}'`],
+    [`credential.https://${apiHost}.useHttpPath`, "false"],
+    [`credential.https://${apiHost}.username`, "unused"],
+    [`http.https://${apiHost}/.proactiveAuth`, "basic"],
   ];
-  for (let [g, h] of a)
-    await execFileAsync("git", ["config", ...r, "--replace-all", g, h], {
+  for (let [configKey, configValue] of configEntries)
+    await execFileAsync("git", ["config", ...configTarget, "--replace-all", configKey, configValue], {
       windowsHide: true,
     });
-  e.onStatus(`[runner:git] --use-anthropic-git-proxy: credential helper registered for https://${o} (${t})`);
+  options.onStatus(
+    `[runner:git] --use-anthropic-git-proxy: credential helper registered for https://${apiHost} (${helperPath})`,
+  );
   return replaced;
 }
 //@ chunk-qcqdqsn4.js:5148-5948 placement
 /**
  * 读取 git --system 配置（含来源）
  */
-async function readSystemGitConfig(e) {
-  let n;
+async function readSystemGitConfig(envVars) {
+  let output;
   try {
-    n = (
+    output = (
       await execFileAsync("git", ["config", "--system", "--includes", "--show-origin", "-z", "--list"], {
         cwd: "/",
         windowsHide: true,
         timeout: GIT_CONFIG_TIMEOUT_MS,
         maxBuffer: 4194304,
-        ...(e && {
-          env: e,
+        ...(envVars && {
+          env: envVars,
         }),
       })
     ).stdout;
   } catch (error) {
-    let r = error;
-    let a =
+    let caughtError = error;
+    let failureDetail =
       getErrnoCode(error) ??
-      (r !== null && typeof r === "object"
-        ? typeof r.signal === "string"
-          ? `killed by ${r.signal}${r.killed === true ? ", timed out" : ""}`
-          : r.code !== undefined
-            ? `exit ${String(r.code)}`
+      (caughtError !== null && typeof caughtError === "object"
+        ? typeof caughtError.signal === "string"
+          ? `killed by ${caughtError.signal}${caughtError.killed === true ? ", timed out" : ""}`
+          : caughtError.code !== undefined
+            ? `exit ${String(caughtError.code)}`
             : "error"
         : "error");
     return {
       files: [],
-      unverifiable: `the system configuration could not be listed (${a})`,
+      unverifiable: `the system configuration could not be listed (${failureDetail})`,
     };
   }
-  let parts = n.split("\x00");
-  let s = [];
-  for (let t = 0; t + 1 < parts.length; t += 2) {
-    let r = stripFilePrefix(parts[t]);
-    if (!parts[t].startsWith("file:") || !isNormalizedAbsolutePath(r))
+  let parts = output.split("\x00");
+  let files = [];
+  for (let partIndex = 0; partIndex + 1 < parts.length; partIndex += 2) {
+    let filePath = stripFilePrefix(parts[partIndex]);
+    if (!parts[partIndex].startsWith("file:") || !isNormalizedAbsolutePath(filePath))
       return {
-        files: s,
-        unverifiable: `git reports a source that is not a plainly spelled absolute file path (${quoteConfigValueForLog(r)}; write [include] paths absolute, without '.' or '..' components)`,
+        files,
+        unverifiable: `git reports a source that is not a plainly spelled absolute file path (${quoteConfigValueForLog(filePath)}; write [include] paths absolute, without '.' or '..' components)`,
       };
-    if (!s.includes(r)) s.push(r);
+    if (!files.includes(filePath)) files.push(filePath);
   }
   return {
-    files: s,
+    files,
   };
 }
 //@ chunk-qcqdqsn4.js:5948-6175 placement
 /**
  * 路径可写或由当前用户拥有
  */
-async function isWritableOrOwned(e) {
-  let n = e;
+async function isWritableOrOwned(startPath) {
+  let currentPath = startPath;
   for (;;)
     try {
-      await access(n, constants.W_OK);
+      await access(currentPath, constants.W_OK);
       return true;
     } catch (error) {
       if (isENOENT(error)) {
-        let t = dirname(n);
-        if (t === n) return false;
-        n = t;
+        let parentPath = dirname(currentPath);
+        if (parentPath === currentPath) return false;
+        currentPath = parentPath;
         continue;
       }
-      let s = process.getuid?.();
-      if (s !== undefined && s !== 0)
+      let uid = process.getuid?.();
+      if (uid !== undefined && uid !== 0)
         try {
-          if ((await lstat(n)).uid === s) return true;
+          if ((await lstat(currentPath)).uid === uid) return true;
         } catch {}
       return false;
     }
 }
 //@ chunk-qcqdqsn4.js:6175-6247 placement
-var isWithinDir = (e, baseDir) =>
+var isWithinDir = (targetPath, baseDir) =>
   baseDir !== undefined &&
   baseDir !== "" &&
-  (resolve(e) === resolve(baseDir) || resolve(e).startsWith(resolve(baseDir) + sep));
+  (resolve(targetPath) === resolve(baseDir) || resolve(targetPath).startsWith(resolve(baseDir) + sep));
 //@ chunk-qcqdqsn4.js:6247-6933 placement
-async function resolveHookGitPrograms(e) {
-  let sessionReachable = e?.sessionReachable ?? isWritableOrOwned;
-  let HOME = e?.env ? e.env.HOME : env.HOME;
-  let PATH = e?.env ? e.env.PATH : env.PATH;
-  let t = [];
-  let filtered = (PATH ?? "").split(delimiter).filter((u) => {
-    if (u === "" || !isAbsolute(u)) return false;
-    if (isWithinDir(u, HOME) || isWithinDir(u, e?.baseDir)) {
-      t.push(u);
+async function resolveHookGitPrograms(options) {
+  let sessionReachable = options?.sessionReachable ?? isWritableOrOwned;
+  let HOME = options?.env ? options.env.HOME : env.HOME;
+  let PATH = options?.env ? options.env.PATH : env.PATH;
+  let skippedPaths = [];
+  let filtered = (PATH ?? "").split(delimiter).filter((dirEntry) => {
+    if (dirEntry === "" || !isAbsolute(dirEntry)) return false;
+    if (isWithinDir(dirEntry, HOME) || isWithinDir(dirEntry, options?.baseDir)) {
+      skippedPaths.push(dirEntry);
       return false;
     }
     return true;
   });
-  let a = async (u) => {
-    for (let m of filtered) {
-      let l = join(m, u);
+  let findProgram = async (programName) => {
+    for (let dirEntry of filtered) {
+      let programPath = join(dirEntry, programName);
       try {
-        await access(l, constants.X_OK);
+        await access(programPath, constants.X_OK);
       } catch {
         continue;
       }
       if (
-        (await describeWritableChain(l, sessionReachable)) !== undefined ||
-        (await describeWritableChain(m, sessionReachable)) !== undefined
+        (await describeWritableChain(programPath, sessionReachable)) !== undefined ||
+        (await describeWritableChain(dirEntry, sessionReachable)) !== undefined
       ) {
-        t.push(l);
+        skippedPaths.push(programPath);
         continue;
       }
-      return l;
+      return programPath;
     }
     return;
   };
-  let g = "/nonexistent-gpg";
-  for (let u of ["/bin/false", "/usr/bin/false"]) {
+  let inertProgram = "/nonexistent-gpg";
+  for (let falsePath of ["/bin/false", "/usr/bin/false"]) {
     try {
-      await access(u, constants.X_OK);
+      await access(falsePath, constants.X_OK);
     } catch {
       continue;
     }
     if (
-      (await describeWritableChain(u, sessionReachable)) === undefined &&
-      (await describeWritableChain(dirname(u), sessionReachable)) === undefined
+      (await describeWritableChain(falsePath, sessionReachable)) === undefined &&
+      (await describeWritableChain(dirname(falsePath), sessionReachable)) === undefined
     ) {
-      g = u;
+      inertProgram = falsePath;
       break;
     }
   }
-  let [h, f, d] = await Promise.all([a("gpg"), a("gpgsm"), a("ssh-keygen")]);
+  let [gpgPath, gpgsmPath, sshKeygenPath] = await Promise.all([
+    findProgram("gpg"),
+    findProgram("gpgsm"),
+    findProgram("ssh-keygen"),
+  ]);
   return {
-    gpg: h ?? g,
-    gpgsm: f ?? g,
-    sshKeygen: d ?? g,
-    inert: g,
-    skipped: t,
+    gpg: gpgPath ?? inertProgram,
+    gpgsm: gpgsmPath ?? inertProgram,
+    sshKeygen: sshKeygenPath ?? inertProgram,
+    inert: inertProgram,
+    skipped: skippedPaths,
   };
 }
 //@ chunk-qcqdqsn4.js:6933-7061 placement
-function isRunnerHooksDir(e, n) {
-  let o = (s) => resolve(s).replace(/[\\/]+$/, "");
-  return (n !== undefined && o(e) === o(n)) || o(e).endsWith(join(sep + ".runner", "git-hooks"));
+function isRunnerHooksDir(hooksPath, runnerHooksDir) {
+  let normalizePath = (targetPath) => resolve(targetPath).replace(/[\\/]+$/, "");
+  return (
+    (runnerHooksDir !== undefined && normalizePath(hooksPath) === normalizePath(runnerHooksDir)) ||
+    normalizePath(hooksPath).endsWith(join(sep + ".runner", "git-hooks"))
+  );
 }
 //@ chunk-qcqdqsn4.js:7061-8876 placement
-async function readOperatorGitSnapshot(e) {
-  let sessionReachable = e?.sessionReachable ?? isWritableOrOwned;
-  let systemConfigFiles = e?.systemConfigFiles ?? readSystemGitConfig;
-  let HOME = e?.env ? e.env.HOME : env.HOME;
-  function t(source) {
-    return e?.lifecycleHooks ? getGitConfigScopesWithValue(source, e.env) : [];
+async function readOperatorGitSnapshot(options) {
+  let sessionReachable = options?.sessionReachable ?? isWritableOrOwned;
+  let systemConfigFiles = options?.systemConfigFiles ?? readSystemGitConfig;
+  let HOME = options?.env ? options.env.HOME : env.HOME;
+  function scopesWithValue(source) {
+    return options?.lifecycleHooks ? getGitConfigScopesWithValue(source, options.env) : [];
   }
-  let [{ system: r, systemOrigin: a, global: g }, h, f, d] = await Promise.all([
-    readSystemAndGlobalGitConfigPath("core.hooksPath", e?.env),
-    t("core.sshCommand"),
-    t("core.askPass"),
-    t("filter.lfs.clean"),
+  let [
+    { system: hooksPath, systemOrigin: hooksPathOrigin, global: globalHooksPath },
+    sshCommandScopes,
+    askPassScopes,
+    lfsFilterScopes,
+  ] = await Promise.all([
+    readSystemAndGlobalGitConfigPath("core.hooksPath", options?.env),
+    scopesWithValue("core.sshCommand"),
+    scopesWithValue("core.askPass"),
+    scopesWithValue("filter.lfs.clean"),
   ]);
-  let u = (l) => l !== undefined && !isRunnerHooksDir(l);
-  let m = {
-    ...(u(g) && {
-      ignoredGlobalHooksPath: g,
+  let isForeignHooksPath = (candidatePath) => candidatePath !== undefined && !isRunnerHooksDir(candidatePath);
+  let snapshot = {
+    ...(isForeignHooksPath(globalHooksPath) && {
+      ignoredGlobalHooksPath: globalHooksPath,
     }),
-    ...(h.length > 0 && {
-      sshCommandScopes: h,
+    ...(sshCommandScopes.length > 0 && {
+      sshCommandScopes,
     }),
-    ...(f.length > 0 && {
-      askPassScopes: f,
+    ...(askPassScopes.length > 0 && {
+      askPassScopes,
     }),
-    ...(d.length > 0 && {
-      lfsFilterScopes: d,
+    ...(lfsFilterScopes.length > 0 && {
+      lfsFilterScopes,
     }),
   };
-  if (u(r)) {
-    let l;
-    if (a === undefined || !isNormalizedAbsolutePath(a))
-      l = `git does not report a plainly spelled absolute file path as its origin (${quoteConfigValueForLog(a ?? "")}) \u2014 cannot verify it is out of the sessions' reach`;
+  if (isForeignHooksPath(hooksPath)) {
+    let exclusionReason;
+    if (hooksPathOrigin === undefined || !isNormalizedAbsolutePath(hooksPathOrigin))
+      exclusionReason = `git does not report a plainly spelled absolute file path as its origin (${quoteConfigValueForLog(hooksPathOrigin ?? "")}) \u2014 cannot verify it is out of the sessions' reach`;
     else {
-      let S = await systemConfigFiles(e?.env);
-      if (S.unverifiable !== undefined)
-        l = `${S.unverifiable} \u2014 cannot verify it is out of the sessions' reach`;
-      else if (!S.files.includes(a))
-        l = `the system configuration changed while it was being read (${quoteConfigValueForLog(a)} is no longer among its files) \u2014 cannot verify it is out of the sessions' reach`;
+      let systemConfig = await systemConfigFiles(options?.env);
+      if (systemConfig.unverifiable !== undefined)
+        exclusionReason = `${systemConfig.unverifiable} \u2014 cannot verify it is out of the sessions' reach`;
+      else if (!systemConfig.files.includes(hooksPathOrigin))
+        exclusionReason = `the system configuration changed while it was being read (${quoteConfigValueForLog(hooksPathOrigin)} is no longer among its files) \u2014 cannot verify it is out of the sessions' reach`;
       else
-        for (let file of S.files) {
-          let D = await lstat(file).then(
+        for (let file of systemConfig.files) {
+          let lstatFailure = await lstat(file).then(
             () => {
               return;
             },
             (error) => getErrnoCode(error) ?? "error",
           );
-          let C =
-            D !== undefined
-              ? `is listed by git but cannot be found as reported (${D}) \u2014 cannot verify it is out of the sessions' reach`
+          let writableReason =
+            lstatFailure !== undefined
+              ? `is listed by git but cannot be found as reported (${lstatFailure}) \u2014 cannot verify it is out of the sessions' reach`
               : await describeWritableChain(file, sessionReachable);
-          if (C !== undefined) {
-            l =
-              file === a
-                ? `it comes from ${quoteConfigValueForLog(file)}, which ${C}`
-                : `one of the files the system configuration reads, ${quoteConfigValueForLog(file)}, ${C}`;
+          if (writableReason !== undefined) {
+            exclusionReason =
+              file === hooksPathOrigin
+                ? `it comes from ${quoteConfigValueForLog(file)}, which ${writableReason}`
+                : `one of the files the system configuration reads, ${quoteConfigValueForLog(file)}, ${writableReason}`;
             break;
           }
         }
     }
-    if (l === undefined)
-      if (!isAbsolute(r)) l = "it is relative (git would resolve it inside each repository)";
-      else if (!isNormalizedAbsolutePath(r))
-        l = `it is not spelled as a plain absolute path (${quoteConfigValueForLog(r)}) \u2014 write it without '.' or '..' components`;
-      else if (isWithinDir(r, HOME) || isWithinDir(r, e?.baseDir))
-        l = "it points under the runner HOME / --base-dir, which sessions can write";
+    if (exclusionReason === undefined)
+      if (!isAbsolute(hooksPath))
+        exclusionReason = "it is relative (git would resolve it inside each repository)";
+      else if (!isNormalizedAbsolutePath(hooksPath))
+        exclusionReason = `it is not spelled as a plain absolute path (${quoteConfigValueForLog(hooksPath)}) \u2014 write it without '.' or '..' components`;
+      else if (isWithinDir(hooksPath, HOME) || isWithinDir(hooksPath, options?.baseDir))
+        exclusionReason = "it points under the runner HOME / --base-dir, which sessions can write";
       else {
-        let S = await describeWritableChain(r, sessionReachable);
-        l = S !== undefined ? `its target directory ${S}` : await findWritableEntryIn(r, sessionReachable);
+        let chainReason = await describeWritableChain(hooksPath, sessionReachable);
+        exclusionReason =
+          chainReason !== undefined
+            ? `its target directory ${chainReason}`
+            : await findWritableEntryIn(hooksPath, sessionReachable);
       }
-    if (l === undefined) m.hooksPath = r;
+    if (exclusionReason === undefined) snapshot.hooksPath = hooksPath;
     else
-      m.ignoredSystemHooksPath = {
-        value: r,
-        reason: l,
+      snapshot.ignoredSystemHooksPath = {
+        value: hooksPath,
+        reason: exclusionReason,
       };
   }
-  return m;
+  return snapshot;
 }
 //@ chunk-qcqdqsn4.js:8876-8886 placement
 var MAX_WRITABLE_CHAIN_HOPS = 32;
@@ -452,18 +472,18 @@ var MAX_WRITABLE_CHAIN_HOPS = 32;
 /**
  * 找目录中可被 runner 用户写的条目
  */
-async function findWritableEntryIn(e, sessionReachable) {
-  let o;
+async function findWritableEntryIn(dirPath, sessionReachable) {
+  let names;
   try {
-    o = (await readdir(e)).sort();
+    names = (await readdir(dirPath)).sort();
   } catch (error) {
     return isENOENT(error)
       ? "its target directory does not exist"
       : `its target directory cannot be listed (${getErrnoCode(error) ?? "error"})`;
   }
-  for (let s of o) {
-    let t = await describeWritableChain(join(e, s), sessionReachable);
-    if (t !== undefined) return `${quoteConfigValueForLog(s)} in it ${t}`;
+  for (let entryName of names) {
+    let writableReason = await describeWritableChain(join(dirPath, entryName), sessionReachable);
+    if (writableReason !== undefined) return `${quoteConfigValueForLog(entryName)} in it ${writableReason}`;
   }
   return;
 }
@@ -472,152 +492,159 @@ async function findWritableEntryIn(e, sessionReachable) {
  * 沿符号链接检查路径是否可被 runner 用户写
  */
 async function describeWritableChain(
-  e,
+  startPath,
   sessionReachable,
-  o = {
+  limits = {
     hops: MAX_WRITABLE_CHAIN_HOPS,
   },
 ) {
-  let s = stripTrailingSlashes(e);
-  let t = s;
+  let normalizedPath = stripTrailingSlashes(startPath);
+  let currentPath = normalizedPath;
   for (;;) {
-    if (await sessionReachable(t))
-      return t === s
+    if (await sessionReachable(currentPath))
+      return currentPath === normalizedPath
         ? "is writable by (or belongs to) this runner's user"
-        : `resolves to ${quoteConfigValueForLog(t)}, which this runner's user can write or owns`;
-    let r;
+        : `resolves to ${quoteConfigValueForLog(currentPath)}, which this runner's user can write or owns`;
+    let isLink;
     try {
-      r = (await lstat(t)).isSymbolicLink();
+      isLink = (await lstat(currentPath)).isSymbolicLink();
     } catch (error) {
-      if (t === s) {
+      if (currentPath === normalizedPath) {
         if (isENOENT(error)) return;
         return `cannot be examined (${getErrnoCode(error) ?? "error"})`;
       }
-      return `is a link that does not resolve (${quoteConfigValueForLog(t)})`;
+      return `is a link that does not resolve (${quoteConfigValueForLog(currentPath)})`;
     }
-    if (!r) return;
-    if (o.hops <= 0) return "is a link with too many levels of indirection";
-    o.hops--;
-    let a;
+    if (!isLink) return;
+    if (limits.hops <= 0) return "is a link with too many levels of indirection";
+    limits.hops--;
+    let linkTarget;
     try {
-      a = await readlink(t);
+      linkTarget = await readlink(currentPath);
     } catch (error) {
       return `is a link that cannot be read (${getErrnoCode(error) ?? "error"})`;
     }
-    t = resolve(dirname(t), a);
-    let g = await describeWritableChain(dirname(t), sessionReachable, o);
-    if (g !== undefined)
-      return o.hops <= 0
-        ? `is a link with too many levels of indirection (through ${quoteConfigValueForLog(dirname(t))})`
-        : `resolves into ${quoteConfigValueForLog(dirname(t))}, a directory that ${g} (the target could be replaced)`;
+    currentPath = resolve(dirname(currentPath), linkTarget);
+    let parentReason = await describeWritableChain(dirname(currentPath), sessionReachable, limits);
+    if (parentReason !== undefined)
+      return limits.hops <= 0
+        ? `is a link with too many levels of indirection (through ${quoteConfigValueForLog(dirname(currentPath))})`
+        : `resolves into ${quoteConfigValueForLog(dirname(currentPath))}, a directory that ${parentReason} (the target could be replaced)`;
   }
 }
 //@ chunk-qcqdqsn4.js:9928-9947 placement
 var FORMAT_CHAR_RE = /^\p{Cf}$/u;
 //@ chunk-qcqdqsn4.js:9947-10170 placement = needsWidthCompensation (0.79)
 function quoteConfigValueForLog(char) {
-  let n = jsonStringify(char);
-  let o = "";
-  for (let s of n) {
-    let cp = s.codePointAt(0);
-    if ((cp >= 127 && cp <= 159) || cp === 8232 || cp === 8233 || FORMAT_CHAR_RE.test(s))
-      for (let idx = 0; idx < s.length; idx++) o += `\\u${s.charCodeAt(idx).toString(16).padStart(4, "0")}`;
-    else o += s;
+  let jsonText = jsonStringify(char);
+  let safeText = "";
+  for (let char of jsonText) {
+    let cp = char.codePointAt(0);
+    if ((cp >= 127 && cp <= 159) || cp === 8232 || cp === 8233 || FORMAT_CHAR_RE.test(char))
+      for (let idx = 0; idx < char.length; idx++)
+        safeText += `\\u${char.charCodeAt(idx).toString(16).padStart(4, "0")}`;
+    else safeText += char;
   }
-  return o;
+  return safeText;
 }
 //@ chunk-qcqdqsn4.js:10170-13913 placement
 /**
  * self-hosted runner 的 --configure-git：配置签名、代理凭据助手与 coauthor hook，并给出操作员 git 配置警告。
  */
 function operatorGitSnapshotWarnings(
-  e,
+  snapshot,
   { isRoot, operatorSshInEnv = false, askpassSource = "none", postSessionHook = false, envHooksPath = false },
 ) {
-  let a = [];
-  if (e.ignoredSystemHooksPath !== undefined) {
-    let ignoredSystemHooksPath = e.ignoredSystemHooksPath;
-    a.push(
+  let warnings = [];
+  if (snapshot.ignoredSystemHooksPath !== undefined) {
+    let ignoredSystemHooksPath = snapshot.ignoredSystemHooksPath;
+    warnings.push(
       `[runner:warn] the system git config sets core.hooksPath=${quoteConfigValueForLog(ignoredSystemHooksPath.value)}, which is NOT applied inside lifecycle hooks because ${ignoredSystemHooksPath.reason}. ` +
         (isRoot
           ? "This runner runs as root, so no configuration file is out of the sessions' reach: export it as a GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n pair in the runner's environment instead \u2014 and run the runner as an unprivileged user."
           : "Use an absolute path outside the runner's HOME/--base-dir in a root-owned file, naming a directory whose hook files are root-owned too (or export it as a GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n pair in the runner's environment)."),
     );
   }
-  if (e.ignoredGlobalHooksPath !== undefined)
-    a.push(
-      `[runner:warn] the global git config sets core.hooksPath=${quoteConfigValueForLog(e.ignoredGlobalHooksPath)}, which is NOT applied inside lifecycle hooks (checkout / post-session): every session this runner hosts can write that file. Git run by those hooks takes core.hooksPath only from the system git config (git config --system) or from a GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n pair exported in the runner's own environment; move it there if your hooks need it. The session's own git is unaffected.`,
+  if (snapshot.ignoredGlobalHooksPath !== undefined)
+    warnings.push(
+      `[runner:warn] the global git config sets core.hooksPath=${quoteConfigValueForLog(snapshot.ignoredGlobalHooksPath)}, which is NOT applied inside lifecycle hooks (checkout / post-session): every session this runner hosts can write that file. Git run by those hooks takes core.hooksPath only from the system git config (git config --system) or from a GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n pair exported in the runner's own environment; move it there if your hooks need it. The session's own git is unaffected.`,
     );
-  if (e.sshCommandScopes !== undefined && !operatorSshInEnv)
-    a.push(
-      `[runner:warn] core.sshCommand is set in the ${e.sshCommandScopes.join(" and ")} git config but is NOT used inside lifecycle hooks (checkout / post-session): git run by those hooks uses plain ssh unless the runner's own environment sets GIT_SSH_COMMAND (or GIT_SSH). If your hooks reach git remotes over ssh and need that command (a deploy key, a jump host), copy its value into GIT_SSH_COMMAND in the runner's environment; if they do not, no action is needed. ` +
-        (e.sshCommandScopes.includes("global")
+  if (snapshot.sshCommandScopes !== undefined && !operatorSshInEnv)
+    warnings.push(
+      `[runner:warn] core.sshCommand is set in the ${snapshot.sshCommandScopes.join(" and ")} git config but is NOT used inside lifecycle hooks (checkout / post-session): git run by those hooks uses plain ssh unless the runner's own environment sets GIT_SSH_COMMAND (or GIT_SSH). If your hooks reach git remotes over ssh and need that command (a deploy key, a jump host), copy its value into GIT_SSH_COMMAND in the runner's environment; if they do not, no action is needed. ` +
+        (snapshot.sshCommandScopes.includes("global")
           ? "Copy only a command you set yourself: every session this runner hosts can write the global file. "
           : "") +
         "The session's own git is unaffected.",
     );
-  if (e.askPassScopes !== undefined && askpassSource !== "own")
-    a.push(
-      `[runner:warn] core.askPass is set in the ${e.askPassScopes.join(" and ")} git config but is NOT used inside lifecycle hooks (checkout / post-session): git run by those hooks takes a credential-prompt program only from the runner's own environment, as GIT_ASKPASS (an SSH_ASKPASS there is handed on as GIT_ASKPASS) or as a core.askPass GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n pair. ` +
+  if (snapshot.askPassScopes !== undefined && askpassSource !== "own")
+    warnings.push(
+      `[runner:warn] core.askPass is set in the ${snapshot.askPassScopes.join(" and ")} git config but is NOT used inside lifecycle hooks (checkout / post-session): git run by those hooks takes a credential-prompt program only from the runner's own environment, as GIT_ASKPASS (an SSH_ASKPASS there is handed on as GIT_ASKPASS) or as a core.askPass GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n pair. ` +
         (askpassSource === "handedOn"
           ? "Here hook git will use the SSH_ASKPASS program from the runner's environment in its place. "
           : "") +
         "If your hooks get https credentials from the program core.askPass names, copy its path into GIT_ASKPASS in the runner's environment; if they do not, no action is needed. " +
-        (e.askPassScopes.includes("global")
+        (snapshot.askPassScopes.includes("global")
           ? "Copy only a path you set yourself: every session this runner hosts can write the global file. "
           : "") +
         "The session's own git is unaffected.",
     );
-  if (e.lfsFilterScopes !== undefined && postSessionHook && e.hooksPath === undefined && !envHooksPath)
-    a.push(
-      `[runner:warn] git-lfs is set up in the ${e.lfsFilterScopes.join(" and ")} git config and this runner has a post-session hook. Git run inside the runner's lifecycle hooks runs no repository or global git hooks, so git-lfs's pre-push hook does not run there and a plain "git push" from the post-session hook sends LFS pointers WITHOUT their objects. The runner cannot see whether your hook already handles this: in it, run "git-lfs push <remote> <branch>" BEFORE "git push" (or "git-lfs push --all <remote> <branch>" after it), or point core.hooksPath, ${isRoot ? "as" : "in the system git config or as"} a GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n pair in the runner's environment, at a root-owned directory that holds git-lfs's pre-push hook. The session's own git is unaffected.`,
+  if (
+    snapshot.lfsFilterScopes !== undefined &&
+    postSessionHook &&
+    snapshot.hooksPath === undefined &&
+    !envHooksPath
+  )
+    warnings.push(
+      `[runner:warn] git-lfs is set up in the ${snapshot.lfsFilterScopes.join(" and ")} git config and this runner has a post-session hook. Git run inside the runner's lifecycle hooks runs no repository or global git hooks, so git-lfs's pre-push hook does not run there and a plain "git push" from the post-session hook sends LFS pointers WITHOUT their objects. The runner cannot see whether your hook already handles this: in it, run "git-lfs push <remote> <branch>" BEFORE "git push" (or "git-lfs push --all <remote> <branch>" after it), or point core.hooksPath, ${isRoot ? "as" : "in the system git config or as"} a GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n pair in the runner's environment, at a root-owned directory that holds git-lfs's pre-push hook. The session's own git is unaffected.`,
     );
-  return a;
+  return warnings;
 }
 //@ chunk-qcqdqsn4.js:13913-14777 placement
 /**
  * 安装 coauthor hook，已有 core.hooksPath 时拒绝
  */
-async function installCoauthorHooks(e, n, onStatus) {
-  let s = join(e, "git-hooks");
-  let t;
-  if (n[0] === "--file") t = await readGitConfigPath(n, "core.hooksPath");
+async function installCoauthorHooks(baseDir, configTarget, onStatus) {
+  let hooksDir = join(baseDir, "git-hooks");
+  let existingHooksPath;
+  if (configTarget[0] === "--file")
+    existingHooksPath = await readGitConfigPath(configTarget, "core.hooksPath");
   else {
     let systemAndGlobalGitConfigPath = await readSystemAndGlobalGitConfigPath("core.hooksPath");
-    t = systemAndGlobalGitConfigPath.global ?? systemAndGlobalGitConfigPath.system ?? "";
+    existingHooksPath = systemAndGlobalGitConfigPath.global ?? systemAndGlobalGitConfigPath.system ?? "";
   }
-  if (t !== "" && !isRunnerHooksDir(t, s)) {
+  if (existingHooksPath !== "" && !isRunnerHooksDir(existingHooksPath, hooksDir)) {
     onStatus(
-      `[runner:git] --configure-git: core.hooksPath already set (${quoteConfigValueForLog(t)}); skipping Co-authored-by hook install so existing hooks keep running for the session's own git (lifecycle ` +
+      `[runner:git] --configure-git: core.hooksPath already set (${quoteConfigValueForLog(existingHooksPath)}); skipping Co-authored-by hook install so existing hooks keep running for the session's own git (lifecycle ` +
         "hooks follow the system config / runner environment only \u2014 see " +
         "the lifecycle-hooks status line)",
     );
     return {
       installed: false,
-      existingHooksPath: t,
+      existingHooksPath,
     };
   }
-  await mkdir(s, {
+  await mkdir(hooksDir, {
     recursive: true,
   });
-  for (let r of GIT_HOOK_NAMES) {
-    let a = join(s, r);
-    await writeFile(a, COAUTHOR_HOOK_SCRIPT, {
+  for (let hookName of GIT_HOOK_NAMES) {
+    let hookPath = join(hooksDir, hookName);
+    await writeFile(hookPath, COAUTHOR_HOOK_SCRIPT, {
       mode: 493,
     });
-    await chmod(a, 493);
+    await chmod(hookPath, 493);
   }
-  for (let r of ["commit-msg", "prepare-commit-msg"]) {
-    let a = join(s, r);
-    await writeFile(a, COMMIT_MSG_HOOK_SCRIPT, {
+  for (let hookName of ["commit-msg", "prepare-commit-msg"]) {
+    let hookPath = join(hooksDir, hookName);
+    await writeFile(hookPath, COMMIT_MSG_HOOK_SCRIPT, {
       mode: 493,
     });
-    await chmod(a, 493);
+    await chmod(hookPath, 493);
   }
-  await execFileAsync("git", ["config", ...n, "--replace-all", "core.hooksPath", s], {
+  await execFileAsync("git", ["config", ...configTarget, "--replace-all", "core.hooksPath", hooksDir], {
     windowsHide: true,
   });
-  onStatus(`[runner:git] --configure-git: core.hooksPath=${s}`);
+  onStatus(`[runner:git] --configure-git: core.hooksPath=${hooksDir}`);
   return {
     installed: true,
   };
@@ -681,26 +708,27 @@ function shellQuote(s) {
 /**
  * 解析 ssh-keygen -Y sign 参数
  */
-function parseSshKeygenSignArgs(e) {
-  let n = false;
+function parseSshKeygenSignArgs(argv) {
+  let isSign = false;
   let namespace;
   let keyFile;
-  let t;
-  for (let idx = 0; idx < e.length; idx++) {
-    let a = e[idx];
-    if (a === "-Y" && e[idx + 1] === "sign") {
-      n = true;
+  let bufferFile;
+  for (let idx = 0; idx < argv.length; idx++) {
+    let arg = argv[idx];
+    if (arg === "-Y" && argv[idx + 1] === "sign") {
+      isSign = true;
       idx++;
-    } else if (a === "-n") namespace = e[++idx];
-    else if (a === "-f") keyFile = e[++idx];
-    else if (a.startsWith("-")) {
-      if (e[idx + 1] !== undefined && !e[idx + 1].startsWith("-")) idx++;
-    } else if (t === undefined) t = a;
+    } else if (arg === "-n") namespace = argv[++idx];
+    else if (arg === "-f") keyFile = argv[++idx];
+    else if (arg.startsWith("-")) {
+      if (argv[idx + 1] !== undefined && !argv[idx + 1].startsWith("-")) idx++;
+    } else if (bufferFile === undefined) bufferFile = arg;
   }
-  if (!n) throw Error(`code-sign: only SSH-style signing (-Y sign) is supported; got: ${e.join(" ")}`);
-  if (!t) throw Error("code-sign: no file specified to sign");
+  if (!isSign)
+    throw Error(`code-sign: only SSH-style signing (-Y sign) is supported; got: ${argv.join(" ")}`);
+  if (!bufferFile) throw Error("code-sign: no file specified to sign");
   return {
-    bufferFile: resolve(t),
+    bufferFile: resolve(bufferFile),
     namespace,
     keyFile,
   };
@@ -709,16 +737,18 @@ function parseSshKeygenSignArgs(e) {
 /**
  * 为会话配置 git 代理凭据助手
  */
-async function configureGitProxyCredentialUnchecked(sshKeygenSignArgs, n) {
-  let o = n.env.CLAUDE_CODE_REMOTE_SESSION_ID || n.env.CLAUDE_RUNNER_SESSION_ID?.replace(/^session_/, "cse_");
-  let CLAUDE_CODE_SESSION_ACCESS_TOKEN = n.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN;
+async function configureGitProxyCredentialUnchecked(sshKeygenSignArgs, options) {
+  let sessionId =
+    options.env.CLAUDE_CODE_REMOTE_SESSION_ID ||
+    options.env.CLAUDE_RUNNER_SESSION_ID?.replace(/^session_/, "cse_");
+  let CLAUDE_CODE_SESSION_ACCESS_TOKEN = options.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN;
   let replaced = (
-    n.env.ANTHROPIC_BASE_URL ||
-    n.env.SESSION_INGRESS_URL ||
-    n.env.CLAUDE_RUNNER_API_BASE_URL ||
+    options.env.ANTHROPIC_BASE_URL ||
+    options.env.SESSION_INGRESS_URL ||
+    options.env.CLAUDE_RUNNER_API_BASE_URL ||
     ""
   ).replace(/\/+$/, "");
-  if (!o || !SAFE_GIT_KEY_REGEX.test(o))
+  if (!sessionId || !SAFE_GIT_KEY_REGEX.test(sessionId))
     throw Error(
       "code-sign: CLAUDE_CODE_REMOTE_SESSION_ID (child) / CLAUDE_RUNNER_SESSION_ID (lifecycle hook) is unset or malformed \u2014 " +
         "is this process a descendant of a runner-spawned session or hook?",
@@ -737,8 +767,8 @@ async function configureGitProxyCredentialUnchecked(sshKeygenSignArgs, n) {
     },
     git_object_format: gitObjectFormat,
   });
-  let h = `${replaced}/v1/code/sessions/${o}/sign-commit`;
-  let fn = await n.fetchFn(h, {
+  let endpointUrl = `${replaced}/v1/code/sessions/${sessionId}/sign-commit`;
+  let fn = await options.fetchFn(endpointUrl, {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -760,22 +790,23 @@ async function configureGitProxyCredentialUnchecked(sshKeygenSignArgs, n) {
     },
     body,
     ...getProxyFetchOptions({
-      url: h,
+      url: endpointUrl,
     }),
     ...getTLSFetchOptions(undefined),
     signal: AbortSignal.timeout(30000),
   });
   if (!fn.ok) {
-    let m = await fn.text().catch(() => "");
+    let responseText = await fn.text().catch(() => "");
     throw Error(
-      `code-sign: sign-commit returned HTTP ${fn.status}` + (m ? `: ${truncateWithEllipsis(m, 200)}` : ""),
+      `code-sign: sign-commit returned HTTP ${fn.status}` +
+        (responseText ? `: ${truncateWithEllipsis(responseText, 200)}` : ""),
     );
   }
   let body_2 = await fn.json();
   if (!body_2.signature) throw Error("code-sign: response missing signature");
-  let u = `${sshKeygenSignArgs.bufferFile}.sig`;
-  await writeFile(u, body_2.signature);
-  return u;
+  let sigPath = `${sshKeygenSignArgs.bufferFile}.sig`;
+  await writeFile(sigPath, body_2.signature);
+  return sigPath;
 }
 //@ chunk-qcqdqsn4.js:18217-18422 placement
 /**
@@ -791,13 +822,13 @@ async function readGitObjectFormat() {
   return code === 0 && stdout.trim() === "sha256" ? "sha256" : "sha1";
 }
 //@ chunk-qcqdqsn4.js:18422-18481 placement
-function truncateWithEllipsis(e, n) {
-  return e.length > n ? e.slice(0, n) + "\u2026" : e;
+function truncateWithEllipsis(text, maxLength) {
+  return text.length > maxLength ? text.slice(0, maxLength) + "\u2026" : text;
 }
 //@ chunk-qcqdqsn4.js:18481-18672 placement
-async function selfHostedRunnerCodeSignMain(e) {
+async function selfHostedRunnerCodeSignMain(argv) {
   try {
-    let sshKeygenSignArgs = parseSshKeygenSignArgs(e);
+    let sshKeygenSignArgs = parseSshKeygenSignArgs(argv);
     await configureGitProxyCredentialUnchecked(sshKeygenSignArgs, {
       env: process.env,
       fetchFn: fetch,
@@ -816,4 +847,15 @@ export {
   relocateConfigureGitArtifacts,
   configureGitOverlayEntries,
   execFileAsync,
+  GIT_PROXY_CRED_HELPER_CONTENT,
+  coauthorHookStubs,
+  codeSignArtifacts,
+  configureGitForSigning,
+  configureGitProxyCredential,
+  gitProxyCredHelperPath,
+  operatorGitSnapshotWarnings,
+  quoteConfigValueForLog,
+  readOperatorGitSnapshot,
+  resolveHookGitPrograms,
+  selfHostedRunnerCodeSignMain,
 };

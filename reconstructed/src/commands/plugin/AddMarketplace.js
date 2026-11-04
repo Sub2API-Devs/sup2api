@@ -10,7 +10,7 @@
  */
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useHasScrollViewport } from "../../components/ScrollViewportContext.js";
-import { R, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { useRef, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import { useRefusalTracker } from "../../components/CustomSelect/selectTypeahead.js";
 import {
@@ -78,7 +78,7 @@ function AddMarketplace({
   setCursorOffset,
   error,
   setError,
-  result: D,
+  result,
   setResult,
   setViewState,
   onAddComplete,
@@ -89,18 +89,18 @@ function AddMarketplace({
 }) {
   let { storageV5, credentials } = useTheme_2();
   let hasScrollViewport = useHasScrollViewport();
-  let hasAttemptedAutoAdd = R(false);
-  let [ne, he] = y(false);
-  let [W, Oe] = y("");
-  let [rt, et] = y(null);
-  let [je, ae] = y(null);
+  let hasAttemptedAutoAdd = useRef(false);
+  let [busy, setBusy] = useState(false);
+  let [draftInput, setDraftInput] = useState("");
+  let [inputError, setInputError] = useState(null);
+  let [pendingConfirm, setConfirmAdd] = useState(null);
   let plugin = confirmAdd?.plugin;
-  let kt = R(false);
-  let Tt = R(false);
+  let submitting = useRef(false);
+  let refreshing = useRef(false);
   let inputClock = useInputClock();
-  let Et = R(null);
+  let refusedRef = useRef(null);
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let Ct = R(false);
+  let processing = useRef(false);
   let handleAdd = async () => {
     {
       let pluginDirectoryState = await getPluginDirectoryState();
@@ -110,12 +110,12 @@ function AddMarketplace({
           sourceKind: undefined,
           surface: "ui",
         });
-        let qe =
+        let blockedHint =
           pluginDirectoryState === "blocked"
             ? `${OFFICIAL_MARKETPLACE_DISPLAY} is blocked by your organization. ${pluginDirectoryPolicyBlockHint()} It can't be turned on here.`
             : `The ${OFFICIAL_MARKETPLACE_DISPLAY} isn't available in this session.`;
-        setError(qe);
-        if (cliMode) setResult(qe);
+        setError(blockedHint);
+        if (cliMode) setResult(blockedHint);
         return;
       }
       if (pluginDirectoryState === "off") {
@@ -127,9 +127,9 @@ function AddMarketplace({
             surface: "ui",
             failure: "settings_write_failed",
           });
-          let vt = printableName(errorMessage(error), 300);
-          setError(vt);
-          if (cliMode) setResult(`Error: ${vt}`);
+          let errorText = printableName(errorMessage(error), 300);
+          setError(errorText);
+          if (cliMode) setResult(`Error: ${errorText}`);
           return;
         }
         logDirectoryToggle({
@@ -151,21 +151,21 @@ function AddMarketplace({
           type: "browse-marketplace",
           targetMarketplace: OFFICIAL_MARKETPLACE_NAME,
         });
-      else et(`${OFFICIAL_MARKETPLACE_DISPLAY} is already on.`);
+      else setInputError(`${OFFICIAL_MARKETPLACE_DISPLAY} is already on.`);
     }
   };
-  let ft = async () => {
+  let refreshPreview = async () => {
     let input = inputValue.trim();
     if (!input) {
       setError("Please enter a marketplace source");
       return;
     }
-    et(null);
+    setInputError(null);
     if (isOfficialMarketplaceName_2(input)) {
-      if (Ct.current) return;
-      Ct.current = true;
+      if (processing.current) return;
+      processing.current = true;
       await handleAdd().finally(() => {
-        Ct.current = false;
+        processing.current = false;
       });
       return;
     }
@@ -178,21 +178,21 @@ function AddMarketplace({
       setError(parsed.error);
       return;
     }
-    await at(parsed);
+    await resolveAdd(parsed);
   };
-  let at = async (_e) => {
+  let resolveAdd = async (resolved) => {
     setError(null);
     try {
-      he(true);
-      Oe("");
+      setBusy(true);
+      setDraftInput("");
       let {
-        name: qe,
+        name: marketplaceName,
         resolvedSource,
         replacedSource,
       } = await addMarketplaceSource(
-        _e,
+        resolved,
         (message) => {
-          Oe(message);
+          setDraftInput(message);
         },
         storageV5,
         undefined,
@@ -201,7 +201,7 @@ function AddMarketplace({
         },
       );
       let { error } = await saveMarketplaceToSettings_2(
-        qe,
+        marketplaceName,
         {
           source: resolvedSource,
         },
@@ -211,15 +211,15 @@ function AddMarketplace({
       if (error) throw error;
       refreshPluginCaches(storageV5, credentials);
       logEvent("tengu_marketplace_added", {
-        _PROTO_marketplace_name: qe,
-        source_type: fromEnum(_e.source),
-        repo_hash: _e.source === "github" ? shortHash(_e.repo) : undefined,
-        is_official_marketplace: isOfficialMarketplaceName_3(qe),
+        _PROTO_marketplace_name: marketplaceName,
+        source_type: fromEnum(resolved.source),
+        repo_hash: resolved.source === "github" ? shortHash(resolved.repo) : undefined,
+        is_official_marketplace: isOfficialMarketplaceName_3(marketplaceName),
       });
-      let $t = [];
+      let lines = [];
       if (confirmAdd === undefined)
         try {
-          $t = (
+          lines = (
             await resolveMissingDependencies((await loadAllPlugins(storageV5, credentials)).errors, storageV5)
           ).installed;
         } catch (error) {
@@ -227,16 +227,16 @@ function AddMarketplace({
             level: "warn",
           });
         }
-      if ($t.length > 0) refreshPluginCaches(storageV5, credentials);
+      if (lines.length > 0) refreshPluginCaches(storageV5, credentials);
       await onAddComplete();
-      Oe("");
-      he(false);
+      setDraftInput("");
+      setBusy(false);
       if (cliMode)
         setResult(
           [
-            `Successfully added marketplace: ${qe}${formatDependencyCountSuffix($t)}`,
+            `Successfully added marketplace: ${marketplaceName}${formatDependencyCountSuffix(lines)}`,
             ...describeMarketplaceSourceReplaced({
-              name: qe,
+              name: marketplaceName,
               replacedSource,
               resolvedSource,
               settingSource: "userSettings",
@@ -244,10 +244,10 @@ function AddMarketplace({
           ].join(`
 `),
         );
-      else if (!Tt.current)
+      else if (!refreshing.current)
         setViewState({
           type: "browse-marketplace",
-          targetMarketplace: qe,
+          targetMarketplace: marketplaceName,
           targetPlugin: plugin,
         });
     } catch (err) {
@@ -256,96 +256,103 @@ function AddMarketplace({
         level: "error",
       });
       setError(error.message);
-      Oe("");
-      he(false);
+      setDraftInput("");
+      setBusy(false);
       if (cliMode) setResult(`Error: ${error.message}`);
       else setResult(null);
     }
   };
-  async function Ot(confirmAdd, qe) {
+  async function resolveMarketplace(confirmAdd, input) {
     try {
       if (confirmAdd.linkOrigin) {
         parseDeepLinkMarketplace(inputValue);
         if (confirmAdd.plugin !== undefined) validateDeepLinkPlugin(confirmAdd.plugin);
       }
-      let marketplaceInput = await parseMarketplaceInput(inputValue);
-      if (qe()) return;
-      if (!marketplaceInput || "error" in marketplaceInput) {
-        setError(marketplaceInput?.error ?? INVALID_MARKETPLACE_SOURCE_MESSAGE);
+      let source = await parseMarketplaceInput(inputValue);
+      if (input()) return;
+      if (!source || "error" in source) {
+        setError(source?.error ?? INVALID_MARKETPLACE_SOURCE_MESSAGE);
         return;
       }
-      let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
-      let nn = confirmAdd.linkOrigin
-        ? findMarketplaceBySourceLoose(knownMarketplacesWithDeclared, marketplaceInput)
-        : findMarketplaceBySource(knownMarketplacesWithDeclared, marketplaceInput);
-      if (qe()) return;
-      if (nn !== undefined) {
+      let marketplaces = await loadKnownMarketplacesWithDeclared(storageV5);
+      let source_2 = confirmAdd.linkOrigin
+        ? findMarketplaceBySourceLoose(marketplaces, source)
+        : findMarketplaceBySource(marketplaces, source);
+      if (input()) return;
+      if (source_2 !== undefined) {
         setViewState({
           type: "browse-marketplace",
-          targetMarketplace: nn,
+          targetMarketplace: source_2,
           targetPlugin: confirmAdd.plugin,
         });
         return;
       }
-      Et.current = Date.now();
-      ae(marketplaceInput);
+      refusedRef.current = Date.now();
+      setConfirmAdd(source);
     } catch (error) {
-      if (!qe()) setError(errorMessage(error));
+      if (!input()) setError(errorMessage(error));
     }
   }
-  P(() => {
+  useEffect(() => {
     if (confirmAdd === undefined) return;
-    let _e = false;
-    Ot(confirmAdd, () => _e);
+    let failed = false;
+    resolveMarketplace(confirmAdd, () => failed);
     return () => {
-      _e = true;
+      failed = true;
     };
   }, []);
-  function an() {
-    if (kt.current) return;
-    Tt.current = true;
+  function onConfirm() {
+    if (submitting.current) return;
+    refreshing.current = true;
     setViewState({
       type: "menu",
     });
   }
-  function Yt(event) {
-    if (event.ctrl || event.meta || ne) return;
-    if ((event.key === "y" || event.key === "Y") && je) {
+  function handleKeyDown(event) {
+    if (event.ctrl || event.meta || busy) return;
+    if ((event.key === "y" || event.key === "Y") && pendingConfirm) {
       event.preventDefault();
-      let qe = Et.current;
+      let clock = refusedRef.current;
       if (
-        qe === null ||
-        isWithinRecentInput(inputClock, qe, RECENT_INPUT_GUARD_MS) ||
+        clock === null ||
+        isWithinRecentInput(inputClock, clock, RECENT_INPUT_GUARD_MS) ||
         refusedWithin(RECENT_INPUT_GUARD_MS)
       ) {
         noteRefused();
         return;
       }
-      if (kt.current || Tt.current) return;
-      kt.current = true;
-      at(je).finally(() => {
-        kt.current = false;
+      if (submitting.current || refreshing.current) return;
+      submitting.current = true;
+      resolveAdd(pendingConfirm).finally(() => {
+        submitting.current = false;
       });
     } else if (event.key === "n" || event.key === "N") {
       event.preventDefault();
-      an();
+      onConfirm();
     }
   }
-  P(() => {
-    if (autoAdd && confirmAdd === undefined && inputValue && !hasAttemptedAutoAdd.current && !error && !D) {
+  useEffect(() => {
+    if (
+      autoAdd &&
+      confirmAdd === undefined &&
+      inputValue &&
+      !hasAttemptedAutoAdd.current &&
+      !error &&
+      !result
+    ) {
       hasAttemptedAutoAdd.current = true;
-      ft();
+      refreshPreview();
     }
   }, []);
   if (confirmAdd !== undefined) {
-    let ref = je && "ref" in je ? je.ref : undefined;
+    let ref = pendingConfirm && "ref" in pendingConfirm ? pendingConfirm.ref : undefined;
     return jsxProd_default(Dialog, {
       title: "Add marketplace?",
       color: "suggestion",
-      onCancel: an,
-      isCancelActive: !ne,
-      hideInputGuide: ne,
-      inputGuide: je
+      onCancel: onConfirm,
+      isCancelActive: !busy,
+      hideInputGuide: busy,
+      inputGuide: pendingConfirm
         ? jsxProd_default_2(Text, {
             children: [
               "Press ",
@@ -372,10 +379,10 @@ function AddMarketplace({
             ],
           }),
       children: jsxProd_default_2(FocusColumn, {
-        onKeyDown: Yt,
+        onKeyDown: handleKeyDown,
         gap: 1,
         children: [
-          je
+          pendingConfirm
             ? jsxProd_default_2(Box, {
                 flexDirection: "column",
                 children: [
@@ -395,7 +402,7 @@ function AddMarketplace({
                         children: "Add this marketplace:",
                       }),
                   jsxProd_default_2(Text, {
-                    children: ["  ", stripInvisibleKeepEmoji(formatSourceForDisplay(je))],
+                    children: ["  ", stripInvisibleKeepEmoji(formatSourceForDisplay(pendingConfirm))],
                   }),
                   ref !== undefined &&
                     jsxProd_default_2(Text, {
@@ -427,12 +434,13 @@ function AddMarketplace({
                   }),
                 ],
               }),
-          ne &&
+          busy &&
             jsxProd_default_2(Box, {
               children: [
                 jsxProd_default(Spinner, {}),
                 jsxProd_default(Text, {
-                  children: stripInvisibleKeepEmoji(W) || "Adding marketplace to configuration\u2026",
+                  children:
+                    stripInvisibleKeepEmoji(draftInput) || "Adding marketplace to configuration\u2026",
                 }),
               ],
             }),
@@ -516,7 +524,7 @@ function AddMarketplace({
                 children: jsxProd_default(TextInput, {
                   value: inputValue,
                   onChange: setInputValue,
-                  onSubmit: ft,
+                  onSubmit: refreshPreview,
                   columns: 80,
                   cursorOffset,
                   onChangeCursorOffset: setCursorOffset,
@@ -526,13 +534,14 @@ function AddMarketplace({
               }),
             ],
           }),
-          ne &&
+          busy &&
             jsxProd_default_2(Box, {
               marginTop: 1,
               children: [
                 jsxProd_default(Spinner, {}),
                 jsxProd_default(Text, {
-                  children: stripInvisibleKeepEmoji(W) || "Adding marketplace to configuration\u2026",
+                  children:
+                    stripInvisibleKeepEmoji(draftInput) || "Adding marketplace to configuration\u2026",
                 }),
               ],
             }),
@@ -543,18 +552,18 @@ function AddMarketplace({
                 error: stripInvisibleKeepNewlines(error),
               }),
             }),
-          rt &&
+          inputError &&
             jsxProd_default(Box, {
               marginTop: 1,
               children: jsxProd_default(Text, {
-                children: rt,
+                children: inputError,
               }),
             }),
-          D &&
+          result &&
             jsxProd_default(Box, {
               marginTop: 1,
               children: jsxProd_default(Text, {
-                children: stripInvisibleKeepNewlines(D),
+                children: stripInvisibleKeepNewlines(result),
               }),
             }),
         ],

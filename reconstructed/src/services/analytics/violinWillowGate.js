@@ -21,8 +21,11 @@ var VIOLIN_WILLOW_FLAG = "tengu_violin_willow";
 //@ chunk-j61dm7j5.js:310-403 placement
 function getViolinWillowOwnAnswer() {
   try {
-    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(VIOLIN_WILLOW_FLAG, false);
-    return isServedFeatureSource(source) ? e === true : undefined;
+    let { value: flagValue, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(
+      VIOLIN_WILLOW_FLAG,
+      false,
+    );
+    return isServedFeatureSource(source) ? flagValue === true : undefined;
   } catch {
     return;
   }

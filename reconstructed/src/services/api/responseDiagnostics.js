@@ -35,6 +35,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1560527-1560723 placement
 var API_ERROR_TYPES = [
@@ -51,19 +52,19 @@ var API_ERROR_TYPES = [
 ];
 //@ chunk-e6aww6q8.js:1560723-1560775 placement
 function normalizeApiErrorTypeDiag(type) {
-  return API_ERROR_TYPES.find((n) => n === type) ?? "other";
+  return API_ERROR_TYPES.find((errorType) => errorType === type) ?? "other";
 }
 //@ chunk-e6aww6q8.js:1560775-1560821 placement
-function requestIdFromHeaders(e) {
-  return isSessionsToken(e) ? (sanitizeMarkName(e) ?? null) : null;
+function requestIdFromHeaders(headers) {
+  return isSessionsToken(headers) ? (sanitizeMarkName(headers) ?? null) : null;
 }
 //@ chunk-e6aww6q8.js:1560821-1561242 placement
 /**
  * 把响应 Content-Type 归类为 none、json、event-stream、html、text、xml、aws-eventstream 或 other。
  */
-function contentTypeKind(e) {
-  let n = e ? firstLineOf(e, ";").trim().toLowerCase() : "";
-  switch (n) {
+function contentTypeKind(contentType) {
+  let base = contentType ? firstLineOf(contentType, ";").trim().toLowerCase() : "";
+  switch (base) {
     case "":
       return "none";
     case "application/json":
@@ -81,7 +82,7 @@ function contentTypeKind(e) {
     case "application/vnd.amazon.eventstream":
       return "aws-eventstream";
     default:
-      return n.endsWith("+json") ? "json" : "other";
+      return base.endsWith("+json") ? "json" : "other";
   }
 }
 //@ chunk-e6aww6q8.js:1561242-1561807 placement
@@ -109,10 +110,10 @@ var PROXY_VENDOR_NAMES = [
   ["python", /uvicorn|gunicorn|hypercorn/],
 ];
 //@ chunk-e6aww6q8.js:1561807-1561915 placement
-function serverKind(e) {
-  if (!e) return "absent";
-  let lower = e.toLowerCase();
-  return PROXY_VENDOR_NAMES.find(([, r]) => r.test(lower))?.[0] ?? "other";
+function serverKind(server) {
+  if (!server) return "absent";
+  let lower = server.toLowerCase();
+  return PROXY_VENDOR_NAMES.find(([, pattern]) => pattern.test(lower))?.[0] ?? "other";
 }
 //@ chunk-e6aww6q8.js:1561915-1563801 placement
 /**
@@ -176,107 +177,111 @@ var APIGEE_FLOW_NAMES = [
   "scripts",
 ];
 //@ chunk-e6aww6q8.js:1563801-1563901 placement
-function apigeeFaultSource(e) {
-  if (!e) return null;
-  let lower = e.trim().toLowerCase();
-  return PROXY_ERROR_SIGNATURES.find((r) => r === lower) ?? "other";
+function apigeeFaultSource(server) {
+  if (!server) return null;
+  let lower = server.trim().toLowerCase();
+  return PROXY_ERROR_SIGNATURES.find((signature) => signature === lower) ?? "other";
 }
 //@ chunk-e6aww6q8.js:1563901-1564056 placement
-function apigeeFaultCode(e) {
-  if (!e) return null;
-  let trimmed = e.trim();
-  let found = APIGEE_FAULT_NAMES.find((y) => y === trimmed);
+function apigeeFaultCode(server) {
+  if (!server) return null;
+  let trimmed = server.trim();
+  let found = APIGEE_FAULT_NAMES.find((name) => name === trimmed);
   if (found) return found;
-  let s = firstLineOf(trimmed, ".");
-  let found_2 = APIGEE_FLOW_NAMES.find((y) => y === s);
+  let firstPart = firstLineOf(trimmed, ".");
+  let found_2 = APIGEE_FLOW_NAMES.find((name) => name === firstPart);
   return found_2 ? `${found_2}.other` : "other";
 }
 //@ chunk-e6aww6q8.js:1564056-1564138 placement
 var VERSION_STRING_RE = /^\d{1,3}\.\d{1,4}\.\d{1,4}(?:(?:a|b|rc)\d{1,4}|\.(?:dev|post)\d{1,4})?$/;
 //@ chunk-e6aww6q8.js:1564138-1564226 placement
-function gatewayVersion(e) {
-  if (typeof e !== "string") return null;
-  return VERSION_STRING_RE.test(e) ? e : "nonconforming";
+function gatewayVersion(headers) {
+  if (typeof headers !== "string") return null;
+  return VERSION_STRING_RE.test(headers) ? headers : "nonconforming";
 }
 //@ chunk-e6aww6q8.js:1564226-1564824 placement
 /**
  * 诊断用的缓存/代理响应头名单与网关头前缀（anthropic-、x-amz-、x-goog- 等），用于识别中间层。
  */
-var CACHE_HEADER_NAMES = new Set([
-  "via",
-  "x-cache",
-  "x-cache-hits",
-  "x-served-by",
-  "x-varnish",
-  "age",
-  "cf-ray",
-  "cf-cache-status",
-  "x-request-id",
-  "x-correlation-id",
-  "x-forwarded-for",
-  "x-powered-by",
-  "x-squid-error",
-  "proxy-authenticate",
-  "proxy-connection",
-  "www-authenticate",
-  "server-timing",
-  "retry-after",
-  "x-should-retry",
-  "content-encoding",
-  "transfer-encoding",
-  "x-accel-buffering",
-  "traceparent",
-  "x-cloud-trace-context",
-  "cf-mitigated",
-  "x-iinfo",
-]);
-var GATEWAY_HEADER_PREFIXES = [
-  "anthropic-",
-  "x-amz-",
-  "x-amzn-",
-  "x-ms-",
-  "x-azure-",
-  "x-goog-",
-  "x-envoy-",
-  "x-apigee-",
-  "x-akamai-",
-  "x-zscaler-",
-  "x-databricks-",
-  ...GATEWAY_FINGERPRINT_ENTRIES.flatMap(([, { headerPrefixes: e }]) => e ?? []),
-];
+var CACHE_HEADER_NAMES; // deferred: uses GATEWAY_FINGERPRINTS (./logging.js) of its import cycle while loading; runs once the cycle is complete
+var GATEWAY_HEADER_PREFIXES;
+deferInit("chunk-e6aww6q8.js:1564226", () => {
+  CACHE_HEADER_NAMES = new Set([
+    "via",
+    "x-cache",
+    "x-cache-hits",
+    "x-served-by",
+    "x-varnish",
+    "age",
+    "cf-ray",
+    "cf-cache-status",
+    "x-request-id",
+    "x-correlation-id",
+    "x-forwarded-for",
+    "x-powered-by",
+    "x-squid-error",
+    "proxy-authenticate",
+    "proxy-connection",
+    "www-authenticate",
+    "server-timing",
+    "retry-after",
+    "x-should-retry",
+    "content-encoding",
+    "transfer-encoding",
+    "x-accel-buffering",
+    "traceparent",
+    "x-cloud-trace-context",
+    "cf-mitigated",
+    "x-iinfo",
+  ]);
+  GATEWAY_HEADER_PREFIXES = [
+    "anthropic-",
+    "x-amz-",
+    "x-amzn-",
+    "x-ms-",
+    "x-azure-",
+    "x-goog-",
+    "x-envoy-",
+    "x-apigee-",
+    "x-akamai-",
+    "x-zscaler-",
+    "x-databricks-",
+    ...GATEWAY_FINGERPRINT_ENTRIES.flatMap(([, { headerPrefixes: prefixes }]) => prefixes ?? []),
+  ];
+});
 //@ chunk-e6aww6q8.js:1564824-1565509 placement
 /**
  * 从响应状态与头部提取诊断信息：内容类型、长度、request-id 是否为 Anthropic、server 厂商、Apigee 故障来源/代码、中间代理头、识别出的网关及版本。
  */
 function describeResponseHeaders(status, headers) {
-  let r = new Set();
-  headers?.forEach((header, q) => {
-    if (CACHE_HEADER_NAMES.has(q)) {
-      r.add(q);
+  let seen = new Set();
+  headers?.forEach((header, name) => {
+    if (CACHE_HEADER_NAMES.has(name)) {
+      seen.add(name);
       return;
     }
-    let found = GATEWAY_HEADER_PREFIXES.find((Se) => q.startsWith(Se));
-    if (found) r.add(found + "*");
+    let found = GATEWAY_HEADER_PREFIXES.find((prefix) => name.startsWith(prefix));
+    if (found) seen.add(found + "*");
   });
-  let s = Number.parseInt(headers?.get("content-length") ?? "", 10);
-  let h = headers?.get("request-id");
-  let y = requestIdFromHeaders(h);
-  let S =
+  let contentLength = Number.parseInt(headers?.get("content-length") ?? "", 10);
+  let requestIdHeader = headers?.get("request-id");
+  let requestId = requestIdFromHeaders(requestIdHeader);
+  let gateway =
     detectGateway({
       headers,
     }) ?? null;
-  let versionHeader = (S ? GATEWAY_FINGERPRINTS[S] : undefined)?.versionHeader;
+  let versionHeader = (gateway ? GATEWAY_FINGERPRINTS[gateway] : undefined)?.versionHeader;
   return {
     status: status ?? null,
     content_type: contentTypeKind(headers?.get("content-type")),
-    content_length: Number.isFinite(s) && s >= 0 ? s : null,
-    request_id: y,
-    request_id_header: y ? "anthropic" : h ? "other" : "absent",
+    content_length: Number.isFinite(contentLength) && contentLength >= 0 ? contentLength : null,
+    request_id: requestId,
+    request_id_header: requestId ? "anthropic" : requestIdHeader ? "other" : "absent",
     server: serverKind(headers?.get("server")),
     apigee_fault_source: apigeeFaultSource(headers?.get("x-apigee-fault-source")),
     apigee_fault_code: apigeeFaultCode(headers?.get("x-apigee-fault-code")),
-    intermediary_headers: [...r].sort(),
-    gateway: S,
+    intermediary_headers: [...seen].sort(),
+    gateway,
     gateway_version: gatewayVersion(versionHeader ? headers?.get(versionHeader) : undefined),
   };
 }
@@ -286,17 +291,17 @@ var SSE_FIELD_RE = /^(event|data|id|retry)?:/;
 /**
  * 判断响应体的形态：空、事件流、HTML/XML、像 JSON 的文本、非 Message 的 JSON 或其他。
  */
-function bodyKind(e) {
-  if (e === null || e === undefined) return "empty";
-  if (typeof e === "string") {
-    let sliced = e.trimStart().slice(0, 16);
+function bodyKind(body) {
+  if (body === null || body === undefined) return "empty";
+  if (typeof body === "string") {
+    let sliced = body.trimStart().slice(0, 16);
     if (sliced.length === 0) return "empty";
     if (SSE_FIELD_RE.test(sliced)) return "event-stream";
     if (sliced.startsWith("<")) return sliced.startsWith("<?xml") ? "xml" : "html";
     if (sliced.startsWith("{") || sliced.startsWith("[")) return "json-text";
     return "other-text";
   }
-  return typeof e === "object" ? "json-not-message" : "other";
+  return typeof body === "object" ? "json-not-message" : "other";
 }
 //@ chunk-e6aww6q8.js:1565914-1566036 placement
 var STREAM_EVENT_TYPES = [
@@ -308,15 +313,15 @@ var STREAM_EVENT_TYPES = [
   "content_block_stop",
 ];
 //@ chunk-e6aww6q8.js:1566036-1566089 placement
-function normalizeStreamEventType(e) {
-  return STREAM_EVENT_TYPES.find((n) => n === e) ?? "other";
+function normalizeStreamEventType(type) {
+  return STREAM_EVENT_TYPES.find((eventType) => eventType === type) ?? "other";
 }
 //@ chunk-e6aww6q8.js:1566089-1566683 placement
 function classifyApiErrorKind(error, errorKind, observedResponse) {
   let connectionErrorDetails = extractConnectionErrorDetails(error);
-  let h = error instanceof APIError ? error : undefined;
-  let status = h?.status ?? observedResponse?.status;
-  let headers = h?.headers ?? observedResponse?.headers;
+  let apiError = error instanceof APIError ? error : undefined;
+  let status = apiError?.status ?? observedResponse?.status;
+  let headers = apiError?.headers ?? observedResponse?.headers;
   return {
     error_kind: errorKind,
     error_class:
@@ -326,14 +331,14 @@ function classifyApiErrorKind(error, errorKind, observedResponse) {
           ? "connection_timeout"
           : error instanceof APIConnectionError
             ? "connection_error"
-            : h
+            : apiError
               ? "api_error"
               : error instanceof Error
                 ? "error"
                 : "non_error",
     error_name: sanitizeErrorName_2(error) ?? null,
     cause_name: error instanceof Error ? (sanitizeErrorName_2(error.cause) ?? null) : null,
-    api_error_type: h?.type ? normalizeApiErrorTypeDiag(h.type) : null,
+    api_error_type: apiError?.type ? normalizeApiErrorTypeDiag(apiError.type) : null,
     connection_code: sanitizedConnectionCodeForTelemetry(connectionErrorDetails?.code) ?? null,
     ssl_error: connectionErrorDetails?.isSSLError ?? false,
     ...(error instanceof UnexpectedApiResponseError
@@ -353,13 +358,13 @@ function classifyApiErrorKind(error, errorKind, observedResponse) {
  */
 function connectionSetupFacts() {
   let apiProvider = getAPIProvider();
-  let n = providerBaseUrl(apiProvider);
+  let provider = providerBaseUrl(apiProvider);
   return {
     provider: apiProvider,
-    base_url: !n ? "default" : isAnthropicHost(n) ? "anthropic" : "custom",
+    base_url: !provider ? "default" : isAnthropicHost(provider) ? "anthropic" : "custom",
     base_url_gateway:
       detectGateway({
-        baseUrl: n,
+        baseUrl: provider,
       }) ?? null,
     https_proxy: getProxyUrl() !== undefined,
     custom_headers: Boolean(env.ANTHROPIC_CUSTOM_HEADERS),
@@ -371,25 +376,25 @@ function connectionSetupFacts() {
 /**
  * 从错误或响应头提取诊断字段：状态码、是否带 request-id 头、服务器类型、代理与额外 CA。
  */
-function responseDiagnosticFields(e, n) {
+function responseDiagnosticFields(error, response) {
   try {
-    let r = e instanceof APIError ? e : undefined;
-    let headers = r?.headers ?? n?.headers;
-    let h =
-      e instanceof UnexpectedApiResponseError
-        ? e.response
+    let apiError = error instanceof APIError ? error : undefined;
+    let headers = apiError?.headers ?? response?.headers;
+    let diagnostic =
+      error instanceof UnexpectedApiResponseError
+        ? error.response
         : headers
-          ? describeResponseHeaders(r?.status ?? n?.status, headers)
+          ? describeResponseHeaders(apiError?.status ?? response?.status, headers)
           : undefined;
-    let y = connectionSetupFacts();
+    let route = connectionSetupFacts();
     return {
-      ...(typeof h?.status === "number" && {
-        response_status: h.status,
+      ...(typeof diagnostic?.status === "number" && {
+        response_status: diagnostic.status,
       }),
-      response_request_id_header: fromEnum(h?.request_id_header ?? "no_response"),
-      response_server: fromEnum(h?.server ?? "no_response"),
-      https_proxy: y.https_proxy,
-      extra_ca_certs: y.extra_ca_certs,
+      response_request_id_header: fromEnum(diagnostic?.request_id_header ?? "no_response"),
+      response_server: fromEnum(diagnostic?.server ?? "no_response"),
+      https_proxy: route.https_proxy,
+      extra_ca_certs: route.extra_ca_certs,
     };
   } catch (error) {
     logError(error);
@@ -440,38 +445,43 @@ var BODY_KIND_DESCRIPTIONS = {
 /**
  * 描述异常响应体（内容类型、大小、是否为空），用于错误日志。
  */
-function describeResponseBody({ data: e, status, headers, originating }) {
+function describeResponseBody({ data: body, status, headers, originating }) {
   try {
-    let h = describeResponseHeaders(status, headers);
-    let y = bodyKind(e);
-    let S = typeof e === "string" ? Buffer.byteLength(e, "utf8") : y === "empty" ? 0 : h.content_length;
+    let responseHeaders = describeResponseHeaders(status, headers);
+    let kind = bodyKind(body);
+    let detail =
+      typeof body === "string"
+        ? Buffer.byteLength(body, "utf8")
+        : kind === "empty"
+          ? 0
+          : responseHeaders.content_length;
     let joined = [
-      ` Response: content-type ${h.content_type}`,
-      BODY_KIND_DESCRIPTIONS[y],
-      S === null ? "size unknown" : `${S} bytes`,
-      `request-id ${h.request_id ?? (h.request_id_header === "other" ? "present but not Anthropic-issued" : "absent")}`,
-      ...(h.server === "absent" ? [] : [`server ${h.server}`]),
-      ...(h.intermediary_headers.length > 0
-        ? [`intermediary headers ${h.intermediary_headers.join(" ")}`]
+      ` Response: content-type ${responseHeaders.content_type}`,
+      BODY_KIND_DESCRIPTIONS[kind],
+      detail === null ? "size unknown" : `${detail} bytes`,
+      `request-id ${responseHeaders.request_id ?? (responseHeaders.request_id_header === "other" ? "present but not Anthropic-issued" : "absent")}`,
+      ...(responseHeaders.server === "absent" ? [] : [`server ${responseHeaders.server}`]),
+      ...(responseHeaders.intermediary_headers.length > 0
+        ? [`intermediary headers ${responseHeaders.intermediary_headers.join(" ")}`]
         : []),
     ].join(", ");
-    let L = originating
+    let errorNames = originating
       ? [originating.cause, originating.errorName, originating.connectionCode]
-          .filter((Se) => Se && Se !== "Error")
+          .filter((name) => name && name !== "Error")
           .join(", ")
       : "";
     let stall = originating?.stall;
-    let q = stall
+    let stallInfo = stall
       ? `; ${[`${stall.events_received} stream ${plural(stall.events_received, "event")} received`, ...(stall.ms_to_first_event === null ? [] : [`first after ${stall.ms_to_first_event} ms`]), ...(stall.ms_since_last_event === null ? [] : [`none in the final ${stall.ms_since_last_event} ms`])].join(", ")}`
       : "";
-    let Z = originating
-      ? ` This was the non-streaming retry of streaming request ${originating.requestId ?? "(no Anthropic request-id)"}, which failed with: ${L}${q}.`
+    let names = originating
+      ? ` This was the non-streaming retry of streaming request ${originating.requestId ?? "(no Anthropic request-id)"}, which failed with: ${errorNames}${stallInfo}.`
       : "";
     return {
-      summary: `${joined}.${Z}`,
-      bodyKind: y,
-      bodyBytes: S,
-      response: h,
+      summary: `${joined}.${names}`,
+      bodyKind: kind,
+      bodyBytes: detail,
+      response: responseHeaders,
     };
   } catch (error) {
     logForDebugging(`unexpected-response description failed: ${errorMessage(error)}`, {
@@ -489,28 +499,33 @@ function describeResponseBody({ data: e, status, headers, originating }) {
 /**
  * API 返回空或格式错误响应时的错误类，记录响应体形态、字节数和响应摘要，提示检查是否有代理或网关拦截。
  */
-class UnexpectedApiResponseError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  name = "UnexpectedApiResponseError";
-  bodyKind;
-  bodyBytes;
-  response;
-  constructor(e) {
-    let n = describeResponseBody(e);
-    super(
-      `API returned an empty or malformed response (HTTP ${e.status ?? "unknown"}) \u2014 check for a proxy or gateway intercepting the request.${n.summary}`,
-      "API returned an empty or malformed response",
-    );
-    this.bodyKind = n.bodyKind;
-    this.bodyBytes = n.bodyBytes;
-    this.response = n.response;
-  }
-}
+let UnexpectedApiResponseError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1569479", () => {
+  UnexpectedApiResponseError = class UnexpectedApiResponseError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    name = "UnexpectedApiResponseError";
+    bodyKind;
+    bodyBytes;
+    response;
+    constructor(response) {
+      let description = describeResponseBody(response);
+      super(
+        `API returned an empty or malformed response (HTTP ${response.status ?? "unknown"}) \u2014 check for a proxy or gateway intercepting the request.${description.summary}`,
+        "API returned an empty or malformed response",
+      );
+      this.bodyKind = description.bodyKind;
+      this.bodyBytes = description.bodyBytes;
+      this.response = description.response;
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:1569869-1569898 placement
-function alwaysFalseResponseDiag(extraBodyParams, model, r) {
+function alwaysFalseResponseDiag(extraBodyParams, model, provider) {
   return false;
 }
 //@ chunk-e6aww6q8.js:1569898-1569923 placement
-function alwaysFalseB(e) {
+function alwaysFalseB(error) {
   return false;
 }
 //@ chunk-e6aww6q8.js:1569923-1569981 placement
@@ -526,7 +541,10 @@ class RefusalSettingsState {
   changed = createSignal();
 }
 //@ chunk-e6aww6q8.js:1570047-1570074 placement
-var refusalSettingsSlot = new HostScoped(() => new RefusalSettingsState());
+var refusalSettingsSlot; // deferred: uses RefusalSettingsState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1570047", () => {
+  refusalSettingsSlot = new HostScoped(() => new RefusalSettingsState());
+});
 //@ chunk-e6aww6q8.js:1570074-1570113 placement
 function refusalSettingsState() {
   return refusalSettingsSlot.of(getRootSession().host);
@@ -539,19 +557,23 @@ function alwaysFalseC() {
 /**
  * 导出函数 `onRefusalSettingsChange`：参数 e，返回 () => {}; return l5o().changed.subscribe(e)。
  */
-function onRefusalSettingsChange(e) {
+function onRefusalSettingsChange(settings) {
   if (!alwaysFalseC()) return () => {};
-  return refusalSettingsState().changed.subscribe(e);
+  return refusalSettingsState().changed.subscribe(settings);
 }
 //@ chunk-e6aww6q8.js:1570210-1570252 placement
-var OTHER = "other";
-var SAFEGUARD_CATEGORY_SET = new Set([...SAFEGUARD_CATEGORIES_ALIAS, OTHER]);
+var OTHER; // deferred: uses SAFEGUARD_CATEGORIES of its import cycle while loading; runs once the cycle is complete
+var SAFEGUARD_CATEGORY_SET;
+deferInit("chunk-e6aww6q8.js:1570210", () => {
+  OTHER = "other";
+  SAFEGUARD_CATEGORY_SET = new Set([...SAFEGUARD_CATEGORIES_ALIAS, OTHER]);
+});
 //@ chunk-e6aww6q8.js:1570252-1570283 placement
-function alwaysFalseD(e, providerForModel = getAPIProvider()) {
+function alwaysFalseD(error, providerForModel = getAPIProvider()) {
   return false;
 }
 //@ chunk-e6aww6q8.js:1570283-1570312 placement
-function alwaysFalseE(error, n, r) {
+function alwaysFalseE(error, baseError, retryDirective) {
   return false;
 }
 //@ chunk-e6aww6q8.js:1570312-1570337 placement

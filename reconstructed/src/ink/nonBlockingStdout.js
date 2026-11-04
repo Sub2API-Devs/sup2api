@@ -19,35 +19,43 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { logForDebugging } from "../utils/debug.js";
 import { logError } from "../utils/log.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-7t3j7ybe.js:635-722 placement = RESET (1)
-var MAX_BUFFER_BYTES = 4194304;
-var MAX_ITEMS = 25;
-var RESET_BYTES = Buffer.from("\x1B[0m");
-var cache = new WeakMap();
-var pendingSet = identity(new Set(), (e) => e.clear());
+var MAX_BUFFER_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_ITEMS;
+var RESET_BYTES;
+var cache;
+var pendingSet;
+deferInit("chunk-7t3j7ybe.js:635", () => {
+  MAX_BUFFER_BYTES = 4194304;
+  MAX_ITEMS = 25;
+  RESET_BYTES = Buffer.from("\x1B[0m");
+  cache = new WeakMap();
+  pendingSet = identity(new Set(), (pendingSet) => pendingSet.clear());
+});
 //@ chunk-7t3j7ybe.js:722-1279 placement
 /**
  * 为 stdout 找到可独立设置 O_NONBLOCK 的 fd（linux/wsl 用 /proc/self/fd，macOS 用 ttyname）。
  */
-function openNonBlockingStdoutFd(e = 1) {
-  if (!(e === 1 ? process.stdout.isTTY : isatty(e)))
+function openNonBlockingStdoutFd(fd = 1) {
+  if (!(fd === 1 ? process.stdout.isTTY : isatty(fd)))
     return {
       reason: "not_a_tty",
     };
-  let n;
+  let ttyPath;
   switch (getPlatform()) {
     case "linux":
     case "wsl":
-      n = `/proc/self/fd/${e}`;
+      ttyPath = `/proc/self/fd/${fd}`;
       break;
     case "macos": {
-      let i = ttyNameOf(e);
-      if (i === undefined)
+      let ttyName = ttyNameOf(fd);
+      if (ttyName === undefined)
         return {
           reason: "ttyname_unavailable",
         };
-      n = i;
+      ttyPath = ttyName;
       break;
     }
     default:
@@ -55,52 +63,55 @@ function openNonBlockingStdoutFd(e = 1) {
         reason: "unsupported_platform",
       };
   }
-  let o;
+  let openedFd;
   try {
-    o = openSync(n, constants.O_WRONLY | constants.O_NONBLOCK | constants.O_NOCTTY | READ_LIMITS);
+    openedFd = openSync(
+      ttyPath,
+      constants.O_WRONLY | constants.O_NONBLOCK | constants.O_NOCTTY | READ_LIMITS,
+    );
   } catch (error) {
     return {
       reason: "open_failed",
       errno: getErrnoCode(error),
     };
   }
-  let r = {
+  let failure = {
     reason: "not_same_tty",
   };
   try {
-    let i = fstatSync(o);
-    let u = fstatSync(e);
-    if (i.rdev === u.rdev && i.ino === u.ino)
+    let openedStat = fstatSync(openedFd);
+    let targetStat = fstatSync(fd);
+    if (openedStat.rdev === targetStat.rdev && openedStat.ino === targetStat.ino)
       return {
-        fd: o,
+        fd: openedFd,
       };
   } catch (error) {
-    r = {
+    failure = {
       reason: "fstat_failed",
       errno: getErrnoCode(error),
     };
   }
   try {
-    closeSync(o);
+    closeSync(openedFd);
   } catch {}
-  return r;
+  return failure;
 }
 //@ chunk-7t3j7ybe.js:1279-1562 placement
-function logNonBlockingStdoutResult(e, n, o) {
+function logNonBlockingStdoutResult(result, reason, errno) {
   logEvent("tengu_nonblocking_stdout", {
-    result: fromEnum(e),
-    reason: n === undefined ? undefined : fromEnum(n),
-    errno: o,
+    result: fromEnum(result),
+    reason: reason === undefined ? undefined : fromEnum(reason),
+    errno,
   });
-  if (e === "installed") logFeatureOk("terminal_nonblocking_stdout");
-  else if (n !== "not_a_tty" && n !== "unsupported_platform")
+  if (result === "installed") logFeatureOk("terminal_nonblocking_stdout");
+  else if (reason !== "not_a_tty" && reason !== "unsupported_platform")
     logFeatureSad(
       "terminal_nonblocking_stdout",
-      n ?? "write_failed",
-      o === undefined
+      reason ?? "write_failed",
+      errno === undefined
         ? undefined
         : {
-            errno: o,
+            errno,
           },
     );
 }
@@ -108,9 +119,9 @@ function logNonBlockingStdoutResult(e, n, o) {
 /**
  * 取流对应的 tty 名称
  */
-function ttyNameOf(e) {
+function ttyNameOf(fd) {
   try {
-    return Bun.ant.ttyName(e) ?? undefined;
+    return Bun.ant.ttyName(fd) ?? undefined;
   } catch {
     return;
   }
@@ -119,23 +130,29 @@ function ttyNameOf(e) {
 /**
  * 安装非阻塞 stdout 写入：终端停读时排队并在超限时丢弃，恢复后重绘。
  */
-function installNonBlockingStdout(onEpisodeEnd, n = openNonBlockingStdoutFd) {
-  let o = cache.get(process.stdout);
-  if (o?.installedWrite !== undefined) {
-    o.onEpisodeEnd = onEpisodeEnd;
-    return nonBlockingStdoutHandle(o);
+function installNonBlockingStdout(onEpisodeEnd, openFd = openNonBlockingStdoutFd) {
+  let existing = cache.get(process.stdout);
+  if (existing?.installedWrite !== undefined) {
+    existing.onEpisodeEnd = onEpisodeEnd;
+    return nonBlockingStdoutHandle(existing);
   }
-  let r = n();
-  if (r.fd === undefined) {
-    logForDebugging(`nonBlockingStdout: not installed (${r.reason}${r.errno ? `, ${r.errno}` : ""})`);
-    if (!pendingSet.has(r.reason)) {
-      pendingSet.add(r.reason);
-      logNonBlockingStdoutResult("skipped", r.reason, sanitizeErrnoTokenForTelemetry(r.errno));
+  let openResult = openFd();
+  if (openResult.fd === undefined) {
+    logForDebugging(
+      `nonBlockingStdout: not installed (${openResult.reason}${openResult.errno ? `, ${openResult.errno}` : ""})`,
+    );
+    if (!pendingSet.has(openResult.reason)) {
+      pendingSet.add(openResult.reason);
+      logNonBlockingStdoutResult(
+        "skipped",
+        openResult.reason,
+        sanitizeErrnoTokenForTelemetry(openResult.errno),
+      );
     }
     return null;
   }
-  let i = {
-    fd: r.fd,
+  let state = {
+    fd: openResult.fd,
     originalWrite: process.stdout.write,
     installedWrite: undefined,
     queue: [],
@@ -149,31 +166,32 @@ function installNonBlockingStdout(onEpisodeEnd, n = openNonBlockingStdoutFd) {
       droppedBytes: 0,
     },
     onEpisodeEnd,
-    onExit: () => flushStdoutQueue(i),
+    onExit: () => flushStdoutQueue(state),
   };
-  let u = (s, p, M) => {
-    let q = typeof p === "string" ? p : undefined;
-    let E = typeof p === "function" ? p : M;
-    if (i.installedWrite === undefined) return i.originalWrite.call(process.stdout, s, q, E);
-    writeNonBlocking(i, typeof s === "string" ? Buffer.from(s, q) : Buffer.from(s));
-    E?.();
+  let write = (chunk, encodingOrCallback, callback) => {
+    let encoding = typeof encodingOrCallback === "string" ? encodingOrCallback : undefined;
+    let done = typeof encodingOrCallback === "function" ? encodingOrCallback : callback;
+    if (state.installedWrite === undefined)
+      return state.originalWrite.call(process.stdout, chunk, encoding, done);
+    writeNonBlocking(state, typeof chunk === "string" ? Buffer.from(chunk, encoding) : Buffer.from(chunk));
+    done?.();
     return true;
   };
-  i.installedWrite = u;
-  process.stdout.write = u;
-  cache.set(process.stdout, i);
-  process.on("exit", i.onExit);
+  state.installedWrite = write;
+  process.stdout.write = write;
+  cache.set(process.stdout, state);
+  process.on("exit", state.onExit);
   logForDebugging("nonBlockingStdout: active");
   logNonBlockingStdoutResult("installed");
-  return nonBlockingStdoutHandle(i);
+  return nonBlockingStdoutHandle(state);
 }
 //@ chunk-7t3j7ybe.js:2524-2647 placement
-function nonBlockingStdoutHandle(e) {
+function nonBlockingStdoutHandle(state) {
   return {
-    flush: () => flushStdoutQueue(e),
-    restore: () => uninstallNonBlockingStdout(e),
-    isActive: () => e.installedWrite !== undefined,
-    queuedBytes: () => e.queuedBytes,
+    flush: () => flushStdoutQueue(state),
+    restore: () => uninstallNonBlockingStdout(state),
+    isActive: () => state.installedWrite !== undefined,
+    queuedBytes: () => state.queuedBytes,
   };
 }
 //@ chunk-7t3j7ybe.js:2647-2717 placement
@@ -186,113 +204,114 @@ function isNonBlockingStdoutInstalled() {
 }
 //@ chunk-7t3j7ybe.js:2786-2864 placement
 function pauseNonBlockingStdout() {
-  let e = cache.get(process.stdout);
-  if (e?.installedWrite !== undefined) uninstallNonBlockingStdout(e);
+  let existing = cache.get(process.stdout);
+  if (existing?.installedWrite !== undefined) uninstallNonBlockingStdout(existing);
 }
 //@ chunk-7t3j7ybe.js:2864-2942 placement
 function resumeNonBlockingStdout() {
-  let e = cache.get(process.stdout);
-  if (e?.installedWrite !== undefined) flushStdoutQueue(e);
+  let existing = cache.get(process.stdout);
+  if (existing?.installedWrite !== undefined) flushStdoutQueue(existing);
 }
 //@ chunk-7t3j7ybe.js:2942-3022 placement
 /**
  * 同步写；EAGAIN 时按 0 处理
  */
-function writeSyncToleratingEagain(e, n) {
+function writeSyncToleratingEagain(fd, buffer) {
   try {
-    return writeSync(e, n);
+    return writeSync(fd, buffer);
   } catch (error) {
     if (getErrnoCode(error) === "EAGAIN") return 0;
     throw error;
   }
 }
 //@ chunk-7t3j7ybe.js:3022-3619 placement
-function writeNonBlocking(e, n) {
-  if (n.length === 0) return;
-  if (e.queue.length === 0) {
-    let o;
+function writeNonBlocking(state, buffer) {
+  if (buffer.length === 0) return;
+  if (state.queue.length === 0) {
+    let written;
     try {
-      o = writeSyncToleratingEagain(e.fd, n);
+      written = writeSyncToleratingEagain(state.fd, buffer);
     } catch (error) {
-      abandonNonBlockingStdout(e, error);
-      process.stdout.write(n);
+      abandonNonBlockingStdout(state, error);
+      process.stdout.write(buffer);
       return;
     }
-    if (o === n.length) return;
-    e.episode = {
+    if (written === buffer.length) return;
+    state.episode = {
       startedMs: performance.now(),
       peakQueuedBytes: 0,
       droppedBytes: 0,
     };
-    enqueueStdoutChunk(e, n.subarray(o));
-    scheduleStdoutRetry(e, o > 0);
+    enqueueStdoutChunk(state, buffer.subarray(written));
+    scheduleStdoutRetry(state, written > 0);
     return;
   }
-  if (e.dropping) {
-    e.episode.droppedBytes += n.length;
+  if (state.dropping) {
+    state.episode.droppedBytes += buffer.length;
     return;
   }
-  if (e.queuedBytes + n.length > MAX_BUFFER_BYTES) {
-    e.episode.droppedBytes += e.queuedBytes + n.length;
-    e.queue = [];
-    e.queuedBytes = 0;
-    e.dropping = true;
+  if (state.queuedBytes + buffer.length > MAX_BUFFER_BYTES) {
+    state.episode.droppedBytes += state.queuedBytes + buffer.length;
+    state.queue = [];
+    state.queuedBytes = 0;
+    state.dropping = true;
     logForDebugging(
-      `nonBlockingStdout: terminal stopped reading; dropped ${e.episode.droppedBytes} queued bytes, will repaint when it resumes`,
+      `nonBlockingStdout: terminal stopped reading; dropped ${state.episode.droppedBytes} queued bytes, will repaint when it resumes`,
       {
         level: "warn",
       },
     );
-    enqueueStdoutChunk(e, RESET_BYTES);
+    enqueueStdoutChunk(state, RESET_BYTES);
     return;
   }
-  enqueueStdoutChunk(e, n);
+  enqueueStdoutChunk(state, buffer);
 }
 //@ chunk-7t3j7ybe.js:3619-3758 placement
-function enqueueStdoutChunk(e, n) {
-  e.queue.push(n);
-  e.queuedBytes += n.length;
-  if (e.queuedBytes > e.episode.peakQueuedBytes) e.episode.peakQueuedBytes = e.queuedBytes;
+function enqueueStdoutChunk(state, chunk) {
+  state.queue.push(chunk);
+  state.queuedBytes += chunk.length;
+  if (state.queuedBytes > state.episode.peakQueuedBytes) state.episode.peakQueuedBytes = state.queuedBytes;
 }
 //@ chunk-7t3j7ybe.js:3758-3874 placement
-function scheduleStdoutRetry(e, n) {
-  e.retryMs = n ? 0 : Math.min(Math.max(1, e.retryMs * 2), MAX_ITEMS);
-  e.timer = setTimeout(drainStdoutQueue, e.retryMs, e);
-  e.timer.unref();
+function scheduleStdoutRetry(state, hadProgress) {
+  state.retryMs = hadProgress ? 0 : Math.min(Math.max(1, state.retryMs * 2), MAX_ITEMS);
+  state.timer = setTimeout(drainStdoutQueue, state.retryMs, state);
+  state.timer.unref();
 }
 //@ chunk-7t3j7ybe.js:3874-4182 placement
-function drainStdoutQueue(e) {
-  e.timer = undefined;
-  let n = false;
+function drainStdoutQueue(state) {
+  state.timer = undefined;
+  let hadProgress = false;
   try {
-    while (e.queue.length > 0) {
-      if (n && e.queue.length > 1) e.queue = [Buffer.concat(e.queue, e.queuedBytes)];
-      let o = e.queue[0];
-      let r = writeSyncToleratingEagain(e.fd, o);
-      if (r === 0) {
-        scheduleStdoutRetry(e, n);
+    while (state.queue.length > 0) {
+      if (hadProgress && state.queue.length > 1)
+        state.queue = [Buffer.concat(state.queue, state.queuedBytes)];
+      let head = state.queue[0];
+      let written = writeSyncToleratingEagain(state.fd, head);
+      if (written === 0) {
+        scheduleStdoutRetry(state, hadProgress);
         return;
       }
-      n = true;
-      e.queuedBytes -= r;
-      if (r < o.length) e.queue[0] = o.subarray(r);
-      else e.queue.shift();
+      hadProgress = true;
+      state.queuedBytes -= written;
+      if (written < head.length) state.queue[0] = head.subarray(written);
+      else state.queue.shift();
     }
   } catch (error) {
-    abandonNonBlockingStdout(e, error);
+    abandonNonBlockingStdout(state, error);
     return;
   }
-  endStdoutBackpressureEpisode(e, "drain");
+  endStdoutBackpressureEpisode(state, "drain");
 }
 //@ chunk-7t3j7ybe.js:4182-4410 placement
-function endStdoutBackpressureEpisode(e, endedBy) {
-  e.dropping = false;
-  e.retryMs = 0;
+function endStdoutBackpressureEpisode(state, endedBy) {
+  state.dropping = false;
+  state.retryMs = 0;
   try {
-    e.onEpisodeEnd({
-      durationMs: Math.round(performance.now() - e.episode.startedMs),
-      peakQueuedBytes: e.episode.peakQueuedBytes,
-      droppedBytes: e.episode.droppedBytes,
+    state.onEpisodeEnd({
+      durationMs: Math.round(performance.now() - state.episode.startedMs),
+      peakQueuedBytes: state.episode.peakQueuedBytes,
+      droppedBytes: state.episode.droppedBytes,
       endedBy,
     });
   } catch (error) {
@@ -300,42 +319,42 @@ function endStdoutBackpressureEpisode(e, endedBy) {
   }
 }
 //@ chunk-7t3j7ybe.js:4410-4645 placement
-function flushStdoutQueue(e) {
-  if (e.timer !== undefined) {
-    clearTimeout(e.timer);
-    e.timer = undefined;
+function flushStdoutQueue(state) {
+  if (state.timer !== undefined) {
+    clearTimeout(state.timer);
+    state.timer = undefined;
   }
-  if (e.queue.length === 0) return;
-  let queue = e.queue;
-  e.queue = [];
-  e.queuedBytes = 0;
+  if (state.queue.length === 0) return;
+  let queue = state.queue;
+  state.queue = [];
+  state.queuedBytes = 0;
   try {
-    for (let o of queue) e.originalWrite.call(process.stdout, o);
+    for (let chunk of queue) state.originalWrite.call(process.stdout, chunk);
   } catch (error) {
-    abandonNonBlockingStdout(e, error);
+    abandonNonBlockingStdout(state, error);
     return;
   }
-  endStdoutBackpressureEpisode(e, "flush");
+  endStdoutBackpressureEpisode(state, "flush");
 }
 //@ chunk-7t3j7ybe.js:4645-4765 placement
-function abandonNonBlockingStdout(e, error) {
+function abandonNonBlockingStdout(state, error) {
   logForDebugging(`nonBlockingStdout: uninstalling (${error})`);
-  e.queue = [];
-  e.queuedBytes = 0;
-  uninstallNonBlockingStdout(e);
+  state.queue = [];
+  state.queuedBytes = 0;
+  uninstallNonBlockingStdout(state);
   logNonBlockingStdoutResult("abandoned", undefined, sanitizeErrnoForTelemetry(error));
 }
 //@ chunk-7t3j7ybe.js:4765-4997 placement
-function uninstallNonBlockingStdout(e) {
-  if (e.installedWrite === undefined) return;
-  if (process.stdout.write === e.installedWrite) process.stdout.write = e.originalWrite;
-  e.installedWrite = undefined;
+function uninstallNonBlockingStdout(state) {
+  if (state.installedWrite === undefined) return;
+  if (process.stdout.write === state.installedWrite) process.stdout.write = state.originalWrite;
+  state.installedWrite = undefined;
   cache.delete(process.stdout);
-  process.off("exit", e.onExit);
+  process.off("exit", state.onExit);
   try {
-    closeSync(e.fd);
+    closeSync(state.fd);
   } catch {}
-  flushStdoutQueue(e);
+  flushStdoutQueue(state);
 }
 export {
   isNonBlockingStdoutInstalled,

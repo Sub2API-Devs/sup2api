@@ -54,8 +54,8 @@ var TENGU_QUIET_HOPCROFT = "tengu_quiet_hopcroft";
  */
 function isQuietHopcroftGateOn() {
   try {
-    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_QUIET_HOPCROFT, false);
-    return !(e === true && source === "payload" && !hasGrowthBookUsedNonDefaultHost());
+    let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_QUIET_HOPCROFT, false);
+    return !(value === true && source === "payload" && !hasGrowthBookUsedNonDefaultHost());
   } catch {
     return true;
   }
@@ -75,8 +75,8 @@ function isVastPlatypusOn() {
 /**
  * 判断事件是否为受保护的钩子事件且闸门开启。
  */
-function isGuardedHookEvent(e) {
-  return GUARD_HOOK_EVENTS.has(e) && isQuietHopcroftGateOn();
+function isGuardedHookEvent(hookEvent) {
+  return GUARD_HOOK_EVENTS.has(hookEvent) && isQuietHopcroftGateOn();
 }
 //@ chunk-e6aww6q8.js:875281-875339 placement
 /**
@@ -86,33 +86,33 @@ function hookInputSizeLimit() {
   return Math.floor(constants_11.MAX_STRING_LENGTH / 2);
 }
 //@ chunk-e6aww6q8.js:875339-875508 placement
-function blockingErrorResult(hookEvent, command, r) {
+function blockingErrorResult(hookEvent, command, message) {
   if (!isGuardedHookEvent(hookEvent)) return;
   return {
     blockingError: {
-      blockingError: r,
+      blockingError: message,
       command,
     },
     ...(hookEvent === "PermissionRequest" && {
       permissionRequestResult: {
         behavior: "deny",
-        message: r,
+        message,
       },
     }),
   };
 }
 //@ chunk-e6aww6q8.js:875508-875807 placement
-function unserializableInputBlockMessage(e) {
-  return `Blocked: this call's input can't be written as JSON, so the hook could not check it. The input is too large, or contains a value that JSON can't represent (such as a BigInt or a circular reference). Retry with a smaller, plain input.${e === undefined ? "" : ` (JSON error: ${errorMessage(e)})`}`;
+function unserializableInputBlockMessage(error) {
+  return `Blocked: this call's input can't be written as JSON, so the hook could not check it. The input is too large, or contains a value that JSON can't represent (such as a BigInt or a circular reference). Retry with a smaller, plain input.${error === undefined ? "" : ` (JSON error: ${errorMessage(error)})`}`;
 }
 //@ chunk-e6aww6q8.js:875807-876240 placement
 /**
  * 生成无法确定适用 hook 时的阻止说明（区分内部故障与其他原因）。
  */
-function hookResolutionFaultMessage(hookEvent, n) {
-  if (mergeClients_3(n))
+function hookResolutionFaultMessage(hookEvent, error) {
+  if (mergeClients_3(error))
     return "Blocked: Claude Code could not work out which hooks apply to this call, because of a fault in Claude Code. Nothing in this session can fix it, and a retry is blocked the same way.";
-  return `Blocked: Claude Code could not work out which hooks apply to this call. Retry with a different input. If every call is blocked, check the ${hookEvent} hooks in /hooks or in your settings.${n === undefined ? "" : ` (${errorMessage(n)})`}`;
+  return `Blocked: Claude Code could not work out which hooks apply to this call. Retry with a different input. If every call is blocked, check the ${hookEvent} hooks in /hooks or in your settings.${error === undefined ? "" : ` (${errorMessage(error)})`}`;
 }
 //@ chunk-e6aww6q8.js:876240-876316 placement
 /**
@@ -124,28 +124,28 @@ function pluginHookRefusal(hookOriginLabel, hookEvent, hook) {
     : undefined;
 }
 //@ chunk-e6aww6q8.js:876316-876906 placement
-function describeKillSwitchedHook(hookEvent, n, r, pluginId, h) {
-  let y = h && !isQuietHopcroftGateOn();
+function describeKillSwitchedHook(hookEvent, hookEvent_2, reason, pluginId, blocks) {
+  let gateOff = blocks && !isQuietHopcroftGateOn();
   logForDebugging(
-    `Hooks: a ${n} hook was not run${y ? ", and does not block: the kill switch has the blocks off" : ""}: ${r}`,
+    `Hooks: a ${hookEvent_2} hook was not run${gateOff ? ", and does not block: the kill switch has the blocks off" : ""}: ${reason}`,
     {
       level: "warn",
     },
   );
-  if (!h || y)
+  if (!blocks || gateOff)
     return {
       outcome: "non_blocking_error",
     };
-  let S = `Blocked, and retrying will not help. ${r}`;
-  let w = pluginId
-    ? `${S}
+  let baseText = `Blocked, and retrying will not help. ${reason}`;
+  let text = pluginId
+    ? `${baseText}
 This hook comes from the ${pluginId} plugin.`
-    : S;
+    : baseText;
   return {
     outcome: "blocking",
     blockingError: {
-      blockingError: w,
-      command: n,
+      blockingError: text,
+      command: hookEvent_2,
       ...promptEndingFields(hookEvent, {
         noVerdict: "remote_runner_refused",
       }),
@@ -153,7 +153,7 @@ This hook comes from the ${pluginId} plugin.`
     ...(hookEvent === "PermissionRequest" && {
       permissionRequestResult: {
         behavior: "deny",
-        message: w,
+        message: text,
       },
     }),
     ...((hookEvent === "UserPromptExpansion" || hookEvent === "UserPromptSubmit") && {

@@ -28,55 +28,57 @@ var TRUNCATED_INSTRUCTIONS_NOTE = `
 /**
  * 截断过长的指令文件内容（尽量在行尾截断），并附上用 Read 从哪一行继续读的提示。
  */
-function truncateInstructionsAtLine(e, path, maxMemoryFileChars) {
-  if (e.length <= maxMemoryFileChars) return e;
-  let index = e.lastIndexOf(
+function truncateInstructionsAtLine(path, path_2, maxMemoryFileChars) {
+  if (path.length <= maxMemoryFileChars) return path;
+  let index = path.lastIndexOf(
     `
 `,
     maxMemoryFileChars,
   );
-  let h = truncateToLength(e, index > 0 ? index : maxMemoryFileChars);
-  let y =
+  let truncated = truncateToLength(path, index > 0 ? index : maxMemoryFileChars);
+  let note =
     index > 0
       ? countCharInString(
-          h,
+          truncated,
           `
 `,
         ) + 2
       : 1;
-  return `${h}${TRUNCATED_INSTRUCTIONS_NOTE} For the rest, call ${FILE_READ_TOOL_NAME} on ${path} with offset=${y} and a limit.`;
+  return `${truncated}${TRUNCATED_INSTRUCTIONS_NOTE} For the rest, call ${FILE_READ_TOOL_NAME} on ${path_2} with offset=${note} and a limit.`;
 }
 //@ chunk-e6aww6q8.js:112248-112351 placement
 /**
  * 判断只含开头部分的指令文件条目是否是给定内容的截断副本。
  */
-function isTruncatedCopyOf(e, n) {
+function isTruncatedCopyOf(truncated, full) {
   return (
-    e.startOnly === true &&
-    n.startsWith(e.content.slice(0, e.content.lastIndexOf(TRUNCATED_INSTRUCTIONS_NOTE)))
+    truncated.startOnly === true &&
+    full.startsWith(truncated.content.slice(0, truncated.content.lastIndexOf(TRUNCATED_INSTRUCTIONS_NOTE)))
   );
 }
 //@ chunk-e6aww6q8.js:112351-112850 placement
 /**
  * 渲染指令文件附件：首次完整列出；变化时说明重读原因、列出改动后的文件并标注已不存在的指令文件。
  */
-function renderInstructionsAttachment(e) {
-  if (!e.changed) return formatMemoryInstruction(e.files);
-  let n = formatInstructionFiles(e.files);
-  let mapped = (e.removed ?? []).map((h) => `Instructions no longer present: ${h}`);
-  let s = e.reason
-    ? `Instruction files were re-read ${describeSessionContextReason(e.reason)}; these differ from their earlier copies`
+function renderInstructionsAttachment(attachment) {
+  if (!attachment.changed) return formatMemoryInstruction(attachment.files);
+  let formattedFiles = formatInstructionFiles(attachment.files);
+  let mapped = (attachment.removed ?? []).map(
+    (removedPath) => `Instructions no longer present: ${removedPath}`,
+  );
+  let reason = attachment.reason
+    ? `Instruction files were re-read ${describeSessionContextReason(attachment.reason)}; these differ from their earlier copies`
     : "These instruction files changed";
   return [
-    ...(n === ""
+    ...(formattedFiles === ""
       ? []
       : [
-          `${s} \u2014 each replaces its earlier copy, and the instructions preamble above still applies:
+          `${reason} \u2014 each replaces its earlier copy, and the instructions preamble above still applies:
 
-${n}`,
+${formattedFiles}`,
         ]),
-    ...(mapped.length > 0 && n === "" && e.reason
-      ? [`Instruction files were re-read ${describeSessionContextReason(e.reason)}.`]
+    ...(mapped.length > 0 && formattedFiles === "" && attachment.reason
+      ? [`Instruction files were re-read ${describeSessionContextReason(attachment.reason)}.`]
       : []),
     ...mapped,
   ].join(`
@@ -87,49 +89,54 @@ ${n}`,
 /**
  * 判断消息是否为指令文件附件。
  */
-function isInstructionsAttachment(e) {
-  return e.type === "attachment" && e.attachment.type === "instructions";
+function isInstructionsAttachment(attachment) {
+  return attachment.type === "attachment" && attachment.attachment.type === "instructions";
 }
 //@ chunk-e6aww6q8.js:112931-113286 placement
 /**
  * 从最后一个完整（非增量）的指令文件附件开始重放之后的增量，得到当前已公告的指令文件（路径 → 文件）。
  */
-function latestInstructionFiles(e) {
-  let lastIndex = e.findLastIndex(
-    (s) =>
-      isInstructionsAttachment(s) &&
-      !s.attachment.changed &&
-      memoryAttachmentSchema().safeParse(s.attachment).success,
+function latestInstructionFiles(messages) {
+  let lastIndex = messages.findLastIndex(
+    (message) =>
+      isInstructionsAttachment(message) &&
+      !message.attachment.changed &&
+      memoryAttachmentSchema().safeParse(message.attachment).success,
   );
   if (lastIndex === -1) return;
-  let r = new Map();
-  for (let s = lastIndex; s < e.length; s++) {
-    let h = e[s];
-    if (!isInstructionsAttachment(h)) continue;
-    let y = memoryAttachmentSchema().safeParse(h.attachment);
-    if (!y.success) continue;
-    for (let file of y.data.files) r.set(file.path, file);
-    for (let S of y.data.removed ?? []) r.delete(S);
+  let files = new Map();
+  for (let index = lastIndex; index < messages.length; index++) {
+    let message = messages[index];
+    if (!isInstructionsAttachment(message)) continue;
+    let parseResult = memoryAttachmentSchema().safeParse(message.attachment);
+    if (!parseResult.success) continue;
+    for (let file of parseResult.data.files) files.set(file.path, file);
+    for (let removedPath of parseResult.data.removed ?? []) files.delete(removedPath);
   }
-  return r;
+  return files;
 }
 //@ chunk-e6aww6q8.js:113286-113636 placement
 /**
  * 对比当前指令文件与已公告的：给出内容/类型/未验证标记变化的文件和被移除的路径；之前未公告时返回全部文件；无变化返回 undefined。
  */
-function diffInstructionFiles(e, n) {
-  if (!n)
-    return e.length === 0
+function diffInstructionFiles(files, previous) {
+  if (!previous)
+    return files.length === 0
       ? undefined
       : {
-          files: e.slice(),
+          files: files.slice(),
         };
-  let filtered = e.filter((y) => {
-    let S = n.get(y.path);
-    return !S || S.content !== y.content || S.type !== y.type || S.unverified !== y.unverified;
+  let filtered = files.filter((file) => {
+    let previousFile = previous.get(file.path);
+    return (
+      !previousFile ||
+      previousFile.content !== file.content ||
+      previousFile.type !== file.type ||
+      previousFile.unverified !== file.unverified
+    );
   });
-  let s = new Set(e.map((y) => y.path));
-  let filtered_2 = [...n.keys()].filter((key) => !s.has(key));
+  let currentPaths = new Set(files.map((file) => file.path));
+  let filtered_2 = [...previous.keys()].filter((key) => !currentPaths.has(key));
   if (filtered.length === 0 && filtered_2.length === 0) return;
   return {
     files: filtered,

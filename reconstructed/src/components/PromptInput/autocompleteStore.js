@@ -10,12 +10,12 @@
  */
 import { createStore } from "../../state/store.js";
 import { hasModuleHookingSite } from "../../plugins/hooksModules/loadedModuleFilters.js";
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import {
   autocompleteWithNoCore,
   normalizeAutocompleteSuggestions,
   currentToken,
-  cXe,
+  COMPOSER_EDIT_ORIGIN,
 } from "../../plugins/functionHooks/sessionEvents.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
@@ -23,117 +23,126 @@ import { applyTextInsertion } from "../../plugins/functionHooks/coreHandlers.js"
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { renderVersions } from "../../plugins/functionHooks/ui/renderInstances.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:542676-542763 placement
-var subscribeOwnAndRows = (h) => (x) => {
-  let D = h.own.subscribe(x);
-  let L = h.rows.subscribe(x);
+var subscribeOwnAndRows = (stores) => (listener) => {
+  let unsubscribeOwn = stores.own.subscribe(listener);
+  let unsubscribeRows = stores.rows.subscribe(listener);
   return () => {
-    D();
-    L();
+    unsubscribeOwn();
+    unsubscribeRows();
   };
 };
 //@ chunk-18hwfzwa.js:542763-542855 placement
-var buildLiveView = (h, x, subscribe) => ({
-  getSnapshot: x.live,
-  getState: x.live,
-  setState: h.own.setState,
+var buildLiveView = (own, rows, subscribe) => ({
+  getSnapshot: rows.live,
+  getState: rows.live,
+  setState: own.own.setState,
   subscribe,
 });
 //@ chunk-18hwfzwa.js:542855-542943 placement
-var createAutocompleteView = (h, x) => ({
-  ...h,
-  ...buildLiveView(h, x, subscribeOwnAndRows(h)),
+var createAutocompleteView = (own, rows) => ({
+  ...own,
+  ...buildLiveView(own, rows, subscribeOwnAndRows(own)),
   drawn: {
-    getSnapshot: x.drawn,
-    subscribe: subscribeOwnAndRows(h),
+    getSnapshot: rows.drawn,
+    subscribe: subscribeOwnAndRows(own),
   },
 });
 //@ chunk-18hwfzwa.js:542943-542958 placement
 var alwaysFalse = () => false;
 //@ chunk-18hwfzwa.js:542958-542983 placement
-var ET = Object.freeze([]);
+var EMPTY_SUGGESTION_ROWS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:542958", () => {
+  EMPTY_SUGGESTION_ROWS = Object.freeze([]);
+});
 //@ chunk-18hwfzwa.js:542983-543039 placement
-var XY = Object.freeze({
-  rows: ET,
-  isLive: alwaysFalse,
-  isArrowed: false,
+var EMPTY_AUTOCOMPLETE_STATE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:542983", () => {
+  EMPTY_AUTOCOMPLETE_STATE = Object.freeze({
+    rows: EMPTY_SUGGESTION_ROWS,
+    isLive: alwaysFalse,
+    isArrowed: false,
+  });
 });
 //@ chunk-18hwfzwa.js:543039-543118 placement
-var normalizeSelectedSuggestion = (h) =>
-  h.selectedSuggestion < h.suggestions.length ? h.selectedSuggestion : -1;
+var normalizeSelectedSuggestion = (state) =>
+  state.selectedSuggestion < state.suggestions.length ? state.selectedSuggestion : -1;
 //@ chunk-18hwfzwa.js:543118-543417 placement
-function mergeAutocompleteRows(h, x, suggestions) {
-  let ee = x.selectedId !== undefined ? x.rows.findIndex((Be) => Be.id === x.selectedId) : -1;
-  let ke = x.rows.length === 0;
-  let isArrowed = ee >= 0 && x.isArrowed;
-  return ke
-    ? h
+function mergeAutocompleteRows(state, rowState, suggestions) {
+  let selectedIndex =
+    rowState.selectedId !== undefined ? rowState.rows.findIndex((row) => row.id === rowState.selectedId) : -1;
+  let hasNoRows = rowState.rows.length === 0;
+  let isArrowed = selectedIndex >= 0 && rowState.isArrowed;
+  return hasNoRows
+    ? state
     : {
-        ...h,
-        suggestions: suggestions ?? h.suggestions.concat(x.rows),
-        selectedSuggestion: ee < 0 ? normalizeSelectedSuggestion(h) : h.suggestions.length + ee,
+        ...state,
+        suggestions: suggestions ?? state.suggestions.concat(rowState.rows),
+        selectedSuggestion:
+          selectedIndex < 0 ? normalizeSelectedSuggestion(state) : state.suggestions.length + selectedIndex,
         ...(isArrowed && {
-          arrowedSuggestionId: x.selectedId,
+          arrowedSuggestionId: rowState.selectedId,
         }),
       };
 }
 //@ chunk-18hwfzwa.js:543417-543503 placement
-function freezeRowsIfEmpty(h) {
-  return h.rows.length === 0
-    ? h
+function freezeRowsIfEmpty(state) {
+  return state.rows.length === 0
+    ? state
     : {
-        rows: h.rows,
-        isLive: h.isLive,
+        rows: state.rows,
+        isLive: state.isLive,
         isArrowed: false,
       };
 }
 //@ chunk-18hwfzwa.js:543503-543635 placement
-function clearHoverIfInRows(h, rows) {
-  let hoveredSuggestionId = h.hoveredSuggestionId;
+function clearHoverIfInRows(state, rows) {
+  let hoveredSuggestionId = state.hoveredSuggestionId;
   return hoveredSuggestionId !== null &&
     hoveredSuggestionId !== undefined &&
-    rows.some((ee) => ee.id === hoveredSuggestionId)
+    rows.some((row) => row.id === hoveredSuggestionId)
     ? {
-        ...h,
+        ...state,
         hoveredSuggestionId: null,
       }
-    : h;
+    : state;
 }
 //@ chunk-18hwfzwa.js:543635-544072 placement
 /**
  * 把输入框建议状态与插件提供的补全行合成一个派生 store：live 时合并补全行与选中项，否则返回原状态；结果按输入引用缓存。
  */
 function createAutocompleteStore(store) {
-  let store_2 = createStore(XY);
+  let store_2 = createStore(EMPTY_AUTOCOMPLETE_STATE);
   let state = store.getState();
-  let state_2 = store_2.getState();
-  let ee = state_2.isLive();
-  let ke = mergeAutocompleteRows(state, state_2, undefined);
-  function Re() {
-    let state_3 = store.getState();
-    let state_4 = store_2.getState();
-    let ze = state_4.isLive();
-    let Xe = state_3 === state && state_4 === state_2 && ze === ee;
-    let rt = state_3.suggestions === state.suggestions && state_4.rows === state_2.rows;
-    if (!Xe) {
-      let suggestions = rt ? ke.suggestions : undefined;
-      ke = ze
-        ? mergeAutocompleteRows(state_3, state_4, suggestions)
+  let rowState = store_2.getState();
+  let isLive = rowState.isLive();
+  let merged = mergeAutocompleteRows(state, rowState, undefined);
+  function getDrawn() {
+    let state_2 = store.getState();
+    let state_3 = store_2.getState();
+    let nextIsLive = state_3.isLive();
+    let isUnchanged = state_2 === state && state_3 === rowState && nextIsLive === isLive;
+    let areSuggestionsUnchanged = state_2.suggestions === state.suggestions && state_3.rows === rowState.rows;
+    if (!isUnchanged) {
+      let suggestions = areSuggestionsUnchanged ? merged.suggestions : undefined;
+      merged = nextIsLive
+        ? mergeAutocompleteRows(state_2, state_3, suggestions)
         : mergeAutocompleteRows(
-            clearHoverIfInRows(state_3, state_4.rows),
-            freezeRowsIfEmpty(state_4),
+            clearHoverIfInRows(state_2, state_3.rows),
+            freezeRowsIfEmpty(state_3),
             suggestions,
           );
-      state = state_3;
-      state_2 = state_4;
-      ee = ze;
+      state = state_2;
+      rowState = state_3;
+      isLive = nextIsLive;
     }
-    return ke;
+    return merged;
   }
-  function Be() {
-    let He = Re();
-    return ee ? He : state;
+  function getLive() {
+    let drawnState = getDrawn();
+    return isLive ? drawnState : state;
   }
   return createAutocompleteView(
     {
@@ -141,41 +150,44 @@ function createAutocompleteStore(store) {
       rows: store_2,
     },
     {
-      live: Be,
-      drawn: Re,
+      live: getLive,
+      drawn: getDrawn,
     },
   );
 }
 //@ chunk-18hwfzwa.js:544072-544192 placement
 function createAutocompleteLogger() {
-  let h;
-  let x = hasModuleHookingSite("prompt.autocomplete");
-  return (D) => {
-    let L = D !== h;
-    h = D;
-    if (L) x = hasModuleHookingSite("prompt.autocomplete");
-    return x;
+  let lastQuery;
+  let isHooked = hasModuleHookingSite("prompt.autocomplete");
+  return (query) => {
+    let didChange = query !== lastQuery;
+    lastQuery = query;
+    if (didChange) isHooked = hasModuleHookingSite("prompt.autocomplete");
+    return isHooked;
   };
 }
 //@ chunk-18hwfzwa.js:544192-544196 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:544192", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:544196-544299 placement
-var withAutocompleteSelection = (h, selectedRowId, arrowed) => ({
-  rows: h.rows,
-  isLive: h.isLive,
+var withAutocompleteSelection = (state, selectedRowId, arrowed) => ({
+  rows: state.rows,
+  isLive: state.isLive,
   isArrowed: selectedRowId !== undefined && arrowed,
   ...(selectedRowId !== undefined && {
     selectedId: selectedRowId,
   }),
 });
 //@ chunk-18hwfzwa.js:544299-544543 placement
-function toAutocompleteSuggestions(h) {
-  let x = new Map();
-  return h.map(({ text, label, description }) => {
-    let ke = x.get(text) ?? 0;
-    x.set(text, ke + 1);
+function toAutocompleteSuggestions(items) {
+  let seenCounts = new Map();
+  return items.map(({ text, label, description }) => {
+    let seenCount = seenCounts.get(text) ?? 0;
+    seenCounts.set(text, seenCount + 1);
     return {
-      id: `autocomplete-${ke}-${text}`,
+      id: `autocomplete-${seenCount}-${text}`,
       displayText: (label ?? text).replace(/\s+/gu, " "),
       ...(description !== undefined && {
         description,
@@ -187,104 +199,107 @@ function toAutocompleteSuggestions(h) {
 //@ chunk-18hwfzwa.js:544543-544555 placement
 var AUTOCOMPLETE_TIMEOUT_MS = 150;
 //@ chunk-18hwfzwa.js:544555-545930 placement
-function raisePromptAutocomplete(h, x = {}, D = AUTOCOMPLETE_TIMEOUT_MS) {
-  let raise = x.raise ?? autocompleteWithNoCore;
-  let ee =
-    x.report ??
-    ((oo) =>
-      logForDebugging(oo, {
+function raisePromptAutocomplete(onSuggestions, options = {}, debounceMs = AUTOCOMPLETE_TIMEOUT_MS) {
+  let raise = options.raise ?? autocompleteWithNoCore;
+  let report =
+    options.report ??
+    ((message) =>
+      logForDebugging(message, {
         level: "error",
       }));
   let abortController = new AbortController();
-  let Re = false;
-  let Be;
-  let He;
-  let We;
-  let ze;
-  let Xe;
-  let rt;
-  let kt;
-  function At(oo, Xt) {
-    let io = Xe !== undefined || Xt.length > 0;
-    Xe = Xt.length > 0 ? oo : undefined;
-    clearTimeout(rt);
-    rt = undefined;
-    if (io) h(Xt);
+  let hooked = false;
+  let currentTokenSnap;
+  let pendingToken;
+  let inFlightToken;
+  let inFlightController;
+  let shownToken;
+  let timer;
+  let droppedText;
+  function showSuggestions(token, items) {
+    let shouldEmit = shownToken !== undefined || items.length > 0;
+    shownToken = items.length > 0 ? token : undefined;
+    clearTimeout(timer);
+    timer = undefined;
+    if (shouldEmit) onSuggestions(items);
   }
-  function It() {
-    let oo = He;
-    if (oo === undefined || ze !== undefined) {
-      ze?.abort();
+  function startNext() {
+    let token = pendingToken;
+    if (token === undefined || inFlightController !== undefined) {
+      inFlightController?.abort();
       return;
     }
     let abortController = new AbortController();
-    He = undefined;
-    ze = abortController;
-    new Promise((resolve) => resolve(raise(oo, abortController.signal)))
-      .then((io) => toAutocompleteSuggestions(normalizeAutocompleteSuggestions(io.suggestions)))
+    pendingToken = undefined;
+    inFlightController = abortController;
+    new Promise((resolve) => resolve(raise(token, abortController.signal)))
+      .then((result) => toAutocompleteSuggestions(normalizeAutocompleteSuggestions(result.suggestions)))
       .catch((error) => {
-        if (!abortController.signal.aborted) ee(`prompt.autocomplete: ${errorMessage(error)}; no row added`);
-        return ET;
+        if (!abortController.signal.aborted)
+          report(`prompt.autocomplete: ${errorMessage(error)}; no row added`);
+        return EMPTY_SUGGESTION_ROWS;
       })
-      .then((io) => Ot(oo, io))
-      .catch((error) => ee(`prompt.autocomplete: ${errorMessage(error)}; no row shown`));
+      .then((result) => onResult(token, result))
+      .catch((error) => report(`prompt.autocomplete: ${errorMessage(error)}; no row shown`));
   }
-  function Ot(oo, Xt) {
-    ze = undefined;
+  function onResult(token, items) {
+    inFlightController = undefined;
     if (abortController.signal.aborted) return;
-    if (We === oo) At(oo, Xt);
-    It();
+    if (inFlightToken === token) showSuggestions(token, items);
+    startNext();
   }
-  let Et = (oo) => Xe?.text === oo.text && Xe.cursor === oo.cursor;
-  function Dt() {
-    let oo = Be === undefined || !Et(Be);
-    rt = undefined;
-    if (oo) At(undefined, ET);
+  let isAnswerTo = (token) => shownToken?.text === token.text && shownToken.cursor === token.cursor;
+  function onDebounce() {
+    let shouldClear = currentTokenSnap === undefined || !isAnswerTo(currentTokenSnap);
+    timer = undefined;
+    if (shouldClear) showSuggestions(undefined, EMPTY_SUGGESTION_ROWS);
   }
-  function Lt() {
-    He = undefined;
-    We = undefined;
-    ze?.abort();
-    At(undefined, ET);
+  function reset() {
+    pendingToken = undefined;
+    inFlightToken = undefined;
+    inFlightController?.abort();
+    showSuggestions(undefined, EMPTY_SUGGESTION_ROWS);
   }
   return {
-    ask: (oo) => {
-      let io = Re && oo !== undefined && oo.text !== kt ? currentToken(oo) : undefined;
-      let so = io?.text === Be?.text && io?.cursor === Be?.cursor;
-      kt = oo?.text === kt ? kt : undefined;
-      if (so) return;
-      let po =
-        io !== undefined &&
-        Be !== undefined &&
-        io.start === Be.start &&
-        io.text.slice(0, io.start) === Be.text.slice(0, Be.start);
-      Be = io;
-      if (!po) Lt();
-      let ao = io !== undefined && !Et(io);
-      if (Xe !== undefined && ao) rt ??= setTimeout(Dt, D);
-      He = io;
-      We = io;
-      It();
+    ask: (token) => {
+      let nextToken =
+        hooked && token !== undefined && token.text !== droppedText ? currentToken(token) : undefined;
+      let sameToken =
+        nextToken?.text === currentTokenSnap?.text && nextToken?.cursor === currentTokenSnap?.cursor;
+      droppedText = token?.text === droppedText ? droppedText : undefined;
+      if (sameToken) return;
+      let samePrefix =
+        nextToken !== undefined &&
+        currentTokenSnap !== undefined &&
+        nextToken.start === currentTokenSnap.start &&
+        nextToken.text.slice(0, nextToken.start) === currentTokenSnap.text.slice(0, currentTokenSnap.start);
+      currentTokenSnap = nextToken;
+      if (!samePrefix) reset();
+      let differs = nextToken !== undefined && !isAnswerTo(nextToken);
+      if (shownToken !== undefined && differs) timer ??= setTimeout(onDebounce, debounceMs);
+      pendingToken = nextToken;
+      inFlightToken = nextToken;
+      startNext();
     },
     drop: () => {
-      kt = Be?.text;
-      Be = undefined;
-      Lt();
+      droppedText = currentTokenSnap?.text;
+      currentTokenSnap = undefined;
+      reset();
     },
-    isAnswerTo: Et,
-    setHooked: (oo) => {
-      Re = oo;
+    isAnswerTo,
+    setHooked: (hookedFlag) => {
+      hooked = hookedFlag;
     },
     dispose: () => {
       abortController.abort();
-      Lt();
+      reset();
     },
   };
 }
 //@ chunk-18hwfzwa.js:545930-545997 placement
 function liveRowsOf(shown) {
   let state = shown.rows.getState();
-  return state.isLive() ? state.rows : ET;
+  return state.isLive() ? state.rows : EMPTY_SUGGESTION_ROWS;
 }
 //@ chunk-18hwfzwa.js:545997-546025 placement
 var nextIndexWrap = (selectedSuggestion, total) =>
@@ -301,93 +316,95 @@ function moveAutocompleteSelection(store, direction, arrowed) {
   let state = store.getState();
   let total = state.suggestions.length;
   let ownCount = total - rows.length;
-  let He =
+  let stepped =
     direction > 0
       ? nextIndexWrap(state.selectedSuggestion, total)
       : prevIndexWrap(state.selectedSuggestion, total);
-  let We = state.selectedSuggestion >= ownCount;
+  let isOwnRow = state.selectedSuggestion >= ownCount;
   let isArrowed = store.rows.getState().isArrowed;
-  let nextIndex = arrowed && We && !isArrowed ? state.selectedSuggestion : He;
+  let nextIndex = arrowed && isOwnRow && !isArrowed ? state.selectedSuggestion : stepped;
   let selectedRowId = nextIndex < ownCount ? undefined : rows[nextIndex - ownCount]?.id;
   if (rows.length === 0) return false;
-  store.own.setState((At) => ({
-    ...At,
+  store.own.setState((nextSelection) => ({
+    ...nextSelection,
     hoveredSuggestionId: null,
-    selectedSuggestion: nextIndex < ownCount ? nextIndex : At.selectedSuggestion,
+    selectedSuggestion: nextIndex < ownCount ? nextIndex : nextSelection.selectedSuggestion,
     ...(arrowed && {
-      arrowedSuggestionId: nextIndex < ownCount ? At.suggestions[nextIndex]?.id : null,
+      arrowedSuggestionId: nextIndex < ownCount ? nextSelection.suggestions[nextIndex]?.id : null,
     }),
   }));
-  store.rows.setState((At) =>
-    At.selectedId === selectedRowId && (selectedRowId === undefined || At.isArrowed === arrowed)
-      ? At
-      : withAutocompleteSelection(At, selectedRowId, arrowed),
+  store.rows.setState((state) =>
+    state.selectedId === selectedRowId && (selectedRowId === undefined || state.isArrowed === arrowed)
+      ? state
+      : withAutocompleteSelection(state, selectedRowId, arrowed),
   );
   return true;
 }
 //@ chunk-18hwfzwa.js:546631-546783 placement
-function nextAutocompleteRowsState(h, x, isLive) {
-  let L = x.length === 0;
-  let ee = h.selectedId !== undefined && x.some((ke) => ke.id === h.selectedId);
-  return L
-    ? XY
+function nextAutocompleteRowsState(previousState, rows, isLive) {
+  let hasNoRows = rows.length === 0;
+  let keepsSelection =
+    previousState.selectedId !== undefined && rows.some((state) => state.id === previousState.selectedId);
+  return hasNoRows
+    ? EMPTY_AUTOCOMPLETE_STATE
     : {
         isArrowed: false,
-        ...(ee && h),
-        rows: x,
+        ...(keepsSelection && previousState),
+        rows,
         isLive,
       };
 }
 //@ chunk-18hwfzwa.js:546783-546989 placement
 function activeAutocompleteRow(shown) {
-  let x = liveRowsOf(shown);
+  let liveRows = liveRowsOf(shown);
   let { selectedId } = shown.rows.getState();
   let { suggestions, hoveredSuggestionId } = shown.own.getState();
   return suggestions.some((suggestion) => suggestion.id === hoveredSuggestionId)
     ? undefined
-    : (x.find((Re) => Re.id === hoveredSuggestionId) ?? x.find((Re) => Re.id === selectedId));
+    : (liveRows.find((row) => row.id === hoveredSuggestionId) ??
+        liveRows.find((row) => row.id === selectedId));
 }
 //@ chunk-18hwfzwa.js:546989-547105 placement
-var autocompleteRowEdit = (h, inputText) =>
+var autocompleteRowEdit = (input, inputText) =>
   applyTextInsertion({
-    origin: cXe,
-    text: h.text,
-    cursor: h.cursor,
-    start: currentToken(h)?.start ?? h.cursor,
-    end: h.cursor,
+    origin: COMPOSER_EDIT_ORIGIN,
+    text: input.text,
+    cursor: input.cursor,
+    start: currentToken(input)?.start ?? input.cursor,
+    end: input.cursor,
     inputText,
   });
 //@ chunk-18hwfzwa.js:547105-548341 placement
 function takeAutocompleteRow(props) {
   let { shown, draft, text, cursor, isOpen } = props;
-  let [Re] = y(() =>
-    raisePromptAutocomplete((Xe) => {
+  let [autocomplete] = useState(() =>
+    raisePromptAutocomplete((suggestions) => {
       let rows = shown.rows.getState().rows;
-      shown.rows.setState((kt) => nextAutocompleteRowsState(kt, Xe, isLive));
-      shown.own.setState((kt) => clearHoverIfInRows(kt, rows));
+      shown.rows.setState((rowsState) => nextAutocompleteRowsState(rowsState, suggestions, isLive));
+      shown.own.setState((ownState) => clearHoverIfInRows(ownState, rows));
     }),
   );
-  let [isLive] = y(
+  let [isLive] = useState(
     () => () =>
-      Re.isAnswerTo({
+      autocomplete.isAnswerTo({
         text: draft.value,
         cursor: draft.cursorOffset,
       }),
   );
-  let [He] = y(() => {
-    function Xe(At) {
-      let autocompleteText = At?.autocompleteText;
+  let [handlers] = useState(() => {
+    function acceptRow(row) {
+      let autocompleteText = row?.autocompleteText;
       if (autocompleteText === undefined) return false;
       try {
-        let Ot = autocompleteRowEdit(
+        let edited = autocompleteRowEdit(
           {
             text: draft.value,
             cursor: draft.cursorOffset,
           },
           autocompleteText,
         );
-        Re.drop();
-        draft.setValueWithCursor(Ot.text, Ot.cursor);
+        autocomplete.drop();
+        draft.setValueWithCursor(edited.text, edited.cursor);
         logFeatureOk("plugin_function_hooks_autocomplete");
       } catch (error) {
         logFeatureBad("plugin_function_hooks_autocomplete", "take_failed");
@@ -397,27 +414,27 @@ function takeAutocompleteRow(props) {
       }
       return true;
     }
-    let rt = () => liveRowsOf(shown).length > 0;
-    let kt = () => shown.own.getState().suggestions.length === 0;
+    let hasLiveRows = () => liveRowsOf(shown).length > 0;
+    let hasNoOwnRows = () => shown.own.getState().suggestions.length === 0;
     return {
-      tab: () => Xe(activeAutocompleteRow(shown)),
-      tabTop: () => kt() && Xe(liveRowsOf(shown)[0]),
+      tab: () => acceptRow(activeAutocompleteRow(shown)),
+      tabTop: () => hasNoOwnRows() && acceptRow(liveRowsOf(shown)[0]),
       enter: () => {
-        let At = Xe(activeAutocompleteRow(shown));
-        let It = rt() && kt();
-        return At ? "taken" : It ? "left" : "engine";
+        let taken = acceptRow(activeAutocompleteRow(shown));
+        let canFallThrough = hasLiveRows() && hasNoOwnRows();
+        return taken ? "taken" : canFallThrough ? "left" : "engine";
       },
-      click: (At) => Xe(liveRowsOf(shown).find((It) => It.id === At)),
+      click: (rowId) => acceptRow(liveRowsOf(shown).find((state) => state.id === rowId)),
       move: (direction, arrowed) => moveAutocompleteSelection(shown, direction, arrowed),
-      drop: Re.drop,
+      drop: autocomplete.drop,
     };
   });
-  let [We] = y(createAutocompleteLogger);
-  let storeSelector = useStoreSelector(renderVersions(), We);
-  P(() => {
+  let [logger] = useState(createAutocompleteLogger);
+  let storeSelector = useStoreSelector(renderVersions(), logger);
+  useEffect(() => {
     try {
-      Re.setHooked(storeSelector);
-      Re.ask(
+      autocomplete.setHooked(storeSelector);
+      autocomplete.ask(
         isOpen
           ? {
               text,
@@ -426,14 +443,14 @@ function takeAutocompleteRow(props) {
           : undefined,
       );
       shown.rows.setState(freezeRowsIfEmpty);
-      shown.own.setState((Xe) => clearHoverIfInRows(Xe, shown.rows.getState().rows));
+      shown.own.setState((ownState) => clearHoverIfInRows(ownState, shown.rows.getState().rows));
     } catch (error) {
       logForDebugging(`prompt.autocomplete: ${errorMessage(error)}; no plugin was asked`, {
         level: "error",
       });
     }
-  }, [Re, shown, storeSelector, isOpen, text, cursor]);
-  P(() => () => Re.dispose(), [Re]);
-  return He;
+  }, [autocomplete, shown, storeSelector, isOpen, text, cursor]);
+  useEffect(() => () => autocomplete.dispose(), [autocomplete]);
+  return handlers;
 }
 export { createAutocompleteStore, takeAutocompleteRow };

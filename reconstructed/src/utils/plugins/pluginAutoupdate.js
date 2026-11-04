@@ -8,6 +8,7 @@
  * pieces: chunk-0nv5pv9r.js (10), chunk-9tyqgtn4.js (1), chunk-e6aww6q8.js (1)
  * attribution: placement 9, callgraph-witnessed 1, fingerprint 2
  */
+import { withClaudeAiMarketplaceLock, isClaudeAiMarketplaceSource } from "./claudeAiMarketplaces.js";
 import { getPluginRegistry } from "./pluginLoadState.js";
 import {
   loadKnownMarketplacesWithDeclared,
@@ -24,7 +25,6 @@ import {
   isSourceDisallowedOrUnverifiable,
   isPluginBlockedByPolicy,
 } from "./marketplacePolicy.js";
-import { isClaudeAiMarketplaceSource, withClaudeAiMarketplaceLock } from "./claudeAiMarketplaces.js";
 import { isPluginsSyncOn } from "../../services/plugins/accountSync/syncedPluginHooks.js";
 import { isMarketplaceAutoUpdate, MAX_CONSENT_COMMAND_LENGTH } from "./schemas.js";
 import { getMarketplaceAutoUpdate } from "./marketplaceAutoUpdate.js";
@@ -63,17 +63,34 @@ import { sleep } from "../sleep.js";
 import { resolveMissingDependencies } from "./dependencyInstall.js";
 import { classifyPluginCommandError } from "../telemetry/pluginTelemetry.js";
 
+//@ chunk-e6aww6q8.js:693187-693320 fingerprint = getAutoUpdateEnabledMarketplaces (1)
+/**
+ * 设置 known_marketplaces 中某市场的 autoUpdate（名字配错）。
+ */
+async function setMarketplaceAutoUpdateFlag(name, autoUpdate) {
+  await withClaudeAiMarketplaceLock((registry) => {
+    let entry = registry[name];
+    if (entry === undefined || entry.autoUpdate === autoUpdate) return null;
+    return {
+      ...registry,
+      [name]: {
+        ...entry,
+        autoUpdate,
+      },
+    };
+  });
+}
 //@ chunk-0nv5pv9r.js:1498-1511 placement
 var AUTOUPDATE_NOTIFY_TTL_MS = 600000;
 //@ chunk-0nv5pv9r.js:1511-1845 placement
 /**
  * 设置插件自动更新监听器；若已有暂存的通知（updated/blocked/reresolved/announce）则立即回调并清空。返回取消注册的函数。
  */
-function onPluginsAutoUpdated(n) {
+function onPluginsAutoUpdated(listener) {
   let pluginRegistry = getPluginRegistry();
-  pluginRegistry.autoUpdateListener = n;
+  pluginRegistry.autoUpdateListener = listener;
   if (pluginRegistry.pendingAutoUpdateNotification !== null) {
-    n(
+    listener(
       pluginRegistry.pendingAutoUpdateNotification.updated,
       pluginRegistry.pendingAutoUpdateNotification.blocked,
       pluginRegistry.pendingAutoUpdateNotification.reresolved,
@@ -89,18 +106,18 @@ function onPluginsAutoUpdated(n) {
 /**
  * 收集开启 autoUpdate、来源被策略允许的市场（小写名）；claude.ai 源需功能开启。 官方插件目录市场未注册但有已安装的官方插件时也加入。
  */
-async function getAutoUpdateMarketplaces(n) {
-  let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(n);
+async function getAutoUpdateMarketplaces(storageV5) {
+  let knownMarketplacesWithDeclared = await loadKnownMarketplacesWithDeclared(storageV5);
   let declaredMarketplaces = getDeclaredMarketplaces();
-  let r = new Set();
+  let names = new Set();
   for (let [key, value] of Object.entries(knownMarketplacesWithDeclared)) {
     if (!isSourceAllowedByPolicy(value.source)) continue;
     if (isClaudeAiMarketplaceSource(value.source) && !isPluginsSyncOn()) continue;
     if (isMarketplaceAutoUpdate(key, value, getMarketplaceAutoUpdate(key, declaredMarketplaces)))
-      r.add(key.toLowerCase());
+      names.add(key.toLowerCase());
   }
   if (
-    !r.has(OFFICIAL_MARKETPLACE_NAME) &&
+    !names.has(OFFICIAL_MARKETPLACE_NAME) &&
     !Object.hasOwn(knownMarketplacesWithDeclared, OFFICIAL_MARKETPLACE_NAME) &&
     isPluginDirectoryAvailable() &&
     isSourceAllowedByPolicy({
@@ -109,51 +126,55 @@ async function getAutoUpdateMarketplaces(n) {
   ) {
     if (
       Object.keys(
-        (isStorageV5Enabled() && n !== undefined ? await loadInstalledPlugins(n) : loadInstalledPluginsSync())
-          .plugins,
+        (isStorageV5Enabled() && storageV5 !== undefined
+          ? await loadInstalledPlugins(storageV5)
+          : loadInstalledPluginsSync()
+        ).plugins,
       ).some((key) => key.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`))
     )
-      r.add(OFFICIAL_MARKETPLACE_NAME);
+      names.add(OFFICIAL_MARKETPLACE_NAME);
   }
-  return r;
+  return names;
 }
 //@ chunk-0nv5pv9r.js:2222-4440 placement
-async function updatePlugin(n, o, m, r, storage) {
-  let i = false;
-  let u = false;
+async function updatePlugin(pluginId, installations, disabledSources, skipOptions, storage) {
+  let updated = false;
+  let failed = false;
   let commandSourceSkipped = null;
-  let h = null;
-  let _ = false;
-  let k = false;
-  let S = false;
-  let y = false;
-  for (let { scope } of o)
+  let blocked = null;
+  let notFound = false;
+  let identityChanged = false;
+  let notInstallable = false;
+  let directoryUnavailable = false;
+  for (let { scope } of installations)
     try {
-      let e = await updatePluginOp(n, scope, r ?? {}, storage);
-      switch (e.outcome) {
+      let outcome = await updatePluginOp(pluginId, scope, skipOptions ?? {}, storage);
+      switch (outcome.outcome) {
         case "updated":
-          i = true;
-          logForDebugging(`Plugin autoupdate: updated ${n} from ${e.oldVersion} to ${e.newVersion}`);
+          updated = true;
+          logForDebugging(
+            `Plugin autoupdate: updated ${pluginId} from ${outcome.oldVersion} to ${outcome.newVersion}`,
+          );
           break;
         case "skipped": {
-          logForDebugging(`Plugin autoupdate: ${n} ${e.message}`);
-          if (e.skipReason === "entry_helper_deferred")
-            h = {
+          logForDebugging(`Plugin autoupdate: ${pluginId} ${outcome.message}`);
+          if (outcome.skipReason === "entry_helper_deferred")
+            blocked = {
               type: "autoupdate-deferred-entry-helper",
-              source: n,
-              plugin: parsePluginIdentifier(n).name,
-              message: e.message,
+              source: pluginId,
+              plugin: parsePluginIdentifier(pluginId).name,
+              message: outcome.message,
             };
-          else if (e.blockedBy && e.blockedBy.length > 0) {
-            let blockedBy = e.blockedBy.map((P) => parsePluginIdentifier(P).name);
-            let disabledPinners = e.blockedBy
-              .filter((P) => m.has(P))
-              .map((P) => parsePluginIdentifier(P).name);
-            h = {
+          else if (outcome.blockedBy && outcome.blockedBy.length > 0) {
+            let blockedBy = outcome.blockedBy.map((pinnerId) => parsePluginIdentifier(pinnerId).name);
+            let disabledPinners = outcome.blockedBy
+              .filter((pinnerId) => disabledSources.has(pinnerId))
+              .map((pinnerId) => parsePluginIdentifier(pinnerId).name);
+            blocked = {
               type: "autoupdate-blocked-by-pinner",
-              source: n,
-              plugin: parsePluginIdentifier(n).name,
-              heldAt: e.oldVersion,
+              source: pluginId,
+              plugin: parsePluginIdentifier(pluginId).name,
+              heldAt: outcome.oldVersion,
               blockedBy,
               disabledPinners,
             };
@@ -161,38 +182,38 @@ async function updatePlugin(n, o, m, r, storage) {
           break;
         }
         case "failed":
-          _ = e.failureCode === "not_found" || e.failureCode === "not_cached";
-          k ||= e.failureCode === "directory_identity_changed";
-          S ||= e.failureCode === "directory_listing_not_installable";
-          y ||=
-            e.failureCode === "directory_unavailable" ||
-            e.failureCode === "marketplace_policy_blocked" ||
-            e.failureCode === "directory_binding_unreadable";
-          if (e.failureCode === "command_source_skipped") commandSourceSkipped = n;
+          notFound = outcome.failureCode === "not_found" || outcome.failureCode === "not_cached";
+          identityChanged ||= outcome.failureCode === "directory_identity_changed";
+          notInstallable ||= outcome.failureCode === "directory_listing_not_installable";
+          directoryUnavailable ||=
+            outcome.failureCode === "directory_unavailable" ||
+            outcome.failureCode === "marketplace_policy_blocked" ||
+            outcome.failureCode === "directory_binding_unreadable";
+          if (outcome.failureCode === "command_source_skipped") commandSourceSkipped = pluginId;
           else if (
-            e.failureCode === "entry_helper_disabled_by_policy" ||
-            e.failureCode === "entry_helper_remote_policy_unconsented" ||
-            e.failureCode === "entry_helper_organization_unanswered" ||
-            e.failureCode === "plugin_policy_blocked" ||
-            (e.failureCode === "command_source_refused" &&
+            outcome.failureCode === "entry_helper_disabled_by_policy" ||
+            outcome.failureCode === "entry_helper_remote_policy_unconsented" ||
+            outcome.failureCode === "entry_helper_organization_unanswered" ||
+            outcome.failureCode === "plugin_policy_blocked" ||
+            (outcome.failureCode === "command_source_refused" &&
               (areCommandPluginSourcesDisabledByPolicy() || !policyTierCommandsMayRun()))
           )
-            h = {
+            blocked = {
               type: "autoupdate-disabled-by-policy",
-              source: n,
-              plugin: parsePluginIdentifier(n).name,
-              message: e.message,
+              source: pluginId,
+              plugin: parsePluginIdentifier(pluginId).name,
+              message: outcome.message,
             };
-          else if (e.failureCode === "entry_helper_not_inlined") {
-            h = {
+          else if (outcome.failureCode === "entry_helper_not_inlined") {
+            blocked = {
               type: "generic-error",
-              source: n,
-              plugin: parsePluginIdentifier(n).name,
-              error: e.message,
+              source: pluginId,
+              plugin: parsePluginIdentifier(pluginId).name,
+              error: outcome.message,
             };
-            u = true;
-          } else if (e.failureCode !== "command_source_inactive") u = true;
-          logForDebugging(`Plugin autoupdate: failed to update ${n}: ${e.message}`, {
+            failed = true;
+          } else if (outcome.failureCode !== "command_source_inactive") failed = true;
+          logForDebugging(`Plugin autoupdate: failed to update ${pluginId}: ${outcome.message}`, {
             level: "warn",
           });
           break;
@@ -200,26 +221,33 @@ async function updatePlugin(n, o, m, r, storage) {
           break;
       }
     } catch (error) {
-      u = true;
-      logForDebugging(`Plugin autoupdate: error updating ${n}: ${errorMessage(error)}`, {
+      failed = true;
+      logForDebugging(`Plugin autoupdate: error updating ${pluginId}: ${errorMessage(error)}`, {
         level: "warn",
       });
     }
-  let p = u && !_ && !k && !S && !y && h === null && n.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`);
-  if (p)
-    h = {
+  let stuck =
+    failed &&
+    !notFound &&
+    !identityChanged &&
+    !notInstallable &&
+    !directoryUnavailable &&
+    blocked === null &&
+    pluginId.endsWith(`@${OFFICIAL_MARKETPLACE_NAME}`);
+  if (stuck)
+    blocked = {
       type: "generic-error",
-      source: n,
-      plugin: parsePluginIdentifier(n).name,
+      source: pluginId,
+      plugin: parsePluginIdentifier(pluginId).name,
       error:
         'The Anthropic Directory lists a different commit, but the background update failed, so this plugin is still on the old one. Choose "Update now" in /plugin \u2192 Installed to retry and see the error',
     };
   return {
-    updated: i ? n : null,
-    blocked: h,
-    failed: u,
-    directoryStuck: p,
-    directoryIdentityChanged: k,
+    updated: updated ? pluginId : null,
+    blocked,
+    failed,
+    directoryStuck: stuck,
+    directoryIdentityChanged: identityChanged,
     commandSourceSkipped,
   };
 }
@@ -252,21 +280,21 @@ async function updatePluginsInMarketplaces(
       },
     };
   let { disabled } = await loadAllPluginsCacheOnly(storage);
-  let disabledSources = new Set(disabled.map((f) => f.source));
+  let disabledSources = new Set(disabled.map((plugin) => plugin.source));
   if (marketplaces.has(OFFICIAL_MARKETPLACE_NAME))
     await seedDirectoryBindings(Object.entries(installed.plugins));
   let settled = await Promise.allSettled(
-    keys.map(async (f) => {
-      let { marketplace } = parsePluginIdentifier(f);
+    keys.map(async (pluginId) => {
+      let { marketplace } = parsePluginIdentifier(pluginId);
       if (!marketplace || !marketplaces.has(marketplace.toLowerCase())) return null;
-      if (excluded.has(f)) return null;
-      let g = installed.plugins[f];
-      if (!g || g.length === 0) return null;
-      let R = filterInstallationsForCurrentProject(g);
-      if (R.length === 0) return null;
+      if (excluded.has(pluginId)) return null;
+      let installations = installed.plugins[pluginId];
+      if (!installations || installations.length === 0) return null;
+      let relevant = filterInstallationsForCurrentProject(installations);
+      if (relevant.length === 0) return null;
       return updatePlugin(
-        f,
-        R,
+        pluginId,
+        relevant,
         disabledSources,
         skipCommandSources
           ? {
@@ -277,38 +305,39 @@ async function updatePluginsInMarketplaces(
       );
     }),
   );
-  let _ = [];
-  let k = [];
-  let S = [];
-  let y = 0;
-  let p = {
+  let updated = [];
+  let blocked = [];
+  let commandSourceSkipped = [];
+  let failedCount = 0;
+  let directoryStats = {
     updated: 0,
     updateFailed: 0,
     stuck: 0,
     identityChanged: 0,
   };
-  for (let [f, e] of settled.entries()) {
-    if (e.status !== "fulfilled" || e.value === null) continue;
-    let g = isOfficialDirectoryPlugin(keys[f] ?? "");
-    if (e.value.updated !== null) {
-      _.push(e.value.updated);
-      if (g) p.updated++;
+  for (let [index, settledResult] of settled.entries()) {
+    if (settledResult.status !== "fulfilled" || settledResult.value === null) continue;
+    let isDirectoryPlugin = isOfficialDirectoryPlugin(keys[index] ?? "");
+    if (settledResult.value.updated !== null) {
+      updated.push(settledResult.value.updated);
+      if (isDirectoryPlugin) directoryStats.updated++;
     }
-    if (e.value.blocked !== null) k.push(e.value.blocked);
-    if (e.value.failed) {
-      y++;
-      if (g) p.updateFailed++;
+    if (settledResult.value.blocked !== null) blocked.push(settledResult.value.blocked);
+    if (settledResult.value.failed) {
+      failedCount++;
+      if (isDirectoryPlugin) directoryStats.updateFailed++;
     }
-    if (e.value.directoryStuck) p.stuck++;
-    if (e.value.directoryIdentityChanged) p.identityChanged++;
-    if (e.value.commandSourceSkipped !== null) S.push(e.value.commandSourceSkipped);
+    if (settledResult.value.directoryStuck) directoryStats.stuck++;
+    if (settledResult.value.directoryIdentityChanged) directoryStats.identityChanged++;
+    if (settledResult.value.commandSourceSkipped !== null)
+      commandSourceSkipped.push(settledResult.value.commandSourceSkipped);
   }
   return {
-    updated: _,
-    blocked: k,
-    updateFailedCount: y,
-    commandSourceSkipped: S,
-    directory: p,
+    updated,
+    blocked,
+    updateFailedCount: failedCount,
+    commandSourceSkipped,
+    directory: directoryStats,
   };
 }
 //@ chunk-0nv5pv9r.js:5702-8276 placement
@@ -332,57 +361,59 @@ async function reresolveCommandSourcedPlugins(storage) {
         : "Plugin autoupdate: command-source refresh disabled by tengu_plugin_command_source_refresh (still excluding command-sourced plugins from the regular pass)",
     );
   try {
-    let s =
+    let installed =
       isStorageV5Enabled() && storage !== undefined
         ? await loadInstalledPlugins(storage)
         : loadInstalledPluginsSync();
-    let i = new Map();
-    for (let [key, value] of Object.entries(s.plugins)) {
-      let S = filterInstallationsForCurrentProject(value ?? []);
-      let { name: y, marketplace } = parsePluginIdentifier(key);
-      if (S.length === 0 || !y || !marketplace) continue;
-      let f = i.get(marketplace) ?? [];
-      f.push({
+    let byMarketplace = new Map();
+    for (let [key, value] of Object.entries(installed.plugins)) {
+      let relevant = filterInstallationsForCurrentProject(value ?? []);
+      let { name, marketplace } = parsePluginIdentifier(key);
+      if (relevant.length === 0 || !name || !marketplace) continue;
+      let list = byMarketplace.get(marketplace) ?? [];
+      list.push({
         pluginId: key,
-        name: y,
-        installations: S,
+        name,
+        installations: relevant,
       });
-      i.set(marketplace, f);
+      byMarketplace.set(marketplace, list);
     }
-    let u;
-    let C = new Set();
-    let h = i.size > 0 ? await loadKnownMarketplacesSafe(storage) : {};
-    for (let [_, k] of i) {
-      let S = h[_];
-      if (isSourceDisallowedOrUnverifiable(S?.source)) {
-        for (let { pluginId, installations } of k)
+    let enabledIds;
+    let disabledSources = new Set();
+    let knownMarketplaces = byMarketplace.size > 0 ? await loadKnownMarketplacesSafe(storage) : {};
+    for (let [marketplace, entries] of byMarketplace) {
+      let entry = knownMarketplaces[marketplace];
+      if (isSourceDisallowedOrUnverifiable(entry?.source)) {
+        for (let { pluginId, installations } of entries)
           if (installations.some((installation) => installation.sourceCommand !== undefined))
             result.commandSourced.add(pluginId);
         continue;
       }
-      let marketplaceCacheOnly = await getMarketplaceCacheOnly(_, storage);
+      let marketplaceCacheOnly = await getMarketplaceCacheOnly(marketplace, storage);
       if (!marketplaceCacheOnly) continue;
-      for (let { pluginId, name: f, installations } of k) {
-        let found = marketplaceCacheOnly.plugins.find((plugin) => plugin.name === f);
+      for (let { pluginId, name: pluginName, installations } of entries) {
+        let found = marketplaceCacheOnly.plugins.find((plugin) => plugin.name === pluginName);
         if (!found || typeof found.source === "string" || found.source.source !== "command") continue;
         result.commandSourced.add(pluginId);
         if (disabledByPolicy || refreshDisabled) continue;
-        if (!u) {
-          u = new Set(await checkEnabledPlugins());
-          C = new Set((await loadAllPluginsCacheOnly(storage)).disabled.map((w) => w.source));
+        if (!enabledIds) {
+          enabledIds = new Set(await checkEnabledPlugins());
+          disabledSources = new Set(
+            (await loadAllPluginsCacheOnly(storage)).disabled.map((plugin) => plugin.source),
+          );
         }
-        if (!u.has(pluginId) || isPluginBlockedByPolicy(pluginId)) {
+        if (!enabledIds.has(pluginId) || isPluginBlockedByPolicy(pluginId)) {
           logForDebugging(`Plugin autoupdate: not re-resolving ${pluginId} (disabled or blocked by policy)`);
           continue;
         }
-        let R = describeCommandOutputMode(found.source);
-        let filtered = installations.filter((installation) => installation.sourceCommand !== R);
+        let acceptedCommand = describeCommandOutputMode(found.source);
+        let filtered = installations.filter((installation) => installation.sourceCommand !== acceptedCommand);
         if (filtered.length > 0) {
-          let all = filtered.every((v) => v.sourceCommand === undefined);
-          let mapped = uniq(filtered.map((v) => v.scope))
-            .map((v) => claudeCommand("plugin update", pluginId, `--scope ${v}`))
-            .filter((v) => v !== null)
-            .map((v) => `\`${v}\``);
+          let all = filtered.every((installation) => installation.sourceCommand === undefined);
+          let mapped = uniq(filtered.map((installation) => installation.scope))
+            .map((scope) => claudeCommand("plugin update", pluginId, `--scope ${scope}`))
+            .filter((command) => command !== null)
+            .map((command) => `\`${command}\``);
           logForDebugging(
             `Plugin autoupdate: not re-resolving ${pluginId}: marketplace command differs from the accepted one`,
             {
@@ -392,30 +423,32 @@ async function reresolveCommandSourcedPlugins(storage) {
           result.blocked.push({
             type: "generic-error",
             source: pluginId,
-            plugin: f,
+            plugin: pluginName,
             error:
               (all
-                ? `${printableName(f, 200)}'s marketplace entry now installs it by running a command`
-                : `${printableName(f, 200)}'s marketplace entry changed the command it runs`) +
+                ? `${printableName(pluginName, 200)}'s marketplace entry now installs it by running a command`
+                : `${printableName(pluginName, 200)}'s marketplace entry changed the command it runs`) +
               ` (\`${printableName(found.source.command, MAX_CONSENT_COMMAND_LENGTH)}${found.source.mode === "link" ? " [mode: link]" : ""}\`). It was not re-run in the background; ${mapped.length > 0 ? `run ${mapped.join(" and ")}` : "an explicit per-scope plugin update is needed"} to review and accept it.`,
           });
         }
-        let filtered_2 = installations.filter((installation) => installation.sourceCommand === R);
-        if (filtered_2.length === 0) continue;
+        let installations_2 = installations.filter(
+          (installation) => installation.sourceCommand === acceptedCommand,
+        );
+        if (installations_2.length === 0) continue;
         result.attemptedCount++;
         logForDebugging(`Plugin autoupdate: re-resolving command-sourced plugin ${pluginId}`);
-        let E = await updatePlugin(
+        let updateResult = await updatePlugin(
           pluginId,
-          filtered_2,
-          C,
+          installations_2,
+          disabledSources,
           {
             skipMarketplaceRefresh: true,
           },
           storage,
         );
-        if (E.updated !== null) result.updated.push(E.updated);
-        if (E.blocked !== null) result.blocked.push(E.blocked);
-        if (E.failed) result.failedCount++;
+        if (updateResult.updated !== null) result.updated.push(updateResult.updated);
+        if (updateResult.blocked !== null) result.blocked.push(updateResult.blocked);
+        if (updateResult.failed) result.failedCount++;
       }
     }
   } catch (error) {
@@ -429,17 +462,18 @@ async function reresolveCommandSourcedPlugins(storage) {
 /**
  * 通知自动更新结果；无监听器时合并暂存。
  */
-function notifyPluginsAutoUpdated(updated, blocked, m = [], { announce: r = true } = {}) {
+function notifyPluginsAutoUpdated(updated, blocked, reresolved = [], { announce = true } = {}) {
   if (updated.length === 0 && blocked.length === 0) return;
   let pluginRegistry = getPluginRegistry();
-  if (pluginRegistry.autoUpdateListener) pluginRegistry.autoUpdateListener(updated, blocked, m, r);
+  if (pluginRegistry.autoUpdateListener)
+    pluginRegistry.autoUpdateListener(updated, blocked, reresolved, announce);
   else {
     let pendingAutoUpdateNotification = pluginRegistry.pendingAutoUpdateNotification;
     pluginRegistry.pendingAutoUpdateNotification = {
       updated: uniq([...(pendingAutoUpdateNotification?.updated ?? []), ...updated]),
       blocked: [...(pendingAutoUpdateNotification?.blocked ?? []), ...blocked],
-      reresolved: uniq([...(pendingAutoUpdateNotification?.reresolved ?? []), ...m]),
-      announce: (pendingAutoUpdateNotification?.announce ?? false) || r,
+      reresolved: uniq([...(pendingAutoUpdateNotification?.reresolved ?? []), ...reresolved]),
+      announce: (pendingAutoUpdateNotification?.announce ?? false) || announce,
     };
   }
 }
@@ -462,21 +496,21 @@ function reresolveCommandSourcesOnce(storage) {
   pluginRegistry.commandSourceReresolve ??= (async () => {
     if (isRemoteSessionAvailable()) return emptyAutoupdateStats();
     if (marketplaceNameAnswerState() === "unanswered") await organizationAnswerState.wait?.();
-    let m = marketplaceNameAnswerState() === "unanswered";
-    let r = await reresolveCommandSourcedPlugins(storage);
-    if (m) pluginRegistry.commandSourceReresolve = null;
-    if (m && r.commandSourced.size > 0) {
+    let heldForAnswer = marketplaceNameAnswerState() === "unanswered";
+    let stats = await reresolveCommandSourcedPlugins(storage);
+    if (heldForAnswer) pluginRegistry.commandSourceReresolve = null;
+    if (heldForAnswer && stats.commandSourced.size > 0) {
       pluginRegistry.organizationAsk.isCommandHeld = true;
       pluginRegistry.organizationAsk.heldReresolve = () =>
         reresolveCommandSourcesOnce(storage).then(() => {});
     }
-    if (r.attemptedCount > 0) emitProducerDirsChanged();
+    if (stats.attemptedCount > 0) emitProducerDirsChanged();
     try {
-      notifyPluginsAutoUpdated(r.updated, r.blocked, r.updated);
+      notifyPluginsAutoUpdated(stats.updated, stats.blocked, stats.updated);
     } catch (error) {
       logError(error);
     }
-    return r;
+    return stats;
   })();
   return pluginRegistry.commandSourceReresolve;
 }
@@ -484,11 +518,11 @@ function reresolveCommandSourcesOnce(storage) {
 /**
  * 后台自动更新：刷新开启 autoUpdate 的市场（refreshMarketplaceDeduped），更新这些市场里已安装的插件、刷新 command 来源与插件目录插件，记 tengu_plugin_autoupdate_pass；自动更新器被禁用时跳过。
  */
-function autoUpdateMarketplacesAndPluginsInBackground(storage) {
+function autoUpdateMarketplacesAndPluginsInBackground(storageV5) {
   return (async () => {
-    let o = await reresolveCommandSourcesOnce(storage);
+    let commandStats = await reresolveCommandSourcesOnce(storageV5);
     let now = Date.now();
-    let r = {
+    let pluginStats = {
       marketplaces_refreshed: 0,
       marketplace_refresh_failed: 0,
       marketplace_refresh_policy_skipped: 0,
@@ -497,34 +531,34 @@ function autoUpdateMarketplacesAndPluginsInBackground(storage) {
       plugins_blocked_by_pin: 0,
       plugins_helper_deferred: 0,
       plugins_policy_blocked: 0,
-      command_plugins_refreshed: o.attemptedCount,
-      command_plugin_refresh_failed: o.failedCount,
+      command_plugins_refreshed: commandStats.attemptedCount,
+      command_plugin_refresh_failed: commandStats.failedCount,
     };
-    let s = {};
-    s = {
+    let directoryStats = {};
+    directoryStats = {
       directory_updated: 0,
       directory_update_failed: 0,
       directory_update_stuck: 0,
       directory_identity_changed: 0,
     };
-    let i = () => {
-      if (o.attemptedCount > 0 || o.failedCount > 0)
+    let logSkipped = () => {
+      if (commandStats.attemptedCount > 0 || commandStats.failedCount > 0)
         logEvent("tengu_plugin_autoupdate_pass", {
           outcome: lit("skipped"),
-          ...r,
-          ...s,
+          ...pluginStats,
+          ...directoryStats,
           duration_ms: Date.now() - now,
         });
     };
     if (shouldSkipPluginAutoupdate()) {
       logForDebugging("Plugin autoupdate: skipped (auto-updater disabled)");
-      i();
+      logSkipped();
       return;
     }
     try {
-      let marketplaces = await getAutoUpdateMarketplaces(storage);
+      let marketplaces = await getAutoUpdateMarketplaces(storageV5);
       if (marketplaces.size === 0) {
-        i();
+        logSkipped();
         return;
       }
       let floored = Math.floor(Math.random() * AUTOUPDATE_NOTIFY_TTL_MS);
@@ -535,7 +569,7 @@ function autoUpdateMarketplacesAndPluginsInBackground(storage) {
       let refreshResults = await Promise.allSettled(
         Array.from(marketplaces).map(async (name) => {
           try {
-            await refreshMarketplaceDeduped(name, storage, undefined, {
+            await refreshMarketplaceDeduped(name, storageV5, undefined, {
               isBackground: true,
             });
             return "refreshed";
@@ -556,45 +590,56 @@ function autoUpdateMarketplacesAndPluginsInBackground(storage) {
           }
         }),
       );
-      r.marketplace_refresh_failed = count(
+      pluginStats.marketplace_refresh_failed = count(
         refreshResults,
-        (e) => e.status === "fulfilled" && e.value === "failed",
+        (result) => result.status === "fulfilled" && result.value === "failed",
       );
-      r.marketplace_refresh_policy_skipped = count(
+      pluginStats.marketplace_refresh_policy_skipped = count(
         refreshResults,
-        (e) => e.status === "fulfilled" && e.value === "policy",
+        (result) => result.status === "fulfilled" && result.value === "policy",
       );
-      r.marketplaces_refreshed =
-        marketplaces.size - r.marketplace_refresh_failed - r.marketplace_refresh_policy_skipped;
+      pluginStats.marketplaces_refreshed =
+        marketplaces.size -
+        pluginStats.marketplace_refresh_failed -
+        pluginStats.marketplace_refresh_policy_skipped;
       logForDebugging("Plugin autoupdate: checking installed plugins");
       let { updated, blocked, updateFailedCount, directory } = await updatePluginsInMarketplaces(
         marketplaces,
-        o.commandSourced,
+        commandStats.commandSourced,
         {
           skipCommandSources: true,
         },
-        storage,
+        storageV5,
       );
-      r.plugins_updated = updated.length;
-      r.plugin_update_failed = updateFailedCount;
-      s = {
+      pluginStats.plugins_updated = updated.length;
+      pluginStats.plugin_update_failed = updateFailedCount;
+      directoryStats = {
         directory_updated: directory.updated,
         directory_update_failed: directory.updateFailed,
         directory_update_stuck: directory.stuck,
         directory_identity_changed: directory.identityChanged,
       };
-      r.plugins_blocked_by_pin = count(blocked, (e) => e.type === "autoupdate-blocked-by-pinner");
-      r.plugins_helper_deferred = count(blocked, (e) => e.type === "autoupdate-deferred-entry-helper");
-      r.plugins_policy_blocked = count(blocked, (e) => e.type === "autoupdate-disabled-by-policy");
+      pluginStats.plugins_blocked_by_pin = count(
+        blocked,
+        (entry) => entry.type === "autoupdate-blocked-by-pinner",
+      );
+      pluginStats.plugins_helper_deferred = count(
+        blocked,
+        (entry) => entry.type === "autoupdate-deferred-entry-helper",
+      );
+      pluginStats.plugins_policy_blocked = count(
+        blocked,
+        (entry) => entry.type === "autoupdate-disabled-by-policy",
+      );
       if (updated.length > 0) clearPluginCache("autoupdate dep-resolution");
-      let { errors } = await loadAllPluginsCacheOnly(storage);
+      let { errors } = await loadAllPluginsCacheOnly(storageV5);
       let missingDependencies = await resolveMissingDependencies(
         errors.filter((error) => {
           if (error.type !== "dependency-unsatisfied") return false;
           let marketplace = parsePluginIdentifier(error.source).marketplace;
           return marketplace !== undefined && marketplaces.has(marketplace.toLowerCase());
         }),
-        storage,
+        storageV5,
       );
       if (missingDependencies.installed.length > 0) {
         logForDebugging(
@@ -604,9 +649,12 @@ function autoUpdateMarketplacesAndPluginsInBackground(storage) {
       }
       notifyPluginsAutoUpdated(updated, blocked);
       logEvent("tengu_plugin_autoupdate_pass", {
-        outcome: r.marketplace_refresh_failed > 0 || r.plugin_update_failed > 0 ? lit("partial") : lit("ok"),
-        ...r,
-        ...s,
+        outcome:
+          pluginStats.marketplace_refresh_failed > 0 || pluginStats.plugin_update_failed > 0
+            ? lit("partial")
+            : lit("ok"),
+        ...pluginStats,
+        ...directoryStats,
         duration_ms: Date.now() - now,
       });
     } catch (error) {
@@ -616,8 +664,8 @@ function autoUpdateMarketplacesAndPluginsInBackground(storage) {
       logEvent("tengu_plugin_autoupdate_pass", {
         outcome: lit("failed"),
         error_kind: fromEnum(classifyPluginCommandError(error)),
-        ...r,
-        ...s,
+        ...pluginStats,
+        ...directoryStats,
         duration_ms: Date.now() - now,
       });
     }
@@ -627,10 +675,10 @@ function autoUpdateMarketplacesAndPluginsInBackground(storage) {
 /**
  * 把一组插件目录批量构造成插件对象（不记遥测），汇总成功与错误。
  */
-async function updatePluginsForMarketplaces(e, storageV5) {
+async function updatePluginsForMarketplaces(entries, storageV5) {
   let results = await Promise.allSettled(
-    e.map(({ path, source, name: c }) =>
-      createPluginFromPath(path, source, true, c, true, storageV5, undefined, {
+    entries.map(({ path, source, name }) =>
+      createPluginFromPath(path, source, true, name, true, storageV5, undefined, {
         noTelemetry: true,
       }),
     ),
@@ -639,23 +687,6 @@ async function updatePluginsForMarketplaces(e, storageV5) {
     enabled: results.flatMap((pluginId) => (pluginId.status === "fulfilled" ? [pluginId.value.plugin] : [])),
     errors: results.flatMap((result) => (result.status === "fulfilled" ? result.value.errors : [])),
   };
-}
-//@ chunk-e6aww6q8.js:693187-693320 fingerprint = getAutoUpdateEnabledMarketplaces (1)
-/**
- * 设置 known_marketplaces 中某市场的 autoUpdate（名字配错）。
- */
-async function setMarketplaceAutoUpdateFlag(name, autoUpdate) {
-  await withClaudeAiMarketplaceLock((r) => {
-    let s = r[name];
-    if (s === undefined || s.autoUpdate === autoUpdate) return null;
-    return {
-      ...r,
-      [name]: {
-        ...s,
-        autoUpdate,
-      },
-    };
-  });
 }
 export {
   autoUpdateMarketplacesAndPluginsInBackground,

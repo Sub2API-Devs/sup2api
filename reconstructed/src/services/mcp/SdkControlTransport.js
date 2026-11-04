@@ -15,8 +15,8 @@ import { isPlainObject } from "../../utils/isPlainObject.js";
 /**
  * 判断消息是否为带非空 id 的 JSON-RPC 请求。
  */
-function isJsonRpcRequest(e) {
-  return "method" in e && "id" in e && e.id !== null;
+function isJsonRpcRequest(message) {
+  return "method" in message && "id" in message && message.id !== null;
 }
 //@ chunk-mdk8a5r0.js:480-2760 fingerprint = SdkControlClientTransport (0.329)
 /**
@@ -46,10 +46,10 @@ class SdkControlClientTransport {
   async start() {}
   async send(message) {
     if (this.isClosed) throw Error("Transport is closed");
-    let t = this.answerFromManifest(message);
-    if (t === SWALLOW_SYMBOL) return;
-    if (t !== undefined) {
-      queueMicrotask(() => this.onmessage?.(t));
+    let answered = this.answerFromManifest(message);
+    if (answered === SWALLOW_SYMBOL) return;
+    if (answered !== undefined) {
+      queueMicrotask(() => this.onmessage?.(answered));
       return;
     }
     let response = await this.sendMcpMessage(this.serverName, message);
@@ -60,26 +60,26 @@ class SdkControlClientTransport {
     this.isClosed = true;
     this.onclose?.();
   }
-  answerFromManifest(e) {
+  answerFromManifest(message) {
     if (
       this.manifestInitializeResult === undefined &&
       this.manifestToolsListResult === undefined &&
       !this.swallowNextInitializedNotification
     )
       return;
-    if (!("method" in e)) {
+    if (!("method" in message)) {
       this.dropManifest("unexpected_message");
       return;
     }
-    switch (e.method) {
+    switch (message.method) {
       case "initialize": {
         let manifestInitializeResult = this.manifestInitializeResult;
-        if (manifestInitializeResult === undefined || !("id" in e)) {
+        if (manifestInitializeResult === undefined || !("id" in message)) {
           this.dropManifest("unexpected_message");
           return;
         }
         this.manifestInitializeResult = undefined;
-        let params = e.params;
+        let params = message.params;
         if (
           params === undefined ||
           typeof params.protocolVersion !== "string" ||
@@ -100,7 +100,7 @@ class SdkControlClientTransport {
         this.outcome = "replayed";
         return {
           jsonrpc: "2.0",
-          id: e.id,
+          id: message.id,
           result: manifestInitializeResult,
         };
       }
@@ -116,9 +116,9 @@ class SdkControlClientTransport {
         let manifestToolsListResult = this.manifestToolsListResult;
         if (
           manifestToolsListResult === undefined ||
-          !("id" in e) ||
+          !("id" in message) ||
           this.swallowNextInitializedNotification ||
-          (e.params !== undefined && e.params.cursor !== undefined)
+          (message.params !== undefined && message.params.cursor !== undefined)
         ) {
           this.dropManifest("unexpected_message");
           return;
@@ -127,7 +127,7 @@ class SdkControlClientTransport {
         if (!isValidResultMeta(manifestToolsListResult)) return;
         return {
           jsonrpc: "2.0",
-          id: e.id,
+          id: message.id,
           result: manifestToolsListResult,
         };
       }
@@ -152,15 +152,15 @@ function isEmptyCapabilities(capabilities) {
 /**
  * isValidResultMeta：校验结果 _meta（progressToken 类型、io.modelcontextprotocol/related-task.taskId）以决定 manifest 结果能否直接重放。
  */
-function isValidResultMeta(e) {
-  let _meta = e._meta;
+function isValidResultMeta(result) {
+  let _meta = result._meta;
   if (_meta === undefined) return true;
   if (!isPlainObject(_meta)) return false;
   let { progressToken } = _meta;
   if (progressToken !== undefined && typeof progressToken !== "string" && typeof progressToken !== "number")
     return false;
-  let s = _meta["io.modelcontextprotocol/related-task"];
-  return s === undefined || (isPlainObject(s) && typeof s.taskId === "string");
+  let relatedTask = _meta["io.modelcontextprotocol/related-task"];
+  return relatedTask === undefined || (isPlainObject(relatedTask) && typeof relatedTask.taskId === "string");
 }
 //@ chunk-mdk8a5r0.js:3070-3347 fingerprint = SdkControlServerTransport (1)
 /**

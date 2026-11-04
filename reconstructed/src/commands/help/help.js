@@ -20,3 +20,4 @@ var call = async (onDone, { options: { commands } }) =>
     commands,
     onClose: onDone,
   });
+export { call };

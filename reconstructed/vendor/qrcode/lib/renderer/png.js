@@ -5,12 +5,12 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_png } from "../../../pngjs/lib/png.js";
 import { require_utils_2 } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:52033-52922 cjs-fingerprint
-var require_png_2 = x(function (cjsExports) {
+var require_png_2 = __commonJS(function (cjsExports) {
   var fs = importMetaRequire("fs");
   var PNG = require_png().PNG;
   var Utils = require_utils_2();
@@ -68,8 +68,8 @@ var require_png_2 = x(function (cjsExports) {
     stream.on("close", done);
     cjsExports.renderToFileStream(stream, qrData, options);
   };
-  cjsExports.renderToFileStream = function (stream, qrData, n) {
-    cjsExports.render(qrData, n).pack().pipe(stream);
+  cjsExports.renderToFileStream = function (stream, qrData, options) {
+    cjsExports.render(qrData, options).pack().pipe(stream);
   };
 });
 export { require_png_2 };

@@ -13,6 +13,7 @@ import { getRootSession } from "../../../bootstrap/state.js";
 import { logForDebugging } from "../../debug.js";
 import { resolveSetting } from "../../settings/userIntentSettings.js";
 import { logError } from "../../log.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-z58m7qdh.js:367-388 facade-exports = getResolvedTeammateMode (0.685)
 /**
@@ -35,14 +36,17 @@ class TeammateModeSnapshot {
   }
 }
 //@ chunk-z58m7qdh.js:547-574 facade-exports
-var teammateModeSnapshots = new HostScoped(() => new TeammateModeSnapshot());
+var teammateModeSnapshots; // deferred: uses TeammateModeSnapshot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z58m7qdh.js:547", () => {
+  teammateModeSnapshots = new HostScoped(() => new TeammateModeSnapshot());
+});
 //@ chunk-z58m7qdh.js:574-611 layout
 function teammateModeSnapshot() {
   return teammateModeSnapshots.of(getRootSession().host);
 }
 //@ chunk-z58m7qdh.js:611-649 facade-exports
-function setCliTeammateModeOverride(e) {
-  teammateModeSnapshot().setCliOverride(e);
+function setCliTeammateModeOverride(mode) {
+  teammateModeSnapshot().setCliOverride(mode);
 }
 //@ chunk-z58m7qdh.js:649-687 facade-exports
 function getCliTeammateModeOverride() {
@@ -82,14 +86,14 @@ function captureTeammateModeSnapshot() {
  * 读取 teammateMode 快照；未捕获时记错误并立即捕获。
  */
 function getTeammateModeFromSnapshot() {
-  let e = teammateModeSnapshot();
-  if (e.captured === null) {
+  let snapshot = teammateModeSnapshot();
+  if (snapshot.captured === null) {
     logError(
       Error("getTeammateModeFromSnapshot called before capture - this indicates an initialization bug"),
     );
     captureTeammateModeSnapshot();
   }
-  return e.captured ?? DEFAULT_TEAMMATE_MODE;
+  return snapshot.captured ?? DEFAULT_TEAMMATE_MODE;
 }
 export {
   getTeammateModeFromSnapshot,
@@ -98,4 +102,7 @@ export {
   getCliTeammateModeOverride,
   DEFAULT_TEAMMATE_MODE,
   clearCliTeammateModeOverride,
+  TeammateModeSnapshot,
+  setCliTeammateModeOverride,
+  teammateModeSnapshots,
 };

@@ -8,7 +8,7 @@
  * pieces: chunk-sc72x544.js (59)
  * attribution: placement 59
  */
-import { Ar } from "../../../../runtime/bun-runtime.js";
+import { __export } from "../../../../runtime/bun-runtime.js";
 import { register } from "./index.js";
 import { isScreenReaderMode } from "../../../utils/accessibility/screenReader.js";
 import { getFeatureValue_SESSION_PINNED } from "../../../services/analytics/growthbook.js";
@@ -16,7 +16,7 @@ import { getFeatureValue_SESSION_PINNED } from "../../../services/analytics/grow
 //@ chunk-sc72x544.js:3848-3857 placement
 var clawdCookingNamespace = {};
 //@ chunk-sc72x544.js:3857-4802 placement
-Ar(clawdCookingNamespace, {
+__export(clawdCookingNamespace, {
   BLINK_FRAME: () => BLINK_FRAME,
   BUBBLES: () => BUBBLES,
   BUBBLES_AT: () => BUBBLES_AT,
@@ -88,13 +88,13 @@ var PLUGIN_NAME = "cc-plugin-mods-guide";
 var ENGINE_ASK_ID = /^confirm_/;
 //@ chunk-sc72x544.js:5065-5251 placement
 function isExplained(questions) {
-  let [r] = questions;
-  let e = typeof r === "object" && r !== null ? Reflect.get(r, "question") : undefined;
-  if (typeof e !== "string") return false;
-  let [, ...f] = e.split(`
+  let [first] = questions;
+  let question = typeof first === "object" && first !== null ? Reflect.get(first, "question") : undefined;
+  if (typeof question !== "string") return false;
+  let [, ...rest] = question.split(`
 
 `);
-  return f
+  return rest
     .join(
       `
 
@@ -145,19 +145,19 @@ var SCENE_COLUMNS = 44;
 //@ chunk-sc72x544.js:5510-5518 placement
 var SCENE_ROWS = 9;
 //@ chunk-sc72x544.js:5518-5802 placement
-function cellsOf(i) {
+function cellsOf(scene) {
   let uint32Array = new Uint32Array(SCENE_COLUMNS * SCENE_ROWS * CELL_WORDS);
   for (let k = 0; k < SCENE_ROWS; k++)
     for (let k_2 = 0; k_2 < SCENE_COLUMNS; k_2++) {
-      let f = PALETTE[i[k + k]?.[k_2] ?? "."];
-      let o = PALETTE[i[k + k + 1]?.[k_2] ?? "."];
-      let n = f === undefined && o === undefined;
-      let s = f === undefined && o !== undefined;
+      let top = PALETTE[scene[k + k]?.[k_2] ?? "."];
+      let bottom = PALETTE[scene[k + k + 1]?.[k_2] ?? "."];
+      let bothBlank = top === undefined && bottom === undefined;
+      let onlyBottom = top === undefined && bottom !== undefined;
       uint32Array.set(
         [
-          n ? SPACE : s ? LOWER_HALF : UPPER_HALF,
-          (s ? o : f) ?? TERMINAL_DEFAULT,
-          (s ? undefined : o) ?? TERMINAL_DEFAULT,
+          bothBlank ? SPACE : onlyBottom ? LOWER_HALF : UPPER_HALF,
+          (onlyBottom ? bottom : top) ?? TERMINAL_DEFAULT,
+          (onlyBottom ? undefined : bottom) ?? TERMINAL_DEFAULT,
         ],
         (k * SCENE_COLUMNS + k_2) * CELL_WORDS,
       );
@@ -165,53 +165,54 @@ function cellsOf(i) {
   return new Uint8Array(uint32Array.buffer).toBase64();
 }
 //@ chunk-sc72x544.js:5802-5874 placement
-var blankGrid = (i, r) =>
+var blankGrid = (columns, rows) =>
   Array.from(
     {
-      length: r,
+      length: rows,
     },
     () =>
       Array.from(
         {
-          length: i,
+          length: columns,
         },
         () => ".",
       ),
   );
 //@ chunk-sc72x544.js:5874-5949 placement
-function put(i, r, t) {
-  let [e, f] = r;
-  let o = i[f];
-  if (o !== undefined && e >= 0 && e < o.length) o[e] = t;
+function put(grid, point, letter) {
+  let [x, y] = point;
+  let row = grid[y];
+  if (row !== undefined && x >= 0 && x < row.length) row[x] = letter;
 }
 //@ chunk-sc72x544.js:5949-6154 placement
-function plot(i, r) {
-  let [t, e] = r.end;
-  let [f, o] = r.start;
-  let n = Math.abs(t - f);
-  let s = -Math.abs(e - o);
-  let l = f < t ? 1 : -1;
-  let a = o < e ? 1 : -1;
-  let p = n + s;
+function plot(grid, line) {
+  let [endX, endY] = line.end;
+  let [startX, startY] = line.start;
+  let dx = Math.abs(endX - startX);
+  let dy = -Math.abs(endY - startY);
+  let stepX = startX < endX ? 1 : -1;
+  let stepY = startY < endY ? 1 : -1;
+  let error = dx + dy;
   for (;;) {
-    put(i, [f, o], r.letter);
-    if (f === t && o === e) return;
-    let u = 2 * p;
-    if (u >= s) {
-      p += s;
-      f += l;
+    put(grid, [startX, startY], line.letter);
+    if (startX === endX && startY === endY) return;
+    let doubled = 2 * error;
+    if (doubled >= dy) {
+      error += dy;
+      startX += stepX;
     }
-    if (u <= n) {
-      p += n;
-      o += a;
+    if (doubled <= dx) {
+      error += dx;
+      startY += stepY;
     }
   }
 }
 //@ chunk-sc72x544.js:6154-6269 placement
-function stamp(i, r, t) {
-  let [e, f] = t;
-  for (let [o, n] of r.entries())
-    for (let [s, l] of [...n].entries()) if (l !== ".") put(i, [e + s, f + o], l);
+function stamp(grid, sprite, at) {
+  let [originX, originY] = at;
+  for (let [rowOffset, row] of sprite.entries())
+    for (let [column, char] of [...row].entries())
+      if (char !== ".") put(grid, [originX + column, originY + rowOffset], char);
 }
 //@ chunk-sc72x544.js:6269-6283 placement
 var BUBBLES_AT = [23, 8];
@@ -405,50 +406,50 @@ var SPOON = [
   ],
 ];
 //@ chunk-sc72x544.js:8689-9051 placement
-function frameOf(i) {
-  let r = i % FRAME_COUNT;
-  let t = blankGrid(SCENE_COLUMNS, PIXEL_ROWS);
-  let [, e] = POT_AT;
-  stamp(t, COUNTER, COUNTER_AT);
-  stamp(t, FLAMES[r] ?? [], FLAMES_AT);
-  for (let [a, p] of PUFF_STARTS) {
-    let c = PUFF_TRACK[(r + p) % FRAME_COUNT];
-    if (c !== undefined) {
-      let [u, H, S] = c;
-      let C = PUFFS[S] ?? [];
-      stamp(t, C, [a + u, e - H - C.length]);
+function frameOf(frameIndex) {
+  let frame = frameIndex % FRAME_COUNT;
+  let grid = blankGrid(SCENE_COLUMNS, PIXEL_ROWS);
+  let [, potY] = POT_AT;
+  stamp(grid, COUNTER, COUNTER_AT);
+  stamp(grid, FLAMES[frame] ?? [], FLAMES_AT);
+  for (let [x, offset] of PUFF_STARTS) {
+    let puff = PUFF_TRACK[(frame + offset) % FRAME_COUNT];
+    if (puff !== undefined) {
+      let [dx, rise, puffIndex] = puff;
+      let sprite = PUFFS[puffIndex] ?? [];
+      stamp(grid, sprite, [x + dx, potY - rise - sprite.length]);
     }
   }
-  let [f, o] = SPOON[r] ?? SPOON[0];
-  plot(t, {
-    start: f,
-    end: o,
+  let [from, to] = SPOON[frame] ?? SPOON[0];
+  plot(grid, {
+    start: from,
+    end: to,
     letter: "W",
   });
-  stamp(t, POT, POT_AT);
-  stamp(t, [BUBBLES[r] ?? ""], BUBBLES_AT);
-  let n = CLAWD_POSES[POSES[r] ?? 0];
-  let l = r === BLINK_FRAME ? n.map((a) => a.replaceAll("E", "C")) : n;
-  stamp(t, l, CLAWD_AT);
-  return t.map((a) => a.join(""));
+  stamp(grid, POT, POT_AT);
+  stamp(grid, [BUBBLES[frame] ?? ""], BUBBLES_AT);
+  let pose = CLAWD_POSES[POSES[frame] ?? 0];
+  let poseForFrame = frame === BLINK_FRAME ? pose.map((line) => line.replaceAll("E", "C")) : pose;
+  stamp(grid, poseForFrame, CLAWD_AT);
+  return grid.map((line) => line.join(""));
 }
 //@ chunk-sc72x544.js:9051-9206 placement
-function playScene(i, r) {
-  let t = 0;
-  let e = 0;
-  let f = r(FRAME_MS, () => void o());
-  async function o() {
-    t += 1;
-    e = (await i.paint(cellsOf(frameOf(t))).catch(() => false)) ? 0 : e + 1;
-    if (t >= PLAY_FRAMES || e >= MISSED_FRAMES_MAX) {
-      f.cancel();
-      i.ended();
+function playScene(screen, every) {
+  let frameCount = 0;
+  let missed = 0;
+  let timer = every(FRAME_MS, () => void tick());
+  async function tick() {
+    frameCount += 1;
+    missed = (await screen.paint(cellsOf(frameOf(frameCount))).catch(() => false)) ? 0 : missed + 1;
+    if (frameCount >= PLAY_FRAMES || missed >= MISSED_FRAMES_MAX) {
+      timer.cancel();
+      screen.ended();
     }
   }
 }
 //@ chunk-sc72x544.js:9206-9290 placement
-var isPlainTerminal = (i) =>
-  (i.noColor !== undefined && i.noColor !== "") || i.forceColor === "0" || i.term === "dumb";
+var isPlainTerminal = (env) =>
+  (env.noColor !== undefined && env.noColor !== "") || env.forceColor === "0" || env.term === "dumb";
 //@ chunk-sc72x544.js:9290-12648 placement
 var CLAWD_COOKING_STILL_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 352 144" width="352" height="144" shape-rendering="crispEdges" role="img"><title>Clawd stirs a steaming pot</title><rect x="0" y="136" width="352" height="8" fill="#6b7280"/><g><rect x="208" y="128" width="8" height="8" fill="#f59e0b"/><rect x="224" y="128" width="8" height="8" fill="#f59e0b"/><rect x="240" y="128" width="8" height="8" fill="#f59e0b"/><rect x="256" y="128" width="8" height="8" fill="#f59e0b"/><rect x="272" y="128" width="8" height="8" fill="#f59e0b"/><rect x="288" y="128" width="8" height="8" fill="#f59e0b"/><rect x="216" y="128" width="8" height="8" fill="#ef4444"/><rect x="232" y="128" width="8" height="8" fill="#ef4444"/><rect x="248" y="128" width="8" height="8" fill="#ef4444"/><rect x="264" y="128" width="8" height="8" fill="#ef4444"/><rect x="280" y="128" width="8" height="8" fill="#ef4444"/><rect x="296" y="128" width="8" height="8" fill="#ef4444"/></g><g><rect x="224" y="120" width="8" height="8" fill="#fde047"/><rect x="256" y="120" width="8" height="8" fill="#fde047"/><rect x="280" y="120" width="8" height="8" fill="#fde047"/></g><g opacity="0.85" transform="translate(0 0)"><g transform="translate(208 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g></g><g opacity="0.6" transform="translate(-8 -36)"><g transform="translate(240 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g></g><g opacity="0.3" transform="translate(-10 -76)"><g transform="translate(272 48)"><path fill="#9aa3ad" d="M8 0h16v8h-16zM0 8h32v8h-32zM8 16h16v8h-16z"/></g></g><g><g><path fill="none" stroke="#be8e5c" stroke-width="8" stroke-linecap="square" d="M161.0 24.8L273.9 91.2"/></g></g><path fill="#94a0b0" d="M184 72h16v8h-16zM312 72h16v8h-16zM192 80h8v8h-8zM184 88h16v8h-16zM320 88h8v8h-8zM192 96h8v8h-8zM192 104h8v8h-8z"/><path fill="#e9b44c" d="M200 72h112v8h-112z"/><path fill="#5f6b7a" d="M200 80h112v8h-112zM200 88h112v8h-112zM200 96h112v8h-112zM200 104h112v8h-112zM200 112h104v8h-104z"/><path fill="#465160" d="M312 80h8v8h-8zM312 88h8v8h-8zM312 96h8v8h-8zM312 104h8v8h-8zM304 112h8v8h-8z"/><rect x="256" y="64" width="8" height="8" fill="#e9b44c"></rect><g><path fill="#d77757" d="M32 56h104v8h-104zM32 64h104v8h-104zM32 72h104v8h-104zM32 80h104v8h-104zM16 88h120v8h-120zM16 96h120v8h-120zM32 104h104v8h-104zM32 112h104v8h-104zM32 120h8v8h-8zM48 120h8v8h-8zM112 120h8v8h-8zM128 120h8v8h-8zM32 128h8v8h-8zM48 128h8v8h-8zM112 128h8v8h-8zM128 128h8v8h-8z"/><rect x="56" y="72" width="8" height="16" fill="#141414"></rect><rect x="120" y="72" width="8" height="16" fill="#141414"></rect><g><rect x="136" y="80" width="16" height="8" fill="#d77757"/><rect x="136" y="72" width="16" height="8" fill="#d77757"/><rect x="144" y="72" width="16" height="8" fill="#d77757"/><rect x="144" y="64" width="16" height="8" fill="#d77757"/><rect x="152" y="64" width="16" height="8" fill="#d77757"/><rect x="152" y="56" width="16" height="8" fill="#d77757"/><rect x="160" y="56" width="16" height="8" fill="#d77757"/><rect x="160" y="48" width="16" height="8" fill="#d77757"/><rect x="168" y="48" width="16" height="8" fill="#d77757"/><rect x="168" y="40" width="16" height="8" fill="#d77757"/><rect x="176" y="40" width="16" height="8" fill="#d77757"/><rect x="176" y="32" width="16" height="8" fill="#d77757"/></g></g></svg>';
@@ -464,8 +465,8 @@ var SCENE_KEY = "clawd-cooking";
 //@ chunk-sc72x544.js:19366-19377 placement
 var SVG_WIDTH = 440;
 //@ chunk-sc72x544.js:19377-19578 placement
-function remoteGuide(i, r, t) {
-  let { Box, Svg, Text } = i;
+function remoteGuide(ui, content, isStill) {
+  let { Box, Svg, Text } = ui;
   return h(
     Box,
     {
@@ -485,18 +486,18 @@ function remoteGuide(i, r, t) {
         HEADING,
       ),
       h(Svg, {
-        source: t ? CLAWD_COOKING_STILL_SVG : CLAWD_COOKING_SVG,
+        source: isStill ? CLAWD_COOKING_STILL_SVG : CLAWD_COOKING_SVG,
         alt: SCENE_ALT,
         width: SVG_WIDTH,
-        isInteractive: !t,
+        isInteractive: !isStill,
       }),
     ),
-    r,
+    content,
   );
 }
 //@ chunk-sc72x544.js:19578-19765 placement
-function terminalGuide(i, r, cells) {
-  let { Box, Raster, Text } = i;
+function terminalGuide(ui, content, cells) {
+  let { Box, Raster, Text } = ui;
   return h(
     Box,
     {
@@ -522,7 +523,7 @@ function terminalGuide(i, r, cells) {
         cells,
       }),
     ),
-    r,
+    content,
   );
 }
 //@ chunk-sc72x544.js:19765-19774 placement

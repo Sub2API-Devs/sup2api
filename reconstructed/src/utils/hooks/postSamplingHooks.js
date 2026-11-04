@@ -20,30 +20,31 @@ import { getDefaultMainLoopModel } from "../model/modelFallback.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { toError } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ha3km179.js:54310-54505 placement
 /**
  * 把小粘贴块展开后重建提交内容。
  */
-function withExpandedPastes(entry, n) {
-  let r = collapseSmallPastedBlocks(n);
-  let s = {};
-  for (let pastedContent of Object.values(entry.pastedContents)) {
-    let included = r.text.includes(formatImageRef(pastedContent.id));
-    if (pastedContent.type === "image" && included) s[pastedContent.id] = pastedContent;
+function withExpandedPastes(logEntry, entry) {
+  let collapsed = collapseSmallPastedBlocks(entry);
+  let pastedContents = {};
+  for (let pastedContent of Object.values(logEntry.pastedContents)) {
+    let included = collapsed.text.includes(formatImageRef(pastedContent.id));
+    if (pastedContent.type === "image" && included) pastedContents[pastedContent.id] = pastedContent;
   }
-  return logEntryToHistoryEntry(entry, r.text, {
-    ...s,
-    ...r.pastedContents,
+  return logEntryToHistoryEntry(logEntry, collapsed.text, {
+    ...pastedContents,
+    ...collapsed.pastedContents,
   });
 }
 //@ chunk-ha3km179.js:54505-54550 placement
 /**
  * 上报排队提交统计（异常吞掉）。
  */
-function reportQueuedSubmissions(e, n) {
+function reportQueuedSubmissions(submissions, delivery) {
   try {
-    reportQueuedSubmissionsUnsafe(e, n);
+    reportQueuedSubmissionsUnsafe(submissions, delivery);
   } catch (error) {
     logError(error);
   }
@@ -52,59 +53,59 @@ function reportQueuedSubmissions(e, n) {
 /**
  * 统计排队提交的类型与等待时间。
  */
-function reportQueuedSubmissionsUnsafe(e, n) {
-  let filtered = e.filter((w) => w.pollEmptyDispatch !== true);
+function reportQueuedSubmissionsUnsafe(submissions, delivery) {
+  let filtered = submissions.filter((submission) => submission.pollEmptyDispatch !== true);
   if (filtered.length === 0) return;
   let now = Date.now();
-  let h = now;
-  let y = 0;
-  let S = 0;
-  let M = 0;
-  let R = 0;
+  let earliest = now;
+  let promptCount = 0;
+  let relayCount = 0;
+  let artifactCount = 0;
+  let monitorCount = 0;
   let monitorEventChars = 0;
-  for (let w of filtered) {
-    if (w.mode === "prompt") y++;
-    if (w.artifactCommentTurn !== undefined) M++;
-    if (w.monitorEvent !== undefined) {
-      R++;
-      monitorEventChars += typeof w.value === "string" ? w.value.length : 0;
+  for (let submission of filtered) {
+    if (submission.mode === "prompt") promptCount++;
+    if (submission.artifactCommentTurn !== undefined) artifactCount++;
+    if (submission.monitorEvent !== undefined) {
+      monitorCount++;
+      monitorEventChars += typeof submission.value === "string" ? submission.value.length : 0;
     }
-    if (isProjectsRelay(w.origin) && w.hearthRelayMessageIds !== undefined) S++;
-    let P = w.timestamp ? Date.parse(w.timestamp) : Number.NaN;
-    if (P < h) h = P;
+    if (isProjectsRelay(submission.origin) && submission.hearthRelayMessageIds !== undefined) relayCount++;
+    let timestamp = submission.timestamp ? Date.parse(submission.timestamp) : Number.NaN;
+    if (timestamp < earliest) earliest = timestamp;
   }
   logFeatureOk("queued_message_delivered", {
-    delivery: fromEnum(n),
+    delivery: fromEnum(delivery),
     command_count: filtered.length,
-    prompt_count: y,
-    relay_count: S,
-    artifact_comment_count: M,
-    monitor_event_count: R,
+    prompt_count: promptCount,
+    relay_count: relayCount,
+    artifact_comment_count: artifactCount,
+    monitor_event_count: monitorCount,
     monitor_event_chars: monitorEventChars,
-    wait_ms: now - h,
+    wait_ms: now - earliest,
   });
 }
 //@ chunk-ha3km179.js:55130-55162 placement
-function canonicalModelName(e) {
-  return getCanonicalName(parseUserSpecifiedModel(e));
+function canonicalModelName(model) {
+  return getCanonicalName(parseUserSpecifiedModel(model));
 }
 //@ chunk-ha3km179.js:55162-55416 placement
 /**
  * 判断当前主循环模型是否为自动模式模型或默认模型（用于回退提示）。
  */
 function automaticModelFallbackInfo({ userModel, permissionMode, exceeds200kTokens, automaticModels }) {
-  let runtimeMainLoopModel = getRuntimeMainLoopModel({
+  let model = getRuntimeMainLoopModel({
     permissionMode,
     mainLoopModel: userModel,
     exceeds200kTokens,
   });
-  let y = canonicalModelName(runtimeMainLoopModel);
+  let runtimeModel = canonicalModelName(model);
   for (let automaticModel of automaticModels)
-    if (automaticModel && canonicalModelName(automaticModel) === y) return {};
-  let defaultMainLoopModel = getDefaultMainLoopModel();
+    if (automaticModel && canonicalModelName(automaticModel) === runtimeModel) return {};
+  let model_2 = getDefaultMainLoopModel();
   return {
-    isDefaultModel: canonicalModelName(defaultMainLoopModel) === y,
-    defaultModel: defaultMainLoopModel,
+    isDefaultModel: canonicalModelName(model_2) === runtimeModel,
+    defaultModel: model_2,
   };
 }
 //@ chunk-ha3km179.js:55416-55473 placement
@@ -128,11 +129,11 @@ function nextFallbackStage(refusalCascadeState, attemptModel, refusalCascadeReso
       hop: undefined,
       state: refusalCascadeState,
     };
-  let h = refusalCascadeResolver.firstReachableStage(cursor.remaining, (S) =>
-    refusalCascadeResolver.resolveStage(S, attemptModel, cursor.triedModels),
+  let firstReachable = refusalCascadeResolver.firstReachableStage(cursor.remaining, (stage) =>
+    refusalCascadeResolver.resolveStage(stage, attemptModel, cursor.triedModels),
   );
   refusalCascadeResolver.logSkippedStages({
-    stages: h?.skippedStages ?? cursor.remaining,
+    stages: firstReachable?.skippedStages ?? cursor.remaining,
     chainLength: cursor.chainLength,
     firstStageIndex: cursor.chainLength - cursor.remaining.length + 1,
     model: attemptModel,
@@ -141,17 +142,17 @@ function nextFallbackStage(refusalCascadeState, attemptModel, refusalCascadeReso
     requestId: cursor.triggerRequestId,
   });
   let cursor_2 =
-    h !== undefined && h.remainingChain.length > 0
+    firstReachable !== undefined && firstReachable.remainingChain.length > 0
       ? {
           ...cursor,
-          remaining: h.remainingChain,
+          remaining: firstReachable.remainingChain,
           nextHopIndex: cursor.nextHopIndex + 1,
         }
       : undefined;
   return {
-    armTarget: h?.model,
+    armTarget: firstReachable?.model,
     hop:
-      h === undefined
+      firstReachable === undefined
         ? undefined
         : {
             index: cursor.nextHopIndex,
@@ -167,8 +168,8 @@ function nextFallbackStage(refusalCascadeState, attemptModel, refusalCascadeReso
 /**
  * 判断该次路由是否为链式（fallback chain）。
  */
-function isChainRouteMatch(e) {
-  return e.routeMatched === "chain";
+function isChainRouteMatch(event) {
+  return event.routeMatched === "chain";
 }
 //@ chunk-ha3km179.js:56158-56727 placement
 /**
@@ -191,11 +192,11 @@ function recordFallbackAttempt(refusalCascadeState, event, switchModelsOnFlagSet
             triggerCategory: event.apiRefusalCategory ?? undefined,
           },
         };
-  let h = switchModelsOnFlagSetting ? (event.remainingChain ?? []) : [];
+  let remainingChain = switchModelsOnFlagSetting ? (event.remainingChain ?? []) : [];
   let cursor =
-    h.length > 0 && event.cascadeChainLength !== undefined
+    remainingChain.length > 0 && event.cascadeChainLength !== undefined
       ? {
-          remaining: h,
+          remaining: remainingChain,
           chainLength: event.cascadeChainLength,
           nextHopIndex: 2,
           triedModels: [canonicalModelKey(event.originalModel), canonicalModelKey(event.fallbackModel)],
@@ -213,22 +214,22 @@ function recordFallbackAttempt(refusalCascadeState, event, switchModelsOnFlagSet
 /**
  * 记录回退通知（来源与服务模型）。
  */
-function recordFallbackNotice(refusalCascadeState, n) {
+function recordFallbackNotice(refusalCascadeState, event) {
   let pendingNotice = refusalCascadeState.pendingNotice;
   return {
     ...refusalCascadeState,
     pendingNotice: {
-      originModel: pendingNotice?.originModel ?? n.originModel,
-      servingModel: n.servingModel,
+      originModel: pendingNotice?.originModel ?? event.originModel,
+      servingModel: event.servingModel,
       retractedMessageUuids: [
         ...(pendingNotice?.retractedMessageUuids ?? []),
         ...(pendingNotice?.provisionalFlushUuid !== undefined ? [pendingNotice.provisionalFlushUuid] : []),
-        ...n.retractedMessageUuids,
+        ...event.retractedMessageUuids,
       ],
-      refusedUserMessageUuid: pendingNotice?.refusedUserMessageUuid ?? n.refusedUserMessageUuid,
-      apiRefusalCategory: pendingNotice ? pendingNotice.apiRefusalCategory : n.apiRefusalCategory,
-      sawCyberRefusal: pendingNotice?.sawCyberRefusal === true || n.apiRefusalCategory === "cyber",
-      requestId: pendingNotice ? pendingNotice.requestId : n.requestId,
+      refusedUserMessageUuid: pendingNotice?.refusedUserMessageUuid ?? event.refusedUserMessageUuid,
+      apiRefusalCategory: pendingNotice ? pendingNotice.apiRefusalCategory : event.apiRefusalCategory,
+      sawCyberRefusal: pendingNotice?.sawCyberRefusal === true || event.apiRefusalCategory === "cyber",
+      requestId: pendingNotice ? pendingNotice.requestId : event.requestId,
       provisionalFlushUuid: undefined,
     },
   };
@@ -290,27 +291,30 @@ function initialRejectionEpisode() {
 /**
  * 判断 e 是否不小于 n。
  */
-function atLeast(refusalFallbacksUsed, n) {
-  return refusalFallbacksUsed >= n;
+function atLeast(refusalFallbacksUsed, minimum) {
+  return refusalFallbacksUsed >= minimum;
 }
 //@ chunk-ha3km179.js:57717-57767 placement
 class PostSamplingHookRegistry {
   hooks = [];
-  register(e) {
-    this.hooks.push(e);
+  register(hook) {
+    this.hooks.push(hook);
   }
 }
 //@ chunk-ha3km179.js:57767-57792 placement
 /**
  * 宿主隔离的 post-sampling 钩子注册表。
  */
-var postSamplingHookRegistry = new HostScoped(() => new PostSamplingHookRegistry());
+var postSamplingHookRegistry; // deferred: uses PostSamplingHookRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ha3km179.js:57767", () => {
+  postSamplingHookRegistry = new HostScoped(() => new PostSamplingHookRegistry());
+});
 //@ chunk-ha3km179.js:57792-57836 placement
 /**
  * 把 post-sampling 钩子注册到当前宿主的注册表。
  */
-function registerPostSamplingHook(e) {
-  postSamplingHookRegistry.of(getRootSession().host).register(e);
+function registerPostSamplingHook(hook) {
+  postSamplingHookRegistry.of(getRootSession().host).register(hook);
 }
 //@ chunk-ha3km179.js:57836-58036 fingerprint = executePostSamplingHooks (0.923)
 async function executePostSamplingHooks(

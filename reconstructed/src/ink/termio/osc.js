@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/termio/osc.ts
- * pieces: chunk-bzr73sfg.js (3), chunk-dxdtyerk.js (33)
- * attribution: fingerprint 12, affinity 2, callgraph-fingerprint 2, layout 18, callgraph-witnessed 1, placement 1
+ * pieces: chunk-bzr73sfg.js (5), chunk-dxdtyerk.js (33)
+ * attribution: fingerprint 12, layout 20, placement 3, callgraph-fingerprint 2, callgraph-witnessed 1
  */
 import { Buffer as M } from "buffer";
 import { ESC, ESC_TYPE, BEL, SEP } from "./ansi.js";
@@ -28,14 +28,19 @@ import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
 import { ANY_CONTROL_CHAR_RE } from "../../utils/stringUtils.js";
-import { tmuxEscapedLength } from "../../_unattributed/chunk-bzr73sfg/part-001.js";
+import { cursorPosition } from "./csi.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dxdtyerk.js:2070-2120 fingerprint = OSC_PREFIX (1)
 /**
  * OSC 引导符：ESC ] 与字符串结束符 ST（kitty 用 ST，其它终端用 BEL 结束）。
  */
-var OSC_PREFIX = ESC + String.fromCharCode(ESC_TYPE.OSC);
-var ST = ESC + "\\";
+var OSC_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ST;
+deferInit("chunk-dxdtyerk.js:2070", () => {
+  OSC_PREFIX = ESC + String.fromCharCode(ESC_TYPE.OSC);
+  ST = ESC + "\\";
+});
 //@ chunk-dxdtyerk.js:3048-3124 fingerprint = osc (0.817)
 /**
  * 按当前终端（kitty 用 ST，其余用 BEL）拼接 OSC 序列。
@@ -90,15 +95,15 @@ class LinuxClipboardTool {
     }
     this.tool = null;
   }
-  recordAddonWrite(e) {
-    if (e) this.addonWriteSucceeded = true;
+  recordAddonWrite(succeeded) {
+    if (succeeded) this.addonWriteSucceeded = true;
     else this.addonWriteFailed ||= !this.addonWriteSucceeded;
   }
   beginWaylandCopy() {
     return ++this.waylandCopyGeneration;
   }
-  isLatestWaylandCopy(e) {
-    return e === this.waylandCopyGeneration;
+  isLatestWaylandCopy(generation) {
+    return generation === this.waylandCopyGeneration;
   }
   reset() {
     this.tool = undefined;
@@ -107,7 +112,10 @@ class LinuxClipboardTool {
   }
 }
 //@ chunk-dxdtyerk.js:4069-4092 layout
-var linuxClipboardByHost = new HostScoped(() => new LinuxClipboardTool());
+var linuxClipboardByHost; // deferred: uses LinuxClipboardTool of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dxdtyerk.js:4069", () => {
+  linuxClipboardByHost = new HostScoped(() => new LinuxClipboardTool());
+});
 //@ chunk-dxdtyerk.js:4092-4127 layout
 function getLinuxClipboardTool() {
   return linuxClipboardByHost.of(getRootSession().host);
@@ -177,23 +185,23 @@ function getOsc52Utf8Warning(text) {
 async function tmuxLoadBuffer(text) {
   let tmuxSocketArgs = getTmuxSocketArgs();
   if (!tmuxSocketArgs) return false;
-  let n = {
+  let execOptions = {
     input: text,
     useCwd: false,
     timeout: 2000,
   };
   let LC_TERMINAL = env.LC_TERMINAL ?? "unset";
   let args = tmuxSocketArgs.length > 0 ? "attacher socket" : "$TMUX";
-  let { code } = await execFileNoThrow("tmux", [...tmuxSocketArgs, "load-buffer", "-w", "-"], n);
+  let { code } = await execFileNoThrow("tmux", [...tmuxSocketArgs, "load-buffer", "-w", "-"], execOptions);
   logForDebugging(
     `clipboard: tmux load-buffer -w - \u2192 exit ${code} (server=${args} LC_TERMINAL=${LC_TERMINAL})`,
   );
   if (code === 0) return true;
-  let u = await execFileNoThrow("tmux", [...tmuxSocketArgs, "load-buffer", "-"], n);
+  let retryResult = await execFileNoThrow("tmux", [...tmuxSocketArgs, "load-buffer", "-"], execOptions);
   logForDebugging(
-    `clipboard: retry tmux load-buffer - \u2192 exit ${u.code} (server=${args} LC_TERMINAL=${LC_TERMINAL})`,
+    `clipboard: retry tmux load-buffer - \u2192 exit ${retryResult.code} (server=${args} LC_TERMINAL=${LC_TERMINAL})`,
   );
-  return u.code === 0;
+  return retryResult.code === 0;
 }
 //@ chunk-dxdtyerk.js:5357-5366 layout
 var SCREEN_OSC52_CHUNK = 76;
@@ -224,14 +232,14 @@ async function setClipboard(text) {
   );
   if (skipOsc52) return "";
   if (mux === "tmux") {
-    let c = `${ESC}]52;c;${base64}${BEL}`;
-    return c + wrapForMultiplexer(c);
+    let sequence = `${ESC}]52;c;${base64}${BEL}`;
+    return sequence + wrapForMultiplexer(sequence);
   }
   if (mux === "screen") {
-    let c = [];
-    for (let p = 0; p < base64.length; p += SCREEN_OSC52_CHUNK)
-      c.push(base64.slice(p, p + SCREEN_OSC52_CHUNK));
-    return `${ESC}P${ESC}]52;c;${c.join(`${ST}${ESC}P`)}${BEL}${ST}`;
+    let chunks = [];
+    for (let offset = 0; offset < base64.length; offset += SCREEN_OSC52_CHUNK)
+      chunks.push(base64.slice(offset, offset + SCREEN_OSC52_CHUNK));
+    return `${ESC}P${ESC}]52;c;${chunks.join(`${ST}${ESC}P`)}${BEL}${ST}`;
   }
   return osc(OSC.CLIPBOARD, "c", base64);
 }
@@ -260,33 +268,33 @@ function copyNative(text) {
         return true;
       }
       if (linuxClipboardTool.tool === "xclip") {
-        let o = {
+        let optsWithCgroup = {
           ...opts,
           useToolMemoryCgroup: false,
         };
-        execFileNoThrow("xclip", ["-selection", "clipboard"], o);
-        execFileNoThrow("xclip", ["-selection", "primary"], o);
+        execFileNoThrow("xclip", ["-selection", "clipboard"], optsWithCgroup);
+        execFileNoThrow("xclip", ["-selection", "primary"], optsWithCgroup);
         return true;
       }
       if (linuxClipboardTool.tool === "xsel") {
-        let o = {
+        let optsWithCgroup = {
           ...opts,
           useToolMemoryCgroup: false,
         };
-        execFileNoThrow("xsel", ["--clipboard", "--input"], o);
-        execFileNoThrow("xsel", ["--primary", "--input"], o);
+        execFileNoThrow("xsel", ["--clipboard", "--input"], optsWithCgroup);
+        execFileNoThrow("xsel", ["--primary", "--input"], optsWithCgroup);
         return true;
       }
       if (linuxClipboardTool.tool === "addon") {
-        let o;
+        let handled;
         try {
-          o = getClipboardNativeModulePath()?.setLinuxClipboardText(text) === true;
+          handled = getClipboardNativeModulePath()?.setLinuxClipboardText(text) === true;
         } catch {
-          o = false;
+          handled = false;
         }
-        linuxClipboardTool.recordAddonWrite(o);
+        linuxClipboardTool.recordAddonWrite(handled);
         linuxClipboardTool.probe();
-        return o;
+        return handled;
       }
       return false;
     }
@@ -310,8 +318,8 @@ function copyNative(text) {
 //@ chunk-dxdtyerk.js:6977-7217 layout
 async function waylandCopy(text) {
   let linuxClipboardTool = getLinuxClipboardTool();
-  let n = linuxClipboardTool.beginWaylandCopy();
-  let o = {
+  let copyGeneration = linuxClipboardTool.beginWaylandCopy();
+  let execOptions = {
     input: text,
     useCwd: false,
     timeout: 2000,
@@ -319,9 +327,9 @@ async function waylandCopy(text) {
     stderr: "ignore",
     useToolMemoryCgroup: false,
   };
-  await execFileNoThrow("wl-copy", [], o);
-  if (!linuxClipboardTool.isLatestWaylandCopy(n)) return;
-  await execFileNoThrow("wl-copy", ["--primary"], o);
+  await execFileNoThrow("wl-copy", [], execOptions);
+  if (!linuxClipboardTool.isLatestWaylandCopy(copyGeneration)) return;
+  await execFileNoThrow("wl-copy", ["--primary"], execOptions);
 }
 //@ chunk-dxdtyerk.js:7217-7912 layout
 /**
@@ -329,24 +337,24 @@ async function waylandCopy(text) {
  */
 async function readClipboard(selection = "clipboard") {
   if (isSshSession()) return "";
-  let r = {
+  let execOptions = {
     useCwd: false,
     timeout: 2000,
   };
   switch (getPlatform()) {
     case "macos": {
-      let n = await execFileNoThrow("pbpaste", [], r);
-      return n.code === 0 ? n.stdout : "";
+      let result = await execFileNoThrow("pbpaste", [], execOptions);
+      return result.code === 0 ? result.stdout : "";
     }
     case "windows":
     case "wsl": {
-      let n = await execFileNoThrow(
+      let result = await execFileNoThrow(
         getPlatform() === "wsl" ? "powershell.exe" : "powershell",
         ["-NoProfile", "-NonInteractive", "-Command", POWERSHELL_GET_CLIPBOARD],
-        r,
+        execOptions,
       );
-      return n.code === 0
-        ? n.stdout
+      return result.code === 0
+        ? result.stdout
             .replace(
               /\r\n/g,
               `
@@ -356,28 +364,28 @@ async function readClipboard(selection = "clipboard") {
         : "";
     }
     case "linux": {
-      let n = selection === "primary";
-      let o = [
-        ["wl-paste", n ? ["--primary", "--no-newline"] : ["--no-newline"]],
-        ["xclip", ["-selection", n ? "primary" : "clipboard", "-o"]],
-        ["xsel", [n ? "--primary" : "--clipboard", "--output"]],
+      let usePrimary = selection === "primary";
+      let commands = [
+        ["wl-paste", usePrimary ? ["--primary", "--no-newline"] : ["--no-newline"]],
+        ["xclip", ["-selection", usePrimary ? "primary" : "clipboard", "-o"]],
+        ["xsel", [usePrimary ? "--primary" : "--clipboard", "--output"]],
       ];
-      for (let [s, a] of o) {
-        let u = await execFileNoThrow(s, [...a], r);
-        if (u.code === 0) return u.stdout;
+      for (let [item, index] of commands) {
+        let output = await execFileNoThrow(item, [...index], execOptions);
+        if (output.code === 0) return output.stdout;
       }
-      return (await readClipboardViaAddon(n, r.timeout)) ?? "";
+      return (await readClipboardViaAddon(usePrimary, execOptions.timeout)) ?? "";
     }
     default:
       return "";
   }
 }
 //@ chunk-dxdtyerk.js:7912-8097 layout
-async function readClipboardViaAddon(e, timeout) {
+async function readClipboardViaAddon(selection, timeout) {
   if (!hasLocalDisplay()) return null;
   try {
     return (
-      (await getClipboardNativeModulePath()?.getLinuxClipboardText?.(e, timeout))?.replace(
+      (await getClipboardNativeModulePath()?.getLinuxClipboardText?.(selection, timeout))?.replace(
         /\r?\n$|\r$/,
         "",
       ) ?? null
@@ -498,12 +506,12 @@ function parseOscColor(text) {
     };
   let match_2 = text.match(/^rgb:([0-9a-f]{1,4})\/([0-9a-f]{1,4})\/([0-9a-f]{1,4})$/i);
   if (match_2) {
-    let o = (s) => Math.round((parseInt(s, 16) / (16 ** s.length - 1)) * 255);
+    let channelFromHex = (hex) => Math.round((parseInt(hex, 16) / (16 ** hex.length - 1)) * 255);
     return {
       type: "rgb",
-      r: o(match_2[1]),
-      g: o(match_2[2]),
-      b: o(match_2[3]),
+      r: channelFromHex(match_2[1]),
+      g: channelFromHex(match_2[2]),
+      b: channelFromHex(match_2[3]),
     };
   }
   return null;
@@ -537,24 +545,27 @@ function* splitTabStatusFields(data) {
   let val = "";
   let inVal = false;
   let esc = false;
-  for (let a of data)
+  for (let char of data)
     if (esc) {
-      if (inVal) val += a;
-      else key += a;
+      if (inVal) val += char;
+      else key += char;
       esc = false;
-    } else if (a === "\\") esc = true;
-    else if (a === ";") {
+    } else if (char === "\\") esc = true;
+    else if (char === ";") {
       yield [key, val];
       key = "";
       val = "";
       inVal = false;
-    } else if (a === "=" && !inVal) inVal = true;
-    else if (inVal) val += a;
-    else key += a;
+    } else if (char === "=" && !inVal) inVal = true;
+    else if (inVal) val += char;
+    else key += char;
   if (key || inVal) yield [key, val];
 }
 //@ chunk-dxdtyerk.js:9968-10000 layout
-var URL_STRIP_RE = new RegExp(ANY_CONTROL_CHAR_RE.source, "g");
+var URL_STRIP_RE; // deferred: uses CONTROL_CHARS_EXCEPT_WS_RE (../../utils/stringUtils.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dxdtyerk.js:9968", () => {
+  URL_STRIP_RE = new RegExp(ANY_CONTROL_CHAR_RE.source, "g");
+});
 //@ chunk-dxdtyerk.js:10000-10163 fingerprint = link (1)
 /**
  * 生成 OSC 8 超链接开始序列：去掉 URL 中的非法字符，附带由 URL 哈希得到的 id（相同链接跨行能被终端识别为同一个）；空 URL 返回结束序列。
@@ -562,11 +573,11 @@ var URL_STRIP_RE = new RegExp(ANY_CONTROL_CHAR_RE.source, "g");
 function link(url, params) {
   let url_2 = url.replace(URL_STRIP_RE, "");
   if (!url_2) return LINK_END;
-  let o = {
+  let paramsWithId = {
     id: osc8Id(url_2),
     ...params,
   };
-  let paramStr = Object.entries(o)
+  let paramStr = Object.entries(paramsWithId)
     .map(([k, v]) => `${k}=${v}`)
     .join(":");
   return osc(OSC.HYPERLINK, paramStr, url_2);
@@ -576,29 +587,37 @@ function link(url, params) {
  * URL 的 32 位哈希（base36），作 OSC 8 的 id 参数。
  */
 function osc8Id(url) {
-  let r = 0;
-  for (let i = 0; i < url.length; i++) r = ((r << 5) - r + url.charCodeAt(i)) | 0;
-  return (r >>> 0).toString(36);
+  let hash = 0;
+  for (let i = 0; i < url.length; i++) hash = ((hash << 5) - hash + url.charCodeAt(i)) | 0;
+  return (hash >>> 0).toString(36);
 }
 //@ chunk-dxdtyerk.js:10269-10534 fingerprint = PROGRESS (0.452)
 /**
  * 常用 OSC 序列：OSC 8 结束、iTerm2 OSC 9 子命令（通知/徽标/进度 4）、进度状态（清除/设置/错误/不确定）、清除进度条、清除标题、清除标签状态。
  */
-var LINK_END = osc(OSC.HYPERLINK, "", "");
-var ITERM2_OSC9 = {
-  NOTIFY: 0,
-  BADGE: 2,
-  PROGRESS: 4,
-};
-var PROGRESS = {
-  CLEAR: 0,
-  SET: 1,
-  ERROR: 2,
-  INDETERMINATE: 3,
-};
-var CLEAR_PROGRESS = `${OSC_PREFIX}${OSC.ITERM2};${ITERM2_OSC9.PROGRESS};${PROGRESS.CLEAR};${BEL}`;
-var CLEAR_TERMINAL_TITLE = `${OSC_PREFIX}${OSC.SET_TITLE_AND_ICON};${BEL}`;
-var CLEAR_TAB_STATUS = osc(OSC.TAB_STATUS, "indicator=;status=;status-color=");
+var LINK_END; // deferred: uses osc of its import cycle while loading; runs once the cycle is complete
+var ITERM2_OSC9;
+var PROGRESS;
+var CLEAR_PROGRESS;
+var CLEAR_TERMINAL_TITLE;
+var CLEAR_TAB_STATUS;
+deferInit("chunk-dxdtyerk.js:10269", () => {
+  LINK_END = osc(OSC.HYPERLINK, "", "");
+  ITERM2_OSC9 = {
+    NOTIFY: 0,
+    BADGE: 2,
+    PROGRESS: 4,
+  };
+  PROGRESS = {
+    CLEAR: 0,
+    SET: 1,
+    ERROR: 2,
+    INDETERMINATE: 3,
+  };
+  CLEAR_PROGRESS = `${OSC_PREFIX}${OSC.ITERM2};${ITERM2_OSC9.PROGRESS};${PROGRESS.CLEAR};${BEL}`;
+  CLEAR_TERMINAL_TITLE = `${OSC_PREFIX}${OSC.SET_TITLE_AND_ICON};${BEL}`;
+  CLEAR_TAB_STATUS = osc(OSC.TAB_STATUS, "indicator=;status=;status-color=");
+});
 //@ chunk-dxdtyerk.js:10534-10558 layout
 function isTabStatusEnabled() {
   return false;
@@ -609,8 +628,10 @@ function isTabStatusEnabled() {
  */
 function tabStatus(fields) {
   let parts = [];
-  let rgb = (o) =>
-    o.type === "rgb" ? `#${[o.r, o.g, o.b].map((n) => n.toString(16).padStart(2, "0")).join("")}` : "";
+  let rgb = (color) =>
+    color.type === "rgb"
+      ? `#${[color.r, color.g, color.b].map((n) => n.toString(16).padStart(2, "0")).join("")}`
+      : "";
   if ("indicator" in fields) parts.push(`indicator=${fields.indicator ? rgb(fields.indicator) : ""}`);
   if ("status" in fields)
     parts.push(`status=${fields.status?.replaceAll("\\", "\\\\").replaceAll(";", "\\;") ?? ""}`);
@@ -625,11 +646,11 @@ var SAVE_CURSOR_DEC = `${ESC}7`;
 var RESTORE_CURSOR_DEC = `${ESC}8`;
 var ITERM_FILE_PREFIX_2 = `${ESC}]1337;File=`;
 var MULTIPART_OVERHEAD = 64;
-//@ chunk-bzr73sfg.js:269106-269158 affinity
+//@ chunk-bzr73sfg.js:269106-269158 layout
 function tmuxPassthrough(sequence) {
   return TMUX_PASSTHROUGH_PREFIX + sequence.replaceAll(ESC, ESC + ESC) + ST;
 }
-//@ chunk-bzr73sfg.js:269158-269587 affinity
+//@ chunk-bzr73sfg.js:269158-269587 layout
 /**
  * 把一串转义序列按 tmux 透传上限（256KB）切块，每块包成 DCS tmux 透传。
  */
@@ -639,36 +660,67 @@ function tmuxPassthroughChunked(text) {
   let pendingLen = 0;
   let pos = 0;
   while (pos < text.length) {
-    let g = text[pos] === ESC ? text[pos + 1] : undefined;
-    let E = text.length;
-    if (g === "_" || g === "P") {
+    let kind = text[pos] === ESC ? text[pos + 1] : undefined;
+    let limit = text.length;
+    if (kind === "_" || kind === "P") {
       let index = text.indexOf(ST, pos + 2);
-      E = index === -1 ? E : index + ST.length;
-    } else if (g === "]") {
+      limit = index === -1 ? limit : index + ST.length;
+    } else if (kind === "]") {
       let index = text.indexOf(BEL, pos + 2);
       let index_2 = text.indexOf(ST, pos + 2);
-      E =
+      limit =
         index !== -1 && (index_2 === -1 || index < index_2)
           ? index + BEL.length
           : index_2 === -1
-            ? E
+            ? limit
             : index_2 + ST.length;
     } else {
       let index = text.indexOf(ESC, pos + 1);
-      E = index === -1 ? E : index;
+      limit = index === -1 ? limit : index;
     }
-    let text_2 = text.slice(pos, E);
-    let A = tmuxEscapedLength(text_2);
-    pos = E;
-    if (pending !== "" && pendingLen + A > TMUX_PASSTHROUGH_MAX) {
+    let text_2 = text.slice(pos, limit);
+    let escapedLength = tmuxEscapedLength(text_2);
+    pos = limit;
+    if (pending !== "" && pendingLen + escapedLength > TMUX_PASSTHROUGH_MAX) {
       out += tmuxPassthrough(pending);
       pending = "";
       pendingLen = 0;
     }
     pending += text_2;
-    pendingLen += A;
+    pendingLen += escapedLength;
   }
   return pending === "" ? out : out + tmuxPassthrough(pending);
+}
+//@ chunk-bzr73sfg.js:269587-270134 placement
+/**
+ * tmux 下的 iTerm2 图片：保存光标、移到 pane 内绝对位置、输出图片、恢复光标，整体透传；超过上限时改用 MultipartFile/FilePart/FileEnd 分片。
+ */
+function wrapItermImageForTmux(sequence, position) {
+  let index = sequence.indexOf(":", ITERM_FILE_PREFIX_2.length);
+  if (!(
+    sequence.startsWith(ITERM_FILE_PREFIX_2) &&
+    sequence.endsWith(BEL) &&
+    sequence.indexOf(ESC, 1) === -1 &&
+    sequence.indexOf(BEL) === sequence.length - BEL.length &&
+    index !== -1
+  ))
+    throw TypeError("tmux passthrough: expected exactly one iTerm2 File= sequence ending in BEL");
+  let cursorMove = cursorPosition(position.row, position.column);
+  let payload = SAVE_CURSOR_DEC + cursorMove + sequence + RESTORE_CURSOR_DEC;
+  if (tmuxEscapedLength(payload) <= TMUX_PASSTHROUGH_MAX) return tmuxPassthrough(payload);
+  let fileParams = sequence.slice(ITERM_FILE_PREFIX_2.length, index);
+  let fileData = sequence.slice(index + 1, -BEL.length);
+  let chunkSize = TMUX_PASSTHROUGH_MAX - MULTIPART_OVERHEAD;
+  let output = tmuxPassthrough(`${ESC}]1337;MultipartFile=${fileParams}${BEL}`);
+  for (let offset = 0; offset < fileData.length; offset += chunkSize)
+    output += tmuxPassthrough(`${ESC}]1337;FilePart=${fileData.slice(offset, offset + chunkSize)}${BEL}`);
+  return (
+    output + tmuxPassthrough(`${SAVE_CURSOR_DEC}${cursorMove}${ESC}]1337;FileEnd${BEL}${RESTORE_CURSOR_DEC}`)
+  );
+}
+//@ chunk-bzr73sfg.js:270134-270186 placement
+function tmuxEscapedLength(text) {
+  return text.length + text.split(ESC).length - 1;
 }
 export {
   setClipboard,
@@ -687,12 +739,7 @@ export {
   PROGRESS,
   LINK_END,
   tmuxPassthroughChunked,
-  ITERM_FILE_PREFIX_2,
-  SAVE_CURSOR_DEC,
-  RESTORE_CURSOR_DEC,
-  TMUX_PASSTHROUGH_MAX,
-  tmuxPassthrough,
-  MULTIPART_OVERHEAD,
+  wrapItermImageForTmux,
   CLEAR_PROGRESS,
   isTabStatusEnabled,
   CLEAR_TAB_STATUS,

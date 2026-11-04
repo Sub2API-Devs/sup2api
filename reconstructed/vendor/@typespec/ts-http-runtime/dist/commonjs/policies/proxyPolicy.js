@@ -5,23 +5,23 @@
  * pieces: chunk-mrx6y2r5.js (10)
  * attribution: esm-layout 3, esm-fingerprint 7
  */
-import { Re } from "../../../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../../../runtime/bun-runtime.js";
 import { require_https_proxy_agent } from "../../../../../https-proxy-agent/dist/index.js";
 import { require_http_proxy_agent } from "../../../../../http-proxy-agent/dist/index.js";
 import { logger_2 } from "../../esm/log.js";
 
 //@ chunk-mrx6y2r5.js:52525-52558 esm-layout
-var import_https_proxy_agent = Re(require_https_proxy_agent(), 1);
-var import_http_proxy_agent = Re(require_http_proxy_agent(), 1);
+var import_https_proxy_agent = __toESM(require_https_proxy_agent(), 1);
+var import_http_proxy_agent = __toESM(require_http_proxy_agent(), 1);
 //@ chunk-mrx6y2r5.js:52558-52664 esm-fingerprint
 var HTTPS_PROXY = "HTTPS_PROXY";
 var HTTP_PROXY = "HTTP_PROXY";
 var ALL_PROXY = "ALL_PROXY";
 var NO_PROXY = "NO_PROXY";
 var proxyPolicyName = "proxyPolicy";
-var Dl = [];
+var globalNoProxyList = [];
 var noProxyListLoaded = false;
-var fp = new Map();
+var globalBypassedMap = new Map();
 //@ chunk-mrx6y2r5.js:52664-52799 esm-fingerprint
 function getEnvironmentValue(name) {
   if (process.env[name]) return process.env[name];
@@ -29,7 +29,7 @@ function getEnvironmentValue(name) {
   return;
 }
 //@ chunk-mrx6y2r5.js:52799-52878 esm-layout
-function mp() {
+function loadEnvironmentProxyValue() {
   if (!process) return;
   let httpsProxy = getEnvironmentValue(HTTPS_PROXY);
   let allProxy = getEnvironmentValue(ALL_PROXY);
@@ -63,9 +63,9 @@ function loadNoProxy() {
   return [];
 }
 //@ chunk-mrx6y2r5.js:53285-53337 esm-layout
-function yp() {
-  let e = mp();
-  return e ? new URL(e) : undefined;
+function getDefaultProxySettingsInternal() {
+  let proxyUrl = loadEnvironmentProxyValue();
+  return proxyUrl ? new URL(proxyUrl) : undefined;
 }
 //@ chunk-mrx6y2r5.js:53337-53579 esm-fingerprint
 function getUrlFromProxySettings(settings) {
@@ -83,13 +83,13 @@ function getUrlFromProxySettings(settings) {
 //@ chunk-mrx6y2r5.js:53579-54047 esm-fingerprint
 function setProxyAgentOnRequest(request, cachedAgents, proxyUrl) {
   if (request.agent) return;
-  let o = new URL(request.url).protocol !== "https:";
+  let isInsecureConnection = new URL(request.url).protocol !== "https:";
   if (request.tlsSettings)
     logger_2.warning(
       "TLS settings are not supported in combination with custom Proxy, certificates provided to the client will be ignored.",
     );
   let headers = request.headers.toJSON();
-  if (o) {
+  if (isInsecureConnection) {
     if (!cachedAgents.httpProxyAgent)
       cachedAgents.httpProxyAgent = new import_http_proxy_agent.HttpProxyAgent(proxyUrl, {
         headers,
@@ -104,23 +104,29 @@ function setProxyAgentOnRequest(request, cachedAgents, proxyUrl) {
   }
 }
 //@ chunk-mrx6y2r5.js:54047-54403 esm-fingerprint
-function ua(proxySettings, t) {
-  if (!noProxyListLoaded) Dl.push(...loadNoProxy());
-  let defaultProxy = proxySettings ? getUrlFromProxySettings(proxySettings) : yp();
+function proxyPolicy(proxySettings, options) {
+  if (!noProxyListLoaded) globalNoProxyList.push(...loadNoProxy());
+  let defaultProxy = proxySettings
+    ? getUrlFromProxySettings(proxySettings)
+    : getDefaultProxySettingsInternal();
   let cachedAgents = {};
   return {
     name: proxyPolicyName,
     async sendRequest(request, next) {
-      var s;
+      var customNoProxyList;
       if (
         !request.proxySettings &&
         defaultProxy &&
         !isBypassed(
           request.url,
-          (s = t === null || t === undefined ? undefined : t.customNoProxyList) !== null && s !== undefined
-            ? s
-            : Dl,
-          (t === null || t === undefined ? undefined : t.customNoProxyList) ? undefined : fp,
+          (customNoProxyList =
+            options === null || options === undefined ? undefined : options.customNoProxyList) !== null &&
+            customNoProxyList !== undefined
+            ? customNoProxyList
+            : globalNoProxyList,
+          (options === null || options === undefined ? undefined : options.customNoProxyList)
+            ? undefined
+            : globalBypassedMap,
         )
       )
         setProxyAgentOnRequest(request, cachedAgents, defaultProxy);
@@ -130,4 +136,4 @@ function ua(proxySettings, t) {
     },
   };
 }
-export { ua };
+export { proxyPolicy };

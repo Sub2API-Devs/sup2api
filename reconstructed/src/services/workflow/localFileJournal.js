@@ -34,11 +34,11 @@ import { formatStorageError } from "../../utils/storage/storageErrors.js";
  */
 class WorkflowJournalStub {}
 //@ chunk-41w44bgm.js:30500-30619 placement
-function workflowJournalKey(e) {
-  let n = sessionProjectKey();
-  if (n === undefined) return;
-  let r = STORAGE_SPACES.journal(n, getSessionId(), ["workflows", e]);
-  return validateStorageKey(r) === undefined ? r : undefined;
+function workflowJournalKey(runId) {
+  let projectKey = sessionProjectKey();
+  if (projectKey === undefined) return;
+  let key = STORAGE_SPACES.journal(projectKey, getSessionId(), ["workflows", runId]);
+  return validateStorageKey(key) === undefined ? key : undefined;
 }
 //@ chunk-41w44bgm.js:30619-33596 placement
 class LocalFileJournal {
@@ -47,15 +47,15 @@ class LocalFileJournal {
   dirReady = false;
   isTailEnded = false;
   appendTurns = createMutex();
-  constructor(e, n) {
-    this.path = join(subagentWorkflowDir(e), "journal.jsonl");
-    let r = n === undefined ? undefined : workflowJournalKey(e);
+  constructor(runId, storageRoot) {
+    this.path = join(subagentWorkflowDir(runId), "journal.jsonl");
+    let key = storageRoot === undefined ? undefined : workflowJournalKey(runId);
     this.storageV5 =
-      n === undefined || r === undefined
+      storageRoot === undefined || key === undefined
         ? undefined
         : {
-            backend: n,
-            key: r,
+            backend: storageRoot,
+            key,
           };
   }
   async readLines() {
@@ -73,16 +73,16 @@ class LocalFileJournal {
     if (lines === undefined) return "missing";
     return lines[0] === RESTORING_LINE && !lines.includes(RESTORED_LINE) ? "partial" : "complete";
   }
-  async writeRestored(e) {
+  async writeRestored(entries) {
     let mapped = [
       {
         type: "restoring",
       },
-      ...e,
+      ...entries,
       {
         type: "restored",
       },
-    ].map((y) => toJsonLine(y));
+    ].map((entry) => toJsonLine(entry));
     let storageV5 = this.storageV5;
     if (storageV5 === undefined) {
       await mkdir(dirname(this.path), {
@@ -91,42 +91,43 @@ class LocalFileJournal {
       await writeFileAtomic(this.path, mapped.join(""));
       return;
     }
-    let h = await storageV5.backend.delete(storageV5.key);
-    if (!h.ok && h.error.code !== "NotFound")
+    let deleteResult = await storageV5.backend.delete(storageV5.key);
+    if (!deleteResult.ok && deleteResult.error.code !== "NotFound")
       throw Error("LocalFileJournal: journal delete failed", {
-        cause: h.error,
+        cause: deleteResult.error,
       });
-    let T = await storageV5.backend.append(
+    let appendResult = await storageV5.backend.append(
       storageV5.key,
       mapped.map((data) => ({
         data,
       })),
     );
-    if (!T.ok)
+    if (!appendResult.ok)
       throw Error("LocalFileJournal: journal append failed", {
-        cause: T.error,
+        cause: appendResult.error,
       });
   }
   async load() {
     let lines = await this.readLines();
     if (lines === undefined) return indexJournalEntries([]);
     let entries = [];
-    let r = this.storageV5 !== undefined && (await this.isTailTorn());
-    for (let [h, T] of lines.entries()) {
-      if (!T || T === RESUMED_LINE) continue;
+    let hasUnreadLine = this.storageV5 !== undefined && (await this.isTailTorn());
+    for (let [lineIndex, line] of lines.entries()) {
+      if (!line || line === RESUMED_LINE) continue;
       try {
-        entries.push(jsonParseRaw(T));
+        entries.push(jsonParseRaw(line));
       } catch (error) {
-        let L =
-          ((this.storageV5 === undefined && h === lines.length - 1) || lines[h + 1] === RESUMED_LINE) &&
-          !containsLaunchedLine(T);
-        r ||= !L;
+        let isTornTail =
+          ((this.storageV5 === undefined && lineIndex === lines.length - 1) ||
+            lines[lineIndex + 1] === RESUMED_LINE) &&
+          !containsLaunchedLine(line);
+        hasUnreadLine ||= !isTornTail;
         logForDebugging(`LocalFileJournal: skipping unparseable line in ${this.path}: ${error}`);
       }
     }
     return {
       ...indexJournalEntries(entries),
-      ...(r && {
+      ...(hasUnreadLine && {
         hasUnreadLine: true,
       }),
     };
@@ -135,15 +136,15 @@ class LocalFileJournal {
     let textDecoder = new TextDecoder("utf-8", {
       ignoreBOM: true,
     });
-    let h = [];
-    let T;
+    let lines = [];
+    let fromSeq;
     for (;;) {
       let records = await backend.readRecords(
         key,
-        T === undefined
+        fromSeq === undefined
           ? undefined
           : {
-              fromSeq: T,
+              fromSeq,
             },
       );
       if (!records.ok) {
@@ -156,19 +157,19 @@ class LocalFileJournal {
         });
       }
       for (let item of records.value.items) {
-        let j = textDecoder.decode(item.data);
-        h.push(
-          j.endsWith(`
+        let text = textDecoder.decode(item.data);
+        lines.push(
+          text.endsWith(`
 `)
-            ? j.slice(0, -1)
-            : j,
+            ? text.slice(0, -1)
+            : text,
         );
       }
       let nextSeq = records.value.nextSeq;
-      if (nextSeq === undefined) return h;
-      if (T !== undefined && nextSeq <= T)
+      if (nextSeq === undefined) return lines;
+      if (fromSeq !== undefined && nextSeq <= fromSeq)
         throw Error("LocalFileJournal: journal read cursor failed to advance");
-      T = nextSeq;
+      fromSeq = nextSeq;
     }
   }
   async isTailTorn() {
@@ -183,30 +184,30 @@ class LocalFileJournal {
       }
       return (stats.value.tornTailBytes ?? 0) > 0;
     }
-    let n;
+    let handle;
     try {
-      n = await open(this.path, "r");
+      handle = await open(this.path, "r");
     } catch (error) {
       if (isENOENT(error)) return false;
       throw error;
     }
     try {
-      let { size } = await n.stat();
+      let { size } = await handle.stat();
       if (size === 0) return false;
-      let h = Buffer.alloc(1);
-      await n.read(h, 0, 1, size - 1);
-      return h[0] !== 10;
+      let lastByte = Buffer.alloc(1);
+      await handle.read(lastByte, 0, 1, size - 1);
+      return lastByte[0] !== 10;
     } finally {
-      await n.close();
+      await handle.close();
     }
   }
-  async append(e) {
-    let n = await this.appendTurns.acquire();
+  async append(entry) {
+    let release = await this.appendTurns.acquire();
     try {
-      let r = !this.isTailEnded && (await this.isTailTorn());
+      let needsResumeMarker = !this.isTailEnded && (await this.isTailTorn());
       let storageV5 = this.storageV5;
       if (storageV5 !== undefined) {
-        let y = r
+        let markerRecords = needsResumeMarker
           ? [
               {
                 data: `
@@ -218,16 +219,18 @@ class LocalFileJournal {
               },
             ]
           : [];
-        let A = await storageV5.backend.append(storageV5.key, [
-          ...y,
+        let appendResult = await storageV5.backend.append(storageV5.key, [
+          ...markerRecords,
           {
-            data: toJsonLine(e),
+            data: toJsonLine(entry),
           },
         ]);
-        if (!A.ok) {
-          logForDebugging(`LocalFileJournal: append to ${this.path} failed: ${formatStorageError(A.error)}`);
+        if (!appendResult.ok) {
+          logForDebugging(
+            `LocalFileJournal: append to ${this.path} failed: ${formatStorageError(appendResult.error)}`,
+          );
           throw Error("LocalFileJournal: journal append failed", {
-            cause: A.error,
+            cause: appendResult.error,
           });
         }
         this.isTailEnded = true;
@@ -239,15 +242,15 @@ class LocalFileJournal {
         });
         this.dirReady = true;
       }
-      let T = r
+      let markerText = needsResumeMarker
         ? `
 ${RESUMED_LINE}
 `
         : "";
-      await appendFile(this.path, T + toJsonLine(e), "utf8");
+      await appendFile(this.path, markerText + toJsonLine(entry), "utf8");
       this.isTailEnded = true;
     } finally {
-      n();
+      release();
     }
   }
 }

@@ -8,7 +8,7 @@
  * pieces: chunk-y6fv30yg.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
 import { useWizard } from "../../../wizard/useWizard.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
 import { VERTEX_WIZARD_STEPS_2 } from "../../../vertexSetup/VertexSetupWizard.js";
@@ -22,11 +22,11 @@ import { ModelSelector } from "../../ModelSelector.js";
 
 //@ chunk-y6fv30yg.js:1525-2554 callgraph-fingerprint = ToolsStep (0.161)
 function ToolsStep() {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { goBack, goToStep, updateWizardData, wizardData } = useWizard();
-  let h;
+  let options;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    h = [
+    options = [
       {
         label: "Application Default Credentials (gcloud auth)",
         value: "adc",
@@ -40,53 +40,53 @@ function ToolsStep() {
         value: "environment",
       },
     ];
-    $[0] = h;
-  } else h = $[0];
-  let options = h;
-  let f;
+    $[0] = options;
+  } else options = $[0];
+  let options_2 = options;
+  let nextStepByMethod;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    f = {
+    nextStepByMethod = {
       adc: VERTEX_WIZARD_STEPS_2.PROJECT,
       serviceAccount: VERTEX_WIZARD_STEPS_2.SERVICE_ACCOUNT,
       environment: VERTEX_WIZARD_STEPS_2.PROJECT,
     };
-    $[1] = f;
-  } else f = $[1];
-  let u = f;
-  let k;
+    $[1] = nextStepByMethod;
+  } else nextStepByMethod = $[1];
+  let nextStep = nextStepByMethod;
+  let handleChange;
   if ($[2] !== goToStep || $[3] !== updateWizardData) {
-    k = (selectedTools) => {
-      let _ = selectedTools;
+    handleChange = (selectedTools) => {
+      let method = selectedTools;
       updateWizardData({
-        authMethod: _,
+        authMethod: method,
       });
-      goToStep(u[_]);
+      goToStep(nextStep[method]);
     };
     $[2] = goToStep;
     $[3] = updateWizardData;
-    $[4] = k;
-  } else k = $[4];
-  let onChange = k;
-  let d;
+    $[4] = handleChange;
+  } else handleChange = $[4];
+  let onChange = handleChange;
+  let introText;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    d = jsxProd_default(Text, {
+    introText = jsxProd_default(Text, {
       dimColor: true,
       children:
         "Claude Code uses the standard GCP credential chain. Pick the method you already use with gcloud or in your deployment.",
     });
-    $[5] = d;
-  } else d = $[5];
-  let D;
+    $[5] = introText;
+  } else introText = $[5];
+  let layout;
   if ($[6] !== goBack || $[7] !== onChange || $[8] !== wizardData.authMethod) {
-    D = jsxProd_default(WizardDialogLayout, {
+    layout = jsxProd_default(WizardDialogLayout, {
       subtitle: "How do you authenticate to Google Cloud?",
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
         children: [
-          d,
+          introText,
           jsxProd_default(ModelSelector, {
-            options,
+            options: options_2,
             defaultValue: wizardData.authMethod,
             onChange,
             onCancel: goBack,
@@ -97,8 +97,8 @@ function ToolsStep() {
     $[6] = goBack;
     $[7] = onChange;
     $[8] = wizardData.authMethod;
-    $[9] = D;
-  } else D = $[9];
-  return D;
+    $[9] = layout;
+  } else layout = $[9];
+  return layout;
 }
 export { ToolsStep };

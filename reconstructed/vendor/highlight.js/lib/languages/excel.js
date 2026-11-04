@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:133716-139327 cjs-fingerprint
-var require_excel = x(function (cjsExports, cjsModule) {
+var require_excel = __commonJS(function (cjsExports, cjsModule) {
   function excel(hljs) {
     return {
       name: "Excel formulae",

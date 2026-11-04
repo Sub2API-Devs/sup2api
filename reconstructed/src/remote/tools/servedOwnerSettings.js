@@ -18,7 +18,7 @@ import {
   asArray,
 } from "../../utils/settings/managedRestrictionKeys.js";
 import { jsonStringify, clone } from "../../utils/slowOperations.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { safeParseJSON } from "../../utils/json.js";
 import { stripBomAndCarriageReturns } from "../../utils/settings/settingsReview.js";
 import { parseSettingsContent, missingSettingsFileResult } from "../../utils/settings/settingsFileParsing.js";
@@ -43,6 +43,7 @@ import { settingsJsonToRules } from "../../utils/permissions/permissionsLoader.j
 import { formatPermissionRule } from "../../utils/permissions/disallowedToolsFlag.js";
 import { CREDENTIAL_HELPER_SETTINGS_KEYS } from "../../utils/settings/policyTiers.js";
 import { BETA_FILES_API, BETA_OAUTH_AUTH } from "../../utils/betas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:476551-477028 placement
 /**
@@ -67,66 +68,74 @@ var PERMISSIVE_LIST_PATHS = [
 ];
 var SANDBOX_ENABLED_PATH = ["sandbox", "enabled"];
 //@ chunk-s61vbvea.js:477028-477088 placement
-function getArrayAtPath(e, n) {
-  let atPath = getAtPath(e, n);
+function getArrayAtPath(settings, path) {
+  let atPath = getAtPath(settings, path);
   return Array.isArray(atPath) ? atPath : [];
 }
 //@ chunk-s61vbvea.js:477088-477550 placement
 /**
  * 用新设置收紧旧设置：deny/ask 等限制性列表取并集，allow/allowRead 等放宽性列表只保留双方都有的项，托管限制键取更严格的值；用于提供远程工具时只接受变严、不接受变宽。
  */
-function tightenSettingsWith(e, n, r = false) {
-  let clone = structuredClone(e ?? {});
-  for (let h of RESTRICTIVE_LIST_PATHS) {
-    let arrayAtPath = getArrayAtPath(e, h);
-    let S = new Set(arrayAtPath.map((R) => jsonStringify(R)));
-    let filtered = getArrayAtPath(n, h).filter((R) => !S.has(jsonStringify(R)));
-    if (filtered.length > 0) setAtPath(clone, h, [...arrayAtPath, ...filtered]);
+function tightenSettingsWith(base, tighter, allowSandbox = false) {
+  let clone = structuredClone(base ?? {});
+  for (let path of RESTRICTIVE_LIST_PATHS) {
+    let arrayAtPath = getArrayAtPath(base, path);
+    let baseSet = new Set(arrayAtPath.map((item) => jsonStringify(item)));
+    let filtered = getArrayAtPath(tighter, path).filter((item) => !baseSet.has(jsonStringify(item)));
+    if (filtered.length > 0) setAtPath(clone, path, [...arrayAtPath, ...filtered]);
   }
-  for (let h of PERMISSIVE_LIST_PATHS) {
-    let arrayAtPath = getArrayAtPath(e, h);
-    let S = new Set(getArrayAtPath(n, h).map((R) => jsonStringify(R)));
-    let filtered = arrayAtPath.filter((R) => S.has(jsonStringify(R)));
-    if (filtered.length !== arrayAtPath.length) setAtPath(clone, h, filtered);
+  for (let path of PERMISSIVE_LIST_PATHS) {
+    let arrayAtPath = getArrayAtPath(base, path);
+    let tighterSet = new Set(getArrayAtPath(tighter, path).map((item) => jsonStringify(item)));
+    let filtered = arrayAtPath.filter((item) => tighterSet.has(jsonStringify(item)));
+    if (filtered.length !== arrayAtPath.length) setAtPath(clone, path, filtered);
   }
-  for (let h of sandboxRestrictionKeys()) {
-    if (!r && En(h.path, SANDBOX_ENABLED_PATH)) continue;
-    let y = restrictionValue(h, n);
-    if (restrictionRank(h, y) < restrictionRank(h, restrictionValue(h, e))) setAtPath(clone, h.path, y);
+  for (let key of sandboxRestrictionKeys()) {
+    if (!allowSandbox && import_sortedIndex_2(key.path, SANDBOX_ENABLED_PATH)) continue;
+    let value = restrictionValue(key, tighter);
+    if (restrictionRank(key, value) < restrictionRank(key, restrictionValue(key, base)))
+      setAtPath(clone, key.path, value);
   }
-  return e === null && Object.keys(clone).length === 0 ? null : clone;
+  return base === null && Object.keys(clone).length === 0 ? null : clone;
 }
 //@ chunk-s61vbvea.js:477550-477611 placement
 function sandboxRestrictionKeys() {
-  return MANAGED_RESTRICTION_KEYS().filter((e) => e.path[0] === "sandbox");
+  return MANAGED_RESTRICTION_KEYS().filter((key) => key.path[0] === "sandbox");
 }
 //@ chunk-s61vbvea.js:477611-477705 placement
-function restrictionRank(e, n) {
-  let index = asArray(e.restrictive).indexOf(n);
+function restrictionRank(key, value) {
+  let index = asArray(key.restrictive).indexOf(value);
   return index === -1 ? Number.POSITIVE_INFINITY : index;
 }
 //@ chunk-s61vbvea.js:477705-477914 placement
-function pickRestrictionFields(e) {
-  let n = {};
-  for (let r of [...RESTRICTIVE_LIST_PATHS, ...PERMISSIVE_LIST_PATHS]) {
-    let atPath = getAtPath(e, r);
-    if (Array.isArray(atPath)) setAtPath(n, r, atPath);
+function pickRestrictionFields(settings) {
+  let picked = {};
+  for (let path of [...RESTRICTIVE_LIST_PATHS, ...PERMISSIVE_LIST_PATHS]) {
+    let atPath = getAtPath(settings, path);
+    if (Array.isArray(atPath)) setAtPath(picked, path, atPath);
   }
-  for (let r of sandboxRestrictionKeys().filter((s) => !En(s.path, SANDBOX_ENABLED_PATH))) {
-    let s = restrictionValue(r, e);
-    if (Number.isFinite(restrictionRank(r, s))) setAtPath(n, r.path, s);
+  for (let key of sandboxRestrictionKeys().filter(
+    (key) => !import_sortedIndex_2(key.path, SANDBOX_ENABLED_PATH),
+  )) {
+    let value = restrictionValue(key, settings);
+    if (Number.isFinite(restrictionRank(key, value))) setAtPath(picked, key.path, value);
   }
-  return n;
+  return picked;
 }
 //@ chunk-s61vbvea.js:477914-477958 placement
-function isSameSettingsText(text, n) {
-  return text === n || (isEmptySettingsText(text) && isEmptySettingsText(n));
+function isSameSettingsText(text, other) {
+  return text === other || (isEmptySettingsText(text) && isEmptySettingsText(other));
 }
 //@ chunk-s61vbvea.js:477958-478107 placement
-function isEmptySettingsText(e) {
-  if (e === null || e.trim() === "") return true;
-  let n = safeParseJSON(e, false);
-  return typeof n === "object" && n !== null && !Array.isArray(n) && Object.keys(n).length === 0;
+function isEmptySettingsText(text) {
+  if (text === null || text.trim() === "") return true;
+  let parsed = safeParseJSON(text, false);
+  return (
+    typeof parsed === "object" &&
+    parsed !== null &&
+    !Array.isArray(parsed) &&
+    Object.keys(parsed).length === 0
+  );
 }
 //@ chunk-s61vbvea.js:478107-478403 placement
 function unreadableAcceptedSettings(file) {
@@ -146,14 +155,14 @@ function unreadableAcceptedSettings(file) {
 }
 //@ chunk-s61vbvea.js:478403-480084 placement
 function readServedOwnerSettings(
-  e,
-  n,
+  store,
+  slots,
   readRepoTierFileText,
-  s,
+  mode,
   repoTierFileLeadsAway = () => false,
-  y = () => false,
+  sandboxForced = () => false,
 ) {
-  let S = {
+  let result = {
     seeds: new Map(),
     heldBack: [],
     firstSeen: [],
@@ -162,98 +171,108 @@ function readServedOwnerSettings(
     hookWaiting: false,
     sandboxTurnedOn: false,
   };
-  let w = e.folder(n.key);
-  let R = [];
-  for (let x of REPO_SETTINGS_TIERS) {
-    let file = n[x];
+  let folder = store.folder(slots.key);
+  let accepted = [];
+  for (let slot of REPO_SETTINGS_TIERS) {
+    let file = slots[slot];
     if (file === null) continue;
-    let j = readRepoTierFileText(file);
-    let G = j === "absent" || j === "unreadable" ? null : stripBomAndCarriageReturns(j.text);
-    let L = n.linkedAway.includes(x) || repoTierFileLeadsAway(file);
-    let q = G === null || L ? null : parseSettingsContent(G, file);
-    let Q = x === "local" && getAtPath(q?.settings ?? null, SANDBOX_ENABLED_PATH) === true && y();
-    let Z = typeof w === "object" ? w[x] : file;
-    let ee;
-    if (w === "unreadable") ee = "unreadable";
-    else if (Z === null)
-      ee = {
+    let read = readRepoTierFileText(file);
+    let onDisk = read === "absent" || read === "unreadable" ? null : stripBomAndCarriageReturns(read.text);
+    let linkedAway = slots.linkedAway.includes(slot) || repoTierFileLeadsAway(file);
+    let parsedDisk = onDisk === null || linkedAway ? null : parseSettingsContent(onDisk, file);
+    let sandboxOnLocal =
+      slot === "local" &&
+      getAtPath(parsedDisk?.settings ?? null, SANDBOX_ENABLED_PATH) === true &&
+      sandboxForced();
+    let acceptedPath = typeof folder === "object" ? folder[slot] : file;
+    let current;
+    if (folder === "unreadable") current = "unreadable";
+    else if (acceptedPath === null)
+      current = {
         text: null,
       };
     else {
-      let we = e.file(Z);
-      if (we === "unreadable" || (we === "none" && w !== "none")) ee = "unreadable";
-      else if (we === "none") {
-        let ie = L ? null : G;
-        ee = {
-          text: ie,
+      let acceptedFile = store.file(acceptedPath);
+      if (acceptedFile === "unreadable" || (acceptedFile === "none" && folder !== "none"))
+        current = "unreadable";
+      else if (acceptedFile === "none") {
+        let text = linkedAway ? null : onDisk;
+        current = {
+          text,
         };
-        S.firstSeen.push({
-          slot: x,
-          present: j !== "absent",
-          widening: q?.settings != null && !En(tightenSettingsWith(null, q.settings) ?? {}, q.settings),
+        result.firstSeen.push({
+          slot,
+          present: read !== "absent",
+          widening:
+            parsedDisk?.settings != null &&
+            !import_sortedIndex_2(tightenSettingsWith(null, parsedDisk.settings) ?? {}, parsedDisk.settings),
         });
-        if (s === "engage") e.recordFile(file, ie, "first_attach");
+        if (mode === "engage") store.recordFile(file, text, "first_attach");
       } else {
-        ee = {
-          text: we.text,
+        current = {
+          text: acceptedFile.text,
         };
-        R.push(Z);
+        accepted.push(acceptedPath);
       }
     }
-    let PreToolUse = q?.settings?.hooks?.PreToolUse;
-    let se = PreToolUse !== undefined && PreToolUse.length > 0;
-    if (ee === "unreadable") {
-      S.unreadable = true;
-      S.heldBack.push(x);
-      S.hookWaiting ||= se;
-      let we = tightenSettingsWith(null, q?.settings ?? null, Q);
-      S.sandboxTurnedOn ||= getAtPath(we, SANDBOX_ENABLED_PATH) === true;
-      S.seeds.set(file, {
+    let PreToolUse = parsedDisk?.settings?.hooks?.PreToolUse;
+    let hasPreToolUse = PreToolUse !== undefined && PreToolUse.length > 0;
+    if (current === "unreadable") {
+      result.unreadable = true;
+      result.heldBack.push(slot);
+      result.hookWaiting ||= hasPreToolUse;
+      let tighter = tightenSettingsWith(null, parsedDisk?.settings ?? null, sandboxOnLocal);
+      result.sandboxTurnedOn ||= getAtPath(tighter, SANDBOX_ENABLED_PATH) === true;
+      result.seeds.set(file, {
         ...unreadableAcceptedSettings(file),
-        settings: we,
+        settings: tighter,
       });
       continue;
     }
-    let re = !isSameSettingsText(ee.text, G);
-    if (!(j === "unreadable" || re || Z !== file)) {
-      if (!L) S.matching.add(file);
-      S.seeds.set(
+    let differs = !isSameSettingsText(current.text, onDisk);
+    if (!(read === "unreadable" || differs || acceptedPath !== file)) {
+      if (!linkedAway) result.matching.add(file);
+      result.seeds.set(
         file,
-        q ?? (ee.text === null ? missingSettingsFileResult() : parseSettingsContent(ee.text, file)),
+        parsedDisk ??
+          (current.text === null ? missingSettingsFileResult() : parseSettingsContent(current.text, file)),
       );
       continue;
     }
-    if (re || j === "unreadable") S.heldBack.push(x);
-    let Se = ee.text === null ? missingSettingsFileResult() : parseSettingsContent(ee.text, file);
-    S.hookWaiting ||= se && !En(PreToolUse, Se.settings?.hooks?.PreToolUse);
-    let ce = tightenSettingsWith(Se.settings, q?.settings ?? null, Q);
-    S.sandboxTurnedOn ||=
-      getAtPath(ce, SANDBOX_ENABLED_PATH) === true && getAtPath(Se.settings, SANDBOX_ENABLED_PATH) !== true;
-    S.seeds.set(
+    if (differs || read === "unreadable") result.heldBack.push(slot);
+    let acceptedParsed =
+      current.text === null ? missingSettingsFileResult() : parseSettingsContent(current.text, file);
+    result.hookWaiting ||=
+      hasPreToolUse && !import_sortedIndex_2(PreToolUse, acceptedParsed.settings?.hooks?.PreToolUse);
+    let tighter = tightenSettingsWith(acceptedParsed.settings, parsedDisk?.settings ?? null, sandboxOnLocal);
+    result.sandboxTurnedOn ||=
+      getAtPath(tighter, SANDBOX_ENABLED_PATH) === true &&
+      getAtPath(acceptedParsed.settings, SANDBOX_ENABLED_PATH) !== true;
+    result.seeds.set(
       file,
-      ce === null && Se.settings === null
-        ? Se
+      tighter === null && acceptedParsed.settings === null
+        ? acceptedParsed
         : {
-            ...Se,
-            settings: ce,
+            ...acceptedParsed,
+            settings: tighter,
           },
     );
   }
-  if (s === "engage") {
-    if (w === "none")
-      e.recordFolder(n.key, {
-        project: n.project,
-        local: n.local,
-        legacy: n.legacy,
+  if (mode === "engage") {
+    if (folder === "none")
+      store.recordFolder(slots.key, {
+        project: slots.project,
+        local: slots.local,
+        legacy: slots.legacy,
       });
-    e.noteServed(n.key, R);
+    store.noteServed(slots.key, accepted);
   }
-  return S;
+  return result;
 }
 //@ chunk-s61vbvea.js:480084-480197 placement
-function hasServedCallLogs(e = servedCallsDir()) {
+function hasServedCallLogs(dir = servedCallsDir()) {
   try {
-    return readdirSync(e).some((n) => n.endsWith(".jsonl") || n.endsWith(".seen"));
+    return readdirSync(dir).some((name) => name.endsWith(".jsonl") || name.endsWith(".seen"));
   } catch (error) {
     return !isENOENT(error);
   }
@@ -262,87 +281,95 @@ function hasServedCallLogs(e = servedCallsDir()) {
 /**
  * 属主设置冻结的开关与受管限制字段表：read_block、write_block、auto_mode_off、plan_asks_a_person、unattended_serving_off 各自的设置路径。
  */
-var TENGU_QUIET_LOCKET = "tengu_quiet_locket";
-var fti = Object.freeze({
-  held: true,
-  settings: Object.freeze({}),
-  took: "unbound",
+var TENGU_QUIET_LOCKET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var UNBOUND_MANAGED_HOLD;
+var MANAGED_RESTRICTION_FIELDS;
+deferInit("chunk-s61vbvea.js:480197", () => {
+  TENGU_QUIET_LOCKET = "tengu_quiet_locket";
+  UNBOUND_MANAGED_HOLD = Object.freeze({
+    held: true,
+    settings: Object.freeze({}),
+    took: "unbound",
+  });
+  MANAGED_RESTRICTION_FIELDS = [
+    {
+      name: "read_block",
+      paths: [["permissions", "blockReadsOutsideWorkingDirectories"]],
+    },
+    {
+      name: "write_block",
+      paths: [["permissions", "blockWritesOutsideWorkingDirectories"]],
+    },
+    {
+      name: "auto_mode_off",
+      paths: [["disableAutoMode"], ["permissions", "disableAutoMode"]],
+    },
+    {
+      name: "plan_asks_a_person",
+      paths: [["useAutoModeDuringPlan"]],
+    },
+    {
+      name: "unattended_serving_off",
+      paths: [["remoteTools", "allowUnattendedServing"]],
+    },
+  ];
 });
-var MANAGED_RESTRICTION_FIELDS = [
-  {
-    name: "read_block",
-    paths: [["permissions", "blockReadsOutsideWorkingDirectories"]],
-  },
-  {
-    name: "write_block",
-    paths: [["permissions", "blockWritesOutsideWorkingDirectories"]],
-  },
-  {
-    name: "auto_mode_off",
-    paths: [["disableAutoMode"], ["permissions", "disableAutoMode"]],
-  },
-  {
-    name: "plan_asks_a_person",
-    paths: [["useAutoModeDuringPlan"]],
-  },
-  {
-    name: "unattended_serving_off",
-    paths: [["remoteTools", "allowUnattendedServing"]],
-  },
-];
 //@ chunk-s61vbvea.js:480695-480982 placement
 class HeldOwnerSettings {
   #e;
   #t = new Set();
-  noteRefusalsOf(e) {
-    for (let { name: n, paths } of MANAGED_RESTRICTION_FIELDS)
+  noteRefusalsOf(settings) {
+    for (let { name: fieldName, paths } of MANAGED_RESTRICTION_FIELDS)
       if (
         paths.some((path) => {
-          let found = MANAGED_RESTRICTION_KEYS().find((S) => En(S.path, path));
-          return found === undefined || restrictionValue(found, e) === found.restrictive;
+          let found = MANAGED_RESTRICTION_KEYS().find((key) => import_sortedIndex_2(key.path, path));
+          return found === undefined || restrictionValue(found, settings) === found.restrictive;
         })
       )
-        this.#t.add(n);
+        this.#t.add(fieldName);
   }
-  refuses(e) {
-    return this.#t.has(e);
+  refuses(fieldName) {
+    return this.#t.has(fieldName);
   }
   get() {
     return this.#e === undefined ? undefined : clone(this.#e);
   }
-  keep(e) {
-    this.#e = clone(e);
+  keep(settings) {
+    this.#e = clone(settings);
   }
 }
 //@ chunk-s61vbvea.js:480982-481007 placement
 /**
  * 按宿主保存的“持有中”属主设置槽：会话启动时冻结的设置快照与当前用户设置的合并。
  */
-var heldOwnerSettingsSlot = new HostScoped(() => new HeldOwnerSettings());
+var heldOwnerSettingsSlot; // deferred: uses HeldOwnerSettings of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:480982", () => {
+  heldOwnerSettingsSlot = new HostScoped(() => new HeldOwnerSettings());
+});
 //@ chunk-s61vbvea.js:481007-481343 placement
 /**
  * 取得冻结中的属主设置：合并会话启动时冻结的设置与当前用户设置。
  */
 function getHeldServedOwnerSettings() {
-  let e = servedSettingsUnavailableReason();
-  if (!e.held) return e;
+  let reason = servedSettingsUnavailableReason();
+  if (!reason.held) return reason;
   try {
-    let n = heldOwnerSettingsSlot.of(getRootSession().host);
-    let r = n.get();
-    let s = e.took === "ok";
-    let h =
-      r === undefined
-        ? e.settings
+    let slot = heldOwnerSettingsSlot.of(getRootSession().host);
+    let held = slot.get();
+    let tookOk = reason.took === "ok";
+    let merged =
+      held === undefined
+        ? reason.settings
         : mergeCredentialDenyFiles(
-            stripCredentialHelperSettings(tightenSettingsWith(r, s ? e.settings : null) ?? {}),
-            e.settings,
+            stripCredentialHelperSettings(tightenSettingsWith(held, tookOk ? reason.settings : null) ?? {}),
+            reason.settings,
           );
-    if (s || r === undefined) n.keep(h);
-    if (s) n.noteRefusalsOf(e.settings);
+    if (tookOk || held === undefined) slot.keep(merged);
+    if (tookOk) slot.noteRefusalsOf(reason.settings);
     return {
       held: true,
-      settings: h,
-      took: e.took,
+      settings: merged,
+      took: reason.took,
     };
   } catch (error) {
     logError(toError(error));
@@ -355,22 +382,22 @@ function getHeldServedOwnerSettings() {
   }
 }
 //@ chunk-s61vbvea.js:481343-481721 placement
-function recordServedUserRulesAtAttach(acceptedSettingsStore) {
-  let n = holdServedUserSettings(acceptedSettingsStore);
+function recordServedUserRulesAtAttach(store) {
+  let outcome = holdServedUserSettings(store);
   try {
-    switch (n) {
+    switch (outcome) {
       case "recorded":
       case "first_attach":
         logFeatureOk("remote_served_user_rules_at_attach", {
           op: lit("record_held"),
-          first_attach: n === "first_attach",
+          first_attach: outcome === "first_attach",
         });
         break;
       case "first_attach_unread":
       case "path_not_accepted":
       case "record_unreadable":
       case "failed":
-        logFeatureSad("remote_served_user_rules_at_attach", n);
+        logFeatureSad("remote_served_user_rules_at_attach", outcome);
         break;
       case "already_held":
       case "not_held":
@@ -379,10 +406,10 @@ function recordServedUserRulesAtAttach(acceptedSettingsStore) {
   } catch (error) {
     logError(toError(error));
   }
-  return n;
+  return outcome;
 }
 //@ chunk-s61vbvea.js:481721-482642 placement
-function holdServedUserSettings(e) {
+function holdServedUserSettings(store) {
   try {
     if (
       !readFlagWithOverride(TENGU_QUIET_LOCKET, {
@@ -391,45 +418,46 @@ function holdServedUserSettings(e) {
       !isSettingSourceEnabled("userSettings")
     )
       return "not_held";
-    let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
-    if (settingsFilePathForSource === undefined) return "not_held";
-    let r = heldOwnerSettingsSlot.of(getRootSession().host);
-    if (r.get() !== undefined) return "already_held";
-    let s = e.file(settingsFilePathForSource);
-    if (s === "unreadable") {
-      r.keep({});
+    let filePath = getSettingsFilePathForSource("userSettings");
+    if (filePath === undefined) return "not_held";
+    let slot = heldOwnerSettingsSlot.of(getRootSession().host);
+    if (slot.get() !== undefined) return "already_held";
+    let accepted = store.file(filePath);
+    if (accepted === "unreadable") {
+      slot.keep({});
       return "record_unreadable";
     }
-    let h = s === "none";
-    if (h && e.file(ownerSettingsMetPath()) !== "none") {
-      e.recordFile(settingsFilePathForSource, null, "first_attach");
-      r.keep({});
+    let absent = accepted === "none";
+    if (absent && store.file(ownerSettingsMetPath()) !== "none") {
+      store.recordFile(filePath, null, "first_attach");
+      slot.keep({});
       return "path_not_accepted";
     }
-    if (h) e.recordFile(ownerSettingsMetPath(), null, "first_attach");
-    let y = h ? readRepoTierFileText(settingsFilePathForSource) : undefined;
-    let S =
-      s !== "none"
-        ? s.text
-        : y === undefined || y === "absent" || y === "unreadable"
+    if (absent) store.recordFile(ownerSettingsMetPath(), null, "first_attach");
+    let read = absent ? readRepoTierFileText(filePath) : undefined;
+    let text =
+      accepted !== "none"
+        ? accepted.text
+        : read === undefined || read === "absent" || read === "unreadable"
           ? null
-          : stripBomAndCarriageReturns(y.text);
-    let settings = S === null ? {} : parseSettingsContent(S, settingsFilePathForSource).settings;
-    if (y === "unreadable" || settings === null) {
-      if (h) e.recordFile(settingsFilePathForSource, null, "first_attach");
-      r.keep({});
-      return h ? "first_attach_unread" : "record_unreadable";
+          : stripBomAndCarriageReturns(read.text);
+    let settings = text === null ? {} : parseSettingsContent(text, filePath).settings;
+    if (read === "unreadable" || settings === null) {
+      if (absent) store.recordFile(filePath, null, "first_attach");
+      slot.keep({});
+      return absent ? "first_attach_unread" : "record_unreadable";
     }
-    let R = servedRestrictionSnapshot(settings);
-    if (h) e.recordFile(settingsFilePathForSource, S === null ? null : settingsToJsonText(R), "first_attach");
-    r.noteRefusalsOf(R);
-    r.keep(R);
+    let snapshot = servedRestrictionSnapshot(settings);
+    if (absent)
+      store.recordFile(filePath, text === null ? null : settingsToJsonText(snapshot), "first_attach");
+    slot.noteRefusalsOf(snapshot);
+    slot.keep(snapshot);
     try {
-      e.noteServed(settingsFilePathForSource, [settingsFilePathForSource, ownerSettingsMetPath()]);
+      store.noteServed(filePath, [filePath, ownerSettingsMetPath()]);
     } catch (error) {
       logError(toError(error));
     }
-    return h ? "first_attach" : "recorded";
+    return absent ? "first_attach" : "recorded";
   } catch (error) {
     logError(toError(error));
     keepEmptyOwnerSettings();
@@ -452,27 +480,27 @@ function hasUserSettingsChangedSinceAttach(acceptedSettingsStore) {
     )
       return false;
     let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
-    let r =
+    let accepted =
       settingsFilePathForSource === undefined
         ? "none"
         : acceptedSettingsStore.file(settingsFilePathForSource);
-    if (settingsFilePathForSource === undefined || r === "none") return false;
+    if (settingsFilePathForSource === undefined || accepted === "none") return false;
     let repoTierFileText = readRepoTierFileText(settingsFilePathForSource);
-    if (r === "unreadable" || repoTierFileText === "unreadable") return true;
-    let h = snapshotSettingsText(r.text, settingsFilePathForSource);
-    let y = snapshotSettingsText(
+    if (accepted === "unreadable" || repoTierFileText === "unreadable") return true;
+    let before = snapshotSettingsText(accepted.text, settingsFilePathForSource);
+    let after = snapshotSettingsText(
       repoTierFileText === "absent" ? null : stripBomAndCarriageReturns(repoTierFileText.text),
       settingsFilePathForSource,
     );
-    return h === undefined || h !== y;
+    return before === undefined || before !== after;
   } catch (error) {
     logError(toError(error));
     return false;
   }
 }
 //@ chunk-s61vbvea.js:483010-483097 placement
-function snapshotSettingsText(e, settingsFilePathForSource) {
-  let settings = e === null ? {} : parseSettingsContent(e, settingsFilePathForSource).settings;
+function snapshotSettingsText(text, parseOptions) {
+  let settings = text === null ? {} : parseSettingsContent(text, parseOptions).settings;
   return settings === null ? undefined : settingsToJsonText(servedRestrictionSnapshot(settings));
 }
 //@ chunk-s61vbvea.js:483097-483148 placement
@@ -484,31 +512,31 @@ function ownerSettingsMetPath() {
  * 从设置中提取受管理的限制性字段快照，只保留取严格值的项。
  */
 function servedRestrictionSnapshot(settings) {
-  let n = pickRestrictionFields(settings);
-  for (let s of MANAGED_RESTRICTION_FIELDS)
-    for (let path of s.paths) {
-      let found = MANAGED_RESTRICTION_KEYS().find((S) => En(S.path, path));
+  let picked = pickRestrictionFields(settings);
+  for (let field of MANAGED_RESTRICTION_FIELDS)
+    for (let path of field.paths) {
+      let found = MANAGED_RESTRICTION_KEYS().find((key) => import_sortedIndex_2(key.path, path));
       if (found !== undefined && restrictionValue(found, settings) === found.restrictive)
-        setAtPath(n, path, getAtPath(settings, path));
+        setAtPath(picked, path, getAtPath(settings, path));
     }
   let files = settings.sandbox?.credentials?.files ?? [];
   if (files.length > 0)
     setAtPath(
-      n,
+      picked,
       ["sandbox", "credentials", "files"],
       files.map((file) => ({
         path: file.path,
         mode: "deny",
       })),
     );
-  return n;
+  return picked;
 }
 //@ chunk-s61vbvea.js:483448-483488 placement
 /**
  * 导出函数 `settingsToJsonText`：参数 e，返回 `${jsonStringify(e, null, 2)} `。
  */
-function settingsToJsonText(e) {
-  return `${jsonStringify(e, null, 2)}
+function settingsToJsonText(settings) {
+  return `${jsonStringify(settings, null, 2)}
 `;
 }
 //@ chunk-s61vbvea.js:483488-483578 placement
@@ -517,19 +545,19 @@ function settingsToJsonText(e) {
  */
 function keepEmptyOwnerSettings() {
   try {
-    let e = heldOwnerSettingsSlot.of(getRootSession().host);
-    if (e.get() === undefined) e.keep({});
+    let slot = heldOwnerSettingsSlot.of(getRootSession().host);
+    if (slot.get() === undefined) slot.keep({});
   } catch (error) {
     logError(toError(error));
   }
 }
 //@ chunk-s61vbvea.js:483578-483678 placement
-function isServedSettingRefused(e) {
+function isServedSettingRefused(fieldName) {
   try {
     return (
       readFlagWithOverride(TENGU_QUIET_LOCKET, {
         safe: true,
-      }) && heldOwnerSettingsSlot.of(getRootSession().host).refuses(e)
+      }) && heldOwnerSettingsSlot.of(getRootSession().host).refuses(fieldName)
     );
   } catch (error) {
     logError(toError(error));
@@ -553,27 +581,27 @@ function getKeptServedOwnerSettings() {
 /**
  * 把另一份设置中的凭据文件补进当前设置的拒绝列表（去重）。
  */
-function mergeCredentialDenyFiles(e, settings) {
-  let files = e.sandbox?.credentials?.files ?? [];
-  let s = new Set(files.map((file) => file.path));
-  let h = [];
-  for (let y of settings.sandbox?.credentials?.files ?? [])
-    if (!s.has(y.path)) {
-      s.add(y.path);
-      h.push({
-        path: y.path,
+function mergeCredentialDenyFiles(settings, settings_2) {
+  let files = settings.sandbox?.credentials?.files ?? [];
+  let seenPaths = new Set(files.map((file) => file.path));
+  let added = [];
+  for (let file of settings_2.sandbox?.credentials?.files ?? [])
+    if (!seenPaths.has(file.path)) {
+      seenPaths.add(file.path);
+      added.push({
+        path: file.path,
         mode: "deny",
       });
     }
-  return h.length === 0
-    ? e
+  return added.length === 0
+    ? settings
     : {
-        ...e,
+        ...settings,
         sandbox: {
-          ...e.sandbox,
+          ...settings.sandbox,
           credentials: {
-            ...e.sandbox?.credentials,
-            files: [...files, ...h],
+            ...settings.sandbox?.credentials,
+            files: [...files, ...added],
           },
         },
       };
@@ -589,8 +617,8 @@ function servedSettingsUnavailableReason() {
       held: false,
       why: "switch_off",
     };
-  let e = {};
-  let n;
+  let settings = {};
+  let took;
   try {
     if (!isSettingSourceEnabled("userSettings"))
       return {
@@ -599,22 +627,22 @@ function servedSettingsUnavailableReason() {
         took: "source_disabled",
       };
     let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
-    let s =
+    let parsed =
       settingsFilePathForSource === undefined
         ? undefined
         : parseSettingsFileUncached(settingsFilePathForSource);
-    if (s?.settings === null && s.errors.length > 0) n = "unreadable";
+    if (parsed?.settings === null && parsed.errors.length > 0) took = "unreadable";
     else {
-      e = stripCredentialHelperSettings(s?.settings ?? {});
-      n = "ok";
+      settings = stripCredentialHelperSettings(parsed?.settings ?? {});
+      took = "ok";
     }
   } catch (error) {
     logError(toError(error));
-    e = {};
-    n = "failed";
+    settings = {};
+    took = "failed";
   }
   try {
-    switch (n) {
+    switch (took) {
       case "ok":
         logFeatureOk("remote_served_user_rules_at_attach", {
           op: lit("taken"),
@@ -635,58 +663,61 @@ function servedSettingsUnavailableReason() {
   }
   return {
     held: true,
-    settings: e,
-    took: n,
+    settings,
+    took,
   };
 }
 //@ chunk-s61vbvea.js:484747-484823 placement
-function tightenOrStripCredentialHelpers(e, n) {
-  let r = n.held ? tightenSettingsWith(n.settings, e) : e;
-  return r === null ? null : stripCredentialHelperSettings(r);
+function tightenOrStripCredentialHelpers(settings, heldInfo) {
+  let tightened = heldInfo.held ? tightenSettingsWith(heldInfo.settings, settings) : settings;
+  return tightened === null ? null : stripCredentialHelperSettings(tightened);
 }
 //@ chunk-s61vbvea.js:484823-485330 placement
 /**
  * 远程提供工具时重算 userSettings 的权限规则：保留持有快照中仍存在的 allow，当前 deny/ask 全部保留，再补上快照中有但当前缺失的 deny/ask；返回规则与被搁置的 allow 数、保留的拒绝数。
  */
-function reconcileUserSettingsRules(rules, n, r) {
-  if (!n.held)
+function reconcileUserSettingsRules(rules, heldInfo, diskSettings) {
+  if (!heldInfo.held)
     return {
       rules: rules.slice(),
       allowsSetAside: 0,
       refusalsKept: 0,
     };
-  let s = settingsJsonToRules(tightenOrStripCredentialHelpers(r, n), "userSettings");
-  let h = new Set(s.map(hasBashPermission));
-  let y = new Set();
-  let S = [];
+  let heldRules = settingsJsonToRules(
+    tightenOrStripCredentialHelpers(diskSettings, heldInfo),
+    "userSettings",
+  );
+  let heldAllowKeys = new Set(heldRules.map(hasBashPermission));
+  let refusalKeys = new Set();
+  let kept = [];
   let allowsSetAside = 0;
   for (let rule of rules) {
     if (rule.source !== "userSettings") {
-      S.push(rule);
+      kept.push(rule);
       continue;
     }
     switch (rule.ruleBehavior) {
       case "allow":
-        if (h.has(hasBashPermission(rule))) S.push(rule);
+        if (heldAllowKeys.has(hasBashPermission(rule))) kept.push(rule);
         else allowsSetAside += 1;
         break;
       case "deny":
       case "ask":
-        y.add(hasBashPermission(rule));
-        S.push(rule);
+        refusalKeys.add(hasBashPermission(rule));
+        kept.push(rule);
         break;
     }
   }
   let refusalsKept = 0;
-  for (let x of s) {
-    let P = hasBashPermission(x);
-    if (x.ruleBehavior === "allow" || y.has(P)) continue;
-    y.add(P);
-    S.push(x);
+  for (let rule of heldRules) {
+    let key = hasBashPermission(rule);
+    if (rule.ruleBehavior === "allow" || refusalKeys.has(key)) continue;
+    refusalKeys.add(key);
+    kept.push(rule);
     refusalsKept += 1;
   }
   return {
-    rules: S,
+    rules: kept,
     allowsSetAside,
     refusalsKept,
   };
@@ -695,23 +726,25 @@ function reconcileUserSettingsRules(rules, n, r) {
 /**
  * 在冻结设置时合并用户规则：冻结中返回附加 deny 规则，失败时记录错误并返回原规则。
  */
-function applyHeldUserRules(rules, n, r) {
-  if (n === undefined || !n.held) return rules;
+function applyHeldUserRules(rules, heldInfo, refusalsOnly) {
+  if (heldInfo === undefined || !heldInfo.held) return rules;
   try {
-    if (r) return [...rules, ...userRefusalRules(n.settings, ["deny"])];
+    if (refusalsOnly) return [...rules, ...userRefusalRules(heldInfo.settings, ["deny"])];
     return reconcileUserSettingsRules(
       rules,
-      n,
+      heldInfo,
       isSettingSourceEnabled("userSettings") ? getSettingsForSource("userSettings") : null,
     ).rules;
   } catch (error) {
     logError(toError(error));
-    let filtered = rules.filter((y) => y.source !== "userSettings" || y.ruleBehavior !== "allow");
+    let filtered = rules.filter((rule) => rule.source !== "userSettings" || rule.ruleBehavior !== "allow");
     try {
-      let y = new Set(filtered.map(hasBashPermission));
+      let denyKeys = new Set(filtered.map(hasBashPermission));
       return [
         ...filtered,
-        ...userRefusalRules(n.settings, ["deny", "ask"]).filter((S) => !y.has(hasBashPermission(S))),
+        ...userRefusalRules(heldInfo.settings, ["deny", "ask"]).filter(
+          (rule) => !denyKeys.has(hasBashPermission(rule)),
+        ),
       ];
     } catch (error) {
       logError(toError(error));
@@ -720,9 +753,9 @@ function applyHeldUserRules(rules, n, r) {
   }
 }
 //@ chunk-s61vbvea.js:485715-485826 placement
-function userRefusalRules(settings, n) {
+function userRefusalRules(settings, behaviors) {
   return settingsJsonToRules(settings, "userSettings").filter(
-    (r) => r.ruleBehavior !== "allow" && n.includes(r.ruleBehavior),
+    (rule) => rule.ruleBehavior !== "allow" && behaviors.includes(rule.ruleBehavior),
   );
 }
 //@ chunk-s61vbvea.js:485826-485889 placement = hasBashPermission (1)
@@ -730,17 +763,17 @@ function hasBashPermission(rules) {
   return `${rules.ruleBehavior}\x00${formatPermissionRule(rules.ruleValue)}`;
 }
 //@ chunk-s61vbvea.js:485889-485992 placement
-function stripCredentialHelperSettings(e) {
-  if (!CREDENTIAL_HELPER_SETTINGS_KEYS.some((r) => r in e)) return e;
-  let n = {
-    ...e,
+function stripCredentialHelperSettings(settings) {
+  if (!CREDENTIAL_HELPER_SETTINGS_KEYS.some((key) => key in settings)) return settings;
+  let copy = {
+    ...settings,
   };
-  for (let r of CREDENTIAL_HELPER_SETTINGS_KEYS) delete n[r];
-  return n;
+  for (let key of CREDENTIAL_HELPER_SETTINGS_KEYS) delete copy[key];
+  return copy;
 }
 //@ chunk-s61vbvea.js:485992-486144 placement
-function parseGitVersion(stdout) {
-  let match = /^git version (\d+)\.(\d+)\.(\d+)/.exec(stdout.trim());
+function parseGitVersion(versionText) {
+  let match = /^git version (\d+)\.(\d+)\.(\d+)/.exec(versionText.trim());
   return match === null
     ? null
     : {
@@ -753,8 +786,8 @@ function parseGitVersion(stdout) {
 /**
  * 导出函数 `isVersionAtLeast2_32`：参数 e，返回 e !== null && (e.major > 2 || (e.major === 2 && e.minor >= 32))。
  */
-function isVersionAtLeast2_32(e) {
-  return e !== null && (e.major > 2 || (e.major === 2 && e.minor >= 32));
+function isVersionAtLeast2_32(version) {
+  return version !== null && (version.major > 2 || (version.major === 2 && version.minor >= 32));
 }
 //@ chunk-s61vbvea.js:486215-486286 placement
 /**
@@ -773,19 +806,23 @@ var ALL_ZERO_RE = /^0+$/;
 /**
  * 导出函数 `hasNonZeroHash`：参数 e，返回 !BF.test(e)。
  */
-function hasNonZeroHash(e) {
-  return !ALL_ZERO_RE.test(e);
+function hasNonZeroHash(hash) {
+  return !ALL_ZERO_RE.test(hash);
 }
 //@ chunk-s61vbvea.js:486464-486519 placement = ANTHROPIC_VERSION (0.816)
 /**
  * 组合的 beta 头值与 anthropic-version "2023-06-01"。
  */
-var COMBINED_BETA_HEADER = `${BETA_FILES_API.header},${BETA_OAUTH_AUTH.header}`;
-var ANTHROPIC_VERSION_2 = "2023-06-01";
+var COMBINED_BETA_HEADER; // deferred: uses BETA_CLAUDE_CODE (../../utils/betas.js) of its import cycle while loading; runs once the cycle is complete
+var ANTHROPIC_VERSION_2;
+deferInit("chunk-s61vbvea.js:486464", () => {
+  COMBINED_BETA_HEADER = `${BETA_FILES_API.header},${BETA_OAUTH_AUTH.header}`;
+  ANTHROPIC_VERSION_2 = "2023-06-01";
+});
 export {
   settingsToJsonText,
   servedRestrictionSnapshot,
-  fti,
+  UNBOUND_MANAGED_HOLD,
   recordServedUserRulesAtAttach,
   getHeldServedOwnerSettings,
   keepEmptyOwnerSettings,

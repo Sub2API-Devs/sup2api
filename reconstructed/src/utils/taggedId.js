@@ -20,12 +20,12 @@ var MAX_WIRE_TOOL_NAME_BYTES = 128;
 /**
  * 工具名是否超过长度上限（按码点计）。
  */
-function isOverlongToolName(e) {
-  if (e.length <= MAX_WIRE_TOOL_NAME_CHARS) return false;
-  let n = 0;
-  for (let r of e) {
-    n++;
-    if (n > MAX_WIRE_TOOL_NAME_CHARS) return true;
+function isOverlongToolName(toolName) {
+  if (toolName.length <= MAX_WIRE_TOOL_NAME_CHARS) return false;
+  let length = 0;
+  for (let char of toolName) {
+    length++;
+    if (length > MAX_WIRE_TOOL_NAME_CHARS) return true;
   }
   return false;
 }
@@ -41,22 +41,22 @@ function clippedToolName(name) {
 //@ chunk-6mwt0myy.js:819-1022 placement = countToolCallsSince (1)
 function countToolCallsSince(content) {
   if (!Array.isArray(content)) return content;
-  let n;
-  content.forEach((r, t) => {
-    if (!isObjectNonNull(r) || r.type !== "tool_use") return;
-    let s = clippedToolName(r.name);
-    if (s === undefined) return;
-    n ??= content.slice();
-    n[t] = {
-      ...r,
-      name: s,
+  let copy;
+  content.forEach((item, index) => {
+    if (!isObjectNonNull(item) || item.type !== "tool_use") return;
+    let clippedName = clippedToolName(item.name);
+    if (clippedName === undefined) return;
+    copy ??= content.slice();
+    copy[index] = {
+      ...item,
+      name: clippedName,
     };
   });
-  return n === undefined ? content : n;
+  return copy === undefined ? content : copy;
 }
 //@ chunk-6mwt0myy.js:1022-1073 placement
-function isObjectNonNull(e) {
-  return typeof e === "object" && e !== null;
+function isObjectNonNull(value) {
+  return typeof value === "object" && value !== null;
 }
 //@ chunk-6mwt0myy.js:1073-1110 placement
 /**

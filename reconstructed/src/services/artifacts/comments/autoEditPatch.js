@@ -5,7 +5,7 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-eavynfj6.js (26)
+ * pieces: chunk-eavynfj6.js (27)
  * attribution: placement 26
  */
 import { extname } from "path";
@@ -13,20 +13,28 @@ import { stat, readFile } from "fs/promises";
 import { MAX_PUBLISH_EDITS, applyFindReplace } from "../../../tools/ArtifactTool/publishEdits.js";
 import { isWellFormedString, normalizeFullWidthSpace } from "../../../utils/stringUtils.js";
 import { jsonParse } from "../../../utils/slowOperations.js";
-import { FILLER_CHAR_CLASS } from "../../../utils/confusables.js";
-import { isDiskless } from "../../../bootstrap/state.js";
 import {
-  containsHarnessTags,
+  FILLER_CHAR_CLASS,
+  confusableTagScrubPattern,
+  createTagNeutralizer,
+  foldConfusableCharacters,
+} from "../../../utils/confusables.js";
+import { isDiskless } from "../../../bootstrap/state.js";
+import { extractThumbnailLinks } from "../../../tools/ArtifactTool/artifactUrls.js";
+import {
   getEditPermissionVerdict,
   canWriteWithoutPrompt,
   applyFindReplaceEdits,
   recordAutoEditRead,
+  matchesTagPattern,
+  decodeMusicalSymbols,
+  decodeHtmlEscapes,
 } from "./autoEditPermissions.js";
-import { extractThumbnailLinks } from "../../../tools/ArtifactTool/artifactUrls.js";
 import { webfetchReadFile } from "../webfetchRead.js";
 import { claudeAiEnvironment } from "../../../constants/claudeAiOrigin.js";
 import { getShareEntry } from "../shareEntries.js";
 import { generateAgent } from "../../../components/agents/generateAgent.js";
+import { stripCombiningRepeated } from "../../../utils/sanitization.js";
 
 //@ chunk-eavynfj6.js:12195-12257 placement
 /**
@@ -38,45 +46,45 @@ var MAX_CREATE_FILE_BYTES = 262144;
 var MAX_CREATE_BYTES = 524288;
 var SURROGATE_ESCAPE = "surrogate_escape";
 //@ chunk-eavynfj6.js:12257-12861 placement
-function parseEditDecisionJson(text, t) {
-  let o = unwrapCodeFence(stripBomAndTrim(text));
-  let n = (a, key) => ({
+function parseEditDecisionJson(text, rawText) {
+  let unwrapped = unwrapCodeFence(stripBomAndTrim(text));
+  let fail = (cls, key) => ({
     ok: false,
     error: {
-      class: a,
+      class: cls,
       key,
     },
   });
-  if (!isWellFormedString(o.text)) return n("not_json", "");
-  let { text: text_2, preamble } = findJsonObjectStart(o.text);
-  let s = {
-    fenced: o.fenced,
+  if (!isWellFormedString(unwrapped.text)) return fail("not_json", "");
+  let { text: text_2, preamble } = findJsonObjectStart(unwrapped.text);
+  let meta = {
+    fenced: unwrapped.fenced,
     preamble,
   };
-  let l;
+  let decision;
   try {
-    l = jsonParse(text_2);
+    decision = jsonParse(text_2);
   } catch {
-    return n("not_json", "");
+    return fail("not_json", "");
   }
-  if (!isPlainObject(l)) return n("not_json", "");
-  let optionalString = readOptionalString(l, "action");
-  if (!optionalString.ok || !optionalString.present) return n("wrong_shape", "action");
+  if (!isPlainObject(decision)) return fail("not_json", "");
+  let optionalString = readOptionalString(decision, "action");
+  if (!optionalString.ok || !optionalString.present) return fail("wrong_shape", "action");
   if (optionalString.value === "hand_back") {
-    let optionalString = readOptionalString(l, "reason");
-    if (!optionalString.ok) return n("wrong_shape", "reason");
+    let optionalString = readOptionalString(decision, "reason");
+    if (!optionalString.ok) return fail("wrong_shape", "reason");
     return {
       ok: true,
       decision: {
         action: "hand_back",
         reason: optionalString.present ? normalizeFullWidthSpace(optionalString.value) : "",
-        ...s,
+        ...meta,
       },
     };
   }
-  if (optionalString.value !== "edit") return n("unknown_action", "action");
-  if (hasLoneSurrogateEscape(text_2)) return n("bad_string", SURROGATE_ESCAPE);
-  return validateEditDecision(l, t, s);
+  if (optionalString.value !== "edit") return fail("unknown_action", "action");
+  if (hasLoneSurrogateEscape(text_2)) return fail("bad_string", SURROGATE_ESCAPE);
+  return validateEditDecision(decision, rawText, meta);
 }
 //@ chunk-eavynfj6.js:12861-12871 placement
 var MAX_JSON_START_ATTEMPTS = 64;
@@ -85,16 +93,16 @@ var MAX_JSON_START_ATTEMPTS = 64;
  * 在模型回复里找第一个能完整解析为 JSON 的 { 起点（有尝试次数上限），返回从那里开始的文本以及前面是否有多余前言。
  */
 function findJsonObjectStart(text) {
-  let index = text.indexOf("{");
-  for (let i = 0; index >= 0 && i < MAX_JSON_START_ATTEMPTS; i++) {
-    if (isParsableJsonAt(text, index))
+  let fromIndex = text.indexOf("{");
+  for (let i = 0; fromIndex >= 0 && i < MAX_JSON_START_ATTEMPTS; i++) {
+    if (isParsableJsonAt(text, fromIndex))
       return {
-        text: text.slice(index),
-        preamble: index > 0,
+        text: text.slice(fromIndex),
+        preamble: fromIndex > 0,
       };
-    let index_2 = text.indexOf("{", index + 1);
-    if (index_2 < 0) break;
-    index = index_2;
+    let index = text.indexOf("{", fromIndex + 1);
+    if (index < 0) break;
+    fromIndex = index;
   }
   return {
     text,
@@ -105,21 +113,21 @@ function findJsonObjectStart(text) {
 /**
  * 从给定位置按括号与字符串转义配平扫描到匹配的 }，尝试 JSON 解析该片段，成功返回 true。
  */
-function isParsableJsonAt(e, t) {
-  let o = 0;
-  let n = false;
-  for (let i = t; i < e.length; i++) {
-    let r = e[i];
-    if (n) {
-      if (r === "\\") i++;
-      else if (r === '"') n = false;
-    } else if (r === '"') n = true;
-    else if (r === "{") o++;
-    else if (r === "}") {
-      o--;
-      if (o === 0)
+function isParsableJsonAt(text, fromIndex) {
+  let depth = 0;
+  let inString = false;
+  for (let index = fromIndex; index < text.length; index++) {
+    let ch = text[index];
+    if (inString) {
+      if (ch === "\\") index++;
+      else if (ch === '"') inString = false;
+    } else if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0)
         try {
-          jsonParse(e.slice(t, i + 1));
+          jsonParse(text.slice(fromIndex, index + 1));
           return true;
         } catch {
           return false;
@@ -129,69 +137,70 @@ function isParsableJsonAt(e, t) {
   return false;
 }
 //@ chunk-eavynfj6.js:13294-14995 placement
-function validateEditDecision(e, t, o) {
-  let n = (u, key) => ({
+function validateEditDecision(decision, sourceHtml, options) {
+  let invalid = (errorClass, key) => ({
     ok: false,
     error: {
-      class: u,
+      class: errorClass,
       key,
     },
   });
-  let optionalString = readOptionalString(e, "reply");
+  let optionalString = readOptionalString(decision, "reply");
   if (!optionalString.ok || !optionalString.present || optionalString.value.trim() === "")
-    return n("wrong_shape", "reply");
-  let optionalString_2 = readOptionalString(e, "confidence");
-  if (!optionalString_2.ok) return n("wrong_shape", "confidence");
-  let edits = e.edits;
+    return invalid("wrong_shape", "reply");
+  let optionalString_2 = readOptionalString(decision, "confidence");
+  if (!optionalString_2.ok) return invalid("wrong_shape", "confidence");
+  let edits = decision.edits;
   if (!Array.isArray(edits) || edits.some((edit) => edit !== null && !isPlainObject(edit)))
-    return n("wrong_shape", "edits");
-  if (edits.length === 0) return n("wrong_shape", "edits");
-  if (edits.length > MAX_EDITS_PER_PATCH) return n("limit", "MaxEdits");
-  let l = [];
-  let f = 0;
-  let a = 0;
+    return invalid("wrong_shape", "edits");
+  if (edits.length === 0) return invalid("wrong_shape", "edits");
+  if (edits.length > MAX_EDITS_PER_PATCH) return invalid("limit", "MaxEdits");
+  let errors = [];
+  let editsApplied = 0;
+  let rewriteAllowed = 0;
   for (let idx = 0; idx < edits.length; idx++) {
-    let d = edits[idx];
-    let h = (m) => `edits[${idx}].${m}`;
-    if (!isPlainObject(d)) return n("wrong_shape", `edits[${idx}]`);
-    let optionalString = readOptionalString(d, "file");
-    if (!optionalString.ok) return n("wrong_shape", h("file"));
-    let y = optionalString.present ? optionalString.value : "";
-    if (y.trim() === "") {
-      if (t === "") return n("wrong_shape", h("file"));
-      y = t;
+    let edit = edits[idx];
+    let fieldPath = (field) => `edits[${idx}].${field}`;
+    if (!isPlainObject(edit)) return invalid("wrong_shape", `edits[${idx}]`);
+    let optionalString = readOptionalString(edit, "file");
+    if (!optionalString.ok) return invalid("wrong_shape", fieldPath("file"));
+    let findText = optionalString.present ? optionalString.value : "";
+    if (findText.trim() === "") {
+      if (sourceHtml === "") return invalid("wrong_shape", fieldPath("file"));
+      findText = sourceHtml;
     }
-    let p = Object.hasOwn(d, "create");
-    let C = Object.hasOwn(d, "find");
-    let x = Object.hasOwn(d, "replace");
-    if (p && (C || x)) return n("wrong_shape", `edits[${idx}]`);
-    if (p) {
-      let optionalString = readOptionalString(d, "create");
+    let hasCreate = Object.hasOwn(edit, "create");
+    let hasFind = Object.hasOwn(edit, "find");
+    let hasReplace = Object.hasOwn(edit, "replace");
+    if (hasCreate && (hasFind || hasReplace)) return invalid("wrong_shape", `edits[${idx}]`);
+    if (hasCreate) {
+      let optionalString = readOptionalString(edit, "create");
       if (!optionalString.ok || !optionalString.present || optionalString.value.trim() === "")
-        return n("wrong_shape", h("create"));
-      if (optionalString.value.includes("\x00")) return n("bad_string", h("create"));
-      let k = utf8Bytes(optionalString.value);
-      if (k > MAX_CREATE_FILE_BYTES) return n("limit", "MaxCreateFileBytes");
-      a += k;
-      if (a > MAX_CREATE_BYTES) return n("limit", "MaxCreateBytes");
-      l.push({
-        file: y,
+        return invalid("wrong_shape", fieldPath("create"));
+      if (optionalString.value.includes("\x00")) return invalid("bad_string", fieldPath("create"));
+      let bytes = utf8Bytes(optionalString.value);
+      if (bytes > MAX_CREATE_FILE_BYTES) return invalid("limit", "MaxCreateFileBytes");
+      rewriteAllowed += bytes;
+      if (rewriteAllowed > MAX_CREATE_BYTES) return invalid("limit", "MaxCreateBytes");
+      errors.push({
+        file: findText,
         create: true,
         content: optionalString.value,
       });
       continue;
     }
-    if (!C && !x) return n("wrong_shape", `edits[${idx}]`);
-    let optionalString_2 = readOptionalString(d, "find");
-    if (!optionalString_2.ok || !optionalString_2.present) return n("wrong_shape", h("find"));
-    let optionalString_3 = readOptionalString(d, "replace");
-    if (!optionalString_3.ok || !optionalString_3.present) return n("wrong_shape", h("replace"));
-    if (optionalString_2.value === "") return n("wrong_shape", h("find"));
-    if (optionalString_3.value.includes("\x00")) return n("bad_string", h("replace"));
-    f += utf8Bytes(optionalString_2.value) + utf8Bytes(optionalString_3.value);
-    if (f > MAX_REPLACE_BYTES) return n("limit", "MaxReplaceBytes");
-    l.push({
-      file: y,
+    if (!hasFind && !hasReplace) return invalid("wrong_shape", `edits[${idx}]`);
+    let optionalString_2 = readOptionalString(edit, "find");
+    if (!optionalString_2.ok || !optionalString_2.present) return invalid("wrong_shape", fieldPath("find"));
+    let optionalString_3 = readOptionalString(edit, "replace");
+    if (!optionalString_3.ok || !optionalString_3.present)
+      return invalid("wrong_shape", fieldPath("replace"));
+    if (optionalString_2.value === "") return invalid("wrong_shape", fieldPath("find"));
+    if (optionalString_3.value.includes("\x00")) return invalid("bad_string", fieldPath("replace"));
+    editsApplied += utf8Bytes(optionalString_2.value) + utf8Bytes(optionalString_3.value);
+    if (editsApplied > MAX_REPLACE_BYTES) return invalid("limit", "MaxReplaceBytes");
+    errors.push({
+      file: findText,
       create: false,
       find: optionalString_2.value,
       replace: optionalString_3.value,
@@ -201,64 +210,64 @@ function validateEditDecision(e, t, o) {
     ok: true,
     decision: {
       action: "edit",
-      edits: l,
+      edits: errors,
       reply: optionalString.value,
       confidence: optionalString_2.present ? optionalString_2.value : "",
-      ...o,
+      ...options,
     },
   };
 }
 //@ chunk-eavynfj6.js:14995-15065 placement
-function isPlainObject(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-eavynfj6.js:15065-15215 placement
-function readOptionalString(e, t) {
-  if (!Object.hasOwn(e, t) || e[t] === null)
+function readOptionalString(obj, key) {
+  if (!Object.hasOwn(obj, key) || obj[key] === null)
     return {
       ok: true,
       present: false,
     };
-  let o = e[t];
-  return typeof o === "string"
+  let value = obj[key];
+  return typeof value === "string"
     ? {
         ok: true,
         present: true,
-        value: o,
+        value,
       }
     : {
         ok: false,
       };
 }
 //@ chunk-eavynfj6.js:15215-15264 placement
-function utf8Bytes(e) {
-  return Buffer.byteLength(e, "utf8");
+function utf8Bytes(text) {
+  return Buffer.byteLength(text, "utf8");
 }
 //@ chunk-eavynfj6.js:15264-15348 placement
-function stripBomAndTrim(e) {
-  let trimmed = e.trim();
+function stripBomAndTrim(text) {
+  let trimmed = text.trim();
   if (trimmed.startsWith("\uFEFF")) trimmed = trimmed.slice(1).trim();
   return trimmed;
 }
 //@ chunk-eavynfj6.js:15348-15652 placement
-function unwrapCodeFence(e) {
-  if (!e.startsWith("```") || !e.endsWith("```") || e.length < 6)
+function unwrapCodeFence(text) {
+  if (!text.startsWith("```") || !text.endsWith("```") || text.length < 6)
     return {
-      text: e,
+      text,
       fenced: false,
     };
-  let sliced = e.slice(3, e.length - 3);
+  let sliced = text.slice(3, text.length - 3);
   let index = sliced.indexOf(`
 `);
   if (index < 0)
     return {
-      text: e,
+      text,
       fenced: false,
     };
   let trimmed = sliced.slice(0, index).trim();
   if (trimmed.length > 0 && !/^[A-Za-z0-9]+$/.test(trimmed))
     return {
-      text: e,
+      text,
       fenced: false,
     };
   return {
@@ -286,53 +295,53 @@ function hasLoneSurrogateEscape(text) {
   return false;
 }
 //@ chunk-eavynfj6.js:15982-16097 placement
-function parseHex4(e, t) {
-  if (t + 4 > e.length) return;
-  let sliced = e.slice(t, t + 4);
+function parseHex4(text, index) {
+  if (index + 4 > text.length) return;
+  let sliced = text.slice(index, index + 4);
   return /^[0-9A-Fa-f]{4}$/.test(sliced) ? parseInt(sliced, 16) : undefined;
 }
 //@ chunk-eavynfj6.js:16097-16594 placement
-function planPatchEdits(e, t, edits) {
+function planPatchEdits(find, rawEdits, edits) {
   if (edits.length === 0)
     return {
       ok: false,
       reason: "empty",
       edit: -1,
     };
-  let n = [];
+  let editList = [];
   for (let k = 0; k < edits.length; k++) {
-    let s = edits[k];
-    if (!isSafeRelativePath(s.file))
+    let edit = edits[k];
+    if (!isSafeRelativePath(edit.file))
       return {
         ok: false,
         reason: "bad_path",
         edit: k,
       };
-    if (s.create)
+    if (edit.create)
       return {
         ok: false,
-        reason: s.file === t ? "exists" : "create_refused",
+        reason: edit.file === rawEdits ? "exists" : "create_refused",
         edit: k,
       };
-    if (s.file !== t)
+    if (edit.file !== rawEdits)
       return {
         ok: false,
         reason: "unknown_file",
         edit: k,
       };
-    n.push({
-      find: s.find,
-      replace: s.replace,
+    editList.push({
+      find: edit.find,
+      replace: edit.replace,
     });
   }
-  let i = applyFindReplace(e, n);
-  if (i.ok)
+  let patched = applyFindReplace(find, editList);
+  if (patched.ok)
     return {
       ok: true,
-      content: i.content,
-      ops: n,
+      content: patched.content,
+      ops: editList,
     };
-  return i.reason === "noop"
+  return patched.reason === "noop"
     ? {
         ok: false,
         reason: "noop",
@@ -340,8 +349,8 @@ function planPatchEdits(e, t, edits) {
       }
     : {
         ok: false,
-        reason: i.reason,
-        edit: i.op,
+        reason: patched.reason,
+        edit: patched.op,
       };
 }
 //@ chunk-eavynfj6.js:16594-16778 placement
@@ -351,7 +360,7 @@ function planPatchEdits(e, t, edits) {
 function isSafeRelativePath(file) {
   if (file === "" || Buffer.byteLength(file, "utf8") > 512 || file.startsWith("/")) return false;
   if (/[\x00-\x1f\x7f\\]/.test(file)) return false;
-  return file.split("/").every((t) => t !== "" && t !== "." && t !== "..");
+  return file.split("/").every((segment) => segment !== "" && segment !== "." && segment !== "..");
 }
 //@ chunk-eavynfj6.js:16778-18970 placement
 var AUTO_EDIT_SYSTEM_PROMPT = `Claude composes one edit to an artifact. Claude has no tools. Claude outputs only the decision JSON object.
@@ -373,38 +382,38 @@ var PAGE_HTML_DESCRIPTION = {
   page: "The artifact is a single-file web page, page.html.",
 };
 //@ chunk-eavynfj6.js:19051-19221 placement
-function splitPatchPrompt(e) {
-  let index = e.indexOf(`
+function splitPatchPrompt(prompt) {
+  let index = prompt.indexOf(`
 
 `);
-  let o = index === -1 ? e : e.slice(0, index);
-  let n = index === -1 ? "" : e.slice(index + 2);
+  let before = index === -1 ? prompt : prompt.slice(0, index);
+  let after = index === -1 ? "" : prompt.slice(index + 2);
   return {
-    systemLine: o.replace(/[ \t\n]+$/, ""),
-    decisionBlock: n.replace(/[ \t\n]+$/, ""),
+    systemLine: before.replace(/[ \t\n]+$/, ""),
+    decisionBlock: after.replace(/[ \t\n]+$/, ""),
   };
 }
 //@ chunk-eavynfj6.js:19221-19252 placement
 var FILE_CLOSE_TAG = "</file>";
 var ESCAPED_FILE_CLOSE_TAG = "<\\/file>";
 //@ chunk-eavynfj6.js:19252-19508 placement
-function buildPatchFilesPrompt(e, t, o) {
-  let sorted = [...o].sort((r, s) => (r.path < s.path ? -1 : r.path > s.path ? 1 : 0));
-  let i = `${e.systemLine}
-${PAGE_HTML_DESCRIPTION[t]}
+function buildPatchFilesPrompt(ctx, head, files) {
+  let sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  let text = `${ctx.systemLine}
+${PAGE_HTML_DESCRIPTION[head]}
 The artifact's current files are between the fences.`;
-  for (let r of sorted) {
-    let replaced = r.text.replaceAll(FILE_CLOSE_TAG, ESCAPED_FILE_CLOSE_TAG);
-    i += `
-<file path="${r.path}">
+  for (let file of sorted) {
+    let replaced = file.text.replaceAll(FILE_CLOSE_TAG, ESCAPED_FILE_CLOSE_TAG);
+    text += `
+<file path="${file.path}">
 ${replaced}
 ${FILE_CLOSE_TAG}`;
   }
-  return i;
+  return text;
 }
 //@ chunk-eavynfj6.js:19508-19575 placement
-function decisionPrompt(e, request) {
-  return `${e.decisionBlock}
+function decisionPrompt(thread, request) {
+  return `${thread.decisionBlock}
 
 The person asks:
 ${request}
@@ -423,8 +432,8 @@ var PATCH_FAILURE_DESCRIPTIONS = {
 /**
  * 补丁应用失败后的重试提示：第几处编辑失败、失败原因、失败的查找文本（截断），要求重新给出决策对象。
  */
-function buildPatchRetryMessage(edit, patchFailureReason, o) {
-  let joined = [...o].slice(0, 2000).join("");
+function buildPatchRetryMessage(edit, patchFailureReason, editRecord) {
+  let joined = [...editRecord].slice(0, 2000).join("");
   return `
 Your previous patch was not applied: edit #${edit + 1} failed because ${PATCH_FAILURE_DESCRIPTIONS[patchFailureReason]}:
 <failed_find>
@@ -522,11 +531,11 @@ var NAMED_ENTITY_MAP = new Map([
   ["inodot", "\u0131"],
   ["iukcy", "\u0456"],
 ]);
-var MEDIUM_EFFORT = ["file", "fiie", "flle"];
+var EFFORT_TYPOS = ["file", "fiie", "flle"];
 var TEXT_ESCAPE_RE = /[1|\u01C0\u2223\u2502\u2758\uFFE8]/g;
-var ESCAPE_MAX_CHARS = /[\uFFFC\uFFFD\u2800\u115F\u1160\u3164\uFFA0\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g;
+var ESCAPE_TARGETS_RE = /[\uFFFC\uFFFD\u2800\u115F\u1160\u3164\uFFA0\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g;
 var INVALID_CODE_POINT = "\uFFFD";
-var MEDIUM = "medium";
+var MEDIUM_EFFORT = "medium";
 var MAX_ENTITIES = 409600;
 //@ chunk-eavynfj6.js:22115-25548 placement
 /**
@@ -535,38 +544,38 @@ var MAX_ENTITIES = 409600;
 async function runAutoEditForFile(abortSignal) {
   let now = abortSignal.now ?? Date.now;
   let deadlineMs = abortSignal.deadlineMs ?? AUTO_EDIT_DEADLINE_MS;
-  let n = now();
-  let i = {
+  let startedAt = now();
+  let timings = {
     readMs: 0,
     callMs: 0,
     retryMs: 0,
   };
-  let r = (reason, pageBytes) => ({
+  let ineligible = (reason, pageBytes) => ({
     kind: "ineligible",
     reason,
     retried: false,
     pageBytes,
-    timings: i,
+    timings,
   });
   let lower = extname(abortSignal.path).toLowerCase();
-  if (lower !== ".html" && lower !== ".htm") return r("not_html");
-  if (isDiskless()) return r("file_missing");
-  let l;
-  let f;
+  if (lower !== ".html" && lower !== ".htm") return ineligible("not_html");
+  if (isDiskless()) return ineligible("file_missing");
+  let html;
+  let mtime;
   try {
-    let g = await stat(abortSignal.path);
-    if (g.size > MAX_ENTITIES) return r("too_large", g.size);
-    l = await readFile(abortSignal.path, "utf8");
-    f = g.mtimeMs;
+    let fileStat = await stat(abortSignal.path);
+    if (fileStat.size > MAX_ENTITIES) return ineligible("too_large", fileStat.size);
+    html = await readFile(abortSignal.path, "utf8");
+    mtime = fileStat.mtimeMs;
   } catch {
-    return r("file_missing");
+    return ineligible("file_missing");
   }
-  let a = Buffer.byteLength(l, "utf8");
-  if (l.trim() === "") return r("empty_file", a);
-  if (l.includes("\r")) return r("crlf", a);
-  if (l.charCodeAt(0) === 65279) return r("bom", a);
-  if (containsHarnessTags(l)) return r("fence", a);
-  let thumbnailLinks = extractThumbnailLinks(l);
+  let bytes = Buffer.byteLength(html, "utf8");
+  if (html.trim() === "") return ineligible("empty_file", bytes);
+  if (html.includes("\r")) return ineligible("crlf", bytes);
+  if (html.charCodeAt(0) === 65279) return ineligible("bom", bytes);
+  if (containsHarnessTags(html)) return ineligible("fence", bytes);
+  let thumbnailLinks = extractThumbnailLinks(html);
   if (
     thumbnailLinks.light !== undefined ||
     thumbnailLinks.dark !== undefined ||
@@ -574,20 +583,24 @@ async function runAutoEditForFile(abortSignal) {
     thumbnailLinks.oversizeTag === true ||
     thumbnailLinks.badMedia !== undefined
   )
-    return r("thumbnail", a);
-  let d = abortSignal.permissions();
-  let editPermissionVerdict = getEditPermissionVerdict(abortSignal.path, d);
+    return ineligible("thumbnail", bytes);
+  let permissions = abortSignal.permissions();
+  let editPermissionVerdict = getEditPermissionVerdict(abortSignal.path, permissions);
   if (editPermissionVerdict !== "allowed")
-    return r(editPermissionVerdict === "classify_all" ? "auto_mode_classify_all" : "edit_would_ask", a);
-  if (!canWriteWithoutPrompt(abortSignal.path, abortSignal.slug, d)) return r("publish_would_ask", a);
-  let A = now();
-  let y = AbortSignal.timeout(Math.max(0, deadlineMs - (A - n)));
-  let p = await webfetchReadFile(
+    return ineligible(
+      editPermissionVerdict === "classify_all" ? "auto_mode_classify_all" : "edit_would_ask",
+      bytes,
+    );
+  if (!canWriteWithoutPrompt(abortSignal.path, abortSignal.slug, permissions))
+    return ineligible("publish_would_ask", bytes);
+  let nowMs = now();
+  let timeoutSignal = AbortSignal.timeout(Math.max(0, deadlineMs - (nowMs - startedAt)));
+  let read = await webfetchReadFile(
     {
       slug: abortSignal.slug,
       env: claudeAiEnvironment(),
     },
-    AbortSignal.any([abortSignal.context.abortController.signal, y]),
+    AbortSignal.any([abortSignal.context.abortController.signal, timeoutSignal]),
     abortSignal.context.credentials,
     "artifact_patch_turn_read",
     "probe",
@@ -597,61 +610,61 @@ async function runAutoEditForFile(abortSignal) {
   ).catch(() => {
     return;
   });
-  i.readMs = now() - A;
+  timings.readMs = now() - nowMs;
   if (abortSignal.context.abortController.signal.aborted)
     return {
       kind: "canceled",
       reason: "read",
       retried: false,
-      pageBytes: a,
-      timings: i,
+      pageBytes: bytes,
+      timings,
     };
-  if (p === undefined || p.err !== null)
-    return y.aborted
+  if (read === undefined || read.err !== null)
+    return timeoutSignal.aborted
       ? {
           kind: "timeout",
           reason: "read",
           retried: false,
-          pageBytes: a,
-          timings: i,
+          pageBytes: bytes,
+          timings,
         }
       : {
           kind: "skipped_read",
           reason: "read_failed",
           retried: false,
-          pageBytes: a,
-          timings: i,
+          pageBytes: bytes,
+          timings,
         };
-  if (p.role !== "owner") return r("not_owner", a);
-  if (p.audience !== "owner") return r("shared", a);
-  if (p.typeLocked) return r("type_locked", a);
-  if (p.fileCount !== undefined && p.fileCount > 1) return r("multifile", a);
-  if (p.contentStore !== undefined) return r("live_doc", a);
+  if (read.role !== "owner") return ineligible("not_owner", bytes);
+  if (read.audience !== "owner") return ineligible("shared", bytes);
+  if (read.typeLocked) return ineligible("type_locked", bytes);
+  if (read.fileCount !== undefined && read.fileCount > 1) return ineligible("multifile", bytes);
+  if (read.contentStore !== undefined) return ineligible("live_doc", bytes);
   if (
-    p.readBack?.capabilities?.room !== undefined ||
+    read.readBack?.capabilities?.room !== undefined ||
     getShareEntry(abortSignal.slug)?.capabilities?.room !== undefined
   )
-    return r("room", a);
-  if (p.ver !== abortSignal.observedVer) return r("live_version_moved", a);
-  let C = splitPatchPrompt(AUTO_EDIT_SYSTEM_PROMPT);
-  let userPrompt = buildPatchFilesPrompt(C, "page", [
+    return ineligible("room", bytes);
+  if (read.ver !== abortSignal.observedVer) return ineligible("live_version_moved", bytes);
+  let systemPrompt = splitPatchPrompt(AUTO_EDIT_SYSTEM_PROMPT);
+  let userPrompt = buildPatchFilesPrompt(systemPrompt, "page", [
     {
       path: PAGE_HTML,
-      text: l,
+      text: html,
     },
   ]);
-  let model = decisionPrompt(C, abortSignal.request);
+  let model = decisionPrompt(systemPrompt, abortSignal.request);
   let retried = false;
   let sideCallMessageId;
-  let k;
+  let decision;
   for (let idx = 0; idx < 2; idx++) {
-    let existingIdentifiers = deadlineMs - (now() - n);
+    let existingIdentifiers = deadlineMs - (now() - startedAt);
     if (idx > 0 && existingIdentifiers < MIN_REMAINING_MS) break;
-    let E = now();
+    let callStart = now();
     let agent = await generateAgent(userPrompt, model, existingIdentifiers, abortSignal);
-    if (idx === 0) i.callMs = now() - E;
+    if (idx === 0) timings.callMs = now() - callStart;
     else {
-      i.retryMs = now() - E;
+      timings.retryMs = now() - callStart;
       retried = true;
     }
     if (agent.kind !== "ok")
@@ -660,100 +673,101 @@ async function runAutoEditForFile(abortSignal) {
             kind: "side_call_failed",
             reason: "call_error",
             retried,
-            pageBytes: a,
-            timings: i,
+            pageBytes: bytes,
+            timings,
           }
         : {
             kind: agent.kind,
             reason: "call",
             retried,
-            pageBytes: a,
-            timings: i,
+            pageBytes: bytes,
+            timings,
           };
     if (idx === 0) sideCallMessageId = agent.messageId;
     if (agent.stopReason !== "end_turn") {
-      k = {
+      decision = {
         kind: "parse_failed",
         reason: agent.stopReason === "max_tokens" ? "stop_max_tokens" : "stop_other",
         retried,
-        pageBytes: a,
-        timings: i,
+        pageBytes: bytes,
+        timings,
       };
       model += buildPatchRetryMessage(-1, "unparseable", "");
       continue;
     }
     let editDecisionJson = parseEditDecisionJson(agent.text, PAGE_HTML);
     if (!editDecisionJson.ok) {
-      k = {
+      decision = {
         kind: "parse_failed",
         reason: editDecisionJson.error.class,
         retried,
-        pageBytes: a,
-        timings: i,
+        pageBytes: bytes,
+        timings,
       };
       model += buildPatchRetryMessage(-1, "unparseable", "");
       continue;
     }
-    let decision = editDecisionJson.decision;
-    if (decision.action === "hand_back")
+    let decision_2 = editDecisionJson.decision;
+    if (decision_2.action === "hand_back")
       return {
         kind: "declined",
         reason: "hand_back",
         retried,
-        pageBytes: a,
-        timings: i,
+        pageBytes: bytes,
+        timings,
       };
-    let R = planPatchEdits(l, PAGE_HTML, decision.edits);
-    if (!R.ok) {
-      let I = decision.edits[R.edit];
-      k = {
+    let plan = planPatchEdits(html, PAGE_HTML, decision_2.edits);
+    if (!plan.ok) {
+      let failedEdit = decision_2.edits[plan.edit];
+      decision = {
         kind: "apply_refused",
-        reason: R.reason,
+        reason: plan.reason,
         retried,
-        pageBytes: a,
-        timings: i,
-        ...(R.edit >= 0 && {
-          failingEdit: R.edit,
+        pageBytes: bytes,
+        timings,
+        ...(plan.edit >= 0 && {
+          failingEdit: plan.edit,
         }),
       };
       model += buildPatchRetryMessage(
-        R.edit,
-        toPatchFailureReason(R.reason),
-        I !== undefined && !I.create ? I.find : "",
+        plan.edit,
+        toPatchFailureReason(plan.reason),
+        failedEdit !== undefined && !failedEdit.create ? failedEdit.find : "",
       );
       continue;
     }
-    let B = applyFindReplaceEdits(l, R.ops);
-    if (B === undefined)
+    let editedHtml = applyFindReplaceEdits(html, plan.ops);
+    if (editedHtml === undefined)
       return {
-        ...r("edit_normalization", a),
+        ...ineligible("edit_normalization", bytes),
         retried,
       };
-    let O = abortSignal.permissions();
-    if (getEditPermissionVerdict(abortSignal.path, O) !== "allowed")
+    let permissions = abortSignal.permissions();
+    if (getEditPermissionVerdict(abortSignal.path, permissions) !== "allowed")
       return {
-        ...r("edit_would_ask_after_call", a),
+        ...ineligible("edit_would_ask_after_call", bytes),
         retried,
       };
-    if (!canWriteWithoutPrompt(abortSignal.path, abortSignal.slug, O))
+    if (!canWriteWithoutPrompt(abortSignal.path, abortSignal.slug, permissions))
       return {
-        ...r("publish_would_ask_after_call", a),
+        ...ineligible("publish_would_ask_after_call", bytes),
         retried,
       };
     return {
       kind: "patched",
-      edits: B,
-      editCount: decision.edits.length,
-      reply: decision.reply,
+      edits: editedHtml,
+      editCount: decision_2.edits.length,
+      reply: decision_2.reply,
       sideCallMessageId,
       retried,
-      pageBytes: a,
-      seedReadState: () => recordAutoEditRead(abortSignal.context.readFileState, abortSignal.path, l, f),
-      timings: i,
+      pageBytes: bytes,
+      seedReadState: () =>
+        recordAutoEditRead(abortSignal.context.readFileState, abortSignal.path, html, mtime),
+      timings,
     };
   }
   return {
-    ...k,
+    ...decision,
     retried,
   };
 }
@@ -777,14 +791,32 @@ function toPatchFailureReason(reason) {
       return "unparseable";
   }
 }
+//@ chunk-eavynfj6.js:27435-27726 placement (moved: shares a binding it assigns)
+/**
+ * 判断文本里是否藏有 harness 标签：逐轮尝试反斜杠/尖括号同形字替换、HTML 转义解码、去组合字符与同形字折叠后检测，超过轮数或膨胀过大时保守地返回结果。
+ */
+function containsHarnessTags(text) {
+  let patternA = (UNSET_REGEX_A ??= confusableTagScrubPattern(EFFORT_TYPOS, () => ANGLE_BOUNDARY_RE));
+  let patternB = (UNSET_REGEX_B ??= createTagNeutralizer([
+    {
+      tags: EFFORT_TYPOS,
+      tail: ({ name }) => `[-_]*(?![${name}])`,
+    },
+  ]));
+  let current = text;
+  for (let round = 0; ; round++) {
+    if (matchesTagPattern(current, patternA, patternB)) return true;
+    if (round === MAX_HTML_ENTITY_ATTEMPTS) return false;
+    let decoded = decodeMusicalSymbols(decodeHtmlEscapes(decodeMusicalSymbols(current)));
+    if (decoded !== current && matchesTagPattern(decoded, patternA, patternB)) return true;
+    let folded = foldConfusableCharacters(stripCombiningRepeated(decoded).replace(ESCAPE_TARGETS_RE, ""));
+    if (folded === current) return false;
+    if (folded.length > 2 * text.length) return true;
+    current = folded;
+  }
+}
 export {
-  MEDIUM,
-  UNSET_REGEX_A,
   MEDIUM_EFFORT,
-  ANGLE_BOUNDARY_RE,
-  UNSET_REGEX_B,
-  MAX_HTML_ENTITY_ATTEMPTS,
-  ESCAPE_MAX_CHARS,
   MUSICAL_SYMBOL_RE,
   HTML_ESCAPE_RE,
   NAMED_ENTITY_MAP,
@@ -793,4 +825,5 @@ export {
   LEFT_ANGLE_VARIANTS_RE,
   RIGHT_ANGLE_VARIANTS_RE,
   TEXT_ESCAPE_RE,
+  runAutoEditForFile,
 };

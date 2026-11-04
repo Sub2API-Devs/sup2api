@@ -8,76 +8,82 @@
  * pieces: chunk-aepeg2w5.js (27)
  * attribution: placement 27
  */
-import { pu } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
+import { subscribe } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { normalizeFullWidthSpace } from "../../utils/stringUtils.js";
 import { identity as identity_2 } from "../../utils/identity.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:500590-501659 placement
 /**
  * 工具描述解析器（组合、缓存、epoch）。
  */
 function createToolDescriptionResolver() {
-  let e = pu();
-  let n = pu();
-  let r = pu();
-  let s = pu();
-  let h = new Map();
-  let y = new Map();
-  let S = new Set();
-  let w = new Set();
-  let R = {
+  let setToolDescribeResolverRef = subscribe();
+  let describeResolverRef = subscribe();
+  let describeCacheRef = subscribe();
+  let setToolDescribeInvalidatorRef = subscribe();
+  let descriptionCache = new Map();
+  let promptCache = new Map();
+  let resolvedNames = new Set();
+  let unavailableNames = new Set();
+  let state = {
     hasDescribed: false,
     epoch: 0,
   };
-  let x = (P) => (r.get() ?? n.get())?.(P) ?? false;
+  let isUnresolvable = (toolName) =>
+    (describeCacheRef.get() ?? describeResolverRef.get())?.(toolName) ?? false;
   return {
-    setToolDescribeResolver: e.set,
-    resolveToolDescription: async (P, F, L) => {
-      R.hasDescribed = true;
-      if (x(P.name)) S.add(P.name);
-      let G = await (e.get()?.(P, F, L) ??
+    setToolDescribeResolver: setToolDescribeResolverRef.set,
+    resolveToolDescription: async (tool, description, isDeferred) => {
+      state.hasDescribed = true;
+      if (isUnresolvable(tool.name)) resolvedNames.add(tool.name);
+      let resolved = await (setToolDescribeResolverRef.get()?.(tool, description, isDeferred) ??
         Promise.resolve({
-          description: F,
-          isDeferred: L,
+          description,
+          isDeferred,
         }));
-      if (normalizeFullWidthSpace(G.description) !== normalizeFullWidthSpace(F)) w.add(P.name);
-      return G;
+      if (normalizeFullWidthSpace(resolved.description) !== normalizeFullWidthSpace(description))
+        unavailableNames.add(tool.name);
+      return resolved;
     },
-    setToolDescribePresence: n.set,
-    isToolDescribeHooked: (P) => n.get()?.(P) ?? false,
-    setToolDescribeBuildPresence: r.set,
-    isToolDescribeHookedForBuild: x,
-    setToolDescribeInvalidator: s.set,
+    setToolDescribePresence: describeResolverRef.set,
+    isToolDescribeHooked: (toolName) => describeResolverRef.get()?.(toolName) ?? false,
+    setToolDescribeBuildPresence: describeCacheRef.set,
+    isToolDescribeHookedForBuild: isUnresolvable,
+    setToolDescribeInvalidator: setToolDescribeInvalidatorRef.set,
     invalidateToolDescriptions: () => {
-      h.clear();
-      y.clear();
-      R.epoch += R.hasDescribed ? 1 : 0;
-      s.get()?.();
+      descriptionCache.clear();
+      promptCache.clear();
+      state.epoch += state.hasDescribed ? 1 : 0;
+      setToolDescribeInvalidatorRef.get()?.();
     },
     redescribeTools: () => {
-      R.hasDescribed = true;
+      state.hasDescribed = true;
     },
-    redescribeEpoch: () => R.epoch,
-    isHookDescribed: (P) => S.has(P) || x(P),
-    isRewrittenByHook: (P) => w.has(P),
+    redescribeEpoch: () => state.epoch,
+    isHookDescribed: (toolName) => resolvedNames.has(toolName) || isUnresolvable(toolName),
+    isRewrittenByHook: (toolName) => unavailableNames.has(toolName),
     forgetRedescribed: () => {
-      S.clear();
-      w.clear();
-      R.hasDescribed = false;
-      R.epoch = 0;
+      resolvedNames.clear();
+      unavailableNames.clear();
+      state.hasDescribed = false;
+      state.epoch = 0;
     },
-    recordDeferral: (P, F) => (F === undefined ? void h.delete(P) : void h.set(P, F)),
-    deferralOf: (P) => h.get(P),
+    recordDeferral: (toolName, deferred) =>
+      deferred === undefined
+        ? void descriptionCache.delete(toolName)
+        : void descriptionCache.set(toolName, deferred),
+    deferralOf: (toolName) => descriptionCache.get(toolName),
     forgetDeferrals: () => {
-      h.clear();
-      y.clear();
+      descriptionCache.clear();
+      promptCache.clear();
     },
-    describedOnce: (P, F) => {
-      let L = y.get(P) ?? F();
-      y.set(P, L);
-      return L;
+    describedOnce: (key, compute) => {
+      let value = promptCache.get(key) ?? compute();
+      promptCache.set(key, value);
+      return value;
     },
   };
 }
@@ -85,42 +91,93 @@ function createToolDescriptionResolver() {
 /**
  * 工具描述缓存的门面实例（HostScoped）：转发读取、盖章、登记、已发送记录与大小，重置时清空延迟与重述记录。
  */
-var toolDescriptionResolver = identity_2(createToolDescriptionResolver(), (e) => {
-  e.forgetDeferrals();
-  e.forgetRedescribed();
+var toolDescriptionResolver; // deferred: uses createToolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:501659", () => {
+  toolDescriptionResolver = identity_2(createToolDescriptionResolver(), (resolver) => {
+    resolver.forgetDeferrals();
+    resolver.forgetRedescribed();
+  });
 });
 //@ chunk-aepeg2w5.js:501724-501746 placement
-var deferralOf = toolDescriptionResolver.deferralOf;
+var deferralOf; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:501724", () => {
+  deferralOf = toolDescriptionResolver.deferralOf;
+});
 //@ chunk-aepeg2w5.js:501746-501771 placement
-var describedOnce = toolDescriptionResolver.describedOnce;
+var describedOnce; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:501746", () => {
+  describedOnce = toolDescriptionResolver.describedOnce;
+});
 //@ chunk-aepeg2w5.js:501771-501797 placement
-var forgetDeferrals = toolDescriptionResolver.forgetDeferrals;
+var forgetDeferrals; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:501771", () => {
+  forgetDeferrals = toolDescriptionResolver.forgetDeferrals;
+});
 //@ chunk-aepeg2w5.js:501797-501823 placement
-var recordDeferral = toolDescriptionResolver.recordDeferral;
+var recordDeferral; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:501797", () => {
+  recordDeferral = toolDescriptionResolver.recordDeferral;
+});
 //@ chunk-aepeg2w5.js:501823-501861 placement
-var invalidateToolDescriptions_2 = toolDescriptionResolver.invalidateToolDescriptions;
+var invalidateToolDescriptions_2; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:501823", () => {
+  invalidateToolDescriptions_2 = toolDescriptionResolver.invalidateToolDescriptions;
+});
 //@ chunk-aepeg2w5.js:501861-501893 placement
-var isToolDescribeHooked = toolDescriptionResolver.isToolDescribeHooked;
+var isToolDescribeHooked; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:501861", () => {
+  isToolDescribeHooked = toolDescriptionResolver.isToolDescribeHooked;
+});
 //@ chunk-aepeg2w5.js:501893-501933 placement
-var isToolDescribeHookedForBuild = toolDescriptionResolver.isToolDescribeHookedForBuild;
+var isToolDescribeHookedForBuild; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:501893", () => {
+  isToolDescribeHookedForBuild = toolDescriptionResolver.isToolDescribeHookedForBuild;
+});
 //@ chunk-aepeg2w5.js:501933-501973 placement
-var setToolDescribeBuildPresence = toolDescriptionResolver.setToolDescribeBuildPresence;
+var setToolDescribeBuildPresence; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:501933", () => {
+  setToolDescribeBuildPresence = toolDescriptionResolver.setToolDescribeBuildPresence;
+});
 //@ chunk-aepeg2w5.js:501973-502008 placement
-var setToolDescribePresence = toolDescriptionResolver.setToolDescribePresence;
+var setToolDescribePresence; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:501973", () => {
+  setToolDescribePresence = toolDescriptionResolver.setToolDescribePresence;
+});
 //@ chunk-aepeg2w5.js:502008-502035 placement
-var isHookDescribed = toolDescriptionResolver.isHookDescribed;
+var isHookDescribed; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:502008", () => {
+  isHookDescribed = toolDescriptionResolver.isHookDescribed;
+});
 //@ chunk-aepeg2w5.js:502035-502064 placement
-var isRewrittenByHook = toolDescriptionResolver.isRewrittenByHook;
+var isRewrittenByHook; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:502035", () => {
+  isRewrittenByHook = toolDescriptionResolver.isRewrittenByHook;
+});
 //@ chunk-aepeg2w5.js:502064-502091 placement
-var redescribeEpoch = toolDescriptionResolver.redescribeEpoch;
+var redescribeEpoch; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:502064", () => {
+  redescribeEpoch = toolDescriptionResolver.redescribeEpoch;
+});
 //@ chunk-aepeg2w5.js:502091-502118 placement
-var redescribeTools = toolDescriptionResolver.redescribeTools;
+var redescribeTools; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:502091", () => {
+  redescribeTools = toolDescriptionResolver.redescribeTools;
+});
 //@ chunk-aepeg2w5.js:502118-502152 placement
-var resolveToolDescription = toolDescriptionResolver.resolveToolDescription;
+var resolveToolDescription; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:502118", () => {
+  resolveToolDescription = toolDescriptionResolver.resolveToolDescription;
+});
 //@ chunk-aepeg2w5.js:502152-502189 placement
-var setToolDescribeInvalidator = toolDescriptionResolver.setToolDescribeInvalidator;
+var setToolDescribeInvalidator; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:502152", () => {
+  setToolDescribeInvalidator = toolDescriptionResolver.setToolDescribeInvalidator;
+});
 //@ chunk-aepeg2w5.js:502189-502224 placement
-var setToolDescribeResolver = toolDescriptionResolver.setToolDescribeResolver;
+var setToolDescribeResolver; // deferred: uses toolDescriptionResolver of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:502189", () => {
+  setToolDescribeResolver = toolDescriptionResolver.setToolDescribeResolver;
+});
 //@ chunk-aepeg2w5.js:502224-502253 placement
 var MAX_IDS_KEPT = 2;
 var MAX_KEY_OVERHEAD_BYTES = 256;
@@ -143,58 +200,59 @@ class ToolDescriptionCache {
   mcpKeysWeight = 0;
   maxMcpKeysWeight = MAX_MCP_KEYS_WEIGHT;
   generation = 0;
-  get(e) {
-    let n = this.byKey.get(e);
-    if (n !== undefined) this.noteMcpKeyUsed(e);
-    return n;
+  get(key) {
+    let entry = this.byKey.get(key);
+    if (entry !== undefined) this.noteMcpKeyUsed(key);
+    return entry;
   }
   stamp() {
     return this.generation;
   }
-  register(e, n, r) {
-    if (r === this.generation) this.byKey.set(this.noteMcpKeyUsed(e, n.description?.length ?? 0), n);
+  register(key, value, generation) {
+    if (generation === this.generation)
+      this.byKey.set(this.noteMcpKeyUsed(key, value.description?.length ?? 0), value);
   }
-  getSentFromRecord(e) {
-    let n = this.sentFromRecordByKey.get(e);
-    if (n !== undefined) this.noteMcpKeyUsed(e);
-    return n;
+  getSentFromRecord(key) {
+    let entry = this.sentFromRecordByKey.get(key);
+    if (entry !== undefined) this.noteMcpKeyUsed(key);
+    return entry;
   }
-  setSentFromRecord(e, n) {
-    this.sentFromRecordByKey.set(this.noteMcpKeyUsed(e), n);
+  setSentFromRecord(key, value) {
+    this.sentFromRecordByKey.set(this.noteMcpKeyUsed(key), value);
   }
   setMaxMcpKeysWeight(maxMcpKeysWeight) {
     this.maxMcpKeysWeight = maxMcpKeysWeight;
     this.dropMcpKeysPastBounds(new Set());
   }
-  noteMcpKeyUsed(serverName, n) {
-    let r = this.mcpKeys.get(serverName);
-    if (r === undefined) {
+  noteMcpKeyUsed(serverName, descBytes) {
+    let mcpKey = this.mcpKeys.get(serverName);
+    if (mcpKey === undefined) {
       let mcpPrefix = getMcpPrefix(serverName);
       if (mcpPrefix === undefined) return serverName;
-      r = {
+      mcpKey = {
         key: serverName,
         tool: mcpPrefix,
         weight: 0,
       };
     }
-    if (r.weight === 0 || n !== undefined) {
-      let h = serverName.length + MAX_KEY_OVERHEAD_BYTES + (n ?? 0);
-      this.mcpKeysWeight += h - r.weight;
-      r.weight = h;
+    if (mcpKey.weight === 0 || descBytes !== undefined) {
+      let weight = serverName.length + MAX_KEY_OVERHEAD_BYTES + (descBytes ?? 0);
+      this.mcpKeysWeight += weight - mcpKey.weight;
+      mcpKey.weight = weight;
     }
-    this.mcpKeys.delete(r.key);
-    this.mcpKeys.set(r.key, r);
-    let s = this.mcpKeysByTool.get(r.tool) ?? new Set();
-    s.delete(r);
-    s.add(r);
-    this.mcpKeysByTool.set(r.tool, s);
-    this.dropMcpKeysPastBounds(s);
-    return r.key;
+    this.mcpKeys.delete(mcpKey.key);
+    this.mcpKeys.set(mcpKey.key, mcpKey);
+    let keys = this.mcpKeysByTool.get(mcpKey.tool) ?? new Set();
+    keys.delete(mcpKey);
+    keys.add(mcpKey);
+    this.mcpKeysByTool.set(mcpKey.tool, keys);
+    this.dropMcpKeysPastBounds(keys);
+    return mcpKey.key;
   }
-  dropMcpKeysPastBounds(e) {
-    for (let n of e) {
-      if (e.size <= MAX_IDS_KEPT) break;
-      this.dropMcpKey(n);
+  dropMcpKeysPastBounds(keep) {
+    for (let mcpKey of keep) {
+      if (keep.size <= MAX_IDS_KEPT) break;
+      this.dropMcpKey(mcpKey);
     }
     if (this.mcpKeysWeight <= this.maxMcpKeysWeight) return;
     for (let mcpKey of this.mcpKeys.values()) {
@@ -202,14 +260,14 @@ class ToolDescriptionCache {
       this.dropMcpKey(mcpKey);
     }
   }
-  dropMcpKey(e) {
-    this.mcpKeys.delete(e.key);
-    this.mcpKeysWeight -= e.weight;
-    let n = this.mcpKeysByTool.get(e.tool);
-    n?.delete(e);
-    if (n?.size === 0) this.mcpKeysByTool.delete(e.tool);
-    this.byKey.delete(e.key);
-    this.sentFromRecordByKey.delete(e.key);
+  dropMcpKey(mcpKey) {
+    this.mcpKeys.delete(mcpKey.key);
+    this.mcpKeysWeight -= mcpKey.weight;
+    let keys = this.mcpKeysByTool.get(mcpKey.tool);
+    keys?.delete(mcpKey);
+    if (keys?.size === 0) this.mcpKeysByTool.delete(mcpKey.tool);
+    this.byKey.delete(mcpKey.key);
+    this.sentFromRecordByKey.delete(mcpKey.key);
   }
   get size() {
     return this.byKey.size;
@@ -227,7 +285,10 @@ class ToolDescriptionCache {
   }
 }
 //@ chunk-aepeg2w5.js:504172-504197 placement
-var descriptionCacheSlot = new HostScoped(() => new ToolDescriptionCache());
+var descriptionCacheSlot; // deferred: uses ToolDescriptionCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:504172", () => {
+  descriptionCacheSlot = new HostScoped(() => new ToolDescriptionCache());
+});
 //@ chunk-aepeg2w5.js:504197-504234 placement
 function descriptionCache() {
   return descriptionCacheSlot.of(getRootSession().host);
@@ -237,20 +298,20 @@ function descriptionCache() {
  * 工具描述缓存的门面：转发到当前会话的缓存实例（读取、盖章、登记、已发送记录、大小）。
  */
 var toolDescriptionCache = {
-  get(e) {
-    return descriptionCache().get(e);
+  get(key) {
+    return descriptionCache().get(key);
   },
   stamp() {
     return descriptionCache().stamp();
   },
-  register(e, n, r) {
-    descriptionCache().register(e, n, r);
+  register(key, value, generation) {
+    descriptionCache().register(key, value, generation);
   },
-  getSentFromRecord(e) {
-    return descriptionCache().getSentFromRecord(e);
+  getSentFromRecord(key) {
+    return descriptionCache().getSentFromRecord(key);
   },
-  setSentFromRecord(e, n) {
-    descriptionCache().setSentFromRecord(e, n);
+  setSentFromRecord(key, value) {
+    descriptionCache().setSentFromRecord(key, value);
   },
   get size() {
     return descriptionCache().size;
@@ -269,7 +330,10 @@ function dropInFlightComposes() {
   descriptionCache().dropInFlightComposes();
 }
 //@ chunk-aepeg2w5.js:504556-504563 placement
-setToolDescribeInvalidator(invalidateToolDescriptions);
+// deferred: uses setToolDescribeInvalidator of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:504556", () => {
+  setToolDescribeInvalidator(invalidateToolDescriptions);
+});
 export {
   dropInFlightComposes,
   invalidateToolDescriptions,

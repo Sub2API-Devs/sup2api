@@ -33,10 +33,11 @@ import { init_react_production } from "../../../../vendor/react/cjs/react.produc
 import { replaceLineBreaks, displayField } from "../../../utils/permissions/approvalPayloadSerialization.js";
 import { getGraphemeSegmenter } from "../../../utils/intl.js";
 import { bunStringWidth } from "../../../ink/stringWidth.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-p2qwpk2k.js:35210-35277 placement
-function editOutcomeKey(h) {
-  return (i) => `${h}_${i instanceof AutoModeRuleWriteError ? i.code : "error"}`;
+function editOutcomeKey(op) {
+  return (error) => `${op}_${error instanceof AutoModeRuleWriteError ? error.code : "error"}`;
 }
 //@ chunk-p2qwpk2k.js:35277-35332 placement
 var AUTO_MODE_RULE_SECTIONS = ["allow", "soft_deny", "hard_deny", "environment"];
@@ -45,57 +46,60 @@ var AUTO_MODE_RULE_SECTIONS = ["allow", "soft_deny", "hard_deny", "environment"]
  * 从可信设置来源读取 autoMode 配置，展开为 {text, section, source, index, structure} 条目列表（跳过默认占位，环境中的 ### 行标为结构）。
  */
 function collectAutoModeRuleEntries() {
-  let h = autoModeConfigSchema();
-  let i = [];
-  for (let m of AUTO_MODE_TRUSTED_SOURCES) {
-    let settingsForSource = getSettingsForSource(m);
+  let schema = autoModeConfigSchema();
+  let entries = [];
+  for (let source of AUTO_MODE_TRUSTED_SOURCES) {
+    let settingsForSource = getSettingsForSource(source);
     if (!settingsForSource) continue;
-    let f = h.safeParse(settingsForSource.autoMode);
-    if (!f.success) continue;
-    for (let g of AUTO_MODE_RULE_SECTIONS) {
-      let v = f.data[g];
-      if (!v) continue;
-      v.forEach((x, index) => {
-        if (x === DEFAULTS_PLACEHOLDER) return;
-        if (g === "environment" && x.startsWith("### ")) {
-          i.push({
-            text: x,
-            section: g,
-            source: m,
+    let parsed = schema.safeParse(settingsForSource.autoMode);
+    if (!parsed.success) continue;
+    for (let section of AUTO_MODE_RULE_SECTIONS) {
+      let sectionValue = parsed.data[section];
+      if (!sectionValue) continue;
+      sectionValue.forEach((entry, index) => {
+        if (entry === DEFAULTS_PLACEHOLDER) return;
+        if (section === "environment" && entry.startsWith("### ")) {
+          entries.push({
+            text: entry,
+            section,
+            source,
             index,
             structure: true,
           });
           return;
         }
-        i.push({
-          text: x,
-          section: g,
-          source: m,
+        entries.push({
+          text: entry,
+          section,
+          source,
           index,
         });
       });
     }
   }
-  return i;
+  return entries;
 }
 //@ chunk-p2qwpk2k.js:35708-36050 placement
 /**
  * 把整份环境文档写回用户设置：加载后若条目已变化则拒绝，解析并校验新条目后写入（带 auto_mode_rule_edit 遥测）。
  */
-async function saveEnvironmentDocument(h, i, storageV5) {
+async function saveEnvironmentDocument(section, expectedEntries, storageV5) {
   return withFeatureTelemetry(
     "auto_mode_rule_edit",
     () =>
       writeAutoModeRuleEdit(
         "environment",
-        (a) => {
-          if (a.length !== i.length || a.some((v, x) => v !== i[x]))
+        (currentEntries) => {
+          if (
+            currentEntries.length !== expectedEntries.length ||
+            currentEntries.some((entry, index) => entry !== expectedEntries[index])
+          )
             return {
               refuse:
                 "The environment changed since this screen loaded \u2014 reopen the tab to see the current entries.",
             };
           let { entries, problem } = parseEnvironmentDocument(
-            h.join(`
+            section.join(`
 `),
           );
           if (problem !== null)
@@ -116,85 +120,89 @@ async function saveEnvironmentDocument(h, i, storageV5) {
 function readUserEnvironmentEntries() {
   let settingsForSourceForUpkeep = getSettingsForSourceForUpkeep("userSettings");
   if (!settingsForSourceForUpkeep) return [];
-  let i = autoModeConfigSchema().safeParse(settingsForSourceForUpkeep.autoMode);
-  if (!i.success) return [];
-  return i.data.environment ?? [];
+  let parsed = autoModeConfigSchema().safeParse(settingsForSourceForUpkeep.autoMode);
+  if (!parsed.success) return [];
+  return parsed.data.environment ?? [];
 }
 //@ chunk-p2qwpk2k.js:36191-36227 placement
 function ruleTextProblem(content) {
   return parseEnvironmentDocument(content).problem;
 }
 //@ chunk-p2qwpk2k.js:36227-36450 placement
-function parseEnvironmentDocument(h) {
-  let i = dropEmptySectionHeaders(
-    h
+function parseEnvironmentDocument(content) {
+  let entries = dropEmptySectionHeaders(
+    content
       .split(
         `
 `,
       )
       .map((line) => normalizeRuleText(line))
-      .filter((a) => a.length > 0),
+      .filter((state) => state.length > 0),
   );
-  if (i.length === 0)
+  if (entries.length === 0)
     return {
-      entries: i,
+      entries,
       problem: null,
     };
-  let m = checkAutoModeEntries("environment", i);
-  if (m !== null)
+  let problem = checkAutoModeEntries("environment", entries);
+  if (problem !== null)
     return {
-      entries: i,
-      problem: m,
+      entries,
+      problem,
     };
   return {
-    entries: i,
+    entries,
     problem: null,
   };
 }
 //@ chunk-p2qwpk2k.js:36450-37643 placement
 function classifyAutoModeRuleSource() {
   if (!alwaysTrueFlag()) {
-    let f = {
+    let internalTemplateSource = {
       enabled: true,
       control: "internalTemplate",
     };
     return {
-      allow: f,
-      soft_deny: f,
-      hard_deny: f,
-      environment: f,
+      allow: internalTemplateSource,
+      soft_deny: internalTemplateSource,
+      hard_deny: internalTemplateSource,
+      environment: internalTemplateSource,
     };
   }
-  let h = autoModeConfigSchema();
-  let i = new Set();
-  let m = {};
-  for (let f of AUTO_MODE_TRUSTED_SOURCES) {
-    let settingsForSource = getSettingsForSource(f);
+  let schema = autoModeConfigSchema();
+  let disabled = new Set();
+  let sourcesBySection = {};
+  for (let source of AUTO_MODE_TRUSTED_SOURCES) {
+    let settingsForSource = getSettingsForSource(source);
     if (!settingsForSource) continue;
-    let v = h.safeParse(settingsForSource.autoMode);
-    if (!v.success) continue;
-    let x = {};
-    for (let C of AUTO_MODE_RULE_SECTIONS) if (v.data[C]?.length) x[C] = v.data[C];
-    m[f] = x;
+    let parsed = schema.safeParse(settingsForSource.autoMode);
+    if (!parsed.success) continue;
+    let sectionValues = {};
+    for (let section of AUTO_MODE_RULE_SECTIONS)
+      if (parsed.data[section]?.length) sectionValues[section] = parsed.data[section];
+    sourcesBySection[source] = sectionValues;
   }
-  if (m.flagSettings?.allow)
-    m.flagSettings.allow = flagAllowBesideManagedAllow(m.flagSettings.allow, m.policySettings?.allow);
-  let a = {};
-  for (let f of AUTO_MODE_RULE_SECTIONS) {
-    let filtered = AUTO_MODE_TRUSTED_SOURCES.map((c) => ({
-      source: c,
-      values: m[c]?.[f] ?? [],
-    })).filter((c) => c.values.length > 0);
+  if (sourcesBySection.flagSettings?.allow)
+    sourcesBySection.flagSettings.allow = flagAllowBesideManagedAllow(
+      sourcesBySection.flagSettings.allow,
+      sourcesBySection.policySettings?.allow,
+    );
+  let sectionControls = {};
+  for (let sectionName of AUTO_MODE_RULE_SECTIONS) {
+    let filtered = AUTO_MODE_TRUSTED_SOURCES.map((source) => ({
+      source,
+      values: sourcesBySection[source]?.[sectionName] ?? [],
+    })).filter((state) => state.values.length > 0);
     if (filtered.length === 0) {
-      a[f] = {
+      sectionControls[sectionName] = {
         enabled: true,
         control: "empty",
       };
       continue;
     }
-    if (f === "environment") {
-      let found = filtered.find((M) => M.values.includes(DEFAULTS_PLACEHOLDER));
-      a[f] = found
+    if (sectionName === "environment") {
+      let found = filtered.find((state) => state.values.includes(DEFAULTS_PLACEHOLDER));
+      sectionControls[sectionName] = found
         ? {
             enabled: true,
             control: "otherSource",
@@ -207,11 +215,13 @@ function classifyAutoModeRuleSource() {
           };
       continue;
     }
-    let v = m.userSettings?.[f] ?? [];
-    let found = filtered.find((c) => c.source !== "userSettings" && c.values.includes(DEFAULTS_PLACEHOLDER));
-    let C = f === "soft_deny" && i.has("userSettings");
-    if (!found && C) {
-      a[f] = {
+    let userValues = sourcesBySection.userSettings?.[sectionName] ?? [];
+    let found = filtered.find(
+      (state) => state.source !== "userSettings" && state.values.includes(DEFAULTS_PLACEHOLDER),
+    );
+    let isUserDisabled = sectionName === "soft_deny" && disabled.has("userSettings");
+    if (!found && isUserDisabled) {
+      sectionControls[sectionName] = {
         enabled: true,
         control: "otherSource",
         source: "userSettings",
@@ -219,37 +229,37 @@ function classifyAutoModeRuleSource() {
       continue;
     }
     if (found) {
-      a[f] = {
+      sectionControls[sectionName] = {
         enabled: true,
         control: "otherSource",
         source: found.source,
       };
       continue;
     }
-    if (v.length > 0) {
-      a[f] = {
-        enabled: v.includes(DEFAULTS_PLACEHOLDER),
+    if (userValues.length > 0) {
+      sectionControls[sectionName] = {
+        enabled: userValues.includes(DEFAULTS_PLACEHOLDER),
         control: "user",
       };
       continue;
     }
-    a[f] = {
+    sectionControls[sectionName] = {
       enabled: false,
       control: "otherSource",
       source: filtered[0].source,
     };
   }
-  return a;
+  return sectionControls;
 }
 //@ chunk-p2qwpk2k.js:37643-38242 placement
-async function AUTO_MODE_RULE_EDIT_ERRORS(section, i, storageV5) {
-  let a = (() => false)();
+async function AUTO_MODE_RULE_EDIT_ERRORS(section, targetSection, storageV5) {
+  let isInternalTemplate = (() => false)();
   return withFeatureTelemetry(
     "auto_mode_rule_edit",
     () =>
       writeAutoModeRuleEdit(
         section,
-        (f) => {
+        (current) => {
           if (!alwaysTrueFlag())
             return {
               refuse:
@@ -260,9 +270,9 @@ async function AUTO_MODE_RULE_EDIT_ERRORS(section, i, storageV5) {
               refuse:
                 "The environment is a single replaceable document \u2014 write your own version to replace the built-in default, or delete your entries to restore it.",
             };
-          let filtered = f.filter((v) => v !== DEFAULTS_PLACEHOLDER);
-          if (i) return [DEFAULTS_PLACEHOLDER, ...filtered];
-          if (filtered.length === 0 && !a)
+          let filtered = current.filter((entry) => entry !== DEFAULTS_PLACEHOLDER);
+          if (targetSection) return [DEFAULTS_PLACEHOLDER, ...filtered];
+          if (filtered.length === 0 && !isInternalTemplate)
             return {
               refuse: "An empty section cannot hold the off state \u2014 add a rule to this section first.",
             };
@@ -274,18 +284,18 @@ async function AUTO_MODE_RULE_EDIT_ERRORS(section, i, storageV5) {
   );
 }
 //@ chunk-p2qwpk2k.js:38242-38371 placement
-function dropEmptySectionHeaders(h) {
-  return h.filter((i, m) => {
-    if (!i.startsWith("### ")) return true;
-    let a = h[m + 1];
-    return a !== undefined && !a.startsWith("### ");
+function dropEmptySectionHeaders(lines) {
+  return lines.filter((line, index) => {
+    if (!line.startsWith("### ")) return true;
+    let next = lines[index + 1];
+    return next !== undefined && !next.startsWith("### ");
   });
 }
 //@ chunk-p2qwpk2k.js:38371-38473 placement
 class AutoModeRuleWriteError extends Error {
   code;
-  constructor(code, i) {
-    super(i);
+  constructor(code, message) {
+    super(message);
     this.code = code;
     this.name = "AutoModeRuleWriteError";
   }
@@ -294,7 +304,7 @@ class AutoModeRuleWriteError extends Error {
 /**
  * 把自动模式规则修改写入用户设置文件
  */
-async function writeAutoModeRuleEdit(h, i, m) {
+async function writeAutoModeRuleEdit(section, mutate, storageV5) {
   let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
   if (!settingsFilePathForSource)
     throw new AutoModeRuleWriteError(
@@ -307,110 +317,116 @@ async function writeAutoModeRuleEdit(h, i, m) {
       "settings_file_invalid",
       "the settings file has a validation error or cannot be read, so its auto mode rules are not in effect; fix it (Claude Code names the problem at startup), then try again.",
     );
-  let v = false;
-  let x = 0;
-  let C = null;
-  let c = null;
+  let isSectionMissing = false;
+  let existingCount = 0;
+  let settingsError = null;
+  let refuseReason = null;
   let { error } = await updateSettingsForSourceWithTransform(
     "userSettings",
-    (b) => {
-      v = false;
-      x = 0;
-      C = null;
-      c = null;
-      let autoMode = b?.autoMode;
+    (settings) => {
+      isSectionMissing = false;
+      existingCount = 0;
+      settingsError = null;
+      refuseReason = null;
+      let autoMode = settings?.autoMode;
       if (Array.isArray(autoMode)) {
-        C =
+        settingsError =
           "the existing autoMode value in the settings file is an array \u2014 fix or remove it, then try again.";
         return null;
       }
       if (autoMode !== undefined && !autoModeConfigSchema().safeParse(autoMode).success) {
-        C =
+        settingsError =
           "the existing autoMode value in the settings file does not match the expected shape \u2014 fix or remove it, then try again.";
         return null;
       }
-      let E = autoMode !== null && typeof autoMode === "object" ? autoMode : undefined;
-      let D = Array.isArray(E?.[h]) ? E[h].filter((B) => typeof B === "string") : [];
-      let k = i(D);
-      if (k !== null && !Array.isArray(k)) {
-        c = k.refuse;
+      let autoModeConfig = autoMode !== null && typeof autoMode === "object" ? autoMode : undefined;
+      let sectionRules = Array.isArray(autoModeConfig?.[section])
+        ? autoModeConfig[section].filter((entry) => typeof entry === "string")
+        : [];
+      let mutated = mutate(sectionRules);
+      if (mutated !== null && !Array.isArray(mutated)) {
+        refuseReason = mutated.refuse;
         return null;
       }
-      let V = (B) => B.length - (B.includes(DEFAULTS_PLACEHOLDER) ? 1 : 0);
-      if (k !== null && V(k) > MAX_RULES_PER_DECISION_KIND && V(k) > V(D)) {
-        x = V(D);
+      let countWithoutDefaults = (state) => state.length - (state.includes(DEFAULTS_PLACEHOLDER) ? 1 : 0);
+      if (
+        mutated !== null &&
+        countWithoutDefaults(mutated) > MAX_RULES_PER_DECISION_KIND &&
+        countWithoutDefaults(mutated) > countWithoutDefaults(sectionRules)
+      ) {
+        existingCount = countWithoutDefaults(sectionRules);
         return null;
       }
-      if (k === null) {
-        v = true;
+      if (mutated === null) {
+        isSectionMissing = true;
         return null;
       }
-      let L = {};
-      L.autoMode = {
-        [h]: k,
+      let nextSettings = {};
+      nextSettings.autoMode = {
+        [section]: mutated,
       };
-      return L;
+      return nextSettings;
     },
     undefined,
-    m,
+    storageV5,
   );
-  if (C) throw new AutoModeRuleWriteError("settings_file_invalid", C);
-  if (c !== null) throw new AutoModeRuleWriteError("invalid_input", c);
-  if (x)
+  if (settingsError) throw new AutoModeRuleWriteError("settings_file_invalid", settingsError);
+  if (refuseReason !== null) throw new AutoModeRuleWriteError("invalid_input", refuseReason);
+  if (existingCount)
     throw new AutoModeRuleWriteError(
       "invalid_input",
-      `autoMode.${h} already has ${x} entries; the maximum is ${MAX_RULES_PER_DECISION_KIND}.`,
+      `autoMode.${section} already has ${existingCount} entries; the maximum is ${MAX_RULES_PER_DECISION_KIND}.`,
     );
-  if (v)
+  if (isSectionMissing)
     throw new AutoModeRuleWriteError(
       "entry_not_found",
       "That rule changed on disk while the dialog was open \u2014 close and reopen /permissions, then try again.",
     );
   if (error) {
-    let b = describeSettingsWriteFailure(error, settingsFilePathForSource, "/permissions");
-    throw new AutoModeRuleWriteError(b.code, b.message);
+    let failure = describeSettingsWriteFailure(error, settingsFilePathForSource, "/permissions");
+    throw new AutoModeRuleWriteError(failure.code, failure.message);
   }
 }
 //@ chunk-p2qwpk2k.js:40052-40080 placement
-function normalizeRuleText(h) {
-  return stripVariationSelectors(h);
+function normalizeRuleText(text) {
+  return stripVariationSelectors(text);
 }
 //@ chunk-p2qwpk2k.js:40080-40178 placement
-function validateRuleText(section, i) {
+function validateRuleText(section, ruleText) {
   try {
-    validateAutoModeRuleText(section, normalizeRuleText(i));
+    validateAutoModeRuleText(section, normalizeRuleText(ruleText));
     return null;
   } catch (error) {
     return error instanceof AutoModeRuleWriteError ? error.message : String(error);
   }
 }
 //@ chunk-p2qwpk2k.js:40178-40692 placement
-function validateAutoModeRuleText(h, i) {
-  if (i === DEFAULTS_PLACEHOLDER)
+function validateAutoModeRuleText(section, ruleText) {
+  if (ruleText === DEFAULTS_PLACEHOLDER)
     throw new AutoModeRuleWriteError(
       "invalid_input",
       `"${DEFAULTS_PLACEHOLDER}" is reserved \u2014 it splices the built-in rules in and cannot be added as a rule.`,
     );
-  if (i.length > MAX_RULE_ENTRY_CHARS)
+  if (ruleText.length > MAX_RULE_ENTRY_CHARS)
     throw new AutoModeRuleWriteError(
       "invalid_input",
-      `the rule is ${i.length} characters; the maximum is ${MAX_RULE_ENTRY_CHARS}.`,
+      `the rule is ${ruleText.length} characters; the maximum is ${MAX_RULE_ENTRY_CHARS}.`,
     );
-  let lines = i.split(`
+  let lines = ruleText.split(`
 `);
-  if (h === "environment" && lines.some((line) => line.startsWith("### ")))
+  if (section === "environment" && lines.some((line) => line.startsWith("### ")))
     throw new AutoModeRuleWriteError(
       "invalid_input",
       "'### ' lines are environment section headers (structure, not entries) and cannot be written here.",
     );
-  let a = checkAutoModeEntries(h, lines);
-  if (a) throw new AutoModeRuleWriteError("invalid_input", a);
+  let problem = checkAutoModeEntries(section, lines);
+  if (problem) throw new AutoModeRuleWriteError("invalid_input", problem);
 }
 //@ chunk-p2qwpk2k.js:40692-40774 placement
-async function addAutoModeRule(section, i, storageV5) {
+async function addAutoModeRule(section, ruleText, storageV5) {
   return withFeatureTelemetry(
     "auto_mode_rule_edit",
-    () => addAutoModeRule_2(section, i, storageV5),
+    () => addAutoModeRule_2(section, ruleText, storageV5),
     editOutcomeKey("add"),
   );
 }
@@ -418,28 +434,30 @@ async function addAutoModeRule(section, i, storageV5) {
 /**
  * 向用户设置的某分类追加一条 auto 模式规则；分类为空时先插入默认占位以保留内置规则；环境按文档编辑时拒绝。
  */
-async function addAutoModeRule_2(h, i, m) {
-  let a = normalizeRuleText(i);
-  validateAutoModeRuleText(h, a);
+async function addAutoModeRule_2(section, ruleText, storageV5) {
+  let normalized = normalizeRuleText(ruleText);
+  validateAutoModeRuleText(section, normalized);
   return writeAutoModeRuleEdit(
-    h,
-    (f) => {
-      if (h === "environment" && alwaysTrueFlag())
+    section,
+    (current) => {
+      if (section === "environment" && alwaysTrueFlag())
         return {
           refuse: "The environment is edited as a document \u2014 use Edit environment on the Auto mode tab.",
         };
-      return h !== "environment" && f.length === 0 && !(h === "allow" && builtinAllowRulesAreOff())
-        ? [DEFAULTS_PLACEHOLDER, a]
-        : [...f, a];
+      return section !== "environment" &&
+        current.length === 0 &&
+        !(section === "allow" && builtinAllowRulesAreOff())
+        ? [DEFAULTS_PLACEHOLDER, normalized]
+        : [...current, normalized];
     },
-    m,
+    storageV5,
   );
 }
 //@ chunk-p2qwpk2k.js:41054-41147 placement
-async function updateAutoModeRule(section, index, text, a, storageV5) {
+async function updateAutoModeRule(section, index, oldText, expectedOldText, storageV5) {
   return withFeatureTelemetry(
     "auto_mode_rule_edit",
-    () => replaceAutoModeRule(section, index, text, a, storageV5),
+    () => replaceAutoModeRule(section, index, oldText, expectedOldText, storageV5),
     editOutcomeKey("update"),
   );
 }
@@ -447,34 +465,34 @@ async function updateAutoModeRule(section, index, text, a, storageV5) {
 /**
  * 替换指定下标的 auto 模式规则（下标处文本须与预期一致）；默认占位与环境分节标题不可编辑。
  */
-async function replaceAutoModeRule(h, i, m, a, f) {
-  let g = normalizeRuleText(a);
-  validateAutoModeRuleText(h, g);
+async function replaceAutoModeRule(section, index, oldText, newText, storageV5) {
+  let normalized = normalizeRuleText(newText);
+  validateAutoModeRuleText(section, normalized);
   return writeAutoModeRuleEdit(
-    h,
-    (v) => {
-      if (m === DEFAULTS_PLACEHOLDER)
+    section,
+    (current) => {
+      if (oldText === DEFAULTS_PLACEHOLDER)
         return {
           refuse: `"${DEFAULTS_PLACEHOLDER}" is splice plumbing, not an editable rule.`,
         };
-      if (h === "environment" && m.startsWith("### "))
+      if (section === "environment" && oldText.startsWith("### "))
         return {
           refuse:
             "'### ' lines are environment section headers (structure, not entries) and cannot be edited here.",
         };
-      if (v[i] !== m) return null;
-      let x = [...v];
-      x[i] = g;
-      return x;
+      if (current[index] !== oldText) return null;
+      let next = [...current];
+      next[index] = normalized;
+      return next;
     },
-    f,
+    storageV5,
   );
 }
 //@ chunk-p2qwpk2k.js:41505-41594 placement
-async function deleteAutoModeRule(section, index, text, storageV5) {
+async function deleteAutoModeRule(section, index, storageV5, expectedText) {
   return withFeatureTelemetry(
     "auto_mode_rule_edit",
-    () => deleteAutoModeRule_2(section, index, text, storageV5),
+    () => deleteAutoModeRule_2(section, index, storageV5, expectedText),
     editOutcomeKey("delete"),
   );
 }
@@ -482,65 +500,68 @@ async function deleteAutoModeRule(section, index, text, storageV5) {
 /**
  * 删除指定下标的 auto 模式规则（下标处文本须一致）；环境删除后清理空分节标题。
  */
-async function deleteAutoModeRule_2(h, i, m, a) {
+async function deleteAutoModeRule_2(section, index, storageV5, expectedText) {
   return writeAutoModeRuleEdit(
-    h,
-    (f) => {
-      if (m === DEFAULTS_PLACEHOLDER)
+    section,
+    (ruleLines) => {
+      if (storageV5 === DEFAULTS_PLACEHOLDER)
         return {
           refuse: `"${DEFAULTS_PLACEHOLDER}" is splice plumbing, not a deletable rule.`,
         };
-      if (h === "environment" && m.startsWith("### "))
+      if (section === "environment" && storageV5.startsWith("### "))
         return {
           refuse:
             "'### ' lines are environment section headers (structure, not entries) and cannot be deleted here.",
         };
-      if (f[i] !== m) return null;
-      let g = [...f.slice(0, i), ...f.slice(i + 1)];
-      return h === "environment" ? dropEmptySectionHeaders(g) : g;
+      if (ruleLines[index] !== storageV5) return null;
+      let nextRuleLines = [...ruleLines.slice(0, index), ...ruleLines.slice(index + 1)];
+      return section === "environment" ? dropEmptySectionHeaders(nextRuleLines) : nextRuleLines;
     },
-    a,
+    expectedText,
   );
 }
 //@ chunk-p2qwpk2k.js:41975-41979 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p2qwpk2k.js:41975", () => {
+  init_react_production();
+});
 //@ chunk-p2qwpk2k.js:41979-42029 placement
-function isNotEnvironmentSection($i) {
-  return $i.section !== "environment";
+function isNotEnvironmentSection(rule) {
+  return rule.section !== "environment";
 }
 //@ chunk-p2qwpk2k.js:42029-42063 placement
-function toRuleKeyPair(Er) {
-  return [ruleKey(Er), Er];
+function toRuleKeyPair(displayRule) {
+  return [ruleKey(displayRule), displayRule];
 }
 //@ chunk-p2qwpk2k.js:42063-42094 placement
-function ruleText(uo) {
-  return uo.text;
+function ruleText(rule) {
+  return rule.text;
 }
 //@ chunk-p2qwpk2k.js:42094-42133 placement
-function normalizedRuleText(an) {
-  return replaceLineBreaks(displayField(an).text);
+function normalizedRuleText(rule) {
+  return replaceLineBreaks(displayField(rule).text);
 }
 //@ chunk-p2qwpk2k.js:42133-42183 placement
-function isEnvironmentSection(co) {
-  return co.section === "environment";
+function isEnvironmentSection(rule) {
+  return rule.section === "environment";
 }
 //@ chunk-p2qwpk2k.js:42183-42270 placement
-function toDisplayRule(Bo) {
+function toDisplayRule(rule) {
   return {
-    tag: Bo.legacy ? "legacy" : getRuleSourceBadge(Bo.source),
-    text: replaceLineBreaks(displayField(Bo.text).text),
+    tag: rule.legacy ? "legacy" : getRuleSourceBadge(rule.source),
+    text: replaceLineBreaks(displayField(rule.text).text),
   };
 }
 //@ chunk-p2qwpk2k.js:42270-42324 placement
-function toDisplayRuleNoTag(Tr) {
+function toDisplayRuleNoTag(rule) {
   return {
     tag: null,
-    text: replaceLineBreaks(displayField(Tr).text),
+    text: replaceLineBreaks(displayField(rule).text),
   };
 }
 //@ chunk-p2qwpk2k.js:42324-42357 placement
-function ruleSource(Bi) {
-  return Bi.source;
+function ruleSource(rule) {
+  return rule.source;
 }
 //@ chunk-p2qwpk2k.js:42357-42407 placement = _temp5 (1)
 function isUserSettingsRule(a_0) {
@@ -551,12 +572,12 @@ function isNonUserSettingsRule(a_0) {
   return a_0.source !== "userSettings";
 }
 //@ chunk-p2qwpk2k.js:42729-42795 placement
-function padSectionLabel(_i) {
-  return _i ? ` \xB7 ${_i}`.padEnd(RULE_LABEL_WIDTH) : " ".repeat(RULE_LABEL_WIDTH);
+function padSectionLabel(label) {
+  return label ? ` \xB7 ${label}`.padEnd(RULE_LABEL_WIDTH) : " ".repeat(RULE_LABEL_WIDTH);
 }
 //@ chunk-p2qwpk2k.js:42795-42828 placement
-function ruleKeyValuePair(Pr, Vi) {
-  return [Pr, Vi];
+function ruleKeyValuePair(key, value) {
+  return [key, value];
 }
 //@ chunk-p2qwpk2k.js:42962-43125 placement
 function getAutoModeRuleCategoryLabel(section) {
@@ -605,16 +626,16 @@ function describeRuleSource(source) {
 /**
  * 按分区顺序、再按来源（用户、flag、托管）顺序排列规则条目。
  */
-function sortRuleEntries(h) {
-  let i = ["userSettings", "flagSettings", "policySettings"];
-  return AUTO_MODE_RULE_SECTIONS.flatMap((m) => {
-    let filtered = h.filter((f) => f.section === m);
-    return i.flatMap((f) => filtered.filter((g) => g.source === f));
+function sortRuleEntries(entries) {
+  let sourceOrder = ["userSettings", "flagSettings", "policySettings"];
+  return AUTO_MODE_RULE_SECTIONS.flatMap((section) => {
+    let filtered = entries.filter((state) => state.section === section);
+    return sourceOrder.flatMap((entry) => filtered.filter((state) => state.source === entry));
   });
 }
 //@ chunk-p2qwpk2k.js:43608-43691 placement
-function ruleKey(h) {
-  return `${h.section}:${h.source}:${h.legacy ? "legacy-" : ""}${h.index}`;
+function ruleKey(rule) {
+  return `${rule.section}:${rule.source}:${rule.legacy ? "legacy-" : ""}${rule.index}`;
 }
 //@ chunk-p2qwpk2k.js:43691-43813 placement
 function getRuleSourceBadge(source) {
@@ -630,22 +651,22 @@ function getRuleSourceBadge(source) {
 //@ chunk-p2qwpk2k.js:43813-43823 placement
 var RULE_LABEL_WIDTH = 20;
 //@ chunk-p2qwpk2k.js:43823-43991 placement
-function splitByWidth(h, i) {
-  let m = [];
-  let a = "";
-  let f = 0;
-  for (let { segment } of getGraphemeSegmenter().segment(h)) {
-    let v = bunStringWidth(segment);
-    if (f + v > i && a.length > 0) {
-      m.push(a);
-      a = "";
-      f = 0;
+function splitByWidth(text, width) {
+  let lines = [];
+  let current = "";
+  let currentWidth = 0;
+  for (let { segment } of getGraphemeSegmenter().segment(text)) {
+    let line = bunStringWidth(segment);
+    if (currentWidth + line > width && current.length > 0) {
+      lines.push(current);
+      current = "";
+      currentWidth = 0;
     }
-    a += segment;
-    f += v;
+    current += segment;
+    currentWidth += line;
   }
-  if (a.length > 0) m.push(a);
-  return m;
+  if (current.length > 0) lines.push(current);
+  return lines;
 }
 //@ chunk-p2qwpk2k.js:43991-44000 placement
 var MAX_RULE_ROWS = 5;

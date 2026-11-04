@@ -70,19 +70,29 @@ import { getEndedByModel } from "../tasks/endedByModel.js";
 import { logEvent } from "../services/analytics/index.js";
 import { useHost } from "../context/session.js";
 import { useRenderMode } from "../ink/renderModeContext.js";
-import { P, init_react_production } from "../../vendor/react/cjs/react.production.js";
+import { useEffect, init_react_production } from "../../vendor/react/cjs/react.production.js";
 import { isBgSession } from "../utils/concurrentSessions.js";
 import { registerRendezvousRunner } from "../services/daemon/rendezvous.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1611905-1614466 placement
-async function handleBridgeInbound(h, x, D, L, ee, ke, storageV5, credentials) {
-  let { prior, release } = h.takeInboundEnqueueTurn();
+async function handleBridgeInbound(
+  queue,
+  frame,
+  runImmediateCommand,
+  onInboundRefused,
+  onInboundHandled,
+  beforeEnqueue,
+  storageV5,
+  credentials,
+) {
+  let { prior, release } = queue.takeInboundEnqueueTurn();
   try {
-    let inboundMetadata = extractInboundMetadata(x);
+    let inboundMetadata = extractInboundMetadata(frame);
     if (!inboundMetadata) return;
     let { uuid } = inboundMetadata;
     recordRemoteSurfaceSeen(inboundMetadata.clientPlatform, storageV5);
-    let rt = classifyInboundOrigin(
+    let origin = classifyInboundOrigin(
       inboundMetadata.content,
       inboundMetadata.clientPlatform,
       inboundMetadata.inboundOrigin,
@@ -91,129 +101,141 @@ async function handleBridgeInbound(h, x, D, L, ee, ke, storageV5, credentials) {
       inboundMetadata.activityObservation,
       inboundMetadata.fromPlugin,
     );
-    let kt = classifyInboundOrigin_2(rt) === "ungated" && !isPeerOrSlackPing(rt) && !isTextNotTyped(x);
-    let At = refineInboundOrigin(rt, inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin);
-    let It = escapePluginTags(inboundMetadata.content, inboundMetadata.inboundOrigin);
+    let canRunImmediate =
+      classifyInboundOrigin_2(origin) === "ungated" && !isPeerOrSlackPing(origin) && !isTextNotTyped(frame);
+    let refinedOrigin = refineInboundOrigin(
+      origin,
+      inboundMetadata.clientPlatform,
+      inboundMetadata.inboundOrigin,
+    );
+    let content = escapePluginTags(inboundMetadata.content, inboundMetadata.inboundOrigin);
     if (
-      kt &&
-      typeof It === "string" &&
-      D(It, At, isChatPlatformHuman(inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin))
+      canRunImmediate &&
+      typeof content === "string" &&
+      runImmediateCommand(
+        content,
+        refinedOrigin,
+        isChatPlatformHuman(inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin),
+      )
     ) {
       logForDebugging(
         `[bridge:repl] Ran immediate command without enqueue: ${inboundMetadata.content.slice(0, 80)}${uuid ? ` uuid=${uuid}` : ""}`,
       );
       return;
     }
-    using Ot = h.beginInboundIngest(isPeerOrSlackPing(rt) ? undefined : uuid);
+    using ingest = queue.beginInboundIngest(isPeerOrSlackPing(origin) ? undefined : uuid);
     await prior;
-    await ke?.();
-    let { resolveAndPrepend } = await import("./chunk-xth3wpgt.js");
-    let Dt = It;
+    await beforeEnqueue?.();
+    let { resolveAndPrepend } = await import("./inboundAttachments.js");
+    let text = content;
     let event;
-    let inboundRefuseCause = getInboundRefuseCause(rt);
+    let inboundRefuseCause = getInboundRefuseCause(origin);
     if (inboundRefuseCause !== undefined) {
       logInboundRefused("bridge:repl: dropped before attachment materialization", inboundRefuseCause);
       return;
     }
-    let Xt = promptOriginKind(inboundMetadata.content);
-    if (!isPeerOrSlackPing(rt))
-      Dt = buildExternalEventRecord(Dt, inboundMetadata.pastedContent, inboundMetadata.inlinePastes);
-    let io = await dispatchSessionReceiveHooks({
+    let promptOrigin = promptOriginKind(inboundMetadata.content);
+    if (!isPeerOrSlackPing(origin))
+      text = buildExternalEventRecord(text, inboundMetadata.pastedContent, inboundMetadata.inlinePastes);
+    let hookResult = await dispatchSessionReceiveHooks({
       origin: originFromBridgeMetadata(
-        rt ?? refineInboundOrigin(undefined, inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin),
+        origin ??
+          refineInboundOrigin(undefined, inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin),
       ),
-      content: Dt,
+      content: text,
       event,
     });
-    if (io.consumed !== undefined) return;
-    Dt = io.content;
-    using queueing = io.queueing;
-    let po = await resolveAndPrepend(
-      x,
-      Dt,
-      humanHintOrPlatform(rt, inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin),
+    if (hookResult.consumed !== undefined) return;
+    text = hookResult.content;
+    using queueing = hookResult.queueing;
+    let resolved = await resolveAndPrepend(
+      frame,
+      text,
+      humanHintOrPlatform(origin, inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin),
       storageV5,
       credentials,
     );
-    let { content, inlinedImagePaths, missingFiles } = po;
-    let Ao = typeof content === "string" ? content.slice(0, 80) : `[${content.length} content blocks]`;
-    logForDebugging(`[bridge:repl] Injecting inbound user message: ${Ao}${uuid ? ` uuid=${uuid}` : ""}`);
-    let Bo;
-    let Ro = false;
-    if (rt?.kind === "peer")
-      Bo = {
-        origin: stripPeerMessageBody(rt, content, inboundMetadata.content),
+    let { content: content_2, inlinedImagePaths, missingFiles } = resolved;
+    let preview =
+      typeof content_2 === "string" ? content_2.slice(0, 80) : `[${content_2.length} content blocks]`;
+    logForDebugging(`[bridge:repl] Injecting inbound user message: ${preview}${uuid ? ` uuid=${uuid}` : ""}`);
+    let extraFields;
+    let isHumanTurn = false;
+    if (origin?.kind === "peer")
+      extraFields = {
+        origin: stripPeerMessageBody(origin, content_2, inboundMetadata.content),
         isMeta: true,
         skipAttachments: true,
-        ...(hasVerifiedSlackHumanTurn(h) && {
+        ...(hasVerifiedSlackHumanTurn(queue) && {
           priority: "later",
         }),
       };
     else {
-      Ro = isHumanOrAutoContinuation(At);
-      Bo = {
+      isHumanTurn = isHumanOrAutoContinuation(refinedOrigin);
+      extraFields = {
         bridgeOrigin: true,
         clientPlatform: inboundMetadata.clientPlatform,
-        ...(At && {
-          origin: At,
+        ...(refinedOrigin && {
+          origin: refinedOrigin,
         }),
-        ...textNotTypedFlags(x, po),
-        ...(At !== undefined &&
-          !isHumanOrAutoContinuation(At) && {
+        ...textNotTypedFlags(frame, resolved),
+        ...(refinedOrigin !== undefined &&
+          !isHumanOrAutoContinuation(refinedOrigin) && {
             skipAttachments: true,
           }),
-        ...(At?.kind === "task-notification" &&
+        ...(refinedOrigin?.kind === "task-notification" &&
           adjustInboundPriority(undefined, inboundMetadata.clientPlatform) === "later" && {
             priority: "later",
           }),
         ...(isChatPlatformHuman(inboundMetadata.clientPlatform, inboundMetadata.inboundOrigin) && {
-          priority: resolveQueuePriority(undefined, content, hasSlackLaterNotification(h)),
+          priority: resolveQueuePriority(undefined, content_2, hasSlackLaterNotification(queue)),
           verifiedSlackHumanTurn: true,
         }),
       };
     }
-    let Ho = inheritedAttributionKey(uuid, {
+    let attributionKey = inheritedAttributionKey(uuid, {
       isCrossSession: isGatedInbound({
-        ingressOrigin: rt,
+        ingressOrigin: origin,
         inboundOrigin: inboundMetadata.inboundOrigin,
         envelopePeer: hasTeammateMessageEnvelope(inboundMetadata.content),
       }),
     });
-    let Io = {
-      value: content,
-      ...(Xt !== undefined && {
-        foreignWord: Xt,
+    let queueItem = {
+      value: content_2,
+      ...(promptOrigin !== undefined && {
+        foreignWord: promptOrigin,
       }),
       mode: "prompt",
       agentId: mainAgentId(),
       uuid,
-      ...(Ho && {
-        turnAttributionKey: Ho,
+      ...(attributionKey && {
+        turnAttributionKey: attributionKey,
       }),
       ...(inlinedImagePaths.length > 0 && {
         inlinedImagePaths,
       }),
       skipSlashCommands: true,
-      ...Bo,
+      ...extraFields,
     };
-    if (gateInboundByOrigin(rt, Io) !== "accept") return;
-    if (Ot.withdrawn()) {
+    if (gateInboundByOrigin(origin, queueItem) !== "accept") return;
+    if (ingest.withdrawn()) {
       logForDebugging(`[bridge:repl] Inbound message withdrawn before enqueue${uuid ? ` uuid=${uuid}` : ""}`);
       return;
     }
-    if (Ro) {
-      Io.uuid ??= randomUUID();
-      noteHumanTakeover(Io.uuid);
-      if (!Io.verifiedSlackHumanTurn && !lastTextBlockText(content)?.startsWith("/")) recordSubmitTime();
+    if (isHumanTurn) {
+      queueItem.uuid ??= randomUUID();
+      noteHumanTakeover(queueItem.uuid);
+      if (!queueItem.verifiedSlackHumanTurn && !lastTextBlockText(content_2)?.startsWith("/"))
+        recordSubmitTime();
     }
-    h.enqueue(Io);
+    queue.enqueue(queueItem);
     logBridgeAttachmentsMissing(
       normalizeUuidOrNull(uuid) ?? undefined,
-      extractInboundAttachments(x).length,
+      extractInboundAttachments(frame).length,
       missingFiles,
     );
     queueing.queued();
-    if (!isPeerOrSlackPing(rt)) ee?.();
+    if (!isPeerOrSlackPing(origin)) onInboundHandled?.();
   } catch (error) {
     logForDebugging(`[bridge:repl] handleInboundMessage failed: ${error}`, {
       level: "error",
@@ -227,17 +249,17 @@ async function handleBridgeInbound(h, x, D, L, ee, ke, storageV5, credentials) {
  * 处理桥接端发来的权限模式切换：先 guardPermissionModeChange 校验，通过后用 transitionPermissionMode 更新 toolPermissionContext 并在下一轮事件循环通知订阅者。
  */
 function applyBridgePermissionModeChange(requestedMode, store, setAppState) {
-  let L = guardPermissionModeChange(requestedMode, store.getState().toolPermissionContext);
-  if (!L.ok) return L;
-  let mode = L.mode;
-  setAppState((ke) => {
-    let mode_2 = ke.toolPermissionContext.mode;
-    if (mode_2 === mode) return ke;
-    let Be = transitionPermissionMode(mode_2, mode, ke.toolPermissionContext);
+  let guard = guardPermissionModeChange(requestedMode, store.getState().toolPermissionContext);
+  if (!guard.ok) return guard;
+  let mode = guard.mode;
+  setAppState((state) => {
+    let mode_2 = state.toolPermissionContext.mode;
+    if (mode_2 === mode) return state;
+    let context = transitionPermissionMode(mode_2, mode, state.toolPermissionContext);
     return {
-      ...ke,
+      ...state,
       toolPermissionContext: {
-        ...Be,
+        ...context,
         mode,
       },
     };
@@ -255,55 +277,66 @@ function applyBridgePermissionModeChange(requestedMode, store, setAppState) {
  */
 function createBridgePermissionCallbacks(bridge, pendingHandlers) {
   return {
-    sendRequest(requestId, L, input, toolUseId, description, Be, He, We, ze, Xe) {
+    sendRequest(
+      requestId,
+      toolName,
+      input,
+      toolUseId,
+      description,
+      suggestions,
+      blockedPath,
+      requiresInteraction,
+      toolKind,
+      extraRequestFields,
+    ) {
       bridge.sendControlRequest({
         type: "control_request",
         request_id: requestId,
         request: {
           subtype: "can_use_tool",
-          tool_name: L,
-          display_name: humanizeToolName(L),
+          tool_name: toolName,
+          display_name: humanizeToolName(toolName),
           input,
           tool_use_id: toolUseId,
           description,
-          ...(Be && {
-            permission_suggestions: Be,
+          ...(suggestions && {
+            permission_suggestions: suggestions,
           }),
-          ...(He && {
-            blocked_path: He,
+          ...(blockedPath && {
+            blocked_path: blockedPath,
           }),
-          requires_user_interaction: We || undefined,
-          ...(ze && {
-            tool_kind: ze,
+          requires_user_interaction: requiresInteraction || undefined,
+          ...(toolKind && {
+            tool_kind: toolKind,
           }),
-          ...Xe,
+          ...extraRequestFields,
         },
       });
     },
-    sendResponse(requestId, L) {
-      let response = {
-        ...L,
+    sendResponse(requestId, response) {
+      let response_2 = {
+        ...response,
       };
       bridge.sendControlResponse({
         type: "control_response",
         response: {
           subtype: "success",
           request_id: requestId,
-          response,
+          response: response_2,
         },
       });
     },
-    cancelRequest(D) {
-      bridge.sendControlCancelRequest(D);
-      pendingHandlers.delete(D);
+    cancelRequest(requestId) {
+      bridge.sendControlCancelRequest(requestId);
+      pendingHandlers.delete(requestId);
     },
-    onResponse(D, toolName, handler) {
-      pendingHandlers.set(D, {
+    onResponse(requestId, toolName, handler) {
+      pendingHandlers.set(requestId, {
         toolName,
         handler,
       });
       return () => {
-        pendingHandlers.delete(D);
+        pendingHandlers.delete(requestId);
       };
     },
   };
@@ -314,10 +347,10 @@ function createBridgePermissionCallbacks(bridge, pendingHandlers) {
  */
 function createBridgeDialogCallbacks(bridge, pendingHandlers, supportedKinds) {
   return {
-    supportsKind(L) {
-      return supportedKinds.has(L);
+    supportsKind(kind) {
+      return supportedKinds.has(kind);
     },
-    sendRequest(requestId, dialogKind, payload, Re) {
+    sendRequest(requestId, dialogKind, payload, toolUseId) {
       return bridge.sendControlRequest({
         type: "control_request",
         request_id: requestId,
@@ -325,23 +358,23 @@ function createBridgeDialogCallbacks(bridge, pendingHandlers, supportedKinds) {
           subtype: "request_user_dialog",
           dialog_kind: dialogKind,
           payload,
-          ...(Re && {
-            tool_use_id: Re,
+          ...(toolUseId && {
+            tool_use_id: toolUseId,
           }),
         },
       });
     },
-    cancelRequest(L) {
-      bridge.sendControlCancelRequest(L);
-      pendingHandlers.delete(L);
+    cancelRequest(requestId) {
+      bridge.sendControlCancelRequest(requestId);
+      pendingHandlers.delete(requestId);
     },
-    onResponse(L, kind, handler) {
-      pendingHandlers.set(L, {
+    onResponse(requestId, kind, handler) {
+      pendingHandlers.set(requestId, {
         kind,
         handler,
       });
       return () => {
-        pendingHandlers.delete(L);
+        pendingHandlers.delete(requestId);
       };
     },
   };
@@ -357,11 +390,11 @@ async function clearBridgeSessionFromJobState(fsOps) {
     let jobState = await readJobState(envClaudeJobDir, fsOps);
     if (!jobState || jobState.bridgeSessionId === undefined) return;
     invalidateJobStateCache(envClaudeJobDir);
-    let L = (await readJobState(envClaudeJobDir, fsOps)) ?? jobState;
+    let current = (await readJobState(envClaudeJobDir, fsOps)) ?? jobState;
     await writeStateAtomic(
       envClaudeJobDir,
       {
-        ...L,
+        ...current,
         bridgeSessionId: undefined,
         bridgeOutboundOnly: undefined,
         bridgeSessionSeq: undefined,
@@ -404,18 +437,18 @@ async function persistBridgeSessionToJobState(
     )
       return;
     invalidateJobStateCache(jobDir);
-    let He = (await readJobState(jobDir, fsOps)) ?? jobState;
+    let current = (await readJobState(jobDir, fsOps)) ?? jobState;
     await writeStateAtomic(
       jobDir,
       {
-        ...He,
+        ...current,
         bridgeSessionId,
         bridgeOutboundOnly: outboundOnly,
         bridgeSessionGroupingId: groupingId,
         bridgeOwnerAccountUuid: owner?.accountUuid,
         bridgeOwnerOrganizationUuid: owner?.organizationUuid,
         bridgeNoHistoryBackfill: noHistoryBackfill || undefined,
-        bridgeSessionSeq: He.bridgeSessionId === bridgeSessionId ? He.bridgeSessionSeq : undefined,
+        bridgeSessionSeq: current.bridgeSessionId === bridgeSessionId ? current.bridgeSessionSeq : undefined,
         updatedAt: new Date().toISOString(),
       },
       fsOps,
@@ -432,7 +465,7 @@ async function collectBridgeContextUsage(
   { getContextUsageInputs, store, transcript, storageV5, credentials, mainLoopModel },
   request,
 ) {
-  let { collectContextData } = await import("./chunk-mszdds2y.js");
+  let { collectContextData } = await import("../commands/context/context-noninteractive.js");
   let state = store.getState();
   let {
     session,
@@ -463,7 +496,10 @@ async function collectBridgeContextUsage(
   });
 }
 //@ chunk-18hwfzwa.js:1617525-1617578 placement
-var BRIDGE_IMMEDIATE_COMMAND_NAMES = new Set(["effort", "model", "rename", "usage"]);
+var BRIDGE_IMMEDIATE_COMMAND_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1617525", () => {
+  BRIDGE_IMMEDIATE_COMMAND_NAMES = new Set(["effort", "model", "rename", "usage"]);
+});
 //@ chunk-18hwfzwa.js:1617578-1617634 placement
 function isBridgeImmediateCommandsEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_humming_locket", true) !== false;
@@ -475,9 +511,9 @@ function isBridgeImmediateCommandsEnabled() {
 function resolveBridgeImmediateCommand(text, commands, renderMode, endedByModel) {
   if (!text.startsWith("/")) return null;
   let slashCommand = parseSlashCommand(text);
-  let ke = slashCommand && findCommand(slashCommand.commandName, commands);
-  if (!ke || !isCommandEnabled(ke)) return null;
-  if (isSlashCommandBlockedByEndedByModel(ke, endedByModel)) return null;
+  let command = slashCommand && findCommand(slashCommand.commandName, commands);
+  if (!command || !isCommandEnabled(command)) return null;
+  if (isSlashCommandBlockedByEndedByModel(command, endedByModel)) return null;
   let bridgeImmediateCommand = resolveBridgeImmediateCommand_2(text, commands, renderMode, {
     origin: {
       kind: "human",
@@ -527,7 +563,7 @@ function tryRunBridgeImmediateCommand(text, { turn, scope, store, transport }, r
 function useBridgeImmediateCommands({ turn, scope, store, transport }) {
   let host = useHost();
   let renderMode = useRenderMode();
-  P(() => {
+  useEffect(() => {
     if (!isBgSession()) return;
     registerRendezvousRunner(host, (text) =>
       tryRunBridgeImmediateCommand(
@@ -545,7 +581,10 @@ function useBridgeImmediateCommands({ turn, scope, store, transport }) {
   }, [host, turn, scope, store, transport, renderMode]);
 }
 //@ chunk-18hwfzwa.js:1618465-1618469 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1618465", () => {
+  init_react_production();
+});
 export {
   useBridgeImmediateCommands,
   clearBridgeSessionFromJobState,

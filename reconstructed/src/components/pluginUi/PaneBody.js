@@ -8,7 +8,15 @@
  * pieces: chunk-18hwfzwa.js (19)
  * attribution: placement 19
  */
-import { init_react_production, Uy, R, ce, zt, P, Q } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useReducer,
+  useRef,
+  useCallback,
+  useLayoutEffect,
+  useEffect,
+  useMemo,
+} from "../../../vendor/react/cjs/react.production.js";
 import { topWithin } from "../../ink/hooks/useTerminalHooks.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box } from "../../ink/components/Text.js";
@@ -17,63 +25,74 @@ import { useWheelScrollStep } from "../ScrollKeybindingHandler.js";
 import { useLatestState } from "../CustomSelect/option-map.js";
 import { logRejection } from "../../plugins/functionHooks/uiApi.js";
 import { dispatchUiScroll, siteKey, scrollSites } from "../../plugins/functionHooks/uiHooks.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:475900-475910 placement
 var BORDER_COLUMNS = 4;
 //@ chunk-18hwfzwa.js:475910-475944 placement
-var chromeRows = (h, x) => (h || !x ? 1 : 0) + (x ? 2 : 0);
+var chromeRows = (hasHeader, hasFooter) => (hasHeader || !hasFooter ? 1 : 0) + (hasFooter ? 2 : 0);
 //@ chunk-18hwfzwa.js:475944-475953 placement
 var BORDER_MARK_INSET = 2;
 //@ chunk-18hwfzwa.js:475953-475957 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:475953", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:475957-475961 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:475957", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:477875-478015 placement
-var toLocalPoint = (h) => (x) => {
-  let cachedLayout = h.current?.cachedLayout;
-  return x.col !== undefined && x.row !== undefined && cachedLayout !== undefined
+var toLocalPoint = (elementRef) => (point) => {
+  let cachedLayout = elementRef.current?.cachedLayout;
+  return point.col !== undefined && point.row !== undefined && cachedLayout !== undefined
     ? {
-        column: x.col - cachedLayout.x,
-        row: x.row - cachedLayout.y,
+        column: point.col - cachedLayout.x,
+        row: point.row - cachedLayout.y,
       }
     : undefined;
 };
 //@ chunk-18hwfzwa.js:478015-478222 placement
-function heldRowOffset(h, x) {
-  let { held, index, content } = h;
+function heldRowOffset(heldState, edge) {
+  let { held, index, content } = heldState;
   if (held === null || index === null || held.index !== index || content === null) return -1;
-  let Re = topWithin(held.node, content);
-  let Be = held.node.yogaNode?.getComputedHeight() ?? 0;
-  return Re < 0 ? -1 : Re + (x === "bottom" ? Be : 0);
+  let heldTop = topWithin(held.node, content);
+  let heldHeight = held.node.yogaNode?.getComputedHeight() ?? 0;
+  return heldTop < 0 ? -1 : heldTop + (edge === "bottom" ? heldHeight : 0);
 }
 //@ chunk-18hwfzwa.js:478222-478594 placement
 /**
  * 在节点树中按 elementKey/插件查找元素上下边界。
  */
-function findElementBounds(h, x, D) {
-  let L = [h];
-  for (let ee = L.pop(); ee; ee = L.pop()) {
-    let { elementKey, elementPlugin } = ee.attributes;
-    if (ee !== h && elementKey === x && (elementPlugin === undefined || elementPlugin === D)) {
-      let He = topWithin(ee, h);
-      let We = ee.yogaNode?.getComputedHeight() ?? 0;
-      return He < 0
+function findElementBounds(root, elementKey, plugin) {
+  let stack = [root];
+  for (let node = stack.pop(); node; node = stack.pop()) {
+    let { elementKey: elementKey_2, elementPlugin } = node.attributes;
+    if (
+      node !== root &&
+      elementKey_2 === elementKey &&
+      (elementPlugin === undefined || elementPlugin === plugin)
+    ) {
+      let top = topWithin(node, root);
+      let height = node.yogaNode?.getComputedHeight() ?? 0;
+      return top < 0
         ? undefined
         : {
-            top: He,
-            bottom: He + We,
+            top,
+            bottom: top + height,
           };
     }
-    for (let He = ee.childNodes.length - 1; He >= 0; He -= 1) {
-      let We = ee.childNodes[He];
-      if (We && We.nodeName !== "#text") L.push(We);
+    for (let childIndex = node.childNodes.length - 1; childIndex >= 0; childIndex -= 1) {
+      let child = node.childNodes[childIndex];
+      if (child && child.nodeName !== "#text") stack.push(child);
     }
   }
   return;
 }
 //@ chunk-18hwfzwa.js:478594-478807 placement
-function paneScrollHandlers(h) {
-  let { bodyRows, contentRows, scrollBy } = h;
+function paneScrollHandlers(scroll) {
+  let { bodyRows, contentRows, scrollBy } = scroll;
   return {
     "pane:scrollUp": () => scrollBy(-1),
     "pane:scrollDown": () => scrollBy(1),
@@ -84,110 +103,123 @@ function paneScrollHandlers(h) {
   };
 }
 //@ chunk-18hwfzwa.js:478807-478919 placement
-var wheelScrollHandler = (h, x, D) => (event) => {
-  let ee = event.deltaY < 0 ? -1 : 1;
-  h.scrollBy(ee * x(ee), D(event));
+var wheelScrollHandler = (scrollState, deltaForDirection, resolvePoint) => (event) => {
+  let direction = event.deltaY < 0 ? -1 : 1;
+  scrollState.scrollBy(direction * deltaForDirection(direction), resolvePoint(event));
   event.preventDefault();
   event.stopPropagation();
 };
 //@ chunk-18hwfzwa.js:478919-479120 placement
-var PaneContent = (h) =>
+var PaneContent = (props) =>
   jsxProd_default(Box, {
-    ref: h.content,
-    marginTop: -h.offset,
+    ref: props.content,
+    marginTop: -props.offset,
     flexDirection: "column",
     flexShrink: 0,
-    marginRight: h.keptColumns,
+    marginRight: props.keptColumns,
     children: jsxProd_default(SiteColumns, {
-      value: h.columns,
+      value: props.columns,
       children: jsxProd_default(SiteRows, {
-        value: h.rows,
-        children: h.children,
+        value: props.rows,
+        children: props.children,
       }),
     }),
   });
 //@ chunk-18hwfzwa.js:479120-479199 placement
-function wheelScrollRows(h, localPoint) {
+function wheelScrollRows(scrollState, resolvePoint) {
   let wheelScrollStep = useWheelScrollStep();
-  return wheelScrollHandler(h, (L) => wheelScrollStep(L, performance.now()).rows, localPoint);
+  return wheelScrollHandler(
+    scrollState,
+    (direction) => wheelScrollStep(direction, performance.now()).rows,
+    resolvePoint,
+  );
 }
 //@ chunk-18hwfzwa.js:479199-479228 placement
-var mergeShallow = (h, x) => ({
-  ...h,
-  ...x,
+var mergeShallow = (a, b) => ({
+  ...a,
+  ...b,
 });
 //@ chunk-18hwfzwa.js:479228-479232 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:479228", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:479232-479270 placement
-var floorClampZero = (h) => Math.max(0, Math.floor(h));
+var floorClampZero = (value) => Math.max(0, Math.floor(value));
 //@ chunk-18hwfzwa.js:479270-481263 placement
 function PaneBody(props) {
   let { component, requestId, owner, content } = props;
   let { bodyRows, contentRows, maxOffset } = props;
-  let [He, We, ze] = useLatestState(0);
-  let [Xe, rt, kt] = useLatestState(false);
-  let [At, It] = Uy((Ro) => Ro + 1, 0);
-  let Ot = R({
+  let [offset, setOffset, getOffset] = useLatestState(0);
+  let [isFollowing, setFollowing, getFollowing] = useLatestState(false);
+  let [raised, bumpRaised] = useReducer((prev) => prev + 1, 0);
+  let propsRef = useRef({
     bodyRows,
     contentRows,
     maxOffset,
   });
-  let Et = R(false);
-  let Dt = R(undefined);
-  let Lt = R(false);
-  let oo = R(0);
-  let Xt = R(undefined);
-  let io = R(true);
-  let so = ce(() => (kt() ? Ot.current.maxOffset : Math.min(ze(), Ot.current.maxOffset)), [ze, kt]);
-  let po = ce(
-    (Ro) => {
-      let Ho = floorClampZero(Ro);
-      if (Ho !== so()) {
-        Lt.current = Et.current;
-        oo.current = 0;
-        Xt.current = undefined;
-      }
-      rt(false);
-      We(Ho);
-    },
-    [We, rt, so],
+  let isScrollingRef = useRef(false);
+  let lastScrollRef = useRef(undefined);
+  let programmaticRef = useRef(false);
+  let pendingDelta = useRef(0);
+  let pendingPointer = useRef(undefined);
+  let isMounted = useRef(true);
+  let currentMaxOffset = useCallback(
+    () => (getFollowing() ? propsRef.current.maxOffset : Math.min(getOffset(), propsRef.current.maxOffset)),
+    [getOffset, getFollowing],
   );
-  let ao = ce(
-    (Ro, Ho) => {
-      if (Ho.kind === "plugin") {
-        po(Ro);
+  let commitOffset = useCallback(
+    (nextOffset) => {
+      let clamped = floorClampZero(nextOffset);
+      if (clamped !== currentMaxOffset()) {
+        programmaticRef.current = isScrollingRef.current;
+        pendingDelta.current = 0;
+        pendingPointer.current = undefined;
+      }
+      setFollowing(false);
+      setOffset(clamped);
+    },
+    [setOffset, setFollowing, currentMaxOffset],
+  );
+  let commitFromScroll = useCallback(
+    (nextOffset, kind) => {
+      if (kind.kind === "plugin") {
+        commitOffset(nextOffset);
         return true;
       }
-      if (Lt.current) return false;
-      let Io = floorClampZero(Ro);
-      let Wo = Dt.current;
-      if (!(kt() && Wo !== undefined && Wo.by > 0 && Io === Wo.offset) && Io !== so()) {
-        rt(false);
-        We(Io);
+      if (programmaticRef.current) return false;
+      let clamped = floorClampZero(nextOffset);
+      let lastScroll = lastScrollRef.current;
+      if (
+        !(getFollowing() && lastScroll !== undefined && lastScroll.by > 0 && clamped === lastScroll.offset) &&
+        clamped !== currentMaxOffset()
+      ) {
+        setFollowing(false);
+        setOffset(clamped);
       }
       return true;
     },
-    [We, rt, po, so, kt],
+    [setOffset, setFollowing, commitOffset, currentMaxOffset, getFollowing],
   );
-  let co = ce(
-    (Ro) => {
-      let Ho = so();
-      let Io = Ro();
-      if (so() !== Ho) It();
-      return Io;
+  let runGuard = useCallback(
+    (fn) => {
+      let before = currentMaxOffset();
+      let result = fn();
+      if (currentMaxOffset() !== before) bumpRaised();
+      return result;
     },
-    [so],
+    [currentMaxOffset],
   );
-  let bo = ce(
-    (Ro, Ho) => {
-      let Io = Ot.current;
-      let offset = Math.min(Io.maxOffset, floorClampZero(so() + Ro));
-      Et.current = true;
-      Dt.current = {
-        by: Ro,
+  let scrollByImpl = useCallback(
+    (delta, pointer) => {
+      let propsSnapshot = propsRef.current;
+      let offset = Math.min(propsSnapshot.maxOffset, floorClampZero(currentMaxOffset() + delta));
+      isScrollingRef.current = true;
+      lastScrollRef.current = {
+        by: delta,
         offset,
       };
-      Lt.current = false;
+      programmaticRef.current = false;
       logRejection(
         `ui.scroll ${component} ${requestId}`,
         dispatchUiScroll({
@@ -195,97 +227,113 @@ function PaneBody(props) {
             component,
             requestId,
             offset,
-            by: Ro,
-            bodyRows: Io.bodyRows,
-            contentRows: Io.contentRows,
+            by: delta,
+            bodyRows: propsSnapshot.bodyRows,
+            contentRows: propsSnapshot.contentRows,
             origin: {
               kind: "person",
             },
-            ...(Ho !== undefined && {
-              pointer: Ho,
+            ...(pointer !== undefined && {
+              pointer,
             }),
           },
         }),
       ).finally(() => {
-        Et.current = false;
-        Dt.current = undefined;
-        let mn = oo.current;
-        let Cn = Xt.current;
-        oo.current = 0;
-        Xt.current = undefined;
-        if (io.current && mn !== 0) bo(mn, Cn);
+        isScrollingRef.current = false;
+        lastScrollRef.current = undefined;
+        let flushedDelta = pendingDelta.current;
+        let flushedPointer = pendingPointer.current;
+        pendingDelta.current = 0;
+        pendingPointer.current = undefined;
+        if (isMounted.current && flushedDelta !== 0) scrollByImpl(flushedDelta, flushedPointer);
       });
     },
-    [component, requestId, so],
+    [component, requestId, currentMaxOffset],
   );
-  let place = ce((Ro) => po(Ro(ze())), [po, ze]);
-  function Bo(Ro, Ho) {
-    if (Ro === 0) return;
-    if (Et.current) {
-      oo.current += Ro;
-      Xt.current = Ho;
+  let place = useCallback((fn) => commitOffset(fn(getOffset())), [commitOffset, getOffset]);
+  function scrollBy(delta, pointer) {
+    if (delta === 0) return;
+    if (isScrollingRef.current) {
+      pendingDelta.current += delta;
+      pendingPointer.current = pointer;
       return;
     }
-    bo(Ro, Ho);
+    scrollByImpl(delta, pointer);
   }
-  zt(() => {
-    Ot.current = {
+  useLayoutEffect(() => {
+    propsRef.current = {
       bodyRows,
       contentRows,
       maxOffset,
     };
   }, [bodyRows, contentRows, maxOffset]);
-  zt(() => {
-    if (Xe && ze() !== maxOffset) We(maxOffset);
-  }, [Xe, maxOffset, ze, We]);
-  P(() => {
-    let Ro = siteKey(component, requestId);
-    scrollSites().set(Ro, {
+  useLayoutEffect(() => {
+    if (isFollowing && getOffset() !== maxOffset) setOffset(maxOffset);
+  }, [isFollowing, maxOffset, getOffset, setOffset]);
+  useEffect(() => {
+    let siteName = siteKey(component, requestId);
+    scrollSites().set(siteName, {
       component,
       requestId,
       owner,
       bodyRows,
       contentRows,
       maxOffset,
-      offset: () => (kt() ? maxOffset : Math.min(ze(), maxOffset)),
-      keyRows: (Ho, Io) => {
-        let Wo = content.current;
-        return Wo ? findElementBounds(Wo, Io, Ho) : undefined;
+      offset: () => (getFollowing() ? maxOffset : Math.min(getOffset(), maxOffset)),
+      keyRows: (element, focusKey) => {
+        let contentNode = content.current;
+        return contentNode ? findElementBounds(contentNode, focusKey, element) : undefined;
       },
-      commit: (Ho, Io) => co(() => ao(Math.min(maxOffset, Ho), Io)),
-      followEnd: () => co(() => rt(true)),
+      commit: (offset, kind) => runGuard(() => commitFromScroll(Math.min(maxOffset, offset), kind)),
+      followEnd: () => runGuard(() => setFollowing(true)),
     });
     return () => {
-      scrollSites().delete(Ro);
+      scrollSites().delete(siteName);
     };
-  }, [component, requestId, owner, bodyRows, contentRows, maxOffset, content, ao, co, ze, kt, rt]);
-  P(
+  }, [
+    component,
+    requestId,
+    owner,
+    bodyRows,
+    contentRows,
+    maxOffset,
+    content,
+    commitFromScroll,
+    runGuard,
+    getOffset,
+    getFollowing,
+    setFollowing,
+  ]);
+  useEffect(
     () => () => {
-      io.current = false;
+      isMounted.current = false;
     },
     [],
   );
   return mergeShallow(
     {
-      offset: Xe ? maxOffset : Math.min(He, maxOffset),
+      offset: isFollowing ? maxOffset : Math.min(offset, maxOffset),
       bodyRows,
       contentRows,
       maxOffset,
-      scrollBy: Bo,
+      scrollBy,
     },
     {
-      placed: Xe ? maxOffset : He,
+      placed: isFollowing ? maxOffset : offset,
       place,
-      raised: At,
+      raised,
     },
   );
 }
 //@ chunk-18hwfzwa.js:481263-481267 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:481263", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:481267-481394 placement
-function withScrollOffset(renderInput, x) {
-  let { offset, raised } = x;
-  return Q(
+function withScrollOffset(renderInput, scroll) {
+  let { offset, raised } = scroll;
+  return useMemo(
     () => ({
       ...renderInput,
       props: {
@@ -300,7 +348,10 @@ function withScrollOffset(renderInput, x) {
   );
 }
 //@ chunk-18hwfzwa.js:481394-481398 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:481394", () => {
+  init_react_production();
+});
 export {
   BORDER_COLUMNS,
   BORDER_MARK_INSET,

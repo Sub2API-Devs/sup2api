@@ -14,43 +14,44 @@ import { getPlatform } from "../../../utils/platform.js";
 import { buildSafeGitInvocation } from "../../../utils/git/gitSafeInvocation.js";
 import { getBashEditDiffDir } from "../../../utils/sandbox/userTempRoot.js";
 import { shellQuoteArgs } from "../../../utils/bash/bashPipeCommand.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4771420-4772117 placement
-async function buildSnapshotGitEnv(e, n, r) {
-  let [s, ...h] = e;
-  if (s === undefined) return null;
+async function buildSnapshotGitEnv(argv, env, worktreeDir) {
+  let [command, ...args] = argv;
+  if (command === undefined) return null;
   if (!SandboxManager.isSandboxingEnabled())
     return {
-      file: s,
-      args: h,
-      env: n,
+      file: command,
+      args,
+      env,
       wrapped: false,
     };
   if (getPlatform() === "windows") return null;
   if (SandboxManager.getConfig() === undefined) return null;
   try {
     await SandboxManager.ensureInitializedForWrap();
-    let safeGitInvocation = buildSafeGitInvocation(s, h, n);
+    let safeGitInvocation = buildSafeGitInvocation(command, args, env);
     let filesystem = SandboxManager.getConfig()?.filesystem;
     if (safeGitInvocation === null || !filesystem) return null;
     let bashEditDiffDir = getBashEditDiffDir();
-    let L = {
+    let sandboxConfig = {
       filesystem: {
-        allowWrite: [r],
+        allowWrite: [worktreeDir],
         denyWrite: filesystem.denyWrite.filter(
-          (Z) => Z !== bashEditDiffDir && !Z.startsWith(bashEditDiffDir + sep),
+          (deniedPath) => deniedPath !== bashEditDiffDir && !deniedPath.startsWith(bashEditDiffDir + sep),
         ),
         denyRead: filesystem.denyRead,
-        allowRead: [...(filesystem.allowRead ?? []), r],
+        allowRead: [...(filesystem.allowRead ?? []), worktreeDir],
       },
       allowNestedUserNamespaces: false,
     };
-    let G = shellQuoteArgs(["env", "-u", "GIT_CONFIG_COUNT", s, ...safeGitInvocation.args]);
-    let q = await SandboxManager.wrapWithSandbox(G, "/bin/sh", L);
-    if (q === G) return null;
+    let quotedCommand = shellQuoteArgs(["env", "-u", "GIT_CONFIG_COUNT", command, ...safeGitInvocation.args]);
+    let wrappedCommand = await SandboxManager.wrapWithSandbox(quotedCommand, "/bin/sh", sandboxConfig);
+    if (wrappedCommand === quotedCommand) return null;
     return {
       file: "/bin/sh",
-      args: ["-c", q],
+      args: ["-c", wrappedCommand],
       env: safeGitInvocation.env,
       wrapped: true,
     };
@@ -79,9 +80,9 @@ class OwnClientPromptState {
 /**
  * 若提示来源以 claude_code_ 开头，则标记本会话的提示由 Claude Code 客户端自己发送。
  */
-function markOwnClientPrompt(e, clientPlatform) {
+function markOwnClientPrompt(state, clientPlatform) {
   if (typeof clientPlatform === "string" && clientPlatform.startsWith("claude_code_"))
-    e.get(OwnClientPromptState).ownClientSentPrompt = true;
+    state.get(OwnClientPromptState).ownClientSentPrompt = true;
 }
 //@ chunk-e6aww6q8.js:4772393-4772429 placement
 /**
@@ -95,31 +96,45 @@ var MAX_DIFF_CHARS = 64000;
 /**
  * 判断差异的总行数与总字符数是否都在上限内。
  */
-function isDiffSmallEnough(e) {
-  let n = 0;
-  let r = 0;
-  for (let s of e) {
-    n += s.lines.length;
-    for (let line of s.lines) r += line.length;
+function isDiffSmallEnough(diffs) {
+  let lineCount = 0;
+  let charCount = 0;
+  for (let diff of diffs) {
+    lineCount += diff.lines.length;
+    for (let line of diff.lines) charCount += line.length;
   }
-  return n <= MAX_DIFF_LINES && r <= MAX_DIFF_CHARS;
+  return lineCount <= MAX_DIFF_LINES && charCount <= MAX_DIFF_CHARS;
 }
 //@ chunk-e6aww6q8.js:4772546-4772679 placement
 /**
  * bashEditDiff 常量：git 步骤超时（Windows 2s/其他 750ms）、并发间隔、读树超时、输出缓冲、批量大小、排除文件内容、单文件/索引大小上限、失败次数阈值等。
  */
-var GIT_STEP_TIMEOUT_MS = getPlatform() === "windows" ? 2000 : 750;
-var DIFF_RETRY_COUNT = 3;
-var SHARED_READ_SPACING_MS_2 = 50;
-var GIT_INDEX_TIMEOUT_MS = 1e4;
-var DIFF_TIMEOUT_MS = 2000;
-var DEFAULT_GIT_MAX_BUFFER = 5000000;
-var MAX_PATHS_BATCH_CHARS = 28000;
-var SNAPSHOT_EXCLUDE_CONTENT = 65536;
-var MAX_SNAPSHOT_FILE_BYTES = 20000000;
-var MAX_INDEX_BYTES = 256000000;
-var MAX_SNAPSHOT_FAILURES = 2;
-var MAX_ALTERNATE_DEPTH = 5;
+var GIT_STEP_TIMEOUT_MS; // deferred: uses getPlatform (../../../utils/platform.js) of its import cycle while loading; runs once the cycle is complete
+var DIFF_RETRY_COUNT;
+var SHARED_READ_SPACING_MS_2;
+var GIT_INDEX_TIMEOUT_MS;
+var DIFF_TIMEOUT_MS;
+var DEFAULT_GIT_MAX_BUFFER;
+var MAX_PATHS_BATCH_CHARS;
+var SNAPSHOT_EXCLUDE_CONTENT;
+var MAX_SNAPSHOT_FILE_BYTES;
+var MAX_INDEX_BYTES;
+var MAX_SNAPSHOT_FAILURES;
+var MAX_ALTERNATE_DEPTH;
+deferInit("chunk-e6aww6q8.js:4772546", () => {
+  GIT_STEP_TIMEOUT_MS = getPlatform() === "windows" ? 2000 : 750;
+  DIFF_RETRY_COUNT = 3;
+  SHARED_READ_SPACING_MS_2 = 50;
+  GIT_INDEX_TIMEOUT_MS = 1e4;
+  DIFF_TIMEOUT_MS = 2000;
+  DEFAULT_GIT_MAX_BUFFER = 5000000;
+  MAX_PATHS_BATCH_CHARS = 28000;
+  SNAPSHOT_EXCLUDE_CONTENT = 65536;
+  MAX_SNAPSHOT_FILE_BYTES = 20000000;
+  MAX_INDEX_BYTES = 256000000;
+  MAX_SNAPSHOT_FAILURES = 2;
+  MAX_ALTERNATE_DEPTH = 5;
+});
 export {
   markOwnClientPrompt,
   OwnClientPromptState,

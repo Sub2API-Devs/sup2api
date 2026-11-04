@@ -5,12 +5,12 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_DOMException } from "./DOMException.js";
 import { require_config } from "./config.js";
 
 //@ chunk-vwj6ccer.js:5355-7704 cjs-fingerprint
-var require_utils = x(function (cjsExports) {
+var require_utils = __commonJS(function (cjsExports) {
   var DOMException = require_DOMException();
   var ERR = DOMException;
   var isApiWritable = require_config().isApiWritable;

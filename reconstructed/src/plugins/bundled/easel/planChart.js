@@ -33,6 +33,7 @@ import {
 } from "./parseValues.js";
 import { unreadNumber } from "./easelMessages.js";
 import { spansWeeksWithoutWeekend, formatTimeTick, defaultTimeStep, pickTickStep } from "./timeFormat.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-3s7ydtfd.js:41306-41316 placement
 /**
@@ -43,8 +44,8 @@ var ARE_TICK_FIELDS_ALL = true;
 /**
  * 同一组标签同一时刻是否有多个读数。
  */
-function hasDuplicateReadings(e) {
-  let mapped = e.readings
+function hasDuplicateReadings(chartData) {
+  let mapped = chartData.readings
     .filter((reading) => reading.value !== null)
     .map((reading) => JSON.stringify([reading.groupLabels, reading.ms]));
   return new Set(mapped).size < mapped.length;
@@ -108,54 +109,59 @@ var LEADING_NUMBER_RE = /^[^\p{L}\p{N}]*\p{N}/u;
 /**
  * 列名都能匹配
  */
-var allColumnsMatch = (e) => (t) => e.every((o) => t.columns.includes(matchColumnName(t, o)));
+var allColumnsMatch = (columns) => (table) =>
+  columns.every((column) => table.columns.includes(matchColumnName(table, column)));
 //@ chunk-3s7ydtfd.js:41662-41730 placement
 /**
  * 能读出数据且非 bars
  */
-function isSingleTableReadable(e, t) {
-  let chartData = readChartData(e, t);
+function isSingleTableReadable(table, request) {
+  let chartData = readChartData(table, request);
   return !("code" in chartData) && chartData.form !== "bars";
 }
 //@ chunk-3s7ydtfd.js:41730-41776 placement
 /**
  * 请求里点名的列
  */
-var requestColumns = (e) => [e.x ?? [], e.y ?? [], e.by ?? []].flat();
+var requestColumns = (request) => [request.x ?? [], request.y ?? [], request.by ?? []].flat();
 //@ chunk-3s7ydtfd.js:41776-41879 placement
 /**
  * 多个表时按列名与请求筛选出唯一匹配的表。
  */
-function pickMatchingTables(tablesFromText, t) {
-  let r =
-    tablesFromText.length === 1 ? tablesFromText : tablesFromText.filter(allColumnsMatch(requestColumns(t)));
-  return r.length === 1 ? r : r.filter((p) => isSingleTableReadable(p, t));
+function pickMatchingTables(tablesFromText, request) {
+  let candidates =
+    tablesFromText.length === 1
+      ? tablesFromText
+      : tablesFromText.filter(allColumnsMatch(requestColumns(request)));
+  return candidates.length === 1
+    ? candidates
+    : candidates.filter((table) => isSingleTableReadable(table, request));
 }
 //@ chunk-3s7ydtfd.js:41879-41919 placement
 /**
  * 去重后取前 N 个拼接
  */
-var joinFirstNames = (e) => uniqueValues(e).slice(0, MAX_JOINED_NAMES).join(", ");
+var joinFirstNames = (names) => uniqueValues(names).slice(0, MAX_JOINED_NAMES).join(", ");
 //@ chunk-3s7ydtfd.js:41919-42545 placement
 /**
  * 检查时间列（未识别的日期拼写、非时间数字、名称而非时间）。
  */
 function checkTimeColumn(roles, reading) {
   let { unreadXCells } = reading;
-  let filtered = unreadXCells.filter(isTimeCell);
-  let s = reading.readings.length === 0;
-  if (filtered.length > 0 && (s || filtered.length === unreadXCells.length))
+  let names = unreadXCells.filter(isTimeCell);
+  let noReadings = reading.readings.length === 0;
+  if (names.length > 0 && (noReadings || names.length === unreadXCells.length))
     return {
       code: "dates_unread",
-      why: `${roles.x} holds dates in a spelling that is not read (${joinFirstNames(filtered)}). ${TIME_FORMATS_HINT}`,
+      why: `${roles.x} holds dates in a spelling that is not read (${joinFirstNames(names)}). ${TIME_FORMATS_HINT}`,
     };
-  let filtered_2 = unreadXCells.filter((unreadXCell) => parseNumberWithUnit(unreadXCell).kind === "number");
-  if (filtered_2.length > 0)
+  let names_2 = unreadXCells.filter((unreadXCell) => parseNumberWithUnit(unreadXCell).kind === "number");
+  if (names_2.length > 0)
     return {
       code: "x_not_times",
-      why: `${roles.x} holds numbers that are not times (${joinFirstNames(filtered_2)}). A line, columns and sparks run over times. For one bar for each, pass form: "bars"`,
+      why: `${roles.x} holds numbers that are not times (${joinFirstNames(names_2)}). A line, columns and sparks run over times. For one bar for each, pass form: "bars"`,
     };
-  return s && unreadXCells.length > 0
+  return noReadings && unreadXCells.length > 0
     ? {
         code: "x_not_times",
         why: `${roles.x} holds names, not times (${joinFirstNames(unreadXCells)}). A line, columns and sparks run over times: for names, pass form: "bars"`,
@@ -173,8 +179,8 @@ function checkTimeline({ reading, roles, request, series }) {
       code: "zones_mixed",
       why: `${roles.x} mixes times that name a zone with times that name none`,
     };
-  let p = checkTimeColumn(roles, reading);
-  if (p !== undefined) return p;
+  let problem = checkTimeColumn(roles, reading);
+  if (problem !== undefined) return problem;
   let found = reading.droppedColumns.find((droppedColumn) => droppedColumn.isEntireColumn);
   if (found !== undefined)
     return {
@@ -191,11 +197,11 @@ function checkTimeline({ reading, roles, request, series }) {
       code: "no_values",
       why: `no cell of ${roles.y.join(", ")} holds a number`,
     };
-  let [f] = reading.droppedColumns;
-  return roles.form === "bars" && f !== undefined
+  let [droppedColumn] = reading.droppedColumns;
+  return roles.form === "bars" && droppedColumn !== undefined
     ? {
         code: "bars_partly_unread",
-        why: `bars rank a whole list, and part of this one was not read. ${f.sentence}`,
+        why: `bars rank a whole list, and part of this one was not read. ${droppedColumn.sentence}`,
       }
     : undefined;
 }
@@ -205,9 +211,9 @@ function checkTimeline({ reading, roles, request, series }) {
  */
 var AGGREGATORS = {
   sum: stableSum,
-  mean: (e) => stableSum(e) / e.length,
-  max: (e) => Math.max(...e),
-  min: (e) => Math.min(...e),
+  mean: (values) => stableSum(values) / values.length,
+  max: (values) => Math.max(...values),
+  min: (values) => Math.min(...values),
 };
 //@ chunk-3s7ydtfd.js:43443-43526 placement
 /**
@@ -224,8 +230,8 @@ var FEWER_ROWS_HINT = "Ask for fewer rows or a shorter span, then chart that";
  * 占比图检查：各部分需相加为整体，否则拒绝或提示 combine。
  */
 function checkShareChart({ roles, request, series, timeline }) {
-  let flattened = series.flatMap((x) => x.samples.map((sample) => sample.value ?? 0));
-  let any = flattened.some((x) => x < 0);
+  let flattened = series.flatMap((series) => series.samples.map((sample) => sample.value ?? 0));
+  let any = flattened.some((value) => value < 0);
   if (request.form === "share" && request.combine !== "sum")
     return {
       code: "share_not_summed",
@@ -257,19 +263,19 @@ function checkShareChart({ roles, request, series, timeline }) {
 /**
  * bars 且名字是编的则不用 y
  */
-var columnsForForm = (e, chartData) => (e.hasMadeUpNames && chartData.form === "bars" ? [] : chartData.y);
+var columnsForForm = (roles, request) => (roles.hasMadeUpNames && request.form === "bars" ? [] : request.y);
 //@ chunk-3s7ydtfd.js:44709-45228 placement
-function describeNotDrawn(e) {
-  let label = e.mark.label === undefined ? "" : e.mark.label;
-  let timeCell = parseTimeCell(e.mark.at);
-  let r = `${label === "" ? "mark" : `mark ${label}`} at ${e.mark.at} not drawn:`;
-  if (!(e.drawnForm !== "bars" && e.drawnForm !== "share")) return `${r} it has no times`;
-  if (e.drawnForm === "sparks") return `${r} sparks have no time axis`;
-  if (timeCell.kind !== "time") return `${r} ${timeCell.why}`;
-  if (timeCell.ms < e.axisSpan.fromMs || timeCell.ms > e.axisSpan.untilMs)
-    return `${r} outside the times drawn`;
-  return timeCell.isZoned !== e.isZoned
-    ? `${r} name a zone in both the mark and the times, or in neither`
+function describeNotDrawn(mark) {
+  let label = mark.mark.label === undefined ? "" : mark.mark.label;
+  let timeCell = parseTimeCell(mark.mark.at);
+  let prefix = `${label === "" ? "mark" : `mark ${label}`} at ${mark.mark.at} not drawn:`;
+  if (!(mark.drawnForm !== "bars" && mark.drawnForm !== "share")) return `${prefix} it has no times`;
+  if (mark.drawnForm === "sparks") return `${prefix} sparks have no time axis`;
+  if (timeCell.kind !== "time") return `${prefix} ${timeCell.why}`;
+  if (timeCell.ms < mark.axisSpan.fromMs || timeCell.ms > mark.axisSpan.untilMs)
+    return `${prefix} outside the times drawn`;
+  return timeCell.isZoned !== mark.isZoned
+    ? `${prefix} name a zone in both the mark and the times, or in neither`
     : {
         ms: timeCell.ms,
         label,
@@ -279,28 +285,28 @@ function describeNotDrawn(e) {
 /**
  * 取单元值
  */
-var cellReader = (e) => (t, o) => {
-  let r = e.get(t);
-  return r === undefined ? null : (o[r] ?? null);
+var cellReader = (columnIndex) => (column, row) => {
+  let index = columnIndex.get(column);
+  return index === undefined ? null : (row[index] ?? null);
 };
 //@ chunk-3s7ydtfd.js:45298-45468 placement
 /**
  * 单元格转为读数（时间、分组标签、数值、单位）。
  */
-var toReading = (e, t, o) => (r, s) => ({
-  ms: e.ms,
-  isZoned: e.isZoned,
-  column: r,
-  groupLabels: o.y.length > 1 ? [...t, r] : t,
-  value: s.kind === "number" ? s.value : null,
-  unit: s.kind === "number" ? s.unit : null,
+var toReading = (time, baseLabels, chartData) => (column, value) => ({
+  ms: time.ms,
+  isZoned: time.isZoned,
+  column,
+  groupLabels: chartData.y.length > 1 ? [...baseLabels, column] : baseLabels,
+  value: value.kind === "number" ? value.value : null,
+  unit: value.kind === "number" ? value.unit : null,
 });
 //@ chunk-3s7ydtfd.js:45468-45553 placement
 /**
  * 按列单位换算
  */
-function applyUnitToCell(numberWithUnit, t) {
-  let unit = t.unit;
+function applyUnitToCell(numberWithUnit, override) {
+  let unit = override.unit;
   return numberWithUnit.kind === "number" && !numberWithUnit.unit && !!unit
     ? scaledNumber(numberWithUnit.value, unit)
     : numberWithUnit;
@@ -309,7 +315,10 @@ function applyUnitToCell(numberWithUnit, t) {
 /**
  * 对数刻度无法表示的读数
  */
-var LOG_SCALE_REJECT = unreadNumber("a log scale cannot show it");
+var LOG_SCALE_REJECT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3s7ydtfd.js:45553", () => {
+  LOG_SCALE_REJECT = unreadNumber("a log scale cannot show it");
+});
 //@ chunk-3s7ydtfd.js:45592-45629 placement
 /**
  * 零点时间值
@@ -320,79 +329,87 @@ var ZERO_TIME = {
   isZoned: false,
 };
 //@ chunk-3s7ydtfd.js:45629-46632 placement
-function describeBarsUnread(e, chartData, o) {
-  let r = cellReader(new Map(e.columns.map((column, u) => [column, u])));
-  let s = e.rows[0] ?? [];
-  let filtered = chartData.by.filter((l) => e.rows.some((u) => r(l, u) !== r(l, s)));
-  let m = chartData.form === "bars";
-  let n = m ? [chartData.x, ...filtered] : filtered;
-  let a = [];
-  let f = [];
-  let i = [];
-  for (let l of e.rows) {
-    let u = m ? ZERO_TIME : parseTimeCell(r(chartData.x, l));
-    if (u.kind === "unread") i.push(r(chartData.x, l));
-    if (u.kind !== "time") {
-      f.push({
+function describeBarsUnread(table, chartData, request) {
+  let readCell = cellReader(new Map(table.columns.map((column, index) => [column, index])));
+  let firstRow = table.rows[0] ?? [];
+  let filtered = chartData.by.filter((column) =>
+    table.rows.some((row) => readCell(column, row) !== readCell(column, firstRow)),
+  );
+  let isBars = chartData.form === "bars";
+  let labelColumns = isBars ? [chartData.x, ...filtered] : filtered;
+  let readings = [];
+  let dropped = [];
+  let unreadXCells = [];
+  for (let row of table.rows) {
+    let xCell = isBars ? ZERO_TIME : parseTimeCell(readCell(chartData.x, row));
+    if (xCell.kind === "unread") unreadXCells.push(readCell(chartData.x, row));
+    if (xCell.kind !== "time") {
+      dropped.push({
         column: chartData.x,
-        quote: `${r(chartData.x, l)} (${u.why})`,
+        quote: `${readCell(chartData.x, row)} (${xCell.why})`,
       });
       continue;
     }
     let reading = toReading(
-      u,
-      n.map((T) => String(r(T, l) ?? "") || `no ${T}`),
+      xCell,
+      labelColumns.map((column) => String(readCell(column, row) ?? "") || `no ${column}`),
       chartData,
     );
-    for (let T of chartData.y) {
-      let L = r(T, l);
-      let _ = applyUnitToCell(parseNumberWithUnit(L, o.y !== undefined), o);
-      let A = o.log === true && _.kind === "number" && _.value <= 0 ? LOG_SCALE_REJECT : _;
-      if (A.kind === "unread")
-        f.push({
-          column: T,
-          quote: `${L} (${A.why})`,
+    for (let column of chartData.y) {
+      let raw = readCell(column, row);
+      let parsed = applyUnitToCell(parseNumberWithUnit(raw, request.y !== undefined), request);
+      let value =
+        request.log === true && parsed.kind === "number" && parsed.value <= 0 ? LOG_SCALE_REJECT : parsed;
+      if (value.kind === "unread")
+        dropped.push({
+          column,
+          quote: `${raw} (${value.why})`,
         });
-      a.push(reading(T, A));
+      readings.push(reading(column, value));
     }
   }
-  let x = new Map();
-  for (let [l, u] of groupIndexBy(a, (d) => d.column))
-    x.set(l, uniqueValues(u.map((d) => d.unit).filter((d) => d !== null)));
+  let unitsByColumn = new Map();
+  for (let [column, readingList] of groupIndexBy(readings, (reading) => reading.column))
+    unitsByColumn.set(
+      column,
+      uniqueValues(readingList.map((reading) => reading.unit).filter((unit) => unit !== null)),
+    );
   return {
-    readings: a,
-    units: x,
-    sharedLabels: chartData.by.filter((l) => !filtered.includes(l)).map((l) => String(r(l, s) ?? "")),
-    droppedColumns: [...groupIndexBy(f, (l) => l.column)].map(([l, u]) => ({
-      isEntireColumn: u.length === e.rows.length,
+    readings,
+    units: unitsByColumn,
+    sharedLabels: chartData.by
+      .filter((column) => !filtered.includes(column))
+      .map((column) => String(readCell(column, firstRow) ?? "")),
+    droppedColumns: [...groupIndexBy(dropped, (drop) => drop.column)].map(([column, drops]) => ({
+      isEntireColumn: drops.length === table.rows.length,
       sentence:
-        `${formatCount(u.length, "cell")} of ${l} not read: ` +
-        u
+        `${formatCount(drops.length, "cell")} of ${column} not read: ` +
+        drops
           .slice(0, MAX_JOINED_NAMES)
-          .map((d) => d.quote)
+          .map((drop) => drop.quote)
           .join(", "),
     })),
-    unreadXCells: i,
+    unreadXCells,
   };
 }
 //@ chunk-3s7ydtfd.js:46632-46672 placement
 /**
  * 至少一个非空值
  */
-var hasAnyValue = (e) => e.some((t) => t.value !== null);
+var hasAnyValue = (series) => series.some((series) => series.value !== null);
 //@ chunk-3s7ydtfd.js:46672-46699 placement
 /**
  * 条件或拆分判断
  */
-var orHasSplit = (e, t, zone) => e || spansWeeksWithoutWeekend(t, zone);
+var orHasSplit = (hasSplit, reads, zone) => hasSplit || spansWeeksWithoutWeekend(reads, zone);
 //@ chunk-3s7ydtfd.js:46699-46821 placement
 /**
  * 合并同一时刻的多个读数。
  */
-var combineSamplesAt = (e, combine) => (o) => {
-  let filtered = (e.get(o) ?? []).map((s) => s.value).filter((s) => s !== null);
+var combineSamplesAt = (groups, combine) => (ms) => {
+  let filtered = (groups.get(ms) ?? []).map((sample) => sample.value).filter((value) => value !== null);
   return {
-    ms: o,
+    ms,
     value: filtered.length > 0 ? combine(filtered) : null,
   };
 };
@@ -400,27 +417,30 @@ var combineSamplesAt = (e, combine) => (o) => {
 /**
  * 系列标题
  */
-var seriesTitle = (e, t) => truncateMiddle(e[0]?.groupLabels.join(" ") || t.fallbackName, MAX_LABEL_TEXT);
+var seriesTitle = (reads, options) =>
+  truncateMiddle(reads[0]?.groupLabels.join(" ") || options.fallbackName, MAX_LABEL_TEXT);
 //@ chunk-3s7ydtfd.js:46885-46938 placement
 /**
  * 去重排序的时间戳
  */
-var sortedUniqueTimes = (e) => uniqueValues(e.map((t) => t.ms)).toSorted((t, o) => t - o);
+var sortedUniqueTimes = (reads) => uniqueValues(reads.map((read) => read.ms)).toSorted((a, b) => a - b);
 //@ chunk-3s7ydtfd.js:46938-47140 placement
 /**
  * 由读数生成一个系列（单位、名称、按周期的样本）。
  */
-function buildSeries(e, t, o) {
-  let r = sortedUniqueTimes(e);
-  let column = e[0]?.column ?? "";
+function buildSeries(reads, context, hasSplit) {
+  let times = sortedUniqueTimes(reads);
+  let column = reads[0]?.column ?? "";
   return {
-    unit: t.reading.units.get(column)?.[0] ?? "",
-    name: seriesTitle(e, t),
+    unit: context.reading.units.get(column)?.[0] ?? "",
+    name: seriesTitle(reads, context),
     measure: column,
-    samples: (formatTimeTick(r, t, orHasSplit(o, r, t.zone))?.periodStarts ?? r).map(
+    samples: (
+      formatTimeTick(times, context, orHasSplit(hasSplit, times, context.zone))?.periodStarts ?? times
+    ).map(
       combineSamplesAt(
-        groupIndexBy(e, (p) => p.ms),
-        t.combine,
+        groupIndexBy(reads, (read) => read.ms),
+        context.combine,
       ),
     ),
   };
@@ -429,20 +449,20 @@ function buildSeries(e, t, o) {
 /**
  * 按分组生成全部时间序列与空系列名，并计算时间网格。
  */
-function buildTimeSeries(e) {
-  let t = [];
-  let o = [];
-  let r = groupIndexBy(e.reading.readings, (m) => JSON.stringify(m.groupLabels));
-  let s = sortedUniqueTimes([...r.values()].filter(hasAnyValue).flat());
-  let p = spansWeeksWithoutWeekend(s, e.zone);
-  for (let m of r.values())
-    if (hasAnyValue(m)) t.push(buildSeries(m, e, p));
-    else o.push(seriesTitle(m, e));
+function buildTimeSeries(options) {
+  let series = [];
+  let emptyNames = [];
+  let byLabels = groupIndexBy(options.reading.readings, (read) => JSON.stringify(read.groupLabels));
+  let times = sortedUniqueTimes([...byLabels.values()].filter(hasAnyValue).flat());
+  let hasSplit = spansWeeksWithoutWeekend(times, options.zone);
+  for (let reads of byLabels.values())
+    if (hasAnyValue(reads)) series.push(buildSeries(reads, options, hasSplit));
+    else emptyNames.push(seriesTitle(reads, options));
   return {
-    series: t,
-    emptyNames: o,
-    times: s,
-    grid: formatTimeTick(s, e, p),
+    series,
+    emptyNames,
+    times,
+    grid: formatTimeTick(times, options, hasSplit),
   };
 }
 //@ chunk-3s7ydtfd.js:47400-47455 placement
@@ -458,23 +478,26 @@ var refusedResult = (problem, tables = []) => ({
 /**
  * 带表名的拒绝结果
  */
-var refuseWithTable = (e, t) =>
+var refuseWithTable = (table, refusal) =>
   refusedResult(
     {
-      ...t,
-      why: `${tableSource(e)}: ${t.why}`,
+      ...refusal,
+      why: `${tableSource(table)}: ${refusal.why}`,
     },
-    [e],
+    [table],
   );
 //@ chunk-3s7ydtfd.js:47509-47682 placement
 /**
  * 系列标题（列名或共享标签）。
  */
-function seriesTitle_2(e, t, o) {
-  let s = e.length > MAX_LISTED_COLUMNS ? formatCount(e.length, "column") : e.join(", ");
-  let p = t.y === undefined;
+function seriesTitle_2(columns, request, reading) {
+  let columnLabel =
+    columns.length > MAX_LISTED_COLUMNS ? formatCount(columns.length, "column") : columns.join(", ");
+  let noYColumn = request.y === undefined;
   return truncateMiddle(
-    (p ? o.sharedLabels : [s, ...o.sharedLabels]).filter((m) => m !== "").join(" ") || s,
+    (noYColumn ? reading.sharedLabels : [columnLabel, ...reading.sharedLabels])
+      .filter((label) => label !== "")
+      .join(" ") || columnLabel,
     MAX_TABLE_ROWS,
   );
 }
@@ -482,150 +505,156 @@ function seriesTitle_2(e, t, o) {
 /**
  * 求时间范围
  */
-function timeRangeOf(e) {
-  let t = e.times[0] ?? 0;
+function timeRangeOf(source) {
+  let first = source.times[0] ?? 0;
   return {
-    fromMs: t,
-    untilMs: e.times.at(-1) ?? t,
-    zone: e.zone,
+    fromMs: first,
+    untilMs: source.times.at(-1) ?? first,
+    zone: source.zone,
   };
 }
 //@ chunk-3s7ydtfd.js:47772-47829 placement
 /**
  * 刻度起点（不走字段）
  */
-var tickTimeStart = (e) => ({
-  zone: e.zone,
+var tickTimeStart = (source) => ({
+  zone: source.zone,
   areTicks: !ARE_TICK_FIELDS_ALL,
   fieldsBefore: [],
 });
 //@ chunk-3s7ydtfd.js:47829-48155 placement
-function defaultFormFor(e) {
-  let t = timeRangeOf(e);
-  let o = defaultTimeStep(e.times, e.zone);
-  let grid = e.readAs === "columns" ? e.grid : null;
-  let s = e.readAs === "bars";
-  let joined = pickTickStep(uniqueValues([t.fromMs, t.untilMs]), o, tickTimeStart(e)).join(" \u2192 ");
+function defaultFormFor(source) {
+  let dataSpan = timeRangeOf(source);
+  let precision = defaultTimeStep(source.times, source.zone);
+  let grid = source.readAs === "columns" ? source.grid : null;
+  let isBars = source.readAs === "bars";
+  let joined = pickTickStep(
+    uniqueValues([dataSpan.fromMs, dataSpan.untilMs]),
+    precision,
+    tickTimeStart(source),
+  ).join(" \u2192 ");
   return {
-    dataSpan: t,
+    dataSpan,
     axisSpan: grid
       ? {
-          ...t,
+          ...dataSpan,
           untilMs: grid.endMs,
         }
-      : t,
-    precision: o,
-    step: e.grid?.step ?? o,
-    spanLabels: s ? [] : [e.isZoned ? `${joined} ${e.zone}` : joined],
+      : dataSpan,
+    precision,
+    step: source.grid?.step ?? precision,
+    spanLabels: isBars ? [] : [source.isZoned ? `${joined} ${source.zone}` : joined],
     periodStarts: grid?.periodStarts ?? [],
   };
 }
 //@ chunk-3s7ydtfd.js:48155-48870 placement
-function checkUnitsMixed(e, chartData, o) {
-  let r = [...e.units.values()];
-  if (r.some((n) => n.length > 1)) {
-    let mapped = r.flat().map((f) => f || "none");
-    let a = mapped.includes("none") && new Set(mapped).size === MIN_ROWS_FOR_CHART;
+function checkUnitsMixed(reading, chartRequest, request) {
+  let unitsPerColumn = [...reading.units.values()];
+  if (unitsPerColumn.some((units) => units.length > 1)) {
+    let mapped = unitsPerColumn.flat().map((unit) => unit || "none");
+    let hasNoUnit = mapped.includes("none") && new Set(mapped).size === MIN_ROWS_FOR_CHART;
     return {
       code: "units_mixed",
       why:
         `the values of a column carry different units (${mapped.join(", ")}). ` +
-        (a
+        (hasNoUnit
           ? "Name what the bare numbers are in as unit"
           : "Convert them to one unit, or chart the rows of each unit in a call of its own"),
     };
   }
-  let p = groupIndexBy(e.units.keys(), (n) => e.units.get(n)?.[0] ?? "");
-  return (chartData.form === "bars" || o.form === "sparks") && p.size > 1
+  let columnsByUnit = groupIndexBy(reading.units.keys(), (column) => reading.units.get(column)?.[0] ?? "");
+  return (chartRequest.form === "bars" || request.form === "sparks") && columnsByUnit.size > 1
     ? {
         code: "units_differ",
         why:
-          (o.form === "sparks" ? "sparks" : "bars") +
+          (request.form === "sparks" ? "sparks" : "bars") +
           " share one scale, and the y columns are in different units (" +
-          [...p].map(([n, a]) => `${a.join(", ")} in ${n || "no unit"}`).join("; ") +
+          [...columnsByUnit]
+            .map(([unit, columns]) => `${columns.join(", ")} in ${unit || "no unit"}`)
+            .join("; ") +
           "). Call once for each unit",
       }
     : undefined;
 }
 //@ chunk-3s7ydtfd.js:48870-49934 placement
-function describeMissingValues(e, t, o) {
-  let chartData = readChartData(e, t);
-  if ("code" in chartData) return refuseWithTable(e, chartData);
-  let form = t.form ?? chartData.form;
-  let m = describeBarsUnread(e, chartData, t);
-  let n = seriesTitle_2(columnsForForm(e, chartData), t, m);
-  let any = m.readings.some((reading) => reading.isZoned);
-  let zone = any ? o.zone : "UTC";
+function describeMissingValues(source, request, context) {
+  let chartData = readChartData(source, request);
+  if ("code" in chartData) return refuseWithTable(source, chartData);
+  let form = request.form ?? chartData.form;
+  let reading = describeBarsUnread(source, chartData, request);
+  let subject = seriesTitle_2(columnsForForm(source, chartData), request, reading);
+  let any = reading.readings.some((reading) => reading.isZoned);
+  let zone = any ? context.zone : "UTC";
   let { series, emptyNames, times, grid } = buildTimeSeries({
-    reading: m,
-    fallbackName: n,
-    combine: AGGREGATORS[t.combine ?? "sum"],
+    reading,
+    fallbackName: subject,
+    combine: AGGREGATORS[request.combine ?? "sum"],
     zone,
   });
-  let d = defaultFormFor({
+  let timeline = defaultFormFor({
     times,
     grid,
     readAs: chartData.form,
     zone,
     isZoned: any,
   });
-  let c =
-    checkUnitsMixed(m, chartData, t) ??
+  let problem =
+    checkUnitsMixed(reading, chartData, request) ??
     checkTimeline({
-      reading: m,
+      reading,
       roles: chartData,
-      request: t,
+      request,
       series,
     }) ??
     checkShareChart({
       roles: chartData,
-      request: t,
+      request,
       series,
-      timeline: d,
+      timeline,
     });
-  if (c !== undefined) return refuseWithTable(e, c);
-  let mapped = (t.marks ?? []).map((mark) =>
+  if (problem !== undefined) return refuseWithTable(source, problem);
+  let mapped = (request.marks ?? []).map((mark) =>
     describeNotDrawn({
       mark,
       drawnForm: form,
-      axisSpan: d.axisSpan,
+      axisSpan: timeline.axisSpan,
       isZoned: any,
     }),
   );
-  let T =
-    e.isReadAtInstants !== true &&
+  let lastPeriodFilling =
+    source.isReadAtInstants !== true &&
     any &&
     grid !== null &&
-    o.nowMs !== null &&
-    o.nowMs >= d.dataSpan.untilMs &&
-    o.nowMs < grid.endMs;
-  let L = emptyNames.length > 0;
+    context.nowMs !== null &&
+    context.nowMs >= timeline.dataSpan.untilMs &&
+    context.nowMs < grid.endMs;
+  let hasEmptySeries = emptyNames.length > 0;
   let leftOutNotes = elideList(
-    m.droppedColumns.map((droppedColumn) => droppedColumn.sentence),
+    reading.droppedColumns.map((droppedColumn) => droppedColumn.sentence),
     MAX_LISTED_TABLES,
     "more column",
   );
   let notes = [
-    ...(L
+    ...(hasEmptySeries
       ? [
           `${emptyNames.length} with no value, not drawn: ` +
             truncateMiddle(emptyNames.join(", "), MAX_LABEL_TEXT),
         ]
       : []),
-    ...mapped.filter((A) => typeof A === "string"),
-    ...(T ? [LAST_PERIOD_FILLING_NOTE] : []),
+    ...mapped.filter((markResult) => typeof markResult === "string"),
+    ...(lastPeriodFilling ? [LAST_PERIOD_FILLING_NOTE] : []),
   ];
   return {
     kind: "data",
     form,
-    source: e.source,
-    path: e.path,
-    isSeries: e.isSeries === true,
-    subject: n,
-    hasCombinedRows: hasDuplicateReadings(m),
+    source: source.source,
+    path: source.path,
+    isSeries: source.isSeries === true,
+    subject,
+    hasCombinedRows: hasDuplicateReadings(reading),
     series,
-    timeline: d,
-    marks: mapped.filter((A) => typeof A !== "string").toSorted((A, Fe) => A.ms - Fe.ms),
+    timeline,
+    marks: mapped.filter((markResult) => typeof markResult !== "string").toSorted((a, b) => a.ms - b.ms),
     leftOutNotes,
     notes,
   };
@@ -637,11 +666,11 @@ function describeMissingValues(e, t, o) {
 function hasNoTimeValues({ rows, listColumns = [] }) {
   return (
     listColumns.length === 0 &&
-    rows.every((o) =>
-      o.every(
-        (r) =>
-          r === null ||
-          !(LEADING_NUMBER_RE.test(String(r)) || isTimeCell(r) || parseTimeCell(r).kind === "time"),
+    rows.every((row) =>
+      row.every(
+        (cell) =>
+          cell === null ||
+          !(LEADING_NUMBER_RE.test(String(cell)) || isTimeCell(cell) || parseTimeCell(cell).kind === "time"),
       ),
     )
   );
@@ -650,22 +679,22 @@ function hasNoTimeValues({ rows, listColumns = [] }) {
 /**
  * 读取请求数据（64 KiB 上限、截断检测）并解析为表。
  */
-function readChartRequestData(e, t, o) {
-  if (e.length >= MAX_DATA_TEXT_BYTES)
+function readChartRequestData(text, request, context) {
+  if (text.length >= MAX_DATA_TEXT_BYTES)
     return refusedResult({
       code: "too_long",
       why: `The data is 64 KiB or longer: too long to chart, and it may be cut short. ${FEWER_ROWS_HINT}`,
     });
-  let tablesFromText = readTablesFromText(e);
-  if (tablesFromText.some((T) => T.isCut))
+  let tablesFromText = readTablesFromText(text);
+  if (tablesFromText.some((table) => table.isCut))
     return refusedResult({
       code: "cut_short",
       why: `That result was cut short or saved to a file, so part of it is missing. ${FEWER_ROWS_HINT}`,
     });
   if (!(tablesFromText.length > 0)) {
-    let T = JSON_START_RE.test(e) && !JSON_END_RE.test(e);
+    let isCutJson = JSON_START_RE.test(text) && !JSON_END_RE.test(text);
     return refusedResult(
-      T
+      isCutJson
         ? {
             code: "cut_short",
             why: `That result is JSON that does not close, so it was cut short. ${FEWER_ROWS_HINT}`,
@@ -676,8 +705,8 @@ function readChartRequestData(e, t, o) {
           },
     );
   }
-  let [n, ...a] = pickMatchingTables(tablesFromText, t);
-  if (n === undefined || a.length > 0)
+  let [picked, ...otherPicked] = pickMatchingTables(tablesFromText, request);
+  if (picked === undefined || otherPicked.length > 0)
     return refusedResult(
       {
         code: "table_unpicked",
@@ -685,22 +714,22 @@ function readChartRequestData(e, t, o) {
       },
       tablesFromText.slice(0, MAX_LISTED_NAMES),
     );
-  let i = describeMissingValues(n, t, o);
-  let unparsedLines = n.unparsedLines ?? 0;
-  let filtered = tablesFromText.filter((T) => T !== n && !hasNoTimeValues(T));
-  let u = filtered.length > 0;
-  let d = unparsedLines > 0;
-  let c = [
-    ...(u ? [formatCount(filtered.length, "other table")] : []),
-    ...(d ? [`${formatCount(unparsedLines, "line")} outside any table`] : []),
+  let chart = describeMissingValues(picked, request, context);
+  let unparsedLines = picked.unparsedLines ?? 0;
+  let filtered = tablesFromText.filter((table) => table !== picked && !hasNoTimeValues(table));
+  let hasOtherTables = filtered.length > 0;
+  let hasUnparsedLines = unparsedLines > 0;
+  let parts = [
+    ...(hasOtherTables ? [formatCount(filtered.length, "other table")] : []),
+    ...(hasUnparsedLines ? [`${formatCount(unparsedLines, "line")} outside any table`] : []),
   ];
-  return i.kind === "refused" || c.length === 0
-    ? i
+  return chart.kind === "refused" || parts.length === 0
+    ? chart
     : {
-        ...i,
+        ...chart,
         leftOutNotes: [
-          ...i.leftOutNotes,
-          "only part of that result is charted: it also holds " + c.join(" and "),
+          ...chart.leftOutNotes,
+          "only part of that result is charted: it also holds " + parts.join(" and "),
         ],
       };
 }
@@ -708,7 +737,7 @@ function readChartRequestData(e, t, o) {
 /**
  * 取第一个值
  */
-var firstValue = (e) => e.values[0] ?? 0;
+var firstValue = (series) => series.values[0] ?? 0;
 //@ chunk-3s7ydtfd.js:51355-51366 placement
 /**
  * 1e9
@@ -828,40 +857,47 @@ var SI_KILO_ALT = 1000;
 /**
  * 按数量级算小数位
  */
-function decimalsForValue(e, t) {
-  return e > 0 ? Math.min(Math.max(0, t - 1 - Math.floor(Math.log10(e) + NEGLIGIBLE)), MAX_DECIMALS) : 0;
+function decimalsForValue(value, precision) {
+  return value > 0
+    ? Math.min(Math.max(0, precision - 1 - Math.floor(Math.log10(value) + NEGLIGIBLE)), MAX_DECIMALS)
+    : 0;
 }
 //@ chunk-3s7ydtfd.js:51731-51815 placement
 /**
  * 千分位格式化绝对值
  */
-var formatAbsoluteWithDecimals = (e, t) =>
-  Math.abs(e).toLocaleString("en-US", {
-    minimumFractionDigits: e === 0 ? 0 : t,
+var formatAbsoluteWithDecimals = (value, decimals) =>
+  Math.abs(value).toLocaleString("en-US", {
+    minimumFractionDigits: value === 0 ? 0 : decimals,
   });
 //@ chunk-3s7ydtfd.js:51815-51838 placement
 /**
  * 负数前缀
  */
-var signPrefix = (e) => (e < 0 ? "-" : "");
+var signPrefix = (value) => (value < 0 ? "-" : "");
 //@ chunk-3s7ydtfd.js:51838-52220 placement
-function clampSeriesCount(e, t) {
-  let mapped = t.map((m) => m * e.multiplesPerUnit);
-  let r = (m) =>
-    mapped.some((n) => {
-      let a = Math.abs(n);
-      let f = Number(a.toFixed(m));
+function clampSeriesCount(format, values) {
+  let mapped = values.map((value) => value * format.multiplesPerUnit);
+  let decimalsFit = (decimals) =>
+    mapped.some((scaled) => {
+      let abs = Math.abs(scaled);
+      let rounded = Number(abs.toFixed(decimals));
       return (
-        Math.abs(f - a) > NEGLIGIBLE * a &&
-        (m < e.decimals || Math.floor(Math.log10(f)) > Math.floor(Math.log10(a)))
+        Math.abs(rounded - abs) > NEGLIGIBLE * abs &&
+        (decimals < format.decimals || Math.floor(Math.log10(rounded)) > Math.floor(Math.log10(abs)))
       );
     });
-  let s = 0;
-  while (r(s)) s++;
-  if (s === 1 && e.before !== "" && e.after === "") s = MIN_TRAILING_DECIMALS;
-  return mapped.map((m) => {
-    let n = Number(m.toFixed(s));
-    return signPrefix(n) + e.before + formatAbsoluteWithDecimals(n, s) + (n === 0 ? e.afterZero : e.after);
+  let decimals = 0;
+  while (decimalsFit(decimals)) decimals++;
+  if (decimals === 1 && format.before !== "" && format.after === "") decimals = MIN_TRAILING_DECIMALS;
+  return mapped.map((scaled) => {
+    let rounded = Number(scaled.toFixed(decimals));
+    return (
+      signPrefix(rounded) +
+      format.before +
+      formatAbsoluteWithDecimals(rounded, decimals) +
+      (rounded === 0 ? format.afterZero : format.after)
+    );
   });
 }
 //@ chunk-3s7ydtfd.js:52220-52249 placement
@@ -878,11 +914,11 @@ var SI_MULTIPLIERS_NO_B = {
 /**
  * 按单位与大值修正小数位
  */
-var decimalsForUnit = (e, t, o) => (r) =>
+var decimalsForUnit = (max, spread, isCurrency) => (multiple) =>
   Math.max(
-    o && e < LARGE_VALUE_THRESHOLD ? MIN_TRAILING_DECIMALS : 0,
-    decimalsForValue(e / r, UNIT_DECIMALS_MAX),
-    decimalsForValue(t / r, VALUE_DECIMALS_MAX),
+    isCurrency && max < LARGE_VALUE_THRESHOLD ? MIN_TRAILING_DECIMALS : 0,
+    decimalsForValue(max / multiple, UNIT_DECIMALS_MAX),
+    decimalsForValue(spread / multiple, VALUE_DECIMALS_MAX),
   );
 //@ chunk-3s7ydtfd.js:52315-52344 placement
 /**
@@ -931,98 +967,107 @@ var UNIT_GROUPS = [
   },
 ];
 //@ chunk-3s7ydtfd.js:52494-52895 placement
-function summarizeSeries(e, t) {
-  let found = UNIT_GROUPS.find((l) => Object.hasOwn(l, e));
-  let included = CURRENCY_SIGNS.includes(e);
-  let s = found ?? (included ? SI_MULTIPLIERS_BYTES : SI_MULTIPLIERS_NO_B);
-  let max = Math.max(...t.map(Math.abs));
-  let m = decimalsForUnit(max, Math.max(...t) - Math.min(...t), included);
-  let filtered = Object.entries(s).filter(([, value], u) => u === 0 || value <= (max === 0 ? 1 : max));
-  let [a, f] = filtered.filter(([, l]) => m(l) <= SUFFIX_DECIMALS_MAX).at(-1) ?? filtered.at(-1) ?? ["", 1];
-  let x = s === SI_MULTIPLIERS_NO_B && e !== "" ? ` ${truncateMiddle(e, MAX_TICK_COUNT)}` : "";
+function summarizeSeries(unit, values) {
+  let found = UNIT_GROUPS.find((group) => Object.hasOwn(group, unit));
+  let isCurrency = CURRENCY_SIGNS.includes(unit);
+  let multiples = found ?? (isCurrency ? SI_MULTIPLIERS_BYTES : SI_MULTIPLIERS_NO_B);
+  let max = Math.max(...values.map(Math.abs));
+  let decimalsFor = decimalsForUnit(max, Math.max(...values) - Math.min(...values), isCurrency);
+  let filtered = Object.entries(multiples).filter(
+    ([, value], index) => index === 0 || value <= (max === 0 ? 1 : max),
+  );
+  let [suffix, multiple] = filtered
+    .filter(([, multiple]) => decimalsFor(multiple) <= SUFFIX_DECIMALS_MAX)
+    .at(-1) ??
+    filtered.at(-1) ?? ["", 1];
+  let unitSuffix =
+    multiples === SI_MULTIPLIERS_NO_B && unit !== "" ? ` ${truncateMiddle(unit, MAX_TICK_COUNT)}` : "";
   return {
-    multiplesPerUnit: 1 / f,
-    before: included ? e : "",
-    after: `${a}${x}`,
-    afterZero: found ? a : x,
-    decimals: m(f),
+    multiplesPerUnit: 1 / multiple,
+    before: isCurrency ? unit : "",
+    after: `${suffix}${unitSuffix}`,
+    afterZero: found ? suffix : unitSuffix,
+    decimals: decimalsFor(multiple),
   };
 }
 //@ chunk-3s7ydtfd.js:52895-52934 placement
 /**
  * 按单位生成系列标签
  */
-var unitLabel = (e, t) => clampSeriesCount(summarizeSeries(t, [e]), [e])[0] ?? "";
+var unitLabel = (value, unit) => clampSeriesCount(summarizeSeries(unit, [value]), [value])[0] ?? "";
 //@ chunk-3s7ydtfd.js:52934-53140 placement
 /**
  * 按系列单位格式化数值（必要时提高精度）。
  */
-function formatSeriesValues(e, t, o = {}) {
-  let { peers = t, minWritten = 0 } = o;
-  let p = summarizeSeries(e, peers);
-  return Math.min(...[...t, ...peers].filter((n) => n !== 0).map(Math.abs)) * p.multiplesPerUnit <
-    Math.max(minWritten, LABEL_DECIMALS / MAX_SIGNIFICANT_DIGITS ** p.decimals)
-    ? t.map((n) => unitLabel(n, e))
-    : clampSeriesCount(p, t);
+function formatSeriesValues(unit, values, options = {}) {
+  let { peers = values, minWritten = 0 } = options;
+  let summary = summarizeSeries(unit, peers);
+  return Math.min(...[...values, ...peers].filter((value) => value !== 0).map(Math.abs)) *
+    summary.multiplesPerUnit <
+    Math.max(minWritten, LABEL_DECIMALS / MAX_SIGNIFICANT_DIGITS ** summary.decimals)
+    ? values.map((value) => unitLabel(value, unit))
+    : clampSeriesCount(summary, values);
 }
 //@ chunk-3s7ydtfd.js:53140-53175 placement
 /**
  * 精度基数
  */
-var precisionBase = (e) => (e === 0 ? 1 : Math.abs(e) / PRECISION_BASE);
+var precisionBase = (max) => (max === 0 ? 1 : Math.abs(max) / PRECISION_BASE);
 //@ chunk-3s7ydtfd.js:53175-53211 placement
 /**
  * 差值可忽略即相等
  */
-var nearlyEqual = (e, t) => !(t - e > NEGLIGIBLE * Math.abs(t));
+var nearlyEqual = (from, to) => !(to - from > NEGLIGIBLE * Math.abs(to));
 //@ chunk-3s7ydtfd.js:53211-53291 placement
 /**
  * 提高精度
  */
-var withMoreDecimals = (e, t) => ({
-  ...e,
+var withMoreDecimals = (format, step) => ({
+  ...format,
   multiplesPerUnit: 1,
-  decimals: Math.max(e.decimals, decimalsForValue(t, 1)),
+  decimals: Math.max(format.decimals, decimalsForValue(step, 1)),
 });
 //@ chunk-3s7ydtfd.js:53291-53650 placement
 /**
  * 线性坐标轴刻度：选整齐的步长，返回刻度与位置函数。
  */
-function linearAxisTicks(e, [t, o], maxAxisSteps) {
-  let s = t * e.multiplesPerUnit;
-  let p = o * e.multiplesPerUnit;
-  let m = (nearlyEqual(s, p) ? precisionBase(p) : p - s) / maxAxisSteps;
-  let n = MAX_SIGNIFICANT_DIGITS ** Math.floor(Math.log10(m));
-  let a = n * (NICE_STEPS.find((l) => l * n >= m) ?? PRECISION_BASE_ALT);
-  let floored = Math.floor(s / a + NEGLIGIBLE);
-  let i = floored * a;
-  let max = Math.max(1, Math.ceil((p - i) / a - NEGLIGIBLE));
+function linearAxisTicks(format, [min, max], maxAxisSteps) {
+  let scaledMin = min * format.multiplesPerUnit;
+  let scaledMax = max * format.multiplesPerUnit;
+  let rawStep =
+    (nearlyEqual(scaledMin, scaledMax) ? precisionBase(scaledMax) : scaledMax - scaledMin) / maxAxisSteps;
+  let magnitude = MAX_SIGNIFICANT_DIGITS ** Math.floor(Math.log10(rawStep));
+  let step =
+    magnitude * (NICE_STEPS.find((candidate) => candidate * magnitude >= rawStep) ?? PRECISION_BASE_ALT);
+  let floored = Math.floor(scaledMin / step + NEGLIGIBLE);
+  let base = floored * step;
+  let max_2 = Math.max(1, Math.ceil((scaledMax - base) / step - NEGLIGIBLE));
   return {
     ticks: clampSeriesCount(
-      withMoreDecimals(e, a),
-      rangeIndices(max + 1).map((l) => (floored + l) * a),
-    ).map((label, u) => ({
-      position: u / max,
+      withMoreDecimals(format, step),
+      rangeIndices(max_2 + 1).map((index) => (floored + index) * step),
+    ).map((label, tickIndex) => ({
+      position: tickIndex / max_2,
       label,
     })),
-    positionOf: (l) => (l * e.multiplesPerUnit - i) / (max * a),
+    positionOf: (value) => (value * format.multiplesPerUnit - base) / (max_2 * step),
   };
 }
 //@ chunk-3s7ydtfd.js:53650-53899 placement
 /**
  * 对数坐标轴刻度。
  */
-function logAxisTicks(e, [t, o], maxAxisSteps) {
-  let floored = Math.floor(Math.log10(t) + NEGLIGIBLE);
-  let max = Math.max(1, Math.ceil(Math.log10(o) - NEGLIGIBLE) - floored);
-  let m = Math.ceil(max / maxAxisSteps);
-  let n = Math.ceil(max / m);
+function logAxisTicks(format, [min, max], maxAxisSteps) {
+  let floored = Math.floor(Math.log10(min) + NEGLIGIBLE);
+  let max_2 = Math.max(1, Math.ceil(Math.log10(max) - NEGLIGIBLE) - floored);
+  let decadeStep = Math.ceil(max_2 / maxAxisSteps);
+  let steps = Math.ceil(max_2 / decadeStep);
   return {
-    ticks: rangeIndices(n + 1).map((a) => ({
-      position: a / n,
-      label: unitLabel(MAX_SIGNIFICANT_DIGITS ** (floored + a * m), e),
+    ticks: rangeIndices(steps + 1).map((index) => ({
+      position: index / steps,
+      label: unitLabel(MAX_SIGNIFICANT_DIGITS ** (floored + index * decadeStep), format),
     })),
-    positionOf: (a) => (Math.log10(a) - floored) / (n * m),
+    positionOf: (value) => (Math.log10(value) - floored) / (steps * decadeStep),
   };
 }
 //@ chunk-3s7ydtfd.js:53899-54522 placement

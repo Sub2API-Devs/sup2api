@@ -2,22 +2,27 @@
  * @anthropic-ai/vertex-sdk/client.mjs
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * third-party: @anthropic-ai/vertex-sdk@0.19.3..0.20.4
- * pieces: chunk-xa96axyz.js (3)
+ * pieces: chunk-xa96axyz.js (4)
  * attribution: esm-fingerprint 3
  */
-import {
-  _AnthropicVertex_instances,
-  _AnthropicVertex_adaptRequest,
-  DEFAULT_VERSION,
-  MODEL_ENDPOINTS,
-} from "./client.js";
 import { APIConnectionError } from "../sdk/core/error.mjs";
 import { castToError_2 } from "../bedrock-sdk/internal/errors.mjs";
-import { w, b } from "./internal/utils/values.mjs";
+import { safeJSON, isObj } from "./internal/utils/values.mjs";
 import { buildHeaders } from "./internal/headers.mjs";
 import { Messages_2 } from "../sdk/resources/messages/messages.mjs";
 import { Beta } from "../sdk/resources/beta/beta.mjs";
 
+//@ chunk-xa96axyz.js:2219-2594 esm-fingerprint (moved: shares a binding it assigns)
+var __classPrivateFieldGet = function (receiver, state, kind, f) {
+  if (kind === "a" && !f) throw TypeError("Private accessor was defined without a getter");
+  if (typeof state === "function" ? receiver !== state || !f : !state.has(receiver))
+    throw TypeError("Cannot read private member from an object whose class did not declare it");
+  return kind === "m" ? f : kind === "a" ? f.call(receiver) : f ? f.value : state.get(receiver);
+};
+var _AnthropicVertex_instances;
+var _AnthropicVertex_adaptRequest;
+var DEFAULT_VERSION = "vertex-2023-10-16";
+var MODEL_ENDPOINTS = new Set(["/v1/messages", "/v1/messages?beta=true"]);
 //@ chunk-xa96axyz.js:3944-5755 esm-fingerprint
 _AnthropicVertex_instances = new WeakSet();
 _AnthropicVertex_adaptRequest = async function (request, options) {
@@ -37,8 +42,8 @@ _AnthropicVertex_adaptRequest = async function (request, options) {
   let url = new URL(request.url);
   let parsedBody;
   if (typeof request.body === "string") {
-    let parsed = w(request.body);
-    if (b(parsed)) parsedBody = parsed;
+    let parsed = safeJSON(request.body);
+    if (isObj(parsed)) parsedBody = parsed;
   }
   if (parsedBody && !parsedBody.anthropic_version) parsedBody.anthropic_version = DEFAULT_VERSION;
   if (options && MODEL_ENDPOINTS.has(options.path) && options.method === "post") {
@@ -51,9 +56,9 @@ _AnthropicVertex_adaptRequest = async function (request, options) {
       if (!parsedBody) throw Error("Expected request body to be an object for post /v1/messages");
       let model = parsedBody.model;
       delete parsedBody.model;
-      let v = (parsedBody.stream ?? false) ? "streamRawPredict" : "rawPredict";
+      let operation = (parsedBody.stream ?? false) ? "streamRawPredict" : "rawPredict";
       let prefix = url.pathname.slice(0, url.pathname.length - canonicalPath.length);
-      url.pathname = `${prefix}/projects/${this.projectId}/locations/${this.region}/publishers/anthropic/models/${model}:${v}`;
+      url.pathname = `${prefix}/projects/${this.projectId}/locations/${this.region}/publishers/anthropic/models/${model}:${operation}`;
       url.searchParams.delete("beta");
     }
   }
@@ -93,4 +98,10 @@ function makeBetaResource(client) {
   delete resource.messages.batches;
   return resource;
 }
-export { makeMessagesResource, makeBetaResource };
+export {
+  _AnthropicVertex_instances,
+  makeMessagesResource,
+  makeBetaResource,
+  __classPrivateFieldGet,
+  _AnthropicVertex_adaptRequest,
+};

@@ -19,16 +19,16 @@ function renderToolActivity(activity, tools, theme, activeAgents) {
   let tool = findToolByName(tools, activity.toolName);
   if (!tool) return activity.toolName;
   try {
-    let ke = describeUnparsedInput(activity.input);
-    let Re = safeParseToolInput(tool, activity.input);
-    let parsedInput = Re.success ? Re.data : {};
+    let unparsedInput = describeUnparsedInput(activity.input);
+    let parsedResult = safeParseToolInput(tool, activity.input);
+    let parsedInput = parsedResult.success ? parsedResult.data : {};
     let userFacingName = tool.userFacingName(parsedInput, {
       activeAgents,
       webFetchByAgentType: true,
     });
     if (!userFacingName) return activity.toolName;
     let toolArgs =
-      ke ??
+      unparsedInput ??
       renderToolUseMessageFor(tool, parsedInput, {
         theme,
         verbose: false,

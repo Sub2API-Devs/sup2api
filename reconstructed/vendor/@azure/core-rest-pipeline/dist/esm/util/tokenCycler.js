@@ -5,7 +5,7 @@
  * pieces: chunk-mrx6y2r5.js (3)
  * attribution: esm-fingerprint 3
  */
-import { delay_2 } from "../../../../core-util/dist/esm/delay.js";
+import { delay_3 } from "../../../../core-util/dist/esm/delay.js";
 
 //@ chunk-mrx6y2r5.js:63072-63158 esm-fingerprint
 var DEFAULT_CYCLER_OPTIONS = {
@@ -14,7 +14,7 @@ var DEFAULT_CYCLER_OPTIONS = {
   refreshWindowInMs: 120000,
 };
 //@ chunk-mrx6y2r5.js:63158-63414 esm-fingerprint
-async function Hp(getAccessToken, retryIntervalInMs, refreshTimeout) {
+async function beginRefresh(getAccessToken, retryIntervalInMs, refreshTimeout) {
   async function tryGetAccessToken() {
     if (Date.now() < refreshTimeout)
       try {
@@ -30,7 +30,7 @@ async function Hp(getAccessToken, retryIntervalInMs, refreshTimeout) {
   }
   let token = await tryGetAccessToken();
   while (token === null) {
-    await delay_2(retryIntervalInMs);
+    await delay_3(retryIntervalInMs);
     token = await tryGetAccessToken();
   }
   return token;
@@ -69,7 +69,7 @@ function createTokenCycler(credential, tokenCyclerOptions) {
   function refresh(scopes, getTokenOptions) {
     var _a;
     if (!cycler.isRefreshing)
-      refreshWorker = Hp(
+      refreshWorker = beginRefresh(
         () => credential.getToken(scopes, getTokenOptions),
         options.retryIntervalInMs,
         (_a = token === null || token === undefined ? undefined : token.expiresOnTimestamp) !== null &&

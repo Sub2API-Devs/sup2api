@@ -10,15 +10,19 @@
  */
 import {
   import_schema_2,
-  InvalidRequestException,
-  ResourceNotFoundException,
-  TooManyRequestsException,
-  UnauthorizedException,
+  InvalidRequestException_2,
+  ResourceNotFoundException_2,
+  TooManyRequestsException_2,
+  UnauthorizedException_2,
   SSOServiceException,
-  import_client_5,
+  import_client_6,
   import_middleware_endpoint_2,
 } from "../../nested-clients/dist-cjs/submodules/sso/index.js";
+import { deferInit, beginDeferredInits, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 3 modules closed by ../../nested-clients/dist-cjs/submodules/signin/endpoint/endpointResolver.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("vendor/@aws-sdk/nested-clients/dist-cjs/submodules/signin/endpoint/endpointResolver.js");
 //@ chunk-kejz1rpb.js:1605-1969 esm-fingerprint
 var resolveClientEndpointParameters = (options) =>
   Object.assign(options, {
@@ -45,11 +49,11 @@ var commonParams = {
   },
 };
 //@ chunk-kejz1rpb.js:12718-12874 placement
-var He = [0, "com.amazonaws.sso", "AccessTokenType", 8, 0];
+var AccessTokenType = [0, "com.amazonaws.sso", "AccessTokenType", 8, 0];
 var SecretAccessKeyType = [0, "com.amazonaws.sso", "SecretAccessKeyType", 8, 0];
 var SessionTokenType = [0, "com.amazonaws.sso", "SessionTokenType", 8, 0];
 //@ chunk-kejz1rpb.js:12874-13292 placement
-var Ge = [
+var GetRoleCredentialsRequest = [
   3,
   "com.amazonaws.sso",
   "GetRoleCredentialsRequest",
@@ -69,15 +73,22 @@ var Ge = [
       },
     ],
     [
-      () => He,
+      () => AccessTokenType,
       {
         ["httpHeader"]: "x-amz-sso_bearer_token",
       },
     ],
   ],
 ];
-var qe = [3, "com.amazonaws.sso", "GetRoleCredentialsResponse", 0, ["roleCredentials"], [[() => ze, 0]]];
-var je = [
+var GetRoleCredentialsResponse = [
+  3,
+  "com.amazonaws.sso",
+  "GetRoleCredentialsResponse",
+  0,
+  ["roleCredentials"],
+  [[() => RoleCredentials, 0]],
+];
+var InvalidRequestException = [
   -3,
   "com.amazonaws.sso",
   "InvalidRequestException",
@@ -89,9 +100,15 @@ var je = [
   [0],
 ];
 //@ chunk-kejz1rpb.js:13292-13352 placement
-import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(je, InvalidRequestException);
+// deferred: uses import_schema_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kejz1rpb.js:13292", () => {
+  import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(
+    InvalidRequestException,
+    InvalidRequestException_2,
+  );
+});
 //@ chunk-kejz1rpb.js:13352-13467 placement
-var Me = [
+var ResourceNotFoundException = [
   -3,
   "com.amazonaws.sso",
   "ResourceNotFoundException",
@@ -103,9 +120,15 @@ var Me = [
   [0],
 ];
 //@ chunk-kejz1rpb.js:13467-13527 placement
-import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(Me, ResourceNotFoundException);
+// deferred: uses import_schema_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kejz1rpb.js:13467", () => {
+  import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(
+    ResourceNotFoundException,
+    ResourceNotFoundException_2,
+  );
+});
 //@ chunk-kejz1rpb.js:13527-13668 placement
-var ze = [
+var RoleCredentials = [
   3,
   "com.amazonaws.sso",
   "RoleCredentials",
@@ -114,7 +137,7 @@ var ze = [
   [0, [() => SecretAccessKeyType, 0], [() => SessionTokenType, 0], 1],
 ];
 //@ chunk-kejz1rpb.js:13668-13782 layout
-var Ke = [
+var TooManyRequestsException = [
   -3,
   "com.amazonaws.sso",
   "TooManyRequestsException",
@@ -126,9 +149,15 @@ var Ke = [
   [0],
 ];
 //@ chunk-kejz1rpb.js:13782-13842 esm-fingerprint
-import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(Ke, TooManyRequestsException);
+// deferred: uses import_schema_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kejz1rpb.js:13782", () => {
+  import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(
+    TooManyRequestsException,
+    TooManyRequestsException_2,
+  );
+});
 //@ chunk-kejz1rpb.js:13842-13953 esm-layout
-var $e = [
+var UnauthorizedException = [
   -3,
   "com.amazonaws.sso",
   "UnauthorizedException",
@@ -140,7 +169,13 @@ var $e = [
   [0],
 ];
 //@ chunk-kejz1rpb.js:13953-14013 esm-fingerprint
-import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError($e, UnauthorizedException);
+// deferred: uses import_schema_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kejz1rpb.js:13953", () => {
+  import_schema_2.TypeRegistry.for("com.amazonaws.sso").registerError(
+    UnauthorizedException,
+    UnauthorizedException_2,
+  );
+});
 //@ chunk-kejz1rpb.js:14013-14099 esm-layout
 var SSOServiceException_2 = [
   -3,
@@ -151,10 +186,13 @@ var SSOServiceException_2 = [
   [],
 ];
 //@ chunk-kejz1rpb.js:14099-14183 esm-fingerprint
-import_schema_2.TypeRegistry.for("smithy.ts.sdk.synthetic.com.amazonaws.sso").registerError(
-  SSOServiceException_2,
-  SSOServiceException,
-);
+// deferred: uses import_schema_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kejz1rpb.js:14099", () => {
+  import_schema_2.TypeRegistry.for("smithy.ts.sdk.synthetic.com.amazonaws.sso").registerError(
+    SSOServiceException_2,
+    SSOServiceException,
+  );
+});
 //@ chunk-kejz1rpb.js:14183-14298 esm-layout
 var GetRoleCredentials = [
   9,
@@ -163,19 +201,28 @@ var GetRoleCredentials = [
   {
     ["http"]: ["GET", "/federation/credentials", 200],
   },
-  () => Ge,
-  () => qe,
+  () => GetRoleCredentialsRequest,
+  () => GetRoleCredentialsResponse,
 ];
 //@ chunk-kejz1rpb.js:14298-14544 esm-fingerprint
-class GetRoleCredentialsCommand extends import_client_5.Command.classBuilder()
-  .ep(commonParams)
-  .m(function (Command, cs, config, o) {
-    return [
-      import_middleware_endpoint_2.getEndpointPlugin(config, Command.getEndpointParameterInstructions()),
-    ];
-  })
-  .s("SWBPortalService", "GetRoleCredentials", {})
-  .n("SSOClient", "GetRoleCredentialsCommand")
-  .sc(GetRoleCredentials)
-  .build() {}
-export { resolveClientEndpointParameters };
+let GetRoleCredentialsCommand; // deferred: uses import_middleware_endpoint_2 (../../nested-clients/dist-cjs/submodules/sso/index.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kejz1rpb.js:14298", () => {
+  GetRoleCredentialsCommand = class GetRoleCredentialsCommand extends (
+    import_client_6.Command.classBuilder()
+      .ep(commonParams)
+      .m(function (Command, cs, config, o) {
+        return [
+          import_middleware_endpoint_2.getEndpointPlugin(config, Command.getEndpointParameterInstructions()),
+        ];
+      })
+      .s("SWBPortalService", "GetRoleCredentials", {})
+      .n("SSOClient", "GetRoleCredentialsCommand")
+      .sc(GetRoleCredentials)
+      .build()
+  ) {};
+});
+
+// The import cycle this module closes (3 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("vendor/@aws-sdk/client-sso/dist-cjs/index.js");
+export { resolveClientEndpointParameters, GetRoleCredentialsCommand };

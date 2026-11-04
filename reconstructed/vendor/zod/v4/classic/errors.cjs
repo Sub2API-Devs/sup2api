@@ -5,12 +5,12 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_core_2 } from "../core/index.cjs";
 import { require_util } from "../core/util.cjs";
 
 //@ chunk-1ny7cxrt.js:591116-593194 cjs-fingerprint
-var require_errors_3 = x(function (cjsExports) {
+var require_errors_3 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -91,15 +91,15 @@ var require_errors_3 = x(function (cjsExports) {
     let proto = Object.getPrototypeOf(inst);
     if (_installedErrorProtos.has(proto)) return;
     _installedErrorProtos.add(proto);
-    _lazyMethod(proto, "format", (o) => (mapper) => core.formatError(o, mapper));
-    _lazyMethod(proto, "flatten", (o) => (mapper) => core.flattenError(o, mapper));
-    _lazyMethod(proto, "addIssue", (o) => (issue) => {
-      o.issues.push(issue);
-      o.message = JSON.stringify(o.issues, util.jsonStringifyReplacer, 2);
+    _lazyMethod(proto, "format", (errorInstance) => (mapper) => core.formatError(errorInstance, mapper));
+    _lazyMethod(proto, "flatten", (errorInstance) => (mapper) => core.flattenError(errorInstance, mapper));
+    _lazyMethod(proto, "addIssue", (errorInstance) => (issue) => {
+      errorInstance.issues.push(issue);
+      errorInstance.message = JSON.stringify(errorInstance.issues, util.jsonStringifyReplacer, 2);
     });
-    _lazyMethod(proto, "addIssues", (o) => (issues) => {
-      o.issues.push(...issues);
-      o.message = JSON.stringify(o.issues, util.jsonStringifyReplacer, 2);
+    _lazyMethod(proto, "addIssues", (errorInstance) => (issues) => {
+      errorInstance.issues.push(...issues);
+      errorInstance.message = JSON.stringify(errorInstance.issues, util.jsonStringifyReplacer, 2);
     });
     Object.defineProperty(proto, "isEmpty", {
       configurable: true,

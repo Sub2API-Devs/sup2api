@@ -33,7 +33,7 @@ import {
 } from "../../utils/errors.js";
 import { count } from "../../utils/collections.js";
 import { checkCasePathInsideRoot, resolveCaseFileInsideSuite } from "./evalFence.js";
-import { Ph } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { sniffImageMediaType } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { stripBom } from "../../utils/json.js";
 import { jsonStringify, jsonParse } from "../../utils/slowOperations.js";
 import { sniffDocumentType, detectHtmlDocument, parseWebpHeader } from "../../utils/imageFormats.js";
@@ -73,35 +73,36 @@ var WRITE_LIKE_TOOLS = new Set([
  * 检查评分器在授予的工具下能否通过（例如检查运行创建的文件却没有写工具）。
  */
 function checkGradersSatisfiable(
-  e,
+  caseSpec,
   allowTools,
   { scaffolded, artifactPublishGranted, mockedTools = [], withheldServers = [], disallowedTools = [] },
 ) {
-  let allowed = buildRunToolRules(e.execution.allowed_tools, allowTools, {
+  let allowed = buildRunToolRules(caseSpec.execution.allowed_tools, allowTools, {
     artifactPublishGranted,
     mockedTools,
     disallowedTools,
   }).allowed;
-  let y = [];
-  let filtered = e.graders.filter((grader) => gradeFileExists(grader, scaffolded));
+  let problems = [];
+  let filtered = caseSpec.graders.filter((grader) => gradeFileExists(grader, scaffolded));
   if (
     filtered.length > 0 &&
     !artifactPublishGranted &&
     !allowed.some(
-      (T) => !mockedTools.includes(T) && !isWithheldServerTool(T, withheldServers) && isWriteLikeTool(T),
+      (rule) =>
+        !mockedTools.includes(rule) && !isWithheldServerTool(rule, withheldServers) && isWriteLikeTool(rule),
     )
   ) {
     let filtered_2 = disallowedTools.filter((disallowedTool) => WRITE_LIKE_TOOLS.has(disallowedTool));
-    for (let N of filtered)
-      y.push({
-        grader: N.name,
+    for (let grader of filtered)
+      problems.push({
+        grader: grader.name,
         text:
           filtered_2.length > 0
-            ? `grader "${N.name}" cannot pass: it checks a file the run creates, but no tool the run may use can create one (a plugin hook still could), and the case's disallowed_tools or --disallow-tools lists ${filtered_2.join(", ")} \u2014 take one off that list and grant it (allowed_tools and --allow-tools), or drop the grader`
-            : `grader "${N.name}" cannot pass with the granted tools: it checks a file the run creates, but no tool the run may use can create one (a plugin hook still could; a skill's own allowed-tools does not count inside a run) \u2014 add Write (or Edit / Bash) to the case's allowed_tools and grant it with --allow-tools`,
+            ? `grader "${grader.name}" cannot pass: it checks a file the run creates, but no tool the run may use can create one (a plugin hook still could), and the case's disallowed_tools or --disallow-tools lists ${filtered_2.join(", ")} \u2014 take one off that list and grant it (allowed_tools and --allow-tools), or drop the grader`
+            : `grader "${grader.name}" cannot pass with the granted tools: it checks a file the run creates, but no tool the run may use can create one (a plugin hook still could; a skill's own allowed-tools does not count inside a run) \u2014 add Write (or Edit / Bash) to the case's allowed_tools and grant it with --allow-tools`,
       });
   }
-  let flattened = e.graders.flatMap((grader) => {
+  let flattened = caseSpec.graders.flatMap((grader) => {
     switch (grader.type) {
       case "tool_used":
         return (grader.min ?? 1) >= 1
@@ -125,68 +126,70 @@ function checkGradersSatisfiable(
   });
   if (flattened.length > 0) {
     let allBaseTools = getAllBaseTools();
-    let N = (disallowedTools) => {
-      let W = new Set(disallowedTools);
-      let G = new Set(W);
-      for (let baseTool of allBaseTools) if (toolMatchesAnyName(baseTool, W)) G.add(baseTool.name);
-      return G;
+    let expandDisallowed = (disallowedTools) => {
+      let names = new Set(disallowedTools);
+      let expanded = new Set(names);
+      for (let baseTool of allBaseTools) if (toolMatchesAnyName(baseTool, names)) expanded.add(baseTool.name);
+      return expanded;
     };
-    let x = N(buildDisallowedTools(allowed, disallowedTools));
-    let j = (X) =>
-      disallowedTools.includes(X) ? X : disallowedTools.find((disallowedTool) => N([disallowedTool]).has(X));
-    let K = new Set([ARTIFACT_TOOL_NAME]);
+    let blockedTools = expandDisallowed(buildDisallowedTools(allowed, disallowedTools));
+    let findBlockingTool = (toolName) =>
+      disallowedTools.includes(toolName)
+        ? toolName
+        : disallowedTools.find((disallowedTool) => expandDisallowed([disallowedTool]).has(toolName));
+    let artifactToolNames = new Set([ARTIFACT_TOOL_NAME]);
     for (let baseTool of allBaseTools)
-      if (baseTool.familyParentToolName === ARTIFACT_TOOL_NAME) K.add(baseTool.name);
+      if (baseTool.familyParentToolName === ARTIFACT_TOOL_NAME) artifactToolNames.add(baseTool.name);
     for (let { grader, tools } of flattened)
-      for (let G of new Set(tools)) {
-        if (artifactPublishGranted && K.has(G)) {
-          y.push({
+      for (let toolName of new Set(tools)) {
+        if (artifactPublishGranted && artifactToolNames.has(toolName)) {
+          problems.push({
             grader,
-            text: `grader "${grader}" cannot pass: it needs a ${G} call in the trace, but a run opted into artifact publishing is offered the ${CLAUDE_ARTIFACTS} MCP tools in its place \u2014 name the tool the run calls (${mcpToolNames(PUBLISH_TOOL_NAMES).join(", ")}), or grade the publish itself under .eval-artifacts/`,
+            text: `grader "${grader}" cannot pass: it needs a ${toolName} call in the trace, but a run opted into artifact publishing is offered the ${CLAUDE_ARTIFACTS} MCP tools in its place \u2014 name the tool the run calls (${mcpToolNames(PUBLISH_TOOL_NAMES).join(", ")}), or grade the publish itself under .eval-artifacts/`,
           });
           continue;
         }
-        if (!x.has(G)) continue;
-        let J = WORKTREE_TOOLS.includes(G) ? undefined : j(G);
-        if (J !== undefined) {
-          let se =
-            J === G
-              ? `${G} is in the case's disallowed_tools or --disallow-tools`
-              : `${J} is in the case's disallowed_tools or --disallow-tools, which also withholds ${G}`;
-          y.push({
+        if (!blockedTools.has(toolName)) continue;
+        let blockedBy = WORKTREE_TOOLS.includes(toolName) ? undefined : findBlockingTool(toolName);
+        if (blockedBy !== undefined) {
+          let blockReason =
+            blockedBy === toolName
+              ? `${toolName} is in the case's disallowed_tools or --disallow-tools`
+              : `${blockedBy} is in the case's disallowed_tools or --disallow-tools, which also withholds ${toolName}`;
+          problems.push({
             grader,
-            text: `grader "${grader}" cannot pass: it needs a ${G} call in the trace, but ${se}, so no call can occur \u2014 change that list (and grant the tool if it is not granted), drop the grader, or invert it (max: 0) if absence is the point`,
+            text: `grader "${grader}" cannot pass: it needs a ${toolName} call in the trace, but ${blockReason}, so no call can occur \u2014 change that list (and grant the tool if it is not granted), drop the grader, or invert it (max: 0) if absence is the point`,
           });
           continue;
         }
-        let Z = WORKTREE_TOOLS.includes(G)
-          ? `${G} is never available inside an eval run \u2014 drop the grader, or invert it (max: 0) if absence is the point`
-          : K.has(G)
-            ? `${G} comes only with the artifact-publishing opt-in this run does not have (not --allow-tools) \u2014 opt the case in, or drop the grader`
-            : `add ${G} to the case's allowed_tools and grant it with --allow-tools ${G}`;
-        y.push({
+        let remedy = WORKTREE_TOOLS.includes(toolName)
+          ? `${toolName} is never available inside an eval run \u2014 drop the grader, or invert it (max: 0) if absence is the point`
+          : artifactToolNames.has(toolName)
+            ? `${toolName} comes only with the artifact-publishing opt-in this run does not have (not --allow-tools) \u2014 opt the case in, or drop the grader`
+            : `add ${toolName} to the case's allowed_tools and grant it with --allow-tools ${toolName}`;
+        problems.push({
           grader,
-          text: `grader "${grader}" cannot pass with the granted tools: it needs a ${G} call in the trace, but ${G} is not granted, so the run withholds it from the model and no call (not even a refused one) can occur \u2014 ${Z}`,
+          text: `grader "${grader}" cannot pass with the granted tools: it needs a ${toolName} call in the trace, but ${toolName} is not granted, so the run withholds it from the model and no call (not even a refused one) can occur \u2014 ${remedy}`,
         });
       }
   }
-  return y;
+  return problems;
 }
 //@ chunk-qchp9vrd.js:229800-229867 placement
 /**
  * 判断工具是否为写入类或来自 MCP 服务器。
  */
-function isWriteLikeTool(e) {
-  let toolName = permissionRuleValueFromString(e).toolName;
+function isWriteLikeTool(rule) {
+  let toolName = permissionRuleValueFromString(rule).toolName;
   return WRITE_LIKE_TOOLS.has(toolName) || mcpInfoFromString(toolName) !== null;
 }
 //@ chunk-qchp9vrd.js:229867-229951 placement
 /**
  * 判断工具是否属于被扣留的服务器。
  */
-function isWithheldServerTool(e, withheldServers) {
-  let r = mcpInfoFromString(permissionRuleValueFromString(e).toolName);
-  return r !== null && withheldServers.includes(r.serverName);
+function isWithheldServerTool(toolName, withheldServers) {
+  let mcpInfo = mcpInfoFromString(permissionRuleValueFromString(toolName).toolName);
+  return mcpInfo !== null && withheldServers.includes(mcpInfo.serverName);
 }
 //@ chunk-qchp9vrd.js:229951-230224 placement
 function gradeFileExists(grader, scaffolded) {
@@ -213,171 +216,179 @@ function isNeverMatched(match) {
 /**
  * 判断评分器是否为无 arm 的 skill 工具使用检查。
  */
-function isSkillToolUsed(e) {
-  return e.arm === undefined && e.type === "tool_used" && e.tool === SKILL;
+function isSkillToolUsed(grader) {
+  return grader.arm === undefined && grader.type === "tool_used" && grader.tool === SKILL;
 }
 //@ chunk-qchp9vrd.js:230501-231055 placement
-async function gradeCase(e) {
-  let n = [];
+async function gradeCase(input) {
+  let results = [];
   let totalCostUSD = getTotalCostUSD();
-  let a = (y) =>
-    e.mockCallsWithOnly === true &&
-    y.arm === undefined &&
-    ((y.type === "regex" && y.target === "mock_calls") || (y.type === "llm" && y.focus === "mock_calls"));
-  let s = (y) => y.arm === "with-only" || isSkillToolUsed(y) || a(y);
-  let all = e.case_.graders.every(s);
-  let w = e.arm === "without" && !all ? e.case_.graders.filter((grader) => !s(grader)) : e.case_.graders;
-  let paidGradersSkipped = !!e.skipPaidGraders && w.some((y) => y.type === "llm" || y.type === "baseline");
-  for (let y of w) {
-    let R = await runGrader(y, e);
-    if (e.arm !== undefined && !all && s(y)) R.with_only = true;
-    R.scored = !R.with_only;
-    n.push(R);
+  let isMockOnlyGrader = (grader) =>
+    input.mockCallsWithOnly === true &&
+    grader.arm === undefined &&
+    ((grader.type === "regex" && grader.target === "mock_calls") ||
+      (grader.type === "llm" && grader.focus === "mock_calls"));
+  let isWithOnlyGrader = (grader) =>
+    grader.arm === "with-only" || isSkillToolUsed(grader) || isMockOnlyGrader(grader);
+  let all = input.case_.graders.every(isWithOnlyGrader);
+  let graders =
+    input.arm === "without" && !all
+      ? input.case_.graders.filter((grader) => !isWithOnlyGrader(grader))
+      : input.case_.graders;
+  let paidGradersSkipped =
+    !!input.skipPaidGraders && graders.some((grader) => grader.type === "llm" || grader.type === "baseline");
+  for (let grader of graders) {
+    let result = await runGrader(grader, input);
+    if (input.arm !== undefined && !all && isWithOnlyGrader(grader)) result.with_only = true;
+    result.scored = !result.with_only;
+    results.push(result);
   }
   return {
-    results: n,
+    results,
     judgeCostUsd: getTotalCostUSD() - totalCostUSD,
     paidGradersSkipped,
   };
 }
 //@ chunk-qchp9vrd.js:231055-231497 placement
-async function runGrader(e, n) {
+async function runGrader(grader, input) {
   try {
-    switch (e.type) {
+    switch (grader.type) {
       case "regex":
-        return await gradeLastMessage(e, n);
+        return await gradeLastMessage(grader, input);
       case "tool_order":
-        return gradeToolOrder(e, n);
+        return gradeToolOrder(grader, input);
       case "tool_used":
-        return gradeToolCallCount(e, n);
+        return gradeToolCallCount(grader, input);
       case "file_exists":
-        return gradeFileState(e, n);
+        return gradeFileState(grader, input);
       case "llm":
       case "baseline":
-        if (n.skipPaidGraders)
+        if (input.skipPaidGraders)
           return {
-            name: e.name,
+            name: grader.name,
             passed: false,
-            weight: e.weight,
+            weight: grader.weight,
             explanation: "skipped: cost ceiling",
           };
-        return e.type === "llm" ? await gradeWithLlm(e, n) : await compareWithBaseline(e, n);
+        return grader.type === "llm"
+          ? await gradeWithLlm(grader, input)
+          : await compareWithBaseline(grader, input);
     }
   } catch (error) {
     return {
-      name: e.name,
+      name: grader.name,
       passed: false,
-      weight: e.weight,
+      weight: grader.weight,
       explanation: `grader threw: ${errorMessage(error)}`,
     };
   }
 }
 //@ chunk-qchp9vrd.js:231497-232578 placement
-async function gradeLastMessage(e, n) {
-  let graderFocusFile = await readGraderFocusFile(e.target, n);
-  let a = describeTarget(e.target);
-  if (graderFocusFile.kind === "unavailable") return failedGrader(e, graderFocusFile.reason);
+async function gradeLastMessage(grader, input) {
+  let graderFocusFile = await readGraderFocusFile(grader.target, input);
+  let targetLabel = describeTarget(grader.target);
+  if (graderFocusFile.kind === "unavailable") return failedGrader(grader, graderFocusFile.reason);
   if (graderFocusFile.kind === "image") {
-    let S =
-      e.match === "not_contains" || e.match === "count:0"
+    let hint =
+      grader.match === "not_contains" || grader.match === "count:0"
         ? "to assert something is absent, have the case also write a text rendering and run this grader over that"
         : `grade what is visible with an llm grader (focus: {source: file, path: ${graderFocusFile.path}})`;
     return failedGrader(
-      e,
-      `${a} is an image (${graderFocusFile.mediaType}); a regex grader needs text \u2014 ${S}`,
+      grader,
+      `${targetLabel} is an image (${graderFocusFile.mediaType}); a regex grader needs text \u2014 ${hint}`,
     );
   }
   let text = graderFocusFile.text;
-  let regExp = new RegExp(e.pattern, e.flags);
-  let w = e.flags.includes("g") ? e.flags : `${e.flags}g`;
-  let b = text.match(new RegExp(e.pattern, w)) ?? [];
-  let y;
-  let R;
-  if (e.match === "contains") {
-    y = regExp.test(text);
-    R = y ? `matched ${e.pattern}` : `pattern not found in ${a}`;
-  } else if (e.match === "not_contains") {
-    y = !regExp.test(text);
-    R = y ? "pattern absent as expected" : "pattern found (expected absent)";
-  } else if (e.match.startsWith("count:")) {
-    let S = parseInt(e.match.slice(6), 10);
-    y = b.length === S;
-    R = `found ${b.length} matches (expected ${S})`;
+  let regExp = new RegExp(grader.pattern, grader.flags);
+  let globalFlags = grader.flags.includes("g") ? grader.flags : `${grader.flags}g`;
+  let matches = text.match(new RegExp(grader.pattern, globalFlags)) ?? [];
+  let passed;
+  let explanation;
+  if (grader.match === "contains") {
+    passed = regExp.test(text);
+    explanation = passed ? `matched ${grader.pattern}` : `pattern not found in ${targetLabel}`;
+  } else if (grader.match === "not_contains") {
+    passed = !regExp.test(text);
+    explanation = passed ? "pattern absent as expected" : "pattern found (expected absent)";
+  } else if (grader.match.startsWith("count:")) {
+    let expectedCount = parseInt(grader.match.slice(6), 10);
+    passed = matches.length === expectedCount;
+    explanation = `found ${matches.length} matches (expected ${expectedCount})`;
   } else {
-    y = false;
-    R = `unknown match mode "${e.match}" (use contains | not_contains | count:N)`;
+    passed = false;
+    explanation = `unknown match mode "${grader.match}" (use contains | not_contains | count:N)`;
   }
   return {
-    name: e.name,
-    passed: y,
-    weight: e.weight,
-    explanation: R,
+    name: grader.name,
+    passed,
+    weight: grader.weight,
+    explanation,
   };
 }
 //@ chunk-qchp9vrd.js:232578-232979 placement
-function gradeToolOrder(e, { run }) {
-  let toolCallIndex = findToolCallIndex(run.toolCalls, e.before);
-  let toolCallIndex_2 = findToolCallIndex(run.toolCalls, e.after);
-  if (toolCallIndex === -1) return failedGrader(e, `"before" tool ${e.before.tool} never called`);
-  if (toolCallIndex_2 === -1) return failedGrader(e, `"after" tool ${e.after.tool} never called`);
-  let s = toolCallIndex < toolCallIndex_2;
+function gradeToolOrder(grader, { run }) {
+  let toolCallIndex = findToolCallIndex(run.toolCalls, grader.before);
+  let toolCallIndex_2 = findToolCallIndex(run.toolCalls, grader.after);
+  if (toolCallIndex === -1) return failedGrader(grader, `"before" tool ${grader.before.tool} never called`);
+  if (toolCallIndex_2 === -1) return failedGrader(grader, `"after" tool ${grader.after.tool} never called`);
+  let inOrder = toolCallIndex < toolCallIndex_2;
   return {
-    name: e.name,
-    passed: s,
-    weight: e.weight,
-    explanation: s
-      ? `${e.before.tool}@${toolCallIndex} precedes ${e.after.tool}@${toolCallIndex_2}`
-      : `${e.before.tool}@${toolCallIndex} does NOT precede ${e.after.tool}@${toolCallIndex_2}`,
+    name: grader.name,
+    passed: inOrder,
+    weight: grader.weight,
+    explanation: inOrder
+      ? `${grader.before.tool}@${toolCallIndex} precedes ${grader.after.tool}@${toolCallIndex_2}`
+      : `${grader.before.tool}@${toolCallIndex} does NOT precede ${grader.after.tool}@${toolCallIndex_2}`,
   };
 }
 //@ chunk-qchp9vrd.js:232979-233278 placement
-function gradeToolCallCount(e, { run }) {
-  let r = {
-    tool: e.tool,
-    input_match: e.input_match,
+function gradeToolCallCount(grader, { run }) {
+  let expectation = {
+    tool: grader.tool,
+    input_match: grader.input_match,
   };
-  let a = count(run.toolCalls, (b) => matchesToolExpectation(b, r));
-  let min = e.min ?? 1;
-  let h = e.max ?? Number.POSITIVE_INFINITY;
-  let passed = a >= min && a <= h;
+  let callCount = count(run.toolCalls, (call) => matchesToolExpectation(call, expectation));
+  let min = grader.min ?? 1;
+  let max = grader.max ?? Number.POSITIVE_INFINITY;
+  let passed = callCount >= min && callCount <= max;
   return {
-    name: e.name,
+    name: grader.name,
     passed,
-    weight: e.weight,
-    explanation: `${e.tool} called ${a}x (expected ${min}..${h === Number.POSITIVE_INFINITY ? "\u221E" : h})`,
+    weight: grader.weight,
+    explanation: `${grader.tool} called ${callCount}x (expected ${min}..${max === Number.POSITIVE_INFINITY ? "\u221E" : max})`,
   };
 }
 //@ chunk-qchp9vrd.js:233278-233599 placement
-function gradeFileState(e, { cwdDiff }) {
-  let r = fileGlobToRegExp(e.path);
+function gradeFileState(grader, { cwdDiff }) {
+  let pattern = fileGlobToRegExp(grader.path);
   let any = (cwdDiff ?? "")
     .split(
       `
 `,
     )
     .filter((line) => line.trim())
-    .some((line) => r.test(line.trim()));
-  let s = any === e.exists;
+    .some((line) => pattern.test(line.trim()));
+  let passed = any === grader.exists;
   return {
-    name: e.name,
-    passed: s,
-    weight: e.weight,
-    explanation: s
-      ? `${e.path} ${e.exists ? "exists" : "absent"} as expected`
-      : `${e.path} ${any ? "exists" : "missing"} (expected ${e.exists ? "present" : "absent"})`,
+    name: grader.name,
+    passed,
+    weight: grader.weight,
+    explanation: passed
+      ? `${grader.path} ${grader.exists ? "exists" : "absent"} as expected`
+      : `${grader.path} ${any ? "exists" : "missing"} (expected ${grader.exists ? "present" : "absent"})`,
   };
 }
 //@ chunk-qchp9vrd.js:233599-233649 placement
 /**
  * 找到第一个匹配工具期望的调用下标。
  */
-function findToolCallIndex(toolCalls, n) {
-  return toolCalls.findIndex((r) => matchesToolExpectation(r, n));
+function findToolCallIndex(toolCalls, expectation) {
+  return toolCalls.findIndex((toolCall) => matchesToolExpectation(toolCall, expectation));
 }
 //@ chunk-qchp9vrd.js:233649-233771 placement
-function matchesToolExpectation(e, n) {
-  if (e.name !== n.tool) return false;
-  if (n.input_match) return new RegExp(n.input_match).test(e.inputText);
+function matchesToolExpectation(toolCall, expectation) {
+  if (toolCall.name !== expectation.tool) return false;
+  if (expectation.input_match) return new RegExp(expectation.input_match).test(toolCall.inputText);
   return true;
 }
 //@ chunk-qchp9vrd.js:233771-233803 placement
@@ -387,34 +398,34 @@ function matchesToolExpectation(e, n) {
 var REGEX_META_CHARS = new Set(".+^${}()|[]\\");
 //@ chunk-qchp9vrd.js:233803-234073 placement
 function fileGlobToRegExp(path) {
-  let n = "^";
+  let source = "^";
   for (let j = 0; j < path.length; j++) {
-    let a = path.charAt(j);
-    if (a === "*") {
+    let character = path.charAt(j);
+    if (character === "*") {
       if (path.charAt(j + 1) === "*") {
         if (path.charAt(j + 2) === "/") {
-          n += "(?:.*/)?";
+          source += "(?:.*/)?";
           j += 2;
         } else {
-          n += ".*";
+          source += ".*";
           j++;
         }
-      } else n += "[^/]*";
-    } else if (a === "?") n += ".";
-    else if (REGEX_META_CHARS.has(a)) n += `\\${a}`;
-    else n += a;
+      } else source += "[^/]*";
+    } else if (character === "?") source += ".";
+    else if (REGEX_META_CHARS.has(character)) source += `\\${character}`;
+    else source += character;
   }
-  return new RegExp(`${n}$`);
+  return new RegExp(`${source}$`);
 }
 //@ chunk-qchp9vrd.js:234073-234150 placement
 /**
  * 构造判失败的评分器结果。
  */
-function failedGrader(e, explanation) {
+function failedGrader(grader, explanation) {
   return {
-    name: e.name,
+    name: grader.name,
     passed: false,
-    weight: e.weight,
+    weight: grader.weight,
     explanation,
   };
 }
@@ -428,31 +439,31 @@ var MAX_FOCUS_FILE_BYTES = 10485760;
 /**
  * 读取评分关注的文件（防止链接逃逸、不存在或过大）。
  */
-async function readGraderFocusFile(e, { run, cwdDiff, sandboxCwd, stubPublishDir, case_, signal }) {
-  if (typeof e === "object") {
-    let b = EVAL_RUN_BASE_PATH(e.path);
-    if (b !== null && stubPublishDir === undefined)
+async function readGraderFocusFile(focus, { run, cwdDiff, sandboxCwd, stubPublishDir, case_, signal }) {
+  if (typeof focus === "object") {
+    let stubPath = EVAL_RUN_BASE_PATH(focus.path);
+    if (stubPath !== null && stubPublishDir === undefined)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `focus file ${e.path} does not exist (artifact publishing was not granted for this run, so nothing was published)`,
+        `focus file ${focus.path} does not exist (artifact publishing was not granted for this run, so nothing was published)`,
         "grader focus file does not exist",
       );
-    let y = b !== null && stubPublishDir !== undefined ? stubPublishDir : sandboxCwd;
-    let R = await checkCasePathInsideRoot(
-      y,
-      b ?? e.path,
-      `case "${case_.name}" grader focus file "${e.path}"`,
-      b !== null ? "stub publish directory" : "run sandbox",
+    let rootDir = stubPath !== null && stubPublishDir !== undefined ? stubPublishDir : sandboxCwd;
+    let focusPath = await checkCasePathInsideRoot(
+      rootDir,
+      stubPath ?? focus.path,
+      `case "${case_.name}" grader focus file "${focus.path}"`,
+      stubPath !== null ? "stub publish directory" : "run sandbox",
     );
     signal.throwIfAborted();
-    let focusFile = await openFocusFileSafely(y, R, e.path);
+    let focusFile = await openFocusFileSafely(rootDir, focusPath, focus.path);
     signal.throwIfAborted();
-    let T = Ph(focusFile);
-    if (T !== null)
+    let mediaType = sniffImageMediaType(focusFile);
+    if (mediaType !== null)
       return {
         kind: "image",
         bytes: focusFile,
-        path: e.path,
-        mediaType: T,
+        path: focus.path,
+        mediaType,
       };
     return {
       kind: "text",
@@ -460,17 +471,17 @@ async function readGraderFocusFile(e, { run, cwdDiff, sandboxCwd, stubPublishDir
       binaryHead: describeBinaryContent(focusFile),
     };
   }
-  if (e === "last_message")
+  if (focus === "last_message")
     return {
       kind: "text",
       text: run.lastAssistantText,
     };
-  if (e === "files")
+  if (focus === "files")
     return {
       kind: "text",
       text: cwdDiff ?? "",
     };
-  if (e === "mock_calls") {
+  if (focus === "mock_calls") {
     if (run.mockTally === null)
       return {
         kind: "unavailable",
@@ -499,16 +510,16 @@ async function readGraderFocusFile(e, { run, cwdDiff, sandboxCwd, stubPublishDir
   }
   return {
     kind: "text",
-    text: run.trace.map((b) => jsonStringify(b)).join(`
+    text: run.trace.map((entry) => jsonStringify(entry)).join(`
 `),
   };
 }
 //@ chunk-qchp9vrd.js:235454-235714 placement
-function describeBinaryContent(focusFile) {
-  if (sniffDocumentType(focusFile) !== null) return `it is a ${detectHtmlDocument(focusFile)}`;
-  let index = focusFile.indexOf(0);
+function describeBinaryContent(head) {
+  if (sniffDocumentType(head) !== null) return `it is a ${detectHtmlDocument(head)}`;
+  let index = head.indexOf(0);
   if (index !== -1)
-    return `it contains a NUL byte at offset ${index} (binary data, UTF-16 text \u2014 save such artifacts as UTF-8 \u2014 or NUL-separated output; leading bytes: ${detectHtmlDocument(focusFile)})`;
+    return `it contains a NUL byte at offset ${index} (binary data, UTF-16 text \u2014 save such artifacts as UTF-8 \u2014 or NUL-separated output; leading bytes: ${detectHtmlDocument(head)})`;
   return;
 }
 //@ chunk-qchp9vrd.js:235714-235775 placement
@@ -529,115 +540,118 @@ var JUDGE_TRACE_CHARS = 20000;
 /**
  * 用模型按标准评分（构建评分提示词、附图片与 trace 摘要）。
  */
-async function gradeWithLlm(e, n) {
-  let r =
-    e.focus === "trace"
+async function gradeWithLlm(grader, input) {
+  let focusContent =
+    grader.focus === "trace"
       ? {
           kind: "text",
-          text: elideMessages(n.run.trace),
+          text: elideMessages(input.run.trace),
         }
-      : await readGraderFocusFile(e.focus, n);
-  if (r.kind === "unavailable") return failedGrader(e, r.reason);
-  let a = `You are grading the output of a coding agent against a criterion.
+      : await readGraderFocusFile(grader.focus, input);
+  if (focusContent.kind === "unavailable") return failedGrader(grader, focusContent.reason);
+  let promptHeader = `You are grading the output of a coding agent against a criterion.
 
 Criterion:
-${e.criteria}`;
-  let s = "Respond with exactly one word: PASS or FAIL.";
-  let h;
-  let w;
-  let b = "";
-  if (r.kind === "text" && r.binaryHead !== undefined)
+${grader.criteria}`;
+  let answerInstruction = "Respond with exactly one word: PASS or FAIL.";
+  let judgePrompt;
+  let evidence;
+  let noteSuffix = "";
+  if (focusContent.kind === "text" && focusContent.binaryHead !== undefined)
     return failedGrader(
-      e,
-      `${describeTarget(e.focus)} cannot be shown to the judge as text \u2014 ${r.binaryHead}. It is not a supported image either (PNG/JPEG/GIF/WebP), so have the case render it to an image or write its content as a UTF-8 text file, and grade that.`,
+      grader,
+      `${describeTarget(grader.focus)} cannot be shown to the judge as text \u2014 ${focusContent.binaryHead}. It is not a supported image either (PNG/JPEG/GIF/WebP), so have the case render it to an image or write its content as a UTF-8 text file, and grade that.`,
     );
-  if (r.kind === "image") {
+  if (focusContent.kind === "image") {
     let { block, dimensions } = await maybeResizeAndDownsampleImageBlock({
-      data: r.bytes,
-      mediaType: r.mediaType,
-      limits: imageLimitsForModel(normalizeJudgeModel(n.judgeModel) ?? getSmallFastModel()),
+      data: focusContent.bytes,
+      mediaType: focusContent.mediaType,
+      limits: imageLimitsForModel(normalizeJudgeModel(input.judgeModel) ?? getSmallFastModel()),
     });
     if (block.type !== "image" || block.source.type !== "base64")
       return failedGrader(
-        e,
-        `focus file ${r.path} could not be prepared as an image for the judge: ${block.type === "text" ? block.text : "unexpected image source"}`,
+        grader,
+        `focus file ${focusContent.path} could not be prepared as an image for the judge: ${block.type === "text" ? block.text : "unexpected image source"}`,
       );
-    h = [
+    judgePrompt = [
       {
         type: "text",
-        text: `${a}
+        text: `${promptHeader}
 
-Agent output (${describeTarget(e.focus)}) is the attached image:`,
+Agent output (${describeTarget(grader.focus)}) is the attached image:`,
       },
       block,
       {
         type: "text",
-        text: s,
+        text: answerInstruction,
       },
     ];
-    let N = dimensions?.displayWidth ? `, ${dimensions.displayWidth}x${dimensions.displayHeight}px` : "";
-    let webpHeader = parseWebpHeader(r.bytes);
-    let j = webpHeader ? `, ${webpHeader.width}x${webpHeader.height}px` : "";
-    w = `[image shown to the judge: ${r.path} \u2014 sent as ${block.source.media_type}, ${formatFileSize(Buffer.byteLength(block.source.data, "base64"))}${N}; file on disk: ${r.mediaType}, ${formatFileSize(r.bytes.length)}${j}]`;
-    b = " (image)";
+    let displaySize = dimensions?.displayWidth
+      ? `, ${dimensions.displayWidth}x${dimensions.displayHeight}px`
+      : "";
+    let webpHeader = parseWebpHeader(focusContent.bytes);
+    let webpSize = webpHeader ? `, ${webpHeader.width}x${webpHeader.height}px` : "";
+    evidence = `[image shown to the judge: ${focusContent.path} \u2014 sent as ${block.source.media_type}, ${formatFileSize(Buffer.byteLength(block.source.data, "base64"))}${displaySize}; file on disk: ${focusContent.mediaType}, ${formatFileSize(focusContent.bytes.length)}${webpSize}]`;
+    noteSuffix = " (image)";
   } else {
-    let S =
-      r.text === "" && e.focus === "files"
+    let focusText =
+      focusContent.text === "" && grader.focus === "files"
         ? "(no file changes)"
-        : r.text === "" && e.focus === "mock_calls"
+        : focusContent.text === "" && grader.focus === "mock_calls"
           ? "(no mocked tool calls)"
-          : r.text;
-    w = truncateMiddle(
-      S,
+          : focusContent.text;
+    evidence = truncateMiddle(
+      focusText,
       MAX_JUDGE_INPUT_CHARS - JUDGE_TRACE_CHARS,
       JUDGE_TRACE_CHARS,
-      (T) => `
-[\u2026${T} chars elided\u2026]
+      (elidedCount) => `
+[\u2026${elidedCount} chars elided\u2026]
 `,
     );
-    h = `${a}
+    judgePrompt = `${promptHeader}
 
 
-Agent output (${describeTarget(e.focus)}):
-${w}
+Agent output (${describeTarget(grader.focus)}):
+${evidence}
 
 
-${s}`;
-    b =
-      typeof e.focus === "object" && S.length > MAX_FOCUS_SPECS
-        ? ` \u2014 note: long file (${S.length} chars); llm judges are noisy on long inputs, prefer a regex grader for large artifacts`
+${answerInstruction}`;
+    noteSuffix =
+      typeof grader.focus === "object" && focusText.length > MAX_FOCUS_SPECS
+        ? ` \u2014 note: long file (${focusText.length} chars); llm judges are noisy on long inputs, prefer a regex grader for large artifacts`
         : "";
   }
-  let y;
+  let votes;
   try {
-    y = await runEvalJudgeTrials(h, n);
+    votes = await runEvalJudgeTrials(judgePrompt, input);
   } catch (error) {
-    if (r.kind === "image" && error instanceof AttachedMediaRejectedError)
+    if (focusContent.kind === "image" && error instanceof AttachedMediaRejectedError)
       return failedGrader(
-        e,
-        `focus file ${r.path} was rejected by the API as an image (${error.reason}) \u2014 the artifact may be truncated or corrupt, or the judge route does not accept images`,
+        grader,
+        `focus file ${focusContent.path} was rejected by the API as an image (${error.reason}) \u2014 the artifact may be truncated or corrupt, or the judge route does not accept images`,
       );
     throw error;
   }
-  let passed = count(y, Boolean) > y.length / 2;
+  let passed = count(votes, Boolean) > votes.length / 2;
   return {
-    name: e.name,
+    name: grader.name,
     passed,
-    weight: e.weight,
-    explanation: `judge votes: ${y.map((S) => (S ? "PASS" : "FAIL")).join(" ")}${b}`,
-    judge_votes: y,
-    evidence: w,
+    weight: grader.weight,
+    explanation: `judge votes: ${votes.map((vote) => (vote ? "PASS" : "FAIL")).join(" ")}${noteSuffix}`,
+    judge_votes: votes,
+    evidence,
   };
 }
 //@ chunk-qchp9vrd.js:237977-238811 placement
-async function compareWithBaseline(e, n) {
-  let { case_, run } = n;
-  let s;
+async function compareWithBaseline(grader, runContext) {
+  let { case_, run } = runContext;
+  let baselineTrace;
   try {
-    let caseFileInsideSuite = await resolveCaseFileInsideSuite(case_, e.baseline_file, "baseline_file");
+    let caseFileInsideSuite = await resolveCaseFileInsideSuite(case_, grader.baseline_file, "baseline_file");
     let textFile = await readTextFile(caseFileInsideSuite, MAX_FOCUS_FILE_BYTES, "baseline file");
-    if (textFile === null) return failedGrader(e, `baseline file ${e.baseline_file} does not exist`);
-    s = textFile
+    if (textFile === null)
+      return failedGrader(grader, `baseline file ${grader.baseline_file} does not exist`);
+    baselineTrace = textFile
       .split(
         `
 `,
@@ -646,17 +660,17 @@ async function compareWithBaseline(e, n) {
       .map((line) => jsonParse(line));
   } catch (error) {
     return failedGrader(
-      e,
+      grader,
       `failed to read baseline: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
   let joined = [
     "You are comparing a NEW coding-agent trajectory against a BASELINE.",
     `Criterion:
-${e.criteria}`,
+${grader.criteria}`,
     `
 BASELINE trajectory:
-${elideMessages(s)}`,
+${elideMessages(baselineTrace)}`,
     `
 NEW trajectory:
 ${elideMessages(run.trace)}`,
@@ -666,60 +680,60 @@ Does the NEW trajectory satisfy the criterion at least as well as the BASELINE?`
   ].join(`
 
 `);
-  let w = await runEvalJudgeTrials(joined, n);
-  let passed = count(w, Boolean) > w.length / 2;
+  let votes = await runEvalJudgeTrials(joined, runContext);
+  let passed = count(votes, Boolean) > votes.length / 2;
   return {
-    name: e.name,
+    name: grader.name,
     passed,
-    weight: e.weight,
-    explanation: `judge votes: ${w.map((y) => (y ? "PASS" : "FAIL")).join(" ")}`,
-    judge_votes: w,
+    weight: grader.weight,
+    explanation: `judge votes: ${votes.map((vote) => (vote ? "PASS" : "FAIL")).join(" ")}`,
+    judge_votes: votes,
   };
 }
 //@ chunk-qchp9vrd.js:238811-238944 placement
 async function runEvalJudgeTrials(description, signal) {
-  let r = [];
+  let votes = [];
   for (let j = 0; j < MAX_JUDGE_ATTEMPTS; j++) {
-    let s = await runEvalJudge(description, signal);
-    r.push(/\bPASS\b/i.test(s) && !/\bFAIL\b/i.test(s));
+    let answer = await runEvalJudge(description, signal);
+    votes.push(/\bPASS\b/i.test(answer) && !/\bFAIL\b/i.test(answer));
   }
-  return r;
+  return votes;
 }
 //@ chunk-qchp9vrd.js:238944-239610 placement = generateTitleAndBranch (0.267)
 async function runEvalJudge(description, signal) {
   let systemPrompt = asSystemPrompt(["You are a strict, terse evaluation judge for coding-agent traces."]);
   let reason;
-  let s = {
+  let queryOptions = {
     querySource: "plugin_eval_judge",
     agents: [],
     isNonInteractiveSession: true,
     hasAppendSystemPrompt: false,
     mcpTools: [],
     agentContext: mainAgentContext(),
-    onMediaStripped: (y, R) => {
-      reason = R;
+    onMediaStripped: (stripped, strippedReason) => {
+      reason = strippedReason;
     },
     credentials: signal.credentials,
   };
-  let h = normalizeJudgeModel(signal.judgeModel);
-  let w = h
+  let judgeModel = normalizeJudgeModel(signal.judgeModel);
+  let response = judgeModel
     ? await queryHaiku({
         systemPrompt,
         userPrompt: description,
         signal: signal.signal,
         options: {
-          ...s,
-          model: h,
+          ...queryOptions,
+          model: judgeModel,
         },
       })
     : await queryHaikuWithFallback({
         systemPrompt,
         userPrompt: description,
         signal: signal.signal,
-        options: s,
+        options: queryOptions,
       });
-  let parsed = extractTextContent_2(w.message.content);
-  if (isSyntheticModelApiErrorMessage(w))
+  let parsed = extractTextContent_2(response.message.content);
+  if (isSyntheticModelApiErrorMessage(response))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `judge call failed: ${parsed}${reason !== undefined ? ` (after the attached image was rejected: ${reason})` : ""}`,
       "plugin eval judge call failed",
@@ -746,35 +760,36 @@ function normalizeJudgeModel(judgeModel) {
     : judgeModel;
 }
 //@ chunk-qchp9vrd.js:239813-240021 placement
-function elideMessages(trace) {
-  if (trace.length <= 24)
-    return trace.map((h) => jsonStringify(h)).join(`
+function elideMessages(messages) {
+  if (messages.length <= 24)
+    return messages.map((message) => jsonStringify(message)).join(`
 `);
-  let mapped = trace.slice(0, 12).map((h) => jsonStringify(h));
-  let mapped_2 = trace.slice(-12).map((h) => jsonStringify(h));
-  return [...mapped, `[\u2026${trace.length - 12 - 12} messages elided\u2026]`, ...mapped_2].join(`
+  let mapped = messages.slice(0, 12).map((message) => jsonStringify(message));
+  let mapped_2 = messages.slice(-12).map((message) => jsonStringify(message));
+  return [...mapped, `[\u2026${messages.length - 12 - 12} messages elided\u2026]`, ...mapped_2].join(`
 `);
 }
 //@ chunk-qchp9vrd.js:240021-241664 placement
-async function openFocusFileSafely(e, n, path) {
-  let a = () =>
+async function openFocusFileSafely(rootDir, focusPath, path) {
+  let escapeError = () =>
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `focus file ${path} leaves the run directory through a link`,
       "grader focus file escapes the run directory via link",
     );
-  let s = await lstat(e, {
+  let rootStats = await lstat(rootDir, {
     bigint: true,
   }).catch(() => null);
-  if (s === null || !s.isDirectory() || s.isSymbolicLink()) throw a();
-  let h = await realpath(e).catch(() => null);
-  if (h === null || h !== e) throw a();
-  let w = await lstat(h, {
+  if (rootStats === null || !rootStats.isDirectory() || rootStats.isSymbolicLink()) throw escapeError();
+  let rootReal = await realpath(rootDir).catch(() => null);
+  if (rootReal === null || rootReal !== rootDir) throw escapeError();
+  let rootRealStats = await lstat(rootReal, {
     bigint: true,
   }).catch(() => null);
-  if (w === null || w.ino !== s.ino || w.dev !== s.dev) throw a();
-  let b;
+  if (rootRealStats === null || rootRealStats.ino !== rootStats.ino || rootRealStats.dev !== rootStats.dev)
+    throw escapeError();
+  let handle;
   try {
-    b = await open(n, constants.O_RDONLY | FILE_OPEN_EXTRA_FLAGS);
+    handle = await open(focusPath, constants.O_RDONLY | FILE_OPEN_EXTRA_FLAGS);
   } catch (error) {
     if (getErrnoCode(error) === "ENOENT")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -787,7 +802,7 @@ async function openFocusFileSafely(e, n, path) {
     );
   }
   try {
-    let stats = await b.stat({
+    let stats = await handle.stat({
       bigint: true,
     });
     if (!stats.isFile())
@@ -800,31 +815,37 @@ async function openFocusFileSafely(e, n, path) {
         `focus file ${path} has more than one hard link, so the grader cannot tell whether it also lives outside the run directory \u2014 not read (point the focus at a file with a single link, e.g. a copy)`,
         "grader focus file has multiple hard links",
       );
-    if (stats.ino === 0n) throw a();
-    let R = await fdRealPath(b.fd);
-    let S = R ?? (await realpath(n).catch(() => null));
-    if (S === null || !toEvalPathError(h, S)) throw a();
-    if (R === null) {
-      let x = await lstat(S, {
+    if (stats.ino === 0n) throw escapeError();
+    let fdReal = await fdRealPath(handle.fd);
+    let fileReal = fdReal ?? (await realpath(focusPath).catch(() => null));
+    if (fileReal === null || !toEvalPathError(rootReal, fileReal)) throw escapeError();
+    if (fdReal === null) {
+      let fileRealStats = await lstat(fileReal, {
         bigint: true,
       }).catch(() => null);
-      if (x === null || x.ino !== stats.ino || x.dev !== stats.dev || x.nlink !== 1n) throw a();
+      if (
+        fileRealStats === null ||
+        fileRealStats.ino !== stats.ino ||
+        fileRealStats.dev !== stats.dev ||
+        fileRealStats.nlink !== 1n
+      )
+        throw escapeError();
     }
     if (stats.size > BigInt(MAX_FOCUS_FILE_BYTES))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `focus file ${path} exceeds ${formatFileSize(MAX_FOCUS_FILE_BYTES)}`,
         "grader focus file too large",
       );
-    let T = Number(stats.size);
-    let exactBytes = await readExactBytes(b, T);
+    let size = Number(stats.size);
+    let exactBytes = await readExactBytes(handle, size);
     if (exactBytes === null)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `focus file ${path} changed while being read (vetted at ${T} bytes); try again`,
+        `focus file ${path} changed while being read (vetted at ${size} bytes); try again`,
         "grader focus file changed during read",
       );
     return exactBytes;
   } finally {
-    await b.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 //@ chunk-qchp9vrd.js:241664-241703 placement
@@ -846,19 +867,19 @@ function EVAL_RUN_BASE_PATH(path) {
 /**
  * 从文件路径向上查找最近的、以指定段结尾的模拟基准目录（不超出根）。
  */
-function findMockBaseDir(caseDir, n, r) {
-  if (r.length > 0) {
-    let a = null;
+function findMockBaseDir(caseDir, pluginDir, suiteSegments) {
+  if (suiteSegments.length > 0) {
+    let found = null;
     let resolved = path_2.resolve(caseDir);
-    while (isSameOrInside(resolved, n) && resolved !== n) {
-      if (pathEndsWith(pathSegments(resolved), r)) a = resolved;
+    while (isSameOrInside(resolved, pluginDir) && resolved !== pluginDir) {
+      if (pathEndsWith(pathSegments(resolved), suiteSegments)) found = resolved;
       let dir = path_2.dirname(resolved);
       if (dir === resolved) break;
       resolved = dir;
     }
-    if (a !== null) return a;
+    if (found !== null) return found;
   }
-  return n;
+  return pluginDir;
 }
 //@ chunk-qchp9vrd.js:242163-242327 placement
 /**
@@ -867,14 +888,14 @@ function findMockBaseDir(caseDir, n, r) {
 function listAncestorChain(caseDir, mockBaseDir) {
   let dir = path_2.dirname(caseDir);
   if (!isSameOrInside(dir, mockBaseDir)) return [caseDir];
-  let a = [];
-  let s = dir;
+  let ancestors = [];
+  let current = dir;
   for (;;) {
-    a.push(s);
-    let dir = path_2.dirname(s);
-    if (dir === s || !isSameOrInside(dir, mockBaseDir)) break;
-    s = dir;
+    ancestors.push(current);
+    let dir = path_2.dirname(current);
+    if (dir === current || !isSameOrInside(dir, mockBaseDir)) break;
+    current = dir;
   }
-  return [...a.reverse(), caseDir];
+  return [...ancestors.reverse(), caseDir];
 }
 export { listAncestorChain, findMockBaseDir, checkGradersSatisfiable, normalizeJudgeModel, gradeCase };

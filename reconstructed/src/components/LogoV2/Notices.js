@@ -8,7 +8,7 @@
  * pieces: chunk-ag5x7vhf.js (10)
  * attribution: placement 10
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { actionKeysNamespace } from "../pluginUi/render/actionKeys.js";
 import {
   jsxProd_default,
@@ -16,11 +16,11 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import {
-  Fy,
+  childrenExport,
   isValidElement_default,
   init_react_production,
-  Q,
-  yt,
+  useMemo,
+  useSyncExternalStore,
 } from "../../../vendor/react/cjs/react.production.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
 import { isAnthropicAuthEnabled, getClaudeAIOAuthTokens } from "../../utils/auth.js";
@@ -29,81 +29,82 @@ import { getModelSourceAnnotation, renderModelSetting } from "../../utils/model/
 import { MIGRATIONS } from "../../hooks/notifs/useModelMigrationNotifications.js";
 import { uiSignals } from "../../state/uiSignals.js";
 import { isMainLoopBusy } from "./ModelSuccessorNotice.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:74596-75065 placement
 /**
  * 启动提示的通用外框：提示正文 + 可选命令（"· /cmd"）。
  */
 function InfoNotice(props) {
-  let T = w(9);
+  let $ = useMemoCache(9);
   let { children, command } = props;
-  let k;
-  if (T[0] !== children) {
-    k = noticeText(children);
-    T[0] = children;
-    T[1] = k;
-  } else k = T[1];
-  let _ = k;
-  let I;
-  let D;
-  if (T[2] !== command || T[3] !== _) {
-    I = () => ({
-      requestId: `notice:${_}`,
+  let text;
+  if ($[0] !== children) {
+    text = noticeText(children);
+    $[0] = children;
+    $[1] = text;
+  } else text = $[1];
+  let text_2 = text;
+  let compute;
+  let deps;
+  if ($[2] !== command || $[3] !== text_2) {
+    compute = () => ({
+      requestId: `notice:${text_2}`,
       props: {
-        text: _,
+        text: text_2,
         command: command ?? null,
       },
     });
-    D = [_, command];
-    T[2] = command;
-    T[3] = _;
-    T[4] = I;
-    T[5] = D;
+    deps = [text_2, command];
+    $[2] = command;
+    $[3] = text_2;
+    $[4] = compute;
+    $[5] = deps;
   } else {
-    I = T[4];
-    D = T[5];
+    compute = $[4];
+    deps = $[5];
   }
-  let A = actionKeysNamespace.useRenderInput("InfoNotice", I, D);
-  let L;
-  if (T[6] !== children || T[7] !== _) {
-    L = (V) =>
+  let actionKeys = actionKeysNamespace.useRenderInput("InfoNotice", compute, deps);
+  let renderNotice;
+  if ($[6] !== children || $[7] !== text_2) {
+    renderNotice = (state) =>
       jsxProd_default(NoticeLine, {
-        command: V.props.command ?? undefined,
-        children: V.props.text === _ ? children : V.props.text,
+        command: state.props.command ?? undefined,
+        children: state.props.text === text_2 ? children : state.props.text,
       });
-    T[6] = children;
-    T[7] = _;
-    T[8] = L;
-  } else L = T[8];
-  return actionKeysNamespace.useRenderHook(A, L);
+    $[6] = children;
+    $[7] = text_2;
+    $[8] = renderNotice;
+  } else renderNotice = $[8];
+  return actionKeysNamespace.useRenderHook(actionKeys, renderNotice);
 }
 //@ chunk-ag5x7vhf.js:75065-75264 placement
 function NoticeLine(props) {
-  let k = w(3);
+  let $ = useMemoCache(3);
   let { children, command } = props;
-  const T = command ? ` \xB7 ${command}` : "";
-  let _;
-  if (k[0] !== children || k[1] !== T) {
-    _ = jsxProd_default(Box, {
+  const commandSuffix = command ? ` \xB7 ${command}` : "";
+  let line;
+  if ($[0] !== children || $[1] !== commandSuffix) {
+    line = jsxProd_default(Box, {
       children: jsxProd_default_2(Text, {
         dimColor: true,
-        children: [children, T],
+        children: [children, commandSuffix],
       }),
     });
-    k[0] = children;
-    k[1] = T;
-    k[2] = _;
-  } else _ = k[2];
-  return _;
+    $[0] = children;
+    $[1] = commandSuffix;
+    $[2] = line;
+  } else line = $[2];
+  return line;
 }
 //@ chunk-ag5x7vhf.js:75264-75413 placement
 function noticeText(children) {
-  let h = "";
-  Fy.forEach(children, (x) => {
-    if (typeof x === "string" || typeof x === "number") h += String(x);
-    else if (isValidElement_default(x)) h += noticeText(x.props.children);
+  let text = "";
+  childrenExport.forEach(children, (child) => {
+    if (typeof child === "string" || typeof child === "number") text += String(child);
+    else if (isValidElement_default(child)) text += noticeText(child.props.children);
   });
-  return h;
+  return text;
 }
 //@ chunk-ag5x7vhf.js:75413-75437 placement
 var ONE_DAY_MS = 86400000;
@@ -122,36 +123,47 @@ function oauthExpiryWarning() {
     claudeAIOAuthTokens.expiresAt > refreshTokenExpiresAt + TOKEN_EXPIRY_WINDOW_MS
   )
     return null;
-  let x = refreshTokenExpiresAt - Date.now();
-  if (x > TOKEN_EXPIRY_WINDOW_MS || x <= 0) return null;
+  let msLeft = refreshTokenExpiresAt - Date.now();
+  if (msLeft > TOKEN_EXPIRY_WINDOW_MS || msLeft <= 0) return null;
   return {
-    daysLeft: Math.ceil(x / ONE_DAY_MS),
+    daysLeft: Math.ceil(msLeft / ONE_DAY_MS),
   };
 }
 //@ chunk-ag5x7vhf.js:75737-75741 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:75737", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:75741-75936 placement
 /**
  * 启动提示 "Using <模型>"，附带模型来源说明和/或 (auto-updated)；两者都没有时不显示。
  */
 function ModelSourceNotice() {
   let mainLoopModel = useMainLoopModel_2();
-  let h = Q(getModelSourceAnnotation, [mainLoopModel]);
-  let x = MIGRATIONS();
-  if (!h && !x) return null;
-  let T = h && x ? `${h.slice(0, -1)}, auto-updated)` : x ? " (auto-updated)" : h;
+  let annotation = useMemo(getModelSourceAnnotation, [mainLoopModel]);
+  let migrationNotice = MIGRATIONS();
+  if (!annotation && !migrationNotice) return null;
+  let suffix =
+    annotation && migrationNotice
+      ? `${annotation.slice(0, -1)}, auto-updated)`
+      : migrationNotice
+        ? " (auto-updated)"
+        : annotation;
   return jsxProd_default_2(InfoNotice, {
     command: "/model",
-    children: ["Using ", renderModelSetting(mainLoopModel), T],
+    children: ["Using ", renderModelSetting(mainLoopModel), suffix],
   });
 }
 //@ chunk-ag5x7vhf.js:75936-75940 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:75936", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:75940-76009 placement
 function setMainLoopBusy(isMainLoopBusy) {
-  uiSignals.mainLoopBusy.setState((h) =>
-    h.busy === isMainLoopBusy
-      ? h
+  uiSignals.mainLoopBusy.setState((state) =>
+    state.busy === isMainLoopBusy
+      ? state
       : {
           busy: isMainLoopBusy,
         },
@@ -159,6 +171,6 @@ function setMainLoopBusy(isMainLoopBusy) {
 }
 //@ chunk-ag5x7vhf.js:76009-76067 placement
 function useMainLoopBusy() {
-  return yt(uiSignals.mainLoopBusy.subscribe, isMainLoopBusy, isMainLoopBusy);
+  return useSyncExternalStore(uiSignals.mainLoopBusy.subscribe, isMainLoopBusy, isMainLoopBusy);
 }
 export { ModelSourceNotice, InfoNotice, oauthExpiryWarning, useMainLoopBusy, setMainLoopBusy };

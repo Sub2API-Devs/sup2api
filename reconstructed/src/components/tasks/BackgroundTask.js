@@ -11,7 +11,7 @@
 import { TaskStatusText, ShellProgress } from "./ShellProgress.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
-import { DIAMOND_GLYPH, FILLED_DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { DIAMOND_GLYPH, FILLED_DIAMOND_GLYPH } from "../../constants/figures.js";
 import { remoteTaskStatusLabel } from "./TaskDetailDialog.js";
 import { isCoordinatorPanelActive, agentLabel } from "../../utils/transcriptDiagnostics.js";
 import { isTerminalStatus } from "./taskStatusUtils.js";
@@ -26,7 +26,7 @@ import { isAutoReactArmedMonitorTask } from "../../tasks/MonitorWsTask/MonitorWs
 var AUTO_REPLYING_TEXT = "auto-replying to comments";
 //@ chunk-18hwfzwa.js:695559-697663 fingerprint = BackgroundTask (0.614)
 function BackgroundTask(t0) {
-  let x = t0.status === "completed" && !t0.notified ? ", unread" : "";
+  let unreadSuffix = t0.status === "completed" && !t0.notified ? ", unread" : "";
   switch (t0.type) {
     case "local_bash":
       return {
@@ -45,25 +45,25 @@ function BackgroundTask(t0) {
         meta: [remoteTaskStatusLabel(t0)],
       };
     case "local_agent": {
-      let D = t0.status === "completed" && "quietlyParked" in t0 && t0.quietlyParked === true;
-      let L = !D && isCoordinatorPanelActive() && isTerminalStatus(t0);
-      let ee = agentLabel(t0.model, t0.effort);
+      let isQuietlyParked = t0.status === "completed" && "quietlyParked" in t0 && t0.quietlyParked === true;
+      let isWaitingInCoordinator = !isQuietlyParked && isCoordinatorPanelActive() && isTerminalStatus(t0);
+      let agentEffortLabel = agentLabel(t0.model, t0.effort);
       return {
         label: t0.description,
-        icon: L
+        icon: isWaitingInCoordinator
           ? jsxProd_default(StatusIcon, {
               status: "pending",
               "aria-label": "waiting:",
             })
-          : D
+          : isQuietlyParked
             ? jsxProd_default(StatusIcon, {
                 status: "pending",
                 "aria-label": "parked:",
               })
             : TaskStatusText(t0.status),
         meta: [
-          `${t0.status === "completed" ? (D ? "parked" : L ? "waiting" : "done") : t0.status}${x}`,
-          ee ? truncate(ee, 28, true) : "",
+          `${t0.status === "completed" ? (isQuietlyParked ? "parked" : isWaitingInCoordinator ? "waiting" : "done") : t0.status}${unreadSuffix}`,
+          agentEffortLabel ? truncate(agentEffortLabel, 28, true) : "",
         ],
       };
     }
@@ -74,7 +74,7 @@ function BackgroundTask(t0) {
         label: t0.workflowName ?? t0.summary ?? t0.description,
         icon: TaskStatusText(t0.status),
         meta: [
-          `${t0.status === "running" ? `${t0.agentCount} ${plural(t0.agentCount, "agent")}` : t0.status === "completed" ? "done" : t0.status}${x}`,
+          `${t0.status === "running" ? `${t0.agentCount} ${plural(t0.agentCount, "agent")}` : t0.status === "completed" ? "done" : t0.status}${unreadSuffix}`,
         ],
       };
     case "mcp_task":
@@ -93,19 +93,19 @@ function BackgroundTask(t0) {
         label: t0.description,
         icon: TaskStatusText(t0.status),
         meta: [
-          `${t0.status === "completed" ? "done" : isAutoReactArmedMonitorTask(t0) ? AUTO_REPLYING_TEXT : t0.status}${x}`,
+          `${t0.status === "completed" ? "done" : isAutoReactArmedMonitorTask(t0) ? AUTO_REPLYING_TEXT : t0.status}${unreadSuffix}`,
         ],
       };
     case "dream": {
-      let D = t0.filesTouched.length;
+      let filesTouchedCount = t0.filesTouched.length;
       return {
         label: t0.description,
         icon: TaskStatusText(t0.status),
         meta: [
-          `${t0.status === "completed" ? "done" : t0.status}${x}`,
+          `${t0.status === "completed" ? "done" : t0.status}${unreadSuffix}`,
           t0.phase,
-          t0.phase === "updating" && D > 0
-            ? `${D} ${plural(D, "file")}`
+          t0.phase === "updating" && filesTouchedCount > 0
+            ? `${filesTouchedCount} ${plural(filesTouchedCount, "file")}`
             : `${t0.sessionsReviewing} ${plural(t0.sessionsReviewing, "session")}`,
         ],
       };
@@ -121,7 +121,7 @@ function BackgroundTask(t0) {
         label: t0.description,
         icon: TaskStatusText(t0.status),
         meta: [
-          `${t0.status === "completed" ? "done" : t0.status}${x}`,
+          `${t0.status === "completed" ? "done" : t0.status}${unreadSuffix}`,
           `${t0.windowsDone} of ${t0.windowsPlanned} model ${plural(t0.windowsPlanned, "call")}`,
           `${t0.filesRead} ${plural(t0.filesRead, "file")}`,
         ],
@@ -130,7 +130,7 @@ function BackgroundTask(t0) {
       return {
         label: t0.description,
         icon: TaskStatusText(t0.status),
-        meta: [`${t0.status === "completed" ? "done" : t0.status}${x}`],
+        meta: [`${t0.status === "completed" ? "done" : t0.status}${unreadSuffix}`],
       };
     default:
       return {

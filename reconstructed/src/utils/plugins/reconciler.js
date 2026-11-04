@@ -10,7 +10,7 @@
  */
 import { isAbsolute, resolve } from "path";
 import { ownPropertyOrUndefined } from "./marketplaceSources.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   getDeclaredMarketplaces,
   loadKnownMarketplacesWithDeclared,
@@ -33,6 +33,13 @@ import { CLAUDEAI_MARKETPLACE_PREFIX } from "./schemas.js";
 import { pathExists } from "../fsSafety/atomicWriteStaging.js";
 import { storageRootFor } from "../settings/settingsStorage.js";
 
+//@ chunk-dcmhvw5a.js:125770-125834 fingerprint = normalizeSource (1)
+/**
+ * 来源是否为本地（file 或 directory）。旧版名 normalizeSource 名不副实，见 lead 建议。
+ */
+function isLocalMarketplaceSource(source) {
+  return source.source === "file" || source.source === "directory";
+}
 //@ chunk-rrq1mnv6.js:5312-5627 fingerprint = diffMarketplaces (1)
 /**
  * 比较 settings 声明的市场（extraKnownMarketplaces）与已落盘的 known_marketplaces：返回 缺失、来源变化、已一致 三组。
@@ -46,7 +53,7 @@ function diffMarketplaces(declared, materialized, opts) {
     let normalizedIntent = normalizeSource(intent.source, opts?.projectRoot);
     if (!state) missing.push(name);
     else if (intent.sourceIsFallback) upToDate.push(name);
-    else if (!En(normalizedIntent, state.source))
+    else if (!import_sortedIndex_2(normalizedIntent, state.source))
       sourceChanged.push({
         name,
         declaredSource: normalizedIntent,
@@ -102,51 +109,51 @@ async function reconcileMarketplaces(opts) {
       action: "update",
     })),
   ];
-  let u = [];
-  let f = [];
-  let S = [];
+  let skipped = [];
+  let work_2 = [];
+  let failed = [];
   for (let item of work) {
     if (hasDirectoryAutoUpdate(item.name)) {
       logForDebugging(
         `[reconcile] '${item.name}' is the built-in ${OFFICIAL_MARKETPLACE_DISPLAY}'s name: a settings entry under it adds no marketplace. Only an autoUpdate from ${AUTOUPDATE_SETTING_SOURCES_TEXT} counts, and only while the Directory is turned on.`,
       );
-      u.push(item.name);
+      skipped.push(item.name);
       continue;
     }
-    let p = lookalikeReservedMarketplaceName(item.name);
-    if (isOfficialMarketplaceSpelling(item.name) || p !== undefined) {
-      let y = `${p === undefined ? reservedNameMessage(item.name) : reservedMarketplaceSpellingMessage(item.name, p)} This marketplace was not added. Remove it from extraKnownMarketplaces in settings.`;
-      logForDebugging(`[reconcile] '${item.name}' ${y}`, {
+    let lookalike = lookalikeReservedMarketplaceName(item.name);
+    if (isOfficialMarketplaceSpelling(item.name) || lookalike !== undefined) {
+      let message = `${lookalike === undefined ? reservedNameMessage(item.name) : reservedMarketplaceSpellingMessage(item.name, lookalike)} This marketplace was not added. Remove it from extraKnownMarketplaces in settings.`;
+      logForDebugging(`[reconcile] '${item.name}' ${message}`, {
         level: "warn",
       });
-      S.push({
+      failed.push({
         name: item.name,
-        error: y,
+        error: message,
       });
       opts?.onProgress?.({
         type: "failed",
         name: item.name,
-        error: y,
+        error: message,
       });
       continue;
     }
     if (opts?.skip?.(item.name, item.source)) {
-      u.push(item.name);
+      skipped.push(item.name);
       continue;
     }
     if (hasClaudeAiReservedPrefix(item.name)) {
-      let P = `not materialized: names starting with "${CLAUDEAI_MARKETPLACE_PREFIX}" are reserved for marketplaces hosted on claude.ai \u2014 rename the declaration`;
-      logForDebugging(`[reconcile] '${item.name}' ${P}`, {
+      let message = `not materialized: names starting with "${CLAUDEAI_MARKETPLACE_PREFIX}" are reserved for marketplaces hosted on claude.ai \u2014 rename the declaration`;
+      logForDebugging(`[reconcile] '${item.name}' ${message}`, {
         level: "warn",
       });
-      S.push({
+      failed.push({
         name: item.name,
-        error: P,
+        error: message,
       });
       opts?.onProgress?.({
         type: "failed",
         name: item.name,
-        error: P,
+        error: message,
       });
       continue;
     }
@@ -156,25 +163,25 @@ async function reconcileMarketplaces(opts) {
       !(await pathExists(item.source.path))
     ) {
       logForDebugging(`[reconcile] '${item.name}' declared path does not exist; keeping materialized entry`);
-      u.push(item.name);
+      skipped.push(item.name);
       continue;
     }
-    f.push(item);
+    work_2.push(item);
   }
   let installed = [];
   let updated = [];
-  if (f.length > 0) {
+  if (work_2.length > 0) {
     logForDebugging(
-      `[reconcile] ${f.length} marketplace(s): ${f.map((i) => `${i.name}(${i.action})`).join(", ")}`,
+      `[reconcile] ${work_2.length} marketplace(s): ${work_2.map((item) => `${item.name}(${item.action})`).join(", ")}`,
     );
-    for (let i = 0; i < f.length; i++) {
-      let { name, source, action } = f[i];
+    for (let index = 0; index < work_2.length; index++) {
+      let { name, source, action } = work_2[index];
       opts?.onProgress?.({
         type: "installing",
         name,
         action,
-        index: i + 1,
-        total: f.length,
+        index: index + 1,
+        total: work_2.length,
       });
       try {
         let result = await addMarketplaceSource(source, undefined, storageV5, name);
@@ -187,7 +194,7 @@ async function reconcileMarketplaces(opts) {
         });
       } catch (e) {
         let error = errorMessage(e);
-        S.push({
+        failed.push({
           name,
           error,
         });
@@ -206,9 +213,9 @@ async function reconcileMarketplaces(opts) {
   return {
     installed,
     updated,
-    failed: S,
+    failed,
     upToDate: diff.upToDate,
-    skipped: u,
+    skipped,
   };
 }
 //@ chunk-rrq1mnv6.js:7892-8056 sole-consumer = normalizeSource (1)
@@ -223,12 +230,5 @@ function normalizeSource(source, projectRoot) {
     };
   }
   return source;
-}
-//@ chunk-dcmhvw5a.js:125770-125834 fingerprint = normalizeSource (1)
-/**
- * 来源是否为本地（file 或 directory）。旧版名 normalizeSource 名不副实，见 lead 建议。
- */
-function isLocalMarketplaceSource(source) {
-  return source.source === "file" || source.source === "directory";
 }
 export { diffMarketplaces, reconcileMarketplaces, isLocalMarketplaceSource };

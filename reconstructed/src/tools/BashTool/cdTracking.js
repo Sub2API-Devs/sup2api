@@ -38,79 +38,79 @@ import { isSentinelInode } from "../../utils/slowOperations.js";
 /**
  * 对单纯的 "cd 路径" 命令（无环境变量/重定向、显式相对或绝对路径、不含 .. 或通配）校验路径在允许的工作目录内，返回解析后的路径或 null。
  */
-function resolveSimpleCdTarget(e, cwd, r) {
-  if (!e) return null;
-  if (e.envVars.length > 0 || e.redirects.length > 0) return null;
-  if (e.argv.length !== 2 || e.argv[0] !== "cd") return null;
-  let normalized = e.argv[1];
-  if (containsAnyPlaceholder(normalized)) return null;
-  if (normalized.startsWith("-")) return null;
-  if (!isExplicitRelativeOrAbsolutePath(normalized)) return null;
-  if (!isAbsolute(normalized) && normalized.split(/[\\/]/).includes("..")) return null;
-  if (getPlatform() === "windows" && !staysWithinRelativeRoot(normalized, cwd)) return null;
-  if (/[*?[\]]/.test(normalized)) return null;
-  let { allowed, resolvedPath } = validatePath(normalized, cwd, r, "read");
+function resolveSimpleCdTarget(command, root, permissionContext) {
+  if (!command) return null;
+  if (command.envVars.length > 0 || command.redirects.length > 0) return null;
+  if (command.argv.length !== 2 || command.argv[0] !== "cd") return null;
+  let targetPath = command.argv[1];
+  if (containsAnyPlaceholder(targetPath)) return null;
+  if (targetPath.startsWith("-")) return null;
+  if (!isExplicitRelativeOrAbsolutePath(targetPath)) return null;
+  if (!isAbsolute(targetPath) && targetPath.split(/[\\/]/).includes("..")) return null;
+  if (getPlatform() === "windows" && !staysWithinRelativeRoot(targetPath, root)) return null;
+  if (/[*?[\]]/.test(targetPath)) return null;
+  let { allowed, resolvedPath } = validatePath(targetPath, root, permissionContext, "read");
   if (!allowed) return null;
-  if (!pathInAllowedWorkingPath(resolvedPath, r, [resolvedPath])) return null;
+  if (!pathInAllowedWorkingPath(resolvedPath, permissionContext, [resolvedPath])) return null;
   return resolvedPath;
 }
 //@ chunk-e6aww6q8.js:1191075-1191490 placement
 /**
  * 判断命令中的 cd 是否只切换到当前目录（只有一个 cd、无环境变量与重定向、目标与当前目录文件身份相同）。
  */
-async function isCdToCurrentDir(astCommandsByIdx, subcommands, filePath) {
-  let fileIdentity = await getFileIdentity_4(filePath);
+async function isCdToCurrentDir(astCommandsByIdx, subcommands, cwd) {
+  let fileIdentity = await getFileIdentity_4(cwd);
   if (fileIdentity === null) return false;
-  if (count(subcommands, (S) => isNormalizedCdCommand(S)) > 1) return false;
-  let y = false;
+  if (count(subcommands, (subcommand) => isNormalizedCdCommand(subcommand)) > 1) return false;
+  let hasCd = false;
   for (let idx = 0; idx < subcommands.length; idx++) {
     if (!isNormalizedCdCommand(subcommands[idx])) continue;
-    y = true;
-    let w = astCommandsByIdx[idx];
-    if (!w) return false;
-    if (w.envVars.length > 0 || w.redirects.length > 0) return false;
-    if (w.argv.length !== 2 || w.argv[0] !== "cd") return false;
-    if (containsAnyPlaceholder(w.argv[1])) return false;
-    let L = getPlatform() === "windows" ? parseCdTarget(subcommands[idx]) : w.argv[1];
-    if (L === null) return false;
-    if (!(await isSameDirPath(L, filePath, fileIdentity))) return false;
+    hasCd = true;
+    let astCommand = astCommandsByIdx[idx];
+    if (!astCommand) return false;
+    if (astCommand.envVars.length > 0 || astCommand.redirects.length > 0) return false;
+    if (astCommand.argv.length !== 2 || astCommand.argv[0] !== "cd") return false;
+    if (containsAnyPlaceholder(astCommand.argv[1])) return false;
+    let cdTarget = getPlatform() === "windows" ? parseCdTarget(subcommands[idx]) : astCommand.argv[1];
+    if (cdTarget === null) return false;
+    if (!(await isSameDirPath(cdTarget, cwd, fileIdentity))) return false;
   }
-  return y;
+  return hasCd;
 }
 //@ chunk-e6aww6q8.js:1191490-1191728 placement
 /**
  * 按文本判断命令中的 cd 是否只切换到当前目录（只允许一个 cd）。
  */
-async function isCdTextToCurrentDir(e, filePath) {
-  let fileIdentity = await getFileIdentity_4(filePath);
+async function isCdTextToCurrentDir(subcommands, cwd) {
+  let fileIdentity = await getFileIdentity_4(cwd);
   if (fileIdentity === null) return false;
-  if (count(e, (y) => isNormalizedCdCommand(y.trim())) > 1) return false;
-  let h = false;
-  for (let y of e) {
-    let trimmed = y.trim();
-    if (!isNormalizedCdCommand(trimmed)) continue;
-    h = true;
-    let cdTarget = parseCdTarget(trimmed);
+  if (count(subcommands, (subcommand) => isNormalizedCdCommand(subcommand.trim())) > 1) return false;
+  let hasCd = false;
+  for (let subcommand of subcommands) {
+    let subcommand_2 = subcommand.trim();
+    if (!isNormalizedCdCommand(subcommand_2)) continue;
+    hasCd = true;
+    let cdTarget = parseCdTarget(subcommand_2);
     if (cdTarget === null) return false;
-    if (!(await isSameDirPath(cdTarget, filePath, fileIdentity))) return false;
+    if (!(await isSameDirPath(cdTarget, cwd, fileIdentity))) return false;
   }
-  return h;
+  return hasCd;
 }
 //@ chunk-e6aww6q8.js:1191728-1192212 placement
 /**
  * 从 "cd 目标" 文本中解析目标路径（支持完整引号），含空白、引号、反斜杠、shell 元字符或控制字符时返回 null。
  */
-function parseCdTarget(e) {
-  let trimmed = e.trim();
+function parseCdTarget(subcommand) {
+  let trimmed = subcommand.trim();
   if (!trimmed.startsWith("cd ")) return null;
   let trimmed_2 = trimmed.slice(3).trim();
   if (trimmed_2.length === 0) return null;
-  let s = trimmed_2[0];
-  if (s === '"' || s === "'") {
-    if (trimmed_2.length < 2 || trimmed_2.at(-1) !== s) return null;
+  let quoteChar = trimmed_2[0];
+  if (quoteChar === '"' || quoteChar === "'") {
+    if (trimmed_2.length < 2 || trimmed_2.at(-1) !== quoteChar) return null;
     let sliced = trimmed_2.slice(1, -1);
-    if (sliced.includes(s)) return null;
-    if (s === '"' && sliced.includes("\\") && getPlatform() !== "windows") return null;
+    if (sliced.includes(quoteChar)) return null;
+    if (quoteChar === '"' && sliced.includes("\\") && getPlatform() !== "windows") return null;
     if (/[\x00-\x1f\x7f]/.test(sliced)) return null;
     return sliced;
   }
@@ -125,91 +125,91 @@ function parseCdTarget(e) {
  * 检查 cd/pushd/popd 命令：目标目录的读权限与拒绝规则。
  */
 function checkCdCommand(commands, cwd, toolPermissionContext) {
-  let s = new Set([cwd]);
-  let h = cwd;
-  let y;
-  let S = [];
-  let w = false;
-  for (let L of commands) {
-    let G = stripWrappersFromArgvForPaths(L.argv);
-    let replaced = G[0]?.replace(/^.*[\\/]/, "");
+  let candidateDirs = new Set([cwd]);
+  let currentDir = cwd;
+  let previousDir;
+  let dirStack = [];
+  let hasUnresolvedCd = false;
+  for (let command of commands) {
+    let argv = stripWrappersFromArgvForPaths(command.argv);
+    let replaced = argv[0]?.replace(/^.*[\\/]/, "");
     if (replaced === "cd" || replaced === "chdir" || replaced === "pushd" || replaced === "popd") {
-      let filtered = G.slice(1).filter((Ae) => Ae !== "--" && (Ae === "-" || !Ae.startsWith("-")));
-      let Se =
+      let filtered = argv.slice(1).filter((arg) => arg !== "--" && (arg === "-" || !arg.startsWith("-")));
+      let pathArg =
         filtered.length === 1
           ? filtered[0]
           : filtered.length === 0 && (replaced === "cd" || replaced === "chdir")
             ? "~"
             : undefined;
-      let filtered_2 = G.slice(1).filter(
-        (Ae) => Ae !== "--" && Ae !== "-" && Ae.startsWith("-") && !/^-[PLe@]+$/.test(Ae),
-      );
+      let filtered_2 = argv
+        .slice(1)
+        .filter((arg) => arg !== "--" && arg !== "-" && arg.startsWith("-") && !/^-[PLe@]+$/.test(arg));
       if ((replaced === "pushd" || replaced === "popd") && filtered_2.length === 1 && filtered_2[0] === "-n")
         continue;
-      let we =
+      let isSimpleTarget =
         replaced !== "popd" &&
         filtered_2.length === 0 &&
-        Se !== undefined &&
-        Se !== "-" &&
-        !/^[+-]\d+$/.test(Se) &&
-        !containsAnyPlaceholder(Se) &&
-        !/[*?[\]$`]/.test(Se) &&
-        !(Se.startsWith("~") && Se !== "~" && !Se.startsWith("~/")) &&
-        !L.envVars.some((envVar) => containsAnyPlaceholder(envVar.value));
-      let Ee =
+        pathArg !== undefined &&
+        pathArg !== "-" &&
+        !/^[+-]\d+$/.test(pathArg) &&
+        !containsAnyPlaceholder(pathArg) &&
+        !/[*?[\]$`]/.test(pathArg) &&
+        !(pathArg.startsWith("~") && pathArg !== "~" && !pathArg.startsWith("~/")) &&
+        !command.envVars.some((envVar) => containsAnyPlaceholder(envVar.value));
+      let stackMove =
         filtered_2.length === 0 &&
         (replaced === "popd"
-          ? filtered.length === 0 && S.length > 0
+          ? filtered.length === 0 && dirStack.length > 0
             ? {
-                dir: S.pop(),
+                dir: dirStack.pop(),
               }
             : undefined
-          : Se === "-" && y !== undefined
+          : pathArg === "-" && previousDir !== undefined
             ? {
-                dir: y,
+                dir: previousDir,
               }
             : undefined);
-      if (Ee) [y, h] = [h, Ee.dir];
-      else if (we) {
-        if (replaced === "pushd") S.push(h);
-        y = h;
-        s.add(resolve_2(cwd, expandTildeWithHome(Se)));
-        if (h !== undefined) {
-          h = resolve_2(h, expandTildeWithHome(Se));
-          s.add(h);
+      if (stackMove) [previousDir, currentDir] = [currentDir, stackMove.dir];
+      else if (isSimpleTarget) {
+        if (replaced === "pushd") dirStack.push(currentDir);
+        previousDir = currentDir;
+        candidateDirs.add(resolve_2(cwd, expandTildeWithHome(pathArg)));
+        if (currentDir !== undefined) {
+          currentDir = resolve_2(currentDir, expandTildeWithHome(pathArg));
+          candidateDirs.add(currentDir);
         }
       } else {
-        if (replaced === "pushd") S.push(h);
-        w = true;
-        y = h;
-        h = undefined;
+        if (replaced === "pushd") dirStack.push(currentDir);
+        hasUnresolvedCd = true;
+        previousDir = currentDir;
+        currentDir = undefined;
       }
-      if (h === undefined && (Ee || we)) w = true;
+      if (currentDir === undefined && (stackMove || isSimpleTarget)) hasUnresolvedCd = true;
       continue;
     }
-    for (let Z of s) {
-      let Se = checkPathConstraints(
+    for (let baseDir of candidateDirs) {
+      let pathResult = checkPathConstraints(
         {
-          command: L.text,
+          command: command.text,
         },
-        Z,
+        baseDir,
         toolPermissionContext,
         false,
-        L.redirects,
-        [L],
+        command.redirects,
+        [command],
       );
-      if (Se.behavior === "deny" && Se.decisionReason?.type === "rule") return Se;
+      if (pathResult.behavior === "deny" && pathResult.decisionReason?.type === "rule") return pathResult;
     }
-    if (w)
-      for (let Z of getReadPathsForAstCommand(L)) {
-        let Se = denyRuleMatchingAnywhere(Z, toolPermissionContext, "read");
-        if (Se !== null)
+    if (hasUnresolvedCd)
+      for (let readPath of getReadPathsForAstCommand(command)) {
+        let denyRule = denyRuleMatchingAnywhere(readPath, toolPermissionContext, "read");
+        if (denyRule !== null)
           return {
             behavior: "deny",
-            message: `${G[0]} reads '${Z}' after a cd whose target cannot be resolved, and a deny rule (${Se.ruleValue.ruleContent ?? Se.ruleValue.toolName}) names that file under a directory it may run in`,
+            message: `${argv[0]} reads '${readPath}' after a cd whose target cannot be resolved, and a deny rule (${denyRule.ruleValue.ruleContent ?? denyRule.ruleValue.toolName}) names that file under a directory it may run in`,
             decisionReason: {
               type: "rule",
-              rule: Se,
+              rule: denyRule,
             },
           };
       }
@@ -222,24 +222,28 @@ function checkCdCommand(commands, cwd, toolPermissionContext) {
  */
 function cdMayChangeReadScope(commands, cwd, context, toolUseContext) {
   if (getPlatform() === "windows") return true;
-  let [h, ...y] = commands.map((command) => ({
+  let [firstCommand, ...restCommands] = commands.map((command) => ({
     cmd: command,
     argv: stripWrappersFromArgvForPaths(command.argv),
   }));
-  let S = h && getDirectoryChangeBuiltin(h.argv);
-  if (h === undefined || S === undefined || S === "popd") return true;
-  let filtered = h.argv.slice(1).filter((arg) => arg !== "--");
+  let cdBuiltin = firstCommand && getDirectoryChangeBuiltin(firstCommand.argv);
+  if (firstCommand === undefined || cdBuiltin === undefined || cdBuiltin === "popd") return true;
+  let filtered = firstCommand.argv.slice(1).filter((arg) => arg !== "--");
   let target = filtered[0];
   if (
-    h.cmd.envVars.length > 0 ||
+    firstCommand.cmd.envVars.length > 0 ||
     filtered.length !== 1 ||
     target === undefined ||
     containsAnyPlaceholder(target) ||
     /^[-+~]|[$`*?[\]{}\\\x00-\x1f\x7f]|(^|\/)\.\.(\/|$)/.test(target)
   )
     return true;
-  let G = !isAbsolute(target) && target !== "." && !target.startsWith("./");
-  if (G && spawnEnvKeysForSession(sessionEnvVarNameSet(toolUseContext))?.has("CDPATH") !== false) return true;
+  let isRelativeTarget = !isAbsolute(target) && target !== "." && !target.startsWith("./");
+  if (
+    isRelativeTarget &&
+    spawnEnvKeysForSession(sessionEnvVarNameSet(toolUseContext))?.has("CDPATH") !== false
+  )
+    return true;
   let resolvedTarget = resolve_2(cwd, target);
   if (!pathInAllowedWorkingPath(resolvedTarget, context, [resolvedTarget])) return true;
   try {
@@ -247,9 +251,14 @@ function cdMayChangeReadScope(commands, cwd, context, toolUseContext) {
   } catch {
     return true;
   }
-  let Z = (searchRoot) => readDenyRuleMayMatchBeneath(searchRoot, context) !== null;
-  if (Z(cwd) || Z(resolvedTarget) || (G && Z(resolve_2(homedir(), target)))) return true;
-  for (let { cmd, argv } of y) {
+  let mayMatchDeniedRead = (searchRoot) => readDenyRuleMayMatchBeneath(searchRoot, context) !== null;
+  if (
+    mayMatchDeniedRead(cwd) ||
+    mayMatchDeniedRead(resolvedTarget) ||
+    (isRelativeTarget && mayMatchDeniedRead(resolve_2(homedir(), target)))
+  )
+    return true;
+  for (let { cmd, argv } of restCommands) {
     if (
       cmd.hasUnquotedGlob ||
       cmd.envVars.length > 0 ||
@@ -258,11 +267,15 @@ function cdMayChangeReadScope(commands, cwd, context, toolUseContext) {
     )
       return true;
     for (let arg of argv.slice(1))
-      for (let Ee of getArgPathCandidates(arg)) {
-        if (Ee === "") continue;
-        if (/[*?[\]{}\\~]/.test(Ee) || /(^|[\\/=])\.\.([\\/]|$)/.test(Ee)) return true;
-        for (let Ae of [cwd, resolvedTarget])
-          if (!validatePath(Ee, Ae, context, "read").allowed || Z(resolve_2(Ae, Ee))) return true;
+      for (let candidate of getArgPathCandidates(arg)) {
+        if (candidate === "") continue;
+        if (/[*?[\]{}\\~]/.test(candidate) || /(^|[\\/=])\.\.([\\/]|$)/.test(candidate)) return true;
+        for (let baseDir of [cwd, resolvedTarget])
+          if (
+            !validatePath(candidate, baseDir, context, "read").allowed ||
+            mayMatchDeniedRead(resolve_2(baseDir, candidate))
+          )
+            return true;
       }
   }
   return false;
@@ -271,65 +284,77 @@ function cdMayChangeReadScope(commands, cwd, context, toolUseContext) {
 /**
  * 判断 "cd 目录 && 只读命令…" 是否可视为只读：cd 目标规范且允许，后续命令无环境变量、只重定向到 /dev/null、为只读命令，且其路径参数相对两个目录都被允许。
  */
-function isReadOnlyAfterCd(commands, cwd, r, toolUseContext) {
-  let [h, ...y] = commands;
-  let S = h?.argv[1];
+function isReadOnlyAfterCd(commands, cwd, permissionContext, toolUseContext) {
+  let [cdCommand, ...restCommands] = commands;
+  let cdTarget = cdCommand?.argv[1];
   if (
     getPlatform() === "windows" ||
-    h === undefined ||
-    S === undefined ||
-    y.length === 0 ||
-    h.argvSourceLiteral !== true ||
-    h.text !== `cd ${S}` ||
-    !isPlainPathToken(S)
+    cdCommand === undefined ||
+    cdTarget === undefined ||
+    restCommands.length === 0 ||
+    cdCommand.argvSourceLiteral !== true ||
+    cdCommand.text !== `cd ${cdTarget}` ||
+    !isPlainPathToken(cdTarget)
   )
     return false;
-  let simpleCdTarget = resolveSimpleCdTarget(h, cwd, r);
+  let simpleCdTarget = resolveSimpleCdTarget(cdCommand, cwd, permissionContext);
   if (simpleCdTarget === null) return false;
-  let mapped = [cwd, simpleCdTarget].map((G) => safeResolvePath(getFsImplementation(), G));
-  if (!mapped.every((G) => G.isCanonical)) return false;
-  return y.every((G) => {
-    let q = G.carveOutMayDesyncQuoteScan !== true && G.argvUnquotedGlob?.length === G.argv.length;
+  let mapped = [cwd, simpleCdTarget].map((dir) => safeResolvePath(getFsImplementation(), dir));
+  if (!mapped.every((resolved) => resolved.isCanonical)) return false;
+  return restCommands.every((command) => {
+    let isGlobLiterate =
+      command.carveOutMayDesyncQuoteScan !== true && command.argvUnquotedGlob?.length === command.argv.length;
     return (
-      G.envVars.length === 0 &&
-      G.argvSourceLiteral === true &&
-      G.redirects.every(
+      command.envVars.length === 0 &&
+      command.argvSourceLiteral === true &&
+      command.redirects.every(
         ({ op, target, targetSourceLiteral }) =>
           targetSourceLiteral === true &&
           (op === ">&" ? /^\d+$/.test(target) : (op === ">" || op === ">>") && target === "/dev/null"),
       ) &&
       BashTool.isReadOnly(
         {
-          command: G.text,
+          command: command.text,
         },
         toolUseContext,
       ) &&
-      G.argv.every(
-        (arg, Se) =>
+      command.argv.every(
+        (arg, argIdx) =>
           getDirectoryChangeBuiltin([arg]) === undefined &&
           !/(^|[\\/])xargs$/.test(arg) &&
           !/[{}]/.test(arg) &&
           !containsAnyPlaceholder(arg) &&
-          (isAbsolute(arg) || !/[*?[]/.test(arg) || (q && G.argvUnquotedGlob?.[Se] === false)) &&
+          (isAbsolute(arg) ||
+            !/[*?[]/.test(arg) ||
+            (isGlobLiterate && command.argvUnquotedGlob?.[argIdx] === false)) &&
           getArgPathCandidates(arg).every(
-            (ke) => ke === "" || mapped.every((we) => validatePath(ke, we.resolvedPath, r, "read").allowed),
+            (candidate) =>
+              candidate === "" ||
+              mapped.every(
+                (basePath) =>
+                  validatePath(candidate, basePath.resolvedPath, permissionContext, "read").allowed,
+              ),
           ),
       )
     );
   });
 }
 //@ chunk-e6aww6q8.js:1195635-1195872 placement
-function getArgPathCandidates(e) {
-  let n = new Set([e]);
-  if (/^-[^-]/.test(e)) for (let idx = 2; idx <= e.length; idx++) n.add(e.slice(idx));
-  let r = e;
+function getArgPathCandidates(arg) {
+  let candidates = new Set([arg]);
+  if (/^-[^-]/.test(arg)) for (let idx = 2; idx <= arg.length; idx++) candidates.add(arg.slice(idx));
+  let current = arg;
   for (;;) {
-    let s = r.startsWith("@") ? r.slice(1) : r.includes("=") ? r.slice(r.indexOf("=") + 1) : r;
-    n.add(s);
-    if (s === r) break;
-    r = s;
+    let stripped = current.startsWith("@")
+      ? current.slice(1)
+      : current.includes("=")
+        ? current.slice(current.indexOf("=") + 1)
+        : current;
+    candidates.add(stripped);
+    if (stripped === current) break;
+    current = stripped;
   }
-  return [...n];
+  return [...candidates];
 }
 //@ chunk-e6aww6q8.js:1195872-1195961 placement = resolveCwdReentry (1)
 /**
@@ -348,33 +373,33 @@ function isExplicitRelativeOrAbsolutePath(normalized) {
 /**
  * 判断 cd 目标是否就是当前目录：拒绝选项、变量、通配、UNC 路径与越界的 ..，再比较文件身份。
  */
-async function isSameDirPath(normalized, n, fileIdentity) {
-  if (normalized.startsWith("-")) return false;
-  if (!isExplicitRelativeOrAbsolutePath(normalized)) return false;
+async function isSameDirPath(cdTarget, cwd, fileIdentity) {
+  if (cdTarget.startsWith("-")) return false;
+  if (!isExplicitRelativeOrAbsolutePath(cdTarget)) return false;
   if (
-    normalized.includes("$") ||
-    normalized.includes("`") ||
-    /[*?[]/.test(normalized) ||
-    (getPlatform() !== "windows" && normalized.includes("\\")) ||
-    (getPlatform() === "windows" && normalized.includes("%"))
+    cdTarget.includes("$") ||
+    cdTarget.includes("`") ||
+    /[*?[]/.test(cdTarget) ||
+    (getPlatform() !== "windows" && cdTarget.includes("\\")) ||
+    (getPlatform() === "windows" && cdTarget.includes("%"))
   )
     return false;
-  if (containsVulnerableUncPath(normalized) || (getPlatform() === "windows" && /^[\\/]{2}/.test(normalized)))
+  if (containsVulnerableUncPath(cdTarget) || (getPlatform() === "windows" && /^[\\/]{2}/.test(cdTarget)))
     return false;
-  if (getPlatform() === "windows" && !staysWithinRelativeRoot(normalized, n)) return false;
+  if (getPlatform() === "windows" && !staysWithinRelativeRoot(cdTarget, cwd)) return false;
   {
-    let y = isAbsolute(normalized);
-    let S = false;
-    for (let w of normalized.split(/[\\/]/)) {
-      if (w === "" || w === ".") continue;
-      if (w === "..") {
-        if (!y || S) return false;
+    let isAbsoluteTarget = isAbsolute(cdTarget);
+    let sawSegment = false;
+    for (let segment of cdTarget.split(/[\\/]/)) {
+      if (segment === "" || segment === ".") continue;
+      if (segment === "..") {
+        if (!isAbsoluteTarget || sawSegment) return false;
         continue;
       }
-      S = true;
+      sawSegment = true;
     }
   }
-  let filePath = isAbsolute(normalized) ? normalized : resolve_2(n, normalized);
+  let filePath = isAbsolute(cdTarget) ? cdTarget : resolve_2(cwd, cdTarget);
   let fileIdentity_2 = await getFileIdentity_4(filePath);
   if (fileIdentity_2 === null) return false;
   return fileIdentity_2 === fileIdentity;
@@ -383,35 +408,35 @@ async function isSameDirPath(normalized, n, fileIdentity) {
 /**
  * 检查 Windows 相对路径中的 .. 不会越过相对根（结合当前目录深度计算）。
  */
-function staysWithinRelativeRoot(e, n) {
-  let r = e;
-  let s;
-  let match = /^[A-Za-z]:[\\/]/.exec(e);
+function staysWithinRelativeRoot(target, root) {
+  let relativePart = target;
+  let depth;
+  let match = /^[A-Za-z]:[\\/]/.exec(target);
   if (match) {
-    r = e.slice(match[0].length);
-    s = 0;
-  } else if (/^[\\/]/.test(e) || e.includes("\\")) return false;
+    relativePart = target.slice(match[0].length);
+    depth = 0;
+  } else if (/^[\\/]/.test(target) || target.includes("\\")) return false;
   else {
-    if (/^[\\/]{2}/.test(n)) return false;
-    s = 0;
-    for (let w of n.replace(/^[A-Za-z]:/, "").split(/[\\/]/)) {
-      if (w === "" || w === ".") continue;
-      s += w === ".." ? -1 : 1;
+    if (/^[\\/]{2}/.test(root)) return false;
+    depth = 0;
+    for (let segment of root.replace(/^[A-Za-z]:/, "").split(/[\\/]/)) {
+      if (segment === "" || segment === ".") continue;
+      depth += segment === ".." ? -1 : 1;
     }
   }
-  let y = !match;
-  let S = false;
-  for (let w of r.split(/[\\/]/)) {
-    if (w === "" || w === ".") continue;
-    if (w === "..") {
-      if (s === 0) return false;
-      s -= 1;
-      S = true;
+  let requiresContained = !match;
+  let wentUp = false;
+  for (let segment of relativePart.split(/[\\/]/)) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      if (depth === 0) return false;
+      depth -= 1;
+      wentUp = true;
       continue;
     }
-    if (y && S) return false;
-    if (w.includes(":") || /[ .]$/.test(w)) return false;
-    s += 1;
+    if (requiresContained && wentUp) return false;
+    if (segment.includes(":") || /[ .]$/.test(segment)) return false;
+    depth += 1;
   }
   return true;
 }
@@ -420,16 +445,16 @@ async function getFileIdentity_4(filePath) {
   if (getPlatform() === "windows") {
     let parts = filePath.split(/[\\/]/);
     for (let idx = 0; idx < parts.length; idx++) {
-      let h = parts[idx];
-      if (h === "." || h === "..") continue;
-      if (/[ .]$/.test(h)) return null;
-      if (h.includes(":") && !(idx === 0 && /^[A-Za-z]:$/.test(h))) return null;
+      let segment = parts[idx];
+      if (segment === "." || segment === "..") continue;
+      if (/[ .]$/.test(segment)) return null;
+      if (segment.includes(":") && !(idx === 0 && /^[A-Za-z]:$/.test(segment))) return null;
     }
-    let r = await stat(filePath, {
+    let stats = await stat(filePath, {
       bigint: true,
     }).catch(() => null);
-    if (r === null || isSentinelInode(r.ino)) return null;
-    return `${r.dev}:${r.ino}`;
+    if (stats === null || isSentinelInode(stats.ino)) return null;
+    return `${stats.dev}:${stats.ino}`;
   }
   return await realpath(filePath).catch(() => null);
 }

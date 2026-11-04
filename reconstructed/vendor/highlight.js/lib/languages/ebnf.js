@@ -5,17 +5,17 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:125988-126377 cjs-fingerprint
-var require_ebnf = x(function (cjsExports, cjsModule) {
+var require_ebnf = __commonJS(function (cjsExports, cjsModule) {
   function ebnf(hljs) {
     let commentMode = hljs.COMMENT(/\(\*/, /\*\)/);
     let nonTerminalMode = {
       className: "attribute",
       begin: /^[ ]*[a-zA-Z]+([\s_-]+[a-zA-Z]+)*/,
     };
-    let s = {
+    let valueMode = {
       begin: /=/,
       end: /[.;]/,
       contains: [
@@ -40,7 +40,7 @@ var require_ebnf = x(function (cjsExports, cjsModule) {
     return {
       name: "Extended Backus-Naur Form",
       illegal: /\S/,
-      contains: [commentMode, nonTerminalMode, s],
+      contains: [commentMode, nonTerminalMode, valueMode],
     };
   }
   cjsModule.exports = ebnf;

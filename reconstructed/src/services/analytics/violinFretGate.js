@@ -29,4 +29,4 @@ async function isViolinFretEnabled() {
 async function isUnattendedServingConsentGateOn() {
   return isViolinWillowEnabledCached() && (await isViolinWoodEnabled()) && (await isViolinFretEnabled());
 }
-export { isUnattendedServingConsentGateOn };
+export { isUnattendedServingConsentGateOn, isViolinFretEnabled };

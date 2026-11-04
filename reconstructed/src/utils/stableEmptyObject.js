@@ -15,7 +15,7 @@ var EMPTY_FROZEN_OBJECT_ALT = EMPTY_FROZEN_OBJECT;
 /**
  * 返回共享的冻结空对象（真值/假值两个别名）。
  */
-function stableEmptyObject(o) {
-  return o ? EMPTY_FROZEN_OBJECT_ALT : EMPTY_FROZEN_OBJECT;
+function stableEmptyObject(alternate) {
+  return alternate ? EMPTY_FROZEN_OBJECT_ALT : EMPTY_FROZEN_OBJECT;
 }
 export { stableEmptyObject };

@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../core/resource.mjs";
-import { I } from "../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../internal/utils/path.mjs";
 import { buildHeaders } from "../../internal/headers.mjs";
 import { TokenPage } from "../../core/pagination.mjs";
 
@@ -14,7 +14,7 @@ import { TokenPage } from "../../core/pagination.mjs";
 class DeploymentRuns extends APIResource {
   retrieve(deploymentRunID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.get(I`/v1/deployment_runs/${deploymentRunID}?beta=true`, {
+    return this._client.get(parseUrl_2`/v1/deployment_runs/${deploymentRunID}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {

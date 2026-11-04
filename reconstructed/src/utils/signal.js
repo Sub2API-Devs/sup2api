@@ -17,22 +17,22 @@ import { bindAsyncResource } from "./asyncResourceBind.js";
 function createSignal() {
   let listeners = new Set();
   return {
-    subscribe(n) {
-      let r = bindAsyncResource(n);
-      listeners.add(r);
+    subscribe(listener) {
+      let boundListener = bindAsyncResource(listener);
+      listeners.add(boundListener);
       return () => {
-        listeners.delete(r);
+        listeners.delete(boundListener);
       };
     },
     emit(...args) {
-      let r;
+      let errors;
       for (let listener of listeners)
         try {
           listener(...args);
         } catch (error) {
-          (r ??= []).push(error);
+          (errors ??= []).push(error);
         }
-      if (r) throw r.length === 1 ? r[0] : AggregateError(r, "Signal listener(s) threw");
+      if (errors) throw errors.length === 1 ? errors[0] : AggregateError(errors, "Signal listener(s) threw");
     },
     clear() {
       listeners.clear();
@@ -43,16 +43,16 @@ function createSignal() {
 /**
  * 创建惰性信号代理：subscribe/emit/clear 转发给按需获取的信号对象。
  */
-function createLazySignal(e) {
+function createLazySignal(getSignal) {
   return {
-    subscribe(n) {
-      return e().subscribe(n);
+    subscribe(listener) {
+      return getSignal().subscribe(listener);
     },
-    emit(...n) {
-      e().emit(...n);
+    emit(...args) {
+      getSignal().emit(...args);
     },
     clear() {
-      e().clear();
+      getSignal().clear();
     },
   };
 }

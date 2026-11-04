@@ -15,7 +15,7 @@ import {
   jsxProd_default_2,
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { SentryErrorBoundary } from "./SentryErrorBoundary.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { NoticeLine } from "./SlashCommandLink.js";
 import { useMainLoopModel_2 } from "../hooks/useMainLoopModel.js";
@@ -36,12 +36,14 @@ import { useCommandQueue } from "./Messages.js";
 import { count } from "../utils/collections.js";
 
 //@ chunk-18hwfzwa.js:1442667-1442762 placement
-function sessionHeaderParts(h) {
-  return [h.compliance, h.debug ? "Debug" : undefined, ...h.modes].filter((x) => x !== undefined);
+function sessionHeaderParts(header) {
+  return [header.compliance, header.debug ? "Debug" : undefined, ...header.modes].filter(
+    (part) => part !== undefined,
+  );
 }
 //@ chunk-18hwfzwa.js:1442762-1442821 placement
-function sessionHeaderText(modelInfo) {
-  return [...getModelBadgeParts(modelInfo), ...sessionHeaderParts(modelInfo)].join(" \xB7 ");
+function sessionHeaderText(sessionHeaderInfo) {
+  return [...getModelBadgeParts(sessionHeaderInfo), ...sessionHeaderParts(sessionHeaderInfo)].join(" \xB7 ");
 }
 //@ chunk-18hwfzwa.js:1442821-1442880 placement
 function renderSessionHeaderLine() {
@@ -53,7 +55,7 @@ function renderSessionHeaderLine() {
 }
 //@ chunk-18hwfzwa.js:1442880-1443110 placement
 function SessionHeaderLine() {
-  let $ = w(4);
+  let $ = useMemoCache(4);
   const sessionHeaderInfo = useSessionHeaderInfo();
   let text;
   if ($[0] !== sessionHeaderInfo) {
@@ -61,9 +63,9 @@ function SessionHeaderLine() {
     $[0] = sessionHeaderInfo;
     $[1] = text;
   } else text = $[1];
-  let L;
+  let hintBox;
   if ($[2] !== text) {
-    L = jsxProd_default(Box, {
+    hintBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(NoticeLine, {
         state: "settled",
@@ -73,16 +75,16 @@ function SessionHeaderLine() {
       }),
     });
     $[2] = text;
-    $[3] = L;
-  } else L = $[3];
-  return L;
+    $[3] = hintBox;
+  } else hintBox = $[3];
+  return hintBox;
 }
 //@ chunk-18hwfzwa.js:1443110-1443782 placement
 /**
  * 汇总会话标题头信息：模型显示名、effort、ultracode、快速模式、合规标识（HIPAA/zdr）、调试模式与账号记忆标记。
  */
 function useSessionHeaderInfo() {
-  let $ = w(13);
+  let $ = useMemoCache(13);
   let model = useMainLoopModel_2();
   let parsedModel = parseUserSpecifiedModel(model);
   let briefOnly = useAppState(selectIsBriefOnly2);
@@ -163,30 +165,31 @@ function processQueuedCommands_2(queuedCommands) {
  * 面板打开期间有排队的后台任务更新时，显示"N background task updates waiting"。
  */
 function PendingTaskUpdatesNote() {
-  let $ = w(4);
+  let $ = useMemoCache(4);
   let appState = useAppState(selectNoteHasViewedAgentTask);
   let commandQueue = useCommandQueue();
-  let L;
+  let queuedCount;
   if ($[0] !== commandQueue) {
-    L = count(commandQueue, processQueuedCommands_2);
+    queuedCount = count(commandQueue, processQueuedCommands_2);
     $[0] = commandQueue;
-    $[1] = L;
-  } else L = $[1];
-  let ee = L;
-  if (appState || ee === 0) {
+    $[1] = queuedCount;
+  } else queuedCount = $[1];
+  let queueSummary = queuedCount;
+  if (appState || queueSummary === 0) {
     return null;
   }
-  const ke = ee === 1 ? "Background task update" : `${ee} background task updates`;
-  let Re;
-  if ($[2] !== ke) {
-    Re = jsxProd_default_2(Text, {
+  const summaryElement =
+    queueSummary === 1 ? "Background task update" : `${queueSummary} background task updates`;
+  let textElement;
+  if ($[2] !== summaryElement) {
+    textElement = jsxProd_default_2(Text, {
       dimColor: true,
       wrap: "truncate",
-      children: [ke, " ", "waiting while this panel is open"],
+      children: [summaryElement, " ", "waiting while this panel is open"],
     });
-    $[2] = ke;
-    $[3] = Re;
-  } else Re = $[3];
-  return Re;
+    $[2] = summaryElement;
+    $[3] = textElement;
+  } else textElement = $[3];
+  return textElement;
 }
 export { PendingTaskUpdatesNote, renderSessionHeaderLine };

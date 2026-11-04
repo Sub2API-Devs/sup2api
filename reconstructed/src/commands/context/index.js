@@ -40,6 +40,6 @@ var contextNonInteractiveCommand = {
   isEnabled() {
     return getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-mszdds2y.js"),
+  load: () => import("./context-noninteractive.js"),
 };
 export { contextCommand, contextNonInteractiveCommand };

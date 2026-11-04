@@ -17,15 +17,15 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { logForDebugging } from "../debug.js";
 
 //@ chunk-k88gsmtn.js:3445-3527 placement
-function wantsBypassPermissions(s) {
-  return s?.permissionMode === "bypassPermissions" || s?.allowBypass === true;
+function wantsBypassPermissions(options) {
+  return options?.permissionMode === "bypassPermissions" || options?.allowBypass === true;
 }
 //@ chunk-k88gsmtn.js:3527-3722 placement
 /**
  * 以 root/sudo 运行且不在受控沙箱内时，使用 --dangerously-skip-permissions 直接报错退出。
  */
-function exitIfRootWithBypass(s) {
-  if (!wantsBypassPermissions(s)) return;
+function exitIfRootWithBypass(options) {
+  if (!wantsBypassPermissions(options)) return;
   if (envDynamicProbe.isRootOutsideDeliberateSandbox()) {
     console.error(
       "--dangerously-skip-permissions cannot be used with root/sudo privileges for security reasons",
@@ -37,14 +37,14 @@ function exitIfRootWithBypass(s) {
 /**
  * bypass 被禁用时打印原因，并从启动选项中去掉 bypassPermissions 模式与 allowBypass。
  */
-function dropDisabledBypass(s) {
-  if (!s || !wantsBypassPermissions(s)) return s;
+function dropDisabledBypass(options) {
+  if (!options || !wantsBypassPermissions(options)) return options;
   let bypassDisabledReason = getBypassDisabledReason();
-  if (!bypassDisabledReason) return s;
+  if (!bypassDisabledReason) return options;
   console.error(bypassDisabledReason);
   return {
-    ...s,
-    permissionMode: s.permissionMode === "bypassPermissions" ? undefined : s.permissionMode,
+    ...options,
+    permissionMode: options.permissionMode === "bypassPermissions" ? undefined : options.permissionMode,
     allowBypass: undefined,
   };
 }
@@ -58,16 +58,16 @@ async function ensureBypassConsent(root, options, storage) {
   if (isBypassPermissionsAccepted()) return;
   if (options?.permissionModeInherited && !options.allowBypass && hasSkipDangerousModePermissionPrompt())
     return;
-  let [{ runSteps: a }, n] = await Promise.all([
-    import("./chunk-8pefyxsz.js"),
-    import("./chunk-styvqsd2.js"),
+  let [{ runSteps }, dialogModule] = await Promise.all([
+    import("../runSteps.js"),
+    import("../../components/BypassPermissionsModeDialog.js"),
   ]);
-  await a(
+  await runSteps(
     root,
     [
-      (p) =>
-        jsxProd_default(n.BypassPermissionsModeDialog, {
-          onAccept: () => p(),
+      (done) =>
+        jsxProd_default(dialogModule.BypassPermissionsModeDialog, {
+          onAccept: () => done(),
           storageV5: storage,
         }),
     ],
@@ -84,3 +84,4 @@ async function ensureBypassConsent(root, options, storage) {
       },
     );
 }
+export { dropDisabledBypass, ensureBypassConsent, exitIfRootWithBypass };

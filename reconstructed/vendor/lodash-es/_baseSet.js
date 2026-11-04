@@ -6,29 +6,30 @@
  * attribution: placement 1
  */
 import {
-  RR,
-  Qve,
-  Ihe,
-  Put,
+  isObjectAlias,
+  castPathAlias,
+  toKeyAlias_2,
+  isIndexAlias,
 } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { assignValueIfDifferent } from "../../src/utils/git/gitSafeEnv.js";
 
 //@ chunk-3a1caa6f.js:1241-1536 placement
 function baseSet(object, path, value, customizer) {
-  if (!RR(object)) return object;
-  path = Qve(path, object);
+  if (!isObjectAlias(object)) return object;
+  path = castPathAlias(path, object);
   var index = -1;
   var length = path.length;
   var lastIndex = length - 1;
   var nested = object;
   while (nested != null && ++index < length) {
-    var key = Ihe(path[index]);
+    var key = toKeyAlias_2(path[index]);
     var newValue = value;
     if (key === "__proto__" || key === "constructor" || key === "prototype") return object;
     if (index != lastIndex) {
       var objValue = nested[key];
       newValue = customizer ? customizer(objValue, key, nested) : undefined;
-      if (newValue === undefined) newValue = RR(objValue) ? objValue : Put(path[index + 1]) ? [] : {};
+      if (newValue === undefined)
+        newValue = isObjectAlias(objValue) ? objValue : isIndexAlias(path[index + 1]) ? [] : {};
     }
     assignValueIfDifferent(nested, key, newValue);
     nested = nested[key];

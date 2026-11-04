@@ -102,6 +102,7 @@ import { OUTSIDE_READS_BLOCKED_DENY_REASON } from "../../types/permissions.js";
 import { SUBAGENT_REJECT_MESSAGE } from "../../utils/messages.js";
 import { otherDialogOnScreen, onBlockingDialogChange } from "../../services/requestUserDialog.js";
 import { sanitizeName } from "../../plugins/bundled/diffPane/diffModel.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-re9y5nwg.js:459-587 placement = parseSkillPaths (0.822)
 /**
@@ -119,8 +120,8 @@ function isSkillDirGlob(frontmatter) {
 //@ chunk-re9y5nwg.js:587-834 placement
 function isSkillDirectoryGlob(ruleContent) {
   let found = [CLAUDE_FOLDER_PERMISSION_PATTERN, GLOBAL_CLAUDE_FOLDER_PERMISSION_PATTERN]
-    .map((o) => `${o.slice(0, -2)}skills/`)
-    .find((o) => ruleContent.startsWith(o));
+    .map((pattern) => `${pattern.slice(0, -2)}skills/`)
+    .find((candidate) => ruleContent.startsWith(candidate));
   if (found === undefined || !ruleContent.endsWith("/**")) return false;
   let sliced = ruleContent.slice(found.length, -3);
   return (
@@ -144,26 +145,35 @@ function isHostDialogApproval(response) {
   );
 }
 //@ chunk-re9y5nwg.js:979-1319 placement
-function fileEditContextOf(toolName, n) {
-  let { file_path: filePath } = n;
+function fileEditContextOf(toolName, toolInput) {
+  let { file_path: filePath } = toolInput;
   if (typeof filePath !== "string") return;
-  let o;
+  let context;
   if (toolName === FILE_EDIT_TOOL_NAME) {
-    let { old_string: oldString, new_string: newString } = n;
+    let { old_string: oldString, new_string: newString } = toolInput;
     if (typeof oldString !== "string" || typeof newString !== "string") return;
-    o = [toolName, expandPath(filePath), oldString, newString, coerceBooleanString(n.replace_all) === true];
+    context = [
+      toolName,
+      expandPath(filePath),
+      oldString,
+      newString,
+      coerceBooleanString(toolInput.replace_all) === true,
+    ];
   } else if (toolName === FILE_WRITE_TOOL_NAME) {
-    let { content } = n;
+    let { content } = toolInput;
     if (typeof content !== "string") return;
-    o = [toolName, expandPath(filePath), content];
+    context = [toolName, expandPath(filePath), content];
   } else return;
-  return createHash("sha256").update(jsonStringify(o)).digest("hex");
+  return createHash("sha256").update(jsonStringify(context)).digest("hex");
 }
 //@ chunk-re9y5nwg.js:1319-1370 placement
-var permissionCallStatsStore = new SessionRootSlot(() => ({
-  calls: new Map(),
-  hostAttests: false,
-}));
+var permissionCallStatsStore; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-re9y5nwg.js:1319", () => {
+  permissionCallStatsStore = new SessionRootSlot(() => ({
+    calls: new Map(),
+    hostAttests: false,
+  }));
+});
 //@ chunk-re9y5nwg.js:1370-1394 placement
 /**
  * 函数 returnFalsePermissionHook（恒 false）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。
@@ -175,16 +185,16 @@ function returnFalsePermissionHook() {
 /**
  * 记录宿主已确认的工具调用（工具名、展开后的文件路径与写入摘要），供后续核对写入。
  */
-function recordHostAttestedCall(session, n, t) {
-  if (n !== "" && returnFalsePermissionHook()) {
-    let o = permissionCallStatsStore.of(session);
-    let filePath = t.input.file_path;
-    o.calls.set(n, {
-      toolName: t.toolName,
+function recordHostAttestedCall(session, toolUseId, toolUse) {
+  if (toolUseId !== "" && returnFalsePermissionHook()) {
+    let stats = permissionCallStatsStore.of(session);
+    let filePath = toolUse.input.file_path;
+    stats.calls.set(toolUseId, {
+      toolName: toolUse.toolName,
       filePath: typeof filePath === "string" ? expandPath(filePath) : undefined,
-      writeDigest: fileEditContextOf(t.toolName, t.input),
+      writeDigest: fileEditContextOf(toolUse.toolName, toolUse.input),
     });
-    o.hostAttests = true;
+    stats.hostAttests = true;
   }
 }
 //@ chunk-re9y5nwg.js:1597-1655 placement
@@ -195,28 +205,31 @@ function hasHostAttestedDialog(session) {
   return permissionCallStatsStore.peek(session)?.hostAttests === true && returnFalsePermissionHook();
 }
 //@ chunk-re9y5nwg.js:1655-1695 placement
-var permissionByToolUseStore = new SessionRootSlot(() => ({
-  byToolUse: new Map(),
-}));
+var permissionByToolUseStore; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-re9y5nwg.js:1655", () => {
+  permissionByToolUseStore = new SessionRootSlot(() => ({
+    byToolUse: new Map(),
+  }));
+});
 //@ chunk-re9y5nwg.js:1695-1769 placement
 /**
  * 函数 recordToolUseDecision（追加一条决定）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。
  */
-function recordToolUseDecision(e, n, t) {
-  let { byToolUse } = permissionByToolUseStore.of(e);
-  byToolUse.set(n, [...(byToolUse.get(n) ?? []), t]);
+function recordToolUseDecision(session, toolUseId, decision) {
+  let { byToolUse } = permissionByToolUseStore.of(session);
+  byToolUse.set(toolUseId, [...(byToolUse.get(toolUseId) ?? []), decision]);
 }
 //@ chunk-re9y5nwg.js:1769-1930 placement
 /**
  * 工具调用结束时清除该 toolUseId 的已记录调用与挂起的回调（并依次执行回调）。
  */
-function clearToolUsePermissionState(session, n) {
+function clearToolUsePermissionState(session, toolUseId) {
   if (session !== undefined) {
-    permissionCallStatsStore.peek(session)?.calls.delete(n);
-    let t = permissionByToolUseStore.peek(session)?.byToolUse.get(n);
-    if (t !== undefined) {
-      permissionByToolUseStore.peek(session)?.byToolUse.delete(n);
-      for (let o of t) o();
+    permissionCallStatsStore.peek(session)?.calls.delete(toolUseId);
+    let decisions = permissionByToolUseStore.peek(session)?.byToolUse.get(toolUseId);
+    if (decisions !== undefined) {
+      permissionByToolUseStore.peek(session)?.byToolUse.delete(toolUseId);
+      for (let decision of decisions) decision();
     }
   }
 }
@@ -237,31 +250,35 @@ function isHostAttestedWrite(session, toolUseId, file) {
     (file.toolName !== FILE_WRITE_TOOL_NAME && file.toolName !== FILE_EDIT_TOOL_NAME)
   )
     return false;
-  let o = permissionCallStatsStore.peek(session)?.calls.get(toolUseId);
+  let record = permissionCallStatsStore.peek(session)?.calls.get(toolUseId);
   return (
-    o !== undefined &&
-    o.toolName === file.toolName &&
-    o.filePath === file.absolutePath &&
-    o.writeDigest !== undefined &&
-    o.writeDigest === fileEditContextOf(file.toolName, file.input)
+    record !== undefined &&
+    record.toolName === file.toolName &&
+    record.filePath === file.absolutePath &&
+    record.writeDigest !== undefined &&
+    record.writeDigest === fileEditContextOf(file.toolName, file.input)
   );
 }
 //@ chunk-re9y5nwg.js:2242-2336 placement
-var weakRefSet = new Set();
-var editRuleContentsStore = new SessionRootSlot(() => {
-  let e = new Set();
-  weakRefSet.add(new WeakRef(e));
-  return {
-    editRuleContents: e,
-  };
+var weakRefSet; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+var editRuleContentsStore;
+deferInit("chunk-re9y5nwg.js:2242", () => {
+  weakRefSet = new Set();
+  editRuleContentsStore = new SessionRootSlot(() => {
+    let set = new Set();
+    weakRefSet.add(new WeakRef(set));
+    return {
+      editRuleContents: set,
+    };
+  });
 });
 //@ chunk-re9y5nwg.js:2336-2553 placement
-function getSessionEditRuleContents(e) {
-  return e.flatMap((n) =>
-    (n.type === "addRules" || n.type === "replaceRules") &&
-    n.destination === "session" &&
-    n.behavior === "allow"
-      ? n.rules.flatMap((rule) =>
+function getSessionEditRuleContents(updates) {
+  return updates.flatMap((update) =>
+    (update.type === "addRules" || update.type === "replaceRules") &&
+    update.destination === "session" &&
+    update.behavior === "allow"
+      ? update.rules.flatMap((rule) =>
           rule.toolName === FILE_EDIT_TOOL_NAME && rule.ruleContent !== undefined ? [rule.ruleContent] : [],
         )
       : [],
@@ -272,13 +289,13 @@ function returnFalseEditRules() {
   return false;
 }
 //@ chunk-re9y5nwg.js:2575-2687 placement
-function isSkillEditRule(e) {
-  let n = permissionRuleValueFromString(e);
+function isSkillEditRule(ruleString) {
+  let ruleValue = permissionRuleValueFromString(ruleString);
   return (
-    n.toolName === FILE_EDIT_TOOL_NAME &&
-    n.ruleContent !== undefined &&
-    isSkillDirGlob(n.ruleContent) &&
-    !isSkillDirectoryGlob(n.ruleContent)
+    ruleValue.toolName === FILE_EDIT_TOOL_NAME &&
+    ruleValue.ruleContent !== undefined &&
+    isSkillDirGlob(ruleValue.ruleContent) &&
+    !isSkillDirectoryGlob(ruleValue.ruleContent)
   );
 }
 //@ chunk-re9y5nwg.js:2687-2955 placement
@@ -304,24 +321,25 @@ function isSessionRuleUpdate(update) {
 /**
  * 函数 filterEditableRules（开关关闭时保持原列表）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。
  */
-function filterEditableRules(e) {
-  return returnFalseEditRules() ? e.filter((n) => !isSkillEditRule(n)) : e;
+function filterEditableRules(rules) {
+  return returnFalseEditRules() ? rules.filter((rule) => !isSkillEditRule(rule)) : rules;
 }
 //@ chunk-re9y5nwg.js:3005-3073 placement
 /**
  * 函数 recordEditedRuleContents（登记编辑后的规则内容）；位于「权限请求编排：通过 toolUseContext.requestDialog 打开对话框、并行跑 PermissionRequest hooks/分类器/bridge/channel，记录 tengu_tool_use_show_permission_request 等事件」模块。
  */
-function recordEditedRuleContents(session, n) {
-  for (let t of getSessionEditRuleContents(n)) editRuleContentsStore.of(session).editRuleContents.add(t);
+function recordEditedRuleContents(session, ruleContents) {
+  for (let ruleContent of getSessionEditRuleContents(ruleContents))
+    editRuleContentsStore.of(session).editRuleContents.add(ruleContent);
 }
 //@ chunk-re9y5nwg.js:3073-3176 placement
 /**
  * 从会话的编辑规则内容表中删除指定规则。
  */
-function forgetSessionEditRules(session, n) {
+function forgetSessionEditRules(session, ruleContents) {
   let editRuleContents = editRuleContentsStore.peek(session)?.editRuleContents;
   if (editRuleContents === undefined) return;
-  for (let o of getSessionEditRuleContents(n)) editRuleContents.delete(o);
+  for (let ruleContent of getSessionEditRuleContents(ruleContents)) editRuleContents.delete(ruleContent);
 }
 //@ chunk-re9y5nwg.js:3176-3322 placement = propagateAbort (1)
 function propagateAbort(updates) {
@@ -343,14 +361,16 @@ function propagateAbort(updates) {
 function decisionReasonToString(session, decisionReason, toolPermissionContext) {
   let editRuleContents = editRuleContentsStore.peek(session)?.editRuleContents;
   if (editRuleContents === undefined || editRuleContents.size === 0) return;
-  let s = new Set(
-    (toolPermissionContext.alwaysAllowRules.session ?? []).flatMap((i) => {
-      let l = permissionRuleValueFromString(i);
-      return l.toolName === FILE_EDIT_TOOL_NAME && l.ruleContent !== undefined ? [l.ruleContent] : [];
+  let covered = new Set(
+    (toolPermissionContext.alwaysAllowRules.session ?? []).flatMap((ruleString) => {
+      let rule = permissionRuleValueFromString(ruleString);
+      return rule.toolName === FILE_EDIT_TOOL_NAME && rule.ruleContent !== undefined
+        ? [rule.ruleContent]
+        : [];
     }),
   );
   for (let editRuleContent of editRuleContents)
-    if (!s.has(editRuleContent)) editRuleContents.delete(editRuleContent);
+    if (!covered.has(editRuleContent)) editRuleContents.delete(editRuleContent);
   if (
     decisionReason?.type !== "rule" ||
     decisionReason.rule.source !== "session" ||
@@ -362,37 +382,37 @@ function decisionReasonToString(session, decisionReason, toolPermissionContext) 
   return editRuleContents.has(decisionReason.rule.ruleValue.ruleContent) ? "host_dialog" : undefined;
 }
 //@ chunk-s4bxxzsw.js:46009-49187 placement
-async function repromptFilePermission(e, r) {
-  let { ctx, description, result: y } = e;
+async function repromptFilePermission(request, respond) {
+  let { ctx, description, result } = request;
   let requestSource = permissionRequestOrigin(ctx.toolUseContext);
-  let C =
+  let wrappedRespond =
     ctx.tool === WorkflowTool
-      ? (x) => {
-          if (x.behavior === "allow")
+      ? (answer) => {
+          if (answer.behavior === "allow")
             workflowUsageConsentModule.recordWorkflowUsageConsent(
               ctx.toolUseContext.session.workflowUsageConsent,
               ctx.toolUseContext.storageV5,
             );
-          r(x);
+          respond(answer);
         }
-      : (x) => {
+      : (request) => {
           ctx.toolUseContext.session.outsideReadPrompt.closeFor(ctx.toolUseID);
-          r(x);
+          respond(request);
         };
-  let D = new CountedAsk();
-  let { resolve, isResolved, claim } = createResolveOnce((x) => {
-    D.settle();
-    C(x);
+  let countedAsk = new CountedAsk();
+  let { resolve, isResolved, claim } = createResolveOnce((answer) => {
+    countedAsk.settle();
+    wrappedRespond(answer);
   });
-  let h = {
+  let claimState = {
     resolve,
     isResolved,
     claim,
-    countedAsk: D,
+    countedAsk,
   };
-  let w = "dark";
-  let B = (x) => ctx.toolUseContext.forRemoteExecution === true || hasHostField(x);
-  let F = {
+  let theme = "dark";
+  let isRemoteOrHostField = (input) => ctx.toolUseContext.forRemoteExecution === true || hasHostField(input);
+  let baseDescriptor = {
     tool: ctx.tool,
     description,
     toolUseID: ctx.toolUseID,
@@ -402,15 +422,15 @@ async function repromptFilePermission(e, r) {
     session: ctx.toolUseContext.session,
     toolState: ctx.toolUseContext.toolState,
     networkAllowListHonoured:
-      !B(y.updatedInput ?? ctx.input) &&
+      !isRemoteOrHostField(result.updatedInput ?? ctx.input) &&
       shouldAcceptCommandDomains(getToolPermissionContext(ctx.toolUseContext)),
   };
-  function P() {
-    showPermissionDialog(e, h, {
+  function showGenericDialog() {
+    showPermissionDialog(request, claimState, {
       dialog: PERMISSION_PROMPT_DIALOG,
       buildDescriptor: ({ input, permissionResult }) =>
         buildPermissionPromptPayload({
-          ...F,
+          ...baseDescriptor,
           ...(ctx.tool.name.startsWith(CFC_TOOL_PREFIX) &&
             permissionResult.inPlaceOfClassifier === true &&
             permissionResult.metadata?.command.description !== undefined && {
@@ -422,65 +442,67 @@ async function repromptFilePermission(e, r) {
         }),
     });
   }
-  let E = classifyBashCommand(ctx.tool);
-  let V = E?.dialog.kind === BROWSER_PERMISSION_CARD.kind && y.inPlaceOfClassifier === true;
-  if (E !== undefined && !V) {
+  let bashClassifier = classifyBashCommand(ctx.tool);
+  let isBrowserCardOverride =
+    bashClassifier?.dialog.kind === BROWSER_PERMISSION_CARD.kind && result.inPlaceOfClassifier === true;
+  if (bashClassifier !== undefined && !isBrowserCardOverride) {
     let hasExternalRacer = !!(
-      e.bridgeCallbacks ||
-      (e.channelCallbacks && !ctx.tool.requiresUserInteraction?.())
+      request.bridgeCallbacks ||
+      (request.channelCallbacks && !ctx.tool.requiresUserInteraction?.())
     );
-    let { race } = E;
-    showPermissionDialog(e, h, {
-      dialog: E.dialog,
-      resultWhenNotShown: E.resultWhenNotShown,
+    let { race } = bashClassifier;
+    showPermissionDialog(request, claimState, {
+      dialog: bashClassifier.dialog,
+      resultWhenNotShown: bashClassifier.resultWhenNotShown,
       buildDescriptor: ({ input, permissionResult }) =>
-        E.build({
-          ...F,
+        bashClassifier.build({
+          ...baseDescriptor,
           input,
           permissionResult,
           hasExternalRacer,
         }),
       onRacersReady:
         race &&
-        ((M) =>
-          M.addTeardown(
+        ((racers) =>
+          racers.addTeardown(
             race({
               ctx,
-              claim: h.claim,
-              notifyBridge: M.notifyBridge,
-              dismissAndTeardown: M.dismissAndTeardown,
-              resolveOnce: h.resolve,
+              claim: claimState.claim,
+              notifyBridge: racers.notifyBridge,
+              dismissAndTeardown: racers.dismissAndTeardown,
+              resolveOnce: claimState.resolve,
             }),
           )),
     });
     return;
   }
   if (isFileTool(ctx.tool)) {
-    let x = y.updatedInput ?? ctx.input;
-    let toolInputPath = getToolInputPath(ctx.tool, x);
+    let input = result.updatedInput ?? ctx.input;
+    let toolInputPath = getToolInputPath(ctx.tool, input);
     if (toolInputPath !== null) {
-      let M = y.localDisplayOnly === true ? null : await getIdeDiffTarget(ctx.tool, x, ctx.toolUseContext);
+      let ideDiffEligibility =
+        result.localDisplayOnly === true ? null : await getIdeDiffTarget(ctx.tool, input, ctx.toolUseContext);
       let permissionPromptStartTimeMs = Date.now();
-      let H;
-      let remoteWorkspace = B(x);
+      let racers;
+      let remoteWorkspace = isRemoteOrHostField(input);
       let filePermissionDescriptor = await buildFilePermissionDescriptor({
-        ...F,
-        input: x,
-        permissionResult: y,
+        ...baseDescriptor,
+        input,
+        permissionResult: result,
         filePath: toolInputPath,
         remoteWorkspace,
       });
-      if (ctx.resolveIfAborted(h.resolve)) return;
-      showPermissionDialog(e, h, {
+      if (ctx.resolveIfAborted(claimState.resolve)) return;
+      showPermissionDialog(request, claimState, {
         dialog: FILE_PERMISSION_CARD,
         buildDescriptor: ({ input, permissionResult }) => {
-          if (H?.isReprompted() !== true) {
-            if (M !== null)
+          if (racers?.isReprompted() !== true) {
+            if (ideDiffEligibility !== null)
               return {
                 ...filePermissionDescriptor,
                 permissionResult,
                 showingDiffInIDE: true,
-                ideName: M.ideName,
+                ideName: ideDiffEligibility.ideName,
               };
             return {
               ...filePermissionDescriptor,
@@ -493,11 +515,11 @@ async function repromptFilePermission(e, r) {
               if (toolInputPath === null)
                 throw Error("no file path could be derived from the hook-rewritten input");
               yield await buildFilePermissionDescriptor({
-                ...F,
+                ...baseDescriptor,
                 input,
                 permissionResult,
                 filePath: toolInputPath,
-                remoteWorkspace: B(input),
+                remoteWorkspace: isRemoteOrHostField(input),
               });
             } catch (error) {
               logForDebugging(
@@ -507,8 +529,8 @@ async function repromptFilePermission(e, r) {
                 },
               );
               if (claim()) {
-                H?.dismissAndTeardown();
-                H?.logRepromptDenyDecision();
+                racers?.dismissAndTeardown();
+                racers?.logRepromptDenyDecision();
                 resolve(
                   ctx.cancelAndAbort(
                     `Failed to preview the hook-rewritten file operation: ${errorMessage(error)}`,
@@ -518,37 +540,37 @@ async function repromptFilePermission(e, r) {
             }
           })();
         },
-        unaryEvent: getCompletionTypeForTool(ctx.tool, x, toolInputPath),
-        onRacersReady: (Q) => {
-          H = Q;
-          if (M === null) return;
+        unaryEvent: getCompletionTypeForTool(ctx.tool, input, toolInputPath),
+        onRacersReady: (fileRacers) => {
+          racers = fileRacers;
+          if (ideDiffEligibility === null) return;
           let { closeTab } = useDiffInIDE({
-            ctx: Q.ctx,
+            ctx: fileRacers.ctx,
             tool: ctx.tool,
-            input: x,
-            permissionResult: y,
+            input,
+            permissionResult: result,
             permissionPromptStartTimeMs,
-            eligibility: M,
-            claim: h.claim,
-            notifyBridge: Q.notifyBridge,
-            dismissAndTeardown: Q.dismissAndTeardown,
-            resolveOnce: h.resolve,
+            eligibility: ideDiffEligibility,
+            claim: claimState.claim,
+            notifyBridge: fileRacers.notifyBridge,
+            dismissAndTeardown: fileRacers.dismissAndTeardown,
+            resolveOnce: claimState.resolve,
           });
-          Q.addTeardown(closeTab);
+          fileRacers.addTeardown(closeTab);
         },
       });
       return;
     }
-    P();
+    showGenericDialog();
     return;
   }
   if (ctx.tool === BashTool) {
     let toolPermissionContext = getToolPermissionContext(ctx.toolUseContext);
-    showPermissionDialog(e, h, {
+    showPermissionDialog(request, claimState, {
       dialog: BASH_PERMISSION_CARD,
       buildDescriptor: ({ input, permissionResult }) =>
         buildBashPermissionPayload({
-          ...F,
+          ...baseDescriptor,
           input,
           permissionResult,
           classifierState: "none",
@@ -557,7 +579,7 @@ async function repromptFilePermission(e, r) {
     });
     return;
   }
-  P();
+  showGenericDialog();
 }
 //@ chunk-s4bxxzsw.js:49187-49241 layout
 class MonotonicCounter {
@@ -568,62 +590,65 @@ class MonotonicCounter {
   }
 }
 //@ chunk-s4bxxzsw.js:49241-49266 layout
-var counterSlot = new HostScoped(() => new MonotonicCounter());
+var counterSlot; // deferred: uses MonotonicCounter of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:49241", () => {
+  counterSlot = new HostScoped(() => new MonotonicCounter());
+});
 //@ chunk-s4bxxzsw.js:49266-60333 callgraph-witnessed = usePermissionRequestLogging (0.155)
 /**
  * 打开并管理一个权限对话框：用 toolUseContext.requestDialog(dialog, descriptor, …) 入对话框队列，记录 tengu_tool_use_show_permission_request，处理对话框结果（allow/reject/反馈/模式切换/规则持久化）、超时与中止，结束时执行 teardown。
  */
-function showPermissionDialog(e, r, n) {
+function showPermissionDialog(request, claimState, spec) {
   let {
     description,
-    result: y,
+    result,
     awaitAutomatedChecksBeforeDialog,
     bridgeCallbacks,
     bridgeDialogCallbacks,
     channelCallbacks,
-  } = e;
-  let { resolve, isResolved, claim, countedAsk } = r;
-  let B;
-  let F = false;
-  let ctx = e.ctx;
+  } = request;
+  let { resolve, isResolved, claim, countedAsk } = claimState;
+  let unusedB;
+  let unusedFlag = false;
+  let ctx = request.ctx;
   let requestDialog = ctx.toolUseContext.requestDialog;
   if (requestDialog === undefined) return;
-  let V = requestDialog;
+  let openDialog = requestDialog;
   let agentContext = ctx.toolUseContext.agentContext;
-  let q = isUnattendedAgentContext(ctx.toolUseContext);
-  let M = q;
-  let askPatience = y.askPatience;
+  let isUnattended = isUnattendedAgentContext(ctx.toolUseContext);
+  let unattended = isUnattended;
+  let askPatience = result.askPatience;
   askPatience?.hold();
   let now = Date.now();
-  let ke = counterSlot.of(ctx.toolUseContext.session.host);
-  let Re = ke.next();
-  let Q = y.updatedInput ?? ctx.input;
-  let decisionReason = y.decisionReason;
-  let result = y;
-  let pe = 0;
-  let De;
-  let L = [];
-  function me() {
-    if (L.length === 0) return;
-    let _ = L.splice(0, L.length);
-    for (let Z of _)
+  let orderCounter = counterSlot.of(ctx.toolUseContext.session.host);
+  let order = orderCounter.next();
+  let displayInput = result.updatedInput ?? ctx.input;
+  let decisionReason = result.decisionReason;
+  let result_2 = result;
+  let round = 0;
+  let roundAbort;
+  let teardowns = [];
+  function runTeardowns() {
+    if (teardowns.length === 0) return;
+    let pendingTeardowns = teardowns.splice(0, teardowns.length);
+    for (let teardown of pendingTeardowns)
       try {
-        Z();
+        teardown();
       } catch (error) {
         logForDebugging(`Dialog teardown failed: ${errorMessage(error)}`, {
           level: "error",
         });
       }
   }
-  let ce = false;
-  let ie = n.unaryEvent ?? {
+  let loggedShown = false;
+  let unaryEvent = spec.unaryEvent ?? {
     completion_type: "tool_use_single",
     language_name: lit("none"),
   };
   let signal = ctx.toolUseContext.abortController.signal;
-  function Ce() {
-    if (ce) return;
-    ce = true;
+  function logShownOnce() {
+    if (loggedShown) return;
+    loggedShown = true;
     let permissionMode = ctx.permissionMode;
     ctx.toolUseContext.applyAttributionOp({
       kind: "incrementPermissionPrompt",
@@ -633,7 +658,7 @@ function showPermissionDialog(e, r, n) {
       toolName: sanitizeToolNameForAnalytics(ctx.tool.name),
       isMcp: ctx.tool.isMcp ?? false,
       ...mcpToolLogFields(ctx.tool, ctx.toolUseContext.options.mcpClients),
-      decisionReasonType: fromEnumOpt(result.decisionReason?.type),
+      decisionReasonType: fromEnumOpt(result_2.decisionReason?.type),
       sandboxEnabled: SandboxManager.isSandboxingEnabled(),
       permissionMode: fromEnum(permissionMode),
       requestSource: fromEnumOpt(permissionRequestOrigin(ctx.toolUseContext)?.type),
@@ -642,39 +667,39 @@ function showPermissionDialog(e, r, n) {
       ),
     });
     logUnaryEvent({
-      completion_type: ie.completion_type,
+      completion_type: unaryEvent.completion_type,
       event: "response",
       metadata: {
-        language_name: ie.language_name,
+        language_name: unaryEvent.language_name,
         message_id: ctx.assistantMessage.message.id,
         platform: env.platform,
       },
     });
   }
-  function ge(event) {
+  function logResponse(event) {
     logUnaryEvent({
-      completion_type: ie.completion_type,
+      completion_type: unaryEvent.completion_type,
       event,
       metadata: {
-        language_name: ie.language_name,
+        language_name: unaryEvent.language_name,
         message_id: ctx.assistantMessage.message.id,
         platform: env.platform,
       },
     });
   }
-  function re() {
-    De?.abort();
+  function dismissAndTeardown() {
+    roundAbort?.abort();
     attentionRegistryStore.clearHookFailure(ctx.toolUseID);
     attentionRegistryStore.closeAsk(ctx.toolUseID);
-    He();
-    me();
+    recheckUnsubscribe();
+    runTeardowns();
   }
-  let Ae = 0;
+  let repromptCount = 0;
   let { notifyBridgeAndTeardown } = handleInteractivePermission({
     ctx,
     description,
-    result: y,
-    displayInput: Q,
+    result,
+    displayInput,
     permissionPromptStartTimeMs: now,
     awaitAutomatedChecksBeforeDialog,
     bridgeCallbacks,
@@ -682,88 +707,88 @@ function showPermissionDialog(e, r, n) {
     channelCallbacks,
     claim,
     isResolved,
-    onWin(_) {
-      if (result.offersBlockOutsideReads === true && _.behavior === "allow")
+    onWin(answer) {
+      if (result_2.offersBlockOutsideReads === true && answer.behavior === "allow")
         ctx.toolUseContext.session.outsideReadPrompt.markAnswered();
-      re();
-      resolve(_);
+      dismissAndTeardown();
+      resolve(answer);
     },
-    onReprompt(_, Z, G) {
-      Ae += 1;
-      Q = _;
-      decisionReason = Z;
-      result = {
-        ...G,
-        ...(result.denialLimitFallback !== undefined && {
-          denialLimitFallback: result.denialLimitFallback,
+    onReprompt(nextInput, nextReason, nextResult) {
+      repromptCount += 1;
+      displayInput = nextInput;
+      decisionReason = nextReason;
+      result_2 = {
+        ...nextResult,
+        ...(result_2.denialLimitFallback !== undefined && {
+          denialLimitFallback: result_2.denialLimitFallback,
         }),
-        ...(result.autoDenyWindow !== undefined && {
-          autoDenyWindow: result.autoDenyWindow,
+        ...(result_2.autoDenyWindow !== undefined && {
+          autoDenyWindow: result_2.autoDenyWindow,
         }),
-        ...(result.oneTimeAnswersOnly === true && {
+        ...(result_2.oneTimeAnswersOnly === true && {
           suggestions: undefined,
           suppressAlwaysAllowRule: true,
           oneTimeAnswersOnly: true,
         }),
-        ...(result.offersBlockOutsideReads === true &&
-          G.decisionReason?.type === "workingDir" && {
+        ...(result_2.offersBlockOutsideReads === true &&
+          nextResult.decisionReason?.type === "workingDir" && {
             offersBlockOutsideReads: true,
           }),
       };
-      commitProvisionalRecord(ctx.toolUseContext, ctx.toolUseID, _, result, ctx.tool.name);
-      let he = De;
-      me();
+      commitProvisionalRecord(ctx.toolUseContext, ctx.toolUseID, nextInput, result_2, ctx.tool.name);
+      let previousAbort = roundAbort;
+      runTeardowns();
       try {
-        lo();
+        showDialog();
       } finally {
-        he?.abort();
+        previousAbort?.abort();
       }
     },
-    onRemoteDialogAnswer(_) {
-      De?.abort();
-      mo(_, undefined);
+    onRemoteDialogAnswer(remoteAnswer) {
+      roundAbort?.abort();
+      finish(remoteAnswer, undefined);
     },
   });
-  let we = false;
-  let Oe;
-  let $e;
-  let Be;
-  let ze;
-  let ve;
-  let Le;
-  let so = (_) => {
-    if (typeof _ !== "object" || _ === null || isAsyncIterable(_)) return;
-    let networkAllowHosts = _.networkAllowHosts;
+  let tornDown = false;
+  let teardownAutoDeny;
+  let presenceUnsubscribe;
+  let dialogChangeUnsubscribe;
+  let pushDescriptor;
+  let lastDescriptor;
+  let networkHosts;
+  let extractHosts = (descriptor) => {
+    if (typeof descriptor !== "object" || descriptor === null || isAsyncIterable(descriptor)) return;
+    let networkAllowHosts = descriptor.networkAllowHosts;
     return Array.isArray(networkAllowHosts) &&
       networkAllowHosts.every((networkAllowHost) => typeof networkAllowHost === "string")
       ? networkAllowHosts
       : undefined;
   };
-  let ao = () => {
-    if (we || isResolved()) return;
-    Oe?.();
-    if (ve !== undefined)
-      ze?.({
-        ...ve,
-        permissionResult: result,
+  let onPresenceChange = () => {
+    if (tornDown || isResolved()) return;
+    teardownAutoDeny?.();
+    if (lastDescriptor !== undefined)
+      pushDescriptor?.({
+        ...lastDescriptor,
+        permissionResult: result_2,
       });
   };
-  let He = permissionModeSignal.subscribe(() => {
+  let recheckUnsubscribe = permissionModeSignal.subscribe(() => {
     if (isResolved()) return;
-    if (Oe !== undefined && !we) {
-      let _ = isAutoAllowedInMode(ctx.tool, getToolPermissionContext(ctx.toolUseContext));
+    if (teardownAutoDeny !== undefined && !tornDown) {
+      let autoMode = isAutoAllowedInMode(ctx.tool, getToolPermissionContext(ctx.toolUseContext));
       if (!(
-        isAutoClassifierActive(_) ||
-        (isRealAutoDenyWindow(y.autoDenyWindow) && _ === "bypassPermissions")
+        isAutoClassifierActive(autoMode) ||
+        (isRealAutoDenyWindow(result.autoDenyWindow) && autoMode === "bypassPermissions")
       ))
-        ao();
+        onPresenceChange();
     }
     if (
       isBypassImmuneDecision(
         {
-          decisionReason: result.decisionReason,
-          forcedByCaller: y.forcedByCaller,
-          personOnly: result.personOnly,
+          decisionReason: result_2.decisionReason,
+          forcedByCaller: result.forcedByCaller,
+          personOnly: result_2.personOnly,
         },
         ctx.tool,
         ctx.toolUseContext,
@@ -780,33 +805,33 @@ function showPermissionDialog(e, r, n) {
       ctx.assistantMessage,
       ctx.toolUseID,
     )
-      .then((_) => {
-        if (_.behavior !== "allow") {
+      .then((recheck) => {
+        if (recheck.behavior !== "allow") {
           if (isResolved()) ctx.toolUseContext.session.outsideReadPrompt.closeFor(ctx.toolUseID);
           return;
         }
         if (!claim()) return;
         dropPermissionRecord(ctx.toolUseContext, ctx.toolUseID);
-        He();
+        recheckUnsubscribe();
         notifyBridgeAndTeardown();
-        De?.abort();
+        roundAbort?.abort();
         attentionRegistryStore.clearHookFailure(ctx.toolUseID);
         attentionRegistryStore.closeAsk(ctx.toolUseID);
-        me();
+        runTeardowns();
         ctx.logDecision({
           decision: "accept",
           source: "config",
-          decisionReason: _.decisionReason,
+          decisionReason: recheck.decisionReason,
           modeAtRecheck: getToolPermissionContext(ctx.toolUseContext).mode,
           surface: decisionReasonToString(
             ctx.toolUseContext.session,
-            _.decisionReason,
+            recheck.decisionReason,
             getToolPermissionContext(ctx.toolUseContext),
           ),
         });
         resolve(
-          ctx.buildAllow(_.updatedInput ?? ctx.input, {
-            decisionReason: _.decisionReason,
+          ctx.buildAllow(recheck.updatedInput ?? ctx.input, {
+            decisionReason: recheck.decisionReason,
           }),
         );
       })
@@ -817,208 +842,208 @@ function showPermissionDialog(e, r, n) {
           );
       });
   });
-  function lo() {
-    let _ = ++pe;
+  function showDialog() {
+    let roundId = ++round;
     askPatience?.hold();
-    ve = undefined;
-    if (true) ut();
+    lastDescriptor = undefined;
+    if (true) armAutoDeny();
     let abortController = new AbortController();
-    De = abortController;
-    let he = () => abortController.abort();
+    roundAbort = abortController;
+    let abortHandler = () => abortController.abort();
     if (signal.aborted) abortController.abort();
     else
-      signal.addEventListener("abort", he, {
+      signal.addEventListener("abort", abortHandler, {
         once: true,
       });
-    let descriptor = n.buildDescriptor({
-      input: Q,
-      permissionResult: result,
+    let descriptor = spec.buildDescriptor({
+      input: displayInput,
+      permissionResult: result_2,
     });
-    Le = so(descriptor);
-    let be;
-    let fo = false;
-    let yo = [];
-    let go = (X) => {
-      if (we)
-        X = {
-          ...X,
-          permissionResult: result,
+    networkHosts = extractHosts(descriptor);
+    let asyncResolve;
+    let streamDone = false;
+    let queuedValues = [];
+    let pushValue = (value) => {
+      if (tornDown)
+        value = {
+          ...value,
+          permissionResult: result_2,
         };
-      ve = X;
-      Le = so(X);
-      if (be !== undefined) {
-        let Ne = be;
-        be = undefined;
-        Ne({
-          value: X,
+      lastDescriptor = value;
+      networkHosts = extractHosts(value);
+      if (asyncResolve !== undefined) {
+        let resolve = asyncResolve;
+        asyncResolve = undefined;
+        resolve({
+          value,
           done: false,
         });
-      } else yo.push(X);
+      } else queuedValues.push(value);
     };
-    let ho = (X) => {
-      if (isAsyncIterable(X))
+    let emit = (payload) => {
+      if (isAsyncIterable(payload))
         (async () => {
           try {
-            for await (let Ne of X) {
+            for await (let value of payload) {
               if (abortController.signal.aborted) return;
-              go(Ne);
+              pushValue(value);
             }
           } catch {}
         })();
-      else go(X);
+      else pushValue(payload);
     };
-    ze = ho;
-    let ft = {
+    pushDescriptor = emit;
+    let iterator = {
       [Symbol.asyncIterator]() {
         return {
           next: () => {
-            if (fo)
+            if (streamDone)
               return Promise.resolve({
                 value: undefined,
                 done: true,
               });
-            let X = yo.shift();
-            if (X !== undefined)
+            let value = queuedValues.shift();
+            if (value !== undefined)
               return Promise.resolve({
-                value: X,
+                value,
                 done: false,
               });
             return new Promise((resolve) => {
-              be = resolve;
+              asyncResolve = resolve;
             });
           },
           return: () => {
-            let X = {
+            let doneValue = {
               value: undefined,
               done: true,
             };
-            be?.(X);
-            be = undefined;
-            return Promise.resolve(X);
+            asyncResolve?.(doneValue);
+            asyncResolve = undefined;
+            return Promise.resolve(doneValue);
           },
         };
       },
     };
-    Ce();
-    let Po = y.personOnly === true;
-    let Qe = M || Po;
-    let bo = !Qe && autoDenyAfterMs !== undefined;
-    let ko = Qe ? ke.next() : Re;
+    logShownOnce();
+    let isPersonOnly = result.personOnly === true;
+    let heldUnder = unattended || isPersonOnly;
+    let queueBehind = !heldUnder && autoDenyAfterMs !== undefined;
+    let askOrder = heldUnder ? orderCounter.next() : order;
     attentionRegistryStore.openAsk(
       {
         ...bridgeApprovalPrompt({
           tool: ctx.tool,
-          input: Q,
+          input: displayInput,
         }),
         toolUseID: ctx.toolUseID,
       },
       {
-        order: ko,
-        onTop: bo,
+        order: askOrder,
+        onTop: queueBehind,
       },
     );
-    let wo = autoDenyAfterMs !== undefined && !co && !we;
-    let Do = () => {
-      fo = true;
-      be?.({
+    let canAutoDeny = autoDenyAfterMs !== undefined && !isUnattendedNoWindow && !tornDown;
+    let endStream = () => {
+      streamDone = true;
+      asyncResolve?.({
         value: undefined,
         done: true,
       });
-      be = undefined;
+      asyncResolve = undefined;
     };
-    if (wo) {
-      if (abortController.signal.aborted) Do();
+    if (canAutoDeny) {
+      if (abortController.signal.aborted) endStream();
       else
-        abortController.signal.addEventListener("abort", Do, {
+        abortController.signal.addEventListener("abort", endStream, {
           once: true,
         });
-      ho(descriptor);
+      emit(descriptor);
     }
-    let Ro = V(n.dialog, wo ? ft : descriptor, {
+    let dialogPromise = openDialog(spec.dialog, canAutoDeny ? iterator : descriptor, {
       signal: abortController.signal,
-      place: Qe ? "under" : bo ? undefined : "queue",
-      askOrder: ko,
+      place: heldUnder ? "under" : queueBehind ? undefined : "queue",
+      askOrder,
       armInputGrace:
-        M ||
-        Po ||
-        y.denialLimitFallback !== undefined ||
-        y.autoDenyWindow !== undefined ||
-        y.oneTimeAnswersOnly === true,
+        unattended ||
+        isPersonOnly ||
+        result.denialLimitFallback !== undefined ||
+        result.autoDenyWindow !== undefined ||
+        result.oneTimeAnswersOnly === true,
       ...false,
       onFirstReveal: askPatience?.resume,
-      ...(isNotAskUserQuestionCard(n.dialog.kind) && {
+      ...(isNotAskUserQuestionCard(spec.dialog.kind) && {
         countedAsk,
       }),
     });
-    Ro.then(undefined, () => {
-      if (_ === pe) countedAsk.settle();
+    dialogPromise.then(undefined, () => {
+      if (roundId === round) countedAsk.settle();
     });
-    Ro.then(
-      (X) => {
-        signal.removeEventListener("abort", he);
-        if (_ !== pe) return;
+    dialogPromise.then(
+      (answer) => {
+        signal.removeEventListener("abort", abortHandler);
+        if (roundId !== round) return;
         if (!claim()) return;
-        mo(X, "host_dialog");
+        finish(answer, "host_dialog");
       },
       (error) => {
-        if (_ === pe) attentionRegistryStore.closeAsk(ctx.toolUseID);
+        if (roundId === round) attentionRegistryStore.closeAsk(ctx.toolUseID);
         throw error;
       },
     );
   }
-  function mo(_, surface) {
+  function finish(answer, surface) {
     switch (
       (attentionRegistryStore.clearHookFailure(ctx.toolUseID),
       attentionRegistryStore.closeAsk(ctx.toolUseID),
-      He(),
-      me(),
-      _.behavior)
+      recheckUnsubscribe(),
+      runTeardowns(),
+      answer.behavior)
     ) {
       case "allow": {
-        if (y.denialLimitFallback !== undefined) {
+        if (result.denialLimitFallback !== undefined) {
           resetDenialStreakAfterUserApproval(ctx.toolUseContext);
           logFeatureOk("permission_auto_mode_denial_fallback", {
             autoDenied: false,
           });
         }
-        if (isRealAutoDenyWindow(y.autoDenyWindow)) {
+        if (isRealAutoDenyWindow(result.autoDenyWindow)) {
           resetUnansweredSafetyCheckCount();
           logFeatureOk("permission_safety_check_timed_dialog", {
             autoDenied: false,
           });
         }
-        if (result.offersBlockOutsideReads === true && _.askAgainOutsideReads !== true)
+        if (result_2.offersBlockOutsideReads === true && answer.askAgainOutsideReads !== true)
           markOutsideReadPromptSeen(ctx.toolUseContext);
-        if (Le !== undefined)
+        if (networkHosts !== undefined)
           rememberCommandNetworkLists(ctx.toolUseID, ctx.tool, {
-            ...Q,
-            allowed_domains: [...Le],
+            ...displayInput,
+            allowed_domains: [...networkHosts],
           });
-        let G = y.inPlaceOfClassifier === true ? [] : (_.permissionUpdates ?? []);
+        let permissionUpdates = result.inPlaceOfClassifier === true ? [] : (answer.permissionUpdates ?? []);
         notifyBridgeAndTeardown({
           behavior: "allow",
-          updatedInput: _.updatedInput,
-          updatedPermissions: [...G],
+          updatedInput: answer.updatedInput,
+          updatedPermissions: [...permissionUpdates],
         });
-        ge("accept");
+        logResponse("accept");
         resolve(
-          ctx.handleUserAllow(_.updatedInput, G, {
-            feedback: _.feedback,
+          ctx.handleUserAllow(answer.updatedInput, permissionUpdates, {
+            feedback: answer.feedback,
             permissionPromptStartTimeMs: now,
-            contentBlocks: _.contentBlocks,
+            contentBlocks: answer.contentBlocks,
             decisionReason,
-            matchedAskRule: result.matchedAskRule,
+            matchedAskRule: result_2.matchedAskRule,
             surface,
           }),
         );
         return;
       }
       case "deny": {
-        if (y.denialLimitFallback !== undefined)
+        if (result.denialLimitFallback !== undefined)
           logFeatureOk("permission_auto_mode_denial_fallback", {
             autoDenied: false,
           });
-        if (isRealAutoDenyWindow(y.autoDenyWindow)) {
+        if (isRealAutoDenyWindow(result.autoDenyWindow)) {
           resetUnansweredSafetyCheckCount();
           logFeatureOk("permission_safety_check_timed_dialog", {
             autoDenied: false,
@@ -1026,28 +1051,28 @@ function showPermissionDialog(e, r, n) {
         }
         let declineMessage =
           ACCOUNT_MEMORY_PERMISSION_MODULE !== null &&
-          n.dialog.kind === ACCOUNT_MEMORY_PERMISSION_MODULE.accountMemoryWritePermissionDialog.kind
-            ? _.declineMessage
+          spec.dialog.kind === ACCOUNT_MEMORY_PERMISSION_MODULE.accountMemoryWritePermissionDialog.kind
+            ? answer.declineMessage
             : undefined;
         notifyBridgeAndTeardown({
           behavior: "deny",
-          message: declineMessage || (_.feedback ?? "User denied permission"),
+          message: declineMessage || (answer.feedback ?? "User denied permission"),
         });
-        ge("reject");
+        logResponse("reject");
         ctx.logDecision(
           {
             decision: "reject",
             source: {
               type: "user_reject",
-              hasFeedback: !!_.feedback,
+              hasFeedback: !!answer.feedback,
             },
           },
           {
             permissionPromptStartTimeMs: now,
-            input: Q,
+            input: displayInput,
           },
         );
-        if (y.askEnded?.() === true) {
+        if (result.askEnded?.() === true) {
           resolve({
             behavior: "ask",
             message: WITHDRAWN_REQUEST_ANSWER_TEXT,
@@ -1065,16 +1090,16 @@ function showPermissionDialog(e, r, n) {
           });
           return;
         }
-        if (result.offersBlockOutsideReads === true) {
-          if (_.blockOutsideReads === true) {
-            let he = (error, be) =>
+        if (result_2.offersBlockOutsideReads === true) {
+          if (answer.blockOutsideReads === true) {
+            let respondFenced = (error, sandboxRefreshed) =>
               resolve({
                 behavior: "deny",
                 message:
                   "The user chose to block reads outside the working directories (permissions.blockReadsOutsideWorkingDirectories). Ask the user to add the directory with /add-dir, or to remove that setting." +
                   (error
                     ? ` Tell the user: the setting could not be saved to user settings (${error.message}); the file tools are fenced for this session only, sandboxed commands are not.`
-                    : be
+                    : sandboxRefreshed
                       ? ""
                       : " Tell the user: the setting is saved, but sandboxed commands may not be fenced until the settings change is picked up."),
                 decisionReason: {
@@ -1083,18 +1108,18 @@ function showPermissionDialog(e, r, n) {
                 },
               });
             persistBlockReadsOutsideWorkspace(ctx.toolUseContext)
-              .then(({ error, sandboxRefreshed }) => he(error, sandboxRefreshed))
-              .catch((error) => he(toError(error), false));
+              .then(({ error, sandboxRefreshed }) => respondFenced(error, sandboxRefreshed))
+              .catch((error) => respondFenced(toError(error), false));
             return;
           }
           resolve({
             behavior: "ask",
-            message: _.feedback
-              ? `The user did not allow this read outside the working directories: ${_.feedback}`
+            message: answer.feedback
+              ? `The user did not allow this read outside the working directories: ${answer.feedback}`
               : "The user did not allow this read outside the working directories.",
-            contentBlocks: _.contentBlocks,
-            ...(_.feedback && {
-              userFeedback: _.feedback,
+            contentBlocks: answer.contentBlocks,
+            ...(answer.feedback && {
+              userFeedback: answer.feedback,
             }),
             decisionReason: {
               type: "other",
@@ -1104,7 +1129,7 @@ function showPermissionDialog(e, r, n) {
           return;
         }
         resolve(
-          ctx.cancelAndAbort(_.feedback, undefined, _.contentBlocks, {
+          ctx.cancelAndAbort(answer.feedback, undefined, answer.contentBlocks, {
             feedbackIsFromUser: true,
           }),
         );
@@ -1115,7 +1140,7 @@ function showPermissionDialog(e, r, n) {
           behavior: "deny",
           message: "User aborted",
         });
-        ge("reject");
+        logResponse("reject");
         ctx.logCancelled();
         ctx.logDecision(
           {
@@ -1126,27 +1151,27 @@ function showPermissionDialog(e, r, n) {
           },
           {
             permissionPromptStartTimeMs: now,
-            input: Q,
+            input: displayInput,
           },
         );
-        if (q) {
+        if (isUnattended) {
           resolve({
             behavior: "ask",
             message: SUBAGENT_REJECT_MESSAGE,
           });
           return;
         }
-        if (y.askEnded?.() === true) {
+        if (result.askEnded?.() === true) {
           resolve({
             behavior: "ask",
             message: WITHDRAWN_REQUEST_ANSWER_TEXT,
           });
           return;
         }
-        if ("wasNotShown" in _ && n.resultWhenNotShown) {
+        if ("wasNotShown" in answer && spec.resultWhenNotShown) {
           resolve({
             behavior: "ask",
-            message: n.resultWhenNotShown(ctx, "wasTakenAway" in _),
+            message: spec.resultWhenNotShown(ctx, "wasTakenAway" in answer),
             decisionReason: {
               type: "other",
               reason: "the ask was not shown",
@@ -1159,54 +1184,55 @@ function showPermissionDialog(e, r, n) {
       }
     }
   }
-  let autoDenyAfterMs = y.denialLimitFallback?.autoDenyAfterMs ?? y.autoDenyWindow?.autoDenyAfterMs;
-  let autoDenyResolution = y.denialLimitFallback?.autoDenyResolution ?? y.autoDenyWindow?.autoDenyResolution;
-  let co = q && y.autoDenyWindow?.notASafetyCheck !== true;
-  let Ue;
-  let je;
-  let Ve = () => y.autoDenyWindow?.notASafetyCheck === true && isUnansweredWindowExpired();
-  let Ee = false;
-  function po() {
-    if (autoDenyAfterMs === undefined || we || isResolved()) return;
-    Ee = Ve();
-    let timeoutMs = Ee ? 0 : autoDenyAfterMs;
-    Ue = Date.now() + timeoutMs;
-    uo(timeoutMs, Ue);
-    if (ve !== undefined)
-      ze?.({
-        ...ve,
-        permissionResult: result,
+  let autoDenyAfterMs = result.denialLimitFallback?.autoDenyAfterMs ?? result.autoDenyWindow?.autoDenyAfterMs;
+  let autoDenyResolution =
+    result.denialLimitFallback?.autoDenyResolution ?? result.autoDenyWindow?.autoDenyResolution;
+  let isUnattendedNoWindow = isUnattended && result.autoDenyWindow?.notASafetyCheck !== true;
+  let autoDenyDeadline;
+  let autoDenyTimer;
+  let isWindowExpired = () => result.autoDenyWindow?.notASafetyCheck === true && isUnansweredWindowExpired();
+  let suppressSchedule = false;
+  function restartAutoDeny() {
+    if (autoDenyAfterMs === undefined || tornDown || isResolved()) return;
+    suppressSchedule = isWindowExpired();
+    let timeoutMs = suppressSchedule ? 0 : autoDenyAfterMs;
+    autoDenyDeadline = Date.now() + timeoutMs;
+    scheduleAutoDeny(timeoutMs, autoDenyDeadline);
+    if (lastDescriptor !== undefined)
+      pushDescriptor?.({
+        ...lastDescriptor,
+        permissionResult: result_2,
       });
   }
-  function uo(timeoutMs, deadlineEpochMs) {
+  function scheduleAutoDeny(timeoutMs, deadlineEpochMs) {
     if (autoDenyResolution === undefined) return;
-    clearTimeout(je);
-    result =
-      result.denialLimitFallback !== undefined
+    clearTimeout(autoDenyTimer);
+    result_2 =
+      result_2.denialLimitFallback !== undefined
         ? {
-            ...result,
-            denialLimitFallback: withDenialDeadline(result.denialLimitFallback, deadlineEpochMs),
+            ...result_2,
+            denialLimitFallback: withDenialDeadline(result_2.denialLimitFallback, deadlineEpochMs),
           }
-        : result.autoDenyWindow !== undefined
+        : result_2.autoDenyWindow !== undefined
           ? {
-              ...result,
-              autoDenyWindow: withAutoDenyDeadline(result.autoDenyWindow, deadlineEpochMs),
+              ...result_2,
+              autoDenyWindow: withAutoDenyDeadline(result_2.autoDenyWindow, deadlineEpochMs),
             }
-          : result;
+          : result_2;
     let max = Math.max(0, deadlineEpochMs - Date.now());
     let message = autoDenyResolution.message;
-    je = setTimeout(() => {
-      if (!Ve() && (Ee || otherDialogOnScreen(n.dialog.kind))) {
-        po();
+    autoDenyTimer = setTimeout(() => {
+      if (!isWindowExpired() && (suppressSchedule || otherDialogOnScreen(spec.dialog.kind))) {
+        restartAutoDeny();
         return;
       }
       if (!claim()) return;
-      re();
+      dismissAndTeardown();
       notifyBridgeAndTeardown({
         behavior: "deny",
         message,
       });
-      if (y.denialLimitFallback !== undefined) {
+      if (result.denialLimitFallback !== undefined) {
         logEvent("tengu_auto_mode_denial_dialog_auto_denied", {
           toolName: sanitizeToolNameForAnalytics(ctx.tool.name),
           isMcp: ctx.tool.isMcp ?? false,
@@ -1215,7 +1241,7 @@ function showPermissionDialog(e, r, n) {
         logFeatureOk("permission_auto_mode_denial_fallback", {
           autoDenied: true,
         });
-      } else if (isRealAutoDenyWindow(y.autoDenyWindow)) {
+      } else if (isRealAutoDenyWindow(result.autoDenyWindow)) {
         logEvent("tengu_safety_check_dialog_auto_denied", {
           toolName: sanitizeToolNameForAnalytics(ctx.tool.name),
           isMcp: ctx.tool.isMcp ?? false,
@@ -1234,7 +1260,7 @@ function showPermissionDialog(e, r, n) {
           autoDenied: true,
         });
       }
-      ge("reject");
+      logResponse("reject");
       ctx.logDecision(
         {
           decision: "reject",
@@ -1243,34 +1269,35 @@ function showPermissionDialog(e, r, n) {
         },
         {
           permissionPromptStartTimeMs: now,
-          input: Q,
+          input: displayInput,
         },
       );
-      e.onClassifierDenyDelivered?.(autoDenyResolution);
+      request.onClassifierDenyDelivered?.(autoDenyResolution);
       resolve(autoDenyResolution);
     }, max);
-    je.unref?.();
+    autoDenyTimer.unref?.();
   }
-  function ut() {
-    if (autoDenyAfterMs === undefined || autoDenyResolution === undefined || co || we) return;
-    if (Ee) Ue = undefined;
-    Ee = Ve();
-    let timeoutMs = Ee ? 0 : autoDenyAfterMs;
-    Ue ??= Date.now() + timeoutMs;
-    uo(timeoutMs, Ue);
-    L.push(() => clearTimeout(je));
-    Oe = () => {
-      we = true;
-      clearTimeout(je);
-      let denialLimitFallback = result.denialLimitFallback;
+  function armAutoDeny() {
+    if (autoDenyAfterMs === undefined || autoDenyResolution === undefined || isUnattendedNoWindow || tornDown)
+      return;
+    if (suppressSchedule) autoDenyDeadline = undefined;
+    suppressSchedule = isWindowExpired();
+    let timeoutMs = suppressSchedule ? 0 : autoDenyAfterMs;
+    autoDenyDeadline ??= Date.now() + timeoutMs;
+    scheduleAutoDeny(timeoutMs, autoDenyDeadline);
+    teardowns.push(() => clearTimeout(autoDenyTimer));
+    teardownAutoDeny = () => {
+      tornDown = true;
+      clearTimeout(autoDenyTimer);
+      let denialLimitFallback = result_2.denialLimitFallback;
       if (denialLimitFallback !== undefined)
-        result = {
-          ...result,
+        result_2 = {
+          ...result_2,
           denialLimitFallback: stripAutoDenyFields(denialLimitFallback),
         };
-      else if (result.autoDenyWindow !== undefined) {
-        let { autoDenyWindow, ...Pe } = result;
-        result = Pe;
+      else if (result_2.autoDenyWindow !== undefined) {
+        let { autoDenyWindow, ...rest } = result_2;
+        result_2 = rest;
         if (isRealAutoDenyWindow(autoDenyWindow)) resetUnansweredSafetyCheckCount();
         else
           setUnansweredWindowExpired({
@@ -1278,33 +1305,33 @@ function showPermissionDialog(e, r, n) {
           });
       }
     };
-    $e?.();
-    $e = autoDenyPresenceSignal.subscribe(() => {
-      ao();
+    presenceUnsubscribe?.();
+    presenceUnsubscribe = autoDenyPresenceSignal.subscribe(() => {
+      onPresenceChange();
     });
-    L.push(() => $e?.());
-    Be?.();
-    let Z = otherDialogOnScreen(n.dialog.kind);
-    Be = onBlockingDialogChange(() => {
-      let loggedToolUseID = otherDialogOnScreen(n.dialog.kind);
-      if (Z && !loggedToolUseID) po();
-      Z = loggedToolUseID;
+    teardowns.push(() => presenceUnsubscribe?.());
+    dialogChangeUnsubscribe?.();
+    let wasBlocking = otherDialogOnScreen(spec.dialog.kind);
+    dialogChangeUnsubscribe = onBlockingDialogChange(() => {
+      let loggedToolUseID = otherDialogOnScreen(spec.dialog.kind);
+      if (wasBlocking && !loggedToolUseID) restartAutoDeny();
+      wasBlocking = loggedToolUseID;
     });
-    L.push(() => {
-      Be?.();
-      Be = undefined;
+    teardowns.push(() => {
+      dialogChangeUnsubscribe?.();
+      dialogChangeUnsubscribe = undefined;
     });
   }
-  n.onRacersReady?.({
+  spec.onRacersReady?.({
     ctx,
-    dismissAndTeardown: re,
+    dismissAndTeardown,
     notifyBridge: notifyBridgeAndTeardown,
-    isReprompted: () => Ae > 0,
+    isReprompted: () => repromptCount > 0,
     addTeardown: (prev) => {
-      L.push(prev);
+      teardowns.push(prev);
     },
     logRepromptDenyDecision: () => {
-      ge("reject");
+      logResponse("reject");
       ctx.logDecision(
         {
           decision: "reject",
@@ -1314,12 +1341,12 @@ function showPermissionDialog(e, r, n) {
         },
         {
           permissionPromptStartTimeMs: now,
-          input: Q,
+          input: displayInput,
         },
       );
     },
   });
-  lo();
+  showDialog();
 }
 //@ chunk-wyqg6m3h.js:36666-36692 fingerprint = permissionResultToLog (0.387)
 var askKeyOf = (permissionResult) => `ask:${sanitizeName(permissionResult)}`;

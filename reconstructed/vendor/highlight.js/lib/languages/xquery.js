@@ -5,11 +5,11 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:556013-561601 cjs-fingerprint
-var require_xquery = x(function (cjsExports, cjsModule) {
-  function xquery(e) {
+var require_xquery = __commonJS(function (cjsExports, cjsModule) {
+  function xquery(hljs) {
     return {
       name: "XQuery",
       aliases: ["xpath", "xq", "xqm"],

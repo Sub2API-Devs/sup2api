@@ -19,8 +19,8 @@ import { logFeatureBad, logFeatureOk } from "../analytics/featureTelemetry.js";
 import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-e6aww6q8.js:963936-963973 placement
-function isRegimeRefusal(e) {
-  return isHipaaFeatureError(e) && !isHumbleFlurryOn();
+function isRegimeRefusal(error) {
+  return isHipaaFeatureError(error) && !isHumbleFlurryOn();
 }
 //@ chunk-e6aww6q8.js:963973-964013 placement
 function recoverRegimeRefusalIfNeeded(error) {
@@ -30,26 +30,26 @@ function recoverRegimeRefusalIfNeeded(error) {
 /**
  * 受监管使用制度（如 HIPAA）拒绝后，按制度重建请求并重发。
  */
-async function* recoverRegimeRefusal(tools, signal, r) {
-  let s = hasComplianceTaint("hipaa");
-  let h = yield* r(tools);
-  if (h === undefined) return;
-  let y;
-  let S = false;
+async function* recoverRegimeRefusal(tools, signal, toolList) {
+  let hipaa = hasComplianceTaint("hipaa");
+  let first = yield* toolList(tools);
+  if (first === undefined) return;
+  let nextTools;
+  let retried = false;
   try {
     await raceWithAbortSignal(runIdleTask(), signal, () => new APIUserAbortError());
-    let filtered = tools.filter((G) => G.isEnabled());
-    if (hasComplianceTaint("hipaa") && (!s || filtered.length < tools.length)) y = filtered;
+    let filtered = tools.filter((tool) => tool.isEnabled());
+    if (hasComplianceTaint("hipaa") && (!hipaa || filtered.length < tools.length)) nextTools = filtered;
   } catch (error) {
     if (!signal.aborted) {
-      S = true;
+      retried = true;
       logError(error);
     }
   }
   if (signal.aborted) return;
-  if (y === undefined) {
-    logFeatureBad("api_regime_refusal_recovery", S ? "decision_failed" : "nothing_to_rebuild");
-    yield h;
+  if (nextTools === undefined) {
+    logFeatureBad("api_regime_refusal_recovery", retried ? "decision_failed" : "nothing_to_rebuild");
+    yield first;
     return;
   }
   logForDebugging(
@@ -58,12 +58,12 @@ async function* recoverRegimeRefusal(tools, signal, r) {
       level: "warn",
     },
   );
-  let w = yield* r(y);
-  if (w === undefined) {
+  let second = yield* toolList(nextTools);
+  if (second === undefined) {
     logFeatureOk("api_regime_refusal_recovery");
     return;
   }
   logFeatureBad("api_regime_refusal_recovery", "refused_again");
-  yield w;
+  yield second;
 }
 export { recoverRegimeRefusal, isRegimeRefusal, recoverRegimeRefusalIfNeeded };

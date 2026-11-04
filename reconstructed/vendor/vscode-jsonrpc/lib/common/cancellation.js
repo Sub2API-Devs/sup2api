@@ -5,13 +5,13 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_ral } from "./ral.js";
 import { require_is } from "./is.js";
 import { require_events } from "./events.js";
 
 //@ chunk-t4ksmxzx.js:15429-16783 cjs-fingerprint
-var require_cancellation = x(function (cjsExports) {
+var require_cancellation = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

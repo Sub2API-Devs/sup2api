@@ -17,7 +17,13 @@ import { resolveGitSshConfig } from "./gitSshConfig.js";
 import { execFileNoThrowWithCwd, execFileNoThrow } from "../execFileNoThrow.js";
 import { gitExe } from "../git.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, array, string, unknown, looseObject } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  array,
+  stringSchema,
+  unknown,
+  looseObject,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { writeFileAtomic as writeFileAtomic_2 } from "../atomicPublishWrite.js";
 import { jsonStringify } from "../slowOperations.js";
 import { safeParseJSON } from "../json.js";
@@ -27,7 +33,7 @@ import { readGitHead, resolveRef, isValidGitSha } from "../git/gitFilesystem.js"
 import { errorMessage } from "../errors.js";
 import { redactKnownUrls } from "../redaction/urlRedaction.js";
 import { logPluginFetch, classifyFetchError } from "./fetchTelemetry.js";
-import { mcpAuthCacheContent, readPluginFileSafe } from "./safeFileRead.js";
+import { readSmallFileText, readPluginFileSafe } from "./safeFileRead.js";
 import { buildGitEnvForRepo } from "../git/gitDirResolution.js";
 import { GIT_SAFE_GLOBAL_ARGS } from "../git/gitSafeEnv.js";
 import { plural } from "../stringUtils.js";
@@ -37,61 +43,67 @@ import {
   PLUGIN_MANIFEST_PATH as PLUGIN_MANIFEST_PATH_2,
   PLUGIN_JSON,
 } from "./commandSource.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4186897-4187414 placement
 async function lsRemoteMarketplace(
-  e,
-  { flags: n = [], patterns: r = [], timeout: s, endsWithItsChildren: h = false } = {},
+  rawUrl,
+  { flags = [], patterns = [], timeout, endsWithItsChildren = false } = {},
 ) {
-  let y = pluginGitUrlError(e);
-  if (y !== null)
+  let urlError = pluginGitUrlError(rawUrl);
+  if (urlError !== null)
     return {
       code: 1,
       stdout: "",
-      stderr: `Refusing to query. ${y.message}`,
+      stderr: `Refusing to query. ${urlError.message}`,
     };
-  let S = await mkdtemp(join(tmpdir(), "claude-lsremote-"));
+  let tempDir = await mkdtemp(join(tmpdir(), "claude-lsremote-"));
   try {
-    let w = runGitWithCeilingDirs(S, await resolveGitSshConfig(e));
-    let L = ["-C", S, ...w.inCheckoutArgs, "ls-remote", ...n, "--", e, ...r];
-    let G = {
-      env: w.env,
+    let gitEnv = runGitWithCeilingDirs(tempDir, await resolveGitSshConfig(rawUrl));
+    let args = ["-C", tempDir, ...gitEnv.inCheckoutArgs, "ls-remote", ...flags, "--", rawUrl, ...patterns];
+    let execOptions = {
+      env: gitEnv.env,
       stdin: "ignore",
-      ...(s !== undefined && {
-        timeout: s,
+      ...(timeout !== undefined && {
+        timeout,
       }),
     };
-    return h
-      ? await execFileNoThrowWithCwd(gitExe(), L, {
-          ...G,
-          cwd: S,
+    return endsWithItsChildren
+      ? await execFileNoThrowWithCwd(gitExe(), args, {
+          ...execOptions,
+          cwd: tempDir,
           withoutControllingTerminal: true,
         })
-      : await execFileNoThrow(gitExe(), L, G);
+      : await execFileNoThrow(gitExe(), args, execOptions);
   } finally {
-    await rm_2(S, {
+    await rm_2(tempDir, {
       recursive: true,
       force: true,
     }).catch(() => {});
   }
 }
 //@ chunk-e6aww6q8.js:4187414-4187499 placement
-var CLAUDE_CODE_SPARSE_PATHS_JSON = "claude-code-sparse-paths.json";
-var MAX_SPARSE_PATHS_FILE_BYTES = 65536;
-var sparsePathsSchema = DoctorLazy(() =>
-  u({
-    sparsePaths: array(string()),
-  }),
-);
+var CLAUDE_CODE_SPARSE_PATHS_JSON; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_SPARSE_PATHS_FILE_BYTES;
+var sparsePathsSchema;
+deferInit("chunk-e6aww6q8.js:4187414", () => {
+  CLAUDE_CODE_SPARSE_PATHS_JSON = "claude-code-sparse-paths.json";
+  MAX_SPARSE_PATHS_FILE_BYTES = 65536;
+  sparsePathsSchema = DoctorLazy(() =>
+    objectSchema({
+      sparsePaths: array(stringSchema()),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:4187499-4187574 placement
 /**
  * writeSparsePaths：写入稀疏路径配置。
  */
-async function writeSparsePaths(e, n) {
+async function writeSparsePaths(checkoutDir, sparsePaths) {
   await writeFileAtomic_2(
-    join(e, ".git", CLAUDE_CODE_SPARSE_PATHS_JSON),
+    join(checkoutDir, ".git", CLAUDE_CODE_SPARSE_PATHS_JSON),
     jsonStringify({
-      sparsePaths: n ?? [],
+      sparsePaths: sparsePaths ?? [],
     }),
   );
 }
@@ -99,38 +111,38 @@ async function writeSparsePaths(e, n) {
 /**
  * 探测已有的市场检出是否可复用（稀疏路径、HEAD、分支），否则重新克隆。
  */
-async function probeMarketplaceCheckout(e, n, { ref, sparsePaths, timeout }) {
-  let y = join(e, ".git");
-  let S = sparsePathsSchema().safeParse(
+async function probeMarketplaceCheckout(checkoutDir, remoteUrl, { ref, sparsePaths, timeout }) {
+  let gitDir = join(checkoutDir, ".git");
+  let parsedSparse = sparsePathsSchema().safeParse(
     safeParseJSON(
-      await readFileGuarded(join(y, CLAUDE_CODE_SPARSE_PATHS_JSON), MAX_SPARSE_PATHS_FILE_BYTES, {
+      await readFileGuarded(join(gitDir, CLAUDE_CODE_SPARSE_PATHS_JSON), MAX_SPARSE_PATHS_FILE_BYTES, {
         noFollow: true,
       }),
       false,
     ),
   );
-  let sorted = (S.success ? S.data.sparsePaths : []).sort();
+  let sorted = (parsedSparse.success ? parsedSparse.data.sparsePaths : []).sort();
   let sorted_2 = [...(sparsePaths ?? [])].sort();
-  if (sorted_2.length !== sorted.length || sorted_2.some((Ie, Me) => Ie !== sorted[Me])) {
+  if (sorted_2.length !== sorted.length || sorted_2.some((left, right) => left !== sorted[right])) {
     logForDebugging("Marketplace checkout probe: sparse paths changed, re-cloning");
     return "stale";
   }
-  let gitHead = await readGitHead(y);
-  let q =
+  let gitHead = await readGitHead(gitDir);
+  let localSha =
     gitHead === null
       ? null
       : gitHead.type === "branch"
-        ? await resolveRef(y, `refs/heads/${gitHead.name}`)
+        ? await resolveRef(gitDir, `refs/heads/${gitHead.name}`)
         : gitHead.sha;
-  if (!q) {
+  if (!localSha) {
     logForDebugging("Marketplace checkout probe: no readable HEAD, cloning");
     return "stale";
   }
-  if (ref !== undefined && isValidGitSha(ref)) return ref === q ? "current" : "stale";
+  if (ref !== undefined && isValidGitSha(ref)) return ref === localSha ? "current" : "stale";
   let startTime = performance.now();
-  let Se;
+  let remoteResult;
   try {
-    Se = await lsRemoteMarketplace(n, {
+    remoteResult = await lsRemoteMarketplace(remoteUrl, {
       patterns:
         ref === undefined ? ["HEAD"] : [`refs/heads/${ref}`, `refs/tags/${ref}^{}`, `refs/tags/${ref}`],
       timeout,
@@ -141,37 +153,37 @@ async function probeMarketplaceCheckout(e, n, { ref, sparsePaths, timeout }) {
     });
     return "stale";
   }
-  let ke = redactKnownUrls(Se.stderr, n);
+  let stderr = redactKnownUrls(remoteResult.stderr, remoteUrl);
   logPluginFetch(
     "marketplace_probe",
-    n,
-    Se.code === 0 ? "success" : "failure",
+    remoteUrl,
+    remoteResult.code === 0 ? "success" : "failure",
     performance.now() - startTime,
-    Se.code === 0 ? undefined : classifyFetchError(ke),
+    remoteResult.code === 0 ? undefined : classifyFetchError(stderr),
   );
-  if (Se.code !== 0) {
-    logForDebugging(`Marketplace checkout probe: ls-remote exited ${Se.code}: ${ke}`);
+  if (remoteResult.code !== 0) {
+    logForDebugging(`Marketplace checkout probe: ls-remote exited ${remoteResult.code}: ${stderr}`);
     return "unreachable";
   }
-  let we = new Map();
-  for (let line of Se.stdout.split(`
+  let refs = new Map();
+  for (let line of remoteResult.stdout.split(`
 `)) {
     let index = line.indexOf("\t");
-    if (index !== -1) we.set(line.slice(index + 1).trim(), line.slice(0, index));
+    if (index !== -1) refs.set(line.slice(index + 1).trim(), line.slice(0, index));
   }
-  let Ee =
+  let remoteSha =
     ref === undefined
-      ? we.get("HEAD")
-      : (we.get(`refs/heads/${ref}`) ?? we.get(`refs/tags/${ref}^{}`) ?? we.get(`refs/tags/${ref}`));
-  if (Ee === undefined) {
+      ? refs.get("HEAD")
+      : (refs.get(`refs/heads/${ref}`) ?? refs.get(`refs/tags/${ref}^{}`) ?? refs.get(`refs/tags/${ref}`));
+  if (remoteSha === undefined) {
     logForDebugging(`Marketplace checkout probe: ${ref ?? "HEAD"} not advertised by the remote, re-cloning`);
     return "stale";
   }
-  let Ae = Ee === q;
+  let isCurrent = remoteSha === localSha;
   logForDebugging(
-    `Marketplace checkout probe: local ${q.slice(0, 12)} remote ${Ee.slice(0, 12)} \u2014 ${Ae ? "up to date" : "re-cloning"}`,
+    `Marketplace checkout probe: local ${localSha.slice(0, 12)} remote ${remoteSha.slice(0, 12)} \u2014 ${isCurrent ? "up to date" : "re-cloning"}`,
   );
-  return Ae ? "current" : "stale";
+  return isCurrent ? "current" : "stale";
 }
 //@ chunk-e6aww6q8.js:4189276-4189451 placement
 /**
@@ -193,106 +205,106 @@ var lfsScanResult = {
 /**
  * 检查市场检出中 Git LFS 跟踪的文件是否都已拉取。
  */
-async function checkGitLfsFiles(e) {
+async function checkGitLfsFiles(repoDir) {
   try {
-    let n = await mcpAuthCacheContent(join(e, ".gitattributes")).catch(() => {
+    let attrContent = await readSmallFileText(join(repoDir, ".gitattributes")).catch(() => {
       return;
     });
-    let r = n !== undefined && LFS_FILTER_RE.test(n);
-    let s = {
-      cwd: e,
-      env: buildGitEnvForRepo(e),
+    let rootTracksLfs = attrContent !== undefined && LFS_FILTER_RE.test(attrContent);
+    let execBase = {
+      cwd: repoDir,
+      env: buildGitEnvForRepo(repoDir),
       timeout: LFS_SCAN_LIMIT,
       maxBuffer: MAX_GITATTRIBUTES_BYTES,
     };
-    let h = await execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "ls-files", "-z", "-t"], {
-      ...s,
+    let lsFiles = await execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "ls-files", "-z", "-t"], {
+      ...execBase,
       stdin: "ignore",
     });
-    if (h.code !== 0 && !h.maxBufferExceeded) {
+    if (lsFiles.code !== 0 && !lsFiles.maxBufferExceeded) {
       logForDebugging(
-        `[git-lfs] could not list the index of ${e}: ${h.stderr || h.error || `exit ${h.code}`}`,
+        `[git-lfs] could not list the index of ${repoDir}: ${lsFiles.stderr || lsFiles.error || `exit ${lsFiles.code}`}`,
         {
           level: "debug",
         },
       );
       return lfsScanResult;
     }
-    let y = h.maxBufferExceeded === true;
-    let parts = h.stdout.split("\x00");
+    let truncated = lsFiles.maxBufferExceeded === true;
+    let parts = lsFiles.stdout.split("\x00");
     parts.pop();
-    let w = [];
-    for (let we of parts) {
-      if (w.length === MAX_LFS_SCANNED_FILES) {
-        y = true;
+    let files = [];
+    for (let entry of parts) {
+      if (files.length === MAX_LFS_SCANNED_FILES) {
+        truncated = true;
         break;
       }
-      if (we.length > 2 && we[1] === " " && we[0] !== "S") w.push(we.slice(2));
+      if (entry.length > 2 && entry[1] === " " && entry[0] !== "S") files.push(entry.slice(2));
     }
-    let L = new Map();
-    if (!r) {
-      let we = 0;
-      for (let Ee of w) {
-        if (!Ee.endsWith("/.gitattributes")) continue;
-        if (we === MAX_LFS_DIRS) break;
-        we++;
-        let Ae = await safeCheckoutPath(e, Ee, L);
-        let Ie =
-          Ae === null
+    let attrCache = new Map();
+    if (!rootTracksLfs) {
+      let dirCount = 0;
+      for (let file of files) {
+        if (!file.endsWith("/.gitattributes")) continue;
+        if (dirCount === MAX_LFS_DIRS) break;
+        dirCount++;
+        let fullPath = await safeCheckoutPath(repoDir, file, attrCache);
+        let content =
+          fullPath === null
             ? undefined
-            : await mcpAuthCacheContent(Ae).catch(() => {
+            : await readSmallFileText(fullPath).catch(() => {
                 return;
               });
-        if (Ie !== undefined && LFS_FILTER_RE.test(Ie)) {
-          r = true;
+        if (content !== undefined && LFS_FILTER_RE.test(content)) {
+          rootTracksLfs = true;
           break;
         }
       }
     }
-    if (!r) return lfsScanResult;
-    if (w.length === 0)
+    if (!rootTracksLfs) return lfsScanResult;
+    if (files.length === 0)
       return {
         pointerFiles: 0,
-        truncated: y,
+        truncated,
       };
-    let G = await execFileNoThrowWithCwd(
+    let checkAttr = await execFileNoThrowWithCwd(
       gitExe(),
       [...GIT_SAFE_GLOBAL_ARGS, "check-attr", "-z", "--stdin", "filter"],
       {
-        ...s,
-        input: `${w.join("\x00")}\x00`,
+        ...execBase,
+        input: `${files.join("\x00")}\x00`,
       },
     );
-    if (G.code !== 0 && !G.maxBufferExceeded) {
+    if (checkAttr.code !== 0 && !checkAttr.maxBufferExceeded) {
       logForDebugging(
-        `[git-lfs] could not read the filter attributes in ${e}: ${G.stderr || G.error || `exit ${G.code}`}`,
+        `[git-lfs] could not read the filter attributes in ${repoDir}: ${checkAttr.stderr || checkAttr.error || `exit ${checkAttr.code}`}`,
         {
           level: "debug",
         },
       );
       return {
         pointerFiles: 0,
-        truncated: y,
+        truncated,
       };
     }
-    y ||= G.maxBufferExceeded === true;
-    let parts_2 = G.stdout.split("\x00");
-    let Z = [];
-    for (let we = 0; we + 3 < parts_2.length; we += 3)
-      if (parts_2[we + 1] === "filter" && parts_2[we + 2] === "lfs") Z.push(parts_2[we]);
-    let sliced = Z.slice(0, MAX_LFS_REPORTED_FILES);
-    y ||= Z.length > sliced.length;
-    let ke = 0;
-    for (let we of sliced) {
-      let Ee = await safeCheckoutPath(e, we, L);
-      if (Ee !== null && (await isLfsPointerFile(Ee))) ke++;
+    truncated ||= checkAttr.maxBufferExceeded === true;
+    let parts_2 = checkAttr.stdout.split("\x00");
+    let lfsFiles = [];
+    for (let idx = 0; idx + 3 < parts_2.length; idx += 3)
+      if (parts_2[idx + 1] === "filter" && parts_2[idx + 2] === "lfs") lfsFiles.push(parts_2[idx]);
+    let sliced = lfsFiles.slice(0, MAX_LFS_REPORTED_FILES);
+    truncated ||= lfsFiles.length > sliced.length;
+    let pointerCount = 0;
+    for (let file of sliced) {
+      let fullPath = await safeCheckoutPath(repoDir, file, attrCache);
+      if (fullPath !== null && (await isLfsPointerFile(fullPath))) pointerCount++;
     }
     return {
-      pointerFiles: ke,
-      truncated: y,
+      pointerFiles: pointerCount,
+      truncated,
     };
   } catch (error) {
-    logForDebugging(`[git-lfs] pointer scan of ${e} skipped: ${errorMessage(error)}`, {
+    logForDebugging(`[git-lfs] pointer scan of ${repoDir} skipped: ${errorMessage(error)}`, {
       level: "debug",
     });
     return lfsScanResult;
@@ -301,50 +313,53 @@ async function checkGitLfsFiles(e) {
 //@ chunk-e6aww6q8.js:4191008-4191075 placement
 var VALID_SPARSE_PATH_RE = /^(?![-@~=+])(?:[A-Za-z]:\/)?[\p{L}\p{N}\p{M}_@~+=./-]+$/u;
 //@ chunk-e6aww6q8.js:4191075-4191787 placement
-function describeGitLfsMissing(e, { pointerFiles, truncated }) {
+function describeGitLfsMissing(repoDir, { pointerFiles, truncated }) {
   if (pointerFiles === 0 && !truncated) return null;
-  let s = sep === "\\" ? e.replaceAll(sep, "/") : e;
-  let h = VALID_SPARSE_PATH_RE.test(s) ? `run: git -C ${s} lfs pull` : "run `git lfs pull` in that directory";
+  let displayPath = sep === "\\" ? repoDir.replaceAll(sep, "/") : repoDir;
+  let hint = VALID_SPARSE_PATH_RE.test(displayPath)
+    ? `run: git -C ${displayPath} lfs pull`
+    : "run `git lfs pull` in that directory";
   if (pointerFiles === 0)
-    return `${e} tracks files in Git LFS and not every LFS-tracked file could be checked: some may have been checked out as Git LFS pointer files instead of their content \u2014 Claude Code never downloads Git LFS content there. To fetch it, ${h}`;
-  let y = pointerFiles !== 1;
-  return `${truncated ? "At least " : ""}${pointerFiles} ${plural(pointerFiles, "file")} in ${e} ${y ? "were" : "was"} checked out as ${y ? "Git LFS pointer files" : "a Git LFS pointer file"} instead of ${y ? "their" : "its"} content \u2014 Claude Code never downloads Git LFS content there. To fetch it, ${h}`;
+    return `${repoDir} tracks files in Git LFS and not every LFS-tracked file could be checked: some may have been checked out as Git LFS pointer files instead of their content \u2014 Claude Code never downloads Git LFS content there. To fetch it, ${hint}`;
+  let isPlural = pointerFiles !== 1;
+  return `${truncated ? "At least " : ""}${pointerFiles} ${plural(pointerFiles, "file")} in ${repoDir} ${isPlural ? "were" : "was"} checked out as ${isPlural ? "Git LFS pointer files" : "a Git LFS pointer file"} instead of ${isPlural ? "their" : "its"} content \u2014 Claude Code never downloads Git LFS content there. To fetch it, ${hint}`;
 }
 //@ chunk-e6aww6q8.js:4191787-4192025 placement
-async function safeCheckoutPath(e, n, r) {
-  let parts = n.split("/");
-  if (isAbsolute(n) || parts.some((y) => y === "" || y === "." || y === "..")) return null;
-  let h = join(e, ...parts);
+async function safeCheckoutPath(repoDir, entryPath, parentChecks) {
+  let parts = entryPath.split("/");
+  if (isAbsolute(entryPath) || parts.some((part) => part === "" || part === "." || part === ".."))
+    return null;
+  let fullPath = join(repoDir, ...parts);
   if (parts.length > 1) {
-    let y = dirname(h);
-    let S = r.get(y);
-    if (S === undefined) {
-      S = readPluginFileSafe(e, y);
-      r.set(y, S);
+    let parentDir = dirname(fullPath);
+    let pending = parentChecks.get(parentDir);
+    if (pending === undefined) {
+      pending = readPluginFileSafe(repoDir, parentDir);
+      parentChecks.set(parentDir, pending);
     }
-    if ((await S) !== "ok") return null;
+    if ((await pending) !== "ok") return null;
   }
-  return h;
+  return fullPath;
 }
 //@ chunk-e6aww6q8.js:4192025-4192338 placement
 /**
  * 文件开头是否 Git LFS 指针头。
  */
-async function isLfsPointerFile(e) {
+async function isLfsPointerFile(filePath) {
   if (platformNoFollowFlags() === 0) {
-    if (!(await lstat(e).catch(() => null))?.isFile()) return false;
+    if (!(await lstat(filePath).catch(() => null))?.isFile()) return false;
   }
   let buffer = Buffer.from(GIT_LFS_POINTER_PREFIX, "latin1");
-  let r;
+  let handle;
   try {
-    r = await open(e, readOnlyNoFollowFlags());
-    let s = Buffer.alloc(buffer.length);
-    let { bytesRead } = await r.read(s, 0, s.length, 0);
-    return bytesRead === s.length && s.equals(buffer);
+    handle = await open(filePath, readOnlyNoFollowFlags());
+    let head = Buffer.alloc(buffer.length);
+    let { bytesRead } = await handle.read(head, 0, head.length, 0);
+    return bytesRead === head.length && head.equals(buffer);
   } catch {
     return false;
   } finally {
-    await r?.close().catch(() => {
+    await handle?.close().catch(() => {
       return;
     });
   }
@@ -353,29 +368,40 @@ async function isLfsPointerFile(e) {
 /**
  * 子模块挑选用的 schema、组件目录与插件根引用正则。
  */
-var MarketplacePluginsSchema = DoctorLazy(() =>
-  u({
-    plugins: array(unknown()),
-  }),
-);
-var PluginSourceSchema = DoctorLazy(() =>
-  looseObject({
-    source: string(),
-  }),
-);
-var PLUGIN_TREE_DIRS = [...PLUGIN_COMPONENT_DIRS, "bin", "hljs"];
-var PLUGIN_MANIFEST_PATHS = [PLUGIN_MANIFEST_PATH_2, PLUGIN_JSON];
-var PLUGIN_CONFIG_FILES = [
-  ".mcp.json",
-  ".lsp.json",
-  join("hooks", "hooks.json"),
-  join("monitors", "monitors.json"),
-];
-var PLUGIN_ROOT_REF_RE =
-  /(?:(?:^|[^.\w])\.|(?:\$(?:env:)?\{?|%)CLAUDE_PLUGIN_ROOT[}%]?["']?)[/\\]([^\s"'`$,;:()[\]{}\\]+)/g;
-var MAX_SCANNED_FILES = 1e4;
-var MAX_SCANNED_BYTES = 24000;
-var MAX_SCANNED_REFS = 1e4;
+var MarketplacePluginsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var PluginSourceSchema;
+var PLUGIN_TREE_DIRS;
+var PLUGIN_MANIFEST_PATHS;
+var PLUGIN_CONFIG_FILES;
+var PLUGIN_ROOT_REF_RE;
+var MAX_SCANNED_FILES;
+var MAX_SCANNED_BYTES;
+var MAX_SCANNED_REFS;
+deferInit("chunk-e6aww6q8.js:4192481", () => {
+  MarketplacePluginsSchema = DoctorLazy(() =>
+    objectSchema({
+      plugins: array(unknown()),
+    }),
+  );
+  PluginSourceSchema = DoctorLazy(() =>
+    looseObject({
+      source: stringSchema(),
+    }),
+  );
+  PLUGIN_TREE_DIRS = [...PLUGIN_COMPONENT_DIRS, "bin", "hljs"];
+  PLUGIN_MANIFEST_PATHS = [PLUGIN_MANIFEST_PATH_2, PLUGIN_JSON];
+  PLUGIN_CONFIG_FILES = [
+    ".mcp.json",
+    ".lsp.json",
+    join("hooks", "hooks.json"),
+    join("monitors", "monitors.json"),
+  ];
+  PLUGIN_ROOT_REF_RE =
+    /(?:(?:^|[^.\w])\.|(?:\$(?:env:)?\{?|%)CLAUDE_PLUGIN_ROOT[}%]?["']?)[/\\]([^\s"'`$,;:()[\]{}\\]+)/g;
+  MAX_SCANNED_FILES = 1e4;
+  MAX_SCANNED_BYTES = 24000;
+  MAX_SCANNED_REFS = 1e4;
+});
 export {
   MAX_SCANNED_BYTES,
   probeMarketplaceCheckout,

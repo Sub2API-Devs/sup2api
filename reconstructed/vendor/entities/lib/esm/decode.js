@@ -5,7 +5,7 @@
  * pieces: chunk-6ja29j2n.js (15)
  * attribution: esm-layout 4, esm-fingerprint 11
  */
-import { Re, fromCodePoint } from "./decode_codepoint.js";
+import { decodeCodePoint, fromCodePoint } from "./decode_codepoint.js";
 
 //@ chunk-6ja29j2n.js:57771-57777 esm-layout
 var CharCodes;
@@ -168,7 +168,7 @@ class EntityDecoder {
     }
     if (lastCp === CharCodes.SEMI) this.consumed += 1;
     else if (this.decodeMode === DecodingMode.Strict) return 0;
-    this.emitCodePoint(Re(this.result), this.consumed);
+    this.emitCodePoint(decodeCodePoint(this.result), this.consumed);
     if (this.errors) {
       if (lastCp !== CharCodes.SEMI) this.errors.missingSemicolonAfterCharacterReference();
       this.errors.validateNumericCharacterReference(this.result);

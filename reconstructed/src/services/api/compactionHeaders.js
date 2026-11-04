@@ -24,7 +24,9 @@ var MAX_TOOL_DURATION_ENTRIES = 32;
 var MAX_TOOL_DURATION_HEADER_CHARS = 4096;
 //@ chunk-e6aww6q8.js:1538049-1538140 placement
 function encodeToolNameForHeader(toolName) {
-  return normalizeFullWidthSpace(toolName).replace(/%|[;=, ]|[^\x20-\x7e]/gu, (n) => encodeURIComponent(n));
+  return normalizeFullWidthSpace(toolName).replace(/%|[;=, ]|[^\x20-\x7e]/gu, (char) =>
+    encodeURIComponent(char),
+  );
 }
 export {
   X_CC_CONTEXT_COMPACTED,

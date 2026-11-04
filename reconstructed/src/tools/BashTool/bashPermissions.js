@@ -200,7 +200,6 @@ import { logForDebugging } from "../../utils/debug.js";
 import { isAllRuleReason } from "../../utils/permissions/decisionReasons.js";
 import { noopToolUseHook } from "./sandboxViolations.js";
 import { BASH_TOOL_NAME } from "./toolName.js";
-import { findDirectoryChangeIndex } from "./bgWorktreeGuard/bgWorktreeCommandGuard.js";
 import {
   toExternalPermissionMode,
   permissionModeFromString,
@@ -211,7 +210,28 @@ import {
 } from "../../utils/permissions/permissionSetup.js";
 import { ASSET_TARGET_PIN_TAG } from "../ArtifactTool/permissions/consentStamps.js";
 import { POWERSHELL_TOOL_NAME } from "../PowerShellTool/toolName.js";
+import { findDirectoryChangeIndex } from "./bgWorktreeGuard/bgWorktreeCommandGuard.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-dcmhvw5a.js:214446-214577 placement = buildSuggestions (1)
+/**
+ * 通用前缀权限建议：规则内容为 "<前缀> *"。
+ */
+function buildToolPrefixAllowSuggestion(toolName, prefix) {
+  return [
+    {
+      type: "addRules",
+      rules: [
+        {
+          toolName,
+          ruleContent: `${prefix} *`,
+        },
+      ],
+      behavior: "allow",
+      destination: "localSettings",
+    },
+  ];
+}
 //@ chunk-e6aww6q8.js:1164354-1164413 placement
 /**
  * 匹配命令开头的环境变量赋值（NAME=value），权限检查用它统计安全的环境前缀。
@@ -230,103 +250,106 @@ function isSourceGlobRecordingEnabled() {
 /**
  * 统计命令开头安全的环境变量赋值个数，遇到不安全赋值返回 null。
  */
-function countSafeEnvPrefix(e) {
-  let n = 0;
-  while (n < e.length && ENV_ASSIGNMENT_RE.test(e[n])) {
-    let r = firstLineOf(e[n], "=");
-    if (!isSafeEnvAssignment(r, e[n].slice(r.length + 1))) return null;
-    n++;
+function countSafeEnvPrefix(argv) {
+  let prefixCount = 0;
+  while (prefixCount < argv.length && ENV_ASSIGNMENT_RE.test(argv[prefixCount])) {
+    let equalsIndex = firstLineOf(argv[prefixCount], "=");
+    if (!isSafeEnvAssignment(equalsIndex, argv[prefixCount].slice(equalsIndex.length + 1))) return null;
+    prefixCount++;
   }
-  return n;
+  return prefixCount;
 }
 //@ chunk-e6aww6q8.js:1164580-1164960 placement
 /**
  * 从命令中取出可作为规则前缀的"命令 子命令"（跳过安全的环境变量赋值，子命令须为小写 kebab 形式，必要时取更深层子命令）；裸 shell 前缀返回 null。
  */
 function getSubcommandPrefix(command) {
-  let filtered = command.trim().split(/\s+/).filter(Boolean);
-  if (filtered.length === 0) return null;
-  let r = countSafeEnvPrefix(filtered);
-  if (r === null) return null;
-  let sliced = filtered.slice(r);
+  let argv = command.trim().split(/\s+/).filter(Boolean);
+  if (argv.length === 0) return null;
+  let envPrefixCount = countSafeEnvPrefix(argv);
+  if (envPrefixCount === null) return null;
+  let sliced = argv.slice(envPrefixCount);
   if (sliced.length < 2) return null;
   if (BARE_SHELL_PREFIXES.has(sliced[0].split("/").pop())) return null;
-  let h = sliced[1];
-  let y = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
-  if (!y.test(h)) return null;
-  let S = noAdditionalDepthRule(sliced[0], h) ?? 2;
-  let w = 2;
-  while (w < S && y.test(sliced[w] ?? "")) w++;
-  return w < S ? null : sliced.slice(0, w).join(" ");
+  let subcommand = sliced[1];
+  let wordPattern = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+  if (!wordPattern.test(subcommand)) return null;
+  let maxDepth = noAdditionalDepthRule(sliced[0], subcommand) ?? 2;
+  let depth = 2;
+  while (depth < maxDepth && wordPattern.test(sliced[depth] ?? "")) depth++;
+  return depth < maxDepth ? null : sliced.slice(0, depth).join(" ");
 }
 //@ chunk-e6aww6q8.js:1164960-1165276 fingerprint = BARE_SHELL_PREFIXES (0.706)
 /**
  * 会把后续参数当命令执行的"裸 shell/包装"命令名（sh/bash/zsh/pwsh/env/xargs/sudo/timeout/nohup/strace…）；规则建议不会为这些前缀生成前缀规则。
  */
-var BARE_SHELL_PREFIXES = new Set([
-  "sh",
-  "bash",
-  "zsh",
-  "fish",
-  "csh",
-  "tcsh",
-  "ksh",
-  "dash",
-  "cmd",
-  "powershell",
-  "pwsh",
-  "env",
-  "xargs",
-  "command",
-  "builtin",
-  "noglob",
-  "nice",
-  "stdbuf",
-  "nohup",
-  "timeout",
-  "time",
-  "watch",
-  "ionice",
-  "chrt",
-  "setsid",
-  "taskset",
-  "strace",
-  "ltrace",
-  "script",
-  "flock",
-  "unshare",
-  "nsenter",
-  "sudo",
-  "doas",
-  "pkexec",
-  "su",
-  "runuser",
-]);
+var BARE_SHELL_PREFIXES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1164960", () => {
+  BARE_SHELL_PREFIXES = new Set([
+    "sh",
+    "bash",
+    "zsh",
+    "fish",
+    "csh",
+    "tcsh",
+    "ksh",
+    "dash",
+    "cmd",
+    "powershell",
+    "pwsh",
+    "env",
+    "xargs",
+    "command",
+    "builtin",
+    "noglob",
+    "nice",
+    "stdbuf",
+    "nohup",
+    "timeout",
+    "time",
+    "watch",
+    "ionice",
+    "chrt",
+    "setsid",
+    "taskset",
+    "strace",
+    "ltrace",
+    "script",
+    "flock",
+    "unshare",
+    "nsenter",
+    "sudo",
+    "doas",
+    "pkexec",
+    "su",
+    "runuser",
+  ]);
+});
 //@ chunk-e6aww6q8.js:1165276-1165416 placement
 /**
  * 判断命令（去掉前导环境变量后）是否以裸 shell 开头（如 bash、sh）。
  */
-function startsWithBareShell(e) {
-  let parts = stripAllLeadingEnvVars(e.trim()).split(/\s+/);
-  let r = 0;
-  while (r < parts.length && ENV_ASSIGNMENT_RE.test(parts[r])) r++;
-  let s = parts[r];
-  return !!s && BARE_SHELL_PREFIXES.has(s.split("/").pop());
+function startsWithBareShell(command) {
+  let parts = stripAllLeadingEnvVars(command.trim()).split(/\s+/);
+  let idx = 0;
+  while (idx < parts.length && ENV_ASSIGNMENT_RE.test(parts[idx])) idx++;
+  let firstWord = parts[idx];
+  return !!firstWord && BARE_SHELL_PREFIXES.has(firstWord.split("/").pop());
 }
 //@ chunk-e6aww6q8.js:1165416-1165670 placement
 /**
  * 获取命令的裸命令前缀（跳过安全的环境变量），用于生成权限规则；shell 或特殊命令返回 null。
  */
 function getBareCommandPrefix(command) {
-  let filtered = command.trim().split(/\s+/).filter(Boolean);
-  let r = countSafeEnvPrefix(filtered);
-  if (r === null) return null;
-  let s = filtered[r];
-  if (!s) return null;
-  if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(s)) return null;
-  if (BARE_SHELL_PREFIXES.has(s)) return null;
-  if (noAdditionalDepthRule(s, filtered[r + 1] ?? "") !== undefined) return null;
-  return s;
+  let argv = command.trim().split(/\s+/).filter(Boolean);
+  let envPrefixCount = countSafeEnvPrefix(argv);
+  if (envPrefixCount === null) return null;
+  let firstWord = argv[envPrefixCount];
+  if (!firstWord) return null;
+  if (!/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/.test(firstWord)) return null;
+  if (BARE_SHELL_PREFIXES.has(firstWord)) return null;
+  if (noAdditionalDepthRule(firstWord, argv[envPrefixCount + 1] ?? "") !== undefined) return null;
+  return firstWord;
 }
 //@ chunk-e6aww6q8.js:1165670-1165854 placement
 function suggestionForExactCommand(command) {
@@ -351,65 +374,69 @@ function suggestionForPrefix(prefix) {
 /**
  * 按 Bash 权限规则模式（含 xargs 前缀）匹配命令文本。
  */
-function matchesCommandRule(e, cmdToMatch) {
-  return matchWildcardPattern(e, cmdToMatch, false, true);
+function matchesCommandRule(rule, command) {
+  return matchWildcardPattern(rule, command, false, true);
 }
 //@ chunk-e6aww6q8.js:1166321-1166857 fingerprint = SAFE_ENV_VARS (0.91)
 /**
  * Bash 安全环境变量白名单（GO*\/RUST_*\/NODE_ENV/PYTHON*\/LANG/LC_*\/TERM/NO_COLOR/TZ/CI…）；wQ 是规则内容解析函数的别名（exact/prefix/wildcard）。
  */
-var parseBashPermissionRule = parseShellPermissionRule;
-var SAFE_ENV_VARS = new Set([
-  "GOEXPERIMENT",
-  "GOOS",
-  "GOARCH",
-  "CGO_ENABLED",
-  "GO111MODULE",
-  "RUST_BACKTRACE",
-  "RUST_LOG",
-  "NODE_ENV",
-  "PYTHONUNBUFFERED",
-  "PYTHONDONTWRITEBYTECODE",
-  "PYTEST_DISABLE_PLUGIN_AUTOLOAD",
-  "PYTEST_DEBUG",
-  "ANTHROPIC_API_KEY",
-  "LANG",
-  "LANGUAGE",
-  "LC_ALL",
-  "LC_CTYPE",
-  "LC_TIME",
-  "CHARSET",
-  "TERM",
-  "COLORTERM",
-  "NO_COLOR",
-  "FORCE_COLOR",
-  "TZ",
-  "LS_COLORS",
-  "LSCOLORS",
-  "GREP_COLOR",
-  "GREP_COLORS",
-  "GCC_COLORS",
-  "TIME_STYLE",
-  "BLOCK_SIZE",
-  "BLOCKSIZE",
-  "COLUMNS",
-  "LINES",
-  "CLICOLOR",
-  "CLICOLOR_FORCE",
-  "CI",
-  "DEBIAN_FRONTEND",
-  "GIT_TERMINAL_PROMPT",
-]);
+var parseBashPermissionRule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SAFE_ENV_VARS;
+deferInit("chunk-e6aww6q8.js:1166321", () => {
+  parseBashPermissionRule = parseShellPermissionRule;
+  SAFE_ENV_VARS = new Set([
+    "GOEXPERIMENT",
+    "GOOS",
+    "GOARCH",
+    "CGO_ENABLED",
+    "GO111MODULE",
+    "RUST_BACKTRACE",
+    "RUST_LOG",
+    "NODE_ENV",
+    "PYTHONUNBUFFERED",
+    "PYTHONDONTWRITEBYTECODE",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD",
+    "PYTEST_DEBUG",
+    "ANTHROPIC_API_KEY",
+    "LANG",
+    "LANGUAGE",
+    "LC_ALL",
+    "LC_CTYPE",
+    "LC_TIME",
+    "CHARSET",
+    "TERM",
+    "COLORTERM",
+    "NO_COLOR",
+    "FORCE_COLOR",
+    "TZ",
+    "LS_COLORS",
+    "LSCOLORS",
+    "GREP_COLOR",
+    "GREP_COLORS",
+    "GCC_COLORS",
+    "TIME_STYLE",
+    "BLOCK_SIZE",
+    "BLOCKSIZE",
+    "COLUMNS",
+    "LINES",
+    "CLICOLOR",
+    "CLICOLOR_FORCE",
+    "CI",
+    "DEBIAN_FRONTEND",
+    "GIT_TERMINAL_PROMPT",
+  ]);
+});
 //@ chunk-e6aww6q8.js:1166857-1166891 layout
 /**
  * 变量名是否在 Bash 安全环境变量白名单 SAFE_ENV_VARS 中。
  */
-function isSafeEnvVarName(e) {
-  return SAFE_ENV_VARS.has(e);
+function isSafeEnvVarName(name) {
+  return SAFE_ENV_VARS.has(name);
 }
 //@ chunk-e6aww6q8.js:1166891-1166929 layout
-function isSafeEnvVarNameForStrip(e) {
-  return SAFE_ENV_VARS.has(e) || false;
+function isSafeEnvVarNameForStrip(name) {
+  return SAFE_ENV_VARS.has(name) || false;
 }
 //@ chunk-e6aww6q8.js:1166929-1166997 layout
 var PATH_LIKE_VALUE_RE = /^[.~]*[/\\]|[/\\][/\\]|:[/\\.]|(?:^|[/\\])\.\.(?:[/\\]|$)/;
@@ -417,11 +444,10 @@ var PATH_LIKE_VALUE_RE = /^[.~]*[/\\]|[/\\][/\\]|:[/\\.]|(?:^|[/\\])\.\.(?:[/\\]
 /**
  * 值看起来像路径（以 ./ ~/ / 开头、含 ..、URL 冒号斜杠等）且路径型值检查开关打开时返回 true；这类赋值不能作为安全前缀剥离。
  */
-function isPathLikeEnvValue(e) {
-  let replaced = e.replaceAll('"', "").replaceAll("'", "");
+function isPathLikeEnvValue(value) {
+  let text = value.replaceAll('"', "").replaceAll("'", "");
   return (
-    (PATH_LIKE_VALUE_RE.test(replaced) || PATH_LIKE_VALUE_RE.test(deletePlaceholders(replaced))) &&
-    noteRefusal()
+    (PATH_LIKE_VALUE_RE.test(text) || PATH_LIKE_VALUE_RE.test(deletePlaceholders(text))) && noteRefusal()
   );
 }
 //@ chunk-e6aww6q8.js:1167104-1167203 layout
@@ -435,28 +461,28 @@ function isSafeEnvAssignment(varName, varValue) {
   return false;
 }
 //@ chunk-e6aww6q8.js:1167203-1167279 layout
-function isRiskyBareAssignmentName(subcmd, n) {
+function isRiskyBareAssignmentName(name, getProtectedNames) {
   return (
-    subcmd === "PWD" ||
-    subcmd === "OLDPWD" ||
-    (!isSafeEnvVarNameForStrip(subcmd) && n()?.has(subcmd) !== false)
+    name === "PWD" ||
+    name === "OLDPWD" ||
+    (!isSafeEnvVarNameForStrip(name) && getProtectedNames()?.has(name) !== false)
   );
 }
 //@ chunk-e6aww6q8.js:1167279-1167318 layout
 /**
  * 返回会话环境变量名集合的惰性读取器（供 hasRiskyBareAssignment 判断裸赋值）。
  */
-function lazySessionEnvVarNames(e) {
+function lazySessionEnvVarNames(sessionId) {
   shellEnvSnapshot();
-  return () => spawnEnvKeysForSession(e);
+  return () => spawnEnvKeysForSession(sessionId);
 }
 //@ chunk-e6aww6q8.js:1167318-1167377 layout
 /**
  * 复合命令里的裸赋值是否可能改变目录语义：赋值给 PWD/OLDPWD，或给不在安全表但存在于会话环境变量里的名字。
  */
-function hasRiskyBareAssignment(e, n) {
-  let r = onceExport(n);
-  return e.some((subcmd) => isRiskyBareAssignmentName(subcmd, r));
+function hasRiskyBareAssignment(assignments, sessionId) {
+  let getNames = onceExport(sessionId);
+  return assignments.some((subcmd) => isRiskyBareAssignmentName(subcmd, getNames));
 }
 //@ chunk-e6aww6q8.js:1167377-1167495 file-local
 /**
@@ -477,8 +503,8 @@ function stripCommentLines(command) {
 /**
  * 规则匹配前的规范化：循环剥离注释行与安全 env 前缀，去掉首词引号，再剥离 timeout/time/nice/stdbuf/nohup/command/builtin/noglob 包装，返回 trim 后的命令。
  */
-function stripSafeWrappers(e, n = true, r = true) {
-  let s = [
+function stripSafeWrappers(command, stripEnvVars = true, stripComments = true) {
+  let wrapperPatterns = [
     /^timeout[ \t]+(?:(?:--(?:foreground|preserve-status|verbose)|--(?:kill-after|signal)=[A-Za-z0-9_.+-]+|--(?:kill-after|signal)[ \t]+[A-Za-z0-9_.+-]+|-v|-[ks][ \t]+[A-Za-z0-9_.+-]+|-[ks][A-Za-z0-9_.+-]+)[ \t]+)*(?:--[ \t]+)?\d+(?:\.\d+)?[smhd]?[ \t]+/,
     /^time[ \t]+(?:--[ \t]+)?/,
     /^nice(?:[ \t]+-n[ \t]+-?\d+|[ \t]+-\d+)?[ \t]+(?:--[ \t]+)?/,
@@ -488,60 +514,61 @@ function stripSafeWrappers(e, n = true, r = true) {
     /^builtin(?:[ \t]+--)?[ \t]+(?!-)/,
     /^noglob[ \t]+(?!-)/,
   ];
-  let h = /^([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_./:-]+)[ \t]+/;
-  let y = (command) => (r ? stripCommentLines(command) : command);
-  let S = e;
-  let w = "";
-  while (S !== w) {
-    w = S;
-    S = y(S);
-    let G = n ? S.match(h) : null;
-    if (G && isSafeEnvAssignment(G[1], G[2])) S = S.replace(h, "");
+  let envAssignmentPattern = /^([A-Za-z_][A-Za-z0-9_]*)=([A-Za-z0-9_./:-]+)[ \t]+/;
+  let stripCommentsOf = (stripped) => (stripComments ? stripCommentLines(stripped) : stripped);
+  let stripped = command;
+  let previous = "";
+  while (stripped !== previous) {
+    previous = stripped;
+    stripped = stripCommentsOf(stripped);
+    let envMatch = stripEnvVars ? stripped.match(envAssignmentPattern) : null;
+    if (envMatch && isSafeEnvAssignment(envMatch[1], envMatch[2]))
+      stripped = stripped.replace(envAssignmentPattern, "");
   }
-  function L(G) {
-    let match = G.match(/^([^\s]+)([\s\S]*)$/);
-    if (!match) return G;
-    let Z = match[1];
-    let Se = null;
-    let ke = false;
-    let we = "";
-    for (let idx = 0; idx < Z.length; idx++) {
-      let Ae = Z[idx];
-      ke = false;
-      if (Se === "'") {
-        if (Ae === "'") Se = null;
-        else we += Ae;
-      } else if (Se === '"') {
-        if (Ae === "\\") {
-          let Ie = Z[idx + 1];
-          if (Ie === "$" || Ie === "`" || Ie === '"' || Ie === "\\") {
-            we += Ie;
+  function unquoteFirstWord(text) {
+    let match = text.match(/^([^\s]+)([\s\S]*)$/);
+    if (!match) return text;
+    let word = match[1];
+    let quoteChar = null;
+    let isDanglingEscape = false;
+    let unquoted = "";
+    for (let idx = 0; idx < word.length; idx++) {
+      let char = word[idx];
+      isDanglingEscape = false;
+      if (quoteChar === "'") {
+        if (char === "'") quoteChar = null;
+        else unquoted += char;
+      } else if (quoteChar === '"') {
+        if (char === "\\") {
+          let nextChar = word[idx + 1];
+          if (nextChar === "$" || nextChar === "`" || nextChar === '"' || nextChar === "\\") {
+            unquoted += nextChar;
             idx++;
-          } else if (Ie === undefined) ke = true;
-          else we += Ae;
-        } else if (Ae === '"') Se = null;
-        else we += Ae;
-      } else if (Ae === "\\") {
-        let Ie = Z[idx + 1];
-        if (Ie === undefined) ke = true;
+          } else if (nextChar === undefined) isDanglingEscape = true;
+          else unquoted += char;
+        } else if (char === '"') quoteChar = null;
+        else unquoted += char;
+      } else if (char === "\\") {
+        let nextChar = word[idx + 1];
+        if (nextChar === undefined) isDanglingEscape = true;
         else {
-          we += Ie;
+          unquoted += nextChar;
           idx++;
         }
-      } else if (Ae === '"' || Ae === "'") Se = Ae;
-      else we += Ae;
+      } else if (char === '"' || char === "'") quoteChar = char;
+      else unquoted += char;
     }
-    if (Se !== null || ke) return G;
-    return we + match[2];
+    if (quoteChar !== null || isDanglingEscape) return text;
+    return unquoted + match[2];
   }
-  S = L(y(S));
-  w = "";
-  while (S !== w) {
-    w = S;
-    for (let G of s) S = S.replace(G, "");
-    if (S !== w) S = L(y(S));
+  stripped = unquoteFirstWord(stripCommentsOf(stripped));
+  previous = "";
+  while (stripped !== previous) {
+    previous = stripped;
+    for (let pattern of wrapperPatterns) stripped = stripped.replace(pattern, "");
+    if (stripped !== previous) stripped = unquoteFirstWord(stripCommentsOf(stripped));
   }
-  return S.trim();
+  return stripped.trim();
 }
 //@ chunk-e6aww6q8.js:1168849-1168878 layout
 var TIMEOUT_FLAG_VALUE_RE = /^[A-Za-z0-9_.+-]+$/;
@@ -575,36 +602,36 @@ function skipTimeoutFlags(a) {
  * argv 版包装剥离：反复去掉 time [-p]、nohup、timeout <选项> <时长>、nice -n N，返回真正的命令 argv。
  */
 function stripWrappersFromArgv(argv) {
-  let n = argv;
+  let remaining = argv;
   for (;;) {
-    let r = stripPathAndExe(n[0] ?? "");
-    if (r === "time" || r === "nohup") {
-      let s = r === "time" && n[1] === "-p" ? 2 : 1;
-      if (n[s]?.startsWith("-") && n[s] !== "--") return n;
-      n = n.slice(n[s] === "--" ? s + 1 : s);
-    } else if (r === "timeout") {
-      let i = skipTimeoutFlags(n);
-      if (i < 0 || !n[i] || !/^\d+(?:\.\d+)?[smhd]?$/.test(n[i])) return n;
-      n = n.slice(i + 1);
-    } else if (r === "nice" && n[1] === "-n" && n[2] && /^-?\d+$/.test(n[2]))
-      n = n.slice(n[3] === "--" ? 4 : 3);
-    else return n;
+    let exeName = stripPathAndExe(remaining[0] ?? "");
+    if (exeName === "time" || exeName === "nohup") {
+      let valueIndex = exeName === "time" && remaining[1] === "-p" ? 2 : 1;
+      if (remaining[valueIndex]?.startsWith("-") && remaining[valueIndex] !== "--") return remaining;
+      remaining = remaining.slice(remaining[valueIndex] === "--" ? valueIndex + 1 : valueIndex);
+    } else if (exeName === "timeout") {
+      let i = skipTimeoutFlags(remaining);
+      if (i < 0 || !remaining[i] || !/^\d+(?:\.\d+)?[smhd]?$/.test(remaining[i])) return remaining;
+      remaining = remaining.slice(i + 1);
+    } else if (exeName === "nice" && remaining[1] === "-n" && remaining[2] && /^-?\d+$/.test(remaining[2]))
+      remaining = remaining.slice(remaining[3] === "--" ? 4 : 3);
+    else return remaining;
   }
 }
 //@ chunk-e6aww6q8.js:1169778-1170112 layout
 /**
  * 命令是否带有不在安全表里（或值像路径）的 env 前缀；有 AST 时直接看 envVars。
  */
-function hasUnsafeEnvVarPrefix(e, astCommand) {
+function hasUnsafeEnvVarPrefix(input, astCommand) {
   if (astCommand) return astCommand.envVars.some((envVar) => !isSafeEnvAssignment(envVar.name, envVar.value));
-  let r = /^([A-Za-z_][A-Za-z0-9_]*)\+?=/;
-  let s = /^[A-Za-z_][A-Za-z0-9_]*\+?=("[^"$`\\]*"|'[^']*'|[A-Za-z0-9_./:+-]*)[ \t]+/;
-  let command = e.command;
+  let namePattern = /^([A-Za-z_][A-Za-z0-9_]*)\+?=/;
+  let assignmentPattern = /^[A-Za-z_][A-Za-z0-9_]*\+?=("[^"$`\\]*"|'[^']*'|[A-Za-z0-9_./:+-]*)[ \t]+/;
+  let command = input.command;
   for (;;) {
-    let match = command.match(r);
+    let match = command.match(namePattern);
     if (!match) return false;
     if (!isSafeEnvVarNameForStrip(match[1])) return true;
-    let m = command.match(s);
+    let m = command.match(assignmentPattern);
     if (!m || !isSafeEnvAssignment(match[1], m[1])) return true;
     command = command.slice(m[0].length);
   }
@@ -613,21 +640,21 @@ function hasUnsafeEnvVarPrefix(e, astCommand) {
 /**
  * 剥离所有前导 VAR=value（含数组下标、引号值），可用回调/正则在特定变量处停止；用于 deny/ask 规则匹配时不被 env 前缀绕过。
  */
-function stripAllLeadingEnvVars(command, isUnsafeEnvAssignment, r = true) {
+function stripAllLeadingEnvVars(command, isUnsafeEnvAssignment, stripComments = true) {
   let ENV_VAR_PATTERN =
     /^([A-Za-z_][A-Za-z0-9_]*(?:\[[^\]]*\])?)\+?=((?:'[^'\n\r]*'|"(?:\\.|[^"$`\\\n\r])*"|\\.|[^ \t\n\r$`;|&()<>\\\\'"])*)[ \t]+/;
   let stripped = command;
   let previousStripped = "";
   while (stripped !== previousStripped) {
     previousStripped = stripped;
-    if (r) stripped = stripCommentLines(stripped);
+    if (stripComments) stripped = stripCommentLines(stripped);
     let m = stripped.match(ENV_VAR_PATTERN);
     if (!m) continue;
-    let w = m[1];
+    let name = m[1];
     if (
       typeof isUnsafeEnvAssignment === "function"
-        ? isUnsafeEnvAssignment(w, m[2])
-        : isUnsafeEnvAssignment?.test(w)
+        ? isUnsafeEnvAssignment(name, m[2])
+        : isUnsafeEnvAssignment?.test(name)
     )
       break;
     stripped = stripped.slice(m[0].length);
@@ -635,227 +662,238 @@ function stripAllLeadingEnvVars(command, isUnsafeEnvAssignment, r = true) {
   return stripped.trim();
 }
 //@ chunk-e6aww6q8.js:1170440-1172319 layout
-var WRAPPER_FLAGS_WITH_VALUE = {
-  env: new Set(["-u", "-C", "--unset", "--chdir"]),
-  sudo: new Set([
-    "-u",
-    "-g",
-    "-U",
-    "-C",
-    "-D",
-    "-h",
-    "-p",
-    "-r",
-    "-R",
-    "-t",
-    "-T",
-    "--user",
-    "--group",
-    "--other-user",
-    "--close-from",
-    "--chdir",
-    "--host",
-    "--prompt",
-    "--role",
-    "--chroot",
-    "--type",
-    "--command-timeout",
-    "-a",
-    "--auth-type",
-  ]),
-  doas: new Set(["-a", "-u", "-C"]),
-  pkexec: new Set(["--user"]),
-  watch: new Set(["-n", "--interval", "--equexit"]),
-  ionice: new Set(["-c", "-n", "-p", "-P", "-u", "--class", "--classdata", "--pid", "--pgid", "--uid"]),
-  setsid: new Set([]),
-  taskset: new Set(["-c", "--cpu-list"]),
-  chrt: new Set(["-p", "--pid", "-T", "-P", "-D", "--sched-runtime", "--sched-period", "--sched-deadline"]),
-  strace: new Set([
-    "-e",
-    "-o",
-    "-p",
-    "-s",
-    "-E",
-    "-P",
-    "-S",
-    "-a",
-    "-b",
-    "-I",
-    "-u",
-    "-X",
-    "-O",
-    "-U",
-    "--output",
-    "--trace",
-    "--expr",
-    "--attach",
-    "--string-limit",
-    "--env",
-    "--trace-path",
-    "--columns",
-    "--user",
-    "--interruptible",
-    "--detach-on",
-    "--const-print-style",
-    "--summary-sort-by",
-    "--summary-syscall-overhead",
-    "--summary-columns",
-  ]),
-  ltrace: new Set([
-    "-a",
-    "-A",
-    "-e",
-    "-l",
-    "-n",
-    "-o",
-    "-p",
-    "-s",
-    "-u",
-    "-x",
-    "-D",
-    "-F",
-    "--align",
-    "--config",
-    "--debug",
-    "--indent",
-    "--library",
-    "--output",
-    "--string-max",
-    "-w",
-    "--where",
-  ]),
-  flock: new Set(["-w", "-E", "--timeout", "--wait", "--conflict-exit-code"]),
-  script: new Set([
-    "-E",
-    "-T",
-    "-m",
-    "-o",
-    "-O",
-    "-B",
-    "-I",
-    "--echo",
-    "--log-timing",
-    "--logging-format",
-    "--output-limit",
-    "--log-out",
-    "--log-io",
-    "--log-in",
-  ]),
-  unshare: new Set([
-    "-R",
-    "-w",
-    "-S",
-    "-G",
-    "--setuid",
-    "--setgid",
-    "--root",
-    "--wd",
-    "--propagation",
-    "--setgroups",
-    "--monotonic",
-    "--boottime",
-  ]),
-  nsenter: new Set(["-t", "-S", "-G", "--target", "--setuid", "--setgid"]),
-  exec: new Set(["-a"]),
-  command: new Set([]),
-  builtin: new Set([]),
-  noglob: new Set([]),
-  nocorrect: new Set([]),
-};
-var WRAPPER_COMMAND_STRING_FLAGS = {
-  env: new Set(["-S", "--split-string"]),
-  flock: new Set(["-c", "--command"]),
-  script: new Set(["-c", "--command"]),
-};
-var WRAPPER_LEADING_OPERAND_CHECKS = {
-  chrt: (e) => /^\d+$/.test(e),
-  taskset: (e) => /^(0x[\da-f]+|\d+)$/i.test(e),
-  flock: () => true,
-  script: () => true,
-};
-var ENV_ASSIGNMENT_RE_2 = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
+var WRAPPER_FLAGS_WITH_VALUE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var WRAPPER_COMMAND_STRING_FLAGS;
+var WRAPPER_LEADING_OPERAND_CHECKS;
+var ENV_ASSIGNMENT_RE_2;
+deferInit("chunk-e6aww6q8.js:1170440", () => {
+  WRAPPER_FLAGS_WITH_VALUE = {
+    env: new Set(["-u", "-C", "--unset", "--chdir"]),
+    sudo: new Set([
+      "-u",
+      "-g",
+      "-U",
+      "-C",
+      "-D",
+      "-h",
+      "-p",
+      "-r",
+      "-R",
+      "-t",
+      "-T",
+      "--user",
+      "--group",
+      "--other-user",
+      "--close-from",
+      "--chdir",
+      "--host",
+      "--prompt",
+      "--role",
+      "--chroot",
+      "--type",
+      "--command-timeout",
+      "-a",
+      "--auth-type",
+    ]),
+    doas: new Set(["-a", "-u", "-C"]),
+    pkexec: new Set(["--user"]),
+    watch: new Set(["-n", "--interval", "--equexit"]),
+    ionice: new Set(["-c", "-n", "-p", "-P", "-u", "--class", "--classdata", "--pid", "--pgid", "--uid"]),
+    setsid: new Set([]),
+    taskset: new Set(["-c", "--cpu-list"]),
+    chrt: new Set(["-p", "--pid", "-T", "-P", "-D", "--sched-runtime", "--sched-period", "--sched-deadline"]),
+    strace: new Set([
+      "-e",
+      "-o",
+      "-p",
+      "-s",
+      "-E",
+      "-P",
+      "-S",
+      "-a",
+      "-b",
+      "-I",
+      "-u",
+      "-X",
+      "-O",
+      "-U",
+      "--output",
+      "--trace",
+      "--expr",
+      "--attach",
+      "--string-limit",
+      "--env",
+      "--trace-path",
+      "--columns",
+      "--user",
+      "--interruptible",
+      "--detach-on",
+      "--const-print-style",
+      "--summary-sort-by",
+      "--summary-syscall-overhead",
+      "--summary-columns",
+    ]),
+    ltrace: new Set([
+      "-a",
+      "-A",
+      "-e",
+      "-l",
+      "-n",
+      "-o",
+      "-p",
+      "-s",
+      "-u",
+      "-x",
+      "-D",
+      "-F",
+      "--align",
+      "--config",
+      "--debug",
+      "--indent",
+      "--library",
+      "--output",
+      "--string-max",
+      "-w",
+      "--where",
+    ]),
+    flock: new Set(["-w", "-E", "--timeout", "--wait", "--conflict-exit-code"]),
+    script: new Set([
+      "-E",
+      "-T",
+      "-m",
+      "-o",
+      "-O",
+      "-B",
+      "-I",
+      "--echo",
+      "--log-timing",
+      "--logging-format",
+      "--output-limit",
+      "--log-out",
+      "--log-io",
+      "--log-in",
+    ]),
+    unshare: new Set([
+      "-R",
+      "-w",
+      "-S",
+      "-G",
+      "--setuid",
+      "--setgid",
+      "--root",
+      "--wd",
+      "--propagation",
+      "--setgroups",
+      "--monotonic",
+      "--boottime",
+    ]),
+    nsenter: new Set(["-t", "-S", "-G", "--target", "--setuid", "--setgid"]),
+    exec: new Set(["-a"]),
+    command: new Set([]),
+    builtin: new Set([]),
+    noglob: new Set([]),
+    nocorrect: new Set([]),
+  };
+  WRAPPER_COMMAND_STRING_FLAGS = {
+    env: new Set(["-S", "--split-string"]),
+    flock: new Set(["-c", "--command"]),
+    script: new Set(["-c", "--command"]),
+  };
+  WRAPPER_LEADING_OPERAND_CHECKS = {
+    chrt: (operand) => /^\d+$/.test(operand),
+    taskset: (operand) => /^(0x[\da-f]+|\d+)$/i.test(operand),
+    flock: () => true,
+    script: () => true,
+  };
+  ENV_ASSIGNMENT_RE_2 = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
+});
 //@ chunk-e6aww6q8.js:1172319-1173302 layout
 /**
  * 把 argv 中的 env 赋值和 sudo/doas/env/watch/ionice/taskset/chrt/strace/ltrace/flock/script/unshare/nsenter/exec/command 等包装（含它们带值的选项、env -S/flock -c 的命令串）一层层剥掉，得到真正执行的命令 argv。
  */
-function unwrapCommandArgv(e) {
-  let argv = e.slice();
+function unwrapCommandArgv(argv) {
+  let argv_2 = argv.slice();
   for (;;) {
-    while (argv[0] !== undefined && ENV_ASSIGNMENT_RE_2.test(argv[0])) argv = argv.slice(1);
-    argv = stripWrappersFromArgv(argv);
-    if (argv[0] === undefined) return argv;
-    let r = stripPathAndExe(argv[0]);
-    let s = getOwn(WRAPPER_FLAGS_WITH_VALUE, r);
-    if (s === undefined) return argv;
-    let h = getOwn(WRAPPER_COMMAND_STRING_FLAGS, r);
-    let y = getOwn(WRAPPER_LEADING_OPERAND_CHECKS, r);
-    let S = 1;
-    let w;
-    let L = false;
-    while (S < argv.length) {
-      let G = argv[S];
-      if (G === "--") {
-        S++;
-        if (!L && y !== undefined && S + 1 < argv.length && y(argv[S])) {
-          L = true;
-          S++;
+    while (argv_2[0] !== undefined && ENV_ASSIGNMENT_RE_2.test(argv_2[0])) argv_2 = argv_2.slice(1);
+    argv_2 = stripWrappersFromArgv(argv_2);
+    if (argv_2[0] === undefined) return argv_2;
+    let exeName = stripPathAndExe(argv_2[0]);
+    let flagsWithValue = getOwn(WRAPPER_FLAGS_WITH_VALUE, exeName);
+    if (flagsWithValue === undefined) return argv_2;
+    let commandStringFlags = getOwn(WRAPPER_COMMAND_STRING_FLAGS, exeName);
+    let leadingOperandCheck = getOwn(WRAPPER_LEADING_OPERAND_CHECKS, exeName);
+    let idx = 1;
+    let commandString;
+    let sawLeadingOperand = false;
+    while (idx < argv_2.length) {
+      let arg = argv_2[idx];
+      if (arg === "--") {
+        idx++;
+        if (
+          !sawLeadingOperand &&
+          leadingOperandCheck !== undefined &&
+          idx + 1 < argv_2.length &&
+          leadingOperandCheck(argv_2[idx])
+        ) {
+          sawLeadingOperand = true;
+          idx++;
           continue;
         }
         break;
       }
-      if (h !== undefined) {
-        if (h.has(G) && argv[S + 1] !== undefined) {
-          let trimmed = argv[S + 1].trim();
+      if (commandStringFlags !== undefined) {
+        if (commandStringFlags.has(arg) && argv_2[idx + 1] !== undefined) {
+          let trimmed = argv_2[idx + 1].trim();
           if (trimmed !== "") {
-            w = trimmed;
+            commandString = trimmed;
             break;
           }
-          S += 2;
+          idx += 2;
           continue;
         }
-        let index = G.indexOf("=");
-        if (index > 0 && h.has(G.slice(0, index))) {
-          let trimmed = G.slice(index + 1).trim();
+        let index = arg.indexOf("=");
+        if (index > 0 && commandStringFlags.has(arg.slice(0, index))) {
+          let trimmed = arg.slice(index + 1).trim();
           if (trimmed !== "") {
-            w = trimmed;
+            commandString = trimmed;
             break;
           }
-          S++;
+          idx++;
           continue;
         }
-        if (G.length > 2 && G[1] !== "-" && h.has(G.slice(0, 2))) {
-          let trimmed = G.slice(2).trim();
+        if (arg.length > 2 && arg[1] !== "-" && commandStringFlags.has(arg.slice(0, 2))) {
+          let trimmed = arg.slice(2).trim();
           if (trimmed !== "") {
-            w = trimmed;
+            commandString = trimmed;
             break;
           }
-          S++;
+          idx++;
           continue;
         }
       }
-      if (G.startsWith("-") && (G !== "-" || y === undefined)) {
-        if (r === "command" && isVersionOnlyFlag(G)) return argv;
-        S += s.has(G) && S + 1 < argv.length ? 2 : 1;
+      if (arg.startsWith("-") && (arg !== "-" || leadingOperandCheck === undefined)) {
+        if (exeName === "command" && isVersionOnlyFlag(arg)) return argv_2;
+        idx += flagsWithValue.has(arg) && idx + 1 < argv_2.length ? 2 : 1;
         continue;
       }
-      if (r === "env" && ENV_ASSIGNMENT_RE_2.test(G)) {
-        S++;
+      if (exeName === "env" && ENV_ASSIGNMENT_RE_2.test(arg)) {
+        idx++;
         continue;
       }
-      if (!L && y?.(G) && S + 1 < argv.length) {
-        L = true;
-        S++;
+      if (!sawLeadingOperand && leadingOperandCheck?.(arg) && idx + 1 < argv_2.length) {
+        sawLeadingOperand = true;
+        idx++;
         continue;
       }
       break;
     }
-    if (w !== undefined) {
-      argv = w.trim().split(/\s+/);
-      if (argv.length === 0 || argv[0] === "") return e.slice();
+    if (commandString !== undefined) {
+      argv_2 = commandString.trim().split(/\s+/);
+      if (argv_2.length === 0 || argv_2[0] === "") return argv.slice();
       continue;
     }
-    if (S >= argv.length) return argv;
-    argv = argv.slice(S);
+    if (idx >= argv_2.length) return argv_2;
+    argv_2 = argv_2.slice(idx);
   }
 }
 //@ chunk-e6aww6q8.js:1173302-1174805 fingerprint = filterRulesByContentsMatchingInput (0.797)
@@ -870,8 +908,8 @@ function filterRulesByContentsMatchingInput(
     stripAllEnvVars = false,
     skipCompoundCheck = false,
     astCommand: command,
-    ruleBehavior: S,
-    compoundBareAssignmentNames: w = [],
+    ruleBehavior,
+    compoundBareAssignmentNames = [],
   } = {},
 ) {
   if (rules.size === 0) return [];
@@ -884,12 +922,12 @@ function filterRulesByContentsMatchingInput(
     return strippedCommand !== cmd ? [cmd, strippedCommand] : [cmd];
   });
   if (stripAllEnvVars) {
-    let ke = command?.argv ?? getCommandArgv(commandWithoutRedirections);
-    let we = unwrapCommandArgv(ke);
-    if (we.length > 0 && (we[0] !== ke[0] || (command?.envVars.length ?? 0) > 0))
-      commandsToTry.push(we.join(" "));
-    if (we[0] !== undefined && stripPathAndExe(we[0]) !== we[0])
-      commandsToTry.push([stripPathAndExe(we[0]), ...we.slice(1)].join(" "));
+    let baseArgv = command?.argv ?? getCommandArgv(commandWithoutRedirections);
+    let unwrappedArgv = unwrapCommandArgv(baseArgv);
+    if (unwrappedArgv.length > 0 && (unwrappedArgv[0] !== baseArgv[0] || (command?.envVars.length ?? 0) > 0))
+      commandsToTry.push(unwrappedArgv.join(" "));
+    if (unwrappedArgv[0] !== undefined && stripPathAndExe(unwrappedArgv[0]) !== unwrappedArgv[0])
+      commandsToTry.push([stripPathAndExe(unwrappedArgv[0]), ...unwrappedArgv.slice(1)].join(" "));
     let seen = new Set(commandsToTry);
     let startIdx = 0;
     while (startIdx < commandsToTry.length) {
@@ -920,10 +958,10 @@ function filterRulesByContentsMatchingInput(
     .filter(([ruleContent]) => {
       if (hasCertifiedPrefix(ruleContent))
         return (
-          S === "allow" &&
+          ruleBehavior === "allow" &&
           matchMode === "prefix" &&
           command !== undefined &&
-          matchesCertifiedCommand(ruleContent, command, w)
+          matchesCertifiedCommand(ruleContent, command, compoundBareAssignmentNames)
         );
       let bashRule = parseBashPermissionRule(ruleContent);
       return commandsToTry.some((cmdToMatch) => {
@@ -951,7 +989,8 @@ function filterRulesByContentsMatchingInput(
             if (matchMode === "exact") return false;
             if (isCompoundCommand.get(cmdToMatch)) return false;
             if (matchesCommandRule(bashRule.pattern, cmdToMatch)) return true;
-            if (S !== "deny" && S !== "ask" && !endsWithUnescapedStar(bashRule.pattern)) return false;
+            if (ruleBehavior !== "deny" && ruleBehavior !== "ask" && !endsWithUnescapedStar(bashRule.pattern))
+              return false;
             return matchesCommandRule(`xargs ${bashRule.pattern}`, cmdToMatch);
         }
       });
@@ -966,28 +1005,28 @@ function matchingRulesForInput(
   input,
   toolPermissionContext,
   matchMode,
-  { skipCompoundCheck = false, astCommand: h, compoundBareAssignmentNames: y = [] } = {},
+  { skipCompoundCheck = false, astCommand, compoundBareAssignmentNames = [] } = {},
 ) {
   let denyRuleByContents = getContentRulesMapForTool(toolPermissionContext, BashTool, "deny");
   let matchingDenyRules = filterRulesByContentsMatchingInput(input, denyRuleByContents, matchMode, {
     stripAllEnvVars: true,
     skipCompoundCheck: true,
-    astCommand: h,
+    astCommand,
     ruleBehavior: "deny",
   });
   let askRuleByContents = getContentRulesMapForTool(toolPermissionContext, BashTool, "ask");
   let matchingAskRules = filterRulesByContentsMatchingInput(input, askRuleByContents, matchMode, {
     stripAllEnvVars: true,
     skipCompoundCheck: true,
-    astCommand: h,
+    astCommand,
     ruleBehavior: "ask",
   });
   let allowRuleByContents = getContentRulesMapForTool(toolPermissionContext, BashTool, "allow");
   let matchingAllowRules = filterRulesByContentsMatchingInput(input, allowRuleByContents, matchMode, {
     skipCompoundCheck,
     ruleBehavior: "allow",
-    astCommand: h,
-    compoundBareAssignmentNames: y,
+    astCommand,
+    compoundBareAssignmentNames,
   });
   return {
     matchingDenyRules,
@@ -999,53 +1038,58 @@ function matchingRulesForInput(
 /**
  * 检查命令的每个片段是否都被某组规则（会话 allow 规则字符串）覆盖；返回第一个未覆盖的片段或解析失败时的 unverifiable。
  */
-async function findSpanNotCoveredByRuleGroups(e, bashCommandClamps) {
+async function findSpanNotCoveredByRuleGroups(toolInput, bashCommandClamps) {
   if (bashCommandClamps.length === 0) return null;
-  let r = {
-    span: e.command.trim(),
+  let unverifiableResult = {
+    span: toolInput.command.trim(),
     group: bashCommandClamps[0] ?? [],
     kind: "unverifiable",
   };
-  let commandRaw = await parseCommandRaw(e.command);
-  if (commandRaw === PARSE_ABORTED) return r;
-  let h = commandRaw
-    ? parseForSecurityFromAst(e.command, commandRaw)
+  let commandRaw = await parseCommandRaw(toolInput.command);
+  if (commandRaw === PARSE_ABORTED) return unverifiableResult;
+  let securityParse = commandRaw
+    ? parseForSecurityFromAst(toolInput.command, commandRaw)
     : {
         kind: "simple",
         commands: [],
         bareAssignmentNames: [],
       };
-  if (h.kind === "too-complex") return r;
-  let y = splitCommandStrict(e.command);
-  if (y === null || y.length === 0) return r;
-  let S = uniq([...y, ...h.commands.map((command) => command.text)]);
-  for (let w of bashCommandClamps) {
-    let L = new Map();
-    for (let G of w) {
-      let q = permissionRuleValueFromString(G);
-      if (q.toolName !== BashTool.name || q.ruleContent === undefined || q.ruleContent === "") continue;
-      L.set(q.ruleContent, {
+  if (securityParse.kind === "too-complex") return unverifiableResult;
+  let splitCommands = splitCommandStrict(toolInput.command);
+  if (splitCommands === null || splitCommands.length === 0) return unverifiableResult;
+  let commandTexts = uniq([...splitCommands, ...securityParse.commands.map((command) => command.text)]);
+  for (let clampGroup of bashCommandClamps) {
+    let allowRulesByContent = new Map();
+    for (let ruleString of clampGroup) {
+      let ruleValue = permissionRuleValueFromString(ruleString);
+      if (
+        ruleValue.toolName !== BashTool.name ||
+        ruleValue.ruleContent === undefined ||
+        ruleValue.ruleContent === ""
+      )
+        continue;
+      allowRulesByContent.set(ruleValue.ruleContent, {
         source: "session",
         ruleBehavior: "allow",
-        ruleValue: q,
+        ruleValue,
       });
     }
-    for (let G of S) {
-      let q = {
-        ...e,
-        command: G,
+    for (let commandText of commandTexts) {
+      let commandInput = {
+        ...toolInput,
+        command: commandText,
       };
       if (!(
-        filterRulesByContentsMatchingInput(q, L, "exact", {
+        filterRulesByContentsMatchingInput(commandInput, allowRulesByContent, "exact", {
           ruleBehavior: "allow",
         }).length > 0 ||
-        filterRulesByContentsMatchingInput(q, L, "prefix", {
+        filterRulesByContentsMatchingInput(commandInput, allowRulesByContent, "prefix", {
           ruleBehavior: "allow",
         }).length > 0
       ))
         return {
-          span: G,
-          group: w,
+          span: commandText,
+          group: clampGroup,
           kind: "unmatched",
         };
     }
@@ -1056,13 +1100,13 @@ async function findSpanNotCoveredByRuleGroups(e, bashCommandClamps) {
 /**
  * 代理带有 bashCommandClamp（限定 Bash 命令形式）时，拒绝通过其他工具面执行 shell。
  */
-function denyForBashCommandClamp(e, shellPermission) {
+function denyForBashCommandClamp(toolName, shellPermission) {
   let bashCommandClamps = getToolPermissionContext(shellPermission).bashCommandClamps;
   if (bashCommandClamps !== undefined && bashCommandClamps.length > 0)
     return {
       behavior: "deny",
       message:
-        `Permission to use ${e} has been denied: this agent carries a per-spawn bashCommandClamp, which scopes shell ` +
+        `Permission to use ${toolName} has been denied: this agent carries a per-spawn bashCommandClamp, which scopes shell ` +
         "execution to a fixed set of Bash command forms \u2014 this surface " +
         "cannot match them. Use the clamped Bash forms instead.",
       decisionReason: {
@@ -1076,12 +1120,12 @@ function denyForBashCommandClamp(e, shellPermission) {
 /**
  * 权限检查本身崩溃且代理带 bashCommandClamp 时直接拒绝，不运行未验证的命令。BashTool.permissionCheckFailureDecision 调用。
  */
-function denyCrashedCheckUnderCommandClamp(e, shellPermission) {
+function denyCrashedCheckUnderCommandClamp(checkName, shellPermission) {
   let bashCommandClamps = getToolPermissionContext(shellPermission).bashCommandClamps;
   if (bashCommandClamps !== undefined && bashCommandClamps.length > 0)
     return {
       behavior: "deny",
-      message: `The ${e} permission check crashed and this agent carries a per-spawn bashCommandClamp; denying rather than running an unverified command.`,
+      message: `The ${checkName} permission check crashed and this agent carries a per-spawn bashCommandClamp; denying rather than running an unverified command.`,
       decisionReason: {
         type: "other",
         reason: BASH_COMMAND_CLAMP_CRASH_REASON,
@@ -1141,14 +1185,14 @@ var bashToolCheckExactMatchPermission = (input, toolPermissionContext) => {
 };
 //@ chunk-e6aww6q8.js:1177404-1177633 placement
 function readsCodeFromStdin(argv) {
-  let n = stripWrappersFromArgvForPaths([...argv]);
-  let r = n[0];
-  if (r === undefined) return false;
-  let replaced = r.slice(r.lastIndexOf("/") + 1).replace(/[\d.]+$/, "");
+  let strippedArgv = stripWrappersFromArgvForPaths([...argv]);
+  let commandName = strippedArgv[0];
+  if (commandName === undefined) return false;
+  let replaced = commandName.slice(commandName.lastIndexOf("/") + 1).replace(/[\d.]+$/, "");
   if (!INLINE_CODE_FLAGS.has(replaced)) return false;
-  let sliced = n.slice(1);
+  let sliced = strippedArgv.slice(1);
   if (sliced.includes("-")) return true;
-  return sliced.every((y) => y.startsWith("-"));
+  return sliced.every((arg) => arg.startsWith("-"));
 }
 //@ chunk-e6aww6q8.js:1177633-1178453 placement
 /**
@@ -1166,26 +1210,26 @@ function checkGitPathArgsForReadBlock(commandName, paths, cwd, context) {
       ask ??= outsideReadsRuntimePathAsk(commandName);
       continue;
     }
-    let S = expandTildeWithHome(path);
-    if (isUncOrDevicePath(S) || firstGlobCharIndex(S) !== -1) {
+    let expandedPath = expandTildeWithHome(path);
+    if (isUncOrDevicePath(expandedPath) || firstGlobCharIndex(expandedPath) !== -1) {
       ask ??= outsideReadsRuntimePathAsk(commandName);
       continue;
     }
-    let w = isAbsolute(S) ? S : resolve_2(cwd, S);
-    if (!hasInteriorDotDot(S) && !getFsImplementation().existsSync(w)) continue;
-    let L = validatePath(path, cwd, context, "read");
-    if (L.allowed) continue;
-    if (L.decisionReason?.type === "rule")
+    let absolutePath = isAbsolute(expandedPath) ? expandedPath : resolve_2(cwd, expandedPath);
+    if (!hasInteriorDotDot(expandedPath) && !getFsImplementation().existsSync(absolutePath)) continue;
+    let validation = validatePath(path, cwd, context, "read");
+    if (validation.allowed) continue;
+    if (validation.decisionReason?.type === "rule")
       return {
         behavior: "deny",
-        message: `${commandName} in '${L.resolvedPath}' was blocked by a deny rule`,
-        decisionReason: L.decisionReason,
+        message: `${commandName} in '${validation.resolvedPath}' was blocked by a deny rule`,
+        decisionReason: validation.decisionReason,
       };
-    if (isOutsideReadsBlockedAsk(L.decisionReason)) {
+    if (isOutsideReadsBlockedAsk(validation.decisionReason)) {
       ask ??= {
         behavior: "ask",
-        message: `${commandName} names '${L.resolvedPath}', outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`,
-        decisionReason: L.decisionReason,
+        message: `${commandName} names '${validation.resolvedPath}', outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`,
+        decisionReason: validation.decisionReason,
       };
       continue;
     }
@@ -1199,10 +1243,10 @@ function checkGitPathArgsForReadBlock(commandName, paths, cwd, context) {
  */
 function checkCommandAgainstReadBlock(command, cwd, context, requireAbsolute, trustedInline) {
   if (!command) return;
-  let y = command.argv[0] ?? "";
+  let commandName = command.argv[0] ?? "";
   if (
     !trustedInline &&
-    y.slice(y.lastIndexOf("/") + 1) === "env" &&
+    commandName.slice(commandName.lastIndexOf("/") + 1) === "env" &&
     command.argv.slice(1).some((arg) => {
       let match = /^([A-Za-z_][A-Za-z0-9_]*)=/.exec(arg);
       return match !== null && !isSafeEnvAssignment(match[1], arg.slice(match[0].length));
@@ -1212,31 +1256,31 @@ function checkCommandAgainstReadBlock(command, cwd, context, requireAbsolute, tr
       "an environment variable assignment outside the safe list cannot be checked against the read block",
     );
   let argv = stripWrappersFromArgvForPaths([...command.argv]);
-  let w = argv[0];
-  if (w === undefined) return;
-  let commandName = w.slice(w.lastIndexOf("/") + 1);
-  if (commandName === "git") {
+  let commandPath = argv[0];
+  if (commandPath === undefined) return;
+  let commandName_2 = commandPath.slice(commandPath.lastIndexOf("/") + 1);
+  if (commandName_2 === "git") {
     let paths = [];
     for (let idx = 1; idx < argv.length; idx++) {
-      let ke = argv[idx];
+      let arg = argv[idx];
       if (
-        (ke === "-C" || ke === "--git-dir" || ke === "--work-tree" || ke === "--file" || ke === "-f") &&
+        (arg === "-C" || arg === "--git-dir" || arg === "--work-tree" || arg === "--file" || arg === "-f") &&
         argv[idx + 1] !== undefined
       ) {
         paths.push(argv[idx + 1]);
         idx++;
-      } else if (/^--(git-dir|work-tree|file)=/.test(ke)) paths.push(ke.slice(ke.indexOf("=") + 1));
-      else if (ke.startsWith("-C") && ke.length > 2) paths.push(ke.slice(2));
+      } else if (/^--(git-dir|work-tree|file)=/.test(arg)) paths.push(arg.slice(arg.indexOf("=") + 1));
+      else if (arg.startsWith("-C") && arg.length > 2) paths.push(arg.slice(2));
     }
-    return paths.length === 0 ? undefined : checkGitPathArgsForReadBlock(commandName, paths, cwd, context);
+    return paths.length === 0 ? undefined : checkGitPathArgsForReadBlock(commandName_2, paths, cwd, context);
   }
-  if (Object.hasOwn(PATH_EXTRACTORS, w) || READ_BLOCK_EXEMPT_COMMANDS.has(commandName)) return;
-  let inlineCodeFlags = INLINE_CODE_FLAGS.get(commandName.replace(/[\d.]+$/, ""));
+  if (Object.hasOwn(PATH_EXTRACTORS, commandPath) || READ_BLOCK_EXEMPT_COMMANDS.has(commandName_2)) return;
+  let inlineCodeFlags = INLINE_CODE_FLAGS.get(commandName_2.replace(/[\d.]+$/, ""));
   if (!trustedInline && inlineCodeFlags !== undefined && argv.slice(1).includes("-"))
     return outsideReadsTooComplexAsk(
-      `${commandName} runs code from stdin, which cannot be checked against the read block`,
+      `${commandName_2} runs code from stdin, which cannot be checked against the read block`,
     );
-  if (commandName === "xargs") return outsideReadsRuntimePathAsk(commandName);
+  if (commandName_2 === "xargs") return outsideReadsRuntimePathAsk(commandName_2);
   if (
     !trustedInline &&
     inlineCodeFlags !== undefined &&
@@ -1256,17 +1300,17 @@ function checkCommandAgainstReadBlock(command, cwd, context, requireAbsolute, tr
       )
   )
     return outsideReadsTooComplexAsk(
-      `${commandName} runs inline code, which cannot be checked against the read block`,
+      `${commandName_2} runs inline code, which cannot be checked against the read block`,
     );
   let ask;
   for (let arg of argv.slice(1)) {
     if (arg === "") continue;
     if (containsAnyPlaceholder(arg)) {
-      ask ??= outsideReadsRuntimePathAsk(commandName);
+      ask ??= outsideReadsRuntimePathAsk(commandName_2);
       continue;
     }
     let index = arg.indexOf("=");
-    let ke = arg.startsWith("-")
+    let pathCandidates = arg.startsWith("-")
       ? index > 0
         ? [arg.slice(index + 1)]
         : !arg.startsWith("--") && arg.length > 2
@@ -1275,63 +1319,66 @@ function checkCommandAgainstReadBlock(command, cwd, context, requireAbsolute, tr
       : index > 0 && /^[A-Za-z_][A-Za-z0-9_]*$/.test(arg.slice(0, index))
         ? [arg, arg.slice(index + 1)]
         : [arg];
-    for (let we of ke) {
-      if (we === "") continue;
-      if (we.startsWith("~") && we !== "~" && !we.startsWith("~/")) {
-        ask ??= outsideReadsRuntimePathAsk(commandName);
+    for (let pathCandidate of pathCandidates) {
+      if (pathCandidate === "") continue;
+      if (pathCandidate.startsWith("~") && pathCandidate !== "~" && !pathCandidate.startsWith("~/")) {
+        ask ??= outsideReadsRuntimePathAsk(commandName_2);
         continue;
       }
-      let Ee = expandTildeWithHome(we);
-      if (isUncOrDevicePath(Ee)) {
-        ask ??= outsideReadsRuntimePathAsk(commandName);
+      let expandedPath = expandTildeWithHome(pathCandidate);
+      if (isUncOrDevicePath(expandedPath)) {
+        ask ??= outsideReadsRuntimePathAsk(commandName_2);
         continue;
       }
-      if (requireAbsolute && !isAbsolute(Ee)) {
-        ask ??= outsideReadsRuntimePathAsk(commandName);
+      if (requireAbsolute && !isAbsolute(expandedPath)) {
+        ask ??= outsideReadsRuntimePathAsk(commandName_2);
         continue;
       }
-      let Ae = we;
-      let Ie = firstGlobCharIndex(Ee);
-      if (Ie !== -1) {
-        let sliced = Ee.slice(0, Ie);
-        Ae = sliced.endsWith("/") ? sliced : dirname(sliced);
-        if (shellPathSegments(Ee).some((Je) => urlPatternToRegex(Je)) || globBeforeInteriorDotDot(Ee)) {
-          let Je = validatePath(Ae, cwd, context, "read");
-          if (!Je.allowed && Je.decisionReason?.type === "rule")
+      let pathToValidate = pathCandidate;
+      let globIndex = firstGlobCharIndex(expandedPath);
+      if (globIndex !== -1) {
+        let sliced = expandedPath.slice(0, globIndex);
+        pathToValidate = sliced.endsWith("/") ? sliced : dirname(sliced);
+        if (
+          shellPathSegments(expandedPath).some((segment) => urlPatternToRegex(segment)) ||
+          globBeforeInteriorDotDot(expandedPath)
+        ) {
+          let validation = validatePath(pathToValidate, cwd, context, "read");
+          if (!validation.allowed && validation.decisionReason?.type === "rule")
             return {
               behavior: "deny",
-              message: `${commandName} in '${Je.resolvedPath}' was blocked by a deny rule`,
-              decisionReason: Je.decisionReason,
+              message: `${commandName_2} in '${validation.resolvedPath}' was blocked by a deny rule`,
+              decisionReason: validation.decisionReason,
             };
-          ask ??= outsideReadsRuntimePathAsk(commandName);
+          ask ??= outsideReadsRuntimePathAsk(commandName_2);
           continue;
         }
       }
-      let Me = expandTildeWithHome(Ae);
-      let We = isAbsolute(Me) ? Me : resolve_2(cwd, Me);
-      if (!hasInteriorDotDot(Me) && !getFsImplementation().existsSync(We)) continue;
-      let ze = validatePath(Ae, cwd, context, "read");
-      if (ze.allowed) continue;
-      if (ze.decisionReason?.type === "rule")
+      let absolutePath = expandTildeWithHome(pathToValidate);
+      let resolvedPath = isAbsolute(absolutePath) ? absolutePath : resolve_2(cwd, absolutePath);
+      if (!hasInteriorDotDot(absolutePath) && !getFsImplementation().existsSync(resolvedPath)) continue;
+      let validation = validatePath(pathToValidate, cwd, context, "read");
+      if (validation.allowed) continue;
+      if (validation.decisionReason?.type === "rule")
         return {
           behavior: "deny",
-          message: `${commandName} in '${ze.resolvedPath}' was blocked by a deny rule`,
-          decisionReason: ze.decisionReason,
+          message: `${commandName_2} in '${validation.resolvedPath}' was blocked by a deny rule`,
+          decisionReason: validation.decisionReason,
         };
-      if (isOutsideReadsBlockedAsk(ze.decisionReason)) {
+      if (isOutsideReadsBlockedAsk(validation.decisionReason)) {
         ask ??= {
           behavior: "ask",
-          message: `${commandName} names '${ze.resolvedPath}', outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`,
-          decisionReason: ze.decisionReason,
+          message: `${commandName_2} names '${validation.resolvedPath}', outside the working directories, which the read block does not allow without asking (permissions.blockReadsOutsideWorkingDirectories). Add the directory with /add-dir, or remove that setting.`,
+          decisionReason: validation.decisionReason,
         };
         continue;
       }
       ask ??= {
         behavior: "ask",
-        message: `${commandName} names '${Ae}', which cannot be checked against the read block (permissions.blockReadsOutsideWorkingDirectories)`,
+        message: `${commandName_2} names '${pathToValidate}', which cannot be checked against the read block (permissions.blockReadsOutsideWorkingDirectories)`,
         decisionReason: {
           type: "safetyCheck",
-          reason: `${commandName} names '${Ae}', which cannot be checked against the read block (permissions.blockReadsOutsideWorkingDirectories)`,
+          reason: `${commandName_2} names '${pathToValidate}', which cannot be checked against the read block (permissions.blockReadsOutsideWorkingDirectories)`,
           classifierApprovable: false,
           circuitBreaker: "outsideReadsBlocked",
         },
@@ -1359,9 +1406,9 @@ var bashToolCheckPermission = (
   compoundCommandHasCd,
   astCommand,
   cwd = getCwd(),
-  y = [],
-  S,
-  w,
+  compoundBareAssignmentNames = [],
+  sandboxDecision,
+  getSandboxedCommand,
 ) => {
   let command = input.command.trim();
   let exactMatchResult = bashToolCheckExactMatchPermission(input, toolPermissionContext);
@@ -1373,7 +1420,7 @@ var bashToolCheckPermission = (
     {
       skipCompoundCheck: astCommand !== undefined,
       astCommand,
-      compoundBareAssignmentNames: y,
+      compoundBareAssignmentNames,
     },
   );
   if (matchingDenyRules[0] !== undefined)
@@ -1394,19 +1441,23 @@ var bashToolCheckPermission = (
         rule: matchingAskRules[0],
       },
     };
-  let ke = checkPathConstraints(
+  let pathResult = checkPathConstraints(
     input,
     cwd,
     toolPermissionContext,
     compoundCommandHasCd,
     astCommand?.redirects,
     astCommand ? [astCommand] : undefined,
-    S,
+    sandboxDecision,
   );
-  if (ke.behavior === "deny" || (ke.behavior === "ask" && !ke.bashAllowRuleOverridable)) return ke;
+  if (
+    pathResult.behavior === "deny" ||
+    (pathResult.behavior === "ask" && !pathResult.bashAllowRuleOverridable)
+  )
+    return pathResult;
   if (toolPermissionContext.blockReadsOutsideWorkingDirectories === true) {
-    let ze = checkSedConstraints(input, toolPermissionContext);
-    if (ze.behavior === "ask" && isOutsideReadsBlockedAsk(ze.decisionReason)) return ze;
+    let sedResult = checkSedConstraints(input, toolPermissionContext);
+    if (sedResult.behavior === "ask" && isOutsideReadsBlockedAsk(sedResult.decisionReason)) return sedResult;
   }
   if (toolPermissionContext.blockReadsOutsideWorkingDirectories === true) {
     if (
@@ -1416,14 +1467,14 @@ var bashToolCheckPermission = (
       return outsideReadsTooComplexAsk(
         "an environment variable prefix outside the safe list cannot be checked against the read block",
       );
-    let ze = checkCommandAgainstReadBlock(
+    let readBlockResult = checkCommandAgainstReadBlock(
       astCommand,
       cwd,
       toolPermissionContext,
       compoundCommandHasCd === true,
       shouldUseSandbox(input) && isSandboxReadBlockEnforceable(toolPermissionContext),
     );
-    if (ze) return ze;
+    if (readBlockResult) return readBlockResult;
   }
   if (exactMatchResult.behavior === "allow") return exactMatchResult;
   if (matchingAllowRules[0] !== undefined)
@@ -1435,20 +1486,23 @@ var bashToolCheckPermission = (
         rule: matchingAllowRules[0],
       },
     };
-  if (ke.behavior === "ask") return ke;
+  if (pathResult.behavior === "ask") return pathResult;
   let sedConstraintResult = checkSedConstraints(input, toolPermissionContext);
   if (sedConstraintResult.behavior !== "passthrough") return sedConstraintResult;
   let modeResult = checkPermissionMode(input, toolPermissionContext);
   if (modeResult.behavior !== "passthrough") return modeResult;
-  let Ae = lazySessionEnvVarNames(w && sessionEnvVarNameSet(w));
-  let Ie = hasBashDenyRule(toolPermissionContext) && hasZshDangerousCommand(input.command);
-  let Me = astCommand !== undefined && hasUnsafeGlobSource(astCommand);
+  let sandboxEnvVarNames = lazySessionEnvVarNames(
+    getSandboxedCommand && sessionEnvVarNameSet(getSandboxedCommand),
+  );
+  let isZshDangerousWithDenyRule =
+    hasBashDenyRule(toolPermissionContext) && hasZshDangerousCommand(input.command);
+  let hasUnsafeGlob = astCommand !== undefined && hasUnsafeGlobSource(astCommand);
   if (
-    !Ie &&
-    !Me &&
-    BashTool.isReadOnly(input, w) &&
+    !isZshDangerousWithDenyRule &&
+    !hasUnsafeGlob &&
+    BashTool.isReadOnly(input, getSandboxedCommand) &&
     !hasUnsafeEnvVarPrefix(input, astCommand) &&
-    !hasRiskyBareAssignment(y, Ae)
+    !hasRiskyBareAssignment(compoundBareAssignmentNames, sandboxEnvVarNames)
   )
     return {
       behavior: "allow",
@@ -1480,89 +1534,100 @@ async function checkSubcommandPermissionWithSuggestions(
   commandPrefixResult,
   compoundCommandHasCd,
   astCommand,
-  y,
-  bareAssignmentNames = [],
-  toolUseContext,
+  sandboxedCommand,
+  compoundBareAssignmentNames = [],
+  getSandboxedCommand,
 ) {
-  let L = bashToolCheckExactMatchPermission(input, toolPermissionContext);
-  if (L.behavior === "deny" || L.behavior === "ask") return L;
-  let G = bashToolCheckPermission(
+  let exactMatchResult = bashToolCheckExactMatchPermission(input, toolPermissionContext);
+  if (exactMatchResult.behavior === "deny" || exactMatchResult.behavior === "ask") return exactMatchResult;
+  let result = bashToolCheckPermission(
     input,
     toolPermissionContext,
     compoundCommandHasCd,
     astCommand,
-    y,
-    bareAssignmentNames,
+    sandboxedCommand,
+    compoundBareAssignmentNames,
     undefined,
-    toolUseContext,
+    getSandboxedCommand,
   );
-  if (G.behavior === "deny" || G.behavior === "ask") return G;
-  if (G.behavior === "allow") return G;
+  if (result.behavior === "deny" || result.behavior === "ask") return result;
+  if (result.behavior === "allow") return result;
   let suggestedUpdates = commandPrefixResult?.commandPrefix
     ? suggestionForPrefix(commandPrefixResult.commandPrefix)
     : suggestionForExactCommand(input.command);
   return {
-    ...G,
+    ...result,
     suggestions: suggestedUpdates,
   };
 }
 //@ chunk-e6aww6q8.js:1183707-1183928 layout
-var INTERPRETER_COMMANDS = new Set(["python", "python3", "node", "bun", "deno", "ruby", "perl"]);
-var DD_OPERAND_KEYS = new Set([
-  "if",
-  "of",
-  "bs",
-  "ibs",
-  "obs",
-  "cbs",
-  "count",
-  "skip",
-  "seek",
-  "iseek",
-  "oseek",
-  "conv",
-  "status",
-  "iflag",
-  "oflag",
-]);
-var INNER_WHITESPACE_RE = /[^ \t\n][ \t\n]+[^ \t\n]/;
+var INTERPRETER_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DD_OPERAND_KEYS;
+var INNER_WHITESPACE_RE;
+deferInit("chunk-e6aww6q8.js:1183707", () => {
+  INTERPRETER_COMMANDS = new Set(["python", "python3", "node", "bun", "deno", "ruby", "perl"]);
+  DD_OPERAND_KEYS = new Set([
+    "if",
+    "of",
+    "bs",
+    "ibs",
+    "obs",
+    "cbs",
+    "count",
+    "skip",
+    "seek",
+    "iseek",
+    "oseek",
+    "conv",
+    "status",
+    "iflag",
+    "oflag",
+  ]);
+  INNER_WHITESPACE_RE = /[^ \t\n][ \t\n]+[^ \t\n]/;
+});
 //@ chunk-e6aww6q8.js:1183928-1185390 layout
 /**
  * 沙箱开启且"沙箱内自动允许"打开时，对已解析的简单命令判断能否自动允许：排除危险 env 赋值、UNC 路径、/dev/tcp 重定向、cd 与 rm 组合、危险删除路径等，满足则返回规则检查结果（allow/ask/deny）。
  */
-function checkSandboxAutoAllowForAst(e, permissionContext, commands, bareAssignmentNames, toolUseContext) {
+function checkSandboxAutoAllowForAst(
+  input,
+  permissionContext,
+  commands,
+  bareAssignmentNames,
+  toolUseContext,
+) {
   if (
     !SandboxManager.isSandboxingEnabled() ||
     !SandboxManager.isAutoAllowBashIfSandboxedEnabled() ||
-    !shouldUseSandbox(e) ||
+    !shouldUseSandbox(input) ||
     isSandboxAutoAllowOff(permissionContext) ||
-    antDisabledListMatchesCommandText(e.command) ||
+    antDisabledListMatchesCommandText(input.command) ||
     (permissionContext.blockReadsOutsideWorkingDirectories === true &&
       !isSandboxReadBlockEnforceable(permissionContext))
   )
     return null;
-  let y = checkRulesForSandboxAutoAllow(e, permissionContext, commands);
-  if (y.behavior === "passthrough") return null;
-  let S = lazySessionEnvVarNames(sessionEnvVarNameSet(toolUseContext));
-  let w =
-    hasRiskyBareAssignment(bareAssignmentNames, S) ||
-    commands.some((Z) => {
-      let Se = stripWrappersFromArgvForPaths(Z.argv);
-      let ke = Z.argv.length - Se.length + 1;
-      let we =
-        INTERPRETER_COMMANDS.has(Se[0] ?? "") &&
+  let decision = checkRulesForSandboxAutoAllow(input, permissionContext, commands);
+  if (decision.behavior === "passthrough") return null;
+  let getSessionEnvVarNames = lazySessionEnvVarNames(sessionEnvVarNameSet(toolUseContext));
+  let hasUnsafeAssignment =
+    hasRiskyBareAssignment(bareAssignmentNames, getSessionEnvVarNames) ||
+    commands.some((command) => {
+      let argv = stripWrappersFromArgvForPaths(command.argv);
+      let droppedArgCount = command.argv.length - argv.length + 1;
+      let interpreterArgIndex =
+        INTERPRETER_COMMANDS.has(argv[0] ?? "") &&
         getFeatureValue_CACHED_MAY_BE_STALE("tengu_quiet_larkspur", true)
-          ? ke
+          ? droppedArgCount
           : Number.POSITIVE_INFINITY;
-      let Ee =
-        Se[0] === "dd" && getFeatureValue_CACHED_MAY_BE_STALE("tengu_plain_sorrel", true)
-          ? ke
+      let ddOperandIndex =
+        argv[0] === "dd" && getFeatureValue_CACHED_MAY_BE_STALE("tengu_plain_sorrel", true)
+          ? droppedArgCount
           : Number.POSITIVE_INFINITY;
       return (
-        Z.envVars.some(
+        command.envVars.some(
           (envVar) =>
             !isSafeEnvAssignment(envVar.name, envVar.value) &&
-            (!INTERPRETER_COMMANDS.has(Z.argv[0] ?? "") ||
+            (!INTERPRETER_COMMANDS.has(command.argv[0] ?? "") ||
               isAssignmentNameUnsafeForSandbox(envVar.name) ||
               isDangerousEnvName(envVar.name) ||
               isBuildToolEnvVar(envVar.name) ||
@@ -1570,13 +1635,13 @@ function checkSandboxAutoAllowForAst(e, permissionContext, commands, bareAssignm
               getEffectiveFilesystemPolicy() === "relaxed" ||
               !SandboxManager.isUnsandboxedFallbackClosedByTrustedSource()),
         ) ||
-        Z.argv.slice(1).some(isTildeUserPath) ||
-        Z.redirects.some((redirect) => redirect.op === "<" && isTildeUserPath(redirect.target)) ||
-        Z.argv.some((arg, Ie) => {
+        command.argv.slice(1).some(isTildeUserPath) ||
+        command.redirects.some((redirect) => redirect.op === "<" && isTildeUserPath(redirect.target)) ||
+        command.argv.some((arg, idx) => {
           if (!arg.includes("=") || arg.startsWith("-")) return false;
           let index = arg.indexOf("=");
           if (
-            Ie >= Ee &&
+            idx >= ddOperandIndex &&
             DD_OPERAND_KEYS.has(arg.slice(0, index)) &&
             !arg
               .slice(index + 1)
@@ -1584,61 +1649,61 @@ function checkSandboxAutoAllowForAst(e, permissionContext, commands, bareAssignm
               .some(isTildeUserPath)
           )
             return false;
-          let We = arg[index - 1] === "+" ? arg.slice(0, index - 1) : arg.slice(0, index);
-          if (Ie >= we && INNER_WHITESPACE_RE.test(We)) return false;
-          return !isSafeEnvAssignment(We, arg.slice(index + 1));
+          let name = arg[index - 1] === "+" ? arg.slice(0, index - 1) : arg.slice(0, index);
+          if (idx >= interpreterArgIndex && INNER_WHITESPACE_RE.test(name)) return false;
+          return !isSafeEnvAssignment(name, arg.slice(index + 1));
         })
       );
     });
   let any = commands.some((command) =>
     command.redirects.some((subcmd) => /^\/dev\/(tcp|udp)\//.test(subcmd.target)),
   );
-  if (w || any) return null;
-  let G = false;
-  let q = false;
-  for (let Z of commands) {
-    let [Se, ...ke] = stripWrappersFromArgvForPaths(Z.argv);
-    let replaced = Se?.replace(/^.*[\\/]/, "");
+  if (hasUnsafeAssignment || any) return null;
+  let hasCd = false;
+  let hasRm = false;
+  for (let command of commands) {
+    let [baseName, ...args] = stripWrappersFromArgvForPaths(command.argv);
+    let replaced = baseName?.replace(/^.*[\\/]/, "");
     if (replaced === "cd" || replaced === "pushd" || replaced === "popd" || replaced === "chdir") {
-      G = true;
+      hasCd = true;
       continue;
     }
     if (replaced !== "rm" && replaced !== "rmdir") continue;
-    q = true;
-    if (checkDangerousRemovalPaths(replaced, ke, getCwd(), permissionContext).behavior !== "passthrough")
+    hasRm = true;
+    if (checkDangerousRemovalPaths(replaced, args, getCwd(), permissionContext).behavior !== "passthrough")
       return null;
   }
-  if (G && q) return null;
-  return y;
+  if (hasCd && hasRm) return null;
+  return decision;
 }
 //@ chunk-e6aww6q8.js:1185390-1188803 fingerprint = checkSandboxAutoAllow (0.592)
 /**
  * AST 过于复杂时的沙箱自动允许：逐个片段检查 deny/ask 规则，再用一长串启发式（heredoc、${!x}、/proc/*\/environ、引号/展开、test/find/jobs/print/set 的危险用法）排除，全部通过则 allow（有 ask 规则则 ask）。
  */
-function checkSandboxAutoAllow(e, permissionContext, nodeType) {
+function checkSandboxAutoAllow(input, permissionContext, nodeType) {
   if (
     !SandboxManager.isSandboxingEnabled() ||
     !SandboxManager.isAutoAllowBashIfSandboxedEnabled() ||
-    !shouldUseSandbox(e) ||
+    !shouldUseSandbox(input) ||
     isSandboxAutoAllowOff(permissionContext) ||
-    antDisabledListMatchesCommandText(e.command) ||
+    antDisabledListMatchesCommandText(input.command) ||
     (permissionContext.blockReadsOutsideWorkingDirectories === true &&
       !isSandboxReadBlockEnforceable(permissionContext))
   )
     return null;
   if (nodeType === undefined || nodeType === "PARSE_ABORT" || nodeType === "ERROR") return null;
-  if (/(?<!<)<<(?!<)/.test(e.command)) return null;
-  if (/\$\{[\s|]/.test(e.command.replace(/['"\\]/g, ""))) return null;
-  if (/\$\{![A-Za-z_0-9]/.test(e.command.replace(/['"\\]/g, ""))) return null;
-  if (/\/proc\/.*\/environ/.test(e.command.replace(/['"\\]/g, ""))) return null;
-  if (hasZshExecutableParenInBraceExpansion(e.command)) return null;
-  let s = splitCommandStrict(e.command);
-  if (s === null || s.length === 0) return null;
-  let h;
-  for (let command of s) {
+  if (/(?<!<)<<(?!<)/.test(input.command)) return null;
+  if (/\$\{[\s|]/.test(input.command.replace(/['"\\]/g, ""))) return null;
+  if (/\$\{![A-Za-z_0-9]/.test(input.command.replace(/['"\\]/g, ""))) return null;
+  if (/\/proc\/.*\/environ/.test(input.command.replace(/['"\\]/g, ""))) return null;
+  if (hasZshExecutableParenInBraceExpansion(input.command)) return null;
+  let commands = splitCommandStrict(input.command);
+  if (commands === null || commands.length === 0) return null;
+  let firstAskRule;
+  for (let command of commands) {
     let { matchingDenyRules, matchingAskRules } = matchingRulesForInput(
       {
-        ...e,
+        ...input,
         command,
       },
       permissionContext,
@@ -1647,133 +1712,137 @@ function checkSandboxAutoAllow(e, permissionContext, nodeType) {
     if (matchingDenyRules[0] !== undefined)
       return {
         behavior: "deny",
-        message: `Permission to use ${BashTool.name} with command ${e.command.trim()} has been denied.`,
+        message: `Permission to use ${BashTool.name} with command ${input.command.trim()} has been denied.`,
         decisionReason: {
           type: "rule",
           rule: matchingDenyRules[0],
         },
       };
-    h ??= matchingAskRules[0];
+    firstAskRule ??= matchingAskRules[0];
   }
-  for (let y of s) {
-    let filtered = y.trim().split(/\s+/).filter(Boolean);
-    let subcommands = stripSafeLeadingAssignments(filtered);
+  for (let command of commands) {
+    let words = command.trim().split(/\s+/).filter(Boolean);
+    let subcommands = stripSafeLeadingAssignments(words);
     if (subcommands === null) return null;
     if (subcommands.length === 0) continue;
-    let L = stripWrappersFromArgvForPaths(subcommands);
-    let sliced = subcommands.slice(0, subcommands.length - L.length);
-    if (sliced.some((Ee) => /["'`$\\(){}|;&<>*?[\]]/.test(Ee))) return null;
+    let argv = stripWrappersFromArgvForPaths(subcommands);
+    let sliced = subcommands.slice(0, subcommands.length - argv.length);
+    if (sliced.some((arg) => /["'`$\\(){}|;&<>*?[\]]/.test(arg))) return null;
     if (
-      sliced.some((Ee) => {
-        let match = Ee.match(/^([A-Za-z_]\w*)\+?=/);
+      sliced.some((assignment) => {
+        let match = assignment.match(/^([A-Za-z_]\w*)\+?=/);
         return match !== null && isAssignmentNameUnsafeForSandbox(match[1]);
       })
     )
       return null;
-    let mapped = L.map((Ee) => Ee.replace(/['"\\]/g, ""));
+    let mapped = argv.map((arg) => arg.replace(/['"\\]/g, ""));
     if (
-      mapped.some((Ee) => {
-        let match = Ee.match(/^([A-Za-z_]\w*)\+?=/);
+      mapped.some((assignment) => {
+        let match = assignment.match(/^([A-Za-z_]\w*)\+?=/);
         return match !== null && isAssignmentNameUnsafeForSandbox(match[1]);
       })
     )
       return null;
-    let any = L.some((Ee, Ae) => {
-      if (Ae === 0) return false;
-      if ((Ee.includes("$'") && !/^'[^']*\$'$/.test(Ee)) || (Ee.includes('$"') && !/^"[^"]*\$"$/.test(Ee)))
+    let any = argv.some((arg, idx) => {
+      if (idx === 0) return false;
+      if (
+        (arg.includes("$'") && !/^'[^']*\$'$/.test(arg)) ||
+        (arg.includes('$"') && !/^"[^"]*\$"$/.test(arg))
+      )
         return true;
-      let Ie = mapped[Ae];
+      let unquoted = mapped[idx];
       return (
-        Ie.includes("`") ||
-        /\$\((?!\()/.test(Ie) ||
-        (/\$[^(\s]/.test(Ie) && Ie.includes("-")) ||
-        /\$\{[^}]*:?[+=]/.test(Ie) ||
-        /\{[^\s]*(,|\.\.)/.test(Ee) ||
-        (Ie.match(/\{/g) ?? []).length !== (Ie.match(/\}/g) ?? []).length
+        unquoted.includes("`") ||
+        /\$\((?!\()/.test(unquoted) ||
+        (/\$[^(\s]/.test(unquoted) && unquoted.includes("-")) ||
+        /\$\{[^}]*:?[+=]/.test(unquoted) ||
+        /\{[^\s]*(,|\.\.)/.test(arg) ||
+        (unquoted.match(/\{/g) ?? []).length !== (unquoted.match(/\}/g) ?? []).length
       );
     });
-    let any_2 = mapped.some((Ee, Ae) => Ae > 0 && Ee.includes("$"));
-    let any_3 = L.some((Ee, Ae) => Ae > 0 && (/[<>]/.test(Ee) || Ee.endsWith("\\")));
-    let we = L[0];
+    let any_2 = mapped.some((arg, idx) => idx > 0 && arg.includes("$"));
+    let any_3 = argv.some((arg, idx) => idx > 0 && (/[<>]/.test(arg) || arg.endsWith("\\")));
+    let baseName = argv[0];
     if (
-      we === undefined ||
-      !/^[A-Za-z0-9._/~+][A-Za-z0-9._/~+-]*$/.test(we) ||
-      isSandboxAutoAllowUnsafeBase(we) ||
-      WRAPPER_COMMAND_NAMES.has(we) ||
-      WRAPPER_COMMAND_NAMES.has(we.replace(/^.*[\\/]/, "")) ||
-      (EXPANSION_SENSITIVE_BUILTINS.has(we) &&
-        (any || mapped.some((Ee) => Ee.includes("[") && /[$`]/.test(Ee)))) ||
-      (we === "test" &&
+      baseName === undefined ||
+      !/^[A-Za-z0-9._/~+][A-Za-z0-9._/~+-]*$/.test(baseName) ||
+      isSandboxAutoAllowUnsafeBase(baseName) ||
+      WRAPPER_COMMAND_NAMES.has(baseName) ||
+      WRAPPER_COMMAND_NAMES.has(baseName.replace(/^.*[\\/]/, "")) ||
+      (EXPANSION_SENSITIVE_BUILTINS.has(baseName) &&
+        (any || mapped.some((unquoted) => unquoted.includes("[") && /[$`]/.test(unquoted)))) ||
+      (baseName === "test" &&
         (any ||
           any_3 ||
-          mapped.some((Ee) => Ee === "-t" || TEST_ARITH_CMP_OPS.has(Ee)) ||
+          mapped.some((unquoted) => unquoted === "-t" || TEST_ARITH_CMP_OPS.has(unquoted)) ||
           mapped.some(
-            (Ee, Ae) => Ae > 0 && Ee.includes("$") && (mapped.length > 4 || Ae === mapped.length - 2),
+            (arg, idx) => idx > 0 && arg.includes("$") && (mapped.length > 4 || idx === mapped.length - 2),
           ))) ||
-      we === "jq" ||
-      AWK_NAMES.has(we) ||
-      (we === "find" &&
+      baseName === "jq" ||
+      AWK_NAMES.has(baseName) ||
+      (baseName === "find" &&
         (any ||
           any_3 ||
           (() => {
-            let Ee = false;
+            let expectOperand = false;
             for (let idx = 1; idx < mapped.length; idx++) {
-              let Ie = mapped[idx];
-              let Me = Ee;
-              Ee = false;
-              if (isFindDangerousAction(Ie)) return true;
-              if (isAmbiguousFindWord(Ie) || (L[idx] !== Ie && findWordTakesOperand(Ie))) return true;
-              if (!Me && findWordTakesFlagValue(L[idx])) {
-                Ee = true;
+              let word = mapped[idx];
+              let previousExpectOperand = expectOperand;
+              expectOperand = false;
+              if (isFindDangerousAction(word)) return true;
+              if (isAmbiguousFindWord(word) || (argv[idx] !== word && findWordTakesOperand(word)))
+                return true;
+              if (!previousExpectOperand && findWordTakesFlagValue(argv[idx])) {
+                expectOperand = true;
                 continue;
               }
-              if (!Me && findWordTakesOperand(L[idx])) {
-                let We = mapped[idx + 1];
-                let matches = /^'[^']*'$|^"[^"]*"$/.test(L[idx + 1] ?? "");
-                if (We !== undefined && /[[\]*?]/.test(We) && !matches) return true;
+              if (!previousExpectOperand && findWordTakesOperand(argv[idx])) {
+                let nextWord = mapped[idx + 1];
+                let matches = /^'[^']*'$|^"[^"]*"$/.test(argv[idx + 1] ?? "");
+                if (nextWord !== undefined && /[[\]*?]/.test(nextWord) && !matches) return true;
                 if (
-                  We !== undefined &&
-                  (!We.includes("$") || (matches && /^\$\{?[A-Za-z_]\w*\}?$/.test(We)))
+                  nextWord !== undefined &&
+                  (!nextWord.includes("$") || (matches && /^\$\{?[A-Za-z_]\w*\}?$/.test(nextWord)))
                 ) {
                   idx++;
                   continue;
                 }
               }
-              if (Ie.includes("$") || /[[\]*?]/.test(Ie)) return true;
+              if (word.includes("$") || /[[\]*?]/.test(word)) return true;
             }
             return false;
           })())) ||
-      (we === "jobs" && (any || any_2 || any_3 || mapped.some((Ee) => /^-[^-]*x/.test(Ee)))) ||
-      (we === "print" &&
+      (baseName === "jobs" && (any || any_2 || any_3 || mapped.some((arg) => /^-[^-]*x/.test(arg)))) ||
+      (baseName === "print" &&
         (any ||
           (any_2 && /^[+-]|\$/.test(mapped[1] ?? "")) ||
           any_3 ||
-          /\\['"]/.test(y) ||
-          /[[\]*?]/.test(y.replace(/'[^']*'|"[^"]*"/g, "")) ||
-          mapped.some((Ee) => PRINT_PROMPT_FLAG.test(Ee)))) ||
-      (we === "set" &&
+          /\\['"]/.test(command) ||
+          /[[\]*?]/.test(command.replace(/'[^']*'|"[^"]*"/g, "")) ||
+          mapped.some((arg) => PRINT_PROMPT_FLAG.test(arg)))) ||
+      (baseName === "set" &&
         (any ||
           any_3 ||
           (() => {
             for (let idx = 1; idx < mapped.length; idx++) {
-              let Ae = mapped[idx];
-              if (Ae === "--") return false;
-              if (Ae.includes("$")) return true;
-              if (!/^[-+]/.test(Ae)) continue;
-              for (let idx_2 = 1; idx_2 < Ae.length; idx_2++) {
-                let Me = Ae[idx_2];
-                if (Me === "o") {
-                  let We = idx_2 < Ae.length - 1 ? Ae.slice(idx_2 + 1) : mapped[idx + 1];
+              let arg = mapped[idx];
+              if (arg === "--") return false;
+              if (arg.includes("$")) return true;
+              if (!/^[-+]/.test(arg)) continue;
+              for (let idx_2 = 1; idx_2 < arg.length; idx_2++) {
+                let flagChar = arg[idx_2];
+                if (flagChar === "o") {
+                  let optionName = idx_2 < arg.length - 1 ? arg.slice(idx_2 + 1) : mapped[idx + 1];
                   if (
-                    We !== undefined &&
-                    We !== "" &&
-                    !SET_O_SAFE_OPTS.has(We.toLowerCase().replace(/[_-]/g, ""))
+                    optionName !== undefined &&
+                    optionName !== "" &&
+                    !SET_O_SAFE_OPTS.has(optionName.toLowerCase().replace(/[_-]/g, ""))
                   )
                     return true;
                   break;
                 }
-                if (Me === "A") break;
-                if (!SET_O_SAFE_LETTERS.has(Me)) return true;
+                if (flagChar === "A") break;
+                if (!SET_O_SAFE_LETTERS.has(flagChar)) return true;
               }
             }
             return false;
@@ -1781,18 +1850,18 @@ function checkSandboxAutoAllow(e, permissionContext, nodeType) {
     )
       return null;
   }
-  if (h)
+  if (firstAskRule)
     return {
       behavior: "ask",
       message: createPermissionRequestMessage(BashTool.name),
       decisionReason: {
         type: "rule",
-        rule: h,
+        rule: firstAskRule,
       },
     };
   return {
     behavior: "allow",
-    updatedInput: e,
+    updatedInput: input,
     decisionReason: {
       type: "other",
       reason: SANDBOX_AUTO_ALLOW_REASON,
@@ -1800,39 +1869,43 @@ function checkSandboxAutoAllow(e, permissionContext, nodeType) {
   };
 }
 //@ chunk-e6aww6q8.js:1188803-1188958 layout
-var EXPANSION_SENSITIVE_BUILTINS = new Set([
-  "printf",
-  "test",
-  "read",
-  "wait",
-  "unset",
-  ...DECLARATION_LIKE_BUILTINS,
-]);
-var WRAPPER_COMMAND_NAMES = new Set([
-  "time",
-  "nohup",
-  "timeout",
-  "nice",
-  "stdbuf",
-  "env",
-  "command",
-  "builtin",
-  "noglob",
-]);
+var EXPANSION_SENSITIVE_BUILTINS; // deferred: uses SUBSCRIPT_EVAL_FLAGS (../../utils/bash/ast.js) of its import cycle while loading; runs once the cycle is complete
+var WRAPPER_COMMAND_NAMES;
+deferInit("chunk-e6aww6q8.js:1188803", () => {
+  EXPANSION_SENSITIVE_BUILTINS = new Set([
+    "printf",
+    "test",
+    "read",
+    "wait",
+    "unset",
+    ...DECLARATION_LIKE_BUILTINS,
+  ]);
+  WRAPPER_COMMAND_NAMES = new Set([
+    "time",
+    "nohup",
+    "timeout",
+    "nice",
+    "stdbuf",
+    "env",
+    "command",
+    "builtin",
+    "noglob",
+  ]);
+});
 //@ chunk-e6aww6q8.js:1188958-1189178 layout
 /**
  * 剥离 argv 开头的 VAR=value；遇到危险变量或值含元字符返回 null。
  */
-function stripSafeLeadingAssignments(e) {
-  let n = 0;
-  while (n < e.length) {
-    let match = e[n].match(/^([A-Za-z_][A-Za-z0-9_]*)\+?=(.*)$/);
+function stripSafeLeadingAssignments(words) {
+  let assignmentCount = 0;
+  while (assignmentCount < words.length) {
+    let match = words[assignmentCount].match(/^([A-Za-z_][A-Za-z0-9_]*)\+?=(.*)$/);
     if (match === null) break;
     if (isAssignmentNameUnsafeForSandbox(match[1])) return null;
     if (/["'`$\\(){}|;&<>*?[\]]/.test(match[2])) return null;
-    n++;
+    assignmentCount++;
   }
-  return n === 0 ? e : e.slice(n);
+  return assignmentCount === 0 ? words : words.slice(assignmentCount);
 }
 //@ chunk-e6aww6q8.js:1189178-1190057 layout = checkSemanticsDeny (0.881)
 /**
@@ -1918,21 +1991,21 @@ function filterCdCwdSubcommands(rawSubcommands, astCommands, cwd, cwdMingw) {
   let astCommandsByIdx = [];
   for (let i = 0; i < rawSubcommands.length; i++) {
     let cmd = rawSubcommands[i];
-    let L = astCommands?.[i];
+    let astCommand = astCommands?.[i];
     if (
       ((cmd === `cd ${cwd}` && isPlainPathToken(cwd)) ||
         (cmd === `cd ${cwdMingw}` && isPlainPathToken(cwdMingw))) &&
-      L !== undefined &&
-      L.argv.length === 2 &&
-      L.argv[0] === "cd" &&
-      L.envVars.length === 0 &&
-      L.redirects.length === 0 &&
-      !/[*?[\]]/.test(L.argv[1]) &&
-      !containsAnyPlaceholder(L.argv[1])
+      astCommand !== undefined &&
+      astCommand.argv.length === 2 &&
+      astCommand.argv[0] === "cd" &&
+      astCommand.envVars.length === 0 &&
+      astCommand.redirects.length === 0 &&
+      !/[*?[\]]/.test(astCommand.argv[1]) &&
+      !containsAnyPlaceholder(astCommand.argv[1])
     )
       continue;
     subcommands.push(cmd);
-    astCommandsByIdx.push(L);
+    astCommandsByIdx.push(astCommand);
   }
   return {
     subcommands,
@@ -1943,8 +2016,8 @@ function filterCdCwdSubcommands(rawSubcommands, astCommands, cwd, cwdMingw) {
 /**
  * 字符串是否是不含空白、引号、通配、元字符的纯路径（用于识别无效的 cd <cwd>）。
  */
-function isPlainPathToken(e) {
-  return !/[\s\\$`'"*?[\]{}<>|&;()]/.test(e);
+function isPlainPathToken(token) {
+  return !/[\s\\$`'"*?[\]{}<>|&;()]/.test(token);
 }
 //@ chunk-e6aww6q8.js:1190458-1190605 placement
 /**
@@ -1993,18 +2066,18 @@ function checkEarlyExitDeny(input, toolPermissionContext) {
 /**
  * 读封锁开关打开时返回 mayBeUnset(name) 判定器，用于估计变量在运行时是否可能为空（TMPDIR 在沙箱中视为已设置）。
  */
-function createEnvUnsetOracle(e, n) {
+function createEnvUnsetOracle(isEvalOrSource, toolUseContext) {
   if (!isDangerousRmEnabled()) return;
   return {
-    mayBeUnset: (r) => {
-      if (e) return true;
-      if (r === "TMPDIR" && SandboxManager.isSandboxingEnabled()) return false;
-      let s = process.env[r];
-      if (typeof s === "string") return s === "";
+    mayBeUnset: (varName) => {
+      if (isEvalOrSource) return true;
+      if (varName === "TMPDIR" && SandboxManager.isSandboxingEnabled()) return false;
+      let processValue = process.env[varName];
+      if (typeof processValue === "string") return processValue === "";
       return (
-        /^(?:TMPDIR|TMP|TEMP)$/.test(r) ||
-        spawnEnvKeysForSession(sessionEnvVarNameSet(n))?.has(r) !== true ||
-        wasShellExportReported(r)
+        /^(?:TMPDIR|TMP|TEMP)$/.test(varName) ||
+        spawnEnvKeysForSession(sessionEnvVarNameSet(toolUseContext))?.has(varName) !== true ||
+        wasShellExportReported(varName)
       );
     },
   };
@@ -2013,19 +2086,28 @@ function createEnvUnsetOracle(e, n) {
 /**
  * 检测命令中可能展开为空的变量导致 rm 等危险删除（如 rm -rf $DIR/），命中时记录遥测并返回危险项。
  */
-function findDangerousVariableRemoval(command, n, wholeCommand, s, h, assignments) {
-  let envUnsetOracle = createEnvUnsetOracle(s, h);
-  if (envUnsetOracle === undefined) return n ? null : findDangerousVariableRemovalInText(command);
-  let dangerousVariableRemovalInText = findDangerousVariableRemovalInText(command, {
+function findDangerousVariableRemoval(
+  text,
+  skipAssignedOriginalHits,
+  wholeCommand,
+  isEvalOrSource,
+  toolUseContext,
+  assignments,
+) {
+  let envUnsetOracle = createEnvUnsetOracle(isEvalOrSource, toolUseContext);
+  if (envUnsetOracle === undefined)
+    return skipAssignedOriginalHits ? null : findDangerousVariableRemovalInText(text);
+  let dangerousVariableRemovalInText = findDangerousVariableRemovalInText(text, {
     ...envUnsetOracle,
     wholeCommand,
-    skipAssignedOriginalHits: n,
+    skipAssignedOriginalHits,
     assignments,
   });
   if (dangerousVariableRemovalInText === null) return null;
   if (dangerousVariableRemovalInText.rootChild !== undefined) logDangerousRmShape("var_root_child");
   else if (dangerousVariableRemovalInText.derived !== undefined) logDangerousRmShape("derived_var");
-  else if (n || findDangerousVariableRemovalInText(command) === null) logDangerousRmShape("eval_trap_string");
+  else if (skipAssignedOriginalHits || findDangerousVariableRemovalInText(text) === null)
+    logDangerousRmShape("eval_trap_string");
   return dangerousVariableRemovalInText;
 }
 //@ chunk-e6aww6q8.js:1198326-1199186 sole-consumer = checkSemanticsDeny (0.783)
@@ -2033,26 +2115,26 @@ function findDangerousVariableRemoval(command, n, wholeCommand, s, h, assignment
  * AST 过于复杂（too-complex）时的拒绝路径：整命令/各片段的 deny 规则、读封锁、空变量删除、AST 上的危险删除检查；只有精确 allow 规则覆盖整条命令时才返回 allow。
  */
 async function checkTooComplexCommandDeny(
-  e,
+  input,
   permissionContext,
-  node,
-  s,
+  parsedRoot,
+  findExtraDeny,
   originalCommand,
-  y,
-  S,
+  isEvalOrSource,
   toolUseContext,
+  toolUseContext_2,
 ) {
-  let fullCmd = checkEarlyExitDeny(e, permissionContext);
+  let fullCmd = checkEarlyExitDeny(input, permissionContext);
   if (fullCmd?.behavior === "deny") return fullCmd;
   if (getContentRulesMapForTool(permissionContext, BashTool, "deny").size > 0) {
-    let Se = new Set([
-      ...splitCommand(e.command),
-      ...(node && node !== PARSE_ABORTED ? nestedCommandSpansFromAst(node) : []),
+    let candidateCommands = new Set([
+      ...splitCommand(input.command),
+      ...(parsedRoot && parsedRoot !== PARSE_ABORTED ? nestedCommandSpansFromAst(parsedRoot) : []),
     ]);
-    for (let cmd of Se) {
+    for (let cmd of candidateCommands) {
       let subDeny = matchingRulesForInput(
         {
-          ...e,
+          ...input,
           command: cmd,
         },
         permissionContext,
@@ -2061,7 +2143,7 @@ async function checkTooComplexCommandDeny(
       if (subDeny !== undefined)
         return {
           behavior: "deny",
-          message: `Permission to use ${BashTool.name} with command ${e.command} has been denied.`,
+          message: `Permission to use ${BashTool.name} with command ${input.command} has been denied.`,
           decisionReason: {
             type: "rule",
             rule: subDeny,
@@ -2069,14 +2151,14 @@ async function checkTooComplexCommandDeny(
         };
     }
   }
-  let G = s?.();
-  if (G) return G;
+  let denyResult = findExtraDeny?.();
+  if (denyResult) return denyResult;
   let dangerousVariableRemoval = findDangerousVariableRemoval(
-    e.command,
+    input.command,
     false,
     originalCommand,
-    y,
-    toolUseContext,
+    isEvalOrSource,
+    toolUseContext_2,
   );
   if (dangerousVariableRemoval !== null) {
     logEventUnlessSuppressed("tengu_bash_dangerous_rm_too_complex", {
@@ -2084,73 +2166,84 @@ async function checkTooComplexCommandDeny(
     });
     return checkDangerousRemoval(dangerousVariableRemoval, false);
   }
-  if (node && node !== PARSE_ABORTED) {
-    let Se = await checkDangerousRemovals(
-      node,
+  if (parsedRoot && parsedRoot !== PARSE_ABORTED) {
+    let removalResult = await checkDangerousRemovals(
+      parsedRoot,
       getCwd(),
       permissionContext,
       originalCommand,
-      y,
-      S,
+      isEvalOrSource,
       toolUseContext,
+      toolUseContext_2,
     );
-    if (Se !== null) {
+    if (removalResult !== null) {
       logEventUnlessSuppressed("tengu_bash_dangerous_rm_too_complex", {
-        kind: fromEnum(Se.kind),
+        kind: fromEnum(removalResult.kind),
       });
-      return Se.result;
+      return removalResult.result;
     }
   }
   if (fullCmd === null || fullCmd.behavior !== "allow") return fullCmd;
   return (fullCmd.decisionReason?.type === "rule"
     ? fullCmd.decisionReason.rule.ruleValue.ruleContent
-    : undefined) === e.command.trim()
+    : undefined) === input.command.trim()
     ? fullCmd
     : null;
 }
 //@ chunk-e6aww6q8.js:1199186-1199290 sole-consumer
-function isMountedDriveAsk(e) {
+function isMountedDriveAsk(decision) {
   return (
-    e.behavior === "ask" &&
-    classifyRemovalReason(findSafetyCheckReason(e.decisionReason)?.reason ?? "") === "mounted_drive_path"
+    decision.behavior === "ask" &&
+    classifyRemovalReason(findSafetyCheckReason(decision.decisionReason)?.reason ?? "") ===
+      "mounted_drive_path"
   );
 }
 //@ chunk-e6aww6q8.js:1199290-1199410 sole-consumer
-function preferEarlierAsk(softAsk, n) {
+function preferEarlierAsk(softAsk, result) {
   return softAsk !== undefined &&
-    findSafetyCheckReason(n.result.decisionReason, (r) => r.circuitBreaker === "dangerousRemoval") ===
-      undefined
+    findSafetyCheckReason(
+      result.result.decisionReason,
+      (reason) => reason.circuitBreaker === "dangerousRemoval",
+    ) === undefined
     ? softAsk
-    : n;
+    : result;
 }
 //@ chunk-e6aww6q8.js:1199410-1203520 sole-consumer
 /**
  * 检查命令（含命令替换、嵌套命令）中的危险 rm/rmdir：空变量展开、字面目标、替换输出为空时的目标、整段替换作为递归删除目标、内联 shell 脚本；返回 {result, kind} 或 null。
  */
-async function checkDangerousRemovals(node, cwd, context, commandText, h, y, S) {
+async function checkDangerousRemovals(
+  node,
+  cwd,
+  context,
+  commandText,
+  isEvalOrSource,
+  bareAssignmentNames,
+  toolUseContext,
+) {
   let substitutions = [];
-  let L = (Me) => {
-    let text = Me.text;
-    let ze = funsubBodyFromNode(Me);
-    if (Me.type === "command_substitution" || Me.type === "process_substitution" || ze !== null) {
-      let Je =
+  let collectSubstitutions = (node) => {
+    let text = node.text;
+    let funsubBody = funsubBodyFromNode(node);
+    if (node.type === "command_substitution" || node.type === "process_substitution" || funsubBody !== null) {
+      let openLength =
         text.startsWith("$(") || text.startsWith("<(") || text.startsWith(">(")
           ? 2
           : text.startsWith("`")
             ? 1
             : 0;
-      let nt = text.endsWith(")") || text.endsWith("`") ? text.length - 1 : text.length;
-      substitutions.push(ze ?? text.slice(Je, nt).trim());
+      let closeIndex = text.endsWith(")") || text.endsWith("`") ? text.length - 1 : text.length;
+      substitutions.push(funsubBody ?? text.slice(openLength, closeIndex).trim());
     }
-    for (let child of Me.children) if (child) L(child);
+    for (let child of node.children) if (child) collectSubstitutions(child);
   };
-  L(node);
-  let envUnsetOracle = createEnvUnsetOracle(h, S);
+  collectSubstitutions(node);
+  let envUnsetOracle = createEnvUnsetOracle(isEvalOrSource, toolUseContext);
   let assignments =
     envUnsetOracle === undefined
       ? undefined
       : describeCommandSubstitution(commandText ?? node.text, envUnsetOracle.mayBeUnset);
-  let Z = node.keywordAfterPrefix === true;
+  let isPlainCommandNode = node.keywordAfterPrefix === true;
   if (substitutions.length > 64) {
     if (isTinglyPearlEnabled() || /\brm(?:dir)?\b/.test(node.text))
       return {
@@ -2163,12 +2256,12 @@ async function checkDangerousRemovals(node, cwd, context, commandText, h, y, S) 
       };
     return null;
   }
-  let Se = Z
+  let nestedSpans = isPlainCommandNode
     ? nestedCommandSpansOrOverrun(node, {
         unparsedBodyOverruns: true,
       })
     : [];
-  if (Se === null)
+  if (nestedSpans === null)
     return {
       result: dangerousRemovalAsk(
         "rm",
@@ -2177,22 +2270,22 @@ async function checkDangerousRemovals(node, cwd, context, commandText, h, y, S) 
       ),
       kind: "nestedSpansOverrun",
     };
-  let ke = Se ?? [];
-  let any = ke.some((Me) => isNormalizedCdCommand(Me.trim()));
-  let Ee =
+  let nestedCommands = nestedSpans ?? [];
+  let any = nestedCommands.some((nestedCommand) => isNormalizedCdCommand(nestedCommand.trim()));
+  let hasCd =
     commandHasAnyCd(node.text) || substitutions.some((substitution) => commandHasAnyCd(substitution)) || any;
-  let Ae = Ee
+  let cdCommands = hasCd
     ? [
         ...[node.text, ...substitutions]
-          .flatMap((Me) => {
+          .flatMap((text) => {
             try {
-              return splitCommand(Me);
+              return splitCommand(text);
             } catch {
-              return [Me];
+              return [text];
             }
           })
-          .map((Me) => Me.trim())
-          .filter((Me) => isNormalizedCdCommand(Me))
+          .map((command) => command.trim())
+          .filter((command) => isNormalizedCdCommand(command))
           .map((text) => ({
             text,
             cd: true,
@@ -2203,16 +2296,16 @@ async function checkDangerousRemovals(node, cwd, context, commandText, h, y, S) 
       ]
     : [];
   let softAsk;
-  for (let Me of [node.text, ...substitutions]) {
-    let We;
+  for (let text of [node.text, ...substitutions]) {
+    let commands;
     try {
-      We = splitCommand(Me);
+      commands = splitCommand(text);
     } catch {
-      We = [Me];
+      commands = [text];
     }
-    if (Me === node.text && ke.length > 0) We = uniq([...We, ...ke]);
-    for (let ze of We) {
-      let trimmed = ze.trim();
+    if (text === node.text && nestedCommands.length > 0) commands = uniq([...commands, ...nestedCommands]);
+    for (let subcommand of commands) {
+      let trimmed = subcommand.trim();
       if (
         (trimmed.startsWith("{") && /;?\s*\}$/.test(trimmed)) ||
         (trimmed.startsWith("(") && trimmed.endsWith(")"))
@@ -2225,8 +2318,8 @@ async function checkDangerousRemovals(node, cwd, context, commandText, h, y, S) 
         trimmed,
         false,
         commandText ?? node.text,
-        h,
-        S,
+        isEvalOrSource,
+        toolUseContext,
         assignments,
       );
       if (dangerousVariableRemoval !== null)
@@ -2235,77 +2328,80 @@ async function checkDangerousRemovals(node, cwd, context, commandText, h, y, S) 
           kind: "emptyVariable",
         });
       let replaced = trimmed.replace(/`[^`]*`/g, "__CMDSUB__");
-      for (let yt = "", gt = 0; yt !== replaced && gt < 16; gt++) {
-        yt = replaced;
+      for (let previous = "", pass = 0; previous !== replaced && pass < 16; pass++) {
+        previous = replaced;
         replaced = replaced.replace(/\$\([^()]*\)/g, "__CMDSUB__");
       }
-      for (let yt = "", gt = 0; yt !== replaced && gt < 16; gt++) {
-        yt = replaced;
+      for (let previous = "", pass = 0; previous !== replaced && pass < 16; pass++) {
+        previous = replaced;
         replaced = replaced.replace(
           /\$\{(?:[A-Za-z_][A-Za-z0-9_]*|[0-9]+|[@*#?!$-]):?[-=+?]"?((?:__CMDSUB__[/*.]*)+)"?\}/g,
           "$1",
         );
       }
-      let pt = replaced !== trimmed;
-      let Et = await parseForSecurity(replaced, {
+      let hasCmdsub = replaced !== trimmed;
+      let parsed = await parseForSecurity(replaced, {
         readsDivergentShapes: true,
       });
-      if (Et.kind === "simple")
-        for (let command of Et.commands) {
+      if (parsed.kind === "simple")
+        for (let command of parsed.commands) {
           let sliced = command.argv.slice();
           if (sliced[0] !== undefined) sliced[0] = sliced[0].replace(/^.*[\\/]/, "");
-          let At = unwrapCommandArgv(stripWrappersFromArgvForPaths(sliced));
-          let It = normalizeCommandName(At[0]);
-          if (It !== "rm" && It !== "rmdir") continue;
-          let sliced_2 = At.slice(1);
-          let qt = checkDangerousRemovalPaths(It, sliced_2, cwd, context, Ee);
-          let Zt = isMountedDriveAsk(qt) ? qt : undefined;
+          let argv = unwrapCommandArgv(stripWrappersFromArgvForPaths(sliced));
+          let commandName = normalizeCommandName(argv[0]);
+          if (commandName !== "rm" && commandName !== "rmdir") continue;
+          let sliced_2 = argv.slice(1);
+          let targetDecision = checkDangerousRemovalPaths(commandName, sliced_2, cwd, context, hasCd);
+          let mountedDriveAsk = isMountedDriveAsk(targetDecision) ? targetDecision : undefined;
           let kind = "literalTarget";
-          if (qt.behavior === "ask" && Zt === undefined)
+          if (targetDecision.behavior === "ask" && mountedDriveAsk === undefined)
             return preferEarlierAsk(softAsk, {
-              result: qt,
+              result: targetDecision,
               kind: "literalTarget",
             });
-          if (pt && sliced_2.some((no) => /.(?:__CMDSUB__(?:(?!\.\.)[/*.])*)+(?:\/\.\.)*\/*$/.test(no))) {
+          if (
+            hasCmdsub &&
+            sliced_2.some((arg) => /.(?:__CMDSUB__(?:(?!\.\.)[/*.])*)+(?:\/\.\.)*\/*$/.test(arg))
+          ) {
             let index = sliced_2.indexOf("--");
-            let hn = index === -1 ? sliced_2.length : index;
-            let ho = sliced_2;
-            for (let yn of [true, false]) {
-              let mapped = sliced_2.map((To, bo) =>
-                yn && bo < hn && To.startsWith("-") && !To.includes("/")
-                  ? To
-                  : To.replace(/(.)(?:__CMDSUB__(?:(?!\.\.)[/*.])*)+((?:\/\.\.)*)\/*$/, "$1$2"),
+            let doubleDashIndex = index === -1 ? sliced_2.length : index;
+            let currentArgs = sliced_2;
+            for (let keepFlags of [true, false]) {
+              let mapped = sliced_2.map((arg, idx) =>
+                keepFlags && idx < doubleDashIndex && arg.startsWith("-") && !arg.includes("/")
+                  ? arg
+                  : arg.replace(/(.)(?:__CMDSUB__(?:(?!\.\.)[/*.])*)+((?:\/\.\.)*)\/*$/, "$1$2"),
               );
-              let all = mapped.every((To, bo) => To === ho[bo]);
-              ho = mapped;
+              let all = mapped.every((arg, idx) => arg === currentArgs[idx]);
+              currentArgs = mapped;
               if (all) continue;
-              let fo = checkDangerousRemovalPaths(It, mapped, cwd, context, Ee);
-              if (fo.behavior === "ask" && !isMountedDriveAsk(fo))
+              let strippedDecision = checkDangerousRemovalPaths(commandName, mapped, cwd, context, hasCd);
+              if (strippedDecision.behavior === "ask" && !isMountedDriveAsk(strippedDecision))
                 return preferEarlierAsk(softAsk, {
-                  result: fo,
+                  result: strippedDecision,
                   kind: "emptyExpansion",
                 });
-              if (fo.behavior === "ask" && Zt === undefined) {
-                Zt = fo;
+              if (strippedDecision.behavior === "ask" && mountedDriveAsk === undefined) {
+                mountedDriveAsk = strippedDecision;
                 kind = "emptyExpansion";
               }
             }
           }
-          let pn = sliced_2.includes("--") ? sliced_2.slice(0, sliced_2.indexOf("--")) : sliced_2;
+          let flagArgs = sliced_2.includes("--") ? sliced_2.slice(0, sliced_2.indexOf("--")) : sliced_2;
           if (
-            pt &&
-            It === "rm" &&
-            pn.some((no) => /^--r/.test(no) || /^-[a-zA-Z]*[rR]/.test(no)) &&
-            sliced_2.some((no) => /^(?:__CMDSUB__[/*.]*)+$/.test(no))
+            hasCmdsub &&
+            commandName === "rm" &&
+            flagArgs.some((arg) => /^--r/.test(arg) || /^-[a-zA-Z]*[rR]/.test(arg)) &&
+            sliced_2.some((arg) => /^(?:__CMDSUB__[/*.]*)+$/.test(arg))
           ) {
-            let no = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_iridescent_boot", true);
+            let featureValue = getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_iridescent_boot", true);
             if (
               !env.CLAUDE_CODE_DISABLE_SUBSTITUTION_RM_PROMPT &&
-              !(no.value === false && no.source === "payload")
+              !(featureValue.value === false && featureValue.source === "payload")
             )
               return preferEarlierAsk(softAsk, {
                 result: dangerousRemovalAsk(
-                  It,
+                  commandName,
                   "Dangerous rm operation detected: the target is the output of a command substitution (`$(...)` or backticks) and cannot be checked before the command runs. This requires explicit approval and cannot be auto-allowed by permission rules.\n\nRun the substitution on its own first, then remove the literal paths it prints.",
                   "on statically-unresolvable target: command substitution output",
                 ),
@@ -2315,19 +2411,23 @@ async function checkDangerousRemovals(node, cwd, context, commandText, h, y, S) 
               kind: fromEnum("wholeSubstitution"),
             });
           }
-          if (Zt !== undefined)
+          if (mountedDriveAsk !== undefined)
             softAsk ??= {
-              result: Zt,
+              result: mountedDriveAsk,
               kind,
             };
         }
     }
   }
-  for (let Me of [node.text, ...substitutions]) {
-    let We = await checkInlineShellRemoval(Me, y, Me === node.text ? [] : Ae);
-    if (We !== null)
+  for (let text of [node.text, ...substitutions]) {
+    let inlineResult = await checkInlineShellRemoval(
+      text,
+      bareAssignmentNames,
+      text === node.text ? [] : cdCommands,
+    );
+    if (inlineResult !== null)
       return preferEarlierAsk(softAsk, {
-        result: We,
+        result: inlineResult,
         kind: "inlineShellScript",
       });
   }
@@ -2380,12 +2480,12 @@ function checkSemanticsDeny(input, toolPermissionContext, commands) {
 /**
  * tree-sitter 树中是否含 ERROR 节点或不在二元表达式里的后台 &。
  */
-function hasErrorOrBackgroundNode(e) {
-  for (let child of e.children) {
+function hasErrorOrBackgroundNode(node) {
+  for (let child of node.children) {
     if (!child) continue;
     if (child.type === "ERROR") return true;
     if (child.type === "&") {
-      if (e.type !== "binary_expression") return true;
+      if (node.type !== "binary_expression") return true;
       continue;
     }
     if (hasErrorOrBackgroundNode(child)) return true;
@@ -2424,8 +2524,8 @@ var STRUCTURAL_MISS_KINDS = {
 /**
  * 若 ask 结果的 bashMissKind 是结构性原因则返回它。
  */
-function getStructuralMissKind(e) {
-  let decisionReason = e.behavior === "ask" ? e.decisionReason : undefined;
+function getStructuralMissKind(decision) {
+  let decisionReason = decision.behavior === "ask" ? decision.decisionReason : undefined;
   return decisionReason?.type === "other" &&
     decisionReason.bashMissKind !== undefined &&
     STRUCTURAL_MISS_KINDS[decisionReason.bashMissKind]
@@ -2436,21 +2536,21 @@ function getStructuralMissKind(e) {
 /**
  * 开启"禁止读工作目录外"且沙箱不能兜底时，把结构性 ask 改成读封锁拒绝。
  */
-function applyReadBlockToStructuralAsk(e, n, toolPermissionContext) {
-  if (e.behavior !== "ask") return e;
-  let decisionReason = e.decisionReason;
+function applyReadBlockToStructuralAsk(decision, input, toolPermissionContext) {
+  if (decision.behavior !== "ask") return decision;
+  let decisionReason = decision.decisionReason;
   if (
     decisionReason?.type !== "other" ||
     decisionReason.bashMissKind === undefined ||
     !STRUCTURAL_MISS_KINDS[decisionReason.bashMissKind]
   )
-    return e;
+    return decision;
   if (
     toolPermissionContext.blockReadsOutsideWorkingDirectories === true &&
-    !(shouldUseSandbox(n) && isSandboxReadBlockEnforceable(toolPermissionContext))
+    !(shouldUseSandbox(input) && isSandboxReadBlockEnforceable(toolPermissionContext))
   )
     return outsideReadsTooComplexAsk(decisionReason.reason);
-  return e;
+  return decision;
 }
 //@ chunk-e6aww6q8.js:1223955-1224531 layout = checkSemanticsDeny (0.828)
 /**
@@ -2463,7 +2563,7 @@ function applyAskDenyRulesToAskResult(askResult, bashInput, permissionContext) {
     getContentRulesMapForTool(permissionContext, BashTool, "deny").size === 0
   )
     return askResult;
-  let s = new Set([
+  let candidateCommands = new Set([
     bashInput.command,
     ...splitCommand(bashInput.command),
     ...(askResult.decisionReason?.type === "subcommandResults"
@@ -2471,8 +2571,8 @@ function applyAskDenyRulesToAskResult(askResult, bashInput, permissionContext) {
       : []),
     ...nestedCommandSpans(bashInput.command),
   ]);
-  let h;
-  for (let cmd of s) {
+  let matchedAskRule;
+  for (let cmd of candidateCommands) {
     let { matchingDenyRules, matchingAskRules } = matchingRulesForInput(
       {
         ...bashInput,
@@ -2490,50 +2590,50 @@ function applyAskDenyRulesToAskResult(askResult, bashInput, permissionContext) {
           rule: matchingDenyRules[0],
         },
       };
-    h ??= matchingAskRules[0];
+    matchedAskRule ??= matchingAskRules[0];
   }
-  return h === undefined
+  return matchedAskRule === undefined
     ? askResult
     : {
         ...askResult,
-        matchedAskRule: h,
+        matchedAskRule,
       };
 }
 //@ chunk-e6aww6q8.js:1224531-1224768 layout
 /**
  * Bash 权限检查的两遍执行：先正常跑 checkBashPermissionWithSandbox，若触发了二次检查条件，再在 R0e 上下文里重跑，第二遍为 deny 时以它为准，异常时保留第一遍结果。BashTool 与 Monitor 工具调用。
  */
-async function bashToolHasPermissionTwoPass(e, shellPermission, r, s) {
-  let h = () => checkBashPermissionWithSandbox(e, shellPermission, r, s);
-  let { result: y, fired } = await runGuarded(false, h);
-  if (!fired || y.behavior === "deny") return y;
+async function bashToolHasPermissionTwoPass(input, permissionContext, astNode, toolUseContext) {
+  let check = () => checkBashPermissionWithSandbox(input, permissionContext, astNode, toolUseContext);
+  let { result: firstPassResult, fired } = await runGuarded(false, check);
+  if (!fired || firstPassResult.behavior === "deny") return firstPassResult;
   try {
-    let { result: w } = await runGuarded(true, () => runWithoutTelemetry(h));
-    return w.behavior === "deny" ? w : y;
+    let { result: secondPassResult } = await runGuarded(true, () => runWithoutTelemetry(check));
+    return secondPassResult.behavior === "deny" ? secondPassResult : firstPassResult;
   } catch (error) {
     if (isAbortError(error)) throw error;
     logError(error);
-    return y;
+    return firstPassResult;
   }
 }
 //@ chunk-e6aww6q8.js:1224768-1225707 layout
 /**
  * 合并 Bash 权限的几路结论：常规规则检查、读法检查、沙箱覆盖检查；dangerouslyDisableSandbox 且原本可沙箱运行时按严格模式改成 too-complex ask；ask 结论标记 standsInUnderHookAsk 供 hook 处理。
  */
-async function checkBashPermissionWithSandbox(e, n, r, s) {
-  let h = () => runCommandSafetyCheck(e, n, r, s);
-  let [y, reason] = await runWithReadingRefusals(h);
-  let context = y;
-  if (reason !== undefined && y.behavior !== "deny") {
-    let L = await runWithoutTelemetry(() => runAsBashReads(h));
-    context = combineWithTooComplex(context, L, reason);
-    let context_2 = await runWithoutTelemetry(() => runWithRuleOff(h));
+async function checkBashPermissionWithSandbox(input, permissionContext, astNode, toolUseContext) {
+  let safetyCheck = () => runCommandSafetyCheck(input, permissionContext, astNode, toolUseContext);
+  let [firstResult, reason] = await runWithReadingRefusals(safetyCheck);
+  let context = firstResult;
+  if (reason !== undefined && firstResult.behavior !== "deny") {
+    let readsResult = await runWithoutTelemetry(() => runAsBashReads(safetyCheck));
+    context = combineWithTooComplex(context, readsResult, reason);
+    let context_2 = await runWithoutTelemetry(() => runWithRuleOff(safetyCheck));
     context = combineWithTooComplex(context, context_2, reason);
     if (
-      e.dangerouslyDisableSandbox &&
-      !shouldUseSandbox(e) &&
+      input.dangerouslyDisableSandbox &&
+      !shouldUseSandbox(input) &&
       shouldUseSandbox({
-        ...e,
+        ...input,
         dangerouslyDisableSandbox: false,
       })
     ) {
@@ -2541,7 +2641,7 @@ async function checkBashPermissionWithSandbox(e, n, r, s) {
         context = buildTooComplexAsk(reason);
     } else if (isPassthroughOrPlainAsk(context))
       context =
-        askClassifierForAllowedDomains(BashTool, e, n, {
+        askClassifierForAllowedDomains(BashTool, input, permissionContext, {
           behavior: "passthrough",
           message: "",
         }) ?? context;
@@ -2560,23 +2660,24 @@ async function checkBashPermissionWithSandbox(e, n, r, s) {
       };
   }
   if (context.behavior === "ask" && isPlainAsk(context)) {
-    let L = askClassifierForAllowedDomains(BashTool, e, n, {
+    let classifierAsk = askClassifierForAllowedDomains(BashTool, input, permissionContext, {
       behavior: "passthrough",
       message: "",
     });
-    if (L !== undefined) {
-      let G = (await parseCommandRaw(e.command)) ?? PARSE_ABORTED;
-      let q = parseForSecurityFromAst(e.command, G);
-      if (q.kind === "too-complex" && q.keepsRemovalVerdict) context = L;
+    if (classifierAsk !== undefined) {
+      let astRoot = (await parseCommandRaw(input.command)) ?? PARSE_ABORTED;
+      let parsed = parseForSecurityFromAst(input.command, astRoot);
+      if (parsed.kind === "too-complex" && parsed.keepsRemovalVerdict) context = classifierAsk;
     }
   }
   if (isDangerousRmEnabled()) {
     let safetyCheckReason = findSafetyCheckReason(
       context.decisionReason,
-      (q) => q.circuitBreaker === "dangerousRemoval",
+      (reason) => reason.circuitBreaker === "dangerousRemoval",
     );
-    let G = safetyCheckReason === undefined ? undefined : classifyRemovalReason(safetyCheckReason.reason);
-    if (G !== undefined) logDangerousRmShape(G);
+    let removalKind =
+      safetyCheckReason === undefined ? undefined : classifyRemovalReason(safetyCheckReason.reason);
+    if (removalKind !== undefined) logDangerousRmShape(removalKind);
   }
   return context;
 }
@@ -2591,31 +2692,31 @@ function isPassthroughOrPlainAsk(context) {
 /**
  * 合并规则结果与安全检查结果：deny 优先；安全 ask 去掉建议；规则 allow 而安全检查不 allow 时改为需确认。
  */
-function combineWithTooComplex(e, n, reason) {
-  if (e.behavior === "deny") return e;
-  if (n.behavior === "deny") return n;
-  if (n.behavior === "ask" && !isPlainAsk(n))
+function combineWithTooComplex(first, second, reason) {
+  if (first.behavior === "deny") return first;
+  if (second.behavior === "deny") return second;
+  if (second.behavior === "ask" && !isPlainAsk(second))
     return {
-      ...n,
+      ...second,
       suggestions: [],
     };
-  if (e.behavior === "allow" && n.behavior !== "allow") return buildTooComplexAsk(reason);
-  return e;
+  if (first.behavior === "allow" && second.behavior !== "allow") return buildTooComplexAsk(reason);
+  return first;
 }
 //@ chunk-e6aww6q8.js:1225995-1226145 layout
 /**
  * 生成 bashMissKind="too-complex" 的 ask 权限结论（无建议规则）。
  */
 function buildTooComplexAsk(reason) {
-  let n = {
+  let decisionReason = {
     type: "other",
     reason,
     bashMissKind: "too-complex",
   };
   return {
     behavior: "ask",
-    decisionReason: n,
-    message: createPermissionRequestMessage(BashTool.name, n),
+    decisionReason,
+    message: createPermissionRequestMessage(BashTool.name, decisionReason),
     suggestions: [],
   };
 }
@@ -2623,40 +2724,43 @@ function buildTooComplexAsk(reason) {
 /**
  * 两遍运行注入/安全检查（正常模式和 refused 模式），取更严格的结果；refused 才有的 ask 在可安全降级时转为 passthrough。
  */
-async function runCommandSafetyCheck(e, n, r, s) {
-  let { result: h, refused } = await runWithRefusedReading(false, () => bashCommandIsSafeAsync(e, n, r, s));
-  if (!refused || h.behavior === "deny") return h;
-  let { result: S } = await runWithRefusedReading(true, () =>
-    runWithoutTelemetry(() => bashCommandIsSafeAsync(e, n, r, s)),
+async function runCommandSafetyCheck(input, permissionContext, astNode, toolUseContext) {
+  let { result: firstResult, refused } = await runWithRefusedReading(false, () =>
+    bashCommandIsSafeAsync(input, permissionContext, astNode, toolUseContext),
   );
-  if (S.behavior === "deny" || (S.behavior === "ask" && !isPlainAsk(S))) return S;
-  if (h.behavior === "ask" && S.behavior !== "ask")
-    return isPlainAsk(h)
+  if (!refused || firstResult.behavior === "deny") return firstResult;
+  let { result: secondResult } = await runWithRefusedReading(true, () =>
+    runWithoutTelemetry(() => bashCommandIsSafeAsync(input, permissionContext, astNode, toolUseContext)),
+  );
+  if (secondResult.behavior === "deny" || (secondResult.behavior === "ask" && !isPlainAsk(secondResult)))
+    return secondResult;
+  if (firstResult.behavior === "ask" && secondResult.behavior !== "ask")
+    return isPlainAsk(firstResult)
       ? {
           behavior: "passthrough",
-          message: h.message,
-          ...(h.decisionReason !== undefined && {
-            decisionReason: h.decisionReason,
+          message: firstResult.message,
+          ...(firstResult.decisionReason !== undefined && {
+            decisionReason: firstResult.decisionReason,
           }),
-          ...(h.suggestions !== undefined && {
-            suggestions: h.suggestions,
+          ...(firstResult.suggestions !== undefined && {
+            suggestions: firstResult.suggestions,
           }),
-          ...(h.blockedPath !== undefined && {
-            blockedPath: h.blockedPath,
+          ...(firstResult.blockedPath !== undefined && {
+            blockedPath: firstResult.blockedPath,
           }),
         }
-      : h;
-  return getDecisionSeverity(S) > getDecisionSeverity(h) ? S : h;
+      : firstResult;
+  return getDecisionSeverity(secondResult) > getDecisionSeverity(firstResult) ? secondResult : firstResult;
 }
 //@ chunk-e6aww6q8.js:1227686-1227822 placement
 /**
  * 判断当前是否为绕过权限模式（或计划模式下可绕过且非远程执行）。
  */
-function isBypassModeForBash(e) {
-  let { mode, isBypassPermissionsModeAvailable } = getToolPermissionContext(e);
+function isBypassModeForBash(input) {
+  let { mode, isBypassPermissionsModeAvailable } = getToolPermissionContext(input);
   return (
     mode === "bypassPermissions" ||
-    (isPlanBypass(mode, isBypassPermissionsModeAvailable) && e.forRemoteExecution !== true)
+    (isPlanBypass(mode, isBypassPermissionsModeAvailable) && input.forRemoteExecution !== true)
   );
 }
 //@ chunk-e6aww6q8.js:1227822-1227984 placement
@@ -2675,45 +2779,50 @@ function buildPendingClassifierCheck(command, toolPermissionContext) {
 /**
  * 带声明前缀推断地执行 Bash 权限检查：对 declare/export 等可能的读法分别再检查并合并；命令含 $ 且使用了本命令内赋值的变量时，不允许直接 allow（转为 passthrough 并去掉建议）。
  */
-async function checkBashWithDeclarations(input, context, r, s) {
-  let h = {};
-  let y = await checkBashCommandClamp(
+async function checkBashWithDeclarations(input, context, getCommandSubcommandPrefix, finalizeResult) {
+  let declarations = {};
+  let clampResult = await checkBashCommandClamp(
     input,
     context,
-    r,
+    getCommandSubcommandPrefix,
     undefined,
     undefined,
     undefined,
     (names, operands, fromUncertainWrite) => {
-      h.names = names;
-      h.operands = operands;
-      h.fromUncertainWrite = fromUncertainWrite;
+      declarations.names = names;
+      declarations.operands = operands;
+      declarations.fromUncertainWrite = fromUncertainWrite;
     },
   );
-  let result = s?.(y) ?? y;
+  let result = finalizeResult?.(clampResult) ?? clampResult;
   let prefixes = [undefined];
-  if (h.names !== undefined) {
-    let { readings, exhaustive } = declarationPrefixReadings(h.names, h.operands);
+  if (declarations.names !== undefined) {
+    let { readings, exhaustive } = declarationPrefixReadings(declarations.names, declarations.operands);
     prefixes.push(...readings);
-    let q = [];
+    let readingResults = [];
     for (let reading of readings) {
-      let ke = await runWithoutTelemetry(() =>
-        checkBashCommandClamp(input, context, r, undefined, undefined, reading),
+      let readingResult = await runWithoutTelemetry(() =>
+        checkBashCommandClamp(input, context, getCommandSubcommandPrefix, undefined, undefined, reading),
       );
-      q.push(s?.(ke) ?? ke);
+      readingResults.push(finalizeResult?.(readingResult) ?? readingResult);
     }
-    let Z = applyReadBlockToStructuralAsk(
-      combineDeclarationReadings(result, q, exhaustive, h.fromUncertainWrite === true),
+    let combined = applyReadBlockToStructuralAsk(
+      combineDeclarationReadings(
+        result,
+        readingResults,
+        exhaustive,
+        declarations.fromUncertainWrite === true,
+      ),
       input,
       getToolPermissionContext(context),
     );
-    if (Z === result || Z.behavior !== "ask" || !isPlainAsk(Z)) result = Z;
+    if (combined === result || combined.behavior !== "ask" || !isPlainAsk(combined)) result = combined;
     else if (result.behavior !== "passthrough")
       result = {
         behavior: "passthrough",
-        message: Z.message,
-        ...(Z.decisionReason !== undefined && {
-          decisionReason: Z.decisionReason,
+        message: combined.message,
+        ...(combined.decisionReason !== undefined && {
+          decisionReason: combined.decisionReason,
         }),
       };
   }
@@ -2728,32 +2837,32 @@ async function checkBashWithDeclarations(input, context, r, s) {
       result.decisionReason.rule.ruleValue.ruleContent === input.command.trim()
     )
   ) {
-    let L = (await parseCommandRaw(input.command)) ?? PARSE_ABORTED;
+    let astRoot = (await parseCommandRaw(input.command)) ?? PARSE_ABORTED;
     let mapped = prefixes.map((declarationPrefix) =>
-      parseForSecurityFromAst(input.command, L, {
+      parseForSecurityFromAst(input.command, astRoot, {
         declarationPrefix,
       }),
     );
-    let any = mapped.some((Z) => Z.kind === "simple" && Z.usesAssignedValue === true);
+    let any = mapped.some((parsed) => parsed.kind === "simple" && parsed.usesAssignedValue === true);
     if (result.behavior !== "allow") {
       if (any)
         result = {
           ...result,
           suggestions: [],
         };
-    } else if (any || mapped.some((Z) => Z.kind !== "simple")) {
-      let Z = {
+    } else if (any || mapped.some((parsed) => parsed.kind !== "simple")) {
+      let decisionReason = {
         type: "other",
         reason: "A variable set in this command can't be checked before it runs",
         bashMissKind: "assigned-variable",
       };
-      let Se = {
+      let assignedVariableResult = {
         behavior: "passthrough",
-        decisionReason: Z,
-        message: createPermissionRequestMessage(BashTool.name, Z),
+        decisionReason,
+        message: createPermissionRequestMessage(BashTool.name, decisionReason),
         suggestions: [],
       };
-      result = s?.(Se) ?? Se;
+      result = finalizeResult?.(assignedVariableResult) ?? assignedVariableResult;
     }
   }
   return result;
@@ -2763,7 +2872,7 @@ async function checkBashWithDeclarations(input, context, r, s) {
  * 当代理的 Bash 使用被限定为固定命令集时，拒绝超出范围的命令。
  */
 async function checkBashCommandClamp(
-  bashInput,
+  toolInput,
   toolUseContext,
   getCommandSubcommandPrefix,
   originalCommand,
@@ -2774,7 +2883,7 @@ async function checkBashCommandClamp(
 ) {
   let bashCommandClamps = getToolPermissionContext(toolUseContext).bashCommandClamps;
   if (bashCommandClamps !== undefined && bashCommandClamps.length > 0) {
-    let spanNotCoveredByRuleGroups = await findSpanNotCoveredByRuleGroups(bashInput, bashCommandClamps);
+    let spanNotCoveredByRuleGroups = await findSpanNotCoveredByRuleGroups(toolInput, bashCommandClamps);
     if (spanNotCoveredByRuleGroups !== null) {
       logEventUnlessSuppressed("tengu_bash_command_clamp_denied", {
         groupCount: bashCommandClamps.length,
@@ -2782,7 +2891,7 @@ async function checkBashCommandClamp(
       return {
         behavior: "deny",
         message:
-          `Permission to use ${BashTool.name} with command ${bashInput.command.trim()} has been denied: this agent's Bash use is clamped to a fixed set of command forms (per-spawn bashCommandClamp), and ` +
+          `Permission to use ${BashTool.name} with command ${toolInput.command.trim()} has been denied: this agent's Bash use is clamped to a fixed set of command forms (per-spawn bashCommandClamp), and ` +
           (spanNotCoveredByRuleGroups.kind === "unverifiable"
             ? "the command has structure the clamp cannot verify " +
               "(substitution, control flow, or an undecomposable compound) \u2014 " +
@@ -2795,13 +2904,13 @@ async function checkBashCommandClamp(
       };
     }
   }
-  let G = {
+  let passState = {
     laterPassesDiffer: false,
   };
-  let q = applyReadBlockToStructuralAsk(
+  let checkResult = applyReadBlockToStructuralAsk(
     await runWithDivergentShapes(divergentShapes === "read", () =>
       bashToolHasPermission(
-        bashInput,
+        toolInput,
         toolUseContext,
         getCommandSubcommandPrefix,
         originalCommand,
@@ -2810,51 +2919,55 @@ async function checkBashCommandClamp(
         onDeclarationPrefixes,
         divergentShapes,
         () => {
-          G.laterPassesDiffer = true;
+          passState.laterPassesDiffer = true;
         },
       ),
     ),
-    bashInput,
+    toolInput,
     getToolPermissionContext(toolUseContext),
   );
-  let askResult = q;
+  let askResult = checkResult;
   if (
-    G.laterPassesDiffer &&
+    passState.laterPassesDiffer &&
     originalCommand === undefined &&
-    (q.behavior === "allow" || q.behavior === "passthrough" || isPlainAsk(q))
+    (checkResult.behavior === "allow" || checkResult.behavior === "passthrough" || isPlainAsk(checkResult))
   ) {
-    let we = {
+    let decisionReason = {
       type: "other",
       reason:
         "Only the first pass of a loop in this command could be checked, and its later passes may run something else",
       bashMissKind: "loop-later-pass",
     };
-    let message = createPermissionRequestMessage(BashTool.name, we);
-    let Ae = applyReadBlockToStructuralAsk(
+    let message = createPermissionRequestMessage(BashTool.name, decisionReason);
+    let laterPassAsk = applyReadBlockToStructuralAsk(
       {
         behavior: "ask",
         message,
-        decisionReason: we,
+        decisionReason,
       },
-      bashInput,
+      toolInput,
       getToolPermissionContext(toolUseContext),
     );
-    let Ie = bashToolCheckExactMatchPermission(bashInput, getToolPermissionContext(toolUseContext));
-    let Me =
-      q.behavior === "allow" &&
-      Ie.behavior === "allow" &&
-      Ie.decisionReason?.type === "rule" &&
-      Ie.decisionReason.rule.ruleValue.ruleContent === bashInput.command.trim();
-    if (!isPlainAsk(Ae) && (Me || !scriptAsksToRunUnsandboxed(BashTool, bashInput))) askResult = Ae;
-    else if (q.behavior === "allow" && !Me)
+    let exactMatchResult = bashToolCheckExactMatchPermission(
+      toolInput,
+      getToolPermissionContext(toolUseContext),
+    );
+    let isExactAllowed =
+      checkResult.behavior === "allow" &&
+      exactMatchResult.behavior === "allow" &&
+      exactMatchResult.decisionReason?.type === "rule" &&
+      exactMatchResult.decisionReason.rule.ruleValue.ruleContent === toolInput.command.trim();
+    if (!isPlainAsk(laterPassAsk) && (isExactAllowed || !scriptAsksToRunUnsandboxed(BashTool, toolInput)))
+      askResult = laterPassAsk;
+    else if (checkResult.behavior === "allow" && !isExactAllowed)
       askResult = {
         behavior: "passthrough",
         message,
-        decisionReason: we,
+        decisionReason,
       };
   }
   if (
-    G.laterPassesDiffer &&
+    passState.laterPassesDiffer &&
     originalCommand === undefined &&
     (askResult.behavior === "ask" || askResult.behavior === "passthrough")
   )
@@ -2862,16 +2975,17 @@ async function checkBashCommandClamp(
       ...askResult,
       suggestions: [],
     };
-  if (q.behavior !== "allow" || askResult.behavior === "ask")
-    return applyAskDenyRulesToAskResult(askResult, bashInput, getToolPermissionContext(toolUseContext));
+  if (checkResult.behavior !== "allow" || askResult.behavior === "ask")
+    return applyAskDenyRulesToAskResult(askResult, toolInput, getToolPermissionContext(toolUseContext));
   if (
-    !bashInput.command.includes("&") ||
-    (q.decisionReason?.type === "other" && q.decisionReason.reason === SANDBOX_AUTO_ALLOW_REASON)
+    !toolInput.command.includes("&") ||
+    (checkResult.decisionReason?.type === "other" &&
+      checkResult.decisionReason.reason === SANDBOX_AUTO_ALLOW_REASON)
   )
     return askResult;
-  let commandRaw = await parseCommandRaw(bashInput.command);
-  if (commandRaw && commandRaw !== PARSE_ABORTED && !hasErrorOrBackgroundNode(commandRaw)) return askResult;
-  let ke = {
+  let node = await parseCommandRaw(toolInput.command);
+  if (node && node !== PARSE_ABORTED && !hasErrorOrBackgroundNode(node)) return askResult;
+  let decisionReason = {
     type: "safetyCheck",
     reason:
       "This command uses the `&` background operator, which defers execution past approval-time safety checks. Approve only if you trust it.",
@@ -2881,10 +2995,10 @@ async function checkBashCommandClamp(
   return applyAskDenyRulesToAskResult(
     {
       behavior: "ask",
-      decisionReason: ke,
-      message: createPermissionRequestMessage(BashTool.name, ke),
+      decisionReason,
+      message: createPermissionRequestMessage(BashTool.name, decisionReason),
     },
-    bashInput,
+    toolInput,
     getToolPermissionContext(toolUseContext),
   );
 }
@@ -2907,7 +3021,7 @@ async function bashToolHasPermission(
   onLaterLoopPassesDiffer,
 ) {
   let permissionContext = getToolPermissionContext(toolUseContext);
-  let q = {
+  let recursionCtx = {
     input,
     context: toolUseContext,
     depth: recursionState?.depth ?? 0,
@@ -2945,7 +3059,7 @@ async function bashToolHasPermission(
     divergentShapes === undefined &&
     (astAnalysis.kind === "too-complex" ? astAnalysis.divergentShape === true : semanticsResult?.ok === false)
   ) {
-    let yo = await checkBashCommandClamp(
+    let readPassResult = await checkBashCommandClamp(
       input,
       toolUseContext,
       getCommandSubcommandPrefix,
@@ -2955,7 +3069,7 @@ async function bashToolHasPermission(
       onDeclarationPrefixes,
       "read",
     );
-    let Ho = await runWithoutTelemetry(() =>
+    let refusedPassResult = await runWithoutTelemetry(() =>
       checkBashCommandClamp(
         input,
         toolUseContext,
@@ -2967,19 +3081,25 @@ async function bashToolHasPermission(
         "refused",
       ),
     );
-    let br =
-      (getDecisionSeverity(yo) === 4 && isBypassModeForBash(toolUseContext) ? 3 : getDecisionSeverity(yo)) -
-      getDecisionSeverity(Ho);
-    let Hr = astAnalysis.kind === "too-complex" && astAnalysis.keepsRemovalVerdict === true;
-    if (Hr && yo.behavior === "ask" && Ho.behavior === "ask" && isOutsideReadsBlockedAsk(Ho.decisionReason)) {
+    let severityDelta =
+      (getDecisionSeverity(readPassResult) === 4 && isBypassModeForBash(toolUseContext)
+        ? 3
+        : getDecisionSeverity(readPassResult)) - getDecisionSeverity(refusedPassResult);
+    let keepsRemovalVerdict = astAnalysis.kind === "too-complex" && astAnalysis.keepsRemovalVerdict === true;
+    if (
+      keepsRemovalVerdict &&
+      readPassResult.behavior === "ask" &&
+      refusedPassResult.behavior === "ask" &&
+      isOutsideReadsBlockedAsk(refusedPassResult.decisionReason)
+    ) {
       let safetyCheckReason = findSafetyCheckReason(
-        yo.decisionReason,
-        (Cr) => Cr.circuitBreaker === "dangerousRemoval",
+        readPassResult.decisionReason,
+        (reason) => reason.circuitBreaker === "dangerousRemoval",
       );
       if (safetyCheckReason !== undefined)
         return {
-          ...yo,
-          message: `${yo.message} ${Ho.message}`,
+          ...readPassResult,
+          message: `${readPassResult.message} ${refusedPassResult.message}`,
           decisionReason: {
             type: "subcommandResults",
             typeOnWire: "safetyCheck",
@@ -2987,27 +3107,35 @@ async function bashToolHasPermission(
               [
                 `${input.command} (as refused)`,
                 {
-                  ...Ho,
+                  ...refusedPassResult,
                   decisionReason: {
-                    ...Ho.decisionReason,
-                    reason: `${safetyCheckReason.reason}; ${Ho.decisionReason.reason}`,
+                    ...refusedPassResult.decisionReason,
+                    reason: `${safetyCheckReason.reason}; ${refusedPassResult.decisionReason.reason}`,
                   },
                 },
               ],
-              [input.command, yo],
+              [input.command, readPassResult],
             ]),
           },
           suggestions: [],
         };
     }
-    let Fr = br > 0 || (br === 0 && getSafetyCheckRank(yo) > getSafetyCheckRank(Ho)) ? yo : Ho;
-    let cs = {
-      ...Fr,
+    let chosenResult =
+      severityDelta > 0 ||
+      (severityDelta === 0 && getSafetyCheckRank(readPassResult) > getSafetyCheckRank(refusedPassResult))
+        ? readPassResult
+        : refusedPassResult;
+    let clearedResult = {
+      ...chosenResult,
       matchedAskRule: undefined,
     };
-    return Hr && recursionState !== undefined && buildPendingClassifierCheck(cs, toolUseContext) ? cs : Fr;
+    return keepsRemovalVerdict &&
+      recursionState !== undefined &&
+      buildPendingClassifierCheck(clearedResult, toolUseContext)
+      ? clearedResult
+      : chosenResult;
   }
-  let we =
+  let isHeredocSandboxEligible =
     toolUseContext.forRemoteExecution !== true &&
     astAnalysis.kind === "too-complex" &&
     ((astAnalysis.nodeType === "heredoc_redirect" && astAnalysis.differential === true) ||
@@ -3017,22 +3145,23 @@ async function bashToolHasPermission(
     shouldUseSandbox(input) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_amber_larch", true);
   if (onDeclarationPrefixes !== undefined) {
-    let yo =
-      astAnalysis.declarationPrefixes === undefined && parsedRoot && we
+    let plainUnquotedAnalysis =
+      astAnalysis.declarationPrefixes === undefined && parsedRoot && isHeredocSandboxEligible
         ? parseForSecurityFromAst(input.command, parsedRoot, {
             plainUnquotedHeredocs: true,
           })
         : undefined;
-    let Ho = astAnalysis.declarationPrefixes === undefined ? yo : astAnalysis;
-    if (Ho?.declarationPrefixes !== undefined)
+    let declarationSource =
+      astAnalysis.declarationPrefixes === undefined ? plainUnquotedAnalysis : astAnalysis;
+    if (declarationSource?.declarationPrefixes !== undefined)
       onDeclarationPrefixes(
-        Ho.declarationPrefixes,
-        Ho.declarationPrefixBashKeeps,
+        declarationSource.declarationPrefixes,
+        declarationSource.declarationPrefixBashKeeps,
         astAnalysis.uncertainWrite === true,
       );
   }
   if (astAnalysis.kind === "too-complex") {
-    let yo = await checkTooComplexCommandDeny(
+    let denyResult = await checkTooComplexCommandDeny(
       input,
       permissionContext,
       parsedRoot,
@@ -3043,36 +3172,36 @@ async function bashToolHasPermission(
           : undefined,
       originalCommand,
       toolUseContext.forRemoteExecution === true,
-      q,
+      recursionCtx,
       toolUseContext,
     );
-    if (yo !== null) return yo;
-    let Ho =
+    if (denyResult !== null) return denyResult;
+    let sandboxAutoAllow =
       toolUseContext.forRemoteExecution === true
         ? null
         : checkSandboxAutoAllow(input, permissionContext, astAnalysis.nodeType);
-    if (Ho !== null) return Ho;
-    if (parsedRoot && we) {
-      let br = parseForSecurityFromAst(input.command, parsedRoot, {
+    if (sandboxAutoAllow !== null) return sandboxAutoAllow;
+    if (parsedRoot && isHeredocSandboxEligible) {
+      let plainAnalysis = parseForSecurityFromAst(input.command, parsedRoot, {
         plainUnquotedHeredocs: true,
         declarationPrefix,
       });
-      if (br.kind === "simple" && br.laterLoopPassesDiffer) onLaterLoopPassesDiffer?.();
-      let Hr =
-        br.kind === "simple" &&
-        checkSemantics(br.commands, {
+      if (plainAnalysis.kind === "simple" && plainAnalysis.laterLoopPassesDiffer) onLaterLoopPassesDiffer?.();
+      let autoAllowResult =
+        plainAnalysis.kind === "simple" &&
+        checkSemantics(plainAnalysis.commands, {
           sourceGlobRecord: isSourceGlobRecordingEnabled(),
-          hasLoop: br.hasLoop,
+          hasLoop: plainAnalysis.hasLoop,
         }).ok
           ? checkSandboxAutoAllowForAst(
               input,
               permissionContext,
-              br.commands,
-              br.bareAssignmentNames,
+              plainAnalysis.commands,
+              plainAnalysis.bareAssignmentNames,
               toolUseContext,
             )
           : null;
-      if (Hr !== null) return Hr;
+      if (autoAllowResult !== null) return autoAllowResult;
     }
     logEventUnlessSuppressed("tengu_bash_ast_too_complex", {
       nodeTypeId: nodeTypeId(astAnalysis.nodeType),
@@ -3088,20 +3217,20 @@ async function bashToolHasPermission(
         "This command could not be checked for dangerous rm operations: the shell may read it differently than it was parsed. This requires explicit approval.",
         "not ruled out \u2014 the shell may read this command differently than it was parsed",
       );
-    let rr = {
+    let decisionReason = {
       type: "other",
       reason: astAnalysis.reason,
       bashMissKind: "too-complex",
     };
     return {
       behavior: "ask",
-      decisionReason: rr,
-      message: createPermissionRequestMessage(BashTool.name, rr),
+      decisionReason,
+      message: createPermissionRequestMessage(BashTool.name, decisionReason),
       suggestions: [],
     };
   }
   let commands = astAnalysis.commands;
-  let Ae = (permissionContext) =>
+  let getCompoundCdTimedDeny = (permissionContext) =>
     hasBashDenyRule(permissionContext) &&
     ((hasNoBashDenyRules(permissionContext) &&
       !cdMayChangeReadScope(commands, getCwd(), permissionContext, toolUseContext)) ||
@@ -3113,11 +3242,11 @@ async function bashToolHasPermission(
   if (
     permissionContext.blockReadsOutsideWorkingDirectories === true &&
     commands.some(
-      (command, Ho) =>
+      (command, cmdIdx) =>
         readsCodeFromStdin(command.argv) &&
         (/<<</.test(input.command) ||
           /<<(?!<)/.test(input.command) ||
-          (Ho > 0 && input.command.includes("|"))),
+          (cmdIdx > 0 && input.command.includes("|"))),
     ) &&
     !(shouldUseSandbox(input) && isSandboxReadBlockEnforceable(permissionContext))
   )
@@ -3126,14 +3255,14 @@ async function bashToolHasPermission(
     let earlyExit = checkSemanticsDeny(input, permissionContext, commands);
     if (earlyExit?.behavior === "deny") return earlyExit;
     if (semanticsResult.kind === "newline-hash" && toolUseContext.forRemoteExecution !== true) {
-      let Hr = checkSandboxAutoAllowForAst(
+      let autoAllowResult = checkSandboxAutoAllowForAst(
         input,
         permissionContext,
         commands,
         astAnalysis.bareAssignmentNames,
         toolUseContext,
       );
-      if (Hr) return Hr;
+      if (autoAllowResult) return autoAllowResult;
     }
     if (
       permissionContext.blockReadsOutsideWorkingDirectories === true &&
@@ -3148,18 +3277,18 @@ async function bashToolHasPermission(
       toolUseContext,
     );
     if (dangerousVariableRemoval !== null) return checkDangerousRemoval(dangerousVariableRemoval, false);
-    let rr = await checkInlineShellRemoval(input.command, q, [], commands);
-    if (rr !== null) return rr;
+    let inlineRemoval = await checkInlineShellRemoval(input.command, recursionCtx, [], commands);
+    if (inlineRemoval !== null) return inlineRemoval;
     if (earlyExit !== null) return earlyExit;
-    let br = {
+    let decisionReason = {
       type: "other",
       reason: semanticsResult.reason,
       bashMissKind: "semantics",
     };
     return {
       behavior: "ask",
-      decisionReason: br,
-      message: createPermissionRequestMessage(BashTool.name, br),
+      decisionReason,
+      message: createPermissionRequestMessage(BashTool.name, decisionReason),
       suggestions: [],
     };
   }
@@ -3184,20 +3313,20 @@ async function bashToolHasPermission(
     return sandboxAstAllowResult;
   let exactMatchResult = bashToolCheckExactMatchPermission(input, permissionContext);
   if (exactMatchResult.behavior === "deny") return exactMatchResult;
-  let lt = () =>
+  let readBlockAsk = () =>
     permissionContext.blockReadsOutsideWorkingDirectories === true &&
     !(shouldUseSandbox(input) && isSandboxReadBlockEnforceable(permissionContext))
       ? outsideReadsTooComplexAsk(GIT_AFTER_CD_READ_BLOCK_REASON)
       : undefined;
   let operatorResult = await checkCommandOperatorPermissions(
     input,
-    (yo) =>
+    (subcommandInput) =>
       checkBashCommandClamp(
-        yo,
+        subcommandInput,
         toolUseContext,
         getCommandSubcommandPrefix,
         originalCommand ?? input.command,
-        q,
+        recursionCtx,
         declarationPrefix,
         undefined,
         divergentShapes,
@@ -3208,54 +3337,56 @@ async function bashToolHasPermission(
     },
     parsedRoot,
     commands,
-    (yo) => isCdTextToCurrentDir(yo, getCwd()),
-    lt,
+    (text) => isCdTextToCurrentDir(text, getCwd()),
+    readBlockAsk,
   );
   if (operatorResult.behavior !== "passthrough") {
-    let yo =
+    let isShellOperatorAsk =
       operatorResult.behavior === "ask" &&
       operatorResult.decisionReason?.type === "other" &&
       operatorResult.decisionReason.bashMissKind === "shell-operators";
-    if (yo) {
+    if (isShellOperatorAsk) {
       if (
         permissionContext.blockReadsOutsideWorkingDirectories === true &&
         !(shouldUseSandbox(input) && isSandboxReadBlockEnforceable(permissionContext))
       )
         return outsideReadsTooComplexAsk("a subshell cannot be checked against the read block");
       if (parsedRoot && parsedRoot !== PARSE_ABORTED) {
-        let rr = await checkDangerousRemovals(
+        let removalResult = await checkDangerousRemovals(
           parsedRoot,
           getCwd(),
           permissionContext,
           originalCommand,
           toolUseContext.forRemoteExecution === true,
-          q,
+          recursionCtx,
           toolUseContext,
         );
-        if (rr !== null) {
+        if (removalResult !== null) {
           logEventUnlessSuppressed("tengu_bash_dangerous_rm_too_complex", {
-            kind: fromEnum(rr.kind),
+            kind: fromEnum(removalResult.kind),
           });
-          return rr.result;
+          return removalResult.result;
         }
       }
     }
     permissionContext = getToolPermissionContext(toolUseContext);
-    let Ho = checkPathConstraints(
+    let pathResult = checkPathConstraints(
       input,
       getCwd(),
       permissionContext,
       commandHasAnyCd(input.command),
       flattened,
       commands,
-      Ae(permissionContext),
+      getCompoundCdTimedDeny(permissionContext),
     );
     if (
-      (Ho.behavior === "deny" ||
-        ((!yo || divergentShapes === "read") && Ho.behavior === "ask" && !Ho.bashAllowRuleOverridable)) &&
-      getDecisionSeverity(Ho) > getDecisionSeverity(operatorResult)
+      (pathResult.behavior === "deny" ||
+        ((!isShellOperatorAsk || divergentShapes === "read") &&
+          pathResult.behavior === "ask" &&
+          !pathResult.bashAllowRuleOverridable)) &&
+      getDecisionSeverity(pathResult) > getDecisionSeverity(operatorResult)
     )
-      return Ho;
+      return pathResult;
     return operatorResult;
   }
   let cwd = getCwd();
@@ -3263,8 +3394,8 @@ async function bashToolHasPermission(
   let { subcommands, astCommandsByIdx } = filterCdCwdSubcommands(rawSubcommands, commands, cwd, cwdMingw);
   let cdCommands = subcommands.filter((subCommand) => isNormalizedCdCommand(subCommand));
   if (cdCommands.length > 1) {
-    let yo = checkCdCommand(commands, cwd, permissionContext);
-    if (yo) return yo;
+    let cdResult = checkCdCommand(commands, cwd, permissionContext);
+    if (cdResult) return cdResult;
     if (
       permissionContext.blockReadsOutsideWorkingDirectories === true &&
       !(shouldUseSandbox(input) && isSandboxReadBlockEnforceable(permissionContext))
@@ -3272,87 +3403,95 @@ async function bashToolHasPermission(
       return outsideReadsTooComplexAsk("multiple directory changes cannot be checked against the read block");
     let mapped = uniq(
       [cwd, ...allWorkingDirectories(getToolPermissionContext(toolUseContext))]
-        .flatMap((jr) => {
-          let { resolvedPath } = safeResolvePath(getFsImplementation(), jr);
-          return resolvedPath === jr ? [jr] : [jr, resolvedPath];
+        .flatMap((dir) => {
+          let { resolvedPath } = safeResolvePath(getFsImplementation(), dir);
+          return resolvedPath === dir ? [dir] : [dir, resolvedPath];
         })
-        .map((jr) => normalize(jr)),
-    ).map((jr) => ({
-      exact: normalizeCaseForComparison(jr),
-      prefix: normalizeCaseForComparison(/[\\/]$/.test(jr) ? jr : jr + sep),
+        .map((dir) => normalize(dir)),
+    ).map((dir) => ({
+      exact: normalizeCaseForComparison(dir),
+      prefix: normalizeCaseForComparison(/[\\/]$/.test(dir) ? dir : dir + sep),
     }));
-    let br = (jr) => {
-      let Or = normalizeCaseForComparison(normalize(jr));
-      return mapped.some((Io) => Or === Io.exact || Or.startsWith(Io.prefix));
+    let isInsideWorkingDir = (path) => {
+      let normalized = normalizeCaseForComparison(normalize(path));
+      return mapped.some(
+        (workingDir) => normalized === workingDir.exact || normalized.startsWith(workingDir.prefix),
+      );
     };
-    let Fr = !/[;|\n&(`!]/.test(input.command.replace(/&&/g, ""));
+    let isSimpleCdOnly = !/[;|\n&(`!]/.test(input.command.replace(/&&/g, ""));
     let { resolvedPath } = safeResolvePath(getFsImplementation(), cwd);
-    let _r = uniq([normalize(cwd), normalize(resolvedPath)]);
-    let Cr = [];
-    let Vr = await checkInlineShellRemoval(input.command, q, [], commands);
-    if (Vr !== null) return Vr;
+    let currentDirs = uniq([normalize(cwd), normalize(resolvedPath)]);
+    let pushdStack = [];
+    let inlineRemoval = await checkInlineShellRemoval(input.command, recursionCtx, [], commands);
+    if (inlineRemoval !== null) return inlineRemoval;
     for (let command of commands) {
-      let [Or, ...Io] = stripWrappersFromArgvForPaths(command.argv);
-      let replaced = Or?.replace(/^.*[\\/]/, "");
+      let [baseName, ...args] = stripWrappersFromArgvForPaths(command.argv);
+      let replaced = baseName?.replace(/^.*[\\/]/, "");
       if (replaced === "cd" || replaced === "chdir" || replaced === "pushd" || replaced === "popd") {
-        Fr &&= command.argv[0] === replaced && command.envVars.length === 0;
+        isSimpleCdOnly &&= command.argv[0] === replaced && command.envVars.length === 0;
         if (replaced === "popd") {
-          if (Io.length === 0 && Cr.length > 0) _r = Cr.pop();
-          else Fr = false;
+          if (args.length === 0 && pushdStack.length > 0) currentDirs = pushdStack.pop();
+          else isSimpleCdOnly = false;
         } else {
-          let Es = Io[0] === "--" ? Io.slice(1) : Io;
-          let Nr = Es.length === 1 ? Es[0] : undefined;
-          let Is = false;
-          let fs = [];
+          let operands = args[0] === "--" ? args.slice(1) : args;
+          let target = operands.length === 1 ? operands[0] : undefined;
+          let isTargetAllowed = false;
+          let resolvedDirs = [];
           if (
-            Nr !== undefined &&
-            !/^[-+]/.test(Nr) &&
-            !Nr.startsWith("~") &&
-            !/[*?[]/.test(Nr) &&
-            !containsAnyPlaceholder(Nr) &&
-            !/(^|[\\/])\.\.([\\/]|$)/.test(Nr)
+            target !== undefined &&
+            !/^[-+]/.test(target) &&
+            !target.startsWith("~") &&
+            !/[*?[]/.test(target) &&
+            !containsAnyPlaceholder(target) &&
+            !/(^|[\\/])\.\.([\\/]|$)/.test(target)
           ) {
-            Is = true;
-            for (let as of _r) {
-              let Vi = isAbsolute(Nr) ? normalize(Nr) : resolve_2(as, Nr);
-              let { resolvedPath } = safeResolvePath(getFsImplementation(), Vi);
-              if (!br(Vi) || !br(resolvedPath)) {
-                Is = false;
+            isTargetAllowed = true;
+            for (let baseDir of currentDirs) {
+              let dirPath = isAbsolute(target) ? normalize(target) : resolve_2(baseDir, target);
+              let { resolvedPath } = safeResolvePath(getFsImplementation(), dirPath);
+              if (!isInsideWorkingDir(dirPath) || !isInsideWorkingDir(resolvedPath)) {
+                isTargetAllowed = false;
                 break;
               }
-              fs.push(normalize(Vi), normalize(resolvedPath));
+              resolvedDirs.push(normalize(dirPath), normalize(resolvedPath));
             }
           }
-          Fr &&= Is;
-          if (Is) {
-            if (replaced === "pushd") Cr.push(_r);
-            _r = uniq(fs);
+          isSimpleCdOnly &&= isTargetAllowed;
+          if (isTargetAllowed) {
+            if (replaced === "pushd") pushdStack.push(currentDirs);
+            currentDirs = uniq(resolvedDirs);
           }
         }
         continue;
       }
       if (replaced !== "rm" && replaced !== "rmdir") continue;
-      let rs = checkDangerousRemovalPaths(replaced, Io, cwd, getToolPermissionContext(toolUseContext), !Fr);
-      if (rs.behavior !== "passthrough") return rs;
+      let removalResult = checkDangerousRemovalPaths(
+        replaced,
+        args,
+        cwd,
+        getToolPermissionContext(toolUseContext),
+        !isSimpleCdOnly,
+      );
+      if (removalResult.behavior !== "passthrough") return removalResult;
     }
-    let Oo = {
+    let decisionReason = {
       type: "other",
       reason: "Multiple directory changes in one command require approval for clarity",
       bashMissKind: "multi-cd",
     };
     return {
       behavior: "ask",
-      decisionReason: Oo,
-      message: createPermissionRequestMessage(BashTool.name, Oo),
+      decisionReason,
+      message: createPermissionRequestMessage(BashTool.name, decisionReason),
     };
   }
-  let At = cdCommands.length > 0;
+  let hasCd = cdCommands.length > 0;
   let effectiveCwd = cwd;
-  let compoundCommandHasCd = At;
-  let qt = false;
+  let compoundCommandHasCd = hasCd;
+  let skippedLeadingCd = false;
   if (
     toolUseContext.forRemoteExecution !== true &&
-    At &&
+    hasCd &&
     subcommands.length > 1 &&
     subcommands.length === rawSubcommands.length &&
     isNormalizedCdCommand(subcommands[0]) &&
@@ -3364,20 +3503,20 @@ async function bashToolHasPermission(
     if (simpleCdTarget !== null) {
       effectiveCwd = simpleCdTarget;
       compoundCommandHasCd = false;
-      qt = true;
+      skippedLeadingCd = true;
     }
   }
-  if (compoundCommandHasCd || (At && divergentShapes === "read")) {
-    let yo = checkCdCommand(commands, cwd, permissionContext);
-    if (yo) return yo;
+  if (compoundCommandHasCd || (hasCd && divergentShapes === "read")) {
+    let cdResult = checkCdCommand(commands, cwd, permissionContext);
+    if (cdResult) return cdResult;
   }
   let cdGitAskResult;
-  if (At) {
+  if (hasCd) {
     if (
       subcommands.some((subcommand) => isNormalizedGitCommand(subcommand.trim())) &&
       !(await isCdToCurrentDir(astCommandsByIdx, subcommands, cwd))
     ) {
-      let Ho = {
+      let decisionReason = {
         type: "other",
         reason:
           "This command changes directory before running a version-control command, which can pick up untrusted hooks or repository configuration from the target directory. Approve only if you trust it.",
@@ -3385,8 +3524,8 @@ async function bashToolHasPermission(
       };
       cdGitAskResult = {
         behavior: "ask",
-        decisionReason: Ho,
-        message: createPermissionRequestMessage(BashTool.name, Ho),
+        decisionReason,
+        message: createPermissionRequestMessage(BashTool.name, decisionReason),
       };
     }
   }
@@ -3395,7 +3534,7 @@ async function bashToolHasPermission(
     subcommands.some((cmd) => isNormalizedGitCommand(cmd.trim())) &&
     (extractWriteTargets(astCommandsByIdx, effectiveCwd) || commandWritesToGitInternalPaths(input.command))
   ) {
-    let Ho = {
+    let decisionReason = {
       type: "other",
       reason:
         "This command creates git repository structure files (HEAD/objects/refs/hooks) and then runs git, which can execute hooks/fsmonitor from the created files.",
@@ -3403,8 +3542,8 @@ async function bashToolHasPermission(
     };
     gitStructureAskResult = {
       behavior: "ask",
-      decisionReason: Ho,
-      message: createPermissionRequestMessage(BashTool.name, Ho),
+      decisionReason,
+      message: createPermissionRequestMessage(BashTool.name, decisionReason),
     };
   }
   permissionContext = getToolPermissionContext(toolUseContext);
@@ -3416,9 +3555,9 @@ async function bashToolHasPermission(
       permissionContext,
       compoundCommandHasCd,
       astCommandsByIdx[i],
-      qt && i === 0 ? cwd : effectiveCwd,
+      skippedLeadingCd && i === 0 ? cwd : effectiveCwd,
       astAnalysis.bareAssignmentNames,
-      Ae(permissionContext),
+      getCompoundCdTimedDeny(permissionContext),
       toolUseContext,
     ),
   );
@@ -3435,14 +3574,16 @@ async function bashToolHasPermission(
         reasons: shouldDedupeSubcommandRules()
           ? labelSubcommandResults(subcommands, astCommandsByIdx, subcommandPermissionDecisions)
           : new Map(
-              subcommandPermissionDecisions.map((subcommandPermissionDecision, Ho) => [
-                subcommands[Ho],
+              subcommandPermissionDecisions.map((subcommandPermissionDecision, idx) => [
+                subcommands[idx],
                 subcommandPermissionDecision,
               ]),
             ),
       },
     };
-  let filtered = astCommandsByIdx.slice(qt ? 1 : 0).filter((yo) => yo !== undefined);
+  let filtered = astCommandsByIdx
+    .slice(skippedLeadingCd ? 1 : 0)
+    .filter((astCommand) => astCommand !== undefined);
   let pathConstraintResult = checkPathConstraints(
     input,
     effectiveCwd,
@@ -3450,77 +3591,78 @@ async function bashToolHasPermission(
     compoundCommandHasCd,
     flattened,
     filtered,
-    Ae(permissionContext),
+    getCompoundCdTimedDeny(permissionContext),
   );
   if (pathConstraintResult.behavior === "deny") return pathConstraintResult;
-  let safetyCheckResult = await checkInlineShellRemoval(input.command, q, [], commands);
-  let Kn =
+  let safetyCheckResult = await checkInlineShellRemoval(input.command, recursionCtx, [], commands);
+  let chosenResult =
     pathConstraintResult.behavior === "ask" &&
     pathConstraintResult.decisionReason?.type === "safetyCheck" &&
     pathConstraintResult.decisionReason.classifierApprovable === false
       ? pathConstraintResult
       : (safetyCheckResult ?? pathConstraintResult);
   if (
-    Kn.behavior === "ask" &&
-    Kn.decisionReason?.type === "safetyCheck" &&
-    Kn.decisionReason.classifierApprovable === false
+    chosenResult.behavior === "ask" &&
+    chosenResult.decisionReason?.type === "safetyCheck" &&
+    chosenResult.decisionReason.classifierApprovable === false
   ) {
     if (
-      !isBypassImmuneCircuitBreaker(Kn.decisionReason) ||
-      isClassifierRoutedCircuitBreaker(Kn.decisionReason)
+      !isBypassImmuneCircuitBreaker(chosenResult.decisionReason) ||
+      isClassifierRoutedCircuitBreaker(chosenResult.decisionReason)
     ) {
-      let yo =
+      let breakerAsk =
         findCircuitBreakerAsk(subcommandPermissionDecisions, true) ??
-        (cdGitAskResult !== undefined || gitStructureAskResult !== undefined ? lt() : undefined) ??
+        (cdGitAskResult !== undefined || gitStructureAskResult !== undefined ? readBlockAsk() : undefined) ??
         findCircuitBreakerAsk(subcommandPermissionDecisions) ??
         safetyCheckResult ??
         undefined;
-      if (yo) return yo;
+      if (breakerAsk) return breakerAsk;
     }
-    return Kn;
+    return chosenResult;
   }
   if (cdGitAskResult !== undefined || gitStructureAskResult !== undefined) {
-    let yo =
+    let breakerAsk =
       findCircuitBreakerAsk(subcommandPermissionDecisions, true) ??
-      lt() ??
+      readBlockAsk() ??
       findCircuitBreakerAsk(subcommandPermissionDecisions);
-    if (yo) return yo;
+    if (breakerAsk) return breakerAsk;
   }
   if (cdGitAskResult !== undefined) return cdGitAskResult;
   if (gitStructureAskResult !== undefined) return gitStructureAskResult;
   let mapped = subcommands
-    .map((result, Ho) => [result, Ho])
-    .filter(([yo]) => isSedCommand(yo))
-    .map(([, yo]) => yo);
+    .map((result, idx) => [result, idx])
+    .filter(([command]) => isSedCommand(command))
+    .map(([, idx]) => idx);
   if (mapped.length > 0) {
-    let all = mapped.every((br) => {
-      let Hr = subcommandPermissionDecisions[br];
-      return Hr?.behavior === "allow" && Hr.decisionReason?.type === "rule";
+    let all = mapped.every((idx) => {
+      let decision = subcommandPermissionDecisions[idx];
+      return decision?.behavior === "allow" && decision.decisionReason?.type === "rule";
     });
     let any = subcommandPermissionDecisions.some(
       (subcommandPermissionDecision) => subcommandPermissionDecision.behavior !== "allow",
     );
-    let rr = pathConstraintResult.behavior === "ask" && !pathConstraintResult.bashAllowRuleOverridable;
-    if (!all && !any && !rr && exactMatchResult.behavior !== "allow") {
-      let br = new Set(
+    let pathAsksAnyway =
+      pathConstraintResult.behavior === "ask" && !pathConstraintResult.bashAllowRuleOverridable;
+    if (!all && !any && !pathAsksAnyway && exactMatchResult.behavior !== "allow") {
+      let allowedSedCommands = new Set(
         mapped
-          .filter((Fr) => {
-            let cs = subcommandPermissionDecisions[Fr];
-            return cs?.behavior === "allow" && cs.decisionReason?.type === "rule";
+          .filter((idx) => {
+            let decision = subcommandPermissionDecisions[idx];
+            return decision?.behavior === "allow" && decision.decisionReason?.type === "rule";
           })
-          .map((Fr) => subcommands[Fr].trim()),
+          .map((idx) => subcommands[idx].trim()),
       );
-      let Hr = checkSedCommand(input, permissionContext, br);
-      if (Hr.behavior === "ask") {
+      let sedResult = checkSedCommand(input, permissionContext, allowedSedCommands);
+      if (sedResult.behavior === "ask") {
         if (permissionContext.blockReadsOutsideWorkingDirectories === true) return outsideReadsSedScriptAsk();
-        return Hr;
+        return sedResult;
       }
     }
   }
   let askSubresult = subcommandPermissionDecisions.find(
     (subcommandPermissionDecision) => subcommandPermissionDecision.behavior === "ask",
   );
-  let nonAllowCount = count(subcommandPermissionDecisions, (yo) => yo.behavior !== "allow");
+  let nonAllowCount = count(subcommandPermissionDecisions, (decision) => decision.behavior !== "allow");
   if (
     pathConstraintResult.behavior === "ask" &&
     askSubresult === undefined &&
@@ -3541,7 +3683,7 @@ async function bashToolHasPermission(
         type: "subcommandResults",
         reasons: shouldDedupeSubcommandRules()
           ? labelSubcommandResults(subcommands, astCommandsByIdx, subcommandPermissionDecisions)
-          : new Map(subcommandPermissionDecisions.map((result, Ho) => [subcommands[Ho], result])),
+          : new Map(subcommandPermissionDecisions.map((result, idx) => [subcommands[idx], result])),
       },
     };
   let commandSubcommandPrefix = null;
@@ -3569,24 +3711,24 @@ async function bashToolHasPermission(
     );
   let subcommandResultList = [];
   for (let idx = 0; idx < subcommands.length; idx++) {
-    let Ho = subcommands[idx];
+    let subcommand = subcommands[idx];
     subcommandResultList.push(
       await checkSubcommandPermissionWithSuggestions(
         {
           ...input,
-          command: Ho,
+          command: subcommand,
         },
         permissionContext,
-        commandSubcommandPrefix?.subcommandPrefixes.get(Ho),
+        commandSubcommandPrefix?.subcommandPrefixes.get(subcommand),
         compoundCommandHasCd,
         astCommandsByIdx[idx],
-        qt && idx === 0 ? cwd : effectiveCwd,
+        skippedLeadingCd && idx === 0 ? cwd : effectiveCwd,
         astAnalysis.bareAssignmentNames,
         toolUseContext,
       ),
     );
   }
-  let co = {
+  let severityByBehavior = {
     deny: 3,
     ask: 2,
     passthrough: 1,
@@ -3594,19 +3736,19 @@ async function bashToolHasPermission(
   };
   let subcommandResults = new Map();
   for (let idx = 0; idx < subcommands.length; idx++) {
-    let Ho = subcommands[idx];
-    let rr = subcommandResultList[idx];
-    let br = subcommandResults.get(Ho);
-    let Hr = co[rr.behavior];
-    let Fr = br ? co[br.behavior] : -1;
+    let subcommand = subcommands[idx];
+    let result = subcommandResultList[idx];
+    let existing = subcommandResults.get(subcommand);
+    let severity = severityByBehavior[result.behavior];
+    let existingSeverity = existing ? severityByBehavior[existing.behavior] : -1;
     if (
-      !br ||
-      Hr > Fr ||
-      (Hr === Fr &&
-        findSafetyCheckReason(rr.decisionReason) !== undefined &&
-        findSafetyCheckReason(br.decisionReason) === undefined)
+      !existing ||
+      severity > existingSeverity ||
+      (severity === existingSeverity &&
+        findSafetyCheckReason(result.decisionReason) !== undefined &&
+        findSafetyCheckReason(existing.decisionReason) === undefined)
     )
-      subcommandResults.set(Ho, rr);
+      subcommandResults.set(subcommand, result);
   }
   if (subcommandResultList.every((subcommand) => subcommand.behavior === "allow"))
     return {
@@ -3621,17 +3763,17 @@ async function bashToolHasPermission(
     };
   let collectedRules = new Map();
   for (let idx = 0; idx < subcommandResultList.length; idx++) {
-    let Ho = subcommands[idx];
-    let rr = subcommandResultList[idx];
-    if (rr.behavior === "ask" || rr.behavior === "passthrough") {
-      let suggestions = "suggestions" in rr ? rr.suggestions : undefined;
+    let subcommand = subcommands[idx];
+    let result = subcommandResultList[idx];
+    if (result.behavior === "ask" || result.behavior === "passthrough") {
+      let suggestions = "suggestions" in result ? result.suggestions : undefined;
       let rules = extractRules(suggestions);
       for (let rule of rules) {
         let ruleKey = formatPermissionRule(rule);
         collectedRules.set(ruleKey, rule);
       }
-      if (rr.behavior === "ask" && rules.length === 0 && rr.decisionReason?.type !== "rule")
-        for (let rule of extractRules(suggestionForExactCommand(Ho))) {
+      if (result.behavior === "ask" && rules.length === 0 && result.decisionReason?.type !== "rule")
+        for (let rule of extractRules(suggestionForExactCommand(subcommand))) {
           let ruleKey = formatPermissionRule(rule);
           collectedRules.set(ruleKey, rule);
         }
@@ -3667,18 +3809,21 @@ var LEADING_TIME_PREFIX_RE = /^(?:time[ \t]+(?:--[ \t]+)?)+/;
 /**
  * 把命令剥离安全包装后解析 argv 交给谓词；开关 tengu_wild_octopus 打开时还会对 argv 再做包装剥离后再判一次。
  */
-function matchesArgvAfterUnwrap(e, n, r) {
-  let s = stripSafeWrappers(e);
-  let commandArgv = getCommandArgv(s);
-  if (r(commandArgv)) return true;
+function matchesArgvAfterUnwrap(commandText, normalizeArgv, matchesArgv) {
+  let unwrappedCommand = stripSafeWrappers(commandText);
+  let commandArgv = getCommandArgv(unwrappedCommand);
+  if (matchesArgv(commandArgv)) return true;
   if (
     !readFlagWithOverride(TENGU_WILD_OCTOPUS, {
       safe: true,
     })
   )
     return false;
-  let y = s === e ? commandArgv : getCommandArgv(e.replace(LEADING_TIME_PREFIX_RE, ""));
-  return r(n(y));
+  let candidateArgv =
+    unwrappedCommand === commandText
+      ? commandArgv
+      : getCommandArgv(commandText.replace(LEADING_TIME_PREFIX_RE, ""));
+  return matchesArgv(normalizeArgv(candidateArgv));
 }
 //@ chunk-e6aww6q8.js:1243435-1243583 fingerprint = isNormalizedGitCommand (0.939)
 /**
@@ -3690,7 +3835,7 @@ function isNormalizedGitCommand(command) {
     matchesArgvAfterUnwrap(
       command,
       stripWrappersFromArgvForPaths,
-      (n) => n[0] === "git" || (n[0] === "xargs" && n.includes("git")),
+      (argv) => argv[0] === "git" || (argv[0] === "xargs" && argv.includes("git")),
     )
   )
     return true;
@@ -3707,11 +3852,11 @@ function isNeverExactMatch(command) {
 /**
  * 剥掉包装后判断命令是否为目录切换内建（cd/pushd/popd/chdir）。
  */
-function isNormalizedCdCommand(e) {
+function isNormalizedCdCommand(command) {
   return matchesArgvAfterUnwrap(
-    e,
+    command,
     stripCommandBuiltinPrefixes,
-    ([n]) => n === "cd" || n === "pushd" || n === "popd" || n === "chdir",
+    ([firstArg]) => firstArg === "cd" || firstArg === "pushd" || firstArg === "popd" || firstArg === "chdir",
   );
 }
 //@ chunk-e6aww6q8.js:1243694-1243747 placement
@@ -3724,31 +3869,34 @@ function commandHasAnyCd(command) {
  */
 async function extractLiteralRmTargets(command, cwd) {
   if (!/\brm\b/.test(command)) return [];
-  let r = () => runWithGuardOff(() => parseForSecurity(command));
-  let [s, h] = await runWithReadingRefusals(r);
-  let y = h === undefined ? [s] : [await runWithRuleOff(r), await runAsBashReads(r)];
-  let S = runWithGuardOff(() => commandHasAnyCd(command));
-  let w = new Set();
-  for (let L of y) {
-    if (L.kind !== "simple") {
-      logForDebugging(`literalRmTargets: ${command.length}-char command not read (${L.kind})`);
+  let parseReadings = () => runWithGuardOff(() => parseForSecurity(command));
+  let [guardedParse, readRefusal] = await runWithReadingRefusals(parseReadings);
+  let parses =
+    readRefusal === undefined
+      ? [guardedParse]
+      : [await runWithRuleOff(parseReadings), await runAsBashReads(parseReadings)];
+  let hasAnyCd = runWithGuardOff(() => commandHasAnyCd(command));
+  let targets = new Set();
+  for (let parsed of parses) {
+    if (parsed.kind !== "simple") {
+      logForDebugging(`literalRmTargets: ${command.length}-char command not read (${parsed.kind})`);
       continue;
     }
-    for (let command of L.commands) {
-      let [q, ...Z] = stripWrappersFromArgvForPaths(command.argv);
-      if (normalizeCommandName(q) !== "rm") continue;
-      for (let Se of PATH_EXTRACTORS.rm(Z).map(expandTildeWithHome))
-        if (!S || isAbsolute(Se)) w.add(expandPath(Se, cwd));
+    for (let command of parsed.commands) {
+      let [commandName, ...commandArgs] = stripWrappersFromArgvForPaths(command.argv);
+      if (normalizeCommandName(commandName) !== "rm") continue;
+      for (let targetPath of PATH_EXTRACTORS.rm(commandArgs).map(expandTildeWithHome))
+        if (!hasAnyCd || isAbsolute(targetPath)) targets.add(expandPath(targetPath, cwd));
     }
   }
-  return [...w];
+  return [...targets];
 }
 //@ chunk-e6aww6q8.js:1244182-1244222 placement
 /**
  * 判断某个开头的环境赋值不安全（变量名非常规或值像路径）。
  */
-function isUnsafeEnvAssignment(e, n) {
-  return !isSafeEnvVarName(e) || isPathLikeEnvValue(n);
+function isUnsafeEnvAssignment(name, value) {
+  return !isSafeEnvVarName(name) || isPathLikeEnvValue(value);
 }
 //@ chunk-e6aww6q8.js:1244222-1244258 placement
 /**
@@ -3761,32 +3909,32 @@ function stripUnsafeLeadingEnvVars(command) {
 /**
  * 剥掉安全包装命令（command/time 等），得到实际执行的命令文本。
  */
-function stripSafeWrappersFromCommand(e) {
-  return stripSafeWrappers(e, false, false);
+function stripSafeWrappersFromCommand(command) {
+  return stripSafeWrappers(command, false, false);
 }
 //@ chunk-e6aww6q8.js:4855075-4855835 placement
-function mergeBashSubcommandVerdicts(e, context, r, s) {
+function mergeBashSubcommandVerdicts(input, context, result, mergeMode) {
   if (
-    !e.dangerouslyDisableSandbox ||
-    r.behavior === "deny" ||
-    (s === "eachVerdict" ? r.behavior === "ask" : r.behavior === "allow") ||
-    isAllRuleReason(r.decisionReason) ||
-    shouldUseSandbox(e) ||
+    !input.dangerouslyDisableSandbox ||
+    result.behavior === "deny" ||
+    (mergeMode === "eachVerdict" ? result.behavior === "ask" : result.behavior === "allow") ||
+    isAllRuleReason(result.decisionReason) ||
+    shouldUseSandbox(input) ||
     !shouldUseSandbox({
-      ...e,
+      ...input,
       dangerouslyDisableSandbox: false,
     }) ||
-    (s === "chosenVerdict" &&
-      (r.behavior === "ask" ? !shouldRetagAskAsSandboxOverride(r) : !sandboxOverrideAskGuardsOn()))
+    (mergeMode === "chosenVerdict" &&
+      (result.behavior === "ask" ? !shouldRetagAskAsSandboxOverride(result) : !sandboxOverrideAskGuardsOn()))
   )
-    return r;
-  let h = noopToolUseHook({
+    return result;
+  let hookResult = noopToolUseHook({
     toolName: BASH_TOOL_NAME,
-    input: e,
+    input,
     context,
   });
-  if (h) return h;
-  if (r.behavior === "allow" || (r.behavior === "passthrough" && s === "eachVerdict"))
+  if (hookResult) return hookResult;
+  if (result.behavior === "allow" || (result.behavior === "passthrough" && mergeMode === "eachVerdict"))
     return {
       behavior: "ask",
       decisionReason: {
@@ -3801,52 +3949,13 @@ function mergeBashSubcommandVerdicts(e, context, r, s) {
       type: "sandboxOverride",
       reason: "dangerouslyDisableSandbox",
       replaces: {
-        decisionReason: r.decisionReason,
-        message: r.message,
-        blockedPath: r.blockedPath,
+        decisionReason: result.decisionReason,
+        message: result.message,
+        blockedPath: result.blockedPath,
       },
     },
     message: "Run outside of the sandbox",
   };
-}
-//@ chunk-63f0f3kd.js:106273-106715 fingerprint = isNormalizedCdCommand (0.91)
-/**
- * 从 cd/pushd 的 argv 求目标目录：无参数为 homedir，popd、pushd 无参、±N 栈操作、多个参数、"-" 返回 undefined。
- */
-function getCdTargetFromArgv(command) {
-  let stripped = findDirectoryChangeIndex(command);
-  let lower = (command[stripped] ?? "").toLowerCase();
-  if (lower === "popd") return;
-  if (lower === "pushd" && command.length - stripped - 1 === 0) return;
-  if (command.slice(stripped + 1).some((d) => /^[+-]\d+$/.test(d))) return;
-  let sliced = command.slice(stripped + 1);
-  let index = sliced.indexOf("--");
-  let a = index === -1 ? sliced : sliced.slice(0, index);
-  let o = index === -1 ? [] : sliced.slice(index + 1);
-  let u = index !== -1 || a.some((d) => d !== "-" && d.startsWith("-"));
-  let l = [...a.filter((d) => d === "-" || !d.startsWith("-")), ...o];
-  if (l.length === 0) return u ? undefined : homedir();
-  if (l.length > 1 || l[0] === "-") return;
-  return l[0];
-}
-//@ chunk-dcmhvw5a.js:214446-214577 placement = buildSuggestions (1)
-/**
- * 通用前缀权限建议：规则内容为 "<前缀> *"。
- */
-function buildToolPrefixAllowSuggestion(toolName, n) {
-  return [
-    {
-      type: "addRules",
-      rules: [
-        {
-          toolName,
-          ruleContent: `${n} *`,
-        },
-      ],
-      behavior: "allow",
-      destination: "localSettings",
-    },
-  ];
 }
 //@ chunk-fnhsh6ng.js:2095-2231 fingerprint = startSpeculativeClassifierCheck (1)
 /**
@@ -3862,9 +3971,9 @@ function resolveAvailablePermissionMode(permissionMode) {
 /**
  * 判断对象上是否带有 classifier:true 的决策标记。
  */
-function isClassifierDecision(e) {
-  let n = Reflect.get(e, ASSET_TARGET_PIN_TAG);
-  return typeof n === "object" && n !== null && Reflect.get(n, "classifier") === true;
+function isClassifierDecision(decision) {
+  let metadata = Reflect.get(decision, ASSET_TARGET_PIN_TAG);
+  return typeof metadata === "object" && metadata !== null && Reflect.get(metadata, "classifier") === true;
 }
 //@ chunk-v0yfsee9.js:75146-75763 fingerprint = bashToolCheckExactMatchPermission (1)
 /**
@@ -3872,12 +3981,12 @@ function isClassifierDecision(e) {
  */
 function powershellToolCheckExactMatchPermission_2(input, toolPermissionContext) {
   let command = trimPsWhitespace(input.command);
-  let s = {
+  let trimmedInput = {
     ...input,
     command,
   };
   let { matchingDenyRules, matchingAskRules, matchingAllowRules } = matchingRulesForInput_2(
-    s,
+    trimmedInput,
     toolPermissionContext,
     "exact",
   );
@@ -3918,6 +4027,29 @@ function powershellToolCheckExactMatchPermission_2(input, toolPermissionContext)
     decisionReason,
     suggestions: suggestionForExactCommand_2(command),
   };
+}
+//@ chunk-63f0f3kd.js:106273-106715 fingerprint = isNormalizedCdCommand (0.91)
+/**
+ * 从 cd/pushd 的 argv 求目标目录：无参数为 homedir，popd、pushd 无参、±N 栈操作、多个参数、"-" 返回 undefined。
+ */
+function getCdTargetFromArgv(command) {
+  let stripped = findDirectoryChangeIndex(command);
+  let lower = (command[stripped] ?? "").toLowerCase();
+  if (lower === "popd") return;
+  if (lower === "pushd" && command.length - stripped - 1 === 0) return;
+  if (command.slice(stripped + 1).some((arg) => /^[+-]\d+$/.test(arg))) return;
+  let sliced = command.slice(stripped + 1);
+  let index = sliced.indexOf("--");
+  let argsBeforeDoubleDash = index === -1 ? sliced : sliced.slice(0, index);
+  let argsAfterDoubleDash = index === -1 ? [] : sliced.slice(index + 1);
+  let hasFlag = index !== -1 || argsBeforeDoubleDash.some((arg) => arg !== "-" && arg.startsWith("-"));
+  let pathArgs = [
+    ...argsBeforeDoubleDash.filter((arg) => arg === "-" || !arg.startsWith("-")),
+    ...argsAfterDoubleDash,
+  ];
+  if (pathArgs.length === 0) return hasFlag ? undefined : homedir();
+  if (pathArgs.length > 1 || pathArgs[0] === "-") return;
+  return pathArgs[0];
 }
 export {
   commandHasAnyCd,

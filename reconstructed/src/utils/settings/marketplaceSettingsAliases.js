@@ -19,16 +19,17 @@ import { stripInvisibleChars } from "../sanitization.js";
 /**
  * isEnvSettingOn：环境变量形式的设置是否开启。
  */
-function isEnvSettingOn(e, n) {
-  return envFlagTruthyOrFalsy(e.toUpperCase(), n);
+function isEnvSettingOn(name, value) {
+  return envFlagTruthyOrFalsy(name.toUpperCase(), value);
 }
 //@ chunk-dcmhvw5a.js:375127-375187 placement
 /**
  * envFlagTruthyOrFalsy：按真/假变量集合判断。
  */
-function envFlagTruthyOrFalsy(e, n) {
+function envFlagTruthyOrFalsy(name, value) {
   return (
-    (PRIVACY_ENV_VARS.has(e) && isEnvTruthy(n)) || (BETA_TRACING_ENV_VARS.has(e) && isEnvDefinedFalsy(n))
+    (PRIVACY_ENV_VARS.has(name) && isEnvTruthy(value)) ||
+    (BETA_TRACING_ENV_VARS.has(name) && isEnvDefinedFalsy(value))
   );
 }
 //@ chunk-dcmhvw5a.js:375187-375240 placement
@@ -36,8 +37,8 @@ function envFlagTruthyOrFalsy(e, n) {
  * isWslEnvironment：是否 WSL 环境。
  */
 function isWslEnvironment() {
-  let wslVersion = getWslVersion_2();
-  return wslVersion !== undefined && looksLikeWslVersion(wslVersion);
+  let kernelString = getWslVersion_2();
+  return kernelString !== undefined && looksLikeWslVersion(kernelString);
 }
 //@ chunk-dcmhvw5a.js:375240-375387 placement
 /**
@@ -45,17 +46,17 @@ function isWslEnvironment() {
  */
 function platformSettingsChain() {
   let platform = getPlatform();
-  let n = platform === "wsl" && !isWslEnvironment() ? "linux" : platform;
-  switch (n) {
+  let hostPlatform = platform === "wsl" && !isWslEnvironment() ? "linux" : platform;
+  switch (hostPlatform) {
     case "unknown":
       return {
-        platform: n,
+        platform: hostPlatform,
         chain: [],
       };
     default:
       return {
-        platform: n,
-        chain: platformSpellings(n),
+        platform: hostPlatform,
+        chain: platformSpellings(hostPlatform),
       };
   }
 }
@@ -77,18 +78,18 @@ var SETTING_ALIASES = [
 /**
  * 应用设置别名到规范键。
  */
-function applySettingAliases(e, file, r) {
-  if (!isPlainObject_2(e)) return [];
-  let s = [];
+function applySettingAliases(doc, file, options) {
+  if (!isPlainObject_2(doc)) return [];
+  let issues = [];
   for (let { alias, canonical } of SETTING_ALIASES) {
-    if (!(alias in e)) continue;
-    if (e[alias] === null) {
-      if (!(canonical in e) && r?.loneNullAlias === "rename") e[canonical] = null;
-      delete e[alias];
+    if (!(alias in doc)) continue;
+    if (doc[alias] === null) {
+      if (!(canonical in doc) && options?.loneNullAlias === "rename") doc[canonical] = null;
+      delete doc[alias];
       continue;
     }
-    if (canonical in e && e[canonical] !== null)
-      s.push({
+    if (canonical in doc && doc[canonical] !== null)
+      issues.push({
         file,
         path: alias,
         message: `"${alias}" is an alias for "${canonical}" and this file sets both; the "${alias}" value was ignored. Use only "${canonical}".`,
@@ -96,21 +97,21 @@ function applySettingAliases(e, file, r) {
         alias,
         canonical,
       });
-    else e[canonical] = e[alias];
-    delete e[alias];
+    else doc[canonical] = doc[alias];
+    delete doc[alias];
   }
-  return s;
+  return issues;
 }
 //@ chunk-dcmhvw5a.js:375959-376065 placement
-function aliasConflictMessage(e) {
-  return `"${e.alias}" and "${e.canonical}" are the same setting; keep only "${e.canonical}"`;
+function aliasConflictMessage(conflict) {
+  return `"${conflict.alias}" and "${conflict.canonical}" are the same setting; keep only "${conflict.canonical}"`;
 }
 //@ chunk-dcmhvw5a.js:376065-376119 placement
 /**
  * 去除不可见字符（保留 emoji 连接符）。
  */
-function stripInvisibleKeepEmoji(e) {
-  return stripInvisibleChars(e, " ", {
+function stripInvisibleKeepEmoji(text) {
+  return stripInvisibleChars(text, " ", {
     keepEmojiJoiners: true,
   });
 }
@@ -123,8 +124,8 @@ var LEADING_INVISIBLE_TEXT_RE = /^[\s\p{M}\p{Cf}\u0000-\u001a\u001c-\u001f\u007f
 /**
  * 去除不可见字符（保留换行）。
  */
-function stripInvisibleKeepNewlines(e) {
-  return stripInvisibleChars(e, " ", {
+function stripInvisibleKeepNewlines(text) {
+  return stripInvisibleChars(text, " ", {
     keepNewlines: true,
   });
 }
@@ -132,8 +133,8 @@ function stripInvisibleKeepNewlines(e) {
 /**
  * cleanOptionalText：清洗可选文本（空白为 undefined）。
  */
-function cleanOptionalText(e) {
-  return stripInvisibleChars(e, "", {
+function cleanOptionalText(text) {
+  return stripInvisibleChars(text, "", {
     keepEmojiJoiners: true,
   });
 }
@@ -141,10 +142,10 @@ function cleanOptionalText(e) {
 /**
  * 清洗可选文本（空白为 undefined）。
  */
-function cleanOptionalText_2(e, stripInvisibleKeepNewlines = stripInvisibleKeepEmoji) {
-  if (e === undefined) return;
-  let r = stripInvisibleKeepNewlines(e);
-  return r.trim() === "" ? undefined : r;
+function cleanOptionalText_2(value, stripInvisibleKeepNewlines = stripInvisibleKeepEmoji) {
+  if (value === undefined) return;
+  let stripped = stripInvisibleKeepNewlines(value);
+  return stripped.trim() === "" ? undefined : stripped;
 }
 export {
   stripInvisibleKeepNewlines,

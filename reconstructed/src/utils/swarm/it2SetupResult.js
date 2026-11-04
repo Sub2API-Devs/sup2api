@@ -10,17 +10,21 @@
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, M, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, booleanSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-yddynw6k.js:301-444 placement
-var IT2_SETUP_DIALOG = withHideWhile({
-  kind: "it2_setup",
-  payload: DoctorLazy(() =>
-    u({
-      tmuxAvailable: M(),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["installed", "use-tmux", "cancelled"])),
-  default: "cancelled",
+var IT2_SETUP_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-yddynw6k.js:301", () => {
+  IT2_SETUP_DIALOG = withHideWhile({
+    kind: "it2_setup",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        tmuxAvailable: booleanSchema(),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["installed", "use-tmux", "cancelled"])),
+    default: "cancelled",
+  });
 });
 export { IT2_SETUP_DIALOG };

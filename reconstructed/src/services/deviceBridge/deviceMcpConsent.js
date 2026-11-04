@@ -14,7 +14,7 @@ import { lit } from "../analytics/safeMetadata.js";
 import { ADMIN_SCOPES } from "./passthroughMcp.js";
 import { FORCE_NOT_REMOTELY_EXECUTABLE } from "../../remote/tools/serve/servedPermissionDecision.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, _enum, string, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, _enum, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { tildify } from "../../utils/path.js";
 import { getClaudeConfigDir } from "../../utils/envUtils.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -25,6 +25,7 @@ import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
 import { getFileReader } from "../../utils/fileStore.js";
 import { shortLabel } from "../../utils/permissions/approvalPayloadSerialization.js";
+import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
 //@ chunk-weh04swb.js:18955-18984 placement
 var MCP_PASSTHROUGH = lit("mcp_passthrough");
@@ -32,8 +33,8 @@ var MCP_PASSTHROUGH = lit("mcp_passthrough");
 /**
  * 判断作用域是否属于管理员作用域。
  */
-function isAdminScope(e) {
-  return ADMIN_SCOPES.has(e);
+function isAdminScope(scope) {
+  return ADMIN_SCOPES.has(scope);
 }
 //@ chunk-weh04swb.js:19016-19025 placement
 /**
@@ -63,18 +64,24 @@ function describeConsentPolicy() {
 /**
  * 设备 MCP 同意记录的 schema（版本、接受/拒绝、条款、决定时间、主机名）及其存储键名与"暂不"键名。
  */
-var DEVICE_MCP_CONSENT_SCHEMA = DoctorLazy(() =>
-  u({
-    version: literal(CONSENT_SCHEMA_VERSION),
-    choice: _enum(["accepted", "declined"]),
-    terms: string(),
-    decidedAt: string(),
-    hostname: string(),
-  }),
-);
-var DEVICE_MCP_CONSENT = "device-mcp-consent";
-var DEVICE_MCP_CONSENT_NOT_NOW = "device-mcp-consent-not-now";
-var CONSENT_SCHEMA_VERSION_2 = 1;
+var DEVICE_MCP_CONSENT_SCHEMA; // deferred: uses CONSENT_SCHEMA_VERSION of its import cycle while loading; runs once the cycle is complete
+var DEVICE_MCP_CONSENT;
+var DEVICE_MCP_CONSENT_NOT_NOW;
+var CONSENT_SCHEMA_VERSION_2;
+deferInit("chunk-weh04swb.js:19199", () => {
+  DEVICE_MCP_CONSENT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      version: literal(CONSENT_SCHEMA_VERSION),
+      choice: _enum(["accepted", "declined"]),
+      terms: stringSchema(),
+      decidedAt: stringSchema(),
+      hostname: stringSchema(),
+    }),
+  );
+  DEVICE_MCP_CONSENT = "device-mcp-consent";
+  DEVICE_MCP_CONSENT_NOT_NOW = "device-mcp-consent-not-now";
+  CONSENT_SCHEMA_VERSION_2 = 1;
+});
 //@ chunk-weh04swb.js:19364-19424 placement
 /**
  * 如何让用户被重新询问的提示：删掉同意文件。
@@ -93,8 +100,8 @@ function deleteNotNowHint() {
 /**
  * 设备 MCP 状态文件的路径（configDir/state/<key>.json）。
  */
-function stateFilePath(e) {
-  return join(getClaudeConfigDir(), "state", `${e}.json`);
+function stateFilePath(key) {
+  return join(getClaudeConfigDir(), "state", `${key}.json`);
 }
 //@ chunk-weh04swb.js:19558-19586 placement
 /**
@@ -111,44 +118,44 @@ function notNowFilePath() {
   return stateFilePath(DEVICE_MCP_CONSENT_NOT_NOW);
 }
 //@ chunk-weh04swb.js:19614-19974 placement
-async function readDeviceMcpConsent(e) {
-  let n;
+async function readDeviceMcpConsent(store) {
+  let text;
   try {
-    n = await e.readText();
+    text = await store.readText();
   } catch (error) {
     logForDebugging(`device-mcp consent: store unreadable (${errorMessage(error)})`, {
       level: "warn",
     });
     return "unreadable";
   }
-  if (n === undefined) return "unset";
+  if (text === undefined) return "unset";
   try {
-    let i = DEVICE_MCP_CONSENT_SCHEMA().safeParse(jsonParse(n));
-    return i.success &&
-      normalizeHostname(i.data.hostname) === normalizeHostname(e.hostname()) &&
-      (i.data.choice === "declined" || i.data.terms === describeConsentPolicy())
-      ? i.data.choice
+    let parsed = DEVICE_MCP_CONSENT_SCHEMA().safeParse(jsonParse(text));
+    return parsed.success &&
+      normalizeHostname(parsed.data.hostname) === normalizeHostname(store.hostname()) &&
+      (parsed.data.choice === "declined" || parsed.data.terms === describeConsentPolicy())
+      ? parsed.data.choice
       : "unset";
   } catch {
     return "unset";
   }
 }
 //@ chunk-weh04swb.js:19974-20049 placement
-async function deviceMcpConsentAnswer(e) {
-  let deviceMcpConsent = await readDeviceMcpConsent(e);
+async function deviceMcpConsentAnswer(store) {
+  let deviceMcpConsent = await readDeviceMcpConsent(store);
   return deviceMcpConsent === "unreadable" ? "unset" : deviceMcpConsent;
 }
 //@ chunk-weh04swb.js:20049-20298 placement
-async function writeDeviceMcpConsent(choice, n) {
+async function writeDeviceMcpConsent(choice, store) {
   try {
-    await n.writeText(
+    await store.writeText(
       jsonStringify(
         {
           version: CONSENT_SCHEMA_VERSION,
           choice,
           terms: describeConsentPolicy(),
-          decidedAt: n.now().toISOString(),
-          hostname: normalizeHostname(n.hostname()),
+          decidedAt: store.now().toISOString(),
+          hostname: normalizeHostname(store.hostname()),
         },
         null,
         2,
@@ -168,45 +175,48 @@ async function writeDeviceMcpConsent(choice, n) {
 /**
  * not-now 记录的 schema。
  */
-var notNowSchema = DoctorLazy(() =>
-  u({
-    version: literal(CONSENT_SCHEMA_VERSION_2),
-    servers: array(string()),
-    decidedAt: string(),
-    hostname: string(),
-  }),
-);
+var notNowSchema; // deferred: uses DEVICE_MCP_CONSENT_SCHEMA of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-weh04swb.js:20298", () => {
+  notNowSchema = DoctorLazy(() =>
+    objectSchema({
+      version: literal(CONSENT_SCHEMA_VERSION_2),
+      servers: array(stringSchema()),
+      decidedAt: stringSchema(),
+      hostname: stringSchema(),
+    }),
+  );
+});
 //@ chunk-weh04swb.js:20373-20658 placement
-async function readDeviceMcpNotNow(e) {
-  let n;
+async function readDeviceMcpNotNow(store) {
+  let text;
   try {
-    n = await e.readText();
+    text = await store.readText();
   } catch (error) {
     logForDebugging(`device-mcp not-now: store unreadable (${errorMessage(error)})`, {
       level: "warn",
     });
     return [];
   }
-  if (n === undefined) return [];
+  if (text === undefined) return [];
   try {
-    let i = notNowSchema().safeParse(jsonParse(n));
-    return i.success && normalizeHostname(i.data.hostname) === normalizeHostname(e.hostname())
-      ? i.data.servers
+    let parsed = notNowSchema().safeParse(jsonParse(text));
+    return parsed.success && normalizeHostname(parsed.data.hostname) === normalizeHostname(store.hostname())
+      ? parsed.data.servers
       : [];
   } catch {
     return [];
   }
 }
 //@ chunk-weh04swb.js:20658-20890 placement
-async function writeDeviceMcpNotNow(servers, n) {
+async function writeDeviceMcpNotNow(servers, store) {
   try {
-    await n.writeText(
+    await store.writeText(
       jsonStringify(
         {
           version: CONSENT_SCHEMA_VERSION_2,
           servers,
-          decidedAt: n.now().toISOString(),
-          hostname: normalizeHostname(n.hostname()),
+          decidedAt: store.now().toISOString(),
+          hostname: normalizeHostname(store.hostname()),
         },
         null,
         2,
@@ -223,9 +233,9 @@ async function writeDeviceMcpNotNow(servers, n) {
   }
 }
 //@ chunk-weh04swb.js:20890-21009 placement
-async function clearDeviceMcpNotNow(e) {
+async function clearDeviceMcpNotNow(store) {
   try {
-    await e.removeText();
+    await store.removeText();
   } catch (error) {
     logForDebugging(`device-mcp not-now: not cleared (${errorMessage(error)})`, {
       level: "warn",
@@ -236,10 +246,10 @@ async function clearDeviceMcpNotNow(e) {
 /**
  * 判断 n 是否是 e 的子集（e 为空时 false）。
  */
-function containsAll(e, n) {
-  if (e.length === 0) return false;
-  let i = new Set(e);
-  return n.every((m) => i.has(m));
+function containsAll(all, required) {
+  if (all.length === 0) return false;
+  let requiredSet = new Set(all);
+  return required.every((name) => requiredSet.has(name));
 }
 //@ chunk-weh04swb.js:21099-21768 placement
 /**
@@ -247,15 +257,15 @@ function containsAll(e, n) {
  */
 function createDeviceMcpStateStore(key, storage) {
   let v5Storage = isStorageV5Enabled() && storage !== undefined ? storage : undefined;
-  let m = STORAGE_SPACES.state(key);
+  let storageKey = STORAGE_SPACES.state(key);
   let filePath = stateFilePath(key);
   return {
     readText: async () => {
       if (v5Storage) {
-        let text = await v5Storage.readText([m]);
+        let text = await v5Storage.readText([storageKey]);
         if (!text.ok) throw Error("device-mcp state read failed");
-        let v = text.value.items[0];
-        return v.found ? v.value : undefined;
+        let item = text.value.items[0];
+        return item.found ? item.value : undefined;
       }
       try {
         return await getFileReader().read(filePath);
@@ -264,11 +274,11 @@ function createDeviceMcpStateStore(key, storage) {
         throw error;
       }
     },
-    writeText: async (c) => {
+    writeText: async (text) => {
       if (v5Storage) {
         if (
           !(
-            await v5Storage.write(m, c, {
+            await v5Storage.write(storageKey, text, {
               mode: 384,
             })
           ).ok
@@ -277,11 +287,11 @@ function createDeviceMcpStateStore(key, storage) {
         return;
       }
       await getFileReader().mkdir(dirname(filePath), 448);
-      await getFileReader().atomicWrite(filePath, c, 384);
+      await getFileReader().atomicWrite(filePath, text, 384);
     },
     removeText: async () => {
       if (v5Storage) {
-        if (!(await v5Storage.delete(m)).ok) throw Error("device-mcp state delete failed");
+        if (!(await v5Storage.delete(storageKey)).ok) throw Error("device-mcp state delete failed");
         return;
       }
       try {
@@ -306,9 +316,13 @@ function deviceMcpNotNowStore(storageV5) {
 /**
  * 取服务器的短标签。
  */
-function shortServerLabel(e) {
-  return shortLabel(e);
+function shortServerLabel(serverName) {
+  return shortLabel(serverName);
 }
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/services/deviceBridge/deviceMcpConsent.js");
 export {
   deviceMcpConsentAnswer,
   deviceMcpConsentStore,

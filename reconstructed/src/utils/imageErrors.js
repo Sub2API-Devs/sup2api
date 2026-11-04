@@ -11,6 +11,7 @@
 import { MONITOR } from "../tools/MonitorTool/constants.js";
 import { isCcsTenant } from "../bootstrap/state.js";
 import { plural } from "./stringUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-mvvq2nx1.js:828-869 placement
 /**
@@ -35,19 +36,19 @@ var IMAGE_ERROR_CODES = [
 ];
 var MAX_IMAGE_DIMENSION = 8000;
 //@ chunk-mvvq2nx1.js:1079-1121 placement
-function isImageErrorCode(e) {
-  return IMAGE_ERROR_CODES.some((n) => n === e);
+function isImageErrorCode(code) {
+  return IMAGE_ERROR_CODES.some((knownCode) => knownCode === code);
 }
 //@ chunk-mvvq2nx1.js:1121-1159 placement
 /**
  * 合法时返回图片错误码，否则 undefined。
  */
-function imageErrorCodeOrUndefined(e) {
-  return isImageErrorCode(e) ? e : undefined;
+function imageErrorCodeOrUndefined(code) {
+  return isImageErrorCode(code) ? code : undefined;
 }
 //@ chunk-mvvq2nx1.js:1159-2881 placement
-function describeImageTooLarge(e) {
-  switch (e) {
+function describeImageTooLarge(code) {
+  switch (code) {
     case "image_dimensions_too_large":
       return {
         cause: `the image is more than ${MAX_IMAGE_DIMENSION} pixels wide or tall`,
@@ -114,35 +115,45 @@ var SIGN_IN_EXPIRED_HINT = {
   stop: true,
 };
 //@ chunk-mvvq2nx1.js:3494-3564 placement
-function isExpiredSignInUploadError(e, n) {
+function isExpiredSignInUploadError(errorText, errorCode) {
   return (
-    imageErrorCodeOrUndefined(n) === undefined && UPLOAD_STATUS_RE.exec(e)?.[1] === "401" && isCcsTenant()
+    imageErrorCodeOrUndefined(errorCode) === undefined &&
+    UPLOAD_STATUS_RE.exec(errorText)?.[1] === "401" &&
+    isCcsTenant()
   );
 }
 //@ chunk-mvvq2nx1.js:3564-3812 placement
 /**
  * 可能暂时性的上传错误正则、排除正则与可重试状态码。
  */
-var TRANSIENT_UPLOAD_ERROR_RE =
-  /^upload failed: (?:network error \(|the connection closed before the server answered$|the server did not answer within \d|the transfer stalled \()/;
-var NON_TRANSIENT_UPLOAD_RE = /\bInvalid URL\b|certificate/i;
-var RETRYABLE_UPLOAD_STATUSES_2 = new Set([429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 529]);
+var TRANSIENT_UPLOAD_ERROR_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NON_TRANSIENT_UPLOAD_RE;
+var RETRYABLE_UPLOAD_STATUSES_2;
+deferInit("chunk-mvvq2nx1.js:3564", () => {
+  TRANSIENT_UPLOAD_ERROR_RE =
+    /^upload failed: (?:network error \(|the connection closed before the server answered$|the server did not answer within \d|the transfer stalled \()/;
+  NON_TRANSIENT_UPLOAD_RE = /\bInvalid URL\b|certificate/i;
+  RETRYABLE_UPLOAD_STATUSES_2 = new Set([429, 500, 502, 503, 504, 520, 521, 522, 523, 524, 529]);
+});
 //@ chunk-mvvq2nx1.js:3812-4031 placement
 /**
  * 给上传错误附加原因与处理建议（图片过大或登录过期）。
  */
-function explainUploadError(e, n, r = false) {
-  let o = imageErrorCodeOrUndefined(n);
-  let u =
-    o !== undefined
-      ? describeImageTooLarge(o)
-      : isExpiredSignInUploadError(e, n)
+function explainUploadError(errorText, errorCode, remedyGiven = false) {
+  let code = imageErrorCodeOrUndefined(errorCode);
+  let hint =
+    code !== undefined
+      ? describeImageTooLarge(code)
+      : isExpiredSignInUploadError(errorText, errorCode)
         ? SIGN_IN_EXPIRED_HINT
         : undefined;
-  if (u === undefined) return e;
-  let { cause, remedy, stop } = u;
-  let h = [...(UPLOAD_STATUS_RE.test(e) ? [cause] : []), ...(r && !stop ? [] : [remedy])];
-  return h.length === 0 ? e : `${e} \u2014 ${h.join("; ")}`;
+  if (hint === undefined) return errorText;
+  let { cause, remedy, stop } = hint;
+  let parts = [
+    ...(UPLOAD_STATUS_RE.test(errorText) ? [cause] : []),
+    ...(remedyGiven && !stop ? [] : [remedy]),
+  ];
+  return parts.length === 0 ? errorText : `${errorText} \u2014 ${parts.join("; ")}`;
 }
 //@ chunk-mvvq2nx1.js:4031-4048 placement
 /**
@@ -153,21 +164,24 @@ var SUSPECTED_UPLOAD_LIMIT_BYTES = 31457280;
 /**
  * 把字节数格式化为 MiB 文本。
  */
-function formatMiB(e) {
-  let n = e / 1048576;
-  return `${Number.isInteger(n) ? n : n.toFixed(1)} MiB`;
+function formatMiB(bytes) {
+  let mib = bytes / 1048576;
+  return `${Number.isInteger(mib) ? mib : mib.toFixed(1)} MiB`;
 }
 //@ chunk-mvvq2nx1.js:4130-4168 placement
-var RETRYABLE_UPLOAD_STATUSES = new Set([502, 503, 504, 520, 524]);
+var RETRYABLE_UPLOAD_STATUSES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mvvq2nx1.js:4130", () => {
+  RETRYABLE_UPLOAD_STATUSES = new Set([502, 503, 504, 520, 524]);
+});
 //@ chunk-mvvq2nx1.js:4168-4277 placement
 /**
  * 上传失败是否可能是暂时性的（状态码或网络错误）。
  */
-function isTransientUploadFailure(e, n) {
-  if (imageErrorCodeOrUndefined(n) !== undefined) return false;
+function isTransientUploadFailure(errorText, errorCode) {
+  if (imageErrorCodeOrUndefined(errorCode) !== undefined) return false;
   return (
-    RETRYABLE_UPLOAD_STATUSES.has(Number(UPLOAD_STATUS_RE.exec(e)?.[1])) ||
-    (TRANSIENT_UPLOAD_ERROR_RE.test(e) && !NON_TRANSIENT_UPLOAD_RE.test(e))
+    RETRYABLE_UPLOAD_STATUSES.has(Number(UPLOAD_STATUS_RE.exec(errorText)?.[1])) ||
+    (TRANSIENT_UPLOAD_ERROR_RE.test(errorText) && !NON_TRANSIENT_UPLOAD_RE.test(errorText))
   );
 }
 //@ chunk-mvvq2nx1.js:4277-4350 placement
@@ -185,29 +199,29 @@ function isPositiveSafeInteger(uploadSuspectedLimitBytes) {
 /**
  * 较大文件的暂时性失败是否可能是超过未声明的上传上限。
  */
-function mayBeOverSizeLimit(e) {
+function mayBeOverSizeLimit(result) {
   return (
-    isPositiveSafeInteger(e.upload_suspected_limit_bytes) &&
-    e.size > SUSPECTED_UPLOAD_LIMIT_BYTES &&
-    isTransientUploadFailure(e.upload_error, e.upload_error_code)
+    isPositiveSafeInteger(result.upload_suspected_limit_bytes) &&
+    result.size > SUSPECTED_UPLOAD_LIMIT_BYTES &&
+    isTransientUploadFailure(result.upload_error, result.upload_error_code)
   );
 }
 //@ chunk-mvvq2nx1.js:4461-4745 placement
 /**
  * 上传失败的说明文本。
  */
-function describeUploadFailure(e) {
-  return mayBeOverSizeLimit(e)
-    ? `${e.upload_error} \u2014 the cause is unknown and may pass. If the same file fails like this again, it may be over the upload limit that applies to this session, which was not named and is never under ${formatMiB(SUSPECTED_UPLOAD_LIMIT_BYTES)}`
-    : explainUploadError(e.upload_error, e.upload_error_code);
+function describeUploadFailure(result) {
+  return mayBeOverSizeLimit(result)
+    ? `${result.upload_error} \u2014 the cause is unknown and may pass. If the same file fails like this again, it may be over the upload limit that applies to this session, which was not named and is never under ${formatMiB(SUSPECTED_UPLOAD_LIMIT_BYTES)}`
+    : explainUploadError(result.upload_error, result.upload_error_code);
 }
 //@ chunk-mvvq2nx1.js:4745-4877 placement
 /**
  * 上传失败是否值得稍后重发。
  */
 function isRetryableUploadFailure(uploadError, uploadErrorCode) {
-  let r = imageErrorCodeOrUndefined(uploadErrorCode);
-  if (r !== undefined) return describeImageTooLarge(r).passes === true;
+  let code = imageErrorCodeOrUndefined(uploadErrorCode);
+  if (code !== undefined) return describeImageTooLarge(code).passes === true;
   return (
     RETRYABLE_UPLOAD_STATUSES_2.has(Number(UPLOAD_STATUS_RE.exec(uploadError)?.[1])) ||
     (TRANSIENT_UPLOAD_ERROR_RE.test(uploadError) && !NON_TRANSIENT_UPLOAD_RE.test(uploadError))
@@ -217,16 +231,21 @@ function isRetryableUploadFailure(uploadError, uploadErrorCode) {
 /**
  * 有可能暂时性的失败时，提示用户稍后让你重发。
  */
-function retryLaterHint(e) {
-  let filtered = e.filter((s) => isRetryableUploadFailure(s.upload_error, s.upload_error_code));
-  if (filtered.length === 0 || e.some((s) => isExpiredSignInUploadError(s.upload_error, s.upload_error_code)))
+function retryLaterHint(failures) {
+  let filtered = failures.filter((failure) =>
+    isRetryableUploadFailure(failure.upload_error, failure.upload_error_code),
+  );
+  if (
+    filtered.length === 0 ||
+    failures.some((failure) => isExpiredSignInUploadError(failure.upload_error, failure.upload_error_code))
+  )
     return "";
-  let r = plural(filtered.length, "failure");
-  let o = `also tell the user they can ask you to send ${plural(filtered.length, "it", "them")} again in a few minutes.`;
-  if (filtered.length === e.length) return ` The ${r} may be temporary, so ${o}`;
+  let failureWord = plural(filtered.length, "failure");
+  let retryHint = `also tell the user they can ask you to send ${plural(filtered.length, "it", "them")} again in a few minutes.`;
+  if (filtered.length === failures.length) return ` The ${failureWord} may be temporary, so ${retryHint}`;
   return ` For ${new Intl.ListFormat("en", {
     type: "conjunction",
-  }).format(filtered.map((s) => s.path))}, whose ${r} may be temporary, ${o}`;
+  }).format(filtered.map((failure) => failure.path))}, whose ${failureWord} may be temporary, ${retryHint}`;
 }
 export {
   IMAGE_SOURCE_MARKER_PREFIX,

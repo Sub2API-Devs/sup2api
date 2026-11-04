@@ -26,20 +26,23 @@ import { logForDebugging } from "./debug.js";
  * 展开时屏蔽的凭证变量集合。
  */
 function scrubbedEnvKeys() {
-  let e = new Set([...childScrubbedCredentialKeys().map((n) => n.toUpperCase()), ...CREDENTIAL_ENV_VARS_2]);
+  let plainKeys = new Set([
+    ...childScrubbedCredentialKeys().map((key) => key.toUpperCase()),
+    ...CREDENTIAL_ENV_VARS_2,
+  ]);
   return {
-    plain: e,
-    remoteSink: new Set([...e, ...SECRET_ENV_VARS]),
+    plain: plainKeys,
+    remoteSink: new Set([...plainKeys, ...SECRET_ENV_VARS]),
   };
 }
 //@ chunk-e6aww6q8.js:595922-596026 placement
-function isBlockedForExpansion(varName, n, r) {
+function isBlockedForExpansion(varName, liveValue, scrubKeys) {
   let upper = varName.toUpperCase();
   return (
-    (r ?? scrubbedEnvKeys()).remoteSink.has(upper) ||
+    (scrubKeys ?? scrubbedEnvKeys()).remoteSink.has(upper) ||
     isCredentialEnvVar(upper) ||
-    isBaseUrlWithCredential(upper, n) ||
-    shouldScrubEnvEntry(varName, n)
+    isBaseUrlWithCredential(upper, liveValue) ||
+    shouldScrubEnvEntry(varName, liveValue)
   );
 }
 //@ chunk-e6aww6q8.js:596026-596074 placement
@@ -54,71 +57,73 @@ function isBlockedForExpansion_2(varName) {
  * 展开 MCP 配置中的环境变量；引用凭据变量但读不到时按空值处理并警告。
  */
 function expandMcpCredentialEnvVars(
-  e,
-  n,
-  r,
-  { remoteSink: s = false, blankAsLive: h = false, blankList: y } = {},
+  text,
+  env,
+  fallbackEnv,
+  { remoteSink = false, blankAsLive = false, blankList } = {},
 ) {
-  if (typeof e === "string" && !e.includes("${"))
+  if (typeof text === "string" && !text.includes("${"))
     return {
-      expanded: e,
+      expanded: text,
       missingVars: [],
       wildcardVars: [],
       blankedVars: [],
     };
-  let S = [];
-  let w = [];
-  let L = [];
-  let G = n ?? process.env;
-  let q = n === undefined || h;
-  let Z = q ? (y ?? scrubbedEnvKeys()) : undefined;
-  let Se = Z === undefined ? EXTRA_CREDENTIAL_ENV_VARS : s ? Z.remoteSink : Z.plain;
-  let expanded = e.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?)\}/g, (we, Ee) => {
-    let index = Ee.indexOf(":-");
-    let Ie = index === -1 ? Ee : Ee.slice(0, index);
-    let Me = index === -1 ? undefined : Ee.slice(index + 2);
-    let We = G[Ie];
-    let upper = Ie.toUpperCase();
-    let Je =
-      (Se.has(upper) ||
-        (q && shouldScrubEnvEntry(Ie, We)) ||
-        (s && (isCredentialEnvVar(upper) || isBaseUrlWithCredential(upper, We)))) &&
-      (We !== undefined || s);
-    if (Je && We !== undefined) L.push(Ie);
-    let nt = Je ? "" : We;
-    if (typeof nt === "string") {
-      if (containsWildcard(nt)) w.push(Ie);
-      return nt;
+  let missingVars = [];
+  let wildcardVars = [];
+  let blankedVars = [];
+  let liveEnv = env ?? process.env;
+  let useScrubList = env === undefined || blankAsLive;
+  let scrubKeys = useScrubList ? (blankList ?? scrubbedEnvKeys()) : undefined;
+  let blockedNames =
+    scrubKeys === undefined ? EXTRA_CREDENTIAL_ENV_VARS : remoteSink ? scrubKeys.remoteSink : scrubKeys.plain;
+  let expanded = text.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*(?::-[^}]*)?)\}/g, (matchText, varExpr) => {
+    let index = varExpr.indexOf(":-");
+    let varName = index === -1 ? varExpr : varExpr.slice(0, index);
+    let defaultText = index === -1 ? undefined : varExpr.slice(index + 2);
+    let liveValue = liveEnv[varName];
+    let upper = varName.toUpperCase();
+    let shouldBlank =
+      (blockedNames.has(upper) ||
+        (useScrubList && shouldScrubEnvEntry(varName, liveValue)) ||
+        (remoteSink && (isCredentialEnvVar(upper) || isBaseUrlWithCredential(upper, liveValue)))) &&
+      (liveValue !== undefined || remoteSink);
+    if (shouldBlank && liveValue !== undefined) blankedVars.push(varName);
+    let value = shouldBlank ? "" : liveValue;
+    if (typeof value === "string") {
+      if (containsWildcard(value)) wildcardVars.push(varName);
+      return value;
     }
-    if (Me !== undefined) return Me;
-    let pt = r?.[Ie];
-    if (typeof pt === "string") {
+    if (defaultText !== undefined) return defaultText;
+    let fallbackValue = fallbackEnv?.[varName];
+    if (typeof fallbackValue === "string") {
       if (
-        Se.has(upper) ||
-        (q && (isChildScrubbedCredentialFamily(upper) || shouldScrubEnvEntry(Ie, pt))) ||
-        (s && (isCredentialEnvVar(upper) || isBaseUrlWithCredential(upper, pt)))
+        blockedNames.has(upper) ||
+        (useScrubList &&
+          (isChildScrubbedCredentialFamily(upper) || shouldScrubEnvEntry(varName, fallbackValue))) ||
+        (remoteSink && (isCredentialEnvVar(upper) || isBaseUrlWithCredential(upper, fallbackValue)))
       ) {
-        L.push(Ie);
+        blankedVars.push(varName);
         return "";
       }
-      if (containsWildcard(pt)) w.push(Ie);
-      return pt;
+      if (containsWildcard(fallbackValue)) wildcardVars.push(varName);
+      return fallbackValue;
     }
-    S.push(Ie);
-    return we;
+    missingVars.push(varName);
+    return matchText;
   });
-  if (s && !n && L.length > 0)
+  if (remoteSink && !env && blankedVars.length > 0)
     logForDebugging(
-      `MCP server config references credential variable(s) that are never expanded toward a remote server: ${L.join(", ")} (read as empty)`,
+      `MCP server config references credential variable(s) that are never expanded toward a remote server: ${blankedVars.join(", ")} (read as empty)`,
       {
         level: "warn",
       },
     );
   return {
     expanded,
-    missingVars: S,
-    wildcardVars: w,
-    blankedVars: L,
+    missingVars,
+    wildcardVars,
+    blankedVars,
   };
 }
 export { scrubbedEnvKeys, expandMcpCredentialEnvVars, isBlockedForExpansion_2, isBlockedForExpansion };

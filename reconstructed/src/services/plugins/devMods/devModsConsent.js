@@ -32,9 +32,9 @@ var MOD_HOT_RELOAD = "mod_hot_reload";
 /**
  * 拼出完整的同意询问文本。
  */
-var consentQuestionText = (o) => `${DEV_MODS_CONSENT_QUESTION}
+var consentQuestionText = (options) => `${DEV_MODS_CONSENT_QUESTION}
 
-${devModsExplainerLines(o)}`;
+${devModsExplainerLines(options)}`;
 //@ chunk-zhrgwca4.js:2521-2530 placement
 /**
  * 最多询问次数（3）。
@@ -44,13 +44,13 @@ var MAX_CONSENT_ASKS = 3;
 /**
  * 询问用户是否开启本会话中 Claude 写的 mod（本轮结束时或立即），返回用户的选择。
  */
-async function askDevModsConsent(o, e) {
-  let r = TURN_STATE_PROBE.isRunning() ? "turn-end" : "now";
-  let question = e === 0 ? devModsConsentQuestionFor(r) : consentQuestionText(r);
-  let i = consentOutcomeToChoice(
+async function askDevModsConsent(binding, attempt) {
+  let loadTiming = TURN_STATE_PROBE.isRunning() ? "turn-end" : "now";
+  let question = attempt === 0 ? devModsConsentQuestionFor(loadTiming) : consentQuestionText(loadTiming);
+  let choice = consentOutcomeToChoice(
     await confirmWithUser({
-      canUseTool: o.binding.canUseTool,
-      toolUseContext: o.binding.toolContext(o.abortController),
+      canUseTool: binding.binding.canUseTool,
+      toolUseContext: binding.binding.toolContext(binding.abortController),
       source: MOD_HOT_RELOAD,
       header: MODS_DIALOG_TITLE,
       question,
@@ -58,11 +58,11 @@ async function askDevModsConsent(o, e) {
       personOnly: true,
     }),
   );
-  if (i !== "explain") return i;
+  if (choice !== "explain") return choice;
   logFeatureOk("plugin_dev_mods", {
     answer: lit("explain"),
   });
-  return e < MAX_CONSENT_ASKS ? askDevModsConsent(o, e + 1) : "decline";
+  return attempt < MAX_CONSENT_ASKS ? askDevModsConsent(binding, attempt + 1) : "decline";
 }
 //@ chunk-zhrgwca4.js:2876-2960 placement
 /**
@@ -74,32 +74,32 @@ var OUTCOME_REASON_MAP = {
   unpicked: "no_selection",
 };
 //@ chunk-zhrgwca4.js:2960-3390 placement
-async function requestDevModsConsent(folder, e) {
-  let r = currentSurfaceBinding();
-  if (r === undefined) {
+async function requestDevModsConsent(folder, signal) {
+  let binding = currentSurfaceBinding();
+  if (binding === undefined) {
     logFeatureSad("plugin_dev_mods", "no_session");
     return "no_one_to_ask";
   }
   let abortController = new AbortController();
-  e?.addEventListener("abort", () => abortController.abort(), {
+  signal?.addEventListener("abort", () => abortController.abort(), {
     once: true,
   });
   try {
-    let n = await askDevModsConsent(
+    let outcome = await askDevModsConsent(
       {
-        binding: r,
+        binding,
         folder,
         abortController,
       },
       0,
     );
-    let i = OUTCOME_REASON_MAP[n];
-    if (i === undefined)
+    let reasonCode = OUTCOME_REASON_MAP[outcome];
+    if (reasonCode === undefined)
       logFeatureOk("plugin_dev_mods", {
-        answer: fromEnum(n),
+        answer: fromEnum(outcome),
       });
-    else logFeatureSad("plugin_dev_mods", i);
-    return n;
+    else logFeatureSad("plugin_dev_mods", reasonCode);
+    return outcome;
   } catch (error) {
     logForDebugging(`dev mods: the ask failed, asked again later: ${errorMessage(error)}`, {
       level: "error",
@@ -109,10 +109,10 @@ async function requestDevModsConsent(folder, e) {
 }
 //@ chunk-zhrgwca4.js:3390-3573 placement
 function canAskForConsent() {
-  let o = currentSurfaceBinding();
-  if (o === undefined) return true;
+  let binding = currentSurfaceBinding();
+  if (binding === undefined) return true;
   try {
-    return canPromptForConfirmation(o.toolContext(new AbortController()));
+    return canPromptForConfirmation(binding.toolContext(new AbortController()));
   } catch (error) {
     logForDebugging(`dev mods: no context to ask in yet: ${errorMessage(error)}`, {
       level: "error",

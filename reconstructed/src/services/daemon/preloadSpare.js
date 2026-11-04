@@ -30,8 +30,8 @@ async function runPreloadSpare_2(args, startPreload) {
   let pidPath = `${socketPath}.pid`;
   let preloadReady = startPreload();
   let resolved = Promise.resolve();
-  let g = false;
-  for (let o of KNOWN_HOST_ENV_VARS) delete process.env[o];
+  let socketPath_2 = false;
+  for (let pidPath of KNOWN_HOST_ENV_VARS) delete process.env[pidPath];
   try {
     mkdirSync(dirname(socketPath), {
       recursive: true,
@@ -40,22 +40,22 @@ async function runPreloadSpare_2(args, startPreload) {
     unlinkSync(socketPath);
   } catch {}
   let cleanupFiles = () => {
-    for (let o of [socketPath, pidPath])
+    for (let claim of [socketPath, pidPath])
       try {
-        unlinkSync(o);
+        unlinkSync(claim);
       } catch {}
   };
   let exitClean = () => {
     cleanupFiles();
     process.exit(0);
   };
-  let onUncaught = (o) => {
+  let onUncaught = (err) => {
     cleanupFiles();
-    process.stderr.write(`[preload] uncaughtException: ${errorMessage(o)}
+    process.stderr.write(`[preload] uncaughtException: ${errorMessage(err)}
 `);
     process.exit(1);
   };
-  for (let o of ["SIGTERM", "SIGHUP", "SIGINT"]) process.on(o, exitClean);
+  for (let err of ["SIGTERM", "SIGHUP", "SIGINT"]) process.on(err, exitClean);
   process.on("uncaughtException", onUncaught);
   let claim;
   try {
@@ -74,11 +74,12 @@ async function runPreloadSpare_2(args, startPreload) {
   }
   let startTime = performance.now();
   let now = Date.now();
-  for (let o of ["SIGTERM", "SIGHUP", "SIGINT"]) process.off(o, exitClean);
+  for (let signal of ["SIGTERM", "SIGHUP", "SIGINT"]) process.off(signal, exitClean);
   process.off("uncaughtException", onUncaught);
   cleanupFiles();
-  let m = Number.parseInt(claim.env.CCR_SPAWN_TIMESTAMP_MS ?? "", 10);
-  if (Number.isFinite(m)) recordPhase("spare_claim_read_from_spawn_ms", now - m, m - performance.timeOrigin);
+  let spawnTs = Number.parseInt(claim.env.CCR_SPAWN_TIMESTAMP_MS ?? "", 10);
+  if (Number.isFinite(spawnTs))
+    recordPhase("spare_claim_read_from_spawn_ms", now - spawnTs, spawnTs - performance.timeOrigin);
   await preloadReady;
   await resolved;
   recordPhase("spare_claim_module_wait_ms", performance.now() - startTime, startTime);
@@ -89,21 +90,22 @@ async function runPreloadSpare_2(args, startPreload) {
  * 并行预加载会话启动所需的模块（远程环境多加一个），返回 allSettled 结果。
  */
 function preloadSessionModules() {
-  let r = [
-    import("./chunk-tyg7f3ek.js"),
-    import("./chunk-fhdzwff4.js"),
-    import("./chunk-3h5pdzw6.js"),
-    import("./chunk-9vvvg0d3.js"),
-    import("./chunk-5kp2513a.js"),
+  let loads = [
+    import("../../bridge/MAX_DECLARED_DIALOG_KINDS.lazy.js"),
+    import("../../isDesktopEntrypointExempted.lazy.js"),
+    import("../../tasks/installObserverSpawner.lazy.js"),
+    import("../../utils/telemetry/bigQueryExportIntervalMs.lazy.js"),
+    import("../../utils/backgroundHousekeeping.js"),
   ];
-  r.push(import("./chunk-cgamr0t5.js"));
-  if (env.CLAUDE_CODE_REMOTE) r.push(import("./chunk-j9e5zgt8.js"));
-  return Promise.allSettled(r);
+  loads.push(import("../../utils/udsMessaging.js"));
+  if (env.CLAUDE_CODE_REMOTE) loads.push(import("../../upstreamproxy/upstreamproxy.js"));
+  return Promise.allSettled(loads);
 }
 //@ chunk-9e524z2b.js:5283-5347 placement
 /**
  * 运行预加载备用进程（可注入加载函数）。
  */
-function runPreloadSpare(r, startPreload = () => import("./chunk-shkzs7rp.js")) {
-  return runPreloadSpare_2(r, startPreload);
+function runPreloadSpare(timeoutMs, startPreload = () => import("../../main.js")) {
+  return runPreloadSpare_2(timeoutMs, startPreload);
 }
+export { runPreloadSpare };

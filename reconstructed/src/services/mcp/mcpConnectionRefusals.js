@@ -23,7 +23,7 @@ import { getEffectiveProjectMcpServerStatus } from "./utils.js";
 import { awaitPolicyColdStartWaiter } from "../policyLimits/coldStartWaiter.js";
 import { getBuiltinPlugin } from "../../plugins/builtinPlugins.js";
 import { getPluginMcpServers } from "../../utils/plugins/mcpPluginIntegration.js";
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { pluginErrorText } from "../../types/plugin.js";
 
 //@ chunk-0sfjpx19.js:137280-137809 placement
@@ -56,64 +56,69 @@ var SESSION_MCP_SUPPRESSIONS = [
 /**
  * 说明某个插件 MCP 服务器当前的状态（插件不存在时返回通用说明）。
  */
-async function explainPluginServer(e) {
-  let { enabled } = await loadAllPluginsCacheOnly(e.storageV5, e.credentials);
-  let found = enabled.find((s) => s.source === e.pluginId);
-  if (found === undefined) return unlistedPluginServer(e.key);
-  return explainPluginMcpServerState(found, e);
+async function explainPluginServer(context) {
+  let { enabled } = await loadAllPluginsCacheOnly(context.storageV5, context.credentials);
+  let plugin = enabled.find((plugin) => plugin.source === context.pluginId);
+  if (plugin === undefined) return unlistedPluginServer(context.key);
+  return explainPluginMcpServerState(plugin, context);
 }
 //@ chunk-0sfjpx19.js:137965-138596 placement
-async function explainPluginMcpServerState(e, n) {
-  let name = `plugin:${pluginDisplayKey(e.name, e.source)}:${n.key}`;
-  let h = [];
-  let config = (await pluginMcpServersFor(e, n, h))?.[name];
-  if (config === undefined) return pluginErrorState(n.key, name, h);
+async function explainPluginMcpServerState(plugin, context) {
+  let serverKey = `plugin:${pluginDisplayKey(plugin.name, plugin.source)}:${context.key}`;
+  let errors = [];
+  let config = (await pluginMcpServersFor(plugin, context, errors))?.[serverKey];
+  if (config === undefined) return pluginErrorState(context.key, serverKey, errors);
   if (config.configError !== undefined)
-    return refusal("failed", `The MCP server "${name}" cannot be resolved: ${config.configError}`);
-  let _ = isProjectLocalPlugin(e) ? getEffectiveProjectMcpServerStatus(name) : "approved";
-  if (_ !== "approved") return refusal("unapproved", formatRejectedProjectServer(name, _));
-  if (isMcpServerDisabled(name))
-    return refusal("disabled", `The MCP server "${name}" is turned off; turn it on in /mcp.`);
+    return refusal("failed", `The MCP server "${serverKey}" cannot be resolved: ${config.configError}`);
+  let projectStatus = isProjectLocalPlugin(plugin)
+    ? getEffectiveProjectMcpServerStatus(serverKey)
+    : "approved";
+  if (projectStatus !== "approved")
+    return refusal("unapproved", formatRejectedProjectServer(serverKey, projectStatus));
+  if (isMcpServerDisabled(serverKey))
+    return refusal("disabled", `The MCP server "${serverKey}" is turned off; turn it on in /mcp.`);
   let message = sessionSuppressionMessage();
   if (message !== undefined) return refusal("policy", message);
   await awaitPolicyColdStartWaiter();
   if (
     filterDynamicMcpServersByPolicy({
-      [name]: config,
+      [serverKey]: config,
     }).blocked.length > 0
   )
-    return refusal("policy", `Your organization's MCP policy does not allow "${name}".`);
-  let name_2 = await suppressedDuplicateOf(name, n);
-  return name_2 === undefined ? listedServer(name, config) : listedTwinServer(name_2);
+    return refusal("policy", `Your organization's MCP policy does not allow "${serverKey}".`);
+  let name = await suppressedDuplicateOf(serverKey, context);
+  return name === undefined ? listedServer(serverKey, config) : listedTwinServer(name);
 }
 //@ chunk-0sfjpx19.js:138596-138774 placement
-async function pluginMcpServersFor(e, n, errors) {
-  let mcpServers = e.isBuiltin ? getBuiltinPlugin(e.name)?.mcpServers : undefined;
-  return e.isBuiltin && mcpServers === undefined
+async function pluginMcpServersFor(plugin, context, errors) {
+  let mcpServers = plugin.isBuiltin ? getBuiltinPlugin(plugin.name)?.mcpServers : undefined;
+  return plugin.isBuiltin && mcpServers === undefined
     ? undefined
     : getPluginMcpServers(
-        e.isBuiltin
+        plugin.isBuiltin
           ? {
-              ...e,
+              ...plugin,
               mcpServers,
             }
-          : e,
+          : plugin,
         errors,
-        n.storageV5,
-        n.credentials,
+        context.storageV5,
+        context.credentials,
       );
 }
 //@ chunk-0sfjpx19.js:138774-139009 placement
-async function suppressedDuplicateOf(e, n) {
+async function suppressedDuplicateOf(serverName, context) {
   let { warnings } = await getClaudeCodeMcpConfigs(
-    wi(n.dynamicServers, (s, h) => h === e),
+    import_reject(context.dynamicServers, (key, value) => value === serverName),
     {
-      storageV5: n.storageV5,
-      credentials: n.credentials,
+      storageV5: context.storageV5,
+      credentials: context.credentials,
     },
   );
   return warnings.flatMap((warning) =>
-    warning.type === "mcp-server-suppressed-duplicate" && warning.source === e ? [warning.duplicateOf] : [],
+    warning.type === "mcp-server-suppressed-duplicate" && warning.source === serverName
+      ? [warning.duplicateOf]
+      : [],
   )[0];
 }
 //@ chunk-0sfjpx19.js:139009-139062 placement
@@ -121,26 +126,26 @@ async function suppressedDuplicateOf(e, n) {
  * 当前会话被抑制时给用户的说明。
  */
 function sessionSuppressionMessage() {
-  return SESSION_MCP_SUPPRESSIONS.find((e) => e.isOn())?.message;
+  return SESSION_MCP_SUPPRESSIONS.find((suppression) => suppression.isOn())?.message;
 }
 //@ chunk-0sfjpx19.js:139062-139229 placement
-function pluginErrorState(key, n, r) {
-  let found = r.find((h) => "source" in h && h.source === key);
-  if (found === undefined) return unlistedPluginServer(key);
-  return refusal("failed", `The MCP server "${n}" cannot be resolved: ${pluginErrorText(found)}`);
+function pluginErrorState(serverKey, displayName, errors) {
+  let found = errors.find((error) => "source" in error && error.source === serverKey);
+  if (found === undefined) return unlistedPluginServer(serverKey);
+  return refusal("failed", `The MCP server "${displayName}" cannot be resolved: ${pluginErrorText(found)}`);
 }
 //@ chunk-0sfjpx19.js:139229-139477 placement
-function formatRejectedProjectServer(e, n) {
-  return n === "rejected"
-    ? `The MCP server "${e}" comes with this repository and you rejected it; \`claude mcp reset-project-choices\` asks again.`
-    : `The MCP server "${e}" comes with this repository and waits for your approval in /mcp.`;
+function formatRejectedProjectServer(serverName, status) {
+  return status === "rejected"
+    ? `The MCP server "${serverName}" comes with this repository and you rejected it; \`claude mcp reset-project-choices\` asks again.`
+    : `The MCP server "${serverName}" comes with this repository and waits for your approval in /mcp.`;
 }
 //@ chunk-0sfjpx19.js:139477-139573 placement
 /**
  * 插件清单里没有该服务器时的拒绝结果。
  */
-function unlistedPluginServer(e) {
-  return refusal("unlisted", `This plugin's manifest lists no MCP server named "${e}".`);
+function unlistedPluginServer(serverKey) {
+  return refusal("unlisted", `This plugin's manifest lists no MCP server named "${serverKey}".`);
 }
 //@ chunk-0sfjpx19.js:139573-139630 placement
 /**

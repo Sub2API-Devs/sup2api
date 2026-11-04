@@ -8,8 +8,8 @@
  * pieces: chunk-qqj12s77.js (5)
  * attribution: placement 5
  */
-import { init_react_production, y, R } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState, useRef } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../state/AppState.js";
 import { getModelContextInfo } from "../utils/model/modelContextInfo.js";
 import { renderModelName } from "../utils/model/modelDisplay.js";
@@ -39,8 +39,8 @@ import { lit } from "../services/analytics/safeMetadata.js";
 //@ chunk-qqj12s77.js:13233-13237 placement
 init_react_production();
 //@ chunk-qqj12s77.js:13237-13281 placement
-function selectAutoCompactWindow(oo) {
-  return oo.autoCompactWindow;
+function selectAutoCompactWindow(appState) {
+  return appState.autoCompactWindow;
 }
 //@ chunk-qqj12s77.js:13281-13307 placement
 var AUTOCOMPACT_STEP_BYTES = 1e5;
@@ -52,27 +52,27 @@ var AUTOCOMPACT_DEFAULT_BYTES = 0;
  * 自动压缩窗口设置对话框：显示模型推荐窗口、当前配置与来源（env/设置），允许覆盖。
  */
 function AutoCompactWindowDialog(props) {
-  let o = w(42);
+  let $ = useMemoCache(42);
   let { onDone, caller } = props;
   let appState = useAppState(selectAutoCompactWindow);
   let modelContextInfo = getModelContextInfo(caller.options.mainLoopModel);
-  let E = renderModelName(modelContextInfo.settingsKey);
-  let { window: P, configured, source } = getAutoCompactWindow(modelContextInfo, appState);
-  let ve;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
-    ve = isAutoCompactEnabled();
-    o[0] = ve;
-  } else ve = o[0];
-  let Qe = ve;
-  let I = configured > P;
-  let v = source === "env";
-  let ye;
-  if (o[1] === MEMO_CACHE_SENTINEL) {
-    ye = reportInvalidWindowEnv(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
-    o[1] = ye;
-  } else ye = o[1];
-  let B = ye;
-  let Ze =
+  let modelName = renderModelName(modelContextInfo.settingsKey);
+  let { window: cappedWindow, configured, source } = getAutoCompactWindow(modelContextInfo, appState);
+  let isAutoCompactOnCached;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    isAutoCompactOnCached = isAutoCompactEnabled();
+    $[0] = isAutoCompactOnCached;
+  } else isAutoCompactOnCached = $[0];
+  let isAutoCompactOn = isAutoCompactOnCached;
+  let isCappedByModel = configured > cappedWindow;
+  let isEnvLocked = source === "env";
+  let invalidEnvWarningCached;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    invalidEnvWarningCached = reportInvalidWindowEnv(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
+    $[1] = invalidEnvWarningCached;
+  } else invalidEnvWarningCached = $[1];
+  let invalidEnvWarning = invalidEnvWarningCached;
+  let sourceLabel =
     source === "env"
       ? "from CLAUDE_CODE_AUTO_COMPACT_WINDOW"
       : source === "settings"
@@ -82,7 +82,7 @@ function AutoCompactWindowDialog(props) {
           : source === "model-default"
             ? "default for this model"
             : "auto";
-  let Ke = !isEnvOrSettingsSource(source)
+  let configuredBytes = !isEnvOrSettingsSource(source)
     ? AUTOCOMPACT_DEFAULT_BYTES
     : Math.min(
         AUTOCOMPACT_MAX_BYTES,
@@ -91,129 +91,129 @@ function AutoCompactWindowDialog(props) {
           Math.round(configured / AUTOCOMPACT_STEP_BYTES) * AUTOCOMPACT_STEP_BYTES,
         ),
       );
-  let [u, We] = y(Ke);
-  let [xe, He] = y(false);
-  let De;
-  if (o[2] !== v) {
-    De = function d($e) {
-      if (v) {
+  let [windowBytes, setWindowBytes] = useState(configuredBytes);
+  let [isCustomized, setIsCustomized] = useState(false);
+  let adjustCached;
+  if ($[2] !== isEnvLocked) {
+    adjustCached = function handleAdjust(steps) {
+      if (isEnvLocked) {
         return;
       }
-      He(true);
-      We((be) => {
-        if (be === AUTOCOMPACT_DEFAULT_BYTES) {
-          return $e > 0 ? AUTOCOMPACT_MIN_BYTES : AUTOCOMPACT_MAX_BYTES;
+      setIsCustomized(true);
+      setWindowBytes((previous) => {
+        if (previous === AUTOCOMPACT_DEFAULT_BYTES) {
+          return steps > 0 ? AUTOCOMPACT_MIN_BYTES : AUTOCOMPACT_MAX_BYTES;
         }
-        let ee = be + $e * AUTOCOMPACT_STEP_BYTES;
-        if (ee < AUTOCOMPACT_MIN_BYTES) {
+        let nextValue = previous + steps * AUTOCOMPACT_STEP_BYTES;
+        if (nextValue < AUTOCOMPACT_MIN_BYTES) {
           return AUTOCOMPACT_DEFAULT_BYTES;
         }
-        if (ee > AUTOCOMPACT_MAX_BYTES) {
+        if (nextValue > AUTOCOMPACT_MAX_BYTES) {
           return AUTOCOMPACT_DEFAULT_BYTES;
         }
-        return ee;
+        return nextValue;
       });
     };
-    o[2] = v;
-    o[3] = De;
-  } else De = o[3];
-  let d = De;
-  let Re;
-  if (o[4] !== I || o[5] !== P) {
-    Re = I ? ` \xB7 capped to ${formatTokens(P)} by model` : "";
-    o[4] = I;
-    o[5] = P;
-    o[6] = Re;
-  } else Re = o[6];
-  let ke = Re;
-  let oe =
+    $[2] = isEnvLocked;
+    $[3] = adjustCached;
+  } else adjustCached = $[3];
+  let adjustWindow = adjustCached;
+  let cappedSuffixCached;
+  if ($[4] !== isCappedByModel || $[5] !== cappedWindow) {
+    cappedSuffixCached = isCappedByModel ? ` \xB7 capped to ${formatTokens(cappedWindow)} by model` : "";
+    $[4] = isCappedByModel;
+    $[5] = cappedWindow;
+    $[6] = cappedSuffixCached;
+  } else cappedSuffixCached = $[6];
+  let cappedSuffix = cappedSuffixCached;
+  let currentSummary =
     source === "auto"
       ? "auto"
       : source === "experiment" || source === "clientdata"
-        ? `auto (${formatTokens(configured)} tokens)${ke}`
-        : `${formatTokens(configured)} tokens (${Ze})${ke}`;
-  let A = R(false);
-  let V = function V() {
-    if (A.current) {
+        ? `auto (${formatTokens(configured)} tokens)${cappedSuffix}`
+        : `${formatTokens(configured)} tokens (${sourceLabel})${cappedSuffix}`;
+  let submittedRef = useRef(false);
+  let applyAndFinish = function handleApply() {
+    if (submittedRef.current) {
       return;
     }
-    if (!xe) {
-      A.current = true;
-      onDone(`Auto-compact window for ${E} unchanged: ${oe}`);
+    if (!isCustomized) {
+      submittedRef.current = true;
+      onDone(`Auto-compact window for ${modelName} unchanged: ${currentSummary}`);
       return;
     }
-    A.current = true;
-    let Ne = u === AUTOCOMPACT_DEFAULT_BYTES ? "auto" : String(u);
-    applyAutoCompactWindow(Ne, caller, "dialog").then(onDone);
+    submittedRef.current = true;
+    let overrideValue = windowBytes === AUTOCOMPACT_DEFAULT_BYTES ? "auto" : String(windowBytes);
+    applyAutoCompactWindow(overrideValue, caller, "dialog").then(onDone);
   };
-  let X;
-  let z;
-  if (o[7] !== d) {
-    X = () => d(1);
-    z = () => d(-1);
-    o[7] = d;
-    o[8] = X;
-    o[9] = z;
+  let increaseWindow;
+  let decreaseWindow;
+  if ($[7] !== adjustWindow) {
+    increaseWindow = () => adjustWindow(1);
+    decreaseWindow = () => adjustWindow(-1);
+    $[7] = adjustWindow;
+    $[8] = increaseWindow;
+    $[9] = decreaseWindow;
   } else {
-    X = o[8];
-    z = o[9];
+    increaseWindow = $[8];
+    decreaseWindow = $[9];
   }
-  let Ae;
-  if (o[10] !== V || o[11] !== X || o[12] !== z) {
-    Ae = {
-      "select:previous": X,
-      "select:next": z,
-      "select:accept": V,
+  let selectKeybindings;
+  if ($[10] !== applyAndFinish || $[11] !== increaseWindow || $[12] !== decreaseWindow) {
+    selectKeybindings = {
+      "select:previous": increaseWindow,
+      "select:next": decreaseWindow,
+      "select:accept": applyAndFinish,
     };
-    o[10] = V;
-    o[11] = X;
-    o[12] = z;
-    o[13] = Ae;
-  } else Ae = o[13];
-  let Le;
-  if (o[14] === MEMO_CACHE_SENTINEL) {
-    Le = {
+    $[10] = applyAndFinish;
+    $[11] = increaseWindow;
+    $[12] = decreaseWindow;
+    $[13] = selectKeybindings;
+  } else selectKeybindings = $[13];
+  let selectKeybindingOptions;
+  if ($[14] === MEMO_CACHE_SENTINEL) {
+    selectKeybindingOptions = {
       context: "Select",
     };
-    o[14] = Le;
-  } else Le = o[14];
-  MessageActionsKeybindings(Ae, Le);
-  let _e;
-  if (o[15] !== d) {
-    _e = {
-      "tabs:next": () => d(1),
-      "tabs:previous": () => d(-1),
+    $[14] = selectKeybindingOptions;
+  } else selectKeybindingOptions = $[14];
+  MessageActionsKeybindings(selectKeybindings, selectKeybindingOptions);
+  let tabKeybindings;
+  if ($[15] !== adjustWindow) {
+    tabKeybindings = {
+      "tabs:next": () => adjustWindow(1),
+      "tabs:previous": () => adjustWindow(-1),
     };
-    o[15] = d;
-    o[16] = _e;
-  } else _e = o[16];
-  let Je;
-  if (o[17] === MEMO_CACHE_SENTINEL) {
-    Je = {
+    $[15] = adjustWindow;
+    $[16] = tabKeybindings;
+  } else tabKeybindings = $[16];
+  let tabKeybindingOptions;
+  if ($[17] === MEMO_CACHE_SENTINEL) {
+    tabKeybindingOptions = {
       context: "Tabs",
     };
-    o[17] = Je;
-  } else Je = o[17];
-  MessageActionsKeybindings(_e, Je);
-  let Me;
-  if (o[18] !== u) {
-    Me = u === AUTOCOMPACT_DEFAULT_BYTES ? "auto" : `${formatTokens(u)} tokens`;
-    o[18] = u;
-    o[19] = Me;
-  } else Me = o[19];
-  let children = Me;
-  const ne = Dialog;
+    $[17] = tabKeybindingOptions;
+  } else tabKeybindingOptions = $[17];
+  MessageActionsKeybindings(tabKeybindings, tabKeybindingOptions);
+  let windowLabel;
+  if ($[18] !== windowBytes) {
+    windowLabel = windowBytes === AUTOCOMPACT_DEFAULT_BYTES ? "auto" : `${formatTokens(windowBytes)} tokens`;
+    $[18] = windowBytes;
+    $[19] = windowLabel;
+  } else windowLabel = $[19];
+  let children = windowLabel;
+  const DialogComponent = Dialog;
   const title = "Auto-compact window";
-  const subtitle = `Current setting for ${E}: ${oe}`;
+  const subtitle = `Current setting for ${modelName}: ${currentSummary}`;
   const onCancel = () => {
-    if (A.current) {
+    if (submittedRef.current) {
       return;
     }
-    A.current = true;
-    onDone(`Auto-compact window for ${E} unchanged: ${oe}`);
+    submittedRef.current = true;
+    onDone(`Auto-compact window for ${modelName} unchanged: ${currentSummary}`);
   };
   let inputGuide;
-  if (o[20] === MEMO_CACHE_SENTINEL) {
+  if ($[20] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default(Text, {
       dimColor: true,
       children: jsxProd_default_2(Byline, {
@@ -233,20 +233,20 @@ function AutoCompactWindowDialog(props) {
         ],
       }),
     });
-    o[20] = inputGuide;
-  } else inputGuide = o[20];
-  const ae = Box;
+    $[20] = inputGuide;
+  } else inputGuide = $[20];
+  const BoxComponent = Box;
   const flexDirection = "column";
   const gap = 1;
-  let Y;
-  if (o[21] === MEMO_CACHE_SENTINEL) {
-    Y = jsxProd_default(Text, {
+  let introText;
+  if ($[21] === MEMO_CACHE_SENTINEL) {
+    introText = jsxProd_default(Text, {
       children:
         "This command configures when auto-compaction happens. The actual threshold is the minimum of this setting and your model's maximum context window.",
     });
-    o[21] = Y;
-  } else Y = o[21];
-  const se =
+    $[21] = introText;
+  } else introText = $[21];
+  const stayOnAutoNote =
     advisesStayingOnAuto(modelContextInfo.settingsKey) &&
     jsxProd_default_2(Text, {
       children: [
@@ -259,37 +259,37 @@ function AutoCompactWindowDialog(props) {
         " for the best cost and performance. You can override it below.",
       ],
     });
-  let F;
-  if (o[22] === MEMO_CACHE_SENTINEL) {
-    F =
-      !Qe &&
+  let disabledWarning;
+  if ($[22] === MEMO_CACHE_SENTINEL) {
+    disabledWarning =
+      !isAutoCompactOn &&
       jsxProd_default(Text, {
         color: "warning",
         children: "Auto-compact is currently disabled (see /config)",
       });
-    o[22] = F;
-  } else F = o[22];
-  const ie =
-    u !== AUTOCOMPACT_DEFAULT_BYTES &&
-    isAboveAutoWindow(modelContextInfo, xe ? u : configured) &&
+    $[22] = disabledWarning;
+  } else disabledWarning = $[22];
+  const highUsageWarning =
+    windowBytes !== AUTOCOMPACT_DEFAULT_BYTES &&
+    isAboveAutoWindow(modelContextInfo, isCustomized ? windowBytes : configured) &&
     jsxProd_default(Text, {
       color: "warning",
       children: "Overriding auto may result in high token usage, especially when resuming long sessions.",
     });
-  let Q;
-  if (o[23] !== B) {
-    Q =
-      B !== null &&
+  let envWarningElement;
+  if ($[23] !== invalidEnvWarning) {
+    envWarningElement =
+      invalidEnvWarning !== null &&
       jsxProd_default(Text, {
         color: "warning",
-        children: B,
+        children: invalidEnvWarning,
       });
-    o[23] = B;
-    o[24] = Q;
-  } else Q = o[24];
-  let Z;
-  if (o[25] !== children || o[26] !== v) {
-    Z = v
+    $[23] = invalidEnvWarning;
+    $[24] = envWarningElement;
+  } else envWarningElement = $[24];
+  let selectionElement;
+  if ($[25] !== children || $[26] !== isEnvLocked) {
+    selectionElement = isEnvLocked
       ? jsxProd_default(Text, {
           color: "warning",
           children:
@@ -307,67 +307,74 @@ function AutoCompactWindowDialog(props) {
             }),
           ],
         });
-    o[25] = children;
-    o[26] = v;
-    o[27] = Z;
-  } else Z = o[27];
+    $[25] = children;
+    $[26] = isEnvLocked;
+    $[27] = selectionElement;
+  } else selectionElement = $[27];
   let children_2;
   if (
-    o[28] !== ae ||
-    o[29] !== Y ||
-    o[30] !== se ||
-    o[31] !== F ||
-    o[32] !== ie ||
-    o[33] !== Q ||
-    o[34] !== Z
+    $[28] !== BoxComponent ||
+    $[29] !== introText ||
+    $[30] !== stayOnAutoNote ||
+    $[31] !== disabledWarning ||
+    $[32] !== highUsageWarning ||
+    $[33] !== envWarningElement ||
+    $[34] !== selectionElement
   ) {
-    children_2 = jsxProd_default_2(ae, {
+    children_2 = jsxProd_default_2(BoxComponent, {
       flexDirection,
       gap,
-      children: [Y, se, F, ie, Q, Z],
+      children: [
+        introText,
+        stayOnAutoNote,
+        disabledWarning,
+        highUsageWarning,
+        envWarningElement,
+        selectionElement,
+      ],
     });
-    o[28] = ae;
-    o[29] = Y;
-    o[30] = se;
-    o[31] = F;
-    o[32] = ie;
-    o[33] = Q;
-    o[34] = Z;
-    o[35] = children_2;
-  } else children_2 = o[35];
-  let Oe;
+    $[28] = BoxComponent;
+    $[29] = introText;
+    $[30] = stayOnAutoNote;
+    $[31] = disabledWarning;
+    $[32] = highUsageWarning;
+    $[33] = envWarningElement;
+    $[34] = selectionElement;
+    $[35] = children_2;
+  } else children_2 = $[35];
+  let dialogElement;
   if (
-    o[36] !== ne ||
-    o[37] !== subtitle ||
-    o[38] !== onCancel ||
-    o[39] !== inputGuide ||
-    o[40] !== children_2
+    $[36] !== DialogComponent ||
+    $[37] !== subtitle ||
+    $[38] !== onCancel ||
+    $[39] !== inputGuide ||
+    $[40] !== children_2
   ) {
-    Oe = jsxProd_default(ne, {
+    dialogElement = jsxProd_default(DialogComponent, {
       title,
       subtitle,
       onCancel,
       inputGuide,
       children: children_2,
     });
-    o[36] = ne;
-    o[37] = subtitle;
-    o[38] = onCancel;
-    o[39] = inputGuide;
-    o[40] = children_2;
-    o[41] = Oe;
-  } else Oe = o[41];
-  return Oe;
+    $[36] = DialogComponent;
+    $[37] = subtitle;
+    $[38] = onCancel;
+    $[39] = inputGuide;
+    $[40] = children_2;
+    $[41] = dialogElement;
+  } else dialogElement = $[41];
+  return dialogElement;
 }
 //@ chunk-qqj12s77.js:17045-17231 placement
 /**
  * /autocompact 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
 var runAutoCompactCommand = async (onDone, context, args) => {
-  let O = args?.trim() || "";
-  if (O) {
-    let C = await applyAutoCompactWindow(O, context, "typed");
-    onDone(C);
+  let kind = args?.trim() || "";
+  if (kind) {
+    let detail = await applyAutoCompactWindow(kind, context, "typed");
+    onDone(detail);
     return null;
   }
   logEvent("tengu_autocompact_dialog_opened", {
@@ -378,3 +385,4 @@ var runAutoCompactCommand = async (onDone, context, args) => {
     caller: context,
   });
 };
+export { runAutoCompactCommand };

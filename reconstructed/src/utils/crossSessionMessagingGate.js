@@ -21,8 +21,8 @@ import {
 /**
  * 跨会话消息是否开启（tengu_harbor_kite 等）。
  */
-function isCrossSessionMessagingEnabled(e = "send") {
-  if (e === "send" && getHostAgentPolicy().messagingBeyondOwnAgentsDisabled) return false;
+function isCrossSessionMessagingEnabled(direction = "send") {
+  if (direction === "send" && getHostAgentPolicy().messagingBeyondOwnAgentsDisabled) return false;
   let CLAUDE_CODE_HARBOR_KITE = env.CLAUDE_CODE_HARBOR_KITE;
   if (CLAUDE_CODE_HARBOR_KITE !== undefined) return isEnvTruthy(CLAUDE_CODE_HARBOR_KITE);
   if (getPlatform() === "windows" && !getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_kite_win", true))
@@ -30,9 +30,9 @@ function isCrossSessionMessagingEnabled(e = "send") {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_harbor_kite", true);
 }
 //@ chunk-jbqx8bv9.js:607-741 placement
-function isProjectsHumanOriginEnabled(e) {
+function isProjectsHumanOriginEnabled(context) {
   if (
-    e?.flagsSettled === false &&
+    context?.flagsSettled === false &&
     getFeatureValueWithSource_CACHED_MAY_BE_STALE("tengu_cuddly_willow", true).source === "fallback"
   )
     return false;

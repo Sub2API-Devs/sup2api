@@ -39,7 +39,7 @@ var CHROME_INPUT_APPROVED_TOOL_NAMES = new Set([
 ]);
 var BRIDGE_EXCLUDED_TOOL_NAMES = new Set(["switch_browser", "list_connected_browsers", "select_browser"]);
 var CHROME_TOOL_MAX_RESULT_CHARS = 60000;
-var o = Object.freeze({
+var CHROME_RESULT_SIZE_META = Object.freeze({
   "anthropic/maxResultSizeChars": CHROME_TOOL_MAX_RESULT_CHARS,
 });
 var CHOOSE_BROWSER_OPTION_LABEL =
@@ -48,8 +48,8 @@ var CHOOSE_BROWSER_OPTION_LABEL =
 /**
  * 把 ask 工具名包装成 “the X tool”（未提供时用泛称）。
  */
-function askToolLabel(e) {
-  return e ? `the ${e} tool` : "your ask-user tool (if available)";
+function askToolLabel(askToolName) {
+  return askToolName ? `the ${askToolName} tool` : "your ask-user tool (if available)";
 }
 //@ chunk-2x56e6nv.js:789-1441 placement
 function browserPreflightInstruction(askUserToolName) {
@@ -59,8 +59,8 @@ function browserPreflightInstruction(askUserToolName) {
   );
 }
 //@ chunk-2x56e6nv.js:1441-2044 placement
-function browserSelectionNote(askUserToolName) {
-  return `You do not need to call this before using the browser: when one browser is connected, or one was already chosen for this session, browser tools just work. Only if a browser tool reports that several browsers are connected and none is selected, or the user asks to change browsers, ask with ${askToolLabel(askUserToolName)}: one option per connected browser, the ones on this computer first (display name as the label, deviceId in parentheses), plus a final option labeled exactly: "${CHOOSE_BROWSER_OPTION_LABEL}" Then call select_browser with the chosen deviceId, or switch_browser for the final option. Never pick one yourself.`;
+function browserSelectionNote(askToolName) {
+  return `You do not need to call this before using the browser: when one browser is connected, or one was already chosen for this session, browser tools just work. Only if a browser tool reports that several browsers are connected and none is selected, or the user asks to change browsers, ask with ${askToolLabel(askToolName)}: one option per connected browser, the ones on this computer first (display name as the label, deviceId in parentheses), plus a final option labeled exactly: "${CHOOSE_BROWSER_OPTION_LABEL}" Then call select_browser with the chosen deviceId, or switch_browser for the final option. Never pick one yourself.`;
 }
 //@ chunk-2x56e6nv.js:2044-28994 placement
 /**
@@ -196,7 +196,7 @@ var BROWSER_TOOLS = [
       },
       required: ["tabId"],
     },
-    _meta: o,
+    _meta: CHROME_RESULT_SIZE_META,
   },
   {
     name: "find",
@@ -391,7 +391,7 @@ var BROWSER_TOOLS = [
       },
       required: ["actions"],
     },
-    _meta: o,
+    _meta: CHROME_RESULT_SIZE_META,
   },
   {
     name: "navigate",
@@ -555,7 +555,7 @@ var BROWSER_TOOLS = [
       },
       required: ["tabId"],
     },
-    _meta: o,
+    _meta: CHROME_RESULT_SIZE_META,
   },
   {
     name: "tabs_context_mcp",
@@ -765,4 +765,8 @@ export {
   BROWSER_REGISTER_TIMEOUT_MS,
   BROWSER_ACTION_SETTLE_MS,
   browserPreflightInstruction,
+  BROWSER_TOOL_INPUT_SCHEMAS,
+  FILE_UPLOAD_PROXY_INPUT_SCHEMA,
+  FILE_UPLOAD_PROXY_TOOL,
+  MAX_WAIT_SECONDS,
 };

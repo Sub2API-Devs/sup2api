@@ -20,10 +20,10 @@ import { firstLineOf } from "../../utils/stringUtils.js";
 import {
   zodStrictObject,
   _enum,
-  string,
-  M,
-  E,
-  u,
+  stringSchema,
+  booleanSchema,
+  numberSchema,
+  objectSchema,
   discriminatedUnion,
   literal,
   array,
@@ -42,37 +42,37 @@ var ORIGINAL_UNAVAILABLE_NOTE = "Note: `original` is not available in this sessi
 var IF_VERSION_UNAVAILABLE_NOTE =
   "Note: `if_version` is not available in this session and was ignored: this call did not check whether the doc had changed.";
 //@ chunk-eg496hkq.js:13067-13546 placement
-function validateProjectWriteFlags(e, { originalOffered, docVersionsOffered }) {
-  if (!isPlainObject(e)) return null;
-  let s = typeof e.force === "boolean";
-  let l = !originalOffered && "original" in e;
-  let h = !docVersionsOffered && "if_version" in e;
-  if (!s && !l && !h) return null;
-  let w = {
-    ...e,
+function validateProjectWriteFlags(input, { originalOffered, docVersionsOffered }) {
+  if (!isPlainObject(input)) return null;
+  let hasForce = typeof input.force === "boolean";
+  let hasOriginal = !originalOffered && "original" in input;
+  let hasIfVersion = !docVersionsOffered && "if_version" in input;
+  if (!hasForce && !hasOriginal && !hasIfVersion) return null;
+  let cleanedInput = {
+    ...input,
   };
-  let m = [];
-  if (s) {
-    delete w.force;
-    m.push("legacy_force");
+  let changedFields = [];
+  if (hasForce) {
+    delete cleanedInput.force;
+    changedFields.push("legacy_force");
   }
-  if (l) {
-    delete w.original;
-    m.push("original_while_off");
+  if (hasOriginal) {
+    delete cleanedInput.original;
+    changedFields.push("original_while_off");
   }
-  if (h) {
-    delete w.if_version;
-    m.push("if_version_while_off");
+  if (hasIfVersion) {
+    delete cleanedInput.if_version;
+    changedFields.push("if_version_while_off");
   }
-  let y = [
-    ...(l && e.original === true ? [ORIGINAL_UNAVAILABLE_NOTE] : []),
-    ...(h ? [IF_VERSION_UNAVAILABLE_NOTE] : []),
+  let notes = [
+    ...(hasOriginal && input.original === true ? [ORIGINAL_UNAVAILABLE_NOTE] : []),
+    ...(hasIfVersion ? [IF_VERSION_UNAVAILABLE_NOTE] : []),
   ];
   return {
-    input: w,
-    shapeClass: m.join("+"),
-    ...(y.length > 0 && {
-      resultNote: y.join(`
+    input: cleanedInput,
+    shapeClass: changedFields.join("+"),
+    ...(notes.length > 0 && {
+      resultNote: notes.join(`
 `),
     }),
   };
@@ -84,51 +84,51 @@ function hasProjectHost() {
   return PROJECT_HOST_STATE.peek(getRootSession())?.host !== undefined;
 }
 //@ chunk-eg496hkq.js:13619-14834 placement
-function findProjectDocInView(e, n, projectsToolAliases, toolUseId) {
-  if (n === "")
+function findProjectDocInView(messages, content, projectsToolAliases, toolUseId) {
+  if (content === "")
     return {
       inView: true,
       foundIn: "none",
     };
-  let l = messagesSinceCompactBoundary(e);
-  let h;
+  let visibleMessages = messagesSinceCompactBoundary(messages);
+  let writeMessageId;
   if (toolUseId !== undefined) {
-    for (let m of l)
+    for (let message of visibleMessages)
       if (
-        m.type === "assistant" &&
-        Array.isArray(m.message.content) &&
-        m.message.content.some((y) => y.type === "tool_use" && y.id === toolUseId)
+        message.type === "assistant" &&
+        Array.isArray(message.message.content) &&
+        message.message.content.some((block) => block.type === "tool_use" && block.id === toolUseId)
       ) {
-        h = m.message.id;
+        writeMessageId = message.message.id;
         break;
       }
   }
-  let w = new Set();
-  for (let m of l) {
-    if (isNonConversationMessage(m)) continue;
+  let pendingToolUseIds = new Set();
+  for (let message of visibleMessages) {
+    if (isNonConversationMessage(message)) continue;
     if (
-      m.type === "attachment" &&
-      m.attachment.type === "project_doc_reads" &&
-      !isBareModeAttachmentDropped(m) &&
-      trackedProjectReads(m.attachment)?.some((y) => y.read.content === n)
+      message.type === "attachment" &&
+      message.attachment.type === "project_doc_reads" &&
+      !isBareModeAttachmentDropped(message) &&
+      trackedProjectReads(message.attachment)?.some((read) => read.read.content === content)
     )
       return {
         inView: true,
         foundIn: "attached_read",
       };
-    if (m.type === "assistant" && Array.isArray(m.message.content)) {
-      if (h !== undefined && m.message.id === h) break;
-      for (let y of m.message.content) {
-        if (y.type !== "tool_use" || !projectsToolAliases.includes(y.name)) continue;
-        w.add(y.id);
-        let input = y.input;
+    if (message.type === "assistant" && Array.isArray(message.message.content)) {
+      if (writeMessageId !== undefined && message.message.id === writeMessageId) break;
+      for (let block of message.message.content) {
+        if (block.type !== "tool_use" || !projectsToolAliases.includes(block.name)) continue;
+        pendingToolUseIds.add(block.id);
+        let input = block.input;
         if (
           typeof input === "object" &&
           input !== null &&
           "method" in input &&
           input.method === "project_write" &&
           "content" in input &&
-          input.content === n
+          input.content === content
         )
           return {
             inView: true,
@@ -136,18 +136,18 @@ function findProjectDocInView(e, n, projectsToolAliases, toolUseId) {
           };
       }
     }
-    if (m.type === "user" && Array.isArray(m.message.content))
-      for (let y of m.message.content) {
+    if (message.type === "user" && Array.isArray(message.message.content))
+      for (let block of message.message.content) {
         if (
-          y.type !== "tool_result" ||
-          !w.has(y.tool_use_id) ||
-          y.is_error === true ||
-          typeof y.content !== "string"
+          block.type !== "tool_result" ||
+          !pendingToolUseIds.has(block.tool_use_id) ||
+          block.is_error === true ||
+          typeof block.content !== "string"
         )
           continue;
-        let j = safeParseJSON(
+        let parsed = safeParseJSON(
           firstLineOf(
-            y.content,
+            block.content,
             `
 
 `,
@@ -155,12 +155,12 @@ function findProjectDocInView(e, n, projectsToolAliases, toolUseId) {
           false,
         );
         if (
-          typeof j === "object" &&
-          j !== null &&
-          "method" in j &&
-          j.method === "project_read" &&
-          "content" in j &&
-          j.content === n
+          typeof parsed === "object" &&
+          parsed !== null &&
+          "method" in parsed &&
+          parsed.method === "project_read" &&
+          "content" in parsed &&
+          parsed.content === content
         )
           return {
             inView: true,
@@ -174,7 +174,7 @@ function findProjectDocInView(e, n, projectsToolAliases, toolUseId) {
   };
 }
 //@ chunk-eg496hkq.js:14834-16242 placement
-var projectsInputSchemaFor = (e, n) =>
+var projectsInputSchemaFor = (contentHint, localPathHint) =>
   zodStrictObject({
     method: _enum([
       "project_info",
@@ -185,30 +185,30 @@ var projectsInputSchemaFor = (e, n) =>
       "project_memory_list",
       "project_memory_read",
     ]),
-    path: string()
+    path: stringSchema()
       .min(1)
       .max(255)
       .optional()
       .describe(
         'project_read/project_write/project_delete: doc path. project_write: an existing path is replaced in place; a new bare filename (no "/") is namespaced to "claude/<name>". project_memory_read: memory file path as listed by project_memory_list.',
       ),
-    content: string().optional().describe(e),
-    local_path: string().min(1).optional().describe(n),
-    present_to_user: M()
+    content: stringSchema().optional().describe(contentHint),
+    local_path: stringSchema().min(1).optional().describe(localPathHint),
+    present_to_user: booleanSchema()
       .optional()
       .describe(
         "project_write: true marks this doc as the file the user needs to " +
           "see \u2014 the deliverable they asked for or must act on. Defaults to " +
           "false; leave it unset for routine saves, notes, and bulk writes.",
       ),
-    if_version: string()
+    if_version: stringSchema()
       .optional()
       .describe(
         "project_write to an existing doc: the `version` that came with the copy you worked from (from project_read or project_write). The write is refused if the doc has changed since. Omit for a new doc.",
       ),
-    query: string().min(1).optional().describe("project_search: knowledge-base query"),
-    n: E().int().min(1).max(15).optional().describe("project_search: number of hits (default 5)"),
-    original: M()
+    query: stringSchema().min(1).optional().describe("project_search: knowledge-base query"),
+    n: numberSchema().int().min(1).max(15).optional().describe("project_search: number of hits (default 5)"),
+    original: booleanSchema()
       .optional()
       .describe(
         "project_read: true saves the original file of a document-kind upload (PDF, docx) to a local file and returns its path, in place of its extracted text. Ignored for text docs and other uploads.",
@@ -271,117 +271,117 @@ var projectMemoryListInputSchema = DoctorLazy(() =>
   }),
 );
 var NOTICE_FIELD_SCHEMA = {
-  notice: string().optional(),
+  notice: stringSchema().optional(),
 };
 var projectsReadOnlyMethods = {
-  version: string()
+  version: stringSchema()
     .optional()
     .describe(
       "@internal Lowercase hex SHA-256 of the UTF-8 bytes of a text doc's whole text. Set only where docVersionsOffered.",
     ),
 };
 var projectsPermissionContext_2 = DoctorLazy(() =>
-  u({
-    knowledge_size: E(),
-    max_knowledge_size: E(),
+  objectSchema({
+    knowledge_size: numberSchema(),
+    max_knowledge_size: numberSchema(),
   }),
 );
 var projectToolOutputSchema = DoctorLazy(() =>
   discriminatedUnion("method", [
-    u({
+    objectSchema({
       method: literal("project_info"),
       ...NOTICE_FIELD_SCHEMA,
-      local_file: string().optional(),
-      name: string(),
-      description: string(),
-      instructions: string(),
+      local_file: stringSchema().optional(),
+      name: stringSchema(),
+      description: stringSchema(),
+      instructions: stringSchema(),
       docs: array(
-        u({
-          path: string(),
-          created_at: string().nullable(),
+        objectSchema({
+          path: stringSchema(),
+          created_at: stringSchema().nullable(),
         }),
       ),
       files: array(
-        u({
-          path: string(),
-          file_kind: string(),
-          created_at: string().nullable(),
+        objectSchema({
+          path: stringSchema(),
+          file_kind: stringSchema(),
+          created_at: stringSchema().nullable(),
         }),
       ).optional(),
       sync_sources: array(
-        u({
-          type: string().nullable(),
-          config: record(string(), unknown()),
+        objectSchema({
+          type: stringSchema().nullable(),
+          config: record(stringSchema(), unknown()),
         }),
       ).optional(),
       knowledge: projectsPermissionContext_2(),
     }),
-    u({
+    objectSchema({
       method: literal("project_read"),
       ...NOTICE_FIELD_SCHEMA,
-      path: string(),
+      path: stringSchema(),
       ...projectsReadOnlyMethods,
-      file_kind: string().optional(),
-      content: string().optional(),
-      local_file: string().optional(),
-      size_bytes: E()
+      file_kind: stringSchema().optional(),
+      content: stringSchema().optional(),
+      local_file: stringSchema().optional(),
+      size_bytes: numberSchema()
         .optional()
         .describe(
           "@internal Size in UTF-8 bytes of the document's whole text. Set only when the text is in local_file and project_read had a token limit on inline text.",
         ),
-      created_at: string().nullable(),
+      created_at: stringSchema().nullable(),
     }),
-    u({
+    objectSchema({
       method: literal("project_search"),
       ...NOTICE_FIELD_SCHEMA,
-      rag: M(),
+      rag: booleanSchema(),
       hits: array(
-        u({
-          name: string().optional(),
-          doc_uuid: string().optional(),
-          text: string().optional(),
+        objectSchema({
+          name: stringSchema().optional(),
+          doc_uuid: stringSchema().optional(),
+          text: stringSchema().optional(),
         }),
       ).optional(),
-      docs: array(string()).optional(),
+      docs: array(stringSchema()).optional(),
     }),
-    u({
+    objectSchema({
       method: literal("project_write"),
       ...NOTICE_FIELD_SCHEMA,
-      path: string(),
-      doc_uuid: string(),
+      path: stringSchema(),
+      doc_uuid: stringSchema(),
       ...projectsReadOnlyMethods,
-      replaced: M(),
-      present_to_user: M().optional(),
-      local_path: string().optional(),
+      replaced: booleanSchema(),
+      present_to_user: booleanSchema().optional(),
+      local_path: stringSchema().optional(),
     }),
-    u({
+    objectSchema({
       method: literal("project_delete"),
       ...NOTICE_FIELD_SCHEMA,
-      path: string(),
-      deleted: M(),
+      path: stringSchema(),
+      deleted: booleanSchema(),
     }),
-    u({
+    objectSchema({
       method: literal("project_memory_list"),
       ...NOTICE_FIELD_SCHEMA,
       files: array(
-        u({
-          path: string(),
-          size_bytes: E(),
-          updated_at: string().nullable(),
-          truncated: M(),
+        objectSchema({
+          path: stringSchema(),
+          size_bytes: numberSchema(),
+          updated_at: stringSchema().nullable(),
+          truncated: booleanSchema(),
         }),
       ),
-      truncated: M(),
+      truncated: booleanSchema(),
     }),
-    u({
+    objectSchema({
       method: literal("project_memory_read"),
       ...NOTICE_FIELD_SCHEMA,
-      path: string(),
-      content: string().optional(),
-      local_file: string().optional(),
-      size_bytes: E(),
-      updated_at: string().nullable(),
-      truncated: M(),
+      path: stringSchema(),
+      content: stringSchema().optional(),
+      local_file: stringSchema().optional(),
+      size_bytes: numberSchema(),
+      updated_at: stringSchema().nullable(),
+      truncated: booleanSchema(),
     }),
   ]),
 );

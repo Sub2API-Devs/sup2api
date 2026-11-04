@@ -22,6 +22,7 @@ import { env } from "../env.js";
 import { describeAxiosError } from "../../bridge/debugUtils.js";
 import { parseCrossSessionInboundCapability } from "../sessionState.js";
 import { stripAnsiAndControls } from "../printableName.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-rwnj2eyf.js:1874-1887 placement
 var BRIDGE_LISTING_TTL_MS = 300000;
@@ -43,59 +44,62 @@ class BridgeListingSlot {
   begin(inFlight) {
     this.inFlight = inFlight;
   }
-  settle(e) {
-    if (this.inFlight === e) this.inFlight = undefined;
+  settle(record) {
+    if (this.inFlight === record) this.inFlight = undefined;
   }
 }
 //@ chunk-rwnj2eyf.js:2108-2132 placement
-var bridgeListingSlot = new SessionRootSlot(() => new BridgeListingSlot());
+var bridgeListingSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rwnj2eyf.js:2108", () => {
+  bridgeListingSlot = new SessionRootSlot(() => new BridgeListingSlot());
+});
 //@ chunk-rwnj2eyf.js:2132-2241 placement
 /**
  * 预热同伴身份归属。
  */
 async function primePeerIdentity(
-  e = {
+  options = {
     refresh: true,
   },
 ) {
   {
-    let { primePeerIdentityOwner } = require("./chunk-y0hca4vs.js");
-    await primePeerIdentityOwner(e);
+    let { primePeerIdentityOwner } = require("../../bridge/replBridgeHandle.js");
+    await primePeerIdentityOwner(options);
   }
 }
 //@ chunk-rwnj2eyf.js:2241-2346 placement
 function currentBridgeIdentityKey() {
-  let { getPeerBridgeIdentity } = require("./chunk-y0hca4vs.js");
+  let { getPeerBridgeIdentity } = require("../../bridge/replBridgeHandle.js");
   let peerBridgeIdentity = getPeerBridgeIdentity();
   return peerBridgeIdentity?.live ? peerBridgeIdentity.key : null;
 }
 //@ chunk-rwnj2eyf.js:2346-3184 placement
-async function fetchBridgePopulation(e, r) {
+async function fetchBridgePopulation(session, options) {
   {
-    let n = currentBridgeIdentityKey();
-    if (!n)
+    let identityKey = currentBridgeIdentityKey();
+    if (!identityKey)
       return {
         rows: [],
         failed: false,
         identityKey: null,
       };
-    let o = bridgeListingSlot.of(e);
-    let inFlight = o.inFlight;
-    if (inFlight !== undefined && inFlight.identityKey === n) return inFlight.promise;
-    let { listBridgePeerSessions } = require("./chunk-ypjxapg8.js");
-    let l = {
+    let slot = bridgeListingSlot.of(session);
+    let inFlight = slot.inFlight;
+    if (inFlight !== undefined && inFlight.identityKey === identityKey) return inFlight.promise;
+    let { listBridgePeerSessions } = require("../../bridge/classifyBridgeSendError.lazy.js");
+    let holder = {
       record: undefined,
     };
     let now = Date.now();
-    let f = (async () => {
+    let promise = (async () => {
       try {
-        let g = {
+        let fetchState = {
           failed: false,
           truncated: false,
         };
-        let h;
+        let rows;
         try {
-          h = await listBridgePeerSessions(g, r);
+          rows = await listBridgePeerSessions(fetchState, options);
         } catch (error) {
           logForDebugging(
             `[bridge:population] fetch threw: ${errorMessage(error)} \u2014 treated as failed`,
@@ -106,30 +110,30 @@ async function fetchBridgePopulation(e, r) {
           return {
             rows: [],
             failed: true,
-            identityKey: n,
+            identityKey,
           };
         }
         logForDebugging(
-          `[bridge:population] fetched ${h.length} rows in ${Date.now() - now}ms${g.failed ? " (FAILED \u2014 not recordable)" : ""}${g.truncated ? " (truncated at page budget)" : ""}`,
+          `[bridge:population] fetched ${rows.length} rows in ${Date.now() - now}ms${fetchState.failed ? " (FAILED \u2014 not recordable)" : ""}${fetchState.truncated ? " (truncated at page budget)" : ""}`,
         );
         return {
-          rows: h,
-          failed: g.failed,
-          ...(g.truncated && {
+          rows,
+          failed: fetchState.failed,
+          ...(fetchState.truncated && {
             truncated: true,
           }),
-          identityKey: n,
+          identityKey,
         };
       } finally {
-        o.settle(l.record);
+        slot.settle(holder.record);
       }
     })();
-    l.record = {
-      identityKey: n,
-      promise: f,
+    holder.record = {
+      identityKey,
+      promise,
     };
-    o.begin(l.record);
-    return f;
+    slot.begin(holder.record);
+    return promise;
   }
   return {
     rows: [],
@@ -141,10 +145,10 @@ async function fetchBridgePopulation(e, r) {
 /**
  * isCurrentBridgeIdentity：桥接列表记录是否属于当前身份。
  */
-function isCurrentBridgeIdentity(e) {
+function isCurrentBridgeIdentity(result) {
   {
-    let r = currentBridgeIdentityKey();
-    return r !== null && e.identityKey === r;
+    let identityKey = currentBridgeIdentityKey();
+    return identityKey !== null && result.identityKey === identityKey;
   }
   return false;
 }
@@ -152,43 +156,43 @@ function isCurrentBridgeIdentity(e) {
 /**
  * 记录桥接列表结果（身份已变则忽略，失败时清空已记录集合）。
  */
-function recordBridgeListing(e, r, n) {
+function recordBridgeListing(session, fetchResult, rows) {
   {
-    let o = currentBridgeIdentityKey();
-    if (!o) return;
-    if (r.identityKey !== o) {
+    let identityKey = currentBridgeIdentityKey();
+    if (!identityKey) return;
+    if (fetchResult.identityKey !== identityKey) {
       logForDebugging(
         "[bridge:population] walk ran under a previous identity \u2014 ignoring its outcome for the current one",
       );
       return;
     }
-    let s = bridgeListingSlot.of(e);
-    if (r.failed) {
-      let listed = s.listed;
-      if (listed !== undefined && listed.identityKey === o) {
-        s.forget();
+    let slot = bridgeListingSlot.of(session);
+    if (fetchResult.failed) {
+      let listed = slot.listed;
+      if (listed !== undefined && listed.identityKey === identityKey) {
+        slot.forget();
         logForDebugging(
           "[bridge:population] failed walk \u2014 cleared the printed set (going cold, never sticky)",
         );
       }
       return;
     }
-    s.record(n, o, r.truncated === true);
-    logForDebugging(`[bridge:population] recorded ${n.length} bridge rows (cloud-deduped)`);
+    slot.record(rows, identityKey, fetchResult.truncated === true);
+    logForDebugging(`[bridge:population] recorded ${rows.length} bridge rows (cloud-deduped)`);
   }
 }
 //@ chunk-rwnj2eyf.js:3730-3950 placement
 /**
  * 不可记录的列表取代时清除已记录集合。
  */
-function forgetBridgeListing(e, r) {
+function forgetBridgeListing(session, fetchResult) {
   {
-    let n = currentBridgeIdentityKey();
-    if (!n || r.identityKey !== n) return;
-    let o = bridgeListingSlot.of(e);
-    let listed = o.listed;
-    if (listed !== undefined && listed.identityKey === n) {
-      o.forget();
+    let identityKey = currentBridgeIdentityKey();
+    if (!identityKey || fetchResult.identityKey !== identityKey) return;
+    let slot = bridgeListingSlot.of(session);
+    let listed = slot.listed;
+    if (listed !== undefined && listed.identityKey === identityKey) {
+      slot.forget();
       logForDebugging("[bridge:population] forgot the recorded set (an unrecordable listing superseded it)");
     }
   }
@@ -197,21 +201,21 @@ function forgetBridgeListing(e, r) {
 /**
  * bridgeListingRows：未过期且身份一致的桥接会话行。
  */
-function bridgeListingRows(e) {
-  return warmBridgeListing(e)?.rows;
+function bridgeListingRows(session) {
+  return warmBridgeListing(session)?.rows;
 }
 //@ chunk-rwnj2eyf.js:3986-4242 placement
 /**
  * 未过期且身份一致的已记录桥接列表。
  */
-function warmBridgeListing(e) {
+function warmBridgeListing(session) {
   {
-    let r = currentBridgeIdentityKey();
-    let listed = bridgeListingSlot.of(e).listed;
-    if (!r || listed === undefined || listed.identityKey !== r) return;
-    let o = Date.now() - listed.at;
-    if (o >= 0 && o < BRIDGE_LISTING_TTL_MS) {
-      logForDebugging(`[bridge:population] warm recorded set: ${listed.listed.length} rows (age ${o}ms)`);
+    let identityKey = currentBridgeIdentityKey();
+    let listed = bridgeListingSlot.of(session).listed;
+    if (!identityKey || listed === undefined || listed.identityKey !== identityKey) return;
+    let age = Date.now() - listed.at;
+    if (age >= 0 && age < BRIDGE_LISTING_TTL_MS) {
+      logForDebugging(`[bridge:population] warm recorded set: ${listed.listed.length} rows (age ${age}ms)`);
       return {
         rows: listed.listed,
         truncated: listed.truncated,
@@ -224,12 +228,16 @@ function warmBridgeListing(e) {
 /**
  * 排除云端已列出或本机已知的会话。
  */
-function excludeKnownPeerSessions(e, r, n) {
-  let o = bridgeSessionIds(r);
-  let s = new Set(n.filter((a) => !hasBridgeSessionId(r, a.id)).map((a) => sessionIdBody(a.id)));
-  return e.filter((a) => {
-    let l = sessionIdBody(a.id);
-    return !o.has(l) && !s.has(l);
+function excludeKnownPeerSessions(candidates, bridge, known) {
+  let bridgeIds = bridgeSessionIds(bridge);
+  let knownIds = new Set(
+    known
+      .filter((knownSession) => !hasBridgeSessionId(bridge, knownSession.id))
+      .map((knownSession) => sessionIdBody(knownSession.id)),
+  );
+  return candidates.filter((candidate) => {
+    let candidateId = sessionIdBody(candidate.id);
+    return !bridgeIds.has(candidateId) && !knownIds.has(candidateId);
   });
 }
 //@ chunk-rwnj2eyf.js:4399-4436 placement
@@ -256,13 +264,13 @@ var CLOUD_SESSION_LIST_DEADLINE_MS = 5000;
 class CloudSessionsMemo {
   memo = undefined;
   inFlight = undefined;
-  record(sessions, truncated, n) {
-    if (n !== currentWalkCredentialKey()) return;
+  record(sessions, truncated, credentialKey) {
+    if (credentialKey !== currentWalkCredentialKey()) return;
     this.memo = {
       at: Date.now(),
       sessions,
       truncated,
-      credential: n,
+      credential: credentialKey,
     };
   }
   begin(promise, credential) {
@@ -271,51 +279,54 @@ class CloudSessionsMemo {
       credential,
     };
   }
-  settle(e) {
-    if (this.inFlight?.promise === e) this.inFlight = undefined;
+  settle(promise) {
+    if (this.inFlight?.promise === promise) this.inFlight = undefined;
   }
-  warm(e) {
+  warm(credentialKey) {
     let memo = this.memo;
-    if (memo === undefined || memo.credential !== e) return;
-    let n = Date.now() - memo.at;
-    return n >= 0 && n < CLOUD_SESSIONS_MEMO_TTL_MS ? memo : undefined;
+    if (memo === undefined || memo.credential !== credentialKey) return;
+    let age = Date.now() - memo.at;
+    return age >= 0 && age < CLOUD_SESSIONS_MEMO_TTL_MS ? memo : undefined;
   }
 }
 //@ chunk-rwnj2eyf.js:4865-4945 placement
 function currentWalkCredentialKey() {
-  let { walkCredentialKey } = require("./chunk-y0hca4vs.js");
+  let { walkCredentialKey } = require("../../bridge/replBridgeHandle.js");
   return walkCredentialKey();
 }
 //@ chunk-rwnj2eyf.js:4945-4969 placement
-var cloudSessionsMemoSlot = new SessionRootSlot(() => new CloudSessionsMemo());
+var cloudSessionsMemoSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-rwnj2eyf.js:4945", () => {
+  cloudSessionsMemoSlot = new SessionRootSlot(() => new CloudSessionsMemo());
+});
 //@ chunk-rwnj2eyf.js:4969-5759 placement
-async function searchCloudPeers(e, credentials) {
+async function searchCloudPeers(session, credentials) {
   {
-    let { hasCloudPeerAccess } = require("./chunk-96k5yyba.js");
+    let { hasCloudPeerAccess } = require("../../bridge/hasCloudPeerAccess.lazy.js");
     if (!hasCloudPeerAccess())
       return {
         sessions: [],
         unavailable: "gate_off",
       };
-    let { walkCcrSessionList } = require("./chunk-52hnbzac.js");
-    let s = cloudSessionsMemoSlot.of(e);
-    let a = currentWalkCredentialKey();
-    let l = s.warm(a);
-    if (l !== undefined)
+    let { walkCcrSessionList } = require("../../services/cloudSessions/ccrSessionList.js");
+    let memo = cloudSessionsMemoSlot.of(session);
+    let credentialKey = currentWalkCredentialKey();
+    let warm = memo.warm(credentialKey);
+    if (warm !== undefined)
       return {
-        sessions: l.sessions,
+        sessions: warm.sessions,
         unavailable: undefined,
-        ...(l.truncated && {
+        ...(warm.truncated && {
           truncated: true,
         }),
       };
-    let inFlight = s.inFlight;
-    let f =
-      inFlight !== undefined && inFlight.credential === a
+    let inFlight = memo.inFlight;
+    let listPromise =
+      inFlight !== undefined && inFlight.credential === credentialKey
         ? inFlight.promise
-        : walkCcrSessionList_2(s, walkCcrSessionList, a, credentials);
-    let g = await withDeadline(f, CLOUD_SESSION_LIST_DEADLINE_MS);
-    if (g === undefined) {
+        : walkCcrSessionList_2(memo, walkCcrSessionList, credentialKey, credentials);
+    let result = await withDeadline(listPromise, CLOUD_SESSION_LIST_DEADLINE_MS);
+    if (result === undefined) {
       logForDebugging(
         `[agents:cloud] session list not ready within ${CLOUD_SESSION_LIST_DEADLINE_MS}ms \u2014 not searched this call, disclosing`,
         {
@@ -327,7 +338,7 @@ async function searchCloudPeers(e, credentials) {
         unavailable: "timeout",
       };
     }
-    if (a !== currentWalkCredentialKey()) {
+    if (credentialKey !== currentWalkCredentialKey()) {
       logForDebugging(
         "[agents:cloud] session list walk ran under a superseded credential \u2014 not served, disclosing",
         {
@@ -339,7 +350,7 @@ async function searchCloudPeers(e, credentials) {
         unavailable: "fetch_failed",
       };
     }
-    return g;
+    return result;
   }
   return {
     sessions: [],
@@ -347,25 +358,25 @@ async function searchCloudPeers(e, credentials) {
   };
 }
 //@ chunk-rwnj2eyf.js:5759-7071 placement
-function walkCcrSessionList_2(e, walkCcrSessionList, n, credentials) {
-  let s = env.CLAUDE_CODE_REMOTE === true;
-  let a = s ? sessionIdBody(env.CLAUDE_CODE_REMOTE_SESSION_ID ?? "") : "";
-  if (a === "") {
-    let { getPeerBridgeIdentity } = require("./chunk-y0hca4vs.js");
+function walkCcrSessionList_2(session, walkCcrSessionList, credentialKey, credentials) {
+  let isRemote = env.CLAUDE_CODE_REMOTE === true;
+  let ownSessionBody = isRemote ? sessionIdBody(env.CLAUDE_CODE_REMOTE_SESSION_ID ?? "") : "";
+  if (ownSessionBody === "") {
+    let { getPeerBridgeIdentity } = require("../../bridge/replBridgeHandle.js");
     let bridgeSessionId = getPeerBridgeIdentity()?.bridgeSessionId;
-    a = typeof bridgeSessionId === "string" ? sessionIdBody(bridgeSessionId) : "";
+    ownSessionBody = typeof bridgeSessionId === "string" ? sessionIdBody(bridgeSessionId) : "";
   }
-  let l = (async () => {
-    let c;
-    let f = {
+  let promise = (async () => {
+    let sessions;
+    let walkState = {
       truncated: false,
     };
     try {
-      c = await walkCcrSessionList({
-        status: f,
+      sessions = await walkCcrSessionList({
+        status: walkState,
         throwOnError: true,
         exhaustive: true,
-        includeBridgeKind: s,
+        includeBridgeKind: isRemote,
         credentials,
       });
     } catch (error) {
@@ -380,52 +391,58 @@ function walkCcrSessionList_2(e, walkCcrSessionList, n, credentials) {
         unavailable: "fetch_failed",
       };
     }
-    let g = false;
-    if (s) {
-      let { isRemoteControlPeerUnreachableFromHere } = require("./chunk-3kb57csj.js");
-      g = isRemoteControlPeerUnreachableFromHere();
+    let truncated = false;
+    if (isRemote) {
+      let { isRemoteControlPeerUnreachableFromHere } = require("../../bridge/trustedDevice.js");
+      truncated = isRemoteControlPeerUnreachableFromHere();
     }
-    let mapped = (a === "" ? c : c.filter((u) => sessionIdBody(u.id) !== a)).map((u) => {
-      let timestamp = Date.parse(u.last_event_at ?? u.created_at ?? "");
+    let mapped = (
+      ownSessionBody === ""
+        ? sessions
+        : sessions.filter((session) => sessionIdBody(session.id) !== ownSessionBody)
+    ).map((session) => {
+      let timestamp = Date.parse(session.last_event_at ?? session.created_at ?? "");
       return {
-        id: u.id,
-        title: u.title ?? null,
+        id: session.id,
+        title: session.title ?? null,
         lastActive: Number.isNaN(timestamp) ? undefined : timestamp,
         workerStatus:
-          u.worker_status === "running" || u.worker_status === "idle" || u.worker_status === "requires_action"
-            ? u.worker_status
+          session.worker_status === "running" ||
+          session.worker_status === "idle" ||
+          session.worker_status === "requires_action"
+            ? session.worker_status
             : undefined,
-        remoteControl: u.environment_kind === "bridge",
-        unreachableFromHere: g && u.environment_kind === "bridge",
-        ...parseCrossSessionInboundCapability(u.external_metadata),
-        ...(u.environment_kind === "bridge" &&
-          u.connection_status === "disconnected" && {
+        remoteControl: session.environment_kind === "bridge",
+        unreachableFromHere: truncated && session.environment_kind === "bridge",
+        ...parseCrossSessionInboundCapability(session.external_metadata),
+        ...(session.environment_kind === "bridge" &&
+          session.connection_status === "disconnected" && {
             offline: true,
           }),
       };
     });
-    e.record(mapped, f.truncated, n);
+    session.record(mapped, walkState.truncated, credentialKey);
     return {
       sessions: mapped,
       unavailable: undefined,
-      ...(f.truncated && {
+      ...(walkState.truncated && {
         truncated: true,
       }),
     };
   })();
-  e.begin(l, n);
-  l.finally(() => e.settle(l));
-  return l;
+  session.begin(promise, credentialKey);
+  promise.finally(() => session.settle(promise));
+  return promise;
 }
 //@ chunk-rwnj2eyf.js:7071-7202 placement
 /**
  * 未过期的云端会话列表（需云端同伴权限）。
  */
-function warmCloudSessions(e) {
+function warmCloudSessions(session) {
   {
-    let { hasCloudPeerAccess } = require("./chunk-96k5yyba.js");
+    let { hasCloudPeerAccess } = require("../../bridge/hasCloudPeerAccess.lazy.js");
     if (!hasCloudPeerAccess()) return;
-    return cloudSessionsMemoSlot.of(e).warm(currentWalkCredentialKey())?.sessions;
+    return cloudSessionsMemoSlot.of(session).warm(currentWalkCredentialKey())?.sessions;
   }
   return;
 }
@@ -439,11 +456,11 @@ var RECIPIENT_CANNOT_RECEIVE_REASON = "target session reports it cannot receive 
 /**
  * 发送被拒的类别（handler_rewrite/bridge_auth/recipient_gate_off/permission_denied）。
  */
-function sendDenialKind(e) {
-  if (e.reason !== "denied") return "handler_rewrite";
-  if (e.decisionReason?.type === "other") {
-    if (e.decisionReason.reason === ELEVATED_UNREACHABLE_REASON) return "bridge_auth";
-    if (e.decisionReason.reason === RECIPIENT_CANNOT_RECEIVE_REASON) return "recipient_gate_off";
+function sendDenialKind(decision) {
+  if (decision.reason !== "denied") return "handler_rewrite";
+  if (decision.decisionReason?.type === "other") {
+    if (decision.decisionReason.reason === ELEVATED_UNREACHABLE_REASON) return "bridge_auth";
+    if (decision.decisionReason.reason === RECIPIENT_CANNOT_RECEIVE_REASON) return "recipient_gate_off";
   }
   return "permission_denied";
 }
@@ -451,23 +468,25 @@ function sendDenialKind(e) {
 /**
  * 目标是云端不可达的高安全会话时生成拒绝文案。
  */
-function unreachableElevatedRefusal(session, r, n, o) {
+function unreachableElevatedRefusal(session, sessionId, displayName, describeSendTool) {
   try {
-    let found = warmCloudSessions(session)?.find((c) => sessionIdBody(c.id) === sessionIdBody(r));
+    let found = warmCloudSessions(session)?.find(
+      (cloudSession) => sessionIdBody(cloudSession.id) === sessionIdBody(sessionId),
+    );
     if (!found?.unreachableFromHere) return;
-    let { formatUnreachableElevatedRefusal } = require("./chunk-3kb57csj.js");
-    let l;
+    let { formatUnreachableElevatedRefusal } = require("../../bridge/trustedDevice.js");
+    let sendTool;
     try {
-      l = found.acceptsPeerMessages === false ? undefined : o?.();
+      sendTool = found.acceptsPeerMessages === false ? undefined : describeSendTool?.();
     } catch {
-      l = undefined;
+      sendTool = undefined;
     }
     return formatUnreachableElevatedRefusal(
-      n,
-      l === undefined
+      displayName,
+      sendTool === undefined
         ? undefined
         : {
-            sendTool: l,
+            sendTool,
             sessionId: found.id,
           },
     );
@@ -490,19 +509,20 @@ var CANNOT_RECEIVE_REASON = "can't receive cross-session messages (off in that s
 /**
  * 目标会话设置为不接收跨会话消息时生成拒绝文案。
  */
-function cannotReceiveRefusal(session, r, n) {
+function cannotReceiveRefusal(session, sessionId, displayName) {
   try {
-    let o = sessionIdBody(r);
+    let sessionBody = sessionIdBody(sessionId);
     if (!(
       warmCloudSessions(session)?.some(
-        (a) => sessionIdBody(a.id) === o && a.acceptsPeerMessages === false,
+        (cloudSession) =>
+          sessionIdBody(cloudSession.id) === sessionBody && cloudSession.acceptsPeerMessages === false,
       ) === true ||
       bridgeListingRows(session)?.some(
-        (a) => sessionIdBody(a.id) === o && a.acceptsPeerMessages === false,
+        (bridgeRow) => sessionIdBody(bridgeRow.id) === sessionBody && bridgeRow.acceptsPeerMessages === false,
       ) === true
     ))
       return;
-    return `Not sent: '${n}' ${CANNOT_RECEIVE_REASON} \u2014 its Claude would never see the message. That session is set not to accept cross-session messages (the feature is off on its platform, or a setting or policy there refuses them); reach that machine another way, or ask its user to enable it (listings refresh within a few minutes \u2014 re-run ListAgents after they do).`;
+    return `Not sent: '${displayName}' ${CANNOT_RECEIVE_REASON} \u2014 its Claude would never see the message. That session is set not to accept cross-session messages (the feature is off on its platform, or a setting or policy there refuses them); reach that machine another way, or ask its user to enable it (listings refresh within a few minutes \u2014 re-run ListAgents after they do).`;
   } catch (error) {
     logForDebugging(
       `[agents:cloud] warm cannot-receive lookup failed (${stripAnsiAndControls(errorMessage(error))}) \u2014 treating as unknown`,
@@ -519,9 +539,13 @@ function cannotReceiveRefusal(session, r, n) {
  */
 function isInboundUnreported(session, target) {
   try {
-    let n = sessionIdBody(target);
-    let found = warmCloudSessions(session)?.find((a) => sessionIdBody(a.id) === n);
-    let found_2 = bridgeListingRows(session)?.find((a) => sessionIdBody(a.id) === n);
+    let targetSessionId = sessionIdBody(target);
+    let found = warmCloudSessions(session)?.find(
+      (cloudSession) => sessionIdBody(cloudSession.id) === targetSessionId,
+    );
+    let found_2 = bridgeListingRows(session)?.find(
+      (bridgeSession) => sessionIdBody(bridgeSession.id) === targetSessionId,
+    );
     if (
       (found !== undefined && !found.remoteControl) ||
       (found_2 !== undefined && hasEnvironmentKindOtherThanBridge(found_2))

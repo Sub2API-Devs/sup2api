@@ -10,9 +10,13 @@
  */
 import { identity as identity_2 } from "../../../utils/identity.js";
 import { hasUiLogSink, reportPluginProblem } from "../hooksWorkerClient.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:305803-305837 placement
-var toldRefusals = identity_2(new Set(), (e) => e.clear());
+var toldRefusals; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:305803", () => {
+  toldRefusals = identity_2(new Set(), (set) => set.clear());
+});
 //@ chunk-s61vbvea.js:305837-305918 placement
 function tellOnce({ key, lead, text }) {
   if (!hasUiLogSink() || toldRefusals.has(key)) return;

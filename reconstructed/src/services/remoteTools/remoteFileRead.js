@@ -51,6 +51,7 @@ import { bindCanonicalPathToHandle, readHandleBounded } from "../../utils/fsSafe
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { logEvent } from "../analytics/index.js";
 import { getFileExtensionForAnalytics } from "../analytics/metadata.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-es7wzebn.js:1096-1115 placement
 var MAX_CANDIDATE_PATHS = 512;
@@ -65,20 +66,20 @@ function validCandidatePaths(within) {
     : undefined;
 }
 //@ chunk-es7wzebn.js:1201-1297 placement
-function isCanonicalAbsolutePath(e) {
+function isCanonicalAbsolutePath(path) {
   return (
-    typeof e === "string" &&
-    e.length <= MAX_CANDIDATE_PATH_CHARS &&
-    !e.includes("\x00") &&
-    isFullyQualifiedPath(e) &&
-    normalize(e) === e
+    typeof path === "string" &&
+    path.length <= MAX_CANDIDATE_PATH_CHARS &&
+    !path.includes("\x00") &&
+    isFullyQualifiedPath(path) &&
+    normalize(path) === path
   );
 }
 //@ chunk-es7wzebn.js:1297-1426 placement
-function isUnderAnyRoot(e, path) {
-  return e.some((n) => {
-    let o = n.endsWith(sep) && parse(n).root !== n ? n.slice(0, -sep.length) : n;
-    return path === o || path.startsWith(o + sep);
+function isUnderAnyRoot(roots, path) {
+  return roots.some((root) => {
+    let trimmedRoot = root.endsWith(sep) && parse(root).root !== root ? root.slice(0, -sep.length) : root;
+    return path === trimmedRoot || path.startsWith(trimmedRoot + sep);
   });
 }
 //@ chunk-es7wzebn.js:1551-1569 placement
@@ -88,70 +89,74 @@ var MAX_WIRE_MESSAGE_CHARS = 4096;
 /**
  * 解析远程读取的目标路径
  */
-async function resolveRemoteReadPath(e, { directories, unprobedDirectories = [], gate, heldFiles }) {
+async function resolveRemoteReadPath(inputPath, { directories, unprobedDirectories = [], gate, heldFiles }) {
   try {
     if (
-      e === "" ||
-      e !== e.trim() ||
-      e.length > MAX_WIRE_MESSAGE_CHARS ||
-      e.includes("\x00") ||
-      /^~(?:\/|$)/.test(e) ||
-      (parse(e).root !== "" && !isFullyQualifiedPath(e))
+      inputPath === "" ||
+      inputPath !== inputPath.trim() ||
+      inputPath.length > MAX_WIRE_MESSAGE_CHARS ||
+      inputPath.includes("\x00") ||
+      /^~(?:\/|$)/.test(inputPath) ||
+      (parse(inputPath).root !== "" && !isFullyQualifiedPath(inputPath))
     )
       return {
         path: null,
         why: "unfit_text",
       };
-    let filtered = directories.filter((directory) => isFullyQualifiedPath(directory));
-    let filtered_2 = unprobedDirectories.filter((unprobedDirectory) =>
-      isFullyQualifiedPath(unprobedDirectory),
+    let roots = directories.filter((directory) => isFullyQualifiedPath(directory));
+    let roots_2 = unprobedDirectories.filter((unprobedDirectory) => isFullyQualifiedPath(unprobedDirectory));
+    let candidates = new Set(
+      (isAbsolute(inputPath) ? [inputPath] : roots).map((dir) => expandStablePath(inputPath, dir)),
     );
-    let m = new Set((isAbsolute(e) ? [e] : filtered).map((d) => expandStablePath(e, d)));
-    let l = await groupByResolvedPath([...m], e, gate);
-    if (l === null)
+    let resolved = await groupByResolvedPath([...candidates], inputPath, gate);
+    if (resolved === null)
       return {
         path: null,
         why: "too_many",
       };
-    let u = new Set(heldFiles());
-    let h = new Set(l.flat());
-    if ([...m, ...filtered_2.map((d) => expandStablePath(e, d))].some((d) => u.has(d) && !h.has(d)))
+    let held = new Set(heldFiles());
+    let resolvedSet = new Set(resolved.flat());
+    if (
+      [...candidates, ...roots_2.map((dir) => expandStablePath(inputPath, dir))].some(
+        (candidate) => held.has(candidate) && !resolvedSet.has(candidate),
+      )
+    )
       return {
         path: null,
         why: "held_file_unreadable",
       };
-    let filtered_3 = l.filter((d) => d.some((y) => u.has(y)));
-    if (l.length > 0) return pickUniqueFile(filtered_3.length > 0 ? filtered_3 : l, "directories");
-    let _ = normalize(e);
+    let filtered = resolved.filter((group) => group.some((candidate) => held.has(candidate)));
+    if (resolved.length > 0) return pickUniqueFile(filtered.length > 0 ? filtered : resolved, "directories");
+    let normalized = normalize(inputPath);
     if (
-      filtered.length === 0 ||
-      isAbsolute(e) ||
-      _.length !== e.length ||
-      _.split(sep).some((d) => ["", ".", ".."].includes(d))
+      roots.length === 0 ||
+      isAbsolute(inputPath) ||
+      normalized.length !== inputPath.length ||
+      normalized.split(sep).some((segment) => ["", ".", ".."].includes(segment))
     )
       return {
         path: null,
         why: "no_file",
       };
-    let w = matchingCandidatePaths(sep + _, u, filtered);
-    let S = new Set(w);
-    if (matchingCandidatePaths(sep + _, u, filtered_2).some((d) => !S.has(d)))
+    let matches = matchingCandidatePaths(sep + normalized, held, roots);
+    let matchSet = new Set(matches);
+    if (matchingCandidatePaths(sep + normalized, held, roots_2).some((candidate) => !matchSet.has(candidate)))
       return {
         path: null,
         why: "held_file_unreadable",
       };
-    if (w.length === 0)
+    if (matches.length === 0)
       return {
         path: null,
         why: "needs_file_search",
       };
-    let R = await groupByResolvedPath(w, e, gate);
-    return R !== null && R.flat().length < w.length
+    let resolvedMatches = await groupByResolvedPath(matches, inputPath, gate);
+    return resolvedMatches !== null && resolvedMatches.flat().length < matches.length
       ? {
           path: null,
           why: "held_file_unreadable",
         }
-      : pickUniqueFile(R, "file_state");
+      : pickUniqueFile(resolvedMatches, "file_state");
   } catch (error) {
     if (error instanceof UnstablePathError)
       return {
@@ -160,10 +165,13 @@ async function resolveRemoteReadPath(e, { directories, unprobedDirectories = [],
       };
     try {
       let errnoCode = getErrnoCode(error);
-      let m = error instanceof Error ? error.name : typeof error;
-      logForDebugging(`resolveAsWrittenPath failed: ${errnoCode === undefined ? m : `${m}/${errnoCode}`}`, {
-        level: "error",
-      });
+      let errorName = error instanceof Error ? error.name : typeof error;
+      logForDebugging(
+        `resolveAsWrittenPath failed: ${errnoCode === undefined ? errorName : `${errorName}/${errnoCode}`}`,
+        {
+          level: "error",
+        },
+      );
     } catch {}
     return {
       path: null,
@@ -175,69 +183,74 @@ async function resolveRemoteReadPath(e, { directories, unprobedDirectories = [],
 /**
  * 按解析路径分组
  */
-async function groupByResolvedPath(e, r, gate) {
-  if (e.length > MAX_AMBIGUOUS_CANDIDATES) return null;
-  let o = new Map();
-  for (let s of e) {
-    let i = await gate(s, r);
-    if (i !== null) o.set(i, [...(o.get(i) ?? []), s]);
+async function groupByResolvedPath(candidates, inputPath, gate) {
+  if (candidates.length > MAX_AMBIGUOUS_CANDIDATES) return null;
+  let groups = new Map();
+  for (let candidate of candidates) {
+    let resolvedPath = await gate(candidate, inputPath);
+    if (resolvedPath !== null) groups.set(resolvedPath, [...(groups.get(resolvedPath) ?? []), candidate]);
   }
-  return [...o.values()];
+  return [...groups.values()];
 }
 //@ chunk-es7wzebn.js:3016-3186 placement
 /**
  * 唯一匹配结果
  */
-function pickUniqueFile(e, step) {
-  if (e === null)
+function pickUniqueFile(groups, step) {
+  if (groups === null)
     return {
       path: null,
       why: "too_many",
     };
-  let n = e[0]?.[0];
-  return n === undefined
+  let first = groups[0]?.[0];
+  return first === undefined
     ? {
         path: null,
         why: "no_file",
       }
-    : e.length > 1
+    : groups.length > 1
       ? {
           path: null,
           why: "tie",
         }
       : {
-          path: n,
+          path: first,
           step,
         };
 }
 //@ chunk-es7wzebn.js:3186-3315 placement
-function matchingCandidatePaths(e, r, n) {
-  let o = new Set();
-  for (let s of r)
+function matchingCandidatePaths(suffix, held, roots) {
+  let matches = new Set();
+  for (let heldPath of held)
     if (
-      s.endsWith(e) &&
-      isFullyQualifiedPath(s) &&
-      normalize(s) === s &&
-      n.some((i) => isSubpathOf(i, s, false))
+      heldPath.endsWith(suffix) &&
+      isFullyQualifiedPath(heldPath) &&
+      normalize(heldPath) === heldPath &&
+      roots.some((root) => isSubpathOf(root, heldPath, false))
     )
-      o.add(s);
-  return [...o];
+      matches.add(heldPath);
+  return [...matches];
 }
 //@ chunk-es7wzebn.js:3315-3625 placement
 /**
  * 找 .git 所在目录
  */
-async function findGitRootBelow(cwd, r, n) {
+async function findGitRootBelow(startDir, cwdState, expired) {
   if (isDiskless()) return null;
-  let o = resolve(cwd);
-  if (r.unresolved || r.landing !== identity(o)) return null;
+  let startPath = resolve(startDir);
+  if (cwdState.unresolved || cwdState.landing !== identity(startPath)) return null;
   let fsImplementation = getFsImplementation();
-  for (let i = o; !n(); i = dirname(i)) {
-    let p = await fsImplementation.lstat(join(i, ".git")).catch(() => {
+  for (let dir = startPath; !expired(); dir = dirname(dir)) {
+    let gitStats = await fsImplementation.lstat(join(dir, ".git")).catch(() => {
       return;
     });
-    if (p?.isDirectory() === true || p?.isFile() === true || p?.isSymbolicLink() === true) return identity(i);
-    if (dirname(i) === i) return null;
+    if (
+      gitStats?.isDirectory() === true ||
+      gitStats?.isFile() === true ||
+      gitStats?.isSymbolicLink() === true
+    )
+      return identity(dir);
+    if (dirname(dir) === dir) return null;
   }
   return null;
 }
@@ -245,128 +258,144 @@ async function findGitRootBelow(cwd, r, n) {
 /**
  * 在时限内搜索文件
  */
-async function searchHeldFile(e, { heldFiles, timeLimitMs, stranded, whyNotBegin }, i, p) {
+async function searchHeldFile(
+  filePath,
+  { heldFiles, timeLimitMs, stranded, whyNotBegin },
+  permissions,
+  gate,
+) {
   if (stranded.probes > 0)
     return {
       path: null,
       why: "stranded",
     };
-  let m = whyNotBegin();
-  if (m !== undefined)
+  let earlyReason = whyNotBegin();
+  if (earlyReason !== undefined)
     return {
       path: null,
-      why: m,
+      why: earlyReason,
     };
   let cwd = getCwd();
-  let u = (y) => pathVettingReason(y, i.trustedNetworkDirectories) === undefined;
-  let h = performance.now() + timeLimitMs;
-  let f = false;
-  let _ = () => f || performance.now() >= h;
-  let w = 0;
-  let S = (y) => {
-    w++;
-    return y.finally(() => {
-      w--;
-      stranded.probes -= f ? 1 : 0;
+  let isAllowedPath = (path) => pathVettingReason(path, permissions.trustedNetworkDirectories) === undefined;
+  let deadlineMs = performance.now() + timeLimitMs;
+  let timedOut = false;
+  let expiredNow = () => timedOut || performance.now() >= deadlineMs;
+  let probesInFlight = 0;
+  let trackProbe = (promise) => {
+    probesInFlight++;
+    return promise.finally(() => {
+      probesInFlight--;
+      stranded.probes -= timedOut ? 1 : 0;
     });
   };
-  let R = {
+  let timedOutResult = {
     path: null,
     why: "no_file",
   };
-  let d = async () => {
-    let y = null;
-    if (u(cwd)) {
-      let g = await S(walkPermissionCheckPathsAsync(resolve(cwd)));
-      if (_()) return R;
-      y = await S(findGitRootBelow(cwd, g, _));
+  let work = async () => {
+    let gitRoot = null;
+    if (isAllowedPath(cwd)) {
+      let cwdState = await trackProbe(walkPermissionCheckPathsAsync(resolve(cwd)));
+      if (expiredNow()) return timedOutResult;
+      gitRoot = await trackProbe(findGitRootBelow(cwd, cwdState, expiredNow));
     }
-    if (_()) return R;
-    let E = uniq([cwd, y ?? cwd, ...allWorkingDirectories(i)]);
-    let filtered = E.filter(u);
-    for (let g of filtered) {
-      if (_()) return R;
-      if (g !== cwd) await S(walkPermissionCheckPathsAsync(g));
+    if (expiredNow()) return timedOutResult;
+    let allDirs = uniq([cwd, gitRoot ?? cwd, ...allWorkingDirectories(permissions)]);
+    let filtered = allDirs.filter(isAllowedPath);
+    for (let dir of filtered) {
+      if (expiredNow()) return timedOutResult;
+      if (dir !== cwd) await trackProbe(walkPermissionCheckPathsAsync(dir));
     }
-    if (_()) return R;
-    return resolveRemoteReadPath(e, {
+    if (expiredNow()) return timedOutResult;
+    return resolveRemoteReadPath(filePath, {
       directories: filtered,
-      unprobedDirectories: E.filter((g) => !u(g)),
-      gate: (g, P) => (_() ? Promise.resolve(null) : S(p(g, P, i))),
+      unprobedDirectories: allDirs.filter((dir) => !isAllowedPath(dir)),
+      gate: (candidate, inputPath) =>
+        expiredNow() ? Promise.resolve(null) : trackProbe(gate(candidate, inputPath, permissions)),
       heldFiles,
     });
   };
   try {
-    let y = await withDeadline(d(), timeLimitMs);
-    return y === undefined || _()
+    let result = await withDeadline(work(), timeLimitMs);
+    return result === undefined || expiredNow()
       ? {
           path: null,
           why: "time_limit",
         }
-      : y;
+      : result;
   } finally {
-    f = true;
-    stranded.probes += w;
+    timedOut = true;
+    stranded.probes += probesInFlight;
   }
 }
 //@ chunk-es7wzebn.js:4457-4597 placement
 /**
  * 远程读文件的上限与常量：最大字符数、打开标志、文件系统操作、最大字节数和用户数据根目录缓存。
  */
-var REMOTE_READ_MAX_CHARS = 1e6;
-var REMOTE_READ_OPEN_FLAGS =
-  constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | (constants.O_NOCTTY ?? 0) | READ_LIMITS;
-var realFsOps = {
-  realpath,
-  lstat,
-  readlink,
-};
-var REMOTE_READ_MAX_BYTES = 1e7;
-var userDataRootsCache = new HostScoped(() => ({
-  promise: undefined,
-}));
+var REMOTE_READ_MAX_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REMOTE_READ_OPEN_FLAGS;
+var realFsOps;
+var REMOTE_READ_MAX_BYTES;
+var userDataRootsCache;
+deferInit("chunk-es7wzebn.js:4457", () => {
+  REMOTE_READ_MAX_CHARS = 1e6;
+  REMOTE_READ_OPEN_FLAGS =
+    constants.O_RDONLY | (constants.O_NONBLOCK ?? 0) | (constants.O_NOCTTY ?? 0) | READ_LIMITS;
+  realFsOps = {
+    realpath,
+    lstat,
+    readlink,
+  };
+  REMOTE_READ_MAX_BYTES = 1e7;
+  userDataRootsCache = new HostScoped(() => ({
+    promise: undefined,
+  }));
+});
 //@ chunk-es7wzebn.js:4597-4830 placement
 /**
  * 加载用户数据根目录
  */
 function loadUserDataRoots() {
-  let e = onProcessRootHost(userDataRootsCache);
-  e.promise ??= Promise.all([import("./chunk-r9zhhmsv.js"), import("./chunk-2s3tfbmy.js")])
-    .then(([r, n]) => [...r.FIXED_USER_DATA_ROOTS, n.SYNCED_FILE_ROOT])
+  let cache = onProcessRootHost(userDataRootsCache);
+  cache.promise ??= Promise.all([
+    import("../../utils/stageFileRoots.js"),
+    import("../syncedFiles/syncedFileSyncer.js"),
+  ])
+    .then(([fixed, synced]) => [...fixed.FIXED_USER_DATA_ROOTS, synced.SYNCED_FILE_ROOT])
     .catch((error) => {
-      e.promise = undefined;
+      cache.promise = undefined;
       throw error;
     });
-  return e.promise;
+  return cache.promise;
 }
 //@ chunk-es7wzebn.js:4830-4933 placement
-function isInAnyGroup(e, trustedNetworkDirectories) {
+function isInAnyGroup(dir, trustedNetworkDirectories) {
   if (!trustedNetworkDirectories || trustedNetworkDirectories.size === 0) return false;
-  for (let n of trustedNetworkDirectories.values()) if (n.includes(e)) return true;
+  for (let group of trustedNetworkDirectories.values()) if (group.includes(dir)) return true;
   return false;
 }
 //@ chunk-es7wzebn.js:4933-5406 placement
-async function isCanonicalPathContained(e, r) {
-  let n = [];
+async function isCanonicalPathContained(canonicalPath, permissions) {
+  let userDataRoots = [];
   try {
-    n = await loadUserDataRoots();
+    userDataRoots = await loadUserDataRoots();
   } catch {}
-  for (let o of allWorkingDirectories(r)) {
+  for (let dir of allWorkingDirectories(permissions)) {
     if (
-      r.additionalWorkingDirectories.has(o) &&
-      !isInAnyGroup(o, r.trustedNetworkDirectories) &&
-      (await entryReachesForeignNetwork(o, getPermissionScreenAnchor()))
+      permissions.additionalWorkingDirectories.has(dir) &&
+      !isInAnyGroup(dir, permissions.trustedNetworkDirectories) &&
+      (await entryReachesForeignNetwork(dir, getPermissionScreenAnchor()))
     )
       continue;
-    let s;
+    let realDir;
     try {
-      s = isWorkingDirPathHeldAsNamed(o) ? o : await realpath(o);
+      realDir = isWorkingDirPathHeldAsNamed(dir) ? dir : await realpath(dir);
     } catch {
       continue;
     }
-    if (isDifferentNetworkLocation(o, s, getPermissionScreenAnchor())) continue;
+    if (isDifferentNetworkLocation(dir, realDir, getPermissionScreenAnchor())) continue;
     if (
-      pathInWorkingPath(e, s, {
+      pathInWorkingPath(canonicalPath, realDir, {
         caseFold: false,
         skipPrivateAlias: true,
         uncShapeParity: true,
@@ -374,9 +403,9 @@ async function isCanonicalPathContained(e, r) {
     )
       return true;
   }
-  for (let o of n)
+  for (let root of userDataRoots)
     if (
-      pathInWorkingPath(e, o, {
+      pathInWorkingPath(canonicalPath, root, {
         caseFold: false,
         skipPrivateAlias: true,
         uncShapeParity: true,
@@ -384,7 +413,7 @@ async function isCanonicalPathContained(e, r) {
     )
       return true;
   return (
-    checkReadableInternalPath(e, {}, [e], {
+    checkReadableInternalPath(canonicalPath, {}, [canonicalPath], {
       remoteSurface: true,
     }).behavior === "allow"
   );
@@ -418,8 +447,8 @@ var REMOTE_READ_REFUSAL_MESSAGES = {
     "read_file: suspicious Windows path spelling rejected (UNC-like form: doubled or mixed separators, embedded NT root, or WebDAV marker)",
 };
 //@ chunk-es7wzebn.js:6957-7035 placement
-function remoteReadDenied(e, telemetryMessage = "remote read denied") {
-  return new WireSafeControlError(`read denied: ${sanitizeTelemetryString(e)}`, telemetryMessage);
+function remoteReadDenied(reason, telemetryMessage = "remote read denied") {
+  return new WireSafeControlError(`read denied: ${sanitizeTelemetryString(reason)}`, telemetryMessage);
 }
 //@ chunk-es7wzebn.js:7035-7132 placement
 /**
@@ -439,24 +468,29 @@ var REMOTE_READ_UNSETTLED = {
 /**
  * 检查并打开路径
  */
-async function openVettedPath(e, r, n, o, s, i) {
-  let p = i
-    ? await vetPathSpellingsOrChainAsync(e, r, n.trustedNetworkDirectories)
-    : vetPathSpellingsOrChain(e, r, n.trustedNetworkDirectories);
-  if (!p.ok) {
-    let l =
-      p.reason === "suspicious_windows_spelling" ? `suspicious_windows_spelling_${p.spelling}` : p.reason;
+async function openVettedPath(path, openPath, permissions, fsImpl, withHandle, asyncVet) {
+  let vetting = asyncVet
+    ? await vetPathSpellingsOrChainAsync(path, openPath, permissions.trustedNetworkDirectories)
+    : vetPathSpellingsOrChain(path, openPath, permissions.trustedNetworkDirectories);
+  if (!vetting.ok) {
+    let reasonKey =
+      vetting.reason === "suspicious_windows_spelling"
+        ? `suspicious_windows_spelling_${vetting.spelling}`
+        : vetting.reason;
     return {
       ...REMOTE_READ_REFUSED,
-      telemetryMessage: REMOTE_READ_REFUSAL_MESSAGES[l],
+      telemetryMessage: REMOTE_READ_REFUSAL_MESSAGES[reasonKey],
     };
   }
-  for (let l of p.pathsToCheck)
-    if (!isPathAllowed(l, n, "read").allowed || matchingRuleForInput(l, n, "read", "ask") !== null)
+  for (let checkedPath of vetting.pathsToCheck)
+    if (
+      !isPathAllowed(checkedPath, permissions, "read").allowed ||
+      matchingRuleForInput(checkedPath, permissions, "read", "ask") !== null
+    )
       return REMOTE_READ_REFUSED;
-  let m;
+  let handle;
   try {
-    m = await open(r, REMOTE_READ_OPEN_FLAGS);
+    handle = await open(openPath, REMOTE_READ_OPEN_FLAGS);
   } catch (error) {
     return {
       ...REMOTE_READ_REFUSED,
@@ -466,166 +500,168 @@ async function openVettedPath(e, r, n, o, s, i) {
     };
   }
   try {
-    let stats = await m.stat({
+    let expectedIdentity = await handle.stat({
       bigint: true,
     });
-    if (!stats.isFile()) return REMOTE_READ_REFUSED;
-    let u;
+    if (!expectedIdentity.isFile()) return REMOTE_READ_REFUSED;
+    let canonicalPath;
     try {
-      u = await o.realpath(r);
+      canonicalPath = await fsImpl.realpath(openPath);
     } catch {
       return REMOTE_READ_UNSETTLED;
     }
-    let h = await bindCanonicalPathToHandle(m, stats, u, o);
-    if (h === undefined) return REMOTE_READ_UNSETTLED;
-    u = h;
-    if (!isPathAllowed(u, n, "read").allowed || matchingRuleForInput(u, n, "read", "ask") !== null)
+    let boundPath = await bindCanonicalPathToHandle(handle, expectedIdentity, canonicalPath, fsImpl);
+    if (boundPath === undefined) return REMOTE_READ_UNSETTLED;
+    canonicalPath = boundPath;
+    if (
+      !isPathAllowed(canonicalPath, permissions, "read").allowed ||
+      matchingRuleForInput(canonicalPath, permissions, "read", "ask") !== null
+    )
       return REMOTE_READ_REFUSED;
-    if (pathVettingReason(u, n.trustedNetworkDirectories) !== undefined) return REMOTE_READ_REFUSED;
-    if (!(await isCanonicalPathContained(u, n))) return REMOTE_READ_REFUSED;
+    if (pathVettingReason(canonicalPath, permissions.trustedNetworkDirectories) !== undefined)
+      return REMOTE_READ_REFUSED;
+    if (!(await isCanonicalPathContained(canonicalPath, permissions))) return REMOTE_READ_REFUSED;
     return {
       refused: false,
-      value: await s({
-        handle: m,
-        openedStat: stats,
-        canonicalPath: u,
+      value: await withHandle({
+        handle,
+        openedStat: expectedIdentity,
+        canonicalPath,
       }),
     };
   } finally {
-    await m.close();
+    await handle.close();
   }
 }
 //@ chunk-es7wzebn.js:7966-8010 placement
-function enumOrUndefined(e) {
-  return e === undefined ? undefined : fromEnum(e);
+function enumOrUndefined(value) {
+  return value === undefined ? undefined : fromEnum(value);
 }
 //@ chunk-es7wzebn.js:8010-9717 placement
 /**
  * 为远端读取本机文件：解析路径、拒绝可疑 Windows 路径与不受信 UNC、限时搜索。
  */
 async function readFileForRemote(
-  e,
-  r,
-  n,
-  {
-    encoding: o = "utf-8",
-    anchor: s,
-    telemetrySource: i,
-    containmentFs: p = realFsOps,
-    asWrittenSources: m,
-  } = {},
+  inputPath,
+  maxBytes,
+  permissions,
+  { encoding = "utf-8", anchor, telemetrySource, containmentFs = realFsOps, asWrittenSources } = {},
 ) {
-  let min = Math.min(r && r > 0 ? r : REMOTE_READ_MAX_CHARS, REMOTE_READ_MAX_BYTES);
-  let u = s?.kind === "as_written";
-  let h = u ? "not_served" : undefined;
+  let min = Math.min(maxBytes && maxBytes > 0 ? maxBytes : REMOTE_READ_MAX_CHARS, REMOTE_READ_MAX_BYTES);
+  let isAsWritten = anchor?.kind === "as_written";
+  let lookupStep = isAsWritten ? "not_served" : undefined;
   try {
-    let f =
-      s === undefined || u
+    let anchored =
+      anchor === undefined || isAsWritten
         ? undefined
-        : await (await import("./chunk-qa2d1m12.js")).resolveAnchoredReadPath(e, s);
-    if (f === null) throw remoteReadDenied(e);
-    let _ = () => {
-      let F = m?.whyNotServed();
-      if (F !== undefined) {
-        h = F;
-        throw remoteReadDenied(e);
+        : await (await import("../../utils/anchoredReadPath.js")).resolveAnchoredReadPath(inputPath, anchor);
+    if (anchored === null) throw remoteReadDenied(inputPath);
+    let throwIfNotServed = () => {
+      let reason = asWrittenSources?.whyNotServed();
+      if (reason !== undefined) {
+        lookupStep = reason;
+        throw remoteReadDenied(inputPath);
       }
     };
-    let w;
-    if (u) {
-      if (m === undefined) throw remoteReadDenied(e);
-      _();
-      let F = validCandidatePaths(s.within);
-      if (F === undefined) {
-        h = "unfit_within";
-        throw remoteReadDenied(e);
+    let foundPath;
+    if (isAsWritten) {
+      if (asWrittenSources === undefined) throw remoteReadDenied(inputPath);
+      throwIfNotServed();
+      let withinPaths = validCandidatePaths(anchor.within);
+      if (withinPaths === undefined) {
+        lookupStep = "unfit_within";
+        throw remoteReadDenied(inputPath);
       }
-      h = "fault";
-      let g = await searchHeldFile(e, m, typeof n === "function" ? n() : n, (P, q, ee) =>
-        resolveCanonicalReadPath(P, q, ee, p),
+      lookupStep = "fault";
+      let found = await searchHeldFile(
+        inputPath,
+        asWrittenSources,
+        typeof permissions === "function" ? permissions() : permissions,
+        (candidate, inputPath, permissions) =>
+          resolveCanonicalReadPath(candidate, inputPath, permissions, containmentFs),
       );
-      h = g.path === null ? g.why : g.step;
-      if (g.path === null) throw remoteReadDenied(e);
-      if (!isUnderAnyRoot(F, g.path)) {
-        h = "outside";
-        throw remoteReadDenied(e);
+      lookupStep = found.path === null ? found.why : found.step;
+      if (found.path === null) throw remoteReadDenied(inputPath);
+      if (!isUnderAnyRoot(withinPaths, found.path)) {
+        lookupStep = "outside";
+        throw remoteReadDenied(inputPath);
       }
-      w = g.path;
+      foundPath = found.path;
     }
-    let S = typeof n === "function" ? n() : n;
-    let R = f?.absPath ?? w ?? expandPath(e);
+    let permissionsNow = typeof permissions === "function" ? permissions() : permissions;
+    let openTargetPath = anchored?.absPath ?? foundPath ?? expandPath(inputPath);
     let vettedPath = await openVettedPath(
-      e,
-      R,
-      S,
-      p,
+      inputPath,
+      openTargetPath,
+      permissionsNow,
+      containmentFs,
       ({ handle, openedStat }) => readHandleBounded(handle, min, openedStat.size),
-      u,
+      isAsWritten,
     );
     if (vettedPath.refused)
       throw vettedPath.openFailure === undefined
-        ? remoteReadDenied(e, vettedPath.telemetryMessage)
+        ? remoteReadDenied(inputPath, vettedPath.telemetryMessage)
         : vettedPath.openFailure.error;
     let { bytes, overLimit } = vettedPath.value;
-    if (w !== undefined) _();
-    if (i)
+    if (foundPath !== undefined) throwIfNotServed();
+    if (telemetrySource)
       logEvent("tengu_bridge_read_file_served", {
         success: true,
-        source: fromEnum(i),
+        source: fromEnum(telemetrySource),
         size_bytes: bytes.length,
         requested_max_bytes: min,
         truncated: overLimit,
-        ext: getFileExtensionForAnalytics(R),
-        as_written_lookup: enumOrUndefined(h),
+        ext: getFileExtensionForAnalytics(openTargetPath),
+        as_written_lookup: enumOrUndefined(lookupStep),
       });
     return {
-      contents: bytes.toString(o === "base64" ? "base64" : "utf-8"),
-      absPath: R,
+      contents: bytes.toString(encoding === "base64" ? "base64" : "utf-8"),
+      absPath: openTargetPath,
       ...(overLimit && {
         truncated: overLimit,
       }),
-      ...(o === "base64" && {
-        encoding: o,
+      ...(encoding === "base64" && {
+        encoding,
       }),
-      ...(f !== undefined && {
-        anchor: f.kind,
+      ...(anchored !== undefined && {
+        anchor: anchored.kind,
       }),
-      ...(w !== undefined && {
+      ...(foundPath !== undefined && {
         anchor: "as_written",
       }),
     };
   } catch (error) {
     try {
-      let _ =
+      let errorKind =
         error instanceof Error
           ? "code" in error && typeof error.code === "string"
             ? `${error.name}/${error.code}`
             : error.name
           : typeof error;
       logForDebugging(
-        `readFileForRemote failed pre-deny: ${_}${h === undefined ? "" : `, as_written look-up: ${h}`}`,
+        `readFileForRemote failed pre-deny: ${errorKind}${lookupStep === undefined ? "" : `, as_written look-up: ${lookupStep}`}`,
         {
           level: "error",
         },
       );
     } catch {}
     try {
-      if (i)
+      if (telemetrySource)
         logEvent("tengu_bridge_read_file_served", {
           success: false,
-          source: fromEnum(i),
-          as_written_lookup: enumOrUndefined(h),
+          source: fromEnum(telemetrySource),
+          as_written_lookup: enumOrUndefined(lookupStep),
         });
     } catch {}
     try {
-      if (h !== undefined) m?.onRefusal(h);
+      if (lookupStep !== undefined) asWrittenSources?.onRefusal(lookupStep);
     } catch {}
     if (
       error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS &&
       error.message.startsWith("read denied: ")
     )
       throw error;
-    throw remoteReadDenied(e);
+    throw remoteReadDenied(inputPath);
   }
 }
 //@ chunk-es7wzebn.js:9717-9862 placement
@@ -639,13 +675,13 @@ class UnsettledRemoteFileError extends Error {
 /**
  * 解析规范读取路径
  */
-async function resolveCanonicalReadPath(e, r, n, o = realFsOps) {
-  if (!isFullyQualifiedPath(e) || normalize(e) !== e) return null;
+async function resolveCanonicalReadPath(candidatePath, inputPath, permissions, fsOps = realFsOps) {
+  if (!isFullyQualifiedPath(candidatePath) || normalize(candidatePath) !== candidatePath) return null;
   let vettedPath = await openVettedPath(
-    r,
-    e,
-    n,
-    o,
+    inputPath,
+    candidatePath,
+    permissions,
+    fsOps,
     ({ canonicalPath }) => Promise.resolve(canonicalPath),
     true,
   );

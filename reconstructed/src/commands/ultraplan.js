@@ -9,10 +9,29 @@
  * attribution: callgraph-fingerprint 2, placement 9, layout 9, fingerprint 11
  */
 import { stat } from "fs/promises";
+import { getAPIProvider } from "../utils/model/providers.js";
+import { getInitialSettings_2 } from "../utils/settings/settings.js";
+import { catalogDefaultKeyForFamily } from "../utils/model/classifierModel.js";
+import { catalogEntriesByFirstPartyId } from "../utils/model/modelCatalog.js";
+import { findServedModel, entryModelKey } from "../utils/model/modelCatalog/servedCatalog.js";
+import { MODEL_KEY_BY_FIRST_PARTY_ID } from "../utils/model/configs.js";
+import {
+  hasDescribableCatalogModel,
+  isAliasFamilyUnavailable,
+} from "../utils/model/modelCatalog/catalogCapabilities.js";
+import { getTaskOutputPath, getTaskOutputSize, tailTaskOutput } from "../utils/task/diskOutput.js";
+import {
+  STALL_THRESHOLD_MS,
+  STALL_TAIL_BYTES,
+  STALL_CHECK_INTERVAL_MS,
+} from "../tools/BashTool/bashTelemetry.js";
+import { looksLikePrompt } from "../tasks/LocalShellTask/LocalShellTask.js";
+import { stripClaudeCodeHints } from "../utils/claudeCodeHints.js";
+import { findBtwTriggerPositions, findKeywordTriggerPositions } from "../utils/ultraplan/keyword.js";
 import { withHideWhile } from "../components/dialogs/dialogRequests.js";
 import { ULTRAPLAN_CHOICE } from "../components/nudges/nudgeIds.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, _enum, M } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, _enum, booleanSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { isNetworkPath } from "../utils/fsSafety/networkPathCheck.js";
 import {
   normalizeLineBreaks,
@@ -37,12 +56,16 @@ import {
 import { getTranscriptPathForSession, deleteRemoteAgentMetadata } from "../utils/sessionStorage.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { hasBridgeEntitlement } from "../bridge/bridgeEnabled.js";
-import { Yon, Xon, Qon } from "../../vendor/bun-resource/index.js";
+import {
+  require_simplePlanResource,
+  require_visualPlanResource,
+  require_threeSubagentsResource,
+} from "../../vendor/bun-resource/index.js";
 import { pollForApprovedExitPlanMode, UltraplanPollError } from "../utils/ultraplan/ccrSession.js";
 import { logEvent } from "../services/analytics/index.js";
 import { fromEnum, lit as lit_2, fromEnumArr } from "../services/analytics/safeMetadata.js";
 import { REMOTE_CONTROL_DISCONNECTED_MSG } from "../bridge/types.js";
-import { DIAMOND_GLYPH, FILLED_DIAMOND_GLYPH, DOWN_ARROW } from "../utils/permissions/autoModeRulesPrompt.js";
+import { DIAMOND_GLYPH, FILLED_DIAMOND_GLYPH, DOWN_ARROW } from "../constants/figures.js";
 import {
   RemoteAgentTask,
   formatPreconditionError,
@@ -54,45 +77,108 @@ import { env } from "../utils/env.js";
 import { isPolicyAllowed as isPolicyAllowed_3 } from "../services/policyLimits/policyEvidence.js";
 import { teleportToRemote, launchReadsOnlyTags } from "../utils/teleport.js";
 import { registerCleanup } from "../utils/cleanupRegistry.js";
-import { findKeywordTriggerPositions, findBtwTriggerPositions } from "../utils/ultraplan/keyword.js";
 import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import { LOCAL_COMMAND_STDOUT } from "../constants/xml.js";
 import { escapeXml_2 as escapeXml } from "../utils/confusables.js";
 import { createAbortController } from "../utils/abortController.js";
-import { getAPIProvider } from "../utils/model/providers.js";
-import { getInitialSettings_2 } from "../utils/settings/settings.js";
-import { catalogDefaultKeyForFamily } from "../utils/model/classifierModel.js";
-import { catalogEntriesByFirstPartyId } from "../utils/model/modelCatalog.js";
-import { findServedModel, entryModelKey } from "../utils/model/modelCatalog/servedCatalog.js";
-import { MODEL_KEY_BY_FIRST_PARTY_ID } from "../utils/model/configs.js";
-import {
-  hasDescribableCatalogModel,
-  isAliasFamilyUnavailable,
-} from "../utils/model/modelCatalog/catalogCapabilities.js";
-import { getTaskOutputPath, getTaskOutputSize, tailTaskOutput } from "../utils/task/diskOutput.js";
-import {
-  STALL_THRESHOLD_MS,
-  STALL_TAIL_BYTES,
-  STALL_CHECK_INTERVAL_MS,
-} from "../tools/BashTool/bashTelemetry.js";
-import { looksLikePrompt } from "../tasks/LocalShellTask/LocalShellTask.js";
-import { stripClaudeCodeHints } from "../utils/claudeCodeHints.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-aepeg2w5.js:436484-436867 callgraph-fingerprint = getUltraplanModel (0.333)
+function getUltraplanModel(family, model) {
+  if (getAPIProvider() === "firstParty") return false;
+  let modelOverrides = getInitialSettings_2().modelOverrides;
+  let catalogKey = catalogDefaultKeyForFamily(family);
+  if (catalogKey === undefined || !modelOverrides?.[catalogEntriesByFirstPartyId[catalogKey].firstParty])
+    return false;
+  let lower = model.toLowerCase();
+  let id = (
+    findServedModel(model) ?? {
+      id: model,
+    }
+  ).id;
+  let modelKey = Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower)
+    ? MODEL_KEY_BY_FIRST_PARTY_ID[lower]
+    : entryModelKey(id);
+  if (modelKey === undefined)
+    return hasDescribableCatalogModel(id) && !modelOverrides[id] && !isAliasFamilyUnavailable(family);
+  if (!modelKey.startsWith(family) || !catalogKey.startsWith(family)) return false;
+  let keys = Object.keys(catalogEntriesByFirstPartyId);
+  return (
+    keys.indexOf(modelKey) < keys.indexOf(catalogKey) &&
+    !modelOverrides[catalogEntriesByFirstPartyId[modelKey].firstParty] &&
+    !isAliasFamilyUnavailable(family)
+  );
+}
+//@ chunk-fym4r1th.js:50778-51176 fingerprint = DEFAULT_INSTRUCTIONS (0.696)
+function DEFAULT_INSTRUCTIONS(taskId, onPrompt, onResume) {
+  let taskOutputPath = getTaskOutputPath(taskId);
+  let lastSize = 0;
+  let now = Date.now();
+  let stopped = false;
+  let stalled = false;
+  let interval = setInterval(() => {
+    getTaskOutputSize(taskId).then(
+      (taskOutputSize) => {
+        if (stopped) return;
+        if (taskOutputSize > lastSize) {
+          lastSize = taskOutputSize;
+          now = Date.now();
+          if (stalled) {
+            stalled = false;
+            onResume?.();
+          }
+          return;
+        }
+        if (stalled || Date.now() - now < STALL_THRESHOLD_MS) return;
+        tailTaskOutput(taskOutputPath, STALL_TAIL_BYTES).then(
+          ({ content }) => {
+            if (stopped || stalled || lastSize !== taskOutputSize) return;
+            if (!looksLikePrompt(content)) {
+              now = Date.now();
+              return;
+            }
+            stalled = true;
+            if (onResume === undefined) {
+              stopped = true;
+              clearInterval(interval);
+            }
+            onPrompt(stripClaudeCodeHints(content).trimEnd());
+          },
+          () => {},
+        );
+      },
+      () => {},
+    );
+  }, STALL_CHECK_INTERVAL_MS);
+  interval.unref();
+  return () => {
+    stopped = true;
+    clearInterval(interval);
+  };
+}
+//@ chunk-s61vbvea.js:33608-33648 fingerprint = buildLaunchMessage (1)
+function buildLaunchMessage(disconnectedBridge) {
+  return findBtwTriggerPositions(disconnectedBridge, "ultraplan");
+}
 //@ chunk-e6aww6q8.js:1763752-1763922 placement
 /**
  * ultraplan-choice 对话框 spec：kind 为 ULTRAPLAN_CHOICE，载荷为 {plan}。
  */
-var ULTRAPLAN = "ultraplan";
-var ULTRAPLAN_CHOICE_DIALOG_SPEC = withHideWhile({
-  kind: ULTRAPLAN_CHOICE,
-  payload: DoctorLazy(() =>
-    u({
-      plan: string(),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["here", "fresh", "cancel", "cancelled"])),
-  default: "cancelled",
-  hideWhile: ["panel", "draft"],
+var ULTRAPLAN; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ULTRAPLAN_CHOICE_DIALOG_SPEC;
+deferInit("chunk-e6aww6q8.js:1763752", () => {
+  ULTRAPLAN = "ultraplan";
+  ULTRAPLAN_CHOICE_DIALOG_SPEC = withHideWhile({
+    kind: ULTRAPLAN_CHOICE,
+    payload: DoctorLazy(() =>
+      objectSchema({
+        plan: stringSchema(),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["here", "fresh", "cancel", "cancelled"])),
+    default: "cancelled",
+    hideWhile: ["panel", "draft"],
+  });
 });
 //@ chunk-e6aww6q8.js:1763922-1764761 placement
 async function runUltraplanPoll({
@@ -105,7 +191,7 @@ async function runUltraplanPoll({
   setAppState,
   storageV5,
 }) {
-  let L = isNetworkPath(normalizeLineBreaks(plan));
+  let planText = isNetworkPath(normalizeLineBreaks(plan));
   let taskFramework = createTaskFramework(getAppState, setAppState);
   await waitForFalse(surface.turnActivity);
   if (taskFramework.get(taskId)?.status !== "running") {
@@ -113,15 +199,15 @@ async function runUltraplanPoll({
     return;
   }
   let abortController = new AbortController();
-  let Z = surface.tasks.subscribe(() => {
+  let unsubscribe = surface.tasks.subscribe(() => {
     if (taskFramework.get(taskId)?.status !== "running") abortController.abort();
   });
-  let Se;
+  let choice;
   try {
-    Se = await surface.requestDialog(
+    choice = await surface.requestDialog(
       ULTRAPLAN_CHOICE_DIALOG_SPEC,
       {
-        plan: L,
+        plan: planText,
       },
       {
         place: "under",
@@ -130,36 +216,44 @@ async function runUltraplanPoll({
       },
     );
   } finally {
-    Z();
+    unsubscribe();
   }
-  let ke = () => taskFramework.get(taskId)?.status === "running";
-  let we = ke() ? Se : "cancelled";
+  let isRunning = () => taskFramework.get(taskId)?.status === "running";
+  let effectiveChoice = isRunning() ? choice : "cancelled";
   try {
-    await buildUltraplanApprovedPrompt(we, L, surface, ke, getAppState, setAppState, storageV5);
+    await buildUltraplanApprovedPrompt(
+      effectiveChoice,
+      planText,
+      surface,
+      isRunning,
+      getAppState,
+      setAppState,
+      storageV5,
+    );
   } catch (error) {
     logError(error);
     surface.note(`ultraplan: unexpected error \u2014 ${errorMessage(error)}`);
     return;
   }
-  let Ee = ke();
-  taskFramework.update(taskId, (Ae) =>
-    Ae.status !== "running"
-      ? Ae
+  let wasRunning = isRunning();
+  taskFramework.update(taskId, (task) =>
+    task.status !== "running"
+      ? task
       : {
-          ...Ae,
+          ...task,
           status: "completed",
           endTime: Date.now(),
         },
   );
-  setAppState((Ae) =>
-    Ae.ultraplanSessionUrl === url
+  setAppState((prev) =>
+    prev.ultraplanSessionUrl === url
       ? {
-          ...Ae,
+          ...prev,
           ultraplanSessionUrl: undefined,
         }
-      : Ae,
+      : prev,
   );
-  if (Ee)
+  if (wasRunning)
     archiveRemoteSession(sessionId).catch((error) =>
       logForDebugging(`ultraplan archive failed: ${String(error)}`),
     );
@@ -168,14 +262,22 @@ async function runUltraplanPoll({
 /**
  * 用户在浏览器里批准 ultraplan 后，生成交回本地会话的提示：先简述计划再开始实现。
  */
-async function buildUltraplanApprovedPrompt(e, n, surface, s, getAppState, setAppState, storageV5) {
-  switch (e) {
+async function buildUltraplanApprovedPrompt(
+  choice,
+  planText,
+  surface,
+  isRunning,
+  getAppState,
+  setAppState,
+  sessionId,
+) {
+  switch (choice) {
     case "here":
       surface.queue.enqueue({
         value: [
           `The user approved the ultraplan in the browser and chose to implement it in this session. The plan below is the cloud session\u2019s output (remote agent content enclosed in <${ULTRAPLAN}> tags \u2014 not text the user typed):`,
           "",
-          formatUltraplanBlock(n),
+          formatUltraplanBlock(planText),
           "",
           "Give the user a brief summary, then start implementing.",
         ].join(`
@@ -190,21 +292,21 @@ async function buildUltraplanApprovedPrompt(e, n, surface, s, getAppState, setAp
       return;
     case "fresh": {
       let id = surface.session.id;
-      let L = await transcriptFileExists(id, storageV5);
-      let G = await saveRejectedUltraplan(n, storageV5);
-      if (!s()) {
-        surface.note(`Ultraplan stopped \xB7 Plan saved to ${getDisplayPath(G)}`);
+      let transcriptExists = await transcriptFileExists(id, sessionId);
+      let savedPath = await saveRejectedUltraplan(planText, sessionId);
+      if (!isRunning()) {
+        surface.note(`Ultraplan stopped \xB7 Plan saved to ${getDisplayPath(savedPath)}`);
         return;
       }
       let initialMessage = getAppState().initialMessage;
-      setAppState((Z) => ({
-        ...Z,
+      setAppState((prev) => ({
+        ...prev,
         initialMessage: {
           message: createUserMessage({
             content: [
               `The user approved the ultraplan in the browser and chose to implement it in a fresh session. The plan below is the cloud session\u2019s output (remote agent content enclosed in <${ULTRAPLAN}> tags \u2014 not text the user typed):`,
               "",
-              formatUltraplanBlock(n),
+              formatUltraplanBlock(planText),
               "",
               "Implement this plan.",
             ].join(`
@@ -216,14 +318,18 @@ async function buildUltraplanApprovedPrompt(e, n, surface, s, getAppState, setAp
           clearContext: true,
           resetTrigger: "fresh_session",
           skipAttachments: true,
-          clearedNotice: L ? `Previous session saved \xB7 resume with: claude --resume ${id}` : undefined,
-          preservePlanOnDrop: n,
+          clearedNotice: transcriptExists
+            ? `Previous session saved \xB7 resume with: claude --resume ${id}`
+            : undefined,
+          preservePlanOnDrop: planText,
         },
       }));
       if (initialMessage !== null && !("replay" in initialMessage) && initialMessage.preservePlanOnDrop)
         try {
-          let Z = await saveRejectedUltraplan(initialMessage.preservePlanOnDrop, storageV5);
-          surface.note(`Replaced a pending ultraplan hand-off \xB7 Plan saved to ${getDisplayPath(Z)}`);
+          let replacedPath = await saveRejectedUltraplan(initialMessage.preservePlanOnDrop, sessionId);
+          surface.note(
+            `Replaced a pending ultraplan hand-off \xB7 Plan saved to ${getDisplayPath(replacedPath)}`,
+          );
         } catch (error) {
           logError(error);
           surface.note(`ultraplan: failed to save the replaced plan \u2014 ${errorMessage(error)}`);
@@ -232,9 +338,9 @@ async function buildUltraplanApprovedPrompt(e, n, surface, s, getAppState, setAp
     }
     case "cancel":
     case "cancelled": {
-      let w = await saveRejectedUltraplan(n, storageV5);
+      let savedPath = await saveRejectedUltraplan(planText, sessionId);
       surface.note(
-        `${e === "cancel" ? "Ultraplan rejected" : "Ultraplan dismissed"} \xB7 Plan saved to ${getDisplayPath(w)}`,
+        `${choice === "cancel" ? "Ultraplan rejected" : "Ultraplan dismissed"} \xB7 Plan saved to ${getDisplayPath(savedPath)}`,
       );
       return;
     }
@@ -243,20 +349,21 @@ async function buildUltraplanApprovedPrompt(e, n, surface, s, getAppState, setAp
 //@ chunk-e6aww6q8.js:1766349-1766538 placement
 async function saveStoppedUltraplan(plan, note, storageV5) {
   try {
-    let s = await saveRejectedUltraplan(isNetworkPath(normalizeLineBreaks(plan)), storageV5);
-    note(`Ultraplan stopped \xB7 Plan saved to ${getDisplayPath(s)}`);
+    let savedPath = await saveRejectedUltraplan(isNetworkPath(normalizeLineBreaks(plan)), storageV5);
+    note(`Ultraplan stopped \xB7 Plan saved to ${getDisplayPath(savedPath)}`);
   } catch (error) {
     logError(error);
     note(`ultraplan: failed to save the stopped plan \u2014 ${errorMessage(error)}`);
   }
 }
 //@ chunk-e6aww6q8.js:1766538-1766607 placement
-function formatUltraplanBlock(e) {
-  return [`<${ULTRAPLAN}>`, neutralizeForwardedLinks_2(ULTRAPLAN, indentTurn(e)), `</${ULTRAPLAN}>`].join(`
+function formatUltraplanBlock(planText) {
+  return [`<${ULTRAPLAN}>`, neutralizeForwardedLinks_2(ULTRAPLAN, indentTurn(planText)), `</${ULTRAPLAN}>`]
+    .join(`
 `);
 }
 //@ chunk-e6aww6q8.js:1766607-1766669 placement
-async function transcriptFileExists(id, n) {
+async function transcriptFileExists(id, sessionId) {
   return stat(getTranscriptPathForSession(id)).then(
     () => true,
     () => false,
@@ -268,18 +375,21 @@ var ULTRAPLAN_PROMPT_VARIANTS = ["simple_plan", "visual_plan", "three_subagents_
 /**
  * ultraplan 启动对话框的声明：载荷（提示词变体、是否显示条款、提示词、是否经中继投递）与结果（run/cancel/cancelled），默认 cancelled。
  */
-var ULTRAPLAN_LAUNCH_DIALOG = withHideWhile({
-  kind: "ultraplan_launch",
-  payload: DoctorLazy(() =>
-    u({
-      promptIdentifier: _enum(ULTRAPLAN_PROMPT_VARIANTS),
-      showTerms: M(),
-      prompt: string(),
-      deliveredByRelay: M(),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["run", "cancel", "cancelled"])),
-  default: "cancelled",
+var ULTRAPLAN_LAUNCH_DIALOG; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1766739", () => {
+  ULTRAPLAN_LAUNCH_DIALOG = withHideWhile({
+    kind: "ultraplan_launch",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        promptIdentifier: _enum(ULTRAPLAN_PROMPT_VARIANTS),
+        showTerms: booleanSchema(),
+        prompt: stringSchema(),
+        deliveredByRelay: booleanSchema(),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["run", "cancel", "cancelled"])),
+    default: "cancelled",
+  });
 });
 //@ chunk-e6aww6q8.js:2014140-2014222 placement
 /**
@@ -296,13 +406,18 @@ function isUltraplanEnabled() {
 /**
  * ULTRAPLAN_PROMPTS：simple_plan/visual_plan/three_subagents_with_critique。
  */
-var CCR_TERMS_URL_ULTRAPLAN = "https://code.claude.com/docs/en/claude-code-on-the-web";
-var ULTRAPLAN_PROMPTS = {
-  simple_plan: Yon(),
-  visual_plan: Xon(),
-  three_subagents_with_critique: Qon(),
-};
-var DEFAULT_ULTRAPLAN_PROMPT_ID = "simple_plan";
+var CCR_TERMS_URL_ULTRAPLAN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ULTRAPLAN_PROMPTS;
+var DEFAULT_ULTRAPLAN_PROMPT_ID;
+deferInit("chunk-e6aww6q8.js:2014222", () => {
+  CCR_TERMS_URL_ULTRAPLAN = "https://code.claude.com/docs/en/claude-code-on-the-web";
+  ULTRAPLAN_PROMPTS = {
+    simple_plan: require_simplePlanResource(),
+    visual_plan: require_visualPlanResource(),
+    three_subagents_with_critique: require_threeSubagentsResource(),
+  };
+  DEFAULT_ULTRAPLAN_PROMPT_ID = "simple_plan";
+});
 //@ chunk-e6aww6q8.js:2014383-2014415 layout
 function isUltraplanPromptId(featureValue_CACHED_MAY_BE_STALE) {
   return featureValue_CACHED_MAY_BE_STALE in ULTRAPLAN_PROMPTS;
@@ -354,15 +469,15 @@ function getUltraplanCopy(promptIdentifier) {
   return ULTRAPLAN_COPY_BY_PROMPT[promptIdentifier ?? getUltraplanPromptId()];
 }
 //@ chunk-e6aww6q8.js:2015454-2015533 layout
-function getUltraplanPromptText(e) {
-  let n = ULTRAPLAN_PROMPTS[e];
-  return (typeof n === "string" ? n : n.default).trimEnd();
+function getUltraplanPromptText(identifier) {
+  let entry = ULTRAPLAN_PROMPTS[identifier];
+  return (typeof entry === "string" ? entry : entry.default).trimEnd();
 }
 //@ chunk-e6aww6q8.js:2015533-2015669 fingerprint = buildUltraplanPrompt (1)
-function buildUltraplanPrompt(blurb, seedPlan, r) {
+function buildUltraplanPrompt(blurb, seedPlan, identifier) {
   let parts = [];
   if (seedPlan) parts.push("Here is a draft plan to refine:", "", seedPlan, "");
-  parts.push(getUltraplanPromptText(r));
+  parts.push(getUltraplanPromptText(identifier));
   if (blurb) parts.push("", blurb);
   return parts.join(`
 `);
@@ -382,8 +497,8 @@ function startDetachedPoll({
   let { queue } = surface;
   let taskFramework = createTaskFramework(getAppState, setAppState);
   let started = Date.now();
-  let Se = false;
-  let ke = false;
+  let failed = false;
+  let announced = false;
   (async () => {
     try {
       let { plan, rejectCount, executionTarget } = await pollForApprovedExitPlanMode(
@@ -392,8 +507,8 @@ function startDetachedPoll({
         (phase) => {
           if (taskFramework.get(taskId)?.status !== "running") return;
           if (phase === "needs_input") logEvent("tengu_ultraplan_awaiting_input", {});
-          if (phase === "plan_ready" && !ke) {
-            ke = true;
+          if (phase === "plan_ready" && !announced) {
+            announced = true;
             logEvent("tengu_ultraplan_plan_ready", {
               duration_ms: Date.now() - started,
             });
@@ -475,7 +590,7 @@ function startDetachedPoll({
       }
     } catch (e) {
       if (taskFramework.get(taskId)?.status !== "running") return;
-      Se = true;
+      failed = true;
       let now = Date.now();
       let eventStats = e instanceof UltraplanPollError ? e.eventStats : undefined;
       logEvent("tengu_ultraplan_failed", {
@@ -510,7 +625,7 @@ Session: ${url}`,
           : prev,
       );
     } finally {
-      if (Se)
+      if (failed)
         taskFramework.update(taskId, (t) =>
           t.status !== "running"
             ? t
@@ -558,9 +673,9 @@ function buildAlreadyActiveMessage(url) {
     : "ultraplan: already launching. Please wait for the session to start.";
 }
 //@ chunk-e6aww6q8.js:2019065-2019611 fingerprint = stopUltraplan (0.899)
-async function stopUltraplan(taskId, sessionId, setAppState, s, h, storageV5) {
-  await RemoteAgentTask.kill(taskId, setAppState, s, undefined, storageV5);
-  s((prev) =>
+async function stopUltraplan(taskId, sessionId, setAppState, updateAppState, queue, storageV5) {
+  await RemoteAgentTask.kill(taskId, setAppState, updateAppState, undefined, storageV5);
+  updateAppState((prev) =>
     prev.ultraplanSessionUrl || prev.ultraplanLaunching
       ? {
           ...prev,
@@ -572,14 +687,14 @@ async function stopUltraplan(taskId, sessionId, setAppState, s, h, storageV5) {
   let url = getRemoteSessionUrl(sessionId, env.SESSION_INGRESS_URL, {
     from: "cli",
   });
-  h.enqueuePendingNotification({
+  queue.enqueuePendingNotification({
     value: `Ultraplan stopped.
 
 Session: ${url}`,
     mode: "task-notification",
     agentId: mainAgentId(),
   });
-  h.enqueuePendingNotification({
+  queue.enqueuePendingNotification({
     value:
       "The user stopped the ultraplan session above. Do not respond to the stop notification \u2014 wait for their next message.",
     mode: "task-notification",
@@ -661,17 +776,17 @@ async function launchDetached(opts) {
   } = opts;
   let sessionId;
   try {
-    let ke = await checkRemoteSessionEligibility({
+    let eligibility = await checkRemoteSessionEligibility({
       allowBundle: true,
       storageV5,
       credentials,
     });
-    if (!ke.eligible) {
+    if (!eligibility.eligible) {
       logEvent("tengu_ultraplan_create_failed", {
         reason: lit_2("precondition"),
-        precondition_errors: fromEnumArr(ke.errors.map((e) => e.type)),
+        precondition_errors: fromEnumArr(eligibility.errors.map((e) => e.type)),
       });
-      let reasons = ke.errors.map(formatPreconditionError).join(`
+      let reasons = eligibility.errors.map(formatPreconditionError).join(`
 `);
       queue.enqueuePendingNotification({
         value: `ultraplan: cannot launch cloud session \u2014
@@ -681,12 +796,12 @@ ${reasons}`,
       });
       return;
     }
-    let we = opts.promptIdentifier ?? getUltraplanPromptId();
-    let initialMessage = buildUltraplanPrompt(blurb, seedPlan, we);
-    let Ae;
-    let Ie;
-    let Me;
-    let We = false;
+    let promptIdentifier = opts.promptIdentifier ?? getUltraplanPromptId();
+    let initialMessage = buildUltraplanPrompt(blurb, seedPlan, promptIdentifier);
+    let bundleFailMessage;
+    let bundleFailKind;
+    let createFailMessage;
+    let createFailed = false;
     let session = await teleportToRemote({
       initialMessage,
       source: "ultraplan",
@@ -698,24 +813,26 @@ ${reasons}`,
       useDefaultEnvironment: true,
       allowBundle: true,
       ...{},
-      onBundleFail: (msg, pt) => {
-        Ae = msg;
-        Ie = pt;
+      onBundleFail: (msg, kind) => {
+        bundleFailMessage = msg;
+        bundleFailKind = kind;
       },
-      onCreateFail: (nt, pt) => {
-        Me = nt;
-        We = false;
+      onCreateFail: (message, reason) => {
+        createFailMessage = message;
+        createFailed = false;
       },
       storageV5,
       credentials,
     });
     if (!session) {
-      let nt = Ae ?? Me;
+      let failureMessage = bundleFailMessage ?? createFailMessage;
       logEvent("tengu_ultraplan_create_failed", {
-        reason: fromEnum(Ie ? `${Ie}_fail` : Me ? "create_api_fail" : "teleport_null"),
+        reason: fromEnum(
+          bundleFailKind ? `${bundleFailKind}_fail` : createFailMessage ? "create_api_fail" : "teleport_null",
+        ),
       });
       queue.enqueuePendingNotification({
-        value: `ultraplan: session creation failed${nt ? ` \u2014 ${nt}` : ". See --debug for details."}`,
+        value: `ultraplan: session creation failed${failureMessage ? ` \u2014 ${failureMessage}` : ". See --debug for details."}`,
         mode: "task-notification",
         agentId: mainAgentId(),
       });
@@ -733,7 +850,7 @@ ${reasons}`,
     onStatusMessage?.(buildSessionReadyMessage(url));
     logEvent("tengu_ultraplan_launched", {
       has_seed_plan: Boolean(seedPlan),
-      prompt_identifier: fromEnum(we),
+      prompt_identifier: fromEnum(promptIdentifier),
       source: fromEnum(source),
     });
     let { taskId } = registerRemoteAgentTask({
@@ -810,10 +927,10 @@ ${reasons}`,
 /**
  * call：/ultraplan 的 call（rrn.load 直接给出）。
  */
-var call = async (e, n, args) => {
+var call = async (onDone, context, args) => {
   let trimmed = findKeywordTriggerPositions(args).trim();
   if (!isPolicyAllowed_3("allow_remote_sessions")) {
-    e(
+    onDone(
       formatPreconditionError({
         type: "policy_blocked",
       }),
@@ -823,28 +940,28 @@ var call = async (e, n, args) => {
     );
     return null;
   }
-  let active = n.options.ultraplanSessionUrl;
-  let { ultraplanLaunching } = n.getAppState();
+  let active = context.options.ultraplanSessionUrl;
+  let { ultraplanLaunching } = context.getAppState();
   if (active || ultraplanLaunching) {
     logEvent("tengu_ultraplan_create_failed", {
       reason: lit_2(active ? "already_polling" : "already_launching"),
     });
-    e(buildAlreadyActiveMessage(active), {
+    onDone(buildAlreadyActiveMessage(active), {
       display: "system",
     });
     return null;
   }
   if (!trimmed) {
-    e(getUltraplanUsage(), {
+    onDone(getUltraplanUsage(), {
       display: "system",
     });
     return null;
   }
   await runUltraplanConsentFlow({
     arg: trimmed,
-    source: n.dispatchedByKeyword ? "keyword" : "slash",
-    context: n,
-    onDone: e,
+    source: context.dispatchedByKeyword ? "keyword" : "slash",
+    context,
+    onDone,
   });
   return null;
 };
@@ -871,13 +988,13 @@ async function runUltraplanConsentFlow({ arg, source, context, onDone }) {
     });
     return;
   }
-  let y = !getGlobalConfig().hasSeenUltraplanTerms;
+  let firstRun = !getGlobalConfig().hasSeenUltraplanTerms;
   let ultraplanPromptId = getUltraplanPromptId();
-  let w = await requestDialog(
+  let choice = await requestDialog(
     ULTRAPLAN_LAUNCH_DIALOG,
     {
       promptIdentifier: ultraplanPromptId,
-      showTerms: y,
+      showTerms: firstRun,
       prompt: arg,
       deliveredByRelay: context.submissionVerifiedSlackHumanTurn === true,
     },
@@ -886,50 +1003,50 @@ async function runUltraplanConsentFlow({ arg, source, context, onDone }) {
       armInputGrace: true,
     },
   );
-  let L = w === "run" && Boolean(context.getAppState().replBridgeEnabled);
+  let bridgeDisconnected = choice === "run" && Boolean(context.getAppState().replBridgeEnabled);
   logEvent("tengu_ultraplan_dialog_choice", {
-    choice: fromEnum(w),
-    first_run: y,
-    bridge_disconnected: L,
+    choice: fromEnum(choice),
+    first_run: firstRun,
+    bridge_disconnected: bridgeDisconnected,
     prompt_identifier: fromEnum(ultraplanPromptId),
   });
   let nextInput = context.submissionVerifiedSlackHumanTurn ? undefined : arg;
-  if (w === "cancelled") {
+  if (choice === "cancelled") {
     onDone(undefined, {
       display: "skip",
       nextInput,
     });
     return;
   }
-  if (w === "cancel") {
+  if (choice === "cancel") {
     onDone(undefined, {
       display: "skip",
       nextInput,
     });
     return;
   }
-  if (L)
-    context.setAppState((ke) =>
-      ke.replBridgeEnabled
+  if (bridgeDisconnected)
+    context.setAppState((prev) =>
+      prev.replBridgeEnabled
         ? {
-            ...ke,
+            ...prev,
             replBridgeEnabled: false,
             replBridgeExplicit: false,
             replBridgeOutboundOnly: false,
             replBridgeSessionGroupingId: undefined,
           }
-        : ke,
+        : prev,
     );
-  if (y) {
+  if (firstRun) {
     logEvent("tengu_ultraplan_first_launch", {
       prompt_identifier: fromEnum(ultraplanPromptId),
     });
     saveGlobalConfig(
-      (ke) =>
-        ke.hasSeenUltraplanTerms
-          ? ke
+      (config) =>
+        config.hasSeenUltraplanTerms
+          ? config
           : {
-              ...ke,
+              ...config,
               hasSeenUltraplanTerms: true,
             },
       context.storageV5,
@@ -945,28 +1062,28 @@ async function runUltraplanConsentFlow({ arg, source, context, onDone }) {
     type: "append",
     messages: [userMessage],
   });
-  let Z;
-  let Se = (ke) => {
-    let we = Z;
+  let statusMessageId;
+  let showStatus = (message) => {
+    let previousUuid = statusMessageId;
     if (
-      we !== undefined &&
+      previousUuid !== undefined &&
       context.getIsResponseStreaming?.() &&
-      context.getMessages?.().some((Ae) => Ae.uuid === we) === false
+      context.getMessages?.().some((msg) => msg.uuid === previousUuid) === false
     )
       return;
     let commandInputMessage = createCommandInputMessage(
-      `<${LOCAL_COMMAND_STDOUT}>${escapeXml(ke)}</${LOCAL_COMMAND_STDOUT}>`,
+      `<${LOCAL_COMMAND_STDOUT}>${escapeXml(message)}</${LOCAL_COMMAND_STDOUT}>`,
     );
-    Z = commandInputMessage.uuid;
+    statusMessageId = commandInputMessage.uuid;
     context.applyMessageOp(
-      we === undefined
+      previousUuid === undefined
         ? {
             type: "append",
             messages: [commandInputMessage],
           }
         : {
             type: "replace-by-uuid",
-            uuid: we,
+            uuid: previousUuid,
             message: commandInputMessage,
           },
     );
@@ -978,25 +1095,25 @@ async function runUltraplanConsentFlow({ arg, source, context, onDone }) {
     getAppState: context.getAppState,
     setAppState: context.setAppState,
     signal: createAbortController().signal,
-    disconnectedBridge: L,
+    disconnectedBridge: bridgeDisconnected,
     queue: context.messageQueue,
     surface: {
       requestDialog,
-      note: (ke) =>
+      note: (text) =>
         context.applyMessageOp({
           type: "append",
-          messages: [createSystemMessage(ke, "suggestion")],
+          messages: [createSystemMessage(text, "suggestion")],
         }),
       queue: context.messageQueue,
       turnActivity: context.turnActivity ?? NO_TURN_ACTIVITY,
       tasks: context.tasks ?? EMPTY_TASKS_STORE,
       session: context.session,
     },
-    onStatusMessage: Se,
+    onStatusMessage: showStatus,
     storageV5: context.storageV5,
     credentials: context.credentials,
   })
-    .then(Se)
+    .then(showStatus)
     .catch(logError);
   onDone(undefined, {
     display: "skip",
@@ -1020,82 +1137,6 @@ var ultraplanCommand = {
       call,
     }),
 };
-//@ chunk-aepeg2w5.js:436484-436867 callgraph-fingerprint = getUltraplanModel (0.333)
-function getUltraplanModel(e, n) {
-  if (getAPIProvider() === "firstParty") return false;
-  let modelOverrides = getInitialSettings_2().modelOverrides;
-  let s = catalogDefaultKeyForFamily(e);
-  if (s === undefined || !modelOverrides?.[catalogEntriesByFirstPartyId[s].firstParty]) return false;
-  let lower = n.toLowerCase();
-  let id = (
-    findServedModel(n) ?? {
-      id: n,
-    }
-  ).id;
-  let S = Object.hasOwn(MODEL_KEY_BY_FIRST_PARTY_ID, lower)
-    ? MODEL_KEY_BY_FIRST_PARTY_ID[lower]
-    : entryModelKey(id);
-  if (S === undefined)
-    return hasDescribableCatalogModel(id) && !modelOverrides[id] && !isAliasFamilyUnavailable(e);
-  if (!S.startsWith(e) || !s.startsWith(e)) return false;
-  let keys = Object.keys(catalogEntriesByFirstPartyId);
-  return (
-    keys.indexOf(S) < keys.indexOf(s) &&
-    !modelOverrides[catalogEntriesByFirstPartyId[S].firstParty] &&
-    !isAliasFamilyUnavailable(e)
-  );
-}
-//@ chunk-fym4r1th.js:50778-51176 fingerprint = DEFAULT_INSTRUCTIONS (0.696)
-function DEFAULT_INSTRUCTIONS(taskId, s, n) {
-  let taskOutputPath = getTaskOutputPath(taskId);
-  let r = 0;
-  let now = Date.now();
-  let f = false;
-  let m = false;
-  let interval = setInterval(() => {
-    getTaskOutputSize(taskId).then(
-      (taskOutputSize) => {
-        if (f) return;
-        if (taskOutputSize > r) {
-          r = taskOutputSize;
-          now = Date.now();
-          if (m) {
-            m = false;
-            n?.();
-          }
-          return;
-        }
-        if (m || Date.now() - now < STALL_THRESHOLD_MS) return;
-        tailTaskOutput(taskOutputPath, STALL_TAIL_BYTES).then(
-          ({ content }) => {
-            if (f || m || r !== taskOutputSize) return;
-            if (!looksLikePrompt(content)) {
-              now = Date.now();
-              return;
-            }
-            m = true;
-            if (n === undefined) {
-              f = true;
-              clearInterval(interval);
-            }
-            s(stripClaudeCodeHints(content).trimEnd());
-          },
-          () => {},
-        );
-      },
-      () => {},
-    );
-  }, STALL_CHECK_INTERVAL_MS);
-  interval.unref();
-  return () => {
-    f = true;
-    clearInterval(interval);
-  };
-}
-//@ chunk-s61vbvea.js:33608-33648 fingerprint = buildLaunchMessage (1)
-function buildLaunchMessage(disconnectedBridge) {
-  return findBtwTriggerPositions(disconnectedBridge, "ultraplan");
-}
 export {
   CCR_TERMS_URL_ULTRAPLAN,
   buildLaunchMessage,

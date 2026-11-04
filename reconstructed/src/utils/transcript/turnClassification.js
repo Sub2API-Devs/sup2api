@@ -13,46 +13,47 @@
 /**
  * 是否因工具调用畸形而被耗尽（API 错误且带撤回的 uuid）。
  */
-function isMalformedToolUseExhausted(e) {
-  return e.isApiErrorMessage === true && Array.isArray(e.retractedMessageUuids);
+function isMalformedToolUseExhausted(row) {
+  return row.isApiErrorMessage === true && Array.isArray(row.retractedMessageUuids);
 }
 //@ chunk-e6aww6q8.js:1859341-1859519 placement
-function isRefusalTurn(e) {
+function isRefusalTurn(msg) {
   return (
-    e.message.stop_reason === "refusal" ||
-    e.apiError === "dlp_request_denied" ||
-    e.apiError === "safety_monitor_blocked" ||
-    e.apiError === "unattended_start_limit" ||
-    isMalformedToolUseExhausted(e)
+    msg.message.stop_reason === "refusal" ||
+    msg.apiError === "dlp_request_denied" ||
+    msg.apiError === "safety_monitor_blocked" ||
+    msg.apiError === "unattended_start_limit" ||
+    isMalformedToolUseExhausted(msg)
   );
 }
 //@ chunk-e6aww6q8.js:1859519-1859576 placement
 /**
  * 是 API 错误但不是拒绝型。
  */
-function isApiErrorWithoutRefusal(e) {
-  return e.isApiErrorMessage === true && !isRefusalTurn(e);
+function isApiErrorWithoutRefusal(msg) {
+  return msg.isApiErrorMessage === true && !isRefusalTurn(msg);
 }
 //@ chunk-e6aww6q8.js:1859576-1859669 placement
 /**
  * 是否「无人值守启动未确认」的 API 错误。
  */
-function isUnattendedStartUnconfirmed(e) {
-  return e.isApiErrorMessage === true && e.apiError === "unattended_start_unconfirmed";
+function isUnattendedStartUnconfirmed(msg) {
+  return msg.isApiErrorMessage === true && msg.apiError === "unattended_start_unconfirmed";
 }
 //@ chunk-e6aww6q8.js:1859669-1859894 placement
-function refusalKind(e) {
-  if (isMalformedToolUseExhausted(e)) return "malformed_tool_use_exhausted";
-  if (e.apiError === "safety_monitor_blocked" || e.apiError === "unattended_start_limit") return e.apiError;
-  return e.apiError === "dlp_request_denied" ? "dlp_denied" : "refusal";
+function refusalKind(msg) {
+  if (isMalformedToolUseExhausted(msg)) return "malformed_tool_use_exhausted";
+  if (msg.apiError === "safety_monitor_blocked" || msg.apiError === "unattended_start_limit")
+    return msg.apiError;
+  return msg.apiError === "dlp_request_denied" ? "dlp_denied" : "refusal";
 }
 //@ chunk-e6aww6q8.js:1859894-1860017 placement
-function apiErrorKind(e) {
-  switch (e.error) {
+function apiErrorKind(msg) {
+  switch (msg.error) {
     case "overloaded":
     case "rate_limit":
     case "server_error":
-      return e.error;
+      return msg.error;
     default:
       return "other";
   }

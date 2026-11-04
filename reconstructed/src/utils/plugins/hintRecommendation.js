@@ -23,9 +23,13 @@ import { errorMessage } from "../errors.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { lit as lit_2 } from "../../services/analytics/safeMetadata.js";
 import { getPluginDisplayName } from "../../components/ManagedSettingsSecurityDialog/utils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1804920-1804924 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1804920", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1804924-1804936 layout
 var MAX_PLUGIN_HINTS_PER_SESSION = 100;
 //@ chunk-18hwfzwa.js:1804936-1805306 fingerprint = maybeRecordPluginHint (0.607)

@@ -64,7 +64,7 @@ import { REMOTE_DEVICES } from "../mcp/firstPartyServerIds.js";
 import { mayBePassthroughTool } from "../deviceBridge/passthroughMarker.js";
 import { AwayEpisodeTracker } from "../awayEpisodes.js";
 import { isHostAwayRecheckable, machineIdentity } from "./resultConversion.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { CALLER_FIELDS, clipText } from "../../remote/tools/protocolSchemas.js";
 import { raceWithAbortSignal } from "../../utils/sleep.js";
 import { AbortError, isAbortError } from "../../utils/errors.js";
@@ -108,148 +108,159 @@ import { buildNoPromptAvailableDenial } from "../../utils/messages.js";
 import { logError } from "../../utils/log.js";
 
 //@ chunk-dtv8x2hx.js:68603-68891 placement
-async function routeRemoteToolCall(e, n, o, afterReannounce) {
-  if (getToolNameForPermissionCheck(e)) return routeToolUse(e, n, o, afterReannounce);
-  let s = o.toolState.get(BridgeToolProvider).machineFor(e);
-  if (s !== undefined && e.isMcp !== true) return resolveHostForCall(e, n, s, o, afterReannounce);
-  if (!getToolRemoteExecution(e).supported || !isRemoteToolForwardingSwitchOn())
+async function routeRemoteToolCall(tool, input, toolUseContext, options) {
+  if (getToolNameForPermissionCheck(tool)) return routeToolUse(tool, input, toolUseContext, options);
+  let machineName = toolUseContext.toolState.get(BridgeToolProvider).machineFor(tool);
+  if (machineName !== undefined && tool.isMcp !== true)
+    return resolveHostForCall(tool, input, machineName, toolUseContext, options);
+  if (!getToolRemoteExecution(tool).supported || !isRemoteToolForwardingSwitchOn())
     return {
       kind: "local",
-      input: n,
+      input,
     };
-  let { requested, input } = splitHostField(n);
+  let { requested, input: input_2 } = splitHostField(input);
   return requested === undefined
     ? {
         kind: "local",
-        input,
+        input: input_2,
       }
-    : routeToolCall(e, requested, input, o, afterReannounce);
+    : routeToolCall(tool, requested, input_2, toolUseContext, options);
 }
 //@ chunk-dtv8x2hx.js:68891-70012 placement
-async function resolveHostForCall(e, n, o, r, s) {
+async function resolveHostForCall(tool, input, machineName, toolUseContext, options) {
   if (!(await isRemoteToolForwardingEnabled()))
     return {
       kind: "error",
       code: "not_served",
       message: runningUnavailableMessage({
-        name: o,
-        toolName: e.name,
+        name: machineName,
+        toolName: tool.name,
       }),
     };
-  let u = n[HOST_TOOL_INPUT_FIELD];
-  if (typeof u === "string" && (u.trim() === "" || isReservedMachineName(u)))
+  let requestedInput = input[HOST_TOOL_INPUT_FIELD];
+  if (
+    typeof requestedInput === "string" &&
+    (requestedInput.trim() === "" || isReservedMachineName(requestedInput))
+  )
     return {
       kind: "error",
       code: "unknown_host",
       message: cannotRunHereMessage({
-        toolName: e.name,
-        machines: [o, ...formatHostLabel(r, e.name, o)],
+        toolName: tool.name,
+        machines: [machineName, ...formatHostLabel(toolUseContext, tool.name, machineName)],
       }),
     };
-  let { requested, input } = splitHostField(restoreTargetField(n));
-  let h = requested === undefined ? describeHostState(r, e.name) : [];
-  if (h.length > 1)
+  let { requested, input: input_2 } = splitHostField(restoreTargetField(input));
+  let servingHosts = requested === undefined ? describeHostState(toolUseContext, tool.name) : [];
+  if (servingHosts.length > 1)
     return {
       kind: "error",
       code: "unknown_host",
       message: cannotRunHereMessage({
-        toolName: e.name,
-        machines: [o, ...formatHostLabel(r, e.name, o)],
+        toolName: tool.name,
+        machines: [machineName, ...formatHostLabel(toolUseContext, tool.name, machineName)],
       }),
     };
-  let w = requested ?? h[0] ?? o;
-  let k = await routeToolCall(e, w, input, r, s);
-  if (k.kind !== "error") return k;
-  let resolved = r.toolState.get(ToolHostRegistry).resolve(w);
-  let A = resolved.kind === "remote" ? resolved.host.name : machineNameMatches(w, o) ? o : w;
-  switch (k.code) {
+  let target = requested ?? servingHosts[0] ?? machineName;
+  let result = await routeToolCall(tool, target, input_2, toolUseContext, options);
+  if (result.kind !== "error") return result;
+  let resolved = toolUseContext.toolState.get(ToolHostRegistry).resolve(target);
+  let failedTarget =
+    resolved.kind === "remote"
+      ? resolved.host.name
+      : machineNameMatches(target, machineName)
+        ? machineName
+        : target;
+  switch (result.code) {
     case "unknown_host":
-      return A === o
+      return failedTarget === machineName
         ? {
-            ...k,
+            ...result,
             message: detachedNowhereMessage({
-              name: o,
-              toolName: e.name,
+              name: machineName,
+              toolName: tool.name,
             }),
           }
-        : k;
+        : result;
     case "not_served":
       return {
-        ...k,
+        ...result,
         message:
-          A === o
+          failedTarget === machineName
             ? notServedRightNowMessage({
-                name: A,
-                toolName: e.name,
+                name: failedTarget,
+                toolName: tool.name,
               })
             : servedElsewhereMessage({
-                name: A,
-                toolName: e.name,
-                servedBy: o,
+                name: failedTarget,
+                toolName: tool.name,
+                servedBy: machineName,
               }),
       };
     case "incompatible": {
-      if (resolved.kind !== "remote" || resolved.host.protocol.kind !== "incompatible") return k;
+      if (resolved.kind !== "remote" || resolved.host.protocol.kind !== "incompatible") return result;
       return {
-        ...k,
+        ...result,
         message:
-          A === o
+          failedTarget === machineName
             ? protocolMismatchMessage({
-                name: A,
+                name: failedTarget,
                 announced: resolved.host.protocol.announced,
-                runsOnlyThere: e.name,
+                runsOnlyThere: tool.name,
               })
             : protocolMismatchMessage({
-                name: A,
+                name: failedTarget,
                 announced: resolved.host.protocol.announced,
                 servedInsteadBy: {
-                  toolName: e.name,
-                  name: o,
+                  toolName: tool.name,
+                  name: machineName,
                 },
               }),
       };
     }
     default:
-      return k;
+      return result;
   }
 }
 //@ chunk-dtv8x2hx.js:70012-70188 placement
-function describeHostState(e, name) {
+function describeHostState(toolUseContext, name) {
   return uniq(
-    e.toolState
+    toolUseContext.toolState
       .get(ToolHostRegistry)
       .hosts()
-      .flatMap((o) =>
-        o.kind === "remote" &&
-        o.status === "online" &&
-        o.protocol.kind !== "incompatible" &&
-        o.servedTools.has(name)
-          ? [o.name]
+      .flatMap((host) =>
+        host.kind === "remote" &&
+        host.status === "online" &&
+        host.protocol.kind !== "incompatible" &&
+        host.servedTools.has(name)
+          ? [host.name]
           : [],
       ),
   );
 }
 //@ chunk-dtv8x2hx.js:70188-70426 placement
-function formatHostLabel(e, name, o) {
-  let flattened = e.toolState
+function formatHostLabel(toolUseContext, name, excludeName) {
+  let flattened = toolUseContext.toolState
     .get(ToolHostRegistry)
     .hosts()
-    .flatMap((s) => (s.kind === "remote" && s.name !== o && s.servedTools.has(name) ? [s] : []));
-  return [...new Map(flattened.map((s) => [s.name, s])).values()].map((s) =>
-    s.status === "offline" ? `${s.name} (offline)` : s.name,
+    .flatMap((host) =>
+      host.kind === "remote" && host.name !== excludeName && host.servedTools.has(name) ? [host] : [],
+    );
+  return [...new Map(flattened.map((host) => [host.name, host])).values()].map((host) =>
+    host.status === "offline" ? `${host.name} (offline)` : host.name,
   );
 }
 //@ chunk-dtv8x2hx.js:70426-72924 placement
 /**
  * 按工具状态与主机可用性决定 local/remote/error（unknown_host、gate_off 等）。
  */
-async function routeToolCall(e, n, input, r, s) {
-  if (r.remoteCall !== undefined)
+async function routeToolCall(tool, requestedName, input, toolUseContext, options) {
+  if (toolUseContext.remoteCall !== undefined)
     return {
       kind: "error",
       code: "unknown_host",
       message: noSuchMachineMessage({
-        requested: n,
+        requested: requestedName,
         attached: [],
       }),
     };
@@ -259,113 +270,121 @@ async function routeToolCall(e, n, input, r, s) {
       code: "gate_off",
       message: remoteToolCallsDisabledMessage(),
     };
-  let u = r.toolState.get(ToolHostRegistry);
-  await refreshTargets(s, r.abortController.signal, u);
-  let resolved = u.resolve(n);
+  let registry = toolUseContext.toolState.get(ToolHostRegistry);
+  await refreshTargets(options, toolUseContext.abortController.signal, registry);
+  let resolved = registry.resolve(requestedName);
   if (
-    s.forget !== undefined &&
+    options.forget !== undefined &&
     (resolved.kind === "unknown" ||
       (resolved.kind === "remote" &&
         resolved.host.source !== "session" &&
         (resolved.host.status === "offline" ||
-          hostToolOffline(r.toolState, resolved.host.name) ||
-          !resolved.host.servedTools.has(e.name) ||
+          hostToolOffline(toolUseContext.toolState, resolved.host.name) ||
+          !resolved.host.servedTools.has(tool.name) ||
           resolved.host.protocol.kind === "incompatible"))) &&
-    !s.listingUnavailable(u) &&
-    s.forget()
+    !options.listingUnavailable(registry) &&
+    options.forget()
   ) {
-    await refreshTargets(s, r.abortController.signal, u);
-    resolved = u.resolve(n);
+    await refreshTargets(options, toolUseContext.abortController.signal, registry);
+    resolved = registry.resolve(requestedName);
   }
-  let i;
-  let h = resolved.kind === "unknown" ? normalizeMachineName(n) : undefined;
-  let lower = n.trim().toLowerCase();
-  let k = h === undefined ? undefined : isValidMachineSlug(lower) ? lower : h;
-  let S = k !== undefined && isValidMachineSlug(k) ? s.reconnectWaitMs?.(k) : undefined;
-  let A =
-    k !== undefined && S !== undefined
+  let announce;
+  let normalized = resolved.kind === "unknown" ? normalizeMachineName(requestedName) : undefined;
+  let lower = requestedName.trim().toLowerCase();
+  let machineSlug = normalized === undefined ? undefined : isValidMachineSlug(lower) ? lower : normalized;
+  let waitMs =
+    machineSlug !== undefined && isValidMachineSlug(machineSlug)
+      ? options.reconnectWaitMs?.(machineSlug)
+      : undefined;
+  let waitTarget =
+    machineSlug !== undefined && waitMs !== undefined
       ? {
-          machine: k,
-          waitMs: S,
+          machine: machineSlug,
+          waitMs,
         }
       : undefined;
-  let R;
+  let waitedMs;
   if (
     resolved.kind === "unknown" &&
-    s.awaitAnnounce !== undefined &&
-    (A !== undefined || shouldAwaitAnnounce(s.listingProvisional?.(), u, n))
+    options.awaitAnnounce !== undefined &&
+    (waitTarget !== undefined || shouldAwaitAnnounce(options.listingProvisional?.(), registry, requestedName))
   ) {
     logForDebugging(
-      `[remote-tools] holding ${e.name} for "${machineLabelForMessage(n)}" until its machine announces to this worker (bounded by the call's own deadline)`,
+      `[remote-tools] holding ${tool.name} for "${machineLabelForMessage(requestedName)}" until its machine announces to this worker (bounded by the call's own deadline)`,
     );
-    if (A !== undefined)
-      s.status?.(
-        waitingToReconnectStatus(A.machine, Math.round(A.waitMs / 1000)),
-        A.waitMs + RECONNECT_STATUS_LEAD_MS,
+    if (waitTarget !== undefined)
+      options.status?.(
+        waitingToReconnectStatus(waitTarget.machine, Math.round(waitTarget.waitMs / 1000)),
+        waitTarget.waitMs + RECONNECT_STATUS_LEAD_MS,
       );
     let now = Date.now();
-    i = await s.awaitAnnounce(
-      r.abortController.signal,
+    announce = await options.awaitAnnounce(
+      toolUseContext.abortController.signal,
       async () => {
-        s.forget?.();
-        await refreshTargets(s, r.abortController.signal, u);
-        return u.resolve(n).kind === "remote";
+        options.forget?.();
+        await refreshTargets(options, toolUseContext.abortController.signal, registry);
+        return registry.resolve(requestedName).kind === "remote";
       },
-      A,
+      waitTarget,
     );
-    if (A !== undefined) {
-      let O = Date.now() - now;
-      R = O > RECONNECT_STATUS_SETTLE_MS ? O : undefined;
+    if (waitTarget !== undefined) {
+      let elapsedMs = Date.now() - now;
+      waitedMs = elapsedMs > RECONNECT_STATUS_SETTLE_MS ? elapsedMs : undefined;
     }
     logForDebugging(
-      `[remote-tools] ${e.name} for "${machineLabelForMessage(n)}": ${describeHostAnnounced(i)}`,
+      `[remote-tools] ${tool.name} for "${machineLabelForMessage(requestedName)}": ${describeHostAnnounced(announce)}`,
     );
-    if (i.kind !== "aborted") {
-      await refreshTargets(s, r.abortController.signal, u);
-      resolved = u.resolve(n);
+    if (announce.kind !== "aborted") {
+      await refreshTargets(options, toolUseContext.abortController.signal, registry);
+      resolved = registry.resolve(requestedName);
     }
   }
   switch (resolved.kind) {
     case "local":
     case "unknown": {
-      let T = k === undefined ? undefined : r.toolState.get(RemoteBackgroundCommands).withdrawnFor(k);
-      let O =
-        k !== undefined && T !== undefined
+      let withdrawnReason =
+        machineSlug === undefined
+          ? undefined
+          : toolUseContext.toolState.get(RemoteBackgroundCommands).withdrawnFor(machineSlug);
+      let withdrawn =
+        machineSlug !== undefined && withdrawnReason !== undefined
           ? {
-              name: k,
-              reason: T,
+              name: machineSlug,
+              reason: withdrawnReason,
             }
           : undefined;
-      return s.listingUnavailable(u)
+      return options.listingUnavailable(registry)
         ? {
             kind: "error",
             code: "host_offline",
             message: computerUnreachableMessage(),
           }
         : (waitForHostAnnouncement(
-            s.listingProvisional?.(),
-            u,
-            A?.machine ?? n,
-            i,
-            A !== undefined || (s.bridgeReached?.() ?? true),
-            A !== undefined,
-            O,
+            options.listingProvisional?.(),
+            registry,
+            waitTarget?.machine ?? requestedName,
+            announce,
+            waitTarget !== undefined || (options.bridgeReached?.() ?? true),
+            waitTarget !== undefined,
+            withdrawn,
           ) ??
-            (O !== undefined
+            (withdrawn !== undefined
               ? {
                   kind: "error",
                   code: "host_offline",
-                  message: noLongerAttachedMessage(O.name, O.reason),
+                  message: noLongerAttachedMessage(withdrawn.name, withdrawn.reason),
                 }
               : {
                   kind: "error",
                   code: "unknown_host",
                   message: noSuchMachineMessage({
-                    requested: n,
-                    attached: u
+                    requested: requestedName,
+                    attached: registry
                       .hosts()
-                      .flatMap((x) =>
-                        x.kind !== "remote" ? [] : [x.status === "offline" ? `${x.name} (offline)` : x.name],
+                      .flatMap((host) =>
+                        host.kind !== "remote"
+                          ? []
+                          : [host.status === "offline" ? `${host.name} (offline)` : host.name],
                       ),
                   }),
                 }));
@@ -387,13 +406,13 @@ async function routeToolCall(e, n, input, r, s) {
             announced: host.protocol.announced,
           }),
         };
-      if (!host.servedTools.has(e.name))
+      if (!host.servedTools.has(tool.name))
         return {
           kind: "error",
           code: "not_served",
           message: servedAlternativesMessage({
             name: host.name,
-            toolName: e.name,
+            toolName: tool.name,
             served: [...host.servedTools],
           }),
         };
@@ -401,8 +420,8 @@ async function routeToolCall(e, n, input, r, s) {
         kind: "remote",
         host,
         input,
-        ...(R !== undefined && {
-          waitedMs: R,
+        ...(waitedMs !== undefined && {
+          waitedMs,
         }),
       };
     }
@@ -413,80 +432,80 @@ function getToolNameForPermissionCheck(tool) {
   return tool.mcpInfo?.serverName === REMOTE_DEVICES;
 }
 //@ chunk-dtv8x2hx.js:72973-73209 placement
-function isSessionOrBridgeHost(e, n, o) {
-  let toolName = o.mcpInfo?.toolName;
+function isSessionOrBridgeHost(registry, machineName, tool) {
+  let toolName = tool.mcpInfo?.toolName;
   if (toolName === undefined) return;
-  if (n === undefined) return e.passthroughHost(toolName);
-  let s = (u) => u.name === n && u.passthroughTools?.has(toolName) === true;
-  return e.sourceHosts("session").find(s) ?? e.sourceHosts("bridge").find(s);
+  if (machineName === undefined) return registry.passthroughHost(toolName);
+  let matches = (host) => host.name === machineName && host.passthroughTools?.has(toolName) === true;
+  return registry.sourceHosts("session").find(matches) ?? registry.sourceHosts("bridge").find(matches);
 }
 //@ chunk-dtv8x2hx.js:73209-75600 placement
 /**
  * 为一次工具调用选择执行机器（已有远程调用直接本地；机器未服务时报 not_served）。
  */
-async function routeToolUse(e, n, o, r) {
-  if (o.remoteCall !== undefined)
+async function routeToolUse(tool, input, toolUseContext, options) {
+  if (toolUseContext.remoteCall !== undefined)
     return {
       kind: "local",
-      input: n,
+      input,
     };
-  let s = o.toolState.get(BridgeToolProvider);
-  let name = s.machineFor(e);
-  let p = (name) => ({
+  let provider = toolUseContext.toolState.get(BridgeToolProvider);
+  let machine = provider.machineFor(tool);
+  let refuseNotServed = (name) => ({
     kind: "error",
     code: "not_served",
     message: mcpToolsUnavailableMessage({
       name,
-      toolName: e.name,
+      toolName: tool.name,
     }),
   });
   if (!(await isRemoteToolForwardingEnabled()))
-    return name === undefined
+    return machine === undefined
       ? {
           kind: "local",
-          input: n,
+          input,
         }
-      : p(name);
-  if (name !== undefined && !s.presentable()) return p(name);
-  let i = o.toolState.get(ToolHostRegistry);
-  await refreshTargets(r, o.abortController.signal, i);
-  let h = isSessionOrBridgeHost(i, name, e);
+      : refuseNotServed(machine);
+  if (machine !== undefined && !provider.presentable()) return refuseNotServed(machine);
+  let registry = toolUseContext.toolState.get(ToolHostRegistry);
+  await refreshTargets(options, toolUseContext.abortController.signal, registry);
+  let host = isSessionOrBridgeHost(registry, machine, tool);
   if (
-    (h === undefined ||
-      (h.source !== "session" && (h.status === "offline" || h.protocol.kind === "incompatible"))) &&
-    mayBePassthroughTool(e.mcpInfo?.toolName ?? "") &&
-    r.forget !== undefined &&
-    !r.listingUnavailable(i) &&
-    r.forget()
+    (host === undefined ||
+      (host.source !== "session" && (host.status === "offline" || host.protocol.kind === "incompatible"))) &&
+    mayBePassthroughTool(tool.mcpInfo?.toolName ?? "") &&
+    options.forget !== undefined &&
+    !options.listingUnavailable(registry) &&
+    options.forget()
   ) {
-    await refreshTargets(r, o.abortController.signal, i);
-    h = isSessionOrBridgeHost(i, name, e);
+    await refreshTargets(options, toolUseContext.abortController.signal, registry);
+    host = isSessionOrBridgeHost(registry, machine, tool);
   }
-  if (h === undefined) {
-    if (name !== undefined)
+  if (host === undefined) {
+    if (machine !== undefined)
       return {
         kind: "error",
         code: "not_served",
         message: toolNotServedMessage({
-          name,
-          toolName: e.name,
+          name: machine,
+          toolName: tool.name,
         }),
       };
-    if (r.listingUnavailable(i))
+    if (options.listingUnavailable(registry))
       return {
         kind: "error",
         code: "host_offline",
         message: computerUnreachableMessage(),
       };
-    let bridgeOrSessionHost = findBridgeOrSessionHost(i);
-    let T = e.mcpInfo?.toolName ?? e.name;
-    if (!mayBePassthroughTool(T))
+    let bridgeOrSessionHost = findBridgeOrSessionHost(registry);
+    let toolName = tool.mcpInfo?.toolName ?? tool.name;
+    if (!mayBePassthroughTool(toolName))
       return {
         kind: "local",
-        input: n,
+        input,
       };
     if (bridgeOrSessionHost === undefined)
-      switch (r.machineOffer()) {
+      switch (options.machineOffer()) {
         case "offered":
           return {
             kind: "error",
@@ -502,14 +521,18 @@ async function routeToolUse(e, n, o, r) {
         case "none":
           return {
             kind: "local",
-            input: n,
+            input,
           };
       }
     if (bridgeOrSessionHost.status === "offline") {
       if (bridgeOrSessionHost.source === "session")
-        o.toolState
+        toolUseContext.toolState
           .get(AwayEpisodeTracker)
-          .told(o.toolState.get(RemoteBackgroundCommands), o.agentId, bridgeOrSessionHost.name);
+          .told(
+            toolUseContext.toolState.get(RemoteBackgroundCommands),
+            toolUseContext.agentId,
+            bridgeOrSessionHost.name,
+          );
       return {
         kind: "error",
         code: "host_offline",
@@ -539,64 +562,64 @@ async function routeToolUse(e, n, o, r) {
       kind: "error",
       code: "not_served",
       message:
-        bridgeOrSessionHost.rejectedPassthroughTools?.has(T) === true
+        bridgeOrSessionHost.rejectedPassthroughTools?.has(toolName) === true
           ? unreadableAnnouncementMessage({
               name: bridgeOrSessionHost.name,
-              toolName: e.name,
+              toolName: tool.name,
             })
           : toolNotServedMessage({
               name: bridgeOrSessionHost.name,
-              toolName: e.name,
+              toolName: tool.name,
             }),
     };
   }
-  if (h.source === "session" && !s.presentable()) return p(h.name);
-  if (h.status === "offline" && h.source !== "session")
+  if (host.source === "session" && !provider.presentable()) return refuseNotServed(host.name);
+  if (host.status === "offline" && host.source !== "session")
     return {
       kind: "error",
       code: "host_offline",
-      message: notAnsweringMessage(h.name),
+      message: notAnsweringMessage(host.name),
     };
-  if (h.protocol.kind === "incompatible")
+  if (host.protocol.kind === "incompatible")
     return {
       kind: "error",
       code: "incompatible",
       message: protocolMismatchMessage({
-        name: h.name,
-        announced: h.protocol.announced,
-        runsOnlyThere: e.name,
+        name: host.name,
+        announced: host.protocol.announced,
+        runsOnlyThere: tool.name,
       }),
     };
-  let w = n[HOST_TOOL_INPUT_FIELD];
-  if (typeof w === "string" && (w.trim() === "" || isReservedMachineName(w)))
+  let targetField = input[HOST_TOOL_INPUT_FIELD];
+  if (typeof targetField === "string" && (targetField.trim() === "" || isReservedMachineName(targetField)))
     return {
       kind: "error",
       code: "unknown_host",
       message: runsOnlyThereMessage({
-        name: h.name,
-        toolName: e.name,
+        name: host.name,
+        toolName: tool.name,
       }),
     };
-  let { requested, input } = splitHostField(restoreTargetField(n));
+  let { requested, input: input_2 } = splitHostField(restoreTargetField(input));
   if (requested === undefined)
     return {
       kind: "remote",
-      host: h,
-      input,
+      host,
+      input: input_2,
     };
-  let resolved = i.resolve(requested);
-  return resolved.kind === "remote" && resolved.host.name === h.name
+  let resolved = registry.resolve(requested);
+  return resolved.kind === "remote" && resolved.host.name === host.name
     ? {
         kind: "remote",
-        host: h,
-        input,
+        host,
+        input: input_2,
       }
     : {
         kind: "error",
         code: "unknown_host",
         message: noSuchMachineMessage({
           requested,
-          attached: [h.name],
+          attached: [host.name],
         }),
       };
 }
@@ -605,91 +628,116 @@ function hostToolOffline(toolState, name) {
   return toolState
     .get(RemoteBackgroundCommands)
     .entries()
-    .some((o) => o.name === name && o.status === "offline");
+    .some((entry) => entry.name === name && entry.status === "offline");
 }
 //@ chunk-dtv8x2hx.js:75688-75794 placement
-function findBridgeOrSessionHost(e) {
-  return e.hosts().find((n) => n.kind === "remote" && (n.source === "bridge" || n.source === "session"));
+function findBridgeOrSessionHost(registry) {
+  return registry
+    .hosts()
+    .find((host) => host.kind === "remote" && (host.source === "bridge" || host.source === "session"));
 }
 //@ chunk-dtv8x2hx.js:75794-75876 placement
 /**
  * 规范化调用输入：去掉目标字段，若目标名是字符串则原样放回。
  */
-function restoreTargetField(e) {
-  let n = Uo(e, CALLER_FIELDS);
-  let o = e[HOST_TOOL_INPUT_FIELD];
-  return typeof o === "string"
+function restoreTargetField(input) {
+  let rest = omitAlias(input, CALLER_FIELDS);
+  let targetField = input[HOST_TOOL_INPUT_FIELD];
+  return typeof targetField === "string"
     ? {
-        ...n,
-        [HOST_TOOL_INPUT_FIELD]: o,
+        ...rest,
+        [HOST_TOOL_INPUT_FIELD]: targetField,
       }
-    : n;
+    : rest;
 }
 //@ chunk-dtv8x2hx.js:75876-75974 placement
 /**
  * 列表暂时不可用且无远程主机时，是否仍需等待机器通告。
  */
-function shouldAwaitAnnounce(e, n, o) {
-  return e === "not_reannounced" && !isReservedMachineName(o) && !n.hosts().some((r) => r.kind === "remote");
+function shouldAwaitAnnounce(provisional, registry, requestedName) {
+  return (
+    provisional === "not_reannounced" &&
+    !isReservedMachineName(requestedName) &&
+    !registry.hosts().some((host) => host.kind === "remote")
+  );
 }
 //@ chunk-dtv8x2hx.js:75974-76341 placement
-function describeHostAnnounced(e) {
-  switch (e.kind) {
+function describeHostAnnounced(wait) {
+  switch (wait.kind) {
     case "announced":
       return "the machine announced";
     case "routable":
       return "the machine became routable over the device bridge";
     case "gave_up":
-      return `gave up after ${e.waitedMs} ms`;
+      return `gave up after ${wait.waitedMs} ms`;
     case "gave_up_earlier":
-      return `not waiting again (gave up after ${e.waitedMs} ms earlier this worker life)`;
+      return `not waiting again (gave up after ${wait.waitedMs} ms earlier this worker life)`;
     case "aborted":
       return "the turn was aborted while waiting";
   }
 }
 //@ chunk-dtv8x2hx.js:76341-76835 placement
-function waitForHostAnnouncement(e, n, o, r, s, u, p) {
-  if (isReservedMachineName(o) || (!u && n.hosts().some((w) => w.kind === "remote"))) return;
-  if (u && r?.kind === "announced")
+function waitForHostAnnouncement(
+  provisional,
+  registry,
+  requestedName,
+  wait,
+  bridgeReached,
+  waited,
+  withdrawn,
+) {
+  if (
+    isReservedMachineName(requestedName) ||
+    (!waited && registry.hosts().some((host) => host.kind === "remote"))
+  )
+    return;
+  if (waited && wait?.kind === "announced")
     return {
       kind: "error",
       code: "host_offline",
-      message: p === undefined ? cannotRunAnythingMessage(o) : noLongerAttachedMessage(p.name, p.reason),
+      message:
+        withdrawn === undefined
+          ? cannotRunAnythingMessage(requestedName)
+          : noLongerAttachedMessage(withdrawn.name, withdrawn.reason),
     };
-  let h = r?.kind === "gave_up" || r?.kind === "gave_up_earlier" ? "not_reannounced" : e;
-  if (p !== undefined && h !== "connecting")
+  let state = wait?.kind === "gave_up" || wait?.kind === "gave_up_earlier" ? "not_reannounced" : provisional;
+  if (withdrawn !== undefined && state !== "connecting")
     return {
       kind: "error",
       code: "host_offline",
-      message: noLongerAttachedMessage(p.name, p.reason),
+      message: noLongerAttachedMessage(withdrawn.name, withdrawn.reason),
     };
-  if (h === undefined) return;
+  if (state === undefined) return;
   return {
     kind: "error",
-    code: h === "set_aside" ? "incompatible" : "host_offline",
-    message: describeHostConnection(h, o, r, s),
+    code: state === "set_aside" ? "incompatible" : "host_offline",
+    message: describeHostConnection(state, requestedName, wait, bridgeReached),
   };
 }
 //@ chunk-dtv8x2hx.js:76835-77114 placement
-function describeHostConnection(e, n, o, r) {
-  switch (e) {
+function describeHostConnection(state, requestedName, wait, bridgeReached) {
+  switch (state) {
     case "connecting":
-      return computerNotReadyMessage(n);
+      return computerNotReadyMessage(requestedName);
     case "not_connected":
       return linkedButNotConnectedMessage();
     case "serves_nothing":
-      return cannotRunAnythingMessage(n);
+      return cannotRunAnythingMessage(requestedName);
     case "set_aside":
       return olderConnectionOfferMessage();
     case "not_reannounced":
-      return o?.kind === "gave_up_earlier"
-        ? alreadyWaitedMessage(n, o.waitedMs, r)
-        : waitedForReconnectMessage(n, o?.kind === "gave_up" ? o.waitedMs : 0, r);
+      return wait?.kind === "gave_up_earlier"
+        ? alreadyWaitedMessage(requestedName, wait.waitedMs, bridgeReached)
+        : waitedForReconnectMessage(
+            requestedName,
+            wait?.kind === "gave_up" ? wait.waitedMs : 0,
+            bridgeReached,
+          );
   }
 }
 //@ chunk-dtv8x2hx.js:77114-77219 placement
-async function refreshTargets(e, signal, o) {
-  await raceWithAbortSignal(e.refresh(o), signal, () => new AbortError()).catch((error) => {
+async function refreshTargets(options, signal, registry) {
+  await raceWithAbortSignal(options.refresh(registry), signal, () => new AbortError()).catch((error) => {
     if (!(error instanceof AbortError)) throw error;
   });
 }
@@ -698,29 +746,29 @@ var STATUS_NOTIFICATION_TIMEOUT_MS = 9000;
 var NOTICE_NOTIFICATION_TIMEOUT_MS = 30000;
 var REMOTE_TOOL_HOST = "remote-tool-host";
 //@ chunk-dtv8x2hx.js:77262-77790 placement
-function buildHostAllowRules(tool, n) {
-  let command = n.input.command;
+function buildHostAllowRules(tool, request) {
+  let command = request.input.command;
   if (
-    !n.keepsStandingApprovals ||
-    n.suggestions.length === 0 ||
+    !request.keepsStandingApprovals ||
+    request.suggestions.length === 0 ||
     !isNonMcpShellTool(tool) ||
     tool.suppressesAllPermissionUpdates?.({
-      ...n.input,
-      [HOST_TOOL_INPUT_FIELD]: n.host.name,
+      ...request.input,
+      [HOST_TOOL_INPUT_FIELD]: request.host.name,
     }) !== true ||
     typeof command !== "string"
   )
     return;
-  let r =
+  let sessionRule =
     clipText(command, command.length + 1) === command
-      ? singlePrefixRuleFor(n.offeredStandingRules, tool.name)
+      ? singlePrefixRuleFor(request.offeredStandingRules, tool.name)
       : undefined;
-  if (r !== undefined)
+  if (sessionRule !== undefined)
     return {
       type: "addRules",
       behavior: "allow",
       destination: "session",
-      rules: [r],
+      rules: [sessionRule],
     };
   let trimmed = command.trim();
   return trimmed === "" || trimmed.includes("*") || trimmed.length > SANDBOX_MAX_PATH_LENGTH
@@ -738,12 +786,12 @@ function buildHostAllowRules(tool, n) {
       };
 }
 //@ chunk-dtv8x2hx.js:77790-77913 placement
-function withdrawnAskDecision(e) {
+function withdrawnAskDecision(request) {
   return {
     decision: "unanswerable",
     message: ASK_FIRST_REASON_TEXTS.withdrawn({
-      name: e.host.name,
-      reason: normalizeWithdrawReason(String(e.ended.reason)),
+      name: request.host.name,
+      reason: normalizeWithdrawReason(String(request.ended.reason)),
     }),
   };
 }
@@ -753,11 +801,16 @@ function withdrawnAskDecision(e) {
  */
 function createRemoteToolsProvider() {
   return {
-    applies: (e) =>
-      (getToolRemoteExecution(e).supported || getToolNameForPermissionCheck(e)) &&
+    applies: (tool) =>
+      (getToolRemoteExecution(tool).supported || getToolNameForPermissionCheck(tool)) &&
       isRemoteToolForwardingSwitchOn(),
-    route: (e, n, o, r) =>
-      routeRemoteToolCall(e, n, o, resolveAfterReannounce(remoteToolsContext(o), o.messages, r)),
+    route: (tool, input, toolUseContext, afterReannounce) =>
+      routeRemoteToolCall(
+        tool,
+        input,
+        toolUseContext,
+        resolveAfterReannounce(remoteToolsContext(toolUseContext), toolUseContext.messages, afterReannounce),
+      ),
     runToolUse: executeRemoteToolUse,
     runInnerCall: handleRemoteCancel,
     noticeAttachment: buildMachinesAttachment,
@@ -765,36 +818,37 @@ function createRemoteToolsProvider() {
   };
 }
 //@ chunk-dtv8x2hx.js:78106-78654 placement
-function resolveAfterReannounce(e, messages, o) {
-  let r = e.toolState.get(ToolHostRegistry);
-  let s = "resolve";
+function resolveAfterReannounce(toolsContext, appState, onStatus) {
+  let registry = toolsContext.toolState.get(ToolHostRegistry);
+  let reason = "resolve";
   return {
-    refresh: () => refreshRemoteToolTargets(e, r, "resolve"),
-    listingUnavailable: () => isListingFailedWithoutHosts(e, r),
-    listingProvisional: () => remoteToolsConnectionState(e),
-    awaitAnnounce: (u, routableOtherwise, i) =>
-      requestReannounce(e, u, {
+    refresh: () => refreshRemoteToolTargets(toolsContext, registry, "resolve"),
+    listingUnavailable: () => isListingFailedWithoutHosts(toolsContext, registry),
+    listingProvisional: () => remoteToolsConnectionState(toolsContext),
+    awaitAnnounce: (signal, routableOtherwise, forMachine) =>
+      requestReannounce(toolsContext, signal, {
         routableOtherwise,
-        ...(i !== undefined && {
-          forMachine: i.machine,
-          deadlineMs: i.waitMs,
+        ...(forMachine !== undefined && {
+          forMachine: forMachine.machine,
+          deadlineMs: forMachine.waitMs,
         }),
       }),
-    reconnectWaitMs: (u) =>
-      canReannounceMachine(e, reconnectNotesFromState(messages), u)
+    reconnectWaitMs: (machineName) =>
+      canReannounceMachine(toolsContext, reconnectNotesFromState(appState), machineName)
         ? targetsDeadlineMs(
-            remoteToolsConnectionState(e) === "not_reannounced" &&
-              !r.hosts().some((p) => p.kind === "remote"),
+            remoteToolsConnectionState(toolsContext) === "not_reannounced" &&
+              !registry.hosts().some((host) => host.kind === "remote"),
           )
         : undefined,
-    ...(o !== undefined && {
-      status: (u, p) => {
-        if (e.toolState.get(RemoteBackgroundCommands).announceWaitExpired() === undefined) o(u, p);
+    ...(onStatus !== undefined && {
+      status: (message, timeoutMs) => {
+        if (toolsContext.toolState.get(RemoteBackgroundCommands).announceWaitExpired() === undefined)
+          onStatus(message, timeoutMs);
       },
     }),
-    forget: () => nextListingInterval(e),
-    bridgeReached: () => hasDeviceBridgeConnection(e),
-    machineOffer: () => sessionChannelOffer(e),
+    forget: () => nextListingInterval(toolsContext),
+    bridgeReached: () => hasDeviceBridgeConnection(toolsContext),
+    machineOffer: () => sessionChannelOffer(toolsContext),
   };
 }
 //@ chunk-dtv8x2hx.js:78654-78797 placement
@@ -810,51 +864,73 @@ class RemoteToolCallEnded extends Error {
   }
 }
 //@ chunk-dtv8x2hx.js:78797-80050 placement
-async function handleRemoteBackgroundCommand(tool, route, o, r, s, canUseTool, p, onStatus, onNotice) {
-  let toolUseId = s.toolUseId ?? "";
-  let k = currentAgentId(s);
-  let S = s.toolState.get(RemoteBackgroundLedger);
-  let A = String(r.task_id ?? r.shell_id);
-  if (tool.name === TASKSTOP && k !== undefined && S.find(A, k)?.hostName !== route.host.name)
+async function handleRemoteBackgroundCommand(
+  tool,
+  route,
+  entry,
+  input,
+  toolUseContext,
+  canUseTool,
+  assistantMessage,
+  onStatus,
+  onNotice,
+) {
+  let toolUseId = toolUseContext.toolUseId ?? "";
+  let agentId = currentAgentId(toolUseContext);
+  let ledger = toolUseContext.toolState.get(RemoteBackgroundLedger);
+  let taskId = String(input.task_id ?? input.shell_id);
+  if (
+    tool.name === TASKSTOP &&
+    agentId !== undefined &&
+    ledger.find(taskId, agentId)?.hostName !== route.host.name
+  )
     throw new RemoteToolCallEnded({
       kind: "error",
       code: "invalid_input",
       message: `No background command with that ID was started on ${route.host.name} by this agent.`,
       host: machineIdentity(route.host),
     });
-  let R = s.requireCanUseTool === true && s.agentId !== undefined;
-  let T = R
-    ? await logRejectedInSession(tool, route.host, r, extractAllowedTools(tool, s), canUseTool, p, toolUseId)
+  let checkSessionGate = toolUseContext.requireCanUseTool === true && toolUseContext.agentId !== undefined;
+  let rejected = checkSessionGate
+    ? await logRejectedInSession(
+        tool,
+        route.host,
+        input,
+        extractAllowedTools(tool, toolUseContext),
+        canUseTool,
+        assistantMessage,
+        toolUseId,
+      )
     : undefined;
-  if (T !== undefined) {
-    logRemoteToolForward(tool, route.host, o, toolUseId, T.verdict);
-    throw new RemoteToolCallEnded(T.outcome);
+  if (rejected !== undefined) {
+    logRemoteToolForward(tool, route.host, entry, toolUseId, rejected.verdict);
+    throw new RemoteToolCallEnded(rejected.outcome);
   }
   let honourHostAllowRules = isSessionTransport(route.host);
   let speculation = isSpeculativeClassifierOn(tool.name)
     ? createEarlyCheckRunner({
         tool,
         host: route.host,
-        toolUseContext: s,
+        toolUseContext,
         toolUseId,
         honourHostAllowRules,
       })
     : undefined;
-  let outcome = await waitForAskAnswer({
+  let askOutcome = await waitForAskAnswer({
     tool,
     route,
-    rawInput: r,
-    toolUseContext: s,
+    rawInput: input,
+    toolUseContext,
     toolUseId,
-    signal: s.abortController.signal,
-    entry: o,
-    callerGate: R ? "allowed" : undefined,
+    signal: toolUseContext.abortController.signal,
+    entry,
+    callerGate: checkSessionGate ? "allowed" : undefined,
     approve: createRemoteApprover({
       tool,
       host: route.host,
-      toolUseContext: s,
+      toolUseContext,
       canUseTool,
-      parentMessage: p,
+      parentMessage: assistantMessage,
       toolUseId,
       honourHostAllowRules,
       speculation,
@@ -863,22 +939,22 @@ async function handleRemoteBackgroundCommand(tool, route, o, r, s, canUseTool, p
     onStatus,
     onNotice,
   });
-  if (outcome.kind !== "completed") throw new RemoteToolCallEnded(outcome);
-  if (outcome.backgroundTaskId !== undefined && r.run_in_background === true)
-    S.started(outcome.backgroundTaskId, {
+  if (askOutcome.kind !== "completed") throw new RemoteToolCallEnded(askOutcome);
+  if (askOutcome.backgroundTaskId !== undefined && input.run_in_background === true)
+    ledger.started(askOutcome.backgroundTaskId, {
       hostName: route.host.name,
       callId: toolUseId,
-      agentId: k,
+      agentId,
     });
   return {
-    data: remoteStructuredOutput(tool, outcome) ?? remoteResultTextOf(outcome),
+    data: remoteStructuredOutput(tool, askOutcome) ?? remoteResultTextOf(askOutcome),
     remoteOrigin:
       route.waitedMs === undefined
-        ? outcome
+        ? askOutcome
         : {
-            ...outcome,
+            ...askOutcome,
             sessionNotes: [
-              ...(outcome.sessionNotes ?? []),
+              ...(askOutcome.sessionNotes ?? []),
               {
                 text: waitedToReconnectNote(route.host.name, Math.round(route.waitedMs / 1000)),
               },
@@ -887,101 +963,109 @@ async function handleRemoteBackgroundCommand(tool, route, o, r, s, canUseTool, p
   };
 }
 //@ chunk-dtv8x2hx.js:80050-80397 placement
-function extractAllowedTools(e, n) {
+function extractAllowedTools(tool, toolUseContext) {
   if (
-    !getToolNameForPermissionCheck(e) ||
+    !getToolNameForPermissionCheck(tool) ||
     shouldAllowManagedPermissionRulesOnly() ||
-    n.toolState.get(BridgeToolProvider).machineFor(e) === undefined
+    toolUseContext.toolState.get(BridgeToolProvider).machineFor(tool) === undefined
   )
-    return n;
+    return toolUseContext;
   let mcpPrefix = getMcpPrefix(REMOTE_DEVICES);
-  let { alwaysAllowRules, alwaysAskRules, alwaysDenyRules } = getToolPermissionContext(n);
+  let { alwaysAllowRules, alwaysAskRules, alwaysDenyRules } = getToolPermissionContext(toolUseContext);
   if (
-    [alwaysAllowRules, alwaysAskRules, alwaysDenyRules].some((p) =>
-      (p.mcpServerPolicy ?? []).some((i) => i.startsWith(mcpPrefix)),
+    [alwaysAllowRules, alwaysAskRules, alwaysDenyRules].some((layer) =>
+      (layer.mcpServerPolicy ?? []).some((prefix) => prefix.startsWith(mcpPrefix)),
     )
   )
-    return n;
+    return toolUseContext;
   return {
-    ...n,
+    ...toolUseContext,
     permissionLayers: [
-      ...(n.permissionLayers ?? []),
+      ...(toolUseContext.permissionLayers ?? []),
       {
         kind: "allowed_tools",
-        allowedTools: [e.name],
+        allowedTools: [tool.name],
       },
     ],
   };
 }
 //@ chunk-dtv8x2hx.js:80397-80636 placement
-async function logRejectedInSession(e, host, o, allowedTools, s, u, toolUseId) {
-  let i = await formatPermissionDenied(
-    e,
+async function logRejectedInSession(
+  tool,
+  host,
+  input,
+  toolUseContext,
+  canUseTool,
+  assistantMessage,
+  toolUseId,
+) {
+  let denial = await formatPermissionDenied(
+    tool,
     {
-      ...o,
+      ...input,
       [HOST_TOOL_INPUT_FIELD]: host.name,
     },
-    allowedTools,
-    s,
-    u,
+    toolUseContext,
+    canUseTool,
+    assistantMessage,
     toolUseId,
   );
   return (
-    i && {
-      verdict: i.verdict,
+    denial && {
+      verdict: denial.verdict,
       outcome: {
         kind: "error",
         code: "rejected_in_session",
         message: notContactedMessage({
           name: host.name,
-          ruleMessage: ensureSentenceEnd(i.words),
+          ruleMessage: ensureSentenceEnd(denial.words),
         }),
-        denialKind: i.kind,
+        denialKind: denial.kind,
         host: machineIdentity(host),
       },
     }
   );
 }
 //@ chunk-dtv8x2hx.js:80636-81335 placement
-async function formatPermissionDenied(e, n, o, r, s, u) {
-  let p = `Permission to use ${e.name} has been denied`;
+async function formatPermissionDenied(tool, input, toolUseContext, canUseTool, assistantMessage, toolUseId) {
+  let deniedText = `Permission to use ${tool.name} has been denied`;
   try {
-    let i = await r(e, n, o, s, u);
-    switch (i.behavior) {
+    let decision = await canUseTool(tool, input, toolUseContext, assistantMessage, toolUseId);
+    switch (decision.behavior) {
       case "allow": {
-        if (i.updatedInput === n || isUnchangedAnswerInput(i.updatedInput, n)) return;
-        let h = denyChangedAnswerInput(e.name, u);
+        if (decision.updatedInput === input || isUnchangedAnswerInput(decision.updatedInput, input)) return;
+        let changedDenial = denyChangedAnswerInput(tool.name, toolUseId);
         return {
           verdict: "changed_input",
-          words: h.message,
-          kind: getToolCallOutcomeCode(h),
+          words: changedDenial.message,
+          kind: getToolCallOutcomeCode(changedDenial),
         };
       }
       case "ask":
         return {
           verdict: "asked",
-          words: buildNoPromptAvailableDenial(i.message),
+          words: buildNoPromptAvailableDenial(decision.message),
           kind: "permission-rule",
         };
       case "deny":
         return {
           verdict: "denied",
-          words: i.message || p,
-          kind: getToolCallOutcomeCode(i),
+          words: decision.message || deniedText,
+          kind: getToolCallOutcomeCode(decision),
         };
       default:
         return {
           verdict: "denied",
-          words: p,
+          words: deniedText,
           kind: "permission-rule",
         };
     }
   } catch (error) {
-    if (isAbortError(error) || o.abortController.signal.aborted) throw error;
+    if (isAbortError(error) || toolUseContext.abortController.signal.aborted) throw error;
     logError(error);
     return {
       verdict: "threw",
-      words: `The permission check for this ${e.name} call failed with an error, so the call was refused`,
+      words: `The permission check for this ${tool.name} call failed with an error, so the call was refused`,
       kind: "permission-rule",
     };
   }
@@ -991,8 +1075,8 @@ async function formatPermissionDenied(e, n, o, r, s, u) {
  * 用于「未联系到机器」提示的措辞：保证句子以标点结尾。
  */
 function ensureSentenceEnd(words) {
-  let n = words.trimEnd();
-  return /[.!?\u2026]$/.test(n) ? n : `${n}.`;
+  let trimmed = words.trimEnd();
+  return /[.!?\u2026]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 }
 export {
   withdrawnAskDecision,
@@ -1003,4 +1087,5 @@ export {
   STATUS_NOTIFICATION_TIMEOUT_MS,
   NOTICE_NOTIFICATION_TIMEOUT_MS,
   RemoteToolCallEnded,
+  createRemoteToolsProvider,
 };

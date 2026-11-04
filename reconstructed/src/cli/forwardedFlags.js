@@ -28,152 +28,165 @@ import {
 } from "../utils/envValidation.js";
 import { logForDebugging } from "../utils/debug.js";
 import { stripLongPathPrefixes } from "../utils/windowsUncPaths.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-nwzhqrkg.js:681-3226 placement
 /**
  * 转发给后台会话的带值 CLI 标志集合（--model、--permission-mode、--settings 等）及可变参标志。
  */
-var FORWARDED_VALUE_FLAGS = new Set([
-  "--model",
-  "-m",
-  "--permission-mode",
-  "--inherit-permission-mode",
-  "--proactivity",
-  "--agent",
-  "--agents",
-  "--routine",
-  "--effort",
-  "--fast-mode",
-  "--add-dir",
-  "--mcp-config",
-  "--settings",
-  "--setting-sources",
-  "--managed-settings",
-  "--client-data-url",
-  "--system-prompt",
-  "--system-prompt-file",
-  "--append-system-prompt",
-  "--append-system-prompt-file",
-  "--system-prompt-snapshot",
-  "--append-subagent-system-prompt",
-  "--append-subagent-system-prompt-file",
-  "--fallback-model",
-  "--advisor",
-  "--channels",
-  "--watch-artifact",
-  "--watch-artifact-no-autoreact",
-  "--permission-prompt-tool",
-  "--permission-prompts",
-  "--allowed-tools",
-  "--allowedTools",
-  "--disallowed-tools",
-  "--disallowedTools",
-  "--tools",
-  "--session-id",
-  "--debug-file",
-  "-n",
-  "--name",
-  "--autocompact",
-  "--betas",
-  "--file",
-  "--max-budget-usd",
-  "--max-thinking-tokens",
-  "--max-turns",
-  "--task-budget",
-  "--plan-mode-instructions",
-  "--plugin-dir",
-  "--plugin-dir-no-mcp",
-  "--plugin-url",
-  "--rewind-files",
-  "--thinking",
-  "--thinking-display",
-  "--remote-control-session-name-prefix",
-  "--json-schema",
-]);
-var BACKGROUND_FORWARDED_VALUE_FLAGS = new Set([
-  ...FORWARDED_VALUE_FLAGS,
-  "--resume-session-at",
-  "--resume-drops-turn",
-  "--project-config-root",
-  "--exec",
-]);
-var VARIADIC_FORWARDED_FLAGS = new Set([
-  "--allowed-tools",
-  "--allowedTools",
-  "--disallowed-tools",
-  "--disallowedTools",
-  "--tools",
-  "--mcp-config",
-  "--betas",
-  "--add-dir",
-  "--file",
-  "--channels",
-]);
-var PLUGIN_SOURCE_FLAGS = new Set(["--plugin-dir", "--plugin-dir-no-mcp", "--plugin-url"]);
-var BOOLEAN_FORWARDED_FLAGS = new Set([
-  "--dangerously-skip-permissions",
-  "--allow-dangerously-skip-permissions",
-  "--strict-mcp-config",
-  "--dangerously-allow-browser-network-access",
-  "--restricted",
-  "--disable-slash-commands",
-  "--include-unsupported-models",
-  "--verbose",
-  "--reply-on-resume",
-  "--ide",
-  "--chrome",
-  "--no-chrome",
-  "--bare",
-  "--safe-mode",
-  "--brief",
-  "--remote-control",
-  "--rc",
-  "--local",
-  "--unsandboxed",
-  "--personal",
-  "--allow-other-models",
-]);
-var ENV_FORCE_PASSTHROUGH_NAMES = new Set([
-  "CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
-  "CLAUDE_CODE_HOST_GATEWAY_LINEAGE",
-]);
-var SUBAGENT_MODEL_ENV_NAMES = [
-  ...MODEL_SELECTION_ENV_VARS,
-  ...CUSTOM_MODEL_OPTION_VARS,
-  "CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
-  "CLAUDE_CODE_SUBAGENT_EFFORT",
-];
-var BACKGROUND_ALLOWED_ENV_NAMES = new Set([
-  "CLAUDE_CONFIG_DIR",
-  "CLAUDE_INTERNAL_FC_OVERRIDES",
-  ...SUBAGENT_MODEL_ENV_NAMES,
-  "CLAUDE_CODE_CLIENT_DATA_URL",
-  "CLAUDE_CODE_ALLOW_OTHER_MODELS",
-  "CLAUDE_CODE_ATTRIBUTION_PROJECT",
-  ...PROVIDER_SELECTION_ENV_VARS,
-  "AWS_REGION",
-  "AWS_DEFAULT_REGION",
-  "ANTHROPIC_BEDROCK_REGION_PREFIX",
-  "AWS_PROFILE",
-  "AWS_CONFIG_FILE",
-  "AWS_SHARED_CREDENTIALS_FILE",
-  "GOOGLE_APPLICATION_CREDENTIALS",
-  "GOOGLE_CLOUD_PROJECT",
-  "GCLOUD_PROJECT",
-  "CLAUDE_SECURESTORAGE_CONFIG_DIR",
-  "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
-  "CLAUDE_CODE_HOST_GATEWAY_LINEAGE",
-]);
-var PATH_VALUED_ENV_NAMES = new Set([
-  "AWS_CONFIG_FILE",
-  "AWS_SHARED_CREDENTIALS_FILE",
-  "GOOGLE_APPLICATION_CREDENTIALS",
-]);
-var CLAUDE_SECURESTORAGE_CONFIG_DIR = "CLAUDE_SECURESTORAGE_CONFIG_DIR";
+var FORWARDED_VALUE_FLAGS; // deferred: uses ARTIFACT_PROVIDER_ENV_VARS (../utils/managedEnvConstants.js) of its import cycle while loading; runs once the cycle is complete
+var BACKGROUND_FORWARDED_VALUE_FLAGS;
+var VARIADIC_FORWARDED_FLAGS;
+var PLUGIN_SOURCE_FLAGS;
+var BOOLEAN_FORWARDED_FLAGS;
+var ENV_FORCE_PASSTHROUGH_NAMES;
+var SUBAGENT_MODEL_ENV_NAMES;
+var BACKGROUND_ALLOWED_ENV_NAMES;
+var PATH_VALUED_ENV_NAMES;
+var CLAUDE_SECURESTORAGE_CONFIG_DIR;
+deferInit("chunk-nwzhqrkg.js:681", () => {
+  FORWARDED_VALUE_FLAGS = new Set([
+    "--model",
+    "-m",
+    "--permission-mode",
+    "--inherit-permission-mode",
+    "--proactivity",
+    "--agent",
+    "--agents",
+    "--routine",
+    "--effort",
+    "--fast-mode",
+    "--add-dir",
+    "--mcp-config",
+    "--settings",
+    "--setting-sources",
+    "--managed-settings",
+    "--client-data-url",
+    "--system-prompt",
+    "--system-prompt-file",
+    "--append-system-prompt",
+    "--append-system-prompt-file",
+    "--system-prompt-snapshot",
+    "--append-subagent-system-prompt",
+    "--append-subagent-system-prompt-file",
+    "--fallback-model",
+    "--advisor",
+    "--channels",
+    "--watch-artifact",
+    "--watch-artifact-no-autoreact",
+    "--permission-prompt-tool",
+    "--permission-prompts",
+    "--allowed-tools",
+    "--allowedTools",
+    "--disallowed-tools",
+    "--disallowedTools",
+    "--tools",
+    "--session-id",
+    "--debug-file",
+    "-n",
+    "--name",
+    "--autocompact",
+    "--betas",
+    "--file",
+    "--max-budget-usd",
+    "--max-thinking-tokens",
+    "--max-turns",
+    "--task-budget",
+    "--plan-mode-instructions",
+    "--plugin-dir",
+    "--plugin-dir-no-mcp",
+    "--plugin-url",
+    "--rewind-files",
+    "--thinking",
+    "--thinking-display",
+    "--remote-control-session-name-prefix",
+    "--json-schema",
+  ]);
+  BACKGROUND_FORWARDED_VALUE_FLAGS = new Set([
+    ...FORWARDED_VALUE_FLAGS,
+    "--resume-session-at",
+    "--resume-drops-turn",
+    "--project-config-root",
+    "--exec",
+  ]);
+  VARIADIC_FORWARDED_FLAGS = new Set([
+    "--allowed-tools",
+    "--allowedTools",
+    "--disallowed-tools",
+    "--disallowedTools",
+    "--tools",
+    "--mcp-config",
+    "--betas",
+    "--add-dir",
+    "--file",
+    "--channels",
+  ]);
+  PLUGIN_SOURCE_FLAGS = new Set(["--plugin-dir", "--plugin-dir-no-mcp", "--plugin-url"]);
+  BOOLEAN_FORWARDED_FLAGS = new Set([
+    "--dangerously-skip-permissions",
+    "--allow-dangerously-skip-permissions",
+    "--strict-mcp-config",
+    "--dangerously-allow-browser-network-access",
+    "--restricted",
+    "--disable-slash-commands",
+    "--include-unsupported-models",
+    "--verbose",
+    "--reply-on-resume",
+    "--ide",
+    "--chrome",
+    "--no-chrome",
+    "--bare",
+    "--safe-mode",
+    "--brief",
+    "--remote-control",
+    "--rc",
+    "--local",
+    "--unsandboxed",
+    "--personal",
+    "--allow-other-models",
+  ]);
+  ENV_FORCE_PASSTHROUGH_NAMES = new Set([
+    "CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
+    "CLAUDE_CODE_HOST_GATEWAY_LINEAGE",
+  ]);
+  SUBAGENT_MODEL_ENV_NAMES = [
+    ...MODEL_SELECTION_ENV_VARS,
+    ...CUSTOM_MODEL_OPTION_VARS,
+    "CLAUDE_CODE_SUBAGENT_MODEL_FORCE",
+    "CLAUDE_CODE_SUBAGENT_EFFORT",
+  ];
+  BACKGROUND_ALLOWED_ENV_NAMES = new Set([
+    "CLAUDE_CONFIG_DIR",
+    "CLAUDE_INTERNAL_FC_OVERRIDES",
+    ...SUBAGENT_MODEL_ENV_NAMES,
+    "CLAUDE_CODE_CLIENT_DATA_URL",
+    "CLAUDE_CODE_ALLOW_OTHER_MODELS",
+    "CLAUDE_CODE_ATTRIBUTION_PROJECT",
+    ...PROVIDER_SELECTION_ENV_VARS,
+    "AWS_REGION",
+    "AWS_DEFAULT_REGION",
+    "ANTHROPIC_BEDROCK_REGION_PREFIX",
+    "AWS_PROFILE",
+    "AWS_CONFIG_FILE",
+    "AWS_SHARED_CREDENTIALS_FILE",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+    "GOOGLE_CLOUD_PROJECT",
+    "GCLOUD_PROJECT",
+    "CLAUDE_SECURESTORAGE_CONFIG_DIR",
+    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+    "CLAUDE_CODE_HOST_GATEWAY_LINEAGE",
+  ]);
+  PATH_VALUED_ENV_NAMES = new Set([
+    "AWS_CONFIG_FILE",
+    "AWS_SHARED_CREDENTIALS_FILE",
+    "GOOGLE_APPLICATION_CREDENTIALS",
+  ]);
+  CLAUDE_SECURESTORAGE_CONFIG_DIR = "CLAUDE_SECURESTORAGE_CONFIG_DIR";
+});
 //@ chunk-nwzhqrkg.js:3226-3470 placement
-function jobAllowedRoots(n) {
+function jobAllowedRoots(envName) {
   let claudeConfigDir = getClaudeConfigDir();
-  let r = [
+  let roots = [
     join(claudeConfigDir, "jobs"),
     join(tmpdir(), claudeTempDirName()),
     join(claudeConfigDir, "projects"),
@@ -182,38 +195,38 @@ function jobAllowedRoots(n) {
   ];
   let CLAUDE_CODE_REMOTE_MEMORY_DIR = env.CLAUDE_CODE_REMOTE_MEMORY_DIR;
   if (CLAUDE_CODE_REMOTE_MEMORY_DIR)
-    r.push(
+    roots.push(
       join(CLAUDE_CODE_REMOTE_MEMORY_DIR, "projects"),
       join(CLAUDE_CODE_REMOTE_MEMORY_DIR, "agent-memory"),
     );
-  if (PATH_VALUED_ENV_NAMES.has(n))
+  if (PATH_VALUED_ENV_NAMES.has(envName))
     try {
-      r.push(join(homedir(), ".claude"));
+      roots.push(join(homedir(), ".claude"));
     } catch {}
-  return r;
+  return roots;
 }
 //@ chunk-nwzhqrkg.js:3470-3504 placement
-function normalizeResolvedPath(n) {
-  return foldCaseBasic(identity(resolve(n)));
+function normalizeResolvedPath(path) {
+  return foldCaseBasic(identity(resolve(path)));
 }
 //@ chunk-nwzhqrkg.js:3504-3583 placement
-function isAbsoluteOnPlatform(n) {
-  return getPlatform() === "windows" ? /^([A-Za-z]:[\\/]|[\\/]{2})/.test(n) : isAbsolute(n);
+function isAbsoluteOnPlatform(path) {
+  return getPlatform() === "windows" ? /^([A-Za-z]:[\\/]|[\\/]{2})/.test(path) : isAbsolute(path);
 }
 //@ chunk-nwzhqrkg.js:3583-4013 placement
 /**
  * 校验转发给后台会话的路径型环境变量：必须是完整路径且不在 Claude 临时目录。
  */
-function checkForwardedPath(n, s) {
-  if (s === "") return n === CLAUDE_SECURESTORAGE_CONFIG_DIR ? undefined : "empty path";
-  if (!isAbsoluteOnPlatform(s)) return "not a full path";
-  let r = normalizeResolvedPath(s);
-  if (getPlatform() !== "windows" && r.split(sep).includes(foldCaseBasic(claudeTempDirName())))
+function checkForwardedPath(envName, value) {
+  if (value === "") return envName === CLAUDE_SECURESTORAGE_CONFIG_DIR ? undefined : "empty path";
+  if (!isAbsoluteOnPlatform(value)) return "not a full path";
+  let normalized = normalizeResolvedPath(value);
+  if (getPlatform() !== "windows" && normalized.split(sep).includes(foldCaseBasic(claudeTempDirName())))
     return "path is inside a Claude temp folder, which background sessions can write to without asking";
-  for (let e of jobAllowedRoots(n)) {
-    let o = relative(normalizeResolvedPath(e), r);
-    if (o !== ".." && !o.startsWith(`..${sep}`) && !isAbsolute(o))
-      return `path is inside ${e}, where background sessions can write some files without asking`;
+  for (let root of jobAllowedRoots(envName)) {
+    let rel = relative(normalizeResolvedPath(root), normalized);
+    if (rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))
+      return `path is inside ${root}, where background sessions can write some files without asking`;
   }
   return;
 }
@@ -222,19 +235,19 @@ function checkForwardedPath(n, s) {
  * 把转发给后台任务的环境变量中表示路径的条目按给定目录解析为绝对路径，其余原样保留。
  */
 function resolveForwardedEnvPaths(providerEnv, cwd) {
-  let r = {};
+  let resolved = {};
   for (let [key, value] of Object.entries(providerEnv))
-    r[key] =
+    resolved[key] =
       value !== "" && PATH_VALUED_ENV_NAMES.has(key) ? resolve(cwd, expandAwsHomePath(key, value)) : value;
-  return r;
+  return resolved;
 }
 //@ chunk-nwzhqrkg.js:4118-4234 placement
-function expandAwsHomePath(n, s) {
-  if (!n.startsWith("AWS_") || !s.startsWith("~/")) return s;
+function expandAwsHomePath(name, value) {
+  if (!name.startsWith("AWS_") || !value.startsWith("~/")) return value;
   try {
-    return join(homedir(), s.slice(2));
+    return join(homedir(), value.slice(2));
   } catch {
-    return s;
+    return value;
   }
 }
 //@ chunk-nwzhqrkg.js:4234-4389 placement
@@ -244,11 +257,11 @@ var PROJECT_ID_RE =
 /**
  * 过滤要带给后台会话的环境变量，返回保留项与被丢弃项（附原因）。
  */
-function filterBackgroundEnv(n) {
-  let s = {};
-  let r = [];
-  for (let [key, value] of Object.entries(n)) {
-    let a = !BACKGROUND_ALLOWED_ENV_NAMES.has(key)
+function filterBackgroundEnv(env) {
+  let kept = {};
+  let dropped = [];
+  for (let [key, value] of Object.entries(env)) {
+    let problem = !BACKGROUND_ALLOWED_ENV_NAMES.has(key)
       ? "not kept for background sessions"
       : ENV_FORCE_PASSTHROUGH_NAMES.has(key) && !isEnvTruthy(value)
         ? "only kept when set to a true value such as 1"
@@ -257,25 +270,28 @@ function filterBackgroundEnv(n) {
           : key === "CLAUDE_CODE_ATTRIBUTION_PROJECT" && !PROJECT_ID_RE.test(value)
             ? "not a claude.ai Project ID"
             : undefined;
-    if (a) r.push(`${describeEnvEntryName(key)} (${a})`);
-    else s[key] = value;
+    if (problem) dropped.push(`${describeEnvEntryName(key)} (${problem})`);
+    else kept[key] = value;
   }
-  if (r.length === 0) return n;
-  logForDebugging(`[jobs] ignored these saved environment entries in the job's state.json: ${r.join(", ")}`, {
-    level: "warn",
-  });
-  return Object.keys(s).length > 0 ? s : undefined;
+  if (dropped.length === 0) return env;
+  logForDebugging(
+    `[jobs] ignored these saved environment entries in the job's state.json: ${dropped.join(", ")}`,
+    {
+      level: "warn",
+    },
+  );
+  return Object.keys(kept).length > 0 ? kept : undefined;
 }
 //@ chunk-nwzhqrkg.js:4898-5086 placement
 /**
  * 过滤可转发的环境变量，被丢弃的条目逐个记录警告日志（名称经转义、附原因）。
  */
-function keepForwardableEnv(n, s) {
-  let { kept, dropped } = filterInvalidEnvEntries(n);
-  dropped.forEach(({ name: o, problem }) => {
+function keepForwardableEnv(env, origin) {
+  let { kept, dropped } = filterInvalidEnvEntries(env);
+  dropped.forEach(({ name, problem }) => {
     try {
       logForDebugging(
-        `[jobs] dropped environment entry ${describeEnvEntryName(o)} from ${s}: ${ENV_ENTRY_PROBLEM_TEXT[problem]}.`,
+        `[jobs] dropped environment entry ${describeEnvEntryName(name)} from ${origin}: ${ENV_ENTRY_PROBLEM_TEXT[problem]}.`,
         {
           level: "warn",
         },
@@ -288,213 +304,240 @@ function keepForwardableEnv(n, s) {
 /**
  * 把 argv 分成可转发的标志与其余参数。
  */
-function splitForwardableArgs(n) {
-  let s = [];
-  let r = [];
-  for (let j = 0; j < n.length; j++) {
-    let o = n[j];
-    if (!o.startsWith("-")) {
-      r.push(o);
+function splitForwardableArgs(args) {
+  let forwarded = [];
+  let stripped = [];
+  for (let j = 0; j < args.length; j++) {
+    let arg = args[j];
+    if (!arg.startsWith("-")) {
+      stripped.push(arg);
       continue;
     }
-    let index = o.indexOf("=");
-    let l = index === -1 ? o : o.slice(0, index);
-    if (index !== -1 && !FORWARDED_VALUE_FLAGS.has(l) && BOOLEAN_FORWARDED_FLAGS.has(l)) {
-      s.push(l);
-      r.push(o);
+    let index = arg.indexOf("=");
+    let flagName = index === -1 ? arg : arg.slice(0, index);
+    if (index !== -1 && !FORWARDED_VALUE_FLAGS.has(flagName) && BOOLEAN_FORWARDED_FLAGS.has(flagName)) {
+      forwarded.push(flagName);
+      stripped.push(arg);
       continue;
     }
-    let d = index === -1 && FORWARDED_VALUE_FLAGS.has(l);
-    let g =
-      l !== "-m" &&
+    let expectsValue = index === -1 && FORWARDED_VALUE_FLAGS.has(flagName);
+    let isForwarded =
+      flagName !== "-m" &&
       (index === -1
-        ? BOOLEAN_FORWARDED_FLAGS.has(l) || (d && n[j + 1] !== undefined)
-        : FORWARDED_VALUE_FLAGS.has(l));
-    let h = g ? s : r;
-    h.push(o);
-    if (d && n[j + 1] !== undefined) h.push(n[++j]);
-    if (!g || (d && VARIADIC_FORWARDED_FLAGS.has(l)))
-      while (n[j + 1] !== undefined && !n[j + 1].startsWith("-")) h.push(n[++j]);
+        ? BOOLEAN_FORWARDED_FLAGS.has(flagName) || (expectsValue && args[j + 1] !== undefined)
+        : FORWARDED_VALUE_FLAGS.has(flagName));
+    let target = isForwarded ? forwarded : stripped;
+    target.push(arg);
+    if (expectsValue && args[j + 1] !== undefined) target.push(args[++j]);
+    if (!isForwarded || (expectsValue && VARIADIC_FORWARDED_FLAGS.has(flagName)))
+      while (args[j + 1] !== undefined && !args[j + 1].startsWith("-")) target.push(args[++j]);
   }
-  if (r.length > 0)
+  if (stripped.length > 0)
     logForDebugging(
-      `[jobs] stripped respawnFlags token(s) that a restart does not re-apply: ${r.join(" ")}`,
+      `[jobs] stripped respawnFlags token(s) that a restart does not re-apply: ${stripped.join(" ")}`,
       {
         level: "warn",
       },
     );
-  return groupFlagArgs(normalizeForwardedFlags(s));
+  return groupFlagArgs(normalizeForwardedFlags(forwarded));
 }
 //@ chunk-nwzhqrkg.js:5669-5939 placement
-function normalizeForwardedFlags(n) {
-  let s = [];
-  for (let j = 0; j < n.length; j++) {
-    let e = n[j];
-    if (!FORWARDED_VALUE_FLAGS.has(e)) {
-      s.push(e);
+function normalizeForwardedFlags(args) {
+  let out = [];
+  for (let j = 0; j < args.length; j++) {
+    let flagName = args[j];
+    if (!FORWARDED_VALUE_FLAGS.has(flagName)) {
+      out.push(flagName);
       continue;
     }
-    let o = n[++j];
-    if (!o.startsWith("-")) {
-      s.push(e, o);
+    let value = args[++j];
+    if (!value.startsWith("-")) {
+      out.push(flagName, value);
       continue;
     }
-    s.push(`${e === "-n" ? "--name" : e}=${o}`);
-    let a = n[j + 1];
-    if (VARIADIC_FORWARDED_FLAGS.has(e) && a !== undefined && !a.startsWith("-")) s.push(e);
+    out.push(`${flagName === "-n" ? "--name" : flagName}=${value}`);
+    let next = args[j + 1];
+    if (VARIADIC_FORWARDED_FLAGS.has(flagName) && next !== undefined && !next.startsWith("-"))
+      out.push(flagName);
   }
-  return s;
+  return out;
 }
 //@ chunk-nwzhqrkg.js:5939-6393 placement
 /**
  * 把 argv 按标志分组（标志与其值放在一起，可变参标志吞掉后续值）。
  */
-function groupFlagArgs(n) {
-  let s = [];
-  for (let j = 0; j < n.length; j++) {
-    let o = n[j];
-    let index = o.indexOf("=");
-    let l = index === -1 ? o : o.slice(0, index);
-    let d = [o];
-    if (index === -1 && FORWARDED_VALUE_FLAGS.has(l) && n[j + 1] !== undefined) {
-      d.push(n[++j]);
-      if (VARIADIC_FORWARDED_FLAGS.has(l))
-        while (n[j + 1] !== undefined && !n[j + 1].startsWith("-")) d.push(n[++j]);
+function groupFlagArgs(args) {
+  let groups = [];
+  for (let j = 0; j < args.length; j++) {
+    let arg = args[j];
+    let index = arg.indexOf("=");
+    let flagName = index === -1 ? arg : arg.slice(0, index);
+    let tokens = [arg];
+    if (index === -1 && FORWARDED_VALUE_FLAGS.has(flagName) && args[j + 1] !== undefined) {
+      tokens.push(args[++j]);
+      if (VARIADIC_FORWARDED_FLAGS.has(flagName))
+        while (args[j + 1] !== undefined && !args[j + 1].startsWith("-")) tokens.push(args[++j]);
     }
-    s.push({
-      name: l,
-      toks: d,
+    groups.push({
+      name: flagName,
+      toks: tokens,
     });
   }
-  let r = new Map();
-  for (let j = 0; j < s.length; j++) {
-    let o = s[j];
+  let lastIndexByName = new Map();
+  for (let j = 0; j < groups.length; j++) {
+    let group = groups[j];
     if (
-      FORWARDED_VALUE_FLAGS.has(o.name) &&
-      !VARIADIC_FORWARDED_FLAGS.has(o.name) &&
-      !PLUGIN_SOURCE_FLAGS.has(o.name)
+      FORWARDED_VALUE_FLAGS.has(group.name) &&
+      !VARIADIC_FORWARDED_FLAGS.has(group.name) &&
+      !PLUGIN_SOURCE_FLAGS.has(group.name)
     )
-      r.set(o.name, j);
+      lastIndexByName.set(group.name, j);
   }
-  return s.filter((e, o) => (r.get(e.name) ?? o) === o).flatMap((e) => e.toks);
+  return groups
+    .filter((group, index) => (lastIndexByName.get(group.name) ?? index) === index)
+    .flatMap((group) => group.toks);
 }
 //@ chunk-nwzhqrkg.js:6393-6621 placement
 /**
  * 若 --dangerously-skip-permissions 之后又出现 --permission-mode，则去掉前者（后者优先）。
  */
-function dropOverriddenSkipPermissions(n) {
-  let index = n.lastIndexOf("--dangerously-skip-permissions");
+function dropOverriddenSkipPermissions(args) {
+  let index = args.lastIndexOf("--dangerously-skip-permissions");
   return index !== -1 &&
-    n.slice(index + 1).some((e) => e === "--permission-mode" || e.startsWith("--permission-mode="))
-    ? n.filter((e) => e !== "--dangerously-skip-permissions")
-    : [...n];
+    args.slice(index + 1).some((arg) => arg === "--permission-mode" || arg.startsWith("--permission-mode="))
+    ? args.filter((arg) => arg !== "--dangerously-skip-permissions")
+    : [...args];
 }
 //@ chunk-nwzhqrkg.js:6621-6786 placement
 /**
  * 把 --dangerously-skip-permissions 移到参数列表末尾。
  */
-function moveSkipPermissionsLast(n) {
-  return n.includes("--dangerously-skip-permissions")
-    ? [...n.filter((s) => s !== "--dangerously-skip-permissions"), "--dangerously-skip-permissions"]
-    : [...n];
+function moveSkipPermissionsLast(args) {
+  return args.includes("--dangerously-skip-permissions")
+    ? [...args.filter((arg) => arg !== "--dangerously-skip-permissions"), "--dangerously-skip-permissions"]
+    : [...args];
 }
 //@ chunk-nwzhqrkg.js:6786-7714 placement
 /**
  * 去掉 argv 中已转发的标志（含 --flag=value 形式），保留 -- 之后的内容。
  */
-function stripForwardedFlags(n) {
-  let s = [];
-  for (let j = 0; j < n.length; j++) {
-    let e = n[j];
-    if (e === "--") {
-      for (let a = j; a < n.length; a++) s.push(n[a]);
+function stripForwardedFlags(args) {
+  let out = [];
+  for (let j = 0; j < args.length; j++) {
+    let arg = args[j];
+    if (arg === "--") {
+      for (let index = j; index < args.length; index++) out.push(args[index]);
       break;
     }
-    let o = e.startsWith("--") ? e.indexOf("=") : -1;
+    let eqIndex = arg.startsWith("--") ? arg.indexOf("=") : -1;
     if (
-      o !== -1 &&
-      (BACKGROUND_FORWARDED_VALUE_FLAGS.has(e.slice(0, o)) || RESUME_VALUE_FLAGS.has(e.slice(0, o)))
+      eqIndex !== -1 &&
+      (BACKGROUND_FORWARDED_VALUE_FLAGS.has(arg.slice(0, eqIndex)) ||
+        RESUME_VALUE_FLAGS.has(arg.slice(0, eqIndex)))
     ) {
-      s.push(e.slice(0, o + 1) + stripPathPrefixUnlessPrompt(e.slice(0, o), e.slice(o + 1)));
+      out.push(
+        arg.slice(0, eqIndex + 1) +
+          stripPathPrefixUnlessPrompt(arg.slice(0, eqIndex), arg.slice(eqIndex + 1)),
+      );
       continue;
     }
-    if (/^-[a-zA-Z].+/.test(e)) {
-      let a = 1;
-      while (a < e.length - 1 && SINGLE_LETTER_FLAGS.has(`-${e[a]}`)) a++;
-      let l = `-${e[a]}`;
-      if (e.length > a + 1 && (BACKGROUND_FORWARDED_VALUE_FLAGS.has(l) || RESUME_VALUE_FLAGS.has(l))) {
-        s.push(e.slice(0, a + 1) + stripPathPrefixUnlessPrompt(l, e.slice(a + 1)));
+    if (/^-[a-zA-Z].+/.test(arg)) {
+      let letterEnd = 1;
+      while (letterEnd < arg.length - 1 && SINGLE_LETTER_FLAGS.has(`-${arg[letterEnd]}`)) letterEnd++;
+      let valueFlag = `-${arg[letterEnd]}`;
+      if (
+        arg.length > letterEnd + 1 &&
+        (BACKGROUND_FORWARDED_VALUE_FLAGS.has(valueFlag) || RESUME_VALUE_FLAGS.has(valueFlag))
+      ) {
+        out.push(
+          arg.slice(0, letterEnd + 1) + stripPathPrefixUnlessPrompt(valueFlag, arg.slice(letterEnd + 1)),
+        );
         continue;
       }
       if (
-        e.length === a + 1 &&
-        a > 1 &&
-        (BACKGROUND_FORWARDED_VALUE_FLAGS.has(l) || RESUME_VALUE_FLAGS.has(l))
+        arg.length === letterEnd + 1 &&
+        letterEnd > 1 &&
+        (BACKGROUND_FORWARDED_VALUE_FLAGS.has(valueFlag) || RESUME_VALUE_FLAGS.has(valueFlag))
       ) {
-        s.push(e);
-        if (BACKGROUND_FORWARDED_VALUE_FLAGS.has(l) && n[j + 1] !== undefined) {
-          s.push(stripPathPrefixUnlessPrompt(l, n[++j]));
-          if (VARIADIC_FORWARDED_FLAGS.has(l))
-            while (n[j + 1] !== undefined && !looksLikeFlag_2(n[j + 1]))
-              s.push(stripPathPrefixUnlessPrompt(l, n[++j]));
-        } else if (RESUME_VALUE_FLAGS.has(l) && n[j + 1] !== undefined && !looksLikeFlag_2(n[j + 1]))
-          s.push(stripLongPathPrefixes(n[++j]));
+        out.push(arg);
+        if (BACKGROUND_FORWARDED_VALUE_FLAGS.has(valueFlag) && args[j + 1] !== undefined) {
+          out.push(stripPathPrefixUnlessPrompt(valueFlag, args[++j]));
+          if (VARIADIC_FORWARDED_FLAGS.has(valueFlag))
+            while (args[j + 1] !== undefined && !looksLikeFlag_2(args[j + 1]))
+              out.push(stripPathPrefixUnlessPrompt(valueFlag, args[++j]));
+        } else if (
+          RESUME_VALUE_FLAGS.has(valueFlag) &&
+          args[j + 1] !== undefined &&
+          !looksLikeFlag_2(args[j + 1])
+        )
+          out.push(stripLongPathPrefixes(args[++j]));
         continue;
       }
     }
-    s.push(e);
-    if (BACKGROUND_FORWARDED_VALUE_FLAGS.has(e) && n[j + 1] !== undefined) {
-      s.push(stripPathPrefixUnlessPrompt(e, n[++j]));
-      if (VARIADIC_FORWARDED_FLAGS.has(e))
-        while (n[j + 1] !== undefined && !looksLikeFlag_2(n[j + 1]))
-          s.push(stripPathPrefixUnlessPrompt(e, n[++j]));
-    } else if (RESUME_VALUE_FLAGS.has(e) && n[j + 1] !== undefined && !looksLikeFlag_2(n[j + 1]))
-      s.push(stripLongPathPrefixes(n[++j]));
+    out.push(arg);
+    if (BACKGROUND_FORWARDED_VALUE_FLAGS.has(arg) && args[j + 1] !== undefined) {
+      out.push(stripPathPrefixUnlessPrompt(arg, args[++j]));
+      if (VARIADIC_FORWARDED_FLAGS.has(arg))
+        while (args[j + 1] !== undefined && !looksLikeFlag_2(args[j + 1]))
+          out.push(stripPathPrefixUnlessPrompt(arg, args[++j]));
+    } else if (RESUME_VALUE_FLAGS.has(arg) && args[j + 1] !== undefined && !looksLikeFlag_2(args[j + 1]))
+      out.push(stripLongPathPrefixes(args[++j]));
   }
-  return s;
+  return out;
 }
 //@ chunk-nwzhqrkg.js:7714-7849 placement
-var PROMPT_TEXT_FLAGS = new Set([
-  "--system-prompt",
-  "--append-system-prompt",
-  "--append-subagent-system-prompt",
-  "--plan-mode-instructions",
-  "--name",
-  "-n",
-]);
+var PROMPT_TEXT_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-nwzhqrkg.js:7714", () => {
+  PROMPT_TEXT_FLAGS = new Set([
+    "--system-prompt",
+    "--append-system-prompt",
+    "--append-subagent-system-prompt",
+    "--plan-mode-instructions",
+    "--name",
+    "-n",
+  ]);
+});
 //@ chunk-nwzhqrkg.js:7849-7889 placement
-function stripPathPrefixUnlessPrompt(n, s) {
-  return PROMPT_TEXT_FLAGS.has(n) ? s : stripLongPathPrefixes(s);
+function stripPathPrefixUnlessPrompt(flagName, value) {
+  return PROMPT_TEXT_FLAGS.has(flagName) ? value : stripLongPathPrefixes(value);
 }
 //@ chunk-nwzhqrkg.js:7889-7957 placement
 /**
  * 转发参数解析用的标志集合：-r/--resume 为带值标志，-c/-p/-h/-v 为单字母标志。
  */
-var RESUME_VALUE_FLAGS = new Set(["-r", "--resume"]);
-var SINGLE_LETTER_FLAGS = new Set(["-c", "-p", "-h", "-v"]);
+var RESUME_VALUE_FLAGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SINGLE_LETTER_FLAGS;
+deferInit("chunk-nwzhqrkg.js:7889", () => {
+  RESUME_VALUE_FLAGS = new Set(["-r", "--resume"]);
+  SINGLE_LETTER_FLAGS = new Set(["-c", "-p", "-h", "-v"]);
+});
 //@ chunk-nwzhqrkg.js:7957-8008 placement
-function looksLikeFlag_2(n) {
-  return n.length > 1 && n.startsWith("-");
+function looksLikeFlag_2(arg) {
+  return arg.length > 1 && arg.startsWith("-");
 }
 //@ chunk-nwzhqrkg.js:8008-8097 placement
 /**
  * 确保参数里带 --reply-on-resume。
  */
-function withReplyOnResume(n) {
-  return n.includes("--reply-on-resume") ? [...n] : [...n, "--reply-on-resume"];
+function withReplyOnResume(args) {
+  return args.includes("--reply-on-resume") ? [...args] : [...args, "--reply-on-resume"];
 }
 //@ chunk-nwzhqrkg.js:8097-8159 placement
 /**
  * 去掉参数里的 --reply-on-resume。
  */
-function withoutReplyOnResume(respawnFlags) {
-  return respawnFlags.filter((s) => s !== "--reply-on-resume");
+function withoutReplyOnResume(flags) {
+  return flags.filter((flag) => flag !== "--reply-on-resume");
 }
 export {
   splitForwardableArgs,
   stripForwardedFlags,
   SUBAGENT_MODEL_ENV_NAMES,
   withoutReplyOnResume,
+  dropOverriddenSkipPermissions,
+  filterBackgroundEnv,
+  keepForwardableEnv,
+  resolveForwardedEnvPaths,
   moveSkipPermissionsLast,
   BOOLEAN_FORWARDED_FLAGS,
   FORWARDED_VALUE_FLAGS,
@@ -504,8 +547,4 @@ export {
   BACKGROUND_ALLOWED_ENV_NAMES,
   ENV_FORCE_PASSTHROUGH_NAMES,
   withReplyOnResume,
-  keepForwardableEnv,
-  dropOverriddenSkipPermissions,
-  filterBackgroundEnv,
-  resolveForwardedEnvPaths,
 };

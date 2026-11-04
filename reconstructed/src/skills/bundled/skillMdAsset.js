@@ -20,3 +20,4 @@ var skill = readEmbeddedTextSync(skillPath, import.meta.dirname);
  * skillMd 资源导出（SKILL.md 正文）。
  */
 var skill2 = skill;
+export { skill2 };

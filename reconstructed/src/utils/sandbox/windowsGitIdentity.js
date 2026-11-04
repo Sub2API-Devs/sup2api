@@ -15,7 +15,7 @@ import { isUncOrDevicePath } from "../pathClassification.js";
 import { SandboxManager } from "./sandbox-adapter.js";
 import { getPathsForPermissionCheck } from "../fsOperations.js";
 import { isPathInSandboxWriteAllowlist } from "../permissions/pathValidation.js";
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { readGlobalGitConfigValue } from "../git.js";
 import { tmpdir } from "../tempDir.js";
 import { getWindowsSandboxUserStatusAsync } from "../../../vendor/@anthropic-ai/sandbox-runtime/dist/sandbox/windows-sandbox-utils.js";
@@ -27,20 +27,21 @@ import { logForDebugging } from "../debug.js";
 import { isSentinelInode } from "../slowOperations.js";
 import { registerCleanup } from "../cleanupRegistry.js";
 import { errorMessage } from "../errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3045428-3045452 placement
 var NON_CONTROL_TEXT_RE = /^[^\p{Cc}]+$/u;
 //@ chunk-e6aww6q8.js:3045452-3045558 placement
-function pickSafeGitIdentity(e) {
-  return ["name", "email"].flatMap((n) => {
-    let r = e[n];
-    return r !== null && NON_CONTROL_TEXT_RE.test(r) ? [[n, r]] : [];
+function pickSafeGitIdentity(identity) {
+  return ["name", "email"].flatMap((field) => {
+    let value = identity[field];
+    return value !== null && NON_CONTROL_TEXT_RE.test(value) ? [[field, value]] : [];
   });
 }
 //@ chunk-e6aww6q8.js:3045558-3045686 placement
 function formatGitUserSection(globalGitIdentity) {
-  let n = (r) => `"${r.replace(/[\\"]/g, "\\$&")}"`;
-  return ["[user]", ...globalGitIdentity.map(([r, s]) => `	${r} = ${n(s)}`), ""].join(`
+  let quote = (value) => `"${value.replace(/[\\"]/g, "\\$&")}"`;
+  return ["[user]", ...globalGitIdentity.map(([key, value]) => `	${key} = ${quote(value)}`), ""].join(`
 `);
 }
 //@ chunk-e6aww6q8.js:3045686-3045890 placement
@@ -48,56 +49,65 @@ function getGitIdentityUnsafeReason(sandboxGitConfigPath) {
   if (isUncOrDevicePath(sandboxGitConfigPath) || !win32.isAbsolute(sandboxGitConfigPath))
     return "not_local_and_absolute";
   if (SandboxManager.storedDenyListsMayBeShort()) return "deny_lists_may_be_short";
-  return getPathsForPermissionCheck(sandboxGitConfigPath).some((n) => isPathInSandboxWriteAllowlist(n, [n]))
+  return getPathsForPermissionCheck(sandboxGitConfigPath).some((path) =>
+    isPathInSandboxWriteAllowlist(path, [path]),
+  )
     ? "sandbox_may_write"
     : undefined;
 }
 //@ chunk-e6aww6q8.js:3045890-3046085 placement
-var readGlobalGitIdentity = io(async (cwd) => {
-  let [globalGitConfigValue, globalGitConfigValue_2] = await Promise.all([
-    readGlobalGitConfigValue("user.name", cwd),
-    readGlobalGitConfigValue("user.email", cwd),
-  ]);
-  return pickSafeGitIdentity({
-    name: globalGitConfigValue,
-    email: globalGitConfigValue_2,
+var readGlobalGitIdentity; // deferred: uses readGlobalGitConfigValue (../git.js) of its import cycle while loading; runs once the cycle is complete
+var getSandboxGitConfigPath;
+var OWNER_RIGHTS_SID;
+deferInit("chunk-e6aww6q8.js:3045890", () => {
+  readGlobalGitIdentity = memoizeAlias(async (cwd) => {
+    let [globalGitConfigValue, globalGitConfigValue_2] = await Promise.all([
+      readGlobalGitConfigValue("user.name", cwd),
+      readGlobalGitConfigValue("user.email", cwd),
+    ]);
+    return pickSafeGitIdentity({
+      name: globalGitConfigValue,
+      email: globalGitConfigValue_2,
+    });
   });
+  getSandboxGitConfigPath = memoizeAlias((content, randomId) =>
+    join(tmpdir(), `claude-sandbox-${randomId()}.gitconfig`),
+  );
+  OWNER_RIGHTS_SID = "S-1-3-4";
 });
-var getSandboxGitConfigPath = io((e, n) => join(tmpdir(), `claude-sandbox-${n()}.gitconfig`));
-var OWNER_RIGHTS_SID = "S-1-3-4";
 //@ chunk-e6aww6q8.js:3046085-3046712 placement
-async function provisionWindowsGitIdentity(e) {
+async function provisionWindowsGitIdentity(configPath) {
   let windowsSandboxUserStatus = await getWindowsSandboxUserStatusAsync({
     srtWin: rgRunner(),
   });
-  let r = windowsSandboxUserStatus.groupSid ?? windowsSandboxUserStatus.sid;
+  let sid = windowsSandboxUserStatus.groupSid ?? windowsSandboxUserStatus.sid;
   if (!windowsSandboxUserStatus.provisioned) {
     logFeatureSad("sandbox_windows_git_identity", "not_provisioned");
     return false;
   }
-  if (r === undefined || !USER_SID_RE.test(r)) {
+  if (sid === undefined || !USER_SID_RE.test(sid)) {
     logFeatureSad("sandbox_windows_git_identity", "unexpected_sid");
     return false;
   }
-  let s = await execFileNoThrow(
+  let result = await execFileNoThrow(
     win32.join(systemRootDir(), "System32", "icacls.exe"),
-    [e, "/inheritance:r", "/grant:r", `*${OWNER_RIGHTS_SID}:(F)`, `*${r}:(R)`, "/L"],
+    [configPath, "/inheritance:r", "/grant:r", `*${OWNER_RIGHTS_SID}:(F)`, `*${sid}:(R)`, "/L"],
     {
       timeout: 15000,
       cwd: systemRootDir(),
       preserveOutputOnError: true,
     },
   );
-  if (s.code !== 0) {
+  if (result.code !== 0) {
     logForDebugging(
-      `[sandbox] icacls ${e} exited ${s.exitCode ?? "with no exit code"}: ${s.stderr || s.stdout}`,
+      `[sandbox] icacls ${configPath} exited ${result.exitCode ?? "with no exit code"}: ${result.stderr || result.stdout}`,
       {
         level: "warn",
       },
     );
-    logFeatureSad("sandbox_windows_git_identity", s.timedOut ? "icacls_timeout" : "icacls_failed");
+    logFeatureSad("sandbox_windows_git_identity", result.timedOut ? "icacls_timeout" : "icacls_failed");
   }
-  return s.code === 0;
+  return result.code === 0;
 }
 //@ chunk-e6aww6q8.js:3046712-3046772 placement = getFileIdentity (0.794)
 function getFileIdentity_6({ dev, ino }) {
@@ -107,19 +117,19 @@ function getFileIdentity_6({ dev, ino }) {
 /**
  * 独占创建沙箱用的 git 配置文件并设置 Windows 访问权限，确认文件未被替换且为空后写入内容，返回文件标识；任何一步异常都打点并放弃。
  */
-async function writeSandboxGitConfig(e, n) {
-  await using handle = await open(e, "wx");
+async function writeSandboxGitConfig(configPath, content) {
+  await using handle = await open(configPath, "wx");
   registerCleanup(() =>
-    rm_2(e, {
+    rm_2(configPath, {
       force: true,
     }),
   );
-  if (!(await provisionWindowsGitIdentity(e))) return;
+  if (!(await provisionWindowsGitIdentity(configPath))) return;
   let [openedStat, pathStat] = await Promise.all([
     handle.stat({
       bigint: true,
     }),
-    lstat(e, {
+    lstat(configPath, {
       bigint: true,
     }),
   ]);
@@ -131,34 +141,37 @@ async function writeSandboxGitConfig(e, n) {
     logFeatureSad("sandbox_windows_git_identity", "replaced");
     return;
   }
-  await handle.writeFile(n);
+  await handle.writeFile(content);
   logFeatureOk("sandbox_windows_git_identity");
   return getFileIdentity_6(openedStat);
 }
 //@ chunk-e6aww6q8.js:3047181-3047197 placement
-var sandboxGitConfigWriter = io(writeSandboxGitConfig);
+var sandboxGitConfigWriter; // deferred: uses writeSandboxGitConfig of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:3047181", () => {
+  sandboxGitConfigWriter = memoizeAlias(writeSandboxGitConfig);
+});
 //@ chunk-e6aww6q8.js:3047197-3047891 placement
-async function prepareSandboxGitGlobalConfig(cwd, n = randomUUID) {
+async function prepareSandboxGitGlobalConfig(cwd, randomId = randomUUID) {
   try {
     let globalGitIdentity = await readGlobalGitIdentity(cwd);
     if (globalGitIdentity.length < 2) readGlobalGitIdentity.cache.delete(cwd);
-    let s = formatGitUserSection(globalGitIdentity);
-    let sandboxGitConfigPath = getSandboxGitConfigPath(s, n);
+    let content = formatGitUserSection(globalGitIdentity);
+    let sandboxGitConfigPath = getSandboxGitConfigPath(content, randomId);
     let gitIdentityUnsafeReason = getGitIdentityUnsafeReason(sandboxGitConfigPath);
     if (gitIdentityUnsafeReason !== undefined) {
-      getSandboxGitConfigPath.cache.delete(s);
+      getSandboxGitConfigPath.cache.delete(content);
       logFeatureSad("sandbox_windows_git_identity", gitIdentityUnsafeReason);
       return;
     }
-    let S = await sandboxGitConfigWriter(sandboxGitConfigPath, s);
-    if (S === undefined) return;
-    let w = await lstat(sandboxGitConfigPath, {
+    let identity = await sandboxGitConfigWriter(sandboxGitConfigPath, content);
+    if (identity === undefined) return;
+    let currentIdentity = await lstat(sandboxGitConfigPath, {
       bigint: true,
     }).then(getFileIdentity_6, () => {
       return;
     });
-    if (S !== w) {
-      getSandboxGitConfigPath.cache.delete(s);
+    if (identity !== currentIdentity) {
+      getSandboxGitConfigPath.cache.delete(content);
       logFeatureSad("sandbox_windows_git_identity", "replaced");
       return;
     }

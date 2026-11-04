@@ -5,10 +5,10 @@
  * pieces: chunk-bzr73sfg.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-bzr73sfg.js:126116-126279 cjs-fingerprint
-var require_escape_string_regexp = x(function (cjsExports, cjsModule) {
+var require_escape_string_regexp = __commonJS(function (cjsExports, cjsModule) {
   var matchOperatorsRegex = /[|\\{}()[\]^$+*?.-]/g;
   cjsModule.exports = (string) => {
     if (typeof string !== "string") throw TypeError("Expected a string");

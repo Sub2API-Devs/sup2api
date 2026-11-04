@@ -9,6 +9,11 @@
  * attribution: sole-consumer 10, fingerprint 6, layout 1, file-local 1, placement 4
  */
 import {
+  isOfficialMarketplaceName_3,
+  parsePluginIdentifier_2,
+} from "../../utils/plugins/pluginIdentifier.js";
+import { DEFERREDTOOLPLACEHOLDER } from "../ToolSearchTool/prompt.js";
+import {
   isHiddenFromModel,
   isSyncedOrManagedSkill,
   dropSyncedClashes,
@@ -105,7 +110,14 @@ import { agentModelRestrictedReporter } from "../../utils/model/agentModelRestri
 import { unreadableToolsLine, toolsUsedForSummary } from "../../utils/agentListing.js";
 import { withUntrustedPreamble, isSillyShoreGateOn } from "../../utils/messages/untrustedArtifactContent.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, M, array, literal, union } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  booleanSchema,
+  array,
+  literal,
+  union,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { currentMcpClients } from "../../services/compact/idleToolResultClearing.js";
 import { isAgentStopPending } from "../../utils/agentProcessRegistry.js";
 import { isCoordinatorMainThread } from "../../coordinator/coordinatorMode.js";
@@ -144,12 +156,30 @@ import { areSkillsConvertedAsPlugins } from "../../utils/permissions/permissionR
 import { renderToolUseMessage } from "./UI.js";
 import { restoreSkillStateFromMessages } from "../../utils/conversationRecovery.js";
 import { getSubagentSteer } from "../../utils/model/subagentSteer.js";
-import {
-  isOfficialMarketplaceName_3,
-  parsePluginIdentifier_2,
-} from "../../utils/plugins/pluginIdentifier.js";
-import { DEFERREDTOOLPLACEHOLDER } from "../ToolSearchTool/prompt.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-csq9ftr9.js:9850-9976 fingerprint = isOfficialMarketplaceSkill (1)
+/**
+ * skill 是否来自官方市场插件。
+ */
+function isOfficialMarketplaceSkill(command) {
+  if (command.source !== "plugin" || !command.pluginInfo?.repository) return false;
+  return isOfficialMarketplaceName_3(parsePluginIdentifier_2(command.pluginInfo.repository).marketplace);
+}
+//@ chunk-e6aww6q8.js:2804890-2805133 fingerprint = getAllCommands (0.414)
+/**
+ * 构造工具名 → 来源（mcp / static）映射，额外登记 DeferredToolPlaceholder 为 static；供 API 层判定工具类别。
+ */
+function getToolNameKinds(tools, extraToolSchemas) {
+  let kinds = new Map();
+  for (let tool of tools)
+    if (tool.isMcp === true) kinds.set(tool.name, "mcp");
+    else if (tool.uiTableKey === undefined) kinds.set(tool.name, "static");
+  for (let schema of extraToolSchemas)
+    if ("name" in schema && typeof schema.name === "string") kinds.set(schema.name, "static");
+  kinds.set(DEFERREDTOOLPLACEHOLDER, "static");
+  return kinds;
+}
 //@ chunk-a5k9jscj.js:3587-3613 sole-consumer
 /**
  * 无采纳的 MCP 技能命令（当前恒返回 null）。
@@ -158,25 +188,28 @@ function noAdoptedSkillCommands() {
   return null;
 }
 //@ chunk-a5k9jscj.js:3613-3830 sole-consumer
-function dedupeSkillsByName(e) {
-  let n = new Map();
-  let s = (i) => Boolean(i.disableModelInvocation) || isHiddenFromModel(i);
-  for (let i of e) {
-    let d = n.get(i.name);
+function dedupeSkillsByName(commandList) {
+  let byName = new Map();
+  let isHidden = (command) => Boolean(command.disableModelInvocation) || isHiddenFromModel(command);
+  for (let command of commandList) {
+    let existing = byName.get(command.name);
     if (
-      d === undefined ||
-      (s(d) && !s(i) && i.type === "prompt" && !(isSyncedOrManagedSkill(d) && !isSyncedOrManagedSkill(i)))
+      existing === undefined ||
+      (isHidden(existing) &&
+        !isHidden(command) &&
+        command.type === "prompt" &&
+        !(isSyncedOrManagedSkill(existing) && !isSyncedOrManagedSkill(command)))
     )
-      n.set(i.name, i);
+      byName.set(command.name, command);
   }
-  return [...n.values()];
+  return [...byName.values()];
 }
 //@ chunk-a5k9jscj.js:3830-4061 sole-consumer
-function logReservedRuleHeldBack(e) {
-  if (!claimOnce().claim(`skill_reserved_namespace_rule_held_back_${e}`)) return;
+function logReservedRuleHeldBack(kind) {
+  if (!claimOnce().claim(`skill_reserved_namespace_rule_held_back_${kind}`)) return;
   logFeatureSad(
     "skill_reserved_namespace",
-    e === "nonholder" ? "nonholder_allow_rule" : "prefix_at_namespace_boundary",
+    kind === "nonholder" ? "nonholder_allow_rule" : "prefix_at_namespace_boundary",
     {
       interactive: !getIsNonInteractiveSession(),
       host_prompt: getPermissionPromptToolName() !== undefined,
@@ -188,18 +221,20 @@ function logReservedRuleHeldBack(e) {
  * 汇总 Skill 工具可调用的命令：本地命令、MCP 技能（含收编的）与内置技能，按名去重并去掉被遮蔽的后备技能。
  */
 async function getSkillToolCommandList(toolContext) {
-  let n = withNamedFolderYieldsRestored(await getCommands(getProjectRootOrNull(), toolContext.storageV5));
-  let s = toolContext.mcpCommands();
-  let filtered = s.filter((_) => _.type === "prompt" && _.loadedFrom === "mcp");
-  let d = withReservedLabels(
-    [...filtered, ...(noAdoptedSkillCommands()?.adoptedMcpSkillCommands(toolContext.mcpClients()) ?? [])],
-    n,
+  let commandList = withNamedFolderYieldsRestored(
+    await getCommands(getProjectRootOrNull(), toolContext.storageV5),
   );
-  let sliced = d.slice(0, filtered.length);
-  let sliced_2 = d.slice(filtered.length);
-  let r = memorySkillCommands();
-  let h = dropSyncedClashes(n, s);
-  let commands = dedupeSkillsByName([...h, ...r, ...sliced]);
+  let mcpCommands = toolContext.mcpCommands();
+  let filtered = mcpCommands.filter((command) => command.type === "prompt" && command.loadedFrom === "mcp");
+  let labelledMcpCommands = withReservedLabels(
+    [...filtered, ...(noAdoptedSkillCommands()?.adoptedMcpSkillCommands(toolContext.mcpClients()) ?? [])],
+    commandList,
+  );
+  let sliced = labelledMcpCommands.slice(0, filtered.length);
+  let sliced_2 = labelledMcpCommands.slice(filtered.length);
+  let memoryCommands = memorySkillCommands();
+  let skillCommands = dropSyncedClashes(commandList, mcpCommands);
+  let commands = dedupeSkillsByName([...skillCommands, ...memoryCommands, ...sliced]);
   return [...dropShadowedFallbackSkills(commands), ...sliced_2];
 }
 //@ chunk-a5k9jscj.js:4370-4430 sole-consumer
@@ -214,9 +249,12 @@ function listSkillCommands(commands, isMainAgent) {
 /**
  * 插件 prompt skill 是否是通过别名（不是正名）被命中的。
  */
-function formatCommandDescription(e, name) {
+function formatCommandDescription(command, name) {
   return (
-    e.type === "prompt" && e.source === "plugin" && e.name !== name && (e.aliases?.includes(name) ?? false)
+    command.type === "prompt" &&
+    command.source === "plugin" &&
+    command.name !== name &&
+    (command.aliases?.includes(name) ?? false)
   );
 }
 //@ chunk-a5k9jscj.js:4535-5257 sole-consumer
@@ -233,12 +271,14 @@ function resolveSkillName(name, commands, context) {
       listed: command,
     };
   if (command !== undefined) {
-    let v = formatCommandDescription(command, name) ? listSkillCommands(commands, isMainAgent) : [];
-    if (v.includes(command)) {
-      let filtered = v.filter(
-        (h) =>
-          formatCommandDescription(h, name) ||
-          (h.type === "prompt" && h.loadedFrom !== "syncedSkills" && h.name.endsWith(`:${name}`)),
+    let listed = formatCommandDescription(command, name) ? listSkillCommands(commands, isMainAgent) : [];
+    if (listed.includes(command)) {
+      let filtered = listed.filter(
+        (listedCommand) =>
+          formatCommandDescription(listedCommand, name) ||
+          (listedCommand.type === "prompt" &&
+            listedCommand.loadedFrom !== "syncedSkills" &&
+            listedCommand.name.endsWith(`:${name}`)),
       );
       if (filtered.length > 1)
         return {
@@ -279,18 +319,21 @@ function resolveSkillName(name, commands, context) {
   }
 }
 //@ chunk-a5k9jscj.js:5257-5399 sole-consumer
-function isSelfForkedSkill(e, toolContext) {
+function isSelfForkedSkill(command, toolContext) {
   return (
-    e.type === "prompt" &&
-    (e.context === "fork" || (e.getContext !== undefined && toolContext.spawnedByForkedSkill === true)) &&
-    toolContext.spawnedBySkill === getBareCommandName(e)
+    command.type === "prompt" &&
+    (command.context === "fork" ||
+      (command.getContext !== undefined && toolContext.spawnedByForkedSkill === true)) &&
+    toolContext.spawnedBySkill === getBareCommandName(command)
   );
 }
 //@ chunk-a5k9jscj.js:5399-5591 sole-consumer
 async function isYieldedSkillTarget(skillName, command, commands, storageV5) {
   if (
     !commands.some(
-      (v) => v.type === "prompt" && v.pluginInfo?.namedFolderYield?.yielded.includes(skillName) === true,
+      (command) =>
+        command.type === "prompt" &&
+        command.pluginInfo?.namedFolderYield?.yielded.includes(skillName) === true,
     )
   )
     return true;
@@ -301,26 +344,30 @@ async function isYieldedSkillTarget(skillName, command, commands, storageV5) {
 /**
  * 主会话本轮中用户是否亲手输入了该 skill 名（排除 meta、压缩摘要、交接、非键入文本、工具结果与命令消息），影响 userTypedThisTurn 判断。
  */
-function userTypedSkillThisTurn(skillName, n) {
-  if (n.agentId !== undefined) return false;
-  let s = slashSkillRuleRegex(skillName);
-  for (let i = n.messages.length - 1; i >= n.turnStartIndex; i--) {
-    let d = n.messages[i];
+function userTypedSkillThisTurn(commandName, toolContext) {
+  if (toolContext.agentId !== undefined) return false;
+  let slashRe = slashSkillRuleRegex(commandName);
+  for (
+    let messageIndex = toolContext.messages.length - 1;
+    messageIndex >= toolContext.turnStartIndex;
+    messageIndex--
+  ) {
+    let message = toolContext.messages[messageIndex];
     if (
-      d.type !== "user" ||
-      d.isMeta ||
-      d.isCompactSummary ||
-      !isHumanOrUnset(d.origin) ||
-      d.verifiedSlackHumanTurn === true ||
-      d.handedOff === true ||
-      d.textNotTyped === true
+      message.type !== "user" ||
+      message.isMeta ||
+      message.isCompactSummary ||
+      !isHumanOrUnset(message.origin) ||
+      message.verifiedSlackHumanTurn === true ||
+      message.handedOff === true ||
+      message.textNotTyped === true
     )
       continue;
-    let content = d.message.content;
+    let content = message.message.content;
     if (typeof content === "string") {
       if (content.includes(`<${COMMAND_MESSAGE}>`)) continue;
-    } else if (content.some((v) => v.type === "tool_result")) continue;
-    if (s.test(getUserMessageText(d) ?? "")) return true;
+    } else if (content.some((contentPart) => contentPart.type === "tool_result")) continue;
+    if (slashRe.test(getUserMessageText(message) ?? "")) return true;
   }
   return false;
 }
@@ -353,7 +400,7 @@ async function executeForkedSkill(
     isOfficial: isOfficialSkill,
   });
   let depth = toolUseContext.queryTracking?.depth ?? 0;
-  let Z = depth > 0 ? "nested-skill" : "claude-proactive";
+  let invocationTrigger = depth > 0 ? "nested-skill" : "claude-proactive";
   let agentId_2 = toolUseContext.agentId;
   if (command.pluginInfo)
     recordPluginActivity(
@@ -366,7 +413,7 @@ async function executeForkedSkill(
     _PROTO_skill_name: skillName,
     ...skillNameHash,
     execution_context: lit("fork"),
-    invocation_trigger: fromEnum(Z),
+    invocation_trigger: fromEnum(invocationTrigger),
     query_depth: depth,
     ...(toolUseContext.queryTracking && {
       query_chain_id: sanitizeMarkName(toolUseContext.queryTracking.chainId),
@@ -386,7 +433,7 @@ async function executeForkedSkill(
     ...(command.pluginInfo && getSkillPluginTelemetryFields(command)),
     ...buildServerAttributionFields(command),
   });
-  skillLoadedSource(skillName, command, Z, toolUseContext.agentContext);
+  skillLoadedSource(skillName, command, invocationTrigger, toolUseContext.agentContext);
   let agentContext = {
     agentId,
     parentAgentId: toolUseContext.agentId,
@@ -400,7 +447,7 @@ async function executeForkedSkill(
     ...getWorkflowRunFields(toolUseContext.agentContext),
   };
   let runInBackground = shouldBackgroundForkedSkill(command, toolUseContext);
-  let N = runInBackground || toolUseContext.spawnedByWorkflowRunId !== undefined;
+  let runInBackgroundFlag = runInBackground || toolUseContext.spawnedByWorkflowRunId !== undefined;
   let {
     modifiedGetAppState,
     contextLayers,
@@ -413,11 +460,11 @@ async function executeForkedSkill(
     webFetchReadmissionAllowed,
     frozenCommandDenies,
   } = await prepareForkedCommandContext(command, args || "", toolUseContext, agentContext, {
-    replaceCommandRules: N,
-    freezeCommandDenies: N,
-    deferInvocationRecording: N,
+    replaceCommandRules: runInBackgroundFlag,
+    freezeCommandDenies: runInBackgroundFlag,
+    deferInvocationRecording: runInBackgroundFlag,
   });
-  let se = await scopedSkillVariantNote(command, getProjectRootOrNull(), {
+  let scopedVariantNote = await scopedSkillVariantNote(command, getProjectRootOrNull(), {
     options: {
       tools: resolveAgentTools(
         baseAgent,
@@ -437,22 +484,22 @@ async function executeForkedSkill(
     storageV5: toolUseContext.storageV5,
     session: toolUseContext.session,
   });
-  if (se) promptMessages.push(se);
-  let ie =
+  if (scopedVariantNote) promptMessages.push(scopedVariantNote);
+  let effort =
     command.getEffort?.(args || "", toolUseContext) ??
     command.getDefaultEffort?.(args || "", toolUseContext)?.value ??
     command.effort;
   let agentDefinition =
-    ie !== undefined
+    effort !== undefined
       ? {
           ...baseAgent,
-          effort: ie,
+          effort,
         }
       : baseAgent;
   let agentMessages = [];
   logForDebugging(`SkillTool executing forked skill ${skillName} with agent ${agentDefinition.agentType}`);
   if (runInBackground) {
-    let Q = await runForkedAgent({
+    let backgroundRun = await runForkedAgent({
       agentId,
       agentDefinition,
       command,
@@ -473,7 +520,7 @@ async function executeForkedSkill(
       recordInvocationOnSuccess: recordInvocation,
       frozenCommandDenies,
     });
-    if (Q) {
+    if (backgroundRun) {
       logFeatureOk("skill_invoke");
       return {
         data: {
@@ -482,19 +529,19 @@ async function executeForkedSkill(
           status: "forked",
           background: true,
           agentId,
-          result: `Running in the background as @${Q.name}`,
+          result: `Running in the background as @${backgroundRun.name}`,
         },
       };
     }
     recordInvocation();
   }
-  let re = {
+  let callerAgentContext = {
     ...agentContext,
     subagentName: agentDefinition.agentType,
     isBuiltIn: isBuiltInAgent(agentDefinition),
   };
   let forwardSubagentText = toolUseContext.options.forwardSubagentText;
-  let le = (message, prompt) => {
+  let emitProgress = (message, prompt) => {
     onProgress?.({
       type: "progress",
       toolUseID: `skill_${parentMessage.message.id}`,
@@ -508,10 +555,10 @@ async function executeForkedSkill(
       },
     });
   };
-  let de = registerForkedSkillTask({
+  let taskHandle = registerForkedSkillTask({
     agentId,
     parentAgentId: agentId_2,
-    spawnDepth: getAgentDepth(re),
+    spawnDepth: getAgentDepth(callerAgentContext),
     skillName: getCommandName(command),
     prompt: skillContent,
     selectedAgent: agentDefinition,
@@ -519,19 +566,19 @@ async function executeForkedSkill(
     toolUseId: toolUseContext.toolUseId,
     callerAbortController: toolUseContext.abortController,
   });
-  let ee = "failed";
+  let outcome = "failed";
   try {
-    let found = normalizeMessages(promptMessages).find((F) => F.type === "user");
+    let found = normalizeMessages(promptMessages).find((message) => message.type === "user");
     if (found)
-      le(
+      emitProgress(
         {
           ...found,
           isMeta: undefined,
         },
         skillContent,
       );
-    let ne = false;
-    let B = timing?.mark("model");
+    let sawAssistant = false;
+    let markModelTiming = timing?.mark("model");
     for await (let message of runAgent({
       agentDefinition,
       promptMessages,
@@ -555,8 +602,8 @@ async function executeForkedSkill(
       webFetchReadmissionAllowed,
       override: {
         agentId,
-        agentContext: re,
-        abortController: de.abortController,
+        agentContext: callerAgentContext,
+        abortController: taskHandle.abortController,
         shareFileHistory: true,
         readFileState: forkReadFileState,
       },
@@ -579,28 +626,32 @@ async function executeForkedSkill(
       }
       if (message.type !== "assistant" && message.type !== "user") continue;
       if (!onProgress) continue;
-      if (message.type === "user" && message.isMeta && !ne) continue;
-      if (message.type === "assistant") ne = true;
-      for (let ve of normalizeMessages([message])) {
-        let be = ve.message.content[0];
-        if (!forwardSubagentText && be?.type !== "tool_use" && be?.type !== "tool_result") continue;
-        le(ve, "");
+      if (message.type === "user" && message.isMeta && !sawAssistant) continue;
+      if (message.type === "assistant") sawAssistant = true;
+      for (let normalizedMessage of normalizeMessages([message])) {
+        let firstContent = normalizedMessage.message.content[0];
+        if (!forwardSubagentText && firstContent?.type !== "tool_use" && firstContent?.type !== "tool_result")
+          continue;
+        emitProgress(normalizedMessage, "");
       }
     }
-    B?.();
+    markModelTiming?.();
     let normalizedNew = isApiErrorDisplayMessage(getLastAssistantMessage(agentMessages));
     if (!normalizedNew) {
       adoptSubagentPublishArmsAsync(agentId, toolUseContext);
       if (toolUseContext.spawnedByWorkflowRunId !== undefined) recordInvocation();
     }
-    let fe = unreadableToolsLine(toolsUsedForSummary(agentMessages), toolUseContext.messages);
+    let unreadableToolsNote = unreadableToolsLine(
+      toolsUsedForSummary(agentMessages),
+      toolUseContext.messages,
+    );
     let result =
       withUntrustedPreamble(agentMessages) + extractResultText(agentMessages, "Skill execution completed");
     agentMessages.length = 0;
-    let Se = Date.now() - startTime;
-    logForDebugging(`SkillTool forked skill ${skillName} completed in ${Se}ms`);
+    let elapsedMs = Date.now() - startTime;
+    logForDebugging(`SkillTool forked skill ${skillName} completed in ${elapsedMs}ms`);
     logFeatureOk("skill_invoke");
-    ee = normalizedNew ? "failed" : "completed";
+    outcome = normalizedNew ? "failed" : "completed";
     return {
       data: {
         success: true,
@@ -608,13 +659,13 @@ async function executeForkedSkill(
         status: "forked",
         agentId,
         result,
-        ...(fe !== undefined && {
-          toolsUsedLine: fe,
+        ...(unreadableToolsNote !== undefined && {
+          toolsUsedLine: unreadableToolsNote,
         }),
       },
     };
   } finally {
-    de.remove(ee);
+    taskHandle.remove(outcome);
     clearInvokedSkillsForAgent(agentId);
   }
 }
@@ -622,45 +673,51 @@ async function executeForkedSkill(
 /**
  * Skill 输入 schema（skill 名、args 可选）与输出 schema（inline：allowedTools/model/readOnly；forked：agentId/result/background/toolsUsedLine）。
  */
-var skillInputSchema = DoctorLazy(() =>
-  u({
-    skill: string().describe("The name of a skill from the available-skills list. Do not guess names."),
-    args: string().optional().describe("Optional arguments for the skill"),
-  }),
-);
-var skillOutputSchema = DoctorLazy(() => {
-  let inlineOutputSchema = u({
-    success: M().describe("Whether the skill is valid"),
-    commandName: string().describe("The name of the skill"),
-    allowedTools: array(string()).optional().describe("Tools allowed by this skill"),
-    model: string()
-      .optional()
-      .describe(
-        "Resolved model the skill turn runs on when a frontmatter model override took effect; omitted otherwise",
+var skillInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var skillOutputSchema;
+deferInit("chunk-a5k9jscj.js:10399", () => {
+  skillInputSchema = DoctorLazy(() =>
+    objectSchema({
+      skill: stringSchema().describe(
+        "The name of a skill from the available-skills list. Do not guess names.",
       ),
-    status: literal("inline").optional().describe("Execution status"),
-    readOnly: M()
-      .optional()
-      .describe("True when the skill instructions were loaded read-only (nothing was executed)"),
+      args: stringSchema().optional().describe("Optional arguments for the skill"),
+    }),
+  );
+  skillOutputSchema = DoctorLazy(() => {
+    let inlineOutputSchema = objectSchema({
+      success: booleanSchema().describe("Whether the skill is valid"),
+      commandName: stringSchema().describe("The name of the skill"),
+      allowedTools: array(stringSchema()).optional().describe("Tools allowed by this skill"),
+      model: stringSchema()
+        .optional()
+        .describe(
+          "Resolved model the skill turn runs on when a frontmatter model override took effect; omitted otherwise",
+        ),
+      status: literal("inline").optional().describe("Execution status"),
+      readOnly: booleanSchema()
+        .optional()
+        .describe("True when the skill instructions were loaded read-only (nothing was executed)"),
+    });
+    let forkedOutputSchema = objectSchema({
+      success: booleanSchema().describe("Whether the skill completed successfully"),
+      commandName: stringSchema().describe("The name of the skill"),
+      status: literal("forked").describe("Execution status"),
+      agentId: stringSchema().describe("The ID of the sub-agent that executed the skill"),
+      result: stringSchema().describe("The result from the forked skill execution"),
+      background: booleanSchema()
+        .optional()
+        .describe(
+          "True when the sub-agent was launched in the background: `result` describes the launch, and the skill outcome arrives later as a task notification.",
+        ),
+      toolsUsedLine: stringSchema()
+        .optional()
+        .describe(
+          "The tools-used-before-summary line the tool_result opens with: the tools the sub-agent called that this conversation's requests did not yet name",
+        ),
+    });
+    return union([inlineOutputSchema, forkedOutputSchema]);
   });
-  let forkedOutputSchema = u({
-    success: M().describe("Whether the skill completed successfully"),
-    commandName: string().describe("The name of the skill"),
-    status: literal("forked").describe("Execution status"),
-    agentId: string().describe("The ID of the sub-agent that executed the skill"),
-    result: string().describe("The result from the forked skill execution"),
-    background: M()
-      .optional()
-      .describe(
-        "True when the sub-agent was launched in the background: `result` describes the launch, and the skill outcome arrives later as a task notification.",
-      ),
-    toolsUsedLine: string()
-      .optional()
-      .describe(
-        "The tools-used-before-summary line the tool_result opens with: the tools the sub-agent called that this conversation's requests did not yet name",
-      ),
-  });
-  return union([inlineOutputSchema, forkedOutputSchema]);
 });
 //@ chunk-a5k9jscj.js:11777-11888 layout
 function makeSkillCommandSource(toolUseContext) {
@@ -697,16 +754,16 @@ async function runSkillInvocation({
     let commands = await getSkillToolCommandList(makeSkillCommandSource(toolUseContext));
     let resolution = resolveSkillName(skillName, commands, toolUseContext);
     if (resolution.kind === "ambiguous") {
-      let B = resolution.candidates.every((candidate) => isNonEmptyIdentifier(candidate.name))
+      let candidateNames = resolution.candidates.every((candidate) => isNonEmptyIdentifier(candidate.name))
         ? `: ${resolution.candidates.map((candidate) => candidate.name).join(", ")}`
         : "";
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Skill ${skillName} now matches several skills${B} \u2014 invoke one by its full name.`,
+        `Skill ${skillName} now matches several skills${candidateNames} \u2014 invoke one by its full name.`,
         "Skill tool: bare name ambiguous at dispatch",
       );
     }
     let command = resolution.command;
-    let Z = null;
+    let skillCommand = null;
     if (command) toolUseContext.options.activeSkill = getBareCommandName(command);
     if (!isReadOnlyLoad) {
       recordSkillInvoked(
@@ -722,15 +779,15 @@ async function runSkillInvocation({
       getCommandContextMode(command, args || "", toolUseContext) === "fork" &&
       !isReadOnlyLoad
     ) {
-      let B =
+      let pluginHoldReason =
         toolUseContext.hookCaller !== undefined &&
         !toolUseContext.hookServesModel &&
         toolUseContext.agentId === undefined
           ? pluginInputHoldReason()
           : undefined;
-      if (B !== undefined)
+      if (pluginHoldReason !== undefined)
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `Skill "${skillName}" was not run: ${B}.`,
+          `Skill "${skillName}" was not run: ${pluginHoldReason}.`,
           "A forked skill was not run: a hold on plugins' input stands",
         );
       try {
@@ -751,9 +808,9 @@ async function runSkillInvocation({
     }
     let invokedSkillKey = `${toolUseContext.agentId ?? ""}:${command?.name ?? skillName}`;
     let priorInvocation = getInvokedSkills().get(invokedSkillKey);
-    let { processPromptSlashCommand } = await import("./chunk-jghdfw5c.js");
+    let { processPromptSlashCommand } = await import("../../utils/processUserInput/processSlashCommand.js");
     let skillToolUseId = toolUseContext.toolUseId ?? findToolUseIdByName(parentMessage, SKILL);
-    let W =
+    let wasHandedOff =
       skillToolUseId !== undefined && handedOffIds(parentMessage.handedOffLive)?.has(skillToolUseId) === true;
     let processed = await processPromptSlashCommand(
       skillName,
@@ -761,7 +818,7 @@ async function runSkillInvocation({
       commands,
       toolUseContext,
       isReadOnlyLoad,
-      W,
+      wasHandedOff,
     );
     if (!processed.shouldQuery) {
       logFeatureBad("skill_invoke", "skill_invoke_process_failed");
@@ -835,8 +892,8 @@ async function runSkillInvocation({
       }
       return true;
     });
-    let le = isReadOnlyLoad
-      ? (filtered.map(metaMessageText).find((B) => B !== null) ?? undefined)
+    let readOnlyText = isReadOnlyLoad
+      ? (filtered.map(metaMessageText).find((text) => text !== null) ?? undefined)
       : undefined;
     let newMessages = tagMessagesWithToolUseID(
       dedupeRenderedSkillContent({
@@ -844,8 +901,8 @@ async function runSkillInvocation({
         contextMessages: toolUseContext.messages,
         commandName: skillName,
         args,
-        priorContent: priorInvocation?.content ?? le,
-        renderedContent: getInvokedSkills().get(invokedSkillKey)?.content ?? le,
+        priorContent: priorInvocation?.content ?? readOnlyText,
+        renderedContent: getInvokedSkills().get(invokedSkillKey)?.content ?? readOnlyText,
       }),
       skillToolUseId,
     );
@@ -901,455 +958,515 @@ async function runSkillInvocation({
 /**
  * Skill 工具定义（name "Skill"，backgrounding never，maxResultSizeChars 100000；isEnabled 为 !Wb()）。validateInput：去前导 /，解析命令（可能需要从远端物化或加载定义），拒绝 MCP 来源 skill、被同步否决或主机目录隐藏的 skill，未找到时给出近似名/目录作用域变体/插件加载错误提示，拒绝在自己 fork 的上下文里递归调用，并用 jKe 检查 disable-model-invocation、未加白名单等。checkPermissions：Skill deny 规则 → MCP skill 拒绝 → ask 规则 → allow 规则（含插件边界 held-back 情况）→ 只含安全属性的 prompt skill 或协调者只读加载直接允许 → 否则询问并建议加 Skill(name) 或 Skill(name:*) 规则。call 通过 runEngine 执行 runSkillInvocation。
  */
-var SkillTool = buildTool({
-  name: SKILL,
-  searchHint: "invoke a slash-command skill",
-  isEnabled() {
-    return !getDisableSlashCommands();
-  },
-  backgrounding: "never",
-  maxResultSizeChars: 1e5,
-  get preserveToolUseResultInSubagents() {
-    return isSillyShoreGateOn();
-  },
-  get inputSchema() {
-    return skillInputSchema();
-  },
-  get outputSchema() {
-    return skillOutputSchema();
-  },
-  description: async ({ skill }) => `Execute skill: ${skill}`,
-  prompt: async ({ model, leanRewrite }) =>
-    getSkillToolPrompt({
-      model,
-      leanRewrite,
-    }),
-  toAutoClassifierInput: ({ skill }) => skill ?? "",
-  create(e) {
-    let toolContext = e;
-    return {
-      async validateInput({ skill }, { signal, toolUseId }) {
-        let trimmed = skill.trim();
-        if (!trimmed) {
-          logFeatureBad("skill_invoke", "skill_invoke_empty_name");
-          return {
-            result: false,
-            message: `Invalid skill format: ${skill}`,
-            errorCode: 1,
-          };
-        }
-        let v = trimmed.startsWith("/");
-        if (v) logEvent("tengu_skill_tool_slash_prefix", {});
-        let skillName = v ? trimmed.substring(1) : trimmed;
-        let downloadFailure;
-        let isWithheld = false;
-        let commands = await getSkillToolCommandList(toolContext);
-        let resolution = resolveSkillName(skillName, commands, toolContext);
-        let command = resolution.command;
-        let unprefixedName = stripSyncedSkillPrefix(skillName);
-        if (
-          isSkillsSyncActive(toolContext.session) &&
-          (!command || isSyncedSkillPlaceholder(command)) &&
-          (command !== undefined || hasPendingSkillDownload(unprefixedName))
-        ) {
-          let P = await raceWithAbortSignal(
-            startPendingDownload(unprefixedName),
-            signal,
-            () => new AbortError(INTERRUPT_MESSAGE_FOR_TOOL_USE),
-          );
-          if (!P.ok) {
-            downloadFailure = P.reason;
-            isWithheld = P.withheld === true;
-          } else {
-            commands = await getSkillToolCommandList(toolContext);
-            resolution = resolveSkillName(skillName, commands, toolContext);
-            command = resolution.command;
-          }
-        }
-        let z = resolution.kind === "listingName" ? resolution.listed : command;
-        if (z?.type === "prompt" && z.loadDefinition !== undefined) {
-          await raceWithAbortSignal(
-            z.loadDefinition(),
-            signal,
-            () => new AbortError(INTERRUPT_MESSAGE_FOR_TOOL_USE),
-          );
-          commands = await getSkillToolCommandList(toolContext);
-          resolution = resolveSkillName(skillName, commands, toolContext);
-          let P =
-            resolution.kind === "none" && z.directoryListingName !== undefined
-              ? resolveSkillName(z.directoryListingName, commands, toolContext)
-              : resolution;
-          if (P.kind === "listingName") resolution = P;
-          command = resolution.command;
-        }
-        if (command?.type === "prompt" && command.loadedFrom === "mcp")
-          return {
-            result: false,
-            message: `Unknown skill: ${skillName}`,
-            errorCode: 2,
-          };
-        if (downloadFailure !== undefined && (!command || isSyncedSkillPlaceholder(command))) {
-          logFeatureBad(
-            "skill_invoke",
-            isWithheld ? "skill_invoke_withheld" : "skill_invoke_not_materialized",
-          );
-          return {
-            result: false,
-            message: isWithheld
-              ? `${skillSwitchedOffText(skillName)} Proceed without it.`
-              : `Skill ${skillName} could not be downloaded (${downloadFailure}). Proceed without it.`,
-            errorCode: 10,
-          };
-        }
-        let te = null;
-        if (command && syncedSkillRefusalReason(command)) {
-          logFeatureBad(
-            "skill_invoke",
-            isHostCatalogSkill(command) ? "skill_invoke_host_catalog_withheld" : "skill_invoke_sync_vetoed",
-          );
-          return {
-            result: false,
-            message: `Unknown skill: ${skillName}`,
-            errorCode: 13,
-          };
-        }
-        if (!command) {
-          let P = matchingSkillVariants(commands, skillName, toolContext.spawnedBySkill);
-          if (P.length > 0) {
-            let y =
-              resolution.kind === "ambiguous"
-                ? resolution.candidates.filter(
-                    (candidate) =>
-                      !matchesUnqualifiedName(candidate, skillName) && isNonEmptyIdentifier(candidate.name),
-                  )
-                : [];
-            if (resolution.kind === "ambiguous")
-              logEvent("tengu_skill_tool_suffix_match", {
-                candidate_count: resolution.candidates.length,
-              });
-            logFeatureBad("skill_invoke", "skill_invoke_not_found");
+var SkillTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+var SAFE_SKILL_PROPERTIES;
+deferInit("chunk-a5k9jscj.js:15630", () => {
+  SkillTool = buildTool({
+    name: SKILL,
+    searchHint: "invoke a slash-command skill",
+    isEnabled() {
+      return !getDisableSlashCommands();
+    },
+    backgrounding: "never",
+    maxResultSizeChars: 1e5,
+    get preserveToolUseResultInSubagents() {
+      return isSillyShoreGateOn();
+    },
+    get inputSchema() {
+      return skillInputSchema();
+    },
+    get outputSchema() {
+      return skillOutputSchema();
+    },
+    description: async ({ skill }) => `Execute skill: ${skill}`,
+    prompt: async ({ model, leanRewrite }) =>
+      getSkillToolPrompt({
+        model,
+        leanRewrite,
+      }),
+    toAutoClassifierInput: ({ skill }) => skill ?? "",
+    create(toolCtx) {
+      let toolContext = toolCtx;
+      return {
+        async validateInput({ skill }, { signal, toolUseId }) {
+          let trimmed = skill.trim();
+          if (!trimmed) {
+            logFeatureBad("skill_invoke", "skill_invoke_empty_name");
             return {
               result: false,
-              message:
-                y.length > 0
-                  ? `Unknown skill: ${skillName}. Several skills match that name: ${[...y, ...P].map((E) => E.name).join(", ")} \u2014 invoke one by its full name; the directory-scoped variants apply to the files under their directory.`
-                  : `Unknown skill: ${skillName}. Directory-scoped variants exist: ${P.map((E) => E.name).join(", ")} \u2014 invoke the variant whose directory contains the files you are working on.`,
-              errorCode: 2,
+              message: `Invalid skill format: ${skill}`,
+              errorCode: 1,
             };
           }
-          if (resolution.kind === "listingName") {
-            let { listed } = resolution;
-            let E = toolContext.agentId === undefined;
-            if (
-              listSkillCommands(commands, E).includes(listed) &&
-              isNonEmptyIdentifier(listed.name) &&
-              !isSelfForkedSkill(listed, toolContext) &&
-              checkSkillPermission(listed, {
-                commandName: listed.name,
-                userTypedThisTurn: false,
-                isMainSession: E,
-                permissionContext: toolContext.permissions(),
-              }) === null
-            ) {
-              logFeatureBad("skill_invoke", "skill_invoke_not_found");
-              return {
-                result: false,
-                message: `Unknown skill: ${skillName}. Did you mean ${listed.name}? Invoke it by that full name.`,
-                errorCode: 2,
-              };
-            }
-          }
-          if (resolution.kind === "suggestion") {
-            logEvent("tengu_skill_tool_suffix_match", {
-              candidate_count: 1,
-            });
-            if (isNonEmptyIdentifier(resolution.suggestion.name)) {
-              logFeatureBad("skill_invoke", "skill_invoke_not_found");
-              return {
-                result: false,
-                message: `Unknown skill: ${skillName}. Did you mean ${resolution.suggestion.name}? Invoke it by that full name.`,
-                errorCode: 2,
-              };
-            }
-          }
-          if (resolution.kind === "ambiguous") {
-            logEvent("tengu_skill_tool_suffix_match", {
-              candidate_count: resolution.candidates.length,
-            });
-            let filtered = resolution.candidates.filter(
-              (candidate) => !matchesUnqualifiedName(candidate, skillName),
+          let hadSlashPrefix = trimmed.startsWith("/");
+          if (hadSlashPrefix) logEvent("tengu_skill_tool_slash_prefix", {});
+          let skillName = hadSlashPrefix ? trimmed.substring(1) : trimmed;
+          let downloadFailure;
+          let isWithheld = false;
+          let commands = await getSkillToolCommandList(toolContext);
+          let resolution = resolveSkillName(skillName, commands, toolContext);
+          let command = resolution.command;
+          let unprefixedName = stripSyncedSkillPrefix(skillName);
+          if (
+            isSkillsSyncActive(toolContext.session) &&
+            (!command || isSyncedSkillPlaceholder(command)) &&
+            (command !== undefined || hasPendingSkillDownload(unprefixedName))
+          ) {
+            let downloadResult = await raceWithAbortSignal(
+              startPendingDownload(unprefixedName),
+              signal,
+              () => new AbortError(INTERRUPT_MESSAGE_FOR_TOOL_USE),
             );
-            let E = filtered.length === 1 ? filtered[0] : undefined;
-            if (filtered.length > 0 && filtered.every((R) => isNonEmptyIdentifier(R.name))) {
+            if (!downloadResult.ok) {
+              downloadFailure = downloadResult.reason;
+              isWithheld = downloadResult.withheld === true;
+            } else {
+              commands = await getSkillToolCommandList(toolContext);
+              resolution = resolveSkillName(skillName, commands, toolContext);
+              command = resolution.command;
+            }
+          }
+          let listedCommand = resolution.kind === "listingName" ? resolution.listed : command;
+          if (listedCommand?.type === "prompt" && listedCommand.loadDefinition !== undefined) {
+            await raceWithAbortSignal(
+              listedCommand.loadDefinition(),
+              signal,
+              () => new AbortError(INTERRUPT_MESSAGE_FOR_TOOL_USE),
+            );
+            commands = await getSkillToolCommandList(toolContext);
+            resolution = resolveSkillName(skillName, commands, toolContext);
+            let retryResolution =
+              resolution.kind === "none" && listedCommand.directoryListingName !== undefined
+                ? resolveSkillName(listedCommand.directoryListingName, commands, toolContext)
+                : resolution;
+            if (retryResolution.kind === "listingName") resolution = retryResolution;
+            command = resolution.command;
+          }
+          if (command?.type === "prompt" && command.loadedFrom === "mcp")
+            return {
+              result: false,
+              message: `Unknown skill: ${skillName}`,
+              errorCode: 2,
+            };
+          if (downloadFailure !== undefined && (!command || isSyncedSkillPlaceholder(command))) {
+            logFeatureBad(
+              "skill_invoke",
+              isWithheld ? "skill_invoke_withheld" : "skill_invoke_not_materialized",
+            );
+            return {
+              result: false,
+              message: isWithheld
+                ? `${skillSwitchedOffText(skillName)} Proceed without it.`
+                : `Skill ${skillName} could not be downloaded (${downloadFailure}). Proceed without it.`,
+              errorCode: 10,
+            };
+          }
+          let refusal = null;
+          if (command && syncedSkillRefusalReason(command)) {
+            logFeatureBad(
+              "skill_invoke",
+              isHostCatalogSkill(command) ? "skill_invoke_host_catalog_withheld" : "skill_invoke_sync_vetoed",
+            );
+            return {
+              result: false,
+              message: `Unknown skill: ${skillName}`,
+              errorCode: 13,
+            };
+          }
+          if (!command) {
+            let variants = matchingSkillVariants(commands, skillName, toolContext.spawnedBySkill);
+            if (variants.length > 0) {
+              let ambiguityCandidates =
+                resolution.kind === "ambiguous"
+                  ? resolution.candidates.filter(
+                      (candidate) =>
+                        !matchesUnqualifiedName(candidate, skillName) && isNonEmptyIdentifier(candidate.name),
+                    )
+                  : [];
+              if (resolution.kind === "ambiguous")
+                logEvent("tengu_skill_tool_suffix_match", {
+                  candidate_count: resolution.candidates.length,
+                });
               logFeatureBad("skill_invoke", "skill_invoke_not_found");
               return {
                 result: false,
                 message:
-                  E !== undefined
-                    ? `Unknown skill: ${skillName}. Did you mean ${E.name}? Invoke it by that full name.`
-                    : `Unknown skill: ${skillName}. Several skills match that name: ${filtered.map((R) => R.name).join(", ")} \u2014 invoke one by its full name.`,
+                  ambiguityCandidates.length > 0
+                    ? `Unknown skill: ${skillName}. Several skills match that name: ${[...ambiguityCandidates, ...variants].map((candidate) => candidate.name).join(", ")} \u2014 invoke one by its full name; the directory-scoped variants apply to the files under their directory.`
+                    : `Unknown skill: ${skillName}. Directory-scoped variants exist: ${variants.map((variant) => variant.name).join(", ")} \u2014 invoke the variant whose directory contains the files you are working on.`,
                 errorCode: 2,
               };
             }
-          }
-          let V = suggestClosestName(
-            skillName,
-            commands.map((command) => ({
-              name: getCommandName(command),
-              aliases: command.aliases,
-            })),
-            {
-              maxEditDistance: 2,
-            },
-          );
-          let N = toolContext.agentId === undefined;
-          let W =
-            V === undefined && unprefixedName !== skillName
-              ? listSkillCommands(commands, N).find(
-                  (y) => y.name === unprefixedName && isProjectScopedCommand(y),
-                )
-              : undefined;
-          let x =
-            W !== undefined &&
-            isNonEmptyIdentifier(unprefixedName) &&
-            !usesReservedSkillNamespace(unprefixedName) &&
-            !isSelfForkedSkill(W, toolContext) &&
-            checkSkillPermission(W, {
-              commandName: unprefixedName,
-              userTypedThisTurn: false,
-              isMainSession: N,
-              permissionContext: toolContext.permissions(),
-            }) === null;
-          if (x) logEvent("tengu_skill_tool_unprefixed_match", {});
-          let suggestedName = V ?? (x ? unprefixedName : undefined);
-          logFeatureBad("skill_invoke", "skill_invoke_not_found");
-          let O = await isPluginLoadCacheOnly()?.catch(() => {
-            return;
-          });
-          let j = O && pluginLoadFailureNote(skillName, O.errors, new Set(O.enabled.map((y) => y.name)));
-          let q = suggestedName
-            ? `Unknown skill: ${skillName}. Did you mean ${suggestedName}?`
-            : `Unknown skill: ${skillName}`;
-          return {
-            result: false,
-            message: j ? `${q}${suggestedName ? "" : "."} ${j}` : q,
-            errorCode: 2,
-          };
-        }
-        if (isSelfForkedSkill(command, toolContext)) {
-          logFeatureBad("skill_invoke", "skill_invoke_fork_recursion");
-          logEvent("tengu_skill_tool_fork_recursion_blocked", {});
-          return {
-            result: false,
-            message: `Skill ${skillName} is already executing in this forked context \u2014 you are the subagent running it. Execute the instructions in the skill body directly instead of re-invoking the ${SKILL} tool.`,
-            errorCode: 9,
-          };
-        }
-        let Z = await isYieldedSkillTarget(skillName, command, commands, toolContext.storageV5);
-        let invocationBlock = checkSkillPermission(command, {
-          commandName: Z ? skillName : command.name,
-          userTypedThisTurn:
-            !isCoordinatorMainThread(toolContext) &&
-            userTypedSkillThisTurn(skillName, {
-              agentId: toolContext.agentId,
-              messages: toolContext.messages(),
-              turnStartIndex: toolContext.turnStartIndex,
-            }) &&
-            Z,
-          isMainSession: toolContext.agentId === undefined,
-          permissionContext: undefined,
-        });
-        if (invocationBlock !== null) {
-          switch (invocationBlock.reason) {
-            case "disable_model_invocation": {
-              let { sanitizedName, skillNameHash } = sanitizeSkillNameForTelemetry({
-                rawName: skillName,
-                canonicalName: command.name,
-                isMcp: command.loadedFrom === "mcp",
-                isBuiltIn: builtInCommandNames().has(skillName),
-                isBundled: command.type === "prompt" && command.source === "bundled",
-                isOfficial: command.type === "prompt" && isOfficialMarketplaceSkill(command),
-              });
-              logFeatureBad("skill_invoke", "skill_invoke_model_disabled", {
-                command_name: sanitizedName,
-                ...skillNameHash,
-              });
-              break;
+            if (resolution.kind === "listingName") {
+              let { listed } = resolution;
+              let isMainSession = toolContext.agentId === undefined;
+              if (
+                listSkillCommands(commands, isMainSession).includes(listed) &&
+                isNonEmptyIdentifier(listed.name) &&
+                !isSelfForkedSkill(listed, toolContext) &&
+                checkSkillPermission(listed, {
+                  commandName: listed.name,
+                  userTypedThisTurn: false,
+                  isMainSession,
+                  permissionContext: toolContext.permissions(),
+                }) === null
+              ) {
+                logFeatureBad("skill_invoke", "skill_invoke_not_found");
+                return {
+                  result: false,
+                  message: `Unknown skill: ${skillName}. Did you mean ${listed.name}? Invoke it by that full name.`,
+                  errorCode: 2,
+                };
+              }
             }
-            case "not_loaded":
-              logFeatureBad("skill_invoke", "skill_invoke_not_materialized");
-              break;
-            case "not_allowlisted":
-              logFeatureBad("skill_invoke", "skill_invoke_not_allowlisted");
-              break;
-            case "override_disabled":
-              logFeatureBad(
-                "skill_invoke",
-                invocationBlock.hiddenBehindPlugin
-                  ? "skill_invoke_hidden_behind_plugin"
-                  : invocationBlock.killSwitchOnly
-                    ? "skill_invoke_bundled_skills_disabled"
-                    : "skill_invoke_override_disabled",
+            if (resolution.kind === "suggestion") {
+              logEvent("tengu_skill_tool_suffix_match", {
+                candidate_count: 1,
+              });
+              if (isNonEmptyIdentifier(resolution.suggestion.name)) {
+                logFeatureBad("skill_invoke", "skill_invoke_not_found");
+                return {
+                  result: false,
+                  message: `Unknown skill: ${skillName}. Did you mean ${resolution.suggestion.name}? Invoke it by that full name.`,
+                  errorCode: 2,
+                };
+              }
+            }
+            if (resolution.kind === "ambiguous") {
+              logEvent("tengu_skill_tool_suffix_match", {
+                candidate_count: resolution.candidates.length,
+              });
+              let filtered = resolution.candidates.filter(
+                (candidate) => !matchesUnqualifiedName(candidate, skillName),
               );
-              break;
-            case "not_prompt_type":
-              logFeatureBad("skill_invoke", "skill_invoke_not_prompt_type");
-              break;
-            case "mcp_prompt":
-              break;
-            case "deny_rule":
-              break;
+              let suggestion = filtered.length === 1 ? filtered[0] : undefined;
+              if (
+                filtered.length > 0 &&
+                filtered.every((candidate) => isNonEmptyIdentifier(candidate.name))
+              ) {
+                logFeatureBad("skill_invoke", "skill_invoke_not_found");
+                return {
+                  result: false,
+                  message:
+                    suggestion !== undefined
+                      ? `Unknown skill: ${skillName}. Did you mean ${suggestion.name}? Invoke it by that full name.`
+                      : `Unknown skill: ${skillName}. Several skills match that name: ${filtered.map((candidate) => candidate.name).join(", ")} \u2014 invoke one by its full name.`,
+                  errorCode: 2,
+                };
+              }
+            }
+            let closest = suggestClosestName(
+              skillName,
+              commands.map((command) => ({
+                name: getCommandName(command),
+                aliases: command.aliases,
+              })),
+              {
+                maxEditDistance: 2,
+              },
+            );
+            let isMainAgent = toolContext.agentId === undefined;
+            let unprefixedDiffers =
+              closest === undefined && unprefixedName !== skillName
+                ? listSkillCommands(commands, isMainAgent).find(
+                    (command) => command.name === unprefixedName && isProjectScopedCommand(command),
+                  )
+                : undefined;
+            let unprefixedUsable =
+              unprefixedDiffers !== undefined &&
+              isNonEmptyIdentifier(unprefixedName) &&
+              !usesReservedSkillNamespace(unprefixedName) &&
+              !isSelfForkedSkill(unprefixedDiffers, toolContext) &&
+              checkSkillPermission(unprefixedDiffers, {
+                commandName: unprefixedName,
+                userTypedThisTurn: false,
+                isMainSession: isMainAgent,
+                permissionContext: toolContext.permissions(),
+              }) === null;
+            if (unprefixedUsable) logEvent("tengu_skill_tool_unprefixed_match", {});
+            let suggestedName = closest ?? (unprefixedUsable ? unprefixedName : undefined);
+            logFeatureBad("skill_invoke", "skill_invoke_not_found");
+            let pluginLoadResult = await isPluginLoadCacheOnly()?.catch(() => {
+              return;
+            });
+            let pluginNote =
+              pluginLoadResult &&
+              pluginLoadFailureNote(
+                skillName,
+                pluginLoadResult.errors,
+                new Set(pluginLoadResult.enabled.map((plugin) => plugin.name)),
+              );
+            let baseMessage = suggestedName
+              ? `Unknown skill: ${skillName}. Did you mean ${suggestedName}?`
+              : `Unknown skill: ${skillName}`;
+            return {
+              result: false,
+              message: pluginNote ? `${baseMessage}${suggestedName ? "" : "."} ${pluginNote}` : baseMessage,
+              errorCode: 2,
+            };
+          }
+          if (isSelfForkedSkill(command, toolContext)) {
+            logFeatureBad("skill_invoke", "skill_invoke_fork_recursion");
+            logEvent("tengu_skill_tool_fork_recursion_blocked", {});
+            return {
+              result: false,
+              message: `Skill ${skillName} is already executing in this forked context \u2014 you are the subagent running it. Execute the instructions in the skill body directly instead of re-invoking the ${SKILL} tool.`,
+              errorCode: 9,
+            };
+          }
+          let yieldedTarget = await isYieldedSkillTarget(skillName, command, commands, toolContext.storageV5);
+          let invocationBlock = checkSkillPermission(command, {
+            commandName: yieldedTarget ? skillName : command.name,
+            userTypedThisTurn:
+              !isCoordinatorMainThread(toolContext) &&
+              userTypedSkillThisTurn(skillName, {
+                agentId: toolContext.agentId,
+                messages: toolContext.messages(),
+                turnStartIndex: toolContext.turnStartIndex,
+              }) &&
+              yieldedTarget,
+            isMainSession: toolContext.agentId === undefined,
+            permissionContext: undefined,
+          });
+          if (invocationBlock !== null) {
+            switch (invocationBlock.reason) {
+              case "disable_model_invocation": {
+                let { sanitizedName, skillNameHash } = sanitizeSkillNameForTelemetry({
+                  rawName: skillName,
+                  canonicalName: command.name,
+                  isMcp: command.loadedFrom === "mcp",
+                  isBuiltIn: builtInCommandNames().has(skillName),
+                  isBundled: command.type === "prompt" && command.source === "bundled",
+                  isOfficial: command.type === "prompt" && isOfficialMarketplaceSkill(command),
+                });
+                logFeatureBad("skill_invoke", "skill_invoke_model_disabled", {
+                  command_name: sanitizedName,
+                  ...skillNameHash,
+                });
+                break;
+              }
+              case "not_loaded":
+                logFeatureBad("skill_invoke", "skill_invoke_not_materialized");
+                break;
+              case "not_allowlisted":
+                logFeatureBad("skill_invoke", "skill_invoke_not_allowlisted");
+                break;
+              case "override_disabled":
+                logFeatureBad(
+                  "skill_invoke",
+                  invocationBlock.hiddenBehindPlugin
+                    ? "skill_invoke_hidden_behind_plugin"
+                    : invocationBlock.killSwitchOnly
+                      ? "skill_invoke_bundled_skills_disabled"
+                      : "skill_invoke_override_disabled",
+                );
+                break;
+              case "not_prompt_type":
+                logFeatureBad("skill_invoke", "skill_invoke_not_prompt_type");
+                break;
+              case "mcp_prompt":
+                break;
+              case "deny_rule":
+                break;
+            }
+            return {
+              result: false,
+              message: invocationBlock.message,
+              errorCode: invocationBlock.errorCode,
+            };
           }
           return {
-            result: false,
-            message: invocationBlock.message,
-            errorCode: invocationBlock.errorCode,
+            result: true,
           };
-        }
-        return {
-          result: true,
-        };
-      },
-      async checkPermissions(s, i) {
-        let { skill, args } = s;
-        let trimmed = skill.trim();
-        let skillName = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
-        let h = toolContext.permissions();
-        let skillToolCommandList = await getSkillToolCommandList(toolContext);
-        let resolution = resolveSkillName(skillName, skillToolCommandList, toolContext);
-        let command = resolution.command;
-        let w = resolution.kind === "ambiguous" ? resolution.candidates : [command];
-        let L = command?.type === "prompt" && command.loadedFrom === "mcp" ? command : undefined;
-        let z = L?.mcpSkillEntry?.();
-        let S = undefined;
-        let te = undefined;
-        let contentRulesMapForTool = getContentRulesMapForTool(h, SkillTool, "deny");
-        for (let [y, E] of contentRulesMapForTool.entries())
-          if (
-            (y.startsWith("/") ? y.substring(1) : y) === undefined ||
-            w.some((R) => matchesSkillRule(y, skillName, R))
-          )
-            return {
-              behavior: "deny",
-              message: "Skill execution blocked by permission rules",
-              decisionReason: {
-                type: "rule",
-                rule: E,
-              },
-            };
-        if (L !== undefined)
-          return {
-            behavior: "deny",
-            message: `Unknown skill: ${skillName}`,
-            decisionReason: {
-              type: "other",
-              reason: `Unknown skill: ${skillName}`,
-            },
-          };
-        let D = () =>
-          isPlaidHarborOn() &&
-          usesReservedSkillNamespace(skillName) &&
-          !(command !== undefined && isSyncedOrManagedSkill(command));
-        let contentRulesMapForTool_2 = getContentRulesMapForTool(h, SkillTool, "ask");
-        if (contentRulesMapForTool_2.size > 0 && areSkillsConvertedAsPlugins()) {
-          for (let [y, E] of contentRulesMapForTool_2.entries())
-            if (w.some((R) => skillAllowedByRules(y, skillName, R)))
+        },
+        async checkPermissions(input, callOptions) {
+          let { skill, args } = input;
+          let trimmed = skill.trim();
+          let skillName = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
+          let permissions = toolContext.permissions();
+          let skillToolCommandList = await getSkillToolCommandList(toolContext);
+          let resolution = resolveSkillName(skillName, skillToolCommandList, toolContext);
+          let command = resolution.command;
+          let candidateCommands = resolution.kind === "ambiguous" ? resolution.candidates : [command];
+          let mcpCommand = command?.type === "prompt" && command.loadedFrom === "mcp" ? command : undefined;
+          let mcpSkillEntry = mcpCommand?.mcpSkillEntry?.();
+          let unused = undefined;
+          let unusedOther = undefined;
+          let contentRulesMapForTool = getContentRulesMapForTool(permissions, SkillTool, "deny");
+          for (let [rulePattern, rule] of contentRulesMapForTool.entries())
+            if (
+              (rulePattern.startsWith("/") ? rulePattern.substring(1) : rulePattern) === undefined ||
+              candidateCommands.some((command) => matchesSkillRule(rulePattern, skillName, command))
+            )
               return {
-                behavior: "ask",
-                message: `Execute skill: ${skillName}`,
+                behavior: "deny",
+                message: "Skill execution blocked by permission rules",
                 decisionReason: {
                   type: "rule",
-                  rule: E,
+                  rule,
                 },
-                ...(D() && {
-                  suppressAlwaysAllowRule: true,
-                }),
+              };
+          if (mcpCommand !== undefined)
+            return {
+              behavior: "deny",
+              message: `Unknown skill: ${skillName}`,
+              decisionReason: {
+                type: "other",
+                reason: `Unknown skill: ${skillName}`,
+              },
+            };
+          let isReservedNamespace = () =>
+            isPlaidHarborOn() &&
+            usesReservedSkillNamespace(skillName) &&
+            !(command !== undefined && isSyncedOrManagedSkill(command));
+          let contentRulesMapForTool_2 = getContentRulesMapForTool(permissions, SkillTool, "ask");
+          if (contentRulesMapForTool_2.size > 0 && areSkillsConvertedAsPlugins()) {
+            for (let [rulePattern, rule] of contentRulesMapForTool_2.entries())
+              if (candidateCommands.some((command) => skillAllowedByRules(rulePattern, skillName, command)))
+                return {
+                  behavior: "ask",
+                  message: `Execute skill: ${skillName}`,
+                  decisionReason: {
+                    type: "rule",
+                    rule,
+                  },
+                  ...(isReservedNamespace() && {
+                    suppressAlwaysAllowRule: true,
+                  }),
+                  updatedInput: {
+                    skill,
+                    args,
+                  },
+                  metadata: command
+                    ? {
+                        command,
+                      }
+                    : undefined,
+                };
+          }
+          let contentRulesMapForTool_3 = getContentRulesMapForTool(permissions, SkillTool, "allow");
+          let heldBackAllowRule;
+          for (let [rulePattern, rule] of contentRulesMapForTool_3.entries()) {
+            let reservedMatch = reservedSkillRuleMatch(rulePattern, skillName, command);
+            if (reservedMatch === "allow")
+              return {
+                behavior: "allow",
                 updatedInput: {
                   skill,
                   args,
                 },
-                metadata: command
-                  ? {
-                      command,
-                    }
-                  : undefined,
+                decisionReason: {
+                  type: "rule",
+                  rule,
+                },
               };
-        }
-        let contentRulesMapForTool_3 = getContentRulesMapForTool(h, SkillTool, "allow");
-        let heldBackAllowRule;
-        for (let [y, E] of contentRulesMapForTool_3.entries()) {
-          let R = reservedSkillRuleMatch(y, skillName, command);
-          if (R === "allow")
+            if (reservedMatch === "held-back-nonholder")
+              heldBackAllowRule = {
+                rule: rulePattern,
+                kind: "nonholder",
+              };
+            else if (reservedMatch === "held-back-boundary")
+              heldBackAllowRule ??= {
+                rule: rulePattern,
+                kind: "boundary",
+              };
+          }
+          if (
+            command?.type === "prompt" &&
+            (skillHasOnlySafeProperties(command) || isCoordinatorMainThread(toolContext))
+          )
             return {
               behavior: "allow",
               updatedInput: {
                 skill,
                 args,
               },
-              decisionReason: {
-                type: "rule",
-                rule: E,
+              decisionReason: undefined,
+            };
+          let pluginName =
+            command?.type === "prompt" && command.source === "plugin"
+              ? command.pluginInfo?.pluginManifest.name
+              : undefined;
+          let suppressAlwaysAllow = isReservedNamespace();
+          let heldBackKind =
+            heldBackAllowRule === undefined
+              ? undefined
+              : suppressAlwaysAllow
+                ? "nonholder"
+                : heldBackAllowRule.kind;
+          if (
+            heldBackKind !== undefined &&
+            permissions.mode !== "bypassPermissions" &&
+            toolAlwaysAllowedRule(permissions, SkillTool) === null
+          )
+            logReservedRuleHeldBack(heldBackKind);
+          let heldBackScope =
+            heldBackAllowRule === undefined || heldBackKind === undefined
+              ? undefined
+              : describeSyncedSkillRuleScope(
+                  heldBackAllowRule.rule,
+                  command?.name ?? skillName,
+                  heldBackKind === "nonholder"
+                    ? {
+                        kind: "nonholder",
+                        pluginName,
+                      }
+                    : {
+                        kind: "boundary",
+                      },
+                );
+          let decisionReason =
+            heldBackScope === undefined
+              ? undefined
+              : {
+                  type: "other",
+                  reason: heldBackScope,
+                };
+          if (suppressAlwaysAllow)
+            return {
+              behavior: "ask",
+              message: `Execute skill: ${skillName}${heldBackScope ? ` \u2014 ${heldBackScope}` : ""}`,
+              decisionReason,
+              suppressAlwaysAllowRule: true,
+              updatedInput: {
+                skill,
+                args,
               },
+              metadata: command
+                ? {
+                    command,
+                  }
+                : undefined,
             };
-          if (R === "held-back-nonholder")
-            heldBackAllowRule = {
-              rule: y,
-              kind: "nonholder",
-            };
-          else if (R === "held-back-boundary")
-            heldBackAllowRule ??= {
-              rule: y,
-              kind: "boundary",
-            };
-        }
-        if (
-          command?.type === "prompt" &&
-          (skillHasOnlySafeProperties(command) || isCoordinatorMainThread(toolContext))
-        )
-          return {
-            behavior: "allow",
-            updatedInput: {
-              skill,
-              args,
+          let suggestions = [
+            {
+              type: "addRules",
+              rules: [
+                {
+                  toolName: SKILL,
+                  ruleContent: skillName,
+                },
+              ],
+              behavior: "allow",
+              destination: "localSettings",
             },
-            decisionReason: undefined,
-          };
-        let pluginName =
-          command?.type === "prompt" && command.source === "plugin"
-            ? command.pluginInfo?.pluginManifest.name
-            : undefined;
-        let x = D();
-        let U = heldBackAllowRule === undefined ? undefined : x ? "nonholder" : heldBackAllowRule.kind;
-        if (U !== undefined && h.mode !== "bypassPermissions" && toolAlwaysAllowedRule(h, SkillTool) === null)
-          logReservedRuleHeldBack(U);
-        let O =
-          heldBackAllowRule === undefined || U === undefined
-            ? undefined
-            : describeSyncedSkillRuleScope(
-                heldBackAllowRule.rule,
-                command?.name ?? skillName,
-                U === "nonholder"
-                  ? {
-                      kind: "nonholder",
-                      pluginName,
-                    }
-                  : {
-                      kind: "boundary",
-                    },
-              );
-        let decisionReason =
-          O === undefined
-            ? undefined
-            : {
-                type: "other",
-                reason: O,
-              };
-        if (x)
+            {
+              type: "addRules",
+              rules: [
+                {
+                  toolName: SKILL,
+                  ruleContent: `${skillName}:*`,
+                },
+              ],
+              behavior: "allow",
+              destination: "localSettings",
+            },
+          ];
           return {
             behavior: "ask",
-            message: `Execute skill: ${skillName}${O ? ` \u2014 ${O}` : ""}`,
+            message: `Execute skill: ${skillName}${heldBackScope ? ` \u2014 ${heldBackScope}` : ""}`,
             decisionReason,
-            suppressAlwaysAllowRule: true,
+            suggestions,
             updatedInput: {
               skill,
               args,
@@ -1360,149 +1477,112 @@ var SkillTool = buildTool({
                 }
               : undefined,
           };
-        let suggestions = [
-          {
-            type: "addRules",
-            rules: [
-              {
-                toolName: SKILL,
-                ruleContent: skillName,
-              },
-            ],
-            behavior: "allow",
-            destination: "localSettings",
-          },
-          {
-            type: "addRules",
-            rules: [
-              {
-                toolName: SKILL,
-                ruleContent: `${skillName}:*`,
-              },
-            ],
-            behavior: "allow",
-            destination: "localSettings",
-          },
-        ];
+        },
+        call(input, callOptions) {
+          if (!callOptions.runEngine)
+            return Promise.reject(Error("Skill: invoking needs the executor (call.runEngine)"));
+          return callOptions.runEngine(runSkillInvocation, {
+            input,
+            parentMessage: callOptions.parentMessage,
+            onProgress: callOptions.onProgress,
+            timing: callOptions.timing,
+          });
+        },
+      };
+    },
+    mapToolResultToToolResultBlockParam(result, toolUseID) {
+      if ("status" in result && result.status === "forked")
         return {
-          behavior: "ask",
-          message: `Execute skill: ${skillName}${O ? ` \u2014 ${O}` : ""}`,
-          decisionReason,
-          suggestions,
-          updatedInput: {
-            skill,
-            args,
-          },
-          metadata: command
-            ? {
-                command,
-              }
-            : undefined,
-        };
-      },
-      call(input, i) {
-        if (!i.runEngine) return Promise.reject(Error("Skill: invoking needs the executor (call.runEngine)"));
-        return i.runEngine(runSkillInvocation, {
-          input,
-          parentMessage: i.parentMessage,
-          onProgress: i.onProgress,
-          timing: i.timing,
-        });
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseID) {
-    if ("status" in e && e.status === "forked")
-      return {
-        type: "tool_result",
-        tool_use_id: toolUseID,
-        content:
-          (e.toolsUsedLine === undefined
-            ? ""
-            : `${e.toolsUsedLine}
+          type: "tool_result",
+          tool_use_id: toolUseID,
+          content:
+            (result.toolsUsedLine === undefined
+              ? ""
+              : `${result.toolsUsedLine}
 `) +
-          (e.background
-            ? `Skill "${e.commandName}" launched (forked execution, running in the background).
+            (result.background
+              ? `Skill "${result.commandName}" launched (forked execution, running in the background).
 
-${e.result}`
-            : `Skill "${e.commandName}" completed (forked execution).
+${result.result}`
+              : `Skill "${result.commandName}" completed (forked execution).
 
 Result:
-${e.result}`),
-      };
-    if ("readOnly" in e && e.readOnly)
+${result.result}`),
+        };
+      if ("readOnly" in result && result.readOnly)
+        return {
+          type: "tool_result",
+          tool_use_id: toolUseID,
+          content: `Loaded skill instructions (read-only): ${result.commandName}. Nothing was executed; delegate execution to a worker.`,
+        };
       return {
         type: "tool_result",
         tool_use_id: toolUseID,
-        content: `Loaded skill instructions (read-only): ${e.commandName}. Nothing was executed; delegate execution to a worker.`,
+        content: `Launching skill: ${result.commandName}`,
       };
-    return {
-      type: "tool_result",
-      tool_use_id: toolUseID,
-      content: `Launching skill: ${e.commandName}`,
-    };
-  },
-  renderToolUseMessage,
+    },
+    renderToolUseMessage,
+  });
+  SAFE_SKILL_PROPERTIES = new Set([
+    "type",
+    "progressMessage",
+    "contentLength",
+    "contentHash",
+    "getLoadedSkillMd",
+    "skillFile",
+    "argNames",
+    "model",
+    "effort",
+    "source",
+    "pluginInfo",
+    "serverAttribution",
+    "disableNonInteractive",
+    "skillRoot",
+    "skillDir",
+    "context",
+    "agent",
+    "background",
+    "getPromptForCommand",
+    "getEffort",
+    "getDefaultEffort",
+    "onUserTypedArgs",
+    "getContext",
+    "formatForegroundForkResult",
+    "declaredFields",
+    "pluginSource",
+    "metadata",
+    "createdBy",
+    "fallback",
+    "unqualifiedName",
+    "allowlistedByFullNameOnly",
+    "directoryListingName",
+    "bareNameReserved",
+    "reservedLabels",
+    "fromHostCatalog",
+    "shedAliases",
+    "name",
+    "description",
+    "menuDescription",
+    "hasUserSpecifiedDescription",
+    "isEnabled",
+    "isHidden",
+    "aliases",
+    "subcommands",
+    "subcommandsBareOnly",
+    "isMcp",
+    "argumentHint",
+    "whenToUse",
+    "paths",
+    "version",
+    "disableModelInvocation",
+    "disableBridgeInvocation",
+    "userInvocable",
+    "loadedFrom",
+    "immediate",
+    "userFacingName",
+    "getArgumentCompletions",
+  ]);
 });
-var SAFE_SKILL_PROPERTIES = new Set([
-  "type",
-  "progressMessage",
-  "contentLength",
-  "contentHash",
-  "getLoadedSkillMd",
-  "skillFile",
-  "argNames",
-  "model",
-  "effort",
-  "source",
-  "pluginInfo",
-  "serverAttribution",
-  "disableNonInteractive",
-  "skillRoot",
-  "skillDir",
-  "context",
-  "agent",
-  "background",
-  "getPromptForCommand",
-  "getEffort",
-  "getDefaultEffort",
-  "onUserTypedArgs",
-  "getContext",
-  "formatForegroundForkResult",
-  "declaredFields",
-  "pluginSource",
-  "metadata",
-  "createdBy",
-  "fallback",
-  "unqualifiedName",
-  "allowlistedByFullNameOnly",
-  "directoryListingName",
-  "bareNameReserved",
-  "reservedLabels",
-  "fromHostCatalog",
-  "shedAliases",
-  "name",
-  "description",
-  "menuDescription",
-  "hasUserSpecifiedDescription",
-  "isEnabled",
-  "isHidden",
-  "aliases",
-  "subcommands",
-  "subcommandsBareOnly",
-  "isMcp",
-  "argumentHint",
-  "whenToUse",
-  "paths",
-  "version",
-  "disableModelInvocation",
-  "disableBridgeInvocation",
-  "userInvocable",
-  "loadedFrom",
-  "immediate",
-  "userFacingName",
-  "getArgumentCompletions",
-]);
 //@ chunk-a5k9jscj.js:25436-25685 file-local
 /**
  * prompt 型 skill 的属性是否全部在 SAFE_SKILL_PROPERTIES 内（或为空值）；是则无需权限询问。
@@ -1536,8 +1616,8 @@ function dedupeRenderedSkillContent({
     )
   )
     return messages;
-  let v = restoreSkillStateFromMessages(contextMessages, priorContent);
-  if (!v) return messages;
+  let priorState = restoreSkillStateFromMessages(contextMessages, priorContent);
+  if (!priorState) return messages;
   if (priorContent !== renderedContent) {
     let content = priorContent.endsWith(SKILL_TRUNCATION_NOTE)
       ? `(Re-invocation of /${commandName} \u2014 the previously loaded copy was truncated by compaction; the full instructions follow.)`
@@ -1550,19 +1630,19 @@ function dedupeRenderedSkillContent({
       ...messages,
     ];
   }
-  let r = false;
+  let elided = false;
   let mapped = messages.map((message) => {
     if (metaMessageText(message) !== renderedContent) return message;
-    r = true;
+    elided = true;
     return createUserMessage({
       content:
-        v === "attachment"
+        priorState === "attachment"
           ? `Skill /${commandName} was loaded earlier (see the invoked-skills reminder above); this is a NEW invocation \u2014 follow those instructions now, including any setup steps.${args ? ` Arguments: ${args}` : ""}`
           : `Skill /${commandName} is already loaded above; instructions unchanged.${args ? ` Arguments: ${args}` : ""}`,
       isMeta: true,
     });
   });
-  if (r) logForDebugging(`SkillTool eliding byte-identical re-invocation of skill ${commandName}`);
+  if (elided) logForDebugging(`SkillTool eliding byte-identical re-invocation of skill ${commandName}`);
   return mapped;
 }
 //@ chunk-a5k9jscj.js:26706-26818 placement = tagMessagesWithToolUseID (1)
@@ -1588,26 +1668,5 @@ function findToolUseIdByName(messages, sinceUuid) {
 //@ chunk-a5k9jscj.js:26944-27017 placement
 function agentToolHintSuffix() {
   return getSubagentSteer() === "default" ? " (use the Agent tool instead)" : "";
-}
-//@ chunk-csq9ftr9.js:9850-9976 fingerprint = isOfficialMarketplaceSkill (1)
-/**
- * skill 是否来自官方市场插件。
- */
-function isOfficialMarketplaceSkill(command) {
-  if (command.source !== "plugin" || !command.pluginInfo?.repository) return false;
-  return isOfficialMarketplaceName_3(parsePluginIdentifier_2(command.pluginInfo.repository).marketplace);
-}
-//@ chunk-e6aww6q8.js:2804890-2805133 fingerprint = getAllCommands (0.414)
-/**
- * 构造工具名 → 来源（mcp / static）映射，额外登记 DeferredToolPlaceholder 为 static；供 API 层判定工具类别。
- */
-function getToolNameKinds(tools, extraToolSchemas) {
-  let r = new Map();
-  for (let s of tools)
-    if (s.isMcp === true) r.set(s.name, "mcp");
-    else if (s.uiTableKey === undefined) r.set(s.name, "static");
-  for (let s of extraToolSchemas) if ("name" in s && typeof s.name === "string") r.set(s.name, "static");
-  r.set(DEFERREDTOOLPLACEHOLDER, "static");
-  return r;
 }
 export { isOfficialMarketplaceSkill, getToolNameKinds, agentToolHintSuffix, SkillTool };

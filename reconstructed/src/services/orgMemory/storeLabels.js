@@ -16,35 +16,35 @@ import { count } from "../../utils/collections.js";
 /**
  * 取记忆存储的标签（路径末段或挂载名）。
  */
-function storeLabel(e) {
-  let n = stripTrailingSlashes(e.path).split("/").at(-1) ?? "";
-  return n === "" ? e.mount : n;
+function storeLabel(store) {
+  let lastSegment = stripTrailingSlashes(store.path).split("/").at(-1) ?? "";
+  return lastSegment === "" ? store.mount : lastSegment;
 }
 //@ chunk-82kqcve8.js:74551-74696 placement
 /**
  * 生成记忆存储的作用域标签，同名的按出现顺序加 #序号。
  */
-function getStoreScopeLabel(e) {
-  let n = readableOrgMemoryStores();
-  let index = n.findIndex((w) => w.path === e.path);
-  let s = index < 0 ? [] : n.slice(0, index);
-  let h = storeLabel(e);
-  let y = count(s, (w) => storeLabel(w) === h);
-  return y === 0 ? h : `${h}#${y + 1}`;
+function getStoreScopeLabel(store) {
+  let stores = readableOrgMemoryStores();
+  let index = stores.findIndex((candidate) => candidate.path === store.path);
+  let precedingStores = index < 0 ? [] : stores.slice(0, index);
+  let label = storeLabel(store);
+  let duplicateCount = count(precedingStores, (store) => storeLabel(store) === label);
+  return duplicateCount === 0 ? label : `${label}#${duplicateCount + 1}`;
 }
 //@ chunk-82kqcve8.js:74696-74816 placement
 /**
  * 把分组根路径排在前面，其余保持原顺序。
  */
-function sortRootFirst(e) {
+function sortRootFirst(stores) {
   return [
-    ...e.filter((n) => classifyStorePath(n.path) === "grouping_root"),
-    ...e.filter((n) => classifyStorePath(n.path) !== "grouping_root"),
+    ...stores.filter((store) => classifyStorePath(store.path) === "grouping_root"),
+    ...stores.filter((store) => classifyStorePath(store.path) !== "grouping_root"),
   ];
 }
 //@ chunk-82kqcve8.js:74816-74945 placement
-function describeStoreScope(e) {
-  return classifyStorePath(e.path) === "grouping_root"
+function describeStoreScope(store) {
+  return classifyStorePath(store.path) === "grouping_root"
     ? "organization-wide store shared by every connected project"
     : "project store";
 }

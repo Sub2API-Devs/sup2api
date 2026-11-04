@@ -11,7 +11,7 @@
 import { isConnectedOrCached } from "../../skills/bundled/scheduleRemoteAgents.js";
 import { getMcpPrefix, isToolFromMcpServer } from "./mcpStringUtils.js";
 import { commandBelongsToServer } from "./utils.js";
-import { SS, En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { partitionAlias, import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { serverCacheKey } from "./client.js";
 import { decorateMcpTools } from "./mcpToolDecoration.js";
 
@@ -19,81 +19,94 @@ import { decorateMcpTools } from "./mcpToolDecoration.js";
 /**
  * 在 AppState 中把指定 MCP 客户端标记为需要认证。
  */
-function markClientNeedsAuth(e, t) {
-  let index = e.clients.findIndex((client) => client.name === t);
-  if (index === -1) return e;
-  let i = e.clients[index];
-  if (!i || (!isConnectedOrCached(i) && i.type !== "needs-auth")) return e;
-  let c = [...e.clients];
-  c[index] =
-    i.type === "needs-auth"
+function markClientNeedsAuth(state, serverName) {
+  let index = state.clients.findIndex((client) => client.name === serverName);
+  if (index === -1) return state;
+  let existing = state.clients[index];
+  if (!existing || (!isConnectedOrCached(existing) && existing.type !== "needs-auth")) return state;
+  let clients = [...state.clients];
+  clients[index] =
+    existing.type === "needs-auth"
       ? {
-          ...i,
+          ...existing,
         }
       : {
-          name: t,
+          name: serverName,
           type: "needs-auth",
-          config: i.config,
+          config: existing.config,
         };
   return {
-    ...e,
-    clients: c,
+    ...state,
+    clients,
   };
 }
 //@ chunk-efym3dq7.js:614-1154 placement
 /**
  * 在 AppState 中替换或追加一个 MCP 客户端及其工具/命令/资源。
  */
-function setMcpClientInAppState(e, t, n, i) {
-  let any = e.mcp.clients.some((client) => client.name === t);
-  if (!any && i?.appendIfAbsent === false) return e;
-  let mcpPrefix = getMcpPrefix(t);
+function setMcpClientInAppState(state, serverName, result, options) {
+  let any = state.mcp.clients.some((client) => client.name === serverName);
+  if (!any && options?.appendIfAbsent === false) return state;
+  let mcpPrefix = getMcpPrefix(serverName);
   return {
-    ...e,
+    ...state,
     mcp: {
-      ...e.mcp,
+      ...state.mcp,
       clients: any
-        ? e.mcp.clients.map((client) => (client.name === t ? n.client : client))
-        : [...e.mcp.clients, n.client],
-      tools: [...e.mcp.tools.filter((tool) => !isToolFromMcpServer(tool, t, mcpPrefix)), ...n.tools],
-      commands: [...e.mcp.commands.filter((command) => !commandBelongsToServer(command, t)), ...n.commands],
-      resources: n.resources
+        ? state.mcp.clients.map((client) => (client.name === serverName ? result.client : client))
+        : [...state.mcp.clients, result.client],
+      tools: [
+        ...state.mcp.tools.filter((tool) => !isToolFromMcpServer(tool, serverName, mcpPrefix)),
+        ...result.tools,
+      ],
+      commands: [
+        ...state.mcp.commands.filter((command) => !commandBelongsToServer(command, serverName)),
+        ...result.commands,
+      ],
+      resources: result.resources
         ? {
-            ...e.mcp.resources,
-            [t]: n.resources,
+            ...state.mcp.resources,
+            [serverName]: result.resources,
           }
-        : e.mcp.resources,
-      resourceTemplates: n.resourceTemplates
+        : state.mcp.resources,
+      resourceTemplates: result.resourceTemplates
         ? {
-            ...e.mcp.resourceTemplates,
-            [t]: n.resourceTemplates,
+            ...state.mcp.resourceTemplates,
+            [serverName]: result.resourceTemplates,
           }
-        : e.mcp.resourceTemplates,
+        : state.mcp.resourceTemplates,
     },
   };
 }
 //@ chunk-efym3dq7.js:1154-1314 placement = findChromeClient (0.769)
-function findChromeClient(dynamicMcpState, t, n) {
-  if (!dynamicMcpState.clients.some((client) => client.name === t && client.type === "connected"))
+function findChromeClient(dynamicMcpState, serverName, tools) {
+  if (!dynamicMcpState.clients.some((client) => client.name === serverName && client.type === "connected"))
     return dynamicMcpState;
-  let mcpPrefix = getMcpPrefix(t);
+  let mcpPrefix = getMcpPrefix(serverName);
   return {
     ...dynamicMcpState,
-    tools: [...dynamicMcpState.tools.filter((tool) => !isToolFromMcpServer(tool, t, mcpPrefix)), ...n],
+    tools: [
+      ...dynamicMcpState.tools.filter((tool) => !isToolFromMcpServer(tool, serverName, mcpPrefix)),
+      ...tools,
+    ],
   };
 }
 //@ chunk-efym3dq7.js:1314-1497 placement
 /**
  * 替换 AppState 中某个已连接服务器的工具列表。
  */
-function replaceServerTools(e, t, n) {
-  if (!e.mcp.clients.some((client) => client.name === t && client.type === "connected")) return e;
-  let mcpPrefix = getMcpPrefix(t);
+function replaceServerTools(state, serverName, tools) {
+  if (!state.mcp.clients.some((client) => client.name === serverName && client.type === "connected"))
+    return state;
+  let mcpPrefix = getMcpPrefix(serverName);
   return {
-    ...e,
+    ...state,
     mcp: {
-      ...e.mcp,
-      tools: [...e.mcp.tools.filter((tool) => !isToolFromMcpServer(tool, t, mcpPrefix)), ...n],
+      ...state.mcp,
+      tools: [
+        ...state.mcp.tools.filter((tool) => !isToolFromMcpServer(tool, serverName, mcpPrefix)),
+        ...tools,
+      ],
     },
   };
 }
@@ -101,71 +114,80 @@ function replaceServerTools(e, t, n) {
 /**
  * 判断服务器的工具列表是否与新列表完全相同且无同名冲突。
  */
-function sameServerTools(tools, t, n) {
-  let mcpPrefix = getMcpPrefix(t);
-  let [c, o] = SS(tools, (m) => isToolFromMcpServer(m, t, mcpPrefix));
-  let r = new Set(n.map((m) => m.name));
-  return c.length === n.length && c.every((m, a) => m === n[a]) && !o.some((m) => r.has(m.name));
+function sameServerTools(tools, serverName, nextTools) {
+  let mcpPrefix = getMcpPrefix(serverName);
+  let [current, rest] = partitionAlias(tools, (tool) => isToolFromMcpServer(tool, serverName, mcpPrefix));
+  let nextNames = new Set(nextTools.map((tool) => tool.name));
+  return (
+    current.length === nextTools.length &&
+    current.every((tool, index) => tool === nextTools[index]) &&
+    !rest.some((tool) => nextNames.has(tool.name))
+  );
 }
 //@ chunk-efym3dq7.js:1668-2478 placement
 /**
  * 按新的客户端列表调和动态 MCP 状态（移除、更新工具前缀）。
  */
-function reconcileMcpClients(e, dynamicMcpState, newDynamicState) {
-  let i = new Set(e.clients);
-  let c = new Map(dynamicMcpState.clients.map((client) => [client.name, client]));
-  let o = newDynamicState;
+function reconcileMcpClients(previous, dynamicMcpState, newDynamicState) {
+  let previousClients = new Set(previous.clients);
+  let previousByName = new Map(dynamicMcpState.clients.map((client) => [client.name, client]));
+  let next = newDynamicState;
   for (let client of newDynamicState.clients) {
-    if (!i.has(client)) continue;
-    let p = c.get(client.name);
+    if (!previousClients.has(client)) continue;
+    let previousClient = previousByName.get(client.name);
     let mcpPrefix = getMcpPrefix(client.name);
-    let f = (tool) => isToolFromMcpServer(tool, client.name, mcpPrefix);
-    if (p === undefined) {
-      o = {
-        ...o,
-        clients: o.clients.filter((client_2) => client_2 !== client),
-        tools: o.tools.filter((tool) => !f(tool)),
+    let belongs = (tool) => isToolFromMcpServer(tool, client.name, mcpPrefix);
+    if (previousClient === undefined) {
+      next = {
+        ...next,
+        clients: next.clients.filter((client_2) => client_2 !== client),
+        tools: next.tools.filter((tool) => !belongs(tool)),
       };
       continue;
     }
-    if (p !== client)
-      o = {
-        ...o,
-        clients: o.clients.map((client_2) => (client_2 === client ? p : client_2)),
+    if (previousClient !== client)
+      next = {
+        ...next,
+        clients: next.clients.map((client_2) => (client_2 === client ? previousClient : client_2)),
       };
-    let filtered = dynamicMcpState.tools.filter(f);
-    let filtered_2 = o.tools.filter(f);
-    if (filtered.length === filtered_2.length && filtered.every((l, y) => l === filtered_2[y])) continue;
-    o = {
-      ...o,
-      tools: [...o.tools.filter((tool) => !f(tool)), ...filtered],
+    let filtered = dynamicMcpState.tools.filter(belongs);
+    let filtered_2 = next.tools.filter(belongs);
+    if (filtered.length === filtered_2.length && filtered.every((tool, index) => tool === filtered_2[index]))
+      continue;
+    next = {
+      ...next,
+      tools: [...next.tools.filter((tool) => !belongs(tool)), ...filtered],
     };
   }
-  let r = new Set(e.clients.map((client) => client.name));
-  let m = new Set(newDynamicState.clients.map((client) => client.name));
-  let filtered = dynamicMcpState.clients.filter((client) => !r.has(client.name) && !m.has(client.name));
+  let previousNames = new Set(previous.clients.map((client) => client.name));
+  let nextNames = new Set(newDynamicState.clients.map((client) => client.name));
+  let filtered = dynamicMcpState.clients.filter(
+    (client) => !previousNames.has(client.name) && !nextNames.has(client.name),
+  );
   if (filtered.length > 0) {
-    let mapped = filtered.map((p) => [p.name, getMcpPrefix(p.name)]);
-    o = {
-      ...o,
-      clients: [...o.clients, ...filtered],
+    let mapped = filtered.map((client) => [client.name, getMcpPrefix(client.name)]);
+    next = {
+      ...next,
+      clients: [...next.clients, ...filtered],
       tools: [
-        ...o.tools,
-        ...dynamicMcpState.tools.filter((tool) => mapped.some(([S, f]) => isToolFromMcpServer(tool, S, f))),
+        ...next.tools,
+        ...dynamicMcpState.tools.filter((tool) =>
+          mapped.some(([name, prefix]) => isToolFromMcpServer(tool, name, prefix)),
+        ),
       ],
     };
   }
-  return o;
+  return next;
 }
 //@ chunk-efym3dq7.js:2478-2536 placement
 /**
  * 配置不同时替换客户端的 config。
  */
-function withMcpConfig(client, config) {
-  return En(client.config, config)
-    ? client
+function withMcpConfig(clientRow, config) {
+  return import_sortedIndex_2(clientRow.config, config)
+    ? clientRow
     : {
-        ...client,
+        ...clientRow,
         config,
       };
 }
@@ -173,16 +195,16 @@ function withMcpConfig(client, config) {
 /**
  * 配置未变时为工具重新附加服务器装饰，配置已变返回 undefined。
  */
-function redecorateTools(e, t, n) {
-  if (e === undefined) return t;
-  return serverCacheKey(e.name, e.config) !== serverCacheKey(e.name, n)
+function redecorateTools(previous, tools, config) {
+  if (previous === undefined) return tools;
+  return serverCacheKey(previous.name, previous.config) !== serverCacheKey(previous.name, config)
     ? undefined
     : decorateMcpTools(
         {
-          name: e.name,
-          config: e.config,
+          name: previous.name,
+          config: previous.config,
         },
-        t,
+        tools,
       );
 }
 export {

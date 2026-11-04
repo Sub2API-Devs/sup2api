@@ -10,8 +10,8 @@
  */
 import { EMPTY_MACHINE_STATUS, noopMachineStatusHook } from "../../utils/machineStatus.js";
 import { createSignal } from "../../utils/signal.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y, R, fo } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState, useRef, suspenseTypeExport } from "../../../vendor/react/cjs/react.production.js";
 import { useHasScrollViewport, useScrollViewportSize } from "../ScrollViewportContext.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useSession } from "../../context/session.js";
@@ -45,29 +45,30 @@ function currentSettingsExtra() {
  * 设置对话框外壳：Status / Config / Usage / Stats（/ Gates 仅内部）标签页，关闭时发系统消息。
  */
 function Settings(props) {
-  let $ = w(51);
+  let $ = useMemoCache(51);
   let { onClose, storageV5, credentials, messages, mcpClients, ideInstallationStatus, defaultTab } = props;
-  let [selectedTab, setSelectedTab] = y(defaultTab);
-  let [tabsHidden, setTabsHidden] = y(false);
-  let [configOwnsEsc, setConfigOwnsEsc] = y(false);
-  let [gatesOwnsEsc] = y(false);
+  let [selectedTab, setSelectedTab] = useState(defaultTab);
+  let [tabsHidden, setTabsHidden] = useState(false);
+  let [configOwnsEsc, setConfigOwnsEsc] = useState(false);
+  let [gatesOwnsEsc] = useState(false);
   let insideModal = useHasScrollViewport();
   let { rows } = useScrollViewportSize(useTerminalSize());
-  let ne = insideModal ? rows + 1 : Math.max(15, Math.min(Math.floor(rows * 0.8), 30));
+  let visibleRows = insideModal ? rows + 1 : Math.max(15, Math.min(Math.floor(rows * 0.8), 30));
   let session = useSession();
-  let J;
+  let loadStatusDiagnostics;
   if ($[0] !== credentials || $[1] !== session || $[2] !== storageV5) {
-    J = () => collectStatusDiagnostics(session, storageV5, credentials).catch(emptySettingsExtra);
+    loadStatusDiagnostics = () =>
+      collectStatusDiagnostics(session, storageV5, credentials).catch(emptySettingsExtra);
     $[0] = credentials;
     $[1] = session;
     $[2] = storageV5;
-    $[3] = J;
-  } else J = $[3];
-  let [ae] = y(J);
-  let cloudSessionsStatusRef = R(null);
-  let fe;
+    $[3] = loadStatusDiagnostics;
+  } else loadStatusDiagnostics = $[3];
+  let [statusDiagnostics] = useState(loadStatusDiagnostics);
+  let cloudSessionsStatusRef = useRef(null);
+  let getWebSetupRead;
   if ($[4] !== credentials || $[5] !== session || $[6] !== storageV5) {
-    fe = () => {
+    getWebSetupRead = () => {
       if (cloudSessionsStatusRef.current === null)
         cloudSessionsStatusRef.current = getCloudSessionsStatus(session.host, credentials, storageV5);
       return cloudSessionsStatusRef.current;
@@ -75,46 +76,48 @@ function Settings(props) {
     $[4] = credentials;
     $[5] = session;
     $[6] = storageV5;
-    $[7] = fe;
-  } else fe = $[7];
-  let getWebSetupRead = fe;
-  let de = R(null);
-  let ve;
+    $[7] = getWebSetupRead;
+  } else getWebSetupRead = $[7];
+  let getWebSetupRead_2 = getWebSetupRead;
+  let machineStatusRef = useRef(null);
+  let getMachineStatusRead;
   if ($[8] !== session) {
-    ve = () => {
-      if (de.current === null)
-        de.current = noopMachineStatusHook(getSessionProject(session).cwd)?.catch(defaultSettingsExtra);
-      return de.current;
+    getMachineStatusRead = () => {
+      if (machineStatusRef.current === null)
+        machineStatusRef.current = noopMachineStatusHook(getSessionProject(session).cwd)?.catch(
+          defaultSettingsExtra,
+        );
+      return machineStatusRef.current;
     };
     $[8] = session;
-    $[9] = ve;
-  } else ve = $[9];
-  let getMachineStatusRead = ve;
-  let [Ce] = y(currentSettingsExtra);
-  let He;
+    $[9] = getMachineStatusRead;
+  } else getMachineStatusRead = $[9];
+  let getMachineStatusRead_2 = getMachineStatusRead;
+  let [settingsExtra] = useState(currentSettingsExtra);
+  let dismiss;
   if ($[10] !== onClose) {
-    He = () =>
+    dismiss = () =>
       onClose("Settings dialog dismissed", {
         display: "system",
       });
     $[10] = onClose;
-    $[11] = He;
-  } else He = $[11];
-  let xe = He;
-  useGlobalExitKeybindings(xe);
-  let Oe;
-  if ($[12] !== xe || $[13] !== tabsHidden) {
-    Oe = () => {
+    $[11] = dismiss;
+  } else dismiss = $[11];
+  let dismissSettings = dismiss;
+  useGlobalExitKeybindings(dismissSettings);
+  let handleEscape;
+  if ($[12] !== dismissSettings || $[13] !== tabsHidden) {
+    handleEscape = () => {
       if (tabsHidden) {
         return;
       }
-      xe();
+      dismissSettings();
     };
-    $[12] = xe;
+    $[12] = dismissSettings;
     $[13] = tabsHidden;
-    $[14] = Oe;
-  } else Oe = $[14];
-  let handleEscape = Oe;
+    $[14] = handleEscape;
+  } else handleEscape = $[14];
+  let handleEscape_2 = handleEscape;
   const isActive =
     !tabsHidden &&
     !(selectedTab === "Config" && configOwnsEsc) &&
@@ -129,43 +132,49 @@ function Settings(props) {
     $[15] = isActive;
     $[16] = t3;
   } else t3 = $[16];
-  useKeybinding("confirm:no", handleEscape, t3);
-  let Ie;
+  useKeybinding("confirm:no", handleEscape_2, t3);
+  let configTab;
   if (
     $[17] !== credentials ||
-    $[18] !== ae ||
-    $[19] !== getMachineStatusRead ||
-    $[20] !== getWebSetupRead ||
+    $[18] !== statusDiagnostics ||
+    $[19] !== getMachineStatusRead_2 ||
+    $[20] !== getWebSetupRead_2 ||
     $[21] !== ideInstallationStatus
   ) {
-    Ie = jsxProd_default(
+    configTab = jsxProd_default(
       Tab,
       {
         title: "Status",
         children: jsxProd_default(Status, {
           credentials,
           ideInstallationStatus,
-          diagnosticsPromise: ae,
-          getWebSetupRead,
-          getMachineStatusRead,
+          diagnosticsPromise: statusDiagnostics,
+          getWebSetupRead: getWebSetupRead_2,
+          getMachineStatusRead: getMachineStatusRead_2,
         }),
       },
       "status",
     );
     $[17] = credentials;
-    $[18] = ae;
-    $[19] = getMachineStatusRead;
-    $[20] = getWebSetupRead;
+    $[18] = statusDiagnostics;
+    $[19] = getMachineStatusRead_2;
+    $[20] = getWebSetupRead_2;
     $[21] = ideInstallationStatus;
-    $[22] = Ie;
-  } else Ie = $[22];
-  let ye;
-  if ($[23] !== ne || $[24] !== mcpClients || $[25] !== messages || $[26] !== onClose || $[27] !== Ce) {
-    ye = jsxProd_default(
+    $[22] = configTab;
+  } else configTab = $[22];
+  let statusTab;
+  if (
+    $[23] !== visibleRows ||
+    $[24] !== mcpClients ||
+    $[25] !== messages ||
+    $[26] !== onClose ||
+    $[27] !== settingsExtra
+  ) {
+    statusTab = jsxProd_default(
       Tab,
       {
         title: "Config",
-        children: jsxProd_default(fo, {
+        children: jsxProd_default(suspenseTypeExport, {
           fallback: null,
           children: jsxProd_default(Config, {
             mcpClients,
@@ -173,28 +182,28 @@ function Settings(props) {
             onClose,
             setTabsHidden,
             onIsSearchModeChange: setConfigOwnsEsc,
-            unclaimedPaneClick: Ce,
-            contentHeight: ne,
+            unclaimedPaneClick: settingsExtra,
+            contentHeight: visibleRows,
           }),
         }),
       },
       "config",
     );
-    $[23] = ne;
+    $[23] = visibleRows;
     $[24] = mcpClients;
     $[25] = messages;
     $[26] = onClose;
-    $[27] = Ce;
-    $[28] = ye;
-  } else ye = $[28];
+    $[27] = settingsExtra;
+    $[28] = statusTab;
+  } else statusTab = $[28];
   let children;
   if ($[29] === MEMO_CACHE_SENTINEL) {
     children = jsxProd_default(renderGatewayUsageNotice, {});
     $[29] = children;
   } else children = $[29];
-  let _e;
+  let usageTab;
   if ($[30] !== onClose) {
-    _e = jsxProd_default(
+    usageTab = jsxProd_default(
       Tab,
       {
         title: "Usage",
@@ -206,11 +215,11 @@ function Settings(props) {
       "usage",
     );
     $[30] = onClose;
-    $[31] = _e;
-  } else _e = $[31];
-  let Ne;
+    $[31] = usageTab;
+  } else usageTab = $[31];
+  let otherTab;
   if ($[32] !== onClose) {
-    Ne = jsxProd_default(
+    otherTab = jsxProd_default(
       Tab,
       {
         title: "Stats",
@@ -221,34 +230,34 @@ function Settings(props) {
       "stats",
     );
     $[32] = onClose;
-    $[33] = Ne;
-  } else Ne = $[33];
-  let at;
+    $[33] = otherTab;
+  } else otherTab = $[33];
+  let extraTabs;
   if ($[34] === MEMO_CACHE_SENTINEL) {
-    at = [];
-    $[34] = at;
-  } else at = $[34];
+    extraTabs = [];
+    $[34] = extraTabs;
+  } else extraTabs = $[34];
   let t8;
-  if ($[35] !== _e || $[36] !== Ne || $[37] !== Ie || $[38] !== ye) {
-    t8 = [Ie, ye, _e, Ne, ...at];
-    $[35] = _e;
-    $[36] = Ne;
-    $[37] = Ie;
-    $[38] = ye;
+  if ($[35] !== usageTab || $[36] !== otherTab || $[37] !== configTab || $[38] !== statusTab) {
+    t8 = [configTab, statusTab, usageTab, otherTab, ...extraTabs];
+    $[35] = usageTab;
+    $[36] = otherTab;
+    $[37] = configTab;
+    $[38] = statusTab;
     $[39] = t8;
   } else t8 = $[39];
   let tabs = t8;
   let onClick;
-  if ($[40] !== Ce) {
-    onClick = (Ge) => {
-      if (!Ge.isWindowActivation) Ce.emit();
-      Ge.allowDefault();
+  if ($[40] !== settingsExtra) {
+    onClick = (index) => {
+      if (!index.isWindowActivation) settingsExtra.emit();
+      index.allowDefault();
     };
-    $[40] = Ce;
+    $[40] = settingsExtra;
     $[41] = onClick;
   } else onClick = $[41];
   const initialHeaderFocused = defaultTab !== "Config" && defaultTab !== "Gates";
-  const contentHeight = insideModal ? undefined : Math.max(0, Math.min(ne - 1, rows - 5));
+  const contentHeight = insideModal ? undefined : Math.max(0, Math.min(visibleRows - 1, rows - 5));
   let children_2;
   if (
     $[42] !== selectedTab ||
@@ -275,9 +284,9 @@ function Settings(props) {
     $[46] = tabsHidden;
     $[47] = children_2;
   } else children_2 = $[47];
-  let kt;
+  let paneElement;
   if ($[48] !== onClick || $[49] !== children_2) {
-    kt = jsxProd_default(Pane, {
+    paneElement = jsxProd_default(Pane, {
       color: "permission",
       children: jsxProd_default(Box, {
         flexDirection: "column",
@@ -288,8 +297,8 @@ function Settings(props) {
     });
     $[48] = onClick;
     $[49] = children_2;
-    $[50] = kt;
-  } else kt = $[50];
-  return kt;
+    $[50] = paneElement;
+  } else paneElement = $[50];
+  return paneElement;
 }
 export { Settings };

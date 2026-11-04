@@ -5,10 +5,10 @@
  * pieces: chunk-wr8v03d0.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-wr8v03d0.js:269-440 cjs-fingerprint
-var require_is_array_buffer = x(function (cjsExports) {
+var require_is_array_buffer = __commonJS(function (cjsExports) {
   var isArrayBuffer = (arg) =>
     (typeof ArrayBuffer === "function" && arg instanceof ArrayBuffer) ||
     Object.prototype.toString.call(arg) === "[object ArrayBuffer]";

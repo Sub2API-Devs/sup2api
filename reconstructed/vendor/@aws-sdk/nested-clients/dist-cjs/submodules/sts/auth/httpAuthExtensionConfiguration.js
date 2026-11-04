@@ -5,20 +5,20 @@
  * pieces: chunk-a8ee6x44.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-a8ee6x44.js:9866-10562 cjs-require-graph
-var require_httpAuthExtensionConfiguration = x(function (cjsExports) {
+var require_httpAuthExtensionConfiguration = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.resolveHttpAuthRuntimeConfig = cjsExports.getHttpAuthExtensionConfiguration = undefined;
-  var getHttpAuthExtensionConfiguration = (e) => {
+  var getHttpAuthExtensionConfiguration = (runtimeConfig) => {
     let {
       httpAuthSchemes: _httpAuthSchemes,
       httpAuthSchemeProvider: _httpAuthSchemeProvider,
       credentials: _credentials,
-    } = e;
+    } = runtimeConfig;
     return {
       setHttpAuthScheme(httpAuthScheme) {
         let index = _httpAuthSchemes.findIndex((scheme) => scheme.schemeId === httpAuthScheme.schemeId);

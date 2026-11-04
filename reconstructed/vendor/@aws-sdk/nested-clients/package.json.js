@@ -5,10 +5,10 @@
  * pieces: chunk-kjtqtk57.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-kjtqtk57.js:226-4128 cjs-fingerprint
-var require_package = x(function (cjsExports, cjsModule) {
+var require_package = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     name: "@aws-sdk/nested-clients",
     version: "3.936.0",

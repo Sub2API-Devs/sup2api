@@ -21,6 +21,7 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { MCP_PROTOCOL_LATEST, MCP_PROTOCOL_NEXT } from "./mcpCallConstants.js";
 import { UNREACHABLE_ERROR_CODES } from "../api/errorUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0qx6sn4e.js:1391-1479 placement
 /**
@@ -32,26 +33,26 @@ function isModuleAdmittedByName(plugin) {
 }
 //@ chunk-0qx6sn4e.js:1479-1815 placement
 function createModuleStore() {
-  let e = new Map();
-  let n = new Map();
-  let o = new Set();
+  let byName = new Map();
+  let keyByName = new Map();
+  let mintedKeys = new Set();
   return {
-    list: (r) => (isModuleAdmittedByName(r) ? [...(e.get(r)?.values() ?? [])] : []),
-    own: (r) => {
-      let c = e.get(r) ?? new Map();
-      e.set(r, c);
-      return c;
+    list: (name) => (isModuleAdmittedByName(name) ? [...(byName.get(name)?.values() ?? [])] : []),
+    own: (name) => {
+      let owned = byName.get(name) ?? new Map();
+      byName.set(name, owned);
+      return owned;
     },
-    serverKey: (r) => n.get(r),
-    ownerOfKey: (r) => [...n.entries()].find(([, c]) => c === r)?.[0],
-    keyed: (r, c) => {
-      n.set(r, c);
-      o.add(c);
+    serverKey: (name) => keyByName.get(name),
+    ownerOfKey: (key) => [...keyByName.entries()].find(([, candidate]) => candidate === key)?.[0],
+    keyed: (name, key) => {
+      keyByName.set(name, key);
+      mintedKeys.add(key);
     },
-    minted: (r) => o.has(r),
-    forget: (r) => {
-      e.delete(r);
-      n.delete(r);
+    minted: (key) => mintedKeys.has(key),
+    forget: (name) => {
+      byName.delete(name);
+      keyByName.delete(name);
     },
   };
 }
@@ -59,7 +60,10 @@ function createModuleStore() {
 /**
  * 模块存储（插件模块索引）。
  */
-var moduleStore = createModuleStore();
+var moduleStore; // deferred: uses createModuleStore of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0qx6sn4e.js:1815", () => {
+  moduleStore = createModuleStore();
+});
 //@ chunk-0qx6sn4e.js:1828-1882 placement
 /**
  * 是否启用 URL 模式 elicitation。
@@ -107,41 +111,41 @@ function baseClientCapabilities() {
 /**
  * 从客户端能力中去掉 tasks 能力及其扩展声明。
  */
-function stripTasksCapability(e) {
-  let { tasks, extensions, ...r } = e;
+function stripTasksCapability(capabilities) {
+  let { tasks, extensions, ...rest } = capabilities;
   if (extensions === undefined || !(IO_MODELCONTEXTPROTOCOL_TASKS in extensions))
     return extensions === undefined
-      ? r
+      ? rest
       : {
-          ...r,
+          ...rest,
           extensions,
         };
-  let { [IO_MODELCONTEXTPROTOCOL_TASKS]: c, ...C } = extensions;
-  return Object.keys(C).length > 0
+  let { [IO_MODELCONTEXTPROTOCOL_TASKS]: tasksExtension, ...otherExtensions } = extensions;
+  return Object.keys(otherExtensions).length > 0
     ? {
-        ...r,
-        extensions: C,
+        ...rest,
+        extensions: otherExtensions,
       }
-    : r;
+    : rest;
 }
 //@ chunk-0qx6sn4e.js:2361-2412 placement
 /**
  * 基础客户端能力（v2 SDK 时附加任务扩展）。
  */
 function clientCapabilitiesForSdk() {
-  let e = baseClientCapabilities();
-  return mcpSdkGeneration() === "v2" ? withTasksExtension(e) : e;
+  let capabilities = baseClientCapabilities();
+  return mcpSdkGeneration() === "v2" ? withTasksExtension(capabilities) : capabilities;
 }
 //@ chunk-0qx6sn4e.js:2412-2501 placement
 /**
  * 需要时给客户端能力加上 tasks 扩展。
  */
-function withTasksExtension(e) {
-  if (!isMcpTasksEnabled() || isHttpMcpServeInvocation()) return e;
+function withTasksExtension(capabilities) {
+  if (!isMcpTasksEnabled() || isHttpMcpServeInvocation()) return capabilities;
   return {
-    ...e,
+    ...capabilities,
     extensions: {
-      ...e.extensions,
+      ...capabilities.extensions,
       [IO_MODELCONTEXTPROTOCOL_TASKS]: {},
     },
   };
@@ -151,10 +155,10 @@ function withTasksExtension(e) {
  * 在基础能力上附加 elicitation（form/url）能力。
  */
 function clientCapabilitiesWithElicitation() {
-  let e = clientCapabilitiesForSdk();
-  if (!isUrlElicitationEnabled()) return e;
+  let capabilities = clientCapabilitiesForSdk();
+  if (!isUrlElicitationEnabled()) return capabilities;
   return {
-    ...e,
+    ...capabilities,
     elicitation: {
       form: {},
       url: {},
@@ -207,8 +211,8 @@ var MAX_DISCOVER_PROJECTION_BYTES = 6144;
 function buildClientCapabilitiesHeader() {
   let projectionPrior = discoverProjectionPrior();
   if (!isStatelessSkipInitEnabled() && projectionPrior === "off") return {};
-  let n = clientCapabilitiesForSdk();
-  let str = Buffer.from(jsonStringify(n)).toString("base64");
+  let capabilities = clientCapabilitiesForSdk();
+  let str = Buffer.from(jsonStringify(capabilities)).toString("base64");
   if (Buffer.byteLength(str, "ascii") > MAX_DISCOVER_PROJECTION_BYTES) {
     logForDebugging(
       "[claudeai-mcp] client capabilities header exceeds size limit \u2014 omitting init-projection headers",
@@ -224,25 +228,30 @@ function buildClientCapabilitiesHeader() {
   };
 }
 //@ chunk-0qx6sn4e.js:3387-3581 placement
-var CLAUDEAI_FETCH_TIMEOUT_MS = 5000;
-var CLAUDEAI_FETCH_MAX_ATTEMPTS = 3;
-var CLAUDEAI_RETRY_BASE_MS = 500;
-var CLAUDEAI_RETRY_FACTOR = 3;
-var CLAUDEAI_RETRY_BUDGET_MS = 12000;
-var TRANSIENT_NETWORK_ERRNOS = new Set([
-  "ECONNABORTED",
-  "ECONNRESET",
-  "ECONNREFUSED",
-  "ETIMEDOUT",
-  "EAI_AGAIN",
-  "ERR_SOCKET_CLOSED",
-  "ERR_PROXY_TUNNEL",
-]);
-var RETRYABLE_NETWORK_CODES = new Set([
-  ...TRANSIENT_NETWORK_ERRNOS,
-  ...UNREACHABLE_ERROR_CODES,
-  "ERR_NETWORK",
-]);
+var CLAUDEAI_FETCH_TIMEOUT_MS; // deferred: uses SSL_CERT_ERROR_CODES (../api/errorUtils.js) of its import cycle while loading; runs once the cycle is complete
+var CLAUDEAI_FETCH_MAX_ATTEMPTS;
+var CLAUDEAI_RETRY_BASE_MS;
+var CLAUDEAI_RETRY_FACTOR;
+var CLAUDEAI_RETRY_BUDGET_MS;
+var TRANSIENT_NETWORK_ERRNOS;
+var RETRYABLE_NETWORK_CODES;
+deferInit("chunk-0qx6sn4e.js:3387", () => {
+  CLAUDEAI_FETCH_TIMEOUT_MS = 5000;
+  CLAUDEAI_FETCH_MAX_ATTEMPTS = 3;
+  CLAUDEAI_RETRY_BASE_MS = 500;
+  CLAUDEAI_RETRY_FACTOR = 3;
+  CLAUDEAI_RETRY_BUDGET_MS = 12000;
+  TRANSIENT_NETWORK_ERRNOS = new Set([
+    "ECONNABORTED",
+    "ECONNRESET",
+    "ECONNREFUSED",
+    "ETIMEDOUT",
+    "EAI_AGAIN",
+    "ERR_SOCKET_CLOSED",
+    "ERR_PROXY_TUNNEL",
+  ]);
+  RETRYABLE_NETWORK_CODES = new Set([...TRANSIENT_NETWORK_ERRNOS, ...UNREACHABLE_ERROR_CODES, "ERR_NETWORK"]);
+});
 export {
   TRANSIENT_NETWORK_ERRNOS,
   buildClientCapabilitiesHeader,

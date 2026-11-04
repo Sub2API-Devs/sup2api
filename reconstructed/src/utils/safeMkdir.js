@@ -21,12 +21,16 @@ import {
 import { getLocalUploadsRoot } from "../bootstrap/state.js";
 import { logForDiagnosticsNoPII } from "./diagLogs.js";
 import { logFeatureBad } from "../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-s42bpptg.js:617-656 placement
-var dirOpenFlags = O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS;
+var dirOpenFlags; // deferred: uses READ_LIMITS (./fsBoundRead.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s42bpptg.js:617", () => {
+  dirOpenFlags = O_NOFOLLOW_ANY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS;
+});
 //@ chunk-s42bpptg.js:656-700 placement
-function fdPath(t) {
-  return `/proc/self/fd/${t.fd}`;
+function fdPath(handle) {
+  return `/proc/self/fd/${handle.fd}`;
 }
 //@ chunk-s42bpptg.js:700-768 placement
 async function isOwnedByCurrentUser(handle) {
@@ -39,7 +43,7 @@ async function isOwnedByCurrentUser(handle) {
 async function openOwnedDirChain(path, createDepth) {
   let missingParts = [];
   let baseDir = path;
-  for (let i = 0; i < createDepth; i++) {
+  for (let depth = 0; depth < createDepth; depth++) {
     missingParts.unshift(basename(baseDir));
     baseDir = dirname(baseDir);
   }
@@ -57,24 +61,24 @@ async function openOwnedDirChain(path, createDepth) {
       }).catch((error) => {
         if (getErrnoCode(error) !== "EEXIST") throw error;
       });
-      let _ = await open(pendingPath, dirOpenFlags);
+      let childHandle = await open(pendingPath, dirOpenFlags);
       pendingPath = undefined;
       await handle.close();
-      handle = _;
+      handle = childHandle;
       if (!(await isOwnedByCurrentUser(handle))) return "not_owned";
     }
-    let i = handle;
+    let ownedHandle = handle;
     handle = undefined;
     return {
-      at: fdPath(i),
-      release: () => i.close(),
+      at: fdPath(ownedHandle),
+      release: () => ownedHandle.close(),
     };
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" && pendingPath === baseDir) return createDepth === 0 ? "absent" : "no_parent";
     if (pendingPath !== undefined && (errnoCode === "ENOTDIR" || errnoCode === "ELOOP"))
       return (await lstat(pendingPath).then(
-        (d) => d.isSymbolicLink(),
+        (stats) => stats.isSymbolicLink(),
         () => false,
       ))
         ? "a_link"
@@ -88,66 +92,69 @@ async function openOwnedDirChain(path, createDepth) {
 /**
  * 在目录下新建子目录并打开句柄，确认属主与上级相同，返回句柄路径与释放函数。
  */
-async function createOwnedSubdir(uploadsDir, r) {
-  let n = join(uploadsDir, r);
-  await mkdir(n, {
+async function createOwnedSubdir(uploadsDir, subdirName) {
+  let dirPath = join(uploadsDir, subdirName);
+  await mkdir(dirPath, {
     mode: 448,
   });
-  let e = await open(n, dirOpenFlags);
+  let handle = await open(dirPath, dirOpenFlags);
   if (
-    !(await Promise.all([e.stat(), stat(uploadsDir)]).then(
-      ([a, i]) => a.uid === i.uid,
+    !(await Promise.all([handle.stat(), stat(uploadsDir)]).then(
+      ([newStats, parentStats]) => newStats.uid === parentStats.uid,
       () => false,
     ))
   ) {
-    await e.close();
+    await handle.close();
     throw Error("the new folder has another owner than the folder it is in");
   }
   return {
-    at: fdPath(e),
-    release: () => e.close(),
+    at: fdPath(handle),
+    release: () => handle.close(),
   };
 }
 //@ chunk-s42bpptg.js:1730-2093 placement
 /**
  * 探测已打开目录句柄在改名后是否仍指向同一目录（readlink 与 inode 一致），否则返回 holds_do_not_follow 或错误码。
  */
-async function probeNoFollowSupport(t) {
-  let r = join(t.at, `.probe-${randomUUID()}`);
-  let n = `${r}-moved`;
-  let e;
+async function probeNoFollowSupport(dirRef) {
+  let probePath = join(dirRef.at, `.probe-${randomUUID()}`);
+  let movedPath = `${probePath}-moved`;
+  let handle;
   try {
-    await mkdir(r, {
+    await mkdir(probePath, {
       mode: 448,
     });
-    e = await open(r, dirOpenFlags);
-    await rename(r, n);
-    let o = await readlink(fdPath(e)).catch(() => "");
-    let a = await stat(fdPath(e)).catch(() => {
+    handle = await open(probePath, dirOpenFlags);
+    await rename(probePath, movedPath);
+    let targetPath = await readlink(fdPath(handle)).catch(() => "");
+    let stats = await stat(fdPath(handle)).catch(() => {
       return;
     });
-    return (basename(o) === basename(n) && a?.ino === (await e.stat()).ino) || "holds_do_not_follow";
+    return (
+      (basename(targetPath) === basename(movedPath) && stats?.ino === (await handle.stat()).ino) ||
+      "holds_do_not_follow"
+    );
   } catch (error) {
     return sanitizeErrnoForTelemetry(error) ?? "unknown";
   } finally {
-    await e?.close();
-    await Promise.allSettled([rmdir(r), rmdir(n)]);
+    await handle?.close();
+    await Promise.allSettled([rmdir(probePath), rmdir(movedPath)]);
   }
 }
 //@ chunk-s42bpptg.js:2093-2519 placement
-async function ensureAttachmentsDir(t) {
+async function ensureAttachmentsDir(dirPath) {
   let localUploadsRoot = getLocalUploadsRoot();
-  if (localUploadsRoot === null || dirname(t) !== localUploadsRoot) {
-    await mkdir(t, {
+  if (localUploadsRoot === null || dirname(dirPath) !== localUploadsRoot) {
+    await mkdir(dirPath, {
       recursive: true,
       mode: 448,
     });
     return {
-      at: t,
+      at: dirPath,
       release: async () => {},
     };
   }
-  let ownedDirChain = await openOwnedDirChain(t, 2);
+  let ownedDirChain = await openOwnedDirChain(dirPath, 2);
   if (typeof ownedDirChain === "string") {
     logForDiagnosticsNoPII("warn", "attachments_in_user_data", {
       state: "write_refused",

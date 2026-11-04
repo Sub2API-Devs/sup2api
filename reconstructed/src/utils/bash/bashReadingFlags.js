@@ -31,16 +31,16 @@ var installWarmSunriseReader = new warmSunriseReaderState();
 /**
  * 注册开关读取器并返回旧的。
  */
-function readWarmSunriseFlag(e) {
-  return installWarmSunriseReader.register(e);
+function readWarmSunriseFlag(reader) {
+  return installWarmSunriseReader.register(reader);
 }
 //@ chunk-xjt4a4zb.js:314-473 placement
 function isWarmSunriseEnabled() {
   let reader = installWarmSunriseReader.reader;
   if (!reader) return true;
   try {
-    let { value: r, source, defaultHost } = reader("tengu_warm_sunrise", true);
-    return r !== false || source !== "payload" || !defaultHost;
+    let { value, source, defaultHost } = reader("tengu_warm_sunrise", true);
+    return value !== false || source !== "payload" || !defaultHost;
   } catch {
     return true;
   }
@@ -49,8 +49,8 @@ function isWarmSunriseEnabled() {
 /**
  * 判断 “-rm” 修饰符是否允许（由 tengu_warm_sunrise 开关控制）。
  */
-function isRmModifierAllowed(e) {
-  return e !== "-rm" || isWarmSunriseEnabled();
+function isRmModifierAllowed(action) {
+  return action !== "-rm" || isWarmSunriseEnabled();
 }
 //@ chunk-xjt4a4zb.js:511-585 placement
 /**
@@ -73,16 +73,16 @@ var installStagedPumpkinReader = new stagedPumpkinReaderState();
 /**
  * 注册该开关读取器。
  */
-function readStagedPumpkinFlag(e) {
-  return installStagedPumpkinReader.register(e);
+function readStagedPumpkinFlag(reader) {
+  return installStagedPumpkinReader.register(reader);
 }
 //@ chunk-xjt4a4zb.js:634-775 placement
-function isFlagOnByDefault(e) {
+function isFlagOnByDefault(flagKey) {
   let reader = installStagedPumpkinReader.reader;
   if (!reader) return true;
   try {
-    let { value: a, source, defaultHost } = reader(e, true);
-    return a !== false || source !== "payload" || !defaultHost;
+    let { value, source, defaultHost } = reader(flagKey, true);
+    return value !== false || source !== "payload" || !defaultHost;
   } catch {
     return true;
   }
@@ -122,8 +122,8 @@ var installNestedRippleReader = new nestedRippleReaderState();
 /**
  * 注册该开关读取器。
  */
-function readNestedRippleFlag(e) {
-  return installNestedRippleReader.register(e);
+function readNestedRippleFlag(reader) {
+  return installNestedRippleReader.register(reader);
 }
 //@ chunk-xjt4a4zb.js:989-1152 placement
 /**
@@ -133,8 +133,8 @@ function isStagedPumpkinEnabled() {
   let reader = installNestedRippleReader.reader;
   if (!reader) return true;
   try {
-    let { value: r, source, defaultHost } = reader("tengu_staged_pumpkin", true);
-    return r !== false || source !== "payload" || !defaultHost;
+    let { value, source, defaultHost } = reader("tengu_staged_pumpkin", true);
+    return value !== false || source !== "payload" || !defaultHost;
   } catch {
     return true;
   }
@@ -162,8 +162,8 @@ var nestedRippleFlagReaderInstance = new nestedRippleFlagReader();
 /**
  * 注册 tengu_nested_ripple 开关读取器。
  */
-function installNestedRippleReader2(e) {
-  return nestedRippleFlagReaderInstance.register(e);
+function installNestedRippleReader2(reader) {
+  return nestedRippleFlagReaderInstance.register(reader);
 }
 //@ chunk-xjt4a4zb.js:1351-1493 placement
 /**
@@ -173,8 +173,8 @@ function isNestedRippleEnabled() {
   let reader = nestedRippleFlagReaderInstance.reader;
   if (!reader) return true;
   try {
-    let { value: r, source, defaultHost } = reader(TENGU_NESTED_RIPPLE, true);
-    return r !== false || source !== "payload" || !defaultHost;
+    let { value, source, defaultHost } = reader(TENGU_NESTED_RIPPLE, true);
+    return value !== false || source !== "payload" || !defaultHost;
   } catch {
     return true;
   }
@@ -188,49 +188,52 @@ var readingRefusalStorage = new AsyncLocalStorage();
 /**
  * 在"读取拒绝"计数上下文中运行函数，返回结果与本次新增的第一个拒绝原因。
  */
-async function runWithReadingRefusals(e) {
-  let r = readingRefusalStorage.getStore() ?? {
+async function runWithReadingRefusals(fn) {
+  let state = readingRefusalStorage.getStore() ?? {
     reading: "refuse",
     refusals: 0,
   };
-  let refusals = r.refusals;
-  return [await readingRefusalStorage.run(r, e), r.refusals > refusals ? r.firstReason : undefined];
+  let refusals = state.refusals;
+  return [
+    await readingRefusalStorage.run(state, fn),
+    state.refusals > refusals ? state.firstReason : undefined,
+  ];
 }
 //@ chunk-xjt4a4zb.js:1649-1752 placement
 /**
  * 在拒绝模式下记录一次读取拒绝及第一个原因。
  */
-function recordReadingRefusal(e) {
-  let r = readingRefusalStorage.getStore();
-  if (r !== undefined && r.reading === "refuse") {
-    r.refusals += 1;
-    r.firstReason ??= e;
+function recordReadingRefusal(reason) {
+  let state = readingRefusalStorage.getStore();
+  if (state !== undefined && state.reading === "refuse") {
+    state.refusals += 1;
+    state.firstReason ??= reason;
   }
 }
 //@ chunk-xjt4a4zb.js:1752-1816 placement
 /**
  * 在“规则关闭”的读取模式下运行回调。
  */
-function runWithRuleOff(e) {
+function runWithRuleOff(fn) {
   return readingRefusalStorage.run(
     {
       reading: "rule off",
       refusals: 0,
     },
-    e,
+    fn,
   );
 }
 //@ chunk-xjt4a4zb.js:1816-1888 placement
 /**
  * 在“按 bash 读法”的读取模式下运行回调。
  */
-function runAsBashReads(e) {
+function runAsBashReads(fn) {
   return readingRefusalStorage.run(
     {
       reading: "as bash reads it",
       refusals: 0,
     },
-    e,
+    fn,
   );
 }
 //@ chunk-xjt4a4zb.js:1888-1977 placement

@@ -5,10 +5,10 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:3839-4130 cjs-fingerprint
-var require_JsonWebTokenError = x(function (cjsExports, cjsModule) {
+var require_JsonWebTokenError = __commonJS(function (cjsExports, cjsModule) {
   var JsonWebTokenError = function (message, error) {
     Error.call(this, message);
     if (Error.captureStackTrace) Error.captureStackTrace(this, this.constructor);

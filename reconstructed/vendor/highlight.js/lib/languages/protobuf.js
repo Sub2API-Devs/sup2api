@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:374067-374758 cjs-fingerprint
-var require_protobuf = x(function (cjsExports, cjsModule) {
+var require_protobuf = __commonJS(function (cjsExports, cjsModule) {
   function protobuf(hljs) {
     let KEYWORDS = ["package", "import", "option", "optional", "required", "repeated", "group", "oneof"];
     let TYPES = [

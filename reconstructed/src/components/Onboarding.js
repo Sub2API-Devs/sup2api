@@ -8,8 +8,15 @@
  * pieces: chunk-1tz177x8.js (1), chunk-p8fze0jh.js (10)
  * attribution: fingerprint 2, placement 6, sole-consumer 2, affinity 1
  */
-import { init_react_production, y, R, P, Q } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { resetStateForTests, resetStateLogPrefix } from "../cli/handlers/pluginTest/engineShim.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+} from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
   jsxProd_default_2,
@@ -53,18 +60,39 @@ import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { MessageActionsKeybindings } from "./messageActions.js";
 import { WelcomeV2 } from "./LogoV2/WelcomeV2.js";
 import { StatusRow } from "./Settings/Status.js";
-import { resetStateForTests, resetStateLogPrefix } from "../cli/handlers/pluginTest/engineShim.js";
+import { deferInit, beginDeferredInits, runDeferredInits } from "../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 5 modules closed by ../cli/handlers/pluginTest/runner.js;
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("src/cli/handlers/pluginTest/runner.js");
+//@ chunk-1tz177x8.js:22768-22923 fingerprint = SkippableStep (0.48)
+function SkippableStep(t0) {
+  let { plugin, event, reason, skip } = t0;
+  let isResetState = plugin === resetStateForTests && skip?.kind === "shape";
+  let text = reason.startsWith(resetStateLogPrefix) ? reason.slice(resetStateLogPrefix.length) : reason;
+  return isResetState
+    ? {
+        text,
+        event,
+      }
+    : undefined;
+}
 //@ chunk-p8fze0jh.js:16213-16217 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p8fze0jh.js:16213", () => {
+  init_react_production();
+});
 //@ chunk-p8fze0jh.js:16217-16221 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p8fze0jh.js:16217", () => {
+  init_react_production();
+});
 //@ chunk-p8fze0jh.js:19010-19177 placement
 function PressEnterToContinue() {
-  let f = w(1);
-  let o;
-  if (f[0] === MEMO_CACHE_SENTINEL) {
-    o = jsxProd_default_2(Text, {
+  let $ = useMemoCache(1);
+  let hintElement;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    hintElement = jsxProd_default_2(Text, {
       color: "permission",
       children: [
         "Press ",
@@ -75,18 +103,30 @@ function PressEnterToContinue() {
         " to continue\u2026",
       ],
     });
-    f[0] = o;
-  } else o = f[0];
-  return o;
+    $[0] = hintElement;
+  } else hintElement = $[0];
+  return hintElement;
 }
 //@ chunk-p8fze0jh.js:19177-19181 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p8fze0jh.js:19177", () => {
+  init_react_production();
+});
 //@ chunk-p8fze0jh.js:19181-19185 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p8fze0jh.js:19181", () => {
+  init_react_production();
+});
 //@ chunk-p8fze0jh.js:19185-19189 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p8fze0jh.js:19185", () => {
+  init_react_production();
+});
 //@ chunk-p8fze0jh.js:20134-20143 sole-consumer
-OrderedListComponent.Item = OrderedListItem;
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-p8fze0jh.js:20134", () => {
+  OrderedListComponent.Item = OrderedListItem;
+});
 //@ chunk-p8fze0jh.js:20143-20151 sole-consumer
 var OnboardingInner = OrderedListComponent;
 //@ chunk-p8fze0jh.js:20151-20166 affinity
@@ -96,70 +136,75 @@ function noop() {}
  * 首次引导：依次展示主题选择、登录（OAuth/网关）、安全须知、终端设置（shift+enter 等）等步骤，记录 tengu_began_setup/tengu_onboarding_step。
  */
 function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
-  let [currentStepIndex, setCurrentStepIndex] = y(0);
-  let [p] = y(() => isGatewayLoginForced());
-  let [c] = y(() => isAnthropicAuthEnabled() || (p && getAPIProvider() === "gateway" && !getGatewayAuth()));
-  let [k] = y(() => p || adminPolicyUnreadable() || getUserSettingsGateway() !== undefined);
-  let [u] = y(() => false);
-  let C = R(false);
-  let d = R(false);
-  let [L, I] = useTheme();
+  let [currentStepIndex, setCurrentStepIndex] = useState(0);
+  let [gatewayForced] = useState(() => isGatewayLoginForced());
+  let [authEnabled] = useState(
+    () => isAnthropicAuthEnabled() || (gatewayForced && getAPIProvider() === "gateway" && !getGatewayAuth()),
+  );
+  let [hasAdminPolicy] = useState(
+    () => gatewayForced || adminPolicyUnreadable() || getUserSettingsGateway() !== undefined,
+  );
+  let [showApiKeyNotice] = useState(() => false);
+  let skippedSignInRef = useRef(false);
+  let didCompleteRef = useRef(false);
+  let [themeName, setThemeName] = useTheme();
   let themeSetting = useThemeSetting();
-  let [N, A] = y();
+  let [errorMessage, setErrorMessage] = useState();
   let { storageV5 } = useTheme_2();
-  P(() => {
+  useEffect(() => {
     logEvent("tengu_began_setup", {
-      oauthEnabled: c,
+      oauthEnabled: authEnabled,
     });
-  }, [c]);
-  function goToNextStep(E = 1) {
-    let v = currentStepIndex + E;
-    let U = false;
-    if (steps[v]?.id === "oauth")
+  }, [authEnabled]);
+  function goToNextStep(count = 1) {
+    let nextIndex = currentStepIndex + count;
+    let skipOauth = false;
+    if (steps[nextIndex]?.id === "oauth")
       try {
-        U = (!computeRemoteSettingsEligibility() || isRemoteManagedSettingsVerified()) && hasExistingSignIn();
+        skipOauth =
+          (!computeRemoteSettingsEligibility() || isRemoteManagedSettingsVerified()) && hasExistingSignIn();
       } catch {
-        U = false;
+        skipOauth = false;
       }
-    if (U) {
-      C.current = true;
-      v++;
+    if (skipOauth) {
+      skippedSignInRef.current = true;
+      nextIndex++;
     }
-    if (v < steps.length) {
-      setCurrentStepIndex(v);
-      for (let nextIndex = currentStepIndex + 1; nextIndex <= v; nextIndex++) {
-        if (U && steps[nextIndex]?.id === "oauth") continue;
+    if (nextIndex < steps.length) {
+      setCurrentStepIndex(nextIndex);
+      for (let nextIndex_2 = currentStepIndex + 1; nextIndex_2 <= nextIndex; nextIndex_2++) {
+        if (skipOauth && steps[nextIndex_2]?.id === "oauth") continue;
         logEvent("tengu_onboarding_step", {
-          oauthEnabled: c,
-          stepId: fromEnumOpt(steps[nextIndex]?.id),
+          oauthEnabled: authEnabled,
+          stepId: fromEnumOpt(steps[nextIndex_2]?.id),
         });
         logFeatureOk("onboarding_step_complete");
       }
     } else {
-      if (d.current) return;
-      d.current = true;
+      if (didCompleteRef.current) return;
+      didCompleteRef.current = true;
       logFeatureOk("onboarding_complete");
       onDone({
-        skippedSignIn: C.current,
+        skippedSignIn: skippedSignInRef.current,
       });
     }
   }
   function handleThemeSelection(newTheme) {
     if (!isConfigSetHooked()) {
-      I(newTheme);
+      setThemeName(newTheme);
       goToNextStep();
       return;
     }
     goToNextStep();
-    return import("./chunk-fqjhw3zb.js")
+    return import("../commands/theme/themeWriter.js")
       .then(({ commitTheme }) =>
         commitTheme(newTheme, {
           themeSetting,
-          setTheme: I,
+          setTheme: setThemeName,
         }),
       )
-      .then((v) => {
-        if (v?.error !== undefined) A(v.error.message);
+      .then((commitResult) => {
+        if (commitResult?.error !== undefined) setErrorMessage(commitResult.error.message);
       });
   }
   let exitState = useGlobalExitKeybindings();
@@ -223,13 +268,13 @@ function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
   let preflightStep = jsxProd_default(PreflightStep, {
     onSuccess: goToNextStep,
   });
-  let apiKeyNeedingApproval = Q(getUnapprovedCustomApiKey, []);
+  let apiKeyNeedingApproval = useMemo(getUnapprovedCustomApiKey, []);
   function handleApiKeyDone(approved) {
-    let v = approved && steps[currentStepIndex + 1]?.id === "oauth";
-    goToNextStep(v ? 2 : 1);
+    let skipsOauth = approved && steps[currentStepIndex + 1]?.id === "oauth";
+    goToNextStep(skipsOauth ? 2 : 1);
   }
   let steps = [];
-  if (c && !k)
+  if (authEnabled && !hasAdminPolicy)
     steps.push({
       id: "preflight",
       component: preflightStep,
@@ -239,20 +284,20 @@ function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
     component: themeStep,
   });
   if (apiKeyNeedingApproval) {
-    let E = jsxProd_default(ApproveApiKey, {
+    let approveApiKeyElement = jsxProd_default(ApproveApiKey, {
       customApiKeyTruncated: apiKeyNeedingApproval,
       onDone: handleApiKeyDone,
     });
     steps.push({
       id: "api-key",
-      component: u
+      component: showApiKeyNotice
         ? jsxProd_default(NoticeUnderScene, {
-            children: E,
+            children: approveApiKeyElement,
           })
-        : E,
+        : approveApiKeyElement,
     });
   }
-  if (c)
+  if (authEnabled)
     steps.push({
       id: "oauth",
       component: jsxProd_default(Box, {
@@ -272,7 +317,7 @@ function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
     id: "security",
     component: securityStep,
   });
-  if (shouldOfferTerminalSetup() && !u)
+  if (shouldOfferTerminalSetup() && !showApiKeyNotice)
     steps.push({
       id: "terminal-setup",
       component: jsxProd_default_2(Box, {
@@ -306,7 +351,7 @@ function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
                 confirmLabel: "Yes, use recommended settings",
                 cancelLabel: "No, maybe later with /terminal-setup",
                 onConfirm: () =>
-                  void setupTerminal(host, L, storageV5)
+                  void setupTerminal(host, themeName, storageV5)
                     .then(() => logFeatureOk("onboarding_terminal_setup"))
                     .catch(() =>
                       logFeatureBad("onboarding_terminal_setup", "onboarding_terminal_setup_failed"),
@@ -339,12 +384,12 @@ function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
       }),
     });
   let currentStep = steps[currentStepIndex];
-  function te() {
+  function advance() {
     goToNextStep();
   }
   MessageActionsKeybindings(
     {
-      "confirm:yes": te,
+      "confirm:yes": advance,
     },
     {
       context: "Confirmation",
@@ -353,7 +398,7 @@ function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
   );
   MessageActionsKeybindings(
     {
-      "confirm:no": te,
+      "confirm:no": advance,
     },
     {
       context: "Confirmation",
@@ -369,12 +414,12 @@ function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
         marginTop: 1,
         children: [
           currentStep?.component,
-          N !== undefined &&
+          errorMessage !== undefined &&
             jsxProd_default(Box, {
               paddingX: 1,
               children: jsxProd_default_2(StatusRow, {
                 status: "warning",
-                children: ["Couldn't save Theme: ", N],
+                children: ["Couldn't save Theme: ", errorMessage],
               }),
             }),
           exitState.pending &&
@@ -390,16 +435,8 @@ function Onboarding({ host, onDone, orgConfigGateFollows = false }) {
     ],
   });
 }
-//@ chunk-1tz177x8.js:22768-22923 fingerprint = SkippableStep (0.48)
-function SkippableStep(t0) {
-  let { plugin, event, reason, skip } = t0;
-  let f = plugin === resetStateForTests && skip?.kind === "shape";
-  let text = reason.startsWith(resetStateLogPrefix) ? reason.slice(resetStateLogPrefix.length) : reason;
-  return f
-    ? {
-        text,
-        event,
-      }
-    : undefined;
-}
-export { SkippableStep };
+
+// The import cycle this module closes (5 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/components/Onboarding.js");
+export { SkippableStep, Onboarding };

@@ -8,7 +8,11 @@
  * pieces: chunk-18hwfzwa.js (11)
  * attribution: sole-consumer 9, fingerprint 2
  */
-import { init_react_production, fo, Qr } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  suspenseTypeExport,
+  use,
+} from "../../../../vendor/react/cjs/react.production.js";
 import { MAX_NOTEBOOK_BYTES, isValidNotebook, parseCellId } from "../../../utils/notebook.js";
 import {
   stripUnsafeChars,
@@ -29,7 +33,7 @@ import { Text, Box } from "../../../ink/components/Text.js";
 import { safeParseJSON } from "../../../utils/json.js";
 import { truncateToLength, getFirstLine } from "../../../utils/stringUtils.js";
 import { truncateToWidth } from "../../../utils/format.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { isNonWslUncPath, isNetworkOrSpecialPath } from "../../../utils/networkPaths.js";
 import { getFsImplementation } from "../../../utils/fsOperations.js";
 import { useCwdDerived } from "../../../utils/cwd.js";
@@ -43,31 +47,35 @@ import { HighlightedCode } from "../../HighlightedCode.js";
 import { intersperse } from "../../../utils/collections.js";
 import { StructuredDiff } from "../../StructuredDiff.js";
 import { DiffFrame } from "../../FileEditToolDiff.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1371962-1371966 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1371962", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1371966-1372070 sole-consumer
-function parseNotebookForPreview(Re) {
-  return Re.length > MAX_NOTEBOOK_BYTES
+function parseNotebookForPreview(rawContent) {
+  return rawContent.length > MAX_NOTEBOOK_BYTES
     ? {
         notebook: null,
         tooLargeForPreview: true,
       }
-    : notebookPreviewData(parseNotebookSafe(Re.toString("utf-8")));
+    : notebookPreviewData(parseNotebookSafe(rawContent.toString("utf-8")));
 }
 //@ chunk-18hwfzwa.js:1372070-1372101 sole-consumer
 function emptyNotebookPreview() {
   return notebookPreviewData(null);
 }
 //@ chunk-18hwfzwa.js:1372101-1372132 sole-consumer
-function selectCwd(Kn) {
-  return Kn.cwd;
+function selectCwd(state) {
+  return state.cwd;
 }
 //@ chunk-18hwfzwa.js:1372132-1372186 sole-consumer
-function sanitizeNotebookEditLines(Wn) {
+function sanitizeNotebookEditLines(diff) {
   return {
-    ...Wn,
-    lines: Wn.lines.map(stripUnsafeChars),
+    ...diff,
+    lines: diff.lines.map(stripUnsafeChars),
   };
 }
 //@ chunk-18hwfzwa.js:1372186-1372294 sole-consumer = _temp (0.797)
@@ -92,30 +100,33 @@ function notebookPreviewData(notebook) {
   };
 }
 //@ chunk-18hwfzwa.js:1372350-1372398 sole-consumer
-function parseNotebookSafe(h) {
-  let x = safeParseJSON(h);
-  return isValidNotebook(x) ? x : null;
+function parseNotebookSafe(content) {
+  let parsed = safeParseJSON(content);
+  return isValidNotebook(parsed) ? parsed : null;
 }
 //@ chunk-18hwfzwa.js:1372398-1372568 sole-consumer
 function formatCellLabel(cellId) {
-  let x = truncateToLength(cellId, MAX_RAW_DISPLAY_CHARS);
-  if (!hasVisibleText(x)) return "(unnamed cell)";
-  let D = replaceLineBreaks(stripUnsafeChars(x));
-  let L = markBrokenSequences(D);
-  if (!isCleanText(L)) return "(unnamed cell)";
-  return truncateToWidth(quoteIfAmbiguous(L, L, L !== D || x.length < cellId.length), SHORT_LABEL_WIDTH);
+  let truncatedId = truncateToLength(cellId, MAX_RAW_DISPLAY_CHARS);
+  if (!hasVisibleText(truncatedId)) return "(unnamed cell)";
+  let flattenedId = replaceLineBreaks(stripUnsafeChars(truncatedId));
+  let markedId = markBrokenSequences(flattenedId);
+  if (!isCleanText(markedId)) return "(unnamed cell)";
+  return truncateToWidth(
+    quoteIfAmbiguous(markedId, markedId, markedId !== flattenedId || truncatedId.length < cellId.length),
+    SHORT_LABEL_WIDTH,
+  );
 }
 //@ chunk-18hwfzwa.js:1372568-1373356 fingerprint = NotebookEditToolDiff (0.302)
 function NotebookEditToolDiff(props) {
-  let $ = w(8);
-  let D;
+  let $ = useMemoCache(8);
+  let notebookPromise;
   if (
     $[0] !== props.notebook_path ||
     $[1] !== props.oldCellSource ||
     $[2] !== props.remoteOldContent ||
     $[3] !== props.skipLocalRead
   ) {
-    D =
+    notebookPromise =
       props.oldCellSource !== undefined
         ? Promise.resolve(notebookPreviewData(null))
         : props.remoteOldContent !== undefined
@@ -126,10 +137,10 @@ function NotebookEditToolDiff(props) {
             ? Promise.resolve(notebookPreviewData(null))
             : getFsImplementation()
                 .stat(props.notebook_path)
-                .then((L) =>
-                  !L.isFile()
+                .then((stat) =>
+                  !stat.isFile()
                     ? notebookPreviewData(null)
-                    : L.size > MAX_NOTEBOOK_BYTES
+                    : stat.size > MAX_NOTEBOOK_BYTES
                       ? {
                           notebook: null,
                           tooLargeForPreview: true,
@@ -143,12 +154,12 @@ function NotebookEditToolDiff(props) {
     $[1] = props.oldCellSource;
     $[2] = props.remoteOldContent;
     $[3] = props.skipLocalRead;
-    $[4] = D;
-  } else D = $[4];
-  let notebookDataPromise = D;
-  let ke;
+    $[4] = notebookPromise;
+  } else notebookPromise = $[4];
+  let notebookDataPromise = notebookPromise;
+  let suspenseElement;
   if ($[5] !== notebookDataPromise || $[6] !== props) {
-    ke = jsxProd_default(fo, {
+    suspenseElement = jsxProd_default(suspenseTypeExport, {
       fallback: null,
       children: jsxProd_default(NotebookEditToolDiffInner, {
         ...props,
@@ -158,13 +169,13 @@ function NotebookEditToolDiff(props) {
     });
     $[5] = notebookDataPromise;
     $[6] = props;
-    $[7] = ke;
-  } else ke = $[7];
-  return ke;
+    $[7] = suspenseElement;
+  } else suspenseElement = $[7];
+  return suspenseElement;
 }
 //@ chunk-18hwfzwa.js:1373356-1377043 fingerprint = NotebookEditToolDiffInner (0.769)
 function NotebookEditToolDiffInner(props) {
-  let $ = w(54);
+  let $ = useMemoCache(54);
   let {
     notebook_path,
     cell_id,
@@ -176,92 +187,93 @@ function NotebookEditToolDiffInner(props) {
     promise,
     resolvedOldSource,
   } = props;
-  let ze = editMode === undefined ? "replace" : editMode;
+  let mode = editMode === undefined ? "replace" : editMode;
   let notebookData = useCwdDerived(useProject(selectCwd));
   let { columns } = useTerminalSize();
-  let { notebook, tooLargeForPreview } = Qr(promise);
+  let { notebook, tooLargeForPreview } = use(promise);
   useExitCleanup();
-  let It;
+  let oldSource;
   Ot: {
     if (resolvedOldSource !== undefined) {
-      It = resolvedOldSource;
+      oldSource = resolvedOldSource;
       break Ot;
     }
     if (!notebook || !cell_id) {
-      It = "";
+      oldSource = "";
       break Ot;
     }
-    let Dt;
+    let foundCell;
     if ($[0] !== cell_id || $[1] !== notebook.cells) {
-      let Lt;
+      let matchCell;
       if ($[3] !== cell_id) {
-        Lt = (oo) => oo.id === cell_id;
+        matchCell = (cell) => cell.id === cell_id;
         $[3] = cell_id;
-        $[4] = Lt;
-      } else Lt = $[4];
-      Dt = notebook.cells.find(Lt);
+        $[4] = matchCell;
+      } else matchCell = $[4];
+      foundCell = notebook.cells.find(matchCell);
       $[0] = cell_id;
       $[1] = notebook.cells;
-      $[2] = Dt;
-    } else Dt = $[2];
-    let Xt = Dt;
-    let io = Xt === undefined ? parseCellId(cell_id) : undefined;
-    let cell = Xt ?? (io !== undefined ? notebook.cells[io] : undefined);
+      $[2] = foundCell;
+    } else foundCell = $[2];
+    let foundCell_2 = foundCell;
+    let parsedIndex = foundCell_2 === undefined ? parseCellId(cell_id) : undefined;
+    let cell = foundCell_2 ?? (parsedIndex !== undefined ? notebook.cells[parsedIndex] : undefined);
     if (!cell) {
-      It = "";
+      oldSource = "";
       break Ot;
     }
-    let Lt;
+    let sourceText;
     if ($[5] !== cell.source) {
-      Lt = Array.isArray(cell.source) ? cell.source.join("") : cell.source;
+      sourceText = Array.isArray(cell.source) ? cell.source.join("") : cell.source;
       $[5] = cell.source;
-      $[6] = Lt;
-    } else Lt = $[6];
-    It = Lt;
+      $[6] = sourceText;
+    } else sourceText = $[6];
+    oldSource = sourceText;
   }
-  let po = It;
-  let Dt;
+  let oldSource_2 = oldSource;
+  let previewProblem;
   ao: {
-    if (ze === "insert" || resolvedOldSource !== undefined) {
-      Dt = undefined;
+    if (mode === "insert" || resolvedOldSource !== undefined) {
+      previewProblem = undefined;
       break ao;
     }
     if (tooLargeForPreview) {
-      Dt =
+      previewProblem =
         "notebook too large for preview \u2014 the current cell contents cannot be shown; the edit applies to the real cell on approval";
       break ao;
     }
     if (!notebook) {
-      Dt =
+      previewProblem =
         "notebook preview unavailable \u2014 the current cell contents cannot be shown; the edit applies to the real cell on approval";
       break ao;
     }
-    if (po === "" && cell_id) {
+    if (oldSource_2 === "" && cell_id) {
       let any = notebook.cells.some((cell) => cell.id === cell_id);
       let cellIndex = parseCellId(cell_id);
-      let Bo = cellIndex !== undefined && notebook.cells[cellIndex] !== undefined;
-      if (!any && !Bo) {
-        Dt = "cell not found in the notebook preview \u2014 the current cell contents cannot be shown";
+      let hasIndexCell = cellIndex !== undefined && notebook.cells[cellIndex] !== undefined;
+      if (!any && !hasIndexCell) {
+        previewProblem =
+          "cell not found in the notebook preview \u2014 the current cell contents cannot be shown";
         break ao;
       }
     }
-    Dt = undefined;
+    previewProblem = undefined;
   }
-  let Ro = Dt;
+  let previewProblem_2 = previewProblem;
   let t3;
   Ho: {
-    if (!(resolvedOldSource !== undefined || notebook !== null) || ze === "insert" || ze === "delete") {
+    if (!(resolvedOldSource !== undefined || notebook !== null) || mode === "insert" || mode === "delete") {
       t3 = null;
       break Ho;
     }
-    let Io;
-    if ($[7] !== new_source || $[8] !== notebook_path || $[9] !== po) {
-      Io = getPatchForDisplay({
+    let patches;
+    if ($[7] !== new_source || $[8] !== notebook_path || $[9] !== oldSource_2) {
+      patches = getPatchForDisplay({
         filePath: notebook_path,
-        fileContents: po,
+        fileContents: oldSource_2,
         edits: [
           {
-            old_string: po,
+            old_string: oldSource_2,
             new_string: new_source,
             replace_all: false,
           },
@@ -270,152 +282,152 @@ function NotebookEditToolDiffInner(props) {
       }).map(sanitizeNotebookEditLines);
       $[7] = new_source;
       $[8] = notebook_path;
-      $[9] = po;
-      $[10] = Io;
-    } else Io = $[10];
-    t3 = Io;
+      $[9] = oldSource_2;
+      $[10] = patches;
+    } else patches = $[10];
+    t3 = patches;
   }
-  let Wo = t3;
-  let Io;
-  if ($[11] !== ze || $[12] !== po) {
-    Io = ze === "delete" ? stripUnsafeChars(po) : "";
-    $[11] = ze;
-    $[12] = po;
-    $[13] = Io;
-  } else Io = $[13];
-  let code = Io;
-  let Cn;
+  let patches_2 = t3;
+  let deletedCode;
+  if ($[11] !== mode || $[12] !== oldSource_2) {
+    deletedCode = mode === "delete" ? stripUnsafeChars(oldSource_2) : "";
+    $[11] = mode;
+    $[12] = oldSource_2;
+    $[13] = deletedCode;
+  } else deletedCode = $[13];
+  let code = deletedCode;
+  let newCode;
   if ($[14] !== new_source) {
-    Cn = stripUnsafeChars(new_source);
+    newCode = stripUnsafeChars(new_source);
     $[14] = new_source;
-    $[15] = Cn;
-  } else Cn = $[15];
-  let code_2 = Cn;
-  let vo;
+    $[15] = newCode;
+  } else newCode = $[15];
+  let code_2 = newCode;
+  let firstLine;
   if ($[16] !== new_source) {
-    vo = stripUnsafeChars(getFirstLine(new_source));
+    firstLine = stripUnsafeChars(getFirstLine(new_source));
     $[16] = new_source;
-    $[17] = vo;
-  } else vo = $[17];
-  let firstLine = vo;
-  let kn;
-  Fn: switch (ze) {
+    $[17] = firstLine;
+  } else firstLine = $[17];
+  let firstLine_2 = firstLine;
+  let verbLabel;
+  Fn: switch (mode) {
     case "insert": {
-      kn = "Insert new cell";
+      verbLabel = "Insert new cell";
       break Fn;
     }
     case "delete": {
-      kn = "Delete cell";
+      verbLabel = "Delete cell";
       break Fn;
     }
     default: {
-      kn = "Replace cell contents";
+      verbLabel = "Replace cell contents";
     }
   }
-  let bn;
+  let displayPath;
   if ($[18] !== notebookData || $[19] !== notebook_path || $[20] !== verbose) {
-    bn = verbose ? notebook_path : toCloudRelativePath(notebook_path, notebookData);
+    displayPath = verbose ? notebook_path : toCloudRelativePath(notebook_path, notebookData);
     $[18] = notebookData;
     $[19] = notebook_path;
     $[20] = verbose;
-    $[21] = bn;
-  } else bn = $[21];
+    $[21] = displayPath;
+  } else displayPath = $[21];
   let children;
-  if ($[22] !== bn) {
-    children = stripInvisibleChars_3(bn);
-    $[22] = bn;
+  if ($[22] !== displayPath) {
+    children = stripInvisibleChars_3(displayPath);
+    $[22] = displayPath;
     $[23] = children;
   } else children = $[23];
-  let hn;
+  let pathElement;
   if ($[24] !== children) {
-    hn = jsxProd_default(Text, {
+    pathElement = jsxProd_default(Text, {
       bold: true,
       children,
     });
     $[24] = children;
-    $[25] = hn;
-  } else hn = $[25];
-  const Mn = kn;
-  let Xo;
+    $[25] = pathElement;
+  } else pathElement = $[25];
+  const verbLabel_2 = verbLabel;
+  let cellLabel;
   if ($[26] !== cell_id) {
-    Xo = cell_id ? formatCellLabel(cell_id) : cell_id;
+    cellLabel = cell_id ? formatCellLabel(cell_id) : cell_id;
     $[26] = cell_id;
-    $[27] = Xo;
-  } else Xo = $[27];
-  const Sn = cell_type === "code" || cell_type === "markdown" ? ` (${cell_type})` : "";
-  let $n;
-  if ($[28] !== kn || $[29] !== Xo || $[30] !== Sn) {
-    $n = jsxProd_default_2(Text, {
+    $[27] = cellLabel;
+  } else cellLabel = $[27];
+  const cellTypeSuffix = cell_type === "code" || cell_type === "markdown" ? ` (${cell_type})` : "";
+  let summaryLine;
+  if ($[28] !== verbLabel || $[29] !== cellLabel || $[30] !== cellTypeSuffix) {
+    summaryLine = jsxProd_default_2(Text, {
       dimColor: true,
       wrap: "truncate-end",
-      children: [Mn, " for cell", " ", Xo, Sn],
+      children: [verbLabel_2, " for cell", " ", cellLabel, cellTypeSuffix],
     });
-    $[28] = kn;
-    $[29] = Xo;
-    $[30] = Sn;
-    $[31] = $n;
-  } else $n = $[31];
-  let on;
-  if ($[32] !== Ro) {
-    on =
-      Ro !== undefined &&
+    $[28] = verbLabel;
+    $[29] = cellLabel;
+    $[30] = cellTypeSuffix;
+    $[31] = summaryLine;
+  } else summaryLine = $[31];
+  let problemText;
+  if ($[32] !== previewProblem_2) {
+    problemText =
+      previewProblem_2 !== undefined &&
       jsxProd_default(Text, {
         dimColor: true,
-        children: Ro,
+        children: previewProblem_2,
       });
-    $[32] = Ro;
-    $[33] = on;
-  } else on = $[33];
+    $[32] = previewProblem_2;
+    $[33] = problemText;
+  } else problemText = $[33];
   let t8;
-  if ($[34] !== hn || $[35] !== $n || $[36] !== on) {
+  if ($[34] !== pathElement || $[35] !== summaryLine || $[36] !== problemText) {
     t8 = jsxProd_default_2(Box, {
       paddingX: 1,
       flexDirection: "column",
-      children: [hn, $n, on],
+      children: [pathElement, summaryLine, problemText],
     });
-    $[34] = hn;
-    $[35] = $n;
-    $[36] = on;
+    $[34] = pathElement;
+    $[35] = summaryLine;
+    $[36] = problemText;
     $[37] = t8;
   } else t8 = $[37];
   let children_2;
   if (
     $[38] !== cell_type ||
     $[39] !== columns ||
-    $[40] !== firstLine ||
+    $[40] !== firstLine_2 ||
     $[41] !== code_2 ||
     $[42] !== code ||
-    $[43] !== ze ||
-    $[44] !== Wo ||
+    $[43] !== mode ||
+    $[44] !== patches_2 ||
     $[45] !== notebook_path ||
-    $[46] !== po ||
+    $[46] !== oldSource_2 ||
     $[47] !== width
   ) {
     children_2 =
-      ze === "delete"
+      mode === "delete"
         ? jsxProd_default(HighlightedCode, {
             code,
             filePath: notebook_path,
           })
-        : ze === "insert"
+        : mode === "insert"
           ? jsxProd_default(HighlightedCode, {
               code: code_2,
               filePath: cell_type === "markdown" ? "file.md" : notebook_path,
             })
-          : Wo
+          : patches_2
             ? intersperse(
-                Wo.map((Dn) =>
+                patches_2.map((patch) =>
                   jsxProd_default(
                     StructuredDiff,
                     {
-                      patch: Dn,
+                      patch,
                       dim: false,
                       width: Math.min(width, columns - 2),
                       filePath: notebook_path,
-                      firstLine,
-                      fileContent: po,
+                      firstLine: firstLine_2,
+                      fileContent: oldSource_2,
                     },
-                    Dn.newStart,
+                    patch.newStart,
                   ),
                 ),
                 NotebookEllipsisRow,
@@ -426,32 +438,32 @@ function NotebookEditToolDiffInner(props) {
               });
     $[38] = cell_type;
     $[39] = columns;
-    $[40] = firstLine;
+    $[40] = firstLine_2;
     $[41] = code_2;
     $[42] = code;
-    $[43] = ze;
-    $[44] = Wo;
+    $[43] = mode;
+    $[44] = patches_2;
     $[45] = notebook_path;
-    $[46] = po;
+    $[46] = oldSource_2;
     $[47] = width;
     $[48] = children_2;
   } else children_2 = $[48];
-  let wn;
+  let bodyFrame;
   if ($[49] !== children_2) {
-    wn = jsxProd_default(DiffFrame, {
+    bodyFrame = jsxProd_default(DiffFrame, {
       children: children_2,
     });
     $[49] = children_2;
-    $[50] = wn;
-  } else wn = $[50];
+    $[50] = bodyFrame;
+  } else bodyFrame = $[50];
   let t10;
-  if ($[51] !== t8 || $[52] !== wn) {
+  if ($[51] !== t8 || $[52] !== bodyFrame) {
     t10 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [t8, wn],
+      children: [t8, bodyFrame],
     });
     $[51] = t8;
-    $[52] = wn;
+    $[52] = bodyFrame;
     $[53] = t10;
   } else t10 = $[53];
   return t10;

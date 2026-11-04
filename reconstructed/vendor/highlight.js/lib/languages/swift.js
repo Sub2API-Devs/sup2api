@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:482907-491187 cjs-fingerprint
-var require_swift = x(function (cjsExports, cjsModule) {
+var require_swift = __commonJS(function (cjsExports, cjsModule) {
   function source(re) {
     if (!re) return null;
     if (typeof re === "string") return re;

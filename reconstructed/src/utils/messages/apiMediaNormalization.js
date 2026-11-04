@@ -17,77 +17,85 @@ import { parseWebpHeader } from "../imageFormats.js";
 /**
  * 把模型或 API 不接受的图片与文档替换为说明文字。
  */
-function replaceUnsupportedMedia(e, n) {
-  if (e === "document" && isPdfUnsupportedError(n))
+function replaceUnsupportedMedia(kind, errorMessage) {
+  if (kind === "document" && isPdfUnsupportedError(errorMessage))
     return "[Document removed: this model does not accept whole PDF documents. This is not a problem with the file; if it is a file on disk, read specific pages with the Read tool's pages parameter (returned as images), and do not read it again without pages.]";
-  let r = e === "document" ? "Document" : "Image";
-  let s = truncateToLength(
-    n
+  let label = kind === "document" ? "Document" : "Image";
+  let detail = truncateToLength(
+    errorMessage
       .replace(/.*messages[.[]\d+[\].]+content[.[]\d+[\].]+\S*:?\s*/, "")
       .replace(/["}]+\s*$/, "")
       .replace(/\s+/g, " ")
       .trim(),
     200,
   );
-  let h = s.length > 0 ? ` (${s})` : "";
-  return `[${r} removed: the API could not process this ${e}${h}. The file may be unsupported or corrupt; do not retry reading it. If you need to inspect it, use a shell command instead.]`;
+  let detailSuffix = detail.length > 0 ? ` (${detail})` : "";
+  return `[${label} removed: the API could not process this ${kind}${detailSuffix}. The file may be unsupported or corrupt; do not retry reading it. If you need to inspect it, use a shell command instead.]`;
 }
 //@ chunk-e6aww6q8.js:125892-126115 placement
-function replaceMatchingBlock(e, n, r) {
-  if (!isObjectBlock(e)) return e;
-  if (n(e)) return r;
+function replaceMatchingBlock(block, matches, replacement) {
+  if (!isObjectBlock(block)) return block;
+  if (matches(block)) return replacement;
   if (
-    e.type === "tool_result" &&
-    "content" in e &&
-    Array.isArray(e.content) &&
-    e.content.some((s) => isObjectBlock(s) && n(s))
+    block.type === "tool_result" &&
+    "content" in block &&
+    Array.isArray(block.content) &&
+    block.content.some((innerBlock) => isObjectBlock(innerBlock) && matches(innerBlock))
   )
     return {
-      ...e,
-      content: e.content.map((s) => (isObjectBlock(s) && n(s) ? r : s)),
+      ...block,
+      content: block.content.map((innerBlock) =>
+        isObjectBlock(innerBlock) && matches(innerBlock) ? replacement : innerBlock,
+      ),
     };
-  return e;
+  return block;
 }
 //@ chunk-e6aww6q8.js:126115-126294 placement
-function replaceNestedBlock(e, nestedContentIdx, kind, s) {
+function replaceNestedBlock(block, nestedContentIdx, kind, replacement) {
   if (
-    e.type !== "tool_result" ||
-    !("content" in e) ||
-    !Array.isArray(e.content) ||
-    e.content[nestedContentIdx]?.type !== kind
+    block.type !== "tool_result" ||
+    !("content" in block) ||
+    !Array.isArray(block.content) ||
+    block.content[nestedContentIdx]?.type !== kind
   )
-    return e;
+    return block;
   return {
-    ...e,
-    content: e.content.map((h, y) => (y === nestedContentIdx ? s : h)),
+    ...block,
+    content: block.content.map((innerBlock, innerIndex) =>
+      innerIndex === nestedContentIdx ? replacement : innerBlock,
+    ),
   };
 }
 //@ chunk-e6aww6q8.js:126294-126742 placement
 /**
  * 把某条用户消息中指定位置（可为 tool_result 内的嵌套位置）的不支持媒体块替换成说明文字，返回新消息列表；未变化时返回原列表。
  */
-function replaceUnsupportedMediaAt(messagesForAPI, n, r) {
-  let s = messagesForAPI[n.messageIdx];
-  if (s?.type !== "user" || !Array.isArray(s.message.content)) return messagesForAPI;
-  let h = s.message.content[n.contentIdx];
-  if (!h) return messagesForAPI;
-  let y = {
+function replaceUnsupportedMediaAt(messagesForAPI, location, errorMessage) {
+  let message = messagesForAPI[location.messageIdx];
+  if (message?.type !== "user" || !Array.isArray(message.message.content)) return messagesForAPI;
+  let block = message.message.content[location.contentIdx];
+  if (!block) return messagesForAPI;
+  let replacement = {
     type: "text",
-    text: replaceUnsupportedMedia(n.kind, r),
+    text: replaceUnsupportedMedia(location.kind, errorMessage),
   };
-  let S =
-    n.nestedContentIdx !== undefined
-      ? replaceNestedBlock(h, n.nestedContentIdx, n.kind, y)
-      : replaceMatchingBlock(h, (L) => L.type === n.kind, y);
-  if (S === h) return messagesForAPI;
-  let w = {
-    ...s,
+  let nextBlock =
+    location.nestedContentIdx !== undefined
+      ? replaceNestedBlock(block, location.nestedContentIdx, location.kind, replacement)
+      : replaceMatchingBlock(block, (innerBlock) => innerBlock.type === location.kind, replacement);
+  if (nextBlock === block) return messagesForAPI;
+  let nextMessage = {
+    ...message,
     message: {
-      ...s.message,
-      content: s.message.content.map((L, G) => (G === n.contentIdx ? S : L)),
+      ...message.message,
+      content: message.message.content.map((contentBlock, contentIndex) =>
+        contentIndex === location.contentIdx ? nextBlock : contentBlock,
+      ),
     },
   };
-  return messagesForAPI.map((L, G) => (G === n.messageIdx ? w : L));
+  return messagesForAPI.map((message, messageIndex) =>
+    messageIndex === location.messageIdx ? nextMessage : message,
+  );
 }
 //@ chunk-e6aww6q8.js:126742-126820 placement
 var MEDIA_BLOCK_SOURCES = {
@@ -103,51 +111,53 @@ var MEDIA_BLOCK_SOURCES = {
   },
 };
 //@ chunk-e6aww6q8.js:126820-126967 placement
-function isUnsupportedMediaSource(e, n) {
-  if (e.type !== n) return false;
-  let source = "source" in e ? e.source : undefined;
+function isUnsupportedMediaSource(block, kind) {
+  if (block.type !== kind) return false;
+  let source = "source" in block ? block.source : undefined;
   return !(
     isObjectBlock(source) &&
     typeof source.type === "string" &&
-    Object.hasOwn(MEDIA_BLOCK_SOURCES[n], source.type)
+    Object.hasOwn(MEDIA_BLOCK_SOURCES[kind], source.type)
   );
 }
 //@ chunk-e6aww6q8.js:126967-127182 placement
-function replaceInUserMessage(e, n, r) {
-  if (e.type !== "user" || !Array.isArray(e.message.content)) return e;
-  let s = false;
-  let content = e.message.content.map((y) => {
-    let S = replaceMatchingBlock(y, n, r);
-    if (S !== y) s = true;
-    return S;
+function replaceInUserMessage(message, matches, replacement) {
+  if (message.type !== "user" || !Array.isArray(message.message.content)) return message;
+  let changed = false;
+  let content = message.message.content.map((block) => {
+    let nextBlock = replaceMatchingBlock(block, matches, replacement);
+    if (nextBlock !== block) changed = true;
+    return nextBlock;
   });
-  return s
+  return changed
     ? {
-        ...e,
+        ...message,
         message: {
-          ...e.message,
+          ...message.message,
           content,
         },
       }
-    : e;
+    : message;
 }
 //@ chunk-e6aww6q8.js:127182-127396 placement
 /**
  * 从后往前找到最后一条含该类不支持来源媒体的用户消息，替换为说明文字，返回新消息列表与该消息下标。
  */
-function replaceLastUnsupportedMedia(messagesForAPI, kind, r) {
-  let s = {
+function replaceLastUnsupportedMedia(messagesForAPI, kind, errorMessage) {
+  let replacement = {
     type: "text",
-    text: replaceUnsupportedMedia(kind, r),
+    text: replaceUnsupportedMedia(kind, errorMessage),
   };
-  let h = (y) => isUnsupportedMediaSource(y, kind);
+  let matches = (block) => isUnsupportedMediaSource(block, kind);
   for (let idx = messagesForAPI.length - 1; idx >= 0; idx--) {
-    let S = messagesForAPI[idx];
-    if (!S) continue;
-    let w = replaceInUserMessage(S, h, s);
-    if (w !== S)
+    let message = messagesForAPI[idx];
+    if (!message) continue;
+    let nextMessage = replaceInUserMessage(message, matches, replacement);
+    if (nextMessage !== message)
       return {
-        messages: messagesForAPI.map((L, G) => (G === idx ? w : L)),
+        messages: messagesForAPI.map((message, messageIndex) =>
+          messageIndex === idx ? nextMessage : message,
+        ),
         carrierIdx: idx,
       };
   }
@@ -165,32 +175,34 @@ function tooLargeLimitFromError(errorDetails) {
   return match ? Number(match[2]) : undefined;
 }
 //@ chunk-e6aww6q8.js:127565-127851 placement = isBase64ImageBlock (0.885)
-function isBase64ImageBlock(e, n) {
-  let match = IMAGE_TOO_LARGE_ERROR_RE.exec(n);
-  if (!match?.[1]) return e;
-  let s = Number(match[2]);
-  let h = {
+function isBase64ImageBlock(messagesForAPI, errorMessage) {
+  let match = IMAGE_TOO_LARGE_ERROR_RE.exec(errorMessage);
+  if (!match?.[1]) return messagesForAPI;
+  let maxDimension = Number(match[2]);
+  let replacement = {
     type: "text",
     text: replaceUnsupportedMedia("image", match[1]),
   };
-  let mapped = e.map((S) =>
+  let mapped = messagesForAPI.map((message) =>
     replaceInUserMessage(
-      S,
-      (w) => {
-        let L = hasImageBlock_2(w) ? parseWebpHeader(Buffer.from(w.source.data, "base64")) : undefined;
-        return L !== undefined && Math.max(L.width, L.height) > s;
+      message,
+      (block) => {
+        let header = hasImageBlock_2(block)
+          ? parseWebpHeader(Buffer.from(block.source.data, "base64"))
+          : undefined;
+        return header !== undefined && Math.max(header.width, header.height) > maxDimension;
       },
-      h,
+      replacement,
     ),
   );
-  return mapped.some((S, w) => S !== e[w]) ? mapped : e;
+  return mapped.some((message, index) => message !== messagesForAPI[index]) ? mapped : messagesForAPI;
 }
 //@ chunk-e6aww6q8.js:129314-129356 placement
 /**
  * 判断消息是否为 fallback 类型。
  */
-function isFallbackMessage(e) {
-  return e.type === "fallback";
+function isFallbackMessage(block) {
+  return block.type === "fallback";
 }
 export {
   tooLargeLimitFromError,

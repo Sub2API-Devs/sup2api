@@ -11,6 +11,8 @@
 import { createInterface } from "readline";
 import { stripVTControlCharacters } from "util";
 import { cwd } from "process";
+import { displaySkillFields } from "../../skills/skillSources.js";
+import { escapeXmlInline } from "../../utils/permissions/checkRegistry.js";
 import { createRoot } from "../../ink/hooks/useTerminalHooks.js";
 import { getBaseRenderOptions } from "../../utils/renderOptions.js";
 import {
@@ -60,25 +62,86 @@ import { plural } from "../../utils/stringUtils.js";
 import { writeToStdout } from "../../utils/process.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 import { env } from "../../utils/env.js";
-import { displaySkillFields } from "../../skills/skillSources.js";
-import { escapeXmlInline } from "../../utils/permissions/checkRegistry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-kpa9nk58.js:191-494 placement
+/**
+ * 惰性构建并可批量重置的单例注册表（lazy/builtCount/releaseBuiltSince）。
+ */
+class LazyRegistry {
+  resetters = [];
+  built = [];
+  lazy(build) {
+    let value;
+    let resetter = () => {
+      value = undefined;
+    };
+    this.resetters.push(resetter);
+    return () => {
+      if (value === undefined) {
+        value = build();
+        this.built.push(resetter);
+      }
+      return value;
+    };
+  }
+  builtCount() {
+    return this.built.length;
+  }
+  releaseBuiltSince(index) {
+    for (let resetter of this.built.splice(index)) resetter();
+  }
+  reset() {
+    for (let resetter of this.resetters) resetter();
+    this.built.length = 0;
+  }
+}
+//@ chunk-kpa9nk58.js:494-508 placement
+/**
+ * DoctorLazy/React.lazy 用的单例 LazyRegistry，提供 .lazy() 包装。
+ */
+var LAZY_COMPONENT_REGISTRY; // deferred: uses LazyRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kpa9nk58.js:494", () => {
+  LAZY_COMPONENT_REGISTRY = new LazyRegistry();
+});
+//@ chunk-kpa9nk58.js:508-541 fingerprint = DoctorLazy (1)
+/**
+ * React.lazy 包装（懒加载组件）。
+ */
+function DoctorLazy(logArtifactGatesFrozen) {
+  return LAZY_COMPONENT_REGISTRY.lazy(logArtifactGatesFrozen);
+}
+//@ chunk-g54kbxqw.js:35039-35119 fingerprint = DoctorWithPlugins (0.498)
+/**
+ * Doctor 屏幕用的插件信息适配（显示名转换）。
+ */
+function DoctorWithPlugins(t0) {
+  return {
+    ...displaySkillFields(t0),
+    displayName: escapeOptionalXmlInline(t0.displayName),
+    fallback: undefined,
+  };
+}
+//@ chunk-g54kbxqw.js:35119-35166 sole-consumer
+function escapeOptionalXmlInline(displayName) {
+  return displayName === undefined ? undefined : escapeXmlInline(displayName);
+}
 //@ chunk-2f5p3gsj.js:1375-1612 facade-exports
-function confirmYesNo(c, input = process.stdin) {
-  let t = () => {};
+function confirmYesNo(question, input = process.stdin) {
+  let resolveValue = () => {};
   let promise = new Promise((resolve) => {
-    t = resolve;
+    resolveValue = resolve;
   });
-  let l = createInterface({
+  let rl = createInterface({
     input,
     output: process.stdout,
   });
-  l.question(`${c} [y/N] `, (p) => {
-    let lower = p.trim().toLowerCase();
-    t(lower === "y" || lower === "yes");
-    l.close();
+  rl.question(`${question} [y/N] `, (answer) => {
+    let lower = answer.trim().toLowerCase();
+    resolveValue(lower === "y" || lower === "yes");
+    rl.close();
   });
-  l.once("close", () => t(false));
+  rl.once("close", () => resolveValue(false));
   return promise;
 }
 //@ chunk-2f5p3gsj.js:1612-1667 facade-exports
@@ -100,45 +163,45 @@ function setupTokenExpiryInfo(expiresInDays) {
 /**
  * claude setup-token：登录并生成长期有效的订阅令牌。
  */
-async function setupTokenHandler(c, u) {
+async function setupTokenHandler(root, options) {
   logEvent("tengu_setup_token_command", {});
-  let t = setupTokenExpiryInfo(u?.expiresInDays);
-  if (!t.ok) {
-    c.unmount();
-    process.stderr.write(`${t.message}
+  let expiry = setupTokenExpiryInfo(options?.expiresInDays);
+  if (!expiry.ok) {
+    root.unmount();
+    process.stderr.write(`${expiry.message}
 `);
-    await logFeatureBadAsync("cli_setup_token", t.errorCode);
+    await logFeatureBadAsync("cli_setup_token", expiry.errorCode);
     await exitAfterAnalyticsFlush(1);
     return;
   }
-  let f = validateForceLoginMethod(true);
-  if (!f.valid) {
-    c.unmount();
-    process.stderr.write(`${f.message}
+  let forceCheck = validateForceLoginMethod(true);
+  if (!forceCheck.valid) {
+    root.unmount();
+    process.stderr.write(`${forceCheck.message}
 setup-token creates a long-lived Claude.ai subscription token, which this policy does not permit.
 `);
     await logFeatureBadAsync("cli_setup_token", "force_login_method_refused");
     await exitAfterAnalyticsFlush(1);
   }
-  let l = providerBlockedMessage("firstParty");
-  if (l !== undefined) {
-    c.unmount();
-    process.stderr.write(`${l}
+  let providerBlock = providerBlockedMessage("firstParty");
+  if (providerBlock !== undefined) {
+    root.unmount();
+    process.stderr.write(`${providerBlock}
 setup-token creates a long-lived Claude.ai subscription token, which this machine's allowedProviders policy does not permit.
 `);
     await logFeatureBadAsync("cli_setup_token", "provider_not_allowed");
     await exitAfterAnalyticsFlush(1);
   }
   let showAuthWarning = !isAnthropicAuthEnabled();
-  let { ConsoleOAuthFlow } = await import("./chunk-dwe6dgzp.js");
+  let { ConsoleOAuthFlow } = await import("../../components/ConsoleOAuthFlow.js");
   let rootSession = getRootSession();
-  let h = false;
-  let S = false;
+  let isOnHold = false;
+  let isOrgRefused = false;
   await new Promise((resolve) => {
-    c.render(
+    root.render(
       jsxProd_default(AppRoot, {
         session: rootSession,
-        onChangeAppState: (k) => onChangeAppState(k, rootSession),
+        onChangeAppState: (appState) => onChangeAppState(appState, rootSession),
         children: jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
@@ -169,7 +232,7 @@ setup-token creates a long-lived Claude.ai subscription token, which this machin
                   bold: true,
                   children: [
                     "This will guide you through long-lived (",
-                    t.days === 365 ? "1-year" : `${t.days}-day`,
+                    expiry.days === 365 ? "1-year" : `${expiry.days}-day`,
                     ") auth token setup for your Claude account. Claude subscription required.",
                   ],
                 }),
@@ -178,15 +241,15 @@ setup-token creates a long-lived Claude.ai subscription token, which this machin
                     resolve();
                   },
                   onAccountOnHold: () => {
-                    h = true;
+                    isOnHold = true;
                     resolve();
                   },
                   onOrgConfigRefused: () => {
-                    S = true;
+                    isOrgRefused = true;
                     resolve();
                   },
                   mode: "setup-token",
-                  expiresIn: t.seconds,
+                  expiresIn: expiry.seconds,
                   urlOutdent: 1,
                 }),
               ],
@@ -196,13 +259,13 @@ setup-token creates a long-lived Claude.ai subscription token, which this machin
       }),
     );
   });
-  c.unmount();
-  if (h) {
+  root.unmount();
+  if (isOnHold) {
     await logFeatureBadAsync("cli_setup_token", "account_on_hold");
     await exitAfterAnalyticsFlush(1);
     return;
   }
-  if (S) {
+  if (isOrgRefused) {
     await logFeatureBadAsync("cli_setup_token", "org_config_refused");
     await exitAfterAnalyticsFlush(1);
     return;
@@ -213,14 +276,14 @@ setup-token creates a long-lived Claude.ai subscription token, which this machin
 //@ chunk-2f5p3gsj.js:3537-8026 facade-exports = Doctor (0.257)
 async function doctorHandler(storageV5) {
   logEvent("tengu_doctor_command", {});
-  let u;
+  let catchError;
   try {
     let doctorDiagnostic = await getDoctorDiagnostic({
       probeKeychain: true,
       storageV5,
     });
-    let f = autoUpdatesChannel();
-    let l = [
+    let channel = autoUpdatesChannel();
+    let lines = [
       "Claude Code doctor",
       "",
       `Running: ${doctorDiagnostic.installationType} (${doctorDiagnostic.version})`,
@@ -260,36 +323,37 @@ async function doctorHandler(storageV5) {
       `Config install method: ${sanitizeDisplayText(doctorDiagnostic.configInstallMethod)}`,
       `Search: ${doctorDiagnostic.ripgrepStatus.working ? "OK" : "Not working"} (${doctorDiagnostic.ripgrepStatus.mode === "embedded" ? "bundled" : sanitizeDisplayText(doctorDiagnostic.ripgrepStatus.systemPath || "system")})`,
       `Auto-updates: ${doctorDiagnostic.packageManager ? "Managed by package manager" : sanitizeDisplayText(doctorDiagnostic.autoUpdates)}`,
-      `Auto-update channel: ${f === "rc" ? "slow" : f}`,
+      `Auto-update channel: ${channel === "rc" ? "slow" : channel}`,
       `Last update attempt: ${describeLastUpdateAttempt(doctorDiagnostic.lastUpdateResult)}`,
     ];
     let remoteSettingsLoadState = getRemoteSettingsLoadState();
     if (remoteSettingsLoadState)
-      l.push(
+      lines.push(
         `Managed settings (remote): ${sanitizeDisplayText(describeRemoteSettingsStatus(remoteSettingsLoadState))}`,
       );
     else if (shouldWarnRemoteSettings())
-      l.push("Managed settings (remote): checking\u2026 (fetch in progress; re-run in a moment)");
+      lines.push("Managed settings (remote): checking\u2026 (fetch in progress; re-run in a moment)");
     {
       let { waitForPolicyLimitsToLoad, POLICY_LIMITS_FIRST_ATTEMPT_WAIT_MS } =
-        await import("./chunk-qchbrsbw.js");
-      let { getLastFetchOutcome } = await import("./chunk-sbc4zy7a.js");
-      let v = false;
-      let A = waitForPolicyLimitsToLoad().then(() => {
-        v = true;
+        await import("../../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js");
+      let { getLastFetchOutcome } = await import("../../services/policyLimits/CLIENT_POLICY_KEYS.lazy.js");
+      let policyLoaded = false;
+      let policyWait = waitForPolicyLimitsToLoad().then(() => {
+        policyLoaded = true;
       });
-      let T = Date.now() + POLICY_LIMITS_FIRST_ATTEMPT_WAIT_MS;
-      while (!v && getLastFetchOutcome() === null && Date.now() < T) await Promise.race([A, sleep(200)]);
+      let policyDeadline = Date.now() + POLICY_LIMITS_FIRST_ATTEMPT_WAIT_MS;
+      while (!policyLoaded && getLastFetchOutcome() === null && Date.now() < policyDeadline)
+        await Promise.race([policyWait, sleep(200)]);
     }
-    let _ = l.push("Organization policy: \u2026") - 1;
+    let policyLineIndex = lines.push("Organization policy: \u2026") - 1;
     let { statusNotices, invalidEntries } = splitStatusNotices(formatInvalidSettingNotice().errors);
     if (invalidEntries.length > 0) {
-      l.push("", sequential.yellow("Invalid settings"));
+      lines.push("", sequential.yellow("Invalid settings"));
       for (let invalidEntry of invalidEntries) {
         let joined = [invalidEntry.file, invalidEntry.path]
-          .flatMap((y) => (y ? [sanitizeDisplayText(y)] : []))
+          .flatMap((entry) => (entry ? [sanitizeDisplayText(entry)] : []))
           .join(" \u203A ");
-        l.push(
+        lines.push(
           `- ${joined ? `${joined}: ` : ""}${sanitizeDisplayText(invalidEntry.message)}${
             invalidEntry.suggestion
               ? `
@@ -300,21 +364,21 @@ async function doctorHandler(storageV5) {
       }
     }
     if (statusNotices.length > 0) {
-      l.push("");
-      for (let statusNotice of statusNotices) l.push(`- ${sanitizeDisplayText(statusNotice.message)}`);
+      lines.push("");
+      for (let statusNotice of statusNotices) lines.push(`- ${sanitizeDisplayText(statusNotice.message)}`);
     }
     let permissionRuleWarningLines = await collectPermissionRuleWarningLines();
     if (permissionRuleWarningLines.length > 0) {
-      l.push("", sequential.yellow("Permission rules that may not work as written"));
+      lines.push("", sequential.yellow("Permission rules that may not work as written"));
       for (let permissionRuleWarningLine of permissionRuleWarningLines)
-        l.push(`- ${sanitizeDisplayText(permissionRuleWarningLine)}`);
+        lines.push(`- ${sanitizeDisplayText(permissionRuleWarningLine)}`);
     }
     let validationErrors = managedLinkWarningLines();
     if (validationErrors.length > 0) {
-      l.push("");
-      for (let [o, m] of validationErrors)
-        l.push(`- ${o}
-  ${m}`);
+      lines.push("");
+      for (let [path, message] of validationErrors)
+        lines.push(`- ${path}
+  ${message}`);
     }
     let filtered = [
       {
@@ -327,59 +391,66 @@ async function doctorHandler(storageV5) {
         ...getModelMaxOutputTokens("claude-opus-4-6"),
       },
     ]
-      .map((o) => ({
-        name: o.name,
-        ...validateBoundedIntEnvVar(o.name, process.env[o.name], o.default, o.upperLimit),
+      .map((spec) => ({
+        name: spec.name,
+        ...validateBoundedIntEnvVar(spec.name, process.env[spec.name], spec.default, spec.upperLimit),
       }))
-      .filter((o) => o.status !== "valid");
+      .filter((result) => result.status !== "valid");
     if (filtered.length > 0) {
-      l.push("", sequential.yellow("Environment variables"));
-      for (let o of filtered) l.push(`- ${o.name}: ${sanitizeDisplayText(o.message ?? o.status)}`);
+      lines.push("", sequential.yellow("Environment variables"));
+      for (let problem of filtered)
+        lines.push(`- ${problem.name}: ${sanitizeDisplayText(problem.message ?? problem.status)}`);
     }
     if (doctorDiagnostic.multipleInstallations.length > 1) {
-      l.push("", sequential.yellow("Multiple installations found"));
+      lines.push("", sequential.yellow("Multiple installations found"));
       for (let multipleInstallation of doctorDiagnostic.multipleInstallations)
-        l.push(`- ${sanitizeDisplayText(`${multipleInstallation.type} at ${multipleInstallation.path}`)}`);
+        lines.push(
+          `- ${sanitizeDisplayText(`${multipleInstallation.type} at ${multipleInstallation.path}`)}`,
+        );
     }
     try {
       let bridgeDoctorInfo = await getBridgeDoctorInfo();
-      l.push("", "Remote Control");
+      lines.push("", "Remote Control");
       if (bridgeDoctorInfo.inRemoteSession)
-        l.push(
+        lines.push(
           "Inside a cloud session \u2014 Remote Control is unavailable here. Use it from the local session instead.",
         );
       else {
-        l.push(
+        lines.push(
           sanitizeDisplayText(
             bridgeDoctorInfo.disabledReason ??
               "Control this session from claude.ai/code or the Claude mobile app",
           ),
         );
         for (let check of bridgeDoctorInfo.checks.filter((check) => !check.ok))
-          l.push(sanitizeDisplayText(`- ${check.label}${check.detail ? ` (${check.detail})` : ""}`));
+          lines.push(sanitizeDisplayText(`- ${check.label}${check.detail ? ` (${check.detail})` : ""}`));
       }
     } catch {
       await logFeatureSadAsync("cli_doctor", "bridge_info_unavailable");
     }
-    l[_] = `Organization policy: ${sanitizeDisplayText(formatPolicyFetchStatus(getPolicyFetchStatus()))}`;
+    lines[policyLineIndex] =
+      `Organization policy: ${sanitizeDisplayText(formatPolicyFetchStatus(getPolicyFetchStatus()))}`;
     if (doctorDiagnostic.warnings.length > 0) {
-      l.push(
+      lines.push(
         "",
         sequential.yellow(
           `${doctorDiagnostic.warnings.length} ${plural(doctorDiagnostic.warnings.length, "warning")} found`,
         ),
       );
       for (let warning of doctorDiagnostic.warnings)
-        l.push(`- ${sanitizeDisplayText(warning.issue)}`, `  Fix: ${sanitizeDisplayText(warning.fix)}`);
-    } else l.push("", "No installation issues found.");
-    l.push("", "For a full setup checkup that can also fix issues, run /doctor in a Claude Code session.");
+        lines.push(`- ${sanitizeDisplayText(warning.issue)}`, `  Fix: ${sanitizeDisplayText(warning.fix)}`);
+    } else lines.push("", "No installation issues found.");
+    lines.push(
+      "",
+      "For a full setup checkup that can also fix issues, run /doctor in a Claude Code session.",
+    );
     writeToStdout(
-      l.join(`
+      lines.join(`
 `) +
         `
 `,
     );
-    u = {
+    catchError = {
       warnings: doctorDiagnostic.warnings.length,
       settings_errors: invalidEntries.length,
       env_var_issues: filtered.length,
@@ -390,42 +461,43 @@ async function doctorHandler(storageV5) {
     await logFeatureBadAsync("cli_doctor", "diagnostic_failed");
     throw error;
   }
-  await logFeatureOkAsync("cli_doctor", u);
+  await logFeatureOkAsync("cli_doctor", catchError);
   await exitAfterAnalyticsFlush(0);
 }
 //@ chunk-2f5p3gsj.js:8026-8075 layout
-function sanitizeDisplayText(c) {
-  return replaceControlChars(stripVTControlCharacters(c)).replaceAll("`", "");
+function sanitizeDisplayText(text) {
+  return replaceControlChars(stripVTControlCharacters(text)).replaceAll("`", "");
 }
 //@ chunk-2f5p3gsj.js:8075-8320 layout
 function describeLastUpdateAttempt(lastUpdateResult) {
   if (!lastUpdateResult) return "none recorded";
-  let u = sanitizeDisplayText(lastUpdateResult.timestamp.slice(0, 10));
+  let dateText = sanitizeDisplayText(lastUpdateResult.timestamp.slice(0, 10));
   switch (lastUpdateResult.outcome) {
     case "success":
       return lastUpdateResult.version_to
-        ? `success \u2192 ${sanitizeDisplayText(lastUpdateResult.version_to)} (${u})`
-        : `success (${u})`;
+        ? `success \u2192 ${sanitizeDisplayText(lastUpdateResult.version_to)} (${dateText})`
+        : `success (${dateText})`;
     case "failed":
-      return `failed (${sanitizeDisplayText(lastUpdateResult.status)}) \u2014 ${u}`;
+      return `failed (${sanitizeDisplayText(lastUpdateResult.status)}) \u2014 ${dateText}`;
   }
 }
 //@ chunk-2f5p3gsj.js:8320-8994 facade-exports = installHandler (0.39)
 /**
  * claude install [target]：安装原生构建（stable/latest/版本号）；DISABLE_UPDATES 时直接退出。
  */
-async function installHandler(target, options, t) {
+async function installHandler(target, options, storage) {
   if (env.DISABLE_UPDATES) {
     process.stdout
       .write(`Updates are disabled by your administrator. Contact your IT team to get the latest version.
 `);
     process.exit(0);
   }
-  let { awaitPolicyLimitsColdStart } = await import("./chunk-qchbrsbw.js");
+  let { awaitPolicyLimitsColdStart } =
+    await import("../../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js");
   await awaitPolicyLimitsColdStart();
-  let { setup } = await import("./chunk-fhdzwff4.js");
-  await setup(cwd(), "default", false, false, undefined, false, undefined, undefined, undefined, t);
-  let { install } = await import("./chunk-na8jp6ng.js");
+  let { setup } = await import("../../isDesktopEntrypointExempted.lazy.js");
+  await setup(cwd(), "default", false, false, undefined, false, undefined, undefined, undefined, storage);
+  let { install } = await import("../../commands/install.lazy.js");
   await new Promise((resolve) => {
     let args = [];
     if (target) args.push(target);
@@ -438,69 +510,19 @@ async function installHandler(target, options, t) {
         resolve();
       },
       {
-        storageV5: t,
+        storageV5: storage,
       },
       args,
     );
   });
 }
-//@ chunk-kpa9nk58.js:191-494 placement
-/**
- * 惰性构建并可批量重置的单例注册表（lazy/builtCount/releaseBuiltSince）。
- */
-class LazyRegistry {
-  resetters = [];
-  built = [];
-  lazy(e) {
-    let t;
-    let r = () => {
-      t = undefined;
-    };
-    this.resetters.push(r);
-    return () => {
-      if (t === undefined) {
-        t = e();
-        this.built.push(r);
-      }
-      return t;
-    };
-  }
-  builtCount() {
-    return this.built.length;
-  }
-  releaseBuiltSince(e) {
-    for (let t of this.built.splice(e)) t();
-  }
-  reset() {
-    for (let resetter of this.resetters) resetter();
-    this.built.length = 0;
-  }
-}
-//@ chunk-kpa9nk58.js:494-508 placement
-/**
- * DoctorLazy/React.lazy 用的单例 LazyRegistry，提供 .lazy() 包装。
- */
-var LAZY_COMPONENT_REGISTRY = new LazyRegistry();
-//@ chunk-kpa9nk58.js:508-541 fingerprint = DoctorLazy (1)
-/**
- * React.lazy 包装（懒加载组件）。
- */
-function DoctorLazy(logArtifactGatesFrozen) {
-  return LAZY_COMPONENT_REGISTRY.lazy(logArtifactGatesFrozen);
-}
-//@ chunk-g54kbxqw.js:35039-35119 fingerprint = DoctorWithPlugins (0.498)
-/**
- * Doctor 屏幕用的插件信息适配（显示名转换）。
- */
-function DoctorWithPlugins(t0) {
-  return {
-    ...displaySkillFields(t0),
-    displayName: escapeOptionalXmlInline(t0.displayName),
-    fallback: undefined,
-  };
-}
-//@ chunk-g54kbxqw.js:35119-35166 sole-consumer
-function escapeOptionalXmlInline(displayName) {
-  return displayName === undefined ? undefined : escapeXmlInline(displayName);
-}
-export { DoctorLazy, confirmYesNo, LAZY_COMPONENT_REGISTRY, DoctorWithPlugins };
+export {
+  DoctorLazy,
+  confirmYesNo,
+  LAZY_COMPONENT_REGISTRY,
+  DoctorWithPlugins,
+  createSubcommandRoot,
+  doctorHandler,
+  installHandler,
+  setupTokenHandler,
+};

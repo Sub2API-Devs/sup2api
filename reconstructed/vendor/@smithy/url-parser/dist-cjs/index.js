@@ -5,11 +5,11 @@
  * pieces: chunk-k057sjda.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_querystring_parser } from "../../querystring-parser/dist-cjs/index.js";
 
 //@ chunk-k057sjda.js:515-772 cjs-fingerprint
-var require_url_parser = x(function (cjsExports) {
+var require_url_parser = __commonJS(function (cjsExports) {
   var import_querystring_parser = require_querystring_parser();
   var parseUrl = (url) => {
     if (typeof url === "string") return parseUrl(new URL(url));

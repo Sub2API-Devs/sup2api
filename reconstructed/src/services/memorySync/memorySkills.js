@@ -39,6 +39,7 @@ import { emptySkillFrontmatter, escapedSkillFields } from "../../skills/skillSou
 import { readAllPages } from "../../utils/pagedRead.js";
 import { ok as ok_2, err } from "../../utils/resultError.js";
 import { formatStorageError, LEAFMOVED, OTHERNAMES } from "../../utils/storage/storageErrors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:166798-166835 placement
 /**
@@ -54,13 +55,14 @@ var MAX_SKILL_FOLDERS = 100;
 class MemorySkillCommands {
   commands = [];
   nameStableSnapshot = this.commands;
-  replace(e) {
-    let n = new Set(this.commands.map((command) => command.name));
-    let r = new Set(e.map((h) => h.name));
-    this.commands = e;
-    let s = r.size !== n.size || [...r].some((h) => !n.has(h));
-    if (s) this.nameStableSnapshot = e;
-    return s;
+  replace(commands) {
+    let previousNames = new Set(this.commands.map((command) => command.name));
+    let nextNames = new Set(commands.map((command) => command.name));
+    this.commands = commands;
+    let namesChanged =
+      nextNames.size !== previousNames.size || [...nextNames].some((name) => !previousNames.has(name));
+    if (namesChanged) this.nameStableSnapshot = commands;
+    return namesChanged;
   }
   changed = createSignal();
 }
@@ -68,7 +70,10 @@ class MemorySkillCommands {
 /**
  * 按宿主保存的记忆库技能命令状态。
  */
-var memorySkillCommandsState = new HostScoped(() => new MemorySkillCommands());
+var memorySkillCommandsState; // deferred: uses MemorySkillCommands of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:167096", () => {
+  memorySkillCommandsState = new HostScoped(() => new MemorySkillCommands());
+});
 //@ chunk-s61vbvea.js:167121-167158 placement
 /**
  * 取当前宿主的记忆库技能命令状态。
@@ -101,9 +106,9 @@ function onMemorySkillsChanged(refresh) {
 /**
  * 从记忆库加载技能（Windows 不支持 O_NOFOLLOW 时跳过）
  */
-async function loadMemoryStoreSkills(storeSkillConfigs, n, storageV5) {
+async function loadMemoryStoreSkills(storeSkillConfigs, syncStates, storageV5) {
   try {
-    let filtered = storeSkillConfigs.filter((j) => (j.skillsDirs ?? []).length > 0);
+    let filtered = storeSkillConfigs.filter((config) => (config.skillsDirs ?? []).length > 0);
     if (filtered.length === 0) return;
     if (getPlatform_2() === "windows") {
       logForDebugging("memory-skills: store skills are not loaded on Windows (no O_NOFOLLOW)", {
@@ -134,240 +139,247 @@ async function loadMemoryStoreSkills(storeSkillConfigs, n, storageV5) {
       if (memorySkillCommands.replace([])) memorySkillCommands.changed.emit();
       return;
     }
-    let h = new Map(n.map((j) => [j.mountName, j]));
-    let y = [];
-    let S = new Set();
-    let w = false;
-    let R = false;
-    let x = (mount, G) => {
-      w = true;
-      logForDebugging(`memory-skills: skipping ${mount} \u2014 ${G}`, {
+    let stateByMount = new Map(syncStates.map((state) => [state.mountName, state]));
+    let commands = [];
+    let seenNames = new Set();
+    let skipped = false;
+    let truncated = false;
+    let skip = (mount, reason) => {
+      skipped = true;
+      logForDebugging(`memory-skills: skipping ${mount} \u2014 ${reason}`, {
         level: "warn",
       });
     };
-    for (let j of filtered) {
-      if (j.scope !== "team") {
-        x(j.mount, "skillsDirs is team-store only");
+    for (let config of filtered) {
+      if (config.scope !== "team") {
+        skip(config.mount, "skillsDirs is team-store only");
         continue;
       }
-      let G = h.get(j.mount);
-      if (!G) {
-        x(j.mount, "no sync state for mount");
+      let state = stateByMount.get(config.mount);
+      if (!state) {
+        skip(config.mount, "no sync state for mount");
         continue;
       }
-      let L = await checkPathInTeamMemDir(G.mountDir, "team", j.mount);
-      if (L === "absent") {
-        x(j.mount, "mount dir does not exist");
+      let dirCheck = await checkPathInTeamMemDir(state.mountDir, "team", config.mount);
+      if (dirCheck === "absent") {
+        skip(config.mount, "mount dir does not exist");
         continue;
       }
-      if (L !== "ok") {
-        x(j.mount, "mount dir escapes its canonical location");
+      if (dirCheck !== "ok") {
+        skip(config.mount, "mount dir escapes its canonical location");
         continue;
       }
-      if (!(await isOwnManifest(G.mountDir, G.backend.partitionId))) {
-        x(j.mount, "mount dir not adopted by this partition");
+      if (!(await isOwnManifest(state.mountDir, state.backend.partitionId))) {
+        skip(config.mount, "mount dir not adopted by this partition");
         continue;
       }
-      let Q = storageV5 && parseTeamMemoryDir(G.mountDir);
-      for (let Z of j.skillsDirs ?? []) {
+      let teamDir = storageV5 && parseTeamMemoryDir(state.mountDir);
+      for (let skillsDir of config.skillsDirs ?? []) {
         let teamMemFilePath = getTeamMemFilePath(
           {
             scope: "team",
-            mount: j.mount,
+            mount: config.mount,
           },
-          Z,
+          skillsDir,
         );
-        let parts = Z.split("/");
-        let se = await checkPathInTeamMemDir(teamMemFilePath, "team", j.mount, ...parts);
-        if (se === "absent") continue;
-        if (se !== "ok") {
-          x(j.mount, `skills dir ${Z} resolves through a symlink or escapes the mount`);
+        let parts = skillsDir.split("/");
+        let dirCheck = await checkPathInTeamMemDir(teamMemFilePath, "team", config.mount, ...parts);
+        if (dirCheck === "absent") continue;
+        if (dirCheck !== "ok") {
+          skip(config.mount, `skills dir ${skillsDir} resolves through a symlink or escapes the mount`);
           continue;
         }
-        let realAutoMemPath = await resolveRealAutoMemPath("team", j.mount, ...parts);
-        let he = await listMemorySkillFolders(
+        let realAutoMemPath = await resolveRealAutoMemPath("team", config.mount, ...parts);
+        let listed = await listMemorySkillFolders(
           realAutoMemPath,
-          x,
-          j,
+          skip,
+          config,
           storageV5,
-          Q && {
-            projectKey: Q.projectKey,
-            relPath: [...Q.relPath, ...parts],
+          teamDir && {
+            projectKey: teamDir.projectKey,
+            relPath: [...teamDir.relPath, ...parts],
           },
         );
-        for (let command of he.commands) {
-          if (S.has(command.name)) {
+        for (let command of listed.commands) {
+          if (seenNames.has(command.name)) {
             logForDebugging(
-              `memory-skills: ${command.name} already registered by an earlier skills dir \u2014 ignoring the copy in ${Z} (${j.mount})`,
+              `memory-skills: ${command.name} already registered by an earlier skills dir \u2014 ignoring the copy in ${skillsDir} (${config.mount})`,
             );
             continue;
           }
-          S.add(command.name);
-          y.push(command);
+          seenNames.add(command.name);
+          commands.push(command);
         }
-        R ||= he.truncated;
+        truncated ||= listed.truncated;
       }
     }
     let memorySkillCommands = getMemorySkillCommands();
-    if (memorySkillCommands.replace(y)) memorySkillCommands.changed.emit();
-    if (y.length > 0) logForDebugging(`memory-skills: registered ${y.length} skill(s) under ${MEMORIES}`);
-    if (w) logFeatureSad("memory_store_skills", "store_skipped");
-    if (R) logFeatureSad("memory_store_skills", "skills_truncated");
-    if (!w && !R) logFeatureOk("memory_store_skills");
+    if (memorySkillCommands.replace(commands)) memorySkillCommands.changed.emit();
+    if (commands.length > 0)
+      logForDebugging(`memory-skills: registered ${commands.length} skill(s) under ${MEMORIES}`);
+    if (skipped) logFeatureSad("memory_store_skills", "store_skipped");
+    if (truncated) logFeatureSad("memory_store_skills", "skills_truncated");
+    if (!skipped && !truncated) logFeatureOk("memory_store_skills");
   } catch (error) {
     logError(error);
     logFeatureBad("memory_store_skills", "register_failed");
   }
 }
 //@ chunk-s61vbvea.js:169499-172086 placement
-async function listMemorySkillFolders(realAutoMemPath, n, r, storage, scope) {
+async function listMemorySkillFolders(realAutoMemPath, reportSkip, config, storage, scope) {
   let { createSkillCommand, parseSkillFrontmatterFields } = getMCPSkillBuilders();
-  let w;
+  let folders;
   if (storage && scope) {
-    let P = await listMemorySkillDirs(storage, scope);
-    if (!P.ok) {
-      n(r.mount, `listing failed for ${realAutoMemPath} (${P.error})`);
+    let dirListing = await listMemorySkillDirs(storage, scope);
+    if (!dirListing.ok) {
+      reportSkip(config.mount, `listing failed for ${realAutoMemPath} (${dirListing.error})`);
       return {
         commands: [],
         truncated: false,
       };
     }
-    w = P.value;
+    folders = dirListing.value;
   } else {
-    let P;
+    let entries;
     try {
-      P = await readdir(realAutoMemPath, {
+      entries = await readdir(realAutoMemPath, {
         withFileTypes: true,
       });
     } catch (error) {
       if (!isENOENT(error))
-        n(r.mount, `readdir failed for ${realAutoMemPath} (${getErrnoCode(error) ?? "unknown"})`);
+        reportSkip(
+          config.mount,
+          `readdir failed for ${realAutoMemPath} (${getErrnoCode(error) ?? "unknown"})`,
+        );
       return {
         commands: [],
         truncated: false,
       };
     }
-    w = P.filter((j) => j.isDirectory() || j.isSymbolicLink()).map((j) => ({
-      name: j.name,
-      symlink: j.isSymbolicLink(),
-    }));
+    folders = entries
+      .filter((entry) => entry.isDirectory() || entry.isSymbolicLink())
+      .map((entry) => ({
+        name: entry.name,
+        symlink: entry.isSymbolicLink(),
+      }));
   }
-  w.sort((P, j) => (P.name < j.name ? -1 : 1));
+  folders.sort((left, right) => (left.name < right.name ? -1 : 1));
   let truncated = false;
-  if (w.length > MAX_SKILL_FOLDERS) {
+  if (folders.length > MAX_SKILL_FOLDERS) {
     logForDebugging(
-      `memory-skills: ${realAutoMemPath} has ${w.length} skill folders \u2014 loading only the first ${MAX_SKILL_FOLDERS}`,
+      `memory-skills: ${realAutoMemPath} has ${folders.length} skill folders \u2014 loading only the first ${MAX_SKILL_FOLDERS}`,
       {
         level: "warn",
       },
     );
     truncated = true;
-    w = w.slice(0, MAX_SKILL_FOLDERS);
+    folders = folders.slice(0, MAX_SKILL_FOLDERS);
   }
-  let x = [];
-  for (let P of w) {
-    if (P.name.length > 256 || P.symlink || !isValidRelativeSegments(P.name)) {
-      n(r.mount, `unsafe or symlinked skill folder in ${realAutoMemPath}`);
+  let commands = [];
+  for (let folder of folders) {
+    if (folder.name.length > 256 || folder.symlink || !isValidRelativeSegments(folder.name)) {
+      reportSkip(config.mount, `unsafe or symlinked skill folder in ${realAutoMemPath}`);
       continue;
     }
-    let j = join(realAutoMemPath, P.name, "SKILL.md");
-    let G;
+    let skillFile = join(realAutoMemPath, folder.name, "SKILL.md");
+    let text;
     if (storage && scope) {
       let memorySkillFile = await readMemorySkillFile(
         storage,
-        STORAGE_SPACES.memory(scope.projectKey, [...scope.relPath, P.name, "SKILL.md"]),
+        STORAGE_SPACES.memory(scope.projectKey, [...scope.relPath, folder.name, "SKILL.md"]),
       );
       if (memorySkillFile.kind === "absent") continue;
       if (memorySkillFile.kind !== "ok") {
-        n(
-          r.mount,
+        reportSkip(
+          config.mount,
           memorySkillFile.kind === "notAtLocation"
-            ? `${j} is not at its apparent location`
+            ? `${skillFile} is not at its apparent location`
             : memorySkillFile.kind === "moved"
-              ? `${j} is not where its key says (moved during open, or the home path is too long to verify)`
+              ? `${skillFile} is not where its key says (moved during open, or the home path is too long to verify)`
               : memorySkillFile.kind === "otherNames"
-                ? `${j} skipped this cycle (a second name on the file, or the backend's own publish in flight) \u2014 retried at the next sync`
+                ? `${skillFile} skipped this cycle (a second name on the file, or the backend's own publish in flight) \u2014 retried at the next sync`
                 : memorySkillFile.kind === "notPlainSmallFile"
-                  ? `${j} is not a plain small file`
-                  : `read failed for ${j} (${memorySkillFile.reason})`,
+                  ? `${skillFile} is not a plain small file`
+                  : `read failed for ${skillFile} (${memorySkillFile.reason})`,
         );
         continue;
       }
-      G = memorySkillFile.content;
+      text = memorySkillFile.content;
     } else {
-      let re;
+      let realFile;
       try {
-        re = await realpath(j);
+        realFile = await realpath(skillFile);
       } catch (error) {
         let errnoCode = getErrnoCode(error);
         if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR")
-          n(r.mount, `realpath failed for ${j} (${errnoCode ?? "unknown"})`);
+          reportSkip(config.mount, `realpath failed for ${skillFile} (${errnoCode ?? "unknown"})`);
         continue;
       }
-      if (re !== j) {
-        n(r.mount, `${j} is not at its apparent location`);
+      if (realFile !== skillFile) {
+        reportSkip(config.mount, `${skillFile} is not at its apparent location`);
         continue;
       }
       try {
-        let he = await open(j, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+        let handle = await open(skillFile, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
         try {
-          let stats = await he.stat();
-          if ((await verifyHandleBinding(he, re, stats)) === "moved") {
-            n(r.mount, `${j} moved during open`);
+          let stats = await handle.stat();
+          if ((await verifyHandleBinding(handle, realFile, stats)) === "moved") {
+            reportSkip(config.mount, `${skillFile} moved during open`);
             continue;
           }
           if (!stats.isFile() || stats.nlink > 1 || stats.size > MAX_SKILL_FILE_BYTES) {
-            n(r.mount, `${j} is not a plain small file`);
+            reportSkip(config.mount, `${skillFile} is not a plain small file`);
             continue;
           }
-          G = (
-            await he.readFile({
+          text = (
+            await handle.readFile({
               encoding: "utf8",
             })
           ).toString();
         } finally {
-          await he.close();
+          await handle.close();
         }
       } catch (error) {
-        if (!isENOENT(error)) n(r.mount, `open failed for ${j} (${getErrnoCode(error) ?? "unknown"})`);
+        if (!isENOENT(error))
+          reportSkip(config.mount, `open failed for ${skillFile} (${getErrnoCode(error) ?? "unknown"})`);
         continue;
       }
     }
     try {
-      G = recursivelySanitizeUnicode(G);
+      text = recursivelySanitizeUnicode(text);
     } catch {
-      n(r.mount, `${j} failed content sanitization`);
+      reportSkip(config.mount, `${skillFile} failed content sanitization`);
       continue;
     }
-    let frontmatter = parseFrontmatter(G, j, {
+    let frontmatter = parseFrontmatter(text, skillFile, {
       normalizeKeys: true,
       untrusted: true,
     });
     let { frontmatter: frontmatter_2, content, parseError } = frontmatter;
     if (parseError !== undefined) {
-      n(r.mount, `${j} frontmatter was not read`);
+      reportSkip(config.mount, `${skillFile} frontmatter was not read`);
       continue;
     }
-    let ee = escapeXmlControlChars(content);
-    let ae = `${MEMORIES}${P.name}`;
-    let skillFrontmatterFields = parseSkillFrontmatterFields(frontmatter_2, ee, ae);
-    x.push(
+    let body = escapeXmlControlChars(content);
+    let skillName = `${MEMORIES}${folder.name}`;
+    let command = parseSkillFrontmatterFields(frontmatter_2, body, skillName);
+    commands.push(
       createSkillCommand({
-        ...skillFrontmatterFields,
-        skillName: ae,
-        markdownContent: ee,
+        ...command,
+        skillName,
+        markdownContent: body,
         source: "memoryStore",
-        baseDir: join(realAutoMemPath, P.name),
+        baseDir: join(realAutoMemPath, folder.name),
         loadedFrom: "memoryStore",
-        skillFile: scrubMemoryKeys(frontmatter, j),
+        skillFile: scrubMemoryKeys(frontmatter, skillFile),
         ...emptySkillFrontmatter(),
-        ...escapedSkillFields(skillFrontmatterFields),
+        ...escapedSkillFields(command),
         userInvocable: false,
       }),
     );
   }
   return {
-    commands: x.filter((P) => P !== undefined),
+    commands: commands.filter((command) => command !== undefined),
     truncated,
   };
 }
@@ -378,7 +390,7 @@ async function listMemorySkillFolders(realAutoMemPath, n, r, storage, scope) {
 async function listMemorySkillDirs(storage, scope) {
   let children = [];
   let listing = await readAllPages(
-    (h) =>
+    (cursor) =>
       storage.listEntries(
         {
           namespace: "memory",
@@ -388,19 +400,19 @@ async function listMemorySkillDirs(storage, scope) {
         {
           skipKeyStats: true,
           skipScopeStats: true,
-          ...(h !== undefined && {
-            cursor: h,
+          ...(cursor !== undefined && {
+            cursor,
           }),
         },
       ),
-    (h) => {
-      for (let y of h) {
-        if (y.kind !== "scope" || y.scope.namespace !== "memory") continue;
-        let last = y.scope.relPath?.at(-1);
-        if (last !== undefined && y.scope.relPath?.length === scope.relPath.length + 1)
+    (items) => {
+      for (let item of items) {
+        if (item.kind !== "scope" || item.scope.namespace !== "memory") continue;
+        let last = item.scope.relPath?.at(-1);
+        if (last !== undefined && item.scope.relPath?.length === scope.relPath.length + 1)
           children.push({
             name: last,
-            symlink: y.viaSymlink === true,
+            symlink: item.viaSymlink === true,
           });
       }
     },
@@ -418,8 +430,8 @@ async function listMemorySkillDirs(storage, scope) {
 /**
  * 以加固模式读取记忆存储中的技能文件，把各类存储错误（不在位置、已移动、多个名称、非小文件）映射为结果类型。
  */
-async function readMemorySkillFile(e, key) {
-  let text = await e.readText(
+async function readMemorySkillFile(storage, key) {
+  let text = await storage.readText(
     [
       {
         key,
@@ -454,25 +466,25 @@ async function readMemorySkillFile(e, key) {
                 reason: formatStorageError(text.error),
               };
   }
-  let [s] = text.value.items;
-  if (!s.found)
+  let [item] = text.value.items;
+  if (!item.found)
     return {
       kind: "absent",
     };
-  if (s.totalBytes > MAX_SKILL_FILE_BYTES)
+  if (item.totalBytes > MAX_SKILL_FILE_BYTES)
     return {
       kind: "notPlainSmallFile",
     };
   return {
     kind: "ok",
-    content: s.value,
+    content: item.value,
   };
 }
 //@ chunk-s61vbvea.js:173086-173191 placement
 class PendingQueue {
   pending = [];
-  enqueue(e) {
-    this.pending.push(e);
+  enqueue(item) {
+    this.pending.push(item);
   }
   drain() {
     let pending = this.pending;
@@ -484,13 +496,16 @@ class PendingQueue {
 /**
  * 按宿主保存的记忆技能加载队列。
  */
-var pendingMemorySkillQueue = new HostScoped(() => new PendingQueue());
+var pendingMemorySkillQueue; // deferred: uses PendingQueue of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:173191", () => {
+  pendingMemorySkillQueue = new HostScoped(() => new PendingQueue());
+});
 //@ chunk-s61vbvea.js:173217-173260 placement
 /**
  * 把一次技能加载加入队列。
  */
-function enqueueMemorySkillLoad(e) {
-  pendingMemorySkillQueue.of(getRootSession().host).enqueue(e);
+function enqueueMemorySkillLoad(text) {
+  pendingMemorySkillQueue.of(getRootSession().host).enqueue(text);
 }
 export {
   onMemorySkillsChanged,

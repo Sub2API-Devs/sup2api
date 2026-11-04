@@ -15,36 +15,36 @@ import { createSignal } from "../utils/signal.js";
 /**
  * 把按键名称转换为 Ink 的 key 布尔对象。
  */
-function toInkKey(n) {
-  let t = KEY_NAME_MAP[n.name];
+function toInkKey(keyEvent) {
+  let name = KEY_NAME_MAP[keyEvent.name];
   let key = {
-    upArrow: t === "upArrow",
-    downArrow: t === "downArrow",
-    leftArrow: t === "leftArrow",
-    rightArrow: t === "rightArrow",
-    pageDown: t === "pageDown",
-    pageUp: t === "pageUp",
+    upArrow: name === "upArrow",
+    downArrow: name === "downArrow",
+    leftArrow: name === "leftArrow",
+    rightArrow: name === "rightArrow",
+    pageDown: name === "pageDown",
+    pageUp: name === "pageUp",
     wheelUp: false,
     wheelDown: false,
-    home: t === "home",
-    end: t === "end",
-    return: t === "return",
-    escape: t === "escape",
-    tab: t === "tab",
-    backspace: t === "backspace",
-    delete: t === "delete",
-    ctrl: n.ctrl,
-    shift: n.shift,
-    super: n.superKey,
-    meta: n.meta,
+    home: name === "home",
+    end: name === "end",
+    return: name === "return",
+    escape: name === "escape",
+    tab: name === "tab",
+    backspace: name === "backspace",
+    delete: name === "delete",
+    ctrl: keyEvent.ctrl,
+    shift: keyEvent.shift,
+    super: keyEvent.superKey,
+    meta: keyEvent.meta,
   };
   return {
     input:
-      n.name === "enter"
+      keyEvent.name === "enter"
         ? `
 `
-        : [...n.key].length === 1
-          ? n.key
+        : [...keyEvent.key].length === 1
+          ? keyEvent.key
           : "",
     key,
   };
@@ -92,7 +92,7 @@ var INK_KEY_DISPLAY_ALIASES = [
 function toInkKeyEvent(action, context) {
   return {
     name:
-      INK_KEY_DISPLAY_ALIASES.find(([i]) => context[i])?.[1] ??
+      INK_KEY_DISPLAY_ALIASES.find(([entry]) => context[entry])?.[1] ??
       (action ===
       `
 `
@@ -116,8 +116,8 @@ function noop() {}
 /**
  * 处理器是否消费了按键
  */
-function didHandlerConsume(ke) {
-  return ke.handler() !== false;
+function didHandlerConsume(registration) {
+  return registration.handler() !== false;
 }
 //@ chunk-8pssrarc.js:1641-1788 placement
 /**

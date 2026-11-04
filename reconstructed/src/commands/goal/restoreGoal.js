@@ -18,46 +18,46 @@ import { logEvent } from "../../services/analytics/index.js";
 /**
  * 恢复会话时从转写还原 /goal 目标与 Stop hook。
  */
-function restoreGoalFromTranscript(messages, setAppState, sessionHooksRegistry, i) {
+function restoreGoalFromTranscript(messages, setAppState, sessionHooksRegistry, hooks) {
   let activeGoalCondition = findActiveGoalCondition(messages);
-  let r = activeGoalCondition !== null ? getGoalBlockedReason() : null;
-  let n = r?.code === "hooks_held" ? null : r;
-  if (n !== null)
-    logFeatureSad("goal_set", n.code, {
+  let blocked = activeGoalCondition !== null ? getGoalBlockedReason() : null;
+  let reason = blocked?.code === "hooks_held" ? null : blocked;
+  if (reason !== null)
+    logFeatureSad("goal_set", reason.code, {
       origin: fromEnum("restored"),
     });
-  let t;
-  if (activeGoalCondition === null || n !== null) {
-    setAppState((o) => {
-      t = o.activeGoal;
-      return o.activeGoal === undefined
-        ? o
+  let restored;
+  if (activeGoalCondition === null || reason !== null) {
+    setAppState((state) => {
+      restored = state.activeGoal;
+      return state.activeGoal === undefined
+        ? state
         : {
-            ...o,
+            ...state,
             activeGoal: undefined,
           };
     });
-    if (t !== undefined) logGoalCleared(t, "resume_swap");
+    if (restored !== undefined) logGoalCleared(restored, "resume_swap");
     return;
   }
   sessionHooksRegistry.add(getSessionId(), "Stop", "", getValueFromInput(activeGoalCondition));
-  setAppState((o) => {
-    t = o.activeGoal;
+  setAppState((state) => {
+    restored = state.activeGoal;
     return {
-      ...o,
+      ...state,
       activeGoal: {
         condition: activeGoalCondition,
-        iterations: i?.iterations ?? 0,
-        setAt: i?.setAt ?? Date.now(),
-        ...(i?.lastReason !== undefined && {
-          lastReason: i.lastReason,
+        iterations: hooks?.iterations ?? 0,
+        setAt: hooks?.setAt ?? Date.now(),
+        ...(hooks?.lastReason !== undefined && {
+          lastReason: hooks.lastReason,
         }),
         origin: "restored",
         tokensAtStart: getTotalOutputTokens(),
       },
     };
   });
-  if (t !== undefined) logGoalCleared(t, "resume_swap");
+  if (restored !== undefined) logGoalCleared(restored, "resume_swap");
   logEvent("tengu_goal_restored_on_resume", {
     promptLength: activeGoalCondition.length,
   });

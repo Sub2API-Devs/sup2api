@@ -47,46 +47,52 @@ import { supportsAutoModeIfActive } from "./modelAccessCheck.js";
 /**
  * 按管理员固定调整
  */
-function steerAdminPins(o) {
-  let providerTierDefaults = buildProviderTierDefaults(o);
-  if (providerTierDefaults === undefined) return;
+function steerAdminPins(provider) {
+  let tierConfig = buildProviderTierDefaults(provider);
+  if (tierConfig === undefined) return;
   let modelOverrides = getInitialSettings_2().modelOverrides;
-  for (let r of collectUnpinnedTiers(providerTierDefaults, modelOverrides)) {
-    let { documentTarget, fromDocument } = providerTierDefaults[r.tier];
-    let id = documentTarget?.modelId ?? catalogEntriesByFirstPartyId[r.defaultKey][o];
+  for (let tier of collectUnpinnedTiers(tierConfig, modelOverrides)) {
+    let { documentTarget, fromDocument } = tierConfig[tier.tier];
+    let id = documentTarget?.modelId ?? catalogEntriesByFirstPartyId[tier.defaultKey][provider];
     if (id === null || enforcedAllowlistLeavesOut(id)) continue;
-    let d = predecessorsInTier(r.defaultKey, r.tier, documentTarget !== undefined);
-    let index = d.findIndex((m) => {
-      let p = catalogEntriesByFirstPartyId[m][o];
-      return p !== null && (isModelRemappedOrRetired(p) || isModelDeprecated(p));
+    let predecessors = predecessorsInTier(tier.defaultKey, tier.tier, documentTarget !== undefined);
+    let index = predecessors.findIndex((key) => {
+      let modelId = catalogEntriesByFirstPartyId[key][provider];
+      return modelId !== null && (isModelRemappedOrRetired(modelId) || isModelDeprecated(modelId));
     });
-    let k = index < 0 ? d : d.slice(0, index);
-    let E = new Set(k.filter((m) => Boolean(modelOverrides?.[catalogEntriesByFirstPartyId[m].firstParty])));
-    let g =
+    let kept = index < 0 ? predecessors : predecessors.slice(0, index);
+    let overridden = new Set(
+      kept.filter((key) => Boolean(modelOverrides?.[catalogEntriesByFirstPartyId[key].firstParty])),
+    );
+    let adminPinned =
       fromDocument === true
-        ? k.find((m) => E.has(m) && !enforcedAllowlistLeavesOut(String(getModelStrings()[m])))
+        ? kept.find(
+            (key) => overridden.has(key) && !enforcedAllowlistLeavesOut(String(getModelStrings()[key])),
+          )
         : undefined;
-    let v = [
+    let rungs = [
       documentTarget === undefined
-        ? defaultModelWithMarketingName(r.defaultKey, id)
+        ? defaultModelWithMarketingName(tier.defaultKey, id)
         : {
             id,
             name: documentTarget.name,
           },
-      ...(g === undefined ? k : k.slice(0, k.indexOf(g))).flatMap((m) => {
-        let id = catalogEntriesByFirstPartyId[m][o];
-        return id === null || E.has(m) || enforcedAllowlistLeavesOut(id)
+      ...(adminPinned === undefined ? kept : kept.slice(0, kept.indexOf(adminPinned))).flatMap((key) => {
+        let id = catalogEntriesByFirstPartyId[key][provider];
+        return id === null || overridden.has(key) || enforcedAllowlistLeavesOut(id)
           ? []
-          : [defaultModelWithMarketingName(m, id)];
+          : [defaultModelWithMarketingName(key, id)];
       }),
-      ...(g === undefined ? [] : [defaultModelWithMarketingName(g, String(getModelStrings()[g]))]),
+      ...(adminPinned === undefined
+        ? []
+        : [defaultModelWithMarketingName(adminPinned, String(getModelStrings()[adminPinned]))]),
     ];
-    registerFallbackLadder(o, r.tier, r.envVar, v);
+    registerFallbackLadder(provider, tier.tier, tier.envVar, rungs);
   }
 }
 //@ chunk-4r745zza.js:1458-1524 placement
-function defaultModelWithMarketingName(o, id) {
-  let firstParty = catalogEntriesByFirstPartyId[o].firstParty;
+function defaultModelWithMarketingName(key, id) {
+  let firstParty = catalogEntriesByFirstPartyId[key].firstParty;
   return {
     id,
     name: getMarketingNameForModel(firstParty) ?? firstParty,
@@ -100,38 +106,44 @@ var TIER_LABELS = {
   haiku: "Haiku",
 };
 //@ chunk-4r745zza.js:1589-1808 placement
-async function withProbeDeadline(o, l, f = STARTUP_PROBE_DEADLINE_MS) {
-  let r;
+async function withProbeDeadline(label, promise, deadlineMs = STARTUP_PROBE_DEADLINE_MS) {
+  let timer;
   try {
     return await Promise.race([
-      l,
+      promise,
       new Promise((resolve) => {
-        r = setTimeout(
-          (u, n, d) => {
-            logForDebugging(`[3p-probe] ${n} hit ${d}ms deadline; proceeding without it`);
-            u([]);
+        timer = setTimeout(
+          (resolve, name, timeout) => {
+            logForDebugging(`[3p-probe] ${name} hit ${timeout}ms deadline; proceeding without it`);
+            resolve([]);
           },
-          f,
+          deadlineMs,
           resolve,
-          o,
-          f,
+          label,
+          deadlineMs,
         );
       }),
     ]);
   } finally {
-    clearTimeout(r);
+    clearTimeout(timer);
   }
 }
 //@ chunk-4r745zza.js:1808-1971 placement = createFallbackStorage (0.51)
 /**
  * 在总时限内依次探测某提供者的回退默认值与文档默认值（第二次用剩余时间），返回两者结果；属于第三方提供者默认模型探测，误归 secureStorage（旧版名 createFallbackStorage 错配）。
  */
-async function probeProviderDefaults(o, l, f, r = STARTUP_PROBE_DEADLINE_MS) {
+async function probeProviderDefaults(
+  provider,
+  availabilityProbe,
+  documentProbe,
+  deadlineMs = STARTUP_PROBE_DEADLINE_MS,
+) {
   let now = Date.now();
-  let u = await withProbeDeadline(`${o}-fallback`, l(), r);
-  let n = r - (Date.now() - now);
-  let d = n > 0 ? await withProbeDeadline(`${o}-document-default`, f(), n) : [];
-  return [u, d];
+  let availability = await withProbeDeadline(`${provider}-fallback`, availabilityProbe(), deadlineMs);
+  let remaining = deadlineMs - (Date.now() - now);
+  let documents =
+    remaining > 0 ? await withProbeDeadline(`${provider}-document-default`, documentProbe(), remaining) : [];
+  return [availability, documents];
 }
 //@ chunk-4r745zza.js:1971-2385 placement
 /**
@@ -155,19 +167,19 @@ function isDefaultModelEnvUserSet(envVar) {
 /**
  * 设置默认模型环境变量
  */
-function setDefaultModelEnv(envVar, l) {
+function setDefaultModelEnv(envVar, value) {
   switch (envVar) {
     case "ANTHROPIC_DEFAULT_SONNET_MODEL":
-      env.set("ANTHROPIC_DEFAULT_SONNET_MODEL", l);
+      env.set("ANTHROPIC_DEFAULT_SONNET_MODEL", value);
       break;
     case "ANTHROPIC_DEFAULT_OPUS_MODEL":
-      env.set("ANTHROPIC_DEFAULT_OPUS_MODEL", l);
+      env.set("ANTHROPIC_DEFAULT_OPUS_MODEL", value);
       break;
     default:
       return;
   }
-  recordProbedDefault(envVar, l);
-  recordSeededDefault(envVar, l);
+  recordProbedDefault(envVar, value);
+  recordSeededDefault(envVar, value);
 }
 //@ chunk-4r745zza.js:2610-2754 placement
 function captureAdmin3PSteeringSnapshot() {
@@ -180,49 +192,52 @@ function captureAdmin3PSteeringSnapshot() {
 /**
  * 第三方提供商（Bedrock/Vertex/Mantle）默认模型不可用时探测并回退到可用模型，记 tengu_*_default_fallback。
  */
-async function apply3PDefaultFallbacks(o) {
+async function apply3PDefaultFallbacks(options) {
   captureAdmin3PSteeringSnapshot();
-  let trimmed = o?.pendingUserModel?.trim();
-  let r = vetUserSpecifiedModel(
+  let trimmed = options?.pendingUserModel?.trim();
+  let pendingUserModel = vetUserSpecifiedModel(
     trimmed === "default" || trimmed === "inherit" || trimmed === "" ? undefined : (trimmed ?? undefined),
   );
   let envDefaultModel = getEnvDefaultModel();
-  let u =
-    r != null && r !== ""
-      ? r
-      : trimmed !== undefined && r == null
+  let baselineModel =
+    pendingUserModel != null && pendingUserModel !== ""
+      ? pendingUserModel
+      : trimmed !== undefined && pendingUserModel == null
         ? (envDefaultModel ?? undefined)
         : (getUserSpecifiedModelSetting() ?? envDefaultModel ?? undefined);
   switch (getAPIProvider()) {
     case "bedrock":
       return {
-        lines: await applyBedrockFallbacks(u),
+        lines: await applyBedrockFallbacks(baselineModel),
         hasHardFailure: false,
       };
     case "vertex":
       return {
-        lines: await applyVertexFallbacks(u),
+        lines: await applyVertexFallbacks(baselineModel),
         hasHardFailure: false,
       };
     case "mantle": {
-      let n = false;
+      let envGoverning = false;
       if (envDefaultModel !== null) {
-        let e = strip1mSuffix(envDefaultModel.trim().toLowerCase());
-        n =
+        let envId = strip1mSuffix(envDefaultModel.trim().toLowerCase());
+        envGoverning =
           !(
-            e === "opus" ||
-            e === "best" ||
-            getCanonicalName(e) ===
+            envId === "opus" ||
+            envId === "best" ||
+            getCanonicalName(envId) ===
               getCanonicalName(catalogEntriesByFirstPartyId[DEFAULT_MANTLE_OPUS_KEY].firstParty)
           ) && isEnvDefaultModelGoverning();
       }
-      let d = (r != null && r !== "") || getUserSpecifiedModelSetting() != null || n;
-      return applyMantleFallbacks(d);
+      let userPinned =
+        (pendingUserModel != null && pendingUserModel !== "") ||
+        getUserSpecifiedModelSetting() != null ||
+        envGoverning;
+      return applyMantleFallbacks(userPinned);
     }
     case "foundry": {
-      let providerTierDefaults = buildProviderTierDefaults("foundry");
-      let d = providerTierDefaults && seedEnvDefaultForUserPin(u, providerTierDefaults);
-      if (d && !isDefaultModelEnvUserSet(d.envVar)) setDefaultModelEnv(d.envVar, d.value);
+      let tierConfig = buildProviderTierDefaults("foundry");
+      let pin = tierConfig && seedEnvDefaultForUserPin(baselineModel, tierConfig);
+      if (pin && !isDefaultModelEnvUserSet(pin.envVar)) setDefaultModelEnv(pin.envVar, pin.value);
       steerAdminPins("foundry");
       return {
         lines: [],
@@ -240,163 +255,163 @@ async function apply3PDefaultFallbacks(o) {
 /**
  * 记录文档默认回退
  */
-function recordDocumentFallbacks(o, l) {
-  let f = [];
-  for (let r of o) {
-    recordProbeRefutedDocumentDefault(r.candidate);
-    logEvent(l === "bedrock" ? "tengu_bedrock_default_fallback" : "tengu_vertex_default_fallback", {
-      tier: fromEnum(r.tier ?? "default"),
+function recordDocumentFallbacks(candidates, provider) {
+  let lines = [];
+  for (let candidate of candidates) {
+    recordProbeRefutedDocumentDefault(candidate.candidate);
+    logEvent(provider === "bedrock" ? "tengu_bedrock_default_fallback" : "tengu_vertex_default_fallback", {
+      tier: fromEnum(candidate.tier ?? "default"),
       default_key: lit("document_default"),
       fallback_key: lit("tier_default"),
       cross_tier: lit("false"),
     });
-    f.push(
-      `Default model: ${r.name} not available on this account \u2014 not used as this session's default`,
+    lines.push(
+      `Default model: ${candidate.name} not available on this account \u2014 not used as this session's default`,
     );
   }
-  return f;
+  return lines;
 }
 //@ chunk-4r745zza.js:3812-5007 placement
 /**
  * 应用 Bedrock 默认回退
  */
-async function applyBedrockFallbacks(o) {
+async function applyBedrockFallbacks(baselineModel) {
   let { checkBedrockDefaultAvailability, checkBedrockDocumentDefaults, seedEnvDefaultForUserPin } =
-    await import("./chunk-a7mvp1gg.js");
-  let s = seedEnvDefaultForUserPin(o);
-  if (s && !isDefaultModelEnvUserSet(s.envVar)) setDefaultModelEnv(s.envVar, s.value);
-  let [u, n] = await probeProviderDefaults(
+    await import("./bedrockDefaultCheck.js");
+  let pin = seedEnvDefaultForUserPin(baselineModel);
+  if (pin && !isDefaultModelEnvUserSet(pin.envVar)) setDefaultModelEnv(pin.envVar, pin.value);
+  let [tierFallbacks, documentFallbacks] = await probeProviderDefaults(
     "bedrock",
     checkBedrockDefaultAvailability,
     checkBedrockDocumentDefaults,
   );
-  let d = [];
-  for (let e of u) {
-    if (isDefaultModelEnvUserSet(e.envVar)) continue;
-    process.env[e.envVar] = e.fallbackBedrockId;
-    recordProbedDefault(e.envVar, e.fallbackBedrockId);
-    if (e.tier === "sonnet")
-      applyThirdPartyCrossTierFallback("bedrock", e.fallbackBedrockId, supportsAutoModeIfActive);
-    if (e.tier === "haiku") {
+  let lines = [];
+  for (let fallback of tierFallbacks) {
+    if (isDefaultModelEnvUserSet(fallback.envVar)) continue;
+    process.env[fallback.envVar] = fallback.fallbackBedrockId;
+    recordProbedDefault(fallback.envVar, fallback.fallbackBedrockId);
+    if (fallback.tier === "sonnet")
+      applyThirdPartyCrossTierFallback("bedrock", fallback.fallbackBedrockId, supportsAutoModeIfActive);
+    if (fallback.tier === "haiku") {
       if (!isDefaultModelEnvUserSet("ANTHROPIC_DEFAULT_HAIKU_MODEL"))
-        process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = e.fallbackBedrockId;
+        process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = fallback.fallbackBedrockId;
     }
-    if (e.crossTier) {
-      process.env.ANTHROPIC_DEFAULT_OPUS_MODEL_NAME = e.fallbackName;
-      process.env.ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION = `Opus unavailable \u2014 using ${e.fallbackName}`;
+    if (fallback.crossTier) {
+      process.env.ANTHROPIC_DEFAULT_OPUS_MODEL_NAME = fallback.fallbackName;
+      process.env.ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION = `Opus unavailable \u2014 using ${fallback.fallbackName}`;
     }
     logEvent("tengu_bedrock_default_fallback", {
-      tier: fromEnum(e.tier),
-      default_key: e.documentTargetId ? lit("document_target") : fromEnum(e.defaultKey),
-      fallback_key: fromEnum(e.fallbackKey),
-      cross_tier: lit(e.crossTier ? "true" : "false"),
+      tier: fromEnum(fallback.tier),
+      default_key: fallback.documentTargetId ? lit("document_target") : fromEnum(fallback.defaultKey),
+      fallback_key: fromEnum(fallback.fallbackKey),
+      cross_tier: lit(fallback.crossTier ? "true" : "false"),
     });
-    d.push(
-      e.crossTier
-        ? `${TIER_LABELS[e.tier]}: ${e.defaultName} not available \u2014 using ${e.fallbackName}. Enable ${e.defaultName} in the Bedrock console to upgrade.`
-        : `${TIER_LABELS[e.tier]}: ${e.defaultName} not available \u2014 using ${e.fallbackName} for this session`,
+    lines.push(
+      fallback.crossTier
+        ? `${TIER_LABELS[fallback.tier]}: ${fallback.defaultName} not available \u2014 using ${fallback.fallbackName}. Enable ${fallback.defaultName} in the Bedrock console to upgrade.`
+        : `${TIER_LABELS[fallback.tier]}: ${fallback.defaultName} not available \u2014 using ${fallback.fallbackName} for this session`,
     );
   }
-  d.push(...recordDocumentFallbacks(n, "bedrock"));
-  return d;
+  lines.push(...recordDocumentFallbacks(documentFallbacks, "bedrock"));
+  return lines;
 }
 //@ chunk-4r745zza.js:5007-6185 placement
 /**
  * 应用 Vertex 默认回退
  */
-async function applyVertexFallbacks(o) {
+async function applyVertexFallbacks(baselineModel) {
   let { checkVertexDefaultAvailability, checkVertexDocumentDefaults, seedEnvDefaultForUserPin } =
-    await import("./chunk-5wnerh16.js");
-  let s = seedEnvDefaultForUserPin(o);
-  if (s && !isDefaultModelEnvUserSet(s.envVar)) setDefaultModelEnv(s.envVar, s.value);
-  let [u, n] = await probeProviderDefaults(
+    await import("./checkVertexDefaultAvailability.lazy.js");
+  let pin = seedEnvDefaultForUserPin(baselineModel);
+  if (pin && !isDefaultModelEnvUserSet(pin.envVar)) setDefaultModelEnv(pin.envVar, pin.value);
+  let [tierFallbacks, documentFallbacks] = await probeProviderDefaults(
     "vertex",
     checkVertexDefaultAvailability,
     checkVertexDocumentDefaults,
   );
-  let d = [];
-  for (let e of u) {
-    if (isDefaultModelEnvUserSet(e.envVar)) continue;
-    process.env[e.envVar] = e.fallbackVertexId;
-    recordProbedDefault(e.envVar, e.fallbackVertexId);
-    if (e.tier === "sonnet")
-      applyThirdPartyCrossTierFallback("vertex", e.fallbackVertexId, supportsAutoModeIfActive);
-    if (e.tier === "haiku") {
+  let lines = [];
+  for (let fallback of tierFallbacks) {
+    if (isDefaultModelEnvUserSet(fallback.envVar)) continue;
+    process.env[fallback.envVar] = fallback.fallbackVertexId;
+    recordProbedDefault(fallback.envVar, fallback.fallbackVertexId);
+    if (fallback.tier === "sonnet")
+      applyThirdPartyCrossTierFallback("vertex", fallback.fallbackVertexId, supportsAutoModeIfActive);
+    if (fallback.tier === "haiku") {
       if (!isDefaultModelEnvUserSet("ANTHROPIC_DEFAULT_HAIKU_MODEL"))
-        process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = e.fallbackVertexId;
+        process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL = fallback.fallbackVertexId;
     }
-    if (e.crossTier) {
-      process.env.ANTHROPIC_DEFAULT_OPUS_MODEL_NAME = e.fallbackName;
-      process.env.ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION = `Opus unavailable \u2014 using ${e.fallbackName}`;
+    if (fallback.crossTier) {
+      process.env.ANTHROPIC_DEFAULT_OPUS_MODEL_NAME = fallback.fallbackName;
+      process.env.ANTHROPIC_DEFAULT_OPUS_MODEL_DESCRIPTION = `Opus unavailable \u2014 using ${fallback.fallbackName}`;
     }
     logEvent("tengu_vertex_default_fallback", {
-      tier: fromEnum(e.tier),
-      default_key: e.documentTargetId ? lit("document_target") : fromEnum(e.defaultKey),
-      fallback_key: fromEnum(e.fallbackKey),
-      cross_tier: lit(e.crossTier ? "true" : "false"),
+      tier: fromEnum(fallback.tier),
+      default_key: fallback.documentTargetId ? lit("document_target") : fromEnum(fallback.defaultKey),
+      fallback_key: fromEnum(fallback.fallbackKey),
+      cross_tier: lit(fallback.crossTier ? "true" : "false"),
     });
-    d.push(
-      e.crossTier
-        ? `${TIER_LABELS[e.tier]}: ${e.defaultName} not available \u2014 using ${e.fallbackName}. Enable ${e.defaultName} in Model Garden to upgrade.`
-        : `${TIER_LABELS[e.tier]}: ${e.defaultName} not available \u2014 using ${e.fallbackName} for this session`,
+    lines.push(
+      fallback.crossTier
+        ? `${TIER_LABELS[fallback.tier]}: ${fallback.defaultName} not available \u2014 using ${fallback.fallbackName}. Enable ${fallback.defaultName} in Model Garden to upgrade.`
+        : `${TIER_LABELS[fallback.tier]}: ${fallback.defaultName} not available \u2014 using ${fallback.fallbackName} for this session`,
     );
   }
-  d.push(...recordDocumentFallbacks(n, "vertex"));
-  return d;
+  lines.push(...recordDocumentFallbacks(documentFallbacks, "vertex"));
+  return lines;
 }
 //@ chunk-4r745zza.js:6185-7417 placement
 /**
  * 应用 Mantle 默认回退
  */
-async function applyMantleFallbacks(o) {
-  let { checkMantleDefaultAvailability } = await import("./chunk-paetrb4a.js");
-  let f = await withProbeDeadline(
+async function applyMantleFallbacks(userPinned) {
+  let { checkMantleDefaultAvailability } = await import("./checkMantleDefaultAvailability.lazy.js");
+  let results = await withProbeDeadline(
     "mantle-fallback",
     checkMantleDefaultAvailability(undefined, {
-      userPinned: o,
+      userPinned,
     }),
   );
-  let r = [];
+  let lines = [];
   let hasHardFailure = false;
-  let u;
-  for (let n of f)
-    if (n.kind === "adminPin") {
-      if (!o) {
-        setMainLoopModelOverride(n.adminMantleId);
-        u = n.adminMantleId;
+  let mantleOverride;
+  for (let result of results)
+    if (result.kind === "adminPin") {
+      if (!userPinned) {
+        setMainLoopModelOverride(result.adminMantleId);
+        mantleOverride = result.adminMantleId;
       }
-    } else if (n.kind === "pinRefuted") {
-      if (!o) {
-        setMainLoopModelOverride(n.workingMantleId);
-        u = n.workingMantleId;
+    } else if (result.kind === "pinRefuted") {
+      if (!userPinned) {
+        setMainLoopModelOverride(result.workingMantleId);
+        mantleOverride = result.workingMantleId;
         logEvent("tengu_mantle_default_fallback", {
-          default_key: fromEnum(n.defaultKey),
-          fallback_key: fromEnum(n.workingKey),
+          default_key: fromEnum(result.defaultKey),
+          fallback_key: fromEnum(result.workingKey),
           admin_pin_refuted: lit("true"),
         });
-        r.push(
-          `${TIER_LABELS[n.tier]}: the admin-configured Opus model is not available on this account \u2014 using ${n.workingName} for this session`,
+        lines.push(
+          `${TIER_LABELS[result.tier]}: the admin-configured Opus model is not available on this account \u2014 using ${result.workingName} for this session`,
         );
       }
-    } else if (n.kind === "fallback") {
-      let d = false;
-      if (!isDefaultModelEnvUserSet(n.envVar)) {
-        process.env[n.envVar] = n.fallbackMantleId;
-        recordProbedDefault(n.envVar, n.fallbackMantleId);
-        d = true;
+    } else if (result.kind === "fallback") {
+      let applied = false;
+      if (!isDefaultModelEnvUserSet(result.envVar)) {
+        process.env[result.envVar] = result.fallbackMantleId;
+        recordProbedDefault(result.envVar, result.fallbackMantleId);
+        applied = true;
       }
-      if (!o) {
-        setMainLoopModelOverride(n.fallbackMantleId);
-        u = n.fallbackMantleId;
-        d = true;
+      if (!userPinned) {
+        setMainLoopModelOverride(result.fallbackMantleId);
+        mantleOverride = result.fallbackMantleId;
+        applied = true;
       }
-      if (d) {
+      if (applied) {
         logEvent("tengu_mantle_default_fallback", {
-          default_key: fromEnum(n.defaultKey),
-          fallback_key: fromEnum(n.fallbackKey),
+          default_key: fromEnum(result.defaultKey),
+          fallback_key: fromEnum(result.fallbackKey),
         });
-        r.push(
-          `${TIER_LABELS[n.tier]}: ${n.defaultName} not available \u2014 using ${n.fallbackName} for this session`,
+        lines.push(
+          `${TIER_LABELS[result.tier]}: ${result.defaultName} not available \u2014 using ${result.fallbackName} for this session`,
         );
       }
     } else {
@@ -404,14 +419,14 @@ async function applyMantleFallbacks(o) {
       logEvent("tengu_mantle_default_fallback", {
         default_key: lit("exhausted"),
       });
-      r.push(
-        `${TIER_LABELS[n.tier]}: no accessible model (tried ${n.triedNames.join(", ")}). Enable ${n.defaultName} in Amazon Bedrock (Mantle).`,
+      lines.push(
+        `${TIER_LABELS[result.tier]}: no accessible model (tried ${result.triedNames.join(", ")}). Enable ${result.defaultName} in Amazon Bedrock (Mantle).`,
       );
     }
   return {
-    lines: r,
+    lines,
     hasHardFailure,
-    mantleOverride: u,
+    mantleOverride,
   };
 }
 export { TIER_LABELS, apply3PDefaultFallbacks, withProbeDeadline, captureAdmin3PSteeringSnapshot };

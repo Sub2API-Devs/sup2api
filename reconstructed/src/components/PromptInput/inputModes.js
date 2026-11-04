@@ -39,9 +39,9 @@ function isBashModeChar(key) {
 /**
  * 判断用户是否在空输入或行首键入了模式前缀字符（如 ! 或 #）以切换输入模式。
  */
-function isModeCharTyped({ nextValue, value: r, cursorOffset, mode }) {
+function isModeCharTyped({ nextValue, value, cursorOffset, mode }) {
   let modeFromInput = getModeFromInput(nextValue);
   if (cursorOffset !== 0 || modeFromInput === "prompt" || modeFromInput === mode) return false;
-  return nextValue.length === r.length + 1 || r.length === 0;
+  return nextValue.length === value.length + 1 || value.length === 0;
 }
 export { stripModePrefix, getModeFromInput, prependModeCharacterToInput, isModeCharTyped, isBashModeChar };

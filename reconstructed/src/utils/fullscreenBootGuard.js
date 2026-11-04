@@ -30,6 +30,7 @@ import { registerCleanup } from "./cleanupRegistry.js";
 import { isExitExternallyClocked } from "./process.js";
 import { profileCheckpoint } from "./startupProfiler.js";
 import { logError } from "./log.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-q5g0890f.js:745-781 placement
 var DEFAULT_STICKY_STRIKES = 2;
@@ -72,102 +73,103 @@ function bootGuardContext(now) {
 /**
  * 根据全局配置中的全屏启动记录判断：清理过期记录、统计本版本未正常启动的次数，决定 none/pending_alive/strike/tripped/disabled。
  */
-function evaluateBootRecords(e, n) {
-  let stickyStrikes = n.stickyStrikes ?? DEFAULT_STICKY_STRIKES;
-  let s = {
-    ...e.fullscreenBootPending,
+function evaluateBootRecords(config, context) {
+  let stickyStrikes = context.stickyStrikes ?? DEFAULT_STICKY_STRIKES;
+  let pending = {
+    ...config.fullscreenBootPending,
   };
-  let fullscreenAutoDisabled = e.fullscreenAutoDisabled;
-  let count = e.fullscreenBootStrikes?.version === n.version ? e.fullscreenBootStrikes.count : 0;
-  if (fullscreenAutoDisabled && fullscreenAutoDisabled.version !== n.version)
+  let fullscreenAutoDisabled = config.fullscreenAutoDisabled;
+  let count =
+    config.fullscreenBootStrikes?.version === context.version ? config.fullscreenBootStrikes.count : 0;
+  if (fullscreenAutoDisabled && fullscreenAutoDisabled.version !== context.version)
     fullscreenAutoDisabled = undefined;
-  let r = 0;
-  let f = false;
+  let newStrikes = 0;
+  let hasAliveBoot = false;
   let POSITIVE_INFINITY = Number.POSITIVE_INFINITY;
-  for (let [key, value] of Object.entries(s)) {
-    let k = Number(key);
-    if (!Number.isInteger(k) || k < 1 || typeof value !== "object" || !value) {
-      delete s[key];
+  for (let [key, value] of Object.entries(pending)) {
+    let pid = Number(key);
+    if (!Number.isInteger(pid) || pid < 1 || typeof value !== "object" || !value) {
+      delete pending[key];
       continue;
     }
-    let max = Math.max(0, n.now - value.startedAt);
-    if (value.host !== n.host || value.platform !== n.platform) {
-      if (max > BOOT_RECORD_MAX_AGE_LONG_MS) delete s[key];
+    let max = Math.max(0, context.now - value.startedAt);
+    if (value.host !== context.host || value.platform !== context.platform) {
+      if (max > BOOT_RECORD_MAX_AGE_LONG_MS) delete pending[key];
       continue;
     }
-    if (value.died !== undefined || k === n.ownPid || n.isGone(k)) {
-      delete s[key];
-      if (value.version === n.version) {
-        r += 1;
+    if (value.died !== undefined || pid === context.ownPid || context.isGone(pid)) {
+      delete pending[key];
+      if (value.version === context.version) {
+        newStrikes += 1;
         POSITIVE_INFINITY = Math.min(POSITIVE_INFINITY, max);
       }
-    } else if (max > BOOT_RECORD_MAX_AGE_MS) delete s[key];
-    else f = true;
+    } else if (max > BOOT_RECORD_MAX_AGE_MS) delete pending[key];
+    else hasAliveBoot = true;
   }
-  let h = {
+  let decision = {
     kind: "none",
   };
   if (fullscreenAutoDisabled)
-    h = {
+    decision = {
       kind: "disabled",
     };
-  else if (r > 0) {
-    count += r;
+  else if (newStrikes > 0) {
+    count += newStrikes;
     let pendingAgeMs = Number.isFinite(POSITIVE_INFINITY) ? POSITIVE_INFINITY : 0;
     if (count >= stickyStrikes) {
       fullscreenAutoDisabled = {
-        version: n.version,
-        at: n.now,
+        version: context.version,
+        at: context.now,
         strikes: count,
       };
-      h = {
+      decision = {
         kind: "tripped",
         strikes: count,
-        newStrikes: r,
+        newStrikes,
         pendingAgeMs,
       };
       count = 0;
     } else
-      h = {
+      decision = {
         kind: "strike",
         strikes: count,
-        newStrikes: r,
+        newStrikes,
         pendingAgeMs,
       };
-  } else if (f)
-    h = {
+  } else if (hasAliveBoot)
+    decision = {
       kind: "pending_alive",
     };
   return {
     next: {
-      fullscreenBootPending: Object.keys(s).length > 0 ? s : undefined,
+      fullscreenBootPending: Object.keys(pending).length > 0 ? pending : undefined,
       fullscreenBootStrikes:
         count > 0
           ? {
               count,
-              version: n.version,
+              version: context.version,
             }
           : undefined,
       fullscreenAutoDisabled,
     },
-    decision: h,
+    decision,
   };
 }
 //@ chunk-q5g0890f.js:2500-2880 placement
 /**
  * 判断启动记录是否变化（需要保存）。
  */
-function bootRecordsChanged(e, n) {
-  let o = (s) =>
-    Object.keys(s.fullscreenBootPending ?? {})
+function bootRecordsChanged(previous, next) {
+  let pendingKeyList = (config) =>
+    Object.keys(config.fullscreenBootPending ?? {})
       .sort()
       .join(",");
   return (
-    o(e) !== o(n) ||
-    (e.fullscreenBootStrikes?.count ?? 0) !== (n.fullscreenBootStrikes?.count ?? 0) ||
-    e.fullscreenBootStrikes?.version !== n.fullscreenBootStrikes?.version ||
-    e.fullscreenAutoDisabled?.version !== n.fullscreenAutoDisabled?.version ||
-    e.fullscreenAutoDisabled?.at !== n.fullscreenAutoDisabled?.at
+    pendingKeyList(previous) !== pendingKeyList(next) ||
+    (previous.fullscreenBootStrikes?.count ?? 0) !== (next.fullscreenBootStrikes?.count ?? 0) ||
+    previous.fullscreenBootStrikes?.version !== next.fullscreenBootStrikes?.version ||
+    previous.fullscreenAutoDisabled?.version !== next.fullscreenAutoDisabled?.version ||
+    previous.fullscreenAutoDisabled?.at !== next.fullscreenAutoDisabled?.at
   );
 }
 //@ chunk-q5g0890f.js:2880-3992 placement
@@ -216,8 +218,8 @@ var FULLSCREEN_SKIPPED_FOREVER_TEXT = `Claude Code's fullscreen renderer has rep
 /**
  * 启动时检查全屏渲染器的启动失败记录：必要时关闭本次全屏并提示（连续失败会持续关闭直到更新或 /tui fullscreen）。
  */
-function checkFullscreenBootGuard(e) {
-  let state = e?.state ?? fullscreenProbeState;
+function checkFullscreenBootGuard(options) {
+  let state = options?.state ?? fullscreenProbeState;
   let fullscreenDecision = getFullscreenDecision(state);
   if (
     fullscreenDecision === "env_on" ||
@@ -227,22 +229,22 @@ function checkFullscreenBootGuard(e) {
     return {
       kind: "none",
     };
-  let s = bootGuardContext(e?.now ?? Date.now());
+  let context = bootGuardContext(options?.now ?? Date.now());
   let globalConfig = getGlobalConfig();
-  let { next: d, decision } = evaluateBootRecords(globalConfig, s);
-  if (bootRecordsChanged(globalConfig, d))
-    saveGlobalConfig((f) => {
-      let y = evaluateBootRecords(f, s).next;
-      return bootRecordsChanged(f, y)
+  let { next: nextConfig, decision } = evaluateBootRecords(globalConfig, context);
+  if (bootRecordsChanged(globalConfig, nextConfig))
+    saveGlobalConfig((currentConfig) => {
+      let freshNext = evaluateBootRecords(currentConfig, context).next;
+      return bootRecordsChanged(currentConfig, freshNext)
         ? {
-            ...f,
-            ...y,
+            ...currentConfig,
+            ...freshNext,
           }
-        : f;
-    }, e?.storageV5);
+        : currentConfig;
+    }, options?.storageV5);
   if (decision.kind === "strike" || decision.kind === "tripped" || decision.kind === "disabled") {
     state.crashAutoOff = true;
-    let f = fullscreenDecisionMode(fullscreenDecision) === "fullscreen";
+    let wouldOpenFullscreen = fullscreenDecisionMode(fullscreenDecision) === "fullscreen";
     if (decision.kind !== "disabled") {
       logEvent("tengu_fullscreen_crash_auto_off", {
         sticky: decision.kind === "tripped",
@@ -250,9 +252,9 @@ function checkFullscreenBootGuard(e) {
         new_strikes: decision.newStrikes,
         pending_age_ms: decision.pendingAgeMs,
         would_be_entry_path: fromEnum(fullscreenDecision),
-        overrides_fullscreen: f,
+        overrides_fullscreen: wouldOpenFullscreen,
       });
-      if (f)
+      if (wouldOpenFullscreen)
         process.stderr.write(
           decision.kind === "tripped" ? FULLSCREEN_SKIPPED_FOREVER_TEXT : FULLSCREEN_SKIPPED_ONCE_TEXT,
         );
@@ -269,11 +271,11 @@ function checkFullscreenBootGuard(e) {
  */
 function resetFullscreenAutoDisable(storageV5) {
   return saveGlobalConfig(
-    (n) =>
-      n.fullscreenAutoDisabled === undefined && n.fullscreenBootStrikes === undefined
-        ? n
+    (currentConfig) =>
+      currentConfig.fullscreenAutoDisabled === undefined && currentConfig.fullscreenBootStrikes === undefined
+        ? currentConfig
         : {
-            ...n,
+            ...currentConfig,
             fullscreenAutoDisabled: undefined,
             fullscreenBootStrikes: undefined,
           },
@@ -281,14 +283,17 @@ function resetFullscreenAutoDisable(storageV5) {
   );
 }
 //@ chunk-q5g0890f.js:5467-5571 placement
-var CANARY_DECISIONS = new Set([
-  "settings_on",
-  "upsell_trial_on",
-  "ant_default",
-  "fresh_install_on",
-  "downsell_on",
-  "gb_on",
-]);
+var CANARY_DECISIONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-q5g0890f.js:5467", () => {
+  CANARY_DECISIONS = new Set([
+    "settings_on",
+    "upsell_trial_on",
+    "ant_default",
+    "fresh_install_on",
+    "downsell_on",
+    "gb_on",
+  ]);
+});
 //@ chunk-q5g0890f.js:5571-5909 placement
 /**
  * 启动金丝雀状态：canary、待写盘记录与退出钩子。
@@ -315,7 +320,10 @@ class BootCanaryState {
   }
 }
 //@ chunk-q5g0890f.js:5909-5932 placement
-var bootCanaryRegistry = new HostScoped(() => new BootCanaryState());
+var bootCanaryRegistry; // deferred: uses BootCanaryState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-q5g0890f.js:5909", () => {
+  bootCanaryRegistry = new HostScoped(() => new BootCanaryState());
+});
 //@ chunk-q5g0890f.js:5932-5967 placement
 function currentBootCanaryState() {
   return bootCanaryRegistry.of(getRootSession().host);
@@ -324,39 +332,39 @@ function currentBootCanaryState() {
 /**
  * 从配置中清除某进程的启动记录（健康时一并清零失败计数）。
  */
-function clearBootRecord(e, n, o) {
-  let s = e.fullscreenBootPending?.[String(n)] !== undefined;
-  if (!s && !(o && e.fullscreenBootStrikes)) return e;
-  let fullscreenBootPending = e.fullscreenBootPending;
-  if (s && fullscreenBootPending) {
-    let { [String(n)]: d, ...r } = fullscreenBootPending;
-    fullscreenBootPending = Object.keys(r).length > 0 ? r : undefined;
+function clearBootRecord(config, pid, clearStrikes) {
+  let hasPendingRecord = config.fullscreenBootPending?.[String(pid)] !== undefined;
+  if (!hasPendingRecord && !(clearStrikes && config.fullscreenBootStrikes)) return config;
+  let fullscreenBootPending = config.fullscreenBootPending;
+  if (hasPendingRecord && fullscreenBootPending) {
+    let { [String(pid)]: removedRecord, ...restPending } = fullscreenBootPending;
+    fullscreenBootPending = Object.keys(restPending).length > 0 ? restPending : undefined;
   }
   return {
-    ...e,
+    ...config,
     fullscreenBootPending,
-    fullscreenBootStrikes: o ? undefined : e.fullscreenBootStrikes,
+    fullscreenBootStrikes: clearStrikes ? undefined : config.fullscreenBootStrikes,
   };
 }
 //@ chunk-q5g0890f.js:6275-6452 placement
-function installCanaryExitHook(e) {
-  if (e.exitHook !== undefined) return;
-  e.exitHook = () => {
-    if (e.recordMaybeOnDisk !== undefined && isShuttingDown()) {
-      let recordMaybeOnDisk = e.recordMaybeOnDisk;
-      saveGlobalConfigSyncForExit((o) => clearBootRecord(o, recordMaybeOnDisk, false));
+function installCanaryExitHook(canaryState) {
+  if (canaryState.exitHook !== undefined) return;
+  canaryState.exitHook = () => {
+    if (canaryState.recordMaybeOnDisk !== undefined && isShuttingDown()) {
+      let recordMaybeOnDisk = canaryState.recordMaybeOnDisk;
+      saveGlobalConfigSyncForExit((config) => clearBootRecord(config, recordMaybeOnDisk, false));
     }
   };
-  process.on("exit", e.exitHook);
+  process.on("exit", canaryState.exitHook);
 }
 //@ chunk-q5g0890f.js:6452-8041 placement
 /**
  * 进入全屏前布下启动金丝雀：在全局配置中记录本进程的待定启动，退出时根据是否健康清理或保留。
  */
-async function armFullscreenBootCanary(e) {
-  let state = e?.state ?? fullscreenProbeState;
-  let o = currentBootCanaryState();
-  if (o.canary.status !== "idle") return o.canary.status === "armed";
+async function armFullscreenBootCanary(options) {
+  let state = options?.state ?? fullscreenProbeState;
+  let canaryState = currentBootCanaryState();
+  if (canaryState.canary.status !== "idle") return canaryState.canary.status === "armed";
   if (!getIsInteractive() || env.CLAUDE_CODE_EXIT_AFTER_FIRST_RENDER) return false;
   if (
     !state.crashAutoOff &&
@@ -371,7 +379,7 @@ async function armFullscreenBootCanary(e) {
   if (!isFullscreenEnvEnabled(state)) return false;
   if (!CANARY_DECISIONS.has(getFullscreenDecision(state))) return false;
   let pid = process.pid;
-  let u = {
+  let bootRecord = {
     startedAt: Date.now(),
     version: {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -389,79 +397,79 @@ async function armFullscreenBootCanary(e) {
   };
   let cleanup = registerCleanup(() =>
     settleBootCanary(
-      o,
-      o.canary.status === "armed" &&
-        o.canary.firstFrameAt !== undefined &&
+      canaryState,
+      canaryState.canary.status === "armed" &&
+        canaryState.canary.firstFrameAt !== undefined &&
         (process.exitCode === undefined || process.exitCode === 0) &&
         !isExitExternallyClocked()
         ? "healthy"
         : "withdrawn",
     ),
   );
-  installCanaryExitHook(o);
-  o.canary = {
+  installCanaryExitHook(canaryState);
+  canaryState.canary = {
     status: "armed",
     pid,
     cleanup,
-    onHealthy: e?.onHealthy,
-    healthyAfterMs: e?.healthyAfterMs ?? DEFAULT_HEALTHY_AFTER_MS,
+    onHealthy: options?.onHealthy,
+    healthyAfterMs: options?.healthyAfterMs ?? DEFAULT_HEALTHY_AFTER_MS,
     firstFrameAt: undefined,
     timer: undefined,
-    storageV5: e?.storageV5,
+    storageV5: options?.storageV5,
   };
-  o.recordMaybeOnDisk = pid;
+  canaryState.recordMaybeOnDisk = pid;
   profileCheckpoint("fullscreen_canary_arm_start");
   try {
     await saveGlobalConfig(
-      (r) => ({
-        ...r,
+      (config) => ({
+        ...config,
         fullscreenBootPending: {
-          ...r.fullscreenBootPending,
-          [String(pid)]: u,
+          ...config.fullscreenBootPending,
+          [String(pid)]: bootRecord,
         },
       }),
-      e?.storageV5,
+      options?.storageV5,
     );
   } catch (error) {
     logError(error);
   } finally {
     profileCheckpoint("fullscreen_canary_armed");
   }
-  return o.canary.status === "armed";
+  return canaryState.canary.status === "armed";
 }
 //@ chunk-q5g0890f.js:8041-8279 placement
 /**
  * 记录全屏首帧时间，并在健康期后把金丝雀标为健康。
  */
 function noteFirstFullscreenFrame(firstFrameAt = Date.now()) {
-  let n = currentBootCanaryState();
-  if (n.canary.status !== "armed" || n.canary.firstFrameAt !== undefined) return;
-  n.canary.firstFrameAt = firstFrameAt;
-  n.canary.timer = setTimeout(
-    (o) => {
-      settleBootCanary(o, "healthy").catch(logError);
+  let canaryState = currentBootCanaryState();
+  if (canaryState.canary.status !== "armed" || canaryState.canary.firstFrameAt !== undefined) return;
+  canaryState.canary.firstFrameAt = firstFrameAt;
+  canaryState.canary.timer = setTimeout(
+    (state) => {
+      settleBootCanary(state, "healthy").catch(logError);
     },
-    n.canary.healthyAfterMs,
-    n,
+    canaryState.canary.healthyAfterMs,
+    canaryState,
   );
-  n.canary.timer.unref?.();
+  canaryState.canary.timer.unref?.();
 }
 //@ chunk-q5g0890f.js:8279-8636 placement
 /**
  * 结算金丝雀：清理、写回配置，健康时调用回调。
  */
-async function settleBootCanary(e, n) {
-  if (e.canary.status !== "armed") return;
-  let { pid, cleanup, timer, onHealthy, storageV5 } = e.canary;
-  e.canary = {
+async function settleBootCanary(canaryState, outcome) {
+  if (canaryState.canary.status !== "armed") return;
+  let { pid, cleanup, timer, onHealthy, storageV5 } = canaryState.canary;
+  canaryState.canary = {
     status: "settled",
   };
   cleanup();
   if (timer !== undefined) clearTimeout(timer);
-  await saveGlobalConfig((f) => clearBootRecord(f, pid, n === "healthy"), storageV5);
-  if (e.recordMaybeOnDisk === pid) e.recordMaybeOnDisk = undefined;
-  logForDebugging(`fullscreen boot canary: ${n}`);
-  if (n === "healthy" && onHealthy)
+  await saveGlobalConfig((config) => clearBootRecord(config, pid, outcome === "healthy"), storageV5);
+  if (canaryState.recordMaybeOnDisk === pid) canaryState.recordMaybeOnDisk = undefined;
+  logForDebugging(`fullscreen boot canary: ${outcome}`);
+  if (outcome === "healthy" && onHealthy)
     try {
       await onHealthy();
     } catch (error) {
@@ -473,33 +481,33 @@ async function settleBootCanary(e, n) {
  * 全屏渲染出错时结束金丝雀，并把本进程的启动记录标为 render_error。
  */
 async function recordFullscreenRenderFailure() {
-  let e = currentBootCanaryState();
-  if (e.canary.status !== "armed") return false;
-  let { pid, cleanup, timer, storageV5 } = e.canary;
-  e.canary = {
+  let canaryState = currentBootCanaryState();
+  if (canaryState.canary.status !== "armed") return false;
+  let { pid, cleanup, timer, storageV5 } = canaryState.canary;
+  canaryState.canary = {
     status: "settled",
   };
   cleanup();
   if (timer !== undefined) clearTimeout(timer);
-  if (e.recordMaybeOnDisk === pid) e.recordMaybeOnDisk = undefined;
-  let d = false;
-  await saveGlobalConfig((r) => {
-    let f = r.fullscreenBootPending?.[String(pid)];
-    if (f === undefined || f.died !== undefined) return r;
-    d = true;
+  if (canaryState.recordMaybeOnDisk === pid) canaryState.recordMaybeOnDisk = undefined;
+  let recorded = false;
+  await saveGlobalConfig((config) => {
+    let existingRecord = config.fullscreenBootPending?.[String(pid)];
+    if (existingRecord === undefined || existingRecord.died !== undefined) return config;
+    recorded = true;
     return {
-      ...r,
+      ...config,
       fullscreenBootPending: {
-        ...r.fullscreenBootPending,
+        ...config.fullscreenBootPending,
         [String(pid)]: {
-          ...f,
+          ...existingRecord,
           died: "render_error",
         },
       },
     };
   }, storageV5);
   logForDebugging("fullscreen boot canary: failure recorded");
-  return d;
+  return recorded;
 }
 export {
   checkFullscreenBootGuard,

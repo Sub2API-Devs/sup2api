@@ -8,7 +8,7 @@
  * pieces: chunk-yb0ajcmt.js (9)
  * attribution: placement 9
  */
-import { Ar } from "../../../../runtime/bun-runtime.js";
+import { __export } from "../../../../runtime/bun-runtime.js";
 import {
   defineMermaidPlugin,
   MAX_RENDER_MS,
@@ -26,7 +26,7 @@ import { getFeatureValue_SESSION_PINNED } from "../../../services/analytics/grow
 //@ chunk-yb0ajcmt.js:3942-3952 placement
 var mermaidPluginModule = {};
 //@ chunk-yb0ajcmt.js:3952-4083 placement
-Ar(mermaidPluginModule, {
+__export(mermaidPluginModule, {
   PLUGIN_DESCRIPTION: () => MERMAID_PLUGIN_DESCRIPTION,
   PLUGIN_NAME: () => CC_PLUGIN_MERMAID,
   default: () => mermaidPluginModule,
@@ -40,7 +40,7 @@ Ar(mermaidPluginModule, {
  */
 var EMPTY_OBJECT = {};
 //@ chunk-yb0ajcmt.js:4092-4261 placement
-Ar(EMPTY_OBJECT, {
+__export(EMPTY_OBJECT, {
   MAX_REWRITTEN_LENGTH: () => MAX_RENDER_MS,
   MAX_ROWS: () => MIN_PLOT_WIDTH,
   MAX_SOURCE_LENGTH: () => MAX_MERMAID_SOURCE_CHARS,
@@ -66,16 +66,16 @@ var CC_PLUGIN_MERMAID = "cc-plugin-mermaid";
 /**
  * 缓存渲染结果（单项与总量有上限，超出时淘汰最旧的）。
  */
-function cacheRenderedDiagram(e, t, n) {
-  e.delete(t);
-  if (t.length + n.length > 50000) return;
-  e.set(t, n);
-  let o = 0;
-  for (let [i, u] of e) o += i.length + u.length;
-  for (let [i, u] of e) {
-    if (e.size <= 32 && o <= 250000) return;
-    e.delete(i);
-    o -= i.length + u.length;
+function cacheRenderedDiagram(cache, source, rendered) {
+  cache.delete(source);
+  if (source.length + rendered.length > 50000) return;
+  cache.set(source, rendered);
+  let total = 0;
+  for (let [key, value] of cache) total += key.length + value.length;
+  for (let [key, value] of cache) {
+    if (cache.size <= 32 && total <= 250000) return;
+    cache.delete(key);
+    total -= key.length + value.length;
   }
 }
 export {
@@ -84,4 +84,6 @@ export {
   MERMAID_PLUGIN_DESCRIPTION,
   isMermaidPluginAvailable,
   EMPTY_OBJECT,
+  mermaidPluginModule,
+  MERMAID_PLUGIN_DEFAULT_ON,
 };

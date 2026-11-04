@@ -26,24 +26,25 @@ import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { isPlainNonInteractive } from "../../utils/sessionShape.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { createUserMessage } from "../../utils/messages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2237624-2237780 placement
-function brookHeronModelValue(e, effortLevelIfSupported) {
-  let r = getCachedClientData()?.[TENGU_BROOK_HERON];
-  if (!isPlainObject_4(r)) return trimmedOrNull(r);
-  let modelKeyedEntry = findModelKeyedEntry(r, e);
+function brookHeronModelValue(model, modelKey) {
+  let override = getCachedClientData()?.[TENGU_BROOK_HERON];
+  if (!isPlainObject_4(override)) return trimmedOrNull(override);
+  let modelKeyedEntry = findModelKeyedEntry(override, model);
   if (modelKeyedEntry === undefined) return null;
-  let [, h] = modelKeyedEntry;
-  if (!isPlainObject_4(h)) return trimmedOrNull(h);
-  return trimmedOrNull(getModelKeyedValue(h, effortLevelIfSupported));
+  let [, modelEntry] = modelKeyedEntry;
+  if (!isPlainObject_4(modelEntry)) return trimmedOrNull(modelEntry);
+  return trimmedOrNull(getModelKeyedValue(modelEntry, modelKey));
 }
 //@ chunk-e6aww6q8.js:2237818-2238798 placement
-function FORK_WORKER_PREAMBLE(e, n) {
+function FORK_WORKER_PREAMBLE(directive, extraRule) {
   return `<${FORK_BOILERPLATE}>
 You are a worker fork. The transcript above is the parent's history \u2014 inherited reference, not your situation. You are NOT a continuation of that agent. Execute ONE directive, then stop.
 
 Hard rules:
-- Do NOT spawn subagents with the ${AGENT} tool. The "default to forking" guidance is for the parent; you ARE the fork, execute directly.${n}
+- Do NOT spawn subagents with the ${AGENT} tool. The "default to forking" guidance is for the parent; you ARE the fork, execute directly.${extraRule}
 - One shot: report once and stop. No follow-up questions, no proposed next steps, no waiting for the user.
 
 Guidelines (your directive may override any of these):
@@ -53,17 +54,19 @@ Guidelines (your directive may override any of these):
 - If you committed changes, list the paths and commit hashes in your report.
 </${FORK_BOILERPLATE}>
 
-${FORK_DIRECTIVE_PREFIX}${e}`;
+${FORK_DIRECTIVE_PREFIX}${directive}`;
 }
 //@ chunk-e6aww6q8.js:2238798-2238942 placement
-function extractForkDirective(e, n) {
-  let r = `</${FORK_BOILERPLATE}>
+function extractForkDirective(prompt, extraRules) {
+  let marker = `</${FORK_BOILERPLATE}>
 
 ${FORK_DIRECTIVE_PREFIX}`;
-  let index = e.indexOf(r);
+  let index = prompt.indexOf(marker);
   if (index === -1) return;
-  let sliced = e.slice(index + r.length);
-  return n.some((y) => e === FORK_WORKER_PREAMBLE(sliced, y)) ? sliced : undefined;
+  let directive = prompt.slice(index + marker.length);
+  return extraRules.some((extraRule) => prompt === FORK_WORKER_PREAMBLE(directive, extraRule))
+    ? directive
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:2238942-2239009 placement
 var TENGU_FORK_SUBAGENT_ENABLED = "tengu_fork_subagent_enabled";
@@ -85,12 +88,12 @@ function getForkSubagentEnabledSource() {
     getFeatureValue_SESSION_PINNED(TENGU_FEDERATED_ULLMAN, false)
   )
     return "disabled";
-  let n = env.CLAUDE_CODE_FORK_SUBAGENT === true ? "env" : "default";
-  sessionFeatureValues.forkSubagentEnabledSource = n;
+  let source = env.CLAUDE_CODE_FORK_SUBAGENT === true ? "env" : "default";
+  sessionFeatureValues.forkSubagentEnabledSource = source;
   logEvent(TENGU_FORK_SUBAGENT_ENABLED, {
-    source: fromEnum(n),
+    source: fromEnum(source),
   });
-  return n;
+  return source;
 }
 //@ chunk-e6aww6q8.js:2239421-2239462 facade-exports
 function isForkSubagentEnabled() {
@@ -105,18 +108,21 @@ function forkGateForcesBackground() {
 /**
  * FORK_AGENT 内建定义：agentType "fork"、tools ["*"]、maxTurns 200、model inherit、permissionMode bubble、系统提示词为空（沿用父线程）。
  */
-var FORK_AGENT = {
-  agentType: FORK,
-  whenToUse:
-    'Fork \u2014 inherits full conversation context. Selected explicitly via subagent_type: "fork" when the fork gate is on; never the default.',
-  tools: ["*"],
-  maxTurns: 200,
-  model: "inherit",
-  permissionMode: "bubble",
-  source: "built-in",
-  baseDir: "built-in",
-  getSystemPrompt: () => "",
-};
+var FORK_AGENT; // deferred: uses AGENT (./constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2239524", () => {
+  FORK_AGENT = {
+    agentType: FORK,
+    whenToUse:
+      'Fork \u2014 inherits full conversation context. Selected explicitly via subagent_type: "fork" when the fork gate is on; never the default.',
+    tools: ["*"],
+    maxTurns: 200,
+    model: "inherit",
+    permissionMode: "bubble",
+    source: "built-in",
+    baseDir: "built-in",
+    getSystemPrompt: () => "",
+  };
+});
 //@ chunk-e6aww6q8.js:2239822-2239857 facade-exports
 /**
  * 消息中是否已含 fork 样板标记（当前就在 fork 子代理内）。
@@ -162,7 +168,7 @@ function buildForkedMessages(directive, assistantMessage, enclosingToolUseId) {
       }),
     ];
   }
-  let y = toolUseBlocks.length === 1 ? toolUseBlocks[0]?.id : enclosingToolUseId;
+  let enclosingId = toolUseBlocks.length === 1 ? toolUseBlocks[0]?.id : enclosingToolUseId;
   let toolResultBlocks = toolUseBlocks.map((block) => ({
     type: "tool_result",
     tool_use_id: block.id,
@@ -170,7 +176,7 @@ function buildForkedMessages(directive, assistantMessage, enclosingToolUseId) {
       {
         type: "text",
         text:
-          block.id !== y
+          block.id !== enclosingId
             ? FORK_PARENT_CALL_TOOL_RESULT
             : block.name === AGENT || block.name === TASK
               ? FORK_SELF_TOOL_RESULT

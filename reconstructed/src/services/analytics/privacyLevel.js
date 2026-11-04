@@ -17,6 +17,7 @@ import {
 } from "../policyLimits/policyVerdicts.js";
 import { hasComplianceTaint } from "../policyLimits/complianceTaints.js";
 import { HEADLESS_HOST_ENTRYPOINTS } from "../../utils/entrypointKinds.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:739399-739426 placement
 /**
@@ -36,30 +37,33 @@ function isHipaaModeCurrent() {
 /**
  * 隐私等级对安全事件（tengu_safety_event）的判定：是否属安全事件、是否缺裁决、是否需要盖主体戳、是否属他人行、HIPAA 是否被污染。
  */
-var SAFETY_EVENT_NAMES = new Set(["tengu_safety_event"]);
+var SAFETY_EVENT_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:739453", () => {
+  SAFETY_EVENT_NAMES = new Set(["tengu_safety_event"]);
+});
 //@ chunk-aepeg2w5.js:739492-739536 placement
-function isSafetyEvent(e) {
-  return e !== undefined && SAFETY_EVENT_NAMES.has(e);
+function isSafetyEvent(eventName) {
+  return eventName !== undefined && SAFETY_EVENT_NAMES.has(eventName);
 }
 //@ chunk-aepeg2w5.js:739536-739569 placement
 function isVerdictMissing() {
   return isPolicyVerdictAbsent() || isSessionVerdictUnattributed();
 }
 //@ chunk-aepeg2w5.js:739569-739611 placement
-function needsPrincipalStamp(e) {
-  return isSafetyEvent(e) && (isVerdictMissing() || isHipaaTainted());
+function needsPrincipalStamp(eventName) {
+  return isSafetyEvent(eventName) && (isVerdictMissing() || isHipaaTainted());
 }
 //@ chunk-aepeg2w5.js:739611-739652 placement
-function principalStampForEvent(e) {
-  return isSafetyEvent(e) ? rowPrincipalStamp() : undefined;
+function principalStampForEvent(eventName) {
+  return isSafetyEvent(eventName) ? rowPrincipalStamp() : undefined;
 }
 //@ chunk-aepeg2w5.js:739652-739690 placement
-function isEventOfAnotherPrincipal(e, principalStamp) {
-  return isSafetyEvent(e) && isRowOfAnotherPrincipal(principalStamp);
+function isEventOfAnotherPrincipal(eventName, stamp) {
+  return isSafetyEvent(eventName) && isRowOfAnotherPrincipal(stamp);
 }
 //@ chunk-aepeg2w5.js:739690-739733 placement
-function isRowOfCurrentPrincipal(principalStamp) {
-  return !isVerdictMissing() && !isHipaaTainted() && !isRowOfAnotherPrincipal(principalStamp);
+function isRowOfCurrentPrincipal(stamp) {
+  return !isVerdictMissing() && !isHipaaTainted() && !isRowOfAnotherPrincipal(stamp);
 }
 //@ chunk-aepeg2w5.js:739733-739809 placement
 function isCurrentPrincipalStamp(principalStamp) {
@@ -71,12 +75,15 @@ function isCurrentPrincipalStamp(principalStamp) {
 }
 //@ chunk-aepeg2w5.js:739809-739882 placement
 function isHipaaTainted() {
-  let e = isPolicyVerdictAbsent();
+  let verdictAbsent = isPolicyVerdictAbsent();
   if (hasComplianceTaint("hipaa")) return true;
-  return e && (isLocalAgentEntrypoint() || principalSeenUnderHipaa());
+  return verdictAbsent && (isLocalAgentEntrypoint() || principalSeenUnderHipaa());
 }
 //@ chunk-aepeg2w5.js:739882-739928 placement
-var LOCAL_AGENT_ENTRYPOINTS = new Set(["local-agent", "local_agent"]);
+var LOCAL_AGENT_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:739882", () => {
+  LOCAL_AGENT_ENTRYPOINTS = new Set(["local-agent", "local_agent"]);
+});
 //@ chunk-aepeg2w5.js:739928-740083 placement
 /**
  * CLAUDE_CODE_ENTRYPOINT 是否属于特定入口（远程、coworker 等）。

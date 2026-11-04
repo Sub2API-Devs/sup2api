@@ -8,6 +8,8 @@
  * pieces: chunk-32qjrk8h.js (1), chunk-4163ksv9.js (6), chunk-ha3km179.js (27)
  * attribution: placement 7, sole-consumer 11, fingerprint 2, layout 13, callgraph-witnessed 1
  */
+import { SessionRootSlot, isVirtualConversationMessage } from "./bootstrap/sessionSlices.js";
+import { isAborted } from "./utils/abortSignalUtils.js";
 import { HostScoped } from "./utils/hostScoped.js";
 import {
   pickFallbackModel,
@@ -211,7 +213,6 @@ import {
 } from "./query/promptSnapshot.js";
 import {
   releaseStaleRefusalEffortCarry,
-  carriedEffortForModel,
   refusedEffortTelemetryFields,
   resolveRefusalFallbackEffort,
 } from "./utils/permissions/permissionSetup.js";
@@ -300,7 +301,7 @@ import {
   replaceToolResultContent,
 } from "./services/compact/microCompact.js";
 import { releasingAsyncIterator } from "./utils/generators.js";
-import { getEffortLevelIfSupported } from "./utils/effort.js";
+import { getEffortLevelIfSupported, carriedEffortForModel } from "./utils/effort.js";
 import { rollOverTotalTokensContext } from "./utils/attachments/totalTokensReminder.js";
 import {
   createCompactTracking,
@@ -332,11 +333,10 @@ import { noopLedger } from "./services/api/promptPrefixLedger.js";
 import { expectPromptCacheDrop, MAIN } from "./services/api/promptCacheBreakDetection.js";
 import { asSystemPrompt } from "./utils/systemPromptType.js";
 import { appendSystemContextToPrompt, prependUserContextReminder } from "./utils/api.js";
-import { isVirtualConversationMessage, SessionRootSlot } from "./bootstrap/sessionSlices.js";
 import {
   shouldRetryRefusal,
   shouldAskRefusalFallbackPreference,
-  mi,
+  EMPTY_ANNOUNCEMENT,
   decideReminderDelivery,
   askRefusalFallbackPreference,
   allAnsweredWithoutRequest,
@@ -425,7 +425,7 @@ import {
   resolveRefusalFallback,
   TENGU_DASH_FLAME,
   TENGU_ELEGANT_POSSUM,
-  l8s,
+  NO_SUPPRESSION,
   describeServerFallback,
   preferSameModel,
   buildRefusalFallbackSystemMessage,
@@ -489,58 +489,141 @@ import { isHumanOrigin } from "./utils/turnOrigin.js";
 import { truncateToLength } from "./utils/stringUtils.js";
 import { applyHookSessionTitle } from "./utils/sessionTitle.js";
 import { capAdditionalContext } from "./services/tools/toolHooks.js";
-import { isAborted } from "./utils/abortSignalUtils.js";
+import { deferInit } from "../runtime/deferred-init.js";
 
+//@ chunk-32qjrk8h.js:191-216 placement
+/**
+ * 恒返回空数组
+ */
+function emptyToolResults(events) {
+  return [];
+}
+//@ chunk-4163ksv9.js:263-281 placement
+/**
+ * ["take_in"]
+ */
+var TAKE_IN_KINDS = ["take_in"];
+//@ chunk-4163ksv9.js:281-306 placement
+/**
+ * 访问者登记表
+ */
+class VisitorRegistry {
+  visitors = new Map();
+}
+//@ chunk-4163ksv9.js:306-330 placement
+/**
+ * 访问者登记槽
+ */
+var visitorRegistrySlot; // deferred: uses SessionRootSlot (./bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4163ksv9.js:306", () => {
+  visitorRegistrySlot = new SessionRootSlot(() => new VisitorRegistry());
+});
+//@ chunk-4163ksv9.js:330-388 placement
+/**
+ * 是否仍在等待
+ */
+function isPending(visitor) {
+  try {
+    return visitor.pending() === true;
+  } catch {
+    return false;
+  }
+}
+//@ chunk-4163ksv9.js:388-473 placement
+/**
+ * 是否有未完成的回合访问者
+ */
+function hasPendingVisitors(session) {
+  let visitors = visitorRegistrySlot.peek(session)?.visitors;
+  return visitors !== undefined && [...visitors.values()].some(isPending);
+}
+//@ chunk-4163ksv9.js:473-827 placement
+/**
+ * 运行注册的回合访问者，可被中止
+ */
+async function runTurnVisitors(session, signal) {
+  let visitors = visitorRegistrySlot.peek(session)?.visitors;
+  if (visitors === undefined) return;
+  let visitorRunPromise = (async () => {
+    for (let kind of TAKE_IN_KINDS) {
+      let visitor = visitors.get(kind);
+      if (visitor !== undefined && !isAborted(signal) && isPending(visitor))
+        try {
+          await visitor.visit(signal);
+        } catch {}
+    }
+  })();
+  if (isAborted(signal)) return;
+  let onAbort = () => {};
+  let promise = new Promise((resolve) => {
+    onAbort = () => resolve();
+  });
+  signal.addEventListener("abort", onAbort, {
+    once: true,
+  });
+  try {
+    await Promise.race([visitorRunPromise, promise]);
+  } finally {
+    signal.removeEventListener("abort", onAbort);
+  }
+}
 //@ chunk-ha3km179.js:153194-153282 sole-consumer
 /**
  * 构建时裁掉的可选拒绝跟踪模块（恒为 null）；requireTurnClassifier/requireClassifierSurfaces 惰性加载活动分类器与其输出面（chunk-wd9kxbpn、chunk-e321p3vc）。
  */
 var toolDenialTracker = null;
-var requireTurnClassifier = () => require("./chunk-wd9kxbpn.js");
-var requireClassifierSurfaces = () => require("./chunk-e321p3vc.js");
+var requireTurnClassifier = () => require("./services/agentStatus/LINK_SCAN_MAX_BYTES.lazy.js");
+var requireClassifierSurfaces = () => require("./services/classifierSummary.js");
 //@ chunk-ha3km179.js:153282-153317 sole-consumer
 /**
  * 按 session.host 存放分类器任务状态的懒槽。
  */
-var classifierJobStateSlot = new HostScoped(() => ({
-  state: undefined,
-}));
+var classifierJobStateSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ha3km179.js:153282", () => {
+  classifierJobStateSlot = new HostScoped(() => ({
+    state: undefined,
+  }));
+});
 //@ chunk-ha3km179.js:153317-153444 sole-consumer
 /**
  * 取当前会话的分类器任务状态，首次调用时用 createClassifierJobState 创建；分类器模块不存在时为 null。
  */
 function getClassifierJobState(toolUseContext) {
-  let n = classifierJobStateSlot.of(toolUseContext.session.host);
-  if (n.state === undefined)
-    n.state = requireTurnClassifier?.().createClassifierJobState(toolUseContext) ?? null;
-  return n.state;
+  let hostState = classifierJobStateSlot.of(toolUseContext.session.host);
+  if (hostState.state === undefined)
+    hostState.state = requireTurnClassifier?.().createClassifierJobState(toolUseContext) ?? null;
+  return hostState.state;
 }
 //@ chunk-ha3km179.js:153444-153652 sole-consumer
 /**
  * teleportFetchModule（composeTeleportFetchOverride，给远程/传送会话改写 fetch）与拒答回退级联解析器 refusalCascadeResolver。
  */
-var teleportFetchModule = require("./chunk-r1wk8q25.js");
-var refusalCascadeResolver = {
-  resolveStage: (mappedTarget, refusingModel, triedModels) =>
-    pickFallbackModel({
-      mappedTarget,
-      armedFallbackModel: undefined,
-      refusingModel,
-      triedModels,
-    }),
-  triedModelEntry: canonicalModelKey,
-  firstReachableStage: findFirstResolvableStage,
-  logSkippedStages: logSkippedChainStages,
-};
+var teleportFetchModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+var refusalCascadeResolver;
+deferInit("chunk-ha3km179.js:153444", () => {
+  teleportFetchModule = require("./services/api/composeTeleportFetchOverride.lazy.js");
+  refusalCascadeResolver = {
+    resolveStage: (mappedTarget, refusingModel, triedModels) =>
+      pickFallbackModel({
+        mappedTarget,
+        armedFallbackModel: undefined,
+        refusingModel,
+        triedModels,
+      }),
+    triedModelEntry: canonicalModelKey,
+    firstReachableStage: findFirstResolvableStage,
+    logSkippedStages: logSkippedChainStages,
+  };
+});
 //@ chunk-ha3km179.js:153652-153944 fingerprint = yieldMissingToolResultBlocks (0.871)
 /**
  * 为每个尚无结果的 tool_use 生成 is_error 的 tool_result 用户消息（中止、出错时保证 tool_use/tool_result 配对）。已回答的 id 通过第 4 参跳过。
  */
-function* yieldMissingToolResultBlocks(assistantMessages, errorMessage, deps, s) {
+function* yieldMissingToolResultBlocks(assistantMessages, errorMessage, deps, answeredToolUseIds) {
   for (let assistantMessage of assistantMessages) {
     let toolUseBlocks = assistantMessage.message.content.filter((content) => content.type === "tool_use");
     for (let toolUse of toolUseBlocks) {
-      if (s?.has(toolUse.id)) continue;
+      if (answeredToolUseIds?.has(toolUse.id)) continue;
       yield createUserMessage({
         content: [
           {
@@ -577,19 +660,19 @@ function markClassifierTurnAborted(toolUseContext, querySource) {
 /**
  * 中止原因为 user-cancel 或 remote-cancel 时返回被打断的消息 id（来自 bootstrap 状态），代理内恒为 undefined。
  */
-function getInterruptedMessageId(e) {
-  if (e.agentId) return;
-  let n = unwrapAbortReason(e.abortController.signal.reason);
-  if (n !== "user-cancel" && n !== "remote-cancel") return;
+function getInterruptedMessageId(toolUseContext) {
+  if (toolUseContext.agentId) return;
+  let abortReason = unwrapAbortReason(toolUseContext.abortController.signal.reason);
+  if (abortReason !== "user-cancel" && abortReason !== "remote-cancel") return;
   return getLastCancelledAPIMessageId() ?? undefined;
 }
 //@ chunk-ha3km179.js:154213-154323 layout
 /**
  * 取最后一条 assistant 之后最后一条真实用户消息的 uuid，作为拒答通知里的 refusedUserMessageUuid。
  */
-function getRefusedUserMessageUuid(e) {
-  let lastIndex = e.findLastIndex((s) => s.type === "assistant");
-  return e.slice(lastIndex + 1).findLast(isRealUserPromptMessage)?.uuid ?? null;
+function getRefusedUserMessageUuid(messages) {
+  let lastIndex = messages.findLastIndex((message) => message.type === "assistant");
+  return messages.slice(lastIndex + 1).findLast(isRealUserPromptMessage)?.uuid ?? null;
 }
 //@ chunk-ha3km179.js:154323-155748 layout
 /**
@@ -620,29 +703,29 @@ async function* endTurnFromToolResult({
       source: fromEnum(endTurnSource),
     });
     if (endTurnSource === "mcp_meta") markClassifierTurnAborted(toolUseContext, querySource);
-    let G = new Map();
+    let toolResultContentById = new Map();
     for (let toolResult of toolResults)
       if (toolResult.type === "user" && Array.isArray(toolResult.message.content)) {
-        for (let V of toolResult.message.content)
-          if (V.type === "tool_result") G.set(V.tool_use_id, V.content);
+        for (let content of toolResult.message.content)
+          if (content.type === "tool_result") toolResultContentById.set(content.tool_use_id, content.content);
       }
     try {
-      for await (let ee of executePostToolBatchHooks(
+      for await (let hookResult of executePostToolBatchHooks(
         toolUseBlocks.map((toolUseBlock) => ({
           tool_name: toolUseBlock.name,
           tool_input: toolUseBlock.input,
           tool_use_id: toolUseBlock.id,
-          tool_response: G.get(toolUseBlock.id),
+          tool_response: toolResultContentById.get(toolUseBlock.id),
         })),
         `hook-${deps.uuid()}`,
         updatedToolUseContext,
         getToolPermissionContext(updatedToolUseContext).mode,
         updatedToolUseContext.abortController.signal,
       )) {
-        if (ee.message) yield ee.message;
-        if (ee.blockingError || ee.preventContinuation)
+        if (hookResult.message) yield hookResult.message;
+        if (hookResult.blockingError || hookResult.preventContinuation)
           logForDebugging(
-            `[end-turn] PostToolBatch block discarded (turn ended by ${endTurnSource === "tool" ? "tool result" : "MCP end-turn"}, no model re-invoke): ${ee.blockingError?.blockingError ?? ee.stopReason ?? "preventContinuation"}`,
+            `[end-turn] PostToolBatch block discarded (turn ended by ${endTurnSource === "tool" ? "tool result" : "MCP end-turn"}, no model re-invoke): ${hookResult.blockingError?.blockingError ?? hookResult.stopReason ?? "preventContinuation"}`,
           );
       }
     } catch (error) {
@@ -686,7 +769,7 @@ async function* endTurnFromToolResult({
 /**
  * 仅主线程 REPL 时把 API 错误（error、详情、apiError）报告给分类器，失败忽略。
  */
-function markClassifierApiFailure(toolUseContext, querySource, apiErrorMessage) {
+function markClassifierApiFailure(toolUseContext, querySource, failureReason) {
   let classifierJobState = getClassifierJobState(toolUseContext);
   if (
     !requireTurnClassifier ||
@@ -699,9 +782,9 @@ function markClassifierApiFailure(toolUseContext, querySource, apiErrorMessage) 
     .markApiFailure(
       classifierJobState,
       getOwnJobShortId(),
-      apiErrorMessage.error,
-      getAssistantMessageText(apiErrorMessage) ?? apiErrorMessage.errorDetails ?? "",
-      apiErrorMessage.apiError,
+      failureReason.error,
+      getAssistantMessageText(failureReason) ?? failureReason.errorDetails ?? "",
+      failureReason.apiError,
     )
     .catch(() => {});
 }
@@ -732,18 +815,18 @@ function isRecoverableTruncatedResponse(event, toolUseContext, querySource) {
  */
 function shouldResumeIncompleteThinking(assistantMessages, model) {
   let filtered = assistantMessages.filter(
-    (y) => !y.isApiErrorMessage && !isAbandonedOrUnsignedThinkingMessage(y),
+    (message) => !message.isApiErrorMessage && !isAbandonedOrUnsignedThinkingMessage(message),
   );
-  let s = filtered.length === 1 ? filtered[0] : undefined;
-  if (s === undefined || s.message.content.length !== 1) return false;
-  let block = s.message.content[0];
+  let candidate = filtered.length === 1 ? filtered[0] : undefined;
+  if (candidate === undefined || candidate.message.content.length !== 1) return false;
+  let block = candidate.message.content[0];
   return (
     block !== undefined &&
     isThinkingBlock(block) &&
     hasThinkingSignature(block) &&
-    s.message.stop_reason === "max_tokens" &&
-    !isForeignModelMessage(s, stripAnyVersatileSuffix(model)) &&
-    shouldResumeThinking(model, s.message.resumable, totalTokensOf(s.message.usage))
+    candidate.message.stop_reason === "max_tokens" &&
+    !isForeignModelMessage(candidate, stripAnyVersatileSuffix(model)) &&
+    shouldResumeThinking(model, candidate.message.resumable, totalTokensOf(candidate.message.usage))
   );
 }
 //@ chunk-ha3km179.js:156537-156678 layout
@@ -760,7 +843,7 @@ function joinCustomAndAppendSystemPrompt(customSystemPrompt, appendSystemPrompt)
 `)
         : undefined,
     appendSystemPrompt,
-  ].filter((h) => !!h);
+  ].filter((promptPart) => !!promptPart);
   return filtered.length > 0
     ? filtered.join(`
 
@@ -779,11 +862,11 @@ async function* query(params) {
     startProfilePhase("loop_entry");
   }
   let deliveredPollEventUuids = [];
-  let h;
+  let terminal;
   using transcriptTap = observeRunningTurn(params.toolUseContext, params.messages);
   try {
     await awaitArtifactRosterSafe(params.toolUseContext.options.tools);
-    h = yield* isObserverAgentsEnabled()
+    terminal = yield* isObserverAgentsEnabled()
       ? queryWithObserverTap(
           {
             ...params,
@@ -809,10 +892,10 @@ async function* query(params) {
     params.toolUseContext,
     params.toolUseContext.getAppState,
     params.querySource,
-    h,
+    terminal,
     createQueueDelivery,
   );
-  let state = isAbnormalTerminalReason(h.reason) ? "cancelled" : "completed";
+  let state = isAbnormalTerminalReason(terminal.reason) ? "cancelled" : "completed";
   for (let uuid of dropPutBackMessages(
     params.toolUseContext.messageQueue,
     startedCommandUuids,
@@ -829,16 +912,16 @@ async function* query(params) {
       uuid,
       state: "completed",
     };
-  if (isErrorTerminalReason(h.reason)) logFeatureBad("turn", terminalReasonTag(h));
+  if (isErrorTerminalReason(terminal.reason)) logFeatureBad("turn", terminalReasonTag(terminal));
   else logFeatureOk("turn");
   reportTurnEnd({
-    terminal: h,
+    terminal,
     querySource: params.querySource,
     agentContext: params.toolUseContext.agentContext,
     hasActiveGoal: params.toolUseContext.options.activeGoal !== undefined,
     startedAt,
   });
-  return h;
+  return terminal;
 }
 //@ chunk-ha3km179.js:157667-158558 layout
 /**
@@ -869,34 +952,34 @@ async function* queryWithObserverTap(params, startedCommandUuids, deliveredPollE
     messages: params.messages,
     turnStartIndex: isHumanTurn(params.messages),
   });
-  let y = transcriptTap.through(
+  let loopIterator = transcriptTap.through(
     queryLoop(params, startedCommandUuids, deliveredPollEventUuids, transcriptTap),
   );
-  let S;
+  let terminal;
   try {
-    let M;
+    let nextInput;
     while (true) {
-      let R = await y.next(M);
-      if (R.done) {
-        S = R.value;
+      let step = await loopIterator.next(nextInput);
+      if (step.done) {
+        terminal = step.value;
         break;
       }
       if (armedObserverAttachment)
-        if (R.value.type === "stream_request_start") armedObserverAttachment.flushSegment();
-        else armedObserverAttachment.capture(R.value);
-      M = yield R.value;
+        if (step.value.type === "stream_request_start") armedObserverAttachment.flushSegment();
+        else armedObserverAttachment.capture(step.value);
+      nextInput = yield step.value;
     }
   } finally {
-    if (S === undefined)
+    if (terminal === undefined)
       try {
-        await y.return(undefined);
+        await loopIterator.return(undefined);
       } catch {}
     try {
-      armedObserverAttachment?.finish(S?.reason ?? "ended");
+      armedObserverAttachment?.finish(terminal?.reason ?? "ended");
     } catch {}
   }
-  if (S === undefined) throw Error("queryWithObserverTap: missing terminal after completion");
-  return S;
+  if (terminal === undefined) throw Error("queryWithObserverTap: missing terminal after completion");
+  return terminal;
 }
 //@ chunk-ha3km179.js:158558-159009 layout
 /**
@@ -935,10 +1018,10 @@ function* absorbQueuedPollEvents({ events, queue, signal, phase, deliveredPollEv
 /**
  * poll_events 生成为 0 时记 poll_event_delivery left_queued 并打警告。
  */
-function logPollEventsLeftQueued(e, n) {
+function logPollEventsLeftQueued(turnPhase, eventCount) {
   logFeatureSad("poll_event_delivery", "left_queued");
   logForDebugging(
-    `[query] ${e} poll_events emission degraded to 0 for ${n} event(s) \u2014 leaving them queued`,
+    `[query] ${turnPhase} poll_events emission degraded to 0 for ${eventCount} event(s) \u2014 leaving them queued`,
     {
       level: "warn",
     },
@@ -977,18 +1060,18 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     advisorStripPlan,
   } = params;
   if (params.inPlaceOfFirstRequest !== undefined) {
-    let k = abortedTurnRows(params.inPlaceOfFirstRequest, {
+    let abortedRows = abortedTurnRows(params.inPlaceOfFirstRequest, {
       signal: params.toolUseContext.abortController.signal,
       interruptedMessageId: () => getInterruptedMessageId(params.toolUseContext),
       now: params.deps?.now,
       uuid: params.deps?.uuid,
     });
-    yield* k.rows;
-    if (k.terminal.reason === "aborted_streaming")
+    yield* abortedRows.rows;
+    if (abortedRows.terminal.reason === "aborted_streaming")
       markClassifierTurnAborted(params.toolUseContext, querySource);
-    return k.terminal;
+    return abortedRows.terminal;
   }
-  let se = endsWithMachineTurn(params.messages);
+  let nobodysTurn = endsWithMachineTurn(params.messages);
   let contextRouting = await buildContextRouting(userContext, systemContext, params.toolUseContext, {
     messages: params.messages,
     querySource,
@@ -1014,8 +1097,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     } catch (error) {
       logError(error);
     }
-  let Pe = messagesSinceCompactBoundary(params.messages);
-  let refusedUserMessageUuid = getRefusedUserMessageUuid(Pe);
+  let messagesSinceBoundary = messagesSinceCompactBoundary(params.messages);
+  let refusedUserMessageUuid = getRefusedUserMessageUuid(messagesSinceBoundary);
   let state = {
     guards: {
       ...INITIAL_LOOP_RECOVERY_STATE,
@@ -1031,7 +1114,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
   };
   let taskBudgetRemaining = undefined;
   let queryConfig = buildQueryConfig();
-  let memoryContextPromise = collectCoworkMemoryContext(Pe, state.toolUseContext, querySource);
+  let memoryContextPromise = collectCoworkMemoryContext(
+    messagesSinceBoundary,
+    state.toolUseContext,
+    querySource,
+  );
   using memoryRecallPrefetch = startRelevantMemoryPrefetch(
     state.messages,
     state.toolUseContext,
@@ -1039,7 +1126,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     memoryContextPromise,
   );
   if (memoryRecallPrefetch && shouldBlockOnMemoryPrefetch()) {
-    let k = [];
+    let memoryAttachments = [];
     try {
       if (isTopLevelMainThread) {
         endProfilePhase("loop_entry");
@@ -1058,7 +1145,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         }
       }
       if (attachments !== undefined) {
-        let Ot = filterDuplicateMemoryAttachments(
+        let dedupedAttachments = filterDuplicateMemoryAttachments(
           attachments,
           state.toolUseContext.readFileState,
           state.toolUseContext.session,
@@ -1066,25 +1153,29 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         );
         memoryRecallPrefetch.consumedOnIteration = 0;
         memoryRecallPrefetch.consumedBlocking = true;
-        k = Ot.map((qt) => createAttachmentMessage_2(qt, deps));
+        memoryAttachments = dedupedAttachments.map((attachment) =>
+          createAttachmentMessage_2(attachment, deps),
+        );
       }
     } catch (error) {
       logError(error);
-      k = [];
+      memoryAttachments = [];
     }
-    if (k.length > 0)
+    if (memoryAttachments.length > 0)
       state = {
         ...state,
-        messages: [...state.messages, ...k],
+        messages: [...state.messages, ...memoryAttachments],
       };
-    for (let Ze of k) yield Ze;
+    for (let attachmentMessage of memoryAttachments) yield attachmentMessage;
   }
   if (memoryContextPromise) {
     if (isTopLevelMainThread) {
       endProfilePhase("loop_entry");
       startProfilePhase("memory_context_wait");
     }
-    let mapped = (await memoryContextPromise).map((Ze) => createAttachmentMessage_2(Ze, deps));
+    let mapped = (await memoryContextPromise).map((attachment) =>
+      createAttachmentMessage_2(attachment, deps),
+    );
     if (isTopLevelMainThread) {
       endProfilePhase("memory_context_wait");
       startProfilePhase("loop_entry");
@@ -1094,13 +1185,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         ...state,
         messages: [...state.messages, ...mapped],
       };
-    for (let Ze of mapped) yield Ze;
+    for (let attachmentMessage of mapped) yield attachmentMessage;
   }
   let pendingPollEventRows = [];
-  let ut = false;
+  let hookErrored = false;
   {
     let agentContext = state.toolUseContext.agentContext;
-    let Ot =
+    let turnStartPollCommands =
       !isMainThreadQuery || state.toolUseContext.messageQueue.isMidTurnFoldSuspended()
         ? []
         : filterQueuedCommandsForThread(
@@ -1112,18 +1203,18 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               currentAgentId: state.toolUseContext.agentId,
             },
           ).filter(isPollEventMode);
-    if (Ot.length > 0) {
+    if (turnStartPollCommands.length > 0) {
       let messageQueue = state.toolUseContext.messageQueue;
-      messageQueue.registerFoldInFlight(Ot);
-      se &&= !Ot.some(isPersonQueuedInput);
+      messageQueue.registerFoldInFlight(turnStartPollCommands);
+      nobodysTurn &&= !turnStartPollCommands.some(isPersonQueuedInput);
       try {
-        let on = messageQueue.countRemainingWakePollEventsAfter(Ot);
-        let Sn = [];
+        let remainingWakeEvents = messageQueue.countRemainingWakePollEventsAfter(turnStartPollCommands);
+        let queuedAttachments = [];
         try {
-          Sn = await getQueuedCommandAttachments(
-            Ot,
+          queuedAttachments = await getQueuedCommandAttachments(
+            turnStartPollCommands,
             imageLimitsForModel(state.toolUseContext.options.mainLoopModel),
-            on,
+            remainingWakeEvents,
             {
               messages: state.toolUseContext.messages,
             },
@@ -1133,36 +1224,36 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             logForDebugging("[query] turn-start poll_events build aborted \u2014 leaving events queued");
           else logError(error);
         }
-        if (Sn.some((Ro) => Ro.type === "poll_events")) {
+        if (queuedAttachments.some((attachment) => attachment.type === "poll_events")) {
           state.toolUseContext.setToolPermissionContext(setPollEventDeliveryGuard);
-          let mapped = Sn.map((bn) => createAttachmentMessage_2(bn, deps));
+          let mapped = queuedAttachments.map((attachment) => createAttachmentMessage_2(attachment, deps));
           state = {
             ...state,
             messages: [...state.messages, ...mapped],
           };
-          for (let bn of mapped) yield bn;
+          for (let attachmentMessage of mapped) yield attachmentMessage;
           pendingPollEventRows = yield* absorbQueuedPollEvents({
-            events: Ot,
+            events: turnStartPollCommands,
             queue: messageQueue,
             signal: state.toolUseContext.abortController.signal,
             phase: "turn-start",
             deliveredPollEventUuids,
           });
-        } else logPollEventsLeftQueued("turn-start", Ot.length);
+        } else logPollEventsLeftQueued("turn-start", turnStartPollCommands.length);
       } finally {
-        messageQueue.unregisterFoldInFlight(Ot);
+        messageQueue.unregisterFoldInFlight(turnStartPollCommands);
       }
     }
   }
   if (isMainThreadQuery && !state.toolUseContext.agentId && !state.toolUseContext.options.bareFork) {
     let messageQueue = state.toolUseContext.messageQueue;
     try {
-      let Ze = messageQueue.isMidTurnFoldSuspended()
+      let passiveCommands = messageQueue.isMidTurnFoldSuspended()
         ? []
         : messageQueue.getCommandQueue().filter(isPassiveMainAgentCommand);
-      if (Ze.length > 0) {
+      if (passiveCommands.length > 0) {
         let queuedCommandAttachments = await getQueuedCommandAttachments(
-          Ze,
+          passiveCommands,
           imageLimitsForModel(state.toolUseContext.options.mainLoopModel),
           0,
           {
@@ -1170,10 +1261,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           },
         );
         if (
-          queuedCommandAttachments.length === Ze.length &&
+          queuedCommandAttachments.length === passiveCommands.length &&
           !state.toolUseContext.abortController.signal.aborted
         ) {
-          checkTurnIdsConsistent(Ze);
+          checkTurnIdsConsistent(passiveCommands);
           let mapped = queuedCommandAttachments.map((queuedCommandAttachment) =>
             createAttachmentMessage_2(queuedCommandAttachment, deps),
           );
@@ -1181,14 +1272,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             ...state,
             messages: [...state.messages, ...mapped],
           };
-          for (let on of mapped) yield on;
-          messageQueue.consume(Ze, {
+          for (let attachmentMessage of mapped) yield attachmentMessage;
+          messageQueue.consume(passiveCommands, {
             reason: "absorbed_mid_turn",
           });
-          se &&= !Ze.some(isPersonQueuedInput);
+          nobodysTurn &&= !passiveCommands.some(isPersonQueuedInput);
         } else if (!state.toolUseContext.abortController.signal.aborted)
           logForDebugging(
-            `[query] turn-start passive fold emitted ${queuedCommandAttachments.length} of ${Ze.length} \u2014 leaving them queued`,
+            `[query] turn-start passive fold emitted ${queuedCommandAttachments.length} of ${passiveCommands.length} \u2014 leaving them queued`,
             {
               level: "warn",
             },
@@ -1198,18 +1289,18 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       if (!isAbortError(error)) logError(error);
     }
   }
-  let kt = false;
+  let silentArmSpent = false;
   let refusalFallbacksUsed = 0;
   let refusalFallbackDeclined = false;
   let suppressionAlreadyLogged = false;
-  let At;
-  let Me = false;
+  let pendingSupersedeUuids;
+  let supersedeHoldRound = false;
   let primaryModel = getMainLoopModel_2(params.toolUseContext);
   let sessionModel = primaryModel;
   let modelChain = buildAvailabilityFallbackChain(primaryModel, fallbackModel);
   let chainIndex = 0;
   let modelFacts = params.modelFacts;
-  let mo;
+  let fallbackRecordChain;
   let refusalOverride;
   let loopEffort;
   let consentOverride;
@@ -1229,7 +1320,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
   let isMainLoop = querySourceKind === "main" || querySourceKind === undefined;
   let sentReminderTexts = new Map();
   async function* runIteration() {
-    if (ut) {
+    if (hookErrored) {
       yield* pendingPollEventRows;
       markClassifierTurnAborted(state.toolUseContext, querySource);
       yield* runTurnEndReactions(state.toolUseContext, state.messages, {
@@ -1251,7 +1342,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     }
     let { toolUseContext } = state;
     let messages = state.messages;
-    let Ot;
+    let turnSnapshot;
     let { guards, compactTracking, resumeIncompleteThinking, pendingToolUseSummary, prevToolDurations } =
       state;
     let {
@@ -1294,20 +1385,20 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     };
     let messagesForQuery = [...messagesSinceCompactBoundary(messages)];
     messagesForQuery = transcriptTap.withArrivedRows(messagesForQuery);
-    let Di = (E) => canResumeThinkingOnModel(messagesForQuery, E);
+    let canResumeThinking = (model) => canResumeThinkingOnModel(messagesForQuery, model);
     let tracking = compactTracking;
-    let zr =
+    let preFirstCompactFork =
       toolUseContext.precomputeSourceKey !== undefined &&
       tracking?.compacted !== true &&
       !isCompactCommandSource(querySource);
-    using Li =
+    using classifierAbortGuard =
       requireTurnClassifier &&
       isActingAsBgJob() &&
       querySource.startsWith("repl_main_thread") &&
       !toolUseContext.agentId
         ? createDisposableGuard(() => markClassifierTurnAborted(toolUseContext, querySource))
         : undefined;
-    if (requireTurnClassifier && Li) {
+    if (requireTurnClassifier && classifierAbortGuard) {
       let last = messagesForQuery.findLast(
         (records) =>
           records.type === "user" && !records.isMeta && typeof records.message.content === "string",
@@ -1322,19 +1413,22 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         isTurnStart: state.transition === undefined,
       });
     }
-    let Lc = querySource.startsWith("agent:") || querySource.startsWith("repl_main_thread");
+    let recordsContentReplacement =
+      querySource.startsWith("agent:") || querySource.startsWith("repl_main_thread");
     messagesForQuery = await applyToolResultBudget(
       messagesForQuery,
       toolUseContext.contentReplacementState,
       toolResultsDirFor_2(toolUseContext.session),
-      Lc
-        ? (E) =>
-            void recordContentReplacement(E, toolUseContext.agentId, toolUseContext.storageV5).catch(logError)
+      recordsContentReplacement
+        ? (message) =>
+            void recordContentReplacement(message, toolUseContext.agentId, toolUseContext.storageV5).catch(
+              logError,
+            )
         : undefined,
       getBudgetExemptToolNames(toolUseContext.options.tools),
       toolUseContext.storageV5,
     );
-    let Ui = () =>
+    let effectiveModel = () =>
       effectiveTurnModel({
         refusalOverride,
         consentOverride,
@@ -1343,7 +1437,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         primaryModel,
       });
     if (isMainThread) {
-      let E = checkModelSwitch({
+      let modelSwitch = checkModelSwitch({
         pickSeen: config,
         livePick: mainLoopModelOverride(),
         sessionModel,
@@ -1357,15 +1451,15 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         },
         resolveLiveModel: getMainLoopModel,
       });
-      if (E !== undefined) {
-        config = E.pick;
-        let adopt = E.adopt;
+      if (modelSwitch !== undefined) {
+        config = modelSwitch.pick;
+        let adopt = modelSwitch.adopt;
         if (adopt !== undefined) {
-          let pe = Ui();
+          let previousModel = effectiveModel();
           let model = adopt.model;
           switch (adopt.latch) {
             case "session_pick":
-              mo = undefined;
+              fallbackRecordChain = undefined;
               liveSwitchOverride = model;
               sessionModel = model;
               refusalOverride = undefined;
@@ -1392,7 +1486,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 }
               : undefined;
           logEvent("tengu_live_model_switch", {
-            from_model: telemetrySafeModelName(pe),
+            from_model: telemetrySafeModelName(previousModel),
             to_model: telemetrySafeModelName(model),
             query_source: agentTypeForTelemetry(querySource),
             entrypoint: lit("cli"),
@@ -1402,20 +1496,21 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         }
       }
     }
-    let resolveRuntimeModel = (E, j) =>
+    let resolveRuntimeModel = (messages, permissionMode) =>
       getRuntimeMainLoopModel({
-        permissionMode: j,
-        mainLoopModel: Ui(),
-        exceeds200kTokens: j === "plan" && doesMostRecentAssistantMessageExceed200k(E),
+        permissionMode,
+        mainLoopModel: effectiveModel(),
+        exceeds200kTokens: permissionMode === "plan" && doesMostRecentAssistantMessageExceed200k(messages),
       });
-    let resolveModelAndFacts = async (messagesForQuery, mode) => {
-      let runtimeModel = resolveRuntimeModel(messagesForQuery, mode);
-      let me = modelFacts;
+    let resolveModelAndFacts = async (messages, permissionMode) => {
+      let model = resolveRuntimeModel(messages, permissionMode);
+      let pendingModelFacts = modelFacts;
       modelFacts = undefined;
       if (isTopLevelMainThread) startProfilePhase("model_config_wait");
-      let he = me?.model === runtimeModel ? me : await awaitMcpSettle(runtimeModel, toolUseContext);
+      let resolvedFacts =
+        pendingModelFacts?.model === model ? pendingModelFacts : await awaitMcpSettle(model, toolUseContext);
       if (isTopLevelMainThread) endProfilePhase("model_config_wait");
-      return [runtimeModel, he];
+      return [model, resolvedFacts];
     };
     if (isTopLevelMainThread) endProfilePhase("message_prep");
     let [attemptModel, attemptModelFacts] = await resolveModelAndFacts(
@@ -1423,9 +1518,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       getToolPermissionContext(toolUseContext).mode,
     );
     if (isTopLevelMainThread) startProfilePhase("message_prep");
-    let setAttemptModel = (E) => {
-      attemptModel = E;
-      attemptModelFacts = getModelContextInfo(E);
+    let setAttemptModel = (nextModel) => {
+      attemptModel = nextModel;
+      attemptModelFacts = getModelContextInfo(nextModel);
     };
     let snipTokensFreed = 0;
     clearMicroCompactFlag();
@@ -1436,7 +1531,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       startProfilePhase("autocompact");
     }
     let compactionCheckFacts = attemptModelFacts;
-    let Nc = deps.autocompact(
+    let compactionIterator = deps.autocompact(
       messagesForQuery,
       toolUseContext,
       attemptModelFacts,
@@ -1455,15 +1550,15 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       snipTokensFreed,
       applyPrecomputedCompact,
     );
-    let autocompactOutcome = yield* releasingAsyncIterator(Nc);
+    let autocompactOutcome = yield* releasingAsyncIterator(compactionIterator);
     queryCheckpoint("query_autocompact_end");
     if (isTopLevelMainThread) {
       endProfilePhase("autocompact");
       startProfilePhase("request_announcements");
     }
     if (autocompactOutcome.kind === "rapid_refill_breaker_tripped") {
-      let E = fallbackWindowNotice({
-        fallback: isMainThreadQuery ? mo : undefined,
+      let rapidRefillNotice = fallbackWindowNotice({
+        fallback: isMainThreadQuery ? fallbackRecordChain : undefined,
         mainLoopModel: toolUseContext.options.mainLoopModel,
         configuredWindow: toolUseContext.options.autoCompactWindow,
       });
@@ -1472,10 +1567,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         turnsSincePreviousCompact: tracking?.turnCounter ?? -1,
         queryChainId: queryChainIdForAnalytics,
         queryDepth: queryTracking.depth,
-        afterShrinkingFallback: E.afterShrinkingFallback,
+        afterShrinkingFallback: rapidRefillNotice.afterShrinkingFallback,
       });
       let fullSystemPrompt = createApiErrorMessage({
-        content: E.content,
+        content: rapidRefillNotice.content,
         error: "invalid_request",
         apiError: "autocompact_thrashing",
         now: deps.now,
@@ -1490,9 +1585,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       };
     }
     if (autocompactOutcome.kind === "compacted") {
-      let { result, thresholdSource, thresholdWindow } = autocompactOutcome;
+      let { result: compactionResult, thresholdSource, thresholdWindow } = autocompactOutcome;
       let { preCompactTokenCount, postCompactTokenCount, truePostCompactTokenCount, compactionUsage } =
-        result;
+        compactionResult;
       let effortLevelIfSupported = getEffortLevelIfSupported(
         toolUseContext.options.mainLoopModel,
         getEffortValue(toolUseContext),
@@ -1508,7 +1603,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         }),
         originalMessageCount: messages.length,
         compactedMessageCount:
-          result.summaryMessages.length + result.attachments.length + result.hookResults.length,
+          compactionResult.summaryMessages.length +
+          compactionResult.attachments.length +
+          compactionResult.hookResults.length,
         ...(effortLevelIfSupported && {
           effort_level: fromEnum(effortLevelIfSupported),
         }),
@@ -1540,7 +1637,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         tokenCountFromLastAPIResponse(messagesForQuery),
       );
       tracking = createCompactTracking(deps.uuid(), autocompactOutcome.consecutiveRapidRefills);
-      result.summaryMessages = stampSummaryTurnFields(result.summaryMessages, messagesForQuery);
+      compactionResult.summaryMessages = stampSummaryTurnFields(
+        compactionResult.summaryMessages,
+        messagesForQuery,
+      );
       contextRouting = await rebuildRoutingAfterCompaction(
         contextRouting,
         userContext,
@@ -1551,7 +1651,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           querySource,
         },
       );
-      let Ne = await reannounceAfterCompact(result, {
+      let reannouncedAfterCompact = await reannounceAfterCompact(compactionResult, {
         routing: contextRouting,
         toolUseContext,
         querySource,
@@ -1559,10 +1659,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         foreground: isMainThreadQuery && isMainAgent(toolUseContext.agentContext),
         stamp: deps,
       });
-      messagesForQuery = insertAfterCompactBoundary(buildPostCompactMessages(result), Ne);
+      messagesForQuery = insertAfterCompactBoundary(
+        buildPostCompactMessages(compactionResult),
+        reannouncedAfterCompact,
+      );
       if (messages !== params.messages) {
-        Ot = snapshotMessagesAndStart(messages);
-        if (Ot !== undefined) messages = messagesForQuery;
+        turnSnapshot = snapshotMessagesAndStart(messages);
+        if (turnSnapshot !== undefined) messages = messagesForQuery;
       }
       toolUseContext = withTurnMessages(toolUseContext, messagesForQuery, isHumanTurn);
       state = {
@@ -1579,7 +1682,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         querySource,
         stickyBetas,
       });
-      for (let ke of insertAfterCompactBoundary(buildPostCompactMessagesWithoutKept(result), Ne)) yield ke;
+      for (let message of insertAfterCompactBoundary(
+        buildPostCompactMessagesWithoutKept(compactionResult),
+        reannouncedAfterCompact,
+      ))
+        yield message;
       if (autocompactOutcome.afterIdle) yield createSystemMessage(COMPACTED_WITH_PRECOMPUTED_TEXT, "notice");
     } else if (
       (autocompactOutcome.kind === "failed" || autocompactOutcome.kind === "not_needed") &&
@@ -1607,7 +1714,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         autocompactRan,
         hasAttemptedReactiveCompact,
         lastTransitionReason: state.transition?.reason,
-        isPreFirstCompactFork: zr,
+        isPreFirstCompactFork: preFirstCompactFork,
         querySource,
         contextTokens:
           estimateTokensWithAnchor(messagesForQuery, attemptModelFacts.bytesPerToken) - snipTokensFreed,
@@ -1670,16 +1777,16 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       }
     if (classifyQuerySource(querySource) === "main" && !toolUseContext.agentId && !resumeActive)
       try {
-        for (let E of await copyTextOf(toolUseContext.session)) {
-          for (let message of E.messages) {
+        for (let copiedText of await copyTextOf(toolUseContext.session)) {
+          for (let message of copiedText.messages) {
             yield message;
             messagesForQuery = [...messagesForQuery, message];
           }
-          if (E.contexts.length > 0) {
+          if (copiedText.contexts.length > 0) {
             let attachmentMessage = createAttachmentMessage_2(
               {
                 type: "hook_additional_context",
-                content: E.contexts,
+                content: copiedText.contexts,
                 hookName: "PostModelSwitch",
                 toolUseID: "PostModelSwitch",
                 hookEvent: "PostModelSwitch",
@@ -1703,15 +1810,21 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       now: deps.now,
       uuid: deps.uuid,
     });
-    let Hi = isMainThreadQuery && isMainAgent(toolUseContext.agentContext);
-    let Xr = resumeActive
+    let isForegroundMain = isMainThreadQuery && isMainAgent(toolUseContext.agentContext);
+    let routedContext = resumeActive
       ? contextRouting
-      : await refreshRoutedGitStatus(messagesForQuery, contextRouting, toolUseContext, Hi);
-    let qc =
+      : await refreshRoutedGitStatus(messagesForQuery, contextRouting, toolUseContext, isForegroundMain);
+    let contextWithDocText =
       !resumeActive &&
-      shouldSendProjectDocText(messagesForQuery, Xr, toolUseContext, Hi, state.transition === undefined)
+      shouldSendProjectDocText(
+        messagesForQuery,
+        routedContext,
+        toolUseContext,
+        isForegroundMain,
+        state.transition === undefined,
+      )
         ? await checkProjectDocReadAllowed(
-            Xr,
+            routedContext,
             toolUseContext,
             () => createToolUseContextView(toolUseContext),
             {
@@ -1719,17 +1832,17 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               systemPrompt,
               modelFacts: attemptModelFacts,
             },
-            (E, j) => anyDocReadHookBlocks(E, toolUseContext, j),
+            (docPath, docContents) => anyDocReadHookBlocks(docPath, toolUseContext, docContents),
           )
-        : Xr;
-    for (let E of reportContextAnnouncements(messagesForQuery, qc, {
+        : routedContext;
+    for (let announcement of reportContextAnnouncements(messagesForQuery, contextWithDocText, {
       querySource,
       resumeActive,
       stamp: deps,
       announcementWalk: toolUseContext.options.announcementWalk,
     })) {
-      yield E;
-      messagesForQuery = [...messagesForQuery, E];
+      yield announcement;
+      messagesForQuery = [...messagesForQuery, announcement];
     }
     let mode = getToolPermissionContext(toolUseContext).mode;
     let exceeds200kInPlanMode = mode === "plan" && doesMostRecentAssistantMessageExceed200k(messagesForQuery);
@@ -1746,16 +1859,16 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       mainLoopModel: toolUseContext.options.mainLoopModel,
       exceeds200kTokens: exceeds200kInPlanMode,
     });
-    for (let E of crossOrgThinkingAttachments(messagesForQuery, {
+    for (let thinkingAttachment of crossOrgThinkingAttachments(messagesForQuery, {
       querySource,
       mainThread: isMainThreadQuery && isMainAgent(toolUseContext.agentContext),
       model: runtimeOptionsModel,
       stamp: deps,
     })) {
-      yield E;
-      messagesForQuery = [...messagesForQuery, E];
+      yield thinkingAttachment;
+      messagesForQuery = [...messagesForQuery, thinkingAttachment];
     }
-    for (let E of await autoModeTurnAttachments(messagesForQuery, toolUseContext, {
+    for (let autoModeAttachment of await autoModeTurnAttachments(messagesForQuery, toolUseContext, {
       querySource,
       resumeActive,
       model: getRuntimeMainLoopModel({
@@ -1765,8 +1878,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       }),
       stamp: deps,
     })) {
-      yield E;
-      messagesForQuery = [...messagesForQuery, E];
+      yield autoModeAttachment;
+      messagesForQuery = [...messagesForQuery, autoModeAttachment];
     }
     let advisorResolution = resolveAdvisorState(messagesForQuery, toolUseContext, {
       querySource,
@@ -1774,7 +1887,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       configuredRuntimeModel,
       runtimeOptionsModel,
       carrier: stickyBetas ?? getStickyBetas(),
-      toolChangesRide: (E) => canDeclareToolChangeAhead(stickyBetas ?? getStickyBetas(), E),
+      toolChangesRide: (toolChange) => canDeclareToolChangeAhead(stickyBetas ?? getStickyBetas(), toolChange),
     });
     if (advisorResolution.announcement !== undefined) {
       let attachmentMessage = createAttachmentMessage_2(advisorResolution.announcement, deps);
@@ -1784,15 +1897,16 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     yield* pendingPollEventRows;
     pendingPollEventRows = [];
     let { advisorModel, advisorDeferred, advisorActive } = advisorResolution;
-    let ts = () => (Ot ? Ot.recorded : latestPromptSnapshot(messages));
+    let previousPromptSnapshot = () =>
+      turnSnapshot ? turnSnapshot.recorded : latestPromptSnapshot(messages);
     let promptRender = recordPromptSnapshot(messagesForQuery, systemPrompt, {
       options: toolUseContext.options,
       querySource,
       resumeActive,
       stamp: deps,
-      inheritedReminderFold: () => ts()?.reminderFold,
-      inheritedWireShape: () => ts()?.wireShape,
-      inheritedEchoWireToolInputs: () => ts()?.echoWireToolInputs,
+      inheritedReminderFold: () => previousPromptSnapshot()?.reminderFold,
+      inheritedWireShape: () => previousPromptSnapshot()?.wireShape,
+      inheritedEchoWireToolInputs: () => previousPromptSnapshot()?.echoWireToolInputs,
       contextRendering: contextRouting.rendering,
       toolDescribeEpoch,
       turnSections,
@@ -1820,14 +1934,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     let deferredToolsSent;
     let toolInputCopiesSent;
     let appendDeferredToolsRecord = () => {
-      let E = recordDeferredTools(messagesForQuery, deferredToolsSent, {
+      let deferredToolsRecord = recordDeferredTools(messagesForQuery, deferredToolsSent, {
         options: toolUseContext.options,
         querySource,
         stamp: deps,
         toolInputCopies: toolInputCopiesSent,
       });
-      if (E) messagesForQuery = [...messagesForQuery, E];
-      return E;
+      if (deferredToolsRecord) messagesForQuery = [...messagesForQuery, deferredToolsRecord];
+      return deferredToolsRecord;
     };
     toolUseContext = {
       ...toolUseContext,
@@ -1848,7 +1962,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     let withheldPromptTooLong;
     let lastWithheldAssistant;
     let refusalNoFallbackEvent;
-    let Mn = shouldRetryRefusal(querySource, refusalRetrySpent);
+    let retryRefusal = shouldRetryRefusal(querySource, refusalRetrySpent);
     queryCheckpoint("query_setup_start");
     if (isTopLevelMainThread) {
       endProfilePhase("request_announcements");
@@ -1860,73 +1974,80 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       onReset: () => clearActiveMcpContext(toolUseContext.options, isMainOrSubagent),
     });
     let { assistantMessages, toolResults, toolUseBlocks } = attemptState;
-    function noteToolMessageFlags(E) {
+    function noteToolMessageFlags(message) {
       attemptState.toolRequestedEndTurn = higherSourceRank(
         attemptState.toolRequestedEndTurn,
-        getToolEndsTurnKind(E),
+        getToolEndsTurnKind(message),
       );
-      if (E.type !== "attachment") return;
-      if (E.attachment.type === "hook_stopped_continuation") attemptState.shouldPreventContinuation = true;
-      else if (E.attachment.type === "hook_deferred_tool") attemptState.toolWasDeferred = true;
+      if (message.type !== "attachment") return;
+      if (message.attachment.type === "hook_stopped_continuation")
+        attemptState.shouldPreventContinuation = true;
+      else if (message.attachment.type === "hook_deferred_tool") attemptState.toolWasDeferred = true;
     }
-    function recordToolResult(E, j) {
-      se &&= !hasAuthoritativePollEvents(E) && !toolUseBlocks.some(isQuestionTool);
-      if (E.type === "attachment") {
-        toolResults.push(E);
+    function recordToolResult(message, context) {
+      nobodysTurn &&= !hasAuthoritativePollEvents(message) && !toolUseBlocks.some(isQuestionTool);
+      if (message.type === "attachment") {
+        toolResults.push(message);
         return;
       }
-      if (isVirtualConversationMessage(E)) return;
-      let pe;
+      if (isVirtualConversationMessage(message)) return;
+      let normalized;
       try {
-        pe = normalizeMessagesForAPI(
-          [E],
-          j.options.refreshTools?.() ?? j.options.tools,
+        normalized = normalizeMessagesForAPI(
+          [message],
+          context.options.refreshTools?.() ?? context.options.tools,
           toolUseContext.options.mainLoopModel,
           {
             reminderFold,
           },
         );
-        validateImagesInMessages(pe, imageLimitsForModel(toolUseContext.options.mainLoopModel).maxBase64Size);
+        validateImagesInMessages(
+          normalized,
+          imageLimitsForModel(toolUseContext.options.mainLoopModel).maxBase64Size,
+        );
       } catch (error) {
-        if (E.type === "user") toolResults.push(E);
+        if (message.type === "user") toolResults.push(message);
         throw error;
       }
-      toolResults.push(...pe.filter((me) => me.type === "user"));
+      toolResults.push(...normalized.filter((message) => message.type === "user"));
     }
-    function* drainCompletedToolResults(E = true) {
+    function* drainCompletedToolResults(includeImages = true) {
       if (toolUseContext.abortController.signal.aborted) return;
-      for (let j of attemptState.streamingToolExecutor.getCompletedResults()) {
-        if (hasTypeField(j)) {
-          yield j;
+      for (let update of attemptState.streamingToolExecutor.getCompletedResults()) {
+        if (hasTypeField(update)) {
+          yield update;
           continue;
         }
-        if (j.message) {
-          if (!E && hasImageBlock(j.message)) continue;
-          yield markVirtualInResume(j.message);
-          noteToolMessageFlags(j.message);
-          recordToolResult(j.message, toolUseContext);
+        if (update.message) {
+          if (!includeImages && hasImageBlock(update.message)) continue;
+          yield markVirtualInResume(update.message);
+          noteToolMessageFlags(update.message);
+          recordToolResult(update.message, toolUseContext);
         }
-        if (j.toolDuration) attemptState.toolDurations.push(j.toolDuration);
+        if (update.toolDuration) attemptState.toolDurations.push(update.toolDuration);
       }
     }
-    function* endTurnOnError(E) {
-      let j = E instanceof ImageSizeError || E instanceof ImageResizeError;
-      let pe = E instanceof Error ? E.message : String(E);
-      if (j)
-        logForDebugging(`Query image error: ${pe}`, {
+    function* endTurnOnError(error) {
+      let isImageError = error instanceof ImageSizeError || error instanceof ImageResizeError;
+      let errorText = error instanceof Error ? error.message : String(error);
+      if (isImageError)
+        logForDebugging(`Query image error: ${errorText}`, {
           level: "error",
         });
-      else logError(withTelemetryMessage(toError(E), "queryLoop invariant broken"));
+      else logError(withTelemetryMessage(toError(error), "queryLoop invariant broken"));
       try {
-        let me;
+        let resetOutcome;
         if (toolUseBlocks.length > 0) {
           try {
             yield* drainCompletedToolResults(false);
           } catch (error) {
             logError(withTelemetryMessage(toError(error), "tool drain failed while ending the turn"));
           }
-          me = resetStreamingToolExecutor(attemptState, j ? "image_error" : "model_error");
-          for (let finishedResult of me.finishedResults) {
+          resetOutcome = resetStreamingToolExecutor(
+            attemptState,
+            isImageError ? "image_error" : "model_error",
+          );
+          for (let finishedResult of resetOutcome.finishedResults) {
             if (hasImageBlock(finishedResult)) continue;
             try {
               yield markVirtualInResume(finishedResult);
@@ -1944,26 +2065,26 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         }
         yield* yieldMissingToolResultBlocks(
           assistantMessages,
-          j ? IMAGE_ERROR_TOOL_CANCEL_TEXT : turnErrorToolCancelText(pe),
+          isImageError ? IMAGE_ERROR_TOOL_CANCEL_TEXT : turnErrorToolCancelText(errorText),
           deps,
           completedToolUseIds(attemptState),
         );
-        if (me?.removes) yield me.removes;
+        if (resetOutcome?.removes) yield resetOutcome.removes;
       } catch (error) {
         logError(withTelemetryMessage(toError(error), "tool_result pairing failed while ending the turn"));
       }
       try {
         let apiErrorMessage = createApiErrorMessage(
-          j
+          isImageError
             ? {
-                content: pe,
+                content: errorText,
                 error: "invalid_request",
-                errorDetails: pe,
+                errorDetails: errorText,
                 now: deps.now,
                 uuid: deps.uuid,
               }
             : {
-                content: pe,
+                content: errorText,
                 now: deps.now,
                 uuid: deps.uuid,
               },
@@ -1973,19 +2094,19 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       } catch (error) {
         logError(withTelemetryMessage(toError(error), "error frame failed while ending the turn"));
       }
-      if (j)
+      if (isImageError)
         return {
           reason: "image_error",
         };
-      logAntError("Query error", E);
+      logAntError("Query error", error);
       return {
         reason: "model_error",
-        error: E,
+        error,
       };
     }
-    function* yieldWithRefusalNotice(E) {
+    function* yieldWithRefusalNotice(message) {
       yield* yieldRefusalNoFallbackNotice();
-      yield E;
+      yield message;
     }
     function* yieldRefusalNoFallbackNotice() {
       if (isMainThread && refusalNoFallbackEvent)
@@ -2010,14 +2131,16 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     let defaultModelInfo = {};
     if (isMainThread)
       try {
-        let E = getUsageCreditsOnlyModelConsentDeclineFallback();
+        let creditsOnlyFallbackModel = getUsageCreditsOnlyModelConsentDeclineFallback();
         defaultModelInfo = automaticModelFallbackInfo({
           userModel: sessionModel,
           permissionMode: mode,
           exceeds200kTokens: exceeds200kInPlanMode,
           automaticModels: [
             getActiveModelFallback()?.fallbackModel,
-            E !== null && getMainLoopModelOverride() === E ? E : undefined,
+            creditsOnlyFallbackModel !== null && getMainLoopModelOverride() === creditsOnlyFallbackModel
+              ? creditsOnlyFallbackModel
+              : undefined,
           ],
         });
       } catch (error) {
@@ -2025,63 +2148,70 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         defaultModelInfo = {};
       }
     if (needsOverageConsentForModel(attemptModel, toolUseContext.requestDialog)) {
-      let E = "cancelled";
-      let j = false;
-      let pe = false;
-      let me = false;
-      let he =
+      let consentChoice = "cancelled";
+      let cancelledWhileParked = false;
+      let dialogQueuedAtPark = false;
+      let answeredOverBridge = false;
+      let canPromptUser =
         needsOverageConsentOnMainThread({
           requestDialog: toolUseContext.requestDialog,
           isMainThread,
         }) && !toolUseContext.abortController.signal.aborted;
-      if (he && toolUseContext.requestDialog) {
+      if (canPromptUser && toolUseContext.requestDialog) {
         let signal = toolUseContext.abortController.signal;
         let userDialogTimeoutMs = getUserDialogTimeoutMs();
-        let Ne = !isSdkDialogHostActive() && isUnattendedInteractiveSession();
+        let unattended = !isSdkDialogHostActive() && isUnattendedInteractiveSession();
         let abortController = new AbortController();
-        let Ee = () => abortController.abort();
-        signal.addEventListener("abort", Ee, {
+        let abortOnSignal = () => abortController.abort();
+        signal.addEventListener("abort", abortOnSignal, {
           once: true,
         });
-        let Ie = false;
+        let userInteracted = false;
         let now = Date.now();
-        let lt =
-          Ne && !isBgSession()
+        let unregisterInteraction =
+          unattended && !isBgSession()
             ? onInteraction(() => {
-                if (Date.now() - now > 1000) Ie = true;
+                if (Date.now() - now > 1000) userInteracted = true;
               })
             : () => {};
-        let Je = (Kt) => Kt.uuid ?? Kt;
-        let gt = new Set(
-          toolUseContext.messageQueue.getCommandQueueSnapshot().filter(isPromptModeQueuedCommand).map(Je),
+        let commandId = (command) => command.uuid ?? command;
+        let knownCommandIds = new Set(
+          toolUseContext.messageQueue
+            .getCommandQueueSnapshot()
+            .filter(isPromptModeQueuedCommand)
+            .map(commandId),
         );
-        let Et = () => {
+        let onQueueChangeCheck = () => {
           flushInteractionTime();
           if (
-            !Ie &&
+            !userInteracted &&
             toolUseContext.messageQueue
               .getCommandQueueSnapshot()
-              .some((Kt) => isPromptModeQueuedCommand(Kt) && !gt.has(Je(Kt)))
+              .some(
+                (command) => isPromptModeQueuedCommand(command) && !knownCommandIds.has(commandId(command)),
+              )
           ) {
-            pe = true;
+            dialogQueuedAtPark = true;
             abortController.abort();
           }
         };
-        let eo = Ne ? toolUseContext.messageQueue.subscribe(Et) : () => {};
-        let ko =
-          Ne && userDialogTimeoutMs > 0
+        let unsubscribeQueue = unattended
+          ? toolUseContext.messageQueue.subscribe(onQueueChangeCheck)
+          : () => {};
+        let dialogTimeout =
+          unattended && userDialogTimeoutMs > 0
             ? setTimeout(
-                (Kt) => {
+                (controller) => {
                   flushInteractionTime();
-                  if (!Ie) Kt.abort();
+                  if (!userInteracted) controller.abort();
                 },
                 userDialogTimeoutMs,
                 abortController,
               )
             : undefined;
-        let lo = false;
+        let settledUnanswered = false;
         try {
-          E = await toolUseContext.requestDialog(
+          consentChoice = await toolUseContext.requestDialog(
             FABLE_OVERAGE_CONSENT_DIALOG,
             {
               overagesEnabled: hasExtraUsageProvisioned(),
@@ -2090,29 +2220,32 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             },
             {
               signal: abortController.signal,
-              onSettledUnanswered: (Kt) => {
-                lo = true;
-                pe ||= Kt === "moved_on";
+              onSettledUnanswered: (settleReason) => {
+                settledUnanswered = true;
+                dialogQueuedAtPark ||= settleReason === "moved_on";
               },
               onAnsweredOverBridge: () => {
-                me = true;
+                answeredOverBridge = true;
               },
             },
           );
         } finally {
-          clearTimeout(ko);
-          lt();
-          eo();
-          signal.removeEventListener("abort", Ee);
+          clearTimeout(dialogTimeout);
+          unregisterInteraction();
+          unsubscribeQueue();
+          signal.removeEventListener("abort", abortOnSignal);
         }
-        j = E === "cancelled" && (abortController.signal.aborted || lo || me) && !signal.aborted;
+        cancelledWhileParked =
+          consentChoice === "cancelled" &&
+          (abortController.signal.aborted || settledUnanswered || answeredOverBridge) &&
+          !signal.aborted;
       }
-      let be =
-        E === "consent" &&
+      let consentRecorded =
+        consentChoice === "consent" &&
         (await recordCreditsOnlyConsent(attemptModel, toolUseContext.storageV5, toolUseContext.credentials, {
-          sessionOnly: me,
+          sessionOnly: answeredOverBridge,
         }));
-      if (!be && toolUseContext.abortController.signal.aborted) {
+      if (!consentRecorded && toolUseContext.abortController.signal.aborted) {
         if (!isSilentAbortReason(toolUseContext.abortController.signal.reason))
           yield createUserInterruptionMessage({
             toolUse: false,
@@ -2126,18 +2259,22 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           reason: "aborted_streaming",
         };
       }
-      if (j) {
-        if (me) logFeatureSad("model_fable_consent", "remote_cancelled");
-        else logFeatureBad("model_fable_consent", pe ? "dialog_queued_at_park" : "dialog_unanswered");
-        let te = me
+      if (cancelledWhileParked) {
+        if (answeredOverBridge) logFeatureSad("model_fable_consent", "remote_cancelled");
+        else
+          logFeatureBad(
+            "model_fable_consent",
+            dialogQueuedAtPark ? "dialog_queued_at_park" : "dialog_unanswered",
+          );
+        let followUpHint = answeredOverBridge
           ? "was closed from Remote Control without a choice \u2014 nothing was sent \xB7 it asks again on your next message, or /model to change"
           : "went unanswered \u2014 nothing was sent \xB7 answer it where this session is running, or /model to change";
-        let qe = renderUsageCreditsOnlyModelName(attemptModel);
+        let modelName = renderUsageCreditsOnlyModelName(attemptModel);
         let apiErrorMessage = createApiErrorMessage({
           content:
             isUsageCreditsModelBilled(attemptModel) || !isFableFamilyOrPinnedModel(attemptModel)
-              ? `${qe} now uses usage credits \xB7 the prompt to confirm ${te}`
-              : `Fable limit reached \xB7 continuing on ${qe} uses usage credits, and the prompt to confirm ${te}`,
+              ? `${modelName} now uses usage credits \xB7 the prompt to confirm ${followUpHint}`
+              : `Fable limit reached \xB7 continuing on ${modelName} uses usage credits, and the prompt to confirm ${followUpHint}`,
           apiError: "consent_unanswered",
           now: deps.now,
           uuid: deps.uuid,
@@ -2149,23 +2286,26 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           error: Error("Usage-credits-only model consent dialog was not answered"),
         };
       }
-      if (he && (isSdkDialogHostActive() || me))
-        if (be) logFeatureOk("model_fable_consent");
-        else if (E === "consent") logFeatureSad("model_fable_consent", "overage_enable_deferred");
-        else if (E === "switch_default") logFeatureBad("model_fable_consent", "declined");
+      if (canPromptUser && (isSdkDialogHostActive() || answeredOverBridge))
+        if (consentRecorded) logFeatureOk("model_fable_consent");
+        else if (consentChoice === "consent") logFeatureSad("model_fable_consent", "overage_enable_deferred");
+        else if (consentChoice === "switch_default") logFeatureBad("model_fable_consent", "declined");
         else logFeatureSad("model_fable_consent", "dismissed");
-      if (!be) {
-        if (!he && isMainThread) logFeatureSad("model_fable_consent", "no_dialog_fallback");
+      if (!consentRecorded) {
+        if (!canPromptUser && isMainThread) logFeatureSad("model_fable_consent", "no_dialog_fallback");
         let newModel = getUsageCreditsOnlyModelConsentDeclineFallback();
         if (newModel === null) {
-          let ke = isNoModelFallbackEnabled();
+          let fallbackDisabled = isNoModelFallbackEnabled();
           if (isMainThread)
-            logFeatureBad("model_fable_consent", ke ? "no_model_fallback_env" : "no_allowed_fallback");
+            logFeatureBad(
+              "model_fable_consent",
+              fallbackDisabled ? "no_model_fallback_env" : "no_allowed_fallback",
+            );
           let apiErrorMessage = createApiErrorMessage({
-            content: ke
+            content: fallbackDisabled
               ? "CLAUDE_CODE_NO_MODEL_FALLBACK is set: model substitution is disabled \xB7 unset it to allow the swap"
               : `Your model policy only allows ${renderUsageCreditsOnlyModelName(attemptModel)}, which requires usage credits \xB7 /model to set it up`,
-            apiError: ke ? "model_substitution_disabled" : "no_allowed_fallback",
+            apiError: fallbackDisabled ? "model_substitution_disabled" : "no_allowed_fallback",
             now: deps.now,
             uuid: deps.uuid,
           });
@@ -2173,7 +2313,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           markClassifierApiFailure(toolUseContext, querySource, apiErrorMessage);
           return {
             reason: "model_error",
-            error: ke
+            error: fallbackDisabled
               ? Error("CLAUDE_CODE_NO_MODEL_FALLBACK forbids model substitution")
               : Error(
                   "Usage-credits-only model consent declined and the model policy allows no other fallback",
@@ -2181,12 +2321,12 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           };
         }
         let model = attemptModel;
-        let Ne = false;
+        let persistedAsDefault = false;
         if (isMainThread) {
-          if (E === "switch_default" && !me)
-            Ne = switchDefaultFromCreditsOnlyModel(model, newModel, toolUseContext.storageV5);
-          toolUseContext.setAppState((ke) => ({
-            ...ke,
+          if (consentChoice === "switch_default" && !answeredOverBridge)
+            persistedAsDefault = switchDefaultFromCreditsOnlyModel(model, newModel, toolUseContext.storageV5);
+          toolUseContext.setAppState((appStateAfterSwitch) => ({
+            ...appStateAfterSwitch,
             mainLoopModel: newModel,
             mainLoopModelForSession: null,
           }));
@@ -2194,13 +2334,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           config = mainLoopModelOverride();
           try {
             let fastMode = toolUseContext.getAppState().fastMode;
-            let Ee = isFastModeEnabled() ? isFastModeActive(newModel, fastMode) : !!fastMode;
-            if (Ee !== !!fastMode) {
-              toolUseContext.setAppState((Ie) => ({
-                ...Ie,
-                fastMode: Ee,
+            let fastModeForNewModel = isFastModeEnabled() ? isFastModeActive(newModel, fastMode) : !!fastMode;
+            if (fastModeForNewModel !== !!fastMode) {
+              toolUseContext.setAppState((appState) => ({
+                ...appState,
+                fastMode: fastModeForNewModel,
               }));
-              reportFastModeToggle(fastMode, Ee);
+              reportFastModeToggle(fastMode, fastModeForNewModel);
             }
           } catch (error) {
             logError(error);
@@ -2221,13 +2361,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           yield {
             type: "system",
             subtype: "model_consent_fallback",
-            content: `Switched to ${renderModelName(newModel)} ${Ne ? "\u2014 now your default model" : "for this session"} \xB7 ${renderModelName(model)} requires usage credits \xB7 /model to change`,
+            content: `Switched to ${renderModelName(newModel)} ${persistedAsDefault ? "\u2014 now your default model" : "for this session"} \xB7 ${renderModelName(model)} requires usage credits \xB7 /model to change`,
             level: "warning",
-            choice: E,
+            choice: consentChoice,
             originalModel: model,
             originalModelName: renderUsageCreditsOnlyModelName(model),
             fallbackModel: newModel,
-            persistedAsDefault: Ne,
+            persistedAsDefault,
             isMeta: false,
             timestamp: deps.now(),
             uuid: deps.uuid(),
@@ -2236,75 +2376,76 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     }
     queryCheckpoint("query_setup_end");
     if (isTopLevelMainThread) endProfilePhase("query_setup");
-    let zi =
+    let dumpPromptsFetch =
       queryConfig.gates.isAnt && classifyQuerySource(querySource) !== "auxiliary"
         ? createDumpPromptsFetch(toolUseContext.agentId ?? queryConfig.sessionId, toolUseContext.storageV5)
         : undefined;
-    let fetchOverride = zi;
-    let yr = classifyQuerySource(querySource) === "main" && !toolUseContext.agentId;
-    if (teleportFetchModule && (yr || relayFork))
+    let fetchOverride = dumpPromptsFetch;
+    let isMainAgentThread = classifyQuerySource(querySource) === "main" && !toolUseContext.agentId;
+    if (teleportFetchModule && (isMainAgentThread || relayFork))
       try {
-        let E = yr ? messages : messagesForQuery;
-        let uuids = yr ? Ot?.uuids : undefined;
+        let messagesForUuids = isMainAgentThread ? messages : messagesForQuery;
+        let uuids = isMainAgentThread ? turnSnapshot?.uuids : undefined;
         fetchOverride = teleportFetchModule.composeTeleportFetchOverride(
-          zi,
-          () => uuids ?? E.map((pe) => pe.uuid),
-          yr ? "main" : "fork",
-          E,
+          dumpPromptsFetch,
+          () => uuids ?? messagesForUuids.map((message) => message.uuid),
+          isMainAgentThread ? "main" : "fork",
+          messagesForUuids,
         );
       } catch (error) {
         logError(error);
       }
-    let Zi = isAutoCompactEnabled() && canCompactInRemote();
-    let Wc =
-      Zi &&
+    let autoCompactCandidate = isAutoCompactEnabled() && canCompactInRemote();
+    let autoCompactUsable =
+      autoCompactCandidate &&
       (!hasExplicitWindow(attemptModelFacts, toolUseContext.options.autoCompactWindow) ||
         usesLongContextWindow(querySource, attemptModelFacts, toolUseContext.options.autoCompactWindow));
     if (
       autocompactOutcome.kind !== "compacted" &&
       querySource !== "compact" &&
-      !Wc &&
+      !autoCompactUsable &&
       !toolUseContext.abortController.signal.aborted
     ) {
-      let E = estimateTokensWithAnchor(messagesForQuery, attemptModelFacts.bytesPerToken) - snipTokensFreed;
+      let contextTokens =
+        estimateTokensWithAnchor(messagesForQuery, attemptModelFacts.bytesPerToken) - snipTokensFreed;
       if (
-        calculateTokenWarningState(E, attemptModelFacts, toolUseContext.options.autoCompactWindow).level ===
-        "blocked"
+        calculateTokenWarningState(contextTokens, attemptModelFacts, toolUseContext.options.autoCompactWindow)
+          .level === "blocked"
       ) {
-        let pe = isCompactQuerySource(querySource);
+        let isCompactSource = isCompactQuerySource(querySource);
         let compactFailure =
           autocompactOutcome.kind === "failed" ? autocompactOutcome.compactFailure : undefined;
-        let he = pe
+        let compactCheck = isCompactSource
           ? {}
           : compactCheckFacts({
               outcome: autocompactOutcome,
               compactionCheckFacts,
               blockingCheck: {
-                tokenCount: E,
+                tokenCount: contextTokens,
                 facts: attemptModelFacts,
               },
               configuredWindow: toolUseContext.options.autoCompactWindow,
             });
         if (
-          !pe &&
-          Zi &&
+          !isCompactSource &&
+          autoCompactCandidate &&
           (shouldBypassPtlPreempt(
             attemptModelFacts,
             toolUseContext.options.autoCompactWindow,
             querySource,
             compactFailure,
           ) ||
-            isCompactNotNeededAtLimit(autocompactOutcome, attemptModelFacts, he))
+            isCompactNotNeededAtLimit(autocompactOutcome, attemptModelFacts, compactCheck))
         );
         else {
-          if (!pe)
+          if (!isCompactSource)
             logEvent("tengu_ptl_surfaced_to_user", {
               reason: lit("blocking_limit"),
               querySource: agentTypeForTelemetry(querySource),
               wasGatedByPriorAttempt: false,
               reactiveUnsupported: !canCompactInRemote(),
               compactFailureReason: fromEnumOpt(compactFailure?.reason),
-              ...he,
+              ...compactCheck,
             });
           let apiErrorMessage = createApiErrorMessage({
             content: compactFailureDetail(compactFailure) ?? PROMPT_TOO_LONG_ERROR_MESSAGE,
@@ -2323,23 +2464,23 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     let keptFirstResponse = state.transition === undefined ? params.keptFirstResponse : undefined;
     let needsAttempt = !adoptFallbackResponse(attemptState, keptFirstResponse);
     if (needsAttempt && keptFirstResponse !== undefined) yield clearInProgressToolUses(keptFirstResponse);
-    let Ao;
-    let ln = false;
-    let Lo;
-    let dn;
-    let fs;
-    let gs;
-    let Rn = {
+    let stitchSalvageText;
+    let stitchBegan = false;
+    let salvageUserMessage;
+    let fallbackCreditCode;
+    let creditMintModel;
+    let creditMintRequestId;
+    let creditDeliveryState = {
       mintedStateless: false,
       delivery: undefined,
     };
-    let hs;
-    let _s;
-    let Ss;
-    let ea;
+    let stampFromModel;
+    let stampCategory;
+    let stampTrigger;
+    let stampOriginalRequestId;
     let refusalCascadeState = INITIAL_REJECTION_EPISODE;
     let provisionalRefusalNotice;
-    function buildRefusalFallbackNotice(notice, uuid, pe) {
+    function buildRefusalFallbackNotice(notice, uuid, isProvisional) {
       return {
         type: "system",
         subtype: "model_refusal_fallback",
@@ -2361,8 +2502,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         isMeta: false,
         timestamp: deps.now(),
         uuid,
-        ...(pe && {
-          provisional: pe,
+        ...(isProvisional && {
+          provisional: isProvisional,
         }),
       };
     }
@@ -2370,51 +2511,52 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     let activeMcpTool = isMainOrSubagent ? toolUseContext.options.activeMcpTool : undefined;
     clearActiveMcpContext(toolUseContext.options, isMainOrSubagent);
     queryCheckpoint("query_api_loop_start");
-    Li?.disarm();
+    classifierAbortGuard?.disarm();
     try {
       while (needsAttempt) {
         needsAttempt = false;
-        if (resumeActive && (Lo !== undefined || !Di(attemptModel))) resumeActive = false;
-        let E =
+        if (resumeActive && (salvageUserMessage !== undefined || !canResumeThinking(attemptModel)))
+          resumeActive = false;
+        let advisorForAttempt =
           advisorModel !== undefined &&
           (isSameModelFamilyId(attemptModel, configuredRuntimeModel) ||
             canAdviseModelLenient(attemptModel, advisorModel))
             ? advisorModel
             : undefined;
-        if (advisorModel !== undefined && E === undefined)
+        if (advisorModel !== undefined && advisorForAttempt === undefined)
           logForDebugging(
             `[AdvisorTool] Skipping advisor - ${advisorModel} cannot advise non-configured attempt model ${attemptModel} (configured: ${configuredRuntimeModel}) \u2014 dropped for this attempt`,
           );
-        if (At !== undefined)
-          if (Me) {
-            At = undefined;
-            Me = false;
-          } else Me = true;
-        let j = nextFallbackModel_2(modelChain, chainIndex, attemptModel);
-        let pe = assistantMessages.length;
-        let me;
-        let he;
-        let be = [];
-        let te;
-        let qe = false;
-        function* Ne() {
-          let Je = me;
-          if (Je === undefined) return 0;
-          let gt = [];
+        if (pendingSupersedeUuids !== undefined)
+          if (supersedeHoldRound) {
+            pendingSupersedeUuids = undefined;
+            supersedeHoldRound = false;
+          } else supersedeHoldRound = true;
+        let accessFallbackModel = nextFallbackModel_2(modelChain, chainIndex, attemptModel);
+        let assistantCountBefore = assistantMessages.length;
+        let midStreamUuids;
+        let fallbackSystemMessage;
+        let retractedMessages = [];
+        let stitchPlan;
+        let stitchOpen = false;
+        function* sweepMidStreamMessages() {
+          let uuidSet = midStreamUuids;
+          if (uuidSet === undefined) return 0;
+          let swept = [];
           for (let idx = assistantMessages.length - 1; idx >= 0; idx--)
-            if (Je.has(assistantMessages[idx].uuid)) {
-              gt.unshift(assistantMessages[idx]);
+            if (uuidSet.has(assistantMessages[idx].uuid)) {
+              swept.unshift(assistantMessages[idx]);
               assistantMessages.splice(idx, 1);
             }
-          be.push(...gt);
-          for (let message of gt)
+          retractedMessages.push(...swept);
+          for (let message of swept)
             yield {
               type: "tombstone",
               message,
             };
-          return gt.length;
+          return swept.length;
         }
-        function* ke() {
+        function* flushProvisionalNotice() {
           let provisionalFlushUuid = deps.uuid();
           let { notice, state } = takePendingNotice(refusalCascadeState, provisionalFlushUuid);
           refusalCascadeState = state;
@@ -2423,42 +2565,45 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           provisionalRefusalNotice = refusalFallbackNotice;
           yield refusalFallbackNotice;
         }
-        function* Ee() {
+        function* emitFallbackNotice() {
           let { notice, state } = takeFallbackNotice(refusalCascadeState);
           refusalCascadeState = state;
           provisionalRefusalNotice = undefined;
           if (notice === undefined) return;
           yield buildRefusalFallbackNotice(notice, deps.uuid());
         }
-        function* Ie() {
-          let Je = he;
-          if (Je === undefined) return;
-          if (be.length > 0)
-            Je.retractedMessageUuids = be.flatMap((gt) =>
-              normalizeMessages([gt])
+        function* flushRefusalNotice() {
+          let notice = fallbackSystemMessage;
+          if (notice === undefined) return;
+          if (retractedMessages.length > 0)
+            notice.retractedMessageUuids = retractedMessages.flatMap((message) =>
+              normalizeMessages([message])
                 .filter(isNotEmptyMessage)
                 .map((content) => content.uuid),
             );
-          Je.refusedUserMessageUuid = refusedUserMessageUuid;
-          yield Je;
-          he = undefined;
+          notice.refusedUserMessageUuid = refusedUserMessageUuid;
+          yield notice;
+          fallbackSystemMessage = undefined;
         }
-        let ct;
+        let attemptError;
         let fallbackError;
         e: try {
-          let Je = [];
-          let gt = [];
+          let messageRewrites = [];
+          let earlyAttachments = [];
           let takePlainDelta = params.takePlainDelta;
-          let eo = nextFallbackStage(refusalCascadeState, attemptModel, refusalCascadeResolver);
-          refusalCascadeState = eo.state;
-          let ko = !Mn && eo.armTarget === undefined ? resolveLatchedFallbackModel(attemptModel) : undefined;
-          let lo = attemptModel;
-          let Kt = {};
+          let cascadeStage = nextFallbackStage(refusalCascadeState, attemptModel, refusalCascadeResolver);
+          refusalCascadeState = cascadeStage.state;
+          let latchedFallbackModel =
+            !retryRefusal && cascadeStage.armTarget === undefined
+              ? resolveLatchedFallbackModel(attemptModel)
+              : undefined;
+          let modelBeforeFallback = attemptModel;
+          let silentRearmState = {};
           let refusalFallbackSilentRearm =
-            !Mn && !kt && !refusalFallbackDeclined
+            !retryRefusal && !silentArmSpent && !refusalFallbackDeclined
               ? (visibleRouteDeclined, apiRefusalCategory, responseSwapped) => {
-                  if (kt || refusalFallbackDeclined) return;
-                  let latchedFallbackModel = resolveLatchedFallbackModel(lo, {
+                  if (silentArmSpent || refusalFallbackDeclined) return;
+                  let latchedFallbackModel = resolveLatchedFallbackModel(modelBeforeFallback, {
                     visibleRouteDeclined,
                     apiRefusalCategory,
                     responseSwapped,
@@ -2470,7 +2615,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   try {
                     let { aborted, completedBeforeEvent, queuedNeverStarted } =
                       streamingToolExecutor.discardAndAbortInFlight(serverFallbackTombstoneAbortReason());
-                    Kt.counts = {
+                    silentRearmState.counts = {
                       aborted,
                       completedBeforeEvent,
                       queuedNeverStarted,
@@ -2481,25 +2626,27 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   return latchedFallbackModel;
                 }
               : undefined;
-          let Uo = canShowRefusalDialog();
+          let hasRefusalDialog = canShowRefusalDialog();
           let capabilitySource = fromEnum(getSdkDialogCapabilitySource());
-          let vo = refusalFallbackDialog(toolUseContext.permissionRelays?.bridge?.dialog, () =>
+          let bridgeDialog = refusalFallbackDialog(toolUseContext.permissionRelays?.bridge?.dialog, () =>
             getFeatureValue_CACHED_MAY_BE_STALE("tengu_loggia_denkbild", false),
           );
-          let uo = toolUseContext.getAppState().replBridgeSessionActive && vo === undefined;
-          let consumerLacksDialogCapability = Uo || uo;
+          let bridgeWithoutDialog =
+            toolUseContext.getAppState().replBridgeSessionActive && bridgeDialog === undefined;
+          let consumerLacksDialogCapability = hasRefusalDialog || bridgeWithoutDialog;
           let currentModel = shouldAskRefusalFallbackPreference({
             toolUseContext,
             isMainThread,
           });
-          let _o = !Mn
+          let refusalFallback = !retryRefusal
             ? resolveRefusalFallback({
                 currentModel: attemptModel,
                 compiledTablesOnly: isAutoModeQuerySource(querySource),
-                alreadyUsed: eo.armTarget === undefined && atLeast(refusalFallbacksUsed, refusalRouteLimit()),
+                alreadyUsed:
+                  cascadeStage.armTarget === undefined && atLeast(refusalFallbacksUsed, refusalRouteLimit()),
                 declined: refusalFallbackDeclined,
                 inCascadeEpisode: refusalCascadeState.inEpisode,
-                cascadeNext: eo.armTarget,
+                cascadeNext: cascadeStage.armTarget,
                 suppressionAlreadyLogged,
                 requestDialog: toolUseContext.requestDialog,
                 isMainThread,
@@ -2516,61 +2663,61 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   attemptModel,
                 ),
               })
-            : l8s;
-          if (_o.shouldLogSuppression) {
+            : NO_SUPPRESSION;
+          if (refusalFallback.shouldLogSuppression) {
             suppressionAlreadyLogged = true;
             logEvent("tengu_refusal_fallback_suppressed", {
               reason:
                 toolUseContext.requestDialog === undefined
                   ? lit("no_dialog_host_setting_off")
-                  : Uo
+                  : hasRefusalDialog
                     ? lit("no_consumer_capability_setting_off")
                     : lit("remote_controlled_session_setting_off"),
               capability_source: capabilitySource,
             });
           }
-          let serverLane = _o.serverLane;
-          let visibleModel = serverLane === undefined ? _o.visibleModel : undefined;
-          let Sr = kt ? undefined : ko;
-          let mn = dn;
-          dn = undefined;
-          let ua = fs;
-          fs = undefined;
-          let fallbackCreditMintRequestId = gs;
-          gs = undefined;
-          let mintedStateless = mn !== undefined && Rn.mintedStateless;
-          Rn.mintedStateless = false;
-          let deliveryOverride = mintedStateless ? Rn.delivery : undefined;
-          Rn.delivery = undefined;
-          let pa = hs;
-          hs = undefined;
-          let fallbackStampCategory = _s;
-          _s = undefined;
-          let fallbackStampTrigger = Ss;
-          Ss = undefined;
+          let serverLane = refusalFallback.serverLane;
+          let visibleModel = serverLane === undefined ? refusalFallback.visibleModel : undefined;
+          let silentArmModel = silentArmSpent ? undefined : latchedFallbackModel;
+          let creditCode = fallbackCreditCode;
+          fallbackCreditCode = undefined;
+          let creditModel = creditMintModel;
+          creditMintModel = undefined;
+          let fallbackCreditMintRequestId = creditMintRequestId;
+          creditMintRequestId = undefined;
+          let mintedStateless = creditCode !== undefined && creditDeliveryState.mintedStateless;
+          creditDeliveryState.mintedStateless = false;
+          let deliveryOverride = mintedStateless ? creditDeliveryState.delivery : undefined;
+          creditDeliveryState.delivery = undefined;
+          let stampModel = stampFromModel;
+          stampFromModel = undefined;
+          let fallbackStampCategory = stampCategory;
+          stampCategory = undefined;
+          let fallbackStampTrigger = stampTrigger;
+          stampTrigger = undefined;
           let refusalFallbackSilentArmActive =
             !refusalFallbackDeclined &&
-            ko !== undefined &&
+            latchedFallbackModel !== undefined &&
             visibleModel === undefined &&
             serverLane === undefined &&
-            mn === undefined;
+            creditCode === undefined;
           if (isTerminalShutdown() && !toolUseContext.abortController.signal.aborted) await heldUntilExit();
           queryCheckpoint("query_api_streaming_start");
-          let rr = ua ?? attemptModel;
-          let Rs = {
+          let reminderModel = creditModel ?? attemptModel;
+          let baselineDelivery = {
             messages: messagesForQuery,
             text: null,
             secondaryText: null,
             afterUuid: null,
           };
-          let br =
-            Lo !== undefined
-              ? mi
+          let deliveryDecision =
+            salvageUserMessage !== undefined
+              ? EMPTY_ANNOUNCEMENT
               : decideReminderDelivery({
                   querySource,
                   agentId: toolUseContext.agentId,
                   model: attemptModel,
-                  reminderModel: rr,
+                  reminderModel,
                   messages: messagesForQuery,
                   session: toolUseContext.session,
                   stamp: deps,
@@ -2582,56 +2729,59 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   createRecord: createAttachmentMessage_2,
                 });
           let reminderDelivery;
-          if (Lo !== undefined)
+          if (salvageUserMessage !== undefined)
             reminderDelivery = {
-              ...Rs,
-              messages: [...messagesForQuery, Lo],
+              ...baselineDelivery,
+              messages: [...messagesForQuery, salvageUserMessage],
             };
-          else if (br.delivery === "kept") {
-            for (let record of br.records) {
+          else if (deliveryDecision.delivery === "kept") {
+            for (let record of deliveryDecision.records) {
               yield record;
               messagesForQuery = [...messagesForQuery, record];
             }
             reminderDelivery = {
-              ...Rs,
+              ...baselineDelivery,
               messages: messagesForQuery,
             };
-          } else if (br.delivery === "none") reminderDelivery = Rs;
-          else reminderDelivery = placeBatchingReminder(messagesForQuery, toolUseContext.session, rr);
-          for (let [O, $e] of [
+          } else if (deliveryDecision.delivery === "none") reminderDelivery = baselineDelivery;
+          else
+            reminderDelivery = placeBatchingReminder(messagesForQuery, toolUseContext.session, reminderModel);
+          for (let [reminderKind, reminderText] of [
             ["batching_reminder_sent", reminderDelivery.text],
             ["secondary_reminder_sent", reminderDelivery.secondaryText],
           ]) {
-            let Co = sentReminderTexts.get(O);
+            let previousReminder = sentReminderTexts.get(reminderKind);
             if (
-              $e === null ||
+              reminderText === null ||
               reminderDelivery.afterUuid === null ||
-              (Co?.afterUuid === reminderDelivery.afterUuid && Co.text === $e && Co.model === rr)
+              (previousReminder?.afterUuid === reminderDelivery.afterUuid &&
+                previousReminder.text === reminderText &&
+                previousReminder.model === reminderModel)
             )
               continue;
-            sentReminderTexts.set(O, {
+            sentReminderTexts.set(reminderKind, {
               afterUuid: reminderDelivery.afterUuid,
-              text: $e,
-              model: rr,
+              text: reminderText,
+              model: reminderModel,
             });
             let attachmentMessage = createAttachmentMessage_2(
               {
-                type: O,
-                text: $e,
-                model: rr,
+                type: reminderKind,
+                text: reminderText,
+                model: reminderModel,
               },
               deps,
             );
             yield attachmentMessage;
             messagesForQuery = [...messagesForQuery, attachmentMessage];
           }
-          let ma = isTopLevelMainThread && autoModeContextPromise !== undefined;
-          if (ma) startProfilePhase("auto_mode_context_wait");
-          let vs = await refreshGitStateSafe(autoModeContextPromise);
-          if (ma) endProfilePhase("auto_mode_context_wait");
+          let showAutoModeWait = isTopLevelMainThread && autoModeContextPromise !== undefined;
+          if (showAutoModeWait) startProfilePhase("auto_mode_context_wait");
+          let autoModeServerContext = await refreshGitStateSafe(autoModeContextPromise);
+          if (showAutoModeWait) endProfilePhase("auto_mode_context_wait");
           deferredToolsSent = undefined;
           toolInputCopiesSent = undefined;
-          let fa = false;
+          let deferredRecordAppended = false;
           let callModel = deps.callModel;
           let callModelParams = {
             systemPrompt,
@@ -2654,9 +2804,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               toolUseContext.readFileState,
             );
           }
-          let np = callModel;
+          let callModelFn = callModel;
           for await (let event of drainToolResults(
-            np({
+            callModelFn({
               messages: contextRouting.bare
                 ? prependUserContextReminder(reminderDelivery.messages, contextRouting.userContext)
                 : reminderDelivery.messages,
@@ -2678,18 +2828,18 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 recordedWireShape: promptRender.recordedWireShape,
                 systemPromptSource: promptRender.source,
                 systemPromptSnapshotHash: promptRender.snapshotHash,
-                onInlineToolsDeclared: ($e) => {
-                  inlineToolsDeclared = $e;
+                onInlineToolsDeclared: (inlineToolNames) => {
+                  inlineToolsDeclared = inlineToolNames;
                 },
-                onPromptHeadSent: ($e) => {
-                  promptHeadSent = $e;
+                onPromptHeadSent: (promptHeadValue) => {
+                  promptHeadSent = promptHeadValue;
                 },
                 recordedDeferredTools: () => recordedDeferredTools(messagesForQuery),
-                onDeferredToolsSent: ($e) => {
-                  deferredToolsSent = $e;
+                onDeferredToolsSent: (sentDeferredTools) => {
+                  deferredToolsSent = sentDeferredTools;
                 },
-                onToolInputCopiesSent: ($e) => {
-                  toolInputCopiesSent = $e;
+                onToolInputCopiesSent: (sentToolInputCopies) => {
+                  toolInputCopiesSent = sentToolInputCopies;
                 },
                 model: attemptModel,
                 modelFacts: attemptModelFacts,
@@ -2709,33 +2859,34 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 isNonInteractiveSession: toolUseContext.options.isNonInteractiveSession,
                 withoutToolDescribeHooks: toolUseContext.options.settingsHooksOff,
                 fallbackModel: modelChain[chainIndex + 1],
-                accessFallbackModel: j,
-                refusalFallbackModel: !refusalFallbackDeclined ? (visibleModel ?? Sr) : undefined,
+                accessFallbackModel,
+                refusalFallbackModel: !refusalFallbackDeclined ? (visibleModel ?? silentArmModel) : undefined,
                 refusalFallbackModelLane: !refusalFallbackDeclined
                   ? visibleModel !== undefined
                     ? "visible"
-                    : Sr !== undefined
+                    : silentArmModel !== undefined
                       ? "silent"
                       : undefined
                   : undefined,
-                refusalFallbackCascadeHop: visibleModel !== undefined ? eo.hop : undefined,
+                refusalFallbackCascadeHop: visibleModel !== undefined ? cascadeStage.hop : undefined,
                 refusalFallbackSilentArmActive,
                 refusalFallbackSilentRearm,
                 serverRefusalFallback: serverLane,
-                fallbackCreditCode: mn,
-                autoModeServerContext: vs,
-                ...(vs !== undefined &&
-                  (isClassifierRoleOn(toolUseContext) || vs.judgeOnlyTools !== undefined) && {
+                fallbackCreditCode: creditCode,
+                autoModeServerContext,
+                ...(autoModeServerContext !== undefined &&
+                  (isClassifierRoleOn(toolUseContext) ||
+                    autoModeServerContext.judgeOnlyTools !== undefined) && {
                     serverClassifier: true,
                   }),
-                fallbackCreditMintModel: ua,
+                fallbackCreditMintModel: creditModel,
                 fallbackCreditMintRequestId,
                 fallbackCreditMintedStateless: mintedStateless,
-                fallbackStampFromModel: pa,
+                fallbackStampFromModel: stampModel,
                 fallbackStampCategory,
                 fallbackStampTrigger,
-                fallbackStampOriginalRequestId: pa !== undefined ? ea : undefined,
-                fallbackCreditLaneArmed: _o.visibleModel !== undefined,
+                fallbackStampOriginalRequestId: stampModel !== undefined ? stampOriginalRequestId : undefined,
+                fallbackCreditLaneArmed: refusalFallback.visibleModel !== undefined,
                 querySource,
                 keepPartialMessageOnAbort: params.keepPartialMessageOnAbort,
                 spawnedBySkill,
@@ -2766,7 +2917,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 effortSetAsideByHold: getEffortSetAsideByHold(toolUseContext),
                 turnEffort: getEffortLayerOverride(toolUseContext.permissionLayers),
                 refusalFallbackEffort: carriedEffortForModel(refusalOverride, loopEffort),
-                advisorModel: E,
+                advisorModel: advisorForAttempt,
                 advisorDeferred,
                 advisorActive,
                 skipCacheWrite,
@@ -2803,7 +2954,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             () => attemptState.streamingToolExecutor,
             takePlainDelta === undefined
               ? undefined
-              : guardGoalCheck("query", () => gt.length === 0, takePlainDelta),
+              : guardGoalCheck("query", () => earlyAttachments.length === 0, takePlainDelta),
           )) {
             if (event.type === "tool_drain_tick") {
               yield* drainCompletedToolResults();
@@ -2813,11 +2964,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               fallbackError = event.error;
               break e;
             }
-            if (!fa && event.type === "assistant" && !event.isApiErrorMessage) {
-              fa = true;
+            if (!deferredRecordAppended && event.type === "assistant" && !event.isApiErrorMessage) {
+              deferredRecordAppended = true;
               if (!resumeActive) {
-                let Se = appendDeferredToolsRecord();
-                if (Se) yield Se;
+                let deferredToolsRecordMessage = appendDeferredToolsRecord();
+                if (deferredToolsRecordMessage) yield deferredToolsRecordMessage;
               }
             }
             if (event.type === "attachment") {
@@ -2830,20 +2981,20 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               continue;
             }
             if (event.type === "hint_clears") {
-              let Se = new Set(event.ids);
-              for (let message of hasMemoryFileRead_2(messagesForQuery, Se)) {
-                let We = expandPathOrNull(message);
-                if (We === null) {
+              let clearedIds = new Set(event.ids);
+              for (let message of hasMemoryFileRead_2(messagesForQuery, clearedIds)) {
+                let expandedPath = expandPathOrNull(message);
+                if (expandedPath === null) {
                   logForDebugging(
                     "hint_clears: a cleared Read has a file_path that cannot be expanded (null byte in it or in the working directory); leaving readFileState as is",
                   );
                   continue;
                 }
-                toolUseContext.readFileState.delete(We);
+                toolUseContext.readFileState.delete(expandedPath);
               }
               messagesForQuery = replaceToolResultContent(
                 messagesForQuery,
-                Se,
+                clearedIds,
                 new Map(Object.entries(event.contentById)),
               );
               call({
@@ -2854,32 +3005,34 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               continue;
             }
             if (event.type === "server_fallback") {
-              let Se = describeServerFallback(event, {
+              let serverFallback = describeServerFallback(event, {
                 isMainThread,
                 emitsLocalScope,
               });
               logEvent("tengu_rotunda_pennant_applied", {
-                reason: fromEnum(Se.telemetry.reason),
+                reason: fromEnum(serverFallback.telemetry.reason),
                 entitlement_blind: isEntitlementOverlayUnavailable(),
                 armed_mode: fromEnum(serverLane?.mode ?? "none"),
-                mid_stream: Se.telemetry.midStream,
-                discarded_block_count: Se.telemetry.discardedBlockCount,
-                tombstoned_had_tool_use: Se.telemetry.tombstonedHadToolUse,
+                mid_stream: serverFallback.telemetry.midStream,
+                discarded_block_count: serverFallback.telemetry.discardedBlockCount,
+                tombstoned_had_tool_use: serverFallback.telemetry.tombstonedHadToolUse,
                 request_id_sha12:
-                  Se.telemetry.requestId !== null ? shortHash(Se.telemetry.requestId) : undefined,
-                original_model_scope: fromEnum(Se.telemetry.originalModelScope),
+                  serverFallback.telemetry.requestId !== null
+                    ? shortHash(serverFallback.telemetry.requestId)
+                    : undefined,
+                original_model_scope: fromEnum(serverFallback.telemetry.originalModelScope),
                 queryChainId: queryChainIdForAnalytics,
                 queryDepth: queryTracking.depth,
                 querySource: agentTypeForTelemetry(querySource),
-                final_stop_reason: fromEnumOpt(Se.telemetry.finalStopReason ?? undefined),
-                api_refusal_category: fromEnumOpt(Se.telemetry.apiRefusalCategory),
+                final_stop_reason: fromEnumOpt(serverFallback.telemetry.finalStopReason ?? undefined),
+                api_refusal_category: fromEnumOpt(serverFallback.telemetry.apiRefusalCategory),
                 ...refusedEffortTelemetryFields(event.refusedEffort),
               });
-              if (Se.userVisible) {
+              if (serverFallback.userVisible) {
                 logFeatureOk("refusal_fallback");
                 let fromModel = attemptModel;
-                let We = preferSameModel(serverLane?.model, event.toModel);
-                let no = attemptModel === We;
+                let fallbackTarget = preferSameModel(serverLane?.model, event.toModel);
+                let sameAsAttempt = attemptModel === fallbackTarget;
                 if (!(
                   isModelAllowedUnderActiveEnforcement(event.toModel) ??
                   (isModelAllowed(event.toModel) || isExemptDefaultResolvingPick(event.toModel))
@@ -2893,38 +3046,38 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   refusalFallbackDeclined = true;
                   if (serverLane?.mode === "default" && BETA_SERVER_SIDE_FALLBACK_CATEGORY !== null)
                     markBetaRejected(stickyBetas ?? getStickyBetas(), BETA_SERVER_SIDE_FALLBACK_CATEGORY);
-                  let He = [];
+                  let discarded = [];
                   for (let discardedMessage of event.discardedMessages) {
                     let index = assistantMessages.findIndex(
                       (assistantMessage) => assistantMessage.uuid === discardedMessage.uuid,
                     );
                     if (index !== -1) assistantMessages.splice(index, 1);
-                    He.push(discardedMessage);
+                    discarded.push(discardedMessage);
                   }
                   for (let idx = assistantMessages.length - 1; idx >= 0; idx--) {
-                    let fo = assistantMessages[idx];
-                    if (fo.message.model === event.toModel) {
+                    let candidateMessage = assistantMessages[idx];
+                    if (candidateMessage.message.model === event.toModel) {
                       assistantMessages.splice(idx, 1);
-                      He.push(fo);
+                      discarded.push(candidateMessage);
                     }
                   }
                   let sliced = toolResults.slice();
                   attemptState.reset({
                     clearAssistantMessages: false,
                   });
-                  Je.length = 0;
-                  let so = attemptState.streamingToolExecutor.discardAndAbortInFlight(
+                  messageRewrites.length = 0;
+                  let abortedTools = attemptState.streamingToolExecutor.discardAndAbortInFlight(
                     serverFallbackTombstoneAbortReason(),
                   );
                   logEvent("tengu_rotunda_pennant_tools", {
                     lane: lit("decline"),
-                    aborted: so.aborted,
-                    completed_before_event: so.completedBeforeEvent,
-                    queued_never_started: so.queuedNeverStarted,
-                    compensated_removes: so.toolUseIds.length,
+                    aborted: abortedTools.aborted,
+                    completed_before_event: abortedTools.completedBeforeEvent,
+                    queued_never_started: abortedTools.queuedNeverStarted,
+                    compensated_removes: abortedTools.toolUseIds.length,
                   });
                   attemptState.rebuildStreamingToolExecutor();
-                  for (let message of He)
+                  for (let message of discarded)
                     yield {
                       type: "tombstone",
                       message,
@@ -2934,15 +3087,15 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                       type: "tombstone",
                       message,
                     };
-                  if (so.toolUseIds.length > 0)
+                  if (abortedTools.toolUseIds.length > 0)
                     yield {
                       type: "set_in_progress_tool_use_ids",
                       op: {
                         action: "remove",
-                        ids: so.toolUseIds,
+                        ids: abortedTools.toolUseIds,
                       },
                     };
-                  let Zo =
+                  let discardNotice =
                     event.reason === "refusal"
                       ? getRefusalMessage(
                           "refusal",
@@ -2964,92 +3117,107 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                           now: deps.now,
                           uuid: deps.uuid,
                         });
-                  if (Zo) {
-                    await transcriptTap.appended(Zo);
-                    assistantMessages.push(Zo);
-                    yield Zo;
+                  if (discardNotice) {
+                    await transcriptTap.appended(discardNotice);
+                    assistantMessages.push(discardNotice);
+                    yield discardNotice;
                   }
                   break;
                 }
                 refusalFallbacksUsed += 1;
                 let refusalFallbackEffort = resolveRefusalFallbackEffort({
                   refusedEffort: event.refusedEffort,
-                  fallbackModel: We,
-                  heldBySession: Se.swapSession && isMainConversationContext(toolUseContext.agentContext),
+                  fallbackModel: fallbackTarget,
+                  heldBySession:
+                    serverFallback.swapSession && isMainConversationContext(toolUseContext.agentContext),
                   loopOverride: refusalOverride,
                   loopEffort,
                 });
-                refusalOverride = We;
+                refusalOverride = fallbackTarget;
                 loopEffort = refusalFallbackEffort.loopEffort;
-                setAttemptModel(We);
-                if (resumeActive && !Di(We)) resumeActive = false;
-                if (Se.swapSession) {
+                setAttemptModel(fallbackTarget);
+                if (resumeActive && !canResumeThinking(fallbackTarget)) resumeActive = false;
+                if (serverFallback.swapSession) {
                   if (event.reason === "refusal" && event.apiRefusalCategory === "cyber")
                     markRefusalFallbackHeaderArmed(event.requestId ?? undefined);
                   let appState = toolUseContext.getAppState();
                   latchRefusalFallbackModel({
-                    fallbackModel: We,
+                    fallbackModel: fallbackTarget,
                     previousOverride: getMainLoopModelOverride(),
                     previousAppStateModel: appState.mainLoopModel,
                     previousModelForSession: appState.mainLoopModelForSession,
                     carriedEffort: refusalFallbackEffort.latchEffort,
                   });
-                  let yt = isFastModeEnabled()
-                    ? isFastModeActive(We, appState.fastMode)
+                  let fastModeActive = isFastModeEnabled()
+                    ? isFastModeActive(fallbackTarget, appState.fastMode)
                     : !!appState.fastMode;
-                  toolUseContext.setAppState((so) => ({
-                    ...so,
-                    mainLoopModel: We,
+                  toolUseContext.setAppState((bridgeAppState) => ({
+                    ...bridgeAppState,
+                    mainLoopModel: fallbackTarget,
                     mainLoopModelForSession: null,
-                    fastMode: yt,
+                    fastMode: fastModeActive,
                   }));
-                  setMainLoopModelOverride(We);
+                  setMainLoopModelOverride(fallbackTarget);
                   config = mainLoopModelOverride();
-                  toolUseContext.options.mainLoopModel = We;
+                  toolUseContext.options.mainLoopModel = fallbackTarget;
                   toolUseContext.options.availabilityFallback = undefined;
-                  reportFastModeToggle(appState.fastMode, yt);
+                  reportFastModeToggle(appState.fastMode, fastModeActive);
                 }
-                let wn = new Set(event.discardedMessages.map((discardedMessage) => discardedMessage.uuid));
-                if (wn.size > 0) {
+                let discardedUuids = new Set(
+                  event.discardedMessages.map((discardedMessage) => discardedMessage.uuid),
+                );
+                if (discardedUuids.size > 0) {
                   for (let idx = assistantMessages.length - 1; idx >= 0; idx--)
-                    if (wn.has(assistantMessages[idx].uuid)) assistantMessages.splice(idx, 1);
+                    if (discardedUuids.has(assistantMessages[idx].uuid)) assistantMessages.splice(idx, 1);
                 }
-                let Mo = [];
-                if (Se.tombstonedToolUse) {
-                  let He = attemptState.streamingToolExecutor.discardAndAbortInFlight(
+                let tombstonedToolResults = [];
+                if (serverFallback.tombstonedToolUse) {
+                  let abortedForSweep = attemptState.streamingToolExecutor.discardAndAbortInFlight(
                     serverFallbackTombstoneAbortReason(),
                   );
                   logEvent("tengu_rotunda_pennant_tools", {
                     lane: lit("accept"),
-                    aborted: He.aborted,
-                    completed_before_event: He.completedBeforeEvent,
-                    queued_never_started: He.queuedNeverStarted,
-                    compensated_removes: He.toolUseIds.length,
+                    aborted: abortedForSweep.aborted,
+                    completed_before_event: abortedForSweep.completedBeforeEvent,
+                    queued_never_started: abortedForSweep.queuedNeverStarted,
+                    compensated_removes: abortedForSweep.toolUseIds.length,
                   });
-                  Mo = [...toolResults];
+                  tombstonedToolResults = [...toolResults];
                   attemptState.reset({
                     clearAssistantMessages: false,
                   });
                   attemptState.rebuildStreamingToolExecutor();
-                  if (He.toolUseIds.length > 0)
+                  if (abortedForSweep.toolUseIds.length > 0)
                     yield {
                       type: "set_in_progress_tool_use_ids",
                       op: {
                         action: "remove",
-                        ids: He.toolUseIds,
+                        ids: abortedForSweep.toolUseIds,
                       },
                       reason: "fallback_sweep",
                     };
                 }
                 if (event.midStream) {
-                  me = new Set(assistantMessages.slice(pe).map((assistantMessage) => assistantMessage.uuid));
+                  midStreamUuids = new Set(
+                    assistantMessages
+                      .slice(assistantCountBefore)
+                      .map((assistantMessage) => assistantMessage.uuid),
+                  );
                   let retainedText = event.retainedText;
-                  if (retainedText !== undefined && retainedText.length > 0 && Ao === undefined)
-                    te = {
+                  if (
+                    retainedText !== undefined &&
+                    retainedText.length > 0 &&
+                    stitchSalvageText === undefined
+                  )
+                    stitchPlan = {
                       text: retainedText,
                       originals: event.retainedMessages ?? [],
                     };
-                  else if (retainedText !== undefined && retainedText.length > 0 && Ao !== undefined)
+                  else if (
+                    retainedText !== undefined &&
+                    retainedText.length > 0 &&
+                    stitchSalvageText !== undefined
+                  )
                     logForDebugging(
                       "server_fallback: silent stitch already pending \u2014 skipping seam merge",
                       {
@@ -3057,10 +3225,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                       },
                     );
                 }
-                be.push(...event.discardedMessages, ...Mo);
+                retractedMessages.push(...event.discardedMessages, ...tombstonedToolResults);
                 yield {
                   type: "query_model_change",
-                  toModel: We,
+                  toModel: fallbackTarget,
                 };
                 for (let message of event.discardedMessages)
                   yield {
@@ -3068,48 +3236,48 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     message,
                     displayOnly: true,
                   };
-                for (let msg of Mo)
+                for (let msg of tombstonedToolResults)
                   yield {
                     type: "tombstone",
                     message: msg,
                     displayOnly: true,
                   };
-                if (te !== undefined) {
-                  qe = true;
+                if (stitchPlan !== undefined) {
+                  stitchOpen = true;
                   yield {
                     type: "refusal_continuation",
                     phase: "begin",
-                    salvageText: te.text,
+                    salvageText: stitchPlan.text,
                     join: "exact",
-                    replacesUuids: te.originals.map((original) => original.uuid),
+                    replacesUuids: stitchPlan.originals.map((original) => original.uuid),
                   };
                 }
-                if (Se.showBanner && !no)
-                  he = buildRefusalFallbackSystemMessage(
+                if (serverFallback.showBanner && !sameAsAttempt)
+                  fallbackSystemMessage = buildRefusalFallbackSystemMessage(
                     {
                       ...event,
                       fromModel,
-                      toModel: We,
+                      toModel: fallbackTarget,
                     },
                     {
                       timestamp: deps.now(),
                       uuid: deps.uuid(),
                     },
-                    Se.bannerScope,
+                    serverFallback.bannerScope,
                   );
               }
               continue;
             }
             if (event.type === "refusal_no_fallback") {
-              if (Mn) {
+              if (retryRefusal) {
                 refusalNoFallbackEvent = event;
                 continue;
               }
-              if (he !== undefined) {
-                let sweptDanglingCount = yield* Ne();
-                if (qe) {
-                  qe = false;
-                  te = undefined;
+              if (fallbackSystemMessage !== undefined) {
+                let sweptDanglingCount = yield* sweepMidStreamMessages();
+                if (stitchOpen) {
+                  stitchOpen = false;
+                  stitchPlan = undefined;
                   yield {
                     type: "refusal_continuation",
                     phase: "end",
@@ -3121,9 +3289,9 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   queryDepth: queryTracking.depth,
                   querySource: agentTypeForTelemetry(querySource),
                 });
-                yield* Ie();
+                yield* flushRefusalNotice();
               }
-              yield* Ee();
+              yield* emitFallbackNotice();
               if (isMainThread)
                 yield {
                   type: "system",
@@ -3142,22 +3310,26 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               continue;
             }
             if (event.type === "fallback_request") {
-              let Se = event.routeMatched == null && (ko !== undefined || event.silentArmAtTrigger === true);
-              let ze = refusalCascadeState.inEpisode && isChainRouteMatch(event);
+              let silentRetry =
+                event.routeMatched == null &&
+                (latchedFallbackModel !== undefined || event.silentArmAtTrigger === true);
+              let episodeContinuation = refusalCascadeState.inEpisode && isChainRouteMatch(event);
               if (
-                !(Se ? kt : !ze && atLeast(refusalFallbacksUsed, refusalRouteLimit())) &&
+                !(silentRetry
+                  ? silentArmSpent
+                  : !episodeContinuation && atLeast(refusalFallbacksUsed, refusalRouteLimit())) &&
                 !refusalFallbackDeclined &&
-                (isRefusalFallbackEnabled() || Se)
+                (isRefusalFallbackEnabled() || silentRetry)
               ) {
-                let We = ze
+                let dialogSkipReason = episodeContinuation
                   ? "episode_continuation"
                   : getFallbackDialogSkipReason({
                       requestDialog: toolUseContext.requestDialog,
                       isMainThread,
-                      silentAttempt: Se,
+                      silentAttempt: silentRetry,
                       consumerLacksDialogCapability,
                     });
-                let no = {
+                let telemetryBase = {
                   original_model: telemetrySafeModelName(event.originalModel),
                   fallback_model: telemetrySafeModelName(event.fallbackModel),
                   trigger: fromEnum(event.trigger),
@@ -3178,35 +3350,37 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   has_api_refusal_explanation: Boolean(event.apiRefusalExplanation),
                   entitlement_blind: isEntitlementOverlayUnavailable(),
                 };
-                let flattened = [...assistantMessages, ...toolResults].flatMap((So) =>
-                  normalizeMessages([So])
+                let flattened = [...assistantMessages, ...toolResults].flatMap((message) =>
+                  normalizeMessages([message])
                     .filter(isNotEmptyMessage)
                     .map((content) => content.uuid),
                 );
-                let wn = We === "no_consumer_capability";
-                if (wn)
+                let lacksConsumerCapability = dialogSkipReason === "no_consumer_capability";
+                if (lacksConsumerCapability)
                   logEvent("tengu_refusal_fallback_dialog_suppressed", {
-                    ...no,
-                    reason: Uo ? lit("no_consumer_capability") : lit("remote_controlled_session"),
+                    ...telemetryBase,
+                    reason: hasRefusalDialog
+                      ? lit("no_consumer_capability")
+                      : lit("remote_controlled_session"),
                     capability_source: capabilitySource,
                     retracted_wire_uuid_count: flattened.length,
                   });
-                let Mo = wn ? "cancelled" : "retry_fallback";
-                let He = currentModel && !ze && !Se;
-                if (He)
-                  Mo = await askRefusalFallbackPreference({
+                let choice = lacksConsumerCapability ? "cancelled" : "retry_fallback";
+                let askPreference = currentModel && !episodeContinuation && !silentRetry;
+                if (askPreference)
+                  choice = await askRefusalFallbackPreference({
                     canUseTool,
                     toolUseContext,
                     originalModel: event.originalModel,
                     fallbackModel: event.fallbackModel,
                     apiRefusalCategory: event.apiRefusalCategory,
-                    telemetry: no,
+                    telemetry: telemetryBase,
                   });
-                else if (We === undefined && toolUseContext.requestDialog)
-                  Mo = await requestRefusalFallbackChoice({
+                else if (dialogSkipReason === undefined && toolUseContext.requestDialog)
+                  choice = await requestRefusalFallbackChoice({
                     requestDialog: toolUseContext.requestDialog,
                     signal: toolUseContext.abortController.signal,
-                    bridgeDialog: vo,
+                    bridgeDialog,
                     hasQueuedPrompts: () =>
                       toolUseContext.messageQueue.peek(isPromptModeQueuedCommand) !== undefined,
                     payload: {
@@ -3216,30 +3390,30 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                       retractedMessageUuids: flattened,
                       guidanceText: getThirdPartyFallbackHint(),
                     },
-                    telemetry: no,
+                    telemetry: telemetryBase,
                     shownExtras: {
                       capability_source: capabilitySource,
                       retracted_wire_uuid_count: flattened.length,
                     },
                   });
-                if (Mo !== "retry_fallback") {
+                if (choice !== "retry_fallback") {
                   refusalFallbackDeclined = true;
                   if (event.creditCode !== null)
                     logEvent("tengu_fallback_credit_forfeited", {
                       reason:
-                        Mo === "cancelled"
+                        choice === "cancelled"
                           ? lit("cancelled")
-                          : He
+                          : askPreference
                             ? lit("preference_question_paused")
                             : lit("dialog_declined"),
                       mint_request_id: sanitizeMarkName(event.requestId),
                       mint_model: telemetrySafeModelName(attemptModel),
                     });
                   yield* attemptState.abandonAttempt("refusal_decline");
-                  Je.length = 0;
-                  if (Mo === "edit_prompt")
+                  messageRewrites.length = 0;
+                  if (choice === "edit_prompt")
                     toolUseContext.abortController.abort(userAbortReason("refusal-fallback-edit"));
-                  if (Mo === "cancelled" && !toolUseContext.abortController.signal.aborted) {
+                  if (choice === "cancelled" && !toolUseContext.abortController.signal.aborted) {
                     let refusalMessage = getRefusalMessage(
                       "refusal",
                       {
@@ -3261,16 +3435,21 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   }
                   break;
                 }
-                let yt = assessPartialResponse(assistantMessages);
-                let so =
+                let partial = assessPartialResponse(assistantMessages);
+                let canSurface =
                   querySource.startsWith("repl_main_thread") &&
                   !toolUseContext.options.isNonInteractiveSession;
-                let Zo = hasRefusalFallbackOccurred();
-                let Rt = !so ? "surface" : Zo ? "session_latch" : yt.skipReason;
-                let salvageText = Se && Rt === undefined ? yt.salvageText : undefined;
-                if (Se) kt = true;
+                let alreadyLatched = hasRefusalFallbackOccurred();
+                let skipContinuationReason = !canSurface
+                  ? "surface"
+                  : alreadyLatched
+                    ? "session_latch"
+                    : partial.skipReason;
+                let salvageText =
+                  silentRetry && skipContinuationReason === undefined ? partial.salvageText : undefined;
+                if (silentRetry) silentArmSpent = true;
                 else {
-                  if (!ze) refusalFallbacksUsed += 1;
+                  if (!episodeContinuation) refusalFallbacksUsed += 1;
                   refusalCascadeState = recordFallbackAttempt(
                     refusalCascadeState,
                     event,
@@ -3278,7 +3457,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     canonicalModelKey,
                   );
                 }
-                let sr = Se
+                let carriedEffort = silentRetry
                   ? undefined
                   : resolveRefusalFallbackEffort({
                       refusedEffort: event.refusedEffort,
@@ -3288,61 +3467,67 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                       loopEffort,
                     });
                 refusalOverride = event.fallbackModel;
-                if (sr !== undefined) loopEffort = sr.loopEffort;
-                dn = Se ? undefined : (event.creditCode ?? undefined);
-                fs = dn !== undefined ? attemptModel : undefined;
-                gs = dn !== undefined ? (event.requestId ?? undefined) : undefined;
-                Rn.mintedStateless = dn !== undefined && event.mintedStateless;
-                Rn.delivery = dn !== undefined && Lo === undefined ? br.delivery : undefined;
-                hs = event.originalModel;
-                _s = event.apiRefusalCategory ?? undefined;
-                Ss = event.trigger;
-                ea ??= event.requestId ?? undefined;
-                if (Se) markRefusalFallbackOccurred(event.requestId ?? undefined);
+                if (carriedEffort !== undefined) loopEffort = carriedEffort.loopEffort;
+                fallbackCreditCode = silentRetry ? undefined : (event.creditCode ?? undefined);
+                creditMintModel = fallbackCreditCode !== undefined ? attemptModel : undefined;
+                creditMintRequestId =
+                  fallbackCreditCode !== undefined ? (event.requestId ?? undefined) : undefined;
+                creditDeliveryState.mintedStateless =
+                  fallbackCreditCode !== undefined && event.mintedStateless;
+                creditDeliveryState.delivery =
+                  fallbackCreditCode !== undefined && salvageUserMessage === undefined
+                    ? deliveryDecision.delivery
+                    : undefined;
+                stampFromModel = event.originalModel;
+                stampCategory = event.apiRefusalCategory ?? undefined;
+                stampTrigger = event.trigger;
+                stampOriginalRequestId ??= event.requestId ?? undefined;
+                if (silentRetry) markRefusalFallbackOccurred(event.requestId ?? undefined);
                 else if (isMainThread && event.apiRefusalCategory === "cyber")
                   markRefusalFallbackHeaderArmed(event.requestId ?? undefined);
                 setAttemptModel(event.fallbackModel);
                 needsAttempt = true;
-                At = isMainThread && !Se && flattened.length > 0 ? flattened : undefined;
-                Me = false;
-                if (isMainThread && !Se) {
+                pendingSupersedeUuids =
+                  isMainThread && !silentRetry && flattened.length > 0 ? flattened : undefined;
+                supersedeHoldRound = false;
+                if (isMainThread && !silentRetry) {
                   let appState = toolUseContext.getAppState();
                   latchRefusalFallbackModel({
                     fallbackModel: event.fallbackModel,
                     previousOverride: getMainLoopModelOverride(),
                     previousAppStateModel: appState.mainLoopModel,
                     previousModelForSession: appState.mainLoopModelForSession,
-                    carriedEffort: sr?.latchEffort,
+                    carriedEffort: carriedEffort?.latchEffort,
                   });
-                  let kr = isFastModeEnabled()
+                  let nextFastModeActive = isFastModeEnabled()
                     ? isFastModeActive(event.fallbackModel, appState.fastMode)
                     : !!appState.fastMode;
-                  toolUseContext.setAppState((sp) => ({
-                    ...sp,
+                  toolUseContext.setAppState((retryAppState) => ({
+                    ...retryAppState,
                     mainLoopModel: event.fallbackModel,
                     mainLoopModelForSession: null,
-                    fastMode: kr,
+                    fastMode: nextFastModeActive,
                   }));
                   setMainLoopModelOverride(event.fallbackModel);
                   config = mainLoopModelOverride();
                   toolUseContext.options.mainLoopModel = event.fallbackModel;
                   toolUseContext.options.availabilityFallback = undefined;
-                  reportFastModeToggle(appState.fastMode, kr);
+                  reportFastModeToggle(appState.fastMode, nextFastModeActive);
                 }
-                if (Se)
+                if (silentRetry)
                   logEvent("tengu_convolute_arcades_retry", {
                     request_id: sanitizeMarkName(event.requestId),
                     queryChainId: queryChainIdForAnalytics,
                     queryDepth: queryTracking.depth,
                     querySource: agentTypeForTelemetry(querySource),
                     continuation: salvageText !== undefined,
-                    ...(Rt !== undefined && {
-                      continuation_skip_reason: fromEnum(Rt),
+                    ...(skipContinuationReason !== undefined && {
+                      continuation_skip_reason: fromEnum(skipContinuationReason),
                     }),
-                    had_partial_text: yt.partialTextChars > 0,
-                    partial_text_chars: yt.partialTextChars,
-                    salvaged_tool_use_count: yt.toolUseCount,
-                    had_empty_input_tool_use: yt.hadEmptyInputToolUse,
+                    had_partial_text: partial.partialTextChars > 0,
+                    partial_text_chars: partial.partialTextChars,
+                    salvaged_tool_use_count: partial.toolUseCount,
+                    had_empty_input_tool_use: partial.hadEmptyInputToolUse,
                     credit_minted: event.creditCode !== null,
                     armed_at_trigger: event.silentArmAtTrigger === true,
                     arm_source: fromEnum(getFallbackLatchKind()),
@@ -3350,22 +3535,24 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 else {
                   logFeatureOk("refusal_fallback");
                   logEvent("tengu_refusal_fallback_triggered", {
-                    ...no,
+                    ...telemetryBase,
                     retracted_wire_uuid_count: flattened.length,
-                    prompt_skipped_reason: He ? lit("preference_question") : fromEnumOpt(We),
-                    had_partial_text: yt.partialTextChars > 0,
-                    partial_text_chars: yt.partialTextChars,
-                    salvaged_tool_use_count: yt.toolUseCount,
-                    had_empty_input_tool_use: yt.hadEmptyInputToolUse,
+                    prompt_skipped_reason: askPreference
+                      ? lit("preference_question")
+                      : fromEnumOpt(dialogSkipReason),
+                    had_partial_text: partial.partialTextChars > 0,
+                    partial_text_chars: partial.partialTextChars,
+                    salvaged_tool_use_count: partial.toolUseCount,
+                    had_empty_input_tool_use: partial.hadEmptyInputToolUse,
                     credit_minted: event.creditCode !== null,
                     ...refusedEffortTelemetryFields(event.refusedEffort),
                   });
                 }
-                let ya = ln;
-                if (ya) {
-                  ln = false;
-                  Ao = undefined;
-                  Lo = undefined;
+                let stitchWasOpen = stitchBegan;
+                if (stitchWasOpen) {
+                  stitchBegan = false;
+                  stitchSalvageText = undefined;
+                  salvageUserMessage = undefined;
                   logEvent("tengu_convolute_arcades_retry_outcome", {
                     outcome: lit("error"),
                     queryChainId: queryChainIdForAnalytics,
@@ -3377,22 +3564,22 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   type: "query_model_change",
                   toModel: event.fallbackModel,
                 };
-                if (ya)
+                if (stitchWasOpen)
                   yield {
                     type: "refusal_continuation",
                     phase: "end",
                   };
-                let counts = Kt.counts;
-                Kt.counts = undefined;
+                let counts = silentRearmState.counts;
+                silentRearmState.counts = undefined;
                 yield* attemptState.abandonAttempt("refusal_retry", {
-                  silent: Se,
+                  silent: silentRetry,
                   ...(counts !== undefined && {
                     earlierCounts: counts,
                   }),
                 });
-                Je.length = 0;
+                messageRewrites.length = 0;
                 if (salvageText !== undefined) {
-                  Lo = createUserMessage({
+                  salvageUserMessage = createUserMessage({
                     content: buildContinuationPrompt(salvageText),
                     isMeta: true,
                     ephemeral: true,
@@ -3404,8 +3591,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     phase: "begin",
                     salvageText,
                   };
-                  Ao = salvageText;
-                  ln = true;
+                  stitchSalvageText = salvageText;
+                  stitchBegan = true;
                 }
                 if (
                   provisionalRefusalNotice !== undefined &&
@@ -3417,12 +3604,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   };
                   provisionalRefusalNotice = undefined;
                 }
-                if (!ze) {
+                if (!episodeContinuation) {
                   refusalCascadeState = clearPendingNotice(refusalCascadeState);
                   provisionalRefusalNotice = undefined;
                 }
-                let rp = refusalCascadeState.inEpisode && (refusalCascadeState.cursor !== undefined || ze);
-                if (isMainThread && !Se && rp)
+                let noticeEpisodeActive =
+                  refusalCascadeState.inEpisode &&
+                  (refusalCascadeState.cursor !== undefined || episodeContinuation);
+                if (isMainThread && !silentRetry && noticeEpisodeActive)
                   refusalCascadeState = recordFallbackNotice(refusalCascadeState, {
                     originModel: event.originalModel,
                     servingModel: event.fallbackModel,
@@ -3431,7 +3620,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     apiRefusalCategory: event.apiRefusalCategory ?? null,
                     requestId: event.requestId ?? null,
                   });
-                else if (!Se && (isMainThread || emitsLocalScope))
+                else if (!silentRetry && (isMainThread || emitsLocalScope))
                   yield {
                     type: "system",
                     subtype: "model_refusal_fallback",
@@ -3461,7 +3650,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     timestamp: deps.now(),
                     uuid: deps.uuid(),
                   };
-              } else if (ko === undefined) {
+              } else if (latchedFallbackModel === undefined) {
                 let refusalMessage = getRefusalMessage(
                   "refusal",
                   {
@@ -3490,7 +3679,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 queryDepth: queryTracking.depth,
               });
               yield* attemptState.abandonAttempt("streaming_fallback");
-              Je.length = 0;
+              messageRewrites.length = 0;
               try {
                 if (
                   querySource.startsWith("repl_main_thread") &&
@@ -3516,179 +3705,203 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               event.resumedFromIncompleteThinking = true;
             if (event.type === "assistant" && !event.isApiErrorMessage && !allAnsweredWithoutRequest([event]))
               event.permissionModeAtRequest = permissionModeAtRequest;
-            if (event.type === "assistant" && event.message.content.some((Se) => Se.type === "tool_use"))
+            if (
+              event.type === "assistant" &&
+              event.message.content.some((contentBlock) => contentBlock.type === "tool_use")
+            )
               await transcriptTap.appended(event);
-            let $e = event;
-            let Co;
-            let co = false;
-            let No;
+            let outgoingEvent = event;
+            let rebuiltResponse;
+            let stitchedRowPushed = false;
+            let pendingTombstones;
             if (event.type === "assistant") {
-              let Se;
+              let patchedContent;
               for (let idx = 0; idx < event.message.content.length; idx++) {
-                let We = event.message.content[idx];
-                if (We.type === "tool_use" && typeof We.input === "object" && We.input !== null) {
+                let contentBlock = event.message.content[idx];
+                if (
+                  contentBlock.type === "tool_use" &&
+                  typeof contentBlock.input === "object" &&
+                  contentBlock.input !== null
+                ) {
                   let toolByName = findToolByName(
                     toolUseContext.options.tools,
-                    We.name,
+                    contentBlock.name,
                     toolUseContext.options.toolAliases,
                   );
-                  let Ht = backfillObservableInput(toolByName, We.input, We.name);
-                  if (Ht) {
-                    Se ??= [...event.message.content];
-                    Se[idx] = {
-                      ...We,
-                      input: Ht,
+                  let backfilledInput = backfillObservableInput(
+                    toolByName,
+                    contentBlock.input,
+                    contentBlock.name,
+                  );
+                  if (backfilledInput) {
+                    patchedContent ??= [...event.message.content];
+                    patchedContent[idx] = {
+                      ...contentBlock,
+                      input: backfilledInput,
                     };
                   }
                 }
               }
-              if (Se) {
-                $e = {
+              if (patchedContent) {
+                outgoingEvent = {
                   ...event,
                   message: {
                     ...event.message,
-                    content: Se,
+                    content: patchedContent,
                   },
                 };
-                Je.push({
+                messageRewrites.push({
                   src: event.message,
-                  dst: $e.message,
+                  dst: outgoingEvent.message,
                   srcRow: event,
-                  dstRow: $e,
+                  dstRow: outgoingEvent,
                 });
               }
             }
             if (
-              (Ao !== undefined || te !== undefined) &&
+              (stitchSalvageText !== undefined || stitchPlan !== undefined) &&
               event.type === "assistant" &&
               !event.isApiErrorMessage
             ) {
-              let Se = $e.type === "assistant" ? $e : event;
-              let content = Se.message.content;
-              let index = content.findIndex((Ht) => Ht.type === "text");
-              let no = index === -1 ? undefined : content[index];
-              if (no !== undefined && no.type === "text" && no.text.trim().length > 0) {
-                let Ht = [...content];
-                Ht[index] = withCitationsDropped(
-                  no,
-                  te !== undefined ? te.text + no.text : stitchContinuation(Ao, no.text),
+              let response = outgoingEvent.type === "assistant" ? outgoingEvent : event;
+              let content = response.message.content;
+              let index = content.findIndex((block) => block.type === "text");
+              let firstTextBlock = index === -1 ? undefined : content[index];
+              if (
+                firstTextBlock !== undefined &&
+                firstTextBlock.type === "text" &&
+                firstTextBlock.text.trim().length > 0
+              ) {
+                let nextContent = [...content];
+                nextContent[index] = withCitationsDropped(
+                  firstTextBlock,
+                  stitchPlan !== undefined
+                    ? stitchPlan.text + firstTextBlock.text
+                    : stitchContinuation(stitchSalvageText, firstTextBlock.text),
                 );
-                let { apiBlockIndex, apiBlockIndices, ...He } = Se;
-                let yt = {
-                  ...He,
+                let { apiBlockIndex, apiBlockIndices, ...responseRest } = response;
+                let stitchedResponse = {
+                  ...responseRest,
                   message: {
-                    ...Se.message,
-                    content: Ht,
+                    ...response.message,
+                    content: nextContent,
                   },
                 };
-                Je.push({
+                messageRewrites.push({
                   src: event.message,
-                  dst: yt.message,
+                  dst: stitchedResponse.message,
                   srcRow: event,
-                  dstRow: yt,
+                  dstRow: stitchedResponse,
                 });
-                if (te !== undefined) {
-                  let originals = te.originals;
-                  let Zo = new Set(originals.map((original) => original.uuid));
+                if (stitchPlan !== undefined) {
+                  let originals = stitchPlan.originals;
+                  let originalUuids = new Set(originals.map((original) => original.uuid));
                   for (let idx = assistantMessages.length - 1; idx >= 0; idx--)
-                    if (Zo.has(assistantMessages[idx].uuid)) assistantMessages.splice(idx, 1);
-                  assistantMessages.push(yt);
-                  co = true;
-                  No = originals;
-                  be.push(...originals);
+                    if (originalUuids.has(assistantMessages[idx].uuid)) assistantMessages.splice(idx, 1);
+                  assistantMessages.push(stitchedResponse);
+                  stitchedRowPushed = true;
+                  pendingTombstones = originals;
+                  retractedMessages.push(...originals);
                   if (isMainThread) {
-                    yt.supersedesUuids = originals.flatMap((original) =>
+                    stitchedResponse.supersedesUuids = originals.flatMap((original) =>
                       normalizeMessages([original])
                         .filter(isNotEmptyMessage)
                         .map((content) => content.uuid),
                     );
                     logEvent("tengu_refusal_fallback_supersedes", {
                       lane: lit("server_stitch"),
-                      count: yt.supersedesUuids.length,
+                      count: stitchedResponse.supersedesUuids.length,
                     });
                   }
-                  me = new Set([yt.uuid]);
-                  te = undefined;
-                } else Ao = undefined;
-                $e = yt;
-                Co = yt;
+                  midStreamUuids = new Set([stitchedResponse.uuid]);
+                  stitchPlan = undefined;
+                } else stitchSalvageText = undefined;
+                outgoingEvent = stitchedResponse;
+                rebuiltResponse = stitchedResponse;
               }
             }
             if (event.type === "stream_event" && event.event.type === "message_delta") {
               if (typeof event.event.delta.stop_reason === "string")
                 lastStopReason = event.event.delta.stop_reason;
-              for (let { src, dst } of Je) {
+              for (let { src, dst } of messageRewrites) {
                 dst.usage = src.usage;
                 dst.stop_reason = src.stop_reason;
                 dst.stop_details = src.stop_details;
                 if (src.context_management !== undefined) dst.context_management = src.context_management;
               }
-              for (let { srcRow, dstRow } of Je) if (srcRow.isUnmetered !== true) delete dstRow.isUnmetered;
-              Je.length = 0;
+              for (let { srcRow, dstRow } of messageRewrites)
+                if (srcRow.isUnmetered !== true) delete dstRow.isUnmetered;
+              messageRewrites.length = 0;
             }
-            let to = false;
-            if (isPromptTooLongReply(event)) to = true;
+            let isWithheld = false;
+            if (isPromptTooLongReply(event)) isWithheld = true;
             if (
               !attemptState.needsFollowUp &&
               shouldCompactAfterLongContextRefusal(event, attemptModelFacts, querySource)
             ) {
-              to = true;
+              isWithheld = true;
               withheldPromptTooLong = event;
             }
             if (isMediaSizeErrorReply(event)) {
-              to = true;
-              gt.push(event);
+              isWithheld = true;
+              earlyAttachments.push(event);
             }
-            if (isWithheldMaxOutputTokens(event)) to = true;
-            if (Mn && isRefusalErrorMessage(event)) to = true;
+            if (isWithheldMaxOutputTokens(event)) isWithheld = true;
+            if (retryRefusal && isRefusalErrorMessage(event)) isWithheld = true;
             if (
               !attemptState.needsFollowUp &&
               isRecoverableTruncatedResponse(event, toolUseContext, querySource)
             ) {
-              to = true;
+              isWithheld = true;
               truncatedResponse = event;
             }
-            if (resumeActive && !attemptState.needsFollowUp && isRetryableApiErrorMessage(event)) to = true;
+            if (resumeActive && !attemptState.needsFollowUp && isRetryableApiErrorMessage(event))
+              isWithheld = true;
             if (
               attemptState.needsFollowUp &&
               event.type === "assistant" &&
               isSafetyMonitorBlockedMessage(event)
             )
-              to = true;
-            if (to && event.type === "assistant") lastWithheldAssistant = event;
-            if (!to) {
-              if (gt.length > 0) {
-                yield* gt;
-                gt.length = 0;
+              isWithheld = true;
+            if (isWithheld && event.type === "assistant") lastWithheldAssistant = event;
+            if (!isWithheld) {
+              if (earlyAttachments.length > 0) {
+                yield* earlyAttachments;
+                earlyAttachments.length = 0;
               }
               if (
                 refusalCascadeState.pendingNotice !== undefined &&
-                $e.type === "assistant" &&
-                !$e.isApiErrorMessage &&
-                normalizeMessages([$e]).some(isNotEmptyMessage)
+                outgoingEvent.type === "assistant" &&
+                !outgoingEvent.isApiErrorMessage &&
+                normalizeMessages([outgoingEvent]).some(isNotEmptyMessage)
               )
-                yield* ke();
+                yield* flushProvisionalNotice();
               if (
-                At !== undefined &&
-                $e.type === "assistant" &&
-                !$e.isApiErrorMessage &&
-                normalizeMessages([$e]).some(isNotEmptyMessage)
+                pendingSupersedeUuids !== undefined &&
+                outgoingEvent.type === "assistant" &&
+                !outgoingEvent.isApiErrorMessage &&
+                normalizeMessages([outgoingEvent]).some(isNotEmptyMessage)
               ) {
-                let ze = At;
-                At = undefined;
-                Me = false;
-                $e = {
-                  ...$e,
-                  supersedesUuids: ze,
+                let supersededUuids = pendingSupersedeUuids;
+                pendingSupersedeUuids = undefined;
+                supersedeHoldRound = false;
+                outgoingEvent = {
+                  ...outgoingEvent,
+                  supersedesUuids: supersededUuids,
                 };
                 logEvent("tengu_refusal_fallback_supersedes", {
                   lane: lit("client_retry"),
-                  count: ze.length,
+                  count: supersededUuids.length,
                 });
               }
-              if ($e !== event && $e.type === "assistant" && event.type === "assistant" && Co === undefined)
-                transcriptTap.answeredAs($e, event);
-              yield $e;
+              if (
+                outgoingEvent !== event &&
+                outgoingEvent.type === "assistant" &&
+                event.type === "assistant" &&
+                rebuiltResponse === undefined
+              )
+                transcriptTap.answeredAs(outgoingEvent, event);
+              yield outgoingEvent;
             }
             if (event.type === "assistant") {
               if (
@@ -3697,21 +3910,23 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 !event.isApiErrorMessage
               )
                 recordTextBlocks(event.message.content);
-              let Se = Co ?? event;
-              if (!co) assistantMessages.push(Se);
-              let msgToolUseBlocks = Se.message.content.filter((content) => content.type === "tool_use");
+              let pushedMessage = rebuiltResponse ?? event;
+              if (!stitchedRowPushed) assistantMessages.push(pushedMessage);
+              let msgToolUseBlocks = pushedMessage.message.content.filter(
+                (content) => content.type === "tool_use",
+              );
               if (msgToolUseBlocks.length > 0) {
                 toolUseBlocks.push(...msgToolUseBlocks);
                 attemptState.needsFollowUp = true;
               }
-              recordServerToolsUsed(Se);
+              recordServerToolsUsed(pushedMessage);
               for (let toolBlock of msgToolUseBlocks)
-                attemptState.streamingToolExecutor.addTool(toolBlock, Se);
+                attemptState.streamingToolExecutor.addTool(toolBlock, pushedMessage);
             }
-            if (No !== undefined) {
-              let Se = No;
-              No = undefined;
-              for (let message of Se)
+            if (pendingTombstones !== undefined) {
+              let tombstones = pendingTombstones;
+              pendingTombstones = undefined;
+              for (let message of tombstones)
                 yield {
                   type: "tombstone",
                   message,
@@ -3721,13 +3936,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             if (attemptState.streamingToolExecutor.hasUnfinishedTools()) yield* drainCompletedToolResults();
           }
           queryCheckpoint("query_api_streaming_end");
-          if (ln && !needsAttempt) {
-            ln = false;
-            let O = Ao === undefined;
-            Ao = undefined;
-            Lo = undefined;
+          if (stitchBegan && !needsAttempt) {
+            stitchBegan = false;
+            let mergedWithoutText = stitchSalvageText === undefined;
+            stitchSalvageText = undefined;
+            salvageUserMessage = undefined;
             logEvent("tengu_convolute_arcades_retry_outcome", {
-              outcome: fromEnum(O ? "merged" : "no_text"),
+              outcome: fromEnum(mergedWithoutText ? "merged" : "no_text"),
               queryChainId: queryChainIdForAnalytics,
               queryDepth: queryTracking.depth,
               querySource: agentTypeForTelemetry(querySource),
@@ -3738,30 +3953,30 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             };
           }
           if (
-            me !== undefined &&
+            midStreamUuids !== undefined &&
             (assistantMessages.at(-1)?.message.stop_reason ?? lastStopReason) === "refusal"
           )
-            yield* Ne();
-          if (qe) {
-            qe = false;
-            te = undefined;
+            yield* sweepMidStreamMessages();
+          if (stitchOpen) {
+            stitchOpen = false;
+            stitchPlan = undefined;
             yield {
               type: "refusal_continuation",
               phase: "end",
             };
           }
-          yield* Ie();
+          yield* flushRefusalNotice();
           {
             let lastAssistant = assistantMessages.at(-1);
-            let $e = lastAssistant ? getTokenUsage(lastAssistant) : undefined;
-            if ($e) {
-              let contextTokens = totalTokensOf($e);
+            let usage = lastAssistant ? getTokenUsage(lastAssistant) : undefined;
+            if (usage) {
+              let contextTokens = totalTokensOf(usage);
               if (
                 shouldArmPrecompute({
                   autocompactRan,
                   hasAttemptedReactiveCompact,
                   lastTransitionReason: state.transition?.reason,
-                  isPreFirstCompactFork: zr,
+                  isPreFirstCompactFork: preFirstCompactFork,
                   querySource,
                   contextTokens,
                   messagesCounted: assistantMessages,
@@ -3777,12 +3992,12 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                     agentTypeForTelemetry(querySource),
                   );
                 else {
-                  let tokenCountFromUsage = getTokenCountFromUsage($e);
-                  let No =
+                  let tokenCountFromUsage = getTokenCountFromUsage(usage);
+                  let usageContextTokens =
                     tokenCountFromUsage.input_tokens +
                     tokenCountFromUsage.cache_creation_input_tokens +
                     tokenCountFromUsage.cache_read_input_tokens;
-                  let to =
+                  let estimatedContextTokens =
                     estimateTokensWithAnchor(messagesForQuery, attemptModelFacts.bytesPerToken) -
                     snipTokensFreed;
                   armPrecomputedCompact({
@@ -3800,7 +4015,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                       agentCacheTtlOverride,
                     },
                     armTrigger: "api_response",
-                    estimateGapTokens: No - to,
+                    estimateGapTokens: usageContextTokens - estimatedContextTokens,
                     ...(querySource === "sdk" && {
                       promptScan: countUserPromptsAndRewrite([...messagesForQuery, ...assistantMessages]),
                     }),
@@ -3809,26 +4024,26 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             }
           }
         } catch (error) {
-          ct = {
+          attemptError = {
             error,
           };
         }
-        if (ct !== undefined || fallbackError !== undefined) {
-          let Je = fallbackError ?? ct?.error;
-          if (qe) {
-            qe = false;
-            te = undefined;
+        if (attemptError !== undefined || fallbackError !== undefined) {
+          let attemptFailure = fallbackError ?? attemptError?.error;
+          if (stitchOpen) {
+            stitchOpen = false;
+            stitchPlan = undefined;
             yield {
               type: "refusal_continuation",
               phase: "end",
             };
           }
-          yield* Ie();
-          yield* Ee();
-          if (ln) {
-            ln = false;
-            Ao = undefined;
-            Lo = undefined;
+          yield* flushRefusalNotice();
+          yield* emitFallbackNotice();
+          if (stitchBegan) {
+            stitchBegan = false;
+            stitchSalvageText = undefined;
+            salvageUserMessage = undefined;
             logEvent("tengu_convolute_arcades_retry_outcome", {
               outcome: lit("error"),
               queryChainId: queryChainIdForAnalytics,
@@ -3840,9 +4055,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               phase: "end",
             };
           }
-          if (isFallbackTo(j, Je)) modelChain = [...modelChain, j];
-          let gt = modelChain[chainIndex + 1];
-          if (fallbackError !== undefined && gt !== undefined) {
+          if (isFallbackTo(accessFallbackModel, attemptFailure))
+            modelChain = [...modelChain, accessFallbackModel];
+          let nextChainModel = modelChain[chainIndex + 1];
+          if (fallbackError !== undefined && nextChainModel !== undefined) {
             if (isNoModelFallbackEnabled()) noModelFallbackTripwire();
             chainIndex++;
             refusalOverride = undefined;
@@ -3860,12 +4076,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               from: chainIndex,
               failedModel: fallbackError.originalModel,
               reason: fallbackError.reason,
-              substituteFor: (Vo) => {
-                if (!needsOverageConsentForModel(Vo, toolUseContext.requestDialog)) return;
-                let vo = getUsageCreditsOnlyModelConsentDeclineFallback();
-                return vo !== null && querySource === "compact" && swapShrinksContextWindow(modelChain[0], vo)
+              substituteFor: (model) => {
+                if (!needsOverageConsentForModel(model, toolUseContext.requestDialog)) return;
+                let substituteModel = getUsageCreditsOnlyModelConsentDeclineFallback();
+                return substituteModel !== null &&
+                  querySource === "compact" &&
+                  swapShrinksContextWindow(modelChain[0], substituteModel)
                   ? null
-                  : vo;
+                  : substituteModel;
               },
             });
             chainIndex = chainIndex_2;
@@ -3880,7 +4098,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             if (substituted || inPlace) consentOverride = target;
             setAttemptModel(target);
             needsAttempt = true;
-            Me = false;
+            supersedeHoldRound = false;
             yield* attemptState.abandonAttempt("chain_advance");
             toolUseContext.options = {
               ...toolUseContext.options,
@@ -3903,14 +4121,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               !substituted,
               fallbackError.reason,
             );
-            mo = chainFallbackRecord(mo, fallbackRecord);
-            let Uo = describeFallbackWindow(fallbackRecord, mo);
+            fallbackRecordChain = chainFallbackRecord(fallbackRecordChain, fallbackRecord);
+            let windowShift = describeFallbackWindow(fallbackRecord, fallbackRecordChain);
             logFeatureOk("model_fallback");
             logEvent("tengu_model_fallback_triggered", {
               original_model: telemetrySafeModelName(fallbackError.originalModel),
               fallback_model: telemetrySafeModelName(attemptModel),
-              original_context_window: Uo?.fromWindow,
-              fallback_context_window: Uo?.toWindow,
+              original_context_window: windowShift?.fromWindow,
+              fallback_context_window: windowShift?.toWindow,
               chain_index: chainIndex,
               query_source: agentTypeForTelemetry(querySource),
               reason: fromEnum(fallbackError.reason),
@@ -3931,7 +4149,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                   renderModelName(fallbackError.originalModel),
                   renderModelName(attemptModel),
                   fallbackError.originalError,
-                ) + (Uo?.noticeSuffix ?? ""),
+                ) + (windowShift?.noticeSuffix ?? ""),
               level: "warning",
               trigger: fallbackError.reason,
               originalModel: fallbackError.originalModel,
@@ -3942,14 +4160,15 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             };
             continue;
           }
-          throw Je;
+          throw attemptFailure;
         }
       }
     } catch (innerError) {
       {
-        let j = takeFallbackNotice(refusalCascadeState);
-        refusalCascadeState = j.state;
-        if (j.notice !== undefined) yield buildRefusalFallbackNotice(j.notice, deps.uuid());
+        let noticeResult = takeFallbackNotice(refusalCascadeState);
+        refusalCascadeState = noticeResult.state;
+        if (noticeResult.notice !== undefined)
+          yield buildRefusalFallbackNotice(noticeResult.notice, deps.uuid());
       }
       logEvent("tengu_query_error", {
         assistantMessages: assistantMessages.length,
@@ -3982,14 +4201,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       } catch (error) {
         logError(withTelemetryMessage(toError(error), "tool drain failed after safety monitor block"));
       }
-      let E = blockAndResetStream(attemptState);
+      let blockedStream = blockAndResetStream(attemptState);
       yield* yieldMissingToolResultBlocks(
         assistantMessages,
         SAFETY_BLOCK_TOOL_CANCEL_TEXT,
         deps,
-        E.answeredToolUseIds,
+        blockedStream.answeredToolUseIds,
       );
-      if (E.removes) yield E.removes;
+      if (blockedStream.removes) yield blockedStream.removes;
       yield message;
     }
     if (
@@ -4027,9 +4246,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           yield* cleanupComputerUseAfterTurn(toolUseContext);
         } catch {}
       {
-        let E = takeFallbackNotice(refusalCascadeState);
-        refusalCascadeState = E.state;
-        if (E.notice !== undefined) yield buildRefusalFallbackNotice(E.notice, deps.uuid());
+        let lateNoticeResult = takeFallbackNotice(refusalCascadeState);
+        refusalCascadeState = lateNoticeResult.state;
+        if (lateNoticeResult.notice !== undefined)
+          yield buildRefusalFallbackNotice(lateNoticeResult.notice, deps.uuid());
       }
       if (!isSilentAbortReason(toolUseContext.abortController.signal.reason))
         yield createUserInterruptionMessage({
@@ -4046,25 +4266,26 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     };
     if (toolUseContext.abortController.signal.aborted) return yield* drainRemainingTools();
     {
-      let E = takeFallbackNotice(refusalCascadeState);
-      refusalCascadeState = E.state;
-      if (E.notice !== undefined) yield buildRefusalFallbackNotice(E.notice, deps.uuid());
+      let pendingNoticeResult = takeFallbackNotice(refusalCascadeState);
+      refusalCascadeState = pendingNoticeResult.state;
+      if (pendingNoticeResult.notice !== undefined)
+        yield buildRefusalFallbackNotice(pendingNoticeResult.notice, deps.uuid());
     }
-    let na = !assistantMessages.at(-1)?.isApiErrorMessage;
-    if (na && !attemptState.needsFollowUp) {
-      let E = recordToolDescriptions(messagesForQuery, inlineToolsDeclared, {
+    let lastResponseOk = !assistantMessages.at(-1)?.isApiErrorMessage;
+    if (lastResponseOk && !attemptState.needsFollowUp) {
+      let toolDescriptionRecord = recordToolDescriptions(messagesForQuery, inlineToolsDeclared, {
         options: toolUseContext.options,
         querySource,
         head: promptHeadSent,
         stamp: deps,
         handed: promptRender.redescribing,
       });
-      if (E) {
-        yield E;
-        messagesForQuery = [...messagesForQuery, E];
+      if (toolDescriptionRecord) {
+        yield toolDescriptionRecord;
+        messagesForQuery = [...messagesForQuery, toolDescriptionRecord];
       }
-      let j = appendDeferredToolsRecord();
-      if (j) yield j;
+      let deferredToolsRecordLate = appendDeferredToolsRecord();
+      if (deferredToolsRecordLate) yield deferredToolsRecordLate;
     }
     if (pendingToolUseSummary) {
       let summary = await pendingToolUseSummary;
@@ -4113,30 +4334,30 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       withheld: lastWithheldAssistant,
     });
     if (resumeActive && allAnsweredWithoutRequest(assistantMessages)) resumeActive = false;
-    let or = false;
+    let resumeRecovered = false;
     if (resumeActive) {
       let last = assistantMessages.at(-1);
-      let j = false;
+      let healedElsewhere = false;
       if (last?.isApiErrorMessage)
-        j =
-          j ||
+        healedElsewhere =
+          healedElsewhere ||
           last === truncatedResponse ||
           last === withheldPromptTooLong ||
           isPromptTooLongMessage_2(last) ||
           isMediaSizeErrorReply(last);
-      or = resumeTruncatedThinking(assistantMessages, {
-        healedElsewhere: j,
+      resumeRecovered = resumeTruncatedThinking(assistantMessages, {
+        healedElsewhere,
         attempt: maxOutputTokensRecoveryCount,
       });
     }
-    let last = assistantMessages.at(-1);
-    if (Mn && isRefusalErrorMessage(last) && last === lastWithheldAssistant) {
+    let message_2 = assistantMessages.at(-1);
+    if (retryRefusal && isRefusalErrorMessage(message_2) && message_2 === lastWithheldAssistant) {
       try {
         yield* drainCompletedToolResults();
       } catch (error) {
         if (!(error instanceof ImageSizeError || error instanceof ImageResizeError)) {
-          let he = resetStreamingToolExecutor(attemptState, "model_error");
-          if (he.removes) yield he.removes;
+          let resetOutcome = resetStreamingToolExecutor(attemptState, "model_error");
+          if (resetOutcome.removes) yield resetOutcome.removes;
           throw error;
         }
         try {
@@ -4148,26 +4369,26 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         }
         return yield* endTurnOnError(error);
       }
-      let E =
+      let toolEndedTurn =
         attemptState.toolWasDeferred ||
         attemptState.shouldPreventContinuation ||
         attemptState.toolRequestedEndTurn !== false;
-      let j;
-      let pe;
-      if (!E)
+      let inFlightRemoves;
+      let refusalRetryPlan;
+      if (!toolEndedTurn)
         try {
-          let me = discardInFlightTools(attemptState.streamingToolExecutor, "same_model_retry");
-          j = me.removes;
+          let discardedTools = discardInFlightTools(attemptState.streamingToolExecutor, "same_model_retry");
+          inFlightRemoves = discardedTools.removes;
           attemptState.rebuildStreamingToolExecutor();
-          if (me.startedToolUseIds.length > 0)
+          if (discardedTools.startedToolUseIds.length > 0)
             clearActiveMcpContext(toolUseContext.options, isMainOrSubagent);
-          let kept = assistantMessages.filter((assistantMessage) => assistantMessage !== last);
-          pe = {
+          let kept = assistantMessages.filter((assistantMessage) => assistantMessage !== message_2);
+          refusalRetryPlan = {
             ...synthesizeRefusedToolResults({
-              refused: last,
+              refused: message_2,
               kept,
               answered: toolResults,
-              started: me.startedToolUseIds,
+              started: discardedTools.startedToolUseIds,
               model: attemptModel,
               querySource,
               queryChainId: queryChainIdForAnalytics,
@@ -4180,11 +4401,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         } catch (error) {
           logError(error);
         }
-      if (j) yield j;
-      if (pe) {
-        yield* pe.notRun;
-        yield pe.notice;
-        yield pe.nudge;
+      if (inFlightRemoves) yield inFlightRemoves;
+      if (refusalRetryPlan) {
+        yield* refusalRetryPlan.notRun;
+        yield refusalRetryPlan.notice;
+        yield refusalRetryPlan.nudge;
         state = {
           guards: {
             ...guards,
@@ -4193,7 +4414,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               stopHookBlockingCount: 0,
             }),
           },
-          messages: [...messagesForQuery, ...pe.kept, ...toolResults, ...pe.notRun, pe.nudge],
+          messages: [
+            ...messagesForQuery,
+            ...refusalRetryPlan.kept,
+            ...toolResults,
+            ...refusalRetryPlan.notRun,
+            refusalRetryPlan.nudge,
+          ],
           toolUseContext,
           compactTracking: tracking,
           transition: {
@@ -4206,37 +4433,47 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         return NEXT_ROUND;
       }
     }
-    if (isRefusalErrorMessage(last) && last === lastWithheldAssistant) yield* yieldWithRefusalNotice(last);
+    if (isRefusalErrorMessage(message_2) && message_2 === lastWithheldAssistant)
+      yield* yieldWithRefusalNotice(message_2);
     if (!attemptState.needsFollowUp) {
-      let qe = function (messagesForQuery) {
+      let hasStructuredOutputCall = function (messagesForQuery) {
         for (let idx = messagesForQuery.length - 1; idx >= 0; idx--) {
-          let Ie = messagesForQuery[idx];
-          if (Ie.type === "user") {
-            if (Ie.isMeta || isToolResultMessage(Ie)) continue;
+          let message = messagesForQuery[idx];
+          if (message.type === "user") {
+            if (message.isMeta || isToolResultMessage(message)) continue;
             return false;
           }
-          if (Ie.type !== "assistant") continue;
-          if (Ie.message.content.some((ct) => ct.type === "tool_use" && ct.name === STRUCTUREDOUTPUT))
+          if (message.type !== "assistant") continue;
+          if (
+            message.message.content.some(
+              (block) => block.type === "tool_use" && block.name === STRUCTUREDOUTPUT,
+            )
+          )
             return true;
         }
         return false;
       };
-      let msg = assistantMessages.at(-1);
-      let j = msg !== undefined && msg === withheldPromptTooLong;
-      let pe = j || (msg?.type === "assistant" && msg.isApiErrorMessage && isPromptTooLongMessage_2(msg));
-      let he =
+      let last = assistantMessages.at(-1);
+      let isWithheldPromptTooLong = last !== undefined && last === withheldPromptTooLong;
+      let isPromptTooLong =
+        isWithheldPromptTooLong ||
+        (last?.type === "assistant" && last.isApiErrorMessage && isPromptTooLongMessage_2(last));
+      let isImageError =
         !(
           toolDenialTracker !== null &&
-          msg?.type === "assistant" &&
-          toolDenialTracker.isToolUseDeniedMessage(msg)
-        ) && isMediaSizeErrorReply(msg);
-      let be =
-        pe || he
+          last?.type === "assistant" &&
+          toolDenialTracker.isToolUseDeniedMessage(last)
+        ) && isMediaSizeErrorReply(last);
+      let recoveryToolUseContext =
+        isPromptTooLong || isImageError
           ? {
               ...toolUseContext,
               abortController: createRecoveryAbortController(
                 toolUseContext.abortController,
-                recoveryTimeoutForMessages(messagesForQuery, pe ? msg?.errorDetails : undefined),
+                recoveryTimeoutForMessages(
+                  messagesForQuery,
+                  isPromptTooLong ? last?.errorDetails : undefined,
+                ),
                 toolUseContext.session.host.clock,
               ),
               onRetryStatus: guardedStreamCallback(
@@ -4245,27 +4482,27 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               ),
             }
           : toolUseContext;
-      e: if (pe || he) {
-        let ke =
-          pe &&
+      e: if (isPromptTooLong || isImageError) {
+        let deeperPassSpent =
+          isPromptTooLong &&
           hasAttemptedReactiveCompact &&
           reactiveCompactDeeperPass === "available" &&
           state.transition?.reason === "reactive_compact_retry";
-        let Ee = hasAttemptedReactiveCompact && !ke;
-        let Ie = ke
+        let reactiveCompactAttempted = hasAttemptedReactiveCompact && !deeperPassSpent;
+        let breakerOutcome = deeperPassSpent
           ? {
               action: "proceed",
               consecutiveRapidRefills: tracking?.consecutiveRapidRefills ?? 0,
             }
           : checkRapidRefillBreaker(tracking);
-        let { consecutiveRapidRefills } = Ie;
-        if (!hasAttemptedReactiveCompact && Ie.action === "trip") {
-          if (j) {
+        let { consecutiveRapidRefills } = breakerOutcome;
+        if (!hasAttemptedReactiveCompact && breakerOutcome.action === "trip") {
+          if (isWithheldPromptTooLong) {
             logFeatureBad("compact_after_long_context_refusal", "rapid_refill_breaker");
             break e;
           }
-          let uo = fallbackWindowNotice({
-            fallback: isMainThreadQuery && pe ? mo : undefined,
+          let windowNotice = fallbackWindowNotice({
+            fallback: isMainThreadQuery && isPromptTooLong ? fallbackRecordChain : undefined,
             mainLoopModel: toolUseContext.options.mainLoopModel,
             configuredWindow: toolUseContext.options.autoCompactWindow,
           });
@@ -4275,10 +4512,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             queryChainId: queryChainIdForAnalytics,
             queryDepth: queryTracking.depth,
             reactive: true,
-            afterShrinkingFallback: uo.afterShrinkingFallback,
+            afterShrinkingFallback: windowNotice.afterShrinkingFallback,
           });
           let apiErrorMessage = createApiErrorMessage({
-            content: uo.content,
+            content: windowNotice.content,
             error: "invalid_request",
             apiError: "autocompact_thrashing",
             now: deps.now,
@@ -4292,29 +4529,29 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           };
         }
         if (
-          msg &&
+          last &&
           canReactiveCompact({
-            hasAttempted: Ee,
+            hasAttempted: reactiveCompactAttempted,
             querySource,
             aborted: toolUseContext.abortController.signal.aborted,
           }) &&
           hasTooFewMessagesToCompact(messagesForQuery)
         ) {
-          if (j) {
+          if (isWithheldPromptTooLong) {
             logFeatureBad("compact_after_long_context_refusal", "too_few_groups");
             break e;
           }
-          let uo = countNonProgressMessages(messagesForQuery);
-          let totalGroups = uo.length;
-          let ho = he ? "image_error" : "prompt_too_long";
-          let { actualTokens, limitTokens } = parsePromptTooLongTokenCounts(msg.errorDetails ?? "");
-          let pn = roughTokenCountEstimationForMessages(uo.flat());
+          let nonProgressGroups = countNonProgressMessages(messagesForQuery);
+          let totalGroups = nonProgressGroups.length;
+          let ptlReason = isImageError ? "image_error" : "prompt_too_long";
+          let { actualTokens, limitTokens } = parsePromptTooLongTokenCounts(last.errorDetails ?? "");
+          let conversationTokens = roughTokenCountEstimationForMessages(nonProgressGroups.flat());
           let overheadTokensEstimate =
-            actualTokens !== undefined ? Math.max(0, actualTokens - pn) : undefined;
+            actualTokens !== undefined ? Math.max(0, actualTokens - conversationTokens) : undefined;
           logEvent("tengu_ptl_surfaced_to_user", {
-            reason: fromEnum(ho),
+            reason: fromEnum(ptlReason),
             querySource: agentTypeForTelemetry(querySource),
-            wasGatedByPriorAttempt: Ee,
+            wasGatedByPriorAttempt: reactiveCompactAttempted,
             deeperPass: fromEnum(reactiveCompactDeeperPass),
             reactiveUnsupported: !canCompactInRemote(),
             precomputedKind: lit("not_consulted"),
@@ -4322,49 +4559,49 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             totalGroups,
             overheadTokensEstimate,
           });
-          let mn =
-            ho === "prompt_too_long"
+          let rebuiltPtlReply =
+            ptlReason === "prompt_too_long"
               ? rebuildApiErrorMessage(
-                  msg,
+                  last,
                   formatSingleExchangePromptTooLong({
                     actualTokens,
                     limitTokens,
-                    conversationTokensEstimate: pn,
+                    conversationTokensEstimate: conversationTokens,
                   }),
                   deps,
                 )
-              : msg;
-          yield mn;
-          executeStopFailureHooks(mn, toolUseContext);
-          markClassifierApiFailure(toolUseContext, querySource, mn);
+              : last;
+          yield rebuiltPtlReply;
+          executeStopFailureHooks(rebuiltPtlReply, toolUseContext);
+          markClassifierApiFailure(toolUseContext, querySource, rebuiltPtlReply);
           return {
-            reason: ho,
+            reason: ptlReason,
           };
         }
         let startTime = performance.now();
-        let Je = pe && msg ? getPromptTooLongTokenGap(msg) : undefined;
+        let ptlGap = isPromptTooLong && last ? getPromptTooLongTokenGap(last) : undefined;
         let { outcome, swap, emittedEarlyCompactStart } = yield* runCompactionAsStream(
-          (toolUseContext_2, zt, onResponseLength) =>
+          (toolUseContext_2, onNotification, onResponseLength) =>
             applyPrecomputedCompact({
               toolUseContext: toolUseContext_2,
               messages: messagesForQuery,
               trigger: "ptl",
-              isWithheld413: pe,
+              isWithheld413: isPromptTooLong,
               hasAttemptedReactiveCompact,
-              borrowFrom: zr ? toolUseContext.precomputeSourceKey : undefined,
+              borrowFrom: preFirstCompactFork ? toolUseContext.precomputeSourceKey : undefined,
               detectedAt: startTime,
               querySource,
               sizingModel: attemptModelFacts.model,
               onResponseLength,
             }),
-          be,
+          recoveryToolUseContext,
         );
-        let ko = yield* runCompactionAsStream(
+        let reactiveOutcome = yield* runCompactionAsStream(
           (toolUseContext_2, onNotification, onResponseLength) =>
             triggerReactiveCompact({
-              hasAttempted: Ee,
+              hasAttempted: reactiveCompactAttempted,
               querySource,
-              aborted: be.abortController.signal.aborted,
+              aborted: recoveryToolUseContext.abortController.signal.aborted,
               messages: messagesForQuery,
               cacheSafeParams: {
                 systemPrompt,
@@ -4379,29 +4616,29 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               precomputed: swap,
               precomputeOutcome: outcome,
               userWaitStartedAt: startTime,
-              promptTooLong: Je,
-              allowLastResort: !he,
+              promptTooLong: ptlGap,
+              allowLastResort: !isImageError,
               onNotification,
               onResponseLength,
             }),
-          be,
+          recoveryToolUseContext,
         );
-        let { result, failure } =
-          pe && !he && msg && !canCompactInRemote()
+        let { result: recoveredResult, failure } =
+          isPromptTooLong && !isImageError && last && !canCompactInRemote()
             ? yield* recoverFromRefusal({
                 autocompact: deps.autocompact,
-                refusal: msg,
+                refusal: last,
                 hasAttempted: hasAttemptedReactiveCompact,
                 loopTopOutcome: autocompactOutcome.kind,
                 offPickedModel: attemptModel !== sessionModel,
                 messages: messagesForQuery,
-                toolUseContext: be,
+                toolUseContext: recoveryToolUseContext,
                 facts: attemptModelFacts,
                 cacheSafeParams: {
                   systemPrompt,
                   userContext,
                   systemContext,
-                  toolUseContext: be,
+                  toolUseContext: recoveryToolUseContext,
                   forkContextMessages: messagesForQuery,
                   advisorModel: toolUseContext.getAppState().advisorModel,
                   stickyBetas,
@@ -4413,40 +4650,49 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 sentSystemPrompt: apiSystemPrompt,
                 sentInlineTools: inlineToolsDeclared,
               })
-            : ko;
-        if (result) {
-          if (j) logFeatureOk("compact_after_long_context_refusal");
+            : reactiveOutcome;
+        if (recoveredResult) {
+          if (isWithheldPromptTooLong) logFeatureOk("compact_after_long_context_refusal");
           if (params.taskBudget) {
-            let _o = finalContextTokensFromLastResponse(messagesForQuery);
-            taskBudgetRemaining = Math.max(0, (taskBudgetRemaining ?? params.taskBudget.total) - _o);
+            let compactOutputTokens = finalContextTokensFromLastResponse(messagesForQuery);
+            taskBudgetRemaining = Math.max(
+              0,
+              (taskBudgetRemaining ?? params.taskBudget.total) - compactOutputTokens,
+            );
           }
           rollOverTotalTokensContext(
             toolUseContext.agentId ?? "main",
             tokenCountFromLastAPIResponse(messagesForQuery),
           );
-          result.summaryMessages = stampSummaryTurnFields(result.summaryMessages, messagesForQuery);
+          recoveredResult.summaryMessages = stampSummaryTurnFields(
+            recoveredResult.summaryMessages,
+            messagesForQuery,
+          );
           contextRouting = await rebuildRoutingAfterCompaction(
             contextRouting,
             userContext,
             systemContext,
-            be,
+            recoveryToolUseContext,
             {
               messages: params.messages,
               querySource,
             },
           );
-          let uo = await reannounceAfterCompact(result, {
+          let reannouncedMessages = await reannounceAfterCompact(recoveredResult, {
             routing: contextRouting,
-            toolUseContext: be,
+            toolUseContext: recoveryToolUseContext,
             querySource,
             resumeActive,
-            foreground: isMainThreadQuery && isMainAgent(be.agentContext),
+            foreground: isMainThreadQuery && isMainAgent(recoveryToolUseContext.agentContext),
             stamp: deps,
           });
-          let zt = insertAfterCompactBoundary(buildPostCompactMessages(result), uo);
-          toolUseContext = withTurnMessages(toolUseContext, zt, isHumanTurn);
+          let postCompactMessages = insertAfterCompactBoundary(
+            buildPostCompactMessages(recoveredResult),
+            reannouncedMessages,
+          );
+          toolUseContext = withTurnMessages(toolUseContext, postCompactMessages, isHumanTurn);
           maybeStartPrecomputeAfterTurn({
-            messages: zt,
+            messages: postCompactMessages,
             systemPrompt,
             userContext,
             systemContext,
@@ -4454,17 +4700,24 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             querySource,
             stickyBetas,
           });
-          for (let _o of insertAfterCompactBoundary(buildPostCompactMessagesWithoutKept(result), uo))
-            yield _o;
+          for (let message of insertAfterCompactBoundary(
+            buildPostCompactMessagesWithoutKept(recoveredResult),
+            reannouncedMessages,
+          ))
+            yield message;
           tracking = createCompactTracking(deps.uuid(), consecutiveRapidRefills);
-          let reactiveCompactDeeperPass_2 = ke
+          let reactiveCompactDeeperPass_2 = deeperPassSpent
             ? "spent"
             : swap === undefined &&
-                pe &&
+                isPromptTooLong &&
                 canCompactInRemote() &&
                 reactiveCompactDeeperPass === "none" &&
-                (countNonProgressMessages(zt).length >= 3 ||
-                  canLeaveOutFixPtl(zt, Je?.gap, toolUseContext.contentReplacementState?.replacements))
+                (countNonProgressMessages(postCompactMessages).length >= 3 ||
+                  canLeaveOutFixPtl(
+                    postCompactMessages,
+                    ptlGap?.gap,
+                    toolUseContext.contentReplacementState?.replacements,
+                  ))
               ? "available"
               : reactiveCompactDeeperPass;
           if (isTopLevelMainThread) noteRedrive("reactive_compact");
@@ -4474,7 +4727,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
               hasAttemptedReactiveCompact: swap === undefined,
               reactiveCompactDeeperPass: reactiveCompactDeeperPass_2,
             },
-            messages: zt,
+            messages: postCompactMessages,
             toolUseContext,
             compactTracking: tracking,
             resumeIncompleteThinking: resumeActive,
@@ -4496,25 +4749,28 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             status: null,
           };
         }
-        if (!he && toolUseContext.abortController.signal.aborted) {
-          if (j) logFeatureSad("compact_after_long_context_refusal", "aborted");
+        if (!isImageError && toolUseContext.abortController.signal.aborted) {
+          if (isWithheldPromptTooLong) logFeatureSad("compact_after_long_context_refusal", "aborted");
           return yield* drainRemainingTools();
         }
-        if (j) {
-          logFeatureBad("compact_after_long_context_refusal", Ee ? "still_refused" : "not_compacted");
+        if (isWithheldPromptTooLong) {
+          logFeatureBad(
+            "compact_after_long_context_refusal",
+            reactiveCompactAttempted ? "still_refused" : "not_compacted",
+          );
           break e;
         }
-        let Yo = he ? "image_error" : "prompt_too_long";
-        let Uo = querySource === "compact" || isCompactQuerySource(querySource);
-        if (!toolUseContext.abortController.signal.aborted && !Uo)
+        let ptlFailureReason = isImageError ? "image_error" : "prompt_too_long";
+        let isCompactSourceForPtl = querySource === "compact" || isCompactQuerySource(querySource);
+        if (!toolUseContext.abortController.signal.aborted && !isCompactSourceForPtl)
           logEvent("tengu_ptl_surfaced_to_user", {
-            reason: fromEnum(Yo),
+            reason: fromEnum(ptlFailureReason),
             querySource: agentTypeForTelemetry(querySource),
-            wasGatedByPriorAttempt: Ee,
+            wasGatedByPriorAttempt: reactiveCompactAttempted,
             deeperPass: fromEnum(reactiveCompactDeeperPass),
-            ...(Yo === "prompt_too_long" &&
+            ...(ptlFailureReason === "prompt_too_long" &&
               promptTooLongFacts({
-                errorDetails: msg?.errorDetails,
+                errorDetails: last?.errorDetails,
                 messages: messagesForQuery,
                 systemPrompt: apiSystemPrompt,
                 inlineTools: inlineToolsDeclared,
@@ -4526,23 +4782,23 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             reactiveUnsupported: !canCompactInRemote(),
             compactFailureReason: fromEnumOpt(failure?.reason),
           });
-        let content = pe ? compactFailureDetail(failure) : undefined;
-        let vo = content !== undefined ? rebuildApiErrorMessage(msg, content, deps) : msg;
-        yield vo;
-        executeStopFailureHooks(vo, toolUseContext);
-        markClassifierApiFailure(toolUseContext, querySource, vo);
+        let content = isPromptTooLong ? compactFailureDetail(failure) : undefined;
+        let finalReply = content !== undefined ? rebuildApiErrorMessage(last, content, deps) : last;
+        yield finalReply;
+        executeStopFailureHooks(finalReply, toolUseContext);
+        markClassifierApiFailure(toolUseContext, querySource, finalReply);
         return {
-          reason: Yo,
+          reason: ptlFailureReason,
         };
       }
-      if (j) yield msg;
+      if (isWithheldPromptTooLong) yield last;
       reportFabricatedTurns(assistantMessages, attemptModel);
-      let te;
-      if (msg !== undefined && (isWithheldMaxOutputTokens(msg) || or)) {
-        let attempt = or ? maxOutputTokensRecoveryCount : maxOutputTokensRecoveryCount + 1;
+      let exhaustedNotice;
+      if (last !== undefined && (isWithheldMaxOutputTokens(last) || resumeRecovered)) {
+        let attempt = resumeRecovered ? maxOutputTokensRecoveryCount : maxOutputTokensRecoveryCount + 1;
         if (attempt <= MAX_CONTINUE_ATTEMPTS) {
-          let Ee =
-            !or &&
+          let resumeThinkingFound =
+            !resumeRecovered &&
             shouldResumeIncompleteThinking(
               assistantMessages,
               resolveRuntimeModel(
@@ -4555,14 +4811,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             );
           if (
             resumeActive &&
-            !or &&
-            !Ee &&
+            !resumeRecovered &&
+            !resumeThinkingFound &&
             assistantMessages.some((assistantMessage) => !assistantMessage.isApiErrorMessage)
           )
             logFeatureOk("query_thinking_block_resumption", {
               attempt: maxOutputTokensRecoveryCount,
             });
-          let Ie = Ee
+          let outputLimitNudge = resumeThinkingFound
             ? undefined
             : createUserMessage({
                 content: shouldNudgeOutputLimitResume(assistantMessages, attempt, querySource),
@@ -4571,20 +4827,20 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
                 now: deps.now,
                 uuidFn: deps.uuid,
               });
-          if (Ie !== undefined) yield Ie;
+          if (outputLimitNudge !== undefined) yield outputLimitNudge;
           state = {
             guards: {
               ...guards,
               maxOutputTokensRecoveryCount: attempt,
             },
             messages:
-              Ie === undefined
+              outputLimitNudge === undefined
                 ? [
                     ...messagesForQuery,
                     ...assistantMessages.filter((assistantMessage) => !assistantMessage.isApiErrorMessage),
                   ]
-                : [...messagesForQuery, ...assistantMessages, Ie],
-            resumeIncompleteThinking: Ee || undefined,
+                : [...messagesForQuery, ...assistantMessages, outputLimitNudge],
+            resumeIncompleteThinking: resumeThinkingFound || undefined,
             toolUseContext,
             compactTracking: tracking,
             transition: {
@@ -4595,16 +4851,16 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           return NEXT_ROUND;
         }
         if (resumeActive) logFeatureBad("query_thinking_block_resumption", "exhausted");
-        te = recoverExhaustedOutput({
-          withheld: msg,
+        exhaustedNotice = recoverExhaustedOutput({
+          withheld: last,
           responses: assistantMessages,
           model: attemptModel,
           isNonInteractiveSession: toolUseContext.options.isNonInteractiveSession,
           agentId: toolUseContext.agentId,
         });
-        yield te;
+        yield exhaustedNotice;
       }
-      if (truncatedResponse !== undefined && msg === truncatedResponse) {
+      if (truncatedResponse !== undefined && last === truncatedResponse) {
         let streamCutCause = truncatedResponse.streamCutCause ?? "unknown";
         if (maxOutputTokensRecoveryCount < MAX_CONTINUE_ATTEMPTS) {
           logFeatureSad("query_truncated_response_recovery", "nudged", {
@@ -4638,12 +4894,12 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         logFeatureBad("query_truncated_response_recovery", "exhausted", {
           cause: fromEnum(streamCutCause),
         });
-        yield msg;
+        yield last;
       }
       if (
-        (msg?.message.stop_reason ?? lastStopReason) === "tool_use" &&
+        (last?.message.stop_reason ?? lastStopReason) === "tool_use" &&
         toolUseBlocks.length === 0 &&
-        !msg?.isApiErrorMessage
+        !last?.isApiErrorMessage
       ) {
         let preCompactContext = canRecoverAgain(malformedToolUseRetryCount);
         logEvent("tengu_malformed_tool_use_response", {
@@ -4684,11 +4940,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           };
           return NEXT_ROUND;
         }
-        let Ee = [
+        let retractedMessages = [
           ...recentMalformedRetries(messagesForQuery, malformedToolUseRetryCount),
           ...assistantMessages,
         ];
-        for (let msg of Ee)
+        for (let msg of retractedMessages)
           yield {
             type: "tombstone",
             message: msg,
@@ -4698,7 +4954,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           now: deps.now,
           uuid: deps.uuid,
         });
-        apiErrorMessage.retractedMessageUuids = Ee.map((ct) => ct.uuid);
+        apiErrorMessage.retractedMessageUuids = retractedMessages.map((message) => message.uuid);
         yield apiErrorMessage;
         executeStopFailureHooks(apiErrorMessage, toolUseContext);
         markClassifierApiFailure(toolUseContext, querySource, apiErrorMessage);
@@ -4706,10 +4962,10 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           reason: "malformed_tool_use_exhausted",
         };
       }
-      let stopReason = msg?.message.stop_reason ?? lastStopReason;
+      let stopReason = last?.message.stop_reason ?? lastStopReason;
       if (
         (stopReason === "end_turn" || stopReason === "stop_sequence") &&
-        !msg?.isApiErrorMessage &&
+        !last?.isApiErrorMessage &&
         querySource !== "compact" &&
         !isCompactQuerySource(querySource) &&
         !hasSuccessfulToolCall_2(messagesForQuery) &&
@@ -4718,7 +4974,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             (content) => content.type === "text" && content.text.trim().length > 0,
           ),
         ) &&
-        !qe(messagesForQuery) &&
+        !hasStructuredOutputCall(messagesForQuery) &&
         !endsWithReminder(messagesForQuery)
       ) {
         if (!thinkingOnlyNudged) {
@@ -4766,7 +5022,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           };
         }
       } else if (thinkingOnlyNudged) logFeatureOk("query_thinking_only_response");
-      if (msg?.isApiErrorMessage) {
+      if (last?.isApiErrorMessage) {
         if (
           requireTurnClassifier &&
           getClassifierJobState(toolUseContext) &&
@@ -4774,67 +5030,70 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           querySource.startsWith("repl_main_thread") &&
           !toolUseContext.agentId
         ) {
-          let ke = getAssistantMessageText(te ?? msg) ?? msg.errorDetails ?? "";
+          let failureText = getAssistantMessageText(exhaustedNotice ?? last) ?? last.errorDetails ?? "";
           await requireTurnClassifier().markApiFailure(
             getClassifierJobState(toolUseContext),
             getOwnJobShortId(),
-            msg.error,
-            ke,
-            msg.apiError,
+            last.error,
+            failureText,
+            last.apiError,
           );
         }
-        executeStopFailureHooks(te ?? msg, toolUseContext);
+        executeStopFailureHooks(exhaustedNotice ?? last, toolUseContext);
         return {
           reason: "api_error",
-          errorKind: msg.error,
-          isTransient: isTransientApiError(msg),
-          quotaLimits: msg.quotaLimits,
-          oauthRefreshDiskFull: msg.oauthRefreshDiskFull,
+          errorKind: last.error,
+          isTransient: isTransientApiError(last),
+          quotaLimits: last.quotaLimits,
+          oauthRefreshDiskFull: last.oauthRefreshDiskFull,
         };
       }
       return yield* runStopHooksAndFinish(toolUseContext);
     }
-    async function* runStopHooksAndFinish(E, j) {
-      let toolResults = j?.toolResults ?? [];
-      let goalActive = !E.agentId && E.getAppState().activeGoal !== undefined;
+    async function* runStopHooksAndFinish(context, finishExtras) {
+      let toolResults = finishExtras?.toolResults ?? [];
+      let goalActive = !context.agentId && context.getAppState().activeGoal !== undefined;
       let stopHookResult = yield* runStopHooks(
         messagesForQuery,
         assistantMessages,
         systemPrompt,
         userContext,
         systemContext,
-        E,
+        context,
         querySource,
         stopHookActive,
         stickyBetas,
-        getClassifierJobState(E),
+        getClassifierJobState(context),
         toolResults,
       );
       if (stopHookBlockingCount > 0 && stopHookResult.blockingErrors.length === 0)
         logEvent("tengu_stop_hook_block_count", {
           count: stopHookBlockingCount,
-          is_subagent: isNonMainSessionSubagent(E.agentContext),
+          is_subagent: isNonMainSessionSubagent(context.agentContext),
           hit_max_turns: false,
           hit_cap: false,
           goal_active: goalActive,
         });
       if (stopHookResult.preventContinuation)
-        return j && E.abortController.signal.aborted
+        return finishExtras && context.abortController.signal.aborted
           ? {
               reason: "aborted_tools",
             }
           : {
               reason: "stop_hook_prevented",
             };
-      let be = waitForTurnEndSummary(E.sessionState, () => stopHookResult.blockingErrors.length > 0);
-      if (be !== undefined) await be;
+      let summaryPromise = waitForTurnEndSummary(
+        context.sessionState,
+        () => stopHookResult.blockingErrors.length > 0,
+      );
+      if (summaryPromise !== undefined) await summaryPromise;
       if (stopHookResult.blockingErrors.length > 0) {
-        let te = turnCount + 1;
-        let qe = stopHookBlockingCount + 1;
-        if (maxTurns && te > maxTurns) {
+        let nextTurnCount = turnCount + 1;
+        let blockCount = stopHookBlockingCount + 1;
+        if (maxTurns && nextTurnCount > maxTurns) {
           logEvent("tengu_stop_hook_block_count", {
-            count: qe,
-            is_subagent: isNonMainSessionSubagent(E.agentContext),
+            count: blockCount,
+            is_subagent: isNonMainSessionSubagent(context.agentContext),
             hit_max_turns: true,
             hit_cap: false,
             goal_active: goalActive,
@@ -4843,34 +5102,37 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             {
               type: "max_turns_reached",
               maxTurns,
-              turnCount: te,
+              turnCount: nextTurnCount,
             },
             deps,
           );
-          yield* runTurnEndReactions(E, [...messagesForQuery, ...assistantMessages, ...toolResults], {
+          yield* runTurnEndReactions(context, [...messagesForQuery, ...assistantMessages, ...toolResults], {
             stopHookActive,
           });
           return {
             reason: "max_turns",
-            turnCount: te,
+            turnCount: nextTurnCount,
           };
         }
         let CLAUDE_CODE_STOP_HOOK_BLOCK_CAP = env.CLAUDE_CODE_STOP_HOOK_BLOCK_CAP ?? 8;
-        if (CLAUDE_CODE_STOP_HOOK_BLOCK_CAP > 0 && qe > CLAUDE_CODE_STOP_HOOK_BLOCK_CAP) {
+        if (CLAUDE_CODE_STOP_HOOK_BLOCK_CAP > 0 && blockCount > CLAUDE_CODE_STOP_HOOK_BLOCK_CAP) {
           logEvent("tengu_stop_hook_block_count", {
-            count: qe,
-            is_subagent: isNonMainSessionSubagent(E.agentContext),
+            count: blockCount,
+            is_subagent: isNonMainSessionSubagent(context.agentContext),
             hit_max_turns: false,
             hit_cap: true,
             goal_active: goalActive,
           });
           let text =
-            `A hook blocked the turn from ending ${qe} consecutive times \u2014 overriding and ending turn. ` +
+            `A hook blocked the turn from ending ${blockCount} consecutive times \u2014 overriding and ending turn. ` +
             "For Stop/SubagentStop hooks, check stop_hook_active in the input and return success while it's true. Set CLAUDE_CODE_STOP_HOOK_BLOCK_CAP to raise this limit.";
           yield createSystemMessage(text, "warning");
-          if (E.agentContext.agentType !== "teammate" && !isNonMainSessionSubagent(E.agentContext))
+          if (
+            context.agentContext.agentType !== "teammate" &&
+            !isNonMainSessionSubagent(context.agentContext)
+          )
             notifyStopHookCap(text);
-          yield* runTurnEndReactions(E, [...messagesForQuery, ...assistantMessages, ...toolResults], {
+          yield* runTurnEndReactions(context, [...messagesForQuery, ...assistantMessages, ...toolResults], {
             stopHookActive,
           });
           return {
@@ -4884,8 +5146,8 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             ...INITIAL_RECOVERY_STATE,
             malformedToolUseRetryCount: 0,
             stopHookActive: true,
-            stopHookBlockingCount: qe,
-            turnCount: te,
+            stopHookBlockingCount: blockCount,
+            turnCount: nextTurnCount,
           },
           messages: [
             ...messagesForQuery,
@@ -4893,13 +5155,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             ...toolResults,
             ...stopHookResult.blockingErrors,
           ],
-          toolUseContext: E,
+          toolUseContext: context,
           compactTracking: tracking,
           transition: {
             reason: "stop_hook_blocking",
           },
-          pendingToolUseSummary: j?.pendingToolUseSummary,
-          prevToolDurations: j?.prevToolDurations,
+          pendingToolUseSummary: finishExtras?.pendingToolUseSummary,
+          prevToolDurations: finishExtras?.prevToolDurations,
         };
         return NEXT_ROUND;
       }
@@ -4910,69 +5172,83 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     }
     let updatedToolUseContext = toolUseContext;
     queryCheckpoint("query_tool_execution_start");
-    let bs = requireClassifierSurfaces
+    let surfaces = requireClassifierSurfaces
       ? requireClassifierSurfaces().detectSurfaces(
           isStorageV5Enabled() && toolUseContext.storageV5
             ? await requireClassifierSurfaces().watchedForSurfaces(toolUseContext.storageV5)
             : undefined,
         )
       : null;
-    let hr = bs ? requireClassifierSurfaces().sinksFor(bs) : null;
-    let sa = hr ? requireClassifierSurfaces().engineFor(hr) : null;
+    let sinks = surfaces ? requireClassifierSurfaces().sinksFor(surfaces) : null;
+    let classifierEngine = sinks ? requireClassifierSurfaces().engineFor(sinks) : null;
     let classifierJobState = getClassifierJobState(toolUseContext);
     if (
       requireTurnClassifier &&
       classifierJobState &&
-      sa &&
+      classifierEngine &&
       classifyQuerySource(querySource) === "main" &&
       !toolUseContext.agentId
     ) {
-      let E = hr.has("summary");
-      let j = hr.has("headline");
-      classifierJobState.onClassified = (te, qe) => {
-        if (!qe || !(E || j) || te.detail === classifierJobState.lastEmittedDetail) return;
-        classifierJobState.lastEmittedDetail = te.detail;
-        if (E)
+      let wantsSummary = sinks.has("summary");
+      let wantsHeadline = sinks.has("headline");
+      classifierJobState.onClassified = (classified, isFresh) => {
+        if (
+          !isFresh ||
+          !(wantsSummary || wantsHeadline) ||
+          classified.detail === classifierJobState.lastEmittedDetail
+        )
+          return;
+        classifierJobState.lastEmittedDetail = classified.detail;
+        if (wantsSummary)
           toolUseContext.sessionState?.notifyMetadataChanged({
-            task_summary: te.detail,
+            task_summary: classified.detail,
           });
-        if (j) {
-          let Ne = te.detail
+        if (wantsHeadline) {
+          let taskSummary = classified.detail
             ? {
-                text: te.detail,
+                text: classified.detail,
                 at: Date.now(),
               }
             : null;
-          toolUseContext.setAppState((ke) =>
-            ke.taskSummary?.text === Ne?.text
-              ? ke
+          toolUseContext.setAppState((appStateForSummary) =>
+            appStateForSummary.taskSummary?.text === taskSummary?.text
+              ? appStateForSummary
               : {
-                  ...ke,
-                  taskSummary: Ne,
+                  ...appStateForSummary,
+                  taskSummary,
                 },
           );
         }
       };
-      classifierJobState.describeToolUse = (te, qe) => {
+      classifierJobState.describeToolUse = (toolName, input) => {
         try {
-          return findToolByName(toolUseContext.options.tools, te)?.getActivityDescription?.(qe) ?? undefined;
+          return (
+            findToolByName(toolUseContext.options.tools, toolName)?.getActivityDescription?.(input) ??
+            undefined
+          );
         } catch (error) {
-          logForDebugging(`[classifier] getActivityDescription(${te}) threw: ${toError(error).message}`);
+          logForDebugging(
+            `[classifier] getActivityDescription(${toolName}) threw: ${toError(error).message}`,
+          );
           return;
         }
       };
       let mainThreadAgentType = getMainThreadAgentType();
-      let me = mainThreadAgentType
+      let mainThreadAgent = mainThreadAgentType
         ? toolUseContext.options.agentDefinitions.activeAgents.find(
             (activeAgent) => activeAgent.agentType === mainThreadAgentType,
           )
         : undefined;
-      let found = messagesForQuery.find((te) => te.type === "user" && te.turnCompanion !== true);
+      let found = messagesForQuery.find(
+        (message) => message.type === "user" && message.turnCompanion !== true,
+      );
       if (found?.type === "user") {
         let content = found.message.content;
         requireTurnClassifier().captureIntent(
           classifierJobState,
-          typeof content === "string" ? content : (content.find((qe) => qe.type === "text")?.text ?? ""),
+          typeof content === "string"
+            ? content
+            : (content.find((block) => block.type === "text")?.text ?? ""),
         );
       }
       let latestRealUserAsk = requireTurnClassifier().findLatestRealUserAsk(messagesForQuery);
@@ -4980,11 +5256,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       requireTurnClassifier().classifyAndPushDebounced(
         classifierJobState,
         getOwnJobShortId(),
-        me,
-        [...messagesForQuery, ...assistantMessages].filter((te) => te.type === "assistant"),
+        mainThreadAgent,
+        [...messagesForQuery, ...assistantMessages].filter((message) => message.type === "assistant"),
         hasActiveAgentTasks(toolUseContext.taskRegistry.all()),
-        sa,
-        bs,
+        classifierEngine,
+        surfaces,
       );
     }
     let remainingResults = attemptState.streamingToolExecutor.getRemainingResults();
@@ -5008,27 +5284,27 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       }
     } catch (error) {
       if (!(error instanceof ImageSizeError || error instanceof ImageResizeError)) {
-        let j = resetStreamingToolExecutor(attemptState, "model_error");
-        if (j.removes) yield j.removes;
+        let resetOutcomeAfterTools = resetStreamingToolExecutor(attemptState, "model_error");
+        if (resetOutcomeAfterTools.removes) yield resetOutcomeAfterTools.removes;
         throw error;
       }
       return yield* endTurnOnError(error);
     }
     queryCheckpoint("query_tool_execution_end");
-    if (na) {
-      let E = recordToolDescriptions(messagesForQuery, inlineToolsDeclared, {
+    if (lastResponseOk) {
+      let toolDescriptionRecordLate = recordToolDescriptions(messagesForQuery, inlineToolsDeclared, {
         options: toolUseContext.options,
         querySource,
         head: promptHeadSent,
         stamp: deps,
         handed: promptRender.redescribing,
       });
-      if (E) {
-        yield E;
-        messagesForQuery = [...messagesForQuery, E];
+      if (toolDescriptionRecordLate) {
+        yield toolDescriptionRecordLate;
+        messagesForQuery = [...messagesForQuery, toolDescriptionRecordLate];
       }
-      let j = appendDeferredToolsRecord();
-      if (j) yield j;
+      let deferredToolsRecordAfterTools = appendDeferredToolsRecord();
+      if (deferredToolsRecordAfterTools) yield deferredToolsRecordAfterTools;
     }
     let pendingToolUseSummary_2;
     if (
@@ -5059,7 +5335,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         let resultContent =
           toolResult?.type === "user" && Array.isArray(toolResult.message.content)
             ? toolResult.message.content.find(
-                (qe) => qe.type === "tool_result" && qe.tool_use_id === block.id,
+                (resultBlock) => resultBlock.type === "tool_result" && resultBlock.tool_use_id === block.id,
               )
             : undefined;
         return {
@@ -5096,13 +5372,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           now: deps.now,
           uuidFn: deps.uuid,
         });
-      let E = turnCount + 1;
-      if (maxTurns && E > maxTurns)
+      let nextTurnCount = turnCount + 1;
+      if (maxTurns && nextTurnCount > maxTurns)
         yield createAttachmentMessage_2(
           {
             type: "max_turns_reached",
             maxTurns,
-            turnCount: E,
+            turnCount: nextTurnCount,
           },
           deps,
         );
@@ -5141,13 +5417,13 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       deps,
       makeUserMessage: createUserMessage,
     });
-    let ia =
+    let shouldRunStopHooks =
       !endTurnOverrideMessage &&
       shouldRunMcpStopHooks({
         requested: attemptState.toolRequestedEndTurn,
         lastIteration: Boolean(maxTurns && turnCount + 1 > maxTurns),
       });
-    if (attemptState.toolRequestedEndTurn && !endTurnOverrideMessage && !ia) {
+    if (attemptState.toolRequestedEndTurn && !endTurnOverrideMessage && !shouldRunStopHooks) {
       yield* endTurnFromToolResult({
         endTurnSource: attemptState.toolRequestedEndTurn === "tool" ? "tool" : "mcp_meta",
         messagesForQuery,
@@ -5179,7 +5455,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       )
     ) {
       let prompt = toolUseBlocks[0].input.prompt;
-      if (getSessionCronTasks().some((j) => j.kind === "loop" && j.prompt === prompt)) {
+      if (getSessionCronTasks().some((cronTask) => cronTask.kind === "loop" && cronTask.prompt === prompt)) {
         logEvent("tengu_loop_dynamic_wakeup_ends_turn", {
           queryChainId: queryChainIdForAnalytics,
           queryDepth: queryTracking.depth,
@@ -5231,21 +5507,21 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         toolUseBlocks.map((cmd) => cmd.name),
         updatedToolUseContext.options.tools,
       );
-      let pe = new Map();
+      let toolResultContentById = new Map();
       for (let toolResult of toolResults)
         if (toolResult.type === "user" && Array.isArray(toolResult.message.content)) {
-          for (let te of toolResult.message.content)
-            if (te.type === "tool_result") pe.set(te.tool_use_id, te.content);
+          for (let block of toolResult.message.content)
+            if (block.type === "tool_result") toolResultContentById.set(block.tool_use_id, block.content);
         }
-      let me = false;
-      let he;
+      let hookBlocked = false;
+      let hookStopReason;
       try {
         for await (let attachment of executePostToolBatchHooks(
           toolUseBlocks.map((toolUseBlock) => ({
             tool_name: toolUseBlock.name,
             tool_input: toolUseBlock.input,
             tool_use_id: toolUseBlock.id,
-            tool_response: pe.get(toolUseBlock.id),
+            tool_response: toolResultContentById.get(toolUseBlock.id),
           })),
           toolUseID,
           updatedToolUseContext,
@@ -5276,12 +5552,12 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             toolResults.push(memoryAttachments);
           }
           if (attachment.blockingError) {
-            me = true;
-            he ??= attachment.blockingError.blockingError;
+            hookBlocked = true;
+            hookStopReason ??= attachment.blockingError.blockingError;
           }
           if (attachment.preventContinuation) {
-            me = true;
-            he ??= attachment.stopReason;
+            hookBlocked = true;
+            hookStopReason ??= attachment.stopReason;
           }
         }
       } catch (error) {
@@ -5306,11 +5582,11 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           reason: "aborted_tools",
         };
       }
-      if (me) {
+      if (hookBlocked) {
         yield createAttachmentMessage_2(
           {
             type: "hook_stopped_continuation",
-            message: he || "Execution stopped by PostToolBatch hook",
+            message: hookStopReason || "Execution stopped by PostToolBatch hook",
             hookName: "PostToolBatch",
             toolUseID,
             hookEvent: "PostToolBatch",
@@ -5331,7 +5607,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         };
       }
     }
-    if (ia)
+    if (shouldRunStopHooks)
       return yield* runStopHooksSafely({
         throughStopHooks: () =>
           runStopHooksAndFinish(updatedToolUseContext, {
@@ -5345,21 +5621,21 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         queryDepth: queryTracking.depth,
       });
     if (updatedToolUseContext.options.refreshTools) {
-      let E = updatedToolUseContext.options.refreshTools();
-      if (E !== updatedToolUseContext.options.tools) {
-        let j = count(updatedToolUseContext.options.tools, (me) => !!me.mcpInfo);
-        let pe = count(E, (me) => !!me.mcpInfo);
-        if (j !== pe)
+      let refreshedTools = updatedToolUseContext.options.refreshTools();
+      if (refreshedTools !== updatedToolUseContext.options.tools) {
+        let oldMcpCount = count(updatedToolUseContext.options.tools, (tool) => !!tool.mcpInfo);
+        let newMcpCount = count(refreshedTools, (tool) => !!tool.mcpInfo);
+        if (oldMcpCount !== newMcpCount)
           logEvent("tengu_mcp_tools_refreshed_mid_turn", {
-            oldMcpCount: j,
-            newMcpCount: pe,
-            recovered: j === 0 && pe > 0,
+            oldMcpCount,
+            newMcpCount,
+            recovered: oldMcpCount === 0 && newMcpCount > 0,
           });
         updatedToolUseContext = {
           ...updatedToolUseContext,
           options: {
             ...updatedToolUseContext.options,
-            tools: E,
+            tools: refreshedTools,
           },
         };
       }
@@ -5375,14 +5651,14 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       };
     }
     let ccrTurnId = getCurrentCallId();
-    let aa = () =>
+    let pendingFoldCommands = () =>
       filterQueuedCommandsForThread(
         toolUseContext.messageQueue.getCommandsByMaxPriority("next").concat(
           toolUseContext.queuedNotificationsRegistry.heldNudge({
             agentId: toolUseContext.agentId,
             messageQueue: toolUseContext.messageQueue,
             ccrTurnId,
-            nobodysTurn: se,
+            nobodysTurn,
           }),
         ),
         {
@@ -5409,24 +5685,27 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           isMainThread: isMainThreadQuery,
           agentId: toolUseContext.agentId,
         }),
-        aa,
+        pendingFoldCommands,
       );
-    let da = isMainThreadQuery;
-    let _r = turnCount + 1;
-    let Ts = maxTurns && _r > maxTurns ? maxTurns : undefined;
-    let Cs = toolUseContext.messageQueue.isMidTurnFoldSuspended() || Ts !== undefined ? [] : aa();
-    se &&= !Cs.some(isPersonQueuedInput);
-    let Ms = da
-      ? await routeSubmissions(Cs, updatedToolUseContext)
+    let isMainThreadFold = isMainThreadQuery;
+    let nextTurn = turnCount + 1;
+    let maxTurnsCap = maxTurns && nextTurn > maxTurns ? maxTurns : undefined;
+    let foldableCommands =
+      toolUseContext.messageQueue.isMidTurnFoldSuspended() || maxTurnsCap !== undefined
+        ? []
+        : pendingFoldCommands();
+    nobodysTurn &&= !foldableCommands.some(isPersonQueuedInput);
+    let routedSubmissions = isMainThreadFold
+      ? await routeSubmissions(foldableCommands, updatedToolUseContext)
       : {
-          deliverable: Cs,
+          deliverable: foldableCommands,
           notices: [],
           dropped: [],
         };
-    let deliverable = Ms.deliverable;
+    let deliverable = routedSubmissions.deliverable;
     toolUseContext.messageQueue.registerFoldInFlight(deliverable);
     try {
-      for (let { uuid } of Ms.dropped)
+      for (let { uuid } of routedSubmissions.dropped)
         if (uuid !== undefined) {
           yield {
             type: "command_lifecycle",
@@ -5439,28 +5718,32 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
             state: "completed",
           };
         }
-      for (let notice of Ms.notices) yield notice;
-      let E = 0;
-      let j = 0;
-      let pe;
+      for (let notice of routedSubmissions.notices) yield notice;
+      let deliveredPromptCount = 0;
+      let deliveredPollEventCount = 0;
+      let content;
       let msg = createFoldCommandFilter(
         createScreensReader(() => updatedToolUseContext, {
           latch: false,
         }),
       );
-      let he = new Set();
-      let filtered = deliverable.filter(isInlineNotificationMode);
-      let te = applyDisallowedTools(filtered, params.joinedDisallowedTools, updatedToolUseContext.options);
-      if (te !== updatedToolUseContext.options.tools)
+      let absorbedCommands = new Set();
+      let commands = deliverable.filter(isInlineNotificationMode);
+      let toolsAfterDisallow = applyDisallowedTools(
+        commands,
+        params.joinedDisallowedTools,
+        updatedToolUseContext.options,
+      );
+      if (toolsAfterDisallow !== updatedToolUseContext.options.tools)
         updatedToolUseContext = {
           ...updatedToolUseContext,
           options: {
             ...updatedToolUseContext.options,
-            tools: te,
+            tools: toolsAfterDisallow,
           },
         };
-      let qe = 0;
-      for await (let Ee of getAttachmentMessages(
+      let filteredIndex = 0;
+      for await (let attachment of getAttachmentMessages(
         null,
         updatedToolUseContext,
         null,
@@ -5473,87 +5756,99 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
           afterToolStep: true,
         },
       )) {
-        let Ie;
-        if (Ee.attachment.type === "queued_command" && Ee.attachment.commandMode !== undefined) {
-          Ie = filtered[qe];
-          qe++;
-          if (Ie !== undefined && !msg(Ie)) {
-            he.add(Ie);
+        let command;
+        if (
+          attachment.attachment.type === "queued_command" &&
+          attachment.attachment.commandMode !== undefined
+        ) {
+          command = commands[filteredIndex];
+          filteredIndex++;
+          if (command !== undefined && !msg(command)) {
+            absorbedCommands.add(command);
             continue;
           }
         }
-        let ct = safeMapOrUndefined(Ee, updatedToolUseContext.options.announcementWalk);
-        if (ct === undefined) continue;
-        yield ct;
-        toolResults.push(ct);
-        if (Ee.attachment.type === "queued_command" && Ee.attachment.commandMode !== undefined) {
-          E++;
-          for (let lt of await applyFoldedPromptSubmit(Ie?.promptSubmitted, updatedToolUseContext)) {
-            yield lt;
-            toolResults.push(lt);
+        let announcement = safeMapOrUndefined(attachment, updatedToolUseContext.options.announcementWalk);
+        if (announcement === undefined) continue;
+        yield announcement;
+        toolResults.push(announcement);
+        if (
+          attachment.attachment.type === "queued_command" &&
+          attachment.attachment.commandMode !== undefined
+        ) {
+          deliveredPromptCount++;
+          for (let message of await applyFoldedPromptSubmit(
+            command?.promptSubmitted,
+            updatedToolUseContext,
+          )) {
+            yield message;
+            toolResults.push(message);
           }
         }
-        if (Ee.attachment.type === "poll_events") j++;
+        if (attachment.attachment.type === "poll_events") deliveredPollEventCount++;
       }
-      let filtered_2 = filtered.filter((Ee) => !he.has(Ee));
-      if (filtered_2.length > 0 && E === 0)
+      let filtered = commands.filter((command) => !absorbedCommands.has(command));
+      if (filtered.length > 0 && deliveredPromptCount === 0)
         logForDebugging(
-          `[query] queued_command attachments degraded to 0 for ${filtered_2.length} consumed command(s) \u2014 leaving them queued instead of dropping them`,
+          `[query] queued_command attachments degraded to 0 for ${filtered.length} consumed command(s) \u2014 leaving them queued instead of dropping them`,
           {
             level: "warn",
           },
         );
       else {
-        if (filtered_2.length > 0 && E < filtered_2.length)
+        if (filtered.length > 0 && deliveredPromptCount < filtered.length)
           logForDebugging(
-            `[query] partial queued_command emission: ${E}/${filtered_2.length} \u2014 removing commands that were not all delivered`,
+            `[query] partial queued_command emission: ${deliveredPromptCount}/${filtered.length} \u2014 removing commands that were not all delivered`,
             {
               level: "error",
             },
           );
-        checkTurnIdsConsistent(filtered_2);
-        if (filtered_2.length > 0)
+        checkTurnIdsConsistent(filtered);
+        if (filtered.length > 0)
           if (
             updatedToolUseContext.abortController.signal.aborted ||
             updatedToolUseContext.messageQueue.isMidTurnFoldSuspended()
           )
             logForDebugging(
-              `[query] abort/suspension during mid-turn absorption \u2014 leaving ${filtered_2.length} command(s) queued`,
+              `[query] abort/suspension during mid-turn absorption \u2014 leaving ${filtered.length} command(s) queued`,
             );
           else {
-            toolUseContext.messageQueue.consume(filtered_2, {
+            toolUseContext.messageQueue.consume(filtered, {
               reason: "absorbed_mid_turn",
             });
-            reportQueuedSubmissions(filtered_2, "mid_turn");
-            markMessagesRead(filtered_2);
-            recordContextKeyFromMessages(filtered_2);
-            getValueFromInput_2(filtered_2, isMainThreadQuery);
-            recordSubmittedPrompts(filtered_2, toolUseContext.storageV5, {
+            reportQueuedSubmissions(filtered, "mid_turn");
+            markMessagesRead(filtered);
+            recordContextKeyFromMessages(filtered);
+            getValueFromInput_2(filtered, isMainThreadQuery);
+            recordSubmittedPrompts(filtered, toolUseContext.storageV5, {
               armUndo: false,
               placed: withExpandedPastes,
             });
             if (
-              da &&
-              filtered_2.some(
-                (Ie) =>
-                  Ie.mode === "prompt" && !Ie.isMeta && Ie.shouldQuery !== false && isHumanOrigin(Ie.origin),
+              isMainThreadFold &&
+              filtered.some(
+                (command) =>
+                  command.mode === "prompt" &&
+                  !command.isMeta &&
+                  command.shouldQuery !== false &&
+                  isHumanOrigin(command.origin),
               )
             ) {
               notifyAutoReactHumanTurn();
               resetGoalIdleCheckinCount(toolUseContext.setAppState, toolUseContext.session.sessionScratch);
             }
-            let Ee = shouldPreemptPromptTooLong(
-              filtered_2,
+            let preempt = shouldPreemptPromptTooLong(
+              filtered,
               updatedToolUseContext.options.mainLoopModel,
               getEffortValue(updatedToolUseContext),
               deps,
             );
-            if (Ee) {
-              updatedToolUseContext = applyContextLayers(updatedToolUseContext, [Ee.layer]);
-              yield Ee.reminder;
-              toolResults.push(Ee.reminder);
+            if (preempt) {
+              updatedToolUseContext = applyContextLayers(updatedToolUseContext, [preempt.layer]);
+              yield preempt.reminder;
+              toolResults.push(preempt.reminder);
             }
-            for (let att of filtered_2)
+            for (let att of filtered)
               if (att.uuid && !wasPutBackSafe(toolUseContext.messageQueue, att.uuid)) {
                 startedCommandUuids.push(att.uuid);
                 yield {
@@ -5566,16 +5861,16 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       }
       let consumedCommands = deliverable.filter(isPollEventMode);
       if (consumedCommands.length > 0)
-        if (j === 0) logPollEventsLeftQueued("mid-turn", consumedCommands.length);
+        if (deliveredPollEventCount === 0) logPollEventsLeftQueued("mid-turn", consumedCommands.length);
         else {
-          let Ee = yield* absorbQueuedPollEvents({
+          let pollEventRows = yield* absorbQueuedPollEvents({
             events: consumedCommands,
             queue: toolUseContext.messageQueue,
             signal: updatedToolUseContext.abortController.signal,
             phase: "mid-turn",
             deliveredPollEventUuids,
           });
-          for (let Ie of Ee) yield markVirtualInResume(Ie);
+          for (let row of pollEventRows) yield markVirtualInResume(row);
         }
     } finally {
       toolUseContext.messageQueue.unregisterFoldInFlight(deliverable);
@@ -5585,7 +5880,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       memoryRecallPrefetch.settledAt !== null &&
       memoryRecallPrefetch.consumedOnIteration === -1
     ) {
-      let E = filterDuplicateMemoryAttachments(
+      let lateMemoryAttachments = filterDuplicateMemoryAttachments(
         memoryRecallPrefetch.screen(await memoryRecallPrefetch.promise, [
           ...messagesForQuery,
           ...assistantMessages,
@@ -5595,7 +5890,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         toolUseContext.session,
         memoryRecallPrefetch.earlierReadsMayBeCleared,
       );
-      for (let cmd of E) {
+      for (let cmd of lateMemoryAttachments) {
         let fileChangeAttachmentCount = createAttachmentMessage_2(cmd, deps);
         yield fileChangeAttachmentCount;
         toolResults.push(fileChangeAttachmentCount);
@@ -5616,12 +5911,12 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       ...updatedToolUseContext,
       queryTracking,
     };
-    if (Ts !== undefined) {
+    if (maxTurnsCap !== undefined) {
       yield createAttachmentMessage_2(
         {
           type: "max_turns_reached",
-          maxTurns: Ts,
-          turnCount: _r,
+          maxTurns: maxTurnsCap,
+          turnCount: nextTurn,
         },
         deps,
       );
@@ -5635,7 +5930,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
       );
       return {
         reason: "max_turns",
-        turnCount: _r,
+        turnCount: nextTurn,
       };
     }
     if (endTurnOverrideMessage) {
@@ -5648,7 +5943,7 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
         ...guards,
         ...INITIAL_LOOP_RECOVERY_STATE,
         mcpEndTurnOverrideSpent: mcpEndTurnOverrideSpent || endTurnOverrideMessage !== undefined,
-        turnCount: _r,
+        turnCount: nextTurn,
       },
       messages: [...messagesForQuery, ...assistantMessages, ...toolResults],
       toolUseContext: toolUseContextWithQueryTracking,
@@ -5662,53 +5957,51 @@ async function* queryLoop(params, startedCommandUuids, deliveredPollEventUuids, 
     return NEXT_ROUND;
   }
   async function* runIterationRecordingErrors() {
-    let k = yield* runIteration();
-    if (k !== NEXT_ROUND) {
-      let { recordProjectsReplyTurnError } = require("./chunk-cshk0jw3.js");
-      recordProjectsReplyTurnError(k, querySource, {
+    let iterationOutcome = yield* runIteration();
+    if (iterationOutcome !== NEXT_ROUND) {
+      let { recordProjectsReplyTurnError } = require("./bridge/projectsReplyGate.js");
+      recordProjectsReplyTurnError(iterationOutcome, querySource, {
         messages: state.messages,
         agentId: state.toolUseContext.agentId,
         engineState: () => state.toolUseContext.getAppState(),
       });
     }
-    return k;
+    return iterationOutcome;
   }
   while (true) {
-    let k = yield* runIterationRecordingErrors();
-    if (k !== NEXT_ROUND) return k;
+    let iterationOutcome = yield* runIterationRecordingErrors();
+    if (iterationOutcome !== NEXT_ROUND) return iterationOutcome;
   }
 }
 //@ chunk-ha3km179.js:234645-235046 sole-consumer
 /**
  * 模型回退的系统提示文案：overloaded/server_error → "due to high demand"；model_not_found/permission_denied/model_blocked → "is not available"（附错误摘要）；last_resort → 不可重试错误。
  */
-function formatModelFallbackMessage(reason, n, r, originalError) {
+function formatModelFallbackMessage(reason, originalModel, fallbackModel, error) {
   switch (reason) {
     case "overloaded":
     case "server_error":
-      return `Switched to ${r} due to high demand for ${n}`;
+      return `Switched to ${fallbackModel} due to high demand for ${originalModel}`;
     case "model_not_found":
     case "permission_denied":
     case "model_blocked": {
-      let h =
-        reason === "model_not_found" && !isModelNotFoundError(originalError)
-          ? formatFallbackErrorDetail(originalError)
-          : "";
-      return `Switched to ${r} because ${n} is not available${h}`;
+      let detail =
+        reason === "model_not_found" && !isModelNotFoundError(error) ? formatFallbackErrorDetail(error) : "";
+      return `Switched to ${fallbackModel} because ${originalModel} is not available${detail}`;
     }
     case "last_resort":
-      return `Switched to ${r} because ${n} returned an error that could not be retried${formatFallbackErrorDetail(originalError)}`;
+      return `Switched to ${fallbackModel} because ${originalModel} returned an error that could not be retried${formatFallbackErrorDetail(error)}`;
   }
 }
 //@ chunk-ha3km179.js:235046-235155 sole-consumer
 /**
  * 把原始错误转成最多 300 字符的 " (…)" 后缀。
  */
-function formatFallbackErrorDetail(e) {
-  let n = e === undefined ? "" : errorMessage(e);
-  let r = truncateToLength(n, 300);
-  let s = r.length < n.length ? `${r}\u2026` : n;
-  return s ? ` (${s})` : "";
+function formatFallbackErrorDetail(error) {
+  let fullMessage = error === undefined ? "" : errorMessage(error);
+  let truncated = truncateToLength(fullMessage, 300);
+  let detail = truncated.length < fullMessage.length ? `${truncated}\u2026` : fullMessage;
+  return detail ? ` (${detail})` : "";
 }
 //@ chunk-ha3km179.js:235155-235573 sole-consumer
 /**
@@ -5733,12 +6026,14 @@ async function applyFoldedPromptSubmit(promptSubmitted, updatedToolUseContext) {
   let filtered = promptSubmitted.messages.filter(
     (message) => message.type === "attachment" || message.type === "user",
   );
-  let s = await capAdditionalContext(
+  let contextItems = await capAdditionalContext(
     promptSubmitted.context ?? [],
     "prompt.submit",
     updatedToolUseContext.storageV5,
   );
-  return s.length > 0 ? [...filtered, createHookContextAttachment(s, "prompt.submit")] : filtered;
+  return contextItems.length > 0
+    ? [...filtered, createHookContextAttachment(contextItems, "prompt.submit")]
+    : filtered;
 }
 //@ chunk-ha3km179.js:235573-235717 sole-consumer = isHumanTurn (0.779)
 /**
@@ -5746,8 +6041,9 @@ async function applyFoldedPromptSubmit(promptSubmitted, updatedToolUseContext) {
  */
 function isHumanTurn(m) {
   for (let j = m.length - 1; j >= 0; j--) {
-    let r = m[j];
-    if (r.type === "user" && !r.isMeta && !r.toolUseResult && !r.isCompactSummary) return j;
+    let message = m[j];
+    if (message.type === "user" && !message.isMeta && !message.toolUseResult && !message.isCompactSummary)
+      return j;
   }
   return 0;
 }
@@ -5769,11 +6065,11 @@ function clearActiveMcpContext(options, isMainOrSubagent) {
  * 生成队列命令过滤器：可折叠命令放行；遇到第一条不可折叠的 prompt 命令后，其后的 prompt 命令都不再折叠进本轮。
  */
 function createFoldCommandFilter(input) {
-  let n = false;
-  return (r) => {
-    if (n && r.mode === "prompt") return false;
-    if (!isCommandFoldable(r, input)) return true;
-    n = true;
+  let sawFoldable = false;
+  return (command) => {
+    if (sawFoldable && command.mode === "prompt") return false;
+    if (!isCommandFoldable(command, input)) return true;
+    sawFoldable = true;
     return false;
   };
 }
@@ -5781,83 +6077,10 @@ function createFoldCommandFilter(input) {
 /**
  * 命令能否折叠进当前轮：drainOnly/screeningPending 恒可；没有 promptSubmitted 不可；否则要求提交时的钩子/插件快照与当前一致（AKn 比较）。
  */
-function isCommandFoldable(e, n) {
-  if (e.drainOnly === true || e.screeningPending === true) return true;
-  if (e.promptSubmitted === undefined) return false;
-  let r = n();
-  return r === undefined || screensChanged(e.promptSubmitted.under, r);
-}
-//@ chunk-4163ksv9.js:263-281 placement
-/**
- * ["take_in"]
- */
-var TAKE_IN_KINDS = ["take_in"];
-//@ chunk-4163ksv9.js:281-306 placement
-/**
- * 访问者登记表
- */
-class VisitorRegistry {
-  visitors = new Map();
-}
-//@ chunk-4163ksv9.js:306-330 placement
-/**
- * 访问者登记槽
- */
-var visitorRegistrySlot = new SessionRootSlot(() => new VisitorRegistry());
-//@ chunk-4163ksv9.js:330-388 placement
-/**
- * 是否仍在等待
- */
-function isPending(o) {
-  try {
-    return o.pending() === true;
-  } catch {
-    return false;
-  }
-}
-//@ chunk-4163ksv9.js:388-473 placement
-/**
- * 是否有未完成的回合访问者
- */
-function hasPendingVisitors(session) {
-  let visitors = visitorRegistrySlot.peek(session)?.visitors;
-  return visitors !== undefined && [...visitors.values()].some(isPending);
-}
-//@ chunk-4163ksv9.js:473-827 placement
-/**
- * 运行注册的回合访问者，可被中止
- */
-async function runTurnVisitors(session, signal) {
-  let visitors = visitorRegistrySlot.peek(session)?.visitors;
-  if (visitors === undefined) return;
-  let p = (async () => {
-    for (let s of TAKE_IN_KINDS) {
-      let i = visitors.get(s);
-      if (i !== undefined && !isAborted(signal) && isPending(i))
-        try {
-          await i.visit(signal);
-        } catch {}
-    }
-  })();
-  if (isAborted(signal)) return;
-  let t = () => {};
-  let promise = new Promise((resolve) => {
-    t = () => resolve();
-  });
-  signal.addEventListener("abort", t, {
-    once: true,
-  });
-  try {
-    await Promise.race([p, promise]);
-  } finally {
-    signal.removeEventListener("abort", t);
-  }
-}
-//@ chunk-32qjrk8h.js:191-216 placement
-/**
- * 恒返回空数组
- */
-function emptyToolResults(events) {
-  return [];
+function isCommandFoldable(command, readScreens) {
+  if (command.drainOnly === true || command.screeningPending === true) return true;
+  if (command.promptSubmitted === undefined) return false;
+  let screens = readScreens();
+  return screens === undefined || screensChanged(command.promptSubmitted.under, screens);
 }
 export { query };

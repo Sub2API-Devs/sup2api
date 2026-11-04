@@ -5,22 +5,22 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_long } from "../../../long/umd/index.js";
 
 //@ chunk-798ashq9.js:24303-24520 cjs-require-graph
-var require_inquire = x(function (cjsExports, cjsModule) {
-  cjsModule.exports = Bi;
-  function Bi(l) {
+var require_inquire = __commonJS(function (cjsExports, cjsModule) {
+  cjsModule.exports = inquire;
+  function inquire(request) {
     try {
       var mod =
-        l === "long"
+        request === "long"
           ? require_long()
-          : l === "buffer"
+          : request === "buffer"
             ? importMetaRequire("buffer")
-            : l === "fs"
+            : request === "fs"
               ? importMetaRequire("fs")
-              : importMetaRequire(l);
+              : importMetaRequire(request);
       if (mod && (mod.length || Object.keys(mod).length)) return mod;
       return null;
     } catch (error) {

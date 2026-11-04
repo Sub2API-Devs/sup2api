@@ -18,49 +18,50 @@ import { postFeedbackSubmission } from "./feedbackBundle.js";
  * SDK 提交满意度反馈（可附带对话，仅 Pro/Max）。
  */
 async function submitSurveyFeedbackForSdk({ request, messages, storageV5, host, credentials }) {
-  let r = SDKSubmitSurveyFeedbackSubmitSurveyFeedbackMessageSchema().safeParse({
+  let parsed = SDKSubmitSurveyFeedbackSubmitSurveyFeedbackMessageSchema().safeParse({
     ...request,
     subtype: "submit_survey_feedback",
   });
-  if (!r.success)
+  if (!parsed.success)
     return {
       feedback_id: null,
       unavailable_reason: "Malformed request.",
     };
-  let s = r.data;
-  let a =
+  let parsedRequest = parsed.data;
+  let unavailableReason =
     feedbackUnavailableReason() ??
     (isConsumerSubscriber()
       ? null
       : "Only Pro and Max plans can send the conversation with a rating. Nothing was sent.");
-  if (a)
+  if (unavailableReason)
     return {
       feedback_id: null,
-      unavailable_reason: a,
+      unavailable_reason: unavailableReason,
     };
-  let e = await postFeedbackSubmission({
+  let result = await postFeedbackSubmission({
     messages,
-    description: s.description,
-    surface: s.surface ?? "sdk",
+    description: parsedRequest.description,
+    surface: parsedRequest.surface ?? "sdk",
     surveyFeedbackSource: {
-      appearanceId: s.appearance_id,
-      response: s.survey_response,
-      surveyType: s.survey_type,
+      appearanceId: parsedRequest.appearance_id,
+      response: parsedRequest.survey_response,
+      surveyType: parsedRequest.survey_type,
       setAt: Date.now(),
     },
     storageV5,
     host,
     credentials,
   });
-  return e.success
+  return result.success
     ? {
-        feedback_id: e.feedbackId,
+        feedback_id: result.feedbackId,
       }
     : {
         feedback_id: null,
-        is_zdr_org: e.isZdrOrg,
-        failure_reason: e.failureReason,
-        status_code: e.statusCode,
-        unavailable_reason: orgFeedbackRefusalMessage(e),
+        is_zdr_org: result.isZdrOrg,
+        failure_reason: result.failureReason,
+        status_code: result.statusCode,
+        unavailable_reason: orgFeedbackRefusalMessage(result),
       };
 }
+export { submitSurveyFeedbackForSdk };

@@ -78,8 +78,8 @@ function getSessionIngressAuthHeaders() {
   return configureApiKeyHeaders(token);
 }
 //@ chunk-vv0zxx69.js:1249-1312 placement = getSessionIngressAuthToken (1)
-function getSessionIngressAuthToken_2(e) {
-  process.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN = e;
+function getSessionIngressAuthToken_2(token) {
+  process.env.CLAUDE_CODE_SESSION_ACCESS_TOKEN = token;
 }
 export {
   hasSessionIngressAuthToken,

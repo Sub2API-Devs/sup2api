@@ -14,10 +14,7 @@ import { isDiskless } from "../../bootstrap/state.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { applyRemoteEntriesToLocal } from "../settingsSync/index.js";
 import { normalizePathForCompare } from "../../utils/file.js";
-import {
-  isInstructionsMemoryType_3,
-  MAX_INCLUDE_DEPTH as MAX_INCLUDE_DEPTH_2,
-} from "../../utils/claudemd.js";
+import { isInstructionsMemoryType_3, MAX_INCLUDE_DEPTH } from "../../utils/claudemd.js";
 import { hasBackslash, isUncOrDevicePath } from "../../utils/pathClassification.js";
 import {
   safeResolvePath,
@@ -86,57 +83,57 @@ import { FRONTMATTER_REGEX } from "../../utils/frontmatterParser.js";
  * 是否继续解析 include 的深度上限标记（true）。
  */
 var MAX_INCLUDE_READS = 4096;
-var MAX_INCLUDE_DEPTH = true;
+var INCLUDE_EXTERNAL = true;
 //@ chunk-axmbhcjg.js:7933-8417 placement
 /**
  * 从配置目录出发收集用户记忆文件及其 @include 链（按类型+路径去重，读取次数超上限返回 null）；无磁盘会话直接返回 null。
  */
-async function collectMemoryIncludeTree(configHome, signal) {
+async function collectMemoryIncludeTree(configDir, signal) {
   if (isDiskless()) {
     logForDebugging("home inventory: memory files not read in a diskless session; nothing is sent");
     return null;
   }
-  let r = {
+  let budget = {
     reads: 0,
   };
-  let o = await applyRemoteEntriesToLocal(configHome, r, signal);
-  if (o === null) return null;
-  let i = new Map();
-  for (let s = o.pop(); s !== undefined; s = o.pop()) {
-    let u = `${s.type}\x00${normalizePathForCompare(s.path)}`;
-    if (i.has(u)) continue;
+  let pending = await applyRemoteEntriesToLocal(configDir, budget, signal);
+  if (pending === null) return null;
+  let seen = new Map();
+  for (let entry = pending.pop(); entry !== undefined; entry = pending.pop()) {
+    let key = `${entry.type}\x00${normalizePathForCompare(entry.path)}`;
+    if (seen.has(key)) continue;
     if (signal?.aborted) return null;
-    i.set(u, s);
-    let d = await isInstructionsMemoryType_3(
-      s.path,
-      s.type,
+    seen.set(key, entry);
+    let included = await isInstructionsMemoryType_3(
+      entry.path,
+      entry.type,
       new Set(),
-      MAX_INCLUDE_DEPTH,
-      MAX_INCLUDE_DEPTH_2 - 2,
+      INCLUDE_EXTERNAL,
+      MAX_INCLUDE_DEPTH - 2,
     );
-    r.reads += d.length;
-    if (r.reads > MAX_INCLUDE_READS) return null;
-    o.push(...d.filter((f) => f.path !== s.path));
+    budget.reads += included.length;
+    if (budget.reads > MAX_INCLUDE_READS) return null;
+    pending.push(...included.filter((includedEntry) => includedEntry.path !== entry.path));
   }
-  return [...i.values()];
+  return [...seen.values()];
 }
 //@ chunk-axmbhcjg.js:9323-9427 placement
-async function realpathStrict(e) {
-  if (hasBackslash(e)) throw Error("realpath would misread a backslash in the path");
-  return realpath(e);
+async function realpathStrict(path) {
+  if (hasBackslash(path)) throw Error("realpath would misread a backslash in the path");
+  return realpath(path);
 }
 //@ chunk-axmbhcjg.js:9427-9511 placement
 /**
  * 解析路径的规范形式（符号链接或安全解析）。
  */
-function resolvePathInfo(e) {
-  return hasBackslash(e)
+function resolvePathInfo(path) {
+  return hasBackslash(path)
     ? {
-        resolvedPath: e,
+        resolvedPath: path,
         isSymlink: false,
         isCanonical: false,
       }
-    : safeResolvePath(getFsImplementation(), e);
+    : safeResolvePath(getFsImplementation(), path);
 }
 //@ chunk-axmbhcjg.js:9511-9523 placement
 /**
@@ -144,29 +141,32 @@ function resolvePathInfo(e) {
  */
 var MAX_ALIAS_DIRECTORIES = 4096;
 //@ chunk-axmbhcjg.js:9523-9765 placement
-async function locateInConfigHome(e, n, r, o) {
-  let i;
+async function locateInConfigHome(walkState, nativePath, lexicalRel, rawLexicalRel) {
+  let realPath;
   try {
-    i = await realpathStrict(n);
+    realPath = await realpathStrict(nativePath);
   } catch {
     return "unresolvable";
   }
-  let s = relative(e.realConfigHome, i);
-  if (s === "" || isParentOrAbsolute(s)) return "outside";
-  let posixNfcPath = toPosixNfcPath(s, sep);
+  let nativeRel = relative(walkState.realConfigHome, realPath);
+  if (nativeRel === "" || isParentOrAbsolute(nativeRel)) return "outside";
+  let posixNfcPath = toPosixNfcPath(nativeRel, sep);
   return {
-    realPath: i,
-    nativeRel: s,
+    realPath,
+    nativeRel,
     rel: posixNfcPath,
-    lexicalRel: r ?? posixNfcPath,
-    rawRels: uniq([toPosixSeparators(s), ...(o === null ? [] : [o])]),
+    lexicalRel: lexicalRel ?? posixNfcPath,
+    rawRels: uniq([toPosixSeparators(nativeRel), ...(rawLexicalRel === null ? [] : [rawLexicalRel])]),
   };
 }
 //@ chunk-axmbhcjg.js:9765-9867 placement
-async function isOutsideOrUnresolvable(e, n) {
+async function isOutsideOrUnresolvable(filePath, target) {
   try {
-    let r = await realpathStrict(n);
-    return isOutsideConfigHome(e, r) || !isParentOrAbsolute(relative(e.realConfigHome, r));
+    let resolved = await realpathStrict(target);
+    return (
+      isOutsideConfigHome(filePath, resolved) ||
+      !isParentOrAbsolute(relative(filePath.realConfigHome, resolved))
+    );
   } catch {
     return true;
   }
@@ -175,50 +175,50 @@ async function isOutsideOrUnresolvable(e, n) {
 /**
  * 判断相对路径是否落在配置主目录之外。
  */
-function isOutsideConfigHome(e, n) {
-  return !isParentOrAbsolute(relative(n, e.realConfigHome));
+function isOutsideConfigHome(entry, configHome) {
+  return !isParentOrAbsolute(relative(configHome, entry.realConfigHome));
 }
 //@ chunk-axmbhcjg.js:9916-9969 placement
 /**
  * 把路径分隔符统一成 /。
  */
-function toPosixSeparators(e) {
-  return sep === "/" ? e : e.split(sep).join("/");
+function toPosixSeparators(path) {
+  return sep === "/" ? path : path.split(sep).join("/");
 }
 //@ chunk-axmbhcjg.js:9969-10113 placement
-function relativeToConfigHome(e, n) {
-  let found = [e.configHome, e.realConfigHome]
-    .map((o) => relative(o, n))
-    .find((o) => o !== "" && !isParentOrAbsolute(o));
-  return found === undefined
+function relativeToConfigHome(walkState, nativePath) {
+  let path = [walkState.configHome, walkState.realConfigHome]
+    .map((base) => relative(base, nativePath))
+    .find((candidate) => candidate !== "" && !isParentOrAbsolute(candidate));
+  return path === undefined
     ? null
     : {
-        rel: toPosixNfcPath(found, sep),
-        raw: toPosixSeparators(found),
+        rel: toPosixNfcPath(path, sep),
+        raw: toPosixSeparators(path),
       };
 }
 //@ chunk-axmbhcjg.js:10113-10286 placement
-function isSyncableMarkdownPath(e) {
-  let n = foldName(firstLineOf(e, "/"));
+function isSyncableMarkdownPath(path) {
+  let firstSegment = foldName(firstLineOf(path, "/"));
   return (
-    isWellFormedString(e) &&
-    e.includes("/") &&
-    extname(e).toLowerCase() === MD_EXTENSION &&
-    !shouldIgnore(e) &&
-    !TRAILING_TILDE_NUMBER_RE.test(e) &&
-    !DIR_SYNC_EXCLUDED_DIRS.has(n) &&
-    !n.startsWith("agent-memory") &&
-    !getThinkbackSkillDir(e) &&
-    !isRulesOrOutputStylePath(e)
+    isWellFormedString(path) &&
+    path.includes("/") &&
+    extname(path).toLowerCase() === MD_EXTENSION &&
+    !shouldIgnore(path) &&
+    !TRAILING_TILDE_NUMBER_RE.test(path) &&
+    !DIR_SYNC_EXCLUDED_DIRS.has(firstSegment) &&
+    !firstSegment.startsWith("agent-memory") &&
+    !getThinkbackSkillDir(path) &&
+    !isRulesOrOutputStylePath(path)
   );
 }
 //@ chunk-axmbhcjg.js:10286-10353 placement
 /**
  * 判断相对路径首段是否为 rules 或 output-styles。
  */
-function isRulesOrOutputStylePath(e) {
-  let n = foldName(firstLineOf(e, "/"));
-  return n === foldName(RULES) || n === foldName(OUTPUT_STYLES);
+function isRulesOrOutputStylePath(path) {
+  let firstSegment = foldName(firstLineOf(path, "/"));
+  return firstSegment === foldName(RULES) || firstSegment === foldName(OUTPUT_STYLES);
 }
 //@ chunk-axmbhcjg.js:10434-10453 placement
 /**
@@ -230,10 +230,10 @@ var MAX_SYMLINK_HOPS = 32;
 /**
  * 沿符号链接链逐跳检查（有跳数上限）：遇到循环返回 false；链接文本非 UTF-8、先进入目录再向上越级、或指向不可触碰的拼写时视为有风险。
  */
-async function isRiskyLinkChain(e) {
-  let current = e;
+async function isRiskyLinkChain(start) {
+  let current = start;
   let visited = new Set();
-  for (let o = 0; o < MAX_SYMLINK_HOPS; o += 1) {
+  for (let hop = 0; hop < MAX_SYMLINK_HOPS; hop += 1) {
     if (visited.has(current)) return false;
     visited.add(current);
     let linkBody;
@@ -289,15 +289,15 @@ function isMissingPathError(error) {
  * 判断符号链接文本里是否有超过 255 字符的段。
  */
 function hasOverlongSegment(linkBody) {
-  return linkBody.split(/[\\/]/).some((n) => [...n].length > 255);
+  return linkBody.split(/[\\/]/).some((segment) => [...segment].length > 255);
 }
 //@ chunk-axmbhcjg.js:11221-11290 placement
 /**
  * 路径缺失或不可读（stat 失败且错误可忽略）。
  */
-async function missingOrUnreadable(e) {
+async function missingOrUnreadable(path) {
   try {
-    await stat(e);
+    await stat(path);
     return false;
   } catch (error) {
     return isMissingPathError(error);
@@ -316,11 +316,11 @@ async function isNonDirectoryOrMissing(dir) {
 }
 //@ chunk-axmbhcjg.js:11372-11486 placement
 function linkClimbsAfterEntering(linkBody) {
-  let n = false;
-  for (let r of linkBody.split(PATH_SEPARATOR_RE))
-    if (r === "..") {
-      if (n) return true;
-    } else if (r !== "" && r !== ".") n = true;
+  let entered = false;
+  for (let segment of linkBody.split(PATH_SEPARATOR_RE))
+    if (segment === "..") {
+      if (entered) return true;
+    } else if (segment !== "" && segment !== ".") entered = true;
   return false;
 }
 //@ chunk-axmbhcjg.js:11486-11518 placement
@@ -411,9 +411,9 @@ async function buildHomeInventory({
           ok: false,
           reason: "too_many_links",
         };
-      for (let T of memoryIncludeTree) {
+      for (let includeTree of memoryIncludeTree) {
         if (isAborted(signal)) return ABORTED_INVENTORY_RESULT;
-        await attributeAtReferences(walkState, pathFilter, T, sensitiveByPath);
+        await attributeAtReferences(walkState, pathFilter, includeTree, sensitiveByPath);
       }
     }
     let memoryLeftBehind = await collectMemoryCandidates(
@@ -451,23 +451,23 @@ async function buildHomeInventory({
     let held = [...heldCandidates.held.values()];
     let failedReal = new Set();
     let resultByCandidate = new Map();
-    for (let v of [
-      ...held.filter((T) => T.kind === "output_style"),
-      ...held.filter((T) => T.kind !== "output_style"),
+    for (let candidate of [
+      ...held.filter((candidate) => candidate.kind === "output_style"),
+      ...held.filter((candidate) => candidate.kind !== "output_style"),
     ]) {
       if (isAborted(signal)) return ABORTED_INVENTORY_RESULT;
       let inventoryEntry = await buildInventoryEntry(
         walkState,
         pathFilter,
-        v,
+        candidate,
         sensitiveByPath,
         failedReal,
         seenReal,
       );
-      if (inventoryEntry.entry === null) failedReal.add(v.location.realPath);
-      resultByCandidate.set(v, inventoryEntry);
+      if (inventoryEntry.entry === null) failedReal.add(candidate.location.realPath);
+      resultByCandidate.set(candidate, inventoryEntry);
     }
-    let flattened = held.flatMap((v) => resultByCandidate.get(v) ?? []);
+    let flattened = held.flatMap((candidate) => resultByCandidate.get(candidate) ?? []);
     let { kept, droppedOverCap } = capInventoryEntries(
       flattened
         .flatMap(({ entry, foldedIncludes }) =>
@@ -481,18 +481,18 @@ async function buildHomeInventory({
                 },
               ],
         )
-        .toSorted((v, T) => compareInventoryEntries(v.entry, T.entry)),
+        .toSorted((left, right) => compareInventoryEntries(left.entry, right.entry)),
     );
     let mapped = [...refusedByPath]
-      .filter(([v]) => !attributed.has(v) && !seenReal.has(v))
-      .map(([v, T]) => sensitiveByPath.get(v) ?? T);
+      .filter(([path]) => !attributed.has(path) && !seenReal.has(path))
+      .map(([path, leftBehindEntry]) => sensitiveByPath.get(path) ?? leftBehindEntry);
     let leftBehind = [
       ...memoryFiles.leftBehind,
       ...memoryLeftBehind,
       ...mapped,
       ...styleFiles.leftBehind,
       ...styleLeftBehind,
-      ...flattened.flatMap((v) => v.leftBehind),
+      ...flattened.flatMap((result) => result.leftBehind),
       ...droppedOverCap.flatMap(({ entry, foldedIncludes }) => [
         {
           path: entry.path,
@@ -504,12 +504,12 @@ async function buildHomeInventory({
         })),
       ]),
     ];
-    let mapped_2 = kept.map(({ entry }) => entry);
+    let leftBehind_2 = kept.map(({ entry }) => entry);
     return {
       ok: true,
       inventory: {
-        entries: mapped_2,
-        summary: summarizeInventory(mapped_2, leftBehind),
+        entries: leftBehind_2,
+        summary: summarizeInventory(leftBehind_2, leftBehind),
         leftBehind,
       },
     };
@@ -542,27 +542,27 @@ function emptyInventory({ rulesUnreadable }) {
 /**
  * 汇总清点结果：各类未发送原因的计数（敏感、拒读、include 未发送、符号链接、非目的地、不可读、超限、无法去引用）以及内联与去引用的 import 数。
  */
-function summarizeInventory(e, leftBehind) {
+function summarizeInventory(leftBehind, leftBehind_2) {
   return {
-    withheldSensitive: countByReason(leftBehind, "sensitive"),
-    withheldReadDenied: countByReason(leftBehind, "read_denied"),
+    withheldSensitive: countByReason(leftBehind_2, "sensitive"),
+    withheldReadDenied: countByReason(leftBehind_2, "read_denied"),
     rulesUnreadable: false,
-    includesNotSent: countByReason(leftBehind, "include_not_sent"),
-    symlinksNotSent: countByReason(leftBehind, "symlink_not_sent"),
-    notDestinations: countByReason(leftBehind, "not_destination"),
-    unreadable: countByReason(leftBehind, "unreadable"),
-    overCap: countByReason(leftBehind, "over_cap"),
-    undefusable: countByReason(leftBehind, "undefusable"),
-    inlinedImports: e.reduce((acc, o) => acc + o.folded.length, 0),
-    defusedImports: e.reduce((acc, o) => acc + o.defused, 0),
+    includesNotSent: countByReason(leftBehind_2, "include_not_sent"),
+    symlinksNotSent: countByReason(leftBehind_2, "symlink_not_sent"),
+    notDestinations: countByReason(leftBehind_2, "not_destination"),
+    unreadable: countByReason(leftBehind_2, "unreadable"),
+    overCap: countByReason(leftBehind_2, "over_cap"),
+    undefusable: countByReason(leftBehind_2, "undefusable"),
+    inlinedImports: leftBehind.reduce((acc, reason) => acc + reason.folded.length, 0),
+    defusedImports: leftBehind.reduce((acc, reason) => acc + reason.defused, 0),
   };
 }
 //@ chunk-axmbhcjg.js:14145-14191 placement
 /**
  * 按未发送原因统计条目数。
  */
-function countByReason(e, n) {
-  return count(e, (r) => r.reason === n);
+function countByReason(items, target) {
+  return count(items, (item) => item.reason === target);
 }
 //@ chunk-axmbhcjg.js:14191-14234 placement
 /**
@@ -586,61 +586,61 @@ function compareInventoryEntries(entry, entry_2) {
  * 列出 CLAUDE.md 与 rules 目录下的记忆文件；CLAUDE.md 是指向非文件的符号链接时记为 symlink_not_sent，指向目录且在配置目录内时放弃。
  */
 async function listMemoryFiles(walkState) {
-  let n = join(walkState.configHome, CLAUDE_MD);
-  let r = await lstatOrGiveUp(walkState, n);
-  let o = await listDirFiles(walkState, RULES);
-  if (r === null) return o;
-  let i = r.isSymlink ? await statFollowingSafeLinks(walkState, n) : undefined;
-  if (i?.isDirectory() === true && (await isOutsideOrUnresolvable(walkState, n)))
+  let claudeMdPath = join(walkState.configHome, CLAUDE_MD);
+  let stats = await lstatOrGiveUp(walkState, claudeMdPath);
+  let ruleFiles = await listDirFiles(walkState, RULES);
+  if (stats === null) return ruleFiles;
+  let targetStats = stats.isSymlink ? await statFollowingSafeLinks(walkState, claudeMdPath) : undefined;
+  if (targetStats?.isDirectory() === true && (await isOutsideOrUnresolvable(walkState, claudeMdPath)))
     walkState.giveUp ??= "alias_unreadable";
-  if (i === null || (i !== undefined && !i.isFile()))
+  if (targetStats === null || (targetStats !== undefined && !targetStats.isFile()))
     return {
-      files: o.files,
+      files: ruleFiles.files,
       leftBehind: [
         {
           path: CLAUDE_MD,
           reason: "symlink_not_sent",
         },
-        ...o.leftBehind,
+        ...ruleFiles.leftBehind,
       ],
     };
   return {
     files: [
       {
-        path: n,
+        path: claudeMdPath,
         lexicalRel: CLAUDE_MD,
         rawLexicalRel: CLAUDE_MD,
-        viaSymlink: r.isSymlink,
+        viaSymlink: stats.isSymlink,
         aliasOnly: false,
       },
-      ...o.files,
+      ...ruleFiles.files,
     ],
-    leftBehind: o.leftBehind,
+    leftBehind: ruleFiles.leftBehind,
   };
 }
 //@ chunk-axmbhcjg.js:14819-15184 placement
 /**
  * 列出配置目录下某子目录（rules、output-styles）的文件；子目录是符号链接且不指向目录时只按别名处理。
  */
-async function listDirFiles(walkState, n) {
-  let dir = join(walkState.configHome, n);
-  let o = await lstatOrGiveUp(walkState, dir);
-  if (o === null)
+async function listDirFiles(walkState, relPath) {
+  let dirPath = join(walkState.configHome, relPath);
+  let dirPath_2 = await lstatOrGiveUp(walkState, dirPath);
+  if (dirPath_2 === null)
     return {
       files: [],
       leftBehind: [],
     };
-  if (o.isSymlink) {
-    let i = await statFollowingSafeLinks(walkState, dir);
-    if (i === null || !i.isDirectory())
+  if (dirPath_2.isSymlink) {
+    let dirStat = await statFollowingSafeLinks(walkState, dirPath);
+    if (dirStat === null || !dirStat.isDirectory())
       return {
         files:
-          i !== null && i.isFile()
+          dirStat !== null && dirStat.isFile()
             ? [
                 {
-                  path: dir,
-                  lexicalRel: n,
-                  rawLexicalRel: n,
+                  path: dirPath,
+                  lexicalRel: relPath,
+                  rawLexicalRel: relPath,
                   viaSymlink: true,
                   aliasOnly: true,
                 },
@@ -648,13 +648,13 @@ async function listDirFiles(walkState, n) {
             : [],
         leftBehind: [
           {
-            path: n,
+            path: relPath,
             reason: "symlink_not_sent",
           },
         ],
       };
   }
-  return walkMarkdownDir(walkState, dir, [n], o.isSymlink, new Set());
+  return walkMarkdownDir(walkState, dirPath, [relPath], dirPath_2.isSymlink, new Set());
 }
 //@ chunk-axmbhcjg.js:15184-15686 placement
 /**
@@ -697,19 +697,23 @@ async function listTopLevelLinks(ctx) {
   return aliases;
 }
 //@ chunk-axmbhcjg.js:15686-15826 placement
-function getAliasSpellings(e, n) {
-  return e.topLevelLinks.flatMap(({ name: r, targetRel }) =>
-    n === targetRel ? [r] : n.startsWith(`${targetRel}/`) ? [`${r}/${n.slice(targetRel.length + 1)}`] : [],
+function getAliasSpellings(walkState, channel) {
+  return walkState.topLevelLinks.flatMap(({ name: link, targetRel }) =>
+    channel === targetRel
+      ? [link]
+      : channel.startsWith(`${targetRel}/`)
+        ? [`${link}/${channel.slice(targetRel.length + 1)}`]
+        : [],
   );
 }
 //@ chunk-axmbhcjg.js:15826-15963 placement
-async function lstatOrGiveUp(e, n) {
+async function lstatOrGiveUp(walkState, path) {
   try {
     return {
-      isSymlink: (await lstat(n)).isSymbolicLink(),
+      isSymlink: (await lstat(path)).isSymbolicLink(),
     };
   } catch (error) {
-    if (!isMissingPathError(error)) e.giveUp ??= "alias_unreadable";
+    if (!isMissingPathError(error)) walkState.giveUp ??= "alias_unreadable";
     return null;
   }
 }
@@ -719,7 +723,7 @@ async function lstatOrGiveUp(e, n) {
  */
 async function walkMarkdownDir(walkState, dir, segments, viaSymlink, visitedReal) {
   let path = segments.join("/").normalize("NFC");
-  let u = {
+  let symlinkLeftBehind = {
     files: [],
     leftBehind: [
       {
@@ -728,30 +732,30 @@ async function walkMarkdownDir(walkState, dir, segments, viaSymlink, visitedReal
       },
     ],
   };
-  let d;
+  let dirents;
   try {
-    let p = await realpathStrict(dir);
-    if (visitedReal.has(p))
+    let realDir = await realpathStrict(dir);
+    if (visitedReal.has(realDir))
       return {
-        files: await walkAliasOnlyDir(walkState, dir, segments, new Set([p])),
+        files: await walkAliasOnlyDir(walkState, dir, segments, new Set([realDir])),
         leftBehind: [],
       };
-    let y = relative(walkState.realConfigHome, p);
-    if (isOutsideConfigHome(walkState, p)) {
+    let nativeRel = relative(walkState.realConfigHome, realDir);
+    if (isOutsideConfigHome(walkState, realDir)) {
       walkState.giveUp ??= "alias_unreadable";
-      return u;
+      return symlinkLeftBehind;
     }
-    if (isParentOrAbsolute(y)) return u;
-    let S = `${toPosixNfcPath(y, sep)}/x.md`;
-    if (viaSymlink && classifyWorkingFile(S) === null)
+    if (isParentOrAbsolute(nativeRel)) return symlinkLeftBehind;
+    let probePath = `${toPosixNfcPath(nativeRel, sep)}/x.md`;
+    if (viaSymlink && classifyWorkingFile(probePath) === null)
       return {
-        files: isSyncableMarkdownPath(S)
-          ? await walkAliasOnlyDir(walkState, dir, segments, new Set([p]))
+        files: isSyncableMarkdownPath(probePath)
+          ? await walkAliasOnlyDir(walkState, dir, segments, new Set([realDir]))
           : [],
-        leftBehind: u.leftBehind,
+        leftBehind: symlinkLeftBehind.leftBehind,
       };
-    visitedReal.add(p);
-    d = await readdir(dir, {
+    visitedReal.add(realDir);
+    dirents = await readdir(dir, {
       withFileTypes: true,
     });
   } catch (error) {
@@ -764,32 +768,41 @@ async function walkMarkdownDir(walkState, dir, segments, viaSymlink, visitedReal
   }
   let files = [];
   let leftBehind = [];
-  for (let p of d.toSorted(compareByName)) {
-    let dir_2 = join(dir, p.name);
-    let joined = [...segments, p.name].join("/");
+  for (let dirent of dirents.toSorted(compareByName)) {
+    let childPath = join(dir, dirent.name);
+    let joined = [...segments, dirent.name].join("/");
     let normalized = joined.normalize("NFC");
-    let direntType = await resolveDirentType(walkState, dir_2, p);
+    let direntType = await resolveDirentType(walkState, childPath, dirent);
     if (direntType === null) continue;
-    let E = direntType.isSymbolicLink();
-    let x = p.name.endsWith(MD_EXTENSION);
-    let I = E ? await statFollowingSafeLinks(walkState, dir_2) : direntType;
-    if (I === null) {
-      if (extname(p.name).toLowerCase() === MD_EXTENSION)
+    let isLink = direntType.isSymbolicLink();
+    let isMarkdown = dirent.name.endsWith(MD_EXTENSION);
+    let targetStats = isLink ? await statFollowingSafeLinks(walkState, childPath) : direntType;
+    if (targetStats === null) {
+      if (extname(dirent.name).toLowerCase() === MD_EXTENSION)
         leftBehind.push({
           path: normalized,
           reason: "symlink_not_sent",
         });
-    } else if (I.isDirectory()) {
-      let h = await walkMarkdownDir(walkState, dir_2, [...segments, p.name], viaSymlink || E, visitedReal);
-      files.push(...h.files);
-      leftBehind.push(...h.leftBehind);
-    } else if (I.isFile() && (x || E || (viaSymlink && extname(p.name).toLowerCase() === MD_EXTENSION)))
+    } else if (targetStats.isDirectory()) {
+      let childResult = await walkMarkdownDir(
+        walkState,
+        childPath,
+        [...segments, dirent.name],
+        viaSymlink || isLink,
+        visitedReal,
+      );
+      files.push(...childResult.files);
+      leftBehind.push(...childResult.leftBehind);
+    } else if (
+      targetStats.isFile() &&
+      (isMarkdown || isLink || (viaSymlink && extname(dirent.name).toLowerCase() === MD_EXTENSION))
+    )
       files.push({
-        path: dir_2,
+        path: childPath,
         lexicalRel: normalized,
         rawLexicalRel: joined,
-        viaSymlink: viaSymlink || E,
-        aliasOnly: !x,
+        viaSymlink: viaSymlink || isLink,
+        aliasOnly: !isMarkdown,
       });
   }
   return {
@@ -802,9 +815,9 @@ async function walkMarkdownDir(walkState, dir, segments, viaSymlink, visitedReal
  * 遍历只作为别名出现的目录，收集其中的 .md 与符号链接文件（标记 aliasOnly），子目录按别名预算继续。
  */
 async function walkAliasOnlyDir(walkState, dir, segments, visited) {
-  let i;
+  let dirents;
   try {
-    i = await readdir(dir, {
+    dirents = await readdir(dir, {
       withFileTypes: true,
     });
   } catch {
@@ -812,26 +825,31 @@ async function walkAliasOnlyDir(walkState, dir, segments, visited) {
     return [];
   }
   let files = [];
-  for (let u of i.toSorted(compareByName)) {
-    let dir_2 = join(dir, u.name);
-    let joined = [...segments, u.name].join("/");
-    let direntType = await resolveDirentType(walkState, dir_2, u);
+  for (let dirent of dirents.toSorted(compareByName)) {
+    let childPath = join(dir, dirent.name);
+    let joined = [...segments, dirent.name].join("/");
+    let direntType = await resolveDirentType(walkState, childPath, dirent);
     if (direntType === null) continue;
-    let p = direntType.isSymbolicLink();
-    let y = p ? await statFollowingSafeLinks(walkState, dir_2) : direntType;
-    if (y === null) continue;
-    if (y.isDirectory()) {
-      let S = await claimAliasDir(walkState, dir_2, visited);
-      if (S !== null)
+    let isLink = direntType.isSymbolicLink();
+    let targetStats = isLink ? await statFollowingSafeLinks(walkState, childPath) : direntType;
+    if (targetStats === null) continue;
+    if (targetStats.isDirectory()) {
+      let claimed = await claimAliasDir(walkState, childPath, visited);
+      if (claimed !== null)
         files.push(
-          ...(await walkAliasOnlyDir(walkState, dir_2, [...segments, u.name], new Set([...visited, S]))),
+          ...(await walkAliasOnlyDir(
+            walkState,
+            childPath,
+            [...segments, dirent.name],
+            new Set([...visited, claimed]),
+          )),
         );
-    } else if (y.isFile() && (p || extname(u.name).toLowerCase() === MD_EXTENSION))
+    } else if (targetStats.isFile() && (isLink || extname(dirent.name).toLowerCase() === MD_EXTENSION))
       files.push({
-        path: dir_2,
+        path: childPath,
         lexicalRel: joined.normalize("NFC"),
         rawLexicalRel: joined,
-        viaSymlink: p,
+        viaSymlink: isLink,
         aliasOnly: true,
       });
   }
@@ -841,62 +859,62 @@ async function walkAliasOnlyDir(walkState, dir, segments, visited) {
 /**
  * 尝试认领一个别名（符号链接）目录：读不出、越界或已见过时放弃，不是可同步的工作文件时跳过，受别名预算限制。
  */
-async function claimAliasDir(walkState, n, visited) {
-  let o;
+async function claimAliasDir(walkState, dir, visited) {
+  let realDir;
   try {
-    o = await realpathStrict(n);
+    realDir = await realpathStrict(dir);
   } catch {
     walkState.giveUp ??= "alias_unreadable";
     return null;
   }
-  let i = relative(walkState.realConfigHome, o);
-  if (isOutsideConfigHome(walkState, o)) {
+  let nativeRel = relative(walkState.realConfigHome, realDir);
+  if (isOutsideConfigHome(walkState, realDir)) {
     walkState.giveUp ??= "alias_unreadable";
     return null;
   }
-  if (visited.has(o) || isParentOrAbsolute(i)) return null;
-  let s = `${toPosixNfcPath(i, sep)}/x.md`;
-  if (classifyWorkingFile(s) === null && !isSyncableMarkdownPath(s)) return null;
+  if (visited.has(realDir) || isParentOrAbsolute(nativeRel)) return null;
+  let probePath = `${toPosixNfcPath(nativeRel, sep)}/x.md`;
+  if (classifyWorkingFile(probePath) === null && !isSyncableMarkdownPath(probePath)) return null;
   if (walkState.aliasBudget.left <= 0) {
     walkState.giveUp ??= "too_many_links";
     return null;
   }
   walkState.aliasBudget.left -= 1;
-  return o;
+  return realDir;
 }
 //@ chunk-axmbhcjg.js:18043-18280 placement
-async function resolveDirentType(e, n, r) {
+async function resolveDirentType(walkState, relPath, dirent) {
   if (
-    r.isSymbolicLink() ||
-    r.isFile() ||
-    r.isDirectory() ||
-    r.isFIFO() ||
-    r.isSocket() ||
-    r.isCharacterDevice() ||
-    r.isBlockDevice()
+    dirent.isSymbolicLink() ||
+    dirent.isFile() ||
+    dirent.isDirectory() ||
+    dirent.isFIFO() ||
+    dirent.isSocket() ||
+    dirent.isCharacterDevice() ||
+    dirent.isBlockDevice()
   )
-    return r;
+    return dirent;
   try {
-    return await lstat(n);
+    return await lstat(relPath);
   } catch (error) {
-    if (!isMissingPathError(error)) e.giveUp ??= "alias_unreadable";
+    if (!isMissingPathError(error)) walkState.giveUp ??= "alias_unreadable";
     return null;
   }
 }
 //@ chunk-axmbhcjg.js:18280-18476 placement
-async function statFollowingSafeLinks(e, n) {
-  let r;
+async function statFollowingSafeLinks(walkState, filePath) {
+  let risky;
   try {
-    r = await isRiskyLinkChain(n);
+    risky = await isRiskyLinkChain(filePath);
   } catch {
-    e.giveUp ??= "alias_unreadable";
+    walkState.giveUp ??= "alias_unreadable";
     return null;
   }
-  if (r) return null;
+  if (risky) return null;
   try {
-    return await stat(n);
+    return await stat(filePath);
   } catch (error) {
-    if (!isMissingPathError(error)) e.giveUp ??= "alias_unreadable";
+    if (!isMissingPathError(error)) walkState.giveUp ??= "alias_unreadable";
     return null;
   }
 }
@@ -904,57 +922,60 @@ async function statFollowingSafeLinks(e, n) {
 /**
  * 按名字排序的比较函数。
  */
-function compareByName(e, n) {
-  return e.name < n.name ? -1 : e.name > n.name ? 1 : 0;
+function compareByName(left, right) {
+  return left.name < right.name ? -1 : left.name > right.name ? 1 : 0;
 }
 //@ chunk-axmbhcjg.js:18535-18587 placement
 /**
  * 在已见位置表里登记（已有记录时不覆盖）。
  */
-function rememberLocation(e, realPath, r) {
-  if (r !== null || !e.has(realPath)) e.set(realPath, r);
+function rememberLocation(records, realPath, value) {
+  if (value !== null || !records.has(realPath)) records.set(realPath, value);
 }
 //@ chunk-axmbhcjg.js:18587-19522 placement
 /**
  * 判定一个清点文件：别名只做敏感归属；无法解析或越界记为未发送；不是可同步目的地时记为不发送或拒绝；已见过的文件归属；否则返回候选条目。
  */
-async function classifyInventoryFile(e, n, r, o, i, s) {
-  let location = await locateInConfigHome(e, r.path, r.lexicalRel, r.rawLexicalRel);
-  if (r.aliasOnly) {
-    if (location === "unresolvable") e.giveUp ??= "alias_unreadable";
+async function classifyInventoryFile(walkState, pathFilter, file, claimed, attributed, sensitiveByPath) {
+  let location = await locateInConfigHome(walkState, file.path, file.lexicalRel, file.rawLexicalRel);
+  if (file.aliasOnly) {
+    if (location === "unresolvable") walkState.giveUp ??= "alias_unreadable";
     else if (location !== "outside") {
-      let sensitivePath = resolveSensitivePath(e, n, location, r.lexicalRel);
-      if (sensitivePath !== null) rememberLocation(s, location.realPath, sensitivePath);
+      let sensitivePath = resolveSensitivePath(walkState, pathFilter, location, file.lexicalRel);
+      if (sensitivePath !== null) rememberLocation(sensitiveByPath, location.realPath, sensitivePath);
     }
     return {
       kind: "attributed",
     };
   }
   if (location === "unresolvable") {
-    if (r.viaSymlink) e.giveUp ??= "alias_unreadable";
-    return refusedLeftBehind(r, r.viaSymlink ? "symlink_not_sent" : "unreadable");
+    if (file.viaSymlink) walkState.giveUp ??= "alias_unreadable";
+    return refusedLeftBehind(file, file.viaSymlink ? "symlink_not_sent" : "unreadable");
   }
-  if (location === "outside") return refusedLeftBehind(r, "symlink_not_sent");
-  let destRel = r.viaSymlink ? location.rel : r.lexicalRel;
+  if (location === "outside") return refusedLeftBehind(file, "symlink_not_sent");
+  let destRel = file.viaSymlink ? location.rel : file.lexicalRel;
   let destination = workingFileDestination(destRel);
   if (destination === null) {
-    let m = r.viaSymlink ? resolveSensitivePath(e, n, location, r.lexicalRel) : null;
-    if (!r.viaSymlink || m !== null) rememberLocation(s, location.realPath, m);
-    if (i.has(location.realPath))
+    let sensitivePath = file.viaSymlink
+      ? resolveSensitivePath(walkState, pathFilter, location, file.lexicalRel)
+      : null;
+    if (!file.viaSymlink || sensitivePath !== null)
+      rememberLocation(sensitiveByPath, location.realPath, sensitivePath);
+    if (attributed.has(location.realPath))
       return {
         kind: "attributed",
       };
-    i.add(location.realPath);
-    return m === null
-      ? refusedLeftBehind(r, r.viaSymlink ? "symlink_not_sent" : "not_destination")
+    attributed.add(location.realPath);
+    return sensitivePath === null
+      ? refusedLeftBehind(file, file.viaSymlink ? "symlink_not_sent" : "not_destination")
       : {
           kind: "refused",
-          left: m,
+          left: sensitivePath,
         };
   }
-  if (o.has(location.realPath)) {
-    let sensitivePath = resolveSensitivePath(e, n, location, r.lexicalRel);
-    if (sensitivePath !== null) rememberLocation(s, location.realPath, sensitivePath);
+  if (claimed.has(location.realPath)) {
+    let sensitivePath = resolveSensitivePath(walkState, pathFilter, location, file.lexicalRel);
+    if (sensitivePath !== null) rememberLocation(sensitiveByPath, location.realPath, sensitivePath);
     return {
       kind: "attributed",
     };
@@ -973,11 +994,11 @@ async function classifyInventoryFile(e, n, r, o, i, s) {
 /**
  * 构造“未发送”条目（路径 + 原因）。
  */
-function refusedLeftBehind(e, reason) {
+function refusedLeftBehind(file, reason) {
   return {
     kind: "refused",
     left: {
-      path: e.lexicalRel,
+      path: file.lexicalRel,
       reason,
     },
   };
@@ -986,10 +1007,10 @@ function refusedLeftBehind(e, reason) {
 /**
  * 把候选放入目的地持有表（重复时返回 null）。
  */
-function holdDestination(e, candidate) {
-  let r = normalizedPath(candidate.destination);
-  if (e.held.has(r)) return null;
-  e.held.set(r, candidate);
+function holdDestination(held, candidate) {
+  let key = normalizedPath(candidate.destination);
+  if (held.held.has(key)) return null;
+  held.held.set(key, candidate);
   return candidate;
 }
 //@ chunk-axmbhcjg.js:19692-20306 placement
@@ -1026,7 +1047,7 @@ async function collectMemoryCandidates(
       continue;
     }
     if (holdDestination(destinations, candidate) === null) {
-      for (let E of imports) await attributeAtReferences(ctx, classify, E, seen);
+      for (let candidates of imports) await attributeAtReferences(ctx, classify, candidates, seen);
       leftBehind.push({
         path: file.lexicalRel,
         reason: "not_destination",
@@ -1054,8 +1075,8 @@ async function collectMemoryCandidates(
 /**
  * 生成 glob 作用域的键（排序后的 JSON）。
  */
-function scopeKey(e) {
-  return e.globs === undefined ? "" : jsonStringify(e.globs.toSorted());
+function scopeKey(scope) {
+  return scope.globs === undefined ? "" : jsonStringify(scope.globs.toSorted());
 }
 //@ chunk-axmbhcjg.js:20370-22323 placement
 /**
@@ -1066,124 +1087,137 @@ async function resolveCandidateImports(
   classify,
   candidate,
   imports,
-  destinations,
+  held,
   claimed,
   budget,
   output,
   withheld,
 ) {
-  let m = [];
-  let found = imports.find((h) => h.parent === undefined);
-  let filtered = imports.filter((h) => h !== found);
+  let left = [];
+  let importEntry = imports.find((root) => root.parent === undefined);
+  let filtered = imports.filter((importEntry_2) => importEntry_2 !== importEntry);
   let styleRealByInclude = new Map();
-  let makeHolder = (h, g) => ({
-    candidate: h,
-    isStyle: h.kind === "output_style",
+  let makeHolder = (candidate, importEntry) => ({
+    candidate,
+    isStyle: candidate.kind === "output_style",
     withheld:
-      getSensitivePathReason(ctx, classify, h.location) !== null || withheld.get(h.location.realPath) != null,
-    scope: scopeKey(g),
+      getSensitivePathReason(ctx, classify, candidate.location) !== null ||
+      withheld.get(candidate.location.realPath) != null,
+    scope: scopeKey(importEntry),
   });
-  let holderByPath = new Map(found === undefined ? [] : [[found.path, makeHolder(candidate, found)]]);
+  let holderByPath = new Map(
+    importEntry === undefined ? [] : [[importEntry.path, makeHolder(candidate, importEntry)]],
+  );
   let leftIndexByReal = new Map();
-  let addLeft = (h, g) => {
-    if (!budget.has(h)) {
-      budget.add(h);
-      leftIndexByReal.set(h, m.push(g) - 1);
+  let addLeft = (realPath, row) => {
+    if (!budget.has(realPath)) {
+      budget.add(realPath);
+      leftIndexByReal.set(realPath, left.push(row) - 1);
     }
   };
-  let setLeft = (realPath, g) => {
-    let C = leftIndexByReal.get(realPath);
-    if (C === undefined) addLeft(realPath, g);
-    else m[C] = g;
+  let setLeft = (realPath, row) => {
+    let index = leftIndexByReal.get(realPath);
+    if (index === undefined) addLeft(realPath, row);
+    else left[index] = row;
   };
-  for (let h of imports) await attributeAtReferences(ctx, classify, h, withheld);
-  for (let h of filtered) {
-    let g = holderByPath.get(h.parent ?? "");
-    if (g === undefined) continue;
-    let C = relativeToConfigHome(ctx, h.path);
-    let w = await locateInConfigHome(ctx, h.path, C?.rel ?? null, C?.raw ?? null);
-    if (w === "outside" || w === "unresolvable") {
-      addLeft(h.path, {
-        path: C?.rel ?? h.path,
+  for (let importEntry of imports) await attributeAtReferences(ctx, classify, importEntry, withheld);
+  for (let importEntry of filtered) {
+    let holder = holderByPath.get(importEntry.parent ?? "");
+    if (holder === undefined) continue;
+    let relInfo = relativeToConfigHome(ctx, importEntry.path);
+    let location = await locateInConfigHome(
+      ctx,
+      importEntry.path,
+      relInfo?.rel ?? null,
+      relInfo?.raw ?? null,
+    );
+    if (location === "outside" || location === "unresolvable") {
+      addLeft(importEntry.path, {
+        path: relInfo?.rel ?? importEntry.path,
         reason: "include_not_sent",
       });
       continue;
     }
-    if (claimed.has(w.realPath) || withheld.has(w.realPath)) {
-      let A = withheld.get(w.realPath) ?? resolveSensitivePath(ctx, classify, w, w.lexicalRel);
-      if (A !== null) {
-        rememberLocation(withheld, w.realPath, A);
-        setLeft(w.realPath, A);
+    if (claimed.has(location.realPath) || withheld.has(location.realPath)) {
+      let sensitivePath =
+        withheld.get(location.realPath) ?? resolveSensitivePath(ctx, classify, location, location.lexicalRel);
+      if (sensitivePath !== null) {
+        rememberLocation(withheld, location.realPath, sensitivePath);
+        setLeft(location.realPath, sensitivePath);
       }
       continue;
     }
-    let R = workingFileDestination(w.rel);
-    if (R !== null) {
-      let A = holdDestination(destinations, {
-        ...R,
-        location: w,
+    let destination = workingFileDestination(location.rel);
+    if (destination !== null) {
+      let claimedCandidate = holdDestination(held, {
+        ...destination,
+        location,
         imports: [],
         styleVia: new Map(),
       });
-      if (A === null) {
-        addLeft(w.realPath, {
-          path: w.lexicalRel,
+      if (claimedCandidate === null) {
+        addLeft(location.realPath, {
+          path: location.lexicalRel,
           reason: "not_destination",
         });
         continue;
       }
-      claimed.add(w.realPath);
-      if (A.kind === "output_style") {
-        styleRealByInclude.set(h.path, w.realPath);
-        let v = h.parent === undefined ? undefined : styleRealByInclude.get(h.parent);
-        if (v !== undefined) g.candidate.styleVia.set(w.realPath, v);
-        if (!g.withheld && !g.isStyle && g.scope === scopeKey(h))
-          g.candidate.imports.push({
-            location: w,
-            via: v ?? null,
+      claimed.add(location.realPath);
+      if (claimedCandidate.kind === "output_style") {
+        styleRealByInclude.set(importEntry.path, location.realPath);
+        let parentStyleReal =
+          importEntry.parent === undefined ? undefined : styleRealByInclude.get(importEntry.parent);
+        if (parentStyleReal !== undefined) holder.candidate.styleVia.set(location.realPath, parentStyleReal);
+        if (!holder.withheld && !holder.isStyle && holder.scope === scopeKey(importEntry))
+          holder.candidate.imports.push({
+            location,
+            via: parentStyleReal ?? null,
             asStyle: true,
           });
       }
       holderByPath.set(
-        h.path,
-        A.kind === "output_style"
+        importEntry.path,
+        claimedCandidate.kind === "output_style"
           ? {
-              ...g,
-              withheld: g.withheld || getSensitivePathReason(ctx, classify, A.location) !== null,
+              ...holder,
+              withheld:
+                holder.withheld || getSensitivePathReason(ctx, classify, claimedCandidate.location) !== null,
             }
-          : makeHolder(A, h),
+          : makeHolder(claimedCandidate, importEntry),
       );
       continue;
     }
-    if (g.withheld) continue;
-    let all = uniq([w.rel, w.lexicalRel, ...w.rawRels]).every(isSyncableMarkdownPath);
-    let U = all ? resolveSensitivePath(ctx, classify, w, w.lexicalRel) : null;
-    let reason = U?.reason ?? null;
-    let V = isRulesOrOutputStylePath(w.rel) && extname(w.rel).toLowerCase() === MD_EXTENSION;
-    if (U !== null || V) rememberLocation(withheld, w.realPath, U);
+    if (holder.withheld) continue;
+    let all = uniq([location.rel, location.lexicalRel, ...location.rawRels]).every(isSyncableMarkdownPath);
+    let sensitivePath = all ? resolveSensitivePath(ctx, classify, location, location.lexicalRel) : null;
+    let reason = sensitivePath?.reason ?? null;
+    let isRulesOrStyle =
+      isRulesOrOutputStylePath(location.rel) && extname(location.rel).toLowerCase() === MD_EXTENSION;
+    if (sensitivePath !== null || isRulesOrStyle)
+      rememberLocation(withheld, location.realPath, sensitivePath);
     if (!all || reason !== null) {
-      addLeft(w.realPath, {
-        path: w.lexicalRel,
-        reason: reason ?? (V ? "not_destination" : "include_not_sent"),
+      addLeft(location.realPath, {
+        path: location.lexicalRel,
+        reason: reason ?? (isRulesOrStyle ? "not_destination" : "include_not_sent"),
       });
       continue;
     }
-    if (g.isStyle || g.scope !== scopeKey(h)) {
-      output.set(w.realPath, {
-        path: w.lexicalRel,
+    if (holder.isStyle || holder.scope !== scopeKey(importEntry)) {
+      output.set(location.realPath, {
+        path: location.lexicalRel,
         reason: "include_not_sent",
       });
       continue;
     }
-    g.candidate.imports.push({
-      location: w,
-      via: h.parent === undefined ? null : (styleRealByInclude.get(h.parent) ?? null),
+    holder.candidate.imports.push({
+      location,
+      via: importEntry.parent === undefined ? null : (styleRealByInclude.get(importEntry.parent) ?? null),
     });
-    styleRealByInclude.set(h.path, w.realPath);
-    claimed.add(w.realPath);
-    holderByPath.set(h.path, g);
+    styleRealByInclude.set(importEntry.path, location.realPath);
+    claimed.add(location.realPath);
+    holderByPath.set(importEntry.path, holder);
   }
-  return m;
+  return left;
 }
 //@ chunk-axmbhcjg.js:22323-23412 placement
 /**
@@ -1266,13 +1300,13 @@ async function attributeAtReferences(ctx, classify, memoryFile, withheld) {
   }
 }
 //@ chunk-axmbhcjg.js:23412-23526 placement
-async function isMissingReference(expanded) {
-  if ((isUncOrDevicePath(expanded) && !isWslUncPath(expanded)) || isNetworkMountPath(expanded)) return true;
+async function isMissingReference(path) {
+  if ((isUncOrDevicePath(path) && !isWslUncPath(path)) || isNetworkMountPath(path)) return true;
   try {
-    await realpathStrict(expanded);
+    await realpathStrict(path);
     return false;
   } catch (error) {
-    return isMissingPathError(error) && (await missingOrUnreadable(expanded));
+    return isMissingPathError(error) && (await missingOrUnreadable(path));
   }
 }
 //@ chunk-axmbhcjg.js:23526-23906 placement
@@ -1283,91 +1317,101 @@ async function collectOutputStyleCandidates(
   walkState,
   pathFilter,
   files,
-  heldCandidates,
+  held,
+  claimed,
   attributed,
-  seenReal,
   sensitiveByPath,
 ) {
-  let d = [];
-  for (let f of files) {
-    let m = await classifyInventoryFile(walkState, pathFilter, f, attributed, seenReal, sensitiveByPath);
-    if (m.kind === "refused") d.push(m.left);
-    else if (m.kind === "candidate")
-      if (m.candidate.kind !== "output_style")
-        d.push({
-          path: f.lexicalRel,
+  let path = [];
+  for (let stat of files) {
+    let linkBody = await classifyInventoryFile(
+      walkState,
+      pathFilter,
+      stat,
+      claimed,
+      attributed,
+      sensitiveByPath,
+    );
+    if (linkBody.kind === "refused") path.push(linkBody.left);
+    else if (linkBody.kind === "candidate")
+      if (linkBody.candidate.kind !== "output_style")
+        path.push({
+          path: stat.lexicalRel,
           reason: "symlink_not_sent",
         });
-      else if (holdDestination(heldCandidates, m.candidate) === null)
-        d.push({
-          path: f.lexicalRel,
+      else if (holdDestination(held, linkBody.candidate) === null)
+        path.push({
+          path: stat.lexicalRel,
           reason: "not_destination",
         });
-      else attributed.add(m.candidate.location.realPath);
+      else claimed.add(linkBody.candidate.location.realPath);
   }
-  return d;
+  return path;
 }
 //@ chunk-axmbhcjg.js:24585-26856 placement
 /**
  * 生成一个清点条目：检查敏感、可读与大小，凭证内容拒发；非输出样式先去引用化，再按上限依次内联 import（跳过敏感、未闭合块、含链接、超限或含凭证的），必要时对合并结果再去引用；返回 {entry, foldedIncludes, leftBehind}。
  */
-async function buildInventoryEntry(walkState, pathFilter, r, sensitiveByPath, failedReal, seenReal) {
-  let sensitive = resolveSensitivePath(walkState, pathFilter, r.location, r.destination);
-  let knownSensitive = sensitiveByPath.get(r.location.realPath) ?? null;
-  if (sensitive !== null) return buildWithheldEntry(r, sensitive.reason, seenReal, sensitive.path);
+async function buildInventoryEntry(walkState, pathFilter, candidate, sensitiveByPath, failedReal, seenReal) {
+  let sensitive = resolveSensitivePath(walkState, pathFilter, candidate.location, candidate.destination);
+  let knownSensitive = sensitiveByPath.get(candidate.location.realPath) ?? null;
+  if (sensitive !== null) return buildWithheldEntry(candidate, sensitive.reason, seenReal, sensitive.path);
   if (knownSensitive !== null)
-    return buildWithheldEntry(r, knownSensitive.reason, seenReal, knownSensitive.path);
-  if (!(await isStillAtRealPath(walkState, r.location))) return buildWithheldEntry(r, "unreadable", seenReal);
-  let read = await readNativeWorkingFile(walkState, r.location);
+    return buildWithheldEntry(candidate, knownSensitive.reason, seenReal, knownSensitive.path);
+  if (!(await isStillAtRealPath(walkState, candidate.location)))
+    return buildWithheldEntry(candidate, "unreadable", seenReal);
+  let read = await readNativeWorkingFile(walkState, candidate.location);
   if (read.kind === "skip")
-    return buildWithheldEntry(r, mapSkipReasonToLeftBehind(read.skipped.reason), seenReal);
-  if (read.content.length > MAX_WORKING_FILE_BYTES_2_2) return buildWithheldEntry(r, "over_cap", seenReal);
-  let str = read.content.toString("utf8");
-  if (looksLikeCredentialIncludingNul(str)) {
-    let withheldEntry = buildWithheldEntry(r, "credential", seenReal);
+    return buildWithheldEntry(candidate, mapSkipReasonToLeftBehind(read.skipped.reason), seenReal);
+  if (read.content.length > MAX_WORKING_FILE_BYTES_2_2)
+    return buildWithheldEntry(candidate, "over_cap", seenReal);
+  let text = read.content.toString("utf8");
+  if (looksLikeCredentialIncludingNul(text)) {
+    let withheldEntry = buildWithheldEntry(candidate, "credential", seenReal);
     return {
       ...withheldEntry,
-      leftBehind: withheldEntry.leftBehind.map((M) =>
-        M.reason === "credential"
+      leftBehind: withheldEntry.leftBehind.map((row) =>
+        row.reason === "credential"
           ? {
-              ...M,
-              ...matchKey(str, 0),
+              ...row,
+              ...matchKey(text, 0),
             }
-          : M,
+          : row,
       ),
     };
   }
   let defused =
-    r.kind === "output_style"
+    candidate.kind === "output_style"
       ? {
           content: read.content,
           defusedPaths: [],
         }
-      : defuseIncludes(r.destination, read.content, r.imports.length > 0);
+      : defuseIncludes(candidate.destination, read.content, candidate.imports.length > 0);
   let parts = [defused.content];
   let folded = [];
   let foldedIncludes = [];
   let totalBytes = defused.content.length;
   let leftBehind = [];
   let parentOpenBlock =
-    r.imports.length > 0 && endsInsideOpenBlock(splitFrontmatter(defused.content.toString("utf8")).body);
+    candidate.imports.length > 0 &&
+    endsInsideOpenBlock(splitFrontmatter(defused.content.toString("utf8")).body);
   let excludedReal = new Set(failedReal);
-  for (let { location, via, asStyle } of r.imports) {
-    let N = (Qt) => {
-      if (!asStyle) leftBehind.push(Qt);
+  for (let { location, via, asStyle } of candidate.imports) {
+    let noteLeft = (row) => {
+      if (!asStyle) leftBehind.push(row);
     };
     let sensitivePath = resolveSensitivePath(walkState, pathFilter, location, location.lexicalRel);
     if (
       sensitivePath !== null ||
       sensitiveByPath.has(location.realPath) ||
       excludedReal.has(location.realPath) ||
-      (via !== null && isViaExcluded(via, excludedReal, r.styleVia)) ||
+      (via !== null && isViaExcluded(via, excludedReal, candidate.styleVia)) ||
       parentOpenBlock
     ) {
       excludedReal.add(location.realPath);
       if (!seenReal.has(location.realPath)) {
         seenReal.add(location.realPath);
-        N(
+        noteLeft(
           sensitivePath ??
             sensitiveByPath.get(location.realPath) ?? {
               path: location.lexicalRel,
@@ -1377,21 +1421,21 @@ async function buildInventoryEntry(walkState, pathFilter, r, sensitiveByPath, fa
       }
       continue;
     }
-    let A = (await isStillAtRealPath(walkState, location))
+    let importRead = (await isStillAtRealPath(walkState, location))
       ? await readNativeWorkingFile(walkState, location)
       : null;
-    if (A === null || A.kind === "skip") {
+    if (importRead === null || importRead.kind === "skip") {
       excludedReal.add(location.realPath);
-      N({
+      noteLeft({
         path: location.lexicalRel,
         reason: "include_not_sent",
       });
       continue;
     }
-    let { head, body } = splitFrontmatter(A.content.toString("utf8"));
+    let { head, body } = splitFrontmatter(importRead.content.toString("utf8"));
     if (endsInsideOpenBlock(body) || hasMarkdownLinks(body)) {
       excludedReal.add(location.realPath);
-      N({
+      noteLeft({
         path: location.lexicalRel,
         reason: "include_not_sent",
       });
@@ -1400,7 +1444,7 @@ async function buildInventoryEntry(walkState, pathFilter, r, sensitiveByPath, fa
     let buffer = Buffer.from(inlinedImportMarker(location.rel) + escapeUnvettedIncludes(body));
     if (totalBytes + buffer.length > MAX_WORKING_FILE_BYTES_2_2) {
       excludedReal.add(location.realPath);
-      N({
+      noteLeft({
         path: location.lexicalRel,
         reason: "over_cap",
       });
@@ -1408,7 +1452,7 @@ async function buildInventoryEntry(walkState, pathFilter, r, sensitiveByPath, fa
     }
     if (looksLikeCredentialIncludingNul(body)) {
       excludedReal.add(location.realPath);
-      N({
+      noteLeft({
         path: location.lexicalRel,
         reason: "credential",
         ...matchKey(
@@ -1429,28 +1473,40 @@ async function buildInventoryEntry(walkState, pathFilter, r, sensitiveByPath, fa
   }
   let buffer = Buffer.concat(parts);
   let content =
-    r.kind !== "output_style" && parts.length > 1 && hasNewIncludes(defused.content, buffer, r.destination)
+    candidate.kind !== "output_style" &&
+    parts.length > 1 &&
+    hasNewIncludes(defused.content, buffer, candidate.destination)
       ? escapeAllIncludes(buffer)
       : buffer;
-  if (r.kind !== "output_style" && content !== buffer && hasUnvettedIncludeIn(content, allowAllIncludes))
-    return buildWithheldEntry(r, "undefusable", seenReal);
+  if (
+    candidate.kind !== "output_style" &&
+    content !== buffer &&
+    hasUnvettedIncludeIn(content, allowAllIncludes)
+  )
+    return buildWithheldEntry(candidate, "undefusable", seenReal);
   if (!content.equals(read.content) && looksLikeCredentialIncludingNul(content.toString("utf8"))) {
-    let withheldEntry = buildWithheldEntry(r, "credential", seenReal);
-    let M = new Set(leftBehind.map((U) => U.path));
+    let withheldEntry = buildWithheldEntry(candidate, "credential", seenReal);
+    let leftBehindPaths = new Set(leftBehind.map((row) => row.path));
     return {
       ...withheldEntry,
-      leftBehind: [...withheldEntry.leftBehind.filter((U) => !M.has(U.path)), ...leftBehind],
+      leftBehind: [
+        ...withheldEntry.leftBehind.filter((row) => !leftBehindPaths.has(row.path)),
+        ...leftBehind,
+      ],
     };
   }
-  let C = new Set(folded);
+  let foldedSet = new Set(folded);
   let defusedCount = count(
     defused.defusedPaths,
-    (R) => !C.has(posix.normalize(posix.join(posix.dirname(r.destination), R)).normalize("NFC")),
+    (defusedPath) =>
+      !foldedSet.has(
+        posix.normalize(posix.join(posix.dirname(candidate.destination), defusedPath)).normalize("NFC"),
+      ),
   );
   return {
     entry: {
-      path: r.destination,
-      kind: r.kind,
+      path: candidate.destination,
+      kind: candidate.kind,
       content,
       sha256: computeContentHash(content),
       folded,
@@ -1464,8 +1520,8 @@ async function buildInventoryEntry(walkState, pathFilter, r, sensitiveByPath, fa
 /**
  * 对记忆文件正文中指向非目的地的 @include 加反斜杠去引用（保留 frontmatter 与 BOM）；结果仍可能引用时退回到整体转义 @。
  */
-function defuseIncludes(destination, content, r) {
-  let isDestination = (x) => isDestinationInclude(destination, x);
+function defuseIncludes(destination, content, path) {
+  let isDestination = (include) => isDestinationInclude(destination, include);
   let replaced = content.toString("utf8").replace(
     /\r\n?/g,
     `
@@ -1475,15 +1531,15 @@ function defuseIncludes(destination, content, r) {
   let head = split.head;
   let bom = head !== "" && replaced.startsWith("\uFEFF") ? "\uFEFF" : "";
   let leadingNewline =
-    r && head === "" && /^\uFEFF?---\s*\n/.test(replaced)
+    path && head === "" && /^\uFEFF?---\s*\n/.test(replaced)
       ? `
 `
       : "";
   let headPart = leadingNewline + bom + head;
   let body = split.body;
-  let y = [];
-  let defusedBody = escapeUnvettedIncludes(body, isDestination, y);
-  let result =
+  let result = [];
+  let defusedBody = escapeUnvettedIncludes(body, isDestination, result);
+  let result_2 =
     defusedBody === body && leadingNewline === ""
       ? {
           content,
@@ -1491,17 +1547,17 @@ function defuseIncludes(destination, content, r) {
         }
       : {
           content: Buffer.from(headPart + defusedBody),
-          defusedPaths: y,
+          defusedPaths: result,
         };
   if (
-    result.content !== content &&
+    result_2.content !== content &&
     (splitFrontmatter(content.toString("utf8")).head === "") !== (head === "")
   )
     return {
       content: Buffer.from(escapeAtSigns(replaced)),
       defusedPaths: defusedIncludes(body, isDestination),
     };
-  if (!hasUnvettedIncludeIn(result.content, isDestination)) return result;
+  if (!hasUnvettedIncludeIn(result_2.content, isDestination)) return result_2;
   let defusedPaths = defusedIncludes(body, isDestination);
   let buffer = Buffer.from(headPart + escapeAtSigns(body));
   return hasUnvettedIncludeIn(buffer, allowAllIncludes)
@@ -1525,63 +1581,66 @@ function defusedIncludes(body, isDestination) {
     : [];
 }
 //@ chunk-axmbhcjg.js:27522-27650 placement
-function hasNewIncludes(content, n, destination) {
-  let o = (u) => isDestinationInclude(destination, u);
-  let i = (u) => extractIncludePathsFromText(splitFrontmatter(u.toString("utf8")).body);
-  let s = i(n);
-  return s.some((u) => !o(u)) || count(s, o) > count(i(content), o);
+function hasNewIncludes(text, mergedContent, destination) {
+  let isDestination = (include) => isDestinationInclude(destination, include);
+  let includedOf = (text) => extractIncludePathsFromText(splitFrontmatter(text.toString("utf8")).body);
+  let nextIncludes = includedOf(mergedContent);
+  return (
+    nextIncludes.some((include) => !isDestination(include)) ||
+    count(nextIncludes, isDestination) > count(includedOf(text), isDestination)
+  );
 }
 //@ chunk-axmbhcjg.js:27650-27819 placement
-function escapeAllIncludes(e) {
-  let str = e.toString("utf8");
+function escapeAllIncludes(content) {
+  let str = content.toString("utf8");
   let { head, body } = splitFrontmatter(str);
-  let i = head !== "" && str.startsWith("\uFEFF") ? "\uFEFF" : "";
-  let buffer = Buffer.from(i + head + escapeAtSigns(body));
+  let inner = head !== "" && str.startsWith("\uFEFF") ? "\uFEFF" : "";
+  let buffer = Buffer.from(inner + head + escapeAtSigns(body));
   return hasUnvettedIncludeIn(buffer, allowAllIncludes) ? Buffer.from(escapeAtSigns(str)) : buffer;
 }
 //@ chunk-axmbhcjg.js:27819-27877 placement
 /**
  * 判断内容体里是否有未受审查的 @include。
  */
-function hasUnvettedIncludeIn(content, allowAllIncludes) {
-  return hasUnvettedInclude(splitFrontmatter(content.toString("utf8")).body, allowAllIncludes);
+function hasUnvettedIncludeIn(content, isAllowed) {
+  return hasUnvettedInclude(splitFrontmatter(content.toString("utf8")).body, isAllowed);
 }
 //@ chunk-axmbhcjg.js:27877-28019 placement
-function splitFrontmatter(e) {
-  let n = e.startsWith("\uFEFF") ? e.slice(1) : e;
-  let r = FRONTMATTER_REGEX.exec(n)?.[0];
-  return r === undefined
+function splitFrontmatter(text) {
+  let strippedBom = text.startsWith("\uFEFF") ? text.slice(1) : text;
+  let match = FRONTMATTER_REGEX.exec(strippedBom)?.[0];
+  return match === undefined
     ? {
         head: "",
-        body: e,
+        body: text,
       }
     : {
-        head: r,
-        body: n.slice(r.length),
+        head: match,
+        body: strippedBom.slice(match.length),
       };
 }
 //@ chunk-axmbhcjg.js:28019-28199 placement
-function isDestinationInclude(e, n) {
-  if (n.startsWith("/") || n.startsWith("~")) return false;
-  let normalized = posix.normalize(posix.join(posix.dirname(e), n));
-  let o = normalized.startsWith("../") ? null : classifyWorkingFile(normalized);
-  return o === "claude_md" || o === "rule";
+function isDestinationInclude(destination, include) {
+  if (include.startsWith("/") || include.startsWith("~")) return false;
+  let normalized = posix.normalize(posix.join(posix.dirname(destination), include));
+  let normalizedInclude = normalized.startsWith("../") ? null : classifyWorkingFile(normalized);
+  return normalizedInclude === "claude_md" || normalizedInclude === "rule";
 }
 //@ chunk-axmbhcjg.js:28199-28317 placement
-function isViaExcluded(e, excludedReal, styleVia) {
-  let o = new Set();
-  for (let i = e; i !== undefined && !o.has(i); i = styleVia.get(i)) {
-    if (excludedReal.has(i)) return true;
-    o.add(i);
+function isViaExcluded(via, excludedReal, styleVia) {
+  let seen = new Set();
+  for (let part = via; part !== undefined && !seen.has(part); part = styleVia.get(part)) {
+    if (excludedReal.has(part)) return true;
+    seen.add(part);
   }
   return false;
 }
 //@ chunk-axmbhcjg.js:28317-28422 placement
-async function isStillAtRealPath(e, location) {
+async function isStillAtRealPath(walkState, location) {
   try {
-    return (await realpathStrict(join(e.realConfigHome, location.nativeRel))) === location.realPath;
+    return (await realpathStrict(join(walkState.realConfigHome, location.nativeRel))) === location.realPath;
   } catch {
     return false;
   }
 }
-export { getAliasSpellings, MAX_INCLUDE_DEPTH, MAX_INCLUDE_READS, buildHomeInventory };
+export { getAliasSpellings, INCLUDE_EXTERNAL, MAX_INCLUDE_READS, buildHomeInventory };

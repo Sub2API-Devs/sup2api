@@ -15,11 +15,11 @@ import "fs";
 import { dirname } from "path";
 import { randomBytes } from "crypto";
 import { EOL } from "os";
-import { createResolvedAddressGuard, ol } from "./resolved-address-guard.js";
+import { createResolvedAddressGuard, isResolvedAddressDeniedError } from "./resolved-address-guard.js";
 import {
   missingWindowsSrtWinCapability,
   getWindowsProfileReadStatus,
-  ax,
+  windowsSrtWinOutdatedError,
   revokeWindowsAclChecked,
   restoreWindowsAcl,
   WindowsSandboxError,
@@ -29,7 +29,7 @@ import {
   getWindowsProfileReadStatusAsync,
   ensurePersistentWindowsCa,
   windowsProfileExclusionConflicts,
-  tI,
+  grantWindowsAclPersistent,
   verifyWindowsWfpEgress,
   DEFAULT_WINDOWS_PROXY_PORT_RANGE,
   checkWindowsDependencies,
@@ -42,7 +42,7 @@ import {
 } from "./windows-sandbox-utils.js";
 import {
   SandboxViolationStore,
-  DC,
+  dedupeFingerprint,
   shouldIgnoreViolation,
   sanitizeDenialReason,
 } from "./sandbox-violation-store.js";
@@ -50,7 +50,7 @@ import { SentinelRegistry } from "./credential-sentinel.js";
 import { AwsPairRegistry, createSigv4Planner, registerAwsPairs } from "./credential-aws-pairs.js";
 import { MaskedFileStore, buildMaskedFileBinds } from "./credential-mask-files.js";
 import {
-  ZE,
+  markExitCleanupNeeded,
   linuxGetCwdMandatoryDenyPaths,
   initializeLinuxNetworkBridge,
   checkLinuxDependencies,
@@ -63,14 +63,14 @@ import { disposeMitmCASync, createMitmCA, CRL_PATH, disposeMitmCA } from "./mitm
 import {
   decodeSandboxedCommand,
   encodeSandboxedCommand,
-  ITt,
+  orDefault,
   getDefaultWritePaths,
   normalizePathForSandbox,
   removeTrailingGlobSuffix,
   containsGlobChars,
   walkGlobPatternSteps,
   finish,
-  xwn,
+  workingDirectory,
   finishInTurns,
   globPatternBaseDir,
   globBaseDirIsRoot,
@@ -83,7 +83,7 @@ import {
   stripDomainPatternPort,
 } from "./domain-pattern.js";
 import { isValidHost, canonicalizeHost, resolveParentProxy, redactUrl } from "./parent-proxy.js";
-import { hR } from "./http-proxy.js";
+import { createHttpProxyServer } from "./http-proxy.js";
 import { createSocksProxyServer } from "./socks-proxy.js";
 import { createMuxProxyServer } from "./mux-proxy.js";
 import { assertTlsTerminationSupported } from "./emitted-connection.js";
@@ -101,15 +101,16 @@ import {
   literalWriteLists,
   samePathEntries,
 } from "./path-entries.js";
-import { HR } from "./java-proxy-agent.js";
+import { getJavaProxyAgentJarPathAsync } from "./java-proxy-agent.js";
 import { whichSync } from "../utils/which.js";
 import { ownInstallWarning } from "./own-files.js";
-import { B6r } from "./generate-seccomp-filter.js";
+import { getApplySeccompBinaryPath_2 } from "./generate-seccomp-filter.js";
 import { buildMaskedEnvVars } from "./credential-mask-env.js";
-import { zE } from "./read-deny-glob.js";
+import { expandReadDenyGlobLinuxSteps } from "./read-deny-glob.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-fq0cr76a.js:703099-703511 esm-fingerprint
-function Mm(server, n, range, exclude) {
+function listenInRange(server, doListen, range, exclude) {
   return new Promise((resolve, reject) => {
     let [lo, hi] = range ?? [0, 0];
     let port = lo;
@@ -134,25 +135,25 @@ function Mm(server, n, range, exclude) {
       };
       server.once("error", onError);
       server.once("listening", onListening);
-      n(range ? port : 0);
+      doListen(range ? port : 0);
     };
     tryNext();
   });
 }
 //@ chunk-fq0cr76a.js:817984-818075 esm-layout
-var config;
-var configInstalls = 0;
+var config; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var configInstalls;
 var httpProxyServer;
 var socksProxyServer;
 var muxProxyServer;
 var managerContext;
 var initializationPromise;
-var cleanupRegistered = false;
-var ownInstallLogged = false;
+var cleanupRegistered;
+var ownInstallLogged;
 var logMonitorShutdown;
 var linuxMonitor;
 var parentProxy;
-var resolvedAddressGuard = createResolvedAddressGuard();
+var resolvedAddressGuard;
 var mitmCA;
 var javaAgentJarPath;
 var proxyAuthToken;
@@ -161,7 +162,14 @@ var windowsFsSbUserSid;
 var windowsFsRawInputs;
 var windowsWfpVerifiedFor;
 var windowsWfpVerifiedLoopback;
-var windowsCapableSrtWin = new Set();
+var windowsCapableSrtWin;
+deferInit("chunk-fq0cr76a.js:817984", () => {
+  configInstalls = 0;
+  cleanupRegistered = false;
+  ownInstallLogged = false;
+  resolvedAddressGuard = createResolvedAddressGuard();
+  windowsCapableSrtWin = new Set();
+});
 //@ chunk-fq0cr76a.js:818075-818209 esm-fingerprint
 function windowsSrtWinIdentity(srtWin) {
   let stat = "";
@@ -183,7 +191,7 @@ function assertWindowsSrtWinCapable(srtWin) {
       srtWin,
     }).capabilities,
   );
-  if (missing !== undefined) throw ax(missing, WINDOWS_CAPABILITIES_WHY);
+  if (missing !== undefined) throw windowsSrtWinOutdatedError(missing, WINDOWS_CAPABILITIES_WHY);
   windowsCapableSrtWin.add(id);
 }
 //@ chunk-fq0cr76a.js:818485-818498 esm-layout
@@ -262,16 +270,22 @@ function windowsProfileReadWarningsOf(grant) {
   return out;
 }
 //@ chunk-fq0cr76a.js:821106-821153 esm-layout
-var srtWinSpawn;
-var sandboxViolationStore = new SandboxViolationStore();
-var sentinelRegistry = new SentinelRegistry();
-var awsPairRegistry = new AwsPairRegistry();
-var maskedFileStore = new MaskedFileStore();
+var srtWinSpawn; // deferred: uses SandboxViolationStore (./sandbox-violation-store.js) of its import cycle while loading; runs once the cycle is complete
+var sandboxViolationStore;
+var sentinelRegistry;
+var awsPairRegistry;
+var maskedFileStore;
+deferInit("chunk-fq0cr76a.js:821106", () => {
+  sandboxViolationStore = new SandboxViolationStore();
+  sentinelRegistry = new SentinelRegistry();
+  awsPairRegistry = new AwsPairRegistry();
+  maskedFileStore = new MaskedFileStore();
+});
 //@ chunk-fq0cr76a.js:821153-821535 esm-fingerprint
 function registerCleanup() {
   if (cleanupRegistered) return;
   let cleanupHandler = () => {
-    ZE();
+    markExitCleanupNeeded();
     return reset().catch((e) => {
       logForDebugging_2(`Cleanup failed in registerCleanup ${e}`, {
         level: "error",
@@ -297,7 +311,10 @@ function registerCleanup() {
   cleanupRegistered = true;
 }
 //@ chunk-fq0cr76a.js:821535-821604 esm-fingerprint
-var WINDOWS_ACL_RELEASE_OK = new Set(["revoked", "stillHeld", "restored", "alreadyOriginal"]);
+var WINDOWS_ACL_RELEASE_OK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:821535", () => {
+  WINDOWS_ACL_RELEASE_OK = new Set(["revoked", "stillHeld", "restored", "alreadyOriginal"]);
+});
 //@ chunk-fq0cr76a.js:821604-821813 esm-fingerprint
 function logWindowsAclOutcomes(kind, outcomes) {
   for (let e of outcomes ?? [])
@@ -337,11 +354,15 @@ function releaseWindowsSessionAcls(sandboxUserSid, srtWin) {
     logWindowsAclOutcomes("deny restore", restoreWindowsAcl(o));
 }
 //@ chunk-fq0cr76a.js:822511-822534 esm-fingerprint
-var MAX_COMMAND_TEXTS = 1024;
-var commandTextsByKey = new Map();
+var MAX_COMMAND_TEXTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var commandTextsByKey;
+deferInit("chunk-fq0cr76a.js:822511", () => {
+  MAX_COMMAND_TEXTS = 1024;
+  commandTextsByKey = new Map();
+});
 //@ chunk-fq0cr76a.js:822534-822713 esm-fingerprint
 function registerCommandText(command, options) {
-  let key = decodeSandboxedCommand(encodeSandboxedCommand(ITt(command, options?.commandId)));
+  let key = decodeSandboxedCommand(encodeSandboxedCommand(orDefault(command, options?.commandId)));
   let text = options?.commandText ?? command;
   commandTextsByKey.delete(key);
   commandTextsByKey.set(key, text);
@@ -353,11 +374,15 @@ function registerCommandText(command, options) {
 }
 //@ chunk-fq0cr76a.js:822713-822752 esm-layout
 function resolveCommandText(decodedKey) {
-  return commandTextsByKey.get(decodedKey) ?? DC(decodedKey);
+  return commandTextsByKey.get(decodedKey) ?? dedupeFingerprint(decodedKey);
 }
 //@ chunk-fq0cr76a.js:822752-822773 esm-layout
-var MIN_NETWORK_LISTS_COMMAND_ID_LENGTH = 22;
-var commandNetworkListsByKey = new Map();
+var MIN_NETWORK_LISTS_COMMAND_ID_LENGTH; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var commandNetworkListsByKey;
+deferInit("chunk-fq0cr76a.js:822752", () => {
+  MIN_NETWORK_LISTS_COMMAND_ID_LENGTH = 22;
+  commandNetworkListsByKey = new Map();
+});
 //@ chunk-fq0cr76a.js:822773-823761 esm-fingerprint
 function registerCommandNetworkLists(commandId, lists) {
   let key = typeof commandId === "string" ? decodeSandboxedCommand(encodeSandboxedCommand(commandId)) : "";
@@ -407,7 +432,7 @@ function recordOutboundDeny(host, port, reason, encodedCommand) {
 //@ chunk-fq0cr76a.js:824051-824143 esm-fingerprint
 var directLookup = (port, encodedCommand) => (hostname, options, callback) =>
   resolvedAddressGuard.lookupFor(port)(hostname, options, (err, address, family) => {
-    if (ol(err)) recordOutboundDeny(hostname, port, err.reason, encodedCommand);
+    if (isResolvedAddressDeniedError(err)) recordOutboundDeny(hostname, port, err.reason, encodedCommand);
     callback(err, address, family);
   });
 //@ chunk-fq0cr76a.js:824143-824223 esm-fingerprint
@@ -565,7 +590,7 @@ function shouldTerminateTLSForHost(host) {
 async function startMuxProxyServer(sandboxAskCallback, portRange) {
   let injectCredentials = buildCredentialInjector();
   let injectBodyCredentials = buildBodyCredentialInjector();
-  httpProxyServer = hR({
+  httpProxyServer = createHttpProxyServer({
     filter: (port, host, _socket, encodedCommand, explain) =>
       filterNetworkRequest(port, host, sandboxAskCallback, encodedCommand, explain),
     getMitmSocketPath,
@@ -629,7 +654,7 @@ async function startMuxProxyServer(sandboxAskCallback, portRange) {
   });
   let mux = muxProxyServer;
   let backendPort = await mux.listenHttpBackend();
-  await Mm(
+  await listenInRange(
     mux.server,
     (p) => mux.server.listen(p, "127.0.0.1"),
     portRange,
@@ -752,7 +777,7 @@ async function initializeSteps(runtimeConfig, sandboxAskCallback, enableLogMonit
     };
     try {
       let missing = missingWindowsSrtWinCapability(u.capabilities);
-      if (missing !== undefined) throw ax(missing, WINDOWS_CAPABILITIES_WHY);
+      if (missing !== undefined) throw windowsSrtWinOutdatedError(missing, WINDOWS_CAPABILITIES_WHY);
       windowsCapableSrtWin.add(windowsSrtWinIdentity(srtWin));
       if (u.profileGrant) {
         let grant = await getWindowsProfileReadStatusAsync({
@@ -855,7 +880,7 @@ async function initializeSteps(runtimeConfig, sandboxAskCallback, enableLogMonit
         );
       let sb = u.sid;
       windowsFsSbUserSid = sb;
-      await tI({
+      await grantWindowsAclPersistent({
         sandboxUserSid: sb,
         read: grantRead,
         write: acc.grantWrite,
@@ -905,7 +930,7 @@ async function initializeSteps(runtimeConfig, sandboxAskCallback, enableLogMonit
           : undefined;
       let httpProxyPort = config.network.httpProxyPort ?? muxPort;
       let socksProxyPort = config.network.socksProxyPort ?? muxPort;
-      javaAgentJarPath = (await HR(config.javaAgentJarPath)) ?? undefined;
+      javaAgentJarPath = (await getJavaProxyAgentJarPathAsync(config.javaAgentJarPath)) ?? undefined;
       if (mitmCA && muxPort !== undefined && getPlatform_2() === "windows")
         mitmCA.crlUrl = `http://127.0.0.1:${muxPort}${CRL_PATH}`;
       if (config.network.httpProxyPort !== undefined)
@@ -1016,7 +1041,8 @@ function checkDependencies(ripgrepConfig) {
 }
 //@ chunk-fq0cr76a.js:835627-835782 esm-fingerprint
 async function checkDependenciesAsync(ripgrepConfig) {
-  if (getPlatform_2() === "linux" && !config?.seccomp?.argv0) await B6r(config?.seccomp?.applyPath);
+  if (getPlatform_2() === "linux" && !config?.seccomp?.argv0)
+    await getApplySeccompBinaryPath_2(config?.seccomp?.applyPath);
   let common = checkDependenciesCommon(ripgrepConfig);
   if ("done" in common) return common.done;
   return checkWindowsDependenciesAsync(common.windows);
@@ -1144,7 +1170,7 @@ function getFsReadConfig() {
   return {
     ...finish(
       collectDenyPaths_2(config.filesystem.denyRead, credentialRestrictions, (pattern, anchor) =>
-        zE(pattern, reExposedPaths, unlistableDenyDirs, {
+        expandReadDenyGlobLinuxSteps(pattern, reExposedPaths, unlistableDenyDirs, {
           anchor,
           listings,
         }),
@@ -1167,7 +1193,7 @@ function getFsWriteConfig() {
       allowOnly: ["/"],
       denyWithinAllow: [],
     };
-  let e = stripWriteGlobs("allow", config.filesystem.allowWrite);
+  let readRules = stripWriteGlobs("allow", config.filesystem.allowWrite);
   let denyPaths = stripWriteGlobs("deny", config.filesystem.denyWrite);
   return {
     allowOnly: [
@@ -1176,7 +1202,7 @@ function getFsWriteConfig() {
         allowRead: config.filesystem.allowRead,
         credentials: config.credentials,
       }),
-      ...e,
+      ...readRules,
     ],
     denyWithinAllow: denyPaths,
     ...literalWriteLists(config.filesystem.allowWrite, config.filesystem.denyWrite),
@@ -1356,10 +1382,16 @@ async function waitForNetworkInitialization() {
   return managerContext !== undefined;
 }
 //@ chunk-fq0cr76a.js:840614-840657 esm-layout
-var RESTARTS_IN_TURNS = 2;
-var REPLACED = Symbol("replaced");
-var walking = false;
-var waitingToWalk = [];
+var RESTARTS_IN_TURNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REPLACED;
+var walking;
+var waitingToWalk;
+deferInit("chunk-fq0cr76a.js:840614", () => {
+  RESTARTS_IN_TURNS = 2;
+  REPLACED = Symbol("replaced");
+  walking = false;
+  waitingToWalk = [];
+});
 //@ chunk-fq0cr76a.js:840657-840963 esm-fingerprint
 async function waitToWalk(signal) {
   if (walking) {
@@ -1425,8 +1457,9 @@ async function wrapWithSandboxOnce(
   registerCommandText(command, options);
   let startedWith = config;
   let startedAt = configInstalls;
-  let startedIn = xwn();
-  let movedOn = () => config !== startedWith || configInstalls !== startedAt || xwn() !== startedIn;
+  let startedIn = workingDirectory();
+  let movedOn = () =>
+    config !== startedWith || configInstalls !== startedAt || workingDirectory() !== startedIn;
   let startOver = () => {
     walkEnded();
     return wrapWithSandboxAgain(restarts + 1, command, binShell, customConfig, abortSignal, options);
@@ -1511,7 +1544,7 @@ async function wrapWithSandboxOnce(
         customConfig?.filesystem?.denyRead ?? config?.filesystem.denyRead,
         credentialRestrictions,
         (pattern, anchor) =>
-          zE(pattern, reExposedPaths, unlistableDenyDirs, {
+          expandReadDenyGlobLinuxSteps(pattern, reExposedPaths, unlistableDenyDirs, {
             anchor,
             listings,
           }),
@@ -1533,11 +1566,11 @@ async function wrapWithSandboxOnce(
     };
   }
   walkEnded();
-  let Se =
+  let hasAllowedDomains =
     customConfig?.network?.allowedDomains !== undefined || config?.network?.allowedDomains !== undefined;
-  let ue = options?.denyAllNetwork === true;
-  let needsNetworkRestriction = Se || ue;
-  let needsNetworkProxy = Se && !ue;
+  let denyAllNetwork = options?.denyAllNetwork === true;
+  let needsNetworkRestriction = hasAllowedDomains || denyAllNetwork;
+  let needsNetworkProxy = hasAllowedDomains && !denyAllNetwork;
   if (needsNetworkProxy) await waitForNetworkInitialization();
   if (movedOn()) return startOver();
   let allowPty = customConfig?.allowPty ?? config?.allowPty;
@@ -1561,16 +1594,16 @@ async function wrapWithSandboxOnce(
         setEnvVars: credentialRestrictions.setEnvVars,
         maskedFileBinds: credentialRestrictions.maskedFileBinds,
         degradeToDenyPaths: credentialRestrictions.degradeToDenyPaths,
-        allowUnixSockets: ue ? undefined : getAllowUnixSockets(),
-        allowAllUnixSockets: ue ? false : getAllowAllUnixSockets(),
-        allowLocalBinding: ue ? false : getAllowLocalBinding(),
-        allowMachLookup: ue ? undefined : getAllowMachLookup(),
+        allowUnixSockets: denyAllNetwork ? undefined : getAllowUnixSockets(),
+        allowAllUnixSockets: denyAllNetwork ? false : getAllowAllUnixSockets(),
+        allowLocalBinding: denyAllNetwork ? false : getAllowLocalBinding(),
+        allowMachLookup: denyAllNetwork ? undefined : getAllowMachLookup(),
         ignoreViolations: getIgnoreViolations(),
         allowPty,
         allowGitConfig: getAllowGitConfig(),
         gitSafeDirectories,
-        enableWeakerNetworkIsolation: ue ? false : getEnableWeakerNetworkIsolation(),
-        allowAppleEvents: ue ? false : getAllowAppleEvents(),
+        enableWeakerNetworkIsolation: denyAllNetwork ? false : getEnableWeakerNetworkIsolation(),
+        allowAppleEvents: denyAllNetwork ? false : getAllowAppleEvents(),
         binShell,
       });
     case "linux":
@@ -1591,9 +1624,9 @@ async function wrapWithSandboxOnce(
         setEnvVars: credentialRestrictions.setEnvVars,
         maskedFileBinds: credentialRestrictions.maskedFileBinds,
         maskedFileStoreDir: credentialRestrictions.maskedFileStoreDir,
-        enableWeakerNestedSandbox: ue ? false : getEnableWeakerNestedSandbox(),
+        enableWeakerNestedSandbox: denyAllNetwork ? false : getEnableWeakerNestedSandbox(),
         allowNestedUserNamespaces,
-        allowAllUnixSockets: ue ? false : getAllowAllUnixSockets(),
+        allowAllUnixSockets: denyAllNetwork ? false : getAllowAllUnixSockets(),
         binShell,
         ripgrepConfig: getRipgrepConfig(),
         mandatoryDenySearchDepth: getMandatoryDenySearchDepth(),
@@ -1980,4 +2013,4 @@ var SandboxManager_2 = {
   getConfig,
   updateConfig,
 };
-export { SandboxManager_2, Mm };
+export { SandboxManager_2, listenInRange };

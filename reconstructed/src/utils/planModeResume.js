@@ -46,50 +46,51 @@ function planModeResumeResult(planModeResumeOutcome) {
     : "none";
 }
 //@ chunk-0089hrfm.js:918-1016 placement
-function parsePermissionModeOrState(e) {
-  if (e === undefined || e === null) return "absent";
-  return (typeof e === "string" && parsePermissionMode(e)) || "invalid";
+function parsePermissionModeOrState(modeState) {
+  if (modeState === undefined || modeState === null) return "absent";
+  return (typeof modeState === "string" && parsePermissionMode(modeState)) || "invalid";
 }
 //@ chunk-0089hrfm.js:1016-1073 placement = handlePlanModeTransition (0.674)
-function handlePlanModeTransition(e) {
+function handlePlanModeTransition(permissionContext) {
   return {
-    ...transitionPermissionMode(e.mode, "plan", e),
+    ...transitionPermissionMode(permissionContext.mode, "plan", permissionContext),
     mode: "plan",
   };
 }
 //@ chunk-0089hrfm.js:1073-1149 placement
-function withPlanModeContext(e) {
+function withPlanModeContext(context) {
   return {
-    ...e,
-    toolPermissionContext: handlePlanModeTransition(e.toolPermissionContext),
+    ...context,
+    toolPermissionContext: handlePlanModeTransition(context.toolPermissionContext),
   };
 }
 //@ chunk-0089hrfm.js:1149-1218 placement
-function _(e) {
+function _(permissionContext) {
   return (
     planModeResumeEnabled() &&
-    e.mode !== "plan" &&
+    permissionContext.mode !== "plan" &&
     ExitPlanModeV2Tool.isEnabled() &&
-    !getDenyRuleForTool(e, ExitPlanModeV2Tool)
+    !getDenyRuleForTool(permissionContext, ExitPlanModeV2Tool)
   );
 }
 //@ chunk-0089hrfm.js:1218-1779 placement
-function planModeFromWorkerRecord(internal, planModeResumeOutcome, { forkSession: o, transcript: s } = {}) {
+function planModeFromWorkerRecord(internal, planModeResumeOutcome, { forkSession, transcript } = {}) {
   planModeResumeOutcome.recordedMode = parsePermissionModeOrState(internal?.worker_permission_mode);
   if (planModeResumeOutcome.recordedMode === "invalid")
     logForDebugging("[planModeResume] ignoring unrecognized internal_metadata.worker_permission_mode", {
       level: "warn",
     });
-  if (planModeResumeOutcome.recordedMode === "plan" && s && planModeResumeEnabled())
-    planModeResumeOutcome.recordTranscriptState = planSegmentState(s);
-  return (r) => {
-    planModeResumeOutcome.trustedMode ??= r.toolPermissionContext.mode;
-    if (planModeResumeOutcome.recordedMode !== "plan" || o || !_(r.toolPermissionContext)) return r;
+  if (planModeResumeOutcome.recordedMode === "plan" && transcript && planModeResumeEnabled())
+    planModeResumeOutcome.recordTranscriptState = planSegmentState(transcript);
+  return (context) => {
+    planModeResumeOutcome.trustedMode ??= context.toolPermissionContext.mode;
+    if (planModeResumeOutcome.recordedMode !== "plan" || forkSession || !_(context.toolPermissionContext))
+      return context;
     planModeResumeOutcome.source = "internal";
     logForDebugging(
-      `[planModeResume] re-entering plan mode from the prior worker's record (was ${r.toolPermissionContext.mode})`,
+      `[planModeResume] re-entering plan mode from the prior worker's record (was ${context.toolPermissionContext.mode})`,
     );
-    return withPlanModeContext(r);
+    return withPlanModeContext(context);
   };
 }
 //@ chunk-0089hrfm.js:1779-2021 placement
@@ -98,36 +99,36 @@ function settleWorkerPermissionModeRecord(
   mode,
   { planModeOnResume, restored, restartedWorker },
 ) {
-  let i = Boolean(restored?.external || restored?.internal);
-  if (restartedWorker && !i) return;
+  let hasStoredRecord = Boolean(restored?.external || restored?.internal);
+  if (restartedWorker && !hasStoredRecord) return;
   sessionState.enableWorkerPermissionModeRecord();
-  if (planModeOnResume !== undefined && i)
+  if (planModeOnResume !== undefined && hasStoredRecord)
     sessionState.notifyInternalMetadataChanged({
       worker_permission_mode: toExternalPermissionMode(mode),
     });
 }
 //@ chunk-0089hrfm.js:2021-2471 placement
-function planModeFromTranscript(e, planModeResumeOutcome, o, s) {
-  let r =
-    s &&
+function planModeFromTranscript(messages, planModeResumeOutcome, updateSession, transcriptAllowed) {
+  let shouldReenterPlanMode =
+    transcriptAllowed &&
     planModeResumeOutcome.source === "none" &&
     (planModeResumeOutcome.recordedMode === "absent" || planModeResumeOutcome.recordedMode === "invalid") &&
     planModeResumeEnabled() &&
-    planSegmentState(e) === "open";
-  if (r) planModeResumeOutcome.transcriptOpen = true;
-  o((i) => {
-    planModeResumeOutcome.trustedMode ??= i.toolPermissionContext.mode;
+    planSegmentState(messages) === "open";
+  if (shouldReenterPlanMode) planModeResumeOutcome.transcriptOpen = true;
+  updateSession((session) => {
+    planModeResumeOutcome.trustedMode ??= session.toolPermissionContext.mode;
     if (
-      !r ||
-      i.toolPermissionContext.mode === "plan" ||
-      getDenyRuleForTool(i.toolPermissionContext, ExitPlanModeV2Tool)
+      !shouldReenterPlanMode ||
+      session.toolPermissionContext.mode === "plan" ||
+      getDenyRuleForTool(session.toolPermissionContext, ExitPlanModeV2Tool)
     )
-      return i;
+      return session;
     planModeResumeOutcome.source = "transcript";
     logForDebugging(
-      `[planModeResume] re-entering plan mode from the transcript's open plan segment (was ${i.toolPermissionContext.mode})`,
+      `[planModeResume] re-entering plan mode from the transcript's open plan segment (was ${session.toolPermissionContext.mode})`,
     );
-    return withPlanModeContext(i);
+    return withPlanModeContext(session);
   });
 }
 //@ chunk-0089hrfm.js:2471-3414 placement
@@ -135,61 +136,81 @@ function planModeFromTranscript(e, planModeResumeOutcome, o, s) {
  * 从转写中找出最后一段未关闭的计划模式段（plan_mode 附件、/plan、ExitPlanMode 的结果），供恢复会话时判断是否重新进入计划模式。2.1.316 新增，受 tengu_tranquil_fern 控制。
  */
 function planSegmentState(messages) {
-  let n = `<${COMMAND_NAME}>/plan</${COMMAND_NAME}>`;
-  let o = new Set();
-  let s = new Set();
-  let r = countToolCallsSince(messages);
-  let i = false;
-  let d = () => (i ? "none" : "open");
+  let planCommandText = `<${COMMAND_NAME}>/plan</${COMMAND_NAME}>`;
+  let erroredToolUseIds = new Set();
+  let answeredToolUseIds = new Set();
+  let repeatedToolUseIds = countToolCallsSince(messages);
+  let humanTurnSeen = false;
+  let openIfNoHumanTurn = () => (humanTurnSeen ? "none" : "open");
   for (let j = messages.length - 1; j >= 0; j--) {
-    let l = messages[j];
-    if (l.type === "attachment") {
-      let m = l.attachment.type;
-      if (m === "plan_mode" || m === "plan_mode_reentry") return d();
-      if (m === "plan_mode_exit") return "exited";
-    } else if (l.type === "assistant" && Array.isArray(l.message.content)) {
-      let content = l.message.content;
+    let message = messages[j];
+    if (message.type === "attachment") {
+      let attachmentType = message.attachment.type;
+      if (attachmentType === "plan_mode" || attachmentType === "plan_mode_reentry")
+        return openIfNoHumanTurn();
+      if (attachmentType === "plan_mode_exit") return "exited";
+    } else if (message.type === "assistant" && Array.isArray(message.message.content)) {
+      let content = message.message.content;
       for (let j = content.length - 1; j >= 0; j--) {
-        let u = content[j];
-        if (u.type !== "tool_use") continue;
-        if (u.name === EXITPLANMODE_2 && s.has(u.id) && !o.has(u.id) && !r.has(u.id)) return "exited";
-        if (u.name === ENTER_PLAN_MODE_TOOL_NAME && s.has(u.id) && (!o.has(u.id) || r.has(u.id))) return d();
+        let contentBlock = content[j];
+        if (contentBlock.type !== "tool_use") continue;
+        if (
+          contentBlock.name === EXITPLANMODE_2 &&
+          answeredToolUseIds.has(contentBlock.id) &&
+          !erroredToolUseIds.has(contentBlock.id) &&
+          !repeatedToolUseIds.has(contentBlock.id)
+        )
+          return "exited";
+        if (
+          contentBlock.name === ENTER_PLAN_MODE_TOOL_NAME &&
+          answeredToolUseIds.has(contentBlock.id) &&
+          (!erroredToolUseIds.has(contentBlock.id) || repeatedToolUseIds.has(contentBlock.id))
+        )
+          return openIfNoHumanTurn();
       }
-    } else if (l.type === "user" && isToolUseResultMessage(l)) {
-      let content = l.message.content;
+    } else if (message.type === "user" && isToolUseResultMessage(message)) {
+      let content = message.message.content;
       if (Array.isArray(content)) {
-        for (let p of content)
-          if (p.type === "tool_result")
-            (p.is_error || isPlanAwaitingLeader(l, p.content) ? o : s).add(p.tool_use_id);
+        for (let contentBlock of content)
+          if (contentBlock.type === "tool_result")
+            (contentBlock.is_error || isPlanAwaitingLeader(message, contentBlock.content)
+              ? erroredToolUseIds
+              : answeredToolUseIds
+            ).add(contentBlock.tool_use_id);
       }
-    } else if (l.type === "user") {
-      if (getUserMessageText(l)?.trimStart().startsWith(n)) return d();
-      if (l.permissionMode === "plan") return d();
-      if (l.permissionMode !== undefined && !l.isMeta && isHumanOrAutoContinuation(l.origin)) i = true;
+    } else if (message.type === "user") {
+      if (getUserMessageText(message)?.trimStart().startsWith(planCommandText)) return openIfNoHumanTurn();
+      if (message.permissionMode === "plan") return openIfNoHumanTurn();
+      if (
+        message.permissionMode !== undefined &&
+        !message.isMeta &&
+        isHumanOrAutoContinuation(message.origin)
+      )
+        humanTurnSeen = true;
     }
   }
   return "none";
 }
 //@ chunk-0089hrfm.js:3414-3654 placement = countToolCallsSince (1)
-function countToolCallsSince(e) {
-  let n = new Set();
-  let o = new Set();
-  for (let message of e) {
+function countToolCallsSince(messages) {
+  let seenToolUseIds = new Set();
+  let repeatedToolUseIds = new Set();
+  for (let message of messages) {
     if (message.type !== "assistant" || !Array.isArray(message.message.content)) continue;
-    for (let r of message.message.content) {
-      if (r.type !== "tool_use") continue;
-      if (n.has(r.id)) o.add(r.id);
-      else n.add(r.id);
+    for (let contentBlock of message.message.content) {
+      if (contentBlock.type !== "tool_use") continue;
+      if (seenToolUseIds.has(contentBlock.id)) repeatedToolUseIds.add(contentBlock.id);
+      else seenToolUseIds.add(contentBlock.id);
     }
   }
-  return o;
+  return repeatedToolUseIds;
 }
 //@ chunk-0089hrfm.js:3654-3855 placement
 /**
  * 计划是否在等团队负责人批准
  */
-function isPlanAwaitingLeader(e, content) {
-  let toolUseResult = e.toolUseResult;
+function isPlanAwaitingLeader(message, content) {
+  let toolUseResult = message.toolUseResult;
   if (
     toolUseResult !== null &&
     typeof toolUseResult === "object" &&
@@ -204,43 +225,53 @@ function isTranscriptPlanSourceAllowed({ sdkUrl, permissionModeSuppliedOnInvocat
   return !!sdkUrl || permissionModeSuppliedOnInvocation === false;
 }
 //@ chunk-0089hrfm.js:3980-4115 placement
-function restorePlanModeFromTranscriptOnly(messages, n, o) {
+function restorePlanModeFromTranscriptOnly(messages, laneOptions, updateSession) {
   let planModeResumeOutcome = createPlanModeResumeOutcome();
-  planModeFromTranscript(messages, planModeResumeOutcome, o, isTranscriptPlanSourceAllowed(n));
+  planModeFromTranscript(
+    messages,
+    planModeResumeOutcome,
+    updateSession,
+    isTranscriptPlanSourceAllowed(laneOptions),
+  );
   logPlanModeResumeOutcome(planModeResumeOutcome, {
-    lane: n.sdkUrl ? "sdk_url" : "print",
+    lane: laneOptions.sdkUrl ? "sdk_url" : "print",
     hadExternal: false,
     hadInternal: false,
   });
   return planModeResumeResult(planModeResumeOutcome);
 }
 //@ chunk-0089hrfm.js:4115-4367 placement
-function restorePlanModeOnResume(e, n, { lane, forkSession, transcript }) {
+function restorePlanModeOnResume(priorWorkerRecord, updateSession, { lane, forkSession, transcript }) {
   let planModeResumeOutcome = createPlanModeResumeOutcome();
-  n(
-    planModeFromWorkerRecord(e?.internal, planModeResumeOutcome, {
+  updateSession(
+    planModeFromWorkerRecord(priorWorkerRecord?.internal, planModeResumeOutcome, {
       forkSession,
       transcript: transcript?.messages,
     }),
   );
   if (transcript)
-    planModeFromTranscript(transcript.sourceRows, planModeResumeOutcome, n, transcript.sourceAllowed);
+    planModeFromTranscript(
+      transcript.sourceRows,
+      planModeResumeOutcome,
+      updateSession,
+      transcript.sourceAllowed,
+    );
   logPlanModeResumeOutcome(planModeResumeOutcome, {
     lane,
-    hadExternal: !!e?.external,
-    hadInternal: !!e?.internal,
+    hadExternal: !!priorWorkerRecord?.external,
+    hadInternal: !!priorWorkerRecord?.internal,
   });
   return planModeResumeResult(planModeResumeOutcome);
 }
 //@ chunk-0089hrfm.js:4367-4945 placement
 function planModeOnInteractiveResume(
-  e,
+  permissionContext,
   { storedPermissionMode, messages, forkSession, startupModePinned, lane },
 ) {
   let planModeResumeOutcome = createPlanModeResumeOutcome();
-  planModeResumeOutcome.trustedMode = e.mode;
+  planModeResumeOutcome.trustedMode = permissionContext.mode;
   planModeResumeOutcome.recordedMode = parsePermissionModeOrState(storedPermissionMode);
-  if (!startupModePinned && !forkSession && _(e)) {
+  if (!startupModePinned && !forkSession && _(permissionContext)) {
     if (planModeResumeOutcome.recordedMode === "plan") {
       planModeResumeOutcome.recordTranscriptState = planSegmentState(messages);
       if (planModeResumeOutcome.recordTranscriptState !== "exited") planModeResumeOutcome.source = "stored";
@@ -259,9 +290,9 @@ function planModeOnInteractiveResume(
   });
   if (planModeResumeOutcome.source === "none") return;
   logForDebugging(
-    `[planModeResume] re-entering plan mode on resume (source: ${planModeResumeOutcome.source}, was ${e.mode})`,
+    `[planModeResume] re-entering plan mode on resume (source: ${planModeResumeOutcome.source}, was ${permissionContext.mode})`,
   );
-  return handlePlanModeTransition(e);
+  return handlePlanModeTransition(permissionContext);
 }
 //@ chunk-0089hrfm.js:4945-5368 placement
 function logPlanModeResumeOutcome(planModeResumeOutcome, { lane, hadExternal, hadInternal }) {
@@ -288,4 +319,11 @@ export {
   restorePlanModeFromTranscriptOnly,
   restorePlanModeOnResume,
   isTranscriptPlanSourceAllowed,
+  createPlanModeResumeOutcome,
+  logPlanModeResumeOutcome,
+  planModeFromTranscript,
+  planModeFromWorkerRecord,
+  planModeOnInteractiveResume,
+  planModeResumeResult,
+  planSegmentState,
 };

@@ -19,8 +19,8 @@ var MAX_RETRY_WINDOW_MS = 600000;
 /**
  * 导出函数 `retryWindowFor`：参数 e，返回 e.escalated ? e.retryWindowMs : e.firstWindowMs。
  */
-function retryWindowFor(e) {
-  return e.escalated ? e.retryWindowMs : e.firstWindowMs;
+function retryWindowFor(deadline) {
+  return deadline.escalated ? deadline.retryWindowMs : deadline.firstWindowMs;
 }
 //@ chunk-gr2vfhah.js:739-946 placement
 class StreamNoResponseError extends Error {
@@ -39,7 +39,7 @@ class StreamNoResponseError extends Error {
  * 导出函数 `findStreamNoResponseError`：参数 e，返回 t instanceof StreamNoResponseError ? t : void 0。
  */
 function findStreamNoResponseError(error) {
-  let inCauseChain = findInCauseChain(error, (r) => r instanceof StreamNoResponseError);
+  let inCauseChain = findInCauseChain(error, (cause) => cause instanceof StreamNoResponseError);
   return inCauseChain instanceof StreamNoResponseError ? inCauseChain : undefined;
 }
 //@ chunk-gr2vfhah.js:11749-11871 placement
@@ -52,12 +52,12 @@ class StreamNoEventsError extends Error {
 //@ chunk-gr2vfhah.js:11871-12130 placement
 class StreamMalformedEventError extends Error {
   blockState;
-  constructor(e) {
+  constructor(blockState) {
     super("Content block not found");
     this.name = "StreamMalformedEventError";
-    this.blockState = e;
-    if (e === "closed") this.message = "Content block already closed";
-    if (e === "unreadable") this.message = "Stream event unreadable";
+    this.blockState = blockState;
+    if (blockState === "closed") this.message = "Content block already closed";
+    if (blockState === "unreadable") this.message = "Stream event unreadable";
   }
 }
 //@ chunk-gr2vfhah.js:12130-12280 placement

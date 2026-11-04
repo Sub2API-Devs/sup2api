@@ -25,9 +25,18 @@ function isHttpMcpServeInvocation() {
   {
     let argv = process.argv;
     if (argv[2] !== "mcp" || argv[3] !== "serve") return false;
-    let [, , t, ...r] = argv.slice(2);
-    let n = t === "--transport=http" ? r : t === "--transport" && r[0] === "http" ? r.slice(1) : undefined;
-    return isRemoteMcpServeHost() && n !== undefined && n.every((o) => HTTP_SERVE_ARG_PATTERN.test(o));
+    let [, , first, ...rest] = argv.slice(2);
+    let httpArgs =
+      first === "--transport=http"
+        ? rest
+        : first === "--transport" && rest[0] === "http"
+          ? rest.slice(1)
+          : undefined;
+    return (
+      isRemoteMcpServeHost() &&
+      httpArgs !== undefined &&
+      httpArgs.every((arg) => HTTP_SERVE_ARG_PATTERN.test(arg))
+    );
   }
   return false;
 }

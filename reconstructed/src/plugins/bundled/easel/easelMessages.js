@@ -162,19 +162,19 @@ var unreadNumber = (why) => ({
 /**
  * 把数值与单位包装成 {kind:"number", value, unit}（0 视为无单位）。
  */
-var numericValue = (e, t) => ({
+var numericValue = (value, unit) => ({
   kind: "number",
-  value: e,
-  unit: e === 0 ? null : t,
+  value,
+  unit: value === 0 ? null : unit,
 });
 //@ chunk-3s7ydtfd.js:10106-10215 placement
 /**
  * 数值过大或过小时返回错误，否则生成带单位的数值。
  */
-function checkMagnitude(e, t) {
-  let o = Math.abs(e);
-  if (!(o <= MAX_ABS_NUMBER)) return unreadNumber("too large");
-  return o > 0 && o < MIN_ABS_NUMBER ? unreadNumber("too small") : numericValue(e, t);
+function checkMagnitude(value, unit) {
+  let abs = Math.abs(value);
+  if (!(abs <= MAX_ABS_NUMBER)) return unreadNumber("too large");
+  return abs > 0 && abs < MIN_ABS_NUMBER ? unreadNumber("too small") : numericValue(value, unit);
 }
 //@ chunk-3s7ydtfd.js:10215-10225 placement
 /**
@@ -310,12 +310,12 @@ var DAYS_PER_WEEK_TICKS = 7;
 /**
  * 返回一个按入参缓存的函数（Map 记忆化）。
  */
-function memoize(e) {
-  let t = new Map();
-  return (o) => {
-    let r = t.get(o) ?? e(o);
-    t.set(o, r);
-    return r;
+function memoize(compute) {
+  let cache = new Map();
+  return (key) => {
+    let value = cache.get(key) ?? compute(key);
+    cache.set(key, value);
+    return value;
   };
 }
 //@ chunk-3s7ydtfd.js:10573-10672 placement
@@ -331,10 +331,10 @@ var timeFormatterFor = memoize(
     }),
 );
 //@ chunk-3s7ydtfd.js:10672-10959 placement
-function logEaselError(e, zone) {
-  let o = e - Math.floor(e / MS_PER_SECOND_FIELD) * MS_PER_SECOND_FIELD;
+function logEaselError(ms, zone) {
+  let fractionMs = ms - Math.floor(ms / MS_PER_SECOND_FIELD) * MS_PER_SECOND_FIELD;
   if (zone === "UTC") {
-    let date = new Date(e);
+    let date = new Date(ms);
     return [
       date.getUTCFullYear(),
       date.getUTCMonth(),
@@ -342,14 +342,14 @@ function logEaselError(e, zone) {
       date.getUTCHours(),
       date.getUTCMinutes(),
       date.getUTCSeconds(),
-      o,
+      fractionMs,
     ];
   }
-  let [r = 0, s = 1, p = 1, m = 0, n = 0, a = 0] = timeFormatterFor(zone)
-    .format(e)
+  let [year = 0, month = 1, day = 1, hour = 0, minute = 0, second = 0] = timeFormatterFor(zone)
+    .format(ms)
     .split(/[- :]/, TIME_FIELD_COUNT)
     .map(Number);
-  return [r, s - 1, p, m, n, a, o];
+  return [year, month - 1, day, hour, minute, second, fractionMs];
 }
 //@ chunk-3s7ydtfd.js:10959-11273 placement
 var EASEL_PROMPT_HINT = [

@@ -21,8 +21,8 @@ import { logForDebugging } from "../../utils/debug.js";
 import { logEvent } from "../analytics/index.js";
 
 //@ chunk-hxj257dq.js:3902-4170 placement
-function needsWorkflowUsageConsent(e, toolUseContext) {
-  if (e !== WORKFLOW_TOOL_NAME) return false;
+function needsWorkflowUsageConsent(toolName, toolUseContext) {
+  if (toolName !== WORKFLOW_TOOL_NAME) return false;
   if (toolUseContext.options.isNonInteractiveSession) return false;
   if (getToolPermissionContext(toolUseContext).shouldAvoidPermissionPrompts) return false;
   if (isBgSession()) return false;
@@ -32,8 +32,8 @@ function needsWorkflowUsageConsent(e, toolUseContext) {
   return !toolUseContext.session.workflowUsageConsent.isGranted() && !hasSkipWorkflowUsageWarning();
 }
 //@ chunk-hxj257dq.js:4170-4432 placement
-async function acceptWorkflowUsageWarning(e, o) {
-  e.grant();
+async function acceptWorkflowUsageWarning(consent, storageV5) {
+  consent.grant();
   if (hasSkipWorkflowUsageWarning()) return;
   let { error } = await updateSettingsForSource(
     "userSettings",
@@ -41,7 +41,7 @@ async function acceptWorkflowUsageWarning(e, o) {
       skipWorkflowUsageWarning: true,
     },
     undefined,
-    o,
+    storageV5,
   );
   if (error) {
     logForDebugging(`Failed to persist skipWorkflowUsageWarning: ${error.message}`, {
@@ -51,3 +51,4 @@ async function acceptWorkflowUsageWarning(e, o) {
   }
   logEvent("tengu_workflow_usage_warning_accepted", {});
 }
+export { acceptWorkflowUsageWarning, needsWorkflowUsageConsent };

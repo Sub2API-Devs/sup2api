@@ -8,8 +8,10 @@
  * pieces: chunk-ksvdmrg0.js (3), chunk-x6v6jz2y.js (5)
  * attribution: sole-consumer 3, affinity 1, fingerprint 4
  */
-import { getGraphemeSegmenter } from "../../utils/intl.js";
 import { bunStringWidth } from "../stringWidth.js";
+import { emptySgrState, applySgrToState } from "../wrapAnsi.js";
+import { regExp, RESET } from "../../services/daemon/controlServer.js";
+import { getGraphemeSegmenter } from "../../utils/intl.js";
 import { DEC } from "./dec.js";
 import { CSI, ERASE_DISPLAY, ERASE_LINE_REGION, CURSOR_STYLES } from "./csi.js";
 import { C0 } from "./ansi.js";
@@ -18,9 +20,45 @@ import { defaultStyle } from "./types.js";
 import { applySGR } from "./sgr.js";
 import { parseOSC } from "./osc.js";
 import { parseEsc } from "./esc.js";
-import { emptySgrState, applySgrToState } from "../wrapAnsi.js";
-import { regExp, RESET } from "../../services/daemon/controlServer.js";
 
+//@ chunk-ksvdmrg0.js:25056-25067 sole-consumer
+var MAX_SGR_REOPEN = 128;
+//@ chunk-ksvdmrg0.js:25067-25163 affinity
+function reopenSgr(activeCodes) {
+  let joined = activeCodes.filter((activeCode) => activeCode !== "").join(";");
+  return joined === "" || joined.length > MAX_SGR_REOPEN ? "" : `\x1B[${joined}m`;
+}
+//@ chunk-ksvdmrg0.js:25163-25498 fingerprint = segmentGraphemes (0.707)
+/**
+ * 把一行带 ANSI 的文本按显示宽度硬折，换行处关闭活动样式、下一行重新打开。
+ */
+function hardWrapAnsiLine(line, width) {
+  if (bunStringWidth(line) <= width) return [line];
+  let lines = [];
+  let current = "";
+  let currentWidth = 0;
+  let sgrState = emptySgrState();
+  for (let part of line.split(regExp)) {
+    if (part === "") continue;
+    if (part.charCodeAt(0) === 27) {
+      applySgrToState(part, sgrState);
+      current += part;
+      continue;
+    }
+    for (let { segment } of getGraphemeSegmenter().segment(part)) {
+      let segmentWidth = segment.length === 1 && segment.charCodeAt(0) < 127 ? 1 : bunStringWidth(segment);
+      if (currentWidth > 0 && currentWidth + segmentWidth > width) {
+        lines.push(sgrState.some((code) => code !== "") ? current + RESET : current);
+        current = reopenSgr(sgrState);
+        currentWidth = 0;
+      }
+      current += segment;
+      currentWidth += segmentWidth;
+    }
+  }
+  lines.push(current);
+  return lines;
+}
 //@ chunk-x6v6jz2y.js:8409-8729 sole-consumer
 /**
  * 把文本切成 {value, width} 字素序列：纯 ASCII 快速路径，否则用 Intl 字素切分并用 Bun.stringWidth 量宽（至少 1）。
@@ -156,8 +194,11 @@ function parseCSI(rawSequence) {
       type: "sgr",
       params: paramStr,
     };
-  let params = paramStr === "" ? [] : paramStr.split(/[;:]/).map((x) => (x === "" ? 0 : parseInt(x, 10)));
-  let h = params[0] ?? 1;
+  let params =
+    paramStr === ""
+      ? []
+      : paramStr.split(/[;:]/).map((paramPart) => (paramPart === "" ? 0 : parseInt(paramPart, 10)));
+  let firstParam = params[0] ?? 1;
   let col = params[1] ?? 1;
   if (finalByte === CSI.CUU)
     return {
@@ -165,7 +206,7 @@ function parseCSI(rawSequence) {
       action: {
         type: "move",
         direction: "up",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.CUD || finalByte === CSI.VPR)
@@ -174,7 +215,7 @@ function parseCSI(rawSequence) {
       action: {
         type: "move",
         direction: "down",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.CUF || finalByte === CSI.HPR)
@@ -183,7 +224,7 @@ function parseCSI(rawSequence) {
       action: {
         type: "move",
         direction: "forward",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.CUB)
@@ -192,7 +233,7 @@ function parseCSI(rawSequence) {
       action: {
         type: "move",
         direction: "back",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.CNL)
@@ -200,7 +241,7 @@ function parseCSI(rawSequence) {
       type: "cursor",
       action: {
         type: "nextLine",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.CPL)
@@ -208,7 +249,7 @@ function parseCSI(rawSequence) {
       type: "cursor",
       action: {
         type: "prevLine",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.CHA || finalByte === CSI.HPA)
@@ -216,7 +257,7 @@ function parseCSI(rawSequence) {
       type: "cursor",
       action: {
         type: "column",
-        col: h,
+        col: firstParam,
       },
     };
   if (finalByte === CSI.CUP || finalByte === CSI.HVP)
@@ -224,7 +265,7 @@ function parseCSI(rawSequence) {
       type: "cursor",
       action: {
         type: "position",
-        row: h,
+        row: firstParam,
         col,
       },
     };
@@ -233,7 +274,7 @@ function parseCSI(rawSequence) {
       type: "cursor",
       action: {
         type: "row",
-        row: h,
+        row: firstParam,
       },
     };
   if (finalByte === CSI.ED)
@@ -257,7 +298,7 @@ function parseCSI(rawSequence) {
       type: "erase",
       action: {
         type: "chars",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.IL)
@@ -265,7 +306,7 @@ function parseCSI(rawSequence) {
       type: "edit",
       action: {
         type: "insertLines",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.DL)
@@ -273,7 +314,7 @@ function parseCSI(rawSequence) {
       type: "edit",
       action: {
         type: "deleteLines",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.ICH)
@@ -281,7 +322,7 @@ function parseCSI(rawSequence) {
       type: "edit",
       action: {
         type: "insertChars",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.DCH)
@@ -289,7 +330,7 @@ function parseCSI(rawSequence) {
       type: "edit",
       action: {
         type: "deleteChars",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.SU)
@@ -297,7 +338,7 @@ function parseCSI(rawSequence) {
       type: "scroll",
       action: {
         type: "up",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.SD)
@@ -305,7 +346,7 @@ function parseCSI(rawSequence) {
       type: "scroll",
       action: {
         type: "down",
-        count: h,
+        count: firstParam,
       },
     };
   if (finalByte === CSI.DECSTBM)
@@ -313,7 +354,7 @@ function parseCSI(rawSequence) {
       type: "scroll",
       action: {
         type: "setRegion",
-        top: h,
+        top: firstParam,
         bottom: params[1] ?? 0,
       },
     };
@@ -336,18 +377,18 @@ function parseCSI(rawSequence) {
       type: "cursor",
       action: {
         type: "style",
-        ...(CURSOR_STYLES[h] ?? CURSOR_STYLES[0]),
+        ...(CURSOR_STYLES[firstParam] ?? CURSOR_STYLES[0]),
       },
     };
   if (privateMode === "?" && (finalByte === CSI.SM || finalByte === CSI.RM)) {
     let enabled = finalByte === CSI.SM;
-    let E = [];
+    let actions = [];
     for (let param of params) {
-      let T = decModeToAction(param, enabled);
-      if (T) E.push(T);
+      let decModeAction = decModeToAction(param, enabled);
+      if (decModeAction) actions.push(decModeAction);
     }
-    return E.length
-      ? E
+    return actions.length
+      ? actions
       : {
           type: "unknown",
           sequence: rawSequence,
@@ -378,10 +419,10 @@ class Parser {
   tokenizer;
   forOutput;
   tail = "";
-  constructor(o) {
-    this.forOutput = o?.forOutput ?? false;
+  constructor(options) {
+    this.forOutput = options?.forOutput ?? false;
     this.tokenizer = createTokenizer({
-      stringsEndAtLineFeed: o?.stringsEndAtLineFeed,
+      stringsEndAtLineFeed: options?.stringsEndAtLineFeed,
       intermediatesRunToFinal: this.forOutput,
     });
   }
@@ -390,9 +431,9 @@ class Parser {
   linkUrl;
   flush() {
     if (!this.tail) return [];
-    let o = this.processText(this.tail, false);
+    let pending = this.processText(this.tail, false);
     this.tail = "";
-    return o;
+    return pending;
   }
   reset() {
     this.tail = "";
@@ -402,78 +443,78 @@ class Parser {
     this.linkUrl = undefined;
   }
   feed(input) {
-    let r = this.tokenizer.feed(input);
-    let l = [];
-    for (let k = 0; k < r.length; k++) {
-      let d = r[k];
-      if (d.type === "text") {
-        let p = this.tail + d.value;
+    let tokens = this.tokenizer.feed(input);
+    let out = [];
+    for (let k = 0; k < tokens.length; k++) {
+      let token = tokens[k];
+      if (token.type === "text") {
+        let text = this.tail + token.value;
         this.tail = "";
-        let m = this.forOutput && k === r.length - 1;
-        l.push(...this.processText(p, m));
+        let isLastToken = this.forOutput && k === tokens.length - 1;
+        out.push(...this.processText(text, isLastToken));
       } else {
         if (this.tail) {
-          l.push(...this.processText(this.tail, false));
+          out.push(...this.processText(this.tail, false));
           this.tail = "";
         }
-        l.push(...this.processSequence(d.value));
+        out.push(...this.processSequence(token.value));
       }
     }
-    return l;
+    return out;
   }
-  processText(text, r) {
+  processText(text, isLast) {
     let style = this.style;
     if (text.indexOf("\x07") === -1) {
-      let p = [...segmentGraphemes(text)];
-      this.holdTail(p, r);
-      return p.length > 0
+      let graphemes = [...segmentGraphemes(text)];
+      this.holdTail(graphemes, isLast);
+      return graphemes.length > 0
         ? [
             {
               type: "text",
-              graphemes: p,
+              graphemes,
               style,
             },
           ]
         : [];
     }
-    let u = [];
-    for (let p of text.split("\x07")) {
-      if (p) {
-        let graphemes = [...segmentGraphemes(p)];
+    let out = [];
+    for (let chunk of text.split("\x07")) {
+      if (chunk) {
+        let graphemes = [...segmentGraphemes(chunk)];
         if (graphemes.length > 0)
-          u.push({
+          out.push({
             type: "text",
             graphemes,
             style,
           });
       }
-      u.push({
+      out.push({
         type: "bell",
       });
     }
-    u.pop();
-    let last = u.at(-1);
+    out.pop();
+    let last = out.at(-1);
     if (last?.type === "text") {
-      this.holdTail(last.graphemes, r);
-      if (last.graphemes.length === 0) u.pop();
+      this.holdTail(last.graphemes, isLast);
+      if (last.graphemes.length === 0) out.pop();
     }
-    return u;
+    return out;
   }
-  holdTail(o, r) {
-    if (!r || o.length === 0) return;
-    let last = o.at(-1);
+  holdTail(tokens, hold) {
+    if (!hold || tokens.length === 0) return;
+    let last = tokens.at(-1);
     let code = last.value.charCodeAt(last.value.length - 1);
     if (code < 32) return;
     this.tail = last.value;
-    o.pop();
-    if (code >= 55296 && code <= 56319 && o.length > 0) this.tail = o.pop().value + this.tail;
-    while (o.length > 0 && this.tail.length <= 64) {
-      let d = o.at(-1).value;
-      let code = d.charCodeAt(d.length - 1);
-      let m = code >= 56320 && code <= 57343 ? d.codePointAt(d.length - 2) : code;
-      if (m === 8205 || (m !== undefined && m >= 127462 && m <= 127487)) {
-        this.tail = d + this.tail;
-        o.pop();
+    tokens.pop();
+    if (code >= 55296 && code <= 56319 && tokens.length > 0) this.tail = tokens.pop().value + this.tail;
+    while (tokens.length > 0 && this.tail.length <= 64) {
+      let lastToken = tokens.at(-1).value;
+      let code = lastToken.charCodeAt(lastToken.length - 1);
+      let codePoint = code >= 56320 && code <= 57343 ? lastToken.codePointAt(lastToken.length - 2) : code;
+      if (codePoint === 8205 || (codePoint !== undefined && codePoint >= 127462 && codePoint <= 127487)) {
+        this.tail = lastToken + this.tail;
+        tokens.pop();
       } else break;
     }
   }
@@ -526,43 +567,5 @@ class Parser {
         ];
     }
   }
-}
-//@ chunk-ksvdmrg0.js:25056-25067 sole-consumer
-var MAX_SGR_REOPEN = 128;
-//@ chunk-ksvdmrg0.js:25067-25163 affinity
-function reopenSgr(activeCodes) {
-  let joined = activeCodes.filter((activeCode) => activeCode !== "").join(";");
-  return joined === "" || joined.length > MAX_SGR_REOPEN ? "" : `\x1B[${joined}m`;
-}
-//@ chunk-ksvdmrg0.js:25163-25498 fingerprint = segmentGraphemes (0.707)
-/**
- * 把一行带 ANSI 的文本按显示宽度硬折，换行处关闭活动样式、下一行重新打开。
- */
-function hardWrapAnsiLine(line, width) {
-  if (bunStringWidth(line) <= width) return [line];
-  let n = [];
-  let s = "";
-  let h = 0;
-  let activeCodes = emptySgrState();
-  for (let p of line.split(regExp)) {
-    if (p === "") continue;
-    if (p.charCodeAt(0) === 27) {
-      applySgrToState(p, activeCodes);
-      s += p;
-      continue;
-    }
-    for (let { segment } of getGraphemeSegmenter().segment(p)) {
-      let S = segment.length === 1 && segment.charCodeAt(0) < 127 ? 1 : bunStringWidth(segment);
-      if (h > 0 && h + S > width) {
-        n.push(activeCodes.some((R) => R !== "") ? s + RESET : s);
-        s = reopenSgr(activeCodes);
-        h = 0;
-      }
-      s += segment;
-      h += S;
-    }
-  }
-  n.push(s);
-  return n;
 }
 export { hardWrapAnsiLine, Parser };

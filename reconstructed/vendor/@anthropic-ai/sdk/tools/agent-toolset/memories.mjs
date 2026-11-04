@@ -9,12 +9,30 @@ import * as BRt from "crypto";
 import * as zp from "path";
 import { AnthropicError } from "../../core/error.mjs";
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
-import { DEFAULT_MEMORY_SYNC_INTERVAL_MS, M8r } from "./sync-interval.mjs";
+import { DEFAULT_MEMORY_SYNC_INTERVAL_MS, checkMemorySyncInterval } from "./sync-interval.mjs";
 import { loggerFor } from "../../internal/utils/log.mjs";
 import { FileStore_default, FileStoreError, isPathLegal } from "../../internal/file-store.mjs";
 import { isStatus } from "../../internal/utils/backoff.mjs";
 import { decodeUtf8 } from "../../internal/utils/bytes.mjs";
 
+//@ chunk-hwmsct5x.js:17254-17270 esm-layout
+function sleepWithAbort(delta) {}
+//@ chunk-hwmsct5x.js:17270-17462 esm-fingerprint
+var sleepUnlessAborted = (ms, signal) =>
+  new Promise((resolve) => {
+    if (signal?.aborted) return resolve();
+    let onAbort = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    let timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal?.addEventListener("abort", onAbort, {
+      once: true,
+    });
+  });
 //@ chunk-2cw52qnf.js:13458-13570 esm-layout
 var _SessionMemoryStores_instances;
 var _SessionMemoryStores_client;
@@ -108,7 +126,10 @@ class SessionMemoryStores {
       opts.syncIntervalMs ?? DEFAULT_MEMORY_SYNC_INTERVAL_MS,
       "f",
     );
-    M8r(__classPrivateFieldGet(this, _SessionMemoryStores_syncIntervalMs, "f"), "syncIntervalMs");
+    checkMemorySyncInterval(
+      __classPrivateFieldGet(this, _SessionMemoryStores_syncIntervalMs, "f"),
+      "syncIntervalMs",
+    );
     __classPrivateFieldSet(this, _SessionMemoryStores_syncDeletions, opts.syncDeletions ?? "enabled", "f");
     __classPrivateFieldSet(this, _SessionMemoryStores_log, loggerFor(client), "f");
     __classPrivateFieldSet(this, _SessionMemoryStores_lastSyncAt, Date.now(), "f");
@@ -921,22 +942,10 @@ async function settledOrAborted(p, signal) {
     signal.removeEventListener("abort", onAbort);
   }
 }
-//@ chunk-hwmsct5x.js:17254-17270 esm-layout
-function Bt(delta) {}
-//@ chunk-hwmsct5x.js:17270-17462 esm-fingerprint
-var sleepUnlessAborted = (ms, signal) =>
-  new Promise((resolve) => {
-    if (signal?.aborted) return resolve();
-    let s = () => {
-      clearTimeout(timer);
-      resolve();
-    };
-    let timer = setTimeout(() => {
-      signal?.removeEventListener("abort", s);
-      resolve();
-    }, ms);
-    signal?.addEventListener("abort", s, {
-      once: true,
-    });
-  });
-export { sleepUnlessAborted, Bt };
+export {
+  sleepUnlessAborted,
+  sleepWithAbort,
+  MEMORY_FLUSH_TIMEOUT_MS,
+  SessionMemoryError,
+  SessionMemoryStores,
+};

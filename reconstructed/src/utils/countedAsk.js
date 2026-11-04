@@ -30,14 +30,14 @@ class CountedAsk {
     }
     this.#t.clear();
   }
-  settleWhen(e) {
-    e.then(
+  settleWhen(settled) {
+    settled.then(
       () => this.settle(),
       () => this.settle(),
     );
   }
-  onSettle(e) {
-    return this.#t.subscribe(e);
+  onSettle(listener) {
+    return this.#t.subscribe(listener);
   }
 }
 //@ chunk-c8400jaf.js:586-994 placement
@@ -48,25 +48,25 @@ class CountedAskQueue {
   #e = new Map();
   #t = 0;
   #i = createSignal();
-  subscribe = (e) => this.#i.subscribe(e);
-  join(e) {
-    if (e.settled || this.#e.has(e)) return;
+  subscribe = (listener) => this.#i.subscribe(listener);
+  join(ask) {
+    if (ask.settled || this.#e.has(ask)) return;
     this.#e.set(
-      e,
-      e.onSettle(() => this.#s(e)),
+      ask,
+      ask.onSettle(() => this.#s(ask)),
     );
     this.#i.emit();
   }
-  positionLabel(e) {
-    if (!this.#e.has(e)) return null;
-    let i = this.#t + this.#e.size;
-    return i < 2 ? null : `${this.#t + 1} of ${i}`;
+  positionLabel(ask) {
+    if (!this.#e.has(ask)) return null;
+    let total = this.#t + this.#e.size;
+    return total < 2 ? null : `${this.#t + 1} of ${total}`;
   }
-  #s(e) {
-    let i = this.#e.get(e);
-    if (i === undefined) return;
-    i();
-    this.#e.delete(e);
+  #s(ask) {
+    let finish = this.#e.get(ask);
+    if (finish === undefined) return;
+    finish();
+    this.#e.delete(ask);
     this.#t = this.#e.size === 0 ? 0 : this.#t + 1;
     this.#i.emit();
   }

@@ -44,18 +44,18 @@ function buildImagePlaceholderGrid(id, columns, rows) {
   assertImageInt(id, MAX_ITERM_IMAGE_ID - 1);
   assertImageInt(columns, MAX_PLACEHOLDER_INDEX);
   assertImageInt(rows, MAX_PLACEHOLDER_INDEX);
-  let m = [];
+  let placeholders = [];
   for (let idx = 0; idx < rows; idx++) {
-    let g = "";
+    let encoded = "";
     for (let idx_2 = 0; idx_2 < columns; idx_2++)
-      g += encodeImagePlaceholder({
+      encoded += encodeImagePlaceholder({
         id,
         row: idx,
         column: idx_2,
       });
-    m.push(g);
+    placeholders.push(encoded);
   }
-  return m.join(`
+  return placeholders.join(`
 `);
 }
 export { buildImagePlaceholderGrid };

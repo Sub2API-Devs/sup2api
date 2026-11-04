@@ -19,27 +19,27 @@ var measureTextAlias = measureText;
 /**
  * 追加待清理项
  */
-function queuePendingClear(parent, u) {
-  if (parent.pendingClears) parent.pendingClears.push(u);
-  else parent.pendingClears = [u];
+function queuePendingClear(parent, clear) {
+  if (parent.pendingClears) parent.pendingClears.push(clear);
+  else parent.pendingClears = [clear];
 }
 //@ chunk-bzr73sfg.js:175988-176070 placement
 /**
  * 标记根节点被移出
  */
 function markAbsoluteNodeRemoved(parent) {
-  let u = parent;
-  while (u.parentNode) u = u.parentNode;
-  u.absoluteNodeRemoved = true;
+  let ancestor = parent;
+  while (ancestor.parentNode) ancestor = ancestor.parentNode;
+  ancestor.absoluteNodeRemoved = true;
 }
 //@ chunk-bzr73sfg.js:176070-176152 placement
 /**
  * 读取节点是否被整体移出，并复位标记。
  */
 function consumeAbsoluteNodeRemoved(node) {
-  let u = node.absoluteNodeRemoved === true;
+  let wasRemoved = node.absoluteNodeRemoved === true;
   node.absoluteNodeRemoved = false;
-  return u;
+  return wasRemoved;
 }
 //@ chunk-bzr73sfg.js:176152-176712 fingerprint = squashTextNodesToSegments (0.881)
 /**

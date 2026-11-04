@@ -6,19 +6,19 @@
  * attribution: esm-fingerprint 1
  */
 //@ chunk-heg39xxp.js:5419-10036 esm-fingerprint
-var X = {
+var stringParamSchema = {
   ["required"]: false,
   ["type"]: "string",
 };
-var U = {
+var booleanParamSchema = {
   ["required"]: true,
   default: false,
   ["type"]: "boolean",
 };
-var ae = {
+var endpointRef = {
   ["ref"]: "Endpoint",
 };
-var Z = {
+var isSetRegionCondition = {
   ["fn"]: "isSet",
   ["argv"]: [
     {
@@ -26,21 +26,21 @@ var Z = {
     },
   ],
 };
-var n = {
+var regionRef = {
   ["ref"]: "Region",
 };
-var ee = {
+var awsPartitionCondition = {
   ["fn"]: "aws.partition",
-  ["argv"]: [n],
+  ["argv"]: [regionRef],
   assign: "PartitionResult",
 };
-var ce = {
+var useFipsRef = {
   ["ref"]: "UseFIPS",
 };
-var de = {
+var useDualStackRef = {
   ["ref"]: "UseDualStack",
 };
-var r = {
+var globalStsEndpoint = {
   url: "https://sts.amazonaws.com",
   properties: {
     authSchemes: [
@@ -53,26 +53,26 @@ var r = {
   },
   headers: {},
 };
-var c = {};
-var te = {
+var v = {};
+var awsGlobalEndpointRule = {
   conditions: [
     {
       ["fn"]: "stringEquals",
-      ["argv"]: [n, "aws-global"],
+      ["argv"]: [regionRef, "aws-global"],
     },
   ],
-  ["endpoint"]: r,
+  ["endpoint"]: globalStsEndpoint,
   ["type"]: "endpoint",
 };
-var pe = {
+var booleanEqualsCondition = {
   ["fn"]: "booleanEquals",
-  ["argv"]: [ce, true],
+  ["argv"]: [useFipsRef, true],
 };
-var le = {
+var booleanEqualsCondition2 = {
   ["fn"]: "booleanEquals",
-  ["argv"]: [de, true],
+  ["argv"]: [useDualStackRef, true],
 };
-var oe = {
+var partitionSupportsFips = {
   ["fn"]: "getAttr",
   ["argv"]: [
     {
@@ -81,35 +81,35 @@ var oe = {
     "supportsFIPS",
   ],
 };
-var ue = {
+var partitionResultRef = {
   ["ref"]: "PartitionResult",
 };
-var ne = {
+var booleanEqualsCondition3 = {
   ["fn"]: "booleanEquals",
   ["argv"]: [
     true,
     {
       ["fn"]: "getAttr",
-      ["argv"]: [ue, "supportsDualStack"],
+      ["argv"]: [partitionResultRef, "supportsDualStack"],
     },
   ],
 };
-var se = [
+var isSetConditionList = [
   {
     ["fn"]: "isSet",
-    ["argv"]: [ae],
+    ["argv"]: [endpointRef],
   },
 ];
-var re = [pe];
-var ie = [le];
-var Xe = {
+var useFipsEqualsTrueList = [booleanEqualsCondition];
+var useDualStackEqualsTrueList = [booleanEqualsCondition2];
+var ruleSetData = {
   version: "1.0",
   parameters: {
-    Region: X,
-    UseDualStack: U,
-    UseFIPS: U,
-    Endpoint: X,
-    UseGlobalEndpoint: U,
+    Region: stringParamSchema,
+    UseDualStack: booleanParamSchema,
+    UseFIPS: booleanParamSchema,
+    Endpoint: stringParamSchema,
+    UseGlobalEndpoint: booleanParamSchema,
   },
   rules: [
     {
@@ -125,17 +125,17 @@ var Xe = {
         },
         {
           ["fn"]: "not",
-          ["argv"]: se,
+          ["argv"]: isSetConditionList,
         },
-        Z,
-        ee,
+        isSetRegionCondition,
+        awsPartitionCondition,
         {
           ["fn"]: "booleanEquals",
-          ["argv"]: [ce, false],
+          ["argv"]: [useFipsRef, false],
         },
         {
           ["fn"]: "booleanEquals",
-          ["argv"]: [de, false],
+          ["argv"]: [useDualStackRef, false],
         },
       ],
       rules: [
@@ -143,151 +143,151 @@ var Xe = {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "ap-northeast-1"],
+              ["argv"]: [regionRef, "ap-northeast-1"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "ap-south-1"],
+              ["argv"]: [regionRef, "ap-south-1"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "ap-southeast-1"],
+              ["argv"]: [regionRef, "ap-southeast-1"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "ap-southeast-2"],
+              ["argv"]: [regionRef, "ap-southeast-2"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
-        te,
+        awsGlobalEndpointRule,
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "ca-central-1"],
+              ["argv"]: [regionRef, "ca-central-1"],
             },
           ],
-          endpoint: r,
-          ["type"]: "endpoint",
-        },
-        {
-          conditions: [
-            {
-              ["fn"]: "stringEquals",
-              ["argv"]: [n, "eu-central-1"],
-            },
-          ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "eu-north-1"],
+              ["argv"]: [regionRef, "eu-central-1"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "eu-west-1"],
+              ["argv"]: [regionRef, "eu-north-1"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "eu-west-2"],
+              ["argv"]: [regionRef, "eu-west-1"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "eu-west-3"],
+              ["argv"]: [regionRef, "eu-west-2"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "sa-east-1"],
+              ["argv"]: [regionRef, "eu-west-3"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "us-east-1"],
+              ["argv"]: [regionRef, "sa-east-1"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "us-east-2"],
+              ["argv"]: [regionRef, "us-east-1"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "us-west-1"],
+              ["argv"]: [regionRef, "us-east-2"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
           conditions: [
             {
               ["fn"]: "stringEquals",
-              ["argv"]: [n, "us-west-2"],
+              ["argv"]: [regionRef, "us-west-1"],
             },
           ],
-          endpoint: r,
+          endpoint: globalStsEndpoint,
+          ["type"]: "endpoint",
+        },
+        {
+          conditions: [
+            {
+              ["fn"]: "stringEquals",
+              ["argv"]: [regionRef, "us-west-2"],
+            },
+          ],
+          endpoint: globalStsEndpoint,
           ["type"]: "endpoint",
         },
         {
@@ -302,7 +302,7 @@ var Xe = {
                 },
               ],
             },
-            headers: c,
+            headers: v,
           },
           ["type"]: "endpoint",
         },
@@ -310,23 +310,23 @@ var Xe = {
       ["type"]: "tree",
     },
     {
-      conditions: se,
+      conditions: isSetConditionList,
       rules: [
         {
-          conditions: re,
+          conditions: useFipsEqualsTrueList,
           error: "Invalid Configuration: FIPS and custom endpoint are not supported",
           ["type"]: "error",
         },
         {
-          conditions: ie,
+          conditions: useDualStackEqualsTrueList,
           error: "Invalid Configuration: Dualstack and custom endpoint are not supported",
           ["type"]: "error",
         },
         {
           endpoint: {
-            url: ae,
-            properties: c,
-            headers: c,
+            url: endpointRef,
+            properties: v,
+            headers: v,
           },
           ["type"]: "endpoint",
         },
@@ -334,28 +334,28 @@ var Xe = {
       ["type"]: "tree",
     },
     {
-      conditions: [Z],
+      conditions: [isSetRegionCondition],
       rules: [
         {
-          conditions: [ee],
+          conditions: [awsPartitionCondition],
           rules: [
             {
-              conditions: [pe, le],
+              conditions: [booleanEqualsCondition, booleanEqualsCondition2],
               rules: [
                 {
                   conditions: [
                     {
                       ["fn"]: "booleanEquals",
-                      ["argv"]: [true, oe],
+                      ["argv"]: [true, partitionSupportsFips],
                     },
-                    ne,
+                    booleanEqualsCondition3,
                   ],
                   rules: [
                     {
                       endpoint: {
                         url: "https://sts-fips.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                        properties: c,
-                        headers: c,
+                        properties: v,
+                        headers: v,
                       },
                       ["type"]: "endpoint",
                     },
@@ -370,13 +370,13 @@ var Xe = {
               ["type"]: "tree",
             },
             {
-              conditions: re,
+              conditions: useFipsEqualsTrueList,
               rules: [
                 {
                   conditions: [
                     {
                       ["fn"]: "booleanEquals",
-                      ["argv"]: [oe, true],
+                      ["argv"]: [partitionSupportsFips, true],
                     },
                   ],
                   rules: [
@@ -387,7 +387,7 @@ var Xe = {
                           ["argv"]: [
                             {
                               ["fn"]: "getAttr",
-                              ["argv"]: [ue, "name"],
+                              ["argv"]: [partitionResultRef, "name"],
                             },
                             "aws-us-gov",
                           ],
@@ -395,16 +395,16 @@ var Xe = {
                       ],
                       endpoint: {
                         url: "https://sts.{Region}.amazonaws.com",
-                        properties: c,
-                        headers: c,
+                        properties: v,
+                        headers: v,
                       },
                       ["type"]: "endpoint",
                     },
                     {
                       endpoint: {
                         url: "https://sts-fips.{Region}.{PartitionResult#dnsSuffix}",
-                        properties: c,
-                        headers: c,
+                        properties: v,
+                        headers: v,
                       },
                       ["type"]: "endpoint",
                     },
@@ -419,16 +419,16 @@ var Xe = {
               ["type"]: "tree",
             },
             {
-              conditions: ie,
+              conditions: useDualStackEqualsTrueList,
               rules: [
                 {
-                  conditions: [ne],
+                  conditions: [booleanEqualsCondition3],
                   rules: [
                     {
                       endpoint: {
                         url: "https://sts.{Region}.{PartitionResult#dualStackDnsSuffix}",
-                        properties: c,
-                        headers: c,
+                        properties: v,
+                        headers: v,
                       },
                       ["type"]: "endpoint",
                     },
@@ -442,12 +442,12 @@ var Xe = {
               ],
               ["type"]: "tree",
             },
-            te,
+            awsGlobalEndpointRule,
             {
               endpoint: {
                 url: "https://sts.{Region}.{PartitionResult#dnsSuffix}",
-                properties: c,
-                headers: c,
+                properties: v,
+                headers: v,
               },
               ["type"]: "endpoint",
             },
@@ -463,5 +463,5 @@ var Xe = {
     },
   ],
 };
-var me = Xe;
-export { me };
+var ruleSet = ruleSetData;
+export { ruleSet };

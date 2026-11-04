@@ -22,7 +22,7 @@ import {
   bgSupervisorNoun,
 } from "../../utils/fleetGates.js";
 import { isWorkerKindAdmitted } from "../../daemon/runDaemonWorker.js";
-import { daemonJsonPath, daemonLogPath } from "../../services/daemon/paths.js";
+import { daemonJsonPath, daemonLogPath, redactDaemonPipeKey } from "../../services/daemon/paths.js";
 import {
   LeaseClientSchema,
   BG_PROTO,
@@ -108,7 +108,6 @@ import { reapAllBackgroundJobs } from "../../services/daemon/reapJobs.js";
 import { stripAnsi } from "../../utils/stripAnsi.js";
 import { resolveAgentLauncher } from "../../services/daemon/spawnLauncher.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
-import { redactDaemonPipeKey } from "../../utils/sandbox/userNamespace.js";
 import { readSmallFileOrNull } from "../../utils/readSmallFile.js";
 import { openBgDispatchLog } from "../../daemon/bgDispatch.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
@@ -176,47 +175,47 @@ function daemonUsageText() {
 /**
  * 解析 claude daemon 的参数（--json-path、--log-file、--origin、--spawned-by、子命令）。
  */
-function parseDaemonArgs(r) {
-  let e = daemonJsonPath();
-  let o = false;
-  let n = daemonLogPath();
-  let i;
+function parseDaemonArgs(argv) {
+  let jsonPath = daemonJsonPath();
+  let hasExplicitJsonPath = false;
+  let logPath = daemonLogPath();
+  let origin;
   let spawnedBy;
-  let S = new Set();
-  for (let idx = 0; idx < r.length; idx++) {
-    let A = r[idx];
-    if (A === "--json-path" && r[idx + 1]) {
-      S.add(idx);
-      S.add(++idx);
-      e = r[idx];
-      o = true;
-    } else if (A.startsWith("--json-path=")) {
-      S.add(idx);
-      e = A.slice(12);
-      o = true;
-    } else if (A === "--log-file" && r[idx + 1]) {
-      S.add(idx);
-      S.add(++idx);
-      n = r[idx];
-    } else if (A.startsWith("--log-file=")) {
-      S.add(idx);
-      n = A.slice(11);
-    } else if (A === "--origin" && r[idx + 1]) {
-      S.add(idx);
-      S.add(++idx);
-      i = parseDaemonOrigin(r[idx]);
-    } else if (A.startsWith("--origin=")) {
-      S.add(idx);
-      i = parseDaemonOrigin(A.slice(9));
-    } else if (A === "--spawned-by" && r[idx + 1]) {
-      S.add(idx);
-      S.add(++idx);
-      spawnedBy = parseSpawnedByJson(r[idx]);
+  let consumedIndices = new Set();
+  for (let idx = 0; idx < argv.length; idx++) {
+    let arg = argv[idx];
+    if (arg === "--json-path" && argv[idx + 1]) {
+      consumedIndices.add(idx);
+      consumedIndices.add(++idx);
+      jsonPath = argv[idx];
+      hasExplicitJsonPath = true;
+    } else if (arg.startsWith("--json-path=")) {
+      consumedIndices.add(idx);
+      jsonPath = arg.slice(12);
+      hasExplicitJsonPath = true;
+    } else if (arg === "--log-file" && argv[idx + 1]) {
+      consumedIndices.add(idx);
+      consumedIndices.add(++idx);
+      logPath = argv[idx];
+    } else if (arg.startsWith("--log-file=")) {
+      consumedIndices.add(idx);
+      logPath = arg.slice(11);
+    } else if (arg === "--origin" && argv[idx + 1]) {
+      consumedIndices.add(idx);
+      consumedIndices.add(++idx);
+      origin = parseDaemonOrigin(argv[idx]);
+    } else if (arg.startsWith("--origin=")) {
+      consumedIndices.add(idx);
+      origin = parseDaemonOrigin(arg.slice(9));
+    } else if (arg === "--spawned-by" && argv[idx + 1]) {
+      consumedIndices.add(idx);
+      consumedIndices.add(++idx);
+      spawnedBy = parseSpawnedByJson(argv[idx]);
     }
   }
-  let u = [];
-  for (let idx = 0; idx < r.length; idx++) if (!S.has(idx)) u.push(r[idx]);
-  let y = new Set([
+  let rest = [];
+  for (let idx = 0; idx < argv.length; idx++) if (!consumedIndices.has(idx)) rest.push(argv[idx]);
+  let knownSubcommands = new Set([
     "run",
     "install",
     "uninstall",
@@ -232,54 +231,54 @@ function parseDaemonArgs(r) {
     "hub",
   ]);
   let sub = process.stdin.isTTY ? "hub" : "run";
-  let E = -1;
-  for (let idx = 0; idx < u.length; idx++)
-    if (!u[idx].startsWith("-")) {
-      E = idx;
+  let subIndex = -1;
+  for (let idx = 0; idx < rest.length; idx++)
+    if (!rest[idx].startsWith("-")) {
+      subIndex = idx;
       break;
     }
-  if (E === -1)
+  if (subIndex === -1)
     return {
       sub,
-      jsonPath: e,
-      logPath: n,
-      origin: i,
+      jsonPath,
+      logPath,
+      origin,
       spawnedBy,
-      rest: u,
+      rest,
     };
-  let L = u[E];
-  if (!y.has(L)) {
-    if (!/[./\\~]/.test(L))
+  let first = rest[subIndex];
+  if (!knownSubcommands.has(first)) {
+    if (!/[./\\~]/.test(first))
       return {
-        sub: L,
-        jsonPath: e,
-        logPath: n,
-        origin: i,
+        sub: first,
+        jsonPath,
+        logPath,
+        origin,
         spawnedBy,
         rest: [],
       };
     return {
       sub: "run",
-      jsonPath: o ? e : L,
-      logPath: n,
-      origin: i,
+      jsonPath: hasExplicitJsonPath ? jsonPath : first,
+      logPath,
+      origin,
       spawnedBy,
       rest: [],
     };
   }
-  let P = [...u.slice(0, E), ...u.slice(E + 1)];
-  let R = L;
-  if (R === "run" && !o) {
-    let found = P.find((A) => !A.startsWith("-"));
-    if (found) e = found;
+  let remaining = [...rest.slice(0, subIndex), ...rest.slice(subIndex + 1)];
+  let subName = first;
+  if (subName === "run" && !hasExplicitJsonPath) {
+    let found = remaining.find((arg) => !arg.startsWith("-"));
+    if (found) jsonPath = found;
   }
   return {
-    sub: R,
-    jsonPath: e,
-    logPath: n,
-    origin: i,
+    sub: subName,
+    jsonPath,
+    logPath,
+    origin,
     spawnedBy,
-    rest: P,
+    rest: remaining,
   };
 }
 //@ chunk-ss669z1x.js:67094-67209 placement
@@ -292,35 +291,35 @@ function parseDaemonOrigin(value) {
 function describeDaemonOrigin(status) {
   let origin = status.origin ?? "unknown";
   if (origin !== "transient" && origin !== "auto") return origin;
-  let o = LeaseClientSchema().safeParse(status.spawnedBy).data;
-  if (!o) return "transient \u2014 started on-demand by a client";
-  return `transient \u2014 started on-demand by \`${o.label}\` (pid ${o.pid}) in ${o.cwd}`;
+  let spawnedBy = LeaseClientSchema().safeParse(status.spawnedBy).data;
+  if (!spawnedBy) return "transient \u2014 started on-demand by a client";
+  return `transient \u2014 started on-demand by \`${spawnedBy.label}\` (pid ${spawnedBy.pid}) in ${spawnedBy.cwd}`;
 }
 //@ chunk-ss669z1x.js:67479-67685 placement
 function parseSpawnedByJson(json) {
-  let e = safeParseJSON(json, false);
-  if (e === null || typeof e !== "object") return;
-  let o = e;
-  if (typeof o.label === "string" && typeof o.cwd === "string" && typeof o.pid === "number")
+  let parsed = safeParseJSON(json, false);
+  if (parsed === null || typeof parsed !== "object") return;
+  let value = parsed;
+  if (typeof value.label === "string" && typeof value.cwd === "string" && typeof value.pid === "number")
     return {
-      label: o.label,
-      cwd: o.cwd,
-      pid: o.pid,
+      label: value.label,
+      cwd: value.cwd,
+      pid: value.pid,
     };
   return;
 }
 //@ chunk-ss669z1x.js:67685-67727 placement
-function daemonPrint(r) {
+function daemonPrint(line) {
   process.stdout.write(
-    r +
+    line +
       `
 `,
   );
 }
 //@ chunk-ss669z1x.js:67727-67769 placement
-function daemonPrintErr(r) {
+function daemonPrintErr(line) {
   process.stderr.write(
-    r +
+    line +
       `
 `,
   );
@@ -329,27 +328,27 @@ function daemonPrintErr(r) {
 /**
  * 去掉 argv 中的调试相关标志和指定参数。
  */
-function stripDebugArgs(r, e) {
-  let o = [];
-  for (let idx = 0; idx < r.length; idx++) {
-    let i = r[idx];
-    if (e.includes(i)) continue;
+function stripDebugArgs(argv, alreadyConsumed) {
+  let kept = [];
+  for (let idx = 0; idx < argv.length; idx++) {
+    let arg = argv[idx];
+    if (alreadyConsumed.includes(arg)) continue;
     if (
-      i === "--debug" ||
-      i === "-d" ||
-      i === "--debug-to-stderr" ||
-      i === "-d2e" ||
-      i.startsWith("--debug=") ||
-      i.startsWith("--debug-file=")
+      arg === "--debug" ||
+      arg === "-d" ||
+      arg === "--debug-to-stderr" ||
+      arg === "-d2e" ||
+      arg.startsWith("--debug=") ||
+      arg.startsWith("--debug-file=")
     )
       continue;
-    if (i === "--debug-file" && idx + 1 < r.length) {
+    if (arg === "--debug-file" && idx + 1 < argv.length) {
       idx++;
       continue;
     }
-    o.push(i);
+    kept.push(arg);
   }
-  if (o.length > 0) daemonPrintErr(`warning: extra arguments ignored: ${o.join(" ")}`);
+  if (kept.length > 0) daemonPrintErr(`warning: extra arguments ignored: ${kept.join(" ")}`);
 }
 //@ chunk-ss669z1x.js:68118-68318 placement
 function foregroundDaemonRefusalMessage(action, pid) {
@@ -359,31 +358,31 @@ function foregroundDaemonRefusalMessage(action, pid) {
 /**
  * 停止守护进程被拒时（eperm/unverified/timed-out）给出说明。
  */
-function describeDaemonStopRefusal(r, serverLockStatus) {
-  let o;
+function describeDaemonStopRefusal(action, serverLockStatus) {
+  let remedy;
   switch (serverLockStatus.outcome) {
     case "eperm":
-      o = "Stop it from the account that owns it";
+      remedy = "Stop it from the account that owns it";
       break;
     case "unverified":
-      o = stopDaemonHint();
+      remedy = stopDaemonHint();
       break;
     case "timed-out":
-      o = `Wait for it to exit (or kill pid ${serverLockStatus.pid})`;
+      remedy = `Wait for it to exit (or kill pid ${serverLockStatus.pid})`;
       break;
   }
-  return `${r} refused: ${lockHolderProblemText(serverLockStatus)} \u2014 a freshly started service would lose the lockfile race to it and crash-loop. ${o}, then retry.`;
+  return `${action} refused: ${lockHolderProblemText(serverLockStatus)} \u2014 a freshly started service would lose the lockfile race to it and crash-loop. ${remedy}, then retry.`;
 }
 //@ chunk-ss669z1x.js:68653-68747 placement
-function daemonRefusalMessage(r, pid) {
-  return `${r} refused: ${unknownDaemonText(pid)}. Stop it (\`claude daemon stop\`) and retry.`;
+function daemonRefusalMessage(action, pid) {
+  return `${action} refused: ${unknownDaemonText(pid)}. Stop it (\`claude daemon stop\`) and retry.`;
 }
 //@ chunk-ss669z1x.js:68747-69128 placement
 /**
  * 服务管理器已接受操作但守护进程在超时内不可达时的警告文字。
  */
-function daemonUnreachableWarning(r) {
-  return `warning: the service manager accepted the ${r}, but the installed daemon is not reachable after ${DAEMON_START_BUDGET_MS / 1000}s \u2014 the first start after an update can be slow. Check \`claude daemon status\` and \`claude daemon logs\`; if the service file points at a binary or launcher that no longer exists, \`claude daemon install\` rewrites it from the current settings.`;
+function daemonUnreachableWarning(action) {
+  return `warning: the service manager accepted the ${action}, but the installed daemon is not reachable after ${DAEMON_START_BUDGET_MS / 1000}s \u2014 the first start after an update can be slow. Check \`claude daemon status\` and \`claude daemon logs\`; if the service file points at a binary or launcher that no longer exists, \`claude daemon install\` rewrites it from the current settings.`;
 }
 //@ chunk-ss669z1x.js:69128-69268 placement
 async function flushAndExitDaemon(exitCode) {
@@ -400,16 +399,16 @@ async function flushAndExitDaemon(exitCode) {
 /**
  * claude daemon 子命令入口：run/status/logs/stop/install/hub 等服务生命周期操作。
  */
-async function daemonMain(r, e) {
+async function daemonMain(argv, runtime) {
   await ensureFleetGateHydrated({
     kickGrowthBook: false,
   });
-  if (r.includes("--help") || r.includes("-h")) {
+  if (argv.includes("--help") || argv.includes("-h")) {
     if (!isDaemonCliEnabled()) return fleetGateRejected("daemon");
     daemonPrint(daemonUsageText());
     return;
   }
-  let daemonArgs = parseDaemonArgs(r);
+  let daemonArgs = parseDaemonArgs(argv);
   let { jsonPath, logPath, origin, spawnedBy, rest } = daemonArgs;
   let sub = daemonArgs.sub === "hub" && !isDaemonWorkerRegistryEnabled() ? "status" : daemonArgs.sub;
   if (sub !== "run") {
@@ -417,19 +416,22 @@ async function daemonMain(r, e) {
       setIsInteractive(Boolean(process.stdout.isTTY));
   }
   if (!DAEMON_DAEMON_COMMAND_NAMES.has(sub)) {
-    let E = await runFastPathPolicyHelper();
-    if (E) {
-      process.stderr.write(`${E}
+    let policyError = await runFastPathPolicyHelper();
+    if (policyError) {
+      process.stderr.write(`${policyError}
 `);
       process.exit(1);
     }
     if (!isDaemonCliEnabled()) return fleetGateRejected("daemon");
   } else if (sub === "run" || sub === "status") {
-    let E = await runFastPathPolicyHelper();
-    if (E)
-      logForDebugging(`daemon ${sub}: policy helper failed (continuing on static managed settings): ${E}`, {
-        level: "warn",
-      });
+    let policyError = await runFastPathPolicyHelper();
+    if (policyError)
+      logForDebugging(
+        `daemon ${sub}: policy helper failed (continuing on static managed settings): ${policyError}`,
+        {
+          level: "warn",
+        },
+      );
   }
   if (
     DAEMON_SUBCOMMANDS_WITHOUT_TRUST.has(sub) &&
@@ -437,7 +439,7 @@ async function daemonMain(r, e) {
   )
     return fleetGateRejected(`daemon ${sub}`);
   try {
-    let { restoreGatewayAuthForFastPath } = await import("./chunk-hfbqbw5b.js");
+    let { restoreGatewayAuthForFastPath } = await import("../../utils/auth/gatewayAuthFastPath.js");
     await restoreGatewayAuthForFastPath();
   } catch (error) {
     logForDebugging(
@@ -450,36 +452,39 @@ async function daemonMain(r, e) {
   configureGlobalAgents();
   initializeAnalyticsSink();
   if (!DAEMON_SERVICE_SUBCOMMANDS.has(sub) && hasWorkspaceTrust()) initializeGrowthBook().catch(() => {});
-  let D = pinStorageV5(e);
-  if (isStorageV5Enabled() && D !== undefined) {
+  let storage = pinStorageV5(runtime);
+  if (isStorageV5Enabled() && storage !== undefined) {
     initDefaultDebugLog({
-      storageV5: D,
+      storageV5: storage,
     });
-    watchGlobalConfigThroughStorage(D);
-    let [{ composePolicyLimitsClient: E, primePolicyLimitsCache: L }, { primeFastPathCredentials: P }] =
-      await Promise.all([import("./chunk-qchbrsbw.js"), import("./chunk-ts9rfgqd.js")]);
-    let R = credentialsStoreFor(D);
-    setGrowthBookCredentials(R);
-    setGrowthBookStorageBackend(D);
-    E({
-      storageV5: D,
-      credentials: R,
+    watchGlobalConfigThroughStorage(storage);
+    let [{ composePolicyLimitsClient, primePolicyLimitsCache }, { primeFastPathCredentials }] =
+      await Promise.all([
+        import("../../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js"),
+        import("../../utils/primeFastPathCredentials.lazy.js"),
+      ]);
+    let credentialsStore = credentialsStoreFor(storage);
+    setGrowthBookCredentials(credentialsStore);
+    setGrowthBookStorageBackend(storage);
+    composePolicyLimitsClient({
+      storageV5: storage,
+      credentials: credentialsStore,
     });
-    await P(R);
-    await L(D);
-    await seedInstallIDs(D);
+    await primeFastPathCredentials(credentialsStore);
+    await primePolicyLimitsCache(storage);
+    await seedInstallIDs(storage);
   }
-  switch ((initialize1PEventLogging(D), sub)) {
+  switch ((initialize1PEventLogging(storage), sub)) {
     case "list": {
       stripDebugArgs(rest, ["--json"]);
-      let { handleListAllKinds } = await import("./chunk-7904g3ks.js");
-      await handleListAllKinds(rest.includes("--json"), jsonPath, D);
+      let { handleListAllKinds } = await import("../daemon/handleCliKind.lazy.js");
+      await handleListAllKinds(rest.includes("--json"), jsonPath, storage);
       return;
     }
     case "scheduled":
     case "remote-control": {
-      let { handleCliKind } = await import("./chunk-7904g3ks.js");
-      await handleCliKind(sub, rest, jsonPath, D);
+      let { handleCliKind } = await import("../daemon/handleCliKind.lazy.js");
+      await handleCliKind(sub, rest, jsonPath, storage);
       return;
     }
     case "hub": {
@@ -488,8 +493,8 @@ async function daemonMain(r, e) {
         daemonPrint("Interactive hub requires a TTY. See `claude daemon --help`.");
         return;
       }
-      let { renderDaemonHubStandalone } = await import("./chunk-b7gstm5r.js");
-      await renderDaemonHubStandalone(D);
+      let { renderDaemonHubStandalone } = await import("../../components/daemon/DaemonHub.lazy.js");
+      await renderDaemonHubStandalone(storage);
       await waitForInFlightOAuthRefresh(OAUTH_REFRESH_EXIT_WAIT_CAP_MS);
       return process.exit(0);
     }
@@ -499,36 +504,36 @@ async function daemonMain(r, e) {
         return process.exit(0);
       }
       process.title = "claude daemon";
-      let E = resolve(jsonPath);
-      let L = resolve(logPath);
+      let resolvedJsonPath = resolve(jsonPath);
+      let resolvedLogPath = resolve(logPath);
       getDebugFilePath();
       try {
         processChdir(homedir());
       } catch {}
       lockCurrentVersion();
       let abortController = new AbortController();
-      let R = false;
-      let w = () => {
-        if (R) {
+      let isStopping = false;
+      let onSignal = () => {
+        if (isStopping) {
           daemonPrintErr("forced shutdown");
           process.exit(1);
         }
-        R = true;
+        isStopping = true;
         abortController.abort();
       };
-      process.on("SIGINT", w);
-      process.on("SIGTERM", w);
-      let A = origin ?? "foreground";
-      let U;
+      process.on("SIGINT", onSignal);
+      process.on("SIGTERM", onSignal);
+      let daemonOrigin = origin ?? "foreground";
+      let upgradeDetected;
       let exitCode;
       try {
-        ({ upgradeDetected: U, exitCode } = await runBgManager({
-          jsonPath: E,
-          logPath: L,
-          origin: A,
+        ({ upgradeDetected, exitCode } = await runBgManager({
+          jsonPath: resolvedJsonPath,
+          logPath: resolvedLogPath,
+          origin: daemonOrigin,
           spawnedBy,
           signal: abortController.signal,
-          storageV5: D,
+          storageV5: storage,
         }));
       } catch (error) {
         logError(error);
@@ -539,9 +544,9 @@ async function daemonMain(r, e) {
         ]);
         return flushAndExitDaemon(1);
       }
-      if (U) {
-        if (A === "service") return flushAndExitDaemon(DAEMON_USAGE);
-        await spawnDaemon(E, L, A, spawnedBy);
+      if (upgradeDetected) {
+        if (daemonOrigin === "service") return flushAndExitDaemon(DAEMON_USAGE);
+        await spawnDaemon(resolvedJsonPath, resolvedLogPath, daemonOrigin, spawnedBy);
       }
       return flushAndExitDaemon(exitCode);
     }
@@ -571,17 +576,17 @@ async function daemonMain(r, e) {
         logFeatureBad("daemon_service_install", "daemon_service_install_config_dir");
         return flushAndExitDaemon(1);
       }
-      let E = await processWrapperProblem();
-      if (E) {
+      let wrapperProblem = await processWrapperProblem();
+      if (wrapperProblem) {
         logFeatureBad("daemon_service_install", "daemon_service_install_launcher");
         await logEventTo1PAwaitable("tengu_daemon_install", {
           ok: false,
           launcher: true,
         });
-        daemonPrintErr(`install refused: ${E}`);
+        daemonPrintErr(`install refused: ${wrapperProblem}`);
         return flushAndExitDaemon(1);
       }
-      let serverLockStatus = await getServerLockStatus(D);
+      let serverLockStatus = await getServerLockStatus(storage);
       if (serverLockStatus.kind === "foreground") {
         logFeatureBad("daemon_service_install", "daemon_service_install_foreground");
         await logEventTo1PAwaitable("tengu_daemon_install", {
@@ -618,29 +623,30 @@ async function daemonMain(r, e) {
       }
       if (serverLockStatus.kind === "stopped")
         daemonPrint(`stopped detached daemon (pid ${serverLockStatus.pid})`);
-      let P = await installDaemonService({
+      let installResult = await installDaemonService({
         jsonPath,
         logPath,
       });
-      if (!P.ok) {
+      if (!installResult.ok) {
         await logEventTo1PAwaitable("tengu_daemon_install", {
           ok: false,
         });
         logFeatureBad("daemon_service_install", "daemon_service_install_failed");
-        daemonPrintErr(`install failed: ${P.error}`);
-        if (P.servicePath) daemonPrintErr(`  (service file was written to ${P.servicePath})`);
+        daemonPrintErr(`install failed: ${installResult.error}`);
+        if (installResult.servicePath)
+          daemonPrintErr(`  (service file was written to ${installResult.servicePath})`);
         return flushAndExitDaemon(1);
       }
       logFeatureOk("daemon_service_install");
-      daemonPrint(`installed: ${P.servicePath}`);
-      let R = await waitForServiceDaemon(DAEMON_START_BUDGET_MS, D);
+      daemonPrint(`installed: ${installResult.servicePath}`);
+      let installResult2 = await waitForServiceDaemon(DAEMON_START_BUDGET_MS, storage);
       await logEventTo1PAwaitable("tengu_daemon_install", {
         ok: true,
-        reachable: R !== null,
+        reachable: installResult2 !== null,
       });
-      if (R)
+      if (installResult2)
         daemonPrint(
-          `running: pid=${R.pid} origin=${R.origin} (managed by ${getPlatform() === "macos" ? "launchd" : "systemd"})`,
+          `running: pid=${installResult2.pid} origin=${installResult2.origin} (managed by ${getPlatform() === "macos" ? "launchd" : "systemd"})`,
         );
       else
         daemonPrintErr(
@@ -675,8 +681,8 @@ async function daemonMain(r, e) {
         daemonPrintErr("service not installed \u2014 run `claude daemon install` first");
         process.exit(1);
       }
-      let E = await processWrapperProblem();
-      if (E) {
+      let wrapperProblem = await processWrapperProblem();
+      if (wrapperProblem) {
         logFeatureBad("daemon_service_install", "daemon_service_install_launcher");
         await logEventTo1PAwaitable("tengu_daemon_control", {
           op_start: sub === "start",
@@ -684,10 +690,10 @@ async function daemonMain(r, e) {
           ok: false,
           launcher: true,
         });
-        daemonPrintErr(`${sub} refused: ${E}`);
+        daemonPrintErr(`${sub} refused: ${wrapperProblem}`);
         return flushAndExitDaemon(1);
       }
-      let serverLockStatus = await getServerLockStatus(D);
+      let serverLockStatus = await getServerLockStatus(storage);
       if (serverLockStatus.kind === "foreground") {
         logFeatureBad("daemon_service_install", "daemon_service_install_foreground");
         await logEventTo1PAwaitable("tengu_daemon_control", {
@@ -730,148 +736,153 @@ async function daemonMain(r, e) {
       }
       if (serverLockStatus.kind === "stopped")
         daemonPrint(`stopped detached daemon (pid ${serverLockStatus.pid})`);
-      let P = await checkServiceExecStart();
-      if (P.execPathStale || P.launcherPrefixDead) {
+      let execStart = await checkServiceExecStart();
+      if (execStart.execPathStale || execStart.launcherPrefixDead) {
         daemonPrint(
-          P.execPathStale
+          execStart.execPathStale
             ? "service binary missing \u2014 regenerating service file"
             : "installed service starts through a launcher that was deleted or is no longer executable \u2014 regenerating the service file from the current settings",
         );
-        let A = await installDaemonService({
+        let reinstall = await installDaemonService({
           jsonPath,
           logPath,
         });
-        let U = A.ok && (await waitForServiceDaemon(DAEMON_START_BUDGET_MS, D)) !== null;
+        let isReachable =
+          reinstall.ok && (await waitForServiceDaemon(DAEMON_START_BUDGET_MS, storage)) !== null;
         await logEventTo1PAwaitable("tengu_daemon_control", {
           op_start: sub === "start",
           op_restart: sub === "restart",
-          ok: A.ok,
+          ok: reinstall.ok,
           regenerated: true,
-          reachable: U,
+          reachable: isReachable,
         });
-        if (A.ok && U) daemonPrint(sub === "start" ? "started" : "restarted");
-        else if (A.ok) daemonPrintErr(daemonUnreachableWarning(sub));
-        else daemonPrintErr(`regenerate failed: ${A.error}`);
-        return flushAndExitDaemon(A.ok ? 0 : 1);
+        if (reinstall.ok && isReachable) daemonPrint(sub === "start" ? "started" : "restarted");
+        else if (reinstall.ok) daemonPrintErr(daemonUnreachableWarning(sub));
+        else daemonPrintErr(`regenerate failed: ${reinstall.error}`);
+        return flushAndExitDaemon(reinstall.ok ? 0 : 1);
       }
-      let R = await (sub === "start" ? startDaemonService() : restartDaemonService());
-      if (!R.ok) {
+      let startResult = await (sub === "start" ? startDaemonService() : restartDaemonService());
+      if (!startResult.ok) {
         await logEventTo1PAwaitable("tengu_daemon_control", {
           op_start: sub === "start",
           op_restart: sub === "restart",
           ok: false,
         });
-        daemonPrintErr(`${sub} failed: ${R.error}`);
+        daemonPrintErr(`${sub} failed: ${startResult.error}`);
         return flushAndExitDaemon(1);
       }
-      let w = (await waitForServiceDaemon(DAEMON_START_BUDGET_MS, D)) !== null;
+      let isReachable = (await waitForServiceDaemon(DAEMON_START_BUDGET_MS, storage)) !== null;
       await logEventTo1PAwaitable("tengu_daemon_control", {
         op_start: sub === "start",
         op_restart: sub === "restart",
         ok: true,
-        reachable: w,
+        reachable: isReachable,
       });
-      if (w) daemonPrint(sub === "start" ? "started" : "restarted");
+      if (isReachable) daemonPrint(sub === "start" ? "started" : "restarted");
       else daemonPrintErr(daemonUnreachableWarning(sub));
       return flushAndExitDaemon(0);
     }
     case "uninstall": {
       stripDebugArgs(rest, []);
-      let E = await uninstallDaemonService();
+      let uninstallResult = await uninstallDaemonService();
       await logEventTo1PAwaitable("tengu_daemon_control", {
         op_uninstall: true,
-        ok: E.ok,
+        ok: uninstallResult.ok,
       });
-      if (E.ok) {
+      if (uninstallResult.ok) {
         logFeatureOk("daemon_service_uninstall");
         daemonPrint("uninstalled");
       } else {
         logFeatureBad("daemon_service_uninstall", "daemon_service_uninstall_failed");
-        daemonPrintErr(`uninstall failed: ${E.error}`);
+        daemonPrintErr(`uninstall failed: ${uninstallResult.error}`);
       }
-      return flushAndExitDaemon(E.ok ? 0 : 1);
+      return flushAndExitDaemon(uninstallResult.ok ? 0 : 1);
     }
     case "stop": {
       let included = rest.includes("--keep-workers");
       stripDebugArgs(rest, ["--keep-workers", "--any"]);
-      let L = (x) =>
-        included || x === 0 ? "stopped" : `stopped (terminated ${x} ${plural(x, "background session")})`;
-      let P = (kept) => {
+      let stopSummary = (count) =>
+        included || count === 0
+          ? "stopped"
+          : `stopped (terminated ${count} ${plural(count, "background session")})`;
+      let reportLeftRunning = (kept) => {
         if (kept > 0)
           daemonPrintErr(
             `note: ${kept} background ${plural(kept, "session")} could not be verified as still ours and ${kept === 1 ? "was" : "were"} left running (records kept). Re-run \`claude daemon stop\` to retry.`,
           );
       };
-      let R = false;
+      let usedSigkill = false;
       let commandLineRefused = false;
-      let A = async (x, reaped, ae = "daemon_stop_failed") => {
-        if (x) logFeatureOk("daemon_stop");
-        else logFeatureBad("daemon_stop", ae);
+      let finishStop = async (ok, reaped, causeCode = "daemon_stop_failed") => {
+        if (ok) logFeatureOk("daemon_stop");
+        else logFeatureBad("daemon_stop", causeCode);
         await logEventTo1PAwaitable("tengu_daemon_control", {
           op_stop: true,
-          ok: x,
+          ok,
           reaped,
-          holderUnverified: ae === "daemon_stop_holder_unverified",
-          sigkill: R,
+          holderUnverified: causeCode === "daemon_stop_holder_unverified",
+          sigkill: usedSigkill,
           commandLineRefused,
         });
-        return flushAndExitDaemon(x ? 0 : 1);
+        return flushAndExitDaemon(ok ? 0 : 1);
       };
-      let U = await daemonServiceStatus();
-      let liveServerLock = await readLiveServerLock(1, D);
-      let X =
+      let serviceInstalled = await daemonServiceStatus();
+      let liveServerLock = await readLiveServerLock(1, storage);
+      let verifiedLock =
         liveServerLock && hasProcIdentity(liveServerLock) && isProbeablePid(liveServerLock.pid)
           ? liveServerLock
           : null;
-      let Q = liveServerLock;
-      let fe;
-      if (!Q) {
-        let daemonLock = await readDaemonLock(D);
+      let lock = liveServerLock;
+      let stalePid;
+      if (!lock) {
+        let daemonLock = await readDaemonLock(storage);
         if (daemonLock && isProcessRunning(daemonLock.pid)) {
-          let ee = await isClaudeProcess(daemonLock.pid);
-          let ae = ee
+          let isClaude = await isClaudeProcess(daemonLock.pid);
+          let startTime = isClaude
             ? await getProcessStartTimeAsync(daemonLock.pid, {
                 skipCache: true,
               })
             : undefined;
-          let W = procIdentityOf(daemonLock);
-          let ge = W !== undefined && ae !== undefined;
-          if (!ee || (ge && ae !== W)) fe = daemonLock.pid;
-          else if (ge) {
-            X = daemonLock;
-            Q = daemonLock;
-          } else Q = daemonLock;
+          let expectedIdentity = procIdentityOf(daemonLock);
+          let hasIdentity = expectedIdentity !== undefined && startTime !== undefined;
+          if (!isClaude || (hasIdentity && startTime !== expectedIdentity)) stalePid = daemonLock.pid;
+          else if (hasIdentity) {
+            verifiedLock = daemonLock;
+            lock = daemonLock;
+          } else lock = daemonLock;
         }
       }
-      if (!U && Q && !rest.includes("--any")) {
+      if (!serviceInstalled && lock && !rest.includes("--any")) {
         daemonPrintErr(
-          X
-            ? `no background service is installed, but a daemon is running (pid=${Q.pid}, origin=${Q.origin ?? "unknown"}). Run \`claude daemon stop --any\` to stop it.`
-            : `no background service is installed, but pid=${Q.pid} is holding the daemon lock. Run \`claude daemon stop --any\` to stop any background sessions and report on the holder.`,
+          verifiedLock
+            ? `no background service is installed, but a daemon is running (pid=${lock.pid}, origin=${lock.origin ?? "unknown"}). Run \`claude daemon stop --any\` to stop it.`
+            : `no background service is installed, but pid=${lock.pid} is holding the daemon lock. Run \`claude daemon stop --any\` to stop any background sessions and report on the holder.`,
         );
         return flushAndExitDaemon(1);
       }
-      let le = "";
-      if (Q && isViolinVarnishOn()) {
-        let [{ readServedFolders: x }, { servedBackgroundShellsIn: ee }] = await Promise.all([
-          import("./chunk-m8tcv902.js"),
-          import("./chunk-rskr11sp.js"),
+      let servedShellNote = "";
+      if (lock && isViolinVarnishOn()) {
+        let [{ readServedFolders }, { servedBackgroundShellsIn }] = await Promise.all([
+          import("../../daemon/daemonStatus.js"),
+          import("../../remote/tools/serve/servedBackgroundShells.js"),
         ]);
-        let ae = await withDeadline(
-          x(Q.pid, D).then((W) => ee(W.map((ge) => ge.dir))),
+        let shellCount = await withDeadline(
+          readServedFolders(lock.pid, storage).then((folders) =>
+            servedBackgroundShellsIn(folders.map((folder) => folder.dir)),
+          ),
           2000,
         );
-        if (ae)
-          le = `
-note: cloud sessions had ${ae} background ${plural(ae, "command")} running in the folders this daemon served; the ones it was serving are stopped too`;
+        if (shellCount)
+          servedShellNote = `
+note: cloud sessions had ${shellCount} background ${plural(shellCount, "command")} running in the folders this daemon served; the ones it was serving are stopped too`;
       }
-      let _e = await controlRequest({
+      let shutdownResult = await controlRequest({
         proto: BG_PROTO,
         op: "shutdown",
         reapWorkers: !included,
       });
-      if (_e.ok && _e.op === "shutdown") {
-        let x = included
+      if (shutdownResult.ok && shutdownResult.op === "shutdown") {
+        let reapResult = included
           ? {
               reaped: 0,
               kept: 0,
@@ -880,126 +891,133 @@ note: cloud sessions had ${ae} background ${plural(ae, "command")} running in th
               {
                 supervisorKilledAll: true,
               },
-              D,
+              storage,
             );
-        P(x.kept);
-        let max = Math.max(_e.reaped, x.reaped);
-        if (U) {
-          let ae = await stopDaemonService();
-          if (!ae.ok) {
-            daemonPrintErr(`stop failed: ${ae.error}`);
-            return A(false, max);
+        reportLeftRunning(reapResult.kept);
+        let max = Math.max(shutdownResult.reaped, reapResult.reaped);
+        if (serviceInstalled) {
+          let stopResult = await stopDaemonService();
+          if (!stopResult.ok) {
+            daemonPrintErr(`stop failed: ${stopResult.error}`);
+            return finishStop(false, max);
           }
         }
-        daemonPrint(L(max) + le);
-        if (!U) daemonPrint("note: the next `claude agents` or `claude --bg` will start a new one");
-        return A(true, max);
+        daemonPrint(stopSummary(max) + servedShellNote);
+        if (!serviceInstalled)
+          daemonPrint("note: the next `claude agents` or `claude --bg` will start a new one");
+        return finishStop(true, max);
       }
-      let q = false;
-      let Z;
-      if (U) {
-        let x = await stopDaemonService();
-        if (!x.ok) {
-          daemonPrintErr(`stop failed: ${x.error}`);
-          return A(false, 0);
+      let didExit = false;
+      let stopOutcome;
+      if (serviceInstalled) {
+        let stopResult = await stopDaemonService();
+        if (!stopResult.ok) {
+          daemonPrintErr(`stop failed: ${stopResult.error}`);
+          return finishStop(false, 0);
         }
-        q = true;
-      } else if (X && getPlatform() !== "windows") {
+        didExit = true;
+      } else if (verifiedLock && getPlatform() !== "windows") {
         daemonPrintErr(
-          `note: the ${bgSupervisorNoun()} (pid=${X.pid}) did not answer; asking it to exit (SIGTERM) and waiting up to ${DAEMON_STOP_GRACE_MS / 1000}s`,
+          `note: the ${bgSupervisorNoun()} (pid=${verifiedLock.pid}) did not answer; asking it to exit (SIGTERM) and waiting up to ${DAEMON_STOP_GRACE_MS / 1000}s`,
         );
-        Z = await stopDaemonProcess(X, {
+        stopOutcome = await stopDaemonProcess(verifiedLock, {
           gracefulMs: DAEMON_STOP_GRACE_MS,
         });
-        commandLineRefused = Z === "not-a-daemon";
-        if (Z === "timed-out") {
+        commandLineRefused = stopOutcome === "not-a-daemon";
+        if (stopOutcome === "timed-out") {
           daemonPrintErr(
-            `note: the ${bgSupervisorNoun()} (pid=${X.pid}) is still running; force-killing it (SIGKILL)`,
+            `note: the ${bgSupervisorNoun()} (pid=${verifiedLock.pid}) is still running; force-killing it (SIGKILL)`,
           );
-          R = true;
-          Z = await stopDaemonProcess(X, {
+          usedSigkill = true;
+          stopOutcome = await stopDaemonProcess(verifiedLock, {
             signal: "SIGKILL",
           });
         }
-        if (Z === "eperm") {
+        if (stopOutcome === "eperm") {
           daemonPrintErr(
-            `could not stop the ${bgSupervisorNoun()} (pid=${X.pid}): it belongs to another user, so this account cannot signal it. Stop it from that account. No sessions were ended.`,
+            `could not stop the ${bgSupervisorNoun()} (pid=${verifiedLock.pid}): it belongs to another user, so this account cannot signal it. Stop it from that account. No sessions were ended.`,
           );
-          return A(false, 0);
+          return finishStop(false, 0);
         }
-        q = Z === "exited";
+        didExit = stopOutcome === "exited";
       }
-      let B = included
+      let reapResult = included
         ? {
             reaped: 0,
             kept: 0,
           }
-        : await reapAllBackgroundJobs({}, D);
-      let reaped = B.reaped;
-      P(B.kept);
-      if (X && !q && getPlatform() === "windows") {
+        : await reapAllBackgroundJobs({}, storage);
+      let reaped = reapResult.reaped;
+      reportLeftRunning(reapResult.kept);
+      if (verifiedLock && !didExit && getPlatform() === "windows") {
         daemonPrintErr(
           (reaped > 0 ? `terminated ${reaped} background session(s); ` : "") +
-            `supervisor (pid=${X.pid}) is still running \u2014 stop it with ` +
-            `\`taskkill /PID ${X.pid}\` or close the terminal it was started in.`,
+            `supervisor (pid=${verifiedLock.pid}) is still running \u2014 stop it with ` +
+            `\`taskkill /PID ${verifiedLock.pid}\` or close the terminal it was started in.`,
         );
-        return A(false, reaped);
+        return finishStop(false, reaped);
       }
-      if (X && !q) {
-        let x = bgSupervisorNoun();
-        let ee;
-        if (Z === "timed-out")
-          ee = `after SIGKILL. A process that outlives SIGKILL is usually waiting inside the operating system, for example on a network drive that stopped answering, and exits by itself once that wait ends. Until then, \`claude agents\` and \`claude --bg\` cannot start a new ${x}. \`claude daemon status\` says "not running" once it has gone; if it never goes, restart the computer.`;
-        else if (R)
-          ee = `after SIGKILL, and could no longer be verified as the ${x}. It should exit shortly. If \`claude agents\` or \`claude --bg\` still cannot start a new ${x} in a minute, restart the computer.`;
+      if (verifiedLock && !didExit) {
+        let noun = bgSupervisorNoun();
+        let whyStillRunning;
+        if (stopOutcome === "timed-out")
+          whyStillRunning = `after SIGKILL. A process that outlives SIGKILL is usually waiting inside the operating system, for example on a network drive that stopped answering, and exits by itself once that wait ends. Until then, \`claude agents\` and \`claude --bg\` cannot start a new ${noun}. \`claude daemon status\` says "not running" once it has gone; if it never goes, restart the computer.`;
+        else if (usedSigkill)
+          whyStillRunning = `after SIGKILL, and could no longer be verified as the ${noun}. It should exit shortly. If \`claude agents\` or \`claude --bg\` still cannot start a new ${noun} in a minute, restart the computer.`;
         else
-          ee = `${DAEMON_STOP_GRACE_MS / 1000}s after SIGTERM, and could no longer be verified as the ${x}, so it was not sent SIGKILL. While it runs, \`claude agents\` and \`claude --bg\` may not be able to start a new ${x}. Re-run \`claude daemon stop --any${included ? " --keep-workers" : ""}\`. If that does not stop it, run \`ps -ww -o args= -p ${X.pid}\`: if that shows Claude Code started with "daemon" (for example \`\u2026/claude daemon \u2026\` or \`\u2026/cli.js daemon \u2026\`), stop it with \`kill -9 ${X.pid}\`. If it shows anything else, another program probably has that pid: leave it alone, and if \`claude agents\` or \`claude --bg\` still cannot start a new ${x}, delete ${daemonLockPath()}.`;
+          whyStillRunning = `${DAEMON_STOP_GRACE_MS / 1000}s after SIGTERM, and could no longer be verified as the ${noun}, so it was not sent SIGKILL. While it runs, \`claude agents\` and \`claude --bg\` may not be able to start a new ${noun}. Re-run \`claude daemon stop --any${included ? " --keep-workers" : ""}\`. If that does not stop it, run \`ps -ww -o args= -p ${verifiedLock.pid}\`: if that shows Claude Code started with "daemon" (for example \`\u2026/claude daemon \u2026\` or \`\u2026/cli.js daemon \u2026\`), stop it with \`kill -9 ${verifiedLock.pid}\`. If it shows anything else, another program probably has that pid: leave it alone, and if \`claude agents\` or \`claude --bg\` still cannot start a new ${noun}, delete ${daemonLockPath()}.`;
         daemonPrintErr(
           (reaped > 0 ? `terminated ${reaped} background ${plural(reaped, "session")}; ` : "") +
-            `the ${x} was not stopped: pid=${X.pid} is still running ` +
-            ee +
+            `the ${noun} was not stopped: pid=${verifiedLock.pid} is still running ` +
+            whyStillRunning +
             (included ? " No sessions were ended." : ""),
         );
-        return A(false, reaped, "daemon_stop_still_running");
+        return finishStop(false, reaped, "daemon_stop_still_running");
       }
-      if (!q && !X && Q) {
-        let x = Q.pid === 1;
+      if (!didExit && !verifiedLock && lock) {
+        let isPidOne = lock.pid === 1;
         daemonPrintErr(
           (reaped > 0 ? `terminated ${reaped} background ${plural(reaped, "session")}; ` : "") +
-            `the daemon was not stopped: pid=${Q.pid} is holding ${daemonLockPath()} ` +
-            (x
+            `the daemon was not stopped: pid=${lock.pid} is holding ${daemonLockPath()} ` +
+            (isPidOne
               ? "and this command never signals pid 1. If that is a container's entrypoint, stop the container; if not, delete that file."
-              : `but could not be verified as the daemon, so it was not signalled. If no daemon is running, delete that file; if pid ${Q.pid} is a live process you own, stop it yourself.`),
+              : `but could not be verified as the daemon, so it was not signalled. If no daemon is running, delete that file; if pid ${lock.pid} is a live process you own, stop it yourself.`),
         );
-        return A(false, reaped, x ? "daemon_stop_holder_is_init" : "daemon_stop_holder_unverified");
+        return finishStop(
+          false,
+          reaped,
+          isPidOne ? "daemon_stop_holder_is_init" : "daemon_stop_holder_unverified",
+        );
       }
-      if (fe !== undefined)
+      if (stalePid !== undefined)
         daemonPrintErr(
-          `note: ${daemonLockPath()} is stale (pid=${fe} is not the daemon). The next daemon start reclaims it automatically.`,
+          `note: ${daemonLockPath()} is stale (pid=${stalePid} is not the daemon). The next daemon start reclaims it automatically.`,
         );
-      if (!q && !X && reaped === 0) daemonPrint("no daemon running");
+      if (!didExit && !verifiedLock && reaped === 0) daemonPrint("no daemon running");
       else {
-        daemonPrint(L(reaped) + le);
-        if (!U && X) daemonPrint("note: the next `claude agents` or `claude --bg` will start a new one");
+        daemonPrint(stopSummary(reaped) + servedShellNote);
+        if (!serviceInstalled && verifiedLock)
+          daemonPrint("note: the next `claude agents` or `claude --bg` will start a new one");
       }
-      return A(true, reaped);
+      return finishStop(true, reaped);
     }
     case "status": {
       stripDebugArgs(rest, []);
-      let status = await readLiveServerLock(1, D);
+      let status = await readLiveServerLock(1, storage);
       if (!status) {
         daemonPrint("not running");
-        let q = processWrapperError();
-        if (q)
+        let nudgeResult = processWrapperError();
+        if (nudgeResult)
           daemonPrint(
-            `warning: ${q} \u2014 background sessions will refuse to start rather than run unwrapped`,
+            `warning: ${nudgeResult} \u2014 background sessions will refuse to start rather than run unwrapped`,
           );
         else if (processWrapperRecord())
           daemonPrint(
             `launcher: (none running) \u2014 this claude resolves \`${processWrapperRecord()}\` and will start the next ${bgSupervisorNoun()} through it`,
           );
-        let { getBgDaemonStatus, formatBgDaemonStatus } = await import("./chunk-czxapneg.js");
-        daemonPrint(formatBgDaemonStatus(await getBgDaemonStatus(D)));
+        let { getBgDaemonStatus, formatBgDaemonStatus } =
+          await import("../daemon/formatBgDaemonStatus.lazy.js");
+        daemonPrint(formatBgDaemonStatus(await getBgDaemonStatus(storage)));
         await printServedBackgroundShells();
         return flushAndExitDaemon(1);
       }
@@ -1010,48 +1028,51 @@ note: cloud sessions had ${ae} background ${plural(ae, "command")} running in th
       daemonPrint(`origin:  ${describeDaemonOrigin(status)}`);
       daemonPrint(`config:  ${status.jsonPath}`);
       daemonPrint(`log:     ${status.logPath}`);
-      let P = processWrapperError();
-      let R = processWrapperRecord();
+      let wrapperError = processWrapperError();
+      let wrapperRecord = processWrapperRecord();
       let processWrapper = status.processWrapper ?? "";
-      let A = "";
-      if (P || R || processWrapper) {
-        let q = await controlRequest({
+      let wrapperText = "";
+      if (wrapperError || wrapperRecord || processWrapper) {
+        let nudgeResult = await controlRequest({
           proto: BG_PROTO,
           op: "nudge",
         }).catch(() => null);
-        A = q?.ok && q.op === "nudge" ? (q.processWrapper ?? "") : processWrapper;
+        wrapperText =
+          nudgeResult?.ok && nudgeResult.op === "nudge" ? (nudgeResult.processWrapper ?? "") : processWrapper;
       }
-      let U = truncateToLength(collapseWhitespace(stripAnsi(A)), 200);
-      if (P || A || R) {
-        daemonPrint(`launcher: ${U || "(none)"}`);
-        if (status.origin === "service" && (R || A))
+      let wrapperSummary = truncateToLength(collapseWhitespace(stripAnsi(wrapperText)), 200);
+      if (wrapperError || wrapperText || wrapperRecord) {
+        daemonPrint(`launcher: ${wrapperSummary || "(none)"}`);
+        if (status.origin === "service" && (wrapperRecord || wrapperText))
           daemonPrint(
             "  note: the installed service process itself runs outside the launcher; the sessions it spawns are covered \u2014 a launcher-aware `claude daemon install` closes this",
           );
-        if (P) {
+        if (wrapperError) {
           daemonPrint("");
           daemonPrint(
-            `warning: ${P} \u2014 background sessions will refuse to start rather than run unwrapped`,
+            `warning: ${wrapperError} \u2014 background sessions will refuse to start rather than run unwrapped`,
           );
-          if (A)
+          if (wrapperText)
             daemonPrint(
-              `  the running ${bgSupervisorNoun()} still launches sessions via \`${U}\`; do NOT restart it until this is fixed, or no daemon will start at all`,
+              `  the running ${bgSupervisorNoun()} still launches sessions via \`${wrapperSummary}\`; do NOT restart it until this is fixed, or no daemon will start at all`,
             );
-        } else if (A !== R) {
+        } else if (wrapperText !== wrapperRecord) {
           daemonPrint("");
           daemonPrint(
-            `warning: the running ${bgSupervisorNoun()} launches sessions via \`${U || "(no launcher)"}\`, but this claude resolves \`${R || "(no launcher)"}\``,
+            `warning: the running ${bgSupervisorNoun()} launches sessions via \`${wrapperSummary || "(no launcher)"}\`, but this claude resolves \`${wrapperRecord || "(no launcher)"}\``,
           );
           daemonPrint(
             "  restart it \u2014 and your running claude sessions \u2014 to apply the current CLAUDE_CODE_PROCESS_WRAPPER",
           );
         }
       }
-      let { getBgDaemonStatus, formatBgDaemonStatus } = await import("./chunk-czxapneg.js");
-      let bgDaemonStatus = await getBgDaemonStatus(D);
+      let { getBgDaemonStatus, formatBgDaemonStatus } =
+        await import("../daemon/formatBgDaemonStatus.lazy.js");
+      let bgDaemonStatus = await getBgDaemonStatus(storage);
       daemonPrint(formatBgDaemonStatus(bgDaemonStatus));
-      let { readServedFolders, servingToolsLines } = await import("./chunk-m8tcv902.js");
-      for (let q of servingToolsLines(await readServedFolders(status.pid, D))) daemonPrint(q);
+      let { readServedFolders, servingToolsLines } = await import("../../daemon/daemonStatus.js");
+      for (let leaseClient of servingToolsLines(await readServedFolders(status.pid, storage)))
+        daemonPrint(leaseClient);
       await printServedBackgroundShells();
       let origin = status.origin;
       if (origin === "transient" || origin === "auto") {
@@ -1105,15 +1126,15 @@ note: cloud sessions had ${ae} background ${plural(ae, "command")} running in th
             }.VERSION
           }`,
         );
-        let q = (await daemonServiceStatus()) ? "claude daemon stop" : "claude daemon stop --any";
-        daemonPrint(`  run \`${q}\` to pick up the new version`);
+        let stopHint = (await daemonServiceStatus()) ? "claude daemon stop" : "claude daemon stop --any";
+        daemonPrint(`  run \`${stopHint}\` to pick up the new version`);
       }
       return flushAndExitDaemon(0);
     }
     case "logs":
     case "log": {
       stripDebugArgs(rest, []);
-      await tailDaemonLogFile(logPath, D);
+      await tailDaemonLogFile(logPath, storage);
       return;
     }
     default:
@@ -1127,62 +1148,64 @@ note: cloud sessions had ${ae} background ${plural(ae, "command")} running in th
 /**
  * 停止守护进程并确认其退出（必要时 SIGKILL），返回结局。
  */
-async function stopDaemonProcess(r, e) {
-  let o = await signalPid(r.pid, e);
-  if (o !== "timed-out") return o;
-  if (await hasExitedUnreaped(r.pid)) return "exited";
-  let n = e.signal === "SIGKILL" || (await readProcCmdline(r.pid));
-  let i = procIdentityOf(r);
-  let h = await captureProcessStartTimeAsync(r.pid);
-  if (i === undefined || h === undefined) return isProcessRunning(r.pid) ? "unverified" : "exited";
-  if (h !== i) return "exited";
-  return n ? "timed-out" : "not-a-daemon";
+async function stopDaemonProcess(lock, options) {
+  let signalResult = await signalPid(lock.pid, options);
+  if (signalResult !== "timed-out") return signalResult;
+  if (await hasExitedUnreaped(lock.pid)) return "exited";
+  let isSigkill = options.signal === "SIGKILL" || (await readProcCmdline(lock.pid));
+  let expectedIdentity = procIdentityOf(lock);
+  let startTime = await captureProcessStartTimeAsync(lock.pid);
+  if (expectedIdentity === undefined || startTime === undefined)
+    return isProcessRunning(lock.pid) ? "unverified" : "exited";
+  if (startTime !== expectedIdentity) return "exited";
+  return isSigkill ? "timed-out" : "not-a-daemon";
 }
 //@ chunk-ss669z1x.js:86429-86649 placement
 async function printServedBackgroundShells() {
   if (!isViolinVarnishOn()) return;
-  let { readServedBackgroundShells, servedBackgroundShellLines } = await import("./chunk-rskr11sp.js");
-  for (let o of servedBackgroundShellLines(await readServedBackgroundShells(), {
+  let { readServedBackgroundShells, servedBackgroundShellLines } =
+    await import("../../remote/tools/serve/servedBackgroundShells.js");
+  for (let line of servedBackgroundShellLines(await readServedBackgroundShells(), {
     now: Date.now(),
     stopHint: isDaemonCliEnabled() && isWorkerKindAdmitted("remoteControl"),
   }))
-    daemonPrint(o);
+    daemonPrint(line);
 }
 //@ chunk-ss669z1x.js:86649-87577 placement
 /**
  * 后台拉起 claude daemon run 并等待其就绪，失败时报告 stderr 路径。
  */
-async function spawnDaemon(r, e, o, spawnedBy) {
+async function spawnDaemon(jsonPath, logPath, origin, spawnedBy) {
   let { err, stderrPath } = await resolveAgentLauncher([
     "daemon",
     "run",
     "--json-path",
-    r,
+    jsonPath,
     "--log-file",
-    e,
+    logPath,
     "--origin",
-    o,
+    origin,
     ...(spawnedBy ? ["--spawned-by", jsonStringify(spawnedBy)] : []),
   ]);
-  let S = err
+  let problem = err
     ? `failed to spawn: ${errorMessage(err)}`
     : (await waitForDaemonPing(DAEMON_START_BUDGET_MS))
       ? null
       : `spawned but never became reachable within ${DAEMON_START_BUDGET_MS / 1000}s`;
-  if (S !== null) {
-    let u = stderrPath
+  if (problem !== null) {
+    let stderrTail = stderrPath
       ? redactDaemonPipeKey(((await readSmallFileOrNull(stderrPath, 1048576)) ?? "").trim()).slice(-2000)
       : "";
-    let y = await openBgDispatchLog(e).catch(() => null);
-    y?.write(
+    let dispatchLog = await openBgDispatchLog(logPath).catch(() => null);
+    dispatchLog?.write(
       "supervisor",
-      `upgrade self-respawn ${S} \u2014 bg workers may be orphan-reaped ~60s after this process exits unless a client restarts the daemon (run \`claude agents\`)` +
-        (u ? `; successor stderr: ${u}` : ""),
+      `upgrade self-respawn ${problem} \u2014 bg workers may be orphan-reaped ~60s after this process exits unless a client restarts the daemon (run \`claude agents\`)` +
+        (stderrTail ? `; successor stderr: ${stderrTail}` : ""),
     );
-    await y?.close();
+    await dispatchLog?.close();
     if (!err)
       await logEventTo1PAwaitable("tengu_daemon_upgrade_respawn_unreachable", {
-        stderr_captured: u.length > 0,
+        stderr_captured: stderrTail.length > 0,
       });
   }
   if (stderrPath)
@@ -1204,114 +1227,117 @@ async function spawnDaemon(r, e, o, spawnedBy) {
 /**
  * 用 tail -f 跟随守护进程日志文件。
  */
-async function tailDaemonLogFile(logPath, e) {
+async function tailDaemonLogFile(logPath, storage) {
   {
-    let S = spawn("tail", ["-f", logPath], {
+    let child = spawn("tail", ["-f", logPath], {
       stdio: "inherit",
       ...cgroupSpawnOptions("helper"),
     });
     await new Promise((resolve) => {
-      S.on("exit", (y) => {
-        if (y) process.exitCode = y;
+      child.on("exit", (exitCode) => {
+        if (exitCode) process.exitCode = exitCode;
         resolve();
       });
-      S.on("error", (y) => {
-        daemonPrintErr(`tail failed: ${y.message}`);
+      child.on("error", (error) => {
+        daemonPrintErr(`tail failed: ${error.message}`);
         process.exit(1);
       });
     });
     return;
   }
-  if (isStorageV5Enabled() && e !== undefined && logPath === daemonLogPath()) {
-    await tailDaemonLogStorage(logPath, e);
+  if (isStorageV5Enabled() && storage !== undefined && logPath === daemonLogPath()) {
+    await tailDaemonLogStorage(logPath, storage);
     return;
   }
-  let o;
+  let handle;
   try {
-    o = await open(logPath, "r");
+    handle = await open(logPath, "r");
   } catch (error) {
     daemonPrintErr(`cannot open ${logPath}: ${errorMessage(error)}`);
     process.exit(1);
   }
-  let size = (await o.stat()).size;
-  let i = Buffer.alloc(65536);
-  let h = false;
+  let size = (await handle.stat()).size;
+  let buffer = Buffer.alloc(65536);
+  let isStopping = false;
   process.on("SIGINT", () => {
-    h = true;
+    isStopping = true;
   });
-  while (!h) {
-    if ((await o.stat()).size < size) size = 0;
-    let { bytesRead } = await o.read(i, 0, i.length, size);
+  while (!isStopping) {
+    if ((await handle.stat()).size < size) size = 0;
+    let { bytesRead } = await handle.read(buffer, 0, buffer.length, size);
     if (bytesRead > 0) {
-      process.stdout.write(i.subarray(0, bytesRead));
+      process.stdout.write(buffer.subarray(0, bytesRead));
       size += bytesRead;
     } else await sleep(500);
   }
-  await o.close();
+  await handle.close();
 }
 //@ chunk-ss669z1x.js:88204-89055 placement
 /**
  * 从存储后端读取并跟随 daemon-log 记录流。
  */
-async function tailDaemonLogStorage(r, e) {
+async function tailDaemonLogStorage(logPath, storage) {
   let key = STORAGE_SPACES.state("daemon-log");
-  let n = await e.read([
+  let firstRead = await storage.read([
     {
       key,
       offset: 0,
       length: 0,
     },
   ]);
-  if (!n.ok || !n.value.items[0].found) {
-    daemonPrintErr(`cannot open ${r}: ${n.ok ? "no such file or directory" : formatStorageError(n.error)}`);
+  if (!firstRead.ok || !firstRead.value.items[0].found) {
+    daemonPrintErr(
+      `cannot open ${logPath}: ${firstRead.ok ? "no such file or directory" : formatStorageError(firstRead.error)}`,
+    );
     process.exit(1);
   }
-  let totalBytes = n.value.items[0].totalBytes;
-  let h = false;
+  let totalBytes = firstRead.value.items[0].totalBytes;
+  let isStopping = false;
   process.on("SIGINT", () => {
-    h = true;
+    isStopping = true;
   });
-  let S = false;
-  while (!h) {
-    let u = await e.read([
+  let reportedRetry = false;
+  while (!isStopping) {
+    let readResult = await storage.read([
       {
         key,
         offset: totalBytes,
         length: 65536,
       },
     ]);
-    if (!u.ok) {
+    if (!readResult.ok) {
       if (
-        u.error.code === "Unavailable" ||
-        (u.error.code === "Failed" && u.error.failureClass === "permission")
+        readResult.error.code === "Unavailable" ||
+        (readResult.error.code === "Failed" && readResult.error.failureClass === "permission")
       ) {
-        if (!S) {
-          daemonPrintErr(`cannot read ${r}: ${formatStorageError(u.error)}; retrying`);
-          S = true;
+        if (!reportedRetry) {
+          daemonPrintErr(`cannot read ${logPath}: ${formatStorageError(readResult.error)}; retrying`);
+          reportedRetry = true;
         }
         await sleep(500);
         continue;
       }
-      daemonPrintErr(`cannot read ${r}: ${formatStorageError(u.error)}`);
+      daemonPrintErr(`cannot read ${logPath}: ${formatStorageError(readResult.error)}`);
       process.exit(1);
     }
-    let y = u.value.items[0];
-    if (!y.found) {
-      if (!S) {
-        daemonPrintErr(`cannot read ${r}: no such file or directory; retrying`);
-        S = true;
+    let item = readResult.value.items[0];
+    if (!item.found) {
+      if (!reportedRetry) {
+        daemonPrintErr(`cannot read ${logPath}: no such file or directory; retrying`);
+        reportedRetry = true;
       }
       await sleep(500);
       continue;
     }
-    S = false;
-    if (y.totalBytes < totalBytes) {
+    reportedRetry = false;
+    if (item.totalBytes < totalBytes) {
       totalBytes = 0;
       continue;
     }
-    if (y.value.length > 0) {
-      process.stdout.write(y.value);
-      totalBytes += y.value.length;
+    if (item.value.length > 0) {
+      process.stdout.write(item.value);
+      totalBytes += item.value.length;
     } else await sleep(500);
   }
 }
+export { daemonMain };

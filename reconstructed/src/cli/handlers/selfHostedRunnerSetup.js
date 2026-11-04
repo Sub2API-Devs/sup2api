@@ -28,7 +28,7 @@ import { exitAfterAnalyticsFlush } from "../exit.js";
 /**
  * `claude self-hosted-runner setup` 向导的系统提示词：指导模型用 self_hosted_runner_* 工具带操作员完成自托管 runner 配置。
  */
-function buildSelfHostedRunnerSetupPrompt(t) {
+function buildSelfHostedRunnerSetupPrompt(baseUrl) {
   return `You are guiding an operator from zero to a working **self-hosted runner** for Claude Code cloud sessions. The operator must leave able to do this themselves \u2014 you have typed tools that make *you* efficient, but every API tool you call returns an \`equivalent.ui\` path. **After every API tool call, surface that \`equivalent.ui\` path to the operator** so they can repeat the action without you.
 
 Tools handle what's error-prone (auth, JSON parsing, starting the runner). You narrate what's learnable (UI paths, the product surface, deployment patterns). Environment creation and secret issuance happen in the **Admin UI only** \u2014 never via tools. The operator copies the secret value into a file on disk themselves; you only ever refer to the file path.
@@ -39,7 +39,7 @@ If the user passed \`quick\`, run Phase 1 only and stop with a one-paragraph sum
 
 1. **Create the environment in the Admin UI (operator action).** Tell the operator:
 
-   > "Open ${t}/admin-settings/cloud-environments in your browser (Admin settings \u2192 Cloud environments). Make sure **Allow self-hosted environments** is toggled on, then scroll to the **Self-hosted environments** section and click **New**. Pick a name, click **Create**, then click **Copy environment key** \u2014 the environment key is the environment secret the CLI expects, and it's shown once. Paste it into \`./runner-setup/ENVIRONMENT_SECRET\` on this machine \u2014 I'll \`chmod 600\` it afterwards. Check the box confirming the key is saved and click **Finish**. Then click your new environment to open it, and copy the **Environment ID** from the **Configuration** tab (starts with \`ccpool_\`). Tell me the id and say 'done' when the file is saved."
+   > "Open ${baseUrl}/admin-settings/cloud-environments in your browser (Admin settings \u2192 Cloud environments). Make sure **Allow self-hosted environments** is toggled on, then scroll to the **Self-hosted environments** section and click **New**. Pick a name, click **Create**, then click **Copy environment key** \u2014 the environment key is the environment secret the CLI expects, and it's shown once. Paste it into \`./runner-setup/ENVIRONMENT_SECRET\` on this machine \u2014 I'll \`chmod 600\` it afterwards. Check the box confirming the key is saved and click **Finish**. Then click your new environment to open it, and copy the **Environment ID** from the **Configuration** tab (starts with \`ccpool_\`). Tell me the id and say 'done' when the file is saved."
 
    When they respond, Bash \`mkdir -p ./runner-setup && chmod 600 ./runner-setup/ENVIRONMENT_SECRET\` and confirm the file exists + is mode 0600 (via Bash \`ls -l\`).
 
@@ -49,7 +49,7 @@ If the user passed \`quick\`, run Phase 1 only and stop with a one-paragraph sum
 
 4. **Watch the Admin UI flip from 0 \u2192 1 alive.** Poll \`self_hosted_runner_get_pool({pool_id})\` every ~3 seconds (max ~30s) until \`alive_runner_count > 0\`. Also call \`self_hosted_runner_list_runners({pool_id})\` once to show the runner row (lease_expires_at, client_label). Tell the operator to refresh the Cloud environments page and open the environment \u2014 the **Active runners** tile flips to 1. **This is the moment of proof.**
 
-5. **Point them at /code.** First say: *"The runner clones your repository over HTTPS, so an SSH key alone is not enough. It uses the git credentials this machine already has for HTTPS, and it cannot show a sign-in prompt. Pick a public repository, or a private one this machine can clone over HTTPS with no prompt. If you are not sure, pick a public one. Credential options for production: https://code.claude.com/docs/en/self-hosted-environments-deploy#configure-git"* Then: *"Go to ${t}/code \u2014 your environment is in the environment picker, listed under the name you gave it. Select it and start a session; it runs on **this** machine."*
+5. **Point them at /code.** First say: *"The runner clones your repository over HTTPS, so an SSH key alone is not enough. It uses the git credentials this machine already has for HTTPS, and it cannot show a sign-in prompt. Pick a public repository, or a private one this machine can clone over HTTPS with no prompt. If you are not sure, pick a public one. Credential options for production: https://code.claude.com/docs/en/self-hosted-environments-deploy#configure-git"* Then: *"Go to ${baseUrl}/code \u2014 your environment is in the environment picker, listed under the name you gave it. Select it and start a session; it runs on **this** machine."*
 
    **If it fails with git's \`could not read Username\`:** this machine has no HTTPS credential for the repository's git host. Have them pick another repository; change nothing in their git settings and add no git options to this runner. The local runner exits after each session, a failed one too, and the failed session stays in the queue, where a new runner is handed it first and fails the same way. So before they try again: have them archive or delete the failed session; poll \`self_hosted_runner_get_pool({pool_id})\` every ~5 seconds (max ~90s) until \`alive_runner_count\` and \`pending_session_count\` are both 0 (the old runner can take half a minute to leave); then call \`self_hosted_runner_spawn_local\` again with step 3's arguments and wait for \`alive_runner_count\` to read 1. After the wait, if \`alive_runner_count\` still reads 1 the runner has stayed up: spawn nothing. If only \`pending_session_count\` is above 0, ask what is still queued, and spawn once the failed session is gone, even if their next one is already waiting.
 
@@ -105,8 +105,8 @@ var SELF_HOSTED_RUNNER_SETUP_PROMPT =
 /**
  * self-hosted-runner setup 子命令入口：处理 --help，然后以受限工具集启动交互向导。
  */
-async function runSelfHostedRunnerSetup(t, s) {
-  if (t.includes("--help") || t.includes("-h")) {
+async function runSelfHostedRunnerSetup(argv, runtime) {
+  if (argv.includes("--help") || argv.includes("-h")) {
     console.log(`Usage: claude self-hosted-runner setup [args...]
 
 Interactive wizard: walks you from zero to a working self-hosted runner
@@ -116,46 +116,46 @@ local runner, verifies it appears in the Admin UI, and writes a CHEAT-SHEET.md.
 Any extra args are passed to the underlying Claude Code session.`);
     return;
   }
-  await ensureFastPathSettingsLoaded(s);
-  let a = await sessionFactsRestored(s);
-  if (a !== null) exitWithError(a.reason);
+  await ensureFastPathSettingsLoaded(runtime);
+  let sessionProblem = await sessionFactsRestored(runtime);
+  if (sessionProblem !== null) exitWithError(sessionProblem.reason);
   initializeAnalyticsSink();
-  let n = pinStorageV5(s);
-  initialize1PEventLogging(n);
-  if (isStorageV5Enabled() && n !== undefined) {
+  let storage = pinStorageV5(runtime);
+  initialize1PEventLogging(storage);
+  if (isStorageV5Enabled() && storage !== undefined) {
     initDefaultDebugLog({
-      storageV5: n,
+      storageV5: storage,
     });
-    watchGlobalConfigThroughStorage(n);
+    watchGlobalConfigThroughStorage(storage);
     let [
-      { composePolicyLimitsClient: o, primePolicyLimitsCache: c },
-      { credentialsStoreFor: p },
-      { primeFastPathCredentials: m },
+      { composePolicyLimitsClient, primePolicyLimitsCache },
+      { credentialsStoreFor },
+      { primeFastPathCredentials },
     ] = await Promise.all([
-      import("./chunk-qchbrsbw.js"),
-      import("./chunk-y36z1q7c.js"),
-      import("./chunk-ts9rfgqd.js"),
+      import("../../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js"),
+      import("../../utils/secureStorage/credentialsFileStore.js"),
+      import("../../utils/primeFastPathCredentials.lazy.js"),
     ]);
-    o({
-      storageV5: n,
+    composePolicyLimitsClient({
+      storageV5: storage,
     });
-    await m(p(n));
-    await c(n);
-    await seedInstallIDs(n);
+    await primeFastPathCredentials(credentialsStoreFor(storage));
+    await primePolicyLimitsCache(storage);
+    await seedInstallIDs(storage);
   }
   let selfHostedRunnerSetupPrompt = buildSelfHostedRunnerSetupPrompt(claudeAiOrigin());
-  let u = isStandaloneExecutable() ? [] : [process.argv[1]];
-  let d = t.length > 0 && !t[0].startsWith("-") ? [] : [SELF_HOSTED_RUNNER_SETUP_PROMPT];
-  let l = [
-    ...u,
-    ...d,
+  let ownScriptArgs = isStandaloneExecutable() ? [] : [process.argv[1]];
+  let promptArgs = argv.length > 0 && !argv[0].startsWith("-") ? [] : [SELF_HOSTED_RUNNER_SETUP_PROMPT];
+  let childArgs = [
+    ...ownScriptArgs,
+    ...promptArgs,
     "--append-system-prompt",
     selfHostedRunnerSetupPrompt,
     "--tools",
     SELF_HOSTED_RUNNER_SETUP_TOOLS,
     "--permission-mode",
     "default",
-    ...t,
+    ...argv,
   ];
   if (env.DEBUG)
     console.error(
@@ -163,28 +163,29 @@ Any extra args are passed to the underlying Claude Code session.`);
       jsonStringify({
         argv: [
           process.execPath,
-          ...l.map((o) =>
-            o === selfHostedRunnerSetupPrompt ? `<${selfHostedRunnerSetupPrompt.length} chars>` : o,
+          ...childArgs.map((arg) =>
+            arg === selfHostedRunnerSetupPrompt ? `<${selfHostedRunnerSetupPrompt.length} chars>` : arg,
           ),
         ],
       }),
     );
-  let e = spawnSync(process.execPath, l, {
+  let child = spawnSync(process.execPath, childArgs, {
     stdio: "inherit",
   });
-  if (e.error) {
+  if (child.error) {
     await logFeatureBadAsync("cli_self_hosted_setup", "spawn_failed");
-    console.error(`[self-hosted-runner:setup] failed to spawn child: ${e.error.message}`);
+    console.error(`[self-hosted-runner:setup] failed to spawn child: ${child.error.message}`);
     return exitAfterAnalyticsFlush(1);
   }
-  if ((e.status !== null && e.status !== 0) || e.signal) {
-    await logFeatureBadAsync("cli_self_hosted_setup", e.signal ? "child_signal" : "child_nonzero");
+  if ((child.status !== null && child.status !== 0) || child.signal) {
+    await logFeatureBadAsync("cli_self_hosted_setup", child.signal ? "child_signal" : "child_nonzero");
     console.error(
-      `[self-hosted-runner:setup] child exited with status ${e.status ?? "(null)"}${e.signal ? `, signal ${e.signal}` : ""}`,
+      `[self-hosted-runner:setup] child exited with status ${child.status ?? "(null)"}${child.signal ? `, signal ${child.signal}` : ""}`,
     );
   } else await logFeatureOkAsync("cli_self_hosted_setup");
   console.error(
     "[self-hosted-runner:setup] To continue setup, re-run `claude self-hosted-runner setup` \u2014 resuming the session with `claude --resume`/`-c` will not re-enable the setup tools.",
   );
-  return exitAfterAnalyticsFlush(e.status !== null ? e.status : 1);
+  return exitAfterAnalyticsFlush(child.status !== null ? child.status : 1);
 }
+export { runSelfHostedRunnerSetup };

@@ -18,7 +18,7 @@ import {
 } from "../consentRows.js";
 import { generateShellSuggestionsLabel } from "../shellPermissionHelpers.js";
 import { findSafetyCheckReason } from "../../../utils/permissions/permissions.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { processResponse } from "../../../hooks/useSwarmPermissionPoller.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import {
@@ -58,7 +58,14 @@ import {
   SURVEY_QUESTION_LINE_CHARS,
 } from "./skillPermissionOptions.js";
 import { getOriginalCwd } from "../../../bootstrap/state.js";
-import { Q, Se, y, P, zt, init_react_production } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  useMemo,
+  useContext,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  init_react_production,
+} from "../../../../vendor/react/cjs/react.production.js";
 import { useIsScreenReaderEnabled } from "../../../ink/components/ErrorBoundary.js";
 import { useScrollViewportSize } from "../../ScrollViewportContext.js";
 import { TerminalSizeContext } from "../../../ink/terminalModes.js";
@@ -68,6 +75,7 @@ import { sanitizeToolNameForAnalytics } from "../../../services/analytics/metada
 import { useShortcutDisplay } from "../../../keybindings/useKeybindingDisplay.js";
 import { formatShortcutHint } from "../../design-system/KeyboardShortcutHint.js";
 import { useDialogKeybindings } from "../../../keybindings/dialogKeyHints.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1390671-1391495 sole-consumer
 /**
@@ -77,52 +85,62 @@ function buildSuggestionRows(payload) {
   let suggestions =
     "suggestions" in payload.permissionResult ? payload.permissionResult.suggestions : undefined;
   if (!Array.isArray(suggestions) || suggestions.length === 0) return null;
-  let D = [];
+  let rows = [];
   let consentSuggestions = parseConsentSuggestions(suggestions, {
     displayedTypes: DISPLAYED_UPDATE_TYPES,
     renderLabel: generateShellSuggestionsLabel,
   });
-  if (consentSuggestions !== null) D.push(consentSuggestions);
-  let ee = [];
-  let ke = false;
+  if (consentSuggestions !== null) rows.push(consentSuggestions);
+  let directories = [];
+  let isValid = false;
   try {
-    let He = suggestions.length;
-    ke = typeof He === "number" && Number.isSafeInteger(He) && He >= 0 && He <= MAX_CONSENT_RULE_WIDTH;
-    if (ke) {
-      let We = MAX_CONSENT_RULE_WIDTH * CONSENT_ROW_LIMITS;
-      for (let idx = 0; idx < He && ke; idx++)
+    let suggestionCount = suggestions.length;
+    isValid =
+      typeof suggestionCount === "number" &&
+      Number.isSafeInteger(suggestionCount) &&
+      suggestionCount >= 0 &&
+      suggestionCount <= MAX_CONSENT_RULE_WIDTH;
+    if (isValid) {
+      let remainingBudget = MAX_CONSENT_RULE_WIDTH * CONSENT_ROW_LIMITS;
+      for (let idx = 0; idx < suggestionCount && isValid; idx++)
         try {
-          let Xe = suggestions[idx];
-          if (Xe === null || typeof Xe !== "object" || Xe.type !== "addDirectories") continue;
-          let directories = Xe.directories;
-          if (!Array.isArray(directories)) continue;
-          let kt = directories.length;
-          if (typeof kt !== "number" || !Number.isSafeInteger(kt) || kt < 0) continue;
-          We -= kt;
-          if (We < 0) {
-            ke = false;
+          let suggestion = suggestions[idx];
+          if (suggestion === null || typeof suggestion !== "object" || suggestion.type !== "addDirectories")
+            continue;
+          let directories_2 = suggestion.directories;
+          if (!Array.isArray(directories_2)) continue;
+          let directoryCount = directories_2.length;
+          if (
+            typeof directoryCount !== "number" ||
+            !Number.isSafeInteger(directoryCount) ||
+            directoryCount < 0
+          )
+            continue;
+          remainingBudget -= directoryCount;
+          if (remainingBudget < 0) {
+            isValid = false;
             break;
           }
-          for (let idx = 0; idx < kt; idx++) ee.push(directories[idx]);
+          for (let idx = 0; idx < directoryCount; idx++) directories.push(directories_2[idx]);
         } catch {}
     }
   } catch {
-    ke = false;
+    isValid = false;
   }
-  if (ke && ee.length > 0) {
-    let modeSuggestions = parseModeSuggestions(ee);
-    if (modeSuggestions !== null) D.push(modeSuggestions);
+  if (isValid && directories.length > 0) {
+    let modeSuggestions = parseModeSuggestions(directories);
+    if (modeSuggestions !== null) rows.push(modeSuggestions);
   }
-  let [Re, ...Be] = D;
-  if (Re === undefined) return null;
-  return Be.length === 0 ? Re : combineRows(Re, ...Be);
+  let [firstRow, ...restRows] = rows;
+  if (firstRow === undefined) return null;
+  return restRows.length === 0 ? firstRow : combineRows(firstRow, ...restRows);
 }
 //@ chunk-18hwfzwa.js:1391495-1391665 sole-consumer
 function hasBlockingSafetyCheck(payload) {
   let decisionReason =
     payload.permissionResult.behavior === "ask" ? payload.permissionResult.decisionReason : undefined;
   return (
-    findSafetyCheckReason(decisionReason, (D) => !D.classifierApprovable) !== undefined ||
+    findSafetyCheckReason(decisionReason, (check) => !check.classifierApprovable) !== undefined ||
     payload.isAskCappedByOrg
   );
 }
@@ -136,91 +154,91 @@ function isSkillInputWithheld(payload) {
   );
 }
 //@ chunk-18hwfzwa.js:1391836-1391890 affinity
-function displayTextOf(h) {
-  return h.kind === "full" ? h.text : h.marker;
+function displayTextOf(text) {
+  return text.kind === "full" ? text.text : text.marker;
 }
 //@ chunk-18hwfzwa.js:1391890-1395417 fingerprint = SkillPermissionRequest (0.304)
 /**
  * Skill 权限：显示技能名、来源与安全检查，选项允许 / 应用建议规则 / 拒绝。
  */
 function SkillPermissionRequest(props) {
-  let $ = w(50);
+  let $ = useMemoCache(50);
   let { payload, answer } = props;
-  let ee;
+  let suggestionRows;
   if ($[0] !== payload) {
-    ee =
+    suggestionRows =
       payload.showAlwaysAllow && !hasBlockingSafetyCheck(payload) && !isSkillInputWithheld(payload)
         ? buildSuggestionRows(payload)
         : null;
     $[0] = payload;
-    $[1] = ee;
-  } else ee = $[1];
-  let ke = ee;
-  let Re;
-  if ($[2] !== answer || $[3] !== payload || $[4] !== ke) {
-    Re = (Be, He) => answer(processResponse(Be, payload, ke, He));
+    $[1] = suggestionRows;
+  } else suggestionRows = $[1];
+  let suggestionRows_2 = suggestionRows;
+  let onSelect;
+  if ($[2] !== answer || $[3] !== payload || $[4] !== suggestionRows_2) {
+    onSelect = (choice, feedback) => answer(processResponse(choice, payload, suggestionRows_2, feedback));
     $[2] = answer;
     $[3] = payload;
-    $[4] = ke;
-    $[5] = Re;
-  } else Re = $[5];
-  let onSelect = Re;
-  let ze;
+    $[4] = suggestionRows_2;
+    $[5] = onSelect;
+  } else onSelect = $[5];
+  let onSelect_2 = onSelect;
+  let onCancel;
   if ($[6] !== answer) {
-    ze = () =>
+    onCancel = () =>
       answer({
         behavior: "deny",
       });
     $[6] = answer;
-    $[7] = ze;
-  } else ze = $[7];
-  let onCancel = ze;
-  let rt = payload.permissionResult.inPlaceOfClassifier === true;
-  let kt;
+    $[7] = onCancel;
+  } else onCancel = $[7];
+  let onCancel_2 = onCancel;
+  let hideIndexes = payload.permissionResult.inPlaceOfClassifier === true;
+  let noOption;
   if ($[8] === MEMO_CACHE_SENTINEL) {
-    kt = {
+    noOption = {
       label: "No",
       value: "no",
       feedbackConfig: {
         type: "reject",
       },
     };
-    $[8] = kt;
-  } else kt = $[8];
-  let At = kt;
-  let It;
+    $[8] = noOption;
+  } else noOption = $[8];
+  let noOption_2 = noOption;
+  let yesOption;
   if ($[9] === MEMO_CACHE_SENTINEL) {
-    It = {
+    yesOption = {
       label: "Yes",
       value: "yes",
       feedbackConfig: {
         type: "accept",
       },
     };
-    $[9] = It;
-  } else It = $[9];
-  let Ot = It;
-  let Et;
-  if ($[10] !== rt || $[11] !== ke) {
-    Et = rt ? [At, Ot] : [Ot];
-    if (ke !== null) {
-      let Dt;
-      if ($[13] !== ke.node) {
-        Dt = {
-          label: ke.node,
+    $[9] = yesOption;
+  } else yesOption = $[9];
+  let yesOption_2 = yesOption;
+  let options;
+  if ($[10] !== hideIndexes || $[11] !== suggestionRows_2) {
+    options = hideIndexes ? [noOption_2, yesOption_2] : [yesOption_2];
+    if (suggestionRows_2 !== null) {
+      let applyOption;
+      if ($[13] !== suggestionRows_2.node) {
+        applyOption = {
+          label: suggestionRows_2.node,
           value: "yes-apply-suggestions",
         };
-        $[13] = ke.node;
-        $[14] = Dt;
-      } else Dt = $[14];
-      Et.push(Dt);
+        $[13] = suggestionRows_2.node;
+        $[14] = applyOption;
+      } else applyOption = $[14];
+      options.push(applyOption);
     }
-    if (!rt) Et.push(At);
-    $[10] = rt;
-    $[11] = ke;
-    $[12] = Et;
-  } else Et = $[12];
-  let options = Et;
+    if (!hideIndexes) options.push(noOption_2);
+    $[10] = hideIndexes;
+    $[11] = suggestionRows_2;
+    $[12] = options;
+  } else options = $[12];
+  let options_2 = options;
   const requestSource = payload.requestSource;
   const monitorDescription = payload.monitorDescription ?? "";
   let multiline;
@@ -238,9 +256,9 @@ function SkillPermissionRequest(props) {
     $[17] = payload.monitorDescription;
     $[18] = children;
   } else children = $[18];
-  let so;
+  let descriptionBox;
   if ($[19] !== multiline || $[20] !== children) {
-    so = jsxProd_default(Box, {
+    descriptionBox = jsxProd_default(Box, {
       flexDirection: "column",
       paddingX: 1,
       children: jsxProd_default(Blockquote, {
@@ -250,8 +268,8 @@ function SkillPermissionRequest(props) {
     });
     $[19] = multiline;
     $[20] = children;
-    $[21] = so;
-  } else so = $[21];
+    $[21] = descriptionBox;
+  } else descriptionBox = $[21];
   let children_2;
   if (
     $[22] !== payload.command ||
@@ -341,17 +359,17 @@ function SkillPermissionRequest(props) {
     $[25] = payload.ws;
     $[26] = children_2;
   } else children_2 = $[26];
-  let ao;
+  let commandFrame;
   if ($[27] !== children_2) {
-    ao = jsxProd_default(DiffFrame, {
+    commandFrame = jsxProd_default(DiffFrame, {
       children: children_2,
     });
     $[27] = children_2;
-    $[28] = ao;
-  } else ao = $[28];
-  let co;
+    $[28] = commandFrame;
+  } else commandFrame = $[28];
+  let hostsSummary;
   if ($[29] !== payload.networkAllowHosts) {
-    co =
+    hostsSummary =
       payload.networkAllowHosts !== undefined &&
       payload.networkAllowHosts.length > 0 &&
       jsxProd_default(Box, {
@@ -361,13 +379,13 @@ function SkillPermissionRequest(props) {
         }),
       });
     $[29] = payload.networkAllowHosts;
-    $[30] = co;
-  } else co = $[30];
+    $[30] = hostsSummary;
+  } else hostsSummary = $[30];
   const toolType = payload.mcp || payload.ws ? "tool" : "command";
-  const rowBudget = rt ? MAX_EXPLANATION_LINES : undefined;
-  let Bo;
+  const rowBudget = hideIndexes ? MAX_EXPLANATION_LINES : undefined;
+  let ruleExplanation;
   if ($[31] !== payload.permissionResult || $[32] !== toolType || $[33] !== rowBudget) {
-    Bo = jsxProd_default(PermissionRuleExplanation, {
+    ruleExplanation = jsxProd_default(PermissionRuleExplanation, {
       permissionResult: payload.permissionResult,
       toolType,
       rowBudget,
@@ -375,63 +393,68 @@ function SkillPermissionRequest(props) {
     $[31] = payload.permissionResult;
     $[32] = toolType;
     $[33] = rowBudget;
-    $[34] = Bo;
-  } else Bo = $[34];
-  let Ro;
+    $[34] = ruleExplanation;
+  } else ruleExplanation = $[34];
+  let prompt;
   if (
-    $[35] !== onCancel ||
-    $[36] !== onSelect ||
-    $[37] !== rt ||
-    $[38] !== options ||
+    $[35] !== onCancel_2 ||
+    $[36] !== onSelect_2 ||
+    $[37] !== hideIndexes ||
+    $[38] !== options_2 ||
     $[39] !== payload.requestSource
   ) {
-    Ro = jsxProd_default(PermissionPrompt, {
-      options,
-      hideIndexes: rt,
-      onSelect,
-      onCancel,
+    prompt = jsxProd_default(PermissionPrompt, {
+      options: options_2,
+      hideIndexes,
+      onSelect: onSelect_2,
+      onCancel: onCancel_2,
       requestSource: payload.requestSource,
     });
-    $[35] = onCancel;
-    $[36] = onSelect;
-    $[37] = rt;
-    $[38] = options;
+    $[35] = onCancel_2;
+    $[36] = onSelect_2;
+    $[37] = hideIndexes;
+    $[38] = options_2;
     $[39] = payload.requestSource;
-    $[40] = Ro;
-  } else Ro = $[40];
-  let Ho;
-  if ($[41] !== co || $[42] !== Bo || $[43] !== Ro) {
-    Ho = jsxProd_default_2(Box, {
+    $[40] = prompt;
+  } else prompt = $[40];
+  let bodyBox;
+  if ($[41] !== hostsSummary || $[42] !== ruleExplanation || $[43] !== prompt) {
+    bodyBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingX: 1,
-      children: [co, Bo, Ro],
+      children: [hostsSummary, ruleExplanation, prompt],
     });
-    $[41] = co;
-    $[42] = Bo;
-    $[43] = Ro;
-    $[44] = Ho;
-  } else Ho = $[44];
-  let Io;
-  if ($[45] !== payload.requestSource || $[46] !== so || $[47] !== ao || $[48] !== Ho) {
-    Io = jsxProd_default_2(PermissionDialog_2, {
+    $[41] = hostsSummary;
+    $[42] = ruleExplanation;
+    $[43] = prompt;
+    $[44] = bodyBox;
+  } else bodyBox = $[44];
+  let dialog;
+  if (
+    $[45] !== payload.requestSource ||
+    $[46] !== descriptionBox ||
+    $[47] !== commandFrame ||
+    $[48] !== bodyBox
+  ) {
+    dialog = jsxProd_default_2(PermissionDialog_2, {
       title: MONITOR,
       innerPaddingX: 0,
       requestSource,
-      children: [so, ao, Ho],
+      children: [descriptionBox, commandFrame, bodyBox],
     });
     $[45] = payload.requestSource;
-    $[46] = so;
-    $[47] = ao;
-    $[48] = Ho;
-    $[49] = Io;
-  } else Io = $[49];
-  return Io;
+    $[46] = descriptionBox;
+    $[47] = commandFrame;
+    $[48] = bodyBox;
+    $[49] = dialog;
+  } else dialog = $[49];
+  return dialog;
 }
 //@ chunk-18hwfzwa.js:1409005-1409162 affinity
-function shouldOfferAlwaysAllow(h) {
-  let decisionReason = h.permissionResult.decisionReason;
-  let D = decisionReason?.type === "safetyCheck" && !decisionReason.classifierApprovable;
-  return h.showAlwaysAllow && !D && !h.isAskCappedByOrg;
+function shouldOfferAlwaysAllow(payload) {
+  let decisionReason = payload.permissionResult.decisionReason;
+  let isUnapprovableCheck = decisionReason?.type === "safetyCheck" && !decisionReason.classifierApprovable;
+  return payload.showAlwaysAllow && !isUnapprovableCheck && !payload.isAskCappedByOrg;
 }
 //@ chunk-18hwfzwa.js:1409162-1409256 fingerprint = _temp (0.709)
 function shouldOfferExactSkillRule(input) {
@@ -453,151 +476,160 @@ function shouldOfferPrefixSkillRule(payload) {
  */
 function SkillUsePermissionDialog({ payload, answer }) {
   let originalCwd = getOriginalCwd();
-  let L = Q(
+  let skillDescription = useMemo(
     () => (payload.skillDescription ? displayField(payload.skillDescription) : undefined),
     [payload.skillDescription],
   );
-  let ee = Q(() => resolveSkillDisplay(payload), [payload]);
-  let ke = ee !== undefined;
+  let skillDisplay = useMemo(() => resolveSkillDisplay(payload), [payload]);
+  let hasSkill = skillDisplay !== undefined;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let Be = plainDisplay(ee?.name ?? payload.skill);
-  let He = Be !== null ? `Use skill "${Be.display}"?` : null;
+  let skillName = plainDisplay(skillDisplay?.name ?? payload.skill);
+  let title = skillName !== null ? `Use skill "${skillName.display}"?` : null;
   let { columns } = useScrollViewportSize(
-    Se(TerminalSizeContext) ?? {
+    useContext(TerminalSizeContext) ?? {
       rows: 0,
       columns: 0,
     },
   );
-  let ze = He !== null && (!ke || fitsWithMeta(He, payload.requestSource, columns - 2));
-  let Xe = ee?.isWithoutSkill === true;
-  let calledAs = ee?.calledAs;
-  let kt = Xe ? "" : (L?.text ?? "");
-  let At = !ke
+  let titleFits = title !== null && (!hasSkill || fitsWithMeta(title, payload.requestSource, columns - 2));
+  let isWithoutSkill = skillDisplay?.isWithoutSkill === true;
+  let calledAs = skillDisplay?.calledAs;
+  let descriptionText = isWithoutSkill ? "" : (skillDescription?.text ?? "");
+  let contentText = !hasSkill
     ? ""
-    : ze || Be === null
-      ? kt
-      : `"${Be.display}"
-${kt}`;
+    : titleFits || skillName === null
+      ? descriptionText
+      : `"${skillName.display}"
+${descriptionText}`;
   let decisionReason = payload.permissionResult.decisionReason;
   let reason =
     decisionReason !== undefined && "reason" in decisionReason && typeof decisionReason.reason === "string"
       ? decisionReason.reason
       : "";
   let skillAskRevealMemory = useSkillAskRevealMemory();
-  let display = Be?.display ?? "";
-  let contentKey = Q(
+  let display = skillName?.display ?? "";
+  let contentKey = useMemo(
     () => ({
       shownNameText: display,
-      descriptionText: kt,
+      descriptionText,
       reasonText: reason,
     }),
-    [display, kt, reason],
+    [display, descriptionText, reason],
   );
-  let oo = FittedOfferBody(At, {
-    isActive: ke,
+  let offerBody = FittedOfferBody(contentText, {
+    isActive: hasSkill,
     isCut: !isScreenReaderEnabled,
     contentKey,
     keptForRequest: skillAskRevealMemory,
   });
-  let Xt = oo.offersStanding && !oo.isStandingHeld;
+  let offersStanding = offerBody.offersStanding && !offerBody.isStandingHeld;
   let matchedAskRule =
     payload.permissionResult.behavior === "ask" ? payload.permissionResult.matchedAskRule : undefined;
-  let so = columns < SKILL_NARROW_COLUMNS;
-  let [po, ao] = y(() => skillAskRevealMemory?.has("narrower") ?? false);
-  P(() => {
-    if (ke && so) ao(true);
-  }, [ke, so]);
-  zt(() => {
-    if (ke && so) skillAskRevealMemory?.keep("narrower");
-  }, [ke, so, skillAskRevealMemory]);
-  let co = Xt && !so && !po;
-  let permissionResult = Q(() => payload.permissionResult, [payload.permissionResult, ke, matchedAskRule]);
-  let Ao = Q(() => {
-    if (ee !== undefined) return null;
+  let isNarrow = columns < SKILL_NARROW_COLUMNS;
+  let [wasNarrow, setWasNarrow] = useState(() => skillAskRevealMemory?.has("narrower") ?? false);
+  useEffect(() => {
+    if (hasSkill && isNarrow) setWasNarrow(true);
+  }, [hasSkill, isNarrow]);
+  useLayoutEffect(() => {
+    if (hasSkill && isNarrow) skillAskRevealMemory?.keep("narrower");
+  }, [hasSkill, isNarrow, skillAskRevealMemory]);
+  let canOfferExact = offersStanding && !isNarrow && !wasNarrow;
+  let permissionResult = useMemo(
+    () => payload.permissionResult,
+    [payload.permissionResult, hasSkill, matchedAskRule],
+  );
+  let exactRule = useMemo(() => {
+    if (skillDisplay !== undefined) return null;
     return shouldOfferExactSkillRule(payload) ? buildSkillExactRule(payload, originalCwd) : null;
-  }, [payload, originalCwd, ee, matchedAskRule, co, isScreenReaderEnabled]);
-  let Bo = Q(
+  }, [payload, originalCwd, skillDisplay, matchedAskRule, canOfferExact, isScreenReaderEnabled]);
+  let prefixRule = useMemo(
     () =>
       resolveSkillDisplay(payload) === undefined && shouldOfferPrefixSkillRule(payload)
         ? buildSkillPrefixRule(payload, originalCwd)
         : null,
     [payload, originalCwd],
   );
-  let Ro = payload.permissionResult.inPlaceOfClassifier === true;
-  let options = Q(() => {
-    let mr = {
+  let hideIndexes = payload.permissionResult.inPlaceOfClassifier === true;
+  let options = useMemo(() => {
+    let noOption = {
       label: "No",
       value: "no",
       feedbackConfig: {
         type: "reject",
       },
     };
-    let Kn = {
+    let yesOption = {
       label: "Yes",
       value: "yes",
       feedbackConfig: {
         type: "accept",
       },
     };
-    let Wn = Ro ? [mr, Kn] : [Kn];
-    if (Ao !== null) {
-      let Fr = ke && !co;
-      Wn.push({
-        label: Fr ? HIDDEN_EXACT_RULE_LABEL : Ao.node,
+    let optionList = hideIndexes ? [noOption, yesOption] : [yesOption];
+    if (exactRule !== null) {
+      let blockExact = hasSkill && !canOfferExact;
+      optionList.push({
+        label: blockExact ? HIDDEN_EXACT_RULE_LABEL : exactRule.node,
         value: "yes-exact",
-        disabled: Fr,
+        disabled: blockExact,
       });
     }
-    if (Bo !== null)
-      Wn.push({
-        label: Bo.node,
+    if (prefixRule !== null)
+      optionList.push({
+        label: prefixRule.node,
         value: "yes-prefix",
       });
-    if (!Ro) Wn.push(mr);
-    return Wn;
-  }, [Ao, Bo, Ro, ke, co]);
-  let toolAnalyticsContext = Q(
+    if (!hideIndexes) optionList.push(noOption);
+    return optionList;
+  }, [exactRule, prefixRule, hideIndexes, hasSkill, canOfferExact]);
+  let toolAnalyticsContext = useMemo(
     () => ({
       toolName: sanitizeToolNameForAnalytics(payload.toolName),
       isMcp: payload.isMcp,
     }),
     [payload.toolName, payload.isMcp],
   );
-  let [Wo, mn] = y();
-  let Cn = undefined;
-  let No = Cn === "both" || (Cn === "unread" && SKILL_UNREAD_HINT_ENABLED);
-  let vo = !ke || false;
-  let Yo = ke && !Xe && oo.isMeasured && !oo.fitsScreen && !isScreenReaderEnabled;
-  let [kn, Fn] = y(() => skillAskRevealMemory?.has("hint") ?? false);
-  P(() => {
-    if (Yo && matchedAskRule !== undefined) Fn(true);
-  }, [Yo, matchedAskRule]);
-  zt(() => {
-    if (Yo && matchedAskRule !== undefined) skillAskRevealMemory?.keep("hint");
-  }, [Yo, matchedAskRule, skillAskRevealMemory]);
-  let bn = undefined;
-  let Go =
-    !ke || Xe || No
+  let [consentDrawn, setConsentDrawn] = useState();
+  let unusedStatus = undefined;
+  let showUnreadHint = unusedStatus === "both" || (unusedStatus === "unread" && SKILL_UNREAD_HINT_ENABLED);
+  let canAnswerYes = !hasSkill || false;
+  let showTooShort =
+    hasSkill && !isWithoutSkill && offerBody.isMeasured && !offerBody.fitsScreen && !isScreenReaderEnabled;
+  let [askRuleHintShown, setAskRuleHintShown] = useState(() => skillAskRevealMemory?.has("hint") ?? false);
+  useEffect(() => {
+    if (showTooShort && matchedAskRule !== undefined) setAskRuleHintShown(true);
+  }, [showTooShort, matchedAskRule]);
+  useLayoutEffect(() => {
+    if (showTooShort && matchedAskRule !== undefined) skillAskRevealMemory?.keep("hint");
+  }, [showTooShort, matchedAskRule, skillAskRevealMemory]);
+  let unusedHint = undefined;
+  let offerHint =
+    !hasSkill || isWithoutSkill || showUnreadHint
       ? undefined
-      : Cn === "unread"
+      : unusedStatus === "unread"
         ? UNREAD_OFFER_HINT
-        : Cn === "cut"
+        : unusedStatus === "cut"
           ? CUT_OFFER_HINT
           : undefined;
-  let Mn =
-    (Yo ? (Go === undefined && bn !== undefined ? bn.tooShort : TERMINAL_TOO_SHORT_HINT) : Go) ??
-    (calledAs === null ? UNREAD_OFFER_HINT : bn !== undefined ? bn.question : undefined);
-  let onSelect = (mr, Kn) => {
-    if ((mr !== "no" && !vo) || (mr === "yes-exact" && ke && !co)) return false;
+  let question =
+    (showTooShort
+      ? offerHint === undefined && unusedHint !== undefined
+        ? unusedHint.tooShort
+        : TERMINAL_TOO_SHORT_HINT
+      : offerHint) ??
+    (calledAs === null ? UNREAD_OFFER_HINT : unusedHint !== undefined ? unusedHint.question : undefined);
+  let onSelect = (choice, feedback) => {
+    if ((choice !== "no" && !canAnswerYes) || (choice === "yes-exact" && hasSkill && !canOfferExact))
+      return false;
     return answer(
       skillChoiceToResult(
-        mr,
+        choice,
         payload,
         {
-          exactRow: Ao,
-          prefixRow: Bo,
+          exactRow: exactRule,
+          prefixRow: prefixRule,
         },
-        Kn,
+        feedback,
       ),
     );
   };
@@ -606,8 +638,8 @@ ${kt}`;
       behavior: "deny",
     });
   let chord = useShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");
-  let showNextRows = oo.showNextRows;
-  let bindings = Q(
+  let showNextRows = offerBody.showNextRows;
+  let bindings = useMemo(
     () => [
       {
         action: "app:toggleTranscript",
@@ -616,13 +648,14 @@ ${kt}`;
     ],
     [showNextRows],
   );
-  let cn = ke && (oo.hiddenRows > 0 || oo.hiddenAbove > 0);
-  let Dn = ke && columns < NARROW_COLUMNS_WITH_HINTS ? Math.max(1, columns - NARROW_COLUMN_INSET) : undefined;
-  let wn = jsxProd_default_2(PermissionDialog_2, {
-    title: ze ? He : "Use this skill?",
+  let hasHiddenRows = hasSkill && (offerBody.hiddenRows > 0 || offerBody.hiddenAbove > 0);
+  let rowColumns =
+    hasSkill && columns < NARROW_COLUMNS_WITH_HINTS ? Math.max(1, columns - NARROW_COLUMN_INSET) : undefined;
+  let dialog = jsxProd_default_2(PermissionDialog_2, {
+    title: titleFits ? title : "Use this skill?",
     innerPaddingX: 0,
     requestSource: payload.requestSource,
-    marginTop: ke ? 0 : 1,
+    marginTop: hasSkill ? 0 : 1,
     children: [
       jsxProd_default(Box, {
         paddingX: 1,
@@ -630,52 +663,52 @@ ${kt}`;
           children: "Claude may use instructions, code, or files from this Skill.",
         }),
       }),
-      ke
+      hasSkill
         ? jsxProd_default(DiffFrame, {
             children: jsxProd_default_2(Box, {
-              ref: oo.box,
+              ref: offerBody.box,
               flexDirection: "column",
               children: [
                 jsxProd_default(Blockquote, {
                   multiline: true,
                   children: jsxProd_default(Box, {
-                    ref: oo.textBox,
+                    ref: offerBody.textBox,
                     flexDirection: "column",
                     flexGrow: 1,
                     children: jsxProd_default(Text, {
                       dimColor: true,
-                      children: oo.text,
+                      children: offerBody.text,
                     }),
                   }),
                 }),
-                cn &&
+                hasHiddenRows &&
                   jsxProd_default(Text, {
                     dimColor: true,
                     wrap: "truncate-end",
                     children: formatHiddenRowsHint({
-                      hiddenRows: oo.hiddenRows,
-                      hiddenAbove: oo.hiddenAbove,
+                      hiddenRows: offerBody.hiddenRows,
+                      hiddenAbove: offerBody.hiddenAbove,
                       hint: formatShortcutHint({
                         chord,
-                        action: oo.hiddenRows > 0 ? "see more" : "see the first lines",
+                        action: offerBody.hiddenRows > 0 ? "see more" : "see the first lines",
                         parens: true,
                         format: {
                           keyCase: "lower",
                         },
                       }),
-                      columns: oo.columns,
+                      columns: offerBody.columns,
                     }),
                   }),
               ],
             }),
           })
-        : L !== undefined
+        : skillDescription !== undefined
           ? jsxProd_default(DiffFrame, {
               children: jsxProd_default(Blockquote, {
-                multiline: L.needsGutter,
+                multiline: skillDescription.needsGutter,
                 children: jsxProd_default(Text, {
                   dimColor: true,
-                  children: L.text,
+                  children: skillDescription.text,
                 }),
               }),
             })
@@ -688,18 +721,18 @@ ${kt}`;
             permissionResult,
             toolType: "tool",
             rowBudget:
-              Dn !== undefined
-                ? Math.ceil((MAX_EXPLANATION_LINES * SURVEY_QUESTION_LINE_CHARS) / Dn) + 1
-                : ke || Ro
+              rowColumns !== undefined
+                ? Math.ceil((MAX_EXPLANATION_LINES * SURVEY_QUESTION_LINE_CHARS) / rowColumns) + 1
+                : hasSkill || hideIndexes
                   ? MAX_EXPLANATION_LINES
                   : undefined,
-            rowColumns: Dn,
-            hideAskRuleHint: ke && kn,
-            onConsentDrawn: ke ? mn : undefined,
+            rowColumns,
+            hideAskRuleHint: hasSkill && askRuleHintShown,
+            onConsentDrawn: hasSkill ? setConsentDrawn : undefined,
           }),
           jsxProd_default(PermissionPrompt, {
             options,
-            hideIndexes: Ro,
+            hideIndexes,
             onSelect,
             onCancel,
             question: undefined,
@@ -710,15 +743,18 @@ ${kt}`;
       }),
     ],
   });
-  return ke
+  return hasSkill
     ? jsxProd_default(useDialogKeybindings, {
         bindings,
-        active: cn,
+        active: hasHiddenRows,
         flexDirection: "column",
-        children: wn,
+        children: dialog,
       })
-    : wn;
+    : dialog;
 }
 //@ chunk-18hwfzwa.js:1412968-1412972 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1412968", () => {
+  init_react_production();
+});
 export { SkillUsePermissionDialog, SkillPermissionRequest };

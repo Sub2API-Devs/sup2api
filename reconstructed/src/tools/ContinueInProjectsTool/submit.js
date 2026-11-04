@@ -51,10 +51,10 @@ import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   zodStrictObject,
   literal,
-  string,
+  stringSchema,
   _enum,
-  M,
-  E,
+  booleanSchema,
+  numberSchema,
   array,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isSelfAddressableSessionId, toCompatSessionId } from "../../bridge/sessionIdCompat.js";
@@ -80,36 +80,37 @@ import {
   getSdkHostedBridgeHandle,
   getPeerBridgeIdentity,
 } from "../../bridge/replBridgeHandle.js";
+import { deferInit, runDeferredInits } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dz3q485w.js:57967-58057 placement
 /**
  * 用逗号与 and 连接列表（“a, b and c”）。
  */
-function joinWithAnd_2(e) {
-  return e.length <= 1 ? (e[0] ?? "") : `${e.slice(0, -1).join(", ")} and ${e.at(-1)}`;
+function joinWithAnd_2(parts) {
+  return parts.length <= 1 ? (parts[0] ?? "") : `${parts.slice(0, -1).join(", ")} and ${parts.at(-1)}`;
 }
 //@ chunk-dz3q485w.js:58057-58105 placement
 /**
  * 判断审批来源是否为 pane 或 desktop。
  */
-function isPaneOrDesktopVia(e) {
-  return e === "pane" || e === "desktop";
+function isPaneOrDesktopVia(approvedVia) {
+  return approvedVia === "pane" || approvedVia === "desktop";
 }
 //@ chunk-dz3q485w.js:58105-58146 placement
 /**
  * 判断状态为 new 且来源为 pane/desktop。
  */
-function isNewViaPaneOrDesktop(e, approvedVia) {
-  return e === "new" && isPaneOrDesktopVia(approvedVia);
+function isNewViaPaneOrDesktop(mode, approvedVia) {
+  return mode === "new" && isPaneOrDesktopVia(approvedVia);
 }
 //@ chunk-dz3q485w.js:58146-58238 placement
 /**
  * 去掉展示用的 icon、color、instructions 字段。
  */
-function stripPresentationFields(proposal, n, approvedVia) {
-  if (!isNewViaPaneOrDesktop(n, approvedVia)) return proposal;
-  let { icon, color, instructions, ...c } = proposal;
-  return c;
+function stripPresentationFields(proposal, mode, approvedVia) {
+  if (!isNewViaPaneOrDesktop(mode, approvedVia)) return proposal;
+  let { icon, color, instructions, ...rest } = proposal;
+  return rest;
 }
 //@ chunk-dz3q485w.js:58238-58297 placement
 /**
@@ -134,8 +135,8 @@ var FALLBACK_SUBMIT_REASONS = new Set([
 /**
  * 把提交失败原因归一到已知值（status_xxx 直接保留）。
  */
-function normalizeSubmitReason(e) {
-  return FALLBACK_SUBMIT_REASONS.has(e) || /^status_\d{3}$/.test(e) ? e : "refused";
+function normalizeSubmitReason(reason) {
+  return FALLBACK_SUBMIT_REASONS.has(reason) || /^status_\d{3}$/.test(reason) ? reason : "refused";
 }
 //@ chunk-dz3q485w.js:58505-58936 placement
 /**
@@ -157,11 +158,11 @@ function classifySubmitError(error) {
         mayHaveLanded: false,
         detail: error.detail,
       };
-    let n = isRetryableChannelError(error);
+    let retryable = isRetryableChannelError(error);
     return {
-      reason: n ? "request_failed" : "refused",
-      retryable: n,
-      mayHaveLanded: n && error.status !== 429,
+      reason: retryable ? "request_failed" : "refused",
+      retryable,
+      mayHaveLanded: retryable && error.status !== 429,
       detail: error.detail,
     };
   }
@@ -176,55 +177,55 @@ function classifySubmitError(error) {
 /**
  * 带重试地向项目频道提交设置卡；可能已提交时不再交接，返回 submitted/uncertain/fallback 与说明。
  */
-async function submitSetupCard(e) {
-  let { signal, credentials, notes } = e;
-  let a = `Check the project\u2019s setup card before you run /send-to-project again.${e.savedToMemory ? ` The brief is in project memory as ${CONTEXT_FILE_NAME}.` : ""}`;
-  let l = null;
-  let c = null;
-  let h = false;
-  for (let j = 0; j <= e.retryDelaysMs.length; j++) {
-    if (!(await waitBeforeAttempt(e.retryDelaysMs, j, signal))) break;
+async function submitSetupCard(submitInput) {
+  let { signal, credentials, notes } = submitInput;
+  let settledNote = `Check the project\u2019s setup card before you run /send-to-project again.${submitInput.savedToMemory ? ` The brief is in project memory as ${CONTEXT_FILE_NAME}.` : ""}`;
+  let submitted = null;
+  let failure = null;
+  let mayHaveLanded = false;
+  for (let j = 0; j <= submitInput.retryDelaysMs.length; j++) {
+    if (!(await waitBeforeAttempt(submitInput.retryDelaysMs, j, signal))) break;
     try {
-      let y = await submitSetupProposal(
-        e.channelId,
-        e.proposal,
-        e.clientRequestId,
-        e.sourceSessionId,
+      let submitResult = await submitSetupProposal(
+        submitInput.channelId,
+        submitInput.proposal,
+        submitInput.clientRequestId,
+        submitInput.sourceSessionId,
         signal,
         credentials,
       );
-      if (y.kind === "submitted") {
-        l = {
-          dropped: y.dropped,
-          sourceSessionSent: y.sourceSessionSent,
+      if (submitResult.kind === "submitted") {
+        submitted = {
+          dropped: submitResult.dropped,
+          sourceSessionSent: submitResult.sourceSessionSent,
         };
-        c = null;
+        failure = null;
         break;
       }
-      c = {
-        reason: y.reason,
-        retryable: y.transient,
-        mayHaveLanded: y.mayHaveStored,
-        detail: y.detail,
+      failure = {
+        reason: submitResult.reason,
+        retryable: submitResult.transient,
+        mayHaveLanded: submitResult.mayHaveStored,
+        detail: submitResult.detail,
       };
     } catch (error) {
       if (signal.aborted) {
-        h = true;
+        mayHaveLanded = true;
         break;
       }
-      c = classifySubmitError(error);
+      failure = classifySubmitError(error);
     }
-    h ||= c.mayHaveLanded;
-    if (!c.retryable) break;
+    mayHaveLanded ||= failure.mayHaveLanded;
+    if (!failure.retryable) break;
   }
-  if (l === null) {
-    if (h) {
+  if (submitted === null) {
+    if (mayHaveLanded) {
       if (!signal.aborted)
-        logFeatureBad("projects_setup_submit", normalizeSubmitReason(c?.reason ?? "request_failed"));
+        logFeatureBad("projects_setup_submit", normalizeSubmitReason(failure?.reason ?? "request_failed"));
       notes.push(
         signal.aborted
-          ? `Cancelled while the setup card was being posted, so it may or may not exist. ${a}`
-          : `The setup card may or may not have been posted (${c?.detail ?? "no answer"}). The coordinator was not handed the brief, so that the setup card is not posted twice. ${a}`,
+          ? `Cancelled while the setup card was being posted, so it may or may not exist. ${settledNote}`
+          : `The setup card may or may not have been posted (${failure?.detail ?? "no answer"}). The coordinator was not handed the brief, so that the setup card is not posted twice. ${settledNote}`,
       );
       return {
         outcome: "uncertain",
@@ -238,9 +239,9 @@ async function submitSetupCard(e) {
         threadsOnCard: 0,
       };
     }
-    logFeatureSad("projects_setup_submit", normalizeSubmitReason(c?.reason ?? "refused"));
+    logFeatureSad("projects_setup_submit", normalizeSubmitReason(failure?.reason ?? "refused"));
     logForDebugging(
-      `send-to-project: setup card submit unavailable (${c?.detail ?? "no answer"}); handing over instead`,
+      `send-to-project: setup card submit unavailable (${failure?.detail ?? "no answer"}); handing over instead`,
     );
     return {
       outcome: "fallback",
@@ -248,14 +249,14 @@ async function submitSetupCard(e) {
     };
   }
   logFeatureOk("projects_setup_submit");
-  if (!l.sourceSessionSent || droppedSourceSession(l.dropped))
+  if (!submitted.sourceSessionSent || droppedSourceSession(submitted.dropped))
     notes.push(
-      `The setup card does not say which session this work came from, because the server did not take it. The brief was posted${e.savedToMemory ? ", and project memory names the session" : ""}.`,
+      `The setup card does not say which session this work came from, because the server did not take it. The brief was posted${submitInput.savedToMemory ? ", and project memory names the session" : ""}.`,
     );
-  let b = e.proposal.sessions?.length ?? 0;
-  if (b > 0 && droppedSessions(l.dropped)) {
+  let threadCount = submitInput.proposal.sessions?.length ?? 0;
+  if (threadCount > 0 && droppedSessions(submitted.dropped)) {
     notes.push(
-      `Your organization has threads on the setup card turned off, so the setup card lists none.${e.savedToMemory ? " The brief in project memory still has them." : ""}`,
+      `Your organization has threads on the setup card turned off, so the setup card lists none.${submitInput.savedToMemory ? " The brief in project memory still has them." : ""}`,
     );
     return {
       outcome: "submitted",
@@ -264,55 +265,57 @@ async function submitSetupCard(e) {
   }
   return {
     outcome: "submitted",
-    threadsOnCard: b,
+    threadsOnCard: threadCount,
   };
 }
 //@ chunk-dz3q485w.js:60886-68162 placement
 /**
  * Continue in Projects 提交：创建或复用项目、上传仓库简报与记忆、返回链接。
  */
-async function submitProjectSetup(e) {
-  let { detection, signal, credentials } = e;
-  let checkRepo = e.checkRepo ?? checkGithubRepoAccess;
-  let dateIso = e.dateIso ?? localIsoDate(new Date());
-  let c = e.existingProjectId !== undefined ? "existing" : "new";
-  let h = [];
-  let environmentId = c === "new" ? e.environmentId : "";
-  let w = null;
-  if (c === "new" && e.attachRepo)
+async function submitProjectSetup(setupInput) {
+  let { detection, signal, credentials } = setupInput;
+  let checkRepo = setupInput.checkRepo ?? checkGithubRepoAccess;
+  let dateIso = setupInput.dateIso ?? localIsoDate(new Date());
+  let mode = setupInput.existingProjectId !== undefined ? "existing" : "new";
+  let notes = [];
+  let environmentId = mode === "new" ? setupInput.environmentId : "";
+  let repoInfo = null;
+  if (mode === "new" && setupInput.attachRepo)
     if (
       detection.repo.kind === "github" &&
-      e.approvedOrigin !== undefined &&
-      e.approvedOrigin !== `${detection.repo.owner}/${detection.repo.name}`
+      setupInput.approvedOrigin !== undefined &&
+      setupInput.approvedOrigin !== `${detection.repo.owner}/${detection.repo.name}`
     )
-      h.push(
-        e.approvedOrigin === ""
+      notes.push(
+        setupInput.approvedOrigin === ""
           ? `No repository was shown when you approved, so github.com/${detection.repo.owner}/${detection.repo.name} was not added. Add it from project settings.`
           : `The origin remote changed after you approved (now github.com/${detection.repo.owner}/${detection.repo.name}), so no repository was added. Add it from project settings.`,
       );
     else if (detection.repo.kind === "github") {
-      let { owner, name: D } = detection.repo;
-      let N = await checkRepo(owner, D, signal);
-      w = {
+      let { owner, name: repoName } = detection.repo;
+      let repoAccess = await checkRepo(owner, repoName, signal);
+      repoInfo = {
         owner,
-        name: D,
-        appInstalled: N.appInstalled,
-        appChecked: !N.transient,
-        reachable: N.accessible || N.transient,
-        githubNotConnected: N.githubNotConnected,
+        name: repoName,
+        appInstalled: repoAccess.appInstalled,
+        appChecked: !repoAccess.transient,
+        reachable: repoAccess.accessible || repoAccess.transient,
+        githubNotConnected: repoAccess.githubNotConnected,
       };
     } else
-      h.push("No GitHub origin remote was found, so no repository was added. Add one from project settings.");
+      notes.push(
+        "No GitHub origin remote was found, so no repository was added. Add one from project settings.",
+      );
   if (signal.aborted)
     return {
       ok: false,
       reason: "Cancelled before anything was created.",
       mayExist: false,
     };
-  let y;
-  if (e.existingProjectId !== undefined)
+  let project;
+  if (setupInput.existingProjectId !== undefined)
     try {
-      y = await getOwnerProjectChannel(e.existingProjectId, signal, credentials);
+      project = await getOwnerProjectChannel(setupInput.existingProjectId, signal, credentials);
     } catch (error) {
       return {
         ok: false,
@@ -321,15 +324,15 @@ async function submitProjectSetup(e) {
       };
     }
   else {
-    let x = isNewViaPaneOrDesktop(c, e.approvedVia);
-    let D = (environmentId) =>
+    let isNewViaPane = isNewViaPaneOrDesktop(mode, setupInput.approvedVia);
+    let createProject = (environmentId) =>
       createProjectChannel(
         {
-          name: e.projectName,
-          ...(x && {
-            icon: e.proposal.icon ?? "Code",
-            color: e.proposal.color,
-            instructions: e.proposal.instructions,
+          name: setupInput.projectName,
+          ...(isNewViaPane && {
+            icon: setupInput.proposal.icon ?? "Code",
+            color: setupInput.proposal.color,
+            instructions: setupInput.proposal.instructions,
           }),
           ...(environmentId !== "" && {
             defaultEnvironmentId: environmentId,
@@ -340,7 +343,7 @@ async function submitProjectSetup(e) {
       );
     try {
       try {
-        y = await D(environmentId);
+        project = await createProject(environmentId);
       } catch (error) {
         if (
           environmentId !== "" &&
@@ -348,11 +351,11 @@ async function submitProjectSetup(e) {
           error.status === 400 &&
           !signal.aborted
         ) {
-          h.push(
+          notes.push(
             `The project could not use your cloud environment (${submitErrorDetail(error)}), so it uses your organization\u2019s default. Pick one in project settings if its threads do not start.`,
           );
           environmentId = "";
-          y = await D("");
+          project = await createProject("");
         } else throw error;
       }
     } catch (error) {
@@ -366,94 +369,101 @@ async function submitProjectSetup(e) {
       };
     }
   }
-  let projectUrl_2 = projectUrl(y.id);
-  let projectName = y.name !== "" ? y.name : c === "new" ? e.projectName : "Untitled project";
-  if (c === "new" && e.environmentId === "")
-    h.push(
-      `${e.environmentLookupFailed ? "Your cloud environments couldn\u2019t be looked up" : "No cloud environment is set"}, so the project uses your organization\u2019s default. Pick one in project settings if its threads do not start.`,
+  let projectUrl_2 = projectUrl(project.id);
+  let projectName =
+    project.name !== "" ? project.name : mode === "new" ? setupInput.projectName : "Untitled project";
+  if (mode === "new" && setupInput.environmentId === "")
+    notes.push(
+      `${setupInput.environmentLookupFailed ? "Your cloud environments couldn\u2019t be looked up" : "No cloud environment is set"}, so the project uses your organization\u2019s default. Pick one in project settings if its threads do not start.`,
     );
-  let P = null;
-  if (w !== null) {
-    let x = githubRepoUrl(w.owner, w.name);
+  let attachedRepoUrl = null;
+  if (repoInfo !== null) {
+    let repoUrl = githubRepoUrl(repoInfo.owner, repoInfo.name);
     try {
       await updateChannelConfig(
-        y.id,
+        project.id,
         {
-          defaultSourceUrls: [x],
+          defaultSourceUrls: [repoUrl],
         },
         signal,
         credentials,
       );
-      P = x;
-      if (!w.appChecked)
-        h.push(
-          `Couldn\u2019t check whether the [Claude GitHub App](https://github.com/apps/claude) is installed on github.com/${w.owner}/${w.name}. Threads need it to clone the repository.`,
+      attachedRepoUrl = repoUrl;
+      if (!repoInfo.appChecked)
+        notes.push(
+          `Couldn\u2019t check whether the [Claude GitHub App](https://github.com/apps/claude) is installed on github.com/${repoInfo.owner}/${repoInfo.name}. Threads need it to clone the repository.`,
         );
-      if (!w.reachable)
-        h.push(
-          `Added github.com/${w.owner}/${w.name}, but your Claude account can\u2019t see it. Connect the GitHub account that can in claude.ai settings, under Connectors, so threads can use it.`,
+      if (!repoInfo.reachable)
+        notes.push(
+          `Added github.com/${repoInfo.owner}/${repoInfo.name}, but your Claude account can\u2019t see it. Connect the GitHub account that can in claude.ai settings, under Connectors, so threads can use it.`,
         );
     } catch (error) {
-      h.push(
+      notes.push(
         signal.aborted
-          ? `Cancelled before the repository was added. Add github.com/${w.owner}/${w.name} from project settings.`
-          : `The repository wasn\u2019t added (${submitErrorDetail(error)}). Add github.com/${w.owner}/${w.name} from project settings.`,
+          ? `Cancelled before the repository was added. Add github.com/${repoInfo.owner}/${repoInfo.name} from project settings.`
+          : `The repository wasn\u2019t added (${submitErrorDetail(error)}). Add github.com/${repoInfo.owner}/${repoInfo.name} from project settings.`,
       );
     }
   }
-  let L = {
-    attachedRepo: w !== null && P !== null ? `${w.owner}/${w.name}` : null,
-    appInstallPending: w !== null && P !== null && w.appChecked && !w.githubNotConnected && !w.appInstalled,
+  let repoResult = {
+    attachedRepo: repoInfo !== null && attachedRepoUrl !== null ? `${repoInfo.owner}/${repoInfo.name}` : null,
+    appInstallPending:
+      repoInfo !== null &&
+      attachedRepoUrl !== null &&
+      repoInfo.appChecked &&
+      !repoInfo.githubNotConnected &&
+      !repoInfo.appInstalled,
   };
-  if (e.message !== undefined) {
-    let x = await sendBriefMessage({
-      projectId: y.id,
-      message: e.message,
-      sourceSessionId: e.sourceSessionId,
+  if (setupInput.message !== undefined) {
+    let sendResult = await sendBriefMessage({
+      projectId: project.id,
+      message: setupInput.message,
+      sourceSessionId: setupInput.sourceSessionId,
       signal,
       credentials,
-      retryDelaysMs: e.setupSubmitRetryDelaysMs,
+      retryDelaysMs: setupInput.setupSubmitRetryDelaysMs,
     });
-    let message = x.outcome;
-    if (x.outcome !== "sent")
-      h.push(
-        x.failure === null
+    let message = sendResult.outcome;
+    if (sendResult.outcome !== "sent")
+      notes.push(
+        sendResult.failure === null
           ? "Cancelled before the message was sent."
-          : `The message ${x.outcome === "uncertain" ? "may not have arrived" : "was not sent"}${signal.aborted ? "" : ` (${submitErrorDetail(x.failure)})`}.`,
+          : `The message ${sendResult.outcome === "uncertain" ? "may not have arrived" : "was not sent"}${signal.aborted ? "" : ` (${submitErrorDetail(sendResult.failure)})`}.`,
       );
     return {
       ok: true,
       result: {
-        mode: c,
-        projectId: y.id,
+        mode,
+        projectId: project.id,
         projectName,
         projectUrl: projectUrl_2,
         setupSubmitted: false,
         setupUncertain: false,
         threadsOnCard: 0,
-        ...L,
+        ...repoResult,
         savedToMemory: false,
         handedOff: false,
         message,
-        notes: h,
+        notes,
       },
     };
   }
-  let R = false;
-  let memoryRetryDelaysMs = c === "new" && y.coordinatorSessionId !== null ? e.memoryRetryDelaysMs : [];
+  let savedToMemory = false;
+  let memoryRetryDelaysMs =
+    mode === "new" && project.coordinatorSessionId !== null ? setupInput.memoryRetryDelaysMs : [];
   try {
-    let x = await saveOrReplaceMemoryFile(
-      y.id,
+    let memoryWriteResult = await saveOrReplaceMemoryFile(
+      project.id,
       {
         path: "/" + CONTEXT_FILE_NAME,
         content: buildContextFileContent({
-          approvedVia: e.approvedVia,
+          approvedVia: setupInput.approvedVia,
           folderName: detection.folderName,
           projectName,
-          sourceSessionId: e.sourceSessionId,
-          proposal: e.proposal,
-          toolsUsed: e.toolsUsed,
-          mode: c,
+          sourceSessionId: setupInput.sourceSessionId,
+          proposal: setupInput.proposal,
+          toolsUsed: setupInput.toolsUsed,
+          mode,
           dateIso,
         }),
       },
@@ -461,37 +471,38 @@ async function submitProjectSetup(e) {
       credentials,
       memoryRetryDelaysMs,
     );
-    if (x === null)
-      h.push(
+    if (memoryWriteResult === null)
+      notes.push(
         signal.aborted
           ? `Cancelled before ${CONTEXT_FILE_NAME} was saved to project memory.`
           : "Project memory isn\u2019t available for this project, so the brief was not saved there.",
       );
     else {
-      R = true;
-      if (x === "replaced") h.push(`Replaced the ${CONTEXT_FILE_NAME} this project already had.`);
+      savedToMemory = true;
+      if (memoryWriteResult === "replaced")
+        notes.push(`Replaced the ${CONTEXT_FILE_NAME} this project already had.`);
     }
   } catch (error) {
-    h.push(
+    notes.push(
       signal.aborted
         ? `Cancelled before ${CONTEXT_FILE_NAME} was saved to project memory.`
         : `Couldn\u2019t save the brief to project memory (${submitErrorDetail(error)}).`,
     );
   }
-  let z = false;
-  if (R) {
+  let sectionWritten = false;
+  if (savedToMemory) {
     let section = buildContinuedSection({
-      mode: c,
+      mode,
       dateIso,
       folderName: detection.folderName,
-      proposal: e.proposal,
-      toolsUsed: e.toolsUsed,
-      attachedRepoUrl: P,
-      sourceSessionId: e.sourceSessionId,
+      proposal: setupInput.proposal,
+      toolsUsed: setupInput.toolsUsed,
+      attachedRepoUrl,
+      sourceSessionId: setupInput.sourceSessionId,
     });
     try {
-      let D = await saveMemoryFileIfAbsent(
-        y.id,
+      let memoryFileResult = await saveMemoryFileIfAbsent(
+        project.id,
         {
           path: MEMORY_FILE_PATH,
           content: `${section}
@@ -501,13 +512,13 @@ async function submitProjectSetup(e) {
         credentials,
         [],
       );
-      if (D === "created") z = true;
-      else if (D === "kept-existing") {
-        let memoryFile = await readMemoryFile(y.id, MEMORY_FILE_PATH, signal, credentials);
+      if (memoryFileResult === "created") sectionWritten = true;
+      else if (memoryFileResult === "kept-existing") {
+        let memoryFile = await readMemoryFile(project.id, MEMORY_FILE_PATH, signal, credentials);
         if (memoryFile === null) {
           if (
             (await saveMemoryFileIfAbsent(
-              y.id,
+              project.id,
               {
                 path: MEMORY_FILE_PATH,
                 content: `${section}
@@ -518,119 +529,124 @@ async function submitProjectSetup(e) {
               [],
             )) === "created"
           )
-            z = true;
+            sectionWritten = true;
           else
-            h.push(
+            notes.push(
               `Saved ${CONTEXT_FILE_NAME} to project memory, but couldn\u2019t add its section to MEMORY.md, which could not be read.`,
             );
         } else {
-          let I = mergeContinuedSection(memoryFile.content, section);
-          if (I.wrote !== "nothing" && I.content === memoryFile.content) z = I.wrote === "section";
-          else if (I.wrote === "nothing")
-            h.push(
+          let merged = mergeContinuedSection(memoryFile.content, section);
+          if (merged.wrote !== "nothing" && merged.content === memoryFile.content)
+            sectionWritten = merged.wrote === "section";
+          else if (merged.wrote === "nothing")
+            notes.push(
               `MEMORY.md is full, so it has no section about this work and no pointer to ${CONTEXT_FILE_NAME}. The brief is still in that file.`,
             );
           else {
             await replaceMemoryFile(
-              y.id,
+              project.id,
               {
                 id: memoryFile.id,
-                content: I.content,
+                content: merged.content,
                 expectedSha256: memoryFile.contentSha256,
               },
               signal,
               credentials,
             );
-            z = I.wrote === "section";
-            if (!z)
-              h.push(
+            sectionWritten = merged.wrote === "section";
+            if (!sectionWritten)
+              notes.push(
                 `MEMORY.md is nearly full, so it points at ${CONTEXT_FILE_NAME} without describing this work.`,
               );
           }
         }
-      } else if (D === null)
-        h.push(
+      } else if (memoryFileResult === null)
+        notes.push(
           `Saved ${CONTEXT_FILE_NAME} to project memory, but couldn\u2019t add its section to MEMORY.md, because project memory did not answer.`,
         );
     } catch (error) {
-      h.push(
+      notes.push(
         `Saved ${CONTEXT_FILE_NAME} to project memory, but couldn\u2019t add its section to MEMORY.md (${submitErrorDetail(error)}).`,
       );
     }
   }
   let handedOff = false;
-  let q = false;
-  let X = false;
-  let re = 0;
-  let oe = stripPresentationFields(e.proposal, c, e.approvedVia);
-  if (isPaneOrDesktopVia(e.approvedVia) && y.coordinatorSessionId !== null && !isProposalEmpty(oe)) {
-    let x = await submitSetupCard({
-      channelId: y.id,
-      proposal: oe,
-      sourceSessionId: e.sourceSessionId,
-      clientRequestId: e.clientRequestId,
-      retryDelaysMs: e.setupSubmitRetryDelaysMs ?? BRIEF_SEND_RETRY_DELAYS_MS,
-      savedToMemory: R,
+  let setupSubmitted = false;
+  let setupUncertain = false;
+  let threadsOnCard = 0;
+  let proposalToSubmit = stripPresentationFields(setupInput.proposal, mode, setupInput.approvedVia);
+  if (
+    isPaneOrDesktopVia(setupInput.approvedVia) &&
+    project.coordinatorSessionId !== null &&
+    !isProposalEmpty(proposalToSubmit)
+  ) {
+    let cardResult = await submitSetupCard({
+      channelId: project.id,
+      proposal: proposalToSubmit,
+      sourceSessionId: setupInput.sourceSessionId,
+      clientRequestId: setupInput.clientRequestId,
+      retryDelaysMs: setupInput.setupSubmitRetryDelaysMs ?? BRIEF_SEND_RETRY_DELAYS_MS,
+      savedToMemory,
       signal,
       credentials,
-      notes: h,
+      notes,
     });
-    q = x.outcome === "submitted";
-    X = x.outcome === "uncertain";
-    re = x.threadsOnCard;
+    setupSubmitted = cardResult.outcome === "submitted";
+    setupUncertain = cardResult.outcome === "uncertain";
+    threadsOnCard = cardResult.threadsOnCard;
   }
-  if (q || X);
-  else if (isProposalEmpty(oe))
-    h.push(
-      isNewViaPaneOrDesktop(c, e.approvedVia)
-        ? `No setup card was posted. The brief\u2019s icon, color and instructions were set on the project when it was created, and it has no summary, threads or routines.${(e.proposal.name ?? "") !== "" ? ` The name it proposed, \u201C${safeLabel(e.proposal.name ?? "")}\u201D, was not used. The project is named \u201C${safeLabel(e.projectName)}\u201D, as you approved.` : ""}`
+  if (setupSubmitted || setupUncertain);
+  else if (isProposalEmpty(proposalToSubmit))
+    notes.push(
+      isNewViaPaneOrDesktop(mode, setupInput.approvedVia)
+        ? `No setup card was posted. The brief\u2019s icon, color and instructions were set on the project when it was created, and it has no summary, threads or routines.${(setupInput.proposal.name ?? "") !== "" ? ` The name it proposed, \u201C${safeLabel(setupInput.proposal.name ?? "")}\u201D, was not used. The project is named \u201C${safeLabel(setupInput.projectName)}\u201D, as you approved.` : ""}`
         : "No setup card was posted, because the brief has no summary, instructions, threads or routines.",
     );
-  else if (y.coordinatorSessionId === null)
-    h.push(
-      `The project has no coordinator, so the brief couldn\u2019t be handed over. ${R ? `It is in project memory as ${CONTEXT_FILE_NAME}` : "Paste it into the project yourself"}.`,
+  else if (project.coordinatorSessionId === null)
+    notes.push(
+      `The project has no coordinator, so the brief couldn\u2019t be handed over. ${savedToMemory ? `It is in project memory as ${CONTEXT_FILE_NAME}` : "Paste it into the project yourself"}.`,
     );
   else
     try {
       await handOffToCoordinator(
-        y.coordinatorSessionId,
+        project.coordinatorSessionId,
         buildHandoffMessage({
-          approvedVia: e.approvedVia,
-          mode: c,
+          approvedVia: setupInput.approvedVia,
+          mode,
           projectName,
-          userFirstName: e.userFirstName,
+          userFirstName: setupInput.userFirstName,
           folderName: detection.folderName,
-          proposal: e.proposal,
-          sourceSessionId: e.sourceSessionId,
-          toolsUsed: e.toolsUsed,
-          savedToMemory: R,
-          attachedRepoUrl: P,
+          proposal: setupInput.proposal,
+          sourceSessionId: setupInput.sourceSessionId,
+          toolsUsed: setupInput.toolsUsed,
+          savedToMemory,
+          attachedRepoUrl,
         }),
         signal,
         credentials,
       );
       handedOff = true;
-      re = e.proposal.sessions?.length ?? 0;
+      threadsOnCard = setupInput.proposal.sessions?.length ?? 0;
     } catch (error) {
-      h.push(
-        `${signal.aborted ? "Cancelled before the brief was handed to the project" : `The brief wasn\u2019t handed to the project (${submitErrorDetail(error)})`}.${R ? ` It is still in project memory as ${CONTEXT_FILE_NAME}.` : ""}`,
+      notes.push(
+        `${signal.aborted ? "Cancelled before the brief was handed to the project" : `The brief wasn\u2019t handed to the project (${submitErrorDetail(error)})`}.${savedToMemory ? ` It is still in project memory as ${CONTEXT_FILE_NAME}.` : ""}`,
       );
     }
   return {
     ok: true,
     result: {
-      mode: c,
-      projectId: y.id,
+      mode,
+      projectId: project.id,
       projectName,
       projectUrl: projectUrl_2,
-      setupSubmitted: q,
-      setupUncertain: X,
-      threadsOnCard: re,
-      ...L,
-      savedToMemory: R,
+      setupSubmitted,
+      setupUncertain,
+      threadsOnCard,
+      ...repoResult,
+      savedToMemory,
       handedOff,
       message: null,
-      notes: h,
+      notes,
     },
   };
 }
@@ -645,31 +661,35 @@ var MAX_SESSION_ID_CHARS = 100;
 /**
  * 项目上下文与发送结果 schema。
  */
-var PROJECT_CONTEXT_SCHEMA = DoctorLazy(() =>
-  zodStrictObject({
-    version: literal(1),
-    source_session_id: string().max(MAX_SESSION_ID_CHARS).refine(isSelfAddressableSessionId),
-    memory_file: zodStrictObject({
-      path: literal(`/${CONTEXT_FILE_NAME}`),
-      content: string(),
-    }).optional(),
-    memory_index_section: string().optional(),
-    memory_omitted: literal(true).optional(),
-  }),
-);
-var SEND_RESULT_SCHEMA = DoctorLazy(() =>
-  zodStrictObject({
-    version: literal(1),
-    project_id: string().regex(CHANNEL_ID_REGEX),
-    project_name: string().max(1000),
-    mode: _enum(["created", "existing"]),
-    saved_to_memory: M(),
-    setup_submitted: M(),
-    setup_uncertain: M(),
-    threads_on_card: E().int().min(0).max(100),
-    notes: array(string().max(1000)).max(50),
-  }),
-);
+var PROJECT_CONTEXT_SCHEMA; // deferred: uses HOST_WRITES of its import cycle while loading; runs once the cycle is complete
+var SEND_RESULT_SCHEMA;
+deferInit("chunk-dz3q485w.js:68208", () => {
+  PROJECT_CONTEXT_SCHEMA = DoctorLazy(() =>
+    zodStrictObject({
+      version: literal(1),
+      source_session_id: stringSchema().max(MAX_SESSION_ID_CHARS).refine(isSelfAddressableSessionId),
+      memory_file: zodStrictObject({
+        path: literal(`/${CONTEXT_FILE_NAME}`),
+        content: stringSchema(),
+      }).optional(),
+      memory_index_section: stringSchema().optional(),
+      memory_omitted: literal(true).optional(),
+    }),
+  );
+  SEND_RESULT_SCHEMA = DoctorLazy(() =>
+    zodStrictObject({
+      version: literal(1),
+      project_id: stringSchema().regex(CHANNEL_ID_REGEX),
+      project_name: stringSchema().max(1000),
+      mode: _enum(["created", "existing"]),
+      saved_to_memory: booleanSchema(),
+      setup_submitted: booleanSchema(),
+      setup_uncertain: booleanSchema(),
+      threads_on_card: numberSchema().int().min(0).max(100),
+      notes: array(stringSchema().max(1000)).max(50),
+    }),
+  );
+});
 //@ chunk-dz3q485w.js:68653-68720 placement
 /**
  * 是否可提供远程会话（非仅必需流量、首方、Claude.ai 订阅者、策略允许）。
@@ -733,25 +753,25 @@ function alwaysFalseRemoteGate() {
 /**
  * 读取当前会话的 Remote Control 连接状态（none/withheld/connected）。
  */
-async function remoteControlState(e, n) {
-  let historySuppressionFromDisk = await readHistorySuppressionFromDisk(n);
-  return isRemoteEgressSuppressedFor(e) ? "suppressed" : historySuppressionFromDisk;
+async function remoteControlState(sessionRoot, storage) {
+  let historySuppressionFromDisk = await readHistorySuppressionFromDisk(storage);
+  return isRemoteEgressSuppressedFor(sessionRoot) ? "suppressed" : historySuppressionFromDisk;
 }
 //@ chunk-dz3q485w.js:69074-69409 placement
 /**
  * 当前会话的 Remote Control 连接状态（none/withheld/connected）。
  */
 function remoteControlLink() {
-  let e = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
-  if (e?.outboundOnly === true)
+  let bridgeHandle = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
+  if (bridgeHandle?.outboundOnly === true)
     return {
       kind: "none",
     };
-  if (e?.noHistoryBackfill === true)
+  if (bridgeHandle?.noHistoryBackfill === true)
     return {
       kind: "withheld",
     };
-  let bridgeSessionId = e?.bridgeSessionId ?? getPeerBridgeIdentity()?.bridgeSessionId;
+  let bridgeSessionId = bridgeHandle?.bridgeSessionId ?? getPeerBridgeIdentity()?.bridgeSessionId;
   if (bridgeSessionId === undefined)
     return {
       kind: "none",
@@ -775,18 +795,18 @@ function remoteControlLink() {
  * 检查对话能否经 Remote Control 发送给项目（含历史抑制扫描）。
  */
 async function checkConversationSendable(storageV5) {
-  let n = remoteControlLink();
-  if (n.kind !== "connected") return n;
+  let linkBefore = remoteControlLink();
+  if (linkBefore.kind !== "connected") return linkBefore;
   let sessionId = getSessionId();
-  let r = await remoteControlState(pinSessionId(sessionId), storageV5);
-  let a = remoteControlLink();
-  if (a.kind !== "connected") return a;
-  if (r === "suppressed" || r === "found")
+  let suppressionState = await remoteControlState(pinSessionId(sessionId), storageV5);
+  let linkAfter = remoteControlLink();
+  if (linkAfter.kind !== "connected") return linkAfter;
+  if (suppressionState === "suppressed" || suppressionState === "found")
     return {
       kind: "withheld",
     };
-  return r === "clean" && getSessionId() === sessionId
-    ? a
+  return suppressionState === "clean" && getSessionId() === sessionId
+    ? linkAfter
     : {
         kind: "unverified",
       };
@@ -796,9 +816,9 @@ async function checkConversationSendable(storageV5) {
  * 交接前等待 Remote Control 上传完成。
  */
 async function settleBridgeUploads() {
-  let e = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
+  let bridgeHandle = getReplBridgeHandle() ?? getSdkHostedBridgeHandle();
   try {
-    await e?.settleUploadsBeforeHandoff?.();
+    await bridgeHandle?.settleUploadsBeforeHandoff?.();
   } catch (error) {
     logForDebugging(`send-to-project: Remote Control upload did not settle: ${errorMessage(error)}`, {
       level: "error",
@@ -809,16 +829,20 @@ async function settleBridgeUploads() {
 /**
  * Remote Control 不可用（none/withheld/unverified）的说明文本。
  */
-function remoteControlRefusalText(e, n) {
-  switch (e.kind) {
+function remoteControlRefusalText(link, isInteractive) {
+  switch (link.kind) {
     case "none":
-      return `This session is not connected to Remote Control, so a project would have no session to read. Turn Remote Control on${n ? " (/remote-control)" : ""}, then run /send-to-project again.`;
+      return `This session is not connected to Remote Control, so a project would have no session to read. Turn Remote Control on${isInteractive ? " (/remote-control)" : ""}, then run /send-to-project again.`;
     case "withheld":
       return "This conversation is kept off its Remote Control session, so it cannot be sent to a project from this session. Copy what you need from here and paste it into the project yourself.";
     case "unverified":
       return "Couldn\u2019t check whether this conversation may go to its Remote Control session, so nothing was sent. Run /send-to-project again, or run it in a new session with Remote Control on.";
   }
 }
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("src/tools/ContinueInProjectsTool/submit.js");
 export {
   stripPresentationFields,
   joinWithAnd_2,

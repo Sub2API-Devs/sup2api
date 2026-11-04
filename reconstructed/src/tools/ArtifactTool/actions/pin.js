@@ -71,33 +71,33 @@ function isOwnPublishedArtifact(slug) {
 //@ chunk-8wvtd8sr.js:132458-132470 placement
 var PIN_TITLE_FETCH_TIMEOUT_MS = 3000;
 //@ chunk-8wvtd8sr.js:132470-132800 placement
-async function fetchPinnedArtifactTitle(artifactUrlOrThrow, n) {
-  if (probeAnswered(getShareEntry(artifactUrlOrThrow.slug), n.toolUseId)) return;
+async function fetchPinnedArtifactTitle(artifactUrlOrThrow, context) {
+  if (probeAnswered(getShareEntry(artifactUrlOrThrow.slug), context.toolUseId)) return;
   let issuedAt = Date.now();
-  let r = await probeArtifactAccess(
+  let probe = await probeArtifactAccess(
     artifactUrlOrThrow,
-    AbortSignal.any([n.abortController.signal, AbortSignal.timeout(PIN_TITLE_FETCH_TIMEOUT_MS)]),
-    n.credentials,
+    AbortSignal.any([context.abortController.signal, AbortSignal.timeout(PIN_TITLE_FETCH_TIMEOUT_MS)]),
+    context.credentials,
   ).catch(() => null);
-  if (r === null || r.err !== null) return;
-  foldShareProbe(artifactUrlOrThrow.slug, r, {
+  if (probe === null || probe.err !== null) return;
+  foldShareProbe(artifactUrlOrThrow.slug, probe, {
     consumedByCheck: false,
-    toolUseId: n.toolUseId,
+    toolUseId: context.toolUseId,
     issuedAt,
     debugLabel: "pin",
   });
-  return artifactCardTitleFor(artifactUrlOrThrow, n).title;
+  return artifactCardTitleFor(artifactUrlOrThrow, context).title;
 }
 //@ chunk-8wvtd8sr.js:132800-132958 placement = validateSafeCommandSubstitution (0.388)
-function allowPinAction(e, reason, s) {
+function allowPinAction(input, reason, target) {
   return {
     behavior: "allow",
     updatedInput: {
-      ...e,
+      ...input,
       [CONSENT_ASK_TAG]: false,
       [PLAN_CONSENT_ASK_TAG]: false,
       [ARTIFACT_DISPLAY_TARGET_TAG]: undefined,
-      ...(s !== undefined && consentPin("pin", s)),
+      ...(target !== undefined && consentPin("pin", target)),
     },
     decisionReason: {
       type: "other",
@@ -111,11 +111,11 @@ function allowPinAction(e, reason, s) {
  */
 var ARTIFACT_PIN_ACTION_HANDLER = {
   actions: ["pin", "unpin"],
-  async checkPermissions(e, n, s) {
-    if (n.action === "unpin")
-      return allowPinAction(n, "Removing an artifact from the user's own pinned list");
-    let r = typeof n.url === "string" ? parseArtifactUrl(n.url) : null;
-    if (r === null)
+  async checkPermissions(tool, input, context) {
+    if (input.action === "unpin")
+      return allowPinAction(input, "Removing an artifact from the user's own pinned list");
+    let artifactUrl = typeof input.url === "string" ? parseArtifactUrl(input.url) : null;
+    if (artifactUrl === null)
       return {
         behavior: "deny",
         message:
@@ -126,32 +126,32 @@ var ARTIFACT_PIN_ACTION_HANDLER = {
           classifierApprovable: false,
         },
       };
-    if (isOwnPublishedArtifact(r.slug))
-      return allowPinAction(n, "Pinning an artifact this session published", r);
-    await warmShareEntry(r, s, "pin");
-    let h = denyOtherOrgArtifact(r, "Nothing was pinned");
-    if (h !== null) return h;
-    let shareEntry = getShareEntry(r.slug);
-    if (ownedByUser(shareEntry)) return allowPinAction(n, "Pinning the user's own artifact", r);
+    if (isOwnPublishedArtifact(artifactUrl.slug))
+      return allowPinAction(input, "Pinning an artifact this session published", artifactUrl);
+    await warmShareEntry(artifactUrl, context, "pin");
+    let outsideOrgDenial = denyOtherOrgArtifact(artifactUrl, "Nothing was pinned");
+    if (outsideOrgDenial !== null) return outsideOrgDenial;
+    let shareEntry = getShareEntry(artifactUrl.slug);
+    if (ownedByUser(shareEntry)) return allowPinAction(input, "Pinning the user's own artifact", artifactUrl);
     if (
-      isStrictHumanTurn(s.messages) &&
-      !(PLAN_MODE_KEEPS_FLAG_OFF_WRITE_ASKS && getToolPermissionContext(s).mode === "plan")
+      isStrictHumanTurn(context.messages) &&
+      !(PLAN_MODE_KEEPS_FLAG_OFF_WRITE_ASKS && getToolPermissionContext(context).mode === "plan")
     )
       return {
         behavior: "allow",
         updatedInput: {
-          ...n,
+          ...input,
           [CONSENT_ASK_TAG]: false,
           [PLAN_CONSENT_ASK_TAG]: false,
-          [ARTIFACT_DISPLAY_TARGET_TAG]: artifactCardTitleFor(r, s),
-          ...consentPin("pin", r),
+          [ARTIFACT_DISPLAY_TARGET_TAG]: artifactCardTitleFor(artifactUrl, context),
+          ...consentPin("pin", artifactUrl),
         },
         decisionReason: {
           type: "other",
           reason: "Pinning someone else's artifact to the user's own list",
         },
       };
-    if (planConsentMustDeny(s) || coworkConsentMustDeny(s))
+    if (planConsentMustDeny(context) || coworkConsentMustDeny(context))
       return {
         behavior: "deny",
         message:
@@ -162,31 +162,35 @@ var ARTIFACT_PIN_ACTION_HANDLER = {
           classifierApprovable: false,
         },
       };
-    let p = artifactCardTitleFor(r, s);
-    let w = artifactCardTitle(p.title);
-    let A = pinCardLede(w ? `"${w}"` : p.url);
-    let S = isSomeoneElses(shareEntry) ? " (someone else's artifact)" : " (ownership couldn't be confirmed)";
+    let cardTitleInfo = artifactCardTitleFor(artifactUrl, context);
+    let cardTitleText = artifactCardTitle(cardTitleInfo.title);
+    let lede = pinCardLede(cardTitleText ? `"${cardTitleText}"` : cardTitleInfo.url);
+    let ownershipNote = isSomeoneElses(shareEntry)
+      ? " (someone else's artifact)"
+      : " (ownership couldn't be confirmed)";
     return {
       behavior: "ask",
-      message: A,
+      message: lede,
       updatedInput: {
-        ...n,
-        [CONSENT_ASK_TAG]: consentAskCanReachUser(s),
-        [PLAN_CONSENT_ASK_TAG]: getToolPermissionContext(s).mode === "plan",
-        [ARTIFACT_DISPLAY_TARGET_TAG]: p,
-        ...consentPin("pin", r),
+        ...input,
+        [CONSENT_ASK_TAG]: consentAskCanReachUser(context),
+        [PLAN_CONSENT_ASK_TAG]: getToolPermissionContext(context).mode === "plan",
+        [ARTIFACT_DISPLAY_TARGET_TAG]: cardTitleInfo,
+        ...consentPin("pin", artifactUrl),
       },
       suppressAlwaysAllowRule: true,
       decisionReason: {
         type: "other",
-        reason: `${A}${S}`,
+        reason: `${lede}${ownershipNote}`,
       },
       localDisplayOnly: true,
     };
   },
-  async validateInput(e, n) {
-    let { action, url } = n;
-    let filtered = Object.keys(n).filter((key) => key !== "action" && key !== "url" && n[key] !== undefined);
+  async validateInput(tool, input) {
+    let { action, url } = input;
+    let filtered = Object.keys(input).filter(
+      (key) => key !== "action" && key !== "url" && input[key] !== undefined,
+    );
     if (filtered.length > 0)
       return {
         result: false,
@@ -206,8 +210,8 @@ var ARTIFACT_PIN_ACTION_HANDLER = {
         message: sessionArtifactUrl.message,
         errorCode: sessionArtifactUrl.errorCode,
       };
-    let p = urlSubPathError(url, "; a pin names the whole artifact");
-    if (p !== undefined) return p;
+    let urlError = urlSubPathError(url, "; a pin names the whole artifact");
+    if (urlError !== undefined) return urlError;
     if (isRelayUnavailableForPins())
       return {
         result: false,
@@ -218,55 +222,64 @@ var ARTIFACT_PIN_ACTION_HANDLER = {
       result: true,
     };
   },
-  async call(e, n, s) {
-    if (!isPinAction(n.action)) return throwUnroutedArtifactAction("pin.call", n);
+  async call(tool, input, context) {
+    if (!isPinAction(input.action)) return throwUnroutedArtifactAction("pin.call", input);
     if (!hasPinAction())
-      throw new ArtifactInputError(`action "${n.action}" is not available in this session`, "pin_schema_off");
-    let artifactUrlOrThrow = parseArtifactUrlOrThrow(n.url);
-    let h = n.action === "pin";
-    if (h ? consentTargetChanged(n, "pin", artifactUrlOrThrow.slug) : carriesAnyDecisionPin(n))
       throw new ArtifactInputError(
-        `\`action\` or \`url\` no longer names the ${h ? "pin" : "unpin"} that was approved \u2014 nothing was changed; retry so it is checked again`,
+        `action "${input.action}" is not available in this session`,
+        "pin_schema_off",
+      );
+    let artifactUrlOrThrow = parseArtifactUrlOrThrow(input.url);
+    let shouldPin = input.action === "pin";
+    if (
+      shouldPin ? consentTargetChanged(input, "pin", artifactUrlOrThrow.slug) : carriesAnyDecisionPin(input)
+    )
+      throw new ArtifactInputError(
+        `\`action\` or \`url\` no longer names the ${shouldPin ? "pin" : "unpin"} that was approved \u2014 nothing was changed; retry so it is checked again`,
         "pin_target_changed",
       );
-    let y = await setArtifactPinned(artifactUrlOrThrow.slug, h, s.credentials, {
+    let pinResult = await setArtifactPinned(artifactUrlOrThrow.slug, shouldPin, context.credentials, {
       source: "tool",
-      signal: s.abortController.signal,
+      signal: context.abortController.signal,
     });
-    if (y.err !== null) throw new ArtifactInputError(y.err, `pin_${y.reason}`);
-    let p = artifactCardTitleFor(artifactUrlOrThrow, s);
-    let w = p.title ?? (await fetchPinnedArtifactTitle(artifactUrlOrThrow, s));
+    if (pinResult.err !== null) throw new ArtifactInputError(pinResult.err, `pin_${pinResult.reason}`);
+    let cardTitleInfo = artifactCardTitleFor(artifactUrlOrThrow, context);
+    let title = cardTitleInfo.title ?? (await fetchPinnedArtifactTitle(artifactUrlOrThrow, context));
     return {
       data: {
         pin: {
-          action: n.action,
-          url: p.url,
-          pinned: h,
-          ...(w !== undefined && {
-            title: w,
+          action: input.action,
+          url: cardTitleInfo.url,
+          pinned: shouldPin,
+          ...(title !== undefined && {
+            title,
           }),
         },
       },
     };
   },
-  toAutoClassifierInput(e) {
-    let n = typeof e?.url === "string" ? parseArtifactUrl(e.url) : null;
-    let s = n !== null ? getShareEntry(n.slug) : undefined;
-    let r = classifierArtifactTargetFor(e?.url, "(no artifact url)");
-    return e?.action === "unpin"
-      ? `remove an artifact from the user's own pinned list (private to the user, reversible)${ownershipClassifierMark(s)}${otherOrgClassifierMark(s)} \u2192 ${r}`
-      : `add an artifact to the user's own pinned list in their claude.ai sidebar (private to the user, reversible; changes nothing about who can see it)${ownershipClassifierMark(s)}${otherOrgClassifierMark(s)} \u2192 ${r}`;
+  toAutoClassifierInput(input) {
+    let artifactUrl = typeof input?.url === "string" ? parseArtifactUrl(input.url) : null;
+    let shareEntry = artifactUrl !== null ? getShareEntry(artifactUrl.slug) : undefined;
+    let target = classifierArtifactTargetFor(input?.url, "(no artifact url)");
+    return input?.action === "unpin"
+      ? `remove an artifact from the user's own pinned list (private to the user, reversible)${ownershipClassifierMark(shareEntry)}${otherOrgClassifierMark(shareEntry)} \u2192 ${target}`
+      : `add an artifact to the user's own pinned list in their claude.ai sidebar (private to the user, reversible; changes nothing about who can see it)${ownershipClassifierMark(shareEntry)}${otherOrgClassifierMark(shareEntry)} \u2192 ${target}`;
   },
-  async description(e, n) {
-    let s = typeof n?.url === "string" ? parseArtifactUrl(n.url) : null;
-    let r = artifactCardTitle(s !== null ? getShareEntry(s.slug)?.title : undefined);
-    let h = r ? `"${r}"` : canonicalArtifactTargetFor(n?.url, "(unrecognized address)");
-    return n?.action === "unpin"
-      ? `Remove ${h} from the user's pinned artifacts`
-      : `Pin ${h} to the user's sidebar`;
+  async description(tool, input) {
+    let artifactUrl = typeof input?.url === "string" ? parseArtifactUrl(input.url) : null;
+    let cardTitle = artifactCardTitle(
+      artifactUrl !== null ? getShareEntry(artifactUrl.slug)?.title : undefined,
+    );
+    let titleText = cardTitle
+      ? `"${cardTitle}"`
+      : canonicalArtifactTargetFor(input?.url, "(unrecognized address)");
+    return input?.action === "unpin"
+      ? `Remove ${titleText} from the user's pinned artifacts`
+      : `Pin ${titleText} to the user's sidebar`;
   },
-  getToolUseSummary(e) {
-    return e?.action === "unpin"
+  getToolUseSummary(input) {
+    return input?.action === "unpin"
       ? "remove an artifact from the user's pinned list"
       : "pin an artifact to the user's sidebar";
   },
@@ -275,16 +288,16 @@ var ARTIFACT_PIN_ACTION_HANDLER = {
 /**
  * 把 pin/unpin 动作结果转换成 tool_result：记录不可读时提示用 list 查看当前 pin 状态，否则说明已 pin 或取消 pin 的 Artifact 标题与 url。
  */
-function mapPinResult(e, toolUseId) {
-  if (!("pin" in e)) return throwUnroutedArtifactAction("pin.mapResult", e);
-  if (!pinSourceSchema().safeParse(e).success)
+function mapPinResult(result, toolUseId) {
+  if (!("pin" in result)) return throwUnroutedArtifactAction("pin.mapResult", result);
+  if (!pinSourceSchema().safeParse(result).success)
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
       content:
         'This record of a pin or unpin is unreadable \u2014 action "list" shows which artifacts are pinned now.',
     };
-  let { pinned, url, title } = e.pin;
+  let { pinned, url, title } = result.pin;
   let titleSuffix = typeof title === "string" && title !== "" ? ` "${sweepScalarField(title, 300)}"` : "";
   return {
     tool_use_id: toolUseId,

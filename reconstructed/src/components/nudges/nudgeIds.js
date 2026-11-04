@@ -12,7 +12,7 @@
 /**
  * 输入框提示（nudge）id 常量：effort_medium_nudge、auto_default_nudge、ultraplan_choice、cost_threshold、autocompact_offer 等。
  */
-var NUDGE_IDS = "effort_medium_nudge";
+var EFFORT_MEDIUM_NUDGE = "effort_medium_nudge";
 var AUTO_DEFAULT_NUDGE = "auto_default_nudge";
 var ULTRAPLAN_CHOICE = "ultraplan_choice";
 var COST_THRESHOLD = "cost_threshold";
@@ -41,7 +41,7 @@ export {
   AUTOCOMPACT_OFFER,
   AUTO_DEFAULT_NUDGE,
   FULLSCREEN_UPSELL,
-  NUDGE_IDS,
+  EFFORT_MEDIUM_NUDGE,
   RESUME_RETURN,
   NEWER_MODEL_OFFER,
   COST_THRESHOLD,

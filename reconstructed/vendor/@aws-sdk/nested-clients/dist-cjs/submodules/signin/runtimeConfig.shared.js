@@ -5,8 +5,8 @@
  * pieces: chunk-y366fgzk.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
-import { require_core as require_core_2 } from "../../../../core/dist-cjs/index.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
+import { require_core_2 } from "../../../../core/dist-cjs/index.js";
 import { require_protocols } from "../../../../core/dist-cjs/submodules/protocols/index.js";
 import { require_core } from "../../../../../@smithy/core/dist-cjs/index.js";
 import { require_client } from "../../../../../@smithy/core/dist-cjs/submodules/client/index.js";
@@ -17,7 +17,7 @@ import { require_httpAuthSchemeProvider } from "./auth/httpAuthSchemeProvider.js
 import { require_endpointResolver } from "./endpoint/endpointResolver.js";
 
 //@ chunk-y366fgzk.js:4773-5894 cjs-fingerprint
-var require_runtimeConfig_shared = x(function (cjsExports) {
+var require_runtimeConfig_shared = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

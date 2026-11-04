@@ -9,6 +9,9 @@
  * attribution: fingerprint 2, placement 4, sole-consumer 2
  */
 import * as pathModule from "path";
+import { complianceTaintState } from "../../services/policyLimits/complianceTaints.js";
+import { WORKER_KINDS } from "../../daemon/runDaemonWorker.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   SKILL_WATCH_DEBOUNCE_MS,
   SKILL_WATCH_MIN_MS,
@@ -57,12 +60,58 @@ import { getFsImplementation } from "../fsOperations.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { findGitRoot, findCanonicalGitRoot } from "../git.js";
 import { PathSpace } from "../resultError.js";
-import { complianceTaintState } from "../../services/policyLimits/complianceTaints.js";
 import { refreshSkillsSyncVeto } from "../claudeAiSync/skillsSync.js";
 import { logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
-import { WORKER_KINDS } from "../../daemon/runDaemonWorker.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-1rckdhfn.js:1589-1626 fingerprint = skillChangeDetector (0.599)
+/**
+ * 测试用：重置 skill 变更检测器。
+ */
+function skillChangeDetector() {
+  complianceTaintState().resetForTesting();
+}
+//@ chunk-g3mpnrhd.js:2629-3044 placement
+/**
+ * 比较技能变化需要停止/启动/重启的服务。
+ */
+function diffSkillServers(currentConfig, config) {
+  let changes = {
+    stop: [],
+    start: [],
+    restart: [],
+  };
+  for (let key of Object.keys(WORKER_KINDS)) {
+    let currentEntries = currentConfig[key] ?? [];
+    let nextEntries = config[key] ?? [];
+    let max = Math.max(currentEntries.length, nextEntries.length);
+    for (let j = 0; j < max; j++) {
+      let id = `${key}:${j}`;
+      let currentEntry = currentEntries[j];
+      let nextEntry = nextEntries[j];
+      if (currentEntry !== undefined && nextEntry === undefined)
+        changes.stop.push({
+          id,
+          kind: key,
+          previousConfig: currentEntry,
+        });
+      else if (currentEntry === undefined && nextEntry !== undefined)
+        changes.start.push({
+          id,
+          kind: key,
+          config: nextEntry,
+        });
+      else if (!import_sortedIndex_2(currentEntry, nextEntry))
+        changes.restart.push({
+          id,
+          kind: key,
+          config: nextEntry,
+          previousConfig: currentEntry,
+        });
+    }
+  }
+  return changes;
+}
 //@ chunk-2njac0sx.js:1112-5402 placement
 /**
  * skill 变更检测器：chokidar 监听上述目录（depth 2，只看 .md，忽略 .git），按交互活跃度切换轮询间隔，变化去抖后先跑 ConfigChange 钩子（可阻断），再清 skill 缓存并通知重载。
@@ -72,65 +121,65 @@ function createSkillChangeDetector(changedPath) {
   let pollInterval = changedPath?.pollInterval ?? SKILL_WATCH_MIN_MS;
   let reloadDebounce = changedPath?.reloadDebounce ?? SKILL_WATCH_SETTLE_MS;
   let chokidarInterval = changedPath?.chokidarInterval ?? SKILL_WATCH_POLL_MS;
-  let command;
-  let D = changedPath?.getFingerprint ?? (() => collectPromptCommandHashes(command));
+  let skillRoot;
+  let getFingerprint = changedPath?.getFingerprint ?? (() => collectPromptCommandHashes(skillRoot));
   let now = changedPath?.now ?? Date.now;
   let lastInteractionTime = changedPath?.lastInteractionTime ?? getLastInteractionTime;
   let onInteraction_2 = changedPath?.onInteraction ?? onInteraction;
   let signal = createSignal();
   let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
-  function S() {
+  function markReloaded() {
     NEGATIVE_INFINITY = now();
     signal.emit();
   }
-  let x = skillsChangedSignal.subscribe(S);
-  let g = null;
-  let oe = 0;
-  let B = false;
-  let I = null;
-  let _ = null;
-  let A = null;
-  let K = null;
-  let L = false;
-  let re = new Set();
-  let v = [];
-  let F = 0;
-  let W = new Set();
-  let M = null;
-  let q = false;
-  let P = false;
-  let j = null;
-  let O = null;
-  let Q;
-  async function pe(e, r) {
-    if (q || P || isDiskless()) return;
-    q = true;
-    Q = e;
-    command = r;
-    if (!j)
-      j = onDynamicSkillsLoaded(() => {
+  let unsubscribe = skillsChangedSignal.subscribe(markReloaded);
+  let watcher = null;
+  let mergerEpoch = 0;
+  let watcherReady = false;
+  let pendingBatchTimer = null;
+  let idleTimer = null;
+  let deferredReloadTimer = null;
+  let unsubscribeInteraction = null;
+  let isIdle = false;
+  let loggedChangeKeys = new Set();
+  let watchedPaths = [];
+  let startGeneration = 0;
+  let pendingChangedPaths = new Set();
+  let lastFingerprint = null;
+  let started = false;
+  let disposed = false;
+  let unsubscribeDynamicSkills = null;
+  let unregisterCleanup = null;
+  let startCommand;
+  async function startWatching(initialCommand, initialPath) {
+    if (started || disposed || isDiskless()) return;
+    started = true;
+    startCommand = initialCommand;
+    skillRoot = initialPath;
+    if (!unsubscribeDynamicSkills)
+      unsubscribeDynamicSkills = onDynamicSkillsLoaded(() => {
         clearCommandMemoizationCaches();
         signal.emit();
       });
-    let s = ++F;
-    let watchablePaths = await getWatchablePaths(r);
-    if (P || s !== F) return;
-    v = watchablePaths;
-    if (v.length === 0) return;
-    M = await D().catch(() => null);
-    if (P || s !== F) return;
-    logForDebugging(`Watching for changes in skill/command directories: ${v.join(", ")}...`);
-    g = Z(chokidarInterval);
-    let m = g;
-    await new Promise((resolve) => m.once("ready", () => resolve()));
-    if (SKILL_WATCH_ENABLED) se();
-    O = registerCleanup(z);
+    let generation = ++startGeneration;
+    let watchablePaths = await getWatchablePaths(initialPath);
+    if (disposed || generation !== startGeneration) return;
+    watchedPaths = watchablePaths;
+    if (watchedPaths.length === 0) return;
+    lastFingerprint = await getFingerprint().catch(() => null);
+    if (disposed || generation !== startGeneration) return;
+    logForDebugging(`Watching for changes in skill/command directories: ${watchedPaths.join(", ")}...`);
+    watcher = createWatcher(chokidarInterval);
+    let readyWatcher = watcher;
+    await new Promise((resolve) => readyWatcher.once("ready", () => resolve()));
+    if (SKILL_WATCH_ENABLED) startInteractionWatch();
+    unregisterCleanup = registerCleanup(dispose);
   }
-  function Z(e) {
-    oe = now();
-    B = false;
+  function createWatcher(watchPollInterval) {
+    mergerEpoch = now();
+    watcherReady = false;
     let skillsPath = getSkillsPath("userSettings", "skills");
-    let s = chokidar_default.watch(v, {
+    let chokidarWatcher = chokidar_default.watch(watchedPaths, {
       persistent: true,
       ignoreInitial: true,
       depth: 2,
@@ -138,51 +187,54 @@ function createSkillChangeDetector(changedPath) {
         stabilityThreshold,
         pollInterval,
       },
-      ignored: (m, c) => {
-        if (c && !c.isFile() && !c.isDirectory() && !c.isSymbolicLink()) return true;
-        if (m.split(/[/\\]/).some((T) => T === ".git")) return true;
-        if (pathModule.relative(skillsPath, m).split(pathModule.sep)[0] === SYNCED_SUBDIR) return true;
-        if (c?.isFile()) return !m.endsWith(".md");
+      ignored: (path, stats) => {
+        if (stats && !stats.isFile() && !stats.isDirectory() && !stats.isSymbolicLink()) return true;
+        if (path.split(/[/\\]/).some((segment) => segment === ".git")) return true;
+        if (pathModule.relative(skillsPath, path).split(pathModule.sep)[0] === SYNCED_SUBDIR) return true;
+        if (stats?.isFile()) return !path.endsWith(".md");
         return false;
       },
       ignorePermissionErrors: true,
       usePolling: SKILL_WATCH_ENABLED,
-      interval: e,
-      binaryInterval: e,
+      interval: watchPollInterval,
+      binaryInterval: watchPollInterval,
       atomic: true,
     });
-    s.on("add", te);
-    s.on("change", te);
-    s.on("unlink", te);
-    let f = false;
-    s.on("unlinkDir", (m) => {
-      f ||= v.some((c) => pathModule.resolve(c) === pathModule.resolve(m));
-      B &&= !f;
+    chokidarWatcher.on("add", handleChange);
+    chokidarWatcher.on("change", handleChange);
+    chokidarWatcher.on("unlink", handleChange);
+    let watchedDirRemoved = false;
+    chokidarWatcher.on("unlinkDir", (dirPath) => {
+      watchedDirRemoved ||= watchedPaths.some(
+        (watchedPath) => pathModule.resolve(watchedPath) === pathModule.resolve(dirPath),
+      );
+      watcherReady &&= !watchedDirRemoved;
     });
-    s.once("ready", () => {
-      let watched = s.getWatched();
-      B = !f && v.every((c) => pathModule.resolve(c) in watched);
+    chokidarWatcher.once("ready", () => {
+      let watched = chokidarWatcher.getWatched();
+      watcherReady =
+        !watchedDirRemoved && watchedPaths.every((watchedPath) => pathModule.resolve(watchedPath) in watched);
     });
-    s.on("error", (m) =>
-      logForDebugging(`[skills] watcher error: ${errorMessage(m)}`, {
+    chokidarWatcher.on("error", (error) =>
+      logForDebugging(`[skills] watcher error: ${errorMessage(error)}`, {
         level: "warn",
       }),
     );
-    return s;
+    return chokidarWatcher;
   }
-  function se() {
-    K ??= onInteraction_2(() => {
-      if (L)
-        A ??= setTimeout(() => {
-          A = null;
-          ae();
+  function startInteractionWatch() {
+    unsubscribeInteraction ??= onInteraction_2(() => {
+      if (isIdle)
+        deferredReloadTimer ??= setTimeout(() => {
+          deferredReloadTimer = null;
+          reloadNow();
         }, 0);
     });
-    ee();
+    scheduleIdleCheck();
   }
-  function ae() {
+  function reloadNow() {
     try {
-      ce();
+      updateIdleState();
     } catch (error) {
       logError(
         withTelemetryMessage(
@@ -191,35 +243,37 @@ function createSkillChangeDetector(changedPath) {
         ),
       );
     }
-    ee();
+    scheduleIdleCheck();
   }
-  function ee() {
-    if (P || L || _ !== null) return;
-    let e = SKILL_WATCH_MAX_IDLE_MS - (now() - lastInteractionTime()) + 1;
-    let r =
-      e < SKILL_WATCH_RETRY_MS
+  function scheduleIdleCheck() {
+    if (disposed || isIdle || idleTimer !== null) return;
+    let untilIdleMs = SKILL_WATCH_MAX_IDLE_MS - (now() - lastInteractionTime()) + 1;
+    let delayMs =
+      untilIdleMs < SKILL_WATCH_RETRY_MS
         ? SKILL_WATCH_RETRY_MS
-        : e <= SKILL_WATCH_MAX_IDLE_MS
-          ? e
+        : untilIdleMs <= SKILL_WATCH_MAX_IDLE_MS
+          ? untilIdleMs
           : SKILL_WATCH_MAX_IDLE_MS + 1;
-    _ = setTimeout(() => {
-      _ = null;
-      ae();
-    }, r);
-    _.unref?.();
+    idleTimer = setTimeout(() => {
+      idleTimer = null;
+      reloadNow();
+    }, delayMs);
+    idleTimer.unref?.();
   }
-  function ce() {
-    if (P || !g) return;
-    let e = now() - lastInteractionTime() > SKILL_WATCH_MAX_IDLE_MS;
-    if (e === L) return;
-    L = e;
-    let r = e ? SKILL_WATCH_IDLE_MS : chokidarInterval;
-    logForDebugging(`[skills] ${e ? "idle" : "active"} \u2014 switching poll interval to ${r}ms`);
-    let s = false;
-    if (B && (e || now() - oe <= SKILL_WATCH_TIMEOUT_MS))
+  function updateIdleState() {
+    if (disposed || !watcher) return;
+    let idleNow = now() - lastInteractionTime() > SKILL_WATCH_MAX_IDLE_MS;
+    if (idleNow === isIdle) return;
+    isIdle = idleNow;
+    let nextInterval = idleNow ? SKILL_WATCH_IDLE_MS : chokidarInterval;
+    logForDebugging(
+      `[skills] ${idleNow ? "idle" : "active"} \u2014 switching poll interval to ${nextInterval}ms`,
+    );
+    let pollIntervalChanged = false;
+    if (watcherReady && (idleNow || now() - mergerEpoch <= SKILL_WATCH_TIMEOUT_MS))
       try {
-        g.setPollInterval(r);
-        s = true;
+        watcher.setPollInterval(nextInterval);
+        pollIntervalChanged = true;
       } catch (error) {
         logError(
           withTelemetryMessage(
@@ -228,116 +282,125 @@ function createSkillChangeDetector(changedPath) {
           ),
         );
       }
-    if (!s) {
+    if (!pollIntervalChanged) {
       logForDebugging("[skills] building a new watcher for the switch");
-      g.close();
-      g = Z(r);
+      watcher.close();
+      watcher = createWatcher(nextInterval);
     }
-    if (!e) {
-      ue(SKILL_WATCHER_IDLE_WAKE_TAG);
-      ee();
+    if (!idleNow) {
+      queueReload(SKILL_WATCHER_IDLE_WAKE_TAG);
+      scheduleIdleCheck();
     }
   }
-  async function ke() {
-    if (!q || P) return;
-    let watchablePaths = await getWatchablePaths(command);
-    if (P) return;
-    let r = uniq([...v, ...watchablePaths]);
-    if (r.length === v.length) return;
-    let s = ++F;
-    v = r;
-    logForDebugging(`[skills] session moved \u2014 watching skill/command directories: ${v.join(", ")}`);
-    if (g) g.close();
-    g = Z(L ? SKILL_WATCH_IDLE_MS : chokidarInterval);
-    let f = g;
-    let promise = new Promise((resolve) => f.once("ready", () => resolve()));
+  async function refreshWatchedPaths() {
+    if (!started || disposed) return;
+    let watchablePaths = await getWatchablePaths(skillRoot);
+    if (disposed) return;
+    let nextPaths = uniq([...watchedPaths, ...watchablePaths]);
+    if (nextPaths.length === watchedPaths.length) return;
+    let generation = ++startGeneration;
+    watchedPaths = nextPaths;
+    logForDebugging(
+      `[skills] session moved \u2014 watching skill/command directories: ${watchedPaths.join(", ")}`,
+    );
+    if (watcher) watcher.close();
+    watcher = createWatcher(isIdle ? SKILL_WATCH_IDLE_MS : chokidarInterval);
+    let newWatcher = watcher;
+    let promise = new Promise((resolve) => newWatcher.once("ready", () => resolve()));
     await Promise.race([
       promise,
       sleep(SKILL_WATCH_BACKOFF_MS, undefined, {
         unref: true,
       }),
     ]);
-    if (P || s !== F) return;
-    if (SKILL_WATCH_ENABLED) se();
-    O ??= registerCleanup(z);
+    if (disposed || generation !== startGeneration) return;
+    if (SKILL_WATCH_ENABLED) startInteractionWatch();
+    unregisterCleanup ??= registerCleanup(dispose);
   }
-  function z() {
-    P = true;
-    if (O) {
-      O();
-      O = null;
+  function dispose() {
+    disposed = true;
+    if (unregisterCleanup) {
+      unregisterCleanup();
+      unregisterCleanup = null;
     }
-    if (j) {
-      j();
-      j = null;
+    if (unsubscribeDynamicSkills) {
+      unsubscribeDynamicSkills();
+      unsubscribeDynamicSkills = null;
     }
-    if (_) {
-      clearTimeout(_);
-      _ = null;
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
     }
-    if (A) {
-      clearTimeout(A);
-      A = null;
+    if (deferredReloadTimer) {
+      clearTimeout(deferredReloadTimer);
+      deferredReloadTimer = null;
     }
-    K?.();
-    K = null;
+    unsubscribeInteraction?.();
+    unsubscribeInteraction = null;
     let resolved = Promise.resolve();
-    if (g) {
-      resolved = g.close();
-      g = null;
+    if (watcher) {
+      resolved = watcher.close();
+      watcher = null;
     }
-    if (I) {
-      clearTimeout(I);
-      I = null;
+    if (pendingBatchTimer) {
+      clearTimeout(pendingBatchTimer);
+      pendingBatchTimer = null;
     }
-    W.clear();
-    x();
+    pendingChangedPaths.clear();
+    unsubscribe();
     signal.clear();
     return resolved;
   }
-  function te(path) {
+  function handleChange(path) {
     logForDebugging(`Detected skill change: ${path}`);
     logEvent("tengu_skill_file_changed", {
       source: lit("chokidar"),
     });
-    we(path);
-    ue(path);
+    logChangeOnce(path);
+    queueReload(path);
   }
-  function we(path) {
-    let any = path.split(/[/\\]/).some((m, c, T) => m === SYNCED_DIR && T[c - 1] === "skills");
-    let s = now() - NEGATIVE_INFINITY <= SKILL_WATCH_MAX_WAIT_MS;
-    let f = `${any}:${s}`;
-    if (re.has(f)) return;
-    re.add(f);
+  function logChangeOnce(path) {
+    let any = path
+      .split(/[/\\]/)
+      .some((segment, index, segments) => segment === SYNCED_DIR && segments[index - 1] === "skills");
+    let recentlyAnnounced = now() - NEGATIVE_INFINITY <= SKILL_WATCH_MAX_WAIT_MS;
+    let changeKey = `${any}:${recentlyAnnounced}`;
+    if (loggedChangeKeys.has(changeKey)) return;
+    loggedChangeKeys.add(changeKey);
     logForDiagnosticsNoPII("info", "skill_watch_saw_change", {
       in_synced_skills_folder: any,
-      within_40s_of_announced_reload: s,
+      within_40s_of_announced_reload: recentlyAnnounced,
     });
   }
-  function ue(e) {
-    W.add(e);
-    if (I) clearTimeout(I);
-    I = setTimeout(async () => {
-      I = null;
-      let paths = [...W];
-      W.clear();
-      let s = paths.length === 1 && paths[0] === SKILL_WATCHER_IDLE_WAKE_TAG;
-      if (!s) {
-        let c = paths.find((path) => path !== SKILL_WATCHER_IDLE_WAKE_TAG) ?? paths[0];
-        if (await Se(c)) {
+  function queueReload(path) {
+    pendingChangedPaths.add(path);
+    if (pendingBatchTimer) clearTimeout(pendingBatchTimer);
+    pendingBatchTimer = setTimeout(async () => {
+      pendingBatchTimer = null;
+      let paths = [...pendingChangedPaths];
+      pendingChangedPaths.clear();
+      let idleWakeOnly = paths.length === 1 && paths[0] === SKILL_WATCHER_IDLE_WAKE_TAG;
+      if (!idleWakeOnly) {
+        let firstPath = paths.find((path) => path !== SKILL_WATCHER_IDLE_WAKE_TAG) ?? paths[0];
+        if (await configChangeBlocked(firstPath)) {
           logForDebugging(`ConfigChange hook blocked skill reload (${paths.length} paths)`);
           return;
         }
       }
       clearSkillCaches();
-      let f = await D().catch(() => null);
-      if (f === null) {
+      let fingerprint = await getFingerprint().catch(() => null);
+      if (fingerprint === null) {
         clearCommandsCache();
         clearAgentDefinitionsCache();
-        de();
+        emitReload();
         return;
       }
-      if (M !== null && f.size === M.size && [...M].every(([c, T]) => f.get(c) === T) && s) {
+      if (
+        lastFingerprint !== null &&
+        fingerprint.size === lastFingerprint.size &&
+        [...lastFingerprint].every(([path, hash]) => fingerprint.get(path) === hash) &&
+        idleWakeOnly
+      ) {
         clearAgentDefinitionsCache();
         return;
       }
@@ -348,50 +411,55 @@ function createSkillChangeDetector(changedPath) {
           level: "warn",
         }),
       );
-      M = f;
-      de();
+      lastFingerprint = fingerprint;
+      emitReload();
     }, reloadDebounce);
   }
-  function Se(e) {
-    if (!Q) {
+  function configChangeBlocked(path) {
+    if (!startCommand) {
       logError(Error("skillChangeDetector: ConfigChange hook gate not wired"));
       return Promise.resolve(true);
     }
-    return Q("skills", e);
+    return startCommand("skills", path);
   }
-  function de() {
+  function emitReload() {
     try {
       signal.emit();
     } catch (error) {
-      for (let r of error instanceof AggregateError ? error.errors : [error])
-        logError(withTelemetryMessage(toError(r), "skillChangeDetector: subscriber threw during reload"));
+      for (let caughtError of error instanceof AggregateError ? error.errors : [error])
+        logError(
+          withTelemetryMessage(toError(caughtError), "skillChangeDetector: subscriber threw during reload"),
+        );
     }
   }
-  function Pe() {
-    if (P) return;
-    x();
-    x = skillsChangedSignal.subscribe(S);
+  function rebridgeSkillsChanged() {
+    if (disposed) return;
+    unsubscribe();
+    unsubscribe = skillsChangedSignal.subscribe(markReloaded);
   }
   return {
-    initialize: pe,
-    dispose: z,
-    rehome: ke,
-    [Symbol.asyncDispose]: z,
+    initialize: startWatching,
+    dispose,
+    rehome: refreshWatchedPaths,
+    [Symbol.asyncDispose]: dispose,
     subscribe: signal.subscribe,
-    rebridgeSkillsChanged: Pe,
-    _checkIdleTransitionForTest: ce,
+    rebridgeSkillsChanged,
+    _checkIdleTransitionForTest: updateIdleState,
   };
 }
 //@ chunk-2njac0sx.js:5402-5415 placement
 /**
  * 全局共享的 skill 变更检测器，支持 rehome。
  */
-var sharedSkillChangeDetector = createSkillChangeDetector();
+var sharedSkillChangeDetector; // deferred: uses createSkillChangeDetector of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-2njac0sx.js:5402", () => {
+  sharedSkillChangeDetector = createSkillChangeDetector();
+});
 //@ chunk-2njac0sx.js:5415-6543 fingerprint = getWatchablePaths (0.908)
 /**
  * 列出 skill 热加载要监听的目录：用户 skills（含 synced）、用户/项目 commands、项目 skills（git worktree 时回退主仓库）、用户/项目 agents、--add-dir 的 .claude/skills；只返回存在的。
  */
-async function getWatchablePaths(n) {
+async function getWatchablePaths(hostFiles) {
   let fs = getFsImplementation();
   let paths = [];
   let userSkillsPath = getSkillsPath("userSettings", "skills");
@@ -417,8 +485,8 @@ async function getWatchablePaths(n) {
   if (projectSkillsPath)
     try {
       let absolutePath = pathModule.resolve(projectSkillsPath);
-      if (isStorageV5Enabled() && n !== undefined) {
-        if (await hostPathExists(n, absolutePath)) paths.push(absolutePath);
+      if (isStorageV5Enabled() && hostFiles !== undefined) {
+        if (await hostPathExists(hostFiles, absolutePath)) paths.push(absolutePath);
       } else {
         await fs.stat(absolutePath);
         paths.push(absolutePath);
@@ -427,17 +495,21 @@ async function getWatchablePaths(n) {
   let gitRoot = findGitRoot(getOriginalCwd());
   let canonicalGitRoot = findCanonicalGitRoot(getOriginalCwd());
   if (getProjectConfigRoot() === null && gitRoot && canonicalGitRoot && gitRoot !== canonicalGitRoot) {
-    let joined = pathModule.join(gitRoot, ".claude", "skills");
-    let joined_2 = pathModule.join(canonicalGitRoot, ".claude", "skills");
-    if (!paths.includes(joined) && !(await pathExists(fs, n, joined)) && (await pathExists(fs, n, joined_2)))
-      paths.push(joined_2);
+    let path = pathModule.join(gitRoot, ".claude", "skills");
+    let path_2 = pathModule.join(canonicalGitRoot, ".claude", "skills");
+    if (
+      !paths.includes(path) &&
+      !(await pathExists(fs, hostFiles, path)) &&
+      (await pathExists(fs, hostFiles, path_2))
+    )
+      paths.push(path_2);
   }
   let projectCommandsPath = getSkillsPath("projectSettings", "commands");
   if (projectCommandsPath)
     try {
       let absolutePath = pathModule.resolve(projectCommandsPath);
-      if (isStorageV5Enabled() && n !== undefined) {
-        if (await hostPathExists(n, absolutePath)) paths.push(absolutePath);
+      if (isStorageV5Enabled() && hostFiles !== undefined) {
+        if (await hostPathExists(hostFiles, absolutePath)) paths.push(absolutePath);
       } else {
         await fs.stat(absolutePath);
         paths.push(absolutePath);
@@ -453,8 +525,8 @@ async function getWatchablePaths(n) {
   if (skillsPath_2)
     try {
       let resolved = pathModule.resolve(skillsPath_2);
-      if (isStorageV5Enabled() && n !== undefined) {
-        if (await hostPathExists(n, resolved)) paths.push(resolved);
+      if (isStorageV5Enabled() && hostFiles !== undefined) {
+        if (await hostPathExists(hostFiles, resolved)) paths.push(resolved);
       } else {
         await fs.stat(resolved);
         paths.push(resolved);
@@ -463,8 +535,8 @@ async function getWatchablePaths(n) {
   for (let dir of getAdditionalDirectoriesForClaudeMd()) {
     let additionalSkillsPath = pathModule.join(dir, ".claude", "skills");
     try {
-      if (isStorageV5Enabled() && n !== undefined) {
-        if (await hostPathExists(n, pathModule.resolve(additionalSkillsPath)))
+      if (isStorageV5Enabled() && hostFiles !== undefined) {
+        if (await hostPathExists(hostFiles, pathModule.resolve(additionalSkillsPath)))
           paths.push(additionalSkillsPath);
       } else {
         await fs.stat(additionalSkillsPath);
@@ -475,26 +547,19 @@ async function getWatchablePaths(n) {
   return paths;
 }
 //@ chunk-2njac0sx.js:6543-6648 sole-consumer
-async function hostPathExists(n, u) {
-  let stats = await n.hostFiles.stat(PathSpace.workspace(u));
+async function hostPathExists(fs, hostPath) {
+  let stats = await fs.hostFiles.stat(PathSpace.workspace(hostPath));
   return stats.ok && stats.value.kind !== "absent";
 }
 //@ chunk-2njac0sx.js:6648-6758 sole-consumer
-async function pathExists(n, u, i) {
+async function pathExists(fs, hostFiles, path) {
   try {
-    if (isStorageV5Enabled() && u !== undefined) return await hostPathExists(u, i);
-    await n.stat(i);
+    if (isStorageV5Enabled() && hostFiles !== undefined) return await hostPathExists(hostFiles, path);
+    await fs.stat(path);
     return true;
   } catch {
     return false;
   }
-}
-//@ chunk-1rckdhfn.js:1589-1626 fingerprint = skillChangeDetector (0.599)
-/**
- * 测试用：重置 skill 变更检测器。
- */
-function skillChangeDetector() {
-  complianceTaintState().resetForTesting();
 }
 //@ chunk-5634v5r7.js:346-618 placement
 /**
@@ -517,46 +582,5 @@ async function reloadSkillsAfterDirectoryChange() {
     );
     logFeatureSad("skill_directory_reload", "rehome_failed");
   }
-}
-//@ chunk-g3mpnrhd.js:2629-3044 placement
-/**
- * 比较技能变化需要停止/启动/重启的服务。
- */
-function diffSkillServers(r, config) {
-  let i = {
-    stop: [],
-    start: [],
-    restart: [],
-  };
-  for (let key of Object.keys(WORKER_KINDS)) {
-    let f = r[key] ?? [];
-    let a = config[key] ?? [];
-    let max = Math.max(f.length, a.length);
-    for (let j = 0; j < max; j++) {
-      let id = `${key}:${j}`;
-      let m = f[j];
-      let g = a[j];
-      if (m !== undefined && g === undefined)
-        i.stop.push({
-          id,
-          kind: key,
-          previousConfig: m,
-        });
-      else if (m === undefined && g !== undefined)
-        i.start.push({
-          id,
-          kind: key,
-          config: g,
-        });
-      else if (!En(m, g))
-        i.restart.push({
-          id,
-          kind: key,
-          config: g,
-          previousConfig: m,
-        });
-    }
-  }
-  return i;
 }
 export { reloadSkillsAfterDirectoryChange, sharedSkillChangeDetector, skillChangeDetector, diffSkillServers };

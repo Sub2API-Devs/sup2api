@@ -15,6 +15,7 @@ import { createValueSlot } from "../../../utils/valueSlot.js";
 import { matchesField } from "../../../utils/hooks/functionHookMatchers.js";
 import { isModuleAdmitted } from "../../../utils/plugins/functionHooks/admission.js";
 import { paneRegistry } from "../panes.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:297633-297664 placement
 /**
@@ -25,11 +26,11 @@ var renderVersions = () => getPluginRegistry().renderVersions;
 /**
  * 递增渲染版本
  */
-function bumpRenderVersion(e) {
-  renderVersions().setState((n) => {
-    let r = new Map(n);
-    r.set(e, (n.get(e) ?? 0) + 1);
-    return r;
+function bumpRenderVersion(key) {
+  renderVersions().setState((versions) => {
+    let next = new Map(versions);
+    next.set(key, (versions.get(key) ?? 0) + 1);
+    return next;
   });
 }
 //@ chunk-s61vbvea.js:297752-297798 placement
@@ -48,69 +49,69 @@ var LIVE_SUFFIX = " live";
 /**
  * 是否 live 键
  */
-var isLiveKey = (e) => e.endsWith(LIVE_SUFFIX);
+var isLiveKey = (key) => key.endsWith(LIVE_SUFFIX);
 //@ chunk-s61vbvea.js:297840-297857 placement
 /**
  * 加 live 后缀
  */
-var asLiveKey = (e) => e + LIVE_SUFFIX;
+var asLiveKey = (key) => key + LIVE_SUFFIX;
 //@ chunk-s61vbvea.js:297857-297890 placement
 /**
  * 按节奏生成键
  */
-var pacedKey = (e, n) => (n === "live" ? asLiveKey(e) : e);
+var pacedKey = (key, pace) => (pace === "live" ? asLiveKey(key) : key);
 //@ chunk-s61vbvea.js:297890-297943 placement
 /**
  * 按节奏递增渲染版本
  */
-function bumpRenderPaced(plugin, n = "steady") {
-  bumpRenderVersion(plugin === undefined ? RENDER_EVENT : pacedKey(plugin, n));
+function bumpRenderPaced(key, pace = "steady") {
+  bumpRenderVersion(key === undefined ? RENDER_EVENT : pacedKey(key, pace));
 }
 //@ chunk-s61vbvea.js:297943-298479 placement
 /**
  * 按插件节流渲染版本递增：间隔内的调用延后到期再递增。
  */
 function createRenderBumper({ pace, now, intervalMs, onBump }) {
-  let h = new Map();
-  function y(S, w) {
-    let pending = h.get(S)?.pending;
+  let byPlugin = new Map();
+  function bump(key, now) {
+    let pending = byPlugin.get(key)?.pending;
     if (pending !== undefined) clearTimeout(pending);
-    h.set(S, {
-      lastAt: w,
+    byPlugin.set(key, {
+      lastAt: now,
       pending: undefined,
     });
-    bumpRenderPaced(S, pace);
-    onBump?.(S, w);
+    bumpRenderPaced(key, pace);
+    onBump?.(key, now);
   }
   return {
-    bump: y,
-    call: (S) => {
-      let w = h.get(S) ?? {
+    bump,
+    call: (key) => {
+      let entry = byPlugin.get(key) ?? {
         lastAt: Number.NEGATIVE_INFINITY,
         pending: undefined,
       };
-      if (w.pending) return false;
-      let R = now();
-      let x = intervalMs - Math.max(0, R - w.lastAt);
-      if (x <= 0) {
-        y(S, R);
+      if (entry.pending) return false;
+      let calledAt = now();
+      let waitMs = intervalMs - Math.max(0, calledAt - entry.lastAt);
+      if (waitMs <= 0) {
+        bump(key, calledAt);
         return true;
       }
-      let timer = setTimeout(bumpViaTimer, x, {
-        bump: y,
-        plugin: S,
+      let timer = setTimeout(bumpViaTimer, waitMs, {
+        bump,
+        plugin: key,
         now,
       });
       timer.unref();
-      h.set(S, {
-        lastAt: w.lastAt,
+      byPlugin.set(key, {
+        lastAt: entry.lastAt,
         pending: timer,
       });
       return false;
     },
     drop: () => {
-      for (let { pending } of h.values()) clearTimeout(pending);
-      h.clear();
+      for (let { pending } of byPlugin.values()) clearTimeout(pending);
+      byPlugin.clear();
     },
   };
 }
@@ -118,48 +119,54 @@ function createRenderBumper({ pace, now, intervalMs, onBump }) {
 /**
  * 渲染突发槽
  */
-var renderBurstSlot = identity_2(createValueSlot(), (e) => e.set(undefined));
+var renderBurstSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:298479", () => {
+  renderBurstSlot = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-s61vbvea.js:298515-298541 placement
 /**
  * 是否允许渲染
  */
 var isRenderAllowed = () => renderBurstSlot.get() !== true;
 //@ chunk-s61vbvea.js:298541-298686 placement
-var maySelectInstance = (e, n) =>
-  Array.isArray(e)
-    ? e.some((r) => maySelectInstance(r, n))
-    : matchesField(e, "surface", n.surface) &&
-      matchesField(e, "component", n.component) &&
-      matchesField(e, "requestId", n.requestId);
+var maySelectInstance = (matcher, instance) =>
+  Array.isArray(matcher)
+    ? matcher.some((entry) => maySelectInstance(entry, instance))
+    : matchesField(matcher, "surface", instance.surface) &&
+      matchesField(matcher, "component", instance.component) &&
+      matchesField(matcher, "requestId", instance.requestId);
 //@ chunk-s61vbvea.js:298686-298775 placement
-var renderModulesForInstance = (e) =>
+var renderModulesForInstance = (instance) =>
   getPluginRegistry().loadedModules.filter(
     (loadedModule) =>
       loadedModule.hooks(RENDER_EVENT) &&
       isModuleAdmitted(loadedModule) &&
-      maySelectInstance(loadedModule.matcherFor(RENDER_EVENT), e),
+      maySelectInstance(loadedModule.matcherFor(RENDER_EVENT), instance),
   );
 //@ chunk-s61vbvea.js:298775-298812 placement
-var renderPluginsForInstance = (e) => renderModulesForInstance(e).map((n) => n.name);
+var renderPluginsForInstance = (instance) => renderModulesForInstance(instance).map((mod) => mod.name);
 //@ chunk-s61vbvea.js:298812-299022 placement
-function pluginDrawsLive(e) {
+function pluginDrawsLive(pluginName) {
   let shownId = paneRegistry().getState().shownId;
-  let r = isRenderAllowed() && renderPluginsFor("AbovePrompt").includes(e);
-  let s =
+  let isAbovePrompt = isRenderAllowed() && renderPluginsFor("AbovePrompt").includes(pluginName);
+  let isShownPane =
     shownId !== null &&
     renderPluginsForInstance({
       surface: "terminal",
       component: "Pane",
       requestId: shownId,
-    }).includes(e);
-  let included = renderPluginsFor("PromptHint").includes(e);
-  return r || s || included;
+    }).includes(pluginName);
+  let included = renderPluginsFor("PromptHint").includes(pluginName);
+  return isAbovePrompt || isShownPane || included;
 }
 //@ chunk-s61vbvea.js:299022-299056 placement
 /**
  * 节流截止表
  */
-var throttleUntil = identity_2(new Map(), (e) => e.clear());
+var throttleUntil; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:299022", () => {
+  throttleUntil = identity_2(new Map(), (map) => map.clear());
+});
 //@ chunk-s61vbvea.js:299056-299068 placement
 /**
  * 1000
@@ -169,16 +176,16 @@ var RENDER_THROTTLE_WINDOW_MS = 1000;
 /**
  * 节流若干键
  */
-function throttleKeys(e, n = Date.now()) {
-  for (let r of e) throttleUntil.set(r, n + RENDER_THROTTLE_WINDOW_MS);
+function throttleKeys(keys, now = Date.now()) {
+  for (let key of keys) throttleUntil.set(key, now + RENDER_THROTTLE_WINDOW_MS);
 }
 //@ chunk-s61vbvea.js:299126-299182 placement
 /**
  * 是否仍在节流
  */
-function isThrottled(e, n) {
-  let r = throttleUntil.get(e);
-  return r !== undefined && n < r;
+function isThrottled(key, now) {
+  let until = throttleUntil.get(key);
+  return until !== undefined && now < until;
 }
 //@ chunk-s61vbvea.js:299182-299192 placement
 /**
@@ -189,8 +196,8 @@ var LIVE_THROTTLE_LIMIT = 34;
 /**
  * live 节奏节流
  */
-function throttleLive(e, n, r = Date.now()) {
-  if (n > LIVE_THROTTLE_LIMIT) throttleKeys(e, r);
+function throttleLive(keys, elapsedMs, now = Date.now()) {
+  if (elapsedMs > LIVE_THROTTLE_LIMIT) throttleKeys(keys, now);
 }
 //@ chunk-s61vbvea.js:299238-299248 placement
 /**
@@ -201,19 +208,19 @@ var STEADY_THROTTLE_LIMIT = 16;
 /**
  * steady 节奏节流
  */
-function throttleSteady(e, n, r = Date.now()) {
-  if (n > STEADY_THROTTLE_LIMIT) throttleKeys(e, r);
+function throttleSteady(keys, elapsedMs, now = Date.now()) {
+  if (elapsedMs > STEADY_THROTTLE_LIMIT) throttleKeys(keys, now);
 }
 //@ chunk-s61vbvea.js:299294-299501 placement
 /**
  * 渲染实例的节奏：终端上的 AbovePrompt、PromptHint 与当前显示的 Pane 为 live，其余 steady。
  */
-function renderPaceOf(e) {
-  let n = e.surface === "terminal";
-  let r = e.component === "AbovePrompt" && isRenderAllowed();
-  let s = e.component === "PromptHint";
-  let h = e.component === "Pane" && paneRegistry().getState().shownId === e.requestId;
-  return n && (r || s || h) ? "live" : "steady";
+function renderPaceOf(input) {
+  let isTerminal = input.surface === "terminal";
+  let isAbovePrompt = input.component === "AbovePrompt" && isRenderAllowed();
+  let isPromptHint = input.component === "PromptHint";
+  let isShownPane = input.component === "Pane" && paneRegistry().getState().shownId === input.requestId;
+  return isTerminal && (isAbovePrompt || isPromptHint || isShownPane) ? "live" : "steady";
 }
 //@ chunk-s61vbvea.js:299501-299513 placement
 /**
@@ -224,21 +231,22 @@ var STEADY_REDRAW_INTERVAL_MS = 100;
 /**
  * $.ui.invalidate 的渲染失效器：steady 节流后，若插件画 live 组件再走 live 节流。
  */
-function createRenderInvalidator(e = Date.now, n = pluginDrawsLive) {
+function createRenderInvalidator(now = Date.now, drawsLive = pluginDrawsLive) {
   let renderBumper = createRenderBumper({
     pace: "live",
-    now: e,
+    now,
     intervalMs: LIVE_THROTTLE_LIMIT,
   });
   let renderBumper_2 = createRenderBumper({
     pace: "steady",
-    now: e,
+    now,
     intervalMs: STEADY_REDRAW_INTERVAL_MS,
     onBump: renderBumper.bump,
   });
   return {
-    invalidate: (h) => {
-      if (!renderBumper_2.call(h) && !isThrottled(h, e()) && n(h)) renderBumper.call(h);
+    invalidate: (pluginName) => {
+      if (!renderBumper_2.call(pluginName) && !isThrottled(pluginName, now()) && drawsLive(pluginName))
+        renderBumper.call(pluginName);
     },
     drop: () => {
       renderBumper_2.drop();
@@ -255,38 +263,38 @@ var STATE_KEY_SUFFIX = "\x00state";
 /**
  * 加 state 后缀
  */
-var stateKeyOf = (e) => e + STATE_KEY_SUFFIX;
+var stateKeyOf = (key) => key + STATE_KEY_SUFFIX;
 //@ chunk-s61vbvea.js:299777-299804 placement
 /**
  * 是否 state 键
  */
-var isStateKey = (e) => e.endsWith(STATE_KEY_SUFFIX);
+var isStateKey = (key) => key.endsWith(STATE_KEY_SUFFIX);
 //@ chunk-s61vbvea.js:299804-299962 placement
 /**
  * 清除所有状态类渲染版本。
  */
 function clearStateRenderVersions() {
-  let e = renderVersions();
-  let filtered = [...e.getState().keys()].filter(isStateKey);
+  let versions = renderVersions();
+  let filtered = [...versions.getState().keys()].filter(isStateKey);
   if (filtered.length === 0) return;
-  e.setState((r) => {
-    let s = new Map(r);
-    for (let h of filtered) s.delete(h);
-    return s;
+  versions.setState((state) => {
+    let next = new Map(state);
+    for (let key of filtered) next.delete(key);
+    return next;
   });
 }
 //@ chunk-s61vbvea.js:299962-300128 placement
 /**
  * 删除指定状态的渲染版本。
  */
-function dropStateRenderVersions(e) {
-  let n = renderVersions();
-  let filtered = e.map(stateKeyOf).filter((s) => n.getState().has(s));
+function dropStateRenderVersions(pluginNames) {
+  let versions = renderVersions();
+  let filtered = pluginNames.map(stateKeyOf).filter((key) => versions.getState().has(key));
   if (filtered.length === 0) return;
-  n.setState((s) => {
-    let h = new Map(s);
-    for (let y of filtered) h.delete(y);
-    return h;
+  versions.setState((state) => {
+    let next = new Map(state);
+    for (let key of filtered) next.delete(key);
+    return next;
   });
 }
 //@ chunk-s61vbvea.js:300128-300146 placement
@@ -308,32 +316,32 @@ var invalidateViewport = () => bumpRenderVersion(VIEWPORT_KEY);
 /**
  * 由渲染版本表算出版本键（全局或指定插件列表、节奏）。
  */
-function renderVersionKey(state, n, r = "steady") {
-  if (n === undefined) {
-    let h = "";
-    for (let [y, S] of state)
-      if (y !== VIEWPORT_KEY && !isLiveKey(y) && !isStateKey(y)) h += `${y}\x00${S}\x00`;
-    return h;
+function renderVersionKey(state, plugins, pace = "steady") {
+  if (plugins === undefined) {
+    let keyText = "";
+    for (let [key, version] of state)
+      if (key !== VIEWPORT_KEY && !isLiveKey(key) && !isStateKey(key)) keyText += `${key}\x00${version}\x00`;
+    return keyText;
   }
-  let s = String(state.get(RENDER_EVENT) ?? 0);
-  for (let h of n) {
-    let y = state.get(pacedKey(h, r)) ?? 0;
-    s += `\x00${h}\x00${y}`;
+  let text = String(state.get(RENDER_EVENT) ?? 0);
+  for (let pluginName of plugins) {
+    let version = state.get(pacedKey(pluginName, pace)) ?? 0;
+    text += `\x00${pluginName}\x00${version}`;
   }
-  return s;
+  return text;
 }
 //@ chunk-s61vbvea.js:300416-300527 placement
 /**
  * 订阅渲染版本变化（全局键变化时回调）。
  */
-function subscribeRenderVersions(e) {
-  let n = renderVersions();
-  let r = renderVersionKey(n.getState());
-  return n.subscribe(() => {
-    let s = renderVersionKey(n.getState());
-    if (s !== r) {
-      r = s;
-      e();
+function subscribeRenderVersions(listener) {
+  let versions = renderVersions();
+  let previous = renderVersionKey(versions.getState());
+  return versions.subscribe(() => {
+    let next = renderVersionKey(versions.getState());
+    if (next !== previous) {
+      previous = next;
+      listener();
     }
   });
 }
@@ -341,9 +349,9 @@ function subscribeRenderVersions(e) {
 /**
  * 附上各插件版本
  */
-function withPluginVersions(e, n, r) {
-  let s = n.get(stateKeyOf(r));
-  return s === undefined ? e : `${e}\x00\x00${s}`;
+function withPluginVersions(key, versions, instanceKey) {
+  let pluginVersion = versions.get(stateKeyOf(instanceKey));
+  return pluginVersion === undefined ? key : `${key}\x00\x00${pluginVersion}`;
 }
 export {
   renderModulesForInstance,

@@ -22,45 +22,45 @@ var TOO_FAST_ANSWER_TEXT =
   "That answer arrived too quickly after the question to count. Please answer again.";
 //@ chunk-e8rfj3kv.js:409-976 placement
 async function confirmPrompt(
-  e,
-  a = process.stdin,
-  { ignoreAnswersWithinMs: r = 0, reaskPreamble: c = "", signal: s } = {},
+  question,
+  input = process.stdin,
+  { ignoreAnswersWithinMs = 0, reaskPreamble = "", signal } = {},
 ) {
-  if (r > 0) {
-    if (await drainEarlyInput(a, r)) return false;
+  if (ignoreAnswersWithinMs > 0) {
+    if (await drainEarlyInput(input, ignoreAnswersWithinMs)) return false;
   }
-  if (s?.aborted === true) return false;
-  let o = () => {};
+  if (signal?.aborted === true) return false;
+  let cleanup = () => {};
   let promise = new Promise((resolve) => {
-    o = resolve;
+    cleanup = resolve;
   });
-  let t = createInterface({
-    input: a,
+  let readline = createInterface({
+    input,
     output: process.stdout,
   });
-  let f = 0;
-  let l = () => {
+  let askedAt = 0;
+  let cleanupOnce = () => {
     let startTime = performance.now();
-    t.question(`${e} [y/N] `, (m) => {
-      if (r > 0 && performance.now() - startTime < r) {
-        if (++f > CONFIRM_MAX_ATTEMPTS) {
-          o(false);
-          t.close();
+    readline.question(`${question} [y/N] `, (answer) => {
+      if (ignoreAnswersWithinMs > 0 && performance.now() - startTime < ignoreAnswersWithinMs) {
+        if (++askedAt > CONFIRM_MAX_ATTEMPTS) {
+          cleanup(false);
+          readline.close();
           return;
         }
-        process.stdout.write(`${c}${TOO_FAST_ANSWER_TEXT}
+        process.stdout.write(`${reaskPreamble}${TOO_FAST_ANSWER_TEXT}
 `);
-        l();
+        cleanupOnce();
         return;
       }
-      let lower = m.trim().toLowerCase();
-      o(lower === "y" || lower === "yes");
-      t.close();
+      let lower = answer.trim().toLowerCase();
+      cleanup(lower === "y" || lower === "yes");
+      readline.close();
     });
   };
-  l();
-  t.once("close", () => o(false));
-  s?.addEventListener("abort", () => t.close(), {
+  cleanupOnce();
+  readline.once("close", () => cleanup(false));
+  signal?.addEventListener("abort", () => readline.close(), {
     once: true,
   });
   return promise;
@@ -69,30 +69,32 @@ async function confirmPrompt(
 /**
  * 在确认提示前短暂读取并丢弃输入（TTY 下切换原始模式），返回输入流是否已结束。
  */
-async function drainEarlyInput(e, a) {
-  let r = "isTTY" in e && e.isTTY === true;
-  let c = "isRaw" in e && e.isRaw === true;
-  let s = false;
-  let o = () => {
-    s = true;
+async function drainEarlyInput(stream, readline) {
+  let isTTY = "isTTY" in stream && stream.isTTY === true;
+  let wasRaw = "isRaw" in stream && stream.isRaw === true;
+  let paused = false;
+  let onData = () => {
+    paused = true;
   };
-  let n = () => {};
-  e.once("end", o);
-  e.once("close", o);
-  e.on("data", n);
-  if (r) setRawModeSafe(e, true);
+  let noop = () => {};
+  stream.once("end", onData);
+  stream.once("close", onData);
+  stream.on("data", noop);
+  if (isTTY) setRawModeSafe(stream, true);
   try {
-    e.resume();
-    await sleep(a);
+    stream.resume();
+    await sleep(readline);
   } finally {
-    e.removeListener("data", n);
-    e.removeListener("end", o);
-    e.removeListener("close", o);
-    e.pause();
-    if (r) setRawModeSafe(e, c);
+    stream.removeListener("data", noop);
+    stream.removeListener("end", onData);
+    stream.removeListener("close", onData);
+    stream.pause();
+    if (isTTY) setRawModeSafe(stream, wasRaw);
   }
   return (
-    s || ("readableEnded" in e && e.readableEnded === true) || ("destroyed" in e && e.destroyed === true)
+    paused ||
+    ("readableEnded" in stream && stream.readableEnded === true) ||
+    ("destroyed" in stream && stream.destroyed === true)
   );
 }
 export { confirmPrompt, MIN_CONFIRM_ANSWER_DELAY_MS, TOO_FAST_ANSWER_TEXT };

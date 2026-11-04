@@ -38,10 +38,10 @@ function isRemoteCoworkSession() {
  * 计算启动时等待特性开关的时间预算：事件日志开且缓存为空，或 GrowthBook 开且需要重启时取对应值的较大者。
  */
 function startupFlagWaitBudget({ eventLoggingEnabled, growthBookEnabled, cacheEmpty, relaunches }) {
-  let t = eventLoggingEnabled && cacheEmpty ? EVENT_LOGGING_FLAG_WAIT_MS : 0;
-  let a =
+  let eventLoggingBudget = eventLoggingEnabled && cacheEmpty ? EVENT_LOGGING_FLAG_WAIT_MS : 0;
+  let growthBookBudget =
     growthBookEnabled && relaunches ? (env.CLAUDE_CODE_FLAG_FETCH_WAIT_MS ?? GROWTHBOOK_FLAG_WAIT_MS) : 0;
-  let max = Math.max(t, a);
+  let max = Math.max(eventLoggingBudget, growthBookBudget);
   return max > 0 ? max : undefined;
 }
 //@ chunk-m9xcg44e.js:621-989 placement
@@ -66,8 +66,8 @@ function startupGrowthBookKickOutcome({
 /**
  * 判断启动情形是否已经发起 GrowthBook 拉取。
  */
-function didStartGrowthBookKick(e) {
-  switch (e) {
+function didStartGrowthBookKick(origin) {
+  switch (origin) {
     case "started_in_init_empty":
     case "started_in_init_warm":
     case "started_after_init_empty":
@@ -109,7 +109,7 @@ function startupFlagWaitPoint({
  */
 async function waitForInitialize({ initialize, budgetMs }) {
   let startTime = performance.now();
-  let r = await withDeadline(
+  let finished = await withDeadline(
     initialize().then(
       () => true,
       () => true,
@@ -118,7 +118,7 @@ async function waitForInitialize({ initialize, budgetMs }) {
   );
   return {
     waitMs: performance.now() - startTime,
-    timedOut: r === undefined,
+    timedOut: finished === undefined,
   };
 }
 export {

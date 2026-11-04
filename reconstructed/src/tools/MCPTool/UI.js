@@ -8,6 +8,8 @@
  * pieces: chunk-ah34pb7m.js (1), chunk-e6aww6q8.js (3), chunk-hny2rpzz.js (11)
  * attribution: callgraph-fingerprint 2, placement 6, layout 3, fingerprint 4
  */
+import { describeUnparsedInput, safeParseJSON } from "../../utils/json.js";
+import { jsonStringify, jsonStringifyRaw, jsonParse } from "../../utils/slowOperations.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
@@ -24,30 +26,59 @@ import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/inde
 import { formatNumber } from "../../utils/format.js";
 import { McpTextOutputItem } from "../../components/BridgeDialog.js";
 import { OutputLine } from "../../components/shell/OutputLine.js";
-import { jsonParse, jsonStringify, jsonStringifyRaw } from "../../utils/slowOperations.js";
 import { exceedsLineLimit } from "../../utils/terminal.js";
-import { describeUnparsedInput, safeParseJSON } from "../../utils/json.js";
 import { sendMessageOutputSchema, getSendMessageDisplay } from "../SendMessageTool/resumedAgentResult.js";
 import { stripAnsiPerLine } from "../../utils/stripAnsi.js";
 import { stripNonPrintable } from "../../utils/truncateGraphemes.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:4678114-4678247 placement
+var C1_CONTROL_CHARS_REGEX = /[\x7f-\x9f]/g;
+var escapeC1ControlChars = (text) =>
+  text.replace(C1_CONTROL_CHARS_REGEX, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
+var CONTROL_CHARS_REGEX = /[\x00-\x1f\x7f-\x9f]/g;
+//@ chunk-e6aww6q8.js:4678247-4678288 placement
+/**
+ * 删除字符串里的 C0/C1 控制字符。
+ */
+function stripControlChars(text) {
+  return text.replace(CONTROL_CHARS_REGEX, "");
+}
+//@ chunk-e6aww6q8.js:4678288-4678495 callgraph-fingerprint = renderToolUseMessage (0.651)
+/**
+ * MCP 工具调用参数的单行显示：优先用 jQ 专用格式，否则 "键: JSON值" 用逗号连接，并转义 C1 控制字符。
+ */
+function renderToolUseMessage_3(input, { verbose }) {
+  if (Object.keys(input).length === 0) return "";
+  let rendered = describeUnparsedInput(input);
+  if (rendered !== null) return rendered;
+  return Object.entries(input)
+    .map(([key, value]) => {
+      let rendered = escapeC1ControlChars(jsonStringify(value));
+      return `${escapeC1ControlChars(jsonStringifyRaw(key).slice(1, -1))}: ${rendered}`;
+    })
+    .join(", ");
+}
 //@ chunk-hny2rpzz.js:736-740 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hny2rpzz.js:736", () => {
+  init_react_production();
+});
 //@ chunk-hny2rpzz.js:740-789 placement
 /**
  * 把 [键, 值] 渲染成 “键: 值”（MCP 工具参数展示）。
  */
-function keyValueLine(o) {
-  let [Re, be] = o;
-  return `${Re}: ${be}`;
+function keyValueLine(entry) {
+  let [key, value] = entry;
+  return `${key}: ${value}`;
 }
 //@ chunk-hny2rpzz.js:789-827 placement
 /**
  * 取 [键] 的第一项并转成展示文本。
  */
-function firstKeyLabel(o) {
-  let [ke] = o;
-  return F(ke);
+function firstKeyLabel(entry) {
+  let [key] = entry;
+  return F(key);
 }
 //@ chunk-hny2rpzz.js:827-837 layout
 var LARGE_MCP_RESPONSE_TOKENS = 1e4;
@@ -117,11 +148,11 @@ function renderToolUseProgressMessage(progressMessagesForMessage) {
 /**
  * MCP 工具结果渲染入口：非 verbose 时若是 Slack 发消息结果（含 message_link），压缩为 "Sent a message to #频道" 超链接；否则交给 renderToolResultMessage。
  */
-function renderMcpToolResultMessage(o, a, { verbose, input }) {
-  let output = o;
+function renderMcpToolResultMessage(doc, progressMessages, { verbose, input }) {
+  let output = doc;
   if (!verbose) {
-    let i = trySlackSendCompact(output, input);
-    if (i !== null)
+    let compactSend = trySlackSendCompact(output, input);
+    if (compactSend !== null)
       return jsxProd_default(MessageResponse, {
         height: 1,
         children: jsxProd_default_2(Text, {
@@ -129,7 +160,7 @@ function renderMcpToolResultMessage(o, a, { verbose, input }) {
             "Sent a message to",
             " ",
             jsxProd_default(Ansi, {
-              children: createHyperlink(i.url, i.channel),
+              children: createHyperlink(compactSend.url, compactSend.channel),
             }),
           ],
         }),
@@ -141,15 +172,15 @@ function renderMcpToolResultMessage(o, a, { verbose, input }) {
 /**
  * 渲染 MCP 结果内容：估算 token 超过 10000 时加大响应警告；数组逐块渲染（图片显示 [Image]）；空结果显示 (No content)。
  */
-function renderToolResultMessage(o, verbose) {
-  let estimatedTokens = getContentSizeEstimate(o);
-  let l =
+function renderToolResultMessage(output, verbose) {
+  let estimatedTokens = getContentSizeEstimate(output);
+  let sizeWarning =
     estimatedTokens > LARGE_MCP_RESPONSE_TOKENS
       ? `${figures_default.warning} Large MCP response (~${formatNumber(estimatedTokens)} tokens), this can fill up context quickly`
       : null;
   let contentElement;
-  if (Array.isArray(o)) {
-    let contentBlocks = o.map((item, i) => {
+  if (Array.isArray(output)) {
+    let contentBlocks = output.map((item, i) => {
       if (item.type === "image")
         return jsxProd_default(
           Box,
@@ -180,7 +211,7 @@ function renderToolResultMessage(o, verbose) {
       width: "100%",
       children: contentBlocks,
     });
-  } else if (!o)
+  } else if (!output)
     contentElement = jsxProd_default(Box, {
       justifyContent: "space-between",
       overflowX: "hidden",
@@ -195,10 +226,10 @@ function renderToolResultMessage(o, verbose) {
     });
   else
     contentElement = jsxProd_default(OutputLine, {
-      content: o,
+      content: output,
       verbose,
     });
-  if (l)
+  if (sizeWarning)
     return jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
@@ -206,7 +237,7 @@ function renderToolResultMessage(o, verbose) {
           height: 1,
           children: jsxProd_default(Text, {
             color: "warning",
-            children: l,
+            children: sizeWarning,
           }),
         }),
         contentElement,
@@ -238,7 +269,7 @@ var SLACK_MESSAGE_LINK_REGEX = /^https:\/\/[a-z0-9-]+\.slack\.com\/archives\/([A
 function trySlackSendCompact(output, input) {
   let text = output;
   if (Array.isArray(output)) {
-    let block = output.find((x) => x.type === "text");
+    let block = output.find((block) => block.type === "text");
     text = block && "text" in block ? block.text : undefined;
   }
   if (typeof text !== "string" || !text.includes('"message_link"')) return null;
@@ -261,53 +292,29 @@ function trySlackSendCompact(output, input) {
 /**
  * 判断 MCP 工具输出是否较大（字符串或任一文本块超过显示阈值）。
  */
-function isLargeMcpOutput(o, a) {
-  let columns = a?.columns;
-  if (typeof o === "string") return exceedsLineLimit(o, columns);
-  if (Array.isArray(o)) return o.some((u) => u.type === "text" && exceedsLineLimit(u.text, columns));
+function isLargeMcpOutput(output, options) {
+  let columns = options?.columns;
+  if (typeof output === "string") return exceedsLineLimit(output, columns);
+  if (Array.isArray(output))
+    return output.some((block) => block.type === "text" && exceedsLineLimit(block.text, columns));
   return false;
-}
-//@ chunk-e6aww6q8.js:4678114-4678247 placement
-var C1_CONTROL_CHARS_REGEX = /[\x7f-\x9f]/g;
-var escapeC1ControlChars = (e) =>
-  e.replace(C1_CONTROL_CHARS_REGEX, (n) => `\\u${n.charCodeAt(0).toString(16).padStart(4, "0")}`);
-var CONTROL_CHARS_REGEX = /[\x00-\x1f\x7f-\x9f]/g;
-//@ chunk-e6aww6q8.js:4678247-4678288 placement
-/**
- * 删除字符串里的 C0/C1 控制字符。
- */
-function stripControlChars(e) {
-  return e.replace(CONTROL_CHARS_REGEX, "");
-}
-//@ chunk-e6aww6q8.js:4678288-4678495 callgraph-fingerprint = renderToolUseMessage (0.651)
-/**
- * MCP 工具调用参数的单行显示：优先用 jQ 专用格式，否则 "键: JSON值" 用逗号连接，并转义 C1 控制字符。
- */
-function renderToolUseMessage_3(input, { verbose }) {
-  if (Object.keys(input).length === 0) return "";
-  let rendered = describeUnparsedInput(input);
-  if (rendered !== null) return rendered;
-  return Object.entries(input)
-    .map(([key, value]) => {
-      let rendered = escapeC1ControlChars(jsonStringify(value));
-      return `${escapeC1ControlChars(jsonStringifyRaw(key).slice(1, -1))}: ${rendered}`;
-    })
-    .join(", ");
 }
 //@ chunk-ah34pb7m.js:256016-256269 callgraph-fingerprint = MCPTextOutput (0.169)
 /**
  * 结构化 MCP 文本输出渲染：能按 schema 解析时显示摘要，否则按普通文本行显示。
  */
-function MCPTextOutput(m, d, { verbose }) {
-  let g = sendMessageOutputSchema().safeParse(typeof m === "string" ? safeParseJSON(m, false) : m);
-  if (!g.success)
-    return typeof m === "string"
+function MCPTextOutput(output, progressMessages, { verbose }) {
+  let parsed = sendMessageOutputSchema().safeParse(
+    typeof output === "string" ? safeParseJSON(output, false) : output,
+  );
+  if (!parsed.success)
+    return typeof output === "string"
       ? jsxProd_default(OutputLine, {
-          content: stripAnsiPerLine(m),
+          content: stripAnsiPerLine(output),
           verbose,
         })
       : null;
-  let sendMessageDisplay = getSendMessageDisplay(g.data);
+  let sendMessageDisplay = getSendMessageDisplay(parsed.data);
   return sendMessageDisplay === undefined
     ? null
     : jsxProd_default(MessageResponse, {

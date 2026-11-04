@@ -31,6 +31,7 @@ import { logFeatureBad } from "../../services/analytics/featureTelemetry.js";
 import { gateBlockReasonCode } from "../../services/policyLimits/orgConfigGate.js";
 import { isNoPromptHost } from "../../utils/permissions/permissionPromptHost.js";
 import { isHostDisplayFeatureOn } from "../../utils/hooks/hookMessages.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:510177-512319 placement
 /**
@@ -149,34 +150,37 @@ function isAllowedBeforeClaim(subtype) {
     : true;
 }
 //@ chunk-tyg7f3ek.js:512391-512424 placement
-var FLAG_SETTINGS_PLUGIN_KEYS = [...MCP_POLICY_SETTING_KEYS, "enabledPlugins"];
+var FLAG_SETTINGS_PLUGIN_KEYS; // deferred: uses MCP_POLICY_SETTING_KEYS (../../services/mcp/config.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-tyg7f3ek.js:512391", () => {
+  FLAG_SETTINGS_PLUGIN_KEYS = [...MCP_POLICY_SETTING_KEYS, "enabledPlugins"];
+});
 //@ chunk-tyg7f3ek.js:512424-513063 placement
 class FlagSettingsClaimTracker {
   latestRequestId;
   latestRefusal;
   unanswered = new Set();
-  received(e) {
-    this.latestRequestId = e;
+  received(requestId) {
+    this.latestRequestId = requestId;
     this.latestRefusal = undefined;
-    this.unanswered.add(e);
+    this.unanswered.add(requestId);
   }
-  answered(e, latestRefusal) {
-    this.unanswered.delete(e);
-    if (e === this.latestRequestId) this.latestRefusal = latestRefusal;
+  answered(requestId, latestRefusal) {
+    this.unanswered.delete(requestId);
+    if (requestId === this.latestRequestId) this.latestRefusal = latestRefusal;
   }
   claimRefusal() {
     if (this.unanswered.size > 0)
       return "an earlier apply_flag_settings is still unanswered; claim again once it is answered";
     if (this.latestRefusal !== undefined) return this.latestRefusal;
-    let e = getFlagSettingsInline() ?? {};
-    for (let n of FLAG_SETTINGS_PLUGIN_KEYS) {
-      if (!(n in e)) continue;
-      let r = {
-        [n]: e[n],
+    let flagSettings = getFlagSettingsInline() ?? {};
+    for (let key of FLAG_SETTINGS_PLUGIN_KEYS) {
+      if (!(key in flagSettings)) continue;
+      let subset = {
+        [key]: flagSettings[key],
       };
-      coerceStringListSettings(r);
-      if (flagInlineSettingDropped(n) || !getSettingsSchemaForDocument(r).safeParse(r).success)
-        return `the flag settings' ${n} would not be in force, because it or another key is invalid`;
+      coerceStringListSettings(subset);
+      if (flagInlineSettingDropped(key) || !getSettingsSchemaForDocument(subset).safeParse(subset).success)
+        return `the flag settings' ${key} would not be in force, because it or another key is invalid`;
     }
     return;
   }
@@ -185,15 +189,15 @@ class FlagSettingsClaimTracker {
 var MODEL_DATE_SUFFIX_RE = /-\d{8}$/;
 var MODEL_WITH_1M_SUFFIX_PATTERN = /^(claude-[a-z0-9-]+)(\[1m\])?$/;
 //@ chunk-tyg7f3ek.js:513116-513278 placement
-function isAutoModeCapableModel(e) {
-  let n = MODEL_WITH_1M_SUFFIX_PATTERN.exec(e)?.[1];
-  if (n === undefined || n.includes("-fast")) return false;
-  let r = firstPartyNameToCanonical(n);
+function isAutoModeCapableModel(model) {
+  let baseModel = MODEL_WITH_1M_SUFFIX_PATTERN.exec(model)?.[1];
+  if (baseModel === undefined || baseModel.includes("-fast")) return false;
+  let canonical = firstPartyNameToCanonical(baseModel);
   return (
-    n.replace(MODEL_DATE_SUFFIX_RE, "") === r &&
-    isRecognizedCanonical(r) &&
-    !isOlderModelThan(r, "claude-opus-4-6") &&
-    modelSupportsAutoMode(e)
+    baseModel.replace(MODEL_DATE_SUFFIX_RE, "") === canonical &&
+    isRecognizedCanonical(canonical) &&
+    !isOlderModelThan(canonical, "claude-opus-4-6") &&
+    modelSupportsAutoMode(model)
   );
 }
 //@ chunk-tyg7f3ek.js:513278-513584 placement
@@ -201,20 +205,20 @@ function isAutoModeCapableModel(e) {
  * SDK claude_authenticate：校验新登录的组织策略/托管设置，通过后切换凭证。
  */
 async function sdkClaudeAuthenticate(err) {
-  let n = await checkLoginAllowed({
+  let gate = await checkLoginAllowed({
     accessToken: err.accessToken,
     newLogin: err,
     untieredLogin: needsProfileVerification(err),
     organizationName: err.profile?.organization.name ?? err.tokenAccount?.organizationName,
   });
-  if (n.ok) return;
-  logFeatureBad("sdk_claude_authenticate", gateBlockReasonCode(n.evaluation.decision));
-  let r = await revokeRefusedSignInToken(err);
-  return `${loginBlockedMessage(loginSettingsOutcome(n.evaluation))} ${r}`;
+  if (gate.ok) return;
+  logFeatureBad("sdk_claude_authenticate", gateBlockReasonCode(gate.evaluation.decision));
+  let revokeMessage = await revokeRefusedSignInToken(err);
+  return `${loginBlockedMessage(loginSettingsOutcome(gate.evaluation))} ${revokeMessage}`;
 }
 //@ chunk-tyg7f3ek.js:513584-514533 placement
-function loginBlockedMessage(e) {
-  switch (e) {
+function loginBlockedMessage(outcome) {
+  switch (outcome) {
     case "refused":
       return "Login blocked: Anthropic refused this organization's policy or managed settings for this sign-in (expired session, or the organization does not allow Claude Code for this account). Run claude auth login from a terminal for details.";
     case "not_loaded_in_launch_mode":
@@ -234,8 +238,8 @@ var SDK_PRE_MODEL_SWITCH_RECONNECT_TEXT =
 var SDK_PROMPT_HOOK_RECONNECT_TEXT =
   "The SDK host reconnected before its prompt hook answered, so this prompt was not submitted. Send it again.";
 //@ chunk-tyg7f3ek.js:514934-515537 placement
-function sdkHookReconnectFallback(e) {
-  switch (e.hook_event_name) {
+function sdkHookReconnectFallback(hookInput) {
+  switch (hookInput.hook_event_name) {
     case "PreToolUse":
       return {
         hookSpecificOutput: {
@@ -275,60 +279,66 @@ function sdkHookReconnectFallback(e) {
   }
 }
 //@ chunk-tyg7f3ek.js:515537-516032 placement
-function buildSdkHookRegistrations(e, n, r) {
-  let s = {};
-  for (let [key, value] of Object.entries(e)) {
+function buildSdkHookRegistrations(hooksByEvent, makeHook, options) {
+  let registrations = {};
+  for (let [key, value] of Object.entries(hooksByEvent)) {
     if (value.length === 0) continue;
-    s[key] = value.map((R) => ({
-      matcher: R.matcher ?? undefined,
-      hooks: R.hookCallbackIds.map((hookCallbackId) => n(hookCallbackId, R.timeout)),
+    registrations[key] = value.map((registration) => ({
+      matcher: registration.matcher ?? undefined,
+      hooks: registration.hookCallbackIds.map((hookCallbackId) =>
+        makeHook(hookCallbackId, registration.timeout),
+      ),
       origin: "sdkHost",
-      ...(r.hostOwnsStdinOrigin && {
+      ...(options.hostOwnsStdinOrigin && {
         hostOwnsStdin: true,
       }),
     }));
   }
   let registeredHooks = getRegisteredHooks();
   if (registeredHooks) {
-    let y = {};
-    let S = false;
+    let kept = {};
+    let removedAny = false;
     for (let [key, value] of Object.entries(registeredHooks)) {
-      let filtered = value.filter((L) => !("origin" in L && L.origin === "sdkHost"));
-      S ||= filtered.length !== value.length;
-      if (filtered.length > 0) y[key] = filtered;
+      let filtered = value.filter(
+        (registration) => !("origin" in registration && registration.origin === "sdkHost"),
+      );
+      removedAny ||= filtered.length !== value.length;
+      if (filtered.length > 0) kept[key] = filtered;
     }
-    if (S) {
+    if (removedAny) {
       clearRegisteredHooks();
-      if (Object.keys(y).length > 0) registerHookCallbacks(y);
+      if (Object.keys(kept).length > 0) registerHookCallbacks(kept);
     }
   }
-  if (Object.keys(s).length > 0) registerHookCallbacks(s);
+  if (Object.keys(registrations).length > 0) registerHookCallbacks(registrations);
 }
 //@ chunk-tyg7f3ek.js:516032-516157 placement
 function hasSdkHostHooks() {
   let registeredHooks = getRegisteredHooks();
   if (!registeredHooks) return false;
-  return Object.values(registeredHooks).some((n) => n.some((r) => "origin" in r && r.origin === "sdkHost"));
+  return Object.values(registeredHooks).some((registrations) =>
+    registrations.some((registration) => "origin" in registration && registration.origin === "sdkHost"),
+  );
 }
 //@ chunk-tyg7f3ek.js:516157-516218 placement
-function sdkHooksIfHostOwnsStdin(e, n) {
-  return n.hostOwnsStdinOrigin ? e.hooks : undefined;
+function sdkHooksIfHostOwnsStdin(initialize, options) {
+  return options.hostOwnsStdinOrigin ? initialize.hooks : undefined;
 }
 //@ chunk-tyg7f3ek.js:516218-516367 placement
-function withHostWordedAsks(e, n, r) {
-  return n.hostOwnsStdinOrigin &&
-    r.permissionPromptToolName === "stdio" &&
-    !isNoPromptHost(r.permissionPrompts) &&
+function withHostWordedAsks(payload, options, host) {
+  return options.hostOwnsStdinOrigin &&
+    host.permissionPromptToolName === "stdio" &&
+    !isNoPromptHost(host.permissionPrompts) &&
     isHostDisplayFeatureOn()
     ? {
-        ...e,
+        ...payload,
         host_worded_asks: true,
       }
-    : e;
+    : payload;
 }
 //@ chunk-tyg7f3ek.js:516409-516479 placement
 function mcpClientModule() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
 }
 export {
   isAutoModeCapableModel,

@@ -18,11 +18,11 @@ import { env } from "../../utils/env.js";
  * 根据 artifact slug 与环境返回其内容域名（<slug>.frame[.staging].claudeusercontent.com）与 https 基础 URL。
  */
 function getFrameHost(target) {
-  let n = `${target.slug}.frame.${target.env === "staging" ? "staging." : ""}claudeusercontent.com`;
-  let r = undefined;
+  let host = `${target.slug}.frame.${target.env === "staging" ? "staging." : ""}claudeusercontent.com`;
+  let pending = undefined;
   return {
-    host: n,
-    base: `https://${n}`,
+    host,
+    base: `https://${host}`,
   };
 }
 //@ chunk-jv307fw4.js:41981-42089 placement

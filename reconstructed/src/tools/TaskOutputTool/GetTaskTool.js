@@ -11,7 +11,7 @@
 import { BASH_TOOL_NAME } from "../BashTool/toolName.js";
 import { hasBackgroundBashStopAfterReply } from "../AgentTool/backgroundGates.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { GET_TASK_TOOL_TEXT, GET_TASK_REPEAT_TEXT } from "../../remote/tools/nativeToolErrors.js";
 import { isLocalShellTask } from "../../tasks/LocalShellTask/guards.js";
 import {
@@ -39,6 +39,7 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../
 import { escapeXml_2 as escapeXml } from "../../utils/confusables.js";
 import { reapsShellsOnExit } from "../../utils/agentContext.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-kxyd0g16.js:88049-90031 placement
 /**
@@ -61,15 +62,19 @@ function getTaskToolPrompt() {
     : GET_TASK_SHORT_DESCRIPTION;
 }
 //@ chunk-kxyd0g16.js:90267-90383 placement
-var getTaskInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    taskId: string().describe("The taskId from the result that moved the command to the background"),
-  }),
-);
-var MAX_REPEATED_ANSWERS = 2;
+var getTaskInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_REPEATED_ANSWERS;
+deferInit("chunk-kxyd0g16.js:90267", () => {
+  getTaskInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      taskId: stringSchema().describe("The taskId from the result that moved the command to the background"),
+    }),
+  );
+  MAX_REPEATED_ANSWERS = 2;
+});
 //@ chunk-kxyd0g16.js:90383-90574 placement
-function repeatedCallMessage(e, status) {
-  return e === MAX_REPEATED_ANSWERS + 1
+function repeatedCallMessage(callCount, status) {
+  return callCount === MAX_REPEATED_ANSWERS + 1
     ? `${GET_TASK_TOOL_TEXT} was already answered ${MAX_REPEATED_ANSWERS} times for this task in this response (status: ${status}); the same call repeated within one response is not answered again.`
     : GET_TASK_REPEAT_TEXT;
 }
@@ -81,17 +86,19 @@ function unknownTaskIdMessage(taskId) {
 /**
  * 在任务注册表里查找可执行的后台 bash 任务（排除 monitor，且 agent 匹配）。
  */
-function findBashTask(taskId, taskRegistry, n) {
-  let s = taskRegistry.get(taskId);
-  return isLocalShellTask(s) && s.kind !== "monitor" && agentIdMatches(n, s.agentId) ? s : undefined;
+function findBashTask(taskId, taskRegistry, agentId) {
+  let task = taskRegistry.get(taskId);
+  return isLocalShellTask(task) && task.kind !== "monitor" && agentIdMatches(agentId, task.agentId)
+    ? task
+    : undefined;
 }
 //@ chunk-kxyd0g16.js:90892-90981 placement
 /**
  * 从任务运行状态快照里查找后台 bash 任务。
  */
-function findBashTaskSnapshot(taskId, r) {
-  let n = getTaskRunState().bashTaskSnapshots.get(taskId);
-  return n && agentIdMatches(r, n.agentId) ? n : undefined;
+function findBashTaskSnapshot(taskId, agentId) {
+  let snapshot = getTaskRunState().bashTaskSnapshots.get(taskId);
+  return snapshot && agentIdMatches(agentId, snapshot.agentId) ? snapshot : undefined;
 }
 //@ chunk-kxyd0g16.js:90981-91193 placement
 async function readFinishedTaskOutputTail(bashTask) {
@@ -112,157 +119,179 @@ async function readFinishedTaskOutputTail(bashTask) {
 /**
  * GetTask 工具：按 id 查询后台 shell 任务状态与输出。
  */
-var GetTaskTool = buildTool({
-  name: GET_TASK_TOOL_TEXT,
-  searchHint: "check on a background shell command by task ID",
-  backgrounding: "never",
-  maxResultSizeChars: 1e5,
-  async description() {
-    return GET_TASK_DESCRIPTION;
-  },
-  async prompt() {
-    return getTaskToolPrompt();
-  },
-  get inputSchema() {
-    return getTaskInputSchema();
-  },
-  get outputSchema() {
-    return getTaskResultSchema();
-  },
-  userFacingName() {
-    return GET_TASK_TOOL_TEXT;
-  },
-  isEnabled() {
-    return false;
-  },
-  isConcurrencySafe() {
-    return true;
-  },
-  isReadOnly() {
-    return true;
-  },
-  toAutoClassifierInput(e) {
-    return e.taskId;
-  },
-  renderToolUseMessage({ taskId }, { toolUseResult, verbose, isTranscriptMode }) {
-    return !verbose &&
-      !isTranscriptMode &&
-      (parseTaskResultOrNull(toolUseResult)?.status === "working" ||
-        toolUseResult === `Error: ${GET_TASK_REPEAT_TEXT}`)
-      ? null
-      : (taskId ?? "");
-  },
-  extractSearchText() {
-    return "";
-  },
-  create(e) {
-    return {
-      async validateInput({ taskId }) {
-        let n = currentAgentId(e);
-        if (
-          findBashTaskSnapshot(taskId, n) ||
-          findBashTask(taskId, e.taskRegistry, n) ||
-          e.toolState.get(RemoteBackgroundLedger).find(taskId, n)
-        )
+var GetTaskTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:91193", () => {
+  GetTaskTool = buildTool({
+    name: GET_TASK_TOOL_TEXT,
+    searchHint: "check on a background shell command by task ID",
+    backgrounding: "never",
+    maxResultSizeChars: 1e5,
+    async description() {
+      return GET_TASK_DESCRIPTION;
+    },
+    async prompt() {
+      return getTaskToolPrompt();
+    },
+    get inputSchema() {
+      return getTaskInputSchema();
+    },
+    get outputSchema() {
+      return getTaskResultSchema();
+    },
+    userFacingName() {
+      return GET_TASK_TOOL_TEXT;
+    },
+    isEnabled() {
+      return false;
+    },
+    isConcurrencySafe() {
+      return true;
+    },
+    isReadOnly() {
+      return true;
+    },
+    toAutoClassifierInput(input) {
+      return input.taskId;
+    },
+    renderToolUseMessage({ taskId }, { toolUseResult, verbose, isTranscriptMode }) {
+      return !verbose &&
+        !isTranscriptMode &&
+        (parseTaskResultOrNull(toolUseResult)?.status === "working" ||
+          toolUseResult === `Error: ${GET_TASK_REPEAT_TEXT}`)
+        ? null
+        : (taskId ?? "");
+    },
+    extractSearchText() {
+      return "";
+    },
+    create(toolContext) {
+      return {
+        async validateInput({ taskId }) {
+          let agentId = currentAgentId(toolContext);
+          if (
+            findBashTaskSnapshot(taskId, agentId) ||
+            findBashTask(taskId, toolContext.taskRegistry, agentId) ||
+            toolContext.toolState.get(RemoteBackgroundLedger).find(taskId, agentId)
+          )
+            return {
+              result: true,
+            };
           return {
-            result: true,
+            result: false,
+            message: unknownTaskIdMessage(taskId),
+            errorCode: 1,
           };
-        return {
-          result: false,
-          message: unknownTaskIdMessage(taskId),
-          errorCode: 1,
-        };
-      },
-      async call({ taskId }, n) {
-        let s = currentAgentId(e);
-        let bashTaskSnapshot = findBashTaskSnapshot(taskId, s);
-        let bashTask = findBashTask(taskId, e.taskRegistry, s);
-        let taskRunState = getTaskRunState();
-        let k = n.innerCall ? undefined : n.parentMessage?.message.id || undefined;
-        let w = bashTaskSnapshot
-          ? bashTaskSnapshot.snapshot.status
-          : bashTask
-            ? useTeammateViewAutoExit(bashTask.status)
-            : undefined;
-        let S =
-          w === undefined
+        },
+        async call({ taskId }, callOptions) {
+          let agentId = currentAgentId(toolContext);
+          let bashTaskSnapshot = findBashTaskSnapshot(taskId, agentId);
+          let bashTask = findBashTask(taskId, toolContext.taskRegistry, agentId);
+          let taskRunState = getTaskRunState();
+          let responseId = callOptions.innerCall
             ? undefined
-            : {
-                status: w,
-                key: bashTaskSnapshot ? `settled:${w}` : w,
-              };
-        let R = k !== undefined && S ? taskRunState.countBashTaskGetInResponse(k, taskId, S.key) : 1;
-        if (S && R > MAX_REPEATED_ANSWERS) {
-          logEvent("tengu_bash_task_get", {
-            caller: lit("model"),
-            status: fromEnum(S.status),
-            get_count_for_task: taskRunState.countBashTaskGet(taskId),
-            repeat_in_response: R,
-            short_circuited: true,
-          });
-          throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            repeatedCallMessage(R, S.status),
-            "GetTask: the same call repeated within one response",
-            "gettask_repeat_in_response",
-          );
-        }
-        let I =
-          bashTaskSnapshot?.snapshot ??
-          (bashTask
-            ? getShellTaskStatus(
-                bashTask.elsewhere
-                  ? {
-                      ...bashTask,
-                      outputFile: escapeXml(bashTask.outputFile),
-                    }
-                  : bashTask,
-                await readFinishedTaskOutputTail(bashTask),
-                bashTask.agentId !== s
-                  ? "other_agent"
-                  : reapsShellsOnExit(e.agentContext) ||
-                      (bashTask.elsewhere && bashTask.agentId !== undefined) ||
-                      (bashTask.agentId === undefined && isPrintWithoutTidySloth())
-                    ? "final_response"
-                    : undefined,
-              )
-            : await describeRemoteBackgroundResult(taskId, s, e.toolState, n.signal));
-        if (!I)
-          throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            unknownTaskIdMessage(taskId),
-            "GetTask: no background command with this task ID",
-          );
-        let { signal } = n;
-        if (bashTaskSnapshot && bashTaskSnapshot.agentId === s && !n.innerCall && !signal.aborted) {
-          taskRunState.markBashTaskSnapshotFetched(taskId);
-          let x = taskRunState.withdrawShellNotification?.(taskId, s, e.taskRegistry);
-          if (x)
-            signal.addEventListener("abort", x, {
-              once: true,
+            : callOptions.parentMessage?.message.id || undefined;
+          let status = bashTaskSnapshot
+            ? bashTaskSnapshot.snapshot.status
+            : bashTask
+              ? useTeammateViewAutoExit(bashTask.status)
+              : undefined;
+          let statusKey =
+            status === undefined
+              ? undefined
+              : {
+                  status,
+                  key: bashTaskSnapshot ? `settled:${status}` : status,
+                };
+          let repeatCount =
+            responseId !== undefined && statusKey
+              ? taskRunState.countBashTaskGetInResponse(responseId, taskId, statusKey.key)
+              : 1;
+          if (statusKey && repeatCount > MAX_REPEATED_ANSWERS) {
+            logEvent("tengu_bash_task_get", {
+              caller: lit("model"),
+              status: fromEnum(statusKey.status),
+              get_count_for_task: taskRunState.countBashTaskGet(taskId),
+              repeat_in_response: repeatCount,
+              short_circuited: true,
             });
-        }
-        logEvent("tengu_bash_task_get", {
-          caller: n.innerCall ? lit("script") : lit("model"),
-          status: fromEnum(I.status),
-          ...(!n.innerCall && {
-            get_count_for_task: taskRunState.countBashTaskGet(taskId),
-            repeat_in_response: R,
-            short_circuited: false,
-          }),
-          since_created_ms: Date.now() - Date.parse(I.createdAt),
-        });
-        return {
-          data: I,
-        };
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    let taskResultOrNull = parseTaskResultOrNull(e);
-    return {
-      tool_use_id: toolUseId,
-      type: "tool_result",
-      content: taskResultOrNull ? serializeTaskResult(taskResultOrNull) : jsonStringify(e),
-    };
-  },
+            throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+              repeatedCallMessage(repeatCount, statusKey.status),
+              "GetTask: the same call repeated within one response",
+              "gettask_repeat_in_response",
+            );
+          }
+          let result =
+            bashTaskSnapshot?.snapshot ??
+            (bashTask
+              ? getShellTaskStatus(
+                  bashTask.elsewhere
+                    ? {
+                        ...bashTask,
+                        outputFile: escapeXml(bashTask.outputFile),
+                      }
+                    : bashTask,
+                  await readFinishedTaskOutputTail(bashTask),
+                  bashTask.agentId !== agentId
+                    ? "other_agent"
+                    : reapsShellsOnExit(toolContext.agentContext) ||
+                        (bashTask.elsewhere && bashTask.agentId !== undefined) ||
+                        (bashTask.agentId === undefined && isPrintWithoutTidySloth())
+                      ? "final_response"
+                      : undefined,
+                )
+              : await describeRemoteBackgroundResult(
+                  taskId,
+                  agentId,
+                  toolContext.toolState,
+                  callOptions.signal,
+                ));
+          if (!result)
+            throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+              unknownTaskIdMessage(taskId),
+              "GetTask: no background command with this task ID",
+            );
+          let { signal } = callOptions;
+          if (
+            bashTaskSnapshot &&
+            bashTaskSnapshot.agentId === agentId &&
+            !callOptions.innerCall &&
+            !signal.aborted
+          ) {
+            taskRunState.markBashTaskSnapshotFetched(taskId);
+            let withdrawNotification = taskRunState.withdrawShellNotification?.(
+              taskId,
+              agentId,
+              toolContext.taskRegistry,
+            );
+            if (withdrawNotification)
+              signal.addEventListener("abort", withdrawNotification, {
+                once: true,
+              });
+          }
+          logEvent("tengu_bash_task_get", {
+            caller: callOptions.innerCall ? lit("script") : lit("model"),
+            status: fromEnum(result.status),
+            ...(!callOptions.innerCall && {
+              get_count_for_task: taskRunState.countBashTaskGet(taskId),
+              repeat_in_response: repeatCount,
+              short_circuited: false,
+            }),
+            since_created_ms: Date.now() - Date.parse(result.createdAt),
+          });
+          return {
+            data: result,
+          };
+        },
+      };
+    },
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
+      let taskResultOrNull = parseTaskResultOrNull(result);
+      return {
+        tool_use_id: toolUseId,
+        type: "tool_result",
+        content: taskResultOrNull ? serializeTaskResult(taskResultOrNull) : jsonStringify(result),
+      };
+    },
+  });
 });
 export { GetTaskTool };

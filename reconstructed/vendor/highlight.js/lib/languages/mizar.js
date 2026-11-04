@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint+context 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:301059-301777 cjs-fingerprint+context
-var require_mizar = x(function (cjsExports, cjsModule) {
+var require_mizar = __commonJS(function (cjsExports, cjsModule) {
   function mizar(hljs) {
     return {
       name: "Mizar",

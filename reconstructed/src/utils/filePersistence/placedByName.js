@@ -28,11 +28,17 @@ import { NOFOLLOW_NONBLOCK_FLAGS } from "../fsFlags.js";
 import { READ_LIMITS } from "../fsBoundRead.js";
 import { readHandleBounded } from "../fsSafety/boundOpen.js";
 import { PS_REFUSED_INPUT_FIELDS } from "../../tools/PowerShellTool/prompt.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-azz22fvc.js:1223-1272 placement
-var PLACED_BY_NAME_LIMITS = 64;
-var MAX_PLACED_TABLE_BYTES = 262144;
-var DAMAGED_TABLE_ERRNOS = new Set(["ELOOP", "ENXIO"]);
+var PLACED_BY_NAME_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_PLACED_TABLE_BYTES;
+var DAMAGED_TABLE_ERRNOS;
+deferInit("chunk-azz22fvc.js:1223", () => {
+  PLACED_BY_NAME_LIMITS = 64;
+  MAX_PLACED_TABLE_BYTES = 262144;
+  DAMAGED_TABLE_ERRNOS = new Set(["ELOOP", "ENXIO"]);
+});
 //@ chunk-azz22fvc.js:1272-1314 placement = setCwdState (1)
 function nfc(cwd) {
   return cwd.normalize("NFC");
@@ -41,29 +47,29 @@ function nfc(cwd) {
 var PLACED_BY_NAME_FILE_NAME = ".placed-by-name.json";
 //@ chunk-azz22fvc.js:1664-1777 placement
 function placedTablePaths() {
-  let e = sessionUploadsDir();
+  let uploadsDir = sessionUploadsDir();
   return [
-    e,
+    uploadsDir,
     ...(getSessionUploadsDirOverride() === null
       ? uploadsRootCandidates()
-          .map((t) => join(t, getSessionId()))
-          .filter((t) => t !== e)
+          .map((baseDir) => join(baseDir, getSessionId()))
+          .filter((candidate) => candidate !== uploadsDir)
       : []),
-  ].map((t) => join(t, PLACED_BY_NAME_FILE_NAME));
+  ].map((baseDir) => join(baseDir, PLACED_BY_NAME_FILE_NAME));
 }
 //@ chunk-azz22fvc.js:1777-1952 placement
-async function removePlacedTable(e) {
-  if (dirname(e) === getUploadsDir()) {
-    await unlink(join(e, PLACED_BY_NAME_FILE_NAME));
+async function removePlacedTable(tablePath) {
+  if (dirname(tablePath) === getUploadsDir()) {
+    await unlink(join(tablePath, PLACED_BY_NAME_FILE_NAME));
     return;
   }
-  let ownedDirChain = await openOwnedDirChain(e, 0);
-  if (typeof ownedDirChain !== "string")
+  let dirRef = await openOwnedDirChain(tablePath, 0);
+  if (typeof dirRef !== "string")
     try {
-      if ((await probeNoFollowSupport(ownedDirChain)) === true)
-        await unlink(join(ownedDirChain.at, PLACED_BY_NAME_FILE_NAME));
+      if ((await probeNoFollowSupport(dirRef)) === true)
+        await unlink(join(dirRef.at, PLACED_BY_NAME_FILE_NAME));
     } finally {
-      await ownedDirChain.release();
+      await dirRef.release();
     }
 }
 //@ chunk-azz22fvc.js:1952-2352 placement
@@ -89,7 +95,7 @@ async function loadFilesPlacedByName() {
     await Promise.allSettled(
       placedTablePaths()
         .slice(1)
-        .map((t) => removePlacedTable(dirname(t))),
+        .map((tablePath) => removePlacedTable(dirname(tablePath))),
     );
   } catch (error) {
     logForDiagnosticsNoPII("warn", "turn_handoff_files_by_name_table", {
@@ -99,56 +105,59 @@ async function loadFilesPlacedByName() {
   }
 }
 //@ chunk-azz22fvc.js:2352-2713 placement
-function isPlacedEntry(e) {
-  if (!Array.isArray(e) || e.length !== 2) return false;
-  let [t, r] = e;
-  if (typeof t !== "string" || typeof r !== "object" || r === null) return false;
-  let { path, fileUuid, dev, ino, mtimeMs, size, sha256, ambiguous } = r;
+function isPlacedEntry(entry) {
+  if (!Array.isArray(entry) || entry.length !== 2) return false;
+  let [key, value] = entry;
+  if (typeof key !== "string" || typeof value !== "object" || value === null) return false;
+  let { path, fileUuid, dev, ino, mtimeMs, size, sha256, ambiguous } = value;
   return (
     typeof path === "string" &&
     typeof fileUuid === "string" &&
-    [dev, ino, mtimeMs, size].every((u) => typeof u === "number" && Number.isFinite(u)) &&
+    [dev, ino, mtimeMs, size].every((field) => typeof field === "number" && Number.isFinite(field)) &&
     typeof sha256 === "string" &&
     (ambiguous === undefined || ambiguous === true)
   );
 }
 //@ chunk-azz22fvc.js:2713-2950 placement
 function ensurePlacedByNameRead() {
-  let e = filesPlacedByNameRead();
-  if (e !== undefined) return e === "done" ? Promise.resolve() : e;
-  let t = readFirstPlacedTable().then((firstPlacedTable) => {
+  let cached = filesPlacedByNameRead();
+  if (cached !== undefined) return cached === "done" ? Promise.resolve() : cached;
+  let firstRead = readFirstPlacedTable().then((firstPlacedTable) => {
     setFilesPlacedByNameRead(firstPlacedTable.state === "table_unread" ? undefined : "done");
     if (firstPlacedTable.state !== "table_absent")
       logForDiagnosticsNoPII("info", "turn_handoff_files_by_name_table", firstPlacedTable);
   });
-  setFilesPlacedByNameRead(t);
-  return t;
+  setFilesPlacedByNameRead(firstRead);
+  return firstRead;
 }
 //@ chunk-azz22fvc.js:2950-3112 placement
 async function readFirstPlacedTable() {
-  let [e, ...t] = placedTablePaths();
-  let placedTable = await readPlacedTable(e);
+  let [firstPath, ...otherPaths] = placedTablePaths();
+  let placedTable = await readPlacedTable(firstPath);
   if (placedTable.state !== "table_absent") return placedTable;
-  for (let a of t) {
-    let placedTable = await readPlacedTable(a);
+  for (let otherPath of otherPaths) {
+    let placedTable = await readPlacedTable(otherPath);
     if (placedTable.state === "table_read") return placedTable;
   }
   return placedTable;
 }
 //@ chunk-azz22fvc.js:3112-3933 placement
-async function readPlacedTable(e) {
-  let t;
+async function readPlacedTable(tablePath) {
+  let entries;
   try {
-    let n = await open(e, NOFOLLOW_NONBLOCK_FLAGS | READ_LIMITS);
+    let handle = await open(tablePath, NOFOLLOW_NONBLOCK_FLAGS | READ_LIMITS);
     try {
-      let stats = await n.stat();
-      let c =
+      let stats = await handle.stat();
+      let parseResult =
         stats.isFile() && stats.size <= MAX_PLACED_TABLE_BYTES
-          ? await readHandleBounded(n, MAX_PLACED_TABLE_BYTES, stats.size)
+          ? await readHandleBounded(handle, MAX_PLACED_TABLE_BYTES, stats.size)
           : undefined;
-      t = c === undefined || c.overLimit ? undefined : jsonParse(c.bytes.toString("utf8"));
+      entries =
+        parseResult === undefined || parseResult.overLimit
+          ? undefined
+          : jsonParse(parseResult.bytes.toString("utf8"));
     } finally {
-      await n.close();
+      await handle.close();
     }
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -162,17 +171,17 @@ async function readPlacedTable(e) {
       rows: 0,
     };
   }
-  if (!Array.isArray(t) || t.length > PLACED_BY_NAME_LIMITS || !t.every(isPlacedEntry))
+  if (!Array.isArray(entries) || entries.length > PLACED_BY_NAME_LIMITS || !entries.every(isPlacedEntry))
     return {
       state: "table_damaged",
       rows: 0,
     };
-  let r = filesPlacedByNameRegistry();
-  let a = [...r];
-  r.clear();
-  for (let [n, s] of t) {
-    let { path, fileUuid, dev, ino, mtimeMs, size, sha256, ambiguous } = s;
-    r.set(n, {
+  let registry = filesPlacedByNameRegistry();
+  let previousEntries = [...registry];
+  registry.clear();
+  for (let [key, value] of entries) {
+    let { path, fileUuid, dev, ino, mtimeMs, size, sha256, ambiguous } = value;
+    registry.set(key, {
       path,
       fileUuid: fileUuid.toLowerCase(),
       dev,
@@ -186,14 +195,15 @@ async function readPlacedTable(e) {
       fromEarlierProcess: true,
     });
   }
-  for (let [n, s] of a) {
-    r.delete(n);
-    r.set(n, s);
+  for (let [key, value] of previousEntries) {
+    registry.delete(key);
+    registry.set(key, value);
   }
-  for (let key of [...r.keys()].slice(0, Math.max(0, r.size - PLACED_BY_NAME_LIMITS))) r.delete(key);
+  for (let key of [...registry.keys()].slice(0, Math.max(0, registry.size - PLACED_BY_NAME_LIMITS)))
+    registry.delete(key);
   return {
     state: "table_read",
-    rows: t.length,
+    rows: entries.length,
   };
 }
 //@ chunk-azz22fvc.js:3933-4057 placement

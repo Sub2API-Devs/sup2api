@@ -40,7 +40,7 @@ import { hasNarrationThinking } from "./messages/apiNormalization.js";
 import { NO_CONTENT_MESSAGE, NO_RESPONSE_REQUESTED } from "../constants/messages.js";
 import { detectGitOperation } from "../tools/shared/gitOperationTracking.js";
 import { logForDebugging } from "./debug.js";
-import { string } from "../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { getEffectiveCwd } from "./cwd.js";
 import { getDisplayPath } from "./file.js";
 import { normalizeHookSummary } from "./collapseHookSummaries.js";
@@ -48,13 +48,14 @@ import { stripAnsiPerLine } from "./stripAnsi.js";
 import { isHumanOrAutoContinuation, isPeerOrObserver } from "./messageProvenance.js";
 import { visibleTeammateMailboxMessages } from "./teammateMailbox.js";
 import { appendTeamMemorySummaryParts } from "./teamMemoryOps.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4677066-4677123 placement
 /**
  * 判断工具输入路径是否指向团队记忆目录。
  */
-function isTeamMemoryPathInput(e) {
-  if (e.path && isTeamMemoryPath(e.path)) return true;
+function isTeamMemoryPathInput(input) {
+  if (input.path && isTeamMemoryPath(input.path)) return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:4677123-4677220 placement
@@ -64,9 +65,9 @@ function getFilePathFromToolInput(toolInput, toolInput_2) {
   return filePath !== undefined && isTeamMemoryPath(filePath);
 }
 //@ chunk-e6aww6q8.js:4679035-4679333 placement = getSessionFileTypeFromInput (0.767)
-function getSessionFileTypeFromInput_2(e) {
-  if (typeof e !== "object" || e === null) return {};
-  let { file_path: filePath, path, pattern, glob, command, query, content } = e;
+function getSessionFileTypeFromInput_2(input) {
+  if (typeof input !== "object" || input === null) return {};
+  let { file_path: filePath, path, pattern, glob, command, query, content } = input;
   return {
     ...(isSafeInputString(filePath) && {
       file_path: filePath,
@@ -95,8 +96,8 @@ function getSessionFileTypeFromInput_2(e) {
 /**
  * 判断字符串输入安全（无 NUL 字符）。
  */
-function isSafeInputString(e) {
-  return typeof e === "string" && !e.includes("\x00");
+function isSafeInputString(value) {
+  return typeof value === "string" && !value.includes("\x00");
 }
 //@ chunk-e6aww6q8.js:4679396-4679409 layout
 /**
@@ -107,10 +108,17 @@ var memorySaveHooks = null;
 /**
  * 由注入钩子判断某内容是否像发布 artifact 的动作。
  */
-var ARTIFACT_TOOL_NAME = require("./chunk-ecvm5qmk.js").ARTIFACT_TOOL_NAME;
-var mapped_5 = [REMOTE_DEVICES, HEARTHBOT, "webagent", ...INJECTED_MCP_SERVER_NAMES].map(alnumLower);
-var isPublishShapedArtifactAction = require("./chunk-ecvm5qmk.js").isPublishShapedArtifactAction;
-var isPublishShapedArtifact = () => require("./chunk-nrmn01d7.js").isScratchpadDisplayPath;
+var ARTIFACT_TOOL_NAME; // deferred: loads other modules while loading; runs once its import cycle is complete
+var mapped_5;
+var isPublishShapedArtifactAction;
+var isPublishShapedArtifact;
+deferInit("chunk-e6aww6q8.js:4679409", () => {
+  ARTIFACT_TOOL_NAME = require("../tools/ArtifactTool/AMPERSAND_FORMS.lazy.js").ARTIFACT_TOOL_NAME;
+  mapped_5 = [REMOTE_DEVICES, HEARTHBOT, "webagent", ...INJECTED_MCP_SERVER_NAMES].map(alnumLower);
+  isPublishShapedArtifactAction =
+    require("../tools/ArtifactTool/AMPERSAND_FORMS.lazy.js").isPublishShapedArtifactAction;
+  isPublishShapedArtifact = () => require("./permissions/filesystem.js").isScratchpadDisplayPath;
+});
 //@ chunk-e6aww6q8.js:4679634-4679677 layout
 /**
  * 取工具输入里的文件路径（file_path 优先，其次 path）。
@@ -146,14 +154,14 @@ function isScratchpadReadOrWrite(toolName, toolInput) {
 var MAX_COLLAPSED_LABEL_CHARS = 300;
 var MAX_LOGGED_THOUGHT_MS = 600000;
 //@ chunk-e6aww6q8.js:4680011-4680070 layout
-function truncateCollapsedLabel(e) {
-  return e.length > MAX_COLLAPSED_LABEL_CHARS
-    ? truncateToLength(e, MAX_COLLAPSED_LABEL_CHARS - 1) + "\u2026"
-    : e;
+function truncateCollapsedLabel(label) {
+  return label.length > MAX_COLLAPSED_LABEL_CHARS
+    ? truncateToLength(label, MAX_COLLAPSED_LABEL_CHARS - 1) + "\u2026"
+    : label;
 }
 //@ chunk-e6aww6q8.js:4680070-4680104 layout
-function formatCollapsedLabel(e) {
-  return truncateCollapsedLabel(collapseWhitespace_2(e));
+function formatCollapsedLabel(label) {
+  return truncateCollapsedLabel(collapseWhitespace_2(label));
 }
 //@ chunk-e6aww6q8.js:4680104-4680204 file-local
 function commandAsHint(command) {
@@ -165,13 +173,13 @@ function commandAsHint(command) {
 `,
       )
       .map((line) => collapseWhitespace_2(line))
-      .filter((r) => r !== "").join(`
+      .filter((part) => part !== "").join(`
 `);
   return truncateCollapsedLabel(cleaned);
 }
 //@ chunk-e6aww6q8.js:4680204-4680250 layout
-function findToolByNameWithFallback(tools, n) {
-  return findToolByName(tools, n) ?? findToolByName(getFileAndShellTools(), n);
+function findToolByNameWithFallback(tools, name) {
+  return findToolByName(tools, name) ?? findToolByName(getFileAndShellTools(), name);
 }
 //@ chunk-e6aww6q8.js:4680250-4682131 fingerprint = getToolSearchOrReadInfo (0.669)
 /**
@@ -228,12 +236,11 @@ function getToolSearchOrReadInfo(toolName, toolInput, tools) {
       isAbsorbedSilently: true,
       popsOutOnError: included,
     };
-  let toolByNameWithFallback = findToolByNameWithFallback(tools, toolName);
-  let w =
-    (toolByNameWithFallback?.mcpInfo !== undefined &&
-      moduleStore.minted(toolByNameWithFallback.mcpInfo.serverName)) ||
-    toolByNameWithFallback?.uiTableKey === MCP_CLAUDE_TEST_WRITE;
-  if (toolByNameWithFallback?.isMcp && !w)
+  let toolName_2 = findToolByNameWithFallback(tools, toolName);
+  let displayInfo =
+    (toolName_2?.mcpInfo !== undefined && moduleStore.minted(toolName_2.mcpInfo.serverName)) ||
+    toolName_2?.uiTableKey === MCP_CLAUDE_TEST_WRITE;
+  if (toolName_2?.isMcp && !displayInfo)
     return {
       isCollapsible: true,
       isSearch: false,
@@ -244,13 +251,18 @@ function getToolSearchOrReadInfo(toolName, toolInput, tools) {
       isScratchpadWrite: false,
       isAbsorbedSilently: false,
       ...{
-        mcpCallLabel: toolByNameWithFallback.mcpInfo?.serverName,
+        mcpCallLabel: toolName_2.mcpInfo?.serverName,
       },
     };
-  let L = toolByNameWithFallback === undefined ? deviceToolDisplayInfo(toolName) : undefined;
-  let serverName = L && normalizeUuidOrNull(L.serverName) !== null ? "MCP" : L?.serverName;
-  let q = alnumLower(serverName ?? "");
-  if (L !== undefined && serverName !== undefined && !mapped_5.some((Ee) => q.startsWith(Ee)))
+  let deviceInfo = toolName_2 === undefined ? deviceToolDisplayInfo(toolName) : undefined;
+  let serverName =
+    deviceInfo && normalizeUuidOrNull(deviceInfo.serverName) !== null ? "MCP" : deviceInfo?.serverName;
+  let normalizedServer = alnumLower(serverName ?? "");
+  if (
+    deviceInfo !== undefined &&
+    serverName !== undefined &&
+    !mapped_5.some((prefix) => normalizedServer.startsWith(prefix))
+  )
     return {
       isCollapsible: true,
       isSearch: false,
@@ -261,11 +273,14 @@ function getToolSearchOrReadInfo(toolName, toolInput, tools) {
       isScratchpadWrite: false,
       isAbsorbedSilently: false,
       mcpCallLabel: serverName,
-      ...(memorySaveHooks?.isMemorySaveCall(L) && {
-        memorySave: memorySaveHooks.memorySaveOf(L.toolName, getSessionFileTypeFromInput_2(toolInput)),
+      ...(memorySaveHooks?.isMemorySaveCall(deviceInfo) && {
+        memorySave: memorySaveHooks.memorySaveOf(
+          deviceInfo.toolName,
+          getSessionFileTypeFromInput_2(toolInput),
+        ),
       }),
     };
-  if (!toolByNameWithFallback?.isSearchOrReadCommand)
+  if (!toolName_2?.isSearchOrReadCommand)
     return {
       isCollapsible: false,
       isSearch: false,
@@ -276,7 +291,7 @@ function getToolSearchOrReadInfo(toolName, toolInput, tools) {
       isScratchpadWrite: false,
       isAbsorbedSilently: false,
     };
-  if (remoteMachineRefForDisplay(toolByNameWithFallback, toolInput) !== undefined)
+  if (remoteMachineRefForDisplay(toolName_2, toolInput) !== undefined)
     return {
       isCollapsible: false,
       isSearch: false,
@@ -287,7 +302,7 @@ function getToolSearchOrReadInfo(toolName, toolInput, tools) {
       isScratchpadWrite: false,
       isAbsorbedSilently: false,
     };
-  let result = toolByNameWithFallback.isSearchOrReadCommand(toolInput ?? {});
+  let result = toolName_2.isSearchOrReadCommand(toolInput ?? {});
   let isList = result.isList ?? false;
   let isCollapsible = result.isSearch || result.isRead || isList;
   let included_2 = SHELL_TOOL_NAMES_3.includes(toolName);
@@ -334,34 +349,38 @@ var MAX_INPUT_PATHS = 20;
 /**
  * 安全地从工具输入中取出 path 字段（字符串或字符串数组，只读自有数据属性、限数量），规范化后返回。
  */
-function toolInputPaths(e) {
-  if (typeof e !== "object" || e === null || isUntrustedObject_2(e)) return [];
-  let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(e, "path");
+function toolInputPaths(input) {
+  if (typeof input !== "object" || input === null || isUntrustedObject_2(input)) return [];
+  let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(input, "path");
   if (!ownPropertyDescriptor || !("value" in ownPropertyDescriptor)) return [];
-  let r = ownPropertyDescriptor.value;
-  if (typeof r === "string") return [normalizeServerPath(r)];
-  if (r === null || typeof r !== "object" || isUntrustedObject_2(r) || !Array.isArray(r)) return [];
-  let s = r.length;
-  if (!Number.isSafeInteger(s)) return [];
-  let h = [];
-  for (let idx = 0; idx < s && idx < MAX_INPUT_PATHS; idx++) {
-    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(r, idx);
+  let paths = ownPropertyDescriptor.value;
+  if (typeof paths === "string") return [normalizeServerPath(paths)];
+  if (paths === null || typeof paths !== "object" || isUntrustedObject_2(paths) || !Array.isArray(paths))
+    return [];
+  let count = paths.length;
+  if (!Number.isSafeInteger(count)) return [];
+  let result = [];
+  for (let idx = 0; idx < count && idx < MAX_INPUT_PATHS; idx++) {
+    let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(paths, idx);
     if (
       ownPropertyDescriptor &&
       "value" in ownPropertyDescriptor &&
       typeof ownPropertyDescriptor.value === "string"
     )
-      h.push(normalizeServerPath(ownPropertyDescriptor.value));
+      result.push(normalizeServerPath(ownPropertyDescriptor.value));
   }
-  return h;
+  return result;
 }
 //@ chunk-e6aww6q8.js:4683047-4683067 layout
-var weakMap_17 = new WeakMap();
+var weakMap_17; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4683047", () => {
+  weakMap_17 = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:4683067-4683236 layout = toolCallOf (1)
 function toolCallOf(msg) {
   if (msg.type === "assistant") {
-    let n = msg.message.content[0];
-    return n?.type === "tool_use" ? n.name : null;
+    let firstBlock = msg.message.content[0];
+    return firstBlock?.type === "tool_use" ? firstBlock.name : null;
   }
   if (msg.type === "grouped_tool_use") return msg.toolName;
   return null;
@@ -371,30 +390,30 @@ function toolCallOf(msg) {
  * 按工具调用缓存折叠信息（工具表不变时复用）。
  */
 function getToolCollapseInfoCached(msg, tools) {
-  let r = weakMap_17.get(msg);
-  if (r?.tools === tools) return r.info;
-  let s = toolCallOf(msg);
-  let h = s === null ? undefined : findToolByNameWithFallback(tools, s);
-  if (r && h === r.resolvedTool) {
-    r.tools = tools;
-    return r.info;
+  let cached = weakMap_17.get(msg);
+  if (cached?.tools === tools) return cached.info;
+  let toolName = toolCallOf(msg);
+  let tool = toolName === null ? undefined : findToolByNameWithFallback(tools, toolName);
+  if (cached && tool === cached.resolvedTool) {
+    cached.tools = tools;
+    return cached.info;
   }
   let collapsibleToolInfo = getCollapsibleToolInfo(msg, tools);
   weakMap_17.set(msg, {
     tools,
-    resolvedTool: h,
+    resolvedTool: tool,
     info: collapsibleToolInfo,
   });
   return collapsibleToolInfo;
 }
 //@ chunk-e6aww6q8.js:4683457-4685204 callgraph-fingerprint = getCollapsibleToolInfo (0.157)
 function getCollapsibleToolInfo(msg, tools) {
-  let r = null;
+  let currentTool = null;
   if (msg.type === "assistant") {
     let content = msg.message.content[0];
     let info = getSearchOrReadFromContent(content, tools);
     if (info && content?.type === "tool_use")
-      r = {
+      currentTool = {
         name: content.name,
         input: getSessionFileTypeFromInput_2(content.input),
         ...info,
@@ -413,66 +432,72 @@ function getCollapsibleToolInfo(msg, tools) {
       tools,
     );
     if (info && firstContent?.type === "tool_use")
-      r = {
+      currentTool = {
         name: msg.toolName,
         input: getSessionFileTypeFromInput_2(firstContent.input),
         ...info,
         memorySave: undefined,
       };
   }
-  if (!r) return null;
-  let { command, query, pattern } = r.input;
-  let S = null;
-  let w = [];
-  let L = "";
+  if (!currentTool) return null;
+  let { command, query, pattern } = currentTool.input;
+  let readPaths = null;
+  let entries = [];
+  let currentLabel = "";
   let isTeamMemoryWrite = false;
-  let q = null;
-  if (r.isMemoryWrite) isTeamMemoryWrite = getFilePathFromToolInput(r.name, r.input);
-  else if (r.isScratchpadWrite || r.isAbsorbedSilently);
-  else if (r.accountMemory) {
-    if (r.accountMemory === "read") {
-      let Se =
+  let pendingCommand = null;
+  if (currentTool.isMemoryWrite)
+    isTeamMemoryWrite = getFilePathFromToolInput(currentTool.name, currentTool.input);
+  else if (currentTool.isScratchpadWrite || currentTool.isAbsorbedSilently);
+  else if (currentTool.accountMemory) {
+    if (currentTool.accountMemory === "read") {
+      let pendingCalls =
         msg.type === "grouped_tool_use"
           ? msg.messages.map((message) => message.message.content[0])
           : msg.type === "assistant"
             ? [msg.message.content[0]]
             : [];
-      for (let ke of Se) if (ke?.type === "tool_use") w.push(...toolInputPaths(ke.input));
+      for (let pendingCall of pendingCalls)
+        if (pendingCall?.type === "tool_use") entries.push(...toolInputPaths(pendingCall.input));
     }
-  } else if (r.memorySave !== undefined);
-  else if (r.mcpCallLabel) L = query ? formatCollapsedLabel(query) : "";
-  else if (isFullscreenEnvEnabled() && r.isBash) {
+  } else if (currentTool.memorySave !== undefined);
+  else if (currentTool.mcpCallLabel) currentLabel = query ? formatCollapsedLabel(query) : "";
+  else if (isFullscreenEnvEnabled() && currentTool.isBash) {
     if (command) {
-      let Se = bashCommentTitle(command);
-      L = Se !== undefined ? truncateCollapsedLabel(Se) : commandAsHint(command);
+      let title = bashCommentTitle(command);
+      currentLabel = title !== undefined ? truncateCollapsedLabel(title) : commandAsHint(command);
     }
-  } else if (r.isList) L = command ? commandAsHint(command) : "";
-  else if (r.isSearch) {
-    q = isTeamMemoryPathInput(r.input) ? "team_memory" : isMemorySearch(r.input) ? "memory" : "other";
-    if (q === "other") L = pattern ? formatCollapsedLabel(pattern) : "";
+  } else if (currentTool.isList) currentLabel = command ? commandAsHint(command) : "";
+  else if (currentTool.isSearch) {
+    pendingCommand = isTeamMemoryPathInput(currentTool.input)
+      ? "team_memory"
+      : isMemorySearch(currentTool.input)
+        ? "memory"
+        : "other";
+    if (pendingCommand === "other") currentLabel = pattern ? formatCollapsedLabel(pattern) : "";
   } else {
-    S = getFilePathsFromReadMessage(msg).map((Se) => ({
-      path: Se,
-      isTeamMem: isTeamMemoryPath(Se),
-      isAutoManagedMemory: isMemoryOrSessionFile(Se),
+    readPaths = getFilePathsFromReadMessage(msg).map((path) => ({
+      path,
+      isTeamMem: isTeamMemoryPath(path),
+      isAutoManagedMemory: isMemoryOrSessionFile(path),
     }));
-    if (S.length === 0) L = command ? commandAsHint(command) : "";
+    if (readPaths.length === 0) currentLabel = command ? commandAsHint(command) : "";
   }
   let editLines = null;
-  if (r.isScratchpadWrite) {
+  if (currentTool.isScratchpadWrite) {
     let added = 0;
     let removed = 0;
-    let we =
+    let editCalls =
       msg.type === "grouped_tool_use"
         ? msg.messages.map((message) => message.message.content[0])
         : msg.type === "assistant"
           ? [msg.message.content[0]]
           : [];
-    for (let Ee of we) {
-      if (Ee?.type !== "tool_use") continue;
-      let Ae = countEditLines(r.name, Ee.input);
-      added += Ae.added;
-      removed += Ae.removed;
+    for (let editCall of editCalls) {
+      if (editCall?.type !== "tool_use") continue;
+      let editLines = countEditLines(currentTool.name, editCall.input);
+      added += editLines.added;
+      removed += editLines.removed;
     }
     editLines = {
       added,
@@ -480,15 +505,15 @@ function getCollapsibleToolInfo(msg, tools) {
     };
   }
   return {
-    ...r,
+    ...currentTool,
     toolUseIds: toolCallOf_3(msg),
     toolUseCount: countToolUses(msg),
-    readPaths: S,
-    accountMemoryPaths: w,
+    readPaths,
+    accountMemoryPaths: entries,
     editLines,
-    displayHint: L,
+    displayHint: currentLabel,
     isTeamMemoryWrite,
-    searchTarget: q,
+    searchTarget: pendingCommand,
   };
 }
 //@ chunk-e6aww6q8.js:4685204-4685367 file-local
@@ -509,18 +534,18 @@ function isTextBreaker(msg) {
 /**
  * 判断消息是否为以带签名思考块开头的 assistant 消息。
  */
-function isSignedThinkingMessage(msg) {
-  if (msg.type !== "assistant") return false;
-  return isSignedThinkingBlock(msg.message.content[0]);
+function isSignedThinkingMessage(message) {
+  if (message.type !== "assistant") return false;
+  return isSignedThinkingBlock(message.message.content[0]);
 }
 //@ chunk-e6aww6q8.js:4685449-4685584 layout
-function isSignedThinkingBlock(e) {
-  if (e === undefined) return false;
+function isSignedThinkingBlock(block) {
+  if (block === undefined) return false;
   return (
-    e.type === "thinking" &&
-    typeof e.thinking === "string" &&
-    typeof e.signature === "string" &&
-    hasNarrationThinking(e)
+    block.type === "thinking" &&
+    typeof block.thinking === "string" &&
+    typeof block.signature === "string" &&
+    hasNarrationThinking(block)
   );
 }
 //@ chunk-e6aww6q8.js:4685584-4685629 layout
@@ -552,26 +577,29 @@ function shouldSkipMessage(msg) {
   return false;
 }
 //@ chunk-e6aww6q8.js:4686054-4686074 sole-consumer
-var weakMap_18 = new WeakMap();
+var weakMap_18; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4686054", () => {
+  weakMap_18 = new WeakMap();
+});
 //@ chunk-e6aww6q8.js:4686074-4686358 sole-consumer
-function visibleThinkingOf(e) {
-  if (e.type !== "assistant") return;
-  let n = e.message.content[0];
-  if (n?.type !== "thinking" || !n.thinking) return;
-  let thinking = n.thinking;
-  let s = weakMap_18.get(e);
-  if (s === undefined || s.thinking !== thinking) {
-    s = {
+function visibleThinkingOf(message) {
+  if (message.type !== "assistant") return;
+  let firstBlock = message.message.content[0];
+  if (firstBlock?.type !== "thinking" || !firstBlock.thinking) return;
+  let thinking = firstBlock.thinking;
+  let cached = weakMap_18.get(message);
+  if (cached === undefined || cached.thinking !== thinking) {
+    cached = {
       thinking,
       blank: thinking.trim() === "",
       summary: undefined,
     };
-    weakMap_18.set(e, s);
+    weakMap_18.set(message, cached);
   }
-  if (s.blank) return;
+  if (cached.blank) return;
   return {
-    message: e,
-    memo: s,
+    message,
+    memo: cached,
   };
 }
 //@ chunk-e6aww6q8.js:4686358-4686545 sole-consumer = toolCallOf (1)
@@ -620,9 +648,9 @@ function scanBashResultForGitOps(msg, group) {
     `
 ` +
     (out.stderr ?? "");
-  for (let h of msg.message.content) {
-    if (h.type !== "tool_result") continue;
-    let command = group.bashCommands?.get(h.tool_use_id);
+  for (let block of msg.message.content) {
+    if (block.type !== "tool_result") continue;
+    let command = group.bashCommands?.get(block.tool_use_id);
     if (!command) continue;
     let { commit, push, branch, pr } = detectGitOperation(command, combined);
     if (commit) group.commits?.push(commit);
@@ -743,22 +771,26 @@ function createCollapsedGroup(group, currentGroup) {
  */
 var EMPTY_COLLAPSED_RESULT = [];
 //@ chunk-e6aww6q8.js:4690695-4691105 layout
-function getMemorySaveEntries(e, n) {
-  if (memorySaveHooks === null || e.type !== "user" || !n.memorySaves?.size) return EMPTY_COLLAPSED_RESULT;
-  let r = [];
-  for (let s of e.message.content) {
-    let h = s.type === "tool_result" ? n.memorySaves.get(s.tool_use_id) : undefined;
-    if (s.type !== "tool_result" || h === undefined) continue;
-    let y = e.sharesToolUseResult === true;
-    h.end = y ? "not_stored" : memorySaveHooks.memorySaveEndOf(s, e.toolUseResult);
-    if (h.end === "not_stored" && (!y || s.is_error === true)) r.push(s.tool_use_id);
+function getMemorySaveEntries(message, group) {
+  if (memorySaveHooks === null || message.type !== "user" || !group.memorySaves?.size)
+    return EMPTY_COLLAPSED_RESULT;
+  let toolUseIds = [];
+  for (let block of message.message.content) {
+    let memorySave = block.type === "tool_result" ? group.memorySaves.get(block.tool_use_id) : undefined;
+    if (block.type !== "tool_result" || memorySave === undefined) continue;
+    let sharesToolUseResult = message.sharesToolUseResult === true;
+    memorySave.end = sharesToolUseResult
+      ? "not_stored"
+      : memorySaveHooks.memorySaveEndOf(block, message.toolUseResult);
+    if (memorySave.end === "not_stored" && (!sharesToolUseResult || block.is_error === true))
+      toolUseIds.push(block.tool_use_id);
   }
-  return r;
+  return toolUseIds;
 }
 //@ chunk-e6aww6q8.js:4691105-4691481 layout
-function hasBashEditDiff(e) {
-  if (e.type !== "user") return false;
-  let toolUseResult = e.toolUseResult;
+function hasBashEditDiff(message) {
+  if (message.type !== "user") return false;
+  let toolUseResult = message.toolUseResult;
   if (
     typeof toolUseResult !== "object" ||
     toolUseResult === null ||
@@ -791,40 +823,41 @@ class IncrementalCollapser {
   #n;
   #o = [];
   lastFolded = 0;
-  resume(e, n) {
-    let r = -1;
-    let s = this.#n;
+  resume(messages, context) {
+    let checkpointIndex = -1;
+    let cachedInput = this.#n;
     if (
-      s !== undefined &&
-      s.tools === n.tools &&
-      s.replVerbose === n.replVerbose &&
-      s.fullscreenEnv === n.fullscreenEnv &&
-      s.cwd === n.cwd
+      cachedInput !== undefined &&
+      cachedInput.tools === context.tools &&
+      cachedInput.replVerbose === context.replVerbose &&
+      cachedInput.fullscreenEnv === context.fullscreenEnv &&
+      cachedInput.cwd === context.cwd
     ) {
-      let w = this.#e;
-      let min = Math.min(w.length, e.length);
-      let G = 0;
-      while (G < min && w[G] === e[G]) G++;
-      r = this.#o.findLastIndex((q) => q.inputIndex <= G);
-    } else this.#n = n;
-    this.#o.length = r + 1;
-    this.#e = e;
-    let h = this.#o[r];
-    let inputIndex = h?.inputIndex ?? 0;
-    let S = h === undefined ? [] : this.#t.slice(0, h.resultLength);
-    this.#t = S;
-    this.lastFolded = e.length - inputIndex;
+      let cachedMessages = this.#e;
+      let min = Math.min(cachedMessages.length, messages.length);
+      let commonPrefixLength = 0;
+      while (commonPrefixLength < min && cachedMessages[commonPrefixLength] === messages[commonPrefixLength])
+        commonPrefixLength++;
+      checkpointIndex = this.#o.findLastIndex((checkpoint) => checkpoint.inputIndex <= commonPrefixLength);
+    } else this.#n = context;
+    this.#o.length = checkpointIndex + 1;
+    this.#e = messages;
+    let checkpoint = this.#o[checkpointIndex];
+    let inputIndex = checkpoint?.inputIndex ?? 0;
+    let resultRows = checkpoint === undefined ? [] : this.#t.slice(0, checkpoint.resultLength);
+    this.#t = resultRows;
+    this.lastFolded = messages.length - inputIndex;
     return {
       start: inputIndex,
-      result: S,
-      prevTimestamp: h?.prevTimestamp,
+      result: resultRows,
+      prevTimestamp: checkpoint?.prevTimestamp,
     };
   }
-  checkpoint(e, resultLength, prevTimestamp) {
+  checkpoint(inputIndex, resultLength, prevTimestamp) {
     let last = this.#o.at(-1);
-    if (last === undefined || e - last.inputIndex >= MAX_INDEX_GAP)
+    if (last === undefined || inputIndex - last.inputIndex >= MAX_INDEX_GAP)
       this.#o.push({
-        inputIndex: e,
+        inputIndex,
         resultLength,
         prevTimestamp,
       });
@@ -841,130 +874,139 @@ class IncrementalCollapser {
 function collapseReadSearchGroups(
   messages,
   tools,
-  { transcriptV2: r = false, expandRows: s = false } = {},
-  h = new IncrementalCollapser(),
+  { transcriptV2 = false, expandRows = false } = {},
+  collapser = new IncrementalCollapser(),
 ) {
-  if (r) {
-    h.reset();
+  if (transcriptV2) {
+    collapser.reset();
     return messages;
   }
   let replVerbose = false;
-  if (s) {
-    h.reset();
-    let Ie = messages;
-    if (!Ie.some((lt) => lt.type === "attachment" && lt.attachment.type === "hook_permission_decision"))
-      return Ie;
-    let Me = [];
-    let We = [];
-    let ze = new Set();
-    for (let lt of Ie) {
-      let Je = toolCallOf_2(lt) ? getToolCollapseInfoCached(lt, tools) : null;
-      if (Je) {
-        for (let toolUseId of Je.toolUseIds) ze.add(toolUseId);
-        We.push(lt);
-      } else if (visibleThinkingOf(lt) !== undefined && !isSignedThinkingMessage(lt)) We.push(lt);
-      else if (
-        We.length > 0 &&
-        !isUserPromptAttachment(lt) &&
-        (toolResultText(lt, ze) || shouldSkipMessage(lt) || isPlaceholderAssistantMessage(lt))
+  if (expandRows) {
+    collapser.reset();
+    let sourceMessages = messages;
+    if (
+      !sourceMessages.some(
+        (message) => message.type === "attachment" && message.attachment.type === "hook_permission_decision",
       )
-        We.push(lt);
+    )
+      return sourceMessages;
+    let output = [];
+    let pendingGroup = [];
+    let toolUseIds = new Set();
+    for (let message of sourceMessages) {
+      let collapseInfo = toolCallOf_2(message) ? getToolCollapseInfoCached(message, tools) : null;
+      if (collapseInfo) {
+        for (let toolUseId of collapseInfo.toolUseIds) toolUseIds.add(toolUseId);
+        pendingGroup.push(message);
+      } else if (visibleThinkingOf(message) !== undefined && !isSignedThinkingMessage(message))
+        pendingGroup.push(message);
+      else if (
+        pendingGroup.length > 0 &&
+        !isUserPromptAttachment(message) &&
+        (toolResultText(message, toolUseIds) ||
+          shouldSkipMessage(message) ||
+          isPlaceholderAssistantMessage(message))
+      )
+        pendingGroup.push(message);
       else {
-        Me.push(...dedupeHookPermissionDecisions(We), lt);
-        We = [];
-        ze.clear();
+        output.push(...dedupeHookPermissionDecisions(pendingGroup), message);
+        pendingGroup = [];
+        toolUseIds.clear();
       }
     }
-    Me.push(...dedupeHookPermissionDecisions(We));
-    return Me;
+    output.push(...dedupeHookPermissionDecisions(pendingGroup));
+    return output;
   }
   let currentGroup = isFullscreenEnvEnabled();
-  let w = h.resume(messages, {
+  let resumed = collapser.resume(messages, {
     tools,
     replVerbose,
     fullscreenEnv: currentGroup,
     cwd: getEffectiveCwd(),
   });
-  let L = w.result;
+  let result = resumed.result;
   let group = createEmptyGroup(currentGroup);
-  let q = [];
-  let prevTimestamp = w.prevTimestamp;
-  let Se;
-  let { start, start: start_2 } = w;
+  let pendingRows = [];
+  let prevTimestamp = resumed.prevTimestamp;
+  let group_2;
+  let { start, start: start_2 } = resumed;
   function flushGroup() {
-    L.push(...dedupeHookPermissionDecisions(q));
-    q = [];
+    result.push(...dedupeHookPermissionDecisions(pendingRows));
+    pendingRows = [];
   }
   function flushGroup_2() {
     if (group.messages.length === 0) return;
-    L.push(createCollapsedGroup(group, currentGroup));
+    result.push(createCollapsedGroup(group, currentGroup));
     flushGroup();
     group = createEmptyGroup(currentGroup);
   }
-  for (let start_3 = w.start; start_3 < messages.length; start_3++) {
-    let msg = messages[start_3];
+  for (let start_3 = resumed.start; start_3 < messages.length; start_3++) {
+    let message = messages[start_3];
     start = start_3;
     if (
       group.messages.length === 0 &&
-      q.length === 0 &&
-      Se === undefined &&
+      pendingRows.length === 0 &&
+      group_2 === undefined &&
       !isMemoryContextAttachment(messages[start_3 - 1]) &&
       start_3 >= start_2
     )
-      h.checkpoint(start_3, L.length, prevTimestamp);
-    let We = toolCallOf_2(msg) ? getToolCollapseInfoCached(msg, tools) : null;
-    let ze = We === null ? visibleThinkingOf(msg) : undefined;
-    let lt = We === null ? getMemorySaveEntries(msg, group) : EMPTY_COLLAPSED_RESULT;
-    if (We) {
+      collapser.checkpoint(start_3, result.length, prevTimestamp);
+    let collapseInfo = toolCallOf_2(message) ? getToolCollapseInfoCached(message, tools) : null;
+    let thinking = collapseInfo === null ? visibleThinkingOf(message) : undefined;
+    let memorySaves = collapseInfo === null ? getMemorySaveEntries(message, group) : EMPTY_COLLAPSED_RESULT;
+    if (collapseInfo) {
       group.latestThinkingSummary = undefined;
-      let toolUseCount = We.toolUseCount;
-      if (We.isMemoryWrite) {
-        if (We.isTeamMemoryWrite)
+      let toolUseCount = collapseInfo.toolUseCount;
+      if (collapseInfo.isMemoryWrite) {
+        if (collapseInfo.isTeamMemoryWrite)
           group.teamMemoryWriteCount = (group.teamMemoryWriteCount ?? 0) + toolUseCount;
         else group.memoryWriteCount += toolUseCount;
-      } else if (We.isScratchpadWrite) {
+      } else if (collapseInfo.isScratchpadWrite) {
         group.scratchpadWriteCount = (group.scratchpadWriteCount ?? 0) + toolUseCount;
-        if (We.editLines) {
-          group.scratchpadLinesAdded = (group.scratchpadLinesAdded ?? 0) + We.editLines.added;
-          group.scratchpadLinesRemoved = (group.scratchpadLinesRemoved ?? 0) + We.editLines.removed;
+        if (collapseInfo.editLines) {
+          group.scratchpadLinesAdded = (group.scratchpadLinesAdded ?? 0) + collapseInfo.editLines.added;
+          group.scratchpadLinesRemoved = (group.scratchpadLinesRemoved ?? 0) + collapseInfo.editLines.removed;
         }
-        let nt = inputFilePath(We.input);
-        let pt = nt ? formatCollapsedLabel(getDisplayPath(nt)) : "";
-        if (pt) group.latestDisplayHint = pt;
-      } else if (We.isAbsorbedSilently) {
-        if (We.popsOutOnError) {
+        let filePath = inputFilePath(collapseInfo.input);
+        let label = filePath ? formatCollapsedLabel(getDisplayPath(filePath)) : "";
+        if (label) group.latestDisplayHint = label;
+      } else if (collapseInfo.isAbsorbedSilently) {
+        if (collapseInfo.popsOutOnError) {
           group.popOutOnErrorIds ??= new Set();
-          for (let toolUseId of We.toolUseIds) group.popOutOnErrorIds.add(toolUseId);
+          for (let toolUseId of collapseInfo.toolUseIds) group.popOutOnErrorIds.add(toolUseId);
         }
-      } else if (We.accountMemory === "read") {
+      } else if (collapseInfo.accountMemory === "read") {
         group.accountMemoryReadKeys ??= new Set();
-        for (let nt of We.accountMemoryPaths.length > 0 ? We.accountMemoryPaths : We.toolUseIds)
-          group.accountMemoryReadKeys.add(nt);
-      } else if (We.accountMemory === "search")
+        for (let memoryPath of collapseInfo.accountMemoryPaths.length > 0
+          ? collapseInfo.accountMemoryPaths
+          : collapseInfo.toolUseIds)
+          group.accountMemoryReadKeys.add(memoryPath);
+      } else if (collapseInfo.accountMemory === "search")
         group.accountMemorySearchCount = (group.accountMemorySearchCount ?? 0) + toolUseCount;
-      else if (We.memorySave !== undefined) {
+      else if (collapseInfo.memorySave !== undefined) {
         group.memorySaves ??= new Map();
-        for (let toolUseId of We.toolUseIds)
+        for (let toolUseId of collapseInfo.toolUseIds)
           group.memorySaves.set(toolUseId, {
-            ...We.memorySave,
+            ...collapseInfo.memorySave,
             id: toolUseId,
           });
-      } else if (We.mcpCallLabel) {
+      } else if (collapseInfo.mcpCallLabel) {
         group.mcpCallCount = (group.mcpCallCount ?? 0) + toolUseCount;
-        group.mcpCallLabels?.add(We.mcpCallLabel);
-        if (We.displayHint) group.latestDisplayHint = `"${We.displayHint}"`;
-      } else if (currentGroup && We.isBash) {
+        group.mcpCallLabels?.add(collapseInfo.mcpCallLabel);
+        if (collapseInfo.displayHint) group.latestDisplayHint = `"${collapseInfo.displayHint}"`;
+      } else if (currentGroup && collapseInfo.isBash) {
         group.bashCount = (group.bashCount ?? 0) + toolUseCount;
-        let { command } = We.input;
+        let { command } = collapseInfo.input;
         if (command) {
-          group.latestDisplayHint = We.displayHint;
-          for (let toolUseId of We.toolUseIds) group.bashCommands?.set(toolUseId, command);
+          group.latestDisplayHint = collapseInfo.displayHint;
+          for (let toolUseId of collapseInfo.toolUseIds) group.bashCommands?.set(toolUseId, command);
         }
-      } else if (We.isList) {
+      } else if (collapseInfo.isList) {
         group.listCount += toolUseCount;
-        if (We.displayHint) group.latestDisplayHint = We.displayHint;
-      } else if (We.isSearch)
-        switch (((group.searchCount += toolUseCount), We.searchTarget)) {
+        if (collapseInfo.displayHint) group.latestDisplayHint = collapseInfo.displayHint;
+      } else if (collapseInfo.isSearch)
+        switch (((group.searchCount += toolUseCount), collapseInfo.searchTarget)) {
           case "team_memory":
             group.teamMemorySearchCount = (group.teamMemorySearchCount ?? 0) + toolUseCount;
             break;
@@ -973,45 +1015,48 @@ function collapseReadSearchGroups(
             break;
           case "other":
           case null:
-            if (We.displayHint) {
-              group.nonMemSearchArgs.push(We.displayHint);
-              group.latestDisplayHint = `"${We.displayHint}"`;
+            if (collapseInfo.displayHint) {
+              group.nonMemSearchArgs.push(collapseInfo.displayHint);
+              group.latestDisplayHint = `"${collapseInfo.displayHint}"`;
             }
             break;
         }
       else {
-        let readPaths = We.readPaths ?? [];
+        let readPaths = collapseInfo.readPaths ?? [];
         for (let deferred of readPaths) {
           group.readFilePaths.add(deferred.path);
           if (deferred.isTeamMem) group.teamMemoryReadFilePaths?.add(deferred.path);
           else if (deferred.isAutoManagedMemory) group.memoryReadFilePaths.add(deferred.path);
           else {
-            let Et = formatCollapsedLabel(getDisplayPath(deferred.path));
-            if (Et) group.latestDisplayHint = Et;
+            let label = formatCollapsedLabel(getDisplayPath(deferred.path));
+            if (label) group.latestDisplayHint = label;
           }
         }
         if (readPaths.length === 0) {
           group.readOperationCount += toolUseCount;
-          if (We.displayHint) group.latestDisplayHint = We.displayHint;
+          if (collapseInfo.displayHint) group.latestDisplayHint = collapseInfo.displayHint;
         }
       }
-      for (let toolUseId of We.toolUseIds) group.toolUseIds.add(toolUseId);
-      group.messages.push(msg);
+      for (let toolUseId of collapseInfo.toolUseIds) group.toolUseIds.add(toolUseId);
+      group.messages.push(message);
     } else if (
-      toolResultText(msg, group.toolUseIds) &&
-      (lt.length > 0 ||
-        (msg.type === "user" &&
-          msg.message.content.some(
-            (Je) => Je.type === "tool_result" && Je.is_error && group.popOutOnErrorIds?.has(Je.tool_use_id),
+      toolResultText(message, group.toolUseIds) &&
+      (memorySaves.length > 0 ||
+        (message.type === "user" &&
+          message.message.content.some(
+            (entry) =>
+              entry.type === "tool_result" &&
+              entry.is_error &&
+              group.popOutOnErrorIds?.has(entry.tool_use_id),
           )))
     ) {
       let last = group.messages.at(-1);
-      let nt = last ? toolCallOf_3(last) : [];
-      let pt = new Set(
-        msg.type === "user"
-          ? msg.message.content.flatMap((gt) =>
-              gt.type === "tool_result" && (gt.is_error || lt.includes(gt.tool_use_id))
-                ? [gt.tool_use_id]
+      let lastToolUseIds = last ? toolCallOf_3(last) : [];
+      let currentToolUseIds = new Set(
+        message.type === "user"
+          ? message.message.content.flatMap((block) =>
+              block.type === "tool_result" && (block.is_error || memorySaves.includes(block.tool_use_id))
+                ? [block.tool_use_id]
                 : [],
             )
           : [],
@@ -1021,157 +1066,171 @@ function collapseReadSearchGroups(
           (group.hookCount > 0 ||
             (group.relevantMemories?.length ?? 0) > 0 ||
             (group.accountMemoryRecalls?.length ?? 0) > 0) &&
-          (lt.length === 0 || group.messages.length === 1)
+          (memorySaves.length === 0 || group.messages.length === 1)
         ) &&
-        nt.length > 0 &&
-        nt.every((gt) => pt.has(gt))
+        lastToolUseIds.length > 0 &&
+        lastToolUseIds.every((toolUseId) => currentToolUseIds.has(toolUseId))
       ) {
         group.messages.pop();
-        for (let msg of nt) {
+        for (let msg of lastToolUseIds) {
           group.toolUseIds.delete(msg);
           group.memorySaves?.delete(msg);
         }
         if (group.messages.length > 0) {
           flushGroup_2();
-          L.push(last);
+          result.push(last);
         } else {
-          L.push(last);
+          result.push(last);
           flushGroup();
           group = createEmptyGroup(currentGroup);
         }
       } else flushGroup_2();
-      L.push(msg);
-    } else if (toolResultText(msg, group.toolUseIds) && hasBashEditDiff(msg)) {
-      let msg_2 = group.messages.at(-1);
-      let nt = msg_2 ? toolCallOf_3(msg_2) : [];
-      let pt = new Set(
-        msg.type === "user"
-          ? msg.message.content.flatMap((yt) => (yt.type === "tool_result" ? [yt.tool_use_id] : []))
+      result.push(message);
+    } else if (toolResultText(message, group.toolUseIds) && hasBashEditDiff(message)) {
+      let msg = group.messages.at(-1);
+      let otherToolUseIds = msg ? toolCallOf_3(msg) : [];
+      let otherToolUseIdSet = new Set(
+        message.type === "user"
+          ? message.message.content.flatMap((block) =>
+              block.type === "tool_result" ? [block.tool_use_id] : [],
+            )
           : [],
       );
-      let Et =
+      let counts =
         group.messages.length === 1 &&
         (group.hookCount > 0 ||
           (group.relevantMemories?.length ?? 0) > 0 ||
           (group.accountMemoryRecalls?.length ?? 0) > 0);
-      if (msg_2 && !Et && nt.length > 0 && nt.every((yt) => pt.has(yt))) {
+      if (
+        msg &&
+        !counts &&
+        otherToolUseIds.length > 0 &&
+        otherToolUseIds.every((toolUseId) => otherToolUseIdSet.has(toolUseId))
+      ) {
         group.messages.pop();
-        let toolInfo = getToolCollapseInfoCached(msg_2, tools);
-        let gt = toolInfo?.toolUseCount ?? countToolUses(msg_2);
+        let toolInfo = getToolCollapseInfoCached(msg, tools);
+        let toolUseCount = toolInfo?.toolUseCount ?? countToolUses(msg);
         if (isFullscreenEnvEnabled() && toolInfo?.isBash)
-          group.bashCount = Math.max(0, (group.bashCount ?? 0) - gt);
-        else if (toolInfo?.isList) group.listCount = Math.max(0, group.listCount - gt);
-        else if (toolInfo?.isSearch) group.searchCount = Math.max(0, group.searchCount - gt);
+          group.bashCount = Math.max(0, (group.bashCount ?? 0) - toolUseCount);
+        else if (toolInfo?.isList) group.listCount = Math.max(0, group.listCount - toolUseCount);
+        else if (toolInfo?.isSearch) group.searchCount = Math.max(0, group.searchCount - toolUseCount);
         else if ((toolInfo?.readPaths?.length ?? 0) === 0)
-          group.readOperationCount = Math.max(0, group.readOperationCount - gt);
-        for (let filePath of nt) {
+          group.readOperationCount = Math.max(0, group.readOperationCount - toolUseCount);
+        for (let filePath of otherToolUseIds) {
           group.toolUseIds.delete(filePath);
           group.bashCommands?.delete(filePath);
         }
         if (group.messages.length > 0) {
           flushGroup_2();
-          L.push(msg_2);
+          result.push(msg);
         } else {
-          L.push(msg_2);
+          result.push(msg);
           flushGroup();
           group = createEmptyGroup(currentGroup);
         }
       } else flushGroup_2();
-      L.push(msg);
-    } else if (toolResultText(msg, group.toolUseIds)) {
-      group.messages.push(msg);
-      if (currentGroup && group.bashCommands?.size) scanBashResultForGitOps(msg, group);
-    } else if (group.messages.length > 0 && isPreToolHookSummary(msg)) {
-      let { hookCount, hookInfos, totalDurationMs } = normalizeHookSummary(msg);
+      result.push(message);
+    } else if (toolResultText(message, group.toolUseIds)) {
+      group.messages.push(message);
+      if (currentGroup && group.bashCommands?.size) scanBashResultForGitOps(message, group);
+    } else if (group.messages.length > 0 && isPreToolHookSummary(message)) {
+      let { hookCount, hookInfos, totalDurationMs } = normalizeHookSummary(message);
       group.hookCount += hookCount;
-      group.hookTotalMs += totalDurationMs ?? hookInfos.reduce((sum, yt) => sum + (yt.durationMs ?? 0), 0);
+      group.hookTotalMs +=
+        totalDurationMs ?? hookInfos.reduce((sum, hookInfo) => sum + (hookInfo.durationMs ?? 0), 0);
       group.hookInfos.push(...hookInfos);
     } else if (
       group.messages.length > 0 &&
-      msg.type === "attachment" &&
-      msg.attachment.type === "relevant_memories"
+      message.type === "attachment" &&
+      message.attachment.type === "relevant_memories"
     ) {
       group.relevantMemories ??= [];
-      group.relevantMemories.push(...msg.attachment.memories);
+      group.relevantMemories.push(...message.attachment.memories);
     } else if (
       group.messages.length > 0 &&
-      msg.type === "attachment" &&
-      msg.attachment.type === "account_memory_recall"
+      message.type === "attachment" &&
+      message.attachment.type === "account_memory_recall"
     ) {
       group.accountMemoryReadKeys ??= new Set();
-      for (let file of msg.attachment.files) group.accountMemoryReadKeys.add(normalizeServerPath(file.path));
+      for (let file of message.attachment.files)
+        group.accountMemoryReadKeys.add(normalizeServerPath(file.path));
       group.accountMemoryRecalls ??= [];
       group.accountMemoryRecalls.push({
-        paths: msg.attachment.files.map((file) => file.path),
-        content: msg.attachment.content,
+        paths: message.attachment.files.map((file) => file.path),
+        content: message.attachment.content,
       });
     } else if (
-      msg.type === "attachment" &&
-      msg.attachment.type === "relevant_memories" &&
+      message.type === "attachment" &&
+      message.attachment.type === "relevant_memories" &&
       isFollowedByMemoryRecall(messages, start_3)
     )
-      Se = msg.attachment.memories;
+      group_2 = message.attachment.memories;
     else if (
-      Se !== undefined &&
-      msg.type === "attachment" &&
-      msg.attachment.type === "account_memory_recall"
+      group_2 !== undefined &&
+      message.type === "attachment" &&
+      message.attachment.type === "account_memory_recall"
     ) {
-      L.push({
-        ...msg,
+      result.push({
+        ...message,
         attachment: {
-          ...msg.attachment,
-          localRecall: Se,
+          ...message.attachment,
+          localRecall: group_2,
         },
       });
-      Se = undefined;
-    } else if (isMessageBreakPoint(msg) || (ze !== undefined && isSignedThinkingMessage(ze.message))) {
+      group_2 = undefined;
+    } else if (
+      isMessageBreakPoint(message) ||
+      (thinking !== undefined && isSignedThinkingMessage(thinking.message))
+    ) {
       flushGroup_2();
-      L.push(msg);
-    } else if (ze !== undefined) {
-      let Je = (ze.memo.summary ??= collapseWhitespace_2(stripAnsiPerLine(ze.memo.thinking)));
-      if (Je) group.latestThinkingSummary = Je;
+      result.push(message);
+    } else if (thinking !== undefined) {
+      let summary = (thinking.memo.summary ??= collapseWhitespace_2(
+        stripAnsiPerLine(thinking.memo.thinking),
+      ));
+      if (summary) group.latestThinkingSummary = summary;
       if (prevTimestamp !== undefined) {
-        let nt = Date.parse(msg.timestamp) - Date.parse(prevTimestamp);
-        if (Number.isFinite(nt) && nt > 0) group.thoughtForMs += Math.min(nt, MAX_LOGGED_THOUGHT_MS);
+        let gapMs = Date.parse(message.timestamp) - Date.parse(prevTimestamp);
+        if (Number.isFinite(gapMs) && gapMs > 0) group.thoughtForMs += Math.min(gapMs, MAX_LOGGED_THOUGHT_MS);
       }
-      group.messages.push(ze.message);
-    } else if (shouldSkipMessage(msg) || isPlaceholderAssistantMessage(msg)) {
-      if (group.messages.length > 0) q.push(msg);
-      else L.push(msg);
+      group.messages.push(thinking.message);
+    } else if (shouldSkipMessage(message) || isPlaceholderAssistantMessage(message)) {
+      if (group.messages.length > 0) pendingRows.push(message);
+      else result.push(message);
     } else {
       flushGroup_2();
-      L.push(msg);
+      result.push(message);
     }
-    if ("timestamp" in msg && typeof msg.timestamp === "string") prevTimestamp = msg.timestamp;
+    if ("timestamp" in message && typeof message.timestamp === "string") prevTimestamp = message.timestamp;
   }
   start = messages.length;
   flushGroup_2();
-  return L;
+  return result;
 }
 //@ chunk-e6aww6q8.js:4698662-4698895 layout
 /**
  * 去重 hook 权限决定附件：同一 decision 与 hookEvent 只保留第一条。
  */
-function dedupeHookPermissionDecisions(e) {
-  let n = new Set();
-  let r = [];
-  for (let s of e) {
-    if (s.type === "attachment" && s.attachment.type === "hook_permission_decision") {
-      let h = `${s.attachment.decision}:${s.attachment.hookEvent}`;
-      if (n.has(h)) continue;
-      n.add(h);
+function dedupeHookPermissionDecisions(decisions) {
+  let seen = new Set();
+  let kept = [];
+  for (let decision of decisions) {
+    if (decision.type === "attachment" && decision.attachment.type === "hook_permission_decision") {
+      let key = `${decision.attachment.decision}:${decision.attachment.hookEvent}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
     }
-    r.push(s);
+    kept.push(decision);
   }
-  return r;
+  return kept;
 }
 //@ chunk-e6aww6q8.js:4698895-4699177 layout
-function isUserPromptAttachment(e) {
-  if (e.type !== "attachment") return false;
-  let attachment = e.attachment;
-  if (attachment.type !== "queued_command" || attachment.commandMode !== "prompt") return false;
-  let origin = attachment.origin;
-  if (!attachment.isMeta && isHumanOrAutoContinuation(origin)) return true;
+function isUserPromptAttachment(attachment) {
+  if (attachment.type !== "attachment") return false;
+  let attachment_2 = attachment.attachment;
+  if (attachment_2.type !== "queued_command" || attachment_2.commandMode !== "prompt") return false;
+  let origin = attachment_2.origin;
+  if (!attachment_2.isMeta && isHumanOrAutoContinuation(origin)) return true;
   if (origin?.kind === "channel") return true;
   if (origin?.kind === "peer") return true;
   if (origin?.kind === "slack-ping") return true;
@@ -1186,34 +1245,35 @@ function isTaskNotificationAttachment(msg) {
   );
 }
 //@ chunk-e6aww6q8.js:4699308-4699460 placement
-function isPeerQueuedCommand(e) {
-  if (e.type !== "attachment" || e.attachment.type !== "queued_command") return false;
-  let origin = e.attachment.origin;
+function isPeerQueuedCommand(message) {
+  if (message.type !== "attachment" || message.attachment.type !== "queued_command") return false;
+  let origin = message.attachment.origin;
   return isPeerOrObserver(origin) || origin?.kind === "coordinator";
 }
 //@ chunk-e6aww6q8.js:4699460-4699620 placement
-function hasVisibleMailbox(e) {
+function hasVisibleMailbox(message) {
   return (
-    e.type === "attachment" &&
-    e.attachment.type === "teammate_mailbox" &&
-    Array.isArray(e.attachment.messages) &&
-    visibleTeammateMailboxMessages(e.attachment.messages).length > 0
+    message.type === "attachment" &&
+    message.attachment.type === "teammate_mailbox" &&
+    Array.isArray(message.attachment.messages) &&
+    visibleTeammateMailboxMessages(message.attachment.messages).length > 0
   );
 }
 //@ chunk-e6aww6q8.js:4699620-4699754 placement
-function isMemoryContextAttachment(e) {
+function isMemoryContextAttachment(attachment) {
   return (
-    e?.type === "attachment" &&
-    (e.attachment.type === "relevant_memories" || e.attachment.type === "cowork_memory_context")
+    attachment?.type === "attachment" &&
+    (attachment.attachment.type === "relevant_memories" ||
+      attachment.attachment.type === "cowork_memory_context")
   );
 }
 //@ chunk-e6aww6q8.js:4699754-4699968 placement
-function isFollowedByMemoryRecall(e, start) {
-  for (let idx = start + 1; idx < e.length; idx++) {
-    let s = e[idx];
-    if (s.type !== "attachment") return false;
-    if (s.attachment.type === "account_memory_recall") return true;
-    if (s.attachment.type !== "cowork_memory_context") return false;
+function isFollowedByMemoryRecall(messages, start) {
+  for (let idx = start + 1; idx < messages.length; idx++) {
+    let message = messages[idx];
+    if (message.type !== "attachment") return false;
+    if (message.attachment.type === "account_memory_recall") return true;
+    if (message.attachment.type !== "cowork_memory_context") return false;
   }
   return false;
 }
@@ -1221,24 +1281,24 @@ function isFollowedByMemoryRecall(e, start) {
 /**
  * 判断该附件是否构成消息断点（用户提示、任务通知、队友排队命令或有可见邮箱）。
  */
-function isMessageBreakPoint(msg) {
+function isMessageBreakPoint(message) {
   return (
-    isUserPromptAttachment(msg) ||
-    isTaskNotificationAttachment(msg) ||
-    isPeerQueuedCommand(msg) ||
-    hasVisibleMailbox(msg)
+    isUserPromptAttachment(message) ||
+    isTaskNotificationAttachment(message) ||
+    isPeerQueuedCommand(message) ||
+    hasVisibleMailbox(message)
   );
 }
 //@ chunk-e6aww6q8.js:4700022-4700121 placement
-function isCollapsibleToolResult(e) {
-  if (e.type === "user") return e.message.content[0]?.type !== "tool_result";
-  return isUserPromptAttachment(e);
+function isCollapsibleToolResult(message) {
+  if (message.type === "user") return message.message.content[0]?.type !== "tool_result";
+  return isUserPromptAttachment(message);
 }
 //@ chunk-e6aww6q8.js:4708167-4709111 fingerprint = getSearchReadSummaryText (0.974)
 /**
  * 生成搜索/读取折叠摘要文本（进行时或过去时），包含记忆检索/读取/写入次数。
  */
-function getSearchReadSummaryText(searchCount, readCount, isActive, memoryCounts, h = 0) {
+function getSearchReadSummaryText(searchCount, readCount, isActive, memoryCounts, deferredCount = 0) {
   let parts = [];
   if (memoryCounts) {
     let { memorySearchCount, memoryReadCount, memoryWriteCount } = memoryCounts;
@@ -1294,7 +1354,7 @@ function getSearchReadSummaryText(searchCount, readCount, isActive, memoryCounts
         : "read";
     parts.push(`${readVerb} ${readCount} ${readCount === 1 ? "file" : "files"}`);
   }
-  if (h > 0) {
+  if (deferredCount > 0) {
     let listVerb = isActive
       ? parts.length === 0
         ? "Listing"
@@ -1302,7 +1362,7 @@ function getSearchReadSummaryText(searchCount, readCount, isActive, memoryCounts
       : parts.length === 0
         ? "Listed"
         : "listed";
-    parts.push(`${listVerb} ${h} ${h === 1 ? "directory" : "directories"}`);
+    parts.push(`${listVerb} ${deferredCount} ${deferredCount === 1 ? "directory" : "directories"}`);
   }
   let text = parts.join(", ");
   return isActive ? `${text}\u2026` : text;

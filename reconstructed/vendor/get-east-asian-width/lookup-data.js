@@ -7,148 +7,152 @@
  */
 
 //@ chunk-m4dvt8pp.js:4012-4083 esm-fingerprint
-function E(e) {
-  return e === 12288 || (e >= 65281 && e <= 65376) || (e >= 65504 && e <= 65510);
-}
-//@ chunk-m4dvt8pp.js:4083-6354 esm-fingerprint
-function B(e) {
+function isFullwidthCodePoint(codePoint) {
   return (
-    (e >= 4352 && e <= 4447) ||
-    e === 8986 ||
-    e === 8987 ||
-    e === 9001 ||
-    e === 9002 ||
-    (e >= 9193 && e <= 9196) ||
-    e === 9200 ||
-    e === 9203 ||
-    e === 9725 ||
-    e === 9726 ||
-    e === 9748 ||
-    e === 9749 ||
-    (e >= 9776 && e <= 9783) ||
-    (e >= 9800 && e <= 9811) ||
-    e === 9855 ||
-    (e >= 9866 && e <= 9871) ||
-    e === 9875 ||
-    e === 9889 ||
-    e === 9898 ||
-    e === 9899 ||
-    e === 9917 ||
-    e === 9918 ||
-    e === 9924 ||
-    e === 9925 ||
-    e === 9934 ||
-    e === 9940 ||
-    e === 9962 ||
-    e === 9970 ||
-    e === 9971 ||
-    e === 9973 ||
-    e === 9978 ||
-    e === 9981 ||
-    e === 9989 ||
-    e === 9994 ||
-    e === 9995 ||
-    e === 10024 ||
-    e === 10060 ||
-    e === 10062 ||
-    (e >= 10067 && e <= 10069) ||
-    e === 10071 ||
-    (e >= 10133 && e <= 10135) ||
-    e === 10160 ||
-    e === 10175 ||
-    e === 11035 ||
-    e === 11036 ||
-    e === 11088 ||
-    e === 11093 ||
-    (e >= 11904 && e <= 11929) ||
-    (e >= 11931 && e <= 12019) ||
-    (e >= 12032 && e <= 12245) ||
-    (e >= 12272 && e <= 12287) ||
-    (e >= 12289 && e <= 12350) ||
-    (e >= 12353 && e <= 12438) ||
-    (e >= 12441 && e <= 12543) ||
-    (e >= 12549 && e <= 12591) ||
-    (e >= 12593 && e <= 12686) ||
-    (e >= 12688 && e <= 12773) ||
-    (e >= 12783 && e <= 12830) ||
-    (e >= 12832 && e <= 12871) ||
-    (e >= 12880 && e <= 42124) ||
-    (e >= 42128 && e <= 42182) ||
-    (e >= 43360 && e <= 43388) ||
-    (e >= 44032 && e <= 55203) ||
-    (e >= 63744 && e <= 64255) ||
-    (e >= 65040 && e <= 65049) ||
-    (e >= 65072 && e <= 65106) ||
-    (e >= 65108 && e <= 65126) ||
-    (e >= 65128 && e <= 65131) ||
-    (e >= 94176 && e <= 94180) ||
-    (e >= 94192 && e <= 94198) ||
-    (e >= 94208 && e <= 101589) ||
-    (e >= 101631 && e <= 101662) ||
-    (e >= 101760 && e <= 101874) ||
-    (e >= 110576 && e <= 110579) ||
-    (e >= 110581 && e <= 110587) ||
-    e === 110589 ||
-    e === 110590 ||
-    (e >= 110592 && e <= 110882) ||
-    e === 110898 ||
-    (e >= 110928 && e <= 110930) ||
-    e === 110933 ||
-    (e >= 110948 && e <= 110951) ||
-    (e >= 110960 && e <= 111355) ||
-    (e >= 119552 && e <= 119638) ||
-    (e >= 119648 && e <= 119670) ||
-    e === 126980 ||
-    e === 127183 ||
-    e === 127374 ||
-    (e >= 127377 && e <= 127386) ||
-    (e >= 127488 && e <= 127490) ||
-    (e >= 127504 && e <= 127547) ||
-    (e >= 127552 && e <= 127560) ||
-    e === 127568 ||
-    e === 127569 ||
-    (e >= 127584 && e <= 127589) ||
-    (e >= 127744 && e <= 127776) ||
-    (e >= 127789 && e <= 127797) ||
-    (e >= 127799 && e <= 127868) ||
-    (e >= 127870 && e <= 127891) ||
-    (e >= 127904 && e <= 127946) ||
-    (e >= 127951 && e <= 127955) ||
-    (e >= 127968 && e <= 127984) ||
-    e === 127988 ||
-    (e >= 127992 && e <= 128062) ||
-    e === 128064 ||
-    (e >= 128066 && e <= 128252) ||
-    (e >= 128255 && e <= 128317) ||
-    (e >= 128331 && e <= 128334) ||
-    (e >= 128336 && e <= 128359) ||
-    e === 128378 ||
-    e === 128405 ||
-    e === 128406 ||
-    e === 128420 ||
-    (e >= 128507 && e <= 128591) ||
-    (e >= 128640 && e <= 128709) ||
-    e === 128716 ||
-    (e >= 128720 && e <= 128722) ||
-    (e >= 128725 && e <= 128728) ||
-    (e >= 128732 && e <= 128735) ||
-    e === 128747 ||
-    e === 128748 ||
-    (e >= 128756 && e <= 128764) ||
-    (e >= 128992 && e <= 129003) ||
-    e === 129008 ||
-    (e >= 129292 && e <= 129338) ||
-    (e >= 129340 && e <= 129349) ||
-    (e >= 129351 && e <= 129535) ||
-    (e >= 129648 && e <= 129660) ||
-    (e >= 129664 && e <= 129674) ||
-    (e >= 129678 && e <= 129734) ||
-    e === 129736 ||
-    (e >= 129741 && e <= 129756) ||
-    (e >= 129759 && e <= 129770) ||
-    (e >= 129775 && e <= 129784) ||
-    (e >= 131072 && e <= 196605) ||
-    (e >= 196608 && e <= 262141)
+    codePoint === 12288 ||
+    (codePoint >= 65281 && codePoint <= 65376) ||
+    (codePoint >= 65504 && codePoint <= 65510)
   );
 }
-export { E, B };
+//@ chunk-m4dvt8pp.js:4083-6354 esm-fingerprint
+function isWideCodePoint(codePoint) {
+  return (
+    (codePoint >= 4352 && codePoint <= 4447) ||
+    codePoint === 8986 ||
+    codePoint === 8987 ||
+    codePoint === 9001 ||
+    codePoint === 9002 ||
+    (codePoint >= 9193 && codePoint <= 9196) ||
+    codePoint === 9200 ||
+    codePoint === 9203 ||
+    codePoint === 9725 ||
+    codePoint === 9726 ||
+    codePoint === 9748 ||
+    codePoint === 9749 ||
+    (codePoint >= 9776 && codePoint <= 9783) ||
+    (codePoint >= 9800 && codePoint <= 9811) ||
+    codePoint === 9855 ||
+    (codePoint >= 9866 && codePoint <= 9871) ||
+    codePoint === 9875 ||
+    codePoint === 9889 ||
+    codePoint === 9898 ||
+    codePoint === 9899 ||
+    codePoint === 9917 ||
+    codePoint === 9918 ||
+    codePoint === 9924 ||
+    codePoint === 9925 ||
+    codePoint === 9934 ||
+    codePoint === 9940 ||
+    codePoint === 9962 ||
+    codePoint === 9970 ||
+    codePoint === 9971 ||
+    codePoint === 9973 ||
+    codePoint === 9978 ||
+    codePoint === 9981 ||
+    codePoint === 9989 ||
+    codePoint === 9994 ||
+    codePoint === 9995 ||
+    codePoint === 10024 ||
+    codePoint === 10060 ||
+    codePoint === 10062 ||
+    (codePoint >= 10067 && codePoint <= 10069) ||
+    codePoint === 10071 ||
+    (codePoint >= 10133 && codePoint <= 10135) ||
+    codePoint === 10160 ||
+    codePoint === 10175 ||
+    codePoint === 11035 ||
+    codePoint === 11036 ||
+    codePoint === 11088 ||
+    codePoint === 11093 ||
+    (codePoint >= 11904 && codePoint <= 11929) ||
+    (codePoint >= 11931 && codePoint <= 12019) ||
+    (codePoint >= 12032 && codePoint <= 12245) ||
+    (codePoint >= 12272 && codePoint <= 12287) ||
+    (codePoint >= 12289 && codePoint <= 12350) ||
+    (codePoint >= 12353 && codePoint <= 12438) ||
+    (codePoint >= 12441 && codePoint <= 12543) ||
+    (codePoint >= 12549 && codePoint <= 12591) ||
+    (codePoint >= 12593 && codePoint <= 12686) ||
+    (codePoint >= 12688 && codePoint <= 12773) ||
+    (codePoint >= 12783 && codePoint <= 12830) ||
+    (codePoint >= 12832 && codePoint <= 12871) ||
+    (codePoint >= 12880 && codePoint <= 42124) ||
+    (codePoint >= 42128 && codePoint <= 42182) ||
+    (codePoint >= 43360 && codePoint <= 43388) ||
+    (codePoint >= 44032 && codePoint <= 55203) ||
+    (codePoint >= 63744 && codePoint <= 64255) ||
+    (codePoint >= 65040 && codePoint <= 65049) ||
+    (codePoint >= 65072 && codePoint <= 65106) ||
+    (codePoint >= 65108 && codePoint <= 65126) ||
+    (codePoint >= 65128 && codePoint <= 65131) ||
+    (codePoint >= 94176 && codePoint <= 94180) ||
+    (codePoint >= 94192 && codePoint <= 94198) ||
+    (codePoint >= 94208 && codePoint <= 101589) ||
+    (codePoint >= 101631 && codePoint <= 101662) ||
+    (codePoint >= 101760 && codePoint <= 101874) ||
+    (codePoint >= 110576 && codePoint <= 110579) ||
+    (codePoint >= 110581 && codePoint <= 110587) ||
+    codePoint === 110589 ||
+    codePoint === 110590 ||
+    (codePoint >= 110592 && codePoint <= 110882) ||
+    codePoint === 110898 ||
+    (codePoint >= 110928 && codePoint <= 110930) ||
+    codePoint === 110933 ||
+    (codePoint >= 110948 && codePoint <= 110951) ||
+    (codePoint >= 110960 && codePoint <= 111355) ||
+    (codePoint >= 119552 && codePoint <= 119638) ||
+    (codePoint >= 119648 && codePoint <= 119670) ||
+    codePoint === 126980 ||
+    codePoint === 127183 ||
+    codePoint === 127374 ||
+    (codePoint >= 127377 && codePoint <= 127386) ||
+    (codePoint >= 127488 && codePoint <= 127490) ||
+    (codePoint >= 127504 && codePoint <= 127547) ||
+    (codePoint >= 127552 && codePoint <= 127560) ||
+    codePoint === 127568 ||
+    codePoint === 127569 ||
+    (codePoint >= 127584 && codePoint <= 127589) ||
+    (codePoint >= 127744 && codePoint <= 127776) ||
+    (codePoint >= 127789 && codePoint <= 127797) ||
+    (codePoint >= 127799 && codePoint <= 127868) ||
+    (codePoint >= 127870 && codePoint <= 127891) ||
+    (codePoint >= 127904 && codePoint <= 127946) ||
+    (codePoint >= 127951 && codePoint <= 127955) ||
+    (codePoint >= 127968 && codePoint <= 127984) ||
+    codePoint === 127988 ||
+    (codePoint >= 127992 && codePoint <= 128062) ||
+    codePoint === 128064 ||
+    (codePoint >= 128066 && codePoint <= 128252) ||
+    (codePoint >= 128255 && codePoint <= 128317) ||
+    (codePoint >= 128331 && codePoint <= 128334) ||
+    (codePoint >= 128336 && codePoint <= 128359) ||
+    codePoint === 128378 ||
+    codePoint === 128405 ||
+    codePoint === 128406 ||
+    codePoint === 128420 ||
+    (codePoint >= 128507 && codePoint <= 128591) ||
+    (codePoint >= 128640 && codePoint <= 128709) ||
+    codePoint === 128716 ||
+    (codePoint >= 128720 && codePoint <= 128722) ||
+    (codePoint >= 128725 && codePoint <= 128728) ||
+    (codePoint >= 128732 && codePoint <= 128735) ||
+    codePoint === 128747 ||
+    codePoint === 128748 ||
+    (codePoint >= 128756 && codePoint <= 128764) ||
+    (codePoint >= 128992 && codePoint <= 129003) ||
+    codePoint === 129008 ||
+    (codePoint >= 129292 && codePoint <= 129338) ||
+    (codePoint >= 129340 && codePoint <= 129349) ||
+    (codePoint >= 129351 && codePoint <= 129535) ||
+    (codePoint >= 129648 && codePoint <= 129660) ||
+    (codePoint >= 129664 && codePoint <= 129674) ||
+    (codePoint >= 129678 && codePoint <= 129734) ||
+    codePoint === 129736 ||
+    (codePoint >= 129741 && codePoint <= 129756) ||
+    (codePoint >= 129759 && codePoint <= 129770) ||
+    (codePoint >= 129775 && codePoint <= 129784) ||
+    (codePoint >= 131072 && codePoint <= 196605) ||
+    (codePoint >= 196608 && codePoint <= 262141)
+  );
+}
+export { isFullwidthCodePoint, isWideCodePoint };

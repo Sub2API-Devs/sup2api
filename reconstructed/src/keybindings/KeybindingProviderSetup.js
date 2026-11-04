@@ -8,11 +8,18 @@
  * pieces: chunk-xe7zq1p4.js (15)
  * attribution: placement 8, fingerprint 2, layout 4, affinity 1
  */
-import { init_react_production, y, R, ce, P, zt } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { TerminalEvent } from "../ink/events/terminal-event.js";
 import { identity } from "../utils/identity.js";
 import { createStore } from "../state/store.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useKeybindingContext, KeybindingProvider } from "./KeybindingContext.js";
 import {
   jsxProd_default,
@@ -42,70 +49,80 @@ import {
 } from "../ink/inputSelectionBridge.js";
 import { isDescendantOf, getRootNode, getFocusManager } from "../ink/focus.js";
 import { BaseBox } from "../ink/components/Box.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-xe7zq1p4.js:3563-3567 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:3563", () => {
+  init_react_production();
+});
 //@ chunk-xe7zq1p4.js:3567-3990 placement
 /**
  * 快捷键动作事件：冒泡、可取消，带动作名、原始按键事件、是否和弦完成与来源；consume 同时阻止原始事件。
  */
-class KeybindingActionEvent extends TerminalEvent {
-  action;
-  sourceEvent;
-  isChordCompletion;
-  origin;
-  constructor(action, r) {
-    super("action", {
-      bubbles: true,
-      cancelable: true,
-    });
-    this.action = action;
-    this.sourceEvent = r?.sourceEvent ?? null;
-    this.isChordCompletion = r?.isChordCompletion ?? false;
-    this.origin = r?.origin ?? "single";
-  }
-  consume() {
-    this.stopPropagation();
-    this.sourceEvent?.preventDefault();
-    this.sourceEvent?.stopImmediatePropagation();
-  }
-  get consumed() {
-    return this._isPropagationStopped();
-  }
-}
+let KeybindingActionEvent; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:3567", () => {
+  KeybindingActionEvent = class KeybindingActionEvent extends TerminalEvent {
+    action;
+    sourceEvent;
+    isChordCompletion;
+    origin;
+    constructor(action, options) {
+      super("action", {
+        bubbles: true,
+        cancelable: true,
+      });
+      this.action = action;
+      this.sourceEvent = options?.sourceEvent ?? null;
+      this.isChordCompletion = options?.isChordCompletion ?? false;
+      this.origin = options?.origin ?? "single";
+    }
+    consume() {
+      this.stopPropagation();
+      this.sourceEvent?.preventDefault();
+      this.sourceEvent?.stopImmediatePropagation();
+    }
+    get consumed() {
+      return this._isPropagationStopped();
+    }
+  };
+});
 //@ chunk-xe7zq1p4.js:3990-4063 placement
 /**
  * 记录各和弦按键使用次数的全局 store（重置时清空）。
  */
-var chordCountsStore = identity(
-  createStore({
-    counts: new Map(),
-  }),
-  (n) =>
-    n.setState(() => ({
+var chordCountsStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:3990", () => {
+  chordCountsStore = identity(
+    createStore({
       counts: new Map(),
-    })),
-);
+    }),
+    (store) =>
+      store.setState(() => ({
+        counts: new Map(),
+      })),
+  );
+});
 //@ chunk-xe7zq1p4.js:4063-4166 placement
 function incrementContextCount(context) {
-  chordCountsStore.setState((r) => {
-    let i = new Map(r.counts);
-    i.set(context, (i.get(context) ?? 0) + 1);
+  chordCountsStore.setState((prevState) => {
+    let nextCounts = new Map(prevState.counts);
+    nextCounts.set(context, (nextCounts.get(context) ?? 0) + 1);
     return {
-      counts: i,
+      counts: nextCounts,
     };
   });
 }
 //@ chunk-xe7zq1p4.js:4166-4326 placement
 function decrementContextCount(context) {
-  chordCountsStore.setState((r) => {
-    let i = r.counts.get(context);
-    if (i === undefined) return r;
-    let o = new Map(r.counts);
-    if (i <= 1) o.delete(context);
-    else o.set(context, i - 1);
+  chordCountsStore.setState((prevState) => {
+    let currentCount = prevState.counts.get(context);
+    if (currentCount === undefined) return prevState;
+    let nextCounts = new Map(prevState.counts);
+    if (currentCount <= 1) nextCounts.delete(context);
+    else nextCounts.set(context, currentCount - 1);
     return {
-      counts: o,
+      counts: nextCounts,
     };
   });
 }
@@ -113,8 +130,8 @@ function decrementContextCount(context) {
 /**
  * 是否统计过该和弦
  */
-function hasChordCount(n, r) {
-  return n.counts.has(r);
+function hasChordCount(state, context) {
+  return state.counts.has(context);
 }
 //@ chunk-xe7zq1p4.js:4367-4379 placement
 /**
@@ -126,35 +143,35 @@ var CHORD_PENDING_TIMEOUT_MS = 3000;
  * 已在快捷键上下文中时直接渲染子元素，否则包一层快捷键初始化组件。
  */
 function KeybindingRoot(props) {
-  let o = w(4);
+  let $ = useMemoCache(4);
   let { children } = props;
   if (useKeybindingContext()) {
-    let a;
-    if (o[0] !== children) {
-      a = jsxProd_default(Fragment, {
+    let plainChildren;
+    if ($[0] !== children) {
+      plainChildren = jsxProd_default(Fragment, {
         children,
       });
-      o[0] = children;
-      o[1] = a;
-    } else a = o[1];
-    return a;
+      $[0] = children;
+      $[1] = plainChildren;
+    } else plainChildren = $[1];
+    return plainChildren;
   }
-  let a;
-  if (o[2] !== children) {
-    a = jsxProd_default(KeybindingSetup, {
+  let wrappedChildren;
+  if ($[2] !== children) {
+    wrappedChildren = jsxProd_default(KeybindingSetup, {
       children,
     });
-    o[2] = children;
-    o[3] = a;
-  } else a = o[3];
-  return a;
+    $[2] = children;
+    $[3] = wrappedChildren;
+  } else wrappedChildren = $[3];
+  return wrappedChildren;
 }
 //@ chunk-xe7zq1p4.js:4577-5904 fingerprint = KeybindingSetup (0.742)
 /**
  * 快捷键系统根组件：首次渲染同步加载绑定，挂载后启动文件监视并订阅热重载；维护待定和弦（超时 Je 毫秒自动取消并弹出 "… cancelled" 通知）、活动上下文集合、动作处理器注册表、预分发处理器、单键事件引用；向下提供 KeybindingProvider，外面包一层 ChordInterceptor。
  */
 function KeybindingSetup({ children }) {
-  let [{ bindings }, setLoadResult] = y(() => {
+  let [{ bindings }, setLoadResult] = useState(() => {
     let result = loadKeybindingsSync(keybindingsState);
     logForDebugging(
       `[keybindings] KeybindingSetup initialized with ${result.bindings.length} bindings, ${result.warnings.length} warnings`,
@@ -163,27 +180,27 @@ function KeybindingSetup({ children }) {
   });
   let timers = useClock();
   let { addNotification } = useNotifications();
-  let pendingChordRef = R(null);
-  let [pendingChord, setPendingChordState] = y(null);
-  let chordTimeoutRef = R(null);
-  let handlerRegistryRef = R(new Map());
-  let activeContextsRef = R(new Set());
-  let preDispatchRef = R(new Set());
-  let singleKeyEventRef = R(null);
-  let [keyHandlerRegistry] = y(createKeybindingRegistryState);
-  let registerActiveContext = ce((context) => {
+  let pendingChordRef = useRef(null);
+  let [pendingChord, setPendingChordState] = useState(null);
+  let chordTimeoutRef = useRef(null);
+  let handlerRegistryRef = useRef(new Map());
+  let activeContextsRef = useRef(new Set());
+  let preDispatchRef = useRef(new Set());
+  let singleKeyEventRef = useRef(null);
+  let [keyHandlerRegistry] = useState(createKeybindingRegistryState);
+  let registerActiveContext = useCallback((context) => {
     activeContextsRef.current.add(context);
     incrementContextCount(context);
   }, []);
-  let unregisterActiveContext = ce((context) => {
+  let unregisterActiveContext = useCallback((context) => {
     activeContextsRef.current.delete(context);
     decrementContextCount(context);
   }, []);
-  let clearChordTimeout = ce(() => {
+  let clearChordTimeout = useCallback(() => {
     chordTimeoutRef.current?.();
     chordTimeoutRef.current = null;
   }, []);
-  let setPendingChord = ce(
+  let setPendingChord = useCallback(
     (pending) => {
       clearChordTimeout();
       if (pending !== null)
@@ -204,7 +221,7 @@ function KeybindingSetup({ children }) {
     },
     [addNotification, clearChordTimeout, timers],
   );
-  P(() => {
+  useEffect(() => {
     initializeKeybindingWatcher(keybindingsState);
     let unsubscribe = keybindingsState.changed.subscribe((result) => {
       setLoadResult(result);
@@ -246,21 +263,32 @@ function KeybindingSetup({ children }) {
 /**
  * 处理器排序：非回退处理器在前；同动作已有非回退处理器时丢弃回退处理器。
  */
-function orderNonFallbackFirst(n) {
-  let r = [...n];
-  let i = new Set(r.filter((o) => !o.fallback).map((o) => o.action));
-  return [...r.filter((o) => !o.fallback), ...r.filter((o) => o.fallback && !i.has(o.action))];
+function orderNonFallbackFirst(registrations) {
+  let copy = [...registrations];
+  let coveredActions = new Set(
+    copy.filter((registration) => !registration.fallback).map((registration) => registration.action),
+  );
+  return [
+    ...copy.filter((registration) => !registration.fallback),
+    ...copy.filter((registration) => registration.fallback && !coveredActions.has(registration.action)),
+  ];
 }
 //@ chunk-xe7zq1p4.js:6074-6125 layout
-function isUnmodifiedKey(n) {
-  return !n.ctrl && !n.meta && !n.superKey;
+function isUnmodifiedKey(keyEvent) {
+  return !keyEvent.ctrl && !keyEvent.meta && !keyEvent.superKey;
 }
 //@ chunk-xe7zq1p4.js:6125-6157 layout
-var RESERVED_KEYSTROKES = NON_REBINDABLE.map((n) => parseKeystroke(n.key));
+var RESERVED_KEYSTROKES; // deferred: uses NON_REBINDABLE (./reservedShortcuts.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-xe7zq1p4.js:6125", () => {
+  RESERVED_KEYSTROKES = NON_REBINDABLE.map((entry) => parseKeystroke(entry.key));
+});
 //@ chunk-xe7zq1p4.js:6157-6225 layout
-function isReservedKeyEvent(n) {
-  let r = keyEventToKeystroke(n);
-  return r !== null && RESERVED_KEYSTROKES.some((i) => keystrokesEqual(i, r));
+function isReservedKeyEvent(keyEvent) {
+  let keystroke = keyEventToKeystroke(keyEvent);
+  return (
+    keystroke !== null &&
+    RESERVED_KEYSTROKES.some((reservedKeystroke) => keystrokesEqual(reservedKeystroke, keystroke))
+  );
 }
 //@ chunk-xe7zq1p4.js:6225-10406 fingerprint = ChordInterceptor (0.407)
 /**
@@ -277,15 +305,15 @@ function ChordInterceptor({
   keyHandlerRegistry,
   children,
 }) {
-  let scopeChainContexts = R([]);
-  let chordStartTarget = R(null);
-  let chordMode = R("legacy");
-  let runPreDispatch = ce(
-    (s, d, f, C) => {
-      for (let g of preDispatchRef.current)
+  let scopeChainContexts = useRef([]);
+  let chordStartTarget = useRef(null);
+  let chordMode = useRef("legacy");
+  let runPreDispatch = useCallback(
+    (event, key, nativeEvent, context) => {
+      for (let preDispatch of preDispatchRef.current)
         try {
-          if (g.handler(s, d, f) === true) {
-            C();
+          if (preDispatch.handler(event, key, nativeEvent) === true) {
+            context();
             return true;
           }
         } catch (error) {
@@ -295,68 +323,76 @@ function ChordInterceptor({
     },
     [preDispatchRef],
   );
-  let dispatchChordAction = (s, d, action, C) => {
-    let g = handlerRegistryRef.current;
-    if (!g) return false;
-    let flattened = [...g.values()].flatMap((v) => [...v]);
-    let A = [
-      ...new Set(flattened.filter((v) => !v.fallback).map((v) => v.context)),
+  let dispatchChordAction = (event, key, action, contexts) => {
+    let registry = handlerRegistryRef.current;
+    if (!registry) return false;
+    let flattened = [...registry.values()].flatMap((entriesA) => [...entriesA]);
+    let scopes = [
+      ...new Set(
+        flattened
+          .filter((registration) => !registration.fallback)
+          .map((registration) => registration.context),
+      ),
       ...activeContexts,
       "Global",
     ];
-    let keyWithChordState = resolveKeyWithChordState(s, A, bindings, d);
+    let keyWithChordState = resolveKeyWithChordState(event, scopes, bindings, key);
     let action_2 =
       keyWithChordState.type === "match" &&
-      flattened.some((v) => !v.fallback && v.action === keyWithChordState.action)
+      flattened.some(
+        (registration) => !registration.fallback && registration.action === keyWithChordState.action,
+      )
         ? keyWithChordState.action
         : null;
-    let V = action_2 === null ? [action] : [action_2, action];
-    let k = isReservedKeyEvent(s);
-    for (let v of V) {
-      let [O] = orderNonFallbackFirst(g.get(v) ?? []).filter((E) => !(E.fallback && k));
-      if (O) {
-        O.handler();
-        logKeybindingFired(v);
-        C();
+    let actions = action_2 === null ? [action] : [action_2, action];
+    let isReserved = isReservedKeyEvent(event);
+    for (let candidateAction of actions) {
+      let [handler] = orderNonFallbackFirst(registry.get(candidateAction) ?? []).filter(
+        (registration) => !(registration.fallback && isReserved),
+      );
+      if (handler) {
+        handler.handler();
+        logKeybindingFired(candidateAction);
+        contexts();
         return true;
       }
     }
     return false;
   };
-  let dispatchLegacy = (s, d, f, C, g, h = false) => {
+  let dispatchLegacy = (event, key, nativeEvent, context, contexts, isChordContinuation = false) => {
     let registry = handlerRegistryRef.current;
-    let m = isReservedKeyEvent(s);
+    let isReserved = isReservedKeyEvent(event);
     let handlerContexts = new Set();
     if (registry) {
       for (let handlers of registry.values())
         for (let registration of handlers)
-          if (!(m && registration.fallback)) handlerContexts.add(registration.context);
+          if (!(isReserved && registration.fallback)) handlerContexts.add(registration.context);
     }
-    let contexts = [...handlerContexts, ...activeContexts, "Global"];
-    let k = pendingChordRef.current;
-    let wasInChord = k !== null;
-    let keyWithChordState = resolveKeyWithChordState(s, contexts, bindings, k);
+    let contexts_2 = [...handlerContexts, ...activeContexts, "Global"];
+    let pendingChord = pendingChordRef.current;
+    let wasInChord = pendingChord !== null;
+    let keyWithChordState = resolveKeyWithChordState(event, contexts_2, bindings, pendingChord);
     switch (keyWithChordState.type) {
       case "chord_started":
         chordMode.current = "legacy";
         setPendingChord(keyWithChordState.pending);
-        g();
+        contexts();
         return;
       case "chord_cancelled":
         setPendingChord(null);
-        g();
+        contexts();
         return;
       case "unbound":
         setPendingChord(null);
         if (wasInChord) {
-          g();
+          contexts();
           return;
         }
         break;
       case "match":
         setPendingChord(null);
         if (wasInChord) {
-          dispatchChordAction(s, k, keyWithChordState.action, g);
+          dispatchChordAction(event, pendingChord, keyWithChordState.action, contexts);
           return;
         }
         break;
@@ -364,149 +400,162 @@ function ChordInterceptor({
         break;
     }
     if (!registry) return;
-    if (!h && runPreDispatch(d, f, C, g)) return;
-    let E = new Map();
-    let q = orderNonFallbackFirst([...registry.values()].flatMap((D) => [...D]));
-    let K = isUnmodifiedKey(s) || m;
-    let ne;
-    for (let registration_0 of q) {
-      if (!registration_0.singleKey || (registration_0.fallback && K)) continue;
-      let L;
+    if (!isChordContinuation && runPreDispatch(key, nativeEvent, context, contexts)) return;
+    let handledByContext = new Map();
+    let registrations = orderNonFallbackFirst([...registry.values()].flatMap((entriesB) => [...entriesB]));
+    let allowFallback = isUnmodifiedKey(event) || isReserved;
+    let handled;
+    for (let registration_0 of registrations) {
+      if (!registration_0.singleKey || (registration_0.fallback && allowFallback)) continue;
+      let result;
       if (registration_0.fallback && !activeContexts.has(registration_0.context)) {
-        ne ??= (() => {
-          let keyWithChordState = resolveKeyWithChordState(s, [...activeContexts, "Global"], bindings, null);
+        handled ??= (() => {
+          let keyWithChordState = resolveKeyWithChordState(
+            event,
+            [...activeContexts, "Global"],
+            bindings,
+            null,
+          );
           return keyWithChordState.type === "match" ? keyWithChordState.action : null;
         })();
-        L = ne;
-      } else L = E.get(registration_0.context);
-      if (L === undefined) {
+        result = handled;
+      } else result = handledByContext.get(registration_0.context);
+      if (result === undefined) {
         let keyWithChordState = resolveKeyWithChordState(
-          s,
+          event,
           [...activeContexts, registration_0.context, "Global"],
           bindings,
           null,
         );
-        L = keyWithChordState.type === "match" ? keyWithChordState.action : null;
-        E.set(registration_0.context, L);
+        result = keyWithChordState.type === "match" ? keyWithChordState.action : null;
+        handledByContext.set(registration_0.context, result);
       }
-      if (L === registration_0.action) {
-        let z = singleKeyEventRef.current;
-        singleKeyEventRef.current = s;
-        let re;
+      if (result === registration_0.action) {
+        let singleKeyEvent = singleKeyEventRef.current;
+        singleKeyEventRef.current = event;
+        let outcome;
         try {
-          re = registration_0.handler();
+          outcome = registration_0.handler();
         } finally {
-          singleKeyEventRef.current = z;
+          singleKeyEventRef.current = singleKeyEvent;
         }
-        if (re !== false) {
-          logKeybindingFired(L);
-          g();
+        if (outcome !== false) {
+          logKeybindingFired(result);
+          contexts();
           return;
         }
       }
     }
   };
-  let dispatchKey = (sourceEvent, d, f, C, g, h) => {
+  let dispatchKey = (sourceEvent, key, nativeEvent, context, contexts, isChordContinuation) => {
     let handleInput = keyHandlerRegistry;
-    let m = (action, E) => {};
+    let noopHandler = (action, context) => {};
     if (handleInput.swallowAll.size > 0) {
-      m(null, true);
-      h();
+      noopHandler(null, true);
+      isChordContinuation();
       return;
     }
     if (pendingChordRef.current !== null && chordMode.current === "legacy") {
-      m(null, false);
-      dispatchLegacy(d, f, C, g, h);
+      noopHandler(null, false);
+      dispatchLegacy(key, nativeEvent, context, contexts, isChordContinuation);
       return;
     }
-    let keybindingScopes = getKeybindingScopes(sourceEvent.target);
-    let V = pendingChordRef.current !== null && chordMode.current === "scopeChain";
-    if (keybindingScopes.length === 0 && handleInput.preemptiveScopes.size === 0 && !V) {
-      m(null, false);
-      dispatchLegacy(d, f, C, g, h);
+    let contexts_2 = getKeybindingScopes(sourceEvent.target);
+    let usesScopeChain = pendingChordRef.current !== null && chordMode.current === "scopeChain";
+    if (contexts_2.length === 0 && handleInput.preemptiveScopes.size === 0 && !usesScopeChain) {
+      noopHandler(null, false);
+      dispatchLegacy(key, nativeEvent, context, contexts, isChordContinuation);
       return;
     }
-    let node = asLayoutNode(sourceEvent.target);
-    if (handleInput.preemptiveScopes.size > 0 && !V) {
-      let O = [...handleInput.preemptiveScopes.keys(), "Global"];
-      let keyInScopeChain = resolveKeyInScopeChain(d, O, bindings, null);
-      if (keyInScopeChain.type === "match" && node) {
+    let targetNode = asLayoutNode(sourceEvent.target);
+    if (handleInput.preemptiveScopes.size > 0 && !usesScopeChain) {
+      let scopes = [...handleInput.preemptiveScopes.keys(), "Global"];
+      let keyInScopeChain = resolveKeyInScopeChain(key, scopes, bindings, null);
+      if (keyInScopeChain.type === "match" && targetNode) {
         if (
           dispatchKeybindingEvent(
-            node,
+            targetNode,
             sourceEvent,
             keyInScopeChain.action,
             false,
             sourceEvent.type === "wheel" ? "wheel" : "single",
           )
         ) {
-          m(keyInScopeChain.action, true);
+          noopHandler(keyInScopeChain.action, true);
           logKeybindingFired(keyInScopeChain.action);
           return;
         }
       }
     }
-    if (!V && node?.attributes.textEntry === true && isUnmodifiedKey(d) && [...d.key].length === 1) {
-      m(null, runPreDispatch(f, C, g, h));
+    if (
+      !usesScopeChain &&
+      targetNode?.attributes.textEntry === true &&
+      isUnmodifiedKey(key) &&
+      [...key.key].length === 1
+    ) {
+      noopHandler(null, runPreDispatch(nativeEvent, context, contexts, isChordContinuation));
       return;
     }
-    if (V) {
-      let O = pendingChordRef.current;
-      let keyInScopeChain = resolveKeyInScopeChain(d, scopeChainContexts.current, bindings, O);
+    if (usesScopeChain) {
+      let pendingChord = pendingChordRef.current;
+      let keyInScopeChain = resolveKeyInScopeChain(key, scopeChainContexts.current, bindings, pendingChord);
       if (keyInScopeChain.type === "chord_started") {
         chordMode.current = "scopeChain";
         setPendingChord(keyInScopeChain.pending);
-        h();
-        m(null, true);
+        isChordContinuation();
+        noopHandler(null, true);
         return;
       }
       if (keyInScopeChain.type === "match") {
         setPendingChord(null);
-        let q = chordStartTarget.current;
+        let chordStartTarget_2 = chordStartTarget.current;
         chordStartTarget.current = null;
         scopeChainContexts.current = [];
-        let K = q && node && isDescendantOf(q, getRootNode(node)) ? q : node;
-        if (K) {
-          if (dispatchKeybindingEvent(K, sourceEvent, keyInScopeChain.action, true, "chord")) {
-            m(keyInScopeChain.action, true);
+        let ownerNode =
+          chordStartTarget_2 && targetNode && isDescendantOf(chordStartTarget_2, getRootNode(targetNode))
+            ? chordStartTarget_2
+            : targetNode;
+        if (ownerNode) {
+          if (dispatchKeybindingEvent(ownerNode, sourceEvent, keyInScopeChain.action, true, "chord")) {
+            noopHandler(keyInScopeChain.action, true);
             logKeybindingFired(keyInScopeChain.action);
             return;
           }
         }
-        let ne = dispatchChordAction(d, O, keyInScopeChain.action, h);
-        m(keyInScopeChain.action, ne);
+        let handled = dispatchChordAction(key, pendingChord, keyInScopeChain.action, isChordContinuation);
+        noopHandler(keyInScopeChain.action, handled);
         return;
       }
       chordStartTarget.current = null;
       scopeChainContexts.current = [];
-      m(null, false);
-      dispatchLegacy(d, f, C, g, h);
+      noopHandler(null, false);
+      dispatchLegacy(key, nativeEvent, context, contexts, isChordContinuation);
       return;
     }
-    let keyInScopeChain = resolveKeyInScopeChain(d, keybindingScopes, bindings, null);
+    let keyInScopeChain = resolveKeyInScopeChain(key, contexts_2, bindings, null);
     switch (keyInScopeChain.type) {
       case "chord_started":
-        scopeChainContexts.current = keybindingScopes;
-        chordStartTarget.current = node ?? null;
+        scopeChainContexts.current = contexts_2;
+        chordStartTarget.current = targetNode ?? null;
         chordMode.current = "scopeChain";
         setPendingChord(keyInScopeChain.pending);
-        h();
-        m(null, true);
+        isChordContinuation();
+        noopHandler(null, true);
         return;
       case "match": {
-        if (!node) {
-          m(keyInScopeChain.action, false);
-          dispatchLegacy(d, f, C, g, h);
+        if (!targetNode) {
+          noopHandler(keyInScopeChain.action, false);
+          dispatchLegacy(key, nativeEvent, context, contexts, isChordContinuation);
           return;
         }
-        if (runPreDispatch(f, C, g, h)) {
+        if (runPreDispatch(nativeEvent, context, contexts, isChordContinuation)) {
           setPendingChord(null);
-          m(keyInScopeChain.action, true);
+          noopHandler(keyInScopeChain.action, true);
           return;
         }
         if (
           dispatchKeybindingEvent(
-            node,
+            targetNode,
             sourceEvent,
             keyInScopeChain.action,
             false,
@@ -514,36 +563,36 @@ function ChordInterceptor({
           )
         ) {
           setPendingChord(null);
-          m(keyInScopeChain.action, true);
+          noopHandler(keyInScopeChain.action, true);
           logKeybindingFired(keyInScopeChain.action);
           return;
         }
-        m(keyInScopeChain.action, false);
-        dispatchLegacy(d, f, C, g, h, true);
+        noopHandler(keyInScopeChain.action, false);
+        dispatchLegacy(key, nativeEvent, context, contexts, isChordContinuation, true);
         return;
       }
       case "unbound":
-        if (runPreDispatch(f, C, g, h)) {
+        if (runPreDispatch(nativeEvent, context, contexts, isChordContinuation)) {
           setPendingChord(null);
-          m(null, true);
+          noopHandler(null, true);
           return;
         }
         setPendingChord(null);
-        m(null, false);
+        noopHandler(null, false);
         return;
       default:
-        m(null, false);
-        dispatchLegacy(d, f, C, g, h);
+        noopHandler(null, false);
+        dispatchLegacy(key, nativeEvent, context, contexts, isChordContinuation);
         return;
     }
   };
-  let onKeyDownCapture = (event) => {
-    let { input, key } = toInkKey(event);
-    dispatchKey(event, event, input, key, event.sequence, () => consumeKeyEvent(event));
+  let onKeyDownCapture = (keyEvent) => {
+    let { input, key } = toInkKey(keyEvent);
+    dispatchKey(keyEvent, keyEvent, input, key, keyEvent.sequence, () => consumeKeyEvent(keyEvent));
   };
   let onWheelCapture = (event) => {
     if (hasWheelHandlerBetween(event.target, event.currentTarget, event.col, event.row)) return;
-    let d = {
+    let value = {
       name: event.deltaY < 0 ? "wheelup" : "wheeldown",
       key: "",
       ctrl: event.ctrl,
@@ -551,7 +600,7 @@ function ChordInterceptor({
       meta: event.meta,
       superKey: false,
     };
-    let f = {
+    let value_2 = {
       upArrow: false,
       downArrow: false,
       leftArrow: false,
@@ -572,30 +621,30 @@ function ChordInterceptor({
       meta: event.meta,
       super: false,
     };
-    dispatchKey(event, d, "", f, "", () => consumeKeyEvent(event));
+    dispatchKey(event, value, "", value_2, "", () => consumeKeyEvent(event));
   };
-  let rootRef = R(null);
-  zt(() => {
+  let rootRef = useRef(null);
+  useLayoutEffect(() => {
     if (!rootRef.current) return;
     let focusManager = getFocusManager(rootRef.current);
-    let d = () => {
-      let f = rootRef.current;
-      if (!f || focusManager.activeElement === f) return;
+    let cleanup = () => {
+      let root = rootRef.current;
+      if (!root || focusManager.activeElement === root) return;
       if (focusManager.activeElement === null) {
-        focusManager.focus(f);
+        focusManager.focus(root);
         return;
       }
-      let parentNode = f.parentNode;
+      let parentNode = root.parentNode;
       while (parentNode) {
         if (parentNode === focusManager.activeElement) {
-          focusManager.focus(f);
+          focusManager.focus(root);
           return;
         }
         parentNode = parentNode.parentNode;
       }
     };
-    d();
-    return focusManager.subscribe(d);
+    cleanup();
+    return focusManager.subscribe(cleanup);
   }, []);
   return jsxProd_default(BaseBox, {
     ref: rootRef,

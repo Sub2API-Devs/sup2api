@@ -5,15 +5,15 @@
  * pieces: chunk-82d8c88w.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_safe_buffer } from "../safe-buffer/index.js";
 import { require_ecdsa_sig_formatter } from "../ecdsa-sig-formatter/src/ecdsa-sig-formatter.js";
 import { require_buffer_equal_constant_time } from "../buffer-equal-constant-time/index.js";
 
 //@ chunk-82d8c88w.js:4461-7580 cjs-fingerprint
-var require_jwa = x(function (cjsExports, cjsModule) {
-  var g = require_safe_buffer().Buffer;
-  var c = importMetaRequire("crypto");
+var require_jwa = __commonJS(function (cjsExports, cjsModule) {
+  var BufferCtor = require_safe_buffer().Buffer;
+  var cryptoModule = importMetaRequire("crypto");
   var formatEcdsa = require_ecdsa_sig_formatter();
   var util = importMetaRequire("util");
   var MSG_INVALID_ALGORITHM = `"%s" is not a valid algorithm.
@@ -22,13 +22,13 @@ var require_jwa = x(function (cjsExports, cjsModule) {
   var MSG_INVALID_SECRET = "secret must be a string or buffer";
   var MSG_INVALID_VERIFIER_KEY = "key must be a string or a buffer";
   var MSG_INVALID_SIGNER_KEY = "key must be a string, a buffer or an object";
-  var supportsKeyObjects = typeof c.createPublicKey === "function";
+  var supportsKeyObjects = typeof cryptoModule.createPublicKey === "function";
   if (supportsKeyObjects) {
     MSG_INVALID_VERIFIER_KEY += " or a KeyObject";
     MSG_INVALID_SECRET += "or a KeyObject";
   }
   function checkIsPublicKey(key) {
-    if (g.isBuffer(key)) return;
+    if (BufferCtor.isBuffer(key)) return;
     if (typeof key === "string") return;
     if (!supportsKeyObjects) throw typeError(MSG_INVALID_VERIFIER_KEY);
     if (typeof key !== "object") throw typeError(MSG_INVALID_VERIFIER_KEY);
@@ -37,13 +37,13 @@ var require_jwa = x(function (cjsExports, cjsModule) {
     if (typeof key.export !== "function") throw typeError(MSG_INVALID_VERIFIER_KEY);
   }
   function checkIsPrivateKey(key) {
-    if (g.isBuffer(key)) return;
+    if (BufferCtor.isBuffer(key)) return;
     if (typeof key === "string") return;
     if (typeof key === "object") return;
     throw typeError(MSG_INVALID_SIGNER_KEY);
   }
   function checkIsSecretKey(key) {
-    if (g.isBuffer(key)) return;
+    if (BufferCtor.isBuffer(key)) return;
     if (typeof key === "string") return key;
     if (!supportsKeyObjects) throw typeError(MSG_INVALID_SECRET);
     if (typeof key !== "object") throw typeError(MSG_INVALID_SECRET);
@@ -65,7 +65,7 @@ var require_jwa = x(function (cjsExports, cjsModule) {
     return TypeError(errMsg);
   }
   function bufferOrString(obj) {
-    return g.isBuffer(obj) || typeof obj === "string";
+    return BufferCtor.isBuffer(obj) || typeof obj === "string";
   }
   function normalizeInput(thing) {
     if (!bufferOrString(thing)) thing = JSON.stringify(thing);
@@ -75,17 +75,17 @@ var require_jwa = x(function (cjsExports, cjsModule) {
     return function (thing, secret) {
       checkIsSecretKey(secret);
       thing = normalizeInput(thing);
-      var hmac = c.createHmac("sha" + bits, secret);
+      var hmac = cryptoModule.createHmac("sha" + bits, secret);
       var sig = (hmac.update(thing), hmac.digest("base64"));
       return fromBase64(sig);
     };
   }
   var bufferEqual;
   var timingSafeEqual =
-    "timingSafeEqual" in c
+    "timingSafeEqual" in cryptoModule
       ? function (a, b) {
           if (a.byteLength !== b.byteLength) return false;
-          return c.timingSafeEqual(a, b);
+          return cryptoModule.timingSafeEqual(a, b);
         }
       : function (a, b) {
           if (!bufferEqual) bufferEqual = require_buffer_equal_constant_time();
@@ -94,14 +94,14 @@ var require_jwa = x(function (cjsExports, cjsModule) {
   function createHmacVerifier(bits) {
     return function (thing, signature, secret) {
       var computedSig = createHmacSigner(bits)(thing, secret);
-      return timingSafeEqual(g.from(signature), g.from(computedSig));
+      return timingSafeEqual(BufferCtor.from(signature), BufferCtor.from(computedSig));
     };
   }
   function createKeySigner(bits) {
     return function (thing, privateKey) {
       checkIsPrivateKey(privateKey);
       thing = normalizeInput(thing);
-      var signer = c.createSign("RSA-SHA" + bits);
+      var signer = cryptoModule.createSign("RSA-SHA" + bits);
       var sig = (signer.update(thing), signer.sign(privateKey, "base64"));
       return fromBase64(sig);
     };
@@ -111,7 +111,7 @@ var require_jwa = x(function (cjsExports, cjsModule) {
       checkIsPublicKey(publicKey);
       thing = normalizeInput(thing);
       signature = toBase64(signature);
-      var verifier = c.createVerify("RSA-SHA" + bits);
+      var verifier = cryptoModule.createVerify("RSA-SHA" + bits);
       verifier.update(thing);
       return verifier.verify(publicKey, signature, "base64");
     };
@@ -120,14 +120,14 @@ var require_jwa = x(function (cjsExports, cjsModule) {
     return function (thing, privateKey) {
       checkIsPrivateKey(privateKey);
       thing = normalizeInput(thing);
-      var signer = c.createSign("RSA-SHA" + bits);
+      var signer = cryptoModule.createSign("RSA-SHA" + bits);
       var sig =
         (signer.update(thing),
         signer.sign(
           {
             key: privateKey,
-            padding: c.constants.RSA_PKCS1_PSS_PADDING,
-            saltLength: c.constants.RSA_PSS_SALTLEN_DIGEST,
+            padding: cryptoModule.constants.RSA_PKCS1_PSS_PADDING,
+            saltLength: cryptoModule.constants.RSA_PSS_SALTLEN_DIGEST,
           },
           "base64",
         ));
@@ -139,13 +139,13 @@ var require_jwa = x(function (cjsExports, cjsModule) {
       checkIsPublicKey(publicKey);
       thing = normalizeInput(thing);
       signature = toBase64(signature);
-      var verifier = c.createVerify("RSA-SHA" + bits);
+      var verifier = cryptoModule.createVerify("RSA-SHA" + bits);
       verifier.update(thing);
       return verifier.verify(
         {
           key: publicKey,
-          padding: c.constants.RSA_PKCS1_PSS_PADDING,
-          saltLength: c.constants.RSA_PSS_SALTLEN_DIGEST,
+          padding: cryptoModule.constants.RSA_PKCS1_PSS_PADDING,
+          saltLength: cryptoModule.constants.RSA_PSS_SALTLEN_DIGEST,
         },
         signature,
         "base64",

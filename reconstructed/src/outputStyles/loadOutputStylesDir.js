@@ -37,20 +37,20 @@ function managedOutputStylesDir() {
 /**
  * 按主机与会话键缓存地加载某一层（managed/user/project）的 *.md 输出风格，解析 frontmatter 的 name/description/keep-coding-instructions。
  */
-function getOutputStyleDirStyles(cwd, n) {
+function getOutputStyleDirStyles(cwd, context) {
   return getOrCreate(
     getHostState().outputStyleDirStyles,
     `${managedFolderCondition()}${keyOrNull(cwd)}`,
-    () => getOutputStyleDirStyles_2(cwd, n),
+    () => getOutputStyleDirStyles_2(cwd, context),
   );
 }
 //@ chunk-e6aww6q8.js:805362-806189 fingerprint = getOutputStyleDirStyles (0.682)
 /**
  * 从 managed/user/project 的 output-styles 目录加载 *.md 输出风格：name 取 frontmatter.name 或文件名，description 缺省取正文首行，keep-coding-instructions 解析为布尔；force-for-plugin 只对插件风格有效，这里告警忽略。
  */
-async function getOutputStyleDirStyles_2(cwd, n) {
+async function getOutputStyleDirStyles_2(cwd, context) {
   try {
-    let sorted = (await loadMarkdownFilesCached(OUTPUT_STYLES, cwd, n))
+    let sorted = (await loadMarkdownFilesCached(OUTPUT_STYLES, cwd, context))
       .map(({ filePath, frontmatter, content, source, baseDir }) => {
         try {
           checkFrontmatterShadow("output-style", frontmatter);

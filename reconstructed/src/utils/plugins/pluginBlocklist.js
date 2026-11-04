@@ -35,10 +35,10 @@ function detectDelistedPlugins(installedPlugins, marketplace, marketplaceName) {
   for (let pluginId of Object.keys(installedPlugins.plugins)) {
     if (!pluginId.endsWith(suffix)) continue;
     let pluginName = pluginId.slice(0, -suffix.length);
-    let S =
+    let renamed =
       marketplace.renames &&
       resolvePluginRename(pluginName, marketplace.renames, marketplacePluginNames)?.kind === "renamed";
-    if (!marketplacePluginNames.has(pluginName) && !S) delisted.push(pluginId);
+    if (!marketplacePluginNames.has(pluginName) && !renamed) delisted.push(pluginId);
   }
   return delisted;
 }
@@ -46,12 +46,14 @@ function detectDelistedPlugins(installedPlugins, marketplace, marketplaceName) {
 /**
  * 启动时扫描所有市场：设置了 forceRemoveDeletedPlugins 的市场中被下架的已安装插件自动卸载并标记（flagged），记 tengu_plugin_delisted_enforcement。
  */
-async function detectAndUninstallDelistedPlugins(e) {
-  await loadFlaggedPlugins(e);
+async function detectAndUninstallDelistedPlugins(storageV5) {
+  await loadFlaggedPlugins(storageV5);
   let installedPlugins =
-    isStorageV5Enabled() && e !== undefined ? await getInstalledPluginsAsync(e) : getInstalledPlugins();
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? await getInstalledPluginsAsync(storageV5)
+      : getInstalledPlugins();
   let alreadyFlagged = getFlaggedPlugins();
-  let knownMarketplaces = await loadKnownMarketplacesSafe(e);
+  let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
   let newlyFlagged = [];
   for (let [key, value] of Object.entries(knownMarketplaces))
     try {
@@ -62,10 +64,10 @@ async function detectAndUninstallDelistedPlugins(e) {
       )
         continue;
       let marketplace = isPluginDirectorySource(value.source)
-        ? await getMarketplaceCacheOnly(key, e, {
+        ? await getMarketplaceCacheOnly(key, storageV5, {
             registryEntry: value,
           })
-        : await getMarketplace(key, e);
+        : await getMarketplace(key, storageV5);
       if (marketplace === null) {
         if (Object.keys(installedPlugins.plugins).some((key_2) => key_2.endsWith(`@${key}`)))
           logEvent("tengu_plugin_delisted_enforcement", {
@@ -85,14 +87,14 @@ async function detectAndUninstallDelistedPlugins(e) {
           let { scope } = installation;
           if (scope !== "user" && scope !== "project" && scope !== "local") continue;
           try {
-            let y = await uninstallPluginOp(pluginId, scope, true, e, {
+            let outcome = await uninstallPluginOp(pluginId, scope, true, storageV5, {
               settingsStillOn: "remove-anyway",
             });
             logEvent("tengu_plugin_delisted_enforcement", {
-              outcome: y.success ? lit("uninstalled") : lit("uninstall-failed"),
+              outcome: outcome.success ? lit("uninstalled") : lit("uninstall-failed"),
               scope: fromEnum(scope),
-              ...(!y.success && {
-                error_kind: fromEnum(classifyPluginCommandError(y.message)),
+              ...(!outcome.success && {
+                error_kind: fromEnum(classifyPluginCommandError(outcome.message)),
               }),
               ...buildPluginEventFieldsFromId(pluginId, policyEnabledPluginNameSet()),
             });
@@ -111,7 +113,7 @@ async function detectAndUninstallDelistedPlugins(e) {
             });
           }
         }
-        await addFlaggedPlugin(pluginId, e);
+        await addFlaggedPlugin(pluginId, storageV5);
         newlyFlagged.push(pluginId);
       }
     } catch (error) {

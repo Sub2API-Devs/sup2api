@@ -35,13 +35,13 @@ function systemPromptSection(name, compute) {
 async function computeAndCacheSection(
   name,
   compute,
-  { epoch: r = getSystemPromptSectionEpoch(), sentAs: s = secondArgument } = {},
+  { epoch = getSystemPromptSectionEpoch(), sentAs = secondArgument } = {},
 ) {
-  let h = await name.compute();
-  let promptSection = await resolvePromptSection(compute, h);
-  if (getSystemPromptSectionEpoch() === r) {
+  let body = await name.compute();
+  let promptSection = await resolvePromptSection(compute, body);
+  if (getSystemPromptSectionEpoch() === epoch) {
     setSystemPromptSectionCacheEntry(name.name, promptSection);
-    noteSectionAnswer(name.name, s(name.name, h), s(name.name, promptSection));
+    noteSectionAnswer(name.name, sentAs(name.name, body), sentAs(name.name, promptSection));
   }
   return promptSection;
 }
@@ -51,19 +51,19 @@ async function computeAndCacheSection(
  */
 async function resolveSystemPromptSections(
   sections,
-  { isStored: n = true, hookOrigin: r, since: s, sentAs: h = secondArgument } = {},
+  { isStored = true, hookOrigin, since, sentAs = secondArgument } = {},
 ) {
   let cache = getSystemPromptSectionCache();
   return Promise.all(
     sections.map(async (section) => {
       if (!section.cacheBreak && cache.has(section.name)) return cache.get(section.name) ?? null;
       let compute = sectionIdOf(section.name);
-      return n
+      return isStored
         ? computeAndCacheSection(section, compute, {
-            epoch: s,
-            sentAs: h,
+            epoch: since,
+            sentAs,
           })
-        : resolvePromptSection(compute, await section.compute(), r);
+        : resolvePromptSection(compute, await section.compute(), hookOrigin);
     }),
   );
 }
@@ -71,13 +71,13 @@ async function resolveSystemPromptSections(
 /**
  * 取系统提示词分段缓存中的内容，未缓存时计算并写入（按名称与参数组成键）；实为系统提示分段缓存，疑似放错文件。
  */
-function cachedSectionFor(compute, n) {
-  let name = `${compute}${ENVIRONMENT_DEDUP_SEPARATOR}${JSON.stringify(n)}`;
+function cachedSectionFor(compute, epoch) {
+  let name = `${compute}${ENVIRONMENT_DEDUP_SEPARATOR}${JSON.stringify(epoch)}`;
   let systemPromptSectionCache = getSystemPromptSectionCache();
   return systemPromptSectionCache.has(name)
     ? Promise.resolve(systemPromptSectionCache.get(name) ?? null)
     : computeAndCacheSection(
-        systemPromptSection(name, () => n),
+        systemPromptSection(name, () => epoch),
         compute,
       );
 }

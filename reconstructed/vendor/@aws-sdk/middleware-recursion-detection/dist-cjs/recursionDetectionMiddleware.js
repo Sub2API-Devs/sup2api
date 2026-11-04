@@ -5,18 +5,18 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_invoke_store } from "../../../@aws/lambda-invoke-store/dist-cjs/invoke-store.js";
-import { require_protocol_http } from "../../../@smithy/protocol-http/dist-cjs/index.js";
+import { require_protocol_http as require_protocol_http_3 } from "../../../@smithy/protocol-http/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:4337-4991 cjs-fingerprint
-var require_recursionDetectionMiddleware = x(function (cjsExports) {
+var require_recursionDetectionMiddleware = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.recursionDetectionMiddleware = undefined;
   var lambda_invoke_store_1 = require_invoke_store();
-  var protocol_http_1 = require_protocol_http();
+  var protocol_http_1 = require_protocol_http_3();
   var TRACE_ID_HEADER_NAME = "X-Amzn-Trace-Id";
   var ENV_LAMBDA_FUNCTION_NAME = "AWS_LAMBDA_FUNCTION_NAME";
   var ENV_TRACE_ID = "_X_AMZN_TRACE_ID";

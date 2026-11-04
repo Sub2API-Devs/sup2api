@@ -22,22 +22,23 @@ import { logForDebugging } from "../../utils/debug.js";
 import { identity as identity_2 } from "../../utils/identity.js";
 import { createValueSlot } from "../../utils/valueSlot.js";
 import { isPlainDataObject } from "../../utils/hooks/functionHookMatchers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3716716-3716888 placement
 /**
  * $.audio.play 表项：以插件根目录与存储 id 交给播放预算器播放。
  */
-var AUDIO_PLAY_API = (e) => ({
-  run: async (n, r) => {
-    let { pluginRoot, pluginStorageId } = requireLoadedPluginArgs(e, r, "audio.play");
-    return e.budgets.plays.play(
+var AUDIO_PLAY_API = (apiEntry) => ({
+  run: async (args, caller) => {
+    let { pluginRoot, pluginStorageId } = requireLoadedPluginArgs(apiEntry, caller, "audio.play");
+    return apiEntry.budgets.plays.play(
       {
-        ...n,
+        ...args,
         root: pluginRoot,
         pluginStorageId,
       },
-      r.plugin,
-      r.signal,
+      caller.plugin,
+      caller.signal,
     );
   },
 });
@@ -45,40 +46,40 @@ var AUDIO_PLAY_API = (e) => ({
 /**
  * 为 prompt.fill/submit 等生成表项：校验 {text} 并告警超长文本，run 时带上 mode、decorations、cursor 与插件来源。
  */
-var createPromptTextApi = (e, n, promptSuggestOp) => ({
-  check: (s, h) => {
-    let text = s?.text;
-    if (!(s !== undefined && typeof text === "string")) return "takes { text } (a string)";
-    let w = n(s);
-    if (w === undefined) warnOversizedPluginText(h.plugin, e, text.length);
-    return w;
+var createPromptTextApi = (apiName, checkSize, promptSuggestOp) => ({
+  check: (args, caller) => {
+    let text = args?.text;
+    if (!(args !== undefined && typeof text === "string")) return "takes { text } (a string)";
+    let sizeProblem = checkSize(args);
+    if (sizeProblem === undefined) warnOversizedPluginText(caller.plugin, apiName, text.length);
+    return sizeProblem;
   },
-  run: (s, h) => {
-    let y = "mode" in s && isPromptSectionMode(s.mode);
-    let S = "decorations" in s && s.decorations !== undefined;
-    let w = "cursor" in s && s.cursor !== undefined;
+  run: (args, caller) => {
+    let hasMode = "mode" in args && isPromptSectionMode(args.mode);
+    let hasDecorations = "decorations" in args && args.decorations !== undefined;
+    let hasCursor = "cursor" in args && args.cursor !== undefined;
     return promptSuggestOp(
       {
-        text: s.text,
-        ...(y && {
-          mode: s.mode,
+        text: args.text,
+        ...(hasMode && {
+          mode: args.mode,
         }),
-        ...(S && {
-          decorations: s.decorations,
+        ...(hasDecorations && {
+          decorations: args.decorations,
         }),
-        ...(w && {
-          cursor: s.cursor,
+        ...(hasCursor && {
+          cursor: args.cursor,
         }),
         origin: {
           kind: "plugin",
-          name: h.plugin,
+          name: caller.plugin,
         },
-        hookOrigin: h.origin,
-        ...(h.signal !== undefined && {
-          signal: h.signal,
+        hookOrigin: caller.origin,
+        ...(caller.signal !== undefined && {
+          signal: caller.signal,
         }),
       },
-      h,
+      caller,
     );
   },
 });
@@ -92,64 +93,70 @@ function checkPromptSectionArgs(mode) {
     : `takes { mode } of ${PROMPT_SECTION_MODES.join(", ")}`;
 }
 //@ chunk-e6aww6q8.js:3717478-3717600 placement
-var dispatchFactsOf = (e) => ({
-  cwd: e.cwd,
-  turnHeld: e.turnHeld,
-  rootEvent: isPersonInputEvent(e.rootEvent) ? undefined : e.rootEvent,
-  isDispatching: e.isDispatching,
+var dispatchFactsOf = (caller) => ({
+  cwd: caller.cwd,
+  turnHeld: caller.turnHeld,
+  rootEvent: isPersonInputEvent(caller.rootEvent) ? undefined : caller.rootEvent,
+  isDispatching: caller.isDispatching,
 });
 //@ chunk-e6aww6q8.js:3717600-3717961 placement
 /**
  * 构造插件间接口调用的"幕后"信息：调用者链、借用帧（有效期上限）、分发事实与评判上下文。
  */
-function interfaceCallBehind(e) {
-  let { environmentId } = e;
-  let r = environmentId === undefined;
+function interfaceCallBehind(caller) {
+  let { environmentId } = caller;
+  let hasNoEnvironment = environmentId === undefined;
   let now = Date.now();
-  let h = lentModulesByChain().get(e.origin);
+  let lentByChain = lentModulesByChain().get(caller.origin);
   return {
-    caller: e.plugin,
-    callers: r ? [] : [...(e.callers ?? []), environmentId],
-    lent: e.origin.map((frame, S) => ({
+    caller: caller.plugin,
+    callers: hasNoEnvironment ? [] : [...(caller.callers ?? []), environmentId],
+    lent: caller.origin.map((frame, frameIndex) => ({
       frame,
-      until: Math.min(h?.[S]?.until ?? Number.POSITIVE_INFINITY, now + DEFAULT_HOOK_TIMEOUT_MS),
-      alike: h?.[S]?.alike,
+      until: Math.min(
+        lentByChain?.[frameIndex]?.until ?? Number.POSITIVE_INFINITY,
+        now + DEFAULT_HOOK_TIMEOUT_MS,
+      ),
+      alike: lentByChain?.[frameIndex]?.alike,
     })),
-    facts: dispatchFactsOf(e),
-    ...(e.judging !== undefined && {
-      judging: e.judging,
+    facts: dispatchFactsOf(caller),
+    ...(caller.judging !== undefined && {
+      judging: caller.judging,
     }),
-    ...(e.signal !== undefined && {
-      signal: e.signal,
+    ...(caller.signal !== undefined && {
+      signal: caller.signal,
     }),
   };
 }
 //@ chunk-e6aww6q8.js:3991212-3991254 placement
-var aEt = Object.freeze({
-  text: "",
-  cursor: 0,
+var EMPTY_PROMPT_DRAFT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3991212", () => {
+  EMPTY_PROMPT_DRAFT = Object.freeze({
+    text: "",
+    cursor: 0,
+  });
 });
 //@ chunk-e6aww6q8.js:3991254-3991356 placement
 /**
  * 规整输入框内容为 {text, cursor}，不合法时为空。
  */
-function normalizePromptBox(e) {
-  return isPlainObject_5(e) && typeof e.text === "string" && isNonNegativeInt(e.cursor)
+function normalizePromptBox(box) {
+  return isPlainObject_5(box) && typeof box.text === "string" && isNonNegativeInt(box.cursor)
     ? {
-        text: e.text,
-        cursor: e.cursor,
+        text: box.text,
+        cursor: box.cursor,
       }
-    : aEt;
+    : EMPTY_PROMPT_DRAFT;
 }
 //@ chunk-e6aww6q8.js:3991356-3991505 placement
 /**
  * $.prompt.read 核心：读取当前绑定输入框的 {text, cursor}，没有输入框时返回空。
  */
 async function readPromptBox(plugin) {
-  let n = surfaceComposer();
-  if (n === undefined && plugin !== undefined)
+  let composer = surfaceComposer();
+  if (composer === undefined && plugin !== undefined)
     logForDebugging(`$.prompt.read (${plugin}): no prompt box bound; the empty box`);
-  return (await n?.read()) ?? aEt;
+  return (await composer?.read()) ?? EMPTY_PROMPT_DRAFT;
 }
 //@ chunk-e6aww6q8.js:3991505-3991568 placement
 /**
@@ -164,13 +171,16 @@ var RECORDS_SESSION_START = {
 /**
  * 会话开始调用记录槽
  */
-var sessionStartCallsSlot = identity_2(createValueSlot(), (e) => e.set(undefined));
+var sessionStartCallsSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3991568", () => {
+  sessionStartCallsSlot = identity_2(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-e6aww6q8.js:3991603-3991639 placement
 /**
  * 忘掉某次调用
  */
-function forgetSessionStartCall(e) {
-  sessionStartCallsSlot.get()?.delete(e);
+function forgetSessionStartCall(name) {
+  sessionStartCallsSlot.get()?.delete(name);
 }
 //@ chunk-e6aww6q8.js:3991682-3991751 placement
 /**
@@ -185,40 +195,41 @@ var emptySessionCalls = () => ({
 /**
  * 记录插件在 session.start 中的一次加载（参数与展示信息）；与上次相同返回 true，否则重置该插件的调用记录。
  */
-function recordSessionStartLoad({ name: e, args, shown, environmentId }) {
-  let h = sessionStartCallsSlot.get() ?? new Map();
-  sessionStartCallsSlot.set(h);
-  let y = {
+function recordSessionStartLoad({ name, args, shown, environmentId }) {
+  let byName = sessionStartCallsSlot.get() ?? new Map();
+  sessionStartCallsSlot.set(byName);
+  let load = {
     args,
     shown,
   };
-  let S = isDeepStrictEqual(h.get(e)?.load, y);
-  if (!S)
-    h.set(e, {
-      load: y,
+  let isSameLoad = isDeepStrictEqual(byName.get(name)?.load, load);
+  if (!isSameLoad)
+    byName.set(name, {
+      load,
       calls: emptySessionCalls(),
       copies: new Set(),
     });
-  h.get(e)?.copies.add(environmentId);
-  return S;
+  byName.get(name)?.copies.add(environmentId);
+  return isSameLoad;
 }
 //@ chunk-e6aww6q8.js:3991970-3992071 placement
 /**
  * 判断调用结果是否因中止而结束（拒绝或出错）。
  */
-function isAbortedCallResult(e, n) {
+function isAbortedCallResult(result, value) {
   return (
-    e.endsWith?.aborted === true && (!isPlainDataObject(n) || Object.hasOwn(n, "deny") || n.isError === true)
+    result.endsWith?.aborted === true &&
+    (!isPlainDataObject(value) || Object.hasOwn(value, "deny") || value.isError === true)
   );
 }
 //@ chunk-e6aww6q8.js:3992071-3992146 placement
 /**
  * 移除一次调用
  */
-function removeCall(e, n, r) {
-  e.calls = {
-    ...e.calls,
-    [n]: e.calls[n].filter((s) => s !== r),
+function removeCall(entry, key, call) {
+  entry.calls = {
+    ...entry.calls,
+    [key]: entry.calls[key].filter((existing) => existing !== call),
   };
 }
 //@ chunk-e6aww6q8.js:3992146-3992217 placement
@@ -241,7 +252,7 @@ export {
   removeCall,
   readPromptBox,
   normalizePromptBox,
-  aEt,
+  EMPTY_PROMPT_DRAFT,
   AUDIO_PLAY_API,
   interfaceCallBehind,
   createPromptTextApi,

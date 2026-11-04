@@ -31,12 +31,12 @@ function sessionIngressTokenPath() {
   return env.CLAUDE_SESSION_INGRESS_TOKEN_FILE ?? CCR_SESSION_INGRESS_TOKEN_PATH;
 }
 //@ chunk-bdmhadbm.js:548-739 placement
-function shouldWaitForSessionIngressToken(r) {
+function shouldWaitForSessionIngressToken(argv) {
   return (
     env.CLAUDE_CODE_REMOTE &&
     !env.CLAUDE_CODE_SESSION_ACCESS_TOKEN &&
     !env.CLAUDE_CODE_WEBSOCKET_AUTH_FILE_DESCRIPTOR &&
-    r.some((e) => e === "--sdk-url" || e.startsWith("--sdk-url=")) &&
+    argv.some((arg) => arg === "--sdk-url" || arg.startsWith("--sdk-url=")) &&
     !isReviewSession()
   );
 }
@@ -57,53 +57,54 @@ function hasAnyCredentialFile() {
 async function waitForSessionIngressToken(
   argv,
   {
-    delaysMs: e = TOKEN_FILE_READ_BACKOFF_MS,
-    siblingGraceMs: o = SIBLING_CREDENTIAL_GRACE_MS,
-    siblingStepMs: f = SIBLING_CREDENTIAL_STEP_MS,
+    delaysMs = TOKEN_FILE_READ_BACKOFF_MS,
+    siblingGraceMs = SIBLING_CREDENTIAL_GRACE_MS,
+    siblingStepMs = SIBLING_CREDENTIAL_STEP_MS,
   } = {},
 ) {
   if (!shouldWaitForSessionIngressToken(argv)) return;
   let startTime = performance.now();
-  let reduced = e.reduce((acc, k) => acc + k, 0);
-  let E = sessionIngressTokenPath();
-  let { token, miss } = readWellKnownCredentialFile(E, "session ingress token");
-  let n = 0;
-  while (!token && n < e.length) {
-    let s = e[n];
+  let reduced = delaysMs.reduce((acc, delay) => acc + delay, 0);
+  let path = sessionIngressTokenPath();
+  let { token, miss } = readWellKnownCredentialFile(path, "session ingress token");
+  let attempts = 0;
+  while (!token && attempts < delaysMs.length) {
+    let delay = delaysMs[attempts];
     logForDebugging(
-      `[spare-claim] session ingress token file not readable yet (${miss}), re-checking in ${s}ms (${n + 1}/${e.length})`,
+      `[spare-claim] session ingress token file not readable yet (${miss}), re-checking in ${delay}ms (${attempts + 1}/${delaysMs.length})`,
       {
         level: "warn",
       },
     );
-    await sleep(s);
-    n++;
-    ({ token, miss } = readWellKnownCredentialFile(E, "session ingress token"));
+    await sleep(delay);
+    attempts++;
+    ({ token, miss } = readWellKnownCredentialFile(path, "session ingress token"));
   }
   if (!token) {
     logForDiagnosticsNoPII("error", "cli_worker_lifecycle_claim_token_wait", {
-      attempts: n,
+      attempts,
       recovered: false,
       last_miss: miss ?? "other",
       waited_ms: Math.round(performance.now() - startTime),
     });
     return;
   }
-  let u = n > 0 ? Math.max(reduced - (performance.now() - startTime), o) : o;
+  let graceMs =
+    attempts > 0 ? Math.max(reduced - (performance.now() - startTime), siblingGraceMs) : siblingGraceMs;
   let startTime_2 = performance.now();
-  let c = 0;
-  let m = hasAnyCredentialFile();
-  while (!m && performance.now() - startTime_2 < u) {
-    await sleep(f);
-    c++;
-    m = hasAnyCredentialFile();
+  let siblingAttempts = 0;
+  let present = hasAnyCredentialFile();
+  while (!present && performance.now() - startTime_2 < graceMs) {
+    await sleep(siblingStepMs);
+    siblingAttempts++;
+    present = hasAnyCredentialFile();
   }
-  if (n > 0 || c > 0)
+  if (attempts > 0 || siblingAttempts > 0)
     logForDiagnosticsNoPII("info", "cli_worker_lifecycle_claim_token_wait", {
-      attempts: n,
+      attempts,
       recovered: true,
-      sibling_attempts: c,
-      sibling_present: m,
+      sibling_attempts: siblingAttempts,
+      sibling_present: present,
       waited_ms: Math.round(performance.now() - startTime),
     });
 }

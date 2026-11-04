@@ -33,8 +33,8 @@ var installBashParserFlagReader = new bashParserFlagReader();
 /**
  * 注册开关读取器并返回旧的（供测试替换）。
  */
-function readTinglyPearlFlag(e) {
-  return installBashParserFlagReader.register(e);
+function readTinglyPearlFlag(reader) {
+  return installBashParserFlagReader.register(reader);
 }
 //@ chunk-krkjw7dv.js:389-531 placement
 /**
@@ -44,8 +44,8 @@ function isTinglyPearlEnabled() {
   let reader = installBashParserFlagReader.reader;
   if (!reader) return true;
   try {
-    let { value: r, source, defaultHost } = reader(TENGU_TINGLY_PEARL, true);
-    return r !== false || source !== "payload" || !defaultHost;
+    let { value, source, defaultHost } = reader(TENGU_TINGLY_PEARL, true);
+    return value !== false || source !== "payload" || !defaultHost;
   } catch {
     return true;
   }
@@ -59,27 +59,27 @@ var guardStorage = new AsyncLocalStorage();
 /**
  * 在守卫上下文中运行回调，返回结果与是否触发守卫。
  */
-async function runGuarded(off, r) {
-  let t = {
+async function runGuarded(off, fn) {
+  let state = {
     off,
     fired: false,
   };
   return {
-    result: await guardStorage.run(t, r),
-    fired: t.fired,
+    result: await guardStorage.run(state, fn),
+    fired: state.fired,
   };
 }
 //@ chunk-krkjw7dv.js:636-686 placement
 /**
  * 在“守卫关闭”的上下文中运行回调。
  */
-function runWithGuardOff(e) {
+function runWithGuardOff(fn) {
   return guardStorage.run(
     {
       off: true,
       fired: false,
     },
-    e,
+    fn,
   );
 }
 //@ chunk-krkjw7dv.js:686-731 placement
@@ -94,8 +94,8 @@ function isGuardOff() {
  * 把当前上下文标记为“守卫已触发”。
  */
 function markGuardFired() {
-  let e = guardStorage.getStore();
-  if (e) e.fired = true;
+  let state = guardStorage.getStore();
+  if (state) state.fired = true;
 }
 //@ chunk-krkjw7dv.js:781-801 placement
 /**
@@ -124,8 +124,8 @@ function isFoamyHeronEnabled() {
   let reader = setFoamyHeronReader.reader;
   if (!reader) return true;
   try {
-    let { value: r, source, defaultHost } = reader("tengu_foamy_heron", true);
-    return r !== false || source !== "payload" || !defaultHost;
+    let { value, source, defaultHost } = reader("tengu_foamy_heron", true);
+    return value !== false || source !== "payload" || !defaultHost;
   } catch {
     return true;
   }
@@ -151,8 +151,8 @@ var installCalmNautilusReader = new calmNautilusReaderState();
 /**
  * 注册 tengu_calm_nautilus 开关的读取器。
  */
-function readCalmNautilusFlag(e) {
-  return installCalmNautilusReader.register(e);
+function readCalmNautilusFlag(reader) {
+  return installCalmNautilusReader.register(reader);
 }
 //@ chunk-krkjw7dv.js:1123-1285 placement
 /**
@@ -162,8 +162,8 @@ function isCalmNautilusEnabled() {
   let reader = installCalmNautilusReader.reader;
   if (!reader) return true;
   try {
-    let { value: r, source, defaultHost } = reader("tengu_calm_nautilus", true);
-    return r !== false || source !== "payload" || !defaultHost;
+    let { value, source, defaultHost } = reader("tengu_calm_nautilus", true);
+    return value !== false || source !== "payload" || !defaultHost;
   } catch {
     return true;
   }

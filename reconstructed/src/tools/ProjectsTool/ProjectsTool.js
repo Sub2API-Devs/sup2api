@@ -96,12 +96,14 @@ var ProjectsTool = buildTool({
     });
   },
   get inputSchema() {
-    let e = localPathAvailability() === "elsewhere";
+    let localPathElsewhere = localPathAvailability() === "elsewhere";
     if (!docVersionsOffered()) {
-      if (e) return isLocalUploadsEnabled() ? projectListInputSchema() : projectMemoryListInputSchema();
+      if (localPathElsewhere)
+        return isLocalUploadsEnabled() ? projectListInputSchema() : projectMemoryListInputSchema();
       return isLocalUploadsEnabled() ? projectDeleteInputSchema() : projectWriteInputSchema();
     }
-    if (e) return isLocalUploadsEnabled() ? projectMethodOutputSchema() : projectSearchInputSchema();
+    if (localPathElsewhere)
+      return isLocalUploadsEnabled() ? projectMethodOutputSchema() : projectSearchInputSchema();
     return isLocalUploadsEnabled() ? projectsInputSchema() : projectReadInputSchema();
   },
   get outputSchema() {
@@ -110,56 +112,58 @@ var ProjectsTool = buildTool({
   isConcurrencySafe() {
     return false;
   },
-  isReadOnly(e) {
-    return isReadOnlyProjectMethod(e.method);
+  isReadOnly(input) {
+    return isReadOnlyProjectMethod(input.method);
   },
-  isDestructive(e) {
-    return e.method === "project_write" || e.method === "project_delete";
+  isDestructive(input) {
+    return input.method === "project_write" || input.method === "project_delete";
   },
-  ignoresWholeToolAllowRule(e) {
-    return isConfirmableProjectWrite(e?.method);
+  ignoresWholeToolAllowRule(input) {
+    return isConfirmableProjectWrite(input?.method);
   },
-  suppressesAlwaysAllowRule(e, n) {
-    return n !== true && isConfirmableProjectWrite(e?.method);
+  suppressesAlwaysAllowRule(input, isSubcase) {
+    return isSubcase !== true && isConfirmableProjectWrite(input?.method);
   },
-  userFacingName(e) {
-    return `Project: ${projectsActivityLabel(e)}`;
+  userFacingName(input) {
+    return `Project: ${projectsActivityLabel(input)}`;
   },
-  getToolUseSummary(e) {
-    return e?.method ? projectsActivityLabel(e) : null;
+  getToolUseSummary(input) {
+    return input?.method ? projectsActivityLabel(input) : null;
   },
-  toAutoClassifierInput(e) {
-    return projectsActivityLabel(e);
+  toAutoClassifierInput(input) {
+    return projectsActivityLabel(input);
   },
-  renderToolUseMessage(e) {
-    return projectsActivityLabel(e);
+  renderToolUseMessage(input) {
+    return projectsActivityLabel(input);
   },
-  coerceInput(e) {
-    return validateProjectWriteFlags(e, {
+  coerceInput(input) {
+    return validateProjectWriteFlags(input, {
       originalOffered: isLocalUploadsEnabled(),
       docVersionsOffered: docVersionsOffered(),
     });
   },
-  create(e) {
+  create(toolContext) {
     return {
-      async validateInput(n) {
-        let filtered = REQUIRED_FIELDS_BY_METHOD[n.method].filter((s) => n[s] === undefined);
+      async validateInput(input) {
+        let filtered = REQUIRED_FIELDS_BY_METHOD[input.method].filter(
+          (fieldName) => input[fieldName] === undefined,
+        );
         if (filtered.length > 0)
           return {
             result: false,
-            message: `${n.method} requires: ${filtered.join(", ")}.`,
+            message: `${input.method} requires: ${filtered.join(", ")}.`,
             errorCode: 1,
           };
-        if (n.method === "project_write") {
-          let s = n.content !== undefined;
-          let l = n.local_path !== undefined;
-          if (s === l)
+        if (input.method === "project_write") {
+          let hasContent = input.content !== undefined;
+          let hasLocalPath = input.local_path !== undefined;
+          if (hasContent === hasLocalPath)
             return {
               result: false,
               message: 'project_write requires exactly one of "content" or "local_path".',
               errorCode: 1,
             };
-          if (n.if_version !== undefined && !SHA256_HEX_RE.test(n.if_version))
+          if (input.if_version !== undefined && !SHA256_HEX_RE.test(input.if_version))
             return {
               result: false,
               message:
@@ -171,10 +175,10 @@ var ProjectsTool = buildTool({
           result: true,
         };
       },
-      async checkPermissions(n) {
+      async checkPermissions(input) {
         if (
-          getAutoModeClassifierRole(e.permissions().mode) === "arbiter" &&
-          isConfirmableProjectWrite(n.method)
+          getAutoModeClassifierRole(toolContext.permissions().mode) === "arbiter" &&
+          isConfirmableProjectWrite(input.method)
         )
           return {
             behavior: "passthrough",
@@ -182,101 +186,121 @@ var ProjectsTool = buildTool({
           };
         return {
           behavior: "allow",
-          updatedInput: n,
+          updatedInput: input,
         };
       },
-      async call(n, r) {
-        if (isCcsTenant() && !isReadOnlyProjectMethod(n.method)) logEvent("tengu_projects_write_started", {});
-        let signal = r.signal;
+      async call(input, callOptions) {
+        if (isCcsTenant() && !isReadOnlyProjectMethod(input.method))
+          logEvent("tengu_projects_write_started", {});
+        let signal = callOptions.signal;
         let attachedProjectUuid = getAttachedProjectUuid();
         if (!attachedProjectUuid)
           throw new ProjectsPreconditionError(
             "No project attached to this session. Project tools are available when the session is started inside a claude.ai Project.",
           );
-        let h = "";
+        let accessToken = "";
         try {
-          let projectsScope = await ensureProjectsScope(e.credentials);
-          h = projectsScope.accessToken;
-          let m = await runProjectsMethod(
-            n,
+          let projectsScope = await ensureProjectsScope(toolContext.credentials);
+          accessToken = projectsScope.accessToken;
+          let result = await runProjectsMethod(
+            input,
             attachedProjectUuid,
-            e.session,
+            toolContext.session,
             signal,
-            e.storageV5,
-            e.credentials,
-            unicodeNameMatcher(n, r, e),
+            toolContext.storageV5,
+            toolContext.credentials,
+            unicodeNameMatcher(input, callOptions, toolContext),
             () =>
-              canWriteToolFile(e)
+              canWriteToolFile(toolContext)
                 ? shouldCutProjectTexts({
-                    model: e.model(),
-                    configuredWindow: e.autoCompactWindow(),
-                    messages: e.messages(),
-                    room: r.innerCall === true ? undefined : e.contextRoom(),
+                    model: toolContext.model(),
+                    configuredWindow: toolContext.autoCompactWindow(),
+                    messages: toolContext.messages(),
+                    room: callOptions.innerCall === true ? undefined : toolContext.contextRoom(),
                   })
                 : undefined,
-            (y) => (toolResultStoreOrNull() === undefined ? formatLongLineNote(e.tools, y) : undefined),
-            e.permissions,
-            e.agentId === undefined ? PROJECT_HOST_STATE.peek(e.session)?.host : undefined,
-            e.agentId === undefined ? e.readFileState : undefined,
-            r.innerCall === true || e.messages().length === 0
+            (appliedLimit) =>
+              toolResultStoreOrNull() === undefined
+                ? formatLongLineNote(toolContext.tools, appliedLimit)
+                : undefined,
+            toolContext.permissions,
+            toolContext.agentId === undefined
+              ? PROJECT_HOST_STATE.peek(toolContext.session)?.host
+              : undefined,
+            toolContext.agentId === undefined ? toolContext.readFileState : undefined,
+            callOptions.innerCall === true || toolContext.messages().length === 0
               ? undefined
-              : (y) => findProjectDocInView(e.messages(), y, getProjectsToolAliases(e), r.toolUseId),
-            (y) => getProjectInfoForTool(y, attachedProjectUuid, e),
+              : (pathText) =>
+                  findProjectDocInView(
+                    toolContext.messages(),
+                    pathText,
+                    getProjectsToolAliases(toolContext),
+                    callOptions.toolUseId,
+                  ),
+            (projectDetail) => getProjectInfoForTool(projectDetail, attachedProjectUuid, toolContext),
           );
           return {
             data: projectsScope.expanded
               ? {
-                  ...m,
-                  notice: m.notice
+                  ...result,
+                  notice: result.notice
                     ? `${SCOPE_UPGRADED_NOTE}
 
-${m.notice}`
+${result.notice}`
                     : SCOPE_UPGRADED_NOTE,
                 }
-              : m,
+              : result,
           };
         } catch (error) {
-          if (n.method === "project_write" && n.local_path !== undefined)
+          if (input.method === "project_write" && input.local_path !== undefined)
             logWriteFailure(
               error,
               signal,
-              e.agentId === undefined ? PROJECT_HOST_STATE.peek(e.session)?.host : undefined,
+              toolContext.agentId === undefined
+                ? PROJECT_HOST_STATE.peek(toolContext.session)?.host
+                : undefined,
             );
           if (signal.aborted) throw new AbortError();
-          let m = error instanceof ProjectSaveError ? error.cause : error;
-          let y = redactTokenFromText(errorMessage(m), h);
-          if (m instanceof ProjectsPreconditionError) throw new ProjectsPreconditionError(y, m.reasonCode);
+          let cause = error instanceof ProjectSaveError ? error.cause : error;
+          let message = redactTokenFromText(errorMessage(cause), accessToken);
+          if (cause instanceof ProjectsPreconditionError)
+            throw new ProjectsPreconditionError(message, cause.reasonCode);
           if (
-            n.method === "project_write" &&
-            m instanceof ProjectsApiError &&
-            m.errorCode === "project_knowledge_full"
+            input.method === "project_write" &&
+            cause instanceof ProjectsApiError &&
+            cause.errorCode === "project_knowledge_full"
           )
             throw new ProjectsPreconditionError(PROJECT_SIZE_LIMIT_TEXT, "project_knowledge_full");
-          let j =
-            getErrnoCode(m) ??
-            (isStorageV5Enabled() && e.storageV5 !== undefined && m instanceof Error && isStoreError(m.cause)
-              ? storageErrorCode(m.cause)
+          let errnoCode =
+            getErrnoCode(cause) ??
+            (isStorageV5Enabled() &&
+            toolContext.storageV5 !== undefined &&
+            cause instanceof Error &&
+            isStoreError(cause.cause)
+              ? storageErrorCode(cause.cause)
               : undefined);
-          let x = error instanceof ProjectSaveError ? classifySaveFailure(error) : "";
-          let b = Error(x === "" ? y : `${y.replace(/[.\s]*$/, "")}.${x}`);
+          let saveFailureNote = error instanceof ProjectSaveError ? classifySaveFailure(error) : "";
+          let wrappedError = Error(
+            saveFailureNote === "" ? message : `${message.replace(/[.\s]*$/, "")}.${saveFailureNote}`,
+          );
           if (
-            (isFsInaccessibleCode(j) && j !== "EACCES" && j !== "EPERM") ||
-            j === "EISDIR" ||
-            j === "ENOSPC" ||
-            j === "EDQUOT" ||
-            j === "EIO"
+            (isFsInaccessibleCode(errnoCode) && errnoCode !== "EACCES" && errnoCode !== "EPERM") ||
+            errnoCode === "EISDIR" ||
+            errnoCode === "ENOSPC" ||
+            errnoCode === "EDQUOT" ||
+            errnoCode === "EIO"
           )
-            b.code = j;
-          throw b;
+            wrappedError.code = errnoCode;
+          throw wrappedError;
         }
       },
     };
   },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
+  mapToolResultToToolResultBlockParam(result, toolUseId) {
     return {
       tool_use_id: toolUseId,
       type: "tool_result",
-      content: jsonStringify(e),
+      content: jsonStringify(result),
     };
   },
 });
@@ -287,87 +311,96 @@ var projectMethodRecords = {
 var MAX_NAME_NORMALIZATION_FACTOR = 36;
 var MAX_NORMALIZED_NAME_CHARS = 1024;
 //@ chunk-eg496hkq.js:25548-25698 placement
-function matchUniqueNormalizedName(e, n, r) {
-  let min = Math.min(MAX_NAME_NORMALIZATION_FACTOR * e.length, MAX_NORMALIZED_NAME_CHARS);
-  let normalized = e.normalize(r);
-  let [h, w] = uniq(n.filter((m) => m.length <= min && m.normalize(r) === normalized));
-  return w === undefined ? h : undefined;
+function matchUniqueNormalizedName(name, candidates, form) {
+  let min = Math.min(MAX_NAME_NORMALIZATION_FACTOR * name.length, MAX_NORMALIZED_NAME_CHARS);
+  let normalized = name.normalize(form);
+  let [onlyMatch, secondMatch] = uniq(
+    candidates.filter((candidate) => candidate.length <= min && candidate.normalize(form) === normalized),
+  );
+  return secondMatch === undefined ? onlyMatch : undefined;
 }
 //@ chunk-eg496hkq.js:25698-25822 placement
-function resolveRespelledName(e, n, r, s) {
-  if (n.includes(e)) return e;
-  for (let l of r) {
-    let h = matchUniqueNormalizedName(e, n, l);
-    if (h !== undefined) return s(h, projectMethodRecords[l]) ? h : e;
+function resolveRespelledName(path, knownNames, forms, isAcceptable) {
+  if (knownNames.includes(path)) return path;
+  for (let form of forms) {
+    let respelled = matchUniqueNormalizedName(path, knownNames, form);
+    if (respelled !== undefined)
+      return isAcceptable(respelled, projectMethodRecords[form]) ? respelled : path;
   }
-  return e;
+  return path;
 }
 //@ chunk-eg496hkq.js:25822-25910 placement
 /**
  * 项目内路径的候选写法（无斜杠时同时试 claude/ 前缀）。
  */
-function projectPathVariants(e) {
-  let replaced = e.replace(/^\.\//, "");
+function projectPathVariants(path) {
+  let replaced = path.replace(/^\.\//, "");
   return replaced.includes("/") ? [replaced] : [replaced, `claude/${replaced}`];
 }
 //@ chunk-eg496hkq.js:25910-26165 placement
-function resolveListedPath(e, n, r, s) {
-  let l = projectPathVariants(e);
-  let found = l.find((m) => n.includes(m));
+function resolveListedPath(path, docNames, fileNames, isAcceptable) {
+  let variants = projectPathVariants(path);
+  let found = variants.find((variant) => docNames.includes(variant));
   if (found !== undefined)
     return {
       path: found,
       listed: found,
     };
-  for (let m of l) {
-    let respelledName = resolveRespelledName(m, [...n, ...r], ["NFD"], (j, x) => n.includes(j) && s(j, x));
-    if (respelledName !== m)
+  for (let variant of variants) {
+    let respelledName = resolveRespelledName(
+      variant,
+      [...docNames, ...fileNames],
+      ["NFD"],
+      (candidate, form) => docNames.includes(candidate) && isAcceptable(candidate, form),
+    );
+    if (respelledName !== variant)
       return {
-        path: m,
+        path: variant,
         listed: respelledName,
       };
   }
-  let w = l.at(-1) ?? l[0];
+  let fallbackPath = variants.at(-1) ?? variants[0];
   return {
-    path: w,
-    listed: w,
+    path: fallbackPath,
+    listed: fallbackPath,
   };
 }
 //@ chunk-eg496hkq.js:26165-26378 placement
-function matchUnicodeName(e, n, r) {
-  let s = projectPathVariants(e);
-  let found = s.find((h) => n.includes(h));
-  if (found !== undefined) return found === e || r(found, "respelled") ? found : e;
-  for (let h of ["NFD", "NFKD"])
-    for (let w of s) {
-      let m = matchUniqueNormalizedName(w, n, h);
-      if (m !== undefined) return r(m, projectMethodRecords[h]) ? m : e;
+function matchUnicodeName(path, knownNames, isAcceptable) {
+  let variants = projectPathVariants(path);
+  let found = variants.find((variant) => knownNames.includes(variant));
+  if (found !== undefined) return found === path || isAcceptable(found, "respelled") ? found : path;
+  for (let form of ["NFD", "NFKD"])
+    for (let variant of variants) {
+      let respelled = matchUniqueNormalizedName(variant, knownNames, form);
+      if (respelled !== undefined)
+        return isAcceptable(respelled, projectMethodRecords[form]) ? respelled : path;
     }
-  return e;
+  return path;
 }
 //@ chunk-eg496hkq.js:26378-26949 placement
-function projectsPermissionContext(e, n, r, s) {
-  let pipeline = r.permissionPhase?.pipeline;
+function projectsPermissionContext(input, form, callOptions, toolContext) {
+  let pipeline = callOptions.permissionPhase?.pipeline;
   let decisionReason = pipeline?.result.decisionReason;
   if (
-    r.innerCall === true ||
-    r.remoteCall !== undefined ||
+    callOptions.innerCall === true ||
+    callOptions.remoteCall !== undefined ||
     pipeline?.result.behavior !== "allow" ||
     pipeline.answered !== undefined ||
-    pipeline.input.path !== e.path ||
-    pipeline.input.method !== e.method ||
+    pipeline.input.path !== input.path ||
+    pipeline.input.method !== input.method ||
     (decisionReason !== undefined &&
       decisionReason.type !== "mode" &&
       decisionReason.type !== "rule" &&
       !(
         decisionReason.type === "classifier" &&
         decisionReason.classifierAllowed === true &&
-        n === "canonical"
+        form === "canonical"
       ))
   )
     return "not_plain_allow";
   try {
-    return projectTextHooksKind(e, s);
+    return projectTextHooksKind(input, toolContext);
   } catch (error) {
     logForDebugging(
       `Projects: could not check hooks and permission rules for a listed name other than the path as typed, so the path was used as typed: ${errorMessage(error)}`,
@@ -378,4 +411,4 @@ function projectsPermissionContext(e, n, r, s) {
     return "error";
   }
 }
-export { projectsPermissionContext, matchUnicodeName, resolveListedPath, resolveRespelledName };
+export { projectsPermissionContext, matchUnicodeName, resolveListedPath, resolveRespelledName, ProjectsTool };

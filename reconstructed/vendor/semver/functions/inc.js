@@ -5,11 +5,11 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_semver } from "../classes/semver.js";
 
 //@ chunk-bwbq4xvm.js:10538-10738 cjs-fingerprint
-var require_inc = x(function (cjsExports, cjsModule) {
+var require_inc = __commonJS(function (cjsExports, cjsModule) {
   var SemVer = require_semver();
   var inc = (version, release, options, identifier, identifierBase) => {
     if (typeof options === "string") {

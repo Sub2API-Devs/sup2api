@@ -13,6 +13,7 @@ import { getTaskRunState } from "../../utils/task/taskNotifications.js";
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 import { getTaskImplsByType } from "../../tasks.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-kxyd0g16.js:17488-17563 placement
 /**
@@ -21,21 +22,21 @@ import { getTaskImplsByType } from "../../tasks.js";
 var MonitorMcpTaskImpl = {
   name: "MonitorMcpTask",
   type: "monitor_mcp",
-  async kill(e, r) {
-    registerMonitorMcpTask(e, r);
+  async kill(taskId, taskRegistry) {
+    registerMonitorMcpTask(taskId, taskRegistry);
   },
 };
 //@ chunk-kxyd0g16.js:17563-17713 placement
-function registerMonitorMcpTask(taskId, registry, n) {
+function registerMonitorMcpTask(taskId, registry, options) {
   stopMonitorTask(taskId, registry, {
-    ...n,
+    ...options,
     onKilled: () => {
-      n?.onKilled?.();
+      options?.onKilled?.();
       let { streamedMonitorStops } = getTaskRunState();
-      let f = streamedMonitorStops.get(taskId);
+      let stopStream = streamedMonitorStops.get(taskId);
       streamedMonitorStops.delete(taskId);
       try {
-        f?.();
+        stopStream?.();
       } catch (error) {
         logError(toError(error));
       }
@@ -48,14 +49,17 @@ function registerMonitorMcpTask(taskId, registry, n) {
  */
 class TaskImplDispatch {
   dispatch = undefined;
-  lookup(e) {
+  lookup(taskType) {
     this.dispatch ??= getTaskImplsByType();
-    return this.dispatch.get(e);
+    return this.dispatch.get(taskType);
   }
 }
 //@ chunk-kxyd0g16.js:18104-18118 placement
 /**
  * 按任务类型查实现的调度表单例。
  */
-var taskImplDispatch = new TaskImplDispatch();
+var taskImplDispatch; // deferred: uses TaskImplDispatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:18104", () => {
+  taskImplDispatch = new TaskImplDispatch();
+});
 export { MonitorMcpTaskImpl, taskImplDispatch };

@@ -48,16 +48,17 @@ import { errorMessage } from "../errors.js";
 import { env } from "../env.js";
 import { getFlagFetchWaitedMs } from "../startupTiming.js";
 import { PROVIDER_ENV_FLAGS } from "../model/modelIds.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-7kt7c7a3.js:827-852 placement
-var growthBookNotStartedOrPending = (o) => hasGrowthBookInitializeStarted() || isPendingNotOver(o);
+var growthBookNotStartedOrPending = (hold) => hasGrowthBookInitializeStarted() || isPendingNotOver(hold);
 //@ chunk-7kt7c7a3.js:852-880 placement
 /**
  * pendingWithoutStart：仍待定且 GrowthBook 尚未开始。
  */
-var pendingWithoutStart = (o) => isPendingNotOver(o) && !hasGrowthBookInitializeStarted();
+var pendingWithoutStart = (hold) => isPendingNotOver(hold) && !hasGrowthBookInitializeStarted();
 //@ chunk-7kt7c7a3.js:880-909 placement
-var isHeldOrPending = (o) => o.hasHeld || pendingWithoutStart(o);
+var isHeldOrPending = (hold) => hold.hasHeld || pendingWithoutStart(hold);
 //@ chunk-7kt7c7a3.js:909-942 placement
 /**
  * fetchHoldForHost：某宿主的取回保持承诺。
@@ -169,46 +170,50 @@ function isStaleHooksModulesSwitch() {
   );
 }
 //@ chunk-7kt7c7a3.js:2293-3313 placement
-function followHooksModulesRollout(o, e, s) {
+function followHooksModulesRollout(reload, tell, standDown) {
   let pluginRegistry = getPluginRegistry();
   let { hooksModulesSwitchRead, hooksModulesSwitchFollowing } = pluginRegistry;
   if (hooksModulesSwitchFollowing !== undefined)
     return hooksModulesSwitchFollowing
       .then(() =>
-        isStaleHooksModulesSwitch() ? (followHooksModulesRollout(o, e, s) ?? undefined) : undefined,
+        isStaleHooksModulesSwitch()
+          ? (followHooksModulesRollout(reload, tell, standDown) ?? undefined)
+          : undefined,
       )
       .catch(logError);
   if (hooksModulesSwitchRead === undefined || !isHooksModulesSwitchStale()) return null;
-  let f = areHooksModulesAllowed();
-  let c = pluginRegistry.loadedModules.length;
+  let isOn = areHooksModulesAllowed();
+  let moduleCountBefore = pluginRegistry.loadedModules.length;
   logForDebugging(
-    `installed plugins' hooks modules ${f ? "load" : "unload"}: the rollout flag (${PLUGIN_HOOKS_MODULES_GATE}) reads ${f ? "on" : "off"} in a running session`,
+    `installed plugins' hooks modules ${isOn ? "load" : "unload"}: the rollout flag (${PLUGIN_HOOKS_MODULES_GATE}) reads ${isOn ? "on" : "off"} in a running session`,
   );
-  let p = () => {
+  let markOff = () => {
     pluginRegistry.hooksModulesSwitchRead = {
       ...(pluginRegistry.hooksModulesSwitchRead ?? hooksModulesSwitchRead),
       isOn: false,
     };
   };
-  let h = (f ? Promise.resolve() : Promise.resolve().then(s).then(p, logError)).then(o);
-  let E = () => {
+  let loadPass = (isOn ? Promise.resolve() : Promise.resolve().then(standDown).then(markOff, logError)).then(
+    reload,
+  );
+  let markLoadOwed = () => {
     pluginRegistry.hooksModulesSwitchRead = {
       ...(pluginRegistry.hooksModulesSwitchRead ?? hooksModulesSwitchRead),
       isLoadOwed: true,
     };
   };
-  h.catch(E);
-  let M = withTimeout(h, ROLLOUT_FOLLOW_TIMEOUT_MS, ROLLOUT_FOLLOW_TIMEOUT_MESSAGE)
+  loadPass.catch(markLoadOwed);
+  let following = withTimeout(loadPass, ROLLOUT_FOLLOW_TIMEOUT_MS, ROLLOUT_FOLLOW_TIMEOUT_MESSAGE)
     .then(
       () => {
         logFeatureOk("plugin_function_hooks_switch_followed", {
-          is_turned_on: f,
+          is_turned_on: isOn,
         });
       },
       (error) => {
-        E();
+        markLoadOwed();
         logFeatureBad("plugin_function_hooks_switch_followed", classifyFollowFailure(error), {
-          is_turned_on: f,
+          is_turned_on: isOn,
         });
         logForDebugging(
           `installed plugins' hooks modules: the load that follows the rollout flag failed: ${errorMessage(error)}`,
@@ -219,63 +224,65 @@ function followHooksModulesRollout(o, e, s) {
       },
     )
     .then(() => {
-      if (!f && pluginRegistry.loadedModules.length < c) e(MODS_ROLLOUT_OFF_MESSAGE);
+      if (!isOn && pluginRegistry.loadedModules.length < moduleCountBefore) tell(MODS_ROLLOUT_OFF_MESSAGE);
     })
     .catch(logError)
     .finally(() => {
       pluginRegistry.hooksModulesSwitchFollowing = undefined;
     });
-  pluginRegistry.hooksModulesSwitchFollowing = M;
-  return M;
+  pluginRegistry.hooksModulesSwitchFollowing = following;
+  return following;
 }
 //@ chunk-7kt7c7a3.js:3313-3481 placement
 /**
  * 组织 hooks 模块仍待加载（且开关并非由 payload 明确关闭）。
  */
 function isOrganizationModsLoadPending() {
-  let o = getPluginRegistry().hooksModulesSwitchRead?.isManagedPending === true;
+  let isPending = getPluginRegistry().hooksModulesSwitchRead?.isManagedPending === true;
   try {
-    let e =
+    let payloadOff =
       !areHooksModulesAllowed() &&
       getFeatureValueWithSource_CACHED_MAY_BE_STALE(PLUGIN_HOOKS_MODULES_GATE, HOOKS_MODULES_DEFAULT)
         .source === "payload";
-    return o && isRemoteNonInteractiveSession() && isRemoteManagedEnvironment() && !e;
+    return isPending && isRemoteNonInteractiveSession() && isRemoteManagedEnvironment() && !payloadOff;
   } catch (error) {
     logError(error);
-    return o;
+    return isPending;
   }
 }
 //@ chunk-7kt7c7a3.js:3481-4355 placement
-function settleHooksModulesWake(o, e, s) {
+function settleHooksModulesWake(reload, tell, standDown) {
   let pluginRegistry = getPluginRegistry();
   if (AUTO_MODE_ENABLED_DEFAULT()) markWakeBoundPassed();
-  let n = pluginRegistry.hooksModulesWakeBound === "taken";
-  let a = pluginRegistry.hooksModulesWakeBound === "passed" && isAutoModeGateOpen();
-  let u =
+  let boundTaken = pluginRegistry.hooksModulesWakeBound === "taken";
+  let boundPassed = pluginRegistry.hooksModulesWakeBound === "passed" && isAutoModeGateOpen();
+  let stillPending =
     !(pluginRegistry.hooksModulesWakeBound === "ahead" && isAutoModeGateOpen()) &&
     isOrganizationModsLoadPending();
   if (!(
     pluginRegistry.hooksModulesSwitchRead !== undefined &&
     pluginRegistry.hooksModulesSwitchFollowing === undefined &&
-    (a || u || n)
+    (boundPassed || stillPending || boundTaken)
   ))
     return null;
-  if (n && !u) {
+  if (boundTaken && !stillPending) {
     pluginRegistry.hooksModulesWakeBound = "loaded";
-    if (pluginRegistry.hooksModulesSwitchRead?.isPersonsOut === true) e(MODS_ORG_SETTINGS_UNREADABLE_MESSAGE);
+    if (pluginRegistry.hooksModulesSwitchRead?.isPersonsOut === true)
+      tell(MODS_ORG_SETTINGS_UNREADABLE_MESSAGE);
     return null;
   }
-  let c = withTimeout(
-    o(),
+  let loadPass = withTimeout(
+    reload(),
     ROLLOUT_FOLLOW_TIMEOUT_MS,
     "the load at the end of the wake's wait did not end and is given up",
   )
     .then(
       () => {
         let hooksModulesSwitchRead = pluginRegistry.hooksModulesSwitchRead;
-        let w = hooksModulesSwitchRead?.isManagedPending !== true;
-        if (w) pluginRegistry.hooksModulesWakeBound = "loaded";
-        if (w && hooksModulesSwitchRead?.isPersonsOut === true) e(MODS_ORG_SETTINGS_UNREADABLE_MESSAGE);
+        let settled = hooksModulesSwitchRead?.isManagedPending !== true;
+        if (settled) pluginRegistry.hooksModulesWakeBound = "loaded";
+        if (settled && hooksModulesSwitchRead?.isPersonsOut === true)
+          tell(MODS_ORG_SETTINGS_UNREADABLE_MESSAGE);
       },
       (error) => {
         logForDebugging(
@@ -289,23 +296,30 @@ function settleHooksModulesWake(o, e, s) {
     .finally(() => {
       pluginRegistry.hooksModulesSwitchFollowing = undefined;
     });
-  pluginRegistry.hooksModulesSwitchFollowing = c;
-  return c
-    .then(() => (isStaleHooksModulesSwitch() ? (followHooksModulesRollout(o, e, s) ?? undefined) : undefined))
+  pluginRegistry.hooksModulesSwitchFollowing = loadPass;
+  return loadPass
+    .then(() =>
+      isStaleHooksModulesSwitch()
+        ? (followHooksModulesRollout(reload, tell, standDown) ?? undefined)
+        : undefined,
+    )
     .catch(logError);
 }
 //@ chunk-7kt7c7a3.js:4355-4611 placement
 /**
  * 按本次加载结果在 taken/passed 之间切换 wakeBound。
  */
-function updateWakeBound(o) {
-  let { registry } = o;
-  let s = o.isSetKnown && o.isLoadFaultless && o.unmet.length === 0;
-  let r = !s && registry.hooksModulesWakeBound === "taken";
-  let n =
-    s && registry.hooksModulesWakeBound === "passed" && isAutoModeGateOpen() && AUTO_MODE_ENABLED_DEFAULT();
-  if (r) registry.hooksModulesWakeBound = "passed";
-  if (n) registry.hooksModulesWakeBound = "taken";
+function updateWakeBound(outcome) {
+  let { registry } = outcome;
+  let isClean = outcome.isSetKnown && outcome.isLoadFaultless && outcome.unmet.length === 0;
+  let shouldPass = !isClean && registry.hooksModulesWakeBound === "taken";
+  let shouldTake =
+    isClean &&
+    registry.hooksModulesWakeBound === "passed" &&
+    isAutoModeGateOpen() &&
+    AUTO_MODE_ENABLED_DEFAULT();
+  if (shouldPass) registry.hooksModulesWakeBound = "passed";
+  if (shouldTake) registry.hooksModulesWakeBound = "taken";
 }
 //@ chunk-7kt7c7a3.js:4611-4704 placement
 async function reinitializeGrowthBookIfNeeded() {
@@ -327,24 +341,24 @@ function flagFetchWaitMs() {
 //@ chunk-7kt7c7a3.js:4770-4802 placement
 var remainingFetchWaitMs = () => Math.max(0, flagFetchWaitMs() - getFlagFetchWaitedMs());
 //@ chunk-7kt7c7a3.js:4802-4945 placement
-function describeFlagWaitOutcome(o) {
-  let timedOut = o.timedOut;
-  let s = !timedOut && hasFreshGrowthBookFeatures();
+function describeFlagWaitOutcome(hold) {
+  let timedOut = hold.timedOut;
+  let hasPayload = !timedOut && hasFreshGrowthBookFeatures();
   return timedOut
     ? `no answer within ${flagFetchWaitMs()}ms`
-    : s
+    : hasPayload
       ? "the flag payload landed"
       : "the fetch settled with no payload";
 }
 //@ chunk-7kt7c7a3.js:4945-5118 placement
 async function waitForRolloutFlag(initialize = initializeGrowthBook) {
-  let e = await waitForInitialize({
+  let holdResult = await waitForInitialize({
     initialize,
     budgetMs: remainingFetchWaitMs(),
   });
   logForDebugging(
-    `installed plugins' hooks modules held ${Math.round(e.waitMs)}ms for the rollout flag (${PLUGIN_HOOKS_MODULES_GATE}): ` +
-      describeFlagWaitOutcome(e),
+    `installed plugins' hooks modules held ${Math.round(holdResult.waitMs)}ms for the rollout flag (${PLUGIN_HOOKS_MODULES_GATE}): ` +
+      describeFlagWaitOutcome(holdResult),
   );
 }
 //@ chunk-7kt7c7a3.js:5118-5163 placement
@@ -357,26 +371,26 @@ async function waitForRolloutUnlessServed() {
 //@ chunk-7kt7c7a3.js:5163-5175 placement
 var STARTUP_ROLLOUT_WAIT_MS = 30000;
 //@ chunk-7kt7c7a3.js:5175-5244 placement
-function settlementPromise(o) {
-  return pendingWithoutStart(o) && hasWorkspaceTrust() ? o.over.promise : Promise.resolve();
+function settlementPromise(hold) {
+  return pendingWithoutStart(hold) && hasWorkspaceTrust() ? hold.over.promise : Promise.resolve();
 }
 //@ chunk-7kt7c7a3.js:5244-5267 placement
 /**
  * waitForSettlement：带截止时间的结算等待。
  */
-var waitForSettlement = (o) => withDeadline(settlementPromise(o), STARTUP_ROLLOUT_WAIT_MS);
+var waitForSettlement = (hold) => withDeadline(settlementPromise(hold), STARTUP_ROLLOUT_WAIT_MS);
 //@ chunk-7kt7c7a3.js:5267-5387 placement
 /**
  * 启动时按需等待 rollout 标志。
  */
 async function holdForRolloutFlagAtStartup() {
   await checkHooksModulesFlag();
-  let o = needsReloadWhileDisallowed();
-  let e = shouldWaitOnFallbackSource() || needsReloadWhenAllowed();
-  let s = (o || e) && !isAutoModeGateOpen();
-  let initialize = o ? reinitializeGrowthBookIfNeeded : initializeGrowthBook;
-  if (s) await waitForSettlement(currentFetchHold());
-  return s ? waitForRolloutFlag(initialize) : undefined;
+  let needReloadDisallowed = needsReloadWhileDisallowed();
+  let needReloadAllowed = shouldWaitOnFallbackSource() || needsReloadWhenAllowed();
+  let shouldWait = (needReloadDisallowed || needReloadAllowed) && !isAutoModeGateOpen();
+  let initialize = needReloadDisallowed ? reinitializeGrowthBookIfNeeded : initializeGrowthBook;
+  if (shouldWait) await waitForSettlement(currentFetchHold());
+  return shouldWait ? waitForRolloutFlag(initialize) : undefined;
 }
 //@ chunk-7kt7c7a3.js:5387-5725 placement
 /**
@@ -399,7 +413,7 @@ var REREAD_INTERVAL_MS = 60000;
 /**
  * 若已有重读进行中则复用；否则在已读开关且距 askedAt 超过间隔时更新 askedAt，首次走 waitForRolloutFlag，之后刷新 GrowthBook 并等待，结束清空。
  */
-function rereadHooksModulesSwitch(o = Date.now()) {
+function rereadHooksModulesSwitch(now = Date.now()) {
   let pluginRegistry = getPluginRegistry();
   let hooksModulesSwitchRereading = pluginRegistry.hooksModulesSwitchRereading;
   if (hooksModulesSwitchRereading !== undefined) return hooksModulesSwitchRereading;
@@ -407,14 +421,14 @@ function rereadHooksModulesSwitch(o = Date.now()) {
   if (!(
     hooksModulesSwitchRead !== undefined &&
     isRemoteManagedEnvironment() &&
-    o - hooksModulesSwitchRead.askedAt >= REREAD_INTERVAL_MS
+    now - hooksModulesSwitchRead.askedAt >= REREAD_INTERVAL_MS
   ))
     return null;
   pluginRegistry.hooksModulesSwitchRead = {
     ...hooksModulesSwitchRead,
-    askedAt: o,
+    askedAt: now,
   };
-  let f = (
+  let reread = (
     hooksModulesSwitchRead.askedAt === 0
       ? waitForRolloutFlag()
       : waitForInitialize({
@@ -426,19 +440,20 @@ function rereadHooksModulesSwitch(o = Date.now()) {
   ).finally(() => {
     pluginRegistry.hooksModulesSwitchRereading = undefined;
   });
-  pluginRegistry.hooksModulesSwitchRereading = f;
-  return f;
+  pluginRegistry.hooksModulesSwitchRereading = reread;
+  return reread;
 }
 //@ chunk-7kt7c7a3.js:6139-6256 placement
-function followRolloutAfterReread(o, e, s) {
-  let r = () => followHooksModulesRollout(o, e, s) ?? settleHooksModulesWake(o, e, s);
-  let n = rereadHooksModulesSwitch();
-  return n !== null
-    ? n.catch(logError).then(() => {
+function followRolloutAfterReread(reload, tell, standDown) {
+  let followOrSettle = () =>
+    followHooksModulesRollout(reload, tell, standDown) ?? settleHooksModulesWake(reload, tell, standDown);
+  let reread = rereadHooksModulesSwitch();
+  return reread !== null
+    ? reread.catch(logError).then(() => {
         markWakeBoundPassed();
-        return r() ?? undefined;
+        return followOrSettle() ?? undefined;
       })
-    : r();
+    : followOrSettle();
 }
 //@ chunk-7kt7c7a3.js:6256-6268 placement
 /**
@@ -449,16 +464,16 @@ var REREAD_INITIAL_DELAY_MS = 1e4;
 /**
  * 开关曾保存为关时，GrowthBook 刷新为开后补加载。
  */
-function loadLateWhenFlagTurnsOn(o) {
+function loadLateWhenFlagTurnsOn(onLoad) {
   if (!(isDiskSourceWithCredential() && !areHooksModulesAllowed())) return;
-  let s = onGrowthBookRefresh(() => {
+  let unsubscribe = onGrowthBookRefresh(() => {
     if (!hasFreshGrowthBookFeatures()) return;
-    s();
+    unsubscribe();
     if (areHooksModulesAllowed()) {
       logForDebugging(
         `installed plugins' hooks modules load late: the rollout flag (${PLUGIN_HOOKS_MODULES_GATE}) answered on after the load went on over a saved off`,
       );
-      o();
+      onLoad();
     }
   });
 }
@@ -481,28 +496,28 @@ var HOOKS_MODULES_OFF_REASONS = {
  * 选出 hooks 模块关闭的原因文字。
  */
 function describeHooksModulesOffReason() {
-  let o = isAutoModeGateOpen() && areHooksModulesAllowed();
-  let e = isDiskSourceWithCredential();
-  let s = o && AUTO_MODE_ENABLED_DEFAULT();
-  if (s && getPluginRegistry().hooksModulesSwitchRead?.isPersonsOut === true)
+  let flagOn = isAutoModeGateOpen() && areHooksModulesAllowed();
+  let isDiskCredential = isDiskSourceWithCredential();
+  let unfetched = flagOn && AUTO_MODE_ENABLED_DEFAULT();
+  if (unfetched && getPluginRegistry().hooksModulesSwitchRead?.isPersonsOut === true)
     return HOOKS_MODULES_OFF_REASONS.unfetchedOut;
-  return s
+  return unfetched
     ? HOOKS_MODULES_OFF_REASONS.unfetched
-    : o
+    : flagOn
       ? HOOKS_MODULES_OFF_REASONS.unanswered
-      : e
+      : isDiskCredential
         ? HOOKS_MODULES_OFF_REASONS.saved
         : HOOKS_MODULES_OFF_REASONS.served;
 }
 //@ chunk-7kt7c7a3.js:7236-7373 placement
-function reloadAndReportDroppedModules(o, e, s) {
+function reloadAndReportDroppedModules(reload, tell, standDown) {
   let pluginRegistry = getPluginRegistry();
-  let n = pluginRegistry.loadedModules.length;
+  let moduleCountBefore = pluginRegistry.loadedModules.length;
   return Promise.resolve()
-    .then(o)
+    .then(reload)
     .then(() => {
-      if (pluginRegistry.loadedModules.length < n) e(MODS_ROLLOUT_OFF_MESSAGE);
-      s();
+      if (pluginRegistry.loadedModules.length < moduleCountBefore) tell(MODS_ROLLOUT_OFF_MESSAGE);
+      standDown();
     });
 }
 //@ chunk-7kt7c7a3.js:7373-7416 placement
@@ -518,27 +533,30 @@ function flagValueSourceLabel() {
 /**
  * 插件测试透传的 GrowthBook/遥测/提供方相关环境变量。
  */
-var ROLLOUT_ENV_PASSTHROUGH_VARS = [
-  "NODE_ENV",
-  "DISABLE_GROWTHBOOK",
-  "DISABLE_TELEMETRY",
-  "DO_NOT_TRACK",
-  "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
-  "CLAUDE_CODE_GB_DISK_CACHE_WHEN_TELEMETRY_OFF",
-  "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
-  "CLAUDE_CODE_CUSTOM_OAUTH_URL",
-  "CLAUDE_INTERNAL_FC_OVERRIDES",
-  ...PROVIDER_ENV_FLAGS,
-];
+var ROLLOUT_ENV_PASSTHROUGH_VARS; // deferred: uses PROVIDER_ENV_FLAGS (../model/modelIds.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7kt7c7a3.js:7416", () => {
+  ROLLOUT_ENV_PASSTHROUGH_VARS = [
+    "NODE_ENV",
+    "DISABLE_GROWTHBOOK",
+    "DISABLE_TELEMETRY",
+    "DO_NOT_TRACK",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC",
+    "CLAUDE_CODE_GB_DISK_CACHE_WHEN_TELEMETRY_OFF",
+    "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST",
+    "CLAUDE_CODE_CUSTOM_OAUTH_URL",
+    "CLAUDE_INTERNAL_FC_OVERRIDES",
+    ...PROVIDER_ENV_FLAGS,
+  ];
+});
 //@ chunk-7kt7c7a3.js:7690-7784 placement
 /**
  * followRolloutWithDeadline：带截止时间的重读后跟随。
  */
 function followRolloutWithDeadline(reload, tell, standDown) {
-  let r = followRolloutAfterReread(reload, tell, standDown);
-  return r === null
+  let followPass = followRolloutAfterReread(reload, tell, standDown);
+  return followPass === null
     ? null
-    : withDeadline(r, REREAD_INITIAL_DELAY_MS)
+    : withDeadline(followPass, REREAD_INITIAL_DELAY_MS)
         .then(() => {
           return;
         })

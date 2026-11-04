@@ -5,13 +5,13 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Node } from "./Node.js";
 import { require_Leaf } from "./Leaf.js";
 import { require_ChildNode } from "./ChildNode.js";
 
 //@ chunk-vwj6ccer.js:120094-120707 cjs-fingerprint
-var require_DocumentType = x(function (cjsExports, cjsModule) {
+var require_DocumentType = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = DocumentType;
   var Node = require_Node();
   var Leaf = require_Leaf();

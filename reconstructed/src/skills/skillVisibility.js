@@ -33,8 +33,8 @@ function isWorkflowAuthoringSkillAvailable() {
   if (!isWorkflowsAvailable()) return false;
   if (isBundledSkillsDisabled() || getDisableSlashCommands()) return false;
   if (env.CLAUDE_CODE_ENTRYPOINT === "local-agent") return false;
-  let o = getInitialSettings_2().skillOverrides?.[WORKFLOW_AUTHORING];
-  if (o === "off" || o === "user-invocable-only") return false;
+  let override = getInitialSettings_2().skillOverrides?.[WORKFLOW_AUTHORING];
+  if (override === "off" || override === "user-invocable-only") return false;
   let sessionSkillAllowlist = getSessionSkillAllowlist();
   if (sessionSkillAllowlist !== undefined && !sessionSkillAllowlist.includes(WORKFLOW_AUTHORING))
     return false;
@@ -44,7 +44,7 @@ function isWorkflowAuthoringSkillAvailable() {
 /**
  * 工具表里是否有 Skill 工具。
  */
-function toolsIncludeSkillTool(o) {
-  return o.some((e) => toolMatchesName(e, SKILL));
+function toolsIncludeSkillTool(tools) {
+  return tools.some((tool) => toolMatchesName(tool, SKILL));
 }
 export { isWorkflowAuthoringSkillVisible };

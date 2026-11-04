@@ -14,13 +14,18 @@ import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { readLinkTextSafe, rawPointerPathIsUnsafe } from "./gitFilesystem.js";
 import { isOnForeignMount } from "../networkPaths.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-t0gq9gyw.js:69612-69695 placement
 /**
  * 表示"仓库不存在"的否定结果标记。
  */
-var REPO_NEGATIVE_RESULT = Symbol("git-repo-negative-result");
-var REPO_UNREADABLE_RESULT = Symbol("git-repo-unreadable-result");
+var REPO_NEGATIVE_RESULT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REPO_UNREADABLE_RESULT;
+deferInit("chunk-t0gq9gyw.js:69612", () => {
+  REPO_NEGATIVE_RESULT = Symbol("git-repo-negative-result");
+  REPO_UNREADABLE_RESULT = Symbol("git-repo-unreadable-result");
+});
 //@ chunk-t0gq9gyw.js:69695-71157 placement
 /**
  * git 仓库信息缓存（根目录、远程、monorepo、worktree 等）。
@@ -104,15 +109,18 @@ class GitRepoCache {
 /**
  * 按 Map 缓存并惰性计算取值。
  */
-function memoizeMap(e, n, r) {
-  let o = e.get(n);
-  if (o !== undefined) return o;
-  let s = r(n);
-  e.set(n, s);
-  return s;
+function memoizeMap(map, key, compute) {
+  let cached = map.get(key);
+  if (cached !== undefined) return cached;
+  let value = compute(key);
+  map.set(key, value);
+  return value;
 }
 //@ chunk-t0gq9gyw.js:71246-71271 placement
-var gitRepoCacheRegistry = new HostScoped(() => new GitRepoCache());
+var gitRepoCacheRegistry; // deferred: uses GitRepoCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-t0gq9gyw.js:71246", () => {
+  gitRepoCacheRegistry = new HostScoped(() => new GitRepoCache());
+});
 //@ chunk-t0gq9gyw.js:71271-71308 placement
 /**
  * 取当前宿主的 git 仓库缓存。
@@ -123,16 +131,16 @@ function getGitRepoCache() {
 //@ chunk-t0gq9gyw.js:71308-71536 placement
 function isUsableGitEntry(gitPath, dir) {
   try {
-    let r = lstatSync(gitPath);
-    if (r.isSymbolicLink()) {
+    let stats = lstatSync(gitPath);
+    if (stats.isSymbolicLink()) {
       let linkText = readLinkTextSafe(gitPath);
       if (linkText === null) return false;
       if (isOnForeignMount(linkText, dir)) return false;
       if (rawPointerPathIsUnsafe(linkText, dir)) return false;
-      let s = statSync(gitPath);
-      return s.isDirectory() || s.isFile();
+      let targetStats = statSync(gitPath);
+      return targetStats.isDirectory() || targetStats.isFile();
     }
-    return r.isDirectory() || r.isFile();
+    return stats.isDirectory() || stats.isFile();
   } catch {
     return false;
   }

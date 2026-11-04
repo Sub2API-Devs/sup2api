@@ -11,7 +11,7 @@
 import { createDecipheriv } from "crypto";
 import {
   CACHE_VERSION_PREFIX,
-  Pe,
+  CACHE_KEY_ID_CHARS,
   regExp,
   BASE64URL_CHARS_RE,
   hashCacheKeyId,
@@ -24,21 +24,22 @@ import { getCacheOffLatched, getDiscoveryCacheStore } from "./mcpAccountKey.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { isCurrentIdentityEpoch, getMcpIdentitySnapshot } from "./identityChange.js";
 import { ACCOUNT_CHANGED_REASON } from "./redactMcpErrors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0qyh5wah.js:4326-4362 placement
 /**
  * 取封印文件头里的摘要。
  */
-function headerDigest(e) {
-  return parseSealedHeader(e)?.digest;
+function headerDigest(text) {
+  return parseSealedHeader(text)?.digest;
 }
 //@ chunk-0qyh5wah.js:4362-4556 placement
-function parseSealedHeader(e) {
-  if (!e.startsWith(CACHE_VERSION_PREFIX)) return;
-  let r = CACHE_VERSION_PREFIX.length + Pe;
-  if (e.length <= r || e[r] !== ":") return;
-  let sliced = e.slice(CACHE_VERSION_PREFIX.length, r);
-  let sliced_2 = e.slice(r + 1);
+function parseSealedHeader(header) {
+  if (!header.startsWith(CACHE_VERSION_PREFIX)) return;
+  let colonIndex = CACHE_VERSION_PREFIX.length + CACHE_KEY_ID_CHARS;
+  if (header.length <= colonIndex || header[colonIndex] !== ":") return;
+  let sliced = header.slice(CACHE_VERSION_PREFIX.length, colonIndex);
+  let sliced_2 = header.slice(colonIndex + 1);
   if (!regExp.test(sliced) || !BASE64URL_CHARS_RE.test(sliced_2)) return;
   return {
     digest: sliced,
@@ -96,9 +97,14 @@ function openDiscoverySeal(keyInfo, sealed) {
 /**
  * 按宿主保存的“呈现过的凭据”记录。
  */
-var MAX_PRESENTED_CREDENTIALS = 4096;
-var MAX_CREDENTIAL_PREFIX_CHARS = 1024;
-var presentedCredentialLog = new HostScoped(() => new PresentedCredentialLog());
+var MAX_PRESENTED_CREDENTIALS; // deferred: uses PresentedCredentialLog of its import cycle while loading; runs once the cycle is complete
+var MAX_CREDENTIAL_PREFIX_CHARS;
+var presentedCredentialLog;
+deferInit("chunk-0qyh5wah.js:5082", () => {
+  MAX_PRESENTED_CREDENTIALS = 4096;
+  MAX_CREDENTIAL_PREFIX_CHARS = 1024;
+  presentedCredentialLog = new HostScoped(() => new PresentedCredentialLog());
+});
 //@ chunk-0qyh5wah.js:5123-5160 placement
 /**
  * 取当前宿主的呈现凭据记录。
@@ -131,17 +137,17 @@ class PresentedCredentialLog {
   off = false;
   incomplete = false;
   overflowNotice = null;
-  record(e) {
+  record(secret) {
     if (this.recordingOff()) return;
-    if (typeof e !== "string" || e === "") return;
-    let r = truncateToLength(e, MAX_CREDENTIAL_PREFIX_CHARS);
-    if (this.seen.has(r)) return;
+    if (typeof secret !== "string" || secret === "") return;
+    let prefix = truncateToLength(secret, MAX_CREDENTIAL_PREFIX_CHARS);
+    if (this.seen.has(prefix)) return;
     if (this.seen.size >= MAX_PRESENTED_CREDENTIALS) {
       this.incomplete = true;
       this.overflowNotice ??= true;
       return;
     }
-    this.seen.add(r);
+    this.seen.add(prefix);
   }
   recordingOff() {
     if (!this.off && isPresentedLogEnabled()) {
@@ -216,8 +222,8 @@ function identityChangedFailure(name, config) {
   };
 }
 //@ chunk-0qyh5wah.js:6310-6359 placement
-function hasRemoteMcpServers(e) {
-  return e.some((r) => isRemoteMcpTransport(r.config));
+function hasRemoteMcpServers(clients) {
+  return clients.some((client) => isRemoteMcpTransport(client.config));
 }
 //@ chunk-0qyh5wah.js:6359-6392 placement
 /**
@@ -236,8 +242,8 @@ export {
   hasAccountResolver,
   setAccountResolver,
   isRemoteMcpTransport,
-  identityChangedForRemote,
   identityChangedFailure,
+  identityChangedForRemote,
   hasRemoteMcpServers,
   basicAuthValue,
 };

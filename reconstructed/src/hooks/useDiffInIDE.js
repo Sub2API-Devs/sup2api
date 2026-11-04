@@ -54,8 +54,8 @@ function computeEditsFromContents(filePath, oldContent, newContent, editMode) {
   return getEditsForPatch(patch);
 }
 //@ chunk-s4bxxzsw.js:27331-28595 fingerprint = showDiffInIDE (0.919)
-async function showDiffInIDE(file_path, edits, toolUseContext, tabName, y) {
-  let isCleanedUp = false;
+async function showDiffInIDE(file_path, edits, toolUseContext, tabName, isCleanedUp) {
+  let isCleanedUp_2 = false;
   let oldFilePath = expandPath(file_path);
   let oldContent = "";
   try {
@@ -64,12 +64,12 @@ async function showDiffInIDE(file_path, edits, toolUseContext, tabName, y) {
     if (!isENOENT(e) && !isNotRegularFileError(e)) throw e;
   }
   function cleanup() {
-    if (toolUseContext.abortController.signal.aborted || y()) throw new AbortError();
+    if (toolUseContext.abortController.signal.aborted || isCleanedUp()) throw new AbortError();
   }
   cleanup();
   async function cleanup_2() {
-    if (isCleanedUp) return;
-    isCleanedUp = true;
+    if (isCleanedUp_2) return;
+    isCleanedUp_2 = true;
     try {
       await closeTabInIDE(tabName, ideClient);
     } catch (e) {
@@ -210,41 +210,41 @@ function markIdeSafe(ideName) {
  */
 async function toolInputToFileEdits(input1, input2) {
   if (input1 === FileEditTool) {
-    let n = FileEditTool.inputSchema.parse(input2);
+    let parsedInput = FileEditTool.inputSchema.parse(input2);
     return {
-      filePath: n.file_path,
+      filePath: parsedInput.file_path,
       edits: [
         {
-          old_string: n.old_string,
-          new_string: n.new_string,
-          replace_all: n.replace_all || false,
+          old_string: parsedInput.old_string,
+          new_string: parsedInput.new_string,
+          replace_all: parsedInput.replace_all || false,
         },
       ],
     };
   }
   if (input1 === FileWriteTool) {
-    let n = FileWriteTool.inputSchema.parse(input2);
-    let s = expandPath(n.file_path);
+    let parsedInput = FileWriteTool.inputSchema.parse(input2);
+    let absolutePath = expandPath(parsedInput.file_path);
     let fileContent = "";
     if (
-      (!(isUncOrDevicePath(n.file_path) || isUncOrDevicePath(s)) ||
-        isWslUncPath(n.file_path) ||
-        isWslUncPath(s)) &&
-      !isNetworkOrSpecialPath(n.file_path) &&
-      !isNetworkOrSpecialPath(s)
+      (!(isUncOrDevicePath(parsedInput.file_path) || isUncOrDevicePath(absolutePath)) ||
+        isWslUncPath(parsedInput.file_path) ||
+        isWslUncPath(absolutePath)) &&
+      !isNetworkOrSpecialPath(parsedInput.file_path) &&
+      !isNetworkOrSpecialPath(absolutePath)
     )
       try {
-        fileContent = (await readFileChecked(s, MAX_SETTINGS_FILE_BYTES)).content;
+        fileContent = (await readFileChecked(absolutePath, MAX_SETTINGS_FILE_BYTES)).content;
       } catch (error) {
         if (isFileTooLargeError(error)) return null;
         if (!isENOENT(error) && !isNotRegularFileError(error)) throw error;
       }
     return {
-      filePath: n.file_path,
+      filePath: parsedInput.file_path,
       edits: [
         {
           old_string: fileContent,
-          new_string: n.content,
+          new_string: parsedInput.content,
           replace_all: false,
         },
       ],
@@ -256,22 +256,22 @@ async function toolInputToFileEdits(input1, input2) {
 /**
  * 把编辑结果写回 Edit/Write 工具输入（Edit 改 old/new/replace_all，Write 改 content）。
  */
-function applyFirstEditToToolInput(tool, r, editsFromContents) {
-  let s = editsFromContents[0];
-  if (!s) return r;
+function applyFirstEditToToolInput(tool, input, editsFromContents) {
+  let firstEdit = editsFromContents[0];
+  if (!firstEdit) return input;
   if (tool === FileEditTool)
     return {
-      ...r,
-      old_string: s.old_string,
-      new_string: s.new_string,
-      replace_all: s.replace_all || false,
+      ...input,
+      old_string: firstEdit.old_string,
+      new_string: firstEdit.new_string,
+      replace_all: firstEdit.replace_all || false,
     };
   if (tool === FileWriteTool)
     return {
-      ...r,
-      content: s.new_string,
+      ...input,
+      content: firstEdit.new_string,
     };
-  return r;
+  return input;
 }
 //@ chunk-s4bxxzsw.js:30160-30661 layout
 /**
@@ -284,33 +284,33 @@ async function getIdeDiffTarget(tool, input, context) {
   let mcpClients = context.options.mcpClients;
   if (!hasAccessToIDEExtensionDiffFeature_2(mcpClients)) return null;
   if (getGlobalConfig().diffTool !== "auto") return null;
-  let y = await toolInputToFileEdits(tool, input);
-  if (y === null) return null;
-  let R = expandPath(y.filePath);
+  let fileEdits = await toolInputToFileEdits(tool, input);
+  if (fileEdits === null) return null;
+  let absolutePath = expandPath(fileEdits.filePath);
   if (
-    ((isUncOrDevicePath(y.filePath) || isUncOrDevicePath(R)) &&
-      !(isWslUncPath(y.filePath) || isWslUncPath(R))) ||
-    isNetworkOrSpecialPath(y.filePath) ||
-    isNetworkOrSpecialPath(R)
+    ((isUncOrDevicePath(fileEdits.filePath) || isUncOrDevicePath(absolutePath)) &&
+      !(isWslUncPath(fileEdits.filePath) || isWslUncPath(absolutePath))) ||
+    isNetworkOrSpecialPath(fileEdits.filePath) ||
+    isNetworkOrSpecialPath(absolutePath)
   )
     return null;
-  if (isNotebookPath(y.filePath) || isNotebookPath(R)) return null;
-  let C = hasAccessToIDEExtensionDiffFeature(mcpClients);
-  if (!C) return null;
+  if (isNotebookPath(fileEdits.filePath) || isNotebookPath(absolutePath)) return null;
+  let ideClient = hasAccessToIDEExtensionDiffFeature(mcpClients);
+  if (!ideClient) return null;
   return {
     ideName: hasAccessToIDEExtensionDiffFeature_2_2(mcpClients) ?? "IDE",
-    ideClient: C,
-    filePath: y.filePath,
-    edits: y.edits,
+    ideClient,
+    filePath: fileEdits.filePath,
+    edits: fileEdits.edits,
   };
 }
 //@ chunk-s4bxxzsw.js:30661-32505 fingerprint = useDiffInIDE (0.36)
-function useDiffInIDE(e) {
-  if (e.permissionResult.localDisplayOnly === true)
+function useDiffInIDE(params) {
+  if (params.permissionResult.localDisplayOnly === true)
     return {
       closeTab: () => {},
     };
-  if (e.ctx.toolUseContext.forRemoteExecution === true || hasHostField(e.input))
+  if (params.ctx.toolUseContext.forRemoteExecution === true || hasHostField(params.input))
     return {
       closeTab: () => {},
     };
@@ -325,37 +325,37 @@ function useDiffInIDE(e) {
     notifyBridge,
     dismissAndTeardown,
     resolveOnce,
-  } = e;
+  } = params;
   let { filePath, edits, ideName, ideClient } = eligibility;
   let sliced = randomUUID().slice(0, 6);
   let tabName = `\u273B [Claude Code] ${basename(filePath)} (${sliced}) \u29C9`;
-  let V = false;
+  let isClosed = false;
   function showDiff() {
-    if (V) return;
-    V = true;
+    if (isClosed) return;
+    isClosed = true;
     closeTabInIDE(tabName, ideClient).catch((error) => {
       logForDebugging(`closeTabInIDE failed: ${error}`, {
         level: "error",
       });
     });
   }
-  let q = {
+  let diffFields = {
     ideName: markIdeSafe(ideName),
     toolName: sanitizeToolNameForAnalytics(tool.name),
     editCount: edits.length,
   };
   logEvent("tengu_ext_will_show_diff", {});
-  showDiffInIDE(filePath, edits, ctx.toolUseContext, tabName, () => V)
+  showDiffInIDE(filePath, edits, ctx.toolUseContext, tabName, () => isClosed)
     .then(({ oldContent, newContent, saved }) => {
       let editsFromContents = computeEditsFromContents(filePath, oldContent, newContent, "single");
-      let Q = {
-        ...q,
+      let eventFields = {
+        ...diffFields,
         isNewFile: oldContent === "",
       };
       if (editsFromContents.length === 0) {
-        if (V || !claim()) return;
+        if (isClosed || !claim()) return;
         showDiff();
-        logEvent("tengu_ext_diff_rejected", Q);
+        logEvent("tengu_ext_diff_rejected", eventFields);
         logFeatureOk("ide_diff_view");
         notifyBridge({
           behavior: "deny",
@@ -377,7 +377,7 @@ function useDiffInIDE(e) {
         resolveOnce(ctx.cancelAndAbort(undefined));
         return;
       }
-      if (V || !claim()) return;
+      if (isClosed || !claim()) return;
       showDiff();
       if (permissionResult.denialLimitFallback !== undefined) {
         resetDenialStreakAfterUserApproval(ctx.toolUseContext);
@@ -385,12 +385,12 @@ function useDiffInIDE(e) {
           autoDenied: false,
         });
       }
-      let oe = applyFirstEditToToolInput(tool, input, editsFromContents);
-      logEvent("tengu_ext_diff_accepted", Q);
+      let updatedInput = applyFirstEditToToolInput(tool, input, editsFromContents);
+      logEvent("tengu_ext_diff_accepted", eventFields);
       logFeatureOk("ide_diff_view");
       notifyBridge({
         behavior: "allow",
-        updatedInput: oe,
+        updatedInput,
         updatedPermissions: [],
       });
       dismissAndTeardown();
@@ -407,7 +407,7 @@ function useDiffInIDE(e) {
         },
       );
       resolveOnce(
-        ctx.handleUserAllow(oe, [], {
+        ctx.handleUserAllow(updatedInput, [], {
           permissionPromptStartTimeMs,
           decisionReason: permissionResult.decisionReason,
           matchedAskRule: permissionResult.matchedAskRule,
@@ -419,7 +419,7 @@ function useDiffInIDE(e) {
       );
     })
     .catch((error) => {
-      if (V || ctx.toolUseContext.abortController.signal.aborted) return;
+      if (isClosed || ctx.toolUseContext.abortController.signal.aborted) return;
       logForDebugging(`IDE diff view failed: ${error instanceof Error ? error.message : String(error)}`, {
         level: "error",
       });

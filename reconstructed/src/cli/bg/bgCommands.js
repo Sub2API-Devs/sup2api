@@ -37,7 +37,12 @@ import {
   encodeHostLineage,
   ensureDaemon,
 } from "../../services/daemon/ensureDaemon.js";
-import { hostManagedDir, hostManagedEntry, redactDaemonPipeKey } from "../../utils/sandbox/userNamespace.js";
+import {
+  hostManagedDir,
+  hostManagedEntry,
+  readDaemonToken,
+  redactDaemonPipeKey,
+} from "../../services/daemon/paths.js";
 import {
   checkWorkspaceTrust,
   formatWorkspaceUntrusted,
@@ -79,7 +84,7 @@ import { findAgentExcludingWebFetch } from "../../tools/WebFetchTool/harnessNote
 import { getAgentDefinitionsWithOverrides } from "../../tools/AgentTool/loadAgentsDir.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { isEnvTruthy, isRestrictedMode } from "../../utils/envUtils.js";
-import { withHostEnvRestored_2, withHostOwnedEnv } from "../../utils/settings/managedSettingsFiles.js";
+import { withHostEnvRestored_2, withHostOwnedEnv } from "../../utils/settings/hostEnvWrites.js";
 import {
   isPersonalConfigRestricted,
   getPersonalConfigFixHint,
@@ -111,7 +116,6 @@ import { buildBgDispatcherEnv } from "../../utils/subprocessEnv.js";
 import { ownStoredLoginPlanAttributes } from "../../utils/auth.js";
 import { controlRequest, subscribeControl } from "../../services/daemon/controlClient.js";
 import { logEventAsync } from "../../services/analytics/index.js";
-import { readDaemonToken } from "../../services/daemon/paths.js";
 import { bgSupervisorNoun, daemonHint, bgSupervisorNounCap } from "../../utils/fleetGates.js";
 import {
   probeDaemonJob,
@@ -177,6 +181,7 @@ import { printableLabel } from "../../utils/printableName.js";
 import { isAcceptableModelArg } from "../../services/daemon/processLiveness.js";
 import { looksLikeAgentsJson } from "../agentsArg.js";
 import { hasSkipDangerousModePermissionPrompt, hasAutoModeOptIn } from "../../utils/settings/settings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bg51yd13.js:27567-27615 placement
 function gateCauseExtra(gateCause) {
@@ -189,114 +194,123 @@ function gateCauseExtra(gateCause) {
     : [];
 }
 //@ chunk-bg51yd13.js:27615-27700 placement
-function workspaceGateCause(e) {
-  return e.unresolvable ? "workspace_unresolvable" : "workspace_untrusted";
+function workspaceGateCause(verdict) {
+  return verdict.unresolvable ? "workspace_unresolvable" : "workspace_untrusted";
 }
 //@ chunk-bg51yd13.js:27700-28705 placement
-async function preSeedReplBgJob(e, n, o) {
-  let sliced = e.slice(0, 8);
-  let jobDir = getJobDir(sliced);
-  await ensureJobTmpFolder(sliced, o);
-  let intent = n.intent ?? "";
-  let y = {
+async function preSeedReplBgJob(sessionId, options, storage) {
+  let hostKey = sessionId.slice(0, 8);
+  let jobDir = getJobDir(hostKey);
+  await ensureJobTmpFolder(hostKey, storage);
+  let intent = options.intent ?? "";
+  let state = {
     ...makeInitialState({
       template: {
         name: "bg",
         description: "",
       },
       intent,
-      name: n.name,
-      nameSource: n.nameSource,
-      color: n.color,
-      detail: n.detail ?? IDLE_DETAIL,
+      name: options.name,
+      nameSource: options.nameSource,
+      color: options.color,
+      detail: options.detail ?? IDLE_DETAIL,
       tempo: "blocked",
       needs: IDLE_NEEDS,
-      sessionId: e,
-      cwd: n.cwd,
-      worktreePath: n.worktree?.path,
-      worktreeBranch: n.worktree?.branch,
-      worktreeHookBased: n.worktree?.hookBased,
-      originCwd: n.worktree?.originCwd,
+      sessionId,
+      cwd: options.cwd,
+      worktreePath: options.worktree?.path,
+      worktreeBranch: options.worktree?.branch,
+      worktreeHookBased: options.worktree?.hookBased,
+      originCwd: options.worktree?.originCwd,
       bgIsolation: "none",
       interactiveLineage: true,
       providerEnv: callerProviderEnv(),
-      sessionPermissionRules: n.sessionPermissionRules,
-      memoryToggledOff: n.memoryToggledOff,
-      autoMemoryOffThisSession: n.autoMemoryOffThisSession,
-      linkScanPath: n.linkScanPath,
-      inFlight: n.inFlight,
-      respawnFlags: n.respawnFlags,
+      sessionPermissionRules: options.sessionPermissionRules,
+      memoryToggledOff: options.memoryToggledOff,
+      autoMemoryOffThisSession: options.autoMemoryOffThisSession,
+      linkScanPath: options.linkScanPath,
+      inFlight: options.inFlight,
+      respawnFlags: options.respawnFlags,
     }),
-    ...(n.keptBy !== undefined && {
-      keptBy: n.keptBy,
+    ...(options.keptBy !== undefined && {
+      keptBy: options.keptBy,
     }),
-    ...(n.createdAt !== undefined && {
-      createdAt: n.createdAt,
+    ...(options.createdAt !== undefined && {
+      createdAt: options.createdAt,
     }),
   };
-  await writeStateAtomic(jobDir, y, o);
+  await writeStateAtomic(jobDir, state, storage);
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST)
-    if (isStorageV5Enabled() && o !== undefined && isValidKeySegment(sliced)) {
-      await ensureTombstoneScope(o);
-      await writeHostTombstone(o, sliced, encodeHostLineage(y.providerEnv));
+    if (isStorageV5Enabled() && storage !== undefined && isValidKeySegment(hostKey)) {
+      await ensureTombstoneScope(storage);
+      await writeHostTombstone(storage, hostKey, encodeHostLineage(state.providerEnv));
     } else {
       await mkdir(hostManagedDir(), {
         recursive: true,
         mode: 448,
       });
-      await writeFile(hostManagedEntry(sliced), encodeHostLineage(y.providerEnv));
+      await writeFile(hostManagedEntry(hostKey), encodeHostLineage(state.providerEnv));
     }
   return {
-    short: sliced,
+    short: hostKey,
     jobDir,
-    state: y,
+    state,
   };
 }
 //@ chunk-bg51yd13.js:28705-29384 placement
-async function spawnBgSession(argv, n, launchMode = "shell", r, launchOptions, l, u, storage) {
-  let p = validateBgLaunchFlags(argv);
-  if (p)
+async function spawnBgSession(
+  argv,
+  requestedSessionId,
+  launchMode = "shell",
+  requestedCwd,
+  launchOptions,
+  options,
+  requestedShort,
+  storage,
+) {
+  let flagError = validateBgLaunchFlags(argv);
+  if (flagError)
     return {
       ok: false,
-      error: p,
+      error: flagError,
       reason: "gate_blocked",
       gateCause: "disclaimer",
     };
-  let w = checkWorkspaceTrust(r ?? getCwd());
-  if (w.verdict === "untrusted")
+  let trust = checkWorkspaceTrust(requestedCwd ?? getCwd());
+  if (trust.verdict === "untrusted")
     return {
       ok: false,
-      error: formatWorkspaceUntrusted(w),
+      error: formatWorkspaceUntrusted(trust),
       reason: "gate_blocked",
-      gateCause: workspaceGateCause(w),
+      gateCause: workspaceGateCause(trust),
     };
-  let cwd = r === undefined ? undefined : w.cwd;
-  let R = n ?? randomUUID();
-  let h = u ?? R.slice(0, 8);
-  let jobDir = getJobDir(h);
+  let cwd = requestedCwd === undefined ? undefined : trust.cwd;
+  let sessionId = requestedSessionId ?? randomUUID();
+  let short = requestedShort ?? sessionId.slice(0, 8);
+  let jobDir = getJobDir(short);
   return trackBgDispatch(
-    h,
+    short,
     (async () => {
       try {
-        await ensureJobTmpFolder(h, storage);
+        await ensureJobTmpFolder(short, storage);
         return await spawnBgSession_2(
           argv,
           launchMode,
           cwd,
           launchOptions,
-          l,
+          options,
           {
-            sessionId: R,
-            short: h,
+            sessionId,
+            short,
             jobDir,
-            freshDir: n === undefined,
+            freshDir: requestedSessionId === undefined,
           },
-          w.verdict === "session",
+          trust.verdict === "session",
           storage,
         );
       } catch (error) {
         if (launchMode !== "fleet" && launchMode !== "spare")
-          if (storage) await removeJobStorage(storage, h);
+          if (storage) await removeJobStorage(storage, short);
           else
             await rm(jobDir, {
               recursive: true,
@@ -315,12 +329,21 @@ async function spawnBgSession(argv, n, launchMode = "shell", r, launchOptions, l
 /**
  * 解析 --bg 启动参数（--agent、--name、--fork-session、恢复参数）并通过守护进程或回退路径启动后台会话（约 7 KB）。
  */
-async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIdentity, u, storage) {
+async function spawnBgSession_2(
+  argv,
+  launchMode,
+  cwd,
+  launchOptions,
+  extraEnv,
+  jobIdentity,
+  isWorkspaceTrusted,
+  storage,
+) {
   let { sessionId, short, jobDir, freshDir } = jobIdentity;
   let dashDashIndex = findDashDashIndex(argv);
   let argsBeforeDashDash = dashDashIndex >= 0 ? argv.slice(0, dashDashIndex) : argv;
   let agentName = getFlagValue(argsBeforeDashDash, "--agent");
-  let E = undefined;
+  let routine = undefined;
   let nameFlag = getFlagValue(argsBeforeDashDash, "--name", "-n");
   let sessionName = nameFlag ?? launchOptions?.name;
   let resumeArg = getResumeArg(argsBeforeDashDash);
@@ -348,26 +371,27 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
     splitForwardableArgs(dashDashIndex >= 0 ? argsWithoutResume : keepFlagArgsOnly(argsWithoutResume)),
   );
   if (launchMode === "shell") {
-    let G = cwd ?? getCwd();
-    let q = stripForwardedFlags(argsWithoutResume);
-    let Be = [
-      ...argsWithoutResume.filter((it, Ze) => q[Ze] !== it),
-      ...(isWindowsDevicePath(G) ? [G] : []),
+    let baseCwd = cwd ?? getCwd();
+    let keptArgs = stripForwardedFlags(argsWithoutResume);
+    let uncPaths = [
+      ...argsWithoutResume.filter((arg, index) => keptArgs[index] !== arg),
+      ...(isWindowsDevicePath(baseCwd) ? [baseCwd] : []),
       ...(launchOptions?.exec && isWindowsDevicePath(launchOptions.exec) ? [launchOptions.exec] : []),
       ...(resumeArg !== undefined && isWindowsDevicePath(resumeArg) ? [resumeArg] : []),
     ];
-    if (Be.length > 0)
+    if (uncPaths.length > 0)
       process.stderr
-        .write(`warning: background sessions do not support Windows network (UNC) paths; the following will be neutralized: ${Be.join(", ")}
+        .write(`warning: background sessions do not support Windows network (UNC) paths; the following will be neutralized: ${uncPaths.join(", ")}
 `);
   }
-  let re = resumeArg !== undefined && resumeArg === sessionId;
-  let Je = hasResumeFlag && !hasForkSessionFlag ? ["--fork-session"] : [];
-  let xe = re ? [] : ["--session-id", sessionId, ...Je];
+  let isResumeSameSession = resumeArg !== undefined && resumeArg === sessionId;
+  let forkArgs = hasResumeFlag && !hasForkSessionFlag ? ["--fork-session"] : [];
+  let sessionIdArgs = isResumeSameSession ? [] : ["--session-id", sessionId, ...forkArgs];
   if (
     launchMode === "shell" &&
     argsBeforeDashDash.some(
-      (G, q) => !flagValueIndices.has(q) && (G === "--session-id" || G.startsWith("--session-id=")),
+      (arg, index) =>
+        !flagValueIndices.has(index) && (arg === "--session-id" || arg.startsWith("--session-id=")),
     )
   )
     process.stderr
@@ -382,24 +406,24 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
   if (agentName && !agentDefinition && launchMode === "shell")
     process.stderr.write(`warning: no agent named '${agentName}' \u2014 spawning with default template
 `);
-  let Z = undefined;
+  let routineDef = undefined;
   let intent = launchOptions?.intent ?? positionalPrompt ?? "";
   let isIdleLaunch =
     !agentDefinition?.initialPrompt &&
     !launchOptions?.exec &&
     !positionalPrompt &&
-    !argsBeforeDashDash.some((G, q) => !flagValueIndices.has(q) && G === "--reply-on-resume");
-  let Ye = false;
-  let qe;
+    !argsBeforeDashDash.some((arg, index) => !flagValueIndices.has(index) && arg === "--reply-on-resume");
+  let didSeedState = false;
+  let seedWrite;
   if (launchMode !== "fleet" && launchMode !== "spare") {
-    let G = freshDir ? null : await readJobState(jobDir, storage);
-    if (G === null)
-      qe = writeStateAtomic(
+    let existingState = freshDir ? null : await readJobState(jobDir, storage);
+    if (existingState === null)
+      seedWrite = writeStateAtomic(
         jobDir,
         makeInitialState({
           template: {
             name: launchOptions?.exec ? "exec" : (agentName ?? undefined ?? "bg"),
-            description: agentDefinition?.whenToUse ?? Z?.description ?? "",
+            description: agentDefinition?.whenToUse ?? routineDef?.description ?? "",
             initialPrompt: agentDefinition?.initialPrompt,
             color: agentDefinition?.color,
           },
@@ -416,12 +440,12 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
           detail:
             launchOptions?.detail ??
             (isIdleLaunch
-              ? Z
-                ? `(idle \u2014 waiting for ${describeRoutineTriggers(Z.triggers)})`
+              ? routineDef
+                ? `(idle \u2014 waiting for ${describeRoutineTriggers(routineDef.triggers)})`
                 : IDLE_DETAIL
               : undefined),
-          tempo: isIdleLaunch ? (Z ? "idle" : "blocked") : undefined,
-          needs: isIdleLaunch && !Z ? IDLE_NEEDS : undefined,
+          tempo: isIdleLaunch ? (routineDef ? "idle" : "blocked") : undefined,
+          needs: isIdleLaunch && !routineDef ? IDLE_NEEDS : undefined,
           sessionId,
           cwd: cwd ?? getCwd(),
           worktreePath: launchOptions?.worktree?.path,
@@ -443,18 +467,18 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
         storage,
       )
         .then(() => {
-          Ye = true;
+          didSeedState = true;
         })
         .catch((error) =>
           logForDebugging(`bg seed state write failed: ${errorMessage(error)}`, {
             level: "warn",
           }),
         );
-    else if (respawnFlags.length > 0 && G.respawnFlags.length === 0)
-      qe = writeStateAtomic(
+    else if (respawnFlags.length > 0 && existingState.respawnFlags.length === 0)
+      seedWrite = writeStateAtomic(
         jobDir,
         {
-          ...G,
+          ...existingState,
           respawnFlags,
         },
         storage,
@@ -464,25 +488,25 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
         }),
       );
   }
-  let Ee =
+  let autoModeServer =
     isEnvTruthy(providerEnv.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) &&
     isEnvTruthy(env.CLAUDE_CODE_AUTO_MODE_SERVER)
       ? (withHostEnvRestored_2(() => env.CLAUDE_CODE_AUTO_MODE_SERVER) ?? "")
       : env.CLAUDE_CODE_AUTO_MODE_SERVER;
-  let Ie = isPersonalConfigRestricted();
-  let we = Ie ? getPersonalConfigFixHint() : undefined;
-  let ce =
+  let restrictsPersonalConfig = isPersonalConfigRestricted();
+  let personalConfigFixHint = restrictsPersonalConfig ? getPersonalConfigFixHint() : undefined;
+  let isInheritingEnv =
     !launchOptions?.exec &&
     (launchMode === "repl" || (!launchOptions?.providerEnv && !cwd) || cwd === getCwd());
   let ANTHROPIC_BASE_URL =
-    !launchOptions?.exec && !ce && cwd
+    !launchOptions?.exec && !isInheritingEnv && cwd
       ? withHostOwnedEnv(() => collectProviderPassthroughEnv(providerEnv)).ANTHROPIC_BASE_URL
       : undefined;
-  let Ne =
+  let withheldCwd =
     ANTHROPIC_BASE_URL !== undefined && !isFirstPartyAnthropicHost(ANTHROPIC_BASE_URL) ? cwd : undefined;
-  if (Ne)
+  if (withheldCwd)
     logForDebugging("bg: this session's ANTHROPIC_BASE_URL is not passed to a session in another folder");
-  let Ae = {
+  let descriptor = {
     proto: BG_PROTO,
     short,
     sessionId,
@@ -503,12 +527,12 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
               normalizeUuidOrNull(resumeArg) !== null ||
               isTranscriptFileResumeArg(resumeArg) ||
               launchOptions?.resumeTranscriptPath !== undefined,
-            fork: !re && (hasForkSessionFlag || Je.length > 0),
+            fork: !isResumeSameSession && (hasForkSessionFlag || forkArgs.length > 0),
             flagArgs: [...argsWithoutResume, ...(dashDashIndex >= 0 ? argv.slice(dashDashIndex) : [])],
           }
         : {
             mode: "prompt",
-            args: [...xe, ...stripSessionIdFlag(argv)],
+            args: [...sessionIdArgs, ...stripSessionIdFlag(argv)],
             restoresTranscript: hasContinueOrResumeId(argv),
           },
     respawnFlags: argsWithoutResume,
@@ -526,14 +550,14 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
             CLAUDE_CODE_DISABLE_PROACTIVITY: "1",
           }
         : {}),
-      ...(Ie && {
+      ...(restrictsPersonalConfig && {
         CLAUDE_CODE_RESTRICT_PERSONAL_CONFIG: "1",
       }),
-      ...(we !== undefined && {
-        CLAUDE_CODE_PERSONAL_CONFIG_FIX: we,
+      ...(personalConfigFixHint !== undefined && {
+        CLAUDE_CODE_PERSONAL_CONFIG_FIX: personalConfigFixHint,
       }),
-      ...(Ee !== undefined && {
-        CLAUDE_CODE_AUTO_MODE_SERVER: Ee,
+      ...(autoModeServer !== undefined && {
+        CLAUDE_CODE_AUTO_MODE_SERVER: autoModeServer,
       }),
       ...(env.CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS && {
         CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: "1",
@@ -556,9 +580,9 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
       ...(env.CLAUDE_CODE_PLUGIN_DIRS && {
         CLAUDE_CODE_PLUGIN_DIRS: env.CLAUDE_CODE_PLUGIN_DIRS,
       }),
-      ...(ce && withHostOwnedEnv(() => collectProviderPassthroughEnv(providerEnv))),
-      ...(Ne && {
-        [CLAUDE_BG_GATEWAY_WITHHELD]: Ne,
+      ...(isInheritingEnv && withHostOwnedEnv(() => collectProviderPassthroughEnv(providerEnv))),
+      ...(withheldCwd && {
+        [CLAUDE_BG_GATEWAY_WITHHELD]: withheldCwd,
       }),
       ...(bgIsolation && {
         CLAUDE_BG_ISOLATION: bgIsolation,
@@ -579,10 +603,10 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
       }),
     },
     reattachEnv: {
-      ...s,
+      ...extraEnv,
       ...(!launchOptions?.exec && {
         ...buildBgDispatcherEnv(ownStoredLoginPlanAttributes()),
-        ...(u && {
+        ...(isWorkspaceTrusted && {
           CLAUDE_BG_WORKSPACE_TRUSTED: "1",
         }),
       }),
@@ -606,9 +630,12 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
     cols: process.stdout.columns || undefined,
     rows: process.stdout.rows || undefined,
   };
-  let [, U] = await Promise.all([qe ?? Promise.resolve(), dispatchViaDaemon(Ae, false, Date.now(), storage)]);
-  if (U.ok) {
-    if (U.reattachEnvDropped !== undefined) warnHomeTrustFallback(Ae, launchMode);
+  let [, dispatchResult] = await Promise.all([
+    seedWrite ?? Promise.resolve(),
+    dispatchViaDaemon(descriptor, false, Date.now(), storage),
+  ]);
+  if (dispatchResult.ok) {
+    if (dispatchResult.reattachEnvDropped !== undefined) warnHomeTrustFallback(descriptor, launchMode);
     return {
       ok: true,
       short,
@@ -617,25 +644,29 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
       name: sessionName,
     };
   }
-  let detail = U.reason === "cwd-gone" ? U.detail : undefined;
-  if (U.reason === "ack-timeout" || U.reason === "enoconn" || U.reason === "estarting") {
-    let G = await controlRequest({
+  let detail = dispatchResult.reason === "cwd-gone" ? dispatchResult.detail : undefined;
+  if (
+    dispatchResult.reason === "ack-timeout" ||
+    dispatchResult.reason === "enoconn" ||
+    dispatchResult.reason === "estarting"
+  ) {
+    let listResult = await controlRequest({
       proto: BG_PROTO,
       op: "list",
     });
     if (
-      G.ok &&
-      G.op === "list" &&
-      G.jobs.some((job) => job.short === short && job.nonce === U.nonce && !job.outcome)
+      listResult.ok &&
+      listResult.op === "list" &&
+      listResult.jobs.some((job) => job.short === short && job.nonce === dispatchResult.nonce && !job.outcome)
     ) {
-      logForDebugging(`bg: daemon dispatch ${U.reason} but worker is live`, {
+      logForDebugging(`bg: daemon dispatch ${dispatchResult.reason} but worker is live`, {
         level: "warn",
       });
-      warnHomeTrustFallback(Ae, launchMode);
+      warnHomeTrustFallback(descriptor, launchMode);
       await logEventAsync("tengu_bg_dispatch_rescued", {
-        reason_ack_timeout: U.reason === "ack-timeout",
-        reason_enoconn: U.reason === "enoconn",
-        reason_estarting: U.reason === "estarting",
+        reason_ack_timeout: dispatchResult.reason === "ack-timeout",
+        reason_enoconn: dispatchResult.reason === "enoconn",
+        reason_estarting: dispatchResult.reason === "estarting",
       });
       return {
         ok: true,
@@ -646,14 +677,19 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
         rescued: true,
       };
     }
-    if (U.reason === "ack-timeout" && G.ok && G.op === "list" && !G.jobs.some((job) => job.short === short)) {
-      let q = await controlRequest(
+    if (
+      dispatchResult.reason === "ack-timeout" &&
+      listResult.ok &&
+      listResult.op === "list" &&
+      !listResult.jobs.some((job) => job.short === short)
+    ) {
+      let redispatchResult = await controlRequest(
         {
           proto: BG_PROTO,
           op: "dispatch",
           d: {
-            ...Ae,
-            nonce: U.nonce,
+            ...descriptor,
+            nonce: dispatchResult.nonce,
           },
           timeoutMs: 5000,
           auth: await readDaemonToken(),
@@ -662,7 +698,7 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
           timeoutMs: 6000,
         },
       );
-      if (q.ok && q.op === "dispatch") {
+      if (redispatchResult.ok && redispatchResult.op === "dispatch") {
         logForDebugging(`bg: ack-timeout recovered via redispatch (${short})`, {
           level: "warn",
         });
@@ -681,17 +717,18 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
           rescued: true,
         };
       }
-      if (!q.ok && "code" in q && q.code === "ECWDGONE") detail = q.error;
+      if (!redispatchResult.ok && "code" in redispatchResult && redispatchResult.code === "ECWDGONE")
+        detail = redispatchResult.error;
     }
   }
-  if (Ye)
+  if (didSeedState)
     if (storage) await removeJobStorage(storage, short);
     else
       await rm(jobDir, {
         recursive: true,
         force: true,
       }).catch(() => {});
-  if (U.reason === "short-alive")
+  if (dispatchResult.reason === "short-alive")
     return {
       ok: false,
       alive: true,
@@ -699,40 +736,43 @@ async function spawnBgSession_2(argv, launchMode, cwd, launchOptions, s, jobIden
       error: `Session ${short} is already running \u2014 \`claude attach ${short}\` to join it`,
       reason: "short_alive",
     };
-  if (U.reason === "stale-short")
+  if (dispatchResult.reason === "stale-short")
     return {
       ok: false,
       error: "Previous session is still shutting down \u2014 try again in a moment",
       reason: "stale_short",
     };
-  if (U.reason === "cwd-gone" || detail !== undefined)
+  if (dispatchResult.reason === "cwd-gone" || detail !== undefined)
     return {
       ok: false,
-      error: `Couldn't start a background session (${detail ?? U.detail})`,
+      error: `Couldn't start a background session (${detail ?? dispatchResult.detail})`,
       reason: "cwd_gone",
     };
-  let Le = U.reason === "daemon-unreachable" && U.detail ? U.detail : describeDispatchFailure(U.reason);
+  let dispatchDetail =
+    dispatchResult.reason === "daemon-unreachable" && dispatchResult.detail
+      ? dispatchResult.detail
+      : describeDispatchFailure(dispatchResult.reason);
   return {
     ok: false,
-    error: `Couldn't reach the ${bgSupervisorNoun()} (${Le})${daemonHint("status")}`,
+    error: `Couldn't reach the ${bgSupervisorNoun()} (${dispatchDetail})${daemonHint("status")}`,
     reason:
-      U.reason === "daemon-unreachable"
-        ? `daemon_unavailable_${classifyDaemonError(U.detail)}`
-        : U.reason.replace(/-/g, "_"),
+      dispatchResult.reason === "daemon-unreachable"
+        ? `daemon_unavailable_${classifyDaemonError(dispatchResult.detail)}`
+        : dispatchResult.reason.replace(/-/g, "_"),
   };
 }
 //@ chunk-bg51yd13.js:36584-36954 placement
 /**
  * 会话记录了 CLAUDE_BG_WORKSPACE_TRUSTED（守护进程只能走回退派发路径、没继承本终端的主目录信任）时写调试日志警告；shell 模式下同时打印到 stderr。
  */
-function warnHomeTrustFallback(e, launchMode) {
-  if (e.reattachEnv?.CLAUDE_BG_WORKSPACE_TRUSTED === undefined) return;
-  let o = `warning: session ${e.short} started without this terminal's home-directory trust (the ${bgSupervisorNoun()} could only take its fallback dispatch path), so hooks and project settings from your home directory stay off in it`;
-  logForDebugging(`bg: ${o}`, {
+function warnHomeTrustFallback(descriptor, launchMode) {
+  if (descriptor.reattachEnv?.CLAUDE_BG_WORKSPACE_TRUSTED === undefined) return;
+  let message = `warning: session ${descriptor.short} started without this terminal's home-directory trust (the ${bgSupervisorNoun()} could only take its fallback dispatch path), so hooks and project settings from your home directory stay off in it`;
+  logForDebugging(`bg: ${message}`, {
     level: "warn",
   });
   if (launchMode === "shell")
-    process.stderr.write(`${o}
+    process.stderr.write(`${message}
 `);
 }
 //@ chunk-bg51yd13.js:36954-38133 placement
@@ -760,27 +800,27 @@ async function resolveBgResumeTarget(argv, options) {
       reason: "unresolved",
       original: undefined,
     };
-  let sliced = sessionId.slice(0, 8);
-  let p = await checkSessionOpenElsewhere(sessionId);
-  if (p !== null)
+  let short = sessionId.slice(0, 8);
+  let openReason = await checkSessionOpenElsewhere(sessionId);
+  if (openReason !== null)
     return {
       kind: "copy",
-      reason: p,
-      original: sliced,
+      reason: openReason,
+      original: short,
     };
   let existingJob = null;
   let wakePrompt;
-  let jobState = await readJobState(getJobDir(sliced), storageV5);
+  let jobState = await readJobState(getJobDir(short), storageV5);
   if (jobState === null) {
-    if (await jobStateExists(sliced, storageV5))
+    if (await jobStateExists(short, storageV5))
       return {
         kind: "copy",
         reason: "unreadable",
-        original: sliced,
+        original: short,
       };
   } else
     existingJob = {
-      jobId: sliced,
+      jobId: short,
       state: jobState,
     };
   if (existingJob !== null) {
@@ -789,25 +829,25 @@ async function resolveBgResumeTarget(argv, options) {
       return {
         kind: "copy",
         reason: "handle-taken",
-        original: sliced,
+        original: short,
       };
     if (state.resumeSessionId && state.resumeSessionId !== sessionId) {
-      let D = await checkSessionOpenElsewhere(state.resumeSessionId);
-      if (D !== null)
+      let openReason = await checkSessionOpenElsewhere(state.resumeSessionId);
+      if (openReason !== null)
         return {
           kind: "copy",
-          reason: D,
-          original: sliced,
+          reason: openReason,
+          original: short,
         };
     }
   }
-  for (let h of new Set([sliced, existingJob?.state.daemonShort ?? sliced])) {
-    let D = await probeDaemonJob(h, storageV5);
-    if (D.alive || D.present)
+  for (let daemonShort of new Set([short, existingJob?.state.daemonShort ?? short])) {
+    let probe = await probeDaemonJob(daemonShort, storageV5);
+    if (probe.alive || probe.present)
       return {
         kind: "copy",
         reason: "running",
-        original: sliced,
+        original: short,
       };
   }
   if (existingJob !== null) {
@@ -815,17 +855,18 @@ async function resolveBgResumeTarget(argv, options) {
       return {
         kind: "copy",
         reason: "restricted",
-        original: sliced,
+        original: short,
       };
-    let h = stripResumeFlags(args);
-    let D = dashDashIndex >= 0 ? -1 : findPromptArgIndex(h);
-    if (h.length > (D >= 0 ? 1 : 0))
+    let strippedArgs = stripResumeFlags(args);
+    let promptIndex = dashDashIndex >= 0 ? -1 : findPromptArgIndex(strippedArgs);
+    if (strippedArgs.length > (promptIndex >= 0 ? 1 : 0))
       return {
         kind: "copy",
         reason: "own-options",
-        original: sliced,
+        original: short,
       };
-    wakePrompt = (dashDashIndex >= 0 ? argv.slice(dashDashIndex + 1).join(" ") : h[D]) || undefined;
+    wakePrompt =
+      (dashDashIndex >= 0 ? argv.slice(dashDashIndex + 1).join(" ") : strippedArgs[promptIndex]) || undefined;
   }
   return {
     kind: "continue",
@@ -840,26 +881,28 @@ async function resolveBgResumeTarget(argv, options) {
   };
 }
 //@ chunk-bg51yd13.js:38133-38341 placement
-async function checkSessionOpenElsewhere(e) {
-  let n;
+async function checkSessionOpenElsewhere(sessionId) {
+  let holders;
   try {
-    n = await listLiveSessionHolders(e, {
+    holders = await listLiveSessionHolders(sessionId, {
       rejectUnreadable: true,
     });
   } catch {
     return "unverified";
   }
-  if (n.length === 0) return null;
-  return n.some((o) => o.kind === "bg" || o.kind === "daemon-worker") ? "running" : "open-elsewhere";
+  if (holders.length === 0) return null;
+  return holders.some((holder) => holder.kind === "bg" || holder.kind === "daemon-worker")
+    ? "running"
+    : "open-elsewhere";
 }
 //@ chunk-bg51yd13.js:38341-38513 placement
-async function jobStateExists(e, storageV5) {
+async function jobStateExists(short, storageV5) {
   if (storageV5) {
-    let o = await storageV5.statMeta(jobStateKey(e));
-    return o.ok || o.error.code !== "NotFound";
+    let meta = await storageV5.statMeta(jobStateKey(short));
+    return meta.ok || meta.error.code !== "NotFound";
   }
   try {
-    return (await readdir(getJobDir(e))).includes("state.json");
+    return (await readdir(getJobDir(short))).includes("state.json");
   } catch (error) {
     return !isENOENT(error);
   }
@@ -892,44 +935,52 @@ function formatResumeCopyNote(resumeResult, copyShort) {
 /**
  * 处理命令行中的 --bg：判断是标志还是文本，校验与 --print 等冲突，转入后台启动。
  */
-async function handleBgFlag(e, storage) {
-  if (stripBgOnlyFlags(e).length === e.length) {
-    let D = e.find((S) => BG_FLAG_NAMES.includes(S)) ?? "--bg";
+async function handleBgFlag(argv, storage) {
+  if (stripBgOnlyFlags(argv).length === argv.length) {
+    let bgFlag = argv.find((arg) => BG_FLAG_NAMES.includes(arg)) ?? "--bg";
     process.stderr
-      .write(`Couldn't tell whether ${D} is a flag or text here, so nothing was started. To start a background session put it first: claude --bg <prompt>
+      .write(`Couldn't tell whether ${bgFlag} is a flag or text here, so nothing was started. To start a background session put it first: claude --bg <prompt>
 `);
     await logFeatureSadAsync("cli_bg_dispatch", "flag_not_stripped");
     process.exitCode = 1;
     return;
   }
-  let dashDashIndex = findDashDashIndex(e);
-  let r = dashDashIndex >= 0 ? e.slice(0, dashDashIndex) : e;
-  let flagValueIndices = getFlagValueIndices(r);
-  let index = r.findIndex((D, S) => !flagValueIndices.has(S) && (D === "--exec" || D.startsWith("--exec=")));
+  let dashDashIndex = findDashDashIndex(argv);
+  let headArgs = dashDashIndex >= 0 ? argv.slice(0, dashDashIndex) : argv;
+  let flagValueIndices = getFlagValueIndices(headArgs);
+  let index = headArgs.findIndex(
+    (arg, argIndex) => !flagValueIndices.has(argIndex) && (arg === "--exec" || arg.startsWith("--exec=")),
+  );
   if (index !== -1) {
-    let D = e[index].includes("=") ? e[index].slice(e[index].indexOf("=") + 1) : undefined;
-    let S = D ?? e.slice(index + 1).join(" ");
-    if (!S.trim()) {
+    let inlineExec = argv[index].includes("=") ? argv[index].slice(argv[index].indexOf("=") + 1) : undefined;
+    let execCommand = inlineExec ?? argv.slice(index + 1).join(" ");
+    if (!execCommand.trim()) {
       process.stderr.write(`--exec requires a command.
 `);
       process.exitCode = 1;
       return;
     }
-    let E = stripBgOnlyFlags([...e.slice(0, index), ...(D !== undefined ? e.slice(index + 1) : [])]);
-    let flagValue = getFlagValue(E, "--name", "-n");
-    let flagValueIndices = getFlagValueIndices(E);
-    let dashDashIndex = findDashDashIndex(E);
-    let N = dashDashIndex >= 0 ? E.slice(0, dashDashIndex) : E;
-    let filtered = N.filter((K, ne) => !flagValueIndices.has(ne));
+    let restArgs = stripBgOnlyFlags([
+      ...argv.slice(0, index),
+      ...(inlineExec !== undefined ? argv.slice(index + 1) : []),
+    ]);
+    let flagValue = getFlagValue(restArgs, "--name", "-n");
+    let flagValueIndices = getFlagValueIndices(restArgs);
+    let dashDashIndex = findDashDashIndex(restArgs);
+    let argsBeforeDashDash = dashDashIndex >= 0 ? restArgs.slice(0, dashDashIndex) : restArgs;
+    let filtered = argsBeforeDashDash.filter((arg, argIndex) => !flagValueIndices.has(argIndex));
     if (hasRemoteBackendFlags(filtered)) {
-      process.stderr.write(`${rejectBgWithEnvironmentFlags(E)}
+      process.stderr.write(`${rejectBgWithEnvironmentFlags(restArgs)}
 `);
       process.exitCode = 1;
       return;
     }
-    let filtered_2 = N.filter(
-      (K, ne) =>
-        !flagValueIndices.has(ne) && looksLikeFlag(K) && !/^(-n|--name)(=|$)/.test(K) && !/^-n./.test(K),
+    let filtered_2 = argsBeforeDashDash.filter(
+      (arg, argIndex) =>
+        !flagValueIndices.has(argIndex) &&
+        looksLikeFlag(arg) &&
+        !/^(-n|--name)(=|$)/.test(arg) &&
+        !/^-n./.test(arg),
     );
     if (filtered_2.length > 0)
       process.stderr.write(`warning: --exec ignores ${filtered_2.join(" ")} (only --name composes)
@@ -941,8 +992,8 @@ async function handleBgFlag(e, storage) {
       "shell",
       undefined,
       {
-        intent: S,
-        exec: S,
+        intent: execCommand,
+        exec: execCommand,
         ...(flagValue && {
           name: flagValue,
           nameSource: "user",
@@ -962,7 +1013,7 @@ async function handleBgFlag(e, storage) {
     }
     await logFeatureOkAsync("cli_bg_dispatch_exec");
     process.stdout.write(
-      formatBgHints(bgSession.short, undefined, flagValue || S) +
+      formatBgHints(bgSession.short, undefined, flagValue || execCommand) +
         `
 `,
     );
@@ -970,22 +1021,22 @@ async function handleBgFlag(e, storage) {
     return;
   }
   let restricted = isRestrictedMode();
-  let y = stripBgOnlyFlags(restricted ? ["--restricted", ...e] : e);
+  let argsWithRestricted = stripBgOnlyFlags(restricted ? ["--restricted", ...argv] : argv);
   let bgStdin = await readBgStdin();
-  let w = bgStdin ? appendPromptToArgs(y, bgStdin) : y;
-  let A = bgStdin ? appendPromptToArgs(stripBgOnlyFlags(e), bgStdin) : stripBgOnlyFlags(e);
-  let resumeResult = await resolveBgResumeTarget(A, {
+  let argsWithStdin = bgStdin ? appendPromptToArgs(argsWithRestricted, bgStdin) : argsWithRestricted;
+  let resumeArgs = bgStdin ? appendPromptToArgs(stripBgOnlyFlags(argv), bgStdin) : stripBgOnlyFlags(argv);
+  let resumeResult = await resolveBgResumeTarget(resumeArgs, {
     restricted,
     storageV5: storage,
   });
   if (resumeResult.kind === "continue" && resumeResult.wakeRow !== null) {
     await promptBgWorkspaceTrust(resumeResult.wakeRow.state.cwd, storage);
-    await wakeExistingBgSession(resumeResult.wakeRow, A, restricted, storage);
+    await wakeExistingBgSession(resumeResult.wakeRow, resumeArgs, restricted, storage);
     return;
   }
   await promptBgWorkspaceTrust(getCwd(), storage);
   let bgSession = await spawnBgSession(
-    w,
+    argsWithStdin,
     resumeResult.kind === "continue" ? resumeResult.sessionId : undefined,
     "shell",
     undefined,
@@ -1021,7 +1072,7 @@ async function handleBgFlag(e, storage) {
 /**
  * 交互终端且工作区未受信任时，动态加载 Ink 渲染 agents 工作区信任对话框并等待用户决定；结束后卸载并刷新配置写入。
  */
-async function promptBgWorkspaceTrust(cwd, n) {
+async function promptBgWorkspaceTrust(cwd, storage) {
   if (
     !process.stdin.isTTY ||
     !process.stdout.isTTY ||
@@ -1029,23 +1080,20 @@ async function promptBgWorkspaceTrust(cwd, n) {
     !isSameRealPath(cwd, getCwd())
   )
     return;
-  let [
-    { createRoot: o },
-    { getBaseRenderOptions: r },
-    { agentsTrustDecision: s, ensureAgentsWorkspaceTrust: l },
-  ] = await Promise.all([
-    import("./chunk-1m6xc21j.js"),
-    import("./chunk-92g44ry1.js"),
-    import("./chunk-pn8x1715.js"),
-  ]);
-  if (s() !== "ask") return;
+  let [{ createRoot }, { getBaseRenderOptions }, { agentsTrustDecision, ensureAgentsWorkspaceTrust }] =
+    await Promise.all([
+      import("../../ink/components/Ansi.lazy.js"),
+      import("../../utils/renderOptions.js"),
+      import("../../utils/agentsWorkspaceTrust.js"),
+    ]);
+  if (agentsTrustDecision() !== "ask") return;
   if (getFeatureValue_CACHED_MAY_BE_STALE("tengu_sable_orrery", true)) setIsInteractive(true);
-  let u = await o(r(false));
+  let root = await createRoot(getBaseRenderOptions(false));
   try {
-    await l(u, "ask", n);
+    await ensureAgentsWorkspaceTrust(root, "ask", storage);
   } finally {
-    u.render(null);
-    u.unmount();
+    root.render(null);
+    root.unmount();
   }
   setIsInteractive(false);
   await drainConfigWrites();
@@ -1055,9 +1103,9 @@ async function promptBgWorkspaceTrust(cwd, n) {
  * 后台会话启动的守护进程派发路径（受限模式、闸门检查、确保守护进程）。
  */
 async function wakeExistingBgSession({ jobId: job, state, prompt }, respawnArgs, restricted, storage) {
-  let u = validateBgLaunchFlags(restricted ? ["--restricted", ...respawnArgs] : respawnArgs.slice());
-  if (u) {
-    process.stderr.write(`${u}
+  let flagError = validateBgLaunchFlags(restricted ? ["--restricted", ...respawnArgs] : respawnArgs.slice());
+  if (flagError) {
+    process.stderr.write(`${flagError}
 `);
     await logFeatureSadAsync("cli_bg_dispatch", "gate_blocked", ...gateCauseExtra("disclaimer"));
     process.exitCode = 1;
@@ -1067,12 +1115,15 @@ async function wakeExistingBgSession({ jobId: job, state, prompt }, respawnArgs,
   if (!daemonResult.ok) {
     let jobDir = getJobDir(job);
     invalidateJobStateCache(jobDir);
-    let h = prompt !== undefined ? await readJobState(jobDir, storage) : null;
-    let D = prompt !== undefined && h !== null && (await queuePromptForJob(jobDir, h, prompt, storage, true));
+    let latestState = prompt !== undefined ? await readJobState(jobDir, storage) : null;
+    let didQueue =
+      prompt !== undefined &&
+      latestState !== null &&
+      (await queuePromptForJob(jobDir, latestState, prompt, storage, true));
     process.stderr
-      .write(`Couldn't reach the ${bgSupervisorNoun()} (${daemonResult.reason})${daemonHint("status")}${D ? ` Your message is saved and will be delivered when session ${job} next starts.` : ""}
+      .write(`Couldn't reach the ${bgSupervisorNoun()} (${daemonResult.reason})${daemonHint("status")}${didQueue ? ` Your message is saved and will be delivered when session ${job} next starts.` : ""}
 `);
-    await (D ? logFeatureSadAsync : logFeatureBadAsync)("cli_bg_dispatch", "daemon_unavailable");
+    await (didQueue ? logFeatureSadAsync : logFeatureBadAsync)("cli_bg_dispatch", "daemon_unavailable");
     process.exitCode = 1;
     return;
   }
@@ -1105,17 +1156,21 @@ async function wakeExistingBgSession({ jobId: job, state, prompt }, respawnArgs,
   }
   await logFeatureOkAsync("cli_bg_dispatch");
   let flagValueIndices = getFlagValueIndices(state.respawnFlags);
-  let A = uniq(
+  let wokeWithFlags = uniq(
     state.respawnFlags
-      .map((respawnFlag, h) =>
-        flagValueIndices.has(h)
+      .map((respawnFlag, index) =>
+        flagValueIndices.has(index)
           ? undefined
           : /^(--?[A-Za-z][A-Za-z0-9-]{0,40})(?:=|$)/.exec(respawnFlag)?.[1],
       )
-      .filter((R) => R !== undefined && (BOOLEAN_FORWARDED_FLAGS.has(R) || FORWARDED_VALUE_FLAGS.has(R))),
+      .filter(
+        (flagName) =>
+          flagName !== undefined &&
+          (BOOLEAN_FORWARDED_FLAGS.has(flagName) || FORWARDED_VALUE_FLAGS.has(flagName)),
+      ),
   );
-  if (A.length > 0)
-    process.stderr.write(`note: woke session ${job} with its saved options (${A.join(", ")}).
+  if (wokeWithFlags.length > 0)
+    process.stderr.write(`note: woke session ${job} with its saved options (${wokeWithFlags.join(", ")}).
 `);
   process.stdout.write(
     formatBgHints(
@@ -1136,14 +1191,14 @@ async function readBgStdin(stdin = process.stdin) {
   if (stdin.isTTY) return "";
   let buffer = "";
   let truncated = false;
-  let onData = (l) => {
+  let onData = (chunk) => {
     if (truncated) return;
-    if (buffer.length + l.length > MAX_PIPED_STDIN_BYTES) {
-      buffer += l.slice(0, MAX_PIPED_STDIN_BYTES - buffer.length);
+    if (buffer.length + chunk.length > MAX_PIPED_STDIN_BYTES) {
+      buffer += chunk.slice(0, MAX_PIPED_STDIN_BYTES - buffer.length);
       truncated = true;
       return;
     }
-    buffer += l;
+    buffer += chunk;
   };
   try {
     stdin.setEncoding("utf8");
@@ -1162,9 +1217,9 @@ async function readBgStdin(stdin = process.stdin) {
 `);
     return "";
   }
-  let s = await peekForStdinData(stdin, 3000);
+  let hasData = await peekForStdinData(stdin, 3000);
   stdin.off("data", onData);
-  if (s) return "";
+  if (hasData) return "";
   if (truncated)
     process.stderr.write(`warning: piped stdin exceeds ${MAX_PIPED_STDIN_BYTES} bytes, truncated
 `);
@@ -1173,12 +1228,12 @@ async function readBgStdin(stdin = process.stdin) {
 //@ chunk-bg51yd13.js:44739-44754 placement
 var MAX_PIPED_STDIN_BYTES = 1048576;
 //@ chunk-bg51yd13.js:44754-44949 placement
-function appendPromptToArgs(e, bgStdin) {
-  let dashDashIndex = findDashDashIndex(e);
+function appendPromptToArgs(args, bgStdin) {
+  let dashDashIndex = findDashDashIndex(args);
   if (dashDashIndex >= 0) {
-    let joined = e.slice(dashDashIndex + 1).join(" ");
+    let joined = args.slice(dashDashIndex + 1).join(" ");
     return [
-      ...e.slice(0, dashDashIndex),
+      ...args.slice(0, dashDashIndex),
       "--",
       joined
         ? `${joined}
@@ -1186,55 +1241,58 @@ ${bgStdin}`
         : bgStdin,
     ];
   }
-  let promptArgIndex = findPromptArgIndex(e);
+  let promptArgIndex = findPromptArgIndex(args);
   if (promptArgIndex >= 0) {
-    let s = [...e];
-    s[promptArgIndex] = `${e[promptArgIndex]}
+    let next = [...args];
+    next[promptArgIndex] = `${args[promptArgIndex]}
 ${bgStdin}`;
-    return s;
+    return next;
   }
-  return [...e, "--", bgStdin];
+  return [...args, "--", bgStdin];
 }
 //@ chunk-bg51yd13.js:44949-45368 placement
 /**
  * 在参数里找最后一个位置参数（提示词）的下标：跳过 flag 及其取值、--resume 的可选 id；找不到返回 -1。
  */
-function findPromptArgIndex(e) {
-  let flagValueIndices = getFlagValueIndices(e);
-  let o = -1;
-  for (let j = 0; j < e.length; j++) {
+function findPromptArgIndex(args) {
+  let flagValueIndices = getFlagValueIndices(args);
+  let promptIndex = -1;
+  for (let j = 0; j < args.length; j++) {
     if (flagValueIndices.has(j)) continue;
-    let s = e[j];
-    if (looksLikeFlag(s)) {
-      if (s.includes("=")) continue;
-      let l = e[j + 1];
-      if (l === undefined) continue;
-      let { rest } = peelCombinedShortFlags(s);
-      if (s === "--resume" || rest === "-r") {
-        if (!looksLikeFlag(l)) j++;
+    let arg = args[j];
+    if (looksLikeFlag(arg)) {
+      if (arg.includes("=")) continue;
+      let nextArg = args[j + 1];
+      if (nextArg === undefined) continue;
+      let { rest } = peelCombinedShortFlags(arg);
+      if (arg === "--resume" || rest === "-r") {
+        if (!looksLikeFlag(nextArg)) j++;
         continue;
       }
       if (rest.length > 2 && (/^-r./.test(rest) || FORWARDED_VALUE_FLAGS.has(rest.slice(0, 2)))) continue;
       if (
-        (BOOLEAN_FORWARDED_FLAGS.has(s) && s !== "--remote-control" && s !== "--rc") ||
+        (BOOLEAN_FORWARDED_FLAGS.has(arg) && arg !== "--remote-control" && arg !== "--rc") ||
         SINGLE_LETTER_FLAGS.has(rest)
       )
         continue;
-      if (!flagValueIndices.has(j + 1) && !looksLikeFlag(l)) j++;
+      if (!flagValueIndices.has(j + 1) && !looksLikeFlag(nextArg)) j++;
       continue;
     }
-    o = j;
+    promptIndex = j;
   }
-  return o;
+  return promptIndex;
 }
 //@ chunk-bg51yd13.js:45368-45402 placement
-var regExp = new RegExp(`${DAEMON_UNREACHABLE_TIMEOUT_PHRASE} \\d+s`);
+var regExp; // deferred: uses DAEMON_UNREACHABLE_TIMEOUT_PHRASE (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bg51yd13.js:45368", () => {
+  regExp = new RegExp(`${DAEMON_UNREACHABLE_TIMEOUT_PHRASE} \\d+s`);
+});
 //@ chunk-bg51yd13.js:45402-45517 placement
-function classifyDaemonError(detail) {
-  let n = extractErrnoTokens(detail)[0];
-  if (n) return n;
-  if (regExp.test(detail)) return "timeout";
-  return detail.includes(DAEMON_EXITED_BEFORE_REACHABLE_PHRASE) ? "exited" : "other";
+function classifyDaemonError(text) {
+  let errnoToken = extractErrnoTokens(text)[0];
+  if (errnoToken) return errnoToken;
+  if (regExp.test(text)) return "timeout";
+  return text.includes(DAEMON_EXITED_BEFORE_REACHABLE_PHRASE) ? "exited" : "other";
 }
 //@ chunk-bg51yd13.js:45517-45822 placement
 /**
@@ -1257,62 +1315,62 @@ function describeDispatchFailure(reason) {
   }
 }
 //@ chunk-bg51yd13.js:45822-46146 placement
-function formatBgHints(short, n, o) {
-  let r = (s, l) => sequential.dim("  " + s.padEnd(26) + l);
+function formatBgHints(short, detail, name) {
+  let hint = (command, description) => sequential.dim("  " + command.padEnd(26) + description);
   return [
-    `backgrounded \xB7 ${sequential.cyan(short)}${o ? ` \xB7 ${o}` : ""}${n ? sequential.dim(` ${n}`) : ""}`,
-    r("claude agents", "list sessions"),
-    r(`claude attach ${short}`, "open in this terminal"),
-    r(`claude logs ${short}`, "show recent output"),
-    r(`claude stop ${short}`, "stop this session"),
+    `backgrounded \xB7 ${sequential.cyan(short)}${name ? ` \xB7 ${name}` : ""}${detail ? sequential.dim(` ${detail}`) : ""}`,
+    hint("claude agents", "list sessions"),
+    hint(`claude attach ${short}`, "open in this terminal"),
+    hint(`claude logs ${short}`, "show recent output"),
+    hint(`claude stop ${short}`, "stop this session"),
   ].join(`
 `);
 }
 //@ chunk-bg51yd13.js:46146-46178 placement
-function extraArgsWarningForArgv(e) {
-  return extraArgsWarning(getBgVerbArgsWithoutDebug(e));
+function extraArgsWarningForArgv(argv) {
+  return extraArgsWarning(getBgVerbArgsWithoutDebug(argv));
 }
 //@ chunk-bg51yd13.js:46178-46270 placement
-function extraArgsWarning(e) {
-  return e.length === 0
+function extraArgsWarning(extraArgs) {
+  return extraArgs.length === 0
     ? null
-    : `warning: extra arguments ignored: ${e.join(" ")}
+    : `warning: extra arguments ignored: ${extraArgs.join(" ")}
 `;
 }
 //@ chunk-bg51yd13.js:46270-46631 placement
 /**
  * 取后台子命令动词之后的参数，去掉 --debug/-d/--debug-file 等调试参数和 --setting-sources 的取值。
  */
-function getBgVerbArgsWithoutDebug(e) {
-  let n = backgroundSessionVerbIndex(e);
-  if (n === -1 || e.length <= n + 2) return [];
-  let o = eagerCliFlagHonoredIndices("--setting-sources", e);
-  let r = [];
-  for (let j = n + 2; j < e.length; j++) {
-    let l = e[j];
-    if (o.has(j)) continue;
+function getBgVerbArgsWithoutDebug(argv) {
+  let verbIndex = backgroundSessionVerbIndex(argv);
+  if (verbIndex === -1 || argv.length <= verbIndex + 2) return [];
+  let honoredIndices = eagerCliFlagHonoredIndices("--setting-sources", argv);
+  let kept = [];
+  for (let j = verbIndex + 2; j < argv.length; j++) {
+    let arg = argv[j];
+    if (honoredIndices.has(j)) continue;
     if (
-      l === "--debug" ||
-      l === "-d" ||
-      l === "--debug-to-stderr" ||
-      l === "-d2e" ||
-      l.startsWith("--debug=") ||
-      l.startsWith("--debug-file=")
+      arg === "--debug" ||
+      arg === "-d" ||
+      arg === "--debug-to-stderr" ||
+      arg === "-d2e" ||
+      arg.startsWith("--debug=") ||
+      arg.startsWith("--debug-file=")
     )
       continue;
-    if (l === "--debug-file" && j + 1 < e.length) {
+    if (arg === "--debug-file" && j + 1 < argv.length) {
       j++;
       continue;
     }
-    r.push(l);
+    kept.push(arg);
   }
-  return r;
+  return kept;
 }
 //@ chunk-bg51yd13.js:46631-46722 placement
 function warnOnExtraArgs() {
-  let e = extraArgsWarningForArgv(process.argv.slice(2));
-  if (e) process.stderr.write(e);
-  return e !== null;
+  let warning = extraArgsWarningForArgv(process.argv.slice(2));
+  if (warning) process.stderr.write(warning);
+  return warning !== null;
 }
 //@ chunk-bg51yd13.js:46722-46733 placement
 var MAX_JOB_LIST_PAGES = 1e4;
@@ -1358,22 +1416,22 @@ async function listStorageJobIds(storage) {
   return [...jobIds];
 }
 //@ chunk-bg51yd13.js:47310-47530 placement
-async function removeJobStorage(e, n) {
-  let jobDir = getJobDir(n);
-  let r = await lstat(jobDir).catch(() => {
+async function removeJobStorage(storage, short) {
+  let jobDir = getJobDir(short);
+  let stats = await lstat(jobDir).catch(() => {
     return;
   });
-  if (r === undefined || !r.isDirectory()) {
+  if (stats === undefined || !stats.isDirectory()) {
     await rm(jobDir, {
       recursive: true,
       force: true,
     }).catch(() => {});
     return;
   }
-  await e
+  await storage
     .deleteScope({
       namespace: "job",
-      jobId: n,
+      jobId: short,
     })
     .catch(() => {});
 }
@@ -1382,7 +1440,7 @@ async function removeJobStorage(e, n) {
  * 后台会话子命令的通用参数解析：--help、未知选项、按 id/名称查找作业。
  */
 async function resolveJobArgument(query, usage, helpText, allowNameMatch, storage) {
-  let l = warnOnExtraArgs();
+  let hasExtraArgs = warnOnExtraArgs();
   if (query === "--help" || query === "-h") {
     process.stdout.write(`Usage: ${usage}
 
@@ -1404,64 +1462,68 @@ Usage: ${usage}
   let filtered = (
     storage ? ((await listStorageJobIds(storage)) ?? []) : await readdir(getJobsDir()).catch(() => [])
   )
-    .filter((R) => SHORT_RE.test(R))
-    .filter((R) => R.startsWith(query));
+    .filter((id) => SHORT_RE.test(id))
+    .filter((id) => id.startsWith(query));
   if (filtered.length === 1)
     return {
       short: filtered[0],
       byName: false,
       nameLines: "",
     };
-  let lower = query.trim().toLowerCase();
-  let w = allowNameMatch && !SHORT_HEX_ID_PATTERN.test(lower);
-  if (w && !l) {
+  let needle = query.trim().toLowerCase();
+  let canMatchName = allowNameMatch && !SHORT_HEX_ID_PATTERN.test(needle);
+  if (canMatchName && !hasExtraArgs) {
     let filtered = (await listJobs(undefined, storage))
-      .filter((E) => SHORT_RE.test(E.id))
-      .map((E) => ({
-        ...E,
-        rank: rankJobNameMatch(E.state, lower),
+      .filter((job) => SHORT_RE.test(job.id))
+      .map((job) => ({
+        ...job,
+        rank: rankJobNameMatch(job.state, needle),
       }))
-      .filter((E) => E.rank !== 0);
-    let any = filtered.some((E) => E.rank === 2 || E.rank === 3);
-    let filtered_2 = filtered.filter((E) => E.rank !== 1 || !isDoneJob(E.state));
+      .filter((candidate) => candidate.rank !== 0);
+    let any = filtered.some((namedJob) => namedJob.rank === 2 || namedJob.rank === 3);
+    let filtered_2 = filtered.filter(
+      (liveCandidate) => liveCandidate.rank !== 1 || !isDoneJob(liveCandidate.state),
+    );
     if (filtered_2.length === 1 && any) {
       let { id, state } = filtered_2[0];
       let sorted = filtered
-        .filter((j) => j.id !== id)
-        .sort((j, K) => {
-          let lastTerminalAt = j.state.lastTerminalAt ?? "";
-          let lastTerminalAt_2 = K.state.lastTerminalAt ?? "";
+        .filter((job) => job.id !== id)
+        .sort((a, b) => {
+          let lastTerminalAt = a.state.lastTerminalAt ?? "";
+          let lastTerminalAt_2 = b.state.lastTerminalAt ?? "";
           if (lastTerminalAt !== lastTerminalAt_2) return lastTerminalAt < lastTerminalAt_2 ? 1 : -1;
-          return j.id < K.id ? -1 : 1;
+          return a.id < b.id ? -1 : 1;
         });
       let mapped = sorted.slice(0, MAX_MATCHED_JOBS).map(
-        (j) => `  ${j.id}  ${sanitizeJobLabel(j.state.name || j.state.displayIntent || j.state.intent)}
+        (
+          job,
+        ) => `  ${job.id}  ${sanitizeJobLabel(job.state.name || job.state.displayIntent || job.state.intent)}
 `,
       );
-      let N = sorted.length - mapped.length;
-      let L =
+      let omittedCount = sorted.length - mapped.length;
+      let header =
         sorted.length > 0
           ? `The task text of ${sorted.length} finished ${plural(sorted.length, "session")} has '${sanitizeJobLabel(query)}' too:
 ${mapped.join("")}${
-              N > 0
-                ? `  \u2026 and ${N} more
+              omittedCount > 0
+                ? `  \u2026 and ${omittedCount} more
 `
                 : ""
             }`
           : "";
       handleStreamGoneErrors(process.stderr);
-      let F = `Session ${id} \xB7 ${sanitizeJobLabel(state.name ?? "")}
-${L}`;
-      process.stderr.write(F);
+      let nameHeader = `Session ${id} \xB7 ${sanitizeJobLabel(state.name ?? "")}
+${header}`;
+      process.stderr.write(nameHeader);
       return {
         short: id,
         byName: true,
-        nameLines: F,
+        nameLines: nameHeader,
       };
     }
     if (filtered.length > 0) {
       let mapped = filtered
-        .sort((T, N) => Number(T.rank === 1) - Number(N.rank === 1) || (T.id < N.id ? -1 : 1))
+        .sort((a, b) => Number(a.rank === 1) - Number(b.rank === 1) || (a.id < b.id ? -1 : 1))
         .slice(0, MAX_LISTED_JOBS)
         .map(
           ({
@@ -1471,38 +1533,38 @@ ${L}`;
           }) => `  ${id}  ${sanitizeJobLabel(state.name || state.displayIntent || state.intent)}${any && rank === 1 ? "  (task text)" : ""}
 `,
         );
-      let x = filtered.length - mapped.length;
-      let P = sanitizeJobLabel(query);
+      let omittedCount = filtered.length - mapped.length;
+      let safeQuery = sanitizeJobLabel(query);
       process.stderr.write(`${
         any
-          ? `${filtered.length} sessions match '${P}'`
-          : `No session name matches '${P}'.
+          ? `${filtered.length} sessions match '${safeQuery}'`
+          : `No session name matches '${safeQuery}'.
 The task text of ${filtered.length} ${plural(filtered.length, "session")} has it`
       }:
 ${mapped.join("")}${
-        x > 0
-          ? `  \u2026 and ${x} more
+        omittedCount > 0
+          ? `  \u2026 and ${omittedCount} more
 `
           : ""
-      }${!any ? "Use the id, or a session name." : filtered.some((T) => T.rank === 2) ? "Use more of the name, or the id." : "Use the id."}
+      }${!any ? "Use the id, or a session name." : filtered.some((candidate) => candidate.rank === 2) ? "Use more of the name, or the id." : "Use the id."}
 `);
       process.exit(1);
     }
   }
-  let A =
-    !allowNameMatch || SHORT_RE.test(lower)
+  let nameHint =
+    !allowNameMatch || SHORT_RE.test(needle)
       ? ""
-      : l
+      : hasExtraArgs
         ? `A name must be the only argument. Put a name with spaces in quotes.
 `
-        : w
+        : canMatchName
           ? ""
           : `Text that can be the start of an id is not read as a name. Use more of the name.
 `;
   process.stderr.write(
     filtered.length === 0
       ? `No job matching '${query}'. Run 'claude agents' to list running sessions.
-${A}`
+${nameHint}`
       : `Ambiguous prefix '${query}', matches: ${filtered.join(", ")}
 `,
   );
@@ -1518,10 +1580,10 @@ var MAX_JOB_TEXT_SNIPPET_CHARS = 32;
 //@ chunk-bg51yd13.js:49842-49948 placement
 function sanitizeJobLabel(query) {
   if (query.length > MAX_JOB_RAW_TEXT_CHARS) return "\u2026";
-  let n = collapseWhitespace(stripFormatChars(collapseWhitespace(query)));
-  return n.length > MAX_JOB_TEXT_CHARS
+  let collapsed = collapseWhitespace(stripFormatChars(collapseWhitespace(query)));
+  return collapsed.length > MAX_JOB_TEXT_CHARS
     ? "\u2026"
-    : truncateWithEllipsis(redactSecrets(n), MAX_JOB_TEXT_SNIPPET_CHARS);
+    : truncateWithEllipsis(redactSecrets(collapsed), MAX_JOB_TEXT_SNIPPET_CHARS);
 }
 //@ chunk-bg51yd13.js:49948-50042 placement
 var NAME_IN_PLACE_OF_ID_HINT =
@@ -1536,18 +1598,18 @@ async function logsHandler(query, storage) {
     storage,
   );
   let promise = await new Promise((resolve) => {
-    let A = subscribeControl(
+    let unsubscribe = subscribeControl(
       short,
       500,
-      (R) => {
-        if (R.type === "snapshot") {
-          A();
-          resolve(R.streamTail);
+      (frame) => {
+        if (frame.type === "snapshot") {
+          unsubscribe();
+          resolve(frame.streamTail);
         }
       },
-      (R) => {
-        A();
-        resolve(R);
+      (error) => {
+        unsubscribe();
+        resolve(error);
       },
     );
   });
@@ -1559,7 +1621,7 @@ async function logsHandler(query, storage) {
   }
   let { replay, cursorAddressed } = waitForDaemonReady(promise.join(""));
   let rows = process.stdout.rows || 9999;
-  let p = process.stdout.isTTY
+  let restoreCursor = process.stdout.isTTY
     ? "\x1B[0m" +
       (cursorAddressed
         ? cursorPosition(rows, 1) +
@@ -1567,7 +1629,7 @@ async function logsHandler(query, storage) {
 `
         : "")
     : "";
-  await writeStdoutAndDrain(replay + p);
+  await writeStdoutAndDrain(replay + restoreCursor);
   if (nameLines && process.stdout.isTTY && process.stderr.isTTY)
     process.stderr.write(
       (cursorAddressed
@@ -1621,23 +1683,23 @@ async function attachWithRetry(short, options = {}, storage) {
         : {},
     );
   let isTty = process.stderr.isTTY === true;
-  let l = false;
-  let u = "";
-  let showStatus = (R, waitedMs) => {
+  let isStatusDrawn = false;
+  let lastMessage = "";
+  let showStatus = (message, waitedMs) => {
     let rounded = Math.round(waitedMs / 1000);
-    let S = rounded >= 5 ? `${R} (${rounded}s)` : R;
+    let line = rounded >= 5 ? `${message} (${rounded}s)` : message;
     if (isTty) {
-      process.stderr.write(`\r${ERASE_LINE}${S}`);
-      l = true;
-    } else if (R !== u)
-      process.stderr.write(`${S}
+      process.stderr.write(`\r${ERASE_LINE}${line}`);
+      isStatusDrawn = true;
+    } else if (message !== lastMessage)
+      process.stderr.write(`${line}
 `);
-    u = R;
+    lastMessage = message;
   };
   let clearStatus = () => {
-    if (l) {
+    if (isStatusDrawn) {
       process.stderr.write(`\r${ERASE_LINE}`);
-      l = false;
+      isStatusDrawn = false;
     }
   };
   let result = await attemptAttach();
@@ -1645,15 +1707,15 @@ async function attachWithRetry(short, options = {}, storage) {
   try {
     for (let j = 0; waitedMs < ATTACH_WAIT_TOTAL_MS; j++) {
       let msg = result.msg;
-      let D = msg !== undefined && TRANSIENT_ATTACH_CODE.test(msg);
-      let S =
-        !D &&
+      let isTransient = msg !== undefined && TRANSIENT_ATTACH_CODE.test(msg);
+      let isSocketRace =
+        !isTransient &&
         result.outcome === "error" &&
         msg !== undefined &&
         RACED_SOCKET_GAP.test(msg) &&
         !SUPERVISOR_DETACH_CODE.test(msg);
-      if (msg === undefined || (!D && !S)) break;
-      if (S) {
+      if (msg === undefined || (!isTransient && !isSocketRace)) break;
+      if (isSocketRace) {
         let daemon = await ensureDaemon(
           {
             forceTransient: true,
@@ -1674,8 +1736,8 @@ async function attachWithRetry(short, options = {}, storage) {
       await sleep(min);
       waitedMs += min;
       if (options.abortOnDetachKey) {
-        let x = drainStdin();
-        if (x && containsInterruptKey(x))
+        let typed = drainStdin();
+        if (typed && containsInterruptKey(typed))
           return {
             r: result,
             waitedMs,
@@ -1701,7 +1763,7 @@ var ENOJOB_PROBE_FAILED_MESSAGE = "ENOJOB: probe found no handle \u2014 worker r
  */
 async function attachHandler(query, storage) {
   let t0 = performance.now();
-  let r = false;
+  let isDaemonBooted = false;
   let jobArgument = await resolveJobArgument(
     query,
     "claude attach <id|name>",
@@ -1710,21 +1772,21 @@ async function attachHandler(query, storage) {
     storage,
   );
   let short = jobArgument.short;
-  let u = 0;
-  let y = randomUUID();
-  let p = {
-    gestureId: y,
+  let waitedTransientMs = 0;
+  let gestureId = randomUUID();
+  let gesture = {
+    gestureId,
     attempt: 0,
     t0,
     surface: "bg_cli",
     interactive: {},
     get daemonBooted() {
-      return r;
+      return isDaemonBooted;
     },
     markDaemonBooted: () => {
-      r = true;
+      isDaemonBooted = true;
       updateAttachBeacon(
-        y,
+        gestureId,
         {
           daemonBooted: true,
         },
@@ -1732,32 +1794,33 @@ async function attachHandler(query, storage) {
       );
     },
   };
-  startAttachBeacon(p.gestureId, "bg_cli", storage).catch(() => {});
-  let w = () =>
-    u > 0 || jobArgument.byName
+  startAttachBeacon(gesture.gestureId, "bg_cli", storage).catch(() => {});
+  let extraFields = () =>
+    waitedTransientMs > 0 || jobArgument.byName
       ? {
-          ...(u > 0 && {
-            waited_transient_ms: u,
+          ...(waitedTransientMs > 0 && {
+            waited_transient_ms: waitedTransientMs,
           }),
           ...(jobArgument.byName && {
             by_name: true,
           }),
         }
       : undefined;
-  let A = async (E, x) => {
-    reportAttachTelemetry(p, "error");
-    await Promise.race([clearAttachBeacon(p.gestureId, storage).catch(() => {}), sleep(750)]);
-    await logFeatureBadAsync("cli_bg_attach", "daemon_unavailable", w());
-    process.stderr.write(`${E} \u2014 ${bgSupervisorNoun()} is unavailable (${x})${daemonHint("status")}
+  let failDaemonUnavailable = async (prefix, reason) => {
+    reportAttachTelemetry(gesture, "error");
+    await Promise.race([clearAttachBeacon(gesture.gestureId, storage).catch(() => {}), sleep(750)]);
+    await logFeatureBadAsync("cli_bg_attach", "daemon_unavailable", extraFields());
+    process.stderr
+      .write(`${prefix} \u2014 ${bgSupervisorNoun()} is unavailable (${reason})${daemonHint("status")}
 `);
     return exitAfterAnalyticsFlush(1);
   };
   let daemonForDispatch = await ensureDaemonForDispatch(
     {
       onStarting: () => {
-        r = true;
+        isDaemonBooted = true;
         updateAttachBeacon(
-          y,
+          gestureId,
           {
             daemonBooted: true,
           },
@@ -1767,133 +1830,136 @@ async function attachHandler(query, storage) {
     },
     storage,
   );
-  if (!daemonForDispatch.ok) return A("Couldn't attach", daemonForDispatch.reason);
-  let h;
+  if (!daemonForDispatch.ok) return failDaemonUnavailable("Couldn't attach", daemonForDispatch.reason);
+  let attachResult;
   if (await isBackgroundSessionGone(short))
-    h = {
+    attachResult = {
       outcome: "error",
       msg: ENOJOB_PROBE_FAILED_MESSAGE,
     };
   else {
-    let E = await attachWithRetry(
+    let firstTry = await attachWithRetry(
       short,
       {
-        gesture: p,
+        gesture,
       },
       storage,
     );
-    h = E.r;
-    u += E.waitedMs;
-    if (E.unavailableReason !== undefined) return A("Couldn't attach", E.unavailableReason);
+    attachResult = firstTry.r;
+    waitedTransientMs += firstTry.waitedMs;
+    if (firstTry.unavailableReason !== undefined)
+      return failDaemonUnavailable("Couldn't attach", firstTry.unavailableReason);
   }
-  if (h.outcome === "error" && h.msg?.includes("ENOJOB")) {
-    let E = await readJobState(getJobDir(short), storage).catch(() => null);
-    let x =
-      E?.state === "failed" &&
-      !isExecLaunch(E) &&
-      (E.reapedMidWorkAt !== undefined || E.reapedUnsettledAt !== undefined);
-    let P = E?.state === "failed" && !isExecLaunch(E) && E.detail === HOST_DIED_DETAIL;
-    let T =
-      E?.sessionId !== undefined && normalizeUuidOrNull(E.sessionId) !== null
-        ? sanitizeMarkName(E.sessionId)
+  if (attachResult.outcome === "error" && attachResult.msg?.includes("ENOJOB")) {
+    let jobState = await readJobState(getJobDir(short), storage).catch(() => null);
+    let wasReaped =
+      jobState?.state === "failed" &&
+      !isExecLaunch(jobState) &&
+      (jobState.reapedMidWorkAt !== undefined || jobState.reapedUnsettledAt !== undefined);
+    let didHostDie =
+      jobState?.state === "failed" && !isExecLaunch(jobState) && jobState.detail === HOST_DIED_DETAIL;
+    let targetSessionId =
+      jobState?.sessionId !== undefined && normalizeUuidOrNull(jobState.sessionId) !== null
+        ? sanitizeMarkName(jobState.sessionId)
         : undefined;
-    let metadata = T
+    let metadata = targetSessionId
       ? {
-          target_session_id: T,
+          target_session_id: targetSessionId,
         }
       : {};
-    if (E?.state === "failed" && !x && !P) {
+    if (jobState?.state === "failed" && !wasReaped && !didHostDie) {
       await logFeatureBadAsync("cli_bg_attach", "wake_failed_state", {
-        ...w(),
+        ...extraFields(),
         ...metadata,
       });
       process.stderr
-        .write(`Session ${short} can't start \u2014 ${sanitizeLogLine(E.detail) || "it crashed repeatedly"}
+        .write(`Session ${short} can't start \u2014 ${sanitizeLogLine(jobState.detail) || "it crashed repeatedly"}
 `);
-      reportAttachTelemetry(p, "error", "worker_crash_loop");
-      await Promise.race([clearAttachBeacon(p.gestureId, storage).catch(() => {}), sleep(750)]);
+      reportAttachTelemetry(gesture, "error", "worker_crash_loop");
+      await Promise.race([clearAttachBeacon(gesture.gestureId, storage).catch(() => {}), sleep(750)]);
       return exitAfterAnalyticsFlush(1);
     }
     if (jobArgument.byName) {
       await logFeatureSadAsync("cli_bg_attach", "wake_needs_id", {
-        ...w(),
+        ...extraFields(),
         ...metadata,
       });
       process.stderr.write(`The background service has no process for session ${short}.
 A name opens only a running session. Use the id: \`claude attach ${short}\`
 `);
-      reportAttachTelemetry(p, "detached");
-      await Promise.race([clearAttachBeacon(p.gestureId, storage).catch(() => {}), sleep(750)]);
+      reportAttachTelemetry(gesture, "detached");
+      await Promise.race([clearAttachBeacon(gesture.gestureId, storage).catch(() => {}), sleep(750)]);
       return exitAfterAnalyticsFlush(1);
     }
-    if (x) {
+    if (wasReaped) {
       await logEventAsync("tengu_bg_attach_wake_after_reap", metadata);
       process.stderr.write(`Session ${short} was interrupted while unattended \u2014 resuming it\u2026
 `);
-    } else if (P)
+    } else if (didHostDie)
       process.stderr.write(`Session ${short}'s terminal host died \u2014 restarting it on a fresh one\u2026
 `);
-    else if (E?.deadEpochReapedAt !== undefined && !isExecLaunch(E))
+    else if (jobState?.deadEpochReapedAt !== undefined && !isExecLaunch(jobState))
       process.stderr
         .write(`Session ${short} ended while the background service was off; looking for its saved conversation to resume\u2026
 `);
     else
       process.stderr.write(`Waking session ${short}\u2026
 `);
-    if (E !== null) await promptBgWorkspaceTrust(E.cwd, storage);
-    let L = await respawnBgSession(short, undefined, storage).catch((error) => ({
+    if (jobState !== null) await promptBgWorkspaceTrust(jobState.cwd, storage);
+    let respawn = await respawnBgSession(short, undefined, storage).catch((error) => ({
       ok: false,
       alive: false,
       short: undefined,
       error: errorMessage(error),
     }));
-    if (L.ok || L.alive) {
-      if (L.short && L.short !== short) {
-        process.stderr.write(`Session moved to ${L.short}
+    if (respawn.ok || respawn.alive) {
+      if (respawn.short && respawn.short !== short) {
+        process.stderr.write(`Session moved to ${respawn.short}
 `);
-        short = L.short;
+        short = respawn.short;
       }
-      let F = await attachWithRetry(
+      let retry = await attachWithRetry(
         short,
         {
-          gesture: p,
+          gesture,
         },
         storage,
       );
-      h = F.r;
-      u += F.waitedMs;
-      if (F.unavailableReason !== undefined) return A("Couldn't attach", F.unavailableReason);
-    } else if ("errorCode" in L && L.errorCode === "dead_epoch_transcript_gone") {
+      attachResult = retry.r;
+      waitedTransientMs += retry.waitedMs;
+      if (retry.unavailableReason !== undefined)
+        return failDaemonUnavailable("Couldn't attach", retry.unavailableReason);
+    } else if ("errorCode" in respawn && respawn.errorCode === "dead_epoch_transcript_gone") {
       await logFeatureSadAsync("cli_bg_attach", "dead_epoch_transcript_gone", {
-        ...w(),
+        ...extraFields(),
         ...metadata,
       });
-      process.stderr.write(`${L.error}
+      process.stderr.write(`${respawn.error}
 `);
-      reportAttachTelemetry(p, "error", "respawn_failed");
-      await Promise.race([clearAttachBeacon(p.gestureId, storage).catch(() => {}), sleep(750)]);
+      reportAttachTelemetry(gesture, "error", "respawn_failed");
+      await Promise.race([clearAttachBeacon(gesture.gestureId, storage).catch(() => {}), sleep(750)]);
       return exitAfterAnalyticsFlush(1);
     } else {
-      await logFeatureBadAsync("cli_bg_attach", x ? "wake_after_reap_failed" : "wake_failed", {
-        ...w(),
+      await logFeatureBadAsync("cli_bg_attach", wasReaped ? "wake_after_reap_failed" : "wake_failed", {
+        ...extraFields(),
         ...metadata,
       });
       process.stderr.write(
-        x
-          ? `Couldn't resume ${short} after the interruption \u2014 ${L.error}
+        wasReaped
+          ? `Couldn't resume ${short} after the interruption \u2014 ${respawn.error}
 `
-          : `Couldn't wake ${short} \u2014 ${L.error}
+          : `Couldn't wake ${short} \u2014 ${respawn.error}
 `,
       );
-      reportAttachTelemetry(p, "error", "respawn_failed");
-      await Promise.race([clearAttachBeacon(p.gestureId, storage).catch(() => {}), sleep(750)]);
+      reportAttachTelemetry(gesture, "error", "respawn_failed");
+      await Promise.race([clearAttachBeacon(gesture.gestureId, storage).catch(() => {}), sleep(750)]);
       return exitAfterAnalyticsFlush(1);
     }
   }
-  let D = () => {
+  let restoreStdin = () => {
     if (getPlatform() === "windows" && process.stdin.isTTY) setRawModeSafe(process.stdin, false);
   };
-  let S = async () => {
+  let reportDetachIfSettled = async () => {
     let jobStateAfterSettle = await readJobStateAfterSettle(getJobDir(short), storage);
     if (
       jobStateAfterSettle === null ||
@@ -1901,16 +1967,16 @@ A name opens only a running session. Use the id: \`claude attach ${short}\`
       jobStateAfterSettle.state === "stopped" ||
       jobStateAfterSettle.state === "blocked"
     )
-      reportAttachTelemetry(p, "detached");
+      reportAttachTelemetry(gesture, "detached");
   };
-  while (h.outcome === "disconnected") {
+  while (attachResult.outcome === "disconnected") {
     let daemon = await ensureDaemon(
       {
         forceTransient: true,
         onStarting: () => {
-          r = true;
+          isDaemonBooted = true;
           updateAttachBeacon(
-            y,
+            gestureId,
             {
               daemonBooted: true,
             },
@@ -1920,10 +1986,10 @@ A name opens only a running session. Use the id: \`claude attach ${short}\`
       },
       storage,
     );
-    if (!daemon.ok) return A(`Couldn't reconnect to ${short}`, daemon.reason);
+    if (!daemon.ok) return failDaemonUnavailable(`Couldn't reconnect to ${short}`, daemon.reason);
     if (await isBackgroundSessionGone(short)) {
-      D();
-      await S();
+      restoreStdin();
+      await reportDetachIfSettled();
       break;
     }
     process.stderr.write(`Reconnecting to ${short}\u2026
@@ -1932,63 +1998,63 @@ A name opens only a running session. Use the id: \`claude attach ${short}\`
       setRawModeSafe(process.stdin, true);
       process.stdin.ref();
     }
-    let x = drainStdin();
-    if (x && containsInterruptKey(x)) {
-      D();
-      reportAttachTelemetry(p, "detached");
-      h = {
+    let typed = drainStdin();
+    if (typed && containsInterruptKey(typed)) {
+      restoreStdin();
+      reportAttachTelemetry(gesture, "detached");
+      attachResult = {
         outcome: "detached",
       };
       break;
     }
-    let P = await attachWithRetry(
+    let retry = await attachWithRetry(
       short,
       {
         abortOnDetachKey: true,
-        gesture: p,
+        gesture,
       },
       storage,
     );
-    h = P.r;
-    u += P.waitedMs;
-    if (P.detachKeyAborted) {
-      D();
-      reportAttachTelemetry(p, "detached");
-      h = {
+    attachResult = retry.r;
+    waitedTransientMs += retry.waitedMs;
+    if (retry.detachKeyAborted) {
+      restoreStdin();
+      reportAttachTelemetry(gesture, "detached");
+      attachResult = {
         outcome: "detached",
       };
       break;
     }
-    if (P.unavailableReason !== undefined) {
-      D();
-      return A(`Couldn't reconnect to ${short}`, P.unavailableReason);
+    if (retry.unavailableReason !== undefined) {
+      restoreStdin();
+      return failDaemonUnavailable(`Couldn't reconnect to ${short}`, retry.unavailableReason);
     }
-    if (h.outcome === "error" && h.msg?.includes("ENOJOB")) {
-      D();
-      await S();
-      h = {
+    if (attachResult.outcome === "error" && attachResult.msg?.includes("ENOJOB")) {
+      restoreStdin();
+      await reportDetachIfSettled();
+      attachResult = {
         outcome: "disconnected",
       };
       break;
     }
   }
-  await Promise.race([clearAttachBeacon(p.gestureId, storage).catch(() => {}), sleep(750)]);
+  await Promise.race([clearAttachBeacon(gesture.gestureId, storage).catch(() => {}), sleep(750)]);
   if (
-    h.outcome === "detached" &&
-    h.msg &&
-    (FATAL_ATTACH_CODE.test(h.msg) || TRANSIENT_ATTACH_CODE.test(h.msg))
+    attachResult.outcome === "detached" &&
+    attachResult.msg &&
+    (FATAL_ATTACH_CODE.test(attachResult.msg) || TRANSIENT_ATTACH_CODE.test(attachResult.msg))
   ) {
     await logFeatureBadAsync(
       "cli_bg_attach",
-      FATAL_ATTACH_CODE.test(h.msg) ? "stalled" : "transient_exhausted",
-      w(),
+      FATAL_ATTACH_CODE.test(attachResult.msg) ? "stalled" : "transient_exhausted",
+      extraFields(),
     );
-    process.stderr.write(`${h.msg.replace(/^E(STALLED|RESPAWNING|STARTING):\s*/, "")}
+    process.stderr.write(`${attachResult.msg.replace(/^E(STALLED|RESPAWNING|STARTING):\s*/, "")}
 `);
     return exitAfterAnalyticsFlush(1);
   }
-  if (isUserApcDetach(h, process.stdout.isTTY, process.stdin.isTTY)) {
-    await logFeatureOkAsync("cli_bg_attach", w());
+  if (isUserApcDetach(attachResult, process.stdout.isTTY, process.stdin.isTTY)) {
+    await logFeatureOkAsync("cli_bg_attach", extraFields());
     return relaunchClaudeCode({
       args: [
         "agents",
@@ -2009,60 +2075,63 @@ A name opens only a running session. Use the id: \`claude attach ${short}\`
       },
     });
   }
-  if (h.outcome === "detached" && h.msg)
-    process.stderr.write(`${h.msg.replace(KICKED_ATTACH_CODE, "")}
+  if (attachResult.outcome === "detached" && attachResult.msg)
+    process.stderr.write(`${attachResult.msg.replace(KICKED_ATTACH_CODE, "")}
 `);
-  if (h.outcome === "disconnected") {
-    let E = await readJobState(getJobDir(short), storage).catch(() => null);
-    if (E?.state === "failed" && E.detail === HOST_DIED_DETAIL)
+  if (attachResult.outcome === "disconnected") {
+    let jobState = await readJobState(getJobDir(short), storage).catch(() => null);
+    if (jobState?.state === "failed" && jobState.detail === HOST_DIED_DETAIL)
       process.stderr
         .write(`Session ${short}'s terminal host died \u2014 run \`claude attach ${short}\` again to restart it on a fresh host.
 `);
     else {
-      let x = E?.state === "failed" && E.detail ? ` (${sanitizeLogLine(E.detail)})` : "";
+      let detailSuffix =
+        jobState?.state === "failed" && jobState.detail ? ` (${sanitizeLogLine(jobState.detail)})` : "";
       process.stderr.write(
-        E?.state === "done" && (await hasConversationToResume(E, storage))
+        jobState?.state === "done" && (await hasConversationToResume(jobState, storage))
           ? `Session ${short} has exited \u2014 run \`claude attach ${short}\` to resume it.
 `
-          : `Session ${short} has exited${x}.
+          : `Session ${short} has exited${detailSuffix}.
 `,
       );
     }
   }
-  if (h.outcome === "error") {
-    let E = h.msg?.startsWith(`${HOST_DEAD_ATTACH_CODE}:`) ?? false;
-    let x = h.msg?.startsWith(`${ENORESPONSE}:`) ?? false;
-    let P = E || x ? await readJobState(getJobDir(short), storage).catch(() => null) : null;
-    let T = P !== null && isExecLaunch(P);
-    let N = E
-      ? T
+  if (attachResult.outcome === "error") {
+    let isHostDead = attachResult.msg?.startsWith(`${HOST_DEAD_ATTACH_CODE}:`) ?? false;
+    let isNoResponse = attachResult.msg?.startsWith(`${ENORESPONSE}:`) ?? false;
+    let jobState =
+      isHostDead || isNoResponse ? await readJobState(getJobDir(short), storage).catch(() => null) : null;
+    let isExec = jobState !== null && isExecLaunch(jobState);
+    let reason = isHostDead
+      ? isExec
         ? `${HOST_DIED_EXEC_ATTACH_MESSAGE}.`
         : `${HOST_DIED_ATTACH_MESSAGE} \u2014 run \`claude attach ${short}\` again to restart it on a fresh host.`
-      : x
-        ? T
+      : isNoResponse
+        ? isExec
           ? `${SESSION_NOT_RESPONDING_TEXT} \u2014 \`claude stop ${short}\` stops it (it runs a shell command, which is not run again for you).`
           : `${SESSION_NOT_RESPONDING_TEXT} \u2014 \`claude stop ${short}\`, then \`claude attach ${short}\` restarts it (the conversation is saved).`
-        : h.msg?.includes(RESPAWNING_ATTACH_CODE)
+        : attachResult.msg?.includes(RESPAWNING_ATTACH_CODE)
           ? "Job is respawning after an upgrade \u2014 try attach again in a moment."
-          : h.msg && (RACED_SOCKET_GAP.test(h.msg) || /ESTARTING/.test(h.msg))
+          : attachResult.msg &&
+              (RACED_SOCKET_GAP.test(attachResult.msg) || /ESTARTING/.test(attachResult.msg))
             ? `${bgSupervisorNounCap()} is restarting \u2014 try again in a moment.`
-            : (h.msg ?? "unknown");
-    process.stderr.write(`Couldn't attach to ${short} \u2014 ${N}
+            : (attachResult.msg ?? "unknown");
+    process.stderr.write(`Couldn't attach to ${short} \u2014 ${reason}
 `);
     await logFeatureBadAsync(
       "cli_bg_attach",
-      E ? "host_dead" : x ? "no_response" : "transient_exhausted",
-      w(),
+      isHostDead ? "host_dead" : isNoResponse ? "no_response" : "transient_exhausted",
+      extraFields(),
     );
-  } else await logFeatureOkAsync("cli_bg_attach", w());
-  return exitAfterAnalyticsFlush(h.outcome === "error" ? 1 : 0);
+  } else await logFeatureOkAsync("cli_bg_attach", extraFields());
+  return exitAfterAnalyticsFlush(attachResult.outcome === "error" ? 1 : 0);
 }
 //@ chunk-bg51yd13.js:58892-59008 placement
-function isUserApcDetach(e, isTTY, isTTY_2) {
+function isUserApcDetach(result, isTTY, isTTY_2) {
   return (
-    e.outcome === "detached" &&
-    e.viaApc === true &&
-    (e.msg === undefined || !SUPERVISOR_DETACH_CODE.test(e.msg)) &&
+    result.outcome === "detached" &&
+    result.viaApc === true &&
+    (result.msg === undefined || !SUPERVISOR_DETACH_CODE.test(result.msg)) &&
     isTTY === true &&
     isTTY_2 === true
   );
@@ -2071,42 +2140,44 @@ function isUserApcDetach(e, isTTY, isTTY_2) {
 /**
  * claude respawn <id>|--all：重启后台会话以使用当前 Claude 二进制。
  */
-async function respawnHandler(e, storage) {
+async function respawnHandler(query, storage) {
   warnOnExtraArgs();
-  if (e === "--help" || e === "-h") {
+  if (query === "--help" || query === "-h") {
     process.stdout.write(`Usage: claude respawn <id>|--all
 
   Restart a background session (or all of them) so it picks up the current Claude binary.
 `);
     return;
   }
-  if (e?.startsWith("-") && e !== "--all") {
-    process.stderr.write(`unknown option '${e}'
+  if (query?.startsWith("-") && query !== "--all") {
+    process.stderr.write(`unknown option '${query}'
 Usage: claude respawn <id>|--all
 `);
     process.exitCode = 1;
     return;
   }
-  if (!e) {
+  if (!query) {
     process.stderr.write(`usage: claude respawn <id>|--all
 `);
     process.exitCode = 1;
     return;
   }
-  let o = [];
-  if (e !== "--all") {
-    o = (storage ? ((await listStorageJobIds(storage)) ?? []) : await readdir(getJobsDir()).catch(() => []))
-      .filter((y) => SHORT_RE.test(y))
-      .filter((y) => y.startsWith(e));
-    if (o.length !== 1) {
+  let matches = [];
+  if (query !== "--all") {
+    matches = (
+      storage ? ((await listStorageJobIds(storage)) ?? []) : await readdir(getJobsDir()).catch(() => [])
+    )
+      .filter((id) => SHORT_RE.test(id))
+      .filter((id) => id.startsWith(query));
+    if (matches.length !== 1) {
       process.stderr.write(
-        o.length === 0
-          ? `No job matching '${e}'
+        matches.length === 0
+          ? `No job matching '${query}'
 `
-          : `Ambiguous prefix '${e}', matches: ${o.join(", ")}
+          : `Ambiguous prefix '${query}', matches: ${matches.join(", ")}
 `,
       );
-      await logFeatureBadAsync("cli_bg_respawn", o.length === 0 ? "no_match" : "ambiguous");
+      await logFeatureBadAsync("cli_bg_respawn", matches.length === 0 ? "no_match" : "ambiguous");
       process.exitCode = 1;
       return;
     }
@@ -2120,87 +2191,88 @@ Usage: claude respawn <id>|--all
     process.exitCode = 1;
     return;
   }
-  if (e === "--all") {
-    let filtered = (await listJobs(undefined, storage)).filter((A) => !isTerminal(A.state.state));
+  if (query === "--all") {
+    let filtered = (await listJobs(undefined, storage)).filter((job) => !isTerminal(job.state.state));
     if (filtered.length === 0) {
       process.stdout.write(`no live jobs to respawn
 `);
       return;
     }
-    let p = 0;
-    let w = 0;
-    for (let A of filtered) {
-      await promptBgWorkspaceTrust(A.state.cwd, storage);
-      let R = await respawnBgSession(
-        A.id,
+    let respawnedCount = 0;
+    let stillAliveCount = 0;
+    for (let job of filtered) {
+      await promptBgWorkspaceTrust(job.state.cwd, storage);
+      let result = await respawnBgSession(
+        job.id,
         {
           force: true,
-          knownState: A.state,
+          knownState: job.state,
         },
         storage,
       );
-      if (R.ok) {
-        p++;
-        process.stdout.write(`respawned ${A.id}${R.short !== A.id ? ` \u2192 ${R.short}` : ""}
+      if (result.ok) {
+        respawnedCount++;
+        process.stdout.write(`respawned ${job.id}${result.short !== job.id ? ` \u2192 ${result.short}` : ""}
 `);
-      } else if (R.alive) {
-        w++;
+      } else if (result.alive) {
+        stillAliveCount++;
         process.exitCode = 1;
-        process.stderr.write(`${A.id}: still running \u2014 couldn't confirm restart, retry in a moment
+        process.stderr.write(`${job.id}: still running \u2014 couldn't confirm restart, retry in a moment
 `);
       } else {
         process.exitCode = 1;
-        process.stderr.write(`${A.id}: ${R.error}
+        process.stderr.write(`${job.id}: ${result.error}
 `);
       }
     }
-    if (p === filtered.length) await logFeatureOkAsync("cli_bg_respawn");
-    else if (p > 0 || w > 0) await logFeatureSadAsync("cli_bg_respawn", w > 0 ? "still_alive" : "partial");
+    if (respawnedCount === filtered.length) await logFeatureOkAsync("cli_bg_respawn");
+    else if (respawnedCount > 0 || stillAliveCount > 0)
+      await logFeatureSadAsync("cli_bg_respawn", stillAliveCount > 0 ? "still_alive" : "partial");
     else await logFeatureBadAsync("cli_bg_respawn", "spawn_failed");
     return;
   }
-  let s = o[0];
-  let l = await respawnBgSession(
-    s,
+  let short = matches[0];
+  let result = await respawnBgSession(
+    short,
     {
       force: true,
     },
     storage,
   );
-  if (!l.ok && l.errorCode === "workspace_untrusted" && l.state !== undefined) {
-    await promptBgWorkspaceTrust(l.state.cwd, storage);
-    if (checkWorkspaceTrust(l.state.cwd).verdict !== "untrusted")
-      l = await respawnBgSession(
-        s,
+  if (!result.ok && result.errorCode === "workspace_untrusted" && result.state !== undefined) {
+    await promptBgWorkspaceTrust(result.state.cwd, storage);
+    if (checkWorkspaceTrust(result.state.cwd).verdict !== "untrusted")
+      result = await respawnBgSession(
+        short,
         {
           force: true,
         },
         storage,
       );
   }
-  if (!l.ok && l.alive) {
-    process.stderr.write(`${s}: still running \u2014 couldn't confirm restart, retry in a moment
+  if (!result.ok && result.alive) {
+    process.stderr.write(`${short}: still running \u2014 couldn't confirm restart, retry in a moment
 `);
     await logFeatureSadAsync("cli_bg_respawn", "still_alive");
     process.exitCode = 1;
     return;
   }
-  if (!l.ok) {
-    process.stderr.write(`${l.error}
+  if (!result.ok) {
+    process.stderr.write(`${result.error}
 `);
     await logFeatureBadAsync("cli_bg_respawn", "spawn_failed");
     process.exitCode = 1;
     return;
   }
   await logFeatureOkAsync("cli_bg_respawn");
-  process.stdout.write(`respawned ${s}${l.short !== s ? ` \u2192 ${l.short}` : ""}
+  process.stdout.write(`respawned ${short}${result.short !== short ? ` \u2192 ${result.short}` : ""}
 `);
 }
 //@ chunk-bg51yd13.js:61338-62534 placement
-async function stopHandler(e, storage, o = false) {
-  let query = e;
+async function stopHandler(query, storage, isVerbose = false) {
+  let query_2 = query;
   let { short } = await resolveJobArgument(
-    query,
+    query_2,
     "claude stop <id>",
     ["Stop a background session. Its conversation is kept; resume it later with `claude attach <id>`.", ...[]]
       .join(`
@@ -2280,113 +2352,120 @@ var RM_HELP =
 /**
  * claude rm：删除后台会话及其工作树（--discard-unpushed、--force-remove-worktree）。
  */
-async function rmHandler(e, storage, o = getBgVerbArgsWithoutDebug(process.argv.slice(2)), r = false) {
-  let s;
-  let l;
-  let u;
-  let y;
-  let p = [];
-  let w = e === undefined ? o : [e, ...o];
-  for (let idx = 0; idx < w.length; idx++) {
-    let N = w[idx];
-    if (N === "--help" || N === "-h") {
+async function rmHandler(
+  firstArg,
+  storage,
+  restArgs = getBgVerbArgsWithoutDebug(process.argv.slice(2)),
+  recurse = false,
+) {
+  let query;
+  let discardUnpushed;
+  let forceRemoveWorktree;
+  let error;
+  let extraArgs = [];
+  let args = firstArg === undefined ? restArgs : [firstArg, ...restArgs];
+  for (let idx = 0; idx < args.length; idx++) {
+    let arg = args[idx];
+    if (arg === "--help" || arg === "-h") {
       process.stdout.write(RM_HELP);
       process.exit(0);
     }
-    if (N === "--discard-unpushed" || N.startsWith("--discard-unpushed=")) {
-      let [L, F, ...j] = ((N === "--discard-unpushed" ? w[++idx] : N.slice(19)) ?? "")
+    if (arg === "--discard-unpushed" || arg.startsWith("--discard-unpushed=")) {
+      let [headSha, worktreeDigest, ...extraParts] = (
+        (arg === "--discard-unpushed" ? args[++idx] : arg.slice(19)) ?? ""
+      )
         .toLowerCase()
         .split("@");
       if (
-        j.length > 0 ||
-        L === undefined ||
-        !isValidGitSha(L) ||
-        F === undefined ||
-        !WORKTREE_DIGEST_PATTERN.test(F)
+        extraParts.length > 0 ||
+        headSha === undefined ||
+        !isValidGitSha(headSha) ||
+        worktreeDigest === undefined ||
+        !WORKTREE_DIGEST_PATTERN.test(worktreeDigest)
       ) {
-        y = `option '--discard-unpushed' takes the <commit>@<worktree-id> value shown by a previous 'claude rm <id>' refusal
+        error = `option '--discard-unpushed' takes the <commit>@<worktree-id> value shown by a previous 'claude rm <id>' refusal
 `;
         break;
       }
-      l = {
-        headSha: L,
-        worktreeDigest: F,
+      discardUnpushed = {
+        headSha,
+        worktreeDigest,
       };
-    } else if (N === "--force-remove-worktree" || N.startsWith("--force-remove-worktree=")) {
-      let lower = ((N === "--force-remove-worktree" ? w[++idx] : N.slice(24)) ?? "").toLowerCase();
+    } else if (arg === "--force-remove-worktree" || arg.startsWith("--force-remove-worktree=")) {
+      let lower = ((arg === "--force-remove-worktree" ? args[++idx] : arg.slice(24)) ?? "").toLowerCase();
       if (!WORKTREE_DIGEST_PATTERN.test(lower)) {
-        y = `option '--force-remove-worktree' takes the <worktree-id> value shown by a previous 'claude rm <id>' refusal
+        error = `option '--force-remove-worktree' takes the <worktree-id> value shown by a previous 'claude rm <id>' refusal
 `;
         break;
       }
-      u = lower;
-    } else if (N.startsWith("-")) {
-      y = `unknown option '${N}'
+      forceRemoveWorktree = lower;
+    } else if (arg.startsWith("-")) {
+      error = `unknown option '${arg}'
 `;
       break;
-    } else if (s === undefined) s = N;
-    else p.push(N);
+    } else if (query === undefined) query = arg;
+    else extraArgs.push(arg);
   }
-  if (y !== undefined || !s) {
-    process.stderr.write(`${y ?? ""}${RM_USAGE}`);
+  if (error !== undefined || !query) {
+    process.stderr.write(`${error ?? ""}${RM_USAGE}`);
     process.exit(1);
   }
-  let A = extraArgsWarning(p);
-  if (A) process.stderr.write(A);
+  let warning = extraArgsWarning(extraArgs);
+  if (warning) process.stderr.write(warning);
   let filtered = (
     storage ? ((await listStorageJobIds(storage)) ?? []) : await readdir(getJobsDir()).catch(() => [])
   )
-    .filter((T) => SHORT_RE.test(T))
-    .filter((T) => T.startsWith(s));
+    .filter((id) => SHORT_RE.test(id))
+    .filter((id) => id.startsWith(query));
   if (filtered.length !== 1) {
     process.stderr.write(
       filtered.length === 0
-        ? `No job matching '${s}'
+        ? `No job matching '${query}'
 `
-        : `Ambiguous prefix '${s}', matches: ${filtered.join(", ")}
+        : `Ambiguous prefix '${query}', matches: ${filtered.join(", ")}
 `,
     );
     process.exit(1);
   }
-  let D = filtered[0];
-  let jobState = await readJobState(getJobDir(D), storage);
-  let E = await deleteJob(
-    D,
+  let short = filtered[0];
+  let jobState = await readJobState(getJobDir(short), storage);
+  let outcome = await deleteJob(
+    short,
     {
-      ...(l !== undefined && {
-        discardUnpushed: l,
+      ...(discardUnpushed !== undefined && {
+        discardUnpushed,
       }),
-      ...(u !== undefined && {
-        forceRemoveWorktree: u,
+      ...(forceRemoveWorktree !== undefined && {
+        forceRemoveWorktree,
       }),
     },
     storage,
   );
-  if (!E.removed) {
-    let { error, errorCode, keptWorktree } = E;
+  if (!outcome.removed) {
+    let { error, errorCode, keptWorktree } = outcome;
     if (keptWorktree) {
       await logFeatureSadAsync("cli_bg_rm", "kept_worktree");
-      let F = formatRmOutcome(
+      let explained = formatRmOutcome(
         {
-          reason: E.keptReason ?? "remove_failed",
-          errorSummary: E.keptErrorSummary,
-          unpushed: E.keptUnpushed,
-          discardUnpushed: E.discardUnpushed,
-          forceRemove: E.forceRemoveWorktree,
-          forceRemoveWithheld: E.forceRemoveWithheld,
-          submoduleWork: E.submoduleWork,
+          reason: outcome.keptReason ?? "remove_failed",
+          errorSummary: outcome.keptErrorSummary,
+          unpushed: outcome.keptUnpushed,
+          discardUnpushed: outcome.discardUnpushed,
+          forceRemove: outcome.forceRemoveWorktree,
+          forceRemoveWithheld: outcome.forceRemoveWithheld,
+          submoduleWork: outcome.submoduleWork,
         },
         {
           worktree: keptWorktree,
-          jobId: D,
+          jobId: short,
         },
       );
       process.stdout.write(
-        `kept ${D} \u2014 its worktree is still at ${keptWorktree}
+        `kept ${short} \u2014 its worktree is still at ${keptWorktree}
 ` +
-          F.cli
+          explained.cli
             .map(
-              (j) => `  ${j}
+              (line) => `  ${line}
 `,
             )
             .join(""),
@@ -2396,7 +2475,7 @@ async function rmHandler(e, storage, o = getBgVerbArgsWithoutDebug(process.argv.
     }
     await logFeatureBadAsync("cli_bg_rm", errorCode ?? "kill_unconfirmed");
     process.stderr
-      .write(`couldn't remove ${D} \u2014 ${error ?? "the background service may be restarting. Try again in a moment."}
+      .write(`couldn't remove ${short} \u2014 ${error ?? "the background service may be restarting. Try again in a moment."}
 `);
     process.exitCode = 1;
     return;
@@ -2406,12 +2485,12 @@ async function rmHandler(e, storage, o = getBgVerbArgsWithoutDebug(process.argv.
     source: lit("cli"),
     jobSessionId: sanitizeMarkName(jobState?.sessionId) ?? lit(""),
   });
-  let { leftWorktreeDir, forcedWorktreeRemoval } = E;
+  let { leftWorktreeDir, forcedWorktreeRemoval } = outcome;
   if (leftWorktreeDir) await logFeatureSadAsync("cli_bg_rm", "worktree_left_in_place");
   else if (forcedWorktreeRemoval) await logFeatureSadAsync("cli_bg_rm", "worktree_force_removed");
   else await logFeatureOkAsync("cli_bg_rm");
   process.stdout.write(
-    `removed ${D}` +
+    `removed ${short}` +
       (leftWorktreeDir
         ? `
   worktree directory left at ${leftWorktreeDir} (git no longer recognized it)`
@@ -2434,9 +2513,9 @@ async function rmHandler(e, storage, o = getBgVerbArgsWithoutDebug(process.argv.
 /**
  * （误归 computerUse）把 -abc 形式拆出已知短选项，返回 {peeled, rest}。
  */
-function peelCombinedShortFlags(e) {
+function peelCombinedShortFlags(arg) {
   let peeled = [];
-  let rest = e;
+  let rest = arg;
   while (/^-[a-zA-Z]./.test(rest) && SINGLE_LETTER_FLAGS.has(rest.slice(0, 2))) {
     peeled.push(rest.slice(0, 2));
     rest = `-${rest.slice(2)}`;
@@ -2447,148 +2526,150 @@ function peelCombinedShortFlags(e) {
   };
 }
 //@ chunk-bg51yd13.js:66271-66323 placement
-function looksLikeFlag(e) {
-  return e.length > 1 && e.startsWith("-");
+function looksLikeFlag(arg) {
+  return arg.length > 1 && arg.startsWith("-");
 }
 //@ chunk-bg51yd13.js:66323-66420 placement
-function findDashDashIndex(e) {
-  let flagValueIndices = getFlagValueIndices(e);
-  for (let j = 0; j < e.length; j++) if (e[j] === "--" && !flagValueIndices.has(j)) return j;
+function findDashDashIndex(argv) {
+  let flagValueIndices = getFlagValueIndices(argv);
+  for (let j = 0; j < argv.length; j++) if (argv[j] === "--" && !flagValueIndices.has(j)) return j;
   return -1;
 }
 //@ chunk-bg51yd13.js:66420-66556 placement
-function stripBgOnlyFlags(e) {
-  let dashDashIndex = findDashDashIndex(e);
-  let o = dashDashIndex >= 0 ? e.slice(0, dashDashIndex) : e;
-  let flagValueIndices = getFlagValueIndices(o);
-  let filtered = o.filter((l, u) => flagValueIndices.has(u) || !BG_FLAG_NAMES.includes(l));
-  return dashDashIndex >= 0 ? [...filtered, ...e.slice(dashDashIndex)] : filtered;
+function stripBgOnlyFlags(argv) {
+  let dashDashIndex = findDashDashIndex(argv);
+  let headArgs = dashDashIndex >= 0 ? argv.slice(0, dashDashIndex) : argv;
+  let flagValueIndices = getFlagValueIndices(headArgs);
+  let filtered = headArgs.filter(
+    (arg, argIndex) => flagValueIndices.has(argIndex) || !BG_FLAG_NAMES.includes(arg),
+  );
+  return dashDashIndex >= 0 ? [...filtered, ...argv.slice(dashDashIndex)] : filtered;
 }
 //@ chunk-bg51yd13.js:66556-66951 placement
 /**
  * 取某个 flag 的值：支持 `--x v`、`--x=v`、组合短参数 `-abv`/`-a v`；遇到 `--` 停止；多次出现取最后一个。
  */
-function getFlagValue(e, n, o) {
-  let flagValueIndices = getFlagValueIndices(e);
-  let s;
-  for (let j = 0; j < e.length; j++) {
+function getFlagValue(argv, longFlag, shortFlag) {
+  let flagValueIndices = getFlagValueIndices(argv);
+  let value;
+  for (let j = 0; j < argv.length; j++) {
     if (flagValueIndices.has(j)) continue;
-    let u = e[j];
-    if (u === "--") break;
-    if (u === n || (o !== undefined && u === o)) {
-      if (e[j + 1] !== undefined) {
-        s = e[j + 1];
+    let arg = argv[j];
+    if (arg === "--") break;
+    if (arg === longFlag || (shortFlag !== undefined && arg === shortFlag)) {
+      if (argv[j + 1] !== undefined) {
+        value = argv[j + 1];
         j++;
       }
       continue;
     }
-    if (u.startsWith(`${n}=`)) {
-      s = u.slice(n.length + 1);
+    if (arg.startsWith(`${longFlag}=`)) {
+      value = arg.slice(longFlag.length + 1);
       continue;
     }
-    if (o !== undefined) {
-      let { peeled, rest } = peelCombinedShortFlags(u);
-      if (rest.length > 2 && rest.slice(0, 2) === o) {
-        s = rest.slice(2);
+    if (shortFlag !== undefined) {
+      let { peeled, rest } = peelCombinedShortFlags(arg);
+      if (rest.length > 2 && rest.slice(0, 2) === shortFlag) {
+        value = rest.slice(2);
         continue;
       }
-      if (peeled.length > 0 && rest === o && e[j + 1] !== undefined) {
-        s = e[j + 1];
+      if (peeled.length > 0 && rest === shortFlag && argv[j + 1] !== undefined) {
+        value = argv[j + 1];
         j++;
       }
     }
   }
-  return s;
+  return value;
 }
 //@ chunk-bg51yd13.js:66951-67678 placement
-function rewriteDispatchFlagValue(respawnFlags, n, o, name) {
+function rewriteDispatchFlagValue(respawnFlags, longFlag, shortFlag, name) {
   let flagValueIndices = getFlagValueIndices(respawnFlags);
-  let l = [...respawnFlags];
-  let u = false;
+  let rewritten = [...respawnFlags];
+  let didChange = false;
   for (let j = 0; j < respawnFlags.length; j++) {
     if (flagValueIndices.has(j)) continue;
-    let w = respawnFlags[j];
-    if (w === "--") break;
-    if (w === n || (o !== undefined && w === o)) {
+    let arg = respawnFlags[j];
+    if (arg === "--") break;
+    if (arg === longFlag || (shortFlag !== undefined && arg === shortFlag)) {
       if (respawnFlags[j + 1] !== undefined) {
         if (!isAcceptableModelArg(name)) {
-          l[j] = `${n}=${name}`;
-          l[j + 1] = null;
-          u = true;
+          rewritten[j] = `${longFlag}=${name}`;
+          rewritten[j + 1] = null;
+          didChange = true;
         } else if (respawnFlags[j + 1] !== name) {
-          l[j + 1] = name;
-          u = true;
+          rewritten[j + 1] = name;
+          didChange = true;
         }
         j++;
       }
       continue;
     }
-    if (w.startsWith(`${n}=`)) {
-      if (w.slice(n.length + 1) !== name) {
-        l[j] = `${n}=${name}`;
-        u = true;
+    if (arg.startsWith(`${longFlag}=`)) {
+      if (arg.slice(longFlag.length + 1) !== name) {
+        rewritten[j] = `${longFlag}=${name}`;
+        didChange = true;
       }
       continue;
     }
-    if (o !== undefined) {
-      let { peeled, rest } = peelCombinedShortFlags(w);
-      if (rest.length > 2 && rest.slice(0, 2) === o) {
+    if (shortFlag !== undefined) {
+      let { peeled, rest } = peelCombinedShortFlags(arg);
+      if (rest.length > 2 && rest.slice(0, 2) === shortFlag) {
         if (rest.slice(2) !== name) {
-          l[j] = `${w.slice(0, w.length - (rest.length - 2))}${name}`;
-          u = true;
+          rewritten[j] = `${arg.slice(0, arg.length - (rest.length - 2))}${name}`;
+          didChange = true;
         }
         continue;
       }
-      if (peeled.length > 0 && rest === o && respawnFlags[j + 1] !== undefined) {
+      if (peeled.length > 0 && rest === shortFlag && respawnFlags[j + 1] !== undefined) {
         if (!isAcceptableModelArg(name)) {
-          l[j] = `-${peeled.map((h) => h.slice(1)).join("")}`;
-          l[j + 1] = `${n}=${name}`;
-          u = true;
+          rewritten[j] = `-${peeled.map((peeledFlag) => peeledFlag.slice(1)).join("")}`;
+          rewritten[j + 1] = `${longFlag}=${name}`;
+          didChange = true;
         } else if (respawnFlags[j + 1] !== name) {
-          l[j + 1] = name;
-          u = true;
+          rewritten[j + 1] = name;
+          didChange = true;
         }
         j++;
       }
     }
   }
-  if (!u) return;
-  let y = [];
-  for (let p of l) if (p !== null) y.push(p);
-  return y;
+  if (!didChange) return;
+  let compacted = [];
+  for (let arg of rewritten) if (arg !== null) compacted.push(arg);
+  return compacted;
 }
 //@ chunk-bg51yd13.js:67678-68131 placement
 /**
  * 返回参数数组里"作为 flag 取值"的下标集合（如 --rc 的名字、多值 flag 的后续值），供其他扫描函数跳过。
  */
-function getFlagValueIndices(e) {
-  let n = new Set();
-  for (let j = 0; j < e.length; j++) {
-    if (n.has(j)) continue;
-    let r = e[j];
-    if (r === "--") break;
-    let { rest } = peelCombinedShortFlags(r);
-    if (r === "--resume" || rest === "-r") continue;
+function getFlagValueIndices(argv) {
+  let indices = new Set();
+  for (let j = 0; j < argv.length; j++) {
+    if (indices.has(j)) continue;
+    let arg = argv[j];
+    if (arg === "--") break;
+    let { rest } = peelCombinedShortFlags(arg);
+    if (arg === "--resume" || rest === "-r") continue;
     if (
-      (r === "--remote-control" || r === "--rc") &&
-      e[j + 1] !== undefined &&
-      !(e[j + 1].length > 1 && e[j + 1].startsWith("-"))
+      (arg === "--remote-control" || arg === "--rc") &&
+      argv[j + 1] !== undefined &&
+      !(argv[j + 1].length > 1 && argv[j + 1].startsWith("-"))
     ) {
-      n.add(j + 1);
+      indices.add(j + 1);
       continue;
     }
-    if (!rest.includes("=") && BACKGROUND_FORWARDED_VALUE_FLAGS.has(rest) && e[j + 1] !== undefined) {
-      n.add(j + 1);
+    if (!rest.includes("=") && BACKGROUND_FORWARDED_VALUE_FLAGS.has(rest) && argv[j + 1] !== undefined) {
+      indices.add(j + 1);
       if (VARIADIC_FORWARDED_FLAGS.has(rest)) {
-        let l = j + 2;
-        while (e[l] !== undefined && !(e[l].length > 1 && e[l].startsWith("-"))) {
-          n.add(l);
-          l++;
+        let next = j + 2;
+        while (argv[next] !== undefined && !(argv[next].length > 1 && argv[next].startsWith("-"))) {
+          indices.add(next);
+          next++;
         }
       }
     }
   }
-  return n;
+  return indices;
 }
 //@ chunk-bg51yd13.js:68131-68471 placement
 /**
@@ -2596,137 +2677,137 @@ function getFlagValueIndices(e) {
  */
 function hasContinueOrResumeId(argv) {
   let flagValueIndices = getFlagValueIndices(argv);
-  let o = false;
-  let r = false;
+  let hasResume = false;
+  let hasContinue = false;
   for (let j = 0; j < argv.length; j++) {
     if (flagValueIndices.has(j)) continue;
-    let l = argv[j];
-    if (l === "--") break;
-    if (l === "--continue") {
-      r = true;
+    let arg = argv[j];
+    if (arg === "--") break;
+    if (arg === "--continue") {
+      hasContinue = true;
       continue;
     }
-    if (l === "--resume" || l.startsWith("--resume=")) {
-      o = true;
+    if (arg === "--resume" || arg.startsWith("--resume=")) {
+      hasResume = true;
       continue;
     }
-    let { peeled, rest } = peelCombinedShortFlags(l);
-    if (peeled.includes("-c") || rest === "-c") r = true;
-    if (rest === "-r" || /^-r./.test(rest)) o = true;
+    let { peeled, rest } = peelCombinedShortFlags(arg);
+    if (peeled.includes("-c") || rest === "-c") hasContinue = true;
+    if (rest === "-r" || /^-r./.test(rest)) hasResume = true;
   }
-  if (o) return getResumeArg(argv) !== undefined;
-  return r;
+  if (hasResume) return getResumeArg(argv) !== undefined;
+  return hasContinue;
 }
 //@ chunk-bg51yd13.js:68471-68792 placement
 /**
  * 取 --resume/-r 的参数值（--resume=、-rXXX、或下一个非 flag 参数），没有值返回 undefined。
  */
-function getResumeArg(e) {
-  let flagValueIndices = getFlagValueIndices(e);
-  let o;
-  for (let j = 0; j < e.length; j++) {
+function getResumeArg(argv) {
+  let flagValueIndices = getFlagValueIndices(argv);
+  let resumeArg;
+  for (let j = 0; j < argv.length; j++) {
     if (flagValueIndices.has(j)) continue;
-    let s = e[j];
-    if (s === "--") break;
-    if (s.startsWith("--resume=")) {
-      o = s.slice(9) || undefined;
+    let arg = argv[j];
+    if (arg === "--") break;
+    if (arg.startsWith("--resume=")) {
+      resumeArg = arg.slice(9) || undefined;
       continue;
     }
-    let { rest } = peelCombinedShortFlags(s);
+    let { rest } = peelCombinedShortFlags(arg);
     if (/^-r./.test(rest)) {
-      o = rest.slice(2);
+      resumeArg = rest.slice(2);
       continue;
     }
-    if (s === "--resume" || rest === "-r") {
-      let u = e[j + 1];
-      if (u !== undefined && !looksLikeFlag(u)) {
-        o = u;
+    if (arg === "--resume" || rest === "-r") {
+      let nextArg = argv[j + 1];
+      if (nextArg !== undefined && !looksLikeFlag(nextArg)) {
+        resumeArg = nextArg;
         j++;
-      } else o = undefined;
+      } else resumeArg = undefined;
     }
   }
-  return o;
+  return resumeArg;
 }
 //@ chunk-bg51yd13.js:68792-69022 placement
-function hasResumeOrContinueFlag(e) {
-  let flagValueIndices = getFlagValueIndices(e);
-  return e.some((o, r) => {
-    if (flagValueIndices.has(r)) return false;
-    if (o === "--continue" || o === "--resume" || o.startsWith("--resume=")) return true;
-    let { peeled, rest } = peelCombinedShortFlags(o);
+function hasResumeOrContinueFlag(argv) {
+  let flagValueIndices = getFlagValueIndices(argv);
+  return argv.some((arg, index) => {
+    if (flagValueIndices.has(index)) return false;
+    if (arg === "--continue" || arg === "--resume" || arg.startsWith("--resume=")) return true;
+    let { peeled, rest } = peelCombinedShortFlags(arg);
     return peeled.includes("-c") || rest === "-c" || rest === "-r" || /^-r./.test(rest);
   });
 }
 //@ chunk-bg51yd13.js:69022-69089 placement
-function hasBareFlag(e, n) {
-  let flagValueIndices = getFlagValueIndices(e);
-  return e.some((r, s) => !flagValueIndices.has(s) && r === n);
+function hasBareFlag(argv, flag) {
+  let flagValueIndices = getFlagValueIndices(argv);
+  return argv.some((arg, index) => !flagValueIndices.has(index) && arg === flag);
 }
 //@ chunk-bg51yd13.js:69089-69768 placement
-function stripResumeFlags(e) {
-  let flagValueIndices = getFlagValueIndices(e);
-  let o = [];
-  for (let j = 0; j < e.length; j++) {
-    let s = e[j];
+function stripResumeFlags(argv) {
+  let flagValueIndices = getFlagValueIndices(argv);
+  let kept = [];
+  for (let j = 0; j < argv.length; j++) {
+    let arg = argv[j];
     if (flagValueIndices.has(j)) {
-      o.push(s);
+      kept.push(arg);
       continue;
     }
-    if (s === "--") {
-      for (let y = j; y < e.length; y++) o.push(e[y]);
+    if (arg === "--") {
+      for (let index = j; index < argv.length; index++) kept.push(argv[index]);
       break;
     }
     if (
-      s === "--fork-session" ||
-      s === "--continue" ||
-      s.startsWith("--resume=") ||
-      s.startsWith("--session-id=")
+      arg === "--fork-session" ||
+      arg === "--continue" ||
+      arg.startsWith("--resume=") ||
+      arg.startsWith("--session-id=")
     )
       continue;
-    let { peeled, rest } = peelCombinedShortFlags(s);
+    let { peeled, rest } = peelCombinedShortFlags(arg);
     if (peeled.length > 0 || rest === "-c" || rest.startsWith("-r")) {
-      let mapped = peeled.filter((R) => R !== "-c").map((R) => R[1]);
-      let p = rest === "-c" || /^-r./.test(rest);
-      let w = rest === "-r";
-      let A = p || w ? "" : rest.slice(1);
-      if (mapped.length > 0 || A) o.push(`-${mapped.join("")}${A}`);
-      if (w && e[j + 1] !== undefined && !looksLikeFlag(e[j + 1])) j++;
+      let mapped = peeled.filter((peeledFlag) => peeledFlag !== "-c").map((peeledFlag) => peeledFlag[1]);
+      let dropsResumeArg = rest === "-c" || /^-r./.test(rest);
+      let isBareResume = rest === "-r";
+      let otherLetters = dropsResumeArg || isBareResume ? "" : rest.slice(1);
+      if (mapped.length > 0 || otherLetters) kept.push(`-${mapped.join("")}${otherLetters}`);
+      if (isBareResume && argv[j + 1] !== undefined && !looksLikeFlag(argv[j + 1])) j++;
       continue;
     }
-    if (s === "--session-id") {
-      if (e[j + 1] !== undefined) j++;
+    if (arg === "--session-id") {
+      if (argv[j + 1] !== undefined) j++;
       continue;
     }
-    if (s === "--resume") {
-      if (e[j + 1] !== undefined && !looksLikeFlag(e[j + 1])) j++;
+    if (arg === "--resume") {
+      if (argv[j + 1] !== undefined && !looksLikeFlag(argv[j + 1])) j++;
       continue;
     }
-    o.push(s);
+    kept.push(arg);
   }
-  return o;
+  return kept;
 }
 //@ chunk-bg51yd13.js:69768-70045 placement
 function stripSessionIdFlag(argv) {
   let flagValueIndices = getFlagValueIndices(argv);
-  let o = [];
+  let kept = [];
   for (let j = 0; j < argv.length; j++) {
-    let s = argv[j];
+    let arg = argv[j];
     if (flagValueIndices.has(j)) {
-      o.push(s);
+      kept.push(arg);
       continue;
     }
-    if (s === "--") {
-      for (let l = j; l < argv.length; l++) o.push(argv[l]);
+    if (arg === "--") {
+      for (let index = j; index < argv.length; index++) kept.push(argv[index]);
       break;
     }
-    if (s.startsWith("--session-id=")) continue;
-    if (s === "--session-id") {
+    if (arg.startsWith("--session-id=")) continue;
+    if (arg === "--session-id") {
       if (argv[j + 1] !== undefined) j++;
       continue;
     }
-    o.push(s);
+    kept.push(arg);
   }
-  return o;
+  return kept;
 }
 //@ chunk-bg51yd13.js:70045-71769 placement
 /**
@@ -2736,7 +2817,7 @@ function validateBgLaunchFlags(args) {
   let separatorIndex = findDashDashIndex(args);
   let launchArgs = separatorIndex >= 0 ? args.slice(0, separatorIndex) : args;
   let valueIndexes = getFlagValueIndices(launchArgs);
-  let flagArgs = launchArgs.filter((launchArg, p) => !valueIndexes.has(p));
+  let flagArgs = launchArgs.filter((launchArg, index) => !valueIndexes.has(index));
   if (hasRemoteBackendFlags(flagArgs)) return rejectBgWithEnvironmentFlags(launchArgs);
   if (
     getProjectConfigRoot() !== null ||
@@ -2778,19 +2859,19 @@ function validateBgLaunchFlags(args) {
 //@ chunk-bg51yd13.js:71769-71994 placement
 function findLastPositionalArg(argv, resumeArg) {
   let flagValueIndices = getFlagValueIndices(argv);
-  let r;
+  let lastPositional;
   for (let j = 0; j < argv.length; j++) {
     if (flagValueIndices.has(j)) continue;
-    let l = argv[j];
-    if (looksLikeFlag(l)) {
-      let { rest } = peelCombinedShortFlags(l);
-      if ((l === "--resume" || rest === "-r") && argv[j + 1] !== undefined && !looksLikeFlag(argv[j + 1]))
+    let arg = argv[j];
+    if (looksLikeFlag(arg)) {
+      let { rest } = peelCombinedShortFlags(arg);
+      if ((arg === "--resume" || rest === "-r") && argv[j + 1] !== undefined && !looksLikeFlag(argv[j + 1]))
         j++;
       continue;
     }
-    if (l.length > 0 && l !== resumeArg) r = l;
+    if (arg.length > 0 && arg !== resumeArg) lastPositional = arg;
   }
-  return r;
+  return lastPositional;
 }
 //@ chunk-bg51yd13.js:71994-72321 placement
 /**
@@ -2798,35 +2879,35 @@ function findLastPositionalArg(argv, resumeArg) {
  */
 function keepFlagArgsOnly(argsWithoutResume) {
   let flagValueIndices = getFlagValueIndices(argsWithoutResume);
-  let o = [];
+  let kept = [];
   for (let j = 0; j < argsWithoutResume.length; j++) {
-    let s = argsWithoutResume[j];
+    let arg = argsWithoutResume[j];
     if (flagValueIndices.has(j)) {
-      o.push(s);
+      kept.push(arg);
       continue;
     }
-    if (!looksLikeFlag(s)) continue;
-    if (s.includes("=")) {
-      o.push(s);
+    if (!looksLikeFlag(arg)) continue;
+    if (arg.includes("=")) {
+      kept.push(arg);
       continue;
     }
-    let { rest } = peelCombinedShortFlags(s);
+    let { rest } = peelCombinedShortFlags(arg);
     if (FORWARDED_VALUE_FLAGS.has(rest)) {
-      o.push(s);
+      kept.push(arg);
       continue;
     }
-    if (BOOLEAN_FORWARDED_FLAGS.has(s)) {
-      o.push(s);
+    if (BOOLEAN_FORWARDED_FLAGS.has(arg)) {
+      kept.push(arg);
       continue;
     }
-    let u = argsWithoutResume[j + 1];
-    if (u !== undefined && !looksLikeFlag(u) && !flagValueIndices.has(j + 1)) {
+    let nextArg = argsWithoutResume[j + 1];
+    if (nextArg !== undefined && !looksLikeFlag(nextArg) && !flagValueIndices.has(j + 1)) {
       j++;
       continue;
     }
-    o.push(s);
+    kept.push(arg);
   }
-  return o;
+  return kept;
 }
 //@ chunk-bg51yd13.js:72321-72350 placement
 function callerProviderEnv() {
@@ -2841,4 +2922,10 @@ export {
   gateCauseExtra,
   workspaceGateCause,
   rewriteDispatchFlagValue,
+  attachHandler,
+  handleBgFlag,
+  logsHandler,
+  respawnHandler,
+  rmHandler,
+  stopHandler,
 };

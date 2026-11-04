@@ -8,7 +8,14 @@
  * pieces: chunk-ah34pb7m.js (9)
  * attribution: sole-consumer 7, fingerprint 2
  */
-import { init_react_production, yt, y, P, Q, R } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useSyncExternalStore,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   RATE_LIMIT_DISPLAY_NAMES,
   HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE,
@@ -65,61 +72,77 @@ import { MessageResponse } from "../MessageResponse.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { LinkifiedText as LinkifiedText_2 } from "../LinkifiedText.js";
 import { MarkdownText_2, MARKDOWN_LINK_SCHEMES } from "../pluginUi/render/MarkdownBlock.js";
-import { RETURN_SYMBOL } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { RETURN_SYMBOL } from "../../constants/figures.js";
 import { StatusIcon } from "../design-system/StatusIcon.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ah34pb7m.js:43543-43547 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:43543", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:43547-43551 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:43547", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:43551-43555 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ah34pb7m.js:43551", () => {
+  init_react_production();
+});
 //@ chunk-ah34pb7m.js:43555-43809 sole-consumer
-function classifyRateLimitText(m) {
-  let d = RATE_LIMIT_DISPLAY_NAMES;
-  let c = (g) => m.startsWith(`You've hit your ${g}`);
-  if (c(d.five_hour) || c("session limit")) return "session";
-  if (c(d.seven_day)) return "weekly";
-  return c(d.seven_day_opus) || c(d.seven_day_sonnet) || c(d.seven_day_overage_included)
+function classifyRateLimitText(text) {
+  let displayNames = RATE_LIMIT_DISPLAY_NAMES;
+  let isHit = (label) => text.startsWith(`You've hit your ${label}`);
+  if (isHit(displayNames.five_hour) || isHit("session limit")) return "session";
+  if (isHit(displayNames.seven_day)) return "weekly";
+  return isHit(displayNames.seven_day_opus) ||
+    isHit(displayNames.seven_day_sonnet) ||
+    isHit(displayNames.seven_day_overage_included)
     ? "model"
     : undefined;
 }
 //@ chunk-ah34pb7m.js:43809-44067 sole-consumer
-function getRateLimitOfferNote(text, rateLimitState, c) {
-  yt(onUsageCreditStateChange, currentUsageCreditState, currentUsageCreditState);
-  yt(subscribeResetChanges, getResetFlowPhase, getResetFlowPhase);
-  let g = c ? classifyRateLimitText(text) : undefined;
-  let limitScopeKind = getLimitScopeKind(rateLimitState.rateLimitType);
+function getRateLimitOfferNote(text, limits, creditState) {
+  useSyncExternalStore(onUsageCreditStateChange, currentUsageCreditState, currentUsageCreditState);
+  useSyncExternalStore(subscribeResetChanges, getResetFlowPhase, getResetFlowPhase);
+  let limitScope = creditState ? classifyRateLimitText(text) : undefined;
+  let limitScopeKind = getLimitScopeKind(limits.rateLimitType);
   if (
-    g === undefined ||
-    (g !== limitScopeKind && !(rateLimitState.rateLimitType === "seven_day_sonnet" && g === "weekly")) ||
-    isResetOfferAvailable(rateLimitState) ||
-    canArmLowPriorityReset(rateLimitState) ||
-    resetsUsedUpLine(rateLimitState) !== undefined ||
-    usageCreditsSpentLine(rateLimitState) !== undefined
+    limitScope === undefined ||
+    (limitScope !== limitScopeKind &&
+      !(limits.rateLimitType === "seven_day_sonnet" && limitScope === "weekly")) ||
+    isResetOfferAvailable(limits) ||
+    canArmLowPriorityReset(limits) ||
+    resetsUsedUpLine(limits) !== undefined ||
+    usageCreditsSpentLine(limits) !== undefined
   )
     return;
   return readOfferNote(
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_WISE_BEAR_COPY, null),
-    g,
+    limitScope,
     cleanTaskDescription,
-    hasResetGrantCoveringLatestEnd(rateLimitState),
+    hasResetGrantCoveringLatestEnd(limits),
   );
 }
 //@ chunk-ah34pb7m.js:44067-44584 sole-consumer
 /**
  * 限额提示中各种升级/调整入口的说明文字（打开选项、/usage-credits 调整月度上限或补充额度等）。
  */
-var UPSELL_TEXTS = {
-  opening_options: "Opening your options\u2026",
-  spend_limit: "/usage-credits to adjust your monthly spend limit.",
-  extra_usage: "/usage-credits to finish what you\u2019re working on.",
-  api_login: "/login to switch to an API usage-billed account.",
-  admin_can_enable: `Your admin can enable extra usage at ${HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE}.`,
-  ask_admin: "/usage-credits to request more usage from your admin.",
-  upgrade: "/upgrade to increase your usage limit.",
-  upgrade_or_extra_usage: "/upgrade or /usage-credits to finish what you\u2019re working on.",
-};
+var UPSELL_TEXTS; // deferred: uses USAGE_SETTINGS_URL (../../services/claudeAiLimits.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ah34pb7m.js:44067", () => {
+  UPSELL_TEXTS = {
+    opening_options: "Opening your options\u2026",
+    spend_limit: "/usage-credits to adjust your monthly spend limit.",
+    extra_usage: "/usage-credits to finish what you\u2019re working on.",
+    api_login: "/login to switch to an API usage-billed account.",
+    admin_can_enable: `Your admin can enable extra usage at ${HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE}.`,
+    ask_admin: "/usage-credits to request more usage from your admin.",
+    upgrade: "/upgrade to increase your usage limit.",
+    upgrade_or_extra_usage: "/upgrade or /usage-credits to finish what you\u2019re working on.",
+  };
+});
 //@ chunk-ah34pb7m.js:44584-45072 fingerprint = getUpsellMessage (0.336)
 function getUpsellMessage({
   shouldShowUpsell,
@@ -135,14 +158,14 @@ function getUpsellMessage({
   if (!shouldShowUpsell) return null;
   if (shouldAutoOpenRateLimitOptionsMenu) return "opening_options";
   if (spendLimitNudgePath) return "spend_limit";
-  let k = isExtraUsageCommandEnabled && !serverHidesOverage;
-  if (isMax20x) return k ? "extra_usage" : "api_login";
+  let isExtraUsageAvailable = isExtraUsageCommandEnabled && !serverHidesOverage;
+  if (isMax20x) return isExtraUsageAvailable ? "extra_usage" : "api_login";
   if (isTeamOrEnterprise) {
-    if (!k) return "admin_can_enable";
+    if (!isExtraUsageAvailable) return "admin_can_enable";
     return hasBillingAccess ? "extra_usage" : "ask_admin";
   }
-  if (serverHidesUpgrade) return k ? "extra_usage" : null;
-  return k ? "upgrade_or_extra_usage" : "upgrade";
+  if (serverHidesUpgrade) return isExtraUsageAvailable ? "extra_usage" : null;
+  return isExtraUsageAvailable ? "upgrade_or_extra_usage" : "upgrade";
 }
 //@ chunk-ah34pb7m.js:45072-48024 fingerprint = RateLimitMessage (0.312)
 /**
@@ -152,126 +175,155 @@ function RateLimitMessage({ text, onOpenRateLimitOptions, onRateLimitAutoQueueCo
   let host = useHost();
   let subscriptionType = getSubscriptionType();
   let rateLimitTier = getRateLimitTier();
-  let M = subscriptionType === "team" || subscriptionType === "enterprise";
-  let T = subscriptionType === "max" && rateLimitTier === "default_claude_max_20x";
-  let x = isRateLimitMockingEnabled() || isClaudeAISubscriber();
-  let rateLimitState = useRateLimitState();
-  let upgradePaths = rateLimitState.upgradePaths;
-  let E = upgradePaths !== undefined && !upgradePaths.includes("upgrade_plan");
-  let B = upgradePaths !== undefined && !upgradePaths.includes("overage");
-  let L = canShowUpgradeCommand();
-  let N = usageCreditsCommand.isEnabled();
-  let W = isConsumerPlan();
-  let U =
+  let isTeamOrEnterprise = subscriptionType === "team" || subscriptionType === "enterprise";
+  let isMax20x = subscriptionType === "max" && rateLimitTier === "default_claude_max_20x";
+  let isClaudeAiSubscriber = isRateLimitMockingEnabled() || isClaudeAISubscriber();
+  let limits = useRateLimitState();
+  let upgradePaths = limits.upgradePaths;
+  let hidesUpgradePlan = upgradePaths !== undefined && !upgradePaths.includes("upgrade_plan");
+  let hidesOverage = upgradePaths !== undefined && !upgradePaths.includes("overage");
+  let canShowUpgrade = canShowUpgradeCommand();
+  let creditsCommandEnabled = usageCreditsCommand.isEnabled();
+  let consumerPlan = isConsumerPlan();
+  let hasServerUpgradePath =
     upgradePaths !== undefined &&
-    ((upgradePaths.includes("upgrade_plan") && L) || (upgradePaths.includes("overage") && N));
-  let K =
+    ((upgradePaths.includes("upgrade_plan") && canShowUpgrade) ||
+      (upgradePaths.includes("overage") && creditsCommandEnabled));
+  let spendLimitNudgePath =
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_PEWTER_SUMMIT, false) &&
-    !M &&
-    rateLimitState.overageDisabledReason === "org_level_disabled_until" &&
-    W &&
-    N;
-  let V = x && (upgradePaths !== undefined ? U : !T);
-  let Y = canAutoResumeThisLimit(rateLimitState);
+    !isTeamOrEnterprise &&
+    limits.overageDisabledReason === "org_level_disabled_until" &&
+    consumerPlan &&
+    creditsCommandEnabled;
+  let shouldUpsell = isClaudeAiSubscriber && (upgradePaths !== undefined ? hasServerUpgradePath : !isMax20x);
+  let canAutoResume = canAutoResumeThisLimit(limits);
   let quotaAutoResumeState = useQuotaAutoResumeState();
-  let z = quotaAutoResumeState.phase === "armed";
-  let ee = isPhaseActive(quotaAutoResumeState.phase);
-  let le = rateLimitState.resetsAt !== undefined && isResetKeyArmed(rateLimitState.resetsAt);
-  let [ge, ae] = y("pending");
-  let pe =
-    rateLimitState.status === "rejected" &&
-    rateLimitState.resetsAt !== undefined &&
-    !rateLimitState.isUsingOverage;
-  let te =
-    rateLimitState.rateLimitType === "seven_day_overage_included" ||
-    rateLimitState.errorCode === "credits_required";
-  let resetsAt = rateLimitState.resetsAt;
-  let ue =
-    rateLimitState.overageDisabledReason !== undefined &&
-    ORG_SPEND_CAP_REASONS.has(rateLimitState.overageDisabledReason);
-  let se =
-    pe &&
-    !z &&
-    !le &&
+  let isArmed = quotaAutoResumeState.phase === "armed";
+  let phaseActive = isPhaseActive(quotaAutoResumeState.phase);
+  let resetKeyArmed = limits.resetsAt !== undefined && isResetKeyArmed(limits.resetsAt);
+  let [openState, setOpenState] = useState("pending");
+  let isRejectedWithReset =
+    limits.status === "rejected" && limits.resetsAt !== undefined && !limits.isUsingOverage;
+  let isCreditsLimit =
+    limits.rateLimitType === "seven_day_overage_included" || limits.errorCode === "credits_required";
+  let resetsAt = limits.resetsAt;
+  let hasOrgSpendCap =
+    limits.overageDisabledReason !== undefined && ORG_SPEND_CAP_REASONS.has(limits.overageDisabledReason);
+  let canPressReturnToContinue =
+    isRejectedWithReset &&
+    !isArmed &&
+    !resetKeyArmed &&
     resetsAt !== undefined &&
     Number.isFinite(resetsAt) &&
-    rateLimitState.rateLimitType === "five_hour" &&
-    !te &&
-    !K &&
-    !ue &&
+    limits.rateLimitType === "five_hour" &&
+    !isCreditsLimit &&
+    !spendLimitNudgePath &&
+    !hasOrgSpendCap &&
     getFeatureValue_CACHED_MAY_BE_STALE(TENGU_VELLUM_ANCHOR, false);
   let claudeAiLimits = useContinueResult();
-  let Te = se && claudeAiLimits?.committed === true;
-  let Me = (V || Y) && !z && !le && ge === "pending" && pe && !te && onOpenRateLimitOptions;
-  let be = se && ge === "pending" && resetsAt !== undefined && onRateLimitAutoQueueContinue;
-  P(() => {
-    if (Me) ae(onOpenRateLimitOptions() ? "opened" : "blocked");
-    else if (be) ae("blocked");
-    if (be && resetsAt !== undefined) {
+  let isCheckpointed = canPressReturnToContinue && claudeAiLimits?.committed === true;
+  let shouldAutoOpenOptions =
+    (shouldUpsell || canAutoResume) &&
+    !isArmed &&
+    !resetKeyArmed &&
+    openState === "pending" &&
+    isRejectedWithReset &&
+    !isCreditsLimit &&
+    onOpenRateLimitOptions;
+  let shouldAutoQueueContinue =
+    canPressReturnToContinue &&
+    openState === "pending" &&
+    resetsAt !== undefined &&
+    onRateLimitAutoQueueContinue;
+  useEffect(() => {
+    if (shouldAutoOpenOptions) setOpenState(onOpenRateLimitOptions() ? "opened" : "blocked");
+    else if (shouldAutoQueueContinue) setOpenState("blocked");
+    if (shouldAutoQueueContinue && resetsAt !== undefined) {
       if (onRateLimitAutoQueueContinue(resetsAt)) {
         logEvent("tengu_rl_checkpoint_copy_shown", {});
         logEvent("tengu_rl_checkpoint_auto_continue_queued", {});
       }
     }
-  }, [Me, onOpenRateLimitOptions, be, onRateLimitAutoQueueContinue, resetsAt]);
-  let ve = Q(() => {
-    if (te) return null;
+  }, [
+    shouldAutoOpenOptions,
+    onOpenRateLimitOptions,
+    shouldAutoQueueContinue,
+    onRateLimitAutoQueueContinue,
+    resetsAt,
+  ]);
+  let upsellMessage = useMemo(() => {
+    if (isCreditsLimit) return null;
     return getUpsellMessage({
-      shouldShowUpsell: x,
-      isMax20x: T,
-      isExtraUsageCommandEnabled: N,
-      shouldAutoOpenRateLimitOptionsMenu: !!Me,
-      isTeamOrEnterprise: M,
-      hasBillingAccess: W,
-      serverHidesUpgrade: E || !L,
-      serverHidesOverage: B,
-      spendLimitNudgePath: K,
+      shouldShowUpsell: isClaudeAiSubscriber,
+      isMax20x,
+      isExtraUsageCommandEnabled: creditsCommandEnabled,
+      shouldAutoOpenRateLimitOptionsMenu: !!shouldAutoOpenOptions,
+      isTeamOrEnterprise,
+      hasBillingAccess: consumerPlan,
+      serverHidesUpgrade: hidesUpgradePlan || !canShowUpgrade,
+      serverHidesOverage: hidesOverage,
+      spendLimitNudgePath,
     });
-  }, [x, T, E, L, B, M, Me, N, W, K, te]);
-  let rateLimitStateRef = R(undefined);
-  let we = !ee && ge !== "opened" && ve !== null;
-  P(() => {
-    if (!pe || ve === "opening_options") return;
-    rateLimitStateRef.current ??= rateLimitState;
-    let resetsAt = rateLimitStateRef.current.resetsAt;
+  }, [
+    isClaudeAiSubscriber,
+    isMax20x,
+    hidesUpgradePlan,
+    canShowUpgrade,
+    hidesOverage,
+    isTeamOrEnterprise,
+    shouldAutoOpenOptions,
+    creditsCommandEnabled,
+    consumerPlan,
+    spendLimitNudgePath,
+    isCreditsLimit,
+  ]);
+  let firstShownLimitsRef = useRef(undefined);
+  let showsUpsell = !phaseActive && openState !== "opened" && upsellMessage !== null;
+  useEffect(() => {
+    if (!isRejectedWithReset || upsellMessage === "opening_options") return;
+    firstShownLimitsRef.current ??= limits;
+    let resetsAt = firstShownLimitsRef.current.resetsAt;
     if (resetsAt === undefined || resetsAt * 1000 <= Date.now()) return;
-    logRateLimitMessageShownOnce(host, rateLimitStateRef.current, {
-      kind: te ? "in_limit_line" : (ve ?? "none"),
-      shown: we,
-      waitLive: ee,
+    logRateLimitMessageShownOnce(host, firstShownLimitsRef.current, {
+      kind: isCreditsLimit ? "in_limit_line" : (upsellMessage ?? "none"),
+      shown: showsUpsell,
+      waitLive: phaseActive,
     });
-  }, [host, rateLimitState, pe, te, ve, we, ee]);
-  let $e = K && pe && !te;
-  let De =
-    quotaAutoResumeState.phase !== "armed" ||
-    quotaAutoResumeState.resetsAtSeconds === rateLimitState.resetsAt;
-  let xe = $e && De ? rateLimitWindowLabel(rateLimitState) : null;
-  let rateLimitOfferNote = getRateLimitOfferNote(text, rateLimitState, x && pe && !$e);
-  let co = yt(onCreditOfferPromptChange, getOfferHint, getOfferHint);
-  let [resetsAt_2] = y(rateLimitState.resetsAt);
-  let Ke =
-    co === undefined
+  }, [host, limits, isRejectedWithReset, isCreditsLimit, upsellMessage, showsUpsell, phaseActive]);
+  let isMonthlySpendLimit = spendLimitNudgePath && isRejectedWithReset && !isCreditsLimit;
+  let isResetSynced =
+    quotaAutoResumeState.phase !== "armed" || quotaAutoResumeState.resetsAtSeconds === limits.resetsAt;
+  let windowLabel = isMonthlySpendLimit && isResetSynced ? rateLimitWindowLabel(limits) : null;
+  let rateLimitOfferNote = getRateLimitOfferNote(
+    text,
+    limits,
+    isClaudeAiSubscriber && isRejectedWithReset && !isMonthlySpendLimit,
+  );
+  let offerHint = useSyncExternalStore(onCreditOfferPromptChange, getOfferHint, getOfferHint);
+  let [resetsAt_2] = useState(limits.resetsAt);
+  let creditOfferKind =
+    offerHint === undefined
       ? undefined
-      : te
-        ? rateLimitState.status === "rejected"
+      : isCreditsLimit
+        ? limits.status === "rejected"
           ? "cli_credits_required"
           : undefined
-        : pe &&
-            rateLimitState.resetsAt === resetsAt_2 &&
+        : isRejectedWithReset &&
+            limits.resetsAt === resetsAt_2 &&
             quotaAutoResumeState.phase !== "stale" &&
-            N &&
-            !B &&
-            !Me &&
-            ge !== "opened"
+            creditsCommandEnabled &&
+            !hidesOverage &&
+            !shouldAutoOpenOptions &&
+            openState !== "opened"
           ? "cli_limit_line"
           : undefined;
-  let Ro = Ke !== undefined ? co : undefined;
-  P(() => {
-    if (Ke !== undefined) logCreditOfferShown(Ke);
-  }, [Ke]);
-  let children = $e
-    ? xe
-      ? `You've hit your monthly spend limit \xB7 your ${xe.limitName} resets ${xe.resetTime}`
+  let creditOfferHint = creditOfferKind !== undefined ? offerHint : undefined;
+  useEffect(() => {
+    if (creditOfferKind !== undefined) logCreditOfferShown(creditOfferKind);
+  }, [creditOfferKind]);
+  let children = isMonthlySpendLimit
+    ? windowLabel
+      ? `You've hit your monthly spend limit \xB7 your ${windowLabel.limitName} resets ${windowLabel.resetTime}`
       : "You've hit your monthly spend limit."
     : text;
   return jsxProd_default(MessageResponse, {
@@ -279,7 +331,7 @@ function RateLimitMessage({ text, onOpenRateLimitOptions, onRateLimitAutoQueueCo
       flexDirection: "column",
       children: [
         jsxProd_default(LinkifiedText_2, {
-          color: $e ? "warning" : "error",
+          color: isMonthlySpendLimit ? "warning" : "error",
           linkHref: allowedUsageLink,
           children,
         }),
@@ -291,13 +343,13 @@ function RateLimitMessage({ text, onOpenRateLimitOptions, onRateLimitAutoQueueCo
               children: rateLimitOfferNote,
             })
           : null,
-        se
+        canPressReturnToContinue
           ? jsxProd_default_2(Text, {
               dimColor: true,
               children: ["Press ", RETURN_SYMBOL, " to continue after reset"],
             })
           : null,
-        Te && claudeAiLimits?.committed === true
+        isCheckpointed && claudeAiLimits?.committed === true
           ? jsxProd_default_2(Fragment, {
               children: [
                 jsxProd_default_2(Text, {
@@ -318,16 +370,16 @@ function RateLimitMessage({ text, onOpenRateLimitOptions, onRateLimitAutoQueueCo
               ],
             })
           : null,
-        we && ve
+        showsUpsell && upsellMessage
           ? jsxProd_default(Text, {
               dimColor: true,
-              children: UPSELL_TEXTS[ve],
+              children: UPSELL_TEXTS[upsellMessage],
             })
           : null,
-        Ro !== undefined
+        creditOfferHint !== undefined
           ? jsxProd_default(Text, {
               dimColor: true,
-              children: Ro,
+              children: creditOfferHint,
             })
           : null,
       ],
@@ -335,7 +387,7 @@ function RateLimitMessage({ text, onOpenRateLimitOptions, onRateLimitAutoQueueCo
   });
 }
 //@ chunk-ah34pb7m.js:48024-48071 sole-consumer
-function allowedUsageLink(m) {
-  return m === USAGE_SETTINGS_URL || m === HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE ? m : undefined;
+function allowedUsageLink(url) {
+  return url === USAGE_SETTINGS_URL || url === HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE ? url : undefined;
 }
 export { RateLimitMessage };

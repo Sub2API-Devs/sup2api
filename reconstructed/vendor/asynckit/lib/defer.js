@@ -5,10 +5,10 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:5269-5492 cjs-fingerprint
-var require_defer = x(function (cjsExports, cjsModule) {
+var require_defer = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = defer;
   function defer(fn) {
     var nextTick =

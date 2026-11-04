@@ -15,9 +15,9 @@ import { findToolByName } from "../../Tool.js";
 import { all } from "../../utils/generators.js";
 
 //@ chunk-0h4e7gnq.js:30007-30092 placement
-function concurrencyBucket(e) {
-  if (e <= 2) return e === 0 ? "0" : e === 1 ? "1" : "2";
-  return e < 10 ? "3_to_9" : "10_plus";
+function concurrencyBucket(concurrentCount) {
+  if (concurrentCount <= 2) return concurrentCount === 0 ? "0" : concurrentCount === 1 ? "1" : "2";
+  return concurrentCount < 10 ? "3_to_9" : "10_plus";
 }
 //@ chunk-0h4e7gnq.js:30092-30156 fingerprint = getMaxToolUseConcurrency (1)
 /**
@@ -111,7 +111,9 @@ async function* runToolsSerially(toolUseMessages, assistantMessages, canUseTool,
     for await (let update of runToolUse(
       toolUse,
       assistantMessages.find((assistantMessage) =>
-        assistantMessage.message.content.some((w) => w.type === "tool_use" && w.id === toolUse.id),
+        assistantMessage.message.content.some(
+          (block) => block.type === "tool_use" && block.id === toolUse.id,
+        ),
       ),
       canUseTool,
       currentContext,
@@ -147,7 +149,7 @@ async function* runToolsConcurrently(toolUseMessages, assistantMessages, canUseT
       yield* runToolUse(
         toolUse,
         assistantMessages.find((prev) =>
-          prev.message.content.some((h) => h.type === "tool_use" && h.id === toolUse.id),
+          prev.message.content.some((block) => block.type === "tool_use" && block.id === toolUse.id),
         ),
         canUseTool,
         toolUseContext,

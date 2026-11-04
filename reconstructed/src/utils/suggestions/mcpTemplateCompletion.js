@@ -21,83 +21,85 @@ import { logForDebugging } from "../debug.js";
 import { errorMessage } from "../errors.js";
 
 //@ chunk-18hwfzwa.js:613736-615188 placement
-async function mcpTemplateCompletions(h, x, clients, L) {
-  let index = h.indexOf(":");
+async function mcpTemplateCompletions(input, templatesByServer, clients, healthTracker) {
+  let index = input.indexOf(":");
   if (index === -1) return null;
-  let sliced = h.slice(0, index);
-  let sliced_2 = h.slice(index + 1);
-  let Be = Object.hasOwn(x, sliced)
-    ? x[sliced]?.filter(
-        (Et) =>
+  let sliced = input.slice(0, index);
+  let sliced_2 = input.slice(index + 1);
+  let templates = Object.hasOwn(templatesByServer, sliced)
+    ? templatesByServer[sliced]?.filter(
+        (resource) =>
           !isMcpAppResource({
-            uri: Et.uriTemplate,
-            mimeType: Et.mimeType,
+            uri: resource.uriTemplate,
+            mimeType: resource.mimeType,
           }),
       )
     : undefined;
-  if (!Be || Be.length === 0) return null;
-  let He = bestTemplateMatch(sliced_2, Be);
-  if (!He) {
+  if (!templates || templates.length === 0) return null;
+  let match = bestTemplateMatch(sliced_2, templates);
+  if (!match) {
     if (!sliced_2) return null;
-    let filtered = Be.filter(
-      (Dt) => Dt.uriTemplate.startsWith(sliced_2) && Dt.uriTemplate.length > sliced_2.length,
+    let filtered = templates.filter(
+      (template) =>
+        template.uriTemplate.startsWith(sliced_2) && template.uriTemplate.length > sliced_2.length,
     );
     if (filtered.length === 0) return null;
-    return filtered.slice(0, MAX_UNIFIED_SUGGESTIONS).map((Dt) => {
-      let Lt = literalPrefixBeforeBrace(Dt.uriTemplate);
+    return filtered.slice(0, MAX_UNIFIED_SUGGESTIONS).map((template) => {
+      let literalPrefix = literalPrefixBeforeBrace(template.uriTemplate);
       return {
-        id: `mcp-template::${sliced}__${Dt.uriTemplate}`,
-        displayText: `${sliced}:${Lt}`,
-        description: truncateDescription(Dt.description || Dt.name || Dt.uriTemplate),
+        id: `mcp-template::${sliced}__${template.uriTemplate}`,
+        displayText: `${sliced}:${literalPrefix}`,
+        description: truncateDescription(template.description || template.name || template.uriTemplate),
         metadata: {
-          replacement: atMentionReplacement(`${sliced}:${Lt}`, true),
+          replacement: atMentionReplacement(`${sliced}:${literalPrefix}`, true),
           partial: true,
         },
       };
     });
   }
-  let found = clients.find((Et) => Et.name === sliced && isConnectedOrCached(Et));
+  let found = clients.find((client) => client.name === sliced && isConnectedOrCached(client));
   if (!found) return [];
-  let { completeResourceTemplate, ensureConnectedClient } = require("./chunk-asne9cp8.js").mcpClientModule();
-  let rt = found.name;
-  if (found.type === "cached" && L?.shouldSkip(rt)) return [];
-  let kt;
+  let { completeResourceTemplate, ensureConnectedClient } =
+    require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
+  let serverName = found.name;
+  if (found.type === "cached" && healthTracker?.shouldSkip(serverName)) return [];
+  let connected;
   try {
-    kt = await ensureConnectedClient(found, {
+    connected = await ensureConnectedClient(found, {
       context: "MCP template completion",
     });
-    L?.recordSuccess(rt);
+    healthTracker?.recordSuccess(serverName);
   } catch (error) {
-    L?.recordFailure(rt);
+    healthTracker?.recordFailure(serverName);
     logForDebugging(`Template completion skipped for ${sliced}: ${errorMessage(error)}`);
     return [];
   }
-  let At = await completeResourceTemplate(
-    kt,
-    He.template.uriTemplate,
-    He.argName,
-    He.argValue,
-    He.resolvedArgs,
+  let completions = await completeResourceTemplate(
+    connected,
+    match.template.uriTemplate,
+    match.argName,
+    match.argValue,
+    match.resolvedArgs,
   );
-  if (At.length === 0) return [];
-  let description = truncateDescription(He.template.description || He.template.name || "");
-  let Ot = isBetweenTemplateVars(He);
-  return At.slice(0, MAX_UNIFIED_SUGGESTIONS).map((Et) => {
-    let Dt = applyTemplateCompletion(sliced_2, He, Et);
+  if (completions.length === 0) return [];
+  let description = truncateDescription(match.template.description || match.template.name || "");
+  let partial = isBetweenTemplateVars(match);
+  return completions.slice(0, MAX_UNIFIED_SUGGESTIONS).map((value) => {
+    let replacement = applyTemplateCompletion(sliced_2, match, value);
     return {
-      id: `mcp-template-value::${sliced}__${Dt}`,
-      displayText: Dt.slice(He.valueStartIndex),
+      id: `mcp-template-value::${sliced}__${replacement}`,
+      displayText: replacement.slice(match.valueStartIndex),
       description,
       metadata: {
-        replacement: atMentionReplacement(`${sliced}:${Dt}`, Ot),
-        partial: Ot,
+        replacement: atMentionReplacement(`${sliced}:${replacement}`, partial),
+        partial,
       },
     };
   });
 }
 //@ chunk-18hwfzwa.js:615188-615267 placement
-function atMentionReplacement(h, x) {
-  if (h.includes(" ")) return x ? `@"${h}` : `@"${h}"`;
-  return `@${h}`;
+function atMentionReplacement(text, partial) {
+  if (text.includes(" ")) return partial ? `@"${text}` : `@"${text}"`;
+  return `@${text}`;
 }
 export { mcpTemplateCompletions, atMentionReplacement };

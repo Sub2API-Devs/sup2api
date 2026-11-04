@@ -68,7 +68,7 @@ class SentinelRegistry {
     return pairs;
   }
   *entries() {
-    for (let e of this.bySentinel.values()) yield [e.sentinel, e.realValue];
+    for (let credential of this.bySentinel.values()) yield [credential.sentinel, credential.realValue];
   }
   get size() {
     return this.bySentinel.size;

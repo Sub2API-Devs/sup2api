@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -20,7 +20,7 @@ import { MarkdownText_2 } from "../../pluginUi/render/MarkdownBlock.js";
 
 //@ chunk-ah34pb7m.js:14788-15144 fingerprint = RejectedPlanMessage (0.802)
 function RejectedPlanMessage(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { plan } = props;
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {

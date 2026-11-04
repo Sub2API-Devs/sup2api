@@ -18,34 +18,34 @@ import { formatStorageError } from "./storage/storageErrors.js";
 /**
  * 非 ASCII 字符转义为 \u。
  */
-function escapeNonAscii(e) {
-  return escapeNonPrintable(e.replace(/\\(?=u[0-9a-fA-F]{4})/g, "\\u005c"));
+function escapeNonAscii(text) {
+  return escapeNonPrintable(text.replace(/\\(?=u[0-9a-fA-F]{4})/g, "\\u005c"));
 }
 //@ chunk-cgr0tezp.js:10726-10779 placement
 /**
  * 非打印字符转义。
  */
-function escapeNonPrintable(e) {
-  return e.replace(/[^\x20-\x7e]/g, toUnicodeEscapes);
+function escapeNonPrintable(text) {
+  return text.replace(/[^\x20-\x7e]/g, toUnicodeEscapes);
 }
 //@ chunk-cgr0tezp.js:10779-10848 placement
 /**
  * 控制字符替换为空格。
  */
-function replaceControlChars(e) {
-  return e.replace(/[\p{Cc}\p{Cf}\u2028\u2029]+/gu, " ");
+function replaceControlChars(text) {
+  return text.replace(/[\p{Cc}\p{Cf}\u2028\u2029]+/gu, " ");
 }
 //@ chunk-cgr0tezp.js:10848-10988 placement
 /**
  * 控制字符转义为 \u。
  */
-function escapeControlChars(e) {
-  return e.replace(regExp_9, (n) =>
+function escapeControlChars(text) {
+  return text.replace(regExp_9, (controlRun) =>
     Array.from(
       {
-        length: n.length,
+        length: controlRun.length,
       },
-      (r, i) => `\\u${n.charCodeAt(i).toString(16).padStart(4, "0")}`,
+      (char, index) => `\\u${controlRun.charCodeAt(index).toString(16).padStart(4, "0")}`,
     ).join(""),
   );
 }
@@ -53,26 +53,26 @@ function escapeControlChars(e) {
 /**
  * 显示前归一化。
  */
-function normalizeForDisplay(e) {
-  return toWellFormedString(stripAnsi(e)).replace(regExp_2, " ");
+function normalizeForDisplay(text) {
+  return toWellFormedString(stripAnsi(text)).replace(regExp_2, " ");
 }
 //@ chunk-cgr0tezp.js:11037-11199 placement
 /**
  * 清洗显示文本（去指定字符、压缩空白、截断）。
  */
-function sanitizeDisplayText(e, n) {
-  let r = normalizeForDisplay(e);
-  if (n?.drop) r = r.replace(n.drop, "");
-  r = r.replace(/\s+/g, " ").trim();
-  if (n?.maxCodeUnits !== undefined) r = truncateToLength(r, n.maxCodeUnits).trim();
-  return r;
+function sanitizeDisplayText(text, options) {
+  let cleaned = normalizeForDisplay(text);
+  if (options?.drop) cleaned = cleaned.replace(options.drop, "");
+  cleaned = cleaned.replace(/\s+/g, " ").trim();
+  if (options?.maxCodeUnits !== undefined) cleaned = truncateToLength(cleaned, options.maxCodeUnits).trim();
+  return cleaned;
 }
 //@ chunk-cgr0tezp.js:11199-11418 placement
 /**
  * 截取显示文本：统一换行、限制行数与字符数、规范化每行，返回文本与是否被截断。
  */
-function clipDisplayText(e, { maxCodeUnits, maxLines }) {
-  let lines = e.replace(
+function clipDisplayText(text, { maxCodeUnits, maxLines }) {
+  let lines = text.replace(
     /\r\n?/g,
     `
 `,
@@ -89,8 +89,8 @@ function clipDisplayText(e, { maxCodeUnits, maxLines }) {
 /**
  * isAlreadySanitized：文本已是清洗后的形式。
  */
-function isAlreadySanitized(e) {
-  return sanitizeDisplayText(e) === e;
+function isAlreadySanitized(text) {
+  return sanitizeDisplayText(text) === text;
 }
 //@ chunk-cgr0tezp.js:11451-11463 placement
 var MAX_TAIL_LINES_BYTES = 8192;
@@ -98,37 +98,40 @@ var MAX_TAIL_LINES_BYTES = 8192;
 /**
  * 取文本尾部完整行。
  */
-function tailLines(e, n) {
-  let r = e;
-  if (e.length > MAX_TAIL_LINES_BYTES) {
-    let o = e.length - MAX_TAIL_LINES_BYTES;
-    let a = e.slice(o).search(/[\r\n]/);
-    if (a !== -1) r = e.slice(o + a + 1);
+function tailLines(text, maxLines) {
+  let tail = text;
+  if (text.length > MAX_TAIL_LINES_BYTES) {
+    let excess = text.length - MAX_TAIL_LINES_BYTES;
+    let newlineIndex = text.slice(excess).search(/[\r\n]/);
+    if (newlineIndex !== -1) tail = text.slice(excess + newlineIndex + 1);
     else {
-      let u =
+      let breakIndex =
         Math.max(
-          e.lastIndexOf(`
+          text.lastIndexOf(`
 `),
-          e.lastIndexOf("\r"),
+          text.lastIndexOf("\r"),
         ) + 1;
-      r = truncateToLength(e.slice(u, u + MAX_TAIL_LINES_BYTES + 1), MAX_TAIL_LINES_BYTES);
+      tail = truncateToLength(
+        text.slice(breakIndex, breakIndex + MAX_TAIL_LINES_BYTES + 1),
+        MAX_TAIL_LINES_BYTES,
+      );
     }
   }
-  let lines = r.split(/\r?\n/);
-  let s = [];
-  for (let j = lines.length - 1; j >= 0 && s.length < n; j--) {
+  let lines = tail.split(/\r?\n/);
+  let result = [];
+  for (let j = lines.length - 1; j >= 0 && result.length < maxLines; j--) {
     let parts = lines[j].split("\r");
     for (let j = parts.length - 1; j >= 0; j--) {
-      let c = sanitizeDisplayText(parts[j], {
+      let line = sanitizeDisplayText(parts[j], {
         maxCodeUnits: 512,
       });
-      if (c !== "") {
-        s.push(c);
+      if (line !== "") {
+        result.push(line);
         break;
       }
     }
   }
-  return s.reverse();
+  return result.reverse();
 }
 //@ chunk-cgr0tezp.js:11877-11888 placement
 /**
@@ -139,33 +142,33 @@ var MAX_TITLE_LENGTH = 255;
 /**
  * 清洗标题。
  */
-function sanitizeTitle(e) {
-  return sanitizeMarkdownInline(e, MAX_TITLE_LENGTH);
+function sanitizeTitle(text) {
+  return sanitizeMarkdownInline(text, MAX_TITLE_LENGTH);
 }
 //@ chunk-cgr0tezp.js:11919-11951 placement
 /**
  * 清洗短文本。
  */
-function sanitizeShortText(e) {
-  return sanitizeMarkdownInline(e, MAX_SHORT_TEXT);
+function sanitizeShortText(text) {
+  return sanitizeMarkdownInline(text, MAX_SHORT_TEXT);
 }
 //@ chunk-cgr0tezp.js:11951-12108 placement
-function sanitizeMarkdownInline(e, n) {
-  let replaced = sanitizeDisplayText(e, {
+function sanitizeMarkdownInline(text, maxLength) {
+  let replaced = sanitizeDisplayText(text, {
     drop: /[`<>]/g,
   })
     .replace(/\]\(/g, "] (")
     .replace(/!\[/g, "! [")
     .replace(/\]\[/g, "] [")
     .replace(/\]:/g, "] :");
-  return truncateToLength(replaced, n).trim();
+  return truncateToLength(replaced, maxLength).trim();
 }
 //@ chunk-cgr0tezp.js:12108-12138 placement
 /**
  * markdown 安全文本长度与字符。
  */
 var MAX_MARKDOWN_SAFE_LENGTH = 2048;
-var MARKDOWN_BREAK_CHARS = /[`\[\]<>]/g;
+var MARKDOWN_BREAK_RE = /[`\[\]<>]/g;
 //@ chunk-cgr0tezp.js:12138-12326 placement
 /**
  * 打断 markdown 链接/HTML 的安全文本。
@@ -185,54 +188,54 @@ function markdownSafeText(description) {
 /**
  * 不可见字符转义。
  */
-function escapeInvisibleChars(e) {
-  return e.replace(/[\u007F-\u009F\u2028\u2029\p{Cf}]/gu, toUnicodeEscapes);
+function escapeInvisibleChars(text) {
+  return text.replace(/[\u007F-\u009F\u2028\u2029\p{Cf}]/gu, toUnicodeEscapes);
 }
 //@ chunk-cgr0tezp.js:12401-12505 placement
 /**
  * 字符转为 \u 转义序列。
  */
-function toUnicodeEscapes(e) {
-  return e
+function toUnicodeEscapes(chars) {
+  return chars
     .split("")
-    .map((n) => "\\u" + n.charCodeAt(0).toString(16).padStart(4, "0"))
+    .map((char) => "\\u" + char.charCodeAt(0).toString(16).padStart(4, "0"))
     .join("");
 }
 //@ chunk-cgr0tezp.js:12505-13075 placement
 /**
  * 解析并描述 URL 协议。
  */
-function describeUrlScheme(e) {
-  let n = 0;
-  while (n < e.length && e.charCodeAt(n) <= 32) n++;
-  let sliced = e.slice(n);
+function describeUrlScheme(input) {
+  let start = 0;
+  while (start < input.length && input.charCodeAt(start) <= 32) start++;
+  let sliced = input.slice(start);
   let match = /^([A-Za-z0-9][A-Za-z0-9+.-]*):\/\//.exec(sliced);
   let lower = match?.[1]?.toLowerCase();
-  let o = match ? sliced.slice(match[0].length) : sliced;
-  let index = o.indexOf(":");
-  let index_2 = o.indexOf("/");
+  let rest = match ? sliced.slice(match[0].length) : sliced;
+  let index = rest.indexOf(":");
+  let index_2 = rest.indexOf("/");
   if (
     !(lower !== undefined
       ? lower !== "file"
-      : index !== -1 && (index_2 === -1 || index < index_2) && !/^[A-Za-z]:/.test(o))
+      : index !== -1 && (index_2 === -1 || index < index_2) && !/^[A-Za-z]:/.test(rest))
   ) {
-    let y = match ? decodePercentEscapes(o) : o;
-    return y.includes("@[") || y.startsWith("[");
+    let decoded = match ? decodePercentEscapes(rest) : rest;
+    return decoded.includes("@[") || decoded.startsWith("[");
   }
-  let l = decodePercentEscapes(o);
-  let d = match
-    ? /^(?:[^@/?#\\[\]]+@)?(\[[0-9A-Fa-f:.]+\])(?::\d*)?(?=\/|$)/.exec(l)
-    : /^[^@:/[\]]+@(\[[0-9A-Fa-f:.]+\])(?=:)/.exec(l);
-  let g = d !== null && !!tryParseUrl(`ssh://${d[1]}/`)?.hostname;
-  return /[[\]]/.test(l.slice(g ? d[0].length : 0));
+  let decodedRest = decodePercentEscapes(rest);
+  let ipv6Match = match
+    ? /^(?:[^@/?#\\[\]]+@)?(\[[0-9A-Fa-f:.]+\])(?::\d*)?(?=\/|$)/.exec(decodedRest)
+    : /^[^@:/[\]]+@(\[[0-9A-Fa-f:.]+\])(?=:)/.exec(decodedRest);
+  let hostnameLength = ipv6Match !== null && !!tryParseUrl(`ssh://${ipv6Match[1]}/`)?.hostname;
+  return /[[\]]/.test(decodedRest.slice(hostnameLength ? ipv6Match[0].length : 0));
 }
 //@ chunk-cgr0tezp.js:13075-13132 placement
 /**
  * 尝试解析 URL。
  */
-function tryParseUrl(e) {
+function tryParseUrl(url) {
   try {
-    return new URL(e);
+    return new URL(url);
   } catch {
     return null;
   }
@@ -241,10 +244,10 @@ function tryParseUrl(e) {
 /**
  * 解码 URL 中的 %XX 转义（保留 %00）。
  */
-function decodePercentEscapes(e) {
-  return e.replace(/%([0-9A-Fa-f]{2})/g, (n, r) => {
-    let i = parseInt(r, 16);
-    return i === 0 ? n : String.fromCharCode(i);
+function decodePercentEscapes(text) {
+  return text.replace(/%([0-9A-Fa-f]{2})/g, (match, hex) => {
+    let codePoint = parseInt(hex, 16);
+    return codePoint === 0 ? match : String.fromCharCode(codePoint);
   });
 }
 //@ chunk-cgr0tezp.js:13433-13470 placement
@@ -282,9 +285,9 @@ class ResultError extends Error {
 /**
  * unwrapResult：取出结果或抛错。
  */
-function unwrapResult(e) {
-  if (e.ok) return e.value;
-  throw new ResultError(e.error);
+function unwrapResult(result) {
+  if (result.ok) return result.value;
+  throw new ResultError(result.error);
 }
 //@ chunk-cgr0tezp.js:13733-13902 placement
 /**
@@ -312,14 +315,14 @@ var PathSpace = {
 /**
  * 判断错误是否为宿主拒绝的文件操作错误（code 为 Failed 且 telemetryCode 为 errno 或 ERR_ 形式）。
  */
-function isHostFileError(e) {
-  if (typeof e !== "object" || e === null) return false;
-  let n = Reflect.get(e, "code");
-  let r = Reflect.get(e, "telemetryCode");
+function isHostFileError(value) {
+  if (typeof value !== "object" || value === null) return false;
+  let code = Reflect.get(value, "code");
+  let telemetryCode = Reflect.get(value, "telemetryCode");
   return (
-    n === "Failed" &&
-    typeof r === "string" &&
-    (errnoShapedCode(r) !== undefined || /^ERR_[A-Z0-9_]+$/.test(r))
+    code === "Failed" &&
+    typeof telemetryCode === "string" &&
+    (errnoShapedCode(telemetryCode) !== undefined || /^ERR_[A-Z0-9_]+$/.test(telemetryCode))
   );
 }
 //@ chunk-cgr0tezp.js:14108-14410 placement
@@ -357,7 +360,7 @@ export {
   unwrapResult,
   replaceControlChars,
   sanitizeTitle,
-  MARKDOWN_BREAK_CHARS,
+  MARKDOWN_BREAK_RE,
   MAX_MARKDOWN_SAFE_LENGTH,
   tailLines,
   ok,

@@ -22,7 +22,7 @@ import {
   stripExtendedPathPrefix,
   expandWindowsEnvRefs,
   isUncPath,
-  Nqt,
+  expandTilde,
   toForwardSlashes,
   collapseInteriorSpellings,
   isAbsenceErrno,
@@ -64,7 +64,7 @@ function spelledAbsolute(spelling) {
     spelled = stripExtendedPathPrefix(expandWindowsEnvRefs(spelled));
     if (isUncPath(spelled)) return;
   }
-  let expanded = Nqt(spelled);
+  let expanded = expandTilde(spelled);
   let absolute =
     expanded === spelled && !pathModule_2.isAbsolute(spelled)
       ? pathModule_2.resolve(process.cwd(), spelled)

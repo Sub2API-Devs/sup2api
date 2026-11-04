@@ -8,6 +8,23 @@
  * pieces: chunk-fe6rs39h.js (34), chunk-q8cqcff6.js (18)
  * attribution: placement 52
  */
+import {
+  eagerParseCliFlag,
+  eagerFindCliArg,
+  detectNonInteractiveLaunch,
+  eagerHasCliFlag,
+} from "../../utils/cliArgs.js";
+import { REPO_DIR_SETTING_SOURCES } from "../../utils/settings/constants.js";
+import { withHostOwnedEnvGuard } from "../../utils/plugins/securityDefaultPlugin.js";
+import { env } from "../../utils/env.js";
+import { getIsNonInteractiveSession, getOriginalCwd } from "../../bootstrap/state.js";
+import { identity as identity_2 } from "../../utils/identity.js";
+import { builtInOauthConfig, getOauthConfig } from "../../constants/oauth.js";
+import { isActualFirstPartyAnthropicBaseUrl } from "../../utils/model/providers.js";
+import { isLoopbackHost } from "../../utils/localhost.js";
+import { EXIT_CONFIG_ERROR } from "../../utils/exitCodes.js";
+import { hasManagedSettings } from "../../utils/settings/managedRestrictionKeys.js";
+import { commandSyncNameState } from "../../utils/settings/commandSyncNames.js";
 import { isViolinWoodEnabled } from "../../services/analytics/violinGates.js";
 import {
   checkGate_CACHED_OR_BLOCKING,
@@ -42,29 +59,209 @@ import {
 } from "../../bridge/deviceRegistry.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { deviceBindingRefusalText } from "../../bridge/deviceBinding.js";
-import { getOriginalCwd, getIsNonInteractiveSession } from "../../bootstrap/state.js";
 import { DoctorLazy } from "../handlers/util.js";
-import { u, literal, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { parseToolOutputSchema } from "../../services/mcp/schemaParse.js";
 import { sessionStillBoundTo } from "./attachDeviceBinding.js";
 import { isSameDevice, isConnectedAndResumed, isServingConnected } from "./hostPermissions.js";
-import {
-  eagerParseCliFlag,
-  eagerFindCliArg,
-  detectNonInteractiveLaunch,
-  eagerHasCliFlag,
-} from "../../utils/cliArgs.js";
-import { REPO_DIR_SETTING_SOURCES } from "../../utils/settings/constants.js";
-import { withHostOwnedEnvGuard } from "../../utils/plugins/securityDefaultPlugin.js";
-import { env } from "../../utils/env.js";
-import { identity as identity_2 } from "../../utils/identity.js";
-import { builtInOauthConfig, getOauthConfig } from "../../constants/oauth.js";
-import { isActualFirstPartyAnthropicBaseUrl } from "../../utils/model/providers.js";
-import { isLoopbackHost } from "../../utils/localhost.js";
-import { EXIT_CONFIG_ERROR } from "../../utils/exitCodes.js";
-import { hasManagedSettings } from "../../utils/settings/managedRestrictionKeys.js";
-import { commandSyncNameState } from "../../utils/settings/commandSyncNames.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-q8cqcff6.js:6929-7034 placement
+function isCloudFlag(flag) {
+  return (
+    flag === "--cloud" || flag === "--remote" || flag.startsWith("--cloud=") || flag.startsWith("--remote=")
+  );
+}
+//@ chunk-q8cqcff6.js:7034-7133 placement
+function isAttachServeMode() {
+  return (
+    eagerParseCliFlag("--attach-serve") !== undefined ||
+    (eagerFindCliArg(isCloudFlag) !== -1 &&
+      detectNonInteractiveLaunch() &&
+      !eagerHasCliFlag("-p") &&
+      !eagerHasCliFlag("--print"))
+  );
+}
+//@ chunk-q8cqcff6.js:7133-7192 placement
+/**
+ * attach serve 模式下判断某设置来源是否为仓库目录级（非 globalConfig 且在 REPO_DIR_SETTING_SOURCES 内）。
+ */
+function isAttachServeRepoScopedSource(sourceName) {
+  return sourceName !== "globalConfig" && REPO_DIR_SETTING_SOURCES.has(sourceName) && isAttachServeMode();
+}
+//@ chunk-q8cqcff6.js:7192-7260 placement
+/**
+ * 在宿主环境守卫内读取 CLAUDE_CODE_IGNORE_PERSISTED_TRUST（是否忽略持久化的信任）。
+ */
+function ignoresPersistedTrust() {
+  return withHostOwnedEnvGuard(() => env.CLAUDE_CODE_IGNORE_PERSISTED_TRUST);
+}
+//@ chunk-q8cqcff6.js:7260-7334 placement
+/**
+ * 仓库目录级设置来源在 attach serve 模式、或非交互且忽略持久信任时视为生效。
+ */
+function isAttachServeRepoScopedSourceOrNonInteractive(sourceName) {
+  return (
+    sourceName !== "globalConfig" &&
+    REPO_DIR_SETTING_SOURCES.has(sourceName) &&
+    (isAttachServeMode() || (getIsNonInteractiveSession() && ignoresPersistedTrust()))
+  );
+}
+//@ chunk-q8cqcff6.js:7334-7461 placement
+var OAUTH_ENDPOINT_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var pinCache;
+deferInit("chunk-q8cqcff6.js:7334", () => {
+  OAUTH_ENDPOINT_KEYS = [
+    "BASE_API_URL",
+    "TOKEN_URL",
+    "CLAUDE_AI_ORIGIN",
+    "API_KEY_URL",
+    "ROLES_URL",
+    "MCP_PROXY_URL",
+  ];
+  pinCache = identity_2(new Map(), (cache) => cache.clear());
+});
+//@ chunk-q8cqcff6.js:7461-7580 placement
+/**
+ * 是否固定使用已存储的登录（缓存首次判断结果，可由环境变量开启）。
+ */
+function isStoredLoginPinned() {
+  let pinned = pinCache.get("isPinned") ?? env.CLAUDE_CODE_REMOTE_TOOLS_PIN_STORED_LOGIN === true;
+  pinCache.set("isPinned", pinned);
+  return pinned;
+}
+//@ chunk-q8cqcff6.js:7580-7604 placement
+/**
+ * 恒返回 true 的占位判断（attach serve 相关构建期开关）。
+ */
+function isAlwaysTrue() {
+  return true;
+}
+//@ chunk-q8cqcff6.js:7604-7669 placement
+function isRemoteToolsPinStoredLogin() {
+  return "CLAUDE_CODE_REMOTE_TOOLS_PIN_STORED_LOGIN";
+}
+//@ chunk-q8cqcff6.js:7669-7813 placement
+function formatServeHelperStoppedError(target) {
+  return `Error: serve helper stopped: ${target} does not resolve to this computer's stored claude.ai login on Anthropic's own service`;
+}
+//@ chunk-q8cqcff6.js:7813-8191 placement
+/**
+ * 远程工具固定使用存储登录时，检查 base URL 与 OAuth 端点是否为官方第一方（本地 OAuth 构建另行判断），不符时返回 base_url 或 oauth_endpoint。
+ */
+function getServeHelperStopReason() {
+  let shippedConfig = builtInOauthConfig();
+  let isLocalOauth = shippedConfig.OAUTH_FILE_SUFFIX === "-local-oauth";
+  let baseUrl = URL.parse(env.ANTHROPIC_BASE_URL ?? "");
+  let isFirstParty =
+    isActualFirstPartyAnthropicBaseUrl() && (baseUrl === null || baseUrl.protocol === "https:");
+  let isLocalLoopback = isLocalOauth && isLoopbackHost(baseUrl?.hostname ?? "");
+  if (!isFirstParty && !isLocalLoopback) return "base_url";
+  try {
+    let oauthConfig = getOauthConfig();
+    if (OAUTH_ENDPOINT_KEYS.some((key) => oauthConfig[key] !== shippedConfig[key])) return "oauth_endpoint";
+  } catch {
+    return "oauth_endpoint";
+  }
+  if (
+    isLocalOauth &&
+    OAUTH_ENDPOINT_KEYS.some((key) => !isLoopbackHost(URL.parse(shippedConfig[key])?.hostname ?? ""))
+  )
+    return "oauth_endpoint";
+  return;
+}
+//@ chunk-q8cqcff6.js:8191-8319 placement
+/**
+ * 固定使用已存储登录但服务助手不满足条件时，输出错误并以配置错误码退出。
+ */
+function exitIfServeHelperMisconfigured() {
+  if (!isStoredLoginPinned()) return;
+  let target = getServeHelperStopReason();
+  if (target === undefined) return;
+  try {
+    process.stderr.write(`${formatServeHelperStoppedError(target)}
+`);
+  } finally {
+    process.exit(EXIT_CONFIG_ERROR);
+  }
+}
+//@ chunk-q8cqcff6.js:8319-8448 placement
+/**
+ * 受管设置询问的进程级状态（询问内容、是否询问中、读取身份、是否已告知），可重置。
+ */
+var managedSettingsAskState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-q8cqcff6.js:8319", () => {
+  managedSettingsAskState = identity_2(
+    {
+      asks: undefined,
+      isAsking: false,
+      readAs: undefined,
+      told: undefined,
+    },
+    (state) => {
+      state.asks = undefined;
+      state.isAsking = false;
+      state.readAs = undefined;
+      state.told = undefined;
+    },
+  );
+});
+//@ chunk-q8cqcff6.js:8448-8694 placement
+/**
+ * 读取是否存在托管设置（可通过注入的 asks 回调），递归调用时返回上次结果；结果变化时使策略层缓存失效。
+ */
+function hasManagedSettingsCached() {
+  let state = managedSettingsAskState;
+  if (state.isAsking) {
+    state.readAs ??= hasManagedSettings();
+    return state.readAs;
+  }
+  let current = hasManagedSettings();
+  if (state.asks !== undefined) {
+    state.isAsking = true;
+    try {
+      current = state.asks();
+    } finally {
+      state.isAsking = false;
+    }
+  }
+  let didChange = state.readAs !== undefined && state.readAs !== current;
+  state.readAs = current;
+  if (didChange) commandSyncNameState().invalidatePolicyLayer();
+  return current;
+}
+//@ chunk-q8cqcff6.js:8694-8707 placement
+/**
+ * 内部写入记录的有效窗口 5000ms：窗口内同路径写入事件视为自身写入而忽略。
+ */
+var INTERNAL_WRITE_WINDOW_MS = 5000;
+//@ chunk-q8cqcff6.js:8707-8761 placement
+/**
+ * 按宿主记录一次内部写入时间戳，供 consumeInternalWrite 在窗口内消费。
+ */
+function markInternalWrite(key) {
+  commandSyncNameState().internalWrites.set(key, Date.now());
+}
+//@ chunk-q8cqcff6.js:8761-8877 placement
+/**
+ * 若某路径在时间窗口内有内部写入记录则消费该记录并返回 true，用于忽略自身写入触发的变更。
+ */
+function consumeInternalWrite(key, windowMs) {
+  let internalWrites = commandSyncNameState().internalWrites;
+  let writtenAt = internalWrites.get(key);
+  if (writtenAt !== undefined && Date.now() - writtenAt < windowMs) {
+    internalWrites.delete(key);
+    return true;
+  }
+  return false;
+}
+//@ chunk-q8cqcff6.js:8877-8920 placement
+/**
+ * 清空全部内部写入记录（重新开始监听外部变更时用）。
+ */
+function clearInternalWrites() {
+  commandSyncNameState().internalWrites.clear();
+}
 //@ chunk-fe6rs39h.js:18087-18160 placement
 async function isAttachServeEnabled() {
   try {
@@ -165,16 +362,16 @@ var ATTACH_REFUSAL_MESSAGES = {
   session_kind_refused: "that kind of session can't use a folder on a computer",
 };
 //@ chunk-fe6rs39h.js:22034-22076 placement
-function isKnownAttachRefusal(e) {
-  return Object.hasOwn(ATTACH_REFUSAL_MESSAGES, e);
+function isKnownAttachRefusal(kind) {
+  return Object.hasOwn(ATTACH_REFUSAL_MESSAGES, kind);
 }
 //@ chunk-fe6rs39h.js:22076-22153 placement
 var ATTACH_LINK_RETRY_DELAYS_MS = [2000, 4000, 8000, 12000, 15000, 15000, 15000];
 var ATTACH_LINK_TOTAL_TIMEOUT_MS = 90000;
 var ATTACH_LINK_TRANSIENT_RETRY_MS = [2000, 4000, 8000];
 //@ chunk-fe6rs39h.js:22153-22264 placement
-function postTeleportOrg(e, n, credentials) {
-  return apiClient.post(e, n, {
+function postTeleportOrg(url, body, credentials) {
+  return apiClient.post(url, body, {
     auth: "teleport-org",
     timeout: 15000,
     validateStatus: () => true,
@@ -195,11 +392,11 @@ async function linkAttachServe({
   handsKeyToLaterReaders = false,
   seams = {},
 }) {
-  let R = {
+  let proofSent = {
     form: undefined,
     retriedAsV1: false,
   };
-  let k = await linkDeviceWithRetries({
+  let linkResult = await linkDeviceWithRetries({
     sessionId,
     orgUuid,
     credentials,
@@ -208,7 +405,7 @@ async function linkAttachServe({
     prepared,
     handsKeyToLaterReaders,
     seams,
-    proofSent: R,
+    proofSent,
   }).catch((error) => {
     logForDebugging(`[attach-serve] link failed unexpectedly: ${errorMessage(error)}`);
     return attachServeRefusal(
@@ -219,33 +416,33 @@ async function linkAttachServe({
       sessionId,
     );
   });
-  let I = R.form !== undefined && {
-    proof: fromEnum(R.form),
-    proof_v1_retry: R.retriedAsV1,
+  let proofFields = proofSent.form !== undefined && {
+    proof: fromEnum(proofSent.form),
+    proof_v1_retry: proofSent.retriedAsV1,
   };
-  if (k.ok) {
+  if (linkResult.ok) {
     logEvent("tengu_attach_serve_link", {
       outcome: lit("linked"),
-      ...I,
+      ...proofFields,
     });
     logFeatureOk("attach_serve_link");
   } else {
-    let O =
-      k.refusal.kind === "refused"
-        ? k.refusal.subReason
-        : "reason" in k.refusal
-          ? k.refusal.reason
+    let detail =
+      linkResult.refusal.kind === "refused"
+        ? linkResult.refusal.subReason
+        : "reason" in linkResult.refusal
+          ? linkResult.refusal.reason
           : undefined;
     logEvent("tengu_attach_serve_link", {
-      outcome: fromEnum(k.refusal.kind),
-      ...(O !== undefined && {
-        detail: fromEnum(O),
+      outcome: fromEnum(linkResult.refusal.kind),
+      ...(detail !== undefined && {
+        detail: fromEnum(detail),
       }),
-      ...I,
+      ...proofFields,
     });
-    logFeatureBad("attach_serve_link", k.refusal.kind);
+    logFeatureBad("attach_serve_link", linkResult.refusal.kind);
   }
-  return k;
+  return linkResult;
 }
 //@ chunk-fe6rs39h.js:23069-23665 placement
 /**
@@ -253,45 +450,45 @@ async function linkAttachServe({
  */
 async function checkAttachServeLocally({ sessionId, credentials, resuming = false, seams = {} }) {
   try {
-    let h = decodeTaggedUuid(sessionId);
-    if (h === undefined)
+    let sessionUuid = decodeTaggedUuid(sessionId);
+    if (sessionUuid === undefined)
       return attachServeRefusal(
         {
           kind: "bad_session_id",
         },
         sessionId,
       );
-    let y = await (seams.servingOff ?? servingOffReason)(resuming);
-    if (y !== undefined)
+    let servingOffReason = await (seams.servingOff ?? servingOffReason_2)(resuming);
+    if (servingOffReason !== undefined)
       return attachServeRefusal(
         {
           kind: "serving_off",
-          reason: y,
+          reason: servingOffReason,
         },
         sessionId,
       );
-    let S;
+    let accountUuid;
     try {
-      S = getStoredOauthAccountInfo()?.accountUuid;
+      accountUuid = getStoredOauthAccountInfo()?.accountUuid;
     } catch {
-      S = undefined;
+      accountUuid = undefined;
     }
-    let w = await (seams.identity ?? localBindIdentity)({
-      accountUuid: S,
+    let identity = await (seams.identity ?? localBindIdentity)({
+      accountUuid,
       credentials,
     });
-    if (!w.ok)
+    if (!identity.ok)
       return attachServeRefusal(
         {
           kind: "local",
-          reason: w.error,
+          reason: identity.error,
         },
         sessionId,
       );
     return {
       ok: true,
-      sessionUuid: h,
-      accountUuid: w.value.accountUuid,
+      sessionUuid,
+      accountUuid: identity.value.accountUuid,
     };
   } catch (error) {
     if (isFsInaccessible(error))
@@ -314,30 +511,30 @@ async function registerAndLinkDevice({
   handsKeyToLaterReaders = false,
   seams = {},
 }) {
-  let y =
+  let localCheck =
     localIdentity ??
     (await checkAttachServeLocally({
       sessionId,
       credentials,
       seams,
     }));
-  if (!y.ok) return y;
-  let S = await registerDeviceForAttach({
-    accountUuid: y.accountUuid,
+  if (!localCheck.ok) return localCheck;
+  let registered = await registerDeviceForAttach({
+    accountUuid: localCheck.accountUuid,
     credentials,
     readBack: !handsKeyToLaterReaders,
     seams,
   });
-  return S.ok
+  return registered.ok
     ? {
         ok: true,
-        local: y,
-        registered: S,
+        local: localCheck,
+        registered,
       }
     : attachServeRefusal(
         {
           kind: "register",
-          reason: S.reason,
+          reason: registered.reason,
         },
         sessionId,
       );
@@ -354,7 +551,7 @@ async function linkDeviceWithRetries({
   seams,
   proofSent,
 }) {
-  let k = await (prepared ??
+  let preparedLink = await (prepared ??
     registerAndLinkDevice({
       sessionId,
       credentials,
@@ -362,47 +559,47 @@ async function linkDeviceWithRetries({
       handsKeyToLaterReaders,
       seams,
     }));
-  if (!k.ok) return k;
-  let { sessionUuid, accountUuid } = k.local;
-  let registered = k.registered;
+  if (!preparedLink.ok) return preparedLink;
+  let { sessionUuid, accountUuid } = preparedLink.local;
+  let registered = preparedLink.registered;
   let busyRetryDelaysMs = seams.busyRetryDelaysMs ?? ATTACH_LINK_RETRY_DELAYS_MS;
   let transientRetryDelaysMs = seams.transientRetryDelaysMs ?? ATTACH_LINK_TRANSIENT_RETRY_MS;
   let sleep_2 = seams.sleep ?? sleep;
-  let j = Date.now() + ATTACH_LINK_TOTAL_TIMEOUT_MS;
-  let Y = 0;
-  let D = 0;
-  let W = false;
-  let te;
+  let deadline = Date.now() + ATTACH_LINK_TOTAL_TIMEOUT_MS;
+  let busyRetries = 0;
+  let transientRetries = 0;
+  let didForgetRow = false;
+  let capabilities;
   if (request !== undefined)
     try {
-      let X = await (seams.linkCapabilities ?? noopAsync)();
-      te = X === undefined ? undefined : canonicalLinkCapabilities(X);
+      let declared = await (seams.linkCapabilities ?? noopAsync)();
+      capabilities = declared === undefined ? undefined : canonicalLinkCapabilities(declared);
     } catch (error) {
       logForDebugging(
         `[attach-serve] could not read what this computer declares on a link; declaring nothing: ${errorMessage(error)}`,
       );
     }
   for (;;) {
-    let X;
+    let linkResult;
     try {
-      let x = {
+      let linkArgs = {
         orgUuid,
         accountUuid,
         sessionUuid,
         deviceUUID: registered.deviceUUID,
         key: registered.key,
       };
-      X =
+      linkResult =
         request === undefined
-          ? await (seams.sign ?? signSessionLateLink)(x)
+          ? await (seams.sign ?? signSessionLateLink)(linkArgs)
           : await (seams.signRequest ?? signToolHostLink)({
-              ...x,
+              ...linkArgs,
               request,
-              ...(te !== undefined && {
-                capabilities: te,
+              ...(capabilities !== undefined && {
+                capabilities,
               }),
             });
-      proofSent.form = request === undefined ? "session_only" : te === undefined ? "v1" : "v2";
+      proofSent.form = request === undefined ? "session_only" : capabilities === undefined ? "v1" : "v2";
     } catch (error) {
       logForDebugging(`[attach-serve] signing the link proof failed: ${errorMessage(error)}`);
       return attachServeRefusal(
@@ -413,19 +610,19 @@ async function linkDeviceWithRetries({
         sessionId,
       );
     }
-    let ee = await Promise.resolve()
+    let settled = await Promise.resolve()
       .then(() =>
         (seams.post ?? postTeleportOrg)(
           `/v1/code/sessions/${sessionId}/device`,
           {
-            target_device_id: X.deviceUUID,
+            target_device_id: linkResult.deviceUUID,
             bind_attestation: {
-              kid: X.kid,
-              signature: X.signature,
+              kid: linkResult.kid,
+              signature: linkResult.signature,
             },
-            bind_attestation_issued_at: X.issuedAt,
-            ...(te !== undefined && {
-              capabilities: te,
+            bind_attestation_issued_at: linkResult.issuedAt,
+            ...(capabilities !== undefined && {
+              capabilities,
             }),
           },
           credentials,
@@ -439,19 +636,19 @@ async function linkDeviceWithRetries({
           error,
         }),
       );
-    let se =
-      "error" in ee
+    let verdict =
+      "error" in settled
         ? {
             next: "transient",
             status: undefined,
           }
-        : classifyAttachLinkResponse(ee.result, registered.deviceUUID);
-    switch (se.next) {
+        : classifyAttachLinkResponse(settled.result, registered.deviceUUID);
+    switch (verdict.next) {
       case "linked":
         return {
           ok: true,
           deviceId: registered.deviceUUID,
-          toolHostStatus: se.toolHostStatus,
+          toolHostStatus: verdict.toolHostStatus,
           ...(handsKeyToLaterReaders && {
             heldKey: {
               accountUuid,
@@ -461,9 +658,9 @@ async function linkDeviceWithRetries({
           }),
         };
       case "final":
-        return attachServeRefusal(se.refusal, sessionId);
+        return attachServeRefusal(verdict.refusal, sessionId);
       case "proof_invalid": {
-        if (te === undefined)
+        if (capabilities === undefined)
           return attachServeRefusal(
             {
               kind: "refused",
@@ -471,7 +668,7 @@ async function linkDeviceWithRetries({
             },
             sessionId,
           );
-        te = undefined;
+        capabilities = undefined;
         proofSent.retriedAsV1 = true;
         logForDebugging(
           "[attach-serve] the service did not take the v2 link proof; sending the v1 proof without the capability list",
@@ -479,47 +676,47 @@ async function linkDeviceWithRetries({
         continue;
       }
       case "busy": {
-        let x = busyRetryDelaysMs[Y];
-        if (x === undefined || Date.now() + x > j)
+        let delayMs = busyRetryDelaysMs[busyRetries];
+        if (delayMs === undefined || Date.now() + delayMs > deadline)
           return attachServeRefusal(
             {
               kind: "busy",
             },
             sessionId,
           );
-        Y += 1;
+        busyRetries += 1;
         logForDebugging(
-          `[attach-serve] session busy; retrying the link in ${x} ms (${Y}/${busyRetryDelaysMs.length})`,
+          `[attach-serve] session busy; retrying the link in ${delayMs} ms (${busyRetries}/${busyRetryDelaysMs.length})`,
         );
-        await sleep_2(x);
+        await sleep_2(delayMs);
         continue;
       }
       case "transient": {
-        let x = transientRetryDelaysMs[D];
-        if (x === undefined)
+        let delayMs = transientRetryDelaysMs[transientRetries];
+        if (delayMs === undefined)
           return attachServeRefusal(
             {
               kind: "unavailable",
-              status: se.status,
+              status: verdict.status,
             },
             sessionId,
           );
-        D += 1;
+        transientRetries += 1;
         logForDebugging(
-          `[attach-serve] link request failed transiently (status ${se.status ?? "none"}: ${"error" in ee ? errorMessage(ee.error) : "server error"}); retrying in ${x} ms`,
+          `[attach-serve] link request failed transiently (status ${verdict.status ?? "none"}: ${"error" in settled ? errorMessage(settled.error) : "server error"}); retrying in ${delayMs} ms`,
         );
-        await sleep_2(x);
+        await sleep_2(delayMs);
         continue;
       }
       case "device_unknown": {
-        if (W)
+        if (didForgetRow)
           return attachServeRefusal(
             {
               kind: "device_unknown",
             },
             sessionId,
           );
-        W = true;
+        didForgetRow = true;
         await (seams.forgetRow ?? forgetRegisteredRow)(accountUuid, credentials).catch((error) => {
           logForDebugging(`[attach-serve] could not forget the cached device row: ${errorMessage(error)}`);
         });
@@ -545,13 +742,17 @@ async function linkDeviceWithRetries({
 //@ chunk-fe6rs39h.js:26544-27166 placement
 async function registerDeviceForAttach({ accountUuid, credentials, readBack, seams }) {
   try {
-    let h = await (seams.register ?? registerDeviceCached)(accountUuid, deviceDisplayName(), credentials);
-    let y = readBack
+    let registered = await (seams.register ?? registerDeviceCached)(
+      accountUuid,
+      deviceDisplayName(),
+      credentials,
+    );
+    let rowPk = readBack
       ? await (seams.readCachedRow ?? registeredRowPk)(accountUuid, credentials)
-      : normalizeUuidOrNull(h.deviceUUID)?.toLowerCase();
-    if (y !== h.deviceUUID.toLowerCase()) {
+      : normalizeUuidOrNull(registered.deviceUUID)?.toLowerCase();
+    if (rowPk !== registered.deviceUUID.toLowerCase()) {
       logForDebugging(
-        `[attach-serve] registered device row=${h.deviceUUID} ${readBack ? `but the local store reads ${y ?? "nothing"}` : "is not a device row id"}; not linking`,
+        `[attach-serve] registered device row=${registered.deviceUUID} ${readBack ? `but the local store reads ${rowPk ?? "nothing"}` : "is not a device row id"}; not linking`,
       );
       return {
         ok: false,
@@ -560,7 +761,7 @@ async function registerDeviceForAttach({ accountUuid, credentials, readBack, sea
     }
     return {
       ok: true,
-      ...h,
+      ...registered,
     };
   } catch (error) {
     logForDebugging(`[attach-serve] device registration failed: ${errorMessage(error)}`);
@@ -599,8 +800,8 @@ function readAttachServeRequest(initialize) {
   };
 }
 //@ chunk-fe6rs39h.js:27512-27658 placement
-function readToolHostStatus(e) {
-  let externalMetadata = e?.session?.external_metadata;
+function readToolHostStatus(body) {
+  let externalMetadata = body?.session?.external_metadata;
   return typeof externalMetadata === "object" &&
     externalMetadata !== null &&
     "tool_host_status" in externalMetadata
@@ -608,8 +809,8 @@ function readToolHostStatus(e) {
     : undefined;
 }
 //@ chunk-fe6rs39h.js:27658-27721 placement
-function nonEmptyString(e) {
-  return typeof e === "string" && e.length > 0 ? e : undefined;
+function nonEmptyString(value) {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 //@ chunk-fe6rs39h.js:27721-29019 placement
 function classifyAttachLinkResponse(result, deviceUUID) {
@@ -626,16 +827,16 @@ function classifyAttachLinkResponse(result, deviceUUID) {
               reason: "egress",
             },
     };
-  let { status, data: r } = result;
+  let { status, data: body } = result;
   logForDebugging(
     `[attach-serve] link status=${status} request_id=${String(result.response.headers?.["request-id"] ?? "")}`,
   );
   if (status === 200) {
-    let lower = nonEmptyString(r?.session?.bound_device_uuid)?.toLowerCase();
+    let lower = nonEmptyString(body?.session?.bound_device_uuid)?.toLowerCase();
     return lower === undefined || lower === deviceUUID.toLowerCase()
       ? {
           next: "linked",
-          toolHostStatus: readToolHostStatus(r),
+          toolHostStatus: readToolHostStatus(body),
         }
       : {
           next: "final",
@@ -644,15 +845,15 @@ function classifyAttachLinkResponse(result, deviceUUID) {
           },
         };
   }
-  let h = nonEmptyString(r?.error?.resource);
-  let y = nonEmptyString(r?.error?.sub_reason);
-  let S = nonEmptyString(r?.error?.details);
+  let resource = nonEmptyString(body?.error?.resource);
+  let subReason = nonEmptyString(body?.error?.sub_reason);
+  let details = nonEmptyString(body?.error?.details);
   if (status === 409) {
-    if (S === SESSION_WORKER_BUSY)
+    if (details === SESSION_WORKER_BUSY)
       return {
         next: "busy",
       };
-    if (S === SESSION_ALREADY_BOUND_ELSEWHERE)
+    if (details === SESSION_ALREADY_BOUND_ELSEWHERE)
       return {
         next: "final",
         refusal: {
@@ -668,27 +869,27 @@ function classifyAttachLinkResponse(result, deviceUUID) {
     };
   }
   if (status === 403) {
-    if (h === DEVICE_NOT_FOUND)
+    if (resource === DEVICE_NOT_FOUND)
       return {
         next: "device_unknown",
       };
-    if (h === BIND_ATTESTATION_STALE)
+    if (resource === BIND_ATTESTATION_STALE)
       return {
         next: "final",
         refusal: {
           kind: "clock",
         },
       };
-    if (h === LATE_BIND_REFUSED && y === TOOL_HOST_PROOF_INVALID)
+    if (resource === LATE_BIND_REFUSED && subReason === TOOL_HOST_PROOF_INVALID)
       return {
         next: "proof_invalid",
       };
-    if (h === LATE_BIND_REFUSED || h === TOOL_HOST_GRANT_REFUSED)
+    if (resource === LATE_BIND_REFUSED || resource === TOOL_HOST_GRANT_REFUSED)
       return {
         next: "final",
         refusal: {
           kind: "refused",
-          subReason: y !== undefined && isKnownAttachRefusal(y) ? y : "other",
+          subReason: subReason !== undefined && isKnownAttachRefusal(subReason) ? subReason : "other",
         },
       };
     return {
@@ -734,27 +935,27 @@ function classifyAttachLinkResponse(result, deviceUUID) {
   };
 }
 //@ chunk-fe6rs39h.js:29019-29138 placement
-function attachServeRefusal(e, sessionId) {
+function attachServeRefusal(refusal, sessionId) {
   return {
     ok: false,
-    refusal: e,
-    message: `Error: cannot serve cloud session ${sessionId} from this computer: ${describeAttachRefusal(e)}`,
+    refusal,
+    message: `Error: cannot serve cloud session ${sessionId} from this computer: ${describeAttachRefusal(refusal)}`,
   };
 }
 //@ chunk-fe6rs39h.js:29138-30351 placement
-function describeAttachRefusal(e) {
-  switch (e.kind) {
+function describeAttachRefusal(refusal) {
+  switch (refusal.kind) {
     case "local":
     case "register":
-      return `${deviceBindingRefusalText(e.reason)}.`;
+      return `${deviceBindingRefusalText(refusal.reason)}.`;
     case "serving_off":
-      return SERVING_OFF_MESSAGES[e.reason];
+      return SERVING_OFF_MESSAGES[refusal.reason];
     case "bad_session_id":
       return "that is not a cloud session id.";
     case "refused":
-      return e.subReason === "other"
+      return refusal.subReason === "other"
         ? "the server refused to link the session to this computer."
-        : `${ATTACH_REFUSAL_MESSAGES[e.subReason]}.`;
+        : `${ATTACH_REFUSAL_MESSAGES[refusal.subReason]}.`;
     case "bound_elsewhere":
       return "the session is already linked to a different computer.";
     case "busy":
@@ -770,54 +971,58 @@ function describeAttachRefusal(e) {
     case "auth":
       return "this computer is not signed in to claude.ai (run claude /login), or its login expired.";
     case "unavailable":
-      return `the service could not be reached or answered unexpectedly${e.status !== undefined ? ` (HTTP ${e.status})` : ""}; try again shortly.`;
+      return `the service could not be reached or answered unexpectedly${refusal.status !== undefined ? ` (HTTP ${refusal.status})` : ""}; try again shortly.`;
   }
 }
 //@ chunk-fe6rs39h.js:30351-31763 placement
-var SERVING_OFF_MESSAGES = {
-  external_build: "this Claude Code cannot serve tools to cloud sessions.",
-  windows: "serving tools from a Windows computer is not available yet.",
-  muted: "serving tools from this computer is paused right now; try again in a few minutes.",
-  switch_off: "serving tools is switched off on this computer.",
-  flag_off: "using this computer from cloud sessions is switched off for your account right now.",
-  profile_dirs_unread: "this computer is still reading where its shell profile lives; try again in a moment.",
-  profile_dirs_unreadable:
-    "Windows did not say where this computer keeps its profile folders (Documents, AppData, the Start Menu), so its tools are not served; restarting Claude Code tries again.",
-  mount_table_unreadable:
-    "this computer could not read its list of mounted drives (/proc/self/mountinfo) in full, so it cannot find your Windows user folder; if it fails again, see the debug log.",
-  launched_from_home:
-    "this helper was started in a folder or repository that is never served, such as your home directory or a hidden folder there; serve a project folder instead.",
-  excluded_repository: "this helper was started in a repository that is never served.",
-  egress: `${deviceBindingRefusalText("egress")}.`,
-  policy_org: "your organization's policy does not allow using this computer from cloud sessions.",
-  channel_off: "this computer's session channel is switched off.",
-  test_vm_without_vm: "this folder cannot be served as it was offered.",
-};
+var SERVING_OFF_MESSAGES; // deferred: uses deviceBindingRefusalText (../../bridge/deviceBinding.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-fe6rs39h.js:30351", () => {
+  SERVING_OFF_MESSAGES = {
+    external_build: "this Claude Code cannot serve tools to cloud sessions.",
+    windows: "serving tools from a Windows computer is not available yet.",
+    muted: "serving tools from this computer is paused right now; try again in a few minutes.",
+    switch_off: "serving tools is switched off on this computer.",
+    flag_off: "using this computer from cloud sessions is switched off for your account right now.",
+    profile_dirs_unread:
+      "this computer is still reading where its shell profile lives; try again in a moment.",
+    profile_dirs_unreadable:
+      "Windows did not say where this computer keeps its profile folders (Documents, AppData, the Start Menu), so its tools are not served; restarting Claude Code tries again.",
+    mount_table_unreadable:
+      "this computer could not read its list of mounted drives (/proc/self/mountinfo) in full, so it cannot find your Windows user folder; if it fails again, see the debug log.",
+    launched_from_home:
+      "this helper was started in a folder or repository that is never served, such as your home directory or a hidden folder there; serve a project folder instead.",
+    excluded_repository: "this helper was started in a repository that is never served.",
+    egress: `${deviceBindingRefusalText("egress")}.`,
+    policy_org: "your organization's policy does not allow using this computer from cloud sessions.",
+    channel_off: "this computer's session channel is switched off.",
+    test_vm_without_vm: "this folder cannot be served as it was offered.",
+  };
+});
 //@ chunk-fe6rs39h.js:31763-31790 placement
 async function noopAsync() {
   return;
 }
 //@ chunk-fe6rs39h.js:31790-32256 placement
-async function servingOffReason(e) {
+async function servingOffReason_2(isResuming) {
   let [
-    { remoteToolServingOffReason: n, remoteToolVmSwitch: s },
-    { servedToolsUnavailableReason: r },
-    { isViolinWoodServedOff: h },
-    { primeWindowsProfileDirs: y },
-    { inExcludedRepository: S },
+    { remoteToolServingOffReason, remoteToolVmSwitch },
+    { servedToolsUnavailableReason },
+    { isViolinWoodServedOff },
+    { primeWindowsProfileDirs },
+    { inExcludedRepository },
   ] = await Promise.all([
-    import("./chunk-wcfcn49z.js"),
-    import("./chunk-012rhzq5.js"),
-    import("./chunk-m288yvvf.js"),
-    import("./chunk-w5rpngy7.js"),
-    import("./chunk-z65m5xev.js"),
+    import("../../services/remoteTools/servingGates.js"),
+    import("../../remote/tools/servedToolsAttachOptions.lazy.js"),
+    import("../../services/analytics/violinGates.js"),
+    import("../../services/remoteTools/windowsProfileDirs.js"),
+    import("../../utils/git/excludedRepository.js"),
   ]);
-  await y();
+  await primeWindowsProfileDirs();
   return (
-    n() ??
-    ((await S(getOriginalCwd())) ? "excluded_repository" : undefined) ??
-    r() ??
-    (h() ? "flag_off" : undefined) ??
+    remoteToolServingOffReason() ??
+    ((await inExcludedRepository(getOriginalCwd())) ? "excluded_repository" : undefined) ??
+    servedToolsUnavailableReason() ??
+    (isViolinWoodServedOff() ? "flag_off" : undefined) ??
     undefined
   );
 }
@@ -826,52 +1031,60 @@ var ATTACH_RESUME_FLAG = "tengu_violin_volute";
 //@ chunk-fe6rs39h.js:32285-32381 placement
 function isAttachResumeEnabled() {
   try {
-    let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(ATTACH_RESUME_FLAG, false);
-    return e === true && source !== "override";
+    let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(ATTACH_RESUME_FLAG, false);
+    return value === true && source !== "override";
   } catch {
     return false;
   }
 }
 //@ chunk-fe6rs39h.js:32381-32665 placement
-var ATTACH_RESUME_RETRY_MS = [1000, 3000, 8000];
-var ATTACH_RESUME_BACKOFF_JITTER = {
-  kind: "symmetric",
-  ratio: 0.25,
-};
-var ATTACH_LINK_STATUS_STALE_MS = 30000;
-var ATTACH_RESUME_POLL_MS = 5000;
-var ATTACH_RESUME_MAX_ATTEMPTS = 3;
-var linkedToolHostStatusSchema = DoctorLazy(() =>
-  u({
-    v: literal(1),
-    state: string(),
-    environment_id: string(),
-    requested_at: string().min(1),
-    resumed_at: string().min(1).nullish(),
-    resume: u({
-      nonce: string().regex(/^[\x21-\x7e]{1,512}$/),
-      until: parseToolOutputSchema({
-        offset: true,
-      }),
-    })
-      .nullish()
-      .catch(undefined),
-  }),
-);
+var ATTACH_RESUME_RETRY_MS; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ATTACH_RESUME_BACKOFF_JITTER;
+var ATTACH_LINK_STATUS_STALE_MS;
+var ATTACH_RESUME_POLL_MS;
+var ATTACH_RESUME_MAX_ATTEMPTS;
+var linkedToolHostStatusSchema;
+deferInit("chunk-fe6rs39h.js:32381", () => {
+  ATTACH_RESUME_RETRY_MS = [1000, 3000, 8000];
+  ATTACH_RESUME_BACKOFF_JITTER = {
+    kind: "symmetric",
+    ratio: 0.25,
+  };
+  ATTACH_LINK_STATUS_STALE_MS = 30000;
+  ATTACH_RESUME_POLL_MS = 5000;
+  ATTACH_RESUME_MAX_ATTEMPTS = 3;
+  linkedToolHostStatusSchema = DoctorLazy(() =>
+    objectSchema({
+      v: literal(1),
+      state: stringSchema(),
+      environment_id: stringSchema(),
+      requested_at: stringSchema().min(1),
+      resumed_at: stringSchema().min(1).nullish(),
+      resume: objectSchema({
+        nonce: stringSchema().regex(/^[\x21-\x7e]{1,512}$/),
+        until: parseToolOutputSchema({
+          offset: true,
+        }),
+      })
+        .nullish()
+        .catch(undefined),
+    }),
+  );
+});
 //@ chunk-fe6rs39h.js:32665-32956 placement
-async function readLinkedStatus(e, n, s) {
-  let r;
-  let h = await sessionStillBoundTo(e, async () => {
-    r = await n();
-    return r;
+async function readLinkedStatus(deviceId, readSession, resumeState) {
+  let session;
+  let isBound = await sessionStillBoundTo(deviceId, async () => {
+    session = await readSession();
+    return session;
   });
-  if (h === undefined || r === undefined) return;
-  if (s === undefined) return h ? "linked" : "ended";
+  if (isBound === undefined || session === undefined) return;
+  if (resumeState === undefined) return isBound ? "linked" : "ended";
   try {
-    let y = s.awaitsResume(r);
-    if (h && !s.endedHere(r)) return "linked";
-    if (y) return "awaits_resume";
-    return h ? "detached_here" : "ended";
+    let awaitsResume = resumeState.awaitsResume(session);
+    if (isBound && !resumeState.endedHere(session)) return "linked";
+    if (awaitsResume) return "awaits_resume";
+    return isBound ? "detached_here" : "ended";
   } catch (error) {
     logError(error);
     return;
@@ -879,19 +1092,19 @@ async function readLinkedStatus(e, n, s) {
 }
 //@ chunk-fe6rs39h.js:32956-33167 placement
 async function waitForLinkedStatus(
-  e,
-  n,
-  s,
-  r = (h) =>
-    sleep(h, undefined, {
+  deviceId,
+  readSession,
+  resumeState,
+  sleepFn = (ms) =>
+    sleep(ms, undefined, {
       unref: true,
     }),
 ) {
-  let linkedStatus = await readLinkedStatus(e, n, s);
+  let linkedStatus = await readLinkedStatus(deviceId, readSession, resumeState);
   if (linkedStatus === "detached_here") {
-    for (let y = 0; y < ATTACH_RESUME_MAX_ATTEMPTS; y += 1) {
-      await r(ATTACH_RESUME_POLL_MS);
-      linkedStatus = await readLinkedStatus(e, n, s);
+    for (let attempt = 0; attempt < ATTACH_RESUME_MAX_ATTEMPTS; attempt += 1) {
+      await sleepFn(ATTACH_RESUME_POLL_MS);
+      linkedStatus = await readLinkedStatus(deviceId, readSession, resumeState);
       if (linkedStatus !== undefined) break;
     }
   }
@@ -901,27 +1114,32 @@ async function waitForLinkedStatus(
 /**
  * 链接状态为 detached 且持有恢复请求时，尝试重新签名并恢复本机对云会话的服务（tengu_attach_serve_resume）。
  */
-function maybeResumeAttach({ linkedStatus, request, held, seams = {}, ...h }) {
+function maybeResumeAttach({ linkedStatus, request, held, seams = {}, ...attachContext }) {
   if (!(seams.flagOn ?? isAttachResumeEnabled)() || request === undefined || held === undefined) return;
-  let y = decodeTaggedUuid(h.sessionId);
-  let S = linkedToolHostStatusSchema().safeParse(linkedStatus);
-  if (y === undefined || !S.success || S.data.environment_id !== request.environmentId) return;
-  let requestedAt = S.data.requested_at;
-  let R = {
-    ...h,
-    sessionUuid: y,
+  let sessionUuid = decodeTaggedUuid(attachContext.sessionId);
+  let parsedStatus = linkedToolHostStatusSchema().safeParse(linkedStatus);
+  if (
+    sessionUuid === undefined ||
+    !parsedStatus.success ||
+    parsedStatus.data.environment_id !== request.environmentId
+  )
+    return;
+  let requestedAt = parsedStatus.data.requested_at;
+  let resumeArgs = {
+    ...attachContext,
+    sessionUuid,
     held,
     request,
     requestedAt,
   };
   let now = seams.now ?? Date.now;
   let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
-  let O;
+  let resumePromise;
   return {
     resume: () => {
       let maySign = now() - NEGATIVE_INFINITY >= ATTACH_LINK_STATUS_STALE_MS;
-      O ??= checkAttachResumeAllowed(
-        R,
+      resumePromise ??= checkAttachResumeAllowed(
+        resumeArgs,
         {
           posted: false,
           maySign,
@@ -932,328 +1150,147 @@ function maybeResumeAttach({ linkedStatus, request, held, seams = {}, ...h }) {
           logError(error);
           return "unexpected";
         })
-        .then((j) => {
-          O = undefined;
+        .then((outcome) => {
+          resumePromise = undefined;
           logEvent("tengu_attach_serve_resume", {
-            outcome: fromEnum(j),
+            outcome: fromEnum(outcome),
           });
-          if (j === "resumed") {
+          if (outcome === "resumed") {
             NEGATIVE_INFINITY = now();
             logFeatureOk("attach_serve_resume");
           } else if (
-            j === "sign" ||
-            j === "refused" ||
-            j === "not_same_attach" ||
-            j === "unavailable" ||
-            j === "not_sent" ||
-            j === "unexpected"
+            outcome === "sign" ||
+            outcome === "refused" ||
+            outcome === "not_same_attach" ||
+            outcome === "unavailable" ||
+            outcome === "not_sent" ||
+            outcome === "unexpected"
           )
-            logFeatureBad("attach_serve_resume", j);
-          return j === "resumed" || j === "already_resumed" ? "resumed" : "stopped";
+            logFeatureBad("attach_serve_resume", outcome);
+          return outcome === "resumed" || outcome === "already_resumed" ? "resumed" : "stopped";
         });
-      return O;
+      return resumePromise;
     },
-    awaitsResume: (z) =>
+    awaitsResume: (session) =>
       (seams.flagOn ?? isAttachResumeEnabled)() &&
-      z.session_status !== "archived" &&
-      typeof resumableDetachState(z, R, now()) === "object",
-    endedHere: (z) =>
+      session.session_status !== "archived" &&
+      typeof resumableDetachState(session, resumeArgs, now()) === "object",
+    endedHere: (session) =>
       (seams.flagOn ?? isAttachResumeEnabled)() &&
-      isSameDevice(z.bound_device_uuid, R) &&
-      parseToolHostStatus(z.tool_host_status, R)?.state === "detached",
+      isSameDevice(session.bound_device_uuid, resumeArgs) &&
+      parseToolHostStatus(session.tool_host_status, resumeArgs)?.state === "detached",
   };
 }
 //@ chunk-fe6rs39h.js:34156-34624 placement
-async function checkAttachResumeAllowed(e, n, seams) {
+async function checkAttachResumeAllowed(args, state, seams) {
   if (!(seams.flagOn ?? isAttachResumeEnabled)()) return "flag_off";
-  let r = await (seams.localIdentity ?? checkAttachServeLocally)({
-    sessionId: e.sessionId,
-    credentials: e.credentials,
+  let localCheck = await (seams.localIdentity ?? checkAttachServeLocally)({
+    sessionId: args.sessionId,
+    credentials: args.credentials,
     resuming: true,
   });
-  if (!r.ok || r.accountUuid !== e.held.accountUuid) return "local";
+  if (!localCheck.ok || localCheck.accountUuid !== args.held.accountUuid) return "local";
   let retryDelaysMs = seams.retryDelaysMs ?? ATTACH_RESUME_RETRY_MS;
-  for (let y = 0; ; y += 1) {
-    let S = await resumeAttachServe(e, n, seams);
-    if (S !== "retry") return S;
-    let w = retryDelaysMs[y];
-    if (w === undefined) return n.posted ? "unavailable" : "unreadable";
-    let R = backoffDelayMs({
+  for (let attempt = 0; ; attempt += 1) {
+    let outcome = await resumeAttachServe(args, state, seams);
+    if (outcome !== "retry") return outcome;
+    let baseDelayMs = retryDelaysMs[attempt];
+    if (baseDelayMs === undefined) return state.posted ? "unavailable" : "unreadable";
+    let delayMs = backoffDelayMs({
       attempt: 1,
-      baseMs: w,
+      baseMs: baseDelayMs,
       jitter: ATTACH_RESUME_BACKOFF_JITTER,
       random: seams.random,
     });
-    await (seams.sleep ?? sleep)(Math.round(R));
+    await (seams.sleep ?? sleep)(Math.round(delayMs));
   }
 }
 //@ chunk-fe6rs39h.js:34624-36104 placement
-async function resumeAttachServe(e, n, s) {
-  let r;
+async function resumeAttachServe(args, state, seams) {
+  let session;
   try {
-    r = await e.readSession();
+    session = await args.readSession();
   } catch (error) {
     logForDebugging(`[attach-serve] resume could not read the session: ${errorMessage(error)}`);
     return error instanceof TeleportOperationError ? "session_read_refused" : "retry";
   }
-  if (r.session_status === "archived") return "session_archived";
-  let toolHostStatus = parseToolHostStatus(r.tool_host_status, e);
-  if (isConnectedAndResumed(toolHostStatus) && isSameDevice(r.bound_device_uuid, e))
-    return n.posted ? "resumed" : "already_resumed";
-  let y = resumableDetachState(r, e, (s.now ?? Date.now)());
-  if (typeof y === "string") return y;
-  if (!n.maySign) return "too_soon";
-  if (!(s.flagOn ?? isAttachResumeEnabled)()) return "flag_off";
-  let S;
+  if (session.session_status === "archived") return "session_archived";
+  let toolHostStatus = parseToolHostStatus(session.tool_host_status, args);
+  if (isConnectedAndResumed(toolHostStatus) && isSameDevice(session.bound_device_uuid, args))
+    return state.posted ? "resumed" : "already_resumed";
+  let detachState = resumableDetachState(session, args, (seams.now ?? Date.now)());
+  if (typeof detachState === "string") return detachState;
+  if (!state.maySign) return "too_soon";
+  if (!(seams.flagOn ?? isAttachResumeEnabled)()) return "flag_off";
+  let proof;
   try {
-    S = await signToolHostResume({
-      orgUuid: e.orgUuid,
-      accountUuid: e.held.accountUuid,
-      sessionUuid: e.sessionUuid,
-      deviceUUID: e.deviceId,
-      request: e.request,
-      nonce: y.nonce,
-      key: e.held.key,
+    proof = await signToolHostResume({
+      orgUuid: args.orgUuid,
+      accountUuid: args.held.accountUuid,
+      sessionUuid: args.sessionUuid,
+      deviceUUID: args.deviceId,
+      request: args.request,
+      nonce: detachState.nonce,
+      key: args.held.key,
     });
   } catch (error) {
     logForDebugging(`[attach-serve] signing the resume proof failed: ${errorMessage(error)}`);
     return "sign";
   }
-  n.posted = true;
-  let w;
+  state.posted = true;
+  let response;
   try {
-    w = await (s.post ?? postTeleportOrg)(
-      `/v1/code/sessions/${e.sessionId}/device`,
+    response = await (seams.post ?? postTeleportOrg)(
+      `/v1/code/sessions/${args.sessionId}/device`,
       {
-        target_device_id: S.deviceUUID,
+        target_device_id: proof.deviceUUID,
         bind_attestation: {
-          kid: S.kid,
-          signature: S.signature,
+          kid: proof.kid,
+          signature: proof.signature,
         },
-        bind_attestation_issued_at: S.issuedAt,
+        bind_attestation_issued_at: proof.issuedAt,
       },
-      e.credentials,
+      args.credentials,
     );
   } catch (error) {
     logForDebugging(`[attach-serve] resume request got no answer: ${errorMessage(error)}`);
     return "retry";
   }
-  if (!w.ok) return "not_sent";
+  if (!response.ok) return "not_sent";
   logForDebugging(
-    `[attach-serve] resume status=${w.status} request_id=${String(w.response.headers?.["request-id"] ?? "")}`,
+    `[attach-serve] resume status=${response.status} request_id=${String(response.response.headers?.["request-id"] ?? "")}`,
   );
-  if (w.status >= 500 || w.status === 408 || w.status === 429) return "retry";
-  if (w.status !== 200) return w.status === 403 && (await isServingConnected(e)) ? "resumed" : "refused";
-  let boundDeviceUuid = w.data?.session?.bound_device_uuid;
-  let toolHostStatus_2 = readToolHostStatus(w.data);
+  if (response.status >= 500 || response.status === 408 || response.status === 429) return "retry";
+  if (response.status !== 200)
+    return response.status === 403 && (await isServingConnected(args)) ? "resumed" : "refused";
+  let boundDeviceUuid = response.data?.session?.bound_device_uuid;
+  let toolHostStatus_2 = readToolHostStatus(response.data);
   if (typeof boundDeviceUuid !== "string" || boundDeviceUuid === "" || toolHostStatus_2 === undefined)
     return "retry";
-  return isSameDevice(boundDeviceUuid, e) && isConnectedAndResumed(parseToolHostStatus(toolHostStatus_2, e))
+  return isSameDevice(boundDeviceUuid, args) &&
+    isConnectedAndResumed(parseToolHostStatus(toolHostStatus_2, args))
     ? "resumed"
     : "not_same_attach";
 }
 //@ chunk-fe6rs39h.js:36104-36262 placement
-function parseToolHostStatus(toolHostStatus, n) {
-  let s = linkedToolHostStatusSchema().safeParse(toolHostStatus);
-  return s.success &&
-    s.data.environment_id === n.request.environmentId &&
-    s.data.requested_at === n.requestedAt
-    ? s.data
+function parseToolHostStatus(toolHostStatus, resumeArgs) {
+  let parsed = linkedToolHostStatusSchema().safeParse(toolHostStatus);
+  return parsed.success &&
+    parsed.data.environment_id === resumeArgs.request.environmentId &&
+    parsed.data.requested_at === resumeArgs.requestedAt
+    ? parsed.data
     : undefined;
 }
 //@ chunk-fe6rs39h.js:36262-36483 placement
-function resumableDetachState(e, n, s) {
-  let toolHostStatus = parseToolHostStatus(e.tool_host_status, n);
+function resumableDetachState(session, resumeArgs, nowMs) {
+  let toolHostStatus = parseToolHostStatus(session.tool_host_status, resumeArgs);
   if (
     toolHostStatus?.state !== "detached" ||
     toolHostStatus.resume == null ||
-    (e.bound_device_uuid !== undefined && !isSameDevice(e.bound_device_uuid, n))
+    (session.bound_device_uuid !== undefined && !isSameDevice(session.bound_device_uuid, resumeArgs))
   )
     return "no_offer";
-  return Date.parse(toolHostStatus.resume.until) > s ? toolHostStatus.resume : "expired";
-}
-//@ chunk-q8cqcff6.js:6929-7034 placement
-function isCloudFlag(e) {
-  return e === "--cloud" || e === "--remote" || e.startsWith("--cloud=") || e.startsWith("--remote=");
-}
-//@ chunk-q8cqcff6.js:7034-7133 placement
-function isAttachServeMode() {
-  return (
-    eagerParseCliFlag("--attach-serve") !== undefined ||
-    (eagerFindCliArg(isCloudFlag) !== -1 &&
-      detectNonInteractiveLaunch() &&
-      !eagerHasCliFlag("-p") &&
-      !eagerHasCliFlag("--print"))
-  );
-}
-//@ chunk-q8cqcff6.js:7133-7192 placement
-/**
- * attach serve 模式下判断某设置来源是否为仓库目录级（非 globalConfig 且在 REPO_DIR_SETTING_SOURCES 内）。
- */
-function isAttachServeRepoScopedSource(e) {
-  return e !== "globalConfig" && REPO_DIR_SETTING_SOURCES.has(e) && isAttachServeMode();
-}
-//@ chunk-q8cqcff6.js:7192-7260 placement
-/**
- * 在宿主环境守卫内读取 CLAUDE_CODE_IGNORE_PERSISTED_TRUST（是否忽略持久化的信任）。
- */
-function ignoresPersistedTrust() {
-  return withHostOwnedEnvGuard(() => env.CLAUDE_CODE_IGNORE_PERSISTED_TRUST);
-}
-//@ chunk-q8cqcff6.js:7260-7334 placement
-/**
- * 仓库目录级设置来源在 attach serve 模式、或非交互且忽略持久信任时视为生效。
- */
-function isAttachServeRepoScopedSourceOrNonInteractive(e) {
-  return (
-    e !== "globalConfig" &&
-    REPO_DIR_SETTING_SOURCES.has(e) &&
-    (isAttachServeMode() || (getIsNonInteractiveSession() && ignoresPersistedTrust()))
-  );
-}
-//@ chunk-q8cqcff6.js:7334-7461 placement
-var OAUTH_ENDPOINT_KEYS = [
-  "BASE_API_URL",
-  "TOKEN_URL",
-  "CLAUDE_AI_ORIGIN",
-  "API_KEY_URL",
-  "ROLES_URL",
-  "MCP_PROXY_URL",
-];
-var pinCache = identity_2(new Map(), (e) => e.clear());
-//@ chunk-q8cqcff6.js:7461-7580 placement
-/**
- * 是否固定使用已存储的登录（缓存首次判断结果，可由环境变量开启）。
- */
-function isStoredLoginPinned() {
-  let e = pinCache.get("isPinned") ?? env.CLAUDE_CODE_REMOTE_TOOLS_PIN_STORED_LOGIN === true;
-  pinCache.set("isPinned", e);
-  return e;
-}
-//@ chunk-q8cqcff6.js:7580-7604 placement
-/**
- * 恒返回 true 的占位判断（attach serve 相关构建期开关）。
- */
-function isAlwaysTrue() {
-  return true;
-}
-//@ chunk-q8cqcff6.js:7604-7669 placement
-function isRemoteToolsPinStoredLogin() {
-  return "CLAUDE_CODE_REMOTE_TOOLS_PIN_STORED_LOGIN";
-}
-//@ chunk-q8cqcff6.js:7669-7813 placement
-function formatServeHelperStoppedError(e) {
-  return `Error: serve helper stopped: ${e} does not resolve to this computer's stored claude.ai login on Anthropic's own service`;
-}
-//@ chunk-q8cqcff6.js:7813-8191 placement
-/**
- * 远程工具固定使用存储登录时，检查 base URL 与 OAuth 端点是否为官方第一方（本地 OAuth 构建另行判断），不符时返回 base_url 或 oauth_endpoint。
- */
-function getServeHelperStopReason() {
-  let e = builtInOauthConfig();
-  let n = e.OAUTH_FILE_SUFFIX === "-local-oauth";
-  let r = URL.parse(env.ANTHROPIC_BASE_URL ?? "");
-  let s = isActualFirstPartyAnthropicBaseUrl() && (r === null || r.protocol === "https:");
-  let S = n && isLoopbackHost(r?.hostname ?? "");
-  if (!s && !S) return "base_url";
-  try {
-    let oauthConfig = getOauthConfig();
-    if (OAUTH_ENDPOINT_KEYS.some((h) => oauthConfig[h] !== e[h])) return "oauth_endpoint";
-  } catch {
-    return "oauth_endpoint";
-  }
-  if (n && OAUTH_ENDPOINT_KEYS.some((E) => !isLoopbackHost(URL.parse(e[E])?.hostname ?? "")))
-    return "oauth_endpoint";
-  return;
-}
-//@ chunk-q8cqcff6.js:8191-8319 placement
-/**
- * 固定使用已存储登录但服务助手不满足条件时，输出错误并以配置错误码退出。
- */
-function exitIfServeHelperMisconfigured() {
-  if (!isStoredLoginPinned()) return;
-  let serveHelperStopReason = getServeHelperStopReason();
-  if (serveHelperStopReason === undefined) return;
-  try {
-    process.stderr.write(`${formatServeHelperStoppedError(serveHelperStopReason)}
-`);
-  } finally {
-    process.exit(EXIT_CONFIG_ERROR);
-  }
-}
-//@ chunk-q8cqcff6.js:8319-8448 placement
-/**
- * 受管设置询问的进程级状态（询问内容、是否询问中、读取身份、是否已告知），可重置。
- */
-var managedSettingsAskState = identity_2(
-  {
-    asks: undefined,
-    isAsking: false,
-    readAs: undefined,
-    told: undefined,
-  },
-  (e) => {
-    e.asks = undefined;
-    e.isAsking = false;
-    e.readAs = undefined;
-    e.told = undefined;
-  },
-);
-//@ chunk-q8cqcff6.js:8448-8694 placement
-/**
- * 读取是否存在托管设置（可通过注入的 asks 回调），递归调用时返回上次结果；结果变化时使策略层缓存失效。
- */
-function hasManagedSettingsCached() {
-  let e = managedSettingsAskState;
-  if (e.isAsking) {
-    e.readAs ??= hasManagedSettings();
-    return e.readAs;
-  }
-  let n = hasManagedSettings();
-  if (e.asks !== undefined) {
-    e.isAsking = true;
-    try {
-      n = e.asks();
-    } finally {
-      e.isAsking = false;
-    }
-  }
-  let r = e.readAs !== undefined && e.readAs !== n;
-  e.readAs = n;
-  if (r) commandSyncNameState().invalidatePolicyLayer();
-  return n;
-}
-//@ chunk-q8cqcff6.js:8694-8707 placement
-/**
- * 内部写入记录的有效窗口 5000ms：窗口内同路径写入事件视为自身写入而忽略。
- */
-var INTERNAL_WRITE_WINDOW_MS = 5000;
-//@ chunk-q8cqcff6.js:8707-8761 placement
-/**
- * 按宿主记录一次内部写入时间戳，供 consumeInternalWrite 在窗口内消费。
- */
-function markInternalWrite(e) {
-  commandSyncNameState().internalWrites.set(e, Date.now());
-}
-//@ chunk-q8cqcff6.js:8761-8877 placement
-/**
- * 若某路径在时间窗口内有内部写入记录则消费该记录并返回 true，用于忽略自身写入触发的变更。
- */
-function consumeInternalWrite(e, n) {
-  let internalWrites = commandSyncNameState().internalWrites;
-  let s = internalWrites.get(e);
-  if (s !== undefined && Date.now() - s < n) {
-    internalWrites.delete(e);
-    return true;
-  }
-  return false;
-}
-//@ chunk-q8cqcff6.js:8877-8920 placement
-/**
- * 清空全部内部写入记录（重新开始监听外部变更时用）。
- */
-function clearInternalWrites() {
-  commandSyncNameState().internalWrites.clear();
+  return Date.parse(toolHostStatus.resume.until) > nowMs ? toolHostStatus.resume : "expired";
 }
 export {
   ignoresPersistedTrust,

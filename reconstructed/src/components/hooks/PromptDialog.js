@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
 import {
@@ -20,38 +20,38 @@ import { Text } from "../../ink/components/Text.js";
 
 //@ chunk-18hwfzwa.js:415192-415610 callgraph-fingerprint = PromptDialog (0.182)
 function PromptDialog(props) {
-  let $ = w(6);
+  let $ = useMemoCache(6);
   let { message, onCancel, escAction } = props;
   let action = escAction === undefined ? "cancel" : escAction;
-  let Re;
+  let keyOpts;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    Re = {
+    keyOpts = {
       context: "Settings",
     };
-    $[0] = Re;
-  } else Re = $[0];
-  useKeybinding("confirm:no", onCancel, Re);
+    $[0] = keyOpts;
+  } else keyOpts = $[0];
+  useKeybinding("confirm:no", onCancel, keyOpts);
   useKeybinding("app:interrupt", onCancel);
-  let Be;
+  let escHint;
   if ($[1] !== action) {
-    Be = jsxProd_default(KeyboardShortcutHint, {
+    escHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action,
       parens: true,
     });
     $[1] = action;
-    $[2] = Be;
-  } else Be = $[2];
-  let He;
-  if ($[3] !== message || $[4] !== Be) {
-    He = jsxProd_default_2(Text, {
+    $[2] = escHint;
+  } else escHint = $[2];
+  let line;
+  if ($[3] !== message || $[4] !== escHint) {
+    line = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [message, " ", Be],
+      children: [message, " ", escHint],
     });
     $[3] = message;
-    $[4] = Be;
-    $[5] = He;
-  } else He = $[5];
-  return He;
+    $[4] = escHint;
+    $[5] = line;
+  } else line = $[5];
+  return line;
 }
 export { PromptDialog };

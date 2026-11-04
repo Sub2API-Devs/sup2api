@@ -20,15 +20,17 @@ import { messagesSinceCompactBoundary } from "../../services/projects/threadRows
 /**
  * 根据可用的 shell 工具生成沙箱说明附件；与历史中最近一次 sandbox_instructions 内容相同则不重复发送。
  */
-function getSandboxInstructionsAttachments(tools, n) {
-  let s = alwaysFalseEvent(tools)
+function getSandboxInstructionsAttachments(unusedArg, messages) {
+  let shellToolNames = alwaysFalseEvent(unusedArg)
     ? [BASH_TOOL_NAME]
-    : SHELL_TOOL_NAMES_3.filter((w) => tools.some((L) => toolMatchesName(L, w) && !isHostOnlyNativeTool(L)));
-  if (s.length === 0) return [];
-  let simpleSandboxSection = getSimpleSandboxSection(s);
+    : SHELL_TOOL_NAMES_3.filter((toolName) =>
+        unusedArg.some((tool) => toolMatchesName(tool, toolName) && !isHostOnlyNativeTool(tool)),
+      );
+  if (shellToolNames.length === 0) return [];
+  let simpleSandboxSection = getSimpleSandboxSection(shellToolNames);
   let content =
-    messagesSinceCompactBoundary(n ?? []).findLast(
-      (w) => w.type === "attachment" && w.attachment.type === "sandbox_instructions",
+    messagesSinceCompactBoundary(messages ?? []).findLast(
+      (message) => message.type === "attachment" && message.attachment.type === "sandbox_instructions",
     )?.attachment.content ?? "";
   if (simpleSandboxSection === content) return [];
   return [

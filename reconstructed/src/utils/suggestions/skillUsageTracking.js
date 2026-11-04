@@ -17,20 +17,20 @@ import { getOwn } from "../objectSafety.js";
  * 记录技能被调用：发出事件，并（节流后）在全局配置中累加使用次数与最近时间。
  */
 function recordSkillInvoked(session, name, storageV5, skillName = name) {
-  let h = suggestionCacheBySessionRoot.of(session);
-  h.skillInvoked.emit(skillName);
+  let cache = suggestionCacheBySessionRoot.of(session);
+  cache.skillInvoked.emit(skillName);
   let now = Date.now();
-  let S = h.skillUsageLastWriteAt.get(name);
-  if (S !== undefined && now - S < SUGGESTION_CACHE_TTL_MS) return;
-  h.skillUsageLastWriteAt.set(name, now);
-  saveGlobalConfig((w) => {
-    let L = getOwn(w.skillUsage ?? {}, name);
+  let lastWriteAt = cache.skillUsageLastWriteAt.get(name);
+  if (lastWriteAt !== undefined && now - lastWriteAt < SUGGESTION_CACHE_TTL_MS) return;
+  cache.skillUsageLastWriteAt.set(name, now);
+  saveGlobalConfig((config) => {
+    let existing = getOwn(config.skillUsage ?? {}, name);
     return {
-      ...w,
+      ...config,
       skillUsage: {
-        ...w.skillUsage,
+        ...config.skillUsage,
         [name]: {
-          usageCount: (L?.usageCount ?? 0) + 1,
+          usageCount: (existing?.usageCount ?? 0) + 1,
           lastUsedAt: now,
         },
       },
@@ -38,13 +38,13 @@ function recordSkillInvoked(session, name, storageV5, skillName = name) {
   }, storageV5);
 }
 //@ chunk-e6aww6q8.js:2314225-2314409 fingerprint = recordSkillUsage (0.847)
-function recordSkillUsage(name, n) {
+function recordSkillUsage(name, fallbackName) {
   let skillUsage = getGlobalConfig().skillUsage ?? {};
-  let s = getOwn(skillUsage, name) ?? (n ? getOwn(skillUsage, n) : undefined);
-  if (!s) return null;
+  let entry = getOwn(skillUsage, name) ?? (fallbackName ? getOwn(skillUsage, fallbackName) : undefined);
+  if (!entry) return null;
   return {
-    usageCount: s.usageCount,
-    daysSinceUse: Math.floor((Date.now() - s.lastUsedAt) / 86400000),
+    usageCount: entry.usageCount,
+    daysSinceUse: Math.floor((Date.now() - entry.lastUsedAt) / 86400000),
   };
 }
 //@ chunk-e6aww6q8.js:2314409-2314569 fingerprint = getSkillUsageScore (1)
@@ -52,10 +52,10 @@ function recordSkillUsage(name, n) {
  * 技能使用评分：按使用次数与最近使用时间计算排序分数。
  */
 function getSkillUsageScore(skillName) {
-  let n = getOwn(getGlobalConfig().skillUsage ?? {}, skillName);
-  if (!n) return 0;
-  let daysSinceUse = (Date.now() - n.lastUsedAt) / 86400000;
+  let entry = getOwn(getGlobalConfig().skillUsage ?? {}, skillName);
+  if (!entry) return 0;
+  let daysSinceUse = (Date.now() - entry.lastUsedAt) / 86400000;
   let recencyFactor = Math.pow(0.5, daysSinceUse / 7);
-  return n.usageCount * Math.max(recencyFactor, 0.1);
+  return entry.usageCount * Math.max(recencyFactor, 0.1);
 }
 export { getSkillUsageScore, recordSkillInvoked, recordSkillUsage };

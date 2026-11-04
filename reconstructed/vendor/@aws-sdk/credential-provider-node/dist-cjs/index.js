@@ -5,23 +5,23 @@
  * pieces: chunk-j3x7ed1b.js (6)
  * attribution: esm-layout 3, esm-fingerprint 3
  */
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { require_property_provider } from "../../../@smithy/property-provider/dist-cjs/index.js";
 import { require_shared_ini_file_loader } from "../../../@smithy/shared-ini-file-loader/dist-cjs/index.js";
 import { ENV_KEY, ENV_SECRET, fromEnv } from "../../credential-provider-env/dist-cjs/index.js";
 
 //@ chunk-j3x7ed1b.js:1021-1047 esm-layout
-var propertyProvider_2 = Re(require_property_provider());
-var sharedIniFileLoader = Re(require_shared_ini_file_loader());
+var propertyProvider_2 = __toESM(require_property_provider());
+var sharedIniFileLoader = __toESM(require_shared_ini_file_loader());
 //@ chunk-j3x7ed1b.js:1047-1723 esm-layout
-var import_property_provider = Re(require_property_provider());
+var import_property_provider = __toESM(require_property_provider());
 var ENV_IMDS_DISABLED = "AWS_EC2_METADATA_DISABLED";
 var remoteProvider = async (init) => {
   let { ENV_CMDS_FULL_URI, ENV_CMDS_RELATIVE_URI, fromContainerMetadata, fromInstanceMetadata } =
-    await import("./chunk-7bg2190x.js");
+    await import("../../../@smithy/credential-provider-imds/dist-cjs/ENV_CMDS_FULL_URI.lazy.js");
   if (process.env[ENV_CMDS_RELATIVE_URI] || process.env[ENV_CMDS_FULL_URI]) {
     init.logger?.debug("@aws-sdk/credential-provider-node - remoteProvider::fromHttp/fromContainerMetadata");
-    let { fromHttp } = await import("./chunk-0c72454j.js");
+    let { fromHttp } = await import("../../credential-provider-http/dist-cjs/fromHttp/fromHttp.js");
     return import_property_provider.chain(fromHttp(init), fromContainerMetadata(init));
   }
   if (process.env[ENV_IMDS_DISABLED] && process.env[ENV_IMDS_DISABLED] !== "false")
@@ -123,22 +123,23 @@ var defaultProvider = (init = {}) =>
               logger: init.logger,
             },
           );
-        let { fromSSO } = await import("./chunk-rs2k9kxx.js");
+        let { fromSSO } = await import("../../credential-provider-sso/dist-cjs/index.js");
         return fromSSO(init)(awsIdentityProperties);
       },
       async (awsIdentityProperties) => {
         init.logger?.debug("@aws-sdk/credential-provider-node - defaultProvider::fromIni");
-        let { fromIni } = await import("./chunk-8f6p9rtw.js");
+        let { fromIni } = await import("../../credential-provider-ini/dist-cjs/index.js");
         return fromIni(init)(awsIdentityProperties);
       },
       async (awsIdentityProperties) => {
         init.logger?.debug("@aws-sdk/credential-provider-node - defaultProvider::fromProcess");
-        let { fromProcess } = await import("./chunk-skhq176t.js");
+        let { fromProcess } = await import("../../credential-provider-process/dist-cjs/index.js");
         return fromProcess(init)(awsIdentityProperties);
       },
       async (awsIdentityProperties) => {
         init.logger?.debug("@aws-sdk/credential-provider-node - defaultProvider::fromTokenFile");
-        let { fromTokenFile } = await import("./chunk-2pe5kgjj.js");
+        let { fromTokenFile } =
+          await import("../../credential-provider-web-identity/dist-cjs/fromTokenFile.lazy.js");
         return fromTokenFile(init)(awsIdentityProperties);
       },
       async () => {

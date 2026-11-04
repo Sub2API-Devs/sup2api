@@ -5,18 +5,18 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_URL } from "./URL.js";
 
 //@ chunk-vwj6ccer.js:79901-83403 cjs-fingerprint
-var require_URLUtils = x(function (cjsExports, cjsModule) {
-  var oe = require_URL();
+var require_URLUtils = __commonJS(function (cjsExports, cjsModule) {
+  var URLModule = require_URL();
   cjsModule.exports = URLUtils;
   function URLUtils() {}
   URLUtils.prototype = Object.create(Object.prototype, {
     _url: {
       get: function () {
-        return new oe(this.href);
+        return new URLModule(this.href);
       },
     },
     protocol: {
@@ -27,10 +27,10 @@ var require_URLUtils = x(function (cjsExports, cjsModule) {
       },
       set: function (v) {
         var output = this.href;
-        var url = new oe(output);
+        var url = new URLModule(output);
         if (url.isAbsolute()) {
           v = v.replace(/:+$/, "");
-          v = v.replace(/[^-+\.a-zA-Z0-9]/g, oe.percentEncode);
+          v = v.replace(/[^-+\.a-zA-Z0-9]/g, URLModule.percentEncode);
           if (v.length > 0) {
             url.scheme = v;
             output = url.toString();
@@ -47,9 +47,9 @@ var require_URLUtils = x(function (cjsExports, cjsModule) {
       },
       set: function (v) {
         var output = this.href;
-        var url = new oe(output);
+        var url = new URLModule(output);
         if (url.isAbsolute() && url.isAuthorityBased()) {
-          v = v.replace(/[^-+\._~!$&'()*,;:=a-zA-Z0-9]/g, oe.percentEncode);
+          v = v.replace(/[^-+\._~!$&'()*,;:=a-zA-Z0-9]/g, URLModule.percentEncode);
           if (v.length > 0) {
             url.host = v;
             delete url.port;
@@ -67,10 +67,10 @@ var require_URLUtils = x(function (cjsExports, cjsModule) {
       },
       set: function (v) {
         var output = this.href;
-        var url = new oe(output);
+        var url = new URLModule(output);
         if (url.isAbsolute() && url.isAuthorityBased()) {
           v = v.replace(/^\/+/, "");
-          v = v.replace(/[^-+\._~!$&'()*,;:=a-zA-Z0-9]/g, oe.percentEncode);
+          v = v.replace(/[^-+\._~!$&'()*,;:=a-zA-Z0-9]/g, URLModule.percentEncode);
           if (v.length > 0) {
             url.host = v;
             output = url.toString();
@@ -87,7 +87,7 @@ var require_URLUtils = x(function (cjsExports, cjsModule) {
       },
       set: function (v) {
         var output = this.href;
-        var url = new oe(output);
+        var url = new URLModule(output);
         if (url.isAbsolute() && url.isAuthorityBased()) {
           v = "" + v;
           v = v.replace(/[^0-9].*$/, "");
@@ -109,10 +109,10 @@ var require_URLUtils = x(function (cjsExports, cjsModule) {
       },
       set: function (v) {
         var output = this.href;
-        var url = new oe(output);
+        var url = new URLModule(output);
         if (url.isAbsolute() && url.isHierarchical()) {
           if (v.charAt(0) !== "/") v = "/" + v;
-          v = v.replace(/[^-+\._~!$&'()*,;:=@\/a-zA-Z0-9]/g, oe.percentEncode);
+          v = v.replace(/[^-+\._~!$&'()*,;:=@\/a-zA-Z0-9]/g, URLModule.percentEncode);
           url.path = v;
           output = url.toString();
         }
@@ -127,10 +127,10 @@ var require_URLUtils = x(function (cjsExports, cjsModule) {
       },
       set: function (v) {
         var output = this.href;
-        var url = new oe(output);
+        var url = new URLModule(output);
         if (url.isAbsolute() && url.isHierarchical()) {
           if (v.charAt(0) === "?") v = v.substring(1);
-          v = v.replace(/[^-+\._~!$&'()*,;:=@\/?a-zA-Z0-9]/g, oe.percentEncode);
+          v = v.replace(/[^-+\._~!$&'()*,;:=@\/?a-zA-Z0-9]/g, URLModule.percentEncode);
           url.query = v;
           output = url.toString();
         }
@@ -145,9 +145,9 @@ var require_URLUtils = x(function (cjsExports, cjsModule) {
       },
       set: function (v) {
         var output = this.href;
-        var url = new oe(output);
+        var url = new URLModule(output);
         if (v.charAt(0) === "#") v = v.substring(1);
-        v = v.replace(/[^-+\._~!$&'()*,;:=@\/?a-zA-Z0-9]/g, oe.percentEncode);
+        v = v.replace(/[^-+\._~!$&'()*,;:=@\/?a-zA-Z0-9]/g, URLModule.percentEncode);
         url.fragment = v;
         output = url.toString();
         this.href = output;
@@ -160,9 +160,9 @@ var require_URLUtils = x(function (cjsExports, cjsModule) {
       },
       set: function (v) {
         var output = this.href;
-        var url = new oe(output);
+        var url = new URLModule(output);
         if (url.isAbsolute()) {
-          v = v.replace(/[\x00-\x1F\x7F-\uFFFF "#<>?`\/@\\:]/g, oe.percentEncode);
+          v = v.replace(/[\x00-\x1F\x7F-\uFFFF "#<>?`\/@\\:]/g, URLModule.percentEncode);
           url.username = v;
           output = url.toString();
         }
@@ -176,11 +176,11 @@ var require_URLUtils = x(function (cjsExports, cjsModule) {
       },
       set: function (v) {
         var output = this.href;
-        var url = new oe(output);
+        var url = new URLModule(output);
         if (url.isAbsolute()) {
           if (v === "") url.password = null;
           else {
-            v = v.replace(/[\x00-\x1F\x7F-\uFFFF "#<>?`\/@\\]/g, oe.percentEncode);
+            v = v.replace(/[\x00-\x1F\x7F-\uFFFF "#<>?`\/@\\]/g, URLModule.percentEncode);
             url.password = v;
           }
           output = url.toString();

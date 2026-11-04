@@ -9,7 +9,13 @@
  * attribution: facade-exports 8, layout 1, placement 1
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string, record, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  record,
+  _enum,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { recordToolUsed } from "../compact/keptTools.js";
 import { buildMcpToolName } from "./mcpStringUtils.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -31,32 +37,44 @@ import { getAllowedChannels } from "../../bootstrap/state.js";
 import { printableName } from "../../utils/printableName.js";
 import { BUILTIN } from "../../utils/telemetry/pluginTelemetry.js";
 import { externalSkillToPluginName } from "../../skills/syncedSkills.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-tdepd6yp.js:191-251 placement
+function hasChannelCapability(capabilities) {
+  return !!capabilities?.experimental?.["claude/channel"];
+}
 //@ chunk-0zzdrwpn.js:803-1131 facade-exports = ChannelMessageNotificationSchema (0.5)
 /**
  * channel 通知 schema 与方法名常量：notifications/claude/channel（content+meta）、.../permission（request_id+behavior）、.../permission_request，以及 meta 键名正则。
  */
-var ChannelMessageNotificationSchema = DoctorLazy(() =>
-  u({
-    method: literal("notifications/claude/channel"),
-    params: u({
-      content: string(),
-      meta: record(string(), string()).optional(),
+var ChannelMessageNotificationSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CHANNEL_PERMISSION_METHOD;
+var ChannelPermissionNotificationSchema;
+var CHANNEL_PERMISSION_REQUEST_METHOD;
+var CHANNEL_META_KEY_PATTERN;
+deferInit("chunk-0zzdrwpn.js:803", () => {
+  ChannelMessageNotificationSchema = DoctorLazy(() =>
+    objectSchema({
+      method: literal("notifications/claude/channel"),
+      params: objectSchema({
+        content: stringSchema(),
+        meta: record(stringSchema(), stringSchema()).optional(),
+      }),
     }),
-  }),
-);
-var CHANNEL_PERMISSION_METHOD = "notifications/claude/channel/permission";
-var ChannelPermissionNotificationSchema = DoctorLazy(() =>
-  u({
-    method: literal(CHANNEL_PERMISSION_METHOD),
-    params: u({
-      request_id: string(),
-      behavior: _enum(["allow", "deny"]),
+  );
+  CHANNEL_PERMISSION_METHOD = "notifications/claude/channel/permission";
+  ChannelPermissionNotificationSchema = DoctorLazy(() =>
+    objectSchema({
+      method: literal(CHANNEL_PERMISSION_METHOD),
+      params: objectSchema({
+        request_id: stringSchema(),
+        behavior: _enum(["allow", "deny"]),
+      }),
     }),
-  }),
-);
-var CHANNEL_PERMISSION_REQUEST_METHOD = "notifications/claude/channel/permission_request";
-var CHANNEL_META_KEY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+  );
+  CHANNEL_PERMISSION_REQUEST_METHOD = "notifications/claude/channel/permission_request";
+  CHANNEL_META_KEY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+});
 //@ chunk-0zzdrwpn.js:1131-1488 facade-exports = wrapChannelMessage (0.335)
 /**
  * wrapChannelMessage：把 channel 推送包装成 <channel source="server" k="v"…>内容</channel> 文本；非标识符的 meta 键丢弃并告警，值做 XML 转义。
@@ -67,23 +85,23 @@ function wrapChannelMessage(serverName, content, meta) {
   let [keptMeta, droppedMeta] = partitionBy(entries, ([k]) => CHANNEL_META_KEY_PATTERN.test(k));
   if (droppedMeta.length > 0)
     logForDebugging(
-      `[channel] ${serverName}: dropped ${droppedMeta.length} meta key(s) that don't match ${CHANNEL_META_KEY_PATTERN.source}: ${droppedMeta.map(([d]) => d).join(", ")}`,
+      `[channel] ${serverName}: dropped ${droppedMeta.length} meta key(s) that don't match ${CHANNEL_META_KEY_PATTERN.source}: ${droppedMeta.map(([key]) => key).join(", ")}`,
       {
         level: "warn",
       },
     );
-  let attrs = keptMeta.map(([d, l]) => ` ${d}="${escapeXmlAttr(l)}"`).join("");
+  let attrs = keptMeta.map(([key, value]) => ` ${key}="${escapeXmlAttr(value)}"`).join("");
   let escapedContent = scrubCloseTag(CHANNEL, neutralizeTextForAgent(content));
   return `<${CHANNEL} source="${escapeXmlAttr(serverName)}"${attrs}>
 ${escapedContent}
 </${CHANNEL}>`;
 }
 //@ chunk-0zzdrwpn.js:1488-1564 layout
-function partitionBy(e, i) {
-  let n = [];
-  let r = [];
-  for (let c of e) (i(c) ? n : r).push(c);
-  return [n, r];
+function partitionBy(items, predicate) {
+  let matching = [];
+  let rest = [];
+  for (let item of items) (predicate(item) ? matching : rest).push(item);
+  return [matching, rest];
 }
 //@ chunk-0zzdrwpn.js:1564-1654 facade-exports = getEffectiveChannelAllowlist (0.729)
 /**
@@ -111,12 +129,15 @@ function isChannelGateHardRevocation(kind) {
 /**
  * 判断组织策略是否禁止 channel：一方订阅时 team/enterprise 账号必须显式 channelsEnabled=true；其他情况策略对象存在且未开启即禁止。旧版名 isBigQueryMetricsEnabled 配错。
  */
-function isChannelsPolicyBlocked(e) {
+function isChannelsPolicyBlocked(policySettings) {
   if (isClaudeAISubscriber()) {
     let subscriptionType = getSubscriptionType();
-    return (subscriptionType === "team" || subscriptionType === "enterprise") && e?.channelsEnabled !== true;
+    return (
+      (subscriptionType === "team" || subscriptionType === "enterprise") &&
+      policySettings?.channelsEnabled !== true
+    );
   }
-  return e !== null && e.channelsEnabled !== true;
+  return policySettings !== null && policySettings.channelsEnabled !== true;
 }
 //@ chunk-0zzdrwpn.js:1875-2042 facade-exports = findChannelEntry (0.886)
 /**
@@ -136,13 +157,13 @@ function findChannelEntry(serverName, channels) {
 /**
  * 判断 channel 白名单条目是否指向给定插件：条目解析出的 marketplace 必须相同，插件名在 dev 模式下精确比较、否则大小写不敏感比较。
  */
-function isPluginNamedByChannelEntry(pluginSource, i) {
-  let n = pluginSource ? parsePluginIdentifier_2(pluginSource) : undefined;
-  let r = parsePluginIdentifier_2(canonicalPluginId(`${i.name}@${i.marketplace}`)).name;
+function isPluginNamedByChannelEntry(pluginSource, entry) {
+  let installed = pluginSource ? parsePluginIdentifier_2(pluginSource) : undefined;
+  let expectedName = parsePluginIdentifier_2(canonicalPluginId(`${entry.name}@${entry.marketplace}`)).name;
   return (
-    n?.marketplace !== undefined &&
-    n.marketplace === i.marketplace &&
-    (i.dev ? n.name === r : pluginNamesEqual(n.name, r))
+    installed?.marketplace !== undefined &&
+    installed.marketplace === entry.marketplace &&
+    (entry.dev ? installed.name === expectedName : pluginNamesEqual(installed.name, expectedName))
   );
 }
 //@ chunk-0zzdrwpn.js:2220-4002 facade-exports = gateChannelServer (0.734)
@@ -206,14 +227,14 @@ function gateChannelServer(serverName, capabilities, pluginSource, protocolEra) 
               (e.marketplace === BUILTIN && externalSkillToPluginName(e.plugin) === installedPlugin.name)),
         )
       ) {
-        let l = printableName(`${installedPlugin.name}@${installedPlugin.marketplace}`);
+        let label = printableName(`${installedPlugin.name}@${installedPlugin.marketplace}`);
         return {
           action: "skip",
           kind: "allowlist",
           reason:
             source === "org"
-              ? `plugin ${l} is not on your org's approved channels list (set allowedChannelPlugins in managed settings)`
-              : `plugin ${l} is not on the approved channels allowlist (use --dangerously-load-development-channels for local dev)`,
+              ? `plugin ${label} is not on your org's approved channels list (set allowedChannelPlugins in managed settings)`
+              : `plugin ${label} is not on the approved channels allowlist (use --dangerously-load-development-channels for local dev)`,
         };
       }
     }
@@ -226,10 +247,6 @@ function gateChannelServer(serverName, capabilities, pluginSource, protocolEra) 
   return {
     action: "register",
   };
-}
-//@ chunk-tdepd6yp.js:191-251 placement
-function hasChannelCapability(capabilities) {
-  return !!capabilities?.experimental?.["claude/channel"];
 }
 export {
   findChannelEntry,

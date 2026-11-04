@@ -30,7 +30,7 @@ var SANDBOX_HOST_CLASSIFIER_THRESHOLDS = {
 /**
  * 沙箱网络分类器：判断主机能否访问，不可用时拒绝。
  */
-async function classifySandboxNetworkHost(host, port, r, s, toolPermissionContext, signal, S) {
+async function classifySandboxNetworkHost(host, port, messages, tools, getClassifierRole, signal, options) {
   if (isMisleadingConsentHost(host)) {
     logForDebugging("Sandbox network classifier refusing a host srt would re-spell; failing closed (deny)", {
       level: "warn",
@@ -41,22 +41,22 @@ async function classifySandboxNetworkHost(host, port, r, s, toolPermissionContex
       transcriptTooLong: false,
     };
   }
-  let w = formatActionForClassifier(SANDBOX_NETWORK_ACCESS_TOOL_NAME, {
+  let action = formatActionForClassifier(SANDBOX_NETWORK_ACCESS_TOOL_NAME, {
     host,
     port,
   });
-  let L = {
+  let pseudoTool = {
     name: SANDBOX_NETWORK_ACCESS_TOOL_NAME,
-    toAutoClassifierInput: (ke) => ke,
+    toAutoClassifierInput: (input) => input,
   };
-  let G = await classifyYoloAction(
-    messagesSinceCompactBoundary(r),
-    w,
-    [...s, L],
-    toolPermissionContext,
+  let verdict = await classifyYoloAction(
+    messagesSinceCompactBoundary(messages),
+    action,
+    [...tools, pseudoTool],
+    getClassifierRole,
     signal,
     {
-      ...S,
+      ...options,
       severityEligible: true,
       severitySite: {
         key: "sandboxNetwork",
@@ -64,24 +64,24 @@ async function classifySandboxNetworkHost(host, port, r, s, toolPermissionContex
       },
     },
   );
-  let unavailable = G.unavailable ?? false;
-  let transcriptTooLong = G.transcriptTooLong ?? false;
-  let Se = unavailable ? false : !G.shouldBlock;
+  let unavailable = verdict.unavailable ?? false;
+  let transcriptTooLong = verdict.transcriptTooLong ?? false;
+  let allow = unavailable ? false : !verdict.shouldBlock;
   if (unavailable)
     logForDebugging(`Sandbox network classifier unavailable for ${host}; failing closed (deny)`, {
       level: "warn",
     });
-  if (!Se)
-    logForDebugging(`Auto mode classifier blocked sandbox network access to ${host}: ${G.reason}`, {
+  if (!allow)
+    logForDebugging(`Auto mode classifier blocked sandbox network access to ${host}: ${verdict.reason}`, {
       level: "warn",
     });
   return {
-    allow: Se,
+    allow,
     unavailable,
     transcriptTooLong,
     ...(unavailable &&
-      G.retryAfterMs !== undefined && {
-        retryAfterMs: G.retryAfterMs,
+      verdict.retryAfterMs !== undefined && {
+        retryAfterMs: verdict.retryAfterMs,
       }),
   };
 }

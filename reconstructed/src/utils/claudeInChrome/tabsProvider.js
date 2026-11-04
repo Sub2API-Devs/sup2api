@@ -18,8 +18,8 @@ var providedTabsProvider = null;
 /**
  * 设置外部注入的标签页提供者。
  */
-function setProvidedTabsProvider(e) {
-  providedTabsProvider = e;
+function setProvidedTabsProvider(provider) {
+  providedTabsProvider = provider;
 }
 //@ chunk-cxfkxaw3.js:222-377 placement
 /**
@@ -27,9 +27,9 @@ function setProvidedTabsProvider(e) {
  */
 async function listProvidedTabs() {
   if (providedTabsProvider === null) return;
-  let e = await providedTabsProvider();
-  return Array.isArray(e)
-    ? e.filter((n) => typeof n?.tabId === "number" && typeof n?.url === "string")
+  let providedTabs = await providedTabsProvider();
+  return Array.isArray(providedTabs)
+    ? providedTabs.filter((tab) => typeof tab?.tabId === "number" && typeof tab?.url === "string")
     : undefined;
 }
 export { setProvidedTabsProvider, listProvidedTabs };

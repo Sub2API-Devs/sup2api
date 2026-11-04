@@ -5,11 +5,11 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_xml_parser } from "./xml-parser.js";
 
 //@ chunk-edce4vxq.js:74087-75638 cjs-fingerprint
-var require_xml_builder = x(function (cjsExports) {
+var require_xml_builder = __commonJS(function (cjsExports) {
   var xmlParser = require_xml_parser();
   function escapeAttribute(value) {
     return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -83,9 +83,9 @@ var require_xml_builder = x(function (cjsExports) {
         this.c(node);
       }
     }
-    l(input, listName, memberName, s) {
+    l(input, listName, memberName, value) {
       if (input[listName] != null)
-        s().map((node) => {
+        value().map((node) => {
           node.withName(memberName);
           this.c(node);
         });

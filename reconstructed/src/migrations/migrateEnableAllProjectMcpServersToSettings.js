@@ -24,11 +24,11 @@ import { logError } from "../utils/log.js";
 async function migrateEnableAllProjectMcpServersToSettings() {
   let projectConfig = getRawCurrentProjectConfigEntry();
   if (!projectConfig) return;
-  let r = (y) => y !== undefined && (!Array.isArray(y) || y.length > 0);
+  let hasLegacyField = (value) => value !== undefined && (!Array.isArray(value) || value.length > 0);
   let hasEnableAll = projectConfig.enableAllProjectMcpServers !== undefined;
-  let s = r(projectConfig.enabledMcpjsonServers);
-  let hasDisabledServers = r(projectConfig.disabledMcpjsonServers);
-  if (!hasEnableAll && !s && !hasDisabledServers) return;
+  let hasEnabledServers = hasLegacyField(projectConfig.enabledMcpjsonServers);
+  let hasDisabledServers = hasLegacyField(projectConfig.disabledMcpjsonServers);
+  if (!hasEnableAll && !hasEnabledServers && !hasDisabledServers) return;
   try {
     if (blockingLocalSettingsErrors().length > 0) {
       logForDebugging(
@@ -39,26 +39,28 @@ async function migrateEnableAllProjectMcpServersToSettings() {
       );
       return;
     }
-    let y = [];
-    if (hasEnableAll) y.push("enableAllProjectMcpServers");
-    if (s) y.push("enabledMcpjsonServers");
-    if (hasDisabledServers) y.push("disabledMcpjsonServers");
+    let fieldsToDelete = [];
+    if (hasEnableAll) fieldsToDelete.push("enableAllProjectMcpServers");
+    if (hasEnabledServers) fieldsToDelete.push("enabledMcpjsonServers");
+    if (hasDisabledServers) fieldsToDelete.push("disabledMcpjsonServers");
     let { error } = await updateSettingsForSourceWithTransform(
       "localSettings",
-      (E) => {
-        let A = E ?? {};
+      (current) => {
+        let currentSettings = current ?? {};
         let updates = {};
         if (
           hasEnableAll &&
           projectConfig.enableAllProjectMcpServers === true &&
-          A.enableAllProjectMcpServers === undefined
+          currentSettings.enableAllProjectMcpServers === undefined
         )
           updates.enableAllProjectMcpServers = true;
-        if (s && Array.isArray(projectConfig.enabledMcpjsonServers)) {
-          let enabledMcpjsonServers = A.enabledMcpjsonServers || [];
-          let k = new Set(enabledMcpjsonServers);
+        if (hasEnabledServers && Array.isArray(projectConfig.enabledMcpjsonServers)) {
+          let enabledMcpjsonServers = currentSettings.enabledMcpjsonServers || [];
+          let existingEnabled = new Set(enabledMcpjsonServers);
           if (
-            projectConfig.enabledMcpjsonServers.some((enabledMcpjsonServer) => !k.has(enabledMcpjsonServer))
+            projectConfig.enabledMcpjsonServers.some(
+              (enabledMcpjsonServer) => !existingEnabled.has(enabledMcpjsonServer),
+            )
           )
             updates.enabledMcpjsonServers = uniq([
               ...enabledMcpjsonServers,
@@ -66,9 +68,9 @@ async function migrateEnableAllProjectMcpServersToSettings() {
             ]);
         }
         if (hasDisabledServers && Array.isArray(projectConfig.disabledMcpjsonServers)) {
-          let disabledMcpjsonServers = A.disabledMcpjsonServers || [];
-          let k = new Set(disabledMcpjsonServers);
-          if (projectConfig.disabledMcpjsonServers.some((current) => !k.has(current)))
+          let disabledMcpjsonServers = currentSettings.disabledMcpjsonServers || [];
+          let existingDisabled = new Set(disabledMcpjsonServers);
+          if (projectConfig.disabledMcpjsonServers.some((current) => !existingDisabled.has(current)))
             updates.disabledMcpjsonServers = uniq([
               ...disabledMcpjsonServers,
               ...projectConfig.disabledMcpjsonServers,
@@ -89,8 +91,8 @@ async function migrateEnableAllProjectMcpServersToSettings() {
       );
       return;
     }
-    if (y.length > 0) {
-      if (!(await deleteCurrentProjectConfigFields(y))) {
+    if (fieldsToDelete.length > 0) {
+      if (!(await deleteCurrentProjectConfigFields(fieldsToDelete))) {
         logForDebugging(
           "migrateEnableAllProjectMcpServersToSettings: settings copy landed but legacy projectConfig fields could not be removed (unwritable config?); will retry next startup",
           {
@@ -101,7 +103,7 @@ async function migrateEnableAllProjectMcpServersToSettings() {
       }
     }
     logEvent("tengu_migrate_mcp_approval_fields_success", {
-      migratedCount: y.length,
+      migratedCount: fieldsToDelete.length,
     });
     logFeatureOk("migration_mcp_servers_to_settings");
   } catch (e) {

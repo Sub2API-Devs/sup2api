@@ -25,28 +25,37 @@ import {
   isJSONRPCNotification,
 } from "../../../vendor/@modelcontextprotocol/sdk/dist/esm/types.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { looseObject, array, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { looseObject, array, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-z1n5m6nf.js:34302-34474 placement
 /**
  * 超出上限时的说明。
  */
-var HTTP_BODY_LIMITS = MAX_STRUCTURED_RESULT_BYTES;
-var MAX_DECOMPRESSED_BODY_BYTES = 4 * HTTP_BODY_LIMITS;
-var SSE_CONTENT_TYPE_RE = /^\s*text\/event-stream\s*(?:;|$)/i;
-var MIN_LINE_CHARS = 32;
-var COMPRESSION_ALIASES = new Map([
-  ["gzip", "gzip"],
-  ["x-gzip", "gzip"],
-  ["deflate", "deflate"],
-]);
-var STOPPED_READING_NOTE_2 = "so Claude Code stopped reading it";
+var HTTP_BODY_LIMITS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_DECOMPRESSED_BODY_BYTES;
+var SSE_CONTENT_TYPE_RE;
+var MIN_LINE_CHARS;
+var COMPRESSION_ALIASES;
+var STOPPED_READING_NOTE_2;
+deferInit("chunk-z1n5m6nf.js:34302", () => {
+  HTTP_BODY_LIMITS = MAX_STRUCTURED_RESULT_BYTES;
+  MAX_DECOMPRESSED_BODY_BYTES = 4 * HTTP_BODY_LIMITS;
+  SSE_CONTENT_TYPE_RE = /^\s*text\/event-stream\s*(?:;|$)/i;
+  MIN_LINE_CHARS = 32;
+  COMPRESSION_ALIASES = new Map([
+    ["gzip", "gzip"],
+    ["x-gzip", "gzip"],
+    ["deflate", "deflate"],
+  ]);
+  STOPPED_READING_NOTE_2 = "so Claude Code stopped reading it";
+});
 //@ chunk-z1n5m6nf.js:34474-34759 placement
 class HttpBodyOverflowError_2 extends Error {
-  constructor(e, r) {
-    let rounded = Math.round(e / 1024 / 1024);
+  constructor(limitBytes, kind) {
+    let rounded = Math.round(limitBytes / 1024 / 1024);
     super(
-      (r === "event"
+      (kind === "event"
         ? `sent more than ${rounded}MB in one event of an event stream (no blank line ended it)`
         : `sent a response larger than ${rounded}MB (counted after decompression)`) +
         `, ${STOPPED_READING_NOTE_2}.`,
@@ -58,66 +67,66 @@ class HttpBodyOverflowError_2 extends Error {
 /**
  * 限制正文大小并让出事件循环的流
  */
-function boundedBodyStream(e, r) {
-  let n = 0;
-  let s = 0;
-  let h = r <= e;
-  let y = 0;
-  let S = false;
+function boundedBodyStream(maxEventBytes, maxBodyBytes) {
+  let bodyBytes = 0;
+  let eventBytes = 0;
+  let bodyFitsOneChunk = maxBodyBytes <= maxEventBytes;
+  let lineLength = 0;
+  let afterCR = false;
   let startTime = performance.now();
   return new TransformStream({
-    async transform(M, w) {
+    async transform(chunk, controller) {
       if (performance.now() - startTime > 8) {
         await new Promise((resolve) => setImmediate(resolve));
         startTime = performance.now();
       }
-      n += M.length;
-      if (n > r) {
-        w.error(new HttpBodyOverflowError_2(r, "body"));
+      bodyBytes += chunk.length;
+      if (bodyBytes > maxBodyBytes) {
+        controller.error(new HttpBodyOverflowError_2(maxBodyBytes, "body"));
         return;
       }
-      if (h) {
-        w.enqueue(M);
+      if (bodyFitsOneChunk) {
+        controller.enqueue(chunk);
         return;
       }
-      let R = -1;
-      let { length: E } = M;
-      let Q = -1;
-      let H = -1;
-      for (let j = 0; j < E; j++) {
-        let re = M[j];
-        if (S && re === 10) {
-          S = false;
+      let lastBlankLineAt = -1;
+      let { length } = chunk;
+      let nextLF = -1;
+      let nextCR = -1;
+      for (let j = 0; j < length; j++) {
+        let byte = chunk[j];
+        if (afterCR && byte === 10) {
+          afterCR = false;
           continue;
         }
-        S = false;
-        if (re === 10 || re === 13) {
-          if (y === 0) R = j;
-          y = 0;
-          S = re === 13;
+        afterCR = false;
+        if (byte === 10 || byte === 13) {
+          if (lineLength === 0) lastBlankLineAt = j;
+          lineLength = 0;
+          afterCR = byte === 13;
           continue;
         }
-        y++;
-        if (y < MIN_LINE_CHARS) continue;
-        let he = j + 1;
-        if (Q < he) {
-          Q = M.indexOf(10, he);
-          Q = Q === -1 ? E : Q;
+        lineLength++;
+        if (lineLength < MIN_LINE_CHARS) continue;
+        let lineEnd = j + 1;
+        if (nextLF < lineEnd) {
+          nextLF = chunk.indexOf(10, lineEnd);
+          nextLF = nextLF === -1 ? length : nextLF;
         }
-        if (H < he) {
-          H = M.indexOf(13, he);
-          H = H === -1 ? E : H;
+        if (nextCR < lineEnd) {
+          nextCR = chunk.indexOf(13, lineEnd);
+          nextCR = nextCR === -1 ? length : nextCR;
         }
-        let min = Math.min(Q, H);
-        y += min - he;
+        let min = Math.min(nextLF, nextCR);
+        lineLength += min - lineEnd;
         j = min - 1;
       }
-      s = R >= 0 ? M.length - 1 - R : s + M.length;
-      if (s > e) {
-        w.error(new HttpBodyOverflowError_2(e, "event"));
+      eventBytes = lastBlankLineAt >= 0 ? chunk.length - 1 - lastBlankLineAt : eventBytes + chunk.length;
+      if (eventBytes > maxEventBytes) {
+        controller.error(new HttpBodyOverflowError_2(maxEventBytes, "event"));
         return;
       }
-      w.enqueue(M);
+      controller.enqueue(chunk);
     },
   });
 }
@@ -125,115 +134,124 @@ function boundedBodyStream(e, r) {
 /**
  * 限制响应大小与编码的 fetch 包装
  */
-function boundedFetch(e, { refusesCodings: r = false } = {}) {
-  let n = mcpInboundDoorOnFetch();
-  return async (s, h) => {
-    n?.noteRequests(h?.body);
-    let upper = (h?.method ?? "GET").toUpperCase();
-    let S = n !== undefined && alwaysTrue() && typeof DecompressionStream !== "undefined";
-    let T = await e(s, {
-      ...h,
-      ...(S && {
+function boundedFetch(fetchImpl, { refusesCodings = false } = {}) {
+  let inboundDoor = mcpInboundDoorOnFetch();
+  return async (input, init) => {
+    inboundDoor?.noteRequests(init?.body);
+    let upper = (init?.method ?? "GET").toUpperCase();
+    let manualDecompress =
+      inboundDoor !== undefined && alwaysTrue() && typeof DecompressionStream !== "undefined";
+    let response = await fetchImpl(input, {
+      ...init,
+      ...(manualDecompress && {
         decompress: false,
       }),
     });
-    if (!T.body || T.body.locked) return T;
-    let body = h?.body;
+    if (!response.body || response.body.locked) return response;
+    let body = init?.body;
     if (
       upper === "POST" &&
       typeof body === "string" &&
       body.includes('"jsonrpc"') &&
-      (T.status === 202 || (T.ok && isJsonRpcRequestOrNotification(body)))
+      (response.status === 202 || (response.ok && isJsonRpcRequestOrNotification(body)))
     ) {
-      await T.body.cancel().catch(() => {});
+      await response.body.cancel().catch(() => {});
       return new Response(null, {
-        status: T.status,
-        statusText: T.statusText,
-        headers: T.headers,
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
       });
     }
-    let [w, ...R] = (T.headers.get("content-encoding") ?? "")
+    let [firstCoding, ...restCodings] = (response.headers.get("content-encoding") ?? "")
       .toLowerCase()
       .split(",")
-      .map((ge) => ge.trim())
-      .filter((ge) => ge !== "" && ge !== "identity");
-    if (r && w !== undefined) {
-      await T.body.cancel();
+      .map((coding) => coding.trim())
+      .filter((coding) => coding !== "" && coding !== "identity");
+    if (refusesCodings && firstCoding !== undefined) {
+      await response.body.cancel();
       throw Error(
         "sent a response with a Content-Encoding. Claude Code reads none from a tool container, so it did not read the response.",
       );
     }
-    let E = S && T.headers.get("content-length") !== "0";
-    if (E && (w === "br" || w === "zstd")) {
-      await T.body.cancel();
+    let hasBody = manualDecompress && response.headers.get("content-length") !== "0";
+    if (hasBody && (firstCoding === "br" || firstCoding === "zstd")) {
+      await response.body.cancel();
       throw Error(
         "sent a response compressed with br or zstd. Claude Code reads only gzip and deflate, so it did not read the response.",
       );
     }
-    let Q = E && w !== undefined && R.length === 0 ? COMPRESSION_ALIASES.get(w) : undefined;
-    let H = Q ? T.body.pipeThrough(new DecompressionStream(Q)) : T.body;
-    let U = HTTP_BODY_LIMITS;
-    let headers = new Headers(h?.headers);
+    let decompressed =
+      hasBody && firstCoding !== undefined && restCodings.length === 0
+        ? COMPRESSION_ALIASES.get(firstCoding)
+        : undefined;
+    let rawBody = decompressed
+      ? response.body.pipeThrough(new DecompressionStream(decompressed))
+      : response.body;
+    let eventCapBytes = HTTP_BODY_LIMITS;
+    let headers = new Headers(init?.headers);
     if (
-      T.ok &&
-      SSE_CONTENT_TYPE_RE.test(T.headers.get("content-type") ?? "") &&
+      response.ok &&
+      SSE_CONTENT_TYPE_RE.test(response.headers.get("content-type") ?? "") &&
       headers.get("accept")?.includes("text/event-stream")
     )
-      U =
-        T.status === 200 &&
-        (n === undefined || w === undefined) &&
+      eventCapBytes =
+        response.status === 200 &&
+        (inboundDoor === undefined || firstCoding === undefined) &&
         (upper === "GET" || headers.get("mcp-method") === "subscriptions/listen")
           ? 1 / 0
           : MAX_DECOMPRESSED_BODY_BYTES;
-    let he = H.pipeThrough(boundedBodyStream(HTTP_BODY_LIMITS, U));
-    let G = n?.judging({
-      url: String(s),
+    let boundedBody = rawBody.pipeThrough(boundedBodyStream(HTTP_BODY_LIMITS, eventCapBytes));
+    let door = inboundDoor?.judging({
+      url: String(input),
       isGet: upper === "GET",
-      ok: T.ok,
-      contentType: T.headers.get("content-type"),
+      ok: response.ok,
+      contentType: response.headers.get("content-type"),
     });
-    let q = G ? he.pipeThrough(G.through) : he;
-    let { headers: headers_2 } = T;
-    if (G?.contentType !== undefined) {
+    let bodyStream = door ? boundedBody.pipeThrough(door.through) : boundedBody;
+    let { headers: headers_2 } = response;
+    if (door?.contentType !== undefined) {
       headers_2 = new Headers(headers_2);
-      headers_2.set("content-type", G.contentType);
+      headers_2.set("content-type", door.contentType);
     }
-    let fe = T.status >= 200 && T.status <= 599;
-    let response = new Response(q, {
-      status: fe ? T.status : 200,
-      statusText: T.statusText,
+    let isHttpStatus = response.status >= 200 && response.status <= 599;
+    let response_2 = new Response(bodyStream, {
+      status: isHttpStatus ? response.status : 200,
+      statusText: response.statusText,
       headers: headers_2,
     });
-    if (!fe) {
-      Object.defineProperty(response, "status", {
-        value: T.status,
+    if (!isHttpStatus) {
+      Object.defineProperty(response_2, "status", {
+        value: response.status,
       });
-      Object.defineProperty(response, "ok", {
-        value: T.ok,
+      Object.defineProperty(response_2, "ok", {
+        value: response.ok,
       });
     }
-    Object.defineProperty(response, "url", {
-      value: T.url,
+    Object.defineProperty(response_2, "url", {
+      value: response.url,
     });
-    Object.defineProperty(response, "redirected", {
-      value: T.redirected,
+    Object.defineProperty(response_2, "redirected", {
+      value: response.redirected,
     });
-    Object.defineProperty(response, "type", {
-      value: T.type,
+    Object.defineProperty(response_2, "type", {
+      value: response.type,
     });
-    return response;
+    return response_2;
   };
 }
 //@ chunk-z1n5m6nf.js:37449-37491 placement
-var JSONRPC_ENVELOPE_KEYS = new Set(["jsonrpc", "id", "method"]);
+var JSONRPC_ENVELOPE_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-z1n5m6nf.js:37449", () => {
+  JSONRPC_ENVELOPE_KEYS = new Set(["jsonrpc", "id", "method"]);
+});
 //@ chunk-z1n5m6nf.js:37491-37645 placement
 /**
  * 文本是否为 JSON-RPC 请求或通知
  */
 function isJsonRpcRequestOrNotification(body) {
   if (body.includes('"id":') && body.includes('"method":')) return false;
-  let r = sliceTopLevelValues(body, JSONRPC_ENVELOPE_KEYS);
-  return r?.get("jsonrpc") === '"2.0"' && r.has("method") !== r.has("id");
+  let topLevel = sliceTopLevelValues(body, JSONRPC_ENVELOPE_KEYS);
+  return topLevel?.get("jsonrpc") === '"2.0"' && topLevel.has("method") !== topLevel.has("id");
 }
 //@ chunk-z1n5m6nf.js:37645-37948 placement
 class StdoutOverflowError_2 extends Error {
@@ -259,17 +277,17 @@ class BoundedReadBuffer {
     this.capBytes = capBytes;
     this.onOverflow = onOverflow;
   }
-  append(e) {
+  append(chunk) {
     if (this.overflowed) return;
-    if (this.byteLength + e.length > this.capBytes) {
+    if (this.byteLength + chunk.length > this.capBytes) {
       this.chunks = [];
       this.byteLength = 0;
       this.overflowed = true;
       this.onOverflow(new StdoutOverflowError_2(this.capBytes));
       return;
     }
-    this.chunks.push(e);
-    this.byteLength += e.length;
+    this.chunks.push(chunk);
+    this.byteLength += chunk.length;
   }
   readMessage() {
     if (this.overflowed) {
@@ -281,10 +299,10 @@ class BoundedReadBuffer {
     let last = this.chunks.at(-1);
     let index = last.indexOf(10);
     if (index === -1) return null;
-    let n = this.chunks.length === 1 ? last : Buffer.concat(this.chunks);
-    let s = n.length - last.length + index;
-    let line = n.toString("utf8", 0, s).replace(/\r$/, "");
-    let chunk = n.subarray(s + 1);
+    let assembled = this.chunks.length === 1 ? last : Buffer.concat(this.chunks);
+    let lineEnd = assembled.length - last.length + index;
+    let line = assembled.toString("utf8", 0, lineEnd).replace(/\r$/, "");
+    let chunk = assembled.subarray(lineEnd + 1);
     this.chunks = chunk.length > 0 ? [chunk] : [];
     this.byteLength = chunk.length;
     return deserializeMessage(line);
@@ -298,44 +316,48 @@ class BoundedReadBuffer {
 /**
  * 限制输出大小的 stdio 传输
  */
-class BoundedStdioTransport extends StdioClientTransport {
-  overflowError;
-  constructor(e) {
-    super(e);
-    this._readBuffer = new BoundedReadBuffer(MAX_STRUCTURED_RESULT_BYTES, (overflowError) => {
-      this.overflowError = overflowError;
-      queueMicrotask(() => void this.close());
-    });
-  }
-  get serverProcess() {
-    return this._process;
-  }
-  #e;
-  async start() {
-    assertNotShuttingDown();
-    let e = this.serverProcess !== undefined;
-    let r = super.start();
-    let serverProcess = this.serverProcess;
-    if (!e && serverProcess?.pid !== undefined) this.#e = trackOrphanStdioServer(serverProcess);
-    await r;
-    if (!e && serverProcess === undefined) this.#t(this.serverProcess);
-  }
-  handOffExitCleanup() {
-    this.#e?.();
-    this.#e = undefined;
-  }
-  #t(e) {
-    if (e?.pid !== undefined) {
-      this.#e = trackOrphanStdioServer(e);
-      return;
+let BoundedStdioTransport; // deferred: uses StdioClientTransport (../../../vendor/@modelcontextprotocol/sdk/dist/esm/client/stdio.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z1n5m6nf.js:38779", () => {
+  BoundedStdioTransport = class BoundedStdioTransport extends StdioClientTransport {
+    overflowError;
+    constructor(options) {
+      super(options);
+      this._readBuffer = new BoundedReadBuffer(MAX_STRUCTURED_RESULT_BYTES, (overflowError) => {
+        this.overflowError = overflowError;
+        queueMicrotask(() => void this.close());
+      });
     }
-    if (this.pid !== null)
-      throw Error(
-        "BoundedStdioClientTransport: the SDK transport no longer keeps its child process on _process \u2014 " +
-          "the exit-time reaper for a still-connecting stdio server cannot arm; re-verify BoundedStdioClientTransport.start() against the SDK transport internals.",
-      );
-  }
-}
+    get serverProcess() {
+      return this._process;
+    }
+    #e;
+    async start() {
+      assertNotShuttingDown();
+      let alreadyStarted = this.serverProcess !== undefined;
+      let startPromise = super.start();
+      let serverProcess = this.serverProcess;
+      if (!alreadyStarted && serverProcess?.pid !== undefined)
+        this.#e = trackOrphanStdioServer(serverProcess);
+      await startPromise;
+      if (!alreadyStarted && serverProcess === undefined) this.#t(this.serverProcess);
+    }
+    handOffExitCleanup() {
+      this.#e?.();
+      this.#e = undefined;
+    }
+    #t(child) {
+      if (child?.pid !== undefined) {
+        this.#e = trackOrphanStdioServer(child);
+        return;
+      }
+      if (this.pid !== null)
+        throw Error(
+          "BoundedStdioClientTransport: the SDK transport no longer keeps its child process on _process \u2014 " +
+            "the exit-time reaper for a still-connecting stdio server cannot arm; re-verify BoundedStdioClientTransport.start() against the SDK transport internals.",
+        );
+    }
+  };
+});
 //@ chunk-z1n5m6nf.js:39544-39617 placement
 function isStatelessClaudeAiProxy_2(serverRef) {
   return serverRef.type === "claudeai-proxy" && serverRef.stateless === true && isStatelessSkipInitEnabled();
@@ -344,32 +366,35 @@ function isStatelessClaudeAiProxy_2(serverRef) {
 function getCachedInitializeResult_2(serverRef) {
   if (!isStatelessClaudeAiProxy_2(serverRef) || serverRef.type !== "claudeai-proxy") return;
   if (serverRef.cachedInitResponse == null) return;
-  let r = InitializeResultSchema.safeParse(serverRef.cachedInitResponse);
-  if (!r.success) {
+  let parseResult = InitializeResultSchema.safeParse(serverRef.cachedInitResponse);
+  if (!parseResult.success) {
     logForDebugging(
       `[claudeai-mcp] cached_init_response for ${serverRef.id} failed InitializeResult validation \u2014 falling back to real initialize`,
     );
     return;
   }
-  if (!SUPPORTED_PROTOCOL_VERSIONS.includes(r.data.protocolVersion)) {
+  if (!SUPPORTED_PROTOCOL_VERSIONS.includes(parseResult.data.protocolVersion)) {
     logForDebugging(
-      `[claudeai-mcp] cached_init_response for ${serverRef.id} carries unsupported protocolVersion ${sanitizeCallMark(r.data.protocolVersion)} \u2014 falling back to real initialize`,
+      `[claudeai-mcp] cached_init_response for ${serverRef.id} carries unsupported protocolVersion ${sanitizeCallMark(parseResult.data.protocolVersion)} \u2014 falling back to real initialize`,
     );
     return;
   }
-  return r.data;
+  return parseResult.data;
 }
 //@ chunk-z1n5m6nf.js:40126-40240 placement
-var discoverResponseSchema = DoctorLazy(() =>
-  looseObject({
-    supportedVersions: array(string()),
-    capabilities: looseObject({}),
-    serverInfo: looseObject({
-      name: string(),
-      version: string(),
-    }).optional(),
-  }),
-);
+var discoverResponseSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-z1n5m6nf.js:40126", () => {
+  discoverResponseSchema = DoctorLazy(() =>
+    looseObject({
+      supportedVersions: array(stringSchema()),
+      capabilities: looseObject({}),
+      serverInfo: looseObject({
+        name: stringSchema(),
+        version: stringSchema(),
+      }).optional(),
+    }),
+  );
+});
 //@ chunk-z1n5m6nf.js:40240-40660 placement
 /**
  * claude.ai 代理的缓存 discover 结果
@@ -379,36 +404,36 @@ function cachedDiscoverOutcome(serverRef) {
   if (serverRef.discoverSupport === "legacy") return "method-not-found";
   if (serverRef.discoverSupport !== "supported") return;
   if (serverRef.cachedDiscoverResponse == null) return;
-  let r = discoverResponseSchema().safeParse(serverRef.cachedDiscoverResponse);
-  if (!r.success) {
+  let parseResult = discoverResponseSchema().safeParse(serverRef.cachedDiscoverResponse);
+  if (!parseResult.success) {
     logForDebugging(
       `[claudeai-mcp] cached_discover_response for ${serverRef.id} failed DiscoverResult shape check \u2014 passing server/discover through`,
     );
     return;
   }
   return {
-    result: r.data,
+    result: parseResult.data,
   };
 }
 //@ chunk-z1n5m6nf.js:40660-41200 placement
 function answerHandshakeLocally_2(transport, cachedInitialize, discoverAnswer) {
-  let s = transport.send.bind(transport);
-  transport.send = async (h, y) => {
-    if (cachedInitialize !== undefined && isJSONRPCRequest(h) && h.method === "initialize") {
-      let S = {
+  let originalSend = transport.send.bind(transport);
+  transport.send = async (message, requestOptions) => {
+    if (cachedInitialize !== undefined && isJSONRPCRequest(message) && message.method === "initialize") {
+      let response = {
         jsonrpc: "2.0",
-        id: h.id,
+        id: message.id,
         result: cachedInitialize,
       };
-      queueMicrotask(() => transport.onmessage?.(S));
+      queueMicrotask(() => transport.onmessage?.(response));
       return;
     }
-    if (discoverAnswer !== undefined && isJSONRPCRequest(h) && h.method === "server/discover") {
-      let S =
+    if (discoverAnswer !== undefined && isJSONRPCRequest(message) && message.method === "server/discover") {
+      let response =
         discoverAnswer === "method-not-found"
           ? {
               jsonrpc: "2.0",
-              id: h.id,
+              id: message.id,
               error: {
                 code: ErrorCode.MethodNotFound,
                 message: "server/discover resolved locally as unsupported",
@@ -416,35 +441,39 @@ function answerHandshakeLocally_2(transport, cachedInitialize, discoverAnswer) {
             }
           : {
               jsonrpc: "2.0",
-              id: h.id,
+              id: message.id,
               result: discoverAnswer.result,
             };
-      queueMicrotask(() => transport.onmessage?.(S));
+      queueMicrotask(() => transport.onmessage?.(response));
       return;
     }
-    if (isJSONRPCNotification(h) && h.method === "notifications/initialized") return;
-    return s(h, y);
+    if (isJSONRPCNotification(message) && message.method === "notifications/initialized") return;
+    return originalSend(message, requestOptions);
   };
 }
 //@ chunk-z1n5m6nf.js:41200-41489 placement
-function answerGetStreamLocally_2(e, proxyUrl) {
+function answerGetStreamLocally_2(originalFetch, proxyUrl) {
   let href = new URL(proxyUrl).href;
-  return async (s, h) => {
-    if ((h?.method ?? "GET").toUpperCase() !== "GET") return e(s, h);
-    let y = typeof s === "object" && s !== null && "url" in s ? s.url : String(s);
-    if (new URL(y).href === href)
+  return async (input, init) => {
+    if ((init?.method ?? "GET").toUpperCase() !== "GET") return originalFetch(input, init);
+    let requestHref =
+      typeof input === "object" && input !== null && "url" in input ? input.url : String(input);
+    if (new URL(requestHref).href === href)
       return new Response(null, {
         status: 405,
         statusText: "Method Not Allowed",
       });
-    return e(s, h);
+    return originalFetch(input, init);
   };
 }
 //@ chunk-z1n5m6nf.js:41521-41559 placement
 /**
  * 懒加载的网络相关模块（当前为 chunk 引用）。
  */
-var netModule = require("./chunk-tn4j580p.js");
+var netModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-z1n5m6nf.js:41521", () => {
+  netModule = require("./callMcpToolWithAutoBackground.lazy.js");
+});
 export {
   HttpBodyOverflowError_2,
   boundedFetch,

@@ -15,40 +15,42 @@ import { launchedCwd } from "./cwd.js";
 /**
  * 把 \\\\?\\C: 或 \\\\localhost\\C$ 形式转为盘符路径。
  */
-function normalizeDosDevicePath(t) {
+function normalizeDosDevicePath(inputPath) {
   let match =
-    /^[\\/]{2}(?:[?.][\\/]([A-Za-z]):|(?:localhost|127\.0\.0\.1)[\\/]([A-Za-z])\$)(?=$|[\\/])/i.exec(t);
-  if (match === null) return t;
-  let sliced = t.slice(match[0].length);
+    /^[\\/]{2}(?:[?.][\\/]([A-Za-z]):|(?:localhost|127\.0\.0\.1)[\\/]([A-Za-z])\$)(?=$|[\\/])/i.exec(
+      inputPath,
+    );
+  if (match === null) return inputPath;
+  let sliced = inputPath.slice(match[0].length);
   return `${match[1] ?? match[2]}:${sliced === "" ? "\\" : sliced}`;
 }
 //@ chunk-aat7wt0p.js:3428-3452 placement
 /**
  * 恒等函数（路径不变换）。
  */
-function identity(t) {
-  return t;
+function identity(value) {
+  return value;
 }
 //@ chunk-aat7wt0p.js:3452-3500 placement
 /**
  * 判断路径是否为 UNC 或设备路径。
  */
-function isUncOrDevicePath(t) {
-  return /^[\\/]{2}/.test(t) || hasWin32DevicePrefixSpelling(t);
+function isUncOrDevicePath(inputPath) {
+  return /^[\\/]{2}/.test(inputPath) || hasWin32DevicePrefixSpelling(inputPath);
 }
 //@ chunk-aat7wt0p.js:3500-3554 placement
 /**
  * 判断路径是否含 .. 段。
  */
-function hasDotDotSegment(t) {
-  return /(^|[\\/])\.\.([\\/]|$)/.test(t);
+function hasDotDotSegment(inputPath) {
+  return /(^|[\\/])\.\.([\\/]|$)/.test(inputPath);
 }
 //@ chunk-aat7wt0p.js:3554-3593 placement
 /**
  * 判断字符串是否含反斜杠。
  */
-function hasBackslash(t) {
-  return t.includes("\\");
+function hasBackslash(inputPath) {
+  return inputPath.includes("\\");
 }
 //@ chunk-aat7wt0p.js:3593-3627 placement
 /**
@@ -61,71 +63,74 @@ function cwdHasBackslash() {
 /**
  * 判断路径是否以 \\?\ 设备前缀开头。
  */
-function isDevicePrefixPath(t) {
-  return /^[\\/]\?\?[\\/]/.test(t);
+function isDevicePrefixPath(inputPath) {
+  return /^[\\/]\?\?[\\/]/.test(inputPath);
 }
 //@ chunk-aat7wt0p.js:3674-3857 placement
 /**
  * UNC 路径主机（小写）。
  */
-function uncHostOf(t) {
-  if (/^[\\/]{2}[?.][\\/](?!unc[\\/])/i.test(t)) return null;
+function uncHostOf(inputPath) {
+  if (/^[\\/]{2}[?.][\\/](?!unc[\\/])/i.test(inputPath)) return null;
   return (
-    t.match(/^[\\/]{2}(?:[?.][\\/]unc[\\/])?([^\\/]+)/i)?.[1]?.replace(/[A-Z]/g, (n) => n.toLowerCase()) ??
-    null
+    inputPath
+      .match(/^[\\/]{2}(?:[?.][\\/]unc[\\/])?([^\\/]+)/i)?.[1]
+      ?.replace(/[A-Z]/g, (upper) => upper.toLowerCase()) ?? null
   );
 }
 //@ chunk-aat7wt0p.js:3857-3919 placement
 /**
  * 判断路径是否含 . 或 .. 段（允许尾随点/空格）。
  */
-function hasDotSegment(t) {
-  return /(^|[\\/])\.{1,2}[. ]*([\\/]|$)/.test(t);
+function hasDotSegment(inputPath) {
+  return /(^|[\\/])\.{1,2}[. ]*([\\/]|$)/.test(inputPath);
 }
 //@ chunk-aat7wt0p.js:3919-3993 placement
 /**
  * 判断路径是否有 ".. " 这类带空格的上级段。
  */
-function hasDotDotWithSpaceSegment(t) {
-  return t.split(/[/\\]/).some((n) => /^\.\. [ .]*$/.test(n));
+function hasDotDotWithSpaceSegment(inputPath) {
+  return inputPath.split(/[/\\]/).some((segment) => /^\.\. [ .]*$/.test(segment));
 }
 //@ chunk-aat7wt0p.js:3993-4104 placement
 /**
  * 路径含 . 或 .. 段。
  */
-function hasDotSegment_2(t, n = "linux") {
-  return n === "win32" ? /(^|[\\/])\.{1,2}([\\/]|$)/.test(t) : /(^|\/)\.{1,2}(\/|$)/.test(t);
+function hasDotSegment_2(inputPath, platform = "linux") {
+  return platform === "win32"
+    ? /(^|[\\/])\.{1,2}([\\/]|$)/.test(inputPath)
+    : /(^|\/)\.{1,2}(\/|$)/.test(inputPath);
 }
 //@ chunk-aat7wt0p.js:4104-4133 placement
 /**
  * hasDotSegment 的别名。
  */
-function hasDotSegmentAlias(t) {
-  return hasDotSegment_2(t);
+function hasDotSegmentAlias(inputPath) {
+  return hasDotSegment_2(inputPath);
 }
 //@ chunk-aat7wt0p.js:4133-4183 placement
 /**
  * 判断路径是否为设备命名空间形式（//?/）。
  */
-function isDeviceNamespacePath(t) {
-  return /^[\\/]{2}[?.][\\/]/.test(t);
+function isDeviceNamespacePath(inputPath) {
+  return /^[\\/]{2}[?.][\\/]/.test(inputPath);
 }
 //@ chunk-aat7wt0p.js:4183-4479 placement
 /**
  * macOS /.vol、/.file 等特殊路径。
  */
-function isMacSpecialPath(t) {
-  if (!/\/\.(?:vol|file|nofollow|resolve)(?:\/|$)/i.test(t)) return false;
-  if (!t.startsWith("/")) return false;
-  let n = [];
-  for (let e of t.split("/")) {
-    if (e === "" || e === ".") continue;
-    if (e === "..") {
-      n.pop();
+function isMacSpecialPath(inputPath) {
+  if (!/\/\.(?:vol|file|nofollow|resolve)(?:\/|$)/i.test(inputPath)) return false;
+  if (!inputPath.startsWith("/")) return false;
+  let segments = [];
+  for (let segment of inputPath.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      segments.pop();
       continue;
     }
-    n.push(e);
-    if (n.length === 1 && /^\.(?:vol|file|nofollow|resolve)$/i.test(e)) return true;
+    segments.push(segment);
+    if (segments.length === 1 && /^\.(?:vol|file|nofollow|resolve)$/i.test(segment)) return true;
   }
   return false;
 }
@@ -133,19 +138,19 @@ function isMacSpecialPath(t) {
 /**
  * 判断路径是否为 DosDevices/GLOBALROOT/Device 等设备路径。
  */
-function isDosDevicePath(t) {
-  return /^[\\/](GLOBAL\?\?|GLOBALROOT|DosDevices|Device)[\\/]/i.test(t);
+function isDosDevicePath(inputPath) {
+  return /^[\\/](GLOBAL\?\?|GLOBALROOT|DosDevices|Device)[\\/]/i.test(inputPath);
 }
 //@ chunk-aat7wt0p.js:4565-4683 placement
 /**
  * 网络路径且主机与参考路径不同。
  */
-function isForeignNetworkPath(t, n) {
-  if (!isUncOrDevicePath(t)) return false;
-  if (isDeviceNamespacePath(t) || hasWin32DevicePrefixSpelling(t)) return true;
-  if (hasDotSegment(t)) return true;
-  let e = uncHostOf(t);
-  return e === null || e !== uncHostOf(n);
+function isForeignNetworkPath(inputPath, referencePath) {
+  if (!isUncOrDevicePath(inputPath)) return false;
+  if (isDeviceNamespacePath(inputPath) || hasWin32DevicePrefixSpelling(inputPath)) return true;
+  if (hasDotSegment(inputPath)) return true;
+  let host = uncHostOf(inputPath);
+  return host === null || host !== uncHostOf(referencePath);
 }
 export {
   identity,

@@ -5,18 +5,18 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_errors } from "../errors.js";
 import { require_codegen_2 } from "../codegen/index.js";
 import { require_names } from "../names.js";
 
 //@ chunk-s82q9s4x.js:24395-25072 cjs-fingerprint
-var require_boolSchema = x(function (cjsExports) {
+var require_boolSchema = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.boolOrEmptySchema = cjsExports.topBoolOrEmptySchema = undefined;
-  var bs = require_errors();
+  var errorsModule = require_errors();
   var codegen_1 = require_codegen_2();
   var names_1 = require_names();
   var boolError = {
@@ -42,7 +42,7 @@ var require_boolSchema = x(function (cjsExports) {
   cjsExports.boolOrEmptySchema = boolOrEmptySchema;
   function falseSchemaError(it, overrideAllErrors) {
     let { gen, data } = it;
-    bs.reportError(
+    errorsModule.reportError(
       {
         gen,
         keyword: "false schema",

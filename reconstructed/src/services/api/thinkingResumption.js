@@ -27,9 +27,9 @@ import {
 import { canSendFirstPartyBetas, modelSupportsISP } from "../../utils/betas.js";
 
 //@ chunk-e6aww6q8.js:2531723-2531847 placement
-function canResumeThinking(e) {
+function canResumeThinking(model) {
   try {
-    return isThinkingResumptionSupported(e) && !isThinkingResumptionRefused();
+    return isThinkingResumptionSupported(model) && !isThinkingResumptionRefused();
   } catch (error) {
     logFeatureSad("query_thinking_block_resumption", "header_gate_threw");
     logError(error);
@@ -67,12 +67,16 @@ function shouldResumeThinking(model, resumable, contextTokens) {
   }
 }
 //@ chunk-e6aww6q8.js:2532256-2532502 placement
-function markAbandonedThinking(e, resolvedModel) {
+function markAbandonedThinking(messages, resolvedModel) {
   try {
     if (!isThinkingResumptionSupported(resolvedModel)) return;
-    for (let r of e)
-      if (r.message.content.every((s) => s.type === "thinking" || s.type === "redacted_thinking"))
-        r.message.abandonedByStreamRetry = true;
+    for (let message of messages)
+      if (
+        message.message.content.every(
+          (block) => block.type === "thinking" || block.type === "redacted_thinking",
+        )
+      )
+        message.message.abandonedByStreamRetry = true;
   } catch (error) {
     logFeatureSad("query_thinking_block_resumption", "abandon_mark_threw");
     logError(error);
@@ -82,15 +86,15 @@ function markAbandonedThinking(e, resolvedModel) {
 /**
  * 判断助手消息是否为可重试的 API 错误（排除 DLP 拒绝、版本过旧、安全监控拦截）。
  */
-function isRetryableApiErrorMessage(e) {
+function isRetryableApiErrorMessage(message) {
   return (
-    e?.type === "assistant" &&
-    e.isApiErrorMessage === true &&
-    e.apiErrorStatus !== undefined &&
-    isNonRetryable4xx(e.apiErrorStatus) &&
-    e.apiError !== DLP_REQUEST_DENIED &&
-    e.apiError !== CLAUDE_CODE_VERSION_TOO_OLD &&
-    e.apiError !== SAFETY_MONITOR_BLOCKED
+    message?.type === "assistant" &&
+    message.isApiErrorMessage === true &&
+    message.apiErrorStatus !== undefined &&
+    isNonRetryable4xx(message.apiErrorStatus) &&
+    message.apiError !== DLP_REQUEST_DENIED &&
+    message.apiError !== CLAUDE_CODE_VERSION_TOO_OLD &&
+    message.apiError !== SAFETY_MONITOR_BLOCKED
   );
 }
 //@ chunk-e6aww6q8.js:2532677-2533310 placement
@@ -98,26 +102,27 @@ function isRetryableApiErrorMessage(e) {
  * 输出达到 max_output_tokens 截断思考块后，请求服务端续接，被拒时改用文字提示。
  */
 function resumeTruncatedThinking(assistantMessages, { healedElsewhere, attempt }) {
-  let last = assistantMessages.at(-1);
-  if (last === undefined) return false;
-  let h = last.isApiErrorMessage === true && !healedElsewhere && isRetryableApiErrorMessage(last);
+  let message = assistantMessages.at(-1);
+  if (message === undefined) return false;
+  let retryable =
+    message.isApiErrorMessage === true && !healedElsewhere && isRetryableApiErrorMessage(message);
   try {
-    if (!last.isApiErrorMessage)
+    if (!message.isApiErrorMessage)
       logFeatureOk("query_thinking_block_resumption", {
         attempt,
       });
-    else if (h) {
+    else if (retryable) {
       logForDebugging(
-        `[thinking-resumption] resume request refused (HTTP ${last.apiErrorStatus}); continuing with the text nudge`,
+        `[thinking-resumption] resume request refused (HTTP ${message.apiErrorStatus}); continuing with the text nudge`,
         {
           level: "warn",
         },
       );
-      if (!(last.apiErrorStatus === 400 && isThinkingResumptionRefused()))
-        logFeatureSad("query_thinking_block_resumption", `refused_${last.apiErrorStatus}`, {
+      if (!(message.apiErrorStatus === 400 && isThinkingResumptionRefused()))
+        logFeatureSad("query_thinking_block_resumption", `refused_${message.apiErrorStatus}`, {
           attempt,
         });
-    } else if (last.apiError !== "max_output_tokens" && !healedElsewhere)
+    } else if (message.apiError !== "max_output_tokens" && !healedElsewhere)
       logFeatureBad("query_thinking_block_resumption", "errored", {
         attempt,
       });
@@ -125,7 +130,7 @@ function resumeTruncatedThinking(assistantMessages, { healedElsewhere, attempt }
     logFeatureSad("query_thinking_block_resumption", "settle_threw");
     logError(error);
   }
-  return h;
+  return retryable;
 }
 //@ chunk-e6aww6q8.js:2533310-2533388 placement
 function isThinkingResumptionSupported(model) {

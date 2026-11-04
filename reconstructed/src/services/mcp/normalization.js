@@ -31,8 +31,8 @@ var CLAUDEAI = "claudeai_";
 /**
  * 规范化服务器名：转小写、连字符与下划线折叠成单下划线、去首尾下划线。
  */
-function normalizedKey(t) {
-  return normalizeNameForMCP(t).toLowerCase().replace(/[-_]+/g, "_").replace(/^_|_$/g, "");
+function normalizedKey(name) {
+  return normalizeNameForMCP(name).toLowerCase().replace(/[-_]+/g, "_").replace(/^_|_$/g, "");
 }
 //@ chunk-knckn35w.js:468-501 placement
 /**
@@ -44,35 +44,35 @@ var MAX_SERVER_NAME_CHARS = 128;
 /**
  * 判断服务器名是否是组织连接器名（org_connector_ 或 orgconnector_ 前缀）。
  */
-function isOrgConnectorName(t) {
-  if (t.length > MAX_SERVER_NAME_CHARS) return false;
-  let r = `${normalizedKey(t)}_`;
-  return r.startsWith("org_connector_") || r.startsWith("orgconnector_");
+function isOrgConnectorName(name) {
+  if (name.length > MAX_SERVER_NAME_CHARS) return false;
+  let prefixed = `${normalizedKey(name)}_`;
+  return prefixed.startsWith("org_connector_") || prefixed.startsWith("orgconnector_");
 }
 //@ chunk-knckn35w.js:629-714 placement
 /**
  * 判断服务器名是否属于 claude.ai 连接器。
  */
 function isClaudeAiServerName(name) {
-  let r = `${normalizedKey(name)}_`;
-  return r.startsWith("claude_ai_") || r.startsWith(CLAUDEAI);
-}
-//@ chunk-ah34pb7m.js:157437-157480 fingerprint = CLAUDEAI_SERVER_PREFIX (1)
-/**
- * CLAUDEAI_SERVER_PREFIX（实为判断）：名字是否以 "claude.ai " 开头。
- */
-function CLAUDEAI_SERVER_PREFIX(j1) {
-  return stripPrefix(j1, "claude.ai ");
+  let prefixed = `${normalizedKey(name)}_`;
+  return prefixed.startsWith("claude_ai_") || prefixed.startsWith(CLAUDEAI);
 }
 //@ chunk-e6aww6q8.js:3289161-3289283 placement
 /**
  * 按名称查找 MCP 客户端（精确匹配优先，否则按规范化名匹配）。
  */
-function findServersByName(e, n) {
-  let filtered = e.filter((h) => h.name === n);
+function findServersByName(clients, serverName) {
+  let filtered = clients.filter((client) => client.name === serverName);
   if (filtered.length > 0) return filtered;
-  let s = normalizeNameForMCP(n);
-  return e.filter((h) => normalizeNameForMCP(h.name) === s);
+  let normalized = normalizeNameForMCP(serverName);
+  return clients.filter((client) => normalizeNameForMCP(client.name) === normalized);
+}
+//@ chunk-ah34pb7m.js:157437-157480 fingerprint = CLAUDEAI_SERVER_PREFIX (1)
+/**
+ * CLAUDEAI_SERVER_PREFIX（实为判断）：名字是否以 "claude.ai " 开头。
+ */
+function CLAUDEAI_SERVER_PREFIX(name) {
+  return stripPrefix(name, "claude.ai ");
 }
 export {
   CLAUDE_AI_NAME_PREFIX,

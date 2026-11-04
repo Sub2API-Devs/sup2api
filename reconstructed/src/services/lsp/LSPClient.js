@@ -8,7 +8,7 @@
  * pieces: chunk-t4ksmxzx.js (9)
  * attribution: sole-consumer 7, affinity 1, fingerprint 1
  */
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_vscode_jsonrpc } from "../../../vendor/vscode-jsonrpc/lib/node/main.js";
 import { jsonParseRaw } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -32,12 +32,12 @@ import { withTimeout } from "../../utils/sleep.js";
 /**
  * 懒加载的 vscode-jsonrpc 消息协议模块。
  */
-var messageProtocolModule = Re(require_vscode_jsonrpc(), 1);
+var messageProtocolModule = __toESM(require_vscode_jsonrpc(), 1);
 //@ chunk-t4ksmxzx.js:59126-59144 sole-consumer
 /**
  * 懒加载的 vscode-jsonrpc 协议模块（AbstractMessageReader）。
  */
-var rpcProtocolModule = Re(require_vscode_jsonrpc(), 1);
+var rpcProtocolModule = __toESM(require_vscode_jsonrpc(), 1);
 //@ chunk-t4ksmxzx.js:59144-59213 sole-consumer
 /**
  * LSP 消息体允许的最大字节数（32 MiB）。
@@ -47,7 +47,7 @@ var MAX_BODY_BYTES = 33554432;
 var buffer = Buffer.from(`\r
 \r
 `);
-var Dn = Buffer.alloc(0);
+var EMPTY_BUFFER = Buffer.alloc(0);
 //@ chunk-t4ksmxzx.js:59213-61911 sole-consumer
 /**
  * LSP 基础协议的 stdio 消息读取器：分块解析 Content-Length 头与正文，头部过大或不合协议时报协议违规并停止，正文解析为 JSON 对象后回调。
@@ -59,12 +59,12 @@ class LspMessageReader extends rpcProtocolModule.AbstractMessageReader {
   stopped = false;
   headerChunks = [];
   headerBytes = 0;
-  headerTail = Dn;
+  headerTail = EMPTY_BUFFER;
   expectedBodyLength;
   bodyChunks = [];
   bodyBytes = 0;
-  onData = (e) => this.handleData(e);
-  onStreamError = (e) => this.fireError(e);
+  onData = (chunk) => this.handleData(chunk);
+  onStreamError = (error) => this.fireError(error);
   onStreamClose = () => this.fireClose();
   constructor(readable, onProtocolViolation) {
     super();
@@ -92,21 +92,24 @@ class LspMessageReader extends rpcProtocolModule.AbstractMessageReader {
     this.bodyBytes = 0;
     this.expectedBodyLength = undefined;
   }
-  handleData(e) {
+  handleData(chunk) {
     if (this.stopped) return;
-    let r = typeof e === "string" ? Buffer.from(e, "utf8") : e;
-    while (r && r.length > 0 && !this.stopped) {
+    let data = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+    while (data && data.length > 0 && !this.stopped) {
       let expectedBodyLength = this.expectedBodyLength;
-      r = expectedBodyLength === undefined ? this.consumeHeader(r) : this.consumeBody(r, expectedBodyLength);
+      data =
+        expectedBodyLength === undefined
+          ? this.consumeHeader(data)
+          : this.consumeBody(data, expectedBodyLength);
     }
   }
-  consumeHeader(e) {
-    let r = this.headerTail.length === 0 ? e : Buffer.concat([this.headerTail, e]);
-    let index = r.indexOf(buffer);
+  consumeHeader(chunk) {
+    let joined = this.headerTail.length === 0 ? chunk : Buffer.concat([this.headerTail, chunk]);
+    let index = joined.indexOf(buffer);
     if (index === -1) {
-      this.headerChunks.push(e);
-      this.headerBytes += e.length;
-      this.headerTail = r.subarray(Math.max(0, r.length - (buffer.length - 1)));
+      this.headerChunks.push(chunk);
+      this.headerBytes += chunk.length;
+      this.headerTail = joined.subarray(Math.max(0, joined.length - (buffer.length - 1)));
       if (this.headerBytes > MAX_HEADER_BYTES)
         this.protocolViolation(
           Error(
@@ -115,54 +118,54 @@ class LspMessageReader extends rpcProtocolModule.AbstractMessageReader {
         );
       return;
     }
-    let s = index - this.headerTail.length + buffer.length;
-    let c = this.headerBytes - this.headerTail.length + index;
-    this.headerChunks.push(e.subarray(0, s));
-    let str = Buffer.concat(this.headerChunks).subarray(0, c).toString("latin1");
-    let chunk = e.subarray(s);
+    let consumed = index - this.headerTail.length + buffer.length;
+    let headerEnd = this.headerBytes - this.headerTail.length + index;
+    this.headerChunks.push(chunk.subarray(0, consumed));
+    let block = Buffer.concat(this.headerChunks).subarray(0, headerEnd).toString("latin1");
+    let chunk_2 = chunk.subarray(consumed);
     this.resetHeader();
-    let lspHeaderBlock = parseLspHeaderBlock(str);
+    let lspHeaderBlock = parseLspHeaderBlock(block);
     if (lspHeaderBlock instanceof Error) {
       this.protocolViolation(lspHeaderBlock);
       return;
     }
     this.expectedBodyLength = lspHeaderBlock;
-    return chunk.length > 0 ? chunk : undefined;
+    return chunk_2.length > 0 ? chunk_2 : undefined;
   }
-  consumeBody(e, r) {
-    let n = r - this.bodyBytes;
-    if (e.length < n) {
-      this.bodyChunks.push(e);
-      this.bodyBytes += e.length;
+  consumeBody(chunk, expected) {
+    let needed = expected - this.bodyBytes;
+    if (chunk.length < needed) {
+      this.bodyChunks.push(chunk);
+      this.bodyBytes += chunk.length;
       return;
     }
-    this.bodyChunks.push(e.length === n ? e : e.subarray(0, n));
-    let s = e.length > n ? e.subarray(n) : undefined;
-    let buffer = Buffer.concat(this.bodyChunks, r);
+    this.bodyChunks.push(chunk.length === needed ? chunk : chunk.subarray(0, needed));
+    let rest = chunk.length > needed ? chunk.subarray(needed) : undefined;
+    let buffer = Buffer.concat(this.bodyChunks, expected);
     this.bodyChunks = [];
     this.bodyBytes = 0;
     this.expectedBodyLength = undefined;
     this.deliver(buffer);
-    return s;
+    return rest;
   }
-  deliver(e) {
-    let r;
+  deliver(body) {
+    let message;
     try {
-      r = jsonParseRaw(e.toString("utf8"));
+      message = jsonParseRaw(body.toString("utf8"));
     } catch (error) {
       logForDebugging(`LSP: dropped unparseable message body: ${error}`, {
         level: "warn",
       });
       return;
     }
-    if (!isObjectLike(r)) {
+    if (!isObjectLike(message)) {
       logForDebugging("LSP: dropped message body that is not an object", {
         level: "warn",
       });
       return;
     }
     try {
-      this.callback?.(r);
+      this.callback?.(message);
     } catch (error) {
       this.fireError(error);
     }
@@ -170,15 +173,15 @@ class LspMessageReader extends rpcProtocolModule.AbstractMessageReader {
   resetHeader() {
     this.headerChunks = [];
     this.headerBytes = 0;
-    this.headerTail = Dn;
+    this.headerTail = EMPTY_BUFFER;
   }
-  protocolViolation(e) {
+  protocolViolation(error) {
     if (this.stopped) return;
     this.stopped = true;
     this.detach();
-    this.fireError(e);
+    this.fireError(error);
     try {
-      this.onProtocolViolation(e);
+      this.onProtocolViolation(error);
     } catch (error) {
       this.fireError(error);
     }
@@ -188,8 +191,8 @@ class LspMessageReader extends rpcProtocolModule.AbstractMessageReader {
 /**
  * 判断值是否为非 null 对象。
  */
-function isObjectLike(e) {
-  return typeof e === "object" && e !== null;
+function isObjectLike(value) {
+  return typeof value === "object" && value !== null;
 }
 //@ chunk-t4ksmxzx.js:61963-62073 sole-consumer
 var LSP_HEADER_LINE_RE = /^([!#$%&'*+.^_`|~0-9A-Za-z-]+)[ \t]*:[ \t]*([^\r\n]*)$/;
@@ -198,9 +201,9 @@ var ALLOWED_LSP_HEADERS = new Set(["content-length", "content-type"]);
 /**
  * 解析 LSP 头块：只允许 content-length/content-type，要求 Content-Length 为数字且不超过大小上限，否则返回描述性错误。
  */
-function parseLspHeaderBlock(e) {
-  let r;
-  for (let line of e.split(`\r
+function parseLspHeaderBlock(block) {
+  let contentLength;
+  for (let line of block.split(`\r
 `)) {
     let match = LSP_HEADER_LINE_RE.exec(line);
     let lower = match?.[1]?.toLowerCase();
@@ -208,20 +211,20 @@ function parseLspHeaderBlock(e) {
       return Error(
         "LSP server sent non-protocol output in the header block \u2014 its stdout is desynchronized from the base protocol (logs/banners on stdout instead of stderr?)",
       );
-    if (lower === "content-length") r = match[2]?.trim();
+    if (lower === "content-length") contentLength = match[2]?.trim();
   }
-  if (r === undefined)
+  if (contentLength === undefined)
     return Error(
       "LSP server sent a header block without a Content-Length \u2014 its stdout is desynchronized from the base protocol (non-protocol output on stdout?)",
     );
-  if (!/^\d+$/.test(r))
+  if (!/^\d+$/.test(contentLength))
     return Error(
       "LSP server sent a Content-Length that is not a number \u2014 its stdout is desynchronized from the base protocol",
     );
-  let n = Number(r);
-  if (n > MAX_BODY_BYTES)
+  let length = Number(contentLength);
+  if (length > MAX_BODY_BYTES)
     return Error("LSP server declared a message larger than the size limit \u2014 refusing to buffer it");
-  return n;
+  return length;
 }
 //@ chunk-t4ksmxzx.js:62870-63006 affinity
 /**
@@ -255,9 +258,9 @@ function createLSPClient(serverName, onCrash) {
   function checkStartFailed() {
     if (startFailed) throw startError || Error(`LSP server ${serverName} failed to start`);
   }
-  function disposeConnection(y) {
+  function disposeConnection(connection) {
     try {
-      y.dispose();
+      connection.dispose();
     } catch (error) {
       logForDebugging(`Connection disposal failed for ${serverName}: ${errorMessage(error)}`);
     }
@@ -367,11 +370,11 @@ function createLSPClient(serverName, onCrash) {
           if (serverProcess !== spawnedProcess) return;
           if ((code === null ? signal !== null : code !== 0) && !isStopping) {
             isInitialized = false;
-            let pe =
+            let handle =
               memoryCgroupMode === "capped" ||
               (memoryCgroupMode === "parked" && isToolCgroupDirUsable("lsp"));
             let oomVerdict =
-              (signal === "SIGKILL" || code === 137) && pe ? hasNewOomKills(cgroupHandle) : false;
+              (signal === "SIGKILL" || code === 137) && handle ? hasNewOomKills(cgroupHandle) : false;
             let oomKilled = oomVerdict === true;
             let exitDescription =
               (code === null ? `killed by signal ${signal}` : `exit code ${code}`) +
@@ -456,12 +459,12 @@ function createLSPClient(serverName, onCrash) {
           .catch((error) => {
             logForDebugging(`Failed to enable tracing for ${serverName}: ${error.message}`);
           });
-        for (let [method, z] of pendingNotificationHandlers) {
-          connection.onNotification(method, z);
+        for (let [method, handler] of pendingNotificationHandlers) {
+          connection.onNotification(method, handler);
           logForDebugging(`Applied notification handler for ${serverName}.${method}`);
         }
-        for (let [method, z] of pendingRequestHandlers) {
-          connection.onRequest(method, z);
+        for (let [method, handler] of pendingRequestHandlers) {
+          connection.onRequest(method, handler);
           logForDebugging(`Applied request handler for ${serverName}.${method}`);
         }
         logForDebugging(`LSP client started for ${serverName}`);
@@ -548,16 +551,16 @@ function createLSPClient(serverName, onCrash) {
       let connAtStop = connection;
       try {
         if (connAtStop) {
-          let k = connAtStop;
+          let connection = connAtStop;
           let shutdownPromise = (async () => {
             let shutdownError;
             try {
-              await k.sendRequest("shutdown");
+              await connection.sendRequest("shutdown");
             } catch (error) {
               shutdownError = error;
             }
             try {
-              await k.sendNotification("exit");
+              await connection.sendNotification("exit");
             } catch (error) {
               throw shutdownError ?? error;
             }
@@ -579,7 +582,7 @@ function createLSPClient(serverName, onCrash) {
         });
         stopError = err;
       } finally {
-        let k = serverProcess === procAtStop;
+        let isOwnProcess = serverProcess === procAtStop;
         if (procAtStop)
           killServerProcess(procAtStop, connAtStop, {
             force: false,
@@ -587,7 +590,7 @@ function createLSPClient(serverName, onCrash) {
         else if (connAtStop) disposeConnection(connAtStop);
         if (serverProcess === procAtStop) serverProcess = undefined;
         if (connection === connAtStop) connection = undefined;
-        if (k) {
+        if (isOwnProcess) {
           isInitialized = false;
           isStopping = false;
           if (stopError) {
@@ -601,3 +604,4 @@ function createLSPClient(serverName, onCrash) {
     },
   };
 }
+export { createLSPClient };

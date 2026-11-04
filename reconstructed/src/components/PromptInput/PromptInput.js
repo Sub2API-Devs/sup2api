@@ -13,7 +13,7 @@ import { EMPTY_MESSAGES } from "../../state/inProgressToolUses.js";
 import { isImagePlaceholder, hasCommand, TEAM_SETUP_GUIDE_LABEL } from "../../commands.js";
 import { logFeatureBad, logFeatureOk, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 import { logError } from "../../utils/log.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import {
   selectDraftValue,
@@ -51,7 +51,14 @@ import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { useNotifications } from "../../context/notifications.js";
 import { useEditorMode } from "../../utils/subagentStatusLine.js";
-import { R, zt, P, yt, Uy, vxe } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useRef,
+  useLayoutEffect,
+  useEffect,
+  useSyncExternalStore,
+  useReducer,
+  useImperativeHandle,
+} from "../../../vendor/react/cjs/react.production.js";
 import { setLaunchWarningFor } from "../../state/promptInputStore.js";
 import {
   normalizeVimMode,
@@ -117,7 +124,7 @@ import {
 import { getRainbowColor } from "../../utils/thinking.js";
 import { emptySpans, overlayDecorations, normalizeInputDecorations } from "./inputDecorations.js";
 import {
-  PP,
+  EMPTY_SPANS,
   buildVirtualTextLayout,
   offsetDecorations,
 } from "../../plugins/functionHooks/prompt/decorationSpans.js";
@@ -134,9 +141,9 @@ import { Text, Box } from "../../ink/components/Text.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { useInputBuffer } from "../../hooks/useInputBuffer.js";
 import { useMaybeTruncateInput } from "./useMaybeTruncateInput.js";
-import { cXe } from "../../plugins/functionHooks/sessionEvents.js";
-import { relayPromptEdits, Dye } from "../pluginUi/promptEditHook.js";
-import { IT } from "../../hooks/useHistorySearch.js";
+import { COMPOSER_EDIT_ORIGIN } from "../../plugins/functionHooks/sessionEvents.js";
+import { relayPromptEdits, undoPromptOrigin } from "../pluginUi/promptEditHook.js";
+import { historyPromptOrigin } from "../../hooks/useHistorySearch.js";
 import { clampCursorOffset, clampOffsetOutsidePlaceholder } from "../../vim/operators.js";
 import { useArrowKeyHistory } from "../../hooks/useArrowKeyHistory.js";
 import { mergeTurnTags } from "../../utils/userTurnTags.js";
@@ -188,8 +195,8 @@ import { Divider } from "../design-system/Divider.js";
 /**
  * 拼输入框上边框文字（如会话标题/状态）。
  */
-function buildBorderText(h) {
-  let fastSeg = h.filter(Boolean).join("  ") || undefined;
+function buildBorderText(segments) {
+  let fastSeg = segments.filter(Boolean).join("  ") || undefined;
   return fastSeg
     ? {
         content: ` ${fastSeg} `,
@@ -204,23 +211,23 @@ function selectViewingAgentTaskId_3(s_0) {
   return s_0.viewingAgentTaskId;
 }
 //@ chunk-18hwfzwa.js:879289-879384 sole-consumer
-function hasSuppliedTextLink(QB) {
-  return QB.linkSuppliedTexts.size > 0 && QB.linkSuppliedTexts.has(QB.value.trim());
+function hasSuppliedTextLink(state) {
+  return state.linkSuppliedTexts.size > 0 && state.linkSuppliedTexts.has(state.value.trim());
 }
 //@ chunk-18hwfzwa.js:879384-879428 sole-consumer
-function selectQueueEditIndex_2(zne) {
-  return zne.queueEditIndex;
+function selectQueueEditIndex_2(state) {
+  return state.queueEditIndex;
 }
 //@ chunk-18hwfzwa.js:879428-879534 sole-consumer
-function viewedAgentMessages(Ym) {
-  let activeAgentForInput = getActiveAgentForInput(Ym);
+function viewedAgentMessages(state) {
+  let activeAgentForInput = getActiveAgentForInput(state);
   return activeAgentForInput.type === "leader"
     ? undefined
-    : (Ym.transcripts[activeAgentForInput.task.id]?.messages ?? EMPTY_MESSAGES);
+    : (state.transcripts[activeAgentForInput.task.id]?.messages ?? EMPTY_MESSAGES);
 }
 //@ chunk-18hwfzwa.js:879534-879740 sole-consumer
-function pendingMessagesForActiveAgent(ky) {
-  let activeAgentForInput = getActiveAgentForInput(ky);
+function pendingMessagesForActiveAgent(state) {
+  let activeAgentForInput = getActiveAgentForInput(state);
   switch (activeAgentForInput.type) {
     case "leader": {
       return;
@@ -236,64 +243,64 @@ function pendingMessagesForActiveAgent(ky) {
   }
 }
 //@ chunk-18hwfzwa.js:879740-879781 sole-consumer
-function shownAsList(BNe) {
-  return BNe.shownAs ?? [];
+function shownAsList(state) {
+  return state.shownAs ?? [];
 }
 //@ chunk-18hwfzwa.js:879781-879828 sole-consumer
-function selectUltraplanSessionUrl(CD) {
-  return CD.ultraplanSessionUrl;
+function selectUltraplanSessionUrl(state) {
+  return state.ultraplanSessionUrl;
 }
 //@ chunk-18hwfzwa.js:879828-879874 sole-consumer
-function selectUltraplanLaunching(sf) {
-  return sf.ultraplanLaunching;
+function selectUltraplanLaunching(state) {
+  return state.ultraplanLaunching;
 }
 //@ chunk-18hwfzwa.js:879874-879912 sole-consumer
-function isImagePasteRef(cg) {
-  return isImagePlaceholder(cg.match);
+function isImagePasteRef(ref) {
+  return isImagePlaceholder(ref.match);
 }
 //@ chunk-18hwfzwa.js:879912-879928 sole-consumer
 function noopInputUpdate() {}
 //@ chunk-18hwfzwa.js:879928-879957 sole-consumer
-function incrementOffset(vy) {
-  return vy + 1;
+function incrementOffset(offset) {
+  return offset + 1;
 }
 //@ chunk-18hwfzwa.js:879957-880001 sole-consumer
-function normalizeNfd(z_) {
-  return z_.normalize("NFD");
+function normalizeNfd(text) {
+  return text.normalize("NFD");
 }
 //@ chunk-18hwfzwa.js:880001-880033 sole-consumer
-function pasteIdOf(EAt) {
-  return EAt.id;
+function pasteIdOf(ref) {
+  return ref.id;
 }
 //@ chunk-18hwfzwa.js:880033-880096 sole-consumer
-function isOrphanedTextPaste(h) {
-  let [, Y_] = h;
-  return Y_.type === "text" && !Y_.inline;
+function isOrphanedTextPaste(entry) {
+  let [, ref] = entry;
+  return ref.type === "text" && !ref.inline;
 }
 //@ chunk-18hwfzwa.js:880096-880135 sole-consumer
-function secondEntryValue(h) {
-  let [, DAt] = h;
-  return DAt;
+function secondEntryValue(entry) {
+  let [, value] = entry;
+  return value;
 }
 //@ chunk-18hwfzwa.js:880135-880220 sole-consumer
-function truncatedTextPasteIds(Cy) {
-  return Cy.match.startsWith("[...Truncated text") ? [String(Cy.id)] : [];
+function truncatedTextPasteIds(ref) {
+  return ref.match.startsWith("[...Truncated text") ? [String(ref.id)] : [];
 }
 //@ chunk-18hwfzwa.js:880220-880236 sole-consumer
 function noopMessageSelector() {}
 //@ chunk-18hwfzwa.js:880236-880307 sole-consumer
-function markStashUsed(Yne) {
-  return Yne.hasUsedStash
-    ? Yne
+function markStashUsed(state) {
+  return state.hasUsedStash
+    ? state
     : {
-        ...Yne,
+        ...state,
         hasUsedStash: true,
       };
 }
 //@ chunk-18hwfzwa.js:880307-880377 sole-consumer
-function logImagePasteFailure(CP) {
+function logImagePasteFailure(error) {
   logFeatureBad("input_image_paste", "clipboard_read_failed");
-  logError(CP);
+  logError(error);
 }
 //@ chunk-18hwfzwa.js:880377-880403 affinity
 var MIN_INPUT_ROWS = 5;
@@ -306,7 +313,7 @@ var INPUT_RIGHT_GUTTER = 2;
  * 关键行为：输入首字符 ! 切到 bash 模式；@队友 提及高亮；超长输入自动折叠；排队命令可上箭头回到编辑（queueEditIndex）；alt+w 切换 workflow 关键词；提交时调用 onSubmit(value, helpers)。
  */
 function PromptInput(props) {
-  let $ = w(543);
+  let $ = useMemoCache(543);
   let {
     ref,
     draft,
@@ -360,7 +367,7 @@ function PromptInput(props) {
   let cameBack = useStoreSelector(draft, selectCameBack);
   let { setValue, setCursorOffset, setMode, setPastedContents } = draft;
   let commands = useStoreSelector(scope, selectCommands);
-  let mergedClients = useMergedClients(scope.initialMcpClients, useAppState(selectMcpClients2));
+  let mcpClients = useMergedClients(scope.initialMcpClients, useAppState(selectMcpClients2));
   let activeAgents = useAppState(selectAgentDefinitionsActiveAgents_3);
   let teamContext = useAppState(selectTeamContext);
   let viewingAgentTaskId = useAppState(selectViewingAgentTaskId_3);
@@ -379,85 +386,85 @@ function PromptInput(props) {
   let { addNotification, removeNotification } = useNotifications();
   let vimMode = useVimMode();
   let isVimEditorMode = useEditorMode();
-  let promptSuggestionState = R(false);
-  let ms;
+  let promptSuggestionState = useRef(false);
+  let onModeChangeRaw;
   if ($[0] !== session) {
-    ms = (Xs) => {
+    onModeChangeRaw = (warningId) => {
       promptSuggestionState.current = false;
-      setLaunchWarningFor(session, Xs);
+      setLaunchWarningFor(session, warningId);
     };
     $[0] = session;
-    $[1] = ms;
-  } else ms = $[1];
-  let onModeChange = ms;
-  let is;
-  let ws;
+    $[1] = onModeChangeRaw;
+  } else onModeChangeRaw = $[1];
+  let onModeChange = onModeChangeRaw;
+  let cursorFixEffect;
+  let cursorFixDeps;
   if ($[2] !== draft || $[3] !== sessionUiStore || $[4] !== isVimEditorMode) {
-    is = () => {
+    cursorFixEffect = () => {
       if (!isVimEditorMode || normalizeVimMode(sessionUiStore.getState().vimMode) !== "NORMAL") {
         return;
       }
       draft.setCursorOffset(setCwdState(draft.value.normalize("NFC"), draft.cursorOffset));
     };
-    ws = [draft, sessionUiStore, isVimEditorMode];
+    cursorFixDeps = [draft, sessionUiStore, isVimEditorMode];
     $[2] = draft;
     $[3] = sessionUiStore;
     $[4] = isVimEditorMode;
-    $[5] = is;
-    $[6] = ws;
+    $[5] = cursorFixEffect;
+    $[6] = cursorFixDeps;
   } else {
-    is = $[5];
-    ws = $[6];
+    cursorFixEffect = $[5];
+    cursorFixDeps = $[6];
   }
-  zt(is, ws);
-  let Ci;
-  let oi;
+  useLayoutEffect(cursorFixEffect, cursorFixDeps);
+  let externalChangeCursorEffect;
+  let externalChangeCursorDeps;
   if ($[7] !== draft || $[8] !== value || $[9] !== sessionUiStore || $[10] !== isVimEditorMode) {
-    Ci = () => {
+    externalChangeCursorEffect = () => {
       if (!isVimEditorMode || !draft.changedFromOutside || sessionUiStore.getState().vimMode !== "NORMAL") {
         return;
       }
       draft.setCursorOffset(setCwdState(value.normalize("NFC"), draft.cursorOffset));
     };
-    oi = [value, draft, sessionUiStore, isVimEditorMode];
+    externalChangeCursorDeps = [value, draft, sessionUiStore, isVimEditorMode];
     $[7] = draft;
     $[8] = value;
     $[9] = sessionUiStore;
     $[10] = isVimEditorMode;
-    $[11] = Ci;
-    $[12] = oi;
+    $[11] = externalChangeCursorEffect;
+    $[12] = externalChangeCursorDeps;
   } else {
-    Ci = $[11];
-    oi = $[12];
+    externalChangeCursorEffect = $[11];
+    externalChangeCursorDeps = $[12];
   }
-  zt(Ci, oi);
-  let speculation = R(value);
-  let Hi;
+  useLayoutEffect(externalChangeCursorEffect, externalChangeCursorDeps);
+  let speculation = useRef(value);
+  let setQueueEditIndexRaw;
   if ($[13] !== draft.value || $[14] !== setAppState) {
-    Hi = (Zi) => {
-      if (Zi !== null) speculation.current = draft.value;
+    setQueueEditIndexRaw = (index) => {
+      if (index !== null) speculation.current = draft.value;
       setAppState((prev) =>
-        prev.queueEditIndex === Zi
+        prev.queueEditIndex === index
           ? prev
           : {
               ...prev,
-              queueEditIndex: Zi,
+              queueEditIndex: index,
             },
       );
     };
     $[13] = draft.value;
     $[14] = setAppState;
-    $[15] = Hi;
-  } else Hi = $[15];
-  let setQueueEditIndex = Hi;
-  let ps;
+    $[15] = setQueueEditIndexRaw;
+  } else setQueueEditIndexRaw = $[15];
+  let setQueueEditIndex = setQueueEditIndexRaw;
+  let resetQueueEditEffect;
   if (
     $[16] !== draft.changedFromOutside ||
     $[17] !== value ||
     $[18] !== setQueueEditIndex ||
     $[19] !== store
   ) {
-    ps = () => {
+    resetQueueEditEffect = () => {
       if (speculation.current === value) {
         return;
       }
@@ -471,78 +478,78 @@ function PromptInput(props) {
     $[17] = value;
     $[18] = setQueueEditIndex;
     $[19] = store;
-    $[20] = ps;
-  } else ps = $[20];
-  let xs;
+    $[20] = resetQueueEditEffect;
+  } else resetQueueEditEffect = $[20];
+  let resetQueueEditDeps;
   if ($[21] !== draft || $[22] !== value || $[23] !== setQueueEditIndex || $[24] !== store) {
-    xs = [value, setQueueEditIndex, store, draft];
+    resetQueueEditDeps = [value, setQueueEditIndex, store, draft];
     $[21] = draft;
     $[22] = value;
     $[23] = setQueueEditIndex;
     $[24] = store;
-    $[25] = xs;
-  } else xs = $[25];
-  P(ps, xs);
+    $[25] = resetQueueEditDeps;
+  } else resetQueueEditDeps = $[25];
+  useEffect(resetQueueEditEffect, resetQueueEditDeps);
   let queueEditIndex = useAppState(selectQueueEditIndex_2);
-  let ls;
+  let clampQueueEditEffect;
   if ($[26] !== commandQueue || $[27] !== setQueueEditIndex || $[28] !== store) {
-    ls = () => {
+    clampQueueEditEffect = () => {
       let queueEditIndex = store.getState().queueEditIndex;
       if (queueEditIndex === null) {
         return;
       }
-      let qs = count(commandQueue, isRefillableInput);
-      if (qs === 0) setQueueEditIndex(null);
-      else if (queueEditIndex > qs - 1) setQueueEditIndex(qs - 1);
+      let refillableCount = count(commandQueue, isRefillableInput);
+      if (refillableCount === 0) setQueueEditIndex(null);
+      else if (queueEditIndex > refillableCount - 1) setQueueEditIndex(refillableCount - 1);
     };
     $[26] = commandQueue;
     $[27] = setQueueEditIndex;
     $[28] = store;
-    $[29] = ls;
-  } else ls = $[29];
-  let gs;
+    $[29] = clampQueueEditEffect;
+  } else clampQueueEditEffect = $[29];
+  let clampQueueEditDeps;
   if ($[30] !== queueEditIndex || $[31] !== commandQueue || $[32] !== setQueueEditIndex || $[33] !== store) {
-    gs = [commandQueue, queueEditIndex, setQueueEditIndex, store];
+    clampQueueEditDeps = [commandQueue, queueEditIndex, setQueueEditIndex, store];
     $[30] = queueEditIndex;
     $[31] = commandQueue;
     $[32] = setQueueEditIndex;
     $[33] = store;
-    $[34] = gs;
-  } else gs = $[34];
-  P(ls, gs);
+    $[34] = clampQueueEditDeps;
+  } else clampQueueEditDeps = $[34];
+  useEffect(clampQueueEditEffect, clampQueueEditDeps);
   let viewSelectionMode = useAppState(viewedAgentMessages);
   let mainLoopModel_ = useAppState(pendingMessagesForActiveAgent);
-  let Hs;
+  let queuedRows;
   if ($[35] !== viewSelectionMode || $[36] !== mainLoopModel_) {
-    Hs = viewSelectionMode
+    queuedRows = viewSelectionMode
       ? queuedHumanRows(viewSelectionMode, {
           queuedRowIds: new Set(mainLoopModel_?.flatMap(shownAsList)),
         })
       : undefined;
     $[35] = viewSelectionMode;
     $[36] = mainLoopModel_;
-    $[37] = Hs;
-  } else Hs = $[37];
-  let _s = Hs;
-  let mainLoopModelForSession = R(null);
-  let ii;
+    $[37] = queuedRows;
+  } else queuedRows = $[37];
+  let queuedRowsStable = queuedRows;
+  let mainLoopModelForSession = useRef(null);
+  let registerPasteEffect;
   if ($[38] !== draft.value) {
-    ii = () => registerPasteCarrier(() => [draft.value]);
+    registerPasteEffect = () => registerPasteCarrier(() => [draft.value]);
     $[38] = draft.value;
-    $[39] = ii;
-  } else ii = $[39];
-  let ua;
+    $[39] = registerPasteEffect;
+  } else registerPasteEffect = $[39];
+  let registerPasteDeps;
   if ($[40] !== draft) {
-    ua = [draft];
+    registerPasteDeps = [draft];
     $[40] = draft;
-    $[41] = ua;
-  } else ua = $[41];
-  P(ii, ua);
-  let thinkingEnabled = R(false);
-  let isFastMode = R(null);
-  let dl;
+    $[41] = registerPasteDeps;
+  } else registerPasteDeps = $[41];
+  useEffect(registerPasteEffect, registerPasteDeps);
+  let thinkingEnabled = useRef(false);
+  let isFastMode = useRef(null);
+  let resetPasteHint;
   if ($[42] !== onExpandPasteHintChange) {
-    dl = () => {
+    resetPasteHint = () => {
       if (isFastMode.current) {
         isFastMode.current();
         isFastMode.current = null;
@@ -550,78 +557,81 @@ function PromptInput(props) {
       onExpandPasteHintChange(false);
     };
     $[42] = onExpandPasteHintChange;
-    $[43] = dl;
-  } else dl = $[43];
-  let Vl = dl;
-  let Hd;
-  let Ss;
+    $[43] = resetPasteHint;
+  } else resetPasteHint = $[43];
+  let resetPasteHintStable = resetPasteHint;
+  let cleanupTimerEffect;
+  let cleanupTimerDeps;
   if ($[44] === MEMO_CACHE_SENTINEL) {
-    Hd = () => () => {
+    cleanupTimerEffect = () => () => {
       isFastMode.current?.();
     };
-    Ss = [];
-    $[44] = Hd;
-    $[45] = Ss;
+    cleanupTimerDeps = [];
+    $[44] = cleanupTimerEffect;
+    $[45] = cleanupTimerDeps;
   } else {
-    Hd = $[44];
-    Ss = $[45];
+    cleanupTimerEffect = $[44];
+    cleanupTimerDeps = $[45];
   }
-  P(Hd, Ss);
-  let yi;
+  useEffect(cleanupTimerEffect, cleanupTimerDeps);
+  let displayedValueRaw;
   if ($[46] !== historyMatch || $[47] !== value || $[48] !== isSearchingHistory) {
-    yi = isSearchingHistory && historyMatch ? stripModePrefix(historyMatch.display) : value;
+    displayedValueRaw = isSearchingHistory && historyMatch ? stripModePrefix(historyMatch.display) : value;
     $[46] = historyMatch;
     $[47] = value;
     $[48] = isSearchingHistory;
-    $[49] = yi;
-  } else yi = $[49];
-  let displayedValue = yi;
+    $[49] = displayedValueRaw;
+  } else displayedValueRaw = $[49];
+  let displayedValue = displayedValueRaw;
   let coordinatorTaskCount = useQueuedMessageText();
-  let cl = viewSelectionMode === undefined;
-  let Ol;
+  let noViewedAgent = viewSelectionMode === undefined;
+  let ultrathinkPositionsRaw;
   if ($[50] !== displayedValue) {
-    Ol = ULTRATHINK_KEYWORD(displayedValue);
+    ultrathinkPositionsRaw = ULTRATHINK_KEYWORD(displayedValue);
     $[50] = displayedValue;
-    $[51] = Ol;
-  } else Ol = $[51];
-  let as = Ol;
-  let pi;
+    $[51] = ultrathinkPositionsRaw;
+  } else ultrathinkPositionsRaw = $[51];
+  let ultrathinkPositions = ultrathinkPositionsRaw;
+  let activeUltrathinkRanges;
   if (
     $[52] !== coordinatorTaskCount ||
     $[53] !== mainLoopModel ||
     $[54] !== mode ||
-    $[55] !== cl ||
-    $[56] !== as
+    $[55] !== noViewedAgent ||
+    $[56] !== ultrathinkPositions
   ) {
-    pi =
-      mode === "prompt" && cl && as.length > 0 && isUltrathinkEffective(mainLoopModel, coordinatorTaskCount)
-        ? as
+    activeUltrathinkRanges =
+      mode === "prompt" &&
+      noViewedAgent &&
+      ultrathinkPositions.length > 0 &&
+      isUltrathinkEffective(mainLoopModel, coordinatorTaskCount)
+        ? ultrathinkPositions
         : [];
     $[52] = coordinatorTaskCount;
     $[53] = mainLoopModel;
     $[54] = mode;
-    $[55] = cl;
-    $[56] = as;
-    $[57] = pi;
-  } else pi = $[57];
-  let qa = pi;
-  let pd;
+    $[55] = noViewedAgent;
+    $[56] = ultrathinkPositions;
+    $[57] = activeUltrathinkRanges;
+  } else activeUltrathinkRanges = $[57];
+  let ultrathinkRanges = activeUltrathinkRanges;
+  let guideChipHighlights;
   if ($[58] !== displayedValue) {
-    pd = setupGuideChipHighlights(displayedValue);
+    guideChipHighlights = setupGuideChipHighlights(displayedValue);
     $[58] = displayedValue;
-    $[59] = pd;
-  } else pd = $[59];
-  let $l = pd;
+    $[59] = guideChipHighlights;
+  } else guideChipHighlights = $[59];
+  let guideChipSpans = guideChipHighlights;
   let ultraplanSessionUrl = useAppState(selectUltraplanSessionUrl);
   let ultraplanLaunching = useAppState(selectUltraplanLaunching);
-  let Ll;
+  let ultraplanRangesRaw;
   if (
     $[60] !== displayedValue ||
     $[61] !== pastedContents ||
     $[62] !== ultraplanLaunching ||
     $[63] !== ultraplanSessionUrl
   ) {
-    Ll =
+    ultraplanRangesRaw =
       isUltraplanEnabled() && !ultraplanSessionUrl && !ultraplanLaunching
         ? getLaunchMessagesOutsidePastes(displayedValue, pastedContents)
         : [];
@@ -629,164 +639,176 @@ function PromptInput(props) {
     $[61] = pastedContents;
     $[62] = ultraplanLaunching;
     $[63] = ultraplanSessionUrl;
-    $[64] = Ll;
-  } else Ll = $[64];
-  let _c = Ll;
-  let mc;
+    $[64] = ultraplanRangesRaw;
+  } else ultraplanRangesRaw = $[64];
+  let ultraplanRanges = ultraplanRangesRaw;
+  let ultrareviewRanges;
   if ($[65] !== displayedValue) {
-    mc = isUltrareviewWithBridge() ? findUltrareviewTriggerPositions(displayedValue) : [];
+    ultrareviewRanges = isUltrareviewWithBridge() ? findUltrareviewTriggerPositions(displayedValue) : [];
     $[65] = displayedValue;
-    $[66] = mc;
-  } else mc = $[66];
-  let Vd = mc;
-  let cd;
+    $[66] = ultrareviewRanges;
+  } else ultrareviewRanges = $[66];
+  let ultrareviewPositions = ultrareviewRanges;
+  let ultracodePositions;
   if ($[67] !== displayedValue) {
-    cd = isWorkflowsAvailable() && isWorkflowKeywordTriggerEnabled() ? ULTRACODE_KEYWORD(displayedValue) : [];
+    ultracodePositions =
+      isWorkflowsAvailable() && isWorkflowKeywordTriggerEnabled() ? ULTRACODE_KEYWORD(displayedValue) : [];
     $[67] = displayedValue;
-    $[68] = cd;
-  } else cd = $[68];
-  let Ka = cd;
-  let [pl, Gl, gd] = useLatestState(false);
-  let hd;
-  let bd;
-  if ($[69] !== draft || $[70] !== gd || $[71] !== removeNotification || $[72] !== Gl) {
-    hd = () => {
-      let Od = draft.value;
+    $[68] = ultracodePositions;
+  } else ultracodePositions = $[68];
+  let ultracodeRanges = ultracodePositions;
+  let [isWorkflowKeywordSuppressed, setWorkflowKeywordSuppressed, getWorkflowKeywordSuppressed] =
+    useLatestState(false);
+  let keywordWatchEffect;
+  let keywordWatchDeps;
+  if (
+    $[69] !== draft ||
+    $[70] !== getWorkflowKeywordSuppressed ||
+    $[71] !== removeNotification ||
+    $[72] !== setWorkflowKeywordSuppressed
+  ) {
+    keywordWatchEffect = () => {
+      let prevValue = draft.value;
       return draft.subscribe(() => {
-        let pc = draft.value;
-        if (pc === Od) {
+        let nextValue = draft.value;
+        if (nextValue === prevValue) {
           return;
         }
-        Od = pc;
-        if (gd() && ULTRACODE_KEYWORD(pc).length === 0) {
-          Gl(false);
+        prevValue = nextValue;
+        if (getWorkflowKeywordSuppressed() && ULTRACODE_KEYWORD(nextValue).length === 0) {
+          setWorkflowKeywordSuppressed(false);
           removeNotification("workflow-keyword-ignored");
         }
       });
     };
-    bd = [draft, gd, Gl, removeNotification];
+    keywordWatchDeps = [
+      draft,
+      getWorkflowKeywordSuppressed,
+      setWorkflowKeywordSuppressed,
+      removeNotification,
+    ];
     $[69] = draft;
-    $[70] = gd;
+    $[70] = getWorkflowKeywordSuppressed;
     $[71] = removeNotification;
-    $[72] = Gl;
-    $[73] = hd;
-    $[74] = bd;
+    $[72] = setWorkflowKeywordSuppressed;
+    $[73] = keywordWatchEffect;
+    $[74] = keywordWatchDeps;
   } else {
-    hd = $[73];
-    bd = $[74];
+    keywordWatchEffect = $[73];
+    keywordWatchDeps = $[74];
   }
-  P(hd, bd);
+  useEffect(keywordWatchEffect, keywordWatchDeps);
   let workflowKeywordToggleShortcut = useShortcutDisplay_2("chat:workflowKeywordToggle", "Chat", "alt+w");
-  let ec;
+  let btwPositions;
   if ($[75] !== displayedValue) {
-    ec = findBtwTriggerPositions(displayedValue);
+    btwPositions = findBtwTriggerPositions(displayedValue);
     $[75] = displayedValue;
-    $[76] = ec;
-  } else ec = $[76];
-  let qu = ec;
-  let Ku;
+    $[76] = btwPositions;
+  } else btwPositions = $[76];
+  let btwRanges = btwPositions;
+  let slashMentionPositions;
   if ($[77] !== commands || $[78] !== displayedValue) {
-    Ku = findSlashMentionRanges(displayedValue).filter((pos) => {
+    slashMentionPositions = findSlashMentionRanges(displayedValue).filter((pos) => {
       let commandName = displayedValue.slice(pos.start + 1, pos.end);
       return hasCommand(commandName, commands);
     });
     $[77] = commands;
     $[78] = displayedValue;
-    $[79] = Ku;
-  } else Ku = $[79];
-  let Am = Ku;
-  let Kp;
+    $[79] = slashMentionPositions;
+  } else slashMentionPositions = $[79];
+  let commandMentionRanges = slashMentionPositions;
+  let slackChannelsChangeHandler;
   if ($[80] !== session) {
-    Kp = (nl) => onKnownSlackChannelsChanged(session, nl);
+    slackChannelsChangeHandler = (channels) => onKnownSlackChannelsChanged(session, channels);
     $[80] = session;
-    $[81] = Kp;
-  } else Kp = $[81];
-  let ss = Kp;
-  let Gs;
+    $[81] = slackChannelsChangeHandler;
+  } else slackChannelsChangeHandler = $[81];
+  let onSlackChannelsChanged = slackChannelsChangeHandler;
+  let getSlackVersion;
   if ($[82] !== session) {
-    Gs = () => getKnownSlackChannelsVersion(session);
+    getSlackVersion = () => getKnownSlackChannelsVersion(session);
     $[82] = session;
-    $[83] = Gs;
-  } else Gs = $[83];
-  yt(ss, Gs);
-  let $a;
+    $[83] = getSlackVersion;
+  } else getSlackVersion = $[83];
+  useSyncExternalStore(onSlackChannelsChanged, getSlackVersion);
+  let slackMentionRangesRaw;
   if ($[84] !== displayedValue || $[85] !== session || $[86] !== store) {
-    $a = hasSlackClient(store.getState().mcp.clients)
+    slackMentionRangesRaw = hasSlackClient(store.getState().mcp.clients)
       ? findSlackChannelMentions(session, displayedValue)
       : [];
     $[84] = displayedValue;
     $[85] = session;
     $[86] = store;
-    $[87] = $a;
-  } else $a = $[87];
-  let xl = $a;
-  let Si;
+    $[87] = slackMentionRangesRaw;
+  } else slackMentionRangesRaw = $[87];
+  let slackMentionRanges = slackMentionRangesRaw;
+  let agentMentionRanges;
   if ($[88] !== displayedValue || $[89] !== teamContext) {
     js: {
       if (!isAgentSwarmsEnabled()) {
-        let na;
+        let emptySwarmRanges;
         if ($[91] === MEMO_CACHE_SENTINEL) {
-          na = [];
-          $[91] = na;
-        } else na = $[91];
-        Si = na;
+          emptySwarmRanges = [];
+          $[91] = emptySwarmRanges;
+        } else emptySwarmRanges = $[91];
+        agentMentionRanges = emptySwarmRanges;
         break js;
       }
       if (!teamContext?.teammates) {
-        let na;
+        let emptyTeamRanges;
         if ($[92] === MEMO_CACHE_SENTINEL) {
-          na = [];
-          $[92] = na;
-        } else na = $[92];
-        Si = na;
+          emptyTeamRanges = [];
+          $[92] = emptyTeamRanges;
+        } else emptyTeamRanges = $[92];
+        agentMentionRanges = emptyTeamRanges;
         break js;
       }
-      let Ya = [];
+      let memberRanges = [];
       let members = teamContext.teammates;
       if (!members) {
-        Si = Ya;
+        agentMentionRanges = memberRanges;
         break js;
       }
-      let na;
+      let memberPattern;
       if ($[93] === MEMO_CACHE_SENTINEL) {
-        na = /(^|\s)@([\w-]+)/g;
-        $[93] = na;
-      } else na = $[93];
-      let ol = na;
+        memberPattern = /(^|\s)@([\w-]+)/g;
+        $[93] = memberPattern;
+      } else memberPattern = $[93];
+      let memberRegex = memberPattern;
       let memberValues = Object.values(members);
-      let _d;
-      while ((_d = ol.exec(displayedValue)) !== null) {
-        let ga = _d[1] ?? "";
-        let du = _d.index + ga.length;
-        let fullMatch = _d[0].trimStart();
-        let wp = _d[2];
-        let member = memberValues.find((memberValue) => memberValue.name === wp);
+      let match;
+      while ((match = memberRegex.exec(displayedValue)) !== null) {
+        let leadingSpace = match[1] ?? "";
+        let nameStart = match.index + leadingSpace.length;
+        let fullMatch = match[0].trimStart();
+        let memberName = match[2];
+        let member = memberValues.find((memberValue) => memberValue.name === memberName);
         if (isAgentColorName(member?.color)) {
-          let Yd = AGENT_COLOR_TO_THEME_COLOR[member.color];
-          if (Yd)
-            Ya.push({
-              start: du,
-              end: du + fullMatch.length,
-              themeColor: Yd,
+          let themeColor = AGENT_COLOR_TO_THEME_COLOR[member.color];
+          if (themeColor)
+            memberRanges.push({
+              start: nameStart,
+              end: nameStart + fullMatch.length,
+              themeColor,
             });
         }
       }
-      Si = Ya;
+      agentMentionRanges = memberRanges;
     }
     $[88] = displayedValue;
     $[89] = teamContext;
-    $[90] = Si;
-  } else Si = $[90];
-  let Pi = Si;
-  let na;
+    $[90] = agentMentionRanges;
+  } else agentMentionRanges = $[90];
+  let memberMentionRanges = agentMentionRanges;
+  let parsedRefs;
   if ($[94] !== displayedValue) {
-    na = parsePastedRefs(displayedValue);
+    parsedRefs = parsePastedRefs(displayedValue);
     $[94] = displayedValue;
-    $[95] = na;
-  } else na = $[95];
-  let placeholders = na;
+    $[95] = parsedRefs;
+  } else parsedRefs = $[95];
+  let placeholders = parsedRefs;
   const active = mode === "prompt" && !isSearchingHistory && !interimRange;
-  let td;
+  let spellcheckArgs;
   if (
     $[96] !== cursorOffset ||
     $[97] !== displayedValue ||
@@ -794,7 +816,7 @@ function PromptInput(props) {
     $[99] !== session.host ||
     $[100] !== active
   ) {
-    td = {
+    spellcheckArgs = {
       host: session.host,
       text: displayedValue,
       cursorOffset,
@@ -806,107 +828,111 @@ function PromptInput(props) {
     $[98] = placeholders;
     $[99] = session.host;
     $[100] = active;
-    $[101] = td;
-  } else td = $[101];
-  let spellcheckHighlights = useSpellcheckHighlights(td);
-  let Ad;
-  let od;
+    $[101] = spellcheckArgs;
+  } else spellcheckArgs = $[101];
+  let spellcheckHighlights = useSpellcheckHighlights(spellcheckArgs);
+  let imageRefCursorEffect;
+  let imageRefCursorDeps;
   if ($[102] !== draft) {
-    Ad = () => {
-      let md;
-      let vp;
-      let sg = [];
+    imageRefCursorEffect = () => {
+      let prevValue;
+      let prevCursorOffset;
+      let imageRefs = [];
       return draft.subscribe(() => {
-        let { value: zi, cursorOffset } = draft;
-        if (zi === md && cursorOffset === vp) {
+        let { value: nextValue, cursorOffset } = draft;
+        if (nextValue === prevValue && cursorOffset === prevCursorOffset) {
           return;
         }
-        if (zi !== md) sg = zi.includes("[") ? parsePastedRefs(zi).filter(isImagePasteRef) : [];
-        md = zi;
-        vp = cursorOffset;
-        let inside = sg.find((Qd) => cursorOffset > Qd.index && cursorOffset < Qd.index + Qd.match.length);
+        if (nextValue !== prevValue)
+          imageRefs = nextValue.includes("[") ? parsePastedRefs(nextValue).filter(isImagePasteRef) : [];
+        prevValue = nextValue;
+        prevCursorOffset = cursorOffset;
+        let inside = imageRefs.find(
+          (refRange) =>
+            cursorOffset > refRange.index && cursorOffset < refRange.index + refRange.match.length,
+        );
         if (inside) {
-          let Hc = inside.index + inside.match.length;
-          let xc = (inside.index + Hc) / 2;
-          draft.setCursorOffset(cursorOffset < xc ? inside.index : Hc);
+          let refEnd = inside.index + inside.match.length;
+          let refMid = (inside.index + refEnd) / 2;
+          draft.setCursorOffset(cursorOffset < refMid ? inside.index : refEnd);
         }
       });
     };
-    od = [draft];
+    imageRefCursorDeps = [draft];
     $[102] = draft;
-    $[103] = Ad;
-    $[104] = od;
+    $[103] = imageRefCursorEffect;
+    $[104] = imageRefCursorDeps;
   } else {
-    Ad = $[103];
-    od = $[104];
+    imageRefCursorEffect = $[103];
+    imageRefCursorDeps = $[104];
   }
-  P(Ad, od);
-  let Yc;
+  useEffect(imageRefCursorEffect, imageRefCursorDeps);
+  let spansRaw;
   if (
-    $[105] !== qu ||
+    $[105] !== btwRanges ||
     $[106] !== cursorOffset ||
     $[107] !== historyFailedMatch ||
     $[108] !== historyMatch ||
     $[109] !== historyQuery ||
     $[110] !== isSearchingHistory ||
-    $[111] !== Pi ||
-    $[112] !== $l ||
-    $[113] !== xl ||
-    $[114] !== Am ||
+    $[111] !== memberMentionRanges ||
+    $[112] !== guideChipSpans ||
+    $[113] !== slackMentionRanges ||
+    $[114] !== commandMentionRanges ||
     $[115] !== spellcheckHighlights ||
-    $[116] !== qa ||
-    $[117] !== _c ||
+    $[116] !== ultrathinkRanges ||
+    $[117] !== ultraplanRanges ||
     $[118] !== interimRange ||
-    $[119] !== pl ||
-    $[120] !== Ka
+    $[119] !== isWorkflowKeywordSuppressed ||
+    $[120] !== ultracodeRanges
   ) {
-    let tc = [];
+    let spansList = [];
     if (isSearchingHistory && historyMatch && !historyFailedMatch)
-      tc.push({
+      spansList.push({
         start: cursorOffset,
         end: cursorOffset + historyQuery.length,
         color: "warning",
         priority: 20,
       });
-    for (const ref of qu)
-      tc.push({
+    for (const ref of btwRanges)
+      spansList.push({
         start: ref.start,
         end: ref.end,
         color: "warning",
         priority: 15,
       });
-    for (const trigger of Am)
-      tc.push({
+    for (const trigger of commandMentionRanges)
+      spansList.push({
         start: trigger.start,
         end: trigger.end,
         color: "suggestion",
         priority: 5,
       });
-    for (const trigger of xl)
-      tc.push({
+    for (const trigger of slackMentionRanges)
+      spansList.push({
         start: trigger.start,
         end: trigger.end,
         color: "suggestion",
         priority: 5,
       });
-    for (const trigger of Pi)
-      tc.push({
+    for (const trigger of memberMentionRanges)
+      spansList.push({
         start: trigger.start,
         end: trigger.end,
         color: trigger.themeColor,
         priority: 5,
       });
     if (interimRange)
-      tc.push({
+      spansList.push({
         start: interimRange.start,
         end: interimRange.end,
         color: undefined,
         dimColor: true,
         priority: 1,
       });
-    for (const trigger of qa) {
+    for (const trigger of ultrathinkRanges) {
       for (let start = trigger.start; start < trigger.end; start++)
-        tc.push({
+        spansList.push({
           start,
           end: start + 1,
           color: getRainbowColor(start - trigger.start),
@@ -914,11 +940,11 @@ function PromptInput(props) {
           priority: 10,
         });
     }
-    tc.push(...$l);
+    spansList.push(...guideChipSpans);
     if (isUltraplanEnabled()) {
-      for (const trigger of _c) {
+      for (const trigger of ultraplanRanges) {
         for (let start = trigger.start; start < trigger.end; start++)
-          tc.push({
+          spansList.push({
             start,
             end: start + 1,
             color: getRainbowColor(start - trigger.start),
@@ -927,10 +953,10 @@ function PromptInput(props) {
           });
       }
     }
-    if (isWorkflowsAvailable() && !pl) {
-      for (const trigger of Ka) {
+    if (isWorkflowsAvailable() && !isWorkflowKeywordSuppressed) {
+      for (const trigger of ultracodeRanges) {
         for (let start = trigger.start; start < trigger.end; start++)
-          tc.push({
+          spansList.push({
             start,
             end: start + 1,
             color: "autoAccept",
@@ -938,65 +964,68 @@ function PromptInput(props) {
           });
       }
     }
-    Yc = mergeNonOverlappingRanges(tc, spellcheckHighlights);
-    $[105] = qu;
+    spansRaw = mergeNonOverlappingRanges(spansList, spellcheckHighlights);
+    $[105] = btwRanges;
     $[106] = cursorOffset;
     $[107] = historyFailedMatch;
     $[108] = historyMatch;
     $[109] = historyQuery;
     $[110] = isSearchingHistory;
-    $[111] = Pi;
-    $[112] = $l;
-    $[113] = xl;
-    $[114] = Am;
+    $[111] = memberMentionRanges;
+    $[112] = guideChipSpans;
+    $[113] = slackMentionRanges;
+    $[114] = commandMentionRanges;
     $[115] = spellcheckHighlights;
-    $[116] = qa;
-    $[117] = _c;
+    $[116] = ultrathinkRanges;
+    $[117] = ultraplanRanges;
     $[118] = interimRange;
-    $[119] = pl;
-    $[120] = Ka;
-    $[121] = Yc;
-  } else Yc = $[121];
-  let spans = Yc;
-  let ba = !footerItemSelected && !isSearchingHistory;
-  let Mi = decorations.length > 0 && !isSearchingHistory && displayedValue === value;
-  let Ti;
-  if ($[122] !== decorations || $[123] !== value || $[124] !== Mi || $[125] !== plain) {
-    let Qa = Mi && value !== "" && !plain ? emptySpans(decorations) : PP;
-    Ti = Qa.length > 0 && !isNfcStable(value, buildVirtualTextLayout(value, Qa)) ? PP : Qa;
+    $[119] = isWorkflowKeywordSuppressed;
+    $[120] = ultracodeRanges;
+    $[121] = spansRaw;
+  } else spansRaw = $[121];
+  let spans = spansRaw;
+  let showCursor = !footerItemSelected && !isSearchingHistory;
+  let hasDecorations = decorations.length > 0 && !isSearchingHistory && displayedValue === value;
+  let virtualTextsRaw;
+  if ($[122] !== decorations || $[123] !== value || $[124] !== hasDecorations || $[125] !== plain) {
+    let decorationSpansRaw = hasDecorations && value !== "" && !plain ? emptySpans(decorations) : EMPTY_SPANS;
+    virtualTextsRaw =
+      decorationSpansRaw.length > 0 && !isNfcStable(value, buildVirtualTextLayout(value, decorationSpansRaw))
+        ? EMPTY_SPANS
+        : decorationSpansRaw;
     $[122] = decorations;
     $[123] = value;
-    $[124] = Mi;
+    $[124] = hasDecorations;
     $[125] = plain;
-    $[126] = Ti;
-  } else Ti = $[126];
-  let Gp = Ti;
-  let yl = isVimEditorMode && vimMode !== "INSERT" ? "after" : "before";
-  let Dc;
-  if ($[127] !== yl || $[128] !== cursorOffset || $[129] !== Gp) {
-    Dc = yl === "before" && Gp.some((Bh) => Bh.start === cursorOffset);
-    $[127] = yl;
+    $[126] = virtualTextsRaw;
+  } else virtualTextsRaw = $[126];
+  let virtualTexts = virtualTextsRaw;
+  let cursorSide = isVimEditorMode && vimMode !== "INSERT" ? "after" : "before";
+  let virtualTextAtCursor;
+  if ($[127] !== cursorSide || $[128] !== cursorOffset || $[129] !== virtualTexts) {
+    virtualTextAtCursor = cursorSide === "before" && virtualTexts.some((span) => span.start === cursorOffset);
+    $[127] = cursorSide;
     $[128] = cursorOffset;
-    $[129] = Gp;
-    $[130] = Dc;
-  } else Dc = $[130];
-  let Hh = Dc;
-  let ES;
+    $[129] = virtualTexts;
+    $[130] = virtualTextAtCursor;
+  } else virtualTextAtCursor = $[130];
+  let hasVirtualTextAtCursor = virtualTextAtCursor;
+  let highlightsRaw;
   if (
     $[131] !== spans ||
     $[132] !== cursorOffset ||
     $[133] !== decorations ||
     $[134] !== value ||
-    $[135] !== Hh ||
-    $[136] !== Mi ||
-    $[137] !== ba
+    $[135] !== hasVirtualTextAtCursor ||
+    $[136] !== hasDecorations ||
+    $[137] !== showCursor
   ) {
-    ES = !Mi
+    highlightsRaw = !hasDecorations
       ? spans
       : overlayDecorations(
           spans,
           decorations,
-          ba && !Hh
+          showCursor && !hasVirtualTextAtCursor
             ? {
                 start: cursorOffset,
                 end: cursorOffset + firstGrapheme(value.slice(cursorOffset)).length,
@@ -1007,17 +1036,17 @@ function PromptInput(props) {
     $[132] = cursorOffset;
     $[133] = decorations;
     $[134] = value;
-    $[135] = Hh;
-    $[136] = Mi;
-    $[137] = ba;
-    $[138] = ES;
-  } else ES = $[138];
-  let highlights = ES;
-  let dm;
-  let Uc;
-  if ($[139] !== addNotification || $[140] !== removeNotification || $[141] !== qa.length) {
-    dm = () => {
-      if (qa.length)
+    $[135] = hasVirtualTextAtCursor;
+    $[136] = hasDecorations;
+    $[137] = showCursor;
+    $[138] = highlightsRaw;
+  } else highlightsRaw = $[138];
+  let highlights = highlightsRaw;
+  let syncUltrathinkNotice;
+  let ultrathinkNoticeDeps;
+  if ($[139] !== addNotification || $[140] !== removeNotification || $[141] !== ultrathinkRanges.length) {
+    syncUltrathinkNotice = () => {
+      if (ultrathinkRanges.length)
         addNotification({
           key: "ultrathink-active",
           kind: "feedback",
@@ -1027,22 +1056,22 @@ function PromptInput(props) {
         });
       else removeNotification("ultrathink-active");
     };
-    Uc = [addNotification, removeNotification, qa.length];
+    ultrathinkNoticeDeps = [addNotification, removeNotification, ultrathinkRanges.length];
     $[139] = addNotification;
     $[140] = removeNotification;
-    $[141] = qa.length;
-    $[142] = dm;
-    $[143] = Uc;
+    $[141] = ultrathinkRanges.length;
+    $[142] = syncUltrathinkNotice;
+    $[143] = ultrathinkNoticeDeps;
   } else {
-    dm = $[142];
-    Uc = $[143];
+    syncUltrathinkNotice = $[142];
+    ultrathinkNoticeDeps = $[143];
   }
-  P(dm, Uc);
-  let uy;
-  let Wh;
-  if ($[144] !== addNotification || $[145] !== removeNotification || $[146] !== _c.length) {
-    uy = () => {
-      if (isUltraplanEnabled() && _c.length)
+  useEffect(syncUltrathinkNotice, ultrathinkNoticeDeps);
+  let syncUltraplanNotice;
+  let ultraplanNoticeDeps;
+  if ($[144] !== addNotification || $[145] !== removeNotification || $[146] !== ultraplanRanges.length) {
+    syncUltraplanNotice = () => {
+      if (isUltraplanEnabled() && ultraplanRanges.length)
         addNotification({
           key: "ultraplan-active",
           kind: "feedback",
@@ -1052,22 +1081,22 @@ function PromptInput(props) {
         });
       else removeNotification("ultraplan-active");
     };
-    Wh = [addNotification, removeNotification, _c.length];
+    ultraplanNoticeDeps = [addNotification, removeNotification, ultraplanRanges.length];
     $[144] = addNotification;
     $[145] = removeNotification;
-    $[146] = _c.length;
-    $[147] = uy;
-    $[148] = Wh;
+    $[146] = ultraplanRanges.length;
+    $[147] = syncUltraplanNotice;
+    $[148] = ultraplanNoticeDeps;
   } else {
-    uy = $[147];
-    Wh = $[148];
+    syncUltraplanNotice = $[147];
+    ultraplanNoticeDeps = $[148];
   }
-  P(uy, Wh);
-  let my;
-  let jh;
-  if ($[149] !== addNotification || $[150] !== Vd.length) {
-    my = () => {
-      if (isUltrareviewWithBridge() && Vd.length)
+  useEffect(syncUltraplanNotice, ultraplanNoticeDeps);
+  let showUltrareviewNotice;
+  let ultrareviewNoticeDeps;
+  if ($[149] !== addNotification || $[150] !== ultrareviewPositions.length) {
+    showUltrareviewNotice = () => {
+      if (isUltrareviewWithBridge() && ultrareviewPositions.length)
         addNotification({
           key: "ultrareview-active",
           kind: "contextual",
@@ -1076,27 +1105,27 @@ function PromptInput(props) {
           timeoutMs: 5000,
         });
     };
-    jh = [addNotification, Vd.length];
+    ultrareviewNoticeDeps = [addNotification, ultrareviewPositions.length];
     $[149] = addNotification;
-    $[150] = Vd.length;
-    $[151] = my;
-    $[152] = jh;
+    $[150] = ultrareviewPositions.length;
+    $[151] = showUltrareviewNotice;
+    $[152] = ultrareviewNoticeDeps;
   } else {
-    my = $[151];
-    jh = $[152];
+    showUltrareviewNotice = $[151];
+    ultrareviewNoticeDeps = $[152];
   }
-  P(my, jh);
-  let Jb;
-  let Im;
+  useEffect(showUltrareviewNotice, ultrareviewNoticeDeps);
+  let syncKeywordNotice;
+  let keywordNoticeDeps;
   if (
     $[153] !== addNotification ||
     $[154] !== removeNotification ||
-    $[155] !== pl ||
+    $[155] !== isWorkflowKeywordSuppressed ||
     $[156] !== workflowKeywordToggleShortcut ||
-    $[157] !== Ka.length
+    $[157] !== ultracodeRanges.length
   ) {
-    Jb = () => {
-      if (isWorkflowsAvailable() && Ka.length && !pl)
+    syncKeywordNotice = () => {
+      if (isWorkflowsAvailable() && ultracodeRanges.length && !isWorkflowKeywordSuppressed)
         addNotification({
           key: "workflow-keyword-active",
           text: `Dynamic workflow requested for this turn${workflowKeywordToggleShortcut ? ` \xB7 ${workflowKeywordToggleShortcut} to ignore` : ""}`,
@@ -1105,35 +1134,41 @@ function PromptInput(props) {
         });
       else removeNotification("workflow-keyword-active");
     };
-    Im = [addNotification, removeNotification, Ka.length, pl, workflowKeywordToggleShortcut];
+    keywordNoticeDeps = [
+      addNotification,
+      removeNotification,
+      ultracodeRanges.length,
+      isWorkflowKeywordSuppressed,
+      workflowKeywordToggleShortcut,
+    ];
     $[153] = addNotification;
     $[154] = removeNotification;
-    $[155] = pl;
+    $[155] = isWorkflowKeywordSuppressed;
     $[156] = workflowKeywordToggleShortcut;
-    $[157] = Ka.length;
-    $[158] = Jb;
-    $[159] = Im;
+    $[157] = ultracodeRanges.length;
+    $[158] = syncKeywordNotice;
+    $[159] = keywordNoticeDeps;
   } else {
-    Jb = $[158];
-    Im = $[159];
+    syncKeywordNotice = $[158];
+    keywordNoticeDeps = $[159];
   }
-  P(Jb, Im);
-  let Hg;
+  useEffect(syncKeywordNotice, keywordNoticeDeps);
+  let toggleKeywordSuppression;
   if (
     $[160] !== addNotification ||
     $[161] !== draft.value ||
-    $[162] !== gd ||
+    $[162] !== getWorkflowKeywordSuppressed ||
     $[163] !== removeNotification ||
-    $[164] !== Gl ||
+    $[164] !== setWorkflowKeywordSuppressed ||
     $[165] !== workflowKeywordToggleShortcut
   ) {
-    Hg = () => {
+    toggleKeywordSuppression = () => {
       if (ULTRACODE_KEYWORD(draft.value).length === 0) {
         return;
       }
-      let Zb = !gd();
-      Gl(Zb);
-      if (Zb) {
+      let nextSuppressed = !getWorkflowKeywordSuppressed();
+      setWorkflowKeywordSuppressed(nextSuppressed);
+      if (nextSuppressed) {
         logEvent("tengu_workflow_keyword_dismissed", {});
         addNotification({
           key: "workflow-keyword-ignored",
@@ -1149,28 +1184,28 @@ function PromptInput(props) {
     };
     $[160] = addNotification;
     $[161] = draft.value;
-    $[162] = gd;
+    $[162] = getWorkflowKeywordSuppressed;
     $[163] = removeNotification;
-    $[164] = Gl;
+    $[164] = setWorkflowKeywordSuppressed;
     $[165] = workflowKeywordToggleShortcut;
-    $[166] = Hg;
-  } else Hg = $[166];
-  let Dd = Hg;
-  let prevInputLengthRef = R(value.length);
-  let peakInputLengthRef = R(value.length);
-  let Zd;
+    $[166] = toggleKeywordSuppression;
+  } else toggleKeywordSuppression = $[166];
+  let toggleKeywordSuppressed = toggleKeywordSuppression;
+  let prevInputLengthRef = useRef(value.length);
+  let peakInputLengthRef = useRef(value.length);
+  let dismissStashHint;
   if ($[167] !== removeNotification) {
-    Zd = () => {
+    dismissStashHint = () => {
       removeNotification("stash-hint");
     };
     $[167] = removeNotification;
-    $[168] = Zd;
-  } else Zd = $[168];
-  let ig = Zd;
-  let fy;
-  let Fx;
+    $[168] = dismissStashHint;
+  } else dismissStashHint = $[168];
+  let dismissStashHintStable = dismissStashHint;
+  let stashHintEffect;
+  let stashHintDeps;
   if ($[169] !== addNotification || $[170] !== value.length) {
-    fy = () => {
+    stashHintEffect = () => {
       let prevLength = prevInputLengthRef.current;
       let peakLength = peakInputLengthRef.current;
       let currentLength = value.length;
@@ -1209,27 +1244,27 @@ function PromptInput(props) {
         peakInputLengthRef.current = currentLength;
       }
     };
-    Fx = [value.length, addNotification];
+    stashHintDeps = [value.length, addNotification];
     $[169] = addNotification;
     $[170] = value.length;
-    $[171] = fy;
-    $[172] = Fx;
+    $[171] = stashHintEffect;
+    $[172] = stashHintDeps;
   } else {
-    fy = $[171];
-    Fx = $[172];
+    stashHintEffect = $[171];
+    stashHintDeps = $[172];
   }
-  P(fy, Fx);
-  let vl;
+  useEffect(stashHintEffect, stashHintDeps);
+  let inputBufferOptions;
   if ($[173] === MEMO_CACHE_SENTINEL) {
-    vl = {
+    inputBufferOptions = {
       maxBufferSize: 50,
       debounceMs: 1000,
     };
-    $[173] = vl;
-  } else vl = $[173];
-  let { pushToBuffer, undo, canUndo, clearBuffer } = useInputBuffer(vl);
-  let defaultPlaceholder = R(mode);
-  let zp;
+    $[173] = inputBufferOptions;
+  } else inputBufferOptions = $[173];
+  let { pushToBuffer, undo, canUndo, clearBuffer } = useInputBuffer(inputBufferOptions);
+  let defaultPlaceholder = useRef(mode);
+  let pushToBufferWithMode;
   if (
     $[174] !== clearBuffer ||
     $[175] !== draft.mode ||
@@ -1238,17 +1273,19 @@ function PromptInput(props) {
     $[178] !== isVimEditorMode ||
     $[179] !== vimMode
   ) {
-    zp = (qh, Pc, Aa, rl) => {
+    pushToBufferWithMode = (text, editCursor, editPastedContents, editMeta) => {
       if (draft.mode !== defaultPlaceholder.current) {
         clearBuffer();
-        if (qh !== draft.value) {
+        if (text !== draft.value) {
           return;
         }
         defaultPlaceholder.current = draft.mode;
       }
       let immediate =
-        !rl?.continuesGesture && isVimEditorMode && (vimMode !== "INSERT" || !promptSuggestionState.current);
-      pushToBuffer(qh, Pc, Aa, {
+        !editMeta?.continuesGesture &&
+        isVimEditorMode &&
+        (vimMode !== "INSERT" || !promptSuggestionState.current);
+      pushToBuffer(text, editCursor, editPastedContents, {
         immediate,
       });
       promptSuggestionState.current = isVimEditorMode;
@@ -1259,114 +1296,114 @@ function PromptInput(props) {
     $[177] = pushToBuffer;
     $[178] = isVimEditorMode;
     $[179] = vimMode;
-    $[180] = zp;
-  } else zp = $[180];
-  let _a = zp;
-  let Jl;
+    $[180] = pushToBufferWithMode;
+  } else pushToBufferWithMode = $[180];
+  let pushToBufferStable = pushToBufferWithMode;
+  let clampCursorForMode;
   if ($[181] !== sessionUiStore || $[182] !== isVimEditorMode) {
-    Jl = (value) =>
+    clampCursorForMode = (value) =>
       isVimEditorMode && sessionUiStore.getState().vimMode === "NORMAL"
         ? setCwdState(value, value.length)
         : value.length;
     $[181] = sessionUiStore;
     $[182] = isVimEditorMode;
-    $[183] = Jl;
-  } else Jl = $[183];
-  let ew = Jl;
-  useMaybeTruncateInput(draft, ew);
-  let Wg;
+    $[183] = clampCursorForMode;
+  } else clampCursorForMode = $[183];
+  let clampCursor = clampCursorForMode;
+  useMaybeTruncateInput(draft, clampCursor);
+  let handleChange;
   if (
     $[184] !== cursorOffset ||
-    $[185] !== ig ||
+    $[185] !== dismissStashHintStable ||
     $[186] !== draft ||
     $[187] !== value ||
     $[188] !== setMode ||
     $[189] !== pastedContents ||
-    $[190] !== _a ||
+    $[190] !== pushToBufferStable ||
     $[191] !== session ||
     $[192] !== setAppState ||
     $[193] !== setCursorOffset ||
     $[194] !== setHelpOpen ||
     $[195] !== setValue
   ) {
-    Wg = (value_2, fc) => {
-      let interpretLeadingModeCharacter = fc?.interpretLeadingModeCharacter ?? true;
+    handleChange = (value_2, changeMeta) => {
+      let interpretLeadingModeCharacter = changeMeta?.interpretLeadingModeCharacter ?? true;
       setHelpOpen(false);
-      ig();
+      dismissStashHintStable();
       session.promptSuggestion.reset();
       setAppState(clearFooterSelectionState);
-      let gy = fc?.previous?.value ?? value;
-      let isSingleCharInsertion = value_2.length === gy.length + 1;
-      let Ux = (fc?.previous?.cursorOffset ?? cursorOffset) === 0;
+      let previousValue = changeMeta?.previous?.value ?? value;
+      let isSingleCharInsertion = value_2.length === previousValue.length + 1;
+      let wasAtStart = (changeMeta?.previous?.cursorOffset ?? cursorOffset) === 0;
       let mode = getModeFromInput_2(value_2);
-      if (interpretLeadingModeCharacter && Ux && mode !== "prompt") {
+      if (interpretLeadingModeCharacter && wasAtStart && mode !== "prompt") {
         if (isSingleCharInsertion) {
           if (mode !== draft.mode) {
             setMode(mode);
             return;
           }
-        } else if (gy.length === 0 && mode !== draft.mode) {
+        } else if (previousValue.length === 0 && mode !== draft.mode) {
           setMode(mode);
           let valueWithoutMode = stripModePrefix(value_2).replaceAll("\t", "    ");
-          _a(value, cursorOffset, pastedContents);
+          pushToBufferStable(value, cursorOffset, pastedContents);
           setValue(valueWithoutMode);
           setCursorOffset(valueWithoutMode.length);
           return;
         }
       }
       let processedValue = value_2.replaceAll("\t", "    ");
-      if (value !== processedValue) _a(value, cursorOffset, pastedContents);
-      if (fc?.keystroke === true && processedValue === value_2) draft.setValueTyped(processedValue);
+      if (value !== processedValue) pushToBufferStable(value, cursorOffset, pastedContents);
+      if (changeMeta?.keystroke === true && processedValue === value_2) draft.setValueTyped(processedValue);
       else setValue(processedValue);
     };
     $[184] = cursorOffset;
-    $[185] = ig;
+    $[185] = dismissStashHintStable;
     $[186] = draft;
     $[187] = value;
     $[188] = setMode;
     $[189] = pastedContents;
-    $[190] = _a;
+    $[190] = pushToBufferStable;
     $[191] = session;
     $[192] = setAppState;
     $[193] = setCursorOffset;
     $[194] = setHelpOpen;
     $[195] = setValue;
-    $[196] = Wg;
-  } else Wg = $[196];
-  let pu = Wg;
-  let noopInputUpdateRef = R(noopInputUpdate);
-  let $x;
-  if ($[197] !== pu) {
-    $x = (C0, Yp) =>
-      pu(C0, {
-        ...Yp,
+    $[196] = handleChange;
+  } else handleChange = $[196];
+  let handleChangeStable = handleChange;
+  let noopInputUpdateRef = useRef(noopInputUpdate);
+  let onChangeKeystroke;
+  if ($[197] !== handleChangeStable) {
+    onChangeKeystroke = (nextValue, meta) =>
+      handleChangeStable(nextValue, {
+        ...meta,
         keystroke: true,
       });
-    $[197] = pu;
-    $[198] = $x;
-  } else $x = $[198];
-  let onChange = $x;
-  let RE;
+    $[197] = handleChangeStable;
+    $[198] = onChangeKeystroke;
+  } else onChangeKeystroke = $[198];
+  let onChange = onChangeKeystroke;
+  let setOverrideRaw;
   if ($[199] !== draft) {
-    RE = (prev) => draft.attribute(cXe, prev);
+    setOverrideRaw = (prev) => draft.attribute(COMPOSER_EDIT_ORIGIN, prev);
     $[199] = draft;
-    $[200] = RE;
-  } else RE = $[200];
-  let $g = RE;
-  let OS;
-  if ($[201] !== draft.value || $[202] !== pu || $[203] !== setCursorOffset) {
-    OS = () => {
-      noopInputUpdateRef.current = (xE) => {
-        if (xE.text !== draft.value) pu(xE.text);
-        setCursorOffset(xE.cursor);
+    $[200] = setOverrideRaw;
+  } else setOverrideRaw = $[200];
+  let commitEdit = setOverrideRaw;
+  let attachNoopUpdateEffect;
+  if ($[201] !== draft.value || $[202] !== handleChangeStable || $[203] !== setCursorOffset) {
+    attachNoopUpdateEffect = () => {
+      noopInputUpdateRef.current = (nextState) => {
+        if (nextState.text !== draft.value) handleChangeStable(nextState.text);
+        setCursorOffset(nextState.cursor);
       };
     };
     $[201] = draft.value;
-    $[202] = pu;
+    $[202] = handleChangeStable;
     $[203] = setCursorOffset;
-    $[204] = OS;
-  } else OS = $[204];
-  zt(OS);
+    $[204] = attachNoopUpdateEffect;
+  } else attachNoopUpdateEffect = $[204];
+  useLayoutEffect(attachNoopUpdateEffect);
   let read;
   if ($[205] !== draft.cursorOffset || $[206] !== draft.value) {
     read = () => ({
@@ -1378,18 +1415,18 @@ function PromptInput(props) {
     $[207] = read;
   } else read = $[207];
   let commit;
-  if ($[208] !== $g) {
-    commit = (PE) => $g(() => noopInputUpdateRef.current(PE));
-    $[208] = $g;
+  if ($[208] !== commitEdit) {
+    commit = (update) => commitEdit(() => noopInputUpdateRef.current(update));
+    $[208] = commitEdit;
     $[209] = commit;
   } else commit = $[209];
   let carry;
   let carryLayers;
   let paint;
   if ($[210] !== draft) {
-    carry = (Md) => draft.carryPaint(Md.before, Md.after);
+    carry = (paintLayer) => draft.carryPaint(paintLayer.before, paintLayer.after);
     carryLayers = (updater) => draft.carryLayers(updater.before, updater.after);
-    paint = (If, fu) => draft.paint(normalizeInputDecorations(If, fu));
+    paint = (decorations, layers) => draft.paint(normalizeInputDecorations(decorations, layers));
     $[210] = draft;
     $[211] = carry;
     $[212] = carryLayers;
@@ -1399,7 +1436,7 @@ function PromptInput(props) {
     carryLayers = $[212];
     paint = $[213];
   }
-  let w_;
+  let relayHandlers;
   if (
     $[214] !== read ||
     $[215] !== commit ||
@@ -1407,7 +1444,7 @@ function PromptInput(props) {
     $[217] !== carryLayers ||
     $[218] !== paint
   ) {
-    w_ = {
+    relayHandlers = {
       read,
       commit,
       carry,
@@ -1419,19 +1456,24 @@ function PromptInput(props) {
     $[216] = carry;
     $[217] = carryLayers;
     $[218] = paint;
-    $[219] = w_;
-  } else w_ = $[219];
-  let Vg = relayPromptEdits(w_);
-  let k_;
-  if ($[220] !== $g || $[221] !== draft.cursorOffset || $[222] !== draft.value || $[223] !== Vg) {
-    k_ = (prev) => {
+    $[219] = relayHandlers;
+  } else relayHandlers = $[219];
+  let editRelay = relayPromptEdits(relayHandlers);
+  let recordableCommit;
+  if (
+    $[220] !== commitEdit ||
+    $[221] !== draft.cursorOffset ||
+    $[222] !== draft.value ||
+    $[223] !== editRelay
+  ) {
+    recordableCommit = (prev) => {
       let before = {
         text: draft.value,
         cursor: draft.cursorOffset,
       };
-      $g(prev);
-      if (Vg.isRecording())
-        Vg.record({
+      commitEdit(prev);
+      if (editRelay.isRecording())
+        editRelay.record({
           before,
           after: {
             text: draft.value,
@@ -1439,51 +1481,55 @@ function PromptInput(props) {
           },
         });
     };
-    $[220] = $g;
+    $[220] = commitEdit;
     $[221] = draft.cursorOffset;
     $[222] = draft.value;
-    $[223] = Vg;
-    $[224] = k_;
-  } else k_ = $[224];
-  let Kk = k_;
-  let C_;
+    $[223] = editRelay;
+    $[224] = recordableCommit;
+  } else recordableCommit = $[224];
+  let commitWithRecording = recordableCommit;
+  let handleExternalEdit;
   if (
     $[225] !== draft ||
-    $[226] !== pu ||
+    $[226] !== handleChangeStable ||
     $[227] !== setMode ||
     $[228] !== sessionUiStore ||
     $[229] !== setCursorOffset ||
     $[230] !== setPastedContents ||
     $[231] !== isVimEditorMode
   ) {
-    C_ = (Jp, T_, sw, hy) => {
-      draft.attribute(IT, () =>
-        pu(Jp, {
+    handleExternalEdit = (text, mode, pastedContents, cursorOffset) => {
+      draft.attribute(historyPromptOrigin, () =>
+        handleChangeStable(text, {
           interpretLeadingModeCharacter: false,
         }),
       );
-      setMode(T_);
-      setPastedContents(sw);
-      let FS = draft.value;
-      if (!isVimEditorMode || sessionUiStore.getState().vimMode !== "NORMAL" || FS !== FS.normalize("NFC")) {
-        setCursorOffset(hy);
+      setMode(mode);
+      setPastedContents(pastedContents);
+      let nextValue = draft.value;
+      if (
+        !isVimEditorMode ||
+        sessionUiStore.getState().vimMode !== "NORMAL" ||
+        nextValue !== nextValue.normalize("NFC")
+      ) {
+        setCursorOffset(cursorOffset);
         return;
       }
-      let onSubmit = clampCursorOffset(FS, hy);
-      let hasImages = parsePastedRefs(FS).some(
-        (WS) => onSubmit >= WS.index && onSubmit < WS.index + WS.match.length,
+      let onSubmit = clampCursorOffset(nextValue, cursorOffset);
+      let hasImages = parsePastedRefs(nextValue).some(
+        (refRange) => onSubmit >= refRange.index && onSubmit < refRange.index + refRange.match.length,
       );
-      setCursorOffset(hasImages ? hy : onSubmit);
+      setCursorOffset(hasImages ? cursorOffset : onSubmit);
     };
     $[225] = draft;
-    $[226] = pu;
+    $[226] = handleChangeStable;
     $[227] = setMode;
     $[228] = sessionUiStore;
     $[229] = setCursorOffset;
     $[230] = setPastedContents;
     $[231] = isVimEditorMode;
-    $[232] = C_;
-  } else C_ = $[232];
+    $[232] = handleExternalEdit;
+  } else handleExternalEdit = $[232];
   let {
     resetHistory,
     onHistoryUp,
@@ -1492,40 +1538,40 @@ function PromptInput(props) {
     historyIndex,
     historyTotal,
     historyEdited,
-  } = useArrowKeyHistory(draft, C_, _s);
-  let R0;
+  } = useArrowKeyHistory(draft, handleExternalEdit, queuedRowsStable);
+  let resetHistoryStable;
   if ($[233] !== resetHistory) {
-    R0 = () => {
+    resetHistoryStable = () => {
       resetHistory();
     };
     $[233] = resetHistory;
-    $[234] = R0;
-  } else R0 = $[234];
-  let P_;
+    $[234] = resetHistoryStable;
+  } else resetHistoryStable = $[234];
+  let resetHistoryDeps;
   if ($[235] !== resetHistory || $[236] !== viewingAgentTaskId) {
-    P_ = [viewingAgentTaskId, resetHistory];
+    resetHistoryDeps = [viewingAgentTaskId, resetHistory];
     $[235] = resetHistory;
     $[236] = viewingAgentTaskId;
-    $[237] = P_;
-  } else P_ = $[237];
-  P(R0, P_);
-  let UK;
-  let EE;
+    $[237] = resetHistoryDeps;
+  } else resetHistoryDeps = $[237];
+  useEffect(resetHistoryStable, resetHistoryDeps);
+  let dismissSearchHintEffect;
+  let dismissSearchHintDeps;
   if ($[238] !== dismissSearchHint || $[239] !== isSearchingHistory) {
-    UK = () => {
+    dismissSearchHintEffect = () => {
       if (isSearchingHistory) dismissSearchHint();
     };
-    EE = [isSearchingHistory, dismissSearchHint];
+    dismissSearchHintDeps = [isSearchingHistory, dismissSearchHint];
     $[238] = dismissSearchHint;
     $[239] = isSearchingHistory;
-    $[240] = UK;
-    $[241] = EE;
+    $[240] = dismissSearchHintEffect;
+    $[241] = dismissSearchHintDeps;
   } else {
-    UK = $[240];
-    EE = $[241];
+    dismissSearchHintEffect = $[240];
+    dismissSearchHintDeps = $[241];
   }
-  P(UK, EE);
-  let A_;
+  useEffect(dismissSearchHintEffect, dismissSearchHintDeps);
+  let popQueuedInput;
   if (
     $[242] !== chrome ||
     $[243] !== draft ||
@@ -1537,21 +1583,22 @@ function PromptInput(props) {
     $[249] !== setPastedContents ||
     $[250] !== isVimEditorMode
   ) {
-    A_ = () => {
-      let Zp = messageQueue.popAllEditable(draft.value, draft.cursorOffset, draft.pastedContents);
-      if (!Zp) {
+    popQueuedInput = () => {
+      let queuedInput = messageQueue.popAllEditable(draft.value, draft.cursorOffset, draft.pastedContents);
+      if (!queuedInput) {
         return false;
       }
-      setValue(Zp.text);
-      if (Zp.unpassed) draft.markCameBack();
-      setMode(Zp.mode);
+      setValue(queuedInput.text);
+      if (queuedInput.unpassed) draft.markCameBack();
+      setMode(queuedInput.mode);
       setCursorOffset(
         isVimEditorMode && sessionUiStore.getState().vimMode === "NORMAL"
-          ? setCwdState(draft.value, Zp.cursorOffset)
-          : Zp.cursorOffset,
+          ? setCwdState(draft.value, queuedInput.cursorOffset)
+          : queuedInput.cursorOffset,
       );
-      chrome.returnIdeSelection(Zp.ideSelection);
-      if (Zp.images.length > 0) setPastedContents((WK) => mergeTurnTags(WK, Zp.images));
+      chrome.returnIdeSelection(queuedInput.ideSelection);
+      if (queuedInput.images.length > 0)
+        setPastedContents((pastedContents) => mergeTurnTags(pastedContents, queuedInput.images));
       logFeatureOk("input_queue_pop_to_edit");
       return true;
     };
@@ -1564,11 +1611,11 @@ function PromptInput(props) {
     $[248] = setValue;
     $[249] = setPastedContents;
     $[250] = isVimEditorMode;
-    $[251] = A_;
-  } else A_ = $[251];
-  let M_ = A_;
+    $[251] = popQueuedInput;
+  } else popQueuedInput = $[251];
+  let popQueuedInputStable = popQueuedInput;
   const suppressSuggestions = isSearchingHistory || (historyIndex > 0 && !historyEdited) || storeSelector;
-  let OE;
+  let typeaheadArgs;
   if (
     $[252] !== activeAgents ||
     $[253] !== commands ||
@@ -1579,7 +1626,7 @@ function PromptInput(props) {
     $[258] !== suggestionsStore ||
     $[259] !== suppressSuggestions
   ) {
-    OE = {
+    typeaheadArgs = {
       draft,
       commands,
       onSubmit,
@@ -1597,8 +1644,8 @@ function PromptInput(props) {
     $[257] = scope.sessionEnvVars;
     $[258] = suggestionsStore;
     $[259] = suppressSuggestions;
-    $[260] = OE;
-  } else OE = $[260];
+    $[260] = typeaheadArgs;
+  } else typeaheadArgs = $[260];
   let {
     suggestions,
     commandArgumentHint,
@@ -1607,25 +1654,25 @@ function PromptInput(props) {
     selectSuggestion,
     setHoveredSuggestion,
     cursorRowId,
-  } = useTypeahead(OE);
-  let zx;
+  } = useTypeahead(typeaheadArgs);
+  let isQueueEditable;
   if ($[261] !== draft.value || $[262] !== value || $[263] !== messageQueue) {
-    zx = function Kg() {
+    isQueueEditable = function isQueueEditable() {
       return messageQueue.getCommandQueue().some(isRefillableInput) && draft.value === value;
     };
     $[261] = draft.value;
     $[262] = value;
     $[263] = messageQueue;
-    $[264] = zx;
-  } else zx = $[264];
-  let Kg = zx;
-  let A0;
+    $[264] = isQueueEditable;
+  } else isQueueEditable = $[264];
+  let isQueueEditableStable = isQueueEditable;
+  let onHistoryUpHandler;
   if (
-    $[265] !== ew ||
+    $[265] !== clampCursor ||
     $[266] !== draft ||
-    $[267] !== Kg ||
+    $[267] !== isQueueEditableStable ||
     $[268] !== onHistoryUp ||
-    $[269] !== M_ ||
+    $[269] !== popQueuedInputStable ||
     $[270] !== messageQueue ||
     $[271] !== commandQueue ||
     $[272] !== setCursorOffset ||
@@ -1633,7 +1680,7 @@ function PromptInput(props) {
     $[274] !== store ||
     $[275] !== suggestions
   ) {
-    A0 = function GS() {
+    onHistoryUpHandler = function onHistoryUpHandler() {
       if (suggestions.length > 1) {
         return;
       }
@@ -1643,14 +1690,14 @@ function PromptInput(props) {
         return;
       }
       if (draft.restoreCleared()) {
-        setCursorOffset(ew(draft.value));
+        setCursorOffset(clampCursor(draft.value));
         return;
       }
       if (isKbCohesionFixesOn()) {
         let queueEditIndex = store.getState().queueEditIndex;
-        let E0 = count(messageQueue.getCommandQueueSnapshot(), isRefillableInput);
-        if (queueEditIndex === null && E0 > 0) {
-          setQueueEditIndex(E0 - 1);
+        let refillableCount = count(messageQueue.getCommandQueueSnapshot(), isRefillableInput);
+        if (queueEditIndex === null && refillableCount > 0) {
+          setQueueEditIndex(refillableCount - 1);
           return;
         }
         if (queueEditIndex !== null) {
@@ -1665,27 +1712,27 @@ function PromptInput(props) {
         commandQueue.some(isRefillableInput) ||
         messageQueue.getCommandQueueSnapshot().some(isRefillableInput)
       ) {
-        if (M_() || !Kg()) {
+        if (popQueuedInputStable() || !isQueueEditableStable()) {
           return;
         }
       }
       onHistoryUp();
     };
-    $[265] = ew;
+    $[265] = clampCursor;
     $[266] = draft;
-    $[267] = Kg;
+    $[267] = isQueueEditableStable;
     $[268] = onHistoryUp;
-    $[269] = M_;
+    $[269] = popQueuedInputStable;
     $[270] = messageQueue;
     $[271] = commandQueue;
     $[272] = setCursorOffset;
     $[273] = setQueueEditIndex;
     $[274] = store;
     $[275] = suggestions;
-    $[276] = A0;
-  } else A0 = $[276];
-  let onHistoryUp_2 = A0;
-  let I_;
+    $[276] = onHistoryUpHandler;
+  } else onHistoryUpHandler = $[276];
+  let onHistoryUp_2 = onHistoryUpHandler;
+  let onHistoryDownHandler;
   if (
     $[277] !== draft.cursorOffset ||
     $[278] !== draft.value ||
@@ -1696,7 +1743,7 @@ function PromptInput(props) {
     $[283] !== store ||
     $[284] !== suggestions
   ) {
-    I_ = function Tc() {
+    onHistoryDownHandler = function onHistoryDownHandler() {
       if (suggestions.length > 1) {
         return;
       }
@@ -1708,8 +1755,8 @@ function PromptInput(props) {
       if (isKbCohesionFixesOn()) {
         let queueEditIndex = store.getState().queueEditIndex;
         if (queueEditIndex !== null) {
-          let qK = count(messageQueue.getCommandQueueSnapshot(), isRefillableInput);
-          if (queueEditIndex < qK - 1) setQueueEditIndex(queueEditIndex + 1);
+          let refillableCount = count(messageQueue.getCommandQueueSnapshot(), isRefillableInput);
+          if (queueEditIndex < refillableCount - 1) setQueueEditIndex(queueEditIndex + 1);
           else setQueueEditIndex(null);
           return;
         }
@@ -1724,11 +1771,11 @@ function PromptInput(props) {
     $[282] = setQueueEditIndex;
     $[283] = store;
     $[284] = suggestions;
-    $[285] = I_;
-  } else I_ = $[285];
-  let onHistoryDown_2 = I_;
-  let [, $K] = Uy(incrementOffset, 0);
-  let VK;
+    $[285] = onHistoryDownHandler;
+  } else onHistoryDownHandler = $[285];
+  let onHistoryDown_2 = onHistoryDownHandler;
+  let [, bumpOffset] = useReducer(incrementOffset, 0);
+  let onSubmitHandler;
   if (
     $[286] !== chordGestureSpent ||
     $[287] !== clock ||
@@ -1736,28 +1783,28 @@ function PromptInput(props) {
     $[289] !== draft.value ||
     $[290] !== onSubmit
   ) {
-    VK = (D0) => {
-      if (chordGestureSpent(D0)) {
+    onSubmitHandler = (input) => {
+      if (chordGestureSpent(input)) {
         return;
       }
       onSubmit(
-        D0 === "" ? "" : draft.value,
+        input === "" ? "" : draft.value,
         false,
         undefined,
         false,
         draft.typedOnly ? createFrozenEmpty() : undefined,
       );
-      clock.setTimeout($K, 0);
+      clock.setTimeout(bumpOffset, 0);
     };
     $[286] = chordGestureSpent;
     $[287] = clock;
     $[288] = draft.typedOnly;
     $[289] = draft.value;
     $[290] = onSubmit;
-    $[291] = VK;
-  } else VK = $[291];
-  let onSubmit_2 = VK;
-  let onKeyDownBefore = function Qm(prev) {
+    $[291] = onSubmitHandler;
+  } else onSubmitHandler = $[291];
+  let onSubmit_2 = onSubmitHandler;
+  let onKeyDownBefore = function onKeyDownBeforeImpl(prev) {
     if (prev.name === "return" && !prev.ctrl && !prev.meta && !prev.shift && takeEnter()) {
       prev.preventDefault();
       return;
@@ -1779,20 +1826,20 @@ function PromptInput(props) {
       !prev.superKey &&
       !isSearchingHistory &&
       (!isVimEditorMode || vimMode === "INSERT") &&
-      !gd() &&
-      Ka.some((prev) => prev.end === cursorOffset)
+      !getWorkflowKeywordSuppressed() &&
+      ultracodeRanges.some((prev) => prev.end === cursorOffset)
     ) {
       prev.preventDefault();
-      Dd();
+      toggleKeywordSuppressed();
       return;
     }
     if (getPlatform() === "macos" && isMacOptionSpecialChar(prev.key)) {
-      let Df = MACOS_OPTION_SPECIAL_CHARS[prev.key];
+      let specialChar = MACOS_OPTION_SPECIAL_CHARS[prev.key];
       let nativeCSIuTerminalDisplayName = getNativeCSIuTerminalDisplayName();
       let segments = nativeCSIuTerminalDisplayName
         ? [
             {
-              text: `To enable ${Df}, set `,
+              text: `To enable ${specialChar}, set `,
               dim: true,
             },
             {
@@ -1807,7 +1854,7 @@ function PromptInput(props) {
           ]
         : [
             {
-              text: `To enable ${Df}, run /terminal-setup`,
+              text: `To enable ${specialChar}, run /terminal-setup`,
               dim: true,
             },
           ];
@@ -1816,15 +1863,15 @@ function PromptInput(props) {
         kind: "contextual",
         segments,
         row1Hint: nativeCSIuTerminalDisplayName
-          ? `set Option as Meta to use ${Df}`
-          : `/terminal-setup to use ${Df}`,
+          ? `set Option as Meta to use ${specialChar}`
+          : `/terminal-setup to use ${specialChar}`,
         priority: "immediate",
         timeoutMs: 5000,
       });
     }
     if (prev.ctrl && prev.key === "c" && (historyIndex === 0 || historyEdited))
       draft.holdCleared({
-        intoHistory: _s === undefined,
+        intoHistory: queuedRowsStable === undefined,
       });
     useComposerEscape(prev, {
       draft,
@@ -1851,7 +1898,7 @@ function PromptInput(props) {
         if (
           (commandQueue.some(isRefillableInput) ||
             messageQueue.getCommandQueueSnapshot().some(isRefillableInput)) &&
-          (M_() || !Kg())
+          (popQueuedInputStable() || !isQueueEditableStable())
         ) {
           return;
         }
@@ -1860,67 +1907,68 @@ function PromptInput(props) {
     }
     if (prev.name === "return" && helpOpen) setHelpOpen(false);
   };
-  let j0;
-  let uw;
+  let pasteCleanupEffect;
+  let draftDeps;
   if ($[292] !== draft) {
-    j0 = () => {
-      let lne = draft.value;
-      let Xx;
-      let KK = false;
+    pasteCleanupEffect = () => {
+      let prevValue = draft.value;
+      let prevPastedContents;
+      let hasSynthetic = false;
       let weakMap = new WeakMap();
-      let HE = (D_, dne) => {
-        let Jk = weakMap.get(D_);
-        if (Jk === undefined) {
-          Jk = uniq(dne().map(normalizeNfd));
-          weakMap.set(D_, Jk);
+      let cachedNfd = (pastedEntry, getVariants) => {
+        let cachedVariants = weakMap.get(pastedEntry);
+        if (cachedVariants === undefined) {
+          cachedVariants = uniq(getVariants().map(normalizeNfd));
+          weakMap.set(pastedEntry, cachedVariants);
         }
-        return Jk;
+        return cachedVariants;
       };
       return draft.subscribe(() => {
-        let { value: UE, pastedContents } = draft;
-        if (UE === lne) {
+        let { value: nextValue, pastedContents } = draft;
+        if (nextValue === prevValue) {
           return;
         }
-        lne = UE;
-        if (pastedContents !== Xx) {
-          Xx = pastedContents;
-          KK = Object.values(pastedContents).some(isSyntheticContent);
+        prevValue = nextValue;
+        if (pastedContents !== prevPastedContents) {
+          prevPastedContents = pastedContents;
+          hasSynthetic = Object.values(pastedContents).some(isSyntheticContent);
         }
-        if (!KK) {
+        if (!hasSynthetic) {
           return;
         }
-        let pastedRefs = parsePastedRefs(UE);
+        let pastedRefs = parsePastedRefs(nextValue);
         let referencedIds = new Set(pastedRefs.map(pasteIdOf));
-        draft.setPastedContents((QS) => {
-          let values = Object.values(QS);
-          let orphaned = Object.entries(QS).filter(isOrphanedTextPaste);
-          let lazySpaceInputFilter = expandTruncatedPastes(UE, QS);
+        draft.setPastedContents((contents) => {
+          let values = Object.values(contents);
+          let orphaned = Object.entries(contents).filter(isOrphanedTextPaste);
+          let lazySpaceInputFilter = expandTruncatedPastes(nextValue, contents);
           let mapped = orphaned.map(secondEntryValue);
-          let jc = new Set(pastedRefs.flatMap(truncatedTextPasteIds));
-          let onIdeAtMentioned = (atMentioned) => HE(atMentioned, () => [atMentioned.content])[0] ?? "";
-          let O_;
-          let VE = (prev) => {
-            let content = prev.content;
+          let truncatedIds = new Set(pastedRefs.flatMap(truncatedTextPasteIds));
+          let onIdeAtMentioned = (atMentioned) =>
+            cachedNfd(atMentioned, () => [atMentioned.content])[0] ?? "";
+          let expandedNfd;
+          let isRetained = (pastedEntry) => {
+            let content = pastedEntry.content;
             if (lazySpaceInputFilter.includes(content)) {
               return true;
             }
-            let N_ = nfcVariants(content);
-            if (N_.some((prev) => prev !== content && lazySpaceInputFilter.includes(prev))) {
+            let variants = nfcVariants(content);
+            if (variants.some((prev) => prev !== content && lazySpaceInputFilter.includes(prev))) {
               return true;
             }
-            if (O_ === undefined)
-              O_ = expandTruncatedPastes(
-                UE.normalize("NFD"),
+            if (expandedNfd === undefined)
+              expandedNfd = expandTruncatedPastes(
+                nextValue.normalize("NFD"),
                 Object.fromEntries(
                   orphaned
                     .filter((prev) => {
-                      let [QK] = prev;
-                      return jc.has(QK);
+                      let [pasteId] = prev;
+                      return truncatedIds.has(pasteId);
                     })
                     .map((prev) => {
-                      let [zK, atMentioned] = prev;
+                      let [pasteId, atMentioned] = prev;
                       return [
-                        zK,
+                        pasteId,
                         {
                           ...atMentioned,
                           content: onIdeAtMentioned(atMentioned),
@@ -1929,12 +1977,12 @@ function PromptInput(props) {
                     }),
                 ),
               );
-            let iP = O_;
-            let nextMode = HE(prev, () => N_);
+            let expandedNfdStable = expandedNfd;
+            let nextMode = cachedNfd(pastedEntry, () => variants);
             if (
-              nextMode.some((prev) => iP.includes(prev)) ||
-              nextMode.some((current) => endsWithCombiningMatch(iP, current)) ||
-              N_.some((prev) => mapped.some((prev_2) => prev_2.content.includes(prev)))
+              nextMode.some((prev) => expandedNfdStable.includes(prev)) ||
+              nextMode.some((current) => endsWithCombiningMatch(expandedNfdStable, current)) ||
+              variants.some((prev) => mapped.some((prev_2) => prev_2.content.includes(prev)))
             ) {
               return true;
             }
@@ -1943,124 +1991,131 @@ function PromptInput(props) {
             );
           };
           let filtered = values.filter((prev) =>
-            prev.inline ? !VE(prev) : isSyntheticContent(prev) && !referencedIds.has(prev.id),
+            prev.inline ? !isRetained(prev) : isSyntheticContent(prev) && !referencedIds.has(prev.id),
           );
           if (filtered.length === 0) {
-            return QS;
+            return contents;
           }
-          let cne = {
-            ...QS,
+          let nextContents = {
+            ...contents,
           };
-          for (const une of filtered) delete cne[une.id];
-          return cne;
+          for (const pastedEntry of filtered) delete nextContents[pastedEntry.id];
+          return nextContents;
         });
       });
     };
-    uw = [draft];
+    draftDeps = [draft];
     $[292] = draft;
-    $[293] = j0;
-    $[294] = uw;
+    $[293] = pasteCleanupEffect;
+    $[294] = draftDeps;
   } else {
-    j0 = $[293];
-    uw = $[294];
+    pasteCleanupEffect = $[293];
+    draftDeps = $[294];
   }
-  P(j0, uw);
-  let tP;
+  useEffect(pasteCleanupEffect, draftDeps);
+  let expandPaste;
   if (
-    $[295] !== Vl ||
+    $[295] !== resetPasteHintStable ||
     $[296] !== draft ||
-    $[297] !== _a ||
+    $[297] !== pushToBufferStable ||
     $[298] !== setCursorOffset ||
     $[299] !== setValue ||
     $[300] !== setPastedContents
   ) {
-    tP = function ev(prev) {
-      let { value: J0, cursorOffset, pastedContents } = draft;
-      let bw = expandLastPaste(J0, pastedContents);
-      if (bw?.id !== prev) {
+    expandPaste = function expandPasteImpl(prev) {
+      let { value: nextValue, cursorOffset, pastedContents } = draft;
+      let paste = expandLastPaste(nextValue, pastedContents);
+      if (paste?.id !== prev) {
         return false;
       }
-      _a(J0, cursorOffset, pastedContents);
-      let content = pastedContents[bw.id]?.content ?? "";
-      let YK = bw.cursorOffset - content.length;
+      pushToBufferStable(nextValue, cursorOffset, pastedContents);
+      let content = pastedContents[paste.id]?.content ?? "";
+      let headLength = paste.cursorOffset - content.length;
       let { written, end } = composeNormalized(
-        bw.expanded.slice(0, YK).normalize("NFC"),
+        paste.expanded.slice(0, headLength).normalize("NFC"),
         content,
-        bw.expanded.slice(bw.cursorOffset),
+        paste.expanded.slice(paste.cursorOffset),
       );
       setValue(written);
       setCursorOffset(end);
       setPastedContents((prev) => {
-        let Zk = {
+        let nextContents = {
           ...prev,
         };
-        let Z0 = Zk[bw.id];
-        delete Zk[bw.id];
-        return Z0 ? addInlineTextContentsWithFallback(Zk, Z0.content, isVirtualPancakeEnabled()) : Zk;
+        let pastedEntry = nextContents[paste.id];
+        delete nextContents[paste.id];
+        return pastedEntry
+          ? addInlineTextContentsWithFallback(nextContents, pastedEntry.content, isVirtualPancakeEnabled())
+          : nextContents;
       });
-      Vl();
+      resetPasteHintStable();
       return true;
     };
-    $[295] = Vl;
+    $[295] = resetPasteHintStable;
     $[296] = draft;
-    $[297] = _a;
+    $[297] = pushToBufferStable;
     $[298] = setCursorOffset;
     $[299] = setValue;
     $[300] = setPastedContents;
-    $[301] = tP;
-  } else tP = $[301];
-  let ev = tP;
-  let onPaste = function eB(prev) {
+    $[301] = expandPaste;
+  } else expandPaste = $[301];
+  let expandPasteStable = expandPaste;
+  let onPaste = function onPasteImpl(prev) {
     setAppState(clearFooterSelectionState);
-    let eNe = thinkingEnabled.current === "link" ? " " : "";
+    let prefix = thinkingEnabled.current === "link" ? " " : "";
     thinkingEnabled.current = false;
-    let { value: tNe, pastedContents } = draft;
-    let cwd = stripAnsi(prev)
+    let { value: nextValue, pastedContents } = draft;
+    let replaced = stripAnsi(prev)
       .replace(
         /\r\n|\r/g,
         `
 `,
       )
       .replaceAll("\t", "    ");
-    if (tNe.length === 0) {
-      let modeFromInput = getModeFromInput_2(cwd);
+    if (nextValue.length === 0) {
+      let modeFromInput = getModeFromInput_2(replaced);
       if (modeFromInput !== "prompt") {
         setMode(modeFromInput);
-        cwd = stripModePrefix(cwd);
+        replaced = stripModePrefix(replaced);
       }
     }
-    let trimmed = cwd.trim();
-    let JE = isSetupGuideLink(trimmed);
-    if (JE) cwd = trimmed;
-    let ZE = mainLoopModelForSession.current;
-    if (ZE !== null && pastedContents[ZE]?.type === "text" && pastedContents[ZE].content === cwd && ev(ZE)) {
+    let text = replaced.trim();
+    let isGuideLink = isSetupGuideLink(text);
+    if (isGuideLink) replaced = text;
+    let lastPasteId = mainLoopModelForSession.current;
+    if (
+      lastPasteId !== null &&
+      pastedContents[lastPasteId]?.type === "text" &&
+      pastedContents[lastPasteId].content === replaced &&
+      expandPasteStable(lastPasteId)
+    ) {
       return;
     }
-    let pastedTextRefNumLines = getPastedTextRefNumLines(cwd);
+    let pastedTextRefNumLines = getPastedTextRefNumLines(replaced);
     let max = Math.max(0, Math.min(rows - 10, 2));
-    if (cwd.length > PASTE_THRESHOLD || pastedTextRefNumLines > max || JE) {
-      if (!JE) logFeatureOk("input_paste_large");
-      let tD = mintPasteId(tNe, pastedContents);
-      mainLoopModelForSession.current = tD;
-      let oNe = {
-        id: tD,
+    if (replaced.length > PASTE_THRESHOLD || pastedTextRefNumLines > max || isGuideLink) {
+      if (!isGuideLink) logFeatureOk("input_paste_large");
+      let pasteId = mintPasteId(nextValue, pastedContents);
+      mainLoopModelForSession.current = pasteId;
+      let newContent = {
+        id: pasteId,
         type: "text",
-        content: cwd,
+        content: replaced,
       };
       setPastedContents((prev) => ({
         ...prev,
-        [tD]: oNe,
+        [pasteId]: newContent,
       }));
-      Pp(
-        eNe +
+      insertAtCursor(
+        prefix +
           formatPastedTextRef(
-            tD,
+            pasteId,
             pastedTextRefNumLines,
-            JE || isSetupGuidePaste(cwd) ? TEAM_SETUP_GUIDE_LABEL : undefined,
+            isGuideLink || isSetupGuidePaste(replaced) ? TEAM_SETUP_GUIDE_LABEL : undefined,
           ),
       );
-      if (JE) thinkingEnabled.current = "link";
-      if (cwd.length <= MAX_HISTORY_ENTRIES) {
+      if (isGuideLink) thinkingEnabled.current = "link";
+      if (replaced.length <= MAX_HISTORY_ENTRIES) {
         onExpandPasteHintChange(true);
         isFastMode.current?.();
         isFastMode.current = clock.setTimeout(() => {
@@ -2069,19 +2124,21 @@ function PromptInput(props) {
         }, 8000);
       }
     } else {
-      let yne =
+      let needsInlinePaste =
         isVirtualPancakeEnabled() &&
-        (mentionsUltraplan(cwd) || getPastedTextRefNumLines(stripInvisibleChars_2(cwd).text) > max);
-      if (yne || hasTextAfterNfcNormalize(cwd))
-        setPastedContents((MAt) => addInlineTextContentsWithFallback(MAt, cwd, yne));
-      Pp(eNe + cwd, {
+        (mentionsUltraplan(replaced) || getPastedTextRefNumLines(stripInvisibleChars_2(replaced).text) > max);
+      if (needsInlinePaste || hasTextAfterNfcNormalize(replaced))
+        setPastedContents((pastedContents) =>
+          addInlineTextContentsWithFallback(pastedContents, replaced, needsInlinePaste),
+        );
+      insertAtCursor(prefix + replaced, {
         isTyped: true,
       });
     }
   };
-  let hw;
+  let spaceRestoreFilter;
   if ($[302] === MEMO_CACHE_SENTINEL) {
-    hw = (input, key) => {
+    spaceRestoreFilter = (input, key) => {
       if (!thinkingEnabled.current) {
         return input;
       }
@@ -2091,37 +2148,38 @@ function PromptInput(props) {
       }
       return input;
     };
-    $[302] = hw;
-  } else hw = $[302];
-  let iNe = hw;
-  let tG = R(null);
-  let oB = R(null);
-  let Sne;
+    $[302] = spaceRestoreFilter;
+  } else spaceRestoreFilter = $[302];
+  let spaceAwareFilter = spaceRestoreFilter;
+  let pendingUndoRef = useRef(null);
+  let pendingRestoreRef = useRef(null);
+  let helpAwareFilter;
   if ($[303] !== draft.value || $[304] !== toggleHelp || $[305] !== isVimEditorMode || $[306] !== vimMode) {
-    Sne = (nG, bne) => {
-      let rG = !bne.ctrl && !bne.meta && draft.value === "" && (!isVimEditorMode || vimMode === "INSERT");
-      if (nG === "?" && rG) {
+    helpAwareFilter = (input, key) => {
+      let canToggleHelp =
+        !key.ctrl && !key.meta && draft.value === "" && (!isVimEditorMode || vimMode === "INSERT");
+      if (input === "?" && canToggleHelp) {
         toggleHelp();
         thinkingEnabled.current = false;
         return "";
       }
-      return iNe(nG, bne);
+      return spaceAwareFilter(input, key);
     };
     $[303] = draft.value;
     $[304] = toggleHelp;
     $[305] = isVimEditorMode;
     $[306] = vimMode;
-    $[307] = Sne;
-  } else Sne = $[307];
-  let inputFilter = Sne;
-  let sG;
+    $[307] = helpAwareFilter;
+  } else helpAwareFilter = $[307];
+  let inputFilter = helpAwareFilter;
+  let clampCursorBeforeTyped;
   if (
     $[308] !== columns ||
     $[309] !== draft.cursorOffset ||
     $[310] !== draft.value ||
     $[311] !== sessionUiStore
   ) {
-    sG = () => {
+    clampCursorBeforeTyped = () => {
       let cursorOffset = draft.cursorOffset;
       if (
         !EDITOR_MODES() ||
@@ -2130,11 +2188,11 @@ function PromptInput(props) {
       ) {
         return cursorOffset;
       }
-      let iG = Cursor.fromText(draft.value, columns, cursorOffset);
-      let offset = iG.endOfLogicalLine().offset;
-      return cursorOffset !== iG.startOfLogicalLine().offset &&
+      let cursor = Cursor.fromText(draft.value, columns, cursorOffset);
+      let offset = cursor.endOfLogicalLine().offset;
+      return cursorOffset !== cursor.startOfLogicalLine().offset &&
         cursorOffset < offset &&
-        iG.right().offset === offset
+        cursor.right().offset === offset
         ? offset
         : cursorOffset;
     };
@@ -2142,41 +2200,41 @@ function PromptInput(props) {
     $[309] = draft.cursorOffset;
     $[310] = draft.value;
     $[311] = sessionUiStore;
-    $[312] = sG;
-  } else sG = $[312];
-  let dG = sG;
-  let Pp = (cG, sB) => {
-    tG.current?.();
-    _a(draft.value, draft.cursorOffset, draft.pastedContents, sB);
-    let terminalName = dG();
-    let vne = terminalName !== draft.cursorOffset;
-    if (vne) draft.setCursorOffset(terminalName);
-    let uNe = () => {
-      draft.insertText(cG);
+    $[312] = clampCursorBeforeTyped;
+  } else clampCursorBeforeTyped = $[312];
+  let clampCursorByLine = clampCursorBeforeTyped;
+  let insertAtCursor = (text, options) => {
+    pendingUndoRef.current?.();
+    pushToBufferStable(draft.value, draft.cursorOffset, draft.pastedContents, options);
+    let terminalName = clampCursorByLine();
+    let cursorMoved = terminalName !== draft.cursorOffset;
+    if (cursorMoved) draft.setCursorOffset(terminalName);
+    let insert = () => {
+      draft.insertText(text);
       if (
-        vne &&
+        cursorMoved &&
         draft.value[draft.cursorOffset - 1] !==
           `
 `
       ) {
-        let dNe = Cursor.fromText(draft.value, columns, draft.cursorOffset);
-        draft.setCursorOffset(clampOffsetOutsidePlaceholder(dNe, draft.cursorOffset));
+        let cursor = Cursor.fromText(draft.value, columns, draft.cursorOffset);
+        draft.setCursorOffset(clampOffsetOutsidePlaceholder(cursor, draft.cursorOffset));
       }
     };
-    if (sB?.isTyped === true) Kk(uNe);
-    else uNe();
+    if (options?.isTyped === true) commitWithRecording(insert);
+    else insert();
   };
-  let iB;
+  let pasteImage;
   if (
     $[313] !== draft.pastedContents ||
     $[314] !== draft.value ||
-    $[315] !== Pp ||
+    $[315] !== insertAtCursor ||
     $[316] !== setMode ||
     $[317] !== setAppState ||
     $[318] !== setPastedContents
   ) {
-    iB = (image, _ne) => {
-      let { mediaType, filename, dimensions, sourcePath, continuesGesture } = _ne ?? {};
+    pasteImage = (image, meta) => {
+      let { mediaType, filename, dimensions, sourcePath, continuesGesture } = meta ?? {};
       logEvent("tengu_paste_image", {});
       logFeatureOk(sourcePath ? "input_image_drag" : "input_image_paste");
       setMode("prompt");
@@ -2191,42 +2249,42 @@ function PromptInput(props) {
         dimensions,
         sourcePath,
       };
-      let uB = setSliceField(setAppState, "storedImagePaths");
-      recordImagePath(newContent, uB);
-      storeImageAndRecord(newContent, uB);
+      let recordStoredImagePath = setSliceField(setAppState, "storedImagePaths");
+      recordImagePath(newContent, recordStoredImagePath);
+      storeImageAndRecord(newContent, recordStoredImagePath);
       setPastedContents((prev) => ({
         ...prev,
         [pasteId]: newContent,
       }));
       let prefix = thinkingEnabled.current ? " " : "";
-      Pp(prefix + formatImageRef(pasteId), {
+      insertAtCursor(prefix + formatImageRef(pasteId), {
         continuesGesture,
       });
       thinkingEnabled.current = true;
     };
     $[313] = draft.pastedContents;
     $[314] = draft.value;
-    $[315] = Pp;
+    $[315] = insertAtCursor;
     $[316] = setMode;
     $[317] = setAppState;
     $[318] = setPastedContents;
-    $[319] = iB;
-  } else iB = $[319];
-  let pP = iB;
+    $[319] = pasteImage;
+  } else pasteImage = $[319];
+  let onPasteImage = pasteImage;
   let isInputWrapped = useDoublePress(noopMessageSelector, chrome.openMessageSelector);
-  let xne;
-  if ($[320] !== draft.value || $[321] !== Pp || $[322] !== dG) {
-    xne = (prev) => {
+  let onAtMentioned;
+  if ($[320] !== draft.value || $[321] !== insertAtCursor || $[322] !== clampCursorByLine) {
+    onAtMentioned = (prev) => {
       logEvent("tengu_ext_at_mentioned", {});
-      Pp(formatAtMention(prev, draft.value[dG() - 1]));
+      insertAtCursor(formatAtMention(prev, draft.value[clampCursorByLine() - 1]));
     };
     $[320] = draft.value;
-    $[321] = Pp;
-    $[322] = dG;
-    $[323] = xne;
-  } else xne = $[323];
-  useIdeAtMentioned(mergedClients, xne);
-  let Ane;
+    $[321] = insertAtCursor;
+    $[322] = clampCursorByLine;
+    $[323] = onAtMentioned;
+  } else onAtMentioned = $[323];
+  useIdeAtMentioned(mcpClients, onAtMentioned);
+  let undoHandler;
   if (
     $[324] !== canUndo ||
     $[325] !== draft ||
@@ -2235,17 +2293,17 @@ function PromptInput(props) {
     $[328] !== setPastedContents ||
     $[329] !== undo
   ) {
-    Ane = () => {
+    undoHandler = () => {
       if (draft.mode !== defaultPlaceholder.current) {
         return;
       }
       if (canUndo) {
-        let mB = undo();
-        if (mB)
-          draft.attribute(Dye, () => {
-            setValue(mB.text);
-            setCursorOffset(mB.cursorOffset);
-            setPastedContents(mB.pastedContents);
+        let snapshot = undo();
+        if (snapshot)
+          draft.attribute(undoPromptOrigin, () => {
+            setValue(snapshot.text);
+            setCursorOffset(snapshot.cursorOffset);
+            setPastedContents(snapshot.pastedContents);
           });
       }
     };
@@ -2255,44 +2313,44 @@ function PromptInput(props) {
     $[327] = setValue;
     $[328] = setPastedContents;
     $[329] = undo;
-    $[330] = Ane;
-  } else Ane = $[330];
-  let gG = Ane;
-  let yG = R(null);
-  let Mne;
+    $[330] = undoHandler;
+  } else undoHandler = $[330];
+  let undoStable = undoHandler;
+  let recordInsertRef = useRef(null);
+  let insertNewline;
   if (
     $[331] !== draft ||
     $[332] !== sessionUiStore ||
-    $[333] !== _a ||
-    $[334] !== Kk ||
+    $[333] !== pushToBufferStable ||
+    $[334] !== commitWithRecording ||
     $[335] !== setCursorOffset
   ) {
-    Mne = () => {
-      let { value: SG, cursorOffset, pastedContents } = draft;
-      _a(SG, cursorOffset, pastedContents);
-      let F_ = () => {
+    insertNewline = () => {
+      let { value: nextValue, cursorOffset, pastedContents } = draft;
+      pushToBufferStable(nextValue, cursorOffset, pastedContents);
+      let insert = () => {
         draft.setValueTyped(
-          SG.slice(0, cursorOffset) +
+          nextValue.slice(0, cursorOffset) +
             `
 ` +
-            SG.slice(cursorOffset),
+            nextValue.slice(cursorOffset),
         );
         setCursorOffset(cursorOffset + 1);
       };
-      if (EDITOR_MODES() && sessionUiStore.getState().vimMode !== "INSERT") F_();
-      else Kk(F_);
-      yG.current?.(`
+      if (EDITOR_MODES() && sessionUiStore.getState().vimMode !== "INSERT") insert();
+      else commitWithRecording(insert);
+      recordInsertRef.current?.(`
 `);
     };
     $[331] = draft;
     $[332] = sessionUiStore;
-    $[333] = _a;
-    $[334] = Kk;
+    $[333] = pushToBufferStable;
+    $[334] = commitWithRecording;
     $[335] = setCursorOffset;
-    $[336] = Mne;
-  } else Mne = $[336];
-  let bG = Mne;
-  let rD;
+    $[336] = insertNewline;
+  } else insertNewline = $[336];
+  let insertNewlineStable = insertNewline;
+  let openExternalEditor;
   if (
     $[337] !== addNotification ||
     $[338] !== draft.cursorOffset ||
@@ -2300,32 +2358,37 @@ function PromptInput(props) {
     $[340] !== draft.value ||
     $[341] !== onExternalEditorActiveChange ||
     $[342] !== sessionUiStore ||
-    $[343] !== _a ||
+    $[343] !== pushToBufferStable ||
     $[344] !== setCursorOffset ||
     $[345] !== setValue ||
     $[346] !== transcript
   ) {
-    rD = async () => {
+    openExternalEditor = async () => {
       logEvent("tengu_external_editor_used", {});
       onExternalEditorActiveChange(true);
-      let wG = draft.value;
-      let ZS;
+      let originalValue = draft.value;
+      let result;
       try {
-        let kNe;
+        let contextText;
         if (getGlobalConfig().externalEditorContext) {
           let joined = collectTrailingAssistantTexts(transcript.getSnapshot()).messages.join(`
 
 `);
-          if (joined) kNe = joined;
+          if (joined) contextText = joined;
         }
-        ZS = await editPromptInEditor(wG, draft.pastedContents, kNe, draft.cursorOffset);
+        result = await editPromptInEditor(
+          originalValue,
+          draft.pastedContents,
+          contextText,
+          draft.cursorOffset,
+        );
       } catch (error) {
-        let kG = error;
-        if (kG instanceof Error) logError(kG);
+        let caughtError = error;
+        if (caughtError instanceof Error) logError(caughtError);
         addNotification({
           key: "external-editor-error",
           kind: "warning",
-          text: `External editor failed: ${errorMessage(kG)}`,
+          text: `External editor failed: ${errorMessage(caughtError)}`,
           color: "warning",
           priority: "high",
         });
@@ -2334,23 +2397,23 @@ function PromptInput(props) {
         return;
       }
       onExternalEditorActiveChange(false);
-      if (ZS.error) {
+      if (result.error) {
         addNotification({
           key: "external-editor-error",
           kind: "warning",
-          text: ZS.error,
+          text: result.error,
           color: "warning",
           priority: "high",
         });
         logFeatureSad("input_external_editor", "editor_error");
       } else logFeatureOk("input_external_editor");
-      if (ZS.content !== null && ZS.content !== wG) {
-        _a(wG, draft.cursorOffset, draft.pastedContents);
-        setValue(ZS.content);
+      if (result.content !== null && result.content !== originalValue) {
+        pushToBufferStable(originalValue, draft.cursorOffset, draft.pastedContents);
+        setValue(result.content);
         setCursorOffset(
           EDITOR_MODES() && sessionUiStore.getState().vimMode === "NORMAL"
-            ? setCwdState(ZS.content.normalize("NFC"), ZS.content.length)
-            : ZS.content.length,
+            ? setCwdState(result.content.normalize("NFC"), result.content.length)
+            : result.content.length,
         );
       }
     };
@@ -2360,14 +2423,14 @@ function PromptInput(props) {
     $[340] = draft.value;
     $[341] = onExternalEditorActiveChange;
     $[342] = sessionUiStore;
-    $[343] = _a;
+    $[343] = pushToBufferStable;
     $[344] = setCursorOffset;
     $[345] = setValue;
     $[346] = transcript;
-    $[347] = rD;
-  } else rD = $[347];
-  let rv = rD;
-  let iD = () => {
+    $[347] = openExternalEditor;
+  } else openExternalEditor = $[347];
+  let openExternalEditorStable = openExternalEditor;
+  let toggleStash = () => {
     if (draft.value.trim() === "" && draft.stashedPrompt !== undefined) {
       draft.popStash("input");
       clearBuffer();
@@ -2376,7 +2439,7 @@ function PromptInput(props) {
     } else if (draft.value.trim() !== "") {
       draft.stash();
       clearBuffer();
-      if (sv) {
+      if (isSwarmFooterVisible) {
         let message = `stashed \xB7 ${getShortcutDisplay("chat:stash", "Chat", "ctrl+s")} to restore`;
         addNotification({
           key: "stash-saved",
@@ -2392,67 +2455,67 @@ function PromptInput(props) {
     }
   };
   let { dispatchPasteEvent } = useApp();
-  let wB;
+  let dispatchPendingPastes;
   if ($[348] !== dispatchPasteEvent || $[349] !== inputTakesFocus || $[350] !== takePendingPastes) {
-    wB = () => {
+    dispatchPendingPastes = () => {
       if (!inputTakesFocus) {
         return;
       }
-      for (const Ene of takePendingPastes()) dispatchPasteEvent(Ene);
+      for (const pastedText of takePendingPastes()) dispatchPasteEvent(pastedText);
     };
     $[348] = dispatchPasteEvent;
     $[349] = inputTakesFocus;
     $[350] = takePendingPastes;
-    $[351] = wB;
-  } else wB = $[351];
-  let vG;
+    $[351] = dispatchPendingPastes;
+  } else dispatchPendingPastes = $[351];
+  let dispatchPendingDeps;
   if (
     $[352] !== dispatchPasteEvent ||
     $[353] !== footerItemSelected ||
     $[354] !== inputTakesFocus ||
     $[355] !== takePendingPastes
   ) {
-    vG = [inputTakesFocus, footerItemSelected, takePendingPastes, dispatchPasteEvent];
+    dispatchPendingDeps = [inputTakesFocus, footerItemSelected, takePendingPastes, dispatchPasteEvent];
     $[352] = dispatchPasteEvent;
     $[353] = footerItemSelected;
     $[354] = inputTakesFocus;
     $[355] = takePendingPastes;
-    $[356] = vG;
-  } else vG = $[356];
-  P(wB, vG);
-  let kB;
+    $[356] = dispatchPendingDeps;
+  } else dispatchPendingDeps = $[356];
+  useEffect(dispatchPendingPastes, dispatchPendingDeps);
+  let noImageNotice;
   if ($[357] !== addNotification) {
-    kB = function kw() {
-      let Dne = env.isSSH();
+    noImageNotice = function noImageNoticeImpl() {
+      let isSsh = env.isSSH();
       addNotification({
         key: "no-image-in-clipboard",
         kind: "feedback",
-        text: Dne
+        text: isSsh
           ? "no image over SSH \xB7 copy the file over, paste its path"
           : `No image found in clipboard. Use ${getShortcutDisplay("chat:imagePaste", "Chat", "ctrl+v")} to paste images.`,
-        row1Hint: Dne ? "no image \xB7 over SSH, try scp" : "no image in clipboard",
+        row1Hint: isSsh ? "no image \xB7 over SSH, try scp" : "no image in clipboard",
         priority: "immediate",
-        timeoutMs: Dne ? 5000 : 1000,
+        timeoutMs: isSsh ? 5000 : 1000,
       });
     };
     $[357] = addNotification;
-    $[358] = kB;
-  } else kB = $[358];
-  let kw = kB;
-  let aD;
+    $[358] = noImageNotice;
+  } else noImageNotice = $[358];
+  let showNoImageNotice = noImageNotice;
+  let pasteImageFromClipboard;
   if (
     $[359] !== dispatchPasteEvent ||
     $[360] !== mainLoopModel ||
-    $[361] !== kw ||
-    $[362] !== pP ||
+    $[361] !== showNoImageNotice ||
+    $[362] !== onPasteImage ||
     $[363] !== onIsPastingChange
   ) {
-    aD = () => {
+    pasteImageFromClipboard = () => {
       onIsPastingChange(true);
       getImageFromClipboard(imageLimitsForModel(mainLoopModel))
         .then(async (result) => {
           if (result) {
-            pP(result.base64, {
+            onPasteImage(result.base64, {
               mediaType: result.mediaType,
               dimensions: result.dimensions,
             });
@@ -2465,84 +2528,90 @@ function PromptInput(props) {
             return;
           }
           logFeatureBad("input_image_paste", clipboard ? "binary_garbage" : "not_found");
-          kw();
+          showNoImageNotice();
         })
         .catch(logImagePasteFailure)
         .finally(() => onIsPastingChange(false));
     };
     $[359] = dispatchPasteEvent;
     $[360] = mainLoopModel;
-    $[361] = kw;
-    $[362] = pP;
+    $[361] = showNoImageNotice;
+    $[362] = onPasteImage;
     $[363] = onIsPastingChange;
-    $[364] = aD;
-  } else aD = $[364];
-  let CG = aD;
-  let vNe;
-  if ($[365] !== rv || $[366] !== CG || $[367] !== bG || $[368] !== iD || $[369] !== gG) {
-    vNe = {
-      "chat:undo": gG,
-      "chat:newline": bG,
-      "chat:externalEditor": rv,
-      "chat:stash": iD,
-      "chat:imagePaste": CG,
+    $[364] = pasteImageFromClipboard;
+  } else pasteImageFromClipboard = $[364];
+  let pasteImageFromClipboardStable = pasteImageFromClipboard;
+  let chatKeyActions;
+  if (
+    $[365] !== openExternalEditorStable ||
+    $[366] !== pasteImageFromClipboardStable ||
+    $[367] !== insertNewlineStable ||
+    $[368] !== toggleStash ||
+    $[369] !== undoStable
+  ) {
+    chatKeyActions = {
+      "chat:undo": undoStable,
+      "chat:newline": insertNewlineStable,
+      "chat:externalEditor": openExternalEditorStable,
+      "chat:stash": toggleStash,
+      "chat:imagePaste": pasteImageFromClipboardStable,
     };
-    $[365] = rv;
-    $[366] = CG;
-    $[367] = bG;
-    $[368] = iD;
-    $[369] = gG;
-    $[370] = vNe;
-  } else vNe = $[370];
-  let One = vNe;
+    $[365] = openExternalEditorStable;
+    $[366] = pasteImageFromClipboardStable;
+    $[367] = insertNewlineStable;
+    $[368] = toggleStash;
+    $[369] = undoStable;
+    $[370] = chatKeyActions;
+  } else chatKeyActions = $[370];
+  let chatKeyActionsStable = chatKeyActions;
   const isActive = !isModalOverlayActive && !isSearchingHistory;
-  let Nne;
+  let chatKeyArgs;
   if ($[371] !== footerOwnsKeyOf || $[372] !== isActive) {
-    Nne = {
+    chatKeyArgs = {
       isActive,
       footerOwnsKeyOf,
     };
     $[371] = footerOwnsKeyOf;
     $[372] = isActive;
-    $[373] = Nne;
-  } else Nne = $[373];
-  useFooterAwareMessageActions(One, Nne);
-  let _G;
-  if ($[374] !== Dd) {
-    _G = {
-      "chat:workflowKeywordToggle": Dd,
+    $[373] = chatKeyArgs;
+  } else chatKeyArgs = $[373];
+  useFooterAwareMessageActions(chatKeyActionsStable, chatKeyArgs);
+  let keywordKeyActions;
+  if ($[374] !== toggleKeywordSuppressed) {
+    keywordKeyActions = {
+      "chat:workflowKeywordToggle": toggleKeywordSuppressed,
     };
-    $[374] = Dd;
-    $[375] = _G;
-  } else _G = $[375];
-  const isActive_2 = !isModalOverlayActive && Ka.length > 0;
-  let iv;
+    $[374] = toggleKeywordSuppressed;
+    $[375] = keywordKeyActions;
+  } else keywordKeyActions = $[375];
+  const isActive_2 = !isModalOverlayActive && ultracodeRanges.length > 0;
+  let keywordKeyArgs;
   if ($[376] !== footerOwnsKeyOf || $[377] !== isActive_2) {
-    iv = {
+    keywordKeyArgs = {
       isActive: isActive_2,
       footerOwnsKeyOf,
     };
     $[376] = footerOwnsKeyOf;
     $[377] = isActive_2;
-    $[378] = iv;
-  } else iv = $[378];
-  useFooterAwareMessageActions(_G, iv);
-  let sv = showSwarmFooterGate();
+    $[378] = keywordKeyArgs;
+  } else keywordKeyArgs = $[378];
+  useFooterAwareMessageActions(keywordKeyActions, keywordKeyArgs);
+  let isSwarmFooterVisible = showSwarmFooterGate();
   let { agent, tmuxHint } = useTeammateBanner();
-  let CB;
+  let bannerOptions;
   if ($[379] !== embedded) {
-    CB = {
+    bannerOptions = {
       hideSessionTitle: embedded,
     };
     $[379] = embedded;
-    $[380] = CB;
-  } else CB = $[380];
-  let sessionBanner = useSessionBanner(CB);
-  let j_ = agent ?? tmuxHint ?? sessionBanner;
+    $[380] = bannerOptions;
+  } else bannerOptions = $[380];
+  let sessionBanner = useSessionBanner(bannerOptions);
+  let banner = agent ?? tmuxHint ?? sessionBanner;
   let maxWidth = columns - INPUT_RIGHT_GUTTER - 1;
-  let cD;
-  if ($[381] !== agent || $[382] !== sv || $[383] !== mode || $[384] !== maxWidth) {
-    cD = sv
+  let badgeWidthValue;
+  if ($[381] !== agent || $[382] !== isSwarmFooterVisible || $[383] !== mode || $[384] !== maxWidth) {
+    badgeWidthValue = isSwarmFooterVisible
       ? badgeWidth(
           promptModeBadgeText({
             mode,
@@ -2552,134 +2621,137 @@ function PromptInput(props) {
         )
       : INPUT_BADGE_GUTTER;
     $[381] = agent;
-    $[382] = sv;
+    $[382] = isSwarmFooterVisible;
     $[383] = mode;
     $[384] = maxWidth;
-    $[385] = cD;
-  } else cD = $[385];
-  let _Ne = cD;
-  let Fne;
+    $[385] = badgeWidthValue;
+  } else badgeWidthValue = $[385];
+  let badgeWidthValueStable = badgeWidthValue;
+  let leadingPillRaw;
   if (
     $[386] !== chrome.dismissIdeSelection ||
     $[387] !== ideSelection ||
     $[388] !== ideSelectionRidesRow1 ||
-    $[389] !== mergedClients ||
+    $[389] !== mcpClients ||
     $[390] !== viewingAgentTaskId
   ) {
-    let TNe =
+    let ideSelectionText =
       viewingAgentTaskId || ideSelectionRidesRow1
         ? null
-        : ideSelectionLabel(useIdeConnectionStatus(mergedClients).status, ideSelection);
-    Fne =
-      TNe === null
+        : ideSelectionLabel(useIdeConnectionStatus(mcpClients).status, ideSelection);
+    leadingPillRaw =
+      ideSelectionText === null
         ? undefined
         : {
-            text: formatPasteLabel(TNe),
+            text: formatPasteLabel(ideSelectionText),
             onDelete: chrome.dismissIdeSelection,
           };
     $[386] = chrome.dismissIdeSelection;
     $[387] = ideSelection;
     $[388] = ideSelectionRidesRow1;
-    $[389] = mergedClients;
+    $[389] = mcpClients;
     $[390] = viewingAgentTaskId;
-    $[391] = Fne;
-  } else Fne = $[391];
-  let TB = Fne;
-  let text = TB?.text ?? "";
-  let columns_2 = sv ? Math.max(INPUT_RIGHT_GUTTER, columns - _Ne) : columns - INPUT_BADGE_GUTTER;
-  let ob = useIsFullscreen()
+    $[391] = leadingPillRaw;
+  } else leadingPillRaw = $[391];
+  let leadingPill = leadingPillRaw;
+  let text = leadingPill?.text ?? "";
+  let columns_2 = isSwarmFooterVisible
+    ? Math.max(INPUT_RIGHT_GUTTER, columns - badgeWidthValueStable)
+    : columns - INPUT_BADGE_GUTTER;
+  let maxVisibleLines = useIsFullscreen()
     ? Math.max(MIN_FULLSCREEN_INPUT_ROWS, Math.floor(rows / 2) - MIN_INPUT_ROWS)
     : undefined;
-  let uD =
+  let ghostAtEnd =
     !isVimEditorMode && inlineGhostText?.insertPosition === cursorOffset && cursorOffset >= value.length;
-  let RB;
-  if ($[392] !== draft || $[393] !== Mi || $[394] !== uD || $[395] !== plain) {
-    RB = () => {
-      let Hne = plain || !Mi ? PP : emptySpans(draft.getSnapshot().decorations);
-      return uD ? rangesBefore(Hne, draft.value.length) : Hne;
+  let getVirtualTexts;
+  if ($[392] !== draft || $[393] !== hasDecorations || $[394] !== ghostAtEnd || $[395] !== plain) {
+    getVirtualTexts = () => {
+      let baseVirtualTexts =
+        plain || !hasDecorations ? EMPTY_SPANS : emptySpans(draft.getSnapshot().decorations);
+      return ghostAtEnd ? rangesBefore(baseVirtualTexts, draft.value.length) : baseVirtualTexts;
     };
     $[392] = draft;
-    $[393] = Mi;
-    $[394] = uD;
+    $[393] = hasDecorations;
+    $[394] = ghostAtEnd;
     $[395] = plain;
-    $[396] = RB;
-  } else RB = $[396];
-  let fP = RB;
-  let RG;
+    $[396] = getVirtualTexts;
+  } else getVirtualTexts = $[396];
+  let virtualTextsGetter = getVirtualTexts;
+  let onClickHandler;
   if (
-    $[397] !== yl ||
+    $[397] !== cursorSide ||
     $[398] !== draft ||
     $[399] !== isSearchingHistory ||
-    $[400] !== ob ||
+    $[400] !== maxVisibleLines ||
     $[401] !== text ||
     $[402] !== setAppState ||
     $[403] !== setCursorOffset ||
     $[404] !== columns_2 ||
-    $[405] !== fP
+    $[405] !== virtualTextsGetter
   ) {
-    RG = (entry) => {
+    onClickHandler = (entry) => {
       if (isSearchingHistory) {
         return;
       }
       setAppState(clearFooterSelectionState);
-      let { value: q_, cursorOffset } = draft;
-      if (!q_) {
+      let { value: nextValue, cursorOffset } = draft;
+      if (!nextValue) {
         return;
       }
       let { cursor, bufferOffset } = createDisplayCursor({
-        buffer: text + q_,
+        buffer: text + nextValue,
         offset: text.length + cursorOffset,
-        texts: offsetDecorations(fP(), text.length),
+        texts: offsetDecorations(virtualTextsGetter(), text.length),
         columns: columns_2,
-        side: yl,
+        side: cursorSide,
       });
       let entryMode = bufferOffset(
         cursor.measuredText.getOffsetFromPosition({
-          line: entry.localRow + cursor.getViewportStartLine(ob),
+          line: entry.localRow + cursor.getViewportStartLine(maxVisibleLines),
           column: entry.localCol,
         }),
       );
-      oB.current?.();
+      pendingRestoreRef.current?.();
       setCursorOffset(Math.max(0, entryMode - text.length));
     };
-    $[397] = yl;
+    $[397] = cursorSide;
     $[398] = draft;
     $[399] = isSearchingHistory;
-    $[400] = ob;
+    $[400] = maxVisibleLines;
     $[401] = text;
     $[402] = setAppState;
     $[403] = setCursorOffset;
     $[404] = columns_2;
-    $[405] = fP;
-    $[406] = RG;
-  } else RG = $[406];
-  let onClick = RG;
-  let value_2 = R(null);
-  let Wne;
+    $[405] = virtualTextsGetter;
+    $[406] = onClickHandler;
+  } else onClickHandler = $[406];
+  let onClick = onClickHandler;
+  let value_2 = useRef(null);
+  let deleteSelection;
   if (
-    $[407] !== yl ||
+    $[407] !== cursorSide ||
     $[408] !== draft ||
     $[409] !== isModalOverlayActive ||
     $[410] !== isSearchingHistory ||
-    $[411] !== ob ||
-    $[412] !== _a ||
+    $[411] !== maxVisibleLines ||
+    $[412] !== pushToBufferStable ||
     $[413] !== text ||
     $[414] !== setCursorOffset ||
     $[415] !== setValue ||
     $[416] !== columns_2 ||
-    $[417] !== fP
+    $[417] !== virtualTextsGetter
   ) {
-    Wne = (PNe) => {
-      let { value: hP, cursorOffset, pastedContents } = draft;
-      if (!hP || isSearchingHistory || isModalOverlayActive) {
+    deleteSelection = (selection) => {
+      let { value: nextValue, cursorOffset, pastedContents } = draft;
+      if (!nextValue || isSearchingHistory || isModalOverlayActive) {
         return false;
       }
       let cachedLayout = value_2.current?.cachedLayout;
-      let av = selectionBounds(PNe);
-      if (!cachedLayout || !av) {
+      let bounds = selectionBounds(selection);
+      if (!cachedLayout || !bounds) {
         return false;
       }
-      let { start, end } = av;
+      let { start, end } = bounds;
       if (
         start.row < cachedLayout.y ||
         end.row < cachedLayout.y ||
@@ -2689,110 +2761,119 @@ function PromptInput(props) {
         return false;
       }
       let { cursor, bufferOffset } = createDisplayCursor({
-        buffer: text + hP,
+        buffer: text + nextValue,
         offset: text.length + cursorOffset,
-        texts: offsetDecorations(fP(), text.length),
+        texts: offsetDecorations(virtualTextsGetter(), text.length),
         columns: columns_2,
-        side: yl,
+        side: cursorSide,
       });
-      let mD = cursor;
-      let MB = bufferOffset;
-      let viewportStartLine = mD.getViewportStartLine(ob);
-      let G_ = (show, key) =>
-        MB(
-          mD.measuredText.getOffsetFromPosition({
+      let displayCursor = cursor;
+      let offsetOf = bufferOffset;
+      let viewportStartLine = displayCursor.getViewportStartLine(maxVisibleLines);
+      let toBufferOffset = (show, key) =>
+        offsetOf(
+          displayCursor.measuredText.getOffsetFromPosition({
             line: show - cachedLayout.y + viewportStartLine,
             column: Math.max(0, key - cachedLayout.x),
           }),
         ) - text.length;
-      let max = Math.max(0, G_(start.row, start.col));
-      let min = Math.min(hP.length, G_(end.row, end.col + 1));
+      let max = Math.max(0, toBufferOffset(start.row, start.col));
+      let min = Math.min(nextValue.length, toBufferOffset(end.row, end.col + 1));
       if (min <= max) {
         return false;
       }
-      _a(hP, cursorOffset, pastedContents);
-      setValue(hP.slice(0, max) + hP.slice(min));
+      pushToBufferStable(nextValue, cursorOffset, pastedContents);
+      setValue(nextValue.slice(0, max) + nextValue.slice(min));
       setCursorOffset(max);
       return true;
     };
-    $[407] = yl;
+    $[407] = cursorSide;
     $[408] = draft;
     $[409] = isModalOverlayActive;
     $[410] = isSearchingHistory;
-    $[411] = ob;
-    $[412] = _a;
+    $[411] = maxVisibleLines;
+    $[412] = pushToBufferStable;
     $[413] = text;
     $[414] = setCursorOffset;
     $[415] = setValue;
     $[416] = columns_2;
-    $[417] = fP;
-    $[418] = Wne;
-  } else Wne = $[418];
-  let NB = Wne;
+    $[417] = virtualTextsGetter;
+    $[418] = deleteSelection;
+  } else deleteSelection = $[418];
+  let deleteSelectionStable = deleteSelection;
   let previousState = useInputSelectionBridge();
-  let yP;
-  let IG;
-  if ($[419] !== NB || $[420] !== previousState) {
-    yP = () => {
-      previousState.setHandler(NB);
+  let bridgeEffect;
+  let bridgeDeps;
+  if ($[419] !== deleteSelectionStable || $[420] !== previousState) {
+    bridgeEffect = () => {
+      previousState.setHandler(deleteSelectionStable);
       return () => previousState.setHandler(null);
     };
-    IG = [previousState, NB];
-    $[419] = NB;
+    bridgeDeps = [previousState, deleteSelectionStable];
+    $[419] = deleteSelectionStable;
     $[420] = previousState;
-    $[421] = yP;
-    $[422] = IG;
+    $[421] = bridgeEffect;
+    $[422] = bridgeDeps;
   } else {
-    yP = $[421];
-    IG = $[422];
+    bridgeEffect = $[421];
+    bridgeDeps = $[422];
   }
-  P(yP, IG);
-  let qne;
-  let MNe;
+  useEffect(bridgeEffect, bridgeDeps);
+  let composerApi;
+  let composerApiDeps;
   if (
     $[423] !== clearBuffer ||
     $[424] !== draft ||
-    $[425] !== gd ||
-    $[426] !== pu ||
+    $[425] !== getWorkflowKeywordSuppressed ||
+    $[426] !== handleChangeStable ||
     $[427] !== resetHistory ||
     $[428] !== selectSuggestion ||
     $[429] !== setCursorOffset ||
     $[430] !== setHoveredSuggestion
   ) {
-    qne = () => ({
+    composerApi = () => ({
       clearBuffer,
       resetHistory,
       typeText: (text) => {
         let { value: input, cursorOffset } = draft;
-        pu(input.slice(0, cursorOffset) + text + input.slice(cursorOffset));
+        handleChangeStable(input.slice(0, cursorOffset) + text + input.slice(cursorOffset));
         setCursorOffset(cursorOffset + text.length);
       },
       selectSuggestion,
       setHoveredSuggestion,
-      isWorkflowKeywordSuppressed: gd,
+      isWorkflowKeywordSuppressed: getWorkflowKeywordSuppressed,
     });
-    MNe = [clearBuffer, resetHistory, draft, pu, setCursorOffset, selectSuggestion, setHoveredSuggestion, gd];
+    composerApiDeps = [
+      clearBuffer,
+      resetHistory,
+      draft,
+      handleChangeStable,
+      setCursorOffset,
+      selectSuggestion,
+      setHoveredSuggestion,
+      getWorkflowKeywordSuppressed,
+    ];
     $[423] = clearBuffer;
     $[424] = draft;
-    $[425] = gd;
-    $[426] = pu;
+    $[425] = getWorkflowKeywordSuppressed;
+    $[426] = handleChangeStable;
     $[427] = resetHistory;
     $[428] = selectSuggestion;
     $[429] = setCursorOffset;
     $[430] = setHoveredSuggestion;
-    $[431] = qne;
-    $[432] = MNe;
+    $[431] = composerApi;
+    $[432] = composerApiDeps;
   } else {
-    qne = $[431];
-    MNe = $[432];
+    composerApi = $[431];
+    composerApiDeps = $[432];
   }
-  vxe(ref, qne, MNe);
-  let FB;
+  useImperativeHandle(ref, composerApi, composerApiDeps);
+  let historyBadge;
   if ($[433] !== historyEdited || $[434] !== historyIndex || $[435] !== historyTotal) {
-    let INe = historyPositionLabel(historyIndex, historyTotal, historyEdited);
-    FB = INe
+    let historyLabel = historyPositionLabel(historyIndex, historyTotal, historyEdited);
+    historyBadge = historyLabel
       ? {
-          content: ` ${sequential.dim(INe)} `,
+          content: ` ${sequential.dim(historyLabel)} `,
           position: "top",
           align: "start",
           offset: 2,
@@ -2801,9 +2882,9 @@ function PromptInput(props) {
     $[433] = historyEdited;
     $[434] = historyIndex;
     $[435] = historyTotal;
-    $[436] = FB;
-  } else FB = $[436];
-  let DNe = FB;
+    $[436] = historyBadge;
+  } else historyBadge = $[436];
+  let historyBadgeStable = historyBadge;
   if (hidden) {
     return null;
   }
@@ -2830,47 +2911,47 @@ function PromptInput(props) {
   const onLeftArrowOnEmpty = leftArrowRoute?.handler;
   const leftArrowConfirmHint = leftArrowRoute?.confirmHint;
   let onUnreadImagePaste;
-  if ($[444] !== kw) {
+  if ($[444] !== showNoImageNotice) {
     onUnreadImagePaste = () => {
       if (env.isSSH()) {
         logFeatureBad("input_image_paste", "not_found");
-        kw();
+        showNoImageNotice();
       }
     };
-    $[444] = kw;
+    $[444] = showNoImageNotice;
     $[445] = onUnreadImagePaste;
   } else onUnreadImagePaste = $[445];
   const disableCursorMovementForUpDownKeys = suggestions.length > 0 || footerItemSelected;
   const disableEscapeDoublePress = suggestions.length > 0;
   const parkCursor = cursorRowId === null;
-  const onUndo = canUndo ? gG : undefined;
-  let uv;
+  const onUndo = canUndo ? undoStable : undefined;
+  let textInputProps;
   if (
     $[446] !== chrome.requestExit ||
     $[447] !== commandArgumentHint ||
-    $[448] !== $g ||
+    $[448] !== commitEdit ||
     $[449] !== cursorOffset ||
     $[450] !== highlights ||
-    $[451] !== Gp ||
-    $[452] !== Vg ||
+    $[451] !== virtualTexts ||
+    $[452] !== editRelay ||
     $[453] !== onSubmit_2 ||
     $[454] !== onHistoryDown_2 ||
     $[455] !== onHistoryUp_2 ||
     $[456] !== onKeyDownBefore ||
     $[457] !== inlineGhostText ||
     $[458] !== inputTakesFocus ||
-    $[459] !== ob ||
+    $[459] !== maxVisibleLines ||
     $[460] !== onExitMessage ||
-    $[461] !== pP ||
+    $[461] !== onPasteImage ||
     $[462] !== onIsPastingChange ||
     $[463] !== onChange ||
     $[464] !== onPaste ||
     $[465] !== placeholder ||
     $[466] !== inputFilter ||
     $[467] !== resetHistory ||
-    $[468] !== TB ||
+    $[468] !== leadingPill ||
     $[469] !== setCursorOffset ||
-    $[470] !== ba ||
+    $[470] !== showCursor ||
     $[471] !== value_3 ||
     $[472] !== getPastedContents ||
     $[473] !== getInputMode ||
@@ -2884,7 +2965,7 @@ function PromptInput(props) {
     $[481] !== onUndo ||
     $[482] !== columns_2
   ) {
-    uv = {
+    textInputProps = {
       multiline: true,
       allowPrintableKeybindings: true,
       onKeyDownBefore,
@@ -2902,11 +2983,11 @@ function PromptInput(props) {
       onExitMessage,
       onLeftArrowOnEmpty,
       leftArrowConfirmHint,
-      onImagePaste: pP,
+      onImagePaste: onPasteImage,
       onUnreadImagePaste,
       columns: columns_2,
-      leadingPill: TB,
-      maxVisibleLines: ob,
+      leadingPill,
+      maxVisibleLines,
       disableCursorMovementForUpDownKeys,
       disableEscapeDoublePress,
       cursorOffset,
@@ -2914,42 +2995,42 @@ function PromptInput(props) {
       onPaste,
       onIsPastingChange,
       focus: inputTakesFocus,
-      showCursor: ba,
+      showCursor,
       parkCursor,
       argumentHint: commandArgumentHint,
       onUndo,
       highlights,
       inlineGhostText,
-      virtualTexts: Gp,
+      virtualTexts,
       inputFilter,
-      editRelay: Vg,
-      commitEdit: $g,
+      editRelay,
+      commitEdit,
     };
     $[446] = chrome.requestExit;
     $[447] = commandArgumentHint;
-    $[448] = $g;
+    $[448] = commitEdit;
     $[449] = cursorOffset;
     $[450] = highlights;
-    $[451] = Gp;
-    $[452] = Vg;
+    $[451] = virtualTexts;
+    $[452] = editRelay;
     $[453] = onSubmit_2;
     $[454] = onHistoryDown_2;
     $[455] = onHistoryUp_2;
     $[456] = onKeyDownBefore;
     $[457] = inlineGhostText;
     $[458] = inputTakesFocus;
-    $[459] = ob;
+    $[459] = maxVisibleLines;
     $[460] = onExitMessage;
-    $[461] = pP;
+    $[461] = onPasteImage;
     $[462] = onIsPastingChange;
     $[463] = onChange;
     $[464] = onPaste;
     $[465] = placeholder;
     $[466] = inputFilter;
     $[467] = resetHistory;
-    $[468] = TB;
+    $[468] = leadingPill;
     $[469] = setCursorOffset;
-    $[470] = ba;
+    $[470] = showCursor;
     $[471] = value_3;
     $[472] = getPastedContents;
     $[473] = getInputMode;
@@ -2962,52 +3043,52 @@ function PromptInput(props) {
     $[480] = parkCursor;
     $[481] = onUndo;
     $[482] = columns_2;
-    $[483] = uv;
-  } else uv = $[483];
-  let nb = uv;
-  let Gne;
+    $[483] = textInputProps;
+  } else textInputProps = $[483];
+  let textInputPropsStable = textInputProps;
+  let editorBorderStyle;
   if ($[484] !== plain || $[485] !== mode) {
-    Gne = getEditorWaitBorderStyle(mode, plain);
+    editorBorderStyle = getEditorWaitBorderStyle(mode, plain);
     $[484] = plain;
     $[485] = mode;
-    $[486] = Gne;
-  } else Gne = $[486];
-  let NG = Gne;
-  let LG;
+    $[486] = editorBorderStyle;
+  } else editorBorderStyle = $[486];
+  let editorBorderStyleStable = editorBorderStyle;
+  let editorElement;
   if (
-    $[487] !== nb ||
+    $[487] !== textInputPropsStable ||
     $[488] !== onModeChange ||
     $[489] !== onOpenHistorySearch ||
     $[490] !== toggleHelp ||
     $[491] !== isVimEditorMode ||
     $[492] !== vimMode
   ) {
-    LG = isVimEditorMode
+    editorElement = isVimEditorMode
       ? jsxProd_default(VimTextInput, {
-          ...nb,
+          ...textInputPropsStable,
           initialMode: vimMode,
           onModeChange,
-          cancelRemapRef: tG,
-          forgetColumnRef: oB,
+          cancelRemapRef: pendingUndoRef,
+          forgetColumnRef: pendingRestoreRef,
           onOpenHistorySearch,
           onToggleHelp: toggleHelp,
-          recordInsertRef: yG,
+          recordInsertRef,
         })
       : jsxProd_default(TextInput, {
-          ...nb,
+          ...textInputPropsStable,
         });
-    $[487] = nb;
+    $[487] = textInputPropsStable;
     $[488] = onModeChange;
     $[489] = onOpenHistorySearch;
     $[490] = toggleHelp;
     $[491] = isVimEditorMode;
     $[492] = vimMode;
-    $[493] = LG;
-  } else LG = $[493];
-  let children = LG;
-  let Qne;
+    $[493] = editorElement;
+  } else editorElement = $[493];
+  let children = editorElement;
+  let editorBox;
   if ($[494] !== onClick || $[495] !== children) {
-    Qne = jsxProd_default(Box, {
+    editorBox = jsxProd_default(Box, {
       ref: value_2,
       flexGrow: 1,
       flexShrink: 1,
@@ -3017,21 +3098,21 @@ function PromptInput(props) {
     });
     $[494] = onClick;
     $[495] = children;
-    $[496] = Qne;
-  } else Qne = $[496];
-  let Yg = Qne;
-  if (sv) {
-    let Jg;
+    $[496] = editorBox;
+  } else editorBox = $[496];
+  let editorBoxStable = editorBox;
+  if (isSwarmFooterVisible) {
+    let topDivider;
     if ($[497] !== columns) {
-      Jg = jsxProd_default(Divider, {
+      topDivider = jsxProd_default(Divider, {
         width: columns,
       });
       $[497] = columns;
-      $[498] = Jg;
-    } else Jg = $[498];
-    let Of;
+      $[498] = topDivider;
+    } else topDivider = $[498];
+    let badge;
     if ($[499] !== agent || $[500] !== mode || $[501] !== maxWidth) {
-      Of = jsxProd_default(PromptModeBadge, {
+      badge = jsxProd_default(PromptModeBadge, {
         mode,
         agent,
         maxWidth,
@@ -3039,91 +3120,91 @@ function PromptInput(props) {
       $[499] = agent;
       $[500] = mode;
       $[501] = maxWidth;
-      $[502] = Of;
-    } else Of = $[502];
-    let Xg;
-    if ($[503] !== Yg || $[504] !== Of) {
-      Xg = jsxProd_default_2(Box, {
+      $[502] = badge;
+    } else badge = $[502];
+    let badgeRow;
+    if ($[503] !== editorBoxStable || $[504] !== badge) {
+      badgeRow = jsxProd_default_2(Box, {
         flexDirection: "row",
         width: "100%",
-        children: [Of, Yg],
+        children: [badge, editorBoxStable],
       });
-      $[503] = Yg;
-      $[504] = Of;
-      $[505] = Xg;
-    } else Xg = $[505];
-    let wy;
+      $[503] = editorBoxStable;
+      $[504] = badge;
+      $[505] = badgeRow;
+    } else badgeRow = $[505];
+    let bottomDivider;
     if ($[506] !== columns) {
-      wy = jsxProd_default(Divider, {
+      bottomDivider = jsxProd_default(Divider, {
         width: columns,
       });
       $[506] = columns;
-      $[507] = wy;
-    } else wy = $[507];
-    let wP;
-    if ($[508] !== Jg || $[509] !== Xg || $[510] !== wy) {
-      wP = jsxProd_default_2(Fragment, {
-        children: [false, Jg, Xg, wy],
+      $[507] = bottomDivider;
+    } else bottomDivider = $[507];
+    let swarmLayout;
+    if ($[508] !== topDivider || $[509] !== badgeRow || $[510] !== bottomDivider) {
+      swarmLayout = jsxProd_default_2(Fragment, {
+        children: [false, topDivider, badgeRow, bottomDivider],
       });
-      $[508] = Jg;
-      $[509] = Xg;
-      $[510] = wy;
-      $[511] = wP;
-    } else wP = $[511];
-    return wP;
+      $[508] = topDivider;
+      $[509] = badgeRow;
+      $[510] = bottomDivider;
+      $[511] = swarmLayout;
+    } else swarmLayout = $[511];
+    return swarmLayout;
   }
-  if (j_ && !DNe) {
-    let Jg;
-    if ($[512] !== columns || $[513] !== fastModeTag || $[514] !== j_) {
-      Jg = jsxProd_default(PromptBorderBanner, {
-        banner: j_,
+  if (banner && !historyBadgeStable) {
+    let topBanner;
+    if ($[512] !== columns || $[513] !== fastModeTag || $[514] !== banner) {
+      topBanner = jsxProd_default(PromptBorderBanner, {
+        banner,
         columns,
         fastModeTag,
       });
       $[512] = columns;
       $[513] = fastModeTag;
-      $[514] = j_;
-      $[515] = Jg;
-    } else Jg = $[515];
-    let Of;
-    if ($[516] !== Yg || $[517] !== modeIndicator) {
-      Of = jsxProd_default_2(Box, {
+      $[514] = banner;
+      $[515] = topBanner;
+    } else topBanner = $[515];
+    let indicatorRow;
+    if ($[516] !== editorBoxStable || $[517] !== modeIndicator) {
+      indicatorRow = jsxProd_default_2(Box, {
         flexDirection: "row",
         width: "100%",
-        children: [modeIndicator, Yg],
+        children: [modeIndicator, editorBoxStable],
       });
-      $[516] = Yg;
+      $[516] = editorBoxStable;
       $[517] = modeIndicator;
-      $[518] = Of;
-    } else Of = $[518];
-    let Xg;
-    if ($[519] !== columns || $[520] !== fastModeTag || $[521] !== j_) {
-      Xg = jsxProd_default(PromptBorderBanner, {
-        banner: j_,
+      $[518] = indicatorRow;
+    } else indicatorRow = $[518];
+    let bottomBanner;
+    if ($[519] !== columns || $[520] !== fastModeTag || $[521] !== banner) {
+      bottomBanner = jsxProd_default(PromptBorderBanner, {
+        banner,
         columns,
         fastModeTag,
         borderOnly: true,
       });
       $[519] = columns;
       $[520] = fastModeTag;
-      $[521] = j_;
-      $[522] = Xg;
-    } else Xg = $[522];
-    let wy;
-    if ($[523] !== Jg || $[524] !== Of || $[525] !== Xg) {
-      wy = jsxProd_default_2(Fragment, {
-        children: [Jg, Of, Xg],
+      $[521] = banner;
+      $[522] = bottomBanner;
+    } else bottomBanner = $[522];
+    let bannerLayout;
+    if ($[523] !== topBanner || $[524] !== indicatorRow || $[525] !== bottomBanner) {
+      bannerLayout = jsxProd_default_2(Fragment, {
+        children: [topBanner, indicatorRow, bottomBanner],
       });
-      $[523] = Jg;
-      $[524] = Of;
-      $[525] = Xg;
-      $[526] = wy;
-    } else wy = $[526];
-    return wy;
+      $[523] = topBanner;
+      $[524] = indicatorRow;
+      $[525] = bottomBanner;
+      $[526] = bannerLayout;
+    } else bannerLayout = $[526];
+    return bannerLayout;
   }
-  let Jg;
+  let plainUltraTag;
   if ($[527] !== plain || $[528] !== ultraEffortTag) {
-    Jg =
+    plainUltraTag =
       plain &&
       ultraEffortTag &&
       jsxProd_default(Text, {
@@ -3131,11 +3212,11 @@ function PromptInput(props) {
       });
     $[527] = plain;
     $[528] = ultraEffortTag;
-    $[529] = Jg;
-  } else Jg = $[529];
-  let Of;
+    $[529] = plainUltraTag;
+  } else plainUltraTag = $[529];
+  let plainFastTag;
   if ($[530] !== fastModeCooldown || $[531] !== fastModeTag || $[532] !== plain) {
-    Of =
+    plainFastTag =
       plain &&
       fastModeTag &&
       jsxProd_default(Text, {
@@ -3146,36 +3227,41 @@ function PromptInput(props) {
     $[530] = fastModeCooldown;
     $[531] = fastModeTag;
     $[532] = plain;
-    $[533] = Of;
-  } else Of = $[533];
-  const borderText = plain ? undefined : (DNe ?? topBorderText);
-  let wy;
-  if ($[534] !== NG || $[535] !== Yg || $[536] !== modeIndicator || $[537] !== borderText) {
-    wy = jsxProd_default_2(Box, {
+    $[533] = plainFastTag;
+  } else plainFastTag = $[533];
+  const borderText = plain ? undefined : (historyBadgeStable ?? topBorderText);
+  let inputRow;
+  if (
+    $[534] !== editorBorderStyleStable ||
+    $[535] !== editorBoxStable ||
+    $[536] !== modeIndicator ||
+    $[537] !== borderText
+  ) {
+    inputRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       alignItems: "flex-start",
       justifyContent: "flex-start",
-      ...NG,
+      ...editorBorderStyleStable,
       width: "100%",
       borderText,
-      children: [modeIndicator, Yg],
+      children: [modeIndicator, editorBoxStable],
     });
-    $[534] = NG;
-    $[535] = Yg;
+    $[534] = editorBorderStyleStable;
+    $[535] = editorBoxStable;
     $[536] = modeIndicator;
     $[537] = borderText;
-    $[538] = wy;
-  } else wy = $[538];
-  let wP;
-  if ($[539] !== Jg || $[540] !== Of || $[541] !== wy) {
-    wP = jsxProd_default_2(Fragment, {
-      children: [Jg, Of, wy],
+    $[538] = inputRow;
+  } else inputRow = $[538];
+  let inputLayout;
+  if ($[539] !== plainUltraTag || $[540] !== plainFastTag || $[541] !== inputRow) {
+    inputLayout = jsxProd_default_2(Fragment, {
+      children: [plainUltraTag, plainFastTag, inputRow],
     });
-    $[539] = Jg;
-    $[540] = Of;
-    $[541] = wy;
-    $[542] = wP;
-  } else wP = $[542];
-  return wP;
+    $[539] = plainUltraTag;
+    $[540] = plainFastTag;
+    $[541] = inputRow;
+    $[542] = inputLayout;
+  } else inputLayout = $[542];
+  return inputLayout;
 }
 export { buildBorderText, PromptInput };

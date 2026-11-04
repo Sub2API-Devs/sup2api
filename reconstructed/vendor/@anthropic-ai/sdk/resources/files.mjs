@@ -8,9 +8,9 @@
 import { APIResource } from "../core/resource.mjs";
 import { TokenPage } from "../core/pagination.mjs";
 import { buildHeaders } from "../internal/headers.mjs";
-import { I } from "../internal/utils/path.mjs";
-import { ut } from "../internal/uploads.mjs";
-import { is } from "../internal/stainless-helper-header.mjs";
+import { parseUrl_2 } from "../internal/utils/path.mjs";
+import { withUploadBody } from "../internal/uploads.mjs";
+import { stainlessHelperHeaders } from "../internal/stainless-helper-header.mjs";
 
 //@ chunk-hwmsct5x.js:145854-146814 esm-fingerprint
 class Files_2 extends APIResource {
@@ -33,7 +33,7 @@ class Files_2 extends APIResource {
   }
   delete(fileID, params = {}, options) {
     let { workspace_id } = params ?? {};
-    return this._client.delete(I`/v1/files/${fileID}`, {
+    return this._client.delete(parseUrl_2`/v1/files/${fileID}`, {
       ...options,
       headers: buildHeaders([
         {
@@ -49,7 +49,7 @@ class Files_2 extends APIResource {
   }
   download(fileID, params = {}, options) {
     let { workspace_id } = params ?? {};
-    return this._client.get(I`/v1/files/${fileID}/content`, {
+    return this._client.get(parseUrl_2`/v1/files/${fileID}/content`, {
       ...options,
       headers: buildHeaders([
         {
@@ -67,7 +67,7 @@ class Files_2 extends APIResource {
   }
   retrieveMetadata(fileID, params = {}, options) {
     let { workspace_id } = params ?? {};
-    return this._client.get(I`/v1/files/${fileID}`, {
+    return this._client.get(parseUrl_2`/v1/files/${fileID}`, {
       ...options,
       headers: buildHeaders([
         {
@@ -85,7 +85,7 @@ class Files_2 extends APIResource {
     let { workspace_id, ...body } = params;
     return this._client.post(
       "/v1/files",
-      ut(
+      withUploadBody(
         {
           body,
           ...options,
@@ -97,7 +97,7 @@ class Files_2 extends APIResource {
                   }
                 : undefined),
             },
-            is(body.file),
+            stainlessHelperHeaders(body.file),
             options?.headers,
           ]),
         },

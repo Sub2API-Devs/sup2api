@@ -31,7 +31,7 @@ import { lit as lit_2, fromEnum, concatSafe, fromNumber } from "../../services/a
 import { normalizeMessagesForAPI } from "../../utils/messages.js";
 import { withholdForExport, withholdTranscriptLine } from "../../utils/transcriptWithholding.js";
 import { anyMessageHasProviderId, containsProviderId } from "../../services/api/providerIds.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import {
   redactTranscript,
   redactFeedbackValue,
@@ -51,13 +51,19 @@ import { getMainLoopModel, isOpus55FamilyModel, isSonnet55FamilyModel } from "..
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { TENGU_RUSSET_WHIMBREL } from "./useFeedbackSurvey.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1017029-1017106 placement
-var TRANSCRIPT_TOP_LEVEL_KEYS = new Set(["transcript"]);
-var SUBAGENT_TRANSCRIPT_KEYS = new Set(["subagentTranscripts"]);
-var SHARE_UPLOAD_TIMEOUT_MS = 1e4;
+var TRANSCRIPT_TOP_LEVEL_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SUBAGENT_TRANSCRIPT_KEYS;
+var SHARE_UPLOAD_TIMEOUT_MS;
+deferInit("chunk-18hwfzwa.js:1017029", () => {
+  TRANSCRIPT_TOP_LEVEL_KEYS = new Set(["transcript"]);
+  SUBAGENT_TRANSCRIPT_KEYS = new Set(["subagentTranscripts"]);
+  SHARE_UPLOAD_TIMEOUT_MS = 1e4;
+});
 //@ chunk-18hwfzwa.js:1017106-1017615 placement
-async function transcriptSharePolicy(messages, storageV5, host) {
+async function transcriptSharePolicy(messages, storage, host) {
   try {
     if (isEssentialTrafficOnly())
       return {
@@ -73,20 +79,20 @@ async function transcriptSharePolicy(messages, storageV5, host) {
       level: "info",
     });
     let lastApiRequest = getLastAPIRequest();
-    let agentIdsFromMessages = extractAgentIdsFromMessages(messages);
-    let ke = isRemoteSessionAvailable();
-    let [subagentTranscripts, Be] = await Promise.all([
-      loadSubagentTranscripts(agentIdsFromMessages, storageV5),
-      ke ? "" : getHead(),
+    let agentIds = extractAgentIdsFromMessages(messages);
+    let remoteSession = isRemoteSessionAvailable();
+    let [subagentTranscripts, headSha] = await Promise.all([
+      loadSubagentTranscripts(agentIds, storage),
+      remoteSession ? "" : getHead(),
     ]);
     let rawTranscriptJsonl =
-      (await getTaskOutput_2(getTranscriptPath(), MAX_RAW_TRANSCRIPT_BYTES, storageV5)) ?? undefined;
+      (await getTaskOutput_2(getTranscriptPath(), MAX_RAW_TRANSCRIPT_BYTES, storage)) ?? undefined;
     return {
       kind: "captured",
       messages,
       rawTranscriptJsonl,
       subagentTranscripts,
-      headSha: Be,
+      headSha,
       lastApiRequest,
       host,
     };
@@ -98,37 +104,44 @@ async function transcriptSharePolicy(messages, storageV5, host) {
   }
 }
 //@ chunk-18hwfzwa.js:1017615-1017679 placement
-async function collectTranscriptShareWithPolicy(h, trigger, appearanceId, storageV5, host, credentials) {
+async function collectTranscriptShareWithPolicy(
+  messages,
+  trigger,
+  appearanceId,
+  storageV5,
+  host,
+  credentials,
+) {
   return collectTranscriptShare(
-    transcriptSharePolicy(h, storageV5, host),
+    transcriptSharePolicy(messages, storageV5, host),
     trigger,
     appearanceId,
     credentials,
   );
 }
 //@ chunk-18hwfzwa.js:1017679-1020352 placement
-async function collectTranscriptShare(h, trigger, appearanceId, credentials) {
+async function collectTranscriptShare(policyPromise, trigger, appearanceId, credentials) {
   if (isEssentialTrafficOnly()) return transcriptShareFailure(lit_2("essential_traffic_only"));
   if (!isPolicyAllowed_2("allow_product_feedback")) return transcriptShareFailure(lit_2("policy_blocked"));
-  let ee = feedbackMode().kind === "bundle" ? "bundle" : "post";
+  let mode = feedbackMode().kind === "bundle" ? "bundle" : "post";
   try {
-    let ke = await h;
-    if (ke.kind === "blocked") return transcriptShareFailure(fromEnum(ke.errorCode));
-    if (ke.kind === "capture_failed") throw ke.error;
-    let Re = normalizeMessagesForAPI(
-      withholdForExport(ke.messages, {
-        host: ke.host,
+    let capture = await policyPromise;
+    if (capture.kind === "blocked") return transcriptShareFailure(fromEnum(capture.errorCode));
+    if (capture.kind === "capture_failed") throw capture.error;
+    let transcript = normalizeMessagesForAPI(
+      withholdForExport(capture.messages, {
+        host: capture.host,
       }),
     );
-    let { headSha, lastApiRequest } = ke;
-    let We = {
-      ...ke.subagentTranscripts,
+    let { headSha, lastApiRequest } = capture;
+    let subagents = {
+      ...capture.subagentTranscripts,
     };
-    let { rawTranscriptJsonl } = ke;
-    if (ee === "post") {
-      for (let [key, value] of Object.entries(We))
+    let { rawTranscriptJsonl } = capture;
+    if (mode === "post") {
+      for (let [key, value] of Object.entries(subagents))
         if (anyMessageHasProviderId(value)) {
-          delete We[key];
+          delete subagents[key];
           logForDebugging(`subagent transcript ${key} withheld: contains_3p_transcript_markers`);
         }
       if (rawTranscriptJsonl !== undefined && containsProviderId(rawTranscriptJsonl)) {
@@ -136,9 +149,9 @@ async function collectTranscriptShare(h, trigger, appearanceId, credentials) {
         logForDebugging("rawTranscriptJsonl withheld from transcript share: contains_3p_transcript_markers");
       }
     }
-    let Xe = xr(We, (Xt) =>
-      withholdForExport(Xt, {
-        host: ke.host,
+    let withheldSubagents = import_mapValues(subagents, (entry) =>
+      withholdForExport(entry, {
+        host: capture.host,
       }),
     );
     let rawTranscriptJsonl_2 =
@@ -146,10 +159,10 @@ async function collectTranscriptShare(h, trigger, appearanceId, credentials) {
         ? undefined
         : redactTranscript(
             withholdTranscriptLine(rawTranscriptJsonl, {
-              host: ke.host,
+              host: capture.host,
             }).jsonl,
           );
-    let kt = {
+    let basePayload = {
       ...redactSecretsDeep({
         trigger,
         version: {
@@ -167,39 +180,42 @@ async function collectTranscriptShare(h, trigger, appearanceId, credentials) {
         commitSha: headSha || null,
         lastApiRequest: lastApiRequest ? pickFeedbackFields(lastApiRequest) : undefined,
       }),
-      transcript: redactFeedbackValue(Re),
-      subagentTranscripts: Object.keys(Xe).length > 0 ? xr(Xe, redactFeedbackValue) : undefined,
+      transcript: redactFeedbackValue(transcript),
+      subagentTranscripts:
+        Object.keys(withheldSubagents).length > 0
+          ? import_mapValues(withheldSubagents, redactFeedbackValue)
+          : undefined,
       rawTranscriptJsonl: rawTranscriptJsonl_2,
     };
-    if (ee === "bundle") {
-      let feedbackPayload = buildFeedbackPayload(kt, TRANSCRIPT_TOP_LEVEL_KEYS, SUBAGENT_TRANSCRIPT_KEYS, {
+    if (mode === "bundle") {
+      let text = buildFeedbackPayload(basePayload, TRANSCRIPT_TOP_LEVEL_KEYS, SUBAGENT_TRANSCRIPT_KEYS, {
         extraOuterFields: {
           appearance_id: appearanceId,
         },
       });
-      let io = await writeFeedbackBundle(feedbackPayload, "transcript.json");
-      if (io.success) {
+      let bundleResult = await writeFeedbackBundle(text, "transcript.json");
+      if (bundleResult.success) {
         logFeatureOk("feedback_transcript_share");
         return {
           success: true,
-          bundlePath: io.zipPath,
+          bundlePath: bundleResult.zipPath,
         };
       }
       return transcriptShareFailure(lit_2("bundle_write_failed"));
     }
     let {
-      transcript,
+      transcript: transcript_2,
       subagentTranscripts,
       lastApiRequest: lastApiRequest_2,
       rawTranscriptJsonl: rawTranscriptJsonl_3,
-      ...Dt
-    } = kt;
-    let Lt = [
-      kt,
+      ...baseFields
+    } = basePayload;
+    let attempts = [
+      basePayload,
       ...(lastApiRequest_2 !== undefined
         ? [
             {
-              ...kt,
+              ...basePayload,
               lastApiRequest: undefined,
             },
           ]
@@ -207,57 +223,57 @@ async function collectTranscriptShare(h, trigger, appearanceId, credentials) {
       ...(rawTranscriptJsonl_3?.trim()
         ? [
             {
-              ...Dt,
+              ...baseFields,
               transcript: [],
               rawTranscriptJsonl: rawTranscriptJsonl_3,
             },
           ]
         : []),
       {
-        ...Dt,
+        ...baseFields,
         transcript: [],
       },
     ];
-    let oo = lit_2("payload_too_large_precheck");
-    for (let [Xt, io] of Lt.entries()) {
-      let so;
+    let failureCode = lit_2("payload_too_large_precheck");
+    for (let [attemptIndex, attempt] of attempts.entries()) {
+      let payload;
       try {
-        so = buildFeedbackPayload(io, TRANSCRIPT_TOP_LEVEL_KEYS, SUBAGENT_TRANSCRIPT_KEYS, {
+        payload = buildFeedbackPayload(attempt, TRANSCRIPT_TOP_LEVEL_KEYS, SUBAGENT_TRANSCRIPT_KEYS, {
           extraOuterFields: {
             appearance_id: appearanceId,
           },
         });
       } catch (error) {
         if (error instanceof RangeError) {
-          oo = lit_2("payload_range_error");
+          failureCode = lit_2("payload_range_error");
           continue;
         }
         throw error;
       }
-      if (so.length > MAX_PAYLOAD_PART_COUNT) {
-        oo = lit_2("payload_too_large_precheck");
+      if (payload.length > MAX_PAYLOAD_PART_COUNT) {
+        failureCode = lit_2("payload_too_large_precheck");
         continue;
       }
-      let po = await submitTranscriptShare(so, credentials);
-      switch (po.kind) {
+      let result = await submitTranscriptShare(payload, credentials);
+      switch (result.kind) {
         case "success":
           logForDebugging("Transcript shared successfully", {
             level: "info",
           });
-          if (Xt > 0) logFeatureSad("feedback_transcript_share", "payload_stripped");
+          if (attemptIndex > 0) logFeatureSad("feedback_transcript_share", "payload_stripped");
           else logFeatureOk("feedback_transcript_share");
           return {
             success: true,
-            transcriptId: po.transcriptId,
+            transcriptId: result.transcriptId,
           };
         case "blocked":
-          return transcriptShareFailure(po.errorCode);
+          return transcriptShareFailure(result.errorCode);
         case "failed":
-          oo = po.errorCode;
-          if (!po.payloadTooLarge) return transcriptShareFailure(po.errorCode);
+          failureCode = result.errorCode;
+          if (!result.payloadTooLarge) return transcriptShareFailure(result.errorCode);
       }
     }
-    return transcriptShareFailure(oo);
+    return transcriptShareFailure(failureCode);
   } catch (error) {
     logForDebugging(errorMessage(error), {
       level: "error",
@@ -266,19 +282,19 @@ async function collectTranscriptShare(h, trigger, appearanceId, credentials) {
   }
 }
 //@ chunk-18hwfzwa.js:1020352-1020432 placement
-function transcriptShareFailure(h) {
-  logFeatureBad("feedback_transcript_share", h);
+function transcriptShareFailure(errorCode) {
+  logFeatureBad("feedback_transcript_share", errorCode);
   return {
     success: false,
-    errorCode: h,
+    errorCode,
   };
 }
 //@ chunk-18hwfzwa.js:1020432-1021210 fingerprint = submitTranscriptShare (0.331)
-async function submitTranscriptShare(h, credentials) {
+async function submitTranscriptShare(payload, credentials) {
   try {
-    let D = await withOAuth401Retry(
+    let response = await withOAuth401Retry(
       () =>
-        apiClient.post("/api/claude_code_shared_session_transcripts", h, {
+        apiClient.post("/api/claude_code_shared_session_transcripts", payload, {
           timeout: SHARE_UPLOAD_TIMEOUT_MS,
           headers: {
             "Content-Type": "application/json",
@@ -290,8 +306,8 @@ async function submitTranscriptShare(h, credentials) {
         credentials,
       },
     );
-    if (!D.ok)
-      switch (D.reason) {
+    if (!response.ok)
+      switch (response.reason) {
         case "essential-traffic-only":
           return {
             kind: "blocked",
@@ -308,15 +324,15 @@ async function submitTranscriptShare(h, credentials) {
             errorCode: lit_2("auth_unavailable"),
           };
       }
-    if (D.status === 200 || D.status === 201)
+    if (response.status === 200 || response.status === 201)
       return {
         kind: "success",
-        transcriptId: D.data?.transcript_id,
+        transcriptId: response.data?.transcript_id,
       };
     return {
       kind: "failed",
-      errorCode: isHttpErrorLabel(D.status),
-      payloadTooLarge: D.status === 413,
+      errorCode: isHttpErrorLabel(response.status),
+      payloadTooLarge: response.status === 413,
     };
   } catch (error) {
     logForDebugging(errorMessage(error), {
@@ -365,7 +381,10 @@ function getTranscriptShareGate() {
       : null;
 }
 //@ chunk-18hwfzwa.js:1021629-1021633 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1021629", () => {
+  init_react_production();
+});
 export {
   transcriptSharePolicy,
   getTranscriptShareGate,

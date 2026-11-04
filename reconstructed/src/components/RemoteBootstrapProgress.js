@@ -8,8 +8,8 @@
  * pieces: chunk-h93cnm7e.js (8)
  * attribution: placement 8
  */
-import { init_react_production, y } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../state/AppState.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
@@ -31,99 +31,106 @@ import { useIsFullscreen } from "../ink/renderModeContext.js";
 import { truncateToWidth } from "../utils/format.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { Spinner } from "./Spinner.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-h93cnm7e.js:1888-1892 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-h93cnm7e.js:1888", () => {
+  init_react_production();
+});
 //@ chunk-h93cnm7e.js:1892-1932 placement
-function selectRemoteBootstrap(N) {
-  return N.remoteBootstrap;
+function selectRemoteBootstrap(state) {
+  return state.remoteBootstrap;
 }
 //@ chunk-h93cnm7e.js:1932-1964 placement
 function nowMs() {
   return Date.now();
 }
 //@ chunk-h93cnm7e.js:1964-2006 placement
-function isFailedStatus(v) {
-  return v.status === "failed";
+function isFailedStatus(state) {
+  return state.status === "failed";
 }
 //@ chunk-h93cnm7e.js:2006-3148 placement
 function RemoteBootstrapProgress() {
-  let $ = w(22);
+  let $ = useMemoCache(22);
   let appState = useAppState(selectRemoteBootstrap);
   let { columns } = useTerminalSize();
-  let [t, g] = y(nowMs);
-  let i;
+  let [props, now] = useState(nowMs);
+  let setNow;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    i = () => g(Date.now());
-    $[0] = i;
-  } else i = $[0];
-  useInterval(i, 1000);
+    setNow = () => now(Date.now());
+    $[0] = setNow;
+  } else setNow = $[0];
+  useInterval(setNow, 1000);
   if (appState === null) {
     return null;
   }
   let queuedCount = appState.queuedCount;
-  let a;
-  let l;
+  let tickInterval;
+  let setTickInterval;
   let flexDirection;
   let marginTop;
-  let h;
-  let d;
-  if ($[1] !== columns || $[2] !== t || $[3] !== appState) {
-    l = appState.steps.some(isFailedStatus);
-    let A = completedSetupMode(appState);
-    a = Box;
+  let textElement;
+  let stepRows;
+  if ($[1] !== columns || $[2] !== props || $[3] !== appState) {
+    setTickInterval = appState.steps.some(isFailedStatus);
+    let setupMode = completedSetupMode(appState);
+    tickInterval = Box;
     flexDirection = "column";
     marginTop = 1;
-    h = jsxProd_default_2(Text, {
+    textElement = jsxProd_default_2(Text, {
       bold: true,
-      children: [setupHeadline(A, l), l || A === "restored" ? "" : "\u2026"],
+      children: [
+        setupHeadline(setupMode, setTickInterval),
+        setTickInterval || setupMode === "restored" ? "" : "\u2026",
+      ],
     });
-    d = appState.steps.map((step) =>
+    stepRows = appState.steps.map((step) =>
       step.status === "skipped"
         ? null
         : jsxProd_default(
             BootstrapStepRow,
             {
               step,
-              label: setupStepLabel(step, A),
-              hint: step.id === "setup_script" ? setupStepAnnotation(appState, step, A) : "",
-              now: t,
+              label: setupStepLabel(step, setupMode),
+              hint: step.id === "setup_script" ? setupStepAnnotation(appState, step, setupMode) : "",
+              now: props,
               columns,
             },
             step.id,
           ),
     );
     $[1] = columns;
-    $[2] = t;
+    $[2] = props;
     $[3] = appState;
-    $[4] = a;
-    $[5] = l;
+    $[4] = tickInterval;
+    $[5] = setTickInterval;
     $[6] = flexDirection;
     $[7] = marginTop;
-    $[8] = h;
-    $[9] = d;
+    $[8] = textElement;
+    $[9] = stepRows;
   } else {
-    a = $[4];
-    l = $[5];
+    tickInterval = $[4];
+    setTickInterval = $[5];
     flexDirection = $[6];
     marginTop = $[7];
-    h = $[8];
-    d = $[9];
+    textElement = $[8];
+    stepRows = $[9];
   }
   let children;
-  if ($[10] !== l || $[11] !== queuedCount) {
-    children = l
+  if ($[10] !== setTickInterval || $[11] !== queuedCount) {
+    children = setTickInterval
       ? "Send a message to try again."
       : queuedCount > 0
         ? `${queuedCount} ${plural(queuedCount, "message")} queued \xB7 sends once the session is ready`
         : "You can start typing \u2014 messages send once the session is ready";
-    $[10] = l;
+    $[10] = setTickInterval;
     $[11] = queuedCount;
     $[12] = children;
   } else children = $[12];
-  let u;
+  let boxElement;
   if ($[13] !== children) {
-    u = jsxProd_default(Box, {
+    boxElement = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
@@ -131,74 +138,80 @@ function RemoteBootstrapProgress() {
       }),
     });
     $[13] = children;
-    $[14] = u;
-  } else u = $[14];
-  let x;
+    $[14] = boxElement;
+  } else boxElement = $[14];
+  let tickIntervalElement;
   if (
-    $[15] !== a ||
+    $[15] !== tickInterval ||
     $[16] !== flexDirection ||
     $[17] !== marginTop ||
-    $[18] !== h ||
-    $[19] !== d ||
-    $[20] !== u
+    $[18] !== textElement ||
+    $[19] !== stepRows ||
+    $[20] !== boxElement
   ) {
-    x = jsxProd_default_2(a, {
+    tickIntervalElement = jsxProd_default_2(tickInterval, {
       flexDirection,
       marginTop,
-      children: [h, d, u],
+      children: [textElement, stepRows, boxElement],
     });
-    $[15] = a;
+    $[15] = tickInterval;
     $[16] = flexDirection;
     $[17] = marginTop;
-    $[18] = h;
-    $[19] = d;
-    $[20] = u;
-    $[21] = x;
-  } else x = $[21];
-  return x;
+    $[18] = textElement;
+    $[19] = stepRows;
+    $[20] = boxElement;
+    $[21] = tickIntervalElement;
+  } else tickIntervalElement = $[21];
+  return tickIntervalElement;
 }
 //@ chunk-h93cnm7e.js:3148-4246 placement
 function BootstrapStepRow(props) {
-  let $ = w(18);
+  let $ = useMemoCache(18);
   let { step, label, hint, now, columns } = props;
-  let f = useIsFullscreen() ? step.output : step.output?.slice(-1);
+  let outputLines = useIsFullscreen() ? step.output : step.output?.slice(-1);
   switch (step.status) {
     case "completed": {
       const annotation = stepDurationSuffix(step, now) + hint;
-      let m;
+      let completedRow;
       if ($[0] !== label || $[1] !== annotation) {
-        m = jsxProd_default(BootstrapStatusLine, {
+        completedRow = jsxProd_default(BootstrapStatusLine, {
           status: "completed",
           label,
           annotation,
         });
         $[0] = label;
         $[1] = annotation;
-        $[2] = m;
-      } else m = $[2];
-      return m;
+        $[2] = completedRow;
+      } else completedRow = $[2];
+      return completedRow;
     }
     case "running": {
       const annotation = stepDurationSuffix(step, now) + hint;
-      const detail = f === undefined ? step.detail : undefined;
-      let T;
-      if ($[3] !== columns || $[4] !== label || $[5] !== f || $[6] !== annotation || $[7] !== detail) {
-        T = jsxProd_default(BootstrapStatusLine, {
+      const detail = outputLines === undefined ? step.detail : undefined;
+      let hintSuffix;
+      if (
+        $[3] !== columns ||
+        $[4] !== label ||
+        $[5] !== outputLines ||
+        $[6] !== annotation ||
+        $[7] !== detail
+      ) {
+        hintSuffix = jsxProd_default(BootstrapStatusLine, {
           status: "running",
           label,
           annotation,
           detail,
-          output: f,
+          output: outputLines,
           columns,
         });
         $[3] = columns;
         $[4] = label;
-        $[5] = f;
+        $[5] = outputLines;
         $[6] = annotation;
         $[7] = detail;
-        $[8] = T;
-      } else T = $[8];
-      return T;
+        $[8] = hintSuffix;
+      } else hintSuffix = $[8];
+      return hintSuffix;
     }
     case "failed": {
       const annotation = step.exitCode === undefined ? "" : ` \xB7 exit code ${step.exitCode}`;
@@ -206,7 +219,7 @@ function BootstrapStepRow(props) {
         step.error === label || ((step.exitCode ?? 0) > 0 && (step.output?.length ?? 0) > 0)
           ? undefined
           : step.error;
-      let T;
+      let statusRow;
       if (
         $[9] !== columns ||
         $[10] !== label ||
@@ -214,7 +227,7 @@ function BootstrapStepRow(props) {
         $[12] !== annotation ||
         $[13] !== detail
       ) {
-        T = jsxProd_default(BootstrapStatusLine, {
+        statusRow = jsxProd_default(BootstrapStatusLine, {
           status: "failed",
           label,
           annotation,
@@ -227,23 +240,23 @@ function BootstrapStepRow(props) {
         $[11] = step.output;
         $[12] = annotation;
         $[13] = detail;
-        $[14] = T;
-      } else T = $[14];
-      return T;
+        $[14] = statusRow;
+      } else statusRow = $[14];
+      return statusRow;
     }
     case "pending": {
-      let a;
+      let pendingRow;
       if ($[15] !== hint || $[16] !== label) {
-        a = jsxProd_default(BootstrapStatusLine, {
+        pendingRow = jsxProd_default(BootstrapStatusLine, {
           status: "pending",
           label,
           annotation: hint,
         });
         $[15] = hint;
         $[16] = label;
-        $[17] = a;
-      } else a = $[17];
-      return a;
+        $[17] = pendingRow;
+      } else pendingRow = $[17];
+      return pendingRow;
     }
     case "skipped": {
       return null;
@@ -252,211 +265,211 @@ function BootstrapStepRow(props) {
 }
 //@ chunk-h93cnm7e.js:4246-6345 placement
 function BootstrapStatusLine(props) {
-  let $ = w(42);
+  let $ = useMemoCache(42);
   let { status, label, annotation, detail, output, columns, detailOverflow } = props;
-  let l = annotation === undefined ? "" : annotation;
-  let m = columns === undefined ? 80 : columns;
-  let T = detailOverflow === undefined ? "truncate" : detailOverflow;
-  let max = Math.max(20, m - 8);
-  let A;
-  if ($[0] !== detail || $[1] !== T || $[2] !== max) {
-    A = detail === undefined || T === "wrap" ? detail : truncateToWidth(detail, max);
+  let annotationText = annotation === undefined ? "" : annotation;
+  let lineColumns = columns === undefined ? 80 : columns;
+  let overflowMode = detailOverflow === undefined ? "truncate" : detailOverflow;
+  let max = Math.max(20, lineColumns - 8);
+  let detailText;
+  if ($[0] !== detail || $[1] !== overflowMode || $[2] !== max) {
+    detailText = detail === undefined || overflowMode === "wrap" ? detail : truncateToWidth(detail, max);
     $[0] = detail;
-    $[1] = T;
+    $[1] = overflowMode;
     $[2] = max;
-    $[3] = A;
-  } else A = $[3];
-  let b = A;
+    $[3] = detailText;
+  } else detailText = $[3];
+  let detailText_2 = detailText;
   switch (status) {
     case "completed": {
-      let C;
+      let tickIcon;
       if ($[4] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default(Text, {
+        tickIcon = jsxProd_default(Text, {
           color: "success",
           children: `  ${figures_default.tick} `,
         });
-        $[4] = C;
-      } else C = $[4];
-      let u;
-      if ($[5] !== l) {
-        u = jsxProd_default(Text, {
+        $[4] = tickIcon;
+      } else tickIcon = $[4];
+      let annotationNode;
+      if ($[5] !== annotationText) {
+        annotationNode = jsxProd_default(Text, {
           dimColor: true,
-          children: l,
+          children: annotationText,
         });
-        $[5] = l;
-        $[6] = u;
-      } else u = $[6];
-      let x;
-      if ($[7] !== label || $[8] !== u) {
-        x = jsxProd_default_2(Box, {
+        $[5] = annotationText;
+        $[6] = annotationNode;
+      } else annotationNode = $[6];
+      let completedRow;
+      if ($[7] !== label || $[8] !== annotationNode) {
+        completedRow = jsxProd_default_2(Box, {
           children: [
-            C,
+            tickIcon,
             jsxProd_default_2(Text, {
-              children: [label, u],
+              children: [label, annotationNode],
             }),
           ],
         });
         $[7] = label;
-        $[8] = u;
-        $[9] = x;
-      } else x = $[9];
-      return x;
+        $[8] = annotationNode;
+        $[9] = completedRow;
+      } else completedRow = $[9];
+      return completedRow;
     }
     case "running": {
-      let C;
+      let spinnerBox;
       if ($[10] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default(Box, {
+        spinnerBox = jsxProd_default(Box, {
           width: 4,
           paddingLeft: 2,
           children: jsxProd_default(Spinner, {}),
         });
-        $[10] = C;
-      } else C = $[10];
-      let u;
-      if ($[11] !== l) {
-        u = jsxProd_default(Text, {
+        $[10] = spinnerBox;
+      } else spinnerBox = $[10];
+      let annotationNode;
+      if ($[11] !== annotationText) {
+        annotationNode = jsxProd_default(Text, {
           dimColor: true,
-          children: l,
+          children: annotationText,
         });
-        $[11] = l;
-        $[12] = u;
-      } else u = $[12];
-      let x;
-      if ($[13] !== label || $[14] !== u) {
-        x = jsxProd_default_2(Box, {
+        $[11] = annotationText;
+        $[12] = annotationNode;
+      } else annotationNode = $[12];
+      let runningRow;
+      if ($[13] !== label || $[14] !== annotationNode) {
+        runningRow = jsxProd_default_2(Box, {
           children: [
-            C,
+            spinnerBox,
             jsxProd_default_2(Text, {
-              children: [label, "\u2026", u],
+              children: [label, "\u2026", annotationNode],
             }),
           ],
         });
         $[13] = label;
-        $[14] = u;
-        $[15] = x;
-      } else x = $[15];
-      let N;
-      if ($[16] !== b) {
-        N =
-          b !== undefined &&
-          b !== "" &&
+        $[14] = annotationNode;
+        $[15] = runningRow;
+      } else runningRow = $[15];
+      let detailBox;
+      if ($[16] !== detailText_2) {
+        detailBox =
+          detailText_2 !== undefined &&
+          detailText_2 !== "" &&
           jsxProd_default(Box, {
             paddingLeft: 6,
             children: jsxProd_default(Text, {
               dimColor: true,
-              children: b,
+              children: detailText_2,
             }),
           });
-        $[16] = b;
-        $[17] = N;
-      } else N = $[17];
-      let v;
+        $[16] = detailText_2;
+        $[17] = detailBox;
+      } else detailBox = $[17];
+      let outputLines;
       if ($[18] !== max || $[19] !== output) {
-        v = jsxProd_default(OutputLines, {
+        outputLines = jsxProd_default(OutputLines, {
           output,
           width: max,
         });
         $[18] = max;
         $[19] = output;
-        $[20] = v;
-      } else v = $[20];
-      let W;
-      if ($[21] !== x || $[22] !== N || $[23] !== v) {
-        W = jsxProd_default_2(Box, {
+        $[20] = outputLines;
+      } else outputLines = $[20];
+      let runningBlock;
+      if ($[21] !== runningRow || $[22] !== detailBox || $[23] !== outputLines) {
+        runningBlock = jsxProd_default_2(Box, {
           flexDirection: "column",
-          children: [x, N, v],
+          children: [runningRow, detailBox, outputLines],
         });
-        $[21] = x;
-        $[22] = N;
-        $[23] = v;
-        $[24] = W;
-      } else W = $[24];
-      return W;
+        $[21] = runningRow;
+        $[22] = detailBox;
+        $[23] = outputLines;
+        $[24] = runningBlock;
+      } else runningBlock = $[24];
+      return runningBlock;
     }
     case "failed": {
-      let C;
+      let crossIcon;
       if ($[25] === MEMO_CACHE_SENTINEL) {
-        C = jsxProd_default(Text, {
+        crossIcon = jsxProd_default(Text, {
           color: "error",
           children: `  ${figures_default.cross} `,
         });
-        $[25] = C;
-      } else C = $[25];
-      let u;
-      if ($[26] !== l) {
-        u = jsxProd_default(Text, {
+        $[25] = crossIcon;
+      } else crossIcon = $[25];
+      let annotationNode;
+      if ($[26] !== annotationText) {
+        annotationNode = jsxProd_default(Text, {
           dimColor: true,
-          children: l,
+          children: annotationText,
         });
-        $[26] = l;
-        $[27] = u;
-      } else u = $[27];
-      let x;
-      if ($[28] !== label || $[29] !== u) {
-        x = jsxProd_default_2(Box, {
+        $[26] = annotationText;
+        $[27] = annotationNode;
+      } else annotationNode = $[27];
+      let failedRow;
+      if ($[28] !== label || $[29] !== annotationNode) {
+        failedRow = jsxProd_default_2(Box, {
           children: [
-            C,
+            crossIcon,
             jsxProd_default_2(Text, {
-              children: [label, u],
+              children: [label, annotationNode],
             }),
           ],
         });
         $[28] = label;
-        $[29] = u;
-        $[30] = x;
-      } else x = $[30];
-      let N;
-      if ($[31] !== b) {
-        N =
-          b !== undefined &&
-          b !== "" &&
+        $[29] = annotationNode;
+        $[30] = failedRow;
+      } else failedRow = $[30];
+      let detailBox;
+      if ($[31] !== detailText_2) {
+        detailBox =
+          detailText_2 !== undefined &&
+          detailText_2 !== "" &&
           jsxProd_default(Box, {
             paddingLeft: 6,
             children: jsxProd_default(Text, {
               color: "error",
-              children: b,
+              children: detailText_2,
             }),
           });
-        $[31] = b;
-        $[32] = N;
-      } else N = $[32];
-      let v;
+        $[31] = detailText_2;
+        $[32] = detailBox;
+      } else detailBox = $[32];
+      let outputLines;
       if ($[33] !== max || $[34] !== output) {
-        v = jsxProd_default(OutputLines, {
+        outputLines = jsxProd_default(OutputLines, {
           output,
           width: max,
         });
         $[33] = max;
         $[34] = output;
-        $[35] = v;
-      } else v = $[35];
-      let W;
-      if ($[36] !== x || $[37] !== N || $[38] !== v) {
-        W = jsxProd_default_2(Box, {
+        $[35] = outputLines;
+      } else outputLines = $[35];
+      let failedBlock;
+      if ($[36] !== failedRow || $[37] !== detailBox || $[38] !== outputLines) {
+        failedBlock = jsxProd_default_2(Box, {
           flexDirection: "column",
-          children: [x, N, v],
+          children: [failedRow, detailBox, outputLines],
         });
-        $[36] = x;
-        $[37] = N;
-        $[38] = v;
-        $[39] = W;
-      } else W = $[39];
-      return W;
+        $[36] = failedRow;
+        $[37] = detailBox;
+        $[38] = outputLines;
+        $[39] = failedBlock;
+      } else failedBlock = $[39];
+      return failedBlock;
     }
     case "pending": {
-      const children = `  ${figures_default.circle} ${label}${l}`;
-      let u;
+      const children = `  ${figures_default.circle} ${label}${annotationText}`;
+      let pendingRow;
       if ($[40] !== children) {
-        u = jsxProd_default(Box, {
+        pendingRow = jsxProd_default(Box, {
           children: jsxProd_default(Text, {
             dimColor: true,
             children,
           }),
         });
         $[40] = children;
-        $[41] = u;
-      } else u = $[41];
-      return u;
+        $[41] = pendingRow;
+      } else pendingRow = $[41];
+      return pendingRow;
     }
   }
 }
@@ -465,42 +478,42 @@ function BootstrapStatusLine(props) {
  * 按宽度截断显示的多行输出（暗色、缩进 6），无输出时不渲染；实际只被 RemoteBootstrapProgress 使用。
  */
 function OutputLines(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { output, width } = props;
   if (output === undefined || output.length === 0) {
     return null;
   }
   let children;
   if ($[0] !== output || $[1] !== width) {
-    let i;
+    let renderLine;
     if ($[3] !== width) {
-      i = (f, a) =>
+      renderLine = (line, index) =>
         jsxProd_default(
           Text,
           {
             dimColor: true,
-            children: truncateToWidth(f, width),
+            children: truncateToWidth(line, width),
           },
-          a,
+          index,
         );
       $[3] = width;
-      $[4] = i;
-    } else i = $[4];
-    children = output.map(i);
+      $[4] = renderLine;
+    } else renderLine = $[4];
+    children = output.map(renderLine);
     $[0] = output;
     $[1] = width;
     $[2] = children;
   } else children = $[2];
-  let i;
+  let boxElement;
   if ($[5] !== children) {
-    i = jsxProd_default(Box, {
+    boxElement = jsxProd_default(Box, {
       flexDirection: "column",
       paddingLeft: 6,
       children,
     });
     $[5] = children;
-    $[6] = i;
-  } else i = $[6];
-  return i;
+    $[6] = boxElement;
+  } else boxElement = $[6];
+  return boxElement;
 }
 export { RemoteBootstrapProgress, BootstrapStatusLine };

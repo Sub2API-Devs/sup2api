@@ -19,15 +19,15 @@ import { buildSkillDoctorContext } from "../skill-doctor/skillDoctor.js";
  * /plugin 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
  */
 async function renderContextCommand(onDone, context, args) {
-  let t = getRemoteCaps() !== null;
+  let isRemote = getRemoteCaps() !== null;
   return jsxProd_default(PluginCommand, {
     onComplete: onDone,
     args,
     commands: context.options.commands,
-    cloudSession: t,
+    cloudSession: isRemote,
     getSessionContext: () => pluginRelevanceInputs(context.messages, context.readFileState),
     getSkillStatsInputs: () => buildSkillDoctorContext(context),
-    getReloadCacheImpactOptions: t
+    getReloadCacheImpactOptions: isRemote
       ? undefined
       : () => ({
           model: context.options.mainLoopModel,
@@ -35,3 +35,4 @@ async function renderContextCommand(onDone, context, args) {
         }),
   });
 }
+export { renderContextCommand };

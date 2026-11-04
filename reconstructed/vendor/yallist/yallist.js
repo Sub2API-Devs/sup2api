@@ -5,26 +5,27 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_iterator } from "./iterator.js";
 
 //@ chunk-1ny7cxrt.js:10965-15716 cjs-fingerprint
-var require_yallist = x(function (cjsExports, cjsModule) {
+var require_yallist = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Yallist;
   Yallist.Node = Node;
   Yallist.create = Yallist;
   function Yallist(list) {
-    var t = this;
-    if (!(t instanceof Yallist)) t = new Yallist();
-    t.tail = null;
-    t.head = null;
-    t.length = 0;
+    var instance = this;
+    if (!(instance instanceof Yallist)) instance = new Yallist();
+    instance.tail = null;
+    instance.head = null;
+    instance.length = 0;
     if (list && typeof list.forEach === "function")
       list.forEach(function (item) {
-        t.push(item);
+        instance.push(item);
       });
-    else if (arguments.length > 0) for (var i = 0, l = arguments.length; i < l; i++) t.push(arguments[i]);
-    return t;
+    else if (arguments.length > 0)
+      for (var i = 0, l = arguments.length; i < l; i++) instance.push(arguments[i]);
+    return instance;
   }
   Yallist.prototype.removeNode = function (node) {
     if (node.list !== this) throw Error("removing node which does not belong to this list");
@@ -223,22 +224,23 @@ var require_yallist = x(function (cjsExports, cjsModule) {
     this.tail = head;
     return this;
   };
-  function insert(e, node, value) {
-    var inserted = node === e.head ? new Node(value, null, node, e) : new Node(value, node, node.next, e);
-    if (inserted.next === null) e.tail = inserted;
-    if (inserted.prev === null) e.head = inserted;
-    e.length++;
+  function insert(list, node, value) {
+    var inserted =
+      node === list.head ? new Node(value, null, node, list) : new Node(value, node, node.next, list);
+    if (inserted.next === null) list.tail = inserted;
+    if (inserted.prev === null) list.head = inserted;
+    list.length++;
     return inserted;
   }
-  function push(e, item) {
-    e.tail = new Node(item, e.tail, null, e);
-    if (!e.head) e.head = e.tail;
-    e.length++;
+  function push(list, item) {
+    list.tail = new Node(item, list.tail, null, list);
+    if (!list.head) list.head = list.tail;
+    list.length++;
   }
-  function unshift(e, item) {
-    e.head = new Node(item, null, e.head, e);
-    if (!e.tail) e.tail = e.head;
-    e.length++;
+  function unshift(list, item) {
+    list.head = new Node(item, null, list.head, list);
+    if (!list.tail) list.tail = list.head;
+    list.length++;
   }
   function Node(value, prev, next, list) {
     if (!(this instanceof Node)) return new Node(value, prev, next, list);

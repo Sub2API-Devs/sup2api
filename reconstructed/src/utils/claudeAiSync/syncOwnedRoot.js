@@ -21,76 +21,80 @@ import { isValidKeySegment } from "../storage/storageSpaces.js";
 import { storageErrorCode, formatStorageError, REMOTELINK } from "../storage/storageErrors.js";
 import { logForDiagnosticsNoPII } from "../diagLogs.js";
 import { syncTrashTempPrefix, queueSyncTrashTrim } from "../plugins/syncTrash.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:629796-629860 placement
 /**
  * 记录一次同步错误（ENOENT 忽略），保存 errno 码。
  */
-function recordSyncError(e, error) {
+function recordSyncError(stats, error) {
   if (!isENOENT(error)) {
-    e.errors++;
-    e.failure = getErrnoCode(error) ?? "unknown";
+    stats.errors++;
+    stats.failure = getErrnoCode(error) ?? "unknown";
   }
 }
 //@ chunk-e6aww6q8.js:630096-630204 placement
 /**
  * 把路径转成 POSIX 形式的显示标签（统一斜杠，逐段替换为可读名称）。
  */
-function toPosixLabelPath(e) {
-  return e
+function toPosixLabelPath(parts) {
+  return parts
     .split(sep)
     .join("/")
     .replaceAll("\\", "/")
     .split("/")
-    .map((n) => syncBucketShape(n) ?? n)
+    .map((part) => syncBucketShape(part) ?? part)
     .join("/");
 }
 //@ chunk-e6aww6q8.js:630204-630377 placement
 class SyncOwnedRootRefusedError extends Error {
   reason;
   code;
-  constructor(reason, n) {
+  constructor(reason, options) {
     super("sync-owned root refused", {
-      cause: n?.cause,
+      cause: options?.cause,
     });
     this.name = "SyncOwnedRootRefusedError";
     this.reason = reason;
-    this.code = n?.code;
+    this.code = options?.code;
   }
 }
 //@ chunk-e6aww6q8.js:630377-630416 placement
 /**
  * 同步目录名到存储命名空间的映射。
  */
-var SYNC_DIR_NAMESPACES = new Map([["skills", "skills"]]);
+var SYNC_DIR_NAMESPACES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:630377", () => {
+  SYNC_DIR_NAMESPACES = new Map([["skills", "skills"]]);
+});
 //@ chunk-e6aww6q8.js:630416-630821 placement
 /**
  * 存储 v5 启用时把配置目录下的路径映射为 userConfigDir 命名空间的作用域链（逐级），并给出管线目录；不在已知子目录下返回 undefined。
  */
-function getStorageChainForPath(e, configHome, storageV5) {
+function getStorageChainForPath(path, configHome, storageV5) {
   if (!(isStorageV5Enabled() && storageV5 !== undefined)) return;
-  let s = relative(configHome, e);
-  if (s === "" || s.startsWith("..") || isAbsolute(s)) return;
-  let [h, ...y] = s.split(sep).filter(Boolean);
-  if (h === undefined) return;
-  let S = SYNC_DIR_NAMESPACES.get(h);
-  if (S === undefined || !y.every(isValidKeySegment)) return;
-  let w = [
+  let relPath = relative(configHome, path);
+  if (relPath === "" || relPath.startsWith("..") || isAbsolute(relPath)) return;
+  let [dirName, ...restSegments] = relPath.split(sep).filter(Boolean);
+  if (dirName === undefined) return;
+  let namespace = SYNC_DIR_NAMESPACES.get(dirName);
+  if (namespace === undefined || !restSegments.every(isValidKeySegment)) return;
+  let chain = [
     {
       namespace: "userConfigDir",
-      dir: S,
+      dir: namespace,
     },
   ];
-  for (let idx = 1; idx <= y.length; idx++)
-    w.push({
+  for (let idx = 1; idx <= restSegments.length; idx++)
+    chain.push({
       namespace: "userConfigDir",
-      dir: S,
-      relPath: y.slice(0, idx),
+      dir: namespace,
+      relPath: restSegments.slice(0, idx),
     });
   return {
     storageV5,
-    chain: w,
-    pipelineFolder: join(configHome, h),
+    chain,
+    pipelineFolder: join(configHome, dirName),
   };
 }
 //@ chunk-e6aww6q8.js:630821-630919 placement
@@ -103,23 +107,23 @@ function lastScopeChainEntry(chain) {
   return last;
 }
 //@ chunk-e6aww6q8.js:630919-631054 placement
-function unexpectedProbeAnswer(e) {
+function unexpectedProbeAnswer(answer) {
   return new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-    `sync-owned path probe: unexpected answer ${String(e?.kind)}`,
+    `sync-owned path probe: unexpected answer ${String(answer?.kind)}`,
     "sync-owned path probe: unexpected answer",
   );
 }
 //@ chunk-e6aww6q8.js:631054-631206 placement
 function probeFailedError(error) {
-  let n = storageErrorCode(error);
+  let code = storageErrorCode(error);
   return Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       `sync-owned path probe failed: ${formatStorageError(error)}`,
       "sync-owned path probe failed",
     ),
-    n !== undefined
+    code !== undefined
       ? {
-          code: n,
+          code,
         }
       : {},
   );
@@ -128,30 +132,30 @@ function probeFailedError(error) {
 /**
  * 逐级检查同步根路径：存储 v5 下按作用域链检查（第一层允许解析到目录的链接），否则逐段 lstat；返回 real、absent、redirected 或 not_a_directory。
  */
-async function probeSyncRootPath(e, configHome, storageV5) {
-  let relPath = relative(configHome, e);
+async function probeSyncRootPath(path, configHome, storageV5) {
+  let relPath = relative(configHome, path);
   if (relPath.startsWith("..") || isAbsolute(relPath)) return "redirected";
-  let storageChain = getStorageChainForPath(e, configHome, storageV5);
+  let storageChain = getStorageChainForPath(path, configHome, storageV5);
   if (storageChain !== undefined) {
-    for (let [S, w] of storageChain.chain.entries()) {
-      let L = await storageChain.storageV5.scopeKind(
-        w,
-        S === 0
+    for (let [chainIndex, scope] of storageChain.chain.entries()) {
+      let scopeResult = await storageChain.storageV5.scopeKind(
+        scope,
+        chainIndex === 0
           ? {
               resolveLink: true,
             }
           : undefined,
       );
-      if (!L.ok) {
-        if (S === 0 && storageErrorCode(L.error) === REMOTELINK) {
-          let q = await statDirectoryKind(storageChain.pipelineFolder);
-          if (q !== "directory") return q;
+      if (!scopeResult.ok) {
+        if (chainIndex === 0 && storageErrorCode(scopeResult.error) === REMOTELINK) {
+          let folderKind = await statDirectoryKind(storageChain.pipelineFolder);
+          if (folderKind !== "directory") return folderKind;
           continue;
         }
-        throw probeFailedError(L.error);
+        throw probeFailedError(scopeResult.error);
       }
-      let G = L.value;
-      switch (G.kind) {
+      let scopeInfo = scopeResult.value;
+      switch (scopeInfo.kind) {
         case "directory":
           continue;
         case "absent":
@@ -159,115 +163,117 @@ async function probeSyncRootPath(e, configHome, storageV5) {
         case "other":
           return "not_a_directory";
         case "link":
-          if (S > 0 || G.linkResolves !== true) return "redirected";
+          if (chainIndex > 0 || scopeInfo.linkResolves !== true) return "redirected";
           continue;
         default:
-          throw unexpectedProbeAnswer(G);
+          throw unexpectedProbeAnswer(scopeInfo);
       }
     }
     return "real";
   }
   let current = configHome;
-  for (let [S, w] of relPath.split(sep).filter(Boolean).entries()) {
-    current = join(current, w);
-    let L;
+  for (let [segmentIndex, segment] of relPath.split(sep).filter(Boolean).entries()) {
+    current = join(current, segment);
+    let stats;
     try {
-      L = await lstat(current);
+      stats = await lstat(current);
     } catch (error) {
       if (isENOENT(error)) return "absent";
       throw error;
     }
-    if (L.isSymbolicLink()) {
-      if (S > 0) return "redirected";
-      let G = await statDirectoryKind(current);
-      if (G !== "directory") return G;
+    if (stats.isSymbolicLink()) {
+      if (segmentIndex > 0) return "redirected";
+      let targetKind = await statDirectoryKind(current);
+      if (targetKind !== "directory") return targetKind;
       continue;
     }
-    if (!L.isDirectory()) return "not_a_directory";
+    if (!stats.isDirectory()) return "not_a_directory";
   }
   return "real";
 }
 //@ chunk-e6aww6q8.js:632076-632220 placement
-async function statDirectoryKind(e) {
-  let n;
+async function statDirectoryKind(path) {
+  let stats;
   try {
-    n = await stat(e);
+    stats = await stat(path);
   } catch (error) {
     if (isENOENT(error)) return "redirected";
     throw error;
   }
-  return n.isDirectory() ? "directory" : "not_a_directory";
+  return stats.isDirectory() ? "directory" : "not_a_directory";
 }
 //@ chunk-e6aww6q8.js:632220-632316 placement
 /**
  * 同步落位使用的 staging 目录与按 pid 区分的子目录。
  */
-function syncStagingPaths(e) {
-  let n = join(e, TRASH_SUBDIR);
+function syncStagingPaths(root) {
+  let trashDir = join(root, TRASH_SUBDIR);
   return [
-    [n, "staging"],
-    [join(n, String(process.pid)), "staging_pid"],
+    [trashDir, "staging"],
+    [join(trashDir, String(process.pid)), "staging_pid"],
   ];
 }
 //@ chunk-e6aww6q8.js:632316-632772 placement
 /**
  * 探测路径叶子的类型（absent、directory、redirected 或 not_a_directory），可走存储 v5 的作用域查询，否则用 lstat。
  */
-async function probeLeafKind(e, configHome, storageV5) {
-  let storageChainForPath = getStorageChainForPath(e, configHome, storageV5);
+async function probeLeafKind(path, configHome, storageV5) {
+  let storageChainForPath = getStorageChainForPath(path, configHome, storageV5);
   if (storageChainForPath !== undefined) {
-    let y = await storageChainForPath.storageV5.scopeKind(lastScopeChainEntry(storageChainForPath.chain));
-    if (!y.ok) throw probeFailedError(y.error);
-    switch (y.value.kind) {
+    let scopeResult = await storageChainForPath.storageV5.scopeKind(
+      lastScopeChainEntry(storageChainForPath.chain),
+    );
+    if (!scopeResult.ok) throw probeFailedError(scopeResult.error);
+    switch (scopeResult.value.kind) {
       case "absent":
       case "directory":
-        return y.value.kind;
+        return scopeResult.value.kind;
       case "link":
         return "redirected";
       case "other":
         return "not_a_directory";
       default:
-        throw unexpectedProbeAnswer(y.value);
+        throw unexpectedProbeAnswer(scopeResult.value);
     }
   }
-  let h;
+  let stats;
   try {
-    h = await lstat(e);
+    stats = await lstat(path);
   } catch (error) {
     if (isENOENT(error)) return "absent";
     throw error;
   }
-  if (h.isSymbolicLink()) return "redirected";
-  return h.isDirectory() ? "directory" : "not_a_directory";
+  if (stats.isSymbolicLink()) return "redirected";
+  return stats.isDirectory() ? "directory" : "not_a_directory";
 }
 //@ chunk-e6aww6q8.js:632772-633369 placement
 /**
  * 校验同步根：探测根路径（可选再检查暂存叶子各级），被拒或无法验证时记诊断并返回 {refused}；正常返回 real 或 absent。
  */
-async function verifySyncRoot(e, claudeConfigDir, r, { checkStagingLeaf: s = false, storageV5: h } = {}) {
+async function verifySyncRoot(root, claudeConfigDir, labels, { checkStagingLeaf = false, storageV5 } = {}) {
   let rootKind;
   try {
-    rootKind = await probeSyncRootPath(e, claudeConfigDir, h);
-    if (rootKind === "real" && s)
-      for (let [S, w] of syncStagingPaths(e)) {
-        let L = await probeLeafKind(S, claudeConfigDir, h);
-        if (L === "absent") break;
-        if (L !== "directory") {
-          logForDiagnosticsNoPII("warn", r.event, {
-            phase: r.phase,
-            root: toPosixLabelPath(r.rootLabel),
-            component: w,
-            reason: L,
+    rootKind = await probeSyncRootPath(root, claudeConfigDir, storageV5);
+    if (rootKind === "real" && checkStagingLeaf)
+      for (let [stagingPath, component] of syncStagingPaths(root)) {
+        let leafKind = await probeLeafKind(stagingPath, claudeConfigDir, storageV5);
+        if (leafKind === "absent") break;
+        if (leafKind !== "directory") {
+          logForDiagnosticsNoPII("warn", labels.event, {
+            phase: labels.phase,
+            root: toPosixLabelPath(labels.rootLabel),
+            component,
+            reason: leafKind,
           });
           return {
-            refused: L,
+            refused: leafKind,
           };
         }
       }
   } catch (error) {
-    logForDiagnosticsNoPII("warn", r.event, {
-      phase: r.phase,
-      root: toPosixLabelPath(r.rootLabel),
+    logForDiagnosticsNoPII("warn", labels.event, {
+      phase: labels.phase,
+      root: toPosixLabelPath(labels.rootLabel),
       reason: "unverified",
       code: getErrnoCode(error) ?? "unknown",
     });
@@ -281,9 +287,9 @@ async function verifySyncRoot(e, claudeConfigDir, r, { checkStagingLeaf: s = fal
       return rootKind;
     case "redirected":
     case "not_a_directory":
-      logForDiagnosticsNoPII("warn", r.event, {
-        phase: r.phase,
-        root: toPosixLabelPath(r.rootLabel),
+      logForDiagnosticsNoPII("warn", labels.event, {
+        phase: labels.phase,
+        root: toPosixLabelPath(labels.rootLabel),
         reason: rootKind,
       });
       return {
@@ -295,15 +301,13 @@ async function verifySyncRoot(e, claudeConfigDir, r, { checkStagingLeaf: s = fal
 /**
  * 来源无法校验时使用的固定原因码。
  */
-function unverifiableSourceKind(e) {
+function unverifiableSourceKind(sourceKind) {
   return "source_unverifiable_unknown";
 }
 //@ chunk-e6aww6q8.js:633421-633581 placement
-async function describeVanishedSource(pipelineFolder) {
+async function describeVanishedSource(path) {
   try {
-    return (await statDirectoryKind(pipelineFolder)) === "not_a_directory"
-      ? "source_unverifiable_ENOTDIR"
-      : "gone";
+    return (await statDirectoryKind(path)) === "not_a_directory" ? "source_unverifiable_ENOTDIR" : "gone";
   } catch (error) {
     return `source_unverifiable_${getErrnoCode(error) ?? "unknown"}`;
   }
@@ -313,13 +317,14 @@ async function describeVanishedSource(pipelineFolder) {
  * 批处理目录消失后在存储中逐级向上判断原因：仍存在为 batch_dir_vanished，父级存在为 gone，遇到非目录、链接或错误则给出 source_unverifiable_*。
  */
 async function diagnoseVanishedBatchDir(batch) {
-  let n = await batch.storageV5.scopeKind(lastScopeChainEntry(batch.chain));
-  if (!n.ok) return `source_unverifiable_${storageErrorCode(n.error) ?? "unknown"}`;
-  if (n.value.kind !== "absent") return "batch_dir_vanished";
+  let lastScopeResult = await batch.storageV5.scopeKind(lastScopeChainEntry(batch.chain));
+  if (!lastScopeResult.ok)
+    return `source_unverifiable_${storageErrorCode(lastScopeResult.error) ?? "unknown"}`;
+  if (lastScopeResult.value.kind !== "absent") return "batch_dir_vanished";
   for (let depth = batch.chain.length - 2; depth >= 0; depth--) {
     let parentScope = batch.chain[depth];
     if (parentScope === undefined) break;
-    let h = await batch.storageV5.scopeKind(
+    let parentResult = await batch.storageV5.scopeKind(
       parentScope,
       depth === 0
         ? {
@@ -327,12 +332,12 @@ async function diagnoseVanishedBatchDir(batch) {
           }
         : undefined,
     );
-    if (!h.ok) {
-      if (depth === 0 && storageErrorCode(h.error) === REMOTELINK)
+    if (!parentResult.ok) {
+      if (depth === 0 && storageErrorCode(parentResult.error) === REMOTELINK)
         return describeVanishedSource(batch.pipelineFolder);
-      return `source_unverifiable_${storageErrorCode(h.error) ?? "unknown"}`;
+      return `source_unverifiable_${storageErrorCode(parentResult.error) ?? "unknown"}`;
     }
-    switch (h.value.kind) {
+    switch (parentResult.value.kind) {
       case "absent":
         continue;
       case "directory":
@@ -343,37 +348,37 @@ async function diagnoseVanishedBatchDir(batch) {
         if (depth === 0) return describeVanishedSource(batch.pipelineFolder);
         return "source_unverifiable_parent_link";
       default:
-        return unverifiableSourceKind(h.value);
+        return unverifiableSourceKind(parentResult.value);
     }
   }
   return "gone";
 }
 //@ chunk-e6aww6q8.js:634281-635209 placement
 async function checkSyncRoots({ dir, trashRoot, configHome, failureEvent, storageV5 }) {
-  let y;
+  let tempDir;
   try {
-    let S = await probeSyncRootPath(dirname(dir), configHome, storageV5);
-    if (S === "redirected" || S === "not_a_directory") {
+    let parentKind = await probeSyncRootPath(dirname(dir), configHome, storageV5);
+    if (parentKind === "redirected" || parentKind === "not_a_directory") {
       logForDiagnosticsNoPII("warn", failureEvent, {
-        code: `source_root_${S}`,
+        code: `source_root_${parentKind}`,
       });
       return false;
     }
-    let w = await probeSyncRootPath(trashRoot, configHome, storageV5);
-    switch (w) {
+    let trashKind = await probeSyncRootPath(trashRoot, configHome, storageV5);
+    switch (trashKind) {
       case "redirected":
       case "not_a_directory":
         logForDiagnosticsNoPII("warn", failureEvent, {
-          code: `trash_root_${w}`,
+          code: `trash_root_${trashKind}`,
         });
         return false;
       case "absent": {
         let storageChainForPath = getStorageChainForPath(trashRoot, configHome, storageV5);
         if (storageChainForPath !== undefined) {
-          let G = await storageChainForPath.storageV5.ensureScope(
+          let ensureResult = await storageChainForPath.storageV5.ensureScope(
             lastScopeChainEntry(storageChainForPath.chain),
           );
-          if (!G.ok) throw probeFailedError(G.error);
+          if (!ensureResult.ok) throw probeFailedError(ensureResult.error);
         } else
           await mkdir(trashRoot, {
             recursive: true,
@@ -383,28 +388,28 @@ async function checkSyncRoots({ dir, trashRoot, configHome, failureEvent, storag
       case "real":
         break;
     }
-    y = await mkdtemp(join(trashRoot, syncTrashTempPrefix(relative(configHome, dir))));
-    await rename(dir, join(y, basename(dir)));
-    queueSyncTrashTrim(trashRoot, basename(y));
+    tempDir = await mkdtemp(join(trashRoot, syncTrashTempPrefix(relative(configHome, dir))));
+    await rename(dir, join(tempDir, basename(dir)));
+    queueSyncTrashTrim(trashRoot, basename(tempDir));
     return true;
   } catch (error) {
-    if (y !== undefined) await rmdir(y).catch(() => {});
-    if (y !== undefined && isENOENT(error)) {
-      let w = "batch_dir_vanished";
+    if (tempDir !== undefined) await rmdir(tempDir).catch(() => {});
+    if (tempDir !== undefined && isENOENT(error)) {
+      let failureCode = "batch_dir_vanished";
       let batch = getStorageChainForPath(dir, configHome, storageV5);
       if (batch !== undefined) {
-        let G = await diagnoseVanishedBatchDir(batch);
-        if (G === "gone") return true;
-        w = G;
+        let diagnosis = await diagnoseVanishedBatchDir(batch);
+        if (diagnosis === "gone") return true;
+        failureCode = diagnosis;
       } else
         try {
           await lstat(dir);
         } catch (error) {
           if (isENOENT(error)) return true;
-          w = `source_unverifiable_${getErrnoCode(error) ?? "unknown"}`;
+          failureCode = `source_unverifiable_${getErrnoCode(error) ?? "unknown"}`;
         }
       logForDiagnosticsNoPII("warn", failureEvent, {
-        code: w,
+        code: failureCode,
       });
       return false;
     }
@@ -420,50 +425,52 @@ async function checkSyncRoots({ dir, trashRoot, configHome, failureEvent, storag
  */
 async function checkSyncOwnedRoot({ root, trashRoot, configHome, events, storageV5 }) {
   try {
-    for (let w of new Set([dirname(trashRoot), dirname(root)])) {
-      let L = await probeSyncRootPath(w, configHome, storageV5);
-      if (L === "redirected" || L === "not_a_directory") {
-        let reason = L === "redirected" ? "parent_symlink" : "parent_not_a_directory";
+    for (let parentDir of new Set([dirname(trashRoot), dirname(root)])) {
+      let parentKind = await probeSyncRootPath(parentDir, configHome, storageV5);
+      if (parentKind === "redirected" || parentKind === "not_a_directory") {
+        let reason = parentKind === "redirected" ? "parent_symlink" : "parent_not_a_directory";
         logForDiagnosticsNoPII("warn", events.refused, {
           phase: "round_head",
           root: toPosixLabelPath(relative(configHome, root)),
           component: "parent",
-          reason: L,
+          reason: parentKind,
         });
         throw new SyncOwnedRootRefusedError(reason);
       }
     }
-    let y = await probeLeafKind(root, configHome, storageV5);
-    let S = [
-      [root, "root", y],
+    let rootKind = await probeLeafKind(root, configHome, storageV5);
+    let checks = [
+      [root, "root", rootKind],
       [trashRoot, "trash_root", await probeLeafKind(trashRoot, configHome, storageV5)],
     ];
-    if (y === "directory")
-      for (let [w, L] of syncStagingPaths(root)) {
-        let G = await probeLeafKind(w, configHome, storageV5);
-        S.push([w, L, G]);
-        if (G !== "directory") break;
+    if (rootKind === "directory")
+      for (let [stagingPath, component] of syncStagingPaths(root)) {
+        let leafKind = await probeLeafKind(stagingPath, configHome, storageV5);
+        checks.push([stagingPath, component, leafKind]);
+        if (leafKind !== "directory") break;
       }
-    for (let [, w, L] of S) {
-      if (L === "absent") continue;
-      if (L !== "directory") {
-        let G = w === "staging_pid" ? "staging" : w;
+    for (let [, component, kind] of checks) {
+      if (kind === "absent") continue;
+      if (kind !== "directory") {
+        let label = component === "staging_pid" ? "staging" : component;
         logForDiagnosticsNoPII("warn", events.refused, {
           phase: "round_head",
           root: toPosixLabelPath(relative(configHome, root)),
-          component: w,
-          reason: L,
+          component,
+          reason: kind,
         });
-        throw new SyncOwnedRootRefusedError(L === "redirected" ? `${G}_symlink` : `${G}_not_a_directory`);
+        throw new SyncOwnedRootRefusedError(
+          kind === "redirected" ? `${label}_symlink` : `${label}_not_a_directory`,
+        );
       }
     }
-    if (y !== "directory") {
+    if (rootKind !== "directory") {
       let storageChainForPath = getStorageChainForPath(root, configHome, storageV5);
       if (storageChainForPath !== undefined) {
-        let L = await storageChainForPath.storageV5.ensureScope(
+        let ensureResult = await storageChainForPath.storageV5.ensureScope(
           lastScopeChainEntry(storageChainForPath.chain),
         );
-        if (!L.ok) throw probeFailedError(L.error);
+        if (!ensureResult.ok) throw probeFailedError(ensureResult.error);
       } else
         await mkdir(root, {
           recursive: true,
@@ -489,17 +496,17 @@ async function checkSyncOwnedRoot({ root, trashRoot, configHome, events, storage
  * 创建同步根守卫：verify 在落地前校验根（只要被拒过就一直拒绝），记录拒绝原因。
  */
 function createSyncRootGuard({ root, rootLabel, configHome, event, storageV5 }) {
-  let y = null;
+  let cachedResult = null;
   return {
     refused() {
-      return y !== null;
+      return cachedResult !== null;
     },
     refusedReason() {
-      return y;
+      return cachedResult;
     },
     async verify() {
-      if (y !== null) return false;
-      let S = await verifySyncRoot(
+      if (cachedResult !== null) return false;
+      let verifyResult = await verifySyncRoot(
         root(),
         configHome(),
         {
@@ -512,15 +519,15 @@ function createSyncRootGuard({ root, rootLabel, configHome, event, storageV5 }) 
           storageV5,
         },
       );
-      if (S === "real") return true;
-      if (S === "absent") {
+      if (verifyResult === "real") return true;
+      if (verifyResult === "absent") {
         logForDiagnosticsNoPII("warn", event, {
           phase: "landing",
           root: toPosixLabelPath(rootLabel),
           reason: "absent",
         });
-        y = "absent";
-      } else y = S.refused;
+        cachedResult = "absent";
+      } else cachedResult = verifyResult.refused;
       return false;
     },
   };
@@ -529,18 +536,18 @@ function createSyncRootGuard({ root, rootLabel, configHome, event, storageV5 }) 
 /**
  * 同步根未通过校验时抛出的错误。
  */
-function rootRefusedError(e) {
-  return new SyncOwnedRootRefusedError(`landing_${e}`);
+function rootRefusedError(reason) {
+  return new SyncOwnedRootRefusedError(`landing_${reason}`);
 }
 //@ chunk-e6aww6q8.js:636798-636865 placement
 /**
  * 同步根的初始校验状态（未读清单、新建守卫）。
  */
-function freshRootState(e) {
+function freshRootState(state) {
   return {
     manifestRead: false,
-    guard: createSyncRootGuard(e),
-    root: e.root(),
+    guard: createSyncRootGuard(state),
+    root: state.root(),
   };
 }
 //@ chunk-e6aww6q8.js:636865-636972 placement
@@ -659,16 +666,16 @@ function describeSyncFailure(cause) {
 /**
  * 判断同步标记文件是否存在（存在返回真）。
  */
-async function hasSyncMarker(e, n) {
-  return (await readSyncMarker(e, n)) === "marked";
+async function hasSyncMarker(configHome, bucket) {
+  return (await readSyncMarker(configHome, bucket)) === "marked";
 }
 //@ chunk-e6aww6q8.js:638116-638263 placement
 /**
  * 读取同步标记文件是否存在：存在为 marked，不存在为 unmarked，其他错误返回不可读代码。
  */
-async function readSyncMarker(e, name) {
+async function readSyncMarker(root, bucketName) {
   try {
-    return (await lstat(bucketDirPath(e, name))).isFile() ? "marked" : "unmarked";
+    return (await lstat(bucketDirPath(root, bucketName))).isFile() ? "marked" : "unmarked";
   } catch (error) {
     return isENOENT(error)
       ? "unmarked"
@@ -681,9 +688,9 @@ async function readSyncMarker(e, name) {
 /**
  * （误归 computerUse）以 wx 模式创建空文件，已存在则忽略。
  */
-async function touchExclusive(e, n) {
+async function touchExclusive(path, content) {
   try {
-    await writeFile(bucketDirPath(e, n), "", {
+    await writeFile(bucketDirPath(path, content), "", {
       flag: "wx",
     });
   } catch (e) {

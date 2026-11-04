@@ -8,7 +8,7 @@
 import { decode_2 } from "../util/base64url.js";
 
 //@ chunk-5h78gfwc.js:11118-11134 esm-layout
-var Ze = Symbol();
+var unusedSymbol = Symbol();
 //@ chunk-5h78gfwc.js:11134-11203 esm-fingerprint
 function assertNotSet(value, name) {
   if (value) throw TypeError(`${name} can only be called once`);
@@ -26,4 +26,4 @@ async function digest(algorithm, data) {
   let subtleDigest = `SHA-${algorithm.slice(-3)}`;
   return new Uint8Array(await crypto.subtle.digest(subtleDigest, data));
 }
-export { decodeBase64url, digest, assertNotSet, Ze };
+export { decodeBase64url, digest, assertNotSet, unusedSymbol };

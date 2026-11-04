@@ -36,19 +36,19 @@ var min = Math.min(
 var MAX_SEED_NAME_CHARS = MAX_SEED_PATH_CHARS - SEED_FIXED_LEN;
 var MAX_LANE_PATH_CHARS = 400;
 //@ chunk-5kex67ak.js:547-651 placement
-function isSeedPath(n) {
-  let joined = posix.join("/", n.replaceAll("\\", "/"));
+function isSeedPath(path) {
+  let joined = posix.join("/", path.replaceAll("\\", "/"));
   return joined === `/${SEED_DIR}` || joined.startsWith(`/${SEED_DIR}/`);
 }
 //@ chunk-5kex67ak.js:651-724 placement
-function isPlainRelativePath(n) {
-  return !n.split("/").some((t) => t === "" || t === "." || t === "..");
+function isPlainRelativePath(path) {
+  return !path.split("/").some((segment) => segment === "" || segment === "." || segment === "..");
 }
 //@ chunk-5kex67ak.js:724-749 placement
 var NAMED_FORK_SEGMENT_RE = /^\.\.namedfork$/i;
 //@ chunk-5kex67ak.js:749-806 placement
 function hasNamedForkSegment(forwardSlashes) {
-  return forwardSlashes.split("/").some((t) => NAMED_FORK_SEGMENT_RE.test(t));
+  return forwardSlashes.split("/").some((segment) => NAMED_FORK_SEGMENT_RE.test(segment));
 }
 export {
   joined,

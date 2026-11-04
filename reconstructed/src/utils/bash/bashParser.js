@@ -28,7 +28,7 @@ var bashParser = {
 var MAX_CACHE_ENTRIES = 64;
 var MAX_COMMAND_LENGTH = 1e4;
 var MAX_SOURCE_LENGTH = 32000;
-var parseCache = identity(new Map(), (e) => e.clear());
+var parseCache = identity(new Map(), (map) => map.clear());
 //@ chunk-k5vy5m8c.js:382-406 facade-exports
 function getParserModule() {
   return bashParser;
@@ -37,20 +37,20 @@ function getParserModule() {
 var SPECIAL_VARS = new Set(["?", "$", "@", "*", "#", "-", "!", "_"]);
 var ZSH_PARAM_FLAG_CHARS = new Set(["#", "^", "=", "~", "+"]);
 //@ chunk-k5vy5m8c.js:489-659 layout
-function scanNonAsciiParamName(e, o) {
-  let src = e.L.src;
-  let s = o;
-  while (s < e.L.len && ZSH_PARAM_FLAG_CHARS.has(src[s])) s++;
-  let i = false;
-  while (s < e.L.len) {
-    let r = src[s];
-    if (isIdentChar(r)) s++;
-    else if (r >= "\x80") {
-      i = true;
-      s++;
+function scanNonAsciiParamName(ctx, start) {
+  let src = ctx.L.src;
+  let index = start;
+  while (index < ctx.L.len && ZSH_PARAM_FLAG_CHARS.has(src[index])) index++;
+  let sawNonAscii = false;
+  while (index < ctx.L.len) {
+    let char = src[index];
+    if (isIdentChar(char)) index++;
+    else if (char >= "\x80") {
+      sawNonAscii = true;
+      index++;
     } else break;
   }
-  return i ? s : -1;
+  return sawNonAscii ? index : -1;
 }
 //@ chunk-k5vy5m8c.js:659-844 facade-exports = SHELL_KEYWORDS (0.799)
 var DECL_KEYWORDS = new Set(["export", "declare", "typeset", "readonly", "local"]);
@@ -102,155 +102,155 @@ function peek(L, off = 0) {
 function byteAt(L, charIdx) {
   if (L.byteTable) return L.byteTable[charIdx];
   let uint32Array = new Uint32Array(L.len + 1);
-  let s = 0;
-  let i = 0;
-  while (i < L.len) {
-    uint32Array[i] = s;
-    let code = L.src.charCodeAt(i);
+  let byteOffset = 0;
+  let index = 0;
+  while (index < L.len) {
+    uint32Array[index] = byteOffset;
+    let code = L.src.charCodeAt(index);
     if (code < 128) {
-      s++;
-      i++;
+      byteOffset++;
+      index++;
     } else if (code < 2048) {
-      s += 2;
-      i++;
+      byteOffset += 2;
+      index++;
     } else if (code >= 55296 && code <= 56319) {
-      uint32Array[i + 1] = s + 2;
-      s += 4;
-      i += 2;
+      uint32Array[index + 1] = byteOffset + 2;
+      byteOffset += 4;
+      index += 2;
     } else {
-      s += 3;
-      i++;
+      byteOffset += 3;
+      index++;
     }
   }
-  uint32Array[L.len] = s;
+  uint32Array[L.len] = byteOffset;
   L.byteTable = uint32Array;
   return uint32Array[charIdx];
 }
 //@ chunk-k5vy5m8c.js:1412-1645 layout
-function isWordChar(e) {
+function isWordChar(char) {
   return (
-    (e >= "a" && e <= "z") ||
-    (e >= "A" && e <= "Z") ||
-    (e >= "0" && e <= "9") ||
-    e === "_" ||
-    e === "/" ||
-    e === "." ||
-    e === "-" ||
-    e === "+" ||
-    e === ":" ||
-    e === "@" ||
-    e === "%" ||
-    e === "," ||
-    e === "~" ||
-    e === "^" ||
-    e === "?" ||
-    e === "*" ||
-    e === "!" ||
-    e === "=" ||
-    e === "[" ||
-    e === "]" ||
-    e >= "\x80"
+    (char >= "a" && char <= "z") ||
+    (char >= "A" && char <= "Z") ||
+    (char >= "0" && char <= "9") ||
+    char === "_" ||
+    char === "/" ||
+    char === "." ||
+    char === "-" ||
+    char === "+" ||
+    char === ":" ||
+    char === "@" ||
+    char === "%" ||
+    char === "," ||
+    char === "~" ||
+    char === "^" ||
+    char === "?" ||
+    char === "*" ||
+    char === "!" ||
+    char === "=" ||
+    char === "[" ||
+    char === "]" ||
+    char >= "\x80"
   );
 }
 //@ chunk-k5vy5m8c.js:1645-1683 layout
-function isWordStart(e) {
-  return isWordChar(e) || e === "\\";
+function isWordStart(char) {
+  return isWordChar(char) || char === "\\";
 }
 //@ chunk-k5vy5m8c.js:1683-1813 layout
-function isWordBreak(e) {
+function isWordBreak(char) {
   return (
-    e === "" ||
-    e === " " ||
-    e === "\t" ||
-    e ===
+    char === "" ||
+    char === " " ||
+    char === "\t" ||
+    char ===
       `
 ` ||
-    e === "\r" ||
-    e === ";" ||
-    e === "&" ||
-    e === "|" ||
-    e === "(" ||
-    e === ")" ||
-    e === "<" ||
-    e === ">"
+    char === "\r" ||
+    char === ";" ||
+    char === "&" ||
+    char === "|" ||
+    char === "(" ||
+    char === ")" ||
+    char === "<" ||
+    char === ">"
   );
 }
 //@ chunk-k5vy5m8c.js:1813-1850 layout
-function isWordBreakNotParen(e) {
-  return isWordBreak(e) && e !== "(";
+function isWordBreakNotParen(char) {
+  return isWordBreak(char) && char !== "(";
 }
 //@ chunk-k5vy5m8c.js:1850-1911 layout
-function isIdentStart(e) {
-  return (e >= "a" && e <= "z") || (e >= "A" && e <= "Z") || e === "_";
+function isIdentStart(char) {
+  return (char >= "a" && char <= "z") || (char >= "A" && char <= "Z") || char === "_";
 }
 //@ chunk-k5vy5m8c.js:1911-1953 layout
-function isIdentChar(e) {
-  return isIdentStart(e) || (e >= "0" && e <= "9");
+function isIdentChar(char) {
+  return isIdentStart(char) || (char >= "0" && char <= "9");
 }
 //@ chunk-k5vy5m8c.js:1953-1989 callgraph-witnessed = isDigit (0)
 function isDigit(c) {
   return c >= "0" && c <= "9";
 }
 //@ chunk-k5vy5m8c.js:1989-2048 layout
-function isHexDigit(e) {
-  return isDigit(e) || (e >= "a" && e <= "f") || (e >= "A" && e <= "F");
+function isHexDigit(char) {
+  return isDigit(char) || (char >= "a" && char <= "f") || (char >= "A" && char <= "F");
 }
 //@ chunk-k5vy5m8c.js:2048-2084 layout
-function isBaseDigit(e) {
-  return isIdentChar(e) || e === "@";
+function isBaseDigit(char) {
+  return isIdentChar(char) || char === "@";
 }
 //@ chunk-k5vy5m8c.js:2084-2241 layout
-function isHeredocDelimChar(e) {
+function isHeredocDelimChar(char) {
   return (
-    e !== "" &&
-    e !== " " &&
-    e !== "\t" &&
-    e !==
+    char !== "" &&
+    char !== " " &&
+    char !== "\t" &&
+    char !==
       `
 ` &&
-    e !== "<" &&
-    e !== ">" &&
-    e !== "|" &&
-    e !== "&" &&
-    e !== ";" &&
-    e !== "(" &&
-    e !== ")" &&
-    e !== "'" &&
-    e !== '"' &&
-    e !== "`" &&
-    e !== "\\"
+    char !== "<" &&
+    char !== ">" &&
+    char !== "|" &&
+    char !== "&" &&
+    char !== ";" &&
+    char !== "(" &&
+    char !== ")" &&
+    char !== "'" &&
+    char !== '"' &&
+    char !== "`" &&
+    char !== "\\"
   );
 }
 //@ chunk-k5vy5m8c.js:2241-2397 layout = peek (1)
-function skipBlanks(e) {
-  while (e.i < e.len) {
-    let o = e.src[e.i];
-    if (o === " " || o === "\t" || o === "\r") advance(e);
-    else if (o === "\\") {
+function skipBlanks(state) {
+  while (state.i < state.len) {
+    let char = state.src[state.i];
+    if (char === " " || char === "\t" || char === "\r") advance(state);
+    else if (char === "\\") {
       if (
-        e.src[e.i + 1] ===
+        state.src[state.i + 1] ===
         `
 `
       ) {
-        advance(e);
-        advance(e);
+        advance(state);
+        advance(state);
       } else break;
     } else break;
   }
 }
 //@ chunk-k5vy5m8c.js:2397-2531 layout = peek (1)
-function skipBlanksNoCR(e) {
-  while (e.i < e.len) {
-    let o = e.src[e.i];
-    if (o === " " || o === "\t") advance(e);
+function skipBlanksNoCR(state) {
+  while (state.i < state.len) {
+    let char = state.src[state.i];
+    if (char === " " || char === "\t") advance(state);
     else if (
-      o === "\\" &&
-      e.src[e.i + 1] ===
+      char === "\\" &&
+      state.src[state.i + 1] ===
         `
 `
     ) {
-      advance(e);
-      advance(e);
+      advance(state);
+      advance(state);
     } else break;
   }
 }
@@ -268,11 +268,11 @@ function nextToken(L, ctx = "arg") {
       start,
       end: start,
     };
-  let s = L.src[L.i];
+  let char = L.src[L.i];
   let c1 = peek(L, 1);
   let c2 = peek(L, 2);
   if (
-    s ===
+    char ===
     `
 `
   ) {
@@ -285,9 +285,9 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "#") {
-    let a = L.i > 0 ? L.src[L.i - 1] : "";
-    if (a === "" || " \t\n;&|<>()`".includes(a)) {
+  if (char === "#") {
+    let previousChar = L.i > 0 ? L.src[L.i - 1] : "";
+    if (previousChar === "" || " \t\n;&|<>()`".includes(previousChar)) {
       let si = L.i;
       while (
         L.i < L.len &&
@@ -304,7 +304,7 @@ function nextToken(L, ctx = "arg") {
       };
     }
   }
-  if (s === "&" && c1 === "&") {
+  if (char === "&" && c1 === "&") {
     advance(L);
     advance(L);
     return {
@@ -314,7 +314,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "|" && c1 === "|") {
+  if (char === "|" && c1 === "|") {
     advance(L);
     advance(L);
     return {
@@ -324,7 +324,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "|" && c1 === "&") {
+  if (char === "|" && c1 === "&") {
     advance(L);
     advance(L);
     return {
@@ -334,7 +334,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === ";" && c1 === ";" && c2 === "&") {
+  if (char === ";" && c1 === ";" && c2 === "&") {
     advance(L);
     advance(L);
     advance(L);
@@ -345,7 +345,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === ";" && c1 === ";") {
+  if (char === ";" && c1 === ";") {
     advance(L);
     advance(L);
     return {
@@ -355,7 +355,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === ";" && c1 === "&") {
+  if (char === ";" && c1 === "&") {
     advance(L);
     advance(L);
     return {
@@ -365,7 +365,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === ">" && c1 === ">") {
+  if (char === ">" && c1 === ">") {
     advance(L);
     advance(L);
     return {
@@ -375,7 +375,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === ">" && c1 === "&" && c2 === "-") {
+  if (char === ">" && c1 === "&" && c2 === "-") {
     advance(L);
     advance(L);
     advance(L);
@@ -386,7 +386,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === ">" && c1 === "&") {
+  if (char === ">" && c1 === "&") {
     advance(L);
     advance(L);
     return {
@@ -396,7 +396,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === ">" && c1 === "|") {
+  if (char === ">" && c1 === "|") {
     advance(L);
     advance(L);
     return {
@@ -406,7 +406,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "&" && c1 === ">" && c2 === ">") {
+  if (char === "&" && c1 === ">" && c2 === ">") {
     advance(L);
     advance(L);
     advance(L);
@@ -417,7 +417,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "&" && c1 === ">") {
+  if (char === "&" && c1 === ">") {
     advance(L);
     advance(L);
     return {
@@ -427,7 +427,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "<" && c1 === "<" && c2 === "<") {
+  if (char === "<" && c1 === "<" && c2 === "<") {
     advance(L);
     advance(L);
     advance(L);
@@ -438,7 +438,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "<" && c1 === "<" && c2 === "-") {
+  if (char === "<" && c1 === "<" && c2 === "-") {
     advance(L);
     advance(L);
     advance(L);
@@ -449,7 +449,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "<" && c1 === "<") {
+  if (char === "<" && c1 === "<") {
     advance(L);
     advance(L);
     return {
@@ -459,7 +459,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "<" && c1 === "&" && c2 === "-") {
+  if (char === "<" && c1 === "&" && c2 === "-") {
     advance(L);
     advance(L);
     advance(L);
@@ -470,7 +470,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "<" && c1 === "&") {
+  if (char === "<" && c1 === "&") {
     advance(L);
     advance(L);
     return {
@@ -480,7 +480,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "<" && c1 === "(") {
+  if (char === "<" && c1 === "(") {
     advance(L);
     advance(L);
     return {
@@ -490,7 +490,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === ">" && c1 === "(") {
+  if (char === ">" && c1 === "(") {
     advance(L);
     advance(L);
     return {
@@ -500,7 +500,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "(" && c1 === "(") {
+  if (char === "(" && c1 === "(") {
     advance(L);
     advance(L);
     return {
@@ -510,7 +510,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === ")" && c1 === ")") {
+  if (char === ")" && c1 === ")") {
     advance(L);
     advance(L);
     return {
@@ -520,55 +520,55 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "|" || s === "&" || s === ";" || s === ">" || s === "<") {
+  if (char === "|" || char === "&" || char === ";" || char === ">" || char === "<") {
     advance(L);
     return {
       type: "OP",
-      value: s,
+      value: char,
       start,
       end: L.b,
     };
   }
-  if (s === "(" || s === ")") {
+  if (char === "(" || char === ")") {
     advance(L);
     return {
       type: "OP",
-      value: s,
+      value: char,
       start,
       end: L.b,
     };
   }
   if (ctx === "cmd") {
-    if (s === "[") {
-      let a = false;
-      let c = (u) => {
-        while (L.src[u] === "\\")
+    if (char === "[") {
+      let sawLineContinuation = false;
+      let skipContinuations = (index) => {
+        while (L.src[index] === "\\")
           if (
-            L.src[u + 1] ===
+            L.src[index + 1] ===
             `
 `
           ) {
-            u += 2;
-            a = true;
+            index += 2;
+            sawLineContinuation = true;
           } else if (
-            L.src[u + 1] === "\r" &&
-            L.src[u + 2] ===
+            L.src[index + 1] === "\r" &&
+            L.src[index + 2] ===
               `
 `
           ) {
-            u += 3;
-            a = true;
+            index += 3;
+            sawLineContinuation = true;
           } else break;
-        return u;
+        return index;
       };
-      let f = c(L.i + 1);
-      if (L.src[f] === "[") {
-        let u = c(f + 1);
-        if (a && L.src[u] === "(") L.zshCondParenDiff = true;
+      let secondBracket = skipContinuations(L.i + 1);
+      if (L.src[secondBracket] === "[") {
+        let afterSecondBracket = skipContinuations(secondBracket + 1);
+        if (sawLineContinuation && L.src[afterSecondBracket] === "(") L.zshCondParenDiff = true;
       }
     }
     if (
-      s === "[" &&
+      char === "[" &&
       c1 === "[" &&
       (c2 === " " ||
         c2 === "\t" ||
@@ -588,7 +588,7 @@ function nextToken(L, ctx = "arg") {
         end: L.b,
       };
     }
-    if (s === "[") {
+    if (char === "[") {
       advance(L);
       return {
         type: "OP",
@@ -598,7 +598,7 @@ function nextToken(L, ctx = "arg") {
       };
     }
     if (
-      s === "{" &&
+      char === "{" &&
       (c1 === " " ||
         c1 === "\t" ||
         c1 ===
@@ -613,7 +613,7 @@ function nextToken(L, ctx = "arg") {
         end: L.b,
       };
     }
-    if (s === "}") {
+    if (char === "}") {
       advance(L);
       return {
         type: "OP",
@@ -622,7 +622,7 @@ function nextToken(L, ctx = "arg") {
         end: L.b,
       };
     }
-    if (s === "!" && (c1 === " " || c1 === "\t")) {
+    if (char === "!" && (c1 === " " || c1 === "\t")) {
       advance(L);
       return {
         type: "OP",
@@ -632,7 +632,7 @@ function nextToken(L, ctx = "arg") {
       };
     }
   }
-  if (s === '"') {
+  if (char === '"') {
     advance(L);
     return {
       type: "DQUOTE",
@@ -641,7 +641,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "'") {
+  if (char === "'") {
     let si = L.i;
     advance(L);
     while (L.i < L.len && L.src[L.i] !== "'") advance(L);
@@ -653,7 +653,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "$") {
+  if (char === "$") {
     if (c1 === "(" && c2 === "(") {
       advance(L);
       advance(L);
@@ -709,7 +709,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (s === "`") {
+  if (char === "`") {
     advance(L);
     return {
       type: "BACKTICK",
@@ -718,7 +718,7 @@ function nextToken(L, ctx = "arg") {
       end: L.b,
     };
   }
-  if (isDigit(s)) {
+  if (isDigit(char)) {
     let j = L.i;
     while (j < L.len && isDigit(L.src[j])) j++;
     let after = j < L.len ? L.src[j] : "";
@@ -733,11 +733,11 @@ function nextToken(L, ctx = "arg") {
       };
     }
   }
-  if (isWordStart(s) || s === "{" || s === "}") {
+  if (isWordStart(char) || char === "{" || char === "}") {
     let si = L.i;
     while (L.i < L.len) {
-      let c = L.src[L.i];
-      if (c === "\\") {
+      let char = L.src[L.i];
+      if (char === "\\") {
         if (L.i + 1 >= L.len) break;
         if (
           L.src[L.i + 1] ===
@@ -752,7 +752,7 @@ function nextToken(L, ctx = "arg") {
         advance(L);
         continue;
       }
-      if (!isWordChar(c) && c !== "{" && c !== "}" && c !== "#") break;
+      if (!isWordChar(char) && char !== "{" && char !== "}" && char !== "#") break;
       advance(L);
     }
     if (L.i > si) {
@@ -775,7 +775,7 @@ function nextToken(L, ctx = "arg") {
   advance(L);
   return {
     type: "WORD",
-    value: s,
+    value: char,
     start,
     end: L.b,
   };
@@ -786,29 +786,34 @@ function nextToken(L, ctx = "arg") {
  */
 function parseCached(source, timeoutMs) {
   if (timeoutMs !== undefined || source.length > MAX_COMMAND_LENGTH) return parseSource(source, timeoutMs);
-  let t = isTinglyPearlEnabled() && !isGuardOff();
-  let s = isCalmNautilusEnabled();
-  let i = isFoamyHeronEnabled();
-  let r = parseCache.get(source);
-  if (r !== undefined && r.keywordRule === t && r.patternQuoteGuard === s && r.dollarOperandGuard === i) {
-    if (r.root.keywordAfterPrefix) markGuardFired();
-    return r.root;
+  let keywordRule = isTinglyPearlEnabled() && !isGuardOff();
+  let patternQuoteGuard = isCalmNautilusEnabled();
+  let dollarOperandGuard = isFoamyHeronEnabled();
+  let cached = parseCache.get(source);
+  if (
+    cached !== undefined &&
+    cached.keywordRule === keywordRule &&
+    cached.patternQuoteGuard === patternQuoteGuard &&
+    cached.dollarOperandGuard === dollarOperandGuard
+  ) {
+    if (cached.root.keywordAfterPrefix) markGuardFired();
+    return cached.root;
   }
   parseCache.delete(source);
   let source_2 = parseSource(source);
   if (source_2 !== null) {
-    let c = source.length;
-    for (let key of parseCache.keys()) c += key.length;
+    let cachedBytes = source.length;
+    for (let key of parseCache.keys()) cachedBytes += key.length;
     for (let key of parseCache.keys()) {
-      if (parseCache.size < MAX_CACHE_ENTRIES && c <= MAX_SOURCE_LENGTH) break;
+      if (parseCache.size < MAX_CACHE_ENTRIES && cachedBytes <= MAX_SOURCE_LENGTH) break;
       parseCache.delete(key);
-      c -= key.length;
+      cachedBytes -= key.length;
     }
     parseCache.set(source, {
       root: source_2,
-      keywordRule: t,
-      patternQuoteGuard: s,
-      dollarOperandGuard: i,
+      keywordRule,
+      patternQuoteGuard,
+      dollarOperandGuard,
     });
   }
   return source_2;
@@ -821,7 +826,7 @@ function parseSource(source, timeoutMs) {
   let lexer = makeLexer(source);
   let srcBytes = byteLengthUtf8(source);
   if (srcBytes >= MAX_CACHED_BYTES) return null;
-  let i = {
+  let parser = {
     L: lexer,
     src: source,
     srcBytes,
@@ -837,11 +842,16 @@ function parseSource(source, timeoutMs) {
     keywordDesync: false,
   };
   try {
-    let program = parseProgram(i);
-    if (i.aborted) return null;
-    if (i.zshBraceDiff || i.L.zshCondParenDiff || i.dollarOperandDiff || i.keywordDesync) {
-      let node = makeNode(i, "ERROR", program.startIndex, program.endIndex, [program]);
-      if (i.keywordDesync)
+    let program = parseProgram(parser);
+    if (parser.aborted) return null;
+    if (
+      parser.zshBraceDiff ||
+      parser.L.zshCondParenDiff ||
+      parser.dollarOperandDiff ||
+      parser.keywordDesync
+    ) {
+      let node = makeNode(parser, "ERROR", program.startIndex, program.endIndex, [program]);
+      if (parser.keywordDesync)
         return {
           ...node,
           keywordAfterPrefix: true,
@@ -855,17 +865,17 @@ function parseSource(source, timeoutMs) {
 }
 //@ chunk-k5vy5m8c.js:7887-8048 callgraph-fingerprint = byteLengthUtf8 (1)
 function byteLengthUtf8(s_2) {
-  let o = 0;
+  let bytes = 0;
   for (let i = 0; i < s_2.length; i++) {
     let code = s_2.charCodeAt(i);
-    if (code < 128) o++;
-    else if (code < 2048) o += 2;
+    if (code < 128) bytes++;
+    else if (code < 2048) bytes += 2;
     else if (code >= 55296 && code <= 56319) {
-      o += 4;
+      bytes += 4;
       i++;
-    } else o += 3;
+    } else bytes += 3;
   }
-  return o;
+  return bytes;
 }
 //@ chunk-k5vy5m8c.js:8048-8221 fingerprint = checkBudget (1)
 /**
@@ -900,15 +910,15 @@ function makeNode(P, type, start, end, children) {
 /**
  * 检测 $name 或 ${...} 中变量名紧跟非 ASCII 字符：zsh 会把多字节字符算进变量名而 bash 不会，存在解析分歧。
  */
-function hasZshMultibyteName(e) {
-  return /\$(?:\{(?:\([^)}]{0,32}\))?)?[#^=~+!]*(?:[A-Za-z_]\w*)?[\u0080-\uffff]/.test(e);
+function hasZshMultibyteName(text) {
+  return /\$(?:\{(?:\([^)}]{0,32}\))?)?[#^=~+!]*(?:[A-Za-z_]\w*)?[\u0080-\uffff]/.test(text);
 }
 //@ chunk-k5vy5m8c.js:8417-8694 fingerprint = sliceBytes (1)
 function sliceBytes(P, startByte, endByte) {
   if (P.isAscii) return P.src.slice(startByte, endByte);
-  let s = P.L;
-  if (!s.byteTable) byteAt(s, 0);
-  let t = s.byteTable;
+  let lex = P.L;
+  if (!lex.byteTable) byteAt(lex, 0);
+  let t = lex.byteTable;
   let lo = 0;
   let hi = P.src.length;
   while (lo < hi) {
@@ -974,10 +984,10 @@ function saveLex(L) {
   return L.b * MAX_INPUT_BYTES + L.i;
 }
 //@ chunk-k5vy5m8c.js:9328-9384 layout = saveLex (1)
-function restoreLex(e, save) {
-  let floored = Math.floor(save / MAX_INPUT_BYTES);
-  e.i = save - floored * MAX_INPUT_BYTES;
-  e.b = floored;
+function restoreLex(lex, offset) {
+  let floored = Math.floor(offset / MAX_INPUT_BYTES);
+  lex.i = offset - floored * MAX_INPUT_BYTES;
+  lex.b = floored;
 }
 //@ chunk-k5vy5m8c.js:9384-10575 fingerprint = parseStatements (1)
 /**
@@ -1169,13 +1179,13 @@ function parsePipeline(P) {
 function parseCommand(P) {
   skipBlanks(P.L);
   let save = saveLex(P.L);
-  let t = nextToken(P.L, "cmd");
-  if (t.type === "EOF") {
+  let token = nextToken(P.L, "cmd");
+  if (token.type === "EOF") {
     restoreLex(P.L, save);
     return null;
   }
-  if (t.type === "OP" && t.value === "!") {
-    let bang = leaf(P, "!", t);
+  if (token.type === "OP" && token.value === "!") {
+    let bang = leaf(P, "!", token);
     let inner = parseCommand(P);
     if (!inner) return makeNode(P, "negated_command", bang.startIndex, bang.endIndex, [bang]);
     if (inner.type === "redirected_statement" && inner.children.length >= 2) {
@@ -1187,8 +1197,8 @@ function parseCommand(P) {
     }
     return makeNode(P, "negated_command", bang.startIndex, inner.endIndex, [bang, inner]);
   }
-  if (t.type === "OP" && t.value === "(") {
-    let open = leaf(P, "(", t);
+  if (token.type === "OP" && token.value === "(") {
+    let open = leaf(P, "(", token);
     let body = parseStatements(P, ")");
     let closeTok = nextToken(P.L, "cmd");
     let close =
@@ -1198,16 +1208,16 @@ function parseCommand(P) {
     let node = makeNode(P, "subshell", open.startIndex, close.endIndex, [open, ...body, close]);
     return maybeRedirect(P, node);
   }
-  if (t.type === "OP" && t.value === "((") {
-    let open = leaf(P, "((", t);
+  if (token.type === "OP" && token.value === "((") {
+    let open = leaf(P, "((", token);
     let exprs = parseArithCommaList(P, "))", "var");
     let closeTok = nextToken(P.L, "cmd");
     let close =
       closeTok.value === "))" ? leaf(P, "))", closeTok) : makeNode(P, "))", open.endIndex, open.endIndex, []);
     return makeNode(P, "compound_statement", open.startIndex, close.endIndex, [open, ...exprs, close]);
   }
-  if (t.type === "OP" && t.value === "{") {
-    let open = leaf(P, "{", t);
+  if (token.type === "OP" && token.value === "{") {
+    let open = leaf(P, "{", token);
     let body = parseStatements(P, "}");
     let closeTok = nextToken(P.L, "cmd");
     let close =
@@ -1217,13 +1227,13 @@ function parseCommand(P) {
     let node = makeNode(P, "compound_statement", open.startIndex, close.endIndex, [open, ...body, close]);
     return maybeRedirect(P, node);
   }
-  if (t.type === "OP" && (t.value === "[" || t.value === "[[")) {
-    let open = leaf(P, t.value, t);
-    let closer = t.value === "[" ? "]" : "]]";
+  if (token.type === "OP" && (token.value === "[" || token.value === "[[")) {
+    let open = leaf(P, token.value, token);
+    let closer = token.value === "[" ? "]" : "]]";
     let exprSave = saveLex(P.L);
     let expr = parseTestExpr(P, closer);
     skipBlanks(P.L);
-    if (t.value === "[" && peek(P.L) !== "]") {
+    if (token.value === "[" && peek(P.L) !== "]") {
       restoreLex(P.L, exprSave);
       let prevStop = P.stopToken;
       P.stopToken = "]";
@@ -1236,36 +1246,37 @@ function parseCommand(P) {
       }
       skipBlanks(P.L);
     }
-    let c = saveLex(P.L);
+    let closeSave = saveLex(P.L);
     let closeTok = nextToken(P.L, "arg");
     let close;
     if (closeTok.value === closer && isWordBreakNotParen(peek(P.L))) close = leaf(P, closer, closeTok);
     else {
-      restoreLex(P.L, c);
+      restoreLex(P.L, closeSave);
       close = makeNode(P, closer, open.endIndex, open.endIndex, []);
     }
     let kids = expr ? [open, expr, close] : [open, close];
     return maybeRedirect(P, makeNode(P, "test_command", open.startIndex, close.endIndex, kids));
   }
-  if (t.type === "WORD" && isWordBreak(peek(P.L))) {
-    if (t.value === "if") return maybeRedirect(P, parseIf(P, t), true);
-    if (t.value === "while" || t.value === "until") return maybeRedirect(P, parseWhile(P, t), true);
-    if (t.value === "for") return maybeRedirect(P, parseFor(P, t), true);
-    if (t.value === "select") return maybeRedirect(P, parseFor(P, t), true);
-    if (t.value === "case") return maybeRedirect(P, parseCase(P, t), true);
-    if (t.value === "function") return parseFunction(P, t);
-    if (DECL_KEYWORDS.has(t.value)) return maybeRedirect(P, parseDeclaration(P, t));
-    if (t.value === "unset" || t.value === "unsetenv") {
-      let s = saveLex(P.L);
+  if (token.type === "WORD" && isWordBreak(peek(P.L))) {
+    if (token.value === "if") return maybeRedirect(P, parseIf(P, token), true);
+    if (token.value === "while" || token.value === "until")
+      return maybeRedirect(P, parseWhile(P, token), true);
+    if (token.value === "for") return maybeRedirect(P, parseFor(P, token), true);
+    if (token.value === "select") return maybeRedirect(P, parseFor(P, token), true);
+    if (token.value === "case") return maybeRedirect(P, parseCase(P, token), true);
+    if (token.value === "function") return parseFunction(P, token);
+    if (DECL_KEYWORDS.has(token.value)) return maybeRedirect(P, parseDeclaration(P, token));
+    if (token.value === "unset" || token.value === "unsetenv") {
+      let unsetSave = saveLex(P.L);
       skipBlanks(P.L);
-      let i = false;
+      let isFunctionCall = false;
       if (peek(P.L) === "(") {
         nextToken(P.L, "cmd");
         skipBlanks(P.L);
-        i = peek(P.L) === ")";
+        isFunctionCall = peek(P.L) === ")";
       }
-      restoreLex(P.L, s);
-      if (!i) return maybeRedirect(P, parseUnset(P, t));
+      restoreLex(P.L, unsetSave);
+      if (!isFunctionCall) return maybeRedirect(P, parseUnset(P, token));
     }
   }
   restoreLex(P.L, save);
@@ -1281,14 +1292,14 @@ function parseSimpleCommand(P) {
   let preRedirects = [];
   while (true) {
     skipBlanks(P.L);
-    let y = tryParseAssignment(P);
-    if (y) {
-      assignments.push(y);
+    let assignment = tryParseAssignment(P);
+    if (assignment) {
+      assignments.push(assignment);
       continue;
     }
-    let _ = tryParseRedirect(P);
-    if (_) {
-      preRedirects.push(_);
+    let redirect = tryParseRedirect(P);
+    if (redirect) {
+      preRedirects.push(redirect);
       continue;
     }
     break;
@@ -1313,7 +1324,9 @@ function parseSimpleCommand(P) {
       isTinglyPearlEnabled() &&
       !isGuardOff()
     ) {
-      let sorted = [...assignments, ...preRedirects].sort((_, k) => _.startIndex - k.startIndex);
+      let sorted = [...assignments, ...preRedirects].sort(
+        (leftNode, rightNode) => leftNode.startIndex - rightNode.startIndex,
+      );
       P.keywordDesync = true;
       markGuardFired();
       return makeNode(P, "ERROR", start, sorted.at(-1).endIndex, sorted);
@@ -1339,15 +1352,15 @@ function parseSimpleCommand(P) {
   let nm = parseWord(P, "cmd");
   if (nm && nm.type === "word") {
     skipBlanks(P.L);
-    let y = false;
+    let isFunctionDef = false;
     if (peek(P.L) === "(") {
-      let _ = saveLex(P.L);
+      let parenSave = saveLex(P.L);
       nextToken(P.L, "cmd");
       skipBlanks(P.L);
-      y = peek(P.L) === ")";
-      restoreLex(P.L, _);
+      isFunctionDef = peek(P.L) === ")";
+      restoreLex(P.L, parenSave);
     }
-    if (y) {
+    if (isFunctionDef) {
       let oTok = nextToken(P.L, "cmd");
       skipBlanks(P.L);
       let cTok = nextToken(P.L, "cmd");
@@ -1386,11 +1399,11 @@ function parseSimpleCommand(P) {
   let heredocRedirect = null;
   while (true) {
     skipBlanks(P.L);
-    let y = tryParseRedirect(P, true);
-    if (y) {
-      if (y.type === "heredoc_redirect") heredocRedirect = y;
-      else if (y.type === "herestring_redirect") args.push(y);
-      else redirects.push(y);
+    let redirect = tryParseRedirect(P, true);
+    if (redirect) {
+      if (redirect.type === "heredoc_redirect") heredocRedirect = redirect;
+      else if (redirect.type === "herestring_redirect") args.push(redirect);
+      else redirects.push(redirect);
       continue;
     }
     if (redirects.length > 0) break;
@@ -1425,12 +1438,12 @@ function parseSimpleCommand(P) {
         let oTok = nextToken(P.L, "cmd");
         let open = leaf(P, "(", oTok);
         let body = parseStatements(P, ")");
-        let Le = saveLex(P.L);
+        let closeSave = saveLex(P.L);
         let cTok = nextToken(P.L, "cmd");
         let close;
         if (cTok.type === "OP" && cTok.value === ")") close = leaf(P, ")", cTok);
         else {
-          restoreLex(P.L, Le);
+          restoreLex(P.L, closeSave);
           close = makeNode(P, ")", open.endIndex, open.endIndex, []);
         }
         args.push(makeNode(P, "subshell", open.startIndex, close.endIndex, [open, ...body, close]));
@@ -1493,13 +1506,13 @@ function maybeRedirect(P, node, allowHerestring = false) {
   while (true) {
     skipBlanks(P.L);
     let save = saveLex(P.L);
-    let a = tryParseRedirect(P);
-    if (!a) break;
-    if (a.type === "herestring_redirect" && !allowHerestring) {
+    let redirect = tryParseRedirect(P);
+    if (!redirect) break;
+    if (redirect.type === "herestring_redirect" && !allowHerestring) {
       restoreLex(P.L, save);
       break;
     }
-    redirects.push(a);
+    redirects.push(redirect);
   }
   if (redirects.length === 0) return node;
   let last = redirects.at(-1);
@@ -1521,18 +1534,18 @@ function tryParseAssignment(P) {
     advance(P.L);
     let depth = 1;
     while (P.L.i < P.L.len && depth > 0) {
-      let y = peek(P.L);
-      if (y === "[") depth++;
-      else if (y === "]") depth--;
+      let char = peek(P.L);
+      if (char === "[") depth++;
+      else if (char === "]") depth--;
       advance(P.L);
     }
     subEnd = P.L.b;
   }
-  let r = peek(P.L);
+  let firstChar = peek(P.L);
   let c1 = peek(P.L, 1);
   let op;
-  if (r === "=" && c1 !== "=") op = "=";
-  else if (r === "+" && c1 === "=") op = "+=";
+  if (firstChar === "=" && c1 !== "=") op = "=";
+  else if (firstChar === "+" && c1 === "=") op = "+=";
   else {
     restoreLex(P.L, save);
     return null;
@@ -1591,13 +1604,13 @@ function tryParseAssignment(P) {
 //@ chunk-k5vy5m8c.js:18546-18999 fingerprint = parseSubscriptIndexInline (1)
 function parseSubscriptIndexInline(P) {
   skipBlanks(P.L);
-  let o = peek(P.L);
-  if ((o === "@" || o === "*") && peek(P.L, 1) === "]") {
-    let t = P.L.b;
+  let firstChar = peek(P.L);
+  if ((firstChar === "@" || firstChar === "*") && peek(P.L, 1) === "]") {
+    let startByte = P.L.b;
     advance(P.L);
-    return makeNode(P, "word", t, P.L.b, []);
+    return makeNode(P, "word", startByte, P.L.b, []);
   }
-  if (o === "(" && peek(P.L, 1) === "(") {
+  if (firstChar === "(" && peek(P.L, 1) === "(") {
     let oStart = P.L.b;
     advance(P.L);
     advance(P.L);
@@ -1634,24 +1647,25 @@ function parseSubscriptIndex(P, startB, endB) {
 }
 //@ chunk-k5vy5m8c.js:19383-19720 fingerprint = isRedirectLiteralStart (1)
 function isRedirectLiteralStart(P) {
-  let o = peek(P.L);
+  let firstChar = peek(P.L);
   if (
-    o === "" ||
-    o ===
+    firstChar === "" ||
+    firstChar ===
       `
 `
   )
     return false;
-  if (o === "|" || o === "&" || o === ";" || o === "(" || o === ")") return false;
-  if (o === "<" || o === ">") return peek(P.L, 1) === "(";
-  if (isDigit(o)) {
+  if (firstChar === "|" || firstChar === "&" || firstChar === ";" || firstChar === "(" || firstChar === ")")
+    return false;
+  if (firstChar === "<" || firstChar === ">") return peek(P.L, 1) === "(";
+  if (isDigit(firstChar)) {
     let j = P.L.i;
     while (j < P.L.len && isDigit(P.L.src[j])) j++;
     let after = j < P.L.len ? P.L.src[j] : "";
     if (after === ">" || after === "<") return false;
   }
-  if (o === "}") return false;
-  if (P.stopToken === "]" && o === "]") return false;
+  if (firstChar === "}") return false;
+  if (P.stopToken === "]" && firstChar === "]") return false;
   return true;
 }
 //@ chunk-k5vy5m8c.js:19720-23489 fingerprint = tryParseRedirect (0.898)
@@ -1673,53 +1687,53 @@ function tryParseRedirect(P, greedy = false) {
     }
   }
   if (fd === null && peek(P.L) === "{") {
-    let a = P.L.i + 1;
-    if (a < P.L.len && /[A-Za-z_]/.test(P.L.src[a])) {
-      while (a < P.L.len && /[A-Za-z0-9_]/.test(P.L.src[a])) a++;
-      if (P.L.src[a] === "[") {
-        let c = 0;
-        let f = false;
-        let u = false;
-        while (a < P.L.len) {
-          let d = P.L.src[a];
-          if (f) {
-            if (d === "'") f = false;
-          } else if (u) {
-            if (d === "\\" && a + 1 < P.L.len) a++;
-            else if (d === '"') u = false;
-          } else if (d === "\\" && a + 1 < P.L.len) a++;
-          else if (d === "'") f = true;
-          else if (d === '"') u = true;
-          else if (d === "[") c++;
-          else if (d === "]") {
-            c--;
-            if (c === 0) {
-              a++;
+    let scanIndex = P.L.i + 1;
+    if (scanIndex < P.L.len && /[A-Za-z_]/.test(P.L.src[scanIndex])) {
+      while (scanIndex < P.L.len && /[A-Za-z0-9_]/.test(P.L.src[scanIndex])) scanIndex++;
+      if (P.L.src[scanIndex] === "[") {
+        let bracketDepth = 0;
+        let inSingleQuote = false;
+        let inDoubleQuote = false;
+        while (scanIndex < P.L.len) {
+          let char = P.L.src[scanIndex];
+          if (inSingleQuote) {
+            if (char === "'") inSingleQuote = false;
+          } else if (inDoubleQuote) {
+            if (char === "\\" && scanIndex + 1 < P.L.len) scanIndex++;
+            else if (char === '"') inDoubleQuote = false;
+          } else if (char === "\\" && scanIndex + 1 < P.L.len) scanIndex++;
+          else if (char === "'") inSingleQuote = true;
+          else if (char === '"') inDoubleQuote = true;
+          else if (char === "[") bracketDepth++;
+          else if (char === "]") {
+            bracketDepth--;
+            if (bracketDepth === 0) {
+              scanIndex++;
               break;
             }
           } else if (
-            d === "\\" &&
-            P.L.src[a + 1] ===
+            char === "\\" &&
+            P.L.src[scanIndex + 1] ===
               `
 `
           ) {
-            a += 2;
+            scanIndex += 2;
             continue;
           } else if (
-            d ===
+            char ===
             `
 `
           )
             break;
-          a++;
+          scanIndex++;
         }
       }
-      if (P.L.src[a] === "}") {
-        let c = a + 1 < P.L.len ? P.L.src[a + 1] : "";
-        if (c === ">" || c === "<") {
-          let f = P.L.b;
-          while (P.L.i <= a) advance(P.L);
-          fd = makeNode(P, "variable_name", f, P.L.b, []);
+      if (P.L.src[scanIndex] === "}") {
+        let afterChar = scanIndex + 1 < P.L.len ? P.L.src[scanIndex + 1] : "";
+        if (afterChar === ">" || afterChar === "<") {
+          let startByte = P.L.b;
+          while (P.L.i <= scanIndex) advance(P.L);
+          fd = makeNode(P, "variable_name", startByte, P.L.b, []);
         }
       }
     }
@@ -1786,20 +1800,20 @@ function tryParseRedirect(P, greedy = false) {
       throw Error("heredoc delimiter contains substitution/escape chars");
     }
     if (P.L.i < P.L.len) {
-      let T = peek(P.L);
+      let afterChar = peek(P.L);
       if (
-        T !== " " &&
-        T !== "\t" &&
-        T !==
+        afterChar !== " " &&
+        afterChar !== "\t" &&
+        afterChar !==
           `
 ` &&
-        T !== "<" &&
-        T !== ">" &&
-        T !== "|" &&
-        T !== "&" &&
-        T !== ";" &&
-        T !== "(" &&
-        T !== ")"
+        afterChar !== "<" &&
+        afterChar !== ">" &&
+        afterChar !== "|" &&
+        afterChar !== "&" &&
+        afterChar !== ";" &&
+        afterChar !== "(" &&
+        afterChar !== ")"
       ) {
         P.aborted = true;
         throw Error("heredoc delimiter word continues past scanned segment");
@@ -1834,15 +1848,15 @@ function tryParseRedirect(P, greedy = false) {
         break;
       if (tc === ">" || tc === "<" || isDigit(tc)) {
         let rSave = saveLex(P.L);
-        let k = tryParseRedirect(P);
-        if (k && k.type === "file_redirect") {
-          kids.push(k);
+        let redirect = tryParseRedirect(P);
+        if (redirect && redirect.type === "file_redirect") {
+          kids.push(redirect);
           continue;
         }
         restoreLex(P.L, rSave);
       }
       if (tc === "|" && peek(P.L, 1) !== "|") {
-        let _ = P.L.b;
+        let pipelineStart = P.L.b;
         advance(P.L);
         skipBlanks(P.L);
         let pipeCmds = [];
@@ -1863,17 +1877,17 @@ function tryParseRedirect(P, greedy = false) {
         if (pipeCmds.length > 0) {
           let last = pipeCmds.at(-1);
           kids.push(makeNode(P, "pipeline", pipeCmds[0].startIndex, last.endIndex, pipeCmds));
-        } else kids.push(makeNode(P, "ERROR", _, P.L.b, []));
+        } else kids.push(makeNode(P, "ERROR", pipelineStart, P.L.b, []));
         continue;
       }
       if ((tc === "&" && peek(P.L, 1) === "&") || (tc === "|" && peek(P.L, 1) === "|")) {
-        let _ = P.L.b;
+        let errorStart = P.L.b;
         advance(P.L);
         advance(P.L);
         skipBlanks(P.L);
         let rhs = parseCommand(P);
         if (rhs) kids.push(rhs);
-        else kids.push(makeNode(P, "ERROR", _, P.L.b, []));
+        else kids.push(makeNode(P, "ERROR", errorStart, P.L.b, []));
         continue;
       }
       if (tc === "&" || tc === ";" || tc === "(" || tc === ")") {
@@ -1958,12 +1972,12 @@ function tryParseRedirect(P, greedy = false) {
 }
 //@ chunk-k5vy5m8c.js:23489-23791 fingerprint = parseProcessSub (1)
 function parseProcessSub(P) {
-  let o = peek(P.L);
-  if ((o !== "<" && o !== ">") || peek(P.L, 1) !== "(") return null;
+  let firstChar = peek(P.L);
+  if ((firstChar !== "<" && firstChar !== ">") || peek(P.L, 1) !== "(") return null;
   let start = P.L.b;
   advance(P.L);
   advance(P.L);
-  let open = makeNode(P, o + "(", start, P.L.b, []);
+  let open = makeNode(P, firstChar + "(", start, P.L.b, []);
   let body = parseStatements(P, ")");
   skipBlanks(P.L);
   let close;
@@ -2000,14 +2014,14 @@ function scanHeredocBodies(P) {
       let checkI = lineStart;
       if (hd.stripTabs) while (checkI < P.L.len && P.L.src[checkI] === "\t") checkI++;
       if (P.L.src.startsWith(hd.delim, checkI)) {
-        let a = checkI + delimLen;
-        let c = a < P.L.len ? P.L.src[a] : "";
+        let afterDelim = checkI + delimLen;
+        let nextChar = afterDelim < P.L.len ? P.L.src[afterDelim] : "";
         if (
-          c === "" ||
-          c ===
+          nextChar === "" ||
+          nextChar ===
             `
 ` ||
-          c === "\r"
+          nextChar === "\r"
         ) {
           hd.bodyEnd = lineStartB;
           while (P.L.i < checkI) advance(P.L);
@@ -2023,20 +2037,20 @@ function scanHeredocBodies(P) {
             advance(P.L);
           return;
         }
-        let f = a;
-        while (f < P.L.len) {
-          let u = P.L.src[f];
+        let scanIndex = afterDelim;
+        while (scanIndex < P.L.len) {
+          let char = P.L.src[scanIndex];
           if (
-            u ===
+            char ===
             `
 `
           )
             break;
-          if (u === ")" || u === "`" || u === "}") {
+          if (char === ")" || char === "`" || char === "}") {
             P.aborted = true;
             throw Error("ambiguous heredoc terminator (shell_eof_token)");
           }
-          f++;
+          scanIndex++;
         }
       }
       while (
@@ -2061,8 +2075,8 @@ function parseHeredocBodyContent(P, start, end) {
   let contentStart = P.L.b;
   let sawExpansion = false;
   while (P.L.b < end) {
-    let c = peek(P.L);
-    if (c === "\\") {
+    let char = peek(P.L);
+    if (char === "\\") {
       let nxt = peek(P.L, 1);
       if (nxt === "$" || nxt === "`" || nxt === "\\") {
         advance(P.L);
@@ -2072,8 +2086,8 @@ function parseHeredocBodyContent(P, start, end) {
       advance(P.L);
       continue;
     }
-    if (c === "$" || c === "`") {
-      if (c === "$" && peek(P.L, 1) === "'") {
+    if (char === "$" || char === "`") {
+      if (char === "$" && peek(P.L, 1) === "'") {
         advance(P.L);
         continue;
       }
@@ -2125,23 +2139,23 @@ function parseWord(P, _ctx) {
   skipBlanks(P.L);
   let parts = [];
   while (P.L.i < P.L.len) {
-    let r = peek(P.L);
+    let char = peek(P.L);
     if (
-      r === " " ||
-      r === "\t" ||
-      r ===
+      char === " " ||
+      char === "\t" ||
+      char ===
         `
 ` ||
-      r === "\r" ||
-      r === "" ||
-      r === "|" ||
-      r === "&" ||
-      r === ";" ||
-      r === "(" ||
-      r === ")"
+      char === "\r" ||
+      char === "" ||
+      char === "|" ||
+      char === "&" ||
+      char === ";" ||
+      char === "(" ||
+      char === ")"
     )
       break;
-    if (r === "<" || r === ">") {
+    if (char === "<" || char === ">") {
       if (peek(P.L, 1) === "(") {
         let ps = parseProcessSub(P);
         if (ps) parts.push(ps);
@@ -2149,16 +2163,16 @@ function parseWord(P, _ctx) {
       }
       break;
     }
-    if (r === '"') {
+    if (char === '"') {
       parts.push(parseDoubleQuoted(P));
       continue;
     }
-    if (r === "'") {
+    if (char === "'") {
       let tok = nextToken(P.L, "arg");
       parts.push(leaf(P, "raw_string", tok));
       continue;
     }
-    if (r === "$") {
+    if (char === "$") {
       let c1 = peek(P.L, 1);
       if (c1 === "'") {
         let tok = nextToken(P.L, "arg");
@@ -2178,27 +2192,27 @@ function parseWord(P, _ctx) {
         continue;
       }
       if (c1 === "`") {
-        let u = {
+        let dollarToken = {
           type: "DOLLAR",
           value: "$",
           start: P.L.b,
           end: P.L.b + 1,
         };
         advance(P.L);
-        parts.push(leaf(P, "$", u));
+        parts.push(leaf(P, "$", dollarToken));
         continue;
       }
       let exp = parseDollarLike(P);
       if (exp) parts.push(exp);
       continue;
     }
-    if (r === "`") {
+    if (char === "`") {
       if (P.inBacktick > 0) break;
       let bt = parseBacktick(P);
       parts.push(bt);
       continue;
     }
-    if (r === "{") {
+    if (char === "{") {
       let be = tryParseBraceExpr(P);
       if (be) {
         parts.push(be);
@@ -2224,17 +2238,17 @@ function parseWord(P, _ctx) {
       }
       let cat = tryParseBraceLikeCat(P);
       if (cat) {
-        for (let d of cat) parts.push(d);
+        for (let part of cat) parts.push(part);
         continue;
       }
     }
-    if (r === "}") {
+    if (char === "}") {
       let bStart = P.L.b;
       advance(P.L);
       parts.push(makeNode(P, "word", bStart, P.L.b, []));
       continue;
     }
-    if (r === "[" || r === "]") {
+    if (char === "[" || char === "]") {
       let bStart = P.L.b;
       advance(P.L);
       parts.push(makeNode(P, "word", bStart, P.L.b, []));
@@ -2267,8 +2281,8 @@ function parseBareWord(P) {
   let start = P.L.b;
   let startI = P.L.i;
   while (P.L.i < P.L.len) {
-    let r = peek(P.L);
-    if (r === "\\") {
+    let char = peek(P.L);
+    if (char === "\\") {
       if (P.L.i + 1 >= P.L.len) break;
       if (
         P.L.src[P.L.i + 1] ===
@@ -2281,28 +2295,28 @@ function parseBareWord(P) {
       continue;
     }
     if (
-      r === " " ||
-      r === "\t" ||
-      r ===
+      char === " " ||
+      char === "\t" ||
+      char ===
         `
 ` ||
-      r === "\r" ||
-      r === "" ||
-      r === "|" ||
-      r === "&" ||
-      r === ";" ||
-      r === "(" ||
-      r === ")" ||
-      r === "<" ||
-      r === ">" ||
-      r === '"' ||
-      r === "'" ||
-      r === "$" ||
-      r === "`" ||
-      r === "{" ||
-      r === "}" ||
-      r === "[" ||
-      r === "]"
+      char === "\r" ||
+      char === "" ||
+      char === "|" ||
+      char === "&" ||
+      char === ";" ||
+      char === "(" ||
+      char === ")" ||
+      char === "<" ||
+      char === ">" ||
+      char === '"' ||
+      char === "'" ||
+      char === "$" ||
+      char === "`" ||
+      char === "{" ||
+      char === "}" ||
+      char === "[" ||
+      char === "]"
     )
       break;
     advance(P.L);
@@ -2451,15 +2465,15 @@ function parseDoubleQuoted(P) {
     }
   };
   while (P.L.i < P.L.len) {
-    let u = peek(P.L);
-    if (u === '"') break;
-    if (u === "\\" && P.L.i + 1 < P.L.len) {
+    let char = peek(P.L);
+    if (char === '"') break;
+    if (char === "\\" && P.L.i + 1 < P.L.len) {
       advance(P.L);
       advance(P.L);
       continue;
     }
     if (
-      u ===
+      char ===
       `
 `
     ) {
@@ -2469,7 +2483,7 @@ function parseDoubleQuoted(P) {
       contentStartI = P.L.i;
       continue;
     }
-    if (u === "$") {
+    if (char === "$") {
       let c1 = peek(P.L, 1);
       if (
         c1 === "(" ||
@@ -2497,7 +2511,7 @@ function parseDoubleQuoted(P) {
         continue;
       }
     }
-    if (u === "`") {
+    if (char === "`") {
       flushContent();
       let bt = parseBacktick(P);
       parts.push(bt);
@@ -2530,14 +2544,14 @@ function parseDollarLike(P) {
     advance(P.L);
     advance(P.L);
     let open = makeNode(P, "$((", dStart, P.L.b, []);
-    let f = saveLex(P.L);
+    let arithSave = saveLex(P.L);
     let exprs = parseArithCommaList(P, "))", "var");
     skipBlanks(P.L);
     let close;
-    let b = false;
+    let skipped = false;
     if (peek(P.L) !== ")" || peek(P.L, 1) !== ")") {
-      skipToArithStop(P, f, "))");
-      b = true;
+      skipToArithStop(P, arithSave, "))");
+      skipped = true;
     }
     if (peek(P.L) === ")" && peek(P.L, 1) === ")") {
       let cStart = P.L.b;
@@ -2545,27 +2559,35 @@ function parseDollarLike(P) {
       advance(P.L);
       close = makeNode(P, "))", cStart, P.L.b, []);
     } else close = makeNode(P, "))", P.L.b, P.L.b, []);
-    return makeNode(P, b ? "ERROR" : "arithmetic_expansion", dStart, close.endIndex, [open, ...exprs, close]);
+    return makeNode(P, skipped ? "ERROR" : "arithmetic_expansion", dStart, close.endIndex, [
+      open,
+      ...exprs,
+      close,
+    ]);
   }
   if (c1 === "[") {
     advance(P.L);
     advance(P.L);
     let open = makeNode(P, "$[", dStart, P.L.b, []);
-    let f = saveLex(P.L);
+    let arithSave = saveLex(P.L);
     let exprs = parseArithCommaList(P, "]", "var");
     skipBlanks(P.L);
     let close;
-    let b = false;
+    let skipped = false;
     if (peek(P.L) !== "]") {
-      skipToArithStop(P, f, "]");
-      b = true;
+      skipToArithStop(P, arithSave, "]");
+      skipped = true;
     }
     if (peek(P.L) === "]") {
       let cStart = P.L.b;
       advance(P.L);
       close = makeNode(P, "]", cStart, P.L.b, []);
     } else close = makeNode(P, "]", P.L.b, P.L.b, []);
-    return makeNode(P, b ? "ERROR" : "arithmetic_expansion", dStart, close.endIndex, [open, ...exprs, close]);
+    return makeNode(P, skipped ? "ERROR" : "arithmetic_expansion", dStart, close.endIndex, [
+      open,
+      ...exprs,
+      close,
+    ]);
   }
   if (c1 === "(") {
     advance(P.L);
@@ -2576,30 +2598,30 @@ function parseDollarLike(P) {
     let body = parseStatements(P, ")");
     P.inDquote = inDquote;
     skipBlanks(P.L);
-    let d;
-    let b = false;
+    let close;
+    let scanRecovered = false;
     if (peek(P.L) === ")") {
       let cStart = P.L.b;
       advance(P.L);
-      d = makeNode(P, ")", cStart, P.L.b, []);
+      close = makeNode(P, ")", cStart, P.L.b, []);
     } else {
-      b = true;
+      scanRecovered = true;
       P.zshBraceDiff = true;
-      let p = P.L.b;
-      let h = 1;
+      let errorStart = P.L.b;
+      let parenDepth = 1;
       while (P.L.i < P.L.len) {
-        let I = peek(P.L);
-        if (I === "\\" && P.L.i + 1 < P.L.len) {
+        let char = peek(P.L);
+        if (char === "\\" && P.L.i + 1 < P.L.len) {
           advance(P.L);
           advance(P.L);
           continue;
         }
-        if (I === '"' || I === "'") {
-          skipQuotedSpan(P, I);
+        if (char === '"' || char === "'") {
+          skipQuotedSpan(P, char);
           if (P.L.i < P.L.len) advance(P.L);
           continue;
         }
-        if (I === "`") {
+        if (char === "`") {
           advance(P.L);
           while (P.L.i < P.L.len && peek(P.L) !== "`") {
             if (peek(P.L) === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
@@ -2608,47 +2630,51 @@ function parseDollarLike(P) {
           if (P.L.i < P.L.len) advance(P.L);
           continue;
         }
-        if (I === "$" && peek(P.L, 1) === "$") {
+        if (char === "$" && peek(P.L, 1) === "$") {
           advance(P.L);
           advance(P.L);
           continue;
         }
-        if (I === "$" && peek(P.L, 1) === "'") {
+        if (char === "$" && peek(P.L, 1) === "'") {
           skipQuotedSpan(P, "$'");
           if (P.L.i < P.L.len) advance(P.L);
           continue;
         }
-        if (I === "(") h++;
-        else if (I === ")") {
-          h--;
-          if (h === 0) break;
+        if (char === "(") parenDepth++;
+        else if (char === ")") {
+          parenDepth--;
+          if (parenDepth === 0) break;
         }
         advance(P.L);
       }
-      body.push(makeNode(P, "ERROR", p, P.L.b, []));
+      body.push(makeNode(P, "ERROR", errorStart, P.L.b, []));
       if (peek(P.L) === ")") {
-        let I = P.L.b;
+        let closeStart = P.L.b;
         advance(P.L);
-        d = makeNode(P, ")", I, P.L.b, []);
-      } else d = makeNode(P, "ERROR", P.L.b, P.L.b, []);
+        close = makeNode(P, ")", closeStart, P.L.b, []);
+      } else close = makeNode(P, "ERROR", P.L.b, P.L.b, []);
     }
     if (
-      !b &&
+      !scanRecovered &&
       body.length === 1 &&
       body[0].type === "redirected_statement" &&
       body[0].children.length === 1 &&
       body[0].children[0].type === "file_redirect"
     )
       body = [...body[0].children];
-    return makeNode(P, b ? "ERROR" : "command_substitution", dStart, d.endIndex, [open, ...body, d]);
+    return makeNode(P, scanRecovered ? "ERROR" : "command_substitution", dStart, close.endIndex, [
+      open,
+      ...body,
+      close,
+    ]);
   }
   if (c1 === "{") {
     advance(P.L);
     advance(P.L);
     let open = makeNode(P, "${", dStart, P.L.b, []);
     let inner = parseExpansionBody(P);
-    let u;
-    let d = false;
+    let close;
+    let scanRecovered = false;
     while (
       peek(P.L) ===
       `
@@ -2658,47 +2684,47 @@ function parseDollarLike(P) {
     if (peek(P.L) === "}") {
       let cStart = P.L.b;
       advance(P.L);
-      u = makeNode(P, "}", cStart, P.L.b, []);
+      close = makeNode(P, "}", cStart, P.L.b, []);
     } else {
-      d = true;
+      scanRecovered = true;
       P.zshBraceDiff = true;
       let dEnd = P.L.b;
-      let p = 1;
+      let braceDepth = 1;
       while (P.L.i < P.L.len) {
-        let I = peek(P.L);
-        if (I === "\\" && P.L.i + 1 < P.L.len) {
+        let char = peek(P.L);
+        if (char === "\\" && P.L.i + 1 < P.L.len) {
           advance(P.L);
           advance(P.L);
           continue;
         }
-        if (I === '"' || I === "'") {
-          skipQuotedSpan(P, I);
+        if (char === '"' || char === "'") {
+          skipQuotedSpan(P, char);
           if (P.L.i < P.L.len) advance(P.L);
           continue;
         }
-        if (I === "$" && peek(P.L, 1) === "(") {
-          let T = 1;
+        if (char === "$" && peek(P.L, 1) === "(") {
+          let cmdsubDepth = 1;
           advance(P.L);
           advance(P.L);
-          while (P.L.i < P.L.len && T > 0) {
-            let g = peek(P.L);
-            if (g === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
-            else if (g === "$" && peek(P.L, 1) === "$") advance(P.L);
-            else if (g === "$" && peek(P.L, 1) === "'") skipQuotedSpan(P, "$'");
-            else if (g === '"' || g === "'") skipQuotedSpan(P, g);
-            else if (g === "`") {
+          while (P.L.i < P.L.len && cmdsubDepth > 0) {
+            let innerChar = peek(P.L);
+            if (innerChar === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
+            else if (innerChar === "$" && peek(P.L, 1) === "$") advance(P.L);
+            else if (innerChar === "$" && peek(P.L, 1) === "'") skipQuotedSpan(P, "$'");
+            else if (innerChar === '"' || innerChar === "'") skipQuotedSpan(P, innerChar);
+            else if (innerChar === "`") {
               advance(P.L);
               while (P.L.i < P.L.len && peek(P.L) !== "`") {
                 if (peek(P.L) === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
                 advance(P.L);
               }
-            } else if (g === "(") T++;
-            else if (g === ")") T--;
+            } else if (innerChar === "(") cmdsubDepth++;
+            else if (innerChar === ")") cmdsubDepth--;
             advance(P.L);
           }
           continue;
         }
-        if (I === "`") {
+        if (char === "`") {
           advance(P.L);
           while (P.L.i < P.L.len && peek(P.L) !== "`") {
             if (peek(P.L) === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
@@ -2707,42 +2733,43 @@ function parseDollarLike(P) {
           if (P.L.i < P.L.len) advance(P.L);
           continue;
         }
-        if (I === "$" && peek(P.L, 1) === "$") {
+        if (char === "$" && peek(P.L, 1) === "$") {
           advance(P.L);
           advance(P.L);
           continue;
         }
-        if (I === "$" && peek(P.L, 1) === "'") {
+        if (char === "$" && peek(P.L, 1) === "'") {
           skipQuotedSpan(P, "$'");
           if (P.L.i < P.L.len) advance(P.L);
           continue;
         }
-        if (I === "$" && peek(P.L, 1) === "{") {
-          p++;
+        if (char === "$" && peek(P.L, 1) === "{") {
+          braceDepth++;
           advance(P.L);
-        } else if (I === "}") {
-          p--;
-          if (p === 0) break;
+        } else if (char === "}") {
+          braceDepth--;
+          if (braceDepth === 0) break;
         }
         advance(P.L);
       }
       let node = makeNode(P, "ERROR", dEnd, P.L.b, []);
       if (peek(P.L) === "}") {
-        let I = P.L.b;
+        let closeStart = P.L.b;
         advance(P.L);
-        u = makeNode(P, "}", I, P.L.b, []);
-      } else u = makeNode(P, "ERROR", P.L.b, P.L.b, []);
+        close = makeNode(P, "}", closeStart, P.L.b, []);
+      } else close = makeNode(P, "ERROR", P.L.b, P.L.b, []);
       inner.push(node);
     }
-    if (!d && P.inDquote > 0 && sliceBytes(P, open.endIndex, u.startIndex).includes("'")) d = true;
-    if (!d && hasZshMultibyteName(sliceBytes(P, dStart, u.startIndex))) d = true;
-    if (/\\\n|\$\[|\$\{[ \t\n|]/.test(sliceBytes(P, open.endIndex, u.startIndex))) P.zshBraceDiff = true;
+    if (!scanRecovered && P.inDquote > 0 && sliceBytes(P, open.endIndex, close.startIndex).includes("'"))
+      scanRecovered = true;
+    if (!scanRecovered && hasZshMultibyteName(sliceBytes(P, dStart, close.startIndex))) scanRecovered = true;
+    if (/\\\n|\$\[|\$\{[ \t\n|]/.test(sliceBytes(P, open.endIndex, close.startIndex))) P.zshBraceDiff = true;
     return makeNode(
       P,
-      d || P.zshBraceDiff || P.dollarOperandDiff ? "ERROR" : "expansion",
+      scanRecovered || P.zshBraceDiff || P.dollarOperandDiff ? "ERROR" : "expansion",
       dStart,
-      u.endIndex,
-      [open, ...inner, u],
+      close.endIndex,
+      [open, ...inner, close],
     );
   }
   if (c1 === "'") {
@@ -2774,11 +2801,11 @@ function parseDollarLike(P) {
     let vn = makeNode(P, "variable_name", vStart, P.L.b, []);
     return makeNode(P, "simple_expansion", dStart, P.L.b, [dollar, vn]);
   }
-  let a = nc === "#" && !ZSH_PARAM_FLAG_CHARS.has(peek(P.L, 1));
-  if (ZSH_PARAM_FLAG_CHARS.has(nc) && !a) {
-    let c = scanNonAsciiParamName(P, P.L.i);
-    if (c !== -1) {
-      while (P.L.i < c) advance(P.L);
+  let isSpecialsFlag = nc === "#" && !ZSH_PARAM_FLAG_CHARS.has(peek(P.L, 1));
+  if (ZSH_PARAM_FLAG_CHARS.has(nc) && !isSpecialsFlag) {
+    let paramNameEnd = scanNonAsciiParamName(P, P.L.i);
+    if (paramNameEnd !== -1) {
+      while (P.L.i < paramNameEnd) advance(P.L);
       return makeNode(P, "ERROR", dStart, P.L.b, []);
     }
   }
@@ -2819,29 +2846,29 @@ function parseExpansionBody(P_2) {
     }
   }
   if (peek(P_2.L) === "#") {
-    let r = P_2.L.b;
+    let poundStart = P_2.L.b;
     advance(P_2.L);
-    out.push(makeNode(P_2, "#", r, P_2.L.b, []));
+    out.push(makeNode(P_2, "#", poundStart, P_2.L.b, []));
   }
   let pc = peek(P_2.L);
   if ((pc === "!" || pc === "=" || pc === "~") && (isIdentStart(peek(P_2.L, 1)) || isDigit(peek(P_2.L, 1)))) {
-    let r = P_2.L.b;
+    let opStart = P_2.L.b;
     advance(P_2.L);
-    out.push(makeNode(P_2, pc, r, P_2.L.b, []));
+    out.push(makeNode(P_2, pc, opStart, P_2.L.b, []));
   }
   skipBlanks(P_2.L);
   if (isIdentStart(peek(P_2.L))) {
-    let r = P_2.L.b;
+    let nameStart = P_2.L.b;
     while (isIdentChar(peek(P_2.L))) advance(P_2.L);
-    out.push(makeNode(P_2, "variable_name", r, P_2.L.b, []));
+    out.push(makeNode(P_2, "variable_name", nameStart, P_2.L.b, []));
   } else if (isDigit(peek(P_2.L))) {
-    let r = P_2.L.b;
+    let numberStart = P_2.L.b;
     while (isDigit(peek(P_2.L))) advance(P_2.L);
-    out.push(makeNode(P_2, "variable_name", r, P_2.L.b, []));
+    out.push(makeNode(P_2, "variable_name", numberStart, P_2.L.b, []));
   } else if (SPECIAL_VARS.has(peek(P_2.L))) {
-    let r = P_2.L.b;
+    let specialVarStart = P_2.L.b;
     advance(P_2.L);
-    out.push(makeNode(P_2, "special_variable_name", r, P_2.L.b, []));
+    out.push(makeNode(P_2, "special_variable_name", specialVarStart, P_2.L.b, []));
   }
   if (peek(P_2.L) === "[") {
     let varNode = out.at(-1);
@@ -2857,27 +2884,27 @@ function parseExpansionBody(P_2) {
       let kids = idx ? [varNode, brOpenNode, idx, brCloseNode] : [varNode, brOpenNode, brCloseNode];
       out[out.length - 1] = makeNode(P_2, "subscript", varNode.startIndex, P_2.L.b, kids);
     } else {
-      let b = idx ? [brOpenNode, idx, brCloseNode] : [brOpenNode, brCloseNode];
-      out.push(makeNode(P_2, "ERROR", brOpen, P_2.L.b, b));
+      let subscriptKids = idx ? [brOpenNode, idx, brCloseNode] : [brOpenNode, brCloseNode];
+      out.push(makeNode(P_2, "ERROR", brOpen, P_2.L.b, subscriptKids));
     }
   }
   skipBlanks(P_2.L);
   let tc = peek(P_2.L);
   if ((tc === "*" || tc === "@") && peek(P_2.L, 1) === "}") {
-    let r = P_2.L.b;
+    let starStart = P_2.L.b;
     advance(P_2.L);
-    out.push(makeNode(P_2, tc, r, P_2.L.b, []));
+    out.push(makeNode(P_2, tc, starStart, P_2.L.b, []));
     return out;
   }
   if (tc === "@" && isIdentStart(peek(P_2.L, 1))) {
-    let r = P_2.L.b;
+    let atStart = P_2.L.b;
     advance(P_2.L);
-    out.push(makeNode(P_2, "@", r, P_2.L.b, []));
+    out.push(makeNode(P_2, "@", atStart, P_2.L.b, []));
     while (isIdentChar(peek(P_2.L))) advance(P_2.L);
     return out;
   }
-  let i = peek(P_2.L);
-  if (i === ":") {
+  let opChar = peek(P_2.L);
+  if (opChar === ":") {
     let c1 = peek(P_2.L, 1);
     if (c1 === "}") {
       advance(P_2.L);
@@ -2913,30 +2940,33 @@ function parseExpansionBody(P_2) {
     }
   }
   if (
-    i === ":" ||
-    i === "#" ||
-    i === "%" ||
-    i === "/" ||
-    i === "^" ||
-    i === "," ||
-    i === "-" ||
-    i === "=" ||
-    i === "?" ||
-    i === "+"
+    opChar === ":" ||
+    opChar === "#" ||
+    opChar === "%" ||
+    opChar === "/" ||
+    opChar === "^" ||
+    opChar === "," ||
+    opChar === "-" ||
+    opChar === "=" ||
+    opChar === "?" ||
+    opChar === "+"
   ) {
-    let r = P_2.L.b;
+    let opStart = P_2.L.b;
     let c1 = peek(P_2.L, 1);
-    let op = i;
-    if (i === ":" && (c1 === "-" || c1 === "=" || c1 === "?" || c1 === "+")) {
+    let op = opChar;
+    if (opChar === ":" && (c1 === "-" || c1 === "=" || c1 === "?" || c1 === "+")) {
       advance(P_2.L);
       advance(P_2.L);
-      op = i + c1;
-    } else if ((i === "#" || i === "%" || i === "/" || i === "^" || i === ",") && c1 === i) {
+      op = opChar + c1;
+    } else if (
+      (opChar === "#" || opChar === "%" || opChar === "/" || opChar === "^" || opChar === ",") &&
+      c1 === opChar
+    ) {
       advance(P_2.L);
       advance(P_2.L);
-      op = i + i;
+      op = opChar + opChar;
     } else advance(P_2.L);
-    out.push(makeNode(P_2, op, r, P_2.L.b, []));
+    out.push(makeNode(P_2, op, opStart, P_2.L.b, []));
     let isPattern =
       op === "#" ||
       op === "##" ||
@@ -2979,7 +3009,7 @@ function parseExpansionBody(P_2) {
           } else out.push(repl);
       }
     } else if (op === "#" || op === "##" || op === "%" || op === "%%")
-      for (let u of parseExpansionRegexSegmented(P_2)) out.push(u);
+      for (let regexSegment of parseExpansionRegexSegmented(P_2)) out.push(regexSegment);
     else {
       let rest = parseExpansionRest(P_2, isPattern ? "regex" : "word", false);
       if (rest) out.push(rest);
@@ -2995,14 +3025,14 @@ function parseExpansionRest(P, nodeType, stopAtSlash) {
     let elems = [makeNode(P, "(", start, P.L.b, [])];
     while (P.L.i < P.L.len) {
       skipBlanks(P.L);
-      let d = peek(P.L);
+      let char = peek(P.L);
       if (
-        d === ")" ||
-        d === "}" ||
-        d ===
+        char === ")" ||
+        char === "}" ||
+        char ===
           `
 ` ||
-        d === ""
+        char === ""
       )
         break;
       let wStart = P.L.b;
@@ -3071,43 +3101,43 @@ function parseExpansionRest(P, nodeType, stopAtSlash) {
   }
   if (nodeType === "regex") {
     while (P.L.i < P.L.len) {
-      let u = peek(P.L);
-      if (u === "{") P.zshBraceDiff = true;
-      if (u === "}") break;
-      if (stopAtSlash && u === "/") break;
-      if (u === "\\" && P.L.i + 1 < P.L.len) {
+      let char = peek(P.L);
+      if (char === "{") P.zshBraceDiff = true;
+      if (char === "}") break;
+      if (stopAtSlash && char === "/") break;
+      if (char === "\\" && P.L.i + 1 < P.L.len) {
         advance(P.L);
         advance(P.L);
         continue;
       }
-      if (u === '"' || u === "'") {
+      if (char === '"' || char === "'") {
         advance(P.L);
-        let d = isCalmNautilusEnabled();
-        while (P.L.i < P.L.len && peek(P.L) !== u) {
+        let isCalmMode = isCalmNautilusEnabled();
+        while (P.L.i < P.L.len && peek(P.L) !== char) {
           if (peek(P.L) === "\\" && P.L.i + 1 < P.L.len) {
-            if (u === "'" && d && peek(P.L, 1) === "'") P.zshBraceDiff = true;
+            if (char === "'" && isCalmMode && peek(P.L, 1) === "'") P.zshBraceDiff = true;
             advance(P.L);
-          } else if (u === '"' && d && !P.zshBraceDiff) {
+          } else if (char === '"' && isCalmMode && !P.zshBraceDiff) {
             if (peek(P.L) === "`") P.zshBraceDiff = true;
             else if (peek(P.L) === "$") {
-              let b = 1;
+              let lookahead = 1;
               while (
-                peek(P.L, b) === "\\" &&
-                peek(P.L, b + 1) ===
+                peek(P.L, lookahead) === "\\" &&
+                peek(P.L, lookahead + 1) ===
                   `
 `
               )
-                b += 2;
-              let c1 = peek(P.L, b);
+                lookahead += 2;
+              let c1 = peek(P.L, lookahead);
               if (c1 === "{" || c1 === "(" || c1 === "[") P.zshBraceDiff = true;
             }
           }
           advance(P.L);
         }
-        if (peek(P.L) === u) advance(P.L);
+        if (peek(P.L) === char) advance(P.L);
         continue;
       }
-      if (u === "`") {
+      if (char === "`") {
         P.zshBraceDiff = true;
         advance(P.L);
         while (P.L.i < P.L.len && peek(P.L) !== "`") {
@@ -3117,21 +3147,21 @@ function parseExpansionRest(P, nodeType, stopAtSlash) {
         if (peek(P.L) === "`") advance(P.L);
         continue;
       }
-      if (u === "$") {
-        let d = peek(P.L, 1);
-        if (d === "$" && isFoamyHeronEnabled()) {
-          let b = 2;
-          while (peek(P.L, b) === "$") b++;
-          if (b % 2 === 0 && peek(P.L, b) === "{") P.dollarOperandDiff = true;
-          for (let k = 1; k < b; k++) advance(P.L);
+      if (char === "$") {
+        let nextChar = peek(P.L, 1);
+        if (nextChar === "$" && isFoamyHeronEnabled()) {
+          let dollarCount = 2;
+          while (peek(P.L, dollarCount) === "$") dollarCount++;
+          if (dollarCount % 2 === 0 && peek(P.L, dollarCount) === "{") P.dollarOperandDiff = true;
+          for (let k = 1; k < dollarCount; k++) advance(P.L);
           continue;
         }
-        if (d === "{") {
-          let b = 0;
+        if (nextChar === "{") {
+          let braceDepth = 0;
           advance(P.L);
           advance(P.L);
-          b++;
-          while (P.L.i < P.L.len && b > 0) {
+          braceDepth++;
+          while (P.L.i < P.L.len && braceDepth > 0) {
             let nc = peek(P.L);
             if (nc === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
             else if (nc === "$" && peek(P.L, 1) === "$") advance(P.L);
@@ -3145,22 +3175,22 @@ function parseExpansionRest(P, nodeType, stopAtSlash) {
                 advance(P.L);
               }
             } else if (nc === "$" && peek(P.L, 1) === "{") {
-              b++;
+              braceDepth++;
               advance(P.L);
             } else if (nc === "$" && peek(P.L, 1) === "(") P.zshBraceDiff = true;
             else if (nc === "{") P.zshBraceDiff = true;
-            else if (nc === "}") b--;
+            else if (nc === "}") braceDepth--;
             advance(P.L);
           }
           continue;
         }
-        if (d === "(") {
+        if (nextChar === "(") {
           P.zshBraceDiff = true;
-          let b = 0;
+          let parenDepth = 0;
           advance(P.L);
           advance(P.L);
-          b++;
-          while (P.L.i < P.L.len && b > 0) {
+          parenDepth++;
+          while (P.L.i < P.L.len && parenDepth > 0) {
             let nc = peek(P.L);
             if (nc === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
             else if (nc === "$" && peek(P.L, 1) === "$") advance(P.L);
@@ -3172,8 +3202,8 @@ function parseExpansionRest(P, nodeType, stopAtSlash) {
                 if (peek(P.L) === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
                 advance(P.L);
               }
-            } else if (nc === "(") b++;
-            else if (nc === ")") b--;
+            } else if (nc === "(") parenDepth++;
+            else if (nc === ")") parenDepth--;
             advance(P.L);
           }
           continue;
@@ -3191,17 +3221,17 @@ function parseExpansionRest(P, nodeType, stopAtSlash) {
     if (P.L.b > segStart) parts.push(makeNode(P, "word", segStart, P.L.b, []));
   };
   while (P.L.i < P.L.len) {
-    let f = peek(P.L);
-    if (f === "}") break;
-    if (f === "{") P.zshBraceDiff = true;
-    if (stopAtSlash && f === "/") break;
-    if (f === "\\" && P.L.i + 1 < P.L.len) {
+    let char = peek(P.L);
+    if (char === "}") break;
+    if (char === "{") P.zshBraceDiff = true;
+    if (stopAtSlash && char === "/") break;
+    if (char === "\\" && P.L.i + 1 < P.L.len) {
       advance(P.L);
       advance(P.L);
       continue;
     }
     let c1 = peek(P.L, 1);
-    if (f === "$") {
+    if (char === "$") {
       if (c1 === "{" || c1 === "(" || c1 === "[") {
         flushSeg();
         let exp = parseDollarLike(P);
@@ -3226,22 +3256,22 @@ function parseExpansionRest(P, nodeType, stopAtSlash) {
         continue;
       }
     }
-    if (f === '"') {
+    if (char === '"') {
       flushSeg();
       parts.push(parseDoubleQuoted(P));
       segStart = P.L.b;
       continue;
     }
-    if (f === "'") {
+    if (char === "'") {
       flushSeg();
       let rStart = P.L.b;
-      skipQuotedSpan(P, f);
+      skipQuotedSpan(P, char);
       if (peek(P.L) === "'") advance(P.L);
       parts.push(makeNode(P, "raw_string", rStart, P.L.b, []));
       segStart = P.L.b;
       continue;
     }
-    if ((f === "<" || f === ">") && c1 === "(") {
+    if ((char === "<" || char === ">") && c1 === "(") {
       P.zshBraceDiff = true;
       flushSeg();
       let ps = parseProcessSub(P);
@@ -3249,7 +3279,7 @@ function parseExpansionRest(P, nodeType, stopAtSlash) {
       segStart = P.L.b;
       continue;
     }
-    if (f === "`") {
+    if (char === "`") {
       flushSeg();
       let bt = parseBacktick(P);
       parts.push(bt);
@@ -3273,21 +3303,21 @@ function parseExpansionRegexSegmented(P) {
     if (P.L.b > segStart) out.push(makeNode(P, "regex", segStart, P.L.b, []));
   };
   while (P.L.i < P.L.len) {
-    let i = peek(P.L);
-    if (i === "}") break;
-    if (i === "{") P.zshBraceDiff = true;
-    if (i === "\\" && P.L.i + 1 < P.L.len) {
+    let char = peek(P.L);
+    if (char === "}") break;
+    if (char === "{") P.zshBraceDiff = true;
+    if (char === "\\" && P.L.i + 1 < P.L.len) {
       advance(P.L);
       advance(P.L);
       continue;
     }
-    if (i === '"') {
+    if (char === '"') {
       flushRegex();
       out.push(parseDoubleQuoted(P));
       segStart = P.L.b;
       continue;
     }
-    if (i === "'") {
+    if (char === "'") {
       flushRegex();
       let rStart = P.L.b;
       advance(P.L);
@@ -3297,7 +3327,7 @@ function parseExpansionRegexSegmented(P) {
       segStart = P.L.b;
       continue;
     }
-    if (i === "`") {
+    if (char === "`") {
       P.zshBraceDiff = true;
       advance(P.L);
       while (P.L.i < P.L.len && peek(P.L) !== "`") {
@@ -3307,7 +3337,7 @@ function parseExpansionRegexSegmented(P) {
       if (peek(P.L) === "`") advance(P.L);
       continue;
     }
-    if (i === "$") {
+    if (char === "$") {
       let c1 = peek(P.L, 1);
       if (c1 === "$") {
         advance(P.L);
@@ -3316,18 +3346,18 @@ function parseExpansionRegexSegmented(P) {
       }
       if (c1 === "'") {
         flushRegex();
-        let a = P.L.b;
+        let ansiStart = P.L.b;
         skipQuotedSpan(P, "$'");
         if (peek(P.L) === "'") advance(P.L);
-        out.push(makeNode(P, "ansi_c_string", a, P.L.b, []));
+        out.push(makeNode(P, "ansi_c_string", ansiStart, P.L.b, []));
         segStart = P.L.b;
         continue;
       }
       if (c1 === "{") {
-        let a = 1;
+        let braceDepth = 1;
         advance(P.L);
         advance(P.L);
-        while (P.L.i < P.L.len && a > 0) {
+        while (P.L.i < P.L.len && braceDepth > 0) {
           let nc = peek(P.L);
           if (nc === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
           else if (nc === "$" && peek(P.L, 1) === "$") advance(P.L);
@@ -3341,21 +3371,21 @@ function parseExpansionRegexSegmented(P) {
               advance(P.L);
             }
           } else if (nc === "$" && peek(P.L, 1) === "{") {
-            a++;
+            braceDepth++;
             advance(P.L);
           } else if (nc === "$" && peek(P.L, 1) === "(") P.zshBraceDiff = true;
           else if (nc === "{") P.zshBraceDiff = true;
-          else if (nc === "}") a--;
+          else if (nc === "}") braceDepth--;
           advance(P.L);
         }
         continue;
       }
       if (c1 === "(") {
         P.zshBraceDiff = true;
-        let a = 1;
+        let parenDepth = 1;
         advance(P.L);
         advance(P.L);
-        while (P.L.i < P.L.len && a > 0) {
+        while (P.L.i < P.L.len && parenDepth > 0) {
           let nc = peek(P.L);
           if (nc === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
           else if (nc === "$" && peek(P.L, 1) === "$") advance(P.L);
@@ -3367,8 +3397,8 @@ function parseExpansionRegexSegmented(P) {
               if (peek(P.L) === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
               advance(P.L);
             }
-          } else if (nc === "(") a++;
-          else if (nc === ")") a--;
+          } else if (nc === "(") parenDepth++;
+          else if (nc === ")") parenDepth--;
           advance(P.L);
         }
         continue;
@@ -3384,37 +3414,37 @@ function parseBacktick(P) {
   let start = P.L.b;
   advance(P.L);
   let open = makeNode(P, "`", start, P.L.b, []);
-  let s = P.L.i;
+  let closeIndex = P.L.i;
   {
-    let u = false;
-    while (s < P.L.len) {
-      let d = P.L.src[s];
-      if (d === "\\") {
-        let b = P.L.src[s + 1];
-        if (b === "`" || b === "$" || b === "\\") u = true;
-        s += 2;
+    let hasEscape = false;
+    while (closeIndex < P.L.len) {
+      let char = P.L.src[closeIndex];
+      if (char === "\\") {
+        let nextChar = P.L.src[closeIndex + 1];
+        if (nextChar === "`" || nextChar === "$" || nextChar === "\\") hasEscape = true;
+        closeIndex += 2;
         continue;
       }
-      if (d === "`") break;
-      s++;
+      if (char === "`") break;
+      closeIndex++;
     }
-    if (u) {
-      let d = P.L.b;
-      while (P.L.i < s) advance(P.L);
-      let node = makeNode(P, "backtick_escape_unsupported", d, P.L.b, []);
-      let p;
+    if (hasEscape) {
+      let escapeNodeStart = P.L.b;
+      while (P.L.i < closeIndex) advance(P.L);
+      let node = makeNode(P, "backtick_escape_unsupported", escapeNodeStart, P.L.b, []);
+      let close;
       if (peek(P.L) === "`") {
-        let h = P.L.b;
+        let closeStart = P.L.b;
         advance(P.L);
-        p = makeNode(P, "`", h, P.L.b, []);
-      } else p = makeNode(P, "`", P.L.b, P.L.b, []);
-      return makeNode(P, "command_substitution", start, p.endIndex, [open, node, p]);
+        close = makeNode(P, "`", closeStart, P.L.b, []);
+      } else close = makeNode(P, "`", P.L.b, P.L.b, []);
+      return makeNode(P, "command_substitution", start, close.endIndex, [open, node, close]);
     }
   }
   P.inBacktick++;
   let inDquote = P.inDquote;
   P.inDquote = 0;
-  let r = saveLex(P.L);
+  let bodySave = saveLex(P.L);
   let heredocs = P.L.heredocs;
   P.L.heredocs = [];
   let body = [];
@@ -3442,9 +3472,9 @@ function parseBacktick(P) {
   P.L.heredocs = heredocs;
   P.inBacktick--;
   P.inDquote = inDquote;
-  if (P.L.i !== s) {
-    restoreLex(P.L, r);
-    while (P.L.i < s) advance(P.L);
+  if (P.L.i !== closeIndex) {
+    restoreLex(P.L, bodySave);
+    while (P.L.i < closeIndex) advance(P.L);
     body.length = 0;
     body.push(makeNode(P, "backtick_body_overrun", open.endIndex, P.L.b, []));
   }
@@ -3519,9 +3549,9 @@ function parseFor(P, forTok) {
       kids.push(...es);
       if (k_2 < 2) {
         if (peek(P.L) === ";") {
-          let N = P.L.b;
+          let semicolonStart = P.L.b;
           advance(P.L);
-          kids.push(makeNode(P, ";", N, P.L.b, []));
+          kids.push(makeNode(P, ";", semicolonStart, P.L.b, []));
         }
       }
     }
@@ -3572,13 +3602,13 @@ function parseFor(P, forTok) {
     kids.push(leaf(P, "in", inTok));
     while (true) {
       skipBlanks(P.L);
-      let b = peek(P.L);
+      let char = peek(P.L);
       if (
-        b === ";" ||
-        b ===
+        char === ";" ||
+        char ===
           `
 ` ||
-        b === ""
+        char === ""
       )
         break;
       let word = parseWord(P, "arg");
@@ -3645,20 +3675,22 @@ function parseCaseItem(P) {
   let start = P.L.b;
   let kids = [];
   if (peek(P.L) === "(") {
-    let f = P.L.b;
+    let openStart = P.L.b;
     advance(P.L);
-    kids.push(makeNode(P, "(", f, P.L.b, []));
+    kids.push(makeNode(P, "(", openStart, P.L.b, []));
   }
   let isFirstAlt = true;
   while (true) {
     skipBlanks(P.L);
-    let f = peek(P.L);
-    if (f === ")" || f === "") break;
+    let char = peek(P.L);
+    if (char === ")" || char === "") break;
     let pats = parseCasePattern(P);
     if (pats.length === 0) break;
     if (!isFirstAlt && pats.length > 1) {
-      let rewritten = pats.map((h) =>
-        h.type === "extglob_pattern" ? makeNode(P, "word", h.startIndex, h.endIndex, []) : h,
+      let rewritten = pats.map((pattern) =>
+        pattern.type === "extglob_pattern"
+          ? makeNode(P, "word", pattern.startIndex, pattern.endIndex, [])
+          : pattern,
       );
       let first = rewritten[0];
       let last = rewritten.at(-1);
@@ -3677,9 +3709,9 @@ function parseCaseItem(P) {
       skipBlanks(P.L);
     }
     if (peek(P.L) === "|") {
-      let d = P.L.b;
+      let pipeStart = P.L.b;
       advance(P.L);
-      kids.push(makeNode(P, "|", d, P.L.b, []));
+      kids.push(makeNode(P, "|", pipeStart, P.L.b, []));
       if (
         peek(P.L) === "\\" &&
         peek(P.L, 1) ===
@@ -3692,9 +3724,9 @@ function parseCaseItem(P) {
     } else break;
   }
   if (peek(P.L) === ")") {
-    let f = P.L.b;
+    let closeStart = P.L.b;
     advance(P.L);
-    kids.push(makeNode(P, ")", f, P.L.b, []));
+    kids.push(makeNode(P, ")", closeStart, P.L.b, []));
   }
   let body = parseStatements(P, null);
   kids.push(...body);
@@ -3726,44 +3758,44 @@ function parseCasePattern(P) {
   let hasBracketOutsideParen = false;
   let hasQuote = false;
   while (P.L.i < P.L.len) {
-    let b = peek(P.L);
-    if (b === "\\" && P.L.i + 1 < P.L.len) {
+    let char = peek(P.L);
+    if (char === "\\" && P.L.i + 1 < P.L.len) {
       advance(P.L);
       advance(P.L);
       continue;
     }
-    if (b === "$" && peek(P.L, 1) === "$") {
+    if (char === "$" && peek(P.L, 1) === "$") {
       hasDollar = true;
       advance(P.L);
       advance(P.L);
       continue;
     }
-    let p = b === "$" && peek(P.L, 1) === "'";
-    if (b === '"' || b === "'" || p) {
+    let isAnsiC = char === "$" && peek(P.L, 1) === "'";
+    if (char === '"' || char === "'" || isAnsiC) {
       hasQuote = true;
-      let h = p ? "'" : b;
-      if (p) advance(P.L);
+      let quoteChar = isAnsiC ? "'" : char;
+      if (isAnsiC) advance(P.L);
       advance(P.L);
-      while (P.L.i < P.L.len && peek(P.L) !== h) {
-        if (b !== "'" && peek(P.L) === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
+      while (P.L.i < P.L.len && peek(P.L) !== quoteChar) {
+        if (char !== "'" && peek(P.L) === "\\" && P.L.i + 1 < P.L.len) advance(P.L);
         advance(P.L);
       }
-      if (peek(P.L) === h) advance(P.L);
+      if (peek(P.L) === quoteChar) advance(P.L);
       continue;
     }
-    if (b === "(") {
+    if (char === "(") {
       parenDepth++;
       advance(P.L);
       continue;
     }
     if (parenDepth > 0) {
-      if (b === ")") {
+      if (char === ")") {
         parenDepth--;
         advance(P.L);
         continue;
       }
       if (
-        b ===
+        char ===
         `
 `
       )
@@ -3772,17 +3804,17 @@ function parseCasePattern(P) {
       continue;
     }
     if (
-      b === ")" ||
-      b === "|" ||
-      b === " " ||
-      b === "\t" ||
-      b ===
+      char === ")" ||
+      char === "|" ||
+      char === " " ||
+      char === "\t" ||
+      char ===
         `
 `
     )
       break;
-    if (b === "$") hasDollar = true;
-    if (b === "[") hasBracketOutsideParen = true;
+    if (char === "$") hasDollar = true;
+    if (char === "[") hasBracketOutsideParen = true;
     advance(P.L);
   }
   if (P.L.b === start) return [];
@@ -3814,20 +3846,20 @@ function parseCasePatternSegmented(P) {
     }
   };
   while (P.L.i < P.L.len) {
-    let r = peek(P.L);
-    if (r === "\\" && P.L.i + 1 < P.L.len) {
+    let char = peek(P.L);
+    if (char === "\\" && P.L.i + 1 < P.L.len) {
       advance(P.L);
       advance(P.L);
       continue;
     }
-    if (r === '"') {
+    if (char === '"') {
       flushSeg();
       parts.push(parseDoubleQuoted(P));
       segStart = P.L.b;
       segStartI = P.L.i;
       continue;
     }
-    if (r === "'") {
+    if (char === "'") {
       flushSeg();
       let tok = nextToken(P.L, "arg");
       parts.push(leaf(P, "raw_string", tok));
@@ -3836,11 +3868,11 @@ function parseCasePatternSegmented(P) {
       continue;
     }
     if (
-      r === ")" ||
-      r === "|" ||
-      r === " " ||
-      r === "\t" ||
-      r ===
+      char === ")" ||
+      char === "|" ||
+      char === " " ||
+      char === "\t" ||
+      char ===
         `
 `
     )
@@ -3859,11 +3891,11 @@ function parseFunction(P, fnTok) {
   let kids = [fnKw, name];
   skipBlanks(P.L);
   if (peek(P.L) === "(" && peek(P.L, 1) === ")") {
-    let f = nextToken(P.L, "cmd");
-    kids.push(leaf(P, "(", f));
-    let u = P.L.b;
+    let parenTok = nextToken(P.L, "cmd");
+    kids.push(leaf(P, "(", parenTok));
+    let closeStart = P.L.b;
     advance(P.L);
-    kids.push(makeNode(P, ")", u, P.L.b, []));
+    kids.push(makeNode(P, ")", closeStart, P.L.b, []));
   }
   skipBlanks(P.L);
   skipNewlines(P);
@@ -3883,38 +3915,38 @@ function parseFunction(P, fnTok) {
 function parseDeclaration(P, kwTok) {
   let kw = leaf(P, kwTok.value, kwTok);
   let kids = [kw];
-  let i = [];
+  let redirects = [];
   while (true) {
     skipBlanks(P.L);
-    let u = tryParseRedirect(P);
-    if (u) {
-      i.push(u);
+    let redirect = tryParseRedirect(P);
+    if (redirect) {
+      redirects.push(redirect);
       continue;
     }
-    let d = peek(P.L);
-    if (d === "(") {
+    let char = peek(P.L);
+    if (char === "(") {
       kids.push(makeNode(P, "variable_name", P.L.b, P.L.b + 1, []));
       break;
     }
     if (
-      d === "" ||
-      d ===
+      char === "" ||
+      char ===
         `
 ` ||
-      d === ";" ||
-      d === "&" ||
-      d === "|" ||
-      d === ")" ||
-      d === "<" ||
-      d === ">"
+      char === ";" ||
+      char === "&" ||
+      char === "|" ||
+      char === ")" ||
+      char === "<" ||
+      char === ">"
     )
       break;
-    let b = tryParseAssignment(P);
-    if (b) {
-      kids.push(b);
+    let assignment = tryParseAssignment(P);
+    if (assignment) {
+      kids.push(assignment);
       continue;
     }
-    if (d === '"' || d === "'" || d === "$") {
+    if (char === '"' || char === "'" || char === "$") {
       let word = parseWord(P, "arg");
       if (word) {
         kids.push(word);
@@ -3936,39 +3968,39 @@ function parseDeclaration(P, kwTok) {
   }
   let last = kids.at(-1);
   let node = makeNode(P, "declaration_command", kw.startIndex, last.endIndex, kids);
-  if (i.length === 0) return node;
-  let last_2 = i.at(-1);
+  if (redirects.length === 0) return node;
+  let last_2 = redirects.at(-1);
   let max = Math.max(node.endIndex, last_2.endIndex);
-  return makeNode(P, "redirected_statement", kw.startIndex, max, [node, ...i]);
+  return makeNode(P, "redirected_statement", kw.startIndex, max, [node, ...redirects]);
 }
 //@ chunk-k5vy5m8c.js:49959-50574 fingerprint = parseUnset (0.898)
 function parseUnset(P, kwTok) {
   let kw = leaf(P, "unset", kwTok);
   let kids = [kw];
-  let i = [];
+  let redirects = [];
   while (true) {
     skipBlanks(P.L);
-    let u = tryParseRedirect(P);
-    if (u) {
-      i.push(u);
+    let redirect = tryParseRedirect(P);
+    if (redirect) {
+      redirects.push(redirect);
       continue;
     }
-    let d = peek(P.L);
-    if (d === "(") {
+    let char = peek(P.L);
+    if (char === "(") {
       kids.push(makeNode(P, "variable_name", P.L.b, P.L.b + 1, []));
       break;
     }
     if (
-      d === "" ||
-      d ===
+      char === "" ||
+      char ===
         `
 ` ||
-      d === ";" ||
-      d === "&" ||
-      d === "|" ||
-      d === ")" ||
-      d === "<" ||
-      d === ">"
+      char === ";" ||
+      char === "&" ||
+      char === "|" ||
+      char === ")" ||
+      char === "<" ||
+      char === ">"
     )
       break;
     let arg = parseWord(P, "arg");
@@ -3980,10 +4012,10 @@ function parseUnset(P, kwTok) {
   }
   let last = kids.at(-1);
   let node = makeNode(P, "unset_command", kw.startIndex, last.endIndex, kids);
-  if (i.length === 0) return node;
-  let last_2 = i.at(-1);
+  if (redirects.length === 0) return node;
+  let last_2 = redirects.at(-1);
   let max = Math.max(node.endIndex, last_2.endIndex);
-  return makeNode(P, "redirected_statement", kw.startIndex, max, [node, ...i]);
+  return makeNode(P, "redirected_statement", kw.startIndex, max, [node, ...redirects]);
 }
 //@ chunk-k5vy5m8c.js:50574-50688 fingerprint = consumeKeyword (1)
 function consumeKeyword(P, name, kids) {
@@ -3994,8 +4026,8 @@ function consumeKeyword(P, name, kids) {
   else restoreLex(P.L, save);
 }
 //@ chunk-k5vy5m8c.js:50688-50720 layout
-function parseTestExpr(e, closer) {
-  return parseTestOr(e, closer);
+function parseTestExpr(parser, closer) {
+  return parseTestOr(parser, closer);
 }
 //@ chunk-k5vy5m8c.js:50720-51018 fingerprint = parseTestOr (1)
 function parseTestOr(P, closer) {
@@ -4005,10 +4037,10 @@ function parseTestOr(P, closer) {
     skipBlanks(P.L);
     let save = saveLex(P.L);
     if (closer === "]]" && peek(P.L) === "|" && peek(P.L, 1) === "|") {
-      let i = P.L.b;
+      let opStart = P.L.b;
       advance(P.L);
       advance(P.L);
-      let op = makeNode(P, "||", i, P.L.b, []);
+      let op = makeNode(P, "||", opStart, P.L.b, []);
       skipTestNewlinesAndComments(P, closer);
       let right = parseTestAnd(P, closer);
       if (!right) {
@@ -4028,10 +4060,10 @@ function parseTestAnd(P, closer) {
     skipBlanks(P.L);
     let save = saveLex(P.L);
     if (closer === "]]" && peek(P.L) === "&" && peek(P.L, 1) === "&") {
-      let i = P.L.b;
+      let opStart = P.L.b;
       advance(P.L);
       advance(P.L);
-      let op = makeNode(P, "&&", i, P.L.b, []);
+      let op = makeNode(P, "&&", opStart, P.L.b, []);
       skipTestNewlinesAndComments(P, closer);
       let right = parseTestUnary(P, closer);
       if (!right) {
@@ -4048,15 +4080,15 @@ function skipTestNewlinesAndComments(P, closer) {
   skipBlanks(P.L);
   if (closer === "]]")
     while (true) {
-      let t = peek(P.L);
+      let char = peek(P.L);
       if (
-        t ===
+        char ===
         `
 `
       ) {
         advance(P.L);
         skipBlanks(P.L);
-      } else if (t === "#")
+      } else if (char === "#")
         while (
           peek(P.L) &&
           peek(P.L) !==
@@ -4071,9 +4103,9 @@ function skipTestNewlinesAndComments(P, closer) {
 function parseTestUnary(P, closer) {
   skipTestNewlinesAndComments(P, closer);
   if (peek(P.L) === "(") {
-    let s = P.L.b;
+    let openStart = P.L.b;
     advance(P.L);
-    let open = makeNode(P, "(", s, P.L.b, []);
+    let open = makeNode(P, "(", openStart, P.L.b, []);
     let inner = parseTestOr(P, closer);
     skipBlanks(P.L);
     let close;
@@ -4090,52 +4122,52 @@ function parseTestUnary(P, closer) {
 //@ chunk-k5vy5m8c.js:51763-52712 fingerprint = parseTestNegatablePrimary (0.716)
 function parseTestNegatablePrimary(P, closer) {
   skipTestNewlinesAndComments(P, closer);
-  let t = peek(P.L);
-  let s = (i) =>
-    i === " " ||
-    i === "\t" ||
-    i ===
+  let char = peek(P.L);
+  let isBlank = (char) =>
+    char === " " ||
+    char === "\t" ||
+    char ===
       `
 ` ||
-    i === "";
-  if (t === "!" && (s(peek(P.L, 1)) || peek(P.L, 1) === "(")) {
-    let i = P.L.b;
+    char === "";
+  if (char === "!" && (isBlank(peek(P.L, 1)) || peek(P.L, 1) === "(")) {
+    let bangStart = P.L.b;
     advance(P.L);
-    let bang = makeNode(P, "!", i, P.L.b, []);
+    let bang = makeNode(P, "!", bangStart, P.L.b, []);
     let inner = parseTestNegatablePrimary(P, closer);
     if (!inner) return bang;
     return makeNode(P, "unary_expression", bang.startIndex, inner.endIndex, [bang, inner]);
   }
-  if (t === "(") {
-    let i = P.L.b;
+  if (char === "(") {
+    let openStart = P.L.b;
     advance(P.L);
-    let node = makeNode(P, "(", i, P.L.b, []);
+    let node = makeNode(P, "(", openStart, P.L.b, []);
     let testOr = parseTestOr(P, closer);
     skipBlanks(P.L);
-    let c;
+    let close;
     if (peek(P.L) === ")") {
-      let u = P.L.b;
+      let closeStart = P.L.b;
       advance(P.L);
-      c = makeNode(P, ")", u, P.L.b, []);
-    } else c = makeNode(P, ")", P.L.b, P.L.b, []);
-    let f = testOr ? [node, testOr, c] : [node, c];
-    return makeNode(P, "parenthesized_expression", node.startIndex, c.endIndex, f);
+      close = makeNode(P, ")", closeStart, P.L.b, []);
+    } else close = makeNode(P, ")", P.L.b, P.L.b, []);
+    let kids = testOr ? [node, testOr, close] : [node, close];
+    return makeNode(P, "parenthesized_expression", node.startIndex, close.endIndex, kids);
   }
-  if (t === "-" && isIdentStart(peek(P.L, 1))) {
-    let i = saveLex(P.L);
-    let r = P.L.b;
+  if (char === "-" && isIdentStart(peek(P.L, 1))) {
+    let opSave = saveLex(P.L);
+    let opStart = P.L.b;
     advance(P.L);
     while (isIdentChar(peek(P.L))) advance(P.L);
-    if (!s(peek(P.L))) {
-      restoreLex(P.L, i);
+    if (!isBlank(peek(P.L))) {
+      restoreLex(P.L, opSave);
       return parseTestPrimary(P, closer);
     }
-    let op = makeNode(P, "test_operator", r, P.L.b, []);
-    let c = P.L.i;
+    let op = makeNode(P, "test_operator", opStart, P.L.b, []);
+    let operandIndex = P.L.i;
     skipBlanks(P.L);
     let arg = parseTestPrimary(P, closer);
     if (!arg) {
-      let sliced = P.src.slice(c, P.L.i);
+      let sliced = P.src.slice(operandIndex, P.L.i);
       if (!/^(?:[ \t]|\\\n)*$/.test(sliced)) {
         let node = makeNode(P, "test_rhs_missing", op.endIndex, P.L.b, []);
         return makeNode(P, "unary_expression", op.startIndex, P.L.b, [op, node]);
@@ -4147,9 +4179,9 @@ function parseTestNegatablePrimary(P, closer) {
   return parseTestPrimary(P, closer);
 }
 //@ chunk-k5vy5m8c.js:52712-52840 layout = parseTestOr (0.828)
-function makeMissingRhsBinary(e, o, t) {
-  let node = makeNode(e, "test_rhs_missing", t.endIndex, e.L.b, []);
-  return makeNode(e, "binary_expression", o.startIndex, e.L.b, [o, t, node]);
+function makeMissingRhsBinary(parser, left, op) {
+  let node = makeNode(parser, "test_rhs_missing", op.endIndex, parser.L.b, []);
+  return makeNode(parser, "binary_expression", left.startIndex, parser.L.b, [left, op, node]);
 }
 //@ chunk-k5vy5m8c.js:52840-54349 fingerprint = parseTestBinary (1)
 function parseTestBinary(P, closer) {
@@ -4157,32 +4189,32 @@ function parseTestBinary(P, closer) {
   let left = parseTestNegatablePrimary(P, closer);
   if (!left) return null;
   skipBlanks(P.L);
-  let s = peek(P.L);
+  let char = peek(P.L);
   let c1 = peek(P.L, 1);
   let op = null;
   let os = P.L.b;
-  if (s === "=" && c1 === "=") {
+  if (char === "=" && c1 === "=") {
     advance(P.L);
     advance(P.L);
     op = makeNode(P, "==", os, P.L.b, []);
-  } else if (s === "!" && c1 === "=") {
+  } else if (char === "!" && c1 === "=") {
     advance(P.L);
     advance(P.L);
     op = makeNode(P, "!=", os, P.L.b, []);
-  } else if (s === "=" && c1 === "~") {
+  } else if (char === "=" && c1 === "~") {
     advance(P.L);
     advance(P.L);
     op = makeNode(P, "=~", os, P.L.b, []);
-  } else if (s === "=" && c1 !== "=") {
+  } else if (char === "=" && c1 !== "=") {
     advance(P.L);
     op = makeNode(P, "=", os, P.L.b, []);
-  } else if (closer === "]]" && s === "<" && c1 !== "<") {
+  } else if (closer === "]]" && char === "<" && c1 !== "<") {
     advance(P.L);
     op = makeNode(P, "<", os, P.L.b, []);
-  } else if (closer === "]]" && s === ">" && c1 !== ">") {
+  } else if (closer === "]]" && char === ">" && c1 !== ">") {
     advance(P.L);
     op = makeNode(P, ">", os, P.L.b, []);
-  } else if (s === "-" && isIdentStart(c1)) {
+  } else if (char === "-" && isIdentStart(c1)) {
     advance(P.L);
     while (isIdentChar(peek(P.L))) advance(P.L);
     op = makeNode(P, "test_operator", os, P.L.b, []);
@@ -4198,35 +4230,35 @@ function parseTestBinary(P, closer) {
       if (rc === '"' || rc === "'") {
         let save = saveLex(P.L);
         let quoted = rc === '"' ? parseDoubleQuoted(P) : leaf(P, "raw_string", nextToken(P.L, "arg"));
-        let h = P.L.i;
-        let I = h;
-        while (I < P.L.len && (P.src[I] === " " || P.src[I] === "\t")) I++;
-        let T = P.src[I] ?? "";
-        let g = I + 1;
-        while (P.src[g] === "\\")
+        let quotedEndI = P.L.i;
+        let scanIndex = quotedEndI;
+        while (scanIndex < P.L.len && (P.src[scanIndex] === " " || P.src[scanIndex] === "\t")) scanIndex++;
+        let charAfterQuoted = P.src[scanIndex] ?? "";
+        let lookaheadIndex = scanIndex + 1;
+        while (P.src[lookaheadIndex] === "\\")
           if (
-            P.src[g + 1] ===
+            P.src[lookaheadIndex + 1] ===
             `
 `
           )
-            g += 2;
+            lookaheadIndex += 2;
           else if (
-            P.src[g + 1] === "\r" &&
-            P.src[g + 2] ===
+            P.src[lookaheadIndex + 1] === "\r" &&
+            P.src[lookaheadIndex + 2] ===
               `
 `
           )
-            g += 3;
+            lookaheadIndex += 3;
           else break;
-        let nc1 = P.src[g] ?? "";
+        let nc1 = P.src[lookaheadIndex] ?? "";
         if (
-          (T === "]" && nc1 === "]" && I > h) ||
-          (T === "&" && nc1 === "&") ||
-          (T === "|" && nc1 === "|" && I > h) ||
-          T ===
+          (charAfterQuoted === "]" && nc1 === "]" && scanIndex > quotedEndI) ||
+          (charAfterQuoted === "&" && nc1 === "&") ||
+          (charAfterQuoted === "|" && nc1 === "|" && scanIndex > quotedEndI) ||
+          charAfterQuoted ===
             `
 ` ||
-          T === ""
+          charAfterQuoted === ""
         )
           rhs = quoted;
         else restoreLex(P.L, save);
@@ -4252,56 +4284,56 @@ function parseTestBinary(P, closer) {
   return makeNode(P, "binary_expression", left.startIndex, right.endIndex, [left, op, right]);
 }
 //@ chunk-k5vy5m8c.js:54349-55000 fingerprint = parseTestRegexRhs (0.921)
-function parseTestRegexRhs(e, o) {
-  skipBlanks(e.L);
-  let start = e.L.b;
-  let s = 0;
-  while (e.L.i < e.L.len) {
-    let i = peek(e.L);
-    if (i === "\\" && e.L.i + 1 < e.L.len) {
-      advance(e.L);
-      advance(e.L);
+function parseTestRegexRhs(parser, inRegexGroup) {
+  skipBlanks(parser.L);
+  let start = parser.L.b;
+  let parenDepth = 0;
+  while (parser.L.i < parser.L.len) {
+    let char = peek(parser.L);
+    if (char === "\\" && parser.L.i + 1 < parser.L.len) {
+      advance(parser.L);
+      advance(parser.L);
       continue;
     }
     if (
-      i ===
+      char ===
       `
 `
     ) {
-      if (s === 0) break;
-      advance(e.L);
+      if (parenDepth === 0) break;
+      advance(parser.L);
       continue;
     }
-    if (i === '"' || i === "'") {
-      let r = i;
-      advance(e.L);
-      while (e.L.i < e.L.len && peek(e.L) !== r) {
-        if (r === '"' && peek(e.L) === "\\" && e.L.i + 1 < e.L.len) advance(e.L);
-        advance(e.L);
+    if (char === '"' || char === "'") {
+      let quoteChar = char;
+      advance(parser.L);
+      while (parser.L.i < parser.L.len && peek(parser.L) !== quoteChar) {
+        if (quoteChar === '"' && peek(parser.L) === "\\" && parser.L.i + 1 < parser.L.len) advance(parser.L);
+        advance(parser.L);
       }
-      if (e.L.i < e.L.len) advance(e.L);
+      if (parser.L.i < parser.L.len) advance(parser.L);
       continue;
     }
-    if (i === "`") {
-      advance(e.L);
-      while (e.L.i < e.L.len && peek(e.L) !== "`") {
-        if (peek(e.L) === "\\" && e.L.i + 1 < e.L.len) advance(e.L);
-        advance(e.L);
+    if (char === "`") {
+      advance(parser.L);
+      while (parser.L.i < parser.L.len && peek(parser.L) !== "`") {
+        if (peek(parser.L) === "\\" && parser.L.i + 1 < parser.L.len) advance(parser.L);
+        advance(parser.L);
       }
-      if (e.L.i < e.L.len) advance(e.L);
+      if (parser.L.i < parser.L.len) advance(parser.L);
       continue;
     }
-    if (s === 0) {
-      if (i === " " || i === "\t") break;
-      if (i === "&" || (!o && i === "|")) break;
-      if (i === ")") break;
+    if (parenDepth === 0) {
+      if (char === " " || char === "\t") break;
+      if (char === "&" || (!inRegexGroup && char === "|")) break;
+      if (char === ")") break;
     }
-    if (i === "(") s++;
-    else if (i === ")" && s > 0) s--;
-    advance(e.L);
+    if (char === "(") parenDepth++;
+    else if (char === ")" && parenDepth > 0) parenDepth--;
+    advance(parser.L);
   }
-  if (e.L.b === start) return null;
-  return makeNode(e, "regex", start, e.L.b, []);
+  if (parser.L.b === start) return null;
+  return makeNode(parser, "regex", start, parser.L.b, []);
 }
 //@ chunk-k5vy5m8c.js:55000-56538 fingerprint = parseTestExtglobRhs (0.83)
 function parseTestExtglobRhs(P) {
@@ -4318,14 +4350,14 @@ function parseTestExtglobRhs(P) {
     }
   };
   while (P.L.i < P.L.len) {
-    let a = peek(P.L);
-    if (a === "\\" && P.L.i + 1 < P.L.len) {
+    let char = peek(P.L);
+    if (char === "\\" && P.L.i + 1 < P.L.len) {
       advance(P.L);
       advance(P.L);
       continue;
     }
     if (
-      a ===
+      char ===
       `
 `
     ) {
@@ -4334,53 +4366,53 @@ function parseTestExtglobRhs(P) {
       continue;
     }
     if (parenDepth === 0) {
-      if (a === "&" || a === "|") break;
-      if (a === " " || a === "\t") {
-        let c = P.L.i;
+      if (char === "&" || char === "|") break;
+      if (char === " " || char === "\t") {
+        let scanIndex = P.L.i;
         for (;;) {
-          let b = P.L.src[c];
-          if (b === " " || b === "\t") c++;
+          let charHere = P.L.src[scanIndex];
+          if (charHere === " " || charHere === "\t") scanIndex++;
           else if (
-            b === "\\" &&
-            P.L.src[c + 1] ===
+            charHere === "\\" &&
+            P.L.src[scanIndex + 1] ===
               `
 `
           )
-            c += 2;
+            scanIndex += 2;
           else if (
-            b === "\\" &&
-            P.L.src[c + 1] === "\r" &&
-            P.L.src[c + 2] ===
+            charHere === "\\" &&
+            P.L.src[scanIndex + 1] === "\r" &&
+            P.L.src[scanIndex + 2] ===
               `
 `
           )
-            c += 3;
+            scanIndex += 3;
           else break;
         }
-        let f = P.L.src[c] ?? "";
-        let u = c + 1;
-        while (P.L.src[u] === "\\")
+        let charAfterBlanks = P.L.src[scanIndex] ?? "";
+        let lookaheadIndex = scanIndex + 1;
+        while (P.L.src[lookaheadIndex] === "\\")
           if (
-            P.L.src[u + 1] ===
+            P.L.src[lookaheadIndex + 1] ===
             `
 `
           )
-            u += 2;
+            lookaheadIndex += 2;
           else if (
-            P.L.src[u + 1] === "\r" &&
-            P.L.src[u + 2] ===
+            P.L.src[lookaheadIndex + 1] === "\r" &&
+            P.L.src[lookaheadIndex + 2] ===
               `
 `
           )
-            u += 3;
+            lookaheadIndex += 3;
           else break;
-        let nc1 = P.L.src[u] ?? "";
+        let nc1 = P.L.src[lookaheadIndex] ?? "";
         if (
-          (f === "]" && nc1 === "]") ||
-          (f === "&" && nc1 === "&") ||
-          (f === "|" && nc1 === "|") ||
-          f === "#" ||
-          f ===
+          (charAfterBlanks === "]" && nc1 === "]") ||
+          (charAfterBlanks === "&" && nc1 === "&") ||
+          (charAfterBlanks === "|" && nc1 === "|") ||
+          charAfterBlanks === "#" ||
+          charAfterBlanks ===
             `
 `
         )
@@ -4389,26 +4421,26 @@ function parseTestExtglobRhs(P) {
         continue;
       }
     }
-    if (a === "$") {
+    if (char === "$") {
       let c1 = peek(P.L, 1);
       if (c1 === "'") {
         flushSeg();
-        let f = nextToken(P.L, "arg");
-        parts.push(leaf(P, "ansi_c_string", f));
+        let ansiTok = nextToken(P.L, "arg");
+        parts.push(leaf(P, "ansi_c_string", ansiTok));
         segStart = P.L.b;
         segStartI = P.L.i;
         continue;
       }
       if (c1 === '"') {
         flushSeg();
-        let f = {
+        let dollarTok = {
           type: "DOLLAR",
           value: "$",
           start: P.L.b,
           end: P.L.b + 1,
         };
         advance(P.L);
-        parts.push(leaf(P, "$", f));
+        parts.push(leaf(P, "$", dollarTok));
         parts.push(parseDoubleQuoted(P));
         segStart = P.L.b;
         segStartI = P.L.i;
@@ -4423,14 +4455,14 @@ function parseTestExtglobRhs(P) {
         continue;
       }
     }
-    if (a === '"') {
+    if (char === '"') {
       flushSeg();
       parts.push(parseDoubleQuoted(P));
       segStart = P.L.b;
       segStartI = P.L.i;
       continue;
     }
-    if (a === "'") {
+    if (char === "'") {
       flushSeg();
       let tok = nextToken(P.L, "arg");
       parts.push(leaf(P, "raw_string", tok));
@@ -4438,7 +4470,7 @@ function parseTestExtglobRhs(P) {
       segStartI = P.L.i;
       continue;
     }
-    if (a === "`") {
+    if (char === "`") {
       flushSeg();
       let backtick = parseBacktick(P);
       parts.push(backtick);
@@ -4446,7 +4478,7 @@ function parseTestExtglobRhs(P) {
       segStartI = P.L.i;
       continue;
     }
-    if ((a === "<" || a === ">") && peek(P.L, 1) === "(") {
+    if ((char === "<" || char === ">") && peek(P.L, 1) === "(") {
       flushSeg();
       let processSub = parseProcessSub(P);
       if (processSub) parts.push(processSub);
@@ -4454,9 +4486,9 @@ function parseTestExtglobRhs(P) {
       segStartI = P.L.i;
       continue;
     }
-    if (a === ")" && parenDepth === 0) break;
-    if (a === "(") parenDepth++;
-    else if (a === ")" && parenDepth > 0) parenDepth--;
+    if (char === ")" && parenDepth === 0) break;
+    if (char === "(") parenDepth++;
+    else if (char === ")" && parenDepth > 0) parenDepth--;
     advance(P.L);
   }
   flushSeg();
@@ -4505,25 +4537,25 @@ var ARITH_PREC = {
 };
 var ARITH_RIGHT_ASSOC = new Set(["=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "^=", "|=", "**"]);
 //@ chunk-k5vy5m8c.js:57004-57280 callgraph-witnessed = parseArithBinary (0.216)
-function skipToArithStop(e, o, t) {
-  restoreLex(e.L, o);
-  let s = 0;
-  while (e.L.i < e.L.len) {
-    let opInfo = peek(e.L);
-    if (t === "))" || t === ")") {
-      if (opInfo === "(") s++;
+function skipToArithStop(parser, saved, stop) {
+  restoreLex(parser.L, saved);
+  let depth = 0;
+  while (parser.L.i < parser.L.len) {
+    let opInfo = peek(parser.L);
+    if (stop === "))" || stop === ")") {
+      if (opInfo === "(") depth++;
       else if (opInfo === ")")
-        if (s === 0) {
-          if (t === ")" || peek(e.L, 1) === ")") return;
-        } else s--;
-    } else if (t === "]") {
-      if (opInfo === "[") s++;
+        if (depth === 0) {
+          if (stop === ")" || peek(parser.L, 1) === ")") return;
+        } else depth--;
+    } else if (stop === "]") {
+      if (opInfo === "[") depth++;
       else if (opInfo === "]") {
-        if (s === 0) return;
-        s--;
+        if (depth === 0) return;
+        depth--;
       }
-    } else if (isArithStop(e, t)) return;
-    advance(e.L);
+    } else if (isArithStop(parser, stop)) return;
+    advance(parser.L);
   }
 }
 //@ chunk-k5vy5m8c.js:57280-57355 fingerprint = parseArithExpr (0.743)
@@ -4577,61 +4609,61 @@ function parseArithTernary(P, stop, mode) {
 }
 //@ chunk-k5vy5m8c.js:57873-58913 fingerprint = scanArithOp (1)
 function scanArithOp(P) {
-  let o = peek(P.L);
+  let char = peek(P.L);
   let c1 = peek(P.L, 1);
   let c2 = peek(P.L, 2);
-  if (o === "<" && c1 === "<" && c2 === "=") return ["<<=", 3];
-  if (o === ">" && c1 === ">" && c2 === "=") return [">>=", 3];
-  if (o === "*" && c1 === "*") return ["**", 2];
-  if (o === "<" && c1 === "<") return ["<<", 2];
-  if (o === ">" && c1 === ">") return [">>", 2];
-  if (o === "=" && c1 === "=") return ["==", 2];
-  if (o === "!" && c1 === "=") return ["!=", 2];
-  if (o === "<" && c1 === "=") return ["<=", 2];
-  if (o === ">" && c1 === "=") return [">=", 2];
-  if (o === "&" && c1 === "&") return ["&&", 2];
-  if (o === "|" && c1 === "|") return ["||", 2];
-  if (o === "+" && c1 === "=") return ["+=", 2];
-  if (o === "-" && c1 === "=") return ["-=", 2];
-  if (o === "*" && c1 === "=") return ["*=", 2];
-  if (o === "/" && c1 === "=") return ["/=", 2];
-  if (o === "%" && c1 === "=") return ["%=", 2];
-  if (o === "&" && c1 === "=") return ["&=", 2];
-  if (o === "^" && c1 === "=") return ["^=", 2];
-  if (o === "|" && c1 === "=") return ["|=", 2];
-  if (o === "+" && c1 !== "+") return ["+", 1];
-  if (o === "-" && c1 !== "-") return ["-", 1];
-  if (o === "*") return ["*", 1];
-  if (o === "/") return ["/", 1];
-  if (o === "%") return ["%", 1];
-  if (o === "<") return ["<", 1];
-  if (o === ">") return [">", 1];
-  if (o === "&") return ["&", 1];
-  if (o === "|") return ["|", 1];
-  if (o === "^") return ["^", 1];
-  if (o === "=") return ["=", 1];
+  if (char === "<" && c1 === "<" && c2 === "=") return ["<<=", 3];
+  if (char === ">" && c1 === ">" && c2 === "=") return [">>=", 3];
+  if (char === "*" && c1 === "*") return ["**", 2];
+  if (char === "<" && c1 === "<") return ["<<", 2];
+  if (char === ">" && c1 === ">") return [">>", 2];
+  if (char === "=" && c1 === "=") return ["==", 2];
+  if (char === "!" && c1 === "=") return ["!=", 2];
+  if (char === "<" && c1 === "=") return ["<=", 2];
+  if (char === ">" && c1 === "=") return [">=", 2];
+  if (char === "&" && c1 === "&") return ["&&", 2];
+  if (char === "|" && c1 === "|") return ["||", 2];
+  if (char === "+" && c1 === "=") return ["+=", 2];
+  if (char === "-" && c1 === "=") return ["-=", 2];
+  if (char === "*" && c1 === "=") return ["*=", 2];
+  if (char === "/" && c1 === "=") return ["/=", 2];
+  if (char === "%" && c1 === "=") return ["%=", 2];
+  if (char === "&" && c1 === "=") return ["&=", 2];
+  if (char === "^" && c1 === "=") return ["^=", 2];
+  if (char === "|" && c1 === "=") return ["|=", 2];
+  if (char === "+" && c1 !== "+") return ["+", 1];
+  if (char === "-" && c1 !== "-") return ["-", 1];
+  if (char === "*") return ["*", 1];
+  if (char === "/") return ["/", 1];
+  if (char === "%") return ["%", 1];
+  if (char === "<") return ["<", 1];
+  if (char === ">") return [">", 1];
+  if (char === "&") return ["&", 1];
+  if (char === "|") return ["|", 1];
+  if (char === "^") return ["^", 1];
+  if (char === "=") return ["=", 1];
   return null;
 }
 //@ chunk-k5vy5m8c.js:58913-59266 layout = parseTestOr (1)
-function parseArithBinary(e, closer, minPrec, mode) {
-  let left = parseArithUnary(e, closer, mode);
+function parseArithBinary(parser, closer, minPrec, mode) {
+  let left = parseArithUnary(parser, closer, mode);
   if (!left) return null;
   while (true) {
-    skipBlanks(e.L);
-    if (isArithStop(e, closer)) break;
-    if (peek(e.L) === ",") break;
-    let opInfo = scanArithOp(e);
+    skipBlanks(parser.L);
+    if (isArithStop(parser, closer)) break;
+    if (peek(parser.L) === ",") break;
+    let opInfo = scanArithOp(parser);
     if (!opInfo) break;
     let [opText, opLen] = opInfo;
     let prec = ARITH_PREC[opText];
     if (prec === undefined || prec < minPrec) break;
-    let os = e.L.b;
-    for (let k = 0; k < opLen; k++) advance(e.L);
-    let op = makeNode(e, opText, os, e.L.b, []);
+    let os = parser.L.b;
+    for (let k = 0; k < opLen; k++) advance(parser.L);
+    let op = makeNode(parser, opText, os, parser.L.b, []);
     let nextMin = ARITH_RIGHT_ASSOC.has(opText) ? prec : prec + 1;
-    let right = parseArithBinary(e, closer, nextMin, mode);
+    let right = parseArithBinary(parser, closer, nextMin, mode);
     if (!right) break;
-    left = makeNode(e, "binary_expression", left.startIndex, right.endIndex, [left, op, right]);
+    left = makeNode(parser, "binary_expression", left.startIndex, right.endIndex, [left, op, right]);
   }
   return left;
 }
@@ -4639,27 +4671,27 @@ function parseArithBinary(e, closer, minPrec, mode) {
 function parseArithUnary(P, stop, mode) {
   skipBlanks(P.L);
   if (isArithStop(P, stop)) return null;
-  let s = peek(P.L);
+  let char = peek(P.L);
   let c1 = peek(P.L, 1);
-  if ((s === "+" && c1 === "+") || (s === "-" && c1 === "-")) {
-    let r = P.L.b;
+  if ((char === "+" && c1 === "+") || (char === "-" && c1 === "-")) {
+    let opStart = P.L.b;
     advance(P.L);
     advance(P.L);
-    let op = makeNode(P, s + c1, r, P.L.b, []);
+    let op = makeNode(P, char + c1, opStart, P.L.b, []);
     let inner = parseArithUnary(P, stop, mode);
     if (!inner) return op;
     return makeNode(P, "unary_expression", op.startIndex, inner.endIndex, [op, inner]);
   }
-  if (s === "-" || s === "+" || s === "!" || s === "~") {
-    if (mode !== "var" && s === "-" && isDigit(c1)) {
-      let f = P.L.b;
+  if (char === "-" || char === "+" || char === "!" || char === "~") {
+    if (mode !== "var" && char === "-" && isDigit(c1)) {
+      let numberStart = P.L.b;
       advance(P.L);
       while (isDigit(peek(P.L))) advance(P.L);
-      return makeNode(P, "number", f, P.L.b, []);
+      return makeNode(P, "number", numberStart, P.L.b, []);
     }
-    let r = P.L.b;
+    let opStart = P.L.b;
     advance(P.L);
-    let op = makeNode(P, s, r, P.L.b, []);
+    let op = makeNode(P, char, opStart, P.L.b, []);
     let inner = parseArithUnary(P, stop, mode);
     if (!inner) return op;
     return makeNode(P, "unary_expression", op.startIndex, inner.endIndex, [op, inner]);
@@ -4670,13 +4702,13 @@ function parseArithUnary(P, stop, mode) {
 function parseArithPostfix(P, stop, mode) {
   let prim = parseArithPrimary(P, stop, mode);
   if (!prim) return null;
-  let i = peek(P.L);
+  let opChar = peek(P.L);
   let c1 = peek(P.L, 1);
-  if ((i === "+" && c1 === "+") || (i === "-" && c1 === "-")) {
-    let a = P.L.b;
+  if ((opChar === "+" && c1 === "+") || (opChar === "-" && c1 === "-")) {
+    let opStart = P.L.b;
     advance(P.L);
     advance(P.L);
-    let op = makeNode(P, i + c1, a, P.L.b, []);
+    let op = makeNode(P, opChar + c1, opStart, P.L.b, []);
     return makeNode(P, "postfix_expression", prim.startIndex, op.endIndex, [prim, op]);
   }
   return prim;
@@ -4685,11 +4717,11 @@ function parseArithPostfix(P, stop, mode) {
 function parseArithPrimary(P, stop, mode) {
   skipBlanks(P.L);
   if (isArithStop(P, stop)) return null;
-  let s = peek(P.L);
-  if (s === "(") {
-    let i = P.L.b;
+  let char = peek(P.L);
+  if (char === "(") {
+    let openStart = P.L.b;
     advance(P.L);
-    let open = makeNode(P, "(", i, P.L.b, []);
+    let open = makeNode(P, "(", openStart, P.L.b, []);
     let inners = parseArithCommaList(P, ")", mode);
     skipBlanks(P.L);
     let close;
@@ -4700,22 +4732,22 @@ function parseArithPrimary(P, stop, mode) {
     } else close = makeNode(P, ")", P.L.b, P.L.b, []);
     return makeNode(P, "parenthesized_expression", open.startIndex, close.endIndex, [open, ...inners, close]);
   }
-  if (s === '"') return parseDoubleQuoted(P);
-  if (s === "$") return parseDollarLike(P);
-  if (isDigit(s)) {
-    let i = P.L.b;
+  if (char === '"') return parseDoubleQuoted(P);
+  if (char === "$") return parseDollarLike(P);
+  if (isDigit(char)) {
+    let numberStart = P.L.b;
     while (isDigit(peek(P.L))) advance(P.L);
-    if (P.L.b - i === 1 && s === "0" && (peek(P.L) === "x" || peek(P.L) === "X")) {
+    if (P.L.b - numberStart === 1 && char === "0" && (peek(P.L) === "x" || peek(P.L) === "X")) {
       advance(P.L);
       while (isHexDigit(peek(P.L))) advance(P.L);
     } else if (peek(P.L) === "#") {
       advance(P.L);
       while (isBaseDigit(peek(P.L))) advance(P.L);
     }
-    return makeNode(P, "number", i, P.L.b, []);
+    return makeNode(P, "number", numberStart, P.L.b, []);
   }
-  if (isIdentStart(s)) {
-    let i = P.L.b;
+  if (isIdentStart(char)) {
+    let nameStart = P.L.b;
     while (isIdentChar(peek(P.L))) advance(P.L);
     let nc = peek(P.L);
     if (mode === "assign") {
@@ -4723,17 +4755,17 @@ function parseArithPrimary(P, stop, mode) {
       let ac = peek(P.L);
       let ac1 = peek(P.L, 1);
       if (ac === "=" && ac1 !== "=") {
-        let vn = makeNode(P, "variable_name", i, P.L.b, []);
+        let vn = makeNode(P, "variable_name", nameStart, P.L.b, []);
         let es = P.L.b;
         advance(P.L);
         let eq = makeNode(P, "=", es, P.L.b, []);
         let val = parseArithTernary(P, stop, mode);
         let end = val ? val.endIndex : eq.endIndex;
-        return makeNode(P, "variable_assignment", i, end, val ? [vn, eq, val] : [vn, eq]);
+        return makeNode(P, "variable_assignment", nameStart, end, val ? [vn, eq, val] : [vn, eq]);
       }
     }
     if (nc === "[") {
-      let vn = makeNode(P, "variable_name", i, P.L.b, []);
+      let vn = makeNode(P, "variable_name", nameStart, P.L.b, []);
       let brS = P.L.b;
       advance(P.L);
       let brOpen = makeNode(P, "[", brS, P.L.b, []);
@@ -4746,39 +4778,39 @@ function parseArithPrimary(P, stop, mode) {
         brClose = makeNode(P, "]", cs, P.L.b, []);
       } else brClose = makeNode(P, "]", P.L.b, P.L.b, []);
       let kids = idx ? [vn, brOpen, idx, brClose] : [vn, brOpen, brClose];
-      return makeNode(P, "subscript", i, brClose.endIndex, kids);
+      return makeNode(P, "subscript", nameStart, brClose.endIndex, kids);
     }
-    return makeNode(P, mode === "var" ? "variable_name" : "word", i, P.L.b, []);
+    return makeNode(P, mode === "var" ? "variable_name" : "word", nameStart, P.L.b, []);
   }
   return null;
 }
 //@ chunk-k5vy5m8c.js:61263-61524 callgraph-witnessed = isArithStop (1)
 function isArithStop(P, stop) {
-  let t = peek(P.L);
-  if (stop === "))") return t === ")" && peek(P.L, 1) === ")";
-  if (stop === ")") return t === ")";
-  if (stop === ";") return t === ";";
-  if (stop === ":") return t === ":";
-  if (stop === "]") return t === "]";
-  if (stop === "}") return t === "}";
-  if (stop === ":}") return t === ":" || t === "}";
+  let char = peek(P.L);
+  if (stop === "))") return char === ")" && peek(P.L, 1) === ")";
+  if (stop === ")") return char === ")";
+  if (stop === ";") return char === ";";
+  if (stop === ":") return char === ":";
+  if (stop === "]") return char === "]";
+  if (stop === "}") return char === "}";
+  if (stop === ":}") return char === ":" || char === "}";
   return (
-    t === "" ||
-    t ===
+    char === "" ||
+    char ===
       `
 `
   );
 }
 //@ chunk-k5vy5m8c.js:61524-61752 callgraph-witnessed = skipBlanks (0.464)
-function skipQuotedSpan(e, o) {
-  let last = o.at(-1);
-  if (o === "$'") advance(e.L);
-  advance(e.L);
-  while (e.L.i < e.L.len && peek(e.L) !== last) {
-    if (o !== "'" && peek(e.L) === "\\" && e.L.i + 1 < e.L.len) advance(e.L);
-    else if ((last === '"' || e.inDquote > 0) && (peek(e.L) === "$" || peek(e.L) === "`"))
-      e.zshBraceDiff = true;
-    advance(e.L);
+function skipQuotedSpan(parser, quote) {
+  let last = quote.at(-1);
+  if (quote === "$'") advance(parser.L);
+  advance(parser.L);
+  while (parser.L.i < parser.L.len && peek(parser.L) !== last) {
+    if (quote !== "'" && peek(parser.L) === "\\" && parser.L.i + 1 < parser.L.len) advance(parser.L);
+    else if ((last === '"' || parser.inDquote > 0) && (peek(parser.L) === "$" || peek(parser.L) === "`"))
+      parser.zshBraceDiff = true;
+    advance(parser.L);
   }
 }
 export { getParserModule, hasZshMultibyteName, SHELL_KEYWORDS };

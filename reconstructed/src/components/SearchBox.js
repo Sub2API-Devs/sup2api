@@ -8,8 +8,8 @@
  * pieces: chunk-tzghj6zv.js (3)
  * attribution: fingerprint 1, placement 2
  */
-import { TELEPHONE_RECORDER } from "../utils/permissions/autoModeRulesPrompt.js";
-import { R, Q } from "../../vendor/react/cjs/react.production.js";
+import { TELEPHONE_RECORDER } from "../constants/figures.js";
+import { useRef, useMemo } from "../../vendor/react/cjs/react.production.js";
 import { assignRef, useIsScreenReaderEnabled } from "../ink/components/ErrorBoundary.js";
 import { useHasFocus, Input } from "../ink/components/Input.js";
 import { measureText, offsetToPosition, positionToOffset } from "../utils/Cursor.js";
@@ -48,113 +48,120 @@ function SearchBox({
   onFocus,
   wrapColumns,
 }) {
-  let Se = cursorOffset ?? query.length;
-  let te = onKeyDown !== undefined;
-  let ae = R(null);
-  let ref_2 = (He) => {
-    ae.current = He;
-    assignRef(ref, He);
+  let effectiveCursorOffset = cursorOffset ?? query.length;
+  let hasKeyHandler = onKeyDown !== undefined;
+  let inputRef = useRef(null);
+  let ref_2 = (node) => {
+    inputRef.current = node;
+    assignRef(ref, node);
   };
-  let hasFocus = useHasFocus(ae);
-  let re = isFocused ?? (te && hasFocus);
+  let hasFocus = useHasFocus(inputRef);
+  let focused = isFocused ?? (hasKeyHandler && hasFocus);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let D = !borderless && !isScreenReaderEnabled;
-  let J = false;
-  let K = D && false;
-  let me = D && !K;
-  let se = placeholder ?? "Search\u2026";
-  let le = isScreenReaderEnabled && prefix === TELEPHONE_RECORDER ? (query ? "Search:" : null) : prefix;
-  let Ce = me ? 2 : 0;
-  let de = K && !isSearchLineUnpadded ? 1 : 0;
-  let _e = me ? 1 : de;
-  let text = le === null ? query : `${le} ${query}`;
-  let Ge = le === null ? 0 : le.length + 1;
-  let _ = Q(() => measureText(text, wrapColumns ?? 0), [text, wrapColumns]);
-  let ge = Q(isNativeCursorEnabled, []);
-  let ke = env.CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT && env.CLAUDE_CODE_SESSION_KIND !== "bg";
-  let q = offsetToPosition(_, Ge + Se);
-  let visible = cursorChar === undefined && !ke;
+  let bordered = !borderless && !isScreenReaderEnabled;
+  let neverFlag = false;
+  let isPermissionBorder = bordered && false;
+  let showBorder = bordered && !isPermissionBorder;
+  let placeholderText = placeholder ?? "Search\u2026";
+  let visiblePrefix =
+    isScreenReaderEnabled && prefix === TELEPHONE_RECORDER ? (query ? "Search:" : null) : prefix;
+  let textInsetX = showBorder ? 2 : 0;
+  let paddingY = isPermissionBorder && !isSearchLineUnpadded ? 1 : 0;
+  let paddingTop = showBorder ? 1 : paddingY;
+  let text = visiblePrefix === null ? query : `${visiblePrefix} ${query}`;
+  let prefixLength = visiblePrefix === null ? 0 : visiblePrefix.length + 1;
+  let measured = useMemo(() => measureText(text, wrapColumns ?? 0), [text, wrapColumns]);
+  let nativeCursor = useMemo(isNativeCursorEnabled, []);
+  let fullRepaint = env.CLAUDE_CODE_ALT_SCREEN_FULL_REPAINT && env.CLAUDE_CODE_SESSION_KIND !== "bg";
+  let cursorPosition = offsetToPosition(measured, prefixLength + effectiveCursorOffset);
+  let visible = cursorChar === undefined && !fullRepaint;
   let ref_3 = useDeclaredCursor({
-    line: _e + q.line,
-    column: Ce + q.column,
-    active: re && !te,
+    line: paddingTop + cursorPosition.line,
+    column: textInsetX + cursorPosition.column,
+    active: focused && !hasKeyHandler,
     visible,
   });
-  let Ee = isTerminalFocused && !(ge && !ke && cursorChar === undefined);
+  let cursorActive = isTerminalFocused && !(nativeCursor && !fullRepaint && cursorChar === undefined);
   let onClick =
-    onCursorOffsetChange || onFocus || te
-      ? (He) => {
-          if (!re && He.isWindowActivation) {
-            He.dropAsStray();
+    onCursorOffsetChange || onFocus || hasKeyHandler
+      ? (event) => {
+          if (!focused && event.isWindowActivation) {
+            event.dropAsStray();
             return;
           }
-          let Xe = ae.current;
-          if (Xe && !onFocus) getFocusManager(Xe).focus(Xe);
-          if (!re) {
+          let node = inputRef.current;
+          if (node && !onFocus) getFocusManager(node).focus(node);
+          if (!focused) {
             onFocus?.();
             return;
           }
           if (!query || !onCursorOffsetChange) return;
-          let Ne = He.localRow - _e;
-          if (Ne < 0) return;
-          let max = Math.max(0, He.localCol - Ce);
-          let Ue = positionToOffset(_, Ne, max);
-          onCursorOffsetChange(Math.max(0, Math.min(query.length, Ue - Ge)));
+          let localRow = event.localRow - paddingTop;
+          if (localRow < 0) return;
+          let max = Math.max(0, event.localCol - textInsetX);
+          let offset = positionToOffset(measured, localRow, max);
+          onCursorOffsetChange(Math.max(0, Math.min(query.length, offset - prefixLength)));
         }
       : undefined;
   let children = jsxProd_default_2(Text, {
-    dimColor: !re,
+    dimColor: !focused,
     children: [
-      le !== null
+      visiblePrefix !== null
         ? jsxProd_default_2(Fragment, {
             children: [
               jsxProd_default(Text, {
                 dimColor: prefixDim,
-                color: prefixColor ?? (K && re ? "permission" : undefined),
-                children: le,
+                color: prefixColor ?? (isPermissionBorder && focused ? "permission" : undefined),
+                children: visiblePrefix,
               }),
               " ",
             ],
           })
         : null,
-      re
+      focused
         ? query
-          ? EffortIndicatorSymbol(query, highlights, dimRange, Ee ? Se : -1, cursorChar)
-          : Ee
+          ? EffortIndicatorSymbol(
+              query,
+              highlights,
+              dimRange,
+              cursorActive ? effectiveCursorOffset : -1,
+              cursorChar,
+            )
+          : cursorActive
             ? jsxProd_default_2(Fragment, {
                 children: [
                   cursorChar ??
                     jsxProd_default(Text, {
                       inverse: true,
-                      children: se.charAt(0),
+                      children: placeholderText.charAt(0),
                     }),
                   jsxProd_default(Text, {
                     dimColor: true,
-                    children: cursorChar ? se : se.slice(1),
+                    children: cursorChar ? placeholderText : placeholderText.slice(1),
                   }),
                 ],
               })
             : jsxProd_default(Text, {
                 dimColor: true,
-                children: se,
+                children: placeholderText,
               })
         : query
           ? jsxProd_default(Text, {
               children: query,
             })
           : jsxProd_default(Text, {
-              children: se,
+              children: placeholderText,
             }),
     ],
   });
-  if (te)
+  if (hasKeyHandler)
     return jsxProd_default(Box, {
       flexShrink: 0,
-      borderStyle: me ? "round" : undefined,
-      borderColor: re ? "suggestion" : undefined,
-      borderDimColor: !re,
-      paddingX: me ? 1 : 0,
-      paddingY: de,
+      borderStyle: showBorder ? "round" : undefined,
+      borderColor: focused ? "suggestion" : undefined,
+      borderDimColor: !focused,
+      paddingX: showBorder ? 1 : 0,
+      paddingY,
       width,
       onClick,
       children: jsxProd_default(Input, {
@@ -162,10 +169,10 @@ function SearchBox({
         autoFocus,
         onKeyDown,
         onPaste,
-        caret: re
+        caret: focused
           ? {
-              line: q.line,
-              column: q.column,
+              line: cursorPosition.line,
+              column: cursorPosition.column,
               visible,
             }
           : undefined,
@@ -176,77 +183,78 @@ function SearchBox({
   return jsxProd_default(Box, {
     ref: ref_3,
     flexShrink: 0,
-    borderStyle: me ? "round" : undefined,
-    borderColor: re ? "suggestion" : undefined,
-    borderDimColor: !re,
-    paddingX: me ? 1 : 0,
-    paddingY: de,
+    borderStyle: showBorder ? "round" : undefined,
+    borderColor: focused ? "suggestion" : undefined,
+    borderDimColor: !focused,
+    paddingX: showBorder ? 1 : 0,
+    paddingY,
     width,
     onClick,
     children,
   });
 }
 //@ chunk-tzghj6zv.js:51767-52276 placement = EffortIndicatorSymbol (0.752)
-function EffortIndicatorSymbol(query, highlights, dimRange, C, cursorChar) {
-  let M = (N) => highlights.some(([B, pe]) => N >= B && N < pe);
-  let O = (N) => !!dimRange && N >= dimRange[0] && N < dimRange[1];
-  let I = new Set([0, query.length]);
-  for (let [N, B] of highlights) {
-    I.add(N);
-    I.add(B);
+function EffortIndicatorSymbol(query, highlights, dimRange, cursorIndex, cursorChar) {
+  let isHighlighted = (index) =>
+    highlights.some(([rangeStart, rangeEnd]) => index >= rangeStart && index < rangeEnd);
+  let isDimmed = (index) => !!dimRange && index >= dimRange[0] && index < dimRange[1];
+  let boundaries = new Set([0, query.length]);
+  for (let [start, end] of highlights) {
+    boundaries.add(start);
+    boundaries.add(end);
   }
   if (dimRange) {
-    I.add(dimRange[0]);
-    I.add(dimRange[1]);
+    boundaries.add(dimRange[0]);
+    boundaries.add(dimRange[1]);
   }
-  if (C >= 0) {
-    I.add(C);
-    I.add(C + 1);
+  if (cursorIndex >= 0) {
+    boundaries.add(cursorIndex);
+    boundaries.add(cursorIndex + 1);
   }
-  let sorted = [...I].sort((N, B) => N - B);
-  let Y = [];
+  let sorted = [...boundaries].sort((a, b) => a - b);
+  let elements = [];
   for (let idx = 0; idx < sorted.length - 1; idx++) {
-    let B = sorted[idx];
-    let pe = sorted[idx + 1];
-    let oe = B < query.length ? query.slice(B, pe) : " ";
-    if (!oe) continue;
-    let ne = B === C;
-    let z =
-      ne &&
-      oe ===
+    let start = sorted[idx];
+    let end = sorted[idx + 1];
+    let segment = start < query.length ? query.slice(start, end) : " ";
+    if (!segment) continue;
+    let isCursor = start === cursorIndex;
+    let isNewlineCursor =
+      isCursor &&
+      segment ===
         `
 `;
-    Y.push(
-      ne && cursorChar
+    elements.push(
+      isCursor && cursorChar
         ? jsxProd_default_2(
             Text,
             {
               children: [
                 cursorChar,
-                z
+                isNewlineCursor
                   ? `
 `
                   : null,
               ],
             },
-            B,
+            start,
           )
         : jsxProd_default(
             Text,
             {
-              color: M(B) ? "suggestion" : undefined,
-              dimColor: O(B),
-              inverse: ne,
-              children: z
+              color: isHighlighted(start) ? "suggestion" : undefined,
+              dimColor: isDimmed(start),
+              inverse: isCursor,
+              children: isNewlineCursor
                 ? ` 
 `
-                : oe,
+                : segment,
             },
-            B,
+            start,
           ),
     );
   }
-  return Y;
+  return elements;
 }
 //@ chunk-tzghj6zv.js:52276-52334 placement
 /**

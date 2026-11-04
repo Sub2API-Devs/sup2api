@@ -5,14 +5,14 @@
  * pieces: chunk-6ja29j2n.js (1)
  * attribution: esm-fingerprint 1
  */
-import { O } from "../../lib/common/html.js";
+import { DOCUMENT_MODE } from "../../lib/common/html.js";
 
 //@ chunk-6ja29j2n.js:123774-126135 esm-fingerprint
 var defaultTreeAdapter = {
   createDocument() {
     return {
       nodeName: "#document",
-      mode: O.NO_QUIRKS,
+      mode: DOCUMENT_MODE.NO_QUIRKS,
       childNodes: [],
     };
   },
@@ -61,8 +61,8 @@ var defaultTreeAdapter = {
   getTemplateContent(templateElement) {
     return templateElement.content;
   },
-  setDocumentType(e, name, publicId, systemId) {
-    let doctypeNode = e.childNodes.find((node) => node.nodeName === "#documentType");
+  setDocumentType(documentNode, name, publicId, systemId) {
+    let doctypeNode = documentNode.childNodes.find((node) => node.nodeName === "#documentType");
     if (doctypeNode) {
       doctypeNode.name = name;
       doctypeNode.publicId = publicId;
@@ -75,14 +75,14 @@ var defaultTreeAdapter = {
         systemId,
         parentNode: null,
       };
-      defaultTreeAdapter.appendChild(e, node);
+      defaultTreeAdapter.appendChild(documentNode, node);
     }
   },
-  setDocumentMode(e, mode) {
-    e.mode = mode;
+  setDocumentMode(documentNode, mode) {
+    documentNode.mode = mode;
   },
-  getDocumentMode(e) {
-    return e.mode;
+  getDocumentMode(documentNode) {
+    return documentNode.mode;
   },
   detachNode(node) {
     if (node.parentNode) {

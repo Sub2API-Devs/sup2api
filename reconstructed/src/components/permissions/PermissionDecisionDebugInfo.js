@@ -35,6 +35,7 @@ import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
 import { TOOL_CHECK } from "../../plugins/functionHooks/toolCheckHooks.js";
 import { generateSuggestions } from "../../utils/permissions/filesystem.js";
 import { parseModeSuggestions } from "./consentRows.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:39273-39452 fingerprint = extractMode (0.676)
 function extractMode(updates) {
@@ -55,26 +56,27 @@ function extractMode(updates) {
       };
 }
 //@ chunk-e6aww6q8.js:50309-50457 placement
-function decisionReasonText(e) {
-  let decisionReason = e.decisionReason;
-  switch (e.behavior) {
+function decisionReasonText(decision) {
+  let decisionReason = decision.decisionReason;
+  switch (decision.behavior) {
     case "allow":
       return decisionReason && "reason" in decisionReason ? decisionReason.reason : undefined;
     case "ask":
     case "deny":
-      return e.message;
+      return decision.message;
   }
 }
 //@ chunk-e6aww6q8.js:50457-50656 placement
 /**
  * 在子命令结果中找出决定行为的规则
  */
-function findDecidingRule(decisionReason, n) {
-  if (decisionReason?.type !== "subcommandResults") return;
-  for (let reason of decisionReason.reasons.values()) {
-    let decisionReason = reason.behavior === n ? reason.decisionReason : undefined;
-    let S = decisionReason?.type === "rule" ? decisionReason.rule : findDecidingRule(decisionReason, n);
-    if (S !== undefined) return S;
+function findDecidingRule(reason, behavior) {
+  if (reason?.type !== "subcommandResults") return;
+  for (let reason_2 of reason.reasons.values()) {
+    let decisionReason = reason_2.behavior === behavior ? reason_2.decisionReason : undefined;
+    let rule =
+      decisionReason?.type === "rule" ? decisionReason.rule : findDecidingRule(decisionReason, behavior);
+    if (rule !== undefined) return rule;
   }
   return;
 }
@@ -85,85 +87,95 @@ function PermissionDecisionInfoItem(t0) {
     : isOutsideReadsBlockedAsk(t0);
 }
 //@ chunk-e6aww6q8.js:3765551-3767426 fingerprint = decisionReasonDisplayString (0.389)
-function decisionReasonDisplayString(e, n, r, s) {
-  if (n !== undefined && n !== "config") {
-    if (n === "hook") return "hook:PermissionRequest";
-    if (n === "classifier" && r?.type === "classifier") return formatClassifierReasonTag(r);
-    return n;
+function decisionReasonDisplayString(reason, type, mode, permissionMode) {
+  if (type !== undefined && type !== "config") {
+    if (type === "hook") return "hook:PermissionRequest";
+    if (type === "classifier" && mode?.type === "classifier") return formatClassifierReasonTag(mode);
+    return type;
   }
-  if (r?.type !== "rule" && s !== undefined) return `rule:${s.source}`;
-  if (r === undefined) return "unknown";
-  switch (r.type) {
+  if (mode?.type !== "rule" && permissionMode !== undefined) return `rule:${permissionMode.source}`;
+  if (mode === undefined) return "unknown";
+  switch (mode.type) {
     case "rule":
-      return `rule:${r.rule.source}`;
+      return `rule:${mode.rule.source}`;
     case "mode":
-      return `mode:${r.mode}`;
+      return `mode:${mode.mode}`;
     case "hook":
-      return `hook:${pickReasonFromList(HOOK_ANALYTICS_NAMES, firstLineOf(r.hookName, ":"))}`;
+      return `hook:${pickReasonFromList(HOOK_ANALYTICS_NAMES, firstLineOf(mode.hookName, ":"))}`;
     case "classifier":
-      return formatClassifierReasonTag(r);
+      return formatClassifierReasonTag(mode);
     case "subcommandResults": {
-      let h = new Set();
-      for (let reason of r.reasons.values())
+      let lines = new Set();
+      for (let reason_2 of mode.reasons.values())
         if (
-          (reason.behavior === e || (e === "ask" && reason.behavior === "passthrough")) &&
-          reason.decisionReason !== undefined
+          (reason_2.behavior === reason || (reason === "ask" && reason_2.behavior === "passthrough")) &&
+          reason_2.decisionReason !== undefined
         ) {
-          let L = decisionReasonDisplayString(e, undefined, reason.decisionReason);
-          for (let G of e === "ask" ? splitSubcommandReason(L) : [L]) h.add(G);
+          let text = decisionReasonDisplayString(reason, undefined, reason_2.decisionReason);
+          for (let line of reason === "ask" ? splitSubcommandReason(text) : [text]) lines.add(line);
         }
-      let [y] = h;
-      if (h.size === 1 && y !== undefined) return y;
-      if (h.size > 1) {
-        let S = e === "ask" ? h : new Set([...h].map((w) => firstLineOf(w, ":")));
-        return `${SUBCOMMANDS}${[...S].sort().join("+")}`;
+      let [firstLine] = lines;
+      if (lines.size === 1 && firstLine !== undefined) return firstLine;
+      if (lines.size > 1) {
+        let uniqueLines =
+          reason === "ask" ? lines : new Set([...lines].map((line) => firstLineOf(line, ":")));
+        return `${SUBCOMMANDS}${[...uniqueLines].sort().join("+")}`;
       }
       return "subcommandResults";
     }
     case "other":
-      if (r.reason === SANDBOX_AUTO_ALLOW_REASON) return "sandboxAutoAllow";
-      if (r.reason === READ_ONLY_AUTO_ALLOW_REASON) return "readOnlyCommand";
-      if (r.reason === RESTRICTED_MODE_DENY_REASON) return "restrictedMode";
-      if (r.reason === OUTSIDE_READS_BLOCKED_DENY_REASON) return "outsideReadsBlocked";
-      if (r.reason === OUTSIDE_WRITES_BLOCKED_DENY_REASON || r.reason === SETTINGS_WRITES_BLOCKED_DENY_REASON)
+      if (mode.reason === SANDBOX_AUTO_ALLOW_REASON) return "sandboxAutoAllow";
+      if (mode.reason === READ_ONLY_AUTO_ALLOW_REASON) return "readOnlyCommand";
+      if (mode.reason === RESTRICTED_MODE_DENY_REASON) return "restrictedMode";
+      if (mode.reason === OUTSIDE_READS_BLOCKED_DENY_REASON) return "outsideReadsBlocked";
+      if (
+        mode.reason === OUTSIDE_WRITES_BLOCKED_DENY_REASON ||
+        mode.reason === SETTINGS_WRITES_BLOCKED_DENY_REASON
+      )
         return "outsideWritesBlocked";
-      if (r.reason === NO_PROJECT_DIRECTORY_DENY_REASON) return "noProjectDirectory";
-      if (r.reason === TOOLS_HELD_UNTIL_A_PERSON_TYPES) return "toolsHeld";
-      if (r.reason === NO_CONFIG_HOME_DENY_REASON) return "noConfigHome";
-      if (r.reason === CLASSIFIER_TRANSCRIPT_TOO_LONG_REASON) return "classifierTranscriptTooLong";
-      if (r.reason === CAN_USE_TOOL_STREAM_CLOSED_REASON) return "permissionStreamClosed";
-      if (r.reason === CAN_USE_TOOL_INVALID_RESULT_REASON) return "canUseToolInvalidResult";
-      if (r.reason === CAN_USE_TOOL_REQUEST_FAILED_REASON) return "canUseToolRequestFailed";
-      if (r.reason === CAN_USE_TOOL_ABORTED_REASON) return "canUseToolAborted";
-      if (r.bashMissKind !== undefined) return `bashMiss:${r.bashMissKind}`;
+      if (mode.reason === NO_PROJECT_DIRECTORY_DENY_REASON) return "noProjectDirectory";
+      if (mode.reason === TOOLS_HELD_UNTIL_A_PERSON_TYPES) return "toolsHeld";
+      if (mode.reason === NO_CONFIG_HOME_DENY_REASON) return "noConfigHome";
+      if (mode.reason === CLASSIFIER_TRANSCRIPT_TOO_LONG_REASON) return "classifierTranscriptTooLong";
+      if (mode.reason === CAN_USE_TOOL_STREAM_CLOSED_REASON) return "permissionStreamClosed";
+      if (mode.reason === CAN_USE_TOOL_INVALID_RESULT_REASON) return "canUseToolInvalidResult";
+      if (mode.reason === CAN_USE_TOOL_REQUEST_FAILED_REASON) return "canUseToolRequestFailed";
+      if (mode.reason === CAN_USE_TOOL_ABORTED_REASON) return "canUseToolAborted";
+      if (mode.bashMissKind !== undefined) return `bashMiss:${mode.bashMissKind}`;
       return "other";
     case "asyncAgent":
-      if (r.reason === HOOK_REWRITTEN_INPUT_ASK_REASON) return "hookRewrittenInputAsk";
-      if (r.reason === NO_APPROVAL_SURFACE_REASON) return "noApprovalSurface";
-      return r.type;
+      if (mode.reason === HOOK_REWRITTEN_INPUT_ASK_REASON) return "hookRewrittenInputAsk";
+      if (mode.reason === NO_APPROVAL_SURFACE_REASON) return "noApprovalSurface";
+      return mode.type;
     case "safetyCheck":
-      if (r.reason === OUTSIDE_READS_BLOCKED_DENY_REASON) return "outsideReadsBlocked";
-      if (r.reason === NO_CONFIG_HOME_DENY_REASON) return "noConfigHome";
-      return r.type;
+      if (mode.reason === OUTSIDE_READS_BLOCKED_DENY_REASON) return "outsideReadsBlocked";
+      if (mode.reason === NO_CONFIG_HOME_DENY_REASON) return "noConfigHome";
+      return mode.type;
     case "permissionPromptTool":
     case "sandboxOverride":
     case "workingDir":
-      return r.type;
+      return mode.type;
     default:
       return "unknown";
   }
 }
 //@ chunk-e6aww6q8.js:3767426-3767598 layout
-function formatClassifierReasonTag(e) {
-  let n = pickReasonFromList(CLASSIFIER_ANALYTICS_NAMES, e.classifier);
-  if (e.reason === CLASSIFIER_UNAVAILABLE_REASON) return `classifier:${n}:unavailable`;
-  if (e.noVerdict) return `classifier:${n}:no-verdict`;
-  return `classifier:${n}`;
+function formatClassifierReasonTag(classifierResult) {
+  let reasonName = pickReasonFromList(CLASSIFIER_ANALYTICS_NAMES, classifierResult.classifier);
+  if (classifierResult.reason === CLASSIFIER_UNAVAILABLE_REASON)
+    return `classifier:${reasonName}:unavailable`;
+  if (classifierResult.noVerdict) return `classifier:${reasonName}:no-verdict`;
+  return `classifier:${reasonName}`;
 }
 //@ chunk-e6aww6q8.js:3767598-3767655 placement = getAutoModeDumpDir (0.607)
-var CLASSIFIER_ANALYTICS_NAMES = ["auto-mode"];
-var HOOK_ANALYTICS_NAMES = [...HOOK_EVENTS, TOOL_CHECK];
-var SUBCOMMANDS = "subcommands:";
+var CLASSIFIER_ANALYTICS_NAMES; // deferred: uses HOOK_EVENTS (../../entrypoints/sdk/coreSchemas.js) of its import cycle while loading; runs once the cycle is complete
+var HOOK_ANALYTICS_NAMES;
+var SUBCOMMANDS;
+deferInit("chunk-e6aww6q8.js:3767598", () => {
+  CLASSIFIER_ANALYTICS_NAMES = ["auto-mode"];
+  HOOK_ANALYTICS_NAMES = [...HOOK_EVENTS, TOOL_CHECK];
+  SUBCOMMANDS = "subcommands:";
+});
 //@ chunk-18hwfzwa.js:1369049-1369244 fingerprint = extractDirectories (0.651)
 function extractDirectories(filePath, operationType, toolPermissionContext) {
   let found = generateSuggestions(filePath, operationType, toolPermissionContext).find(

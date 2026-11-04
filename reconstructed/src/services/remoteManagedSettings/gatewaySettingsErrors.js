@@ -50,18 +50,20 @@ import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, toError } 
 /**
  * preAction 中调用的迁移入口：先 migrateEnableAllProjectMcpServersToSettings，再 runMigrations，再异步迁移（不等待）。
  */
-async function runAllMigrations(e) {
+async function runAllMigrations(config) {
   await migrateEnableAllProjectMcpServersToSettings();
-  await runMigrations(e);
-  migrateChangelogFromConfig(e).catch(() => {});
+  await runMigrations(config);
+  migrateChangelogFromConfig(config).catch(() => {});
 }
 //@ chunk-cjydagjy.js:69431-69510 placement
 function asStringArray(optionValue) {
-  return Array.isArray(optionValue) && optionValue.every((r) => typeof r === "string") ? optionValue : [];
+  return Array.isArray(optionValue) && optionValue.every((value) => typeof value === "string")
+    ? optionValue
+    : [];
 }
 //@ chunk-cjydagjy.js:69510-69599 placement
-function parseNumberOption(e) {
-  let numberWithSeparators = parseNumberWithSeparators(e);
+function parseNumberOption(value) {
+  let numberWithSeparators = parseNumberWithSeparators(value);
   if (Number.isNaN(numberWithSeparators)) throw new InvalidArgumentError("must be a number");
   return numberWithSeparators;
 }
@@ -93,7 +95,7 @@ function needsPolicyHelperVerdict() {
  */
 function gatewaySettingsFailure() {
   let url = getGatewayAuth()?.url ?? "";
-  let r = isArtifactMountMode();
+  let isMountMode = isArtifactMountMode();
   let lastLoadStatus = getLastLoadStatus();
   let failure =
     lastLoadStatus?.state === "failed" || lastLoadStatus?.state === "stale_cache"
@@ -104,7 +106,7 @@ function gatewaySettingsFailure() {
     return {
       endedSession: true,
       forbidden: false,
-      exitMessage: `Cloud gateway ${url} no longer accepts this session. ${r ? "Run `claude` in a terminal where this session runs, then sign in again with /login." : "Start `claude` and sign in again with /login."}`,
+      exitMessage: `Cloud gateway ${url} no longer accepts this session. ${isMountMode ? "Run `claude` in a terminal where this session runs, then sign in again with /login." : "Start `claude` and sign in again with /login."}`,
       gatewayUrl: url,
       reason: "gateway_signin_required",
     };
@@ -112,7 +114,7 @@ function gatewaySettingsFailure() {
     return {
       endedSession: false,
       forbidden: true,
-      exitMessage: `Cloud gateway ${url} refused managed settings for this account (403): Claude Code may not be enabled for your organization. ${r ? "Contact your admin. To use a different account, run `claude auth logout` in a terminal where this session runs, then start `claude` and sign in with /login." : "Contact your administrator; to sign in with a different account, run `claude auth logout` first, then start `claude` and sign in."}`,
+      exitMessage: `Cloud gateway ${url} refused managed settings for this account (403): Claude Code may not be enabled for your organization. ${isMountMode ? "Contact your admin. To use a different account, run `claude auth logout` in a terminal where this session runs, then start `claude` and sign in with /login." : "Contact your administrator; to sign in with a different account, run `claude auth logout` first, then start `claude` and sign in."}`,
       gatewayUrl: url,
       reason: "gateway_access_denied",
     };
@@ -124,7 +126,7 @@ function gatewaySettingsFailure() {
       gatewayUrl: url,
       reason: "remote_settings_required_unavailable",
     };
-  let y = r
+  let hint = isMountMode
     ? "You can check your network connection or contact your admin."
     : isGatewayLoginForced()
       ? "Check your network connection, or sign in again with /login."
@@ -132,7 +134,7 @@ function gatewaySettingsFailure() {
   return {
     endedSession: false,
     forbidden: false,
-    exitMessage: `Couldn't load settings from Cloud gateway ${url}. ${y}`,
+    exitMessage: `Couldn't load settings from Cloud gateway ${url}. ${hint}`,
     gatewayUrl: url,
     reason: "remote_settings_required_unavailable",
   };
@@ -144,9 +146,9 @@ function remoteSettingsFailureReason() {
     : "remote_settings_required_unavailable";
 }
 //@ chunk-cjydagjy.js:71536-71578 placement
-async function exitWithStartupFailure(e, r) {
-  printCliError(r);
-  await sendManagedSettingsRefusal(e);
+async function exitWithStartupFailure(storageV5, message) {
+  printCliError(message);
+  await sendManagedSettingsRefusal(storageV5);
 }
 //@ chunk-cjydagjy.js:71578-71626 placement
 function redoAuthDependentStartup() {
@@ -158,13 +160,13 @@ function redoAuthDependentStartup() {
   initializePolicyLimitsLoadingPromise();
 }
 //@ chunk-cjydagjy.js:71626-71821 placement
-function redoStartupAfterLauncherLogin(e) {
+function redoStartupAfterLauncherLogin(refreshFeatures) {
   try {
     clearOAuthTokenCache();
     resetUserData();
     redoAuthDependentStartup();
     learnLauncherHostLoginIdentity(validateLoginIdentity);
-    if (e) refreshGrowthBookAfterAuthChange();
+    if (refreshFeatures) refreshGrowthBookAfterAuthChange();
   } catch (error) {
     logError(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -177,7 +179,6 @@ function redoStartupAfterLauncherLogin(e) {
   }
 }
 export {
-  gatewaySettingsFailure,
   redoAuthDependentStartup,
   redoStartupAfterLauncherLogin,
   asStringArray,
@@ -185,6 +186,7 @@ export {
   needsPolicyHelperVerdict,
   exitWithStartupFailure,
   remoteSettingsFailureReason,
+  gatewaySettingsFailure,
   continueSignedOutAfterGatewayEnd,
   parseNumberOption,
 };

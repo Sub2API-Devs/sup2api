@@ -48,9 +48,9 @@ function screenshotSaveDir() {
 /**
  * 确定截图保存目录：宿主提供 getScreenshotSaveDir 时用它（建目录 0700）；否则用缓存的私有临时目录，属主或权限不对时重新创建。
  */
-async function resolveScreenshotSaveDir(e) {
-  if (e.getScreenshotSaveDir) {
-    let screenshotSaveDir = e.getScreenshotSaveDir();
+async function resolveScreenshotSaveDir(host) {
+  if (host.getScreenshotSaveDir) {
+    let screenshotSaveDir = host.getScreenshotSaveDir();
     if (screenshotSaveDir === undefined) return;
     await mkdir(screenshotSaveDir, {
       recursive: true,
@@ -58,29 +58,33 @@ async function resolveScreenshotSaveDir(e) {
     });
     return screenshotSaveDir;
   }
-  let t = await screenshotSaveDir();
+  let dir = await screenshotSaveDir();
   try {
-    let n = await lstat(t);
+    let stats = await lstat(dir);
     let getuid = process.getuid;
-    if (n.isDirectory() && (getuid === undefined || (n.uid === getuid() && (n.mode & 511) === 448))) return t;
+    if (
+      stats.isDirectory() &&
+      (getuid === undefined || (stats.uid === getuid() && (stats.mode & 511) === 448))
+    )
+      return dir;
   } catch {}
   cachedScreenshotDir = undefined;
   return screenshotSaveDir();
 }
 //@ chunk-w2264jxg.js:936-2348 placement
-async function saveScreenshotsToDisk(e, host) {
-  if (e.isError || !e.content.some((o) => o.type === "image")) return e;
-  let n;
+async function saveScreenshotsToDisk(result, host) {
+  if (result.isError || !result.content.some((block) => block.type === "image")) return result;
+  let saveDir;
   try {
-    n = await resolveScreenshotSaveDir(host);
+    saveDir = await resolveScreenshotSaveDir(host);
   } catch (error) {
     host.logger.warn(
       `[${host.serverName}] save_to_disk: could not prepare screenshot directory: ${error instanceof Error ? error.message : String(error)}`,
     );
     return {
-      ...e,
+      ...result,
       content: [
-        ...e.content,
+        ...result.content,
         {
           type: "text",
           text:
@@ -90,11 +94,11 @@ async function saveScreenshotsToDisk(e, host) {
       ],
     };
   }
-  if (n === undefined)
+  if (saveDir === undefined)
     return {
-      ...e,
+      ...result,
       content: [
-        ...e.content,
+        ...result.content,
         {
           type: "text",
           text:
@@ -103,46 +107,48 @@ async function saveScreenshotsToDisk(e, host) {
         },
       ],
     };
-  let r = [];
-  let u = false;
-  let s = false;
-  for (let o of e.content) {
-    r.push(o);
-    if (o.type !== "image") continue;
-    let a = Object.hasOwn(SCREENSHOT_EXT_BY_MIME, o.mimeType) ? SCREENSHOT_EXT_BY_MIME[o.mimeType] : "png";
-    let i = join(n, `screenshot-${Date.now()}-${screenshotCounter++}.${a}`);
+  let content = [];
+  let savedAny = false;
+  let failedAny = false;
+  for (let block of result.content) {
+    content.push(block);
+    if (block.type !== "image") continue;
+    let ext = Object.hasOwn(SCREENSHOT_EXT_BY_MIME, block.mimeType)
+      ? SCREENSHOT_EXT_BY_MIME[block.mimeType]
+      : "png";
+    let filePath = join(saveDir, `screenshot-${Date.now()}-${screenshotCounter++}.${ext}`);
     try {
-      await writeFile(i, Buffer.from(o.data, "base64"), {
+      await writeFile(filePath, Buffer.from(block.data, "base64"), {
         flag: "wx",
         mode: 384,
       });
-      u = true;
-      r.push({
+      savedAny = true;
+      content.push({
         type: "text",
-        text: `${SCREENSHOT_SAVED_PREFIX}${i}`,
+        text: `${SCREENSHOT_SAVED_PREFIX}${filePath}`,
       });
     } catch (error) {
-      s = true;
+      failedAny = true;
       host.logger.warn(
         `[${host.serverName}] save_to_disk: failed to write screenshot: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
-  if (u)
-    r.push({
+  if (savedAny)
+    content.push({
       type: "text",
       text: "Include the saved path(s) in your response so they can be attached for the user.",
     });
-  if (s)
-    r.push({
+  if (failedAny)
+    content.push({
       type: "text",
       text:
         "Note: save_to_disk failed for at least one screenshot \u2014 it could " +
         "not be written to disk. The image is included inline above.",
     });
   return {
-    ...e,
-    content: r,
+    ...result,
+    content,
   };
 }
 //@ chunk-w2264jxg.js:2348-2366 placement
@@ -159,20 +165,20 @@ function releaseBrowserSelection(socketClient) {
 /**
  * 生成给模型看的浏览器名称：去控制/格式字符、统一引号、折叠空白，把 "this computer" 替换为 [?]，为空时用 "Browser N"。
  */
-function sanitizeBrowserLabel(e, t) {
+function sanitizeBrowserLabel(extension, index) {
   return (
-    browserDisplayName(e, t)
+    browserDisplayName(extension, index)
       .replace(/[\p{Cc}\p{Cf}\p{Default_Ignorable_Code_Point}]/gu, " ")
       .replace(/[\p{Quotation_Mark}\u02BA\u02DD\u02EE\u05F4\u2033\u3003]+/gu, "'")
       .replace(/\s+/g, " ")
       .replace(/this\s*computer/giu, "[?]")
-      .trim() || `Browser ${t + 1}`
+      .trim() || `Browser ${index + 1}`
   );
 }
 //@ chunk-w2264jxg.js:2665-2820 placement
-function browserDisplayName(e, t) {
-  let trimmed = (e.name ?? "").replace(/[\r\n\t\u0000-\u001f]/g, " ").trim();
-  if (!trimmed) return `Browser ${t + 1}`;
+function browserDisplayName(extension, index) {
+  let trimmed = (extension.name ?? "").replace(/[\r\n\t\u0000-\u001f]/g, " ").trim();
+  if (!trimmed) return `Browser ${index + 1}`;
   return trimmed.length > 50 ? `${trimmed.slice(0, 50)}\u2026` : trimmed;
 }
 //@ chunk-w2264jxg.js:2820-3104 placement
@@ -208,21 +214,23 @@ async function browserSelectionPreflight(host, bridge) {
   }
   if (weakMap.get(bridge) && bridge.hasActiveSelection?.()) return null;
   weakMap.delete(bridge);
-  let n = await bridge.listConnectedExtensions();
-  if (n.length === 0) return null;
-  let r = n.length > 1 ? await safeCallPromise(host.getLocalDeviceIds) : undefined;
-  let u = pickBrowserDevice(n, bridge.getSelectedDeviceId?.(), r);
-  if (u.kind !== "ask") {
+  let extensions = await bridge.listConnectedExtensions();
+  if (extensions.length === 0) return null;
+  let localDeviceIds = extensions.length > 1 ? await safeCallPromise(host.getLocalDeviceIds) : undefined;
+  let pick = pickBrowserDevice(extensions, bridge.getSelectedDeviceId?.(), localDeviceIds);
+  if (pick.kind !== "ask") {
     weakMap.set(bridge, true);
     return null;
   }
-  let { candidates, localCount } = u;
+  let { candidates, localCount } = pick;
   let sliced = candidates.slice(0, 8);
-  let i = (d, m) =>
-    `${m + 1}. "${sanitizeBrowserLabel(d, m)}" (${osDisplayName(d.osPlatform)})${r?.get(d.deviceId) === "remembered" ? " \u2014 seen recently, not answering right now" : ""} \u2014 deviceId: ${d.deviceId}`;
-  let mapped = sliced.slice(0, localCount).map(i);
-  let mapped_2 = sliced.slice(localCount).map((d, m) => i(d, m + mapped.length));
-  let f =
+  let formatChoice = (extension, index) =>
+    `${index + 1}. "${sanitizeBrowserLabel(extension, index)}" (${osDisplayName(extension.osPlatform)})${localDeviceIds?.get(extension.deviceId) === "remembered" ? " \u2014 seen recently, not answering right now" : ""} \u2014 deviceId: ${extension.deviceId}`;
+  let mapped = sliced.slice(0, localCount).map(formatChoice);
+  let mapped_2 = sliced
+    .slice(localCount)
+    .map((extension, index) => formatChoice(extension, index + mapped.length));
+  let localChoices =
     localCount > 0
       ? `Browsers on this computer:
 ${mapped.join(`
@@ -236,7 +244,7 @@ ${
       : `Connected browsers:
 ${mapped_2.join(`
 `)}`;
-  let p =
+  let remoteChoices =
     candidates.length > sliced.length
       ? `
 \u2026and ${candidates.length - sliced.length} more not shown`
@@ -247,16 +255,16 @@ ${mapped_2.join(`
         type: "text",
         text: `${localCount > 0 ? `${candidates.length} Chrome browsers are connected to this account, ${localCount} of them on this computer, and none has been selected for this session. ` : "Multiple Chrome browsers are connected to this account and none has been selected for this session. "}${browserPreflightInstruction(host.askUserToolName)}${localCount > 0 ? " List the browsers on this computer first, in the order below." : ""}
 
-${f}${p}`,
+${localChoices}${remoteChoices}`,
       },
     ],
     isError: true,
   };
 }
 //@ chunk-w2264jxg.js:4418-4529 placement
-function jsonForLog(e) {
-  return JSON.stringify(e, (t, n) =>
-    typeof n === "string" && n.length > 256 ? `<${n.length} chars elided>` : n,
+function jsonForLog(value) {
+  return JSON.stringify(value, (key, value) =>
+    typeof value === "string" && value.length > 256 ? `<${value.length} chars elided>` : value,
   );
 }
 //@ chunk-w2264jxg.js:4529-4552 placement
@@ -265,37 +273,44 @@ function jsonForLog(e) {
  */
 class ChromeToolDisabledError extends Error {}
 //@ chunk-w2264jxg.js:4552-4675 placement
-function callBridgeTool(host, bridge, n, r, u) {
-  if (host.isDisabled?.()) return Promise.reject(new ChromeToolDisabledError(`disabled: ${n} not sent`));
-  return bridge.callTool(n, r, u);
+function callBridgeTool(host, bridge, toolName, args, options) {
+  if (host.isDisabled?.())
+    return Promise.reject(new ChromeToolDisabledError(`disabled: ${toolName} not sent`));
+  return bridge.callTool(toolName, args, options);
 }
 //@ chunk-w2264jxg.js:4675-5485 placement
-async function fetchActiveTab(e, t, n) {
-  if (e.isDisabled?.()) return;
+async function fetchActiveTab(host, bridge, options) {
+  if (host.isDisabled?.()) return;
   try {
-    if (!(await t.ensureConnected())) return;
+    if (!(await bridge.ensureConnected())) return;
     let content = (
       await callBridgeTool(
-        e,
-        t,
+        host,
+        bridge,
         "tabs_context_mcp",
         {},
-        n
+        options
           ? {
-              ...n,
+              ...options,
               permissionMode: "ask",
             }
           : undefined,
       )
     )?.result?.content;
     if (!Array.isArray(content)) return;
-    let s;
-    for (let i of content) {
-      if (typeof i !== "object" || i === null || i.type !== "text" || typeof i.text !== "string") continue;
+    let context;
+    for (let block of content) {
+      if (
+        typeof block !== "object" ||
+        block === null ||
+        block.type !== "text" ||
+        typeof block.text !== "string"
+      )
+        continue;
       try {
-        let parsed = JSON.parse(i.text);
+        let parsed = JSON.parse(block.text);
         if (Array.isArray(parsed.availableTabs)) {
-          s = {
+          context = {
             ...parsed,
             availableTabs: parsed.availableTabs,
           };
@@ -303,35 +318,35 @@ async function fetchActiveTab(e, t, n) {
         }
       } catch {}
     }
-    if (!s) return;
-    let filtered = s.availableTabs.filter(
+    if (!context) return;
+    let filtered = context.availableTabs.filter(
       (availableTab) =>
         typeof availableTab === "object" &&
         availableTab !== null &&
         typeof availableTab.tabId === "number" &&
         typeof availableTab.url === "string",
     );
-    let a =
-      typeof s.selectedTabId === "number"
-        ? filtered.find((i) => i.tabId === s.selectedTabId)
+    let tabs =
+      typeof context.selectedTabId === "number"
+        ? filtered.find((tab) => tab.tabId === context.selectedTabId)
         : filtered.length === 1
           ? filtered[0]
           : undefined;
-    return a
+    return tabs
       ? {
-          tabId: a.tabId,
-          origin: new URL(a.url).origin,
+          tabId: tabs.tabId,
+          origin: new URL(tabs.url).origin,
         }
       : undefined;
   } catch (error) {
-    e.logger.debug(`[${e.serverName}] fetchActiveTab failed`, error);
+    host.logger.debug(`[${host.serverName}] fetchActiveTab failed`, error);
     return;
   }
 }
 //@ chunk-w2264jxg.js:5485-5614 placement
-function errorContentOf(e) {
-  if (typeof e !== "object" || e === null) return "";
-  let content = e.error?.content;
+function errorContentOf(result) {
+  if (typeof result !== "object" || result === null) return "";
+  let content = result.error?.content;
   return typeof content === "string" || Array.isArray(content) ? content : "";
 }
 //@ chunk-w2264jxg.js:5614-6397 placement
@@ -350,7 +365,7 @@ async function typeIntoTabViaBridge(host, bridge, callOptions, tabId, text, expe
         ok: false,
         reason: "disconnected",
       };
-    let o = await callBridgeTool(
+    let response = await callBridgeTool(
       host,
       bridge,
       "computer",
@@ -370,14 +385,18 @@ async function typeIntoTabViaBridge(host, bridge, callOptions, tabId, text, expe
         onPermissionRequest: undefined,
       },
     );
-    let a = typeof o === "object" && o !== null && !("error" in o) ? o.result : undefined;
-    let i = typeof a === "object" && a !== null && (a.isError === true || a.is_error === true);
-    if (a !== undefined && a !== null && a !== false && !i)
+    let body =
+      typeof response === "object" && response !== null && !("error" in response)
+        ? response.result
+        : undefined;
+    let isError =
+      typeof body === "object" && body !== null && (body.isError === true || body.is_error === true);
+    if (body !== undefined && body !== null && body !== false && !isError)
       return {
         ok: true,
       };
-    let c = i ? (a.content ?? "") : "";
-    if ((contentText(errorContentOf(o)) || contentText(c)).startsWith("Origin mismatch"))
+    let errorContent = isError ? (body.content ?? "") : "";
+    if ((contentText(errorContentOf(response)) || contentText(errorContent)).startsWith("Origin mismatch"))
       return {
         ok: false,
         reason: "origin_mismatch",
@@ -410,22 +429,22 @@ function hostToolContext(host, bridge, callOptions, sessionId) {
  */
 function stripSaveToDiskArgs(toolName, rawArgs) {
   if (toolName === "browser_batch" && Array.isArray(rawArgs.actions)) {
-    let { save_to_disk: saveToDisk, ...s } = rawArgs;
+    let { save_to_disk: saveToDisk, ...restArgs } = rawArgs;
     let wantsSave = saveToDisk === true;
     let actions = rawArgs.actions.map((action) => {
       if (typeof action !== "object" || action === null) return action;
-      let l = action;
-      if (typeof l.input !== "object" || l.input === null) return action;
-      let { save_to_disk: saveToDisk, ...f } = l.input;
-      if (saveToDisk === true && l.name === "computer") wantsSave = true;
+      let action_2 = action;
+      if (typeof action_2.input !== "object" || action_2.input === null) return action;
+      let { save_to_disk: saveToDisk, ...restInput } = action_2.input;
+      if (saveToDisk === true && action_2.name === "computer") wantsSave = true;
       return {
-        ...l,
-        input: f,
+        ...action_2,
+        input: restInput,
       };
     });
     return {
       args: {
-        ...s,
+        ...restArgs,
         actions,
       },
       wantsSave,
@@ -436,9 +455,9 @@ function stripSaveToDiskArgs(toolName, rawArgs) {
       args: rawArgs,
       wantsSave: false,
     };
-  let { save_to_disk: saveToDisk, ...r } = rawArgs;
+  let { save_to_disk: saveToDisk, ...restArgs } = rawArgs;
   return {
-    args: r,
+    args: restArgs,
     wantsSave: toolName === "computer" && saveToDisk === true,
   };
 }
@@ -446,17 +465,17 @@ function stripSaveToDiskArgs(toolName, rawArgs) {
 /**
  * 被宿主排除的工具（含 browser_batch 内的动作）返回 "Unknown tool" 错误；batch 内动作缺名或嵌套 batch 也报错。
  */
-function excludedToolError(host, toolName, n) {
+function excludedToolError(host, toolName, args) {
   let excludedTools = host.excludedTools;
   if (!excludedTools) return;
   if (excludedTools.has(toolName)) return `Unknown tool: ${toolName}`;
   if (toolName !== "browser_batch") return;
-  if (!Array.isArray(n.actions)) return "browser_batch: actions must be an array";
-  for (let action of n.actions) {
-    let s = action?.name;
-    if (typeof s !== "string" || s === "browser_batch")
+  if (!Array.isArray(args.actions)) return "browser_batch: actions must be an array";
+  for (let action of args.actions) {
+    let actionName = action?.name;
+    if (typeof actionName !== "string" || actionName === "browser_batch")
       return "browser_batch: every action needs a string tool name (and batches don't nest)";
-    if (excludedTools.has(s)) return `Unknown tool: ${s}`;
+    if (excludedTools.has(actionName)) return `Unknown tool: ${actionName}`;
   }
   return;
 }
@@ -467,7 +486,8 @@ function guardPermissionRequests(host, callOptions) {
   if (!callOptions || !onPermissionRequest || !isDisabled) return callOptions;
   return {
     ...callOptions,
-    onPermissionRequest: async (u) => !isDisabled() && (await onPermissionRequest(u)) && !isDisabled(),
+    onPermissionRequest: async (request) =>
+      !isDisabled() && (await onPermissionRequest(request)) && !isDisabled(),
   };
 }
 //@ chunk-w2264jxg.js:7604-8608 placement
@@ -486,33 +506,33 @@ var handleChromeToolCall = async (host, bridge, toolName, rawArgs, callOptions) 
   if (toolName === "select_browser") return selectBrowser(host, bridge, args);
   let sessionId = callOptions_2?.sessionScope?.sessionId ?? "";
   if (host.handleHostTool && host.hostToolBypassesBrowser?.(toolName, args)) {
-    let f = await host.handleHostTool(
+    let hostResult = await host.handleHostTool(
       toolName,
       args,
       hostToolContext(host, bridge, callOptions_2, sessionId),
     );
-    if (f !== undefined) return f;
+    if (hostResult !== undefined) return hostResult;
   }
   let state = {
     args,
   };
   try {
-    let f = await bridge.ensureConnected();
+    let connected = await bridge.ensureConnected();
     host.logger.silly(
-      `[${host.serverName}] Server is connected: ${f}. Received tool call: ${quoteTruncated(toolName)} with args: ${jsonForLog(args)}.`,
+      `[${host.serverName}] Server is connected: ${connected}. Received tool call: ${quoteTruncated(toolName)} with args: ${jsonForLog(args)}.`,
     );
-    if (f) {
+    if (connected) {
       if (host.isDisabled?.()) return chromeToolErrorResult(`Unknown tool: ${toolName}`);
-      let p = await browserSelectionPreflight(host, bridge);
-      if (p) return p;
+      let preflight = await browserSelectionPreflight(host, bridge);
+      if (preflight) return preflight;
       if (host.isDisabled?.()) return chromeToolErrorResult(`Unknown tool: ${toolName}`);
       if (host.handleHostTool) {
-        let d = await host.handleHostTool(
+        let hostResult = await host.handleHostTool(
           toolName,
           args,
           hostToolContext(host, bridge, callOptions_2, sessionId),
         );
-        if (d !== undefined) return d;
+        if (hostResult !== undefined) return hostResult;
       }
       state = await frontLoadTabContext(host, bridge, toolName, args, callOptions_2);
       if (state.error) return appendTabContext(state, state.error);
@@ -529,7 +549,7 @@ var handleChromeToolCall = async (host, bridge, toolName, rawArgs, callOptions) 
 /**
  * 构造给模型的 Chrome 工具错误结果（文本 + isError）。
  */
-function chromeToolErrorResult(text, t) {
+function chromeToolErrorResult(text, meta) {
   return {
     content: [
       {
@@ -538,8 +558,8 @@ function chromeToolErrorResult(text, t) {
       },
     ],
     isError: true,
-    ...(t && {
-      _meta: t,
+    ...(meta && {
+      _meta: meta,
     }),
   };
 }
@@ -582,22 +602,28 @@ function chromeToolErrorResult_2(error, toolName, host) {
 }
 //@ chunk-w2264jxg.js:10253-11036 placement
 function toolTimeoutMessage(toolName, error) {
-  let n = `The "${toolName}" tool did not respond in time.`;
-  let r = 'a lighter operation (e.g., "get_page_text" instead of a screenshot)';
+  let headline = `The "${toolName}" tool did not respond in time.`;
+  let lighterHint = 'a lighter operation (e.g., "get_page_text" instead of a screenshot)';
   if (error.routingAckReceived === undefined)
-    return `${n} The page or Chrome may be unresponsive, or Chrome may be waiting for the user. Try a lighter operation (e.g., "get_page_text" instead of a screenshot), or ask the user to check Chrome.`;
-  return `${n} If Chrome is on another computer, that computer may be closed or asleep. The page may also be loading or unresponsive, or Chrome may be waiting for the user. Try a lighter operation (e.g., "get_page_text" instead of a screenshot) once. If that also gets no response, ask the user to check that the computer running Chrome is awake, that Chrome is open, and that nothing in Chrome is waiting for them.`;
+    return `${headline} The page or Chrome may be unresponsive, or Chrome may be waiting for the user. Try a lighter operation (e.g., "get_page_text" instead of a screenshot), or ask the user to check Chrome.`;
+  return `${headline} If Chrome is on another computer, that computer may be closed or asleep. The page may also be loading or unresponsive, or Chrome may be waiting for the user. Try a lighter operation (e.g., "get_page_text" instead of a screenshot) once. If that also gets no response, ask the user to check that the computer running Chrome is awake, that Chrome is open, and that nothing in Chrome is waiting for them.`;
 }
 //@ chunk-w2264jxg.js:11036-11462 placement
 /**
  * 从 tabs_context_mcp 结果文本中解析出第一个 tabId、tabGroupId 和原始 JSON。
  */
-function parseTabsContextResult(e) {
-  let content = e?.result?.content;
+function parseTabsContextResult(response) {
+  let content = response?.result?.content;
   if (!Array.isArray(content)) return {};
-  for (let n of content) {
-    if (typeof n !== "object" || n === null || n.type !== "text" || typeof n.text !== "string") continue;
-    let text = n.text;
+  for (let block of content) {
+    if (
+      typeof block !== "object" ||
+      block === null ||
+      block.type !== "text" ||
+      typeof block.text !== "string"
+    )
+      continue;
+    let text = block.text;
     try {
       let parsed = JSON.parse(text);
       if (!Array.isArray(parsed.availableTabs)) continue;
@@ -618,17 +644,17 @@ function parseTabsContextResult(e) {
  */
 var TIMED_OUT_SENTINEL = Symbol("timed-out");
 //@ chunk-w2264jxg.js:11488-11636 placement
-async function raceTimeoutSentinel(e, t) {
-  let n;
+async function raceTimeoutSentinel(promise, timeoutMs) {
+  let timer;
   try {
     return await Promise.race([
-      e,
+      promise,
       new Promise((resolve) => {
-        n = setTimeout(() => resolve(TIMED_OUT_SENTINEL), t);
+        timer = setTimeout(() => resolve(TIMED_OUT_SENTINEL), timeoutMs);
       }),
     ]);
   } finally {
-    if (n !== undefined) clearTimeout(n);
+    if (timer !== undefined) clearTimeout(timer);
   }
 }
 //@ chunk-w2264jxg.js:11636-11661 placement
@@ -646,8 +672,8 @@ async function frontLoadTabContext(host, bridge, toolName, args, callOptions) {
     return {
       args,
     };
-  let s = typeof args.url === "string" ? args.url.trim().toLowerCase() : "";
-  if (s === "back" || s === "forward")
+  let url = typeof args.url === "string" ? args.url.trim().toLowerCase() : "";
+  if (url === "back" || url === "forward")
     return {
       args,
       error: chromeToolErrorResult(
@@ -655,18 +681,18 @@ async function frontLoadTabContext(host, bridge, toolName, args, callOptions) {
       ),
     };
   let sessionId = callOptions?.sessionScope?.sessionId;
-  if (!s || !sessionId)
+  if (!url || !sessionId)
     return {
       args,
     };
-  let a = weakMap_2.get(bridge);
-  if (!a) {
-    a = new Map();
-    weakMap_2.set(bridge, a);
+  let perBridge = weakMap_2.get(bridge);
+  if (!perBridge) {
+    perBridge = new Map();
+    weakMap_2.set(bridge, perBridge);
   }
-  let i = a.get(sessionId);
-  if (!i) {
-    i = callBridgeTool(
+  let pending = perBridge.get(sessionId);
+  if (!pending) {
+    pending = callBridgeTool(
       host,
       bridge,
       "tabs_context_mcp",
@@ -678,12 +704,12 @@ async function frontLoadTabContext(host, bridge, toolName, args, callOptions) {
         permissionMode: "ask",
       },
     ).finally(() => {
-      if (a.get(sessionId) === i) a.delete(sessionId);
+      if (perBridge.get(sessionId) === pending) perBridge.delete(sessionId);
     });
-    a.set(sessionId, i);
+    perBridge.set(sessionId, pending);
   }
-  let l = await raceTimeoutSentinel(i, MAX_IMPLICIT_TABS_TIMEOUT_MS);
-  if (l === TIMED_OUT_SENTINEL)
+  let response = await raceTimeoutSentinel(pending, MAX_IMPLICIT_TABS_TIMEOUT_MS);
+  if (response === TIMED_OUT_SENTINEL)
     return {
       args,
       error: chromeToolErrorResult(
@@ -693,9 +719,9 @@ async function frontLoadTabContext(host, bridge, toolName, args, callOptions) {
         },
       ),
     };
-  let error = l?.error;
+  let error = response?.error;
   if (error) {
-    let d = Array.isArray(error.content)
+    let errorContent = Array.isArray(error.content)
       ? error.content
       : [
           {
@@ -703,16 +729,16 @@ async function frontLoadTabContext(host, bridge, toolName, args, callOptions) {
             text: "tabs_context_mcp returned an error.",
           },
         ];
-    if (isReauthenticatedText(d)) host.onAuthenticationError();
+    if (isReauthenticatedText(errorContent)) host.onAuthenticationError();
     return {
       args,
       error: {
-        content: d,
+        content: errorContent,
         isError: true,
       },
     };
   }
-  let { tabId, tabGroupId, json } = parseTabsContextResult(l);
+  let { tabId, tabGroupId, json } = parseTabsContextResult(response);
   if (tabId === undefined)
     return {
       args,
@@ -762,9 +788,9 @@ Tabs in this group were opened for this task and are yours to clean up: close ea
  * 经 socket 桥调用扩展工具并把结果规范成 MCP 内容：处理错误内容、认证失效回调、图片/文本内容与 notices 元数据。
  */
 async function forwardToolCall(host, bridge, toolName, args, callOptions) {
-  let s = await callBridgeTool(host, bridge, toolName, args, callOptions);
-  host.logger.silly(`[${host.serverName}] Received result from socket bridge: ${jsonForLog(s)}`);
-  if (s === null || s === undefined)
+  let response = await callBridgeTool(host, bridge, toolName, args, callOptions);
+  host.logger.silly(`[${host.serverName}] Received result from socket bridge: ${jsonForLog(response)}`);
+  if (response === null || response === undefined)
     return {
       content: [
         {
@@ -773,16 +799,16 @@ async function forwardToolCall(host, bridge, toolName, args, callOptions) {
         },
       ],
     };
-  let { result: o, error, notices } = s;
-  let l =
+  let { result, error, notices } = response;
+  let meta =
     Array.isArray(notices) && notices.length > 0
       ? {
           notices,
         }
       : undefined;
-  let c = error || o;
-  let f = !!error;
-  if (!c)
+  let body = error || result;
+  let isError = !!error;
+  if (!body)
     return {
       content: [
         {
@@ -790,47 +816,52 @@ async function forwardToolCall(host, bridge, toolName, args, callOptions) {
           text: "Tool execution completed",
         },
       ],
-      ...(l && {
-        _meta: l,
+      ...(meta && {
+        _meta: meta,
       }),
     };
-  if (f && isReauthenticatedText(c.content)) host.onAuthenticationError();
-  let { content } = c;
+  if (isError && isReauthenticatedText(body.content)) host.onAuthenticationError();
+  let { content } = body;
   if (content && Array.isArray(content)) {
-    if (f)
+    if (isError)
       return {
-        content: content.map((d) => {
-          if (typeof d === "object" && d !== null && "type" in d) return d;
+        content: content.map((item) => {
+          if (typeof item === "object" && item !== null && "type" in item) return item;
           return {
             type: "text",
-            text: String(d),
+            text: String(item),
           };
         }),
         isError: true,
-        ...(l && {
-          _meta: l,
+        ...(meta && {
+          _meta: meta,
         }),
       };
     return {
-      content: content.map((d) => {
-        if (typeof d === "object" && d !== null && "type" in d && "source" in d) {
-          let m = d;
-          if (m.type === "image" && typeof m.source === "object" && m.source !== null && "data" in m.source)
+      content: content.map((item) => {
+        if (typeof item === "object" && item !== null && "type" in item && "source" in item) {
+          let source = item;
+          if (
+            source.type === "image" &&
+            typeof source.source === "object" &&
+            source.source !== null &&
+            "data" in source.source
+          )
             return {
               type: "image",
-              data: m.source.data,
-              mimeType: "media_type" in m.source ? m.source.media_type || "image/png" : "image/png",
+              data: source.source.data,
+              mimeType: "media_type" in source.source ? source.source.media_type || "image/png" : "image/png",
             };
         }
-        if (typeof d === "object" && d !== null && "type" in d) return d;
+        if (typeof item === "object" && item !== null && "type" in item) return item;
         return {
           type: "text",
-          text: String(d),
+          text: String(item),
         };
       }),
-      isError: f,
-      ...(l && {
-        _meta: l,
+      isError,
+      ...(meta && {
+        _meta: meta,
       }),
     };
   }
@@ -842,22 +873,22 @@ async function forwardToolCall(host, bridge, toolName, args, callOptions) {
           text: content,
         },
       ],
-      isError: f,
-      ...(l && {
-        _meta: l,
+      isError,
+      ...(meta && {
+        _meta: meta,
       }),
     };
-  host.logger.warn(`[${host.serverName}] Unexpected result format from socket bridge`, s);
+  host.logger.warn(`[${host.serverName}] Unexpected result format from socket bridge`, response);
   return {
     content: [
       {
         type: "text",
-        text: JSON.stringify(s),
+        text: JSON.stringify(response),
       },
     ],
-    isError: f,
-    ...(l && {
-      _meta: l,
+    isError,
+    ...(meta && {
+      _meta: meta,
     }),
   };
 }
@@ -865,12 +896,12 @@ async function forwardToolCall(host, bridge, toolName, args, callOptions) {
 /**
  * 扩展未连接时的结果文本。
  */
-function disconnectedResult(e) {
+function disconnectedResult(host) {
   return {
     content: [
       {
         type: "text",
-        text: e.onToolCallDisconnected(),
+        text: host.onToolCallDisconnected(),
       },
     ],
   };
@@ -889,8 +920,8 @@ async function switchBrowser(host, bridge) {
     };
   if (!(await bridge.ensureConnected())) return disconnectedResult(host);
   if (host.isDisabled?.()) return chromeToolErrorResult("Unknown tool: switch_browser");
-  let r = (await bridge.switchBrowser?.()) ?? null;
-  if (r === "no_other_browsers")
+  let outcome = (await bridge.switchBrowser?.()) ?? null;
+  if (outcome === "no_other_browsers")
     return {
       content: [
         {
@@ -900,13 +931,13 @@ async function switchBrowser(host, bridge) {
       ],
       isError: false,
     };
-  if (r) {
+  if (outcome) {
     weakMap.set(bridge, true);
     return {
       content: [
         {
           type: "text",
-          text: `Selected browser "${sanitizeBrowserLabel(r, 0)}".`,
+          text: `Selected browser "${sanitizeBrowserLabel(outcome, 0)}".`,
         },
       ],
     };
@@ -935,34 +966,34 @@ async function listConnectedBrowsers(options, selector) {
     };
   if (!(await selector.ensureConnected())) return disconnectedResult(options);
   if (options.isDisabled?.()) return chromeToolErrorResult("Unknown tool: list_connected_browsers");
-  let r = await selector.listConnectedExtensions();
+  let extensions = await selector.listConnectedExtensions();
   let decision = pickBrowserDevice(
-    r,
+    extensions,
     selector.getSelectedDeviceId?.(),
-    r.length > 1 ? await safeCallPromise(options.getLocalDeviceIds) : undefined,
+    extensions.length > 1 ? await safeCallPromise(options.getLocalDeviceIds) : undefined,
   );
   let deviceId = decision.kind === "select" ? decision.extension.deviceId : undefined;
-  let browsers = r.map((i, l) => ({
-    ...i,
-    name: browserDisplayName(i, l),
-    osPlatform: i.osPlatform === undefined ? undefined : OS_DISPLAY_NAMES.get(i.osPlatform),
-    ...(i.deviceId === deviceId && {
+  let browsers = extensions.map((extension, index) => ({
+    ...extension,
+    name: browserDisplayName(extension, index),
+    osPlatform: extension.osPlatform === undefined ? undefined : OS_DISPLAY_NAMES.get(extension.osPlatform),
+    ...(extension.deviceId === deviceId && {
       inUse: true,
     }),
   }));
-  let a = [
+  let content = [
     {
       type: "text",
       text: JSON.stringify(browsers),
     },
   ];
-  if (r.length > 1)
-    a.push({
+  if (extensions.length > 1)
+    content.push({
       type: "text",
       text: describeBrowserSelection(options, selector, browsers, decision),
     });
   return {
-    content: a,
+    content,
   };
 }
 //@ chunk-w2264jxg.js:16223-17098 placement
@@ -984,8 +1015,8 @@ function describeBrowserSelection(options, selector, browsers, decision) {
   return `${browsers.length} browsers are connected and none is selected for this session. ${browserPreflightInstruction(options.askUserToolName)}`;
 }
 //@ chunk-w2264jxg.js:17098-17836 placement
-async function selectBrowser(host, bridge, n) {
-  let deviceId = typeof n.deviceId === "string" ? n.deviceId : "";
+async function selectBrowser(host, bridge, args) {
+  let deviceId = typeof args.deviceId === "string" ? args.deviceId : "";
   if (!host.bridgeConfig || !bridge.selectExtensionById || !bridge.listConnectedExtensions || !deviceId)
     return {
       content: [
@@ -997,9 +1028,9 @@ async function selectBrowser(host, bridge, n) {
       isError: true,
     };
   if (!(await bridge.ensureConnected())) return disconnectedResult(host);
-  let s = await bridge.listConnectedExtensions();
-  let found = s.find((i) => i.deviceId === deviceId);
-  if (!found)
+  let extensions = await bridge.listConnectedExtensions();
+  let extension = extensions.find((extension) => extension.deviceId === deviceId);
+  if (!extension)
     return {
       content: [
         {
@@ -1010,25 +1041,26 @@ async function selectBrowser(host, bridge, n) {
       isError: true,
     };
   if (host.isDisabled?.()) return chromeToolErrorResult("Unknown tool: select_browser");
-  let index = s.indexOf(found);
-  bridge.selectExtensionById(deviceId, browserDisplayName(found, index));
+  let index = extensions.indexOf(extension);
+  bridge.selectExtensionById(deviceId, browserDisplayName(extension, index));
   weakMap.set(bridge, true);
   return {
     content: [
       {
         type: "text",
-        text: `Selected browser "${sanitizeBrowserLabel(found, index)}".`,
+        text: `Selected browser "${sanitizeBrowserLabel(extension, index)}".`,
       },
     ],
   };
 }
 //@ chunk-w2264jxg.js:17836-18045 placement
-function contentText(e) {
-  if (!Array.isArray(e)) return String(e);
-  return e
-    .map((t) => {
-      if (typeof t === "string") return t;
-      if (typeof t === "object" && t !== null && "text" in t && typeof t.text === "string") return t.text;
+function contentText(value) {
+  if (!Array.isArray(value)) return String(value);
+  return value
+    .map((item) => {
+      if (typeof item === "string") return item;
+      if (typeof item === "object" && item !== null && "text" in item && typeof item.text === "string")
+        return item.text;
       return "";
     })
     .join(" ");
@@ -1037,7 +1069,7 @@ function contentText(e) {
 /**
  * 判断结果文本是否提示已重新认证。
  */
-function isReauthenticatedText(e) {
-  return contentText(e).toLowerCase().includes("re-authenticated");
+function isReauthenticatedText(value) {
+  return contentText(value).toLowerCase().includes("re-authenticated");
 }
 export { releaseBrowserSelection, handleChromeToolCall, parseTabsContextResult };

@@ -20,3 +20,4 @@ var artifactPlanHtml = readEmbeddedTextSync(artifactPlanHtmlPath, import.meta.di
  * Artifact 计划模板的 HTML 资源文本。
  */
 var artifactPlanHtml2 = artifactPlanHtml;
+export { artifactPlanHtml2 };

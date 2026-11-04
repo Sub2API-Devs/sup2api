@@ -10,12 +10,12 @@ import { readEnv_2 } from "./internal/utils/env.mjs";
 import { Completions } from "../sdk/resources/completions.mjs";
 import { loggerFor } from "./internal/utils/log.mjs";
 import { VERSION } from "../sdk/version.mjs";
-import { R } from "./AWS_restJson1.mjs";
-import { A } from "./internal/qs/utils.js";
-import { L } from "./internal/utils/path.mjs";
+import { tryParseJson } from "./AWS_restJson1.mjs";
+import { is_buffer } from "./internal/qs/utils.js";
+import { formatter } from "./internal/utils/path.mjs";
 import { getAuthHeaders } from "./core/auth.js";
 import { buildHeaders_2 } from "./internal/headers.mjs";
-import { G } from "./core/streaming.mjs";
+import { eventStreamToSSEResponse } from "./core/streaming.mjs";
 import { Messages_2 } from "../sdk/resources/messages/messages.mjs";
 import { Beta } from "../sdk/resources/beta/beta.mjs";
 
@@ -105,8 +105,8 @@ _AnthropicBedrock_adaptRequest = async function (request, options) {
   let headers = new Headers(request.headers);
   let parsedBody;
   if (typeof request.body === "string") {
-    let parsed = R(request.body);
-    if (A(parsed)) parsedBody = parsed;
+    let parsed = tryParseJson(request.body);
+    if (is_buffer(parsed)) parsedBody = parsed;
   }
   if (parsedBody) {
     if (!parsedBody.anthropic_version) parsedBody.anthropic_version = DEFAULT_VERSION;
@@ -124,7 +124,8 @@ _AnthropicBedrock_adaptRequest = async function (request, options) {
       delete parsedBody.stream;
       let prefix = url.pathname.slice(0, url.pathname.length - canonicalPath.length);
       url.pathname =
-        prefix + (stream ? L`/model/${model}/invoke-with-response-stream` : L`/model/${model}/invoke`);
+        prefix +
+        (stream ? formatter`/model/${model}/invoke-with-response-stream` : formatter`/model/${model}/invoke`);
       url.searchParams.delete("beta");
     }
   }
@@ -156,7 +157,7 @@ _AnthropicBedrock_adaptRequest = async function (request, options) {
 };
 _AnthropicBedrock_adaptResponse = function (response) {
   if (response.body && response.headers.get("content-type")?.includes("application/vnd.amazon.eventstream"))
-    return G(response);
+    return eventStreamToSSEResponse(response);
   return response;
 };
 //@ chunk-h87x8cg3.js:13829-13908 esm-fingerprint
@@ -174,3 +175,4 @@ function makeBetaResource(client) {
   delete resource.messages.countTokens;
   return resource;
 }
+export { AnthropicBedrock };

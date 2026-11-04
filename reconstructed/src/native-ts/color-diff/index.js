@@ -33,6 +33,7 @@ import { BIDI_CONTROL_RANGES, regExp } from "../../ink/render-border.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
 import { regExp_2 } from "../../ink/layout/node.js";
 import { getColorModuleUnavailableReason } from "../../components/StructuredDiff/colorDiff.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-cwwxybjc.js:1032-1076 fingerprint = rgb (1)
 /**
@@ -83,10 +84,11 @@ var CUBE_LEVELS = [0, 95, 135, 175, 215, 255];
  * RGB 转 xterm-256 色号：在 6×6×6 色立方与 24 级灰阶中取欧氏距离更近者（与 syntect/ansi_colours 一致）。
  */
 function ansi256FromRgb(r_2, g_2, b_2) {
-  let c = (m) => (m < 48 ? 0 : m < 115 ? 1 : m < 155 ? 2 : m < 195 ? 3 : m < 235 ? 4 : 5);
-  let qr = c(r_2);
-  let qg = c(g_2);
-  let qb = c(b_2);
+  let cubeLevel = (channel) =>
+    channel < 48 ? 0 : channel < 115 ? 1 : channel < 155 ? 2 : channel < 195 ? 3 : channel < 235 ? 4 : 5;
+  let qr = cubeLevel(r_2);
+  let qg = cubeLevel(g_2);
+  let qb = cubeLevel(b_2);
   let cubeIdx = 16 + 36 * qr + 6 * qg + qb;
   let grey = Math.round((r_2 + g_2 + b_2) / 3);
   if (grey < 5) return 16;
@@ -94,10 +96,10 @@ function ansi256FromRgb(r_2, g_2, b_2) {
   let greyLevel = Math.max(0, Math.min(23, Math.round((grey - 8) / 10)));
   let greyIdx = 232 + greyLevel;
   let greyRgb = 8 + greyLevel * 10;
-  let g = CUBE_LEVELS[qr];
-  let y = CUBE_LEVELS[qg];
+  let cubeR = CUBE_LEVELS[qr];
+  let cubeG = CUBE_LEVELS[qg];
   let cb = CUBE_LEVELS[qb];
-  let dCube = (r_2 - g) ** 2 + (g_2 - y) ** 2 + (b_2 - cb) ** 2;
+  let dCube = (r_2 - cubeR) ** 2 + (g_2 - cubeG) ** 2 + (b_2 - cb) ** 2;
   return (r_2 - greyRgb) ** 2 + (g_2 - greyRgb) ** 2 + (b_2 - greyRgb) ** 2 < dCube ? greyIdx : cubeIdx;
 }
 //@ chunk-cwwxybjc.js:1597-1904 fingerprint = colorToEscape (1)
@@ -142,90 +144,96 @@ function defaultSyntaxThemeName(themeName) {
 /**
  * highlight.js 作用域到颜色的映射：Monokai Extended（深色）、GitHub（浅色）、ANSI 16 色；STORAGE_KEYWORDS（const/let/function/class/def/fn/struct 等）在 keyword 作用域里改用 _storage 颜色。
  */
-var MONOKAI_SCOPES = new Map([
-  ["keyword", rgb(249, 38, 114)],
-  ["_storage", rgb(102, 217, 239)],
-  ["built_in", rgb(166, 226, 46)],
-  ["type", rgb(166, 226, 46)],
-  ["literal", rgb(190, 132, 255)],
-  ["number", rgb(190, 132, 255)],
-  ["string", rgb(230, 219, 116)],
-  ["title", rgb(166, 226, 46)],
-  ["title.function", rgb(166, 226, 46)],
-  ["title.class", rgb(166, 226, 46)],
-  ["title.class.inherited", rgb(166, 226, 46)],
-  ["params", rgb(253, 151, 31)],
-  ["comment", rgb(117, 113, 94)],
-  ["meta", rgb(117, 113, 94)],
-  ["attr", rgb(166, 226, 46)],
-  ["attribute", rgb(166, 226, 46)],
-  ["variable", rgb(255, 255, 255)],
-  ["variable.language", rgb(255, 255, 255)],
-  ["property", rgb(255, 255, 255)],
-  ["operator", rgb(249, 38, 114)],
-  ["punctuation", rgb(248, 248, 242)],
-  ["symbol", rgb(190, 132, 255)],
-  ["regexp", rgb(230, 219, 116)],
-  ["subst", rgb(248, 248, 242)],
-]);
-var GITHUB_SCOPES = new Map([
-  ["keyword", rgb(167, 29, 93)],
-  ["_storage", rgb(167, 29, 93)],
-  ["built_in", rgb(0, 134, 179)],
-  ["type", rgb(0, 134, 179)],
-  ["literal", rgb(0, 134, 179)],
-  ["number", rgb(0, 134, 179)],
-  ["string", rgb(24, 54, 145)],
-  ["title", rgb(121, 93, 163)],
-  ["title.function", rgb(121, 93, 163)],
-  ["title.class", rgb(0, 0, 0)],
-  ["title.class.inherited", rgb(0, 0, 0)],
-  ["params", rgb(0, 134, 179)],
-  ["comment", rgb(150, 152, 150)],
-  ["meta", rgb(150, 152, 150)],
-  ["attr", rgb(0, 134, 179)],
-  ["attribute", rgb(0, 134, 179)],
-  ["variable", rgb(0, 134, 179)],
-  ["variable.language", rgb(0, 134, 179)],
-  ["property", rgb(0, 134, 179)],
-  ["operator", rgb(167, 29, 93)],
-  ["punctuation", rgb(51, 51, 51)],
-  ["symbol", rgb(0, 134, 179)],
-  ["regexp", rgb(24, 54, 145)],
-  ["subst", rgb(51, 51, 51)],
-]);
-var STORAGE_KEYWORDS = new Set([
-  "const",
-  "let",
-  "var",
-  "function",
-  "class",
-  "type",
-  "interface",
-  "enum",
-  "namespace",
-  "module",
-  "def",
-  "fn",
-  "func",
-  "struct",
-  "trait",
-  "impl",
-]);
-var ANSI_SCOPES = new Map([
-  ["keyword", ansiIdx(13)],
-  ["_storage", ansiIdx(14)],
-  ["built_in", ansiIdx(14)],
-  ["type", ansiIdx(14)],
-  ["literal", ansiIdx(12)],
-  ["number", ansiIdx(12)],
-  ["string", ansiIdx(10)],
-  ["title", ansiIdx(11)],
-  ["title.function", ansiIdx(11)],
-  ["title.class", ansiIdx(11)],
-  ["comment", ansiIdx(8)],
-  ["meta", ansiIdx(8)],
-]);
+var MONOKAI_SCOPES; // deferred: uses rgb of its import cycle while loading; runs once the cycle is complete
+var GITHUB_SCOPES;
+var STORAGE_KEYWORDS;
+var ANSI_SCOPES;
+deferInit("chunk-cwwxybjc.js:2138", () => {
+  MONOKAI_SCOPES = new Map([
+    ["keyword", rgb(249, 38, 114)],
+    ["_storage", rgb(102, 217, 239)],
+    ["built_in", rgb(166, 226, 46)],
+    ["type", rgb(166, 226, 46)],
+    ["literal", rgb(190, 132, 255)],
+    ["number", rgb(190, 132, 255)],
+    ["string", rgb(230, 219, 116)],
+    ["title", rgb(166, 226, 46)],
+    ["title.function", rgb(166, 226, 46)],
+    ["title.class", rgb(166, 226, 46)],
+    ["title.class.inherited", rgb(166, 226, 46)],
+    ["params", rgb(253, 151, 31)],
+    ["comment", rgb(117, 113, 94)],
+    ["meta", rgb(117, 113, 94)],
+    ["attr", rgb(166, 226, 46)],
+    ["attribute", rgb(166, 226, 46)],
+    ["variable", rgb(255, 255, 255)],
+    ["variable.language", rgb(255, 255, 255)],
+    ["property", rgb(255, 255, 255)],
+    ["operator", rgb(249, 38, 114)],
+    ["punctuation", rgb(248, 248, 242)],
+    ["symbol", rgb(190, 132, 255)],
+    ["regexp", rgb(230, 219, 116)],
+    ["subst", rgb(248, 248, 242)],
+  ]);
+  GITHUB_SCOPES = new Map([
+    ["keyword", rgb(167, 29, 93)],
+    ["_storage", rgb(167, 29, 93)],
+    ["built_in", rgb(0, 134, 179)],
+    ["type", rgb(0, 134, 179)],
+    ["literal", rgb(0, 134, 179)],
+    ["number", rgb(0, 134, 179)],
+    ["string", rgb(24, 54, 145)],
+    ["title", rgb(121, 93, 163)],
+    ["title.function", rgb(121, 93, 163)],
+    ["title.class", rgb(0, 0, 0)],
+    ["title.class.inherited", rgb(0, 0, 0)],
+    ["params", rgb(0, 134, 179)],
+    ["comment", rgb(150, 152, 150)],
+    ["meta", rgb(150, 152, 150)],
+    ["attr", rgb(0, 134, 179)],
+    ["attribute", rgb(0, 134, 179)],
+    ["variable", rgb(0, 134, 179)],
+    ["variable.language", rgb(0, 134, 179)],
+    ["property", rgb(0, 134, 179)],
+    ["operator", rgb(167, 29, 93)],
+    ["punctuation", rgb(51, 51, 51)],
+    ["symbol", rgb(0, 134, 179)],
+    ["regexp", rgb(24, 54, 145)],
+    ["subst", rgb(51, 51, 51)],
+  ]);
+  STORAGE_KEYWORDS = new Set([
+    "const",
+    "let",
+    "var",
+    "function",
+    "class",
+    "type",
+    "interface",
+    "enum",
+    "namespace",
+    "module",
+    "def",
+    "fn",
+    "func",
+    "struct",
+    "trait",
+    "impl",
+  ]);
+  ANSI_SCOPES = new Map([
+    ["keyword", ansiIdx(13)],
+    ["_storage", ansiIdx(14)],
+    ["built_in", ansiIdx(14)],
+    ["type", ansiIdx(14)],
+    ["literal", ansiIdx(12)],
+    ["number", ansiIdx(12)],
+    ["string", ansiIdx(10)],
+    ["title", ansiIdx(11)],
+    ["title.function", ansiIdx(11)],
+    ["title.class", ansiIdx(11)],
+    ["comment", ansiIdx(8)],
+    ["meta", ansiIdx(8)],
+  ]);
+});
 //@ chunk-cwwxybjc.js:3828-4884 fingerprint = buildTheme (1)
 /**
  * 按主题名与颜色模式组装 diff 主题：增删行背景、增删单词背景、增删标记色、前景、语法作用域表；有 dark/light × 普通/色盲友好（daltonized，新增行用蓝色）× ansi 几种组合；256 色下深色主题的增行背景改用调色板索引。
@@ -311,13 +319,13 @@ function toInkColor(color) {
   if (match) return rgb(Number(match[1]), Number(match[2]), Number(match[3]));
   let match_2 = /^#([0-9a-fA-F]{6})$/.exec(color);
   if (match_2) {
-    let s = parseInt(match_2[1], 16);
-    return rgb(s >> 16, (s >> 8) & 255, s & 255);
+    let rgbValue = parseInt(match_2[1], 16);
+    return rgb(rgbValue >> 16, (rgbValue >> 8) & 255, rgbValue & 255);
   }
   let match_3 = /^#([0-9a-fA-F]{3})$/.exec(color);
   if (match_3) {
-    let [s, o, f] = match_3[1];
-    return rgb(parseInt(s + s, 16), parseInt(o + o, 16), parseInt(f + f, 16));
+    let [hexR, hexG, hexB] = match_3[1];
+    return rgb(parseInt(hexR + hexR, 16), parseInt(hexG + hexG, 16), parseInt(hexB + hexB, 16));
   }
   let match_4 = /^ansi256\(\s?(\d{1,3})\s?\)$/.exec(color);
   if (match_4) return ansiIdx(Number(match_4[1]));
@@ -328,11 +336,11 @@ function toInkColor(color) {
   return null;
 }
 //@ chunk-cwwxybjc.js:5687-5961 sole-consumer
-function applyThemeDiffColors(theme, n, t) {
-  let inkColor = toInkColor((t ? n.diffAddedDimmed : undefined) ?? n.diffAdded);
-  let inkColor_2 = toInkColor((t ? n.diffRemovedDimmed : undefined) ?? n.diffRemoved);
-  let inkColor_3 = toInkColor(n.diffAddedWord);
-  let inkColor_4 = toInkColor(n.diffRemovedWord);
+function applyThemeDiffColors(theme, diffColors, dimmed) {
+  let inkColor = toInkColor((dimmed ? diffColors.diffAddedDimmed : undefined) ?? diffColors.diffAdded);
+  let inkColor_2 = toInkColor((dimmed ? diffColors.diffRemovedDimmed : undefined) ?? diffColors.diffRemoved);
+  let inkColor_3 = toInkColor(diffColors.diffAddedWord);
+  let inkColor_4 = toInkColor(diffColors.diffRemovedWord);
   return {
     ...theme,
     addLine: inkColor ?? theme.addLine,
@@ -382,13 +390,16 @@ function decorationColor(marker, theme) {
   }
 }
 //@ chunk-cwwxybjc.js:6368-6499 fingerprint = FILENAME_LANGS (0.588)
-var FILENAME_LANGS = new Map([
-  ["Dockerfile", "dockerfile"],
-  ["Makefile", "makefile"],
-  ["Rakefile", "ruby"],
-  ["Gemfile", "ruby"],
-  ["CMakeLists", "cmake"],
-]);
+var FILENAME_LANGS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-cwwxybjc.js:6368", () => {
+  FILENAME_LANGS = new Map([
+    ["Dockerfile", "dockerfile"],
+    ["Makefile", "makefile"],
+    ["Rakefile", "ruby"],
+    ["Gemfile", "ruby"],
+    ["CMakeLists", "cmake"],
+  ]);
+});
 //@ chunk-cwwxybjc.js:6499-7046 fingerprint = detectLanguage (0.973)
 /**
  * 识别文件语言：先按文件名（Dockerfile/Makefile 等），再按扩展名，再按首行 shebang（bash/python/node/ruby/perl）或 <?php、<?xml。
@@ -397,9 +408,9 @@ function detectLanguage(filePath, firstLine) {
   let base = basename(filePath);
   let ext = extname(filePath).slice(1);
   let stem = firstLineOf(base, ".");
-  let s = FILENAME_LANGS.get(base) ?? FILENAME_LANGS.get(stem);
-  if (s) {
-    let highlightLanguage = ensureHighlightLanguage(s);
+  let language = FILENAME_LANGS.get(base) ?? FILENAME_LANGS.get(stem);
+  if (language) {
+    let highlightLanguage = ensureHighlightLanguage(language);
     if (highlightLanguage) return highlightLanguage;
   }
   if (ext) {
@@ -435,10 +446,10 @@ function scopeColor(scope, text, theme) {
  * 递归展开 highlight.js 的 emitter 节点树，按继承的作用域给每段文本配色。
  */
 function flattenHljsNode(node, theme, parentScope, out) {
-  let r = node.scope ?? node.kind ?? parentScope;
+  let scope = node.scope ?? node.kind ?? parentScope;
   for (let child of node.children)
     if (typeof child === "string") {
-      let foreground = scopeColor(r, child, theme);
+      let foreground = scopeColor(scope, child, theme);
       out.push([
         {
           foreground,
@@ -446,7 +457,7 @@ function flattenHljsNode(node, theme, parentScope, out) {
         },
         child,
       ]);
-    } else flattenHljsNode(child, theme, r, out);
+    } else flattenHljsNode(child, theme, scope, out);
 }
 //@ chunk-cwwxybjc.js:7412-7554 fingerprint = hasRootNode (1)
 function hasRootNode(emitter) {
@@ -471,9 +482,9 @@ function highlightLine(state, line, theme) {
   if (!state.lang) return [[defaultStyle(theme), code]];
   if (code.length > MAX_SUBLANGUAGE_CHARS)
     state.limited ??= rootHighlightLanguage(getMaxCodeChars(), state.lang);
-  let r = sublanguageOverflowCheck(code, state.limited ?? state.lang);
-  state.squares += r;
-  if (r > 0 && state.squares > MAX_SUBLANGUAGE_BYTES) return [[defaultStyle(theme), code]];
+  let overflowChars = sublanguageOverflowCheck(code, state.limited ?? state.lang);
+  state.squares += overflowChars;
+  if (overflowChars > 0 && state.squares > MAX_SUBLANGUAGE_BYTES) return [[defaultStyle(theme), code]];
   let result;
   try {
     result = getMaxCodeChars().highlight(code, {
@@ -499,15 +510,15 @@ function highlightLine(state, line, theme) {
 }
 //@ chunk-cwwxybjc.js:8116-8272 layout
 function sanitizeBlocks(blocks) {
-  let mapped = blocks.map(([, r]) => r);
-  let t = mergeCombiningGraphemes(mapped);
-  if (t === mapped) return blocks;
-  let c = [];
+  let graphemes = blocks.map(([, text]) => text);
+  let merged = mergeCombiningGraphemes(graphemes);
+  if (merged === graphemes) return blocks;
+  let result = [];
   for (let k = 0; k < blocks.length; k++) {
-    let s = t[k];
-    if (s.length > 0) c.push([blocks[k][0], s]);
+    let text = merged[k];
+    if (text.length > 0) result.push([blocks[k][0], text]);
   }
-  return c;
+  return result;
 }
 //@ chunk-cwwxybjc.js:8272-8283 layout
 /**
@@ -618,195 +629,197 @@ function splitBlocksOnNewlines(h) {
   );
 }
 //@ chunk-cwwxybjc.js:9305-9419 file-local
-function isAmbiguousWidthChar(e) {
-  if (e.length !== 1) return false;
-  let firstCp = e.codePointAt(0);
-  for (let [t, c] of BIDI_CONTROL_RANGES) if (firstCp >= t && firstCp <= c) return true;
+function isAmbiguousWidthChar(char) {
+  if (char.length !== 1) return false;
+  let firstCp = char.codePointAt(0);
+  for (let [rangeStart, rangeEnd] of BIDI_CONTROL_RANGES)
+    if (firstCp >= rangeStart && firstCp <= rangeEnd) return true;
   return false;
 }
 //@ chunk-cwwxybjc.js:9419-9443 layout
 var PRINTABLE_ASCII = /^[\x20-\x7e]*$/;
 //@ chunk-cwwxybjc.js:9443-9509 layout
-function graphemeWidth(segment) {
-  if (segment === "\t") return 8;
-  if (isAmbiguousWidthChar(segment)) return 1;
-  return bunStringWidth(segment);
+function graphemeWidth(char) {
+  if (char === "\t") return 8;
+  if (isAmbiguousWidthChar(char)) return 1;
+  return bunStringWidth(char);
 }
 //@ chunk-cwwxybjc.js:9509-9617 layout
-function textWidth(e) {
-  if (!regExp_2.test(e)) return bunStringWidth(e);
-  let parts = e.split(regExp);
-  let t = parts.length - 1;
-  for (let c of parts) t += bunStringWidth(c);
-  return t;
+function textWidth(text) {
+  if (!regExp_2.test(text)) return bunStringWidth(text);
+  let parts = text.split(regExp);
+  let width = parts.length - 1;
+  for (let part of parts) width += bunStringWidth(part);
+  return width;
 }
 //@ chunk-cwwxybjc.js:9617-9664 layout
 function blocksText(line) {
-  return line.map(([, n]) => n).join("");
+  return line.map(([, text]) => text).join("");
 }
 //@ chunk-cwwxybjc.js:9664-9675 layout
 var WIDTH_CONTEXT_CHARS = 256;
 //@ chunk-cwwxybjc.js:9675-9760 layout
-function appendedWidth(e, n) {
-  if (PRINTABLE_ASCII.test(n)) return n.length;
-  let sliced = e.slice(-WIDTH_CONTEXT_CHARS);
-  return textWidth(sliced + n) - textWidth(sliced);
+function appendedWidth(prefix, text) {
+  if (PRINTABLE_ASCII.test(text)) return text.length;
+  let sliced = prefix.slice(-WIDTH_CONTEXT_CHARS);
+  return textWidth(sliced + text) - textWidth(sliced);
 }
 //@ chunk-cwwxybjc.js:9760-9835 layout = asTerminalEscaped (1)
-function styleEscape(e, mode, skipBackground) {
+function styleEscape(style, mode, skipBackground) {
   return (
-    colorToEscape(e.foreground, true, mode) + (skipBackground ? "" : colorToEscape(e.background, false, mode))
+    colorToEscape(style.foreground, true, mode) +
+    (skipBackground ? "" : colorToEscape(style.background, false, mode))
   );
 }
 //@ chunk-cwwxybjc.js:9835-9987 layout
 function mergeSameStyleBlocks(line, mode, skipBackground) {
-  let c = [];
-  let r = null;
-  for (let [s, o] of line) {
-    let f = styleEscape(s, mode, skipBackground);
-    let last = c.at(-1);
-    if (last && f === r) c[c.length - 1] = [last[0], last[1] + o];
+  let merged = [];
+  let lastEscape = null;
+  for (let [style, text] of line) {
+    let escapeSequence = styleEscape(style, mode, skipBackground);
+    let last = merged.at(-1);
+    if (last && escapeSequence === lastEscape) merged[merged.length - 1] = [last[0], last[1] + text];
     else {
-      c.push([s, o]);
-      r = f;
+      merged.push([style, text]);
+      lastEscape = escapeSequence;
     }
   }
-  return c;
+  return merged;
 }
 //@ chunk-cwwxybjc.js:9987-10217 layout
-function expandTabs(e) {
-  if (!e.some(([, r]) => r.includes("\t"))) return e;
-  let n = "";
-  let t = 0;
-  let c = [];
-  for (let [r, s] of e) {
-    let parts = s.split("\t");
-    let f = "";
+function expandTabs(blocks) {
+  if (!blocks.some(([, text]) => text.includes("\t"))) return blocks;
+  let lineText = "";
+  let column = 0;
+  let out = [];
+  for (let [style, text] of blocks) {
+    let parts = text.split("\t");
+    let expandedLineText = "";
     for (let k = 0; k < parts.length; k++) {
-      let d = k === 0 ? parts[k] : repeatString(" ", 8 - (t % 8)) + parts[k];
-      t += appendedWidth(n, d);
-      f += d;
-      n += d;
+      let part = k === 0 ? parts[k] : repeatString(" ", 8 - (column % 8)) + parts[k];
+      column += appendedWidth(lineText, part);
+      expandedLineText += part;
+      lineText += part;
     }
-    c.push([r, f]);
+    out.push([style, expandedLineText]);
   }
-  return c;
+  return out;
 }
 //@ chunk-cwwxybjc.js:10217-11590 layout = addMarker (0.806)
 /**
  * 把一行的样式块按宽度折行（纯 ASCII 快速路径，其余按字素宽度）；超长时截断并加省略号；有增删标记时用行背景色补齐到整宽。
  */
-function wrapLines(e, effectiveWidth, theme, c, r) {
-  let s = [];
-  for (let line of e.lines) {
-    let f = s.length;
-    let a = [];
-    let d = "";
-    let h = 0;
-    for (let [b, g] of expandTabs(mergeSameStyleBlocks(line, c, r))) {
-      let y = h + appendedWidth(d, g);
-      if (y <= effectiveWidth) {
-        if (g.length > 0) {
-          a.push([b, g]);
-          d += g;
-          h = y;
+function wrapLines(wrappedLine, effectiveWidth, theme, mode, skipBackground) {
+  let out = [];
+  for (let line of wrappedLine.lines) {
+    let lineStartIndex = out.length;
+    let currentBlocks = [];
+    let currentText = "";
+    let currentWidth = 0;
+    for (let [style, text] of expandTabs(mergeSameStyleBlocks(line, mode, skipBackground))) {
+      let nextWidth = currentWidth + appendedWidth(currentText, text);
+      if (nextWidth <= effectiveWidth) {
+        if (text.length > 0) {
+          currentBlocks.push([style, text]);
+          currentText += text;
+          currentWidth = nextWidth;
         }
         continue;
       }
-      if (effectiveWidth >= 1 && PRINTABLE_ASCII.test(g)) {
-        let p = 0;
-        let m = effectiveWidth - h;
-        while (g.length - p > m) {
-          if (m > 0) {
-            a.push([b, g.slice(p, p + m)]);
-            p += m;
+      if (effectiveWidth >= 1 && PRINTABLE_ASCII.test(text)) {
+        let consumed = 0;
+        let available = effectiveWidth - currentWidth;
+        while (text.length - consumed > available) {
+          if (available > 0) {
+            currentBlocks.push([style, text.slice(consumed, consumed + available)]);
+            consumed += available;
           }
-          if (a.length > 0) {
-            s.push(a);
-            a = [];
-            d = "";
+          if (currentBlocks.length > 0) {
+            out.push(currentBlocks);
+            currentBlocks = [];
+            currentText = "";
           }
-          h = 0;
-          m = effectiveWidth;
+          currentWidth = 0;
+          available = effectiveWidth;
         }
-        if (p < g.length) {
-          a.push([b, g.slice(p)]);
-          d += g.slice(p);
-          h += g.length - p;
+        if (consumed < text.length) {
+          currentBlocks.push([style, text.slice(consumed)]);
+          currentText += text.slice(consumed);
+          currentWidth += text.length - consumed;
         }
         continue;
       }
-      let k = 0;
-      let S = 0;
-      for (let { segment, index } of getGraphemeSegmenter().segment(g)) {
-        let C = graphemeWidth(segment);
-        if (h + S + C > effectiveWidth) {
-          if (index > k) a.push([b, g.slice(k, index)]);
-          if (a.length > 0) {
-            s.push(a);
-            a = [];
-            d = "";
-            h = 0;
+      let graphemeStart = 0;
+      let pendingWidth = 0;
+      for (let { segment, index } of getGraphemeSegmenter().segment(text)) {
+        let graphemeWidth_ = graphemeWidth(segment);
+        if (currentWidth + pendingWidth + graphemeWidth_ > effectiveWidth) {
+          if (index > graphemeStart) currentBlocks.push([style, text.slice(graphemeStart, index)]);
+          if (currentBlocks.length > 0) {
+            out.push(currentBlocks);
+            currentBlocks = [];
+            currentText = "";
+            currentWidth = 0;
           }
-          k = index;
-          S = 0;
-          if (C > effectiveWidth) {
-            s.push([[b, g.slice(index, index + segment.length)]]);
-            k = index + segment.length;
+          graphemeStart = index;
+          pendingWidth = 0;
+          if (graphemeWidth_ > effectiveWidth) {
+            out.push([[style, text.slice(index, index + segment.length)]]);
+            graphemeStart = index + segment.length;
             continue;
           }
         }
-        S += C;
+        pendingWidth += graphemeWidth_;
       }
-      if (k < g.length) {
-        a.push([b, g.slice(k)]);
-        d += g.slice(k);
-        h = textWidth(d);
+      if (graphemeStart < text.length) {
+        currentBlocks.push([style, text.slice(graphemeStart)]);
+        currentText += text.slice(graphemeStart);
+        currentWidth = textWidth(currentText);
       }
     }
-    if (a.length > 0 || s.length === f) s.push(a);
+    if (currentBlocks.length > 0 || out.length === lineStartIndex) out.push(currentBlocks);
   }
-  e.lines = s;
-  e.lines = e.lines.map((line) => {
-    let f = blocksText(line);
-    if (textWidth(f) <= effectiveWidth) return line;
+  wrappedLine.lines = out;
+  wrappedLine.lines = wrappedLine.lines.map((line) => {
+    let lineText = blocksText(line);
+    if (textWidth(lineText) <= effectiveWidth) return line;
     let max = Math.max(0, effectiveWidth - 1);
-    let d = [[0, 0, 0]];
-    let h = 0;
-    let b = 0;
+    let offsets = [[0, 0, 0]];
+    let widthSoFar = 0;
+    let blockOffset = 0;
     e: for (let idx = 0; idx < line.length; idx++) {
-      let T = line[idx][1];
-      for (let { segment, index } of getGraphemeSegmenter().segment(T)) {
-        h += graphemeWidth(segment);
-        if (h > max) break e;
-        let w = index + segment.length;
-        d.push([idx, w, b + w]);
+      let text = line[idx][1];
+      for (let { segment, index } of getGraphemeSegmenter().segment(text)) {
+        widthSoFar += graphemeWidth(segment);
+        if (widthSoFar > max) break e;
+        let segmentEnd = index + segment.length;
+        offsets.push([idx, segmentEnd, blockOffset + segmentEnd]);
       }
-      b += T.length;
+      blockOffset += text.length;
     }
-    let g = 0;
-    let y = d.length - 1;
-    while (g < y) {
-      let C = (g + y + 1) >> 1;
-      if (textWidth(f.slice(0, d[C][2])) <= max) g = C;
-      else y = C - 1;
+    let low = 0;
+    let high = offsets.length - 1;
+    while (low < high) {
+      let mid = (low + high + 1) >> 1;
+      if (textWidth(lineText.slice(0, offsets[mid][2])) <= max) low = mid;
+      else high = mid - 1;
     }
-    let [k, S] = d[g];
-    let sliced = line.slice(0, k);
-    if (S > 0) sliced.push([line[k][0], line[k][1].slice(0, S)]);
-    let m = sliced.at(-1)?.[0] ?? line[0][0];
-    sliced.push([m, "\u2026"]);
+    let [blockIndex, charOffset] = offsets[low];
+    let sliced = line.slice(0, blockIndex);
+    if (charOffset > 0) sliced.push([line[blockIndex][0], line[blockIndex][1].slice(0, charOffset)]);
+    let ellipsisStyle = sliced.at(-1)?.[0] ?? line[0][0];
+    sliced.push([ellipsisStyle, "\u2026"]);
     return sliced;
   });
-  if (e.marker && e.marker !== " ") {
-    let background = lineBackground(e.marker, theme);
+  if (wrappedLine.marker && wrappedLine.marker !== " ") {
+    let background = lineBackground(wrappedLine.marker, theme);
     let style = {
       foreground: theme.foreground,
       background,
     };
-    for (let line of e.lines) {
-      let d = textWidth(blocksText(line));
-      if (d < effectiveWidth) line.push([style, repeatString(" ", effectiveWidth - d)]);
+    for (let line of wrappedLine.lines) {
+      let lineWidth = textWidth(blocksText(line));
+      if (lineWidth < effectiveWidth) line.push([style, repeatString(" ", effectiveWidth - lineWidth)]);
     }
   }
 }
@@ -848,43 +861,44 @@ function dimContent(h) {
     }
 }
 //@ chunk-cwwxybjc.js:12146-12637 layout
-function snapRangesToGraphemes(e, ranges) {
+function snapRangesToGraphemes(text, ranges) {
   if (ranges.length === 0) return ranges;
-  let t = [0];
-  for (let o of getGraphemeSegmenter().segment(e)) t.push(o.index + o.segment.length);
-  let c = (o) => {
-    let f = 0;
-    let a = t.length - 1;
-    while (f < a) {
-      let d = (f + a + 1) >> 1;
-      if (t[d] <= o) f = d;
-      else a = d - 1;
+  let boundaries = [0];
+  for (let grapheme of getGraphemeSegmenter().segment(text))
+    boundaries.push(grapheme.index + grapheme.segment.length);
+  let snapStart = (offset) => {
+    let low = 0;
+    let high = boundaries.length - 1;
+    while (low < high) {
+      let mid = (low + high + 1) >> 1;
+      if (boundaries[mid] <= offset) low = mid;
+      else high = mid - 1;
     }
-    return t[f];
+    return boundaries[low];
   };
-  let r = (o) => {
-    let f = 0;
-    let a = t.length - 1;
-    while (f < a) {
-      let d = (f + a) >> 1;
-      if (t[d] >= o) a = d;
-      else f = d + 1;
+  let snapEnd = (offset) => {
+    let low = 0;
+    let high = boundaries.length - 1;
+    while (low < high) {
+      let mid = (low + high) >> 1;
+      if (boundaries[mid] >= offset) high = mid;
+      else low = mid + 1;
     }
-    return t[f];
+    return boundaries[low];
   };
-  let s = [];
-  for (let o of ranges) {
-    let f = c(Math.min(o.start, e.length));
-    let max = Math.max(f, r(Math.min(o.end, e.length)));
-    let last = s.at(-1);
-    if (last && f <= last.end) last.end = Math.max(last.end, max);
+  let snapped = [];
+  for (let range of ranges) {
+    let start = snapStart(Math.min(range.start, text.length));
+    let max = Math.max(start, snapEnd(Math.min(range.end, text.length)));
+    let last = snapped.at(-1);
+    if (last && start <= last.end) last.end = Math.max(last.end, max);
     else
-      s.push({
-        start: f,
+      snapped.push({
+        start,
         end: max,
       });
   }
-  return s;
+  return snapped;
 }
 //@ chunk-cwwxybjc.js:12637-13280 fingerprint = applyBackground (1)
 /**
@@ -894,8 +908,8 @@ function applyBackground(h_2, theme, ranges) {
   if (!h_2.marker) return;
   let lineBg = lineBackground(h_2.marker, theme);
   let wordBg = wordBackground(h_2.marker, theme);
-  let joined = h_2.lines.map((line) => line.map(([, h]) => h).join("")).join("");
-  let ranges_2 = snapRangesToGraphemes(joined, ranges);
+  let text = h_2.lines.map((line) => line.map(([, text]) => text).join("")).join("");
+  let ranges_2 = snapRangesToGraphemes(text, ranges);
   let rangeIdx = 0;
   let byteOff = 0;
   for (let idx = 0; idx < h_2.lines.length; idx++) {
@@ -918,11 +932,11 @@ function applyBackground(h_2, theme, ranges) {
       let remaining = text;
       let pos = textStart;
       while (remaining.length > 0 && rangeIdx < ranges_2.length) {
-        let m = ranges_2[rangeIdx];
-        let inRange = pos >= m.start && pos < m.end;
+        let range = ranges_2[rangeIdx];
+        let inRange = pos >= range.start && pos < range.end;
         let next;
-        if (inRange) next = Math.min(m.end, textEnd);
-        else if (m.start > pos && m.start < textEnd) next = m.start;
+        if (inRange) next = Math.min(range.end, textEnd);
+        else if (range.start > pos && range.start < textEnd) next = range.start;
         else next = textEnd;
         let segLen = next - pos;
         let seg = remaining.slice(0, segLen);
@@ -935,7 +949,7 @@ function applyBackground(h_2, theme, ranges) {
         ]);
         remaining = remaining.slice(segLen);
         pos = next;
-        if (pos >= m.end) rangeIdx++;
+        if (pos >= range.end) rangeIdx++;
       }
       if (remaining.length > 0)
         newLine.push([
@@ -957,8 +971,8 @@ function getMaxLineNumber(patch) {
   return Math.max(maxLineNumber, max);
 }
 //@ chunk-cwwxybjc.js:13396-13441 layout
-function normalizeMarker(e) {
-  return e === "+" || e === "-" ? e : " ";
+function normalizeMarker(marker) {
+  return marker === "+" || marker === "-" ? marker : " ";
 }
 //@ chunk-cwwxybjc.js:13441-13453 layout
 var DIFF_GUTTER_BLOCKS = 2;
@@ -978,21 +992,21 @@ class ColorDiff {
     this.firstLine = firstLine;
     this.prefixContent = prefixContent ?? null;
   }
-  render(e, n, t, c) {
-    let { rows, mode } = this.buildRows(e, n, t, c);
-    return rows.map((line) => asTerminalEscaped(line, mode, false, t));
+  render(themeName, width, dim, diffColors) {
+    let { rows, mode } = this.buildRows(themeName, width, dim, diffColors);
+    return rows.map((line) => asTerminalEscaped(line, mode, false, dim));
   }
-  renderSplit(e, n, t, c) {
-    let { rows, mode } = this.buildRows(e, n, t, c);
+  renderSplit(themeName, width, dim, diffColors) {
+    let { rows, mode } = this.buildRows(themeName, width, dim, diffColors);
     return {
-      gutters: rows.map((o) => asTerminalEscaped(o.slice(0, DIFF_GUTTER_BLOCKS), mode, false, t)),
-      contents: rows.map((o) => asTerminalEscaped(o.slice(DIFF_GUTTER_BLOCKS), mode, false, t)),
+      gutters: rows.map((row) => asTerminalEscaped(row.slice(0, DIFF_GUTTER_BLOCKS), mode, false, dim)),
+      contents: rows.map((row) => asTerminalEscaped(row.slice(DIFF_GUTTER_BLOCKS), mode, false, dim)),
     };
   }
-  buildRows(themeName, width, dim, c) {
+  buildRows(themeName, width, dim, diffColors) {
     let mode = detectColorMode(themeName);
     let theme = buildTheme(themeName, mode);
-    let theme_2 = c ? applyThemeDiffColors(theme, c, dim) : theme;
+    let theme_2 = diffColors ? applyThemeDiffColors(theme, diffColors, dim) : theme;
     let state = {
       lang: detectLanguage(this.filePath, this.firstLine),
       stack: null,
@@ -1040,19 +1054,20 @@ class ColorDiff {
     for (let i = 0; i < entries.length; i++) {
       let { lineNumber, marker, code, truncatedChars } = entries[i];
       let tokens = marker === "-" ? [[defaultStyle(theme_2), code]] : highlightLine(state, code, theme_2);
-      let w = {
+      let wrappedLine = {
         marker,
         lineNumber,
         lines: [tokens],
       };
-      splitBlocksOnNewlines(w);
-      applyBackground(w, theme_2, ranges[i]);
-      if (truncatedChars > 0) w.lines[0].push([defaultStyle(theme_2), truncatedCharsSuffix(truncatedChars)]);
-      wrapLines(w, effectiveWidth, theme_2, mode, false);
-      if (mode === "ansi" && marker === "-") dimContent(w);
-      addMarker(w, theme_2);
-      addLineNumber(w, theme_2, maxDigits, dim);
-      out.push(...w.lines);
+      splitBlocksOnNewlines(wrappedLine);
+      applyBackground(wrappedLine, theme_2, ranges[i]);
+      if (truncatedChars > 0)
+        wrappedLine.lines[0].push([defaultStyle(theme_2), truncatedCharsSuffix(truncatedChars)]);
+      wrapLines(wrappedLine, effectiveWidth, theme_2, mode, false);
+      if (mode === "ansi" && marker === "-") dimContent(wrappedLine);
+      addMarker(wrappedLine, theme_2);
+      addLineNumber(wrappedLine, theme_2, maxDigits, dim);
+      out.push(...wrappedLine.lines);
     }
     return {
       rows: out,
@@ -1071,15 +1086,15 @@ class ColorFile {
     this.code = code;
     this.filePath = filePath;
   }
-  render(e, n, t) {
-    let { rows, mode } = this.buildRows(e, n, t);
-    return rows.map((line) => asTerminalEscaped(line, mode, true, t));
+  render(themeName, width, dim) {
+    let { rows, mode } = this.buildRows(themeName, width, dim);
+    return rows.map((line) => asTerminalEscaped(line, mode, true, dim));
   }
-  renderSplit(e, n, t) {
-    let { rows, mode } = this.buildRows(e, n, t);
+  renderSplit(themeName, width, dim) {
+    let { rows, mode } = this.buildRows(themeName, width, dim);
     return {
-      gutters: rows.map((s) => asTerminalEscaped(s.slice(0, FILE_GUTTER_BLOCKS), mode, true, t)),
-      contents: rows.map((s) => asTerminalEscaped(s.slice(FILE_GUTTER_BLOCKS), mode, true, t)),
+      gutters: rows.map((row) => asTerminalEscaped(row.slice(0, FILE_GUTTER_BLOCKS), mode, true, dim)),
+      contents: rows.map((row) => asTerminalEscaped(row.slice(FILE_GUTTER_BLOCKS), mode, true, dim)),
     };
   }
   buildRows(themeName, width, dim) {
@@ -1099,17 +1114,17 @@ class ColorFile {
     let out = [];
     for (let i = 0; i < lines.length; i++) {
       let { code, truncatedChars } = truncateCode(lines[i]);
-      let S = highlightLine(state, code, theme);
-      if (truncatedChars > 0) S.push([defaultStyle(theme), truncatedCharsSuffix(truncatedChars)]);
-      let p = {
+      let tokens = highlightLine(state, code, theme);
+      if (truncatedChars > 0) tokens.push([defaultStyle(theme), truncatedCharsSuffix(truncatedChars)]);
+      let wrappedLine = {
         marker: null,
         lineNumber: i + 1,
-        lines: [S],
+        lines: [tokens],
       };
-      splitBlocksOnNewlines(p);
-      wrapLines(p, effectiveWidth, theme, mode, true);
-      addLineNumber(p, theme, maxDigits, dim);
-      out.push(...p.lines);
+      splitBlocksOnNewlines(wrappedLine);
+      wrapLines(wrappedLine, effectiveWidth, theme, mode, true);
+      addLineNumber(wrappedLine, theme, maxDigits, dim);
+      out.push(...wrappedLine.lines);
     }
     return {
       rows: out,

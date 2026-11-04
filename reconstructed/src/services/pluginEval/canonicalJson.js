@@ -11,8 +11,8 @@
 import { jsonStringify } from "../../utils/slowOperations.js";
 
 //@ chunk-qchp9vrd.js:16398-16439 placement
-function canonicalJsonStringify(e) {
-  return jsonStringify(canonicalizeValue(e, 0)) ?? "null";
+function canonicalJsonStringify(value) {
+  return jsonStringify(canonicalizeValue(value, 0)) ?? "null";
 }
 //@ chunk-qchp9vrd.js:16439-16449 placement
 /**
@@ -23,14 +23,14 @@ var MAX_CANONICAL_DEPTH = 64;
 /**
  * 递归规范化值（对象键排序），嵌套过深时报错。
  */
-function canonicalizeValue(e, n) {
-  if (n > MAX_CANONICAL_DEPTH) throw RangeError("value nested too deep to canonicalize");
-  if (Array.isArray(e)) return e.map((r) => canonicalizeValue(r, n + 1));
-  if (e !== null && typeof e === "object") {
-    let r = Object.create(null);
-    for (let key of Object.keys(e).sort()) r[key] = canonicalizeValue(e[key], n + 1);
-    return r;
+function canonicalizeValue(value, depth) {
+  if (depth > MAX_CANONICAL_DEPTH) throw RangeError("value nested too deep to canonicalize");
+  if (Array.isArray(value)) return value.map((item) => canonicalizeValue(item, depth + 1));
+  if (value !== null && typeof value === "object") {
+    let result = Object.create(null);
+    for (let key of Object.keys(value).sort()) result[key] = canonicalizeValue(value[key], depth + 1);
+    return result;
   }
-  return e;
+  return value;
 }
 export { canonicalJsonStringify };

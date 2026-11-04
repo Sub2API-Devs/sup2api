@@ -5,13 +5,13 @@
  * pieces: chunk-hq88884p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_debug_2 } from "../../debug/src/index.js";
 import { require_agent_base } from "../../agent-base/dist/index.js";
 import { require_parse_proxy_response } from "./parse-proxy-response.js";
 
 //@ chunk-hq88884p.js:22404-25383 cjs-fingerprint
-var require_https_proxy_agent = x(function (cjsExports) {
+var require_https_proxy_agent = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create

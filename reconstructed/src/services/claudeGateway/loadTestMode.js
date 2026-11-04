@@ -14,10 +14,13 @@ import { gatewayLog } from "../gateway/gatewayBanner.js";
 /**
  * 压测模式下确认所有上游都使用模拟 fetch，否则报错。
  */
-function assertCannedUpstreams(e, t) {
-  for (let n of e)
-    if ((n.kind === "raw" ? n.fetch : n.client.fetch) !== t) {
-      gatewayLog("error", `load_test_mode: upstream '${n.name}' was built without the canned-reply fetch`);
+function assertCannedUpstreams(upstreams, cannedFetch) {
+  for (let upstream of upstreams)
+    if ((upstream.kind === "raw" ? upstream.fetch : upstream.client.fetch) !== cannedFetch) {
+      gatewayLog(
+        "error",
+        `load_test_mode: upstream '${upstream.name}' was built without the canned-reply fetch`,
+      );
       throw Error(
         "load_test_mode is on, but an upstream (named in the log line above) would still send real requests. This is a bug in the gateway. Do not send load to this gateway, and report it to Anthropic.",
       );

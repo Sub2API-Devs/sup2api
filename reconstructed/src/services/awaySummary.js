@@ -76,21 +76,21 @@ function resetRecapState(ccrRecap) {
 /**
  * 生成离开摘要并作为 recap 元数据推送：中止上一次生成；若新回合已开始则丢弃；记 ccr_recap_generate 埋点。
  */
-async function generateCcrRecap(e, a) {
-  e.inFlight?.abort();
+async function generateCcrRecap(state, session) {
+  state.inFlight?.abort();
   let abortController = new AbortController();
-  e.inFlight = abortController;
+  state.inFlight = abortController;
   let awaySummary = await generateAwaySummary(abortController.signal);
   if (abortController.signal.aborted) return;
   if (awaySummary.kind !== "ok") {
     if (awaySummary.kind !== "no-turn") logFeatureBad("ccr_recap_generate", awaySummary.kind);
     return;
   }
-  if (a.getState() === "running") {
+  if (session.getState() === "running") {
     logForDebugging("[awaySummary] ccr recap dropped: new turn already running");
     return;
   }
-  a.notifyMetadataChanged({
+  session.notifyMetadataChanged({
     recap: awaySummary.text,
   });
   if (awaySummary.capped) logFeatureSad("ccr_recap_generate", "capped");
@@ -104,15 +104,15 @@ var AWAY_SUMMARY_MAX_CHARS = 400;
 /**
  * 生成离开摘要（40 词内），无缓存参数时重建，失败记录。
  */
-async function generateAwaySummary(signal, a) {
+async function generateAwaySummary(signal, rebuildParams) {
   let lastCacheSafeParams = getLastCacheSafeParams();
-  if (!lastCacheSafeParams && a) {
+  if (!lastCacheSafeParams && rebuildParams) {
     if (signal.aborted)
       return {
         kind: "aborted",
       };
     try {
-      lastCacheSafeParams = await a();
+      lastCacheSafeParams = await rebuildParams();
     } catch (error) {
       logForDebugging(`[awaySummary] fallback params rebuild failed: ${error}`);
       return {
@@ -169,18 +169,18 @@ async function generateAwaySummary(signal, a) {
         kind: "api-error",
         text: assistantText([found], true),
       };
-    let s = assistantText(messages, false);
-    let d = s.length > AWAY_SUMMARY_MAX_CHARS;
-    if (d) {
-      let c = truncateAtWord(s, AWAY_SUMMARY_MAX_CHARS);
-      logForDebugging(`[awaySummary] recap capped from ${s.length} to ${c.length} chars`);
-      s = c;
+    let summaryText = assistantText(messages, false);
+    let wasCapped = summaryText.length > AWAY_SUMMARY_MAX_CHARS;
+    if (wasCapped) {
+      let shortened = truncateAtWord(summaryText, AWAY_SUMMARY_MAX_CHARS);
+      logForDebugging(`[awaySummary] recap capped from ${summaryText.length} to ${shortened.length} chars`);
+      summaryText = shortened;
     }
-    return s
+    return summaryText
       ? {
           kind: "ok",
-          text: s,
-          capped: d,
+          text: summaryText,
+          capped: wasCapped,
         }
       : {
           kind: "failed",
@@ -197,12 +197,16 @@ async function generateAwaySummary(signal, a) {
   }
 }
 //@ chunk-7jj28n8t.js:2968-3158 placement
-function assistantText(messages, a) {
+function assistantText(messages, includeApiErrors) {
   return stripMemoryTags(
     messages
-      .flatMap((r) => (r.type === "assistant" && (a || !r.isApiErrorMessage) ? r.message.content : []))
-      .filter((r) => r.type === "text")
-      .map((r) => ("text" in r ? r.text : ""))
+      .flatMap((message) =>
+        message.type === "assistant" && (includeApiErrors || !message.isApiErrorMessage)
+          ? message.message.content
+          : [],
+      )
+      .filter((block) => block.type === "text")
+      .map((block) => ("text" in block ? block.text : ""))
       .join(""),
   ).trim();
 }

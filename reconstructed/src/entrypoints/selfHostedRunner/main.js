@@ -42,8 +42,8 @@ import { withBoundedTimeout } from "../../utils/boundedTimeout.js";
 /**
  * claude self-hosted-runner orchestrator 入口：解析参数、读取环境密钥、启动健康/指标服务与 spawn-runner 轮询循环。
  */
-async function runSelfHostedRunnerOrchestrator(e) {
-  if (e.includes("--help") || e.includes("-h")) {
+async function runSelfHostedRunnerOrchestrator(argv) {
+  if (argv.includes("--help") || argv.includes("-h")) {
     console.log(`Usage: claude self-hosted-runner orchestrator [options]
 
 Polls the spawn-hints queue (server returns immediately) and runs \${hooks-dir}/spawn-runner once per
@@ -110,15 +110,15 @@ Debug:
     return;
   }
   configureGlobalAgents();
-  let t = () => new Date().toISOString();
+  let timestamp = () => new Date().toISOString();
   let stdioWriter = openStdioWriter({
-    stamp: (b) => `${t()} [self-hosted-runner] ${redactSecretsInText(b)}`,
+    stamp: (line) => `${timestamp()} [self-hosted-runner] ${redactSecretsInText(line)}`,
   });
-  let n;
+  let config;
   try {
     assertLifecycleHooksSupported("orchestrator mode");
-    rejectOrchestratorProxyAuth(e);
-    n = parseRunnerArgs(e);
+    rejectOrchestratorProxyAuth(argv);
+    config = parseRunnerArgs(argv);
     checkRunnerAgentProxyStandaloneUrl(
       env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL,
       "SELF_HOSTED_RUNNER_AGENT_PROXY_URL",
@@ -131,74 +131,74 @@ Run 'claude self-hosted-runner orchestrator --help' for usage.`,
     );
     process.exit(2);
   }
-  let h = n.logLevel === "debug";
-  let o = (b) => redactSecretsInText(b).replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
-  let l = (b) => {
-    if (h) stdioWriter.write("stderr", `${t()} [DEBUG] ${o(b)}`);
+  let isDebug = config.logLevel === "debug";
+  let sanitize = (text) => redactSecretsInText(text).replace(/[\x00-\x08\x0b-\x1f\x7f]/g, "");
+  let debugLog = (text) => {
+    if (isDebug) stdioWriter.write("stderr", `${timestamp()} [DEBUG] ${sanitize(text)}`);
   };
-  let g = (b) => {
-    stdioWriter.write("stdout", `${t()} [self-hosted-runner] ${o(b)}`);
+  let statusLog = (text) => {
+    stdioWriter.write("stdout", `${timestamp()} [self-hosted-runner] ${sanitize(text)}`);
   };
-  l(`[runner:log] ${stdioWriter.describe()}`);
-  let c;
+  debugLog(`[runner:log] ${stdioWriter.describe()}`);
+  let hookPath;
   try {
-    c = await resolveSpawnRunnerHook(n.hooksDir);
+    hookPath = await resolveSpawnRunnerHook(config.hooksDir);
   } catch (error) {
-    g(`[runner:fatal] ${errorMessage(error)}`);
+    statusLog(`[runner:fatal] ${errorMessage(error)}`);
     process.exit(1);
   }
-  g(`[runner:hook] spawn-runner hook found at ${c}`);
-  let S;
+  statusLog(`[runner:hook] spawn-runner hook found at ${hookPath}`);
+  let environmentSecret;
   try {
-    S = await readPoolSecret(n, (b) => stdioWriter.write("stderr", b));
+    environmentSecret = await readPoolSecret(config, (text) => stdioWriter.write("stderr", text));
   } catch (error) {
-    g(`[runner:fatal] ${errorMessage(error)}`);
+    statusLog(`[runner:fatal] ${errorMessage(error)}`);
     process.exit(1);
   }
-  if (n.debugDir)
-    await mkdir(n.debugDir, {
+  if (config.debugDir)
+    await mkdir(config.debugDir, {
       recursive: true,
       mode: 448,
     }).catch((error) =>
-      g(
-        `[runner:warn] failed to create --debug-dir ${n.debugDir}: ${errorMessage(error)} \u2014 continuing without debug artifacts`,
+      statusLog(
+        `[runner:warn] failed to create --debug-dir ${config.debugDir}: ${errorMessage(error)} \u2014 continuing without debug artifacts`,
       ),
     );
-  let s = randomUUID();
-  let u = hostname();
-  g(
-    `[runner:orchestrator] starting orchestrator_uuid=${s} hostname=${u} hook-concurrency=${n.hookConcurrency} hook-timeout=${n.hookTimeoutMs}ms`,
+  let runnerId = randomUUID();
+  let hostName = hostname();
+  statusLog(
+    `[runner:orchestrator] starting orchestrator_uuid=${runnerId} hostname=${hostName} hook-concurrency=${config.hookConcurrency} hook-timeout=${config.hookTimeoutMs}ms`,
   );
-  if (n.shutdownDrainMs > 0) {
-    let b = n.shutdownDrainMs / 1000;
-    g(
-      `[runner:orchestrator] shutdown drain: ${b}s after SIGTERM; SIGINT or a second SIGTERM ends it early. Allow up to ${b + ENV_MAX_TIMEOUT_MS / 1000}s for the exit, longer if a hook cannot be killed`,
+  if (config.shutdownDrainMs > 0) {
+    let drainSeconds = config.shutdownDrainMs / 1000;
+    statusLog(
+      `[runner:orchestrator] shutdown drain: ${drainSeconds}s after SIGTERM; SIGINT or a second SIGTERM ends it early. Allow up to ${drainSeconds + ENV_MAX_TIMEOUT_MS / 1000}s for the exit, longer if a hook cannot be killed`,
     );
-    let K = n.hookTimeoutMs + 2 * ORCHESTRATOR_DEBUG_LIMITS;
-    if (n.shutdownDrainMs < K)
-      g(
-        `[runner:warn] --shutdown-drain-sec (${b}s) is less than --hook-timeout + ${(2 * ORCHESTRATOR_DEBUG_LIMITS) / 1000}s (${K / 1000}s): a hook that is running at SIGTERM may be stopped before it ends, and every spawn request that arrives after SIGTERM is handed back to the server`,
+    let maxHookMs = config.hookTimeoutMs + 2 * ORCHESTRATOR_DEBUG_LIMITS;
+    if (config.shutdownDrainMs < maxHookMs)
+      statusLog(
+        `[runner:warn] --shutdown-drain-sec (${drainSeconds}s) is less than --hook-timeout + ${(2 * ORCHESTRATOR_DEBUG_LIMITS) / 1000}s (${maxHookMs / 1000}s): a hook that is running at SIGTERM may be stopped before it ends, and every spawn request that arrives after SIGTERM is handed back to the server`,
       );
   }
-  let U;
+  let loopController;
   try {
-    U = poolIdFromSecret(S);
+    loopController = poolIdFromSecret(environmentSecret);
   } catch (error) {
-    g(`[runner:fatal] ${errorMessage(error)}`);
+    statusLog(`[runner:fatal] ${errorMessage(error)}`);
     process.exit(1);
   }
-  g(`[runner:orchestrator] environment_id=${U}`);
+  statusLog(`[runner:orchestrator] environment_id=${loopController}`);
   let apiClient = createDefaultEnvironment({
-    baseUrl: n.apiUrl,
-    poolSecret: S,
-    onDebug: l,
+    baseUrl: config.apiUrl,
+    poolSecret: environmentSecret,
+    onDebug: debugLog,
     capabilities: [],
   });
-  let H = {
-    orchestratorUuid: s,
-    hostname: u,
+  let orchestrator = {
+    orchestratorUuid: runnerId,
+    hostname: hostName,
     version: RUNNER_CLIENT_VERSION,
-    pool_id: U,
+    pool_id: loopController,
     connected: false,
     last_poll_at: 0,
     last_hint_at: 0,
@@ -217,118 +217,119 @@ Run 'claude self-hosted-runner orchestrator --help' for usage.`,
     },
     spawnHookDurations: newDurationHistogram(),
     pollErrors: emptyErrorCategoryCounts(),
-    scm_connector: n.scmConnector ? newScmConnectorStatus() : null,
+    scm_connector: config.scmConnector ? newScmConnectorStatus() : null,
     sessionQueueWaits: newSpawnHistogram(),
   };
-  let W = n.healthPort > 0 ? startRunnerHealthServer(n.healthPort, H, g) : undefined;
+  let healthServer =
+    config.healthPort > 0 ? startRunnerHealthServer(config.healthPort, orchestrator, statusLog) : undefined;
   let abortController = new AbortController();
   let abortController_2 = new AbortController();
-  let w;
-  let x;
-  let O =
-    n.shutdownDrainMs > 0
+  let signalPromise;
+  let resolveSignal;
+  let loopPromise =
+    config.shutdownDrainMs > 0
       ? {
           stopSignal: abortController_2.signal,
-          abortAt: () => w,
+          abortAt: () => signalPromise,
         }
       : undefined;
-  let I =
-    n.scmConnector && H.scm_connector
+  let exitPromise =
+    config.scmConnector && orchestrator.scm_connector
       ? startScmConnector(
-          n.scmConnector,
-          H.scm_connector,
+          config.scmConnector,
+          orchestrator.scm_connector,
           {
-            apiUrl: n.apiUrl,
-            poolSecret: S,
-            onStatus: g,
-            onDebug: l,
+            apiUrl: config.apiUrl,
+            poolSecret: environmentSecret,
+            onStatus: statusLog,
+            onDebug: debugLog,
           },
           abortController.signal,
         )
       : undefined;
-  let G = false;
-  let L = (b) => {
-    if (O && !abortController.signal.aborted) {
-      if (b && !abortController_2.signal.aborted) {
-        g(
-          `Received SIGTERM, stopping poll loop; the poll in flight and running hooks have up to ${n.shutdownDrainMs / 1000}s to end...`,
+  let isDraining = false;
+  let drain = (hard) => {
+    if (loopPromise && !abortController.signal.aborted) {
+      if (hard && !abortController_2.signal.aborted) {
+        statusLog(
+          `Received SIGTERM, stopping poll loop; the poll in flight and running hooks have up to ${config.shutdownDrainMs / 1000}s to end...`,
         );
-        w = performance.now() + n.shutdownDrainMs;
-        x = setTimeout(
-          (K, m) => {
-            K("Shutdown drain time is over, stopping what is still running...");
-            m.abort();
+        signalPromise = performance.now() + config.shutdownDrainMs;
+        resolveSignal = setTimeout(
+          (onDrained, sig) => {
+            onDrained("Shutdown drain time is over, stopping what is still running...");
+            sig.abort();
           },
-          n.shutdownDrainMs,
-          g,
+          config.shutdownDrainMs,
+          statusLog,
           abortController,
         );
         abortController_2.abort();
         return;
       }
-      g(
+      statusLog(
         abortController_2.signal.aborted
           ? "Received a second shutdown signal, stopping what is still running..."
           : "Received SIGINT, stopping poll loop and running hooks...",
       );
-      clearTimeout(x);
-      w = performance.now();
+      clearTimeout(resolveSignal);
+      signalPromise = performance.now();
       abortController_2.abort();
       abortController.abort();
       return;
     }
-    if (G || O) {
-      g("Forced shutdown");
+    if (isDraining || loopPromise) {
+      statusLog("Forced shutdown");
       process.exit(1);
     }
-    G = true;
-    g("Received shutdown signal, stopping poll loop...");
+    isDraining = true;
+    statusLog("Received shutdown signal, stopping poll loop...");
     abortController.abort();
   };
-  let B = () => L(true);
-  let q = () => L(false);
-  process.on("SIGTERM", B);
-  process.on("SIGINT", q);
+  let onTerm = () => drain(true);
+  let onInt = () => drain(false);
+  process.on("SIGTERM", onTerm);
+  process.on("SIGINT", onInt);
   try {
     await runOrchestratorLoop(
       {
         apiClient,
-        hookPath: c,
-        args: n,
-        healthState: H,
-        onStatus: g,
-        onDebug: l,
-        drain: O,
-        fatalExit: fatalExitWith((b) => stdioWriter.write("stderr", b)),
+        hookPath,
+        args: config,
+        healthState: orchestrator,
+        onStatus: statusLog,
+        onDebug: debugLog,
+        drain: loopPromise,
+        fatalExit: fatalExitWith((message) => stdioWriter.write("stderr", message)),
       },
       abortController.signal,
     );
   } finally {
-    clearTimeout(x);
-    I?.stop();
-    W?.closeAllConnections?.();
-    W?.close();
-    process.removeListener("SIGTERM", B);
-    process.removeListener("SIGINT", q);
+    clearTimeout(resolveSignal);
+    exitPromise?.stop();
+    healthServer?.closeAllConnections?.();
+    healthServer?.close();
+    process.removeListener("SIGTERM", onTerm);
+    process.removeListener("SIGINT", onInt);
   }
 }
 //@ chunk-2cbdmxy9.js:52374-52935 placement
-async function readPoolSecret(e, t = (r) => console.error(r)) {
-  if (e.poolSecretFile)
+async function readPoolSecret(config, warn = (message) => console.error(message)) {
+  if (config.poolSecretFile)
     return (
       await withBoundedTimeout(
-        readFile(e.poolSecretFile, {
+        readFile(config.poolSecretFile, {
           encoding: "utf-8",
         }),
         CONNECT_RETRY_MS,
-        `environment-secret read from ${e.poolSecretFile}`,
+        `environment-secret read from ${config.poolSecretFile}`,
       )
     ).trim();
   let envSelfHostedRunnerEnvironmentSecret = process.env.SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET;
   if (envSelfHostedRunnerEnvironmentSecret) return envSelfHostedRunnerEnvironmentSecret.trim();
   let envSelfHostedRunnerPoolSecret = process.env.SELF_HOSTED_RUNNER_POOL_SECRET;
   if (envSelfHostedRunnerPoolSecret) {
-    t(
+    warn(
       "[runner:warn] SELF_HOSTED_RUNNER_POOL_SECRET is deprecated; use SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET",
     );
     return envSelfHostedRunnerPoolSecret.trim();
@@ -337,3 +338,4 @@ async function readPoolSecret(e, t = (r) => console.error(r)) {
     "No environment secret provided. Use --environment-secret-file or set SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET.",
   );
 }
+export { runSelfHostedRunnerOrchestrator };

@@ -11,36 +11,42 @@
 import { join } from "path";
 import { rm } from "fs/promises";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { zodStrictObject, string, E } from "../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, stringSchema, numberSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { logJobWriteError } from "../services/daemon/jobState.js";
 import { replaceFileExclusive } from "../services/daemon/promptStash.js";
 import { jsonStringify, jsonParse } from "./slowOperations.js";
 import { isENOENT } from "./errors.js";
 import { readSmallFileOrNull } from "./readSmallFile.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-425yaf76.js:659-808 placement
 /**
  * 待唤醒记录文件名、大小上限与 schema。
  */
-var PENDING_WAKEUP_FILE = ".pending-wakeup";
-var MAX_PENDING_WAKEUP_BYTES = 1024;
-var PENDING_WAKEUP_SCHEMA = DoctorLazy(() =>
-  zodStrictObject({
-    toolUseId: string().min(1).max(256),
-    scheduledFor: E().int().positive(),
-    chainStartedAt: E().int().nonnegative(),
-  }),
-);
+var PENDING_WAKEUP_FILE; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_PENDING_WAKEUP_BYTES;
+var PENDING_WAKEUP_SCHEMA;
+deferInit("chunk-425yaf76.js:659", () => {
+  PENDING_WAKEUP_FILE = ".pending-wakeup";
+  MAX_PENDING_WAKEUP_BYTES = 1024;
+  PENDING_WAKEUP_SCHEMA = DoctorLazy(() =>
+    zodStrictObject({
+      toolUseId: stringSchema().min(1).max(256),
+      scheduledFor: numberSchema().int().positive(),
+      chainStartedAt: numberSchema().int().nonnegative(),
+    }),
+  );
+});
 //@ chunk-425yaf76.js:808-982 placement
 /**
  * 写入（或删除）待唤醒记录。
  */
-async function writePendingWakeup(i, r) {
-  let e = join(i, PENDING_WAKEUP_FILE);
+async function writePendingWakeup(dir, snapshot) {
+  let filePath = join(dir, PENDING_WAKEUP_FILE);
   try {
-    if (r === undefined) {
+    if (snapshot === undefined) {
       if (
-        await rm(e, {
+        await rm(filePath, {
           force: true,
         }).then(
           () => true,
@@ -52,7 +58,7 @@ async function writePendingWakeup(i, r) {
       )
         return;
     }
-    await replaceFileExclusive(e, r === undefined ? "" : jsonStringify(r));
+    await replaceFileExclusive(filePath, snapshot === undefined ? "" : jsonStringify(snapshot));
   } catch (error) {
     if (!isENOENT(error)) logJobWriteError(error);
   }
@@ -68,8 +74,8 @@ async function readPendingWakeup(bgJobDir) {
   );
   if (!smallFileOrNull) return null;
   try {
-    let e = PENDING_WAKEUP_SCHEMA().safeParse(jsonParse(smallFileOrNull));
-    return e.success ? e.data : null;
+    let parsed = PENDING_WAKEUP_SCHEMA().safeParse(jsonParse(smallFileOrNull));
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }

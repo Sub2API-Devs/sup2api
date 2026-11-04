@@ -64,7 +64,7 @@ import {
   mcpConnectRefusal,
   connectMcpServerForPlugin,
 } from "../../plugins/functionHooks/mcpApi.js";
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { getRemoteCaps, hasRemoteCap } from "../../remote/remoteMode.js";
 import { requestContextUsage } from "../../entrypoints/sdk/controlSchemas.js";
 import { collectContextData } from "../../commands/context/context-noninteractive.js";
@@ -123,11 +123,12 @@ import { toAccountInfo } from "../../utils/auth.js";
 import { hasCustomOutputStyle } from "../../constants/outputStyles.js";
 import { mcpServerStatusSnapshots } from "../../services/mcp/config.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:186519-186606 placement
-function activeToolNames(h, x) {
-  if (x === null) return h;
-  return h.filter((D) => x.has(D.name) || REMOTE_SAFE_COMMANDS.has(D));
+function activeToolNames(tools, allowed) {
+  if (allowed === null) return tools;
+  return tools.filter((tool) => allowed.has(tool.name) || REMOTE_SAFE_COMMANDS.has(tool));
 }
 //@ chunk-18hwfzwa.js:186606-186742 placement
 var SESSION_SCOPE_DEFAULTS = [
@@ -140,8 +141,8 @@ var SESSION_SCOPE_DEFAULTS = [
   "combinedInitialTools",
 ];
 //@ chunk-18hwfzwa.js:186742-186808 placement = useMainLoopModel (1)
-function selectMainLoopModels(h) {
-  return [h.mainLoopModel, h.mainLoopModelForSession];
+function selectMainLoopModels(state) {
+  return [state.mainLoopModel, state.mainLoopModelForSession];
 }
 //@ chunk-18hwfzwa.js:186808-201323 placement
 /**
@@ -192,91 +193,105 @@ class ReplSessionScope {
   mergeMcpCommands = memoizeLast(commandNamesForBridge);
   filterForThinClient = memoizeLast(filterCommandsForRemoteMode);
   addWorkerOnly = memoizeLast(withWorkerOnlyCommands);
-  namesOf = memoizeLast((h) => new Set(h));
-  applyCommandFilter = memoizeLast((h, x) => h.filter(x));
+  namesOf = memoizeLast((names) => new Set(names));
+  applyCommandFilter = memoizeLast((commands, filter) => commands.filter(filter));
   addDisplayOnlyTools = memoizeLast(withExtraExportTools);
-  buildCombinedInitialTools = memoizeLast((h, x, D, L, ee, ke, Re, Be, He, We) => [
-    ...getTools(h, {
-      activeAgents: x.activeAgents,
-    }),
-    ...this.initialTools,
-  ]);
-  constructor(h) {
-    this.store = h.store;
-    this.storageV5 = h.storageV5;
-    this.credentials = h.credentials;
-    this.session = h.session;
-    this.initialMcpClients = h.initialMcpClients;
-    this.initialTools = h.initialTools;
-    this.disableSlashCommands = h.disableSlashCommands;
-    this.filterCommands = h.filterCommands;
-    this.isThinClient = h.isThinClient;
-    this.onCommandsChange = h.onCommandsChange;
-    this.localCommands = h.initialCommands;
-    this.lastModelInputs = selectMainLoopModels(h.store.getState());
-    this.dynamicMcp = h.initialDynamicMcpConfig;
-    this.mainThreadAgent = h.mainThreadAgentDefinition;
+  buildCombinedInitialTools = memoizeLast(
+    (
+      toolPermissionContext,
+      agentState,
+      isBriefOnly,
+      userMsgOptIn,
+      slackTagConnected,
+      mainLoopModel,
+      todoTools,
+      workspaceRestricted,
+      policyRebuildKey,
+      alwaysFalseFlag,
+    ) => [
+      ...getTools(toolPermissionContext, {
+        activeAgents: agentState.activeAgents,
+      }),
+      ...this.initialTools,
+    ],
+  );
+  constructor(init) {
+    this.store = init.store;
+    this.storageV5 = init.storageV5;
+    this.credentials = init.credentials;
+    this.session = init.session;
+    this.initialMcpClients = init.initialMcpClients;
+    this.initialTools = init.initialTools;
+    this.disableSlashCommands = init.disableSlashCommands;
+    this.filterCommands = init.filterCommands;
+    this.isThinClient = init.isThinClient;
+    this.onCommandsChange = init.onCommandsChange;
+    this.localCommands = init.initialCommands;
+    this.lastModelInputs = selectMainLoopModels(init.store.getState());
+    this.dynamicMcp = init.initialDynamicMcpConfig;
+    this.mainThreadAgent = init.mainThreadAgentDefinition;
     this.readFileState = createRemoteFileState(READ_FILE_STATE_CACHE_SIZE);
-    this.isolationLatch = createIsolationLatch(null, (x) => saveIsolationLatch(x, this.storageV5));
+    this.isolationLatch = createIsolationLatch(null, (latch) => saveIsolationLatch(latch, this.storageV5));
     this.contentReplacementState = provisionContentReplacementState(
-      h.initialMessages,
-      h.initialContentReplacements,
+      init.initialMessages,
+      init.initialContentReplacements,
     );
     this.sessionBinding = {
       surface: "terminal",
       model: () => this.requireHost().mainLoopModel,
       messages: () => this.requireHost().getMessages(),
-      conversation: (x) => (x === undefined ? this.requireHost().conversation : runningTurnRegistry.of(x)),
+      conversation: (agentId) =>
+        agentId === undefined ? this.requireHost().conversation : runningTurnRegistry.of(agentId),
       tools: () => this.computeTools(),
       commands: () => this.snapshot.commands,
-      mcpServers: () => this.computeMcpClients().map((x) => x.name),
-      toolContext: (x) => {
-        let D = this.requireHost();
-        return D.buildToolUseContext(D.getMessages(), [], x, D.mainLoopModel);
+      mcpServers: () => this.computeMcpClients().map((client) => client.name),
+      toolContext: (permissionContext) => {
+        let host = this.requireHost();
+        return host.buildToolUseContext(host.getMessages(), [], permissionContext, host.mainLoopModel);
       },
-      savedAgentMessages: (x) => waitForAgentTranscriptFlush(x, this.storageV5),
-      requestMessages: (x) => normalizeAgentMessagesForApi(x, this.computeTools()),
-      canUseTool: (...x) => this.requireHost().canUseTool(...x),
-      toast: (x, D, L) => {
+      savedAgentMessages: (agentId) => waitForAgentTranscriptFlush(agentId, this.storageV5),
+      requestMessages: (messages) => normalizeAgentMessagesForApi(messages, this.computeTools()),
+      canUseTool: (...args) => this.requireHost().canUseTool(...args),
+      toast: (plugin, text, timeoutMs) => {
         if (this.requireHost().stacksToasts) {
           stackToast({
-            plugin: x,
-            text: singleLineFieldText(D),
-            timeoutMs: L ?? TOAST_DEFAULT_MS,
+            plugin,
+            text: singleLineFieldText(text),
+            timeoutMs: timeoutMs ?? TOAST_DEFAULT_MS,
           });
           return;
         }
         let state = this.store.getState();
-        let ke = toastQueueState(
+        let toastState = toastQueueState(
           {
             ...state.notifications,
             isHeld: holdsToasts_2(state),
           },
-          x,
+          plugin,
         );
-        let key = toastKeyFor(x, randomUUID());
+        let key = toastKeyFor(plugin, randomUUID());
         logToastGaveWay({
-          key: ke.givesWay,
-          plugin: x,
-          isCutShort: wasToastShown(readBarToasts(), ke.givesWay, ke.isCutShort),
+          key: toastState.givesWay,
+          plugin,
+          isCutShort: wasToastShown(readBarToasts(), toastState.givesWay, toastState.isCutShort),
         });
         this.requireHost().addNotification({
           key,
           kind: "event",
-          text: formatSourceLine(x, D),
+          text: formatSourceLine(plugin, text),
           priority: IMMEDIATE,
-          waitsItsTurn: ke.isWaiting,
-          invalidates: ke.givesWay === undefined ? [] : [ke.givesWay],
-          timeoutMs: L ?? TOAST_DEFAULT_MS,
+          waitsItsTurn: toastState.isWaiting,
+          invalidates: toastState.givesWay === undefined ? [] : [toastState.givesWay],
+          timeoutMs: timeoutMs ?? TOAST_DEFAULT_MS,
         });
         enqueueBarToast({
           key,
-          plugin: x,
-          text: formatSourceLine(x, D),
-          ms: L ?? TOAST_DEFAULT_MS,
+          plugin,
+          text: formatSourceLine(plugin, text),
+          ms: timeoutMs ?? TOAST_DEFAULT_MS,
         });
-        let { current: Be, queue } = this.store.getState().notifications;
-        logForDebugging(`$.ui.toast: shown as ${Be?.key ?? "nothing"} (${queue.length} queued)`);
+        let { current: currentToast, queue } = this.store.getState().notifications;
+        logForDebugging(`$.ui.toast: shown as ${currentToast?.key ?? "nothing"} (${queue.length} queued)`);
       },
       notify: (notification, hookOrigin) =>
         sendNotification(notification, this.requireHost().terminal, {
@@ -284,94 +299,102 @@ class ReplSessionScope {
           credentials: this.credentials,
           hookOrigin,
         }),
-      status: (x, D) => {
-        let L = this.requireHost();
-        let ee = `plugin-status-${x}`;
-        L.removeNotification(ee);
-        if (D !== undefined)
-          L.addNotification({
-            key: ee,
+      status: (plugin, text) => {
+        let host = this.requireHost();
+        let notificationKey = `plugin-status-${plugin}`;
+        host.removeNotification(notificationKey);
+        if (text !== undefined)
+          host.addNotification({
+            key: notificationKey,
             kind: "event",
-            text: formatSourceLine(x, D),
+            text: formatSourceLine(plugin, text),
             priority: "low",
             pinned: true,
           });
       },
-      addMcpServer: async (x, D) => {
-        let L = Symbol(x);
-        this.pendingMcpServerAdds.set(x, L);
+      addMcpServer: async (serverName, config) => {
+        let token = Symbol(serverName);
+        this.pendingMcpServerAdds.set(serverName, token);
         await awaitPolicyColdStartWaiter();
-        if (this.pendingMcpServerAdds.get(x) !== L) return;
-        this.pendingMcpServerAdds.delete(x);
-        this.updateDynamicMcpConfig((ee) => ({
-          ...(ee ?? {}),
-          [x]: D,
+        if (this.pendingMcpServerAdds.get(serverName) !== token) return;
+        this.pendingMcpServerAdds.delete(serverName);
+        this.updateDynamicMcpConfig((dynamicMcp) => ({
+          ...(dynamicMcp ?? {}),
+          [serverName]: config,
         }));
       },
-      resolveMcpServer: (x) =>
+      resolveMcpServer: (server) =>
         explainPluginServer({
-          ...x,
+          ...server,
           storageV5: this.storageV5,
           credentials: this.credentials,
           dynamicServers: this.dynamicMcp ?? {},
         }),
-      settledMcpServer: (x) =>
+      settledMcpServer: (server) =>
         awaitMcpServerConnected(
           {
             rows: () => this.store.getState().mcp.clients,
-            subscribe: (D) => this.store.subscribe(D),
+            subscribe: (listener) => this.store.subscribe(listener),
           },
-          x,
+          server,
         ),
-      connectMcpServer: async (x, D) => {
-        let L = Symbol(x);
-        this.pendingMcpServerAdds.set(x, L);
+      connectMcpServer: async (serverName, config) => {
+        let token = Symbol(serverName);
+        this.pendingMcpServerAdds.set(serverName, token);
         await awaitPolicyColdStartWaiter();
-        if (this.pendingMcpServerAdds.get(x) !== L)
-          return mcpConnectRefusal("failed", `The MCP server "${x}" left the session before it connected.`);
-        this.pendingMcpServerAdds.delete(x);
+        if (this.pendingMcpServerAdds.get(serverName) !== token)
+          return mcpConnectRefusal(
+            "failed",
+            `The MCP server "${serverName}" left the session before it connected.`,
+          );
+        this.pendingMcpServerAdds.delete(serverName);
         return connectMcpServerForPlugin(
           {
             rows: () => this.store.getState().mcp.clients,
-            subscribe: (ee) => this.store.subscribe(ee),
-            add: (ee, ke) =>
-              this.updateDynamicMcpConfig((Re) => ({
-                ...(Re ?? {}),
-                [ee]: ke,
+            subscribe: (listener) => this.store.subscribe(listener),
+            add: (name, entry) =>
+              this.updateDynamicMcpConfig((dynamicMcp) => ({
+                ...(dynamicMcp ?? {}),
+                [name]: entry,
               })),
-            drop: (ee) => this.updateDynamicMcpConfig((ke) => wi(ke ?? {}, (Re, Be) => Be === ee)),
-            holds: (ee) => Object.hasOwn(this.dynamicMcp ?? {}, ee),
-            forget: (ee, ke) => clearMcpAuthCaches(ee, ke, this.storageV5),
+            drop: (name) =>
+              this.updateDynamicMcpConfig((dynamicMcp) =>
+                import_reject(dynamicMcp ?? {}, (entry, entryName) => entryName === name),
+              ),
+            holds: (name) => Object.hasOwn(this.dynamicMcp ?? {}, name),
+            forget: (serverName, serverId) => clearMcpAuthCaches(serverName, serverId, this.storageV5),
           },
-          x,
-          D,
+          serverName,
+          config,
         );
       },
-      removeMcpServer: async (x) => {
-        this.pendingMcpServerAdds.delete(x);
-        this.updateDynamicMcpConfig((D) => wi(D ?? {}, (L, ee) => ee === x));
+      removeMcpServer: async (serverName) => {
+        this.pendingMcpServerAdds.delete(serverName);
+        this.updateDynamicMcpConfig((dynamicMcp) =>
+          import_reject(dynamicMcp ?? {}, (key, entryName) => entryName === serverName),
+        );
       },
       refreshCommands: () => void this.rereadCommands(),
       refreshAgents: () => this.rereadAgents(),
-      refreshContext: h.refreshContext,
-      compact: (x) => this.requireHost().compact(x),
-      contextData: async (x) => {
+      refreshContext: init.refreshContext,
+      compact: (options) => this.requireHost().compact(options),
+      contextData: async (request) => {
         let controlChannel = getRemoteCaps();
         if (controlChannel) {
           if (!hasRemoteCap("controlChannel"))
             throw Error("the context breakdown isn't available over this remote connection");
-          let ke = await requestContextUsage(controlChannel, {
-            detail: x.detail,
+          let data = await requestContextUsage(controlChannel, {
+            detail: request.detail,
           });
-          if (!ke) throw Error("the remote sent a context breakdown this version can't read");
-          return ke;
+          if (!data) throw Error("the remote sent a context breakdown this version can't read");
+          return data;
         }
-        let L = this.requireHost();
-        let toolUseContext = L.buildToolUseContext(
-          L.getMessages(),
+        let host = this.requireHost();
+        let toolUseContext = host.buildToolUseContext(
+          host.getMessages(),
           [],
           new AbortController(),
-          L.mainLoopModel,
+          host.mainLoopModel,
         );
         return collectContextData({
           session: toolUseContext.session,
@@ -381,26 +404,26 @@ class ReplSessionScope {
           storageV5: this.storageV5,
           credentials: this.credentials,
           options: toolUseContext.options,
-          detail: x.detail,
-          terminalWidth: x.terminalWidth,
+          detail: request.detail,
+          terminalWidth: request.terminalWidth,
         });
       },
       composer: {
         read: () => this.requireHost().readDraft(),
-        write: (x, D, L) => this.requireHost().fillDraft(x, D, L),
-        paint: (x, D, L) => this.requireHost().paintDraft(x, D, L),
-        forget: (x) => this.host?.forgetPaint(x),
-        attribute: (x, D) => this.requireHost().attributeDraft(x, D),
-        propose: (x, D) => this.requireHost().suggestDraft(x, D),
+        write: (text, options, meta) => this.requireHost().fillDraft(text, options, meta),
+        paint: (text, options, meta) => this.requireHost().paintDraft(text, options, meta),
+        forget: (paintId) => this.host?.forgetPaint(paintId),
+        attribute: (text, source) => this.requireHost().attributeDraft(text, source),
+        propose: (text, source) => this.requireHost().suggestDraft(text, source),
       },
       transcript: {
-        reveal: (x, D) => this.requireHost().revealInTranscript(x, D),
+        reveal: (messageUuid, options) => this.requireHost().revealInTranscript(messageUuid, options),
       },
       selection: {
         read: () => selectionPayloadForAltScreen(this.selectionWatch()),
       },
       view: {
-        show: (x) => showAgentTaskView(this.store, x),
+        show: (taskId) => showAgentTaskView(this.store, taskId),
       },
     };
     this.snapshot = this.derive();
@@ -412,7 +435,7 @@ class ReplSessionScope {
   selectionWatch() {
     return {
       source: getSecondRootError().get(process.stdout),
-      rowHolding: (h) => this.host?.rowHoldingSelection(h),
+      rowHolding: (row) => this.host?.rowHoldingSelection(row),
     };
   }
   requireHost() {
@@ -459,7 +482,7 @@ class ReplSessionScope {
     clearForkCacheSafeParams();
     for (let stop of this.stops.splice(0)) stop();
   }
-  subscribe = (h) => this.changed.subscribe(h);
+  subscribe = (listener) => this.changed.subscribe(listener);
   getSnapshot = () => this.snapshot;
   get commands() {
     return this.snapshot.commands;
@@ -468,13 +491,13 @@ class ReplSessionScope {
     return this.mainThreadAgent;
   }
   get combinedInitialTools() {
-    let h = this.combinedInitialToolsFor(this.store.getState(), todoToolsEnabled());
-    if (h !== this.snapshot.combinedInitialTools) this.refresh();
-    return h;
+    let tools = this.combinedInitialToolsFor(this.store.getState(), todoToolsEnabled());
+    if (tools !== this.snapshot.combinedInitialTools) this.refresh();
+    return tools;
   }
-  setMainThreadAgentDefinition(h) {
-    if (h === this.mainThreadAgent) return;
-    this.mainThreadAgent = h;
+  setMainThreadAgentDefinition(agentDefinition) {
+    if (agentDefinition === this.mainThreadAgent) return;
+    this.mainThreadAgent = agentDefinition;
     this.refresh();
   }
   lastStoreInputs = [];
@@ -486,7 +509,7 @@ class ReplSessionScope {
       this.lastModelInputs = mainLoopModels;
       if (!this.isThinClient) this.rereadCommands();
     }
-    let D = [
+    let inputs = [
       state.plugins.commands,
       state.mcp,
       state.toolPermissionContext,
@@ -500,24 +523,24 @@ class ReplSessionScope {
       this.isThinClient && state.workerInventory,
       state.settings,
     ];
-    if (arraysEqual(this.lastStoreInputs, D)) return;
-    this.lastStoreInputs = D;
+    if (arraysEqual(this.lastStoreInputs, inputs)) return;
+    this.lastStoreInputs = inputs;
     this.refresh();
   };
   refresh = () => {
     if (this.disposed) return;
-    let h;
+    let nextSnapshot;
     try {
-      h = this.derive();
+      nextSnapshot = this.derive();
     } catch (error) {
       logError(error);
       return;
     }
     let snapshot = this.snapshot;
-    if (SESSION_SCOPE_DEFAULTS.every((D) => snapshot[D] === h[D])) return;
-    this.snapshot = h;
+    if (SESSION_SCOPE_DEFAULTS.every((key) => snapshot[key] === nextSnapshot[key])) return;
+    this.snapshot = nextSnapshot;
     try {
-      if (h.commands !== snapshot.commands) this.onCommandsChange?.(h.commands);
+      if (nextSnapshot.commands !== snapshot.commands) this.onCommandsChange?.(nextSnapshot.commands);
       this.changed.emit();
     } catch (error) {
       logError(error);
@@ -525,44 +548,44 @@ class ReplSessionScope {
   };
   derive() {
     let state = this.store.getState();
-    let x = todoToolsEnabled();
-    let D = memorySkillNamesSnapshot();
-    let L = this.narrowToWorker(this.localCommands, this.workerCommands.getState());
-    let ee = this.mergePluginCommands(L, state.plugins.commands, D);
-    let ke = this.mergeMcpCommands(ee, state.mcp.commands, D);
+    let todoTools = todoToolsEnabled();
+    let memorySkillNames = memorySkillNamesSnapshot();
+    let workerNarrowed = this.narrowToWorker(this.localCommands, this.workerCommands.getState());
+    let withPlugins = this.mergePluginCommands(workerNarrowed, state.plugins.commands, memorySkillNames);
+    let withMcp = this.mergeMcpCommands(withPlugins, state.mcp.commands, memorySkillNames);
     let commands = state.workerInventory?.commands;
-    let Be = this.isThinClient
+    let commands_2 = this.isThinClient
       ? this.addWorkerOnly(
-          this.filterForThinClient(ke),
+          this.filterForThinClient(withMcp),
           commands === undefined ? null : this.namesOf(commands),
         )
-      : ke;
-    let commands_2 = this.disableSlashCommands
+      : withMcp;
+    let commands_3 = this.disableSlashCommands
       ? this.noCommands
       : this.filterCommands
-        ? this.applyCommandFilter(Be, this.filterCommands)
-        : Be;
-    let We = this.combinedInitialToolsFor(state, x);
-    let { tools, allowedAgentTypes } = this.computeToolPool(state, We, x);
+        ? this.applyCommandFilter(commands_2, this.filterCommands)
+        : commands_2;
+    let initialTools = this.combinedInitialToolsFor(state, todoTools);
+    let { tools, allowedAgentTypes } = this.computeToolPool(state, initialTools, todoTools);
     return {
-      commands: commands_2,
+      commands: commands_3,
       dynamicMcpConfig: this.dynamicMcp,
       tools,
       renderingTools: this.addDisplayOnlyTools(tools, this.isThinClient && alwaysFalseSessionScope(state)),
       allowedAgentTypes,
       mainThreadAgentDefinition: this.mainThreadAgent,
-      combinedInitialTools: We,
+      combinedInitialTools: initialTools,
     };
   }
-  combinedInitialToolsFor(h, x) {
+  combinedInitialToolsFor(state, todoTools) {
     return this.buildCombinedInitialTools(
-      h.toolPermissionContext,
-      h.agentDefinitions,
-      h.isBriefOnly,
+      state.toolPermissionContext,
+      state.agentDefinitions,
+      state.isBriefOnly,
       getUserMsgOptIn(),
-      h.slackTagConnected,
-      h.mainLoopModel,
-      x,
+      state.slackTagConnected,
+      state.mainLoopModel,
+      todoTools,
       isWorkspaceRestricted(),
       policyVerdictRebuildKey(),
       alwaysFalseFlag(),
@@ -593,14 +616,14 @@ class ReplSessionScope {
     let under = "";
     try {
       under = join(getManagedFilePath(), ".claude") + sep;
-      let x = managedFolderCondition();
-      return x === "held:"
+      let hold = managedFolderCondition();
+      return hold === "held:"
         ? {
-            hold: x,
+            hold,
             under,
           }
         : {
-            hold: x,
+            hold,
           };
     } catch (error) {
       if (error instanceof Error) logError(error);
@@ -612,19 +635,19 @@ class ReplSessionScope {
           };
     }
   }
-  shedHeldManagedAgents(h) {
+  shedHeldManagedAgents(hold) {
     let agentDefinitions = this.store.getState().agentDefinitions;
-    if (h === undefined && agentDefinitions === this.shedSeat) return;
+    if (hold === undefined && agentDefinitions === this.shedSeat) return;
     this.shedSeat = agentDefinitions;
-    let { under } = h ?? this.readHold();
+    let { under } = hold ?? this.readHold();
     let filtered = agentDefinitions.allAgents.filter(
       (agent) =>
         under === undefined || agent.source !== "policySettings" || !agent.baseDir?.startsWith(under),
     );
     if (filtered.length !== agentDefinitions.allAgents.length)
-      this.store.setState((ee) => ({
-        ...ee,
-        agentDefinitions: rebuildAgentDefinitions(ee.agentDefinitions, filtered),
+      this.store.setState((state) => ({
+        ...state,
+        agentDefinitions: rebuildAgentDefinitions(state.agentDefinitions, filtered),
       }));
   }
   noteHoldMove() {
@@ -642,10 +665,10 @@ class ReplSessionScope {
         this.storageV5,
       );
       if (this.disposed) return;
-      this.store.setState((x) => {
-        let filtered = x.agentDefinitions.allAgents.filter((agent) => agent.source === "flagSettings");
+      this.store.setState((state) => {
+        let filtered = state.agentDefinitions.allAgents.filter((agent) => agent.source === "flagSettings");
         return {
-          ...x,
+          ...state,
           agentDefinitions: rebuildAgentDefinitions(
             agentDefinitionsWithOverrides,
             withLiveRegisteredAgents([...agentDefinitionsWithOverrides.allAgents, ...filtered]),
@@ -655,11 +678,11 @@ class ReplSessionScope {
     } catch (error) {
       if (error instanceof Error) logError(error);
       if (this.disposed) return;
-      this.store.setState((x) => ({
-        ...x,
+      this.store.setState((state) => ({
+        ...state,
         agentDefinitions: rebuildAgentDefinitions(
-          x.agentDefinitions,
-          withLiveRegisteredAgents(x.agentDefinitions.allAgents),
+          state.agentDefinitions,
+          withLiveRegisteredAgents(state.agentDefinitions.allAgents),
         ),
       }));
     }
@@ -683,18 +706,18 @@ class ReplSessionScope {
       if (error instanceof Error) logError(error);
     }
   };
-  replaceLocalCommands(h, x = this.disposed ? {} : this.readHold()) {
-    let { under } = x;
-    let filtered = h.filter(
-      (ke) =>
+  replaceLocalCommands(localCommands, hold = this.disposed ? {} : this.readHold()) {
+    let { under } = hold;
+    let filtered = localCommands.filter(
+      (command) =>
         under === undefined ||
-        ke.type !== "prompt" ||
-        ke.source !== "policySettings" ||
-        !(ke.skillRoot ?? ke.skillFile?.path)?.startsWith(under),
+        command.type !== "prompt" ||
+        command.source !== "policySettings" ||
+        !(command.skillRoot ?? command.skillFile?.path)?.startsWith(under),
     );
-    let ee = filtered.length === h.length ? h : filtered;
-    if (this.disposed || ee === this.localCommands) return;
-    this.localCommands = ee;
+    let filteredCommands = filtered.length === localCommands.length ? localCommands : filtered;
+    if (this.disposed || filteredCommands === this.localCommands) return;
+    this.localCommands = filteredCommands;
     this.refresh();
   }
   sessionPlugins = {
@@ -707,28 +730,28 @@ class ReplSessionScope {
         credentials: this.credentials,
       }),
     joinPluginDir: addPluginDirAndRebuildSandbox,
-    retarget: (h) => PluginsStateStore.over(this.store).retarget(h),
+    retarget: (dir) => PluginsStateStore.over(this.store).retarget(dir),
   };
   get dynamicMcpConfig() {
     return this.snapshot.dynamicMcpConfig;
   }
-  updateDynamicMcpConfig = (h) => {
+  updateDynamicMcpConfig = (updater) => {
     let dynamicMcp = this.dynamicMcp;
-    let D = typeof h === "function" ? h(dynamicMcp) : h;
-    if (D === dynamicMcp) return;
-    this.dynamicMcp = D;
+    let nextConfig = typeof updater === "function" ? updater(dynamicMcp) : updater;
+    if (nextConfig === dynamicMcp) return;
+    this.dynamicMcp = nextConfig;
     this.snapshot = {
       ...this.snapshot,
-      dynamicMcpConfig: D,
+      dynamicMcpConfig: nextConfig,
     };
     this.changed.emit();
   };
   addAutoConnectedIde = (ide) => {
-    this.updateDynamicMcpConfig((x) =>
-      x?.ide
-        ? x
+    this.updateDynamicMcpConfig((dynamicMcp) =>
+      dynamicMcp?.ide
+        ? dynamicMcp
         : {
-            ...x,
+            ...dynamicMcp,
             ide,
           },
     );
@@ -736,79 +759,85 @@ class ReplSessionScope {
   computeTools = () => this.computeToolPoolFresh().tools;
   computeToolPoolFresh = () => {
     let state = this.store.getState();
-    let x = todoToolsEnabled();
-    let toolPool = this.computeToolPool(state, this.combinedInitialToolsFor(state, x), x);
+    let todoTools = todoToolsEnabled();
+    let toolPool = this.computeToolPool(state, this.combinedInitialToolsFor(state, todoTools), todoTools);
     if (toolPool.tools !== this.snapshot.tools) this.refresh();
     return toolPool;
   };
-  computeToolPool(h, initialTools, todoTools) {
-    let L = {
-      toolPermissionContext: h.toolPermissionContext,
-      mcpTools: h.mcp.tools,
-      mcpClients: h.mcp.clients,
+  computeToolPool(state, initialTools, todoTools) {
+    let poolInputs = {
+      toolPermissionContext: state.toolPermissionContext,
+      mcpTools: state.mcp.tools,
+      mcpClients: state.mcp.clients,
       combinedInitialTools: initialTools,
       mainThreadAgentDefinition: this.mainThreadAgent,
-      replBridgeEnabled: h.replBridgeEnabled,
-      replBridgeOutboundOnly: h.replBridgeOutboundOnly,
-      agentDefinitions: h.agentDefinitions,
+      replBridgeEnabled: state.replBridgeEnabled,
+      replBridgeOutboundOnly: state.replBridgeOutboundOnly,
+      agentDefinitions: state.agentDefinitions,
       todoTools,
-      slackTagConnected: h.slackTagConnected,
+      slackTagConnected: state.slackTagConnected,
       githubRepo: isCachedGitHubRepo(),
       workspaceRestricted: isWorkspaceRestricted(),
       waitForMcpServersDeclared: isDeclared(),
     };
     let toolPoolCache = this.toolPoolCache;
-    if (toolPoolCache !== null && assembleSessionTools(toolPoolCache.key, L)) return toolPoolCache.result;
-    setReplBridgeActive(h.replBridgeEnabled && !h.replBridgeOutboundOnly);
-    let found = h.mcp.clients.find(isCommsRoledServer);
+    if (toolPoolCache !== null && assembleSessionTools(toolPoolCache.key, poolInputs))
+      return toolPoolCache.result;
+    setReplBridgeActive(state.replBridgeEnabled && !state.replBridgeOutboundOnly);
+    let found = state.mcp.clients.find(isCommsRoledServer);
     if (found)
       this.commsRoledServerSeen = {
         name: found.name,
         type: "disabled",
         config: found.config,
       };
-    let assembled = assembleToolPool(h.toolPermissionContext, h.mcp.tools, {
-      activeAgents: h.agentDefinitions.activeAgents,
+    let assembled = assembleToolPool(state.toolPermissionContext, state.mcp.tools, {
+      activeAgents: state.agentDefinitions.activeAgents,
     });
-    let Be = mergeAndFilterTools(
+    let mergedTools = mergeAndFilterTools(
       initialTools,
       assembled,
-      h.toolPermissionContext.mode,
-      [...initialTools, ...h.mcp.tools],
+      state.toolPermissionContext.mode,
+      [...initialTools, ...state.mcp.tools],
       createAccountMemoryToolGate(() =>
-        this.commsRoledServerSeen ? [...h.mcp.clients, this.commsRoledServerSeen] : h.mcp.clients,
+        this.commsRoledServerSeen ? [...state.mcp.clients, this.commsRoledServerSeen] : state.mcp.clients,
       ),
     );
     let mainThreadAgent = this.mainThreadAgent;
-    let We = mainThreadAgent
+    let agentTools = mainThreadAgent
       ? resolveAgentTools(
           mainThreadAgent,
-          withWebFetchToolForAgent(mainThreadAgent, Be, h.toolPermissionContext, {
-            activeAgents: h.agentDefinitions.activeAgents,
+          withWebFetchToolForAgent(mainThreadAgent, mergedTools, state.toolPermissionContext, {
+            activeAgents: state.agentDefinitions.activeAgents,
           }),
           false,
           true,
         )
       : undefined;
-    let ze = stripSoleNonDeniableTool(We ? We.resolvedTools : Be, h.toolPermissionContext);
-    let allowedAgentTypes = We?.allowedAgentTypes;
-    let rt = mainThreadAgent ? resolveAgentToolNames(mainThreadAgent) : undefined;
-    let kt = toolPoolCache !== null && arraysEqual(toolPoolCache.result.tools, ze);
-    let At = toolPoolCache !== null && arraysEqual(toolPoolCache.result.allowedAgentTypes, allowedAgentTypes);
-    let It = toolPoolCache !== null && hasAnyOf(toolPoolCache.result.primitiveToolGrant, rt);
-    let Ot =
-      kt && At && It
+    let toolList = stripSoleNonDeniableTool(
+      agentTools ? agentTools.resolvedTools : mergedTools,
+      state.toolPermissionContext,
+    );
+    let allowedAgentTypes = agentTools?.allowedAgentTypes;
+    let agentToolNames = mainThreadAgent ? resolveAgentToolNames(mainThreadAgent) : undefined;
+    let sameTools = toolPoolCache !== null && arraysEqual(toolPoolCache.result.tools, toolList);
+    let sameAgentTypes =
+      toolPoolCache !== null && arraysEqual(toolPoolCache.result.allowedAgentTypes, allowedAgentTypes);
+    let sameGrant =
+      toolPoolCache !== null && hasAnyOf(toolPoolCache.result.primitiveToolGrant, agentToolNames);
+    let pool =
+      sameTools && sameAgentTypes && sameGrant
         ? toolPoolCache.result
         : {
-            tools: kt ? toolPoolCache.result.tools : ze,
-            allowedAgentTypes: At ? toolPoolCache.result.allowedAgentTypes : allowedAgentTypes,
-            primitiveToolGrant: It ? toolPoolCache.result.primitiveToolGrant : rt,
+            tools: sameTools ? toolPoolCache.result.tools : toolList,
+            allowedAgentTypes: sameAgentTypes ? toolPoolCache.result.allowedAgentTypes : allowedAgentTypes,
+            primitiveToolGrant: sameGrant ? toolPoolCache.result.primitiveToolGrant : agentToolNames,
           };
     this.toolPoolCache = {
-      key: L,
-      result: Ot,
+      key: poolInputs,
+      result: pool,
     };
-    return Ot;
+    return pool;
   }
   computeMcpClients = () => mergeClients(this.initialMcpClients, this.store.getState().mcp.clients);
   sandboxClassifierVerdicts() {
@@ -825,76 +854,81 @@ class ReplSessionScope {
       extractReadFilesFromMessages(messages, cwd, READ_FILE_STATE_CACHE_SIZE),
     );
   }
-  reseatIsolationLatch(h) {
+  reseatIsolationLatch(latch) {
     this.isolationLatch.onLatch = undefined;
-    this.isolationLatch = createIsolationLatch(h, (x) => saveIsolationLatch(x, this.storageV5));
+    this.isolationLatch = createIsolationLatch(latch, (latch) => saveIsolationLatch(latch, this.storageV5));
   }
   reconstructContentReplacementState(messages, records) {
     if (!this.contentReplacementState) return;
     this.contentReplacementState = reconstructContentReplacementState(messages, records);
   }
-  evictRewoundFileTracking(h) {
-    for (let readFilePath of h.readFilePaths) this.readFileState.delete(readFilePath);
-    for (let nestedMemoryPath of h.nestedMemoryPaths) this.readFileState.delete(nestedMemoryPath);
+  evictRewoundFileTracking(rewound) {
+    for (let readFilePath of rewound.readFilePaths) this.readFileState.delete(readFilePath);
+    for (let nestedMemoryPath of rewound.nestedMemoryPaths) this.readFileState.delete(nestedMemoryPath);
   }
-  seedMemoryFile(h, x) {
-    this.readFileState.set(h, {
-      ...x,
+  seedMemoryFile(path, fileState) {
+    this.readFileState.set(path, {
+      ...fileState,
       startupMemorySeed: true,
     });
   }
 }
 //@ chunk-18hwfzwa.js:201323-201457 placement
-function hasAnyOf(primitiveToolGrant, x) {
-  if (primitiveToolGrant === x) return true;
-  if (primitiveToolGrant === undefined || x === undefined || primitiveToolGrant.size !== x.size) return false;
-  for (let D of primitiveToolGrant) if (!x.has(D)) return false;
+function hasAnyOf(primitiveToolGrant, other) {
+  if (primitiveToolGrant === other) return true;
+  if (primitiveToolGrant === undefined || other === undefined || primitiveToolGrant.size !== other.size)
+    return false;
+  for (let item of primitiveToolGrant) if (!other.has(item)) return false;
   return true;
 }
 //@ chunk-18hwfzwa.js:201457-202036 placement
-function assembleSessionTools(key, x) {
+function assembleSessionTools(key, other) {
   return (
-    key.toolPermissionContext === x.toolPermissionContext &&
-    key.mcpTools === x.mcpTools &&
-    key.mcpClients === x.mcpClients &&
-    key.combinedInitialTools === x.combinedInitialTools &&
-    key.mainThreadAgentDefinition === x.mainThreadAgentDefinition &&
-    key.replBridgeEnabled === x.replBridgeEnabled &&
-    key.replBridgeOutboundOnly === x.replBridgeOutboundOnly &&
-    key.agentDefinitions === x.agentDefinitions &&
-    key.todoTools === x.todoTools &&
-    key.slackTagConnected === x.slackTagConnected &&
-    key.githubRepo === x.githubRepo &&
-    key.workspaceRestricted === x.workspaceRestricted &&
-    key.waitForMcpServersDeclared === x.waitForMcpServersDeclared
+    key.toolPermissionContext === other.toolPermissionContext &&
+    key.mcpTools === other.mcpTools &&
+    key.mcpClients === other.mcpClients &&
+    key.combinedInitialTools === other.combinedInitialTools &&
+    key.mainThreadAgentDefinition === other.mainThreadAgentDefinition &&
+    key.replBridgeEnabled === other.replBridgeEnabled &&
+    key.replBridgeOutboundOnly === other.replBridgeOutboundOnly &&
+    key.agentDefinitions === other.agentDefinitions &&
+    key.todoTools === other.todoTools &&
+    key.slackTagConnected === other.slackTagConnected &&
+    key.githubRepo === other.githubRepo &&
+    key.workspaceRestricted === other.workspaceRestricted &&
+    key.waitForMcpServersDeclared === other.waitForMcpServersDeclared
   );
 }
 //@ chunk-18hwfzwa.js:202036-202061 placement
-function alwaysFalseSessionScope(h) {
+function alwaysFalseSessionScope(state) {
   return false;
 }
 //@ chunk-18hwfzwa.js:202061-202241 placement
 /**
  * 记住上一次参数与结果，参数逐个相同时直接返回缓存结果。
  */
-function memoizeLast(h) {
-  let x = null;
-  return (...D) => {
-    if (x !== null && x.inputs.length === D.length && x.inputs.every((input, ke) => input === D[ke]))
-      return x.result;
-    let L = h(...D);
-    x = {
-      inputs: D,
-      result: L,
+function memoizeLast(fn) {
+  let last = null;
+  return (...inputs) => {
+    if (
+      last !== null &&
+      last.inputs.length === inputs.length &&
+      last.inputs.every((input, index) => input === inputs[index])
+    )
+      return last.result;
+    let result = fn(...inputs);
+    last = {
+      inputs,
+      result,
     };
-    return L;
+    return result;
   };
 }
 //@ chunk-18hwfzwa.js:202241-202607 placement
 function runWithQueryParams({ store, scope, readPendingQueryParams }) {
   return createQueryEngine({
     run: query,
-    queryParams: async (L) => readPendingQueryParams(),
+    queryParams: async (params) => readPendingQueryParams(),
     commands: () => toSlashCommands(scope.commands),
     models: () => toSdkModelInfos(getEnabledModelOptions()),
     unavailableModels: () => toSdkModelInfos(getUnavailableModelOptions()),
@@ -907,7 +941,10 @@ function runWithQueryParams({ store, scope, readPendingQueryParams }) {
   });
 }
 //@ chunk-18hwfzwa.js:202607-202611 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:202607", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:202611-202646 placement
 var REMOUNT_SETTLE_MS = 5000;
 var BRIDGE_RETRY_DELAYS_MS = [2000, 8000, 30000];

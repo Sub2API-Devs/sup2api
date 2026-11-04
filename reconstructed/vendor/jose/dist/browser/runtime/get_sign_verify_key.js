@@ -5,26 +5,26 @@
  * pieces: chunk-2tyrgda4.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { Xa } from "../../../../../runtime/bun-runtime.js";
+import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { init_content_encryption_2 } from "../../webapi/lib/content_encryption.js";
-import { g, p } from "../../webapi/lib/buffer_utils.js";
+import { isCryptoKey, cryptoModule } from "../../webapi/lib/buffer_utils.js";
 import { checkSigCryptoKey } from "../../node/esm/lib/crypto_key.js";
-import { A } from "../../node/esm/lib/invalid_key_input.js";
-import { m } from "./is_key_like.js";
+import { keyMustBeTypeError } from "../../node/esm/lib/invalid_key_input.js";
+import { keyObjectTypes } from "./is_key_like.js";
 
 //@ chunk-2tyrgda4.js:27831-27852 esm-layout
-var init_get_sign_verify_key = Xa(() => {
+var init_get_sign_verify_key = __esm(() => {
   init_content_encryption_2();
 });
 //@ chunk-2tyrgda4.js:27852-28098 esm-fingerprint
 function getCryptoKey_3(alg, key, usage) {
-  if (g(key)) {
+  if (isCryptoKey(key)) {
     checkSigCryptoKey(key, alg, usage);
     return key;
   }
   if (key instanceof Uint8Array) {
-    if (!alg.startsWith("HS")) throw TypeError(A(key, ...m));
-    return p.subtle.importKey(
+    if (!alg.startsWith("HS")) throw TypeError(keyMustBeTypeError(key, ...keyObjectTypes));
+    return cryptoModule.subtle.importKey(
       "raw",
       key,
       {
@@ -35,6 +35,6 @@ function getCryptoKey_3(alg, key, usage) {
       [usage],
     );
   }
-  throw TypeError(A(key, ...m, "Uint8Array"));
+  throw TypeError(keyMustBeTypeError(key, ...keyObjectTypes, "Uint8Array"));
 }
 export { getCryptoKey_3, init_get_sign_verify_key };

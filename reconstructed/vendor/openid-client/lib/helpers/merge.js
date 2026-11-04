@@ -5,11 +5,11 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_is_plain_object } from "./is_plain_object.js";
 
 //@ chunk-1ny7cxrt.js:27191-27454 cjs-fingerprint
-var require_merge = x(function (cjsExports, cjsModule) {
+var require_merge = __commonJS(function (cjsExports, cjsModule) {
   var isPlainObject = require_is_plain_object();
   function merge(target, ...sources) {
     for (let source of sources) {

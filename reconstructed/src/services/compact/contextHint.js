@@ -45,33 +45,33 @@ function isHazelOspreyFloorGateOn() {
 /**
  * 是否为会话额度类错误（422/424 的 API 错误）。
  */
-function isSessionLimitError(e) {
-  return e instanceof APIError && (e.status === 422 || e.status === 424);
+function isSessionLimitError(error) {
+  return error instanceof APIError && (error.status === 422 || error.status === 424);
 }
 //@ chunk-gzv3xh26.js:12152-12281 placement
 /**
  * 无状态码的 invalid_request_error API 错误。
  */
-function isInvalidRequestWithoutStatus(e) {
-  if (!(e instanceof APIError)) return false;
-  if (e.status !== undefined) return false;
-  return e.error?.error?.type === "invalid_request_error";
+function isInvalidRequestWithoutStatus(error) {
+  if (!(error instanceof APIError)) return false;
+  if (error.status !== undefined) return false;
+  return error.error?.error?.type === "invalid_request_error";
 }
 //@ chunk-gzv3xh26.js:12281-12334 placement
 /**
  * 是否为冲突错误（409）。
  */
-function isConflictError(e) {
-  return e instanceof APIError && e.status === 409;
+function isConflictError(error) {
+  return error instanceof APIError && error.status === 409;
 }
 //@ chunk-gzv3xh26.js:12334-12502 placement
 /**
  * 400 错误且提示 anthropic-beta 不被接受。
  */
-function isUnsupportedBetaError(e) {
-  if (!(e instanceof APIError)) return false;
-  if (e.status !== 400) return false;
-  let message = e.message ?? "";
+function isUnsupportedBetaError(error) {
+  if (!(error instanceof APIError)) return false;
+  if (error.status !== 400) return false;
+  let message = error.message ?? "";
   return (
     (message.includes("Unexpected value") && message.includes("anthropic-beta")) ||
     isBetaHeaderRejection(message)
@@ -81,22 +81,22 @@ function isUnsupportedBetaError(e) {
 /**
  * 从 API 错误里取 request id。
  */
-function getRequestIdFromError(e) {
-  if (e instanceof APIError) return e.requestID ?? undefined;
+function getRequestIdFromError(error) {
+  if (error instanceof APIError) return error.requestID ?? undefined;
   return;
 }
 //@ chunk-gzv3xh26.js:12569-12822 placement
 /**
  * 记 tengu_context_hint_reject（压缩前后估算与节省）。
  */
-function logContextHintReject(e) {
+function logContextHintReject(hint) {
   logEvent("tengu_context_hint_reject", {
-    requestId: sanitizeMarkName(e.requestId),
-    preCompactTokenEstimate: e.preCompactTokenEstimate,
-    postCompactTokenEstimate: e.postCompactTokenEstimate,
-    tokensSaved: e.tokensSaved,
-    mcApplied: e.mcApplied,
-    mcTokensSaved: e.mcTokensSaved,
+    requestId: sanitizeMarkName(hint.requestId),
+    preCompactTokenEstimate: hint.preCompactTokenEstimate,
+    postCompactTokenEstimate: hint.postCompactTokenEstimate,
+    tokensSaved: hint.tokensSaved,
+    mcApplied: hint.mcApplied,
+    mcTokensSaved: hint.mcTokensSaved,
   });
 }
 //@ chunk-gzv3xh26.js:12822-12903 placement
@@ -120,14 +120,14 @@ var EMPTY_CLEARED_CONTENT = new Map();
 /**
  * 把工具结果持久化到文件，返回引用文本（可能截断）。
  */
-async function persistedResultReference(e, n, o) {
-  let s = await persistToolResult(e, n, toolResultsDirOrNull(), o);
-  if (isPersistError(s)) return null;
-  let d =
-    s.truncatedAtBytes === undefined
+async function persistedResultReference(toolUseId, result, getDir) {
+  let persisted = await persistToolResult(toolUseId, result, toolResultsDirOrNull(), getDir);
+  if (isPersistError(persisted)) return null;
+  let truncationNote =
+    persisted.truncatedAtBytes === undefined
       ? ""
-      : ` (truncated to the first ${formatFileSize(s.truncatedAtBytes)} of the output)`;
-  return `${PERSISTED_OUTPUT_TAG}Tool result saved to: ${s.filepath}${d}
+      : ` (truncated to the first ${formatFileSize(persisted.truncatedAtBytes)} of the output)`;
+  return `${PERSISTED_OUTPUT_TAG}Tool result saved to: ${persisted.filepath}${truncationNote}
 
 Use ${FILE_READ_TOOL_NAME} to view${PERSISTED_OUTPUT_CLOSING_TAG}`;
 }
@@ -135,23 +135,23 @@ Use ${FILE_READ_TOOL_NAME} to view${PERSISTED_OUTPUT_CLOSING_TAG}`;
 /**
  * 对消息做基于时间的 microcompact，返回结果与前后 token 估算。
  */
-async function microcompactForHint(messages, querySource, storageV5, agentId) {
+async function microcompactForHint(messages, querySource, getDir, agentId) {
   let preCompactTokenEstimate = roughTokenCountEstimationForMessages(messages);
-  let r = await maybeTimeBasedMicrocompact(messages, querySource, {
+  let compacted = await maybeTimeBasedMicrocompact(messages, querySource, {
     keepRecent: KEEP_RECENT_TOOL_RESULTS,
-    persist: (x, R) => persistedResultReference(x, R, storageV5),
+    persist: (message, index) => persistedResultReference(message, index, getDir),
     agentId,
   });
-  let u = r ? r.messages : messages;
-  let postCompactTokenEstimate = roughTokenCountEstimationForMessages(u);
-  logForDebugging(`[CONTEXT_HINT_REJECT] mc=${!!r} tokensSaved=${r?.tokensSaved ?? 0}`);
+  let afterMessages = compacted ? compacted.messages : messages;
+  let postCompactTokenEstimate = roughTokenCountEstimationForMessages(afterMessages);
+  logForDebugging(`[CONTEXT_HINT_REJECT] mc=${!!compacted} tokensSaved=${compacted?.tokensSaved ?? 0}`);
   return {
-    messages: u,
-    clearedIds: r?.clearedIds ?? _,
-    clearedContent: r?.clearedContent ?? EMPTY_CLEARED_CONTENT,
+    messages: afterMessages,
+    clearedIds: compacted?.clearedIds ?? _,
+    clearedContent: compacted?.clearedContent ?? EMPTY_CLEARED_CONTENT,
     applied: {
-      mcApplied: !!r,
-      mcTokensSaved: r?.tokensSaved ?? 0,
+      mcApplied: !!compacted,
+      mcTokensSaved: compacted?.tokensSaved ?? 0,
     },
     preCompactTokenEstimate,
     postCompactTokenEstimate,
@@ -161,68 +161,74 @@ async function microcompactForHint(messages, querySource, storageV5, agentId) {
 /**
  * 服务端拒绝上下文提示时本地做 microcompact 并记录。
  */
-async function handleContextHintReject(e) {
-  let n = await microcompactForHint(e.messages, e.querySource, e.storageV5, e.agentId);
+async function handleContextHintReject(hint) {
+  let microcompacted = await microcompactForHint(
+    hint.messages,
+    hint.querySource,
+    hint.storageV5,
+    hint.agentId,
+  );
   logFeatureOk("compact_hint_reject");
   logContextHintReject({
-    requestId: e.requestId,
-    preCompactTokenEstimate: n.preCompactTokenEstimate,
-    postCompactTokenEstimate: n.postCompactTokenEstimate,
-    tokensSaved: n.preCompactTokenEstimate - n.postCompactTokenEstimate,
-    mcApplied: n.applied.mcApplied,
-    mcTokensSaved: n.applied.mcTokensSaved,
+    requestId: hint.requestId,
+    preCompactTokenEstimate: microcompacted.preCompactTokenEstimate,
+    postCompactTokenEstimate: microcompacted.postCompactTokenEstimate,
+    tokensSaved: microcompacted.preCompactTokenEstimate - microcompacted.postCompactTokenEstimate,
+    mcApplied: microcompacted.applied.mcApplied,
+    mcTokensSaved: microcompacted.applied.mcTokensSaved,
   });
   return {
-    messages: n.messages,
-    clearedIds: n.clearedIds,
-    clearedContent: n.clearedContent,
+    messages: microcompacted.messages,
+    clearedIds: microcompacted.clearedIds,
+    clearedContent: microcompacted.clearedContent,
   };
 }
 //@ chunk-gzv3xh26.js:14034-14964 placement
-function contextHintRequest(e) {
-  if (!e.includeFirstPartyBetas) return null;
-  if (!e.querySource.startsWith("repl_main_thread")) return null;
-  let n = isHazelOspreyGateOn();
-  let o = false;
-  let s = false;
-  let d = false;
+function contextHintRequest(context) {
+  if (!context.includeFirstPartyBetas) return null;
+  if (!context.querySource.startsWith("repl_main_thread")) return null;
+  let gateOn = isHazelOspreyGateOn();
+  let disabled = false;
+  let requested = false;
+  let streamFallbackSeen = false;
   return {
-    active: n,
-    buildRequestParams(r) {
-      s = false;
-      if (!n || o) return null;
-      s = true;
-      let u = selectClearableToolUses(r, KEEP_RECENT_TOOL_RESULTS).tokensSaved >= MICROCOMPACT_LIMITS;
-      let i = isHazelOspreyFloorGateOn();
+    active: gateOn,
+    buildRequestParams(messages) {
+      requested = false;
+      if (!gateOn || disabled) return null;
+      requested = true;
+      let worthHinting =
+        selectClearableToolUses(messages, KEEP_RECENT_TOOL_RESULTS).tokensSaved >= MICROCOMPACT_LIMITS;
+      let targetTokens = isHazelOspreyFloorGateOn();
       return {
         beta: BETA_CONTEXT_HINT,
-        body: u
+        body: worthHinting
           ? {
               context_hint: {
                 enabled: true,
-                ...(i > 0 && {
-                  target_tokens_saved: i,
+                ...(targetTokens > 0 && {
+                  target_tokens_saved: targetTokens,
                 }),
               },
             }
           : null,
       };
     },
-    async onRequestError(r, messages) {
-      if (!s || o) return null;
-      let requestIdFromError = getRequestIdFromError(r);
-      if (isSessionLimitError(r)) {
-        o = true;
+    async onRequestError(error, messages) {
+      if (!requested || disabled) return null;
+      let requestIdFromError = getRequestIdFromError(error);
+      if (isSessionLimitError(error)) {
+        disabled = true;
         return handleContextHintReject({
           messages,
-          querySource: e.querySource,
-          agentId: e.agentId,
+          querySource: context.querySource,
+          agentId: context.agentId,
           requestId: requestIdFromError,
-          storageV5: e.storageV5,
+          storageV5: context.storageV5,
         });
       }
-      if (isUnsupportedBetaError(r)) {
-        o = true;
+      if (isUnsupportedBetaError(error)) {
+        disabled = true;
         logContextHintBusyFallback(requestIdFromError, 400);
         return {
           messages,
@@ -230,39 +236,40 @@ function contextHintRequest(e) {
           clearedContent: EMPTY_CLEARED_CONTENT,
         };
       }
-      if (isConflictError(r)) {
-        o = true;
+      if (isConflictError(error)) {
+        disabled = true;
         logContextHintBusyFallback(requestIdFromError, 409);
         return null;
       }
-      if (e.is529Error(r)) {
-        o = true;
+      if (context.is529Error(error)) {
+        disabled = true;
         logContextHintBusyFallback(requestIdFromError, 529);
         return null;
       }
       return null;
     },
-    classifyStreamError(r) {
-      d = false;
-      if (!s || o) return false;
-      if (!isInvalidRequestWithoutStatus(r)) return false;
-      d = true;
+    classifyStreamError(error) {
+      streamFallbackSeen = false;
+      if (!requested || disabled) return false;
+      if (!isInvalidRequestWithoutStatus(error)) return false;
+      streamFallbackSeen = true;
       return true;
     },
     async onStreamFallback(messages, requestId) {
-      let i = d;
-      o = true;
-      if (!i) return null;
+      let fallbackSeen = streamFallbackSeen;
+      disabled = true;
+      if (!fallbackSeen) return null;
       return handleContextHintReject({
         messages,
-        querySource: e.querySource,
-        agentId: e.agentId,
+        querySource: context.querySource,
+        agentId: context.agentId,
         requestId,
-        storageV5: e.storageV5,
+        storageV5: context.storageV5,
       });
     },
     strip() {
-      o = true;
+      disabled = true;
     },
   };
 }
+export { contextHintRequest };

@@ -8,7 +8,7 @@
  * pieces: chunk-j64mp9kq.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useQueuedMessageContext } from "../../context/QueuedMessageContext.js";
 import { isShortSiteText } from "./UserMessageSite.js";
 import { formatBriefTimestamp } from "../../utils/formatBriefTimestamp.js";
@@ -24,41 +24,41 @@ import { MarkdownText_2 } from "../pluginUi/render/MarkdownBlock.js";
 
 //@ chunk-j64mp9kq.js:2673-4795 fingerprint = HighlightedThinkingText (0.414)
 function HighlightedThinkingText(props) {
-  let $ = w(34);
+  let $ = useMemoCache(34);
   let { text, useBriefLayout, timestamp, bodyOnly, awaitingModel, markLinks } = props;
-  let l = bodyOnly === undefined ? false : bodyOnly;
-  let u = awaitingModel === undefined ? false : awaitingModel;
+  let bodyOnlyFlag = bodyOnly === undefined ? false : bodyOnly;
+  let awaitingModelFlag = awaitingModel === undefined ? false : awaitingModel;
   let queuedMessageContext = useQueuedMessageContext();
   let isQueued = queuedMessageContext?.isQueued ?? false;
-  let m = typeof text === "object";
-  let x;
-  if ($[0] !== text || $[1] !== m) {
-    x = !m && isShortSiteText(text);
+  let hasHiddenLines = typeof text === "object";
+  let isShortText;
+  if ($[0] !== text || $[1] !== hasHiddenLines) {
+    isShortText = !hasHiddenLines && isShortSiteText(text);
     $[0] = text;
-    $[1] = m;
-    $[2] = x;
-  } else x = $[2];
-  let h = x;
-  let b = queuedMessageContext?.selectionHighlight === "on";
-  let R = isQueued || u;
-  if (useBriefLayout || l) {
-    let D;
+    $[1] = hasHiddenLines;
+    $[2] = isShortText;
+  } else isShortText = $[2];
+  let shortTextValue = isShortText;
+  let isHighlighted = queuedMessageContext?.selectionHighlight === "on";
+  let isDim = isQueued || awaitingModelFlag;
+  if (useBriefLayout || bodyOnlyFlag) {
+    let timestampText;
     if ($[3] !== timestamp) {
-      D = timestamp ? formatBriefTimestamp(timestamp) : "";
+      timestampText = timestamp ? formatBriefTimestamp(timestamp) : "";
       $[3] = timestamp;
-      $[4] = D;
-    } else D = $[4];
-    let q = D;
-    let color = b ? "suggestion" : R ? (l ? "inactive" : "subtle") : "text";
-    const paddingLeft = l ? 0 : 2;
-    let A;
-    if ($[5] !== l || $[6] !== b || $[7] !== q || $[8] !== R) {
-      A = l
+      $[4] = timestampText;
+    } else timestampText = $[4];
+    let timestampLabel = timestampText;
+    let color = isHighlighted ? "suggestion" : isDim ? (bodyOnlyFlag ? "inactive" : "subtle") : "text";
+    const paddingLeft = bodyOnlyFlag ? 0 : 2;
+    let youRow;
+    if ($[5] !== bodyOnlyFlag || $[6] !== isHighlighted || $[7] !== timestampLabel || $[8] !== isDim) {
+      youRow = bodyOnlyFlag
         ? null
         : jsxProd_default_2(Box, {
             flexDirection: "row",
             children: [
-              b
+              isHighlighted
                 ? jsxProd_default_2(Text, {
                     "aria-label": "selected:",
                     color: "suggestion",
@@ -66,34 +66,34 @@ function HighlightedThinkingText(props) {
                   })
                 : null,
               jsxProd_default(Text, {
-                color: b ? "suggestion" : R ? "subtle" : "briefLabelYou",
+                color: isHighlighted ? "suggestion" : isDim ? "subtle" : "briefLabelYou",
                 children: "You",
               }),
-              q
+              timestampLabel
                 ? jsxProd_default_2(Text, {
                     dimColor: true,
-                    children: [" ", q],
+                    children: [" ", timestampLabel],
                   })
                 : null,
             ],
           });
-      $[5] = l;
-      $[6] = b;
-      $[7] = q;
-      $[8] = R;
-      $[9] = A;
-    } else A = $[9];
-    let K;
+      $[5] = bodyOnlyFlag;
+      $[6] = isHighlighted;
+      $[7] = timestampLabel;
+      $[8] = isDim;
+      $[9] = youRow;
+    } else youRow = $[9];
+    let bodyElement;
     if (
-      $[10] !== l ||
+      $[10] !== bodyOnlyFlag ||
       $[11] !== markLinks ||
-      $[12] !== h ||
+      $[12] !== shortTextValue ||
       $[13] !== text ||
       $[14] !== color ||
-      $[15] !== m ||
-      $[16] !== R
+      $[15] !== hasHiddenLines ||
+      $[16] !== isDim
     ) {
-      K = m
+      bodyElement = hasHiddenLines
         ? jsxProd_default_2(Fragment, {
             children: [
               jsxProd_default(Text, {
@@ -102,7 +102,7 @@ function HighlightedThinkingText(props) {
               }),
               jsxProd_default(CollapsedLinesDivider, {
                 hiddenLines: text.hiddenLines,
-                indent: l ? 0 : 2,
+                indent: bodyOnlyFlag ? 0 : 2,
               }),
               jsxProd_default(Text, {
                 color,
@@ -110,11 +110,11 @@ function HighlightedThinkingText(props) {
               }),
             ],
           })
-        : h
+        : shortTextValue
           ? jsxProd_default(MarkdownText_2, {
               promptMode: true,
               color,
-              monochrome: R,
+              monochrome: isDim,
               markLinks,
               children: text,
             })
@@ -122,33 +122,33 @@ function HighlightedThinkingText(props) {
               color,
               children: text,
             });
-      $[10] = l;
+      $[10] = bodyOnlyFlag;
       $[11] = markLinks;
-      $[12] = h;
+      $[12] = shortTextValue;
       $[13] = text;
       $[14] = color;
-      $[15] = m;
-      $[16] = R;
-      $[17] = K;
-    } else K = $[17];
-    let ie;
-    if ($[18] !== paddingLeft || $[19] !== A || $[20] !== K) {
-      ie = jsxProd_default_2(Box, {
+      $[15] = hasHiddenLines;
+      $[16] = isDim;
+      $[17] = bodyElement;
+    } else bodyElement = $[17];
+    let columnElement;
+    if ($[18] !== paddingLeft || $[19] !== youRow || $[20] !== bodyElement) {
+      columnElement = jsxProd_default_2(Box, {
         flexDirection: "column",
         paddingLeft,
-        children: [A, K],
+        children: [youRow, bodyElement],
       });
       $[18] = paddingLeft;
-      $[19] = A;
-      $[20] = K;
-      $[21] = ie;
-    } else ie = $[21];
-    return ie;
+      $[19] = youRow;
+      $[20] = bodyElement;
+      $[21] = columnElement;
+    } else columnElement = $[21];
+    return columnElement;
   }
-  let color = b ? "suggestion" : R ? "inactive" : "text";
-  let D;
-  if ($[22] !== queuedMessageContext?.selectionHighlight || $[23] !== b) {
-    D = jsxProd_default(Box, {
+  let color = isHighlighted ? "suggestion" : isDim ? "inactive" : "text";
+  let highlightBar;
+  if ($[22] !== queuedMessageContext?.selectionHighlight || $[23] !== isHighlighted) {
+    highlightBar = jsxProd_default(Box, {
       flexShrink: 0,
       children:
         queuedMessageContext?.selectionHighlight === "off"
@@ -156,18 +156,24 @@ function HighlightedThinkingText(props) {
               children: "  ",
             })
           : jsxProd_default_2(Text, {
-              "aria-label": b ? "selected:" : "you:",
-              color: b ? "suggestion" : "inactive",
+              "aria-label": isHighlighted ? "selected:" : "you:",
+              color: isHighlighted ? "suggestion" : "inactive",
               children: [figures_default.pointer, " "],
             }),
     });
     $[22] = queuedMessageContext?.selectionHighlight;
-    $[23] = b;
-    $[24] = D;
-  } else D = $[24];
-  let T;
-  if ($[25] !== h || $[26] !== text || $[27] !== color || $[28] !== m || $[29] !== R) {
-    T = m
+    $[23] = isHighlighted;
+    $[24] = highlightBar;
+  } else highlightBar = $[24];
+  let bodyColumn;
+  if (
+    $[25] !== shortTextValue ||
+    $[26] !== text ||
+    $[27] !== color ||
+    $[28] !== hasHiddenLines ||
+    $[29] !== isDim
+  ) {
+    bodyColumn = hasHiddenLines
       ? jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
@@ -185,34 +191,34 @@ function HighlightedThinkingText(props) {
             }),
           ],
         })
-      : h
+      : shortTextValue
         ? jsxProd_default(MarkdownText_2, {
             promptMode: true,
             color,
-            monochrome: R,
+            monochrome: isDim,
             children: text,
           })
         : jsxProd_default(UltrathinkHighlightedText, {
             text,
             color,
           });
-    $[25] = h;
+    $[25] = shortTextValue;
     $[26] = text;
     $[27] = color;
-    $[28] = m;
-    $[29] = R;
-    $[30] = T;
-  } else T = $[30];
-  let A;
-  if ($[31] !== D || $[32] !== T) {
-    A = jsxProd_default_2(Box, {
+    $[28] = hasHiddenLines;
+    $[29] = isDim;
+    $[30] = bodyColumn;
+  } else bodyColumn = $[30];
+  let rowElement;
+  if ($[31] !== highlightBar || $[32] !== bodyColumn) {
+    rowElement = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [D, T],
+      children: [highlightBar, bodyColumn],
     });
-    $[31] = D;
-    $[32] = T;
-    $[33] = A;
-  } else A = $[33];
-  return A;
+    $[31] = highlightBar;
+    $[32] = bodyColumn;
+    $[33] = rowElement;
+  } else rowElement = $[33];
+  return rowElement;
 }
 export { HighlightedThinkingText };

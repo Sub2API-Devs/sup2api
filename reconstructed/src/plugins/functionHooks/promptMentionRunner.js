@@ -8,23 +8,25 @@
  * pieces: chunk-dbh1yfwe.js (5)
  * attribution: placement 5
  */
-import { pu } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
+import { subscribe } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { identity } from "../../utils/identity.js";
 
 //@ chunk-dbh1yfwe.js:263-336 placement
-var TAo = Object.freeze({
+var UNHOOKED_MENTION_RESULT = Object.freeze({
   isKept: true,
   isDenied: false,
   context: Object.freeze([]),
 });
 //@ chunk-dbh1yfwe.js:336-491 placement
 function createPromptMentionSlot() {
-  let o = pu();
+  let runnerSlot = subscribe();
   return {
-    setPromptMentionRunner: o.set,
-    runPromptMention: (r) => {
-      let e = o.get();
-      return e ? e(r) : r.read(r.raised, "unhooked").then(() => TAo);
+    setPromptMentionRunner: runnerSlot.set,
+    runPromptMention: (request) => {
+      let runner = runnerSlot.get();
+      return runner
+        ? runner(request)
+        : request.read(request.raised, "unhooked").then(() => UNHOOKED_MENTION_RESULT);
     },
   };
 }
@@ -32,9 +34,9 @@ function createPromptMentionSlot() {
 /**
  * 提示提及运行器槽
  */
-var promptMentionSlot = identity(createPromptMentionSlot(), (o) => o.setPromptMentionRunner(null));
+var promptMentionSlot = identity(createPromptMentionSlot(), (slot) => slot.setPromptMentionRunner(null));
 //@ chunk-dbh1yfwe.js:541-568 placement
 var runPromptMention = promptMentionSlot.runPromptMention;
 //@ chunk-dbh1yfwe.js:568-601 placement
 var setPromptMentionRunner = promptMentionSlot.setPromptMentionRunner;
-export { setPromptMentionRunner, TAo, runPromptMention };
+export { setPromptMentionRunner, UNHOOKED_MENTION_RESULT, runPromptMention };

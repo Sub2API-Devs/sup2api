@@ -39,7 +39,7 @@ function seclogonStatusMessage(user) {
  */
 async function getWindowsSandboxUserStatus() {
   if (getPlatform() !== "windows") return;
-  let n = await checkWindowsSandboxStatusAsync({
+  let status = await checkWindowsSandboxStatusAsync({
     srtWin: rgRunner(),
   }).catch((error) => {
     logForDebugging(`[sandbox] could not read the sandbox status: ${errorMessage(error)}`, {
@@ -47,6 +47,6 @@ async function getWindowsSandboxUserStatus() {
     });
     return;
   });
-  return seclogonStatusMessage(n?.user);
+  return seclogonStatusMessage(status?.user);
 }
 export { seclogonStatusMessage, getWindowsSandboxUserStatus };

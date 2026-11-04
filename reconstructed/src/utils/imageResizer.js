@@ -8,6 +8,7 @@
  * pieces: chunk-mvvq2nx1.js (39), chunk-p8kytbnw.js (2), chunk-qz53w8v8.js (1)
  * attribution: placement 16, affinity 1, fingerprint 13, layout 9, callgraph-witnessed 2, file-local 1
  */
+import { sniffImageMediaType } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { MAX_IMAGE_DIMENSION, IMAGE_SOURCE_MARKER_PREFIX, IMAGE_MARKER_PREFIX } from "./imageErrors.js";
 import { limitConcurrency } from "./concurrencyLimit.js";
 import {
@@ -20,15 +21,9 @@ import {
   isLosslessWebp,
 } from "./imageFormats.js";
 import { isDiskless, isDisklessProcess } from "../bootstrap/state.js";
-import {
-  imageTileCount,
-  MODEL_COPY_IMAGE_BYTES,
-  IMAGE_LIMITS,
-  MAX_IMAGE_SIDE_PX,
-} from "./truncateGraphemes.js";
+import { imageTileCount, MODEL_COPY_IMAGE_BYTES, IMAGE_LIMITS, MAX_IMAGE_SIDE_PX } from "./mediaLimits.js";
 import { getErrnoCode, sanitizeClassName, sanitizeErrnoForTelemetry, errorMessage } from "./errors.js";
 import { fromEnum, lit, fromEnumOpt } from "../services/analytics/safeMetadata.js";
-import { Ph } from "../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { tryWebpEncoding, webpMaxBytesIfOn, chooseImageEncoding } from "./imageWebp.js";
 import { logEvent } from "../services/analytics/index.js";
 import { logForDebugging } from "./debug.js";
@@ -37,18 +32,47 @@ import { logError } from "./log.js";
 import { isFirstPartyApiBackend } from "./model/providers.js";
 import { formatFileSize } from "./format.js";
 import { isPlainObject } from "./isPlainObject.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-p8kytbnw.js:1486-1528 callgraph-witnessed = detectImageFormatFromBuffer (0.384)
+/**
+ * 按魔数识别图片 MIME，默认 image/png。
+ */
+function detectImageFormatFromBuffer(buffer) {
+  return sniffImageMediaType(buffer) ?? "image/png";
+}
+//@ chunk-p8kytbnw.js:1528-1617 fingerprint = detectImageFormatFromBase64 (1)
+/**
+ * 从 base64 数据识别图片格式。
+ */
+function detectImageFormatFromBase64(base64Data) {
+  try {
+    let buffer = Buffer.from(base64Data, "base64");
+    return detectImageFormatFromBuffer(buffer);
+  } catch {
+    return "image/png";
+  }
+}
 //@ chunk-mvvq2nx1.js:5350-5451 placement
 /**
- * 图片解码状态与常量（最大像素、编码并发、限流 toBuffer、弱映射缓存）。
+ * 官方行为，保留：imageDecodingOff 只初始化为 false、本 chunk 内从不赋 true（死开关），isImageDecodingDisabled 实际由 !isDisklessMode() 决定；不要把名字当成可配置项。
  */
-var imageDecodingOff = false;
-var ERR_IMAGE_DECODING_OFF = "ERR_IMAGE_DECODING_OFF";
-var MAX_DECODE_PIXELS = MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION;
-var ENCODE_CONCURRENCY = 4;
-var limitedToBuffer = limitConcurrency(ENCODE_CONCURRENCY, (e) => e.toBuffer());
-var imageDecoderState = 100;
-var weakMap = new WeakMap();
+var imageDecodingForcedOff; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ERR_IMAGE_DECODING_OFF;
+var MAX_DECODE_PIXELS;
+var ENCODE_CONCURRENCY;
+var limitedToBuffer;
+var imageDecoderState;
+var weakMap;
+deferInit("chunk-mvvq2nx1.js:5350", () => {
+  imageDecodingForcedOff = false;
+  ERR_IMAGE_DECODING_OFF = "ERR_IMAGE_DECODING_OFF";
+  MAX_DECODE_PIXELS = MAX_IMAGE_DIMENSION * MAX_IMAGE_DIMENSION;
+  ENCODE_CONCURRENCY = 4;
+  limitedToBuffer = limitConcurrency(ENCODE_CONCURRENCY, (pipeline) => pipeline.toBuffer());
+  imageDecoderState = 100;
+  weakMap = new WeakMap();
+});
 //@ chunk-mvvq2nx1.js:5451-5575 placement
 /**
  * 返回“图片解码代价过高”的拒绝。
@@ -64,15 +88,15 @@ function rejectCostlyDecode() {
 /**
  * 包装图片处理管线，使 toBuffer 经过并发限制。
  */
-function wrapImagePipeline(e) {
+function wrapImagePipeline(pipeline) {
   return {
-    metadata: () => e.metadata(),
-    resize: (n, r, o) => wrapImagePipeline(e.resize(n, r, o)),
-    rotate: (n) => wrapImagePipeline(e.rotate(n)),
-    jpeg: (n) => wrapImagePipeline(e.jpeg(n)),
-    png: (n) => wrapImagePipeline(e.png(n)),
-    webp: (n) => wrapImagePipeline(e.webp(n)),
-    toBuffer: () => limitedToBuffer(e),
+    metadata: () => pipeline.metadata(),
+    resize: (width, height, options) => wrapImagePipeline(pipeline.resize(width, height, options)),
+    rotate: (angle) => wrapImagePipeline(pipeline.rotate(angle)),
+    jpeg: (options) => wrapImagePipeline(pipeline.jpeg(options)),
+    png: (options) => wrapImagePipeline(pipeline.png(options)),
+    webp: (options) => wrapImagePipeline(pipeline.webp(options)),
+    toBuffer: () => limitedToBuffer(pipeline),
   };
 }
 //@ chunk-mvvq2nx1.js:5771-5882 placement
@@ -80,27 +104,27 @@ function wrapImagePipeline(e) {
  * 所有变换都返回自身的管线（固定输出）。
  */
 function staticImagePipeline(rejectCostlyDecode) {
-  let n = {
+  let pipeline = {
     metadata: rejectCostlyDecode,
-    resize: () => n,
-    rotate: () => n,
-    jpeg: () => n,
-    png: () => n,
-    webp: () => n,
+    resize: () => pipeline,
+    rotate: () => pipeline,
+    jpeg: () => pipeline,
+    png: () => pipeline,
+    webp: () => pipeline,
     toBuffer: rejectCostlyDecode,
   };
-  return n;
+  return pipeline;
 }
 //@ chunk-mvvq2nx1.js:5882-5914 placement
 /**
  * 判断图片解码是否被禁用（显式关闭或无盘）。
  */
 function isImageDecodingDisabled() {
-  return imageDecodingOff || !isDisklessMode();
+  return imageDecodingForcedOff || !isDisklessMode();
 }
 //@ chunk-mvvq2nx1.js:5914-6388 placement
-function loadImageDecoder_2(e) {
-  let n = isDisklessMode();
+function loadImageDecoder_2(bytes) {
+  let diskless = isDisklessMode();
   if (!isImageDecodingDisabled())
     return staticImagePipeline(() =>
       Promise.reject(
@@ -117,17 +141,18 @@ function loadImageDecoder_2(e) {
         }),
       ),
     );
-  let bytes = inspectWebpChunks(e) ?? e;
-  if (!n) return new Bun.Image(bytes);
-  let o = weakMap.get(bytes);
-  if (o === undefined) {
-    o = countJpegScans(bytes, imageDecoderState) > imageDecoderState ? null : stripPngMetadata(bytes);
-    weakMap.set(bytes, o);
+  let bytes_2 = inspectWebpChunks(bytes) ?? bytes;
+  if (!diskless) return new Bun.Image(bytes_2);
+  let preparedBytes = weakMap.get(bytes_2);
+  if (preparedBytes === undefined) {
+    preparedBytes =
+      countJpegScans(bytes_2, imageDecoderState) > imageDecoderState ? null : stripPngMetadata(bytes_2);
+    weakMap.set(bytes_2, preparedBytes);
   }
-  return o === null
+  return preparedBytes === null
     ? staticImagePipeline(rejectCostlyDecode)
     : wrapImagePipeline(
-        new Bun.Image(o, {
+        new Bun.Image(preparedBytes, {
           maxPixels: MAX_DECODE_PIXELS,
         }),
       );
@@ -154,83 +179,98 @@ var MAX_TILE_PIXELS = 1398100;
 /**
  * 按最大边与 tile 数上限缩小尺寸（保持比例，二分搜索）。
  */
-function fitWithinTileBudget(e, n, r = MAX_TILE_SIDE, o = MAX_TILE_HEIGHT) {
-  if (e <= r && n <= r && imageTileCount(e, n) <= o) return [e, n];
-  if (n > e) {
-    let [m, h] = fitWithinTileBudget(n, e, r, o);
-    return [h, m];
+function fitWithinTileBudget(width, height, maxSide = MAX_TILE_SIDE, maxTiles = MAX_TILE_HEIGHT) {
+  if (width <= maxSide && height <= maxSide && imageTileCount(width, height) <= maxTiles)
+    return [width, height];
+  if (height > width) {
+    let [swappedWidth, swappedHeight] = fitWithinTileBudget(height, width, maxSide, maxTiles);
+    return [swappedHeight, swappedWidth];
   }
-  let u = e / n;
-  let s = 1;
-  let i = e;
-  while (s + 1 < i) {
-    let m = (s + i) >> 1;
-    let max = Math.max(Math.round(m / u), 1);
-    if (m <= r && imageTileCount(m, max) <= o) s = m;
-    else i = m;
+  let aspectRatio = width / height;
+  let low = 1;
+  let high = width;
+  while (low + 1 < high) {
+    let mid = (low + high) >> 1;
+    let max = Math.max(Math.round(mid / aspectRatio), 1);
+    if (mid <= maxSide && imageTileCount(mid, max) <= maxTiles) low = mid;
+    else high = mid;
   }
-  return [s, Math.max(Math.round(s / u), 1)];
+  return [low, Math.max(Math.round(low / aspectRatio), 1)];
 }
 //@ chunk-mvvq2nx1.js:6759-6963 placement
 /**
  * 按最大宽高与 token 上限计算缩放后的尺寸。
  */
-function fitImageDimensions(e, n, r) {
-  if (e > r.maxWidth) {
-    n = Math.round((n * r.maxWidth) / e);
-    e = r.maxWidth;
+function fitImageDimensions(width, height, limits) {
+  if (width > limits.maxWidth) {
+    height = Math.round((height * limits.maxWidth) / width);
+    width = limits.maxWidth;
   }
-  if (n > r.maxHeight) {
-    e = Math.round((e * r.maxHeight) / n);
-    n = r.maxHeight;
+  if (height > limits.maxHeight) {
+    width = Math.round((width * limits.maxHeight) / height);
+    height = limits.maxHeight;
   }
-  return r.maxImageTokens === undefined ? [e, n] : fitWithinTileBudget(e, n, 1 / 0, r.maxImageTokens);
+  return limits.maxImageTokens === undefined
+    ? [width, height]
+    : fitWithinTileBudget(width, height, 1 / 0, limits.maxImageTokens);
 }
 //@ chunk-mvvq2nx1.js:6963-7285 placement
 /**
  * 把截图缩放并逐步降低质量编码为 JPEG，直到大小在上限内。
  */
-async function encodePreviewJpeg(e) {
+async function encodePreviewJpeg(buffer) {
   let imageDecoder = await loadImageDecoder();
-  let buffer = Buffer.from(e.buffer, e.byteOffset, e.byteLength);
-  let o = await imageDecoder(buffer).metadata();
-  let [u, s] = fitWithinTileBudget(o.width, o.height);
-  let i = u !== o.width || s !== o.height;
-  let m = MIN_SCALED_SIDE + SCALE_STEP;
-  let h;
+  let buffer_2 = Buffer.from(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  let metadata = await imageDecoder(buffer_2).metadata();
+  let [targetWidth, targetHeight] = fitWithinTileBudget(metadata.width, metadata.height);
+  let needsResize = targetWidth !== metadata.width || targetHeight !== metadata.height;
+  let quality = MIN_SCALED_SIDE + SCALE_STEP;
+  let jpegBuffer;
   do {
-    m -= SCALE_STEP;
-    let y = imageDecoder(buffer);
-    if (i)
-      y = y.resize(u, s, {
+    quality -= SCALE_STEP;
+    let pipeline = imageDecoder(buffer_2);
+    if (needsResize)
+      pipeline = pipeline.resize(targetWidth, targetHeight, {
         fit: "fill",
       });
-    h = await y
+    jpegBuffer = await pipeline
       .jpeg({
-        quality: m,
+        quality,
       })
       .toBuffer();
-  } while (h.length * 4 > MAX_TILE_PIXELS * 3 && m > MIN_SEARCH_SIDE);
+  } while (jpegBuffer.length * 4 > MAX_TILE_PIXELS * 3 && quality > MIN_SEARCH_SIDE);
   return {
-    jpeg: h,
-    w: u,
-    h: s,
+    jpeg: jpegBuffer,
+    w: targetWidth,
+    h: targetHeight,
   };
 }
 //@ chunk-mvvq2nx1.js:7285-7393 affinity = IMAGE_EXTENSIONS (0.776)
 /**
  * 图片处理错误类型编号（2 未知格式、3 未知、4 像素超限、5 内存、8 权限、9 格式不支持、10 解码失败、11 解码关闭）与 tengu_parsed_eagle 开关名、直通格式集合。
  */
-var ERROR_TYPE_UNKNOWN_FORMAT = 2;
-var ERROR_TYPE_UNKNOWN = 3;
-var ERROR_TYPE_PIXEL_LIMIT = 4;
-var ERROR_TYPE_MEMORY = 5;
-var ERROR_TYPE_PERMISSION = 8;
-var ERROR_TYPE_FORMAT_UNSUPPORTED = 9;
-var ERROR_TYPE_DECODE_FAILED = 10;
-var ERROR_TYPE_DECODING_OFF = 11;
-var TENGU_PARSED_EAGLE = "tengu_parsed_eagle";
-var PASSTHROUGH_IMAGE_FORMATS = new Set(["png", "jpeg", "gif", "webp"]);
+var ERROR_TYPE_UNKNOWN_FORMAT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ERROR_TYPE_UNKNOWN;
+var ERROR_TYPE_PIXEL_LIMIT;
+var ERROR_TYPE_MEMORY;
+var ERROR_TYPE_PERMISSION;
+var ERROR_TYPE_FORMAT_UNSUPPORTED;
+var ERROR_TYPE_DECODE_FAILED;
+var ERROR_TYPE_DECODING_OFF;
+var TENGU_PARSED_EAGLE;
+var PASSTHROUGH_IMAGE_FORMATS;
+deferInit("chunk-mvvq2nx1.js:7285", () => {
+  ERROR_TYPE_UNKNOWN_FORMAT = 2;
+  ERROR_TYPE_UNKNOWN = 3;
+  ERROR_TYPE_PIXEL_LIMIT = 4;
+  ERROR_TYPE_MEMORY = 5;
+  ERROR_TYPE_PERMISSION = 8;
+  ERROR_TYPE_FORMAT_UNSUPPORTED = 9;
+  ERROR_TYPE_DECODE_FAILED = 10;
+  ERROR_TYPE_DECODING_OFF = 11;
+  TENGU_PARSED_EAGLE = "tengu_parsed_eagle";
+  PASSTHROUGH_IMAGE_FORMATS = new Set(["png", "jpeg", "gif", "webp"]);
+});
 //@ chunk-mvvq2nx1.js:7497-7574 fingerprint = ImageResizeError (1)
 /**
  * 图片缩放/处理失败的错误类型。
@@ -242,13 +282,13 @@ class ImageResizeError extends Error {
   }
 }
 //@ chunk-mvvq2nx1.js:7574-8055 layout
-function describeUndecodableImage(e) {
-  if (jpegSofComponentCount(e) === 4)
+function describeUndecodableImage(buffer) {
+  if (jpegSofComponentCount(buffer) === 4)
     return {
       reason: "it is a CMYK JPEG, which Claude Code cannot decode",
       advice: "Re-save it as an RGB PNG or JPEG and try again.",
     };
-  if (isAnimatedWebp(e))
+  if (isAnimatedWebp(buffer))
     return {
       reason: "it is an animated WebP whose first frame Claude Code cannot decode",
       advice: "Save its first frame as a PNG or JPEG and try again.",
@@ -288,8 +328,8 @@ function classifyImageErrorCode(error) {
 /**
  * 是否为未知类型的图片错误。
  */
-function isUnknownImageErrorType(e) {
-  return e === ERROR_TYPE_UNKNOWN;
+function isUnknownImageErrorType(errorType) {
+  return errorType === ERROR_TYPE_UNKNOWN;
 }
 //@ chunk-mvvq2nx1.js:8374-8565 layout
 function getErrorTelemetryFields(error) {
@@ -305,14 +345,14 @@ function getErrorTelemetryFields(error) {
   };
 }
 //@ chunk-mvvq2nx1.js:8565-8690 layout
-function getImageFormatTelemetryFields(e) {
-  let n = Ph(e);
+function getImageFormatTelemetryFields(buffer) {
+  let mediaType = sniffImageMediaType(buffer);
   return {
-    ...(n === "image/jpeg" && {
-      jpeg_components: jpegSofComponentCount(e),
+    ...(mediaType === "image/jpeg" && {
+      jpeg_components: jpegSofComponentCount(buffer),
     }),
-    ...(n === "image/webp" && {
-      webp_animated: isAnimatedWebp(e),
+    ...(mediaType === "image/webp" && {
+      webp_animated: isAnimatedWebp(buffer),
     }),
   };
 }
@@ -323,10 +363,10 @@ function hashString(str) {
   return hash >>> 0;
 }
 //@ chunk-mvvq2nx1.js:8785-8898 layout
-function getRejectDimensions(e) {
+function getRejectDimensions(limits) {
   return {
-    rejectMaxWidth: e.rejectMaxWidth ?? e.maxWidth,
-    rejectMaxHeight: e.rejectMaxHeight ?? e.maxHeight,
+    rejectMaxWidth: limits.rejectMaxWidth ?? limits.maxWidth,
+    rejectMaxHeight: limits.rejectMaxHeight ?? limits.maxHeight,
   };
 }
 //@ chunk-mvvq2nx1.js:8898-8909 layout
@@ -336,35 +376,36 @@ var MAX_PROVIDER_IMAGE_DIMENSION = 8000;
  * 按模型图片限制缩放/重编码：非直通格式转 PNG 或 WebP；尺寸不明时校验上限；仅超字节时先试 PNG 调色板再试 JPEG 80/60/40/20；需缩放时按 token 上限算目标尺寸后 resize。
  */
 async function maybeResizeAndDownsampleImageBuffer(
-  imageBuffer,
-  n,
+  buffer,
+  originalSize,
   ext,
-  o,
-  { timings: u, directWebpMaxBytes: s } = {},
+  limits,
+  { timings, directWebpMaxBytes } = {},
 ) {
-  if (imageBuffer.length === 0) throw new ImageResizeError("Image file is empty (0 bytes)");
+  if (buffer.length === 0) throw new ImageResizeError("Image file is empty (0 bytes)");
   try {
     let sharp = await loadImageDecoder();
-    let metadata = await sharp(imageBuffer).metadata();
+    let metadata = await sharp(buffer).metadata();
     let mediaType = metadata.format ?? ext;
-    let y = mediaType === "jpg" ? "jpeg" : mediaType;
-    let p = imageBuffer;
-    let I = n;
-    if (!PASSTHROUGH_IMAGE_FORMATS.has(y)) {
+    let format = mediaType === "jpg" ? "jpeg" : mediaType;
+    let currentBuffer = buffer;
+    let currentSize = originalSize;
+    if (!PASSTHROUGH_IMAGE_FORMATS.has(format)) {
       let { width, height } = metadata;
-      let T = width === undefined || height === undefined ? undefined : fitImageDimensions(width, height, o);
+      let fitted =
+        width === undefined || height === undefined ? undefined : fitImageDimensions(width, height, limits);
       let webp =
-        T !== undefined && T[0] === width && T[1] === height
-          ? (await tryWebpEncoding(() => sharp(imageBuffer), s)).webp
+        fitted !== undefined && fitted[0] === width && fitted[1] === height
+          ? (await tryWebpEncoding(() => sharp(buffer), directWebpMaxBytes)).webp
           : undefined;
-      p = webp ?? (await sharp(imageBuffer).png().toBuffer());
-      I = p.length;
-      metadata = await sharp(p).metadata();
-      y = webp ? "webp" : "png";
+      currentBuffer = webp ?? (await sharp(buffer).png().toBuffer());
+      currentSize = currentBuffer.length;
+      metadata = await sharp(currentBuffer).metadata();
+      format = webp ? "webp" : "png";
     }
     if (!metadata.width || !metadata.height) {
-      let webpHeader = parseWebpHeader(p);
-      let { rejectMaxWidth, rejectMaxHeight } = getRejectDimensions(o);
+      let webpHeader = parseWebpHeader(currentBuffer);
+      let { rejectMaxWidth, rejectMaxHeight } = getRejectDimensions(limits);
       if (
         webpHeader === undefined ||
         webpHeader.width > rejectMaxWidth ||
@@ -373,15 +414,15 @@ async function maybeResizeAndDownsampleImageBuffer(
         throw new ImageResizeError(
           `Unable to resize image \u2014 could not verify image dimensions are within the ${rejectMaxWidth}x${rejectMaxHeight}px API limit.`,
         );
-      if (I > o.targetRawSize) {
+      if (currentSize > limits.targetRawSize) {
         logEvent("tengu_image_resize", {
           over_byte_limit: true,
           over_dimension_limit: false,
           resized_for_tokens: false,
-          original_size_bytes: I,
+          original_size_bytes: currentSize,
         });
         return {
-          buffer: await sharp(p)
+          buffer: await sharp(currentBuffer)
             .jpeg({
               quality: 80,
             })
@@ -390,114 +431,114 @@ async function maybeResizeAndDownsampleImageBuffer(
         };
       }
       return {
-        buffer: p,
-        mediaType: y,
+        buffer: currentBuffer,
+        mediaType: format,
       };
     }
     let originalWidth = metadata.width;
     let originalHeight = metadata.height;
-    let [w, x] = fitImageDimensions(originalWidth, originalHeight, o);
-    let R = w !== originalWidth || x !== originalHeight;
-    if (I <= o.targetRawSize && !R)
+    let [targetWidth, targetHeight] = fitImageDimensions(originalWidth, originalHeight, limits);
+    let needsResize = targetWidth !== originalWidth || targetHeight !== originalHeight;
+    if (currentSize <= limits.targetRawSize && !needsResize)
       return {
-        buffer: p,
-        mediaType: y,
+        buffer: currentBuffer,
+        mediaType: format,
         dimensions: {
           originalWidth,
           originalHeight,
-          displayWidth: w,
-          displayHeight: x,
+          displayWidth: targetWidth,
+          displayHeight: targetHeight,
         },
       };
-    let isPng = y === "png";
+    let isPng = format === "png";
     logEvent("tengu_image_resize", {
-      over_byte_limit: I > o.targetRawSize,
-      over_dimension_limit: originalWidth > o.maxWidth || originalHeight > o.maxHeight,
-      resized_for_tokens: R && w < o.maxWidth && x < o.maxHeight,
-      original_size_bytes: I,
+      over_byte_limit: currentSize > limits.targetRawSize,
+      over_dimension_limit: originalWidth > limits.maxWidth || originalHeight > limits.maxHeight,
+      resized_for_tokens: needsResize && targetWidth < limits.maxWidth && targetHeight < limits.maxHeight,
+      original_size_bytes: currentSize,
       original_width: originalWidth,
       original_height: originalHeight,
-      target_width: w,
-      target_height: x,
-      max_width: o.maxWidth,
-      max_height: o.maxHeight,
-      max_image_tokens: o.maxImageTokens,
+      target_width: targetWidth,
+      target_height: targetHeight,
+      max_width: limits.maxWidth,
+      max_height: limits.maxHeight,
+      max_image_tokens: limits.maxImageTokens,
     });
-    if (!R && I > o.targetRawSize) {
+    if (!needsResize && currentSize > limits.targetRawSize) {
       if (isPng) {
         let pngCompressed = await timePngPalette(
           () =>
-            sharp(p)
+            sharp(currentBuffer)
               .png({
                 compressionLevel: 9,
                 palette: true,
               })
               .toBuffer(),
-          u,
+          timings,
         );
-        if (pngCompressed.length <= o.targetRawSize)
+        if (pngCompressed.length <= limits.targetRawSize)
           return {
             buffer: pngCompressed,
             mediaType: "png",
             dimensions: {
               originalWidth,
               originalHeight,
-              displayWidth: w,
-              displayHeight: x,
+              displayWidth: targetWidth,
+              displayHeight: targetHeight,
             },
           };
       }
       for (let quality of [80, 60, 40, 20]) {
-        let compressedBuffer = await sharp(p)
+        let compressedBuffer = await sharp(currentBuffer)
           .jpeg({
             quality,
           })
           .toBuffer();
-        if (compressedBuffer.length <= o.targetRawSize)
+        if (compressedBuffer.length <= limits.targetRawSize)
           return {
             buffer: compressedBuffer,
             mediaType: "jpeg",
             dimensions: {
               originalWidth,
               originalHeight,
-              displayWidth: w,
-              displayHeight: x,
+              displayWidth: targetWidth,
+              displayHeight: targetHeight,
             },
           };
       }
     }
-    logForDebugging(`Resizing to ${w}x${x}`);
-    let A =
-      R &&
-      s !== undefined &&
-      originalWidth <= getRejectDimensions(o).rejectMaxWidth &&
-      originalHeight <= getRejectDimensions(o).rejectMaxHeight &&
-      isLosslessWebp(p)
+    logForDebugging(`Resizing to ${targetWidth}x${targetHeight}`);
+    let encoderFormat =
+      needsResize &&
+      directWebpMaxBytes !== undefined &&
+      originalWidth <= getRejectDimensions(limits).rejectMaxWidth &&
+      originalHeight <= getRejectDimensions(limits).rejectMaxHeight &&
+      isLosslessWebp(currentBuffer)
         ? "png"
-        : toEncoderFormat(y);
-    let L = sharp(p).resize(w, x, {
+        : toEncoderFormat(format);
+    let pipeline = sharp(currentBuffer).resize(targetWidth, targetHeight, {
       fit: "inside",
       withoutEnlargement: true,
     });
-    if (A !== y) L = L.png();
-    let G =
-      A === "png"
+    if (encoderFormat !== format) pipeline = pipeline.png();
+    let webpAttempt =
+      encoderFormat === "png"
         ? await tryWebpEncoding(
             () =>
-              sharp(p).resize(w, x, {
+              sharp(currentBuffer).resize(targetWidth, targetHeight, {
                 fit: "inside",
                 withoutEnlargement: true,
               }),
-            s,
+            directWebpMaxBytes,
           )
         : {};
-    let ee = G.webp ?? (await L.toBuffer());
-    if (ee.length > o.targetRawSize) {
+    let encodedBuffer = webpAttempt.webp ?? (await pipeline.toBuffer());
+    if (encodedBuffer.length > limits.targetRawSize) {
       if (isPng) {
         let pngCompressed = await timePngPalette(
           () =>
-            sharp(p)
-              .resize(w, x, {
+            sharp(currentBuffer)
+              .resize(targetWidth, targetHeight, {
                 fit: "inside",
                 withoutEnlargement: true,
               })
@@ -506,23 +547,23 @@ async function maybeResizeAndDownsampleImageBuffer(
                 palette: true,
               })
               .toBuffer(),
-          u,
+          timings,
         );
-        if (pngCompressed.length <= o.targetRawSize)
+        if (pngCompressed.length <= limits.targetRawSize)
           return {
             buffer: pngCompressed,
             mediaType: "png",
             dimensions: {
               originalWidth,
               originalHeight,
-              displayWidth: w,
-              displayHeight: x,
+              displayWidth: targetWidth,
+              displayHeight: targetHeight,
             },
           };
       }
       for (let quality of [80, 60, 40, 20]) {
-        let compressedBuffer = await sharp(p)
-          .resize(w, x, {
+        let compressedBuffer = await sharp(currentBuffer)
+          .resize(targetWidth, targetHeight, {
             fit: "inside",
             withoutEnlargement: true,
           })
@@ -530,22 +571,22 @@ async function maybeResizeAndDownsampleImageBuffer(
             quality,
           })
           .toBuffer();
-        if (compressedBuffer.length <= o.targetRawSize)
+        if (compressedBuffer.length <= limits.targetRawSize)
           return {
             buffer: compressedBuffer,
             mediaType: "jpeg",
             dimensions: {
               originalWidth,
               originalHeight,
-              displayWidth: w,
-              displayHeight: x,
+              displayWidth: targetWidth,
+              displayHeight: targetHeight,
             },
           };
       }
-      let smallerWidth = Math.min(w, 1000);
-      let smallerHeight = Math.round((x * smallerWidth) / Math.max(w, 1));
+      let smallerWidth = Math.min(targetWidth, 1000);
+      let smallerHeight = Math.round((targetHeight * smallerWidth) / Math.max(targetWidth, 1));
       logForDebugging("Still too large, compressing with JPEG");
-      let compressedBuffer = await sharp(p)
+      let compressedBuffer = await sharp(currentBuffer)
         .resize(smallerWidth, smallerHeight, {
           fit: "inside",
           withoutEnlargement: true,
@@ -567,15 +608,15 @@ async function maybeResizeAndDownsampleImageBuffer(
       };
     }
     return {
-      buffer: ee,
-      mediaType: G.webp ? "webp" : A,
+      buffer: encodedBuffer,
+      mediaType: webpAttempt.webp ? "webp" : encoderFormat,
       dimensions: {
         originalWidth,
         originalHeight,
-        displayWidth: w,
-        displayHeight: x,
+        displayWidth: targetWidth,
+        displayHeight: targetHeight,
       },
-      losslessWebp: G.lossless,
+      losslessWebp: webpAttempt.lossless,
     };
   } catch (error) {
     if (error instanceof ImageResizeError) throw error;
@@ -587,15 +628,15 @@ async function maybeResizeAndDownsampleImageBuffer(
         level: "error",
       });
     logEvent("tengu_image_resize_failed", {
-      original_size_bytes: n,
+      original_size_bytes: originalSize,
       error_type: errorType,
       error_message_hash: hashString(errorMsg),
       ...getErrorTelemetryFields(error),
-      ...getImageFormatTelemetryFields(imageBuffer),
+      ...getImageFormatTelemetryFields(buffer),
     });
-    let normalizedExt = detectImageFormatFromBuffer(imageBuffer).slice(6);
-    let base64Size = Math.ceil((n * 4) / 3);
-    let webpHeader = parseWebpHeader(imageBuffer);
+    let normalizedExt = detectImageFormatFromBuffer(buffer).slice(6);
+    let base64Size = Math.ceil((originalSize * 4) / 3);
+    let webpHeader = parseWebpHeader(buffer);
     if (webpHeader === undefined)
       throw new ImageResizeError(
         "Unable to resize image \u2014 image processing is unavailable and dimensions could not be read from the file header. " +
@@ -607,114 +648,114 @@ async function maybeResizeAndDownsampleImageBuffer(
             rejectMaxWidth: MAX_PROVIDER_IMAGE_DIMENSION,
             rejectMaxHeight: MAX_PROVIDER_IMAGE_DIMENSION,
           }
-        : getRejectDimensions(o);
-    let x = webpHeader.width > rejectMaxWidth || webpHeader.height > rejectMaxHeight;
-    if (base64Size <= o.maxBase64Size && !x) {
+        : getRejectDimensions(limits);
+    let overDimensions = webpHeader.width > rejectMaxWidth || webpHeader.height > rejectMaxHeight;
+    if (base64Size <= limits.maxBase64Size && !overDimensions) {
       logEvent("tengu_image_resize_fallback", {
-        original_size_bytes: n,
+        original_size_bytes: originalSize,
         base64_size_bytes: base64Size,
         error_type: errorType,
       });
       return {
-        buffer: imageBuffer,
+        buffer,
         mediaType: normalizedExt,
       };
     }
     if (errorType === ERROR_TYPE_DECODING_OFF)
       throw new ImageResizeError(
-        x
+        overDimensions
           ? `Unable to send image \u2014 at ${webpHeader.width}x${webpHeader.height}px it is over the ${rejectMaxWidth}x${rejectMaxHeight}px limit, and this session cannot shrink images. Resize it to fit within ${rejectMaxWidth}x${rejectMaxHeight}px and try again.`
-          : `Unable to send image \u2014 it is ${formatFileSize(base64Size)} in base64, over the API's ${formatFileSize(o.maxBase64Size)} limit, and this session cannot shrink images. Make it smaller than ${Math.floor((o.targetRawSize / 1024 / 1024) * 10) / 10}MB and try again.`,
+          : `Unable to send image \u2014 it is ${formatFileSize(base64Size)} in base64, over the API's ${formatFileSize(limits.maxBase64Size)} limit, and this session cannot shrink images. Make it smaller than ${Math.floor((limits.targetRawSize / 1024 / 1024) * 10) / 10}MB and try again.`,
       );
     if (errorType === ERROR_TYPE_DECODE_FAILED) {
-      let { reason, advice } = describeUndecodableImage(imageBuffer);
-      let A = x
+      let { reason, advice } = describeUndecodableImage(buffer);
+      let overReason = overDimensions
         ? `at ${webpHeader.width}x${webpHeader.height}px it is over the ${rejectMaxWidth}x${rejectMaxHeight}px limit`
-        : `it is over the ${formatFileSize(o.maxBase64Size)} API limit (${formatFileSize(n)} raw, ${formatFileSize(base64Size)} base64)`;
+        : `it is over the ${formatFileSize(limits.maxBase64Size)} API limit (${formatFileSize(originalSize)} raw, ${formatFileSize(base64Size)} base64)`;
       throw new ImageResizeError(
-        `Unable to resize image \u2014 ${reason}, and ${A}, so it cannot be sent. ${advice}`,
+        `Unable to resize image \u2014 ${reason}, and ${overReason}, so it cannot be sent. ${advice}`,
       );
     }
     throw new ImageResizeError(
-      x
+      overDimensions
         ? `Unable to resize image \u2014 dimensions exceed the ${rejectMaxWidth}x${rejectMaxHeight}px limit and image processing failed. Please resize the image to reduce its pixel dimensions.`
-        : `Unable to resize image (${formatFileSize(n)} raw, ${formatFileSize(base64Size)} base64). The image exceeds the ${formatFileSize(o.maxBase64Size)} API limit and compression failed. Please resize the image manually or use a smaller image.`,
+        : `Unable to resize image (${formatFileSize(originalSize)} raw, ${formatFileSize(base64Size)} base64). The image exceeds the ${formatFileSize(limits.maxBase64Size)} API limit and compression failed. Please resize the image manually or use a smaller image.`,
     );
   }
 }
 //@ chunk-mvvq2nx1.js:14013-14140 layout
-async function timePngPalette(e, n) {
+async function timePngPalette(run, timings) {
   let startTime = performance.now();
   try {
-    return await e();
+    return await run();
   } finally {
-    if (n !== undefined) n.pngPaletteMs += performance.now() - startTime;
+    if (timings !== undefined) timings.pngPaletteMs += performance.now() - startTime;
   }
 }
 //@ chunk-mvvq2nx1.js:14140-14483 layout
 /**
  * 把图片压到字节上限以内：JPEG 质量递减并逐步缩小尺寸。
  */
-async function compressToJpegUnderBytes(buffer, n, mediaType) {
+async function compressToJpegUnderBytes(buffer, maxBytes, mediaType) {
   let imageDecoder = await loadImageDecoder();
-  let u = (quality) =>
+  let encodeAtQuality = (quality) =>
     imageDecoder(buffer)
       .jpeg({
         quality,
       })
       .toBuffer();
-  let s = buffer;
-  let i = 90;
+  let best = buffer;
+  let high = 90;
   if (!/jpe?g/i.test(mediaType)) {
-    let p = await u(90);
-    if (p.length < s.length) s = p;
-    if (p.length <= n) return p;
-    i = 89;
+    let firstTry = await encodeAtQuality(90);
+    if (firstTry.length < best.length) best = firstTry;
+    if (firstTry.length <= maxBytes) return firstTry;
+    high = 89;
   }
-  let h = 1;
-  let y;
+  let low = 1;
+  let accepted;
   for (let j = 0; j < 5; j++) {
-    let floored = Math.floor((h + i) / 2);
-    let E = await u(floored);
-    if (E.length < s.length) s = E;
-    if (E.length <= n) {
-      y = E;
-      h = floored + 1;
-    } else i = floored - 1;
-    if (h > i) break;
+    let floored = Math.floor((low + high) / 2);
+    let candidate = await encodeAtQuality(floored);
+    if (candidate.length < best.length) best = candidate;
+    if (candidate.length <= maxBytes) {
+      accepted = candidate;
+      low = floored + 1;
+    } else high = floored - 1;
+    if (low > high) break;
   }
-  return y ?? s;
+  return accepted ?? best;
 }
 //@ chunk-mvvq2nx1.js:14483-15548 fingerprint = maybeResizeAndDownsampleImageBlock (0.402)
 /**
  * 处理 image block（base64 或 Buffer）：diskless 时只校验尺寸，否则调用缩放并返回新 block 或"无法处理"文本块。
  */
 async function maybeResizeAndDownsampleImageBlock({
-  data: e,
+  data,
   mediaType,
   limits,
   timings,
   allowWebp = true,
   from,
 }) {
-  let i = Buffer.isBuffer(e) ? e : Buffer.from(e, "base64");
+  let buffer = Buffer.isBuffer(data) ? data : Buffer.from(data, "base64");
   if (isDiskless()) {
-    let webpHeader = parseWebpHeader(i);
-    let w = webpHeader ? Math.max(webpHeader.width, webpHeader.height) : 0;
+    let webpHeader = parseWebpHeader(buffer);
+    let maxSide = webpHeader ? Math.max(webpHeader.width, webpHeader.height) : 0;
     logEvent("tengu_image_input", {
-      over_byte_budget: i.length > MODEL_COPY_IMAGE_BYTES,
-      over_byte_limit: i.length > IMAGE_LIMITS.targetRawSize,
-      over_many_images_side_limit: w > MAX_IMAGE_SIDE_PX,
-      over_side_limit: w > MAX_PROVIDER_IMAGE_DIMENSION,
+      over_byte_budget: buffer.length > MODEL_COPY_IMAGE_BYTES,
+      over_byte_limit: buffer.length > IMAGE_LIMITS.targetRawSize,
+      over_many_images_side_limit: maxSide > MAX_IMAGE_SIDE_PX,
+      over_side_limit: maxSide > MAX_PROVIDER_IMAGE_DIMENSION,
       from: fromEnumOpt(from),
     });
   }
   let ext = allowWebp && limits.allowWebp !== false;
-  let h = mediaType?.includes("/") ? mediaType.split("/")[1] || "png" : mediaType || "png";
-  let y;
+  let extension = mediaType?.includes("/") ? mediaType.split("/")[1] || "png" : mediaType || "png";
+  let resized;
   let startTime = performance.now();
   try {
-    y = await maybeResizeAndDownsampleImageBuffer(i, i.length, h, limits, {
+    resized = await maybeResizeAndDownsampleImageBuffer(buffer, buffer.length, extension, limits, {
       timings,
       directWebpMaxBytes: ext ? webpMaxBytesIfOn(MODEL_COPY_IMAGE_BYTES) : undefined,
     });
@@ -724,11 +765,11 @@ async function maybeResizeAndDownsampleImageBlock({
   } finally {
     if (timings !== undefined) timings.resizeMs = performance.now() - startTime;
   }
-  let buffer = y.buffer;
-  if (buffer.length > MODEL_COPY_IMAGE_BYTES) {
+  let buffer_2 = resized.buffer;
+  if (buffer_2.length > MODEL_COPY_IMAGE_BYTES) {
     let startTime = performance.now();
     try {
-      buffer = await compressToJpegUnderBytes(y.buffer, MODEL_COPY_IMAGE_BYTES, y.mediaType);
+      buffer_2 = await compressToJpegUnderBytes(resized.buffer, MODEL_COPY_IMAGE_BYTES, resized.mediaType);
     } catch (error) {
       logForDebugging(
         `Image byte-budget compression failed, passing through unbudgeted: ${errorMessage(error)}`,
@@ -739,39 +780,49 @@ async function maybeResizeAndDownsampleImageBlock({
     }
     if (timings !== undefined) timings.byteBudgetMs = performance.now() - startTime;
   }
-  buffer = await chooseImageEncoding(i, y.buffer, buffer, MODEL_COPY_IMAGE_BYTES, ext, y.losslessWebp);
+  buffer_2 = await chooseImageEncoding(
+    buffer,
+    resized.buffer,
+    buffer_2,
+    MODEL_COPY_IMAGE_BYTES,
+    ext,
+    resized.losslessWebp,
+  );
   return {
     block: {
       type: "image",
       source: {
         type: "base64",
-        media_type: detectImageFormatFromBuffer(buffer),
-        data: buffer.toString("base64"),
+        media_type: detectImageFormatFromBuffer(buffer_2),
+        data: buffer_2.toString("base64"),
       },
     },
-    dimensions: y.dimensions,
+    dimensions: resized.dimensions,
   };
 }
 //@ chunk-mvvq2nx1.js:18060-18079 placement
-var weakSet = new WeakSet();
+var weakSet; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-mvvq2nx1.js:18060", () => {
+  weakSet = new WeakSet();
+});
 //@ chunk-mvvq2nx1.js:18303-18875 placement
-async function checkImageBlockSource(e, limits) {
-  if (!isPlainObject(e.source))
-    return e.source == null
+async function checkImageBlockSource(block, limits) {
+  if (!isPlainObject(block.source))
+    return block.source == null
       ? degradedImageBlock("image block has no source object", "no_source")
       : degradedImageBlock("image block source must be an object", "malformed_source");
-  if (e.source.type !== "base64")
+  if (block.source.type !== "base64")
     return {
-      block: e,
+      block,
     };
-  let mediaType = e.source.media_type;
+  let mediaType = block.source.media_type;
   if (mediaType != null && typeof mediaType !== "string")
     return degradedImageBlock("base64 image media_type must be a string", "malformed_source");
   let mediaType_2 = typeof mediaType === "string" ? mediaType : undefined;
-  let u = e.source.data;
+  let rawData = block.source.data;
   let data;
   try {
-    data = Buffer.isBuffer(u) ? u : Buffer.from(u, "base64");
+    data = Buffer.isBuffer(rawData) ? rawData : Buffer.from(rawData, "base64");
   } catch (error) {
     return degradedImageBlock(errorMessage(error), "malformed_source");
   }
@@ -779,18 +830,18 @@ async function checkImageBlockSource(e, limits) {
     data,
     mediaType: mediaType_2,
     limits,
-    from: weakSet.has(e) ? "built_block" : "block",
+    from: weakSet.has(block) ? "built_block" : "block",
   });
 }
 //@ chunk-mvvq2nx1.js:18875-19011 placement
-function degradedImageBlock(e, n) {
+function degradedImageBlock(reason, cause) {
   logEvent("tengu_image_resize_degraded", {
-    reason: fromEnum(n),
+    reason: fromEnum(cause),
   });
   return {
     block: {
       type: "text",
-      text: `[Image could not be processed: ${e}]`,
+      text: `[Image could not be processed: ${reason}]`,
     },
   };
 }
@@ -806,20 +857,21 @@ async function compressImageBuffer(imageBuffer, maxBytes, originalMediaType) {
     let metadata = await sharp(imageBuffer).metadata();
     let format = metadata.format || normalizedFallback;
     let originalSize = imageBuffer.length;
-    let y = imageBuffer;
+    let currentBuffer = imageBuffer;
     if (!PASSTHROUGH_IMAGE_FORMATS.has(format === "jpg" ? "jpeg" : format)) {
-      y = await sharp(imageBuffer).png().toBuffer();
-      metadata = await sharp(y).metadata();
+      currentBuffer = await sharp(imageBuffer).png().toBuffer();
+      metadata = await sharp(currentBuffer).metadata();
       format = "png";
     }
     let context = {
-      imageBuffer: y,
+      imageBuffer: currentBuffer,
       metadata,
       format,
       maxBytes,
       originalSize,
     };
-    if (y.length <= maxBytes) return createCompressedImageResult(y, format, originalSize);
+    if (currentBuffer.length <= maxBytes)
+      return createCompressedImageResult(currentBuffer, format, originalSize);
     let resizedResult = await tryProgressiveResizing(context, sharp);
     if (resizedResult) return resizedResult;
     if (format === "png") {
@@ -1009,25 +1061,6 @@ function createImageMetadataText(dims, sourcePath) {
     );
   }
   return `${IMAGE_MARKER_PREFIX}${parts.join(", ")}]`;
-}
-//@ chunk-p8kytbnw.js:1486-1528 callgraph-witnessed = detectImageFormatFromBuffer (0.384)
-/**
- * 按魔数识别图片 MIME，默认 image/png。
- */
-function detectImageFormatFromBuffer(buffer) {
-  return Ph(buffer) ?? "image/png";
-}
-//@ chunk-p8kytbnw.js:1528-1617 fingerprint = detectImageFormatFromBase64 (1)
-/**
- * 从 base64 数据识别图片格式。
- */
-function detectImageFormatFromBase64(base64Data) {
-  try {
-    let buffer = Buffer.from(base64Data, "base64");
-    return detectImageFormatFromBuffer(buffer);
-  } catch {
-    return "image/png";
-  }
 }
 //@ chunk-qz53w8v8.js:1699-1837 placement = CLAUDE_OPUS_4_6_CONFIG (0.48)
 /**

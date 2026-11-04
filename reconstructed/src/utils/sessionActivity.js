@@ -16,6 +16,7 @@ import { env } from "./env.js";
 import { registerCleanup } from "./cleanupRegistry.js";
 import { getRemoteFeatureGateState, needsGrowthBookRefresh } from "./permissions/yoloClassifier.js";
 import { stopNoticeWasSent } from "../tools/AgentTool/backgroundGates.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-frha7zp8.js:407-419 sole-consumer
 var IDLE_TIMEOUT_MS = 30000;
@@ -38,14 +39,14 @@ function createActivityState() {
   };
 }
 //@ chunk-frha7zp8.js:629-648 sole-consumer = getClientSurface (0.78)
-var SESSION_ACTIVITY_TICK_MS = "cli";
-var sessionActivityRegistrySlot = 1000;
+var SESSION_ACTIVITY_KEY = "cli";
+var SESSION_ACTIVITY_TICK_MS = 1000;
 //@ chunk-frha7zp8.js:648-1703 sole-consumer
 /**
  * 按活动键保存会话活动状态（淘汰时清理计时器）。
  */
 class SessionActivityRegistry {
-  activityKey = () => SESSION_ACTIVITY_TICK_MS;
+  activityKey = () => SESSION_ACTIVITY_KEY;
   mainLoopActivityListener = null;
   nestedChainDropListener = null;
   workStarted = createSignal();
@@ -61,14 +62,14 @@ class SessionActivityRegistry {
     return this.statesByKey.size;
   }
   currentStateOrCreate() {
-    let e = this.activityKey();
-    if (this.evictedKeys.has(e)) return null;
-    let t = this.statesByKey.get(e);
-    if (!t) {
-      t = createActivityState();
-      this.statesByKey.set(e, t);
+    let key = this.activityKey();
+    if (this.evictedKeys.has(key)) return null;
+    let state = this.statesByKey.get(key);
+    if (!state) {
+      state = createActivityState();
+      this.statesByKey.set(key, state);
     }
-    return t;
+    return state;
   }
   currentStateOrNull() {
     return this.statesByKey.get(this.activityKey()) ?? null;
@@ -76,27 +77,30 @@ class SessionActivityRegistry {
   reset() {
     for (let key of [...this.statesByKey.keys()]) this.evictKey(key);
     this.evictedKeys.clear();
-    this.activityKey = () => SESSION_ACTIVITY_TICK_MS;
+    this.activityKey = () => SESSION_ACTIVITY_KEY;
     this.mainLoopActivityListener = null;
     this.nestedChainDropListener = null;
     this.workStarted.clear();
   }
-  evictKey(e) {
-    this.evictedKeys.add(e);
-    if (this.evictedKeys.size > sessionActivityRegistrySlot) {
-      let o = this.evictedKeys.values().next().value;
-      if (o !== undefined) this.evictedKeys.delete(o);
+  evictKey(key) {
+    this.evictedKeys.add(key);
+    if (this.evictedKeys.size > SESSION_ACTIVITY_TICK_MS) {
+      let evicted = this.evictedKeys.values().next().value;
+      if (evicted !== undefined) this.evictedKeys.delete(evicted);
     }
-    let t = this.statesByKey.get(e);
-    if (!t) return;
-    if (t.heartbeatTimer !== null) clearInterval(t.heartbeatTimer);
-    if (t.idleTimer !== null) clearTimeout(t.idleTimer);
-    t.cleanupHandle?.();
-    this.statesByKey.delete(e);
+    let state = this.statesByKey.get(key);
+    if (!state) return;
+    if (state.heartbeatTimer !== null) clearInterval(state.heartbeatTimer);
+    if (state.idleTimer !== null) clearTimeout(state.idleTimer);
+    state.cleanupHandle?.();
+    this.statesByKey.delete(key);
   }
 }
 //@ chunk-frha7zp8.js:1703-1726 sole-consumer
-var sessionActivityRegistry = new HostScoped(() => new SessionActivityRegistry());
+var sessionActivityRegistry; // deferred: uses SessionActivityRegistry of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-frha7zp8.js:1703", () => {
+  sessionActivityRegistry = new HostScoped(() => new SessionActivityRegistry());
+});
 //@ chunk-frha7zp8.js:1726-1761 affinity
 function getSessionActivityState() {
   return sessionActivityRegistry.of(getRootSession().host);
@@ -105,49 +109,49 @@ function getSessionActivityState() {
 /**
  * 活动期间定时发送会话保活心跳。
  */
-function startHeartbeatTimer(e) {
-  clearIdleTimer(e);
-  e.heartbeatTimer = setInterval(
-    (t) => {
-      if (isParkedOnUser(t)) {
+function startHeartbeatTimer(state) {
+  clearIdleTimer(state);
+  state.heartbeatTimer = setInterval(
+    (state) => {
+      if (isParkedOnUser(state)) {
         logForDiagnosticsNoPII("debug", "session_keepalive_parked_on_user", {
-          refcount: t.refcount,
-          parked_on_user: t.parkedOnUser,
+          refcount: state.refcount,
+          parked_on_user: state.parkedOnUser,
         });
         return;
       }
       logForDiagnosticsNoPII("debug", "session_keepalive_heartbeat", {
-        refcount: t.refcount,
-        main_loop_refcount: t.mainLoopRefcount,
-        active: Object.fromEntries(t.activeReasons),
+        refcount: state.refcount,
+        main_loop_refcount: state.mainLoopRefcount,
+        active: Object.fromEntries(state.activeReasons),
       });
-      if (env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES) t.activityCallback?.();
+      if (env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES) state.activityCallback?.();
     },
     IDLE_TIMEOUT_MS,
-    e,
+    state,
   );
 }
 //@ chunk-frha7zp8.js:2142-2278 fingerprint = startIdleTimer (0.764)
 /**
  * 活动结束 30 秒后记录 session_idle_30s。
  */
-function startIdleTimer(e) {
-  clearIdleTimer(e);
-  if (e.activityCallback === null) return;
-  e.idleTimer = setTimeout(
-    (t) => {
+function startIdleTimer(state) {
+  clearIdleTimer(state);
+  if (state.activityCallback === null) return;
+  state.idleTimer = setTimeout(
+    (state) => {
       logForDiagnosticsNoPII("info", "session_idle_30s");
-      t.idleTimer = null;
+      state.idleTimer = null;
     },
     IDLE_TIMEOUT_MS,
-    e,
+    state,
   );
 }
 //@ chunk-frha7zp8.js:2278-2357 layout
-function clearIdleTimer(e) {
-  if (e.idleTimer !== null) {
-    clearTimeout(e.idleTimer);
-    e.idleTimer = null;
+function clearIdleTimer(state) {
+  if (state.idleTimer !== null) {
+    clearTimeout(state.idleTimer);
+    state.idleTimer = null;
   }
 }
 //@ chunk-frha7zp8.js:2357-2486 layout
@@ -155,32 +159,32 @@ function clearIdleTimer(e) {
  * 设置活动回调；有活动时启动心跳。
  */
 function setActivityCallback(activityCallback) {
-  let t = getSessionActivityState().currentStateOrCreate();
-  if (!t) return;
-  t.activityCallback = activityCallback;
-  if (t.refcount > 0 && t.heartbeatTimer === null) startHeartbeatTimer(t);
+  let state = getSessionActivityState().currentStateOrCreate();
+  if (!state) return;
+  state.activityCallback = activityCallback;
+  if (state.refcount > 0 && state.heartbeatTimer === null) startHeartbeatTimer(state);
 }
 //@ chunk-frha7zp8.js:2486-2655 layout
 /**
  * 清除活动回调并停止心跳与空闲计时。
  */
 function clearActivityCallback() {
-  let e = getSessionActivityState().currentStateOrNull();
-  if (!e) return;
-  e.activityCallback = null;
-  if (e.heartbeatTimer !== null) {
-    clearInterval(e.heartbeatTimer);
-    e.heartbeatTimer = null;
+  let state = getSessionActivityState().currentStateOrNull();
+  if (!state) return;
+  state.activityCallback = null;
+  if (state.heartbeatTimer !== null) {
+    clearInterval(state.heartbeatTimer);
+    state.heartbeatTimer = null;
   }
-  clearIdleTimer(e);
+  clearIdleTimer(state);
 }
 //@ chunk-frha7zp8.js:2655-2767 layout
 /**
  * 开启远程保活时立即触发一次活动回调。
  */
 function sendKeepaliveNow() {
-  let e = getSessionActivityState().currentStateOrNull();
-  if (e && env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES) e.activityCallback?.();
+  let state = getSessionActivityState().currentStateOrNull();
+  if (state && env.CLAUDE_CODE_REMOTE_SEND_KEEPALIVES) state.activityCallback?.();
 }
 //@ chunk-frha7zp8.js:2767-2846 layout
 function activityCallbackActive() {
@@ -208,18 +212,18 @@ function notifyNestedChainDropped(taskId) {
   getSessionActivityState().nestedChainDropListener?.(taskId);
 }
 //@ chunk-frha7zp8.js:2988-3064 layout
-function isActivityReasonActive(e) {
-  return (getSessionActivityState().currentStateOrNull()?.activeReasons.get(e) ?? 0) > 0;
+function isActivityReasonActive(reason) {
+  return (getSessionActivityState().currentStateOrNull()?.activeReasons.get(reason) ?? 0) > 0;
 }
 //@ chunk-frha7zp8.js:3064-3158 layout
 function hasActiveWork() {
-  for (let e of getSessionActivityState().statesByKey.values())
-    if (e.refcount > 0 && !isParkedOnUser(e)) return true;
+  for (let state of getSessionActivityState().statesByKey.values())
+    if (state.refcount > 0 && !isParkedOnUser(state)) return true;
   return false;
 }
 //@ chunk-frha7zp8.js:3158-3210 layout
-function onWorkStarted(e) {
-  return getSessionActivityState().workStarted.subscribe(e);
+function onWorkStarted(listener) {
+  return getSessionActivityState().workStarted.subscribe(listener);
 }
 //@ chunk-frha7zp8.js:3210-3278 layout
 function getMainLoopRefcount() {
@@ -233,31 +237,31 @@ function isSessionActive() {
 /**
  * 开始会话活动计数，驱动心跳与空闲计时（session_activity_at_shutdown）。
  */
-function startSessionActivity(reason, t) {
+function startSessionActivity(reason, owner) {
   let sessionActivityState = getSessionActivityState();
-  let n = sessionActivityState.currentStateOrCreate();
-  if (!n) return;
-  n.refcount++;
-  if (t === undefined) {
-    n.mainLoopRefcount++;
-    sessionActivityState.mainLoopActivityListener?.(n.mainLoopRefcount);
+  let state = sessionActivityState.currentStateOrCreate();
+  if (!state) return;
+  state.refcount++;
+  if (owner === undefined) {
+    state.mainLoopRefcount++;
+    sessionActivityState.mainLoopActivityListener?.(state.mainLoopRefcount);
   }
-  n.activeReasons.set(reason, (n.activeReasons.get(reason) ?? 0) + 1);
-  if (n.refcount === 1) {
-    n.oldestActivityStartedAt = Date.now();
-    if (n.activityCallback !== null && n.heartbeatTimer === null) startHeartbeatTimer(n);
+  state.activeReasons.set(reason, (state.activeReasons.get(reason) ?? 0) + 1);
+  if (state.refcount === 1) {
+    state.oldestActivityStartedAt = Date.now();
+    if (state.activityCallback !== null && state.heartbeatTimer === null) startHeartbeatTimer(state);
   }
-  if (n.refcount - n.parkedOnUser === 1) sessionActivityState.workStarted.emit();
-  if (n.cleanupHandle === null) {
+  if (state.refcount - state.parkedOnUser === 1) sessionActivityState.workStarted.emit();
+  if (state.cleanupHandle === null) {
     let ownerKey = sessionActivityState.activityKey();
-    n.cleanupHandle = registerCleanup(async () => {
+    state.cleanupHandle = registerCleanup(async () => {
       logForDiagnosticsNoPII("info", "session_activity_at_shutdown", {
         owner_key: ownerKey,
-        refcount: n.refcount,
-        active: Object.fromEntries(n.activeReasons),
+        refcount: state.refcount,
+        active: Object.fromEntries(state.activeReasons),
         oldest_activity_ms:
-          n.refcount > 0 && n.oldestActivityStartedAt !== null
-            ? Date.now() - n.oldestActivityStartedAt
+          state.refcount > 0 && state.oldestActivityStartedAt !== null
+            ? Date.now() - state.oldestActivityStartedAt
             : null,
       });
     });
@@ -267,34 +271,34 @@ function startSessionActivity(reason, t) {
 /**
  * 结束一次活动（减引用计数，归零时停止心跳并开始空闲计时）。
  */
-function endActivity(e, t) {
+function endActivity(reason, owner) {
   let sessionActivityState = getSessionActivityState();
-  let n = sessionActivityState.currentStateOrNull();
-  if (!n) return;
-  if (n.refcount > 0) n.refcount--;
-  if (t === undefined)
-    if (n.mainLoopRefcount > 0) {
-      n.mainLoopRefcount--;
-      sessionActivityState.mainLoopActivityListener?.(n.mainLoopRefcount);
+  let state = sessionActivityState.currentStateOrNull();
+  if (!state) return;
+  if (state.refcount > 0) state.refcount--;
+  if (owner === undefined)
+    if (state.mainLoopRefcount > 0) {
+      state.mainLoopRefcount--;
+      sessionActivityState.mainLoopActivityListener?.(state.mainLoopRefcount);
     } else
       logForDiagnosticsNoPII("warn", "session_activity_main_loop_underflow", {
-        reason: e,
+        reason,
       });
-  let s = (n.activeReasons.get(e) ?? 0) - 1;
-  if (s > 0) n.activeReasons.set(e, s);
-  else n.activeReasons.delete(e);
-  if (n.refcount === 0) {
-    if (n.parkedOnUser > 0) {
+  let remaining = (state.activeReasons.get(reason) ?? 0) - 1;
+  if (remaining > 0) state.activeReasons.set(reason, remaining);
+  else state.activeReasons.delete(reason);
+  if (state.refcount === 0) {
+    if (state.parkedOnUser > 0) {
       logForDiagnosticsNoPII("warn", "session_activity_parked_leaked", {
-        parked_on_user: n.parkedOnUser,
+        parked_on_user: state.parkedOnUser,
       });
-      n.parkedOnUser = 0;
-      n.parkGeneration++;
+      state.parkedOnUser = 0;
+      state.parkGeneration++;
     }
-    if (n.heartbeatTimer !== null) {
-      clearInterval(n.heartbeatTimer);
-      n.heartbeatTimer = null;
-      startIdleTimer(n);
+    if (state.heartbeatTimer !== null) {
+      clearInterval(state.heartbeatTimer);
+      state.heartbeatTimer = null;
+      startIdleTimer(state);
     }
   }
 }
@@ -305,24 +309,24 @@ function endActivity(e, t) {
 function parkOnUser() {
   if (env.CLAUDE_CODE_DISABLE_AWAITING_USER_IDLE) return () => {};
   let sessionActivityState = getSessionActivityState();
-  let t = sessionActivityState.currentStateOrNull();
-  if (!t) return () => {};
-  if (t.parkedOnUser >= t.refcount) {
+  let state = sessionActivityState.currentStateOrNull();
+  if (!state) return () => {};
+  if (state.parkedOnUser >= state.refcount) {
     logForDiagnosticsNoPII("warn", "session_activity_parked_exceeds_refcount", {
-      refcount: t.refcount,
-      parked_on_user: t.parkedOnUser,
+      refcount: state.refcount,
+      parked_on_user: state.parkedOnUser,
     });
     return () => {};
   }
-  t.parkedOnUser++;
-  let parkGeneration = t.parkGeneration;
-  let n = false;
+  state.parkedOnUser++;
+  let parkGeneration = state.parkGeneration;
+  let released = false;
   return () => {
-    if (n) return;
-    n = true;
-    if (t.parkGeneration === parkGeneration && t.parkedOnUser > 0) {
-      t.parkedOnUser--;
-      if (t.refcount - t.parkedOnUser === 1) sessionActivityState.workStarted.emit();
+    if (released) return;
+    released = true;
+    if (state.parkGeneration === parkGeneration && state.parkedOnUser > 0) {
+      state.parkedOnUser--;
+      if (state.refcount - state.parkedOnUser === 1) sessionActivityState.workStarted.emit();
     }
   };
 }
@@ -331,16 +335,18 @@ function parkOnUser() {
  * currentActivityState：当前活动状态。
  */
 function currentActivityState() {
-  let e = getSessionActivityState().currentStateOrNull();
-  return e !== null && isParkedOnUser(e);
+  let state = getSessionActivityState().currentStateOrNull();
+  return state !== null && isParkedOnUser(state);
 }
 //@ chunk-frha7zp8.js:5143-5253 placement
 /**
  * 全部活动都在等待用户。
  */
-function isParkedOnUser(e) {
+function isParkedOnUser(state) {
   return (
-    !env.CLAUDE_CODE_DISABLE_AWAITING_USER_IDLE && e.parkedOnUser > 0 && e.refcount - e.parkedOnUser <= 0
+    !env.CLAUDE_CODE_DISABLE_AWAITING_USER_IDLE &&
+    state.parkedOnUser > 0 &&
+    state.refcount - state.parkedOnUser <= 0
   );
 }
 //@ chunk-z4g2ta8k.js:42463-42497 affinity

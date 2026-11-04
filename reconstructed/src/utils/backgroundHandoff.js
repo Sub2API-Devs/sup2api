@@ -17,6 +17,7 @@ import { looksLikeSlashInput } from "../commands.js";
 import { plural } from "./stringUtils.js";
 import { isInterruptionOnlyMessage } from "./messages.js";
 import { isTranscriptPersistenceDisabled } from "./sessionStorage.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-8fqgaf3a.js:9830-9864 placement
 /**
@@ -37,33 +38,33 @@ function backgroundVia(isLoading, betweenCalls) {
 /**
  * 当前能否转后台及方式（detach 或其他），不能时给原因。
  */
-function backgroundEligibility(e) {
-  let { inFlight } = e;
-  if (e.isBg)
+function backgroundEligibility(options) {
+  let { inFlight } = options;
+  if (options.isBg)
     return {
       ok: true,
       via: "detach",
       inFlight,
     };
-  if (!e.fleetEnabled)
+  if (!options.fleetEnabled)
     return {
       ok: false,
       reason: "fleet-disabled",
       inFlight,
     };
-  if (e.isRemote)
+  if (options.isRemote)
     return {
       ok: false,
       reason: "remote",
       inFlight,
     };
-  if (e.persistenceDisabled)
+  if (options.persistenceDisabled)
     return {
       ok: false,
       reason: "persistence",
       inFlight,
     };
-  if (e.isExternalLoading)
+  if (options.isExternalLoading)
     return {
       ok: false,
       reason: "loading",
@@ -71,7 +72,7 @@ function backgroundEligibility(e) {
     };
   return {
     ok: true,
-    via: backgroundVia(e.isLoading, e.betweenCalls),
+    via: backgroundVia(options.isLoading, options.betweenCalls),
     inFlight,
   };
 }
@@ -79,15 +80,15 @@ function backgroundEligibility(e) {
 /**
  * 非远程且 assistant 未在流式输出（处于可转后台的空闲点）。
  */
-function isIdleForBackground(snapshot, o) {
-  return !o && !isAssistantStreaming(snapshot);
+function isIdleForBackground(snapshot, isBusy) {
+  return !isBusy && !isAssistantStreaming(snapshot);
 }
 //@ chunk-8fqgaf3a.js:10385-10540 placement
-function isAssistantStreaming(e) {
-  for (let i = e.length - 1; i >= 0; i--) {
-    let r = e[i];
-    if (r.type === "assistant") return r.message?.stop_reason === null;
-    if (r.type === "user") return false;
+function isAssistantStreaming(snapshot) {
+  for (let i = snapshot.length - 1; i >= 0; i--) {
+    let message = snapshot[i];
+    if (message.type === "assistant") return message.message?.stop_reason === null;
+    if (message.type === "user") return false;
   }
   return false;
 }
@@ -96,52 +97,53 @@ function isAssistantStreaming(e) {
  * 生成中助手文本长度。
  */
 function streamingTextLength(snapshot) {
-  let o = 0;
+  let totalLength = 0;
   for (let i = snapshot.length - 1; i >= 0; i--) {
-    let n = snapshot[i];
-    if (n.type === "assistant") {
-      if (n.message?.stop_reason !== null) return o;
-      for (let s of n.message?.content ?? [])
-        if (s.type === "text" && typeof s.text === "string") o += s.text.length;
-    } else if (n.type === "user") return o;
+    let message = snapshot[i];
+    if (message.type === "assistant") {
+      if (message.message?.stop_reason !== null) return totalLength;
+      for (let block of message.message?.content ?? [])
+        if (block.type === "text" && typeof block.text === "string") totalLength += block.text.length;
+    } else if (message.type === "user") return totalLength;
   }
-  return o;
+  return totalLength;
 }
 //@ chunk-8fqgaf3a.js:10813-11175 placement
 /**
  * 生成中助手文本（加未发送尾部）。
  */
-function streamingTextSoFar(snapshot, o) {
-  let r = snapshot.length;
+function streamingTextSoFar(snapshot, pendingText) {
+  let startIndex = snapshot.length;
   for (let i = snapshot.length - 1; i >= 0; i--) {
-    let m = snapshot[i];
-    if (m.type === "assistant") {
-      if (m.message?.stop_reason !== null) break;
-      r = i;
-    } else if (m.type === "user") break;
+    let message = snapshot[i];
+    if (message.type === "assistant") {
+      if (message.message?.stop_reason !== null) break;
+      startIndex = i;
+    } else if (message.type === "user") break;
   }
-  let n = "";
-  for (let s = r; s < snapshot.length; s++) {
-    let m = snapshot[s];
-    if (m.type !== "assistant") continue;
-    for (let u of m.message?.content ?? []) if (u.type === "text" && typeof u.text === "string") n += u.text;
+  let text = "";
+  for (let index = startIndex; index < snapshot.length; index++) {
+    let message = snapshot[index];
+    if (message.type !== "assistant") continue;
+    for (let block of message.message?.content ?? [])
+      if (block.type === "text" && typeof block.text === "string") text += block.text;
   }
-  return n + (o ?? "");
+  return text + (pendingText ?? "");
 }
 //@ chunk-8fqgaf3a.js:11175-11363 placement
 /**
  * 判断提示是否处于筛查保留中（读取失败视为保留）。
  */
-function createHeldScreeningCheck(e) {
-  let o;
-  let r = false;
-  return (n) => {
-    if (r) return true;
+function createHeldScreeningCheck(getScreening) {
+  let baseline;
+  let failed = false;
+  return (promptSubmitted) => {
+    if (failed) return true;
     try {
-      o ??= hooksSnapshotKey(e());
-      return screensChanged(n.under, o);
+      baseline ??= hooksSnapshotKey(getScreening());
+      return screensChanged(promptSubmitted.under, baseline);
     } catch (error) {
-      r = true;
+      failed = true;
       logForDebugging(`heldScreening could not read the screening: ${error}`, {
         level: "error",
       });
@@ -154,23 +156,23 @@ function createHeldScreeningCheck(e) {
  * 排队命令中不能随交接带走的数量。
  */
 function countHeldQueuedCommands(commandQueue, heldScreeningCheck) {
-  let r = 0;
-  for (let n of commandQueue) {
-    if (isCheckinNotification(n)) continue;
+  let heldCount = 0;
+  for (let command of commandQueue) {
+    if (isCheckinNotification(command)) continue;
     if (
-      n.priority === "later" ||
-      n.drainOnly === true ||
-      n.screeningPending === true ||
-      (n.promptSubmitted !== undefined &&
+      command.priority === "later" ||
+      command.drainOnly === true ||
+      command.screeningPending === true ||
+      (command.promptSubmitted !== undefined &&
         heldScreeningCheck !== undefined &&
-        heldScreeningCheck(n.promptSubmitted)) ||
-      n.mode === "bash" ||
-      n.mode === "poll-event" ||
-      (looksLikeSlashInput(n.value) && !n.skipSlashCommands)
+        heldScreeningCheck(command.promptSubmitted)) ||
+      command.mode === "bash" ||
+      command.mode === "poll-event" ||
+      (looksLikeSlashInput(command.value) && !command.skipSlashCommands)
     )
-      r++;
+      heldCount++;
   }
-  return r;
+  return heldCount;
 }
 //@ chunk-8fqgaf3a.js:11641-11871 placement
 /**
@@ -183,20 +185,25 @@ function waitingForSubagentsMessage(restartableCount) {
 /**
  * 生成转后台受阻的说明文本。
  */
-function backgroundBlockedMessage(e, o) {
-  return `Backgrounding cancelled \u2014 ${e}.${o === undefined ? "" : ` ${o}`}`;
+function backgroundBlockedMessage(reason, detail) {
+  return `Backgrounding cancelled \u2014 ${reason}.${detail === undefined ? "" : ` ${detail}`}`;
 }
 //@ chunk-8fqgaf3a.js:11958-12182 placement
 /**
  * 转后台受阻提示。
  */
-var UNSENT_INPUT_BLOCK = backgroundBlockedMessage(
-  "you have unsent text in the input",
-  "Send it or clear it, then press \u2190 again.",
-);
-var WAITING_FOR_ANSWER_MESSAGE =
-  "Still backgrounding after the current tool \u2014 a question is waiting for your answer.";
-var TURN_STOPPED_BLOCK = backgroundBlockedMessage("the turn was stopped");
+var UNSENT_INPUT_BLOCK; // deferred: uses backgroundBlockedMessage of its import cycle while loading; runs once the cycle is complete
+var WAITING_FOR_ANSWER_MESSAGE;
+var TURN_STOPPED_BLOCK;
+deferInit("chunk-8fqgaf3a.js:11958", () => {
+  UNSENT_INPUT_BLOCK = backgroundBlockedMessage(
+    "you have unsent text in the input",
+    "Send it or clear it, then press \u2190 again.",
+  );
+  WAITING_FOR_ANSWER_MESSAGE =
+    "Still backgrounding after the current tool \u2014 a question is waiting for your answer.";
+  TURN_STOPPED_BLOCK = backgroundBlockedMessage("the turn was stopped");
+});
 //@ chunk-8fqgaf3a.js:12182-12375 placement = _temp (1)
 function isToolResultUserMessage(c) {
   if (c.type !== "user") return false;
@@ -204,51 +211,55 @@ function isToolResultUserMessage(c) {
   return (
     Array.isArray(content) &&
     content[0]?.type === "tool_result" &&
-    content.every((r) => r.type === "tool_result" || r.type === "text" || r.type === "image")
+    content.every((block) => block.type === "tool_result" || block.type === "text" || block.type === "image")
   );
 }
 //@ chunk-8fqgaf3a.js:12375-12547 placement
-function isUnfinishedTailMessage(e) {
-  if (e.type === "system") return true;
-  if (e.type === "assistant") {
-    let stopReason = e.message?.stop_reason;
+function isUnfinishedTailMessage(message) {
+  if (message.type === "system") return true;
+  if (message.type === "assistant") {
+    let stopReason = message.message?.stop_reason;
     return stopReason === null || stopReason === "tool_use";
   }
-  if (e.type === "user") return isInterruptionOnlyMessage(e);
+  if (message.type === "user") return isInterruptionOnlyMessage(message);
   return false;
 }
 //@ chunk-8fqgaf3a.js:12547-12879 placement
 /**
  * 去掉末尾未完成的助手/中断消息。
  */
-function trimIncompleteTail(e) {
-  let o = e.length;
-  let r = false;
-  while (o > 0) {
-    let s = e[o - 1];
-    if (s.type === "user") {
-      if (isInterruptionOnlyMessage(s)) r ||= isToolResultUserMessage(s);
-      else if (r && isToolResultUserMessage(s));
+function trimIncompleteTail(messages) {
+  let endIndex = messages.length;
+  let sawToolResult = false;
+  while (endIndex > 0) {
+    let message = messages[endIndex - 1];
+    if (message.type === "user") {
+      if (isInterruptionOnlyMessage(message)) sawToolResult ||= isToolResultUserMessage(message);
+      else if (sawToolResult && isToolResultUserMessage(message));
       else break;
-    } else if (s.type === "assistant") {
-      if (!isUnfinishedTailMessage(s)) break;
-      r = false;
+    } else if (message.type === "assistant") {
+      if (!isUnfinishedTailMessage(message)) break;
+      sawToolResult = false;
     }
-    o--;
+    endIndex--;
   }
-  let filtered = e.slice(o).filter((s) => s.type !== "user" && s.type !== "assistant" && s.type !== "system");
-  if (o + filtered.length === e.length) return e;
-  return [...e.slice(0, o), ...filtered];
+  let filtered = messages
+    .slice(endIndex)
+    .filter(
+      (message) => message.type !== "user" && message.type !== "assistant" && message.type !== "system",
+    );
+  if (endIndex + filtered.length === messages.length) return messages;
+  return [...messages.slice(0, endIndex), ...filtered];
 }
 //@ chunk-8fqgaf3a.js:12879-13010 placement
 /**
  * 修剪后最后一条用户或助手消息 uuid。
  */
 function lastSettledMessageUuid(snapshot) {
-  let o = trimIncompleteTail(snapshot);
-  for (let i = o.length - 1; i >= 0; i--) {
-    let n = o[i].type;
-    if (n === "user" || n === "assistant") return o[i].uuid;
+  let trimmed = trimIncompleteTail(snapshot);
+  for (let i = trimmed.length - 1; i >= 0; i--) {
+    let type = trimmed[i].type;
+    if (type === "user" || type === "assistant") return trimmed[i].uuid;
   }
   return;
 }
@@ -256,13 +267,13 @@ function lastSettledMessageUuid(snapshot) {
 /**
  * 消息列表是否仍停在记录的位置之后。
  */
-function isAtResumePoint(e, snapshot) {
-  if (e === null || e.length < 1 || e.length > snapshot.length) return false;
-  let r = e.length - 1;
-  if (snapshot[r]?.uuid !== e.uuid) return false;
-  for (let n = e.length; n < snapshot.length; n++) {
-    let s = snapshot[n].type;
-    if (s === "user" || s === "assistant") return false;
+function isAtResumePoint(resumePoint, snapshot) {
+  if (resumePoint === null || resumePoint.length < 1 || resumePoint.length > snapshot.length) return false;
+  let pointIndex = resumePoint.length - 1;
+  if (snapshot[pointIndex]?.uuid !== resumePoint.uuid) return false;
+  for (let index = resumePoint.length; index < snapshot.length; index++) {
+    let type = snapshot[index].type;
+    if (type === "user" || type === "assistant") return false;
   }
   return true;
 }
@@ -270,11 +281,11 @@ function isAtResumePoint(e, snapshot) {
 /**
  * 最后一条对话消息是非中断的用户消息。
  */
-function endsWithUserPrompt(e) {
-  for (let i = e.length - 1; i >= 0; i--) {
-    let r = e[i];
-    if (r.type === "user") return !isInterruptionOnlyMessage(r);
-    if (r.type === "assistant") return false;
+function endsWithUserPrompt(messages) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    let message = messages[i];
+    if (message.type === "user") return !isInterruptionOnlyMessage(message);
+    if (message.type === "assistant") return false;
   }
   return false;
 }
@@ -282,16 +293,16 @@ function endsWithUserPrompt(e) {
 /**
  * 转后台可行、但不是直接 detach 时需要先 detach。
  */
-function needsDetachBeforeBackground(e) {
-  return e.ok && e.via !== "detach";
+function needsDetachBeforeBackground(eligibility) {
+  return eligibility.ok && eligibility.via !== "detach";
 }
 //@ chunk-8fqgaf3a.js:13407-13498 placement
 /**
  * 按当前会话状态（编队、远程、持久化）计算能否转后台。
  */
-function backgroundEligibilityForSession(e) {
+function backgroundEligibilityForSession(base) {
   return backgroundEligibility({
-    ...e,
+    ...base,
     fleetEnabled: isAgentsFleetEnabled(),
     isRemote: getIsRemoteMode(),
     persistenceDisabled: isTranscriptPersistenceDisabled(),

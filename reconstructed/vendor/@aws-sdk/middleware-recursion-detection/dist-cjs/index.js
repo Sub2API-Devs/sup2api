@@ -5,11 +5,11 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_recursionDetectionMiddleware } from "./recursionDetectionMiddleware.js";
 
 //@ chunk-edce4vxq.js:4991-5421 cjs-fingerprint
-var require_middleware_recursion_detection = x(function (cjsExports) {
+var require_middleware_recursion_detection = __commonJS(function (cjsExports) {
   var recursionDetectionMiddleware = require_recursionDetectionMiddleware();
   var recursionDetectionMiddlewareOptions = {
     step: "build",

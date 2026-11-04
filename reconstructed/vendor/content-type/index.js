@@ -5,10 +5,13 @@
  * pieces: chunk-r1g76qsy.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { J, Eo } from "../@modelcontextprotocol/core/(bundler runtime of a pre-bundled dist file).js";
+import {
+  initModule,
+  interopDefault,
+} from "../@modelcontextprotocol/core/(bundler runtime of a pre-bundled dist file).js";
 
 //@ chunk-r1g76qsy.js:115925-117199 cjs-fingerprint
-var require_content_type = J((cjsExports) => {
+var require_content_type = initModule((cjsExports) => {
   var PARAM_REGEXP =
     /; *([!#$%&'*+.^_`|~0-9A-Za-z-]+) *= *("(?:[\u000b\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u00ff]|\\[\u000b\u0020-\u00ff])*"|[!#$%&'*+.^_`|~0-9A-Za-z-]+) */g;
   var QESC_REGEXP = /\\([\u000b\u0020-\u00ff])/g;
@@ -54,5 +57,5 @@ var require_content_type = J((cjsExports) => {
     this.type = type;
   }
 });
-var import_content_type = Eo(require_content_type(), 1);
+var import_content_type = interopDefault(require_content_type(), 1);
 export { import_content_type };

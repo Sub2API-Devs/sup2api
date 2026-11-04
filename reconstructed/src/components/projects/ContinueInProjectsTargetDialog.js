@@ -8,8 +8,8 @@
  * pieces: chunk-ftzr67d2.js (5)
  * attribution: placement 5
  */
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useInputRefusalWindow, useRefusalTracker } from "../CustomSelect/selectTypeahead.js";
 import { DECAY_TICK_MS } from "../ResumeStaleConversationDialog.js";
 import { useRefusableAnswer } from "../../hooks/useRefusableAnswer.js";
@@ -32,14 +32,14 @@ function nowMs() {
 var NEW_PROJECT_VALUE = "new";
 var LIST_RESERVED_ROWS = 8;
 //@ chunk-ftzr67d2.js:13851-13925 placement
-function toTargetChoice(C) {
-  return C === NEW_PROJECT_VALUE
+function toTargetChoice(projectId) {
+  return projectId === NEW_PROJECT_VALUE
     ? {
         choice: "new",
       }
     : {
         choice: "existing",
-        projectId: C,
+        projectId,
       };
 }
 //@ chunk-ftzr67d2.js:13925-16222 placement
@@ -47,101 +47,106 @@ function toTargetChoice(C) {
  * 选择目标 Claude 项目（已有/新建）的对话框。
  */
 function ContinueInProjectsTargetDialog(props) {
-  let t = w(39);
+  let $ = useMemoCache(39);
   let { payload, answer } = props;
   let inputRefusalWindow = useInputRefusalWindow();
   let inputRefusalWindow_2 = useInputRefusalWindow(DECAY_TICK_MS);
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let G;
-  if (t[0] !== answer) {
-    G = (se) => answer(toTargetChoice(se));
-    t[0] = answer;
-    t[1] = G;
-  } else G = t[1];
-  let refusableAnswer = useRefusableAnswer(G);
-  let [B] = y(nowMs);
-  let H;
-  if (t[2] !== B || t[3] !== payload.newProjectName || t[4] !== payload.projects || t[5] !== payload.sends) {
-    let date = new Date(B);
+  let rawAnswer;
+  if ($[0] !== answer) {
+    rawAnswer = (choice) => answer(toTargetChoice(choice));
+    $[0] = answer;
+    $[1] = rawAnswer;
+  } else rawAnswer = $[1];
+  let refusableAnswer = useRefusableAnswer(rawAnswer);
+  let [nowTimestamp] = useState(nowMs);
+  let options;
+  if (
+    $[2] !== nowTimestamp ||
+    $[3] !== payload.newProjectName ||
+    $[4] !== payload.projects ||
+    $[5] !== payload.sends
+  ) {
+    let date = new Date(nowTimestamp);
     const label = `New Claude Project \u201C${payload.newProjectName}\u201D`;
     const description =
       payload.sends === "message" ? "create it for this message" : "create it from this session";
-    let f;
-    if (t[7] !== label || t[8] !== description) {
-      f = {
+    let newProjectOption;
+    if ($[7] !== label || $[8] !== description) {
+      newProjectOption = {
         label,
         value: NEW_PROJECT_VALUE,
         description,
       };
-      t[7] = label;
-      t[8] = description;
-      t[9] = f;
-    } else f = t[9];
-    H = [
-      f,
+      $[7] = label;
+      $[8] = description;
+      $[9] = newProjectOption;
+    } else newProjectOption = $[9];
+    options = [
+      newProjectOption,
       ...payload.projects.map((project) => ({
         label: project.name !== "" ? project.name : "Untitled project",
         value: project.id,
         description: lastActiveLabel(project.lastMessageAtMs, date),
       })),
     ];
-    t[2] = B;
-    t[3] = payload.newProjectName;
-    t[4] = payload.projects;
-    t[5] = payload.sends;
-    t[6] = H;
-  } else H = t[6];
-  let options = H;
-  let u;
-  if (t[10] !== noteRefused || t[11] !== refusedWithin) {
-    u = function c(ae) {
-      if (!ae() && !refusedWithin()) {
+    $[2] = nowTimestamp;
+    $[3] = payload.newProjectName;
+    $[4] = payload.projects;
+    $[5] = payload.sends;
+    $[6] = options;
+  } else options = $[6];
+  let options_2 = options;
+  let refuseInput;
+  if ($[10] !== noteRefused || $[11] !== refusedWithin) {
+    refuseInput = function refuseInput(check) {
+      if (!check() && !refusedWithin()) {
         return false;
       }
       noteRefused();
       return true;
     };
-    t[10] = noteRefused;
-    t[11] = refusedWithin;
-    t[12] = u;
-  } else u = t[12];
-  let c = u;
-  let d;
-  if (t[13] !== inputRefusalWindow_2 || t[14] !== refusableAnswer || t[15] !== c) {
-    d = function v(K) {
-      if (c(inputRefusalWindow_2)) {
-        refusableAnswer.refuse(K);
+    $[10] = noteRefused;
+    $[11] = refusedWithin;
+    $[12] = refuseInput;
+  } else refuseInput = $[12];
+  let refuseInput_2 = refuseInput;
+  let onChoice;
+  if ($[13] !== inputRefusalWindow_2 || $[14] !== refusableAnswer || $[15] !== refuseInput_2) {
+    onChoice = function onChoice(choice) {
+      if (refuseInput_2(inputRefusalWindow_2)) {
+        refusableAnswer.refuse(choice);
         return;
       }
-      refusableAnswer.answer(K);
+      refusableAnswer.answer(choice);
     };
-    t[13] = inputRefusalWindow_2;
-    t[14] = refusableAnswer;
-    t[15] = c;
-    t[16] = d;
-  } else d = t[16];
-  let onChange = d;
-  let f;
-  if (t[17] !== answer || t[18] !== inputRefusalWindow || t[19] !== c) {
-    f = function p() {
-      if (!c(inputRefusalWindow))
+    $[13] = inputRefusalWindow_2;
+    $[14] = refusableAnswer;
+    $[15] = refuseInput_2;
+    $[16] = onChoice;
+  } else onChoice = $[16];
+  let onChange = onChoice;
+  let onCancel;
+  if ($[17] !== answer || $[18] !== inputRefusalWindow || $[19] !== refuseInput_2) {
+    onCancel = function onCancel() {
+      if (!refuseInput_2(inputRefusalWindow))
         answer({
           choice: "cancel",
         });
     };
-    t[17] = answer;
-    t[18] = inputRefusalWindow;
-    t[19] = c;
-    t[20] = f;
-  } else f = t[20];
-  let onCancel = f;
+    $[17] = answer;
+    $[18] = inputRefusalWindow;
+    $[19] = refuseInput_2;
+    $[20] = onCancel;
+  } else onCancel = $[20];
+  let onCancel_2 = onCancel;
   const subtitle =
     payload.sends === "message"
       ? "Your message goes to the project you pick."
       : "This session\u2019s work goes to the project you pick.";
-  let R;
-  if (t[21] !== payload.listError) {
-    R =
+  let listErrorText;
+  if ($[21] !== payload.listError) {
+    listErrorText =
       payload.listError !== undefined
         ? jsxProd_default_2(Text, {
             color: "warning",
@@ -152,73 +157,74 @@ function ContinueInProjectsTargetDialog(props) {
             ],
           })
         : null;
-    t[21] = payload.listError;
-    t[22] = R;
-  } else R = t[22];
+    $[21] = payload.listError;
+    $[22] = listErrorText;
+  } else listErrorText = $[22];
   const defaultFocusValue = refusableAnswer.refused ?? NEW_PROJECT_VALUE;
-  let b;
+  let selector;
   if (
-    t[23] !== onCancel ||
-    t[24] !== options ||
-    t[25] !== onChange ||
-    t[26] !== refusableAnswer.attempts ||
-    t[27] !== defaultFocusValue
+    $[23] !== onCancel_2 ||
+    $[24] !== options_2 ||
+    $[25] !== onChange ||
+    $[26] !== refusableAnswer.attempts ||
+    $[27] !== defaultFocusValue
   ) {
-    b = jsxProd_default(
+    selector = jsxProd_default(
       ModelSelector,
       {
-        options,
+        options: options_2,
         defaultFocusValue,
         visibleOptionCount: LIST_RESERVED_ROWS,
         hiddenBelowUnit: "project",
         onChange,
-        onCancel,
+        onCancel: onCancel_2,
       },
       refusableAnswer.attempts,
     );
-    t[23] = onCancel;
-    t[24] = options;
-    t[25] = onChange;
-    t[26] = refusableAnswer.attempts;
-    t[27] = defaultFocusValue;
-    t[28] = b;
-  } else b = t[28];
-  let k;
-  if (t[29] !== payload.truncated) {
-    k = payload.truncated
+    $[23] = onCancel_2;
+    $[24] = options_2;
+    $[25] = onChange;
+    $[26] = refusableAnswer.attempts;
+    $[27] = defaultFocusValue;
+    $[28] = selector;
+  } else selector = $[28];
+  let truncatedNote;
+  if ($[29] !== payload.truncated) {
+    truncatedNote = payload.truncated
       ? jsxProd_default(Text, {
           dimColor: true,
           children: "Older projects are not listed. To use one, run /send-to-project with its link.",
         })
       : null;
-    t[29] = payload.truncated;
-    t[30] = k;
-  } else k = t[30];
+    $[29] = payload.truncated;
+    $[30] = truncatedNote;
+  } else truncatedNote = $[30];
   let children;
-  if (t[31] !== k || t[32] !== R || t[33] !== b) {
+  if ($[31] !== truncatedNote || $[32] !== listErrorText || $[33] !== selector) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [R, b, k],
+      children: [listErrorText, selector, truncatedNote],
     });
-    t[31] = k;
-    t[32] = R;
-    t[33] = b;
-    t[34] = children;
-  } else children = t[34];
-  let V;
-  if (t[35] !== onCancel || t[36] !== children || t[37] !== subtitle) {
-    V = jsxProd_default(Dialog, {
+    $[31] = truncatedNote;
+    $[32] = listErrorText;
+    $[33] = selector;
+    $[34] = children;
+  } else children = $[34];
+  let dialog;
+  if ($[35] !== onCancel_2 || $[36] !== children || $[37] !== subtitle) {
+    dialog = jsxProd_default(Dialog, {
       title: "Send to which project?",
       subtitle,
-      onCancel,
+      onCancel: onCancel_2,
       color: "suggestion",
       children,
     });
-    t[35] = onCancel;
-    t[36] = children;
-    t[37] = subtitle;
-    t[38] = V;
-  } else V = t[38];
-  return V;
+    $[35] = onCancel_2;
+    $[36] = children;
+    $[37] = subtitle;
+    $[38] = dialog;
+  } else dialog = $[38];
+  return dialog;
 }
+export { ContinueInProjectsTargetDialog };

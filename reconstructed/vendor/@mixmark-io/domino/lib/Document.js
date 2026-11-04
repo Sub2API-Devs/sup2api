@@ -5,7 +5,7 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Node } from "./Node.js";
 import { require_NodeList } from "./NodeList.js";
 import { require_ContainerNode } from "./ContainerNode.js";
@@ -30,7 +30,7 @@ import { require_MutationConstants } from "./MutationConstants.js";
 import { require_config } from "./config.js";
 
 //@ chunk-vwj6ccer.js:107912-120094 cjs-fingerprint
-var require_Document = x(function (cjsExports, cjsModule) {
+var require_Document = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Document;
   var Node = require_Node();
   var NodeList = require_NodeList();
@@ -38,14 +38,14 @@ var require_Document = x(function (cjsExports, cjsModule) {
   var Element = require_Element();
   var Text = require_Text();
   var Comment = require_Comment();
-  var gr = require_Event();
+  var EventModule = require_Event();
   var DocumentFragment = require_DocumentFragment();
   var ProcessingInstruction = require_ProcessingInstruction();
   var DOMImplementation = require_DOMImplementation();
   var TreeWalker = require_TreeWalker();
   var NodeIterator = require_NodeIterator();
   var NodeFilter = require_NodeFilter();
-  var j0 = require_URL();
+  var URLModule = require_URL();
   var select = require_select();
   var events = require_events();
   var xml = require_xmlnames();
@@ -135,7 +135,7 @@ var require_Document = x(function (cjsExports, cjsModule) {
       value: function (targetNid, type, details) {
         var target = this._nodes[targetNid];
         if (!target) return;
-        target._dispatchEvent(new gr(type, details), true);
+        target._dispatchEvent(new EventModule(type, details), true);
       },
     },
     nodeName: {
@@ -542,11 +542,11 @@ var require_Document = x(function (cjsExports, cjsModule) {
     close: {
       value: function () {
         this.readyState = "interactive";
-        this._dispatchEvent(new gr("readystatechange"), true);
-        this._dispatchEvent(new gr("DOMContentLoaded"), true);
+        this._dispatchEvent(new EventModule("readystatechange"), true);
+        this._dispatchEvent(new EventModule("DOMContentLoaded"), true);
         this.readyState = "complete";
-        this._dispatchEvent(new gr("readystatechange"), true);
-        if (this.defaultView) this.defaultView._dispatchEvent(new gr("load"), true);
+        this._dispatchEvent(new EventModule("readystatechange"), true);
+        if (this.defaultView) this.defaultView._dispatchEvent(new EventModule("load"), true);
       },
     },
     clone: {
@@ -658,7 +658,7 @@ var require_Document = x(function (cjsExports, cjsModule) {
     },
     _resolve: {
       value: function (href) {
-        return new j0(this._documentBaseURL).resolve(href);
+        return new URLModule(this._documentBaseURL).resolve(href);
       },
     },
     _documentBaseURL: {
@@ -666,7 +666,7 @@ var require_Document = x(function (cjsExports, cjsModule) {
         var url = this._address;
         if (url === "about:blank") url = "/";
         var base = this.querySelector("base[href]");
-        if (base) return new j0(url).resolve(base.getAttribute("href"));
+        if (base) return new URLModule(url).resolve(base.getAttribute("href"));
         return url;
       },
     },

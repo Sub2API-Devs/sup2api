@@ -99,10 +99,11 @@ import {
 import { armedAskOf, fittedAskTextOf } from "./diffText.js";
 import { CC_PLUGIN_DIFF } from "../diff/index.js";
 import { BUILTIN } from "../../../utils/telemetry/pluginTelemetry.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-wyqg6m3h.js:36855-37057 placement
-function listRow(e, o, r) {
-  let { Box, Button } = e.ui;
+function listRow(ctx, row, right) {
+  let { Box, Button } = ctx.ui;
   return h(
     Box,
     {
@@ -111,75 +112,75 @@ function listRow(e, o, r) {
     h(
       Button,
       {
-        key: o.key,
+        key: row.key,
         plain: true,
-        dimColor: o.isDim,
-        ...(o.isAutoFocus
+        dimColor: row.isDim,
+        ...(row.isAutoFocus
           ? {
               autoFocus: true,
             }
           : {}),
-        onPress: o.onPress,
+        onPress: row.onPress,
       },
-      o.label,
+      row.label,
     ),
     h(Box, {
       flexGrow: 1,
     }),
-    r,
+    right,
   );
 }
 //@ chunk-wyqg6m3h.js:37057-37073 placement
 var POINTER = "\u276F";
 //@ chunk-wyqg6m3h.js:37073-37357 placement
-function dialogFileRow(e, o, onPress) {
-  let { Text } = e.ui;
-  let max = Math.max(DIALOG_PATH_FLOOR, e.columns - DIALOG_PATH_RESERVE);
-  let a = o.isSelected ? POINTER : " ";
-  let i = truncateStart(sanitizeName(o.displayPath), max);
-  let p = h(
+function dialogFileRow(ctx, row, onPress) {
+  let { Text } = ctx.ui;
+  let max = Math.max(DIALOG_PATH_FLOOR, ctx.columns - DIALOG_PATH_RESERVE);
+  let pointer = row.isSelected ? POINTER : " ";
+  let label = truncateStart(sanitizeName(row.displayPath), max);
+  let note = h(
     Text,
     {
       dimColor: true,
       italic: true,
     },
-    o.note ?? "",
+    row.note ?? "",
   );
-  let y = o.note !== null ? p : diffStat(e, o.added, o.removed);
+  let stat = row.note !== null ? note : diffStat(ctx, row.added, row.removed);
   return listRow(
-    e,
+    ctx,
     {
-      key: o.key,
-      label: `${a} ${i}`,
+      key: row.key,
+      label: `${pointer} ${label}`,
       onPress,
       isDim: false,
-      isAutoFocus: o.isSelected,
+      isAutoFocus: row.isSelected,
     },
-    y,
+    stat,
   );
 }
 //@ chunk-wyqg6m3h.js:37357-37438 placement
-function dimNote(e, o) {
-  let { Text } = e.ui;
+function dimNote(ctx, text) {
+  let { Text } = ctx.ui;
   return h(
     Text,
     {
       dimColor: true,
       wrap: "truncate-end",
     },
-    o,
+    text,
   );
 }
 //@ chunk-wyqg6m3h.js:37438-37555 placement
-function divider(e) {
-  let { Text } = e.ui;
+function divider(ctx) {
+  let { Text } = ctx.ui;
   return h(
     Text,
     {
       dimColor: true,
       wrap: "truncate-end",
     },
-    "\u2500".repeat(Math.max(1, e.columns)),
+    "\u2500".repeat(Math.max(1, ctx.columns)),
   );
 }
 //@ chunk-wyqg6m3h.js:37555-37587 placement = _temp2 (1)
@@ -188,28 +189,28 @@ var fileKeyOf = (url) => `file:${sanitizeName(url.path)}`;
 var statTextOf = (added, removed) =>
   keptOf([added > 0 ? `+${added}` : null, removed > 0 ? `-${removed}` : null]).join(" ");
 //@ chunk-wyqg6m3h.js:37650-37856 placement
-function fileRow(e, o, onPress) {
+function fileRow(ctx, row, onPress) {
   let label = padEnd(
-    truncateStart(sanitizeName(o.displayPath), Math.max(e.columns - STAT_CELLS, PATH_FLOOR)),
-    e.columns - statTextOf(o.added, o.removed).length,
+    truncateStart(sanitizeName(row.displayPath), Math.max(ctx.columns - STAT_CELLS, PATH_FLOOR)),
+    ctx.columns - statTextOf(row.added, row.removed).length,
   );
   return listRow(
-    e,
+    ctx,
     {
-      key: o.key,
+      key: row.key,
       label,
       onPress,
       isDim: true,
       isAutoFocus: false,
     },
-    diffStat(e, o.added, o.removed),
+    diffStat(ctx, row.added, row.removed),
   );
 }
 //@ chunk-wyqg6m3h.js:37856-37873 placement
-var present = (e) => keptOf(e);
+var present = (items) => keptOf(items);
 //@ chunk-wyqg6m3h.js:37873-38109 placement
-function headerView(e, o, r) {
-  let { Box, Text } = e.ui;
+function headerView(ctx, totals, right) {
+  let { Box, Text } = ctx.ui;
   return h(
     Box,
     {
@@ -217,8 +218,8 @@ function headerView(e, o, r) {
       height: 1,
     },
     present([
-      o &&
-        ((i) =>
+      totals &&
+        ((totals) =>
           h(
             Text,
             {
@@ -229,21 +230,21 @@ function headerView(e, o, r) {
               {
                 bold: true,
               },
-              plural(i.filesCount, "file"),
+              plural(totals.filesCount, "file"),
             ),
             " changed ",
-            diffStat(e, i.linesAdded, i.linesRemoved),
-          ))(o),
+            diffStat(ctx, totals.linesAdded, totals.linesRemoved),
+          ))(totals),
       h(Box, {
         flexGrow: 1,
       }),
-      r,
+      right,
     ]),
   );
 }
 //@ chunk-wyqg6m3h.js:38109-38313 placement
-function legendRow(e, entry) {
-  let { Box, Text } = e.ui;
+function legendRow(ctx, entry) {
+  let { Box, Text } = ctx.ui;
   return h(
     Box,
     {
@@ -256,45 +257,45 @@ function legendRow(e, entry) {
           dimColor: true,
           wrap: "truncate-end",
         },
-        truncateStart(sanitizeName(entry.displayPath), Math.max(e.columns - STAT_CELLS, PATH_FLOOR)),
+        truncateStart(sanitizeName(entry.displayPath), Math.max(ctx.columns - STAT_CELLS, PATH_FLOOR)),
       ),
       h(Box, {
         flexGrow: 1,
       }),
-      diffStat(e, entry.added, entry.removed),
+      diffStat(ctx, entry.added, entry.removed),
     ],
   );
 }
 //@ chunk-wyqg6m3h.js:38313-38504 placement
-function listEdgeButton(e, o, r) {
-  let { Button } = e.ui;
-  let n = o === "list-up";
+function listEdgeButton(ctx, key, label) {
+  let { Button } = ctx.ui;
+  let isUp = key === "list-up";
   return h(
     Button,
     {
-      key: o,
+      key,
       plain: true,
       dimColor: true,
-      action: n ? "app:diffFileListUp" : "app:diffFileListDown",
-      onPress: () => e.actions.scrollList(n ? -1 : 1),
+      action: isUp ? "app:diffFileListUp" : "app:diffFileListDown",
+      onPress: () => ctx.actions.scrollList(isUp ? -1 : 1),
     },
-    r,
+    label,
   );
 }
 //@ chunk-wyqg6m3h.js:38504-38940 placement
-function nameRow(e, o) {
-  let { Box, Text, Button } = e.ui;
-  let filtered = [o.isUntracked ? "untracked" : null, o.isTruncated ? "truncated" : null].filter(
-    (l) => l !== null,
+function nameRow(ctx, file) {
+  let { Box, Text, Button } = ctx.ui;
+  let filtered = [file.isUntracked ? "untracked" : null, file.isTruncated ? "truncated" : null].filter(
+    (flag) => flag !== null,
   );
-  let i = filtered.length === 0 ? "" : ` (${filtered.join(", ")})`;
-  let p = h(
+  let suffix = filtered.length === 0 ? "" : ` (${filtered.join(", ")})`;
+  let askButton = h(
     Button,
     {
-      key: askKeyOf(o.path),
-      onPress: () => e.actions.toggleAsk(o.path),
+      key: askKeyOf(file.path),
+      onPress: () => ctx.actions.toggleAsk(file.path),
     },
-    o.isArmed ? "asked \u2713" : "ask",
+    file.isArmed ? "asked \u2713" : "ask",
   );
   return h(
     Box,
@@ -308,26 +309,26 @@ function nameRow(e, o) {
           bold: true,
           wrap: "truncate-start",
         },
-        truncateStart(sanitizeName(o.displayPath), e.columns),
+        truncateStart(sanitizeName(file.displayPath), ctx.columns),
       ),
       h(
         Text,
         {
           dimColor: true,
         },
-        i,
+        suffix,
       ),
       h(Box, {
         flexGrow: 1,
       }),
-      ...(o.isAskable ? [p] : []),
+      ...(file.isAskable ? [askButton] : []),
     ],
   );
 }
 //@ chunk-wyqg6m3h.js:38940-39251 placement
-function sourcePicker(e, o) {
-  let { Select } = e.ui;
-  let { source, turns } = o;
+function sourcePicker(ctx, view) {
+  let { Select } = ctx.ui;
+  let { source, turns } = view;
   return turns.length > 0
     ? h(Select, {
         key: "source",
@@ -343,35 +344,35 @@ function sourcePicker(e, o) {
           })),
         ],
         value: source.kind === "current" ? "current" : String(source.index),
-        onSelect: (i) => e.actions.chooseSource(i),
+        onSelect: (value) => ctx.actions.chooseSource(value),
       })
     : null;
 }
 //@ chunk-wyqg6m3h.js:39251-39392 placement
-function titleRow(e, o) {
-  let { Text } = e.ui;
-  let s = o.subtitle !== "";
+function titleRow(ctx, title) {
+  let { Text } = ctx.ui;
+  let hasSubtitle = title.subtitle !== "";
   return h(
     Text,
     {
       wrap: "truncate-end",
     },
-    sanitizeName(o.title),
+    sanitizeName(title.title),
     h(
       Text,
       {
         dimColor: true,
       },
-      s ? ` ${sanitizeName(o.subtitle)}` : "",
+      hasSubtitle ? ` ${sanitizeName(title.subtitle)}` : "",
     ),
   );
 }
 //@ chunk-wyqg6m3h.js:39392-39748 placement
-function todoBar(e, o) {
-  let { todos } = o;
+function todoBar(ctx, view) {
+  let { todos } = view;
   if (todos.total === 0) return null;
-  let { Box, Text } = e.ui;
-  let max = Math.max(1, Math.min(TODO_BAR_CELLS, e.columns - TODO_BAR_RESERVE));
+  let { Box, Text } = ctx.ui;
+  let max = Math.max(1, Math.min(TODO_BAR_CELLS, ctx.columns - TODO_BAR_RESERVE));
   let rounded = Math.round((todos.done / todos.total) * max);
   return h(
     Box,
@@ -408,8 +409,8 @@ function todoBar(e, o) {
   );
 }
 //@ chunk-wyqg6m3h.js:39748-39886 placement
-function toggleRow(e, key, r) {
-  let { Box, Button } = e.ui;
+function toggleRow(ctx, key, row) {
+  let { Box, Button } = ctx.ui;
   return h(
     Box,
     {
@@ -421,9 +422,9 @@ function toggleRow(e, key, r) {
         key,
         plain: true,
         dimColor: true,
-        onPress: r.onPress,
+        onPress: row.onPress,
       },
-      r.label,
+      row.label,
     ),
   );
 }
@@ -432,27 +433,27 @@ var FILE_FRAME_NODES = 16;
 //@ chunk-wyqg6m3h.js:39896-39928 placement
 var SAFE_PATHSPEC_PATTERN = /^[\p{L}\p{N}._/@+-]+$/u;
 //@ chunk-wyqg6m3h.js:39928-40296 placement
-function placeholderOf(e) {
-  if (e.isUntracked) return e.words.untrackedNoteOf(e.path, SAFE_PATHSPEC_PATTERN.test(e.path));
-  if (e.isBinary) return ["Binary file - cannot display diff"];
-  if (e.body === undefined) return ["Loading diff\u2026"];
-  if (e.body === null) return ["Diff unavailable"];
-  let { isLarge, hunks } = e.body;
-  let s = hunks.length === 0;
-  let n = isLarge ? "Large file - diff exceeds 1 MB limit" : s ? "No diff content" : null;
-  return n ? [n] : null;
+function placeholderOf(file) {
+  if (file.isUntracked) return file.words.untrackedNoteOf(file.path, SAFE_PATHSPEC_PATTERN.test(file.path));
+  if (file.isBinary) return ["Binary file - cannot display diff"];
+  if (file.body === undefined) return ["Loading diff\u2026"];
+  if (file.body === null) return ["Diff unavailable"];
+  let { isLarge, hunks } = file.body;
+  let isEmpty = hunks.length === 0;
+  let message = isLarge ? "Large file - diff exceeds 1 MB limit" : isEmpty ? "No diff content" : null;
+  return message ? [message] : null;
 }
 //@ chunk-wyqg6m3h.js:40296-40840 placement
-function detailView(e, o, r) {
-  let { Box, Text, Code } = e.ui;
-  let i = placeholderOf(o);
-  let p = codeBlocksOf(i ? [] : (o.body?.hunks ?? []), {
-    chars: r.chars - sanitizeName(o.displayPath).length,
-    nodes: r.nodes - FILE_FRAME_NODES,
+function detailView(ctx, file, budget) {
+  let { Box, Text, Code } = ctx.ui;
+  let placeholder = placeholderOf(file);
+  let blocks = codeBlocksOf(placeholder ? [] : (file.body?.hunks ?? []), {
+    chars: budget.chars - sanitizeName(file.displayPath).length,
+    nodes: budget.nodes - FILE_FRAME_NODES,
   });
-  let l = o.body?.isTruncated === true || p.isTruncated;
-  let path = sanitizeName(o.path).slice(-MAX_CODE_CHARS);
-  let d = l
+  let isTruncated = file.body?.isTruncated === true || blocks.isTruncated;
+  let path = sanitizeName(file.path).slice(-MAX_CODE_CHARS);
+  let truncatedLines = isTruncated
     ? [
         h(
           Text,
@@ -464,7 +465,7 @@ function detailView(e, o, r) {
         ),
       ]
     : [];
-  let mapped = (i ?? []).map((O) =>
+  let mapped = (placeholder ?? []).map((line) =>
     h(
       Text,
       {
@@ -472,10 +473,10 @@ function detailView(e, o, r) {
         italic: true,
         wrap: "wrap",
       },
-      O,
+      line,
     ),
   );
-  let mapped_2 = p.sources.map((source) =>
+  let mapped_2 = blocks.sources.map((source) =>
     h(Code, {
       source,
       format: "diff",
@@ -489,71 +490,71 @@ function detailView(e, o, r) {
         flexDirection: "column",
       },
       [
-        nameRow(e, {
-          ...o,
-          isTruncated: l,
-          isAskable: i === null,
+        nameRow(ctx, {
+          ...file,
+          isTruncated,
+          isAskable: placeholder === null,
         }),
-        divider(e),
-        ...(i ? mapped : mapped_2),
-        ...d,
+        divider(ctx),
+        ...(placeholder ? mapped : mapped_2),
+        ...truncatedLines,
       ],
     ),
-    room: p.room,
+    room: blocks.room,
   };
 }
 //@ chunk-wyqg6m3h.js:40840-40992 placement
-var bodyEntryOf = (e, o) => ({
-  path: e.path,
-  displayPath: displayPathOf(e),
-  added: e.added,
-  removed: e.removed,
-  isUntracked: e.isUntracked,
-  isBinary: e.isBinary,
-  body: o.bodies.get(e.path),
+var bodyEntryOf = (file, view) => ({
+  path: file.path,
+  displayPath: displayPathOf(file),
+  added: file.added,
+  removed: file.removed,
+  isUntracked: file.isUntracked,
+  isBinary: file.isBinary,
+  body: view.bodies.get(file.path),
 });
 //@ chunk-wyqg6m3h.js:40992-41149 placement
-var detailModelOf = (e, o) => ({
-  words: o.words,
-  path: e.path,
-  displayPath: e.displayPath,
-  isUntracked: e.isUntracked,
-  isBinary: e.isBinary,
-  body: e.body,
-  isArmed: o.armedPath === e.path,
+var detailModelOf = (file, view) => ({
+  words: view.words,
+  path: file.path,
+  displayPath: file.displayPath,
+  isUntracked: file.isUntracked,
+  isBinary: file.isBinary,
+  body: file.body,
+  isArmed: view.armedPath === file.path,
 });
 //@ chunk-wyqg6m3h.js:41149-41313 placement
-var turnEntryOf = (e) => ({
-  path: e.path,
-  displayPath: e.path,
-  added: e.added,
-  removed: e.removed,
+var turnEntryOf = (file) => ({
+  path: file.path,
+  displayPath: file.path,
+  added: file.added,
+  removed: file.removed,
   isUntracked: false,
   isBinary: false,
   body: {
-    hunks: e.hunks,
-    isTruncated: e.isTruncated,
+    hunks: file.hunks,
+    isTruncated: file.isTruncated,
     isLarge: false,
   },
 });
 //@ chunk-wyqg6m3h.js:41313-42573 placement
-function segmentsOf(e, o) {
-  let { earlier } = o;
-  let { columns } = e.place;
-  let n = o.message.length > 0;
-  let a = e.isPreSessionShown && earlier.length > 0;
-  let i = earlier.length > PRE_SESSION_BODY_CAP;
-  let p = (E) =>
+function segmentsOf(ctx, view) {
+  let { earlier } = view;
+  let { columns } = ctx.place;
+  let hasMessage = view.message.length > 0;
+  let showEarlier = ctx.isPreSessionShown && earlier.length > 0;
+  let earlierCapped = earlier.length > PRE_SESSION_BODY_CAP;
+  let numberWidthOf = (hunk) =>
     String(
       Math.max(
         1,
-        E.oldStart + countWhere(E.lines, (A) => !A.startsWith("+")) - 1,
-        E.newStart + countWhere(E.lines, (A) => !A.startsWith("-")) - 1,
+        hunk.oldStart + countWhere(hunk.lines, (line) => !line.startsWith("+")) - 1,
+        hunk.newStart + countWhere(hunk.lines, (line) => !line.startsWith("-")) - 1,
       ),
     ).length + GUTTER_CHROME;
-  function l(E, A) {
-    let max = Math.max(1, columns - p(A));
-    let mapped = A.lines.map((line) =>
+  function hunkSegment(file, hunk) {
+    let max = Math.max(1, columns - numberWidthOf(hunk));
+    let mapped = hunk.lines.map((line) =>
       Math.max(
         1,
         Math.ceil(cellWidth(sanitizeLine(line.slice(1).replaceAll("\t", " ".repeat(TAB_WIDTH)))) / max),
@@ -561,50 +562,50 @@ function segmentsOf(e, o) {
     );
     return {
       kind: "hunk",
-      path: E.path,
-      hunk: A,
+      path: file.path,
+      hunk,
       lineRows: mapped,
-      rows: mapped.reduce((acc, me) => acc + me, 0),
+      rows: mapped.reduce((acc, rows) => acc + rows, 0),
     };
   }
-  let y = (E) =>
+  let splitHunk = (hunk) =>
     subHunksOf(
       {
-        ...E,
-        lines: E.lines.filter(isBodyLine).map(drawnLineOf),
+        ...hunk,
+        lines: hunk.lines.filter(isBodyLine).map(drawnLineOf),
       },
       MAX_CODE_CHARS,
     );
-  function d(E) {
-    let A = detailModelOf(E, e);
-    let k = placeholderOf(A);
-    let mapped = (E.body?.hunks ?? []).map(y);
-    let I = E.body?.isTruncated === true || mapped.some((V) => V.isTruncated);
-    let me = k
-      ? k.map((text) => ({
+  function fileSegments(file) {
+    let model = detailModelOf(file, ctx);
+    let placeholder = placeholderOf(model);
+    let mapped = (file.body?.hunks ?? []).map(splitHunk);
+    let isTruncated = file.body?.isTruncated === true || mapped.some((part) => part.isTruncated);
+    let segments = placeholder
+      ? placeholder.map((text) => ({
           kind: "note",
           text,
         }))
-      : mapped.flatMap((V) => V.hunks).map((V) => l(E, V));
+      : mapped.flatMap((part) => part.hunks).map((hunk) => hunkSegment(file, hunk));
     return [
       {
         kind: "rule",
-        path: E.path,
+        path: file.path,
       },
       {
         kind: "name",
         name: {
-          ...A,
-          isTruncated: I,
-          isAskable: k === null,
+          ...model,
+          isTruncated,
+          isAskable: placeholder === null,
         },
       },
       {
         kind: "rule",
         path: null,
       },
-      ...me,
-      ...(I
+      ...segments,
+      ...(isTruncated
         ? [
             {
               kind: "footer",
@@ -613,30 +614,30 @@ function segmentsOf(e, o) {
         : []),
     ];
   }
-  let T = (E) => [
-    ...d(E),
+  let withBlank = (entry) => [
+    ...fileSegments(entry),
     {
       kind: "blank",
     },
   ];
-  let w = () => [
+  let messageSegments = () => [
     {
       kind: "blank",
     },
-    ...o.message.map((E) => ({
+    ...view.message.map((line) => ({
       kind: "text",
-      text: sanitizeName(E),
+      text: sanitizeName(line),
     })),
     {
       kind: "blank",
     },
   ];
-  let R = {
+  let capNote = {
     kind: "text",
     text: `diffs hidden above ${PRE_SESSION_BODY_CAP} files`,
   };
-  let O = () => (i ? [R] : earlier.flatMap(d));
-  let _ = () => [
+  let earlierSegments = () => (earlierCapped ? [capNote] : earlier.flatMap(fileSegments));
+  let legendSegments = () => [
     {
       kind: "blank",
     },
@@ -644,180 +645,188 @@ function segmentsOf(e, o) {
       kind: "legend",
       entry,
     })),
-    ...O(),
+    ...earlierSegments(),
   ];
   return [
-    ...(n ? w() : o.rows.flatMap(T)),
-    ...keptOf([o.earlierLabel]).map((label) => ({
+    ...(hasMessage ? messageSegments() : view.rows.flatMap(withBlank)),
+    ...keptOf([view.earlierLabel]).map((label) => ({
       kind: "toggle",
       label,
     })),
-    ...(a ? _() : []),
+    ...(showEarlier ? legendSegments() : []),
   ];
 }
 //@ chunk-wyqg6m3h.js:42573-43102 placement
-function bodyLayoutOf(e, o) {
-  let r = segmentsOf(e, o);
-  let s = listWindowOf(e, o);
-  let n = !o.turn && o.partition.noiseCount > 0;
-  let a = o.message.length === 0;
-  let i = a && (o.rows.length > 0 || n);
-  let p = i
-    ? s.shown.length +
-      Number(s.above > 0) +
-      Number(s.below > 0 || o.totals.notShown > 0) +
-      Number(o.isUntrackedNoted) +
-      Number(n) +
+function bodyLayoutOf(ctx, view) {
+  let segments = segmentsOf(ctx, view);
+  let list = listWindowOf(ctx, view);
+  let hasNoise = !view.turn && view.partition.noiseCount > 0;
+  let noMessage = view.message.length === 0;
+  let showsList = noMessage && (view.rows.length > 0 || hasNoise);
+  let listRows = showsList
+    ? list.shown.length +
+      Number(list.above > 0) +
+      Number(list.below > 0 || view.totals.notShown > 0) +
+      Number(view.isUntrackedNoted) +
+      Number(hasNoise) +
       2
-    : Number(a);
-  let l = 1 + Number(o.line !== null) + (e.todos.total > 0 ? 2 : 0);
-  let y = new Map();
-  let max = Math.max(0, e.place.rows - l - p);
-  let T = 0;
-  for (let R of r) {
-    if (R.kind === "rule" && R.path !== null) y.set(R.path, T);
-    T += segmentRowsOf(R);
+    : Number(noMessage);
+  let chromeRows = 1 + Number(view.line !== null) + (ctx.todos.total > 0 ? 2 : 0);
+  let tops = new Map();
+  let max = Math.max(0, ctx.place.rows - chromeRows - listRows);
+  let top = 0;
+  for (let segment of segments) {
+    if (segment.kind === "rule" && segment.path !== null) tops.set(segment.path, top);
+    top += segmentRowsOf(segment);
   }
-  let w = l + 1;
+  let listTop = chromeRows + 1;
   return {
-    segments: r,
-    extent: T,
+    segments,
+    extent: top,
     visibleRows: max,
-    maxTop: Math.max(0, T - max),
-    tops: y,
-    listTop: w,
-    listEnd: i ? w + p - 2 : w,
+    maxTop: Math.max(0, top - max),
+    tops,
+    listTop,
+    listEnd: showsList ? listTop + listRows - 2 : listTop,
   };
 }
 //@ chunk-wyqg6m3h.js:43102-43235 placement
-function dialogEntriesOf(e) {
-  let o = pickedTurnOf(e);
-  return o
-    ? o.files.map(turnEntryOf)
-    : [...(e.data?.files ?? [])]
-        .sort((r, s) => displayPathOf(r).localeCompare(displayPathOf(s)))
-        .map((r) => bodyEntryOf(r, e));
+function dialogEntriesOf(view) {
+  let turn = pickedTurnOf(view);
+  return turn
+    ? turn.files.map(turnEntryOf)
+    : [...(view.data?.files ?? [])]
+        .sort((fileA, fileB) => displayPathOf(fileA).localeCompare(displayPathOf(fileB)))
+        .map((file) => bodyEntryOf(file, view));
 }
 //@ chunk-wyqg6m3h.js:43235-43342 placement
-var dialogWindowOf = (e, o) =>
+var dialogWindowOf = (view, paths) =>
   Math.max(
     0,
     Math.min(
-      o.length - MAX_VISIBLE_FILES,
-      Math.max(0, o.indexOf(e.selectedPath ?? "")) - Math.floor(MAX_VISIBLE_FILES / 2),
+      paths.length - MAX_VISIBLE_FILES,
+      Math.max(0, paths.indexOf(view.selectedPath ?? "")) - Math.floor(MAX_VISIBLE_FILES / 2),
     ),
   );
 //@ chunk-wyqg6m3h.js:43342-43679 placement
-function dialogFocusOf(e, element) {
-  let r = dialogEntriesOf(e);
-  let mapped = r.map((E) => E.path);
-  let mapped_2 = r.map((E) => fileKeyOf(E));
+function dialogFocusOf(view, element) {
+  let entries = dialogEntriesOf(view);
+  let mapped = entries.map((entry) => entry.path);
+  let mapped_2 = entries.map((entry) => fileKeyOf(entry));
   let index = mapped_2.indexOf(element ?? "");
-  let max = Math.max(0, mapped.indexOf(e.selectedPath ?? ""));
-  let p = dialogWindowOf(e, mapped);
-  let l = Math.min(mapped.length, p + MAX_VISIBLE_FILES) - 1;
-  let y = mapped[index] ?? null;
-  let d =
+  let max = Math.max(0, mapped.indexOf(view.selectedPath ?? ""));
+  let windowStart = dialogWindowOf(view, mapped);
+  let windowEnd = Math.min(mapped.length, windowStart + MAX_VISIBLE_FILES) - 1;
+  let selectedPath = mapped[index] ?? null;
+  let landingKey =
     mapped_2[
-      p +
+      windowStart +
         index -
         dialogWindowOf(
           {
-            selectedPath: y,
+            selectedPath,
           },
           mapped,
         )
     ];
-  let T = max === 0 && index === l;
-  let w = max === mapped.length - 1 && index === p;
-  return l - p >= 2 && (w || T)
+  let atLast = max === 0 && index === windowEnd;
+  let atFirst = max === mapped.length - 1 && index === windowStart;
+  return windowEnd - windowStart >= 2 && (atFirst || atLast)
     ? "stay"
-    : y !== null && d !== undefined
+    : selectedPath !== null && landingKey !== undefined
       ? {
-          selectedPath: y,
-          landing: d,
+          selectedPath,
+          landing: landingKey,
         }
       : null;
 }
 //@ chunk-wyqg6m3h.js:43679-43909 placement
-function preludeOf(e, o) {
-  let { Box } = e.ui;
-  let s = o.data === null && !o.hasSettled;
-  let n = h(Box, null, dimNote(e, NOT_IN_REPOSITORY_TEXT));
-  let i = s
+function preludeOf(ctx, view) {
+  let { Box } = ctx.ui;
+  let isLoading = view.data === null && !view.hasSettled;
+  let outsideNote = h(Box, null, dimNote(ctx, NOT_IN_REPOSITORY_TEXT));
+  let loadingPane = isLoading
     ? (() =>
-        messagePaneOf(e, {
-          top: [headerView(e, null, null)],
+        messagePaneOf(ctx, {
+          top: [headerView(ctx, null, null)],
           message: ["Loading diff\u2026"],
           controls: null,
           earlier: null,
           rest: [],
         }))()
     : null;
-  return o.isOutsideRepository ? n : i;
+  return view.isOutsideRepository ? outsideNote : loadingPane;
 }
 //@ chunk-wyqg6m3h.js:43909-45274 placement
-function dialogPane(e, o) {
-  let { Box, Text } = e.ui;
-  let n = preludeOf(e, o);
-  if (n) return n;
-  let a = pickedTurnOf(o);
-  let { data: i } = o;
-  let p = dialogEntriesOf(o);
-  let l = a ? turnTotalsOf(a) : (i?.stats ?? null);
-  let y = o.source.kind === "turn";
-  let d = p.length > MAX_VISIBLE_FILES;
-  let found = p.find((D) => D.path === o.selectedPath);
-  let w = found ?? p[0];
-  let R = o.dialogView === "detail" && found !== undefined;
-  let O = dialogWindowOf(
-    o,
-    p.map((D) => D.path),
+function dialogPane(ctx, view) {
+  let { Box, Text } = ctx.ui;
+  let prelude = preludeOf(ctx, view);
+  if (prelude) return prelude;
+  let turn = pickedTurnOf(view);
+  let { data } = view;
+  let entries = dialogEntriesOf(view);
+  let totals = turn ? turnTotalsOf(turn) : (data?.stats ?? null);
+  let isTurnSource = view.source.kind === "turn";
+  let isListLong = entries.length > MAX_VISIBLE_FILES;
+  let entry = entries.find((entry) => entry.path === view.selectedPath);
+  let selectedEntry = entry ?? entries[0];
+  let showsDetail = view.dialogView === "detail" && entry !== undefined;
+  let windowStart = dialogWindowOf(
+    view,
+    entries.map((entry) => entry.path),
   );
-  let sliced = p.slice(O, O + MAX_VISIBLE_FILES);
-  let E = dimNote(e, " ");
-  let A = p.length - O - sliced.length;
-  let k = !y && i !== null && i.stats.filesCount > 0 && p.length === 0;
-  let U = y ? "No file changes in this turn" : k ? "Too many files to display details" : "No changes yet";
-  let I = p.length > 0 ? null : U;
-  let me =
-    l &&
+  let sliced = entries.slice(windowStart, windowStart + MAX_VISIBLE_FILES);
+  let blank = dimNote(ctx, " ");
+  let belowCount = entries.length - windowStart - sliced.length;
+  let tooManyFiles = !isTurnSource && data !== null && data.stats.filesCount > 0 && entries.length === 0;
+  let emptyText = isTurnSource
+    ? "No file changes in this turn"
+    : tooManyFiles
+      ? "Too many files to display details"
+      : "No changes yet";
+  let emptyNote = entries.length > 0 ? null : emptyText;
+  let totalsLine =
+    totals &&
     h(
       Text,
       {
         dimColor: true,
         wrap: "truncate-end",
       },
-      `${plural(l.filesCount, "file")} changed `,
-      diffStat(e, l.linesAdded, l.linesRemoved),
+      `${plural(totals.filesCount, "file")} changed `,
+      diffStat(ctx, totals.linesAdded, totals.linesRemoved),
     );
-  let V = (D) => (D.isUntracked ? "untracked" : D.isBinary ? "Binary file" : null);
-  let Me = (url) =>
+  let noteOf = (entry) => (entry.isUntracked ? "untracked" : entry.isBinary ? "Binary file" : null);
+  let renderEntry = (fileEntry) =>
     dialogFileRow(
-      e,
+      ctx,
       {
-        key: fileKeyOf(url),
-        path: url.path,
-        displayPath: url.displayPath,
-        added: url.added,
-        removed: url.removed,
-        note: V(url),
-        isSelected: url === w,
+        key: fileKeyOf(fileEntry),
+        path: fileEntry.path,
+        displayPath: fileEntry.displayPath,
+        added: fileEntry.added,
+        removed: fileEntry.removed,
+        note: noteOf(fileEntry),
+        isSelected: fileEntry === selectedEntry,
       },
-      () => e.actions.selectFile(url.path),
+      () => ctx.actions.selectFile(fileEntry.path),
     );
-  function ye(D, Y) {
-    let ze = D === "up" ? "\u2191" : "\u2193";
-    let replaced = plural(Y, "file").replace(" ", " more ");
-    return dimNote(e, ` ${ze} ${replaced}`);
+  function overflowNote(direction, count) {
+    let arrow = direction === "up" ? "\u2191" : "\u2193";
+    let replaced = plural(count, "file").replace(" ", " more ");
+    return dimNote(ctx, ` ${arrow} ${replaced}`);
   }
-  let he = (D, Y) => (Y > 0 ? ye(D, Y) : E);
-  let Oe = (D, Y) => (d ? he(D, Y) : null);
-  let ge = (D) => [detailView(e, detailModelOf(D, o), BODY_BUDGET).element];
-  let z = present([Oe("up", O), ...sliced.map(Me), Oe("down", A)]);
-  let C = R && found ? ge(found) : z;
-  let u = I === null ? C : [dimNote(e, I)];
-  let M = R
+  let edgeNote = (direction, count) => (count > 0 ? overflowNote(direction, count) : blank);
+  let listEdge = (direction, count) => (isListLong ? edgeNote(direction, count) : null);
+  let detailRows = (entry) => [detailView(ctx, detailModelOf(entry, view), BODY_BUDGET).element];
+  let listRows = present([
+    listEdge("up", windowStart),
+    ...sliced.map(renderEntry),
+    listEdge("down", belowCount),
+  ]);
+  let bodyRows = showsDetail && entry ? detailRows(entry) : listRows;
+  let contentRows = emptyNote === null ? bodyRows : [dimNote(ctx, emptyNote)];
+  let hintText = showsDetail
     ? "\u2191/\u2193 to scroll \xB7 Esc to back"
     : "\u2191/\u2193 to select \xB7 Enter to view \xB7 Esc to close";
   return h(
@@ -826,12 +835,12 @@ function dialogPane(e, o) {
       flexDirection: "column",
     },
     present([
-      titleRow(e, dialogTitleOf(o)),
+      titleRow(ctx, dialogTitleOf(view)),
       h(Box, {
         height: 1,
       }),
-      me,
-      sourcePicker(e, o),
+      totalsLine,
+      sourcePicker(ctx, view),
       h(
         Box,
         {
@@ -839,35 +848,35 @@ function dialogPane(e, o) {
           marginTop: 1,
           marginBottom: 1,
         },
-        u,
+        contentRows,
       ),
-      dimNote(e, M),
+      dimNote(ctx, hintText),
     ]),
   );
 }
 //@ chunk-wyqg6m3h.js:45274-45635 placement
-function dialogRowsOf(e) {
-  let o = dialogEntriesOf(e);
-  let r = pickedTurnOf(e) !== undefined || e.data !== null;
-  let s = o.length > MAX_VISIBLE_FILES;
-  let found = o.find((w) => w.path === e.selectedPath);
-  let a = e.dialogView === "detail" && found !== undefined;
-  let i = dialogWindowOf(
-    e,
-    o.map((w) => w.path),
+function dialogRowsOf(view) {
+  let entries = dialogEntriesOf(view);
+  let hasTitleLine = pickedTurnOf(view) !== undefined || view.data !== null;
+  let isListLong = entries.length > MAX_VISIBLE_FILES;
+  let found = entries.find((entry) => entry.path === view.selectedPath);
+  let showsDetail = view.dialogView === "detail" && found !== undefined;
+  let windowStart = dialogWindowOf(
+    view,
+    entries.map((entry) => entry.path),
   );
-  let reduced = (found?.body?.hunks ?? []).reduce((acc, R) => acc + 1 + R.lines.length, 0);
-  let min = Math.min(o.length - i, MAX_VISIBLE_FILES);
-  let d = o.length === 0 ? 1 : min + (s ? 2 : 0);
-  let T = a ? 2 + Math.max(1, reduced) : d;
-  return 2 + Number(r) + Number(e.turns.length > 0) + 2 + T + 1;
+  let reduced = (found?.body?.hunks ?? []).reduce((acc, hunk) => acc + 1 + hunk.lines.length, 0);
+  let min = Math.min(entries.length - windowStart, MAX_VISIBLE_FILES);
+  let listRows = entries.length === 0 ? 1 : min + (isListLong ? 2 : 0);
+  let bodyRows = showsDetail ? 2 + Math.max(1, reduced) : listRows;
+  return 2 + Number(hasTitleLine) + Number(view.turns.length > 0) + 2 + bodyRows + 1;
 }
 //@ chunk-wyqg6m3h.js:45635-46046 placement
-function listBodyOf(e) {
-  let { data: o, partition, totals, empty } = e;
+function listBodyOf(view) {
+  let { data, partition, totals, empty } = view;
   let hint = empty?.hint ?? null;
   if (empty) return hint === null ? [] : [hint];
-  if (o !== null && o.files.length === 0 && totals.filesCount > 0)
+  if (data !== null && data.files.length === 0 && totals.filesCount > 0)
     return ["Too many changed files to show diff", "Per-file diff is skipped above 500 files"];
   return partition.shown.length === 0 && partition.noiseCount > 0
     ? [
@@ -879,33 +888,33 @@ function listBodyOf(e) {
 //@ chunk-wyqg6m3h.js:46046-46055 placement
 var FOOT_ROWS = 3;
 //@ chunk-wyqg6m3h.js:46055-46746 placement
-function messagePaneOf(e, o) {
-  let { Box, Text } = e.ui;
-  let { top, controls, earlier, rest } = o;
-  let flattened = o.message.flatMap((I) => wrappedLines(sanitizeName(I), e.columns));
-  let mapped = flattened.map((I) =>
+function messagePaneOf(ctx, pane) {
+  let { Box, Text } = ctx.ui;
+  let { top, controls, earlier, rest } = pane;
+  let flattened = pane.message.flatMap((line) => wrappedLines(sanitizeName(line), ctx.columns));
+  let mapped = flattened.map((line) =>
     h(
       Text,
       {
         dimColor: true,
       },
-      I,
+      line,
     ),
   );
-  let d = controls === null ? [] : [controls];
-  let T = earlier === null ? [] : [earlier];
-  let R =
-    d.length > 0 || T.length === 0
-      ? d
+  let controlsRows = controls === null ? [] : [controls];
+  let earlierRows = earlier === null ? [] : [earlier];
+  let controlRow =
+    controlsRows.length > 0 || earlierRows.length === 0
+      ? controlsRows
       : [
           h(Box, {
             height: 1,
           }),
         ];
-  let O = earlier === null ? 0 : FOOT_ROWS;
-  let _ = e.rows - top.length - 1 - O;
-  let floored = Math.floor((_ - flattened.length) / 2);
-  if (!(rest.length === 0 && _ - floored - flattened.length >= d.length))
+  let footRows = earlier === null ? 0 : FOOT_ROWS;
+  let bodyRows = ctx.rows - top.length - 1 - footRows;
+  let floored = Math.floor((bodyRows - flattened.length) / 2);
+  if (!(rest.length === 0 && bodyRows - floored - flattened.length >= controlsRows.length))
     return h(
       Box,
       {
@@ -917,12 +926,12 @@ function messagePaneOf(e, o) {
           height: 1,
         }),
         ...mapped,
-        ...R,
-        ...T,
+        ...controlRow,
+        ...earlierRows,
         ...rest,
       ],
     );
-  let k =
+  let topPad =
     floored > 0
       ? [
           h(Box, {
@@ -930,7 +939,7 @@ function messagePaneOf(e, o) {
           }),
         ]
       : [];
-  let mapped_2 = T.map((I) =>
+  let mapped_2 = earlierRows.map((row) =>
     h(
       Box,
       {
@@ -938,14 +947,14 @@ function messagePaneOf(e, o) {
         marginTop: 1,
         paddingBottom: 1,
       },
-      I,
+      row,
     ),
   );
   return h(
     Box,
     {
       flexDirection: "column",
-      height: e.rows,
+      height: ctx.rows,
     },
     [
       ...top,
@@ -956,105 +965,108 @@ function messagePaneOf(e, o) {
         Box,
         {
           flexDirection: "column",
-          height: _,
+          height: bodyRows,
           alignItems: "center",
         },
-        [...k, ...mapped, ...d],
+        [...topPad, ...mapped, ...controlsRows],
       ),
       ...mapped_2,
     ],
   );
 }
 //@ chunk-wyqg6m3h.js:46746-47563 placement
-function dockPlanOf(e) {
-  let { data: o, requestedMode } = e;
-  let s = pickedTurnOf(e);
-  let n = e.isNoiseShown ? "shown" : "hidden";
-  let a = partitionOf(o?.files ?? [], n);
-  let i = e.isPreSessionShown ? "hide" : "show";
-  let p = s ? turnTotalsOf(s) : o ? headerTotalsOf(o, a) : ZERO_TOTALS;
-  let l = s ? null : emptyStateOf(e, p.filesCount);
-  let y = s
+function dockPlanOf(view) {
+  let { data, requestedMode } = view;
+  let turn = pickedTurnOf(view);
+  let noiseFilter = view.isNoiseShown ? "shown" : "hidden";
+  let partition = partitionOf(data?.files ?? [], noiseFilter);
+  let toggleLabel = view.isPreSessionShown ? "hide" : "show";
+  let totals = turn ? turnTotalsOf(turn) : data ? headerTotalsOf(data, partition) : ZERO_TOTALS;
+  let empty = turn ? null : emptyStateOf(view, totals.filesCount);
+  let listBody = turn
     ? []
     : listBodyOf({
-        data: o,
-        partition: a,
-        totals: p,
-        empty: l,
+        data,
+        partition,
+        totals,
+        empty,
       });
-  let flattened = y.flatMap((k) => (typeof k === "string" ? [k] : []));
-  let T = s ? s.files.length > 0 : flattened.length < y.length;
-  let w = (k) => bodyEntryOf(k, e);
-  let rows = s ? s.files.map(turnEntryOf) : T ? a.shown.map(w) : [];
-  let O = s ? [] : a.preSession.map(w);
-  let _ = O.length > 0;
-  let E = o !== null && !o.isUnborn && (requestedMode !== "session" || o.mode !== "session");
-  let A = s
-    ? `Turn ${s.index} "${s.preview}"`
-    : E
-      ? modeLabelOf(requestedMode, e)
-      : unbornNoteOf(e, p.filesCount);
+  let flattened = listBody.flatMap((item) => (typeof item === "string" ? [item] : []));
+  let hasFileRows = turn ? turn.files.length > 0 : flattened.length < listBody.length;
+  let toEntry = (file) => bodyEntryOf(file, view);
+  let rows = turn ? turn.files.map(turnEntryOf) : hasFileRows ? partition.shown.map(toEntry) : [];
+  let earlier = turn ? [] : partition.preSession.map(toEntry);
+  let hasEarlier = earlier.length > 0;
+  let showModeLabel =
+    data !== null && !data.isUnborn && (requestedMode !== "session" || data.mode !== "session");
+  let lineText = turn
+    ? `Turn ${turn.index} "${turn.preview}"`
+    : showModeLabel
+      ? modeLabelOf(requestedMode, view)
+      : unbornNoteOf(view, totals.filesCount);
   return {
-    turn: s,
-    partition: a,
-    totals: p,
-    empty: l,
-    line: A === null ? null : sanitizeName(A),
+    turn,
+    partition,
+    totals,
+    empty,
+    line: lineText === null ? null : sanitizeName(lineText),
     rows,
-    earlier: O,
-    earlierLabel: _ ? `+${plural(O.length, "file")} edited before this session (${i})` : null,
+    earlier,
+    earlierLabel: hasEarlier
+      ? `+${plural(earlier.length, "file")} edited before this session (${toggleLabel})`
+      : null,
     notes: flattened,
-    message: l ? [l.headline, ...flattened] : T ? [] : flattened,
-    isUntrackedNoted: !s && o?.isUntrackedWithheld === true && l === null,
+    message: empty ? [empty.headline, ...flattened] : hasFileRows ? [] : flattened,
+    isUntrackedNoted: !turn && data?.isUntrackedWithheld === true && empty === null,
   };
 }
 //@ chunk-wyqg6m3h.js:47563-47734 placement
-function hunkWindowOf(e, o) {
-  let r = 0;
+function hunkWindowOf(segment, windowSpec) {
+  let consumedRows = 0;
   let offset = 0;
-  let n = 0;
-  let a = 0;
-  for (let p of e.lineRows) {
-    if (r + p <= o.skip) offset += 1;
-    else if (n < o.take) {
-      n += p;
-      a += 1;
+  let takenRows = 0;
+  let takenLines = 0;
+  for (let rows of segment.lineRows) {
+    if (consumedRows + rows <= windowSpec.skip) offset += 1;
+    else if (takenRows < windowSpec.take) {
+      takenRows += rows;
+      takenLines += 1;
     }
-    r += p;
+    consumedRows += rows;
   }
-  let i = adjustHunkLineNumbers(e.hunk, offset);
+  let hunk = adjustHunkLineNumbers(segment.hunk, offset);
   return {
-    ...i,
-    lines: i.lines.slice(0, a),
+    ...hunk,
+    lines: hunk.lines.slice(0, takenLines),
   };
 }
 //@ chunk-wyqg6m3h.js:47734-47977 placement
-function bodyScrolledBy(e, o) {
-  let { visibleRows, maxTop } = bodyLayoutOf(e, dockPlanOf(e));
-  let n = Math.abs(o.by);
-  let a = n >= o.contentRows && o.contentRows > o.bodyRows;
-  let i = !a && n >= o.bodyRows;
-  let p = a ? maxTop : i ? Math.max(1, visibleRows) : n * WHEEL_ROWS;
+function bodyScrolledBy(ctx, event) {
+  let { visibleRows, maxTop } = bodyLayoutOf(ctx, dockPlanOf(ctx));
+  let delta = Math.abs(event.by);
+  let isPage = delta >= event.contentRows && event.contentRows > event.bodyRows;
+  let isRowStep = !isPage && delta >= event.bodyRows;
+  let step = isPage ? maxTop : isRowStep ? Math.max(1, visibleRows) : delta * WHEEL_ROWS;
   return {
-    ...e.place,
-    top: Math.max(0, Math.min(maxTop, e.place.top + Math.sign(o.by) * p)),
+    ...ctx.place,
+    top: Math.max(0, Math.min(maxTop, ctx.place.top + Math.sign(event.by) * step)),
   };
 }
 //@ chunk-wyqg6m3h.js:47977-48829 placement
-function drawWindow(e, o, top) {
-  let { Box, Text, Code } = e.ui;
-  let i = [];
-  let p = o.visibleRows + SCROLL_MARGIN_ROWS;
-  let max = Math.max(0, Math.min(top, o.maxTop));
-  let onPress = e.actions.togglePreSession;
-  let d = 0;
-  let T = 0;
-  let w = 0;
-  function R(_, E) {
-    let A = hunkSourceOf(hunkWindowOf(_, E));
-    let path = sanitizeName(_.path);
-    w += A.length;
-    return w > MAX_BODY_CHARS
+function drawWindow(ctx, layout, top) {
+  let { Box, Text, Code } = ctx.ui;
+  let out = [];
+  let takeRows = layout.visibleRows + SCROLL_MARGIN_ROWS;
+  let max = Math.max(0, Math.min(top, layout.maxTop));
+  let onPress = ctx.actions.togglePreSession;
+  let scannedRows = 0;
+  let takenRows = 0;
+  let charsUsed = 0;
+  function renderHunk(segment, hunkSegment) {
+    let source = hunkSourceOf(hunkWindowOf(segment, hunkSegment));
+    let path = sanitizeName(segment.path);
+    charsUsed += source.length;
+    return charsUsed > MAX_BODY_CHARS
       ? h(
           Text,
           {
@@ -1064,23 +1076,23 @@ function drawWindow(e, o, top) {
           "\u2026",
         )
       : h(Code, {
-          source: A,
+          source,
           format: "diff",
           path,
         });
   }
-  function O(segment, E) {
+  function renderSegment(segment, sliceWindow) {
     switch (segment.kind) {
       case "rule":
-        return divider(e);
+        return divider(ctx);
       case "blank":
         return h(Box, {
           height: 1,
         });
       case "name":
-        return nameRow(e, segment.name);
+        return nameRow(ctx, segment.name);
       case "hunk":
-        return R(segment, E);
+        return renderHunk(segment, sliceWindow);
       case "note":
         return h(
           Text,
@@ -1101,55 +1113,56 @@ function drawWindow(e, o, top) {
           "\u2026 diff truncated (exceeded 400 line limit)",
         );
       case "text":
-        return dimNote(e, segment.text);
+        return dimNote(ctx, segment.text);
       case "toggle":
-        return toggleRow(e, "presession", {
+        return toggleRow(ctx, "presession", {
           ...segment,
           onPress,
         });
       case "legend":
-        return legendRow(e, segment.entry);
+        return legendRow(ctx, segment.entry);
     }
   }
-  for (let segment of o.segments) {
-    let E = segmentRowsOf(segment);
-    if (d + E > max && T < p) {
-      let max_2 = Math.max(0, max - d);
-      i.push(
-        O(segment, {
+  for (let segment of layout.segments) {
+    let rows = segmentRowsOf(segment);
+    if (scannedRows + rows > max && takenRows < takeRows) {
+      let max_2 = Math.max(0, max - scannedRows);
+      out.push(
+        renderSegment(segment, {
           skip: max_2,
-          take: p - T,
+          take: takeRows - takenRows,
         }),
       );
-      T += E - max_2;
+      takenRows += rows - max_2;
     }
-    d += E;
+    scannedRows += rows;
   }
-  return i;
+  return out;
 }
 //@ chunk-wyqg6m3h.js:48829-48944 placement
-function isWheelOverList(e, o) {
-  let r = dockPlanOf(e);
-  let { listTop, listEnd } = bodyLayoutOf(e, r);
-  let a = o.pointer?.row ?? -1;
-  return a >= listTop && a < listEnd && r.rows.length > MAX_SUMMARY_ROWS;
+function isWheelOverList(ctx, event) {
+  let plan = dockPlanOf(ctx);
+  let { listTop, listEnd } = bodyLayoutOf(ctx, plan);
+  let pointerRow = event.pointer?.row ?? -1;
+  return pointerRow >= listTop && pointerRow < listEnd && plan.rows.length > MAX_SUMMARY_ROWS;
 }
 //@ chunk-wyqg6m3h.js:48944-49605 placement
-function listBlockOf(e, o, r) {
-  let { shown, above, below } = listWindowOf(o, r);
-  let { noiseCount } = r.partition;
-  let { notShown } = r.totals;
-  let l = !r.turn && noiseCount > 0;
-  let y = above > 0;
-  let d = below > 0;
-  let T = notShown > 0;
-  let w = o.isNoiseShown ? "hide" : "show";
-  let joined = keptOf([d ? `${below} ${MORE_BELOW_TEXT}` : null, T ? `${notShown} not shown` : null]).join(
-    " \xB7 ",
-  );
-  let O = (url) =>
+function listBlockOf(ctx, view, list) {
+  let { shown, above, below } = listWindowOf(view, list);
+  let { noiseCount } = list.partition;
+  let { notShown } = list.totals;
+  let hasNoise = !list.turn && noiseCount > 0;
+  let hasAbove = above > 0;
+  let hasBelow = below > 0;
+  let hasNotShown = notShown > 0;
+  let toggleLabel = view.isNoiseShown ? "hide" : "show";
+  let joined = keptOf([
+    hasBelow ? `${below} ${MORE_BELOW_TEXT}` : null,
+    hasNotShown ? `${notShown} not shown` : null,
+  ]).join(" \xB7 ");
+  let renderFile = (url) =>
     fileRow(
-      e,
+      ctx,
       {
         key: fileKeyOf(url),
         path: url.path,
@@ -1159,96 +1172,100 @@ function listBlockOf(e, o, r) {
         note: null,
         isSelected: false,
       },
-      () => e.actions.selectFile(url.path),
+      () => ctx.actions.selectFile(url.path),
     );
-  let _ = y ? listEdgeButton(e, "list-up", `\u2191 ${above} more above`) : null;
-  let E = d ? listEdgeButton(e, "list-down", `\u2193 ${joined}`) : T ? dimNote(e, `\u2026 ${joined}`) : null;
-  let A = l
-    ? toggleRow(e, "noise", {
-        label: `${plural(noiseCount, "test")}/generated (${w})`,
-        onPress: e.actions.toggleNoise,
+  let aboveButton = hasAbove ? listEdgeButton(ctx, "list-up", `\u2191 ${above} more above`) : null;
+  let belowRow = hasBelow
+    ? listEdgeButton(ctx, "list-down", `\u2193 ${joined}`)
+    : hasNotShown
+      ? dimNote(ctx, `\u2026 ${joined}`)
+      : null;
+  let noiseToggle = hasNoise
+    ? toggleRow(ctx, "noise", {
+        label: `${plural(noiseCount, "test")}/generated (${toggleLabel})`,
+        onPress: ctx.actions.toggleNoise,
       })
     : null;
   return present([
-    _,
-    ...shown.map(O),
-    E,
-    r.isUntrackedNoted ? dimNote(e, untrackedWithheldTextOf(o)) : null,
-    A,
+    aboveButton,
+    ...shown.map(renderFile),
+    belowRow,
+    list.isUntrackedNoted ? dimNote(ctx, untrackedWithheldTextOf(view)) : null,
+    noiseToggle,
   ]);
 }
 //@ chunk-wyqg6m3h.js:49605-49746 placement
-function listScrolledBy(e, o) {
-  let max = Math.max(0, dockPlanOf(e).rows.length - MAX_SUMMARY_ROWS);
+function listScrolledBy(ctx, delta) {
+  let max = Math.max(0, dockPlanOf(ctx).rows.length - MAX_SUMMARY_ROWS);
   return {
-    ...e.place,
-    listStart: Math.max(0, Math.min(max, Math.min(e.place.listStart, max) + o)),
+    ...ctx.place,
+    listStart: Math.max(0, Math.min(max, Math.min(ctx.place.listStart, max) + delta)),
   };
 }
 //@ chunk-wyqg6m3h.js:49746-49816 placement
-var placeAtFile = (e, o) => ({
-  ...e.place,
-  top: bodyLayoutOf(e, dockPlanOf(e)).tops.get(o) ?? e.place.top,
+var placeAtFile = (ctx, path) => ({
+  ...ctx.place,
+  top: bodyLayoutOf(ctx, dockPlanOf(ctx)).tops.get(path) ?? ctx.place.top,
 });
 //@ chunk-wyqg6m3h.js:49816-49870 placement
-var insetOf = (e) => ({
-  ...e,
-  columns: Math.max(1, e.columns - PANE_RIGHT_PAD_COLUMNS),
+var insetOf = (place) => ({
+  ...place,
+  columns: Math.max(1, place.columns - PANE_RIGHT_PAD_COLUMNS),
 });
 //@ chunk-wyqg6m3h.js:49870-50611 placement
-function sidebarPane(e, o) {
-  let { Box, Button } = e.ui;
-  let n = preludeOf(e, o);
-  if (n) return n;
-  let a = dockPlanOf(o);
-  let i = a.message.length === 0;
-  let p = !i && !(o.isPreSessionShown && a.earlier.length > 0);
-  let l = listBlockOf(e, o, a);
-  let onPress = e.actions.togglePreSession;
-  let d = l.length > 0;
-  let T = present([
+function sidebarPane(ctx, view) {
+  let { Box, Button } = ctx.ui;
+  let prelude = preludeOf(ctx, view);
+  if (prelude) return prelude;
+  let plan = dockPlanOf(view);
+  let noMessage = plan.message.length === 0;
+  let showsMessage = !noMessage && !(view.isPreSessionShown && plan.earlier.length > 0);
+  let listBlock = listBlockOf(ctx, view, plan);
+  let onPress = ctx.actions.togglePreSession;
+  let hasListRows = listBlock.length > 0;
+  let topRows = present([
     headerView(
-      e,
-      a.empty ? null : a.totals,
+      ctx,
+      plan.empty ? null : plan.totals,
       h(
         Box,
         {
           flexDirection: "row",
         },
         present([
-          sourcePicker(e, o),
+          sourcePicker(ctx, view),
           h(
             Button,
             {
               key: "base",
               plain: true,
               action: "app:cycleDiffBase",
-              onPress: e.actions.cycleBase,
+              onPress: ctx.actions.cycleBase,
             },
             "",
           ),
         ]),
       ),
     ),
-    a.line === null ? null : dimNote(e, a.line),
-    todoBar(e, o),
+    plan.line === null ? null : dimNote(ctx, plan.line),
+    todoBar(ctx, view),
   ]);
-  if (p)
-    return messagePaneOf(e, {
-      top: [...T, ...l],
-      message: a.message,
+  if (showsMessage)
+    return messagePaneOf(ctx, {
+      top: [...topRows, ...listBlock],
+      message: plan.message,
       controls: null,
       earlier:
-        keptOf([a.earlierLabel]).map((label) =>
-          toggleRow(e, "presession", {
+        keptOf([plan.earlierLabel]).map((label) =>
+          toggleRow(ctx, "presession", {
             label,
             onPress,
           }),
         )[0] ?? null,
       rest: [],
     });
-  let w = () =>
-    d
+  let listElement = () =>
+    hasListRows
       ? h(
           Box,
           {
@@ -1256,7 +1273,7 @@ function sidebarPane(e, o) {
             marginTop: 1,
             marginBottom: 1,
           },
-          l,
+          listBlock,
         )
       : h(Box, {
           height: 1,
@@ -1266,68 +1283,73 @@ function sidebarPane(e, o) {
     {
       flexDirection: "column",
     },
-    [...T, ...(i ? [w()] : []), ...drawWindow(e, bodyLayoutOf(o, a), o.place.top)],
+    [
+      ...topRows,
+      ...(noMessage ? [listElement()] : []),
+      ...drawWindow(ctx, bodyLayoutOf(view, plan), view.place.top),
+    ],
   );
 }
 //@ chunk-wyqg6m3h.js:50611-50834 placement
-function paneView(e, o, r) {
-  let { Box } = e.ui;
-  let n = r.placement === "dock";
-  let a = o.isFullscreen !== false && r.terminalColumns !== null && r.terminalColumns < OPEN_MIN_COLUMNS;
-  return n
+function paneView(ctx, view, props) {
+  let { Box } = ctx.ui;
+  let isDocked = props.placement === "dock";
+  let isTooNarrow =
+    view.isFullscreen !== false && props.terminalColumns !== null && props.terminalColumns < OPEN_MIN_COLUMNS;
+  return isDocked
     ? h(
         Box,
         {
           flexDirection: "column",
           paddingRight: PANE_RIGHT_PAD_COLUMNS,
         },
-        sidebarPane(insetOf(e), o),
+        sidebarPane(insetOf(ctx), view),
       )
-    : a
-      ? h(Box, null, dimNote(e, RESIZE_TERMINAL_TEXT))
-      : dialogPane(e, o);
+    : isTooNarrow
+      ? h(Box, null, dimNote(ctx, RESIZE_TERMINAL_TEXT))
+      : dialogPane(ctx, view);
 }
 //@ chunk-wyqg6m3h.js:50834-51150 placement
-function drawnFilesOf(e) {
-  let files = e.data?.files ?? [];
-  if (e.placement === "inline") {
-    let n = pickedTurnOf(e) !== undefined;
-    let mapped = dialogEntriesOf(e).map((l) => l.path);
-    let i = dialogWindowOf(e, mapped);
-    let sliced = mapped.slice(i, i + MAX_VISIBLE_FILES);
-    return files.filter((file) => !n && sliced.includes(file.path));
+function drawnFilesOf(view) {
+  let files = view.data?.files ?? [];
+  if (view.placement === "inline") {
+    let hasTurn = pickedTurnOf(view) !== undefined;
+    let mapped = dialogEntriesOf(view).map((entry) => entry.path);
+    let windowStart = dialogWindowOf(view, mapped);
+    let sliced = mapped.slice(windowStart, windowStart + MAX_VISIBLE_FILES);
+    return files.filter((file) => !hasTurn && sliced.includes(file.path));
   }
-  let r = partitionOf(files, e.isNoiseShown ? "shown" : "hidden");
-  let s = e.isPreSessionShown && r.preSession.length <= PRE_SESSION_BODY_CAP;
-  return [...r.shown, ...(s ? r.preSession : [])];
+  let partition = partitionOf(files, view.isNoiseShown ? "shown" : "hidden");
+  let includePreSession = view.isPreSessionShown && partition.preSession.length <= PRE_SESSION_BODY_CAP;
+  return [...partition.shown, ...(includePreSession ? partition.preSession : [])];
 }
 //@ chunk-wyqg6m3h.js:51150-51237 placement
-var entryKindsOf = (e) => (o) =>
-  e.listDir(o).then(
-    (r) => new Map(r.map((s) => [s.name, s.kind])),
+var entryKindsOf = (ctx) => (dir) =>
+  ctx.listDir(dir).then(
+    (entries) => new Map(entries.map((entry) => [entry.name, entry.kind])),
     () => null,
   );
 //@ chunk-wyqg6m3h.js:51237-51348 placement = isEnvTruthy (0.824)
-var isEnvTruthy = (e, o) =>
-  e.fileCheckpointingEnabled !== false &&
-  !["1", "true", "yes", "on"].includes((o ?? "").trim().toLowerCase());
+var isEnvTruthy = (settings, envValue) =>
+  settings.fileCheckpointingEnabled !== false &&
+  !["1", "true", "yes", "on"].includes((envValue ?? "").trim().toLowerCase());
 //@ chunk-wyqg6m3h.js:51348-51381 placement
-var isOnPaneSurface = (e) => e.surface !== "mobile";
+var isOnPaneSurface = (props) => props.surface !== "mobile";
 //@ chunk-wyqg6m3h.js:51381-51432 placement
 var messageOf = (error) => (error instanceof Error ? error.message : String(error));
 //@ chunk-wyqg6m3h.js:51432-51489 placement = getFileModificationTimeAsync (1)
 /**
  * 返回"取 mtime 或 null"的函数（柯里化）。
  */
-var getFileModificationTimeAsync = (filePath) => (o) =>
-  filePath.stat(o).then(
-    (r) => r.mtimeMs,
+var getFileModificationTimeAsync = (filePath) => (path) =>
+  filePath.stat(path).then(
+    (stats) => stats.mtimeMs,
     () => null,
   );
 //@ chunk-wyqg6m3h.js:51489-51587 placement
-function paneToggleOf(e) {
-  let o = e.columns !== null && e.columns < OPEN_MIN_COLUMNS;
-  return e.isOpen ? "close" : o ? "too-narrow" : "open";
+function paneToggleOf(props) {
+  let isTooNarrow = props.columns !== null && props.columns < OPEN_MIN_COLUMNS;
+  return props.isOpen ? "close" : isTooNarrow ? "too-narrow" : "open";
 }
 //@ chunk-wyqg6m3h.js:51587-51631 placement
 var BASE_OUTCOMES = ["merge-base", "head-is-base", "none"];
@@ -1340,9 +1362,9 @@ var FEATURES = {
   selectionAttach: "diff_selection_attach",
 };
 //@ chunk-wyqg6m3h.js:51797-51848 placement
-function safely(e) {
+function safely(fn) {
   try {
-    e().catch(() => {
+    fn().catch(() => {
       return;
     });
   } catch {}
@@ -1352,17 +1374,17 @@ var SHOWN_TRIGGERS = ["auto_open", "manual"];
 //@ chunk-wyqg6m3h.js:51878-51936 placement
 var WIDTH_BUCKETS = ["under_110", "110_to_143", "144_to_199", "200_plus"];
 //@ chunk-wyqg6m3h.js:51936-52198 placement
-var recorderOf = (e) => ({
-  mark: (feature, r) =>
+var recorderOf = (recorder) => ({
+  mark: (feature, props) =>
     safely(() =>
-      e.mark({
+      recorder.mark({
         feature,
-        ...r,
+        ...props,
       }),
     ),
   shown: (value, value_2) =>
     safely(() =>
-      e.log({
+      recorder.log({
         event: "tengu_repl_diff_panel_shown",
         props: {
           trigger: {
@@ -1378,7 +1400,7 @@ var recorderOf = (e) => ({
     ),
   asked: () =>
     safely(() =>
-      e.mark({
+      recorder.mark({
         feature: FEATURES.selectionAttach,
         kind: "ok",
       }),
@@ -1387,336 +1409,340 @@ var recorderOf = (e) => ({
 //@ chunk-wyqg6m3h.js:52198-52222 placement
 var TABS = ["diff", "convo"];
 //@ chunk-wyqg6m3h.js:52222-52302 placement
-function widthBucketOf(e) {
-  let [o, r, s, n] = WIDTH_BUCKETS;
-  let a = e ?? 0;
-  let i = a < OPEN_MIN_COLUMNS;
-  let p = a < AUTO_OPEN_MIN_COLUMNS;
-  let l = a < WIDEST_BUCKET_COLUMNS;
-  return i ? o : p ? r : l ? s : n;
+function widthBucketOf(columns) {
+  let [narrow, medium, wide, widest] = WIDTH_BUCKETS;
+  let width = columns ?? 0;
+  let isNarrow = width < OPEN_MIN_COLUMNS;
+  let isMedium = width < AUTO_OPEN_MIN_COLUMNS;
+  let isWide = width < WIDEST_BUCKET_COLUMNS;
+  return isNarrow ? narrow : isMedium ? medium : isWide ? wide : widest;
 }
 //@ chunk-wyqg6m3h.js:52302-52405 placement
-function refreshRestOf(e, o) {
-  let min = Math.min(e, SLOW_REFRESH_REST_MAX_MS);
-  let s = o > 0 ? Math.min(TIMED_OUT_REST_MS * 2 ** (o - 1), TIMED_OUT_REST_MAX_MS) : 0;
-  let max = Math.max(min, s);
+function refreshRestOf(elapsedMs, timeoutCount) {
+  let min = Math.min(elapsedMs, SLOW_REFRESH_REST_MAX_MS);
+  let backoffMs =
+    timeoutCount > 0 ? Math.min(TIMED_OUT_REST_MS * 2 ** (timeoutCount - 1), TIMED_OUT_REST_MAX_MS) : 0;
+  let max = Math.max(min, backoffMs);
   return max > REFRESH_DEBOUNCE_MS ? max : 0;
 }
 //@ chunk-wyqg6m3h.js:52405-52554 placement
 /**
  * 窗格打开结果：placed / awaited（暂无界面）/ withdrawn。
  */
-function classifyPanePlacement(e) {
-  if (!(isRecord(e) && e.isPlaced === false)) return "placed";
-  return typeof e.reason === "string" && e.reason.startsWith("no-surface") ? "awaited" : "withdrawn";
+function classifyPanePlacement(result) {
+  if (!(isRecord(result) && result.isPlaced === false)) return "placed";
+  return typeof result.reason === "string" && result.reason.startsWith("no-surface")
+    ? "awaited"
+    : "withdrawn";
 }
 //@ chunk-wyqg6m3h.js:52554-64097 placement
-function register(e) {
-  let o = null;
-  let r = null;
-  let s = null;
-  let n = 0;
-  let a = false;
-  let i = null;
-  let p = null;
-  let l = false;
-  let y = false;
-  let d = false;
-  let T = 0;
-  let w = false;
-  let R = null;
-  let O = null;
-  let _ = null;
-  let E = null;
-  let A = false;
-  let k = false;
-  let U = false;
-  let I = 0;
-  let me = null;
+function register(on) {
+  let host = null;
+  let backend = null;
+  let backendPromise = null;
+  let sessionStartMs = 0;
+  let isPaneOpen = false;
+  let pendingOpenOutcome = null;
+  let lastPaneRows = null;
+  let isOpening = false;
+  let isAutoOpenPending = false;
+  let isRestQueued = false;
+  let toggleGeneration = 0;
+  let hasTurnDiffs = false;
+  let terminalColumns = null;
+  let lastShownSessionId = null;
+  let armedAsk = null;
+  let lastAskedAsk = null;
+  let isRefreshing = false;
+  let isRefreshQueued = false;
+  let isForcedRefresh = false;
+  let timeoutCount = 0;
+  let restDueAt = null;
   let resolved = Promise.resolve();
-  let Me = 0;
-  let ye = 0;
-  let he = null;
-  let Oe = null;
-  let ge = new Set();
-  let z = {
+  let diffGeneration = 0;
+  let changeCount = 0;
+  let bodiesKey = null;
+  let bodiesBaseRef = null;
+  let loadedBodyPaths = new Set();
+  let repoState = {
     toplevel: "",
     headKey: "",
   };
-  let C = {
+  let envState = {
     cwd: "",
     isEmpty: false,
     epoch: 0,
   };
-  let u = INITIAL_MODEL;
-  let M = new Map();
-  let D = new Set();
-  let Y = (f) => o ?? f;
-  let ze = () => a && i === null;
-  let Qt = (f) => ({
-    run: (m, g) =>
-      Y(f).run(
-        m,
-        C.cwd === ""
-          ? g
+  let model = INITIAL_MODEL;
+  let timers = new Map();
+  let markedBaseOutcomes = new Set();
+  let hostFor = (fallback) => host ?? fallback;
+  let isIdle = () => isPaneOpen && pendingOpenOutcome === null;
+  let hostApiOf = (fallback) => ({
+    run: (command, options) =>
+      hostFor(fallback).run(
+        command,
+        envState.cwd === ""
+          ? options
           : {
-              cwd: C.cwd,
-              ...g,
+              cwd: envState.cwd,
+              ...options,
             },
       ),
-    readFile: (m) => Y(f).readFile(m),
-    mtimeOf: (m) => getFileModificationTimeAsync(Y(f))(m),
-    entryKindsOf: (m) => entryKindsOf(Y(f))(m),
-    nowMs: () => Y(f).now(),
-    sessionStartMsOf: () => n,
-    onBranchBase: (m) => {
-      let c =
-        m.kind === "error"
+    readFile: (path) => hostFor(fallback).readFile(path),
+    mtimeOf: (path) => getFileModificationTimeAsync(hostFor(fallback))(path),
+    entryKindsOf: (dir) => entryKindsOf(hostFor(fallback))(dir),
+    nowMs: () => hostFor(fallback).now(),
+    sessionStartMsOf: () => sessionStartMs,
+    onBranchBase: (result) => {
+      let markArg =
+        result.kind === "error"
           ? {
               kind: "sad",
-              reason: m.reason,
+              reason: result.reason,
             }
           : {
               kind: "ok",
               props: {
                 outcome: {
-                  value: m.kind,
+                  value: result.kind,
                   of: BASE_OUTCOMES,
                 },
               },
             };
-      if (!D.has(c.kind)) {
-        D.add(c.kind);
-        recorderOf(Y(f)).mark(FEATURES.baseResolve, c);
+      if (!markedBaseOutcomes.has(markArg.kind)) {
+        markedBaseOutcomes.add(markArg.kind);
+        recorderOf(hostFor(fallback)).mark(FEATURES.baseResolve, markArg);
       }
     },
   });
-  function wt(f) {
-    if (r || C.isEmpty) return Promise.resolve(true);
-    s ??= ci(f).finally(() => {
-      s = null;
+  function ensureBackend(fallback) {
+    if (backend || envState.isEmpty) return Promise.resolve(true);
+    backendPromise ??= resolveBackend(fallback).finally(() => {
+      backendPromise = null;
     });
-    return s;
+    return backendPromise;
   }
-  async function ci(f) {
-    let m = {
+  async function resolveBackend(fallback) {
+    let probeState = {
       isAnswered: true,
     };
-    let g = Qt(f);
-    let { epoch } = C;
-    let S = await backendOf(
+    let hostApi = hostApiOf(fallback);
+    let { epoch } = envState;
+    let resolved = await backendOf(
       {
-        ...g,
-        run: (L, ee) =>
-          g.run(L, ee).catch((error) => {
-            m.isAnswered &&= L[0] !== "git" || !/\baborted\b/.test(messageOf(error));
+        ...hostApi,
+        run: (command, options) =>
+          hostApi.run(command, options).catch((error) => {
+            probeState.isAnswered &&= command[0] !== "git" || !/\baborted\b/.test(messageOf(error));
             throw error;
           }),
       },
       INSTALLED_BACKEND_PROBES,
     );
-    if (epoch !== C.epoch) return false;
-    r ??= S;
-    C.isEmpty = r === null && m.isAnswered;
-    if (!S || r !== S) return m.isAnswered || r !== null;
-    yi(f, S);
-    let b = baseModeOf(
-      await f.storeGet(baseStoreKeyOf(S.repository.toplevel)).catch(() => {
+    if (epoch !== envState.epoch) return false;
+    backend ??= resolved;
+    envState.isEmpty = backend === null && probeState.isAnswered;
+    if (!resolved || backend !== resolved) return probeState.isAnswered || backend !== null;
+    startHeadPoll(fallback, resolved);
+    let storedMode = baseModeOf(
+      await fallback.storeGet(baseStoreKeyOf(resolved.repository.toplevel)).catch(() => {
         return;
       }),
     );
-    let N = b && S.baseModes.includes(b) ? b : null;
-    u = {
-      ...u,
-      words: S.words,
-      baseModes: S.baseModes,
-      ...(N && {
-        requestedMode: N,
+    let modeToPersist = storedMode && resolved.baseModes.includes(storedMode) ? storedMode : null;
+    model = {
+      ...model,
+      words: resolved.words,
+      baseModes: resolved.baseModes,
+      ...(modeToPersist && {
+        requestedMode: modeToPersist,
       }),
     };
     return true;
   }
-  function ui() {
-    r = null;
-    C.isEmpty = false;
-    C.epoch += 1;
-    z.toplevel = "";
-    z.headKey = "";
-    M.get("poll")?.cancel();
-    M.delete("poll");
-    M.get("rest")?.cancel();
-    M.delete("rest");
-    I = 0;
-    k = false;
-    U = false;
-    M.get("refresh")?.cancel();
-    M.delete("refresh");
+  function resetSessionState() {
+    backend = null;
+    envState.isEmpty = false;
+    envState.epoch += 1;
+    repoState.toplevel = "";
+    repoState.headKey = "";
+    timers.get("poll")?.cancel();
+    timers.delete("poll");
+    timers.get("rest")?.cancel();
+    timers.delete("rest");
+    timeoutCount = 0;
+    isRefreshQueued = false;
+    isForcedRefresh = false;
+    timers.get("refresh")?.cancel();
+    timers.delete("refresh");
   }
-  function Jt() {
+  function paneRequest() {
     return {
       id: PANE_ID,
       title: PANE_TITLE,
       closeOnEscape: true,
-      rows: dialogRowsOf(u),
+      rows: dialogRowsOf(model),
     };
   }
-  function rs(f) {
-    let m = dialogRowsOf(u);
-    if (a && u.isFullscreen === false && m !== p) {
-      p = m;
-      f.openPane(Jt()).catch(() => {
+  function syncOpenPane(hostApi) {
+    let paneRows = dialogRowsOf(model);
+    if (isPaneOpen && model.isFullscreen === false && paneRows !== lastPaneRows) {
+      lastPaneRows = paneRows;
+      hostApi.openPane(paneRequest()).catch(() => {
         return;
       });
     }
   }
-  function K(f) {
-    rs(f);
-    if (M.has("redraw")) return;
-    M.set(
+  function requestRedraw(hostApi) {
+    syncOpenPane(hostApi);
+    if (timers.has("redraw")) return;
+    timers.set(
       "redraw",
-      f.after(REDRAW_COALESCE_MS, () => {
-        M.delete("redraw");
-        f.invalidate();
+      hostApi.after(REDRAW_COALESCE_MS, () => {
+        timers.delete("redraw");
+        hostApi.invalidate();
       }),
     );
   }
-  async function De(f) {
-    let { data: m } = u;
-    let g = r;
-    if (!m || !g) {
-      he = null;
-      Oe = null;
-      ge.clear();
-      u = {
-        ...u,
+  async function loadBodies(hostApi) {
+    let { data } = model;
+    let currentBackend = backend;
+    if (!data || !currentBackend) {
+      bodiesKey = null;
+      bodiesBaseRef = null;
+      loadedBodyPaths.clear();
+      model = {
+        ...model,
         bodies: NO_BODIES,
       };
       return false;
     }
-    let c = ss(m);
-    let S = m.baseRef !== Oe;
-    if (c !== he) {
-      he = c;
-      ge.clear();
+    let cacheKey = bodiesCacheKey(data);
+    let baseRefChanged = data.baseRef !== bodiesBaseRef;
+    if (cacheKey !== bodiesKey) {
+      bodiesKey = cacheKey;
+      loadedBodyPaths.clear();
     }
-    if (S) {
-      Oe = m.baseRef;
-      u = {
-        ...u,
+    if (baseRefChanged) {
+      bodiesBaseRef = data.baseRef;
+      model = {
+        ...model,
         bodies: NO_BODIES,
       };
-      K(f);
+      requestRedraw(hostApi);
     }
-    return xi(f, g, m);
+    return fetchMissingHunks(hostApi, currentBackend, data);
   }
-  let ss = (f) => `${Me}|${f.baseRef}`;
-  async function xi(f, m, g) {
-    let c = ss(g);
-    let filtered = drawnFilesOf(u).filter((L) => !ge.has(L.path));
-    for (let L of filtered) ge.add(L.path);
-    let hunks = await m.fetchHunks(g, filtered);
-    if (he === c && hunks.size > 0) {
-      u = {
-        ...u,
-        bodies: new Map([...u.bodies, ...hunks]),
+  let bodiesCacheKey = (data) => `${diffGeneration}|${data.baseRef}`;
+  async function fetchMissingHunks(hostApi, currentBackend, data) {
+    let cacheKey = bodiesCacheKey(data);
+    let filtered = drawnFilesOf(model).filter((file) => !loadedBodyPaths.has(file.path));
+    for (let file of filtered) loadedBodyPaths.add(file.path);
+    let hunks = await currentBackend.fetchHunks(data, filtered);
+    if (bodiesKey === cacheKey && hunks.size > 0) {
+      model = {
+        ...model,
+        bodies: new Map([...model.bodies, ...hunks]),
       };
-      K(f);
+      requestRedraw(hostApi);
     }
     return [...hunks.values()].includes(null);
   }
-  function ns() {
-    let f = r;
-    if (!f || z.headKey !== "") return;
-    f.headKeyOf()
+  function ensureHeadKey() {
+    let currentBackend = backend;
+    if (!currentBackend || repoState.headKey !== "") return;
+    currentBackend
+      .headKeyOf()
       .catch(() => "")
       .then((headKey) => {
-        if (r === f && z.headKey === "") z.headKey = headKey;
+        if (backend === currentBackend && repoState.headKey === "") repoState.headKey = headKey;
       });
   }
-  function yi(f, m) {
-    let g = () => m.headKeyOf().catch(() => "");
-    if (z.toplevel === m.repository.toplevel) return;
-    M.get("poll")?.cancel();
-    z.toplevel = m.repository.toplevel;
-    z.headKey = "";
-    M.set(
+  function startHeadPoll(hostApi, resolved) {
+    let readHeadKey = () => resolved.headKeyOf().catch(() => "");
+    if (repoState.toplevel === resolved.repository.toplevel) return;
+    timers.get("poll")?.cancel();
+    repoState.toplevel = resolved.repository.toplevel;
+    repoState.headKey = "";
+    timers.set(
       "poll",
-      f.every(HEAD_POLL_MS, () => {
-        if (!ze()) return;
-        if (k && !A) eo(f);
-        g().then((c) => {
-          let S = z.headKey !== "" && c !== z.headKey;
-          z.headKey = c;
-          if (S) to(f);
+      hostApi.every(HEAD_POLL_MS, () => {
+        if (!isIdle()) return;
+        if (isRefreshQueued && !isRefreshing) runDeferredRestIfDue(hostApi);
+        readHeadKey().then((headKey) => {
+          let headChanged = repoState.headKey !== "" && headKey !== repoState.headKey;
+          repoState.headKey = headKey;
+          if (headChanged) scheduleRefresh(hostApi);
         });
       }),
     );
   }
-  async function Le(f, m = false) {
-    if (A || (M.has("rest") && !m)) {
-      k = true;
-      U ||= m;
-      if (!A) eo(f);
+  async function refreshDiff(hostApi, force = false) {
+    if (isRefreshing || (timers.has("rest") && !force)) {
+      isRefreshQueued = true;
+      isForcedRefresh ||= force;
+      if (!isRefreshing) runDeferredRestIfDue(hostApi);
       return;
     }
-    A = true;
-    let c = () => {
+    isRefreshing = true;
+    let resolveDone = () => {
       return;
     };
     resolved = new Promise((resolve) => {
-      c = resolve;
+      resolveDone = resolve;
     });
-    k = false;
-    U = false;
-    M.get("refresh")?.cancel();
-    M.delete("refresh");
-    let S = recorderOf(f);
-    let b = r;
-    let { epoch } = C;
-    let L = await f.now().catch(() => null);
-    let ee = null;
-    let j = null;
-    let Ve = async () => ({
-      outcome: b
-        ? await b.fetchDiff(u.requestedMode)
+    isRefreshQueued = false;
+    isForcedRefresh = false;
+    timers.get("refresh")?.cancel();
+    timers.delete("refresh");
+    let recorder = recorderOf(hostApi);
+    let currentBackend = backend;
+    let { epoch } = envState;
+    let startedAt = await hostApi.now().catch(() => null);
+    let outcomeKind = null;
+    let endedAt = null;
+    let fetchOutcome = async () => ({
+      outcome: currentBackend
+        ? await currentBackend.fetchDiff(model.requestedMode)
         : {
             kind: "no-repository",
           },
-      endedMs: await f.now().catch(() => null),
+      endedMs: await hostApi.now().catch(() => null),
     });
     try {
-      u = {
-        ...u,
-        isLoading: u.data === null,
+      model = {
+        ...model,
+        isLoading: model.data === null,
       };
-      let [q, oe] = await Promise.all([Ve(), f.messages().catch(() => [])]);
-      let { outcome } = q;
+      let [fetchResult, messages] = await Promise.all([fetchOutcome(), hostApi.messages().catch(() => [])]);
+      let { outcome } = fetchResult;
       switch (
-        ((j = q.endedMs),
-        (u = afterFetch(u, {
+        ((endedAt = fetchResult.endedMs),
+        (model = afterFetch(model, {
           outcome,
-          messages: oe,
+          messages,
         })),
-        (ee = outcome.kind),
+        (outcomeKind = outcome.kind),
         outcome.kind)
       ) {
         case "no-repository":
           break;
         case "unavailable":
-          S.mark(FEATURES.read, {
+          recorder.mark(FEATURES.read, {
             kind: "sad",
             reason: "git_diff_failed",
           });
           break;
         case "data":
-          Me += 1;
+          diffGeneration += 1;
           break;
       }
-      let Ei = await De(f);
+      let hunksFailed = await loadBodies(hostApi);
       if (outcome.kind === "data")
-        S.mark(
+        recorder.mark(
           FEATURES.read,
-          Ei
+          hunksFailed
             ? {
                 kind: "sad",
                 reason: "git_hunks_failed",
@@ -1726,124 +1752,131 @@ function register(e) {
               },
         );
     } catch (error) {
-      S.mark(FEATURES.read, {
+      recorder.mark(FEATURES.read, {
         kind: "sad",
         reason: "git_diff_threw",
       });
       throw error;
     } finally {
-      let q = await f.now().catch(() => null);
-      let oe = j ?? q;
-      let Se = L === null || oe === null ? 0 : oe - L;
-      A = false;
-      c();
-      if (epoch === C.epoch) hi(f, Se, ee, q ?? j);
-      K(f);
-      fs(f);
+      let now = await hostApi.now().catch(() => null);
+      let endMs = endedAt ?? now;
+      let elapsedMs = startedAt === null || endMs === null ? 0 : endMs - startedAt;
+      isRefreshing = false;
+      resolveDone();
+      if (epoch === envState.epoch) scheduleRestRefresh(hostApi, elapsedMs, outcomeKind, now ?? endedAt);
+      requestRedraw(hostApi);
+      settlePendingRefresh(hostApi);
     }
   }
-  function hi(f, m, g, c) {
-    I = g !== "data" && m >= GIT_TIMEOUT_MS ? I + 1 : 0;
-    M.get("rest")?.cancel();
-    M.delete("rest");
-    let b = refreshRestOf(m, I);
-    if (b === 0) {
-      as(f);
+  function scheduleRestRefresh(hostApi, elapsedMs, outcomeKind, endedAt) {
+    timeoutCount = outcomeKind !== "data" && elapsedMs >= GIT_TIMEOUT_MS ? timeoutCount + 1 : 0;
+    timers.get("rest")?.cancel();
+    timers.delete("rest");
+    let delayMs = refreshRestOf(elapsedMs, timeoutCount);
+    if (delayMs === 0) {
+      flushDeferredOpen(hostApi);
       return;
     }
-    let N = f.after(b, () => {
-      if (M.get("rest") === N) is(f);
+    let timer = hostApi.after(delayMs, () => {
+      if (timers.get("rest") === timer) runRestRefresh(hostApi);
     });
-    M.set("rest", N);
-    me = c === null ? null : c + b;
+    timers.set("rest", timer);
+    restDueAt = endedAt === null ? null : endedAt + delayMs;
   }
-  function is(f) {
-    M.delete("rest");
-    fs(f);
-    as(f);
+  function runRestRefresh(hostApi) {
+    timers.delete("rest");
+    settlePendingRefresh(hostApi);
+    flushDeferredOpen(hostApi);
   }
-  function as(f) {
-    if (d) {
-      d = false;
-      Ye(f).catch(() => {
+  function flushDeferredOpen(hostApi) {
+    if (isRestQueued) {
+      isRestQueued = false;
+      maybeAutoOpen(hostApi).catch(() => {
         return;
       });
     }
   }
-  async function eo(f) {
-    let m = M.get("rest");
-    let g = me;
-    let c = await f.now().catch(() => null);
-    if (m !== undefined && M.get("rest") === m && g !== null && c !== null && c >= g) is(f);
+  async function runDeferredRestIfDue(hostApi) {
+    let restTimer = timers.get("rest");
+    let dueAt = restDueAt;
+    let now = await hostApi.now().catch(() => null);
+    if (
+      restTimer !== undefined &&
+      timers.get("rest") === restTimer &&
+      dueAt !== null &&
+      now !== null &&
+      now >= dueAt
+    )
+      runRestRefresh(hostApi);
   }
-  function fs(f) {
-    if (!k || A) return;
-    let m = U;
-    if (M.has("rest") && !m && a) return;
-    k = false;
-    U = false;
-    if (m) Le(f, true);
-    else if (a) to(f);
+  function settlePendingRefresh(hostApi) {
+    if (!isRefreshQueued || isRefreshing) return;
+    let isForced = isForcedRefresh;
+    if (timers.has("rest") && !isForced && isPaneOpen) return;
+    isRefreshQueued = false;
+    isForcedRefresh = false;
+    if (isForced) refreshDiff(hostApi, true);
+    else if (isPaneOpen) scheduleRefresh(hostApi);
   }
-  function to(f) {
-    M.get("refresh")?.cancel();
-    let m = f.after(REFRESH_DEBOUNCE_MS, () => {
-      if (M.get("refresh") !== m) return;
-      M.delete("refresh");
-      Le(f);
+  function scheduleRefresh(hostApi) {
+    timers.get("refresh")?.cancel();
+    let timer = hostApi.after(REFRESH_DEBOUNCE_MS, () => {
+      if (timers.get("refresh") !== timer) return;
+      timers.delete("refresh");
+      refreshDiff(hostApi);
     });
-    M.set("refresh", m);
+    timers.set("refresh", timer);
   }
-  async function ps(f, m) {
-    let g = await f.sessionId().catch(() => null);
-    if (g !== null && g !== O) {
-      O = g;
-      recorderOf(f).shown(m, widthBucketOf(R));
+  async function logShownOnce(hostApi, trigger) {
+    let sessionId = await hostApi.sessionId().catch(() => null);
+    if (sessionId !== null && sessionId !== lastShownSessionId) {
+      lastShownSessionId = sessionId;
+      recorderOf(hostApi).shown(trigger, widthBucketOf(terminalColumns));
     }
   }
-  async function ms(f, m) {
-    await ps(f, m);
-    await wt(f);
-    ns();
-    Le(f, true);
+  async function openAfterReady(hostApi, trigger) {
+    await logShownOnce(hostApi, trigger);
+    await ensureBackend(hostApi);
+    ensureHeadKey();
+    refreshDiff(hostApi, true);
   }
-  async function ls(f, m, g = T) {
-    let c = m === "auto_open";
-    let epoch = C.epoch;
-    while (c && A) await resolved;
-    let b = a || C.epoch !== epoch || T !== g;
-    if (c && b) return "withdrawn";
-    let N = u.isFullscreen === false;
-    u = {
-      ...u,
+  async function openPane(hostApi, trigger, generation = toggleGeneration) {
+    let isAutoOpen = trigger === "auto_open";
+    let epoch = envState.epoch;
+    while (isAutoOpen && isRefreshing) await resolved;
+    let isStale = isPaneOpen || envState.epoch !== epoch || toggleGeneration !== generation;
+    if (isAutoOpen && isStale) return "withdrawn";
+    let isInline = model.isFullscreen === false;
+    model = {
+      ...model,
       selectedPath: null,
       dialogView: "list",
       place: {
-        ...u.place,
+        ...model.place,
         top: 0,
         listStart: 0,
       },
     };
-    p = N ? dialogRowsOf(u) : null;
-    let L = ye;
-    let ee = Me;
-    if (!N)
-      await Le(f, true).catch(() => {
+    lastPaneRows = isInline ? dialogRowsOf(model) : null;
+    let changeCountBefore = changeCount;
+    let diffGenerationBefore = diffGeneration;
+    if (!isInline)
+      await refreshDiff(hostApi, true).catch(() => {
         return;
       });
-    let { data: j } = u;
-    let Ve =
-      Me !== ee &&
-      C.epoch === epoch &&
-      !a &&
-      T === g &&
-      j !== null &&
-      headerTotalsOf(j, partitionOf(j.files, u.isNoiseShown ? "shown" : "hidden")).filesCount > 0;
-    if (c && !Ve) return "withdrawn";
-    let q = await f.openPane(
-      N
+    let { data } = model;
+    let hasChanges =
+      diffGeneration !== diffGenerationBefore &&
+      envState.epoch === epoch &&
+      !isPaneOpen &&
+      toggleGeneration === generation &&
+      data !== null &&
+      headerTotalsOf(data, partitionOf(data.files, model.isNoiseShown ? "shown" : "hidden")).filesCount > 0;
+    if (isAutoOpen && !hasChanges) return "withdrawn";
+    let placement = await hostApi.openPane(
+      isInline
         ? {
-            ...Jt(),
+            ...paneRequest(),
             focus: true,
           }
         : {
@@ -1851,33 +1884,33 @@ function register(e) {
             title: PANE_TITLE,
           },
     );
-    let oe = classifyPanePlacement(q);
-    if (oe === "withdrawn") {
-      await f
+    let outcome = classifyPanePlacement(placement);
+    if (outcome === "withdrawn") {
+      await hostApi
         .closePane({
           id: PANE_ID,
         })
         .catch(() => {
           return;
         });
-      return oe;
+      return outcome;
     }
-    a = true;
-    ns();
-    if (oe === "awaited") i = m;
-    else await ps(f, m);
-    if (N || ye !== L) Le(f, true);
-    return oe;
+    isPaneOpen = true;
+    ensureHeadKey();
+    if (outcome === "awaited") pendingOpenOutcome = trigger;
+    else await logShownOnce(hostApi, trigger);
+    if (isInline || changeCount !== changeCountBefore) refreshDiff(hostApi, true);
+    return outcome;
   }
-  async function ds(f) {
-    await f.closePane({
+  async function closePane(hostApi) {
+    await hostApi.closePane({
       id: PANE_ID,
     });
-    a = false;
-    i = null;
+    isPaneOpen = false;
+    pendingOpenOutcome = null;
   }
-  function cs(f, value) {
-    recorderOf(f).mark(FEATURES.tabSwitch, {
+  function markTabSwitch(hostApi, value) {
+    recorderOf(hostApi).mark(FEATURES.tabSwitch, {
       kind: "ok",
       props: {
         tab: {
@@ -1887,246 +1920,257 @@ function register(e) {
       },
     });
   }
-  async function Ye(f) {
-    let m = () => a || l;
-    if (m()) return;
-    if (y && M.has("rest")) {
-      d = true;
-      eo(f);
+  async function maybeAutoOpen(hostApi) {
+    let isBlocked = () => isPaneOpen || isOpening;
+    if (isBlocked()) return;
+    if (isAutoOpenPending && timers.has("rest")) {
+      isRestQueued = true;
+      runDeferredRestIfDue(hostApi);
       return;
     }
-    d = false;
-    let g = T;
-    let c = await f.storeGet(STORE_OPEN_KEY);
-    let b = c === true ? OPEN_MIN_COLUMNS : AUTO_OPEN_MIN_COLUMNS;
-    if (!(c !== false && u.isFullscreen === true && R !== null && R >= b) || m()) return;
-    if (!(await f.isCheckpointing().catch(() => true)) || m()) return;
-    await wt(f);
-    if (!r || m()) return;
-    let ee = ye;
-    let { epoch } = C;
-    l = true;
-    let Ve = await ls(f, "auto_open", g).catch(() => "withdrawn");
-    if (C.epoch !== epoch) return;
-    l = Ve !== "withdrawn";
-    y = !l;
-    if (!l && ye !== ee) await Ye(f);
+    isRestQueued = false;
+    let generation = toggleGeneration;
+    let openStored = await hostApi.storeGet(STORE_OPEN_KEY);
+    let minColumns = openStored === true ? OPEN_MIN_COLUMNS : AUTO_OPEN_MIN_COLUMNS;
+    if (
+      !(
+        openStored !== false &&
+        model.isFullscreen === true &&
+        terminalColumns !== null &&
+        terminalColumns >= minColumns
+      ) ||
+      isBlocked()
+    )
+      return;
+    if (!(await hostApi.isCheckpointing().catch(() => true)) || isBlocked()) return;
+    await ensureBackend(hostApi);
+    if (!backend || isBlocked()) return;
+    let changeCountBefore = changeCount;
+    let { epoch } = envState;
+    isOpening = true;
+    let openOutcome = await openPane(hostApi, "auto_open", generation).catch(() => "withdrawn");
+    if (envState.epoch !== epoch) return;
+    isOpening = openOutcome !== "withdrawn";
+    isAutoOpenPending = !isOpening;
+    if (!isOpening && changeCount !== changeCountBefore) await maybeAutoOpen(hostApi);
   }
-  async function us(f) {
-    w = turnDiffsOf(await f.messages().catch(() => [])).length > 0;
-    if (w) await Ye(f);
+  async function noteMessagesChanged(hostApi) {
+    hasTurnDiffs = turnDiffsOf(await hostApi.messages().catch(() => [])).length > 0;
+    if (hasTurnDiffs) await maybeAutoOpen(hostApi);
   }
-  function Rt(f) {
-    _ = null;
-    u = {
-      ...u,
+  function disarmAsk(hostApi) {
+    armedAsk = null;
+    model = {
+      ...model,
       armedPath: null,
     };
-    f.status(undefined);
+    hostApi.status(undefined);
   }
-  let Oi = (f) => ({
-    selectFile: (m) => {
-      let g = u.placement === "dock";
-      u = {
-        ...u,
-        selectedPath: m,
-        dialogView: g ? u.dialogView : "detail",
-        place: g ? placeAtFile(u, m) : u.place,
+  let actionsOf = (hostApi) => ({
+    selectFile: (path) => {
+      let isDock = model.placement === "dock";
+      model = {
+        ...model,
+        selectedPath: path,
+        dialogView: isDock ? model.dialogView : "detail",
+        place: isDock ? placeAtFile(model, path) : model.place,
       };
-      De(f).catch(() => {
+      loadBodies(hostApi).catch(() => {
         return;
       });
-      K(f);
+      requestRedraw(hostApi);
     },
-    scrollList: (m) => {
-      u = {
-        ...u,
-        place: listScrolledBy(u, m),
+    scrollList: (delta) => {
+      model = {
+        ...model,
+        place: listScrolledBy(model, delta),
       };
-      K(f);
+      requestRedraw(hostApi);
     },
     toggleNoise: () => {
-      u = {
-        ...u,
-        isNoiseShown: !u.isNoiseShown,
+      model = {
+        ...model,
+        isNoiseShown: !model.isNoiseShown,
       };
-      De(f);
-      K(f);
+      loadBodies(hostApi);
+      requestRedraw(hostApi);
     },
     togglePreSession: () => {
-      u = {
-        ...u,
-        isPreSessionShown: !u.isPreSessionShown,
+      model = {
+        ...model,
+        isPreSessionShown: !model.isPreSessionShown,
       };
-      De(f);
-      K(f);
+      loadBodies(hostApi);
+      requestRedraw(hostApi);
     },
     cycleBase: () => {
-      let { baseModes, requestedMode } = u;
-      let c = baseModes[(baseModes.indexOf(requestedMode) + 1) % baseModes.length] ?? requestedMode;
-      if (c === requestedMode) return;
-      u = {
-        ...u,
-        requestedMode: c,
+      let { baseModes, requestedMode } = model;
+      let nextMode = baseModes[(baseModes.indexOf(requestedMode) + 1) % baseModes.length] ?? requestedMode;
+      if (nextMode === requestedMode) return;
+      model = {
+        ...model,
+        requestedMode: nextMode,
       };
-      recorderOf(f).mark(FEATURES.baseSwitch, {
+      recorderOf(hostApi).mark(FEATURES.baseSwitch, {
         kind: "ok",
         props: {
           mode: {
-            value: c,
-            of: u.baseModes,
+            value: nextMode,
+            of: model.baseModes,
           },
         },
       });
-      let toplevel = u.data?.repository.toplevel;
+      let toplevel = model.data?.repository.toplevel;
       if (toplevel !== undefined)
-        f.storeSet(baseStoreKeyOf(toplevel), c).catch(() => {
+        hostApi.storeSet(baseStoreKeyOf(toplevel), nextMode).catch(() => {
           return;
         });
-      Le(f, true);
-      K(f);
+      refreshDiff(hostApi, true);
+      requestRedraw(hostApi);
     },
-    chooseSource: (m) => {
-      let g = Number(m);
+    chooseSource: (value) => {
+      let index = Number(value);
       let source =
-        m !== "current" && Number.isInteger(g)
+        value !== "current" && Number.isInteger(index)
           ? {
               kind: "turn",
-              index: g,
+              index,
             }
           : {
               kind: "current",
             };
-      u = {
-        ...u,
+      model = {
+        ...model,
         source,
         selectedPath: null,
         dialogView: "list",
       };
-      K(f);
+      requestRedraw(hostApi);
     },
-    toggleAsk: (m) => {
-      if (_?.path === m) {
-        Rt(f);
-        K(f);
+    toggleAsk: (path) => {
+      if (armedAsk?.path === path) {
+        disarmAsk(hostApi);
+        requestRedraw(hostApi);
         return;
       }
-      gi(f, m);
+      armAsk(hostApi, path);
     },
   });
-  function gi(f, m) {
-    _ = armedAskOf(
-      m,
-      pickedTurnOf(u)?.files.find((file) => file.path === m)?.hunks ?? u.bodies.get(m)?.hunks ?? [],
+  function armAsk(hostApi, path) {
+    armedAsk = armedAskOf(
+      path,
+      pickedTurnOf(model)?.files.find((file) => file.path === path)?.hunks ??
+        model.bodies.get(path)?.hunks ??
+        [],
     );
-    u = {
-      ...u,
-      armedPath: m,
+    model = {
+      ...model,
+      armedPath: path,
     };
-    f.status(`${sanitizeName(m)} rides your next prompt (press ` + "asked \u2713 to drop it)");
-    K(f);
+    hostApi.status(`${sanitizeName(path)} rides your next prompt (press ` + "asked \u2713 to drop it)");
+    requestRedraw(hostApi);
   }
-  async function xs(f) {
-    let m = await f.startedAt().catch(() => {
+  async function readStartedAt(hostApi) {
+    let startedAt = await hostApi.startedAt().catch(() => {
       return;
     });
-    return typeof m === "number" ? m : null;
+    return typeof startedAt === "number" ? startedAt : null;
   }
-  async function Si(f, cwd) {
-    n = (await xs(f)) ?? (await f.now());
-    C.cwd = cwd;
+  async function startSession(hostApi, cwd) {
+    sessionStartMs = (await readStartedAt(hostApi)) ?? (await hostApi.now());
+    envState.cwd = cwd;
     try {
-      await f.registerCommand(COMMAND_SPEC);
-      o = f;
+      await hostApi.registerCommand(COMMAND_SPEC);
+      host = hostApi;
     } catch (error) {
-      let c = messageOf(error);
-      if (!BUILTIN_HOLDS_PATTERN.test(c)) f.uiLog(registerFailedTextOf(sanitizeName(c)));
+      let message = messageOf(error);
+      if (!BUILTIN_HOLDS_PATTERN.test(message)) hostApi.uiLog(registerFailedTextOf(sanitizeName(message)));
     }
   }
-  e("session.start", async (f, m, g) => {
-    await Si(
+  on("session.start", async (ctx, payload, next) => {
+    await startSession(
       {
-        now: () => f.clock.now(),
-        after: (c, S) => f.clock.after(c, S),
-        every: (c, S) => f.clock.every(c, S),
-        run: (c, S) => f.process.run(c, S),
-        stat: (c) => f.fs.stat(c),
-        listDir: (c) => f.fs.list(c),
-        readFile: (c) => f.fs.read(c),
-        storeGet: (c) => f.store.get(c),
-        storeSet: (c, S) => f.store.set(c, S),
+        now: () => ctx.clock.now(),
+        after: (ms, fn) => ctx.clock.after(ms, fn),
+        every: (ms, fn) => ctx.clock.every(ms, fn),
+        run: (command, options) => ctx.process.run(command, options),
+        stat: (path) => ctx.fs.stat(path),
+        listDir: (dir) => ctx.fs.list(dir),
+        readFile: (path) => ctx.fs.read(path),
+        storeGet: (key) => ctx.store.get(key),
+        storeSet: (key, value) => ctx.store.set(key, value),
         isCheckpointing: async () =>
-          isEnvTruthy(await f.settings.read(), await f.env.get("CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING")),
-        messages: () => f.session.messages(),
-        invalidate: () => f.ui.invalidate("ui.render"),
-        status: (c) => f.ui.status(c),
-        uiLog: (c) => f.ui.log(c),
-        openPane: (c) => f.ui.open(c),
-        closePane: (c) => f.ui.close(c),
-        registerCommand: (c) => f.command.register(c),
-        sessionId: () => f.session.id(),
-        startedAt: () => f.session.usage().then((c) => (isRecord(c) ? c.startedAt : undefined)),
-        mark: (c) => f.telemetry.mark(c),
-        log: (c) => f.telemetry.log(c),
+          isEnvTruthy(await ctx.settings.read(), await ctx.env.get("CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING")),
+        messages: () => ctx.session.messages(),
+        invalidate: () => ctx.ui.invalidate("ui.render"),
+        status: (text) => ctx.ui.status(text),
+        uiLog: (text) => ctx.ui.log(text),
+        openPane: (request) => ctx.ui.open(request),
+        closePane: (request) => ctx.ui.close(request),
+        registerCommand: (spec) => ctx.command.register(spec),
+        sessionId: () => ctx.session.id(),
+        startedAt: () => ctx.session.usage().then((usage) => (isRecord(usage) ? usage.startedAt : undefined)),
+        mark: (mark) => ctx.telemetry.mark(mark),
+        log: (event) => ctx.telemetry.log(event),
       },
-      m.cwd,
+      payload.cwd,
     );
-    if (o)
-      us(o).catch(() => {
+    if (host)
+      noteMessagesChanged(host).catch(() => {
         return;
       });
-    return g(m);
+    return next(payload);
   });
-  e(
+  on(
     "ui.render",
     {
       component: "PromptHint",
     },
-    (f, m, g) => {
-      if (isOnPaneSurface(m)) {
-        let { viewport } = m;
-        let S = R === null && viewport?.columns !== undefined;
-        R = viewport?.columns ?? R;
-        u = {
-          ...u,
-          isFullscreen: viewport?.isFullscreen ?? u.isFullscreen,
+    (ctx, payload, next) => {
+      if (isOnPaneSurface(payload)) {
+        let { viewport } = payload;
+        let firstViewport = terminalColumns === null && viewport?.columns !== undefined;
+        terminalColumns = viewport?.columns ?? terminalColumns;
+        model = {
+          ...model,
+          isFullscreen: viewport?.isFullscreen ?? model.isFullscreen,
         };
-        if (S && w && o)
-          Ye(o).catch(() => {
+        if (firstViewport && hasTurnDiffs && host)
+          maybeAutoOpen(host).catch(() => {
             return;
           });
       }
-      return g(m);
+      return next(payload);
     },
   );
-  e(
+  on(
     "ui.render",
     {
       component: "Pane",
     },
-    async (f, m, g) => {
-      if (m.requestId !== PANE_ID || !o || !isOnPaneSurface(m)) return g(m);
-      let { Box, Text, Button, Select, Code } = await f.ui.resolve(m);
-      R = m.viewport?.columns ?? R;
-      if (i !== null) {
-        let j = i;
-        i = null;
-        ms(o, j).catch(() => {
+    async (ctx, payload, next) => {
+      if (payload.requestId !== PANE_ID || !host || !isOnPaneSurface(payload)) return next(payload);
+      let { Box, Text, Button, Select, Code } = await ctx.ui.resolve(payload);
+      terminalColumns = payload.viewport?.columns ?? terminalColumns;
+      if (pendingOpenOutcome !== null) {
+        let pendingTrigger = pendingOpenOutcome;
+        pendingOpenOutcome = null;
+        openAfterReady(host, pendingTrigger).catch(() => {
           return;
         });
       }
-      let ee = m.props.placement !== u.placement;
-      u = {
-        ...u,
-        placement: m.props.placement,
+      let placementChanged = payload.props.placement !== model.placement;
+      model = {
+        ...model,
+        placement: payload.props.placement,
         place: {
-          ...u.place,
-          columns: Math.max(1, m.props.bodyColumns - PANE_RIGHT_PAD_COLUMNS),
-          rows: m.props.scroll.bodyRows,
+          ...model.place,
+          columns: Math.max(1, payload.props.bodyColumns - PANE_RIGHT_PAD_COLUMNS),
+          rows: payload.props.scroll.bodyRows,
         },
       };
-      if (ee)
-        De(o).catch(() => {
+      if (placementChanged)
+        loadBodies(host).catch(() => {
           return;
         });
       return paneView(
@@ -2138,242 +2182,260 @@ function register(e) {
             Select,
             Code,
           },
-          actions: Oi(o),
-          columns: m.props.bodyColumns,
-          rows: m.props.scroll.bodyRows,
+          actions: actionsOf(host),
+          columns: payload.props.bodyColumns,
+          rows: payload.props.scroll.bodyRows,
         },
-        u,
+        model,
         {
-          placement: m.props.placement,
-          terminalColumns: R,
+          placement: payload.props.placement,
+          terminalColumns,
         },
       );
     },
   );
-  e(
+  on(
     "command.run",
     {
       command: "diff",
     },
-    async (f, m, g) => {
-      if (!o) return g(m);
-      let c = (await wt(o)) || (await wt(o));
-      if (!r)
+    async (ctx, payload, next) => {
+      if (!host) return next(payload);
+      let isEmptyRepo = (await ensureBackend(host)) || (await ensureBackend(host));
+      if (!backend)
         return {
-          text: c ? NOT_IN_REPOSITORY_TEXT : GIT_UNANSWERED_TEXT,
+          text: isEmptyRepo ? NOT_IN_REPOSITORY_TEXT : GIT_UNANSWERED_TEXT,
         };
-      let { isFullscreen } = m.presentation;
-      R = m.presentation.columns;
-      u = {
-        ...u,
+      let { isFullscreen } = payload.presentation;
+      terminalColumns = payload.presentation.columns;
+      model = {
+        ...model,
         isFullscreen,
       };
-      let b = paneToggleOf({
-        isOpen: a,
-        columns: isFullscreen ? R : null,
+      let toggle = paneToggleOf({
+        isOpen: isPaneOpen,
+        columns: isFullscreen ? terminalColumns : null,
       });
-      if (b === "too-narrow")
+      if (toggle === "too-narrow")
         return {
           text: RESIZE_TERMINAL_TEXT,
         };
-      let N = b === "open";
-      if (!N) T += 1;
-      let L = N ? await ls(o, "manual") : await ds(o).then(() => "placed");
-      if (L === "withdrawn")
+      let shouldOpen = toggle === "open";
+      if (!shouldOpen) toggleGeneration += 1;
+      let openOutcome = shouldOpen
+        ? await openPane(host, "manual")
+        : await closePane(host).then(() => "placed");
+      if (openOutcome === "withdrawn")
         return {
           text: RESIZE_TERMINAL_TEXT,
         };
-      if (L === "awaited")
+      if (openOutcome === "awaited")
         return {
           text: AWAITS_SURFACE_TEXT,
         };
       if (!isFullscreen)
-        return N
+        return shouldOpen
           ? {}
           : {
               text: DIALOG_DISMISSED_TEXT,
             };
-      cs(o, N ? "diff" : "convo");
-      await o.storeSet(STORE_OPEN_KEY, N).catch(() => {
+      markTabSwitch(host, shouldOpen ? "diff" : "convo");
+      await host.storeSet(STORE_OPEN_KEY, shouldOpen).catch(() => {
         return;
       });
       return {
-        text: N ? PANEL_SHOWN_TEXT : PANEL_HIDDEN_TEXT,
+        text: shouldOpen ? PANEL_SHOWN_TEXT : PANEL_HIDDEN_TEXT,
       };
     },
   );
-  e(
+  on(
     "ui.close",
     {
       id: PANE_ID,
     },
-    async (f, m, g) => {
-      if (m.origin.kind === "person" && u.placement === "inline" && u.dialogView === "detail" && o) {
-        u = {
-          ...u,
+    async (ctx, payload, next) => {
+      if (
+        payload.origin.kind === "person" &&
+        model.placement === "inline" &&
+        model.dialogView === "detail" &&
+        host
+      ) {
+        model = {
+          ...model,
           dialogView: "list",
         };
-        K(o);
-        p = dialogRowsOf(u);
-        o.openPane({
-          ...Jt(),
-          focus: true,
-        }).catch(() => {
-          return;
-        });
+        requestRedraw(host);
+        lastPaneRows = dialogRowsOf(model);
+        host
+          .openPane({
+            ...paneRequest(),
+            focus: true,
+          })
+          .catch(() => {
+            return;
+          });
         return {
           deny: "back to the file list",
         };
       }
-      let S = await g(m);
-      let b = S.deny === undefined;
-      let N = b && m.origin.kind === "person";
-      if (b) {
-        a = false;
-        i = null;
+      let result = await next(payload);
+      let isAllowed = result.deny === undefined;
+      let fromPerson = isAllowed && payload.origin.kind === "person";
+      if (isAllowed) {
+        isPaneOpen = false;
+        pendingOpenOutcome = null;
       }
-      if (N) T += 1;
-      let L = u.isFullscreen !== false;
-      if (N && o && L) {
-        cs(o, "convo");
-        await o.storeSet(STORE_OPEN_KEY, false).catch(() => {
+      if (fromPerson) toggleGeneration += 1;
+      let isInline = model.isFullscreen !== false;
+      if (fromPerson && host && isInline) {
+        markTabSwitch(host, "convo");
+        await host.storeSet(STORE_OPEN_KEY, false).catch(() => {
           return;
         });
       }
-      return S;
+      return result;
     },
   );
-  e(
+  on(
     "ui.focus",
     {
       plugin: PLUGIN_NAMES,
     },
-    (f, m, g) => {
-      let S = u.placement === "inline" && u.dialogView === "list" && o ? dialogFocusOf(u, m.element) : null;
-      if (S === "stay") return {};
-      if (!S || !o) return g(m);
-      u = {
-        ...u,
-        selectedPath: S.selectedPath,
+    (ctx, payload, next) => {
+      let focusResult =
+        model.placement === "inline" && model.dialogView === "list" && host
+          ? dialogFocusOf(model, payload.element)
+          : null;
+      if (focusResult === "stay") return {};
+      if (!focusResult || !host) return next(payload);
+      model = {
+        ...model,
+        selectedPath: focusResult.selectedPath,
       };
-      De(o).catch(() => {
+      loadBodies(host).catch(() => {
         return;
       });
-      rs(o);
-      o.invalidate();
-      return g({
-        ...m,
-        element: S.landing,
+      syncOpenPane(host);
+      host.invalidate();
+      return next({
+        ...payload,
+        element: focusResult.landing,
       });
     },
   );
-  e(
+  on(
     "ui.scroll",
     {
       requestId: PANE_ID,
     },
-    (f, m, g) => {
-      if (!(m.origin.kind === "person" && u.placement === "dock") || !o) return g(m);
-      let S = isWheelOverList(u, m);
-      u = {
-        ...u,
-        place: S ? listScrolledBy(u, m.by) : bodyScrolledBy(u, m),
+    (ctx, payload, next) => {
+      if (!(payload.origin.kind === "person" && model.placement === "dock") || !host) return next(payload);
+      let overList = isWheelOverList(model, payload);
+      model = {
+        ...model,
+        place: overList ? listScrolledBy(model, payload.by) : bodyScrolledBy(model, payload),
       };
-      o.invalidate();
+      host.invalidate();
       return {};
     },
   );
-  e(
+  on(
     "command.run",
     {
       command: ["clear", "resume"],
     },
-    async (f, m, g) => {
-      let c = await g(m);
-      if (!o) return c;
-      let S = m.command === "resume";
-      let b = ze() && !S;
-      if (a && S)
-        await ds(o).catch(() => {
+    async (ctx, payload, next) => {
+      let result = await next(payload);
+      if (!host) return result;
+      let isResume = payload.command === "resume";
+      let shouldReopen = isIdle() && !isResume;
+      if (isPaneOpen && isResume)
+        await closePane(host).catch(() => {
           return;
         });
-      ui();
-      l = false;
-      y = false;
-      d = false;
-      w = false;
-      he = null;
-      Oe = null;
-      ge.clear();
-      Rt(o);
-      u = afterNewSession(u);
-      n = (await xs(o)) ?? (S ? n : await o.now());
-      if (b) await ms(o, "manual");
-      if (S)
-        us(o).catch(() => {
+      resetSessionState();
+      isOpening = false;
+      isAutoOpenPending = false;
+      isRestQueued = false;
+      hasTurnDiffs = false;
+      bodiesKey = null;
+      bodiesBaseRef = null;
+      loadedBodyPaths.clear();
+      disarmAsk(host);
+      model = afterNewSession(model);
+      sessionStartMs = (await readStartedAt(host)) ?? (isResume ? sessionStartMs : await host.now());
+      if (shouldReopen) await openAfterReady(host, "manual");
+      if (isResume)
+        noteMessagesChanged(host).catch(() => {
           return;
         });
-      return c;
+      return result;
     },
   );
-  function Ti(f, m, g) {
-    let any = CODE_EDITING_TOOLS.some((L) => L === m.tool);
-    let S = any && g !== undefined && g.deny === undefined && g.isError !== true;
-    let b = any ? S : mayHaveWritten(g);
-    if (b) ye += 1;
-    if (b && ze()) to(f);
-    if ((S && m.agentId === undefined) || (b && y))
-      Ye(f).catch(() => {
+  function noteToolResult(hostApi, payload, result) {
+    let any = CODE_EDITING_TOOLS.some((tool) => tool === payload.tool);
+    let isEditingTool = any && result !== undefined && result.deny === undefined && result.isError !== true;
+    let changedFiles = any ? isEditingTool : mayHaveWritten(result);
+    if (changedFiles) changeCount += 1;
+    if (changedFiles && isIdle()) scheduleRefresh(hostApi);
+    if ((isEditingTool && payload.agentId === undefined) || (changedFiles && isAutoOpenPending))
+      maybeAutoOpen(hostApi).catch(() => {
         return;
       });
   }
-  e(
+  on(
     "tool.call",
     {
       tool: [...CODE_EDITING_TOOLS, ...SHELL_TOOLS],
     },
-    async (f, m, g) => {
-      let c;
+    async (ctx, payload, next) => {
+      let result;
       try {
-        c = await g(m);
-        return c;
+        result = await next(payload);
+        return result;
       } finally {
-        if (o) Ti(o, m, c);
+        if (host) noteToolResult(host, payload, result);
       }
     },
   );
-  e("prompt.submit", async (f, m, g) => {
-    let c = _;
-    if (!o || !c || E === c) return g(m);
-    let context = m.context ?? [];
-    let b = fittedAskTextOf(c.text, PROMPT_CONTEXT_MAX_CHARS - context.reduce((acc, L) => acc + L.length, 0));
-    if (b === undefined) {
-      Rt(o);
-      o.status(`${sanitizeName(c.path)}'s diff did not fit in the prompt and was dropped`);
-      K(o);
-      return g(m);
+  on("prompt.submit", async (ctx, payload, next) => {
+    let ask = armedAsk;
+    if (!host || !ask || lastAskedAsk === ask) return next(payload);
+    let context = payload.context ?? [];
+    let fittedText = fittedAskTextOf(
+      ask.text,
+      PROMPT_CONTEXT_MAX_CHARS - context.reduce((acc, part) => acc + part.length, 0),
+    );
+    if (fittedText === undefined) {
+      disarmAsk(host);
+      host.status(`${sanitizeName(ask.path)}'s diff did not fit in the prompt and was dropped`);
+      requestRedraw(host);
+      return next(payload);
     }
-    E = c;
+    lastAskedAsk = ask;
     try {
-      let N = await g({
-        ...m,
-        context: [...context, b],
+      let result = await next({
+        ...payload,
+        context: [...context, fittedText],
       });
-      if (N.drop === undefined) {
-        recorderOf(o).asked();
-        if (_ === c) {
-          Rt(o);
-          K(o);
+      if (result.drop === undefined) {
+        recorderOf(host).asked();
+        if (armedAsk === ask) {
+          disarmAsk(host);
+          requestRedraw(host);
         }
       }
-      return N;
+      return result;
     } finally {
-      E = null;
+      lastAskedAsk = null;
     }
   });
 }
 //@ chunk-wyqg6m3h.js:64097-64119 placement
-var STORE_ID = `${CC_PLUGIN_DIFF}@${BUILTIN}`;
+var STORE_ID; // deferred: uses INLINE_PLUGIN_MARKETPLACE (../../../utils/telemetry/pluginTelemetry.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-wyqg6m3h.js:64097", () => {
+  STORE_ID = `${CC_PLUGIN_DIFF}@${BUILTIN}`;
+});
 export {
   STORE_ID,
   BASE_OUTCOMES,

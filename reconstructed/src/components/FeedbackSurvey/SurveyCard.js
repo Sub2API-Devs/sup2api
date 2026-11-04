@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (3)
  * attribution: placement 3
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { normalizeDigitKey, DIGIT_HOTKEY_HOLD_MS, useDigitHotkeys } from "../pluginUi/digitHotkeys.js";
 import { useKeybindingContext } from "../../keybindings/KeybindingContext.js";
 import { getActionChords } from "../../keybindings/resolver.js";
@@ -16,7 +16,7 @@ import { hasSingleItem } from "./FeedbackSurvey.js";
 import { chordToString } from "../../keybindings/parser.js";
 import { useAppStateSlice } from "../../state/AppState.js";
 import { selectHasModalOverlay } from "../../context/overlayContext.js";
-import { P } from "../../../vendor/react/cjs/react.production.js";
+import { useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { isUnattendedInteractiveSession } from "../../utils/concurrentSessions.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -25,21 +25,21 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { USER_MESSAGE_BACKGROUND } from "../CustomSelect/selectTypeahead.js";
 import { Button } from "../../ink/components/ErrorBoundary.js";
 
 //@ chunk-18hwfzwa.js:1004373-1004412 placement
-function isRatingKey(h) {
-  return h === "0" || h === "1";
+function isRatingKey(key) {
+  return key === "0" || key === "1";
 }
 //@ chunk-18hwfzwa.js:1004412-1007788 placement
 /**
  * SurveyCard：调查卡片外框与评分选项。
  */
 function SurveyCard(props) {
-  let $ = w(48);
+  let $ = useMemoCache(48);
   let {
     state,
     survey,
@@ -52,75 +52,75 @@ function SurveyCard(props) {
     onDismiss,
     onIgnore,
   } = props;
-  let rt;
+  let normalizedInputCached;
   if ($[0] !== inputValue) {
-    rt = inputValue.length === 1 ? normalizeDigitKey(inputValue) : inputValue;
+    normalizedInputCached = inputValue.length === 1 ? normalizeDigitKey(inputValue) : inputValue;
     $[0] = inputValue;
-    $[1] = rt;
-  } else rt = $[1];
-  let kt = rt;
-  let At;
-  if ($[2] !== kt || $[3] !== state) {
-    At = state === "open" && kt !== "" && !isRatingKey(kt);
-    $[2] = kt;
+    $[1] = normalizedInputCached;
+  } else normalizedInputCached = $[1];
+  let normalizedInput = normalizedInputCached;
+  let hasUnrecognizedInputCached;
+  if ($[2] !== normalizedInput || $[3] !== state) {
+    hasUnrecognizedInputCached = state === "open" && normalizedInput !== "" && !isRatingKey(normalizedInput);
+    $[2] = normalizedInput;
     $[3] = state;
-    $[4] = At;
-  } else At = $[4];
-  let It = At;
-  let Ot = state === "open" && survey !== null && !It;
+    $[4] = hasUnrecognizedInputCached;
+  } else hasUnrecognizedInputCached = $[4];
+  let hasUnrecognizedInput = hasUnrecognizedInputCached;
+  let isCardOpen = state === "open" && survey !== null && !hasUnrecognizedInput;
   let keybindingContext = useKeybindingContext();
-  let Dt;
+  let enterChord;
   Lt: {
     if (keybindingContext === null) {
-      Dt = "enter";
+      enterChord = "enter";
       break Lt;
     }
-    let oo;
+    let submitChord;
     if ($[5] !== keybindingContext.bindings) {
       let last = getActionChords("chat:submit", "Chat", keybindingContext.bindings)
         .filter(hasSingleItem)
         .at(-1);
-      oo = last === undefined ? "" : chordToString(last);
+      submitChord = last === undefined ? "" : chordToString(last);
       $[5] = keybindingContext.bindings;
-      $[6] = oo;
-    } else oo = $[6];
-    Dt = oo;
+      $[6] = submitChord;
+    } else submitChord = $[6];
+    enterChord = submitChord;
   }
-  let io = Dt;
-  let so = useAppStateSlice(selectHasModalOverlay) === true;
-  let oo;
-  let po;
-  if ($[7] !== onIgnore || $[8] !== It) {
-    oo = () => {
-      if (It) onIgnore();
+  let enterKeyHint = enterChord;
+  let hasModalOverlay = useAppStateSlice(selectHasModalOverlay) === true;
+  let ignoreEffect;
+  let ignoreEffectDeps;
+  if ($[7] !== onIgnore || $[8] !== hasUnrecognizedInput) {
+    ignoreEffect = () => {
+      if (hasUnrecognizedInput) onIgnore();
     };
-    po = [It, onIgnore];
+    ignoreEffectDeps = [hasUnrecognizedInput, onIgnore];
     $[7] = onIgnore;
-    $[8] = It;
-    $[9] = oo;
-    $[10] = po;
+    $[8] = hasUnrecognizedInput;
+    $[9] = ignoreEffect;
+    $[10] = ignoreEffectDeps;
   } else {
-    oo = $[9];
-    po = $[10];
+    ignoreEffect = $[9];
+    ignoreEffectDeps = $[10];
   }
-  P(oo, po);
-  let ao;
-  let co;
-  if ($[11] !== Ot || $[12] !== onShown) {
-    ao = () => {
-      if (Ot) onShown();
+  useEffect(ignoreEffect, ignoreEffectDeps);
+  let shownEffect;
+  let shownEffectDeps;
+  if ($[11] !== isCardOpen || $[12] !== onShown) {
+    shownEffect = () => {
+      if (isCardOpen) onShown();
     };
-    co = [Ot, onShown];
-    $[11] = Ot;
+    shownEffectDeps = [isCardOpen, onShown];
+    $[11] = isCardOpen;
     $[12] = onShown;
-    $[13] = ao;
-    $[14] = co;
+    $[13] = shownEffect;
+    $[14] = shownEffectDeps;
   } else {
-    ao = $[13];
-    co = $[14];
+    shownEffect = $[13];
+    shownEffectDeps = $[14];
   }
-  P(ao, co);
-  let bo;
+  useEffect(shownEffect, shownEffectDeps);
+  let handleDigitCached;
   if (
     $[15] !== onDismiss ||
     $[16] !== onIgnore ||
@@ -128,7 +128,7 @@ function SurveyCard(props) {
     $[18] !== setInputValue ||
     $[19] !== starting
   ) {
-    bo = function Bo(Ao) {
+    handleDigitCached = function handleDigit(digit) {
       setInputValue("");
       if (starting) {
         return;
@@ -137,7 +137,7 @@ function SurveyCard(props) {
         onIgnore();
         return;
       }
-      if (Ao === "1") onStart();
+      if (digit === "1") onStart();
       else onDismiss();
     };
     $[15] = onDismiss;
@@ -145,44 +145,44 @@ function SurveyCard(props) {
     $[17] = onStart;
     $[18] = setInputValue;
     $[19] = starting;
-    $[20] = bo;
-  } else bo = $[20];
-  let Bo = bo;
-  const enterConfirms = !inputRowReplaced && !so;
-  let Ho;
-  if ($[21] !== Ot || $[22] !== inputValue || $[23] !== Bo || $[24] !== enterConfirms) {
-    Ho = {
+    $[20] = handleDigitCached;
+  } else handleDigitCached = $[20];
+  let answerDigit = handleDigitCached;
+  const enterConfirms = !inputRowReplaced && !hasModalOverlay;
+  let digitHotkeyOptions;
+  if ($[21] !== isCardOpen || $[22] !== inputValue || $[23] !== answerDigit || $[24] !== enterConfirms) {
+    digitHotkeyOptions = {
       inputValue,
       isValidDigit: isRatingKey,
-      onDigit: Bo,
-      enabled: Ot,
+      onDigit: answerDigit,
+      enabled: isCardOpen,
       enterConfirms,
       acceptAfterPause: false,
       mountDelayMs: DIGIT_HOTKEY_HOLD_MS,
     };
-    $[21] = Ot;
+    $[21] = isCardOpen;
     $[22] = inputValue;
-    $[23] = Bo;
+    $[23] = answerDigit;
     $[24] = enterConfirms;
-    $[25] = Ho;
-  } else Ho = $[25];
-  useDigitHotkeys(Ho);
+    $[25] = digitHotkeyOptions;
+  } else digitHotkeyOptions = $[25];
+  useDigitHotkeys(digitHotkeyOptions);
   if (state === "thanks" && survey !== null) {
-    let Io;
+    let thanksText;
     if ($[26] === MEMO_CACHE_SENTINEL) {
-      Io = jsxProd_default(Text, {
+      thanksText = jsxProd_default(Text, {
         color: "success",
         children: "Thanks for your feedback",
       });
-      $[26] = Io;
-    } else Io = $[26];
-    let Wo;
+      $[26] = thanksText;
+    } else thanksText = $[26];
+    let thanksElement;
     if ($[27] !== survey.orgName) {
-      Wo = jsxProd_default_2(Box, {
+      thanksElement = jsxProd_default_2(Box, {
         flexDirection: "column",
         marginTop: 1,
         children: [
-          Io,
+          thanksText,
           jsxProd_default_2(Text, {
             dimColor: true,
             wrap: "wrap",
@@ -199,14 +199,14 @@ function SurveyCard(props) {
         ],
       });
       $[27] = survey.orgName;
-      $[28] = Wo;
-    } else Wo = $[28];
-    return Wo;
+      $[28] = thanksElement;
+    } else thanksElement = $[28];
+    return thanksElement;
   }
   if (state === "gone" && survey !== null) {
-    let Io;
+    let goneElement;
     if ($[29] === MEMO_CACHE_SENTINEL) {
-      Io = jsxProd_default(Box, {
+      goneElement = jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default_2(Text, {
           color: "warning",
@@ -220,29 +220,29 @@ function SurveyCard(props) {
           ],
         }),
       });
-      $[29] = Io;
-    } else Io = $[29];
-    return Io;
+      $[29] = goneElement;
+    } else goneElement = $[29];
+    return goneElement;
   }
-  if (!Ot) {
+  if (!isCardOpen) {
     return null;
   }
-  let Io;
+  let bulletElement;
   if ($[30] === MEMO_CACHE_SENTINEL) {
-    Io = jsxProd_default(Box, {
+    bulletElement = jsxProd_default(Box, {
       minWidth: 2,
       children: jsxProd_default(Text, {
         color: "ansi:cyan",
         children: BLACK_CIRCLE,
       }),
     });
-    $[30] = Io;
-  } else Io = $[30];
-  let Wo;
+    $[30] = bulletElement;
+  } else bulletElement = $[30];
+  let headlineRow;
   if ($[31] !== survey.headline) {
-    Wo = jsxProd_default_2(Box, {
+    headlineRow = jsxProd_default_2(Box, {
       children: [
-        Io,
+        bulletElement,
         jsxProd_default(Text, {
           bold: true,
           wrap: "wrap",
@@ -251,11 +251,11 @@ function SurveyCard(props) {
       ],
     });
     $[31] = survey.headline;
-    $[32] = Wo;
-  } else Wo = $[32];
-  let mn;
+    $[32] = headlineRow;
+  } else headlineRow = $[32];
+  let messageRow;
   if ($[33] !== survey.message) {
-    mn = jsxProd_default(Box, {
+    messageRow = jsxProd_default(Box, {
       marginLeft: 2,
       children: jsxProd_default(Text, {
         wrap: "wrap",
@@ -263,11 +263,11 @@ function SurveyCard(props) {
       }),
     });
     $[33] = survey.message;
-    $[34] = mn;
-  } else mn = $[34];
-  let Cn;
+    $[34] = messageRow;
+  } else messageRow = $[34];
+  let orgRow;
   if ($[35] !== survey.orgName) {
-    Cn = jsxProd_default(Box, {
+    orgRow = jsxProd_default(Box, {
       marginLeft: 2,
       children: jsxProd_default_2(Text, {
         dimColor: true,
@@ -276,33 +276,33 @@ function SurveyCard(props) {
       }),
     });
     $[35] = survey.orgName;
-    $[36] = Cn;
-  } else Cn = $[36];
-  let No;
-  if ($[37] !== Bo) {
-    No = jsxProd_default_2(Box, {
+    $[36] = orgRow;
+  } else orgRow = $[36];
+  let actionsRow;
+  if ($[37] !== answerDigit) {
+    actionsRow = jsxProd_default_2(Box, {
       marginLeft: 2,
       flexWrap: "wrap",
       children: [
         jsxProd_default(SurveyDigitButton, {
           digit: "1",
           label: "Start survey",
-          onAction: Bo,
+          onAction: answerDigit,
         }),
         jsxProd_default(SurveyDigitButton, {
           digit: "0",
           label: "Not now",
-          onAction: Bo,
+          onAction: answerDigit,
         }),
       ],
     });
-    $[37] = Bo;
-    $[38] = No;
-  } else No = $[38];
-  let vo;
-  if ($[39] !== starting || $[40] !== io) {
-    vo =
-      (starting || io !== "") &&
+    $[37] = answerDigit;
+    $[38] = actionsRow;
+  } else actionsRow = $[38];
+  let hintRow;
+  if ($[39] !== starting || $[40] !== enterKeyHint) {
+    hintRow =
+      (starting || enterKeyHint !== "") &&
       jsxProd_default(Box, {
         marginLeft: 2,
         children: jsxProd_default(Text, {
@@ -315,7 +315,7 @@ function SurveyCard(props) {
                   "Type 1 or 0, then",
                   " ",
                   jsxProd_default(KeyboardShortcutHint, {
-                    chord: io,
+                    chord: enterKeyHint,
                     action: "answer",
                   }),
                 ],
@@ -323,31 +323,37 @@ function SurveyCard(props) {
         }),
       });
     $[39] = starting;
-    $[40] = io;
-    $[41] = vo;
-  } else vo = $[41];
-  let Yo;
-  if ($[42] !== Wo || $[43] !== mn || $[44] !== Cn || $[45] !== No || $[46] !== vo) {
-    Yo = jsxProd_default_2(Box, {
+    $[40] = enterKeyHint;
+    $[41] = hintRow;
+  } else hintRow = $[41];
+  let cardElement;
+  if (
+    $[42] !== headlineRow ||
+    $[43] !== messageRow ||
+    $[44] !== orgRow ||
+    $[45] !== actionsRow ||
+    $[46] !== hintRow
+  ) {
+    cardElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
-      children: [Wo, mn, Cn, No, vo],
+      children: [headlineRow, messageRow, orgRow, actionsRow, hintRow],
     });
-    $[42] = Wo;
-    $[43] = mn;
-    $[44] = Cn;
-    $[45] = No;
-    $[46] = vo;
-    $[47] = Yo;
-  } else Yo = $[47];
-  return Yo;
+    $[42] = headlineRow;
+    $[43] = messageRow;
+    $[44] = orgRow;
+    $[45] = actionsRow;
+    $[46] = hintRow;
+    $[47] = cardElement;
+  } else cardElement = $[47];
+  return cardElement;
 }
 //@ chunk-18hwfzwa.js:1007788-1008312 placement
 /**
  * 调查卡片里的一个数字按钮：显示"数字: 标签"，悬停高亮，点击回调 onAction(digit)。
  */
 function SurveyDigitButton(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { digit, label, onAction } = props;
   let onAction_2;
   if ($[0] !== digit || $[1] !== onAction) {
@@ -358,8 +364,8 @@ function SurveyDigitButton(props) {
   } else onAction_2 = $[2];
   let children;
   if ($[3] !== digit || $[4] !== label) {
-    children = (Be) => {
-      let { hovered } = Be;
+    children = (props) => {
+      let { hovered } = props;
       return jsxProd_default_2(Text, {
         backgroundColor: hovered ? USER_MESSAGE_BACKGROUND : undefined,
         children: [
@@ -376,9 +382,9 @@ function SurveyDigitButton(props) {
     $[4] = label;
     $[5] = children;
   } else children = $[5];
-  let Be;
+  let button;
   if ($[6] !== onAction_2 || $[7] !== children) {
-    Be = jsxProd_default(Box, {
+    button = jsxProd_default(Box, {
       marginRight: 3,
       flexShrink: 0,
       children: jsxProd_default(Button, {
@@ -390,8 +396,8 @@ function SurveyDigitButton(props) {
     });
     $[6] = onAction_2;
     $[7] = children;
-    $[8] = Be;
-  } else Be = $[8];
-  return Be;
+    $[8] = button;
+  } else button = $[8];
+  return button;
 }
 export { SurveyCard };

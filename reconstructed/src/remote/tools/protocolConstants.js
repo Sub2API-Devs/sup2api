@@ -8,22 +8,23 @@
  * pieces: chunk-g54kbxqw.js (24), chunk-s61vbvea.js (8)
  * attribution: placement 32
  */
-import { nz } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { FIn } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { baseIterateeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { import_baseForOwn } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { assignValueRaw } from "../../utils/git/gitSafeEnv.js";
 import { shortHash } from "../../utils/shortHash.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, _enum, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, _enum, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { CLAUDE_CODE_REMOTE } from "../../services/mcp/ccrMetaMcp.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-g54kbxqw.js:2890-2977 placement
-function identityMapObject(e, n) {
-  var s = {};
-  n = nz(n, 3);
-  FIn(e, function (r, h, y) {
-    assignValueRaw(s, n(r, h, y), r);
+function identityMapObject(sourceObject, iteratee) {
+  var result = {};
+  iteratee = baseIterateeAlias(iteratee, 3);
+  import_baseForOwn(sourceObject, function (value, key, object) {
+    assignValueRaw(result, iteratee(value, key, object), value);
   });
-  return s;
+  return result;
 }
 //@ chunk-g54kbxqw.js:2977-2987 placement
 var identityMap = identityMapObject;
@@ -99,8 +100,8 @@ var LEFT_STATE_NAMES = {
 };
 var RELEASED = "released";
 //@ chunk-g54kbxqw.js:3622-3651 placement
-function leftStateFor(leftFor) {
-  return LEFT_STATE_NAMES[leftFor];
+function leftStateFor(stateCode) {
+  return LEFT_STATE_NAMES[stateCode];
 }
 //@ chunk-g54kbxqw.js:3651-3775 placement
 function parseLeftState(capabilities) {
@@ -119,9 +120,9 @@ var LIVENESS_PROBE_TIMEOUT_MS = 2000;
 var CAPABILITY_NAME_RE = /^[a-z][a-z0-9_]{0,47}$/;
 var MAX_CAPABILITIES = 32;
 //@ chunk-g54kbxqw.js:3847-3943 placement
-function clampServingLimit(e, pendingAsksMax) {
+function clampServingLimit(limitKey, pendingAsksMax) {
   if (pendingAsksMax === undefined) return;
-  let { min, max } = SERVING_LIMIT_BOUNDS[e];
+  let { min, max } = SERVING_LIMIT_BOUNDS[limitKey];
   return Math.min(Math.max(pendingAsksMax, min), max);
 }
 //@ chunk-g54kbxqw.js:3943-4036 placement
@@ -186,10 +187,10 @@ var WITHDRAW_REASON_CODES = [
 var ANSWER_GONE_REASONS = ["no_answer", "host_withdrawn", "superseded"];
 var WITHDRAW_OR_ANSWER_GONE_REASONS = [...WITHDRAW_REASON_CODES, ...ANSWER_GONE_REASONS];
 //@ chunk-g54kbxqw.js:4806-4936 placement
-function normalizeWithdrawReason(e) {
+function normalizeWithdrawReason(reason) {
   return (
-    (e === "displaced" ? "superseded" : e === "withdrawn" ? "host_withdrawn" : undefined) ??
-    WITHDRAW_OR_ANSWER_GONE_REASONS.find((s) => s === e) ??
+    (reason === "displaced" ? "superseded" : reason === "withdrawn" ? "host_withdrawn" : undefined) ??
+    WITHDRAW_OR_ANSWER_GONE_REASONS.find((candidate) => candidate === reason) ??
     "unrecognized"
   );
 }
@@ -593,44 +594,48 @@ var SERVED_OUTCOME_TABLE = {
   },
 };
 //@ chunk-g54kbxqw.js:10181-10253 placement
-function isUnverifiedRefusal(e) {
-  return e.kind === "dropped" && e.why === "unverified_refusal";
+function isUnverifiedRefusal(outcome) {
+  return outcome.kind === "dropped" && outcome.why === "unverified_refusal";
 }
 //@ chunk-g54kbxqw.js:10253-10433 placement
-function unexpectedValueFingerprint(e, n) {
-  let s = typeof e === "string" ? e : "";
-  if (typeof e === "string" && n.includes(e)) return;
+function unexpectedValueFingerprint(value, listedValues) {
+  let text = typeof value === "string" ? value : "";
+  if (typeof value === "string" && listedValues.includes(value)) return;
   return {
-    length: s.length,
-    hash: shortHash(s),
-    variantOfListed: n.includes(s.trim().toLowerCase()),
+    length: text.length,
+    hash: shortHash(text),
+    variantOfListed: listedValues.includes(text.trim().toLowerCase()),
   };
 }
 //@ chunk-g54kbxqw.js:10433-10690 placement
 /**
  * 服务端校验结论（server_verdict）的字段名与 zod schema：匹配状态、是否标记、依据、上下文与年龄。
  */
-var SERVER_VERDICT_KEY = "server_verdict";
-var serverVerdictSchema = DoctorLazy(() =>
-  u({
-    v: literal(1),
-    status: _enum(["matched", "mismatch", "by_id", "id_split", "none"]),
-    outcome: _enum(["flagged", "not_flagged", "unavailable"]).optional(),
-    by: literal("input").optional(),
-    context: literal("container_supplied").optional(),
-    age_ms: E().optional(),
-  }),
-);
+var SERVER_VERDICT_KEY; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var serverVerdictSchema;
+deferInit("chunk-g54kbxqw.js:10433", () => {
+  SERVER_VERDICT_KEY = "server_verdict";
+  serverVerdictSchema = DoctorLazy(() =>
+    objectSchema({
+      v: literal(1),
+      status: _enum(["matched", "mismatch", "by_id", "id_split", "none"]),
+      outcome: _enum(["flagged", "not_flagged", "unavailable"]).optional(),
+      by: literal("input").optional(),
+      context: literal("container_supplied").optional(),
+      age_ms: numberSchema().optional(),
+    }),
+  );
+});
 //@ chunk-g54kbxqw.js:10690-10824 placement
-function readServerVerdict(e) {
-  let n = serverVerdictSchema().safeParse(e);
-  if (!n.success || stampOutcomeKey(n.data) === undefined)
+function readServerVerdict(payload) {
+  let parsed = serverVerdictSchema().safeParse(payload);
+  if (!parsed.success || stampOutcomeKey(parsed.data) === undefined)
     return {
       kind: "unreadable",
     };
   return {
     kind: "stamp",
-    stamp: n.data,
+    stamp: parsed.data,
   };
 }
 //@ chunk-g54kbxqw.js:10824-10960 placement
@@ -655,8 +660,8 @@ var CONFIRM_REPOSITORY_TRUST = "confirm_repository_trust";
 var REQUEST_COMPUTER_FOLDER = "request_computer_folder";
 var LIST_COMPUTER_FOLDERS = "list_computer_folders";
 //@ chunk-s61vbvea.js:588836-588883 placement = getMcpPrefix (1)
-function getMcpPrefix(e, n) {
-  return e === `mcp__${CLAUDE_CODE_REMOTE}__${n}`;
+function getMcpPrefix(actualToolName, expectedToolName) {
+  return actualToolName === `mcp__${CLAUDE_CODE_REMOTE}__${expectedToolName}`;
 }
 //@ chunk-s61vbvea.js:588883-588915 placement
 /**
@@ -669,40 +674,40 @@ function isConfirmRepositoryTrustTool(toolName) {
 /**
  * 导出函数 `isRequestComputerFolderTool`：参数 e，返回 getMcpPrefix(e, REQUEST_COMPUTER_FOLDER)。
  */
-function isRequestComputerFolderTool(toolName) {
-  return getMcpPrefix(toolName, REQUEST_COMPUTER_FOLDER);
+function isRequestComputerFolderTool(actualToolName) {
+  return getMcpPrefix(actualToolName, REQUEST_COMPUTER_FOLDER);
 }
 //@ chunk-s61vbvea.js:588947-588980 placement
 /**
  * 导出函数 `isListComputerFoldersTool`：参数 e，返回 getMcpPrefix(e, LIST_COMPUTER_FOLDERS)。
  */
-function isListComputerFoldersTool(e) {
-  return getMcpPrefix(e, LIST_COMPUTER_FOLDERS);
+function isListComputerFoldersTool(toolName) {
+  return getMcpPrefix(toolName, LIST_COMPUTER_FOLDERS);
 }
 //@ chunk-s61vbvea.js:588980-589408 placement
 /**
  * 把服务端工具权限请求转换为 can_use_tool 控制请求，只带上存在的可选字段。
  */
-function toCanUseToolRequest(e) {
+function toCanUseToolRequest(request) {
   return {
-    subtype: e.subtype,
-    tool_name: e.tool_name,
-    input: e.input,
-    tool_use_id: e.tool_use_id,
-    ...(e.mcp_server !== undefined && {
-      mcp_server: e.mcp_server,
+    subtype: request.subtype,
+    tool_name: request.tool_name,
+    input: request.input,
+    tool_use_id: request.tool_use_id,
+    ...(request.mcp_server !== undefined && {
+      mcp_server: request.mcp_server,
     }),
-    ...(e.title !== undefined && {
-      title: e.title,
+    ...(request.title !== undefined && {
+      title: request.title,
     }),
-    ...(e.display_name !== undefined && {
-      display_name: e.display_name,
+    ...(request.display_name !== undefined && {
+      display_name: request.display_name,
     }),
-    ...(e.description !== undefined && {
-      description: e.description,
+    ...(request.description !== undefined && {
+      description: request.description,
     }),
-    ...(e.agent_id !== undefined && {
-      agent_id: e.agent_id,
+    ...(request.agent_id !== undefined && {
+      agent_id: request.agent_id,
     }),
     suppress_always_allow_rule: true,
     default_to_no: true,
@@ -710,12 +715,12 @@ function toCanUseToolRequest(e) {
   };
 }
 //@ chunk-s61vbvea.js:589408-589569 placement
-function isComputerFolderTarget(e) {
+function isComputerFolderTarget(target) {
   return (
-    Object.keys(e).length === 3 &&
-    ["environment_id", "computer_name", "folder"].every((r) => {
-      let s = e[r];
-      return typeof s === "string" && s.trim() !== "";
+    Object.keys(target).length === 3 &&
+    ["environment_id", "computer_name", "folder"].every((key) => {
+      let value = target[key];
+      return typeof value === "string" && value.trim() !== "";
     })
   );
 }
@@ -723,23 +728,23 @@ function isComputerFolderTarget(e) {
 /**
  * 把权限请求转换为可服务端处理的权限请求对象，只带上存在的可选字段。
  */
-function toServedPermissionRequest(e) {
+function toServedPermissionRequest(request) {
   return {
-    subtype: e.subtype,
-    tool_name: e.tool_name,
-    input: e.input,
-    tool_use_id: e.tool_use_id,
-    ...(e.mcp_server !== undefined && {
-      mcp_server: e.mcp_server,
+    subtype: request.subtype,
+    tool_name: request.tool_name,
+    input: request.input,
+    tool_use_id: request.tool_use_id,
+    ...(request.mcp_server !== undefined && {
+      mcp_server: request.mcp_server,
     }),
-    ...(e.agent_id !== undefined && {
-      agent_id: e.agent_id,
+    ...(request.agent_id !== undefined && {
+      agent_id: request.agent_id,
     }),
-    ...(e.server_prompt !== undefined && {
-      server_prompt: e.server_prompt,
+    ...(request.server_prompt !== undefined && {
+      server_prompt: request.server_prompt,
     }),
-    ...(e.computer_folder !== undefined && {
-      computer_folder: e.computer_folder,
+    ...(request.computer_folder !== undefined && {
+      computer_folder: request.computer_folder,
     }),
     default_to_no: true,
     suppress_always_allow_rule: true,

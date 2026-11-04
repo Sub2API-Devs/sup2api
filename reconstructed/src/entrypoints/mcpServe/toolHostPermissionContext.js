@@ -16,18 +16,18 @@ import { NOTEBOOK_EDIT_TOOL_NAME } from "../../tools/NotebookEditTool/constants.
 import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  string,
+  stringSchema,
   zodStrictObject,
   _enum,
   discriminatedUnion,
   literal,
-  M,
+  booleanSchema,
   array,
   union,
   tuple,
-  u,
-  E,
-  QD,
+  objectSchema,
+  numberSchema,
+  undefinedSchema,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isEscapableRuleChar } from "../../utils/permissions/permissionRuleParser.js";
 import { patternWithRootFor } from "../../utils/permissions/filesystem.js";
@@ -71,12 +71,12 @@ import {
 //@ chunk-dz36xfxg.js:15108-15142 placement
 var ANTHROPIC_SHELLDIRECTORY = "anthropic/shellDirectory";
 //@ chunk-dz36xfxg.js:15142-15198 placement
-function withShellDirectoryMeta(e, n) {
+function withShellDirectoryMeta(result, directory) {
   return {
-    ...e,
+    ...result,
     _meta: {
-      ...e._meta,
-      [ANTHROPIC_SHELLDIRECTORY]: n,
+      ...result._meta,
+      [ANTHROPIC_SHELLDIRECTORY]: directory,
     },
   };
 }
@@ -96,32 +96,32 @@ var PATH_KEYS = new Set([
   NOTEBOOK_EDIT_TOOL_NAME,
 ]);
 //@ chunk-dz36xfxg.js:15353-15381 placement
-function isBashToolName(e) {
-  return e === BASH_TOOL_NAME;
+function isBashToolName(toolName) {
+  return toolName === BASH_TOOL_NAME;
 }
 //@ chunk-dz36xfxg.js:15381-15405 placement
-var ReasonSchema = DoctorLazy(() => string().max(MAX_REASON_CHARS));
+var ReasonSchema = DoctorLazy(() => stringSchema().max(MAX_REASON_CHARS));
 //@ chunk-dz36xfxg.js:15405-15450 placement
-function stripTierSuffix(e) {
-  return e.replace(/\\[^]/g, "");
+function stripTierSuffix(tier) {
+  return tier.replace(/\\[^]/g, "");
 }
 //@ chunk-dz36xfxg.js:15450-15592 placement
-function hasOnlySafeEscapes(e) {
-  return [...e.matchAll(/\\([^]?)(?=([^]?))/g)].every(
-    ([, n = "", t = ""]) =>
-      isEscapableRuleChar(n) && !"*?!#".includes(n) && !(n === "\\" && /^[.{]$/.test(t)),
+function hasOnlySafeEscapes(pattern) {
+  return [...pattern.matchAll(/\\([^]?)(?=([^]?))/g)].every(
+    ([, escaped = "", next = ""]) =>
+      isEscapableRuleChar(escaped) && !"*?!#".includes(escaped) && !(escaped === "\\" && /^[.{]$/.test(next)),
   );
 }
 //@ chunk-dz36xfxg.js:15592-15805 placement
 function isNarrowPathPattern(relativePattern) {
   let mapped = relativePattern.split("/").map(stripTierSuffix);
-  let index = mapped.findIndex((r) => /[*?[\]]/.test(r));
+  let index = mapped.findIndex((segment) => /[*?[\]]/.test(segment));
   return (
     !/[|()+^$]/.test(stripTierSuffix(relativePattern)) &&
     !mapped.includes("..") &&
     hasOnlySafeEscapes(relativePattern) &&
     /\/[^/]/.test(relativePattern) &&
-    mapped.slice(0, index === -1 ? undefined : index).some((r) => /[^\s.~\\]/.test(r))
+    mapped.slice(0, index === -1 ? undefined : index).some((segment) => /[^\s.~\\]/.test(segment))
   );
 }
 //@ chunk-dz36xfxg.js:15805-15927 placement
@@ -137,13 +137,13 @@ function isNarrowPathRule(ruleContent) {
  */
 function filterRulesByContentsMatchingInput(ruleContent) {
   let inputCmdName = parseShellPermissionRule(ruleContent);
-  let t =
+  let commandText =
     inputCmdName.type === "exact"
       ? `${inputCmdName.command} `
       : inputCmdName.type === "prefix"
         ? `${inputCmdName.prefix} `
         : /^((?:[^\\*]|\\[^])*)\*\s*$/.exec(inputCmdName.pattern)?.[1];
-  let inputCanonical = normalizeProgramBasename(/^\s*([\w./+-]+)\s/.exec(t ?? "")?.[1]);
+  let inputCanonical = normalizeProgramBasename(/^\s*([\w./+-]+)\s/.exec(commandText ?? "")?.[1]);
   return (
     inputCanonical !== "" && !SHELL_PROGRAM_NAMES.has(inputCanonical) && !startsWithBareShell(inputCanonical)
   );
@@ -151,22 +151,22 @@ function filterRulesByContentsMatchingInput(ruleContent) {
 //@ chunk-dz36xfxg.js:16152-16396 placement
 var toolHostAllowRuleSchema = DoctorLazy(() =>
   zodStrictObject({
-    tool_name: string()
+    tool_name: stringSchema()
       .min(1)
       .max(MAX_RULES_PER_TOOL)
-      .refine((e) => isBashToolName(e) || PATH_KEYS.has(e)),
-    rule_content: string()
+      .refine((toolName) => isBashToolName(toolName) || PATH_KEYS.has(toolName)),
+    rule_content: stringSchema()
       .min(1)
       .max(MAX_RULE_CHARS, {
         abort: true,
       })
-      .refine((e) => !/^[\s*]+$/.test(e) && !regExp.test(e), {
+      .refine((ruleContent) => !/^[\s*]+$/.test(ruleContent) && !regExp.test(ruleContent), {
         abort: true,
       }),
-  }).refine((e) =>
-    isBashToolName(e.tool_name)
-      ? filterRulesByContentsMatchingInput(e.rule_content)
-      : isNarrowPathRule(e.rule_content),
+  }).refine((rule) =>
+    isBashToolName(rule.tool_name)
+      ? filterRulesByContentsMatchingInput(rule.rule_content)
+      : isNarrowPathRule(rule.rule_content),
   ),
 );
 //@ chunk-dz36xfxg.js:16396-17697 placement
@@ -174,10 +174,10 @@ var toolHostAllowRuleSchema = DoctorLazy(() =>
  * ToolHost 权限上下文 / 决策原因的 zod 模式集合（anthropic/toolHostPermissionDecision 元数据）。
  */
 var TOOL_HOST_PERMISSION_SCHEMAS = DoctorLazy(() =>
-  string()
+  stringSchema()
     .min(1)
     .max(MAX_RULE_CHARS)
-    .refine((e) => !regExp.test(e)),
+    .refine((rule) => !regExp.test(rule)),
 );
 var RuleUpdateSchema = DoctorLazy(() =>
   zodStrictObject({
@@ -186,14 +186,14 @@ var RuleUpdateSchema = DoctorLazy(() =>
   }),
 );
 var PathSchema = DoctorLazy(() =>
-  string()
+  stringSchema()
     .max(MAX_PATH_CHARS)
-    .refine((e) => !regExp.test(e)),
+    .refine((path) => !regExp.test(path)),
 );
 var TrimmedReasonSchema = DoctorLazy(() =>
   ReasonSchema()
     .min(1)
-    .refine((e) => asShownOnACard(e) === e),
+    .refine((reason) => asShownOnACard(reason) === reason),
 );
 var ModeReasonSchema = DoctorLazy(() =>
   discriminatedUnion("type", [
@@ -220,21 +220,23 @@ var RuleReasonSchema = DoctorLazy(() =>
     zodStrictObject({
       type: literal("safetyCheck"),
       reason: TrimmedReasonSchema(),
-      classifier_approvable: M(),
+      classifier_approvable: booleanSchema(),
       circuit_breaker: PathSchema().optional(),
       also: array(PathSchema()).max(MAX_PERMISSION_REASONS).optional(),
     }),
     zodStrictObject({
       type: _enum(["workingDir", "other"]),
       reason: TrimmedReasonSchema(),
-      classifier_approvable: M(),
+      classifier_approvable: booleanSchema(),
     }),
   ]),
 );
 var ReasonListSchema = DoctorLazy(() =>
   union([
     tuple([ModeReasonSchema()]),
-    tuple([RuleReasonSchema()], RuleReasonSchema()).refine((e) => e.length <= MAX_PERMISSION_REASONS),
+    tuple([RuleReasonSchema()], RuleReasonSchema()).refine(
+      (reasons) => reasons.length <= MAX_PERMISSION_REASONS,
+    ),
   ]),
 );
 var PermissionSummaryReasonSchema = DoctorLazy(() =>
@@ -278,7 +280,7 @@ var HostPermissionKindSchema = DoctorLazy(() =>
       ask_digest: askDigestSchema(),
       reasons: ReasonListSchema(),
       matched_ask_rule: RuleUpdateSchema().optional(),
-      blocked_path: string().min(1).max(MAX_DIRECTORY_PATH_LENGTH).optional(),
+      blocked_path: stringSchema().min(1).max(MAX_DIRECTORY_PATH_LENGTH).optional(),
       suggested_allow_rules: array(toolHostAllowRuleSchema()).max(MAX_REASONS_PER_DECISION),
     }),
   ]),
@@ -294,12 +296,12 @@ function formatDecisionMessage({ message, denied_by_rule: deniedByRule }) {
     : clipText(
         message
           .split(/([\n\t])/)
-          .map((t) =>
-            t ===
+          .map((piece) =>
+            piece ===
               `
-` || t === "\t"
-              ? t
-              : asShownOnACard(t),
+` || piece === "\t"
+              ? piece
+              : asShownOnACard(piece),
           )
           .join(""),
         MAX_REASON_CHARS,
@@ -312,14 +314,14 @@ function formatDecisionMessage({ message, denied_by_rule: deniedByRule }) {
 function serializeDecisionReason(reason) {
   switch (reason.type) {
     case "rule": {
-      let n = PermissionSummaryReasonSchema().safeParse({
+      let serialized = PermissionSummaryReasonSchema().safeParse({
         type: "rule",
         source: reason.rule.source,
         behavior: reason.rule.ruleBehavior,
         rule: formatPermissionRule(reason.rule.ruleValue),
       });
-      return n.success
-        ? n.data
+      return serialized.success
+        ? serialized.data
         : {
             type: "other",
             name: "rule",
@@ -357,17 +359,17 @@ function serializeDecisionReason(reason) {
 //@ chunk-dz36xfxg.js:18409-18547 placement = hasBashPermission (0.813)
 function askRuleFromRule(rules) {
   if (rules?.ruleBehavior !== "ask") return;
-  let n = TOOL_HOST_PERMISSION_SCHEMAS().safeParse(formatPermissionRule(rules.ruleValue));
+  let rule = TOOL_HOST_PERMISSION_SCHEMAS().safeParse(formatPermissionRule(rules.ruleValue));
   return {
     source: rules.source,
-    ...(n.success && {
-      rule: n.data,
+    ...(rule.success && {
+      rule: rule.data,
     }),
   };
 }
 //@ chunk-dz36xfxg.js:18547-18714 placement
-function isRaisedAllowReason(e) {
-  switch (e.type) {
+function isRaisedAllowReason(reason) {
+  switch (reason.type) {
     case "rule":
     case "mode":
       return false;
@@ -376,49 +378,51 @@ function isRaisedAllowReason(e) {
     case "safetyCheck":
     case "workingDir":
     case "other":
-      return e.classifier_approvable;
+      return reason.classifier_approvable;
   }
 }
 //@ chunk-dz36xfxg.js:18714-18943 placement
 function allowRulesFromUpdates(suggestions) {
   return (suggestions ?? [])
-    .flatMap((n) => (n.type === "addRules" && n.behavior === "allow" ? n.rules : []))
+    .flatMap((suggestion) =>
+      suggestion.type === "addRules" && suggestion.behavior === "allow" ? suggestion.rules : [],
+    )
     .flatMap(({ toolName, ruleContent }) => {
-      let r = toolHostAllowRuleSchema().safeParse({
+      let parsed = toolHostAllowRuleSchema().safeParse({
         tool_name: toolName,
         rule_content: ruleContent,
       });
-      return r.success ? [r.data] : [];
+      return parsed.success ? [parsed.data] : [];
     })
     .slice(0, MAX_REASONS_PER_DECISION);
 }
 //@ chunk-dz36xfxg.js:18943-18977 placement
-function toolHostDecisionMeta(e) {
+function toolHostDecisionMeta(decision) {
   return {
-    [ANTHROPIC_TOOLHOSTPERMISSIONDECISION]: encodeToolHostDecision(e),
+    [ANTHROPIC_TOOLHOSTPERMISSIONDECISION]: encodeToolHostDecision(decision),
   };
 }
 //@ chunk-dz36xfxg.js:18977-19230 placement
-function encodeToolHostDecision(e) {
-  switch (e.kind) {
+function encodeToolHostDecision(decision) {
+  switch (decision.kind) {
     case "allow":
-      return e;
+      return decision;
     case "invalid":
       return {
-        ...e,
-        message: formatDecisionMessage(e),
+        ...decision,
+        message: formatDecisionMessage(decision),
       };
     case "deny":
       return {
-        ...e,
-        message: truncateReason(e.message),
+        ...decision,
+        message: truncateReason(decision.message),
       };
     case "ask":
       return {
-        ...e,
-        message: truncateReason(e.message),
-        ...(e.blocked_path !== undefined && {
-          blocked_path: clipText(asShownOnACard(e.blocked_path), MAX_DIRECTORY_PATH_LENGTH),
+        ...decision,
+        message: truncateReason(decision.message),
+        ...(decision.blocked_path !== undefined && {
+          blocked_path: clipText(asShownOnACard(decision.blocked_path), MAX_DIRECTORY_PATH_LENGTH),
         }),
       };
   }
@@ -455,74 +459,84 @@ function isAskingDecisionReason(reason) {
   }
 }
 //@ chunk-dz36xfxg.js:19732-19910 placement
-function isBackgroundOperatorApprovable(e, n) {
+function isBackgroundOperatorApprovable(safety, context) {
   return (
-    n.mode === "auto" &&
-    n.classifierMayApprove.includes("background_operator") &&
-    e.circuitBreaker === "backgroundOperator" &&
-    (e.also ?? []).length === 0 &&
-    isClassifierRoutedCircuitBreaker(e) &&
-    !isAutoModeDenyCircuitBreaker(e)
+    context.mode === "auto" &&
+    context.classifierMayApprove.includes("background_operator") &&
+    safety.circuitBreaker === "backgroundOperator" &&
+    (safety.also ?? []).length === 0 &&
+    isClassifierRoutedCircuitBreaker(safety) &&
+    !isAutoModeDenyCircuitBreaker(safety)
   );
 }
 //@ chunk-dz36xfxg.js:19910-20004 placement
-function isAutoLocalSessionMode(e) {
-  return e.mode === "auto" && e.classifierMayApprove.includes("as_in_local_session");
+function isAutoLocalSessionMode(context) {
+  return context.mode === "auto" && context.classifierMayApprove.includes("as_in_local_session");
 }
 //@ chunk-dz36xfxg.js:20004-20056 placement
-function isClassifierApprovable(e) {
-  return e.classifierApprovable || isClassifierRoutedCircuitBreaker(e);
+function isClassifierApprovable(reason) {
+  return reason.classifierApprovable || isClassifierRoutedCircuitBreaker(reason);
 }
 //@ chunk-dz36xfxg.js:20056-20173 placement
-function safetyCheckAskReason(safetyReason, n, t) {
-  let r = isAutoLocalSessionMode(t);
+function safetyCheckAskReason(safetyReason, askIntent, context) {
+  let isAutoLocal = isAutoLocalSessionMode(context);
   return {
     type: "safetyCheck",
     ...toPermissionQuestionReason(
       safetyReason,
-      !n &&
-        (r
+      !askIntent &&
+        (isAutoLocal
           ? isClassifierApprovable(safetyReason)
-          : safetyReason.classifierApprovable || isBackgroundOperatorApprovable(safetyReason, t)),
-      !r,
+          : safetyReason.classifierApprovable || isBackgroundOperatorApprovable(safetyReason, context)),
+      !isAutoLocal,
     ),
   };
 }
 //@ chunk-dz36xfxg.js:20173-20456 placement
-function askRuleForDecision(reason, n, classifierApprovable) {
-  let [r, ...i] = n;
-  let s = i.length === 0 ? r : n.find((d) => d?.type === "rule" && d.rule.ruleBehavior === "ask");
-  let a = s?.type === "rule" ? askRuleFromRule(s.rule) : undefined;
-  if (a !== undefined)
+function askRuleForDecision(reason, reasons, classifierApprovable) {
+  let [first, ...rest] = reasons;
+  let chosen =
+    rest.length === 0
+      ? first
+      : reasons.find((reason) => reason?.type === "rule" && reason.rule.ruleBehavior === "ask");
+  let askRule = chosen?.type === "rule" ? askRuleFromRule(chosen.rule) : undefined;
+  if (askRule !== undefined)
     return {
       type: "rule",
       reason,
-      ...a,
+      ...askRule,
     };
   return {
-    type: s?.type === "workingDir" ? "workingDir" : "other",
+    type: chosen?.type === "workingDir" ? "workingDir" : "other",
     reason,
     classifier_approvable: classifierApprovable,
   };
 }
 //@ chunk-dz36xfxg.js:20456-20515 placement
-function isPlanModeWrite(e, n, t, r) {
-  return t === "plan" && !e.isReadOnly(n, r);
+function isPlanModeWrite(tool, input, mode, toolUseContext) {
+  return mode === "plan" && !tool.isReadOnly(input, toolUseContext);
 }
 //@ chunk-dz36xfxg.js:20515-20581 placement
-function reasonsIfValid(e) {
-  return e.every(({ reason }) => reason.length <= MAX_REASON_CHARS) ? e : undefined;
+function reasonsIfValid(reasons) {
+  return reasons.every(({ reason }) => reason.length <= MAX_REASON_CHARS) ? reasons : undefined;
 }
 //@ chunk-dz36xfxg.js:20581-21251 placement
-function describeToolHostAsk(e, n, t, r, i) {
-  let safetyReasons = collectSafetyReasons(t.decisionReason);
-  let a = flattenAskReasons(t.decisionReason);
-  let d =
-    carriesAskRuleIntent(t) || e.requiresUserInteraction?.() === true || isPlanModeWrite(e, n, r.mode, i);
-  let k = asShownOnACard(t.message || createPermissionRequestMessage(e.name, t.decisionReason));
-  let reason = t.decisionReason?.type === "subcommandResults" ? clipText(k, MAX_REASON_CHARS) : k;
-  let y = safetyReasons.length === 0 && a.length === 1 ? a[0] : undefined;
-  if (isPlanModeFloorReason(y))
+function describeToolHostAsk(tool, input, result, askContext, toolUseContext) {
+  let safetyReasons = collectSafetyReasons(result.decisionReason);
+  let askReasons = flattenAskReasons(result.decisionReason);
+  let askIntent =
+    carriesAskRuleIntent(result) ||
+    tool.requiresUserInteraction?.() === true ||
+    isPlanModeWrite(tool, input, askContext.mode, toolUseContext);
+  let messageText = asShownOnACard(
+    result.message || createPermissionRequestMessage(tool.name, result.decisionReason),
+  );
+  let reason =
+    result.decisionReason?.type === "subcommandResults"
+      ? clipText(messageText, MAX_REASON_CHARS)
+      : messageText;
+  let singleReason = safetyReasons.length === 0 && askReasons.length === 1 ? askReasons[0] : undefined;
+  if (isPlanModeFloorReason(singleReason))
     return reasonsIfValid([
       {
         type: "mode",
@@ -530,46 +544,52 @@ function describeToolHostAsk(e, n, t, r, i) {
         mode: "plan",
       },
     ]);
-  if (!d && t.decisionReason?.type === "other" && t.decisionReason.reroutedFrom !== undefined)
+  if (
+    !askIntent &&
+    result.decisionReason?.type === "other" &&
+    result.decisionReason.reroutedFrom !== undefined
+  )
     return reasonsIfValid([
       {
         type: "raisedAllow",
         reason,
-        ...(isBashToolName(e.name) &&
-          e.isReadOnly(n, i) && {
+        ...(isBashToolName(tool.name) &&
+          tool.isReadOnly(input, toolUseContext) && {
             is_read_only_command: true,
           }),
       },
     ]);
-  let [w, ...h] = [
-    ...safetyReasons.map((safetyReason) => safetyCheckAskReason(safetyReason, d, r)),
-    ...(safetyReasons.length === 0 || a.length > 0 || d
-      ? [askRuleForDecision(reason, a, !d && !a.some(isAskingDecisionReason))]
+  let [firstReason, ...restReasons] = [
+    ...safetyReasons.map((safetyReason) => safetyCheckAskReason(safetyReason, askIntent, askContext)),
+    ...(safetyReasons.length === 0 || askReasons.length > 0 || askIntent
+      ? [askRuleForDecision(reason, askReasons, !askIntent && !askReasons.some(isAskingDecisionReason))]
       : []),
   ];
-  return w === undefined || h.length >= MAX_PERMISSION_REASONS ? undefined : reasonsIfValid([w, ...h]);
+  return firstReason === undefined || restReasons.length >= MAX_PERMISSION_REASONS
+    ? undefined
+    : reasonsIfValid([firstReason, ...restReasons]);
 }
 //@ chunk-dz36xfxg.js:21251-21429 placement
-function offersAlwaysAllow(e) {
+function offersAlwaysAllow(ask) {
   return (
     shouldShowAlwaysAllowOptions() &&
-    e.suggestions?.some((suggestion) => suggestion.type === "addRules") === true &&
-    e.suppressAlwaysAllowRule !== true &&
+    ask.suggestions?.some((suggestion) => suggestion.type === "addRules") === true &&
+    ask.suppressAlwaysAllowRule !== true &&
     findSafetyCheckReason(
-      e.decisionReason,
-      (n) => !n.classifierApprovable || isHostPersonOnlyCircuitBreaker(n),
+      ask.decisionReason,
+      (safety) => !safety.classifierApprovable || isHostPersonOnlyCircuitBreaker(safety),
     ) === undefined
   );
 }
 //@ chunk-dz36xfxg.js:21429-21535 placement
-function sortedObjectKeys(e, n) {
-  return isPlainObject(n)
-    ? Object.fromEntries(Object.entries(n).toSorted(([t], [r]) => (t < r ? -1 : t > r ? 1 : 0)))
-    : n;
+function sortedObjectKeys(key, value) {
+  return isPlainObject(value)
+    ? Object.fromEntries(Object.entries(value).toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)))
+    : value;
 }
 //@ chunk-dz36xfxg.js:21535-21569 placement
-function settingsFileContentHash(e) {
-  return computeContentHash(jsonStringify(e, sortedObjectKeys));
+function settingsFileContentHash(payload) {
+  return computeContentHash(jsonStringify(payload, sortedObjectKeys));
 }
 //@ chunk-dz36xfxg.js:21569-21652 placement
 var ANTHROPIC_MOVESATTIMEOUT = "anthropic/movesAtTimeout";
@@ -579,7 +599,7 @@ var CONTEXT_VERSION_ONE = {
   },
 };
 var ContextVersionSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     [ANTHROPIC_MOVESATTIMEOUT]: zodStrictObject({
       v: literal(1),
     }),
@@ -590,29 +610,33 @@ function isValidSettingsFileIdentity(meta) {
   return ContextVersionSchema().safeParse(meta).success;
 }
 //@ chunk-dz36xfxg.js:21700-22199 placement
-async function judgeSettingsFileWrite(e, n, t, r, classifierMayApprove, s) {
-  if (findSafetyCheckReason(t.decisionReason, isHostPersonOnlyCircuitBreaker) !== undefined)
+async function judgeSettingsFileWrite(tool, input, result, cwd, classifierMayApprove, toolUseContext) {
+  if (findSafetyCheckReason(result.decisionReason, isHostPersonOnlyCircuitBreaker) !== undefined)
     return findSafetyCheckReason(
-      t.decisionReason,
-      (a) => a.circuitBreaker === "claudeSettingsFile" || a.also?.includes("claudeSettingsFile") === true,
+      result.decisionReason,
+      (safety) =>
+        safety.circuitBreaker === "claudeSettingsFile" ||
+        safety.also?.includes("claudeSettingsFile") === true,
     ) !== undefined
       ? "tagged_by_path_check"
       : "tagged_by_another_check";
-  switch (await shouldBypassAskForReadOnly(e, n, t, r)) {
+  switch (await shouldBypassAskForReadOnly(tool, input, result, cwd)) {
     case "settings":
       return "proven";
     case "none":
-      return (await servedLineTouchesProtectedPath(e, n, s)) ? "names_settings" : undefined;
+      return (await servedLineTouchesProtectedPath(tool, input, toolUseContext))
+        ? "names_settings"
+        : undefined;
     case "uncertain":
-      if (touchesProtectedPath(n, "file_or_folder")) return "uncertain_names_settings";
+      if (touchesProtectedPath(input, "file_or_folder")) return "uncertain_names_settings";
       return classifierMayApprove.includes("unresolved_shell_write") ? undefined : "uncertain";
   }
 }
 //@ chunk-dz36xfxg.js:22199-22584 placement
-function settingsFileWriteReason(e, n) {
-  let t = `This command ${n} to one of Claude Code's own settings files.`;
+function settingsFileWriteReason(result, verb) {
+  let message = `This command ${verb} to one of Claude Code's own settings files.`;
   return {
-    ...e,
+    ...result,
     decisionReason: {
       type: "subcommandResults",
       reasons: new Map([
@@ -620,10 +644,10 @@ function settingsFileWriteReason(e, n) {
           "settings",
           {
             behavior: "ask",
-            message: t,
+            message,
             decisionReason: {
               type: "safetyCheck",
-              reason: t,
+              reason: message,
               classifierApprovable: true,
               circuitBreaker: "claudeSettingsFile",
             },
@@ -633,8 +657,8 @@ function settingsFileWriteReason(e, n) {
           "command",
           {
             behavior: "ask",
-            message: e.message,
-            decisionReason: e.decisionReason,
+            message: result.message,
+            decisionReason: result.decisionReason,
           },
         ],
       ]),
@@ -642,43 +666,50 @@ function settingsFileWriteReason(e, n) {
   };
 }
 //@ chunk-dz36xfxg.js:22584-22957 placement
-async function resolveToolHostAsk(e, n, t, r, i, s) {
-  let a = await judgeSettingsFileWrite(e, n, t, r, i.classifierMayApprove, s);
-  if (a === undefined)
+async function resolveToolHostAsk(tool, input, result, cwd, askContext, toolUseContext) {
+  let suspicionReason = await judgeSettingsFileWrite(
+    tool,
+    input,
+    result,
+    cwd,
+    askContext.classifierMayApprove,
+    toolUseContext,
+  );
+  if (suspicionReason === undefined)
     return {
-      ask: t,
+      ask: result,
     };
-  if (isAutoLocalSessionMode(i)) {
-    let d =
+  if (isAutoLocalSessionMode(askContext)) {
+    let personOnly =
       findSafetyCheckReason(
-        t.decisionReason,
-        (k) => isHostPersonOnlyCircuitBreaker(k) && !isClassifierApprovable(k),
+        result.decisionReason,
+        (safety) => isHostPersonOnlyCircuitBreaker(safety) && !isClassifierApprovable(safety),
       ) !== undefined;
     return {
-      ask: t,
+      ask: result,
       suspicion: {
-        reason: a,
-        isHoldLifted: !d,
+        reason: suspicionReason,
+        isHoldLifted: !personOnly,
       },
     };
   }
   return {
     ask:
-      a === "tagged_by_path_check" || a === "tagged_by_another_check"
-        ? t
-        : settingsFileWriteReason(t, a === "proven" ? "writes" : "may write"),
+      suspicionReason === "tagged_by_path_check" || suspicionReason === "tagged_by_another_check"
+        ? result
+        : settingsFileWriteReason(result, suspicionReason === "proven" ? "writes" : "may write"),
     suspicion: {
-      reason: a,
+      reason: suspicionReason,
       isHoldLifted: false,
     },
   };
 }
 //@ chunk-dz36xfxg.js:22957-23053 placement
-function withChangeWithoutReadEntry(e) {
+function withChangeWithoutReadEntry(result) {
   return {
-    ...e,
+    ...result,
     _meta: {
-      ...e._meta,
+      ...result._meta,
       ["anthropic/changeWithoutReadFileStateEntry"]: true,
     },
   };
@@ -687,24 +718,24 @@ function withChangeWithoutReadEntry(e) {
 var READ_FILE_STATE_META = "anthropic/readFileStateChanges";
 var MAX_REFS = 64;
 var PathRefSchema = DoctorLazy(() =>
-  u({
-    path: string().pipe(absolutePathSchema()),
+  objectSchema({
+    path: stringSchema().pipe(absolutePathSchema()),
   }),
 );
 var FileRefSchema = DoctorLazy(() =>
   union([
     PathRefSchema().extend({
-      sha256: string().regex(SHA256_HEX_RE),
-      bytes: E().int().nonnegative(),
+      sha256: stringSchema().regex(SHA256_HEX_RE),
+      bytes: numberSchema().int().nonnegative(),
       content_not_in_model_context: literal(true).optional(),
-      is_partial_view: QD().optional(),
+      is_partial_view: undefinedSchema().optional(),
     }),
     PathRefSchema().extend({
       is_partial_view: literal(true),
     }),
     PathRefSchema().extend({
-      sha256: QD().optional(),
-      is_partial_view: QD().optional(),
+      sha256: undefinedSchema().optional(),
+      is_partial_view: undefinedSchema().optional(),
     }),
   ]),
 );

@@ -32,144 +32,150 @@ import { roughTokenCountEstimation } from "../tokenEstimation.js";
 /**
  * 空闲返回后判断是否清除旧工具结果（按空闲开始时间与上次清除记录）。
  */
-function decideIdleClearing(rolloutMode, querySource, s, idleReturn, h) {
+function decideIdleClearing(rolloutMode, querySource, toolUseState, idle, thresholds) {
   let { decidedIdles, lastClearedByTrackingKey } = getIdleClearingState();
-  let { returnedAtMs, idleStartedAtMs } = idleReturn;
-  let S = classifyQuerySource(querySource);
-  if (S === "auxiliary") {
-    for (let P of lastClearedByTrackingKey.values())
-      if (P.returnedAtMs === returnedAtMs && P.clearedToolUses > 0) return true;
+  let { returnedAtMs, idleStartedAtMs } = idle;
+  let sourceCategory = classifyQuerySource(querySource);
+  if (sourceCategory === "auxiliary") {
+    for (let entry of lastClearedByTrackingKey.values())
+      if (entry.returnedAtMs === returnedAtMs && entry.clearedToolUses > 0) return true;
     return false;
   }
   if (rolloutMode === "unknown") return true;
-  let w = isNewIdlePeriod(decidedIdles, idleReturn, h);
-  if (w === undefined) {
+  let shouldClear = isNewIdlePeriod(decidedIdles, idle, thresholds);
+  if (shouldClear === undefined) {
     let lastActivityAt =
-      S === "main" && s === undefined && !idleReturn.serverClearedBeforeIdle
+      sourceCategory === "main" && toolUseState === undefined && !idle.serverClearedBeforeIdle
         ? getPromptCacheSummary(MAIN, returnedAtMs).lastActivityAt
         : null;
-    w =
+    shouldClear =
       lastActivityAt === null ||
       lastActivityAt > returnedAtMs ||
-      returnedAtMs - lastActivityAt > h.minIdleSeconds * 1000;
+      returnedAtMs - lastActivityAt > thresholds.minIdleSeconds * 1000;
     if (!decidedIdles.delete(idleStartedAtMs) && decidedIdles.size >= MAX_TRACKING_KEYS) {
-      let j = decidedIdles.keys().next().value;
-      if (j !== undefined) decidedIdles.delete(j);
+      let oldestKey = decidedIdles.keys().next().value;
+      if (oldestKey !== undefined) decidedIdles.delete(oldestKey);
     }
     decidedIdles.set(idleStartedAtMs, {
-      starts: w,
+      starts: shouldClear,
       returnedAtMs,
     });
-    if (w) {
+    if (shouldClear) {
       logEvent("tengu_tool_result_clearing_after_idle_planned", {
         mode: fromEnum(rolloutMode),
-        idle_seconds: idleReturn.idleSeconds,
-        clearable_tool_uses: idleReturn.clearableToolUses,
-        trigger_tool_uses: idleReturn.triggerToolUses,
-        keep_tool_uses: h.keepToolUses,
-        rough_tokens_to_clear: idleReturn.roughTokensToClear,
-        context_tokens_before_idle: idleReturn.contextTokensBeforeIdle,
-        server_cleared_before_idle: idleReturn.serverClearedBeforeIdle,
-        query_source_category: fromEnumOpt(S),
+        idle_seconds: idle.idleSeconds,
+        clearable_tool_uses: idle.clearableToolUses,
+        trigger_tool_uses: idle.triggerToolUses,
+        keep_tool_uses: thresholds.keepToolUses,
+        rough_tokens_to_clear: idle.roughTokensToClear,
+        context_tokens_before_idle: idle.contextTokensBeforeIdle,
+        server_cleared_before_idle: idle.serverClearedBeforeIdle,
+        query_source_category: fromEnumOpt(sourceCategory),
       });
       if (rolloutMode === "on") logFeatureOk("compact_tool_result_clearing_after_idle");
     }
   }
-  return w;
+  return shouldClear;
 }
 //@ chunk-g54kbxqw.js:156325-156466 placement
-function isNewIdlePeriod(decidedIdles, n, s) {
-  let r = decidedIdles.get(n.idleStartedAtMs);
-  return r && (r.starts || n.returnedAtMs - r.returnedAtMs <= s.minIdleSeconds * 1000) ? r.starts : undefined;
+function isNewIdlePeriod(decidedIdles, idle, options) {
+  let previous = decidedIdles.get(idle.idleStartedAtMs);
+  return previous &&
+    (previous.starts || idle.returnedAtMs - previous.returnedAtMs <= options.minIdleSeconds * 1000)
+    ? previous.starts
+    : undefined;
 }
 //@ chunk-g54kbxqw.js:156466-156541 placement
-function supportsContextEditing(e) {
+function supportsContextEditing(model) {
   return (
-    getAllModelBetas(e).includes(BETA_CONTEXT_MANAGEMENT) &&
-    ![...getRefusedBetasForModel(toProviderWireModelId(e))].includes(BETA_CONTEXT_MANAGEMENT)
+    getAllModelBetas(model).includes(BETA_CONTEXT_MANAGEMENT) &&
+    ![...getRefusedBetasForModel(toProviderWireModelId(model))].includes(BETA_CONTEXT_MANAGEMENT)
   );
 }
 //@ chunk-g54kbxqw.js:156541-156768 placement
-function messagesSince(messages, n) {
-  let s = n === undefined ? -1 : messages.findLastIndex((h) => h.uuid === n);
-  if (s < 0) return dropTrailingUserContent(messages);
-  let r = messages[s];
+function messagesSince(messages, anchorUuid) {
+  let index =
+    anchorUuid === undefined ? -1 : messages.findLastIndex((message) => message.uuid === anchorUuid);
+  if (index < 0) return dropTrailingUserContent(messages);
+  let previous = messages[index];
   for (
-    let h = messages[s + 1];
-    r?.type === "assistant" && h?.type === "assistant" && h.message.id === r.message.id;
-    h = messages[s + 1]
+    let next = messages[index + 1];
+    previous?.type === "assistant" && next?.type === "assistant" && next.message.id === previous.message.id;
+    next = messages[index + 1]
   )
-    s++;
-  return messages.slice(0, s + 1);
+    index++;
+  return messages.slice(0, index + 1);
 }
 //@ chunk-g54kbxqw.js:156768-156888 placement
 /**
  * 去掉末尾可清理消息中的用户内容消息。
  */
-function dropTrailingUserContent(e) {
-  let n = e.length;
-  for (let s = e[n - 1]; s; s = e[n - 1]) {
-    if (clearableMessageKind(s) !== undefined) return isUserContentMessage(s) ? e.slice(0, n - 1) : e;
-    n--;
+function dropTrailingUserContent(messages) {
+  let count = messages.length;
+  for (let message = messages[count - 1]; message; message = messages[count - 1]) {
+    if (clearableMessageKind(message) !== undefined)
+      return isUserContentMessage(message) ? messages.slice(0, count - 1) : messages;
+    count--;
   }
-  return e;
+  return messages;
 }
 //@ chunk-g54kbxqw.js:156888-157054 placement
-function isUserContentMessage(e) {
+function isUserContentMessage(message) {
   return (
-    e.type === "user" &&
-    (typeof e.message.content === "string" ||
-      (Array.isArray(e.message.content) && !e.message.content.some((n) => n?.type === "tool_result")))
+    message.type === "user" &&
+    (typeof message.message.content === "string" ||
+      (Array.isArray(message.message.content) &&
+        !message.message.content.some((block) => block?.type === "tool_result")))
   );
 }
 //@ chunk-g54kbxqw.js:157054-157176 placement
 function idleClearingMode() {
-  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_JIGGLY_BLOSSOM, "off");
+  let { value: mode, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_JIGGLY_BLOSSOM, "off");
   if (source === "fallback") return "unknown";
-  return e === "on" || e === "shadow" ? e : "off";
+  return mode === "on" || mode === "shadow" ? mode : "off";
 }
 //@ chunk-g54kbxqw.js:157176-157342 placement
-function hasAppliedContextEdits(e) {
+function hasAppliedContextEdits(message) {
   return (
-    e.type === "assistant" &&
-    (e.message.context_management?.applied_edits?.some(
+    message.type === "assistant" &&
+    (message.message.context_management?.applied_edits?.some(
       (appliedEdit) => appliedEdit?.type === "clear_tool_uses_20250919" && appliedEdit.cleared_tool_uses > 0,
     ) ??
       false)
   );
 }
 //@ chunk-g54kbxqw.js:157342-157549 placement
-function logIdleClearingFailure(error, n, s, r) {
+function logIdleClearingFailure(error, reason, code, session) {
   try {
-    let { failuresLogged } = getIdleClearingState(r);
-    if (failuresLogged.has(s)) return;
-    failuresLogged.add(s);
+    let { failuresLogged } = getIdleClearingState(session);
+    if (failuresLogged.has(code)) return;
+    failuresLogged.add(code);
     logError(error);
-    if (n === "bad") logFeatureBad("compact_tool_result_clearing_after_idle", s);
-    else logFeatureSad("compact_tool_result_clearing_after_idle", s);
+    if (reason === "bad") logFeatureBad("compact_tool_result_clearing_after_idle", code);
+    else logFeatureSad("compact_tool_result_clearing_after_idle", code);
   } catch {}
 }
 //@ chunk-g54kbxqw.js:157549-157878 placement
-function clearableMessageKind(e) {
-  switch (e.type) {
+function clearableMessageKind(message) {
+  switch (message.type) {
     case "assistant":
-      if (e.message.model === SYNTHETIC_MODEL || e.isApiErrorMessage) return;
+      if (message.message.model === SYNTHETIC_MODEL || message.isApiErrorMessage) return;
       break;
     case "user":
       if (
-        e.isMeta ||
-        e.ephemeral ||
-        e.isVirtual ||
-        e.isVisibleInTranscriptOnly ||
-        e.isCompactSummary ||
-        e.toolDenialKind === "interrupted"
+        message.isMeta ||
+        message.ephemeral ||
+        message.isVirtual ||
+        message.isVisibleInTranscriptOnly ||
+        message.isCompactSummary ||
+        message.toolDenialKind === "interrupted"
       )
         return;
       break;
     default:
       return;
   }
-  let timestamp = Date.parse(e.timestamp);
+  let timestamp = Date.parse(message.timestamp);
   return Number.isFinite(timestamp) ? timestamp : undefined;
 }
 //@ chunk-g54kbxqw.js:157878-158040 placement
@@ -178,8 +184,10 @@ function hasClearedMarker(content) {
   return (
     Array.isArray(content) &&
     content.some(
-      (n) =>
-        n?.type === "text" && typeof n.text === "string" && n.text.includes(ARTIFACT_CONTENT_AUTHORED_TAG),
+      (block) =>
+        block?.type === "text" &&
+        typeof block.text === "string" &&
+        block.text.includes(ARTIFACT_CONTENT_AUTHORED_TAG),
     )
   );
 }
@@ -191,19 +199,19 @@ function estimateLargeContentTokens(block) {
   if (typeof block === "string")
     return block.length >= SMALL_RESULT_BYTES ? roughTokenCountEstimation(block) : undefined;
   if (!Array.isArray(block)) return;
-  let n = 0;
-  let s = 0;
-  let r = false;
-  for (let h of block)
-    if (h?.type === "text" && typeof h.text === "string") {
-      n += h.text.length;
-      s += roughTokenCountEstimation(h.text);
-    } else if (h?.type === "image" || h?.type === "document") r = true;
-  return r || n >= SMALL_RESULT_BYTES ? s : undefined;
+  let textBytes = 0;
+  let tokens = 0;
+  let hasMedia = false;
+  for (let inner of block)
+    if (inner?.type === "text" && typeof inner.text === "string") {
+      textBytes += inner.text.length;
+      tokens += roughTokenCountEstimation(inner.text);
+    } else if (inner?.type === "image" || inner?.type === "document") hasMedia = true;
+  return hasMedia || textBytes >= SMALL_RESULT_BYTES ? tokens : undefined;
 }
 //@ chunk-g54kbxqw.js:158328-158426 placement
-function currentMcpClients(e) {
-  return e.options.refreshMcpClients?.() ?? e.getMcp?.().clients ?? e.options.mcpClients;
+function currentMcpClients(context) {
+  return context.options.refreshMcpClients?.() ?? context.getMcp?.().clients ?? context.options.mcpClients;
 }
 //@ chunk-g54kbxqw.js:158426-158548 placement = hasAccessToIDEExtensionDiffFeature (1)
 function hasAccessToIDEExtensionDiffFeature(mcpClients) {

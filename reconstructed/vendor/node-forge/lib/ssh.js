@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_aes } from "./aes.js";
 import { require_hmac } from "./hmac.js";
@@ -14,7 +14,7 @@ import { require_sha1 } from "./sha1.js";
 import { require_util } from "./util.js";
 
 //@ chunk-fq0cr76a.js:293009-295373 cjs-fingerprint
-var require_ssh = x(function (cjsExports, cjsModule) {
+var require_ssh = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_aes();
   require_hmac();

@@ -10,6 +10,7 @@
  */
 import { getGraphemeSegmenter } from "../utils/intl.js";
 import { INVISIBLE_CHAR_CLASS_SOURCE } from "../utils/sanitization.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-gfseh2w1.js:191-220 fingerprint = BUN_STRING_WIDTH_OPTS (1)
 /**
@@ -35,16 +36,21 @@ function findZeroWidthCodePoint(text) {
   if (PRINTABLE_ASCII_RE.test(text)) return;
   for (let { segment: grapheme } of getGraphemeSegmenter().segment(text)) {
     if (CONTROL_WHITESPACE_RE.test(grapheme)) continue;
-    let o = bunStringWidth(grapheme);
-    if (o === 0) return grapheme.codePointAt(0);
-    if (o > 2 && grapheme.length > 1) {
+    let width = bunStringWidth(grapheme);
+    if (width === 0) return grapheme.codePointAt(0);
+    if (width > 2 && grapheme.length > 1) {
       for (let char of grapheme) if (bunStringWidth(char) === 0) return char.codePointAt(0);
     }
   }
   return;
 }
 //@ chunk-t0gq9gyw.js:5691-5782 sole-consumer
-var INVISIBLE_CHAR_RE = new RegExp(`(?![\\t\\n\\r])[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "u");
-var CONTROL_WHITESPACE_RE = /^[\t\n\r]+$/;
-var PRINTABLE_ASCII_RE = /^[\t\n\r\x20-\x7e]*$/;
+var INVISIBLE_CHAR_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CONTROL_WHITESPACE_RE;
+var PRINTABLE_ASCII_RE;
+deferInit("chunk-t0gq9gyw.js:5691", () => {
+  INVISIBLE_CHAR_RE = new RegExp(`(?![\\t\\n\\r])[${INVISIBLE_CHAR_CLASS_SOURCE}]`, "u");
+  CONTROL_WHITESPACE_RE = /^[\t\n\r]+$/;
+  PRINTABLE_ASCII_RE = /^[\t\n\r\x20-\x7e]*$/;
+});
 export { bunStringWidth, findZeroWidthCodePoint };

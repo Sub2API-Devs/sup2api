@@ -8,31 +8,41 @@
  * pieces: chunk-xe7zq1p4.js (8)
  * attribution: placement 3, sole-consumer 1, affinity 1, fingerprint 2, layout 1
  */
-import { init_react_production, qt, P } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, createContext, useEffect } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useTheme_2 } from "../components/design-system/ThemeProvider.js";
 import { isStorageV5Enabled } from "../utils/hoverRest.js";
 import { registerPreExitFlush } from "../utils/cleanupRegistry.js";
 import { saveCurrentProjectConfig, saveCurrentProjectConfigSyncForExit } from "../utils/config.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-xe7zq1p4.js:1784-1788 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:1784", () => {
+  init_react_production();
+});
 //@ chunk-xe7zq1p4.js:1788-1792 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:1788", () => {
+  init_react_production();
+});
 //@ chunk-xe7zq1p4.js:1792-1810 placement
-var statsContext = qt(undefined);
+var statsContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:1792", () => {
+  statsContext = createContext(undefined);
+});
 //@ chunk-xe7zq1p4.js:2004-2128 sole-consumer
 /**
  * 已排序数组的线性插值百分位。
  */
-function interpolatedPercentile(sorted, r) {
-  let i = (r / 100) * (sorted.length - 1);
-  let floored = Math.floor(i);
-  let a = Math.ceil(i);
-  if (floored === a) return sorted[floored];
-  return sorted[floored] + (sorted[a] - sorted[floored]) * (i - floored);
+function interpolatedPercentile(sorted, percentile) {
+  let position = (percentile / 100) * (sorted.length - 1);
+  let floored = Math.floor(position);
+  let upper = Math.ceil(position);
+  if (floored === upper) return sorted[floored];
+  return sorted[floored] + (sorted[upper] - sorted[floored]) * (position - floored);
 }
 //@ chunk-xe7zq1p4.js:2128-2140 affinity
 /**
@@ -55,49 +65,49 @@ function createStatsStore() {
       metrics.set(name, value);
     },
     observe(name, value) {
-      let c = histograms.get(name);
-      if (!c) {
-        c = {
+      let histogram = histograms.get(name);
+      if (!histogram) {
+        histogram = {
           reservoir: [],
           count: 0,
           sum: 0,
           min: value,
           max: value,
         };
-        histograms.set(name, c);
+        histograms.set(name, histogram);
       }
-      c.count++;
-      c.sum += value;
-      if (value < c.min) c.min = value;
-      if (value > c.max) c.max = value;
-      if (c.reservoir.length < STATS_RESERVOIR_SIZE) c.reservoir.push(value);
+      histogram.count++;
+      histogram.sum += value;
+      if (value < histogram.min) histogram.min = value;
+      if (value > histogram.max) histogram.max = value;
+      if (histogram.reservoir.length < STATS_RESERVOIR_SIZE) histogram.reservoir.push(value);
       else {
-        let j = Math.floor(Math.random() * c.count);
-        if (j < STATS_RESERVOIR_SIZE) c.reservoir[j] = value;
+        let j = Math.floor(Math.random() * histogram.count);
+        if (j < STATS_RESERVOIR_SIZE) histogram.reservoir[j] = value;
       }
     },
     add(name, value) {
-      let c = sets.get(name);
-      if (!c) {
-        c = new Set();
-        sets.set(name, c);
+      let setEntry = sets.get(name);
+      if (!setEntry) {
+        setEntry = new Set();
+        sets.set(name, setEntry);
       }
-      c.add(value);
+      setEntry.add(value);
     },
     getAll() {
       let result = Object.fromEntries(metrics);
-      for (let [name, c] of histograms) {
-        if (c.count === 0) continue;
-        result[`${name}_count`] = c.count;
-        result[`${name}_min`] = c.min;
-        result[`${name}_max`] = c.max;
-        result[`${name}_avg`] = c.sum / c.count;
-        let sorted = [...c.reservoir].sort((M, T) => M - T);
+      for (let [name, histogram] of histograms) {
+        if (histogram.count === 0) continue;
+        result[`${name}_count`] = histogram.count;
+        result[`${name}_min`] = histogram.min;
+        result[`${name}_max`] = histogram.max;
+        result[`${name}_avg`] = histogram.sum / histogram.count;
+        let sorted = [...histogram.reservoir].sort((a, b) => a - b);
         result[`${name}_p50`] = interpolatedPercentile(sorted, 50);
         result[`${name}_p95`] = interpolatedPercentile(sorted, 95);
         result[`${name}_p99`] = interpolatedPercentile(sorted, 99);
       }
-      for (let [name, c] of sets) result[name] = c.size;
+      for (let [name, setEntry] of sets) result[name] = setEntry.size;
       return result;
     },
   };
@@ -106,27 +116,30 @@ function createStatsStore() {
 /**
  * StatsContext：统计存储的 React Context（默认 null）。
  */
-var StatsContext = qt(null);
+var StatsContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:2903", () => {
+  StatsContext = createContext(null);
+});
 //@ chunk-xe7zq1p4.js:2919-3563 fingerprint = StatsProvider (0.745)
 /**
  * 统计 Provider：退出时把 getAll() 写入配置 lastSessionMetrics（V5 存储可用时异步写）。
  */
 function StatsProvider(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { store: externalStore, children } = props;
-  let a;
+  let statsStore;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    a = createStatsStore();
-    $[0] = a;
-  } else a = $[0];
-  let store = externalStore ?? a;
+    statsStore = createStatsStore();
+    $[0] = statsStore;
+  } else statsStore = $[0];
+  let store = externalStore ?? statsStore;
   let { storageV5 } = useTheme_2();
-  let T;
+  let providerElement;
   let t3;
   if ($[1] !== storageV5 || $[2] !== store) {
-    T = () => {
-      let u = false;
-      let U =
+    providerElement = () => {
+      let unmounting = false;
+      let cleanup =
         isStorageV5Enabled() && storageV5 !== undefined
           ? registerPreExitFlush(async () => {
               let metrics = store.getAll();
@@ -138,11 +151,11 @@ function StatsProvider(props) {
                   }),
                   storageV5,
                 );
-              u = true;
+              unmounting = true;
             })
           : undefined;
       let flush = () => {
-        if (u) {
+        if (unmounting) {
           return;
         }
         let metrics = store.getAll();
@@ -154,20 +167,20 @@ function StatsProvider(props) {
       };
       process.on("exit", flush);
       return () => {
-        U?.();
+        cleanup?.();
         process.off("exit", flush);
       };
     };
     t3 = [store, storageV5];
     $[1] = storageV5;
     $[2] = store;
-    $[3] = T;
+    $[3] = providerElement;
     $[4] = t3;
   } else {
-    T = $[3];
+    providerElement = $[3];
     t3 = $[4];
   }
-  P(T, t3);
+  useEffect(providerElement, t3);
   let t4;
   if ($[5] !== children || $[6] !== store) {
     t4 = jsxProd_default(StatsContext.Provider, {

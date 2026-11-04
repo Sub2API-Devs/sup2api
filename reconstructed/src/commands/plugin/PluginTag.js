@@ -8,14 +8,15 @@
  * pieces: chunk-vrb44rx7.js (3)
  * attribution: placement 3
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { tagPluginRelease, formatTagName, createPluginGitTag } from "../../services/plugins/pluginTag.js";
 import { warningLine } from "./SkillDoctor.js";
-import { P, init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { useEffect, init_react_production } from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrb44rx7.js:212810-213105 placement
 var PLUGIN_TAG_USAGE = `Usage: /plugin tag [path] [--push] [--dry-run] [-f|--force]
@@ -29,21 +30,21 @@ For -m/--message and --remote, use the CLI: claude plugin tag --help`;
  * 校验插件并创建/推送版本标签。
  */
 function PluginTagFlow(props) {
-  let U = w(9);
-  let { onComplete, path, push: C, dryRun, force, unknownFlag } = props;
-  let L;
-  let A;
+  let $ = useMemoCache(9);
+  let { onComplete, path, push, dryRun, force, unknownFlag } = props;
+  let runTag;
+  let deps;
   if (
-    U[0] !== dryRun ||
-    U[1] !== force ||
-    U[2] !== onComplete ||
-    U[3] !== path ||
-    U[4] !== C ||
-    U[5] !== unknownFlag
+    $[0] !== dryRun ||
+    $[1] !== force ||
+    $[2] !== onComplete ||
+    $[3] !== path ||
+    $[4] !== push ||
+    $[5] !== unknownFlag
   ) {
-    L = () => {
-      K();
-      async function K() {
+    runTag = () => {
+      runTag();
+      async function runTag() {
         if (unknownFlag !== undefined) {
           onComplete(
             unknownFlag === "--help" || unknownFlag === "-h"
@@ -54,19 +55,19 @@ ${PLUGIN_TAG_USAGE}`,
           );
           return;
         }
-        let V = await tagPluginRelease(path ?? ".", {
+        let tagResult = await tagPluginRelease(path ?? ".", {
           force,
         });
-        let mapped = V.warnings.map(warningLine);
-        if (!V.ok) {
-          mapped.push(`${figures_default.cross} ${V.error}`);
+        let mapped = tagResult.warnings.map(warningLine);
+        if (!tagResult.ok) {
+          mapped.push(`${figures_default.cross} ${tagResult.error}`);
           onComplete(
             mapped.join(`
 `),
           );
           return;
         }
-        let { plan } = V;
+        let { plan } = tagResult;
         mapped.push(`Plugin:  ${plan.pluginName}`, `Version: ${plan.version} (from ${plan.versionFrom})`);
         if (plan.marketplace)
           mapped.push(
@@ -74,12 +75,12 @@ ${PLUGIN_TAG_USAGE}`,
               (plan.marketplace.entryVersion ? ` (version: ${plan.marketplace.entryVersion})` : ""),
           );
         mapped.push(`Tag:     ${plan.tag}`, "");
-        let J = `git -C ${plan.gitRoot} push ${force ? "--force " : ""}origin refs/tags/${plan.tag}`;
+        let pushCommand = `git -C ${plan.gitRoot} push ${force ? "--force " : ""}origin refs/tags/${plan.tag}`;
         if (dryRun) {
           mapped.push(
             `${figures_default.tick} Dry run \u2014 would create tag ${plan.tag} at HEAD in ${plan.gitRoot}`,
             `  git -C ${plan.gitRoot} tag ${force ? "-f " : ""}-a ${plan.tag} -m "${formatTagName(plan, undefined)}"`,
-            `  ${J}`,
+            `  ${pushCommand}`,
           );
           onComplete(
             mapped.join(`
@@ -88,7 +89,7 @@ ${PLUGIN_TAG_USAGE}`,
           return;
         }
         let pluginGitTag = await createPluginGitTag(plan, {
-          push: C,
+          push,
           force,
           message: undefined,
           remote: "origin",
@@ -103,7 +104,9 @@ ${PLUGIN_TAG_USAGE}`,
           return;
         }
         mapped.push(`${figures_default.tick} Created tag ${plan.tag}`);
-        mapped.push(pluginGitTag.pushed ? `${figures_default.tick} Pushed to origin` : `  Push with: ${J}`);
+        mapped.push(
+          pluginGitTag.pushed ? `${figures_default.tick} Pushed to origin` : `  Push with: ${pushCommand}`,
+        );
         mapped.push("", "For -m/--message and --remote, use: claude plugin tag --help");
         onComplete(
           mapped.join(`
@@ -111,32 +114,35 @@ ${PLUGIN_TAG_USAGE}`,
         );
       }
     };
-    A = [onComplete, path, C, dryRun, force, unknownFlag];
-    U[0] = dryRun;
-    U[1] = force;
-    U[2] = onComplete;
-    U[3] = path;
-    U[4] = C;
-    U[5] = unknownFlag;
-    U[6] = L;
-    U[7] = A;
+    deps = [onComplete, path, push, dryRun, force, unknownFlag];
+    $[0] = dryRun;
+    $[1] = force;
+    $[2] = onComplete;
+    $[3] = path;
+    $[4] = push;
+    $[5] = unknownFlag;
+    $[6] = runTag;
+    $[7] = deps;
   } else {
-    L = U[6];
-    A = U[7];
+    runTag = $[6];
+    deps = $[7];
   }
-  P(L, A);
-  let fe;
-  if (U[8] === MEMO_CACHE_SENTINEL) {
-    fe = jsxProd_default(Box, {
+  useEffect(runTag, deps);
+  let footer;
+  if ($[8] === MEMO_CACHE_SENTINEL) {
+    footer = jsxProd_default(Box, {
       flexDirection: "column",
       children: jsxProd_default(Text, {
         children: "Preparing tag\u2026",
       }),
     });
-    U[8] = fe;
-  } else fe = U[8];
-  return fe;
+    $[8] = footer;
+  } else footer = $[8];
+  return footer;
 }
 //@ chunk-vrb44rx7.js:214690-214694 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:214690", () => {
+  init_react_production();
+});
 export { PluginTagFlow };

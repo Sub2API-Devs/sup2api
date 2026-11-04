@@ -19,8 +19,8 @@ var REMOTE_TOOLS_CONSENT_TEXT = {
   "consent.unattended.body.host": `${"This computer is serving tools to your cloud session. In auto mode, the cloud session decides which commands to run here without asking you each time \u2014 the same way auto mode works locally. Your deny rules and hooks on this computer still apply. Answer once per computer;"} change it later in Settings \u203A Claude Code.`,
   "consent.unattended.detail":
     "Until you answer, a cloud session in auto mode asks you before most commands here, as in Manual mode. Whatever you answer, a session set to edit files without asking can still create, edit, move and delete files here, in its folder and any other folder you or your settings let Claude work in, as it would locally.",
-  consent_unattended_saved(e) {
-    return `Yes and No are saved for this computer; to change the answer later, ${e}.`;
+  consent_unattended_saved(settingsHint) {
+    return `Yes and No are saved for this computer; to change the answer later, ${settingsHint}.`;
   },
   "auto_off.reason.consent_unset":
     "Unattended commands from cloud sessions are not yet allowed on this computer. Allow them in /config in claude, or in the Claude desktop app under Remote Control.",
@@ -35,14 +35,14 @@ var REMOTE_TOOLS_CONSENT_TEXT = {
   "auto_off.reason.settings": "This computer's settings turn auto mode off (disableAutoMode).",
   "auto_off.reason.breaker":
     "Auto mode is turned off for the Claude Code process running on this computer. Restarting it checks again.",
-  auto_off_notice(e, n) {
-    return `Cloud sessions ask you before most commands on ${e}. ${n}`;
+  auto_off_notice(computerLabel, reasonText) {
+    return `Cloud sessions ask you before most commands on ${computerLabel}. ${reasonText}`;
   },
   "ask.outside_sandbox": "Runs outside the sandbox.",
   "ask.settings_person_only":
     "This may change Claude Code's settings or credentials, so only you can approve it.",
-  ask_runs_in_vm(e) {
-    return `This runs in a ${e} VM on this computer, not on the computer itself.`;
+  ask_runs_in_vm(vmKind) {
+    return `This runs in a ${vmKind} VM on this computer, not on the computer itself.`;
   },
   "serving_off.muted":
     "Remote tool serving was turned off by Anthropic (emergency switch). No new command is accepted until it is turned back on. A command Claude is waiting on may go on until the cloud session cancels it.",
@@ -78,18 +78,18 @@ var REMOTE_TOOLS_CONSENT_TEXT = {
     "This project's Claude Code settings set environment variables not applied while this computer serves a cloud session. The session may have set them; put only your own in ~/.claude/settings.json here.",
   "refused.sandbox_custody":
     "This computer can't run this command inside its sandbox while protecting its credential files (a protected directory could not be prepared). Nothing was run. Ask the user to run it themselves on this computer, or continue without it.",
-  "refused.path_too_long"(e, n) {
-    return `${e} cannot open this path: written out in full it comes to ${n.toLocaleString("en-US")} bytes or more, and its operating system takes no path that long. Nothing was read or written.`;
+  "refused.path_too_long"(toolName, pathBytes) {
+    return `${toolName} cannot open this path: written out in full it comes to ${pathBytes.toLocaleString("en-US")} bytes or more, and its operating system takes no path that long. Nothing was read or written.`;
   },
   "computer_folder.prompt.name": "Use a folder on your computer",
   "computer_folder.prompt.question": "Let this cloud session use a folder on your computer?",
   "computer_folder.prompt.meaning":
     "Claude in this cloud session can then run commands and read and change files in that folder, including in auto mode, under that computer\u2019s own sandbox, rules and hooks. To end it, stop claude remote-control on that computer or disconnect it in the Claude app.",
-  "computer_folder.prompt.folder"(e) {
-    return `folder: ${e}`;
+  "computer_folder.prompt.folder"(folderLabel) {
+    return `folder: ${folderLabel}`;
   },
-  "computer_folder.prompt.computer"(e) {
-    return `on: ${e}`;
+  "computer_folder.prompt.computer"(computerLabel) {
+    return `on: ${computerLabel}`;
   },
   "repository_trust.state.trusted": "Repositories trusted",
   "repository_trust.state.no_repository": "No repository attached",
@@ -101,8 +101,8 @@ var REMOTE_TOOLS_CONSENT_TEXT = {
     "This terminal is not the computer this cloud session is bound to, so an answer given here cannot prove which device it came from. Answer on a device that can: claude.ai on the web, the desktop app or the mobile app.",
   "repository_trust.prompt.not_shown_here":
     "This cloud session is asking whether you trust what is attached to it, but the question cannot be shown in full here. Answer it in claude.ai on the web, the desktop app or the mobile app; the session waits until you do (esc stops its turn).",
-  "repository_trust.prompt.answer_elsewhere"(e) {
-    return `This cloud session is asking whether you trust what is attached to it. A yes given here would not count, because an answer sent from here cannot prove which device it came from. Answer on a trusted device, at ${e} or in the desktop or mobile app; the session waits until you do (esc stops its turn).`;
+  "repository_trust.prompt.answer_elsewhere"(askUrl) {
+    return `This cloud session is asking whether you trust what is attached to it. A yes given here would not count, because an answer sent from here cannot prove which device it came from. Answer on a trusted device, at ${askUrl} or in the desktop or mobile app; the session waits until you do (esc stops its turn).`;
   },
   "repository_trust.folder_waits.required":
     "Before this session can use a folder on your computer, it needs you to confirm you trust what is attached to it. It asks next.",
@@ -127,14 +127,14 @@ var REMOTE_TOOLS_CONSENT_TEXT = {
     "it has not been able to check whether running tools there is enabled for this account",
   "forwarding_off.retracted":
     "Correction: this session now offers device tools that act on the user's computer, so the earlier note that it cannot run tools there no longer holds for them. When the user asks for something on their computer, use those tools.",
-  forwarding_off(e) {
-    return `The user's computer has connected to this cloud session, but this session cannot run tools on it, because ${e}. Do the work in this session's own cloud environment. When the user asks for something on their computer, tell them plainly that this session cannot reach it and why, and that you are working in the cloud environment instead. Do not describe this environment as their computer. Do not retry or look for another route: a tool that only reports information about that computer cannot run anything on it, and if it says the computer is not connected or may be back in a few seconds, this is the cause and waiting will not change it.`;
+  forwarding_off(reasonText) {
+    return `The user's computer has connected to this cloud session, but this session cannot run tools on it, because ${reasonText}. Do the work in this session's own cloud environment. When the user asks for something on their computer, tell them plainly that this session cannot reach it and why, and that you are working in the cloud environment instead. Do not describe this environment as their computer. Do not retry or look for another route: a tool that only reports information about that computer cannot run anything on it, and if it says the computer is not connected or may be back in a few seconds, this is the cause and waiting will not change it.`;
   },
-  forwarding_off_for_now(e) {
-    return `The user's computer has connected to this cloud session, but this session cannot run tools on it yet, because ${e}. If that changes, the computer's tools are listed for you. Until then, do the work in this session's own cloud environment and do not describe this environment as their computer. When the user asks for something on their computer, tell them plainly that this session cannot reach it yet and why, that there is nothing to change on their computer, and that a new session may help if it stays this way.`;
+  forwarding_off_for_now(reasonText) {
+    return `The user's computer has connected to this cloud session, but this session cannot run tools on it yet, because ${reasonText}. If that changes, the computer's tools are listed for you. Until then, do the work in this session's own cloud environment and do not describe this environment as their computer. When the user asks for something on their computer, tell them plainly that this session cannot reach it yet and why, that there is nothing to change on their computer, and that a new session may help if it stays this way.`;
   },
-  announce_unverified(e) {
-    return `The cloud session did not accept the device proof on this machine's requests, so commands meant for this machine are not routed here and the session uses its own environment instead \u2014 ${e}.`;
+  announce_unverified(detailText) {
+    return `The cloud session did not accept the device proof on this machine's requests, so commands meant for this machine are not routed here and the session uses its own environment instead \u2014 ${detailText}.`;
   },
 };
 export { REMOTE_TOOLS_CONSENT_TEXT };

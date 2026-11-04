@@ -15,12 +15,12 @@
  */
 class InstanceRegistry {
   #e = new Map();
-  get(e) {
-    let n = this.#e.get(e);
-    if (n instanceof e) return n;
-    let r = new e();
-    this.#e.set(e, r);
-    return r;
+  get(registryKey) {
+    let cachedInstance = this.#e.get(registryKey);
+    if (cachedInstance instanceof registryKey) return cachedInstance;
+    let instance = new registryKey();
+    this.#e.set(registryKey, instance);
+    return instance;
   }
 }
 export { InstanceRegistry };

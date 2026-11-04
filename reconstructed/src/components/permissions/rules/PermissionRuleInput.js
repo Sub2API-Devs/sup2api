@@ -8,8 +8,8 @@
  * pieces: chunk-p2qwpk2k.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { init_react_production, y } from "../../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../keybindings/useKeybinding.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
@@ -33,10 +33,10 @@ import { Dialog } from "../../design-system/Dialog.js";
 init_react_production();
 //@ chunk-p2qwpk2k.js:24432-25922 fingerprint = PermissionRuleInput (0.585)
 function PermissionRuleInput(props) {
-  let $ = w(18);
+  let $ = useMemoCache(18);
   let { onCancel, onSubmit, ruleBehavior } = props;
-  let [inputValue, setInputValue] = y("");
-  let [cursorOffset, setCursorOffset] = y(0);
+  let [inputValue, setInputValue] = useState("");
+  let [cursorOffset, setCursorOffset] = useState(0);
   let t1;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t1 = {
@@ -155,9 +155,9 @@ function PermissionRuleInput(props) {
     $[12] = textInputColumns;
     $[13] = children;
   } else children = $[13];
-  let K;
+  let dialogElement;
   if ($[14] !== onCancel || $[15] !== title || $[16] !== children) {
-    K = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title,
       onCancel,
       color: "permission",
@@ -168,8 +168,8 @@ function PermissionRuleInput(props) {
     $[14] = onCancel;
     $[15] = title;
     $[16] = children;
-    $[17] = K;
-  } else K = $[17];
-  return K;
+    $[17] = dialogElement;
+  } else dialogElement = $[17];
+  return dialogElement;
 }
 export { PermissionRuleInput };

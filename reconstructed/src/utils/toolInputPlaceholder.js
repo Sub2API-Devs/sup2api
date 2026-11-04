@@ -9,8 +9,8 @@
  * attribution: placement 3
  */
 import {
-  B1e,
-  lMn,
+  ZodObject,
+  ZodString,
   ZodNumber,
   ZodBoolean,
   ZodArray,
@@ -37,15 +37,15 @@ function isEmptyObject(updatedInput) {
  */
 function placeholderToolInput(name, inputSchema) {
   try {
-    if (!(inputSchema instanceof B1e)) return null;
+    if (!(inputSchema instanceof ZodObject)) return null;
     let shape = inputSchema.shape;
     let filtered = Object.entries(shape).filter(([, value]) => !value.safeParse(undefined).success);
     if (filtered.length === 0) return null;
-    let h = {};
-    for (let [S, w] of filtered) h[S] = placeholderForSchema(S, w);
-    if (!inputSchema.safeParse(h).success) return null;
-    let joined = filtered.map(([S]) => `\`${S}\``).join(", ");
-    return `The ${name} tool was called with an empty input object ({}), but it has required parameters: ${joined}. Minimal valid call shape: ${jsonStringify(h)}. Re-issue the call with real values for each required parameter.`;
+    let placeholderInput = {};
+    for (let [key, schema] of filtered) placeholderInput[key] = placeholderForSchema(key, schema);
+    if (!inputSchema.safeParse(placeholderInput).success) return null;
+    let joined = filtered.map(([key]) => `\`${key}\``).join(", ");
+    return `The ${name} tool was called with an empty input object ({}), but it has required parameters: ${joined}. Minimal valid call shape: ${jsonStringify(placeholderInput)}. Re-issue the call with real values for each required parameter.`;
   } catch {
     return null;
   }
@@ -54,19 +54,19 @@ function placeholderToolInput(name, inputSchema) {
 /**
  * 按 schema 类型生成占位值。
  */
-function placeholderForSchema(e, n) {
-  if (n instanceof lMn) return `<${e}>`;
-  if (n instanceof ZodNumber) return 0;
-  if (n instanceof ZodBoolean) return false;
-  if (n instanceof ZodArray) return [];
-  if (n instanceof ZodEnum) {
-    let options = n.options;
+function placeholderForSchema(name, schema) {
+  if (schema instanceof ZodString) return `<${name}>`;
+  if (schema instanceof ZodNumber) return 0;
+  if (schema instanceof ZodBoolean) return false;
+  if (schema instanceof ZodArray) return [];
+  if (schema instanceof ZodEnum) {
+    let options = schema.options;
     if (Array.isArray(options) && options.length > 0) return options[0];
   }
-  if (n instanceof ZodLiteral) {
-    let r = [...n.values];
-    if (r.length > 0) return r[0];
+  if (schema instanceof ZodLiteral) {
+    let literalValues = [...schema.values];
+    if (literalValues.length > 0) return literalValues[0];
   }
-  return `<${e}>`;
+  return `<${name}>`;
 }
 export { isEmptyObject, placeholderToolInput };

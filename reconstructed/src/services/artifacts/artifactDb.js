@@ -50,11 +50,12 @@ import {
 } from "./requestMeta.js";
 import { requestIdMeta, buildFrameHeaders } from "./frameApi.js";
 import { sleep } from "../../utils/sleep.js";
-import { Uo } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { isCancel } from "../../../vendor/axios/dist/esm/axios.js";
 import { describeArtifactAuthFailure } from "./frameFlags.js";
 import { ARTIFACT_SLUG_RE } from "../../tools/ArtifactTool/constants.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0zqb2m0b.js:959-1011 placement
 function isArtifactDbEnabled() {
@@ -72,23 +73,31 @@ function isArtifactDbStrReplaceEnabled() {
 var ARTIFACT_DB_API_PATH = "/api/frame/db/agent";
 var DB_REQUEST_TIMEOUT_MS = 5000;
 //@ chunk-0zqb2m0b.js:1149-1169 placement
-class DbAbortError extends AbortError {}
+let DbAbortError; // deferred: uses AbortError (../../utils/errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0zqb2m0b.js:1149", () => {
+  DbAbortError = class DbAbortError extends AbortError {};
+});
 //@ chunk-0zqb2m0b.js:1169-1293 placement
-var DB_SEGMENT_PATTERN = String.raw`(?!\.\.?(?:/|$))[A-Za-z0-9_\-.~:@+]{1,200}`;
-var regExp = new RegExp(`^${DB_SEGMENT_PATTERN}$`);
-var regExp_2 = new RegExp(`^${DB_SEGMENT_PATTERN}(?:/${DB_SEGMENT_PATTERN}){0,14}$`);
+var DB_SEGMENT_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp;
+var regExp_2;
+deferInit("chunk-0zqb2m0b.js:1169", () => {
+  DB_SEGMENT_PATTERN = String.raw`(?!\.\.?(?:/|$))[A-Za-z0-9_\-.~:@+]{1,200}`;
+  regExp = new RegExp(`^${DB_SEGMENT_PATTERN}$`);
+  regExp_2 = new RegExp(`^${DB_SEGMENT_PATTERN}(?:/${DB_SEGMENT_PATTERN}){0,14}$`);
+});
 //@ chunk-0zqb2m0b.js:1293-1335 placement
 function isCollectionPath(collection) {
   return (countCharInString(collection, "/") + 1) % 2 === 1;
 }
 //@ chunk-0zqb2m0b.js:1335-2026 placement
 function describeCollectionPathError(collection) {
-  let t = (o) => (o.length > 120 ? `${o.slice(0, 60)}\u2026${o.slice(-40)}` : o);
+  let pathPart = (part) => (part.length > 120 ? `${part.slice(0, 60)}\u2026${part.slice(-40)}` : part);
   let parts = collection.split("/");
-  let c = parts.length;
-  let s = t(parts.slice(0, -1).join("/"));
-  let l = t(parts[c - 1]);
-  return `collection '${t(collection)}' has ${c} segments, which makes it a document path, not a collection: collection paths have an odd number of segments (collection/document/collection/\u2026) and the document is collection + doc_id. For that document use collection '${s}' with doc_id '${l}'; for a collection inside it, add one more segment. Per-user data follows the same rule \u2014 collection 'data/users/<id>' (3 segments) holds that user's documents, so 'data/users/<id>/decks' is one document and 'data/users/<id>/decks/cards' a collection.`;
+  let count = parts.length;
+  let parent = pathPart(parts.slice(0, -1).join("/"));
+  let leaf = pathPart(parts[count - 1]);
+  return `collection '${pathPart(collection)}' has ${count} segments, which makes it a document path, not a collection: collection paths have an odd number of segments (collection/document/collection/\u2026) and the document is collection + doc_id. For that document use collection '${parent}' with doc_id '${leaf}'; for a collection inside it, add one more segment. Per-user data follows the same rule \u2014 collection 'data/users/<id>' (3 segments) holds that user's documents, so 'data/users/<id>/decks' is one document and 'data/users/<id>/decks/cards' a collection.`;
 }
 //@ chunk-0zqb2m0b.js:2026-2159 placement
 /**
@@ -129,41 +138,45 @@ var EDIT_ERROR_CODES = [
   "version_mismatch",
 ];
 //@ chunk-0zqb2m0b.js:2461-2503 placement
-function isEditErrorCode(code) {
-  return EDIT_ERROR_CODES.some((t) => t === code);
+function isEditErrorCode(errorCode) {
+  return EDIT_ERROR_CODES.some((known) => known === errorCode);
 }
 //@ chunk-0zqb2m0b.js:2503-3262 placement
 /**
  * 数据库错误码映射表：服务端各种错误码统一到 not_found/invalid_argument/quota_or_rate/busy/upstream_auth/store_unavailable 等，及需要用户级 OAuth 错误的文案集合。
  */
-var DB_ERROR_CODES = new Map([
-  ["not_found", "not_found"],
-  ["invalid_argument", "invalid_argument"],
-  ["quota_or_rate", "quota_or_rate"],
-  ["busy", "busy"],
-  ["upstream_auth", "upstream_auth"],
-  ["store_unavailable", "store_unavailable"],
-  ["not_declared", "not_declared"],
-  ["too_large", "too_large"],
-  ["quota_exceeded", "quota_exceeded"],
-  ["invalid-argument", "invalid_argument"],
-  ["not-found", "not_found"],
-  ["resource-exhausted", "quota_or_rate"],
-  ["resource_exhausted", "quota_or_rate"],
-  ["data-unavailable", "store_unavailable"],
-  ["unavailable", "store_unavailable"],
-  ["upstream-error", "store_unavailable"],
-  ...EDIT_ERROR_CODES.map((e) => [e, e]),
-]);
-var USER_SCOPED_TOKEN_ERRORS = new Set([
-  "an OAuth access token is required",
-  "a directly presented OAuth access token is required",
-  "db verbs require a user-scoped OAuth token, not an org service key",
-]);
+var DB_ERROR_CODES; // deferred: uses MAX_EDITS_PER_CALL of its import cycle while loading; runs once the cycle is complete
+var USER_SCOPED_TOKEN_ERRORS;
+deferInit("chunk-0zqb2m0b.js:2503", () => {
+  DB_ERROR_CODES = new Map([
+    ["not_found", "not_found"],
+    ["invalid_argument", "invalid_argument"],
+    ["quota_or_rate", "quota_or_rate"],
+    ["busy", "busy"],
+    ["upstream_auth", "upstream_auth"],
+    ["store_unavailable", "store_unavailable"],
+    ["not_declared", "not_declared"],
+    ["too_large", "too_large"],
+    ["quota_exceeded", "quota_exceeded"],
+    ["invalid-argument", "invalid_argument"],
+    ["not-found", "not_found"],
+    ["resource-exhausted", "quota_or_rate"],
+    ["resource_exhausted", "quota_or_rate"],
+    ["data-unavailable", "store_unavailable"],
+    ["unavailable", "store_unavailable"],
+    ["upstream-error", "store_unavailable"],
+    ...EDIT_ERROR_CODES.map((name) => [name, name]),
+  ]);
+  USER_SCOPED_TOKEN_ERRORS = new Set([
+    "an OAuth access token is required",
+    "a directly presented OAuth access token is required",
+    "db verbs require a user-scoped OAuth token, not an org service key",
+  ]);
+});
 //@ chunk-0zqb2m0b.js:3262-3494 placement
-function classifyCredential403(e, t) {
-  if (e !== 403 || typeof t !== "string") return;
-  let trimmed = t.trim();
+function classifyCredential403(error, status) {
+  if (error !== 403 || typeof status !== "string") return;
+  let trimmed = status.trim();
   if (USER_SCOPED_TOKEN_ERRORS.has(trimmed))
     return {
       code: "credential_rejected",
@@ -177,21 +190,21 @@ function classifyCredential403(e, t) {
   return;
 }
 //@ chunk-0zqb2m0b.js:3494-3746 placement
-function classifyDbHttpStatus(e) {
-  if (e === 404 || e === 403) return "not_found";
-  if (e === 400 || e === 422) return "invalid_argument";
-  if (e === 413) return "too_large";
-  if (e === 429) return "quota_or_rate";
-  if (e === 409 || e === 412) return "busy";
-  if (e === 401) return "upstream_auth";
+function classifyDbHttpStatus(status) {
+  if (status === 404 || status === 403) return "not_found";
+  if (status === 400 || status === 422) return "invalid_argument";
+  if (status === 413) return "too_large";
+  if (status === 429) return "quota_or_rate";
+  if (status === 409 || status === 412) return "busy";
+  if (status === 401) return "upstream_auth";
   return "store_unavailable";
 }
 //@ chunk-0zqb2m0b.js:3746-4230 placement
 /**
  * 把内部数据库错误码归并成对模型公开的错误码（invalid_argument/resource_exhausted/quota_exceeded/unavailable，编辑类与版本冲突原样保留）。
  */
-function toPublicDbErrorCode(e) {
-  switch (e) {
+function toPublicDbErrorCode(result) {
+  switch (result) {
     case "not_found":
     case "invalid_argument":
     case "too_large":
@@ -213,7 +226,7 @@ function toPublicDbErrorCode(e) {
     case "edit_field_missing":
     case "edit_field_not_string":
     case "version_mismatch":
-      return e;
+      return result;
   }
 }
 //@ chunk-0zqb2m0b.js:4230-4402 placement
@@ -231,102 +244,114 @@ var SYMBOL_TO_DB_OPERATOR = {
   ">=": "gte",
 };
 //@ chunk-0zqb2m0b.js:4402-4444 placement
-function isComparisonSymbol(e) {
-  return Object.hasOwn(SYMBOL_TO_DB_OPERATOR, e);
+function isComparisonSymbol(op) {
+  return Object.hasOwn(SYMBOL_TO_DB_OPERATOR, op);
 }
 //@ chunk-0zqb2m0b.js:4444-4480 placement
-function toDbOperator(e) {
-  return isComparisonSymbol(e) ? SYMBOL_TO_DB_OPERATOR[e] : e;
+function toDbOperator(op) {
+  return isComparisonSymbol(op) ? SYMBOL_TO_DB_OPERATOR[op] : op;
 }
 //@ chunk-0zqb2m0b.js:4480-5030 placement
 /**
  * 数据库响应的 schema 集合：单文档读取、文档列表、用量（文档数/上限），以及可选布尔字段 authoredByOthers/outside_writer。
  */
-var optionalTrueSchema = DoctorLazy(() => create_25(true).optional().catch(undefined));
-var optionalBooleanSchema = DoctorLazy(() => create_6().optional().catch(undefined));
-var DB_GET_RESPONSE_SCHEMA = DoctorLazy(() =>
-  create({
-    exists: create_6(),
-    data: create_20(create_2(), create_12()).optional(),
-    version: create_3().int().optional(),
-    updatedAt: create_2().optional(),
-    authoredByOthers: optionalTrueSchema(),
-    outside_writer: optionalBooleanSchema(),
-  }),
-);
-var DB_LIST_RESPONSE_SCHEMA = DoctorLazy(() =>
-  create({
-    docs: create_15(
-      create({
-        id: create_2(),
-        data: create_20(create_2(), create_12()),
-        version: create_3().int().optional(),
-        updatedAt: create_2().optional(),
-      }),
-    ),
-    nextCursor: create_2().optional(),
-    authoredByOthers: optionalTrueSchema(),
-    outside_writer: optionalBooleanSchema(),
-  }),
-);
-var DB_USAGE_SCHEMA = DoctorLazy(() =>
-  create({
-    documents: create_3().int().safe().nonnegative(),
-    maxDocuments: create_3().int().safe().positive(),
-  })
-    .optional()
-    .catch(undefined),
-);
+var optionalTrueSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var optionalBooleanSchema;
+var DB_GET_RESPONSE_SCHEMA;
+var DB_LIST_RESPONSE_SCHEMA;
+var DB_USAGE_SCHEMA;
+deferInit("chunk-0zqb2m0b.js:4480", () => {
+  optionalTrueSchema = DoctorLazy(() => create_25(true).optional().catch(undefined));
+  optionalBooleanSchema = DoctorLazy(() => create_6().optional().catch(undefined));
+  DB_GET_RESPONSE_SCHEMA = DoctorLazy(() =>
+    create({
+      exists: create_6(),
+      data: create_20(create_2(), create_12()).optional(),
+      version: create_3().int().optional(),
+      updatedAt: create_2().optional(),
+      authoredByOthers: optionalTrueSchema(),
+      outside_writer: optionalBooleanSchema(),
+    }),
+  );
+  DB_LIST_RESPONSE_SCHEMA = DoctorLazy(() =>
+    create({
+      docs: create_15(
+        create({
+          id: create_2(),
+          data: create_20(create_2(), create_12()),
+          version: create_3().int().optional(),
+          updatedAt: create_2().optional(),
+        }),
+      ),
+      nextCursor: create_2().optional(),
+      authoredByOthers: optionalTrueSchema(),
+      outside_writer: optionalBooleanSchema(),
+    }),
+  );
+  DB_USAGE_SCHEMA = DoctorLazy(() =>
+    create({
+      documents: create_3().int().safe().nonnegative(),
+      maxDocuments: create_3().int().safe().positive(),
+    })
+      .optional()
+      .catch(undefined),
+  );
+});
 //@ chunk-0zqb2m0b.js:5030-5151 placement
-function checkWriteUsageShape(e, usage) {
-  if (usage === undefined && typeof e === "object" && e !== null && e.usage !== undefined)
+function checkWriteUsageShape(usage, usage_2) {
+  if (usage_2 === undefined && typeof usage === "object" && usage !== null && usage.usage !== undefined)
     logFeatureSad("artifact_db_write", "malformed_usage");
 }
 //@ chunk-0zqb2m0b.js:5151-5167 placement
 var RETRY_ATTEMPTS = 4;
 var RETRY_BASE_MS = 600;
 //@ chunk-0zqb2m0b.js:5167-5394 placement
-function getResponseWarnings(e) {
-  let warnings = e !== null && typeof e === "object" ? e.warnings : undefined;
+function getResponseWarnings(result) {
+  let warnings = result !== null && typeof result === "object" ? result.warnings : undefined;
   if (!Array.isArray(warnings)) return [];
-  let r = [];
+  let warningList = [];
   for (let warning of warnings) {
-    if (r.length >= RETRY_ATTEMPTS) break;
+    if (warningList.length >= RETRY_ATTEMPTS) break;
     if (typeof warning !== "string") continue;
-    let s = sanitizeDisplayTextOrUndefined(warning, RETRY_BASE_MS);
-    if (s !== undefined) r.push(s);
+    let rawWarning = sanitizeDisplayTextOrUndefined(warning, RETRY_BASE_MS);
+    if (rawWarning !== undefined) warningList.push(rawWarning);
   }
-  return r;
+  return warningList;
 }
 //@ chunk-0zqb2m0b.js:5394-5639 placement
-var DB_WRITE_RESPONSE_SCHEMA = DoctorLazy(() =>
-  create({
-    version: create_3().int().optional(),
-    usage: DB_USAGE_SCHEMA(),
-  }),
-);
-var DB_BATCH_RESPONSE_SCHEMA = DoctorLazy(() =>
-  create({
-    results: create_15(
-      create({
-        version: create_3().int().optional(),
-      }),
-    ),
-    usage: DB_USAGE_SCHEMA(),
-  }),
-);
-var DB_INVALID_ARGUMENT_SCHEMA = DoctorLazy(() =>
-  create({
-    error: create({
-      code: create_25("invalid_argument"),
-      message: create_25("invalid argument"),
-      verb: create_9().optional(),
+var DB_WRITE_RESPONSE_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var DB_BATCH_RESPONSE_SCHEMA;
+var DB_INVALID_ARGUMENT_SCHEMA;
+deferInit("chunk-0zqb2m0b.js:5394", () => {
+  DB_WRITE_RESPONSE_SCHEMA = DoctorLazy(() =>
+    create({
+      version: create_3().int().optional(),
+      usage: DB_USAGE_SCHEMA(),
     }),
-  }),
-);
+  );
+  DB_BATCH_RESPONSE_SCHEMA = DoctorLazy(() =>
+    create({
+      results: create_15(
+        create({
+          version: create_3().int().optional(),
+        }),
+      ),
+      usage: DB_USAGE_SCHEMA(),
+    }),
+  );
+  DB_INVALID_ARGUMENT_SCHEMA = DoctorLazy(() =>
+    create({
+      error: create({
+        code: create_25("invalid_argument"),
+        message: create_25("invalid argument"),
+        verb: create_9().optional(),
+      }),
+    }),
+  );
+});
 //@ chunk-0zqb2m0b.js:5639-5697 placement
-function isInvalidArgumentBody(status, t) {
-  return status === 400 && DB_INVALID_ARGUMENT_SCHEMA().safeParse(t).success;
+function isInvalidArgumentBody(status, error) {
+  return status === 400 && DB_INVALID_ARGUMENT_SCHEMA().safeParse(error).success;
 }
 //@ chunk-0zqb2m0b.js:5697-5802 placement
 class RefusalCooldown {
@@ -339,60 +364,73 @@ class RefusalCooldown {
 /**
  * 导出函数 `ME_ID_TTL_MS`。
  */
-var ME_ID_TTL_MS = 3600000;
-var meIdCooldown = new HostScoped(() => new RefusalCooldown());
-var meAliasCooldown = new HostScoped(() => new RefusalCooldown());
-var meRawCooldown = new HostScoped(() => new RefusalCooldown());
+var ME_ID_TTL_MS; // deferred: uses RefusalCooldown of its import cycle while loading; runs once the cycle is complete
+var meIdCooldown;
+var meAliasCooldown;
+var meRawCooldown;
+deferInit("chunk-0zqb2m0b.js:5802", () => {
+  ME_ID_TTL_MS = 3600000;
+  meIdCooldown = new HostScoped(() => new RefusalCooldown());
+  meAliasCooldown = new HostScoped(() => new RefusalCooldown());
+  meRawCooldown = new HostScoped(() => new RefusalCooldown());
+});
 //@ chunk-0zqb2m0b.js:5878-5971 placement
-function isBadJsonInvalidArgument(status, t) {
-  if (!isInvalidArgumentBody(status, t)) return false;
-  let { reason } = t.error;
+function isBadJsonInvalidArgument(status, error) {
+  if (!isInvalidArgumentBody(status, error)) return false;
+  let { reason } = error.error;
   return reason === undefined || reason === "bad_json";
 }
 //@ chunk-0zqb2m0b.js:5971-6248 placement
 /**
  * 数据库错误响应体 schema（code/reason/kind/limit/version/index/required）与配额原因集合。
  */
-var DbErrorBodySchema = DoctorLazy(() =>
-  create({
-    error: create({
-      code: create_2().optional(),
-      reason: create_12().optional(),
-      kind: create_12().optional(),
-      limit: create_12().optional(),
-      version: create_12().optional(),
-      index: create_12().optional(),
-      required: create_12().optional(),
-    }).optional(),
-  }),
-);
-var QUOTA_REASONS = new Set(["docs_per_collection", "docs_per_database", "databases_per_org"]);
+var DbErrorBodySchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var QUOTA_REASONS;
+deferInit("chunk-0zqb2m0b.js:5971", () => {
+  DbErrorBodySchema = DoctorLazy(() =>
+    create({
+      error: create({
+        code: create_2().optional(),
+        reason: create_12().optional(),
+        kind: create_12().optional(),
+        limit: create_12().optional(),
+        version: create_12().optional(),
+        index: create_12().optional(),
+        required: create_12().optional(),
+      }).optional(),
+    }),
+  );
+  QUOTA_REASONS = new Set(["docs_per_collection", "docs_per_database", "databases_per_org"]);
+});
 //@ chunk-0zqb2m0b.js:6248-6281 placement
 /**
  * 导出函数 `isQuotaReason`：参数 e，返回 ve.has(e)。
  */
-function isQuotaReason(e) {
-  return QUOTA_REASONS.has(e);
+function isQuotaReason(reason) {
+  return QUOTA_REASONS.has(reason);
 }
 //@ chunk-0zqb2m0b.js:6281-6448 placement
-var QUOTA_REASONS_BY_CODE = {
-  quota_exceeded: new Set([...QUOTA_REASONS, "bytes_per_database"]),
-  quota_or_rate: new Set([
-    "active_leases",
-    "rate_limited",
-    "write_capacity",
-    "scan_budget",
-    "response_budget",
-  ]),
-};
+var QUOTA_REASONS_BY_CODE; // deferred: uses DbErrorBodySchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0zqb2m0b.js:6281", () => {
+  QUOTA_REASONS_BY_CODE = {
+    quota_exceeded: new Set([...QUOTA_REASONS, "bytes_per_database"]),
+    quota_or_rate: new Set([
+      "active_leases",
+      "rate_limited",
+      "write_capacity",
+      "scan_budget",
+      "response_budget",
+    ]),
+  };
+});
 //@ chunk-0zqb2m0b.js:6448-6505 placement
-function hasQuotaReasonForCode(e, kind) {
-  let r = QUOTA_REASONS_BY_CODE[e];
-  return r !== undefined && r.has(kind);
+function hasQuotaReasonForCode(code, kind) {
+  let reasons = QUOTA_REASONS_BY_CODE[code];
+  return reasons !== undefined && reasons.has(kind);
 }
 //@ chunk-0zqb2m0b.js:6505-6586 placement
-function positiveIntOrUndefined(e) {
-  return typeof e === "number" && Number.isSafeInteger(e) && e > 0 ? e : undefined;
+function positiveIntOrUndefined(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : undefined;
 }
 //@ chunk-0zqb2m0b.js:6586-6668 placement
 function nonNegativeIntOrUndefined(index) {
@@ -401,34 +439,34 @@ function nonNegativeIntOrUndefined(index) {
 //@ chunk-0zqb2m0b.js:6668-6698 placement
 var SAFE_COLLECTION_NAME_RE = /^[a-z][a-z_-]{0,63}$/;
 //@ chunk-0zqb2m0b.js:6698-7266 placement
-function checkVersionPrecondition(status, t) {
-  let r = classifyCredential403(status, t);
-  if (r !== undefined) return r;
-  let c = DbErrorBodySchema().safeParse(t);
-  let error = c.success ? c.data.error : undefined;
+function checkVersionPrecondition(status, body) {
+  let credentialKind = classifyCredential403(status, body);
+  if (credentialKind !== undefined) return credentialKind;
+  let parsed = DbErrorBodySchema().safeParse(body);
+  let error = parsed.success ? parsed.data.error : undefined;
   let code = error?.code;
-  let o = code !== undefined ? DB_ERROR_CODES.get(code) : undefined;
-  if (code !== undefined && o !== undefined) {
+  let codeInfo = code !== undefined ? DB_ERROR_CODES.get(code) : undefined;
+  if (code !== undefined && codeInfo !== undefined) {
     let kind = error?.kind;
-    if (hasQuotaReasonForCode(o, kind))
+    if (hasQuotaReasonForCode(codeInfo, kind))
       return {
-        code: o,
+        code: codeInfo,
         reason: kind,
         kind,
         limit: positiveIntOrUndefined(error?.limit),
       };
-    let h = o === "version_mismatch" && error?.required === true;
+    let isVersionMismatch = codeInfo === "version_mismatch" && error?.required === true;
     let reason =
       typeof error?.reason === "string" && SAFE_COLLECTION_NAME_RE.test(error.reason)
         ? error.reason
         : undefined;
     return {
-      code: o,
-      reason: h ? "version_required" : code.replace(/-/g, "_"),
-      ...(isEditErrorCode(o) && {
+      code: codeInfo,
+      reason: isVersionMismatch ? "version_required" : code.replace(/-/g, "_"),
+      ...(isEditErrorCode(codeInfo) && {
         version: positiveIntOrUndefined(error?.version),
         index: nonNegativeIntOrUndefined(error?.index),
-        ...(h && {
+        ...(isVersionMismatch && {
           required: true,
         }),
       }),
@@ -437,100 +475,105 @@ function checkVersionPrecondition(status, t) {
       }),
     };
   }
-  let n = classifyDbHttpStatus(status);
+  let httpStatus = classifyDbHttpStatus(status);
   return {
-    code: n,
-    reason: n,
+    code: httpStatus,
+    reason: httpStatus,
   };
 }
 //@ chunk-0zqb2m0b.js:7266-7577 placement
 /**
  * 版本冲突错误的提示前缀与写入/删除时“需先读最新版本”的文案。
  */
-var VERSION_MISMATCH_PREFIXES = [
-  `db write failed (${toPublicDbErrorCode("version_mismatch")}): `,
-  `db batch write failed (${toPublicDbErrorCode("version_mismatch")}): `,
-];
-var VERSION_MISMATCH_TEXTS = {
-  write: "Not saved: Claude needs to read the latest version of this document before changing it.",
-  delete: "Not deleted: Claude needs to read the latest version of this document before deleting it.",
-};
+var VERSION_MISMATCH_PREFIXES; // deferred: uses toPublicDbErrorCode of its import cycle while loading; runs once the cycle is complete
+var VERSION_MISMATCH_TEXTS;
+deferInit("chunk-0zqb2m0b.js:7266", () => {
+  VERSION_MISMATCH_PREFIXES = [
+    `db write failed (${toPublicDbErrorCode("version_mismatch")}): `,
+    `db batch write failed (${toPublicDbErrorCode("version_mismatch")}): `,
+  ];
+  VERSION_MISMATCH_TEXTS = {
+    write: "Not saved: Claude needs to read the latest version of this document before changing it.",
+    delete: "Not deleted: Claude needs to read the latest version of this document before deleting it.",
+  };
+});
 //@ chunk-0zqb2m0b.js:7577-12816 placement
 /**
  * 生成文档写入错误说明（字段、版本冲突、编辑未匹配/不唯一等，约 5 KB）。
  */
-function formatDbWriteError(e, t, kind, limit, s, l, serverReason) {
-  let n = `field '${s ?? "?"}'`;
-  let d = l?.current !== undefined ? ` The document is at version ${l.current}.` : "";
-  let h = l?.pinned !== undefined && l.current === l.pinned;
-  let u = `db ${t} failed (${toPublicDbErrorCode(e)})`;
-  switch (e) {
+function formatDbWriteError(errorCode, operation, kind, limit, field, versionInfo, serverReason) {
+  let fieldText = `field '${field ?? "?"}'`;
+  let versionText =
+    versionInfo?.current !== undefined ? ` The document is at version ${versionInfo.current}.` : "";
+  let pinnedAtCurrent = versionInfo?.pinned !== undefined && versionInfo.current === versionInfo.pinned;
+  let headline = `db ${operation} failed (${toPublicDbErrorCode(errorCode)})`;
+  switch (errorCode) {
     case "not_found":
-      return `${u}: no such artifact, collection, or document (or no access \u2014 the two are deliberately indistinguishable)`;
+      return `${headline}: no such artifact, collection, or document (or no access \u2014 the two are deliberately indistinguishable)`;
     case "invalid_argument":
-      return `${u}: the server could not accept the request as shaped${serverReason !== undefined ? ` (reason: ${serverReason})` : ""}`;
+      return `${headline}: the server could not accept the request as shaped${serverReason !== undefined ? ` (reason: ${serverReason})` : ""}`;
     case "too_large":
-      return `${u}: the request body exceeds the server's size limit \u2014 send less per call`;
+      return `${headline}: the request body exceeds the server's size limit \u2014 send less per call`;
     case "quota_or_rate":
-      return `${u}: ${formatDbLimitError(kind, limit) ?? "over a rate or storage limit \u2014 retry later or write less"}`;
+      return `${headline}: ${formatDbLimitError(kind, limit) ?? "over a rate or storage limit \u2014 retry later or write less"}`;
     case "quota_exceeded":
-      return `${u}: ${formatDbLimitError(kind, limit) ?? "a storage limit on this artifact's database has been reached \u2014 delete documents; retrying won't help"}`;
+      return `${headline}: ${formatDbLimitError(kind, limit) ?? "a storage limit on this artifact's database has been reached \u2014 delete documents; retrying won't help"}`;
     case "busy":
-      return `${u}: lost to a concurrent change \u2014 re-read and retry deliberately`;
+      return `${headline}: lost to a concurrent change \u2014 re-read and retry deliberately`;
     case "upstream_auth":
-      return `${u}: could not authenticate \u2014 the session's credential may need a refresh; try again`;
+      return `${headline}: could not authenticate \u2014 the session's credential may need a refresh; try again`;
     case "store_unavailable":
-      return `${u}: the store is unavailable right now \u2014 try again`;
+      return `${headline}: the store is unavailable right now \u2014 try again`;
     case "not_declared":
-      return `${u}: this artifact's current published version does not declare the database capability \u2014 republish it with the db capability declared, then retry`;
+      return `${headline}: this artifact's current published version does not declare the database capability \u2014 republish it with the db capability declared, then retry`;
     case "credential_rejected":
-      return `${u}: the server refused this session's credential at the artifact-db door \u2014 not an artifact-access or existence answer; report this as a client/server integration fault`;
+      return `${headline}: the server refused this session's credential at the artifact-db door \u2014 not an artifact-access or existence answer; report this as a client/server integration fault`;
     case "cloud_unavailable":
-      return `${u}: reading and editing artifact data isn't available in this cloud session right now; this says nothing about the artifact or its data, and if the user has access, Claude Code on their own machine can still read and edit it`;
+      return `${headline}: reading and editing artifact data isn't available in this cloud session right now; this says nothing about the artifact or its data, and if the user has access, Claude Code on their own machine can still read and edit it`;
     case "network_off":
-      return t === "read"
-        ? `${u}: this cloud session's network access is turned off (or could not be confirmed), so it cannot read artifact data${relayIsOnlyRoute() ? "" : " \u2014 writes still work"}; do not retry the read here`
-        : `${u}: this cloud session's network access is turned off (or could not be confirmed), and the gateway did not accept this call as a write it allows \u2014 do not retry it here`;
+      return operation === "read"
+        ? `${headline}: this cloud session's network access is turned off (or could not be confirmed), so it cannot read artifact data${relayIsOnlyRoute() ? "" : " \u2014 writes still work"}; do not retry the read here`
+        : `${headline}: this cloud session's network access is turned off (or could not be confirmed), and the gateway did not accept this call as a write it allows \u2014 do not retry it here`;
     case "edit_no_match":
-      return h
-        ? `${u}: old_str does not occur in ${n} of that document, so nothing was written by this call. The document is still at version ${l?.current}, the one this edit was pinned to, so nothing changed under you: old_str itself does not match the stored text \u2014 copy it exactly as it appears in the field's value (the decoded string, not JSON-escaped source)`
-        : `${u}: old_str does not occur in ${n} of that document, so nothing was written by this call.${d} Copy the text exactly as it appears in the field's value (the decoded string, not JSON-escaped source). If you were retrying after a call whose outcome you did not see, that earlier call may already have applied \u2014 read the document back before trying again. If someone else changed that text, re-read and re-plan the edit`;
+      return pinnedAtCurrent
+        ? `${headline}: old_str does not occur in ${fieldText} of that document, so nothing was written by this call. The document is still at version ${versionInfo?.current}, the one this edit was pinned to, so nothing changed under you: old_str itself does not match the stored text \u2014 copy it exactly as it appears in the field's value (the decoded string, not JSON-escaped source)`
+        : `${headline}: old_str does not occur in ${fieldText} of that document, so nothing was written by this call.${versionText} Copy the text exactly as it appears in the field's value (the decoded string, not JSON-escaped source). If you were retrying after a call whose outcome you did not see, that earlier call may already have applied \u2014 read the document back before trying again. If someone else changed that text, re-read and re-plan the edit`;
     case "edit_ambiguous":
-      return `${u}: old_str occurs more than once in ${n} of that document; nothing was written.${d} Include more surrounding text so it is unique, or pass replace_all to change every occurrence`;
+      return `${headline}: old_str occurs more than once in ${fieldText} of that document; nothing was written.${versionText} Include more surrounding text so it is unique, or pass replace_all to change every occurrence`;
     case "edit_field_missing":
-      return `${u}: the document has no top-level ${n}; nothing was written.${d} str_replace edits an existing top-level string field \u2014 read the document to see its fields, or use update to add one`;
+      return `${headline}: the document has no top-level ${fieldText}; nothing was written.${versionText} str_replace edits an existing top-level string field \u2014 read the document to see its fields, or use update to add one`;
     case "edit_field_not_string":
-      return `${u}: ${n} is not a string (str_replace edits top-level string fields only); nothing was written \u2014 use update for structured fields.${d}`;
+      return `${headline}: ${fieldText} is not a string (str_replace edits top-level string fields only); nothing was written \u2014 use update for structured fields.${versionText}`;
     case "version_mismatch":
-      if (l?.required === true) {
-        let path = l.path ?? "that document";
-        let k =
+      if (versionInfo?.required === true) {
+        let path = versionInfo.path ?? "that document";
+        let unknown =
           "Read it back with read_db, base the change on what it holds now, and resend with if_version set to the version that read returns";
-        switch (l.op) {
+        switch (versionInfo.op) {
           case "delete":
-            return `${u}: ${path} is an existing document and this delete carried no if_version \u2014 nothing was deleted. Read it back and, if it should still be deleted, resend the delete with if_version set to the version that read returns`;
+            return `${headline}: ${path} is an existing document and this delete carried no if_version \u2014 nothing was deleted. Read it back and, if it should still be deleted, resend the delete with if_version set to the version that read returns`;
           case "update":
-            return `${u}: ${path} is an existing document and this update carried no if_version \u2014 nothing was written. ${"Read it back with read_db, base the change on what it holds now, and resend with if_version set to the version that read returns"}`;
+            return `${headline}: ${path} is an existing document and this update carried no if_version \u2014 nothing was written. ${"Read it back with read_db, base the change on what it holds now, and resend with if_version set to the version that read returns"}`;
           default:
-            return `${u}: ${path} already exists and this write carried no if_version \u2014 nothing was written. ${"Read it back with read_db, base the change on what it holds now, and resend with if_version set to the version that read returns"}`;
+            return `${headline}: ${path} already exists and this write carried no if_version \u2014 nothing was written. ${"Read it back with read_db, base the change on what it holds now, and resend with if_version set to the version that read returns"}`;
         }
       }
-      return l?.current !== undefined
-        ? `${u}: the document is no longer at version ${l.pinned ?? "?"}, the one this write was pinned to \u2014 it is now at version ${l.current}; nothing was written. Read it back, re-plan the write against what it holds now, and pin to that version`
-        : `${u}: the document is no longer at version ${l?.pinned ?? "?"}, the one this write was pinned to \u2014 it has changed or may have been deleted; nothing was written. Read it back: if it still exists, re-plan the write against what it holds now and pin to its version; if it is gone, ${l?.op === "delete" ? "a delete has nothing left to do" : 're-create it with a "set" and no if_version only if it should exist again'}`;
+      return versionInfo?.current !== undefined
+        ? `${headline}: the document is no longer at version ${versionInfo.pinned ?? "?"}, the one this write was pinned to \u2014 it is now at version ${versionInfo.current}; nothing was written. Read it back, re-plan the write against what it holds now, and pin to that version`
+        : `${headline}: the document is no longer at version ${versionInfo?.pinned ?? "?"}, the one this write was pinned to \u2014 it has changed or may have been deleted; nothing was written. Read it back: if it still exists, re-plan the write against what it holds now and pin to its version; if it is gone, ${versionInfo?.op === "delete" ? "a delete has nothing left to do" : 're-create it with a "set" and no if_version only if it should exist again'}`;
   }
 }
 //@ chunk-0zqb2m0b.js:12816-14127 placement
-function formatDbLimitError(e, t) {
-  let r = t === undefined ? "document limit" : `limit of ${t} documents`;
-  let c = t === undefined ? "storage limit" : `storage limit of ${formatBytesDecimal(t)}`;
-  switch (e) {
+function formatDbLimitError(kind, limit) {
+  let docPart = limit === undefined ? "document limit" : `limit of ${limit} documents`;
+  let storagePart = limit === undefined ? "storage limit" : `storage limit of ${formatBytesDecimal(limit)}`;
+  switch (kind) {
     case "docs_per_collection":
-      return `this collection has reached its ${r} \u2014 delete documents; retrying won't help`;
+      return `this collection has reached its ${docPart} \u2014 delete documents; retrying won't help`;
     case "docs_per_database":
-      return `this artifact's database has reached its ${r} \u2014 delete documents before adding more; retrying won't help`;
+      return `this artifact's database has reached its ${docPart} \u2014 delete documents before adding more; retrying won't help`;
     case "bytes_per_database":
-      return `this artifact's database has reached its ${c} (the total size of its documents, not their count) \u2014 delete documents or make them smaller; a write that makes an existing document larger can be refused too, and retrying won't help`;
+      return `this artifact's database has reached its ${storagePart} (the total size of its documents, not their count) \u2014 delete documents or make them smaller; a write that makes an existing document larger can be refused too, and retrying won't help`;
     case "databases_per_org":
       return "this organization has reached its limit on artifact databases; retrying won't help";
     case "active_leases":
@@ -551,33 +594,38 @@ function formatDbLimitError(e, t) {
 /**
  * 数据库读取自身身份（data/users/me、whoami）的路径常量与 schema。
  */
-var DATA_USERS_ME = "data/users/me";
-var WHOAMI_PATH = "whoami";
-var whoAmIResponseSchema = DoctorLazy(() =>
-  create({
-    id: create_2().min(1),
-  }),
-);
+var DATA_USERS_ME; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var WHOAMI_PATH;
+var whoAmIResponseSchema;
+deferInit("chunk-0zqb2m0b.js:14127", () => {
+  DATA_USERS_ME = "data/users/me";
+  WHOAMI_PATH = "whoami";
+  whoAmIResponseSchema = DoctorLazy(() =>
+    create({
+      id: create_2().min(1),
+    }),
+  );
+});
 //@ chunk-0zqb2m0b.js:14192-14227 placement
-function meKey(accountUuid, t) {
-  return `${accountUuid}:${t}`;
+function meKey(accountUuid, prefix) {
+  return `${accountUuid}:${prefix}`;
 }
 //@ chunk-0zqb2m0b.js:14227-14280 placement
 function isDbViaRelay() {
   return plannedRoute("POST", ARTIFACT_DB_API_PATH, "bound") === "relay";
 }
 //@ chunk-0zqb2m0b.js:14280-14378 placement
-async function meKeyFromGateway(e, t) {
+async function meKeyFromGateway(accountUuid, credentials) {
   if (isDbViaRelay()) return null;
-  let accountUuid = (await getGatewayAccountInfoAsync(t))?.accountUuid;
-  return accountUuid ? meKey(accountUuid, e) : null;
+  let accountUuid_2 = (await getGatewayAccountInfoAsync(credentials))?.accountUuid;
+  return accountUuid_2 ? meKey(accountUuid_2, accountUuid) : null;
 }
 //@ chunk-0zqb2m0b.js:14378-14477 placement
-async function isSameAccountUuid(e, t, r) {
-  let freshOauthAccountFromDisk = await readFreshOauthAccountFromDisk(r);
+async function isSameAccountUuid(a, b, credentials) {
+  let freshOauthAccountFromDisk = await readFreshOauthAccountFromDisk(credentials);
   return (
     freshOauthAccountFromDisk?.accountUuid !== undefined &&
-    meKey(freshOauthAccountFromDisk.accountUuid, e) === t
+    meKey(freshOauthAccountFromDisk.accountUuid, a) === b
   );
 }
 //@ chunk-0zqb2m0b.js:14477-14554 placement
@@ -607,122 +655,138 @@ function clearMeIdCache(host) {
 //@ chunk-0zqb2m0b.js:14732-14859 placement
 function makeUsersMeRewriter(collection, docId) {
   if (collection === DATA_USERS_ME || collection.startsWith(DATA_USERS_ME + "/"))
-    return (r) => ({
-      collection: "data/users/" + r + collection.slice(DATA_USERS_ME.length),
+    return (result) => ({
+      collection: "data/users/" + result + collection.slice(DATA_USERS_ME.length),
       docId,
     });
   return null;
 }
 //@ chunk-0zqb2m0b.js:14859-14892 placement
-var CONTESTED_ME_KEY = Symbol("contested-me-key");
+var CONTESTED_ME_KEY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0zqb2m0b.js:14859", () => {
+  CONTESTED_ME_KEY = Symbol("contested-me-key");
+});
 //@ chunk-0zqb2m0b.js:14892-14945 placement
 class MeIdCache {
   resolvedMeIds = new Map();
   inFlightMeIds = new Map();
 }
 //@ chunk-0zqb2m0b.js:14945-14970 placement
-var meIdCache = new HostScoped(() => new MeIdCache());
+var meIdCache; // deferred: uses MeIdCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0zqb2m0b.js:14945", () => {
+  meIdCache = new HostScoped(() => new MeIdCache());
+});
 //@ chunk-0zqb2m0b.js:14970-15406 placement
-function resolveWhoamiKey(e, t, r, kind, limit) {
-  if (t === "malformed_whoami_echo")
-    return `db ${r} failed (unavailable): resolving 'me' returned an unreadable response \u2014 the artifact db service may need an update`;
-  if (e === "not_declared")
-    return `db ${r} failed (${toPublicDbErrorCode(e)}): resolving 'me' needs this artifact's published version to declare the db and user capabilities \u2014 republish with both declared, then retry`;
+function resolveWhoamiKey(token, host, kind, kind_2, limit) {
+  if (host === "malformed_whoami_echo")
+    return `db ${kind} failed (unavailable): resolving 'me' returned an unreadable response \u2014 the artifact db service may need an update`;
+  if (token === "not_declared")
+    return `db ${kind} failed (${toPublicDbErrorCode(token)}): resolving 'me' needs this artifact's published version to declare the db and user capabilities \u2014 republish with both declared, then retry`;
   return (
-    formatDbWriteError(e, r, kind, limit) +
-    (r === "write" && NO_RETRY_WRITE_CODES.has(e) ? NOTHING_WRITTEN_SUFFIX : "")
+    formatDbWriteError(token, kind, kind_2, limit) +
+    (kind === "write" && NO_RETRY_WRITE_CODES.has(token) ? NOTHING_WRITTEN_SUFFIX : "")
   );
 }
 //@ chunk-0zqb2m0b.js:15406-15518 placement
-var NOTHING_WRITTEN_SUFFIX = "; nothing was written";
-var NO_RETRY_WRITE_CODES = new Set(["too_large", "credential_rejected", "cloud_unavailable", "network_off"]);
+var NOTHING_WRITTEN_SUFFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NO_RETRY_WRITE_CODES;
+deferInit("chunk-0zqb2m0b.js:15406", () => {
+  NOTHING_WRITTEN_SUFFIX = "; nothing was written";
+  NO_RETRY_WRITE_CODES = new Set(["too_large", "credential_rejected", "cloud_unavailable", "network_off"]);
+});
 //@ chunk-0zqb2m0b.js:15518-16377 placement
-async function composeMeKey(e, t, slug, c, s, credentials) {
-  let o = meIdCache.of(e);
-  let { resolvedMeIds, inFlightMeIds } = o;
-  let h = await meKeyFromGateway(slug, credentials);
-  let u = null;
-  if (h !== null && (resolvedMeIds.has(h) || inFlightMeIds.has(h))) {
-    if (await isSameAccountUuid(slug, h, s)) {
-      if (resolvedMeIds.has(h)) await refreshOAuthTwice(credentials);
-      u = h;
+async function composeMeKey(host, operation, slug, scope, storageV5, credentials) {
+  let cache = meIdCache.of(host);
+  let { resolvedMeIds, inFlightMeIds } = cache;
+  let gatewayMeKey = await meKeyFromGateway(slug, credentials);
+  let meKey = null;
+  if (gatewayMeKey !== null && (resolvedMeIds.has(gatewayMeKey) || inFlightMeIds.has(gatewayMeKey))) {
+    if (await isSameAccountUuid(slug, gatewayMeKey, storageV5)) {
+      if (resolvedMeIds.has(gatewayMeKey)) await refreshOAuthTwice(credentials);
+      meKey = gatewayMeKey;
     }
   }
-  let R = u === null ? undefined : resolvedMeIds.get(u);
-  if (u !== null && R !== undefined && !isDbViaRelay()) {
-    if (R.fingerprint === currentAuthorizationHash())
+  let resolved = meKey === null ? undefined : resolvedMeIds.get(meKey);
+  if (meKey !== null && resolved !== undefined && !isDbViaRelay()) {
+    if (resolved.fingerprint === currentAuthorizationHash())
       return {
         ok: true,
-        id: R.id,
+        id: resolved.id,
       };
-    if (resolvedMeIds.get(u) === R) resolvedMeIds.delete(u);
+    if (resolvedMeIds.get(meKey) === resolved) resolvedMeIds.delete(meKey);
   }
-  let k;
-  if (h === null) k = await describeWhoamiFailure(o, t, slug, c, h, s, credentials);
+  let result;
+  if (gatewayMeKey === null)
+    result = await describeWhoamiFailure(cache, operation, slug, scope, gatewayMeKey, storageV5, credentials);
   else {
-    let a = u === null ? undefined : inFlightMeIds.get(u);
-    if (!a) {
-      a = (async () => {
-        if (!(await isSameAccountUuid(slug, h, s))) {
-          logFeatureSad(t, "contested_me_key");
+    let pending = meKey === null ? undefined : inFlightMeIds.get(meKey);
+    if (!pending) {
+      pending = (async () => {
+        if (!(await isSameAccountUuid(slug, gatewayMeKey, storageV5))) {
+          logFeatureSad(operation, "contested_me_key");
           return CONTESTED_ME_KEY;
         }
-        return describeWhoamiFailure(o, t, slug, c, h, s, credentials);
+        return describeWhoamiFailure(cache, operation, slug, scope, gatewayMeKey, storageV5, credentials);
       })();
-      inFlightMeIds.set(h, a);
-      a.finally(() => {
-        if (inFlightMeIds.get(h) === a) inFlightMeIds.delete(h);
-      }).catch(() => {});
+      inFlightMeIds.set(gatewayMeKey, pending);
+      pending
+        .finally(() => {
+          if (inFlightMeIds.get(gatewayMeKey) === pending) inFlightMeIds.delete(gatewayMeKey);
+        })
+        .catch(() => {});
     }
-    let w = await a;
-    k = w === CONTESTED_ME_KEY ? await describeWhoamiFailure(o, t, slug, c, null, s, credentials) : w;
+    let failure = await pending;
+    result =
+      failure === CONTESTED_ME_KEY
+        ? await describeWhoamiFailure(cache, operation, slug, scope, null, storageV5, credentials)
+        : failure;
   }
-  if (k.ok) return k;
-  if ("composed" in k)
+  if (result.ok) return result;
+  if ("composed" in result)
     return {
       ok: false,
-      result: k.composed,
+      result: result.composed,
     };
-  let y = t === "artifact_db_read" ? "read" : "write";
-  logFeatureBad(t, k.reason);
+  let kind = operation === "artifact_db_read" ? "read" : "write";
+  logFeatureBad(operation, result.reason);
   return {
     ok: false,
     result: {
       kind: "error",
-      code: k.code,
-      message: resolveWhoamiKey(k.code, k.reason, y, k.kind, k.limit),
-      reason: k.reason,
+      code: result.code,
+      message: resolveWhoamiKey(result.code, result.reason, kind, result.kind, result.limit),
+      reason: result.reason,
     },
   };
 }
 //@ chunk-0zqb2m0b.js:16377-17097 placement
-async function describeWhoamiFailure(e, t, r, c, s, l, credentials) {
-  let n = null;
-  if (s !== null) {
+async function describeWhoamiFailure(cache, operation, slug, scope, cachedMeKey, storageV5, credentials) {
+  let authHash = null;
+  if (cachedMeKey !== null) {
     await refreshOAuthTwice(credentials);
-    n = currentAuthorizationHash();
-    if (n === null || isDbViaRelay()) return CONTESTED_ME_KEY;
+    authHash = currentAuthorizationHash();
+    if (authHash === null || isDbViaRelay()) return CONTESTED_ME_KEY;
   }
-  let d = await callArtifactDb(
-    t,
-    r,
+  let response = await callArtifactDb(
+    operation,
+    slug,
     WHOAMI_PATH,
     {},
     {
       timeout: 15000,
       maxContentLength: STALE_PIN_NOTICE_CHARS,
       credentials,
-      reportSentAuth: s !== null,
+      reportSentAuth: cachedMeKey !== null,
     },
-    c,
+    scope,
   );
-  if (!d.ok)
+  if (!response.ok)
     return {
       ok: false,
-      composed: d.result,
+      composed: response.result,
     };
-  if (d.status !== 200) {
-    let { code, reason, kind, limit } = checkVersionPrecondition(d.status, d.data);
+  if (response.status !== 200) {
+    let { code, reason, kind, limit } = checkVersionPrecondition(response.status, response.data);
     return {
       ok: false,
       code,
@@ -731,220 +795,225 @@ async function describeWhoamiFailure(e, t, r, c, s, l, credentials) {
       limit,
     };
   }
-  let h = whoAmIResponseSchema().safeParse(d.data);
-  if (!h.success || !regExp.test(h.data.id))
+  let parsed = whoAmIResponseSchema().safeParse(response.data);
+  if (!parsed.success || !regExp.test(parsed.data.id))
     return {
       ok: false,
       code: "store_unavailable",
       reason: "malformed_whoami_echo",
     };
-  if (s !== null) {
+  if (cachedMeKey !== null) {
     if (
-      n === null ||
-      n !== d.sentAuthFingerprint ||
-      n !== currentAuthorizationHash() ||
-      !(await isSameAccountUuid(r, s, l))
+      authHash === null ||
+      authHash !== response.sentAuthFingerprint ||
+      authHash !== currentAuthorizationHash() ||
+      !(await isSameAccountUuid(slug, cachedMeKey, storageV5))
     ) {
-      logFeatureSad(t, "auth_unstable_me_key");
+      logFeatureSad(operation, "auth_unstable_me_key");
       return CONTESTED_ME_KEY;
     }
     if (isDbViaRelay()) return CONTESTED_ME_KEY;
-    e.resolvedMeIds.set(s, {
-      id: h.data.id,
-      fingerprint: n,
+    cache.resolvedMeIds.set(cachedMeKey, {
+      id: parsed.data.id,
+      fingerprint: authHash,
     });
   }
   return {
     ok: true,
-    id: h.data.id,
+    id: parsed.data.id,
   };
 }
 //@ chunk-0zqb2m0b.js:17097-21118 placement
 /**
  * 调用 Artifact DB 接口（读/写/批量），处理中继、作用域、错误分类（约 4 KB）。
  */
-async function callArtifactDb(e, slug, r, args, s, l) {
-  let o = r === "batch" ? "batch_" : "";
-  let n = r === WHOAMI_PATH;
-  let d = e === "artifact_db_read" ? "read" : "write";
-  let h = s.requestId !== undefined ? meRawCooldown.of(s.requestId.host) : undefined;
-  let u = {
+async function callArtifactDb(operation, slug, path, args, options, scope) {
+  let batchPrefix = path === "batch" ? "batch_" : "";
+  let isWhoami = path === WHOAMI_PATH;
+  let lane = operation === "artifact_db_read" ? "read" : "write";
+  let cooldown = options.requestId !== undefined ? meRawCooldown.of(options.requestId.host) : undefined;
+  let requestOptions = {
     slug,
-    verb: r,
+    verb: path,
     args,
-    ...(s.asLevel !== undefined && {
-      asLevel: s.asLevel,
+    ...(options.asLevel !== undefined && {
+      asLevel: options.asLevel,
     }),
-    ...(s.requireVersion === true && {
+    ...(options.requireVersion === true && {
       requireVersion: true,
     }),
-    ...(e === "artifact_db_write" && !n && getSessionHintHeaders()),
-    ...(e === "artifact_db_write" &&
-      !n &&
-      s.requestId !== undefined &&
-      h !== undefined &&
-      !h.unsupported &&
-      requestIdMeta(s.requestId.id)),
+    ...(operation === "artifact_db_write" && !isWhoami && getSessionHintHeaders()),
+    ...(operation === "artifact_db_write" &&
+      !isWhoami &&
+      options.requestId !== undefined &&
+      cooldown !== undefined &&
+      !cooldown.unsupported &&
+      requestIdMeta(options.requestId.id)),
   };
-  let R = () =>
-    frameApi.postRelayBound(ARTIFACT_DB_API_PATH, u, {
+  let sendOnce = () =>
+    frameApi.postRelayBound(ARTIFACT_DB_API_PATH, requestOptions, {
       refreshOAuth: true,
-      credentials: s.credentials,
+      credentials: options.credentials,
       headers: buildFrameHeaders(),
-      timeout: s.timeout,
-      maxContentLength: s.maxContentLength,
-      signal: l,
-      reportSentAuth: s.reportSentAuth,
+      timeout: options.timeout,
+      maxContentLength: options.maxContentLength,
+      signal: scope,
+      reportSentAuth: options.reportSentAuth,
     });
-  let k = false;
-  let y = async () => {
-    let w = await R();
-    if (w.ok && w.gatewayRetryAfterMs !== undefined && !k) {
-      k = true;
-      await sleep(Math.min(w.gatewayRetryAfterMs, DB_REQUEST_TIMEOUT_MS), l, {
+  let retried = false;
+  let sendWithRetry = async () => {
+    let res = await sendOnce();
+    if (res.ok && res.gatewayRetryAfterMs !== undefined && !retried) {
+      retried = true;
+      await sleep(Math.min(res.gatewayRetryAfterMs, DB_REQUEST_TIMEOUT_MS), scope, {
         abortError: () => new DbAbortError(),
       });
-      w = await R();
-      if (w.ok && w.route === "relay" && w.fromFrame)
-        logFeatureSad(e, `${o}${n ? "whoami_" : ""}relay_busy_recovered`);
+      res = await sendOnce();
+      if (res.ok && res.route === "relay" && res.fromFrame)
+        logFeatureSad(operation, `${batchPrefix}${isWhoami ? "whoami_" : ""}relay_busy_recovered`);
     }
-    return w;
+    return res;
   };
-  let a;
+  let refusal;
   try {
-    a = await y();
-    let w = a.ok && a.fromFrame ? findRejectedHintFields(a.status, a.data, u) : [];
-    if (w.length > 0) {
-      if (w.includes("request_id") && h !== undefined) {
-        logFeatureSad(e, `${o}request_id_rejected`);
-        h.refusedAt = Date.now();
+    refusal = await sendWithRetry();
+    let text =
+      refusal.ok && refusal.fromFrame
+        ? findRejectedHintFields(refusal.status, refusal.data, requestOptions)
+        : [];
+    if (text.length > 0) {
+      if (text.includes("request_id") && cooldown !== undefined) {
+        logFeatureSad(operation, `${batchPrefix}request_id_rejected`);
+        cooldown.refusedAt = Date.now();
       }
-      if (mentionsSessionHintField(w)) {
-        logFeatureSad(e, `${o}session_hints_rejected`);
+      if (mentionsSessionHintField(text)) {
+        logFeatureSad(operation, `${batchPrefix}session_hints_rejected`);
         noteSessionHintsRefused();
       }
-      u = Uo(u, mentionsSessionHintField(w) ? SESSION_HINT_FIELDS : w);
-      a = await y();
+      requestOptions = omitAlias(requestOptions, mentionsSessionHintField(text) ? SESSION_HINT_FIELDS : text);
+      refusal = await sendWithRetry();
     }
     if (
-      h !== undefined &&
-      u.request_id !== undefined &&
-      a.ok &&
-      a.fromFrame &&
-      isBadJsonInvalidArgument(a.status, a.data)
+      cooldown !== undefined &&
+      requestOptions.request_id !== undefined &&
+      refusal.ok &&
+      refusal.fromFrame &&
+      isBadJsonInvalidArgument(refusal.status, refusal.data)
     ) {
-      let { request_id: requestId, ...S } = u;
-      u = S;
-      a = await y();
-      if (a.ok && a.fromFrame && a.status >= 200 && a.status < 300) {
-        h.refusedAt = Date.now();
-        logFeatureSad(e, `${o}request_id_unsupported`);
+      let { request_id: requestId, ...bodyWithoutRequestId } = requestOptions;
+      requestOptions = bodyWithoutRequestId;
+      refusal = await sendWithRetry();
+      if (refusal.ok && refusal.fromFrame && refusal.status >= 200 && refusal.status < 300) {
+        cooldown.refusedAt = Date.now();
+        logFeatureSad(operation, `${batchPrefix}request_id_unsupported`);
       }
     }
   } catch (error) {
     if (isCancel(error) || error instanceof DbAbortError) throw error;
-    let D = e !== "artifact_db_read" && !n && threwOnRelayLeg(error);
-    logFeatureBad(e, `${o}${D ? "relay_request_error" : "request_error"}`);
+    let relayThrew = operation !== "artifact_db_read" && !isWhoami && threwOnRelayLeg(error);
+    logFeatureBad(operation, `${batchPrefix}${relayThrew ? "relay_request_error" : "request_error"}`);
     return {
       ok: false,
       result: {
         kind: "error",
         code: "store_unavailable",
-        message: D
+        message: relayThrew
           ? "db write outcome unknown (relay request failed) \u2014 it may have applied; read back before retrying"
-          : `db ${d} failed (network error)`,
-        reason: D ? "relay_request_error" : "request_error",
+          : `db ${lane} failed (network error)`,
+        reason: relayThrew ? "relay_request_error" : "request_error",
       },
     };
   }
-  if (!a.ok) {
-    if (a.reason === "relay-unavailable" || a.reason === "relay-not-served") {
-      let w = `${n ? "whoami_" : ""}${a.reason.replace(/-/g, "_")}`;
-      logFeatureBad(e, `${o}${w}`, {
-        status: a.status,
+  if (!refusal.ok) {
+    if (refusal.reason === "relay-unavailable" || refusal.reason === "relay-not-served") {
+      let featureName = `${isWhoami ? "whoami_" : ""}${refusal.reason.replace(/-/g, "_")}`;
+      logFeatureBad(operation, `${batchPrefix}${featureName}`, {
+        status: refusal.status,
       });
       return {
         ok: false,
         result: {
           kind: "error",
           code: "store_unavailable",
-          message: `db ${d} failed (${toPublicDbErrorCode("store_unavailable")}): ${n ? "resolving 'me' failed \u2014 " : ""}this cloud session's artifact connection did not carry the request${a.status ? ` (HTTP ${a.status})` : ""}, so nothing ran; this says nothing about the artifact or its data, and if the user has access, Claude Code on their own machine can still read and edit it${d === "write" ? NOTHING_WRITTEN_SUFFIX : ""}`,
-          reason: w,
+          message: `db ${lane} failed (${toPublicDbErrorCode("store_unavailable")}): ${isWhoami ? "resolving 'me' failed \u2014 " : ""}this cloud session's artifact connection did not carry the request${refusal.status ? ` (HTTP ${refusal.status})` : ""}, so nothing ran; this says nothing about the artifact or its data, and if the user has access, Claude Code on their own machine can still read and edit it${lane === "write" ? NOTHING_WRITTEN_SUFFIX : ""}`,
+          reason: featureName,
         },
       };
     }
-    logFeatureBad(e, `${o}${a.reason.replace(/-/g, "_")}`);
+    logFeatureBad(operation, `${batchPrefix}${refusal.reason.replace(/-/g, "_")}`);
     return {
       ok: false,
       result: {
         kind: "error",
         code: "store_unavailable",
         message:
-          a.reason === "no-auth" ? describeArtifactAuthFailure(a.detail) : `db ${d} unavailable: ${a.reason}`,
+          refusal.reason === "no-auth"
+            ? describeArtifactAuthFailure(refusal.detail)
+            : `db ${lane} unavailable: ${refusal.reason}`,
         reason: "transport",
       },
     };
   }
-  if (a.gatewayPolicy === "network-off") {
-    let w = n ? "whoami_network_off" : "network_off";
-    logFeatureSad(e, `${o}${w}`);
+  if (refusal.gatewayPolicy === "network-off") {
+    let networkOffFeature = isWhoami ? "whoami_network_off" : "network_off";
+    logFeatureSad(operation, `${batchPrefix}${networkOffFeature}`);
     return {
       ok: false,
       result: {
         kind: "error",
         code: "network_off",
-        message: n
-          ? resolveWhoamiKey("network_off", w, d)
-          : formatDbWriteError("network_off", d) + (d === "write" ? NOTHING_WRITTEN_SUFFIX : ""),
-        reason: w,
+        message: isWhoami
+          ? resolveWhoamiKey("network_off", networkOffFeature, lane)
+          : formatDbWriteError("network_off", lane) + (lane === "write" ? NOTHING_WRITTEN_SUFFIX : ""),
+        reason: networkOffFeature,
       },
     };
   }
-  if (a.gatewayRetryAfterMs !== undefined) {
-    let w = `${n ? "whoami_" : ""}relay_busy_retried`;
-    let D = r === STR_REPLACE;
-    logFeatureBad(e, `${o}${w}`, {
-      status: a.status,
+  if (refusal.gatewayRetryAfterMs !== undefined) {
+    let busyFeature = `${isWhoami ? "whoami_" : ""}relay_busy_retried`;
+    let isStrReplace = path === STR_REPLACE;
+    logFeatureBad(operation, `${batchPrefix}${busyFeature}`, {
+      status: refusal.status,
     });
     return {
       ok: false,
       result: {
         kind: "error",
         code: "store_unavailable",
-        message: `db ${d} failed (${toPublicDbErrorCode("store_unavailable")}): ${n ? "resolving 'me' failed \u2014 " : ""}this cloud session's artifact connection was temporarily unavailable (HTTP ${a.status}, after one retry); ${D ? "the edit may or may not have applied \u2014 read it back before retrying" : `this is transient and nothing ran \u2014 retry shortly${d === "write" ? NOTHING_WRITTEN_SUFFIX : ""}`}`,
-        reason: w,
+        message: `db ${lane} failed (${toPublicDbErrorCode("store_unavailable")}): ${isWhoami ? "resolving 'me' failed \u2014 " : ""}this cloud session's artifact connection was temporarily unavailable (HTTP ${refusal.status}, after one retry); ${isStrReplace ? "the edit may or may not have applied \u2014 read it back before retrying" : `this is transient and nothing ran \u2014 retry shortly${lane === "write" ? NOTHING_WRITTEN_SUFFIX : ""}`}`,
+        reason: busyFeature,
       },
     };
   }
-  if (!a.fromFrame) {
-    logFeatureBad(e, `${o}${n ? "whoami_relay_error" : "relay_error"}`, {
-      status: a.status,
+  if (!refusal.fromFrame) {
+    logFeatureBad(operation, `${batchPrefix}${isWhoami ? "whoami_relay_error" : "relay_error"}`, {
+      status: refusal.status,
     });
     return {
       ok: false,
       result: {
         kind: "error",
         code: "store_unavailable",
-        message: n
-          ? `db ${d} failed: resolving 'me' failed (relay HTTP ${a.status}) \u2014 try again`
-          : e === "artifact_db_read"
-            ? `db read failed (relay HTTP ${a.status}) \u2014 try again`
-            : `db write outcome unknown (relay HTTP ${a.status}) \u2014 it may have applied; read back before retrying`,
-        reason: n ? "whoami_relay_error" : "relay_error",
+        message: isWhoami
+          ? `db ${lane} failed: resolving 'me' failed (relay HTTP ${refusal.status}) \u2014 try again`
+          : operation === "artifact_db_read"
+            ? `db read failed (relay HTTP ${refusal.status}) \u2014 try again`
+            : `db write outcome unknown (relay HTTP ${refusal.status}) \u2014 it may have applied; read back before retrying`,
+        reason: isWhoami ? "whoami_relay_error" : "relay_error",
       },
     };
   }
   return {
     ok: true,
-    status: a.status,
-    data: a.data,
-    sentAuthFingerprint: a.sentAuthFingerprint,
-    ...(a.route === "relay" &&
-      a.response.headers?.[X_FRAME_RELAY_READ_SCOPE_APPLIED] === "session" && {
+    status: refusal.status,
+    data: refusal.data,
+    sentAuthFingerprint: refusal.sentAuthFingerprint,
+    ...(refusal.route === "relay" &&
+      refusal.response.headers?.[X_FRAME_RELAY_READ_SCOPE_APPLIED] === "session" && {
         sessionScoped: true,
       }),
-    ...(s.asLevel !== undefined && {
-      levelConfirmed: getAsLevel(a.data) === s.asLevel,
+    ...(options.asLevel !== undefined && {
+      levelConfirmed: getAsLevel(refusal.data) === options.asLevel,
     }),
   };
 }
@@ -952,24 +1021,29 @@ async function callArtifactDb(e, slug, r, args, s, l) {
 /**
  * 关闭云端网络访问时数据库读取失败的说明文案（只能读自己发布的 artifact）与读取范围头。
  */
-var X_FRAME_RELAY_READ_SCOPE_APPLIED = "x-frame-relay-read-scope-applied";
-var READ_SCOPE_NOT_FOUND_TEXT = `db read failed (${toPublicDbErrorCode("not_found")}): nothing this session can read at that address \u2014 with the organization's cloud network access turned off, this session can read the data only of artifacts it published itself (or there is no such artifact, collection, or document); do not retry the read here`;
+var X_FRAME_RELAY_READ_SCOPE_APPLIED; // deferred: uses toPublicDbErrorCode of its import cycle while loading; runs once the cycle is complete
+var READ_SCOPE_NOT_FOUND_TEXT;
+deferInit("chunk-0zqb2m0b.js:21118", () => {
+  X_FRAME_RELAY_READ_SCOPE_APPLIED = "x-frame-relay-read-scope-applied";
+  READ_SCOPE_NOT_FOUND_TEXT = `db read failed (${toPublicDbErrorCode("not_found")}): nothing this session can read at that address \u2014 with the organization's cloud network access turned off, this session can read the data only of artifacts it published itself (or there is no such artifact, collection, or document); do not retry the read here`;
+});
 //@ chunk-0zqb2m0b.js:21464-21711 placement
-function getAsLevel(e) {
-  if (e === null || typeof e !== "object") return;
-  let t = Reflect.get(e, "asLevel");
-  if (typeof t === "string") return t;
-  let r = Reflect.get(e, "error");
-  let c = r !== null && typeof r === "object" ? Reflect.get(r, "asLevel") : undefined;
-  return typeof c === "string" ? c : undefined;
+function getAsLevel(node) {
+  if (node === null || typeof node !== "object") return;
+  let asLevel = Reflect.get(node, "asLevel");
+  if (typeof asLevel === "string") return asLevel;
+  let errorNode = Reflect.get(node, "error");
+  let nestedAsLevel =
+    errorNode !== null && typeof errorNode === "object" ? Reflect.get(errorNode, "asLevel") : undefined;
+  return typeof nestedAsLevel === "string" ? nestedAsLevel : undefined;
 }
 //@ chunk-0zqb2m0b.js:21711-25152 placement
 /**
  * 执行 read_db 动作：get/list/query 文档。
  */
-async function readArtifactDb(host, t, r, storageV5, credentials) {
-  let { slug, op, query } = t;
-  let { collection, docId } = t;
+async function readArtifactDb(host, operation, scope, storageV5, credentials) {
+  let { slug, op, query } = operation;
+  let { collection, docId } = operation;
   if (!ARTIFACT_SLUG_RE.test(slug)) {
     logFeatureBad("artifact_db_read", "invalid_slug");
     return {
@@ -1008,27 +1082,27 @@ async function readArtifactDb(host, t, r, storageV5, credentials) {
     };
   }
   let usersMeRewriter = makeUsersMeRewriter(collection, docId);
-  let R;
+  let meKey;
   if (usersMeRewriter !== null) {
-    let b = await composeMeKey(host, "artifact_db_read", slug, r, storageV5, credentials);
-    if (!b.ok) return b.result;
-    R = b.id;
-    ({ collection, docId } = usersMeRewriter(b.id));
+    let composedMeKey = await composeMeKey(host, "artifact_db_read", slug, scope, storageV5, credentials);
+    if (!composedMeKey.ok) return composedMeKey.result;
+    meKey = composedMeKey.id;
+    ({ collection, docId } = usersMeRewriter(composedMeKey.id));
   }
-  let k = docId !== undefined ? `${collection}/${docId}` : collection;
-  if (k.length > DB_LIST_LIMIT) {
+  let docPath = docId !== undefined ? `${collection}/${docId}` : collection;
+  if (docPath.length > DB_LIST_LIMIT) {
     logFeatureBad("artifact_db_read", "path_too_long");
     return {
       kind: "error",
       code: "invalid_argument",
-      message: `the composed document path is ${k.length} bytes \u2014 the limit is ${DB_LIST_LIMIT}`,
+      message: `the composed document path is ${docPath.length} bytes \u2014 the limit is ${DB_LIST_LIMIT}`,
       reason: "path_too_long",
     };
   }
-  let y =
+  let dbQuery =
     op === "get"
       ? {
-          path: k,
+          path: docPath,
         }
       : {
           collection,
@@ -1040,10 +1114,10 @@ async function readArtifactDb(host, t, r, storageV5, credentials) {
           }),
           ...(op === "query" &&
             query?.where !== undefined && {
-              where: query.where.map(([b, E, B]) => ({
-                field: b,
-                op: toDbOperator(E),
-                value: B,
+              where: query.where.map(([field, op, value]) => ({
+                field,
+                op: toDbOperator(op),
+                value,
               })),
             }),
           ...(op === "query" &&
@@ -1056,26 +1130,26 @@ async function readArtifactDb(host, t, r, storageV5, credentials) {
               },
             }),
         };
-  let a = await callArtifactDb(
+  let response = await callArtifactDb(
     "artifact_db_read",
     slug,
     op,
-    y,
+    dbQuery,
     {
       timeout: 15000,
       maxContentLength: MAX_DB_BODY_BYTES,
       credentials,
-      ...(t.asLevel !== undefined && {
-        asLevel: t.asLevel,
+      ...(operation.asLevel !== undefined && {
+        asLevel: operation.asLevel,
       }),
     },
-    r,
+    scope,
   );
-  if (!a.ok) return a.result;
-  if (a.status === 200) {
+  if (!response.ok) return response.result;
+  if (response.status === 200) {
     if (op === "get") {
-      let E = DB_GET_RESPONSE_SCHEMA().safeParse(a.data);
-      if (!E.success) {
+      let parsed = DB_GET_RESPONSE_SCHEMA().safeParse(response.data);
+      if (!parsed.success) {
         logFeatureBad("artifact_db_read", "malformed_echo");
         return {
           kind: "error",
@@ -1084,50 +1158,50 @@ async function readArtifactDb(host, t, r, storageV5, credentials) {
           reason: "malformed_echo",
         };
       }
-      let B = {
-        ...(a.levelConfirmed !== undefined && {
-          levelConfirmed: a.levelConfirmed,
+      let extra = {
+        ...(response.levelConfirmed !== undefined && {
+          levelConfirmed: response.levelConfirmed,
         }),
-        ...(R !== undefined && {
-          meId: R,
+        ...(meKey !== undefined && {
+          meId: meKey,
         }),
       };
-      if (!E.data.exists) {
+      if (!parsed.data.exists) {
         logFeatureSad("artifact_db_read", "not_found");
         return {
           kind: "not_found",
-          ...B,
+          ...extra,
         };
       }
       logFeatureOk("artifact_db_read");
       return {
         kind: "ok",
-        ...B,
+        ...extra,
         docs: [
           {
             id: docId ?? "",
-            data: E.data.data ?? {},
-            ...(E.data.version !== undefined && {
-              version: E.data.version,
+            data: parsed.data.data ?? {},
+            ...(parsed.data.version !== undefined && {
+              version: parsed.data.version,
             }),
-            ...(E.data.updatedAt !== undefined && {
-              updatedAt: E.data.updatedAt,
+            ...(parsed.data.updatedAt !== undefined && {
+              updatedAt: parsed.data.updatedAt,
             }),
           },
         ],
-        ...(E.data.version !== undefined && {
-          version: E.data.version,
+        ...(parsed.data.version !== undefined && {
+          version: parsed.data.version,
         }),
-        ...(E.data.authoredByOthers && {
+        ...(parsed.data.authoredByOthers && {
           authoredByOthers: true,
         }),
-        ...(E.data.outside_writer !== undefined && {
-          outsideWriter: E.data.outside_writer,
+        ...(parsed.data.outside_writer !== undefined && {
+          outsideWriter: parsed.data.outside_writer,
         }),
       };
     }
-    let b = DB_LIST_RESPONSE_SCHEMA().safeParse(a.data);
-    if (!b.success) {
+    let parsed = DB_LIST_RESPONSE_SCHEMA().safeParse(response.data);
+    if (!parsed.success) {
       logFeatureBad("artifact_db_read", "malformed_echo");
       return {
         kind: "error",
@@ -1139,157 +1213,157 @@ async function readArtifactDb(host, t, r, storageV5, credentials) {
     logFeatureOk("artifact_db_read");
     return {
       kind: "ok",
-      ...(a.levelConfirmed !== undefined && {
-        levelConfirmed: a.levelConfirmed,
+      ...(response.levelConfirmed !== undefined && {
+        levelConfirmed: response.levelConfirmed,
       }),
-      ...(R !== undefined && {
-        meId: R,
+      ...(meKey !== undefined && {
+        meId: meKey,
       }),
-      docs: b.data.docs,
-      ...(b.data.nextCursor !== undefined &&
-        b.data.nextCursor !== "" && {
-          nextCursor: b.data.nextCursor,
+      docs: parsed.data.docs,
+      ...(parsed.data.nextCursor !== undefined &&
+        parsed.data.nextCursor !== "" && {
+          nextCursor: parsed.data.nextCursor,
         }),
-      ...(b.data.authoredByOthers && {
+      ...(parsed.data.authoredByOthers && {
         authoredByOthers: true,
       }),
-      ...(b.data.outside_writer !== undefined && {
-        outsideWriter: b.data.outside_writer,
+      ...(parsed.data.outside_writer !== undefined && {
+        outsideWriter: parsed.data.outside_writer,
       }),
     };
   }
-  let { code, reason, kind, limit, serverReason } = checkVersionPrecondition(a.status, a.data);
-  let A = code === "not_found" && a.sessionScoped === true;
-  logFeatureBad("artifact_db_read", A ? "not_found_session_scoped" : reason);
+  let { code, reason, kind, limit, serverReason } = checkVersionPrecondition(response.status, response.data);
+  let sessionScoped = code === "not_found" && response.sessionScoped === true;
+  logFeatureBad("artifact_db_read", sessionScoped ? "not_found_session_scoped" : reason);
   return {
     kind: "error",
     code,
-    ...(a.levelConfirmed !== undefined && {
-      levelConfirmed: a.levelConfirmed,
+    ...(response.levelConfirmed !== undefined && {
+      levelConfirmed: response.levelConfirmed,
     }),
-    message: A
+    message: sessionScoped
       ? READ_SCOPE_NOT_FOUND_TEXT
       : formatDbWriteError(code, "read", kind, limit, undefined, undefined, serverReason),
-    reason: A ? "not_found_session_scoped" : reason,
+    reason: sessionScoped ? "not_found_session_scoped" : reason,
   };
 }
 //@ chunk-0zqb2m0b.js:25152-25272 placement
-function invalidDbWrite(e, message, r = "") {
-  logFeatureBad("artifact_db_write", `${r}${e}`);
+function invalidDbWrite(result, message, suffix = "") {
+  logFeatureBad("artifact_db_write", `${suffix}${result}`);
   return {
     kind: "error",
     code: "invalid_argument",
     message,
-    reason: e,
+    reason: result,
   };
 }
 //@ chunk-0zqb2m0b.js:25272-25869 placement
-async function validateCollectionPath(e, t, r = "") {
-  let { collection, docId } = e;
+async function validateCollectionPath(path, readCollection, suffix = "") {
+  let { collection, docId } = path;
   if (!regExp_2.test(collection) || !regExp.test(docId))
     return {
       ok: false,
       result: invalidDbWrite(
         "invalid_segment",
         'collection must be a path of 1-15 "/"-separated segments and doc_id one segment (letters, digits, _ - . ~ : @ + per segment; "." and ".." reserved)',
-        r,
+        suffix,
       ),
     };
   if (!isCollectionPath(collection))
     return {
       ok: false,
-      result: invalidDbWrite("parity", describeCollectionPathError(collection), r),
+      result: invalidDbWrite("parity", describeCollectionPathError(collection), suffix),
     };
   let usersMeRewriter = makeUsersMeRewriter(collection, docId);
   if (usersMeRewriter !== null) {
-    let n = await t();
-    if (!n.ok) return n;
-    ({ collection, docId } = usersMeRewriter(n.id));
+    let existingCollection = await readCollection();
+    if (!existingCollection.ok) return existingCollection;
+    ({ collection, docId } = usersMeRewriter(existingCollection.id));
   }
-  let o = `${collection}/${docId}`;
-  if (o.length > DB_LIST_LIMIT)
+  let docPath = `${collection}/${docId}`;
+  if (docPath.length > DB_LIST_LIMIT)
     return {
       ok: false,
       result: invalidDbWrite(
         "path_too_long",
-        `the composed document path is ${o.length} bytes \u2014 the limit is ${DB_LIST_LIMIT}`,
-        r,
+        `the composed document path is ${docPath.length} bytes \u2014 the limit is ${DB_LIST_LIMIT}`,
+        suffix,
       ),
     };
   return {
     ok: true,
-    path: o,
+    path: docPath,
   };
 }
 //@ chunk-0zqb2m0b.js:25869-26198 placement
 /**
  * 把一次写操作（delete/set/update/str_replace）转成请求体：路径、数据、replace 标志、str_replace 字段与 idem，可带 ifVersion 乐观锁。
  */
-function buildDbWriteOp(e, path, data, c, s) {
-  let l = s !== undefined && {
-    ifVersion: s,
+function buildDbWriteOp(op, path, data, version, ifVersion) {
+  let guard = ifVersion !== undefined && {
+    ifVersion,
   };
-  switch (e) {
+  switch (op) {
     case "delete":
       return {
         path,
-        ...l,
+        ...guard,
       };
     case "set":
       return {
         path,
         data,
         replace: true,
-        ...l,
+        ...guard,
       };
     case "update":
       return {
         path,
         data,
-        ...l,
+        ...guard,
       };
     case "str_replace":
       return {
         path,
-        field: c?.field,
-        old_str: c?.oldStr,
-        new_str: c?.newStr,
-        ...(c?.replaceAll === true && {
+        field: version?.field,
+        old_str: version?.oldStr,
+        new_str: version?.newStr,
+        ...(version?.replaceAll === true && {
           replace_all: true,
         }),
-        idem: c?.idem,
-        ...l,
+        idem: version?.idem,
+        ...guard,
       };
   }
 }
 //@ chunk-0zqb2m0b.js:26198-26606 placement
-async function validateWriteRequest(host, t, signal, storageV5, credentials) {
-  let { slug, op, data: n, edit } = t;
+async function validateWriteRequest(host, request, signal, storageV5, options) {
+  let { slug, op, data, edit } = request;
   if (!ARTIFACT_SLUG_RE.test(slug)) return invalidDbWrite("invalid_slug", "not a valid artifact id");
-  let h = await validateCollectionPath(t, () =>
-    composeMeKey(host, "artifact_db_write", slug, signal, storageV5, credentials),
+  let result = await validateCollectionPath(request, () =>
+    composeMeKey(host, "artifact_db_write", slug, signal, storageV5, options),
   );
-  if (!h.ok) return h.result;
+  if (!result.ok) return result.result;
   return writeArtifactDocument(
     slug,
     op,
-    h.path,
-    n,
+    result.path,
+    data,
     signal,
-    credentials,
-    t.asLevel,
+    options,
+    request.asLevel,
     edit,
-    t.ifVersion,
-    t.requireVersion === true && op !== "str_replace"
+    request.ifVersion,
+    request.requireVersion === true && op !== "str_replace"
       ? {
           host,
-          address: `${t.collection}/${t.docId}`,
+          address: `${request.collection}/${request.docId}`,
         }
       : undefined,
-    t.requestId !== undefined
+    request.requestId !== undefined
       ? {
           host,
-          id: t.requestId,
+          id: request.requestId,
         }
       : undefined,
   );
@@ -1298,62 +1372,86 @@ async function validateWriteRequest(host, t, signal, storageV5, credentials) {
 /**
  * 写单个文档（set/update/delete/str_replace），支持版本要求。
  */
-async function writeArtifactDocument(e, t, path, c, s, l, o, n, d, h, u) {
-  let R = h !== undefined ? meAliasCooldown.of(h.host) : undefined;
-  let k = R !== undefined && !R.unsupported;
-  let y = await callArtifactDb(
+async function writeArtifactDocument(
+  operation,
+  path,
+  path_2,
+  data,
+  ifVersion,
+  options,
+  scope,
+  slug,
+  requestIdInfo,
+  storageV5,
+  credentials,
+) {
+  let cooldown = storageV5 !== undefined ? meAliasCooldown.of(storageV5.host) : undefined;
+  let aliasUsable = cooldown !== undefined && !cooldown.unsupported;
+  let response = await callArtifactDb(
     "artifact_db_write",
-    e,
-    t,
-    buildDbWriteOp(t, path, c, n, d),
+    operation,
+    path,
+    buildDbWriteOp(path, path_2, data, slug, requestIdInfo),
     {
       timeout: 30000,
-      ...(o !== undefined && {
-        asLevel: o,
+      ...(scope !== undefined && {
+        asLevel: scope,
       }),
-      ...(k && {
+      ...(aliasUsable && {
         requireVersion: true,
       }),
-      ...(u !== undefined && {
-        requestId: u,
+      ...(credentials !== undefined && {
+        requestId: credentials,
       }),
       maxContentLength: STALE_PIN_NOTICE_CHARS,
-      credentials: l,
+      credentials: options,
     },
-    s,
+    ifVersion,
   );
-  if (!y.ok) return y.result;
-  if (k && R !== undefined && isInvalidArgumentBody(y.status, y.data)) {
-    let b = await writeArtifactDocument(e, t, path, c, s, l, o, n, d, undefined, u);
-    if (isRetryableDbResult(b)) {
-      R.refusedAt = Date.now();
+  if (!response.ok) return response.result;
+  if (aliasUsable && cooldown !== undefined && isInvalidArgumentBody(response.status, response.data)) {
+    let fallback = await writeArtifactDocument(
+      operation,
+      path,
+      path_2,
+      data,
+      ifVersion,
+      options,
+      scope,
+      slug,
+      requestIdInfo,
+      undefined,
+      credentials,
+    );
+    if (isRetryableDbResult(fallback)) {
+      cooldown.refusedAt = Date.now();
       logFeatureSad("artifact_db_write", "require_version_unsupported");
     }
-    return b;
+    return fallback;
   }
-  if (y.status === 200) {
-    let b = y.levelConfirmed !== undefined && {
-      levelConfirmed: y.levelConfirmed,
+  if (response.status === 200) {
+    let levelConfirmed = response.levelConfirmed !== undefined && {
+      levelConfirmed: response.levelConfirmed,
     };
-    let E = DB_WRITE_RESPONSE_SCHEMA().safeParse(y.data);
-    if (!E.success) {
+    let parsed = DB_WRITE_RESPONSE_SCHEMA().safeParse(response.data);
+    if (!parsed.success) {
       logFeatureSad("artifact_db_write", "malformed_echo");
       return {
         kind: "ok",
-        ...b,
+        ...levelConfirmed,
       };
     }
     logFeatureOk("artifact_db_write");
-    checkWriteUsageShape(y.data, E.data.usage);
-    let responseWarnings = getResponseWarnings(y.data);
+    checkWriteUsageShape(response.data, parsed.data.usage);
+    let responseWarnings = getResponseWarnings(response.data);
     return {
       kind: "ok",
-      ...b,
-      ...(E.data.version !== undefined && {
-        version: E.data.version,
+      ...levelConfirmed,
+      ...(parsed.data.version !== undefined && {
+        version: parsed.data.version,
       }),
-      ...(E.data.usage !== undefined && {
-        usage: E.data.usage,
+      ...(parsed.data.usage !== undefined && {
+        usage: parsed.data.usage,
       }),
       ...(responseWarnings.length > 0 && {
         warnings: responseWarnings,
@@ -1361,15 +1459,15 @@ async function writeArtifactDocument(e, t, path, c, s, l, o, n, d, h, u) {
     };
   }
   let { code, reason, kind, limit, version, required, serverReason } = checkVersionPrecondition(
-    y.status,
-    y.data,
+    response.status,
+    response.data,
   );
   (isEditErrorCode(code) ? logFeatureSad : logFeatureBad)("artifact_db_write", reason);
   return {
     kind: "error",
     code,
-    ...(y.levelConfirmed !== undefined && {
-      levelConfirmed: y.levelConfirmed,
+    ...(response.levelConfirmed !== undefined && {
+      levelConfirmed: response.levelConfirmed,
     }),
     message:
       formatDbWriteError(
@@ -1377,27 +1475,27 @@ async function writeArtifactDocument(e, t, path, c, s, l, o, n, d, h, u) {
         "write",
         kind,
         limit,
-        n?.field,
+        slug?.field,
         {
-          pinned: d,
+          pinned: requestIdInfo,
           current: version,
-          op: t,
+          op: path,
           required,
-          path: h?.address,
+          path: storageV5?.address,
         },
         serverReason,
       ) +
       (NO_RETRY_WRITE_CODES.has(code) ? NOTHING_WRITTEN_SUFFIX : "") +
-      (code === "invalid_argument" && (d !== undefined || n?.replaceAll === true)
-        ? `. If this server does not yet accept \`${d !== undefined ? "if_version" : "replace_all"}\`, that alone explains the refusal \u2014 nothing was written; retry without it only if an unconditional ${d !== undefined ? "write" : "single replacement"} is acceptable here`
+      (code === "invalid_argument" && (requestIdInfo !== undefined || slug?.replaceAll === true)
+        ? `. If this server does not yet accept \`${requestIdInfo !== undefined ? "if_version" : "replace_all"}\`, that alone explains the refusal \u2014 nothing was written; retry without it only if an unconditional ${requestIdInfo !== undefined ? "write" : "single replacement"} is acceptable here`
         : ""),
     reason,
   };
 }
 //@ chunk-0zqb2m0b.js:28145-28407 placement
-function isRetryableDbResult(e) {
-  if (e.kind !== "error") return true;
-  switch (e.code) {
+function isRetryableDbResult(result) {
+  if (result.kind !== "error") return true;
+  switch (result.code) {
     case "invalid_argument":
     case "store_unavailable":
     case "quota_or_rate":
@@ -1415,8 +1513,8 @@ function isRetryableDbResult(e) {
 /**
  * 执行 write_db 的 batch：校验、发送、按需降级为逐条写入。
  */
-async function writeArtifactDbBatch(host, t, signal, storageV5, credentials) {
-  let { slug, ops, asLevel } = t;
+async function writeArtifactDbBatch(host, request, signal, storageV5, scope) {
+  let { slug, ops, asLevel } = request;
   if (!ARTIFACT_SLUG_RE.test(slug))
     return invalidDbWrite("invalid_slug", "not a valid artifact id", "batch_");
   if (ops.length === 0 || ops.length > MAX_BATCH_WRITES)
@@ -1425,49 +1523,50 @@ async function writeArtifactDbBatch(host, t, signal, storageV5, credentials) {
       `a batch takes 1-${MAX_BATCH_WRITES} writes \u2014 ${ops.length} were given`,
       "batch_",
     );
-  let d;
-  let h = () => (d ??= composeMeKey(host, "artifact_db_write", slug, signal, storageV5, credentials));
-  let u = [];
-  let R = new Set();
-  for (let [x, F] of ops.entries()) {
-    let C = await validateCollectionPath(F, h, "batch_");
-    if (!C.ok)
+  let ensureAlias;
+  let getMeKey = () =>
+    (ensureAlias ??= composeMeKey(host, "artifact_db_write", slug, signal, storageV5, scope));
+  let validatedOps = [];
+  let seenPaths = new Set();
+  for (let [index, op] of ops.entries()) {
+    let validatedPath = await validateCollectionPath(op, getMeKey, "batch_");
+    if (!validatedPath.ok)
       return {
-        ...C.result,
-        message: `write ${x + 1} of ${ops.length}: ${C.result.message}`,
+        ...validatedPath.result,
+        message: `write ${index + 1} of ${ops.length}: ${validatedPath.result.message}`,
       };
-    if (R.has(C.path))
+    if (seenPaths.has(validatedPath.path))
       return invalidDbWrite(
         "duplicate_path",
-        `write ${x + 1} of ${ops.length} addresses ${C.path}, which an earlier write in this batch already addresses \u2014 a batch writes each document at most once`,
+        `write ${index + 1} of ${ops.length} addresses ${validatedPath.path}, which an earlier write in this batch already addresses \u2014 a batch writes each document at most once`,
         "batch_",
       );
-    R.add(C.path);
-    u.push({
-      op: F.op,
-      path: C.path,
-      ...(F.data !== undefined && {
-        data: F.data,
+    seenPaths.add(validatedPath.path);
+    validatedOps.push({
+      op: op.op,
+      path: validatedPath.path,
+      ...(op.data !== undefined && {
+        data: op.data,
       }),
-      ...(F.ifVersion !== undefined && {
-        ifVersion: F.ifVersion,
+      ...(op.ifVersion !== undefined && {
+        ifVersion: op.ifVersion,
       }),
     });
   }
-  let any = u.some((x) => x.ifVersion !== undefined);
-  let y = {
-    ops: u.map(({ op, path, data: C, ifVersion }) => ({
+  let any = validatedOps.some((op) => op.ifVersion !== undefined);
+  let body = {
+    ops: validatedOps.map(({ op, path, data, ifVersion }) => ({
       op,
-      ...buildDbWriteOp(op, path, C, undefined, ifVersion),
+      ...buildDbWriteOp(op, path, data, undefined, ifVersion),
     })),
   };
-  let a;
+  let response;
   try {
-    a = Buffer.byteLength(
+    response = Buffer.byteLength(
       jsonStringify({
         slug,
         verb: "batch",
-        args: y,
+        args: body,
       }),
       "utf8",
     );
@@ -1478,90 +1577,107 @@ async function writeArtifactDbBatch(host, t, signal, storageV5, credentials) {
       "batch_",
     );
   }
-  if (a > MAX_WRITE_BODY_BYTES)
+  if (response > MAX_WRITE_BODY_BYTES)
     return invalidDbWrite(
       "batch_too_large",
-      `the batch serializes to ${a} bytes \u2014 the limit for one request is ${MAX_WRITE_BODY_BYTES}; split it into smaller batches`,
+      `the batch serializes to ${response} bytes \u2014 the limit for one request is ${MAX_WRITE_BODY_BYTES}; split it into smaller batches`,
       "batch_",
     );
-  let w = meIdCooldown.of(host);
-  let D = t.requireVersion === true ? host : undefined;
-  let S =
-    t.requestId !== undefined
+  let idCooldown = meIdCooldown.of(host);
+  let versionHost = request.requireVersion === true ? host : undefined;
+  let requestIdHint =
+    request.requestId !== undefined
       ? {
           host,
-          id: t.requestId,
+          id: request.requestId,
         }
       : undefined;
-  if (w.unsupported && !any) return writeBatchSequentialFallback(slug, u, signal, credentials, asLevel, D, S);
-  let q = meAliasCooldown.of(host);
-  let I = t.requireVersion === true && !q.unsupported;
-  let A = (x) =>
+  if (idCooldown.unsupported && !any)
+    return writeBatchSequentialFallback(
+      slug,
+      validatedOps,
+      signal,
+      scope,
+      asLevel,
+      versionHost,
+      requestIdHint,
+    );
+  let aliasCooldown = meAliasCooldown.of(host);
+  let aliasUsable = request.requireVersion === true && !aliasCooldown.unsupported;
+  let sendOnce = (useAlias) =>
     callArtifactDb(
       "artifact_db_write",
       slug,
       "batch",
-      y,
+      body,
       {
         timeout: 60000,
         maxContentLength: STALE_PIN_NOTICE_CHARS,
-        credentials,
+        credentials: scope,
         ...(asLevel !== undefined && {
           asLevel,
         }),
-        ...(x && {
+        ...(useAlias && {
           requireVersion: true,
         }),
-        ...(S !== undefined && {
-          requestId: S,
+        ...(requestIdHint !== undefined && {
+          requestId: requestIdHint,
         }),
       },
       signal,
     );
-  let b = await A(I);
-  if (!b.ok) return b.result;
-  if (I && isInvalidArgumentBody(b.status, b.data)) {
-    b = await A(false);
-    if (!b.ok) return b.result;
+  let res = await sendOnce(aliasUsable);
+  if (!res.ok) return res.result;
+  if (aliasUsable && isInvalidArgumentBody(res.status, res.data)) {
+    res = await sendOnce(false);
+    if (!res.ok) return res.result;
     if (asLevel === undefined) {
-      q.refusedAt = Date.now();
+      aliasCooldown.refusedAt = Date.now();
       logFeatureSad("artifact_db_write", "batch_require_version_unsupported");
     }
   }
-  if (asLevel === undefined && isInvalidArgumentBody(b.status, b.data)) {
-    w.refusedAt = Date.now();
+  if (asLevel === undefined && isInvalidArgumentBody(res.status, res.data)) {
+    idCooldown.refusedAt = Date.now();
     return any
       ? describeBatchPinnedUnsupported()
-      : writeBatchSequentialFallback(slug, u, signal, credentials, undefined, D, S);
+      : writeBatchSequentialFallback(
+          slug,
+          validatedOps,
+          signal,
+          scope,
+          undefined,
+          versionHost,
+          requestIdHint,
+        );
   }
-  if (b.status === 200) {
-    let x = b.levelConfirmed !== undefined && {
-      levelConfirmed: b.levelConfirmed,
+  if (res.status === 200) {
+    let levelConfirmed = res.levelConfirmed !== undefined && {
+      levelConfirmed: res.levelConfirmed,
     };
-    let F = DB_BATCH_RESPONSE_SCHEMA().safeParse(b.data);
-    if (!F.success || F.data.results.length !== ops.length) {
+    let parsed = DB_BATCH_RESPONSE_SCHEMA().safeParse(res.data);
+    if (!parsed.success || parsed.data.results.length !== ops.length) {
       logFeatureSad("artifact_db_write", "malformed_batch_echo");
       return {
         kind: "ok",
-        ...x,
+        ...levelConfirmed,
         results: ops.map(() => ({})),
       };
     }
     logFeatureOk("artifact_db_write");
-    checkWriteUsageShape(b.data, F.data.usage);
-    let responseWarnings = getResponseWarnings(b.data);
+    checkWriteUsageShape(res.data, parsed.data.usage);
+    let responseWarnings = getResponseWarnings(res.data);
     return {
       kind: "ok",
-      ...x,
-      results: F.data.results.map((N) =>
-        N.version !== undefined
+      ...levelConfirmed,
+      results: parsed.data.results.map((result) =>
+        result.version !== undefined
           ? {
-              version: N.version,
+              version: result.version,
             }
           : {},
       ),
-      ...(F.data.usage !== undefined && {
-        usage: F.data.usage,
+      ...(parsed.data.usage !== undefined && {
+        usage: parsed.data.usage,
       }),
       ...(responseWarnings.length > 0 && {
         warnings: responseWarnings,
@@ -1569,26 +1685,26 @@ async function writeArtifactDbBatch(host, t, signal, storageV5, credentials) {
     };
   }
   let { code, reason, kind, limit, version, index, required, serverReason } = checkVersionPrecondition(
-    b.status,
-    b.data,
+    res.status,
+    res.data,
   );
   (isEditErrorCode(code) ? logFeatureSad : logFeatureBad)("artifact_db_write", `batch_${reason}`);
-  let T = index !== undefined && index < u.length ? index : undefined;
+  let failedIndex = index !== undefined && index < validatedOps.length ? index : undefined;
   return {
     kind: "error",
     code,
-    ...(b.levelConfirmed !== undefined && {
-      levelConfirmed: b.levelConfirmed,
+    ...(res.levelConfirmed !== undefined && {
+      levelConfirmed: res.levelConfirmed,
     }),
     message: splitOversizedBatch(code, kind, limit, {
       pinned: any,
       stale:
-        T !== undefined
+        failedIndex !== undefined
           ? {
-              index: T,
-              path: `${ops[T].collection}/${ops[T].docId}`,
-              op: ops[T].op,
-              ifVersion: ops[T].ifVersion,
+              index: failedIndex,
+              path: `${ops[failedIndex].collection}/${ops[failedIndex].docId}`,
+              op: ops[failedIndex].op,
+              ifVersion: ops[failedIndex].ifVersion,
               total: ops.length,
             }
           : undefined,
@@ -1613,131 +1729,148 @@ function describeBatchPinnedUnsupported() {
 /**
  * 批量写入失败说明（超过 1 MiB、部分失败等）。
  */
-function splitOversizedBatch(code, kind, limit, c) {
-  if (code === "too_large")
-    return `db batch write failed (${toPublicDbErrorCode(code)}): the batch body exceeds the server's 1 MiB request limit \u2014 nothing was written; split it into smaller write_db calls`;
-  if (code === "version_mismatch" && c?.required === true) {
-    let o = `db batch write failed (${toPublicDbErrorCode(code)})`;
-    let n =
+function splitOversizedBatch(error, kind, limit, context) {
+  if (error === "too_large")
+    return `db batch write failed (${toPublicDbErrorCode(error)}): the batch body exceeds the server's 1 MiB request limit \u2014 nothing was written; split it into smaller write_db calls`;
+  if (error === "version_mismatch" && context?.required === true) {
+    let message = `db batch write failed (${toPublicDbErrorCode(error)})`;
+    let out =
       "Other unpinned entries that write existing documents would be refused the same way \u2014 read and pin those too before resending";
-    let stale = c.stale;
+    let stale = context.stale;
     return stale !== undefined
-      ? `${o}: writes[${stale.index}] (write ${stale.index + 1} of ${stale.total}) targets ${stale.path}, which already exists, and carried no if_version \u2014 the whole batch wrote nothing. Read that document back, re-plan its ${stale.op === "delete" ? "delete (if it should still be deleted)" : "write on what it holds now"} with if_version set to the version the read returns, then resend the batch. ${"Other unpinned entries that write existing documents would be refused the same way \u2014 read and pin those too before resending"}`
-      : `${o}: one of the writes targets a document that already exists and carried no if_version \u2014 the whole batch wrote nothing. Read the existing documents this batch writes, re-plan those entries on what they hold now with if_version set to the versions the reads return, then resend the batch`;
+      ? `${message}: writes[${stale.index}] (write ${stale.index + 1} of ${stale.total}) targets ${stale.path}, which already exists, and carried no if_version \u2014 the whole batch wrote nothing. Read that document back, re-plan its ${stale.op === "delete" ? "delete (if it should still be deleted)" : "write on what it holds now"} with if_version set to the version the read returns, then resend the batch. ${"Other unpinned entries that write existing documents would be refused the same way \u2014 read and pin those too before resending"}`
+      : `${message}: one of the writes targets a document that already exists and carried no if_version \u2014 the whole batch wrote nothing. Read the existing documents this batch writes, re-plan those entries on what they hold now with if_version set to the versions the reads return, then resend the batch`;
   }
-  if (code === "version_mismatch") {
-    let o = `db batch write failed (${toPublicDbErrorCode(code)}): the batch is atomic, so nothing was written \u2014 none of the writes applied`;
-    let stale = c?.stale;
+  if (error === "version_mismatch") {
+    let nothingWritten = `db batch write failed (${toPublicDbErrorCode(error)}): the batch is atomic, so nothing was written \u2014 none of the writes applied`;
+    let stale = context?.stale;
     if (stale === undefined || stale.ifVersion === undefined)
-      return `${o}. A document one of the writes was pinned to with if_version is no longer at that version (or no longer exists). Re-read the pinned documents, re-plan those writes against what they hold now with fresh pins, then resend the batch`;
-    let d = `writes[${stale.index}] (write ${stale.index + 1} of ${stale.total}, ${jsonStringify(stale.path)})`;
-    let h =
+      return `${nothingWritten}. A document one of the writes was pinned to with if_version is no longer at that version (or no longer exists). Re-read the pinned documents, re-plan those writes against what they hold now with fresh pins, then resend the batch`;
+    let writeDesc = `writes[${stale.index}] (write ${stale.index + 1} of ${stale.total}, ${jsonStringify(stale.path)})`;
+    let out2 =
       "It is the first stale pin the server met; later pinned entries were not checked, so re-read any pinned document you are unsure of too, then resend the batch";
-    return c?.version !== undefined
-      ? `${o}. ${d} was pinned to version ${stale.ifVersion} and that document is now at version ${c.version}: read it back, re-plan its write against what it holds now and pin to that version. ${h}`
-      : `${o}. ${d} was pinned to version ${stale.ifVersion} and that document has changed or may have been deleted (the server named no current version): read it back \u2014 if it still exists, re-plan its write against what it holds now and pin to its version; if it is gone, drop that entry, or re-create it with a "set" entry and no if_version only if it should exist again. ${h}`;
+    return context?.version !== undefined
+      ? `${nothingWritten}. ${writeDesc} was pinned to version ${stale.ifVersion} and that document is now at version ${context.version}: read it back, re-plan its write against what it holds now and pin to that version. ${out2}`
+      : `${nothingWritten}. ${writeDesc} was pinned to version ${stale.ifVersion} and that document has changed or may have been deleted (the server named no current version): read it back \u2014 if it still exists, re-plan its write against what it holds now and pin to its version; if it is gone, drop that entry, or re-create it with a "set" entry and no if_version only if it should exist again. ${out2}`;
   }
-  let s = formatDbWriteError(code, "batch write", kind, limit, undefined, undefined, c?.serverReason);
-  let l =
-    code === "invalid_argument" && c?.pinned === true
+  let formatted = formatDbWriteError(
+    error,
+    "batch write",
+    kind,
+    limit,
+    undefined,
+    undefined,
+    context?.serverReason,
+  );
+  let hints =
+    error === "invalid_argument" && context?.pinned === true
       ? ". If this server does not yet accept `if_version` on batch writes, that alone explains the refusal \u2014 resend without the pins only if unconditional writes are acceptable here"
       : "";
-  return isRecoverableStoreError(code)
-    ? `${s}; the batch is atomic, so nothing was written${l}`
-    : `${s}; the batch's outcome is unknown \u2014 it applies all-or-nothing and may have committed; read back before retrying`;
+  return isRecoverableStoreError(error)
+    ? `${formatted}; the batch is atomic, so nothing was written${hints}`
+    : `${formatted}; the batch's outcome is unknown \u2014 it applies all-or-nothing and may have committed; read back before retrying`;
 }
 //@ chunk-0zqb2m0b.js:34752-34799 placement
 /**
  * 导出函数 `isRecoverableStoreError`：参数 e，返回 e !== "store_unavailable"。
  */
-function isRecoverableStoreError(e) {
-  return e !== "store_unavailable";
+function isRecoverableStoreError(error) {
+  return error !== "store_unavailable";
 }
 //@ chunk-0zqb2m0b.js:34799-36393 placement
 /**
  * 批量写入不被支持时逐条顺序写入的回退。
  */
-async function writeBatchSequentialFallback(slug, t, r, c, s, l, o) {
+async function writeBatchSequentialFallback(
+  operation,
+  ops,
+  operation_2,
+  scope,
+  storageV5,
+  batchSlug,
+  credentials,
+) {
   logFeatureSad("artifact_db_write", "batch_fallback_sequential");
-  let n = [];
-  let d;
-  let h = [];
-  let u;
-  let R = (y) =>
-    s !== undefined && y > 0 && u !== true
-      ? ` (as_level '${s}' unconfirmed for them \u2014 they may have run at your own level)`
+  let results = [];
+  let failure;
+  let committed = [];
+  let error;
+  let fail = (reason) =>
+    storageV5 !== undefined && reason > 0 && error !== true
+      ? ` (as_level '${storageV5}' unconfirmed for them \u2014 they may have run at your own level)`
       : "";
-  let k =
+  let request =
     "this server does not take batch writes yet, so the batch was applied one write at a time and is NOT atomic";
-  for (let [y, { op: a, path: w, data: D }] of t.entries()) {
-    let S = `${y} ${y === 1 ? "entry" : "entries"} before it already committed`;
-    let q = t.length - y - 1;
-    let I = (b) => ({
+  for (let [index, { op, path, data }] of ops.entries()) {
+    let committedNote = `${index} ${index === 1 ? "entry" : "entries"} before it already committed`;
+    let afterCount = ops.length - index - 1;
+    let formatResult = (result) => ({
       kind: "error",
       code: "store_unavailable",
       reason: "batch_fallback_aborted",
-      message: `${k}: interrupted at writes[${y}] (write ${y + 1} of ${t.length}). The ${S}${R(y)}; writes[${y}] itself ${b ? "may or may not have applied" : "did not run"}; the ${q} after it did not run.`,
+      message: `${request}: interrupted at writes[${index}] (write ${index + 1} of ${ops.length}). The ${committedNote}${fail(index)}; writes[${index}] itself ${result ? "may or may not have applied" : "did not run"}; the ${afterCount} after it did not run.`,
       fallback: "sequential",
-      results: n,
-      failedIndex: y,
+      results,
+      failedIndex: index,
     });
-    if (r.aborted) return I(false);
-    let A;
+    if (operation_2.aborted) return formatResult(false);
+    let response;
     try {
-      A = await writeArtifactDocument(
-        slug,
-        a,
-        w,
-        D,
-        r,
-        c,
-        s,
+      response = await writeArtifactDocument(
+        operation,
+        op,
+        path,
+        data,
+        operation_2,
+        scope,
+        storageV5,
         undefined,
         undefined,
-        l && {
-          host: l,
-          address: w,
+        batchSlug && {
+          host: batchSlug,
+          address: path,
         },
-        o,
+        credentials,
       );
     } catch (error) {
-      if (isCancel(error)) return I(true);
-      if (error instanceof DbAbortError) return I(false);
+      if (isCancel(error)) return formatResult(true);
+      if (error instanceof DbAbortError) return formatResult(false);
       throw error;
     }
-    if (A.kind === "error")
+    if (response.kind === "error")
       return {
         kind: "error",
-        code: A.code,
-        reason: A.reason,
-        message: `${k}: writes[${y}] (write ${y + 1} of ${t.length}) failed \u2014 ${A.message.replace(NOTHING_WRITTEN_SUFFIX, `; writes[${y}] was not applied`)}. The ${S}${R(y)}; the ${q} after it did not run.`,
+        code: response.code,
+        reason: response.reason,
+        message: `${request}: writes[${index}] (write ${index + 1} of ${ops.length}) failed \u2014 ${response.message.replace(NOTHING_WRITTEN_SUFFIX, `; writes[${index}] was not applied`)}. The ${committedNote}${fail(index)}; the ${afterCount} after it did not run.`,
         fallback: "sequential",
-        results: n,
-        failedIndex: y,
+        results,
+        failedIndex: index,
       };
-    n.push(
-      A.version !== undefined
+    results.push(
+      response.version !== undefined
         ? {
-            version: A.version,
+            version: response.version,
           }
         : {},
     );
-    d = A.usage ?? (a === "delete" ? undefined : d);
-    for (let b of A.warnings ?? []) if (h.length < RETRY_ATTEMPTS && !h.includes(b)) h.push(b);
-    if (A.levelConfirmed !== undefined) u = (u ?? true) && A.levelConfirmed;
+    failure = response.usage ?? (op === "delete" ? undefined : failure);
+    for (let warning of response.warnings ?? [])
+      if (committed.length < RETRY_ATTEMPTS && !committed.includes(warning)) committed.push(warning);
+    if (response.levelConfirmed !== undefined) error = (error ?? true) && response.levelConfirmed;
   }
   return {
     kind: "ok",
-    results: n,
-    ...(d !== undefined && {
-      usage: d,
+    results,
+    ...(failure !== undefined && {
+      usage: failure,
     }),
-    ...(h.length > 0 && {
-      warnings: h,
+    ...(committed.length > 0 && {
+      warnings: committed,
     }),
     fallback: "sequential",
-    ...(u !== undefined && {
-      levelConfirmed: u,
+    ...(error !== undefined && {
+      levelConfirmed: error,
     }),
   };
 }

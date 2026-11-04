@@ -37,16 +37,16 @@ function stubPublishDir(evalTempDir) {
 /**
  * 检查发布桩目录未消失/被替换/改动后收集本次运行的发布记录。
  */
-async function collectStubPublishes(sandbox, stubArtifactSlugs) {
-  let r = stubPublishDir(sandbox);
-  let a = await lstat(r).catch((error) => {
-    if (isENOENT(error) && stubArtifactSlugs.size === 0) return null;
+async function collectStubPublishes(sandbox, expectedSlugs) {
+  let stubDir = stubPublishDir(sandbox);
+  let stats = await lstat(stubDir).catch((error) => {
+    if (isENOENT(error) && expectedSlugs.size === 0) return null;
     if (isENOENT(error))
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `the run's artifact-publish staging directory is gone although the run published (${stubArtifactSlugs.size} corroborated) \u2014 its publishes cannot be vouched for`,
+        `the run's artifact-publish staging directory is gone although the run published (${expectedSlugs.size} corroborated) \u2014 its publishes cannot be vouched for`,
         "eval: stub publish staging dir missing",
       );
-    logForDebugging(`eval: cannot examine ${r}: ${errorMessage(error)}`, {
+    logForDebugging(`eval: cannot examine ${stubDir}: ${errorMessage(error)}`, {
       level: "warn",
     });
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -54,12 +54,12 @@ async function collectStubPublishes(sandbox, stubArtifactSlugs) {
       "eval: stub publish staging dir unreadable",
     );
   });
-  if (a === null) return [];
-  if (!a.isDirectory() || a.isSymbolicLink()) {
-    await detectPlatformFlavor(r, {
+  if (stats === null) return [];
+  if (!stats.isDirectory() || stats.isSymbolicLink()) {
+    await detectPlatformFlavor(stubDir, {
       harnessOwned: true,
     });
-    await rm_2(r, {
+    await rm_2(stubDir, {
       recursive: true,
       force: true,
     });
@@ -69,27 +69,31 @@ async function collectStubPublishes(sandbox, stubArtifactSlugs) {
     );
   }
   try {
-    let stubPublishDir = await readStubPublishDir(r, stubArtifactSlugs);
-    let h = new Set(stubPublishDir.flatMap((b) => (b.env === "stub" ? [path.basename(b.payloadDir)] : [])));
-    let w = await lstat(r);
-    if (!w.isDirectory() || w.isSymbolicLink() || w.ino !== a.ino || w.dev !== a.dev)
+    let stubPublishDir = await readStubPublishDir(stubDir, expectedSlugs);
+    let keptNames = new Set(
+      stubPublishDir.flatMap((publish) =>
+        publish.env === "stub" ? [path.basename(publish.payloadDir)] : [],
+      ),
+    );
+    let after = await lstat(stubDir);
+    if (!after.isDirectory() || after.isSymbolicLink() || after.ino !== stats.ino || after.dev !== stats.dev)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "the run's artifact-publish staging directory changed while it was being indexed",
         "eval: stub publish staging dir changed",
       );
-    for (let b of await readdir(r))
-      if (!h.has(b))
-        await rm_2(path.join(r, b), {
+    for (let name of await readdir(stubDir))
+      if (!keptNames.has(name))
+        await rm_2(path.join(stubDir, name), {
           recursive: true,
           force: true,
         });
-    await readStubPublishesJson(r, stubPublishDir);
+    await readStubPublishesJson(stubDir, stubPublishDir);
     return stubPublishDir;
   } catch (error) {
-    await detectPlatformFlavor(r, {
+    await detectPlatformFlavor(stubDir, {
       harnessOwned: true,
     });
-    await rm_2(r, {
+    await rm_2(stubDir, {
       recursive: true,
       force: true,
     });

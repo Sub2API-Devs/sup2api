@@ -39,7 +39,7 @@ var autocompactNonInteractiveCommand = {
     return getIsNonInteractiveSession() || getIsRemoteMode();
   },
   argumentHint: "[auto|<tokens>]",
-  load: () => import("./chunk-70h2e8y3.js"),
+  load: () => import("./autocompact.js"),
   userFacingName() {
     return "autocompact";
   },

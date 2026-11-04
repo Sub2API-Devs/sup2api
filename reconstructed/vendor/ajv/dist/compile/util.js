@@ -5,12 +5,12 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_codegen_2 } from "./codegen/index.js";
 import { require_code } from "./codegen/code.js";
 
 //@ chunk-s82q9s4x.js:17192-20766 cjs-fingerprint
-var require_util_2 = x(function (cjsExports) {
+var require_util_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -49,10 +49,10 @@ var require_util_2 = x(function (cjsExports) {
   }
   cjsExports.alwaysValidSchema = alwaysValidSchema;
   function checkUnknownRules(it, schema = it.schema) {
-    let { opts, self: s } = it;
+    let { opts, self: ajv } = it;
     if (!opts.strictSchema) return;
     if (typeof schema === "boolean") return;
-    let rules = s.RULES.keywords;
+    let rules = ajv.RULES.keywords;
     for (let key in schema) if (!rules[key]) checkStrictMode(it, `unknown keyword: "${key}"`);
   }
   cjsExports.checkUnknownRules = checkUnknownRules;

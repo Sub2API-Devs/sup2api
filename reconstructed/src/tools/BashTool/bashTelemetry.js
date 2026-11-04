@@ -124,41 +124,45 @@ var TEST_OUTPUT_PATTERNS = [
   [/^(?:FAILURES|ERRORS)!$/m, /^OK \(\d+ tests?, \d+ assertions?\)/m],
 ];
 //@ chunk-fym4r1th.js:49092-49281 placement
-function detectTestOutcome(e) {
-  let s = e.length - BASH_TEST_PATTERNS;
-  let n = stripAnsiPerLine(
-    s > 0
-      ? e.slice(
-          e.indexOf(
+function detectTestOutcome(output) {
+  let tailStart = output.length - BASH_TEST_PATTERNS;
+  let tail = stripAnsiPerLine(
+    tailStart > 0
+      ? output.slice(
+          output.indexOf(
             `
 `,
-            s - 1,
+            tailStart - 1,
           ),
         )
-      : e,
+      : output,
   );
-  if (TEST_OUTPUT_PATTERNS.some(([a]) => a.test(n))) return "failed";
-  return TEST_OUTPUT_PATTERNS.some(([, a, r]) => a.test(n) && r?.test(n) !== true) ? "passed" : "unknown";
+  if (TEST_OUTPUT_PATTERNS.some(([failurePattern]) => failurePattern.test(tail))) return "failed";
+  return TEST_OUTPUT_PATTERNS.some(
+    ([, passPattern, failPattern]) => passPattern.test(tail) && failPattern?.test(tail) !== true,
+  )
+    ? "passed"
+    : "unknown";
 }
 //@ chunk-fym4r1th.js:49281-49640 placement
 /**
  * 根据输出判断测试命令的结果；若输出显示通过但退出码非零、被中断、超时或输出被截断，则记为 unknown。
  */
-function classifyTestOutcome(e, s, n) {
+function classifyTestOutcome(commandClass, output, result) {
   if (
-    e.bash_test_scope === undefined ||
-    e.bash_test_scope === "runs_no_tests" ||
-    n.backgroundTaskId !== undefined
+    commandClass.bash_test_scope === undefined ||
+    commandClass.bash_test_scope === "runs_no_tests" ||
+    result.backgroundTaskId !== undefined
   )
     return;
   let testOutcome = detectTestOutcome(
-    n.outputFilePath === undefined ? s : s.slice(n.stdout.length).replace(/^\n.*/, ""),
+    result.outputFilePath === undefined ? output : output.slice(result.stdout.length).replace(/^\n.*/, ""),
   );
-  let parts = e.bash_programs.split(",");
+  let parts = commandClass.bash_programs.split(",");
   return testOutcome === "passed" &&
-    (n.code !== 0 ||
-      n.interrupted ||
-      n.timedOut === true ||
+    (result.code !== 0 ||
+      result.interrupted ||
+      result.timedOut === true ||
       parts.includes("head") ||
       parts.includes("incomplete"))
     ? "unknown"
@@ -168,28 +172,32 @@ function classifyTestOutcome(e, s, n) {
 /**
  * 后台命令结束时计算命令分类与测试结果（从输出或任务输出尾部异步读取），异常时返回空结果。
  */
-function classifyBackgroundCommand(e, taskOutput, n, interrupted, r) {
+function classifyBackgroundCommand(input, taskOutput, result, interrupted, outputText) {
   try {
-    let d = classifyBashCommand(e);
-    if (d.bash_test_scope === undefined || n === undefined || n.outputFileSize !== undefined)
+    let commandClass = classifyBashCommand(input);
+    if (
+      commandClass.bash_test_scope === undefined ||
+      result === undefined ||
+      result.outputFileSize !== undefined
+    )
       return {
-        commandClass: d,
+        commandClass,
         testOutcome: undefined,
       };
-    let f = {
-      code: n.code,
+    let classifyInput = {
+      code: result.code,
       interrupted,
       stdout: "",
     };
-    let m = taskOutput.outputFileRedundant ? n.stdout : r;
+    let tail = taskOutput.outputFileRedundant ? result.stdout : outputText;
     return {
-      commandClass: d,
+      commandClass,
       testOutcome:
-        m !== undefined
-          ? fromEnumOpt(classifyTestOutcome(d, m, f))
+        tail !== undefined
+          ? fromEnumOpt(classifyTestOutcome(commandClass, tail, classifyInput))
           : getVerifiedTaskOutputTail(taskOutput.taskId, MAX_TASK_OUTPUT_BYTES)
               .then((verifiedTaskOutputTail) =>
-                fromEnumOpt(classifyTestOutcome(d, verifiedTaskOutputTail.content, f)),
+                fromEnumOpt(classifyTestOutcome(commandClass, verifiedTaskOutputTail.content, classifyInput)),
               )
               .catch((error) => {
                 logForDebugging(
@@ -210,9 +218,9 @@ function classifyBackgroundCommand(e, taskOutput, n, interrupted, r) {
 /**
  * 若值是 Promise 就 then 回调，否则同步调用；错误统一写日志。用于把同步/异步结果交给同一回调。
  */
-function thenIfPromise(testOutcome, s) {
-  if (testOutcome instanceof Promise) testOutcome.then(s).catch((error) => logError(toError(error)));
-  else s(testOutcome);
+function thenIfPromise(testOutcome, handler) {
+  if (testOutcome instanceof Promise) testOutcome.then(handler).catch((error) => logError(toError(error)));
+  else handler(testOutcome);
 }
 //@ chunk-fym4r1th.js:50244-50436 placement
 /**
@@ -238,7 +246,7 @@ export {
   classifyTestOutcome,
   buildCommandTimingFields,
   thenIfPromise,
-  classifyBackgroundCommand,
   INTERACTIVE_PROMPT_PATTERNS,
+  classifyBackgroundCommand,
   APPROVAL_SOURCES_WITH_REASON,
 };

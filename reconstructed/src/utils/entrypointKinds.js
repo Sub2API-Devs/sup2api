@@ -19,6 +19,7 @@ import {
 import { isCcsTenant, getCcrDerivedSurface } from "../bootstrap/state.js";
 import { REMOTE_COWORK_SOURCE_KINDS } from "./remoteCoworkSources.js";
 import { isEnvTruthy } from "./envUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-7dqf31r1.js:386-427 placement
 var HOST_SKILL_CATALOG_ENV = "CLAUDE_CODE_HOST_SKILL_CATALOG";
@@ -26,54 +27,61 @@ var HOST_SKILL_CATALOG_ENV = "CLAUDE_CODE_HOST_SKILL_CATALOG";
 /**
  * 归为“无头宿主”的远程入口集合（remote、remote_cowork、claude-in-slack 等）。
  */
-var ENTRYPOINT_KINDS = {
-  cli: true,
-  mcp: true,
-  "sdk-cli": true,
-  "sdk-ts": true,
-  "sdk-py": true,
-  bench: true,
-  "claude-vscode": true,
-  "claude-code-github-action": true,
-  "local-agent": true,
-  local_agent: true,
-  "claude-desktop": true,
-  remote: true,
-  remote_baku: true,
-  remote_cowork: true,
-  remote_trigger: true,
-  remote_cowork_trigger: true,
-  remote_desktop: true,
-  remote_mobile: true,
-  remote_projects: true,
-  claude_in_slack: true,
-  "claude-in-slack": true,
-  "claude-in-teams": true,
-  "claude-desktop-3p": true,
-  "claude-security": true,
-  "ssh-remote": true,
-  "claude-coworker": true,
-  "claude-coworker-terminal": true,
-};
-var HEADLESS_HOST_ENTRYPOINTS = new Set([
-  "remote",
-  "remote_baku",
-  "remote_cowork",
-  "remote_trigger",
-  "remote_cowork_trigger",
-  "remote_desktop",
-  "remote_mobile",
-  "remote_projects",
-  "claude_in_slack",
-  "claude-in-slack",
-  "claude-in-teams",
-]);
-var REMOTE_TRIGGER_ENTRYPOINTS_SET = new Set(["remote_trigger", "remote_cowork_trigger"]);
-var REMOTE_ENTRYPOINT_NAMES = ["remote", "remote_desktop", "remote_mobile"];
-var CLI_ENTRYPOINT = "cli";
+var ENTRYPOINT_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var HEADLESS_HOST_ENTRYPOINTS;
+var REMOTE_TRIGGER_ENTRYPOINTS_SET;
+var REMOTE_ENTRYPOINT_NAMES;
+var CLI_ENTRYPOINT;
+deferInit("chunk-7dqf31r1.js:427", () => {
+  ENTRYPOINT_KINDS = {
+    cli: true,
+    mcp: true,
+    "sdk-cli": true,
+    "sdk-ts": true,
+    "sdk-py": true,
+    bench: true,
+    "claude-vscode": true,
+    "claude-code-github-action": true,
+    "local-agent": true,
+    local_agent: true,
+    "claude-desktop": true,
+    remote: true,
+    remote_baku: true,
+    remote_cowork: true,
+    remote_trigger: true,
+    remote_cowork_trigger: true,
+    remote_desktop: true,
+    remote_mobile: true,
+    remote_projects: true,
+    claude_in_slack: true,
+    "claude-in-slack": true,
+    "claude-in-teams": true,
+    "claude-desktop-3p": true,
+    "claude-security": true,
+    "ssh-remote": true,
+    "claude-coworker": true,
+    "claude-coworker-terminal": true,
+  };
+  HEADLESS_HOST_ENTRYPOINTS = new Set([
+    "remote",
+    "remote_baku",
+    "remote_cowork",
+    "remote_trigger",
+    "remote_cowork_trigger",
+    "remote_desktop",
+    "remote_mobile",
+    "remote_projects",
+    "claude_in_slack",
+    "claude-in-slack",
+    "claude-in-teams",
+  ]);
+  REMOTE_TRIGGER_ENTRYPOINTS_SET = new Set(["remote_trigger", "remote_cowork_trigger"]);
+  REMOTE_ENTRYPOINT_NAMES = ["remote", "remote_desktop", "remote_mobile"];
+  CLI_ENTRYPOINT = "cli";
+});
 //@ chunk-7dqf31r1.js:1224-1287 placement
-function isCustomEntrypointName(e) {
-  return /^(?!sdk)[a-z][a-z0-9_-]{0,31}$/.test(e);
+function isCustomEntrypointName(name) {
+  return /^(?!sdk)[a-z][a-z0-9_-]{0,31}$/.test(name);
 }
 //@ chunk-7dqf31r1.js:1287-1441 placement
 function bridgeOwnerAccount() {
@@ -86,18 +94,21 @@ function bridgeOwnerAccount() {
     : undefined;
 }
 //@ chunk-7dqf31r1.js:1441-1475 placement
-var ENTRYPOINT_KIND_SET = new Set(Object.keys(ENTRYPOINT_KINDS));
+var ENTRYPOINT_KIND_SET; // deferred: uses ENTRYPOINT_KINDS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7dqf31r1.js:1441", () => {
+  ENTRYPOINT_KIND_SET = new Set(Object.keys(ENTRYPOINT_KINDS));
+});
 //@ chunk-7dqf31r1.js:1475-1507 placement
-function _(e) {
-  return ENTRYPOINT_KIND_SET.has(e);
+function _(entrypoint) {
+  return ENTRYPOINT_KIND_SET.has(entrypoint);
 }
 //@ chunk-7dqf31r1.js:1507-1558 placement
 function getEntrypointKind() {
   return validEntrypoint(env.CLAUDE_CODE_ENTRYPOINT);
 }
 //@ chunk-7dqf31r1.js:1558-1598 placement
-function validEntrypoint(e) {
-  return e && _(e) ? e : undefined;
+function validEntrypoint(entrypoint) {
+  return entrypoint && _(entrypoint) ? entrypoint : undefined;
 }
 //@ chunk-7dqf31r1.js:1598-1996 placement
 function entrypointSurfaceName() {
@@ -126,7 +137,10 @@ function entrypointSurfaceName() {
 /**
  * 视为宿主入口的入口名集合（claude-desktop、claude-desktop-3p、local-agent）。
  */
-var HOST_ENTRYPOINTS = new Set(["claude-desktop", "claude-desktop-3p", "local-agent"]);
+var HOST_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7dqf31r1.js:1996", () => {
+  HOST_ENTRYPOINTS = new Set(["claude-desktop", "claude-desktop-3p", "local-agent"]);
+});
 //@ chunk-7dqf31r1.js:2064-2137 placement
 function isHostEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
@@ -143,15 +157,18 @@ function desktopEntrypointSetting() {
 /**
  * 视为 SDK 入口的入口名集合（claude-desktop-3p、local-agent）。
  */
-var SDK_ENTRYPOINTS = new Set(["claude-desktop-3p", "local-agent"]);
+var SDK_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7dqf31r1.js:2271", () => {
+  SDK_ENTRYPOINTS = new Set(["claude-desktop-3p", "local-agent"]);
+});
 //@ chunk-7dqf31r1.js:2322-2396 placement
 function isSdkEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
   return CLAUDE_CODE_ENTRYPOINT !== undefined && SDK_ENTRYPOINTS.has(CLAUDE_CODE_ENTRYPOINT);
 }
 //@ chunk-7dqf31r1.js:2396-2460 placement
-function isHostEntrypointName(e) {
-  return HOST_ENTRYPOINTS.has(e === "local_agent" ? "local-agent" : e);
+function isHostEntrypointName(entrypoint) {
+  return HOST_ENTRYPOINTS.has(entrypoint === "local_agent" ? "local-agent" : entrypoint);
 }
 //@ chunk-7dqf31r1.js:2460-2549 placement
 function isIdeOrSdkEntrypoint(entrypoint) {
@@ -161,7 +178,10 @@ function isIdeOrSdkEntrypoint(entrypoint) {
   );
 }
 //@ chunk-7dqf31r1.js:2549-2605 placement
-var DESKTOP_ENTRYPOINTS = new Set(["claude-desktop", "claude-desktop-3p"]);
+var DESKTOP_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7dqf31r1.js:2549", () => {
+  DESKTOP_ENTRYPOINTS = new Set(["claude-desktop", "claude-desktop-3p"]);
+});
 //@ chunk-7dqf31r1.js:2605-2680 placement
 function isDesktopTopSession() {
   let sessionEntrypoint = getSessionEntrypoint();
@@ -227,7 +247,10 @@ function isCcsRemoteCowork() {
 /**
  * Cowork 相关入口名集合（来自 remoteCoworkSources）。
  */
-var COWORK_ENTRYPOINTS = new Set(REMOTE_COWORK_SOURCE_KINDS);
+var COWORK_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7dqf31r1.js:3289", () => {
+  COWORK_ENTRYPOINTS = new Set(REMOTE_COWORK_SOURCE_KINDS);
+});
 //@ chunk-7dqf31r1.js:3308-3381 placement
 function isCoworkEntrypoint() {
   let CLAUDE_CODE_ENTRYPOINT = env.CLAUDE_CODE_ENTRYPOINT;
@@ -240,8 +263,8 @@ function isCoworkSession() {
 }
 //@ chunk-7dqf31r1.js:3434-3500 placement
 function isCcsCoworkSurface() {
-  let e = isCcsTenant() ? getCcrDerivedSurface() : undefined;
-  return e !== undefined && COWORK_ENTRYPOINTS.has(e);
+  let surface = isCcsTenant() ? getCcrDerivedSurface() : undefined;
+  return surface !== undefined && COWORK_ENTRYPOINTS.has(surface);
 }
 //@ chunk-7dqf31r1.js:3500-3532 placement
 function isCoworkAny() {
@@ -272,7 +295,10 @@ function isChatHostEntrypoint() {
 /**
  * 聊天宿主入口（claude_in_slack、claude-in-slack）。
  */
-var CHAT_HOST_ENTRYPOINTS = new Set(["claude_in_slack", "claude-in-slack"]);
+var CHAT_HOST_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7dqf31r1.js:3782", () => {
+  CHAT_HOST_ENTRYPOINTS = new Set(["claude_in_slack", "claude-in-slack"]);
+});
 //@ chunk-7dqf31r1.js:3835-3889 placement
 function isChatHostSession() {
   let sessionEntrypoint = getSessionEntrypoint();
@@ -296,19 +322,22 @@ function isRemoteEntrypoint() {
   return startsWithRemote(env.CLAUDE_CODE_ENTRYPOINT);
 }
 //@ chunk-7dqf31r1.js:4118-4170 placement
-function startsWithRemote(e) {
-  return e?.startsWith("remote") === true;
+function startsWithRemote(entrypoint) {
+  return entrypoint?.startsWith("remote") === true;
 }
 //@ chunk-7dqf31r1.js:4369-4511 placement
-var REMOTE_TRIGGER_ENTRYPOINTS = new Set([
-  "claude_in_slack",
-  "claude-in-slack",
-  "claude-in-teams",
-  "remote_trigger",
-  "remote_cowork_trigger",
-  "remote_cowork",
-  "remote_baku",
-]);
+var REMOTE_TRIGGER_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7dqf31r1.js:4369", () => {
+  REMOTE_TRIGGER_ENTRYPOINTS = new Set([
+    "claude_in_slack",
+    "claude-in-slack",
+    "claude-in-teams",
+    "remote_trigger",
+    "remote_cowork_trigger",
+    "remote_cowork",
+    "remote_baku",
+  ]);
+});
 //@ chunk-7dqf31r1.js:4511-4635 placement
 function showSettingsHint() {
   if (isEnvTruthy(env.CLAUDE_CODE_HIDE_SETTINGS_HINT)) return false;

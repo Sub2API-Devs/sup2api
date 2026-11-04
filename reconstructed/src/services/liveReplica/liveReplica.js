@@ -15,6 +15,7 @@ import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
 import { errorMessage } from "../../utils/errors.js";
 import { sleep } from "../../utils/sleep.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-enbhzjw4.js:406-804 placement
 /**
@@ -23,35 +24,35 @@ import { sleep } from "../../utils/sleep.js";
 class DivergenceNotes {
   #e = new Map();
   #t = new Set();
-  note(e, r, n) {
-    if (this.#t.has(e)) return;
-    let s = this.#e.get(e);
-    if (s !== undefined) {
-      if (s.has(r)) return;
-      if (s.size >= 4) {
-        this.#n(e);
+  note(slug, part, generation) {
+    if (this.#t.has(slug)) return;
+    let parts = this.#e.get(slug);
+    if (parts !== undefined) {
+      if (parts.has(part)) return;
+      if (parts.size >= 4) {
+        this.#n(slug);
         return;
       }
-      s.set(r, n);
+      parts.set(part, generation);
       return;
     }
     if (this.#e.size >= 256) {
-      let l = 128;
+      let remaining = 128;
       for (let key of this.#e.keys()) {
         this.#n(key);
-        if (--l === 0) break;
+        if (--remaining === 0) break;
       }
     }
-    this.#e.set(e, new Map([[r, n]]));
+    this.#e.set(slug, new Map([[part, generation]]));
   }
-  #n(e) {
-    this.#e.delete(e);
-    this.#t.add(e);
+  #n(slug) {
+    this.#e.delete(slug);
+    this.#t.add(slug);
   }
-  take(e, r) {
-    let n = this.#e.get(e);
-    this.#e.delete(e);
-    return n?.get(r);
+  take(slug, part) {
+    let parts = this.#e.get(slug);
+    this.#e.delete(slug);
+    return parts?.get(part);
   }
 }
 //@ chunk-enbhzjw4.js:804-1103 placement
@@ -63,17 +64,17 @@ class WatchSettleTicket {
   #t;
   #n;
   #r = false;
-  constructor(e, r, n) {
-    this.#e = e;
-    this.#t = r;
-    this.#n = n;
+  constructor(map, slug, record) {
+    this.#e = map;
+    this.#t = slug;
+    this.#n = record;
   }
-  settle(e) {
+  settle(outcome) {
     if (this.#r) return;
     this.#r = true;
     if (this.#e.get(this.#t) !== this.#n) return;
     this.#n.pending--;
-    if (e.wasWatching || e.teardown !== "unsent") this.#n.confirmed = true;
+    if (outcome.wasWatching || outcome.teardown !== "unsent") this.#n.confirmed = true;
     if (this.#n.pending === 0 && !this.#n.confirmed) this.#e.delete(this.#t);
   }
 }
@@ -86,66 +87,66 @@ class StoppedSlugLatch {
   #t = 1;
   #n = new Set();
   #r = new DivergenceNotes();
-  isStopped(e) {
-    return this.#e.has(e);
+  isStopped(slug) {
+    return this.#e.has(slug);
   }
   stoppedSlugs() {
     return this.#e.keys();
   }
-  latchGeneration(e) {
-    return this.#e.get(e)?.generation;
+  latchGeneration(slug) {
+    return this.#e.get(slug)?.generation;
   }
-  recordStop(e) {
-    this.#n.delete(e);
-    let r = this.#e.get(e);
-    if (r === undefined) {
-      r = {
+  recordStop(slug) {
+    this.#n.delete(slug);
+    let record = this.#e.get(slug);
+    if (record === undefined) {
+      record = {
         pending: 0,
         confirmed: false,
         generation: this.#t++,
       };
-      this.#e.set(e, r);
-    } else r.generation = this.#t++;
-    r.pending++;
-    return new WatchSettleTicket(this.#e, e, r);
+      this.#e.set(slug, record);
+    } else record.generation = this.#t++;
+    record.pending++;
+    return new WatchSettleTicket(this.#e, slug, record);
   }
-  reaffirmStop(e) {
-    this.#n.delete(e);
-    let r = this.#e.get(e);
-    if (r === undefined) this.confirmStop(e);
-    else r.confirmed = true;
+  reaffirmStop(slug) {
+    this.#n.delete(slug);
+    let record = this.#e.get(slug);
+    if (record === undefined) this.confirmStop(slug);
+    else record.confirmed = true;
   }
-  confirmStop(e) {
-    this.#n.delete(e);
-    let r = this.#e.get(e);
-    if (r === undefined)
-      this.#e.set(e, {
+  confirmStop(slug) {
+    this.#n.delete(slug);
+    let record = this.#e.get(slug);
+    if (record === undefined)
+      this.#e.set(slug, {
         pending: 0,
         confirmed: true,
         generation: this.#t++,
       });
     else {
-      r.confirmed = true;
-      r.generation = this.#t++;
+      record.confirmed = true;
+      record.generation = this.#t++;
     }
   }
-  noteRelatchAsk(e, r) {
-    this.#r.note(e, r, this.latchGeneration(r));
+  noteRelatchAsk(askerSlug, slug) {
+    this.#r.note(askerSlug, slug, this.latchGeneration(slug));
   }
-  takeRelatchAsk(e, r) {
-    return this.#r.take(e, r);
+  takeRelatchAsk(askerSlug, slug) {
+    return this.#r.take(askerSlug, slug);
   }
-  clearByApprovedRewatch(e, r) {
-    let n = this.#e.get(e);
-    if (n === undefined || n.generation !== r) return;
-    this.#e.delete(e);
-    this.#n.add(e);
+  clearByApprovedRewatch(slug, generation) {
+    let record = this.#e.get(slug);
+    if (record === undefined || record.generation !== generation) return;
+    this.#e.delete(slug);
+    this.#n.add(slug);
   }
-  noteApprovedWatch(e) {
-    if (!this.#e.has(e)) this.#n.add(e);
+  noteApprovedWatch(slug) {
+    if (!this.#e.has(slug)) this.#n.add(slug);
   }
-  wasClearedByRewatch(e) {
-    return this.#n.has(e) && !this.#e.has(e);
+  wasClearedByRewatch(slug) {
+    return this.#n.has(slug) && !this.#e.has(slug);
   }
 }
 //@ chunk-enbhzjw4.js:2097-2639 placement
@@ -194,30 +195,30 @@ var KEEPALIVE_REPLICA_TIMING = {
 /**
  * 生成副本键（代理 id + slug）。
  */
-function replicaKey(e, r) {
-  return `${e ?? "main"}
-${r}`;
+function replicaKey(key, id) {
+  return `${key ?? "main"}
+${id}`;
 }
 //@ chunk-enbhzjw4.js:2682-2881 placement
-function resetCodeliveredFollowups(e) {
-  let r = [...e.codeliveredFollowups.values()];
-  e.codeliveredFollowups.clear();
-  for (let { revoke } of r) revoke("reset");
-  e.coordinatorEditors.clear();
-  e.editorSettleWatch?.();
-  e.editorSettleWatch = null;
+function resetCodeliveredFollowups(state) {
+  let followups = [...state.codeliveredFollowups.values()];
+  state.codeliveredFollowups.clear();
+  for (let { revoke } of followups) revoke("reset");
+  state.coordinatorEditors.clear();
+  state.editorSettleWatch?.();
+  state.editorSettleWatch = null;
 }
 //@ chunk-enbhzjw4.js:2881-3067 placement
 /**
  * 撤销指定 slug 的共同投递跟进。
  */
-function revokeCodeliveredFollowups(e, r, n) {
-  let s = getLiveStateHolder().current;
-  if (s === undefined) return;
-  for (let [l, i] of s.codeliveredFollowups)
-    if (i.slug === e && i.agentId !== n?.exceptAgentId) {
-      s.codeliveredFollowups.delete(l);
-      i.revoke(r);
+function revokeCodeliveredFollowups(slug, reason, options) {
+  let liveState = getLiveStateHolder().current;
+  if (liveState === undefined) return;
+  for (let [key, followup] of liveState.codeliveredFollowups)
+    if (followup.slug === slug && followup.agentId !== options?.exceptAgentId) {
+      liveState.codeliveredFollowups.delete(key);
+      followup.revoke(reason);
     }
 }
 //@ chunk-enbhzjw4.js:3067-3091 placement
@@ -626,16 +627,16 @@ function createLiveState() {
 /**
  * 停止副本监督者（中止、清定时器、租约）。
  */
-function stopSupervisor(e) {
-  e.stopped = true;
-  e.abort.abort();
-  if (e.timer !== undefined) {
-    clearTimeout(e.timer);
-    e.timer = undefined;
+function stopSupervisor(supervisor) {
+  supervisor.stopped = true;
+  supervisor.abort.abort();
+  if (supervisor.timer !== undefined) {
+    clearTimeout(supervisor.timer);
+    supervisor.timer = undefined;
   }
-  delete e.lease;
-  delete e.renewable;
-  delete e.wake;
+  delete supervisor.lease;
+  delete supervisor.renewable;
+  delete supervisor.wake;
 }
 //@ chunk-enbhzjw4.js:11225-11248 placement
 /**
@@ -648,7 +649,10 @@ class LiveStateHolder {
 /**
  * 按会话根保存的实时协作状态。
  */
-var liveStateSlot = new SessionRootSlot(() => new LiveStateHolder());
+var liveStateSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-enbhzjw4.js:11248", () => {
+  liveStateSlot = new SessionRootSlot(() => new LiveStateHolder());
+});
 //@ chunk-enbhzjw4.js:11272-11302 placement
 /**
  * 取（必要时创建）当前实时协作状态。
@@ -670,26 +674,26 @@ function getLiveState() {
  * 记录某 artifact 讨论串最近一次自动回复的时间。
  */
 function markAutoReplyTime(slug, threadId) {
-  let n = getLiveStateHolder().current?.autoReact.artifacts.get(slug)?.threads.get(threadId);
-  if (n !== undefined) n.lastAutoReplyAt = Date.now();
+  let artifact = getLiveStateHolder().current?.autoReact.artifacts.get(slug)?.threads.get(threadId);
+  if (artifact !== undefined) artifact.lastAutoReplyAt = Date.now();
 }
 //@ chunk-enbhzjw4.js:11482-11602 placement
 /**
  * 重置文档监视的通知预算。
  */
 function resetNoticeBudgets() {
-  let e = getLiveStateHolder().current;
-  if (e === undefined) return;
-  for (let noticeBudget of e.liveDocWatch.noticeBudgets.values()) noticeBudget.disclosed = false;
+  let live = getLiveStateHolder().current;
+  if (live === undefined) return;
+  for (let noticeBudget of live.liveDocWatch.noticeBudgets.values()) noticeBudget.disclosed = false;
 }
 //@ chunk-enbhzjw4.js:11602-11693 placement
 /**
  * 清除被拒发布的正文记录。
  */
 function clearRefusedPublishBodies() {
-  let e = getLiveStateHolder().current;
-  if (e === undefined) return;
-  e.refusedPublishBodies.clear();
+  let live = getLiveStateHolder().current;
+  if (live === undefined) return;
+  live.refusedPublishBodies.clear();
   clearHandoverReadState();
 }
 //@ chunk-enbhzjw4.js:11693-11915 placement
@@ -697,30 +701,34 @@ function clearRefusedPublishBodies() {
  * 清空所有待交接读取的已返回/已准备/完成者/重发确认记录，以及读取投递记录。
  */
 function clearHandoverReadState() {
-  let e = getLiveStateHolder().current;
-  if (e === undefined) return;
-  for (let pendingHandoverRead of e.pendingHandoverReads.values()) {
+  let live = getLiveStateHolder().current;
+  if (live === undefined) return;
+  for (let pendingHandoverRead of live.pendingHandoverReads.values()) {
     pendingHandoverRead.linesReturned.clear();
     pendingHandoverRead.linesPrepared.clear();
     pendingHandoverRead.completedBy.clear();
     pendingHandoverRead.confirmsResendFor.clear();
   }
-  e.readDeliveries.clear();
+  live.readDeliveries.clear();
 }
 //@ chunk-enbhzjw4.js:11915-12193 placement
 /**
  * 按仍保留的批次集合清理被拒发布内容记录：批次已不在的删除，观察来源已不在的去掉该字段。
  */
-function pruneRefusedPublishBodies(e) {
-  let r = getLiveStateHolder().current;
-  if (r === undefined) return;
-  let refusedPublishBodies = r.refusedPublishBodies;
-  let s = replicaKey(undefined, "");
-  for (let [l, i] of refusedPublishBodies) {
-    if (!l.startsWith(s)) continue;
-    if (!e.has(i.batch)) refusedPublishBodies.delete(l);
-    else if (i.observedFrom !== undefined && i.observedFrom !== "" && !e.has(i.observedFrom))
-      delete i.observedFrom;
+function pruneRefusedPublishBodies(knownBatches) {
+  let liveState = getLiveStateHolder().current;
+  if (liveState === undefined) return;
+  let refusedPublishBodies = liveState.refusedPublishBodies;
+  let prefix = replicaKey(undefined, "");
+  for (let [key, entry] of refusedPublishBodies) {
+    if (!key.startsWith(prefix)) continue;
+    if (!knownBatches.has(entry.batch)) refusedPublishBodies.delete(key);
+    else if (
+      entry.observedFrom !== undefined &&
+      entry.observedFrom !== "" &&
+      !knownBatches.has(entry.observedFrom)
+    )
+      delete entry.observedFrom;
   }
 }
 //@ chunk-enbhzjw4.js:12193-12233 placement
@@ -741,9 +749,9 @@ function currentPresence() {
 /**
  * 释放某 slug 的 presence。
  */
-function disposePresenceSlug(e) {
+function disposePresenceSlug(slug) {
   let presence = getLiveStateHolder().current?.presence;
-  presence?.disposeSlug?.(presence, e);
+  presence?.disposeSlug?.(presence, slug);
 }
 //@ chunk-enbhzjw4.js:12343-12408 placement
 /**
@@ -757,8 +765,8 @@ function retirePresenceSlug(slug) {
 /**
  * 某 slug 是否被拒绝协作。
  */
-function isPresenceDeclined(e) {
-  return getLiveStateHolder().current?.presence.declined.has(e) === true;
+function isPresenceDeclined(slug) {
+  return getLiveStateHolder().current?.presence.declined.has(slug) === true;
 }
 //@ chunk-enbhzjw4.js:12474-12516 placement
 /**
@@ -772,40 +780,40 @@ function hasLiveState() {
  * 通知房间“同意状态变化”。
  */
 function notifyRoomConsentChanged() {
-  let e = currentRoom();
-  e?.consentChanged?.(e);
+  let room = currentRoom();
+  room?.consentChanged?.(room);
 }
 //@ chunk-enbhzjw4.js:12566-12619 placement
 /**
  * 通知房间“账号变化”。
  */
 function notifyRoomAccountChanged(oauthAccountInfo) {
-  let r = currentRoom();
-  r?.accountChanged?.(r, oauthAccountInfo);
+  let room = currentRoom();
+  room?.accountChanged?.(room, oauthAccountInfo);
 }
 //@ chunk-enbhzjw4.js:12619-12662 placement
 /**
  * 释放实时协作资源。
  */
 function disposeLiveState() {
-  let e = currentRoom();
-  e?.dispose?.(e);
+  let room = currentRoom();
+  room?.dispose?.(room);
 }
 //@ chunk-enbhzjw4.js:12662-12715 placement
 /**
  * 清空所有文档的日志状态。
  */
-function clearAllJournals(e) {
-  clearJournalPosition(e);
-  for (let doc of e.docs.values()) bumpJournalFence(doc);
+function clearAllJournals(live) {
+  clearJournalPosition(live);
+  for (let doc of live.docs.values()) bumpJournalFence(doc);
 }
 //@ chunk-enbhzjw4.js:12715-12772 placement
 /**
  * 清空某状态的日志游标。
  */
-function clearJournalPosition(e) {
-  e.journalPos = undefined;
-  e.journalPosOrd = undefined;
+function clearJournalPosition(live) {
+  live.journalPos = undefined;
+  live.journalPosOrd = undefined;
 }
 //@ chunk-enbhzjw4.js:12772-12824 placement
 /**
@@ -816,12 +824,12 @@ function bumpJournalFence(doc) {
   doc.journalGen += 1;
 }
 //@ chunk-enbhzjw4.js:12824-13094 placement
-function stopReplicaJournal(e) {
-  let journal = e.journal;
-  e.journal = undefined;
-  e.journalCap = undefined;
-  clearAllJournals(e);
-  for (let doc of e.docs.values()) {
+function stopReplicaJournal(replica) {
+  let journal = replica.journal;
+  replica.journal = undefined;
+  replica.journalCap = undefined;
+  clearAllJournals(replica);
+  for (let doc of replica.docs.values()) {
     if (doc.batchTimer !== undefined) {
       clearTimeout(doc.batchTimer);
       doc.batchTimer = undefined;
@@ -839,68 +847,68 @@ function stopReplicaJournal(e) {
 /**
  * 重置本会话主体令牌缓存（清空令牌、账号置空并递增纪元）。
  */
-function resetOwnPrincipalTokens(e) {
-  e.ownPrincipalTokens.clear();
-  e.ownPrincipalTokenAccount = null;
-  e.ownPrincipalTokenEpoch++;
+function resetOwnPrincipalTokens(replica) {
+  replica.ownPrincipalTokens.clear();
+  replica.ownPrincipalTokenAccount = null;
+  replica.ownPrincipalTokenEpoch++;
 }
 //@ chunk-enbhzjw4.js:13198-16084 placement
 /**
  * 登出或换账号时重置实时协作状态。
  */
 function resetLiveStateOnAccountChange(artifactAccount = "signed_out", incomingIdentity) {
-  let n = getLiveStateHolder().current;
-  if (n === undefined) return;
-  resetOwnPrincipalTokens(n);
-  n.profileNames.clear();
-  n.profileIdsServed.clear();
+  let liveState = getLiveStateHolder().current;
+  if (liveState === undefined) return;
+  resetOwnPrincipalTokens(liveState);
+  liveState.profileNames.clear();
+  liveState.profileIdsServed.clear();
   if (artifactAccount !== "same_account") {
-    n.frameRelay.mcpAdvert = {
+    liveState.frameRelay.mcpAdvert = {
       tools: new Set(),
       until: 0,
     };
-    n.frameRelay.mcpNarrower.clear();
-    n.roster = undefined;
-    n.rosterHeard = undefined;
-    n.rosterWait = undefined;
-    n.rosterWaitOver = false;
-    n.assetsOnRoster = false;
-    n.accountEpoch++;
-    n.askClassOutsideOrgConsent.clear();
-    n.askNamedOtherOrg.clear();
-    n.postedReplyIds.clear();
-    n.commentTargets.clear();
-    n.summonStatus.handOffs.clear();
-    n.summonStatus.queuedWakes.clear();
-    n.verify.lastPublish = undefined;
-    n.verify.reads.clear();
-    n.ownPublishedSlugs.clear();
-    n.ownCreatedSlugs.clear();
-    n.routineTypeInstances.clear();
-    n.strandedMints.clear();
-    n.reservedMints.clear();
-    n.live.heardVersions.clear();
-    n.roomJoinArming.clear();
-    resetCodeliveredFollowups(n);
-    for (let supervisor of n.live.supervisors.values()) {
+    liveState.frameRelay.mcpNarrower.clear();
+    liveState.roster = undefined;
+    liveState.rosterHeard = undefined;
+    liveState.rosterWait = undefined;
+    liveState.rosterWaitOver = false;
+    liveState.assetsOnRoster = false;
+    liveState.accountEpoch++;
+    liveState.askClassOutsideOrgConsent.clear();
+    liveState.askNamedOtherOrg.clear();
+    liveState.postedReplyIds.clear();
+    liveState.commentTargets.clear();
+    liveState.summonStatus.handOffs.clear();
+    liveState.summonStatus.queuedWakes.clear();
+    liveState.verify.lastPublish = undefined;
+    liveState.verify.reads.clear();
+    liveState.ownPublishedSlugs.clear();
+    liveState.ownCreatedSlugs.clear();
+    liveState.routineTypeInstances.clear();
+    liveState.strandedMints.clear();
+    liveState.reservedMints.clear();
+    liveState.live.heardVersions.clear();
+    liveState.roomJoinArming.clear();
+    resetCodeliveredFollowups(liveState);
+    for (let supervisor of liveState.live.supervisors.values()) {
       delete supervisor.lease;
       delete supervisor.renewable;
     }
-    n.live.nonEditorSlugs.clear();
-    n.laneNoticeSlugs.clear();
-    n.commentReads.clear();
-    n.lastOthersCommentReadAt = Date.now();
-    n.cleanReplyIds.clear();
-    for (let otherComment of n.shareStatus.otherComments.values()) {
+    liveState.live.nonEditorSlugs.clear();
+    liveState.laneNoticeSlugs.clear();
+    liveState.commentReads.clear();
+    liveState.lastOthersCommentReadAt = Date.now();
+    liveState.cleanReplyIds.clear();
+    for (let otherComment of liveState.shareStatus.otherComments.values()) {
       otherComment.judged.clear();
       otherComment.judgedSends.clear();
     }
-    n.live.pendingSubagentArms.clear();
-    n.live.finishedSubagentAdopters.clear();
-    n.live.repliesConsent.outstanding.clear();
-    n.live.repliesConsent.declined.clear();
-    n.live.repliesConsent.approved.clear();
-    for (let artifact of n.autoReact.artifacts.values()) {
+    liveState.live.pendingSubagentArms.clear();
+    liveState.live.finishedSubagentAdopters.clear();
+    liveState.live.repliesConsent.outstanding.clear();
+    liveState.live.repliesConsent.declined.clear();
+    liveState.live.repliesConsent.approved.clear();
+    for (let artifact of liveState.autoReact.artifacts.values()) {
       artifact.heldReplyDeclined = false;
       artifact.heldReplyChain = null;
       for (let thread of artifact.threads.values()) {
@@ -908,45 +916,46 @@ function resetLiveStateOnAccountChange(artifactAccount = "signed_out", incomingI
         thread.ownReplyIdsIncomplete = false;
       }
     }
-    n.liveDocWatch.journalUnavailable.clear();
-    for (let journalNegotiation of n.liveDocWatch.journalNegotiations) journalNegotiation.abort();
-    n.liveDocWatch.journalNegotiations.clear();
-    for (let i of n.liveDocWatch.arming.values()) for (let o of i.reviving) stopReplicaJournal(o);
-    n.liveDocWatch.stopAll?.(artifactAccount);
-    n.live.endAll?.(artifactAccount);
-    for (let i of n.liveReplicas.replicas.values()) {
-      i.watcher?.close();
-      clearTimeout(i.pushHold?.due);
+    liveState.liveDocWatch.journalUnavailable.clear();
+    for (let journalNegotiation of liveState.liveDocWatch.journalNegotiations) journalNegotiation.abort();
+    liveState.liveDocWatch.journalNegotiations.clear();
+    for (let arming of liveState.liveDocWatch.arming.values())
+      for (let job of arming.reviving) stopReplicaJournal(job);
+    liveState.liveDocWatch.stopAll?.(artifactAccount);
+    liveState.live.endAll?.(artifactAccount);
+    for (let replica of liveState.liveReplicas.replicas.values()) {
+      replica.watcher?.close();
+      clearTimeout(replica.pushHold?.due);
     }
-    n.liveReplicas.replicas.clear();
-    n.liveReplicas.unavailable.clear();
-    n.liveReplicas.tooOld.clear();
-    n.liveReplicas.cloudUnserved.clear();
-    n.liveReplicas.opening.clear();
-    n.liveReplicas.unanswered.clear();
-    n.createdFromType.clear();
-    n.deferredSurface.clear();
-    n.remoteControlSkippedSlugs.clear();
-    n.typeInstanceFiles.clear();
-    n.publishedSources.clear();
-    n.pathPins.clear();
-    n.typeCatalogVouch.clear();
-    n.typeDescriptions.clear();
-    n.attestedTypeArtifacts.clear();
-    n.typeCapabilityReads.clear();
-    n.quickstartRan.clear();
-    n.anchorSnippets.clear();
-    n.shareStatus.accountBoundaryAt = Date.now();
-    n.shareStatus.probeBoots.clear();
-    for (let [i, o] of n.shareStatus.bySlug)
+    liveState.liveReplicas.replicas.clear();
+    liveState.liveReplicas.unavailable.clear();
+    liveState.liveReplicas.tooOld.clear();
+    liveState.liveReplicas.cloudUnserved.clear();
+    liveState.liveReplicas.opening.clear();
+    liveState.liveReplicas.unanswered.clear();
+    liveState.createdFromType.clear();
+    liveState.deferredSurface.clear();
+    liveState.remoteControlSkippedSlugs.clear();
+    liveState.typeInstanceFiles.clear();
+    liveState.publishedSources.clear();
+    liveState.pathPins.clear();
+    liveState.typeCatalogVouch.clear();
+    liveState.typeDescriptions.clear();
+    liveState.attestedTypeArtifacts.clear();
+    liveState.typeCapabilityReads.clear();
+    liveState.quickstartRan.clear();
+    liveState.anchorSnippets.clear();
+    liveState.shareStatus.accountBoundaryAt = Date.now();
+    liveState.shareStatus.probeBoots.clear();
+    for (let [slug, shareStatus] of liveState.shareStatus.bySlug)
       if (
-        o.probeErrorCode !== undefined ||
-        o.role !== undefined ||
-        o.outsideOrgReader !== undefined ||
-        o.external !== undefined ||
-        o.endpointConnectors !== undefined ||
-        o.connectorsIssuedAt !== undefined ||
-        o.lastConnectorsReadToolUseId !== undefined
+        shareStatus.probeErrorCode !== undefined ||
+        shareStatus.role !== undefined ||
+        shareStatus.outsideOrgReader !== undefined ||
+        shareStatus.external !== undefined ||
+        shareStatus.endpointConnectors !== undefined ||
+        shareStatus.connectorsIssuedAt !== undefined ||
+        shareStatus.lastConnectorsReadToolUseId !== undefined
       ) {
         let {
           probeErrorCode,
@@ -957,12 +966,12 @@ function resetLiveStateOnAccountChange(artifactAccount = "signed_out", incomingI
           endpointConnectors,
           connectorsIssuedAt,
           lastConnectorsReadToolUseId,
-          ...h
-        } = o;
-        n.shareStatus.bySlug.set(i, h);
+          ...rest
+        } = shareStatus;
+        liveState.shareStatus.bySlug.set(slug, rest);
       }
   }
-  let { room, presence } = n;
+  let { room, presence } = liveState;
   room.accountChanged?.(room, incomingIdentity);
   presence.accountChanged?.(presence, incomingIdentity);
 }
@@ -972,50 +981,50 @@ function resetLiveStateOnAccountChange(artifactAccount = "signed_out", incomingI
  */
 async function flushReplicasBeforeLogout(artifactAccount) {
   if (artifactAccount === "same_account") return;
-  let r = getLiveStateHolder().current;
-  if (r === undefined || r.liveReplicas.replicas.size === 0) return;
-  let n = [];
-  let pushHeldSaves = r.liveReplicas.pushHeldSaves;
+  let liveState = getLiveStateHolder().current;
+  if (liveState === undefined || liveState.liveReplicas.replicas.size === 0) return;
+  let pending = [];
+  let pushHeldSaves = liveState.liveReplicas.pushHeldSaves;
   if (pushHeldSaves !== undefined)
-    n.push(
+    pending.push(
       pushHeldSaves().then(
         () => logForDebugging("[liveReplica] held saves pushed before logout"),
         (error) =>
           logForDebugging(`[liveReplica] held saves not pushed before logout: ${errorMessage(error)}`),
       ),
     );
-  for (let [l, i] of r.liveReplicas.replicas)
-    n.push(
-      i.replica.sendFinalReport().then(
-        (o) =>
+  for (let [key, replica] of liveState.liveReplicas.replicas)
+    pending.push(
+      replica.replica.sendFinalReport().then(
+        (tried) =>
           logForDebugging(
-            `[liveReplica] final divergence report before logout ${l}: ${o ? "tried" : "nothing due"}`,
+            `[liveReplica] final divergence report before logout ${key}: ${tried ? "tried" : "nothing due"}`,
           ),
         (error) =>
           logForDebugging(
-            `[liveReplica] final divergence report before logout ${l} failed: ${errorMessage(error)}`,
+            `[liveReplica] final divergence report before logout ${key} failed: ${errorMessage(error)}`,
           ),
       ),
     );
-  await Promise.race([Promise.all(n), sleep(2000)]);
+  await Promise.race([Promise.all(pending), sleep(2000)]);
 }
 //@ chunk-enbhzjw4.js:16708-17059 placement
 /**
  * 对话结束时停止文档监视并发送最终报告。
  */
 function retireConversationReplicas() {
-  let e = getLiveStateHolder().current;
-  e?.liveDocWatch.stopAll?.("clear");
-  if (e !== undefined)
-    for (let [r, n] of e.liveReplicas.replicas)
-      n.replica.sendFinalReport().then(
-        (s) =>
+  let liveState = getLiveStateHolder().current;
+  liveState?.liveDocWatch.stopAll?.("clear");
+  if (liveState !== undefined)
+    for (let [key, replica] of liveState.liveReplicas.replicas)
+      replica.replica.sendFinalReport().then(
+        (tried) =>
           logForDebugging(
-            `[liveReplica] final divergence report at conversation retire ${r}: ${s ? "tried" : "nothing due"}`,
+            `[liveReplica] final divergence report at conversation retire ${key}: ${tried ? "tried" : "nothing due"}`,
           ),
         (error) =>
           logForDebugging(
-            `[liveReplica] final divergence report at conversation retire ${r} failed: ${errorMessage(error)}`,
+            `[liveReplica] final divergence report at conversation retire ${key} failed: ${errorMessage(error)}`,
           ),
       );
 }
@@ -1023,41 +1032,41 @@ function retireConversationReplicas() {
 /**
  * 新对话时重置会话级集合（自有 slug、实例等）。
  */
-function resetForNewConversation(e) {
-  let r = getLiveStateHolder().current;
-  if (r === undefined) return;
-  if (e?.continuesConversation !== true) {
-    r.conversationEpoch++;
-    r.ownPublishedSlugs.clear();
-    r.ownCreatedSlugs.clear();
-    r.routineTypeInstances.clear();
-    r.strandedMints.clear();
-    r.reservedMints.clear();
-    r.live.heardVersions.clear();
-    r.roomJoinArming.clear();
-    r.roomStoppedByUser.clear();
-    r.roomArmAsked.clear();
-    r.roomArmRefusedByUser.clear();
-    resetCodeliveredFollowups(r);
-    r.live.nonEditorSlugs.clear();
-    r.live.pendingSubagentArms.clear();
-    r.live.finishedSubagentAdopters.clear();
-    r.live.repliesConsent.outstanding.clear();
-    r.live.repliesConsent.declined.clear();
-    r.live.repliesConsent.approved.clear();
-    r.deferredSurface.clear();
-    r.remoteControlSkippedSlugs.clear();
+function resetForNewConversation(reason) {
+  let live = getLiveStateHolder().current;
+  if (live === undefined) return;
+  if (reason?.continuesConversation !== true) {
+    live.conversationEpoch++;
+    live.ownPublishedSlugs.clear();
+    live.ownCreatedSlugs.clear();
+    live.routineTypeInstances.clear();
+    live.strandedMints.clear();
+    live.reservedMints.clear();
+    live.live.heardVersions.clear();
+    live.roomJoinArming.clear();
+    live.roomStoppedByUser.clear();
+    live.roomArmAsked.clear();
+    live.roomArmRefusedByUser.clear();
+    resetCodeliveredFollowups(live);
+    live.live.nonEditorSlugs.clear();
+    live.live.pendingSubagentArms.clear();
+    live.live.finishedSubagentAdopters.clear();
+    live.live.repliesConsent.outstanding.clear();
+    live.live.repliesConsent.declined.clear();
+    live.live.repliesConsent.approved.clear();
+    live.deferredSurface.clear();
+    live.remoteControlSkippedSlugs.clear();
   }
-  r.createdFromType.clear();
-  r.verify.lastPublish = undefined;
-  r.verify.reads.clear();
-  if (e?.continuesConversation !== true) {
-    r.pathPins.clear();
-    r.publishedSources.clear();
-    r.resultNotes.kindSaid = false;
-    r.resultNotes.watchCodesSaid.clear();
-    r.resultNotes.previewedPaths.clear();
-    r.resultNotes.previewHintedPaths.clear();
+  live.createdFromType.clear();
+  live.verify.lastPublish = undefined;
+  live.verify.reads.clear();
+  if (reason?.continuesConversation !== true) {
+    live.pathPins.clear();
+    live.publishedSources.clear();
+    live.resultNotes.kindSaid = false;
+    live.resultNotes.watchCodesSaid.clear();
+    live.resultNotes.previewedPaths.clear();
+    live.resultNotes.previewHintedPaths.clear();
   }
 }
 export {

@@ -25,57 +25,62 @@ import { execFileNoThrow } from "../../utils/execFileNoThrow.js";
 import { getCachedPowerShellPath } from "../../utils/shell/powershellDetection.js";
 import { withDeadline } from "../../utils/sleep.js";
 import { getErrnoCode } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e2fknt7w.js:3656-3930 placement
 function windowsPowerShellProfileDirs() {
   if (getPlatform() !== "windows") return [];
-  let { result: e } = profileDirsState;
+  let { result } = profileDirsState;
   let filtered = [
-    e.settled ? e.documents : null,
-    ...(e.settled && !e.failed ? e.kept : []),
+    result.settled ? result.documents : null,
+    ...(result.settled && !result.failed ? result.kept : []),
     ...oneDriveDocumentsDirs(),
-  ].filter((o) => o !== null);
+  ].filter((dir) => dir !== null);
   return uniq(
     filtered
-      .flatMap((o) => [o, profileDirsState.resolved.get(o) ?? o])
-      .flatMap((o) => [win32.join(o, "PowerShell"), win32.join(o, "WindowsPowerShell")]),
+      .flatMap((dir) => [dir, profileDirsState.resolved.get(dir) ?? dir])
+      .flatMap((dir) => [win32.join(dir, "PowerShell"), win32.join(dir, "WindowsPowerShell")]),
   );
 }
 //@ chunk-e2fknt7w.js:3930-4100 placement
 function windowsAutoRunDirs() {
   if (getPlatform() !== "windows") return [];
-  let { result: e } = profileDirsState;
-  let n = uniq([...appDataDirs(), startMenuDir(), ...(e.settled && !e.failed ? placedPaths(e.autoRun) : [])]);
-  return uniq(n.flatMap((o) => [o, profileDirsState.resolved.get(o) ?? o]));
+  let { result } = profileDirsState;
+  let dirs = uniq([
+    ...appDataDirs(),
+    startMenuDir(),
+    ...(result.settled && !result.failed ? placedPaths(result.autoRun) : []),
+  ]);
+  return uniq(dirs.flatMap((dir) => [dir, profileDirsState.resolved.get(dir) ?? dir]));
 }
 //@ chunk-e2fknt7w.js:4100-4200 placement
 function appDataDirs() {
-  return ["APPDATA", "LOCALAPPDATA"].flatMap((e) => {
-    let n = sanitizeProfileDir(envAtStartup(e));
-    return n === null ? [] : [n];
+  return ["APPDATA", "LOCALAPPDATA"].flatMap((name) => {
+    let dir = sanitizeProfileDir(envAtStartup(name));
+    return dir === null ? [] : [dir];
   });
 }
 //@ chunk-e2fknt7w.js:4200-4336 placement
 function startMenuDir() {
-  let e =
+  let programData =
     sanitizeProfileDir(
       envAtStartup("ProgramData") || envAtStartup("PROGRAMDATA") || envAtStartup("ALLUSERSPROFILE"),
     ) ?? DEFAULT_PROGRAMDATA_DIR;
-  return win32.join(e, "Microsoft", "Windows", "Start Menu");
+  return win32.join(programData, "Microsoft", "Windows", "Start Menu");
 }
 //@ chunk-e2fknt7w.js:4336-4481 placement
 function oneDriveDocumentsDirs() {
   return [envAtStartup("OneDrive"), envAtStartup("OneDriveConsumer"), envAtStartup("OneDriveCommercial")]
-    .filter((e) => e !== undefined && isAbsolutePlatformPath(e))
-    .map((e) => win32.join(e, "Documents"));
+    .filter((value) => value !== undefined && isAbsolutePlatformPath(value))
+    .map((root) => win32.join(root, "Documents"));
 }
 //@ chunk-e2fknt7w.js:4481-4534 placement
 /**
  * 读环境变量：优先用启动时锁定的快照，否则读当前 env（Windows 文件夹正在探测时用）。
  */
-function envAtStartup(e) {
+function envAtStartup(name) {
   let latchedPreSettingsEnvSnapshot = getLatchedPreSettingsEnvSnapshot();
-  return latchedPreSettingsEnvSnapshot !== undefined ? latchedPreSettingsEnvSnapshot[e] : env[e];
+  return latchedPreSettingsEnvSnapshot !== undefined ? latchedPreSettingsEnvSnapshot[name] : env[name];
 }
 //@ chunk-e2fknt7w.js:4534-4591 placement
 function windowsProfileDirsUnread() {
@@ -83,8 +88,8 @@ function windowsProfileDirsUnread() {
 }
 //@ chunk-e2fknt7w.js:4591-4679 placement
 function windowsProfileDirsReadFailure() {
-  let { result: e } = profileDirsState;
-  return getPlatform() === "windows" && e.settled && e.failed ? e.why : undefined;
+  let { result } = profileDirsState;
+  return getPlatform() === "windows" && result.settled && result.failed ? result.why : undefined;
 }
 //@ chunk-e2fknt7w.js:4679-4720 placement
 var PROFILE_DIRS_UNREADABLE_NOTICE_KEY = "served-profile-dirs-unreadable";
@@ -95,12 +100,12 @@ async function primeWindowsProfileDirs() {
     profileDirsState.inFlight ??= resolveVolumePaths(profileDirsState.unresolved)
       .then(async ({ resolved, unresolved, missing }) => {
         let { result: dirs } = profileDirsState;
-        let s;
+        let reread;
         try {
-          s = dirs.settled && !dirs.failed ? await rereadMissingProfileDirs(dirs, missing) : undefined;
+          reread = dirs.settled && !dirs.failed ? await rereadMissingProfileDirs(dirs, missing) : undefined;
         } catch (error) {
           logError(error);
-          s = logProfileDirsUnsettled(
+          reread = logProfileDirsUnsettled(
             unreadableProfileDirs(
               `checking a missing profile folder against PowerShell threw (${error instanceof Error ? error.message : String(error)})`,
             ),
@@ -109,13 +114,13 @@ async function primeWindowsProfileDirs() {
         profileDirsState.resolved = new Map([
           ...profileDirsState.resolved,
           ...resolved,
-          ...(s?.its?.resolved ?? []),
+          ...(reread?.its?.resolved ?? []),
         ]);
-        profileDirsState.unresolved = [...unresolved, ...(s?.its?.unresolved ?? [])];
+        profileDirsState.unresolved = [...unresolved, ...(reread?.its?.unresolved ?? [])];
         profileDirsState.unresolvedAskedAt = Date.now();
-        if (s !== undefined) profileDirsState.result = s.result;
+        if (reread !== undefined) profileDirsState.result = reread.result;
         profileDirsState.inFlight = undefined;
-        if (resolved.size > 0 || s !== undefined) emitProfileDirsSettled();
+        if (resolved.size > 0 || reread !== undefined) emitProfileDirsSettled();
       })
       .catch((error) => {
         profileDirsState.inFlight = undefined;
@@ -136,22 +141,22 @@ async function primeWindowsProfileDirs() {
       retry: true,
       why: error instanceof Error ? error.message : "the read threw",
     }))
-    .then(async (e) => {
+    .then(async (read) => {
       let { resolved, unresolved } = await resolveVolumePaths([
-        ...(e.failed || e.documents === null ? [] : [e.documents]),
-        ...(e.failed ? [] : e.kept),
+        ...(read.failed || read.documents === null ? [] : [read.documents]),
+        ...(read.failed ? [] : read.kept),
         ...oneDriveDocumentsDirs(),
-        ...(e.failed ? [] : placedPaths(e.autoRun)),
+        ...(read.failed ? [] : placedPaths(read.autoRun)),
         ...appDataDirs(),
       ]);
       profileDirsState.resolved = resolved;
       profileDirsState.unresolved = unresolved;
       profileDirsState.unresolvedAskedAt = Date.now();
-      profileDirsState.result = e;
+      profileDirsState.result = read;
       profileDirsState.inFlight = undefined;
-      if (e.failed)
+      if (read.failed)
         logForDebugging(
-          `[toolHosts] Could not read where this machine keeps its profile folders (${e.why}); its tools are not offered to cloud sessions until the next start reads them.`,
+          `[toolHosts] Could not read where this machine keeps its profile folders (${read.why}); its tools are not offered to cloud sessions until the next start reads them.`,
         );
       emitProfileDirsSettled();
     })
@@ -189,39 +194,42 @@ function pendingWindowsProfileDirsRead() {
     : primeWindowsProfileDirs();
 }
 //@ chunk-e2fknt7w.js:6647-6693 placement
-function onWindowsProfileDirsSettled(e) {
-  return profileDirsState.settled.subscribe(e);
+function onWindowsProfileDirsSettled(listener) {
+  return profileDirsState.settled.subscribe(listener);
 }
 //@ chunk-e2fknt7w.js:6693-7023 placement
 /**
  * Windows 用户文件夹解析的进程状态：结果、已解析/未解析的路径、进行中的读取、卷与 PowerShell 的答复。
  */
-var profileDirsState = identity(
-  {
-    result: {
-      settled: false,
+var profileDirsState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e2fknt7w.js:6693", () => {
+  profileDirsState = identity(
+    {
+      result: {
+        settled: false,
+      },
+      resolved: new Map(),
+      unresolved: [],
+      unresolvedAskedAt: 0,
+      inFlight: undefined,
+      settled: createSignal(),
+      volumeAnswers: new Map(),
+      powershellAnswer: undefined,
     },
-    resolved: new Map(),
-    unresolved: [],
-    unresolvedAskedAt: 0,
-    inFlight: undefined,
-    settled: createSignal(),
-    volumeAnswers: new Map(),
-    powershellAnswer: undefined,
-  },
-  (e) => {
-    e.result = {
-      settled: false,
-    };
-    e.resolved = new Map();
-    e.unresolved = [];
-    e.unresolvedAskedAt = 0;
-    e.inFlight = undefined;
-    e.settled.clear();
-    e.volumeAnswers.clear();
-    e.powershellAnswer = undefined;
-  },
-);
+    (state) => {
+      state.result = {
+        settled: false,
+      };
+      state.resolved = new Map();
+      state.unresolved = [];
+      state.unresolvedAskedAt = 0;
+      state.inFlight = undefined;
+      state.settled.clear();
+      state.volumeAnswers.clear();
+      state.powershellAnswer = undefined;
+    },
+  );
+});
 //@ chunk-e2fknt7w.js:7023-7111 placement
 /**
  * 平台为 Windows、尚未就绪且最近没有问过未解析文件夹时，需要（再次）探测。
@@ -237,38 +245,45 @@ function isProfileDirsUnsettledRecently() {
 var UNRESOLVED_REQUEST_COOLDOWN_MS = 60000;
 //@ chunk-e2fknt7w.js:7124-7194 placement
 function isProfileDirsSettled() {
-  let { result: e } = profileDirsState;
-  return e.settled && (!e.failed || !e.retry);
+  let { result } = profileDirsState;
+  return result.settled && (!result.failed || !result.retry);
 }
 //@ chunk-e2fknt7w.js:7194-7302 placement
-function readRegistryValue(stdout, n, o) {
-  let replaced = registryValuePattern(n)
+function readRegistryValue(stdout, valueName, vars) {
+  let dir = registryValuePattern(valueName)
     .exec(stdout)?.[1]
-    ?.replace(/%([^%]+)%/g, (s, u) => o[u.toUpperCase()] ?? s);
-  return sanitizeProfileDir(replaced);
+    ?.replace(/%([^%]+)%/g, (wholeMatch, varName) => vars[varName.toUpperCase()] ?? wholeMatch);
+  return sanitizeProfileDir(dir);
 }
 //@ chunk-e2fknt7w.js:7302-7436 placement
-function registryValuePattern(e, n = "REG_(?:EXPAND_)?SZ") {
-  return new RegExp("^[ \\t]+" + e.replace(/ /g, "[ ]") + "[ \\t]+" + n + "[ \\t]+(.+?)[ \\t]*\\r?$", "im");
+function registryValuePattern(valueName, typePattern = "REG_(?:EXPAND_)?SZ") {
+  return new RegExp(
+    "^[ \\t]+" + valueName.replace(/ /g, "[ ]") + "[ \\t]+" + typePattern + "[ \\t]+(.+?)[ \\t]*\\r?$",
+    "im",
+  );
 }
 //@ chunk-e2fknt7w.js:7436-7650 placement
 function parsePowerShellProfileDir(stdout) {
-  let n = stdout.trim().split(/\r?\n/).pop()?.trim() ?? "";
-  let o = sanitizeProfileDir(
-    /^\d{1,5}(,\d{1,5})*$/.test(n) ? String.fromCharCode(...n.split(",").map(Number)) : n,
+  let lastLine = stdout.trim().split(/\r?\n/).pop()?.trim() ?? "";
+  let dir = sanitizeProfileDir(
+    /^\d{1,5}(,\d{1,5})*$/.test(lastLine)
+      ? String.fromCharCode(...lastLine.split(",").map(Number))
+      : lastLine,
   );
-  return o !== null && /\.ps1$/i.test(o) ? win32.dirname(win32.dirname(o)) : null;
+  return dir !== null && /\.ps1$/i.test(dir) ? win32.dirname(win32.dirname(dir)) : null;
 }
 //@ chunk-e2fknt7w.js:7650-7719 placement
-function sanitizeProfileDir(e) {
-  return e === undefined || /[%?\uFFFD]/.test(e) || !isAbsolutePlatformPath(e) ? null : e;
+function sanitizeProfileDir(dir) {
+  return dir === undefined || /[%?\uFFFD]/.test(dir) || !isAbsolutePlatformPath(dir) ? null : dir;
 }
 //@ chunk-e2fknt7w.js:7719-7923 placement
 async function findRegExe() {
   let joined = win32.join(DEFAULT_WINDOWS_DIR, "System32", "reg.exe");
   if (await pathExists(joined)) return joined;
-  let n = envAtStartup("SystemRoot") || envAtStartup("SYSTEMROOT");
-  return n !== undefined && /^[A-Za-z]:[\\/]/.test(n) ? win32.join(n, "System32", "reg.exe") : undefined;
+  let systemRoot = envAtStartup("SystemRoot") || envAtStartup("SYSTEMROOT");
+  return systemRoot !== undefined && /^[A-Za-z]:[\\/]/.test(systemRoot)
+    ? win32.join(systemRoot, "System32", "reg.exe")
+    : undefined;
 }
 //@ chunk-e2fknt7w.js:7923-8051 placement
 var DEFAULT_WINDOWS_DIR = "C:\\Windows";
@@ -284,7 +299,7 @@ async function readProfileDirs() {
   if (
     !regResult.failed &&
     regResult.documents !== "unplaceable" &&
-    regResult.autoRun.every(([, o]) => o !== "unplaceable")
+    regResult.autoRun.every(([, value]) => value !== "unplaceable")
   )
     return settleProfileDirs(regResult.autoRun, regResult.documents);
   let psResult = await powerShellProfileAnswer();
@@ -311,24 +326,32 @@ async function readProfileDirs() {
 /**
  * 确认 reg.exe 给出的文件夹：对不存在的再问 PowerShell，合并结果并检查仍无法定位的文件夹。
  */
-async function settleProfileDirs(e, n) {
-  let o = typeof n === "object" ? (n.placed[0] ?? null) : null;
-  let r = [...(o === null ? [] : [o]), ...placedPaths(e)];
-  let s = (
-    await Promise.all(r.map(async (E) => ("missing" in (await resolveVolumeCached(E)) ? [E] : [])))
+async function settleProfileDirs(autoRun, documents) {
+  let placement = typeof documents === "object" ? (documents.placed[0] ?? null) : null;
+  let allDirs = [...(placement === null ? [] : [placement]), ...placedPaths(autoRun)];
+  let missingDirs = (
+    await Promise.all(
+      allDirs.map(async (dir) => ("missing" in (await resolveVolumeCached(dir)) ? [dir] : [])),
+    )
   ).flat();
-  let u = s.length > 0 ? await askPowerShellForDirs(o !== null && s.includes(o) ? o : null, s) : undefined;
-  if (u !== undefined && u.failed) return u;
-  let autoRun = u?.autoRun;
-  let a = autoRun === undefined ? e : shellFoldersByKind(e, autoRun);
-  let m = unplaceableFolders(a, n);
-  if (m.length > 0) return unplaceableFailure(m);
-  let documents = u?.documents ?? null;
+  let asked =
+    missingDirs.length > 0
+      ? await askPowerShellForDirs(
+          placement !== null && missingDirs.includes(placement) ? placement : null,
+          missingDirs,
+        )
+      : undefined;
+  if (asked !== undefined && asked.failed) return asked;
+  let autoRun_2 = asked?.autoRun;
+  let resolvedAutoRun = autoRun_2 === undefined ? autoRun : shellFoldersByKind(autoRun, autoRun_2);
+  let unplaceable = unplaceableFolders(resolvedAutoRun, documents);
+  if (unplaceable.length > 0) return unplaceableFailure(unplaceable);
+  let documents_2 = asked?.documents ?? null;
   return {
     settled: true,
-    documents: documents ?? o,
-    kept: documents !== null && o !== null && documents !== o ? [o] : [],
-    autoRun: a,
+    documents: documents_2 ?? placement,
+    kept: documents_2 !== null && placement !== null && documents_2 !== placement ? [placement] : [],
+    autoRun: resolvedAutoRun,
     failed: false,
   };
 }
@@ -337,12 +360,12 @@ async function settleProfileDirs(e, n) {
  * 重新读取缺失的 Windows 用户文件夹：经 PowerShell 获取新位置，返回更新后的结果与需要核实的路径。
  */
 async function rereadMissingProfileDirs(dirs, missing) {
-  let filtered = [...(dirs.documents === null ? [] : [dirs.documents]), ...placedPaths(dirs.autoRun)].filter(
-    (w) => missing.includes(w),
+  let missing_2 = [...(dirs.documents === null ? [] : [dirs.documents]), ...placedPaths(dirs.autoRun)].filter(
+    (dir) => missing.includes(dir),
   );
-  if (filtered.length === 0) return;
-  let includesDocuments = dirs.documents !== null && filtered.includes(dirs.documents);
-  let psResult = await askPowerShellForDirs(includesDocuments ? dirs.documents : null, filtered);
+  if (missing_2.length === 0) return;
+  let includesDocuments = dirs.documents !== null && missing_2.includes(dirs.documents);
+  let psResult = await askPowerShellForDirs(includesDocuments ? dirs.documents : null, missing_2);
   if (psResult.failed) return logProfileDirsUnsettled(psResult);
   let autoRun =
     psResult.autoRun === undefined ? dirs.autoRun : shellFoldersByKind(dirs.autoRun, psResult.autoRun);
@@ -350,8 +373,8 @@ async function rereadMissingProfileDirs(dirs, missing) {
   if (absentFolders.length > 0) return logProfileDirsUnsettled(unplaceableFailure(absentFolders));
   let newDocuments =
     psResult.documents !== null && psResult.documents !== dirs.documents ? psResult.documents : null;
-  let filtered_2 = placedPaths(autoRun).filter((w) => !placedPaths(dirs.autoRun).includes(w));
-  if (newDocuments === null && filtered_2.length === 0) return;
+  let filtered = placedPaths(autoRun).filter((dir) => !placedPaths(dirs.autoRun).includes(dir));
+  if (newDocuments === null && filtered.length === 0) return;
   return {
     result: {
       ...dirs,
@@ -362,77 +385,79 @@ async function rereadMissingProfileDirs(dirs, missing) {
       ]),
       autoRun,
     },
-    its: await resolveVolumePaths([...(newDocuments === null ? [] : [newDocuments]), ...filtered_2]),
+    its: await resolveVolumePaths([...(newDocuments === null ? [] : [newDocuments]), ...filtered]),
   };
 }
 //@ chunk-e2fknt7w.js:9786-10016 placement
-function logProfileDirsUnsettled(e) {
+function logProfileDirsUnsettled(failure) {
   resetProfileDirAnswers();
   logForDebugging(
-    `[toolHosts] Asked again where this machine keeps its profile folders and could not settle it \u2014 ${e.why}; its tools are not offered to cloud sessions until the next start reads again.`,
+    `[toolHosts] Asked again where this machine keeps its profile folders and could not settle it \u2014 ${failure.why}; its tools are not offered to cloud sessions until the next start reads again.`,
   );
   return {
-    result: e,
+    result: failure,
   };
 }
 //@ chunk-e2fknt7w.js:10016-10337 placement
 /**
  * 让 PowerShell 读取用户文件夹位置（文档与自动运行目录），失败或不可读时给出失败原因。
  */
-async function askPowerShellForDirs(e, n) {
-  let o = await powerShellProfileAnswer();
-  if (o.failed) return missingDirsFailure(n, o.why);
-  let filtered = n.filter((s) => s !== e);
-  if (o.autoRun === "unreadable" && filtered.length > 0)
-    return missingDirsFailure(filtered, "its registry provider could not read the User Shell Folders key");
+async function askPowerShellForDirs(documents, missing) {
+  let answer = await powerShellProfileAnswer();
+  if (answer.failed) return missingDirsFailure(missing, answer.why);
+  let dirs = missing.filter((dir) => dir !== documents);
+  if (answer.autoRun === "unreadable" && dirs.length > 0)
+    return missingDirsFailure(dirs, "its registry provider could not read the User Shell Folders key");
   return {
     failed: false,
-    documents: e === null ? null : o.documents,
-    autoRun: o.autoRun === "unreadable" ? undefined : o.autoRun,
+    documents: documents === null ? null : answer.documents,
+    autoRun: answer.autoRun === "unreadable" ? undefined : answer.autoRun,
   };
 }
 //@ chunk-e2fknt7w.js:10337-10558 placement
-function missingDirsFailure(e, n) {
+function missingDirsFailure(dirs, why) {
   return unreadableProfileDirs(
-    `${e.join(" and ")} ${e.length === 1 ? "does not exist on its volume" : "do not exist on their volumes"} as read, and PowerShell could not say where ${e.length === 1 ? "the folder is" : "they are"} (${n})`,
+    `${dirs.join(" and ")} ${dirs.length === 1 ? "does not exist on its volume" : "do not exist on their volumes"} as read, and PowerShell could not say where ${dirs.length === 1 ? "the folder is" : "they are"} (${why})`,
   );
 }
 //@ chunk-e2fknt7w.js:10558-10667 placement
-function unplaceableFolders(autoRun, n) {
+function unplaceableFolders(folderEntries, state) {
   return [
-    ...(n === "unplaceable" ? ["Personal"] : []),
-    ...autoRun.flatMap(([o, r]) => (r === "unplaceable" ? [o] : [])),
+    ...(state === "unplaceable" ? ["Personal"] : []),
+    ...folderEntries.flatMap(([name, value]) => (value === "unplaceable" ? [name] : [])),
   ];
 }
 //@ chunk-e2fknt7w.js:10667-10747 placement
-function shellFoldersByKind(...e) {
-  return SHELL_FOLDER_NAMES.map((n) => {
-    let o = mergePlacements(e.map((r) => placementFor(r, n)));
-    return [n, o];
+function shellFoldersByKind(...sources) {
+  return SHELL_FOLDER_NAMES.map((name) => {
+    let placement = mergePlacements(sources.map((source) => placementFor(source, name)));
+    return [name, placement];
   });
 }
 //@ chunk-e2fknt7w.js:10747-10822 placement
 function placedPaths(autoRun) {
-  return uniq(autoRun.flatMap(([, n]) => (typeof n === "object" ? n.placed : [])));
+  return uniq(autoRun.flatMap(([, value]) => (typeof value === "object" ? value.placed : [])));
 }
 //@ chunk-e2fknt7w.js:10822-10969 placement
-function unplaceableFailure(e) {
+function unplaceableFailure(names) {
   return unreadableProfileDirs(
-    `the User Shell Folders key's ${e.join(" and ")} could not be placed by any source that read ${e.length === 1 ? "it" : "them"}`,
+    `the User Shell Folders key's ${names.join(" and ")} could not be placed by any source that read ${names.length === 1 ? "it" : "them"}`,
   );
 }
 //@ chunk-e2fknt7w.js:10969-11128 placement
-function mergePlacements(e) {
-  let n = uniq(e.flatMap((o) => (typeof o === "object" ? o.placed : [])));
-  if (n.length > 0)
+function mergePlacements(placements) {
+  let paths = uniq(
+    placements.flatMap((placement) => (typeof placement === "object" ? placement.placed : [])),
+  );
+  if (paths.length > 0)
     return {
-      placed: n,
+      placed: paths,
     };
-  return e.includes("unplaceable") ? "unplaceable" : "absent";
+  return placements.includes("unplaceable") ? "unplaceable" : "absent";
 }
 //@ chunk-e2fknt7w.js:11128-11188 placement
-function placementFor(e, n) {
-  return e.find(([o]) => o === n)?.[1] ?? "absent";
+function placementFor(autoRun, name) {
+  return autoRun.find(([entryName]) => entryName === name)?.[1] ?? "absent";
 }
 //@ chunk-e2fknt7w.js:11188-12008 placement
 async function queryUserShellFoldersViaReg() {
@@ -457,7 +482,7 @@ async function queryUserShellFoldersViaReg() {
           autoRun: [],
         }
       : unreadableProfileDirs(`reg.exe exited ${exitCode}`);
-  let u = {
+  let vars = {
     USERPROFILE: homedir(),
     USERNAME: envAtStartup("USERNAME"),
     HOMESHARE: envAtStartup("HOMESHARE"),
@@ -466,10 +491,10 @@ async function queryUserShellFoldersViaReg() {
     APPDATA: envAtStartup("APPDATA"),
     LOCALAPPDATA: envAtStartup("LOCALAPPDATA"),
   };
-  let d = (a) => {
-    let trimmed = registryValuePattern(a, "REG_\\w+").exec(stdout)?.[1]?.trim();
+  let readFolder = (name) => {
+    let trimmed = registryValuePattern(name, "REG_\\w+").exec(stdout)?.[1]?.trim();
     if (trimmed === undefined || trimmed === "") return "absent";
-    let registryValue = readRegistryValue(stdout, a, u);
+    let registryValue = readRegistryValue(stdout, name, vars);
     return registryValue === null
       ? "unplaceable"
       : {
@@ -478,21 +503,25 @@ async function queryUserShellFoldersViaReg() {
   };
   return {
     failed: false,
-    documents: d("Personal"),
-    autoRun: SHELL_FOLDER_NAMES.map((a) => [a, d(a)]),
+    documents: readFolder("Personal"),
+    autoRun: SHELL_FOLDER_NAMES.map((name) => [name, readFolder(name)]),
   };
 }
 //@ chunk-e2fknt7w.js:12008-12477 placement
 /**
  * Windows 需要定位的用户 shell 文件夹名，以及读取这些文件夹与 PowerShell 配置文件位置的 PowerShell 脚本。
  */
-var SHELL_FOLDER_NAMES = ["AppData", "Local AppData", "Start Menu", "Programs", "Startup"];
-var POWERSHELL_FOLDERS_SCRIPT = [
-  `$k='HKCU:\\${USER_SHELL_FOLDERS_KEY.slice(5)}'`,
-  "$p=$null;$x='!';try{$p=Get-ItemProperty -LiteralPath $k -ErrorAction Stop;$x=''}catch{if($_.FullyQualifiedErrorId -like 'PathNotFound,*'){$x=''}}",
-  `foreach($n in ${SHELL_FOLDER_NAMES.map((e) => `'${e}'`).join(",")}){$v=$x;if($null -ne $p -and $null -ne $p.$n){$v=([int[]][char[]][string]$p.$n) -join ','};$n+'='+$v}`,
-  "([int[]][char[]]$PROFILE.CurrentUserAllHosts) -join ','",
-].join(";");
+var SHELL_FOLDER_NAMES; // deferred: uses DEFAULT_WINDOWS_DIR of its import cycle while loading; runs once the cycle is complete
+var POWERSHELL_FOLDERS_SCRIPT;
+deferInit("chunk-e2fknt7w.js:12008", () => {
+  SHELL_FOLDER_NAMES = ["AppData", "Local AppData", "Start Menu", "Programs", "Startup"];
+  POWERSHELL_FOLDERS_SCRIPT = [
+    `$k='HKCU:\\${USER_SHELL_FOLDERS_KEY.slice(5)}'`,
+    "$p=$null;$x='!';try{$p=Get-ItemProperty -LiteralPath $k -ErrorAction Stop;$x=''}catch{if($_.FullyQualifiedErrorId -like 'PathNotFound,*'){$x=''}}",
+    `foreach($n in ${SHELL_FOLDER_NAMES.map((name) => `'${name}'`).join(",")}){$v=$x;if($null -ne $p -and $null -ne $p.$n){$v=([int[]][char[]][string]$p.$n) -join ','};$n+'='+$v}`,
+    "([int[]][char[]]$PROFILE.CurrentUserAllHosts) -join ','",
+  ].join(";");
+});
 //@ chunk-e2fknt7w.js:12477-12524 placement
 function powerShellProfileAnswer() {
   return (profileDirsState.powershellAnswer ??= queryPowerShellProfile());
@@ -525,27 +554,27 @@ async function queryPowerShellProfile() {
   let powerShellProfileDir = parsePowerShellProfileDir(stdout);
   if (powerShellProfileDir === null)
     return unreadableProfileDirs("PowerShell's $PROFILE could not be placed");
-  let mapped = SHELL_FOLDER_NAMES.map((a) => [
-    a,
-    new RegExp(`^${a.replace(/ /g, "[ ]")}=(.*?)\\r?$`, "m").exec(stdout)?.[1],
+  let mapped = SHELL_FOLDER_NAMES.map((name) => [
+    name,
+    new RegExp(`^${name.replace(/ /g, "[ ]")}=(.*?)\\r?$`, "m").exec(stdout)?.[1],
   ]);
   return {
     failed: false,
     documents: powerShellProfileDir,
-    autoRun: mapped.some(([, a]) => a === undefined || a === "!")
+    autoRun: mapped.some(([, value]) => value === undefined || value === "!")
       ? "unreadable"
-      : mapped.flatMap(([a, m]) => (m === undefined ? [] : [[a, parsePowerShellFolderValue(m)]])),
+      : mapped.flatMap(([name, raw]) => (raw === undefined ? [] : [[name, parsePowerShellFolderValue(raw)]])),
   };
 }
 //@ chunk-e2fknt7w.js:13248-13450 placement
-function parsePowerShellFolderValue(e) {
-  let n = /^\d{1,5}(,\d{1,5})*$/.test(e) ? String.fromCharCode(...e.split(",").map(Number)) : e;
-  if (n.trim() === "") return "absent";
-  let o = sanitizeProfileDir(n === e ? undefined : n);
-  return o === null
+function parsePowerShellFolderValue(raw) {
+  let decoded = /^\d{1,5}(,\d{1,5})*$/.test(raw) ? String.fromCharCode(...raw.split(",").map(Number)) : raw;
+  if (decoded.trim() === "") return "absent";
+  let dir = sanitizeProfileDir(decoded === raw ? undefined : decoded);
+  return dir === null
     ? "unplaceable"
     : {
-        placed: [o],
+        placed: [dir],
       };
 }
 //@ chunk-e2fknt7w.js:13450-13527 placement
@@ -572,7 +601,7 @@ async function resolveVolumePaths(folders) {
       unresolved: [],
       missing: [],
     };
-  let n = await Promise.all(
+  let results = await Promise.all(
     folders.map(async (folder) => {
       let volume = await resolveVolumeCached(folder);
       return {
@@ -583,12 +612,12 @@ async function resolveVolumePaths(folders) {
   ).finally(resetProfileDirAnswers);
   return {
     resolved: new Map(
-      n.flatMap(({ folder, outcome }) =>
+      results.flatMap(({ folder, outcome }) =>
         "resolved" in outcome && outcome.resolved !== folder ? [[folder, outcome.resolved]] : [],
       ),
     ),
-    unresolved: n.flatMap(({ folder, outcome }) => ("unresolved" in outcome ? [folder] : [])),
-    missing: n.flatMap(({ folder, outcome }) => ("missing" in outcome ? [folder] : [])),
+    unresolved: results.flatMap(({ folder, outcome }) => ("unresolved" in outcome ? [folder] : [])),
+    missing: results.flatMap(({ folder, outcome }) => ("missing" in outcome ? [folder] : [])),
   };
 }
 //@ chunk-e2fknt7w.js:13998-14010 placement
@@ -599,23 +628,23 @@ function resetProfileDirAnswers() {
   profileDirsState.powershellAnswer = undefined;
 }
 //@ chunk-e2fknt7w.js:14074-14224 placement
-function resolveVolumeCached(e) {
-  let n = profileDirsState.volumeAnswers.get(e);
-  if (n !== undefined) return n;
-  let o = withDeadline(resolveVolumePath(e), VOLUME_RESOLVE_TIMEOUT_MS).then(
-    (r) =>
-      r ?? {
+function resolveVolumeCached(folder) {
+  let cached = profileDirsState.volumeAnswers.get(folder);
+  if (cached !== undefined) return cached;
+  let promise = withDeadline(resolveVolumePath(folder), VOLUME_RESOLVE_TIMEOUT_MS).then(
+    (answer) =>
+      answer ?? {
         unresolved: true,
       },
   );
-  profileDirsState.volumeAnswers.set(e, o);
-  return o;
+  profileDirsState.volumeAnswers.set(folder, promise);
+  return promise;
 }
 //@ chunk-e2fknt7w.js:14224-14511 placement
-async function resolveVolumePath(e) {
+async function resolveVolumePath(path) {
   try {
     return {
-      resolved: await realpath(e),
+      resolved: await realpath(path),
     };
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -623,14 +652,14 @@ async function resolveVolumePath(e) {
       return {
         unresolved: true,
       };
-    let root = win32.parse(e).root;
-    if (root === "" || root === e)
+    let root = win32.parse(path).root;
+    if (root === "" || root === path)
       return {
         unresolved: true,
       };
     return realpath(root).then(
-      (s) => ({
-        resolved: win32.join(s, e.slice(root.length)),
+      (rootReal) => ({
+        resolved: win32.join(rootReal, path.slice(root.length)),
         missing: true,
       }),
       () => ({
@@ -650,10 +679,10 @@ async function resolveMappedDrive(folder) {
       unresolved: true,
     };
   let sliced = folder.slice(2);
-  let r = sanitizeUncPath(envAtStartup("HOMESHARE"));
-  if (r !== null && envAtStartup("HOMEDRIVE")?.toUpperCase() === `${upper}:`)
+  let homeShare = sanitizeUncPath(envAtStartup("HOMESHARE"));
+  if (homeShare !== null && envAtStartup("HOMEDRIVE")?.toUpperCase() === `${upper}:`)
     return {
-      resolved: win32.join(r, sliced),
+      resolved: win32.join(homeShare, sliced),
     };
   let regExe = await findRegExe();
   if (regExe === undefined)
@@ -669,13 +698,13 @@ async function resolveMappedDrive(folder) {
       stdin: "ignore",
     },
   );
-  let m = !timedOut && exitCode === 0 ? remotePathFromReg(stdout) : null;
-  return m === null
+  let remotePath = !timedOut && exitCode === 0 ? remotePathFromReg(stdout) : null;
+  return remotePath === null
     ? {
         unresolved: true,
       }
     : {
-        resolved: win32.join(m, sliced),
+        resolved: win32.join(remotePath, sliced),
       };
 }
 //@ chunk-e2fknt7w.js:15018-15112 placement
@@ -683,8 +712,10 @@ function remotePathFromReg(stdout) {
   return sanitizeUncPath(/^[ \t]+RemotePath[ \t]+REG_SZ[ \t]+(.+?)[ \t]*\r?$/im.exec(stdout)?.[1]);
 }
 //@ chunk-e2fknt7w.js:15112-15205 placement
-function sanitizeUncPath(e) {
-  return e !== undefined && /^\\\\(?![?.][\\/])[^\\/]+[\\/]+[^\\/]+/.test(e) ? sanitizeProfileDir(e) : null;
+function sanitizeUncPath(path) {
+  return path !== undefined && /^\\\\(?![?.][\\/])[^\\/]+[\\/]+[^\\/]+/.test(path)
+    ? sanitizeProfileDir(path)
+    : null;
 }
 export {
   PROFILE_DIRS_UNREADABLE_NOTICE_KEY,

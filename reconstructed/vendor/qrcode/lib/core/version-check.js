@@ -5,10 +5,10 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-spjgqa4y.js:7990-8067 cjs-fingerprint
-var require_version_check = x(function (cjsExports) {
+var require_version_check = __commonJS(function (cjsExports) {
   cjsExports.isValid = function (version) {
     return !isNaN(version) && version >= 1 && version <= 40;
   };

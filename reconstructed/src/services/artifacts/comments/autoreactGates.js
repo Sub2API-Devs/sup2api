@@ -101,9 +101,9 @@ function isMadroneSpindleNewelEnabled() {
 //@ chunk-9tgt55am.js:43784-43798 placement
 var CLOCK_SKEW_TOLERANCE_MS = 600000;
 //@ chunk-9tgt55am.js:43798-43873 placement
-function isRecentToClaudeAt(e, t) {
-  let timestamp = parseTimestamp(e.toClaudeAt);
-  return timestamp !== null && Math.abs(t - timestamp) <= CLOCK_SKEW_TOLERANCE_MS;
+function isRecentToClaudeAt(comment, now) {
+  let timestamp = parseTimestamp(comment.toClaudeAt);
+  return timestamp !== null && Math.abs(now - timestamp) <= CLOCK_SKEW_TOLERANCE_MS;
 }
 //@ chunk-9tgt55am.js:43873-43889 placement
 var MIN_FLAG_VALUE = 1;
@@ -112,13 +112,13 @@ var MAX_FLAG_VALUE = 600;
 /**
  * 读取 GrowthBook 数值开关（允许字符串形式的数字），返回四舍五入后的整数，无效时返回 null。
  */
-function getNumericFlag(e) {
-  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(e, null);
-  let n =
+function getNumericFlag(name) {
+  let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE(name, null);
+  let value =
     typeof featureValue_CACHED_MAY_BE_STALE === "string" && featureValue_CACHED_MAY_BE_STALE.trim() !== ""
       ? Number(featureValue_CACHED_MAY_BE_STALE)
       : featureValue_CACHED_MAY_BE_STALE;
-  return typeof n === "number" && Number.isFinite(n) ? Math.round(n) : null;
+  return typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
 }
 //@ chunk-9tgt55am.js:44035-44178 placement
 /**
@@ -137,42 +137,42 @@ async function ownAccount(credentials) {
   return ownAccountUuid(credentials);
 }
 //@ chunk-9tgt55am.js:44213-44276 placement
-function hasCommentsFromOthers(thread, t) {
-  return thread.comments.some((comment) => !isOwnPrincipal(comment.account, t));
+function hasCommentsFromOthers(thread, account) {
+  return thread.comments.some((comment) => !isOwnPrincipal(comment.account, account));
 }
 //@ chunk-9tgt55am.js:44276-44520 placement
 /**
  * 从评论线程里挑出需要重新判断的评论：未见过的，或者已发给 Claude 但"发给 Claude"时间更新（应重新触发）的，或者文字被改过的。
  */
-function selectCommentsToJudge(slug, thread, n) {
-  let a = [];
+function selectCommentsToJudge(slug, thread, threadState) {
+  let out = [];
   for (let comment of thread.comments)
-    if (!n.seen.has(comment.id)) a.push(comment);
+    if (!threadState.seen.has(comment.id)) out.push(comment);
     else if (
       (!isDegradedComment(comment) &&
         comment.toClaudeAt !== undefined &&
-        n.sentToClaudeAt.has(comment.id) &&
-        shouldFireActivation(n.sentToClaudeAt.get(comment.id) ?? null, comment.toClaudeAt).fire) ||
+        threadState.sentToClaudeAt.has(comment.id) &&
+        shouldFireActivation(threadState.sentToClaudeAt.get(comment.id) ?? null, comment.toClaudeAt).fire) ||
       commentTextChanged(slug, comment.id, comment.text)
     )
-      a.push(comment);
-  return a;
+      out.push(comment);
+  return out;
 }
 //@ chunk-9tgt55am.js:44520-44669 placement
 /**
  * 记录已判定过的评论（讨论串、id、发给 Claude 的时间、文本与作者分类）。
  */
-function recordJudged(slug, threadId, n, a) {
+function recordJudged(slug, threadId, comments, account) {
   recordJudgedComments(
     slug,
-    n.map((r) => ({
+    comments.map((comment) => ({
       threadId,
-      id: r.id,
-      ...(r.toClaudeAt !== undefined && {
-        toClaudeAt: r.toClaudeAt,
+      id: comment.id,
+      ...(comment.toClaudeAt !== undefined && {
+        toClaudeAt: comment.toClaudeAt,
       }),
-      text: r.text,
-      authorship: classifyThreadAuthors([r], a),
+      text: comment.text,
+      authorship: classifyThreadAuthors([comment], account),
     })),
   );
 }
@@ -185,9 +185,9 @@ var DEFAULT_READ_RETRY_DELAYS_MS = [5000, 15000, 30000, 60000];
 var TENGU_SORREL_TRELLIS_MULLION = "tengu_sorrel_trellis_mullion";
 //@ chunk-9tgt55am.js:44743-44828 placement
 function effectiveReadRetryCount() {
-  let e = readRetryDelays().length;
+  let retries = readRetryDelays().length;
   let numericFlag = getNumericFlag(TENGU_SORREL_TRELLIS_MULLION);
-  return numericFlag === null ? e : Math.min(Math.max(numericFlag, 0), e);
+  return numericFlag === null ? retries : Math.min(Math.max(numericFlag, 0), retries);
 }
 //@ chunk-9tgt55am.js:44828-44839 placement
 var RETRY_JITTER_RATIO = 0.5;
@@ -199,11 +199,12 @@ function readRetryDelays() {
 /**
  * 计算第 N 次自动回复的退避等待：按退避表取基数乘以 0.7–1.3 随机系数，与服务端建议的等待（加随机放大）取较大者。
  */
-function computeAutoReactBackoff(readRetryAttempts, t, n = Math.random) {
+function computeAutoReactBackoff(readRetryAttempts, retryDelayMs, random = Math.random) {
   let retryDelays = readRetryDelays();
-  let s = (retryDelays[Math.min(readRetryAttempts, retryDelays.length - 1)] ?? 0) * (0.7 + n() * 0.6);
-  let d = t === undefined ? 0 : t * (1 + n() * RETRY_JITTER_RATIO);
-  return Math.max(s, d);
+  let delay =
+    (retryDelays[Math.min(readRetryAttempts, retryDelays.length - 1)] ?? 0) * (0.7 + random() * 0.6);
+  let jittered = retryDelayMs === undefined ? 0 : retryDelayMs * (1 + random() * RETRY_JITTER_RATIO);
+  return Math.max(delay, jittered);
 }
 //@ chunk-9tgt55am.js:45043-45093 placement
 var DEFAULT_BURST_SCALE_MS = 2000;
@@ -222,9 +223,9 @@ function coalesceMs() {
  * 计算自动响应前的确认停留时间：优先测试覆盖值，否则读开关，非法时用默认值，并限制在上限内。
  */
 function getConfirmDwellMs() {
-  let e = getLiveState().autoReact.confirmDwellMsOverride ?? getNumericFlag(TENGU_SORREL_TRELLIS_FINIAL);
-  let t = e !== null && e >= 0 ? e : DEFAULT_BURST_SCALE_MS;
-  return Math.min(t, coalesceMs());
+  let value = getLiveState().autoReact.confirmDwellMsOverride ?? getNumericFlag(TENGU_SORREL_TRELLIS_FINIAL);
+  let scale = value !== null && value >= 0 ? value : DEFAULT_BURST_SCALE_MS;
+  return Math.min(scale, coalesceMs());
 }
 //@ chunk-9tgt55am.js:45308-45322 placement
 var MAX_MAIN_AGENT_RETRIES = 3;
@@ -234,8 +235,8 @@ function isHumanComment(comment) {
   return getCommentAuthorKind(comment) === "human";
 }
 //@ chunk-9tgt55am.js:45360-45404 placement
-function hasToClaudeAt(e) {
-  return e.toClaudeAt !== undefined;
+function hasToClaudeAt(comment) {
+  return comment.toClaudeAt !== undefined;
 }
 //@ chunk-9tgt55am.js:45404-45519 placement
 /**
@@ -252,94 +253,94 @@ function isDegradedComment(comment) {
 /**
  * 自动响应推迟原因只打点一次；条件不再成立时清除记录以便下次再报。
  */
-function noteDeferOnce(e, t, n) {
-  if (!n) {
-    e.deferNoticed.delete(t);
+function noteDeferOnce(threadState, reason, shouldDefer) {
+  if (!shouldDefer) {
+    threadState.deferNoticed.delete(reason);
     return;
   }
-  if (!e.deferNoticed.has(t)) {
-    e.deferNoticed.add(t);
-    logFeatureSad("artifact_comments_autoreact", t);
+  if (!threadState.deferNoticed.has(reason)) {
+    threadState.deferNoticed.add(reason);
+    logFeatureSad("artifact_comments_autoreact", reason);
   }
 }
 //@ chunk-9tgt55am.js:50833-51147 placement
-function shouldFireActivation(e, t) {
-  if (t === null)
+function shouldFireActivation(previous, next) {
+  if (next === null)
     return {
       fire: false,
-      record: e,
+      record: previous,
     };
-  let timestamp = parseTimestamp(t);
-  if (e === null)
+  let timestamp = parseTimestamp(next);
+  if (previous === null)
     return timestamp !== null
       ? {
           fire: true,
-          record: t,
+          record: next,
         }
       : {
           fire: false,
           record: null,
         };
-  if (t === e)
+  if (next === previous)
     return {
       fire: false,
-      record: e,
+      record: previous,
     };
-  let timestamp_2 = parseTimestamp(e);
+  let timestamp_2 = parseTimestamp(previous);
   if (timestamp_2 !== null && timestamp !== null)
     return timestamp > timestamp_2
       ? {
           fire: true,
-          record: t,
+          record: next,
         }
       : {
           fire: false,
-          record: e,
+          record: previous,
         };
   if (timestamp !== null)
     return {
       fire: false,
-      record: t,
+      record: next,
     };
   return {
     fire: false,
-    record: e,
+    record: previous,
   };
 }
 //@ chunk-9tgt55am.js:51147-51296 placement
-function collectActivationStamps(e) {
+function collectActivationStamps(thread) {
   return [
-    e.activatedAtDegraded !== true ? (e.activatedAt ?? null) : null,
-    ...e.comments.map((comment) =>
+    thread.activatedAtDegraded !== true ? (thread.activatedAt ?? null) : null,
+    ...thread.comments.map((comment) =>
       comment.toClaudeAtDegraded !== true ? (comment.toClaudeAt ?? null) : null,
     ),
   ];
 }
 //@ chunk-9tgt55am.js:51296-51379 placement
 function raiseStampHighWater(artifactState, thread) {
-  for (let n of collectActivationStamps(thread))
-    artifactState.stampHighWater = shouldFireActivation(artifactState.stampHighWater, n).record;
+  for (let threadArg of collectActivationStamps(thread))
+    artifactState.stampHighWater = shouldFireActivation(artifactState.stampHighWater, threadArg).record;
 }
 //@ chunk-9tgt55am.js:51379-51433 placement
 function shouldFireOnStamps(thread, liveSightBoundary) {
-  return collectActivationStamps(thread).some((n) => shouldFireActivation(liveSightBoundary, n).fire);
+  return collectActivationStamps(thread).some((stamp) => shouldFireActivation(liveSightBoundary, stamp).fire);
 }
 //@ chunk-9tgt55am.js:51433-51446 placement
 var MAX_STAMP_AGE_MS = 30000;
 //@ chunk-9tgt55am.js:51446-51522 placement
-function heldReplyChainFor(e) {
-  return getLiveState().autoReact.artifacts.get(e)?.heldReplyChain ?? null;
+function heldReplyChainFor(slug) {
+  return getLiveState().autoReact.artifacts.get(slug)?.heldReplyChain ?? null;
 }
 //@ chunk-9tgt55am.js:51522-51723 placement
 function isArtifactScanBusy(slug) {
-  let t = getLiveState().wakes.wakes.get(slug);
+  let wake = getLiveState().wakes.wakes.get(slug);
   return (
-    (t !== undefined &&
-      (!t.kickSettled ||
-        t.inFlightScan !== null ||
-        t.readRetryTimer !== null ||
-        t.idleRescanCancel !== null ||
-        t.idlePassOwed !== null)) ||
+    (wake !== undefined &&
+      (!wake.kickSettled ||
+        wake.inFlightScan !== null ||
+        wake.readRetryTimer !== null ||
+        wake.idleRescanCancel !== null ||
+        wake.idlePassOwed !== null)) ||
     heldReplyChainFor(slug) !== null ||
     hasThreadAgentForSlug(slug)
   );
@@ -364,26 +365,28 @@ function isOchreBitternEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_ochre_bittern", false);
 }
 //@ chunk-9tgt55am.js:51993-52069 placement
-function autoReactCanUseTool(agentId, artifactState, n) {
+function autoReactCanUseTool(agentId, artifactState, state) {
   if (!isOchreBitternEnabled() || artifactState.heldReplyDeclined) return null;
-  return makeAutoReactCanUseTool(agentId, n);
+  return makeAutoReactCanUseTool(agentId, state);
 }
 //@ chunk-9tgt55am.js:52069-52324 placement
 /**
  * 构造自动回复用的 canUseTool：先走常规权限检查，需要询问时若是子代理或无人值守会话则记为 unanswered 并返回 ask，否则记 answered 并交给交互式询问。
  */
-function makeAutoReactCanUseTool(e, t) {
+function makeAutoReactCanUseTool(agentId, state) {
   let permissionPromptPerson = getPermissionPromptPerson();
-  if (permissionPromptPerson === null || e !== undefined || isUnattendedInteractiveSession()) return null;
-  return async (a, r, s, d, h, y) => {
-    let C = y ?? (await hasPermissionsToUseTool(a, r, s, d, h));
-    if (C.behavior !== "ask") return C;
-    if (s.agentId !== undefined || isUnattendedInteractiveSession()) {
-      t.ask = "unanswered";
-      return C;
+  if (permissionPromptPerson === null || agentId !== undefined || isUnattendedInteractiveSession())
+    return null;
+  return async (tool, input, toolUseContext, canUseTool, assistantMessage, toolUseId) => {
+    let decision =
+      toolUseId ?? (await hasPermissionsToUseTool(tool, input, toolUseContext, canUseTool, assistantMessage));
+    if (decision.behavior !== "ask") return decision;
+    if (toolUseContext.agentId !== undefined || isUnattendedInteractiveSession()) {
+      state.ask = "unanswered";
+      return decision;
     }
-    t.ask = "answered";
-    return permissionPromptPerson(a, r, s, d, h, C);
+    state.ask = "answered";
+    return permissionPromptPerson(tool, input, toolUseContext, canUseTool, assistantMessage, decision);
   };
 }
 //@ chunk-9tgt55am.js:52324-52336 placement
@@ -409,14 +412,14 @@ function refreshFastAckFlag() {
 /**
  * 判断读取评论是否受权限规则约束（有 deny/ask 规则，或在 MCP 替换模式下 MCP 读评论工具需要询问）。
  */
-function isCommentReadGated(context, t, url) {
+function isCommentReadGated(context, decision, url) {
   let toolPermissionContext = getToolPermissionContext(context);
-  let r = {
+  let probeContext = {
     action: "comments",
   };
   if (
-    artifactCallReadRule(toolPermissionContext, t, url, "deny", r) !== null ||
-    artifactCallReadRule(toolPermissionContext, t, url, "ask", r) !== null
+    artifactCallReadRule(toolPermissionContext, decision, url, "deny", probeContext) !== null ||
+    artifactCallReadRule(toolPermissionContext, decision, url, "ask", probeContext) !== null
   )
     return true;
   if (!isBuiltInArtifactHiddenForMcp()) return false;
@@ -425,32 +428,38 @@ function isCommentReadGated(context, t, url) {
 //@ chunk-9tgt55am.js:53641-53813 placement
 function canAutoreactWithoutPrompts(context) {
   let toolPermissionContext = getToolPermissionContext(context);
-  let n = isAutoAllowedInMode(artifactsMcpToolRef(ARTIFACTS_MCP_READ_COMMENTS_TOOL), toolPermissionContext);
+  let allowed = isAutoAllowedInMode(
+    artifactsMcpToolRef(ARTIFACTS_MCP_READ_COMMENTS_TOOL),
+    toolPermissionContext,
+  );
   return (
     (isCoworkFramePublishSession() && consentMustDeny(context)) ||
-    n === "dontAsk" ||
-    ((n === "default" || n === "acceptEdits") &&
+    allowed === "dontAsk" ||
+    ((allowed === "default" || allowed === "acceptEdits") &&
       (toolPermissionContext.shouldAvoidPermissionPrompts === true ||
         (getIsNonInteractiveSession() && !hasPermissionPromptTool(getPermissionPromptToolName()))))
   );
 }
 //@ chunk-9tgt55am.js:53813-53856 placement
-function hasReplyAllowRule(toolUseContext) {
+function hasReplyAllowRule(toolPermissionContext) {
   return (
-    hasArtifactDenyOrAskRule(toolUseContext, ARTIFACTS_MCP_READ_COMMENTS_TOOL, true) ||
-    isReplyDeniedByRules(toolUseContext)
+    hasArtifactDenyOrAskRule(toolPermissionContext, ARTIFACTS_MCP_READ_COMMENTS_TOOL, true) ||
+    isReplyDeniedByRules(toolPermissionContext)
   );
 }
 //@ chunk-9tgt55am.js:53856-53906 placement
-function canPostReply(e, t, n) {
-  return isCommentReadGated(e, t, n) || (isBuiltInArtifactHiddenForMcp() && isReplyDeniedByRules(e));
+function canPostReply(context, url, tool) {
+  return (
+    isCommentReadGated(context, url, tool) ||
+    (isBuiltInArtifactHiddenForMcp() && isReplyDeniedByRules(context))
+  );
 }
 //@ chunk-9tgt55am.js:53906-54143 placement
 /**
  * 收集决定评论自动编辑能否免询问的权限上下文：当前模式是否自动允许、自动模式是否激活、chain-on-allow、是否避免提示、分类器 deny 规则、是否有可能询问的钩子。
  */
-function getAutoEditPermissionContext(tool, context) {
-  let toolPermissionContext = getToolPermissionContext(context);
+function getAutoEditPermissionContext(tool, toolUseContext) {
+  let toolPermissionContext = getToolPermissionContext(toolUseContext);
   return {
     mode: isAutoAllowedInMode(tool, toolPermissionContext),
     autoActive: isAutoModeActive(),
@@ -477,14 +486,14 @@ function canAutoEditWithoutPrompt(autoEditPermissionContext) {
   );
 }
 //@ chunk-9tgt55am.js:54268-54406 placement
-function canAskForReply(e, t, n) {
-  let toolPermissionContext = getToolPermissionContext(n);
+function canAskForReply(context, url, tool) {
+  let toolPermissionContext = getToolPermissionContext(tool);
   return (
-    canAutoEditWithoutPrompt(getAutoEditPermissionContext(e, n)) &&
-    n.hookAskFloor !== true &&
-    n.requireCanUseTool !== true &&
-    getAskRuleForTool(toolPermissionContext, e) === null &&
-    matchToolRule(toolPermissionContext, e, t, "ask") === null
+    canAutoEditWithoutPrompt(getAutoEditPermissionContext(context, tool)) &&
+    tool.hookAskFloor !== true &&
+    tool.requireCanUseTool !== true &&
+    getAskRuleForTool(toolPermissionContext, context) === null &&
+    matchToolRule(toolPermissionContext, context, url, "ask") === null
   );
 }
 export {

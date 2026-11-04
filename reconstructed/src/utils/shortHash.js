@@ -15,8 +15,8 @@ import { computeContentHash } from "./commitAttribution.js";
 /**
  * 内容哈希取前 12 位十六进制，作为短哈希。
  */
-function shortHash(r) {
-  return fromSanitizer_SANITIZER_OUTPUT_ONLY(computeContentHash(r).slice(0, 12));
+function shortHash(value) {
+  return fromSanitizer_SANITIZER_OUTPUT_ONLY(computeContentHash(value).slice(0, 12));
 }
 //@ chunk-smzk8psk.js:307-330 placement
 var SHORT_HASH_RE = /^[0-9a-f]{12}$/;
@@ -24,7 +24,7 @@ var SHORT_HASH_RE = /^[0-9a-f]{12}$/;
 /**
  * 校验并规范化已有的 12 位短哈希，非法返回 undefined。
  */
-function normalizeShortHash(r) {
-  return SHORT_HASH_RE.test(r) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(r) : undefined;
+function normalizeShortHash(hash) {
+  return SHORT_HASH_RE.test(hash) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(hash) : undefined;
 }
 export { shortHash, normalizeShortHash };

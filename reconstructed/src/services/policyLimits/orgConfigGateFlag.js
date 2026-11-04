@@ -20,15 +20,15 @@ import { logForDebugging } from "../../utils/debug.js";
 
 //@ chunk-ad1qk1kv.js:346-423 placement
 function readOrgConfigRequiredFlagWithSource() {
-  let { value: e, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_ORG_CONFIG_REQUIRED, null);
+  let { value, source } = getFeatureValueWithSource_CACHED_MAY_BE_STALE(TENGU_ORG_CONFIG_REQUIRED, null);
   return {
-    flag: readOrgConfigRequiredFlag(e),
+    flag: readOrgConfigRequiredFlag(value),
     source,
   };
 }
 //@ chunk-ad1qk1kv.js:423-570 placement
-function readOrgConfigRequiredFlag(e) {
-  let { flag, problem } = parseRelayFlag(e);
+function readOrgConfigRequiredFlag(value) {
+  let { flag, problem } = parseRelayFlag(value);
   if (problem !== undefined)
     logForDebugging(
       `org-config gate: ${TENGU_ORG_CONFIG_REQUIRED} is malformed (${problem}); treating as off`,
@@ -42,13 +42,13 @@ function readOrgConfigRequiredFlag(e) {
 /**
  * 读取组织配置必需开关并决定灰度分桶。
  */
-async function fetchOrgConfigRequiredFlagServedToBearer(e, r, o) {
+async function fetchOrgConfigRequiredFlagServedToBearer(accessToken, identity, timeoutMs) {
   let featureValueServedToBearer = await fetchFeatureValueServedToBearer(
     TENGU_ORG_CONFIG_REQUIRED,
     null,
-    e,
-    r,
-    o,
+    accessToken,
+    identity,
+    timeoutMs,
   );
   return featureValueServedToBearer.served
     ? {
@@ -58,22 +58,26 @@ async function fetchOrgConfigRequiredFlagServedToBearer(e, r, o) {
     : undefined;
 }
 //@ chunk-ad1qk1kv.js:686-774 placement = ensureTaskListLockFile (0.505)
-function orgConfigGateFlagCouldArm(e = readOrgConfigRequiredFlagWithSource, r = isGrowthBookCacheEmpty) {
-  let { flag, source } = e();
-  return flag.enabled || (source === "fallback" && r());
+function orgConfigGateFlagCouldArm(
+  readFlag = readOrgConfigRequiredFlagWithSource,
+  isCacheEmpty = isGrowthBookCacheEmpty,
+) {
+  let { flag, source } = readFlag();
+  return flag.enabled || (source === "fallback" && isCacheEmpty());
 }
 //@ chunk-ad1qk1kv.js:774-890 placement
-function orgConfigGateBucket(e) {
-  let r = createHash("sha256").update(`org_config_gate:${e}`).digest("hex");
-  return parseInt(r.slice(0, 8), 16) % 100;
+function orgConfigGateBucket(identity) {
+  let hex = createHash("sha256").update(`org_config_gate:${identity}`).digest("hex");
+  return parseInt(hex.slice(0, 8), 16) % 100;
 }
 //@ chunk-ad1qk1kv.js:890-938 placement
-function inOrgConfigGateRollout(e, bucket) {
-  return e.enabled && bucket < e.percent;
+function inOrgConfigGateRollout(flag, bucket) {
+  return flag.enabled && bucket < flag.percent;
 }
 export {
   inOrgConfigGateRollout,
   orgConfigGateBucket,
   readOrgConfigRequiredFlagWithSource,
   fetchOrgConfigRequiredFlagServedToBearer,
+  orgConfigGateFlagCouldArm,
 };

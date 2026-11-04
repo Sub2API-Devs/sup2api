@@ -8,7 +8,7 @@
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
 import { AnthropicError } from "./error.mjs";
 import { APIPromise } from "./api-promise.mjs";
-import { Xo } from "../internal/parse.mjs";
+import { defaultParseResponse } from "../internal/parse.mjs";
 import { maybeObj } from "../internal/utils/values.mjs";
 
 //@ chunk-hwmsct5x.js:37300-38193 esm-layout
@@ -57,7 +57,8 @@ var PagePromise = (() => {
       super(
         client,
         request,
-        async (client, props) => new Page(client, props.response, await Xo(client, props), props.options),
+        async (client, props) =>
+          new Page(client, props.response, await defaultParseResponse(client, props), props.options),
       );
     }
     async *[Symbol.asyncIterator]() {

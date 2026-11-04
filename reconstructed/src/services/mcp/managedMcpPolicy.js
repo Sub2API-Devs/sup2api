@@ -13,7 +13,7 @@ import { realpathSync, accessSync, constants, realpath } from "fs";
 import { promisify } from "util";
 import { access } from "fs/promises";
 import { MCP_POLICY_SETTING_KEYS, shouldAllowManagedMcpServersOnly } from "./config.js";
-import { En } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { cleanForDisplay } from "../../utils/stringUtils.js";
 import {
   getFsImplementation,
@@ -40,41 +40,50 @@ function getAllowedMcpServersFromTiers({ slot, adminTiers }) {
 /**
  * 列出该文档里存在但不由该文档托管的 MCP 设置键。
  */
-function unmanagedPolicyKeys(e, n) {
-  return MCP_POLICY_SETTING_KEYS.filter((r) => e[r] !== undefined && !isManagedMcpKeySet(r, e, n));
+function unmanagedPolicyKeys(settings, policy) {
+  return MCP_POLICY_SETTING_KEYS.filter(
+    (key) => settings[key] !== undefined && !isManagedMcpKeySet(key, settings, policy),
+  );
 }
 //@ chunk-dcmhvw5a.js:423254-424162 placement
 /**
  * 判断托管 MCP 设置键是否由该文档设定。
  */
-function isManagedMcpKeySet(e, n, r) {
-  let slot = r.slot ?? {};
-  switch (e) {
+function isManagedMcpKeySet(key, settings, context) {
+  let slot = context.slot ?? {};
+  switch (key) {
     case "deniedMcpServers":
       return true;
     case "allowManagedMcpServersOnly":
-      return n.allowManagedMcpServersOnly === shouldAllowManagedMcpServersOnly(r);
+      return settings.allowManagedMcpServersOnly === shouldAllowManagedMcpServersOnly(context);
     case "disableClaudeAiConnectors":
       return (
-        n.disableClaudeAiConnectors ===
+        settings.disableClaudeAiConnectors ===
         (slot.disableClaudeAiConnectors === true ||
-          r.adminTiers.some((adminTier) => adminTier.disableClaudeAiConnectors === true))
+          context.adminTiers.some((adminTier) => adminTier.disableClaudeAiConnectors === true))
       );
     case "allowedMcpServers":
-      return En(
-        n.allowedMcpServers,
-        shouldAllowManagedMcpServersOnly(r) ? getAllowedMcpServersFromTiers(r) : slot.allowedMcpServers,
+      return import_sortedIndex_2(
+        settings.allowedMcpServers,
+        shouldAllowManagedMcpServersOnly(context)
+          ? getAllowedMcpServersFromTiers(context)
+          : slot.allowedMcpServers,
       );
     case "disabledMcpjsonServers":
-      return (n.disabledMcpjsonServers ?? []).every((a) => slot.disabledMcpjsonServers?.includes(a) === true);
+      return (settings.disabledMcpjsonServers ?? []).every(
+        (name) => slot.disabledMcpjsonServers?.includes(name) === true,
+      );
     case "enabledMcpjsonServers":
-      return (n.enabledMcpjsonServers ?? []).every((a) => slot.enabledMcpjsonServers?.includes(a) === true);
+      return (settings.enabledMcpjsonServers ?? []).every(
+        (name) => slot.enabledMcpjsonServers?.includes(name) === true,
+      );
     case "enableAllProjectMcpServers":
-      return (n.enableAllProjectMcpServers ?? false) === (slot.enableAllProjectMcpServers ?? false);
+      return (settings.enableAllProjectMcpServers ?? false) === (slot.enableAllProjectMcpServers ?? false);
     case "managedMcpServers": {
       let managedMcpServers = slot.managedMcpServers ?? {};
-      return Object.entries(n.managedMcpServers ?? {}).every(
-        ([key, value]) => Object.hasOwn(managedMcpServers, key) && En(managedMcpServers[key], value),
+      return Object.entries(settings.managedMcpServers ?? {}).every(
+        ([key, value]) =>
+          Object.hasOwn(managedMcpServers, key) && import_sortedIndex_2(managedMcpServers[key], value),
       );
     }
   }
@@ -83,22 +92,22 @@ function isManagedMcpKeySet(e, n, r) {
 /**
  * 描述经过链接到达的路径（外部/无法确认）。
  */
-function describeLinkedPath(e) {
-  let n = `${cleanForDisplay(e.path)}: ${cleanForDisplay(basename(e.path))} is reached through a link`;
-  let r = cleanForDisplay(e.folder);
-  let s;
-  switch (e.kind) {
+function describeLinkedPath(link) {
+  let linkText = `${cleanForDisplay(link.path)}: ${cleanForDisplay(basename(link.path))} is reached through a link`;
+  let folderText = cleanForDisplay(link.folder);
+  let sentence;
+  switch (link.kind) {
     case "inside":
       return null;
     case "outside":
-      s = `${n} that leads outside ${r}.`;
+      sentence = `${linkText} that leads outside ${folderText}.`;
       break;
     case "unverified":
-      s = `${n}, and Claude Code couldn't tell whether the link leads outside ${r}.`;
+      sentence = `${linkText}, and Claude Code couldn't tell whether the link leads outside ${folderText}.`;
       break;
   }
   return [
-    `${s} Claude Code still reads it.`,
+    `${sentence} Claude Code still reads it.`,
     "Suggested fix: Ask your administrator to replace the link with the file or folder it points to.",
   ];
 }
@@ -106,41 +115,41 @@ function describeLinkedPath(e) {
 /**
  * 同步执行路径解析步骤生成器（逐步执行文件系统询问）。
  */
-function resolvePathStepsSync(e, n, r, s, a) {
+function resolvePathStepsSync(folder, segments, knownReal, linkCache, statCache) {
   let fsImplementation = getFsImplementation();
-  let pathSteps = resolvePathSteps(e, n, r, s);
-  let m = pathSteps.next();
-  while (!m.done) {
-    let f;
+  let pathSteps = resolvePathSteps(folder, segments, knownReal, linkCache);
+  let step = pathSteps.next();
+  while (!step.done) {
+    let answer;
     try {
-      f = answerPathAskSync(fsImplementation, m.value, a);
+      answer = answerPathAskSync(fsImplementation, step.value, statCache);
     } catch (error) {
-      m = pathSteps.throw(error);
+      step = pathSteps.throw(error);
       continue;
     }
-    m = pathSteps.next(f);
+    step = pathSteps.next(answer);
   }
-  return m.value;
+  return step.value;
 }
 //@ chunk-dcmhvw5a.js:425042-425211 placement
 /**
  * 异步执行路径解析步骤生成器（逐步执行文件系统询问）。
  */
-async function resolvePathStepsAsync(e, n, r, s) {
+async function resolvePathStepsAsync(folder, segments, knownReal, linkCache) {
   let fsImplementation = getFsImplementation();
-  let pathSteps = resolvePathSteps(e, n, r, s);
-  let g = pathSteps.next();
-  while (!g.done) {
-    let m;
+  let pathSteps = resolvePathSteps(folder, segments, knownReal, linkCache);
+  let step = pathSteps.next();
+  while (!step.done) {
+    let answer;
     try {
-      m = await answerPathAskAsync(fsImplementation, g.value);
+      answer = await answerPathAskAsync(fsImplementation, step.value);
     } catch (error) {
-      g = pathSteps.throw(error);
+      step = pathSteps.throw(error);
       continue;
     }
-    g = pathSteps.next(m);
+    step = pathSteps.next(answer);
   }
-  return g.value;
+  return step.value;
 }
 //@ chunk-dcmhvw5a.js:425211-425298 placement
 /**
@@ -152,16 +161,16 @@ var UNC_JUNCTION_OPTIONS = {
   literalLinkText: "opaque",
 };
 //@ chunk-dcmhvw5a.js:425298-425563 placement
-function answerPathAskSync(fsImplementation, { ask, path }, s) {
+function answerPathAskSync(fsImplementation, { ask, path }, statCache) {
   switch (ask) {
     case "isLink": {
-      let a = fsImplementation.lstatSync(path);
-      s.set(path, {
-        uid: a.uid,
-        gid: a.gid,
-        mode: a.mode,
+      let stats = fsImplementation.lstatSync(path);
+      statCache.set(path, {
+        uid: stats.uid,
+        gid: stats.gid,
+        mode: stats.mode,
       });
-      return a.isSymbolicLink();
+      return stats.isSymbolicLink();
     }
     case "networkJunction":
       return findIntermediateUncJunction(fsImplementation, path, UNC_JUNCTION_OPTIONS);
@@ -190,97 +199,100 @@ async function answerPathAskAsync(fsImplementation, { ask, path }) {
 /**
  * 逐段解析路径（生成器，询问 realpath/junction）。
  */
-function* resolvePathSteps(e, n, r, s) {
-  let a = join(e, ...n);
-  let c;
+function* resolvePathSteps(folder, segments, knownReal, linkCache) {
+  let candidatePath = join(folder, ...segments);
+  let folderIsLink;
   try {
-    c = yield* askIsLink(resolve(e), s);
-    if (!c) {
-      let h = e;
-      let y = false;
-      for (let [b, S] of n.entries()) {
-        h = join(h, S);
-        y = b === n.length - 1 ? (r ?? (yield* askIsLink(h))) : yield* askIsLink(h, s);
-        if (y) break;
+    folderIsLink = yield* askIsLink(resolve(folder), linkCache);
+    if (!folderIsLink) {
+      let prefix = folder;
+      let foundLink = false;
+      for (let [index, segment] of segments.entries()) {
+        prefix = join(prefix, segment);
+        foundLink =
+          index === segments.length - 1
+            ? (knownReal ?? (yield* askIsLink(prefix)))
+            : yield* askIsLink(prefix, linkCache);
+        if (foundLink) break;
       }
-      if (!y) return null;
+      if (!foundLink) return null;
     }
   } catch {
     return null;
   }
-  if (c) {
+  if (folderIsLink) {
     let targetWritable = isPosixPlatform()
-      ? yield* isPathOrParentWritable(yield* resolveNetworkJunction(a))
+      ? yield* isPathOrParentWritable(yield* resolveNetworkJunction(candidatePath))
       : "unknown";
     return {
-      path: a,
-      folder: e,
+      path: candidatePath,
+      folder,
       kind: "outside",
       targetWritable,
     };
   }
-  let g = yield* resolveNetworkJunction(a);
-  let m = yield* resolveNetworkJunction(e);
-  if (g === "gone" || m === "gone") return null;
-  if (m === "unverified" || "network" in m || g === "unverified")
+  let candidateResolved = yield* resolveNetworkJunction(candidatePath);
+  let folderResolved = yield* resolveNetworkJunction(folder);
+  if (candidateResolved === "gone" || folderResolved === "gone") return null;
+  if (folderResolved === "unverified" || "network" in folderResolved || candidateResolved === "unverified")
     return {
-      path: a,
-      folder: e,
+      path: candidatePath,
+      folder,
       kind: "unverified",
     };
-  if ("real" in g && isSpelledStrictAncestor(m.real, g.real))
+  if ("real" in candidateResolved && isSpelledStrictAncestor(folderResolved.real, candidateResolved.real))
     return {
-      path: a,
-      folder: e,
+      path: candidatePath,
+      folder,
       kind: "inside",
     };
-  let targetWritable = yield* isPathOrParentWritable(g);
+  let targetWritable = yield* isPathOrParentWritable(candidateResolved);
   return {
-    path: a,
-    folder: e,
+    path: candidatePath,
+    folder,
     kind: "outside",
     targetWritable,
   };
 }
 //@ chunk-dcmhvw5a.js:426432-426536 placement
-function* askIsLink(e, n) {
-  let r = n?.get(e);
-  if (r === undefined) {
-    r =
+function* askIsLink(path, linkCache) {
+  let isLink = linkCache?.get(path);
+  if (isLink === undefined) {
+    isLink =
       (yield {
         ask: "isLink",
-        path: e,
+        path,
       }) === true;
-    n?.set(e, r);
+    linkCache?.set(path, isLink);
   }
-  return r;
+  return isLink;
 }
 //@ chunk-dcmhvw5a.js:426536-426871 placement
 /**
  * 解析网络路径或 junction。
  */
-function* resolveNetworkJunction(e) {
-  if (isUntouchableSpelling(e) && !isWslUncPath(e))
+function* resolveNetworkJunction(path) {
+  if (isUntouchableSpelling(path) && !isWslUncPath(path))
     return {
-      network: e,
+      network: path,
     };
   try {
-    let n = yield {
+    let junction = yield {
       ask: "networkJunction",
-      path: e,
+      path,
     };
-    if (n === UNVERIFIED_ANCESTRY || n === OPAQUE_LINK_TEXT) return "unverified";
-    if (typeof n === "string")
+    if (junction === UNVERIFIED_ANCESTRY || junction === OPAQUE_LINK_TEXT) return "unverified";
+    if (typeof junction === "string")
       return {
-        network: n,
+        network: junction,
       };
-    let r = yield {
+    let realPath = yield {
       ask: "realpath",
-      path: e,
+      path,
     };
-    return typeof r === "string"
+    return typeof realPath === "string"
       ? {
-          real: r,
+          real: realPath,
         }
       : "unverified";
   } catch (error) {
@@ -289,14 +301,14 @@ function* resolveNetworkJunction(e) {
   }
 }
 //@ chunk-dcmhvw5a.js:426947-427191 placement
-function* isPathOrParentWritable(e) {
+function* isPathOrParentWritable(resolved) {
   try {
-    if (typeof e === "string" || !("real" in e) || !isPosixPlatform()) return "unknown";
-    let n = yield* probeWritabilityAsync(e.real);
-    if (n === "yes") return "yes";
-    let r = yield* probeWritabilityAsync(dirname(e.real));
-    if (r === "yes") return "yes";
-    return n === "no" && r === "no" ? "no" : "unknown";
+    if (typeof resolved === "string" || !("real" in resolved) || !isPosixPlatform()) return "unknown";
+    let selfStatus = yield* probeWritabilityAsync(resolved.real);
+    if (selfStatus === "yes") return "yes";
+    let parentStatus = yield* probeWritabilityAsync(dirname(resolved.real));
+    if (parentStatus === "yes") return "yes";
+    return selfStatus === "no" && parentStatus === "no" ? "no" : "unknown";
   } catch {
     return "unknown";
   }

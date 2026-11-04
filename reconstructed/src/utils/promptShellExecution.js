@@ -31,23 +31,24 @@ import { recordToolUsed } from "../services/compact/keptTools.js";
 import { mapAndMaybePersistToolResult, toolResultsDirFor_2 } from "./toolResultStorage.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
 import { stripNonPrintable } from "./truncateGraphemes.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:983407-983529 placement
 /**
  * 把文本中不是 !` 起头的行内代码段内容替换为空格（保留长度），避免其中的 !`命令` 被误识别为 shell 执行。
  */
-function blankInlineCodeSpans(e) {
-  return e.replace(/`[^`\n]+`/g, (n, r) => {
-    let s = e[r - 1];
-    return s === "!" || s === "`" ? n : "`" + repeatString(" ", n.length - 2) + "`";
+function blankInlineCodeSpans(text) {
+  return text.replace(/`[^`\n]+`/g, (match, offset) => {
+    let prevChar = text[offset - 1];
+    return prevChar === "!" || prevChar === "`" ? match : "`" + repeatString(" ", match.length - 2) + "`";
   });
 }
 //@ chunk-e6aww6q8.js:983529-983624 placement
 /**
  * escapeShellBangs：转义提示词里的感叹号。
  */
-function escapeShellBangs(e) {
-  return e
+function escapeShellBangs(text) {
+  return text
     .replace(/`!/g, "` !")
     .replace(/!`/g, "! `")
     .replace(/(^|\s)!/gm, "$1\\!");
@@ -59,8 +60,8 @@ var INLINE_SHELL_COMMAND_PATTERN = /(?<=^|\s)!`([^`]+)`/gm;
 /**
  * normalizeShellCommandText：统一换行并去空白。
  */
-function normalizeShellCommandText(e) {
-  return e.trim().replaceAll(
+function normalizeShellCommandText(text) {
+  return text.trim().replaceAll(
     `\r
 `,
     `
@@ -71,9 +72,11 @@ function normalizeShellCommandText(e) {
 /**
  * 找出提示词中要执行的 shell 命令：```! 代码块与行内 !`命令`，返回原文、解析后的命令与位置。
  */
-function findPromptShellCommands(e) {
-  let blockMatches = e.matchAll(SHELL_BLOCK_PATTERN);
-  let inlineMatches = e.includes("!`") ? blankInlineCodeSpans(e).matchAll(INLINE_SHELL_COMMAND_PATTERN) : [];
+function findPromptShellCommands(text) {
+  let blockMatches = text.matchAll(SHELL_BLOCK_PATTERN);
+  let inlineMatches = text.includes("!`")
+    ? blankInlineCodeSpans(text).matchAll(INLINE_SHELL_COMMAND_PATTERN)
+    : [];
   let commands = [];
   for (let match of [...blockMatches, ...inlineMatches]) {
     let command = normalizeShellCommandText(match[1] ?? "");
@@ -108,12 +111,12 @@ function isSkillShellExecutionDisabled() {
 /**
  * 把提示词中的 shell 执行片段（代码块和行内 !`命令`）替换为占位文本。
  */
-function replacePromptShellCommands(text, n = SHELL_DISABLED_PLACEHOLDER) {
-  let result = text.replace(SHELL_BLOCK_RE, n);
+function replacePromptShellCommands(promptText, placeholder = SHELL_DISABLED_PLACEHOLDER) {
+  let result = promptText.replace(SHELL_BLOCK_RE, placeholder);
   if (result.includes("!`")) {
     let blanked = blankInlineCodeSpans(result);
     for (let match of [...blanked.matchAll(INLINE_SHELL_RE)].reverse())
-      result = result.slice(0, match.index) + n + result.slice(match.index + match[0].length);
+      result = result.slice(0, match.index) + placeholder + result.slice(match.index + match[0].length);
   }
   return result;
 }
@@ -151,30 +154,30 @@ function iterativeFalconOn() {
 }
 //@ chunk-e6aww6q8.js:3029535-3029793 placement
 function formatRunFirstInstruction({ command, tool }) {
-  let r =
+  let instruction =
     tool === BASH_TOOL_NAME
       ? "run this first, exactly as written, and use its output:"
       : `run this first, exactly as written, with the ${tool} tool and use its output:`;
   if (/[`\n]/.test(command))
-    return `[${r}]
+    return `[${instruction}]
 \`\`\`
 ${command}
 \`\`\``;
-  return `[${r} \`${command}\`]`;
+  return `[${instruction} \`${command}\`]`;
 }
 //@ chunk-e6aww6q8.js:3029793-3030284 placement
 /**
  * 为多条需先执行的命令生成说明：若都用同一工具，提示可合并为一次调用（Bash 用 &&，否则用 ;）；逐条编号列出命令，含反引号或换行的用代码块。
  */
-function formatRunAllFirstInstruction(e) {
-  let firstTool = e[0]?.tool;
-  let sameTool = firstTool !== undefined && e.every((w) => w.tool === firstTool);
+function formatRunAllFirstInstruction(commands) {
+  let firstTool = commands[0]?.tool;
+  let sameTool = firstTool !== undefined && commands.every((command) => command.tool === firstTool);
   let toolSuffix = sameTool && firstTool !== BASH_TOOL_NAME ? ` with the ${firstTool} tool` : "";
   let joinHint = sameTool
     ? `, or all in one ${firstTool} call joined with ${firstTool === BASH_TOOL_NAME ? "&&" : ";"}`
     : "";
-  let header = `[Run these ${e.length} commands first, exactly as written${toolSuffix}, and use their output where each is named below. Run them one per call${joinHint}.]`;
-  let lines = e.map(({ command, tool }, index) => {
+  let header = `[Run these ${commands.length} commands first, exactly as written${toolSuffix}, and use their output where each is named below. Run them one per call${joinHint}.]`;
+  let lines = commands.map(({ command, tool }, index) => {
     let toolNote = sameTool ? "" : ` (${tool} tool)`;
     if (/[`\n]/.test(command))
       return `${index + 1}.${toolNote}
@@ -187,21 +190,21 @@ ${command}
 `);
 }
 //@ chunk-e6aww6q8.js:3030284-3030407 placement
-function formatCommandOutputRef({ command }, n) {
-  if (/[`\n]/.test(command)) return `[output of command ${n}]`;
-  return `[output of command ${n}, \`${command}\`]`;
+function formatCommandOutputRef({ command }, commandNumber) {
+  if (/[`\n]/.test(command)) return `[output of command ${commandNumber}]`;
+  return `[output of command ${commandNumber}, \`${command}\`]`;
 }
 //@ chunk-e6aww6q8.js:3030407-3030555 placement
 /**
  * 找出最后一条真实用户提示（有提示来源，或非元消息、非堆叠展开、非工具结果）的下标，找不到为 0。
  */
-function findLastPromptIndex(e) {
+function findLastPromptIndex(messages) {
   return Math.max(
-    e.findLastIndex(
-      (n) =>
-        n.type === "user" &&
-        (n.promptSource !== undefined ||
-          (n.isMeta !== true && n.stackedExpansion !== true && !isToolResultMessage(n))),
+    messages.findLastIndex(
+      (message) =>
+        message.type === "user" &&
+        (message.promptSource !== undefined ||
+          (message.isMeta !== true && message.stackedExpansion !== true && !isToolResultMessage(message))),
     ),
     0,
   );
@@ -215,12 +218,16 @@ function collapseWhitespace(command) {
   return command.replace(/\s+/g, " ").trim();
 }
 //@ chunk-e6aww6q8.js:3030643-3030830 placement
-function containsCommandToken(e, n) {
-  let r = /[\s;&|()<>]/;
-  for (let index = e.indexOf(n); index !== -1; index = e.indexOf(n, index + 1)) {
-    let h = e[index - 1];
-    let y = e[index + n.length];
-    if ((h === undefined || r.test(h)) && (y === undefined || r.test(y))) return true;
+function containsCommandToken(text, token) {
+  let tokenSeparator = /[\s;&|()<>]/;
+  for (let index = text.indexOf(token); index !== -1; index = text.indexOf(token, index + 1)) {
+    let before = text[index - 1];
+    let after = text[index + token.length];
+    if (
+      (before === undefined || tokenSeparator.test(before)) &&
+      (after === undefined || tokenSeparator.test(after))
+    )
+      return true;
   }
   return false;
 }
@@ -254,9 +261,9 @@ ${command.command}`;
           });
       }
     } else if (message.type === "assistant" && pending.size > 0)
-      for (let S of message.message.content) {
-        if (S.type !== "tool_use") continue;
-        let input = S.input;
+      for (let block of message.message.content) {
+        if (block.type !== "tool_use") continue;
+        let input = block.input;
         if (
           typeof input !== "object" ||
           input === null ||
@@ -264,31 +271,32 @@ ${command.command}`;
           typeof input.command !== "string"
         )
           continue;
-        let L = collapseWhitespace(input.command);
-        for (let [G, state] of pending) {
+        let commandText = collapseWhitespace(input.command);
+        for (let [key, state] of pending) {
           workBudget -= MAX_SHELL_HANDOFFS;
-          if (state.entry.tool === S.name)
-            for (let line of state.pending) workBudget -= (L.length + 1) * (line.length + MAX_SHELL_HANDOFFS);
+          if (state.entry.tool === block.name)
+            for (let line of state.pending)
+              workBudget -= (commandText.length + 1) * (line.length + MAX_SHELL_HANDOFFS);
           if (workBudget < 0) return;
-          if (state.entry.tool !== S.name) continue;
-          state.pending = state.pending.filter((Z) => !containsCommandToken(L, Z));
-          if (state.pending.length === 0) pending.delete(G);
+          if (state.entry.tool !== block.name) continue;
+          state.pending = state.pending.filter((line) => !containsCommandToken(commandText, line));
+          if (state.pending.length === 0) pending.delete(key);
         }
       }
-  return [...pending.values()].map((y) => y.entry);
+  return [...pending.values()].map((state) => state.entry);
 }
 //@ chunk-e6aww6q8.js:3031654-3031700 placement
 /**
  * pendingShellHandOffs：权限上下文中的待处理 shell 交接。
  */
-function pendingShellHandOffs(e, n, agentId) {
-  return findPendingShellHandOffs([...e, ...n], agentId);
+function pendingShellHandOffs(messages, extraMessages, agentId) {
+  return findPendingShellHandOffs([...messages, ...extraMessages], agentId);
 }
 //@ chunk-e6aww6q8.js:3031700-3031957 placement
 /**
  * 生成在权限上下文中加入命令允许规则的 AppState 读取函数（poll 事件投递保护开启时不改）。
  */
-function withCommandAllowRules(context, n) {
+function withCommandAllowRules(context, commandRules) {
   return () => {
     let appState = context.getAppState();
     if (appState.toolPermissionContext.pollEventDeliveryGuard === true) return appState;
@@ -298,20 +306,23 @@ function withCommandAllowRules(context, n) {
         ...appState.toolPermissionContext,
         alwaysAllowRules: {
           ...appState.toolPermissionContext.alwaysAllowRules,
-          command: [...n],
+          command: [...commandRules],
         },
       },
     };
   };
 }
 //@ chunk-e6aww6q8.js:3116579-3116678 callgraph-fingerprint = getPowerShellTool (0.524)
-var getPowerShellTool = (() => {
-  let cached;
-  return () => {
-    if (!cached) cached = require("./chunk-v0yfsee9.js").PowerShellTool;
-    return cached;
-  };
-})();
+var getPowerShellTool; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3116579", () => {
+  getPowerShellTool = (() => {
+    let cached;
+    return () => {
+      if (!cached) cached = require("../tools/PowerShellTool/PowerShellTool.js").PowerShellTool;
+      return cached;
+    };
+  })();
+});
 //@ chunk-e6aww6q8.js:3116678-3119119 fingerprint = executeShellCommandsInPrompt (0.36)
 /**
  * 执行 Skill/命令文件里的 !`cmd` 与 ```! 块：按 frontmatter shell 选 Bash/PowerShell 工具，逐条做权限检查（GE），auto 模式下需要询问的可移交模型（promptShellHandOff），不允许则抛错；允许则执行并把输出替换进文本。readOnlySkillLoad 时不执行。
@@ -324,43 +335,45 @@ async function executeShellCommandsInPrompt(text, context, sourceName, shell, pl
     throw Error(
       `Skill ${sourceName} requires bash (\`shell: bash\` in frontmatter) but Git Bash was not found. ${INSTALL_GIT_FOR_WINDOWS}, or change the skill's frontmatter to \`shell: powershell\`.`,
     );
-  let S =
+  let tool =
     shell === "powershell" && isPowerShellToolEnabled()
       ? getPowerShellTool()
       : isBashAvailable()
         ? BashTool
         : getPowerShellTool();
-  let w = context.toolUseId ?? `${randomUUID()}${INNER_TASK_SUFFIX}`;
-  let L = iterativeFalconOn();
-  let G = findToolByName(context.options.tools, S.name) !== undefined;
+  let toolUseId = context.toolUseId ?? `${randomUUID()}${INNER_TASK_SUFFIX}`;
+  let handOffEnabled = iterativeFalconOn();
+  let toolAvailable = findToolByName(context.options.tools, tool.name) !== undefined;
   let promptShellHandOff =
-    L && getToolPermissionContext(context).mode === "auto" && G ? context.promptShellHandOff : undefined;
-  let forPromptShellCommand = L && (promptShellHandOff !== undefined || true);
+    handOffEnabled && getToolPermissionContext(context).mode === "auto" && toolAvailable
+      ? context.promptShellHandOff
+      : undefined;
+  let forPromptShellCommand = handOffEnabled && (promptShellHandOff !== undefined || true);
   if (
     getToolPermissionContext(context).servedCall === true &&
     getToolPermissionContext(context).mode === "auto" &&
     promptShellHandOff === undefined
   )
     return replacePromptShellCommands(text, SHELL_DEFERRED_TO_WORKER_PLACEHOLDER);
-  let options = G
+  let options = toolAvailable
     ? context.options
     : {
         ...context.options,
-        tools: [...context.options.tools, S],
+        tools: [...context.options.tools, tool],
       };
-  let ke = [];
+  let handOffs = [];
   await Promise.all(
-    extractPromptShellCommands(text, S, sourceName).map(async ({ raw, command, at }, Ie) => {
-      if (shell === undefined && S !== BashTool) describeNoBashFallback("skill");
-      let Me = {
+    extractPromptShellCommands(text, tool, sourceName).map(async ({ raw, command, at }, index) => {
+      if (shell === undefined && tool !== BashTool) describeNoBashFallback("skill");
+      let innerContext = {
         ...context,
         innerCall: true,
-        toolUseId: `${w}${PREAMBLE_TASK_SUFFIX}${Ie}`,
+        toolUseId: `${toolUseId}${PREAMBLE_TASK_SUFFIX}${index}`,
         promptShellHandOff: undefined,
         promptShellPluginId: pluginId,
       };
       try {
-        let We = {
+        let callContext = {
           ...context,
           options,
           forPromptShellCommand,
@@ -370,47 +383,47 @@ async function executeShellCommandsInPrompt(text, context, sourceName, shell, pl
           }),
         };
         let permissionResult = await hasPermissionsToUseTool(
-          S,
+          tool,
           {
             command,
           },
-          We,
+          callContext,
           createAssistantMessage({
             content: [],
           }),
           "",
         );
-        let lt =
+        let needsAsk =
           permissionResult.behavior === "ask" ||
           (permissionResult.behavior === "deny" && permissionResult.decisionReason?.type === "asyncAgent");
-        let Je = false;
-        let nt = promptShellHandOff !== undefined && (lt || Je);
+        let handOffOnAllow = false;
+        let handToModel = promptShellHandOff !== undefined && (needsAsk || handOffOnAllow);
         logEvent("tengu_prompt_shell_permission", {
           behavior: fromEnum(permissionResult.behavior),
           mode: fromEnum(getToolPermissionContext(context).mode),
-          evaluatedAs: fromEnum(getToolPermissionContext(We).mode),
+          evaluatedAs: fromEnum(getToolPermissionContext(callContext).mode),
           decisionReasonType: fromEnumOpt(permissionResult.decisionReason?.type),
-          handedToModel: nt,
-          handedOffOnAllow: Je,
+          handedToModel: handToModel,
+          handedOffOnAllow: handOffOnAllow,
         });
-        if (nt) {
+        if (handToModel) {
           let entry = {
             command: command.trim(),
-            tool: S.name,
+            tool: tool.name,
           };
-          ke.push({
-            index: Ie,
+          handOffs.push({
+            index,
             at,
             entry,
           });
-          result = result.replace(raw, () => promptShellHandOffPlaceholder(Ie));
+          result = result.replace(raw, () => promptShellHandOffPlaceholder(index));
           return;
         }
         if (permissionResult.behavior !== "allow") {
           logForDebugging(
             `Shell command permission check failed for command in ${sourceName}: ${command}. Error: ${permissionResult.message}`,
           );
-          if (isBridgeOrTransport(Me.session)) {
+          if (isBridgeOrTransport(innerContext.session)) {
             logForDebugging(
               `prompt shell permission denial: ${permissionResult.message || "Permission denied"}`,
               {
@@ -425,46 +438,49 @@ async function executeShellCommandsInPrompt(text, context, sourceName, shell, pl
             `Shell command permission check failed for pattern "${raw}": ${permissionResult.message || "Permission denied"}`,
           );
         }
-        recordToolUsed(S.name);
-        let { data } = await S.call(
+        recordToolUsed(tool.name);
+        let { data } = await tool.call(
           {
             command,
           },
-          Me,
+          innerContext,
         );
-        let Et = await mapAndMaybePersistToolResult(
-          S,
+        let toolResult = await mapAndMaybePersistToolResult(
+          tool,
           data,
           randomUUID(),
-          toolResultsDirFor_2(Me.session),
-          Me.storageV5,
+          toolResultsDirFor_2(innerContext.session),
+          innerContext.storageV5,
         );
-        let yt = typeof Et.content === "string" ? Et.content : formatBashOutput(data.stdout, data.stderr);
-        result = result.replace(raw, () => yt);
+        let outputText =
+          typeof toolResult.content === "string"
+            ? toolResult.content
+            : formatBashOutput(data.stdout, data.stderr);
+        result = result.replace(raw, () => outputText);
       } catch (error) {
         if (error instanceof MalformedCommandError) throw error;
-        formatBashError(error, raw, Me.session);
+        formatBashError(error, raw, innerContext.session);
       }
     }),
   );
-  if (promptShellHandOff !== undefined && ke.length > 0) {
-    ke.sort((Ee, Ae) => Ee.at - Ae.at);
-    let mapped = ke.map((Ee) => Ee.entry);
-    if (ke.length === 1)
-      result = result.replace(promptShellHandOffPlaceholder(ke[0].index), () =>
-        formatRunFirstInstruction(ke[0].entry),
+  if (promptShellHandOff !== undefined && handOffs.length > 0) {
+    handOffs.sort((left, right) => left.at - right.at);
+    let commands = handOffs.map((handOff) => handOff.entry);
+    if (handOffs.length === 1)
+      result = result.replace(promptShellHandOffPlaceholder(handOffs[0].index), () =>
+        formatRunFirstInstruction(handOffs[0].entry),
       );
     else {
-      ke.forEach(({ index, entry }, Ie) => {
+      handOffs.forEach(({ index, entry }, handOffIndex) => {
         result = result.replace(promptShellHandOffPlaceholder(index), () =>
-          formatCommandOutputRef(entry, Ie + 1),
+          formatCommandOutputRef(entry, handOffIndex + 1),
         );
       });
-      result = `${formatRunAllFirstInstruction(mapped)}
+      result = `${formatRunAllFirstInstruction(commands)}
 
 ${result}`;
     }
-    promptShellHandOff.push(...mapped);
+    promptShellHandOff.push(...commands);
     logFeatureOk("skill_inline_command_handoff");
   }
   return result;
@@ -473,24 +489,26 @@ ${result}`;
 /**
  * 提取文本中的内联/块命令并用工具 inputSchema 校验；不合法（或含不可打印字符）时抛出带说明的错误，一条都不执行。
  */
-function extractPromptShellCommands(text, n, sourceName) {
-  return findPromptShellCommands(text).map((s) => {
-    let h = n.inputSchema.safeParse({
-      command: s.command,
+function extractPromptShellCommands(text, tool, sourceName) {
+  return findPromptShellCommands(text).map((command) => {
+    let parseResult = tool.inputSchema.safeParse({
+      command: command.command,
     });
-    let y = n !== BashTool && hasInvisibleCommandChars(s.command);
-    if (h.success && !y) return s;
-    let S = h.success ? INVISIBLE_CHAR_REFUSAL : h.error.issues.map((issue) => issue.message).join("; ");
-    let w = s.command.includes(`\r
+    let hasInvisibleChars = tool !== BashTool && hasInvisibleCommandChars(command.command);
+    if (parseResult.success && !hasInvisibleChars) return command;
+    let reason = parseResult.success
+      ? INVISIBLE_CHAR_REFUSAL
+      : parseResult.error.issues.map((issue) => issue.message).join("; ");
+    let crlfNote = command.command.includes(`\r
 `)
       ? " A \uFFFD at the end of a line is a carriage return from Windows (CR LF) line endings: if the file has them, save it with LF line endings."
       : "";
     throw new MalformedCommandError(
       stripNonPrintable(
-        `No shell command in ${sourceName} was run, because the ${n.name} tool does not accept one of them: ${S}. ` +
-          `Unprintable characters are shown as \uFFFD below: remove them from the skill or command file, or from the arguments or options substituted into it.${w}
+        `No shell command in ${sourceName} was run, because the ${tool.name} tool does not accept one of them: ${reason}. ` +
+          `Unprintable characters are shown as \uFFFD below: remove them from the skill or command file, or from the arguments or options substituted into it.${crlfNote}
 ` +
-          (y ? replaceInvisibleCommandChars(s.command) : s.command),
+          (hasInvisibleChars ? replaceInvisibleCommandChars(command.command) : command.command),
       ),
     );
   });

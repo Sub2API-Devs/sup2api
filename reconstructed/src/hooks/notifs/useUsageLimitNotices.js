@@ -9,7 +9,12 @@
  * attribution: placement 13, layout 3
  */
 import { EMPTY_LIMIT_NOTICES } from "../../utils/messageQueueManager.js";
-import { init_react_production, yt, ce, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useSyncExternalStore,
+  useCallback,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   useRateLimitState,
   formatResetCountsSummary,
@@ -49,7 +54,7 @@ import {
 import { statusLineShouldDisplay } from "../../components/StatusLine.js";
 import { formatResetTime } from "../../utils/format.js";
 import { LOW_PRIORITY } from "../../services/lowPriority/headers.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { canOfferLowPriority, logLowPriorityShown } from "../../services/lowPriorityMode.js";
 import { createSystemMessage } from "../../utils/messages.js";
 import { useAppState } from "../../state/AppState.js";
@@ -58,62 +63,63 @@ import { renderWithForceUpdate } from "../useForceRender.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { useHost } from "../../context/session.js";
 import { UsageLimitGraceNotice } from "../../components/UsageLimitGraceNotice.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1655107-1655593 placement
 /**
  * 从各类限额状态挑出 reset 提示（grant/weekly 及已用完）、低优先级、额度、套餐升级文案。
  */
-function pickLimitNoticeParts(h) {
-  let wait = h.wait?.kind === "live" ? h.wait : null;
+function pickLimitNoticeParts(limits) {
+  let wait = limits.wait?.kind === "live" ? limits.wait : null;
   return {
     reset:
-      h.resetGrant.offer !== null
+      limits.resetGrant.offer !== null
         ? {
             key: "grant",
-            text: h.resetGrant.offer,
+            text: limits.resetGrant.offer,
           }
-        : h.weeklyReset.offer !== null
-          ? h.resetGrant.claimUnsettled
+        : limits.weeklyReset.offer !== null
+          ? limits.resetGrant.claimUnsettled
             ? null
             : {
                 key: "weekly",
-                text: h.weeklyReset.offer,
+                text: limits.weeklyReset.offer,
               }
-          : h.resetGrant.spent !== null
+          : limits.resetGrant.spent !== null
             ? {
                 key: "grant-spent",
-                text: h.resetGrant.spent,
+                text: limits.resetGrant.spent,
               }
-            : h.weeklyReset.spent !== null
+            : limits.weeklyReset.spent !== null
               ? {
                   key: "weekly-spent",
-                  text: h.weeklyReset.spent,
+                  text: limits.weeklyReset.spent,
                 }
               : null,
-    lowPriority: h.lowPriorityOffer,
+    lowPriority: limits.lowPriorityOffer,
     credits: wait?.credits ?? null,
-    planUpsell: wait === null ? h.wrapUp?.upsell || null : null,
+    planUpsell: wait === null ? limits.wrapUp?.upsell || null : null,
   };
 }
 //@ chunk-18hwfzwa.js:1655593-1656543 placement
 /**
  * 组装用量限额状态行与下一步提示行。
  */
-function buildLimitStatusNotices(h) {
-  let wait = h.wait?.kind === "live" ? h.wait : null;
-  let D = pickLimitNoticeParts(h);
-  let L = h.wait?.kind === "declined" && h.wrapUp?.running !== true;
-  let ee = [];
-  if (h.wrapUp !== null)
-    ee.push([
+function buildLimitStatusNotices(limits) {
+  let wait = limits.wait?.kind === "live" ? limits.wait : null;
+  let parts = pickLimitNoticeParts(limits);
+  let isDeclinedWait = limits.wait?.kind === "declined" && limits.wrapUp?.running !== true;
+  let statusSegments = [];
+  if (limits.wrapUp !== null)
+    statusSegments.push([
       {
-        text: h.wrapUp.lead,
+        text: limits.wrapUp.lead,
       },
       {
-        text: h.wrapUp.resets,
+        text: limits.wrapUp.resets,
         dim: true,
       },
-      ...(L
+      ...(isDeclinedWait
         ? []
         : [
             {
@@ -121,72 +127,77 @@ function buildLimitStatusNotices(h) {
               dim: true,
             },
             {
-              ...h.wrapUp.link,
+              ...limits.wrapUp.link,
               dim: true,
             },
           ]),
-      ...(D.planUpsell !== null
+      ...(parts.planUpsell !== null
         ? [
             {
-              text: ` \xB7 ${D.planUpsell}`,
+              text: ` \xB7 ${parts.planUpsell}`,
               dim: true,
             },
           ]
         : []),
     ]);
   else if (wait !== null)
-    ee.push([
+    statusSegments.push([
       {
         text: wait.status,
       },
     ]);
-  else if (h.pausedWorkflow !== null)
-    ee.push([
+  else if (limits.pausedWorkflow !== null)
+    statusSegments.push([
       {
-        text: h.pausedWorkflow,
+        text: limits.pausedWorkflow,
       },
     ]);
-  if (h.lowPriorityActive !== null)
-    ee.push([
+  if (limits.lowPriorityActive !== null)
+    statusSegments.push([
       {
-        text: h.lowPriorityActive,
+        text: limits.lowPriorityActive,
         color: "text",
       },
     ]);
-  let ke = [];
+  let nextSegments = [];
   if (wait !== null)
-    ke.push([
+    nextSegments.push([
       {
         text: wait.next,
       },
     ]);
-  if (D.credits !== null)
-    ke.push([
+  if (parts.credits !== null)
+    nextSegments.push([
       {
-        text: D.credits,
+        text: parts.credits,
         dim: true,
       },
     ]);
-  if (D.reset !== null)
-    ke.push([
+  if (parts.reset !== null)
+    nextSegments.push([
       {
-        text: D.reset.text,
-        dim: D.reset.key.endsWith("spent"),
+        text: parts.reset.text,
+        dim: parts.reset.key.endsWith("spent"),
       },
     ]);
-  if (D.lowPriority !== null)
-    ke.push([
+  if (parts.lowPriority !== null)
+    nextSegments.push([
       {
-        text: D.lowPriority,
+        text: parts.lowPriority,
       },
     ]);
-  if (ee.length === 0 && ke.length === 0) return EMPTY_LIMIT_NOTICES;
+  if (statusSegments.length === 0 && nextSegments.length === 0) return EMPTY_LIMIT_NOTICES;
   return {
     status:
-      ee.length === 0
+      statusSegments.length === 0
         ? null
-        : createEventNotice("limit-status", joinSegmentsWithDots(ee), h.wrapUp !== null ? "warning" : "text"),
-    next: ke.length === 0 ? null : createEventNotice("limit-next", joinSegmentsWithDots(ke)),
+        : createEventNotice(
+            "limit-status",
+            joinSegmentsWithDots(statusSegments),
+            limits.wrapUp !== null ? "warning" : "text",
+          ),
+    next:
+      nextSegments.length === 0 ? null : createEventNotice("limit-next", joinSegmentsWithDots(nextSegments)),
   };
 }
 //@ chunk-18hwfzwa.js:1656543-1656640 placement
@@ -207,16 +218,16 @@ function createEventNotice(key, segments, color = "text") {
 /**
  * 用 " · " 连接多段文本片段。
  */
-function joinSegmentsWithDots(h) {
-  return h.flatMap((x, D) =>
-    D === 0
-      ? x
+function joinSegmentsWithDots(segments) {
+  return segments.flatMap((segment, index) =>
+    index === 0
+      ? segment
       : [
           {
             text: " \xB7 ",
             dim: true,
           },
-          ...x,
+          ...segment,
         ],
   );
 }
@@ -224,55 +235,64 @@ function joinSegmentsWithDots(h) {
 /**
  * 惰性模块初始化调用 j()（Bun 打包的 init 包装），无业务逻辑。
  */
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1656719", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1656723-1657417 placement
 /**
  * React hook：限额重置赠送的提示与已用完提示。
  */
 function useResetGrantOffer() {
   let rateLimitState = useRateLimitState();
-  let x = yt(
+  let offerLine = useSyncExternalStore(
     onUsageCreditStateChange,
-    ce(() => {
-      let He = availableResetOffers(rateLimitState);
-      let [We, ...ze] = He;
-      if (We === undefined) return null;
-      let reduced = ze.reduce(
-        (acc, At) =>
-          At.endsAtMs !== null && (acc.endsAtMs === null || At.endsAtMs < acc.endsAtMs) ? At : acc,
-        We,
+    useCallback(() => {
+      let offers = availableResetOffers(rateLimitState);
+      let [first, ...rest] = offers;
+      if (first === undefined) return null;
+      let reduced = rest.reduce(
+        (acc, offer) =>
+          offer.endsAtMs !== null && (acc.endsAtMs === null || offer.endsAtMs < acc.endsAtMs) ? offer : acc,
+        first,
       );
-      let rt =
-        ze.length === 0
-          ? formatLimitResetTemplate(getCedarEmberCopy().noticeLine, resetOfferFields(We))
+      let line =
+        rest.length === 0
+          ? formatLimitResetTemplate(getCedarEmberCopy().noticeLine, resetOfferFields(first))
           : formatLimitResetTemplate(getCedarEmberCopy().noticeLineMany, {
               ...resetOfferFields(reduced),
               held: formatResetCountsSummary(
-                He.map((kt) => ({
-                  kind: kt.kind,
-                  count: kt.resetsLeft,
+                offers.map((offer) => ({
+                  kind: offer.kind,
+                  count: offer.resetsLeft,
                 })),
               ),
             });
       return `${reduced.endsAtMs ?? ""}
-${rt}`;
+${line}`;
     }, [rateLimitState]),
   );
-  let D =
-    x?.indexOf(`
+  let newlineIndex =
+    offerLine?.indexOf(`
 `) ?? -1;
-  let L = x === null ? null : x.slice(D + 1);
-  let ee = x === null || D === 0 ? null : Number(x.slice(0, D));
-  let ke = yt(
+  let offerText = offerLine === null ? null : offerLine.slice(newlineIndex + 1);
+  let resetAtMs = offerLine === null || newlineIndex === 0 ? null : Number(offerLine.slice(0, newlineIndex));
+  let spentLine = useSyncExternalStore(
     onUsageCreditStateChange,
-    ce(() => resetsUsedUpLine(rateLimitState) ?? null, [rateLimitState]),
+    useCallback(() => resetsUsedUpLine(rateLimitState) ?? null, [rateLimitState]),
   );
-  let claimUnsettled = yt(onUsageCreditStateChange, isClaimingReset);
-  let Be = rateLimitState.resetsAt !== undefined ? rateLimitState.resetsAt * 1000 : null;
-  useResetReached(L !== null || ke !== null ? (ee !== null && (Be === null || ee < Be) ? ee : Be) : null);
+  let claimUnsettled = useSyncExternalStore(onUsageCreditStateChange, isClaimingReset);
+  let limitResetAtMs = rateLimitState.resetsAt !== undefined ? rateLimitState.resetsAt * 1000 : null;
+  useResetReached(
+    offerText !== null || spentLine !== null
+      ? resetAtMs !== null && (limitResetAtMs === null || resetAtMs < limitResetAtMs)
+        ? resetAtMs
+        : limitResetAtMs
+      : null,
+  );
   return {
-    offer: L,
-    spent: L === null ? ke : null,
+    offer: offerText,
+    spent: offerText === null ? spentLine : null,
     claimUnsettled,
   };
 }
@@ -280,67 +300,74 @@ ${rt}`;
 /**
  * 惰性模块初始化调用 j()。
  */
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1657417", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1657421-1657638 placement
 /**
  * React hook：周限额重置提示。
  */
 function useWeeklyResetOffer() {
   let rateLimitState = useRateLimitState();
-  let x = yt(
+  let offerLine = useSyncExternalStore(
     subscribeResetChanges,
-    ce(
+    useCallback(
       () => (canArmLowPriorityReset(rateLimitState) ? getLimitResetCopy().noticeLine : null),
       [rateLimitState],
     ),
   );
-  let D = yt(
+  let spentLine = useSyncExternalStore(
     subscribeResetChanges,
-    ce(() => usageCreditsSpentLine(rateLimitState) ?? null, [rateLimitState]),
+    useCallback(() => usageCreditsSpentLine(rateLimitState) ?? null, [rateLimitState]),
   );
   useResetReached(
-    (x !== null || D !== null) && rateLimitState.resetsAt !== undefined
+    (offerLine !== null || spentLine !== null) && rateLimitState.resetsAt !== undefined
       ? rateLimitState.resetsAt * 1000
       : null,
   );
   return {
-    offer: x,
-    spent: x === null ? D : null,
+    offer: offerLine,
+    spent: offerLine === null ? spentLine : null,
   };
 }
 //@ chunk-18hwfzwa.js:1657638-1657642 layout
 /**
  * 惰性模块初始化调用 j()。
  */
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1657638", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:1657642-1657680 placement
 /**
  * React hook：低优先级模式状态。
  */
 function useLowPriorityState() {
-  return yt(onLowPriorityChanged, getLowPriorityStateValue, getLowPriorityStateValue);
+  return useSyncExternalStore(onLowPriorityChanged, getLowPriorityStateValue, getLowPriorityStateValue);
 }
 //@ chunk-18hwfzwa.js:1657680-1657986 placement
 /**
  * 低优先级模式状态行（重置时间、额度百分比、停止命令）。
  */
-function formatLowPriorityStatusLine(lowPriorityState, x) {
-  let D = statusLineShouldDisplay();
-  let L =
-    lowPriorityState.phase === "active"
-      ? formatResetTime(lowPriorityState.resetsAtSeconds, false)
-      : undefined;
-  let ee = D.statusLine.includes("{reset}")
-    ? D.statusLine.replace("{reset}", L ?? "your usage limit resets")
-    : D.statusLine;
-  let ke = x === undefined ? "" : ` \xB7 ${D.allowanceNote.replace("{percent}", `${x}%`)}`;
-  return `${ee}${ke} \xB7 /${LOW_PRIORITY} to stop`;
+function formatLowPriorityStatusLine(resumeState, allowancePercent) {
+  let statusLine = statusLineShouldDisplay();
+  let resetText =
+    resumeState.phase === "active" ? formatResetTime(resumeState.resetsAtSeconds, false) : undefined;
+  let line = statusLine.statusLine.includes("{reset}")
+    ? statusLine.statusLine.replace("{reset}", resetText ?? "your usage limit resets")
+    : statusLine.statusLine;
+  let allowanceSuffix =
+    allowancePercent === undefined
+      ? ""
+      : ` \xB7 ${statusLine.allowanceNote.replace("{percent}", `${allowancePercent}%`)}`;
+  return `${line}${allowanceSuffix} \xB7 /${LOW_PRIORITY} to stop`;
 }
 //@ chunk-18hwfzwa.js:1657986-1658823 placement
 /**
  * 低优先级模式结束原因 → 提示文本（weekly/budget/off/extra_usage/max_wait）。
  */
-function getLowPriorityEndedMessage(reason, x = getCooloffUntil()) {
+function getLowPriorityEndedMessage(reason, cooloffUntil = getCooloffUntil()) {
   switch (reason) {
     case "reset":
     case "user":
@@ -358,8 +385,9 @@ function getLowPriorityEndedMessage(reason, x = getCooloffUntil()) {
     case "extra_usage":
       return "Extra usage is now covering your requests \xB7 lower-priority mode ended";
     case "max_wait": {
-      let D = x === undefined ? undefined : formatResetTime(Math.ceil(x / 1000), false);
-      return `No room for lower-priority work for a while \xB7 lower-priority mode stopped; new messages wait for your usage limit to reset${D ? ` \xB7 /${LOW_PRIORITY} again after ${D}` : ""}`;
+      let resetText =
+        cooloffUntil === undefined ? undefined : formatResetTime(Math.ceil(cooloffUntil / 1000), false);
+      return `No room for lower-priority work for a while \xB7 lower-priority mode stopped; new messages wait for your usage limit to reset${resetText ? ` \xB7 /${LOW_PRIORITY} again after ${resetText}` : ""}`;
     }
   }
 }
@@ -368,71 +396,75 @@ function getLowPriorityEndedMessage(reason, x = getCooloffUntil()) {
  * React hook：低优先级模式开始/结束的转录通知。
  */
 function useLowPriorityNotices(props) {
-  let ke = w(27);
+  let $ = useMemoCache(27);
   let { transcript } = props;
   let rateLimitState = useRateLimitState();
   let lowPriorityState = useLowPriorityState();
-  let ee = yt(onLowPriorityChanged, allowanceLeftPercent, allowanceLeftPercent);
-  let Re;
-  if (ke[0] !== rateLimitState || ke[1] !== lowPriorityState.phase) {
-    Re = lowPriorityState.phase === "idle" && canOfferLowPriority(rateLimitState);
-    ke[0] = rateLimitState;
-    ke[1] = lowPriorityState.phase;
-    ke[2] = Re;
-  } else Re = ke[2];
-  let Be = Re;
-  let He;
-  if (ke[3] !== rateLimitState || ke[4] !== Be || ke[5] !== lowPriorityState.phase) {
-    He =
-      lowPriorityState.phase === "idle" && !Be && rateLimitState.lowPriorityOffer === "treatment"
+  let allowancePercent = useSyncExternalStore(
+    onLowPriorityChanged,
+    allowanceLeftPercent,
+    allowanceLeftPercent,
+  );
+  let canOffer;
+  if ($[0] !== rateLimitState || $[1] !== lowPriorityState.phase) {
+    canOffer = lowPriorityState.phase === "idle" && canOfferLowPriority(rateLimitState);
+    $[0] = rateLimitState;
+    $[1] = lowPriorityState.phase;
+    $[2] = canOffer;
+  } else canOffer = $[2];
+  let canOffer_ = canOffer;
+  let cooloffUntil;
+  if ($[3] !== rateLimitState || $[4] !== canOffer_ || $[5] !== lowPriorityState.phase) {
+    cooloffUntil =
+      lowPriorityState.phase === "idle" && !canOffer_ && rateLimitState.lowPriorityOffer === "treatment"
         ? getCooloffUntil()
         : undefined;
-    ke[3] = rateLimitState;
-    ke[4] = Be;
-    ke[5] = lowPriorityState.phase;
-    ke[6] = He;
-  } else He = ke[6];
-  let We = He;
-  let ze;
-  if (ke[7] !== rateLimitState || ke[8] !== Be || ke[9] !== lowPriorityState || ke[10] !== We) {
-    ze =
+    $[3] = rateLimitState;
+    $[4] = canOffer_;
+    $[5] = lowPriorityState.phase;
+    $[6] = cooloffUntil;
+  } else cooloffUntil = $[6];
+  let cooloffUntil_ = cooloffUntil;
+  let resetAtMs;
+  if ($[7] !== rateLimitState || $[8] !== canOffer_ || $[9] !== lowPriorityState || $[10] !== cooloffUntil_) {
+    resetAtMs =
       lowPriorityState.phase === "active"
         ? resetDeadlineMs(lowPriorityState)
-        : Be && rateLimitState.resetsAt !== undefined
+        : canOffer_ && rateLimitState.resetsAt !== undefined
           ? rateLimitState.resetsAt * 1000
-          : (We ?? null);
-    ke[7] = rateLimitState;
-    ke[8] = Be;
-    ke[9] = lowPriorityState;
-    ke[10] = We;
-    ke[11] = ze;
-  } else ze = ke[11];
-  let resetReached = useResetReached(ze);
-  let kt;
-  let At;
-  if (ke[12] !== resetReached || ke[13] !== lowPriorityState.phase) {
-    kt = () => {
+          : (cooloffUntil_ ?? null);
+    $[7] = rateLimitState;
+    $[8] = canOffer_;
+    $[9] = lowPriorityState;
+    $[10] = cooloffUntil_;
+    $[11] = resetAtMs;
+  } else resetAtMs = $[11];
+  let resetReached = useResetReached(resetAtMs);
+  let onReset;
+  let onResetDeps;
+  if ($[12] !== resetReached || $[13] !== lowPriorityState.phase) {
+    onReset = () => {
       if (resetReached && lowPriorityState.phase === "active") endLowPriorityIfReset();
     };
-    At = [resetReached, lowPriorityState.phase];
-    ke[12] = resetReached;
-    ke[13] = lowPriorityState.phase;
-    ke[14] = kt;
-    ke[15] = At;
+    onResetDeps = [resetReached, lowPriorityState.phase];
+    $[12] = resetReached;
+    $[13] = lowPriorityState.phase;
+    $[14] = onReset;
+    $[15] = onResetDeps;
   } else {
-    kt = ke[14];
-    At = ke[15];
+    onReset = $[14];
+    onResetDeps = $[15];
   }
-  P(kt, At);
-  let It;
-  let Ot;
-  if (ke[16] !== transcript) {
-    It = () =>
-      onLowPriorityEvent((Et) => {
-        if (Et.type !== "ended") {
+  useEffect(onReset, onResetDeps);
+  let subscribeEnded;
+  let subscribeEndedDeps;
+  if ($[16] !== transcript) {
+    subscribeEnded = () =>
+      onLowPriorityEvent((event) => {
+        if (event.type !== "ended") {
           return;
         }
-        let lowPriorityEndedMessage = getLowPriorityEndedMessage(Et.reason);
+        let lowPriorityEndedMessage = getLowPriorityEndedMessage(event.reason);
         if (lowPriorityEndedMessage === null) {
           return;
         }
@@ -441,47 +473,49 @@ function useLowPriorityNotices(props) {
           messages: [createSystemMessage(lowPriorityEndedMessage, "notice")],
         });
       });
-    Ot = [transcript];
-    ke[16] = transcript;
-    ke[17] = It;
-    ke[18] = Ot;
+    subscribeEndedDeps = [transcript];
+    $[16] = transcript;
+    $[17] = subscribeEnded;
+    $[18] = subscribeEndedDeps;
   } else {
-    It = ke[17];
-    Ot = ke[18];
+    subscribeEnded = $[17];
+    subscribeEndedDeps = $[18];
   }
-  P(It, Ot);
+  useEffect(subscribeEnded, subscribeEndedDeps);
   let lowPriorityActive;
-  if (ke[19] !== ee || ke[20] !== lowPriorityState) {
+  if ($[19] !== allowancePercent || $[20] !== lowPriorityState) {
     lowPriorityActive =
-      lowPriorityState.phase === "active" ? formatLowPriorityStatusLine(lowPriorityState, ee) : null;
-    ke[19] = ee;
-    ke[20] = lowPriorityState;
-    ke[21] = lowPriorityActive;
-  } else lowPriorityActive = ke[21];
+      lowPriorityState.phase === "active"
+        ? formatLowPriorityStatusLine(lowPriorityState, allowancePercent)
+        : null;
+    $[19] = allowancePercent;
+    $[20] = lowPriorityState;
+    $[21] = lowPriorityActive;
+  } else lowPriorityActive = $[21];
   let lowPriorityOffer;
-  if (ke[22] !== Be) {
-    lowPriorityOffer = Be ? statusLineShouldDisplay().noticeLine : null;
-    ke[22] = Be;
-    ke[23] = lowPriorityOffer;
-  } else lowPriorityOffer = ke[23];
-  let Xt;
-  if (ke[24] !== lowPriorityActive || ke[25] !== lowPriorityOffer) {
-    Xt = {
+  if ($[22] !== canOffer_) {
+    lowPriorityOffer = canOffer_ ? statusLineShouldDisplay().noticeLine : null;
+    $[22] = canOffer_;
+    $[23] = lowPriorityOffer;
+  } else lowPriorityOffer = $[23];
+  let result;
+  if ($[24] !== lowPriorityActive || $[25] !== lowPriorityOffer) {
+    result = {
       lowPriorityActive,
       lowPriorityOffer,
     };
-    ke[24] = lowPriorityActive;
-    ke[25] = lowPriorityOffer;
-    ke[26] = Xt;
-  } else Xt = ke[26];
-  return Xt;
+    $[24] = lowPriorityActive;
+    $[25] = lowPriorityOffer;
+    $[26] = result;
+  } else result = $[26];
+  return result;
 }
 //@ chunk-18hwfzwa.js:1660153-1660335 placement
 /**
  * 运行中工作流任务里最晚的 rateLimitWait.resetsAt。
  */
-function getEarliestWorkflowRateLimitReset(h) {
-  return Object.values(h.tasks).reduce(
+function getEarliestWorkflowRateLimitReset(appState) {
+  return Object.values(appState.tasks).reduce(
     (acc, task) =>
       task.type === "local_workflow" && task.status === "running" && task.rateLimitWait !== undefined
         ? Math.max(acc ?? 0, task.rateLimitWait.resetsAt)
@@ -494,14 +528,14 @@ function getEarliestWorkflowRateLimitReset(h) {
  * React hook：因限额暂停的工作流提示（tengu_lantern_snuffer）。
  */
 function usePausedWorkflowNotice() {
-  let appState = useAppState(getEarliestWorkflowRateLimitReset);
-  let x = isAutoResumableLimit(useRateLimitState());
-  let resetReached = useResetReached(appState === null ? null : appState * 1000);
-  let L = appState !== null && x && !resetReached;
+  let resetsAtSeconds = useAppState(getEarliestWorkflowRateLimitReset);
+  let isAutoResumable = isAutoResumableLimit(useRateLimitState());
+  let resetReached = useResetReached(resetsAtSeconds === null ? null : resetsAtSeconds * 1000);
+  let isPaused = resetsAtSeconds !== null && isAutoResumable && !resetReached;
   return renderWithForceUpdate(
-    () => L && getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_snuffer", false) === true,
-  ) && appState !== null
-    ? usageLimitStatusText(appState)
+    () => isPaused && getFeatureValue_CACHED_MAY_BE_STALE("tengu_lantern_snuffer", false) === true,
+  ) && resetsAtSeconds !== null
+    ? usageLimitStatusText(resetsAtSeconds)
     : null;
 }
 //@ chunk-18hwfzwa.js:1660494-1661153 placement
@@ -511,7 +545,7 @@ function usePausedWorkflowNotice() {
 function useUsageLimitNotices({ isLoading, transcript }) {
   let host = useHost();
   let rateLimitState = useRateLimitState();
-  let ee = {
+  let parts = {
     wrapUp: UsageLimitGraceNotice(isLoading),
     wait: QuotaAutoResume({
       isLoading,
@@ -524,26 +558,26 @@ function useUsageLimitNotices({ isLoading, transcript }) {
       transcript,
     }),
   };
-  let limitStatusNotices = buildLimitStatusNotices(ee);
-  let Re = pickLimitNoticeParts(ee);
-  let text = Re.reset?.key === "grant" ? Re.reset.text : undefined;
-  let text_2 = Re.reset?.key === "weekly" ? Re.reset.text : undefined;
-  let lowPriority = Re.lowPriority ?? undefined;
-  let credits = Re.credits ?? undefined;
-  let planUpsell = Re.planUpsell ?? undefined;
-  P(() => {
+  let limitStatusNotices = buildLimitStatusNotices(parts);
+  let picked = pickLimitNoticeParts(parts);
+  let text = picked.reset?.key === "grant" ? picked.reset.text : undefined;
+  let text_2 = picked.reset?.key === "weekly" ? picked.reset.text : undefined;
+  let lowPriority = picked.lowPriority ?? undefined;
+  let credits = picked.credits ?? undefined;
+  let planUpsell = picked.planUpsell ?? undefined;
+  useEffect(() => {
     if (text !== undefined) reportResetOfferShown(rateLimitState, "notice");
   }, [text, rateLimitState]);
-  P(() => {
+  useEffect(() => {
     if (text_2 !== undefined) logLimitResetOfferShown(rateLimitState, "notice");
   }, [text_2, rateLimitState]);
-  P(() => {
+  useEffect(() => {
     if (lowPriority !== undefined) logLowPriorityShown(rateLimitState, "notice");
   }, [lowPriority, rateLimitState]);
-  P(() => {
+  useEffect(() => {
     if (credits !== undefined) logLimitFooterOfferShownOnce(host, rateLimitState, "credits_while_waiting");
   }, [credits, host, rateLimitState]);
-  P(() => {
+  useEffect(() => {
     if (planUpsell !== undefined) logLimitFooterOfferShownOnce(host, rateLimitState, "plan_upsell");
   }, [planUpsell, host, rateLimitState]);
   return limitStatusNotices;

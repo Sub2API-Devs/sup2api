@@ -359,7 +359,7 @@ Other exit codes - display the original delta`,
  */
 function groupHooksByEventAndMatcher(appState, toolNames) {
   let grouped = Object.create(null);
-  for (let o of HOOK_EVENTS) grouped[o] = Object.create(null);
+  for (let event of HOOK_EVENTS) grouped[event] = Object.create(null);
   let metadata = getHookEventMetadata(toolNames);
   getAllHooks(appState).forEach((hook) => {
     let eventGroup = grouped[hook.event];
@@ -402,8 +402,8 @@ function getSortedMatchersForEvent(hooksByEventAndMatcher, event) {
  * 取某来源某事件（可选 matcher）下配置的钩子列表。
  */
 function hooksForSourceAndEvent(hooksByEventAndMatcher, selectedEvent, selectedMatcher) {
-  let i = selectedMatcher ?? "";
-  return hooksByEventAndMatcher[selectedEvent]?.[i] ?? [];
+  let matcherKey = selectedMatcher ?? "";
+  return hooksByEventAndMatcher[selectedEvent]?.[matcherKey] ?? [];
 }
 export {
   getSortedMatchersForEvent,

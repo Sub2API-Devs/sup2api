@@ -26,34 +26,34 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 /**
  * 取 Artifact 工具输入的动作名用于埋点：缺省为 publish，未知动作为 other。
  */
-function artifactActionLabel(e) {
-  let n = typeof e === "object" && e !== null ? Reflect.get(e, "action") : undefined;
-  if (n === undefined) return "publish";
-  return ARTIFACT_ACTION_NAME_SET.has(n) ? n : "other";
+function artifactActionLabel(input) {
+  let action = typeof input === "object" && input !== null ? Reflect.get(input, "action") : undefined;
+  if (action === undefined) return "publish";
+  return ARTIFACT_ACTION_NAME_SET.has(action) ? action : "other";
 }
 //@ chunk-8wvtd8sr.js:21927-22237 placement
 /**
  * 包装 checkPermissions：每个 toolUseId 首次得到 ask 时记录询问特征（动作、原因类型、仅限本人、询问类别、权限模式、能否回答）并上报 tengu_artifact_ask。
  */
-function withAskTelemetry(artifactToolWithAskCard) {
-  let checkPermissions = artifactToolWithAskCard.checkPermissions;
-  return overrideDescriptors(artifactToolWithAskCard, {
-    async checkPermissions(s, r) {
-      let h = await checkPermissions.call(this, s, r);
-      let toolUseId = r.toolUseId;
-      if (h.behavior !== "ask" || toolUseId === undefined) return h;
+function withAskTelemetry(base) {
+  let checkPermissions = base.checkPermissions;
+  return overrideDescriptors(base, {
+    async checkPermissions(input, context) {
+      let decision = await checkPermissions.call(this, input, context);
+      let toolUseId = context.toolUseId;
+      if (decision.behavior !== "ask" || toolUseId === undefined) return decision;
       try {
         let askTelemetry = getLiveState().askTelemetry;
         if (!askTelemetry.has(toolUseId)) {
-          let w = captureAskFacts(s, h, r, toolUseId);
-          setBounded(askTelemetry, toolUseId, w);
+          let facts = captureAskFacts(input, decision, context, toolUseId);
+          setBounded(askTelemetry, toolUseId, facts);
           logEvent("tengu_artifact_ask", {
             toolUseID: sanitizeMarkName(toolUseId),
-            ...askTelemetryFields(w),
+            ...askTelemetryFields(facts),
           });
         }
       } catch {}
-      return h;
+      return decision;
     },
   });
 }
@@ -61,43 +61,43 @@ function withAskTelemetry(artifactToolWithAskCard) {
 /**
  * 询问获批时记录 tengu_artifact_ask_granted 事件（工具调用 id、消息 id 与询问时记下的字段），并清除记录。
  */
-function logAskGranted(e, n) {
+function logAskGranted(context, message) {
   try {
-    let toolUseId = e.toolUseId;
+    let toolUseId = context.toolUseId;
     if (toolUseId === undefined) return;
     let askTelemetry = getLiveState().askTelemetry;
-    let h = askTelemetry.get(toolUseId);
-    if (h === undefined) return;
+    let facts = askTelemetry.get(toolUseId);
+    if (facts === undefined) return;
     askTelemetry.delete(toolUseId);
     logEvent("tengu_artifact_ask_granted", {
       toolUseID: sanitizeMarkName(toolUseId),
-      messageID: sanitizeMarkName(n?.message.id),
-      ...askTelemetryFields(h),
-      approvedBy: fromEnum(approvalSourceLabel(e.toolDecisions?.get(toolUseId)?.source)),
+      messageID: sanitizeMarkName(message?.message.id),
+      ...askTelemetryFields(facts),
+      approvedBy: fromEnum(approvalSourceLabel(context.toolDecisions?.get(toolUseId)?.source)),
     });
   } catch {}
 }
 //@ chunk-8wvtd8sr.js:22510-22685 placement
-function askTelemetryFields(e) {
+function askTelemetryFields(facts) {
   return {
-    action: fromEnum(e.action),
-    decisionReasonType: fromEnumOpt(e.reasonType),
-    personOnly: e.personOnly,
-    askClass: fromEnumOpt(e.askClass),
-    permissionMode: fromEnum(e.mode),
-    answerable: e.answerable,
+    action: fromEnum(facts.action),
+    decisionReasonType: fromEnumOpt(facts.reasonType),
+    personOnly: facts.personOnly,
+    askClass: fromEnumOpt(facts.askClass),
+    permissionMode: fromEnum(facts.mode),
+    answerable: facts.answerable,
   };
 }
 //@ chunk-8wvtd8sr.js:22685-22916 placement
-function captureAskFacts(e, n, s, toolUseId) {
-  let decisionReason = n.decisionReason;
+function captureAskFacts(input, decision, context, toolUseId) {
+  let decisionReason = decision.decisionReason;
   return {
-    action: artifactActionLabel(e),
+    action: artifactActionLabel(input),
     reasonType: decisionReason?.type,
     personOnly: decisionReason?.type === "safetyCheck" && decisionReason.classifierApprovable === false,
     askClass: getLiveState().askClassPending.get(toolUseId)?.[0]?.class,
-    mode: getToolPermissionContext(s).mode,
-    answerable: !consentMustDeny(s),
+    mode: getToolPermissionContext(context).mode,
+    answerable: !consentMustDeny(context),
   };
 }
 //@ chunk-8wvtd8sr.js:22916-23064 placement
@@ -115,7 +115,7 @@ function approvalSourceLabel(source) {
   }
 }
 //@ chunk-8wvtd8sr.js:23064-23172 placement = buildPermissionUpdates (0.774)
-function buildPermissionUpdates(e) {
+function buildPermissionUpdates(sessionScoped) {
   return {
     type: "addRules",
     rules: [
@@ -124,7 +124,7 @@ function buildPermissionUpdates(e) {
       },
     ],
     behavior: "allow",
-    destination: e ? "session" : permissionRuleDestination(),
+    destination: sessionScoped ? "session" : permissionRuleDestination(),
   };
 }
 //@ chunk-8wvtd8sr.js:23172-23245 placement

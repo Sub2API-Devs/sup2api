@@ -8,92 +8,98 @@
  * pieces: chunk-8ayegty4.js (1), chunk-ca06bv0t.js (1), chunk-gda5w2fs.js (1)
  * attribution: fingerprint 3
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { jsxProd_default_2 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../ink/components/Text.js";
 import { isFromPluginDirectory, displayTextOrRaw } from "../utils/plugins/pluginDisplayMetadata.js";
 import { OFFICIAL_MARKETPLACE_DISPLAY } from "../utils/plugins/officialMarketplaceNames.js";
 
+//@ chunk-gda5w2fs.js:4096-4556 fingerprint = truncateTag (0.699)
+function truncateTag(pattern) {
+  if (!pattern.includes(pattern.charAt(0), 1))
+    return (text, startIndex, endIndex) => {
+      let index = text.indexOf(pattern, startIndex);
+      return index + pattern.length > endIndex ? -1 : index;
+    };
+  let int32Array = new Int32Array(pattern.length);
+  for (let i = 1, matchedLength = 0; i < pattern.length; i++) {
+    while (matchedLength > 0 && pattern.charCodeAt(i) !== pattern.charCodeAt(matchedLength))
+      matchedLength = int32Array[matchedLength - 1] ?? 0;
+    if (pattern.charCodeAt(i) === pattern.charCodeAt(matchedLength)) matchedLength++;
+    int32Array[i] = matchedLength;
+  }
+  return (text, startIndex, endIndex) => {
+    for (let position = startIndex, matchedLength = 0; position < endIndex; position++) {
+      while (matchedLength > 0 && text.charCodeAt(position) !== pattern.charCodeAt(matchedLength))
+        matchedLength = int32Array[matchedLength - 1] ?? 0;
+      if (text.charCodeAt(position) === pattern.charCodeAt(matchedLength)) matchedLength++;
+      if (matchedLength === pattern.length) return position - pattern.length + 1;
+    }
+    return -1;
+  };
+}
 //@ chunk-8ayegty4.js:296-631 fingerprint = TagTabs (0.381)
 function TagTabs(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { children, color, textColor, padded, bold, wrap } = props;
-  let e = padded ? " " : "";
+  let padding = padded ? " " : "";
   const windowWidth = textColor ?? (color ? "inverseText" : undefined);
-  let s;
+  let element;
   if (
     $[0] !== bold ||
     $[1] !== children ||
     $[2] !== color ||
-    $[3] !== e ||
+    $[3] !== padding ||
     $[4] !== windowWidth ||
     $[5] !== wrap
   ) {
-    s = jsxProd_default_2(Text, {
+    element = jsxProd_default_2(Text, {
       backgroundColor: color,
       color: windowWidth,
       bold,
       wrap,
-      children: [e, children, e],
+      children: [padding, children, padding],
     });
     $[0] = bold;
     $[1] = children;
     $[2] = color;
-    $[3] = e;
+    $[3] = padding;
     $[4] = windowWidth;
     $[5] = wrap;
-    $[6] = s;
-  } else s = $[6];
-  return s;
+    $[6] = element;
+  } else element = $[6];
+  return element;
 }
 //@ chunk-ca06bv0t.js:8675-9094 fingerprint = ALL_TAB_LABEL (0.497)
-function ALL_TAB_LABEL(r) {
-  let n = new Map();
-  let i;
-  for (let s of r) {
-    if (isFromPluginDirectory(s)) i = s.marketplaceName;
-    for (let f of [s.marketplaceName, ...(s.alsoListedIn ?? [])]) n.set(f, (n.get(f) ?? 0) + 1);
+function ALL_TAB_LABEL(plugins) {
+  let marketplaceCounts = new Map();
+  let officialMarketplaceName;
+  for (let plugin of plugins) {
+    if (isFromPluginDirectory(plugin)) officialMarketplaceName = plugin.marketplaceName;
+    for (let marketplaceName of [plugin.marketplaceName, ...(plugin.alsoListedIn ?? [])])
+      marketplaceCounts.set(marketplaceName, (marketplaceCounts.get(marketplaceName) ?? 0) + 1);
   }
-  let sorted = [...n]
-    .map(([s, f]) => ({
-      marketplace: s,
-      label: s === i ? OFFICIAL_MARKETPLACE_DISPLAY : displayTextOrRaw(s),
-      count: f,
+  let sorted = [...marketplaceCounts]
+    .map(([marketplaceName, pluginCount]) => ({
+      marketplace: marketplaceName,
+      label:
+        marketplaceName === officialMarketplaceName
+          ? OFFICIAL_MARKETPLACE_DISPLAY
+          : displayTextOrRaw(marketplaceName),
+      count: pluginCount,
     }))
-    .sort((s, f) => {
-      if (s.marketplace === i) return -1;
-      if (f.marketplace === i) return 1;
-      return f.count - s.count || s.label.localeCompare(f.label);
+    .sort((tabA, tabB) => {
+      if (tabA.marketplace === officialMarketplaceName) return -1;
+      if (tabB.marketplace === officialMarketplaceName) return 1;
+      return tabB.count - tabA.count || tabA.label.localeCompare(tabB.label);
     });
   return [
     {
       marketplace: null,
       label: "All",
-      count: r.length,
+      count: plugins.length,
     },
     ...sorted,
   ];
-}
-//@ chunk-gda5w2fs.js:4096-4556 fingerprint = truncateTag (0.699)
-function truncateTag(e) {
-  if (!e.includes(e.charAt(0), 1))
-    return (t, r, o) => {
-      let index = t.indexOf(e, r);
-      return index + e.length > o ? -1 : index;
-    };
-  let int32Array = new Int32Array(e.length);
-  for (let i = 1, r = 0; i < e.length; i++) {
-    while (r > 0 && e.charCodeAt(i) !== e.charCodeAt(r)) r = int32Array[r - 1] ?? 0;
-    if (e.charCodeAt(i) === e.charCodeAt(r)) r++;
-    int32Array[i] = r;
-  }
-  return (t, r, o) => {
-    for (let s = r, i = 0; s < o; s++) {
-      while (i > 0 && t.charCodeAt(s) !== e.charCodeAt(i)) i = int32Array[i - 1] ?? 0;
-      if (t.charCodeAt(s) === e.charCodeAt(i)) i++;
-      if (i === e.length) return s - e.length + 1;
-    }
-    return -1;
-  };
 }
 export { TagTabs, truncateTag, ALL_TAB_LABEL };

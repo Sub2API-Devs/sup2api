@@ -11,7 +11,7 @@
 import { getRecordedPhase, recordPhase } from "../../utils/startupTiming.js";
 import { logError, logMCPDebug } from "../../utils/log.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { identityEpoch, isCurrentIdentityEpoch } from "./identityChange.js";
 import { env } from "../../utils/env.js";
 import { setMcpConnectNonBlocking } from "../../bootstrap/state.js";
@@ -60,25 +60,26 @@ import { getMcpPrefix, isToolFromMcpServer } from "./mcpStringUtils.js";
 import { reject_default } from "../../../vendor/lodash-es/reject.js";
 import { omitKeys } from "../../utils/hooks/hookCommandResolution.js";
 import { isDiscoveryCacheOn } from "./mcpAccountKey.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-zdgk9dc6.js:5102-5171 placement
 /**
  * 懒加载 MCP 客户端模块。
  */
 function mcpClientModule() {
-  return require("./chunk-asne9cp8.js").mcpClientModule();
+  return require("./emitTripwireEvent.lazy.js").mcpClientModule();
 }
 //@ chunk-zdgk9dc6.js:5171-5389 placement
-function loadMcpClientModuleTimed(n) {
+function loadMcpClientModuleTimed(phaseLabel) {
   let startTime = performance.now();
   try {
-    let e = mcpClientModule();
+    let mcpClient = mcpClientModule();
     if (getRecordedPhase("mcp_client_module_load_ms") === undefined)
       recordPhase("mcp_client_module_load_ms", performance.now() - startTime, startTime);
-    return e;
+    return mcpClient;
   } catch (error) {
     logError(error);
-    logForDebugging(`[MCP] ${n} connect error: ${error}`);
+    logForDebugging(`[MCP] ${phaseLabel} connect error: ${error}`);
     return;
   }
 }
@@ -86,11 +87,16 @@ function loadMcpClientModuleTimed(n) {
 /**
  * 连接重试的退避序列（500/1500/4000 毫秒）。
  */
-var CONNECT_RETRY_BASE_MS = 1000;
-var CONNECT_RETRY_DELAYS_MS = [500, 1500, 4000];
-var reduced = CONNECT_RETRY_DELAYS_MS.reduce((acc, o) => acc + o, 0);
+var CONNECT_RETRY_BASE_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CONNECT_RETRY_DELAYS_MS;
+var reduced;
+deferInit("chunk-zdgk9dc6.js:5389", () => {
+  CONNECT_RETRY_BASE_MS = 1000;
+  CONNECT_RETRY_DELAYS_MS = [500, 1500, 4000];
+  reduced = CONNECT_RETRY_DELAYS_MS.reduce((acc, delayMs) => acc + delayMs, 0);
+});
 //@ chunk-zdgk9dc6.js:5450-6321 placement
-function MCP_CONNECT_PHASES(n) {
+function MCP_CONNECT_PHASES(options) {
   let {
     regularMcpConfigs,
     claudeaiConfigPromise,
@@ -102,24 +108,24 @@ function MCP_CONNECT_PHASES(n) {
     dialFirst,
     dialOptions,
     leaveAlwaysLoadWaitTo,
-  } = n;
+  } = options;
   let knownListings =
-    n.knownListings &&
-    xr(n.knownListings, (b) =>
-      Array.isArray(b)
+    options.knownListings &&
+    import_mapValues(options.knownListings, (listing) =>
+      Array.isArray(listing)
         ? {
-            tools: b,
+            tools: listing,
           }
-        : b,
+        : listing,
     );
   let epoch = identityEpoch();
   let nonBlocking = env.MCP_CONNECTION_NONBLOCKING !== false;
   setMcpConnectNonBlocking(nonBlocking);
   let deferConnect = nonBlocking;
-  async function R() {
+  async function connectAll() {
     profileCheckpoint("before_mcp_connect_user");
     profileCheckpoint("before_mcp_connect_connector");
-    let b = connectMcpConfigServers({
+    let regularPromise = connectMcpConfigServers({
       configs: regularMcpConfigs,
       label: "regular",
       nonBlocking,
@@ -133,7 +139,7 @@ function MCP_CONNECT_PHASES(n) {
       knownListings,
       leaveAlwaysLoadWaitTo,
     }).then(() => profileCheckpoint("after_mcp_connect_user"));
-    let T = awaitConnectBatch(
+    let connectorsPromise = awaitConnectBatch(
       nonBlocking,
       () =>
         claudeaiConfigPromise
@@ -147,13 +153,13 @@ function MCP_CONNECT_PHASES(n) {
               epoch,
             }),
           )
-          .then((v) => (v === "superseded" ? [] : v)),
+          .then((mounted) => (mounted === "superseded" ? [] : mounted)),
       "claude.ai connectors",
     ).then(() => profileCheckpoint("after_mcp_connect_connector"));
-    await Promise.all([b, T]);
+    await Promise.all([regularPromise, connectorsPromise]);
   }
   return {
-    connect: R,
+    connect: connectAll,
   };
 }
 //@ chunk-zdgk9dc6.js:6321-6416 placement
@@ -184,22 +190,25 @@ function connectMcpConfigServers(options) {
     dialOptions,
     leaveAlwaysLoadWaitTo: isRequired,
   } = options;
-  let requiredLater = (v, w) =>
-    v.alwaysLoad === true || (knownListings !== undefined && Object.hasOwn(knownListings, w));
+  let requiredLater = (config, name) =>
+    config.alwaysLoad === true || (knownListings !== undefined && Object.hasOwn(knownListings, name));
   let requiredNow =
     isRequired === undefined
       ? {}
       : filterObject(
           configs,
-          (v, w) =>
-            v.alwaysLoad === true &&
-            v.scope === "dynamic" &&
-            !isPluginServerConfig(v) &&
-            !(knownListings !== undefined && Object.hasOwn(knownListings, w)),
+          (config, name) =>
+            config.alwaysLoad === true &&
+            config.scope === "dynamic" &&
+            !isPluginServerConfig(config) &&
+            !(knownListings !== undefined && Object.hasOwn(knownListings, name)),
         );
-  let optional = filterObject(configs, (v, w) => requiredLater(v, w) && !Object.hasOwn(requiredNow, w));
-  let hasRequired = filterObject(configs, (v, w) => !requiredLater(v, w));
-  let T = Object.keys(optional).length > 0;
+  let optional = filterObject(
+    configs,
+    (config, name) => requiredLater(config, name) && !Object.hasOwn(requiredNow, name),
+  );
+  let hasRequired = filterObject(configs, (config, name) => !requiredLater(config, name));
+  let hasOptional = Object.keys(optional).length > 0;
   if (Object.keys(requiredNow).length > 0) {
     let mcpServerBatch = connectMcpServerBatch(
       requiredNow,
@@ -216,7 +225,7 @@ function connectMcpConfigServers(options) {
     isRequired?.(() => awaitConnectBatch(false, () => mcpServerBatch, "--mcp-config alwaysLoad servers"));
   }
   return Promise.all([
-    ...(T
+    ...(hasOptional
       ? [
           awaitConnectBatch(
             false,
@@ -258,10 +267,10 @@ function connectMcpConfigServers(options) {
 }
 //@ chunk-zdgk9dc6.js:7176-8638 placement
 function connectMcpServerBatch(
-  n,
-  o,
+  configs,
+  label,
   state,
-  y = false,
+  nonBlocking = false,
   storageV5,
   credentials,
   knownListings,
@@ -269,106 +278,115 @@ function connectMcpServerBatch(
   dialFirst,
   dialOptions,
 ) {
-  let keys = Object.keys(n);
+  let keys = Object.keys(configs);
   if (keys.length === 0) return [];
-  let S = knownListings && xr(knownListings, (v) => v.tools);
-  state.applyMcpUpdate((v) => ({
-    ...v,
+  let knownTools = knownListings && import_mapValues(knownListings, (listing) => listing.tools);
+  state.applyMcpUpdate((state) => ({
+    ...state,
     clients: [
-      ...v.clients,
-      ...Object.entries(n).map(([key, value]) => ({
+      ...state.clients,
+      ...Object.entries(configs).map(([key, value]) => ({
         name: key,
         type: "pending",
         config: value,
       })),
     ],
   }));
-  let M = new Map();
-  let mapped = keys.map((v) => new Promise((resolve) => M.set(v, resolve)));
+  let resolvers = new Map();
+  let mapped = keys.map((name) => new Promise((resolve) => resolvers.set(name, resolve)));
   let deferred = Promise.withResolvers();
-  let R = new Set();
-  let b = (v) => {
-    for (let key of Object.keys(v)) R.add(key);
-    retryRemoteMcpServers(v, state, storageV5, undefined, deferred.promise)
-      .catch((error) => logForDebugging(`[MCP] ${o} retry error: ${error}`))
+  let retrying = new Set();
+  let retrySlowServers = (slowConfigs) => {
+    for (let key of Object.keys(slowConfigs)) retrying.add(key);
+    retryRemoteMcpServers(slowConfigs, state, storageV5, undefined, deferred.promise)
+      .catch((error) => logForDebugging(`[MCP] ${label} retry error: ${error}`))
       .finally(() => {
-        for (let key of Object.keys(v)) R.delete(key);
+        for (let key of Object.keys(slowConfigs)) retrying.delete(key);
       });
   };
-  let T = () => {
-    let dialer = loadMcpClientModuleTimed(o);
+  let startDial = () => {
+    let dialer = loadMcpClientModuleTimed(label);
     if (!dialer) {
-      for (let k of M.values()) k();
+      for (let resolve of resolvers.values()) resolve();
       return;
     }
-    if (onDialStart !== undefined && keys.some((k) => !Object.hasOwn(S ?? {}, k))) onDialStart();
-    let w =
+    if (onDialStart !== undefined && keys.some((name) => !Object.hasOwn(knownTools ?? {}, name)))
+      onDialStart();
+    let orderedConfigs =
       dialFirst === undefined
-        ? n
+        ? configs
         : {
-            ...filterObject(n, (k, P) => dialFirst(P)),
-            ...n,
+            ...filterObject(configs, (config, name) => dialFirst(name)),
+            ...configs,
           };
     dialer
       .getMcpToolsCommandsAndResources(
-        (k) => {
-          let { client } = k;
-          let I = Object.hasOwn(knownListings ?? {}, client.name) ? knownListings?.[client.name] : undefined;
-          let handshake = I?.handshake;
-          if (client.type === "cached" && I !== undefined) client.listedByHost = true;
+        (result) => {
+          let { client } = result;
+          let knownListing = Object.hasOwn(knownListings ?? {}, client.name)
+            ? knownListings?.[client.name]
+            : undefined;
+          let handshake = knownListing?.handshake;
+          if (client.type === "cached" && knownListing !== undefined) client.listedByHost = true;
           if (client.type === "cached" && handshake !== undefined) {
             client.capabilities = handshake.capabilities;
             client.serverInfo = {
               name: handshake.serverInfo.name,
               version: handshake.serverInfo.version,
             };
-            let j = dialer.capMcpInstructions(
+            let cappedInstructions = dialer.capMcpInstructions(
               handshake.instructions,
               client.name,
               toolTimeoutForServer(client.config),
             );
-            if (j !== undefined) client.instructions = j;
+            if (cappedInstructions !== undefined) client.instructions = cappedInstructions;
           }
-          if (client.type === "cached" && I?.comparedBeforeUse)
-            wrapHandedListingChecks(client, k.tools, I.tools, dialer, handshake !== undefined);
-          applyConnectionResult(state, k);
+          if (client.type === "cached" && knownListing?.comparedBeforeUse)
+            wrapHandedListingChecks(
+              client,
+              result.tools,
+              knownListing.tools,
+              dialer,
+              handshake !== undefined,
+            );
+          applyConnectionResult(state, result);
           printScopeExpansionNotice();
-          let { name: E } = k.client;
-          M.get(E)?.();
-          if (!R.has(E)) {
-            let j = filterObject(n, (le, X) => X === E);
-            if (findReusableClients(j, state).length > 0) b(j);
+          let { name } = result.client;
+          resolvers.get(name)?.();
+          if (!retrying.has(name)) {
+            let thisServerConfigs = filterObject(configs, (key, configName) => configName === name);
+            if (findReusableClients(thisServerConfigs, state).length > 0) retrySlowServers(thisServerConfigs);
           }
         },
-        w,
+        orderedConfigs,
         storageV5,
         credentials,
-        S,
+        knownTools,
         true,
         undefined,
         dialOptions,
       )
-      .catch((error) => logForDebugging(`[MCP] ${o} connect error: ${error}`))
+      .catch((error) => logForDebugging(`[MCP] ${label} connect error: ${error}`))
       .finally(() => {
-        for (let k of M.values()) k();
+        for (let resolve of resolvers.values()) resolve();
         deferred.resolve(performance.now());
-        b(filterObject(n, (k, P) => !R.has(P)));
+        retrySlowServers(filterObject(configs, (key, name) => !retrying.has(name)));
       });
   };
-  if (y) setImmediate(T);
-  else T();
+  if (nonBlocking) setImmediate(startDial);
+  else startDial();
   return mapped;
 }
 //@ chunk-zdgk9dc6.js:8638-10341 placement
-function applyConnectionResult(n, o) {
-  let { client, tools, commands, attemptEpoch } = o;
-  let u;
-  let m = "applied";
-  let s = identityChangedForRemote(client.config, attemptEpoch);
-  n.applyMcpUpdate((h) => {
-    m = "applied";
-    u = undefined;
-    let name = h.clients.find((client_2) => client_2.name === client.name);
+function applyConnectionResult(state, update) {
+  let { client, tools, commands, attemptEpoch } = update;
+  let finalize;
+  let outcome = "applied";
+  let identityChanged = identityChangedForRemote(client.config, attemptEpoch);
+  state.applyMcpUpdate((appState) => {
+    outcome = "applied";
+    finalize = undefined;
+    let name = appState.clients.find((client_2) => client_2.name === client.name);
     if (
       !name ||
       (name.config !== client.config && !mcpClientModule().areMcpConfigsEqual(name.config, client.config))
@@ -380,90 +398,95 @@ function applyConnectionResult(n, o) {
             ? "applyConnectionResult: disposing orphaned connect (slot config changed mid-flight)"
             : "applyConnectionResult: disposing orphaned connect (slot removed mid-flight)",
         );
-        u = () => discardClient(client);
+        finalize = () => discardClient(client);
       }
-      m = "dropped";
-      return h;
+      outcome = "dropped";
+      return appState;
     }
-    if (s) {
+    if (identityChanged) {
       logMCPDebug(
         client.name,
         "applyConnectionResult: settlement superseded by an account switch \u2014 closed, not installed (the identity boundary owns the row)",
       );
       if (client.type === "connected")
-        u = () => {
+        finalize = () => {
           mcpClientModule()
             .detachAndCloseConnection(client)
             .catch(() => {});
         };
-      m = "superseded";
-      return h;
+      outcome = "superseded";
+      return appState;
     }
-    let S =
+    let blockCause =
       client.type !== "failed" && client.type !== "disabled"
         ? mcpDialBlockCause(client.name, client.config)
         : null;
     if (
-      S !== "managed-policy" &&
+      blockCause !== "managed-policy" &&
       !isPolicyBlockedFailure(client) &&
       isMcpServerDisabled(client.name) &&
       client.type !== "disabled"
     ) {
-      let M = client.type === "connected" && name.type === "connected" && name.client === client.client;
-      if (client.type === "connected" && !M) {
+      let isSameConnection =
+        client.type === "connected" && name.type === "connected" && name.client === client.client;
+      if (client.type === "connected" && !isSameConnection) {
         logMCPDebug(client.name, "applyConnectionResult: disposing connect that settled after a disable");
-        u = () => discardClient(client);
+        finalize = () => discardClient(client);
       }
-      m = "refused";
-      if (name.type === "disabled" || (name.type === "connected" && isConnectedOrCached(client))) return h;
-      return replaceClientInState(h, {
+      outcome = "refused";
+      if (name.type === "disabled" || (name.type === "connected" && isConnectedOrCached(client)))
+        return appState;
+      return replaceClientInState(appState, {
         name: client.name,
         type: "disabled",
         config: name.config,
       });
     }
-    if (S) {
+    if (blockCause) {
       if (client.type === "connected")
-        logMCPDebug(client.name, `applyConnectionResult: disposing connect that settled after a ${S} deny`);
-      u = () => {
+        logMCPDebug(
+          client.name,
+          `applyConnectionResult: disposing connect that settled after a ${blockCause} deny`,
+        );
+      finalize = () => {
         if (client.type === "connected") discardClient(client);
         mcpClientModule()
           .dropDiscoveryEntry(client.name, client.config)
           .catch(() => {});
       };
-      m = "refused";
-      return replaceClientInState(h, {
+      outcome = "refused";
+      return replaceClientInState(appState, {
         name: client.name,
         type: "failed",
         config: name.config,
-        ...mcpGateError(S, client.name, client.config),
+        ...mcpGateError(blockCause, client.name, client.config),
       });
     }
     if (!checkMcpServerHealth_2(name, client)) {
-      m = "dropped";
-      return h;
+      outcome = "dropped";
+      return appState;
     }
     return {
-      ...h,
-      clients: h.clients.map((client_2) => (client_2.name === client.name ? client : client_2)),
-      tools: uniqBy([...h.tools, ...tools], (M) => M.name),
-      commands: uniqBy([...h.commands, ...commands], (M) => M.name),
+      ...appState,
+      clients: appState.clients.map((client_2) => (client_2.name === client.name ? client : client_2)),
+      tools: uniqBy([...appState.tools, ...tools], (tool) => tool.name),
+      commands: uniqBy([...appState.commands, ...commands], (command) => command.name),
     };
   });
-  u?.();
-  return m;
+  finalize?.();
+  return outcome;
 }
 //@ chunk-zdgk9dc6.js:10341-10534 placement
 /**
  * 找出配置未变且客户端已连接（或可接受的失败状态）的服务器，可直接复用而无需重连。
  */
-function findReusableClients(n, o, e = true) {
-  let clients = o.getClients();
-  return Object.entries(n).filter(([key, value]) => {
-    let found = clients.find((m) => m.name === key);
+function findReusableClients(configs, state, includeForbidden = true) {
+  let clients = state.getClients();
+  return Object.entries(configs).filter(([key, value]) => {
+    let found = clients.find((client) => client.name === key);
     return (
       found !== undefined &&
-      (isRetryableRemoteFailure(found) || (e && isProxyForbiddenFailure(found))) &&
+      (isRetryableRemoteFailure(found) || (includeForbidden && isProxyForbiddenFailure(found))) &&
       mcpClientModule().areMcpConfigsEqual(found.config, value)
     );
   });
@@ -472,112 +495,118 @@ function findReusableClients(n, o, e = true) {
 /**
  * 登记一组服务器正处于瞬时错误重试轮次中，返回可 dispose 的对象在结束时撤销。
  */
-function trackTransientRetryPass(n) {
-  let o = (e) => {
+function trackTransientRetryPass(names) {
+  let bump = (delta) => {
     let transientRetryPasses = getCliOwnedState().transientRetryPasses;
-    for (let r of n) {
-      let p = (transientRetryPasses.get(r) ?? 0) + e;
-      if (p > 0) transientRetryPasses.set(r, p);
-      else transientRetryPasses.delete(r);
+    for (let name of names) {
+      let nextCount = (transientRetryPasses.get(name) ?? 0) + delta;
+      if (nextCount > 0) transientRetryPasses.set(name, nextCount);
+      else transientRetryPasses.delete(name);
     }
   };
-  o(1);
+  bump(1);
   return {
-    [Symbol.dispose]: () => o(-1),
+    [Symbol.dispose]: () => bump(-1),
   };
 }
 //@ chunk-zdgk9dc6.js:10710-12322 placement
-async function retryRemoteMcpServers(n, o, e, y = (p) => applyConnectionResult(o, p), promise) {
-  let p = () => findReusableClients(n, o);
-  if (p().length === 0) return;
-  using u = trackTransientRetryPass(Object.keys(n));
-  let m = identityEpoch();
-  let { signal } = o;
+async function retryRemoteMcpServers(
+  configs,
+  state,
+  storageV5,
+  applyResult = (result) => applyConnectionResult(state, result),
+  promise,
+) {
+  let failedPairs = () => findReusableClients(configs, state);
+  if (failedPairs().length === 0) return;
+  using retryPass = trackTransientRetryPass(Object.keys(configs));
+  let epochAtStart = identityEpoch();
+  let { signal } = state;
   let startTime = performance.now();
-  let c = 0;
-  for (let [M, _] of CONNECT_RETRY_DELAYS_MS.entries()) {
-    let L = M === CONNECT_RETRY_DELAYS_MS.length - 1;
-    await sleep(_, signal);
-    if (promise !== undefined && L) {
-      let P = (await promise) + reduced + c;
-      await sleep(Math.max(0, P - performance.now()), signal);
+  let dialTimeMs = 0;
+  for (let [attempt, delayMs] of CONNECT_RETRY_DELAYS_MS.entries()) {
+    let isLastAttempt = attempt === CONNECT_RETRY_DELAYS_MS.length - 1;
+    await sleep(delayMs, signal);
+    if (promise !== undefined && isLastAttempt) {
+      let targetTime = (await promise) + reduced + dialTimeMs;
+      await sleep(Math.max(0, targetTime - performance.now()), signal);
     }
     if (signal?.aborted) return;
-    if (identityEpoch() !== m) {
+    if (identityEpoch() !== epochAtStart) {
       logForDebugging(
         "[MCP] Retry: identity changed during backoff, stopping (these rows belong to the previous account)",
       );
       return;
     }
-    let reusableClients = findReusableClients(n, o, L);
+    let reusableClients = findReusableClients(configs, state, isLastAttempt);
     if (reusableClients.length === 0) {
-      if (p().length > 0) continue;
+      if (failedPairs().length > 0) continue;
       logForDebugging("[MCP] Retry: all remote servers recovered, stopping");
       return;
     }
     logForDebugging(
-      `[MCP] Retry attempt ${M + 1}: ${reusableClients.length} transiently-failed remote server(s)`,
+      `[MCP] Retry attempt ${attempt + 1}: ${reusableClients.length} transiently-failed remote server(s)`,
     );
-    let b = [];
+    let dialable = [];
     for (let reusableClient of reusableClients) {
       if (!(await mcpClientModule().discardMemoizedConnectResult(...reusableClient))) continue;
-      let [I, A] = reusableClient;
-      let E = mcpDialBlockCause(I, A);
-      if (E) {
-        y({
+      let [name, config] = reusableClient;
+      let blockCause = mcpDialBlockCause(name, config);
+      if (blockCause) {
+        applyResult({
           client: {
-            name: I,
+            name,
             type: "failed",
-            config: A,
-            ...mcpGateError(E, I, A),
+            config,
+            ...mcpGateError(blockCause, name, config),
           },
           tools: [],
           commands: [],
-          attemptEpoch: m,
+          attemptEpoch: epochAtStart,
         });
         continue;
       }
-      b.push(reusableClient);
+      dialable.push(reusableClient);
     }
-    if (b.length === 0 || signal?.aborted) continue;
-    let T = 0;
-    let v = 0;
+    if (dialable.length === 0 || signal?.aborted) continue;
+    let recoveredCount = 0;
+    let stillRetryableCount = 0;
     let startTime_2 = performance.now();
     let sincePassStartMs = Math.round(startTime_2 - startTime);
     await mcpClientModule().getMcpToolsCommandsAndResources(
-      (P) => {
+      (result) => {
         if (!signal?.aborted) {
-          y(P);
-          if (P.client.type === "connected") T++;
-          else if (isRetriableOrForbidden(P.client)) v++;
-        } else if (P.client.type === "connected")
+          applyResult(result);
+          if (result.client.type === "connected") recoveredCount++;
+          else if (isRetriableOrForbidden(result.client)) stillRetryableCount++;
+        } else if (result.client.type === "connected")
           mcpClientModule()
-            .detachAndCloseConnection(P.client)
+            .detachAndCloseConnection(result.client)
             .catch(() => {});
       },
-      Object.fromEntries(b),
-      e,
+      Object.fromEntries(dialable),
+      storageV5,
     );
-    c += performance.now() - startTime_2;
+    dialTimeMs += performance.now() - startTime_2;
     if (!signal?.aborted)
       logEvent("tengu_mcp_connect_retry_attempt", {
-        attempt: M + 1,
-        delayMs: _,
+        attempt: attempt + 1,
+        delayMs,
         sincePassStartMs,
         retryable: reusableClients.length,
-        dialed: b.length,
-        recovered: T,
-        stillRetryable: v,
+        dialed: dialable.length,
+        recovered: recoveredCount,
+        stillRetryable: stillRetryableCount,
       });
-    if (p().length === 0) {
+    if (failedPairs().length === 0) {
       logForDebugging("[MCP] Retry: all remote servers recovered, stopping");
       return;
     }
   }
-  let S = p();
-  if (S.length > 0)
+  let remaining = failedPairs();
+  if (remaining.length > 0)
     logForDebugging(
-      `[MCP] Retry: ${S.length} remote server(s) still failed after all retries: ${S.map(([M]) => M).join(", ")}`,
+      `[MCP] Retry: ${remaining.length} remote server(s) still failed after all retries: ${remaining.map(([name]) => name).join(", ")}`,
     );
 }
 //@ chunk-zdgk9dc6.js:12322-13112 placement
@@ -596,17 +625,17 @@ async function awaitConnectBatch(nonBlocking, startBatch, label) {
   let dials;
   if (Array.isArray(batch)) dials = batch;
   else {
-    let c;
+    let timer;
     let winner = await Promise.race([
       batch.catch((error) => {
         logError(error);
         return "failed";
       }),
       new Promise((resolve) => {
-        c = setTimeout((_) => _("deadline"), deadlineMs, resolve);
+        timer = setTimeout((resolve) => resolve("deadline"), deadlineMs, resolve);
       }),
     ]);
-    clearTimeout(c);
+    clearTimeout(timer);
     if (winner === "deadline") {
       logForDebugging(
         `[MCP] ${label} config fetch not ready after ${deadlineMs}ms \u2014 proceeding; background connection continues`,
@@ -623,72 +652,79 @@ async function awaitConnectBatch(nonBlocking, startBatch, label) {
   if (dials.length === 0) return;
   let mcpClientModuleTimed = loadMcpClientModuleTimed(label);
   if (!mcpClientModuleTimed) return;
-  let h = await mcpClientModuleTimed.awaitEachWithDeadline(dials, max);
-  if (h > 0)
+  let unsettledCount = await mcpClientModuleTimed.awaitEachWithDeadline(dials, max);
+  if (unsettledCount > 0)
     logForDebugging(
-      `[MCP] ${label}: ${h}/${dials.length} not ready after ${deadlineMs}ms \u2014 proceeding; background connection continues`,
+      `[MCP] ${label}: ${unsettledCount}/${dials.length} not ready after ${deadlineMs}ms \u2014 proceeding; background connection continues`,
     );
 }
 //@ chunk-zdgk9dc6.js:13112-13767 placement
-function fetchClaudeAiConnectors(n, storageV5, credentials) {
+function fetchClaudeAiConnectors(adapter, storageV5, credentials) {
   clearClaudeAiConfigsFetch();
   resetClaudeAiSessionConnections();
-  let y = identityEpoch();
-  let r = (async () => {
+  let epochAtStart = identityEpoch();
+  let mountPromise = (async () => {
     let claudeAiConfigs = await fetchClaudeAiConfigsOnce(credentials);
-    if (!isCurrentIdentityEpoch(y)) return supersededByAccountSwitch("list fetch");
+    if (!isCurrentIdentityEpoch(epochAtStart)) return supersededByAccountSwitch("list fetch");
     let { allowed, blocked } = filterMcpServersByPolicy(claudeAiConfigs);
     printClaudeAiConnectorNotice();
     if (blocked.length > 0)
       logForDebugging(
         `[MCP] claude.ai connectors blocked by enterprise policy after account switch: ${blocked.join(", ")}`,
       );
-    let s = await restorableSuppressedPlugins(n, storageV5);
+    let restorablePlugins = await restorableSuppressedPlugins(adapter, storageV5);
     let regularMcpConfigs = Object.fromEntries([
-      ...Object.entries(s),
-      ...n
+      ...Object.entries(restorablePlugins),
+      ...adapter
         .getClients()
-        .filter((c) => c.config.scope !== "claudeai")
-        .map((c) => [c.name, c.config]),
+        .filter((client) => client.config.scope !== "claudeai")
+        .map((client) => [client.name, client.config]),
     ]);
     return mountClaudeAiConnectors({
       claudeaiConfigs: allowed,
       regularMcpConfigs,
-      state: n,
+      state: adapter,
       deferConnect: false,
       storageV5,
-      epoch: y,
-      restorablePlugins: s,
+      epoch: epochAtStart,
+      restorablePlugins,
     });
   })();
   return {
-    mounted: r.then((p) => (p === "superseded" ? p : "mounted")),
-    settled: r.then((p) => (p === "superseded" ? [] : Promise.all(p))).then(() => {}),
+    mounted: mountPromise.then((mountResult) => (mountResult === "superseded" ? mountResult : "mounted")),
+    settled: mountPromise
+      .then((mountResult) => (mountResult === "superseded" ? [] : Promise.all(mountResult)))
+      .then(() => {}),
   };
 }
 //@ chunk-zdgk9dc6.js:13767-13896 placement
-function supersededByAccountSwitch(n) {
+function supersededByAccountSwitch(stage) {
   logForDebugging(
-    `[MCP] claude.ai connector list superseded by an account switch (${n}) \u2014 not mounting`,
+    `[MCP] claude.ai connector list superseded by an account switch (${stage}) \u2014 not mounting`,
   );
   return "superseded";
 }
 //@ chunk-zdgk9dc6.js:13896-14130 placement
-async function mountClaudeAiConnectors(n) {
-  if (!isCurrentIdentityEpoch(n.epoch)) return supersededByAccountSwitch("list fetch");
-  let o = await dedupPluginServersAgainstConnectors(n);
-  if (!isCurrentIdentityEpoch(n.epoch)) return supersededByAccountSwitch("dedup");
+async function mountClaudeAiConnectors(params) {
+  if (!isCurrentIdentityEpoch(params.epoch)) return supersededByAccountSwitch("list fetch");
+  let dedup = await dedupPluginServersAgainstConnectors(params);
+  if (!isCurrentIdentityEpoch(params.epoch)) return supersededByAccountSwitch("dedup");
   return [
-    ...restorePluginServers(n.restorablePlugins ?? {}, o.suppressedPlugins, n.state, n.storageV5),
-    ...connectDedupedConnectors(o, n.state, n.deferConnect, n.storageV5),
+    ...restorePluginServers(
+      params.restorablePlugins ?? {},
+      dedup.suppressedPlugins,
+      params.state,
+      params.storageV5,
+    ),
+    ...connectDedupedConnectors(dedup, params.state, params.deferConnect, params.storageV5),
   ];
 }
 //@ chunk-zdgk9dc6.js:14130-14612 placement
 /**
  * 找出仍可恢复的被抑制插件服务器：插件仍安装启用的返回其配置，已不存在的从抑制列表中移除。
  */
-async function restorableSuppressedPlugins(n, storageV5) {
-  let suppressedPluginServers = n.getSuppressedPluginServers();
+async function restorableSuppressedPlugins(adapter, storageV5) {
+  let suppressedPluginServers = adapter.getSuppressedPluginServers();
   if (suppressedPluginServers.length === 0) return {};
   let { servers } = await getClaudeCodeMcpConfigs(
     {},
@@ -696,30 +732,32 @@ async function restorableSuppressedPlugins(n, storageV5) {
       storageV5,
     },
   );
-  let r = {};
-  let p = new Set();
-  for (let u of suppressedPluginServers) {
-    let m = servers[u];
-    if (m && m.pluginSource !== undefined) r[u] = m;
-    else p.add(u);
+  let restorable = {};
+  let staleNames = new Set();
+  for (let name of suppressedPluginServers) {
+    let config = servers[name];
+    if (config && config.pluginSource !== undefined) restorable[name] = config;
+    else staleNames.add(name);
   }
-  if (p.size > 0) {
+  if (staleNames.size > 0) {
     logForDebugging(
-      `[MCP] Dropping ${p.size} suppressed plugin server(s) whose plugin is no longer installed/enabled: ${[...p].join(", ")}`,
+      `[MCP] Dropping ${staleNames.size} suppressed plugin server(s) whose plugin is no longer installed/enabled: ${[...staleNames].join(", ")}`,
     );
-    n.applyMcpUpdate((u) => ({
-      ...u,
-      suppressedPluginMcpServers: (u.suppressedPluginMcpServers ?? []).filter((m) => !p.has(m)),
+    adapter.applyMcpUpdate((state) => ({
+      ...state,
+      suppressedPluginMcpServers: (state.suppressedPluginMcpServers ?? []).filter(
+        (name) => !staleNames.has(name),
+      ),
     }));
   }
-  return r;
+  return restorable;
 }
 //@ chunk-zdgk9dc6.js:14612-15123 placement
 /**
  * 账号切换后不再与 claude.ai 连接器重复的插件服务器：从抑制列表移除并重新连接。
  */
 function restorePluginServers(restorable, stillSuppressed, mcpState, storageV5) {
-  let connectedNames = new Set(mcpState.getClients().map((s) => s.name));
+  let connectedNames = new Set(mcpState.getClients().map((client) => client.name));
   let restoredNames = new Set();
   let toConnect = {};
   for (let [key, value] of Object.entries(restorable)) {
@@ -728,9 +766,11 @@ function restorePluginServers(restorable, stillSuppressed, mcpState, storageV5) 
     if (!connectedNames.has(key)) toConnect[key] = value;
   }
   if (restoredNames.size === 0) return [];
-  mcpState.applyMcpUpdate((s) => ({
-    ...s,
-    suppressedPluginMcpServers: (s.suppressedPluginMcpServers ?? []).filter((h) => !restoredNames.has(h)),
+  mcpState.applyMcpUpdate((state) => ({
+    ...state,
+    suppressedPluginMcpServers: (state.suppressedPluginMcpServers ?? []).filter(
+      (name) => !restoredNames.has(name),
+    ),
   }));
   let keys = Object.keys(toConnect);
   if (keys.length > 0)
@@ -740,65 +780,69 @@ function restorePluginServers(restorable, stillSuppressed, mcpState, storageV5) 
   return connectMcpServerBatch(toConnect, "plugin-restore", mcpState, false, storageV5);
 }
 //@ chunk-zdgk9dc6.js:15123-16567 placement
-async function dedupPluginServersAgainstConnectors(n) {
-  let { claudeaiConfigs, regularMcpConfigs, state } = n;
-  let r = new Set();
+async function dedupPluginServersAgainstConnectors(params) {
+  let { claudeaiConfigs, regularMcpConfigs, state } = params;
+  let suppressed = new Set();
   if (Object.keys(claudeaiConfigs).length > 0) {
-    let u = new Set();
-    let m = new Set();
-    for (let c of Object.values(claudeaiConfigs)) {
-      let mcpServerSignature = getMcpServerSignature(c);
-      if (mcpServerSignature) (isIneligibleClaudeAiProxy(c) ? m : u).add(mcpServerSignature);
+    let eligibleSignatures = new Set();
+    let ineligibleSignatures = new Set();
+    for (let connectorConfig of Object.values(claudeaiConfigs)) {
+      let mcpServerSignature = getMcpServerSignature(connectorConfig);
+      if (mcpServerSignature)
+        (isIneligibleClaudeAiProxy(connectorConfig) ? ineligibleSignatures : eligibleSignatures).add(
+          mcpServerSignature,
+        );
     }
-    let s = [];
-    let h;
+    let besideIneligible = [];
+    let eligibilityCheckOn;
     for (let [key, value] of Object.entries(regularMcpConfigs)) {
       if (!key.startsWith("plugin:")) continue;
       let mcpServerSignature = getMcpServerSignature(value);
       if (!mcpServerSignature) continue;
-      if (u.has(mcpServerSignature)) r.add(key);
-      else if (m.has(mcpServerSignature)) {
-        s.push(key);
-        h ??= isClaudeAiEligibilityCheckEnabled();
-        if (!h) r.add(key);
+      if (eligibleSignatures.has(mcpServerSignature)) suppressed.add(key);
+      else if (ineligibleSignatures.has(mcpServerSignature)) {
+        besideIneligible.push(key);
+        eligibilityCheckOn ??= isClaudeAiEligibilityCheckEnabled();
+        if (!eligibilityCheckOn) suppressed.add(key);
       }
     }
-    if (s.length > 0)
+    if (besideIneligible.length > 0)
       logEvent("tengu_mcp_plugin_beside_ineligible_connector", {
-        plugin_server_count: s.length,
-        kept: h,
+        plugin_server_count: besideIneligible.length,
+        kept: eligibilityCheckOn,
       });
-    if (h)
+    if (eligibilityCheckOn)
       logForDebugging(
-        `[MCP] Lazy dedup: keeping ${s.length} plugin server(s) whose only duplicate claude.ai connectors are ineligible: ${s.join(", ")}`,
+        `[MCP] Lazy dedup: keeping ${besideIneligible.length} plugin server(s) whose only duplicate claude.ai connectors are ineligible: ${besideIneligible.join(", ")}`,
       );
-    if (r.size > 0) {
+    if (suppressed.size > 0) {
       logForDebugging(
-        `[MCP] Lazy dedup: suppressing ${r.size} plugin server(s) that duplicate claude.ai connectors: ${[...r].join(", ")}`,
+        `[MCP] Lazy dedup: suppressing ${suppressed.size} plugin server(s) that duplicate claude.ai connectors: ${[...suppressed].join(", ")}`,
       );
-      for (let c of state.getClients()) {
-        if (!r.has(c.name) || !(isConnectedOrCached(c) || c.type === "pending")) continue;
-        if (c.type === "connected") {
-          setMcpOnClose(c, undefined);
+      for (let client of state.getClients()) {
+        if (!suppressed.has(client.name) || !(isConnectedOrCached(client) || client.type === "pending"))
+          continue;
+        if (client.type === "connected") {
+          setMcpOnClose(client, undefined);
           mcpClientModule()
-            .clearServerCache(c.name, c.config)
+            .clearServerCache(client.name, client.config)
             .catch(() => {});
-        } else mcpClientModule().disposeServerConnectionDetached(c.name, c.config);
+        } else mcpClientModule().disposeServerConnectionDetached(client.name, client.config);
       }
-      state.applyMcpUpdate((c) => {
-        let { clients, tools, commands, resources } = c;
-        clients = clients.filter((client) => !r.has(client.name));
-        tools = tools.filter((tool) => !tool.mcpInfo || !r.has(tool.mcpInfo.serverName));
-        for (let b of r) {
-          commands = excludeCommandsByServer(commands, b);
-          resources = omitKey(resources, b);
+      state.applyMcpUpdate((state) => {
+        let { clients, tools, commands, resources } = state;
+        clients = clients.filter((client) => !suppressed.has(client.name));
+        tools = tools.filter((tool) => !tool.mcpInfo || !suppressed.has(tool.mcpInfo.serverName));
+        for (let name of suppressed) {
+          commands = excludeCommandsByServer(commands, name);
+          resources = omitKey(resources, name);
         }
         let suppressedPluginMcpServers = [
-          ...(c.suppressedPluginMcpServers ?? []).filter((b) => !r.has(b)),
-          ...r,
+          ...(state.suppressedPluginMcpServers ?? []).filter((name) => !suppressed.has(name)),
+          ...suppressed,
         ];
         return {
-          ...c,
+          ...state,
           clients,
           tools,
           commands,
@@ -808,34 +852,34 @@ async function dedupPluginServersAgainstConnectors(n) {
       });
     }
   }
-  let manualServers = filterObject(regularMcpConfigs, (u, m) => !m.startsWith("plugin:"));
+  let manualServers = filterObject(regularMcpConfigs, (name, entryName) => !entryName.startsWith("plugin:"));
   return {
     ...(await dedupClaudeAiMcpServers(claudeaiConfigs, manualServers)),
-    suppressedPlugins: r,
+    suppressedPlugins: suppressed,
   };
 }
 //@ chunk-zdgk9dc6.js:16567-16745 placement
 function connectDedupedConnectors({ servers, suppressed }, state, deferConnect, storageV5) {
-  state.applyMcpUpdate((p) =>
-    suppressedConnectorsEqual(p.suppressedClaudeAiConnectors ?? [], suppressed)
-      ? p
+  state.applyMcpUpdate((state) =>
+    suppressedConnectorsEqual(state.suppressedClaudeAiConnectors ?? [], suppressed)
+      ? state
       : {
-          ...p,
+          ...state,
           suppressedClaudeAiConnectors: suppressed,
         },
   );
   return connectMcpServerBatch(servers, "claudeai", state, deferConnect, storageV5);
 }
 //@ chunk-zdgk9dc6.js:16745-17001 placement
-function replaceClientInState(n, o) {
-  let mcpPrefix = getMcpPrefix(o.name);
+function replaceClientInState(state, client) {
+  let mcpPrefix = getMcpPrefix(client.name);
   return {
-    ...n,
-    clients: n.clients.map((client) => (client.name === o.name ? o : client)),
-    tools: reject_default(n.tools, (y) => isToolFromMcpServer(y, o.name, mcpPrefix)),
-    commands: reject_default(n.commands, (y) => commandBelongsToServer(y, o.name)),
-    resources: omitKeys(n.resources, o.name),
-    resourceTemplates: omitKeys(n.resourceTemplates, o.name),
+    ...state,
+    clients: state.clients.map((client_2) => (client_2.name === client.name ? client : client_2)),
+    tools: reject_default(state.tools, (tool) => isToolFromMcpServer(tool, client.name, mcpPrefix)),
+    commands: reject_default(state.commands, (command) => commandBelongsToServer(command, client.name)),
+    resources: omitKeys(state.resources, client.name),
+    resourceTemplates: omitKeys(state.resourceTemplates, client.name),
   };
 }
 //@ chunk-zdgk9dc6.js:17001-17115 placement
@@ -850,10 +894,10 @@ export {
   MCP_CONNECT_PHASES,
   shouldJoinBeforeInput,
   connectMcpConfigServers,
-  CONNECT_RETRY_BASE_MS,
   applyConnectionResult,
   findReusableClients,
   retryRemoteMcpServers,
+  CONNECT_RETRY_BASE_MS,
   fetchClaudeAiConnectors,
   trackTransientRetryPass,
   CONNECT_RETRY_DELAYS_MS,

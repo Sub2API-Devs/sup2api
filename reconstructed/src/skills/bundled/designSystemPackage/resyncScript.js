@@ -18,3 +18,4 @@ var resyncPath = __cc_resource_0;
  * design-system 打包技能附带的 resync 脚本文本。
  */
 var resync = readEmbeddedTextSync(resyncPath, import.meta.dirname);
+export { resync };

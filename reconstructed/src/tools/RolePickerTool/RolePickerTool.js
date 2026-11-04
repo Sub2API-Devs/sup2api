@@ -9,7 +9,12 @@
  * attribution: placement 9
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, u, string, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  objectSchema,
+  stringSchema,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../../utils/env.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
 import {
@@ -18,6 +23,7 @@ import {
   SHOW_ONBOARDING_ROLE_PICKER_PROMPT,
 } from "../ShowOnboardingRolePickerTool/ShowOnboardingRolePickerTool.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-kxyd0g16.js:11581-11642 placement
 /**
@@ -40,28 +46,28 @@ var MAX_ROLE_PICKER_RESULT_CHARS = 1e4;
 /**
  * 校验角色选择回答。
  */
-function checkRolePickerAnswer(e, r) {
+function checkRolePickerAnswer(shownInput, reply) {
   try {
-    let prototypeOf = Object.getPrototypeOf(r);
+    let prototypeOf = Object.getPrototypeOf(reply);
     if (prototypeOf !== Object.prototype && prototypeOf !== null) return roleAnswerRefusal("not_an_object");
-    let keys = Object.keys(r);
-    let f = keys[0];
-    if (f === undefined || keys.length > 1) return roleAnswerRefusal("unknown_field");
-    if (Object.keys(e).length > 0) return roleAnswerRefusal("changed_shown_field");
-    let h = r[f];
-    switch (f) {
+    let keys = Object.keys(reply);
+    let fieldName = keys[0];
+    if (fieldName === undefined || keys.length > 1) return roleAnswerRefusal("unknown_field");
+    if (Object.keys(shownInput).length > 0) return roleAnswerRefusal("changed_shown_field");
+    let fieldValue = reply[fieldName];
+    switch (fieldName) {
       case "role":
-        if (typeof h !== "string") return roleAnswerRefusal("response");
-        return h.length > 9991 || JSON.stringify(h).length > 9991
+        if (typeof fieldValue !== "string") return roleAnswerRefusal("response");
+        return fieldValue.length > 9991 || JSON.stringify(fieldValue).length > 9991
           ? roleAnswerRefusal("too_large")
           : {
               kind: "admitted",
               input: {
-                role: h,
+                role: fieldValue,
               },
             };
       case "dismissed":
-        return h === true
+        return fieldValue === true
           ? {
               kind: "admitted",
               input: {
@@ -90,13 +96,17 @@ function roleAnswerRefusal(rule) {
 /**
  * 角色选择器的输入 schema（空对象）。
  */
-var rolePickerInputSchema = DoctorLazy(() => zodStrictObject({}));
-var rolePickerOutputSchema = DoctorLazy(() =>
-  u({
-    role: string().optional(),
-    dismissed: M().optional(),
-  }),
-);
+var rolePickerInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var rolePickerOutputSchema;
+deferInit("chunk-kxyd0g16.js:12276", () => {
+  rolePickerInputSchema = DoctorLazy(() => zodStrictObject({}));
+  rolePickerOutputSchema = DoctorLazy(() =>
+    objectSchema({
+      role: stringSchema().optional(),
+      dismissed: booleanSchema().optional(),
+    }),
+  );
+});
 //@ chunk-kxyd0g16.js:12357-12399 placement
 /**
  * 判断是否为远程会话（环境变量 CLAUDE_CODE_REMOTE）。
@@ -108,94 +118,98 @@ function isRemoteSession() {
 /**
  * 显示 Cowork 入门角色选择器的工具。
  */
-var RolePickerTool = buildTool({
-  name: SHOWONBOARDINGROLEPICKER,
-  searchHint: "show the Cowork onboarding role picker",
-  backgrounding: "never",
-  maxResultSizeChars: MAX_ROLE_PICKER_RESULT_CHARS,
-  get inputSchema() {
-    return rolePickerInputSchema();
-  },
-  get outputSchema() {
-    return rolePickerOutputSchema();
-  },
-  isEnabled: isRemoteSession,
-  isConcurrencySafe() {
-    return true;
-  },
-  isReadOnly() {
-    return true;
-  },
-  requiresUserInteraction() {
-    return true;
-  },
-  admitCardAnswer: checkRolePickerAnswer,
-  async description() {
-    return SHOW_ONBOARDING_ROLE_PICKER_DESCRIPTION;
-  },
-  async prompt() {
-    return SHOW_ONBOARDING_ROLE_PICKER_PROMPT;
-  },
-  toAutoClassifierInput() {
-    return "show onboarding role picker";
-  },
-  create() {
-    return {
-      async checkPermissions(e) {
-        return {
-          behavior: "ask",
-          message: "Pick your role?",
-          updatedInput: {},
-        };
-      },
-      async call(e) {
-        let { role, dismissed } = e;
-        return {
-          data: {
-            ...(typeof role === "string" &&
-              role.trim() !== "" && {
-                role,
+var RolePickerTool; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-kxyd0g16.js:12399", () => {
+  RolePickerTool = buildTool({
+    name: SHOWONBOARDINGROLEPICKER,
+    searchHint: "show the Cowork onboarding role picker",
+    backgrounding: "never",
+    maxResultSizeChars: MAX_ROLE_PICKER_RESULT_CHARS,
+    get inputSchema() {
+      return rolePickerInputSchema();
+    },
+    get outputSchema() {
+      return rolePickerOutputSchema();
+    },
+    isEnabled: isRemoteSession,
+    isConcurrencySafe() {
+      return true;
+    },
+    isReadOnly() {
+      return true;
+    },
+    requiresUserInteraction() {
+      return true;
+    },
+    admitCardAnswer: checkRolePickerAnswer,
+    async description() {
+      return SHOW_ONBOARDING_ROLE_PICKER_DESCRIPTION;
+    },
+    async prompt() {
+      return SHOW_ONBOARDING_ROLE_PICKER_PROMPT;
+    },
+    toAutoClassifierInput() {
+      return "show onboarding role picker";
+    },
+    create() {
+      return {
+        async checkPermissions(input) {
+          return {
+            behavior: "ask",
+            message: "Pick your role?",
+            updatedInput: {},
+          };
+        },
+        async call(input) {
+          let { role, dismissed } = input;
+          return {
+            data: {
+              ...(typeof role === "string" &&
+                role.trim() !== "" && {
+                  role,
+                }),
+              ...(typeof dismissed === "boolean" && {
+                dismissed,
               }),
-            ...(typeof dismissed === "boolean" && {
-              dismissed,
-            }),
-          },
-        };
-      },
-    };
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    return {
-      tool_use_id: toolUseId,
-      type: "tool_result",
-      content: jsonStringify(e),
-    };
-  },
-  renderToolUseMessage() {
-    return null;
-  },
+            },
+          };
+        },
+      };
+    },
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
+      return {
+        tool_use_id: toolUseId,
+        type: "tool_result",
+        content: jsonStringify(result),
+      };
+    },
+    renderToolUseMessage() {
+      return null;
+    },
+  });
 });
 //@ chunk-kxyd0g16.js:13206-13642 placement
 /**
  * 校验 Chrome 设置回答。
  */
-function checkChromeSetupAnswer(e, r) {
+function checkChromeSetupAnswer(shownFields, answer) {
   try {
-    let prototypeOf = Object.getPrototypeOf(r);
+    let prototypeOf = Object.getPrototypeOf(answer);
     if (prototypeOf !== Object.prototype && prototypeOf !== null) return chromeAnswerRefusal("not_an_object");
-    let s = {};
-    for (let key of Object.keys(e)) {
-      if (!Object.hasOwn(r, key) || r[key] !== e[key]) return chromeAnswerRefusal("changed_shown_field");
-      s[key] = e[key];
+    let admitted = {};
+    for (let key of Object.keys(shownFields)) {
+      if (!Object.hasOwn(answer, key) || answer[key] !== shownFields[key])
+        return chromeAnswerRefusal("changed_shown_field");
+      admitted[key] = shownFields[key];
     }
-    for (let key of Object.keys(r)) {
-      if (Object.hasOwn(e, key)) continue;
+    for (let key of Object.keys(answer)) {
+      if (Object.hasOwn(shownFields, key)) continue;
       if (key !== "outcome") return chromeAnswerRefusal("unknown_field");
-      if (r[key] === "connected") s.outcome = "connected";
+      if (answer[key] === "connected") admitted.outcome = "connected";
     }
     return {
       kind: "admitted",
-      input: s,
+      input: admitted,
     };
   } catch {
     return chromeAnswerRefusal("threw");

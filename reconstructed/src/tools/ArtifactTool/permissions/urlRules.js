@@ -25,11 +25,14 @@ function parseTypePrefixedValue(data) {
   return index > 0 && data.slice(0, index).trim() === "type" ? data.slice(index + 1) : undefined;
 }
 //@ chunk-8wvtd8sr.js:94119-94302 placement = urlPatternToRegex (1)
-function matchesWildcardPattern(e, agentType) {
-  let s = typeRuleMatchKeys(e);
-  if (s === undefined) return false;
-  let regExp = new RegExp(`^${s.map((h) => h.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`, "su");
-  return agentType.some((h) => h !== "" && regExp.test(h));
+function matchesWildcardPattern(ruleContent, agentType) {
+  let keys = typeRuleMatchKeys(ruleContent);
+  if (keys === undefined) return false;
+  let regExp = new RegExp(
+    `^${keys.map((key) => key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`,
+    "su",
+  );
+  return agentType.some((value) => value !== "" && regExp.test(value));
 }
 //@ chunk-8wvtd8sr.js:94519-94579 placement
 function getDenyAndAskUrlRules(context, agentToolName) {
@@ -39,11 +42,13 @@ function getDenyAndAskUrlRules(context, agentToolName) {
   ];
 }
 //@ chunk-8wvtd8sr.js:94579-94740 placement
-function findTypeRule(toolPermissionContext, tool, s, r) {
-  let h = typeof s === "object" && s !== null ? s.type : undefined;
-  if (typeof h !== "string") return null;
-  let y = typeNameMatchKey(h);
-  return y === "" ? null : (filterRulesMatchingUrls(toolPermissionContext, tool, [y], r)[0] ?? null);
+function findTypeRule(toolPermissionContext, tool, input, behavior) {
+  let typeName = typeof input === "object" && input !== null ? input.type : undefined;
+  if (typeof typeName !== "string") return null;
+  let matchKey = typeNameMatchKey(typeName);
+  return matchKey === ""
+    ? null
+    : (filterRulesMatchingUrls(toolPermissionContext, tool, [matchKey], behavior)[0] ?? null);
 }
 //@ chunk-8wvtd8sr.js:94740-94912 placement = getDenyRuleForAgent (1)
 function getUrlRulesForTool(context, agentToolName, agentType) {
@@ -56,8 +61,8 @@ function getUrlRulesForTool(context, agentToolName, agentType) {
   );
 }
 //@ chunk-8wvtd8sr.js:94912-95033 placement
-function typeRuleMatchKeys(e) {
-  let typePrefixedValue = parseTypePrefixedValue(e);
+function typeRuleMatchKeys(ruleContent) {
+  let typePrefixedValue = parseTypePrefixedValue(ruleContent);
   if (typePrefixedValue === undefined) return;
   let mapped = typeNameWithoutQuotes(typePrefixedValue).split("*").map(typeNameMatchKey);
   return mapped.length === 1 && mapped[0] === "" ? undefined : mapped;
@@ -68,8 +73,8 @@ function typeRuleMatchKeys(e) {
  */
 function isUrlOfOthersContent(url) {
   let slug = parseArtifactUrlInput(url)?.slug;
-  let s = slug === undefined ? undefined : getShareEntry(slug);
-  return s !== undefined && entryContentByOthers(s);
+  let shareEntry = slug === undefined ? undefined : getShareEntry(slug);
+  return shareEntry !== undefined && entryContentByOthers(shareEntry);
 }
 export {
   parseTypePrefixedValue,

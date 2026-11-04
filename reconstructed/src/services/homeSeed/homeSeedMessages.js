@@ -17,10 +17,12 @@ import { tildify } from "../../utils/path.js";
 
 //@ chunk-mxpjbr4y.js:27091-27164 placement = isResultTruncated (1)
 /**
- * 返回云会话权限规则提示行（deny/ask 规则不在云端生效等）；与 Write UI 无关，归属疑似错误。
+ * 把一条 home seed 提示拼成 `${触发前缀}: ${正文}${后缀}` 一行（create 与其他触发用不同前缀）。
  */
-function isResultTruncated(e, n, r) {
-  return [e === "create" ? `${RULES_NOT_IN_FORCE}: ${n}${r}` : `${SETTINGS_STAY}: ${n}`];
+function formatHomeSeedNoticeLine(kind, detail, deadlineMs) {
+  return [
+    kind === "create" ? `${RULES_NOT_IN_FORCE}: ${detail}${deadlineMs}` : `${SETTINGS_STAY}: ${detail}`,
+  ];
 }
 //@ chunk-mxpjbr4y.js:27164-27872 placement
 /**
@@ -51,47 +53,47 @@ function homeSeedSummary(plan) {
  * 把把设置推送到云端会话（home seed）的结果转为提示行：未绑定、规则不可读、超时、已截断等。
  */
 function homeSeedNoticeLines(plan, trigger, planDeadlineMs) {
-  let i = Math.ceil(planDeadlineMs / 1000);
+  let seconds = Math.ceil(planDeadlineMs / 1000);
   switch (plan.reason) {
     case "unbound":
       return [];
     case "rules_unreadable": {
       if (plan.settings === "settings_unreadable")
-        return isResultTruncated(
+        return formatHomeSeedNoticeLine(
           trigger,
           `${userSettingsDisplayPath(plan.configHome)} has errors (see /status) or links to a missing file`,
           "; fix it and start a new cloud session",
         );
       let _ = plan.unreadableSettingsFiles.length;
-      let s = formatFailureDetails_3(plan.unreadableSettingsFiles);
-      return s === ""
-        ? isResultTruncated(trigger, settingsReadFailureText([]), "")
-        : isResultTruncated(
+      let severity = formatFailureDetails_3(plan.unreadableSettingsFiles);
+      return severity === ""
+        ? formatHomeSeedNoticeLine(trigger, settingsReadFailureText([]), "")
+        : formatHomeSeedNoticeLine(
             trigger,
-            `${s} ${plural(_, "has", "have")} errors`,
+            `${severity} ${plural(_, "has", "have")} errors`,
             `; once ${plural(_, "it is", "they are")} fixed, start a new cloud session`,
           );
     }
     case "failed":
-      return isResultTruncated(
+      return formatHomeSeedNoticeLine(
         trigger,
         "preparing your settings failed (see the debug log)",
         START_NEW_SESSION_HINT,
       );
     case "too_slow":
-      return isResultTruncated(
+      return formatHomeSeedNoticeLine(
         trigger,
-        `preparing your settings took over ${i} ${plural(i, "second")}`,
+        `preparing your settings took over ${seconds} ${plural(seconds, "second")}`,
         START_NEW_SESSION_HINT,
       );
     case "home_unvettable":
       return plan.cause === "too_many_links"
-        ? isResultTruncated(
+        ? formatHomeSeedNoticeLine(
             trigger,
             `your memory files and what they @import, or the links under ${tildify(plan.configHome)}, are too many to check`,
             "; remove some and start a new cloud session",
           )
-        : isResultTruncated(
+        : formatHomeSeedNoticeLine(
             trigger,
             `a link, an unreadable folder or an @import under ${tildify(plan.configHome)} could not be checked`,
             "",

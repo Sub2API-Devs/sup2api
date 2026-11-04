@@ -33,12 +33,12 @@ function getCachedSystemTheme() {
   return getCustomThemeRegistry().cachedSystemTheme();
 }
 //@ chunk-34977376.js:476-515 layout
-function setSystemTheme(e) {
-  getCustomThemeRegistry().setSystemTheme(e);
+function setSystemTheme(theme) {
+  getCustomThemeRegistry().setSystemTheme(theme);
 }
 //@ chunk-34977376.js:515-566 layout
-function onSystemThemeChange(e) {
-  return getCustomThemeRegistry().onSystemThemeChange(e);
+function onSystemThemeChange(listener) {
+  return getCustomThemeRegistry().onSystemThemeChange(listener);
 }
 //@ chunk-34977376.js:566-665 callgraph-fingerprint = resolveThemeSetting (0.592)
 function resolveThemeSetting(setting) {

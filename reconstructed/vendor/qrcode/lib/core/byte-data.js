@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_mode } from "./mode.js";
 
 //@ chunk-spjgqa4y.js:12654-13100 cjs-fingerprint
-var require_byte_data = x(function (cjsExports, cjsModule) {
+var require_byte_data = __commonJS(function (cjsExports, cjsModule) {
   var Mode = require_mode();
   function ByteData(data) {
     this.mode = Mode.BYTE;

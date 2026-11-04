@@ -5,11 +5,11 @@
  * pieces: chunk-a1ttyqdw.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_getHomeDir } from "./getHomeDir.js";
 
 //@ chunk-a1ttyqdw.js:666-951 cjs-fingerprint
-var require_getSSOTokenFilepath = x(function (cjsExports) {
+var require_getSSOTokenFilepath = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -18,8 +18,8 @@ var require_getSSOTokenFilepath = x(function (cjsExports) {
   var path_1 = importMetaRequire("path");
   var getHomeDir_1 = require_getHomeDir();
   var getSSOTokenFilepath = (id) => {
-    let r = crypto_1.createHash("sha1").update(id).digest("hex");
-    return path_1.join(getHomeDir_1.getHomeDir(), ".aws", "sso", "cache", `${r}.json`);
+    let cacheName = crypto_1.createHash("sha1").update(id).digest("hex");
+    return path_1.join(getHomeDir_1.getHomeDir(), ".aws", "sso", "cache", `${cacheName}.json`);
   };
   cjsExports.getSSOTokenFilepath = getSSOTokenFilepath;
 });

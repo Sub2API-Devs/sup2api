@@ -39,6 +39,13 @@ import { getHostState } from "../hostEnvironment.js";
 import { skillsChangedSignal } from "./pluginsChangedSignal.js";
 import { count } from "../collections.js";
 
+//@ chunk-7nse75qx.js:453-519 fingerprint = mergePluginErrors (1)
+/**
+ * 名字是否属于插件/LSP 管理器来源（lsp-manager 或 plugin: 前缀）。
+ */
+function mergePluginErrors(source) {
+  return source === "lsp-manager" || source.startsWith("plugin:");
+}
 //@ chunk-4q6mp9e8.js:1153-1189 placement
 /**
  * bareModePluginAllow：裸模式下的通配插件放行函数。
@@ -58,18 +65,18 @@ var pluginIdsWithSource = (dynamicMcpConfig) =>
 /**
  * noReloadPlugins：已裁掉的插件重载（返回 0）。
  */
-async function noReloadPlugins(enabled, e) {
+async function noReloadPlugins(enabled, enabled_2) {
   return 0;
 }
 //@ chunk-4q6mp9e8.js:1309-3503 fingerprint = refreshActivePlugins (0.701)
 /**
  * /reload-plugins 与安装后刷新：清空插件相关缓存、重新加载插件（完整或 cacheOnly）、刷新命令/代理/输出样式/MCP/LSP、重新注册 hooks，汇总各组件数量与错误供界面展示。
  */
-async function refreshActivePlugins(n, storageV5, credentials, y = {}) {
-  let applyStagedInstalls = y.applyStagedInstalls ?? true;
+async function refreshActivePlugins(appState, storageV5, credentials, options = {}) {
+  let applyStagedInstalls = options.applyStagedInstalls ?? true;
   let syncedPluginReloadDebt = getSyncedPluginReloadDebt();
   let { changesLanded, holdsSet } = syncedPluginReloadDebt;
-  using h = {
+  using dispose = {
     [Symbol.dispose]: () => {
       syncedPluginReloadDebt.endHoldSetBefore(holdsSet);
     },
@@ -88,25 +95,25 @@ async function refreshActivePlugins(n, storageV5, credentials, y = {}) {
     markKeychainCacheStale();
     clearInstalledPluginsCache();
   }
-  let o =
+  let oneLoadMode =
     env.CLAUDE_CODE_CCR_ONE_PLUGIN_LOAD_PER_RELOAD &&
     !env.CLAUDE_CODE_SYNC_PLUGIN_INSTALL &&
     !hasMarketplaceBackedPlugins() &&
     getPluginRegistry().pluginLoadsRunning === 0;
-  refreshPluginCaches(storageV5, credentials, o ? "caller" : "clear");
+  refreshPluginCaches(storageV5, credentials, oneLoadMode ? "caller" : "clear");
   if (applyStagedInstalls) clearOrphanedGlobExclusions();
-  if (o) pruneRemovedPluginHooks(storageV5, credentials).catch(logError);
-  let A;
-  if (o) {
+  if (oneLoadMode) pruneRemovedPluginHooks(storageV5, credentials).catch(logError);
+  let loadResult;
+  if (oneLoadMode) {
     let allPluginsCacheOnly = loadAllPluginsCacheOnly(storageV5, credentials);
-    let c = await allPluginsCacheOnly.catch((error) => {
+    let loadOutcome = await allPluginsCacheOnly.catch((error) => {
       logError(error);
       return;
     });
     if (getPluginRegistry().pluginLoadCacheOnly === allPluginsCacheOnly && !hasMarketplaceBackedPlugins())
-      A = c;
+      loadResult = loadOutcome;
   }
-  A ??= await loadAllPlugins(storageV5, credentials);
+  loadResult ??= await loadAllPlugins(storageV5, credentials);
   clearPluginDerivedState();
   let pluginLoadCacheOnly = getPluginRegistry().pluginLoadCacheOnly;
   await invalidateShellSnapshotIfPluginBinsChanged(storageV5);
@@ -116,37 +123,37 @@ async function refreshActivePlugins(n, storageV5, credentials, y = {}) {
     loadPluginSkills(storageV5),
     getAgentDefinitionsWithOverrides(getOriginalCwd(), storageV5),
   ]);
-  let { enabled, disabled, errors, warnings } = A;
-  let P = [];
-  let I = [];
+  let { enabled, disabled, errors, warnings } = loadResult;
+  let mcpErrors = [];
+  let mcpWarnings = [];
   let [mcpCounts, lspCounts] = await Promise.all([
     Promise.all(
-      enabled.map(async (r) => {
-        let servers = await extractMcpServersFromPlugins(r, P, storageV5, {
-          warnings: I,
+      enabled.map(async (plugin) => {
+        let servers = await extractMcpServersFromPlugins(plugin, mcpErrors, storageV5, {
+          warnings: mcpWarnings,
         });
         return servers ? Object.keys(servers).length : 0;
       }),
     ),
     Promise.all(
-      enabled.map(async (r) => {
-        if (r.lspServers) return Object.keys(r.lspServers).length;
-        let servers = await loadPluginLspServers(r, P, storageV5);
-        if (servers) r.lspServers = servers;
+      enabled.map(async (plugin) => {
+        if (plugin.lspServers) return Object.keys(plugin.lspServers).length;
+        let servers = await loadPluginLspServers(plugin, mcpErrors, storageV5);
+        if (servers) plugin.lspServers = servers;
         return servers ? Object.keys(servers).length : 0;
       }),
     ),
   ]);
   let mcp_count = mcpCounts.reduce((sum, n) => sum + n, 0);
   let lsp_count = lspCounts.reduce((sum, n) => sum + n, 0);
-  await noReloadPlugins(enabled, P);
-  let warnings_2 = [...warnings, ...I, ...findLspExtensionConflicts(enabled)];
-  let L = [...errors, ...P];
-  n.applyRefresh({
+  await noReloadPlugins(enabled, mcpErrors);
+  let warnings_2 = [...warnings, ...mcpWarnings, ...findLspExtensionConflicts(enabled)];
+  let errors_2 = [...errors, ...mcpErrors];
+  appState.applyRefresh({
     enabled,
     disabled,
     commands: pluginCommands,
-    errors: L,
+    errors: errors_2,
     warnings: warnings_2,
     agentDefinitions: agentDefinitionsWithOverrides,
   });
@@ -163,11 +170,11 @@ async function refreshActivePlugins(n, storageV5, credentials, y = {}) {
     await releaseSyncedDirsNotIn(enabled, storageV5).catch(logError);
     syncedPluginReloadDebt.reloaded(changesLanded);
   }
-  let hook_count = enabled.reduce((sum, c) => {
-    if (!c.hooksConfig) return sum;
+  let hook_count = enabled.reduce((sum, plugin) => {
+    if (!plugin.hooksConfig) return sum;
     return (
       sum +
-      Object.values(c.hooksConfig).reduce(
+      Object.values(plugin.hooksConfig).reduce(
         (acc, matchers) => acc + (matchers?.reduce((acc, m) => acc + m.hooks.length, 0) ?? 0),
         0,
       )
@@ -185,26 +192,19 @@ async function refreshActivePlugins(n, storageV5, credentials, y = {}) {
     `refreshActivePlugins: ${enabled.length} enabled, ${pluginCommands.length} commands, ${pluginSkills.length} skills, ${agentDefinitionsWithOverrides.allAgents.length} agents, ${hook_count} hooks, ${mcp_count} MCP, ${lsp_count} LSP`,
   );
   return {
-    enabled_count: count(enabled, (r) => r.isBuiltin !== true),
-    disabled_count: count(disabled, (r) => r.isBuiltin !== true),
+    enabled_count: count(enabled, (plugin) => plugin.isBuiltin !== true),
+    disabled_count: count(disabled, (plugin) => plugin.isBuiltin !== true),
     command_count: pluginCommands.length,
     skill_count: pluginSkills.length,
     agent_count: agentDefinitionsWithOverrides.allAgents.length,
     hook_count,
     mcp_count,
     lsp_count,
-    error_count: L.length + (hook_load_failed ? 1 : 0),
-    errors: L,
+    error_count: errors_2.length + (hook_load_failed ? 1 : 0),
+    errors: errors_2,
     warnings: warnings_2,
     agentDefinitions: agentDefinitionsWithOverrides,
     pluginCommands,
   };
-}
-//@ chunk-7nse75qx.js:453-519 fingerprint = mergePluginErrors (1)
-/**
- * 名字是否属于插件/LSP 管理器来源（lsp-manager 或 plugin: 前缀）。
- */
-function mergePluginErrors(e) {
-  return e === "lsp-manager" || e.startsWith("plugin:");
 }
 export { refreshActivePlugins, noReloadPlugins, bareModePluginAllow, pluginIdsWithSource, mergePluginErrors };

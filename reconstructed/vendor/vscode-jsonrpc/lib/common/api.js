@@ -5,7 +5,7 @@
  * pieces: chunk-t4ksmxzx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_messages } from "./messages.js";
 import { require_linkedMap } from "./linkedMap.js";
 import { require_disposable } from "./disposable.js";
@@ -19,7 +19,7 @@ import { require_connection } from "./connection.js";
 import { require_ral } from "./ral.js";
 
 //@ chunk-t4ksmxzx.js:44519-51933 cjs-fingerprint
-var require_api = x(function (cjsExports) {
+var require_api = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

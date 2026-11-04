@@ -8,7 +8,7 @@
  * pieces: chunk-p2qwpk2k.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTabHeaderFocus } from "../design-system/Tabs.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { toRuleOption, noopRulePicker } from "../permissions/rules/CloudSessionRulesTab.js";
@@ -20,7 +20,7 @@ import { ModelSelector } from "../agents/ModelSelector.js";
  * /help 的命令标签页：列出可用命令及描述，按名称排序。
  */
 function Commands(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { rules, onExit } = props;
   let { headerFocused, focusHeader } = useTabHeaderFocus();
   let { rows } = useTerminalSize();
@@ -37,7 +37,7 @@ function Commands(props) {
     $[2] = onExit;
     $[3] = onCancel;
   } else onCancel = $[3];
-  let M;
+  let picker;
   if (
     $[4] !== focusHeader ||
     $[5] !== headerFocused ||
@@ -45,7 +45,7 @@ function Commands(props) {
     $[7] !== maxWidth ||
     $[8] !== onCancel
   ) {
-    M = jsxProd_default(ModelSelector, {
+    picker = jsxProd_default(ModelSelector, {
       options,
       visibleOptionCount: maxWidth,
       hideIndexes: true,
@@ -59,8 +59,8 @@ function Commands(props) {
     $[6] = options;
     $[7] = maxWidth;
     $[8] = onCancel;
-    $[9] = M;
-  } else M = $[9];
-  return M;
+    $[9] = picker;
+  } else picker = $[9];
+  return picker;
 }
 export { Commands };

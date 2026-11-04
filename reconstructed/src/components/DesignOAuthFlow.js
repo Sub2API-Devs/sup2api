@@ -8,13 +8,18 @@
  * pieces: chunk-zkzpd9ky.js (8)
  * attribution: placement 8
  */
-import { init_react_production, y, R, P } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { OAuthService } from "../services/oauth/index.js";
 import {
   DESIGN_LOGIN_CLOSING_NOTICE,
   DESIGN_CLOSING_SUPPORT_URL,
 } from "../tools/DesignSyncTool/DesignSyncTool.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { useCopyUrl, CopiedUrlHint, CopyUrlFallbackHint } from "./CopyUrlHint.js";
 import { useClock } from "../ink/components/ClockContext.js";
@@ -43,20 +48,24 @@ import { Box, Text, Link } from "../ink/components/Text.js";
 import { OAuthStatusMessage } from "./ConsoleOAuthFlow.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { FocusColumn } from "./design-system/FocusColumn.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-zkzpd9ky.js:14331-14335 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-zkzpd9ky.js:14331", () => {
+  init_react_production();
+});
 //@ chunk-zkzpd9ky.js:14335-14363 placement
 function createOAuthService() {
   return new OAuthService();
 }
 //@ chunk-zkzpd9ky.js:14363-14391 placement
-function runCleanup(_e) {
-  return _e();
+function runCleanup(cleanup) {
+  return cleanup();
 }
 //@ chunk-zkzpd9ky.js:14391-14419 placement
-function runCleanup_2(Oe) {
-  return Oe();
+function runCleanup_2(cleanup) {
+  return cleanup();
 }
 //@ chunk-zkzpd9ky.js:14419-14518 placement
 var PASTE_CODE_PROMPT_3 = "Paste code here if prompted > ";
@@ -67,107 +76,107 @@ ${DESIGN_LOGIN_CLOSING_NOTICE} Details: ${DESIGN_CLOSING_SUPPORT_URL}`;
  * Claude Design 的 OAuth 授权流程界面（浏览器授权、手动粘贴 code、保存到安全存储）。
  */
 function DesignOAuthFlow(props) {
-  let h = w(59);
+  let $ = useMemoCache(59);
   let { onDone, hadExistingCredential } = props;
-  let F;
-  if (h[0] === MEMO_CACHE_SENTINEL) {
-    F = {
+  let initialStatus;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    initialStatus = {
       state: "starting",
     };
-    h[0] = F;
-  } else F = h[0];
-  let [o, f] = y(F);
-  let [p] = y(createOAuthService);
-  let [C, k] = y("");
-  let [g, u] = y(0);
-  let [m, K] = y(false);
-  let { copiedVia, copy, reset } = useCopyUrl(o.state === "waiting_for_login" ? o.url : null);
+    $[0] = initialStatus;
+  } else initialStatus = $[0];
+  let [status, setStatus] = useState(initialStatus);
+  let [oauthService] = useState(createOAuthService);
+  let [pastedCode, setPastedCode] = useState("");
+  let [cursorOffset, setCursorOffset] = useState(0);
+  let [submitting, setSubmitting] = useState(false);
+  let { copiedVia, copy, reset } = useCopyUrl(status.state === "waiting_for_login" ? status.url : null);
   let clock = useClock();
-  let zt;
-  if (h[1] === MEMO_CACHE_SENTINEL) {
-    zt = new Set();
-    h[1] = zt;
-  } else zt = h[1];
-  let L = R(zt);
-  let H = R(false);
+  let emptyTimerSet;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    emptyTimerSet = new Set();
+    $[1] = emptyTimerSet;
+  } else emptyTimerSet = $[1];
+  let timersRef = useRef(emptyTimerSet);
+  let cancelledRef = useRef(false);
   let terminalSize = useTerminalSize();
   let textInputColumns = Math.max(50, terminalSize.columns - PASTE_CODE_PROMPT_3.length - 4);
-  let Tt;
-  if (h[2] !== o.state || h[3] !== o.toRetry || h[4] !== onDone) {
-    Tt = function tt(event) {
-      if (o.state === "success") {
+  let keyHandlerCached;
+  if ($[2] !== status.state || $[3] !== status.toRetry || $[4] !== onDone) {
+    keyHandlerCached = function handleKeyDown(event) {
+      if (status.state === "success") {
         event.preventDefault();
         onDone(DESIGN_AUTH_SUCCESS_TEXT);
         return;
       }
-      if (o.state !== "error") {
+      if (status.state !== "error") {
         if (
           event.key === "escape" ||
           ((event.ctrl || event.meta) && (event.key === "c" || event.key === "d"))
         ) {
           event.preventDefault();
-          H.current = true;
+          cancelledRef.current = true;
           onDone("Design login cancelled.");
         }
         return;
       }
       event.preventDefault();
-      if (event.key === "return" && o.toRetry) {
-        k("");
-        u(0);
-        f({
+      if (event.key === "return" && status.toRetry) {
+        setPastedCode("");
+        setCursorOffset(0);
+        setStatus({
           state: "about_to_retry",
-          nextState: o.toRetry,
+          nextState: status.toRetry,
         });
       } else {
-        H.current = true;
+        cancelledRef.current = true;
         onDone("Design login cancelled.");
       }
     };
-    h[2] = o.state;
-    h[3] = o.toRetry;
-    h[4] = onDone;
-    h[5] = Tt;
-  } else Tt = h[5];
-  let onKeyDown = Tt;
-  let Ut;
-  if (h[6] !== p) {
-    Ut = function et(Bt, Et) {
-      if (!Bt.trim()) {
-        k("");
-        u(0);
+    $[2] = status.state;
+    $[3] = status.toRetry;
+    $[4] = onDone;
+    $[5] = keyHandlerCached;
+  } else keyHandlerCached = $[5];
+  let onKeyDown = keyHandlerCached;
+  let submitCodeCached;
+  if ($[6] !== oauthService) {
+    submitCodeCached = function handleSubmitCode(value, url) {
+      if (!value.trim()) {
+        setPastedCode("");
+        setCursorOffset(0);
         return;
       }
-      let [Ft, Kt] = Bt.split("#");
-      if (!Ft || !Kt) {
-        f({
+      let [authorizationCode, state] = value.split("#");
+      if (!authorizationCode || !state) {
+        setStatus({
           state: "error",
           message: "Invalid code. Please make sure the full code was copied",
           toRetry: {
             state: "waiting_for_login",
-            url: Et,
+            url,
           },
         });
-        logForDebugging(`Design login: invalid pasted code for ${Et}`);
+        logForDebugging(`Design login: invalid pasted code for ${url}`);
         return;
       }
       logEvent("tengu_design_oauth_manual_entry", {});
-      p.handleManualAuthCodeInput({
-        authorizationCode: Ft,
-        state: Kt,
+      oauthService.handleManualAuthCodeInput({
+        authorizationCode,
+        state,
       });
     };
-    h[6] = p;
-    h[7] = Ut;
-  } else Ut = h[7];
-  let onSubmitCode = Ut;
-  let $t;
-  if (h[8] !== clock || h[9] !== p || h[10] !== onDone || h[11] !== reset) {
-    $t = async () => {
-      L.current.forEach(runCleanup);
-      L.current.clear();
+    $[6] = oauthService;
+    $[7] = submitCodeCached;
+  } else submitCodeCached = $[7];
+  let onSubmitCode = submitCodeCached;
+  let startFlowCached;
+  if ($[8] !== clock || $[9] !== oauthService || $[10] !== onDone || $[11] !== reset) {
+    startFlowCached = async () => {
+      timersRef.current.forEach(runCleanup);
+      timersRef.current.clear();
       if (!isDesignOAuthConfigured()) {
-        f({
+        setStatus({
           state: "error",
           message:
             "The Claude Design OAuth client is not configured in this build. Set CLAUDE_CODE_DESIGN_OAUTH_CLIENT_ID to the registered client id, or update to a build with the registered client.",
@@ -176,56 +185,56 @@ function DesignOAuthFlow(props) {
       }
       try {
         let oauthConfig = getOauthConfig();
-        let yt = designOAuthClientId();
-        let wt = await p.startOAuthFlow(
+        let clientId = designOAuthClientId();
+        let tokens = await oauthService.startOAuthFlow(
           async (url) => {
             reset();
-            K(false);
-            f({
+            setSubmitting(false);
+            setStatus({
               state: "waiting_for_login",
               url,
             });
-            if (isBrowserUnavailable()) K(true);
-            else L.current.add(clock.setTimeout(() => K(true), 3000));
+            if (isBrowserUnavailable()) setSubmitting(true);
+            else timersRef.current.add(clock.setTimeout(() => setSubmitting(true), 3000));
           },
           {
             loginWithClaudeAi: true,
             oauthClient: {
-              clientId: yt,
+              clientId,
               scopes: DESIGN_OAUTH_SCOPES,
             },
             skipProfileFetch: true,
             successRedirectUrl: oauthConfig.CLAUDEAI_SUCCESS_URL,
           },
         );
-        if (H.current) {
-          if (wt.refreshToken) await revokeOAuthToken(wt.refreshToken, yt);
+        if (cancelledRef.current) {
+          if (tokens.refreshToken) await revokeOAuthToken(tokens.refreshToken, clientId);
           return;
         }
-        f({
+        setStatus({
           state: "processing",
         });
-        let I = await refreshDesignToken(wt, yt);
-        if (!I.ok) {
-          f({
+        let refreshResult = await refreshDesignToken(tokens, clientId);
+        if (!refreshResult.ok) {
+          setStatus({
             state: "error",
-            message: I.message,
+            message: refreshResult.message,
             toRetry: {
               state: "starting",
             },
           });
           return;
         }
-        if (H.current) {
-          await revokeOAuthToken(I.slot.refreshToken, I.slot.clientId);
+        if (cancelledRef.current) {
+          await revokeOAuthToken(refreshResult.slot.refreshToken, refreshResult.slot.clientId);
           return;
         }
-        let Lt = await writeDesignOAuth(I.slot);
-        if (!Lt.success) {
-          await revokeOAuthToken(I.slot.refreshToken, I.slot.clientId);
-          f({
+        let writeResult = await writeDesignOAuth(refreshResult.slot);
+        if (!writeResult.success) {
+          await revokeOAuthToken(refreshResult.slot.refreshToken, refreshResult.slot.clientId);
+          setStatus({
             state: "error",
-            message: Lt.warning ?? "Could not save the design credential to secure storage.",
+            message: writeResult.warning ?? "Could not save the design credential to secure storage.",
             toRetry: {
               state: "starting",
             },
@@ -233,112 +242,118 @@ function DesignOAuthFlow(props) {
           return;
         }
         logEvent("tengu_design_oauth_login_success", {});
-        f({
+        setStatus({
           state: "success",
         });
-        L.current.add(clock.setTimeout(() => onDone(DESIGN_AUTH_SUCCESS_TEXT), 1500));
+        timersRef.current.add(clock.setTimeout(() => onDone(DESIGN_AUTH_SUCCESS_TEXT), 1500));
       } catch (error) {
-        let ot = error;
-        if (ot instanceof AuthCodeRefusedError)
-          logForDebugging(`Design login failed: ${ot.message}`, {
+        let caughtError = error;
+        if (caughtError instanceof AuthCodeRefusedError)
+          logForDebugging(`Design login failed: ${caughtError.message}`, {
             level: "error",
           });
-        else logError(ot);
+        else logError(caughtError);
         logEvent("tengu_design_oauth_login_error", {});
-        f({
+        setStatus({
           state: "error",
-          message: errorMessage(ot),
+          message: errorMessage(caughtError),
           toRetry: {
             state: "starting",
           },
         });
       }
     };
-    h[8] = clock;
-    h[9] = p;
-    h[10] = onDone;
-    h[11] = reset;
-    h[12] = $t;
-  } else $t = h[12];
-  let rt = $t;
-  let st;
-  let Nt;
-  if (h[13] !== o.state || h[14] !== rt) {
-    st = () => {
-      if (o.state === "starting") rt();
+    $[8] = clock;
+    $[9] = oauthService;
+    $[10] = onDone;
+    $[11] = reset;
+    $[12] = startFlowCached;
+  } else startFlowCached = $[12];
+  let startFlow = startFlowCached;
+  let startEffect;
+  let startDeps;
+  if ($[13] !== status.state || $[14] !== startFlow) {
+    startEffect = () => {
+      if (status.state === "starting") startFlow();
     };
-    Nt = [o.state, rt];
-    h[13] = o.state;
-    h[14] = rt;
-    h[15] = st;
-    h[16] = Nt;
+    startDeps = [status.state, startFlow];
+    $[13] = status.state;
+    $[14] = startFlow;
+    $[15] = startEffect;
+    $[16] = startDeps;
   } else {
-    st = h[15];
-    Nt = h[16];
+    startEffect = $[15];
+    startDeps = $[16];
   }
-  P(st, Nt);
-  let Vt;
-  if (h[17] !== o.nextState || h[18] !== o.state) {
-    Vt = () => {
-      if (o.state === "about_to_retry") {
-        K(o.nextState.state === "waiting_for_login");
-        f(o.nextState);
+  useEffect(startEffect, startDeps);
+  let retryTimeout;
+  if ($[17] !== status.nextState || $[18] !== status.state) {
+    retryTimeout = () => {
+      if (status.state === "about_to_retry") {
+        setSubmitting(status.nextState.state === "waiting_for_login");
+        setStatus(status.nextState);
       }
     };
-    h[17] = o.nextState;
-    h[18] = o.state;
-    h[19] = Vt;
-  } else Vt = h[19];
-  useTimeout(Vt, o.state === "about_to_retry" ? 500 : null);
-  let jt;
-  if (h[20] !== copy || h[21] !== o.state || h[22] !== o.url || h[23] !== C || h[24] !== m) {
-    jt = () => {
-      if (/^c+$/.test(C) && o.state === "waiting_for_login" && m) {
-        k("");
-        copy(o.url);
+    $[17] = status.nextState;
+    $[18] = status.state;
+    $[19] = retryTimeout;
+  } else retryTimeout = $[19];
+  useTimeout(retryTimeout, status.state === "about_to_retry" ? 500 : null);
+  let copyOnConcede;
+  if (
+    $[20] !== copy ||
+    $[21] !== status.state ||
+    $[22] !== status.url ||
+    $[23] !== pastedCode ||
+    $[24] !== submitting
+  ) {
+    copyOnConcede = () => {
+      if (/^c+$/.test(pastedCode) && status.state === "waiting_for_login" && submitting) {
+        setPastedCode("");
+        copy(status.url);
       }
     };
-    h[20] = copy;
-    h[21] = o.state;
-    h[22] = o.url;
-    h[23] = C;
-    h[24] = m;
-    h[25] = jt;
-  } else jt = h[25];
-  let Xt;
-  if (h[26] !== copy || h[27] !== o || h[28] !== C || h[29] !== m) {
-    Xt = [C, o, m, copy];
-    h[26] = copy;
-    h[27] = o;
-    h[28] = C;
-    h[29] = m;
-    h[30] = Xt;
-  } else Xt = h[30];
-  P(jt, Xt);
-  let Jt;
-  let Wt;
-  if (h[31] !== p) {
-    Jt = () => {
-      let qt = L.current;
+    $[20] = copy;
+    $[21] = status.state;
+    $[22] = status.url;
+    $[23] = pastedCode;
+    $[24] = submitting;
+    $[25] = copyOnConcede;
+  } else copyOnConcede = $[25];
+  let copyEffectDeps;
+  if ($[26] !== copy || $[27] !== status || $[28] !== pastedCode || $[29] !== submitting) {
+    copyEffectDeps = [pastedCode, status, submitting, copy];
+    $[26] = copy;
+    $[27] = status;
+    $[28] = pastedCode;
+    $[29] = submitting;
+    $[30] = copyEffectDeps;
+  } else copyEffectDeps = $[30];
+  useEffect(copyOnConcede, copyEffectDeps);
+  let cleanupEffect;
+  let cleanupDeps;
+  if ($[31] !== oauthService) {
+    cleanupEffect = () => {
+      let timers = timersRef.current;
       return () => {
-        p.cleanup();
-        qt.forEach(runCleanup_2);
-        qt.clear();
+        oauthService.cleanup();
+        timers.forEach(runCleanup_2);
+        timers.clear();
       };
     };
-    Wt = [p];
-    h[31] = p;
-    h[32] = Jt;
-    h[33] = Wt;
+    cleanupDeps = [oauthService];
+    $[31] = oauthService;
+    $[32] = cleanupEffect;
+    $[33] = cleanupDeps;
   } else {
-    Jt = h[32];
-    Wt = h[33];
+    cleanupEffect = $[32];
+    cleanupDeps = $[33];
   }
-  P(Jt, Wt);
-  let at;
-  if (h[34] !== hadExistingCredential || h[35] !== o.state) {
-    at =
-      o.state !== "success" &&
+  useEffect(cleanupEffect, cleanupDeps);
+  let introElement;
+  if ($[34] !== hadExistingCredential || $[35] !== status.state) {
+    introElement =
+      status.state !== "success" &&
       jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
@@ -361,15 +376,15 @@ function DesignOAuthFlow(props) {
           jsxProd_default(DesignOAuthWarning, {}),
         ],
       });
-    h[34] = hadExistingCredential;
-    h[35] = o.state;
-    h[36] = at;
-  } else at = h[36];
-  let it;
-  if (h[37] !== o.state || h[38] !== o.url || h[39] !== m || h[40] !== copiedVia) {
-    it =
-      o.state === "waiting_for_login" &&
-      m &&
+    $[34] = hadExistingCredential;
+    $[35] = status.state;
+    $[36] = introElement;
+  } else introElement = $[36];
+  let urlFallbackElement;
+  if ($[37] !== status.state || $[38] !== status.url || $[39] !== submitting || $[40] !== copiedVia) {
+    urlFallbackElement =
+      status.state === "waiting_for_login" &&
+      submitting &&
       jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
@@ -396,53 +411,53 @@ function DesignOAuthFlow(props) {
             ],
           }),
           jsxProd_default(Link, {
-            url: o.url,
+            url: status.url,
             assumeSupport: true,
             children: jsxProd_default(Text, {
               dimColor: true,
-              children: o.url,
+              children: status.url,
             }),
           }),
         ],
       });
-    h[37] = o.state;
-    h[38] = o.url;
-    h[39] = m;
-    h[40] = copiedVia;
-    h[41] = it;
-  } else it = h[41];
-  let ut;
+    $[37] = status.state;
+    $[38] = status.url;
+    $[39] = submitting;
+    $[40] = copiedVia;
+    $[41] = urlFallbackElement;
+  } else urlFallbackElement = $[41];
+  let statusElement;
   if (
-    h[42] !== g ||
-    h[43] !== onSubmitCode ||
-    h[44] !== o ||
-    h[45] !== C ||
-    h[46] !== m ||
-    h[47] !== textInputColumns
+    $[42] !== cursorOffset ||
+    $[43] !== onSubmitCode ||
+    $[44] !== status ||
+    $[45] !== pastedCode ||
+    $[46] !== submitting ||
+    $[47] !== textInputColumns
   ) {
-    ut = jsxProd_default(OAuthStatusMessage, {
-      oauthStatus: o,
-      showPastePrompt: m,
-      pastedCode: C,
-      setPastedCode: k,
-      cursorOffset: g,
-      setCursorOffset: u,
+    statusElement = jsxProd_default(OAuthStatusMessage, {
+      oauthStatus: status,
+      showPastePrompt: submitting,
+      pastedCode,
+      setPastedCode,
+      cursorOffset,
+      setCursorOffset,
       textInputColumns,
       onSubmitCode,
     });
-    h[42] = g;
-    h[43] = onSubmitCode;
-    h[44] = o;
-    h[45] = C;
-    h[46] = m;
-    h[47] = textInputColumns;
-    h[48] = ut;
-  } else ut = h[48];
-  let ct;
-  if (h[49] !== o.state) {
-    ct =
-      o.state !== "success" &&
-      o.state !== "error" &&
+    $[42] = cursorOffset;
+    $[43] = onSubmitCode;
+    $[44] = status;
+    $[45] = pastedCode;
+    $[46] = submitting;
+    $[47] = textInputColumns;
+    $[48] = statusElement;
+  } else statusElement = $[48];
+  let cancelHint;
+  if ($[49] !== status.state) {
+    cancelHint =
+      status.state !== "success" &&
+      status.state !== "error" &&
       jsxProd_default(Text, {
         dimColor: true,
         children: jsxProd_default(KeyboardShortcutHint, {
@@ -450,42 +465,47 @@ function DesignOAuthFlow(props) {
           action: "cancel",
         }),
       });
-    h[49] = o.state;
-    h[50] = ct;
-  } else ct = h[50];
-  let lt;
-  if (h[51] !== ut || h[52] !== ct) {
-    lt = jsxProd_default_2(Box, {
+    $[49] = status.state;
+    $[50] = cancelHint;
+  } else cancelHint = $[50];
+  let bodyElement;
+  if ($[51] !== statusElement || $[52] !== cancelHint) {
+    bodyElement = jsxProd_default_2(Box, {
       paddingLeft: 1,
       flexDirection: "column",
       gap: 1,
-      children: [ut, ct],
+      children: [statusElement, cancelHint],
     });
-    h[51] = ut;
-    h[52] = ct;
-    h[53] = lt;
-  } else lt = h[53];
-  let Mt;
-  if (h[54] !== onKeyDown || h[55] !== at || h[56] !== it || h[57] !== lt) {
-    Mt = jsxProd_default_2(FocusColumn, {
+    $[51] = statusElement;
+    $[52] = cancelHint;
+    $[53] = bodyElement;
+  } else bodyElement = $[53];
+  let flowElement;
+  if (
+    $[54] !== onKeyDown ||
+    $[55] !== introElement ||
+    $[56] !== urlFallbackElement ||
+    $[57] !== bodyElement
+  ) {
+    flowElement = jsxProd_default_2(FocusColumn, {
       gap: 1,
       onKeyDown,
-      children: [at, it, lt],
+      children: [introElement, urlFallbackElement, bodyElement],
     });
-    h[54] = onKeyDown;
-    h[55] = at;
-    h[56] = it;
-    h[57] = lt;
-    h[58] = Mt;
-  } else Mt = h[58];
-  return Mt;
+    $[54] = onKeyDown;
+    $[55] = introElement;
+    $[56] = urlFallbackElement;
+    $[57] = bodyElement;
+    $[58] = flowElement;
+  } else flowElement = $[58];
+  return flowElement;
 }
 //@ chunk-zkzpd9ky.js:21845-21983 placement
 function DesignOAuthWarning() {
-  let E = w(1);
-  let c;
-  if (E[0] === MEMO_CACHE_SENTINEL) {
-    c = jsxProd_default_2(Text, {
+  let $ = useMemoCache(1);
+  let warning;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    warning = jsxProd_default_2(Text, {
       color: "warning",
       children: [
         DESIGN_LOGIN_CLOSING_NOTICE,
@@ -496,9 +516,9 @@ function DesignOAuthWarning() {
         }),
       ],
     });
-    E[0] = c;
-  } else c = E[0];
-  return c;
+    $[0] = warning;
+  } else warning = $[0];
+  return warning;
 }
 //@ chunk-zkzpd9ky.js:21983-22085 placement
 /**
@@ -507,8 +527,8 @@ function DesignOAuthWarning() {
 async function runDesignLogin(onDone) {
   let hadExistingCredential = (await readDesignOAuth()) !== null;
   return jsxProd_default(DesignOAuthFlow, {
-    onDone: (D) => onDone(D),
+    onDone: (result) => onDone(result),
     hadExistingCredential,
   });
 }
-export { PASTE_CODE_PROMPT_3, DesignOAuthWarning };
+export { PASTE_CODE_PROMPT_3, DesignOAuthWarning, DesignOAuthFlow, runDesignLogin };

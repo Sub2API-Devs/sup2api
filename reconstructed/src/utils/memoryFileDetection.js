@@ -124,9 +124,9 @@ function isShellCommandTargetingMemory(command) {
   let autoMemDir = isAutoMemoryEnabled() ? getAutoMemPath().replace(/[/\\]+$/, "") : "";
   let commandCmp = toComparable(command);
   if (
-    ![configDir, memoryBase, autoMemDir].filter(Boolean).some((L) => {
-      if (commandCmp.includes(toComparable(L))) return true;
-      if (memoryFileDetectionDisabled) return commandCmp.includes(windowsPathToPosixPath(L).toLowerCase());
+    ![configDir, memoryBase, autoMemDir].filter(Boolean).some((dir) => {
+      if (commandCmp.includes(toComparable(dir))) return true;
+      if (memoryFileDetectionDisabled) return commandCmp.includes(windowsPathToPosixPath(dir).toLowerCase());
       return false;
     })
   )

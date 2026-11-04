@@ -39,16 +39,19 @@ function isOutputLimitStop(stopReason) {
   return stopReason === "max_tokens" || stopReason === "model_context_window_exceeded";
 }
 //@ chunk-e6aww6q8.js:2818162-2818189 placement
-var USER_TAG_UNSAFE_CHARS = /[^a-zA-Z0-9._-]/g;
+var USER_TAG_UNSAFE_RE = /[^a-zA-Z0-9._-]/g;
 //@ chunk-e6aww6q8.js:2818189-2818395 placement
 /**
  * 取分类器用的用户标识：GITHUB_ACTOR/USER/USERNAME，或 git 邮箱的用户名部分，清洗后截到 64 字符；无盘模式返回 null。
  */
 async function getClassifierUserTag() {
   if (isDiskless()) return null;
-  let e = env.GITHUB_ACTOR ?? env.USER ?? env.USERNAME;
-  let n = e === undefined && !env.CLAUDE_CODE_EVAL_CONFINED ? await getGitEmail_2() : null;
-  return (e ?? (n ? firstLineOf(n, "@") : null))?.replace(USER_TAG_UNSAFE_CHARS, "").slice(0, 64) || null;
+  let actor = env.GITHUB_ACTOR ?? env.USER ?? env.USERNAME;
+  let gitEmail = actor === undefined && !env.CLAUDE_CODE_EVAL_CONFINED ? await getGitEmail_2() : null;
+  return (
+    (actor ?? (gitEmail ? firstLineOf(gitEmail, "@") : null))?.replace(USER_TAG_UNSAFE_RE, "").slice(0, 64) ||
+    null
+  );
 }
 //@ chunk-e6aww6q8.js:2818395-2818851 placement
 /**
@@ -79,7 +82,7 @@ var CACHE_BREAK_CHANGE_LABELS = {
 /**
  * 检测分类器提示缓存被破坏的原因（首次写入、读取丢失、改写一半等）。
  */
-function detectClassifierCacheBreak(cacheBreakState, requestOptions, usage, requestId, h) {
+function detectClassifierCacheBreak(cacheBreakState, requestOptions, usage, requestId, sentAt) {
   try {
     if (!isCacheBreakOutlineEnabled() || isExcludedModel(requestOptions.model)) return;
     let promptCacheBreak = streamFallbackWarning().promptCacheBreak;
@@ -89,110 +92,113 @@ function detectClassifierCacheBreak(cacheBreakState, requestOptions, usage, requ
       cacheBreakState.site,
       cacheBreakState.hostRules === undefined ? "" : bunHashOf(cacheBreakState.hostRules.host),
     ].join("\x00");
-    let L = classifierLines.get(joined);
+    let previous = classifierLines.get(joined);
     let promptCacheRegions = buildPromptCacheRegions(requestOptions, cacheBreakState.leadingMessageCount);
-    let q =
+    let systemTexts =
       typeof requestOptions.system === "string"
         ? [requestOptions.system]
-        : (requestOptions.system ?? []).map((ze) => ze.text);
-    let Z = {
+        : (requestOptions.system ?? []).map((part) => part.text);
+    let current = {
       agentId: cacheBreakState.agentId,
       model: requestOptions.model,
-      systemHash: bunHashOf(q.join("\x00")),
+      systemHash: bunHashOf(systemTexts.join("\x00")),
       cacheControls: stableJsonKey(promptCacheRegions.cacheControls),
       betas: stableJsonKey(requestOptions.extraBetas ?? []),
       extraBodyHash: bunHashOf(jsonStringify(requestOptions.extraBodyParams ?? {})),
       thinking: requestOptions.thinking,
       breakpoints: promptCacheRegions.breakpoints,
       cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-      sentAt: h,
+      sentAt,
       respondedAt: Date.now(),
-      requestCount: (L?.requestCount ?? 0) + 1,
+      requestCount: (previous?.requestCount ?? 0) + 1,
       remoteHost: cacheBreakState.hostRules !== undefined,
     };
-    let Se = L !== undefined && h < L.respondedAt;
-    let ke = L !== undefined && h < L.sentAt;
-    let we = ke ? undefined : L;
-    let cacheReadTokens = Z.cacheReadTokens;
+    let overlapped = previous !== undefined && sentAt < previous.respondedAt;
+    let sentBeforePrevious = previous !== undefined && sentAt < previous.sentAt;
+    let comparable = sentBeforePrevious ? undefined : previous;
+    let cacheReadTokens = current.cacheReadTokens;
     let cacheCreationInputTokens = usage.cache_creation_input_tokens ?? 0;
-    let Ie = cacheCreationInputTokens >= MIN_CACHE_MISS_TOKENS;
-    let Me =
-      Ie && cacheCreationInputTokens * 2 >= usage.input_tokens + cacheReadTokens + cacheCreationInputTokens;
-    let We =
-      L === undefined
-        ? Ie
+    let hasSignificantCacheWrite = cacheCreationInputTokens >= MIN_CACHE_MISS_TOKENS;
+    let rewroteAtLeastHalf =
+      hasSignificantCacheWrite &&
+      cacheCreationInputTokens * 2 >= usage.input_tokens + cacheReadTokens + cacheCreationInputTokens;
+    let trigger =
+      previous === undefined
+        ? hasSignificantCacheWrite
           ? "first_write"
           : undefined
-        : isCacheReadDrop(L.cacheReadTokens, cacheReadTokens)
+        : isCacheReadDrop(previous.cacheReadTokens, cacheReadTokens)
           ? "read_dropped"
-          : Me
+          : rewroteAtLeastHalf
             ? "rewrote_half"
             : undefined;
-    if (We !== undefined) {
-      let ze = we ? locateCacheBreakRegion(we.breakpoints, promptCacheRegions) : undefined;
-      let lt = we && {
-        modelChanged: we.model !== Z.model,
-        systemPromptChanged: we.systemHash !== Z.systemHash,
-        cacheControlChanged: we.cacheControls !== Z.cacheControls,
-        betasChanged: we.betas !== Z.betas,
-        extraBodyChanged: we.extraBodyHash !== Z.extraBodyHash,
-        thinkingChanged: we.thinking !== Z.thinking,
+    if (trigger !== undefined) {
+      let keptRegion = comparable
+        ? locateCacheBreakRegion(comparable.breakpoints, promptCacheRegions)
+        : undefined;
+      let changes = comparable && {
+        modelChanged: comparable.model !== current.model,
+        systemPromptChanged: comparable.systemHash !== current.systemHash,
+        cacheControlChanged: comparable.cacheControls !== current.cacheControls,
+        betasChanged: comparable.betas !== current.betas,
+        extraBodyChanged: comparable.extraBodyHash !== current.extraBodyHash,
+        thinkingChanged: comparable.thinking !== current.thinking,
       };
-      let Je = L && !Se ? h - L.respondedAt : undefined;
-      let nt =
-        we &&
+      let msSincePreviousResponse = previous && !overlapped ? sentAt - previous.respondedAt : undefined;
+      let compactedBeforeSend =
+        comparable &&
         (promptCacheBreak.classifierCompactions.get(cacheBreakState.agentId) ?? []).some(
-          (At) => we.sentAt < At && At <= h,
+          (compactionAt) => comparable.sentAt < compactionAt && compactionAt <= sentAt,
         );
       logEvent("tengu_classifier_cache_break", {
-        trigger: fromEnum(We),
+        trigger: fromEnum(trigger),
         querySource: agentTypeForTelemetry(requestOptions.querySource),
         classifierSite: fromEnum(cacheBreakState.caller ?? cacheBreakState.site),
         loop: fromEnum(cacheBreakState.agentId === undefined ? "main" : "agent"),
-        remoteHostRules: Z.remoteHost,
+        remoteHostRules: current.remoteHost,
         model: telemetrySafeModelName(requestOptions.model),
         requestId: sanitizeMarkName(requestId),
-        callNumber: Z.requestCount,
+        callNumber: current.requestCount,
         inputTokens: usage.input_tokens,
         cacheReadTokens,
         cacheCreationTokens: cacheCreationInputTokens,
-        prevCacheReadTokens: L?.cacheReadTokens,
-        overlapped: L && Se,
-        msSincePrevResponse: Je,
+        prevCacheReadTokens: previous?.cacheReadTokens,
+        overlapped: previous && overlapped,
+        msSincePrevResponse: msSincePreviousResponse,
         is1hCacheTTL: promptCacheRegions.cacheControls.some((cacheControl) => cacheControl.ttl === "1h"),
-        compactionBeforeSend: nt,
-        keptThrough: fromEnumOpt(ze?.region),
-        keptThroughBlocksBack: ze?.blocksBack,
-        edgesMoved: ze?.edgesMoved,
-        ...lt,
+        compactionBeforeSend: compactedBeforeSend,
+        keptThrough: fromEnumOpt(keptRegion?.region),
+        keptThroughBlocksBack: keptRegion?.blocksBack,
+        edgesMoved: keptRegion?.edgesMoved,
+        ...changes,
       });
       let joined = [
         cacheBreakState.site === "gate" ? "permission check" : cacheBreakState.site,
         cacheBreakState.agentId === undefined ? "main conversation" : "subagent",
-        ...(Z.remoteHost ? ["remote host"] : []),
+        ...(current.remoteHost ? ["remote host"] : []),
       ].join(", ");
-      let mapped = Object.entries(lt ?? {})
+      let mapped = Object.entries(changes ?? {})
         .filter(([, value]) => value)
         .map(([key]) => CACHE_BREAK_CHANGE_LABELS[key]);
-      let yt = `read ${cacheReadTokens} tokens from the cache (previous request ${L?.cacheReadTokens}), wrote ${cacheCreationInputTokens}`;
-      let gt = ke
+      let cacheText = `read ${cacheReadTokens} tokens from the cache (previous request ${previous?.cacheReadTokens}), wrote ${cacheCreationInputTokens}`;
+      let comparisonText = sentBeforePrevious
         ? "sent before the previous request; not compared, because it was sent before the request it would be compared with"
-        : `${Se ? "sent before the previous response arrived" : `sent ${Je} ms after the previous response`}; matches the previous request through: ${CACHE_BREAK_REGION_LABELS[ze?.region ?? "none"]}; same bytes split into different blocks: ${ze?.edgesMoved ? "yes" : "no"}; changed: ${mapped.join(", ") || "nothing"}; a compaction came before this request: ${nt ? "yes" : "no"}`;
+        : `${overlapped ? "sent before the previous response arrived" : `sent ${msSincePreviousResponse} ms after the previous response`}; matches the previous request through: ${CACHE_BREAK_REGION_LABELS[keptRegion?.region ?? "none"]}; same bytes split into different blocks: ${keptRegion?.edgesMoved ? "yes" : "no"}; changed: ${mapped.join(", ") || "nothing"}; a compaction came before this request: ${compactedBeforeSend ? "yes" : "no"}`;
       logForDebugging(
-        `[CLASSIFIER CACHE ${We === "read_dropped" ? "BREAK" : "WRITE"}] auto-mode classifier (${joined}), call #${Z.requestCount}: ` +
-          (L === undefined
+        `[CLASSIFIER CACHE ${trigger === "read_dropped" ? "BREAK" : "WRITE"}] auto-mode classifier (${joined}), call #${current.requestCount}: ` +
+          (previous === undefined
             ? `first tracked request from this conversation and call site, wrote ${cacheCreationInputTokens} tokens to the cache`
-            : `${CACHE_BREAK_KIND_LABELS[We]}: ${yt}; ${gt}`),
+            : `${CACHE_BREAK_KIND_LABELS[trigger]}: ${cacheText}; ${comparisonText}`),
       );
     }
-    if (L !== undefined && ke) {
-      L.requestCount = Z.requestCount;
+    if (previous !== undefined && sentBeforePrevious) {
+      previous.requestCount = current.requestCount;
       return;
     }
     classifierLines.delete(joined);
-    classifierLines.set(joined, Z);
+    classifierLines.set(joined, current);
     if (classifierLines.size > MAX_CACHE_BREAK_DETAIL) {
-      let found = [...classifierLines].find(([, lt]) => lt.agentId !== undefined || lt.remoteHost);
+      let found = [...classifierLines].find(([, entry]) => entry.agentId !== undefined || entry.remoteHost);
       if (found) classifierLines.delete(found[0]);
     }
   } catch (error) {
@@ -203,136 +209,142 @@ function detectClassifierCacheBreak(cacheBreakState, requestOptions, usage, requ
 /**
  * 把请求拆成 system / CLAUDE.md / 转录三个区域的块列表，用于定位提示缓存失效发生在哪个区域。
  */
-function buildPromptCacheRegions(e, leadingMessageCount) {
-  let r =
-    typeof e.system === "string"
+function buildPromptCacheRegions(requestOptions, leadingMessageCount) {
+  let systemBlocks =
+    typeof requestOptions.system === "string"
       ? [
           {
             type: "text",
-            text: e.system,
+            text: requestOptions.system,
           },
         ]
-      : (e.system ?? []);
-  let s = [];
-  for (let block of r)
-    s.push({
+      : (requestOptions.system ?? []);
+  let blocks = [];
+  for (let block of systemBlocks)
+    blocks.push({
       block,
       region: "system",
       role: undefined,
     });
-  for (let [Se, ke] of e.messages.entries()) {
-    let we =
-      typeof ke.content === "string"
+  for (let [messageIndex, message] of requestOptions.messages.entries()) {
+    let contentBlocks =
+      typeof message.content === "string"
         ? [
             {
               type: "text",
-              text: ke.content,
+              text: message.content,
             },
           ]
-        : ke.content;
-    for (let [Ee, Ae] of we.entries())
-      s.push({
-        block: Ae,
-        region: Se < leadingMessageCount ? "claude_md" : "transcript",
-        role: Ee === 0 ? ke.role : undefined,
+        : message.content;
+    for (let [blockIndex, contentBlock] of contentBlocks.entries())
+      blocks.push({
+        block: contentBlock,
+        region: messageIndex < leadingMessageCount ? "claude_md" : "transcript",
+        role: blockIndex === 0 ? message.role : undefined,
       });
   }
-  let h = [];
-  let y = [];
-  let S = new Map();
-  let w = [];
-  let L = [];
-  let G = 0;
-  for (let [Se, { block, region: we, role: Ee }] of s.entries()) {
-    let Ae = (Ee ? `\x00${Ee}\x00` : "") + isBase64ImageBlock_2(block);
-    h.push(Ae);
-    G += Ae.length;
-    y.push(G);
-    S.set(G, Se);
+  let pieces = [];
+  let blockEnds = [];
+  let blockIndexByEnd = new Map();
+  let breakpoints = [];
+  let cacheControls = [];
+  let offset = 0;
+  for (let [blockIndex, { block, region, role }] of blocks.entries()) {
+    let piece = (role ? `\x00${role}\x00` : "") + isBase64ImageBlock_2(block);
+    pieces.push(piece);
+    offset += piece.length;
+    blockEnds.push(offset);
+    blockIndexByEnd.set(offset, blockIndex);
     if ("cache_control" in block && block.cache_control) {
-      L.push(block.cache_control);
-      w.push({
-        offset: G,
-        region: we,
+      cacheControls.push(block.cache_control);
+      breakpoints.push({
+        offset,
+        region,
       });
     }
   }
-  let last = w.at(-1);
+  let last = breakpoints.at(-1);
   if (last?.region === "transcript") last.region = "action";
-  let Z = {
-    text: h.join(""),
-    blockEnds: y,
-    blockIndexByEnd: S,
+  let outline = {
+    text: pieces.join(""),
+    blockEnds,
+    blockIndexByEnd,
     breakpoints: [],
-    cacheControls: L,
+    cacheControls,
     prefixHashes: new Map(),
   };
-  Z.breakpoints = w.map((Se) => ({
-    ...Se,
-    hash: getPrefixHash(Z, Se.offset),
-    edgesHash: getBlockBoundaryHash(Z, Se.offset),
+  outline.breakpoints = breakpoints.map((breakpoint) => ({
+    ...breakpoint,
+    hash: getPrefixHash(outline, breakpoint.offset),
+    edgesHash: getBlockBoundaryHash(outline, breakpoint.offset),
   }));
-  return Z;
+  return outline;
 }
 //@ chunk-e6aww6q8.js:2822942-2823120 placement = isBase64ImageBlock (0.848)
 function isBase64ImageBlock_2(block) {
   if (block.type === "text") return block.text;
-  let n =
+  let hashSource =
     block.type === "image" && block.source.type === "base64"
       ? block.source.data
       : jsonStringify({
           ...block,
           cache_control: undefined,
         });
-  return `\x00${block.type}:${bunHashOf(n)}\x00`;
+  return `\x00${block.type}:${bunHashOf(hashSource)}\x00`;
 }
 //@ chunk-e6aww6q8.js:2823120-2823237 placement
-function getPrefixHash(e, offset) {
-  let r = e.prefixHashes.get(offset);
-  if (r === undefined) {
-    r = bunHashOf(e.text.slice(0, offset));
-    e.prefixHashes.set(offset, r);
+function getPrefixHash(regions, offset) {
+  let cachedHash = regions.prefixHashes.get(offset);
+  if (cachedHash === undefined) {
+    cachedHash = bunHashOf(regions.text.slice(0, offset));
+    regions.prefixHashes.set(offset, cachedHash);
   }
-  return r;
+  return cachedHash;
 }
 //@ chunk-e6aww6q8.js:2823237-2823336 placement
-function getBlockBoundaryHash(e, offset) {
-  let r = e.blockIndexByEnd.get(offset) ?? -1;
-  return bunHashOf(e.blockEnds.slice(0, r + 1).join(","));
+function getBlockBoundaryHash(regions, offset) {
+  let blockIndex = regions.blockIndexByEnd.get(offset) ?? -1;
+  return bunHashOf(regions.blockEnds.slice(0, blockIndex + 1).join(","));
 }
 //@ chunk-e6aww6q8.js:2823336-2823789 placement
-function locateCacheBreakRegion(breakpoints, promptCacheRegions) {
-  let r;
+function locateCacheBreakRegion(breakpoints, regions) {
+  let matchingBreakpoint;
   let edgesMoved = false;
-  for (let L of breakpoints) {
-    if (L.offset > promptCacheRegions.text.length || getPrefixHash(promptCacheRegions, L.offset) !== L.hash)
+  for (let breakpoint of breakpoints) {
+    if (
+      breakpoint.offset > regions.text.length ||
+      getPrefixHash(regions, breakpoint.offset) !== breakpoint.hash
+    )
       continue;
     if (
-      promptCacheRegions.blockIndexByEnd.has(L.offset) &&
-      getBlockBoundaryHash(promptCacheRegions, L.offset) === L.edgesHash
+      regions.blockIndexByEnd.has(breakpoint.offset) &&
+      getBlockBoundaryHash(regions, breakpoint.offset) === breakpoint.edgesHash
     )
-      r = L;
+      matchingBreakpoint = breakpoint;
     else edgesMoved = true;
   }
-  if (r === undefined)
+  if (matchingBreakpoint === undefined)
     return {
       region: "none",
       blocksBack: undefined,
       edgesMoved,
     };
-  let offset = r.offset;
-  let found = promptCacheRegions.breakpoints.find((breakpoint) => breakpoint.offset >= offset);
-  let S = promptCacheRegions.blockIndexByEnd.get(offset);
-  let w = found && promptCacheRegions.blockIndexByEnd.get(found.offset);
+  let offset = matchingBreakpoint.offset;
+  let found = regions.breakpoints.find((breakpoint) => breakpoint.offset >= offset);
+  let blocksFromStart = regions.blockIndexByEnd.get(offset);
+  let blocksToNext = found && regions.blockIndexByEnd.get(found.offset);
   return {
-    region: r.region,
-    blocksBack: S !== undefined && w !== undefined ? w - S : undefined,
+    region: matchingBreakpoint.region,
+    blocksBack:
+      blocksFromStart !== undefined && blocksToNext !== undefined
+        ? blocksToNext - blocksFromStart
+        : undefined,
     edgesMoved,
   };
 }
 //@ chunk-e6aww6q8.js:2823789-2823852 placement
 function stableJsonKey(cacheControls) {
-  return uniq(cacheControls.map((n) => jsonStringify(n)))
+  return uniq(cacheControls.map((cacheControl) => jsonStringify(cacheControl)))
     .sort()
     .join("\x00");
 }

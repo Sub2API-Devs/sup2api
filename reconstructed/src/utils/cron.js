@@ -65,7 +65,7 @@ function expandField(field, range) {
     return null;
   }
   if (out.size === 0) return null;
-  return Array.from(out).sort((a, n) => a - n);
+  return Array.from(out).sort((left, right) => left - right);
 }
 //@ chunk-93zax7h2.js:1453-1673 fingerprint = parseCronExpression (1)
 /**
@@ -107,14 +107,14 @@ function computeNextCronRun(fields, from, { oneShot = false } = {}) {
   let domSet = new Set(fields.dayOfMonth);
   let monthSet = new Set(fields.month);
   let dowSet = new Set(fields.dayOfWeek);
-  let p = fields.dayOfMonth.length === 31;
-  let c = fields.dayOfWeek.length === 7;
-  let f = (date) =>
-    p && c
+  let domIsFull = fields.dayOfMonth.length === 31;
+  let dowIsFull = fields.dayOfWeek.length === 7;
+  let dayMatches = (date) =>
+    domIsFull && dowIsFull
       ? true
-      : p
+      : domIsFull
         ? dowSet.has(date.getDay())
-        : c
+        : dowIsFull
           ? domSet.has(date.getDate())
           : domSet.has(date.getDate()) || dowSet.has(date.getDay());
   let date = new Date(Math.floor(from.getTime() / 60000) * 60000 + 60000);
@@ -125,7 +125,7 @@ function computeNextCronRun(fields, from, { oneShot = false } = {}) {
       if (
         oneShot &&
         monthSet.has(date.getMonth() + 1) &&
-        f(date) &&
+        dayMatches(date) &&
         hourSet.has(date.getHours()) &&
         minuteSet.has(date.getMinutes())
       )
@@ -139,7 +139,7 @@ function computeNextCronRun(fields, from, { oneShot = false } = {}) {
       date.setHours(0, 0, 0, 0);
       continue;
     }
-    if (!f(date)) {
+    if (!dayMatches(date)) {
       date.setDate(date.getDate() + 1);
       date.setHours(0, 0, 0, 0);
       continue;
@@ -204,9 +204,9 @@ function cronToHuman(cron, opts) {
   }
   if (!minute.match(/^\d+$/) || !hour.match(/^\d+$/)) return cron;
   let m = parseInt(minute, 10);
-  let u = parseInt(hour, 10);
+  let hourNum = parseInt(hour, 10);
   let fmtTime = utc ? formatUtcTimeAsLocal : formatLocalTime;
-  if (dayOfMonth === "*" && month === "*" && dayOfWeek === "*") return `Every day at ${fmtTime(m, u)}`;
+  if (dayOfMonth === "*" && month === "*" && dayOfWeek === "*") return `Every day at ${fmtTime(m, hourNum)}`;
   if (dayOfMonth === "*" && month === "*" && dayOfWeek.match(/^\d$/)) {
     let dayIndex = parseInt(dayOfWeek, 10) % 7;
     let dayName;
@@ -214,12 +214,12 @@ function cronToHuman(cron, opts) {
       let ref = new Date();
       let daysToAdd = (dayIndex - ref.getUTCDay() + 7) % 7;
       ref.setUTCDate(ref.getUTCDate() + daysToAdd);
-      ref.setUTCHours(u, m, 0, 0);
+      ref.setUTCHours(hourNum, m, 0, 0);
       dayName = DAY_NAMES[ref.getDay()];
     } else dayName = DAY_NAMES[dayIndex];
-    if (dayName) return `Every ${dayName} at ${fmtTime(m, u)}`;
+    if (dayName) return `Every ${dayName} at ${fmtTime(m, hourNum)}`;
   }
-  if (dayOfMonth === "*" && month === "*" && dayOfWeek === "1-5") return `Weekdays at ${fmtTime(m, u)}`;
+  if (dayOfMonth === "*" && month === "*" && dayOfWeek === "1-5") return `Weekdays at ${fmtTime(m, hourNum)}`;
   return cron;
 }
 //@ chunk-93zax7h2.js:4148-5010 placement
@@ -234,42 +234,42 @@ function parseScheduleInput(input) {
     };
   let match = trimmed.match(/^(\d+)\s*([smhd])$/i);
   if (match) {
-    let r = parseInt(match[1], 10);
+    let interval = parseInt(match[1], 10);
     let lower = match[2].toLowerCase();
-    if (r < 1)
+    if (interval < 1)
       return {
         error: "interval must be at least 1",
       };
-    let a;
+    let cron;
     switch (lower) {
       case "s":
         return {
           error: "minimum interval is 1 minute",
         };
       case "m":
-        if (r > 59)
+        if (interval > 59)
           return {
             error: "minute interval must be 1\u201359 (use hours instead)",
           };
-        a = r === 1 ? "* * * * *" : `*/${r} * * * *`;
+        cron = interval === 1 ? "* * * * *" : `*/${interval} * * * *`;
         break;
       case "h":
-        if (r > 23)
+        if (interval > 23)
           return {
             error: "hour interval must be 1\u201323 (use days instead)",
           };
-        a = r === 1 ? "0 * * * *" : `0 */${r} * * *`;
+        cron = interval === 1 ? "0 * * * *" : `0 */${interval} * * *`;
         break;
       case "d":
-        if (r === 1) {
-          a = "0 0 * * *";
+        if (interval === 1) {
+          cron = "0 0 * * *";
           break;
         }
-        if (r > 28)
+        if (interval > 28)
           return {
             error: "day interval must be 1\u201328 (use a cron expression)",
           };
-        a = `0 0 */${r} * *`;
+        cron = `0 0 */${interval} * *`;
         break;
       default:
         return {
@@ -277,8 +277,8 @@ function parseScheduleInput(input) {
         };
     }
     return {
-      cron: a,
-      human: cronToHuman(a),
+      cron,
+      human: cronToHuman(cron),
     };
   }
   if (parseCronExpression(trimmed) !== null)

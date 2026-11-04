@@ -18,31 +18,35 @@ import { env } from "../env.js";
 import { isProbedDefault, userConfiguredDefault } from "./thirdPartyModelDefaults.js";
 import { isModelAllowedUnderActiveEnforcement } from "./defaultModel.js";
 import { cloudDocumentDefaultCandidates } from "./planModeModel.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:516936-516966 placement
 var STARTUP_PROBE_DEADLINE_MS = 20000;
 var PROBE_TAIL_MARGIN_MS = 8000;
 var PROBE_HEAD_MARGIN_MS = 4000;
 //@ chunk-s61vbvea.js:516966-517001 placement
-function lastLiveRoundStart(e) {
-  return e + STARTUP_PROBE_DEADLINE_MS - PROBE_TAIL_MARGIN_MS - PROBE_HEAD_MARGIN_MS;
+function lastLiveRoundStart(now) {
+  return now + STARTUP_PROBE_DEADLINE_MS - PROBE_TAIL_MARGIN_MS - PROBE_HEAD_MARGIN_MS;
 }
 //@ chunk-s61vbvea.js:517001-517024 placement
-var keys = Object.keys(catalogEntriesByFirstPartyId);
+var keys; // deferred: uses catalogEntriesByFirstPartyId (./modelCatalog.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:517001", () => {
+  keys = Object.keys(catalogEntriesByFirstPartyId);
+});
 //@ chunk-s61vbvea.js:517024-517310 placement
-function tierConfig(e, n = DEFAULT_3P_SONNET_KEY, r = DEFAULT_3P_HAIKU_KEY) {
+function tierConfig(opusKey, sonnetKey = DEFAULT_3P_SONNET_KEY, haikuKey = DEFAULT_3P_HAIKU_KEY) {
   return {
     sonnet: {
       envVarPriority: ["ANTHROPIC_DEFAULT_SONNET_MODEL"],
-      ...resolveTierDefaultKey("sonnet", n),
+      ...resolveTierDefaultKey("sonnet", sonnetKey),
     },
     opus: {
       envVarPriority: ["ANTHROPIC_DEFAULT_OPUS_MODEL"],
-      ...resolveTierDefaultKey("opus", e),
+      ...resolveTierDefaultKey("opus", opusKey),
     },
     haiku: {
       envVarPriority: ["ANTHROPIC_SMALL_FAST_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL"],
-      ...resolveTierDefaultKey("haiku", r),
+      ...resolveTierDefaultKey("haiku", haikuKey),
     },
   };
 }
@@ -54,32 +58,34 @@ function documentMayMoveTiers() {
 /**
  * 根据目录文档给出的档位别名目标决定默认模型键：无目标或被白名单排除时用编译默认；目标是已知键时使用它（标记来自文档）；否则带出文档中的模型 id 与名称。
  */
-function resolveTierDefaultKey(e, n) {
-  let r = documentTierAliasTarget(e);
+function resolveTierDefaultKey(tier, defaultKey) {
+  let target = documentTierAliasTarget(tier);
   if (
-    r === undefined ||
-    enforcedAllowlistLeavesOut(r.key !== undefined ? String(getRawModelStrings()[r.key]) : r.modelId)
+    target === undefined ||
+    enforcedAllowlistLeavesOut(
+      target.key !== undefined ? String(getRawModelStrings()[target.key]) : target.modelId,
+    )
   )
     return {
-      defaultKey: n,
+      defaultKey,
     };
-  if (r.key !== undefined)
-    return r.key === n
+  if (target.key !== undefined)
+    return target.key === defaultKey
       ? {
-          defaultKey: r.key,
+          defaultKey: target.key,
         }
       : {
-          defaultKey: r.key,
+          defaultKey: target.key,
           fromDocument: true,
         };
   return {
-    defaultKey: n,
+    defaultKey,
     documentTarget: {
-      modelId: r.modelId,
-      ...(r.overrideKey !== undefined && {
-        overrideKey: r.overrideKey,
+      modelId: target.modelId,
+      ...(target.overrideKey !== undefined && {
+        overrideKey: target.overrideKey,
       }),
-      name: r.name,
+      name: target.name,
     },
     fromDocument: true,
   };
@@ -88,82 +94,82 @@ function resolveTierDefaultKey(e, n) {
 /**
  * 去掉模型键结尾数字（opus55 变 opus）。
  */
-function stripTrailingDigits(e) {
-  return e.replace(/\d+$/, "");
+function stripTrailingDigits(modelKey) {
+  return modelKey.replace(/\d+$/, "");
 }
 //@ chunk-s61vbvea.js:517725-517806 placement = aliasMatchesParentTier (1)
 /**
  * 模型键对应的档位 sonnet/opus/haiku。
  */
-function getTierFromModelKey(modelKeyByModelId) {
-  let canonical = stripTrailingDigits(modelKeyByModelId);
+function getTierFromModelKey(modelKey) {
+  let canonical = stripTrailingDigits(modelKey);
   return canonical === "sonnet" || canonical === "opus" || canonical === "haiku" ? canonical : undefined;
 }
 //@ chunk-s61vbvea.js:517806-517893 placement
 /**
  * 规范名匹配某 catalog 键的第一方 id 时返回键。
  */
-function findModelKeyByModelId(e) {
-  let n = firstPartyNameToCanonical(e);
-  for (let r of keys)
-    if (firstPartyNameToCanonical(catalogEntriesByFirstPartyId[r].firstParty) === n) return r;
+function findModelKeyByModelId(modelId) {
+  let canonical = firstPartyNameToCanonical(modelId);
+  for (let key of keys)
+    if (firstPartyNameToCanonical(catalogEntriesByFirstPartyId[key].firstParty) === canonical) return key;
   return;
 }
 //@ chunk-s61vbvea.js:517893-517944 placement
 /**
  * "<fromKey>-to-<toKey>"。
  */
-function upgradeKey(e) {
-  return `${e.fromKey}-to-${e.toKey}`;
+function upgradeKey(change) {
+  return `${change.fromKey}-to-${change.toKey}`;
 }
 //@ chunk-s61vbvea.js:517944-518404 placement
 /**
  * 第三方：ANTHROPIC_DEFAULT_*_MODEL 固定到比内置默认更旧版本的档位（托管设置里配置的跳过），列出 {tier, envVar, pinnedKey, defaultKey}。
  */
-function collectStalePins(e, n) {
-  let r = [];
+function collectStalePins(tierConfig, isUserChosen) {
+  let stale = [];
   let env = getSettingsForSource("policySettings")?.env ?? {};
-  for (let key of Object.keys(e)) {
-    let y = e[key];
-    let S;
-    let w;
-    for (let j of y.envVarPriority) {
-      let trimmed = process.env[j]?.trim();
+  for (let key of Object.keys(tierConfig)) {
+    let config = tierConfig[key];
+    let pinnedEnvVar;
+    let pinnedKey;
+    for (let envVar of config.envVarPriority) {
+      let trimmed = process.env[envVar]?.trim();
       if (!trimmed) continue;
-      if (Object.hasOwn(env, j)) break;
-      if (isProbeWrittenTierDefault(j)) continue;
-      if (n?.(trimmed)) continue;
+      if (Object.hasOwn(env, envVar)) break;
+      if (isProbeWrittenTierDefault(envVar)) continue;
+      if (isUserChosen?.(trimmed)) continue;
       let modelKeyByModelId = findModelKeyByModelId(trimmed);
       if (
         !modelKeyByModelId ||
         getTierFromModelKey(modelKeyByModelId) !== key ||
-        modelKeyByModelId === y.defaultKey
+        modelKeyByModelId === config.defaultKey
       )
         continue;
-      S = j;
-      w = modelKeyByModelId;
+      pinnedEnvVar = envVar;
+      pinnedKey = modelKeyByModelId;
       break;
     }
-    if (!S || !w) continue;
-    let defaultKey = y.defaultKey;
-    let index = keys.indexOf(w);
+    if (!pinnedEnvVar || !pinnedKey) continue;
+    let defaultKey = config.defaultKey;
+    let index = keys.indexOf(pinnedKey);
     let index_2 = keys.indexOf(defaultKey);
     if (index >= index_2) continue;
-    r.push({
+    stale.push({
       tier: key,
-      envVar: S,
-      pinnedKey: w,
+      envVar: pinnedEnvVar,
+      pinnedKey,
       defaultKey,
     });
   }
-  return r;
+  return stale;
 }
 //@ chunk-s61vbvea.js:518404-518673 placement
 /**
  * 给定值对应非 haiku 档位且未被 modelOverrides 指向时，返回 {tier, envVar, value}。
  */
-function seedEnvDefaultForUserPin(e, n) {
-  let trimmed = e?.trim();
+function seedEnvDefaultForUserPin(model, tierConfig) {
+  let trimmed = model?.trim();
   if (!trimmed) return;
   if (env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST) return;
   let modelKeyByModelId = findModelKeyByModelId(trimmed);
@@ -171,11 +177,11 @@ function seedEnvDefaultForUserPin(e, n) {
   let tierFromModelKey = getTierFromModelKey(modelKeyByModelId);
   if (!tierFromModelKey) return;
   if (tierFromModelKey === "haiku") return;
-  let y = n[tierFromModelKey];
-  if (isTierDocumentTargetOverridden(y, getInitialSettings_2().modelOverrides)) return;
+  let tierEntry = tierConfig[tierFromModelKey];
+  if (isTierDocumentTargetOverridden(tierEntry, getInitialSettings_2().modelOverrides)) return;
   return {
     tier: tierFromModelKey,
-    envVar: y.envVarPriority.at(-1),
+    envVar: tierEntry.envVarPriority.at(-1),
     value: trimmed,
   };
 }
@@ -183,47 +189,47 @@ function seedEnvDefaultForUserPin(e, n) {
 /**
  * 档位文档目标在 modelOverrides 中已配置。
  */
-function isTierDocumentTargetOverridden(e, n) {
-  let r =
-    e.documentTarget === undefined
-      ? catalogEntriesByFirstPartyId[e.defaultKey].firstParty
-      : e.documentTarget.overrideKey;
-  return r !== undefined && Boolean(n?.[r]);
+function isTierDocumentTargetOverridden(tierEntry, modelOverrides) {
+  let overrideKey =
+    tierEntry.documentTarget === undefined
+      ? catalogEntriesByFirstPartyId[tierEntry.defaultKey].firstParty
+      : tierEntry.documentTarget.overrideKey;
+  return overrideKey !== undefined && Boolean(modelOverrides?.[overrideKey]);
 }
 //@ chunk-s61vbvea.js:518814-519139 placement
 /**
  * 没有任何环境变量固定的档位列表。
  */
-function collectUnpinnedTiers(e, modelOverrides) {
-  let r = [];
-  for (let key of Object.keys(e)) {
-    let h = e[key];
-    if (isTierDocumentTargetOverridden(h, modelOverrides)) continue;
+function collectUnpinnedTiers(tierConfig, modelOverrides) {
+  let unpinned = [];
+  for (let key of Object.keys(tierConfig)) {
+    let entry = tierConfig[key];
+    if (isTierDocumentTargetOverridden(entry, modelOverrides)) continue;
     if (
-      h.envVarPriority.some((S) => {
-        let trimmed = process.env[S]?.trim();
+      entry.envVarPriority.some((envVar) => {
+        let trimmed = process.env[envVar]?.trim();
         if (!trimmed) return false;
-        if (isProbeWrittenTierDefault(S) && !isProbedDefault(S)) return false;
+        if (isProbeWrittenTierDefault(envVar) && !isProbedDefault(envVar)) return false;
         let modelKeyByModelId = findModelKeyByModelId(trimmed);
         if (!modelKeyByModelId) return true;
         return getTierFromModelKey(modelKeyByModelId) === key;
       })
     )
       continue;
-    r.push({
+    unpinned.push({
       tier: key,
-      envVar: h.envVarPriority.at(-1),
-      defaultKey: h.defaultKey,
+      envVar: entry.envVarPriority.at(-1),
+      defaultKey: entry.defaultKey,
     });
   }
-  return r;
+  return unpinned;
 }
 //@ chunk-s61vbvea.js:519139-519172 placement
 /**
  * 白名单检查明确为 false。
  */
-function enforcedAllowlistLeavesOut(e) {
-  return isModelAllowedUnderActiveEnforcement(e) === false;
+function enforcedAllowlistLeavesOut(modelId) {
+  return isModelAllowedUnderActiveEnforcement(modelId) === false;
 }
 //@ chunk-s61vbvea.js:519172-519291 placement
 /**
@@ -238,17 +244,17 @@ var MANAGED_SKIP_VERBS = {
 /**
  * "managed settings do not allow …" 日志文案。
  */
-function leftOutDebugLine(tier, n, r) {
-  let s = r.length === 1 ? "this id" : "these ids";
-  let h = n === "check" ? "; the tier is left as it is" : "";
-  return `${tier}: ${MANAGED_SKIP_VERBS[n]} ${r.join(", ")} because managed settings do not allow ${s} as spelled here (matched by no enforced availableModels entry, named in deniedModels, or the settings failed to load)${h}`;
+function leftOutDebugLine(tier, phase, ids) {
+  let idPhrase = ids.length === 1 ? "this id" : "these ids";
+  let phaseSuffix = phase === "check" ? "; the tier is left as it is" : "";
+  return `${tier}: ${MANAGED_SKIP_VERBS[phase]} ${ids.join(", ")} because managed settings do not allow ${idPhrase} as spelled here (matched by no enforced availableModels entry, named in deniedModels, or the settings failed to load)${phaseSuffix}`;
 }
 //@ chunk-s61vbvea.js:519603-519811 placement
 /**
  * 该 ANTHROPIC_DEFAULT_*_MODEL 是否由第三方探测写入。
  */
-function isProbeWrittenTierDefault(e) {
-  switch (e) {
+function isProbeWrittenTierDefault(envVar) {
+  switch (envVar) {
     case "ANTHROPIC_DEFAULT_OPUS_MODEL":
       return userConfiguredDefault("opus");
     case "ANTHROPIC_DEFAULT_SONNET_MODEL":
@@ -263,53 +269,59 @@ function isProbeWrittenTierDefault(e) {
 /**
  * 比给定模型更旧的同族模型第一方 id（从新到旧）。
  */
-function olderFirstPartyIdsInFamily(e) {
-  let modelKeyByModelId = findModelKeyByModelId(e);
-  if (!modelKeyByModelId) return [];
-  let r = stripTrailingDigits(modelKeyByModelId);
+function olderFirstPartyIdsInFamily(modelId) {
+  let modelKey = findModelKeyByModelId(modelId);
+  if (!modelKey) return [];
+  let familyKey = stripTrailingDigits(modelKey);
   return keys
-    .slice(0, keys.indexOf(modelKeyByModelId))
-    .filter((s) => stripTrailingDigits(s) === r)
+    .slice(0, keys.indexOf(modelKey))
+    .filter((key) => stripTrailingDigits(key) === familyKey)
     .reverse()
-    .map((s) => catalogEntriesByFirstPartyId[s].firstParty);
+    .map((key) => catalogEntriesByFirstPartyId[key].firstParty);
 }
 //@ chunk-s61vbvea.js:519959-520079 placement
 /**
  * catalog 中排在给定键之前（更旧）的同档模型键。
  */
-function predecessorsInTier(defaultKey, tier, r = false) {
-  let index = keys.indexOf(defaultKey);
-  let h = [];
-  for (let y = r ? index : index - 1; y >= 0; y--) {
-    let S = keys[y];
-    if (getTierFromModelKey(S) === tier) h.push(S);
+function predecessorsInTier(modelKey, tier, includeDefault = false) {
+  let index = keys.indexOf(modelKey);
+  let predecessors = [];
+  for (let cursor = includeDefault ? index : index - 1; cursor >= 0; cursor--) {
+    let key = keys[cursor];
+    if (getTierFromModelKey(key) === tier) predecessors.push(key);
   }
-  return h;
+  return predecessors;
 }
 //@ chunk-s61vbvea.js:520079-520415 placement
 /**
  * 第三方提供商默认模型候选中，探测函数判定不可用的条目。
  */
-async function refuteUnavailableDocumentDefaults(e, modelOverrides) {
-  let filtered = cloudDocumentDefaultCandidates().filter((h) => {
-    let y = h.key !== undefined ? catalogEntriesByFirstPartyId[h.key].firstParty : h.overrideKey;
-    return y === undefined || !modelOverrides?.[y];
+async function refuteUnavailableDocumentDefaults(probe, modelOverrides) {
+  let filtered = cloudDocumentDefaultCandidates().filter((candidate) => {
+    let overrideKey =
+      candidate.key !== undefined
+        ? catalogEntriesByFirstPartyId[candidate.key].firstParty
+        : candidate.overrideKey;
+    return overrideKey === undefined || !modelOverrides?.[overrideKey];
   });
   return (
     await Promise.all(
-      filtered.map(async (h) => {
-        let y = h.key !== undefined ? getTierFromModelKey(h.key) : toTier(h.family);
-        return (await e(h.model, y))
+      filtered.map(async (documentCandidate) => {
+        let tier =
+          documentCandidate.key !== undefined
+            ? getTierFromModelKey(documentCandidate.key)
+            : toTier(documentCandidate.family);
+        return (await probe(documentCandidate.model, tier))
           ? null
           : {
-              candidate: h.candidate,
-              modelId: h.model,
-              name: h.name,
-              tier: y,
+              candidate: documentCandidate.candidate,
+              modelId: documentCandidate.model,
+              name: documentCandidate.name,
+              tier,
             };
       }),
     )
-  ).filter((h) => h !== null);
+  ).filter((result) => result !== null);
 }
 //@ chunk-s61vbvea.js:520415-520484 placement = aliasMatchesParentTier (1)
 /**
@@ -331,4 +343,5 @@ export {
   refuteUnavailableDocumentDefaults,
   documentMayMoveTiers,
   olderFirstPartyIdsInFamily,
+  upgradeKey,
 };

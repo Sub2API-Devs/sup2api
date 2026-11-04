@@ -14,7 +14,7 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { Text, Box } from "../../ink/components/Text.js";
 import { LOCAL_JSX_DIALOG } from "../../commands/rate-limit-options/index.js";
 
@@ -23,88 +23,88 @@ function requestLocalJsxDialog() {
   let signal = createSignal();
   let signal_2 = createSignal();
   let signal_3 = createSignal();
-  let L = new Map();
-  let ee = 0;
-  let ke = 0;
+  let pendingReplies = new Map();
+  let dialogCount = 0;
+  let subscriberCount = 0;
   return {
-    subscribe(Re) {
-      ke += 1;
-      let Be = signal.subscribe(Re);
-      let He = false;
+    subscribe(listener) {
+      subscriberCount += 1;
+      let unsubscribe = signal.subscribe(listener);
+      let unsubscribed = false;
       return () => {
-        if (He) return;
-        He = true;
-        ke -= 1;
-        Be();
+        if (unsubscribed) return;
+        unsubscribed = true;
+        subscriberCount -= 1;
+        unsubscribe();
       };
     },
     onCancel: signal_2.subscribe,
     onUpdate: signal_3.subscribe,
-    reply(Re) {
-      let Be = L.get(Re.id);
-      if (!Be) return;
-      L.delete(Re.id);
-      Be(Re);
+    reply(reply) {
+      let resolveReply = pendingReplies.get(reply.id);
+      if (!resolveReply) return;
+      pendingReplies.delete(reply.id);
+      resolveReply(reply);
     },
-    request({ kind, payload, userInvoked, hideWhile, holdsTop }, Xe) {
-      ee += 1;
-      let rt = `dialog-${ee}`;
+    request({ kind, payload, userInvoked, hideWhile, holdsTop }, options) {
+      dialogCount += 1;
+      let id = `dialog-${dialogCount}`;
       let { promise, resolve } = Promise.withResolvers();
-      let signal_4 = Xe?.signal;
-      if (signal_4?.aborted || ke === 0) {
+      let signal_4 = options?.signal;
+      if (signal_4?.aborted || subscriberCount === 0) {
         queueMicrotask(() =>
           resolve({
-            id: rt,
+            id,
             cancelled: true,
           }),
         );
         return {
-          id: rt,
+          id,
           replied: promise,
           update: () => {},
         };
       }
-      let Ot;
-      L.set(rt, (Et) => {
-        if (signal_4 && Ot) signal_4.removeEventListener("abort", Ot);
-        resolve(Et);
+      let onAbort;
+      pendingReplies.set(id, (handleReply) => {
+        if (signal_4 && onAbort) signal_4.removeEventListener("abort", onAbort);
+        resolve(handleReply);
       });
       if (signal_4) {
-        Ot = () => {
-          if (L.delete(rt)) {
+        onAbort = () => {
+          if (pendingReplies.delete(id)) {
             resolve({
-              id: rt,
+              id,
               cancelled: true,
             });
-            signal_2.emit(rt);
+            signal_2.emit(id);
           }
         };
-        signal_4.addEventListener("abort", Ot, {
+        signal_4.addEventListener("abort", onAbort, {
           once: true,
         });
       }
       signal.emit({
-        id: rt,
+        id,
         kind,
         payload,
-        place: Xe?.place,
-        askOrder: Xe?.askOrder,
-        shownAt: Xe?.armInputGrace ? Date.now() : undefined,
-        succeeds: Xe?.succeeds,
+        place: options?.place,
+        askOrder: options?.askOrder,
+        shownAt: options?.armInputGrace ? Date.now() : undefined,
+        succeeds: options?.succeeds,
         userInvoked,
         hideWhile,
         holdsTop,
-        onFirstReveal: Xe?.onFirstReveal,
-        onClaimed: Xe?.onClaimed,
-        countedAsk: Xe?.countedAsk,
+        onFirstReveal: options?.onFirstReveal,
+        onClaimed: options?.onClaimed,
+        countedAsk: options?.countedAsk,
       });
       return {
-        id: rt,
+        id,
         replied: promise,
         update: (payload) => {
-          if (L.has(rt))
+          if (pendingReplies.has(id))
             signal_3.emit({
-              id: rt,
+              id,
               payload,
             });
         },
@@ -122,18 +122,18 @@ class LocalJsxHost {
   constructor(requestDialog) {
     this.#e = requestDialog;
   }
-  subscribe = (h) => this.#n.subscribe(h);
+  subscribe = (listener) => this.#n.subscribe(listener);
   getSnapshot = () => this.#t;
-  show(h, { commandName, immediate, hidesPrompt, retireAtTurnBoundary, holdsQueue = true }) {
+  show(node, { commandName, immediate, hidesPrompt, retireAtTurnBoundary, holdsQueue = true }) {
     this.#s += 1;
-    let Re = `local-jsx-${this.#s}`;
+    let nodeId = `local-jsx-${this.#s}`;
     let abortController = new AbortController();
-    this.#r((We) => We.set(Re, h));
-    if (retireAtTurnBoundary) this.#o.set(Re, () => abortController.abort());
+    this.#r((panels) => panels.set(nodeId, node));
+    if (retireAtTurnBoundary) this.#o.set(nodeId, () => abortController.abort());
     let closed = this.#e(
       LOCAL_JSX_DIALOG,
       {
-        nodeId: Re,
+        nodeId,
         commandName,
         immediate,
         hidesPrompt,
@@ -145,33 +145,33 @@ class LocalJsxHost {
         signal: abortController.signal,
       },
     ).then(() => {
-      this.#o.delete(Re);
-      this.#r((We) => We.delete(Re));
+      this.#o.delete(nodeId);
+      this.#r((panels) => panels.delete(nodeId));
       return abortController.signal.aborted ? "closed" : "dismissed";
     });
     return {
-      nodeId: Re,
+      nodeId,
       closed,
       close: () => abortController.abort(),
     };
   }
   closeCommandPanels() {
-    for (let h of this.#o.values()) h();
+    for (let closePanel of this.#o.values()) closePanel();
   }
   get size() {
     return this.#t.size;
   }
-  #r(h) {
-    let x = new Map(this.#t);
-    h(x);
-    this.#t = x;
+  #r(updatePanels) {
+    let nextPanels = new Map(this.#t);
+    updatePanels(nextPanels);
+    this.#t = nextPanels;
     this.#n.emit();
   }
 }
 //@ chunk-18hwfzwa.js:184931-185079 placement
-async function clearMcpAuthCaches(h, x, storageV5) {
-  let L = require("./chunk-asne9cp8.js").mcpClientModule();
-  await L.clearServerCache(h, x);
-  await L.removeMcpAuthCacheEntry(h, storageV5);
+async function clearMcpAuthCaches(serverName, serverConfig, storageV5) {
+  let mcpClient = require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
+  await mcpClient.clearServerCache(serverName, serverConfig);
+  await mcpClient.removeMcpAuthCacheEntry(serverName, storageV5);
 }
 export { requestLocalJsxDialog, LocalJsxHost, clearMcpAuthCaches };

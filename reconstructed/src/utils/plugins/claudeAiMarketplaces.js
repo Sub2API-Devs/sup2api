@@ -21,15 +21,15 @@ import {
 } from "./schemas.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  string,
-  u,
+  stringSchema,
+  objectSchema,
   _enum,
   union,
   literal,
-  E,
+  numberSchema,
   array,
   unknown,
-  M,
+  booleanSchema,
   record,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { GITHUB_REPO_SLUG_RE, parseMarketplaceInput } from "./parseMarketplaceInput.js";
@@ -78,58 +78,70 @@ import { readFileChecked } from "../fileRead.js";
 import { createKeyedQueue } from "../promiseQueue.js";
 import { registerWriteQueueDrain } from "../settings/writeQueues.js";
 import { lock, releaseLockQuietly } from "../lockfile.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:673790-673867 placement
 var ACCOUNT_MARKETPLACES_API_PATH = "/api/oauth/organizations/:orgUUID/marketplaces";
 var ACCOUNT_MARKETPLACES_FETCH_TIMEOUT_MS = 1e4;
 var MAX_ACCOUNT_MARKETPLACES_BYTES = 4194304;
 //@ chunk-e6aww6q8.js:673867-673902 placement
-function isPrintableMarketplaceText(e) {
-  return !CONTROL_OR_BIDI_CHARS_RE.test(e);
+function isPrintableMarketplaceText(text) {
+  return !CONTROL_OR_BIDI_CHARS_RE.test(text);
 }
 //@ chunk-e6aww6q8.js:673902-674499 placement
 /**
  * 本语句定义 claude.ai 账号市场行的 zod schema：显示名、ref/git url 正则、名长上限 128，以及市场行（github/git/claudeai 源）。
  */
-var OptionalDisplayNameSchema = DoctorLazy(() =>
-  string().max(MAX_MARKETPLACE_NAME_LENGTH).refine(isPrintableMarketplaceText).optional().catch(undefined),
-);
-var GIT_REF_RE = /^\w[\w./-]{0,127}$/;
-var GIT_URL_RE = /^(?:https?:\/\/|[\w-]{1,64}@[\w.-]+:)[\w.~:/%+-]+$/;
-var MAX_MARKETPLACE_NAME_LENGTH = 128;
-var AccountMarketplaceRowSchema = DoctorLazy(() =>
-  u({
-    name: string().min(1).max(MAX_MARKETPLACE_NAME_LENGTH).refine(isPrintableMarketplaceText),
-    display_name: OptionalDisplayNameSchema(),
-    scope: _enum(CLAUDEAI_MARKETPLACE_KINDS).optional().catch(undefined),
-    source: union([
-      u({
-        source: literal("github"),
-        repo: string().max(MAX_MARKETPLACE_NAME_LENGTH).regex(GITHUB_REPO_SLUG_RE),
-        ref: string().regex(GIT_REF_RE).optional(),
-      }),
-      u({
-        source: literal("git"),
-        url: string().max(2048).regex(GIT_URL_RE),
-        ref: string().regex(GIT_REF_RE).optional(),
-      }),
-      u({
-        source: literal("claudeai"),
-      }),
-    ]),
-    id: string().refine(isTaggedMarketplaceId).optional().catch(undefined),
-    updated_at: string().catch(""),
-  }).refine((e) =>
-    e.source.source === "claudeai" ? e.id !== undefined : isValidAccountMarketplaceName(e.name),
-  ),
-);
+var OptionalDisplayNameSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var GIT_REF_RE;
+var GIT_URL_RE;
+var MAX_MARKETPLACE_NAME_LENGTH;
+var AccountMarketplaceRowSchema;
+deferInit("chunk-e6aww6q8.js:673902", () => {
+  OptionalDisplayNameSchema = DoctorLazy(() =>
+    stringSchema()
+      .max(MAX_MARKETPLACE_NAME_LENGTH)
+      .refine(isPrintableMarketplaceText)
+      .optional()
+      .catch(undefined),
+  );
+  GIT_REF_RE = /^\w[\w./-]{0,127}$/;
+  GIT_URL_RE = /^(?:https?:\/\/|[\w-]{1,64}@[\w.-]+:)[\w.~:/%+-]+$/;
+  MAX_MARKETPLACE_NAME_LENGTH = 128;
+  AccountMarketplaceRowSchema = DoctorLazy(() =>
+    objectSchema({
+      name: stringSchema().min(1).max(MAX_MARKETPLACE_NAME_LENGTH).refine(isPrintableMarketplaceText),
+      display_name: OptionalDisplayNameSchema(),
+      scope: _enum(CLAUDEAI_MARKETPLACE_KINDS).optional().catch(undefined),
+      source: union([
+        objectSchema({
+          source: literal("github"),
+          repo: stringSchema().max(MAX_MARKETPLACE_NAME_LENGTH).regex(GITHUB_REPO_SLUG_RE),
+          ref: stringSchema().regex(GIT_REF_RE).optional(),
+        }),
+        objectSchema({
+          source: literal("git"),
+          url: stringSchema().max(2048).regex(GIT_URL_RE),
+          ref: stringSchema().regex(GIT_REF_RE).optional(),
+        }),
+        objectSchema({
+          source: literal("claudeai"),
+        }),
+      ]),
+      id: stringSchema().refine(isTaggedMarketplaceId).optional().catch(undefined),
+      updated_at: stringSchema().catch(""),
+    }).refine((row) =>
+      row.source.source === "claudeai" ? row.id !== undefined : isValidAccountMarketplaceName(row.name),
+    ),
+  );
+});
 //@ chunk-e6aww6q8.js:674499-674603 placement
-function isValidAccountMarketplaceName(e) {
+function isValidAccountMarketplaceName(name) {
   return (
-    !RESERVED_MARKETPLACE_NAMES.has(nfcBasename(e)) &&
-    !isPackageMarketplaceName(nfcBasename(e)) &&
-    !(e in Object.prototype) &&
-    MarketplaceNameSchema().safeParse(e).success
+    !RESERVED_MARKETPLACE_NAMES.has(nfcBasename(name)) &&
+    !isPackageMarketplaceName(nfcBasename(name)) &&
+    !(name in Object.prototype) &&
+    MarketplaceNameSchema().safeParse(name).success
   );
 }
 //@ chunk-e6aww6q8.js:674603-674648 placement = setCwdState (1)
@@ -141,7 +153,7 @@ function nfcBasename(cwd) {
  * 把 claude.ai 市场显示名规范化（NFKD 去变音、小写、非法字符换成 -）并加 claude.ai 前缀，得到本地市场名；不合法返回 null。
  */
 function toAccountMarketplaceLocalName(name) {
-  let n = trimAccountMarketplaceName(
+  let localName = trimAccountMarketplaceName(
     name
       .normalize("NFKD")
       .replace(/\p{M}+/gu, "")
@@ -149,13 +161,15 @@ function toAccountMarketplaceLocalName(name) {
       .replace(/[^a-z0-9_-]+/g, "-")
       .replace(/-{2,}/g, "-"),
   );
-  if (n === "" || !isValidAccountMarketplaceName(n)) return null;
-  let r = `${CLAUDEAI_MARKETPLACE_PREFIX}${n}`;
-  return isValidAccountMarketplaceName(r) ? r : null;
+  if (localName === "" || !isValidAccountMarketplaceName(localName)) return null;
+  let prefixedName = `${CLAUDEAI_MARKETPLACE_PREFIX}${localName}`;
+  return isValidAccountMarketplaceName(prefixedName) ? prefixedName : null;
 }
 //@ chunk-e6aww6q8.js:674852-674923 placement
-function trimAccountMarketplaceName(e) {
-  return e.slice(0, MAX_MARKETPLACE_NAME_LENGTH - CLAUDEAI_MARKETPLACE_PREFIX.length).replace(/^-+|-+$/g, "");
+function trimAccountMarketplaceName(name) {
+  return name
+    .slice(0, MAX_MARKETPLACE_NAME_LENGTH - CLAUDEAI_MARKETPLACE_PREFIX.length)
+    .replace(/^-+|-+$/g, "");
 }
 //@ chunk-e6aww6q8.js:674923-674933 placement
 var MAX_NAME_SUFFIX_LENGTH = 6;
@@ -165,52 +179,52 @@ var MAX_NAME_SUFFIX_LENGTH = 6;
  */
 function assignAccountMarketplaceLocalNames(rows) {
   let byName = new Map();
-  for (let y of rows) {
-    let accountMarketplaceLocalName = toAccountMarketplaceLocalName(y.name);
+  for (let row of rows) {
+    let accountMarketplaceLocalName = toAccountMarketplaceLocalName(row.name);
     if (accountMarketplaceLocalName === null) continue;
-    let w = byName.get(accountMarketplaceLocalName);
-    if (w === undefined) byName.set(accountMarketplaceLocalName, [y]);
-    else w.push(y);
+    let rowsForName = byName.get(accountMarketplaceLocalName);
+    if (rowsForName === undefined) byName.set(accountMarketplaceLocalName, [row]);
+    else rowsForName.push(row);
   }
   let nameById = new Map();
   let nameCounts = new Map();
-  for (let [y, S] of byName)
-    for (let w of S) {
-      let L = y;
-      if (S.length > 1) {
-        let lower = w.id
+  for (let [localName, rowsForName] of byName)
+    for (let row of rowsForName) {
+      let assignedName = localName;
+      if (rowsForName.length > 1) {
+        let lower = row.id
           .replace(/[^A-Za-z0-9]/g, "")
           .slice(-MAX_NAME_SUFFIX_LENGTH)
           .toLowerCase();
-        let q = `-${lower}`;
-        let Z = `${trimAccountMarketplaceName(y.slice(0, MAX_MARKETPLACE_NAME_LENGTH - q.length))}${q}`;
-        L = lower !== "" && isValidAccountMarketplaceName(Z) ? Z : null;
+        let suffix = `-${lower}`;
+        let candidateName = `${trimAccountMarketplaceName(localName.slice(0, MAX_MARKETPLACE_NAME_LENGTH - suffix.length))}${suffix}`;
+        assignedName = lower !== "" && isValidAccountMarketplaceName(candidateName) ? candidateName : null;
       }
-      if (L !== null) {
-        nameById.set(w.id, L);
-        nameCounts.set(L, (nameCounts.get(L) ?? 0) + 1);
+      if (assignedName !== null) {
+        nameById.set(row.id, assignedName);
+        nameCounts.set(assignedName, (nameCounts.get(assignedName) ?? 0) + 1);
       }
     }
   let result = new Map();
-  for (let y of rows.toSorted((S, w) => (S.id < w.id ? -1 : S.id > w.id ? 1 : 0))) {
-    let S = nameById.get(y.id);
-    if (S !== undefined && nameCounts.get(S) === 1) result.set(y.id, S);
+  for (let row of rows.toSorted((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))) {
+    let assignedName = nameById.get(row.id);
+    if (assignedName !== undefined && nameCounts.get(assignedName) === 1) result.set(row.id, assignedName);
   }
   return result;
 }
 //@ chunk-e6aww6q8.js:675527-675781 placement
-function parseAccountMarketplaceRows(e) {
-  let n = new Set();
-  let r = new Set();
-  let filtered = parseValidRows(AccountMarketplaceRowSchema(), e).filter((h) => {
-    if (h.source.source === "claudeai" && h.id !== undefined)
-      return r.has(h.id) ? false : Boolean(r.add(h.id));
-    let y = nfcBasename(h.name);
-    return n.has(y) ? false : Boolean(n.add(y));
+function parseAccountMarketplaceRows(rawRows) {
+  let seenNames = new Set();
+  let seenIds = new Set();
+  let filtered = parseValidRows(AccountMarketplaceRowSchema(), rawRows).filter((row) => {
+    if (row.source.source === "claudeai" && row.id !== undefined)
+      return seenIds.has(row.id) ? false : Boolean(seenIds.add(row.id));
+    let baseName = nfcBasename(row.name);
+    return seenNames.has(baseName) ? false : Boolean(seenNames.add(baseName));
   });
   return {
     rows: filtered,
-    dropped: e.length - filtered.length,
+    dropped: rawRows.length - filtered.length,
   };
 }
 //@ chunk-e6aww6q8.js:675781-676594 placement
@@ -221,7 +235,7 @@ async function fetchClaudeAiMarketplaceRows({ etag, credentials }) {
         status: "skipped",
         code: "no-plugins-scope",
       };
-    let s = await apiClient.get(ACCOUNT_MARKETPLACES_API_PATH, {
+    let listResponse = await apiClient.get(ACCOUNT_MARKETPLACES_API_PATH, {
       auth: "teleport-org",
       isBackground: true,
       timeout: ACCOUNT_MARKETPLACES_FETCH_TIMEOUT_MS,
@@ -234,35 +248,35 @@ async function fetchClaudeAiMarketplaceRows({ etag, credentials }) {
         },
       }),
     });
-    if (!s.ok)
+    if (!listResponse.ok)
       return {
         status: "skipped",
-        code: s.reason,
+        code: listResponse.reason,
       };
-    if (s.status === 304 && etag !== undefined)
+    if (listResponse.status === 304 && etag !== undefined)
       return {
         status: "not_modified",
       };
-    if (s.status === 403 || s.status === 404)
+    if (listResponse.status === 403 || listResponse.status === 404)
       return {
         status: "denied",
-        code: `http_${s.status}`,
+        code: `http_${listResponse.status}`,
       };
-    if (s.status < 200 || s.status >= 300)
+    if (listResponse.status < 200 || listResponse.status >= 300)
       return {
         status: "failed",
-        code: `http_${s.status}`,
+        code: `http_${listResponse.status}`,
       };
-    let h = MarketplacesListSchema().safeParse(s.data);
-    if (!h.success)
+    let parseResult = MarketplacesListSchema().safeParse(listResponse.data);
+    if (!parseResult.success)
       return {
         status: "failed",
         code: "malformed",
       };
-    let etag_2 = s.response?.headers?.etag;
+    let etag_2 = listResponse.response?.headers?.etag;
     return {
       status: "ok",
-      ...parseAccountMarketplaceRows(h.data.marketplaces),
+      ...parseAccountMarketplaceRows(parseResult.data.marketplaces),
       etag: isValidEtag(etag_2) ? etag_2 : undefined,
     };
   } catch (error) {
@@ -282,25 +296,30 @@ function classifySyncError(error) {
     : kind;
 }
 //@ chunk-e6aww6q8.js:676702-676841 placement
-var ACCOUNT_MARKETPLACES_CACHE_VERSION = 2;
-var ACCOUNT_MARKETPLACES_PARSER_VERSION = 1000 + ACCOUNT_MARKETPLACES_CACHE_VERSION;
-var AccountMarketplacesCacheSchema = DoctorLazy(() =>
-  u({
-    etag: string().optional().catch(undefined),
-    parserVersion: E().optional().catch(undefined),
-    rows: array(unknown()).catch([]),
-  }),
-);
+var ACCOUNT_MARKETPLACES_CACHE_VERSION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ACCOUNT_MARKETPLACES_PARSER_VERSION;
+var AccountMarketplacesCacheSchema;
+deferInit("chunk-e6aww6q8.js:676702", () => {
+  ACCOUNT_MARKETPLACES_CACHE_VERSION = 2;
+  ACCOUNT_MARKETPLACES_PARSER_VERSION = 1000 + ACCOUNT_MARKETPLACES_CACHE_VERSION;
+  AccountMarketplacesCacheSchema = DoctorLazy(() =>
+    objectSchema({
+      etag: stringSchema().optional().catch(undefined),
+      parserVersion: numberSchema().optional().catch(undefined),
+      rows: array(unknown()).catch([]),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:676841-676875 placement
-function accountMarketplacesCachePath(e) {
-  return join(e, MARKETPLACES_JSON_FILE);
+function accountMarketplacesCachePath(syncBucketDir) {
+  return join(syncBucketDir, MARKETPLACES_JSON_FILE);
 }
 //@ chunk-e6aww6q8.js:676875-677081 placement
 /**
  * 读账号市场列表缓存（etag 只在解析器版本一致时有效）。
  */
-async function readAccountMarketplacesCache(e) {
-  let manifestText = await readManifestText(accountMarketplacesCachePath(e), null);
+async function readAccountMarketplacesCache(syncBucketDir) {
+  let manifestText = await readManifestText(accountMarketplacesCachePath(syncBucketDir), null);
   if (manifestText === null) return null;
   let manifestJson = parseManifestJson(manifestText, AccountMarketplacesCacheSchema(), null);
   if (manifestJson === null) return null;
@@ -316,12 +335,12 @@ async function readAccountMarketplacesCache(e) {
 /**
  * writeAccountMarketplacesCache：写入账号市场缓存（带解析器版本）。
  */
-async function writeAccountMarketplacesCache(e, n) {
+async function writeAccountMarketplacesCache(syncBucketDir, payload) {
   await writeFileAtomic_2(
-    accountMarketplacesCachePath(e),
+    accountMarketplacesCachePath(syncBucketDir),
     jsonStringify(
       {
-        ...n,
+        ...payload,
         parserVersion: ACCOUNT_MARKETPLACES_PARSER_VERSION,
       },
       null,
@@ -333,13 +352,13 @@ async function writeAccountMarketplacesCache(e, n) {
 class KeyedPromiseCache {
   #e = null;
   #t = null;
-  read(e, n) {
-    if (this.#t === null || this.#e !== e) {
-      this.#e = e;
-      this.#t = n().then(
-        (r) => {
-          if (r === null) this.invalidate();
-          return r;
+  read(key, loader) {
+    if (this.#t === null || this.#e !== key) {
+      this.#e = key;
+      this.#t = loader().then(
+        (loadedValue) => {
+          if (loadedValue === null) this.invalidate();
+          return loadedValue;
         },
         (error) => {
           this.invalidate();
@@ -358,15 +377,18 @@ class KeyedPromiseCache {
 /**
  * accountMarketplacesPromiseCache：账号市场请求的键控 Promise 缓存。
  */
-var accountMarketplacesPromiseCache = new HostScoped(() => new KeyedPromiseCache());
+var accountMarketplacesPromiseCache; // deferred: uses KeyedPromiseCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:677386", () => {
+  accountMarketplacesPromiseCache = new HostScoped(() => new KeyedPromiseCache());
+});
 //@ chunk-e6aww6q8.js:677413-677570 placement
-async function isAccountSyncRootUsable(e) {
+async function isAccountSyncRootUsable(syncBucket) {
   return (
-    (await verifySyncRoot(syncedPluginBucketDir(e), getClaudeConfigDir(), {
+    (await verifySyncRoot(syncedPluginBucketDir(syncBucket), getClaudeConfigDir(), {
       event: "plugins_sync_root_refused",
       phase: "read",
       rootLabel: SKILLS_SYNCED_STAGING,
-    }).catch(() => null)) === "real" && (await hasSyncMarker(syncedPluginsRoot(), e))
+    }).catch(() => null)) === "real" && (await hasSyncMarker(syncedPluginsRoot(), syncBucket))
   );
 }
 //@ chunk-e6aww6q8.js:677570-678759 placement
@@ -375,7 +397,7 @@ async function isAccountSyncRootUsable(e) {
  */
 async function listClaudeAiMarketplaces(credentials) {
   if (!isPluginsSyncOn()) return null;
-  let n = await accountMarketplacesPromiseCache
+  let loaded = await accountMarketplacesPromiseCache
     .of(getRootSession().host)
     .read(`${syncedPluginsRoot()}|${getAccountCacheKey()}`, async () => {
       let syncBucket = await getSyncBucket(credentials);
@@ -388,117 +410,121 @@ async function listClaudeAiMarketplaces(credentials) {
             cache: accountMarketplacesCache,
           };
     });
-  if (n === null) return null;
-  let { bucket, cache } = n;
-  let h = {
+  if (loaded === null) return null;
+  let { bucket, cache } = loaded;
+  let result = {
     bucket,
     available: [],
     hosted: [],
     browseOnly: [],
     policyBlocked: [],
   };
-  let y = assignAccountMarketplaceLocalNames(
-    cache.rows.flatMap((w) =>
-      w.source.source === "claudeai" && w.id !== undefined
+  let localNames = assignAccountMarketplaceLocalNames(
+    cache.rows.flatMap((row) =>
+      row.source.source === "claudeai" && row.id !== undefined
         ? [
             {
-              id: w.id,
-              name: w.name,
+              id: row.id,
+              name: row.name,
             },
           ]
         : [],
     ),
   );
   let organizationUuid = bucketOrg(bucket) ?? "";
-  for (let w of cache.rows)
-    if (w.source.source === "claudeai") {
-      let L = w.id === undefined ? undefined : y.get(w.id);
-      let G =
-        w.id !== undefined && L !== undefined
+  for (let row of cache.rows)
+    if (row.source.source === "claudeai") {
+      let localName = row.id === undefined ? undefined : localNames.get(row.id);
+      let hostedEntry =
+        row.id !== undefined && localName !== undefined
           ? {
-              name: L,
-              displayName: w.display_name ?? w.name,
-              marketplaceId: w.id,
-              scope: w.scope,
+              name: localName,
+              displayName: row.display_name ?? row.name,
+              marketplaceId: row.id,
+              scope: row.scope,
             }
           : undefined;
       if (
-        w.id !== undefined &&
+        row.id !== undefined &&
         !isSourceAllowedByPolicy({
           source: "claudeai",
-          marketplaceId: w.id,
+          marketplaceId: row.id,
           organizationUuid,
-          ...(w.scope !== undefined && {
-            scope: w.scope,
+          ...(row.scope !== undefined && {
+            scope: row.scope,
           }),
         })
       ) {
-        if (G !== undefined) h.policyBlocked.push(G);
+        if (hostedEntry !== undefined) result.policyBlocked.push(hostedEntry);
         continue;
       }
-      if (G !== undefined) h.hosted.push(G);
+      if (hostedEntry !== undefined) result.hosted.push(hostedEntry);
       else
-        h.browseOnly.push({
-          name: w.name,
-          displayName: w.display_name ?? w.name,
+        result.browseOnly.push({
+          name: row.name,
+          displayName: row.display_name ?? row.name,
         });
     } else if (
-      isSourceAllowedByPolicy(w.source) &&
-      (w.source.source !== "git" || isPluginGitUrlValid(w.source.url)) &&
-      (await isListedSourceUnchanged(w.source))
+      isSourceAllowedByPolicy(row.source) &&
+      (row.source.source !== "git" || isPluginGitUrlValid(row.source.url)) &&
+      (await isListedSourceUnchanged(row.source))
     )
-      h.available.push({
-        name: w.name,
-        source: w.source,
-        scope: w.scope,
+      result.available.push({
+        name: row.name,
+        source: row.source,
+        scope: row.scope,
       });
-  if (h.browseOnly.length > 0)
+  if (result.browseOnly.length > 0)
     logForDiagnosticsNoPII("info", "claudeai_marketplaces_browse_only", {
-      count: h.browseOnly.length,
+      count: result.browseOnly.length,
     });
-  return h;
+  return result;
 }
 //@ chunk-e6aww6q8.js:678759-678874 placement
 async function isListedSourceUnchanged(source) {
-  let n = await parseMarketplaceInput(formatGitSourceSpec(source)).catch(() => null);
-  return n !== null && !("error" in n) && n.source === source.source;
+  let parsed = await parseMarketplaceInput(formatGitSourceSpec(source)).catch(() => null);
+  return parsed !== null && !("error" in parsed) && parsed.source === source.source;
 }
 //@ chunk-e6aww6q8.js:678874-679202 placement
 /**
  * 从 claude.ai 可用/托管市场列表中去掉已在本地注册的项（按 NFC 名字或 claudeai 源的 marketplaceId 比较）；输入为 null 时返回空列表。
  */
-function filterUnaddedClaudeAiMarketplaces(e, n) {
-  if (e === null)
+function filterUnaddedClaudeAiMarketplaces(listed, configuredMarketplaces) {
+  if (listed === null)
     return {
       available: [],
       hosted: [],
     };
-  let r = new Set(Object.keys(n).map(nfcBasename));
-  let s = new Set(
-    Object.values(n).flatMap(({ source }) => (source.source === "claudeai" ? [source.marketplaceId] : [])),
+  let configuredNames = new Set(Object.keys(configuredMarketplaces).map(nfcBasename));
+  let configuredIds = new Set(
+    Object.values(configuredMarketplaces).flatMap(({ source }) =>
+      source.source === "claudeai" ? [source.marketplaceId] : [],
+    ),
   );
   return {
-    available: e.available.filter((h) => !r.has(nfcBasename(h.name))),
-    hosted: e.hosted.filter((h) => !r.has(nfcBasename(h.name)) && !s.has(h.marketplaceId)),
+    available: listed.available.filter((entry) => !configuredNames.has(nfcBasename(entry.name))),
+    hosted: listed.hosted.filter(
+      (entry) => !configuredNames.has(nfcBasename(entry.name)) && !configuredIds.has(entry.marketplaceId),
+    ),
   };
 }
 //@ chunk-e6aww6q8.js:679202-679474 placement
 /**
  * 按本地名精确查找账号市场行；找不到时按显示名查找，多个命中返回 {kind:"ambiguous"}，否则 found/none。
  */
-function findAccountMarketplaceByName(e, name) {
-  let r = nfcBasename(name);
-  let found = e.find((y) => nfcBasename(y.name) === r);
+function findAccountMarketplaceByName(rows, name) {
+  let normalizedName = nfcBasename(name);
+  let found = rows.find((row) => nfcBasename(row.name) === normalizedName);
   if (found !== undefined)
     return {
       kind: "found",
       row: found,
     };
-  let filtered = e.filter((y) => nfcBasename(y.displayName) === r);
+  let filtered = rows.filter((row) => nfcBasename(row.displayName) === normalizedName);
   if (filtered.length > 1)
     return {
       kind: "ambiguous",
-      localNames: filtered.map((y) => y.name),
+      localNames: filtered.map((row) => row.name),
     };
   return filtered[0] === undefined
     ? {
@@ -513,9 +539,9 @@ function findAccountMarketplaceByName(e, name) {
 /**
  * accountMarketplaceLabel：市场名加上 “listed as …”。
  */
-function accountMarketplaceLabel(e) {
-  let n = listedAsSuffix(e.name, e.displayName);
-  return n === undefined ? e.name : `${e.name} (${n})`;
+function accountMarketplaceLabel(entry) {
+  let suffix = listedAsSuffix(entry.name, entry.displayName);
+  return suffix === undefined ? entry.name : `${entry.name} (${suffix})`;
 }
 //@ chunk-e6aww6q8.js:679566-679638 placement
 /**
@@ -530,8 +556,8 @@ function listedAsSuffix(name, displayName) {
 /**
  * noCliNameLabel：只有显示名的市场的说明。
  */
-function noCliNameLabel(e) {
-  return `(no CLI name) \xB7 listed as ${quoteDisplayName(e.displayName)}`;
+function noCliNameLabel(entry) {
+  return `(no CLI name) \xB7 listed as ${quoteDisplayName(entry.displayName)}`;
 }
 //@ chunk-e6aww6q8.js:679713-679761 placement
 function quoteDisplayName(displayName) {
@@ -567,45 +593,56 @@ function formatGitSourceSpec(source) {
 /**
  * claude.ai 托管市场插件目录：每页 500、最多 4 页，以及插件行、分页响应的 zod schema。
  */
-var CATALOG_PAGE_SIZE = 500;
-var CATALOG_MAX_PAGES = 4;
-var CATALOG_MAX_ROWS = CATALOG_PAGE_SIZE * CATALOG_MAX_PAGES;
-var MAX_CATALOG_PLUGIN_NAME_LENGTH = 128;
-var MAX_CATALOG_DESCRIPTION_LENGTH = 1024;
-var CATALOG_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
-var CATALOG_CURSOR_RE = /^[A-Za-z0-9_-]{1,512}$/;
-var CatalogPluginRowSchema = DoctorLazy(() =>
-  u({
-    id: string().refine(isTaggedMarketplaceId),
-    name: string().max(MAX_CATALOG_PLUGIN_NAME_LENGTH).refine(isValidPluginIdSegment),
-    display_name: OptionalDisplayNameSchema(),
-    description: string()
-      .max(MAX_CATALOG_DESCRIPTION_LENGTH * 4)
-      .transform((e) =>
-        truncateToLength(
-          e.replace(new RegExp(CONTROL_OR_BIDI_CHARS_RE, "gu"), " "),
-          MAX_CATALOG_DESCRIPTION_LENGTH,
-        ),
-      )
-      .catch(""),
-    version: string().regex(CATALOG_VERSION_RE).optional().catch(undefined),
-    authored_version: OptionalDisplayNameSchema(),
-    updated_at: string().max(64).catch(""),
-    installable: M(),
-  }),
-);
-var CatalogPageSchema = DoctorLazy(() =>
-  u({
-    plugins: array(unknown()),
-    next_cursor: string().regex(CATALOG_CURSOR_RE).optional().catch(undefined),
-  }),
-);
+var CATALOG_PAGE_SIZE; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CATALOG_MAX_PAGES;
+var CATALOG_MAX_ROWS;
+var MAX_CATALOG_PLUGIN_NAME_LENGTH;
+var MAX_CATALOG_DESCRIPTION_LENGTH;
+var CATALOG_VERSION_RE;
+var CATALOG_CURSOR_RE;
+var CatalogPluginRowSchema;
+var CatalogPageSchema;
+deferInit("chunk-e6aww6q8.js:680162", () => {
+  CATALOG_PAGE_SIZE = 500;
+  CATALOG_MAX_PAGES = 4;
+  CATALOG_MAX_ROWS = CATALOG_PAGE_SIZE * CATALOG_MAX_PAGES;
+  MAX_CATALOG_PLUGIN_NAME_LENGTH = 128;
+  MAX_CATALOG_DESCRIPTION_LENGTH = 1024;
+  CATALOG_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._+-]{0,63}$/;
+  CATALOG_CURSOR_RE = /^[A-Za-z0-9_-]{1,512}$/;
+  CatalogPluginRowSchema = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema().refine(isTaggedMarketplaceId),
+      name: stringSchema().max(MAX_CATALOG_PLUGIN_NAME_LENGTH).refine(isValidPluginIdSegment),
+      display_name: OptionalDisplayNameSchema(),
+      description: stringSchema()
+        .max(MAX_CATALOG_DESCRIPTION_LENGTH * 4)
+        .transform((description) =>
+          truncateToLength(
+            description.replace(new RegExp(CONTROL_OR_BIDI_CHARS_RE, "gu"), " "),
+            MAX_CATALOG_DESCRIPTION_LENGTH,
+          ),
+        )
+        .catch(""),
+      version: stringSchema().regex(CATALOG_VERSION_RE).optional().catch(undefined),
+      authored_version: OptionalDisplayNameSchema(),
+      updated_at: stringSchema().max(64).catch(""),
+      installable: booleanSchema(),
+    }),
+  );
+  CatalogPageSchema = DoctorLazy(() =>
+    objectSchema({
+      plugins: array(unknown()),
+      next_cursor: stringSchema().regex(CATALOG_CURSOR_RE).optional().catch(undefined),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:680661-680816 placement
 function parseCatalogPluginRows(rows) {
-  let n = new Set();
-  let filtered = parseValidRows(CatalogPluginRowSchema(), rows).filter((s) => {
-    let h = sanitizePluginIdLower(s.name);
-    return n.has(h) ? false : Boolean(n.add(h));
+  let seenNames = new Set();
+  let filtered = parseValidRows(CatalogPluginRowSchema(), rows).filter((row) => {
+    let normalizedName = sanitizePluginIdLower(row.name);
+    return seenNames.has(normalizedName) ? false : Boolean(seenNames.add(normalizedName));
   });
   return {
     rows: filtered,
@@ -618,8 +655,8 @@ var GONE_HTTP_STATUSES = ["http_403", "http_404"];
 var ACCOUNT_MARKETPLACE_GONE_TTL_MS = 604800000;
 //@ chunk-e6aww6q8.js:680868-681031 placement
 function buildCatalogPagePath(marketplaceId, cursor) {
-  let r = `limit=${CATALOG_PAGE_SIZE}${cursor === undefined ? "" : `&cursor=${cursor}`}`;
-  return `/api/oauth/organizations/:orgUUID/marketplaces/${encodeURIComponent(marketplaceId)}/plugins?${r}`;
+  let query = `limit=${CATALOG_PAGE_SIZE}${cursor === undefined ? "" : `&cursor=${cursor}`}`;
+  return `/api/oauth/organizations/:orgUUID/marketplaces/${encodeURIComponent(marketplaceId)}/plugins?${query}`;
 }
 //@ chunk-e6aww6q8.js:681031-682231 placement
 /**
@@ -664,7 +701,7 @@ async function fetchClaudeAiCatalogPages({ marketplaceId, etag, credentials, isB
         return {
           status: "not_modified",
         };
-      let found = GONE_HTTP_STATUSES.find((ke) => ke === `http_${response.status}`);
+      let found = GONE_HTTP_STATUSES.find((statusCode) => statusCode === `http_${response.status}`);
       if (found !== undefined)
         return {
           status: "denied",
@@ -675,18 +712,18 @@ async function fetchClaudeAiCatalogPages({ marketplaceId, etag, credentials, isB
           status: "failed",
           code: `http_${response.status}`,
         };
-      let Se = CatalogPageSchema().safeParse(response.data);
-      if (!Se.success)
+      let pageResult = CatalogPageSchema().safeParse(response.data);
+      if (!pageResult.success)
         return {
           status: "failed",
           code: "malformed",
         };
-      rows.push(...Se.data.plugins);
+      rows.push(...pageResult.data.plugins);
       if (page === 0) {
         let etag = response.response?.headers?.etag;
-        nextEtag = isValidEtag(etag) && Se.data.next_cursor === undefined ? etag : undefined;
+        nextEtag = isValidEtag(etag) && pageResult.data.next_cursor === undefined ? etag : undefined;
       }
-      cursor = Se.data.next_cursor;
+      cursor = pageResult.data.next_cursor;
       if (cursor === undefined)
         return {
           status: "ok",
@@ -713,24 +750,27 @@ async function fetchClaudeAiCatalogPages({ marketplaceId, etag, credentials, isB
   }
 }
 //@ chunk-e6aww6q8.js:682231-682475 placement
-var CatalogCacheSchema = DoctorLazy(() =>
-  u({
-    etag: string().optional().catch(undefined),
-    parserVersion: E().optional().catch(undefined),
-    fetchedAt: string().max(64).catch(""),
-    truncated: M().catch(false),
-    rows: array(unknown()).catch([]),
-    gone: u({
-      goneAt: string().max(64),
-      status: _enum(GONE_HTTP_STATUSES),
-    })
-      .optional()
-      .catch(undefined),
-  }),
-);
+var CatalogCacheSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:682231", () => {
+  CatalogCacheSchema = DoctorLazy(() =>
+    objectSchema({
+      etag: stringSchema().optional().catch(undefined),
+      parserVersion: numberSchema().optional().catch(undefined),
+      fetchedAt: stringSchema().max(64).catch(""),
+      truncated: booleanSchema().catch(false),
+      rows: array(unknown()).catch([]),
+      gone: objectSchema({
+        goneAt: stringSchema().max(64),
+        status: _enum(GONE_HTTP_STATUSES),
+      })
+        .optional()
+        .catch(undefined),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:682475-682514 placement
-function claudeAiMarketplaceCachePath(e, n) {
-  return join(e, claudeAiMarketplaceFile(n));
+function claudeAiMarketplaceCachePath(root, marketplaceId) {
+  return join(root, claudeAiMarketplaceFile(marketplaceId));
 }
 //@ chunk-e6aww6q8.js:682514-682829 placement
 /**
@@ -758,26 +798,26 @@ async function readCatalogCache(root, marketplaceId) {
   };
 }
 //@ chunk-e6aww6q8.js:682829-683042 placement
-async function writeCatalogCache(root, marketplaceId, r) {
-  let s =
-    r.kind === "gone"
+async function writeCatalogCache(root, marketplaceId, entry) {
+  let cacheBody =
+    entry.kind === "gone"
       ? {
           gone: {
-            goneAt: r.goneAt,
-            status: r.status,
+            goneAt: entry.goneAt,
+            status: entry.status,
           },
         }
       : {
-          etag: r.etag,
-          rows: r.rows,
-          fetchedAt: r.fetchedAt,
-          truncated: r.truncated,
+          etag: entry.etag,
+          rows: entry.rows,
+          fetchedAt: entry.fetchedAt,
+          truncated: entry.truncated,
         };
   await writeFileAtomic_2(
     claudeAiMarketplaceCachePath(root, marketplaceId),
     jsonStringify(
       {
-        ...s,
+        ...cacheBody,
         parserVersion: MAX_ACCOUNT_MARKETPLACE_FETCH_RETRIES,
       },
       null,
@@ -793,9 +833,9 @@ async function removeClaudeAiMarketplaceCache(bucket, marketplaceId) {
 /**
  * removeAccountSyncedFile：账号同步根可用时删除同步桶里的文件。
  */
-async function removeAccountSyncedFile(e, n) {
-  if (!(await isAccountSyncRootUsable(e))) return;
-  await rm_2(join(syncedPluginBucketDir(e), n), {
+async function removeAccountSyncedFile(syncBucket, fileName) {
+  if (!(await isAccountSyncRootUsable(syncBucket))) return;
+  await rm_2(join(syncedPluginBucketDir(syncBucket), fileName), {
     force: true,
   }).catch(() => {});
 }
@@ -803,7 +843,7 @@ async function removeAccountSyncedFile(e, n) {
 /**
  * 解析当前账号的同步桶：功能未开返回 inert，无身份 no_identity，组织不符 identity_mismatch，否则返回 bucket 与根目录。
  */
-async function resolveAccountBucket(e, credentials) {
+async function resolveAccountBucket(source, credentials) {
   if (!isPluginsSyncOn())
     return {
       kind: "inert",
@@ -813,7 +853,7 @@ async function resolveAccountBucket(e, credentials) {
     return {
       kind: "no_identity",
     };
-  if (bucketOrg(syncBucket) !== e.organizationUuid.toLowerCase())
+  if (bucketOrg(syncBucket) !== source.organizationUuid.toLowerCase())
     return {
       kind: "identity_mismatch",
     };
@@ -872,96 +912,107 @@ function catalogStatusCode(status) {
   }
 }
 //@ chunk-e6aww6q8.js:684375-684402 placement
-var accountMarketplaceSyncSlots = new HostScoped(() => new Map());
+var accountMarketplaceSyncSlots; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:684375", () => {
+  accountMarketplaceSyncSlots = new HostScoped(() => new Map());
+});
 //@ chunk-e6aww6q8.js:684402-685361 placement
 async function ensureClaudeAiMarketplace(
-  e,
+  name,
   source,
   { mode, credentials, isBackground = false, recheckGone = false, freshWithinMs = 0 },
 ) {
   if (!isTaggedMarketplaceId(source.marketplaceId))
-    return buildCatalogResult(e, [], {
+    return buildCatalogResult(name, [], {
       kind: "failed",
       code: "bad_marketplace_id",
     });
   let accountBucket = await resolveAccountBucket(source, credentials);
   if (accountBucket.kind !== "ready")
-    return buildCatalogResult(e, [], {
+    return buildCatalogResult(name, [], {
       kind: accountBucket.kind,
     });
   let { bucket, root } = accountBucket;
-  let q = (await isAccountSyncRootUsable(bucket)) ? await readCatalogCache(root, source.marketplaceId) : null;
-  let Z = catalogFromCache(e, q);
-  if (mode === "cache-only" || (mode === "if-missing" && q !== null)) return Z;
-  if (q !== null) {
-    let Ae = Date.now() - new Date(q.kind === "gone" ? q.goneAt : q.fetchedAt).getTime();
-    if (freshWithinMs > 0 && Ae >= 0 && Ae < freshWithinMs) return Z;
-    if (q.kind === "gone" && !recheckGone && Ae >= 0 && Ae < ACCOUNT_MARKETPLACE_GONE_TTL_MS) return Z;
+  let cacheEntry = (await isAccountSyncRootUsable(bucket))
+    ? await readCatalogCache(root, source.marketplaceId)
+    : null;
+  let cachedResult = catalogFromCache(name, cacheEntry);
+  if (mode === "cache-only" || (mode === "if-missing" && cacheEntry !== null)) return cachedResult;
+  if (cacheEntry !== null) {
+    let ageMs =
+      Date.now() - new Date(cacheEntry.kind === "gone" ? cacheEntry.goneAt : cacheEntry.fetchedAt).getTime();
+    if (freshWithinMs > 0 && ageMs >= 0 && ageMs < freshWithinMs) return cachedResult;
+    if (cacheEntry.kind === "gone" && !recheckGone && ageMs >= 0 && ageMs < ACCOUNT_MARKETPLACE_GONE_TTL_MS)
+      return cachedResult;
   }
   if (!isSourceAllowedByPolicy(source))
-    return buildCatalogResult(e, q?.kind === "rows" ? q.rows : [], {
+    return buildCatalogResult(name, cacheEntry?.kind === "rows" ? cacheEntry.rows : [], {
       kind: "policy_blocked",
     });
-  let Se = accountMarketplaceSyncSlots.of(getRootSession().host);
-  let ke = `${root}
+  let slots = accountMarketplaceSyncSlots.of(getRootSession().host);
+  let slotKey = `${root}
 ${source.marketplaceId}
-${e}`;
-  let we = Se.get(ke);
-  if (we !== undefined && (!we.settled || isBackground || mode === "if-missing")) return we.load;
-  let Ee = {
-    load: Promise.resolve(Z),
+${name}`;
+  let inFlight = slots.get(slotKey);
+  if (inFlight !== undefined && (!inFlight.settled || isBackground || mode === "if-missing"))
+    return inFlight.load;
+  let slot = {
+    load: Promise.resolve(cachedResult),
     settled: false,
   };
-  Ee.load = fetchClaudeAiCatalogWithTelemetry({
-    name: e,
+  slot.load = fetchClaudeAiCatalogWithTelemetry({
+    name,
     source,
     bucket,
     root,
-    previous: q,
+    previous: cacheEntry,
     credentials,
     isBackground,
   }).finally(() => {
-    Ee.settled = true;
+    slot.settled = true;
   });
-  Se.set(ke, Ee);
-  return Ee.load;
+  slots.set(slotKey, slot);
+  return slot.load;
 }
 //@ chunk-e6aww6q8.js:685361-685584 placement
-function catalogFromCache(e, n) {
-  if (n === null)
-    return buildCatalogResult(e, [], {
+function catalogFromCache(name, entry) {
+  if (entry === null)
+    return buildCatalogResult(name, [], {
       kind: "empty",
     });
-  switch (n.kind) {
+  switch (entry.kind) {
     case "gone":
-      return buildCatalogResult(e, [], {
+      return buildCatalogResult(name, [], {
         kind: "gone",
-        code: n.status,
+        code: entry.status,
       });
     case "rows":
-      return buildCatalogResult(e, n.rows, {
+      return buildCatalogResult(name, entry.rows, {
         kind: "cached",
-        fetchedAt: n.fetchedAt,
-        truncated: n.truncated,
+        fetchedAt: entry.fetchedAt,
+        truncated: entry.truncated,
       });
   }
 }
 //@ chunk-e6aww6q8.js:685584-685837 placement
-async function fetchClaudeAiCatalogWithTelemetry(e) {
-  let claudeAiMarketplaceCatalog = await fetchClaudeAiMarketplaceCatalog(e);
-  let r = catalogStatusCode(claudeAiMarketplaceCatalog.status);
+async function fetchClaudeAiCatalogWithTelemetry(options) {
+  let claudeAiMarketplaceCatalog = await fetchClaudeAiMarketplaceCatalog(options);
+  let statusCode = catalogStatusCode(claudeAiMarketplaceCatalog.status);
   if (claudeAiMarketplaceCatalog.status.kind === "fresh" && !claudeAiMarketplaceCatalog.status.truncated)
     logFeatureOk("claudeai_marketplace_catalog");
-  else if (claudeAiMarketplaceCatalog.marketplace !== null) logFeatureSad("claudeai_marketplace_catalog", r);
-  else logFeatureBad("claudeai_marketplace_catalog", r);
+  else if (claudeAiMarketplaceCatalog.marketplace !== null)
+    logFeatureSad("claudeai_marketplace_catalog", statusCode);
+  else logFeatureBad("claudeai_marketplace_catalog", statusCode);
   return claudeAiMarketplaceCatalog;
 }
 //@ chunk-e6aww6q8.js:685837-685947 placement
-function buildCatalogResult(name, n, r) {
+function buildCatalogResult(name, plugins, status) {
   return {
     marketplace:
-      n.length > 0 || r.kind === "fresh" || r.kind === "cached" ? buildClaudeAiMarketplace(name, n) : null,
-    status: r,
+      plugins.length > 0 || status.kind === "fresh" || status.kind === "cached"
+        ? buildClaudeAiMarketplace(name, plugins)
+        : null,
+    status,
   };
 }
 //@ chunk-e6aww6q8.js:685947-687419 placement
@@ -969,7 +1020,7 @@ function buildCatalogResult(name, n, r) {
  * 拉取 claude.ai 插件市场目录，丢弃不合格的行并写缓存。
  */
 async function fetchClaudeAiMarketplaceCatalog({
-  name: e,
+  name,
   source,
   bucket,
   root,
@@ -980,10 +1031,10 @@ async function fetchClaudeAiMarketplaceCatalog({
   logForDiagnosticsNoPII("info", "claudeai_catalog_fetch_starting", {
     background: isBackground,
   });
-  let w = previous?.kind === "rows" ? previous : null;
+  let cachedRows = previous?.kind === "rows" ? previous : null;
   let claudeAiCatalogPages = await fetchClaudeAiCatalogPages({
     marketplaceId: source.marketplaceId,
-    etag: w?.etag,
+    etag: cachedRows?.etag,
     credentials,
     isBackground,
   });
@@ -993,7 +1044,7 @@ async function fetchClaudeAiMarketplaceCatalog({
         logForDiagnosticsNoPII("warn", "claudeai_catalog_rows_dropped", {
           count: claudeAiCatalogPages.dropped,
         });
-      let G = {
+      let cacheEntry = {
         kind: "rows",
         etag: claudeAiCatalogPages.etag,
         rows: claudeAiCatalogPages.rows,
@@ -1002,7 +1053,7 @@ async function fetchClaudeAiMarketplaceCatalog({
       };
       try {
         await ensurePluginsBucketRoot(getRootSession(), bucket);
-        await writeCatalogCache(root, source.marketplaceId, G);
+        await writeCatalogCache(root, source.marketplaceId, cacheEntry);
       } catch {
         logForDiagnosticsNoPII("warn", "claudeai_catalog_cache_unwritten");
       }
@@ -1010,23 +1061,23 @@ async function fetchClaudeAiMarketplaceCatalog({
         count: claudeAiCatalogPages.rows.length,
         truncated: claudeAiCatalogPages.truncated,
       });
-      return buildCatalogResult(e, claudeAiCatalogPages.rows, {
+      return buildCatalogResult(name, claudeAiCatalogPages.rows, {
         kind: "fresh",
-        fetchedAt: G.fetchedAt,
+        fetchedAt: cacheEntry.fetchedAt,
         truncated: claudeAiCatalogPages.truncated,
       });
     }
     case "not_modified":
       logForDiagnosticsNoPII("info", "claudeai_catalog_not_modified");
-      return w === null
-        ? buildCatalogResult(e, [], {
+      return cachedRows === null
+        ? buildCatalogResult(name, [], {
             kind: "failed",
             code: "not_modified_without_cache",
           })
-        : buildCatalogResult(e, w.rows, {
+        : buildCatalogResult(name, cachedRows.rows, {
             kind: "fresh",
-            fetchedAt: w.fetchedAt,
-            truncated: w.truncated,
+            fetchedAt: cachedRows.fetchedAt,
+            truncated: cachedRows.truncated,
           });
     case "denied":
       logForDiagnosticsNoPII("warn", "claudeai_catalog_fetch_failed", {
@@ -1042,7 +1093,7 @@ async function fetchClaudeAiMarketplaceCatalog({
       } catch {
         await removeClaudeAiMarketplaceCache(bucket, source.marketplaceId);
       }
-      return buildCatalogResult(e, [], {
+      return buildCatalogResult(name, [], {
         kind: "gone",
         code: claudeAiCatalogPages.code,
       });
@@ -1052,18 +1103,18 @@ async function fetchClaudeAiMarketplaceCatalog({
         code: claudeAiCatalogPages.code,
       });
       if (previous?.kind === "gone")
-        return buildCatalogResult(e, [], {
+        return buildCatalogResult(name, [], {
           kind: "gone",
           code: previous.status,
         });
-      return w === null
-        ? buildCatalogResult(e, [], {
+      return cachedRows === null
+        ? buildCatalogResult(name, [], {
             kind: "failed",
             code: claudeAiCatalogPages.code,
           })
-        : buildCatalogResult(e, w.rows, {
+        : buildCatalogResult(name, cachedRows.rows, {
             kind: "offline",
-            fetchedAt: w.fetchedAt,
+            fetchedAt: cachedRows.fetchedAt,
             code: claudeAiCatalogPages.code,
           });
   }
@@ -1072,20 +1123,20 @@ async function fetchClaudeAiMarketplaceCatalog({
 /**
  * 把目录行转成 strict 的 claudeai 源市场 manifest。
  */
-function buildClaudeAiMarketplace(name, n) {
-  let plugins = n.map((s) => ({
-    name: s.name,
+function buildClaudeAiMarketplace(name, plugins) {
+  let plugins_2 = plugins.map((plugin) => ({
+    name: plugin.name,
     source: {
       source: "claudeai",
-      pluginId: s.id,
-      version: s.version ?? "",
-      installable: s.installable && s.version !== undefined,
+      pluginId: plugin.id,
+      version: plugin.version ?? "",
+      installable: plugin.installable && plugin.version !== undefined,
     },
-    ...(s.version !== undefined && {
-      version: s.version,
+    ...(plugin.version !== undefined && {
+      version: plugin.version,
     }),
-    ...(s.description !== "" && {
-      description: s.description,
+    ...(plugin.description !== "" && {
+      description: plugin.description,
     }),
     strict: true,
   }));
@@ -1094,31 +1145,38 @@ function buildClaudeAiMarketplace(name, n) {
     owner: {
       name: "claude.ai",
     },
-    plugins,
+    plugins: plugins_2,
   };
 }
 //@ chunk-e6aww6q8.js:687734-688102 placement
 /**
  * MAX_KNOWN_CLAUDEAI_FILE_BYTES：claude.ai 市场注册表体积上限；KNOWN_CLAUDEAI_FILE_TTL_MS：注册表缓存时长；knownClaudeAiMarketplaceSchema：claude.ai 市场注册表 schema（同一声明共 4 个绑定）。
  */
-var KNOWN_MARKETPLACES_CLAUDEAI_JSON = "known_marketplaces_claudeai.json";
-var MAX_KNOWN_CLAUDEAI_FILE_BYTES = 1048576;
-var KNOWN_CLAUDEAI_FILE_TTL_MS = 60000;
-var knownClaudeAiMarketplaceSchema = DoctorLazy(() =>
-  u({
-    source: u({
-      source: literal("claudeai"),
-      marketplaceId: string().refine(isTaggedMarketplaceId),
-      organizationUuid: string().refine(isUuid),
+var KNOWN_MARKETPLACES_CLAUDEAI_JSON; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_KNOWN_CLAUDEAI_FILE_BYTES;
+var KNOWN_CLAUDEAI_FILE_TTL_MS;
+var knownClaudeAiMarketplaceSchema;
+var knownClaudeAiMarketplacesFileSchema;
+deferInit("chunk-e6aww6q8.js:687734", () => {
+  KNOWN_MARKETPLACES_CLAUDEAI_JSON = "known_marketplaces_claudeai.json";
+  MAX_KNOWN_CLAUDEAI_FILE_BYTES = 1048576;
+  KNOWN_CLAUDEAI_FILE_TTL_MS = 60000;
+  knownClaudeAiMarketplaceSchema = DoctorLazy(() =>
+    objectSchema({
+      source: objectSchema({
+        source: literal("claudeai"),
+        marketplaceId: stringSchema().refine(isTaggedMarketplaceId),
+        organizationUuid: stringSchema().refine(isUuid),
+        scope: _enum(CLAUDEAI_MARKETPLACE_KINDS).optional().catch(undefined),
+      }),
+      displayName: OptionalDisplayNameSchema(),
       scope: _enum(CLAUDEAI_MARKETPLACE_KINDS).optional().catch(undefined),
+      lastUpdated: stringSchema().max(64).catch(""),
+      autoUpdate: booleanSchema().optional().catch(undefined),
     }),
-    displayName: OptionalDisplayNameSchema(),
-    scope: _enum(CLAUDEAI_MARKETPLACE_KINDS).optional().catch(undefined),
-    lastUpdated: string().max(64).catch(""),
-    autoUpdate: M().optional().catch(undefined),
-  }),
-);
-var knownClaudeAiMarketplacesFileSchema = DoctorLazy(() => record(string(), unknown()));
+  );
+  knownClaudeAiMarketplacesFileSchema = DoctorLazy(() => record(stringSchema(), unknown()));
+});
 //@ chunk-e6aww6q8.js:688102-688138 placement
 function knownClaudeAiMarketplacesPath() {
   return join(getPluginsDirectory(), KNOWN_MARKETPLACES_CLAUDEAI_JSON);
@@ -1129,25 +1187,25 @@ function knownClaudeAiMarketplacesPath() {
  */
 async function readClaudeAiMarketplaceRegistryUnsafe() {
   if (isDiskless()) return {};
-  let e;
+  let rawText;
   try {
-    e = (await readFileChecked(knownClaudeAiMarketplacesPath(), MAX_KNOWN_CLAUDEAI_FILE_BYTES)).content;
+    rawText = (await readFileChecked(knownClaudeAiMarketplacesPath(), MAX_KNOWN_CLAUDEAI_FILE_BYTES)).content;
   } catch (error) {
     if (isENOENT(error)) return {};
     throw error;
   }
-  let n = knownClaudeAiMarketplacesFileSchema().safeParse(jsonParse(e));
-  if (!n.success) throw Error("claude.ai marketplace registry is not a JSON object");
-  let r = {};
-  for (let [key, value] of Object.entries(n.data)) {
-    let y = knownClaudeAiMarketplaceSchema().safeParse(value);
-    if (y.success && isAccountMarketplaceId(key)) r[key] = y.data;
+  let parseResult = knownClaudeAiMarketplacesFileSchema().safeParse(jsonParse(rawText));
+  if (!parseResult.success) throw Error("claude.ai marketplace registry is not a JSON object");
+  let registry = {};
+  for (let [key, value] of Object.entries(parseResult.data)) {
+    let entryResult = knownClaudeAiMarketplaceSchema().safeParse(value);
+    if (entryResult.success && isAccountMarketplaceId(key)) registry[key] = entryResult.data;
   }
-  return r;
+  return registry;
 }
 //@ chunk-e6aww6q8.js:688476-688524 placement
-function isAccountMarketplaceId(e) {
-  return e.startsWith(CLAUDEAI_MARKETPLACE_PREFIX) && isValidAccountMarketplaceName(e);
+function isAccountMarketplaceId(id) {
+  return id.startsWith(CLAUDEAI_MARKETPLACE_PREFIX) && isValidAccountMarketplaceName(id);
 }
 //@ chunk-e6aww6q8.js:688524-688656 placement
 /**
@@ -1164,9 +1222,15 @@ async function readClaudeAiMarketplaceRegistry() {
   }
 }
 //@ chunk-e6aww6q8.js:688656-688669 placement
-var accountMarketplaceLockQueue = createKeyedQueue();
+var accountMarketplaceLockQueue; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:688656", () => {
+  accountMarketplaceLockQueue = createKeyedQueue();
+});
 //@ chunk-e6aww6q8.js:688669-688690 placement
-registerWriteQueueDrain(() => accountMarketplaceLockQueue.drain());
+// deferred: uses registerWriteQueueDrain (../settings/writeQueues.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:688669", () => {
+  registerWriteQueueDrain(() => accountMarketplaceLockQueue.drain());
+});
 //@ chunk-e6aww6q8.js:688690-688782 placement
 var ACCOUNT_MARKETPLACE_UNSAVABLE_MESSAGE =
   "claude.ai marketplaces can't be added in this session, because it can't save them";
@@ -1174,28 +1238,29 @@ var ACCOUNT_MARKETPLACE_UNSAVABLE_MESSAGE =
 /**
  * 在 claude.ai 市场注册表锁内执行操作。
  */
-async function withClaudeAiMarketplaceLock(e) {
+async function withClaudeAiMarketplaceLock(updateRegistry) {
   if (isDiskless()) {
-    if (e({}) !== null) throw new ClaudeAiMarketplaceError(ACCOUNT_MARKETPLACE_UNSAVABLE_MESSAGE, "diskless");
+    if (updateRegistry({}) !== null)
+      throw new ClaudeAiMarketplaceError(ACCOUNT_MARKETPLACE_UNSAVABLE_MESSAGE, "diskless");
     return false;
   }
-  let n = knownClaudeAiMarketplacesPath();
-  return accountMarketplaceLockQueue.run(n, async () => {
-    await mkdir(dirname(n), {
+  let registryPath = knownClaudeAiMarketplacesPath();
+  return accountMarketplaceLockQueue.run(registryPath, async () => {
+    await mkdir(dirname(registryPath), {
       recursive: true,
     });
-    let r;
+    let lockHandle;
     try {
-      r = await lock(n, {
-        lockfilePath: `${n}.lock`,
+      lockHandle = await lock(registryPath, {
+        lockfilePath: `${registryPath}.lock`,
         realpath: false,
         retries: {
           retries: 5,
           minTimeout: 100,
           maxTimeout: 1000,
         },
-        onCompromised: (s) => {
-          logForDebugging(`claude.ai marketplace registry lock compromised: ${s}`, {
+        onCompromised: (compromisedError) => {
+          logForDebugging(`claude.ai marketplace registry lock compromised: ${compromisedError}`, {
             level: "error",
           });
         },
@@ -1209,23 +1274,23 @@ async function withClaudeAiMarketplaceLock(e) {
       );
     }
     try {
-      let s = e(await readClaudeAiMarketplaceRegistryUnsafe());
-      if (s === null) return false;
-      await writeFileAtomic_2(n, jsonStringify(s, null, 2));
+      let nextRegistry = updateRegistry(await readClaudeAiMarketplaceRegistryUnsafe());
+      if (nextRegistry === null) return false;
+      await writeFileAtomic_2(registryPath, jsonStringify(nextRegistry, null, 2));
       return true;
     } finally {
-      await releaseLockQuietly(r, "known_marketplaces_claudeai.json");
+      await releaseLockQuietly(lockHandle, "known_marketplaces_claudeai.json");
     }
   });
 }
 //@ chunk-e6aww6q8.js:689402-689565 placement
-function toKnownMarketplaceEntry(e, n) {
+function toKnownMarketplaceEntry(name, entry) {
   return {
-    source: n.source,
-    installLocation: join(getPluginsDirectory(), "marketplaces", e),
-    lastUpdated: n.lastUpdated,
-    ...(n.autoUpdate !== undefined && {
-      autoUpdate: n.autoUpdate,
+    source: entry.source,
+    installLocation: join(getPluginsDirectory(), "marketplaces", name),
+    lastUpdated: entry.lastUpdated,
+    ...(entry.autoUpdate !== undefined && {
+      autoUpdate: entry.autoUpdate,
     }),
   };
 }
@@ -1237,17 +1302,17 @@ function isClaudeAiMarketplaceSource(source) {
   return source?.source === "claudeai";
 }
 //@ chunk-e6aww6q8.js:689610-689723 placement
-function omitClaudeAiMarketplaces(e) {
-  let n = e;
-  for (let [key, value] of Object.entries(e))
+function omitClaudeAiMarketplaces(marketplaces) {
+  let result = marketplaces;
+  for (let [key, value] of Object.entries(marketplaces))
     if (isClaudeAiMarketplaceSource(value.source)) {
-      if (n === e)
-        n = {
-          ...e,
+      if (result === marketplaces)
+        result = {
+          ...marketplaces,
         };
-      delete n[key];
+      delete result[key];
     }
-  return n;
+  return result;
 }
 //@ chunk-e6aww6q8.js:689723-689826 placement
 /**
@@ -1260,122 +1325,129 @@ function isNonInstallableClaudeAiPlugin(entry) {
 /**
  * claude.ai（scope）· listed as 显示名。
  */
-function formatClaudeAiMarketplaceLabel(e) {
-  let scope = e?.scope;
-  let r =
+function formatClaudeAiMarketplaceLabel(entry) {
+  let scope = entry?.scope;
+  let baseLabel =
     scope === "org" || scope === "account"
       ? `claude.ai (${formatMarketplaceScopeLabel(scope)})`
       : "claude.ai";
-  return e?.displayName === undefined ? r : `${r} \xB7 listed as ${quoteDisplayName(e.displayName)}`;
+  return entry?.displayName === undefined
+    ? baseLabel
+    : `${baseLabel} \xB7 listed as ${quoteDisplayName(entry.displayName)}`;
 }
 //@ chunk-e6aww6q8.js:689997-690143 placement
-class ClaudeAiMarketplaceError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  code;
-  constructor(message, code, r = "claude.ai marketplace operation refused") {
-    super(message, r);
-    this.code = code;
-    this.name = "ClaudeAiMarketplaceError";
-  }
-}
+let ClaudeAiMarketplaceError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:689997", () => {
+  ClaudeAiMarketplaceError = class ClaudeAiMarketplaceError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    code;
+    constructor(message, code, telemetryCode = "claude.ai marketplace operation refused") {
+      super(message, telemetryCode);
+      this.code = code;
+      this.name = "ClaudeAiMarketplaceError";
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:690143-692025 placement
 /**
  * 添加 claude.ai 托管的插件市场，校验名字与是否已添加。
  */
-async function addClaudeAiMarketplace(e, { configured, credentials }) {
+async function addClaudeAiMarketplace(candidate, { configured, credentials }) {
   if (isDiskless()) throw new ClaudeAiMarketplaceError(ACCOUNT_MARKETPLACE_UNSAVABLE_MESSAGE, "diskless");
-  let s = e.name;
-  if (!isAccountMarketplaceId(s))
+  let name = candidate.name;
+  if (!isAccountMarketplaceId(name))
     throw new ClaudeAiMarketplaceError(
-      `"${s}" is not a name a claude.ai-hosted marketplace can be added under`,
+      `"${name}" is not a name a claude.ai-hosted marketplace can be added under`,
       "bad_name",
     );
   for (let [key, value] of Object.entries(await readClaudeAiMarketplaceRegistry()))
-    if (value.source.marketplaceId === e.marketplaceId)
+    if (value.source.marketplaceId === candidate.marketplaceId)
       throw new ClaudeAiMarketplaceError(
         `That claude.ai marketplace is already added as marketplace "${key}"`,
         "already_added",
       );
-  let h = nfcBasename(s);
-  let y = canonicalMarketplaceKey(s);
-  if (Object.keys(configured).some((key) => canonicalMarketplaceKey(key) === y))
+  let normalizedName = nfcBasename(name);
+  let canonicalName = canonicalMarketplaceKey(name);
+  if (Object.keys(configured).some((key) => canonicalMarketplaceKey(key) === canonicalName))
     throw new ClaudeAiMarketplaceError(
-      `A marketplace named "${s}" is already configured \u2014 remove it first: claude plugin marketplace remove ${s}`,
+      `A marketplace named "${name}" is already configured \u2014 remove it first: claude plugin marketplace remove ${name}`,
       "name_taken",
     );
   let syncBucket = await getSyncBucket(credentials);
-  let w = syncBucket === null ? null : bucketOrg(syncBucket);
-  if (w === null)
+  let organizationUuid = syncBucket === null ? null : bucketOrg(syncBucket);
+  if (organizationUuid === null)
     throw new ClaudeAiMarketplaceError("Sign in to claude.ai to add a marketplace it hosts", "no_identity");
-  let L = {
+  let source = {
     source: "claudeai",
-    marketplaceId: e.marketplaceId,
-    organizationUuid: w,
-    ...(e.scope !== undefined && {
-      scope: e.scope,
+    marketplaceId: candidate.marketplaceId,
+    organizationUuid,
+    ...(candidate.scope !== undefined && {
+      scope: candidate.scope,
     }),
   };
-  if (!isSourceAllowedByPolicy(L))
+  if (!isSourceAllowedByPolicy(source))
     throw new ClaudeAiMarketplaceError(
-      `Marketplace "${s}" (hosted on claude.ai) is blocked by enterprise policy`,
+      `Marketplace "${name}" (hosted on claude.ai) is blocked by enterprise policy`,
       "policy_blocked",
     );
-  let { marketplace, status } = await ensureClaudeAiMarketplace(s, L, {
+  let { marketplace, status } = await ensureClaudeAiMarketplace(name, source, {
     mode: "refresh",
     credentials,
     recheckGone: true,
   });
   if (status.kind === "gone" || marketplace === null) {
     if (status.kind === "gone") {
-      let accountBucket = await resolveAccountBucket(L, credentials);
+      let accountBucket = await resolveAccountBucket(source, credentials);
       if (accountBucket.kind === "ready")
-        await removeClaudeAiMarketplaceCache(accountBucket.bucket, L.marketplaceId);
+        await removeClaudeAiMarketplaceCache(accountBucket.bucket, source.marketplaceId);
     }
     throw new ClaudeAiMarketplaceError(
       status.kind === "gone"
-        ? `Cannot add "${s}": it isn't available from claude.ai right now (the catalog endpoint returned ${status.code.replace("http_", "")})`
-        : `Cannot add "${s}": ${describeMarketplaceFreshness(status) ?? "claude.ai did not serve its plugins"}`,
+        ? `Cannot add "${name}": it isn't available from claude.ai right now (the catalog endpoint returned ${status.code.replace("http_", "")})`
+        : `Cannot add "${name}": ${describeMarketplaceFreshness(status) ?? "claude.ai did not serve its plugins"}`,
       catalogStatusCode(status),
     );
   }
-  await withClaudeAiMarketplaceLock((Z) => {
-    for (let [key, value] of Object.entries(Z))
-      if (value.source.marketplaceId === e.marketplaceId || nfcBasename(key) === h)
+  await withClaudeAiMarketplaceLock((registry) => {
+    for (let [key, value] of Object.entries(registry))
+      if (value.source.marketplaceId === candidate.marketplaceId || nfcBasename(key) === normalizedName)
         throw new ClaudeAiMarketplaceError(
           `A marketplace named "${key}" was added meanwhile \u2014 run the command again to see it`,
-          value.source.marketplaceId === e.marketplaceId ? "already_added" : "name_taken",
+          value.source.marketplaceId === candidate.marketplaceId ? "already_added" : "name_taken",
         );
     return {
-      ...Z,
-      [s]: {
-        source: L,
-        ...(e.displayName !== s && {
-          displayName: e.displayName,
+      ...registry,
+      [name]: {
+        source,
+        ...(candidate.displayName !== name && {
+          displayName: candidate.displayName,
         }),
-        ...(e.scope !== undefined && {
-          scope: e.scope,
+        ...(candidate.scope !== undefined && {
+          scope: candidate.scope,
         }),
         lastUpdated: new Date().toISOString(),
       },
     };
   });
   return {
-    name: s,
+    name,
     marketplace,
     status,
   };
 }
 //@ chunk-e6aww6q8.js:692025-692628 placement
 async function refreshClaudeAiMarketplace(
-  e,
+  name,
   source,
   { credentials, skipIfRecent = false, isBackground = false },
 ) {
   if (isDiskless())
     throw new ClaudeAiMarketplaceError(
-      `Marketplace "${e}" was not refreshed: this session can't save claude.ai marketplaces`,
+      `Marketplace "${name}" was not refreshed: this session can't save claude.ai marketplaces`,
       "diskless",
     );
-  let claudeAiMarketplace = await ensureClaudeAiMarketplace(e, source, {
+  let claudeAiMarketplace = await ensureClaudeAiMarketplace(name, source, {
     mode: "refresh",
     credentials,
     isBackground,
@@ -1384,16 +1456,16 @@ async function refreshClaudeAiMarketplace(
   });
   if (claudeAiMarketplace.status.kind !== "fresh" && claudeAiMarketplace.status.kind !== "cached")
     throw new ClaudeAiMarketplaceError(
-      `Marketplace "${e}" was not refreshed: ${describeMarketplaceFreshness(claudeAiMarketplace.status) ?? "claude.ai did not serve its plugins"}`,
+      `Marketplace "${name}" was not refreshed: ${describeMarketplaceFreshness(claudeAiMarketplace.status) ?? "claude.ai did not serve its plugins"}`,
       catalogStatusCode(claudeAiMarketplace.status),
     );
-  await withClaudeAiMarketplaceLock((S) => {
-    let w = S[e];
-    if (w === undefined) return null;
+  await withClaudeAiMarketplaceLock((registry) => {
+    let entry = registry[name];
+    if (entry === undefined) return null;
     return {
-      ...S,
-      [e]: {
-        ...w,
+      ...registry,
+      [name]: {
+        ...entry,
         lastUpdated: new Date().toISOString(),
       },
     };
@@ -1404,17 +1476,17 @@ async function refreshClaudeAiMarketplace(
 /**
  * 从 claude.ai 市场注册表中删除指定市场（加锁写），若账号桶就绪再删除该市场的目录缓存。
  */
-async function removeClaudeAiMarketplace(e, source, r) {
+async function removeClaudeAiMarketplace(name, source, credentials) {
   if (isDiskless()) return;
-  await withClaudeAiMarketplaceLock((h) => {
-    if (!Object.hasOwn(h, e)) return null;
-    let y = {
-      ...h,
+  await withClaudeAiMarketplaceLock((registry) => {
+    if (!Object.hasOwn(registry, name)) return null;
+    let nextRegistry = {
+      ...registry,
     };
-    delete y[e];
-    return y;
+    delete nextRegistry[name];
+    return nextRegistry;
   });
-  let accountBucket = await resolveAccountBucket(source, r);
+  let accountBucket = await resolveAccountBucket(source, credentials);
   if (accountBucket.kind === "ready")
     await removeClaudeAiMarketplaceCache(accountBucket.bucket, source.marketplaceId);
 }
@@ -1422,32 +1494,32 @@ async function removeClaudeAiMarketplace(e, source, r) {
 /**
  * 根据账号市场行的 id→scope，更新注册表中属于该组织的市场的 source.scope 与 scope（只在变化时写）。
  */
-async function syncAccountMarketplaceScopes(rows, n) {
-  let r = new Map(rows.flatMap((s) => (s.id === undefined ? [] : [[s.id, s.scope]])));
-  await withClaudeAiMarketplaceLock((s) => {
-    let h = null;
-    for (let [key, value] of Object.entries(s)) {
-      if (value.source.organizationUuid.toLowerCase() !== n) continue;
-      let w = r.get(value.source.marketplaceId);
-      if (value.source.scope === w && value.scope === w) continue;
-      h ??= {
-        ...s,
+async function syncAccountMarketplaceScopes(rows, organizationUuid) {
+  let scopesById = new Map(rows.flatMap((row) => (row.id === undefined ? [] : [[row.id, row.scope]])));
+  await withClaudeAiMarketplaceLock((registry) => {
+    let nextRegistry = null;
+    for (let [key, value] of Object.entries(registry)) {
+      if (value.source.organizationUuid.toLowerCase() !== organizationUuid) continue;
+      let scope = scopesById.get(value.source.marketplaceId);
+      if (value.source.scope === scope && value.scope === scope) continue;
+      nextRegistry ??= {
+        ...registry,
       };
-      h[key] = {
+      nextRegistry[key] = {
         ...value,
         source: {
           ...value.source,
-          scope: w,
+          scope,
         },
-        scope: w,
+        scope,
       };
     }
-    return h;
+    return nextRegistry;
   });
 }
 export {
-  isClaudeAiMarketplaceSource,
   withClaudeAiMarketplaceLock,
+  isClaudeAiMarketplaceSource,
   ClaudeAiMarketplaceError,
   readClaudeAiMarketplaceRegistry,
   ensureClaudeAiMarketplace,

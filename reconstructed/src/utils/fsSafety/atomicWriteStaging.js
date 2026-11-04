@@ -24,6 +24,7 @@ import { getPathsForPermissionCheck } from "../fsOperations.js";
 import { PERMISSION_STASH_EVICTED_SYMBOL } from "../../bootstrap/sessionSlices.js";
 import { logForDebugging } from "../debug.js";
 import { slowLogging } from "../slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-847rdpmn.js:1235-1516 placement
 /**
@@ -31,12 +32,12 @@ import { slowLogging } from "../slowOperations.js";
  */
 class StagingDirIdentities {
   identities = new Map();
-  record(e, dev, ino, fd) {
-    let stagingPath = resolveStagingPath(e);
-    let o = this.identities.get(stagingPath);
-    if (o)
+  record(stagingDir, dev, ino, fd) {
+    let stagingPath = resolveStagingPath(stagingDir);
+    let previous = this.identities.get(stagingPath);
+    if (previous)
       try {
-        closeSync(o.fd);
+        closeSync(previous.fd);
       } catch {}
     this.identities.set(stagingPath, {
       dev,
@@ -44,8 +45,8 @@ class StagingDirIdentities {
       fd,
     });
   }
-  identity(e) {
-    return this.identities.get(resolveStagingPath(e));
+  identity(stagingDir) {
+    return this.identities.get(resolveStagingPath(stagingDir));
   }
   reset() {
     for (let { fd } of this.identities.values())
@@ -56,21 +57,24 @@ class StagingDirIdentities {
   }
 }
 //@ chunk-847rdpmn.js:1516-1541 placement
-var stagingIdentitiesRegistry = new HostScoped(() => new StagingDirIdentities());
+var stagingIdentitiesRegistry; // deferred: uses StagingDirIdentities of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-847rdpmn.js:1516", () => {
+  stagingIdentitiesRegistry = new HostScoped(() => new StagingDirIdentities());
+});
 //@ chunk-847rdpmn.js:1541-1577 placement
 function currentStagingIdentities() {
   return stagingIdentitiesRegistry.of(getRootSession().host);
 }
 //@ chunk-847rdpmn.js:1577-1603 placement
-function resolveStagingPath(e) {
-  return resolve(e);
+function resolveStagingPath(stagingDir) {
+  return resolve(stagingDir);
 }
 //@ chunk-847rdpmn.js:1603-1645 placement
 /**
  * 记录原子写入暂存目录的身份（供后续校验未变）。
  */
-function recordStagingDirIdentity(e, n, r, s) {
-  currentStagingIdentities().record(e, n, r, s);
+function recordStagingDirIdentity(stagingDir, dev, ino, fd) {
+  currentStagingIdentities().record(stagingDir, dev, ino, fd);
 }
 //@ chunk-847rdpmn.js:1645-2157 placement
 /**
@@ -78,11 +82,11 @@ function recordStagingDirIdentity(e, n, r, s) {
  */
 function verifyStagingDir(stagingDir) {
   if (!stagingDir) return;
-  let n = currentStagingIdentities().identity(stagingDir);
-  if (!n) return;
-  let r;
+  let expected = currentStagingIdentities().identity(stagingDir);
+  if (!expected) return;
+  let dirFd;
   try {
-    r = openSync(stagingDir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
+    dirFd = openSync(stagingDir, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || errnoCode === "ELOOP" || errnoCode === "EACCES")
@@ -92,75 +96,75 @@ function verifyStagingDir(stagingDir) {
     throw error;
   }
   try {
-    let s = fstatSync(r);
-    if (s.dev !== n.dev || s.ino !== n.ino)
+    let actual = fstatSync(dirFd);
+    if (actual.dev !== expected.dev || actual.ino !== expected.ino)
       throwStagingTampered(
-        `Staging dir ${stagingDir} identity changed (expected ${n.dev}/${n.ino}, found ${s.dev}/${s.ino}) \u2014 refusing atomic write`,
+        `Staging dir ${stagingDir} identity changed (expected ${expected.dev}/${expected.ino}, found ${actual.dev}/${actual.ino}) \u2014 refusing atomic write`,
       );
   } finally {
-    closeSync(r);
+    closeSync(dirFd);
   }
 }
 //@ chunk-847rdpmn.js:2157-3173 placement
 /**
  * 生成原子写入暂存路径（检查父目录）。
  */
-function stagingPathFor(stagingDir, n, r, s) {
-  let u = `${n}${r}`;
-  if (!stagingDir) return u;
-  let o = currentStagingIdentities().identity(stagingDir);
-  if (s && dirname(n) !== dirname(stagingDir)) {
+function stagingPathFor(stagingDir, targetPath, suffix, allowSiblingFallback) {
+  let siblingPath = `${targetPath}${suffix}`;
+  if (!stagingDir) return siblingPath;
+  let expected = currentStagingIdentities().identity(stagingDir);
+  if (allowSiblingFallback && dirname(targetPath) !== dirname(stagingDir)) {
     verifyStagingDir(stagingDir);
-    return u;
+    return siblingPath;
   }
-  let a = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
+  let dirFlags = constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW;
   try {
-    closeSync(openSync(dirname(stagingDir), a));
+    closeSync(openSync(dirname(stagingDir), dirFlags));
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ELOOP" || errnoCode === "ENOTDIR") {
-      if (o)
+      if (expected)
         throwStagingTampered(
           `Staging dir parent ${dirname(stagingDir)} is ${errnoCode} but a sandboxed command established ${stagingDir} \u2014 refusing sibling fallback`,
         );
-      if (s) return u;
+      if (allowSiblingFallback) return siblingPath;
       throw new SymlinkWriteRefusedError(
         `Refusing to stage atomic write under non-directory parent: ${dirname(stagingDir)}`,
       );
     }
     if (!isENOENT(error)) throw error;
-    if (o)
+    if (expected)
       throwStagingTampered(
         `Staging dir parent ${dirname(stagingDir)} is absent but a sandboxed command established ${stagingDir} \u2014 refusing sibling fallback`,
       );
-    return u;
+    return siblingPath;
   }
-  let f;
+  let dirFd;
   try {
-    f = openSync(stagingDir, a);
+    dirFd = openSync(stagingDir, dirFlags);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR" || errnoCode === "ELOOP") {
-      if (o)
+      if (expected)
         throwStagingTampered(
           `Staging dir ${stagingDir} is ${errnoCode} but a sandboxed command established it \u2014 refusing sibling fallback`,
         );
-      return u;
+      return siblingPath;
     }
     throw error;
   }
   try {
-    if (o) {
-      let y = fstatSync(f);
-      if (y.dev !== o.dev || y.ino !== o.ino)
+    if (expected) {
+      let actual = fstatSync(dirFd);
+      if (actual.dev !== expected.dev || actual.ino !== expected.ino)
         throwStagingTampered(
-          `Staging dir ${stagingDir} identity changed (expected ${o.dev}/${o.ino}, found ${y.dev}/${y.ino}) \u2014 refusing atomic write`,
+          `Staging dir ${stagingDir} identity changed (expected ${expected.dev}/${expected.ino}, found ${actual.dev}/${actual.ino}) \u2014 refusing atomic write`,
         );
     }
   } finally {
-    closeSync(f);
+    closeSync(dirFd);
   }
-  return join(stagingDir, `${basename(n)}${r}`);
+  return join(stagingDir, `${basename(targetPath)}${suffix}`);
 }
 //@ chunk-847rdpmn.js:3173-3258 placement
 /**
@@ -173,19 +177,22 @@ class SymlinkWriteRefusedError extends Error {
   }
 }
 //@ chunk-847rdpmn.js:3258-3351 placement
-class HardLinkWriteRefusedError extends SymlinkWriteRefusedError {
-  constructor(e, nlink) {
-    super(hardlinkedRefusalText(e, nlink));
-    this.name = "HardLinkWriteRefusedError";
-  }
-}
+let HardLinkWriteRefusedError; // deferred: uses SymlinkWriteRefusedError of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-847rdpmn.js:3258", () => {
+  HardLinkWriteRefusedError = class HardLinkWriteRefusedError extends SymlinkWriteRefusedError {
+    constructor(targetPath, nlink) {
+      super(hardlinkedRefusalText(targetPath, nlink));
+      this.name = "HardLinkWriteRefusedError";
+    }
+  };
+});
 //@ chunk-847rdpmn.js:3351-3425 placement
 /**
  * 生成写入打开的 flags 描述（O_WRONLY|O_CREAT 加上调用方标志）。
  */
-function openWriteFlags(e) {
+function openWriteFlags(extraFlags) {
   return {
-    flags: constants.O_WRONLY | constants.O_CREAT | e,
+    flags: constants.O_WRONLY | constants.O_CREAT | extraFlags,
     flagsIfMissing: undefined,
   };
 }
@@ -203,22 +210,26 @@ class SymlinkReadRefusedError extends Error {
 /**
  * 确认目录链在基目录内且没有链接。
  */
-async function assertDirChainReal(e, n) {
-  let r = relative(e, n);
-  if (r === "" || r.startsWith("..") || isAbsolute(r))
+async function assertDirChainReal(baseDir, dirPath) {
+  let relPath = relative(baseDir, dirPath);
+  if (relPath === "" || relPath.startsWith("..") || isAbsolute(relPath))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `assertDirChainReal: dir must be strictly inside base (rel: ${r})`,
+      `assertDirChainReal: dir must be strictly inside base (rel: ${relPath})`,
       "assertDirChainReal: dir must be strictly inside base",
     );
-  let s = e;
-  for (let u of r.split(sep)) {
-    s = join(s, u);
+  let currentPath = baseDir;
+  for (let segment of relPath.split(sep)) {
+    currentPath = join(currentPath, segment);
     try {
-      await (await open(s, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)).close();
+      await (
+        await open(currentPath, constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW)
+      ).close();
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode === "ELOOP" || errnoCode === "ENOTDIR")
-        throw new SymlinkWriteRefusedError(`Refusing to write under symlinked or non-directory path: ${s}`);
+        throw new SymlinkWriteRefusedError(
+          `Refusing to write under symlinked or non-directory path: ${currentPath}`,
+        );
       if (errnoCode === "ENOENT") return;
       throw error;
     }
@@ -243,23 +254,23 @@ function throwStagingTampered(message) {
 /**
  * 取出写入权限暂存的路径拼写（过期时拒绝）。
  */
-function consumeWritePermission(e, n, r = "write") {
-  return consumePermissionStash(e, n, r) ?? getPathsForPermissionCheck(n);
+function consumeWritePermission(session, filePath, accessKind = "write") {
+  return consumePermissionStash(session, filePath, accessKind) ?? getPathsForPermissionCheck(filePath);
 }
 //@ chunk-847rdpmn.js:4212-4621 placement
 /**
  * 从权限暂存中取出路径批准。
  */
-function consumePermissionStash(e, n, r) {
-  let s = e.session.writePermissionStash.consume(e.toolUseId, n, r);
-  if (s === PERMISSION_STASH_EVICTED_SYMBOL)
-    throw new (r === "read" ? SymlinkReadRefusedError : SymlinkWriteRefusedError)(
-      `Refusing to ${r === "read" ? "read" : "write"} ${n}: its permission check expired before it ran (too many concurrent file operations). Retry.`,
+function consumePermissionStash(session, filePath, accessKind) {
+  let stashedPaths = session.session.writePermissionStash.consume(session.toolUseId, filePath, accessKind);
+  if (stashedPaths === PERMISSION_STASH_EVICTED_SYMBOL)
+    throw new (accessKind === "read" ? SymlinkReadRefusedError : SymlinkWriteRefusedError)(
+      `Refusing to ${accessKind === "read" ? "read" : "write"} ${filePath}: its permission check expired before it ran (too many concurrent file operations). Retry.`,
     );
-  if (s !== undefined) return s;
-  if (e.toolUseId)
+  if (stashedPaths !== undefined) return stashedPaths;
+  if (session.toolUseId)
     logForDebugging(
-      `takeApprovedPathsForWrite: no check-time stash for toolUseId=${e.toolUseId}; using fresh resolution`,
+      `takeApprovedPathsForWrite: no check-time stash for toolUseId=${session.toolUseId}; using fresh resolution`,
     );
   return;
 }
@@ -274,9 +285,9 @@ function consumeReadPermission(filePath, toolPermissionContext) {
 /**
  * 路径是否存在。
  */
-async function pathExists(e) {
+async function pathExists(filePath) {
   try {
-    await stat(e);
+    await stat(filePath);
     return true;
   } catch {
     return false;
@@ -286,8 +297,8 @@ async function pathExists(e) {
 /**
  * 路径存在/消失/不可读。
  */
-async function pathPresence(e) {
-  return lstat(e).then(
+async function pathPresence(filePath) {
+  return lstat(filePath).then(
     () => "present",
     (error) => (isENOENT(error) || getErrnoCode(error) === "ENOTDIR" ? "gone" : "unreadable"),
   );
@@ -302,33 +313,34 @@ var BOUNDED_READ_MAX = 262144;
  * 有界同步读取文件（可拒绝链接、只读常规文件）。
  */
 function readBoundedSync(
-  e,
+  filePath,
   { maxBytes, symlinkAtPath = "follow", regularFileOnly = symlinkAtPath === "refuse" },
 ) {
-  using u = slowLogging`fs.readBoundedSync(${e}, max ${maxBytes} bytes)`;
-  let o = "r";
-  if (symlinkAtPath === "refuse") o = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
-  else if (regularFileOnly) o = constants.O_RDONLY | constants.O_NONBLOCK;
-  let a = openSync(e, o);
+  using span = slowLogging`fs.readBoundedSync(${filePath}, max ${maxBytes} bytes)`;
+  let openFlags = "r";
+  if (symlinkAtPath === "refuse")
+    openFlags = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+  else if (regularFileOnly) openFlags = constants.O_RDONLY | constants.O_NONBLOCK;
+  let fd = openSync(filePath, openFlags);
   try {
     if (regularFileOnly) {
-      if (!fstatSync(a).isFile())
+      if (!fstatSync(fd).isFile())
         throw Object.assign(Error("EINVAL: not a regular file"), {
           code: "EINVAL",
         });
     }
-    return readFdBounded(a, e, maxBytes);
+    return readFdBounded(fd, filePath, maxBytes);
   } finally {
-    closeSync(a);
+    closeSync(fd);
   }
 }
 //@ chunk-847rdpmn.js:5638-5697 placement
 /**
  * 路径是否为 socket。
  */
-function isSocket(e) {
+function isSocket(fd) {
   try {
-    return fstatSync(e).isSocket();
+    return fstatSync(fd).isSocket();
   } catch {
     return false;
   }
@@ -337,35 +349,35 @@ function isSocket(e) {
 /**
  * 有界读取文件描述符内容（读到换行为止），读完关闭 fd。
  */
-function readBoundedFdClose(e, maxBytes) {
+function readBoundedFdClose(fd, maxBytes) {
   try {
-    return readFdBounded(e, `fd ${e}`, maxBytes, {
+    return readFdBounded(fd, `fd ${fd}`, maxBytes, {
       untilNewline: true,
     });
   } finally {
-    closeSync(e);
+    closeSync(fd);
   }
 }
 //@ chunk-847rdpmn.js:5775-6208 placement
 /**
  * 有界读取文件描述符内容。
  */
-function readFdBounded(e, n, r, { untilNewline: s = false } = {}) {
-  let u = [];
-  let o = 0;
-  let a = Buffer.alloc(8192);
+function readFdBounded(fd, label, maxBytes, { untilNewline = false } = {}) {
+  let chunks = [];
+  let totalRead = 0;
+  let readBuffer = Buffer.alloc(8192);
   while (true) {
-    let f = readSync(e, a, 0, a.length, null);
-    if (f === 0) return Buffer.concat(u).toString("utf8");
-    o += f;
-    if (o > r)
+    let bytesRead = readSync(fd, readBuffer, 0, readBuffer.length, null);
+    if (bytesRead === 0) return Buffer.concat(chunks).toString("utf8");
+    totalRead += bytesRead;
+    if (totalRead > maxBytes)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `refusing to read ${n}: content exceeds ${r} byte limit`,
+        `refusing to read ${label}: content exceeds ${maxBytes} byte limit`,
         "readBoundedSync: content exceeds byte limit",
       );
-    let y = s ? a.subarray(0, f).indexOf(10) : -1;
-    u.push(Buffer.from(a.subarray(0, y === -1 ? f : y + 1)));
-    if (y !== -1) return Buffer.concat(u).toString("utf8");
+    let newlineIndex = untilNewline ? readBuffer.subarray(0, bytesRead).indexOf(10) : -1;
+    chunks.push(Buffer.from(readBuffer.subarray(0, newlineIndex === -1 ? bytesRead : newlineIndex + 1)));
+    if (newlineIndex !== -1) return Buffer.concat(chunks).toString("utf8");
   }
 }
 export {
@@ -381,8 +393,8 @@ export {
   openWriteFlags,
   BOUNDED_READ_MAX,
   consumePermissionStash,
-  isSocket,
   readBoundedFdClose,
+  isSocket,
   assertDirChainReal,
   SymlinkReadRefusedError,
   recordStagingDirIdentity,

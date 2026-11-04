@@ -6,17 +6,21 @@
  * attribution: esm-layout 4, esm-fingerprint 8
  */
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../../internal/tslib.mjs";
-import { collectStainlessHelpers, wr, X_STAINLESS_HELPER } from "../../internal/stainless-helper-header.mjs";
+import {
+  collectStainlessHelpers,
+  stainlessHelperHeader,
+  X_STAINLESS_HELPER,
+} from "../../internal/stainless-helper-header.mjs";
 import { buildHeaders } from "../../internal/headers.mjs";
-import { SEn } from "../../internal/utils/promise.mjs";
+import { promiseWithResolvers } from "../../internal/utils/promise.mjs";
 import { AnthropicError } from "../../core/error.mjs";
 import { loggerFor } from "../../internal/utils/log.mjs";
 import { ToolError } from "./ToolError.mjs";
-import { Bt } from "../../tools/agent-toolset/memories.mjs";
+import { sleepWithAbort } from "../../tools/agent-toolset/memories.mjs";
 
 //@ chunk-hwmsct5x.js:104913-106258 esm-layout
 var DEFAULT_TOKEN_THRESHOLD = 1e5;
-var dd = `You have been working on the task described above but have not yet completed it. Write a continuation summary that will allow you (or another instance of yourself) to resume work efficiently in a future context window where the conversation history will be replaced with this summary. Your summary should be structured, concise, and actionable. Include:
+var CONTINUATION_PROMPT = `You have been working on the task described above but have not yet completed it. Write a continuation summary that will allow you (or another instance of yourself) to resume work efficiently in a future context window where the conversation history will be replaced with this summary. Your summary should be structured, concise, and actionable. Include:
 1. Task Overview
 The user's core request and success criteria
 Any clarifications or constraints they specified
@@ -103,7 +107,7 @@ var BetaToolRunner = (() => {
         {
           ...options,
           headers: buildHeaders([
-            wr("BetaToolRunner"),
+            stainlessHelperHeader("BetaToolRunner"),
             collected.length
               ? {
                   [X_STAINLESS_HELPER]: collected.join(", "),
@@ -114,7 +118,7 @@ var BetaToolRunner = (() => {
         },
         "f",
       );
-      __classPrivateFieldSet(this, _BetaToolRunner_completion, SEn(), "f");
+      __classPrivateFieldSet(this, _BetaToolRunner_completion, promiseWithResolvers(), "f");
       if (params.compactionControl?.enabled)
         console.warn(
           'Anthropic: The `compactionControl` parameter is deprecated and will be removed in a future version. Use server-side compaction instead by passing `edits: [{ type: "compact_20260112" }]` in the params passed to `toolRunner()`. See https://platform.claude.com/docs/en/build-with-claude/compaction',
@@ -154,7 +158,7 @@ var BetaToolRunner = (() => {
       if (tokensUsed < threshold) return false;
       let model =
         compactionControl.model ?? __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.model;
-      let summaryPrompt = compactionControl.summaryPrompt ?? dd;
+      let summaryPrompt = compactionControl.summaryPrompt ?? CONTINUATION_PROMPT;
       let messages = __classPrivateFieldGet(this, _BetaToolRunner_state, "f").params.messages;
       if (messages[messages.length - 1].role === "assistant") {
         let lastMessage = messages[messages.length - 1];
@@ -185,7 +189,7 @@ var BetaToolRunner = (() => {
           signal: __classPrivateFieldGet(this, _BetaToolRunner_options, "f").signal,
           headers: buildHeaders([
             __classPrivateFieldGet(this, _BetaToolRunner_options, "f").headers,
-            wr("compaction"),
+            stainlessHelperHeader("compaction"),
           ]),
         },
       );
@@ -329,7 +333,7 @@ var BetaToolRunner = (() => {
         __classPrivateFieldSet(this, _BetaToolRunner_consumed, false, "f");
         __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").promise.catch(() => {});
         __classPrivateFieldGet(this, _BetaToolRunner_completion, "f").reject(error);
-        __classPrivateFieldSet(this, _BetaToolRunner_completion, SEn(), "f");
+        __classPrivateFieldSet(this, _BetaToolRunner_completion, promiseWithResolvers(), "f");
         throw error;
       }
     }
@@ -810,7 +814,7 @@ function determineNextStepFromStopReason(stopReason) {
     case "refusal":
       return "stop";
     default:
-      Bt(stopReason);
+      sleepWithAbort(stopReason);
       return "stop";
   }
 }

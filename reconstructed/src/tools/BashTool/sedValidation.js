@@ -45,7 +45,7 @@ function validateFlagsAgainstAllowlist(flags, allowedFlags) {
 function isLinePrintingCommand(command, expressions) {
   let sedMatch = getCommandArgv(command);
   if (sedMatch[0] !== "sed") return false;
-  let flags = sedMatch.slice(1).filter((w) => w.startsWith("-") && w !== "--");
+  let flags = sedMatch.slice(1).filter((flag) => flag.startsWith("-") && flag !== "--");
   if (
     !validateFlagsAgainstAllowlist(flags, [
       "-n",
@@ -93,7 +93,7 @@ function isSubstitutionCommand(command, expressions, hasFileArguments, options) 
   if (!allowFileWrites && hasFileArguments) return false;
   let sedMatch = getCommandArgv(command);
   if (sedMatch[0] !== "sed") return false;
-  let flags = sedMatch.slice(1).filter((Ie) => Ie.startsWith("-") && Ie !== "--");
+  let flags = sedMatch.slice(1).filter((arg) => arg.startsWith("-") && arg !== "--");
   let allowedFlags = ["-E", "--regexp-extended", "-r", "--posix"];
   if (allowFileWrites) allowedFlags.push("-i", "--in-place");
   if (!validateFlagsAgainstAllowlist(flags, allowedFlags)) return false;
@@ -154,20 +154,26 @@ function sedCommandIsAllowedByAllowlist(command, options) {
   if (expression !== null) {
     if (expression === MULTIPLE_INPLACE_MARKER) return false;
     if (containsDangerousOperations(expression)) return false;
-    let L = expression.trimStart();
-    if (/^[sy][^a-zA-Z0-9]/.test(L)) return false;
-    if (/^[\\$:={]/.test(L)) return false;
-    if (/^\d+[ \t]*[,!~=aAcCdDegGhHiIlnNpPqQrRsStTwWxyz]/.test(L)) return false;
-    if (/^[aAcCdDgGhHiIlnNpPqQtTwWxz=]([\s\\;]|$)/.test(L)) return false;
-    if (/^[rR]([\s\\;/]|\.{1,2}\/|$)/.test(L)) return false;
+    let expressionText = expression.trimStart();
+    if (/^[sy][^a-zA-Z0-9]/.test(expressionText)) return false;
+    if (/^[\\$:={]/.test(expressionText)) return false;
+    if (/^\d+[ \t]*[,!~=aAcCdDegGhHiIlnNpPqQrRsStTwWxyz]/.test(expressionText)) return false;
+    if (/^[aAcCdDgGhHiIlnNpPqQtTwWxz=]([\s\\;]|$)/.test(expressionText)) return false;
+    if (/^[rR]([\s\\;/]|\.{1,2}\/|$)/.test(expressionText)) return false;
     if (
       /^\/(?:[^/\\]|\\.)*\/[IMim]*[ \t]*([aAcCdDgGhHiIlnNpPqQtTwWxz=]([\s\\;]|$)|[rR]([\s\\;/]|\.{1,2}\/|$)|[sy][^a-zA-Z0-9]|[,!~])/.test(
-        L,
+        expressionText,
       )
     )
       return false;
-    let replaced = L.replace(/^(\.{1,2}\/)+/, "");
-    if (L.includes(";") || L.includes("[") || L.includes("\\") || replaced.includes("..")) return false;
+    let replaced = expressionText.replace(/^(\.{1,2}\/)+/, "");
+    if (
+      expressionText.includes(";") ||
+      expressionText.includes("[") ||
+      expressionText.includes("\\") ||
+      replaced.includes("..")
+    )
+      return false;
   }
   return true;
 }
@@ -179,7 +185,7 @@ function hasFileArgs(command) {
   let sedMatch = getCommandArgv(command);
   if (sedMatch[0] !== "sed") return false;
   let withoutSed = sedMatch.slice(1);
-  let s = 0;
+  let operandCount = 0;
   let hasEFlag = false;
   for (let i = 0; i < withoutSed.length; i++) {
     let arg = withoutSed[i];
@@ -197,9 +203,9 @@ function hasFileArgs(command) {
       continue;
     }
     if (arg.startsWith("-")) continue;
-    s++;
+    operandCount++;
     if (hasEFlag) return true;
-    if (s > 1) return true;
+    if (operandCount > 1) return true;
   }
   return false;
 }
@@ -217,7 +223,7 @@ function extractSedExpressions(command) {
   let sedMatch = getCommandArgv(command);
   if (sedMatch[0] !== "sed") return expressions;
   let withoutSed = sedMatch.slice(1);
-  if (withoutSed.some((h) => /^-e[wWe]/.test(h) || /^-w[eE]/.test(h)))
+  if (withoutSed.some((arg) => /^-e[wWe]/.test(arg) || /^-w[eE]/.test(arg)))
     throw Error("Dangerous flag combination detected");
   if (withoutSed.length === 0) throw Error("No sed arguments");
   try {
@@ -323,16 +329,16 @@ function containsDangerousOperations(expression) {
  */
 function checkSedConstraints(input, toolPermissionContext) {
   let commands = splitCommand(input.command);
-  let s;
+  let firstAsk;
   for (let cmd of commands) {
     let trimmed = extractSedCommand(cmd);
     if (trimmed === null) continue;
     let allowFileWrites = toolPermissionContext.mode === "acceptEdits";
-    s ??= checkSedCommand(input, toolPermissionContext);
-    if (s.behavior === "ask") {
+    firstAsk ??= checkSedCommand(input, toolPermissionContext);
+    if (firstAsk.behavior === "ask") {
       if (toolPermissionContext.blockReadsOutsideWorkingDirectories === true)
         return outsideReadsSedScriptAsk();
-      return s;
+      return firstAsk;
     }
     if (
       !sedCommandIsAllowedByAllowlist(trimmed, {
@@ -362,29 +368,29 @@ function checkSedConstraints(input, toolPermissionContext) {
 /**
  * 判断命令里是否含 sed 调用。
  */
-function isSedCommand(e) {
-  return extractSedCommand(e) !== null;
+function isSedCommand(segment) {
+  return extractSedCommand(segment) !== null;
 }
 //@ chunk-e6aww6q8.js:1062342-1062483 placement
-function extractSedCommand(e) {
-  let trimmed = e.trim();
-  if (!trimmed) return null;
-  let sedFromParse = extractSedFromParse(trimmed);
+function extractSedCommand(segment) {
+  let text = segment.trim();
+  if (!text) return null;
+  let sedFromParse = extractSedFromParse(text);
   if (sedFromParse !== null) return sedFromParse;
-  if (stripSafeWrappers(trimmed).split(/\s+/)[0] === "sed") return stripLeadingRedirectsAndWrappers(trimmed);
+  if (stripSafeWrappers(text).split(/\s+/)[0] === "sed") return stripLeadingRedirectsAndWrappers(text);
   return null;
 }
 //@ chunk-e6aww6q8.js:1062483-1063028 placement
 /**
  * 用 Bash 解析器确认命令只有一条 sed 语句，并从命令名处截取 sed 文本；解析失败或差异时回退字符串处理。
  */
-function extractSedFromParse(e) {
-  let n = (w) => (w.split(/\s+/)[0] === "sed" ? w : null);
-  if (e.length > SPLIT_MAX_LEN) return n(stripLeadingRedirectsAndWrappers(e));
-  if (hasParserLexingDifferential(e)) return n(stripLeadingRedirectsAndWrappers(e));
-  let r = getParserModule().parse(e);
-  if (!r || parseHasErrorNode(r)) return n(stripLeadingRedirectsAndWrappers(e));
-  let filtered = r.children.filter((child) => child.type !== "comment");
+function extractSedFromParse(text) {
+  let asSedCommand = (text) => (text.split(/\s+/)[0] === "sed" ? text : null);
+  if (text.length > SPLIT_MAX_LEN) return asSedCommand(stripLeadingRedirectsAndWrappers(text));
+  if (hasParserLexingDifferential(text)) return asSedCommand(stripLeadingRedirectsAndWrappers(text));
+  let astRoot = getParserModule().parse(text);
+  if (!astRoot || parseHasErrorNode(astRoot)) return asSedCommand(stripLeadingRedirectsAndWrappers(text));
+  let filtered = astRoot.children.filter((child) => child.type !== "comment");
   if (
     filtered.length !== 1 ||
     (filtered[0].type !== "command" &&
@@ -393,24 +399,24 @@ function extractSedFromParse(e) {
         filtered[0].children.some((child) => child.type === "command")
       ))
   )
-    return n(stripLeadingRedirectsAndWrappers(e));
-  let commandNode = findCommandNode(r, null);
+    return asSedCommand(stripLeadingRedirectsAndWrappers(text));
+  let commandNode = findCommandNode(astRoot, null);
   if (!commandNode) return null;
   let found = commandNode.children.find((child) => child.type === "command_name");
   if (!found) return null;
-  let str = Buffer.from(e, "utf8").subarray(found.startIndex).toString("utf8");
-  return n(stripLeadingRedirectsAndWrappers(str));
+  let str = Buffer.from(text, "utf8").subarray(found.startIndex).toString("utf8");
+  return asSedCommand(stripLeadingRedirectsAndWrappers(str));
 }
 //@ chunk-e6aww6q8.js:1063028-1063111 placement
 /**
  * 反复剥掉命令文本开头的重定向词与安全包装，返回剩余命令（用于识别以重定向开头的命令）。
  */
-function stripLeadingRedirectsAndWrappers(e) {
-  let trimmed = e.trim();
+function stripLeadingRedirectsAndWrappers(text) {
+  let trimmed = text.trim();
   for (;;) {
-    let r = stripLeadingRedirects(stripSafeWrappers(trimmed));
-    if (r === trimmed) break;
-    trimmed = r;
+    let stripped = stripLeadingRedirects(stripSafeWrappers(trimmed));
+    if (stripped === trimmed) break;
+    trimmed = stripped;
   }
   return trimmed;
 }
@@ -418,69 +424,71 @@ function stripLeadingRedirectsAndWrappers(e) {
 /**
  * 反复剥掉命令文本开头的重定向词（<<< word、>file、2>&1 等），返回剩余部分；用于识别以重定向开头的命令。
  */
-function stripLeadingRedirects(e) {
-  let n = e;
+function stripLeadingRedirects(command) {
+  let rest = command;
   for (;;) {
-    if (n.startsWith("<<<") && n[3] !== "<" && n[3] !== "(") {
-      let sliced = n.slice(3);
-      let w = sliced.startsWith(" ") || sliced.startsWith("\t") ? sliced.trimStart() : sliced;
-      if (!w) return n;
-      let L = shellWordEnd(w);
-      if (L === null) return n;
-      n = w.slice(L).trimStart();
+    if (rest.startsWith("<<<") && rest[3] !== "<" && rest[3] !== "(") {
+      let sliced = rest.slice(3);
+      let hereStringRest = sliced.startsWith(" ") || sliced.startsWith("\t") ? sliced.trimStart() : sliced;
+      if (!hereStringRest) return rest;
+      let wordEnd = shellWordEnd(hereStringRest);
+      if (wordEnd === null) return rest;
+      rest = hereStringRest.slice(wordEnd).trimStart();
       continue;
     }
-    let match = /^(?:\d*|&)(?:>>(?!\()|>\|(?!\()|>&(?!\()|<&(?!\()|<>(?!\()|>(?![>|&(])|<(?![<>&(]))/.exec(n);
-    if (!match) return n;
-    let sliced = n.slice(match[0].length);
-    let h = sliced.startsWith(" ") || sliced.startsWith("\t") ? sliced.trimStart() : sliced;
-    if (!h) return n;
-    let y = shellWordEnd(h);
-    if (y === null) return n;
-    n = h.slice(y).trimStart();
+    let match = /^(?:\d*|&)(?:>>(?!\()|>\|(?!\()|>&(?!\()|<&(?!\()|<>(?!\()|>(?![>|&(])|<(?![<>&(]))/.exec(
+      rest,
+    );
+    if (!match) return rest;
+    let sliced = rest.slice(match[0].length);
+    let targetRest = sliced.startsWith(" ") || sliced.startsWith("\t") ? sliced.trimStart() : sliced;
+    if (!targetRest) return rest;
+    let wordEnd = shellWordEnd(targetRest);
+    if (wordEnd === null) return rest;
+    rest = targetRest.slice(wordEnd).trimStart();
   }
 }
 //@ chunk-e6aww6q8.js:1063620-1063968 placement
-function shellWordEnd(e) {
-  let n = 0;
-  while (n < e.length) {
-    let r = e[n];
-    if (r === " " || r === "\t") break;
-    if (r === "\\" && n + 1 < e.length) {
-      n += 2;
+function shellWordEnd(text) {
+  let idx = 0;
+  while (idx < text.length) {
+    let char = text[idx];
+    if (char === " " || char === "\t") break;
+    if (char === "\\" && idx + 1 < text.length) {
+      idx += 2;
       continue;
     }
-    if (r === "'") {
-      let index = e.indexOf("'", n + 1);
+    if (char === "'") {
+      let index = text.indexOf("'", idx + 1);
       if (index === -1) return null;
-      n = index + 1;
+      idx = index + 1;
       continue;
     }
-    if (r === '"') {
-      let s = n + 1;
+    if (char === '"') {
+      let scan = idx + 1;
       for (;;) {
-        if (s >= e.length) return null;
-        if (e[s] === "\\" && s + 1 < e.length) {
-          s += 2;
+        if (scan >= text.length) return null;
+        if (text[scan] === "\\" && scan + 1 < text.length) {
+          scan += 2;
           continue;
         }
-        if (e[s] === '"') break;
-        s++;
+        if (text[scan] === '"') break;
+        scan++;
       }
-      n = s + 1;
+      idx = scan + 1;
       continue;
     }
-    n++;
+    idx++;
   }
-  return n;
+  return idx;
 }
 //@ chunk-e6aww6q8.js:1063968-1064812 placement
 /**
  * 检查 sed 命令：含危险操作或无法静态校验时需要批准。
  */
-function checkSedCommand(e, n, r) {
-  let s = (h) => isSedCommand(h) && !(r?.has(h.trim()) ?? false);
-  if (e.command.length > SPLIT_MAX_LEN || hasParserLexingDifferential(e.command))
+function checkSedCommand(input, toolPermissionContext, coveredSegments) {
+  let isUncoveredSed = (segment) => isSedCommand(segment) && !(coveredSegments?.has(segment.trim()) ?? false);
+  if (input.command.length > SPLIT_MAX_LEN || hasParserLexingDifferential(input.command))
     return {
       behavior: "ask",
       message: "sed command requires approval (contains potentially dangerous operations)",
@@ -491,7 +499,7 @@ function checkSedCommand(e, n, r) {
         bashMissKind: "sed-dangerous",
       },
     };
-  if (commandRedirectsAreRuntimeDetermined(e.command, s))
+  if (commandRedirectsAreRuntimeDetermined(input.command, isUncoveredSed))
     return {
       behavior: "ask",
       message: "sed command requires approval (contains potentially dangerous operations)",

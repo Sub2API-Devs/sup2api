@@ -8,7 +8,14 @@
  * pieces: chunk-ag5x7vhf.js (22)
  * attribution: placement 14, sole-consumer 7, callgraph-witnessed 1
  */
-import { yt, init_react_production, y, P, Se, Kc } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useSyncExternalStore,
+  init_react_production,
+  useState,
+  useEffect,
+  useContext,
+  fragmentTypeExport,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   onComplianceTaintsChanged,
   getComplianceTaints,
@@ -26,7 +33,7 @@ import { isNoticeableMcpServer } from "../../hooks/notifs/useMcpConnectivityStat
 import { getCliOwnedState } from "../../services/mcp/cliOwnedClients.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { count, stringArray } from "../../utils/collections.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { isClaudeMdLoadingDisabled } from "../../utils/settings/customizationDisabled.js";
 import { getMemoryFilesCached } from "../../utils/claudemd.js";
 import {
@@ -67,23 +74,27 @@ import { plural } from "../../utils/stringUtils.js";
 import { noticeImpressionEnabled } from "./CondensedLogo.js";
 import { FreezeWhenOffscreen } from "../FreezeWhenOffscreen.js";
 import { SlashLinkContexts } from "../SlashCommandLink.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:69058-69089 placement
 function useComplianceTaints() {
-  return yt(onComplianceTaintsChanged, getComplianceTaints);
+  return useSyncExternalStore(onComplianceTaintsChanged, getComplianceTaints);
 }
 //@ chunk-ag5x7vhf.js:69089-69128 placement
 /**
  * 函数 useHasComplianceTaint（是否有合规标记）；位于「启动 Logo 主组件：根据宽度/会话状态选择完整欢迎框或精简 Logo，并挂 Feed、通知、提示」模块。
  */
-function useHasComplianceTaint(m) {
-  return yt(onComplianceTaintsChanged, () => hasComplianceTaint(m));
+function useHasComplianceTaint(taints) {
+  return useSyncExternalStore(onComplianceTaintsChanged, () => hasComplianceTaint(taints));
 }
 //@ chunk-ag5x7vhf.js:69128-69132 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:69128", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:69132-69164 placement
 function useLastLoadStatus() {
-  return yt(onLastLoadStatusChanged, getLastLoadStatus);
+  return useSyncExternalStore(onLastLoadStatusChanged, getLastLoadStatus);
 }
 //@ chunk-ag5x7vhf.js:69164-69226 placement
 var MAX_NOTICED_MCP_SERVERS = 128;
@@ -92,54 +103,56 @@ var MCP_CONNECTION_CHECKS = {
   connectedThisSession: isClaudeAiMcpConnectedThisSession,
 };
 //@ chunk-ag5x7vhf.js:69226-69412 placement
-function isNeedsAuthNotice(m, { hasEverConnected, connectedThisSession }) {
-  if (m.type !== "needs-auth" || !isNoticeableMcpServer(m, hasEverConnected, connectedThisSession))
+function isNeedsAuthNotice(client, { hasEverConnected, connectedThisSession }) {
+  if (client.type !== "needs-auth" || !isNoticeableMcpServer(client, hasEverConnected, connectedThisSession))
     return false;
   return (
-    getCliOwnedState().needsAuthNoticedThisSession.has(m.name) ||
-    !stringArrayOf(getGlobalConfig()).includes(m.name)
+    getCliOwnedState().needsAuthNoticedThisSession.has(client.name) ||
+    !stringArrayOf(getGlobalConfig()).includes(client.name)
   );
 }
 //@ chunk-ag5x7vhf.js:69412-69454 placement
-function countNeedsAuthServers_2(clients, h) {
-  return count(clients, (x) => isNeedsAuthNotice(x, h));
+function countNeedsAuthServers_2(clients, connectionState) {
+  return count(clients, (client) => isNeedsAuthNotice(client, connectionState));
 }
 //@ chunk-ag5x7vhf.js:69454-69757 placement
-function needsAuthNoticeServers(clients, h, storageV5) {
+function needsAuthNoticeServers(clients, connectionState, storageV5) {
   let needsAuthNoticedThisSession = getCliOwnedState().needsAuthNoticedThisSession;
-  let k = [];
-  for (let _ of clients)
-    if (isNeedsAuthNotice(_, h) && !needsAuthNoticedThisSession.has(_.name)) {
-      needsAuthNoticedThisSession.add(_.name);
-      k.push(_.name);
+  let noticed = [];
+  for (let client of clients)
+    if (isNeedsAuthNotice(client, connectionState) && !needsAuthNoticedThisSession.has(client.name)) {
+      needsAuthNoticedThisSession.add(client.name);
+      noticed.push(client.name);
     }
-  if (k.length === 0) return;
-  saveGlobalConfig((_) => {
-    let I = stringArrayOf(_);
-    let filtered = k.filter((L) => !I.includes(L));
-    if (filtered.length === 0) return _;
-    let A = [...I, ...filtered];
+  if (noticed.length === 0) return;
+  saveGlobalConfig((config) => {
+    let noticedList = stringArrayOf(config);
+    let filtered = noticed.filter((name) => !noticedList.includes(name));
+    if (filtered.length === 0) return config;
+    let merged = [...noticedList, ...filtered];
     return {
-      ..._,
-      mcpNeedsAuthNoticed: A.slice(-MAX_NOTICED_MCP_SERVERS),
+      ...config,
+      mcpNeedsAuthNoticed: merged.slice(-MAX_NOTICED_MCP_SERVERS),
     };
   }, storageV5);
 }
 //@ chunk-ag5x7vhf.js:69757-69870 placement = findChromeClient (1)
 function findChromeClient(clients) {
-  let h = stringArrayOf(getGlobalConfig());
-  if (h.length === 0) return 0;
-  return count(clients, (client) => client.type === "connected" && h.includes(client.name));
+  let noticedList = stringArrayOf(getGlobalConfig());
+  if (noticedList.length === 0) return 0;
+  return count(clients, (client) => client.type === "connected" && noticedList.includes(client.name));
 }
 //@ chunk-ag5x7vhf.js:69870-70072 placement
 function clearNoticedMcpNeedsAuth(clients, storageV5) {
-  saveGlobalConfig((x) => {
-    let T = stringArrayOf(x);
-    if (T.length === 0) return x;
-    let filtered = T.filter((_) => !clients.some((I) => I.name === _ && I.type === "connected"));
-    if (filtered.length === T.length) return x;
+  saveGlobalConfig((config) => {
+    let noticedList = stringArrayOf(config);
+    if (noticedList.length === 0) return config;
+    let filtered = noticedList.filter(
+      (name) => !clients.some((client) => client.name === name && client.type === "connected"),
+    );
+    if (filtered.length === noticedList.length) return config;
     return {
-      ...x,
+      ...config,
       mcpNeedsAuthNoticed: filtered,
     };
   }, storageV5);
@@ -151,16 +164,22 @@ function stringArrayOf(globalConfig) {
 //@ chunk-ag5x7vhf.js:70163-70176 placement
 var MCP_CONNECTED_TTL_MS = 15000;
 //@ chunk-ag5x7vhf.js:70599-70603 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:70599", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:74592-74596 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ag5x7vhf.js:74592", () => {
+  init_react_production();
+});
 //@ chunk-ag5x7vhf.js:112980-113076 sole-consumer
-function selectUnknownModelWindowModel(oo) {
-  return oo.setupIssues.unknownModelWindowWarning ? oo.mainLoopModelForSession : null;
+function selectUnknownModelWindowModel(appState) {
+  return appState.setupIssues.unknownModelWindowWarning ? appState.mainLoopModelForSession : null;
 }
 //@ chunk-ag5x7vhf.js:113076-113128 sole-consumer
-function selectReplBridgeAutoOn(mo) {
-  return mo.replBridgeAutoOnByDefault;
+function selectReplBridgeAutoOn(state) {
+  return state.replBridgeAutoOnByDefault;
 }
 //@ chunk-ag5x7vhf.js:113128-113175 sole-consumer = _temp4 (1)
 function selectReplBridgeSessionUrl(s) {
@@ -181,57 +200,57 @@ var EMPTY_MEMORY_FILES = [];
  * 异步加载 CLAUDE.md 等记忆文件（关闭 CLAUDE.md 加载时为空），组件卸载后忽略结果；返回当前结果。
  */
 function useMemoryFiles(showGuestPassesUpsell, storageV5, credentials) {
-  let T = w(7);
-  let k;
-  if (T[0] !== credentials || T[1] !== showGuestPassesUpsell || T[2] !== storageV5) {
-    k = isClaudeMdLoadingDisabled()
+  let $ = useMemoCache(7);
+  let loading;
+  if ($[0] !== credentials || $[1] !== showGuestPassesUpsell || $[2] !== storageV5) {
+    loading = isClaudeMdLoadingDisabled()
       ? null
       : getMemoryFilesCached(showGuestPassesUpsell, false, storageV5, credentials);
-    T[0] = credentials;
-    T[1] = showGuestPassesUpsell;
-    T[2] = storageV5;
-    T[3] = k;
-  } else k = T[3];
-  let _ = k;
-  let [I, D] = y(EMPTY_MEMORY_FILES);
-  let A;
-  let L;
-  if (T[4] !== _) {
-    A = () => {
-      if (_ === null) {
-        D(EMPTY_MEMORY_FILES);
+    $[0] = credentials;
+    $[1] = showGuestPassesUpsell;
+    $[2] = storageV5;
+    $[3] = loading;
+  } else loading = $[3];
+  let loading_2 = loading;
+  let [memoryFiles, setMemoryFiles] = useState(EMPTY_MEMORY_FILES);
+  let loadEffect;
+  let loadDeps;
+  if ($[4] !== loading_2) {
+    loadEffect = () => {
+      if (loading_2 === null) {
+        setMemoryFiles(EMPTY_MEMORY_FILES);
         return;
       }
-      let V = true;
-      _.then((W) => {
-        if (V) D(W);
+      let alive = true;
+      loading_2.then((files) => {
+        if (alive) setMemoryFiles(files);
       }, noopMountEffect);
       return () => {
-        V = false;
+        alive = false;
       };
     };
-    L = [_];
-    T[4] = _;
-    T[5] = A;
-    T[6] = L;
+    loadDeps = [loading_2];
+    $[4] = loading_2;
+    $[5] = loadEffect;
+    $[6] = loadDeps;
   } else {
-    A = T[5];
-    L = T[6];
+    loadEffect = $[5];
+    loadDeps = $[6];
   }
-  P(A, L);
-  return I;
+  useEffect(loadEffect, loadDeps);
+  return memoryFiles;
 }
 //@ chunk-ag5x7vhf.js:113588-117168 callgraph-witnessed = LogoV2 (0.17)
-function LogoV2(m) {
-  let $ = w(28);
-  let x;
-  if ($[0] !== m) {
-    x = m === undefined ? {} : m;
-    $[0] = m;
-    $[1] = x;
-  } else x = $[1];
-  let { latchAnnouncementSlot, homeMessage } = x;
-  let _ = latchAnnouncementSlot === undefined ? true : latchAnnouncementSlot;
+function LogoV2(props) {
+  let $ = useMemoCache(28);
+  let options;
+  if ($[0] !== props) {
+    options = props === undefined ? {} : props;
+    $[0] = props;
+    $[1] = options;
+  } else options = $[1];
+  let { latchAnnouncementSlot, homeMessage } = options;
+  let latchSlot = latchAnnouncementSlot === undefined ? true : latchAnnouncementSlot;
   if (homeMessage === undefined) false;
   else homeMessage;
   let { storageV5, credentials } = useTheme_2();
@@ -243,54 +262,54 @@ function LogoV2(m) {
   let appStateSlice_3 = useAppStateSlice(selectUnknownModelWindowModel);
   let agent = useAppStateSlice(selectReplBridgeAutoOn);
   let effortValue = useAppStateSlice(selectReplBridgeSessionUrl);
-  let pe;
-  if ($[2] !== _) {
-    pe = (xe) => (_ ? xe.agentDefinitions : undefined);
-    $[2] = _;
-    $[3] = pe;
-  } else pe = $[3];
-  let agentDefinitions = useAppStateSlice(pe);
-  let Re = useAppStateSlice(countNeedsAuthServers) ?? 0;
-  let We = useAppStateSlice(countChromeClients) ?? 0;
-  let fe = Se(appStoreContext);
-  let Fe;
-  let te;
-  if ($[4] !== fe || $[5] !== _ || $[6] !== We || $[7] !== storageV5) {
-    Fe = () => {
-      if (!_ || fe === null || We === 0) {
+  let selectAgentDefs;
+  if ($[2] !== latchSlot) {
+    selectAgentDefs = (state) => (latchSlot ? state.agentDefinitions : undefined);
+    $[2] = latchSlot;
+    $[3] = selectAgentDefs;
+  } else selectAgentDefs = $[3];
+  let agentDefinitions = useAppStateSlice(selectAgentDefs);
+  let mcpNeedsAuthCount = useAppStateSlice(countNeedsAuthServers) ?? 0;
+  let chromeClientCount = useAppStateSlice(countChromeClients) ?? 0;
+  let appStore = useContext(appStoreContext);
+  let clearAuthEffect;
+  let clearAuthDeps;
+  if ($[4] !== appStore || $[5] !== latchSlot || $[6] !== chromeClientCount || $[7] !== storageV5) {
+    clearAuthEffect = () => {
+      if (!latchSlot || appStore === null || chromeClientCount === 0) {
         return;
       }
-      clearNoticedMcpNeedsAuth(fe.getState().mcp.clients, storageV5);
+      clearNoticedMcpNeedsAuth(appStore.getState().mcp.clients, storageV5);
     };
-    te = [_, fe, We, storageV5];
-    $[4] = fe;
-    $[5] = _;
-    $[6] = We;
+    clearAuthDeps = [latchSlot, appStore, chromeClientCount, storageV5];
+    $[4] = appStore;
+    $[5] = latchSlot;
+    $[6] = chromeClientCount;
     $[7] = storageV5;
-    $[8] = Fe;
-    $[9] = te;
+    $[8] = clearAuthEffect;
+    $[9] = clearAuthDeps;
   } else {
-    Fe = $[8];
-    te = $[9];
+    clearAuthEffect = $[8];
+    clearAuthDeps = $[9];
   }
-  P(Fe, te);
+  useEffect(clearAuthEffect, clearAuthDeps);
   useComplianceTaints();
   useStoreSelector(useTasksV2);
   useModelSuccessorSubscriptions();
-  let me;
-  if ($[10] !== fe) {
-    me = () => (fe?.getState().initialMessage ?? null) !== null;
-    $[10] = fe;
-    $[11] = me;
-  } else me = $[11];
-  let se = me;
-  let [_e] = y(se);
+  let selectHasInitialMessage;
+  if ($[10] !== appStore) {
+    selectHasInitialMessage = () => (appStore?.getState().initialMessage ?? null) !== null;
+    $[10] = appStore;
+    $[11] = selectHasInitialMessage;
+  } else selectHasInitialMessage = $[11];
+  let hasInitialMessage = selectHasInitialMessage;
+  let [launchPromptTaken] = useState(hasInitialMessage);
   useLastLoadStatus();
   let memoryFiles = useMemoryFiles(showGuestPassesUpsell, storageV5, credentials);
   let unknownModelWindowWarning = appStateSlice?.unknownModelWindowWarning ?? null;
-  let Ee;
+  let matchingUnknownModelWarning;
   if ($[12] !== appStateSlice_2 || $[13] !== appStateSlice_3 || $[14] !== unknownModelWindowWarning) {
-    Ee =
+    matchingUnknownModelWarning =
       unknownModelWindowWarning !== null &&
       unknownModelWindowWarning.model ===
         getMainLoopModelFromState({
@@ -302,15 +321,15 @@ function LogoV2(m) {
     $[12] = appStateSlice_2;
     $[13] = appStateSlice_3;
     $[14] = unknownModelWindowWarning;
-    $[15] = Ee;
-  } else Ee = $[15];
-  let unknownModelWindowWarning_2 = Ee;
+    $[15] = matchingUnknownModelWarning;
+  } else matchingUnknownModelWarning = $[15];
+  let unknownModelWindowWarning_2 = matchingUnknownModelWarning;
   const config = getGlobalConfig();
   let isLaunchPromptPending;
-  if ($[16] !== se || $[17] !== _e) {
-    isLaunchPromptPending = () => _e || se();
-    $[16] = se;
-    $[17] = _e;
+  if ($[16] !== hasInitialMessage || $[17] !== launchPromptTaken) {
+    isLaunchPromptPending = () => launchPromptTaken || hasInitialMessage();
+    $[16] = hasInitialMessage;
+    $[17] = launchPromptTaken;
     $[18] = isLaunchPromptPending;
   } else isLaunchPromptPending = $[18];
   const modelDeprecationWarning = appStateSlice?.modelDeprecationWarning ?? null;
@@ -324,29 +343,29 @@ function LogoV2(m) {
     ? null
     : reportInvalidWindowEnv(env.CLAUDE_CODE_AUTO_COMPACT_WINDOW);
   const unusableManagedMcpConfigMessage = getIsRemoteMode() ? null : getUnusableEnterpriseMcpConfigMessage();
-  let Je;
+  let modelRestrictedWarning;
   Qe: {
-    let modelRestrictedWarning = appStateSlice?.modelRestrictedWarning;
-    if (!modelRestrictedWarning) {
-      Je = null;
+    let modelRestrictedWarning_2 = appStateSlice?.modelRestrictedWarning;
+    if (!modelRestrictedWarning_2) {
+      modelRestrictedWarning = null;
       break Qe;
     }
     let model = getMainLoopModel();
-    let fullModelDisplayName = strip1mSuffix(modelRestrictedWarning.requested.trim().toLowerCase());
+    let fullModelDisplayName = strip1mSuffix(modelRestrictedWarning_2.requested.trim().toLowerCase());
     if (
       !isModeDependentModelSetting(fullModelDisplayName) &&
       fullModelDisplayName !== "best" &&
-      parseUserSpecifiedModel(modelRestrictedWarning.requested).toLowerCase() === model.toLowerCase()
+      parseUserSpecifiedModel(modelRestrictedWarning_2.requested).toLowerCase() === model.toLowerCase()
     ) {
-      Je = null;
+      modelRestrictedWarning = null;
       break Qe;
     }
-    Je = {
-      requested: modelRestrictedWarning.requested,
+    modelRestrictedWarning = {
+      requested: modelRestrictedWarning_2.requested,
       effective: model,
     };
   }
-  let pt = {
+  let noticeProps = {
     session: showGuestPassesUpsell,
     config,
     agentDefinitions,
@@ -357,132 +376,142 @@ function LogoV2(m) {
     securityWarnings,
     autoCompactWindowEnvWarning,
     unusableManagedMcpConfigMessage,
-    modelRestrictedWarning: Je,
+    modelRestrictedWarning,
     sandboxDeniesOnAnotherHostCount: appStateSlice?.sandboxDeniesOnAnotherHostCount ?? 0,
     existingClaudeSubscription: appStateSlice?.existingClaudeSubscription ?? null,
     replBridgeAutoOnByDefault: agent ?? false,
     replBridgeSessionUrl: effortValue,
-    mcpNeedsAuthCount: Re,
+    mcpNeedsAuthCount,
     storageV5,
   };
-  let rt = (_ ? resolveAnnouncementSlot : selectStatusNotices)(activeStatusNotices(pt), layoutMode, {
-    suppressPromos: isPromoOffersBlocked(),
-  });
-  let { slot, warnings } = rt;
-  let dt;
-  let Pt = false || dt !== undefined;
-  let Ot = warnings.length > 0;
-  let It = slot !== null;
-  let kt = rt.ant.length > 0;
-  let to = slot?.showAccentBar?.() ?? true;
-  let de =
-    rt.slotOverflowCount > 0 &&
+  let statusNotices = (latchSlot ? resolveAnnouncementSlot : selectStatusNotices)(
+    activeStatusNotices(noticeProps),
+    layoutMode,
+    {
+      suppressPromos: isPromoOffersBlocked(),
+    },
+  );
+  let { slot, warnings } = statusNotices;
+  let homeNotice;
+  let showHomeNotice = false || homeNotice !== undefined;
+  let hasWarnings = warnings.length > 0;
+  let hasSlot = slot !== null;
+  let hasAnt = statusNotices.ant.length > 0;
+  let showAccentBar = slot?.showAccentBar?.() ?? true;
+  let overflowBox =
+    statusNotices.slotOverflowCount > 0 &&
     jsxProd_default(Box, {
       paddingLeft: 2,
       children: jsxProd_default_2(InfoNotice, {
-        children: [rt.slotOverflowCount, " more ", plural(rt.slotOverflowCount, "notice"), " ", "hidden"],
+        children: [
+          statusNotices.slotOverflowCount,
+          " more ",
+          plural(statusNotices.slotOverflowCount, "notice"),
+          " ",
+          "hidden",
+        ],
       }),
     });
-  const le = noticeImpressionEnabled;
-  const Be = FreezeWhenOffscreen;
+  const contextProvider = noticeImpressionEnabled;
+  const Wrapper = FreezeWhenOffscreen;
   const children =
-    !Ot && !It && !kt && !Pt
+    !hasWarnings && !hasSlot && !hasAnt && !showHomeNotice
       ? null
       : jsxProd_default_2(Box, {
           flexDirection: "column",
-          flexGrow: Pt ? 1 : 0,
+          flexGrow: showHomeNotice ? 1 : 0,
           children: [
-            Pt &&
+            showHomeNotice &&
               jsxProd_default(SlashLinkContexts.Provider, {
                 value: true,
                 children: jsxProd_default(Box, {
                   flexDirection: "column",
                   alignItems: "center",
                   marginTop: 1,
-                  marginBottom: Ot || It || kt || de !== false ? 1 : 0,
-                  children: (dt ?? null)?.render(pt),
+                  marginBottom: hasWarnings || hasSlot || hasAnt || overflowBox !== false ? 1 : 0,
+                  children: (homeNotice ?? null)?.render(noticeProps),
                 }),
               }),
             jsxProd_default(McpAuthNoticeTrigger, {
-              count: Re,
+              count: mcpNeedsAuthCount,
               storageV5,
             }),
             jsxProd_default(NoticeVisibilityTracker, {
-              rows: pt.securityWarnings,
+              rows: noticeProps.securityWarnings,
               storageV5,
             }),
             warnings.map((warning) =>
               jsxProd_default(
-                Kc,
+                fragmentTypeExport,
                 {
-                  children: warning.render(pt),
+                  children: warning.render(noticeProps),
                 },
                 warning.id,
               ),
             ),
             false &&
-              de !== false &&
+              overflowBox !== false &&
               jsxProd_default(Box, {
-                marginTop: Ot ? 1 : 0,
-                children: de,
+                marginTop: hasWarnings ? 1 : 0,
+                children: overflowBox,
               }),
             slot === null
               ? null
               : jsxProd_default_2(Box, {
                   flexDirection: "column",
-                  marginTop: Ot ? 1 : 0,
+                  marginTop: hasWarnings ? 1 : 0,
                   children: [
                     jsxProd_default(Box, {
                       flexDirection: "column",
-                      paddingLeft: to ? 1 : 2,
-                      borderStyle: to ? "quote" : undefined,
+                      paddingLeft: showAccentBar ? 1 : 2,
+                      borderStyle: showAccentBar ? "quote" : undefined,
                       borderTop: false,
                       borderBottom: false,
                       borderRight: false,
                       borderColor: slot.tier === "announcement" ? "claude" : undefined,
                       borderDimColor: slot.tier !== "announcement",
-                      children: slot.render(pt),
+                      children: slot.render(noticeProps),
                     }),
-                    de,
+                    overflowBox,
                   ],
                 }),
-            kt &&
+            hasAnt &&
               jsxProd_default(Box, {
                 flexDirection: "column",
                 paddingLeft: 2,
-                marginTop: Ot || It || (false && de !== false) ? 1 : 0,
-                children: rt.ant.map((Ge) =>
+                marginTop: hasWarnings || hasSlot || (false && overflowBox !== false) ? 1 : 0,
+                children: statusNotices.ant.map((antNotice) =>
                   jsxProd_default(
-                    Kc,
+                    fragmentTypeExport,
                     {
-                      children: Ge.render(pt),
+                      children: antNotice.render(noticeProps),
                     },
-                    Ge.id,
+                    antNotice.id,
                   ),
                 ),
               }),
           ],
         });
   let children_2;
-  if ($[21] !== Be || $[22] !== children) {
-    children_2 = jsxProd_default(Be, {
+  if ($[21] !== Wrapper || $[22] !== children) {
+    children_2 = jsxProd_default(Wrapper, {
       children,
     });
-    $[21] = Be;
+    $[21] = Wrapper;
     $[22] = children;
     $[23] = children_2;
   } else children_2 = $[23];
-  let At;
-  if ($[24] !== _ || $[25] !== le.Provider || $[26] !== children_2) {
-    At = jsxProd_default(le.Provider, {
-      value: _,
+  let wrapped;
+  if ($[24] !== latchSlot || $[25] !== contextProvider.Provider || $[26] !== children_2) {
+    wrapped = jsxProd_default(contextProvider.Provider, {
+      value: latchSlot,
       children: children_2,
     });
-    $[24] = _;
-    $[25] = le.Provider;
+    $[24] = latchSlot;
+    $[25] = contextProvider.Provider;
     $[26] = children_2;
-    $[27] = At;
-  } else At = $[27];
-  return At;
+    $[27] = wrapped;
+  } else wrapped = $[27];
+  return wrapped;
 }
 export { LogoV2, useHasComplianceTaint, MCP_CONNECTED_TTL_MS, needsAuthNoticeServers, MCP_CONNECTION_CHECKS };

@@ -39,55 +39,65 @@ function getMcpInstructionsDelta(
       let addedBlocks = msg.attachment.addedBlocks;
       let addedServerInstructions = msg.attachment.addedServerInstructions;
       if (Array.isArray(addedNames))
-        addedNames.forEach((addedName, nt) => {
+        addedNames.forEach((addedName, index) => {
           if (typeof addedName !== "string") return;
-          let pt = Array.isArray(addedServerInstructions) ? addedServerInstructions[nt] : undefined;
-          announcedBlocks.set(addedName, addedBlocks[nt]);
+          let serverInstruction = Array.isArray(addedServerInstructions)
+            ? addedServerInstructions[index]
+            : undefined;
+          announcedBlocks.set(addedName, addedBlocks[index]);
           announced.set(
             addedName,
-            typeof addedBlocks[nt] !== "string" ? "" : typeof pt === "string" ? pt : undefined,
+            typeof addedBlocks[index] !== "string"
+              ? ""
+              : typeof serverInstruction === "string"
+                ? serverInstruction
+                : undefined,
           );
         });
     }
     for (let n of stringArray_2(msg.attachment.removedNames)) announced.delete(n);
   }
   let connected = clients.filter(isConnectedOrCached);
-  let connectedNames = new Set(connected.map((Me) => Me.name));
+  let connectedNames = new Set(connected.map((client) => client.name));
   let currentBlocks = computeMcpInstructionsDelta(connected, clientSideInstructions);
   let serverInstructions = new Map();
-  for (let Me of connected) if (Me.instructions) serverInstructions.set(Me.name, Me.instructions);
-  let Se = isSortedOtterOn();
-  let ke = isDiscoveryCacheOn() || Se;
+  for (let client of connected)
+    if (client.instructions) serverInstructions.set(client.name, client.instructions);
+  let sortedOtter = isSortedOtterOn();
+  let discoveryCache = isDiscoveryCacheOn() || sortedOtter;
   let added = [];
-  for (let [Me, We] of currentBlocks) {
-    let ze = serverInstructions.get(Me) ?? "";
-    if (!announced.has(Me)) {
+  for (let [name, block] of currentBlocks) {
+    let serverInstruction = serverInstructions.get(name) ?? "";
+    if (!announced.has(name)) {
       added.push({
-        name: Me,
-        block: We,
-        server: ze,
+        name,
+        block,
+        server: serverInstruction,
       });
       continue;
     }
-    let existing = announced.get(Me);
-    let Je = existing !== undefined ? existing !== ze : Se && announcedBlocks.get(Me) !== We;
-    if (ke && ze !== "" && Je)
+    let existing = announced.get(name);
+    let hasChanged =
+      existing !== undefined
+        ? existing !== serverInstruction
+        : sortedOtter && announcedBlocks.get(name) !== block;
+    if (discoveryCache && serverInstruction !== "" && hasChanged)
       added.push({
-        name: Me,
-        block: We,
-        server: ze,
+        name,
+        block,
+        server: serverInstruction,
       });
   }
   let filtered = [...announced.keys()].filter((key) => !connectedNames.has(key));
   let pendingNames = new Set(
     clients.filter((client) => client.type === "pending").map((client) => client.name),
   );
-  let removed = holdRetractionsWhilePending ? filtered.filter((Me) => !pendingNames.has(Me)) : filtered;
+  let removed = holdRetractionsWhilePending ? filtered.filter((name) => !pendingNames.has(name)) : filtered;
   if (added.length === 0 && removed.length === 0) return null;
   logEvent("tengu_mcp_instructions_pool_change", {
     addedCount: added.length,
     removedCount: removed.length,
-    departedWhileConnectingCount: count(filtered, (Me) => pendingNames.has(Me)),
+    departedWhileConnectingCount: count(filtered, (name) => pendingNames.has(name)),
     retractionHoldEnabled: holdRetractionsWhilePending,
     priorAnnouncedCount: announced.size,
     clientSideCount: clientSideInstructions.length,
@@ -95,12 +105,12 @@ function getMcpInstructionsDelta(
     attachmentCount,
     midCount,
   });
-  added.sort((Me, We) => compareStringsGrouped(Me.name, We.name));
+  added.sort((entryA, entryB) => compareStringsGrouped(entryA.name, entryB.name));
   return {
-    addedNames: added.map((Me) => Me.name),
-    addedBlocks: added.map((Me) => Me.block),
-    ...(ke && {
-      addedServerInstructions: added.map((Me) => Me.server),
+    addedNames: added.map((entry) => entry.name),
+    addedBlocks: added.map((entry) => entry.block),
+    ...(discoveryCache && {
+      addedServerInstructions: added.map((entry) => entry.server),
     }),
     removedNames: removed.sort(),
   };
@@ -109,29 +119,29 @@ function getMcpInstructionsDelta(
 /**
  * 计算 MCP 服务器 instructions 增量：对比当前已连接服务器的 instructions 与之前已公告的，给出新增/变更与移除的服务器列表。
  */
-function computeMcpInstructionsDelta(e, n) {
-  let r = new Map();
-  for (let h of e)
-    if (h.instructions)
-      r.set(
-        h.name,
-        `## ${h.name}
-${h.instructions}`,
+function computeMcpInstructionsDelta(clients, clientSideInstructions) {
+  let blocks = new Map();
+  for (let client of clients)
+    if (client.instructions)
+      blocks.set(
+        client.name,
+        `## ${client.name}
+${client.instructions}`,
       );
-  let s = new Set(e.map((h) => h.name));
-  for (let h of n) {
-    if (!s.has(h.serverName)) continue;
-    let y = r.get(h.serverName);
-    r.set(
-      h.serverName,
-      y
-        ? `${y}
+  let clientNames = new Set(clients.map((client) => client.name));
+  for (let instruction of clientSideInstructions) {
+    if (!clientNames.has(instruction.serverName)) continue;
+    let existingBlock = blocks.get(instruction.serverName);
+    blocks.set(
+      instruction.serverName,
+      existingBlock
+        ? `${existingBlock}
 
-${h.block}`
-        : `## ${h.serverName}
-${h.block}`,
+${instruction.block}`
+        : `## ${instruction.serverName}
+${instruction.block}`,
     );
   }
-  return r;
+  return blocks;
 }
 export { getMcpInstructionsDelta, computeMcpInstructionsDelta };

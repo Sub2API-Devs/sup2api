@@ -100,10 +100,11 @@ class AzureCliCredential {
           this.subscription,
           this.timeout,
         );
-        let d =
+        let match =
           (_a = obj.stderr) === null || _a === undefined ? undefined : _a.match("(.*)az login --scope(.*)");
         let isLoginError =
-          ((_b = obj.stderr) === null || _b === undefined ? undefined : _b.match("(.*)az login(.*)")) && !d;
+          ((_b = obj.stderr) === null || _b === undefined ? undefined : _b.match("(.*)az login(.*)")) &&
+          !match;
         if (
           ((_c = obj.stderr) === null || _c === undefined ? undefined : _c.match("az:(.*)not found")) ||
           ((_d = obj.stderr) === null || _d === undefined

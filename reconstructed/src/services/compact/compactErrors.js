@@ -13,9 +13,9 @@
  * 压缩错误文案常量。
  */
 var NO_MESSAGES_TO_COMPACT = "No messages to compact";
-var COMPACT_FAILED_CONTEXT_LIMIT =
+var COMPACT_FAILED_CONTEXT_LIMIT_MESSAGE =
   "Compaction failed \xB7 conversation could not be reduced below the context limit";
-var COMPACT_FAILED_MEDIA_LIMIT = "Compaction failed \xB7 attached media exceeds size limits";
+var COMPACT_FAILED_MEDIA_LIMIT_MESSAGE = "Compaction failed \xB7 attached media exceeds size limits";
 var COMPACT_ERROR_PREFIX = "Error during compaction: ";
 var COULD_NOT_COMPACT = "Could not compact";
 //@ chunk-xndtzje6.js:431-558 placement
@@ -23,9 +23,9 @@ var CONVERSATION_TOO_LONG_HINT = `conversation too long \xB7 ${"/clear to start 
 var MEDIA_TOO_LARGE_HINT = `attached media too large \xB7 ${"/clear to start fresh"}`;
 export {
   CONVERSATION_TOO_LONG_HINT,
-  COMPACT_FAILED_CONTEXT_LIMIT,
+  COMPACT_FAILED_CONTEXT_LIMIT_MESSAGE,
   MEDIA_TOO_LARGE_HINT,
-  COMPACT_FAILED_MEDIA_LIMIT,
+  COMPACT_FAILED_MEDIA_LIMIT_MESSAGE,
   NO_MESSAGES_TO_COMPACT,
   COMPACT_ERROR_PREFIX,
   COULD_NOT_COMPACT,

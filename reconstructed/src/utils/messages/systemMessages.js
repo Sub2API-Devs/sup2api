@@ -32,12 +32,12 @@ function createApiSystemMessage(content) {
 function foldAttachmentText(message, text, ephemeralText, nameOnlyText, spans) {
   let current = message.ephemeral ? "" : message.message.content;
   if (text && spans && spans.length > 0) {
-    let L = current ? current.length + 2 : 0;
+    let offset = current ? current.length + 2 : 0;
     message.foldedAttachmentSpans = [
       ...(message.foldedAttachmentSpans ?? []),
       ...spans.map((span) => ({
         ...span,
-        start: span.start + L,
+        start: span.start + offset,
       })),
     ];
   }
@@ -63,11 +63,11 @@ function foldAttachmentText(message, text, ephemeralText, nameOnlyText, spans) {
 /**
  * 用空格连接两个非空部分（有一个为空则返回另一个）。
  */
-function joinParts(e, n) {
-  return e && n
-    ? `${e}
+function joinParts(first, second) {
+  return first && second
+    ? `${first}
 
-${n}`
-    : e || n;
+${second}`
+    : first || second;
 }
 export { foldAttachmentText, createApiSystemMessage, joinParts };

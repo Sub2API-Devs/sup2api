@@ -10,7 +10,7 @@
  */
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { logForDebugging } from "../../utils/debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getCurrentSessionFile, queueSessionMetadataEntry } from "../../utils/sessionStorage.js";
 import { getSessionId } from "../../bootstrap/state.js";
 import { ZERO_UUID } from "../../utils/requestReplay.js";
@@ -25,6 +25,7 @@ import {
 import { isPromptHookObserved } from "../../utils/telemetry/sessionTracing.js";
 import { withExpandedPastes } from "../../utils/hooks/postSamplingHooks.js";
 import { gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1473473-1474045 placement
 /**
@@ -49,16 +50,16 @@ class LastPromptRestamp {
     this.#t = undefined;
     this.#o.clear();
   }
-  turnStarts(h) {
+  turnStarts(messages) {
     if (!this.#e) return;
     if (this.#t !== getSessionId()) {
       this.conversationReplaced();
       return;
     }
-    for (let x of h) this.#o.add(x.uuid);
+    for (let message of messages) this.#o.add(message.uuid);
   }
-  rowsQueued(h) {
-    if (!h.some((x) => this.#o.has(x.uuid))) return;
+  rowsQueued(rows) {
+    if (!rows.some((row) => this.#o.has(row.uuid))) return;
     this.#o.clear();
     if (this.#t !== getSessionId()) return;
     this.#e = false;
@@ -70,18 +71,21 @@ class LastPromptRestamp {
       sessionId: getSessionId(),
     });
   }
-  writeFailed(h) {
-    if (h.some((x) => this.#o.has(x.uuid))) this.#o.clear();
+  writeFailed(rows) {
+    if (rows.some((row) => this.#o.has(row.uuid))) this.#o.clear();
   }
 }
 //@ chunk-18hwfzwa.js:1474045-1474072 placement
-var lastPromptRestampSlot = new SessionRootSlot(() => new LastPromptRestamp());
+var lastPromptRestampSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-18hwfzwa.js:1474045", () => {
+  lastPromptRestampSlot = new SessionRootSlot(() => new LastPromptRestamp());
+});
 //@ chunk-18hwfzwa.js:1474110-1474259 placement
 /**
  * 非斜杠命令或非本地命令的输入才记录为提示。
  */
-function shouldRecordPrompt(h, commands) {
-  let slashCommand = parseSlashCommand(h);
+function shouldRecordPrompt(text, commands) {
+  let slashCommand = parseSlashCommand(text);
   if (!slashCommand) return true;
   let command = findCommand(slashCommand.commandName, commands);
   if (!command) return !looksLikeCommand(slashCommand.commandName);
@@ -91,18 +95,18 @@ function shouldRecordPrompt(h, commands) {
 /**
  * 生成写历史记录的函数（命令参数变化时写展开后的文本，只写一次）。
  */
-function createPromptHistoryWriter({ entry, name: x, typed, write }) {
-  let ee = entry === undefined;
-  let ke = snapshotHookRegistration();
+function createPromptHistoryWriter({ entry, name, typed, write }) {
+  let pending = entry === undefined;
+  let snapshot = snapshotHookRegistration();
   if (entry !== undefined && !isPromptHookObserved()) {
-    ee = true;
+    pending = true;
     write(entry);
   }
-  return (Re) => {
-    let Be = hasHookRegistrationChanged(ke);
-    if (ee || entry === undefined || Be) return;
-    ee = true;
-    write(Re === typed ? entry : withExpandedPastes(entry, `/${x} ${Re}`.trim()));
+  return (writtenEntry) => {
+    let changed = hasHookRegistrationChanged(snapshot);
+    if (pending || entry === undefined || changed) return;
+    pending = true;
+    write(writtenEntry === typed ? entry : withExpandedPastes(entry, `/${name} ${writtenEntry}`.trim()));
   };
 }
 //@ chunk-18hwfzwa.js:1474466-1474487 placement

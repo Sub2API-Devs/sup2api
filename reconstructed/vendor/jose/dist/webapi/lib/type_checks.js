@@ -38,6 +38,6 @@ function isDisjoint(...headers) {
 var isJWK = (key) => isObject(key) && typeof key.kty === "string";
 var isPrivateJWK = (key) =>
   key.kty !== "oct" && ((key.kty === "AKP" && typeof key.priv === "string") || typeof key.d === "string");
-var tt = (key) => key.kty !== "oct" && key.d === undefined && key.priv === undefined;
+var isPublicJWK = (key) => key.kty !== "oct" && key.d === undefined && key.priv === undefined;
 var isSecretJWK = (key) => key.kty === "oct" && typeof key.k === "string";
-export { isObject, isJWK, isSecretJWK, isPrivateJWK, tt, isDisjoint };
+export { isObject, isJWK, isSecretJWK, isPrivateJWK, isPublicJWK, isDisjoint };

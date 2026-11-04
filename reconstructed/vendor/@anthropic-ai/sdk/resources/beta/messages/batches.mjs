@@ -7,7 +7,7 @@
  */
 import { APIResource } from "../../../core/resource.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { Page } from "../../../core/pagination.mjs";
 import { AnthropicError } from "../../../core/error.mjs";
 import { JSONLDecoder } from "../../../internal/decoders/jsonl.mjs";
@@ -39,7 +39,7 @@ class Batches extends APIResource {
   }
   retrieve(messageBatchID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.get(I`/v1/messages/batches/${messageBatchID}?beta=true`, {
+    return this._client.get(parseUrl_2`/v1/messages/batches/${messageBatchID}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -74,7 +74,7 @@ class Batches extends APIResource {
   }
   delete(messageBatchID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.delete(I`/v1/messages/batches/${messageBatchID}?beta=true`, {
+    return this._client.delete(parseUrl_2`/v1/messages/batches/${messageBatchID}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -91,7 +91,7 @@ class Batches extends APIResource {
   }
   cancel(messageBatchID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.post(I`/v1/messages/batches/${messageBatchID}/cancel?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/messages/batches/${messageBatchID}/cancel?beta=true`, {
       ...options,
       headers: buildHeaders([
         {

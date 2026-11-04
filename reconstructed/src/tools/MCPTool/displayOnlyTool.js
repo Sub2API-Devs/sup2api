@@ -10,11 +10,12 @@
  */
 import { deviceToolDisplayInfo } from "../../utils/toolUseDisplay.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { union, u, string, array } from "../../../vendor/zod/v4/classic/schemas.js";
+import { union, objectSchema, stringSchema, array } from "../../../vendor/zod/v4/classic/schemas.js";
 import { mcpOutputSchema, MCPTool, MCP_DISPLAY_ONLY } from "./MCPTool.js";
 import { isLargeMcpOutput, renderToolResultMessage } from "./UI.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { memoizeWithLRU } from "../../utils/memoize.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vq77wsrh.js:462-479 placement
 /**
@@ -23,88 +24,101 @@ import { memoizeWithLRU } from "../../utils/memoize.js";
 var DISPLAY_ONLY_TOOL_CACHE_SIZE = 256;
 var memorySaveUiHooks = null;
 //@ chunk-vq77wsrh.js:479-568 placement
-function displayOnlyMcpTool(name, host, t = false) {
-  let r = deviceToolDisplayInfo(name);
-  return r ? displayOnlyToolFactory.of(host)(name, r.serverName, r.toolName, t) : undefined;
+function displayOnlyMcpTool(name, host, memorySave = false) {
+  let displayInfo = deviceToolDisplayInfo(name);
+  return displayInfo
+    ? displayOnlyToolFactory.of(host)(name, displayInfo.serverName, displayInfo.toolName, memorySave)
+    : undefined;
 }
 //@ chunk-vq77wsrh.js:568-855 placement
 /**
  * 按宿主隔离、带 LRU 缓存的展示型 MCP 工具工厂。
  */
-var displayOnlyOutputSchema = DoctorLazy(() =>
-  union([
-    mcpOutputSchema(),
-    u({
-      content: union([
-        string(),
-        array(
-          u({
-            type: string(),
-          }).passthrough(),
-        ),
-      ]),
-    }).transform((e) => e.content),
-  ]),
-);
-var displayOnlyMcpToolUi = {
-  isResultTruncated(e, n) {
-    let toolResultContent = extractToolResultContent(e);
-    return (
-      isLargeMcpOutput(toolResultContent, n) || isLargeMcpOutput(stripResultEscapes(toolResultContent), n)
-    );
-  },
-  renderToolResultMessage(e, n, { verbose }) {
-    return renderToolResultMessage(stripResultEscapes(e), verbose);
-  },
-};
-var displayOnlyToolFactory = new HostScoped(() =>
-  memoizeWithLRU(
-    createDisplayOnlyMcpTool,
-    (e, n, t, r) => (r ? `${e}\x00save` : e),
-    DISPLAY_ONLY_TOOL_CACHE_SIZE,
-  ),
-);
+var displayOnlyOutputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var displayOnlyMcpToolUi;
+var displayOnlyToolFactory;
+deferInit("chunk-vq77wsrh.js:568", () => {
+  displayOnlyOutputSchema = DoctorLazy(() =>
+    union([
+      mcpOutputSchema(),
+      objectSchema({
+        content: union([
+          stringSchema(),
+          array(
+            objectSchema({
+              type: stringSchema(),
+            }).passthrough(),
+          ),
+        ]),
+      }).transform((parsed) => parsed.content),
+    ]),
+  );
+  displayOnlyMcpToolUi = {
+    isResultTruncated(result, maxChars) {
+      let toolResultContent = extractToolResultContent(result);
+      return (
+        isLargeMcpOutput(toolResultContent, maxChars) ||
+        isLargeMcpOutput(stripResultEscapes(toolResultContent), maxChars)
+      );
+    },
+    renderToolResultMessage(result, progressMessages, { verbose }) {
+      return renderToolResultMessage(stripResultEscapes(result), verbose);
+    },
+  };
+  displayOnlyToolFactory = new HostScoped(() =>
+    memoizeWithLRU(
+      createDisplayOnlyMcpTool,
+      (serverName, toolName, flags, memorySave) => (memorySave ? `${serverName}\x00save` : serverName),
+      DISPLAY_ONLY_TOOL_CACHE_SIZE,
+    ),
+  );
+});
 //@ chunk-vq77wsrh.js:855-1367 placement
 /**
  * 只用于渲染的 MCP 工具
  */
-function createDisplayOnlyMcpTool(name, n, t, r = false) {
-  let s = () => {
+function createDisplayOnlyMcpTool(name, serverName, toolName, memorySave = false) {
+  let refuse = () => {
     throw Error("Display-only MCP tool invoked \u2014 it exists only for transcript rendering");
   };
   return {
     ...MCPTool,
     name,
     mcpInfo: {
-      serverName: n,
-      toolName: t,
+      serverName,
+      toolName,
     },
     isEnabled: () => false,
     outputSchema: displayOnlyOutputSchema(),
     uiTableKey: MCP_DISPLAY_ONLY,
-    userFacingName: () => `${n} - ${t} (MCP)`,
-    ...(r &&
+    userFacingName: () => `${serverName} - ${toolName} (MCP)`,
+    ...(memorySave &&
       memorySaveUiHooks?.isMemorySaveCall({
-        serverName: n,
-        toolName: t,
+        serverName,
+        toolName,
       }) && {
-        userFacingName: () => memorySaveUiHooks.memorySaveRowName(t),
-        renderToolUseMessage: (i) => memorySaveUiHooks.memorySaveArgument(i),
+        userFacingName: () => memorySaveUiHooks.memorySaveRowName(toolName),
+        renderToolUseMessage: (input) => memorySaveUiHooks.memorySaveArgument(input),
       }),
-    description: async () => s(),
-    prompt: async () => s(),
-    call: async () => s(),
-    checkPermissions: async () => s(),
+    description: async () => refuse(),
+    prompt: async () => refuse(),
+    call: async () => refuse(),
+    checkPermissions: async () => refuse(),
   };
 }
 //@ chunk-vq77wsrh.js:1367-1573 placement
 /**
  * 取工具结果 content
  */
-function extractToolResultContent(e) {
-  let n = typeof e === "object" && e !== null && !Array.isArray(e) && "content" in e ? e.content : e;
-  if (typeof n === "string") return n;
-  return Array.isArray(n) && n.every((t) => typeof t === "object" && t !== null) ? n : undefined;
+function extractToolResultContent(result) {
+  let content =
+    typeof result === "object" && result !== null && !Array.isArray(result) && "content" in result
+      ? result.content
+      : result;
+  if (typeof content === "string") return content;
+  return Array.isArray(content) && content.every((block) => typeof block === "object" && block !== null)
+    ? content
+    : undefined;
 }
 //@ chunk-vq77wsrh.js:1573-1834 placement
 /**
@@ -119,31 +133,31 @@ var ESCAPED_CONTROL_RE = /\\u00(?:0[0-8b-f]|1[0-9a-f]|7f|[89][0-9a-f])/gi;
 /**
  * 去除终端转义，保留链接地址
  */
-function stripTerminalEscapes(e) {
-  let n = "";
-  let t = () => (n ? ` <${n}>` : "");
+function stripTerminalEscapes(text) {
+  let pendingEscape = "";
+  let flushPending = () => (pendingEscape ? ` <${pendingEscape}>` : "");
   return (
-    e.replace(ANSI_ESCAPE_RE, (s, i) => {
-      if (i === undefined) return "";
-      let m = t();
-      n = i;
-      return m;
-    }) + t()
+    text.replace(ANSI_ESCAPE_RE, (matchText, escapeName) => {
+      if (escapeName === undefined) return "";
+      let flushedEscape = flushPending();
+      pendingEscape = escapeName;
+      return flushedEscape;
+    }) + flushPending()
   )
     .replace(CONTROL_CHARS_RE, "")
     .replace(ESCAPED_ESC_RE, "\\u241b")
     .replace(ESCAPED_CONTROL_RE, "\\u2426");
 }
 //@ chunk-vq77wsrh.js:2014-2156 placement
-function stripResultEscapes(e) {
-  if (typeof e === "string") return stripTerminalEscapes(e);
-  return e?.map((n) =>
-    n.type === "text" && "text" in n
+function stripResultEscapes(result) {
+  if (typeof result === "string") return stripTerminalEscapes(result);
+  return result?.map((block) =>
+    block.type === "text" && "text" in block
       ? {
           type: "text",
-          text: stripTerminalEscapes(String(n.text ?? "")),
+          text: stripTerminalEscapes(String(block.text ?? "")),
         }
-      : n,
+      : block,
   );
 }
-export { displayOnlyMcpTool };
+export { displayOnlyMcpTool, displayOnlyMcpToolUi };

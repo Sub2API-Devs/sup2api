@@ -5,21 +5,21 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_EventTarget } from "./EventTarget.js";
 import { require_LinkedList } from "./LinkedList.js";
 import { require_NodeUtils } from "./NodeUtils.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:14225-23412 cjs-fingerprint
-var require_Node = x(function (cjsExports, cjsModule) {
+var require_Node = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = Node;
-  var Ji = require_EventTarget();
+  var EventTargetModule = require_EventTarget();
   var LinkedList = require_LinkedList();
   var NodeUtils = require_NodeUtils();
   var utils = require_utils();
   function Node() {
-    Ji.call(this);
+    EventTargetModule.call(this);
     this.parentNode = null;
     this._nextSibling = this._previousSibling = this;
     this._index = undefined;
@@ -42,7 +42,7 @@ var require_Node = x(function (cjsExports, cjsModule) {
   var DOCUMENT_POSITION_CONTAINS = (Node.DOCUMENT_POSITION_CONTAINS = 8);
   var DOCUMENT_POSITION_CONTAINED_BY = (Node.DOCUMENT_POSITION_CONTAINED_BY = 16);
   var DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC = (Node.DOCUMENT_POSITION_IMPLEMENTATION_SPECIFIC = 32);
-  Node.prototype = Object.create(Ji.prototype, {
+  Node.prototype = Object.create(EventTargetModule.prototype, {
     baseURI: {
       get: utils.nyi,
     },

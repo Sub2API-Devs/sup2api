@@ -10,8 +10,8 @@
  */
 import { isAbsolute, sep } from "path";
 import { homedir } from "os";
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { Se } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import { useContext } from "../../vendor/react/cjs/react.production.js";
 import { diffDialogSlot, isAbsoluteForPlatform, filePathToUrl } from "../hooks/useWorkspaceDiff.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -23,61 +23,61 @@ import { hasControlChars } from "../services/policyLimits/complianceTaints.js";
 
 //@ chunk-qwh6zcf0.js:8508-8990 callgraph-witnessed = FilePathLink (0.654)
 function FilePathLink(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { filePath, children } = props;
-  let s = Se(diffDialogSlot);
-  let i = children ?? filePath;
-  if (filePathToLink(filePath) || (typeof i === "string" && filePathToLink(i))) {
-    let u;
+  let slot = useContext(diffDialogSlot);
+  let label = children ?? filePath;
+  if (filePathToLink(filePath) || (typeof label === "string" && filePathToLink(label))) {
+    let hiddenPlaceholder;
     if ($[0] === MEMO_CACHE_SENTINEL) {
-      u = jsxProd_default(Text, {
+      hiddenPlaceholder = jsxProd_default(Text, {
         dimColor: true,
         children: HIDDEN_PATH_PLACEHOLDER,
       });
-      $[0] = u;
-    } else u = $[0];
-    return u;
+      $[0] = hiddenPlaceholder;
+    } else hiddenPlaceholder = $[0];
+    return hiddenPlaceholder;
   }
-  let u;
-  if ($[1] !== s || $[2] !== i) {
-    u = s !== null && typeof i === "string" ? truncatePathMiddle(i, s) : i;
-    $[1] = s;
-    $[2] = i;
-    $[3] = u;
-  } else u = $[3];
-  let children_2 = u;
-  let D;
+  let displayLabelCached;
+  if ($[1] !== slot || $[2] !== label) {
+    displayLabelCached = slot !== null && typeof label === "string" ? truncatePathMiddle(label, slot) : label;
+    $[1] = slot;
+    $[2] = label;
+    $[3] = displayLabelCached;
+  } else displayLabelCached = $[3];
+  let children_2 = displayLabelCached;
+  let safeUrl;
   if ($[4] !== filePath) {
-    D = isAbsoluteForPlatform(filePath) ? toSafeFileUrl(filePath) : null;
+    safeUrl = isAbsoluteForPlatform(filePath) ? toSafeFileUrl(filePath) : null;
     $[4] = filePath;
-    $[5] = D;
-  } else D = $[5];
-  let k = D;
-  let M;
-  if ($[6] !== children_2 || $[7] !== k) {
-    M =
-      k === null
+    $[5] = safeUrl;
+  } else safeUrl = $[5];
+  let linkUrl = safeUrl;
+  let element;
+  if ($[6] !== children_2 || $[7] !== linkUrl) {
+    element =
+      linkUrl === null
         ? jsxProd_default(Text, {
             children: children_2,
           })
         : jsxProd_default(Link, {
-            url: k,
+            url: linkUrl,
             children: children_2,
           });
     $[6] = children_2;
-    $[7] = k;
-    $[8] = M;
-  } else M = $[8];
-  return M;
+    $[7] = linkUrl;
+    $[8] = element;
+  } else element = $[8];
+  return element;
 }
 //@ chunk-qwh6zcf0.js:8990-9043 sole-consumer
-function filePathToLink(t) {
-  let r = expandHomePath(t);
-  return isAbsolute(r) ? filePathToUrl(r) : hasControlChars(r);
+function filePathToLink(path) {
+  let expandedPath = expandHomePath(path);
+  return isAbsolute(expandedPath) ? filePathToUrl(expandedPath) : hasControlChars(expandedPath);
 }
 //@ chunk-qwh6zcf0.js:9043-9127 sole-consumer
-function expandHomePath(t) {
-  if (t === "~") return homedir();
-  return t.startsWith("~" + sep) ? homedir() + t.slice(1) : t;
+function expandHomePath(path) {
+  if (path === "~") return homedir();
+  return path.startsWith("~" + sep) ? homedir() + path.slice(1) : path;
 }
 export { FilePathLink };

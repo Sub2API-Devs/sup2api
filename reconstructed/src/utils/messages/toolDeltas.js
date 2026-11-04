@@ -16,90 +16,99 @@ import { getPluginRegistry } from "../plugins/pluginLoadState.js";
 /**
  * 把工具增删应用到工具变更记录：新增项抵消之前的删除；删除时按值删除需在已宣告列表内才记录（否则只撤销对应新增）；新增时附上工具定义。
  */
-function applyToolDeltas(e, n, r, s = new Map(), h = new Set()) {
-  for (let y of n)
-    if (e.toolRemovals?.includes(y)) recordToolDelta(e, "add", y);
-    else e.toolAdditions = [...(e.toolAdditions ?? []), y];
-  for (let { op, name: S, byValue } of r) {
+function applyToolDeltas(
+  message,
+  announceNames,
+  toolChanges,
+  definitionsByName = new Map(),
+  announcedNames = new Set(),
+) {
+  for (let toolName of announceNames)
+    if (message.toolRemovals?.includes(toolName)) recordToolDelta(message, "add", toolName);
+    else message.toolAdditions = [...(message.toolAdditions ?? []), toolName];
+  for (let { op, name: changeToolName, byValue } of toolChanges) {
     if (op === "remove" && byValue) {
-      let G = ownValue(e.toolDefinitions, S) !== undefined;
-      if (!h.has(S)) {
-        if (G) dropToolAddition(e, S);
+      let isDefined = ownValue(message.toolDefinitions, changeToolName) !== undefined;
+      if (!announcedNames.has(changeToolName)) {
+        if (isDefined) dropToolAddition(message, changeToolName);
         continue;
       }
-      recordToolDelta(e, "remove", S);
-      if (!(e.byValueRemovals ?? []).includes(S)) e.byValueRemovals = [...(e.byValueRemovals ?? []), S];
+      recordToolDelta(message, "remove", changeToolName);
+      if (!(message.byValueRemovals ?? []).includes(changeToolName))
+        message.byValueRemovals = [...(message.byValueRemovals ?? []), changeToolName];
       continue;
     }
-    recordToolDelta(e, op, S);
-    let L = s.get(S);
-    if (op === "add" && L !== undefined)
-      e.toolDefinitions = {
-        ...(e.toolDefinitions ?? {}),
-        [S]: L,
+    recordToolDelta(message, op, changeToolName);
+    let definition = definitionsByName.get(changeToolName);
+    if (op === "add" && definition !== undefined)
+      message.toolDefinitions = {
+        ...(message.toolDefinitions ?? {}),
+        [changeToolName]: definition,
       };
   }
 }
 //@ chunk-e6aww6q8.js:5043949-5044228 placement
-function dropToolAddition(e, n) {
-  let filtered = e.toolAdditions?.filter((toolAddition) => toolAddition !== n);
-  if (filtered === undefined || filtered.length === 0) delete e.toolAdditions;
-  else e.toolAdditions = filtered;
-  if (e.toolDefinitions !== undefined) {
-    let { [n]: s, ...h } = e.toolDefinitions;
-    if (Object.keys(h).length === 0) delete e.toolDefinitions;
-    else e.toolDefinitions = h;
+function dropToolAddition(message, toolName) {
+  let filtered = message.toolAdditions?.filter((toolAddition) => toolAddition !== toolName);
+  if (filtered === undefined || filtered.length === 0) delete message.toolAdditions;
+  else message.toolAdditions = filtered;
+  if (message.toolDefinitions !== undefined) {
+    let { [toolName]: removedDefinition, ...restDefinitions } = message.toolDefinitions;
+    if (Object.keys(restDefinitions).length === 0) delete message.toolDefinitions;
+    else message.toolDefinitions = restDefinitions;
   }
 }
 //@ chunk-e6aww6q8.js:5044228-5044339 placement
 /**
  * 从工具增量记录中挑出指定名称的工具定义。
  */
-function pickToolDefinitions(e, inlineToolDefinitions) {
-  let r = new Map();
-  for (let [s, { definition: h }] of e ?? []) if (inlineToolDefinitions.has(s)) r.set(s, h);
+function pickToolDefinitions(deltas, inlineToolDefinitions) {
+  let picked = new Map();
+  for (let [toolName, { definition }] of deltas ?? [])
+    if (inlineToolDefinitions.has(toolName)) picked.set(toolName, definition);
   return {
-    definitions: r,
+    definitions: picked,
   };
 }
 //@ chunk-e6aww6q8.js:5044339-5044736 placement
 /**
  * 记录一次工具增或删：删除时移除对应新增；新增时撤销对应删除与按值删除，并加入新增列表。
  */
-function recordToolDelta(e, n, r) {
-  let s = n === "add" ? "toolAdditions" : "toolRemovals";
-  let h = n === "add" ? "toolRemovals" : "toolAdditions";
-  if (n === "remove") dropToolAddition(e, r);
+function recordToolDelta(message, op, toolName) {
+  let targetField = op === "add" ? "toolAdditions" : "toolRemovals";
+  let oppositeField = op === "add" ? "toolRemovals" : "toolAdditions";
+  if (op === "remove") dropToolAddition(message, toolName);
   else {
-    let filtered = e[h]?.filter((w) => w !== r);
+    let filtered = message[oppositeField]?.filter((existingName) => existingName !== toolName);
     if (filtered !== undefined)
-      if (filtered.length === 0) delete e[h];
-      else e[h] = filtered;
-    let filtered_2 = e.byValueRemovals?.filter((byValueRemoval) => byValueRemoval !== r);
+      if (filtered.length === 0) delete message[oppositeField];
+      else message[oppositeField] = filtered;
+    let filtered_2 = message.byValueRemovals?.filter((byValueRemoval) => byValueRemoval !== toolName);
     if (filtered_2 !== undefined)
-      if (filtered_2.length === 0) delete e.byValueRemovals;
-      else e.byValueRemovals = filtered_2;
+      if (filtered_2.length === 0) delete message.byValueRemovals;
+      else message.byValueRemovals = filtered_2;
   }
-  if (!(e[s] ?? []).includes(r)) e[s] = [...(e[s] ?? []), r];
+  if (!(message[targetField] ?? []).includes(toolName))
+    message[targetField] = [...(message[targetField] ?? []), toolName];
 }
 //@ chunk-e6aww6q8.js:5044736-5044945 placement
-var makeCoreHookRunner = (e, stepRecorder) => ({
+var makeCoreHookRunner = (coreHook, stepRecorder) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
-  async run(r) {
-    let s = await e.run(r.args);
-    let text = e.textOf(s);
-    let y = e.contextOf(s);
+  async run(input) {
+    let output = await coreHook.run(input.args);
+    let text = coreHook.textOf(output);
+    let hookContext = coreHook.contextOf(output);
     return {
-      ref: stepRecorder.keep(r.args, {
-        ran: s,
+      ref: stepRecorder.keep(input.args, {
+        ran: output,
         text,
-        context: y,
+        context: hookContext,
       }),
       text,
-      ...(y !== undefined && {
-        context: y,
+      ...(hookContext !== undefined && {
+        context: hookContext,
       }),
     };
   },
@@ -108,10 +117,10 @@ var makeCoreHookRunner = (e, stepRecorder) => ({
 /**
  * 创建带步骤记录器的工具差量执行核心。
  */
-function createDeltaStepRecorder(engine) {
+function createDeltaStepRecorder(coreHook) {
   let stepRecorder = createStepRecorder();
   return {
-    core: makeCoreHookRunner(engine, stepRecorder),
+    core: makeCoreHookRunner(coreHook, stepRecorder),
     runs: stepRecorder,
   };
 }
@@ -119,21 +128,21 @@ function createDeltaStepRecorder(engine) {
 /**
  * 判断给定的模块是否都已作为内置模块加载。
  */
-function areBuiltinModulesLoaded(e) {
+function areBuiltinModulesLoaded(moduleNames) {
   let { loadedModules } = getPluginRegistry();
-  return e.every((r) =>
-    loadedModules.some((loadedModule) => loadedModule.name === r && loadedModule.tier === "builtin"),
+  return moduleNames.every((moduleName) =>
+    loadedModules.some((loadedModule) => loadedModule.name === moduleName && loadedModule.tier === "builtin"),
   );
 }
 //@ chunk-e6aww6q8.js:5045109-5045155 placement
 /**
  * 有退出码时附加到结果对象上。
  */
-var withExitCode = (e, exitCode) =>
+var withExitCode = (result, exitCode) =>
   exitCode === undefined
-    ? e
+    ? result
     : {
-        ...e,
+        ...result,
         exitCode,
       };
 export {

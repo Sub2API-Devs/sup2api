@@ -30,88 +30,100 @@ import {
 } from "./overageCreditGrant.js";
 import { apiClient } from "../routines/routinesApi.js";
 import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-0ba63vr9.js:511-1331 placement
 /**
  * Feature of the Week 活动配置：开关名、命令与时间窗、标题/说明/提示文案、公告行与领取期限的 zod schema。
  */
-var FOTW_CAMPAIGN_SCHEMA = "tengu_lilac_loom";
-var FEATURE_OF_THE_WEEK = "feature_of_the_week";
-var FOTW_DAY_MS = 86400000;
-var isoTimestampSchema = () =>
-  create_2().refine(
-    (e) => !Number.isNaN(Date.parse(e)) && /(z|[+-]\d{2}:?\d{2})$/i.test(e),
-    "must be ISO 8601 with timezone, e.g. 2026-06-04T16:00:00Z",
+var FOTW_EXPERIMENT_FLAG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var FEATURE_OF_THE_WEEK;
+var FOTW_DAY_MS;
+var isoTimestampSchema;
+var optionalNonEmptyString;
+var fotwCampaignSchema;
+deferInit("chunk-0ba63vr9.js:511", () => {
+  FOTW_EXPERIMENT_FLAG = "tengu_lilac_loom";
+  FEATURE_OF_THE_WEEK = "feature_of_the_week";
+  FOTW_DAY_MS = 86400000;
+  isoTimestampSchema = () =>
+    create_2().refine(
+      (rawValue) => !Number.isNaN(Date.parse(rawValue)) && /(z|[+-]\d{2}:?\d{2})$/i.test(rawValue),
+      "must be ISO 8601 with timezone, e.g. 2026-06-04T16:00:00Z",
+    );
+  optionalNonEmptyString = () =>
+    create_2()
+      .optional()
+      .transform((rawValue) => (rawValue === "" ? undefined : rawValue));
+  fotwCampaignSchema = DoctorLazy(() =>
+    create({
+      feature: create_2().min(1),
+      command: create_2()
+        .optional()
+        .transform((rawValue) => (rawValue === "" ? undefined : rawValue)),
+      startsAt: isoTimestampSchema(),
+      endsAt: isoTimestampSchema(),
+      hideCommandChip: create_6().optional(),
+      creditless: create_6().optional(),
+      titleLabel: optionalNonEmptyString(),
+      commandBlurb: optionalNonEmptyString(),
+      tipBlurb: optionalNonEmptyString(),
+      isTopPriorityAnnouncement: create_6().optional(),
+      announcementLines: create_15(
+        create({
+          text: create_2(),
+          style: create_26(["bold", "dim"]).optional(),
+        }),
+      )
+        .optional()
+        .transform((lines) => {
+          let filtered = lines?.filter((line) => line.text !== "");
+          return filtered?.length ? filtered : undefined;
+        })
+        .catch(undefined),
+      tips: create_15(create_2())
+        .optional()
+        .transform((tips) => {
+          let filtered = tips?.filter(Boolean);
+          return filtered?.length ? filtered : undefined;
+        })
+        .catch(undefined),
+      redeemBy: optionalNonEmptyString(),
+    }),
   );
-var optionalNonEmptyString = () =>
-  create_2()
-    .optional()
-    .transform((e) => (e === "" ? undefined : e));
-var fotwCampaignSchema = DoctorLazy(() =>
-  create({
-    feature: create_2().min(1),
-    command: create_2()
-      .optional()
-      .transform((e) => (e === "" ? undefined : e)),
-    startsAt: isoTimestampSchema(),
-    endsAt: isoTimestampSchema(),
-    hideCommandChip: create_6().optional(),
-    creditless: create_6().optional(),
-    titleLabel: optionalNonEmptyString(),
-    commandBlurb: optionalNonEmptyString(),
-    tipBlurb: optionalNonEmptyString(),
-    isTopPriorityAnnouncement: create_6().optional(),
-    announcementLines: create_15(
-      create({
-        text: create_2(),
-        style: create_26(["bold", "dim"]).optional(),
-      }),
-    )
-      .optional()
-      .transform((e) => {
-        let filtered = e?.filter((i) => i.text !== "");
-        return filtered?.length ? filtered : undefined;
-      })
-      .catch(undefined),
-    tips: create_15(create_2())
-      .optional()
-      .transform((e) => {
-        let filtered = e?.filter(Boolean);
-        return filtered?.length ? filtered : undefined;
-      })
-      .catch(undefined),
-    redeemBy: optionalNonEmptyString(),
-  }),
-);
+});
 //@ chunk-0ba63vr9.js:1331-1391 placement
 class FotwState {
   parsedCampaign = null;
   inFlightEligibilityRefresh = null;
 }
 //@ chunk-0ba63vr9.js:1391-1414 placement
-var fotwStateSlot = new HostScoped(() => new FotwState());
+var fotwStateSlot; // deferred: uses FotwState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0ba63vr9.js:1391", () => {
+  fotwStateSlot = new HostScoped(() => new FotwState());
+});
 //@ chunk-0ba63vr9.js:1414-1449 placement
 function fotwState() {
   return fotwStateSlot.of(getRootSession().host);
 }
 //@ chunk-0ba63vr9.js:1449-2056 placement
 function parsePromoCampaign() {
-  let dynamicConfig_CACHED_MAY_BE_STALE = getDynamicConfig_CACHED_MAY_BE_STALE(FOTW_CAMPAIGN_SCHEMA, null);
+  let dynamicConfig_CACHED_MAY_BE_STALE = getDynamicConfig_CACHED_MAY_BE_STALE(FOTW_EXPERIMENT_FLAG, null);
   if (dynamicConfig_CACHED_MAY_BE_STALE === null || dynamicConfig_CACHED_MAY_BE_STALE === undefined)
     return null;
-  let n = fotwState();
-  if (n.parsedCampaign === null || n.parsedCampaign.raw !== dynamicConfig_CACHED_MAY_BE_STALE) {
-    let r = fotwCampaignSchema().safeParse(dynamicConfig_CACHED_MAY_BE_STALE);
-    if (!r.success)
-      logForDebugging(`Promo campaign payload failed validation: ${r.error.message}`, {
+  let state = fotwState();
+  if (state.parsedCampaign === null || state.parsedCampaign.raw !== dynamicConfig_CACHED_MAY_BE_STALE) {
+    let parsed = fotwCampaignSchema().safeParse(dynamicConfig_CACHED_MAY_BE_STALE);
+    if (!parsed.success)
+      logForDebugging(`Promo campaign payload failed validation: ${parsed.error.message}`, {
         level: "warn",
       });
-    n.parsedCampaign = r.success
+    state.parsedCampaign = parsed.success
       ? {
           raw: dynamicConfig_CACHED_MAY_BE_STALE,
-          campaign: r.data,
-          startsAtMs: Date.parse(r.data.startsAt),
-          endsAtMs: Date.parse(r.data.endsAt),
+          campaign: parsed.data,
+          startsAtMs: Date.parse(parsed.data.startsAt),
+          endsAtMs: Date.parse(parsed.data.endsAt),
         }
       : {
           raw: dynamicConfig_CACHED_MAY_BE_STALE,
@@ -120,11 +132,11 @@ function parsePromoCampaign() {
           endsAtMs: 0,
         };
   }
-  if (n.parsedCampaign.campaign === null) return null;
+  if (state.parsedCampaign.campaign === null) return null;
   let now = Date.now();
-  if (now < n.parsedCampaign.startsAtMs) return null;
-  if (now > n.parsedCampaign.endsAtMs) return null;
-  return n.parsedCampaign.campaign;
+  if (now < state.parsedCampaign.startsAtMs) return null;
+  if (now > state.parsedCampaign.endsAtMs) return null;
+  return state.parsedCampaign.campaign;
 }
 //@ chunk-0ba63vr9.js:2056-2099 placement
 /**
@@ -152,39 +164,39 @@ function activePromo() {
   if (!campaign) return null;
   let organizationUuid = getOauthAccountInfo()?.organizationUuid;
   if (!organizationUuid) return null;
-  let i = promoAudience(campaign);
-  if (i === "excluded") return null;
-  if (i === "claimant" && hasClaimedFeature(organizationUuid, campaign.feature)) return null;
+  let audience = promoAudience(campaign);
+  if (audience === "excluded") return null;
+  if (audience === "claimant" && hasClaimedFeature(organizationUuid, campaign.feature)) return null;
   return {
     campaign,
     orgId: organizationUuid,
-    audience: i,
+    audience,
   };
 }
 //@ chunk-0ba63vr9.js:2552-2603 placement
 /**
  * 导出函数 `isPromoCommand`：参数 e，返回 n !== null && e === n。
  */
-function isPromoCommand(e) {
-  let n = promoCommand();
-  return n !== null && e === n;
+function isPromoCommand(command) {
+  let commandName = promoCommand();
+  return commandName !== null && command === commandName;
 }
 //@ chunk-0ba63vr9.js:2603-2640 placement
 /**
  * 导出函数 `canClaimPromoCreditFor`：参数 e，返回 jDr(e) && canClaimPromoCredit()。
  */
-function canClaimPromoCreditFor(commandName) {
-  return isPromoCommand(commandName) && canClaimPromoCredit();
+function canClaimPromoCreditFor(command) {
+  return isPromoCommand(command) && canClaimPromoCredit();
 }
 //@ chunk-0ba63vr9.js:2640-2814 placement
 /**
  * 当前组织作为领取方（claimant）且活动配置了命令时，判断缓存的超额额度赠送是否符合条件且仍可领取。
  */
 function canClaimPromoCredit() {
-  let e = activePromo();
-  if (!e || e.audience !== "claimant") return false;
-  if (!e.campaign.command) return false;
-  let cachedOverageCreditGrant = getCachedOverageCreditGrant(e.orgId, e.campaign.feature);
+  let promo = activePromo();
+  if (!promo || promo.audience !== "claimant") return false;
+  if (!promo.campaign.command) return false;
+  let cachedOverageCreditGrant = getCachedOverageCreditGrant(promo.orgId, promo.campaign.feature);
   return (
     cachedOverageCreditGrant !== null &&
     cachedOverageCreditGrant.eligible &&
@@ -196,10 +208,10 @@ function canClaimPromoCredit() {
  * 当前组织作为观看方（viewer）且活动配置了命令时，判断升级推广是否尚未完成，用于决定是否展示推广。
  */
 function shouldShowPromoUpsell() {
-  let e = activePromo();
-  if (!e || e.audience !== "viewer") return false;
-  if (!e.campaign.command) return false;
-  return !isUpsellFulfilled(e.orgId, e.campaign.feature);
+  let promo = activePromo();
+  if (!promo || promo.audience !== "viewer") return false;
+  if (!promo.campaign.command) return false;
+  return !isUpsellFulfilled(promo.orgId, promo.campaign.feature);
 }
 //@ chunk-0ba63vr9.js:2946-3167 placement
 /**
@@ -226,8 +238,8 @@ function promoCreditAmount() {
  * 刷新推广资格：合并同一时刻的并发请求，失败只记调试日志并返回 null。
  */
 function refreshPromoEligibility(credentials) {
-  let n = fotwState();
-  n.inFlightEligibilityRefresh ??= fetchOverageCreditGrant(credentials)
+  let state = fotwState();
+  state.inFlightEligibilityRefresh ??= fetchOverageCreditGrant(credentials)
     .catch((error) => {
       logForDebugging(`FotW eligibility refresh failed: ${error}`, {
         level: "warn",
@@ -235,27 +247,27 @@ function refreshPromoEligibility(credentials) {
       return null;
     })
     .finally(() => {
-      n.inFlightEligibilityRefresh = null;
+      state.inFlightEligibilityRefresh = null;
     });
-  return n.inFlightEligibilityRefresh;
+  return state.inFlightEligibilityRefresh;
 }
 //@ chunk-0ba63vr9.js:3391-4406 placement
 /**
  * GET overage_credit_grant?campaign=… 查询领取资格并缓存。
  */
 async function fetchOverageCreditGrant(credentials) {
-  let n = activePromo();
-  if (!n || n.audience !== "claimant") return null;
-  let { campaign, orgId } = n;
+  let promo = activePromo();
+  if (!promo || promo.audience !== "claimant") return null;
+  let { campaign, orgId } = promo;
   if (getCachedOverageCreditGrant(orgId, campaign.feature) !== null) return null;
-  let a;
+  let response;
   try {
-    a = await apiClient.get(
+    response = await apiClient.get(
       `/api/oauth/organizations/:orgUUID/overage_credit_grant?campaign=${FEATURE_OF_THE_WEEK}`,
       {
         auth: "teleport-org",
         timeout: 1e4,
-        validateStatus: (o) => o < 500,
+        validateStatus: (status) => status < 500,
         credentials,
       },
     );
@@ -266,17 +278,17 @@ async function fetchOverageCreditGrant(credentials) {
     });
     return null;
   }
-  if (!a.ok || a.status >= 400) {
+  if (!response.ok || response.status >= 400) {
     logFeatureSad("api_fotw_eligibility_fetch", "unavailable");
     return null;
   }
   logFeatureOk("api_fotw_eligibility_fetch");
-  if (a.data.granted) markFeatureClaimed(orgId, campaign.feature);
-  if (a.data.eligible && a.data.needs_payment_setup === true) {
-    if (a.data.amount_minor_units == null || !a.data.currency) return null;
+  if (response.data.granted) markFeatureClaimed(orgId, campaign.feature);
+  if (response.data.eligible && response.data.needs_payment_setup === true) {
+    if (response.data.amount_minor_units == null || !response.data.currency) return null;
     return {
-      amountMinorUnits: a.data.amount_minor_units,
-      currency: a.data.currency,
+      amountMinorUnits: response.data.amount_minor_units,
+      currency: response.data.currency,
     };
   }
   if (getCachedOverageCreditGrant(orgId, campaign.feature) !== null) return null;
@@ -284,11 +296,11 @@ async function fetchOverageCreditGrant(credentials) {
     orgId,
     campaign.feature,
     {
-      available: a.data.available,
-      eligible: a.data.eligible,
-      granted: a.data.granted,
-      amount_minor_units: a.data.amount_minor_units ?? null,
-      currency: a.data.currency ?? null,
+      available: response.data.available,
+      eligible: response.data.eligible,
+      granted: response.data.granted,
+      amount_minor_units: response.data.amount_minor_units ?? null,
+      currency: response.data.currency ?? null,
     },
     {
       onlyIfAbsent: true,

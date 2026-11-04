@@ -5,12 +5,12 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_index_native } from "../../../../@smithy/core/dist-cjs/submodules/config/index.native.js";
 import { require_node_config_provider } from "../../../../@smithy/node-config-provider/dist-cjs/index.js";
 
 //@ chunk-edce4vxq.js:168080-168567 cjs-fingerprint
-var require_stsRegionDefaultResolver = x(function (cjsExports) {
+var require_stsRegionDefaultResolver = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

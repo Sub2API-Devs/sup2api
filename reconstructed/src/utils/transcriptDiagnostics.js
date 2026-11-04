@@ -35,90 +35,92 @@ import { normalizeEffortLevel } from "./effort.js";
 /**
  * 消息 uuid 的短形式。
  */
-function shortUuid(m) {
-  return hasStringUuid(m) ? m.uuid.slice(0, UUID_PREFIX_LENGTH) : undefined;
+function shortUuid(msg) {
+  return hasStringUuid(msg) ? msg.uuid.slice(0, UUID_PREFIX_LENGTH) : undefined;
 }
 //@ chunk-ah34pb7m.js:9316-9560 placement
 /**
  * 首次发现缺 uuid 的消息时上报位置。
  */
-function reportMessageWithoutUuid(host, renderableMessages, c) {
+function reportMessageWithoutUuid(host, msg, reason) {
   try {
-    let g = claimOnceStore.of(host);
-    if (g.has(MESSAGES_ENTRY_WITHOUT_UUID)) return;
-    let index = renderableMessages.findIndex((M) => !hasStringUuid(M));
-    if (index < 0 || !g.claim(MESSAGES_ENTRY_WITHOUT_UUID)) return;
-    let h;
+    let claim = claimOnceStore.of(host);
+    if (claim.has(MESSAGES_ENTRY_WITHOUT_UUID)) return;
+    let messageIndex = msg.findIndex((message) => !hasStringUuid(message));
+    if (messageIndex < 0 || !claim.claim(MESSAGES_ENTRY_WITHOUT_UUID)) return;
+    let description;
     try {
-      h = describeTranscriptPosition(renderableMessages, index, {
-        ...c,
+      description = describeTranscriptPosition(msg, messageIndex, {
+        ...reason,
         resumed: isSessionRestored(host),
         uptimeSeconds: process.uptime(),
       });
     } catch {
-      h = `${MESSAGES_ENTRY_WITHOUT_UUID_TEXT} (describe=failed)`;
+      description = `${MESSAGES_ENTRY_WITHOUT_UUID_TEXT} (describe=failed)`;
     }
-    logError(new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(h));
+    logError(new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(description));
   } catch {}
 }
 //@ chunk-ah34pb7m.js:9560-9893 placement
 /**
  * 描述转录中的位置（诊断）。
  */
-function describeTranscriptPosition(m, d, { resumed, virtualized, screen, uptimeSeconds }) {
-  let M = [
-    ...describeTranscriptMessage(m[d]),
-    `index=${d}`,
-    `length=${m.length}`,
-    `previous=${d > 0 ? describeMessageTypeSafe(m[d - 1]) : "none"}`,
-    `next=${d + 1 < m.length ? describeMessageTypeSafe(m[d + 1]) : "none"}`,
+function describeTranscriptPosition(msg, messageIndex, { resumed, virtualized, screen, uptimeSeconds }) {
+  let details = [
+    ...describeTranscriptMessage(msg[messageIndex]),
+    `index=${messageIndex}`,
+    `length=${msg.length}`,
+    `previous=${messageIndex > 0 ? describeMessageTypeSafe(msg[messageIndex - 1]) : "none"}`,
+    `next=${messageIndex + 1 < msg.length ? describeMessageTypeSafe(msg[messageIndex + 1]) : "none"}`,
     `resumed=${resumed}`,
     `virtualized=${virtualized}`,
     `screen=${screen === "transcript" ? "transcript" : "prompt"}`,
     `uptime=${uptimeBucket(uptimeSeconds)}`,
   ];
-  return `${MESSAGES_ENTRY_WITHOUT_UUID_TEXT} (${M.join(" ")})`;
+  return `${MESSAGES_ENTRY_WITHOUT_UUID_TEXT} (${details.join(" ")})`;
 }
 //@ chunk-ah34pb7m.js:9893-10377 placement
 /**
  * 描述消息的诊断字段。
  */
-function describeTranscriptMessage(m) {
+function describeTranscriptMessage(msg) {
   try {
-    let field = readField(m, "type");
+    let field = readField(msg, "type");
     return [
-      `uuid=${describeUuidField(m)}`,
-      `kind=${getReceivedType(m)}`,
-      `type=${describeMessageType(m)}`,
+      `uuid=${describeUuidField(msg)}`,
+      `kind=${getReceivedType(msg)}`,
+      `type=${describeMessageType(msg)}`,
       ...(field === "user" || field === "assistant"
-        ? [`block=${describeMessageContent(readField(m, "message"))}`]
+        ? [`block=${describeMessageContent(readField(msg, "message"))}`]
         : field === "attachment"
           ? [
-              `attachment=${describeTypeField(readField(readField(m, "attachment"), "type"), isKnownAttachmentType)}`,
+              `attachment=${describeTypeField(readField(readField(msg, "attachment"), "type"), isKnownAttachmentType)}`,
             ]
           : field === "system"
-            ? [`subtype=${describeTypeField(readField(m, "subtype"), isKnownSubtype)}`]
+            ? [`subtype=${describeTypeField(readField(msg, "subtype"), isKnownSubtype)}`]
             : []),
-      `has_message=${readField(m, "message") !== undefined}`,
-      `has_timestamp=${readField(m, "timestamp") !== undefined}`,
-      `has_parentUuid=${readField(m, "parentUuid") !== undefined}`,
-      `isMeta=${describeBooleanish(readField(m, "isMeta"))}`,
+      `has_message=${readField(msg, "message") !== undefined}`,
+      `has_timestamp=${readField(msg, "timestamp") !== undefined}`,
+      `has_parentUuid=${readField(msg, "parentUuid") !== undefined}`,
+      `isMeta=${describeBooleanish(readField(msg, "isMeta"))}`,
     ];
   } catch {
     return ["describe=failed"];
   }
 }
 //@ chunk-ah34pb7m.js:10377-10440 placement
-function describeMessageTypeSafe(m) {
+function describeMessageTypeSafe(msg) {
   try {
-    return describeMessageType(m);
+    return describeMessageType(msg);
   } catch {
     return "describe_failed";
   }
 }
 //@ chunk-ah34pb7m.js:10440-10494 placement = extractErrorTypeFromData (1)
 function describeMessageType(data) {
-  return describeTypeField(readField(data, "type"), (d) => KNOWN_MESSAGE_ENTRY_TYPES.has(d));
+  return describeTypeField(readField(data, "type"), (isKnownType) =>
+    KNOWN_MESSAGE_ENTRY_TYPES.has(isKnownType),
+  );
 }
 //@ chunk-ah34pb7m.js:10494-10723 placement
 function describeMessageContent(field) {
@@ -126,27 +128,32 @@ function describeMessageContent(field) {
   let field_2 = readField(field, "content");
   if (typeof field_2 === "string") return "string_content";
   if (!Array.isArray(field_2)) return "non_array_content";
-  let c = field_2[0];
-  return c === undefined ? "empty_content" : describeTypeField(readField(c, "type"), isKnownContentBlockType);
+  let firstBlock = field_2[0];
+  return firstBlock === undefined
+    ? "empty_content"
+    : describeTypeField(readField(firstBlock, "type"), isKnownContentBlockType);
 }
 //@ chunk-ah34pb7m.js:10723-10765 placement
-function isKnownSubtype(m) {
-  return Object.hasOwn(SYSTEM_SUBTYPES, m);
+function isKnownSubtype(subtype) {
+  return Object.hasOwn(SYSTEM_SUBTYPES, subtype);
 }
 //@ chunk-ah34pb7m.js:10765-10829 placement
-function isKnownAttachmentType(m) {
-  return Object.hasOwn(ATTACHMENT_MESSAGE_RENDERERS, m) || Object.hasOwn(ATTACHMENT_TYPES, m);
+function isKnownAttachmentType(attachmentType) {
+  return (
+    Object.hasOwn(ATTACHMENT_MESSAGE_RENDERERS, attachmentType) ||
+    Object.hasOwn(ATTACHMENT_TYPES, attachmentType)
+  );
 }
 //@ chunk-ah34pb7m.js:10829-10943 placement
-function describeTypeField(field, d) {
+function describeTypeField(field, isKnown) {
   if (typeof field !== "string")
     return field === undefined ? "absent" : `non_string_${getReceivedType(field)}`;
-  return d(field) ? field : "unlisted";
+  return isKnown(field) ? field : "unlisted";
 }
 //@ chunk-ah34pb7m.js:10943-11132 placement
-function describeUuidField(m) {
-  if (typeof m !== "object" || m === null || !("uuid" in m)) return "absent";
-  let { uuid } = m;
+function describeUuidField(record) {
+  if (typeof record !== "object" || record === null || !("uuid" in record)) return "absent";
+  let { uuid } = record;
   if (typeof uuid === "string") return uuid === "" ? "string_empty" : "string";
   return uuid === undefined ? "undefined" : getReceivedType(uuid);
 }
@@ -163,8 +170,10 @@ function describeBooleanish(field) {
       : `non_boolean_${getReceivedType(field)}`;
 }
 //@ chunk-ah34pb7m.js:11300-11386 placement
-function readField(m, d) {
-  return typeof m === "object" && m !== null && d in m ? Reflect.get(m, d) : undefined;
+function readField(target, fieldName) {
+  return typeof target === "object" && target !== null && fieldName in target
+    ? Reflect.get(target, fieldName)
+    : undefined;
 }
 //@ chunk-ah34pb7m.js:11386-11494 placement
 function uptimeBucket(uptimeSeconds) {
@@ -205,18 +214,18 @@ function isCoordinatorPanelEnabled() {
  */
 function agentLabel(model, effort) {
   if (!model) return null;
-  let c = getMarketingNameForModel(model) ?? displayModelName(model);
-  let g = effortLevelOf(effort);
-  return g !== undefined ? `${c} (${g})` : c;
+  let modelName = getMarketingNameForModel(model) ?? displayModelName(model);
+  let effortLabel = effortLevelOf(effort);
+  return effortLabel !== undefined ? `${modelName} (${effortLabel})` : modelName;
 }
 //@ chunk-ah34pb7m.js:11723-11803 placement
 /**
  * 把值规范成努力等级（数字/undefined 原样跳过）。
  */
-function effortLevelOf(m) {
-  if (m === undefined) return;
-  if (typeof m === "number") return;
-  return normalizeEffortLevel(m);
+function effortLevelOf(effort) {
+  if (effort === undefined) return;
+  if (typeof effort === "number") return;
+  return normalizeEffortLevel(effort);
 }
 export {
   shortUuid,

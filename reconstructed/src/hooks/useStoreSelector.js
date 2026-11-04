@@ -8,7 +8,12 @@
  * pieces: chunk-yn45f1gp.js (3)
  * attribution: placement 3
  */
-import { init_react_production, Se, R, yt } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useContext,
+  useRef,
+  useSyncExternalStore,
+} from "../../vendor/react/cjs/react.production.js";
 import { SpinnerPaceContext } from "../components/Spinner/paceContext.js";
 
 //@ chunk-yn45f1gp.js:270-274 placement
@@ -27,8 +32,8 @@ var returnUndefined = () => {
  * 订阅状态仓库并按选择器取值：缓存上次快照与结果避免重复计算，订阅可经节奏控制器限速，仓库为空时返回默认值。
  */
 function useStoreSelector(store, selector) {
-  let pacer = Se(SpinnerPaceContext);
-  let stateRef = R(null);
+  let pacer = useContext(SpinnerPaceContext);
+  let stateRef = useRef(null);
   if (stateRef.current === null)
     stateRef.current = {
       select: selector,
@@ -64,6 +69,6 @@ function useStoreSelector(store, selector) {
         }
       : returnUndefined;
   }
-  return yt(state.subscribe, state.get, state.get);
+  return useSyncExternalStore(state.subscribe, state.get, state.get);
 }
 export { useStoreSelector, ZERO_SELECTOR };

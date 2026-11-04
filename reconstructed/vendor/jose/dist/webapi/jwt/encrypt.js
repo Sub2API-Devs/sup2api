@@ -5,9 +5,9 @@
  * pieces: chunk-5h78gfwc.js (1)
  * attribution: esm-fingerprint 1
  */
-import { de } from "../lib/jwt_claims_set.js";
+import { JWTClaimsSetVerifier } from "../lib/jwt_claims_set.js";
 import { assertNotSet } from "../lib/helpers.js";
-import { Ue } from "../jwe/compact/encrypt.js";
+import { CompactEncrypt } from "../jwe/compact/encrypt.js";
 
 //@ chunk-5h78gfwc.js:47558-48800 esm-fingerprint
 class EncryptJWT {
@@ -20,7 +20,7 @@ class EncryptJWT {
   #s;
   #i;
   constructor(payload = {}) {
-    this.#i = new de(payload);
+    this.#i = new JWTClaimsSetVerifier(payload);
   }
   setIssuer(issuer) {
     this.#i.iss = issuer;
@@ -83,7 +83,7 @@ class EncryptJWT {
     return this;
   }
   async encrypt(key, options) {
-    let enc = new Ue(this.#i.data());
+    let enc = new CompactEncrypt(this.#i.data());
     if (this.#n && (this.#a || this.#o || this.#s))
       this.#n = {
         ...this.#n,

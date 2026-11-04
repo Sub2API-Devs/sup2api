@@ -10,7 +10,7 @@
  */
 import { stripAnsi } from "./stripAnsi.js";
 import { sequential } from "./sequential.js";
-import { VERTICAL_LEFT_BAR_GLYPH, BOXED_DIAMOND_GLYPH } from "./permissions/autoModeRulesPrompt.js";
+import { VERTICAL_LEFT_BAR_GLYPH, BOXED_DIAMOND_GLYPH } from "../constants/figures.js";
 import { sgrPatternSource } from "../ink/wrapAnsi.js";
 import { INVISIBLE_CHAR_CLASS } from "./pathSanitize.js";
 import {
@@ -24,6 +24,7 @@ import { LRUCache } from "../../vendor/lru-cache/dist/esm/index.min.js";
 import { HostScoped } from "./hostScoped.js";
 import { nestingGuard, normalizeBlockText } from "../ink/render-border.js";
 import { markdownHeldGuard, regExp, MARKDOWN_LIMITS_2 } from "./doctorContextWarnings.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-wj577vf9.js:7634-7772 placement
 var MAX_PREVIEW_LINES = 6;
@@ -34,113 +35,126 @@ var makeRows = (rows) => ({
   rows,
   isDone: false,
 });
-var ensureTrailingNewline = (e) => (e === "" || e.endsWith(NEWLINE_STR) ? e : e + NEWLINE_STR);
+var ensureTrailingNewline = (text) => (text === "" || text.endsWith(NEWLINE_STR) ? text : text + NEWLINE_STR);
 var rowsOf = (rows) => (rows === "" ? [] : [makeRows(rows)]);
-var isNonBlankLine = (e) => stripAnsi(e).trim() !== "";
+var isNonBlankLine = (line) => stripAnsi(line).trim() !== "";
 //@ chunk-wj577vf9.js:7772-7876 placement = styleBorderLine (0.66)
-function styleQuotedPreview(e) {
-  let t = sequential.dim(VERTICAL_LEFT_BAR_GLYPH);
+function styleQuotedPreview(text) {
+  let bar = sequential.dim(VERTICAL_LEFT_BAR_GLYPH);
   return makeRows(
-    e
+    text
       .split(NEWLINE_STR)
-      .map((n) => (isNonBlankLine(n) ? `${t} ${sequential.italic(n)}` : n))
+      .map((line) => (isNonBlankLine(line) ? `${bar} ${sequential.italic(line)}` : line))
       .join(NEWLINE_STR),
   );
 }
 //@ chunk-wj577vf9.js:7876-7972 placement
-function gutterPrefix(e) {
-  let t = `${VERTICAL_LEFT_BAR_GLYPH} `.repeat(Math.max(0, e)).trimEnd();
-  return t === "" ? "" : `${sequential.dim(t)} `;
+function gutterPrefix(depth) {
+  let bars = `${VERTICAL_LEFT_BAR_GLYPH} `.repeat(Math.max(0, depth)).trimEnd();
+  return bars === "" ? "" : `${sequential.dim(bars)} `;
 }
 //@ chunk-wj577vf9.js:7972-8158 placement
-function quotedPreviewRows(e, t, n) {
-  let r = Math.min(t + 1, MAX_PREVIEW_ROWS) - n.around;
-  let o = n.around === 0;
-  let s = gutterPrefix(o ? 1 : r);
-  let l = gutterPrefix(o ? r - 1 : 0);
-  let a = o ? sequential.italic : (c) => c;
+function quotedPreviewRows(text, linesUsed, options) {
+  let availableLines = Math.min(linesUsed + 1, MAX_PREVIEW_ROWS) - options.around;
+  let isShallow = options.around === 0;
+  let firstGutter = gutterPrefix(isShallow ? 1 : availableLines);
+  let restGutter = gutterPrefix(isShallow ? availableLines - 1 : 0);
+  let styleLine = isShallow ? sequential.italic : (line) => line;
   return {
-    rows: ensureTrailingNewline(e)
+    rows: ensureTrailingNewline(text)
       .split(NEWLINE_STR)
-      .map((c) => (isNonBlankLine(c) ? s + a(l + c) : c))
+      .map((line) => (isNonBlankLine(line) ? firstGutter + styleLine(restGutter + line) : line))
       .join(NEWLINE_STR),
     isDone: true,
   };
 }
 //@ chunk-wj577vf9.js:8158-8279 placement
-function mergePreviewRows(e) {
-  let t = [];
-  let n = "";
-  for (let r of e)
-    if (r.isDone) {
-      t.push(...rowsOf(ensureTrailingNewline(n)), r);
-      n = "";
-    } else n += r.rows;
-  return [...t, ...rowsOf(n)];
+function mergePreviewRows(rows) {
+  let merged = [];
+  let pendingText = "";
+  for (let rowEntry of rows)
+    if (rowEntry.isDone) {
+      merged.push(...rowsOf(ensureTrailingNewline(pendingText)), rowEntry);
+      pendingText = "";
+    } else pendingText += rowEntry.rows;
+  return [...merged, ...rowsOf(pendingText)];
 }
 //@ chunk-wj577vf9.js:8279-8450 placement
-function renderBlockquoteRows(e, t, n) {
-  let o = t < MAX_PREVIEW_LINES ? styleQuotedPreview : (s) => quotedPreviewRows(s, t, n);
+function renderBlockquoteRows(tokens, depth, context) {
+  let styleRows =
+    depth < MAX_PREVIEW_LINES ? styleQuotedPreview : (text) => quotedPreviewRows(text, depth, context);
   return mergePreviewRows(
-    e.flatMap((s) =>
-      s.type === "blockquote" ? renderBlockquoteRows(s.tokens ?? [], t + 1, n) : [makeRows(n.draw(s, t + 1))],
+    tokens.flatMap((token) =>
+      token.type === "blockquote"
+        ? renderBlockquoteRows(token.tokens ?? [], depth + 1, context)
+        : [makeRows(context.draw(token, depth + 1))],
     ),
-  ).map((s) => (s.isDone ? s : o(s.rows)));
+  ).map((rowEntry) => (rowEntry.isDone ? rowEntry : styleRows(rowEntry.rows)));
 }
 //@ chunk-wj577vf9.js:8450-8518 placement
-var drawAround = (e, quotesAround, draw) =>
-  renderBlockquoteRows(e, quotesAround, {
-    around: quotesAround,
+var drawAround = (tokens, depth, draw) =>
+  renderBlockquoteRows(tokens, depth, {
+    around: depth,
     draw,
   })
-    .map((r) => r.rows)
+    .map((rowEntry) => rowEntry.rows)
     .join("");
 //@ chunk-wj577vf9.js:8518-8655 placement
 /**
  * 去除内联文本中的控制字符（保留行分隔符等）。
  */
-var CONTROL_CHAR_PATTERN = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/;
-var regExp_2 = new RegExp(`(?!${sgrPatternSource(";:")})${CONTROL_CHAR_PATTERN.source}`, "g");
-var stripControlCharsForInline = (e) =>
-  e
-    .replace(
-      /\r\n?/g,
-      `
+var CONTROL_CHAR_PATTERN; // deferred: uses sgrPatternSource (../ink/wrapAnsi.js) of its import cycle while loading; runs once the cycle is complete
+var regExp_2;
+var stripControlCharsForInline;
+deferInit("chunk-wj577vf9.js:8518", () => {
+  CONTROL_CHAR_PATTERN = /[\x00-\x08\x0b-\x1f\x7f-\x9f]/;
+  regExp_2 = new RegExp(`(?!${sgrPatternSource(";:")})${CONTROL_CHAR_PATTERN.source}`, "g");
+  stripControlCharsForInline = (text) =>
+    text
+      .replace(
+        /\r\n?/g,
+        `
 `,
-    )
-    .replace(regExp_2, "");
+      )
+      .replace(regExp_2, "");
+});
 //@ chunk-wj577vf9.js:8655-9130 placement
 function controlCharTokens(tokens) {
-  let n = tokens.some((s) => CONTROL_CHAR_PATTERN.test(s.raw)) ? [tokens] : [];
-  for (let s of n)
-    for (let [key, value] of Object.entries(s)) {
-      let c = typeof value === "string" && key !== "href";
-      if (typeof value === "object" && value !== null) n.push(value);
-      else if (c) Reflect.set(s, key, stripControlCharsForInline(value));
+  let pending = tokens.some((token) => CONTROL_CHAR_PATTERN.test(token.raw)) ? [tokens] : [];
+  for (let node of pending)
+    for (let [key, value] of Object.entries(node)) {
+      let isStrippable = typeof value === "string" && key !== "href";
+      if (typeof value === "object" && value !== null) pending.push(value);
+      else if (isStrippable) Reflect.set(node, key, stripControlCharsForInline(value));
     }
-  let any = n.some((s) =>
-    Object.entries(s).some(
+  let any = pending.some((node) =>
+    Object.entries(node).some(
       ([key, value]) => key !== "href" && typeof value === "string" && value.includes("\x1B"),
     ),
   );
-  let filtered = n.filter(
-    (s) => "type" in s && (s.type === "link" || s.type === "image" || s.type === "codespan"),
+  let filtered = pending.filter(
+    (node) => "type" in node && (node.type === "link" || node.type === "image" || node.type === "codespan"),
   );
-  for (let s of any ? filtered : [])
-    Object.assign(s, {
+  for (let node of any ? filtered : [])
+    Object.assign(node, {
       afterStyle: true,
     });
   return tokens;
 }
 //@ chunk-wj577vf9.js:9130-9221 placement
-var WORD_BOUNDARY_PATTERNS = `
+var WORD_BOUNDARY_PATTERNS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_3;
+var regExp_4;
+deferInit("chunk-wj577vf9.js:9130", () => {
+  WORD_BOUNDARY_PATTERNS = `
 `;
-var regExp_3 = new RegExp(`^[${INVISIBLE_CHAR_CLASS}]+`, "u");
-var regExp_4 = new RegExp(`(?:^|[^${INVISIBLE_CHAR_CLASS}])([${INVISIBLE_CHAR_CLASS}]*)$`, "u");
+  regExp_3 = new RegExp(`^[${INVISIBLE_CHAR_CLASS}]+`, "u");
+  regExp_4 = new RegExp(`(?:^|[^${INVISIBLE_CHAR_CLASS}])([${INVISIBLE_CHAR_CLASS}]*)$`, "u");
+});
 //@ chunk-wj577vf9.js:9221-9306 placement
-function stripTrailingLinkHint(e) {
-  let t = regExp_4.exec(e)?.[1]?.length ?? 0;
-  return t === 0 ? e : e.slice(0, e.length - t);
+function stripTrailingLinkHint(label) {
+  let hintLength = regExp_4.exec(label)?.[1]?.length ?? 0;
+  return hintLength === 0 ? label : label.slice(0, label.length - hintLength);
 }
 //@ chunk-wj577vf9.js:9306-9671 placement
 /**
@@ -150,114 +164,115 @@ var OSC8_LINK_PATTERN = /\x1b\]8;[^;\x07\x1b]*;([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
 var ESC_NON_CSI_RE = /\x9d|\x1b(?!\[)/;
 var C1_OSC_RE = /\x9d/g;
 var ESC_NON_CSI_GLOBAL_RE = /\x1b(?!\[)/g;
-var stripDecisionSurfaceChars = (e) =>
-  Array.from(e)
-    .filter((t) => {
-      let n = t.codePointAt(0) ?? 0;
-      return n !== 10697 && !isDecisionSurfaceControl(n);
+var stripDecisionSurfaceChars = (text) =>
+  Array.from(text)
+    .filter((char) => {
+      let codePoint = char.codePointAt(0) ?? 0;
+      return codePoint !== 10697 && !isDecisionSurfaceControl(codePoint);
     })
     .join("");
 var SGR_RESET_SEQUENCE = "\x1B[28m\x1B[39m\x1B[49m";
-var afterStyleReset = (e) => ("afterStyle" in e && e.afterStyle === true ? SGR_RESET_SEQUENCE : "");
-var labelWithReset = (e, t) => `${t}${stripDecisionSurfaceChars(e)}`;
-var labelWithHint = (e, t, n = "") => `${t} (${stripDecisionSurfaceChars(e)}${n})`;
-var labelForLink = (e) => labelWithHint(e, SGR_RESET_SEQUENCE);
+var afterStyleReset = (token) =>
+  "afterStyle" in token && token.afterStyle === true ? SGR_RESET_SEQUENCE : "";
+var labelWithReset = (label, reset) => `${reset}${stripDecisionSurfaceChars(label)}`;
+var labelWithHint = (href, reset, hint = "") => `${reset} (${stripDecisionSurfaceChars(href)}${hint})`;
+var labelForLink = (href) => labelWithHint(href, SGR_RESET_SEQUENCE);
 //@ chunk-wj577vf9.js:9671-10714 placement
 /**
  * 去掉嵌套或无效的 OSC 8 超链接序列，保留文本。
  */
-function stripNestedHyperlinks(e) {
-  if (!e.includes("\x1B]8;")) return e;
-  let t = [];
-  let n = null;
-  for (let a of e.matchAll(OSC8_LINK_PATTERN)) {
-    let c = a.index + a[0].length;
-    if (n !== null) {
-      t.push({
-        href: n.href,
-        openEnd: n.openEnd,
-        closeStart: a.index,
-        closeEnd: c,
+function stripNestedHyperlinks(text) {
+  if (!text.includes("\x1B]8;")) return text;
+  let links = [];
+  let openLink = null;
+  for (let match of text.matchAll(OSC8_LINK_PATTERN)) {
+    let matchEnd = match.index + match[0].length;
+    if (openLink !== null) {
+      links.push({
+        href: openLink.href,
+        openEnd: openLink.openEnd,
+        closeStart: match.index,
+        closeEnd: matchEnd,
       });
-      n = null;
+      openLink = null;
     }
-    let p = a[1] ?? "";
-    if (p !== "")
-      n = {
-        href: p,
-        openEnd: c,
+    let href = match[1] ?? "";
+    if (href !== "")
+      openLink = {
+        href,
+        openEnd: matchEnd,
       };
   }
-  if (n !== null)
-    t.push({
-      href: n.href,
-      openEnd: n.openEnd,
-      closeStart: e.length,
-      closeEnd: e.length,
+  if (openLink !== null)
+    links.push({
+      href: openLink.href,
+      openEnd: openLink.openEnd,
+      closeStart: text.length,
+      closeEnd: text.length,
     });
-  let r = "";
-  let o = 0;
-  let s = 0;
-  let l = false;
-  for (let a of t) {
-    let index = e.lastIndexOf("\x1B]8;", a.openEnd - 1);
-    let p = stripTrailingLinkHint(stripAnsi(e.slice(0, index)));
-    let d = s;
-    s = a.closeStart;
-    let b = isCanonicalArtifactViewerUrl(a.href);
-    let S = l;
-    l = b;
-    if (!b) {
-      let f = stripAnsi(e.slice(d, index));
-      let included = f.includes(BOXED_DIAMOND_GLYPH);
-      let T = S && stripTrailingLinkHint(f) === "";
-      if (!included && !p.endsWith(BOXED_DIAMOND_GLYPH) && !T) continue;
-    } else if (!p.endsWith(BOXED_DIAMOND_GLYPH)) continue;
-    if (b) {
-      let sliced = e.slice(a.openEnd, a.closeStart);
-      let h = stripAnsi(sliced).startsWith(`${BOXED_DIAMOND_GLYPH} `)
+  let output = "";
+  let copiedUntil = 0;
+  let previousCloseEnd = 0;
+  let previousWasArtifact = false;
+  for (let link of links) {
+    let index = text.lastIndexOf("\x1B]8;", link.openEnd - 1);
+    let precedingText = stripTrailingLinkHint(stripAnsi(text.slice(0, index)));
+    let segmentStart = previousCloseEnd;
+    previousCloseEnd = link.closeStart;
+    let isArtifactLink = isCanonicalArtifactViewerUrl(link.href);
+    let previousFlag = previousWasArtifact;
+    previousWasArtifact = isArtifactLink;
+    if (!isArtifactLink) {
+      let betweenText = stripAnsi(text.slice(segmentStart, index));
+      let included = betweenText.includes(BOXED_DIAMOND_GLYPH);
+      let isHintOnly = previousFlag && stripTrailingLinkHint(betweenText) === "";
+      if (!included && !precedingText.endsWith(BOXED_DIAMOND_GLYPH) && !isHintOnly) continue;
+    } else if (!precedingText.endsWith(BOXED_DIAMOND_GLYPH)) continue;
+    if (isArtifactLink) {
+      let sliced = text.slice(link.openEnd, link.closeStart);
+      let diamondIndex = stripAnsi(sliced).startsWith(`${BOXED_DIAMOND_GLYPH} `)
         ? sliced.indexOf(`${BOXED_DIAMOND_GLYPH} `)
         : -1;
-      if (h !== -1) {
-        r += e.slice(o, a.openEnd);
-        r += sliced.slice(0, h);
-        r += sliced.slice(h + BOXED_DIAMOND_GLYPH.length + 1);
-        o = a.closeStart;
+      if (diamondIndex !== -1) {
+        output += text.slice(copiedUntil, link.openEnd);
+        output += sliced.slice(0, diamondIndex);
+        output += sliced.slice(diamondIndex + BOXED_DIAMOND_GLYPH.length + 1);
+        copiedUntil = link.closeStart;
       } else {
-        let sliced = e.slice(o, index);
-        let k = `${BOXED_DIAMOND_GLYPH} `;
-        if (sliced.endsWith(k)) {
-          let sliced_2 = sliced.slice(0, -k.length);
-          if (stripTrailingLinkHint(stripAnsi(r + sliced_2)).endsWith(BOXED_DIAMOND_GLYPH)) {
-            r += sliced_2;
-            o = index;
+        let sliced = text.slice(copiedUntil, index);
+        let diamondPrefix = `${BOXED_DIAMOND_GLYPH} `;
+        if (sliced.endsWith(diamondPrefix)) {
+          let sliced_2 = sliced.slice(0, -diamondPrefix.length);
+          if (stripTrailingLinkHint(stripAnsi(output + sliced_2)).endsWith(BOXED_DIAMOND_GLYPH)) {
+            output += sliced_2;
+            copiedUntil = index;
           }
         }
       }
       continue;
     }
-    let y = labelForLink(a.href);
-    let closeEnd = a.closeEnd;
-    if (e.startsWith(y, closeEnd)) continue;
-    r += e.slice(o, closeEnd) + y;
-    o = closeEnd;
+    let linkLabel = labelForLink(link.href);
+    let closeEnd = link.closeEnd;
+    if (text.startsWith(linkLabel, closeEnd)) continue;
+    output += text.slice(copiedUntil, closeEnd) + linkLabel;
+    copiedUntil = closeEnd;
   }
-  return r + e.slice(o);
+  return output + text.slice(copiedUntil);
 }
 //@ chunk-wj577vf9.js:10714-10991 placement
-function renderWithSafeLinks(tokens, t) {
-  let n = t();
-  if (!n.includes("\x1B]8;")) return n;
-  let r = stripNestedHyperlinks(n);
-  if (!n.includes(BOXED_DIAMOND_GLYPH) && r === n) return n;
+function renderWithSafeLinks(tokens, render) {
+  let rendered = render();
+  if (!rendered.includes("\x1B]8;")) return rendered;
+  let stripped = stripNestedHyperlinks(rendered);
+  if (!rendered.includes(BOXED_DIAMOND_GLYPH) && stripped === rendered) return rendered;
   let suspiciousCodespans = findSuspiciousCodespans(tokens ?? []);
-  if (suspiciousCodespans.length === 0) return r;
+  if (suspiciousCodespans.length === 0) return stripped;
   try {
     for (let suspiciousCodespan of suspiciousCodespans)
       Object.assign(suspiciousCodespan, {
         defanged: true,
       });
-    return stripNestedHyperlinks(t());
+    return stripNestedHyperlinks(render());
   } finally {
     for (let suspiciousCodespan of suspiciousCodespans)
       Reflect.deleteProperty(suspiciousCodespan, "defanged");
@@ -265,10 +280,10 @@ function renderWithSafeLinks(tokens, t) {
 }
 //@ chunk-wj577vf9.js:10991-11181 placement
 function findSuspiciousCodespans(tokens) {
-  return tokens.flatMap((t) => {
-    if (t.type === "codespan")
-      return !("defanged" in t && t.defanged === true) && HTTP_URL_RE.test(t.text) ? [t] : [];
-    return "tokens" in t && Array.isArray(t.tokens) ? findSuspiciousCodespans(t.tokens) : [];
+  return tokens.flatMap((token) => {
+    if (token.type === "codespan")
+      return !("defanged" in token && token.defanged === true) && HTTP_URL_RE.test(token.text) ? [token] : [];
+    return "tokens" in token && Array.isArray(token.tokens) ? findSuspiciousCodespans(token.tokens) : [];
   });
 }
 //@ chunk-wj577vf9.js:11181-11297 placement
@@ -289,160 +304,178 @@ class MarkedConfigState {
 /**
  * 宿主隔离的 marked 配置状态缓存（含重置）。
  */
-var markedConfigStateMemo = identity(new MarkedConfigState(), (e) => e.reset());
+var markedConfigStateMemo; // deferred: uses MarkedConfigState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-wj577vf9.js:11297", () => {
+  markedConfigStateMemo = identity(new MarkedConfigState(), (state) => state.reset());
+});
 //@ chunk-wj577vf9.js:11330-11429 placement
 class MarkedConfigCache {
   #e = new LRUCache({
     max: 200,
     ttl: 30000,
   });
-  get(e) {
-    return this.#e.get(e);
+  get(key) {
+    return this.#e.get(key);
   }
-  record(e, t) {
-    this.#e.set(e, t);
+  record(key, value) {
+    this.#e.set(key, value);
   }
 }
 //@ chunk-wj577vf9.js:11429-13024 placement
 /**
  * marked 渲染器池、扩展原型方法与渲染配置（后台词、表格、列表、加粗、代码管道转义等）。
  */
-var markdownRendererPool = new HostScoped(() => new MarkedConfigCache());
-var table = _Tokenizer.prototype.table;
-var blockquote = _Tokenizer.prototype.blockquote;
-var list = _Tokenizer.prototype.list;
-var emStrong = _Tokenizer.prototype.emStrong;
-var MARKED_CONFIG_CACHE_SIZE = {
-  tokenizer: {
-    del(e) {
-      let match = /^~~(?=[^\s~])((?:\\.|[^\\])*?(?:\\.|[^\s~\\]))~~(?=[^~]|$)/.exec(e);
-      let n = match?.[1];
-      if (!match || n === undefined) return;
-      return {
-        type: "del",
-        raw: match[0],
-        text: n,
-        tokens: this.lexer.inlineTokens(n),
-      };
-    },
-    blockquote(e) {
-      return this.rules.other.blockquoteStart.test(e)
-        ? nestingGuard.lexLevel(this.lexer, () => blockquote.call(this, e))
-        : undefined;
-    },
-    list(e) {
-      return this.rules.block.list.test(e)
-        ? nestingGuard.lexLevel(this.lexer, () => list.call(this, e))
-        : undefined;
-    },
-    emStrong(e, t, n) {
-      return this.rules.inline.emStrongLDelim.test(e)
-        ? nestingGuard.lexLevel(this.lexer, () => emStrong.call(this, e, t, n))
-        : undefined;
-    },
-    paragraph(e) {
-      let t = flattenDeepList(this, e);
-      return t
-        ? {
-            type: "paragraph",
-            ...t,
-          }
-        : false;
-    },
-    text(e) {
-      let t = flattenDeepList(this, e);
-      return t
-        ? {
-            type: "text",
-            ...t,
-          }
-        : false;
-    },
-    def() {
-      return;
-    },
-    lheading(e) {
-      return (markdownHeldGuard.isHeld() ? regExp.test(e) : MARKDOWN_LIMITS_2.test(e)) ? false : undefined;
-    },
-    table(e) {
-      let match = this.rules.block.table.exec(e);
-      if (!match) return;
-      let n = match[0];
-      let mapped = n
-        .split(
-          `
-`,
-        )
-        .map(escapePipesInCode);
-      let joined = mapped.join(`
-`);
-      let s = joined === n ? table.call(this, e) : table.call(this, joined + e.slice(n.length));
-      if (s) {
-        if (tableHasExtraCells(mapped, s.header.length)) return;
-        if (joined !== n) s.raw = n;
-      }
-      return s;
-    },
-  },
-};
-var CLOSING_TO_OPENING = {
-  '"': '"',
-  "'": "'",
-  ")": "(",
-  "]": "[",
-  "}": "{",
-  ">": "<",
-};
-var BACKSLASH_ESCAPE_RE = /^\\.[\p{L}\p{N}\\*_`~]/u;
-var WORD_END_RE = /[\p{L}\p{N}].$/u;
-var markedExtensions = {
-  extensions: [
-    {
-      name: "wrappedBackslash",
-      level: "inline",
-      tokenizer(e, t) {
-        let n = e[1];
-        if (e[0] !== "\\" || n === undefined || this.lexer.state.inLink) return;
-        let r = CLOSING_TO_OPENING[n];
-        let last = t.at(-1);
-        if (
-          r === undefined ||
-          last?.type !== "text" ||
-          !last.raw.endsWith(r) ||
-          WORD_END_RE.test(last.raw) ||
-          BACKSLASH_ESCAPE_RE.test(e)
-        )
-          return;
-        let s = t.at(-2);
-        if (
-          last.raw === r &&
-          s !== undefined &&
-          s.type !== "br" &&
-          !(s.type === "escape" && s.text === s.raw)
-        )
-          return;
-        let l = `\\${n}`;
+var markdownRendererPool; // deferred: uses MarkedConfigCache of its import cycle while loading; runs once the cycle is complete
+var table;
+var blockquote;
+var list;
+var emStrong;
+var MARKED_CONFIG_CACHE_SIZE;
+var CLOSING_TO_OPENING;
+var BACKSLASH_ESCAPE_RE;
+var WORD_END_RE;
+var markedExtensions;
+deferInit("chunk-wj577vf9.js:11429", () => {
+  markdownRendererPool = new HostScoped(() => new MarkedConfigCache());
+  table = _Tokenizer.prototype.table;
+  blockquote = _Tokenizer.prototype.blockquote;
+  list = _Tokenizer.prototype.list;
+  emStrong = _Tokenizer.prototype.emStrong;
+  MARKED_CONFIG_CACHE_SIZE = {
+    tokenizer: {
+      del(src) {
+        let match = /^~~(?=[^\s~])((?:\\.|[^\\])*?(?:\\.|[^\s~\\]))~~(?=[^~]|$)/.exec(src);
+        let innerText = match?.[1];
+        if (!match || innerText === undefined) return;
         return {
-          type: "escape",
-          raw: l,
-          text: l,
+          type: "del",
+          raw: match[0],
+          text: innerText,
+          tokens: this.lexer.inlineTokens(innerText),
         };
       },
+      blockquote(src) {
+        return this.rules.other.blockquoteStart.test(src)
+          ? nestingGuard.lexLevel(this.lexer, () => blockquote.call(this, src))
+          : undefined;
+      },
+      list(src) {
+        return this.rules.block.list.test(src)
+          ? nestingGuard.lexLevel(this.lexer, () => list.call(this, src))
+          : undefined;
+      },
+      emStrong(src, prevChar, nextChar) {
+        return this.rules.inline.emStrongLDelim.test(src)
+          ? nestingGuard.lexLevel(this.lexer, () => emStrong.call(this, src, prevChar, nextChar))
+          : undefined;
+      },
+      paragraph(src) {
+        let flattened = flattenDeepList(this, src);
+        return flattened
+          ? {
+              type: "paragraph",
+              ...flattened,
+            }
+          : false;
+      },
+      text(src) {
+        let flattened = flattenDeepList(this, src);
+        return flattened
+          ? {
+              type: "text",
+              ...flattened,
+            }
+          : false;
+      },
+      def() {
+        return;
+      },
+      lheading(src) {
+        return (markdownHeldGuard.isHeld() ? regExp.test(src) : MARKDOWN_LIMITS_2.test(src))
+          ? false
+          : undefined;
+      },
+      table(src) {
+        let match = this.rules.block.table.exec(src);
+        if (!match) return;
+        let rawTable = match[0];
+        let lines = rawTable
+          .split(
+            `
+`,
+          )
+          .map(escapePipesInCode);
+        let joined = lines.join(`
+`);
+        let tableToken =
+          joined === rawTable ? table.call(this, src) : table.call(this, joined + src.slice(rawTable.length));
+        if (tableToken) {
+          if (tableHasExtraCells(lines, tableToken.header.length)) return;
+          if (joined !== rawTable) tableToken.raw = rawTable;
+        }
+        return tableToken;
+      },
     },
-  ],
-};
+  };
+  CLOSING_TO_OPENING = {
+    '"': '"',
+    "'": "'",
+    ")": "(",
+    "]": "[",
+    "}": "{",
+    ">": "<",
+  };
+  BACKSLASH_ESCAPE_RE = /^\\.[\p{L}\p{N}\\*_`~]/u;
+  WORD_END_RE = /[\p{L}\p{N}].$/u;
+  markedExtensions = {
+    extensions: [
+      {
+        name: "wrappedBackslash",
+        level: "inline",
+        tokenizer(tokenizerMatch, siblingTokens) {
+          let escapedChar = tokenizerMatch[1];
+          if (tokenizerMatch[0] !== "\\" || escapedChar === undefined || this.lexer.state.inLink) return;
+          let closingChar = CLOSING_TO_OPENING[escapedChar];
+          let last = siblingTokens.at(-1);
+          if (
+            closingChar === undefined ||
+            last?.type !== "text" ||
+            !last.raw.endsWith(closingChar) ||
+            WORD_END_RE.test(last.raw) ||
+            BACKSLASH_ESCAPE_RE.test(tokenizerMatch)
+          )
+            return;
+          let previousToken = siblingTokens.at(-2);
+          if (
+            last.raw === closingChar &&
+            previousToken !== undefined &&
+            previousToken.type !== "br" &&
+            !(previousToken.type === "escape" && previousToken.text === previousToken.raw)
+          )
+            return;
+          let escapedText = `\\${escapedChar}`;
+          return {
+            type: "escape",
+            raw: escapedText,
+            text: escapedText,
+          };
+        },
+      },
+    ],
+  };
+});
 //@ chunk-wj577vf9.js:13024-13206 placement
-function flattenDeepList(e, t) {
+function flattenDeepList(tokenizer, source) {
   if (
-    !nestingGuard.isAtMaxNesting(e.lexer) ||
-    !(e.rules.block.list.test(t) || e.rules.other.blockquoteStart.test(t))
+    !nestingGuard.isAtMaxNesting(tokenizer.lexer) ||
+    !(tokenizer.rules.block.list.test(source) || tokenizer.rules.other.blockquoteStart.test(source))
   )
     return;
-  let n = normalizeBlockText(t);
+  let text = normalizeBlockText(source);
   return {
-    raw: t,
-    text: n,
-    tokens: e.lexer.inline(n),
+    raw: source,
+    text,
+    tokens: tokenizer.lexer.inline(text),
   };
 }
 export {

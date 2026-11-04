@@ -9,8 +9,12 @@
  * attribution: placement 3, callgraph-fingerprint 1, layout 1, fingerprint 1
  */
 import { PassThrough } from "stream";
-import { init_react_production, qt, zt } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  createContext,
+  useLayoutEffect,
+} from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useApp } from "../ink/components/Input.js";
 import {
   jsxProd_default,
@@ -18,19 +22,26 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { render } from "../ink/hooks/useTerminalHooks.js";
 import { TerminalWriteProvider } from "../ink/useTerminalNotification.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-h6f3feta.js:416-420 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-h6f3feta.js:416", () => {
+  init_react_production();
+});
 //@ chunk-h6f3feta.js:457-471 placement
 function noopElement() {}
 //@ chunk-h6f3feta.js:471-486 placement
 /**
  * 离屏渲染用的存储上下文（storageV5 槽）。
  */
-var staticRenderStorageSlot = qt(false);
+var staticRenderStorageSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-h6f3feta.js:471", () => {
+  staticRenderStorageSlot = createContext(false);
+});
 //@ chunk-h6f3feta.js:486-740 callgraph-fingerprint = RenderOnceAndExit (1)
 function RenderOnceAndExit(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { children } = props;
   let { exit } = useApp();
   let t1;
@@ -48,7 +59,7 @@ function RenderOnceAndExit(props) {
     t1 = $[1];
     t2 = $[2];
   }
-  zt(t1, t2);
+  useLayoutEffect(t1, t2);
   let t3;
   if ($[3] !== children) {
     t3 = jsxProd_default(Fragment, {
@@ -77,12 +88,12 @@ async function renderAndRun(root, element) {
  */
 async function renderToAnsiString(node, { columns, storageV5 }) {
   let output = "";
-  let a = false;
+  let gotOutput = false;
   let stream = new PassThrough();
   if (columns !== undefined) stream.columns = columns;
   stream.on("data", (chunk) => {
-    if (a) return;
-    a = true;
+    if (gotOutput) return;
+    gotOutput = true;
     output = chunk.toString();
   });
   await (

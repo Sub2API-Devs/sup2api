@@ -13,66 +13,66 @@
 /**
  * 把内部的上下文用量数据复制为插件可见的形状：分类、网格、模型、记忆文件、MCP 工具、代理、斜杠命令、技能、自动压缩阈值与 API 用量。
  */
-function toPluginContextData(e) {
-  let { slashCommands, skills, autoCompactThreshold, apiUsage } = e;
-  let y = slashCommands !== undefined;
-  let S = skills !== undefined;
-  let w = autoCompactThreshold !== undefined;
-  let L = apiUsage !== null;
+function toPluginContextData(data) {
+  let { slashCommands, skills, autoCompactThreshold, apiUsage } = data;
+  let hasSlashCommands = slashCommands !== undefined;
+  let hasSkills = skills !== undefined;
+  let hasThreshold = autoCompactThreshold !== undefined;
+  let hasApiUsage = apiUsage !== null;
   return {
-    categories: e.categories.map(({ name: G, tokens, color, isDeferred = false, kind }) => ({
-      name: G,
+    categories: data.categories.map(({ name, tokens, color, isDeferred = false, kind }) => ({
+      name,
       tokens,
       color,
       isDeferred,
       kind,
     })),
-    totalTokens: e.totalTokens,
-    maxTokens: e.maxTokens,
-    rawMaxTokens: e.rawMaxTokens,
-    autocompactSource: e.autocompactSource,
-    percentage: e.percentage,
-    gridRows: e.gridRows.map((G) =>
-      G.map((q) => ({
-        color: q.color,
-        isFilled: q.isFilled,
-        categoryName: q.categoryName,
-        tokens: q.tokens,
-        percentage: q.percentage,
-        squareFullness: q.squareFullness,
+    totalTokens: data.totalTokens,
+    maxTokens: data.maxTokens,
+    rawMaxTokens: data.rawMaxTokens,
+    autocompactSource: data.autocompactSource,
+    percentage: data.percentage,
+    gridRows: data.gridRows.map((row) =>
+      row.map((cell) => ({
+        color: cell.color,
+        isFilled: cell.isFilled,
+        categoryName: cell.categoryName,
+        tokens: cell.tokens,
+        percentage: cell.percentage,
+        squareFullness: cell.squareFullness,
       })),
     ),
-    model: e.model,
-    memoryFiles: e.memoryFiles.map((memoryFile) => ({
+    model: data.model,
+    memoryFiles: data.memoryFiles.map((memoryFile) => ({
       path: memoryFile.path,
       type: memoryFile.type,
       tokens: memoryFile.tokens,
     })),
-    mcpTools: e.mcpTools.map(({ name: G, serverName, tokens, isLoaded = true }) => ({
-      name: G,
+    mcpTools: data.mcpTools.map(({ name, serverName, tokens, isLoaded = true }) => ({
+      name,
       serverName,
       tokens,
       isLoaded,
     })),
-    agents: e.agents.map(({ agentType, source, tokens }) => ({
+    agents: data.agents.map(({ agentType, source, tokens }) => ({
       agentType,
       source,
       tokens,
     })),
-    ...(y && {
+    ...(hasSlashCommands && {
       slashCommands: {
         totalCommands: slashCommands.totalCommands,
         includedCommands: slashCommands.includedCommands,
         tokens: slashCommands.tokens,
       },
     }),
-    ...(S && {
+    ...(hasSkills && {
       skills: {
         totalSkills: skills.totalSkills,
         includedSkills: skills.includedSkills,
         tokens: skills.tokens,
-        skillFrontmatter: skills.skillFrontmatter.map(({ name: G, source, pluginName, tokens }) => ({
-          name: G,
+        skillFrontmatter: skills.skillFrontmatter.map(({ name, source, pluginName, tokens }) => ({
+          name,
           source,
           ...(pluginName !== undefined && {
             pluginName,
@@ -81,11 +81,11 @@ function toPluginContextData(e) {
         })),
       },
     }),
-    ...(w && {
+    ...(hasThreshold && {
       autoCompactThreshold,
     }),
-    isAutoCompactEnabled: e.isAutoCompactEnabled,
-    apiUsage: L
+    isAutoCompactEnabled: data.isAutoCompactEnabled,
+    apiUsage: hasApiUsage
       ? {
           input_tokens: apiUsage.input_tokens,
           output_tokens: apiUsage.output_tokens,
@@ -99,11 +99,11 @@ function toPluginContextData(e) {
 /**
  * 读插件上下文数据
  */
-var pluginContextData = async (e, n) =>
+var pluginContextData = async (ctx, options) =>
   toPluginContextData(
-    await e.contextData({
-      detail: n.breakdown,
-      terminalWidth: n.columns,
+    await ctx.contextData({
+      detail: options.breakdown,
+      terminalWidth: options.columns,
     }),
   );
 //@ chunk-e6aww6q8.js:789491-789532 placement

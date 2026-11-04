@@ -8,7 +8,7 @@
  * pieces: chunk-55w3ydvj.js (3)
  * attribution: affinity 1, fingerprint 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { SandboxManager, shouldForceSandboxOn } from "../../utils/sandbox/sandbox-adapter.js";
 import { sandboxSettingsErrorText } from "./WindowsSandboxStatus.js";
@@ -30,63 +30,63 @@ import { ModelSelector } from "../agents/ModelSelector.js";
 import { LearnMoreLink } from "../LearnMoreLink.js";
 
 //@ chunk-55w3ydvj.js:25340-25385 affinity
-function isAutoAllowSetting(A) {
-  return A.value === "auto-allow";
+function isAutoAllowSetting(option) {
+  return option.value === "auto-allow";
 }
 //@ chunk-55w3ydvj.js:25385-28869 fingerprint = SandboxSettings (0.678)
 function SandboxSettings(props) {
-  let $ = w(36);
+  let $ = useMemoCache(36);
   let { onComplete, depCheck } = props;
-  let m;
+  let sandboxEnabled;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    m = SandboxManager.isSandboxingEnabled();
-    $[0] = m;
-  } else m = $[0];
-  let u = m;
-  let i;
+    sandboxEnabled = SandboxManager.isSandboxingEnabled();
+    $[0] = sandboxEnabled;
+  } else sandboxEnabled = $[0];
+  let enabled = sandboxEnabled;
+  let autoAllowEnabled;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    i = SandboxManager.isAutoAllowBashIfSandboxedEnabled();
-    $[1] = i;
-  } else i = $[1];
-  let p = i;
-  let a = depCheck.warnings.length > 0;
-  let c;
+    autoAllowEnabled = SandboxManager.isAutoAllowBashIfSandboxedEnabled();
+    $[1] = autoAllowEnabled;
+  } else autoAllowEnabled = $[1];
+  let autoAllow = autoAllowEnabled;
+  let hasWarnings = depCheck.warnings.length > 0;
+  let hasUnixSocketConfig;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    c = SandboxManager.isAllowAllUnixSocketsConfigured();
-    $[2] = c;
-  } else c = $[2];
-  let showSocketWarning = a && !c;
-  let b;
+    hasUnixSocketConfig = SandboxManager.isAllowAllUnixSocketsConfigured();
+    $[2] = hasUnixSocketConfig;
+  } else hasUnixSocketConfig = $[2];
+  let showSocketWarning = hasWarnings && !hasUnixSocketConfig;
+  let computeMode;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    b = () => {
-      if (!u) {
+    computeMode = () => {
+      if (!enabled) {
         return "disabled";
       }
-      if (p) {
+      if (autoAllow) {
         return "auto-allow";
       }
       return "regular";
     };
-    $[3] = b;
-  } else b = $[3];
-  let x = b;
-  let P;
+    $[3] = computeMode;
+  } else computeMode = $[3];
+  let mode = computeMode;
+  let forcedOn;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    P = shouldForceSandboxOn();
-    $[4] = P;
-  } else P = $[4];
-  let W = P;
-  let v = x();
-  let currentMode = W && v === "disabled" ? "regular" : v;
-  let R;
+    forcedOn = shouldForceSandboxOn();
+    $[4] = forcedOn;
+  } else forcedOn = $[4];
+  let isForced = forcedOn;
+  let computedMode = mode();
+  let currentMode = isForced && computedMode === "disabled" ? "regular" : computedMode;
+  let supportsAutoAllow;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    R = SandboxManager.isAutoAllowSupported();
-    $[5] = R;
-  } else R = $[5];
-  let A = R;
-  let G;
+    supportsAutoAllow = SandboxManager.isAutoAllowSupported();
+    $[5] = supportsAutoAllow;
+  } else supportsAutoAllow = $[5];
+  let supportsAutoAllow_2 = supportsAutoAllow;
+  let autoAllowOptions;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    G = A
+    autoAllowOptions = supportsAutoAllow_2
       ? [
           {
             label: "Sandbox commands, with auto-allow",
@@ -94,17 +94,17 @@ function SandboxSettings(props) {
           },
         ]
       : [];
-    $[6] = G;
-  } else G = $[6];
-  let M;
+    $[6] = autoAllowOptions;
+  } else autoAllowOptions = $[6];
+  let options;
   if ($[7] === MEMO_CACHE_SENTINEL) {
-    M = [
-      ...G,
+    options = [
+      ...autoAllowOptions,
       {
-        label: A ? "Sandbox commands, with regular permissions" : "Sandbox commands",
+        label: supportsAutoAllow_2 ? "Sandbox commands, with regular permissions" : "Sandbox commands",
         value: "regular",
       },
-      ...(W
+      ...(isForced
         ? []
         : [
             {
@@ -113,47 +113,51 @@ function SandboxSettings(props) {
             },
           ]),
     ];
-    $[7] = M;
-  } else M = $[7];
-  let options = M;
+    $[7] = options;
+  } else options = $[7];
+  let options_2 = options;
   let noSandboxHint;
   let t10;
   if ($[8] !== onComplete) {
     t10 = async function handleSelect(value) {
       let mode = value;
-      let V;
+      let result;
       In: switch (mode) {
         case "auto-allow": {
-          V = await SandboxManager.setSandboxSettings({
+          result = await SandboxManager.setSandboxSettings({
             enabled: true,
             autoAllowBashIfSandboxed: true,
           });
-          onComplete(sandboxSettingsErrorText(V, "\u2713 Sandbox enabled with auto-allow for bash commands"));
+          onComplete(
+            sandboxSettingsErrorText(result, "\u2713 Sandbox enabled with auto-allow for bash commands"),
+          );
           break In;
         }
         case "regular": {
-          V = await SandboxManager.setSandboxSettings({
+          result = await SandboxManager.setSandboxSettings({
             enabled: true,
-            ...(A && {
+            ...(supportsAutoAllow_2 && {
               autoAllowBashIfSandboxed: false,
             }),
           });
           onComplete(
             sandboxSettingsErrorText(
-              V,
-              A ? "\u2713 Sandbox enabled with regular bash permissions" : "\u2713 Sandbox enabled",
+              result,
+              supportsAutoAllow_2
+                ? "\u2713 Sandbox enabled with regular bash permissions"
+                : "\u2713 Sandbox enabled",
             ),
           );
           break In;
         }
         case "disabled": {
-          V = await SandboxManager.setSandboxSettings({
+          result = await SandboxManager.setSandboxSettings({
             enabled: false,
-            ...(A && {
+            ...(supportsAutoAllow_2 && {
               autoAllowBashIfSandboxed: false,
             }),
           });
-          onComplete(sandboxSettingsErrorText(V, "\u25CB Sandbox disabled"));
+          onComplete(sandboxSettingsErrorText(result, "\u25CB Sandbox disabled"));
         }
       }
     };
@@ -161,24 +165,24 @@ function SandboxSettings(props) {
     $[9] = t10;
   } else t10 = $[9];
   let handleSelect = t10;
-  let Xe;
+  let onEscape;
   if ($[10] !== onComplete) {
-    Xe = () =>
+    onEscape = () =>
       onComplete(undefined, {
         display: "skip",
       });
     $[10] = onComplete;
-    $[11] = Xe;
-  } else Xe = $[11];
-  let re = Xe;
-  let eo;
-  if ($[12] !== re) {
-    eo = {
-      "confirm:no": re,
+    $[11] = onEscape;
+  } else onEscape = $[11];
+  let onEscape_2 = onEscape;
+  let escapeBindings;
+  if ($[12] !== onEscape_2) {
+    escapeBindings = {
+      "confirm:no": onEscape_2,
     };
-    $[12] = re;
-    $[13] = eo;
-  } else eo = $[13];
+    $[12] = onEscape_2;
+    $[13] = escapeBindings;
+  } else escapeBindings = $[13];
   let t12;
   if ($[14] === MEMO_CACHE_SENTINEL) {
     t12 = {
@@ -186,17 +190,17 @@ function SandboxSettings(props) {
     };
     $[14] = t12;
   } else t12 = $[14];
-  MessageActionsKeybindings(eo, t12);
-  let globalExitKeybindings = useGlobalExitKeybindings(re);
-  let no;
+  MessageActionsKeybindings(escapeBindings, t12);
+  let globalExitKeybindings = useGlobalExitKeybindings(onEscape_2);
+  let modeTab;
   if ($[15] !== handleSelect || $[16] !== onComplete || $[17] !== showSocketWarning) {
-    no = jsxProd_default(
+    modeTab = jsxProd_default(
       Tab,
       {
         title: "Mode",
         children: jsxProd_default(SandboxModeTab, {
           showSocketWarning,
-          options,
+          options: options_2,
           currentMode,
           noSandboxHint,
           onSelect: handleSelect,
@@ -208,9 +212,9 @@ function SandboxSettings(props) {
     $[15] = handleSelect;
     $[16] = onComplete;
     $[17] = showSocketWarning;
-    $[18] = no;
-  } else no = $[18];
-  let modeTab = no;
+    $[18] = modeTab;
+  } else modeTab = $[18];
+  let modeTab_2 = modeTab;
   let t14;
   if ($[19] !== onComplete) {
     t14 = jsxProd_default(
@@ -245,8 +249,8 @@ function SandboxSettings(props) {
   if (
     $[22] !== depCheck ||
     $[23] !== hasErrors ||
-    $[24] !== a ||
-    $[25] !== modeTab ||
+    $[24] !== hasWarnings ||
+    $[25] !== modeTab_2 ||
     $[26] !== overridesTab
   ) {
     t16 = hasErrors
@@ -263,8 +267,8 @@ function SandboxSettings(props) {
           ),
         ]
       : [
-          modeTab,
-          ...(a
+          modeTab_2,
+          ...(hasWarnings
             ? [
                 jsxProd_default(
                   Tab,
@@ -283,8 +287,8 @@ function SandboxSettings(props) {
         ];
     $[22] = depCheck;
     $[23] = hasErrors;
-    $[24] = a;
-    $[25] = modeTab;
+    $[24] = hasWarnings;
+    $[25] = modeTab_2;
     $[26] = overridesTab;
     $[27] = t16;
   } else t16 = $[27];
@@ -306,9 +310,9 @@ function SandboxSettings(props) {
       : undefined;
     $[28] = banner;
   } else banner = $[28];
-  let ie;
+  let tabsElement;
   if ($[29] !== children) {
-    ie = jsxProd_default(Tabs, {
+    tabsElement = jsxProd_default(Tabs, {
       title: "Sandbox",
       color: "permission",
       defaultTab: "Mode",
@@ -317,14 +321,14 @@ function SandboxSettings(props) {
       children,
     });
     $[29] = children;
-    $[30] = ie;
-  } else ie = $[30];
+    $[30] = tabsElement;
+  } else tabsElement = $[30];
   const children_2 = globalExitKeybindings.pending
     ? `Press ${globalExitKeybindings.keyName} again to close`
     : "\u2190/\u2192 to switch \xB7 \u2191/\u2193 to navigate \xB7 Enter to select \xB7 Esc to close";
-  let ae;
+  let hintBox;
   if ($[31] !== children_2) {
-    ae = jsxProd_default(Box, {
+    hintBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
@@ -332,28 +336,28 @@ function SandboxSettings(props) {
       }),
     });
     $[31] = children_2;
-    $[32] = ae;
-  } else ae = $[32];
-  let lo;
-  if ($[33] !== ie || $[34] !== ae) {
-    lo = jsxProd_default_2(Pane, {
+    $[32] = hintBox;
+  } else hintBox = $[32];
+  let pane;
+  if ($[33] !== tabsElement || $[34] !== hintBox) {
+    pane = jsxProd_default_2(Pane, {
       color: "permission",
-      children: [ie, ae],
+      children: [tabsElement, hintBox],
     });
-    $[33] = ie;
-    $[34] = ae;
-    $[35] = lo;
-  } else lo = $[35];
-  return lo;
+    $[33] = tabsElement;
+    $[34] = hintBox;
+    $[35] = pane;
+  } else pane = $[35];
+  return pane;
 }
 //@ chunk-55w3ydvj.js:28869-30440 fingerprint = SandboxModeTab (0.633)
 function SandboxModeTab(props) {
-  let $ = w(24);
+  let $ = useMemoCache(24);
   let { showSocketWarning, options, currentMode, noSandboxHint, onSelect, onComplete } = props;
   let { headerFocused, focusHeader } = useTabHeaderFocus();
-  let C;
+  let warningElement;
   if ($[0] !== showSocketWarning) {
-    C =
+    warningElement =
       showSocketWarning &&
       jsxProd_default(Box, {
         marginBottom: 1,
@@ -363,8 +367,8 @@ function SandboxModeTab(props) {
         }),
       });
     $[0] = showSocketWarning;
-    $[1] = C;
-  } else C = $[1];
+    $[1] = warningElement;
+  } else warningElement = $[1];
   let t2;
   if ($[2] === MEMO_CACHE_SENTINEL) {
     t2 = jsxProd_default(Box, {
@@ -385,7 +389,7 @@ function SandboxModeTab(props) {
     $[3] = onComplete;
     $[4] = onCancel;
   } else onCancel = $[4];
-  let x;
+  let modelSelectorElement;
   if (
     $[5] !== currentMode ||
     $[6] !== focusHeader ||
@@ -394,7 +398,7 @@ function SandboxModeTab(props) {
     $[9] !== options ||
     $[10] !== onCancel
   ) {
-    x = jsxProd_default(ModelSelector, {
+    modelSelectorElement = jsxProd_default(ModelSelector, {
       options,
       defaultValue: currentMode,
       defaultFocusValue: currentMode,
@@ -409,11 +413,11 @@ function SandboxModeTab(props) {
     $[8] = onSelect;
     $[9] = options;
     $[10] = onCancel;
-    $[11] = x;
-  } else x = $[11];
-  let P;
+    $[11] = modelSelectorElement;
+  } else modelSelectorElement = $[11];
+  let noSandboxNotice;
   if ($[12] !== noSandboxHint) {
-    P =
+    noSandboxNotice =
       noSandboxHint &&
       jsxProd_default(Box, {
         marginTop: 1,
@@ -423,11 +427,11 @@ function SandboxModeTab(props) {
         }),
       });
     $[12] = noSandboxHint;
-    $[13] = P;
-  } else P = $[13];
-  let W;
+    $[13] = noSandboxNotice;
+  } else noSandboxNotice = $[13];
+  let autoAllowNotice;
   if ($[14] !== options) {
-    W =
+    autoAllowNotice =
       options.some(isAutoAllowSetting) &&
       jsxProd_default_2(Text, {
         dimColor: true,
@@ -442,36 +446,41 @@ function SandboxModeTab(props) {
         ],
       });
     $[14] = options;
-    $[15] = W;
-  } else W = $[15];
-  let v;
+    $[15] = autoAllowNotice;
+  } else autoAllowNotice = $[15];
+  let learnMoreLinkElement;
   if ($[16] === MEMO_CACHE_SENTINEL) {
-    v = jsxProd_default(LearnMoreLink, {
+    learnMoreLinkElement = jsxProd_default(LearnMoreLink, {
       url: "https://code.claude.com/docs/en/sandboxing",
     });
-    $[16] = v;
-  } else v = $[16];
-  let D;
-  if ($[17] !== W) {
-    D = jsxProd_default_2(Box, {
+    $[16] = learnMoreLinkElement;
+  } else learnMoreLinkElement = $[16];
+  let boxElement;
+  if ($[17] !== autoAllowNotice) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop: 1,
       gap: 1,
-      children: [W, v],
+      children: [autoAllowNotice, learnMoreLinkElement],
     });
-    $[17] = W;
-    $[18] = D;
-  } else D = $[18];
+    $[17] = autoAllowNotice;
+    $[18] = boxElement;
+  } else boxElement = $[18];
   let t7;
-  if ($[19] !== C || $[20] !== x || $[21] !== P || $[22] !== D) {
+  if (
+    $[19] !== warningElement ||
+    $[20] !== modelSelectorElement ||
+    $[21] !== noSandboxNotice ||
+    $[22] !== boxElement
+  ) {
     t7 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [C, t2, x, P, D],
+      children: [warningElement, t2, modelSelectorElement, noSandboxNotice, boxElement],
     });
-    $[19] = C;
-    $[20] = x;
-    $[21] = P;
-    $[22] = D;
+    $[19] = warningElement;
+    $[20] = modelSelectorElement;
+    $[21] = noSandboxNotice;
+    $[22] = boxElement;
     $[23] = t7;
   } else t7 = $[23];
   return t7;

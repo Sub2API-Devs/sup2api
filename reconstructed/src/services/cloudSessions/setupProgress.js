@@ -5,34 +5,68 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-tp07j3pd.js (21)
- * attribution: placement 21
+ * pieces: chunk-tp07j3pd.js (26)
+ * attribution: placement 26
  */
-import {
-  sanitizeShortHostText,
-  parseSafeInteger,
-  DNS_ERROR_CACHE_MS,
-  DNS_POSITIVE_CACHE_MS,
-  MAX_EXPECTED_STEPS,
-  sanitizeHostText,
-  tailOfDnsResponse,
-} from "../../utils/hooks/ssrfGuard.js";
+import { sanitizeDisplayText, tailLines } from "../../utils/resultError.js";
 import { isPlainObject } from "../../utils/isPlainObject.js";
 import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { uniq, arraysEqual } from "../../utils/collections.js";
 import { formatDurationCoarse } from "../../utils/format.js";
 
+//@ chunk-tp07j3pd.js:376-449 placement
+/**
+ * 清洗主机相关展示文本（上限 512）。
+ */
+function sanitizeHostText(hostText) {
+  return typeof hostText === "string"
+    ? sanitizeDisplayText(hostText, {
+        maxCodeUnits: 512,
+      })
+    : undefined;
+}
+//@ chunk-tp07j3pd.js:449-494 placement
+/**
+ * 清洗短主机文本（上限 64）。
+ */
+function sanitizeShortHostText(hostText) {
+  return sanitizeDisplayText(hostText, {
+    maxCodeUnits: 64,
+  });
+}
+//@ chunk-tp07j3pd.js:494-525 placement
+/**
+ * DNS 结果缓存与解析限制常量（标签数、TTL 等）。
+ */
+var MAX_EXPECTED_STEPS = 32;
+var DNS_ERROR_CACHE_MS = 1000;
+var DNS_POSITIVE_CACHE_MS = 86400000;
+var MAX_DNS_TAIL_LINES = 5;
+//@ chunk-tp07j3pd.js:525-613 placement
+/**
+ * 取 DNS 响应文本的最后若干行（失败返回 undefined）。
+ */
+function tailOfDnsResponse(output) {
+  if (typeof output !== "string") return;
+  let tailLinesText = tailLines(output, MAX_DNS_TAIL_LINES);
+  return tailLinesText.length === 0 ? undefined : tailLinesText;
+}
+//@ chunk-tp07j3pd.js:613-758 placement
+function parseSafeInteger(value) {
+  if (typeof value === "number") return Number.isSafeInteger(value) ? value : undefined;
+  return typeof value === "string" && /^-?\d{1,15}$/.test(value) ? Number(value) : undefined;
+}
 //@ chunk-tp07j3pd.js:758-771 placement
 var STALE_AFTER_MS = 300000;
 //@ chunk-tp07j3pd.js:771-895 placement = isBlockedV4 (0.697)
 /**
  * 时间戳是否早于 5 分钟前。旧版名 isBlockedV4 配错（与 SSRF 无关）。
  */
-function isStaleTimestamp(e, t) {
-  let timestamp = e.data?.timestamp;
+function isStaleTimestamp(frame, now) {
+  let timestamp = frame.data?.timestamp;
   if (typeof timestamp !== "string") return false;
   let timestamp_2 = Date.parse(timestamp);
-  return !Number.isNaN(timestamp_2) && t - timestamp_2 > STALE_AFTER_MS;
+  return !Number.isNaN(timestamp_2) && now - timestamp_2 > STALE_AFTER_MS;
 }
 //@ chunk-tp07j3pd.js:895-949 placement
 /**
@@ -53,14 +87,14 @@ function isSetupStep(id) {
 var TIMESTAMP_SKEW_MS = 60000;
 var MIN_TIMESTAMP_MS = 5000;
 //@ chunk-tp07j3pd.js:1005-1151 placement
-function isLiveFrameTimestamp(e, t, n) {
-  let timestamp = e.data?.timestamp;
+function isLiveFrameTimestamp(frame, now, startedAt) {
+  let timestamp = frame.data?.timestamp;
   if (typeof timestamp !== "string") return false;
   let timestamp_2 = Date.parse(timestamp);
   return (
     Number.isFinite(timestamp_2) &&
-    Math.abs(t - timestamp_2) <= TIMESTAMP_SKEW_MS &&
-    timestamp_2 >= n - MIN_TIMESTAMP_MS
+    Math.abs(now - timestamp_2) <= TIMESTAMP_SKEW_MS &&
+    timestamp_2 >= startedAt - MIN_TIMESTAMP_MS
   );
 }
 //@ chunk-tp07j3pd.js:1151-1374 placement
@@ -86,8 +120,8 @@ function createSetupProgress(startedAt, { wake }) {
   };
 }
 //@ chunk-tp07j3pd.js:1374-1535 placement
-function readSetupStepFields(e) {
-  let extra = e.data?.extra;
+function readSetupStepFields(frame) {
+  let extra = frame.data?.extra;
   return {
     stepId: typeof extra?.step_id === "string" ? sanitizeShortHostText(extra.step_id) : null,
     stepStatus: typeof extra?.step_status === "string" ? extra.step_status : null,
@@ -97,8 +131,8 @@ function readSetupStepFields(e) {
 /**
  * 判断一帧消息对准备进度显示的意义（notice/实时内容等）。
  */
-function classifySetupFrame(e, request) {
-  if (e === null || !e.hasStructuredSteps || e.terminal) return null;
+function classifySetupFrame(progress, request) {
+  if (progress === null || !progress.hasStructuredSteps || progress.terminal) return null;
   switch (request.type) {
     case "system":
       return request.subtype === "init_milestone" || request.subtype === "informational" ? "notice" : null;
@@ -115,15 +149,15 @@ function classifySetupFrame(e, request) {
   }
 }
 //@ chunk-tp07j3pd.js:1914-2182 placement
-function markCurrentStepFailed(e, completedAt) {
-  let o =
-    e.steps.findLast((step) => step.status === "running") ??
-    e.steps.find((step) => step.status === "pending");
-  if (o === undefined || e.steps.some((step) => step.status === "failed")) return e;
+function markCurrentStepFailed(progress, completedAt) {
+  let targetStep =
+    progress.steps.findLast((step) => step.status === "running") ??
+    progress.steps.find((step) => step.status === "pending");
+  if (targetStep === undefined || progress.steps.some((step) => step.status === "failed")) return progress;
   return {
-    ...e,
-    steps: e.steps.map((step) =>
-      step === o
+    ...progress,
+    steps: progress.steps.map((step) =>
+      step === targetStep
         ? {
             ...step,
             status: "failed",
@@ -138,27 +172,32 @@ function markCurrentStepFailed(e, completedAt) {
 /**
  * 把云会话准备事件应用到进度状态（重新开始、标记失败等）。
  */
-function applySetupEvent(e, t, n, o, r) {
-  let extra = t.data?.extra;
-  let { stepId, stepStatus } = readSetupStepFields(t);
-  let s =
-    (e.terminal ||
+function applySetupEvent(state, event, line, now, timing) {
+  let extra = event.data?.extra;
+  let { stepId, stepStatus } = readSetupStepFields(event);
+  let nextState =
+    (state.terminal ||
       (stepId === "provision" &&
         stepStatus !== "failed" &&
-        e.steps.some((step) => step.status === "failed"))) &&
+        state.steps.some((step) => step.status === "failed"))) &&
     stepId !== null &&
     stepStatus !== null
       ? {
-          ...createSetupProgress(o, {
+          ...createSetupProgress(now, {
             wake: true,
           }),
-          dismissed: e.hadLiveCycle,
-          hadLiveCycle: e.hadLiveCycle,
+          dismissed: state.hadLiveCycle,
+          hadLiveCycle: state.hadLiveCycle,
         }
-      : e;
-  if (stepId !== null && stepStatus !== null && !s.sawLiveFrame && isLiveFrameTimestamp(t, o, r))
-    s = {
-      ...s,
+      : state;
+  if (
+    stepId !== null &&
+    stepStatus !== null &&
+    !nextState.sawLiveFrame &&
+    isLiveFrameTimestamp(event, now, timing)
+  )
+    nextState = {
+      ...nextState,
       sawLiveFrame: true,
     };
   if (typeof extra?.session_mode === "string") {
@@ -168,10 +207,10 @@ function applySetupEvent(e, t, n, o, r) {
         sessionMode === "resume" ||
         sessionMode === "resume-cached" ||
         sessionMode === "setup-only") &&
-      s.sessionMode !== sessionMode
+      nextState.sessionMode !== sessionMode
     )
-      s = {
-        ...s,
+      nextState = {
+        ...nextState,
         sessionMode,
       };
   }
@@ -180,10 +219,10 @@ function applySetupEvent(e, t, n, o, r) {
     (setupSource === "checkpoint" ||
       setupSource === "building_checkpoint" ||
       setupSource === "checkpoint_restore_failed") &&
-    s.setupSource !== setupSource
+    nextState.setupSource !== setupSource
   )
-    s = {
-      ...s,
+    nextState = {
+      ...nextState,
       setupSource,
     };
   let safeInteger = parseSafeInteger(extra?.setup_script_duration_ms);
@@ -191,140 +230,141 @@ function applySetupEvent(e, t, n, o, r) {
     safeInteger !== undefined &&
     safeInteger >= DNS_ERROR_CACHE_MS &&
     safeInteger <= DNS_POSITIVE_CACHE_MS &&
-    s.setupScriptDurationMs !== safeInteger &&
-    !s.steps.some((step) => step.id === "setup_script" && step.status === "completed")
+    nextState.setupScriptDurationMs !== safeInteger &&
+    !nextState.steps.some((step) => step.id === "setup_script" && step.status === "completed")
   )
-    s = {
-      ...s,
+    nextState = {
+      ...nextState,
       setupScriptDurationMs: safeInteger,
     };
   if (typeof extra?.expected_steps === "string") {
     let sliced = uniq(
       extra.expected_steps
         .split(",")
-        .map((u) => sanitizeShortHostText(u))
-        .filter((u) => u !== ""),
+        .map((entry) => sanitizeShortHostText(entry))
+        .filter((stepName) => stepName !== ""),
     ).slice(0, MAX_EXPECTED_STEPS);
     if (sliced.length > 0) {
-      let u = new Map(s.steps.map((step) => [step.id, step]));
+      let stepById = new Map(nextState.steps.map((step) => [step.id, step]));
       let mapped = sliced.map(
-        (m) =>
-          u.get(m) ?? {
-            id: m,
+        (stepName) =>
+          stepById.get(stepName) ?? {
+            id: stepName,
             status: "pending",
           },
       );
-      let filtered = s.steps.filter((step) => !sliced.includes(step.id) && step.status !== "pending");
-      s = {
-        ...s,
+      let filtered = nextState.steps.filter((step) => !sliced.includes(step.id) && step.status !== "pending");
+      nextState = {
+        ...nextState,
         steps: [...filtered, ...mapped],
       };
     }
   }
   if (stepId !== null && stepStatus !== null)
-    s = updateSetupStep(s, {
+    nextState = updateSetupStep(nextState, {
       stepId,
       stepStatus,
       extra,
-      line: n,
-      now: o,
+      line,
+      now,
     });
-  else if (n !== "") {
-    let index = s.steps.findIndex((step) => step.status === "running");
-    if (index !== -1 && s.steps[index].detail !== n) {
-      let sliced = s.steps.slice();
+  else if (line !== "") {
+    let index = nextState.steps.findIndex((step) => step.status === "running");
+    if (index !== -1 && nextState.steps[index].detail !== line) {
+      let sliced = nextState.steps.slice();
       sliced[index] = {
         ...sliced[index],
-        detail: n,
+        detail: line,
       };
-      s = {
-        ...s,
+      nextState = {
+        ...nextState,
         steps: sliced,
       };
     }
   }
-  return s;
+  return nextState;
 }
 //@ chunk-tp07j3pd.js:3588-4922 placement
 /**
  * 更新单个准备步骤的状态与标签。
  */
-function updateSetupStep(e, { stepId, stepStatus, extra, line, now }) {
-  let c = sanitizeShortHostText(stepId);
-  let steps = e.steps;
-  let index = steps.findIndex((step) => step.id === c);
+function updateSetupStep(state, { stepId, stepStatus, extra, line, now }) {
+  let stepKey = sanitizeShortHostText(stepId);
+  let steps = state.steps;
+  let index = steps.findIndex((step) => step.id === stepKey);
   if (index === -1) {
-    if (steps.length >= MAX_EXPECTED_STEPS) return e;
+    if (steps.length >= MAX_EXPECTED_STEPS) return state;
     let label = sanitizeHostText(extra?.step_label) || line;
     steps = [
       ...steps,
       {
-        id: c,
+        id: stepKey,
         label,
         status: "pending",
       },
     ];
     index = steps.length - 1;
   }
-  let s = steps[index];
-  let l =
+  let step = steps[index];
+  let detail =
     typeof extra?.progress_label === "string" && line !== "" ? line : sanitizeHostText(extra?.step_detail);
-  let p = null;
+  let updatedStep = null;
   switch (stepStatus) {
     case "started":
-      if (s.status === "pending")
-        p = {
-          ...s,
+      if (step.status === "pending")
+        updatedStep = {
+          ...step,
           status: "running",
           startedAt: now,
-          detail: l,
+          detail,
           output: tailOfDnsResponse(extra?.output),
         };
       else {
-        let u = l ?? s.detail;
-        let g = (s.status === "running" ? tailOfDnsResponse(extra?.output) : undefined) ?? s.output;
-        if (u !== s.detail || !arraysEqual(g, s.output))
-          p = {
-            ...s,
-            detail: u,
-            output: g,
+        let nextDetail = detail ?? step.detail;
+        let nextOutput =
+          (step.status === "running" ? tailOfDnsResponse(extra?.output) : undefined) ?? step.output;
+        if (nextDetail !== step.detail || !arraysEqual(nextOutput, step.output))
+          updatedStep = {
+            ...step,
+            detail: nextDetail,
+            output: nextOutput,
           };
       }
       break;
     case "completed":
-      if (c === "clone" && (l || typeof extra?.clone_phase === "string")) break;
-      if (s.status !== "completed")
-        p = {
-          ...s,
+      if (stepKey === "clone" && (detail || typeof extra?.clone_phase === "string")) break;
+      if (step.status !== "completed")
+        updatedStep = {
+          ...step,
           status: "completed",
           completedAt: now,
-          completedMode: completedSetupMode(e),
+          completedMode: completedSetupMode(state),
           detail: undefined,
           output: undefined,
         };
       break;
     case "failed": {
-      let u = {
-        ...s,
+      let failedStep = {
+        ...step,
         status: "failed",
-        completedAt: s.status === "failed" ? s.completedAt : now,
+        completedAt: step.status === "failed" ? step.completedAt : now,
         error: line || undefined,
-        output: tailOfDnsResponse(extra?.output) ?? s.output,
-        exitCode: parseSafeInteger(extra?.exit_code) ?? s.exitCode,
+        output: tailOfDnsResponse(extra?.output) ?? step.output,
+        exitCode: parseSafeInteger(extra?.exit_code) ?? step.exitCode,
       };
       if (
-        s.status !== "failed" ||
-        s.error !== u.error ||
-        s.exitCode !== u.exitCode ||
-        !arraysEqual(s.output, u.output)
+        step.status !== "failed" ||
+        step.error !== failedStep.error ||
+        step.exitCode !== failedStep.exitCode ||
+        !arraysEqual(step.output, failedStep.output)
       )
-        p = u;
+        updatedStep = failedStep;
       break;
     }
     case "skipped":
-      if (s.status === "pending" || s.status === "running")
-        p = {
-          ...s,
+      if (step.status === "pending" || step.status === "running")
+        updatedStep = {
+          ...step,
           status: "skipped",
           detail: undefined,
         };
@@ -332,24 +372,24 @@ function updateSetupStep(e, { stepId, stepStatus, extra, line, now }) {
     default:
       break;
   }
-  if (p !== null) {
-    steps = steps === e.steps ? e.steps.slice() : steps;
-    steps[index] = p;
+  if (updatedStep !== null) {
+    steps = steps === state.steps ? state.steps.slice() : steps;
+    steps[index] = updatedStep;
   }
-  if (steps === e.steps) return e;
-  let i = {
-    ...e,
+  if (steps === state.steps) return state;
+  let nextState = {
+    ...state,
     steps,
     hasStructuredSteps: true,
   };
-  if (c === "start_cc" && stepStatus === "completed") i = completeSetupProgress(i, now);
-  return i;
+  if (stepKey === "start_cc" && stepStatus === "completed") nextState = completeSetupProgress(nextState, now);
+  return nextState;
 }
 //@ chunk-tp07j3pd.js:4922-5211 placement
-function completeSetupProgress(e, completedAt) {
-  if (e.terminal) return e;
-  let completedMode = completedSetupMode(e);
-  let steps = e.steps.map((step) =>
+function completeSetupProgress(progress, completedAt) {
+  if (progress.terminal) return progress;
+  let completedMode = completedSetupMode(progress);
+  let steps = progress.steps.map((step) =>
     step.status === "pending"
       ? {
           ...step,
@@ -365,23 +405,23 @@ function completeSetupProgress(e, completedAt) {
         : step,
   );
   return {
-    ...e,
+    ...progress,
     steps,
     terminal: true,
     completedAt,
-    hadLiveCycle: e.hadLiveCycle || e.sawLiveFrame,
+    hadLiveCycle: progress.hadLiveCycle || progress.sawLiveFrame,
   };
 }
 //@ chunk-tp07j3pd.js:5211-5518 placement
 /**
  * 由会话模式与准备来源推断完成方式（resume/restored/new）。
  */
-function completedSetupMode(e) {
-  switch (e.sessionMode) {
+function completedSetupMode(progress) {
+  switch (progress.sessionMode) {
     case "resume":
       return "resume";
     case "resume-cached":
-      switch (e.setupSource) {
+      switch (progress.setupSource) {
         case "checkpoint":
           return "restored";
         case "checkpoint_restore_failed":
@@ -390,7 +430,7 @@ function completedSetupMode(e) {
         case null:
           break;
       }
-      return e.wake ? "resume" : "new";
+      return progress.wake ? "resume" : "new";
     case "new":
     case "setup-only":
     case null:
@@ -401,30 +441,31 @@ function completedSetupMode(e) {
 /**
  * 生成准备步骤的显示文字（创建/恢复容器、克隆、安装脚本、启动 CC）。
  */
-function setupStepLabel(e, t) {
-  let n = e.status === "completed";
-  let o = (n ? e.completedMode : undefined) ?? t;
-  switch (e.id) {
+function setupStepLabel(step, fallbackMode) {
+  let isCompleted = step.status === "completed";
+  let mode = (isCompleted ? step.completedMode : undefined) ?? fallbackMode;
+  switch (step.id) {
     case "provision":
-      if (o === "resume") return n ? "Resumed your cloud container" : "Resuming your cloud container";
-      return n ? "Set up a cloud container" : "Setting up a cloud container";
+      if (mode === "resume")
+        return isCompleted ? "Resumed your cloud container" : "Resuming your cloud container";
+      return isCompleted ? "Set up a cloud container" : "Setting up a cloud container";
     case "clone":
-      if (o !== "new") return n ? "Refreshed repository" : "Refreshing repository";
-      return n ? "Cloned repository" : "Cloning repository";
+      if (mode !== "new") return isCompleted ? "Refreshed repository" : "Refreshing repository";
+      return isCompleted ? "Cloned repository" : "Cloning repository";
     case "setup_script":
-      if (e.status === "failed") return "Setup script failed";
-      if (n) return o === "restored" ? "Restored from snapshot" : "Ran setup script";
+      if (step.status === "failed") return "Setup script failed";
+      if (isCompleted) return mode === "restored" ? "Restored from snapshot" : "Ran setup script";
       return "Running setup script";
     case "start_cc":
-      return n ? "Started Claude Code" : "Starting Claude Code";
+      return isCompleted ? "Started Claude Code" : "Starting Claude Code";
     default:
-      return e.label || e.id;
+      return step.label || step.id;
   }
 }
 //@ chunk-tp07j3pd.js:6181-6448 placement
-function setupHeadline(e, t = false) {
-  if (t) return e === "resume" ? "Cloud session didn't resume" : "Cloud session didn't start";
-  switch (e) {
+function setupHeadline(mode, failed = false) {
+  if (failed) return mode === "resume" ? "Cloud session didn't resume" : "Cloud session didn't start";
+  switch (mode) {
     case "new":
       return "Setting up remote session";
     case "resume":
@@ -437,9 +478,9 @@ function setupHeadline(e, t = false) {
 /**
  * 步骤附注（恢复时节省的时间、进行中的进度）。
  */
-function setupStepAnnotation(appState, step, n) {
+function setupStepAnnotation(appState, step, fallbackMode) {
   if (step.status === "completed")
-    return (step.completedMode ?? n) === "restored" && appState.setupScriptDurationMs !== undefined
+    return (step.completedMode ?? fallbackMode) === "restored" && appState.setupScriptDurationMs !== undefined
       ? ` \xB7 saved about ${formatDurationCoarse(appState.setupScriptDurationMs)}`
       : "";
   if (step.status !== "pending" && step.status !== "running") return "";
@@ -454,28 +495,28 @@ function setupStepAnnotation(appState, step, n) {
   }
 }
 //@ chunk-tp07j3pd.js:6883-7101 placement
-function currentSetupLabel(e) {
-  let sessionMode = e.terminal ? null : e.sessionMode;
-  let n = completedSetupMode({
-    sessionMode: sessionMode ?? (e.hadLiveCycle ? "resume" : null),
-    setupSource: e.setupSource,
-    wake: e.wake,
+function currentSetupLabel(progress) {
+  let sessionMode = progress.terminal ? null : progress.sessionMode;
+  let mode = completedSetupMode({
+    sessionMode: sessionMode ?? (progress.hadLiveCycle ? "resume" : null),
+    setupSource: progress.setupSource,
+    wake: progress.wake,
   });
-  let last = e.steps.findLast((step) => step.status === "running");
-  return (last && setupStepLabel(last, n)) || setupHeadline(n);
+  let last = progress.steps.findLast((step) => step.status === "running");
+  return (last && setupStepLabel(last, mode)) || setupHeadline(mode);
 }
 //@ chunk-tp07j3pd.js:7101-7370 placement
-function setupReadySummary(e) {
-  let t = completedSetupMode(e);
-  let n = (e.completedAt ?? e.startedAt) - e.startedAt;
-  let o = formatSetupDuration(n);
-  switch (t) {
+function setupReadySummary(progress) {
+  let mode = completedSetupMode(progress);
+  let elapsedMs = (progress.completedAt ?? progress.startedAt) - progress.startedAt;
+  let duration = formatSetupDuration(elapsedMs);
+  switch (mode) {
     case "new":
-      return `Remote session ready in ${o}`;
+      return `Remote session ready in ${duration}`;
     case "resume":
-      return `Remote session resumed in ${o}`;
+      return `Remote session resumed in ${duration}`;
     case "restored":
-      return `Remote session ready in ${o} \xB7 restored from snapshot`;
+      return `Remote session ready in ${duration} \xB7 restored from snapshot`;
   }
 }
 //@ chunk-tp07j3pd.js:7370-7617 placement
@@ -489,9 +530,9 @@ function stepDurationSuffix(step, now) {
   return step.status === "running" && max >= 5000 ? ` (${Math.round(max / 1000)}s)` : "";
 }
 //@ chunk-tp07j3pd.js:7617-7771 placement
-function formatSetupDuration(e) {
-  if (e < 1e4) return `${(Math.max(e, 100) / 1000).toFixed(1)}s`;
-  let rounded = Math.round(e / 1000);
+function formatSetupDuration(ms) {
+  if (ms < 1e4) return `${(Math.max(ms, 100) / 1000).toFixed(1)}s`;
+  let rounded = Math.round(ms / 1000);
   if (rounded < 60) return `${rounded}s`;
   return `${Math.floor(rounded / 60)}m ${rounded % 60}s`;
 }

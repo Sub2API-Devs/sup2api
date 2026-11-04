@@ -36,6 +36,7 @@ import { writeFileAtomic } from "./file.js";
 import { ATOMIC_WRITE_DIRNAME } from "./plugins/safeCopy.js";
 import { getHookCallerOrScheduler } from "./workloadContext.js";
 import { ownProcStart } from "./processIdentity.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-93zax7h2.js:5010-5020 placement
 /**
@@ -55,9 +56,14 @@ var isValidPluginName = (plugin) =>
 /**
  * 常量：缓存预热阈值 5 分钟、"每 N 分钟"表达式正则、任务文件相对路径 .claude/scheduled_tasks.json。
  */
-var CACHE_LEAD_MIN_INTERVAL_MS = 300000;
-var EVERY_N_MINUTES_PATTERN = /^\*\/\d+ \* \* \* \*$/;
-var CRON_FILE_REL = join(".claude", "scheduled_tasks.json");
+var CACHE_LEAD_MIN_INTERVAL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EVERY_N_MINUTES_PATTERN;
+var CRON_FILE_REL;
+deferInit("chunk-93zax7h2.js:5088", () => {
+  CACHE_LEAD_MIN_INTERVAL_MS = 300000;
+  EVERY_N_MINUTES_PATTERN = /^\*\/\d+ \* \* \* \*$/;
+  CRON_FILE_REL = join(".claude", "scheduled_tasks.json");
+});
 //@ chunk-93zax7h2.js:5167-5203 layout
 /**
  * scheduled_tasks.json 的完整路径（默认项目根）。
@@ -181,8 +187,8 @@ async function writeCronTasks(tasks, dir) {
   if (isDurableCronUnavailable(dir))
     throw Error("Durable scheduled tasks are unavailable in a session started with --project-config-root");
   let root = dir ?? getProjectRoot();
-  let r = !isPathConfigDir(join(root, ".claude"));
-  if (r) await assertDirChainReal(root, join(root, ".claude"));
+  let isRealConfigDir = !isPathConfigDir(join(root, ".claude"));
+  if (isRealConfigDir) await assertDirChainReal(root, join(root, ".claude"));
   await mkdir(join(root, ".claude"), {
     recursive: true,
   });
@@ -196,8 +202,8 @@ async function writeCronTasks(tasks, dir) {
 `,
     {
       encoding: "utf-8",
-      allowSymlink: !r,
-      checkParentDir: r,
+      allowSymlink: !isRealConfigDir,
+      checkParentDir: isRealConfigDir,
       stagingDir: join(root, ".claude", ATOMIC_WRITE_DIRNAME),
     },
   );
@@ -324,16 +330,16 @@ function jitteredNextCronRunMs(cron, fromMs, taskId, cfg = DEFAULT_CRON_JITTER_C
   if (t1 === null) return null;
   let t2 = nextCronRunMs(cron, t1);
   if (t2 === null) return t1;
-  let n = t2 - t1;
+  let spanMs = t2 - t1;
   if (
     EVERY_N_MINUTES_PATTERN.test(cron) &&
     cfg.cacheLeadMs > 0 &&
-    cfg.cacheLeadMs < n &&
-    n >= CACHE_LEAD_MIN_INTERVAL_MS &&
-    n - cfg.cacheLeadMs < CACHE_LEAD_MIN_INTERVAL_MS
+    cfg.cacheLeadMs < spanMs &&
+    spanMs >= CACHE_LEAD_MIN_INTERVAL_MS &&
+    spanMs - cfg.cacheLeadMs < CACHE_LEAD_MIN_INTERVAL_MS
   )
-    return fromMs + n - cfg.cacheLeadMs;
-  let jitter = Math.min(jitterFrac(taskId) * cfg.recurringFrac * n, cfg.recurringCapMs);
+    return fromMs + spanMs - cfg.cacheLeadMs;
+  let jitter = Math.min(jitterFrac(taskId) * cfg.recurringFrac * spanMs, cfg.recurringCapMs);
   return t1 + jitter;
 }
 //@ chunk-93zax7h2.js:8610-8832 fingerprint = oneShotJitteredNextCronRunMs (0.887)
@@ -377,6 +383,11 @@ function findMissedTasks(tasks, nowMs) {
     return next !== null && next < nowMs;
   });
 }
+//@ chunk-b0a246e7.js:1185-1216 placement
+/**
+ * 匹配 “u_ + 22 位字母数字下划线” 的短会话 id。
+ */
+var SESSION_ID_SHORT_RE = /^u_[A-Za-z0-9_]{22}$/;
 //@ chunk-e6aww6q8.js:2592580-2592660 placement
 /**
  * cron 归属表的条目上限（32）。
@@ -388,39 +399,34 @@ var MISSED_WATCH_RELAUNCH_ADVICE = 'pass action "watch" with its url if you stil
 /**
  * 向 Map 写入（先删再插保持最新），超过上限时淘汰最早的键。
  */
-function setWithLimit(armOutcomes, n, r, s) {
-  armOutcomes.delete(n);
-  if (armOutcomes.size >= s) {
-    let h = armOutcomes.keys().next().value;
-    if (h !== undefined) armOutcomes.delete(h);
+function setWithLimit(armOutcomes, key, value, limit) {
+  armOutcomes.delete(key);
+  if (armOutcomes.size >= limit) {
+    let oldestKey = armOutcomes.keys().next().value;
+    if (oldestKey !== undefined) armOutcomes.delete(oldestKey);
   }
-  armOutcomes.set(n, r);
+  armOutcomes.set(key, value);
 }
 //@ chunk-e6aww6q8.js:2592773-2592903 placement
 /**
  * 向 Set 添加新值，超过上限时淘汰最早的值；已存在返回 false。
  */
-function addWithLimit(e, n, r) {
-  if (e.has(n)) return false;
-  if (e.size >= r) {
-    let s = e.values().next().value;
-    if (s !== undefined) e.delete(s);
+function addWithLimit(set, value, limit) {
+  if (set.has(value)) return false;
+  if (set.size >= limit) {
+    let oldest = set.values().next().value;
+    if (oldest !== undefined) set.delete(oldest);
   }
-  e.add(n);
+  set.add(value);
   return true;
 }
 //@ chunk-e6aww6q8.js:2592903-2592973 placement
 /**
  * 删除某前缀下的所有归属键。
  */
-function removeCronOwnedKeys(announcedArmFailures, n) {
-  for (let r of announcedArmFailures) if (r.startsWith(`${n}:`)) announcedArmFailures.delete(r);
+function removeCronOwnedKeys(announcedArmFailures, taskId) {
+  for (let key of announcedArmFailures) if (key.startsWith(`${taskId}:`)) announcedArmFailures.delete(key);
 }
-//@ chunk-b0a246e7.js:1185-1216 placement
-/**
- * 匹配 “u_ + 22 位字母数字下划线” 的短会话 id。
- */
-var SESSION_ID_SHORT_RE = /^u_[A-Za-z0-9_]{22}$/;
 export {
   roundToMinute,
   isValidPluginName,

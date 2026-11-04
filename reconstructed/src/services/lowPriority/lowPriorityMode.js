@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-hwmsct5x.js (37)
- * attribution: placement 37
+ * pieces: chunk-77a3xzkb.js (1), chunk-hwmsct5x.js (37)
+ * attribution: placement 38
  */
 import { createSignal } from "../../utils/signal.js";
 import { HostScoped } from "../../utils/hostScoped.js";
@@ -32,6 +32,8 @@ import { is529Error } from "../api/withRetry.js";
 import { env } from "../../utils/env.js";
 import { isFirstPartyApiBackend, getAPIProvider } from "../../utils/model/providers.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../analytics/growthbook.js";
+import { LOW_PRIORITY_STATE } from "../lowPriorityMode.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hwmsct5x.js:187495-187674 placement = clearMockEarlyWarning (0.331)
 /**
@@ -78,7 +80,10 @@ function createLowPriorityState() {
 /**
  * 按宿主保存的低优先级模式状态。
  */
-var lowPriorityStateSlot = new HostScoped(createLowPriorityState);
+var lowPriorityStateSlot; // deferred: uses createLowPriorityState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hwmsct5x.js:187996", () => {
+  lowPriorityStateSlot = new HostScoped(createLowPriorityState);
+});
 //@ chunk-hwmsct5x.js:188013-188050 placement
 /**
  * 取当前宿主的低优先级模式状态。
@@ -97,9 +102,9 @@ function isLowPriorityActive() {
 /**
  * 安全版 active 判断：先处理重置，出错返回 false。
  */
-function isLowPriorityActiveSafe(e = Date.now()) {
+function isLowPriorityActiveSafe(now = Date.now()) {
   try {
-    endLowPriorityIfReset(e);
+    endLowPriorityIfReset(now);
     return getLowPriorityState().state.phase === "active";
   } catch (error) {
     logError(error);
@@ -110,26 +115,26 @@ function isLowPriorityActiveSafe(e = Date.now()) {
 /**
  * 低优先级模式的重置截止时间（active 时）。
  */
-function resetDeadlineMs(e) {
-  return e.phase === "active" ? e.resetsAtSeconds * 1000 + POST_RESET_GRACE_MS : null;
+function resetDeadlineMs(state) {
+  return state.phase === "active" ? state.resetsAtSeconds * 1000 + POST_RESET_GRACE_MS : null;
 }
 //@ chunk-hwmsct5x.js:188270-188370 placement
 /**
  * 低优先级模式到达重置时间时结束它。
  */
-function endLowPriorityIfReset(e = Date.now()) {
+function endLowPriorityIfReset(now = Date.now()) {
   let lowPriorityState = getLowPriorityState();
-  let r = resetDeadlineMs(lowPriorityState.state);
-  if (r === null || e < r) return false;
-  return endLowPriority("reset", e);
+  let deadline = resetDeadlineMs(lowPriorityState.state);
+  if (deadline === null || now < deadline) return false;
+  return endLowPriority("reset", now);
 }
 //@ chunk-hwmsct5x.js:188370-188460 placement
 /**
  * 预算是否已花到某时间点。
  */
-function isBudgetSpent(e = Date.now()) {
+function isBudgetSpent(now = Date.now()) {
   let budgetSpentUntilSeconds = getLowPriorityState().budgetSpentUntilSeconds;
-  return budgetSpentUntilSeconds !== undefined && e < budgetSpentUntilSeconds * 1000;
+  return budgetSpentUntilSeconds !== undefined && now < budgetSpentUntilSeconds * 1000;
 }
 //@ chunk-hwmsct5x.js:188460-188511 placement
 /**
@@ -142,9 +147,9 @@ function clearBudgetSpent() {
 /**
  * 冷却截止时间（未在冷却返回 undefined）。
  */
-function getCooloffUntil(e = Date.now()) {
+function getCooloffUntil(now = Date.now()) {
   let coolingOffUntilMs = getLowPriorityState().coolingOffUntilMs;
-  return coolingOffUntilMs !== undefined && e < coolingOffUntilMs ? coolingOffUntilMs : undefined;
+  return coolingOffUntilMs !== undefined && now < coolingOffUntilMs ? coolingOffUntilMs : undefined;
 }
 //@ chunk-hwmsct5x.js:188599-188691 placement
 /**
@@ -175,31 +180,31 @@ function getLowPriorityStateValue() {
 /**
  * 订阅低优先级状态变化。
  */
-function onLowPriorityChanged(e) {
-  return getLowPriorityState().changed.subscribe(e);
+function onLowPriorityChanged(listener) {
+  return getLowPriorityState().changed.subscribe(listener);
 }
 //@ chunk-hwmsct5x.js:188861-188909 placement
 /**
  * 订阅低优先级事件。
  */
-function onLowPriorityEvent(e) {
-  return getLowPriorityState().events.subscribe(e);
+function onLowPriorityEvent(listener) {
+  return getLowPriorityState().events.subscribe(listener);
 }
 //@ chunk-hwmsct5x.js:188909-188953 placement
 /**
  * 设置状态并发出变更事件。
  */
-function setLowPriorityState(e, state) {
-  e.state = state;
-  e.changed.emit();
+function setLowPriorityState(holder, state) {
+  holder.state = state;
+  holder.changed.emit();
 }
 //@ chunk-hwmsct5x.js:188953-189011 placement
 /**
  * 生成低优先级遥测字段（arm、配置版本）。
  */
-function telemetryFields(e) {
+function telemetryFields(state) {
   return {
-    arm: fromEnumOpt(e.arm),
+    arm: fromEnumOpt(state.arm),
     config_version: getLowPriorityConfigVersion(),
   };
 }
@@ -215,13 +220,13 @@ function acceptLowPriorityOffer({
   maxWaitSeconds,
   now = Date.now(),
 }) {
-  let lowPriorityState = getLowPriorityState();
-  if (lowPriorityState.state.phase === "active") return false;
-  lowPriorityState.arm = arm;
-  lowPriorityState.retryAfterMs = LOW_PRIORITY_DEFAULT_RETRY_AFTER_MS;
-  lowPriorityState.maxWaitMs = LOW_PRIORITY_DEFAULT_MAX_WAIT_MS;
-  applyRetryLimits(lowPriorityState, retryAfterSeconds, maxWaitSeconds);
-  enterLowPriorityActive(lowPriorityState, {
+  let state = getLowPriorityState();
+  if (state.state.phase === "active") return false;
+  state.arm = arm;
+  state.retryAfterMs = LOW_PRIORITY_DEFAULT_RETRY_AFTER_MS;
+  state.maxWaitMs = LOW_PRIORITY_DEFAULT_MAX_WAIT_MS;
+  applyRetryLimits(state, retryAfterSeconds, maxWaitSeconds);
+  enterLowPriorityActive(state, {
     resetsAtSeconds,
     entry,
     resumed: false,
@@ -233,23 +238,23 @@ function acceptLowPriorityOffer({
 /**
  * 可恢复的重置时间（未 active 且有停止记录时）。
  */
-function resumableResetAt(e = Date.now()) {
+function resumableResetAt(now = Date.now()) {
   let lowPriorityState = getLowPriorityState();
-  return lowPriorityState.state.phase === "active" ? undefined : stoppedResetAt(lowPriorityState, e);
+  return lowPriorityState.state.phase === "active" ? undefined : stoppedResetAt(lowPriorityState, now);
 }
 //@ chunk-hwmsct5x.js:189358-189518 placement
 /**
  * 恢复低优先级模式（若当前未激活且有可用的重置时间）。
  */
-function resumeLowPriority(entry, n = Date.now()) {
+function resumeLowPriority(entry, nowMs = Date.now()) {
   let lowPriorityState = getLowPriorityState();
-  let s = stoppedResetAt(lowPriorityState, n);
-  if (lowPriorityState.state.phase === "active" || s === undefined) return false;
+  let resetsAt = stoppedResetAt(lowPriorityState, nowMs);
+  if (lowPriorityState.state.phase === "active" || resetsAt === undefined) return false;
   enterLowPriorityActive(lowPriorityState, {
-    resetsAtSeconds: s,
+    resetsAtSeconds: resetsAt,
     entry,
     resumed: true,
-    now: n,
+    now: nowMs,
   });
   return true;
 }
@@ -257,9 +262,9 @@ function resumeLowPriority(entry, n = Date.now()) {
 /**
  * 已停止状态的重置时间（仍有效时）。
  */
-function stoppedResetAt(lowPriorityState, n) {
+function stoppedResetAt(lowPriorityState, nowMs) {
   let stoppedWallResetsAtSeconds = lowPriorityState.stoppedWallResetsAtSeconds;
-  return stoppedWallResetsAtSeconds !== undefined && stoppedWallResetsAtSeconds * 1000 > n
+  return stoppedWallResetsAtSeconds !== undefined && stoppedWallResetsAtSeconds * 1000 > nowMs
     ? stoppedWallResetsAtSeconds
     : undefined;
 }
@@ -267,27 +272,27 @@ function stoppedResetAt(lowPriorityState, n) {
 /**
  * 进入 active 阶段：重置计数（非恢复时清空预算使用率），上报 tengu_lowpri_accepted 并发出 accepted 事件。
  */
-function enterLowPriorityActive(lowPriorityState, { resetsAtSeconds, entry, resumed, now }) {
-  lowPriorityState.stoppedWallResetsAtSeconds = undefined;
-  lowPriorityState.resumed = resumed;
-  lowPriorityState.requestsServed = 0;
-  lowPriorityState.requestsServedStandard = 0;
-  lowPriorityState.totalWaitMs = 0;
+function enterLowPriorityActive(holder, { resetsAtSeconds, entry, resumed, now }) {
+  holder.stoppedWallResetsAtSeconds = undefined;
+  holder.resumed = resumed;
+  holder.requestsServed = 0;
+  holder.requestsServedStandard = 0;
+  holder.totalWaitMs = 0;
   if (!resumed) {
-    lowPriorityState.budgetUtilization = undefined;
-    lowPriorityState.budgetUtilizationObservedAtMs = 0;
+    holder.budgetUtilization = undefined;
+    holder.budgetUtilizationObservedAtMs = 0;
   }
   logEvent("tengu_lowpri_accepted", {
-    ...telemetryFields(lowPriorityState),
+    ...telemetryFields(holder),
     entry: fromEnum(entry),
     resumed,
   });
-  setLowPriorityState(lowPriorityState, {
+  setLowPriorityState(holder, {
     phase: "active",
     resetsAtSeconds,
     acceptedAtMs: now,
   });
-  lowPriorityState.events.emit({
+  holder.events.emit({
     type: "accepted",
     entry,
   });
@@ -352,52 +357,64 @@ function isBenignEndReason(reason) {
 /**
  * 四舍五入并夹在 [min, max] 之间。
  */
-function clampRound(e, n, r) {
-  return Math.min(r, Math.max(n, Math.round(e)));
+function clampRound(value, min, max) {
+  return Math.min(max, Math.max(min, Math.round(value)));
 }
 //@ chunk-hwmsct5x.js:191017-191165 placement
-function applyRetryLimits(e, n, r) {
-  if (n !== undefined && Number.isFinite(n))
-    e.retryAfterMs = clampRound(n * 1000, LOW_PRIORITY_MIN_RETRY_AFTER_MS, LOW_PRIORITY_MAX_RETRY_AFTER_MS);
-  if (r !== undefined && Number.isFinite(r))
-    e.maxWaitMs = clampRound(r * 1000, LOW_PRIORITY_MIN_MAX_WAIT_MS, LOW_PRIORITY_MAX_MAX_WAIT_MS);
+function applyRetryLimits(state, retryAfterSeconds, maxWaitSeconds) {
+  if (retryAfterSeconds !== undefined && Number.isFinite(retryAfterSeconds))
+    state.retryAfterMs = clampRound(
+      retryAfterSeconds * 1000,
+      LOW_PRIORITY_MIN_RETRY_AFTER_MS,
+      LOW_PRIORITY_MAX_RETRY_AFTER_MS,
+    );
+  if (maxWaitSeconds !== undefined && Number.isFinite(maxWaitSeconds))
+    state.maxWaitMs = clampRound(
+      maxWaitSeconds * 1000,
+      LOW_PRIORITY_MIN_MAX_WAIT_MS,
+      LOW_PRIORITY_MAX_MAX_WAIT_MS,
+    );
 }
 //@ chunk-hwmsct5x.js:191165-191384 placement
-function observeLowPriorityHeaders(e, n, r) {
-  applyRetryLimits(e, getSlowRetryAfter(n), getSlowMaxWait(n));
-  let slowBudgetUtilization = getSlowBudgetUtilization(n);
-  if (slowBudgetUtilization !== undefined && r >= e.budgetUtilizationObservedAtMs) {
-    e.budgetUtilizationObservedAtMs = r;
-    let h = remainingPercent(slowBudgetUtilization) !== remainingPercent(e.budgetUtilization);
-    e.budgetUtilization = slowBudgetUtilization;
-    if (h) e.changed.emit();
+function observeLowPriorityHeaders(state, headers, observedAtMs) {
+  applyRetryLimits(state, getSlowRetryAfter(headers), getSlowMaxWait(headers));
+  let slowBudgetUtilization = getSlowBudgetUtilization(headers);
+  if (slowBudgetUtilization !== undefined && observedAtMs >= state.budgetUtilizationObservedAtMs) {
+    state.budgetUtilizationObservedAtMs = observedAtMs;
+    let changed = remainingPercent(slowBudgetUtilization) !== remainingPercent(state.budgetUtilization);
+    state.budgetUtilization = slowBudgetUtilization;
+    if (changed) state.changed.emit();
   }
 }
 //@ chunk-hwmsct5x.js:191384-191832 placement
 /**
  * 根据响应头更新低优先级状态：5 小时重置时间前移则结束（reset），slow-status active/not_needed 时计数并读取预算，额外用量启用时以 extra_usage 结束。
  */
-function handleLowPriorityResponseHeaders(e, n = Date.now()) {
+function handleLowPriorityResponseHeaders(headers, nowMs = Date.now()) {
   try {
-    let lowPriorityState = getLowPriorityState();
-    let slowStatusHeader = getSlowStatusHeader(e);
-    let h = slowStatusHeader === "ineligible" && e.get(OVERAGE_IN_USE_HEADER) === "true";
-    if (lowPriorityState.state.phase !== "active") {
-      if (h && lowPriorityState.stoppedWallResetsAtSeconds !== undefined) endLowPriority("extra_usage", n);
+    let state = getLowPriorityState();
+    let slowStatusHeader = getSlowStatusHeader(headers);
+    let overageInUse = slowStatusHeader === "ineligible" && headers.get(OVERAGE_IN_USE_HEADER) === "true";
+    if (state.state.phase !== "active") {
+      if (overageInUse && state.stoppedWallResetsAtSeconds !== undefined)
+        endLowPriority("extra_usage", nowMs);
       return;
     }
-    let y = Number(e.get(UNIFIED_5H_RESET_HEADER) ?? NaN);
-    if (Number.isFinite(y) && y >= lowPriorityState.state.resetsAtSeconds + RESET_ADVANCE_TOLERANCE_SECONDS) {
-      endLowPriority("reset", n);
+    let fiveHourReset = Number(headers.get(UNIFIED_5H_RESET_HEADER) ?? NaN);
+    if (
+      Number.isFinite(fiveHourReset) &&
+      fiveHourReset >= state.state.resetsAtSeconds + RESET_ADVANCE_TOLERANCE_SECONDS
+    ) {
+      endLowPriority("reset", nowMs);
       return;
     }
     if (slowStatusHeader === "active") {
-      observeLowPriorityHeaders(lowPriorityState, e, n);
-      lowPriorityState.requestsServed++;
+      observeLowPriorityHeaders(state, headers, nowMs);
+      state.requestsServed++;
     } else if (slowStatusHeader === "not_needed") {
-      observeLowPriorityHeaders(lowPriorityState, e, n);
-      lowPriorityState.requestsServedStandard++;
-    } else if (h) endLowPriority("extra_usage", n);
+      observeLowPriorityHeaders(state, headers, nowMs);
+      state.requestsServedStandard++;
+    } else if (overageInUse) endLowPriority("extra_usage", nowMs);
   } catch (error) {
     logError(error);
   }
@@ -406,30 +423,30 @@ function handleLowPriorityResponseHeaders(e, n = Date.now()) {
 /**
  * 请求成功时结算低优先级等待：计算本次等待（过期 tick 按计划时间截断），累加并上报 tengu_lowpri_request/tengu_lowpri_wait。
  */
-function recordLowPriorityServed(lowPriorityWait, n = Date.now()) {
+function recordLowPriorityServed(lowPriorityWait, nowMs = Date.now()) {
   try {
-    let r = lowPriorityWait.current;
+    let wait = lowPriorityWait.current;
     lowPriorityWait.current = null;
     let lowPriorityState = getLowPriorityState();
     if (
-      r === null ||
+      wait === null ||
       lowPriorityState.state.phase !== "active" ||
-      r.sinceMs < lowPriorityState.state.acceptedAtMs
+      wait.sinceMs < lowPriorityState.state.acceptedAtMs
     )
       return;
-    let h = n - r.nextTryAtMs > LOW_PRIORITY_STALE_TICK_MS;
-    let max = Math.max(0, (h ? r.nextTryAtMs : n) - r.sinceMs);
+    let isStale = nowMs - wait.nextTryAtMs > LOW_PRIORITY_STALE_TICK_MS;
+    let max = Math.max(0, (isStale ? wait.nextTryAtMs : nowMs) - wait.sinceMs);
     lowPriorityState.totalWaitMs += max;
     logEvent("tengu_lowpri_request", {
       ...telemetryFields(lowPriorityState),
       outcome: fromEnum("served"),
       wait_ms: max,
-      attempt: r.attempts + 1,
+      attempt: wait.attempts + 1,
     });
     logEvent("tengu_lowpri_wait", {
       ...telemetryFields(lowPriorityState),
       total_wait_ms: max,
-      attempts: r.attempts,
+      attempts: wait.attempts,
     });
   } catch (error) {
     logError(error);
@@ -456,49 +473,51 @@ function planLowPriorityRetryInner(error, markedAtDispatch, querySource, wait, n
   if (!markedAtDispatch) return null;
   let headers = error instanceof APIError ? error.headers : undefined;
   let slowStatusHeader = getSlowStatusHeader(headers);
-  let E = error instanceof APIError && error.status === 429;
-  let R = classifyQuerySource(querySource) === "main";
-  let L = E ? getLowPriorityEndReason(slowStatusHeader, R, hasUnifiedRateLimitHeaders(error)) : null;
+  let rateLimited = error instanceof APIError && error.status === 429;
+  let isMainSource = classifyQuerySource(querySource) === "main";
+  let endReason = rateLimited
+    ? getLowPriorityEndReason(slowStatusHeader, isMainSource, hasUnifiedRateLimitHeaders(error))
+    : null;
   if (state.state.phase !== "active") {
-    if (L !== null && state.stoppedWallResetsAtSeconds !== undefined)
-      endLowPriorityWithBudget(state, L, headers, now);
+    if (endReason !== null && state.stoppedWallResetsAtSeconds !== undefined)
+      endLowPriorityWithBudget(state, endReason, headers, now);
     return null;
   }
   observeLowPriorityHeaders(state, headers, now);
-  if (L !== null) {
-    endLowPriorityWithBudget(state, L, headers, now);
+  if (endReason !== null) {
+    endLowPriorityWithBudget(state, endReason, headers, now);
     return null;
   }
-  let O = E && slowStatusHeader === "slot_busy";
-  let M = is529Error(error) && (slowStatusHeader === "active" || slowStatusHeader === undefined);
-  if (!O && !M) return null;
+  let slotBusy = rateLimited && slowStatusHeader === "slot_busy";
+  let capacityBusy = is529Error(error) && (slowStatusHeader === "active" || slowStatusHeader === undefined);
+  if (!slotBusy && !capacityBusy) return null;
   if (!isMainOrAgentQuerySource(querySource)) return null;
-  let P = wait.current;
-  let H =
-    P !== null && P.sinceMs >= state.state.acceptedAtMs
-      ? P
+  let existing = wait.current;
+  let current =
+    existing !== null && existing.sinceMs >= state.state.acceptedAtMs
+      ? existing
       : {
           sinceMs: now,
           attempts: 0,
           nextTryAtMs: now,
         };
-  let max = Math.max(0, now - H.sinceMs);
+  let max = Math.max(0, now - current.sinceMs);
   logEvent("tengu_lowpri_request", {
     ...telemetryFields(state),
-    outcome: fromEnum(O ? "slot_busy" : "capacity_busy"),
+    outcome: fromEnum(slotBusy ? "slot_busy" : "capacity_busy"),
     wait_ms: max,
-    attempt: H.attempts + 1,
+    attempt: current.attempts + 1,
   });
   if (max >= state.maxWaitMs) {
     wait.current = null;
     endLowPriority("max_wait", now);
     return null;
   }
-  let z = 1 + (Math.random() * 2 - 1) * LOW_PRIORITY_JITTER_RATIO;
-  let rounded = Math.round(state.retryAfterMs * z);
+  let jitter = 1 + (Math.random() * 2 - 1) * LOW_PRIORITY_JITTER_RATIO;
+  let rounded = Math.round(state.retryAfterMs * jitter);
   wait.current = {
-    sinceMs: H.sinceMs,
-    attempts: H.attempts + 1,
+    sinceMs: current.sinceMs,
+    attempts: current.attempts + 1,
     nextTryAtMs: now + rounded,
   };
   return {
@@ -511,9 +530,9 @@ function planLowPriorityRetryInner(error, markedAtDispatch, querySource, wait, n
 /**
  * 按终态记录预算并结束低优先级。
  */
-function endLowPriorityWithBudget(state, n, headers, now) {
-  if (n === "budget") recordBudgetSpentUntil(state, headers, now);
-  endLowPriority(n, now);
+function endLowPriorityWithBudget(state, reason, headers, nowMs) {
+  if (reason === "budget") recordBudgetSpentUntil(state, headers, nowMs);
+  endLowPriority(reason, nowMs);
 }
 //@ chunk-hwmsct5x.js:193360-193374 placement
 /**
@@ -521,13 +540,15 @@ function endLowPriorityWithBudget(state, n, headers, now) {
  */
 var MAX_BUDGET_SPEND_S = 691200;
 //@ chunk-hwmsct5x.js:193374-193535 placement
-function recordBudgetSpentUntil(e, n, r) {
-  let s = Number(n?.get(SLOW_BUDGET_RESET_HEADER) ?? NaN) || Number(n?.get(UNIFIED_7D_RESET_HEADER) ?? NaN);
-  if (Number.isFinite(s) && s > 0)
-    e.budgetSpentUntilSeconds = Math.round(Math.min(s, r / 1000 + MAX_BUDGET_SPEND_S));
+function recordBudgetSpentUntil(state, headers, nowMs) {
+  let resetSeconds =
+    Number(headers?.get(SLOW_BUDGET_RESET_HEADER) ?? NaN) ||
+    Number(headers?.get(UNIFIED_7D_RESET_HEADER) ?? NaN);
+  if (Number.isFinite(resetSeconds) && resetSeconds > 0)
+    state.budgetSpentUntilSeconds = Math.round(Math.min(resetSeconds, nowMs / 1000 + MAX_BUDGET_SPEND_S));
 }
 //@ chunk-hwmsct5x.js:193535-193816 placement
-function getLowPriorityEndReason(slowStatusHeader, n, r) {
+function getLowPriorityEndReason(slowStatusHeader, isMainSource, hasUnifiedHeaders) {
   switch (slowStatusHeader) {
     case "weekly_limit":
       return "weekly";
@@ -536,14 +557,14 @@ function getLowPriorityEndReason(slowStatusHeader, n, r) {
     case "off":
       return "off";
     case "ineligible":
-      return n ? "ineligible" : null;
+      return isMainSource ? "ineligible" : null;
     case "slot_busy":
       return null;
     case undefined:
     case "unrecognized":
     case "active":
     case "not_needed":
-      return n && r ? "wall" : null;
+      return isMainSource && hasUnifiedHeaders ? "wall" : null;
   }
 }
 //@ chunk-hwmsct5x.js:193816-193981 placement
@@ -556,6 +577,13 @@ function shouldSendGatewayHintHeaders() {
   if (isFirstPartyApiBackend()) return true;
   if (getAPIProvider() !== "firstParty") return false;
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_splendid_sutton", false);
+}
+//@ chunk-77a3xzkb.js:704-739 placement
+/**
+ * 取当前宿主的低优先级状态。
+ */
+function getLowPrioritySessionState() {
+  return LOW_PRIORITY_STATE.of(getRootSession().host);
 }
 export {
   isLowPriorityActive,
@@ -574,6 +602,7 @@ export {
   endLowPriority,
   isBudgetSpent,
   resumableResetAt,
+  getLowPrioritySessionState,
   acceptLowPriorityOffer,
   resumeLowPriority,
   clearBudgetSpent,

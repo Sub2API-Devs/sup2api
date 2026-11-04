@@ -14,8 +14,8 @@ import { fromEnum } from "../services/analytics/safeMetadata.js";
 /**
  * wakeupSourceForKind：由 kind 得到唤醒来源。
  */
-function wakeupSourceForKind(e) {
-  return e.kind === "loop" ? "loop_wakeup" : "schedule_wakeup";
+function wakeupSourceForKind(source) {
+  return source.kind === "loop" ? "loop_wakeup" : "schedule_wakeup";
 }
 //@ chunk-e6aww6q8.js:1813001-1813052 placement
 var WAKEUP_SOURCES = ["handoff", "handback", "seeded", "unmarked"];
@@ -74,28 +74,28 @@ var WAKEUP_SOURCES_2 = [
   "other",
 ];
 //@ chunk-e6aww6q8.js:1813676-1813715 placement
-function isWakeupSource(e) {
-  return WAKEUP_SOURCES_2.includes(e);
+function isWakeupSource(source) {
+  return WAKEUP_SOURCES_2.includes(source);
 }
 //@ chunk-e6aww6q8.js:1813715-1813784 placement
-function normalizeWakeupSource(e) {
-  if (e === undefined || e === "") return;
-  return isWakeupSource(e) ? e : "other";
+function normalizeWakeupSource(source) {
+  if (source === undefined || source === "") return;
+  return isWakeupSource(source) ? source : "other";
 }
 //@ chunk-e6aww6q8.js:1813784-1813857 placement
 /**
  * originKindForWakeup：唤醒来源对应的来源种类。
  */
-function originKindForWakeup(hostInitiator) {
-  let n = normalizeWakeupSource(hostInitiator);
-  return n === undefined || n === "user" ? undefined : originKindOfWakeup(n);
+function originKindForWakeup(source) {
+  let source_2 = normalizeWakeupSource(source);
+  return source_2 === undefined || source_2 === "user" ? undefined : originKindOfWakeup(source_2);
 }
 //@ chunk-e6aww6q8.js:1813857-1814183 placement
 /**
  * 把唤醒来源映射为提示来源类别（定时、自动继续、对端、宿主合成）。
  */
-function originKindOfWakeup(e) {
-  switch (e) {
+function originKindOfWakeup(source) {
+  switch (source) {
     case "scheduled-task":
       return "scheduled";
     case "sleep-auto-resume":
@@ -127,16 +127,16 @@ function scheduledWakeupKind(wakeupSource) {
  * 生成提示相关的遥测字段：唤醒来源、宿主发起方、Artifact 评论回合。
  */
 function promptTelemetryFields({ wakeupSource, hostInitiator, artifactCommentTurn, inboundOrigin }) {
-  let h = scheduledWakeupKind(wakeupSource);
-  let y = normalizeWakeupSource(hostInitiator);
-  let S = undefined;
-  let found = WAKEUP_SOURCES.find((L) => L === artifactCommentTurn);
+  let wakeupKind = scheduledWakeupKind(wakeupSource);
+  let normalizedInitiator = normalizeWakeupSource(hostInitiator);
+  let unknown = undefined;
+  let found = WAKEUP_SOURCES.find((candidate) => candidate === artifactCommentTurn);
   return {
-    ...(h && {
-      wakeup_source: fromEnum(h),
+    ...(wakeupKind && {
+      wakeup_source: fromEnum(wakeupKind),
     }),
-    ...(y && {
-      host_initiator: fromEnum(y),
+    ...(normalizedInitiator && {
+      host_initiator: fromEnum(normalizedInitiator),
     }),
     ...(found && {
       artifact_comment_turn: fromEnum(found),
@@ -150,10 +150,10 @@ function promptTelemetryFields({ wakeupSource, hostInitiator, artifactCommentTur
  */
 function classifyPromptSource({ origin, isMeta, wakeupSource, promptSource, hostInitiator }) {
   if (wakeupSource !== undefined) return "scheduled";
-  let y = originKindForWakeup(hostInitiator);
+  let initiatorOrigin = originKindForWakeup(hostInitiator);
   switch (origin?.kind) {
     case "human":
-      return y ?? "human";
+      return initiatorOrigin ?? "human";
     case "auto-continuation":
       return "auto_continuation";
     case "task-notification":
@@ -175,7 +175,7 @@ function classifyPromptSource({ origin, isMeta, wakeupSource, promptSource, host
       break;
   }
   if (isMeta) return "system";
-  if (y !== undefined) return y;
+  if (initiatorOrigin !== undefined) return initiatorOrigin;
   if (promptSource === "sdk") return "sdk";
   return "unknown";
 }
@@ -188,14 +188,14 @@ var WAKEUP_ORIGIN_TTL_MS = 1e4;
 /**
  * wakeupDedupKey：唤醒去重键。
  */
-function wakeupDedupKey(uuid, n) {
-  return `${String(uuid)}\x00${String(n)}`;
+function wakeupDedupKey(uuid, turnId) {
+  return `${String(uuid)}\x00${String(turnId)}`;
 }
 //@ chunk-e6aww6q8.js:1815274-1815469 placement
-function singleToolResultId(e) {
-  let content = e.message?.content;
+function singleToolResultId(message) {
+  let content = message.message?.content;
   if (!Array.isArray(content)) return;
-  let filtered = content.filter((h) => h?.type === "tool_result");
+  let filtered = content.filter((block) => block?.type === "tool_result");
   if (filtered.length !== 1) return;
   let toolUseId = filtered[0].tool_use_id;
   return toolUseId === undefined ? undefined : String(toolUseId);

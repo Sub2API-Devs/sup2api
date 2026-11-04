@@ -13,7 +13,7 @@ import { antEnv } from "../../utils/env.js";
 import { isSemverString } from "../../utils/model/modelCatalog/catalogCapabilities.js";
 import { isEnvTruthy } from "../../utils/envUtils.js";
 import { semverGte } from "../../utils/semver.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -23,8 +23,9 @@ import { Box, Text } from "../../ink/components/Text.js";
 import { Decorative, useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { isReducedMotion } from "../Spinner/spinnerFlags.js";
 import { getInitialSettings_2 } from "../../utils/settings/settings.js";
-import { y, Oo, R, P } from "../../../vendor/react/cjs/react.production.js";
+import { useState, useEffectEvent, useRef, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { useClock } from "../../ink/components/ClockContext.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:48678-48727 fingerprint = hold (1)
 var CLAWD_MIN_OFFSET = 3;
@@ -50,23 +51,23 @@ function poofFrames() {
   ];
 }
 //@ chunk-ag5x7vhf.js:48824-48951 layout
-function repeatPoseFrames(pose, h, { offset: x = 0, x: T, poof: k, shadow: _ } = {}) {
+function repeatPoseFrames(pose, count, { offset = 0, x, poof, shadow } = {}) {
   return Array.from(
     {
-      length: h,
+      length: count,
     },
     () => ({
       pose,
-      offset: x,
-      x: T,
-      poof: k,
-      shadow: _,
+      offset,
+      x,
+      poof,
+      shadow,
     }),
   );
 }
 //@ chunk-ag5x7vhf.js:48951-49019 layout
-function turnFrames(m, shadow) {
-  return m.flatMap((facing) =>
+function turnFrames(facings, shadow) {
+  return facings.flatMap((facing) =>
     repeatPoseFrames(
       {
         facing,
@@ -90,259 +91,284 @@ function pose(eyes, arms = "down", feet = "both") {
 /**
  * Clawd 动画帧序列表：每种动画（jump/look/celebrate/skip/spin/peekaboo/drop/waddle/peek/wink/boop/tap/sneeze/turn/coin-hop）是若干 {pose, offset, x, poof, shadow} 帧；CLAWD_ANIMATIONS 按名字索引，CLAWD_ANIMATION_NAMES 列出顺序。
  */
-var JUMP_FRAMES = [
-  ...poofFrames(),
-  ...repeatPoseFrames("arms-up", 3),
-  ...repeatPoseFrames("default", 1),
-  ...poofFrames(),
-  ...repeatPoseFrames("arms-up", 3),
-  ...repeatPoseFrames("default", 1),
-];
-var LOOK_FRAMES = [
-  ...repeatPoseFrames("look-right", 5),
-  ...repeatPoseFrames("look-left", 5),
-  ...repeatPoseFrames("default", 1),
-];
-var IDLE_LOOK_FRAMES = [
-  ...repeatPoseFrames("default", 12),
-  ...repeatPoseFrames("look-right", 5),
-  ...repeatPoseFrames("look-left", 5),
-];
-var CELEBRATE_FRAMES = [
-  ...JUMP_FRAMES,
-  ...repeatPoseFrames("default", 3, {
-    offset: 1,
-  }),
-];
-var SPIN_FRAMES = [
-  ...repeatPoseFrames("look-left", 2),
-  ...repeatPoseFrames("look-right", 2),
-  ...repeatPoseFrames("look-left", 2),
-  ...repeatPoseFrames("arms-up", 3),
-  ...repeatPoseFrames("default", 1),
-];
-var SKIP_FRAMES = [
-  ...repeatPoseFrames("default", 1, {
-    offset: 1,
-    x: -CLAWD_BASE_WIDTH,
-  }),
-  ...repeatPoseFrames("arms-up", 2, {
-    x: -6,
-  }),
-  ...repeatPoseFrames("default", 1, {
-    x: -6,
-  }),
-  ...repeatPoseFrames("default", 1, {
-    offset: 1,
-    x: -6,
-  }),
-  ...repeatPoseFrames("arms-up", 2, {
-    x: -3,
-  }),
-  ...repeatPoseFrames("default", 1, {
-    x: -3,
-  }),
-  ...repeatPoseFrames("default", 1, {
-    offset: 1,
-    x: -3,
-  }),
-  ...repeatPoseFrames("arms-up", 2),
-  ...poofFrames(),
-  ...repeatPoseFrames("default", 1),
-];
-var BLINK_SETTLE_FRAMES = [...repeatPoseFrames(pose("closed"), 1), DEFAULT_CLAWD_FRAME];
-var PEEKABOO_FRAMES = [
-  ...repeatPoseFrames("default", 1, {
-    offset: CLAWD_MIN_OFFSET,
-  }),
-  ...repeatPoseFrames("default", 3, {
-    offset: 2,
-  }),
-  ...repeatPoseFrames("look-right", 3, {
-    offset: 2,
-  }),
-  ...repeatPoseFrames("look-left", 3, {
-    offset: 2,
-  }),
-  ...repeatPoseFrames("default", 2, {
-    offset: 2,
-  }),
-  ...repeatPoseFrames("default", 1, {
-    offset: 1,
-  }),
-  ...repeatPoseFrames("arms-up", 4),
-  ...repeatPoseFrames("default", 2),
-  ...BLINK_SETTLE_FRAMES,
-];
-var DROP_FRAMES = [
-  ...repeatPoseFrames("arms-up", 1, {
-    offset: -CLAWD_MIN_OFFSET,
-  }),
-  ...repeatPoseFrames("arms-up", 2, {
-    offset: -2,
-  }),
-  ...repeatPoseFrames("arms-up", 2, {
-    offset: -1,
-  }),
-  ...repeatPoseFrames("arms-up", 1),
-  ...poofFrames(),
-  ...repeatPoseFrames("default", 3),
-  ...BLINK_SETTLE_FRAMES,
-];
-var WADDLE_FRAMES = [
-  ...repeatPoseFrames("look-right", 1, {
-    x: -CLAWD_BASE_WIDTH,
-  }),
-  ...[-6, -5, -4, -3, -2, -1].flatMap((m) =>
-    repeatPoseFrames(pose("right", "down", m % 2 === 0 ? "left" : "right"), 2, {
-      x: m,
+var JUMP_FRAMES; // deferred: uses poofFrames of its import cycle while loading; runs once the cycle is complete
+var LOOK_FRAMES;
+var IDLE_LOOK_FRAMES;
+var CELEBRATE_FRAMES;
+var SPIN_FRAMES;
+var SKIP_FRAMES;
+var BLINK_SETTLE_FRAMES;
+var PEEKABOO_FRAMES;
+var DROP_FRAMES;
+var WADDLE_FRAMES;
+var PEEK_FRAMES;
+var WINK_FRAMES;
+var BOOP_FRAMES;
+var TAP_FRAMES;
+var SNEEZE_FRAMES;
+var TURN_FRAMES;
+var COIN_HOP_FRAMES;
+var CLAWD_ANIMATIONS;
+var CLAWD_ANIMATION_NAMES;
+var IN_PLACE_ANIMATION_NAMES;
+deferInit("chunk-ag5x7vhf.js:49081", () => {
+  JUMP_FRAMES = [
+    ...poofFrames(),
+    ...repeatPoseFrames("arms-up", 3),
+    ...repeatPoseFrames("default", 1),
+    ...poofFrames(),
+    ...repeatPoseFrames("arms-up", 3),
+    ...repeatPoseFrames("default", 1),
+  ];
+  LOOK_FRAMES = [
+    ...repeatPoseFrames("look-right", 5),
+    ...repeatPoseFrames("look-left", 5),
+    ...repeatPoseFrames("default", 1),
+  ];
+  IDLE_LOOK_FRAMES = [
+    ...repeatPoseFrames("default", 12),
+    ...repeatPoseFrames("look-right", 5),
+    ...repeatPoseFrames("look-left", 5),
+  ];
+  CELEBRATE_FRAMES = [
+    ...JUMP_FRAMES,
+    ...repeatPoseFrames("default", 3, {
+      offset: 1,
     }),
-  ),
-  ...repeatPoseFrames("look-right", 2),
-  ...repeatPoseFrames("default", 2),
-  ...BLINK_SETTLE_FRAMES,
-];
-var PEEK_FRAMES = [
-  ...repeatPoseFrames("look-right", 1, {
-    x: -CLAWD_BASE_WIDTH,
-  }),
-  ...repeatPoseFrames("look-right", 5, {
-    x: -6,
-  }),
-  ...repeatPoseFrames("look-right", 3, {
-    x: -CLAWD_BASE_WIDTH,
-  }),
-  ...repeatPoseFrames("look-right", 4, {
-    x: -5,
-  }),
-  ...repeatPoseFrames("arms-up", 2, {
-    x: -3,
-  }),
-  ...repeatPoseFrames("arms-up", 2),
-  ...poofFrames(),
-  DEFAULT_CLAWD_FRAME,
-];
-var WINK_FRAMES = [...repeatPoseFrames(pose("wink"), 5), DEFAULT_CLAWD_FRAME];
-var BOOP_FRAMES = [
-  ...repeatPoseFrames(pose("closed"), 1, {
-    offset: 1,
-    poof: "dot",
-  }),
-  ...repeatPoseFrames(pose("closed"), 2, {
-    offset: 1,
-    poof: "wave",
-  }),
-  ...repeatPoseFrames("look-left", 4),
-  ...repeatPoseFrames("default", 2),
-  ...BLINK_SETTLE_FRAMES,
-];
-var TAP_FRAMES = [
-  ...repeatPoseFrames(pose("open", "down", "left"), 2),
-  ...repeatPoseFrames(pose("open", "down", "right"), 2),
-  ...repeatPoseFrames(pose("open", "down", "left"), 2),
-  ...repeatPoseFrames(pose("open", "down", "right"), 2),
-  ...repeatPoseFrames(pose("open", "down", "left"), 1),
-  ...repeatPoseFrames(pose("open", "down", "right"), 1),
-  ...repeatPoseFrames("arms-up", 3),
-  DEFAULT_CLAWD_FRAME,
-];
-var SNEEZE_FRAMES = [
-  ...repeatPoseFrames(pose("closed", "up"), 4),
-  ...repeatPoseFrames(pose("closed"), 2, {
-    offset: 1,
-    poof: "wave",
-  }),
-  ...repeatPoseFrames(pose("closed"), 2),
-  ...repeatPoseFrames("default", 2),
-  ...BLINK_SETTLE_FRAMES,
-];
-var TURN_FRAMES = [
-  ...turnFrames(["right-12", "right-30", "right-55", "right-75", "edge"]),
-  ...turnFrames(["back-105", "back-125", "back-150", "back", "back"]),
-  ...turnFrames(["back-150", "back-125", "back-105", "edge"]),
-  ...turnFrames(["left-75", "left-55", "left-30", "left-12"]),
-  DEFAULT_CLAWD_FRAME,
-];
-var COIN_HOP_FRAMES = [
-  ...repeatPoseFrames("default", 2, {
-    offset: 1,
-  }),
-  ...repeatPoseFrames("arms-up", 1, {
-    shadow: "wide",
-  }),
-  ...turnFrames(["right-55", "edge", "back-125", "back"], "narrow"),
-  ...turnFrames(["back-125", "edge", "left-55"], "narrow"),
-  ...repeatPoseFrames("arms-up", 1, {
-    shadow: "wide",
-  }),
-  ...poofFrames(),
-  DEFAULT_CLAWD_FRAME,
-];
-var CLAWD_ANIMATIONS = {
-  jump: JUMP_FRAMES,
-  look: LOOK_FRAMES,
-  celebrate: CELEBRATE_FRAMES,
-  skip: SKIP_FRAMES,
-  spin: SPIN_FRAMES,
-  peekaboo: PEEKABOO_FRAMES,
-  drop: DROP_FRAMES,
-  waddle: WADDLE_FRAMES,
-  peek: PEEK_FRAMES,
-  wink: WINK_FRAMES,
-  boop: BOOP_FRAMES,
-  tap: TAP_FRAMES,
-  sneeze: SNEEZE_FRAMES,
-  turn: TURN_FRAMES,
-  "coin-hop": COIN_HOP_FRAMES,
-};
-var CLAWD_ANIMATION_NAMES = [
-  "skip",
-  "jump",
-  "look",
-  "spin",
-  "peekaboo",
-  "drop",
-  "waddle",
-  "peek",
-  "wink",
-  "boop",
-  "tap",
-  "sneeze",
-  "turn",
-  "coin-hop",
-];
-var IN_PLACE_ANIMATION_NAMES = CLAWD_ANIMATION_NAMES.filter((m) => (CLAWD_ANIMATIONS[m][0]?.x ?? 0) === 0);
+  ];
+  SPIN_FRAMES = [
+    ...repeatPoseFrames("look-left", 2),
+    ...repeatPoseFrames("look-right", 2),
+    ...repeatPoseFrames("look-left", 2),
+    ...repeatPoseFrames("arms-up", 3),
+    ...repeatPoseFrames("default", 1),
+  ];
+  SKIP_FRAMES = [
+    ...repeatPoseFrames("default", 1, {
+      offset: 1,
+      x: -CLAWD_BASE_WIDTH,
+    }),
+    ...repeatPoseFrames("arms-up", 2, {
+      x: -6,
+    }),
+    ...repeatPoseFrames("default", 1, {
+      x: -6,
+    }),
+    ...repeatPoseFrames("default", 1, {
+      offset: 1,
+      x: -6,
+    }),
+    ...repeatPoseFrames("arms-up", 2, {
+      x: -3,
+    }),
+    ...repeatPoseFrames("default", 1, {
+      x: -3,
+    }),
+    ...repeatPoseFrames("default", 1, {
+      offset: 1,
+      x: -3,
+    }),
+    ...repeatPoseFrames("arms-up", 2),
+    ...poofFrames(),
+    ...repeatPoseFrames("default", 1),
+  ];
+  BLINK_SETTLE_FRAMES = [...repeatPoseFrames(pose("closed"), 1), DEFAULT_CLAWD_FRAME];
+  PEEKABOO_FRAMES = [
+    ...repeatPoseFrames("default", 1, {
+      offset: CLAWD_MIN_OFFSET,
+    }),
+    ...repeatPoseFrames("default", 3, {
+      offset: 2,
+    }),
+    ...repeatPoseFrames("look-right", 3, {
+      offset: 2,
+    }),
+    ...repeatPoseFrames("look-left", 3, {
+      offset: 2,
+    }),
+    ...repeatPoseFrames("default", 2, {
+      offset: 2,
+    }),
+    ...repeatPoseFrames("default", 1, {
+      offset: 1,
+    }),
+    ...repeatPoseFrames("arms-up", 4),
+    ...repeatPoseFrames("default", 2),
+    ...BLINK_SETTLE_FRAMES,
+  ];
+  DROP_FRAMES = [
+    ...repeatPoseFrames("arms-up", 1, {
+      offset: -CLAWD_MIN_OFFSET,
+    }),
+    ...repeatPoseFrames("arms-up", 2, {
+      offset: -2,
+    }),
+    ...repeatPoseFrames("arms-up", 2, {
+      offset: -1,
+    }),
+    ...repeatPoseFrames("arms-up", 1),
+    ...poofFrames(),
+    ...repeatPoseFrames("default", 3),
+    ...BLINK_SETTLE_FRAMES,
+  ];
+  WADDLE_FRAMES = [
+    ...repeatPoseFrames("look-right", 1, {
+      x: -CLAWD_BASE_WIDTH,
+    }),
+    ...[-6, -5, -4, -3, -2, -1].flatMap((x) =>
+      repeatPoseFrames(pose("right", "down", x % 2 === 0 ? "left" : "right"), 2, {
+        x,
+      }),
+    ),
+    ...repeatPoseFrames("look-right", 2),
+    ...repeatPoseFrames("default", 2),
+    ...BLINK_SETTLE_FRAMES,
+  ];
+  PEEK_FRAMES = [
+    ...repeatPoseFrames("look-right", 1, {
+      x: -CLAWD_BASE_WIDTH,
+    }),
+    ...repeatPoseFrames("look-right", 5, {
+      x: -6,
+    }),
+    ...repeatPoseFrames("look-right", 3, {
+      x: -CLAWD_BASE_WIDTH,
+    }),
+    ...repeatPoseFrames("look-right", 4, {
+      x: -5,
+    }),
+    ...repeatPoseFrames("arms-up", 2, {
+      x: -3,
+    }),
+    ...repeatPoseFrames("arms-up", 2),
+    ...poofFrames(),
+    DEFAULT_CLAWD_FRAME,
+  ];
+  WINK_FRAMES = [...repeatPoseFrames(pose("wink"), 5), DEFAULT_CLAWD_FRAME];
+  BOOP_FRAMES = [
+    ...repeatPoseFrames(pose("closed"), 1, {
+      offset: 1,
+      poof: "dot",
+    }),
+    ...repeatPoseFrames(pose("closed"), 2, {
+      offset: 1,
+      poof: "wave",
+    }),
+    ...repeatPoseFrames("look-left", 4),
+    ...repeatPoseFrames("default", 2),
+    ...BLINK_SETTLE_FRAMES,
+  ];
+  TAP_FRAMES = [
+    ...repeatPoseFrames(pose("open", "down", "left"), 2),
+    ...repeatPoseFrames(pose("open", "down", "right"), 2),
+    ...repeatPoseFrames(pose("open", "down", "left"), 2),
+    ...repeatPoseFrames(pose("open", "down", "right"), 2),
+    ...repeatPoseFrames(pose("open", "down", "left"), 1),
+    ...repeatPoseFrames(pose("open", "down", "right"), 1),
+    ...repeatPoseFrames("arms-up", 3),
+    DEFAULT_CLAWD_FRAME,
+  ];
+  SNEEZE_FRAMES = [
+    ...repeatPoseFrames(pose("closed", "up"), 4),
+    ...repeatPoseFrames(pose("closed"), 2, {
+      offset: 1,
+      poof: "wave",
+    }),
+    ...repeatPoseFrames(pose("closed"), 2),
+    ...repeatPoseFrames("default", 2),
+    ...BLINK_SETTLE_FRAMES,
+  ];
+  TURN_FRAMES = [
+    ...turnFrames(["right-12", "right-30", "right-55", "right-75", "edge"]),
+    ...turnFrames(["back-105", "back-125", "back-150", "back", "back"]),
+    ...turnFrames(["back-150", "back-125", "back-105", "edge"]),
+    ...turnFrames(["left-75", "left-55", "left-30", "left-12"]),
+    DEFAULT_CLAWD_FRAME,
+  ];
+  COIN_HOP_FRAMES = [
+    ...repeatPoseFrames("default", 2, {
+      offset: 1,
+    }),
+    ...repeatPoseFrames("arms-up", 1, {
+      shadow: "wide",
+    }),
+    ...turnFrames(["right-55", "edge", "back-125", "back"], "narrow"),
+    ...turnFrames(["back-125", "edge", "left-55"], "narrow"),
+    ...repeatPoseFrames("arms-up", 1, {
+      shadow: "wide",
+    }),
+    ...poofFrames(),
+    DEFAULT_CLAWD_FRAME,
+  ];
+  CLAWD_ANIMATIONS = {
+    jump: JUMP_FRAMES,
+    look: LOOK_FRAMES,
+    celebrate: CELEBRATE_FRAMES,
+    skip: SKIP_FRAMES,
+    spin: SPIN_FRAMES,
+    peekaboo: PEEKABOO_FRAMES,
+    drop: DROP_FRAMES,
+    waddle: WADDLE_FRAMES,
+    peek: PEEK_FRAMES,
+    wink: WINK_FRAMES,
+    boop: BOOP_FRAMES,
+    tap: TAP_FRAMES,
+    sneeze: SNEEZE_FRAMES,
+    turn: TURN_FRAMES,
+    "coin-hop": COIN_HOP_FRAMES,
+  };
+  CLAWD_ANIMATION_NAMES = [
+    "skip",
+    "jump",
+    "look",
+    "spin",
+    "peekaboo",
+    "drop",
+    "waddle",
+    "peek",
+    "wink",
+    "boop",
+    "tap",
+    "sneeze",
+    "turn",
+    "coin-hop",
+  ];
+  IN_PLACE_ANIMATION_NAMES = CLAWD_ANIMATION_NAMES.filter(
+    (name) => (CLAWD_ANIMATIONS[name][0]?.x ?? 0) === 0,
+  );
+});
 //@ chunk-ag5x7vhf.js:51755-51954 layout
 /**
  * 不允许移动时，过滤掉首帧/任意帧带特殊姿态或首帧是静止睁眼原位的动画，只留下适合入场的动画名；允许时原样返回。
  */
-function filterEntranceAnimations(m, h) {
-  if (h) return m;
-  return m.filter((x) => {
-    let T = CLAWD_ANIMATIONS[x];
-    let k = T[0];
-    if (k === undefined || isPoseSpec(k.pose)) return false;
+function filterEntranceAnimations(animations, chalkOk) {
+  if (chalkOk) return animations;
+  return animations.filter((name) => {
+    let frames = CLAWD_ANIMATIONS[name];
+    let first = frames[0];
+    if (first === undefined || isPoseSpec(first.pose)) return false;
     return (
-      !T.some((_) => isPoseSpec(_.pose)) &&
-      (normalizePose(k.pose).eyes !== "open" || k.offset !== 0 || (k.x ?? 0) !== 0)
+      !frames.some((frame) => isPoseSpec(frame.pose)) &&
+      (normalizePose(first.pose).eyes !== "open" || first.offset !== 0 || (first.x ?? 0) !== 0)
     );
   });
 }
 //@ chunk-ag5x7vhf.js:51954-52141 layout
-function withLeadInFrames(m, h) {
-  let x = CLAWD_ANIMATIONS[m];
-  let T = x[0];
-  if (!h || T === undefined) return x;
-  let _ = (T.x ?? 0) !== 0 || Math.abs(T.offset) >= CLAWD_MIN_OFFSET ? T : DEFAULT_CLAWD_FRAME;
-  let max = Math.max(1, Math.round(h / CLAWD_FRAME_WIDTH));
+function withLeadInFrames(name, delayMs) {
+  let frames = CLAWD_ANIMATIONS[name];
+  let first = frames[0];
+  if (!delayMs || first === undefined) return frames;
+  let leadIn =
+    (first.x ?? 0) !== 0 || Math.abs(first.offset) >= CLAWD_MIN_OFFSET ? first : DEFAULT_CLAWD_FRAME;
+  let max = Math.max(1, Math.round(delayMs / CLAWD_FRAME_WIDTH));
   return [
     ...Array.from(
       {
         length: max,
       },
-      () => _,
+      () => leadIn,
     ),
-    ...x,
+    ...frames,
   ];
 }
 //@ chunk-ag5x7vhf.js:52141-52296 layout
@@ -364,8 +390,8 @@ function getForcedFirstLaunch() {
 }
 //@ chunk-ag5x7vhf.js:52296-52873 layout
 function isNewerClawdEntranceVersion(
-  m,
-  h = {
+  entranceVersion,
+  appVersion = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
@@ -377,10 +403,10 @@ function isNewerClawdEntranceVersion(
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
 ) {
-  if (!isSemverString(h)) return false;
-  if (!isSemverString(m)) return true;
+  if (!isSemverString(appVersion)) return false;
+  if (!isSemverString(entranceVersion)) return true;
   try {
-    return semverGte(h, m);
+    return semverGte(appVersion, entranceVersion);
   } catch {
     return true;
   }
@@ -422,34 +448,31 @@ var SHADOW_GLYPHS = {
     left: 4,
   },
 };
-var nextFrameIndex = (m) => m + 1;
+var nextFrameIndex = (index) => index + 1;
 //@ chunk-ag5x7vhf.js:53567-55252 callgraph-witnessed = AnimatedClawd (0.3)
-function AnimatedClawd(m) {
-  let $ = w(28);
-  let x;
-  if ($[0] !== m) {
-    x = m === undefined ? {} : m;
-    $[0] = m;
-    $[1] = x;
-  } else x = $[1];
-  let { autoplay, sequence, delayMs, onComplete, reserveCrouchRow, color, rest } = x;
-  let V = autoplay === undefined ? false : autoplay;
-  let W = reserveCrouchRow === undefined ? false : reserveCrouchRow;
-  let {
-    pose,
-    bounceOffset,
-    x: q,
-    poof,
-    shadow,
-    isPlaying,
-    onClick,
-  } = useClawdAnimation(V, sequence, delayMs, onComplete);
-  let Re = W ? CLAWD_MIN_OFFSET + 1 : CLAWD_MIN_OFFSET;
-  let We = isPlaying ? undefined : rest;
+function AnimatedClawd(props) {
+  let $ = useMemoCache(28);
+  let options;
+  if ($[0] !== props) {
+    options = props === undefined ? {} : props;
+    $[0] = props;
+    $[1] = options;
+  } else options = $[1];
+  let { autoplay, sequence, delayMs, onComplete, reserveCrouchRow, color, rest } = options;
+  let shouldAutoplay = autoplay === undefined ? false : autoplay;
+  let keepCrouchRow = reserveCrouchRow === undefined ? false : reserveCrouchRow;
+  let { pose, bounceOffset, x, poof, shadow, isPlaying, onClick } = useClawdAnimation(
+    shouldAutoplay,
+    sequence,
+    delayMs,
+    onComplete,
+  );
+  let height = keepCrouchRow ? CLAWD_MIN_OFFSET + 1 : CLAWD_MIN_OFFSET;
+  let restFrame = isPlaying ? undefined : rest;
   const width = CLAWD_BASE_WIDTH + (rest?.heldWidth ?? 0);
-  const marginTop = bounceOffset > 1 ? bounceOffset + Re - CLAWD_MIN_OFFSET : bounceOffset;
-  const pose_2 = We?.pose ?? pose;
-  const paint = We?.paint;
+  const marginTop = bounceOffset > 1 ? bounceOffset + height - CLAWD_MIN_OFFSET : bounceOffset;
+  const pose_2 = restFrame?.pose ?? pose;
+  const paint = restFrame?.paint;
   let children;
   if ($[2] !== color || $[3] !== pose_2 || $[4] !== paint) {
     children = jsxProd_default(Clawd, {
@@ -462,22 +485,22 @@ function AnimatedClawd(m) {
     $[4] = paint;
     $[5] = children;
   } else children = $[5];
-  let _e;
-  if ($[6] !== marginTop || $[7] !== children || $[8] !== q) {
-    _e = jsxProd_default(Box, {
+  let clawdBox;
+  if ($[6] !== marginTop || $[7] !== children || $[8] !== x) {
+    clawdBox = jsxProd_default(Box, {
       marginTop,
-      marginLeft: q,
+      marginLeft: x,
       flexShrink: 0,
       children,
     });
     $[6] = marginTop;
     $[7] = children;
-    $[8] = q;
-    $[9] = _e;
-  } else _e = $[9];
-  let oe;
+    $[8] = x;
+    $[9] = clawdBox;
+  } else clawdBox = $[9];
+  let poofBox;
   if ($[10] !== bounceOffset || $[11] !== poof) {
-    oe =
+    poofBox =
       poof && bounceOffset > 0
         ? jsxProd_default_2(Fragment, {
             children: [
@@ -504,11 +527,11 @@ function AnimatedClawd(m) {
         : null;
     $[10] = bounceOffset;
     $[11] = poof;
-    $[12] = oe;
-  } else oe = $[12];
-  let ve;
+    $[12] = poofBox;
+  } else poofBox = $[12];
+  let shadowBox;
   if ($[13] !== shadow) {
-    ve = shadow
+    shadowBox = shadow
       ? jsxProd_default(Box, {
           position: "absolute",
           top: CLAWD_MIN_OFFSET - 1,
@@ -520,191 +543,199 @@ function AnimatedClawd(m) {
         })
       : null;
     $[13] = shadow;
-    $[14] = ve;
-  } else ve = $[14];
-  let Ee;
-  if ($[15] !== Re || $[16] !== oe || $[17] !== ve || $[18] !== _e) {
-    Ee = jsxProd_default_2(Box, {
-      height: Re,
+    $[14] = shadowBox;
+  } else shadowBox = $[14];
+  let stage;
+  if ($[15] !== height || $[16] !== poofBox || $[17] !== shadowBox || $[18] !== clawdBox) {
+    stage = jsxProd_default_2(Box, {
+      height,
       width: CLAWD_BASE_WIDTH,
       flexDirection: "column",
       flexShrink: 0,
       overflow: "hidden",
-      children: [_e, oe, ve],
+      children: [clawdBox, poofBox, shadowBox],
     });
-    $[15] = Re;
-    $[16] = oe;
-    $[17] = ve;
-    $[18] = _e;
-    $[19] = Ee;
-  } else Ee = $[19];
-  let He;
-  if ($[20] !== We) {
-    He = We
+    $[15] = height;
+    $[16] = poofBox;
+    $[17] = shadowBox;
+    $[18] = clawdBox;
+    $[19] = stage;
+  } else stage = $[19];
+  let heldBox;
+  if ($[20] !== restFrame) {
+    heldBox = restFrame
       ? jsxProd_default(Box, {
           flexShrink: 0,
-          children: We.held,
+          children: restFrame.held,
         })
       : null;
-    $[20] = We;
-    $[21] = He;
-  } else He = $[21];
-  let Ue;
-  if ($[22] !== Re || $[23] !== onClick || $[24] !== Ee || $[25] !== He || $[26] !== width) {
-    Ue = jsxProd_default(Decorative, {
+    $[20] = restFrame;
+    $[21] = heldBox;
+  } else heldBox = $[21];
+  let clawd;
+  if ($[22] !== height || $[23] !== onClick || $[24] !== stage || $[25] !== heldBox || $[26] !== width) {
+    clawd = jsxProd_default(Decorative, {
       children: jsxProd_default_2(Box, {
-        height: Re,
+        height,
         width,
         flexShrink: 0,
         noSelect: true,
         onClick,
-        children: [Ee, He],
+        children: [stage, heldBox],
       }),
     });
-    $[22] = Re;
+    $[22] = height;
     $[23] = onClick;
-    $[24] = Ee;
-    $[25] = He;
+    $[24] = stage;
+    $[25] = heldBox;
     $[26] = width;
-    $[27] = Ue;
-  } else Ue = $[27];
-  return Ue;
+    $[27] = clawd;
+  } else clawd = $[27];
+  return clawd;
 }
 //@ chunk-ag5x7vhf.js:55252-56868 fingerprint = useClawdAnimation (0.646)
-function useClawdAnimation(m, sequence, delayMs, onComplete) {
-  let $ = w(40);
+function useClawdAnimation(autoplay, name, delayMs, onComplete) {
+  let $ = useMemoCache(40);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let I;
+  let isReduced;
   if ($[0] !== isScreenReaderEnabled) {
-    I = () => isReducedMotion(getInitialSettings_2().prefersReducedMotion) || isScreenReaderEnabled;
+    isReduced = () => isReducedMotion(getInitialSettings_2().prefersReducedMotion) || isScreenReaderEnabled;
     $[0] = isScreenReaderEnabled;
-    $[1] = I;
-  } else I = $[1];
-  let [D] = y(I);
-  let A = (m || sequence !== undefined) && !D;
-  let [L, V] = y(A ? 0 : -1);
-  let W;
-  if ($[2] !== m || $[3] !== delayMs || $[4] !== sequence) {
-    W = () => (sequence ? withLeadInFrames(sequence, delayMs) : m ? IDLE_LOOK_FRAMES : CLAWD_ANIMATIONS.jump);
-    $[2] = m;
+    $[1] = isReduced;
+  } else isReduced = $[1];
+  let [reducedMotion] = useState(isReduced);
+  let shouldAnimate = (autoplay || name !== undefined) && !reducedMotion;
+  let [frameIndex, setFrameIndex] = useState(shouldAnimate ? 0 : -1);
+  let pickFrames;
+  if ($[2] !== autoplay || $[3] !== delayMs || $[4] !== name) {
+    pickFrames = () =>
+      name ? withLeadInFrames(name, delayMs) : autoplay ? IDLE_LOOK_FRAMES : CLAWD_ANIMATIONS.jump;
+    $[2] = autoplay;
     $[3] = delayMs;
-    $[4] = sequence;
-    $[5] = W;
-  } else W = $[5];
-  let [z, K] = y(W);
-  let q;
+    $[4] = name;
+    $[5] = pickFrames;
+  } else pickFrames = $[5];
+  let [frames, setFrames] = useState(pickFrames);
+  let notifyComplete;
   if ($[6] !== onComplete) {
-    q = () => onComplete?.();
+    notifyComplete = () => onComplete?.();
     $[6] = onComplete;
-    $[7] = q;
-  } else q = $[7];
-  let Y = Oo(q);
-  let pe = R(!sequence);
+    $[7] = notifyComplete;
+  } else notifyComplete = $[7];
+  let complete = useEffectEvent(notifyComplete);
+  let canClickRef = useRef(!name);
   let clock = useClock();
-  let ge;
-  if ($[8] !== Y || $[9] !== D) {
-    ge = () => {
-      if (D) Y();
+  let settleEffect;
+  if ($[8] !== complete || $[9] !== reducedMotion) {
+    settleEffect = () => {
+      if (reducedMotion) complete();
     };
-    $[8] = Y;
-    $[9] = D;
-    $[10] = ge;
-  } else ge = $[10];
-  let Re;
-  if ($[11] !== D) {
-    Re = [D];
-    $[11] = D;
-    $[12] = Re;
-  } else Re = $[12];
-  P(ge, Re);
-  let We;
-  if ($[13] !== m || $[14] !== L || $[15] !== D) {
-    We = () => {
-      if (m || D || L !== -1 || !pe.current) {
+    $[8] = complete;
+    $[9] = reducedMotion;
+    $[10] = settleEffect;
+  } else settleEffect = $[10];
+  let settleDeps;
+  if ($[11] !== reducedMotion) {
+    settleDeps = [reducedMotion];
+    $[11] = reducedMotion;
+    $[12] = settleDeps;
+  } else settleDeps = $[12];
+  useEffect(settleEffect, settleDeps);
+  let onClick;
+  if ($[13] !== autoplay || $[14] !== frameIndex || $[15] !== reducedMotion) {
+    onClick = () => {
+      if (autoplay || reducedMotion || frameIndex !== -1 || !canClickRef.current) {
         return;
       }
-      let fe = filterEntranceAnimations(IN_PLACE_ANIMATION_NAMES, chalkForChart());
-      K(CLAWD_ANIMATIONS[fe[Math.floor(Math.random() * fe.length)]]);
-      V(0);
+      let entranceNames = filterEntranceAnimations(IN_PLACE_ANIMATION_NAMES, chalkForChart());
+      setFrames(CLAWD_ANIMATIONS[entranceNames[Math.floor(Math.random() * entranceNames.length)]]);
+      setFrameIndex(0);
     };
-    $[13] = m;
-    $[14] = L;
-    $[15] = D;
-    $[16] = We;
-  } else We = $[16];
-  let onClick = We;
-  let te;
-  if ($[17] !== m || $[18] !== clock || $[19] !== Y || $[20] !== L || $[21] !== z || $[22] !== sequence) {
-    te = () => {
-      if (L === -1) {
+    $[13] = autoplay;
+    $[14] = frameIndex;
+    $[15] = reducedMotion;
+    $[16] = onClick;
+  } else onClick = $[16];
+  let onClick_2 = onClick;
+  let tick;
+  if (
+    $[17] !== autoplay ||
+    $[18] !== clock ||
+    $[19] !== complete ||
+    $[20] !== frameIndex ||
+    $[21] !== frames ||
+    $[22] !== name
+  ) {
+    tick = () => {
+      if (frameIndex === -1) {
         return;
       }
-      if (L >= z.length) {
-        pe.current = true;
-        Y();
-        V(m && !sequence ? 0 : -1);
+      if (frameIndex >= frames.length) {
+        canClickRef.current = true;
+        complete();
+        setFrameIndex(autoplay && !name ? 0 : -1);
         return;
       }
-      return clock.setTimeout(() => V(nextFrameIndex), CLAWD_FRAME_WIDTH);
+      return clock.setTimeout(() => setFrameIndex(nextFrameIndex), CLAWD_FRAME_WIDTH);
     };
-    $[17] = m;
+    $[17] = autoplay;
     $[18] = clock;
-    $[19] = Y;
-    $[20] = L;
-    $[21] = z;
-    $[22] = sequence;
-    $[23] = te;
-  } else te = $[23];
-  let me;
-  if ($[24] !== m || $[25] !== clock || $[26] !== L || $[27] !== z || $[28] !== sequence) {
-    me = [L, z, m, sequence, clock];
-    $[24] = m;
+    $[19] = complete;
+    $[20] = frameIndex;
+    $[21] = frames;
+    $[22] = name;
+    $[23] = tick;
+  } else tick = $[23];
+  let tickDeps;
+  if ($[24] !== autoplay || $[25] !== clock || $[26] !== frameIndex || $[27] !== frames || $[28] !== name) {
+    tickDeps = [frameIndex, frames, autoplay, name, clock];
+    $[24] = autoplay;
     $[25] = clock;
-    $[26] = L;
-    $[27] = z;
-    $[28] = sequence;
-    $[29] = me;
-  } else me = $[29];
-  P(te, me);
-  let se;
-  if ($[30] !== sequence) {
-    se = sequence ? CLAWD_ANIMATIONS[sequence].at(-1) : DEFAULT_CLAWD_FRAME;
-    $[30] = sequence;
-    $[31] = se;
-  } else se = $[31];
-  let _e = se;
-  let oe = L >= 0 && L < z.length;
-  let current = oe ? z[L] : _e;
-  const Ee = current.x ?? 0;
-  let He;
+    $[26] = frameIndex;
+    $[27] = frames;
+    $[28] = name;
+    $[29] = tickDeps;
+  } else tickDeps = $[29];
+  useEffect(tick, tickDeps);
+  let lastFrame;
+  if ($[30] !== name) {
+    lastFrame = name ? CLAWD_ANIMATIONS[name].at(-1) : DEFAULT_CLAWD_FRAME;
+    $[30] = name;
+    $[31] = lastFrame;
+  } else lastFrame = $[31];
+  let lastFrame_2 = lastFrame;
+  let isPlaying = frameIndex >= 0 && frameIndex < frames.length;
+  let current = isPlaying ? frames[frameIndex] : lastFrame_2;
+  const x = current.x ?? 0;
+  let state;
   if (
     $[32] !== current.offset ||
     $[33] !== current.poof ||
     $[34] !== current.pose ||
     $[35] !== current.shadow ||
-    $[36] !== oe ||
-    $[37] !== onClick ||
-    $[38] !== Ee
+    $[36] !== isPlaying ||
+    $[37] !== onClick_2 ||
+    $[38] !== x
   ) {
-    He = {
+    state = {
       pose: current.pose,
       bounceOffset: current.offset,
-      x: Ee,
+      x,
       poof: current.poof,
       shadow: current.shadow,
-      isPlaying: oe,
-      onClick,
+      isPlaying,
+      onClick: onClick_2,
     };
     $[32] = current.offset;
     $[33] = current.poof;
     $[34] = current.pose;
     $[35] = current.shadow;
-    $[36] = oe;
-    $[37] = onClick;
-    $[38] = Ee;
-    $[39] = He;
-  } else He = $[39];
-  return He;
+    $[36] = isPlaying;
+    $[37] = onClick_2;
+    $[38] = x;
+    $[39] = state;
+  } else state = $[39];
+  return state;
 }
 export {
   AnimatedClawd,

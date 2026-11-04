@@ -9,12 +9,13 @@
  * attribution: placement 17
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, _enum, array } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, _enum, array } from "../../vendor/zod/v4/classic/schemas.js";
 import { bridgeHostState } from "./bridgeHostState.js";
 import { logForDebugging } from "../utils/debug.js";
 import { logFeatureSad } from "../services/analytics/featureTelemetry.js";
 import { errorMessage } from "../utils/errors.js";
 import { attestationLogPrefix } from "./attestationGate.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-1qpz7qcd.js:26413-26712 placement
 var DEVICE_ATTESTATION_STATUS_NAMES = [
@@ -51,10 +52,10 @@ function normalizeAttestationStatus(deviceAttestationStatus) {
   if (deviceAttestationStatus === "server_authored") return "SERVER_AUTHORED";
   if (deviceAttestationStatus === "server_replayed") return "SERVER_REPLAYED";
   if (deviceAttestationStatus === "transitively_vouched") return "TRANSITIVELY_VOUCHED";
-  let r = deviceAttestationStatus.startsWith(DEVICE_ATTESTATION_STATUS)
+  let statusTail = deviceAttestationStatus.startsWith(DEVICE_ATTESTATION_STATUS)
     ? deviceAttestationStatus.slice(DEVICE_ATTESTATION_STATUS.length)
     : deviceAttestationStatus;
-  return DEVICE_ATTESTATION_STATUS_NAMES.find((n) => n === r) ?? "UNSPECIFIED";
+  return DEVICE_ATTESTATION_STATUS_NAMES.find((name) => name === statusTail) ?? "UNSPECIFIED";
 }
 //@ chunk-1qpz7qcd.js:27109-27173 placement
 var ATTESTATION_LEVEL_ORDER = ["VERIFIED", "VERIFIED_KEYLESS_DEVICE", "VERIFIED_BY_GATE"];
@@ -65,36 +66,41 @@ function weakerAttestationLevel(acceptLevel, acceptLevel_2) {
     : acceptLevel_2;
 }
 //@ chunk-1qpz7qcd.js:27229-27342 placement
-function meetsAttestationLevel(e, acceptLevel) {
-  if (e === "SERVICE_VOUCHED") return true;
-  let index = ATTESTATION_LEVEL_ORDER.findIndex((s) => s === e);
-  return index !== -1 && index <= ATTESTATION_LEVEL_ORDER.indexOf(acceptLevel);
+function meetsAttestationLevel(status, requiredLevel) {
+  if (status === "SERVICE_VOUCHED") return true;
+  let index = ATTESTATION_LEVEL_ORDER.findIndex((level) => level === status);
+  return index !== -1 && index <= ATTESTATION_LEVEL_ORDER.indexOf(requiredLevel);
 }
 //@ chunk-1qpz7qcd.js:27342-27549 placement
-var DEFAULT_ATTESTATION_POLICY = {
-  enforce: false,
-  acceptLevel: "VERIFIED",
-  acceptStatuses: new Set(),
-};
-var UNVERIFIED_ATTESTATION_STATUSES = ["UNSPECIFIED", "ABSENT", "INVALID", "UNCHECKED"];
-var attestationEnforceConfigSchema = DoctorLazy(() =>
-  u({
-    accept_level: _enum(ATTESTATION_LEVEL_ORDER).default("VERIFIED"),
-    accept_statuses: array(_enum(UNVERIFIED_ATTESTATION_STATUSES)).default([]),
-  }),
-);
+var DEFAULT_ATTESTATION_POLICY; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var UNVERIFIED_ATTESTATION_STATUSES;
+var attestationEnforceConfigSchema;
+deferInit("chunk-1qpz7qcd.js:27342", () => {
+  DEFAULT_ATTESTATION_POLICY = {
+    enforce: false,
+    acceptLevel: "VERIFIED",
+    acceptStatuses: new Set(),
+  };
+  UNVERIFIED_ATTESTATION_STATUSES = ["UNSPECIFIED", "ABSENT", "INVALID", "UNCHECKED"];
+  attestationEnforceConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      accept_level: _enum(ATTESTATION_LEVEL_ORDER).default("VERIFIED"),
+      accept_statuses: array(_enum(UNVERIFIED_ATTESTATION_STATUSES)).default([]),
+    }),
+  );
+});
 //@ chunk-1qpz7qcd.js:27549-28114 placement
 /**
  * 解析服务端下发的签名强制配置（accept_level/accept_statuses）；格式错误时只告警一次并保守回落到 VERIFIED。
  */
-function parseAttestationEnforceConfig(e) {
+function parseAttestationEnforceConfig(config) {
   let attestation = bridgeHostState().attestation;
-  let n = attestationEnforceConfigSchema().safeParse(e);
-  if (!n.success && !attestation.malformedConfigReported) {
+  let parsed = attestationEnforceConfigSchema().safeParse(config);
+  if (!parsed.success && !attestation.malformedConfigReported) {
     attestation.malformedConfigReported = true;
     try {
       logForDebugging(
-        `[bridge:attestation] malformed enforce config \u2014 failing closed to accept_level=VERIFIED with no accept_statuses: ${n.error.message}`,
+        `[bridge:attestation] malformed enforce config \u2014 failing closed to accept_level=VERIFIED with no accept_statuses: ${parsed.error.message}`,
         {
           level: "error",
         },
@@ -108,8 +114,8 @@ function parseAttestationEnforceConfig(e) {
   }
   return {
     enforce: true,
-    acceptLevel: n.success ? n.data.accept_level : "VERIFIED",
-    acceptStatuses: new Set(n.success ? n.data.accept_statuses : []),
+    acceptLevel: parsed.success ? parsed.data.accept_level : "VERIFIED",
+    acceptStatuses: new Set(parsed.success ? parsed.data.accept_statuses : []),
   };
 }
 //@ chunk-1qpz7qcd.js:28114-28413 placement
@@ -149,15 +155,15 @@ function setSenderDropWriter(senderDropWriter) {
   bridgeHostState().attestation.senderDropWriter = senderDropWriter;
 }
 //@ chunk-1qpz7qcd.js:28644-28735 placement
-function clearSenderDropWriter(e) {
+function clearSenderDropWriter(writer) {
   let attestation = bridgeHostState().attestation;
-  if (attestation.senderDropWriter === e) attestation.senderDropWriter = undefined;
+  if (attestation.senderDropWriter === writer) attestation.senderDropWriter = undefined;
 }
 //@ chunk-1qpz7qcd.js:28735-28767 placement
 var REMOTE_IO_WARNING_PREFIX = "[remote-io] warning: ";
 //@ chunk-1qpz7qcd.js:28767-29479 placement
 function describeUnsignedEvent({ status, payloadType, subtype, isCloud }) {
-  let i = isCloud
+  let unsupportedAppHint = isCloud
     ? "The app that sent it doesn't sign its activity. Use an app that does."
     : "The app that sent it doesn't sign its activity. Use the terminal or an app that does.";
   return {
@@ -175,7 +181,7 @@ function describeUnsignedEvent({ status, payloadType, subtype, isCloud }) {
           : status === "ABSENT" || status === "INVALID"
             ? "Re-pair the sending device in Trusted Devices."
             : status === "VERIFIED_BY_GATE" || status === "VERIFIED_KEYLESS_DEVICE"
-              ? i
+              ? unsupportedAppHint
               : status === "TRANSITIVELY_VOUCHED"
                 ? "It came from an automated cloud session, not from a person."
                 : undefined,
@@ -185,17 +191,17 @@ function describeUnsignedEvent({ status, payloadType, subtype, isCloud }) {
 /**
  * 生成"远端活动缺少有效设备签名被忽略"的用户提示，突发时只提示一次。
  */
-function formatUnsignedEventWarning(e) {
-  let r = e.isCloud ? "This session" : "Remote Control";
-  if (e.windowCapped)
-    return `${r} is rejecting a burst of unsigned remote activity; further warnings for this burst are suppressed.`;
-  let { what, hint } = describeUnsignedEvent(e);
-  return `${r} ignored a ${what} that arrived without a valid device signature (attestation: ${e.status}).${hint ? ` ${hint}` : ""}`;
+function formatUnsignedEventWarning(notice) {
+  let subject = notice.isCloud ? "This session" : "Remote Control";
+  if (notice.windowCapped)
+    return `${subject} is rejecting a burst of unsigned remote activity; further warnings for this burst are suppressed.`;
+  let { what, hint } = describeUnsignedEvent(notice);
+  return `${subject} ignored a ${what} that arrived without a valid device signature (attestation: ${notice.status}).${hint ? ` ${hint}` : ""}`;
 }
 //@ chunk-1qpz7qcd.js:29815-29975 placement
-function formatUnsignedEventNotice(e) {
-  let { what, hint } = describeUnsignedEvent(e);
-  return `This ${what} arrived without a valid device signature (attestation: ${e.status}) and was ignored.${hint ? ` ${hint}` : ""}`;
+function formatUnsignedEventNotice(notice) {
+  let { what, hint } = describeUnsignedEvent(notice);
+  return `This ${what} arrived without a valid device signature (attestation: ${notice.status}) and was ignored.${hint ? ` ${hint}` : ""}`;
 }
 export {
   normalizeAttestationStatus,

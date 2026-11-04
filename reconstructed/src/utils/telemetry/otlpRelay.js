@@ -13,13 +13,14 @@ import { startupCcrEnv } from "../../tasks/RemoteAgentTask/remoteAgentKinds.js";
 import { isSameOriginAsCcr } from "../../services/mcp/ccrMcpUrls.js";
 import { isDiskless } from "../../bootstrap/state.js";
 import { maskModelIdForTelemetry } from "../model/modelCatalog/catalogEntries.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ry7mqags.js:370-456 placement
 var RELAY_PATH_RE = /^\/v1\/code\/sessions\/[A-Za-z0-9_-]+\/worker\/otlp\/((?:customer\/)?[a-z]+)$/;
 //@ chunk-ry7mqags.js:456-514 placement
-function matchesRelayPath(pathname, e) {
-  let match = RELAY_PATH_RE.exec(pathname);
-  return match !== null && match[1] === e;
+function matchesRelayPath(requestPath, signal) {
+  let match = RELAY_PATH_RE.exec(requestPath);
+  return match !== null && match[1] === signal;
 }
 //@ chunk-ry7mqags.js:514-628 placement
 function isLoopbackHost(hostname) {
@@ -40,29 +41,29 @@ var SIGNAL_ENV_SUFFIX = {
   traces: "TRACES",
 };
 //@ chunk-ry7mqags.js:757-853 placement
-function hasOtlpHeadersEnv(r) {
-  return !!env.OTEL_EXPORTER_OTLP_HEADERS || !!env[`OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[r]}_HEADERS`];
+function hasOtlpHeadersEnv(signal) {
+  return !!env.OTEL_EXPORTER_OTLP_HEADERS || !!env[`OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[signal]}_HEADERS`];
 }
 //@ chunk-ry7mqags.js:853-1369 placement
-function getRemoteOtlpEndpoint(r) {
-  if (r === "traces") return null;
+function getRemoteOtlpEndpoint(signal) {
+  if (signal === "traces") return null;
   if (!isRelayCarrier()) return null;
   let SESSION_INGRESS_URL = env.SESSION_INGRESS_URL;
   let CLAUDE_CODE_REMOTE_SESSION_ID = env.CLAUDE_CODE_REMOTE_SESSION_ID;
-  let trimmed = process.env[`OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[r]}_ENDPOINT`]?.trim();
+  let trimmed = process.env[`OTEL_EXPORTER_OTLP_${SIGNAL_ENV_SUFFIX[signal]}_ENDPOINT`]?.trim();
   if (!SESSION_INGRESS_URL || !CLAUDE_CODE_REMOTE_SESSION_ID || !trimmed) return null;
-  if (hasOtlpHeadersEnv(r)) return null;
-  let f =
-    r === "logs"
+  if (hasOtlpHeadersEnv(signal)) return null;
+  let paths =
+    signal === "logs"
       ? ["customer/logs"]
       : [...(hasRemoteOtelLogsEndpoint() ? ["customer/metrics"] : []), "metrics"];
   try {
     let origin = new URL(SESSION_INGRESS_URL).origin;
     let href = new URL(trimmed).href;
-    for (let c of f) {
-      let l = `/v1/code/sessions/${CLAUDE_CODE_REMOTE_SESSION_ID}/worker/otlp/${c}`;
-      let href_2 = new URL(`${origin}${l}`).href;
-      if (matchesRelayPath(l, c) && isSameOriginAsCcr(href_2) && href === href_2) return href_2;
+    for (let path of paths) {
+      let url = `/v1/code/sessions/${CLAUDE_CODE_REMOTE_SESSION_ID}/worker/otlp/${path}`;
+      let href_2 = new URL(`${origin}${url}`).href;
+      if (matchesRelayPath(url, path) && isSameOriginAsCcr(href_2) && href === href_2) return href_2;
     }
     return null;
   } catch {
@@ -77,8 +78,8 @@ function hasRemoteOtelLogsEndpoint() {
 /**
  * 走中继时对模型名做脱敏。
  */
-function maskModelIdIfRelayed(r) {
-  return hasRemoteOtelLogsEndpoint() ? maskModelIdForTelemetry(r) : r;
+function maskModelIdIfRelayed(modelId) {
+  return hasRemoteOtelLogsEndpoint() ? maskModelIdForTelemetry(modelId) : modelId;
 }
 //@ chunk-ry7mqags.js:1453-1781 placement
 /**
@@ -88,23 +89,23 @@ function ccrTracesRelayUrl() {
   if (!isRelayCarrier()) return null;
   let OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
   if (!OTEL_EXPORTER_OTLP_TRACES_ENDPOINT) return null;
-  let e;
+  let url;
   try {
-    e = new URL(OTEL_EXPORTER_OTLP_TRACES_ENDPOINT);
+    url = new URL(OTEL_EXPORTER_OTLP_TRACES_ENDPOINT);
   } catch {
     return null;
   }
   if (
-    !(e.protocol === "https:" || (e.protocol === "http:" && isLoopbackHost(e.hostname))) ||
-    e.username !== "" ||
-    e.password !== "" ||
-    e.search !== "" ||
-    e.hash !== "" ||
-    !isSameOriginAsCcr(e.href) ||
-    !matchesRelayPath(e.pathname, "traces")
+    !(url.protocol === "https:" || (url.protocol === "http:" && isLoopbackHost(url.hostname))) ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    !isSameOriginAsCcr(url.href) ||
+    !matchesRelayPath(url.pathname, "traces")
   )
     return null;
-  return e.href;
+  return url.href;
 }
 //@ chunk-ry7mqags.js:1781-1933 placement
 /**
@@ -114,8 +115,8 @@ function isCcrTracesEndpoint() {
   let OTEL_EXPORTER_OTLP_TRACES_ENDPOINT = env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT;
   if (!OTEL_EXPORTER_OTLP_TRACES_ENDPOINT) return false;
   try {
-    let e = new URL(OTEL_EXPORTER_OTLP_TRACES_ENDPOINT);
-    return isSameOriginAsCcr(e.href) && matchesRelayPath(e.pathname, "traces");
+    let url = new URL(OTEL_EXPORTER_OTLP_TRACES_ENDPOINT);
+    return isSameOriginAsCcr(url.href) && matchesRelayPath(url.pathname, "traces");
   } catch {
     return false;
   }
@@ -130,9 +131,9 @@ class ArmLatch {
   freeze() {
     this.frozen = this.armed;
   }
-  resolve(r) {
+  resolve(fallback) {
     if (this.frozen !== undefined) return this.frozen;
-    return this.armed || r();
+    return this.armed || fallback();
   }
   reset() {
     this.armed = false;
@@ -143,7 +144,10 @@ class ArmLatch {
 /**
  * traces 是否走中继的闩锁。
  */
-var tracesRelayedLatch = new ArmLatch();
+var tracesRelayedLatch; // deferred: uses ArmLatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ry7mqags.js:2135", () => {
+  tracesRelayedLatch = new ArmLatch();
+});
 //@ chunk-ry7mqags.js:2149-2201 placement
 function isTracesRelayed() {
   return tracesRelayedLatch.resolve(() => ccrTracesRelayUrl() !== null);

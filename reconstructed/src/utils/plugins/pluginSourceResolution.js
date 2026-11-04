@@ -34,28 +34,29 @@ function unresolvedForLocalMarketplace(source) {
 /**
  * 根据缓存的市场条目判断插件来源：本地市场内的相对路径插件解析成目录路径；其他来源返回 copy； 本地市场条目解析失败时返回 unresolved 与原因。
  */
-async function resolvePluginSourceLocation(e, o) {
+async function resolvePluginSourceLocation(pluginId, storageV5) {
   let [pluginByIdCacheOnly, knownMarketplaces] = await Promise.all([
-    getPluginByIdCacheOnly(e, o),
-    loadKnownMarketplacesSafe(o),
+    getPluginByIdCacheOnly(pluginId, storageV5),
+    loadKnownMarketplacesSafe(storageV5),
   ]);
-  let source = knownMarketplaces[parsePluginIdentifier(e).marketplace ?? ""]?.source;
+  let source = knownMarketplaces[parsePluginIdentifier(pluginId).marketplace ?? ""]?.source;
   if (pluginByIdCacheOnly === null) return unresolvedForLocalMarketplace(source);
   let { source: source_2 } = pluginByIdCacheOnly.entry;
-  let c = isLocalMarketplaceEntry(source_2, source);
-  if (typeof source_2 !== "string" || !c)
+  let isLocalEntry = isLocalMarketplaceEntry(source_2, source);
+  if (typeof source_2 !== "string" || !isLocalEntry)
     return {
       kind: "copy",
     };
-  let i = seedDirFor(pluginByIdCacheOnly.marketplaceInstallLocation) === undefined ? "workspace" : "system";
+  let space =
+    seedDirFor(pluginByIdCacheOnly.marketplaceInstallLocation) === undefined ? "workspace" : "system";
   let pluginEntryPath = await resolvePluginEntryPath(
-    e,
+    pluginId,
     pluginByIdCacheOnly.marketplaceInstallLocation,
     source_2,
     knownMarketplaces,
     tryUnwrapTextPayload(),
-    o,
-    i,
+    storageV5,
+    space,
   );
   return pluginEntryPath.kind === "ok"
     ? {

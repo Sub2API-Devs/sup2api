@@ -5,13 +5,13 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_syntax_pb } from "../../../cel-spec/dist/cjs/gen/cel/expr/syntax_pb.js";
 import { require_parser } from "./parser.js";
 import { require_protobuf } from "../../../protobuf/dist/commonjs/index.js";
 
 //@ chunk-fq0cr76a.js:597305-597494 cjs-fingerprint
-var require_parse_2 = x(function (cjsExports) {
+var require_parse_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

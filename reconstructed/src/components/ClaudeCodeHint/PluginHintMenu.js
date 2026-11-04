@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: affinity 1, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { truncateToWidth } from "../../utils/format.js";
 import { labelOr } from "../../utils/permissions/approvalPayloadSerialization.js";
 import {
@@ -23,15 +23,15 @@ import { DesktopUpsellStartup } from "../DesktopUpsell/DesktopUpsellStartup.js";
 var MAX_HINT_LABEL_WIDTH = 24;
 //@ chunk-18hwfzwa.js:1108728-1109652 fingerprint = PluginHintMenu (0.447)
 function PluginHintMenu(props) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { pluginName, pluginDescription, marketplaceName, sourceCommand, onResponse } = props;
-  let Be;
+  let commandLabel;
   if ($[0] !== sourceCommand) {
-    Be = truncateToWidth(labelOr(sourceCommand, "(unnamed command)"), MAX_HINT_LABEL_WIDTH);
+    commandLabel = truncateToWidth(labelOr(sourceCommand, "(unnamed command)"), MAX_HINT_LABEL_WIDTH);
     $[0] = sourceCommand;
-    $[1] = Be;
-  } else Be = $[1];
-  let children = Be;
+    $[1] = commandLabel;
+  } else commandLabel = $[1];
+  let children = commandLabel;
   let intro;
   if ($[2] !== children) {
     intro = jsxProd_default_2(Text, {
@@ -69,7 +69,7 @@ function PluginHintMenu(props) {
     ];
     $[4] = options;
   } else options = $[4];
-  let Xe;
+  let upsell;
   if (
     $[5] !== marketplaceName ||
     $[6] !== onResponse ||
@@ -77,7 +77,7 @@ function PluginHintMenu(props) {
     $[8] !== pluginName ||
     $[9] !== intro
   ) {
-    Xe = jsxProd_default(DesktopUpsellStartup, {
+    upsell = jsxProd_default(DesktopUpsellStartup, {
       title: "Plugin recommendation",
       intro,
       pluginName,
@@ -93,8 +93,8 @@ function PluginHintMenu(props) {
     $[7] = pluginDescription;
     $[8] = pluginName;
     $[9] = intro;
-    $[10] = Xe;
-  } else Xe = $[10];
-  return Xe;
+    $[10] = upsell;
+  } else upsell = $[10];
+  return upsell;
 }
 export { PluginHintMenu };

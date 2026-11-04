@@ -8,9 +8,10 @@
  * pieces: chunk-s61vbvea.js (7)
  * attribution: placement 7
  */
-import { Ar } from "../../../../runtime/bun-runtime.js";
+import { __export } from "../../../../runtime/bun-runtime.js";
 import { settingsJsonSchema } from "../../../utils/settings/schemaOutput.js";
 import { logForDebugging } from "../../../utils/debug.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:10204-10215 placement
 /**
@@ -18,10 +19,13 @@ import { logForDebugging } from "../../../utils/debug.js";
  */
 var BUILTIN_TOOL_SCHEMAS_EXPORTS = {};
 //@ chunk-s61vbvea.js:10215-10297 placement
-Ar(BUILTIN_TOOL_SCHEMAS_EXPORTS, {
-  builtinToolSchemasOf: () => builtinToolSchemasOf,
-  default: () => BUILTIN_TOOL_SCHEMAS_EXPORTS,
-  outputJsonSchemaOf: () => outputJsonSchemaOf,
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:10215", () => {
+  __export(BUILTIN_TOOL_SCHEMAS_EXPORTS, {
+    builtinToolSchemasOf: () => builtinToolSchemasOf,
+    default: () => BUILTIN_TOOL_SCHEMAS_EXPORTS,
+    outputJsonSchemaOf: () => outputJsonSchemaOf,
+  });
 });
 //@ chunk-s61vbvea.js:454996-455140 placement
 /**
@@ -29,11 +33,11 @@ Ar(BUILTIN_TOOL_SCHEMAS_EXPORTS, {
  */
 class SchemaConversionCache {
   converted = new WeakMap();
-  lookup(e) {
-    return this.converted.get(e);
+  lookup(schema) {
+    return this.converted.get(schema);
   }
-  remember(e, n) {
-    this.converted.set(e, n);
+  remember(schema, jsonSchema) {
+    this.converted.set(schema, jsonSchema);
   }
   reset() {
     this.converted = new WeakMap();
@@ -43,19 +47,22 @@ class SchemaConversionCache {
 /**
  * zod → JSON Schema 的缓存
  */
-var schemaConversionCache = new SchemaConversionCache();
+var schemaConversionCache; // deferred: uses SchemaConversionCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:455140", () => {
+  schemaConversionCache = new SchemaConversionCache();
+});
 //@ chunk-s61vbvea.js:455154-455267 placement
 /**
  * 把工具的 zod 输入 schema 转为 JSON Schema（不可表示时抛错），结果按 schema 缓存。被工具 API schema、延迟工具统计、serve 模式等使用。
  */
 function toolInputJsonSchema(inputSchema) {
-  let n = schemaConversionCache.lookup(inputSchema);
-  if (n) return n;
-  let r = settingsJsonSchema(inputSchema, {
+  let cached = schemaConversionCache.lookup(inputSchema);
+  if (cached) return cached;
+  let jsonSchema = settingsJsonSchema(inputSchema, {
     unrepresentable: "throw",
   });
-  schemaConversionCache.remember(inputSchema, r);
-  return r;
+  schemaConversionCache.remember(inputSchema, jsonSchema);
+  return jsonSchema;
 }
 //@ chunk-s61vbvea.js:626893-627024 placement
 function outputJsonSchemaOf(outputSchema) {
@@ -71,12 +78,12 @@ function outputJsonSchemaOf(outputSchema) {
 //@ chunk-s61vbvea.js:627024-627203 placement
 var builtinToolSchemasOf = (allBaseToolsFromRegistry) =>
   allBaseToolsFromRegistry
-    .filter((n) => n.isMcp !== true)
-    .map((n) => ({
-      name: n.name,
-      inputSchema: n.inputJSONSchema ?? toolInputJsonSchema(n.inputSchema),
-      ...(n.outputSchema !== undefined && {
-        outputSchema: outputJsonSchemaOf(n.outputSchema),
+    .filter((tool) => tool.isMcp !== true)
+    .map((tool) => ({
+      name: tool.name,
+      inputSchema: tool.inputJSONSchema ?? toolInputJsonSchema(tool.inputSchema),
+      ...(tool.outputSchema !== undefined && {
+        outputSchema: outputJsonSchemaOf(tool.outputSchema),
       }),
     }));
-export { toolInputJsonSchema, builtinToolSchemasOf };
+export { toolInputJsonSchema, builtinToolSchemasOf, BUILTIN_TOOL_SCHEMAS_EXPORTS, outputJsonSchemaOf };

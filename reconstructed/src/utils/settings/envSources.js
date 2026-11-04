@@ -32,24 +32,25 @@ function effectiveEnvSnapshot() {
 }
 //@ chunk-e4vyc04t.js:543-727 placement
 function overlayEnvCaseInsensitive(preSettingsEnvSnapshot, nonProjectEnv) {
-  let r = new Set(Object.keys(nonProjectEnv).map((key) => key.toUpperCase()));
-  let t = {
+  let uppercaseKeys = new Set(Object.keys(nonProjectEnv).map((key) => key.toUpperCase()));
+  let result = {
     ...preSettingsEnvSnapshot,
   };
-  for (let key of Object.keys(t)) if (!(key in nonProjectEnv) && r.has(key.toUpperCase())) delete t[key];
-  return Object.assign(t, nonProjectEnv);
+  for (let key of Object.keys(result))
+    if (!(key in nonProjectEnv) && uppercaseKeys.has(key.toUpperCase())) delete result[key];
+  return Object.assign(result, nonProjectEnv);
 }
 //@ chunk-e4vyc04t.js:727-906 placement
-function mergeEnvCaseInsensitive(...s) {
-  let n = new Map();
-  for (let t of s)
-    for (let [key, value] of Object.entries(t))
-      n.set(key.toUpperCase(), {
+function mergeEnvCaseInsensitive(...envs) {
+  let byKey = new Map();
+  for (let env of envs)
+    for (let [key, value] of Object.entries(env))
+      byKey.set(key.toUpperCase(), {
         key,
         value,
       });
-  let r = {};
-  for (let { key, value: e } of n.values()) r[key] = e;
-  return r;
+  let out = {};
+  for (let { key, value } of byKey.values()) out[key] = value;
+  return out;
 }
 export { effectiveEnvSnapshot };

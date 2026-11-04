@@ -8,7 +8,7 @@
  * pieces: chunk-bc20zedk.js (54)
  * attribution: placement 54
  */
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { repeatString, stripSuffix, countCharInString } from "../../../utils/stringUtils.js";
 import { bunStringWidth } from "../../../ink/stringWidth.js";
 import { wrapText, MarkdownTableView } from "../../MarkdownTable.js";
@@ -43,17 +43,17 @@ import { useScrollViewportSize } from "../../ScrollViewportContext.js";
 import { useTerminalSize } from "../../../hooks/useTerminalSize.js";
 import { Box, Text } from "../../../ink/components/Text.js";
 import {
-  qt,
-  Q,
-  Se,
-  yt,
-  R,
-  y,
-  Vc,
-  P,
+  createContext,
+  useMemo,
+  useContext,
+  useSyncExternalStore,
+  useRef,
+  useState,
+  createElement,
+  useEffect,
   init_react_production,
-  zt,
-  ce,
+  useLayoutEffect,
+  useCallback,
 } from "../../../../vendor/react/cjs/react.production.js";
 import { isSmallMarkdown, lexMarkdownWindowed, lexInlineHtml } from "../../../utils/doctorContextWarnings.js";
 import { controlCharTokens, stripControlCharsForInline } from "../../../utils/markdownInlineRendering.js";
@@ -85,7 +85,7 @@ import { useSelection, useMeasured, useFinePointer } from "../../../ink/componen
 import { hrefInList } from "../../../plugins/functionHooks/ui/interactions.js";
 import { pressFromTerminal, ActionKeysSeat } from "./actionKeys.js";
 import { getFocusManager } from "../../../ink/focus.js";
-import { kp } from "../../../../vendor/convert-to-spaces/dist/index.js";
+import { APP_CONTEXT } from "../../../../vendor/convert-to-spaces/dist/index.js";
 import {
   clearFocusedClient,
   focusStore,
@@ -96,85 +96,88 @@ import { paneRegistry, focusPane } from "../../../plugins/functionHooks/panes.js
 import { usePreDispatchKeyHandler } from "../../../keybindings/useActionHandlers.js";
 import { measureElement } from "../../../ink/hooks/useTerminalHooks.js";
 import { SCROLL_JUMP_LINES } from "../../../ink/scrollConstants.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-bc20zedk.js:15392-16300 placement
 function layoutMarkdownTable(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { headers, rows, terminalWidth, truncatedCount } = props;
-  let c;
+  let lines;
   if ($[0] !== headers || $[1] !== rows || $[2] !== terminalWidth || $[3] !== truncatedCount) {
-    c = [];
+    lines = [];
     let min = Math.min(terminalWidth - 1, 40);
-    let x = repeatString("\u2500", min);
-    rows.forEach((h) => {
-      let C = [];
-      h.forEach((I, b) => {
-        let T = headers[b] || "";
-        let trimmed = I.trimEnd().replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
-        if (!T && !trimmed) {
+    let divider = repeatString("\u2500", min);
+    rows.forEach((row) => {
+      let rowLines = [];
+      row.forEach((cell, index) => {
+        let header = headers[index] || "";
+        let trimmed = cell.trimEnd().replace(/\n+/g, " ").replace(/\s+/g, " ").trim();
+        if (!header && !trimmed) {
           return;
         }
-        let A = T ? terminalWidth - bunStringWidth(T) - 3 : terminalWidth - 1;
-        let _ = terminalWidth - 2 - 1;
-        let N = wrapText(trimmed, Math.max(A, 10));
-        let E = N[0] || "";
-        let U;
-        if (N.length <= 1) U = N;
+        let cellWidth = header ? terminalWidth - bunStringWidth(header) - 3 : terminalWidth - 1;
+        let continuationWidth = terminalWidth - 2 - 1;
+        let wrapped = wrapText(trimmed, Math.max(cellWidth, 10));
+        let firstLine = wrapped[0] || "";
+        let cellLines;
+        if (wrapped.length <= 1) cellLines = wrapped;
         else {
-          let joined = N.slice(1).map(trimEntryText).join(" ");
-          let B = wrapText(joined, _);
-          U = [E, ...B];
+          let joined = wrapped.slice(1).map(trimEntryText).join(" ");
+          let restLines = wrapText(joined, continuationWidth);
+          cellLines = [firstLine, ...restLines];
         }
-        C.push(T ? `${BOLD_OPEN}${T}:${BOLD_CLOSE} ${U[0] || ""}` : U[0] || "");
-        for (let idx = 1; idx < U.length; idx++) {
-          let M = U[idx];
-          if (!M.trim()) {
+        rowLines.push(
+          header ? `${BOLD_OPEN}${header}:${BOLD_CLOSE} ${cellLines[0] || ""}` : cellLines[0] || "",
+        );
+        for (let idx = 1; idx < cellLines.length; idx++) {
+          let line = cellLines[idx];
+          if (!line.trim()) {
             continue;
           }
-          C.push(`${M}`);
+          rowLines.push(`${line}`);
         }
       });
-      if (C.length === 0) {
+      if (rowLines.length === 0) {
         return;
       }
-      if (c.length > 0) c.push(x);
-      c.push(...C);
+      if (lines.length > 0) lines.push(divider);
+      lines.push(...rowLines);
     });
     if (truncatedCount > 0) {
-      if (c.length > 0) c.push(x);
-      let D;
+      if (lines.length > 0) lines.push(divider);
+      let moreText;
       if ($[5] !== truncatedCount) {
-        D = moreRowsText(truncatedCount);
+        moreText = moreRowsText(truncatedCount);
         $[5] = truncatedCount;
-        $[6] = D;
-      } else D = $[6];
-      c.push(D);
+        $[6] = moreText;
+      } else moreText = $[6];
+      lines.push(moreText);
     }
     $[0] = headers;
     $[1] = rows;
     $[2] = terminalWidth;
     $[3] = truncatedCount;
-    $[4] = c;
-  } else c = $[4];
-  const children = c.join(`
+    $[4] = lines;
+  } else lines = $[4];
+  const children = lines.join(`
 `);
-  let G;
+  let ansiElement;
   if ($[7] !== children) {
-    G = jsxProd_default(Ansi, {
+    ansiElement = jsxProd_default(Ansi, {
       children,
     });
     $[7] = children;
-    $[8] = G;
-  } else G = $[8];
-  return G;
+    $[8] = ansiElement;
+  } else ansiElement = $[8];
+  return ansiElement;
 }
 //@ chunk-bc20zedk.js:16300-16315 placement
 var MARKDOWN_MAX_HEADING_LEVEL = 10;
 var MARKDOWN_TABLE_PAD = 2;
 //@ chunk-bc20zedk.js:16315-16433 placement
-function listItemIndent(indent, p, room) {
+function listItemIndent(indent, markerWidth, room) {
   let max = Math.max(0, Math.min(indent, room - MARKDOWN_TABLE_PAD));
-  let markerCell = Math.max(MARKDOWN_TABLE_PAD, Math.min(p, room - max));
+  let markerCell = Math.max(MARKDOWN_TABLE_PAD, Math.min(markerWidth, room - max));
   return {
     rowIndent: max,
     markerCell,
@@ -193,90 +196,90 @@ function isBlockToken(token) {
 /**
  * 列表嵌套深度与条目数是否都在上限内（超限则不按列表渲染）。
  */
-function isListWithinLimits(o) {
-  let p = 0;
-  let a = [];
-  for (let m of o)
-    if (m.type === "list")
-      a.push({
-        list: m,
+function isListWithinLimits(tokens) {
+  let itemCount = 0;
+  let stack = [];
+  for (let token of tokens)
+    if (token.type === "list")
+      stack.push({
+        list: token,
         depth: 1,
       });
-  for (let m = a.pop(); m; m = a.pop()) {
-    if (m.depth > MARKDOWN_CODE_INDENT) return false;
-    for (let item of m.list.items) {
-      if (++p > MARKDOWN_MAX_TABLE_CELL) return false;
-      let u = true;
+  for (let entry = stack.pop(); entry; entry = stack.pop()) {
+    if (entry.depth > MARKDOWN_CODE_INDENT) return false;
+    for (let item of entry.list.items) {
+      if (++itemCount > MARKDOWN_MAX_TABLE_CELL) return false;
+      let isOpen = true;
       for (let token of flattenNumberOnlyLists(item).tokens)
         if (token.type === "list") {
-          a.push({
+          stack.push({
             list: token,
-            depth: m.depth + 1,
+            depth: entry.depth + 1,
           });
-          u = false;
+          isOpen = false;
         } else if (isBlockToken(token)) {
-          if (++p > MARKDOWN_MAX_TABLE_CELL) return false;
-          u = false;
-        } else if (token.type !== "space" && !u) {
-          if (++p > MARKDOWN_MAX_TABLE_CELL) return false;
-          u = true;
+          if (++itemCount > MARKDOWN_MAX_TABLE_CELL) return false;
+          isOpen = false;
+        } else if (token.type !== "space" && !isOpen) {
+          if (++itemCount > MARKDOWN_MAX_TABLE_CELL) return false;
+          isOpen = true;
         }
     }
   }
   return true;
 }
 //@ chunk-bc20zedk.js:16928-17130 placement
-function MarkdownList(o) {
-  let $ = w(3);
+function MarkdownList(props) {
+  let $ = useMemoCache(3);
   let { columns } = useScrollViewportSize(useTerminalSize());
   let room =
-    Math.min(columns - CODE_LIST_TAB_WIDTH, o.maxProseWidth ?? Infinity) - MARKDOWN_MAX_HEADING_LEVEL;
-  let f;
-  if ($[0] !== o || $[1] !== room) {
-    f = jsxProd_default(MarkdownListItems, {
+    Math.min(columns - CODE_LIST_TAB_WIDTH, props.maxProseWidth ?? Infinity) - MARKDOWN_MAX_HEADING_LEVEL;
+  let listElement;
+  if ($[0] !== props || $[1] !== room) {
+    listElement = jsxProd_default(MarkdownListItems, {
       indent: 0,
       listDepth: 0,
       room,
-      ...o,
+      ...props,
     });
-    $[0] = o;
+    $[0] = props;
     $[1] = room;
-    $[2] = f;
-  } else f = $[2];
-  return f;
+    $[2] = listElement;
+  } else listElement = $[2];
+  return listElement;
 }
 //@ chunk-bc20zedk.js:17130-17390 placement
-function MarkdownListItems({ token, blankLineBefore, ...a }) {
-  let m = orderedListRange(token);
-  return token.items.map((item, u) =>
+function MarkdownListItems({ token, blankLineBefore, ...restProps }) {
+  let range = orderedListRange(token);
+  return token.items.map((item, index) =>
     jsxProd_default(
       renderMarkdownListItem,
       {
         item,
         marker: listMarkerText(
-          a.listDepth,
+          restProps.listDepth,
           token.ordered
             ? {
-                number: m.first + u,
-                ...m,
+                number: range.first + index,
+                ...range,
               }
             : null,
         ),
-        blankLineBefore: u === 0 ? blankLineBefore : endsWithBlockGap(token.items[u - 1]),
-        ...a,
-        tailWrap: u === token.items.length - 1 ? a.tailWrap : undefined,
+        blankLineBefore: index === 0 ? blankLineBefore : endsWithBlockGap(token.items[index - 1]),
+        ...restProps,
+        tailWrap: index === token.items.length - 1 ? restProps.tailWrap : undefined,
       },
-      u,
+      index,
     ),
   );
 }
 //@ chunk-bc20zedk.js:17390-17593 placement
-function endsWithBlockGap(o) {
-  let last = o.tokens.at(-1);
+function endsWithBlockGap(tokens) {
+  let last = tokens.tokens.at(-1);
   if (last?.type === "space" || last?.type === "heading" || last?.type === "table") return true;
   if (last?.type === "list") {
-    let last_2 = last.items.at(-1);
-    return last_2 ? endsWithBlockGap(last_2) : false;
+    let tokens = last.items.at(-1);
+    return tokens ? endsWithBlockGap(tokens) : false;
   }
   return last?.type === "html" && endsWithHardBreak(last.raw);
 }
@@ -297,82 +300,82 @@ function renderMarkdownListItem({
   room,
   maxProseWidth,
 }) {
-  let L = flattenNumberOnlyLists(item);
-  let A = [];
-  for (let token of L.tokens) {
+  let flattenedItem = flattenNumberOnlyLists(item);
+  let rows = [];
+  for (let token of flattenedItem.tokens) {
     if (token.type === "list") {
-      A.push({
+      rows.push({
         kind: "list",
         token,
       });
       continue;
     }
-    let D = token.type === "blockquote" ? leadingBlockToken(token, highlight) : undefined;
-    let G = formatTokenWindowed(D ?? token, theme, {
+    let leadingToken = token.type === "blockquote" ? leadingBlockToken(token, highlight) : undefined;
+    let formatted = formatTokenWindowed(leadingToken ?? token, theme, {
       listDepth: listDepth + 1,
       orderedListNumber: null,
-      parent: L,
+      parent: flattenedItem,
       highlight,
       glueProse: false,
       linkCap,
       windowed: isWindowed,
     });
     if (isBlockToken(token)) {
-      A.push({
+      rows.push({
         kind: "block",
         text:
           token.type === "code"
             ? stripSuffix(
-                G,
+                formatted,
                 `
 `,
               )
-            : (D ? G : G.replace(/^\n+/, "")).trimEnd(),
+            : (leadingToken ? formatted : formatted.replace(/^\n+/, "")).trimEnd(),
       });
       continue;
     }
-    let last = A.at(-1);
-    if (last?.kind === "inline") last.text += G;
+    let last = rows.at(-1);
+    if (last?.kind === "inline") last.text += formatted;
     else
-      A.push({
+      rows.push({
         kind: "inline",
-        text: G,
+        text: formatted,
       });
   }
-  if (A[0]?.kind !== "inline")
-    A.unshift({
+  if (rows[0]?.kind !== "inline")
+    rows.unshift({
       kind: "inline",
       text: "",
     });
-  let _ = bunStringWidth(marker) + 1;
-  let indent_2 = Math.min(indent + _, MAX_INDENT_SPACES);
-  let { rowIndent, markerCell } = listItemIndent(indent, _, room);
-  let Y = [];
-  let B = blankLineBefore;
-  let W = A.length - 1;
-  A.forEach((M, D) => {
-    let G = D === W ? tailWrap : undefined;
-    if (M.kind === "inline") {
-      let q = M.text.startsWith(`
+  let markerWidth = bunStringWidth(marker) + 1;
+  let indent_2 = Math.min(indent + markerWidth, MAX_INDENT_SPACES);
+  let { rowIndent, markerCell } = listItemIndent(indent, markerWidth, room);
+  let elements = [];
+  let needsGap = blankLineBefore;
+  let lastIndex = rows.length - 1;
+  rows.forEach((row, index) => {
+    let wrapMode = index === lastIndex ? tailWrap : undefined;
+    if (row.kind === "inline") {
+      let startsWithNewline = row.text.startsWith(`
 `);
-      let X = endsWithHardBreak(M.text);
-      let J = M.text.replace(/^\n+/, "").trimEnd();
-      if (!J && D > 0) {
-        B ||= M.text.includes(`
+      let hasHardBreak = endsWithHardBreak(row.text);
+      let text = row.text.replace(/^\n+/, "").trimEnd();
+      if (!text && index > 0) {
+        needsGap ||= row.text.includes(`
 `);
         return;
       }
-      let Z = D === 0;
-      Y.push(
+      let isFirst = index === 0;
+      elements.push(
         jsxProd_default_2(
           Box,
           {
             flexDirection: "row",
-            marginTop: B || (!Z && q) ? 1 : 0,
-            paddingLeft: Z ? rowIndent : rowIndent + markerCell,
+            marginTop: needsGap || (!isFirst && startsWithNewline) ? 1 : 0,
+            paddingLeft: isFirst ? rowIndent : rowIndent + markerCell,
             maxWidth: maxProseWidth,
             children: [
-              Z &&
+              isFirst &&
                 jsxProd_default(Box, {
                   width: markerCell,
                   flexShrink: 0,
@@ -385,39 +388,39 @@ function renderMarkdownListItem({
               jsxProd_default(Ansi, {
                 dimColor,
                 italic,
-                wrap: G,
-                children: J,
+                wrap: wrapMode,
+                children: text,
               }),
             ],
           },
-          D,
+          index,
         ),
       );
-      B = X;
-    } else if (M.kind === "block") {
-      Y.push(
+      needsGap = hasHardBreak;
+    } else if (row.kind === "block") {
+      elements.push(
         jsxProd_default(
           Box,
           {
-            marginTop: B ? 1 : 0,
+            marginTop: needsGap ? 1 : 0,
             children: jsxProd_default(Ansi, {
               dimColor,
               italic,
-              wrap: G,
-              children: M.text,
+              wrap: wrapMode,
+              children: row.text,
             }),
           },
-          D,
+          index,
         ),
       );
-      B = false;
+      needsGap = false;
     } else {
-      Y.push(
+      elements.push(
         jsxProd_default(
           MarkdownListItems,
           {
-            token: M.token,
-            blankLineBefore: B,
+            token: row.token,
+            blankLineBefore: needsGap,
             indent: indent_2,
             listDepth: listDepth + 1,
             room,
@@ -427,77 +430,83 @@ function renderMarkdownListItem({
             italic,
             linkCap,
             isWindowed,
-            tailWrap: G,
+            tailWrap: wrapMode,
             maxProseWidth,
           },
-          D,
+          index,
         ),
       );
-      B = false;
+      needsGap = false;
     }
   });
-  return Y;
+  return elements;
 }
 //@ chunk-bc20zedk.js:19133-19164 placement
-function selectText(oe) {
-  return oe.text;
+function selectText(state) {
+  return state.text;
 }
 //@ chunk-bc20zedk.js:19164-19327 placement
-var InsideMarkdownContext = qt(false);
-var TOKEN_CACHE_MAX = 500;
-var MARKDOWN_SYNTAX_RE =
-  /[#*`|[>\-_~]|\n[\r\n]|\r\r|\r\n[\r\n]|(?:^|[\r\n]) {0,3}(?:\d+[.)]|\+) |(?:^|[\r\n]) {0,3}=+ *(?:[\r\n]|$)|https?:\/\/|www\./;
-var NBSP_ENTITY = "&nbsp;";
+var InsideMarkdownContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TOKEN_CACHE_MAX;
+var MARKDOWN_SYNTAX_RE;
+var NBSP_ENTITY;
+deferInit("chunk-bc20zedk.js:19164", () => {
+  InsideMarkdownContext = createContext(false);
+  TOKEN_CACHE_MAX = 500;
+  MARKDOWN_SYNTAX_RE =
+    /[#*`|[>\-_~]|\n[\r\n]|\r\r|\r\n[\r\n]|(?:^|[\r\n]) {0,3}(?:\d+[.)]|\+) |(?:^|[\r\n]) {0,3}=+ *(?:[\r\n]|$)|https?:\/\/|www\./;
+  NBSP_ENTITY = "&nbsp;";
+});
 //@ chunk-bc20zedk.js:19327-19446 placement
-function plainParagraphTokens(o) {
+function plainParagraphTokens(text) {
   return {
     tokens: [
       {
         type: "paragraph",
-        raw: o,
-        text: o,
+        raw: text,
+        text,
         tokens: [
           {
             type: "text",
-            raw: o,
-            text: o,
+            raw: text,
+            text,
           },
         ],
       },
     ],
-    isWindowed: !isSmallMarkdown(o),
+    isWindowed: !isSmallMarkdown(text),
   };
 }
 //@ chunk-bc20zedk.js:19446-19514 placement
-function renderMarkdownSafe(o, p) {
+function renderMarkdownSafe(source, text) {
   try {
-    return lexMarkdownWindowed(o, p);
+    return lexMarkdownWindowed(source, text);
   } catch (error) {
-    reportLexerError(error, p);
-    return plainParagraphTokens(p);
+    reportLexerError(error, text);
+    return plainParagraphTokens(text);
   }
 }
 //@ chunk-bc20zedk.js:19514-19563 placement
-function withWrappedTokens(o) {
+function withWrappedTokens(lexed) {
   return {
-    ...o,
-    tokens: controlCharTokens(o.tokens),
+    ...lexed,
+    tokens: controlCharTokens(lexed.tokens),
   };
 }
 //@ chunk-bc20zedk.js:19563-19681 placement
-function reportLexerError(error, p) {
+function reportLexerError(error, text) {
   if (error instanceof RangeError)
-    logForDebugging(`marked.lexer overflow on ${p.length} chars`, {
+    logForDebugging(`marked.lexer overflow on ${text.length} chars`, {
       level: "error",
     });
   else logError(error);
 }
 //@ chunk-bc20zedk.js:19681-19745 placement
-function isMarkdownSafe(o) {
+function isMarkdownSafe(text) {
   try {
-    return lexInlineHtml(marked, o);
+    return lexInlineHtml(marked, text);
   } catch (error) {
-    reportLexerError(error, o);
+    reportLexerError(error, text);
     return true;
   }
 }
@@ -505,77 +514,79 @@ function isMarkdownSafe(o) {
 /**
  * 词法分析并按长度+哈希 LRU 缓存，无 Markdown 语法时直接作段落。
  */
-function lexMarkdownCached(o, p, promptMode) {
-  let m = o === null ? "" : `${promptMode ? "_" : ""}${p.length}:${bunHashOf(p)}`;
-  let f = o?.get(m);
-  if (o !== null && f) {
-    o.delete(m);
-    o.set(m, f);
-    return f;
+function lexMarkdownCached(cache, source, promptMode) {
+  let cacheKey = cache === null ? "" : `${promptMode ? "_" : ""}${source.length}:${bunHashOf(source)}`;
+  let cached = cache?.get(cacheKey);
+  if (cache !== null && cached) {
+    cache.delete(cacheKey);
+    cache.set(cacheKey, cached);
+    return cached;
   }
-  if (!MARKDOWN_SYNTAX_RE.test(p) && (promptMode || !p.includes(NBSP_ENTITY)))
-    return withWrappedTokens(plainParagraphTokens(p));
-  let u = withWrappedTokens(renderMarkdownSafe(promptMode ? pluginMarkdownLexer : marked, p));
-  if (o === null) return u;
-  if (o.size >= TOKEN_CACHE_MAX) {
-    let c = o.keys().next().value;
-    if (c !== undefined) o.delete(c);
+  if (!MARKDOWN_SYNTAX_RE.test(source) && (promptMode || !source.includes(NBSP_ENTITY)))
+    return withWrappedTokens(plainParagraphTokens(source));
+  let lexed = withWrappedTokens(renderMarkdownSafe(promptMode ? pluginMarkdownLexer : marked, source));
+  if (cache === null) return lexed;
+  if (cache.size >= TOKEN_CACHE_MAX) {
+    let oldestKey = cache.keys().next().value;
+    if (oldestKey !== undefined) cache.delete(oldestKey);
   }
-  o.set(m, u);
-  return u;
+  cache.set(cacheKey, lexed);
+  return lexed;
 }
 //@ chunk-bc20zedk.js:20064-20681 placement
 /**
  * Markdown 渲染组件（语法高亮、宽度上限、词法缓存）。
  */
-function MarkdownText_2(o) {
-  let $ = w(9);
+function MarkdownText_2(props) {
+  let $ = useMemoCache(9);
   let settings = useSettingsState();
   let { highlightedCode } = useFrameRegistry();
-  let f;
+  let highlight;
   if ($[0] !== settings.syntaxHighlightingDisabled) {
-    f = settings.syntaxHighlightingDisabled ? null : getCliHighlightModule();
+    highlight = settings.syntaxHighlightingDisabled ? null : getCliHighlightModule();
     $[0] = settings.syntaxHighlightingDisabled;
-    $[1] = f;
-  } else f = $[1];
-  let highlighter = f;
-  let skipHighlightCache = o.skipHighlightCache ?? false;
-  let g;
+    $[1] = highlight;
+  } else highlight = $[1];
+  let highlighter = highlight;
+  let skipHighlightCache = props.skipHighlightCache ?? false;
+  let highlighterValue;
   x: {
     if (highlighter === null || skipHighlightCache) {
-      g = highlighter;
+      highlighterValue = highlighter;
       break x;
     }
-    let h;
+    let fallbackHighlighter;
     if ($[2] !== highlighter || $[3] !== highlightedCode) {
-      h = {
+      fallbackHighlighter = {
         supportsLanguage: highlighter.supportsLanguage,
-        highlight(C, I) {
-          let language = I?.language;
-          return language ? getCachedHighlight(highlightedCode, highlighter, C, language, I?.work) : C;
+        highlight(contentElement, options) {
+          let language = options?.language;
+          return language
+            ? getCachedHighlight(highlightedCode, highlighter, contentElement, language, options?.work)
+            : contentElement;
         },
       };
       $[2] = highlighter;
       $[3] = highlightedCode;
-      $[4] = h;
-    } else h = $[4];
-    g = h;
+      $[4] = fallbackHighlighter;
+    } else fallbackHighlighter = $[4];
+    highlighterValue = fallbackHighlighter;
   }
-  let highlight = g;
-  const maxProseWidth = o.capProseWidth ? settings.maxProseWidth : undefined;
-  let L;
-  if ($[5] !== highlight || $[6] !== o || $[7] !== maxProseWidth) {
-    L = jsxProd_default(MarkdownText, {
-      ...o,
-      highlight,
+  let highlight_2 = highlighterValue;
+  const maxProseWidth = props.capProseWidth ? settings.maxProseWidth : undefined;
+  let markdownTextElement;
+  if ($[5] !== highlight_2 || $[6] !== props || $[7] !== maxProseWidth) {
+    markdownTextElement = jsxProd_default(MarkdownText, {
+      ...props,
+      highlight: highlight_2,
       maxProseWidth,
     });
-    $[5] = highlight;
-    $[6] = o;
+    $[5] = highlight_2;
+    $[6] = props;
     $[7] = maxProseWidth;
-    $[8] = L;
-  } else L = $[8];
-  return L;
+    $[8] = markdownTextElement;
+  } else markdownTextElement = $[8];
+  return markdownTextElement;
 }
 //@ chunk-bc20zedk.js:20681-23084 placement
 function MarkdownText({
@@ -594,210 +605,211 @@ function MarkdownText({
   highlight,
   maxProseWidth,
 }) {
-  let [L] = useTheme();
+  let [theme] = useTheme();
   configureMarked();
   let fallbackPermission = useFallbackPermission();
-  let _ = Q(
+  let strippedChildren = useMemo(
     () => (stripPromptTags && !promptMode ? stripPromptXMLTags(children) : children),
     [children, stripPromptTags, promptMode],
   );
-  let N = Se(InsideMarkdownContext);
+  let insideMarkdown = useContext(InsideMarkdownContext);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let U = yt(subscribeFullscreenObserved, hasFullscreenBeenObserved);
+  let fullscreenObserved = useSyncExternalStore(subscribeFullscreenObserved, hasFullscreenBeenObserved);
   let { markdownTokens } = useFrameRegistry();
-  let children_2 = Q(() => {
-    let W = lexMarkdownCached(skipTokenCache ? null : markdownTokens, _, promptMode);
-    let M = N || W.isWindowed;
-    let D = fallbackPermission && !M;
-    let G = linkSchemes === undefined ? W.tokens : structuredClone(W.tokens);
-    if (linkSchemes !== undefined) defangTokens(G, linkSchemes);
-    let highlight_2 = prehighlightCodeSegments(highlight, G, L);
-    let X = [];
-    let J = "";
-    let Z = "none";
-    let oe = false;
-    let v = false;
-    let F = hint ? `\xB7\xA0${hint}` : undefined;
-    function K(z, ee) {
-      X.push(z);
-      Z = ee;
-      oe = false;
+  let children_2 = useMemo(() => {
+    let lexed = lexMarkdownCached(skipTokenCache ? null : markdownTokens, strippedChildren, promptMode);
+    let isWindowed = insideMarkdown || lexed.isWindowed;
+    let linkCap = fallbackPermission && !isWindowed;
+    let tokens = linkSchemes === undefined ? lexed.tokens : structuredClone(lexed.tokens);
+    if (linkSchemes !== undefined) defangTokens(tokens, linkSchemes);
+    let highlight_2 = prehighlightCodeSegments(highlight, tokens, theme);
+    let blocks = [];
+    let pendingText = "";
+    let lastKind = "none";
+    let endsHardBreak = false;
+    let hintShown = false;
+    let hintText = hint ? `\xB7\xA0${hint}` : undefined;
+    function pushBlock(node, kind) {
+      blocks.push(node);
+      lastKind = kind;
+      endsHardBreak = false;
     }
-    function V(children, marginTop, ae) {
+    function wrapBlock(children, marginTop, kind) {
       return jsxProd_default(
         Box,
         {
           marginTop,
-          maxWidth: ae === "prose" ? maxProseWidth : undefined,
+          maxWidth: kind === "prose" ? maxProseWidth : undefined,
           children,
         },
-        X.length,
+        blocks.length,
       );
     }
-    function te() {
-      if (!F || v) return null;
-      v = true;
+    function hintSuffix() {
+      if (!hintText || hintShown) return null;
+      hintShown = true;
       return jsxProd_default_2(Text, {
         color: "subtle",
-        children: [" ", F],
+        children: [" ", hintText],
       });
     }
-    function ne(wrap, ee = false) {
-      if (!J) return;
-      let ae = J.startsWith(`
+    function flushText(wrap, final = false) {
+      if (!pendingText) return;
+      let startsBlank = pendingText.startsWith(`
 `);
-      let ke = endsWithHardBreak(J);
-      let ue = J.replace(/^\n+/, "").trimEnd();
-      J = "";
-      if (D && markLinks !== undefined)
-        for (let [Rr, mn] of markLinks)
-          ue = ue.replaceAll(Rr, `${OSC8_START}${mn}${BEL}${Rr}${OSC8_START}${BEL}`);
-      if (!ue) {
-        oe = true;
+      let hardBreak = endsWithHardBreak(pendingText);
+      let text = pendingText.replace(/^\n+/, "").trimEnd();
+      pendingText = "";
+      if (linkCap && markLinks !== undefined)
+        for (let [linkText, linkUrl] of markLinks)
+          text = text.replaceAll(linkText, `${OSC8_START}${linkUrl}${BEL}${linkText}${OSC8_START}${BEL}`);
+      if (!text) {
+        endsHardBreak = true;
         return;
       }
-      let marginTop = Z === "none" ? 0 : (Z === "list" || Z === "code") && !ae ? 0 : 1;
-      let Le = jsxProd_default(Ansi, {
+      let marginTop =
+        lastKind === "none" ? 0 : (lastKind === "list" || lastKind === "code") && !startsBlank ? 0 : 1;
+      let ansiText = jsxProd_default(Ansi, {
         dimColor,
         italic,
         monochrome,
         wrap,
-        children: ue,
+        children: text,
       });
-      let kr = ee ? te() : null;
-      K(
-        V(
-          color || kr
+      let suffix = final ? hintSuffix() : null;
+      pushBlock(
+        wrapBlock(
+          color || suffix
             ? jsxProd_default_2(Text, {
                 color,
                 wrap,
-                children: [Le, kr],
+                children: [ansiText, suffix],
               })
-            : Le,
+            : ansiText,
           marginTop,
           "prose",
         ),
         "prose",
       );
-      oe = ke;
+      endsHardBreak = hardBreak;
     }
-    function re(z) {
-      return Z === "none" ? 0 : z === "block" || Z === "block" || oe ? 1 : 0;
+    function gapBefore(kind) {
+      return lastKind === "none" ? 0 : kind === "block" || lastKind === "block" || endsHardBreak ? 1 : 0;
     }
-    function pe(children, ee) {
-      ne();
-      K(V(children, re(ee), ee), ee);
+    function pushBlockWithGap(children, kind) {
+      flushText();
+      pushBlock(wrapBlock(children, gapBefore(kind), kind), kind);
     }
-    function le(token, tailWrap) {
-      ne();
-      K(
+    function pushList(token, tailWrap) {
+      flushText();
+      pushBlock(
         jsxProd_default(
           MarkdownList,
           {
             token,
-            blankLineBefore: re("list") > 0,
-            theme: L,
+            blankLineBefore: gapBefore("list") > 0,
+            theme,
             highlight: highlight_2,
             dimColor,
             italic,
-            linkCap: D,
-            isWindowed: M,
+            linkCap,
+            isWindowed,
             tailWrap,
             maxProseWidth,
           },
-          X.length,
+          blocks.length,
         ),
         "list",
       );
     }
-    let lastIndex = G.findLastIndex((z) => z.type !== "space");
-    let Rt = !isScreenReaderEnabled && !promptMode && isListWithinLimits(G);
-    G.forEach((z, ee) => {
-      if (z.type === "table")
-        pe(
+    let lastIndex = tokens.findLastIndex((token) => token.type !== "space");
+    let listsOk = !isScreenReaderEnabled && !promptMode && isListWithinLimits(tokens);
+    tokens.forEach((token, index) => {
+      if (token.type === "table")
+        pushBlockWithGap(
           jsxProd_default(MarkdownTableView, {
-            token: z,
+            token,
             highlight,
-            linkCap: D,
-            isWindowed: M,
+            linkCap,
+            isWindowed,
           }),
           "block",
         );
-      else if (z.type === "list" && Rt) le(z, ee === lastIndex ? tailWrap : undefined);
-      else if (z.type === "blockquote")
-        pe(
+      else if (token.type === "list" && listsOk) pushList(token, index === lastIndex ? tailWrap : undefined);
+      else if (token.type === "blockquote")
+        pushBlockWithGap(
           jsxProd_default(MarkdownToken, {
-            token: z,
-            theme: L,
+            token,
+            theme,
             highlight: highlight_2,
             dimColor,
-            linkCap: D,
-            isWindowed: M,
+            linkCap,
+            isWindowed,
             isScreenReader: isScreenReaderEnabled,
             maxWidth: maxProseWidth,
           }),
           "block",
         );
       else {
-        let ae = formatTokenWindowed(z, L, {
+        let text = formatTokenWindowed(token, theme, {
           listDepth: 0,
           orderedListNumber: null,
           parent: null,
           highlight: highlight_2,
           glueProse: false,
-          linkCap: D,
+          linkCap,
           screenReader: isScreenReaderEnabled,
           promptMode,
-          windowed: M,
+          windowed: isWindowed,
         });
-        if (maxProseWidth !== undefined && z.type === "code") {
-          let ke = ee === lastIndex;
-          let wrap = ke ? tailWrap : undefined;
-          let Ve = ke ? te() : null;
-          let Le = jsxProd_default(Ansi, {
+        if (maxProseWidth !== undefined && token.type === "code") {
+          let isLast = index === lastIndex;
+          let wrap = isLast ? tailWrap : undefined;
+          let suffix = isLast ? hintSuffix() : null;
+          let ansiText = jsxProd_default(Ansi, {
             dimColor,
             italic,
             monochrome,
             wrap,
             children: stripSuffix(
-              ae,
+              text,
               `
 `,
             ),
           });
-          pe(
-            color || Ve
+          pushBlockWithGap(
+            color || suffix
               ? jsxProd_default_2(Text, {
                   color,
                   wrap,
-                  children: [Le, Ve],
+                  children: [ansiText, suffix],
                 })
-              : Le,
+              : ansiText,
             "code",
           );
-        } else J += ae;
+        } else pendingText += text;
       }
     });
-    ne(tailWrap, true);
-    if (promptMode && X.length === 0 && _.trim()) {
-      J = stripControlCharsForInline(_);
-      ne(tailWrap, true);
+    flushText(tailWrap, true);
+    if (promptMode && blocks.length === 0 && strippedChildren.trim()) {
+      pendingText = stripControlCharsForInline(strippedChildren);
+      flushText(tailWrap, true);
     }
-    if (F && !v)
-      K(
-        V(
+    if (hintText && !hintShown)
+      pushBlock(
+        wrapBlock(
           jsxProd_default(Text, {
             color: "subtle",
-            children: F,
+            children: hintText,
           }),
           0,
           "prose",
         ),
         "prose",
       );
-    return X;
+    return blocks;
   }, [
-    _,
+    strippedChildren,
     color,
     dimColor,
     italic,
@@ -805,16 +817,16 @@ function MarkdownText({
     hint,
     linkSchemes,
     highlight,
-    L,
+    theme,
     fallbackPermission,
-    N,
+    insideMarkdown,
     isScreenReaderEnabled,
     tailWrap,
     skipTokenCache,
     markdownTokens,
     promptMode,
     markLinks,
-    U,
+    fullscreenObserved,
     maxProseWidth,
   ]);
   return jsxProd_default(Box, {
@@ -826,33 +838,33 @@ function MarkdownText({
 var MARKDOWN_LIST_INDENT = 2;
 //@ chunk-bc20zedk.js:23093-24825 placement
 function MarkdownToken(props) {
-  let $ = w(21);
+  let $ = useMemoCache(21);
   let { token, theme, highlight, dimColor, linkCap, isWindowed, isScreenReader, maxWidth } = props;
-  let C;
+  let leadingToken;
   if ($[0] !== highlight || $[1] !== token) {
-    C = leadingBlockToken(token, highlight);
+    leadingToken = leadingBlockToken(token, highlight);
     $[0] = highlight;
     $[1] = token;
-    $[2] = C;
-  } else C = $[2];
-  let I = C;
-  const b = I ?? token;
-  let T;
-  let L;
+    $[2] = leadingToken;
+  } else leadingToken = $[2];
+  let leadingBlock = leadingToken;
+  const blockToken = leadingBlock ?? token;
+  let earlyResult;
+  let result;
   if (
     $[3] !== dimColor ||
-    $[4] !== I ||
+    $[4] !== leadingBlock ||
     $[5] !== highlight ||
     $[6] !== isScreenReader ||
     $[7] !== isWindowed ||
     $[8] !== linkCap ||
     $[9] !== maxWidth ||
-    $[10] !== b.tokens ||
+    $[10] !== blockToken.tokens ||
     $[11] !== theme
   ) {
-    L = EARLY_RETURN_SENTINEL;
+    result = EARLY_RETURN_SENTINEL;
     Y: {
-      let A;
+      let formatPart;
       if (
         $[14] !== highlight ||
         $[15] !== isScreenReader ||
@@ -861,10 +873,10 @@ function MarkdownToken(props) {
         $[18] !== maxWidth ||
         $[19] !== theme
       ) {
-        A = (_) => ({
-          code: _.type === "code",
-          fullWidth: maxWidth !== undefined && hasCodeOrTable(_),
-          text: formatTokenWindowed(_, theme, {
+        formatPart = (part) => ({
+          code: part.type === "code",
+          fullWidth: maxWidth !== undefined && hasCodeOrTable(part),
+          text: formatTokenWindowed(part, theme, {
             listDepth: 0,
             orderedListNumber: null,
             parent: null,
@@ -882,13 +894,13 @@ function MarkdownToken(props) {
         $[17] = linkCap;
         $[18] = maxWidth;
         $[19] = theme;
-        $[20] = A;
-      } else A = $[20];
-      let mapped = b.tokens.map(A);
+        $[20] = formatPart;
+      } else formatPart = $[20];
+      let mapped = blockToken.tokens.map(formatPart);
       if (maxWidth === undefined || isScreenReader || !mapped.some(sliceAnsi)) {
         let joined = mapped.map(selectText).join("");
-        let children = sequential.italic((I ? joined : joined.replace(/^\n+/, "")).trimEnd());
-        L = jsxProd_default(Box, {
+        let children = sequential.italic((leadingBlock ? joined : joined.replace(/^\n+/, "")).trimEnd());
+        result = jsxProd_default(Box, {
           borderStyle: "quote",
           borderTop: false,
           borderBottom: false,
@@ -903,58 +915,61 @@ function MarkdownToken(props) {
         });
         break Y;
       }
-      let B = [];
-      for (const W of mapped) {
-        let last = B.at(-1);
-        if (last && !last.fullWidth && !W.fullWidth) last.text = last.text + W.text;
+      let segments = [];
+      for (const part of mapped) {
+        let last = segments.at(-1);
+        if (last && !last.fullWidth && !part.fullWidth) last.text = last.text + part.text;
         else
-          B.push({
-            ...W,
+          segments.push({
+            ...part,
           });
       }
-      let D = [];
-      let G = 0;
-      for (const q of B) {
-        let X = q.code || (I !== undefined && q === B[0]) ? q.text : q.text.replace(/^\n+/, "");
-        let J = q.code
+      let lines = [];
+      let lineCount = 0;
+      for (const segment of segments) {
+        let text =
+          segment.code || (leadingBlock !== undefined && segment === segments[0])
+            ? segment.text
+            : segment.text.replace(/^\n+/, "");
+        let trimmedText = segment.code
           ? stripSuffix(
-              X,
+              text,
               `
 `,
             )
-          : X.trimEnd();
-        if (!J) {
-          G =
-            G +
+          : text.trimEnd();
+        if (!trimmedText) {
+          lineCount =
+            lineCount +
             countCharInString(
-              q.text,
+              segment.text,
               `
 `,
             );
           continue;
         }
-        G = G + (q.text.length - X.length);
-        D.push(
+        lineCount = lineCount + (segment.text.length - text.length);
+        lines.push(
           jsxProd_default(
             Box,
             {
-              marginTop: D.length > 0 ? Math.max(0, G - 1) : 0,
-              maxWidth: q.fullWidth ? undefined : maxWidth - MARKDOWN_LIST_INDENT,
+              marginTop: lines.length > 0 ? Math.max(0, lineCount - 1) : 0,
+              maxWidth: segment.fullWidth ? undefined : maxWidth - MARKDOWN_LIST_INDENT,
               children: jsxProd_default(Ansi, {
                 dimColor,
-                children: sequential.italic(J),
+                children: sequential.italic(trimmedText),
               }),
             },
-            D.length,
+            lines.length,
           ),
         );
-        G = countCharInString(
-          X.slice(J.length),
+        lineCount = countCharInString(
+          text.slice(trimmedText.length),
           `
 `,
         );
       }
-      T = jsxProd_default(Box, {
+      earlyResult = jsxProd_default(Box, {
         flexDirection: "column",
         borderStyle: "quote",
         borderTop: false,
@@ -962,35 +977,39 @@ function MarkdownToken(props) {
         borderRight: false,
         borderDimColor: true,
         paddingLeft: 1,
-        children: D,
+        children: lines,
       });
     }
     $[3] = dimColor;
-    $[4] = I;
+    $[4] = leadingBlock;
     $[5] = highlight;
     $[6] = isScreenReader;
     $[7] = isWindowed;
     $[8] = linkCap;
     $[9] = maxWidth;
-    $[10] = b.tokens;
+    $[10] = blockToken.tokens;
     $[11] = theme;
-    $[12] = T;
-    $[13] = L;
+    $[12] = earlyResult;
+    $[13] = result;
   } else {
-    T = $[12];
-    L = $[13];
+    earlyResult = $[12];
+    result = $[13];
   }
-  if (L !== EARLY_RETURN_SENTINEL) return L;
-  return T;
+  if (result !== EARLY_RETURN_SENTINEL) return result;
+  return earlyResult;
 }
 //@ chunk-bc20zedk.js:24825-25060 placement
-function hasCodeOrTable(o) {
-  let p = [o];
-  for (let a = p.pop(); a !== undefined; a = p.pop()) {
-    if (a.type === "code" || a.type === "table") return true;
-    let m =
-      a.type === "list" ? a.items : a.type === "blockquote" || a.type === "list_item" ? (a.tokens ?? []) : [];
-    for (let f of m) p.push(f);
+function hasCodeOrTable(token) {
+  let stack = [token];
+  for (let current = stack.pop(); current !== undefined; current = stack.pop()) {
+    if (current.type === "code" || current.type === "table") return true;
+    let children =
+      current.type === "list"
+        ? current.items
+        : current.type === "blockquote" || current.type === "list_item"
+          ? (current.tokens ?? [])
+          : [];
+    for (let child of children) stack.push(child);
   }
   return false;
 }
@@ -1011,29 +1030,29 @@ function createStreamState() {
 //@ chunk-bc20zedk.js:25198-25239 placement
 var FENCED_CODE_RE = /^ {0,3}(`{3,}|~{3,})([^\n]*)$/gm;
 //@ chunk-bc20zedk.js:25239-25346 placement
-function closesFence(o, p, a) {
-  let m = o.match(/^`+|^~+/)?.[0] ?? "";
-  return p[0] === m[0] && p.length >= m.length && a.trim() === "";
+function closesFence(line, closingFence, trailingText) {
+  let fence = line.match(/^`+|^~+/)?.[0] ?? "";
+  return closingFence[0] === fence[0] && closingFence.length >= fence.length && trailingText.trim() === "";
 }
 //@ chunk-bc20zedk.js:25346-25470 placement
-function updateOpenFence(openFence, p) {
-  let a = openFence;
-  for (let m of p.matchAll(FENCED_CODE_RE))
-    if (a === null) a = m[1] + m[2].trim();
-    else if (closesFence(a, m[1], m[2])) a = null;
-  return a;
+function updateOpenFence(openFence, fence) {
+  let updated = openFence;
+  for (let match of fence.matchAll(FENCED_CODE_RE))
+    if (updated === null) updated = match[1] + match[2].trim();
+    else if (closesFence(updated, match[1], match[2])) updated = null;
+  return updated;
 }
 //@ chunk-bc20zedk.js:25470-25604 placement
-function closingFenceEnd(o, openFence) {
-  for (let a of o.matchAll(FENCED_CODE_RE)) {
-    let m = a.index + a[0].length;
+function closingFenceEnd(text, line) {
+  for (let match of text.matchAll(FENCED_CODE_RE)) {
+    let matchEnd = match.index + match[0].length;
     if (
-      o[m] !==
+      text[matchEnd] !==
       `
 `
     )
       continue;
-    if (closesFence(openFence, a[1], a[2])) return m + 1;
+    if (closesFence(line, match[1], match[2])) return matchEnd + 1;
   }
   return -1;
 }
@@ -1041,21 +1060,21 @@ function closingFenceEnd(o, openFence) {
 /**
  * 把流式文本前缀冻结为一个渲染块，返回剩余部分。
  */
-function freezeStreamChunk(o, p, a, m) {
-  let f = p.substring(0, a);
+function freezeStreamChunk(chunk, text, length, prefixOnly) {
+  let head = text.substring(0, length);
   let children =
-    (o.openFence !== null
-      ? o.openFence +
+    (chunk.openFence !== null
+      ? chunk.openFence +
         `
 `
-      : (o.openTable ?? "")) + f;
-  let skipHighlightCache = o.openFence !== null || !m;
-  o.chunks = [
-    ...o.chunks,
+      : (chunk.openTable ?? "")) + head;
+  let skipHighlightCache = chunk.openFence !== null || !prefixOnly;
+  chunk.chunks = [
+    ...chunk.chunks,
     jsxProd_default(
       Box,
       {
-        marginTop: o.chunks.length > 0 && o.gapAfterChunks ? 1 : 0,
+        marginTop: chunk.chunks.length > 0 && chunk.gapAfterChunks ? 1 : 0,
         children: jsxProd_default(MarkdownText_2, {
           skipTokenCache: true,
           skipHighlightCache,
@@ -1063,27 +1082,28 @@ function freezeStreamChunk(o, p, a, m) {
           children,
         }),
       },
-      o.chunks.length,
+      chunk.chunks.length,
     ),
   ];
-  o.openFence = updateOpenFence(o.openFence, f);
-  o.frozenSource += f;
-  o.gapAfterChunks = m;
-  o.isLinkless ||= !m || o.openFence !== null;
-  o.stablePrefix = "";
-  if (m) o.openTable = null;
-  return p.substring(a);
+  chunk.openFence = updateOpenFence(chunk.openFence, head);
+  chunk.frozenSource += head;
+  chunk.gapAfterChunks = prefixOnly;
+  chunk.isLinkless ||= !prefixOnly || chunk.openFence !== null;
+  chunk.stablePrefix = "";
+  if (prefixOnly) chunk.openTable = null;
+  return text.substring(length);
 }
 //@ chunk-bc20zedk.js:26077-26089 placement
 var MAX_BASH_COMMAND_SCAN_CHARS = 1536;
 //@ chunk-bc20zedk.js:26089-26258 placement = getFileExtensionsFromBashCommand (1)
-function getFileExtensionsFromBashCommand(o) {
-  let index = o.lastIndexOf(`
+function getFileExtensionsFromBashCommand(command) {
+  let index = command.lastIndexOf(`
 `);
-  if (index < MARKDOWN_MAX_CHARS / 2) index = o.lastIndexOf(" ", o.length - MAX_BASH_COMMAND_SCAN_CHARS);
+  if (index < MARKDOWN_MAX_CHARS / 2)
+    index = command.lastIndexOf(" ", command.length - MAX_BASH_COMMAND_SCAN_CHARS);
   if (index < MARKDOWN_MAX_CHARS / 2) {
-    index = o.length - MAX_BASH_COMMAND_SCAN_CHARS;
-    let code = o.charCodeAt(index + 1);
+    index = command.length - MAX_BASH_COMMAND_SCAN_CHARS;
+    let code = command.charCodeAt(index + 1);
     if (code >= 56320 && code <= 57343) index--;
   }
   return index + 1;
@@ -1096,181 +1116,195 @@ var MARKDOWN_NEST_DEPTH = 64;
 //@ chunk-bc20zedk.js:26324-28498 placement
 function StreamingMarkdown({ children, hideTrailingLine = false }) {
   configureMarked();
-  let a = stripPromptXMLTags(children);
-  let f = R(createStreamState()).current;
-  let u = false;
-  let c = false;
-  if (!a.startsWith(f.frozenSource)) Object.assign(f, createStreamState());
-  f.isLinkless ||= !isSmallMarkdown(a);
-  let g = a.substring(f.frozenSource.length);
-  if (!g.startsWith(f.stablePrefix)) f.stablePrefix = "";
-  if (f.openFence !== null) {
-    let _ = closingFenceEnd(g, f.openFence);
-    if (_ >= 0) g = freezeStreamChunk(f, g, _, true);
-    else if (g.length > MARKDOWN_MAX_CHARS)
-      g = freezeStreamChunk(f, g, getFileExtensionsFromBashCommand(g), false);
+  let source = stripPromptXMLTags(children);
+  let streamState = useRef(createStreamState()).current;
+  let openTablePending = false;
+  let atTop = false;
+  if (!source.startsWith(streamState.frozenSource)) Object.assign(streamState, createStreamState());
+  streamState.isLinkless ||= !isSmallMarkdown(source);
+  let tail = source.substring(streamState.frozenSource.length);
+  if (!tail.startsWith(streamState.stablePrefix)) streamState.stablePrefix = "";
+  if (streamState.openFence !== null) {
+    let fenceEnd = closingFenceEnd(tail, streamState.openFence);
+    if (fenceEnd >= 0) tail = freezeStreamChunk(streamState, tail, fenceEnd, true);
+    else if (tail.length > MARKDOWN_MAX_CHARS)
+      tail = freezeStreamChunk(streamState, tail, getFileExtensionsFromBashCommand(tail), false);
   }
-  if (f.openFence === null) {
-    let _ = f.stablePrefix.length;
-    let openTable = f.openTable ?? "";
-    let E = openTable + g.substring(_);
-    let U =
-      E.lastIndexOf(`
+  if (streamState.openFence === null) {
+    let prefixLength = streamState.stablePrefix.length;
+    let openTable = streamState.openTable ?? "";
+    let combined = openTable + tail.substring(prefixLength);
+    let lineStart =
+      combined.lastIndexOf(`
 `) + 1;
-    let Y = openTable !== "" || TABLE_ROW_RE.test(E.substring(U)) ? E.substring(0, U) : E;
-    let { tokens, isWindowed } = renderMarkdownSafe(marked, Y);
-    f.isLinkless ||= isWindowed;
-    let M = tokens.length - 1;
-    while (M >= 0 && tokens[M].type === "space") M--;
-    f.isLinkless ||= !endsWith(tokens, Y);
+    let candidate =
+      openTable !== "" || TABLE_ROW_RE.test(combined.substring(lineStart))
+        ? combined.substring(0, lineStart)
+        : combined;
+    let { tokens, isWindowed } = renderMarkdownSafe(marked, candidate);
+    streamState.isLinkless ||= isWindowed;
+    let lastTokenIndex = tokens.length - 1;
+    while (lastTokenIndex >= 0 && tokens[lastTokenIndex].type === "space") lastTokenIndex--;
+    streamState.isLinkless ||= !endsWith(tokens, candidate);
     let last = tokens.at(-1);
-    let G = last?.type === "table" && endsWithHardBreak(Y);
-    let q = G ? Y.length : M > 0 ? hasMarkdownSyntax(tokens, M, Y) : 0;
-    let X = last?.type === "table" && !G ? last : null;
-    u = X !== null || (last?.type === "paragraph" && TABLE_HEADER_RE.test(last.raw + E.substring(Y.length)));
-    c = q > 0 || M === 0;
-    let J = tokens[0];
-    if (J?.type !== "table") f.openTable = null;
-    if (openTable !== "" && q >= openTable.length) {
-      if (J?.type === "table" && J.rows.length === 0) {
-        f.openTable = null;
-        f.gapAfterChunks = true;
-      } else g = freezeStreamChunk(f, g, q - openTable.length, true);
-    } else if (openTable === "" && q > 0) {
-      f.stablePrefix = g.substring(0, _ + q);
-      f.isLinkless ||= isMarkdownSafe(g.substring(_, _ + q));
+    let tableHardBreak = last?.type === "table" && endsWithHardBreak(candidate);
+    let stableEnd = tableHardBreak
+      ? candidate.length
+      : lastTokenIndex > 0
+        ? hasMarkdownSyntax(tokens, lastTokenIndex, candidate)
+        : 0;
+    let tableToken = last?.type === "table" && !tableHardBreak ? last : null;
+    openTablePending =
+      tableToken !== null ||
+      (last?.type === "paragraph" && TABLE_HEADER_RE.test(last.raw + combined.substring(candidate.length)));
+    atTop = stableEnd > 0 || lastTokenIndex === 0;
+    let firstToken = tokens[0];
+    if (firstToken?.type !== "table") streamState.openTable = null;
+    if (openTable !== "" && stableEnd >= openTable.length) {
+      if (firstToken?.type === "table" && firstToken.rows.length === 0) {
+        streamState.openTable = null;
+        streamState.gapAfterChunks = true;
+      } else tail = freezeStreamChunk(streamState, tail, stableEnd - openTable.length, true);
+    } else if (openTable === "" && stableEnd > 0) {
+      streamState.stablePrefix = tail.substring(0, prefixLength + stableEnd);
+      streamState.isLinkless ||= isMarkdownSafe(tail.substring(prefixLength, prefixLength + stableEnd));
     }
-    if (f.stablePrefix.length > MARKDOWN_MAX_CHARS) g = freezeStreamChunk(f, g, f.stablePrefix.length, true);
-    if (g.length - f.stablePrefix.length > MARKDOWN_MAX_CHARS) {
-      let oe = f.stablePrefix.length;
-      let fileExtensionsFromBashCommand = getFileExtensionsFromBashCommand(g.substring(oe));
-      let K =
-        g[oe + fileExtensionsFromBashCommand - 1] ===
+    if (streamState.stablePrefix.length > MARKDOWN_MAX_CHARS)
+      tail = freezeStreamChunk(streamState, tail, streamState.stablePrefix.length, true);
+    if (tail.length - streamState.stablePrefix.length > MARKDOWN_MAX_CHARS) {
+      let prefixLength = streamState.stablePrefix.length;
+      let fileExtensionsFromBashCommand = getFileExtensionsFromBashCommand(tail.substring(prefixLength));
+      let openTableHeader =
+        tail[prefixLength + fileExtensionsFromBashCommand - 1] ===
           `
 ` &&
-        X !== null &&
-        X.header.length <= MARKDOWN_NEST_DEPTH
-          ? firstLine(X.raw)
+        tableToken !== null &&
+        tableToken.header.length <= MARKDOWN_NEST_DEPTH
+          ? firstLine(tableToken.raw)
           : "";
-      g = freezeStreamChunk(f, g, oe + fileExtensionsFromBashCommand, false);
-      f.openTable = K !== "" && K.length <= MARKDOWN_TOKEN_LIMIT ? K : null;
+      tail = freezeStreamChunk(streamState, tail, prefixLength + fileExtensionsFromBashCommand, false);
+      streamState.openTable =
+        openTableHeader !== "" && openTableHeader.length <= MARKDOWN_TOKEN_LIMIT ? openTableHeader : null;
     }
   }
-  let stablePrefix = f.stablePrefix;
-  let h = g.substring(stablePrefix.length);
-  let C = stablePrefix.trim() !== "";
-  let I =
-    f.openFence !== null
-      ? f.openFence +
+  let stablePrefix = streamState.stablePrefix;
+  let rest = tail.substring(stablePrefix.length);
+  let hasStableText = stablePrefix.trim() !== "";
+  let openPrefix =
+    streamState.openFence !== null
+      ? streamState.openFence +
         `
 `
-      : (f.openTable ?? "");
-  let b = h && I + h;
-  if (hideTrailingLine && u) {
-    b = b.substring(
+      : (streamState.openTable ?? "");
+  let pendingText = rest && openPrefix + rest;
+  if (hideTrailingLine && openTablePending) {
+    pendingText = pendingText.substring(
       0,
-      b.lastIndexOf(`
+      pendingText.lastIndexOf(`
 `) + 1,
     );
     if (
-      c &&
+      atTop &&
       countCharInString(
-        b.trim(),
+        pendingText.trim(),
         `
 `,
       ) < 2
     )
-      b = "";
+      pendingText = "";
   }
-  let T = !b.endsWith(`
+  let missingNewline = !pendingText.endsWith(`
 `);
-  let L = b
+  let pendingNode = pendingText
     ? jsxProd_default(MarkdownText_2, {
-        tailWrap: hideTrailingLine && T ? "wrap-stream" : undefined,
+        tailWrap: hideTrailingLine && missingNewline ? "wrap-stream" : undefined,
         skipTokenCache: true,
         skipHighlightCache: true,
         capProseWidth: true,
-        children: b,
+        children: pendingText,
       })
     : null;
-  if (f.chunks.length === 0)
+  if (streamState.chunks.length === 0)
     return jsxProd_default(InsideMarkdownContext.Provider, {
-      value: f.isLinkless,
+      value: streamState.isLinkless,
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         gap: 1,
         children: [
-          C &&
+          hasStableText &&
             jsxProd_default(MarkdownText_2, {
               skipTokenCache: true,
               capProseWidth: true,
               children: stablePrefix,
             }),
-          L,
+          pendingNode,
         ],
       }),
     });
-  let A = f.gapAfterChunks ? 1 : 0;
+  let gapRows = streamState.gapAfterChunks ? 1 : 0;
   return jsxProd_default(InsideMarkdownContext.Provider, {
-    value: f.isLinkless,
+    value: streamState.isLinkless,
     children: jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        f.chunks,
-        C &&
+        streamState.chunks,
+        hasStableText &&
           jsxProd_default(Box, {
-            marginTop: A,
+            marginTop: gapRows,
             children: jsxProd_default(MarkdownText_2, {
               skipTokenCache: true,
               capProseWidth: true,
               children: stablePrefix,
             }),
           }),
-        L &&
+        pendingNode &&
           jsxProd_default(Box, {
-            marginTop: C ? 1 : A,
-            children: L,
+            marginTop: hasStableText ? 1 : gapRows,
+            children: pendingNode,
           }),
       ],
     }),
   });
 }
 //@ chunk-bc20zedk.js:28498-28539 placement
-var MARKDOWN_LINK_SCHEMES = new Set(["https", "http", "file"]);
+var MARKDOWN_LINK_SCHEMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:28498", () => {
+  MARKDOWN_LINK_SCHEMES = new Set(["https", "http", "file"]);
+});
 //@ chunk-bc20zedk.js:28539-29466 placement
 function MarkdownBlock({ text, dimColor, press, part, elementKey, pressableLinks }) {
   let clock = useClock();
   let selection = useSelection();
-  let [x] = y(() => clock.now());
-  let h = R(null);
-  let C = R({
+  let [mountTime] = useState(() => clock.now());
+  let releaseRef = useRef(null);
+  let handlersRef = useRef({
     press,
     pressableLinks,
   });
-  let I = Vc(MarkdownText_2, {
+  let markdownElement = createElement(MarkdownText_2, {
     dimColor,
     linkSchemes: MARKDOWN_LINK_SCHEMES,
     stripPromptTags: false,
     children: text,
   });
-  C.current = {
+  handlersRef.current = {
     press,
     pressableLinks,
   };
-  P(() => () => h.current?.(), []);
+  useEffect(() => () => releaseRef.current?.(), []);
   if (press === undefined)
     return elementKey === undefined
-      ? I
-      : Vc(
+      ? markdownElement
+      : createElement(
           Box,
           {
             flexDirection: "column",
             elementKey,
             elementPlugin: part?.plugin,
           },
-          I,
+          markdownElement,
         );
-  return Vc(
+  return createElement(
     Box,
     {
       flexDirection: "column",
@@ -1286,47 +1320,60 @@ function MarkdownBlock({ text, dimColor, press, part, elementKey, pressableLinks
           event.allowDefault();
           return;
         }
-        if (event.isWindowActivation || clock.now() - x < DOUBLE_CLICK_MS) {
+        if (event.isWindowActivation || clock.now() - mountTime < DOUBLE_CLICK_MS) {
           event.dropAsStray();
           return;
         }
         event.stopImmediatePropagation();
-        h.current?.();
-        let _ = selection.subscribe(() => {
-          if (selection.hasSelection()) h.current?.();
+        releaseRef.current?.();
+        let unsubscribeSelection = selection.subscribe(() => {
+          if (selection.hasSelection()) releaseRef.current?.();
         });
-        let N = clock.setTimeout(() => {
-          h.current = null;
-          _();
-          let E = C.current;
-          if (E.press !== undefined && hrefInList(hyperlinkUrl, E.pressableLinks) && E.press)
-            pressFromTerminal(E.press, {
+        let timeout = clock.setTimeout(() => {
+          releaseRef.current = null;
+          unsubscribeSelection();
+          let handlers = handlersRef.current;
+          if (
+            handlers.press !== undefined &&
+            hrefInList(hyperlinkUrl, handlers.pressableLinks) &&
+            handlers.press
+          )
+            pressFromTerminal(handlers.press, {
               href: hyperlinkUrl,
             });
         }, MULTI_CLICK_MAX_MS);
-        h.current = () => {
-          h.current = null;
-          _();
-          N();
+        releaseRef.current = () => {
+          releaseRef.current = null;
+          unsubscribeSelection();
+          timeout();
         };
       },
     },
-    I,
+    markdownElement,
   );
 }
 //@ chunk-bc20zedk.js:29466-29470 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:29466", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:29470-29474 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:29470", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:29474-29491 placement
-var HotkeySeat = qt(null);
+var HotkeySeat; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:29474", () => {
+  HotkeySeat = createContext(null);
+});
 //@ chunk-bc20zedk.js:29491-29606 placement
-function releaseInkFocus(o) {
-  if (!o) return;
-  let focusManager = getFocusManager(o);
+function releaseInkFocus(node) {
+  if (!node) return;
+  let focusManager = getFocusManager(node);
   let activeElement = focusManager.activeElement ?? undefined;
-  while (activeElement && activeElement !== o) activeElement = activeElement.parentNode;
-  if (activeElement === o) focusManager.blur();
+  while (activeElement && activeElement !== node) activeElement = activeElement.parentNode;
+  if (activeElement === node) focusManager.blur();
 }
 //@ chunk-bc20zedk.js:29606-30537 placement
 function PressButton({
@@ -1346,34 +1393,36 @@ function PressButton({
     plugin,
     handle,
   });
-  let T = R(null);
-  let L = Se(HotkeySeat);
-  zt(() => {
-    let N = T.current;
-    return hotkey !== undefined && L !== null && N !== null ? L(hotkey, N) : undefined;
-  }, [L, hotkey]);
+  let buttonRef = useRef(null);
+  let hotkeySeat = useContext(HotkeySeat);
+  useLayoutEffect(() => {
+    let node = buttonRef.current;
+    return hotkey !== undefined && hotkeySeat !== null && node !== null
+      ? hotkeySeat(hotkey, node)
+      : undefined;
+  }, [hotkeySeat, hotkey]);
   let { overrides, handlers } = useHoverLit(groupOf(plugin, hover), hover, "Box");
-  return Vc(
+  return createElement(
     Box,
     {
-      ref: T,
+      ref: buttonRef,
       flexShrink: 0,
       alignSelf: "flex-start",
       elementKey: element,
       elementPlugin: plugin,
       onClick: (event) => {
-        releaseInkFocus(T.current);
+        releaseInkFocus(buttonRef.current);
         event.stopImmediatePropagation();
       },
       ...handlers,
     },
     action !== undefined &&
-      Vc(ActionKeysSeat, {
+      createElement(ActionKeysSeat, {
         plugin,
         handle,
         action,
       }),
-    Vc(Button, {
+    createElement(Button, {
       ref,
       tabIndex: -1,
       flexShrink: 0,
@@ -1383,54 +1432,63 @@ function PressButton({
           plugin,
           handle,
         }),
-      children: (N) => {
-        let E = N.focused || N.hovered || hasKeyboardFocus;
-        let dimColor_2 = dimColor === true && !E;
-        let Y = plain === true;
-        let B = hotkey === undefined;
-        let W = held.length > 0;
-        let M = W ? held : [label];
-        return Y
-          ? Vc(
+      children: (state) => {
+        let isActive = state.focused || state.hovered || hasKeyboardFocus;
+        let dimColor_2 = dimColor === true && !isActive;
+        let isPlain = plain === true;
+        let hasNoHotkey = hotkey === undefined;
+        let hasHeld = held.length > 0;
+        let labelParts = hasHeld ? held : [label];
+        return isPlain
+          ? createElement(
               Text,
               {
-                inverse: E,
+                inverse: isActive,
                 dimColor: dimColor_2,
                 ...overrides,
               },
-              B
+              hasNoHotkey
                 ? ""
-                : Vc(
+                : createElement(
                     Text,
                     {
                       color: "suggestion",
                     },
                     hotkey,
                   ),
-              B ? "" : ": ",
-              ...M,
+              hasNoHotkey ? "" : ": ",
+              ...labelParts,
             )
-          : Vc(
+          : createElement(
               Text,
               {
-                inverse: E,
+                inverse: isActive,
                 bold: true,
                 dimColor: dimColor_2,
                 color: variant === "primary" ? "suggestion" : undefined,
                 ...overrides,
               },
-              ...(W ? ["[ ", ...held, " ]"] : [`[ ${label} ]`]),
+              ...(hasHeld ? ["[ ", ...held, " ]"] : [`[ ${label} ]`]),
             );
       },
     }),
   );
 }
 //@ chunk-bc20zedk.js:30537-30541 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:30537", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:30541-30545 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:30541", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:30545-30549 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:30545", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:30549-30657 placement
 function mouseButtonName(button) {
   switch (button) {
@@ -1445,29 +1503,35 @@ function mouseButtonName(button) {
   }
 }
 //@ chunk-bc20zedk.js:30657-30661 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:30657", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:30661-30665 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:30661", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:30665-30848 placement
 /**
  * 点击发生在元素外（非窗口激活）时回调。
  */
-function useClickOutside(o) {
-  let p = R(null);
-  let { subscribeClicks } = Se(kp);
-  P(
+function useClickOutside(config) {
+  let ref = useRef(null);
+  let { subscribeClicks } = useContext(APP_CONTEXT);
+  useEffect(
     () =>
-      subscribeClicks((m, f) => {
-        let u = m ?? undefined;
-        while (u && u !== p.current) u = u.parentNode;
-        if (!u && f?.isWindowActivation !== true) o();
+      subscribeClicks((event, node) => {
+        let unsubscribe = event ?? undefined;
+        while (unsubscribe && unsubscribe !== ref.current) unsubscribe = unsubscribe.parentNode;
+        if (!unsubscribe && node?.isWindowActivation !== true) config();
       }),
-    [o, subscribeClicks],
+    [config, subscribeClicks],
   );
-  return p;
+  return ref;
 }
 //@ chunk-bc20zedk.js:30848-31093 placement
-var KEY_NAME_MAP = [
+var KEY_NAME_PAIRS = [
   ["upArrow", "up"],
   ["downArrow", "down"],
   ["leftArrow", "left"],
@@ -1484,11 +1548,11 @@ var KEY_NAME_MAP = [
 //@ chunk-bc20zedk.js:31093-31290 placement
 function toPluginKeyEvent(input, key) {
   if (key.wheelUp || key.wheelDown) return;
-  let a = KEY_NAME_MAP.find(([f]) => key[f])?.[1] ?? (input === " " ? "space" : input);
-  return a === ""
+  let keyName = KEY_NAME_PAIRS.find(([pairKey]) => key[pairKey])?.[1] ?? (input === " " ? "space" : input);
+  return keyName === ""
     ? undefined
     : {
-        key: a,
+        key: keyName,
         ...(key.ctrl && {
           ctrl: true,
         }),
@@ -1505,27 +1569,27 @@ function toPluginKeyEvent(input, key) {
  * 插件面板获得焦点时转发按键，Esc/Ctrl+C 释放焦点。
  */
 function usePluginKeyFocus(instance) {
-  let p = ce(() => clearFocusedClient(instance.id), [instance]);
-  let clickOutside = useClickOutside(p);
-  let m = useStoreSelector(focusStore, (u) => u.focusedId) === instance.id;
-  let f = useStoreSelector(paneRegistry(), (u) => u.focusedId);
-  P(() => {
-    if (f !== null && m) setFocusedClient(null);
-  }, [f, m]);
-  P(() => p, [p]);
-  usePreDispatchKeyHandler((input, key, g) => {
-    let x = focusStore.getState().focusedId === instance.id;
-    let h = key.escape || (key.ctrl && (input === "c" || input === "d"));
-    if (!x) return false;
+  let clearFocus = useCallback(() => clearFocusedClient(instance.id), [instance]);
+  let clickOutside = useClickOutside(clearFocus);
+  let isFocused = useStoreSelector(focusStore, (state) => state.focusedId) === instance.id;
+  let focusedPaneId = useStoreSelector(paneRegistry(), (state) => state.focusedId);
+  useEffect(() => {
+    if (focusedPaneId !== null && isFocused) setFocusedClient(null);
+  }, [focusedPaneId, isFocused]);
+  useEffect(() => clearFocus, [clearFocus]);
+  usePreDispatchKeyHandler((input, key, keyEvent) => {
+    let isFocusedClient = focusStore.getState().focusedId === instance.id;
+    let isExitKey = key.escape || (key.ctrl && (input === "c" || input === "d"));
+    if (!isFocusedClient) return false;
     if (!instance.acceptsKeys()) {
-      p();
+      clearFocus();
       return false;
     }
-    if (h) {
+    if (isExitKey) {
       setFocusedClient(null);
       return key.escape;
     }
-    let pluginKeyEvent = toPluginKeyEvent(input === "" ? g : input, key);
+    let pluginKeyEvent = toPluginKeyEvent(input === "" ? keyEvent : input, key);
     if (pluginKeyEvent === undefined) return false;
     instance.key(pluginKeyEvent);
     return true;
@@ -1536,66 +1600,66 @@ function usePluginKeyFocus(instance) {
 function RenderHostElement({ host, instance, snapshot }) {
   let { rebuild, props, width, height, flexGrow, plugin, elementKey } = host;
   let pluginKeyFocus = usePluginKeyFocus(instance);
-  P(() => {
+  useEffect(() => {
     instance.setProps(props);
   }, [instance, props]);
-  P(() => {
+  useEffect(() => {
     instance.drawnAgain();
   }, [instance, host.drawn]);
-  let I = useMeasured(() =>
+  let measuredWidth = useMeasured(() =>
     pluginKeyFocus.current === null ? 0 : measureElement(pluginKeyFocus.current).width,
   );
-  let b = useMeasured(() =>
+  let measuredHeight = useMeasured(() =>
     pluginKeyFocus.current === null ? 0 : measureElement(pluginKeyFocus.current).height,
   );
-  zt(() => {
+  useLayoutEffect(() => {
     instance.laidOut();
   });
-  P(() => {
-    instance.resize(I, b);
-  }, [instance, I, b]);
-  let T = R({
+  useEffect(() => {
+    instance.resize(measuredWidth, measuredHeight);
+  }, [instance, measuredWidth, measuredHeight]);
+  let pointerPosRef = useRef({
     x: 0,
     y: 0,
   });
-  let L = snapshot.status === "drawn";
-  let A = L && instance.acceptsPointer();
-  let _ = A || (L && instance.acceptsKeys());
-  useFinePointer(A);
-  function N(E) {
-    if (E.type === "down" && instance.acceptsKeys()) {
+  let isDrawn = snapshot.status === "drawn";
+  let acceptsPointer = isDrawn && instance.acceptsPointer();
+  let isInteractive = acceptsPointer || (isDrawn && instance.acceptsKeys());
+  useFinePointer(acceptsPointer);
+  function handlePointer(event) {
+    if (event.type === "down" && instance.acceptsKeys()) {
       focusPane(null);
       setFocusedClient(instance.id);
     }
-    T.current = {
-      x: E.localCol,
-      y: E.localRow,
+    pointerPosRef.current = {
+      x: event.localCol,
+      y: event.localRow,
     };
     instance.pointer({
-      type: E.type,
-      x: E.localCol,
-      y: E.localRow,
-      ...(E.fine && {
+      type: event.type,
+      x: event.localCol,
+      y: event.localRow,
+      ...(event.fine && {
         fine: {
-          x: E.fine.col,
-          y: E.fine.row,
+          x: event.fine.col,
+          y: event.fine.row,
         },
       }),
-      ...(E.button !== undefined && {
-        button: mouseButtonName(E.button),
+      ...(event.button !== undefined && {
+        button: mouseButtonName(event.button),
       }),
-      ...(E.shift && {
+      ...(event.shift && {
         shift: true,
       }),
-      ...(E.alt && {
+      ...(event.alt && {
         alt: true,
       }),
-      ...(E.ctrl && {
+      ...(event.ctrl && {
         ctrl: true,
       }),
     });
   }
-  return Vc(
+  return createElement(
     Box,
     {
       ref: pluginKeyFocus,
@@ -1607,25 +1671,25 @@ function RenderHostElement({ host, instance, snapshot }) {
       overflow: "hidden",
       elementKey,
       elementPlugin: plugin,
-      ...(_ && {
-        onPointer: N,
+      ...(isInteractive && {
+        onPointer: handlePointer,
         onMouseEnter: () => {
           instance.pointer({
             type: "enter",
-            ...T.current,
+            ...pointerPosRef.current,
           });
         },
         onMouseLeave: () => {
           instance.pointer({
             type: "leave",
-            ...T.current,
+            ...pointerPosRef.current,
           });
         },
       }),
     },
-    L && rebuild(snapshot.tree),
+    isDrawn && rebuild(snapshot.tree),
     snapshot.status === "failed" &&
-      Vc(
+      createElement(
         Text,
         {
           dimColor: true,
@@ -1636,24 +1700,27 @@ function RenderHostElement({ host, instance, snapshot }) {
   );
 }
 //@ chunk-bc20zedk.js:32807-32811 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bc20zedk.js:32807", () => {
+  init_react_production();
+});
 //@ chunk-bc20zedk.js:32811-33028 placement
-function createTicker(o) {
-  if (o === null)
+function createTicker(clock) {
+  if (clock === null)
     return {
-      every: (p, a) => {
-        let interval = setInterval(a, Math.max(p, SCROLL_JUMP_LINES));
+      every: (ms, callback) => {
+        let interval = setInterval(callback, Math.max(ms, SCROLL_JUMP_LINES));
         return () => clearInterval(interval);
       },
     };
   return {
-    every: (p, a) => {
-      let m = o.now();
-      return o.subscribeKeepAlive(() => {
-        let f = o.now();
-        if (f - m >= p) {
-          m = f;
-          a();
+    every: (ms, callback) => {
+      let lastTick = clock.now();
+      return clock.subscribeKeepAlive(() => {
+        let now = clock.now();
+        if (now - lastTick >= ms) {
+          lastTick = now;
+          callback();
         }
       });
     },

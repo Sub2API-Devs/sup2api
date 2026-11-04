@@ -12,30 +12,30 @@ import { getRuleBehaviorDescription } from "../permissions/PermissionResult.js";
 import { getCloudDeferUnsupportedMessage, getPreToolHookBlockingMessage } from "../hooks.js";
 
 //@ chunk-e6aww6q8.js:921230-922063 placement
-function resolveHookPermissionResult(remoteCall, hookName, r) {
-  let s = `Hook ${hookName} ${getRuleBehaviorDescription("deny")} this tool`;
-  let h;
-  switch (r.permissionBehavior) {
+function resolveHookPermissionResult(remoteCall, hookName, result) {
+  let defaultMessage = `Hook ${hookName} ${getRuleBehaviorDescription("deny")} this tool`;
+  let denyMessage;
+  switch (result.permissionBehavior) {
     case "deny":
-      h = r.hookPermissionDecisionReason || s;
+      denyMessage = result.hookPermissionDecisionReason || defaultMessage;
       break;
     case "defer":
       if (remoteCall.strictestHookAnswer?.behavior !== "deny")
-        h = getCloudDeferUnsupportedMessage(r.hookSource || hookName);
+        denyMessage = getCloudDeferUnsupportedMessage(result.hookSource || hookName);
       break;
     case "ask":
       if (remoteCall.strictestHookAnswer?.behavior !== "deny")
         remoteCall.strictestHookAnswer = {
           behavior: "ask",
           message:
-            r.hookPermissionDecisionReason ||
+            result.hookPermissionDecisionReason ||
             `Hook ${hookName} ${getRuleBehaviorDescription("ask")} this tool`,
           decisionReason: {
             type: "hook",
             hookName,
-            hookSource: r.hookSource,
-            reason: r.hookPermissionDecisionReason,
-            ...(r.heldForServedCall && {
+            hookSource: result.hookSource,
+            reason: result.hookPermissionDecisionReason,
+            ...(result.heldForServedCall && {
               heldForServedCall: true,
             }),
           },
@@ -46,19 +46,19 @@ function resolveHookPermissionResult(remoteCall, hookName, r) {
     case undefined:
       break;
     default:
-      r.permissionBehavior;
-      h = s;
+      result.permissionBehavior;
+      denyMessage = defaultMessage;
   }
-  if (r.blockingError !== undefined && r.permissionBehavior !== "deny")
-    h = getPreToolHookBlockingMessage(hookName, r.blockingError);
-  if (h !== undefined)
+  if (result.blockingError !== undefined && result.permissionBehavior !== "deny")
+    denyMessage = getPreToolHookBlockingMessage(hookName, result.blockingError);
+  if (denyMessage !== undefined)
     remoteCall.strictestHookAnswer = {
       behavior: "deny",
-      message: h,
+      message: denyMessage,
       decisionReason: {
         type: "hook",
         hookName,
-        reason: h,
+        reason: denyMessage,
       },
     };
 }

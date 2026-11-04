@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme } from "../design-system/ThemeProvider.js";
 import { useAppState } from "../../state/AppState.js";
 import { selectAgentDefinitionsActiveAgents } from "../agents/AgentsMenu.js";
@@ -39,7 +39,7 @@ import { FocusColumn } from "../design-system/FocusColumn.js";
  * 后台异步 agent 详情：描述、状态、进度、工具活动、结果或错误。
  */
 function AsyncAgentDetailDialog(props) {
-  let $ = w(70);
+  let $ = useMemoCache(70);
   let { agent, onDone, onKillAgent, onForeground, onBack, killAllAgentsShortcut } = props;
   let [theme] = useTheme();
   let activeAgents = useAppState(selectAgentDefinitionsActiveAgents);
@@ -64,11 +64,11 @@ function AsyncAgentDetailDialog(props) {
     $[1] = agent;
     $[2] = t2;
   } else t2 = $[2];
-  let At = t2;
-  const onKill = At ? onKillAgent : undefined;
-  let Ot;
+  let isActive = t2;
+  const onKill = isActive ? onKillAgent : undefined;
+  let confirmationHandlers;
   if ($[3] !== onBack || $[4] !== onDone || $[5] !== onKill) {
-    Ot = {
+    confirmationHandlers = {
       onClose: onDone,
       onBack,
       onKill,
@@ -76,12 +76,12 @@ function AsyncAgentDetailDialog(props) {
     $[3] = onBack;
     $[4] = onDone;
     $[5] = onKill;
-    $[6] = Ot;
-  } else Ot = $[6];
-  let confirmationKeys = useConfirmationKeys(Ot);
-  let Dt;
+    $[6] = confirmationHandlers;
+  } else confirmationHandlers = $[6];
+  let confirmationKeys = useConfirmationKeys(confirmationHandlers);
+  let keyDownHandler;
   if ($[7] !== confirmationKeys || $[8] !== onForeground) {
-    Dt = (e) => {
+    keyDownHandler = (e) => {
       if (e.key === "f" && !e.ctrl && !e.meta && onForeground) {
         e.preventDefault();
         onForeground();
@@ -91,9 +91,9 @@ function AsyncAgentDetailDialog(props) {
     };
     $[7] = confirmationKeys;
     $[8] = onForeground;
-    $[9] = Dt;
-  } else Dt = $[9];
-  let handleKeyDown = Dt;
+    $[9] = keyDownHandler;
+  } else keyDownHandler = $[9];
+  let handleKeyDown = keyDownHandler;
   let t5;
   if ($[10] !== agent.prompt) {
     t5 = extractTag(agent.prompt, "plan");
@@ -104,36 +104,36 @@ function AsyncAgentDetailDialog(props) {
   let displayPrompt = agent.prompt.length > 300 ? agent.prompt.substring(0, 297) + "\u2026" : agent.prompt;
   let tokenCount = agent.result?.totalTokens ?? agent.progress?.tokenCount;
   let toolUseCount = agent.result?.totalToolUseCount ?? agent.progress?.toolUseCount;
-  let co;
+  let agentEffortLabel;
   if ($[12] !== agent.effort || $[13] !== agent.model) {
-    co = agentLabel(agent.model, agent.effort);
+    agentEffortLabel = agentLabel(agent.model, agent.effort);
     $[12] = agent.effort;
     $[13] = agent.model;
-    $[14] = co;
-  } else co = $[14];
-  let bo = co;
+    $[14] = agentEffortLabel;
+  } else agentEffortLabel = $[14];
+  let agentEffortText = agentEffortLabel;
   const agentType = agent.selectedAgent?.agentType ?? agent.agentType;
-  let Bo;
+  let agentTypeLabel;
   if ($[15] !== agentType) {
-    Bo = collapseWhitespace(agentType);
+    agentTypeLabel = collapseWhitespace(agentType);
     $[15] = agentType;
-    $[16] = Bo;
-  } else Bo = $[16];
-  let Ro = Bo;
+    $[16] = agentTypeLabel;
+  } else agentTypeLabel = $[16];
+  let agentTypeText = agentTypeLabel;
   const description = agent.description || "Async agent";
   let t8;
-  if ($[17] !== Ro || $[18] !== description) {
+  if ($[17] !== agentTypeText || $[18] !== description) {
     t8 = jsxProd_default_2(Text, {
-      children: [Ro, " \u203A ", description],
+      children: [agentTypeText, " \u203A ", description],
     });
-    $[17] = Ro;
+    $[17] = agentTypeText;
     $[18] = description;
     $[19] = t8;
   } else t8 = $[19];
   let title = t8;
-  let mn;
+  let statusLine;
   if ($[20] !== agent.status) {
-    mn =
+    statusLine =
       agent.status !== "running" &&
       jsxProd_default_2(Text, {
         color: getTaskStatusColor(agent.status),
@@ -145,79 +145,84 @@ function AsyncAgentDetailDialog(props) {
         ],
       });
     $[20] = agent.status;
-    $[21] = mn;
-  } else mn = $[21];
-  let Cn;
+    $[21] = statusLine;
+  } else statusLine = $[21];
+  let tokenUsageHint;
   if ($[22] !== tokenCount) {
-    Cn =
+    tokenUsageHint =
       tokenCount !== undefined &&
       tokenCount > 0 &&
       jsxProd_default_2(Fragment, {
         children: [" \xB7 ", formatNumber(tokenCount), " tokens"],
       });
     $[22] = tokenCount;
-    $[23] = Cn;
-  } else Cn = $[23];
-  let No;
+    $[23] = tokenUsageHint;
+  } else tokenUsageHint = $[23];
+  let toolCountHint;
   if ($[24] !== toolUseCount) {
-    No =
+    toolCountHint =
       toolUseCount !== undefined &&
       toolUseCount > 0 &&
       jsxProd_default_2(Fragment, {
         children: [" ", "\xB7 ", toolUseCount, " ", toolUseCount === 1 ? "tool" : "tools"],
       });
     $[24] = toolUseCount;
-    $[25] = No;
-  } else No = $[25];
-  let vo;
-  if ($[26] !== bo) {
-    vo =
-      bo &&
+    $[25] = toolCountHint;
+  } else toolCountHint = $[25];
+  let effortHint;
+  if ($[26] !== agentEffortText) {
+    effortHint =
+      agentEffortText &&
       jsxProd_default_2(Fragment, {
-        children: [" \xB7 ", bo],
+        children: [" \xB7 ", agentEffortText],
       });
-    $[26] = bo;
-    $[27] = vo;
-  } else vo = $[27];
-  let Yo;
-  if ($[28] !== elapsedTicker || $[29] !== Cn || $[30] !== No || $[31] !== vo) {
-    Yo = jsxProd_default_2(Text, {
+    $[26] = agentEffortText;
+    $[27] = effortHint;
+  } else effortHint = $[27];
+  let timingLine;
+  if (
+    $[28] !== elapsedTicker ||
+    $[29] !== tokenUsageHint ||
+    $[30] !== toolCountHint ||
+    $[31] !== effortHint
+  ) {
+    timingLine = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [elapsedTicker, Cn, No, vo],
+      children: [elapsedTicker, tokenUsageHint, toolCountHint, effortHint],
     });
     $[28] = elapsedTicker;
-    $[29] = Cn;
-    $[30] = No;
-    $[31] = vo;
-    $[32] = Yo;
-  } else Yo = $[32];
+    $[29] = tokenUsageHint;
+    $[30] = toolCountHint;
+    $[31] = effortHint;
+    $[32] = timingLine;
+  } else timingLine = $[32];
   let t13;
-  if ($[33] !== mn || $[34] !== Yo) {
+  if ($[33] !== statusLine || $[34] !== timingLine) {
     t13 = jsxProd_default_2(Text, {
-      children: [mn, Yo],
+      children: [statusLine, timingLine],
     });
-    $[33] = mn;
-    $[34] = Yo;
+    $[33] = statusLine;
+    $[34] = timingLine;
     $[35] = t13;
   } else t13 = $[35];
   let subtitle = t13;
   const showBack = !!onBack;
-  const showStop = At && !!onKillAgent;
-  let hn;
+  const showStop = isActive && !!onKillAgent;
+  let foregroundHint;
   if ($[36] !== onForeground) {
-    hn =
+    foregroundHint =
       onForeground &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "f",
         action: "foreground",
       });
     $[36] = onForeground;
-    $[37] = hn;
-  } else hn = $[37];
-  let Mn;
-  if ($[38] !== At || $[39] !== killAllAgentsShortcut) {
-    Mn =
-      At &&
+    $[37] = foregroundHint;
+  } else foregroundHint = $[37];
+  let killAllHint;
+  if ($[38] !== isActive || $[39] !== killAllAgentsShortcut) {
+    killAllHint =
+      isActive &&
       killAllAgentsShortcut &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: killAllAgentsShortcut,
@@ -226,21 +231,21 @@ function AsyncAgentDetailDialog(props) {
           keyCase: "lower",
         },
       });
-    $[38] = At;
+    $[38] = isActive;
     $[39] = killAllAgentsShortcut;
-    $[40] = Mn;
-  } else Mn = $[40];
+    $[40] = killAllHint;
+  } else killAllHint = $[40];
   let inputGuide;
-  if ($[41] !== showBack || $[42] !== showStop || $[43] !== hn || $[44] !== Mn) {
+  if ($[41] !== showBack || $[42] !== showStop || $[43] !== foregroundHint || $[44] !== killAllHint) {
     inputGuide = jsxProd_default_2(TaskDetailFooterHints, {
       showBack,
       showStop,
-      children: [hn, Mn],
+      children: [foregroundHint, killAllHint],
     });
     $[41] = showBack;
     $[42] = showStop;
-    $[43] = hn;
-    $[44] = Mn;
+    $[43] = foregroundHint;
+    $[44] = killAllHint;
     $[45] = inputGuide;
   } else inputGuide = $[45];
   let t15;

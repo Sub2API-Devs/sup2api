@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:229632-230327 cjs-fingerprint
-var require_leaf = x(function (cjsExports, cjsModule) {
+var require_leaf = __commonJS(function (cjsExports, cjsModule) {
   function leaf(hljs) {
     let IDENT = /([A-Za-z_][A-Za-z_0-9]*)?/;
     let PARAMS = {

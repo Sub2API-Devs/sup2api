@@ -11,7 +11,7 @@
 import { readdir, mkdir, writeFile, lstat, realpath, rename, open } from "fs/promises";
 import { resolve as resolve_2, join } from "path";
 import { constants } from "fs";
-import { b8e } from "../../../vendor/jsonc-parser/lib/esm/main.js";
+import { parseJsonc } from "../../../vendor/jsonc-parser/lib/esm/main.js";
 import { stripBom } from "../json.js";
 import { quotedPrintable } from "../printableName.js";
 import {
@@ -111,6 +111,7 @@ import {
 import { marketplaceNameOfId } from "./headersHelper.js";
 import { samePluginSource, sourceUrlAndRef } from "./pluginSourceUrl.js";
 import { uniq } from "../collections.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4400802-4400826 placement
 class PluginDependencyError extends Error {}
@@ -126,41 +127,39 @@ var INTEGRITY_RE = /^(sha512|sha384|sha256|sha1)-[A-Za-z0-9+/]+={0,2}$/;
 var PLUGIN_DEPENDENCIES = "plugin-dependencies";
 var PLACEHOLDER_VERSION = "0.0.0";
 //@ chunk-e6aww6q8.js:4401137-4401818 placement
-function checkPackageLock(e, n, lockfileName, registry) {
-  let jsonObject = parseJsonObject(e, "package.json");
-  let jsonObject_2 = parseJsonObject(n, lockfileName);
+function checkPackageLock(packageJsonText, lockText, lockfile, registry) {
+  let jsonObject = parseJsonObject(packageJsonText, "package.json");
+  let jsonObject_2 = parseJsonObject(lockText, lockfile);
   if (jsonObject_2.lockfileVersion !== 2 && jsonObject_2.lockfileVersion !== 3)
-    throw new PluginDependencyError(
-      `its ${lockfileName} is in an old format; regenerate it with npm 7 or later`,
-    );
+    throw new PluginDependencyError(`its ${lockfile} is in an old format; regenerate it with npm 7 or later`);
   if (jsonObject.overrides !== undefined)
     throw new PluginDependencyError("its package.json sets overrides, which this install does not apply");
   let packages = jsonObject_2.packages;
   if (!isPlainObjectLike(packages) || !isPlainObjectLike(packages[""]))
-    throw new PluginDependencyError(`its ${lockfileName} has no packages section with the plugin in it`);
-  let w = assertLockMatchesPackage(packages[""], jsonObject, lockfileName);
-  let L = {
+    throw new PluginDependencyError(`its ${lockfile} has no packages section with the plugin in it`);
+  let rootDeps = assertLockMatchesPackage(packages[""], jsonObject, lockfile);
+  let lockPackages = {
     "": {
       name: PLUGIN_DEPENDENCIES,
       version: PLACEHOLDER_VERSION,
-      ...w,
+      ...rootDeps,
     },
   };
   for (let [key, value] of Object.entries(packages))
-    if (key !== "") L[key] = validateLockEntry(key, value, lockfileName, registry);
+    if (key !== "") lockPackages[key] = validateLockEntry(key, value, lockfile, registry);
   return {
-    packageCount: Object.keys(L).length - 1,
+    packageCount: Object.keys(lockPackages).length - 1,
     packageJson: {
       name: PLUGIN_DEPENDENCIES,
       version: PLACEHOLDER_VERSION,
-      ...w,
+      ...rootDeps,
     },
     lockfile: {
       name: PLUGIN_DEPENDENCIES,
       version: PLACEHOLDER_VERSION,
       lockfileVersion: 3,
       requires: true,
-      packages: L,
+      packages: lockPackages,
     },
   };
 }
@@ -168,55 +167,56 @@ function checkPackageLock(e, n, lockfileName, registry) {
 /**
  * 检查插件的 bun.lock 是否可用（JSON 格式、版本、patchedDependencies）。
  */
-function checkBunLock(e, n, r) {
-  let jsonObject = parseJsonObject(e, "package.json");
-  let h = [];
-  let y = b8e(stripBom(n), h, {
+function checkBunLock(packageJsonText, lockText, registry) {
+  let jsonObject = parseJsonObject(packageJsonText, "package.json");
+  let errors = [];
+  let lock = parseJsonc(stripBom(lockText), errors, {
     allowTrailingComma: true,
     disallowComments: true,
   });
-  if (h.length > 0 || !isPlainObjectLike(y))
+  if (errors.length > 0 || !isPlainObjectLike(lock))
     throw new PluginDependencyError("its bun.lock is not valid JSON");
-  if (![0, 1, 2].includes(y.lockfileVersion))
+  if (![0, 1, 2].includes(lock.lockfileVersion))
     throw new PluginDependencyError("its bun.lock is in a format this version of Claude Code does not read");
-  if (y.patchedDependencies !== undefined || jsonObject.patchedDependencies !== undefined)
+  if (lock.patchedDependencies !== undefined || jsonObject.patchedDependencies !== undefined)
     throw new PluginDependencyError(
       "it patches its dependencies (patchedDependencies), which this install does not apply",
     );
-  let workspaces = y.workspaces;
+  let workspaces = lock.workspaces;
   if (
     !isPlainObjectLike(workspaces) ||
     !isPlainObjectLike(workspaces[""]) ||
     Object.keys(workspaces).length !== 1
   )
     throw new PluginDependencyError("its bun.lock does not list the plugin as its only workspace");
-  let packages = y.packages;
+  let packages = lock.packages;
   if (!isPlainObjectLike(packages)) throw new PluginDependencyError("its bun.lock lists no packages");
-  let L = assertLockMatchesPackage(workspaces[""], jsonObject, "bun.lock");
-  let { peerDependenciesMeta, ...q } = L;
+  let rootDeps = assertLockMatchesPackage(workspaces[""], jsonObject, "bun.lock");
+  let { peerDependenciesMeta, ...workspaceRoot } = rootDeps;
   if (workspaces[""].optionalPeers !== undefined)
-    q.optionalPeers = assertOptionalPeers(workspaces[""].optionalPeers, "its bun.lock");
-  let Z = {};
-  for (let [key, value] of Object.entries(packages)) Z[key] = validateBunLockEntry(key, value, r);
+    workspaceRoot.optionalPeers = assertOptionalPeers(workspaces[""].optionalPeers, "its bun.lock");
+  let bunPackages = {};
+  for (let [key, value] of Object.entries(packages))
+    bunPackages[key] = validateBunLockEntry(key, value, registry);
   return {
-    packageCount: Object.keys(Z).length,
+    packageCount: Object.keys(bunPackages).length,
     packageJson: {
       name: PLUGIN_DEPENDENCIES,
       version: PLACEHOLDER_VERSION,
-      ...L,
+      ...rootDeps,
     },
     lockfile: {
-      lockfileVersion: y.lockfileVersion,
-      ...(typeof y.configVersion === "number" && {
-        configVersion: y.configVersion,
+      lockfileVersion: lock.lockfileVersion,
+      ...(typeof lock.configVersion === "number" && {
+        configVersion: lock.configVersion,
       }),
       workspaces: {
         "": {
           name: PLUGIN_DEPENDENCIES,
-          ...q,
+          ...workspaceRoot,
         },
       },
-      packages: Z,
+      packages: bunPackages,
     },
   };
 }
@@ -224,38 +224,38 @@ function checkBunLock(e, n, r) {
 /**
  * package.json 与锁文件列出的依赖须一致。
  */
-function assertLockMatchesPackage(e, jsonObject, r) {
-  let s = validateDependencyLists(e, DEPENDENCY_FIELDS_2, `its ${r}`);
-  let h = omitOptionalFromDependencies(
+function assertLockMatchesPackage(rootPackage, jsonObject, lockfileName) {
+  let lockDeps = validateDependencyLists(rootPackage, DEPENDENCY_FIELDS_2, `its ${lockfileName}`);
+  let packageDeps = omitOptionalFromDependencies(
     validateDependencyLists(jsonObject, DEPENDENCY_FIELDS_2, "its package.json"),
-    r === "bun.lock" ? ["devDependencies"] : [],
+    lockfileName === "bun.lock" ? ["devDependencies"] : [],
   );
-  if (dependencyFingerprint(s) !== dependencyFingerprint(h))
-    throw new PluginDependencyError(`its package.json and ${r} list different dependencies`);
+  if (dependencyFingerprint(lockDeps) !== dependencyFingerprint(packageDeps))
+    throw new PluginDependencyError(`its package.json and ${lockfileName} list different dependencies`);
   return isPlainObjectLike(jsonObject.peerDependenciesMeta)
     ? {
-        ...s,
+        ...lockDeps,
         peerDependenciesMeta: sanitizePeerDependenciesMeta(jsonObject.peerDependenciesMeta),
       }
-    : s;
+    : lockDeps;
 }
 //@ chunk-e6aww6q8.js:4403268-4403504 placement
-function omitOptionalFromDependencies(e, n = []) {
-  let optionalDependencies = e.optionalDependencies;
-  if (optionalDependencies === undefined) return e;
-  let s = {
-    ...e,
+function omitOptionalFromDependencies(lists, extraFields = []) {
+  let optionalDependencies = lists.optionalDependencies;
+  if (optionalDependencies === undefined) return lists;
+  let result = {
+    ...lists,
   };
-  for (let h of ["dependencies", ...n]) {
-    let y = e[h];
-    if (y !== undefined) {
-      let S = {};
-      for (let [key, value] of Object.entries(y))
-        if (!Object.hasOwn(optionalDependencies, key)) S[key] = value;
-      s[h] = S;
+  for (let field of ["dependencies", ...extraFields]) {
+    let deps = lists[field];
+    if (deps !== undefined) {
+      let kept = {};
+      for (let [key, value] of Object.entries(deps))
+        if (!Object.hasOwn(optionalDependencies, key)) kept[key] = value;
+      result[field] = kept;
     }
   }
-  return s;
+  return result;
 }
 //@ chunk-e6aww6q8.js:4403504-4404560 placement
 /**
@@ -287,11 +287,12 @@ function validateLockEntry(entryPath, entry, lockfileName, registry) {
   if (entry.integrity !== undefined)
     result.integrity = assertIntegrity(entry.integrity, label, entry.resolved !== undefined);
   Object.assign(result, validateDependencyLists(entry, LOCK_ENTRY_DEPENDENCY_FIELDS, label));
-  for (let w of LOCK_ENTRY_FLAGS) if (entry[w] === true) result[w] = true;
-  for (let w of PLATFORM_FIELDS)
-    if (entry[w] !== undefined) {
-      if (!isStringArray(entry[w])) throw new PluginDependencyError(`${label} has an unreadable ${w} list`);
-      result[w] = entry[w];
+  for (let flag of LOCK_ENTRY_FLAGS) if (entry[flag] === true) result[flag] = true;
+  for (let field of PLATFORM_FIELDS)
+    if (entry[field] !== undefined) {
+      if (!isStringArray(entry[field]))
+        throw new PluginDependencyError(`${label} has an unreadable ${field} list`);
+      result[field] = entry[field];
     }
   if (entry.bin !== undefined) result.bin = validateBinField(entry.bin, label);
   if (isPlainObjectLike(entry.peerDependenciesMeta))
@@ -299,91 +300,97 @@ function validateLockEntry(entryPath, entry, lockfileName, registry) {
   return result;
 }
 //@ chunk-e6aww6q8.js:4404560-4405476 placement
-function validateBunLockEntry(e, n, r) {
-  let s = `its bun.lock entry "${quotedPrintable(e, 120)}"`;
-  if (!isPackagePath(e)) throw new PluginDependencyError(`${s} is not a package path`);
-  if (!Array.isArray(n) || n.length !== 4) throw new PluginDependencyError(`${s} is not a registry package`);
-  let [h, y, S, w] = n;
-  let L = typeof h === "string" ? h.lastIndexOf("@") : -1;
+function validateBunLockEntry(entryPath, entry, registry) {
+  let label = `its bun.lock entry "${quotedPrintable(entryPath, 120)}"`;
+  if (!isPackagePath(entryPath)) throw new PluginDependencyError(`${label} is not a package path`);
+  if (!Array.isArray(entry) || entry.length !== 4)
+    throw new PluginDependencyError(`${label} is not a registry package`);
+  let [nameAndVersion, resolved, meta, integrity] = entry;
+  let atIndex = typeof nameAndVersion === "string" ? nameAndVersion.lastIndexOf("@") : -1;
   if (
-    typeof h !== "string" ||
-    L <= 0 ||
-    !isValidNpmPackageNameLoose(h.slice(0, L)) ||
-    semverCompat.parse(h.slice(L + 1)) === null
+    typeof nameAndVersion !== "string" ||
+    atIndex <= 0 ||
+    !isValidNpmPackageNameLoose(nameAndVersion.slice(0, atIndex)) ||
+    semverCompat.parse(nameAndVersion.slice(atIndex + 1)) === null
   )
-    throw new PluginDependencyError(`${s} is not a registry package at an exact version`);
-  if (y !== "") assertDownloadLink(y, s, r, "bun");
-  if (!isPlainObjectLike(S)) throw new PluginDependencyError(`${s} has unreadable metadata`);
-  let G = validateDependencyLists(S, LOCK_ENTRY_DEPENDENCY_FIELDS, s);
-  for (let q of PLATFORM_FIELDS) {
-    let Z = S[q];
-    if (Z !== undefined) {
-      if (typeof Z !== "string" && !isStringArray(Z))
-        throw new PluginDependencyError(`${s} has an unreadable ${q} list`);
-      G[q] = Z;
+    throw new PluginDependencyError(`${label} is not a registry package at an exact version`);
+  if (resolved !== "") assertDownloadLink(resolved, label, registry, "bun");
+  if (!isPlainObjectLike(meta)) throw new PluginDependencyError(`${label} has unreadable metadata`);
+  let result = validateDependencyLists(meta, LOCK_ENTRY_DEPENDENCY_FIELDS, label);
+  for (let field of PLATFORM_FIELDS) {
+    let value = meta[field];
+    if (value !== undefined) {
+      if (typeof value !== "string" && !isStringArray(value))
+        throw new PluginDependencyError(`${label} has an unreadable ${field} list`);
+      result[field] = value;
     }
   }
-  if (S.optionalPeers !== undefined) G.optionalPeers = assertOptionalPeers(S.optionalPeers, s);
-  if (S.bin !== undefined) G.bin = validateBinField(S.bin, s);
-  if (S.binDir !== undefined) {
-    if (typeof S.binDir !== "string" || !isSafePackageSubpath(S.binDir))
-      throw new PluginDependencyError(`${s} has a bin folder outside its package`);
-    G.binDir = S.binDir;
+  if (meta.optionalPeers !== undefined) result.optionalPeers = assertOptionalPeers(meta.optionalPeers, label);
+  if (meta.bin !== undefined) result.bin = validateBinField(meta.bin, label);
+  if (meta.binDir !== undefined) {
+    if (typeof meta.binDir !== "string" || !isSafePackageSubpath(meta.binDir))
+      throw new PluginDependencyError(`${label} has a bin folder outside its package`);
+    result.binDir = meta.binDir;
   }
-  return [h, y, G, assertIntegrity(w, s, y !== "")];
+  return [nameAndVersion, resolved, result, assertIntegrity(integrity, label, resolved !== "")];
 }
 //@ chunk-e6aww6q8.js:4405476-4405638 placement
-function assertDownloadLink(e, n, r, s) {
-  let reason = typeof e === "string" ? checkTarballUrl(e, undefined, r, s)?.reason : "is not text";
-  if (reason !== undefined) throw new PluginDependencyError(`${n} has a download link that ${reason}`);
-  return e;
+function assertDownloadLink(resolved, label, registry, kind) {
+  let reason =
+    typeof resolved === "string"
+      ? checkTarballUrl(resolved, undefined, registry, kind)?.reason
+      : "is not text";
+  if (reason !== undefined) throw new PluginDependencyError(`${label} has a download link that ${reason}`);
+  return resolved;
 }
 //@ chunk-e6aww6q8.js:4405638-4405861 placement
-function assertOptionalPeers(optionalPeers, n) {
+function assertOptionalPeers(optionalPeers, label) {
   if (!isStringArray(optionalPeers))
-    throw new PluginDependencyError(`${n} has an unreadable optionalPeers list`);
-  let found = optionalPeers.find((s) => !isValidNpmPackageNameLoose(s));
+    throw new PluginDependencyError(`${label} has an unreadable optionalPeers list`);
+  let found = optionalPeers.find((name) => !isValidNpmPackageNameLoose(name));
   if (found !== undefined)
     throw new PluginDependencyError(
-      `${n} has an optional peer that is not a registry package: ${quotedPrintable(found, 120)}`,
+      `${label} has an optional peer that is not a registry package: ${quotedPrintable(found, 120)}`,
     );
   return optionalPeers;
 }
 //@ chunk-e6aww6q8.js:4405861-4406118 placement
-function assertIntegrity(e, n, r) {
-  if (e === "")
+function assertIntegrity(integrity, label, hasResolved) {
+  if (integrity === "")
     throw new PluginDependencyError(
-      r ? `${n} has no integrity hash for its download link` : `${n} has an empty integrity hash`,
+      hasResolved
+        ? `${label} has no integrity hash for its download link`
+        : `${label} has an empty integrity hash`,
     );
-  if (typeof e !== "string" || !e.split(" ").every((s) => INTEGRITY_RE.test(s)))
-    throw new PluginDependencyError(`${n} has an unreadable integrity hash`);
-  return e;
+  if (typeof integrity !== "string" || !integrity.split(" ").every((part) => INTEGRITY_RE.test(part)))
+    throw new PluginDependencyError(`${label} has an unreadable integrity hash`);
+  return integrity;
 }
 //@ chunk-e6aww6q8.js:4406118-4406425 placement
 /**
  * 依赖列表须为“注册表包名 → 版本范围”。
  */
-function validateDependencyLists(e, n, r) {
-  let s = {};
-  for (let h of n) {
-    let y = e[h];
-    if (y === undefined) continue;
-    if (!isPlainObjectLike(y)) throw new PluginDependencyError(`${r} has an unreadable ${h} list`);
-    for (let [key, value] of Object.entries(y))
+function validateDependencyLists(source, fields, label) {
+  let result = {};
+  for (let field of fields) {
+    let deps = source[field];
+    if (deps === undefined) continue;
+    if (!isPlainObjectLike(deps)) throw new PluginDependencyError(`${label} has an unreadable ${field} list`);
+    for (let [key, value] of Object.entries(deps))
       if (!isValidNpmPackageNameLoose(key) || !isRegistryVersionRange(value))
         throw new PluginDependencyError(
-          `${r} has a dependency that is not a registry package and version range: ${quotedPrintable(key, 120)}`,
+          `${label} has a dependency that is not a registry package and version range: ${quotedPrintable(key, 120)}`,
         );
-    s[h] = y;
+    result[field] = deps;
   }
-  return s;
+  return result;
 }
 //@ chunk-e6aww6q8.js:4406425-4406551 placement
-function isRegistryVersionRange(e) {
-  if (typeof e !== "string") return false;
-  let match = /^npm:(.+)@([^@]*)$/.exec(e);
+function isRegistryVersionRange(spec) {
+  if (typeof spec !== "string") return false;
+  let match = /^npm:(.+)@([^@]*)$/.exec(spec);
   return match === null
-    ? isNpmVersionSpec(e)
+    ? isNpmVersionSpec(spec)
     : isValidNpmPackageNameLoose(match[1]) && isNpmVersionSpec(match[2]);
 }
 //@ chunk-e6aww6q8.js:4406551-4406659 placement
@@ -393,132 +400,141 @@ function isNodeModulesPath(entryPath) {
     entryPath
       .slice(13)
       .split("/node_modules/")
-      .every((r) => isValidNpmPackageNameLoose(r))
+      .every((segment) => isValidNpmPackageNameLoose(segment))
   );
 }
 //@ chunk-e6aww6q8.js:4406659-4406828 placement
-function isPackagePath(e) {
-  let parts = e.split("/");
-  let r = [];
+function isPackagePath(path) {
+  let parts = path.split("/");
+  let packages = [];
   for (let idx = 0; idx < parts.length; idx++) {
-    let h = parts[idx];
-    let y = h.startsWith("@") && idx + 1 < parts.length;
-    r.push(y ? `${h}/${parts[++idx]}` : h);
+    let segment = parts[idx];
+    let isScope = segment.startsWith("@") && idx + 1 < parts.length;
+    packages.push(isScope ? `${segment}/${parts[++idx]}` : segment);
   }
-  return r.every((s) => isValidNpmPackageNameLoose(s));
+  return packages.every((pkg) => isValidNpmPackageNameLoose(pkg));
 }
 //@ chunk-e6aww6q8.js:4406828-4406926 placement
-function isSafePackageSubpath(e) {
-  return e !== "" && !e.startsWith("/") && !/[\\:]/.test(e) && !e.split("/").includes("..");
+function isSafePackageSubpath(subpath) {
+  return (
+    subpath !== "" && !subpath.startsWith("/") && !/[\\:]/.test(subpath) && !subpath.split("/").includes("..")
+  );
 }
 //@ chunk-e6aww6q8.js:4406926-4406994 placement
-function isSafePackageFileSegment(e) {
-  return e !== "" && e !== "." && e !== ".." && !/[\\/:]/.test(e);
+function isSafePackageFileSegment(segment) {
+  return segment !== "" && segment !== "." && segment !== ".." && !/[\\/:]/.test(segment);
 }
 //@ chunk-e6aww6q8.js:4406994-4407227 placement
-function validateBinField(e, n) {
+function validateBinField(bin, label) {
   if (
-    typeof e === "string"
-      ? isSafePackageSubpath(e)
-      : isPlainObjectLike(e) &&
-        Object.entries(e).every(
+    typeof bin === "string"
+      ? isSafePackageSubpath(bin)
+      : isPlainObjectLike(bin) &&
+        Object.entries(bin).every(
           ([key, value]) =>
             isSafePackageFileSegment(key) && typeof value === "string" && isSafePackageSubpath(value),
         )
   )
-    return e;
+    return bin;
   throw new PluginDependencyError(
-    `${n} has a bin link that points outside its package or has an invalid command name`,
+    `${label} has a bin link that points outside its package or has an invalid command name`,
   );
 }
 //@ chunk-e6aww6q8.js:4407227-4407342 placement
 function sanitizePeerDependenciesMeta(peerDependenciesMeta) {
-  let n = {};
+  let result = {};
   for (let [key, value] of Object.entries(peerDependenciesMeta))
     if (isValidNpmPackageNameLoose(key) && isPlainObjectLike(value))
-      n[key] = {
+      result[key] = {
         optional: value.optional === true,
       };
-  return n;
+  return result;
 }
 //@ chunk-e6aww6q8.js:4407342-4407496 placement
-function parseJsonObject(e, n) {
-  let r;
+function parseJsonObject(text, label) {
+  let parsed;
   try {
-    r = jsonParse(stripBom(e));
+    parsed = jsonParse(stripBom(text));
   } catch {
-    throw new PluginDependencyError(`its ${n} is not valid JSON`);
+    throw new PluginDependencyError(`its ${label} is not valid JSON`);
   }
-  if (!isPlainObjectLike(r)) throw new PluginDependencyError(`its ${n} is not a JSON object`);
-  return r;
+  if (!isPlainObjectLike(parsed)) throw new PluginDependencyError(`its ${label} is not a JSON object`);
+  return parsed;
 }
 //@ chunk-e6aww6q8.js:4407496-4407593 placement
-function dependencyFingerprint(e) {
+function dependencyFingerprint(lists) {
   return jsonStringify(
-    DEPENDENCY_FIELDS_2.map((n) =>
-      Object.entries(e[n] ?? {}).sort(([r], [s]) => (r < s ? -1 : r > s ? 1 : 0)),
+    DEPENDENCY_FIELDS_2.map((field) =>
+      Object.entries(lists[field] ?? {}).sort(([left], [right]) =>
+        left < right ? -1 : left > right ? 1 : 0,
+      ),
     ),
   );
 }
 //@ chunk-e6aww6q8.js:4407593-4407664 placement
-function isPlainObjectLike(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainObjectLike(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-e6aww6q8.js:4407664-4407739 placement
-function isStringArray(e) {
-  return Array.isArray(e) && e.every((n) => typeof n === "string");
+function isStringArray(value) {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 //@ chunk-e6aww6q8.js:4407739-4408464 placement
 /**
- * 安装插件依赖（npm 或 bun，禁用脚本）。
+ * 安装插件依赖的常量组：rqn 安装命令超时 60 s；Rks 安装输出上限 32 MiB；sqn npm ci 参数；Eft 各 lockfile 对应的安装计划；uqn bun.lockb 不受支持的说明；cqn 各计划的 lockfile 名；fqn lockfile → 完成标记文件的映射。
  */
-var installPluginDependencies_2 = 60000;
-var MAX_DEPENDENCY_INSTALL_TIMEOUT_MS = 33554432;
-var MAX_DEPENDENCY_INSTALL_BYTES = [
-  "ci",
-  "--ignore-scripts",
-  "--workspaces=false",
-  "--no-audit",
-  "--no-fund",
-];
-var NPM_CI_ARGS = [
-  {
-    lockfile: "bun.lock",
-    command: "bun",
-    args: ["install", "--frozen-lockfile", "--ignore-scripts"],
-  },
-  {
-    lockfile: "npm-shrinkwrap.json",
-    command: "npm",
-    args: MAX_DEPENDENCY_INSTALL_BYTES,
-    completionRecord: "node_modules/.package-lock.json",
-  },
-  {
-    lockfile: "package-lock.json",
-    command: "npm",
-    args: MAX_DEPENDENCY_INSTALL_BYTES,
-    completionRecord: "node_modules/.package-lock.json",
-  },
-  {
-    lockfile: "bun.lockb",
-    command: "bun",
-    args: ["install", "--frozen-lockfile", "--ignore-scripts"],
-  },
-];
-var LOCKFILE_INSTALL_PLANS =
-  "its bun.lockb is a binary lockfile that cannot be checked; ship a text bun.lock instead";
-var mapped_4 = NPM_CI_ARGS.map((e) => e.lockfile);
-var BINARY_LOCKFILE_UNSUPPORTED_TEXT = new Map(
-  NPM_CI_ARGS.flatMap((e) => (e.completionRecord === undefined ? [] : [[e.lockfile, e.completionRecord]])),
-);
+var MAX_DEPENDENCY_INSTALL_TIMEOUT_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_DEPENDENCY_INSTALL_BYTES;
+var NPM_CI_ARGS;
+var LOCKFILE_INSTALL_PLANS;
+var BINARY_LOCKFILE_UNSUPPORTED_TEXT;
+var mapped_4;
+var BINARY_LOCKFILE_MESSAGES;
+deferInit("chunk-e6aww6q8.js:4407739", () => {
+  MAX_DEPENDENCY_INSTALL_TIMEOUT_MS = 60000;
+  MAX_DEPENDENCY_INSTALL_BYTES = 33554432;
+  NPM_CI_ARGS = ["ci", "--ignore-scripts", "--workspaces=false", "--no-audit", "--no-fund"];
+  LOCKFILE_INSTALL_PLANS = [
+    {
+      lockfile: "bun.lock",
+      command: "bun",
+      args: ["install", "--frozen-lockfile", "--ignore-scripts"],
+    },
+    {
+      lockfile: "npm-shrinkwrap.json",
+      command: "npm",
+      args: NPM_CI_ARGS,
+      completionRecord: "node_modules/.package-lock.json",
+    },
+    {
+      lockfile: "package-lock.json",
+      command: "npm",
+      args: NPM_CI_ARGS,
+      completionRecord: "node_modules/.package-lock.json",
+    },
+    {
+      lockfile: "bun.lockb",
+      command: "bun",
+      args: ["install", "--frozen-lockfile", "--ignore-scripts"],
+    },
+  ];
+  BINARY_LOCKFILE_UNSUPPORTED_TEXT =
+    "its bun.lockb is a binary lockfile that cannot be checked; ship a text bun.lock instead";
+  mapped_4 = LOCKFILE_INSTALL_PLANS.map((plan) => plan.lockfile);
+  BINARY_LOCKFILE_MESSAGES = new Map(
+    LOCKFILE_INSTALL_PLANS.flatMap((plan) =>
+      plan.completionRecord === undefined ? [] : [[plan.lockfile, plan.completionRecord]],
+    ),
+  );
+});
 //@ chunk-e6aww6q8.js:4408464-4408939 placement
 /**
  * 插件目录有 package.json 时按锁文件选择包管理器安装依赖；yarn/pnpm 锁文件不支持（会绕过 --ignore-scripts）； 返回 {ran, error?}。
  */
-async function installPluginDependencies(e, { inPlaceAt: n } = {}) {
-  let r;
+async function installPluginDependencies(pluginPath, { inPlaceAt } = {}) {
+  let entries;
   try {
-    r = await readdir(e);
+    entries = await readdir(pluginPath);
   } catch (error) {
     if (isFsInaccessible(error))
       return {
@@ -526,12 +542,12 @@ async function installPluginDependencies(e, { inPlaceAt: n } = {}) {
       };
     throw error;
   }
-  let s = new Set(r.map((y) => foldCase_2(y)));
-  if (!s.has("package.json"))
+  let names = new Set(entries.map((name) => foldCase_2(name)));
+  if (!names.has("package.json"))
     return {
       ran: false,
     };
-  let lockfile = detectLockfile(s);
+  let lockfile = detectLockfile(names);
   if (lockfile === "yarn-or-pnpm")
     return {
       ran: false,
@@ -542,54 +558,56 @@ async function installPluginDependencies(e, { inPlaceAt: n } = {}) {
     return {
       ran: false,
     };
-  logForDebugging(`Installing plugin dependencies: ${lockfile.command} ${lockfile.args.join(" ")} for ${e}`);
-  return choosePackageManager(e, lockfile, n);
+  logForDebugging(
+    `Installing plugin dependencies: ${lockfile.command} ${lockfile.args.join(" ")} for ${pluginPath}`,
+  );
+  return choosePackageManager(pluginPath, lockfile, inPlaceAt);
 }
 //@ chunk-e6aww6q8.js:4408939-4409090 placement
-function detectLockfile(e) {
-  let found = NPM_CI_ARGS.find((r) => e.has(r.lockfile));
+function detectLockfile(names) {
+  let found = LOCKFILE_INSTALL_PLANS.find((plan) => names.has(plan.lockfile));
   if (found !== undefined) return found;
-  return e.has("yarn.lock") || e.has("pnpm-lock.yaml") ? "yarn-or-pnpm" : undefined;
+  return names.has("yarn.lock") || names.has("pnpm-lock.yaml") ? "yarn-or-pnpm" : undefined;
 }
 //@ chunk-e6aww6q8.js:4409090-4409926 placement
-async function checkLockfileSupported(e) {
-  let n;
+async function checkLockfileSupported(pluginPath) {
+  let entries;
   try {
-    n = await readdir(e);
+    entries = await readdir(pluginPath);
   } catch (error) {
     if (isFsInaccessible(error)) return;
     throw error;
   }
-  let r = new Set(n.map((h) => foldCase_2(h)));
-  if (!r.has("package.json") || r.has("node_modules")) return;
-  let lockfile = detectLockfile(r);
-  if (lockfile === undefined) return;
+  let names = new Set(entries.map((name) => foldCase_2(name)));
+  if (!names.has("package.json") || names.has("node_modules")) return;
+  let plan = detectLockfile(names);
+  if (plan === undefined) return;
   try {
-    let packageFile = await readPackageFile(e, "package.json");
+    let packageFile = await readPackageFile(pluginPath, "package.json");
     if (!hasLifecycleScripts(packageFile)) return;
-    if (lockfile === "yarn-or-pnpm")
+    if (plan === "yarn-or-pnpm")
       return {
         kind: "refused",
         reason: "it uses a yarn or pnpm lockfile, which plugin installs do not support",
       };
-    if (lockfile.lockfile === "bun.lockb")
+    if (plan.lockfile === "bun.lockb")
       return {
         kind: "refused",
-        reason: LOCKFILE_INSTALL_PLANS,
+        reason: BINARY_LOCKFILE_UNSUPPORTED_TEXT,
       };
-    let packageFile_2 = await readPackageFile(e, lockfile.lockfile);
-    let S;
+    let packageFile_2 = await readPackageFile(pluginPath, plan.lockfile);
+    let match;
     try {
-      S = lockfileCompletionMatches(lockfile, packageFile, packageFile_2, undefined);
+      match = lockfileCompletionMatches(plan, packageFile, packageFile_2, undefined);
     } catch (error) {
       if (error instanceof PluginDependencyError && packageFile_2.includes('"http://')) return;
       throw error;
     }
-    if (S.packageCount === 0) return;
-    return (await whichAsync(lockfile.command)) === null
+    if (match.packageCount === 0) return;
+    return (await whichAsync(plan.command)) === null
       ? {
           kind: "refused",
-          reason: `it needs ${lockfile.command}, which is not installed on this computer`,
+          reason: `it needs ${plan.command}, which is not installed on this computer`,
         }
       : {
           kind: "not-installed",
@@ -608,96 +626,98 @@ async function checkLockfileSupported(e) {
 var DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "workspaces"];
 //@ chunk-e6aww6q8.js:4410006-4410110 placement
 function hasLifecycleScripts(packageFile) {
-  let n;
+  let parsed;
   try {
-    n = jsonParse(stripBom(packageFile));
+    parsed = jsonParse(stripBom(packageFile));
   } catch {
     return true;
   }
-  if (!isPlainObjectLike(n)) return true;
-  return DEPENDENCY_FIELDS.some((r) => hasAnyDependencyEntry(n[r]));
+  if (!isPlainObjectLike(parsed)) return true;
+  return DEPENDENCY_FIELDS.some((field) => hasAnyDependencyEntry(parsed[field]));
 }
 //@ chunk-e6aww6q8.js:4410110-4410192 placement
-function hasAnyDependencyEntry(e) {
-  return isPlainObjectLike(e) ? Object.keys(e).length > 0 : Array.isArray(e) && e.length > 0;
+function hasAnyDependencyEntry(value) {
+  return isPlainObjectLike(value) ? Object.keys(value).length > 0 : Array.isArray(value) && value.length > 0;
 }
 //@ chunk-e6aww6q8.js:4410192-4410967 placement
-async function choosePackageManager(e, lockfile, r) {
-  let tempSiblingName = makeTempSiblingName(stripTempSiblingSuffix(resolve_2(e)));
+async function choosePackageManager(pluginPath, plan, inPlaceAt) {
+  let tempSiblingName = makeTempSiblingName(stripTempSiblingSuffix(resolve_2(pluginPath)));
   try {
     await mkdir(tempSiblingName);
   } catch (error) {
-    return dependencyInstallError(lockfile.command, error);
+    return dependencyInstallError(plan.command, error);
   }
   try {
-    let packageManagerInputs = await preparePackageManagerInputs(e, lockfile, tempSiblingName);
+    let packageManagerInputs = await preparePackageManagerInputs(pluginPath, plan, tempSiblingName);
     if (packageManagerInputs.packageCount === 0)
       return {
         ran: false,
       };
     await writeFile(join(tempSiblingName, "package.json"), jsonStringify(packageManagerInputs.packageJson));
     await writeFile(
-      join(tempSiblingName, lockfile.command === "npm" ? "package-lock.json" : "bun.lock"),
+      join(tempSiblingName, plan.command === "npm" ? "package-lock.json" : "bun.lock"),
       jsonStringify(packageManagerInputs.lockfile),
       {
         flag: "wx",
       },
     );
-    let y = npmExecEnv();
-    let S =
-      lockfile.command === "npm"
+    let env = npmExecEnv();
+    let result =
+      plan.command === "npm"
         ? await runNpm(
-            lockfile.args,
+            plan.args,
             {
               workDir: tempSiblingName,
               toolCgroupClass: "plugin",
             },
-            installPluginDependencies_2,
+            MAX_DEPENDENCY_INSTALL_TIMEOUT_MS,
           )
-        : await execFileNoThrowWithCwd(lockfile.command, lockfile.args, {
+        : await execFileNoThrowWithCwd(plan.command, plan.args, {
             cwd: tempSiblingName,
-            timeout: installPluginDependencies_2,
+            timeout: MAX_DEPENDENCY_INSTALL_TIMEOUT_MS,
             toolCgroupClass: "plugin",
-            ...y,
+            ...env,
             env: {
-              ...y.env,
+              ...env.env,
               BUN_INSTALL_CACHE_DIR: join(tempSiblingName, "bun-cache"),
             },
           });
-    if (S.code === 0)
-      await (r !== undefined ? placeNodeModules(tempSiblingName, e, r) : swapNodeModules(tempSiblingName, e));
-    return dependencyInstallResult(lockfile.command, S, e);
+    if (result.code === 0)
+      await (inPlaceAt !== undefined
+        ? placeNodeModules(tempSiblingName, pluginPath, inPlaceAt)
+        : swapNodeModules(tempSiblingName, pluginPath));
+    return dependencyInstallResult(plan.command, result, pluginPath);
   } catch (error) {
     if (error instanceof PluginDependencyError)
       return {
         ran: false,
         error: `Skipped installing this plugin's dependencies: ${error.message}.`,
       };
-    return dependencyInstallError(lockfile.command, error);
+    return dependencyInstallError(plan.command, error);
   } finally {
     await removeDirectoryTreeNoFollow_2(tempSiblingName).catch(() => {});
   }
 }
 //@ chunk-e6aww6q8.js:4410967-4411227 placement
-async function preparePackageManagerInputs(e, n, tempSiblingName) {
-  if (n.lockfile === "bun.lockb") throw new PluginDependencyError(LOCKFILE_INSTALL_PLANS);
-  let packageFile = await readPackageFile(e, "package.json");
-  let packageFile_2 = await readPackageFile(e, n.lockfile);
+async function preparePackageManagerInputs(pluginPath, plan, tempSiblingName) {
+  if (plan.lockfile === "bun.lockb") throw new PluginDependencyError(BINARY_LOCKFILE_UNSUPPORTED_TEXT);
+  let packageFile = await readPackageFile(pluginPath, "package.json");
+  let packageFile_2 = await readPackageFile(pluginPath, plan.lockfile);
   await writeFile(join(tempSiblingName, "package.json"), "{}", {
     flag: "wx",
   });
-  let y = packageFile_2.includes('"http://')
+  let registry = packageFile_2.includes('"http://')
     ? await getDefaultHttpNpmRegistry({
         workDir: tempSiblingName,
       })
     : undefined;
-  return lockfileCompletionMatches(n, packageFile, packageFile_2, y);
+  return lockfileCompletionMatches(plan, packageFile, packageFile_2, registry);
 }
 //@ chunk-e6aww6q8.js:4411227-4411307 placement
-function lockfileCompletionMatches(e, packageFile, packageFile_2, s) {
-  return e.command === "npm"
-    ? checkPackageLock(packageFile, packageFile_2, e.lockfile, s)
-    : checkBunLock(packageFile, packageFile_2, s);
+function lockfileCompletionMatches(plan, packageJsonText, lockText, registry) {
+  return plan.command === "npm"
+    ? checkPackageLock(packageJsonText, lockText, plan.lockfile, registry)
+    : checkBunLock(packageJsonText, lockText, registry);
 }
 //@ chunk-e6aww6q8.js:4411307-4411331 placement
 class PluginDependencyCheckError extends Error {}
@@ -707,29 +727,30 @@ class PluginDependencyInstallError extends Error {}
 var FOLDER_REPLACED_MESSAGE =
   "the plugin's folder was moved or replaced by a link during the install, so the packages were not added";
 //@ chunk-e6aww6q8.js:4411469-4411626 placement
-async function assertFolderUnchanged(e, n) {
-  let [r, s] = await Promise.all([
-    lstat(e).catch(() => {
+async function assertFolderUnchanged(pluginPath, expectedReal) {
+  let [stat, real] = await Promise.all([
+    lstat(pluginPath).catch(() => {
       return;
     }),
-    realpath(e).catch(() => {
+    realpath(pluginPath).catch(() => {
       return;
     }),
   ]);
-  if (r?.isDirectory() !== true || s !== n) throw new PluginDependencyCheckError(FOLDER_REPLACED_MESSAGE);
+  if (stat?.isDirectory() !== true || real !== expectedReal)
+    throw new PluginDependencyCheckError(FOLDER_REPLACED_MESSAGE);
 }
 //@ chunk-e6aww6q8.js:4411626-4412093 placement
 /**
  * Linux 上经目录 fd 把 node_modules 移入插件目录。
  */
-async function moveNodeModulesSafely(e, n, r) {
+async function moveNodeModulesSafely(sourcePath, pluginReal, targetPath) {
   let platform = getPlatform();
   if (platform !== "linux" && platform !== "wsl") {
-    await rename(e, r);
+    await rename(sourcePath, targetPath);
     return;
   }
-  let h = await open(
-    n,
+  let handle = await open(
+    pluginReal,
     constants.O_RDONLY | constants.O_DIRECTORY | constants.O_NOFOLLOW | READ_LIMITS,
   ).catch((error) => {
     throw ["ENOTDIR", "ELOOP", "ENOENT"].includes(getErrnoCode(error) ?? "")
@@ -737,15 +758,15 @@ async function moveNodeModulesSafely(e, n, r) {
       : error;
   });
   try {
-    let y = await fdRealPath(h.fd);
-    if (y === null)
+    let realPath = await fdRealPath(handle.fd);
+    if (realPath === null)
       throw new PluginDependencyCheckError(
         "could not confirm where the plugin's folder is, so the packages were not added",
       );
-    if (y !== n) throw new PluginDependencyCheckError(FOLDER_REPLACED_MESSAGE);
-    await rename(e, `/proc/self/fd/${h.fd}/node_modules`);
+    if (realPath !== pluginReal) throw new PluginDependencyCheckError(FOLDER_REPLACED_MESSAGE);
+    await rename(sourcePath, `/proc/self/fd/${handle.fd}/node_modules`);
   } finally {
-    await h.close();
+    await handle.close();
   }
 }
 //@ chunk-e6aww6q8.js:4412093-4412181 placement
@@ -754,7 +775,7 @@ async function moveNodeModulesSafely(e, n, r) {
  */
 async function hasNodeModulesDir(absolute) {
   return lstat(join(absolute, "node_modules")).then(
-    (n) => n.isDirectory(),
+    (stat) => stat.isDirectory(),
     () => false,
   );
 }
@@ -762,15 +783,15 @@ async function hasNodeModulesDir(absolute) {
 /**
  * 把安装好的 node_modules 放进插件目录并处理失败。
  */
-async function placeNodeModules(tempSiblingName, n, r) {
-  let s = join(n, "node_modules");
+async function placeNodeModules(tempSiblingName, pluginPath, pluginReal) {
+  let targetPath = join(pluginPath, "node_modules");
   try {
-    await retryFsOpLong(join(tempSiblingName, "node_modules"), s, async (h, y) => {
-      await assertFolderUnchanged(n, r);
-      await moveNodeModulesSafely(h, r, y).catch(async (error) => {
+    await retryFsOpLong(join(tempSiblingName, "node_modules"), targetPath, async (sourcePath, targetPath) => {
+      await assertFolderUnchanged(pluginPath, pluginReal);
+      await moveNodeModulesSafely(sourcePath, pluginReal, targetPath).catch(async (error) => {
         if (
           !(error instanceof PluginDependencyCheckError) &&
-          (await lstat(y).then(
+          (await lstat(targetPath).then(
             () => true,
             () => false,
           ))
@@ -783,37 +804,37 @@ async function placeNodeModules(tempSiblingName, n, r) {
     });
   } catch (error) {
     if (error instanceof PluginDependencyCheckError) throw error;
-    let y = error instanceof PluginDependencyInstallError ? error.cause : error;
+    let cause = error instanceof PluginDependencyInstallError ? error.cause : error;
     if (
       error instanceof PluginDependencyInstallError ||
-      (await lstat(s).then(
+      (await lstat(targetPath).then(
         () => true,
         () => false,
       ))
     ) {
-      await assertFolderUnchanged(n, r);
+      await assertFolderUnchanged(pluginPath, pluginReal);
       return;
     }
     if (
-      getErrnoCode(y) === "ENOENT" &&
+      getErrnoCode(cause) === "ENOENT" &&
       !(await lstat(join(tempSiblingName, "node_modules")).then(
         () => true,
         () => false,
       ))
     )
       throw Error("the package manager finished but wrote no node_modules");
-    throw y;
+    throw cause;
   }
 }
 //@ chunk-e6aww6q8.js:4412726-4413150 placement
 /**
  * 读插件目录里的 package.json/锁文件（须普通文件且 ≤32 MB）。
  */
-async function readPackageFile(e, lockfile) {
-  let r = join(e, lockfile);
+async function readPackageFile(pluginPath, lockfile) {
+  let filePath = join(pluginPath, lockfile);
   if (
     !(
-      await lstat(r).catch((error) => {
+      await lstat(filePath).catch((error) => {
         if (getErrnoCode(error) === "ENOENT")
           throw new PluginDependencyError(`its ${lockfile} is missing, or not named in lowercase`);
         throw error;
@@ -821,23 +842,23 @@ async function readPackageFile(e, lockfile) {
     ).isFile()
   )
     throw new PluginDependencyError(`its ${lockfile} is not a regular file`);
-  let h = await open(r, readOnlyNoFollowFlags());
+  let handle = await open(filePath, readOnlyNoFollowFlags());
   try {
-    let stats = await h.stat();
-    if (!stats.isFile() || stats.size > MAX_DEPENDENCY_INSTALL_TIMEOUT_MS)
+    let stats = await handle.stat();
+    if (!stats.isFile() || stats.size > MAX_DEPENDENCY_INSTALL_BYTES)
       throw new PluginDependencyError(`its ${lockfile} is not a regular file of at most 32 MB`);
-    return await h.readFile({
+    return await handle.readFile({
       encoding: "utf8",
     });
   } finally {
-    await h.close();
+    await handle.close();
   }
 }
 //@ chunk-e6aww6q8.js:4413150-4413415 placement
-async function swapNodeModules(tempSiblingName, n) {
-  let r = join(n, "node_modules");
-  let s = join(tempSiblingName, "previous-node_modules");
-  let h = await retryFsOpLong(r, s).then(
+async function swapNodeModules(tempSiblingName, pluginPath) {
+  let targetPath = join(pluginPath, "node_modules");
+  let previousPath = join(tempSiblingName, "previous-node_modules");
+  let movedAside = await retryFsOpLong(targetPath, previousPath).then(
     () => true,
     (error) => {
       if (getErrnoCode(error) === "ENOENT") return false;
@@ -845,9 +866,9 @@ async function swapNodeModules(tempSiblingName, n) {
     },
   );
   try {
-    await retryFsOpLong(join(tempSiblingName, "node_modules"), r);
+    await retryFsOpLong(join(tempSiblingName, "node_modules"), targetPath);
   } catch (error) {
-    if (h) await retryFsOpLong(s, r).catch(() => {});
+    if (movedAside) await retryFsOpLong(previousPath, targetPath).catch(() => {});
     if (getErrnoCode(error) !== "ENOENT") throw error;
   }
 }
@@ -862,17 +883,17 @@ function dependencyInstallError(command, error) {
   };
 }
 //@ chunk-e6aww6q8.js:4413522-4413753 placement
-function dependencyInstallResult(command, n, r) {
-  if (n.code !== 0)
+function dependencyInstallResult(command, result, pluginPath) {
+  if (result.code !== 0)
     return {
       ran: true,
       error:
-        `Plugin dependency install failed (${command}): ${redactUrlsInMessage(n.stderr || n.stdout || n.error || "no output")}`.slice(
+        `Plugin dependency install failed (${command}): ${redactUrlsInMessage(result.stderr || result.stdout || result.error || "no output")}`.slice(
           0,
           500,
         ),
     };
-  logForDebugging(`Plugin dependency install succeeded (${command}) in ${r}`);
+  logForDebugging(`Plugin dependency install succeeded (${command}) in ${pluginPath}`);
   return {
     ran: true,
   };
@@ -886,87 +907,96 @@ var npmMarketplaceDefaultOff = false;
 /**
  * 清理不再被依赖的自动安装插件，设置写入失败时保留。
  */
-async function pruneOrphanedAutoDeps(orphans, n, projectPathForScope, { deleteDataDir: s = true } = {}, h) {
+async function pruneOrphanedAutoDeps(orphans, scope, projectPath, { deleteDataDir = true } = {}, storageV5) {
   if (orphans.size === 0) return [];
-  let y =
-    isStorageV5Enabled() && h !== undefined ? await loadInstalledPlugins(h) : loadInstalledPluginsSync();
-  let plugins = y.plugins;
-  let w = [];
-  let L = [];
-  for (let we of orphans) {
-    let Ee = plugins[we];
-    let Ae = installationAtTarget(Ee, n, projectPathForScope);
-    if (!Ae) continue;
+  let installed =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? await loadInstalledPlugins(storageV5)
+      : loadInstalledPluginsSync();
+  let plugins = installed.plugins;
+  let removedRecords = [];
+  let removedIds = [];
+  for (let id of orphans) {
+    let installations = plugins[id];
+    let target = installationAtTarget(installations, scope, projectPath);
+    if (!target) continue;
     {
-      let matchingInstallations = findMatchingInstallations(Ee, n, projectPathForScope);
-      if (!(Ee ?? []).filter((We) => !matchingInstallations.includes(We)).some(hasDirectoryRepositoryKey)) {
-        if ((await persistDirectoryBinding(we, Ee)) === "not-persisted") {
+      let matchingInstallations = findMatchingInstallations(installations, scope, projectPath);
+      if (
+        !(installations ?? [])
+          .filter((installation) => !matchingInstallations.includes(installation))
+          .some(hasDirectoryRepositoryKey)
+      ) {
+        if ((await persistDirectoryBinding(id, installations)) === "not-persisted") {
           logForDebugging(
-            `pruneOrphanedAutoDeps: ${we} is kept: plugin-directory-bindings.json could not be used or written, so nothing would hold its name once this install record is gone`,
+            `pruneOrphanedAutoDeps: ${id} is kept: plugin-directory-bindings.json could not be used or written, so nothing would hold its name once this install record is gone`,
             {
               level: "warn",
             },
           );
           continue;
         }
-      } else await seedBindingsFromInstall(we, Ee);
+      } else await seedBindingsFromInstall(id, installations);
     }
-    await removePluginInstallation(we, n, projectPathForScope, h);
-    L.push(we);
-    if ((Ee?.length ?? 0) <= 1)
-      w.push({
-        id: we,
-        installPath: Ae.installPath,
+    await removePluginInstallation(id, scope, projectPath, storageV5);
+    removedIds.push(id);
+    if ((installations?.length ?? 0) <= 1)
+      removedRecords.push({
+        id,
+        installPath: target.installPath,
       });
   }
-  if (L.length === 0) return [];
-  let G = (we) =>
-    bindingKeysFor(plugins, we).flatMap(([Ee, Ae]) =>
-      Ee !== we && Ae.length > 0 && !L.includes(Ee) ? [Ee] : [],
+  if (removedIds.length === 0) return [];
+  let relatedIds = (id) =>
+    bindingKeysFor(plugins, id).flatMap(([otherId, otherInstallations]) =>
+      otherId !== id && otherInstallations.length > 0 && !removedIds.includes(otherId) ? [otherId] : [],
     );
-  let q = scopeToSettingSource(n);
+  let settingSource = scopeToSettingSource(scope);
   let { error } = await updateSettingsForSourceWithTransform(
-    q,
-    (we) => {
-      let Ee = {
-        ...we?.enabledPlugins,
+    settingSource,
+    (settings) => {
+      let enabledPlugins = {
+        ...settings?.enabledPlugins,
       };
-      for (let Ae of L) {
-        Ee[Ae] = undefined;
-        for (let Ie of enabledPluginKeys(Ee, Ae, G(Ae))) Ee[Ie] = undefined;
+      for (let id of removedIds) {
+        enabledPlugins[id] = undefined;
+        for (let key of enabledPluginKeys(enabledPlugins, id, relatedIds(id)))
+          enabledPlugins[key] = undefined;
       }
       return {
-        enabledPlugins: Ee,
+        enabledPlugins,
       };
     },
     undefined,
-    h,
+    storageV5,
   );
-  if (error) logForDebugging(`pruneOrphanedAutoDeps: settings write failed at ${n}: ${error.message}`);
-  refreshPluginCaches(h);
-  let installedIds = w.some(({ id }) => isOfficialPluginDirectoryId(id))
+  if (error) logForDebugging(`pruneOrphanedAutoDeps: settings write failed at ${scope}: ${error.message}`);
+  refreshPluginCaches(storageV5);
+  let installedIds = removedRecords.some(({ id }) => isOfficialPluginDirectoryId(id))
     ? listInstalledPluginIds(
-        isStorageV5Enabled() && h !== undefined ? await loadInstalledPlugins(h) : loadInstalledPluginsSync(),
+        isStorageV5Enabled() && storageV5 !== undefined
+          ? await loadInstalledPlugins(storageV5)
+          : loadInstalledPluginsSync(),
       )
     : [];
-  let ke = new Set(w.map((we) => we.id));
-  for (let { id, installPath } of w) {
-    await markPluginVersionOrphaned(installPath, h);
+  let removedSet = new Set(removedRecords.map((record) => record.id));
+  for (let { id, installPath } of removedRecords) {
+    await markPluginVersionOrphaned(installPath, storageV5);
     let installedOthers = [];
-    installedOthers = G(id);
+    installedOthers = relatedIds(id);
     let { plan, stillOn, entry } = await planUninstallCleanup(id, {
-      deleteDataDir: s && !isPluginUnreadableOrShared(id, y, ke),
+      deleteDataDir: deleteDataDir && !isPluginUnreadableOrShared(id, installed, removedSet),
       installedIds,
       installedOthers,
-      storageV5: h,
+      storageV5,
     });
     if (plan.kind === "nothing" && plan.reason === "still-switched-on") {
       let joined = stillOn.map(describeUnwritableSettingsSource).join(" and ");
-      let lt =
+      let heldNote =
         entry === "held"
           ? "plugin-directory-bindings.json still holds its name"
           : "plugin-directory-bindings.json could not be used, so its name counts as held";
-      let Je = [
+      let mendSteps = [
         ...(stillOn.some(({ readsBack }) => readsBack === "unreadable")
           ? ["a file that could not be read must be mended first"]
           : []),
@@ -981,13 +1011,13 @@ async function pruneOrphanedAutoDeps(orphans, n, projectPathForScope, { deleteDa
             ]
           : []),
       ];
-      let nt = Je.length > 0 ? ` (${Je.join("; ")})` : "";
-      let pt =
+      let mendSuffix = mendSteps.length > 0 ? ` (${mendSteps.join("; ")})` : "";
+      let instruction =
         entry === "held"
-          ? `switch it off there${nt}, then uninstall ${id}`
-          : `once plugin-directory-bindings.json can be used, switch it off there${nt}, then uninstall ${id}`;
+          ? `switch it off there${mendSuffix}, then uninstall ${id}`
+          : `once plugin-directory-bindings.json can be used, switch it off there${mendSuffix}, then uninstall ${id}`;
       logForDebugging(
-        `pruneOrphanedAutoDeps: ${id} was pruned, but a settings file still switches it on, could not be read, or is not read in this launch (${joined}), so nothing it saved was removed, and ${lt}; ${pt}`,
+        `pruneOrphanedAutoDeps: ${id} was pruned, but a settings file still switches it on, could not be read, or is not read in this launch (${joined}), so nothing it saved was removed, and ${heldNote}; ${instruction}`,
         {
           level: "warn",
         },
@@ -995,45 +1025,56 @@ async function pruneOrphanedAutoDeps(orphans, n, projectPathForScope, { deleteDa
     }
   }
   removePluginUsage(
-    w.map((we) => we.id),
-    h,
+    removedRecords.map((record) => record.id),
+    storageV5,
   );
-  return L;
+  return removedIds;
 }
 //@ chunk-e6aww6q8.js:4454381-4454578 placement = hasPendingUpdates (0.783)
 /**
  * 插件在该作用域的设置中被启用且对应安装路径（缓存）存在。
  */
-async function isPluginEnabledAndCachedAtScope(e, n, r) {
-  let s = scopeToSettingSource(n);
-  if (!getEnabledPluginIdsInSource(s).has(e)) return false;
-  let h = n !== "user" ? getCwd() : undefined;
-  let S =
-    isStorageV5Enabled() && r !== undefined ? await loadInstalledPlugins(r) : loadInstalledPluginsSync();
-  let w = installationAtTarget(S.plugins[e], n, h);
-  if (!w) return false;
-  return installPathExists(e, w.installPath, r);
+async function isPluginEnabledAndCachedAtScope(pluginId, scope, storageV5) {
+  let source = scopeToSettingSource(scope);
+  if (!getEnabledPluginIdsInSource(source).has(pluginId)) return false;
+  let projectPath = scope !== "user" ? getCwd() : undefined;
+  let installed =
+    isStorageV5Enabled() && storageV5 !== undefined
+      ? await loadInstalledPlugins(storageV5)
+      : loadInstalledPluginsSync();
+  let target = installationAtTarget(installed.plugins[pluginId], scope, projectPath);
+  if (!target) return false;
+  return installPathExists(pluginId, target.installPath, storageV5);
 }
 //@ chunk-e6aww6q8.js:4454578-4455009 placement
-async function installPathExists(e, installPath, r) {
-  let s = isStorageV5Enabled() && r !== undefined;
+async function installPathExists(pluginId, installPath, storageV5) {
+  let useStorage = isStorageV5Enabled() && storageV5 !== undefined;
   let { absolute, suspect } = classifyMarketplacePath(installPath, {
-    trustedRoots: getMarketplaceCandidatePaths(e, await loadKnownMarketplacesSafe(r), tryUnwrapTextPayload()),
+    trustedRoots: getMarketplaceCandidatePaths(
+      pluginId,
+      await loadKnownMarketplacesSafe(storageV5),
+      tryUnwrapTextPayload(),
+    ),
   });
   if (suspect) return false;
-  let S = anchoredPluginCachePath();
-  let w = s ? versionCacheStorageSpace(absolute, S) : null;
-  if (isStorageV5Enabled() && r !== undefined && w !== null && !(await hasLinkedAncestorBelow(absolute, S))) {
-    let L = await r.scopeKind(w, {
+  let cacheRoot = anchoredPluginCachePath();
+  let space = useStorage ? versionCacheStorageSpace(absolute, cacheRoot) : null;
+  if (
+    isStorageV5Enabled() &&
+    storageV5 !== undefined &&
+    space !== null &&
+    !(await hasLinkedAncestorBelow(absolute, cacheRoot))
+  ) {
+    let kindResult = await storageV5.scopeKind(space, {
       resolveLink: true,
     });
-    if (!L.ok) {
-      let { error } = L;
+    if (!kindResult.ok) {
+      let { error } = kindResult;
       if ("telemetryCode" in error && isFsInaccessibleCode(error.telemetryCode)) return false;
       throw toProbeError(error, installPath);
     }
-    let G = L.value;
-    return G.kind === "link" ? G.linkResolves === true : G.kind !== "absent";
+    let kind = kindResult.value;
+    return kind.kind === "link" ? kind.linkResolves === true : kind.kind !== "absent";
   }
   return pathStatOk(absolute);
 }
@@ -1041,22 +1082,22 @@ async function installPathExists(e, installPath, r) {
 /**
  * 插件在该作用域是否有缓存仍存在的安装记录（优先当前项目的记录）。
  */
-async function hasCachedInstallationAtScope(pluginId, n, storageV5) {
+async function hasCachedInstallationAtScope(pluginId, scope, storageV5) {
   let filtered = (
     (isStorageV5Enabled() && storageV5 !== undefined
       ? await loadInstalledPlugins(storageV5)
       : loadInstalledPluginsSync()
     ).plugins[pluginId] ?? []
-  ).filter((S) => S.scope === n);
-  let y = false;
+  ).filter((entry) => entry.scope === scope);
+  let sawEntry = false;
   for (let diskEntry of filtered) {
     if (!isInstallationRelevantToCurrentProject(diskEntry)) continue;
-    y = true;
+    sawEntry = true;
     if (await installPathExists(pluginId, diskEntry.installPath, storageV5)) return true;
   }
-  if (y) return false;
-  for (let S of filterInstallationsForCurrentProject(filtered))
-    if (await installPathExists(pluginId, S.installPath, storageV5)) return true;
+  if (sawEntry) return false;
+  for (let entry of filterInstallationsForCurrentProject(filtered))
+    if (await installPathExists(pluginId, entry.installPath, storageV5)) return true;
   return false;
 }
 //@ chunk-e6aww6q8.js:4455288-4455379 placement
@@ -1070,22 +1111,22 @@ async function pathStatOk(absolute) {
   }
 }
 //@ chunk-e6aww6q8.js:4455379-4455577 placement
-function findBlockedMarketplace(e, knownMarketplaces, r) {
-  let marketplace = parsePluginIdentifier(e).marketplace;
+function findBlockedMarketplace(pluginId, knownMarketplaces, options) {
+  let marketplace = parsePluginIdentifier(pluginId).marketplace;
   if (!marketplace) return;
   if (marketplace === pluginManifestPathSchemas) return;
   if (marketplace === OFFICIAL_MARKETPLACE_NAME && pluginDirectoryPolicyBlock() !== null) return marketplace;
   let source = knownMarketplaces[marketplace]?.source;
-  if (source === undefined && !r?.failClosedOnUnknownSource) return;
+  if (source === undefined && !options?.failClosedOnUnknownSource) return;
   return isSourceDisallowedOrUnverifiable(source) ? marketplace : undefined;
 }
 //@ chunk-e6aww6q8.js:4455577-4455732 placement
-async function pluginDirectoryUnavailableReason(e) {
+async function pluginDirectoryUnavailableReason(pluginId) {
   {
-    if (parsePluginIdentifier(e).marketplace !== OFFICIAL_MARKETPLACE_NAME) return null;
+    if (parsePluginIdentifier(pluginId).marketplace !== OFFICIAL_MARKETPLACE_NAME) return null;
     if (pluginDirectoryUnavailableKind() === "policy-not-known") await awaitPluginDirectoryVerdict();
-    let n = pluginDirectoryUnavailableKind();
-    return n === "blocked" ? null : n;
+    let kind = pluginDirectoryUnavailableKind();
+    return kind === "blocked" ? null : kind;
   }
   return null;
 }
@@ -1095,10 +1136,10 @@ async function pluginDirectoryUnavailableReason(e) {
  */
 function formatDirectoryUnavailableMessage(pluginName, unavailableDependency) {
   {
-    let r = `is unavailable: ${pluginDirectoryRefusalReason()}`;
+    let reason = `is unavailable: ${pluginDirectoryRefusalReason()}`;
     return unavailableDependency === undefined
-      ? `Cannot install "${quotedPrintable(pluginName)}": the ${OFFICIAL_MARKETPLACE_DISPLAY} ${r}`
-      : `Cannot install "${quotedPrintable(pluginName)}": its dependency "${quotedPrintable(unavailableDependency)}" is from the ${OFFICIAL_MARKETPLACE_DISPLAY}, which ${r}`;
+      ? `Cannot install "${quotedPrintable(pluginName)}": the ${OFFICIAL_MARKETPLACE_DISPLAY} ${reason}`
+      : `Cannot install "${quotedPrintable(pluginName)}": its dependency "${quotedPrintable(unavailableDependency)}" is from the ${OFFICIAL_MARKETPLACE_DISPLAY}, which ${reason}`;
   }
   return "";
 }
@@ -1106,63 +1147,74 @@ function formatDirectoryUnavailableMessage(pluginName, unavailableDependency) {
 /**
  * 自动安装插件声明的依赖，跨市场或找不到时不安装。
  */
-async function autoInstallPluginDependencies(e) {
-  let n = [];
-  let r = [];
-  for (let s of e.rootManifestDeps ?? []) {
-    let h = qualifyDependency(s, e.pluginId);
-    if (e.closureSet.has(h) || (e.alreadyEnabled.has(h) && !e.forceInclude.has(h))) continue;
-    let marketplace = parsePluginIdentifier(h).marketplace;
+async function autoInstallPluginDependencies(context) {
+  let ids = [];
+  let notFound = [];
+  for (let rawDep of context.rootManifestDeps ?? []) {
+    let dependencyId = qualifyDependency(rawDep, context.pluginId);
     if (
-      marketplace !== e.rootMarketplace &&
-      !(marketplace && e.allowedCrossMarketplaces.has(marketplace)) &&
-      !e.alreadyEnabled.has(h)
+      context.closureSet.has(dependencyId) ||
+      (context.alreadyEnabled.has(dependencyId) && !context.forceInclude.has(dependencyId))
+    )
+      continue;
+    let marketplace = parsePluginIdentifier(dependencyId).marketplace;
+    if (
+      marketplace !== context.rootMarketplace &&
+      !(marketplace && context.allowedCrossMarketplaces.has(marketplace)) &&
+      !context.alreadyEnabled.has(dependencyId)
     ) {
       logForDebugging(
-        `${e.pluginId} plugin.json declares dependency "${h}" in a different marketplace; not auto-installing \u2014 install it manually`,
+        `${context.pluginId} plugin.json declares dependency "${dependencyId}" in a different marketplace; not auto-installing \u2014 install it manually`,
         {
           level: "warn",
         },
       );
       continue;
     }
-    if (isPluginBlockedByPolicy(h))
+    if (isPluginBlockedByPolicy(dependencyId))
       return {
         ok: false,
-        blockedDependency: h,
+        blockedDependency: dependencyId,
       };
-    let blockedMarketplace = findBlockedMarketplace(h, e.knownMarketplaces, {
-      failClosedOnUnknownSource: e.failClosedOnUnknownSource,
+    let blockedMarketplace = findBlockedMarketplace(dependencyId, context.knownMarketplaces, {
+      failClosedOnUnknownSource: context.failClosedOnUnknownSource,
     });
     if (blockedMarketplace)
       return {
         ok: false,
-        blockedDependency: h,
+        blockedDependency: dependencyId,
         blockedMarketplace,
       };
-    let pluginById = await getPluginById(h, e.storageV5, "install");
+    let pluginById = await getPluginById(dependencyId, context.storageV5, "install");
     if (!pluginById) {
       logForDebugging(
-        `${e.pluginId} plugin.json declares dependency "${h}" not found in any known marketplace; not auto-installing`,
+        `${context.pluginId} plugin.json declares dependency "${dependencyId}" not found in any known marketplace; not auto-installing`,
         {
           level: "warn",
         },
       );
-      r.push(h);
+      notFound.push(dependencyId);
       continue;
     }
-    if (await isListingUsableForMarketplace(h, pluginById.entry, e.knownMarketplaces, e.storageV5))
+    if (
+      await isListingUsableForMarketplace(
+        dependencyId,
+        pluginById.entry,
+        context.knownMarketplaces,
+        context.storageV5,
+      )
+    )
       return {
         ok: false,
-        blockedDependency: h,
+        blockedDependency: dependencyId,
       };
-    e.depInfo.set(h, pluginById);
-    n.push(h);
+    context.depInfo.set(dependencyId, pluginById);
+    ids.push(dependencyId);
   }
   return {
     ok: true,
-    ids: n,
-    notFound: r,
+    ids,
+    notFound,
   };
 }
 //@ chunk-e6aww6q8.js:4456927-4457382 placement
@@ -1178,85 +1230,98 @@ function computeDependencyEnablement({
   defaultsById,
   dependenciesById,
 }) {
-  let w = new Set(closure);
-  let L = new Set();
-  for (let q of closure) {
-    let Z = priorEnabled[q];
-    let Se = defaultsById.get(q) ?? true;
-    if (Z !== undefined) {
-      if (Z !== false || Se) L.add(q);
+  let closureSet = new Set(closure);
+  let enabled = new Set();
+  for (let id of closure) {
+    let prior = priorEnabled[id];
+    let defaultOn = defaultsById.get(id) ?? true;
+    if (prior !== undefined) {
+      if (prior !== false || defaultOn) enabled.add(id);
       continue;
     }
-    if (explicitAnywhere.has(q) || Se || (q === rootId && rootRequiredByDependent)) L.add(q);
+    if (explicitAnywhere.has(id) || defaultOn || (id === rootId && rootRequiredByDependent)) enabled.add(id);
   }
-  let G = [...L];
-  while (G.length > 0) {
-    let q = G.pop();
-    if (q === undefined) break;
-    for (let Z of dependenciesById.get(q) ?? [])
-      if (w.has(Z) && !L.has(Z)) {
-        L.add(Z);
-        G.push(Z);
+  let pending = [...enabled];
+  while (pending.length > 0) {
+    let id = pending.pop();
+    if (id === undefined) break;
+    for (let dependencyId of dependenciesById.get(id) ?? [])
+      if (closureSet.has(dependencyId) && !enabled.has(dependencyId)) {
+        enabled.add(dependencyId);
+        pending.push(dependencyId);
       }
   }
-  return new Map(closure.map((q) => [q, L.has(q)]));
+  return new Map(closure.map((id) => [id, enabled.has(id)]));
 }
 //@ chunk-e6aww6q8.js:4457382-4457458 placement
 /**
  * isListingUsableForMarketplace：目录列表可用于该市场。
  */
-async function isListingUsableForMarketplace(e, entry, knownMarketplaces, storageV5) {
-  if (!isPluginDirectoryMarketplace(e, knownMarketplaces)) return false;
+async function isListingUsableForMarketplace(pluginId, entry, knownMarketplaces, storageV5) {
+  if (!isPluginDirectoryMarketplace(pluginId, knownMarketplaces)) return false;
   return isListingBlocked(entry, await collectOrgBlockedPlugins(storageV5));
 }
 //@ chunk-e6aww6q8.js:4457458-4457634 placement
-function isPluginDirectoryMarketplace(e, n) {
-  let { marketplace } = parsePluginIdentifier(e);
+function isPluginDirectoryMarketplace(pluginId, knownMarketplaces) {
+  let { marketplace } = parsePluginIdentifier(pluginId);
   if (marketplace === undefined) return false;
-  let s = Object.hasOwn(n, marketplace) ? n[marketplace] : undefined;
-  return s !== undefined && s.source !== undefined && s.source !== null
-    ? isPluginDirectorySource(s.source)
+  let entry = Object.hasOwn(knownMarketplaces, marketplace) ? knownMarketplaces[marketplace] : undefined;
+  return entry !== undefined && entry.source !== undefined && entry.source !== null
+    ? isPluginDirectorySource(entry.source)
     : isOfficialMarketplaceSpelling(marketplace);
 }
 //@ chunk-e6aww6q8.js:4457634-4457686 placement
 /**
  * isMarketplaceNamed：市场名是否匹配（官方名按族匹配）。
  */
-function isMarketplaceNamed(e, n) {
-  return e === OFFICIAL_MARKETPLACE_NAME
-    ? isOfficialMarketplaceName_3(n)
-    : n === OFFICIAL_MARKETPLACE_NAME && isOfficialMarketplaceName_3(e);
+function isMarketplaceNamed(marketplace, candidate) {
+  return marketplace === OFFICIAL_MARKETPLACE_NAME
+    ? isOfficialMarketplaceName_3(candidate)
+    : candidate === OFFICIAL_MARKETPLACE_NAME && isOfficialMarketplaceName_3(marketplace);
 }
 //@ chunk-e6aww6q8.js:4457686-4458115 placement
 /**
  * 来自同一来源的其他官方市场族安装。
  */
-async function findOtherMarketplaceInstalls(e, n, r, s, h) {
+async function findOtherMarketplaceInstalls(pluginId, entry, knownMarketplaces, predicate, storageV5) {
   if (isPluginDirectoryAvailable()) {
-    let y = marketplaceNameOfId(e);
-    if (!y) return [];
-    let S = samePluginSource(n.source, sourceUrlAndRef(r[y]?.source));
-    if (S === undefined) return [];
+    let marketplaceName = marketplaceNameOfId(pluginId);
+    if (!marketplaceName) return [];
+    let sourceKey = samePluginSource(
+      entry.source,
+      sourceUrlAndRef(knownMarketplaces[marketplaceName]?.source),
+    );
+    if (sourceKey === undefined) return [];
     let plugins = (
-      isStorageV5Enabled() && h !== undefined ? await loadInstalledPlugins(h) : loadInstalledPluginsSync()
+      isStorageV5Enabled() && storageV5 !== undefined
+        ? await loadInstalledPlugins(storageV5)
+        : loadInstalledPluginsSync()
     ).plugins;
-    let L = [];
+    let results = [];
     for (let [key, value] of Object.entries(plugins)) {
-      let Z = marketplaceNameOfId(key);
-      if (!Z || Z === y || !isMarketplaceNamed(y, Z)) continue;
-      let filtered = value.filter(s);
+      let otherMarketplace = marketplaceNameOfId(key);
+      if (
+        !otherMarketplace ||
+        otherMarketplace === marketplaceName ||
+        !isMarketplaceNamed(marketplaceName, otherMarketplace)
+      )
+        continue;
+      let filtered = value.filter(predicate);
       if (filtered.length === 0) continue;
-      let pluginByIdCacheOnly = await getPluginByIdCacheOnly(key, h);
+      let pluginByIdCacheOnly = await getPluginByIdCacheOnly(key, storageV5);
       if (
         pluginByIdCacheOnly &&
-        samePluginSource(pluginByIdCacheOnly.entry.source, sourceUrlAndRef(r[Z]?.source)) === S
+        samePluginSource(
+          pluginByIdCacheOnly.entry.source,
+          sourceUrlAndRef(knownMarketplaces[otherMarketplace]?.source),
+        ) === sourceKey
       )
-        L.push({
+        results.push({
           otherId: key,
           installations: filtered,
         });
     }
-    return L;
+    return results;
   }
   return [];
 }
@@ -1308,6 +1373,6 @@ export {
   autoInstallPluginDependencies,
   npmMarketplaceDefaultOff,
   mapped_4,
-  BINARY_LOCKFILE_UNSUPPORTED_TEXT,
+  BINARY_LOCKFILE_MESSAGES,
   findOtherMarketplaceInstalls,
 };

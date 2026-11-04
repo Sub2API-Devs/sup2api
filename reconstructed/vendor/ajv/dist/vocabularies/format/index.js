@@ -5,16 +5,7 @@
  * pieces: chunk-1r4fv9mg.js (3), chunk-s82q9s4x.js (2)
  * attribution: cjs-require-graph 5
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
-import { require_dynamicAnchor } from "../dynamic/dynamicAnchor.js";
-import { require_dynamicRef } from "../dynamic/dynamicRef.js";
-import { require_recursiveAnchor } from "../dynamic/recursiveAnchor.js";
-import { require_recursiveRef } from "../dynamic/recursiveRef.js";
-import { require_dependentRequired } from "../validation/dependentRequired.js";
-import { require_dependentSchemas } from "../applicator/dependentSchemas.js";
-import { require_limitContains } from "../validation/limitContains.js";
-import { require_unevaluatedProperties } from "../unevaluated/unevaluatedProperties.js";
-import { require_unevaluatedItems } from "../unevaluated/unevaluatedItems.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_additionalItems } from "../applicator/additionalItems.js";
 import { require_prefixItems } from "../applicator/prefixItems.js";
 import { require_items } from "../applicator/items.js";
@@ -32,84 +23,60 @@ import { require_allOf } from "../applicator/allOf.js";
 import { require_if } from "../applicator/if.js";
 import { require_thenElse } from "../applicator/thenElse.js";
 import { require_format_6 } from "./format.js";
+import { require_dynamicAnchor } from "../dynamic/dynamicAnchor.js";
+import { require_dynamicRef } from "../dynamic/dynamicRef.js";
+import { require_recursiveAnchor } from "../dynamic/recursiveAnchor.js";
+import { require_recursiveRef } from "../dynamic/recursiveRef.js";
+import { require_dependentRequired } from "../validation/dependentRequired.js";
+import { require_dependentSchemas } from "../applicator/dependentSchemas.js";
+import { require_limitContains } from "../validation/limitContains.js";
+import { require_unevaluatedProperties } from "../unevaluated/unevaluatedProperties.js";
+import { require_unevaluatedItems } from "../unevaluated/unevaluatedItems.js";
 
-//@ chunk-1r4fv9mg.js:2409-2580 cjs-require-graph
-var require_format = x(function (cjsExports) {
-  Object.defineProperty(cjsExports, "__esModule", {
-    value: true,
-  });
-  var format_1 = require_dynamicAnchor();
-  var Ye = require_dynamicRef();
-  var Ze = require_recursiveAnchor();
-  var Be = require_recursiveRef();
-  var format = [format_1.default, Ye.default, Ze.default, Be.default];
-  cjsExports.default = format;
-});
-//@ chunk-1r4fv9mg.js:3298-3452 cjs-require-graph
-var require_format_2 = x(function (cjsExports) {
-  Object.defineProperty(cjsExports, "__esModule", {
-    value: true,
-  });
-  var format_1 = require_dependentRequired();
-  var it = require_dependentSchemas();
-  var ct = require_limitContains();
-  var format = [format_1.default, it.default, ct.default];
-  cjsExports.default = format;
-});
-//@ chunk-1r4fv9mg.js:5354-5489 cjs-require-graph
-var require_format_3 = x(function (cjsExports) {
-  Object.defineProperty(cjsExports, "__esModule", {
-    value: true,
-  });
-  var format_1 = require_unevaluatedProperties();
-  var bt = require_unevaluatedItems();
-  var format = [format_1.default, bt.default];
-  cjsExports.default = format;
-});
 //@ chunk-s82q9s4x.js:105960-106427 cjs-require-graph
-var require_format_5 = x(function (cjsExports) {
+var require_format_5 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
-  var Up = require_additionalItems();
-  var Kp = require_prefixItems();
-  var Fp = require_items();
-  var Lp = require_items2020();
-  var Hp = require_contains();
-  var Gp = require_dependencies();
-  var Jp = require_propertyNames();
-  var Wp = require_additionalProperties();
-  var Bp = require_properties();
-  var Qp = require_patternProperties();
-  var Xp = require_not();
-  var Yp = require_anyOf();
-  var Zp = require_oneOf();
-  var eh = require_allOf();
-  var th = require_if();
-  var rh = require_thenElse();
-  function sh(e = false) {
-    let t = [
-      Xp.default,
-      Yp.default,
-      Zp.default,
-      eh.default,
-      th.default,
-      rh.default,
-      Jp.default,
-      Wp.default,
-      Gp.default,
-      Bp.default,
-      Qp.default,
+  var additionalItemsModule = require_additionalItems();
+  var prefixItemsModule = require_prefixItems();
+  var itemsModule = require_items();
+  var items2020Module = require_items2020();
+  var containsModule = require_contains();
+  var dependenciesModule = require_dependencies();
+  var propertyNamesModule = require_propertyNames();
+  var additionalPropertiesModule = require_additionalProperties();
+  var propertiesModule = require_properties();
+  var patternPropertiesModule = require_patternProperties();
+  var notModule = require_not();
+  var anyOfModule = require_anyOf();
+  var oneOfModule = require_oneOf();
+  var allOfModule = require_allOf();
+  var ifModule = require_if();
+  var thenElseModule = require_thenElse();
+  function applicator(draft2020 = false) {
+    let vocabularies = [
+      notModule.default,
+      anyOfModule.default,
+      oneOfModule.default,
+      allOfModule.default,
+      ifModule.default,
+      thenElseModule.default,
+      propertyNamesModule.default,
+      additionalPropertiesModule.default,
+      dependenciesModule.default,
+      propertiesModule.default,
+      patternPropertiesModule.default,
     ];
-    if (e) t.push(Kp.default, Lp.default);
-    else t.push(Up.default, Fp.default);
-    t.push(Hp.default);
-    return t;
+    if (draft2020) vocabularies.push(prefixItemsModule.default, items2020Module.default);
+    else vocabularies.push(additionalItemsModule.default, itemsModule.default);
+    vocabularies.push(containsModule.default);
+    return vocabularies;
   }
-  cjsExports.default = sh;
+  cjsExports.default = applicator;
 });
 //@ chunk-s82q9s4x.js:108297-108414 cjs-require-graph
-var require_format_4 = x(function (cjsExports) {
+var require_format_4 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -117,4 +84,42 @@ var require_format_4 = x(function (cjsExports) {
   var format = [format_1.default];
   cjsExports.default = format;
 });
-export { require_format_5, require_format, require_format_2, require_format_3, require_format_4 };
+//@ chunk-1r4fv9mg.js:2409-2580 cjs-require-graph
+var require_format = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var format_1 = require_dynamicAnchor();
+  var dynamicRefModule = require_dynamicRef();
+  var recursiveAnchorModule = require_recursiveAnchor();
+  var recursiveRefModule = require_recursiveRef();
+  var format = [
+    format_1.default,
+    dynamicRefModule.default,
+    recursiveAnchorModule.default,
+    recursiveRefModule.default,
+  ];
+  cjsExports.default = format;
+});
+//@ chunk-1r4fv9mg.js:3298-3452 cjs-require-graph
+var require_format_2 = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var format_1 = require_dependentRequired();
+  var dependentSchemasModule = require_dependentSchemas();
+  var limitContainsModule = require_limitContains();
+  var format = [format_1.default, dependentSchemasModule.default, limitContainsModule.default];
+  cjsExports.default = format;
+});
+//@ chunk-1r4fv9mg.js:5354-5489 cjs-require-graph
+var require_format_3 = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  var format_1 = require_unevaluatedProperties();
+  var unevaluatedItemsModule = require_unevaluatedItems();
+  var format = [format_1.default, unevaluatedItemsModule.default];
+  cjsExports.default = format;
+});
+export { require_format_5, require_format_4, require_format, require_format_2, require_format_3 };

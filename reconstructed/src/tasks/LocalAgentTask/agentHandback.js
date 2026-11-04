@@ -15,13 +15,14 @@ import { logError } from "../../utils/log.js";
 import { TASK_NOTIFICATION, TASK_ID, SUMMARY, AGENT_NOTIFICATION_PREFIX } from "../../constants/xml.js";
 import { formatTaskNotification, NEXT } from "../../utils/xmlTags.js";
 import { escapeXml_2 as escapeXml, unescapeHtmlEntities } from "../../utils/confusables.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:579516-579783 placement
 /**
  * 判断子代理结果是否可直接交回给某个接收者（单条内容、无警告、无 worktree 等），返回接收者。
  */
 function handbackRecipientOf({
-  result: e,
+  result,
   deliveries,
   reviewWarning,
   worktreePath,
@@ -30,8 +31,8 @@ function handbackRecipientOf({
   reportedBeforePass,
 }) {
   if (
-    (e.handback !== "send" && e.handback !== "flagged") ||
-    e.content.length !== 1 ||
+    (result.handback !== "send" && result.handback !== "flagged") ||
+    result.content.length !== 1 ||
     reviewWarning !== undefined ||
     worktreePath !== undefined ||
     maxTurnsReached !== undefined ||
@@ -60,10 +61,14 @@ function shouldUseHandbackPointer({ handbackRecipient, routedAgentId }) {
   }
 }
 //@ chunk-e6aww6q8.js:580032-580149 placement
-var RESUMED_BY_USER_SUFFIX = '" was resumed by the user';
-var USER_RESUMED_NOTICE_PATTERN = new RegExp(
-  `^<${TASK_NOTIFICATION}>\\n<${TASK_ID}>([^<]+)</${TASK_ID}>\\n<${SUMMARY}>[^<]*${RESUMED_BY_USER_SUFFIX}</${SUMMARY}>`,
-);
+var RESUMED_BY_USER_SUFFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var USER_RESUMED_NOTICE_PATTERN;
+deferInit("chunk-e6aww6q8.js:580032", () => {
+  RESUMED_BY_USER_SUFFIX = '" was resumed by the user';
+  USER_RESUMED_NOTICE_PATTERN = new RegExp(
+    `^<${TASK_NOTIFICATION}>\\n<${TASK_ID}>([^<]+)</${TASK_ID}>\\n<${SUMMARY}>[^<]*${RESUMED_BY_USER_SUFFIX}</${SUMMARY}>`,
+  );
+});
 //@ chunk-e6aww6q8.js:580149-580647 placement
 /**
  * 生成"用户已从转录视图恢复该代理"的任务通知。
@@ -95,16 +100,16 @@ function buildUserResumedNotice({ agentId, description, to }) {
 /**
  * 从「用户已恢复」提示文本中取出任务 id。
  */
-function userResumeNoticeTaskId(e) {
-  let n = USER_RESUMED_NOTICE_PATTERN.exec(e)?.[1];
-  return n === undefined ? undefined : unescapeHtmlEntities(n);
+function userResumeNoticeTaskId(text) {
+  let encodedId = USER_RESUMED_NOTICE_PATTERN.exec(text)?.[1];
+  return encodedId === undefined ? undefined : unescapeHtmlEntities(encodedId);
 }
 //@ chunk-e6aww6q8.js:580717-580780 placement
 /**
  * 判断通知是否是针对给定任务的用户恢复提示。
  */
-function isUserResumeNoticeFor(e, taskId) {
-  return e.userResumeNotice === true && e.taskId === taskId;
+function isUserResumeNoticeFor(message, taskId) {
+  return message.userResumeNotice === true && message.taskId === taskId;
 }
 export {
   handbackRecipientOf,

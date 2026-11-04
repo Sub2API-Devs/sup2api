@@ -5,8 +5,8 @@
  * pieces: chunk-5h78gfwc.js (2)
  * attribution: esm-layout 2
  */
-import { isJWK, isSecretJWK, isPrivateJWK, tt } from "./type_checks.js";
-import { We } from "./key.js";
+import { isJWK, isSecretJWK, isPrivateJWK, isPublicJWK } from "./type_checks.js";
+import { isKeyLike } from "./key.js";
 import { withAlg } from "../../node/esm/lib/invalid_key_input.js";
 
 //@ chunk-5h78gfwc.js:28225-30586 esm-layout
@@ -67,7 +67,8 @@ var symmetricTypeCheck = (alg, key, usage) => {
       'JSON Web Key for symmetric algorithms must have JWK "kty" (Key Type) equal to "oct" and the JWK "k" (Key Value) present',
     );
   }
-  if (!We(key)) throw TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key", "Uint8Array"));
+  if (!isKeyLike(key))
+    throw TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key", "Uint8Array"));
   if (key.type !== "secret")
     throw TypeError(`${tag_2(key)} instances for symmetric algorithms must be of type "secret"`);
 };
@@ -80,10 +81,10 @@ var asymmetricTypeCheck = (alg, key, usage) => {
         throw TypeError("JSON Web Key for this operation must be a private JWK");
       case "encrypt":
       case "verify":
-        if (tt(key) && jwkMatchesOp(alg, key, usage)) return;
+        if (isPublicJWK(key) && jwkMatchesOp(alg, key, usage)) return;
         throw TypeError("JSON Web Key for this operation must be a public JWK");
     }
-  if (!We(key)) throw TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key"));
+  if (!isKeyLike(key)) throw TypeError(withAlg(alg, key, "CryptoKey", "KeyObject", "JSON Web Key"));
   if (key.type === "secret")
     throw TypeError(`${tag_2(key)} instances for asymmetric algorithms must not be of type "secret"`);
   if (key.type === "public")

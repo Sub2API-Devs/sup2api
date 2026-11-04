@@ -20,7 +20,7 @@ var forkSubagentCommand = {
   description: "Spawn a background agent that inherits the full conversation",
   argumentHint: "<directive>",
   isEnabled: () => !isCoordinatorMode_2(),
-  load: () => import("./chunk-cc2xzzcg.js"),
+  load: () => import("../fork/call_2.lazy.js"),
 };
 //@ chunk-e6aww6q8.js:2028828-2029000 placement
 /**
@@ -43,7 +43,7 @@ var subtaskCommand = {
   description: "Send a subagent off with your full context; its result comes back here",
   argumentHint: "<task>",
   isEnabled: () => !isCoordinatorMode_2(),
-  load: () => import("./chunk-3vqj3nc0.js"),
+  load: () => import("../subtask/call.lazy.js"),
 };
 //@ chunk-e6aww6q8.js:2029208-2029796 placement
 /**

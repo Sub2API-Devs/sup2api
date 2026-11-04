@@ -5,11 +5,11 @@
  * pieces: chunk-1r4fv9mg.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_dependencies } from "./dependencies.js";
 
 //@ chunk-1r4fv9mg.js:2797-2999 cjs-fingerprint
-var require_dependentSchemas = x(function (cjsExports) {
+var require_dependentSchemas = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

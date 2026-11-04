@@ -35,35 +35,35 @@ class OauthSlotLockContendedError extends Error {
 /**
  * 在 OAuth 槽位刷新锁下执行（托管服务器会话不允许）。
  */
-async function withOauthSlotRefreshLock(o, n) {
+async function withOauthSlotRefreshLock(slotName, fn) {
   if (isDiskless()) {
     logFeatureBad("oauth_token_refresh", "oauth_slot_refresh_diskless");
     throw Error("This hosted session (claude-code-server) cannot refresh an OAuth token");
   }
   let projectDirsUpToHome = getProjectDirsUpToHome();
   await getFsImplementation().mkdir(projectDirsUpToHome);
-  let i = join(projectDirsUpToHome, o);
-  let a = false;
-  let r;
-  let l = 0;
-  while (!r) {
-    l++;
+  let lockPath = join(projectDirsUpToHome, slotName);
+  let compromised = false;
+  let release;
+  let attempts = 0;
+  while (!release) {
+    attempts++;
     try {
-      r = await lock(i, {
-        lockfilePath: i,
+      release = await lock(lockPath, {
+        lockfilePath: lockPath,
         realpath: false,
         stale: 60000,
         update: 5000,
-        onCompromised: (e) => {
-          a = true;
-          logForDebugging(`OAuth refresh lock ${o} compromised: ${e.message}`, {
+        onCompromised: (error) => {
+          compromised = true;
+          logForDebugging(`OAuth refresh lock ${slotName} compromised: ${error.message}`, {
             level: "error",
           });
         },
       });
     } catch (error) {
       if (error.code === "ELOCKED") {
-        if (l < MAX_SLOT_LOCK_ATTEMPTS) {
+        if (attempts < MAX_SLOT_LOCK_ATTEMPTS) {
           await sleep(1000 + Math.random() * 1000);
           continue;
         }
@@ -72,23 +72,23 @@ async function withOauthSlotRefreshLock(o, n) {
       throw error;
     }
   }
-  let c = {
-    isCompromised: () => a,
+  let lockInfo = {
+    isCompromised: () => compromised,
   };
-  let h = beginOAuthRefreshLockHold();
+  let endHold = beginOAuthRefreshLockHold();
   try {
-    return await n(c);
+    return await fn(lockInfo);
   } finally {
     try {
       try {
-        await r();
+        await release();
       } catch (error) {
-        logForDebugging(`OAuth refresh lock ${o} release failed: ${errorMessage(error)}`, {
+        logForDebugging(`OAuth refresh lock ${slotName} release failed: ${errorMessage(error)}`, {
           level: "error",
         });
       }
     } finally {
-      h();
+      endHold();
     }
   }
 }

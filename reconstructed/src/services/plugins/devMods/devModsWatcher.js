@@ -119,16 +119,16 @@ var DEV_MODS_REFUSAL_CHECKS = [
  * 取当前生效的拒绝原因（没有返回 undefined）。
  */
 function currentRefusal() {
-  return DEV_MODS_REFUSAL_CHECKS.find((o) => o.isRefused())?.refusal;
+  return DEV_MODS_REFUSAL_CHECKS.find((refusalCheck) => refusalCheck.isRefused())?.refusal;
 }
 //@ chunk-zhrgwca4.js:4185-4306 placement
 function devModsOffReason() {
-  let o = currentRefusal();
-  if (o !== undefined) {
-    logFeatureSad("plugin_dev_mods", o);
-    logForDebugging(`dev mods: mod hot-reloading is off here (${o})`);
+  let refusal = currentRefusal();
+  if (refusal !== undefined) {
+    logFeatureSad("plugin_dev_mods", refusal);
+    logForDebugging(`dev mods: mod hot-reloading is off here (${refusal})`);
   }
-  return o;
+  return refusal;
 }
 //@ chunk-zhrgwca4.js:4343-4352 placement
 /**
@@ -139,193 +139,201 @@ var MAX_RELOADS = 3;
 /**
  * 跟踪 dev mods 目录变化并决定何时热重载、何时报告加载/拒绝结果。
  */
-function createDevModsReloadTracker(folder, e) {
-  let r = new Set();
-  let s = new Set(e.loaded);
-  let n = false;
-  let i = false;
-  let a = false;
-  let u;
-  let l = 0;
+function createDevModsReloadTracker(folder, host) {
+  let declined = new Set();
+  let knownLoaded = new Set(host.loaded);
+  let wroteSinceTurn = false;
+  let deferredEnable = false;
+  let rescanAfterEnable = false;
+  let consentAbort;
+  let turnCount = 0;
   let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
-  let w = false;
-  let q = 0;
-  let z = false;
-  let P = false;
-  let G = false;
-  let D = false;
-  let W;
-  let Uo = e.watchRoot(folder, () => {
-    n = true;
-    no();
+  let pendingReload = false;
+  let unpickedCount = 0;
+  let personTurn = false;
+  let askedUnanswered = false;
+  let reloading = false;
+  let closed = false;
+  let quietTimer;
+  let watcher = host.watchRoot(folder, () => {
+    wroteSinceTurn = true;
+    onWatchEvent();
   });
-  let $o = e.turn.onBegin(() => {
-    l += 1;
-    z = e.turn.isPersonTurn();
+  let offTurnBegin = host.turn.onBegin(() => {
+    turnCount += 1;
+    personTurn = host.turn.isPersonTurn();
   });
-  let jo = e.turn.onEnd((p) => void Z(() => Ko(p ? "wait" : "wake")));
-  function so() {
-    W?.();
-    W = undefined;
+  let offTurnEnd = host.turn.onEnd(
+    (isPersonTurn) => void guard(() => resumeAfterTurn(isPersonTurn ? "wait" : "wake")),
+  );
+  function clearQuietTimer() {
+    quietTimer?.();
+    quietTimer = undefined;
   }
-  function no() {
-    if (D || i) return;
-    so();
-    if (e.turn.isRunning()) {
-      Z(H);
+  function onWatchEvent() {
+    if (closed || deferredEnable) return;
+    clearQuietTimer();
+    if (host.turn.isRunning()) {
+      guard(evaluateChanges);
       return;
     }
-    W = e.clock.setTimeout(() => void Z(H), e.quietMs);
+    quietTimer = host.clock.setTimeout(() => void guard(evaluateChanges), host.quietMs);
   }
-  async function Z(p) {
+  async function guard(task) {
     try {
-      await p();
+      await task();
     } catch (error) {
       logForDebugging(`dev mods: the watch on ${folder} failed: ${errorMessage(error)}`, {
         level: "error",
       });
     }
   }
-  async function Ko(p) {
-    if (a) {
-      a = false;
-      for (let h of (await e.listChildren(folder)) ?? []) r.add(h);
+  async function resumeAfterTurn(nextTiming) {
+    if (rescanAfterEnable) {
+      rescanAfterEnable = false;
+      for (let childName of (await host.listChildren(folder)) ?? []) declined.add(childName);
     }
-    if (i) {
-      await io(p);
+    if (deferredEnable) {
+      await enableNow(nextTiming);
       return;
     }
-    if (w) {
-      w = false;
-      await H();
+    if (pendingReload) {
+      pendingReload = false;
+      await evaluateChanges();
     }
   }
-  async function io(p) {
-    if (D) return;
-    if (e.refusal()) {
-      await E();
-      e.stopped("refused");
+  async function enableNow(timing) {
+    if (closed) return;
+    if (host.refusal()) {
+      await dispose();
+      host.stopped("refused");
       return;
     }
-    let h = p;
-    let oo = e.turn.onBegin(() => {
-      h = "wait";
+    let startTiming = timing;
+    let offBegin = host.turn.onBegin(() => {
+      startTiming = "wait";
     });
-    let I = e.turn.onEnd((A) => {
-      h = A ? "wait" : "wake";
+    let offEnd = host.turn.onEnd((isPersonTurn) => {
+      startTiming = isPersonTurn ? "wait" : "wake";
     });
     try {
-      await Promise.all([E(), e.enable(folder, () => h)]);
+      await Promise.all([dispose(), host.enable(folder, () => startTiming)]);
     } finally {
-      oo();
-      I();
+      offBegin();
+      offEnd();
     }
-    e.stopped("enabled");
+    host.stopped("enabled");
   }
-  async function H() {
-    W = undefined;
-    let p = e.turn.isRunning() && n && NEGATIVE_INFINITY === Number.NEGATIVE_INFINITY;
-    let h = D || i;
-    let oo = e.turn.isRunning() && !p;
-    if (h || G || oo || NEGATIVE_INFINITY === l) {
-      w = !h;
+  async function evaluateChanges() {
+    quietTimer = undefined;
+    let isFirstWrite =
+      host.turn.isRunning() && wroteSinceTurn && NEGATIVE_INFINITY === Number.NEGATIVE_INFINITY;
+    let isBusy = closed || deferredEnable;
+    let turnRunning = host.turn.isRunning() && !isFirstWrite;
+    if (isBusy || reloading || turnRunning || NEGATIVE_INFINITY === turnCount) {
+      pendingReload = !isBusy;
       return;
     }
-    G = true;
-    let I = false;
+    reloading = true;
+    let needsRerun = false;
     try {
-      let A = p ? [] : ((await e.listChildren(folder)) ?? []).filter((C) => !r.has(C));
-      let Bo = p || (A.length > 0 && (n || A.some((C) => !s.has(C))));
-      if (D || !Bo) return;
-      if (e.turn.isRunning() && !p) {
-        w = true;
+      let newChildren = isFirstWrite
+        ? []
+        : ((await host.listChildren(folder)) ?? []).filter((childName) => !declined.has(childName));
+      let shouldReload =
+        isFirstWrite ||
+        (newChildren.length > 0 &&
+          (wroteSinceTurn || newChildren.some((childName) => !knownLoaded.has(childName))));
+      if (closed || !shouldReload) return;
+      if (host.turn.isRunning() && !isFirstWrite) {
+        pendingReload = true;
         return;
       }
-      if (e.refusal()) {
-        await E();
-        e.stopped("refused");
+      if (host.refusal()) {
+        await dispose();
+        host.stopped("refused");
         return;
       }
-      NEGATIVE_INFINITY = l;
-      z = false;
+      NEGATIVE_INFINITY = turnCount;
+      personTurn = false;
       let abortController = new AbortController();
-      u = abortController;
-      let mo = await e.ask(folder, abortController.signal).finally(() => {
-        u = undefined;
+      consentAbort = abortController;
+      let answer = await host.ask(folder, abortController.signal).finally(() => {
+        consentAbort = undefined;
       });
-      if (D) return;
-      switch (mo) {
+      if (closed) return;
+      switch (answer) {
         case "enable":
-          if (e.turn.isRunning() && !e.refusal()) {
-            i = true;
-            e.deferred();
+          if (host.turn.isRunning() && !host.refusal()) {
+            deferredEnable = true;
+            host.deferred();
             return;
           }
-          await io("wake");
+          await enableNow("wake");
           return;
         case "decline": {
-          P = false;
-          q = 0;
-          a = e.turn.isRunning();
-          let C = await e.listChildren(folder);
-          for (let Vo of [...A, ...(C ?? [])]) r.add(Vo);
+          askedUnanswered = false;
+          unpickedCount = 0;
+          rescanAfterEnable = host.turn.isRunning();
+          let latestChildren = await host.listChildren(folder);
+          for (let childName of [...newChildren, ...(latestChildren ?? [])]) declined.add(childName);
           return;
         }
         case "withdrawn":
-          if (!P) {
-            P = true;
-            e.unanswered();
+          if (!askedUnanswered) {
+            askedUnanswered = true;
+            host.unanswered();
           }
-          w = true;
+          pendingReload = true;
           return;
         case "retry":
-          w = true;
+          pendingReload = true;
           return;
         case "closed":
         case "unpicked":
-          if (!P) {
-            P = true;
-            e.unanswered();
+          if (!askedUnanswered) {
+            askedUnanswered = true;
+            host.unanswered();
           }
-          if (!z) q += 1;
-          if (q >= MAX_RELOADS) {
-            await E();
-            e.stopped("no_pick");
+          if (!personTurn) unpickedCount += 1;
+          if (unpickedCount >= MAX_RELOADS) {
+            await dispose();
+            host.stopped("no_pick");
             return;
           }
-          if (mo === "unpicked") {
-            NEGATIVE_INFINITY = e.turn.isRunning() ? l - 1 : l;
-            w = true;
+          if (answer === "unpicked") {
+            NEGATIVE_INFINITY = host.turn.isRunning() ? turnCount - 1 : turnCount;
+            pendingReload = true;
             return;
           }
-          NEGATIVE_INFINITY = l - 1;
-          I = true;
+          NEGATIVE_INFINITY = turnCount - 1;
+          needsRerun = true;
           break;
         case "no_one_to_ask":
-          await E();
-          e.stopped("no_one_to_ask");
+          await dispose();
+          host.stopped("no_one_to_ask");
           return;
       }
     } finally {
-      G = false;
+      reloading = false;
     }
-    if (I) await H();
+    if (needsRerun) await evaluateChanges();
   }
-  async function E() {
-    if (D) return;
-    D = true;
-    w = false;
-    so();
-    u?.abort();
-    $o();
-    jo();
-    await Uo.close();
+  async function dispose() {
+    if (closed) return;
+    closed = true;
+    pendingReload = false;
+    clearQuietTimer();
+    consentAbort?.abort();
+    offTurnBegin();
+    offTurnEnd();
+    await watcher.close();
   }
-  no();
+  onWatchEvent();
   return {
-    declined: () => [...r],
-    isClosed: () => D,
-    dispose: E,
+    declined: () => [...declined],
+    isClosed: () => closed,
+    dispose,
   };
 }
 //@ chunk-zhrgwca4.js:6491-6551 placement
@@ -334,16 +342,16 @@ function createDevModsReloadTracker(folder, e) {
  */
 var DEFERRED_NOTICE = "This session's mods will load once this turn ends.";
 //@ chunk-zhrgwca4.js:6551-6828 placement
-function markDevModsWatchState(folder, e) {
-  let r = skillWatchStateByHost.get();
-  if (r?.stage !== "watching" || r.folder !== folder) return;
-  switch (e) {
+function markDevModsWatchState(folder, outcome) {
+  let state = skillWatchStateByHost.get();
+  if (state?.stage !== "watching" || state.folder !== folder) return;
+  switch (outcome) {
     case "refused":
       skillWatchStateByHost.set({
         stage: "wanted",
         folder,
-        ...(r.loaded !== undefined && {
-          loaded: r.loaded,
+        ...(state.loaded !== undefined && {
+          loaded: state.loaded,
         }),
       });
       return;
@@ -359,10 +367,10 @@ function markDevModsWatchState(folder, e) {
   }
 }
 //@ chunk-zhrgwca4.js:6866-6977 placement
-async function touchPath(o) {
+async function touchPath(filePath) {
   let date = new Date();
-  await utimes(o, date, date).catch((error) =>
-    logForDebugging(`dev mods: ${o} keeps its old time: ${errorMessage(error)}`),
+  await utimes(filePath, date, date).catch((error) =>
+    logForDebugging(`dev mods: ${filePath} keeps its old time: ${errorMessage(error)}`),
   );
 }
 //@ chunk-zhrgwca4.js:6977-7180 placement
@@ -371,7 +379,8 @@ function installTurnEndTouch() {
   skillWatchStateResetSlot.set(
     TURN_STATE_PROBE.onEnd(() => {
       try {
-        for (let o of [...(pluginDirSlot.get() ?? []), ...(pluginDirWatchSlot.get() ?? [])]) touchPath(o);
+        for (let dirPath of [...(pluginDirSlot.get() ?? []), ...(pluginDirWatchSlot.get() ?? [])])
+          touchPath(dirPath);
       } catch (error) {
         logForDebugging(`dev mods: the turn-end refresh failed: ${errorMessage(error)}`, {
           level: "error",
@@ -381,76 +390,76 @@ function installTurnEndTouch() {
   );
 }
 //@ chunk-zhrgwca4.js:7213-7395 placement
-function reportDevModsFailure(o, error, r) {
-  let s = r === "enable_failed" ? "enabling" : "loading";
-  reportPluginProblem(MODS, describeReloadFailure(basename(o), error));
-  logFeatureBad("plugin_dev_mods", r);
-  logForDebugging(`dev mods: ${s} ${o} failed: ${errorMessage(error)}`, {
+function reportDevModsFailure(folder, error, reasonCode) {
+  let phase = reasonCode === "enable_failed" ? "enabling" : "loading";
+  reportPluginProblem(MODS, describeReloadFailure(basename(folder), error));
+  logFeatureBad("plugin_dev_mods", reasonCode);
+  logForDebugging(`dev mods: ${phase} ${folder} failed: ${errorMessage(error)}`, {
     level: "error",
   });
   return "failed";
 }
 //@ chunk-zhrgwca4.js:7395-7506 placement
-function emptyReloadResult(root, outcome, r) {
+function emptyReloadResult(root, outcome, changes) {
   return {
     root,
     before: new Map(),
-    after: r.after,
-    present: r.present,
-    unserved: r.unserved,
+    after: changes.after,
+    present: changes.present,
+    unserved: changes.unserved,
     outcome,
   };
 }
 //@ chunk-zhrgwca4.js:7506-7825 placement
-async function reloadDevModsPlugins(root, outcome, r) {
+async function reloadDevModsPlugins(root, outcome, options) {
   let present = (await listDirChildren(root)) ?? [];
-  let i =
+  let pluginRegistry =
     outcome === "reloaded"
-      ? await loadAllPluginsCacheOnly(r.storageV5, r.credentials)
+      ? await loadAllPluginsCacheOnly(options.storageV5, options.credentials)
       : {
           enabled: [],
           disabled: [],
         };
-  let [a] = collectPluginDirRoots([...i.enabled, ...i.disabled], [root]);
-  for (let u of describeDirChanges(
+  let [rootInfo] = collectPluginDirRoots([...pluginRegistry.enabled, ...pluginRegistry.disabled], [root]);
+  for (let change of describeDirChanges(
     emptyReloadResult(root, outcome, {
       present,
-      after: a?.loaded ?? new Map(),
-      unserved: a?.unserved ?? new Set(),
+      after: rootInfo?.loaded ?? new Map(),
+      unserved: rootInfo?.unserved ?? new Set(),
     }),
     describeModPresence,
-    (l) => reloadControllerSlot.get()?.isUnloaded(l) ?? false,
+    (dirPath) => reloadControllerSlot.get()?.isUnloaded(dirPath) ?? false,
   ))
-    uiLog(u.plugin, u.text);
+    uiLog(change.plugin, change.text);
 }
 //@ chunk-zhrgwca4.js:7825-8043 placement
-async function notifyDevModsReload(o, e) {
-  let r = currentSurfaceBinding()?.toolContext(new AbortController());
-  await reloadDevModsPlugins(o, e, {
-    storageV5: r?.storageV5,
-    credentials: r?.credentials,
+async function notifyDevModsReload(folder, load) {
+  let toolContext = currentSurfaceBinding()?.toolContext(new AbortController());
+  await reloadDevModsPlugins(folder, load, {
+    storageV5: toolContext?.storageV5,
+    credentials: toolContext?.credentials,
   }).catch((error) =>
-    logForDebugging(`dev mods: the lines for ${o} were not told: ${errorMessage(error)}`, {
+    logForDebugging(`dev mods: the lines for ${folder} were not told: ${errorMessage(error)}`, {
       level: "error",
     }),
   );
 }
 //@ chunk-zhrgwca4.js:8043-8659 placement
-async function joinDevModsPluginDir(o) {
+async function joinDevModsPluginDir(folder) {
   try {
-    await pendingReloadSlot.get()?.joinPluginDir(o);
+    await pendingReloadSlot.get()?.joinPluginDir(folder);
   } catch (error) {
-    let r = skillWatchStateByHost.get();
-    if ((r?.stage === "watching" || r?.stage === "consented") && r.folder === o)
+    let state = skillWatchStateByHost.get();
+    if ((state?.stage === "watching" || state?.stage === "consented") && state.folder === folder)
       skillWatchStateByHost.set({
         stage: "wanted",
-        folder: o,
-        ...(r.stage === "watching" &&
-          r.loaded !== undefined && {
-            loaded: r.loaded,
+        folder,
+        ...(state.stage === "watching" &&
+          state.loaded !== undefined && {
+            loaded: state.loaded,
           }),
       });
-    reportDevModsFailure(o, error, "enable_failed");
+    reportDevModsFailure(folder, error, "enable_failed");
     return {
       kind: "off",
       reason: errorMessage(error),
@@ -459,61 +468,61 @@ async function joinDevModsPluginDir(o) {
   try {
     skillWatchStateByHost.set({
       stage: "enabled",
-      folder: o,
+      folder,
     });
-    pluginDirSlot.set(mergePluginDirs(pluginDirSlot.get() ?? [], [o]));
+    pluginDirSlot.set(mergePluginDirs(pluginDirSlot.get() ?? [], [folder]));
     installTurnEndTouch();
-    await touchPath(o);
+    await touchPath(folder);
     await sleep(0);
-    let e = currentSurfaceBinding()?.toolContext(new AbortController());
-    saveDevModsFolder(o, e?.storageV5);
-    let r = await reloadBoundPlugins();
-    await notifyDevModsReload(o, r);
+    let toolContext = currentSurfaceBinding()?.toolContext(new AbortController());
+    saveDevModsFolder(folder, toolContext?.storageV5);
+    let load = await reloadBoundPlugins();
+    await notifyDevModsReload(folder, load);
     logFeatureOk("plugin_dev_mods", {
       enabled: true,
     });
     return {
       kind: "enabled",
-      load: r,
+      load,
     };
   } catch (error) {
     return {
       kind: "enabled",
-      load: reportDevModsFailure(o, error, "enable_failed"),
+      load: reportDevModsFailure(folder, error, "enable_failed"),
     };
   }
 }
 //@ chunk-zhrgwca4.js:8659-9460 placement
-function devModsLoadedNotice(o, load) {
+function devModsLoadedNotice(folder, load) {
   switch (load) {
     case "reloaded":
-      return `The person enabled mod hot-reloading for this session and the mods under ${o} loaded: they load and reload by themselves as their files change; the transcript names any mod that failed.`;
+      return `The person enabled mod hot-reloading for this session and the mods under ${folder} loaded: they load and reload by themselves as their files change; the transcript names any mod that failed.`;
     case "held":
-      return `The person enabled mod hot-reloading for this session, but the mods under ${o} wait for /reload-plugins (the load would rewrite the prompt cache): they are NOT loaded yet.`;
+      return `The person enabled mod hot-reloading for this session, but the mods under ${folder} wait for /reload-plugins (the load would rewrite the prompt cache): they are NOT loaded yet.`;
     case "unbound":
-      return `The person enabled mod hot-reloading for this session, but the mods under ${o} did not load (this session cannot reload its plugins; only a restart loads them).`;
+      return `The person enabled mod hot-reloading for this session, but the mods under ${folder} did not load (this session cannot reload its plugins; only a restart loads them).`;
     case "failed":
-      return `The person enabled mod hot-reloading for this session, but the mods under ${o} did not load (the load failed; the transcript says why, and /reload-plugins tries again).`;
+      return `The person enabled mod hot-reloading for this session, but the mods under ${folder} did not load (the load failed; the transcript says why, and /reload-plugins tries again).`;
   }
 }
 //@ chunk-zhrgwca4.js:9460-10252 placement
-function devModsOutcomeNotice(o, e) {
-  switch (e.kind) {
+function devModsOutcomeNotice(folder, outcome) {
+  switch (outcome.kind) {
     case "enabled":
-      return devModsLoadedNotice(o, e.load);
+      return devModsLoadedNotice(folder, outcome.load);
     case "declined":
-      return `The person declined mod hot-reloading: what this run wrote under ${o} is written but NOT loaded (a mod that loaded when the session started keeps running as it loaded). Do not say the change is running. It loads the next time this session starts (/reload-plugins reloads only a mod that loaded at the start); the person can ask again.`;
+      return `The person declined mod hot-reloading: what this run wrote under ${folder} is written but NOT loaded (a mod that loaded when the session started keeps running as it loaded). Do not say the change is running. It loads the next time this session starts (/reload-plugins reloads only a mod that loaded at the start); the person can ask again.`;
     case "unanswered":
-      return `The person has not answered the mod hot-reloading question yet; it is asked again once a turn ends. What this run wrote under ${o} is written but NOT loaded yet. Do not say it was declined, and do not suggest --plugin-dir or a restart.`;
+      return `The person has not answered the mod hot-reloading question yet; it is asked again once a turn ends. What this run wrote under ${folder} is written but NOT loaded yet. Do not say it was declined, and do not suggest --plugin-dir or a restart.`;
     case "off":
-      return `Mod hot-reloading is off in this session (${e.reason}): mods under ${o} are not loaded.`;
+      return `Mod hot-reloading is off in this session (${outcome.reason}): mods under ${folder} are not loaded.`;
   }
 }
 //@ chunk-zhrgwca4.js:10252-10279 placement
 /**
  * 生成结果提示。
  */
-var noticeFor = (o, e) => hookNoticeTask(devModsOutcomeNotice(o, e));
+var noticeFor = (folder, outcome) => hookNoticeTask(devModsOutcomeNotice(folder, outcome));
 //@ chunk-zhrgwca4.js:10279-10305 placement
 /**
  * 表示“未回答”的结果对象。
@@ -522,17 +531,17 @@ var UNANSWERED_OUTCOME = {
   kind: "unanswered",
 };
 //@ chunk-zhrgwca4.js:10305-10527 placement
-function enqueueDevModsNotice(o, e, r = "wake") {
-  let s = e.kind === "enabled";
-  let n = s && r === "wake";
-  if (s) removeQueuedByFilter((i) => i.value === noticeFor(o, UNANSWERED_OUTCOME));
+function enqueueDevModsNotice(folder, outcome, timing = "wake") {
+  let isEnabled = outcome.kind === "enabled";
+  let isActive = isEnabled && timing === "wake";
+  if (isEnabled) removeQueuedByFilter((notice) => notice.value === noticeFor(folder, UNANSWERED_OUTCOME));
   enqueuePendingNotification({
     agentId: mainAgentId(),
-    value: noticeFor(o, e),
+    value: noticeFor(folder, outcome),
     mode: "task-notification",
     skipAttachments: true,
     isMeta: TASK_NOTICE_IS_META,
-    ...(!n && {
+    ...(!isActive && {
       passive: true,
     }),
     priority: "next",
@@ -544,10 +553,10 @@ var NO_ONE_TO_ASK_TEXT = "nobody could be asked";
 /**
  * 记录并提示“无人可问”。
  */
-function markNoOneToAsk(o) {
-  if (skillWatchStateClearSlot.get() === o) return;
-  skillWatchStateClearSlot.set(o);
-  enqueueDevModsNotice(o, {
+function markNoOneToAsk(folder) {
+  if (skillWatchStateClearSlot.get() === folder) return;
+  skillWatchStateClearSlot.set(folder);
+  enqueueDevModsNotice(folder, {
     kind: "off",
     reason: NO_ONE_TO_ASK_TEXT,
   });
@@ -571,15 +580,15 @@ var DEV_MODS_REFUSAL_TEXT = {
   untrusted: "the workspace is not trusted",
 };
 //@ chunk-zhrgwca4.js:11295-11504 placement
-function devModsStateFor(o, e) {
-  switch (o) {
+function devModsStateFor(outcome, refusal) {
+  switch (outcome) {
     case "enabled":
       return;
     case "refused":
-      if (e === undefined) return;
+      if (refusal === undefined) return;
       return {
         kind: "off",
-        reason: DEV_MODS_REFUSAL_TEXT[e],
+        reason: DEV_MODS_REFUSAL_TEXT[refusal],
       };
     case "no_one_to_ask":
       return {
@@ -597,36 +606,36 @@ function devModsStateFor(o, e) {
 /**
  * 根据结果发出相应提示。
  */
-function reportOutcome(folder, e) {
-  let r = devModsStateFor(e, currentRefusal());
-  if (e === "no_one_to_ask") markNoOneToAsk(folder);
-  else if (r !== undefined) enqueueDevModsNotice(folder, r);
+function reportOutcome(folder, outcome) {
+  let state = devModsStateFor(outcome, currentRefusal());
+  if (outcome === "no_one_to_ask") markNoOneToAsk(folder);
+  else if (state !== undefined) enqueueDevModsNotice(folder, state);
 }
 //@ chunk-zhrgwca4.js:11591-11976 placement
-function watchDevModsFolder(o, e) {
-  let r = chokidar_default.watch(o, {
+function watchDevModsFolder(folder, onChange) {
+  let watcher = chokidar_default.watch(folder, {
     persistent: true,
     ignoreInitial: true,
     followSymlinks: false,
     ignorePermissionErrors: true,
-    ignored: createWatchIgnorer(o, getDebugLogPath(), () => false),
+    ignored: createWatchIgnorer(folder, getDebugLogPath(), () => false),
     usePolling: true,
     interval: WATCH_ACTIVE_POLL_MS,
     binaryInterval: WATCH_ACTIVE_POLL_MS,
   });
-  let s = () => e();
-  r.on("add", s);
-  r.on("addDir", s);
-  r.on("change", s);
-  r.on("unlink", s);
-  r.on("unlinkDir", s);
-  r.on("error", (n) =>
-    logForDebugging(`dev mods: the watch on ${o}: ${errorMessage(n)}`, {
+  let notify = () => onChange();
+  watcher.on("add", notify);
+  watcher.on("addDir", notify);
+  watcher.on("change", notify);
+  watcher.on("unlink", notify);
+  watcher.on("unlinkDir", notify);
+  watcher.on("error", (error) =>
+    logForDebugging(`dev mods: the watch on ${folder}: ${errorMessage(error)}`, {
       level: "warn",
     }),
   );
   return {
-    close: () => r.close(),
+    close: () => watcher.close(),
   };
 }
 //@ chunk-zhrgwca4.js:11976-12836 placement
@@ -635,46 +644,47 @@ function watchDevModsFolder(o, e) {
  */
 async function startDevModsIfWanted() {
   try {
-    let o = skillWatchStateByHost.get();
-    if (o?.stage !== "wanted") return;
+    let state = skillWatchStateByHost.get();
+    if (state?.stage !== "wanted") return;
     if (currentRefusal() !== undefined) return;
     if (!canAskForConsent()) {
       logFeatureSad("plugin_dev_mods", "no_one_to_ask");
       skillWatchStateByHost.set({
         stage: "off",
-        folder: o.folder,
+        folder: state.folder,
       });
-      if (o.loaded === undefined) markNoOneToAsk(o.folder);
+      if (state.loaded === undefined) markNoOneToAsk(state.folder);
       return;
     }
-    await mkdir(o.folder, {
+    await mkdir(state.folder, {
       recursive: true,
     });
-    let e = skillWatchStateByHost.get();
-    if (e?.stage !== "wanted") return;
-    let { folder, loaded } = e;
-    let n = {};
+    let freshState = skillWatchStateByHost.get();
+    if (freshState?.stage !== "wanted") return;
+    let { folder, loaded } = freshState;
+    let cleanupSlot = {};
     let devModsReloadTracker = createDevModsReloadTracker(folder, {
       watchRoot: watchDevModsFolder,
       loaded: loaded ?? [],
       listChildren: listDirChildren,
       refusal: devModsOffReason,
-      ask: async (folder, u) => {
-        let l = await requestDevModsConsent(folder, u);
-        if (l !== "no_one_to_ask" && l !== "retry") skillWatchStateClearSlot.set(undefined);
-        if (l === "decline")
+      ask: async (folder, signal) => {
+        let answer = await requestDevModsConsent(folder, signal);
+        if (answer !== "no_one_to_ask" && answer !== "retry") skillWatchStateClearSlot.set(undefined);
+        if (answer === "decline")
           enqueueDevModsNotice(folder, {
             kind: "declined",
           });
-        return l;
+        return answer;
       },
-      enable: async (a, u) => enqueueDevModsNotice(a, await joinDevModsPluginDir(a), u()),
+      enable: async (folder, timing) =>
+        enqueueDevModsNotice(folder, await joinDevModsPluginDir(folder), timing()),
       deferred: () => uiLog(MODS, DEFERRED_NOTICE),
       unanswered: () => enqueueDevModsNotice(folder, UNANSWERED_OUTCOME),
-      stopped: (a) => {
-        n.release?.();
-        markDevModsWatchState(folder, a);
-        reportOutcome(folder, a);
+      stopped: (outcome) => {
+        cleanupSlot.release?.();
+        markDevModsWatchState(folder, outcome);
+        reportOutcome(folder, outcome);
       },
       clock: WATCH_CLOCK,
       turn: TURN_STATE_PROBE,
@@ -688,7 +698,7 @@ async function startDevModsIfWanted() {
         loaded,
       }),
     });
-    n.release = registerCleanup(() => devModsReloadTracker.dispose());
+    cleanupSlot.release = registerCleanup(() => devModsReloadTracker.dispose());
   } catch (error) {
     logForDebugging(`dev mods: the watch did not start: ${errorMessage(error)}`, {
       level: "error",
@@ -696,10 +706,10 @@ async function startDevModsIfWanted() {
   }
 }
 //@ chunk-zhrgwca4.js:12930-13033 placement
-function isFileSafe(o) {
+function isFileSafe(filePath) {
   try {
     return (
-      statSync(o, {
+      statSync(filePath, {
         throwIfNoEntry: false,
       })?.isFile() === true
     );
@@ -709,14 +719,14 @@ function isFileSafe(o) {
   }
 }
 //@ chunk-zhrgwca4.js:13033-13238 placement
-function listDevModDirs(o) {
+function listDevModDirs(folder) {
   try {
-    return readdirSync(o, {
+    return readdirSync(folder, {
       withFileTypes: true,
     })
-      .filter((e) => (e.isDirectory() || e.isSymbolicLink()) && isNotDotPrefixed(e.name))
-      .map((e) => e.name)
-      .filter((e) => isFileSafe(join(o, e, PLUGIN_MANIFEST_PATH)))
+      .filter((entry) => (entry.isDirectory() || entry.isSymbolicLink()) && isNotDotPrefixed(entry.name))
+      .map((entry) => entry.name)
+      .filter((childName) => isFileSafe(join(folder, childName, PLUGIN_MANIFEST_PATH)))
       .toSorted();
   } catch (error) {
     if (isFsInaccessible(error)) return;
@@ -726,15 +736,15 @@ function listDevModDirs(o) {
 //@ chunk-zhrgwca4.js:13238-13749 placement
 async function initDevModsState(folder) {
   try {
-    let e = listDevModDirs(folder);
-    if (e === undefined || e.length === 0) {
-      let r = e !== undefined && canAskForConsent();
+    let children = listDevModDirs(folder);
+    if (children === undefined || children.length === 0) {
+      let canAsk = children !== undefined && canAskForConsent();
       skillWatchStateByHost.set(
-        r
+        canAsk
           ? {
               stage: "wanted",
               folder,
-              loaded: e,
+              loaded: children,
             }
           : undefined,
       );
@@ -744,7 +754,7 @@ async function initDevModsState(folder) {
     skillWatchStateByHost.set({
       stage: "wanted",
       folder,
-      loaded: e,
+      loaded: children,
     });
     pluginDirWatchSlot.set(mergePluginDirs(pluginDirWatchSlot.get() ?? [], [folder]));
     await pendingReloadSlot.get()?.joinPluginDir(folder);
@@ -757,8 +767,8 @@ async function initDevModsState(folder) {
     });
     await startDevModsIfWanted();
   } catch (error) {
-    let r = skillWatchStateByHost.get();
-    if ((r?.stage === "wanted" || r?.stage === "present") && r.folder === folder) {
+    let state = skillWatchStateByHost.get();
+    if ((state?.stage === "wanted" || state?.stage === "present") && state.folder === folder) {
       skillWatchStateByHost.set({
         stage: "wanted",
         folder,
@@ -771,19 +781,19 @@ async function initDevModsState(folder) {
 //@ chunk-zhrgwca4.js:13749-14071 placement
 function resumeDevModsWatching() {
   try {
-    let o = skillWatchStateByHost.get();
-    switch (o?.stage) {
+    let state = skillWatchStateByHost.get();
+    switch (state?.stage) {
       case "consented":
-        if (currentRefusal() === undefined) joinDevModsPluginDir(o.folder);
+        if (currentRefusal() === undefined) joinDevModsPluginDir(state.folder);
         return;
       case "present":
-        if (currentRefusal() === undefined) initDevModsState(o.folder);
+        if (currentRefusal() === undefined) initDevModsState(state.folder);
         return;
       case "wanted":
         startDevModsIfWanted();
         return;
       case "enabled":
-        touchPath(o.folder);
+        touchPath(state.folder);
         return;
       case undefined:
       case "watching":
@@ -798,48 +808,50 @@ function resumeDevModsWatching() {
 }
 //@ chunk-zhrgwca4.js:14071-14466 placement
 async function switchDevModsFolder() {
-  let o = skillWatchStateByHost.get();
-  let e = devModsFolderFor(getSessionId());
+  let previousState = skillWatchStateByHost.get();
+  let folder = devModsFolderFor(getSessionId());
   try {
-    if (o?.stage === "watching" && o.folder !== e) await o.watch.dispose();
-    let r = skillWatchStateByHost.get();
-    let s = r !== undefined && r.folder !== e;
-    let n = r === undefined || r.stage === "off" || (r.stage === "watching" && r.watch.isClosed());
-    if (s || n)
+    if (previousState?.stage === "watching" && previousState.folder !== folder)
+      await previousState.watch.dispose();
+    let state = skillWatchStateByHost.get();
+    let wrongFolder = state !== undefined && state.folder !== folder;
+    let needsRestart =
+      state === undefined || state.stage === "off" || (state.stage === "watching" && state.watch.isClosed());
+    if (wrongFolder || needsRestart)
       skillWatchStateByHost.set({
         stage: "wanted",
-        folder: e,
+        folder,
       });
     pluginDirsOverride.set(resumeDevModsWatching);
     if (devModsOffReason() === undefined) await startDevModsIfWanted();
   } catch (error) {
-    logForDebugging(`dev mods: handing out ${e} started nothing: ${errorMessage(error)}`, {
+    logForDebugging(`dev mods: handing out ${folder} started nothing: ${errorMessage(error)}`, {
       level: "error",
     });
   }
-  return e;
+  return folder;
 }
 //@ chunk-zhrgwca4.js:14466-14498 placement
 var DEV_MODS_DIR_PLACEHOLDER = "${CLAUDE_DEV_MODS_DIR}";
 //@ chunk-zhrgwca4.js:14498-14640 placement
-async function expandDevModsPlaceholder(o, e) {
+async function expandDevModsPlaceholder(text, options) {
   let { DEV_MODS_PLACEHOLDER } = devModsDialogNamespace;
-  if (!o.includes(DEV_MODS_PLACEHOLDER)) return o;
-  let s = e.isPreload ? devModsFolderFor(getSessionId()) : await switchDevModsFolder();
-  return o.replaceAll(DEV_MODS_PLACEHOLDER, s);
+  if (!text.includes(DEV_MODS_PLACEHOLDER)) return text;
+  let folder = options.isPreload ? devModsFolderFor(getSessionId()) : await switchDevModsFolder();
+  return text.replaceAll(DEV_MODS_PLACEHOLDER, folder);
 }
 //@ chunk-zhrgwca4.js:14640-14883 placement
 function resumeDevModsForSession() {
-  let o = devModsFolderFor(getSessionId());
-  let e = skillWatchStateByHost.get();
-  if (e !== undefined && e.folder === o && e.stage !== "off") return;
-  if (e?.stage === "watching")
-    e.watch
+  let folder = devModsFolderFor(getSessionId());
+  let state = skillWatchStateByHost.get();
+  if (state !== undefined && state.folder === folder && state.stage !== "off") return;
+  if (state?.stage === "watching")
+    state.watch
       .dispose()
       .catch((error) => logForDebugging(`dev mods: the watch did not close: ${errorMessage(error)}`));
   skillWatchStateByHost.set({
     stage: "present",
-    folder: o,
+    folder,
   });
   pluginDirsOverride.set(resumeDevModsWatching);
   resumeDevModsWatching();
@@ -852,17 +864,17 @@ function installDevModsPlaceholderExpander() {
   skillWatchStateSlot.set(expandDevModsPlaceholder);
   try {
     let currentSessionDevModsFolder = getCurrentSessionDevModsFolder();
-    let e = skillWatchStateByHost.get();
+    let state = skillWatchStateByHost.get();
     if (!(
       currentSessionDevModsFolder !== undefined &&
       isSessionFileAt(currentSessionDevModsFolder, getSessionId()) &&
-      !(e?.stage === "enabled" && e.folder === currentSessionDevModsFolder)
+      !(state?.stage === "enabled" && state.folder === currentSessionDevModsFolder)
     )) {
       resumeDevModsForSession();
       return;
     }
-    if (e?.stage === "watching")
-      e.watch
+    if (state?.stage === "watching")
+      state.watch
         .dispose()
         .catch((error) => logForDebugging(`dev mods: the watch did not close: ${errorMessage(error)}`));
     skillWatchStateByHost.set({

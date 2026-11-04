@@ -6,10 +6,10 @@
  * attribution: esm-layout 1, esm-fingerprint 1
  */
 import { getStreamContents } from "./contents.js";
-import { ke, throwObjectStream, getLengthProp, getContentsProp } from "./utils.js";
+import { identity, throwObjectStream, getLengthProp, getContentsProp } from "./utils.js";
 
 //@ chunk-m4p5zn6n.js:24141-24181 esm-layout
-async function Le(stream, options) {
+async function getStreamContentsImpl(stream, options) {
   return getStreamContents(stream, stringMethods, options);
 }
 //@ chunk-m4p5zn6n.js:24181-24564 esm-fingerprint
@@ -30,7 +30,7 @@ var getFinalStringChunk = ({ textDecoder }) => {
 var stringMethods = {
   init: initString,
   convertChunk: {
-    string: ke,
+    string: identity,
     buffer: useTextDecoder,
     arrayBuffer: useTextDecoder,
     dataView: useTextDecoder,
@@ -43,4 +43,4 @@ var stringMethods = {
   getFinalChunk: getFinalStringChunk,
   finalize: getContentsProp,
 };
-export { Le };
+export { getStreamContentsImpl };

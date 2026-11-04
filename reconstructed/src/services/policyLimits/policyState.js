@@ -77,7 +77,7 @@ import { sessionHostKind } from "../../utils/telemetry/memorySummary.js";
 import { getClaudeConfigDir } from "../../utils/envUtils.js";
 import { withoutSSHTunnelVars } from "../../utils/managedEnv.js";
 import { machineAdminMayPinSignInOrg } from "../../utils/settings/settings.js";
-import { hasMdmResult } from "../../utils/settings/managedPluginTiers.js";
+import { hasMdmResult } from "../../utils/settings/mdm/mdmLoader.js";
 import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from "../../utils/model/providers.js";
 import { CLAUDE_AI_INFERENCE_SCOPE } from "../../constants/oauth.js";
 import { resolveOrgConfigPlan, computeChecksum } from "./index.js";
@@ -97,6 +97,7 @@ import {
 import { env } from "../../utils/env.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { UNREADABLE_PRINCIPAL } from "./policyVerdicts.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-55ht3bcx.js:7634-7707 placement = CACHE_FILENAME (1)
 /**
@@ -163,15 +164,17 @@ class PolicyState {
   cacheRevision = 0;
   verdictChanged = createSignal();
   heldStartSignal = createSignal();
-  replaceSessionCache(e, n = false, r = false) {
-    this.failOpenVerdict = e !== null && (n || (this.failOpenVerdict && (r || e === this.sessionCache)));
-    this.sessionCache = e;
-    if (e?.core_skills !== undefined)
+  replaceSessionCache(cache, fromMemTable = false, keepEnvDigest = false) {
+    this.failOpenVerdict =
+      cache !== null &&
+      (fromMemTable || (this.failOpenVerdict && (keepEnvDigest || cache === this.sessionCache)));
+    this.sessionCache = cache;
+    if (cache?.core_skills !== undefined)
       this.lastServedCoreSkills = this.sessionFromServerFetch
-        ? e.core_skills
-        : this.narrowedServedList(e.core_skills);
-    if (!r) this.verdictEnvBearerDigest = null;
-    if (e === null) {
+        ? cache.core_skills
+        : this.narrowedServedList(cache.core_skills);
+    if (!keepEnvDigest) this.verdictEnvBearerDigest = null;
+    if (cache === null) {
       this.sessionAttributed = false;
       this.attributedBearerDigest = null;
       this.attributedPrincipalIdentity = null;
@@ -179,15 +182,15 @@ class PolicyState {
       this.evidenceRereadForBearer = undefined;
     }
     this.cacheRevision++;
-    let s = replaceComplianceTaints(this.effectiveTaints());
-    setPolicyNotice(e?.monitoring_notice ?? null);
-    if (s) clearBetasCaches();
+    let rift = replaceComplianceTaints(this.effectiveTaints());
+    setPolicyNotice(cache?.monitoring_notice ?? null);
+    if (rift) clearBetasCaches();
     this.emitVerdictChanged();
   }
-  effectiveTaints(e = this.sessionCache?.compliance_taints ?? []) {
+  effectiveTaints(baseTaints = this.sessionCache?.compliance_taints ?? []) {
     return this.hintedTaints.length === 0
-      ? e
-      : uniq([...this.hintedTaints, ...e]).slice(0, MAX_COMPLIANCE_TAINTS);
+      ? baseTaints
+      : uniq([...this.hintedTaints, ...baseTaints]).slice(0, MAX_COMPLIANCE_TAINTS);
   }
   dropHintedTaints() {
     if (
@@ -203,51 +206,51 @@ class PolicyState {
     if (replaceComplianceTaints(this.effectiveTaints())) clearBetasCaches();
     this.emitVerdictChanged();
   }
-  hintFromRefusedBody(e) {
+  hintFromRefusedBody(body) {
     if (this.sessionCache !== null && this.sessionAttributed) return;
-    let filtered = e.compliance_taints.filter((complianceTaint) =>
-      TAINT_DISABLED_POLICIES.some(([m]) => m === complianceTaint),
+    let filtered = body.compliance_taints.filter((complianceTaint) =>
+      TAINT_DISABLED_POLICIES.some(([taintName]) => taintName === complianceTaint),
     );
-    let r = uniq([...this.hintedTaints, ...filtered]);
-    let mapped = Object.entries(e.restrictions)
+    let nextTaints = uniq([...this.hintedTaints, ...filtered]);
+    let mapped = Object.entries(body.restrictions)
       .filter(([key, value]) => value?.allowed === false && !isEnforcedPolicyKey(key))
       .map(([key]) => key);
     let sliced = uniq([...this.hintedDeniedKeys, ...mapped]).slice(0, MAX_HINTED_DENIED_KEYS);
-    let mapped_2 = Object.entries(e.restrictions)
+    let mapped_2 = Object.entries(body.restrictions)
       .filter(([key, value]) => value?.allowed === true && isEnforcedPolicyKey(key))
       .map(([key]) => key);
     let sliced_2 = uniq([...this.hintedEnforcedKeys, ...mapped_2]).slice(0, MAX_HINTED_DENIED_KEYS);
-    let y = false;
-    if (e.core_skills !== undefined) {
-      let h = this.narrowedServedList(e.core_skills);
+    let changed = false;
+    if (body.core_skills !== undefined) {
+      let narrowed = this.narrowedServedList(body.core_skills);
       if (
         this.lastServedCoreSkills === null ||
-        h.join(`
+        narrowed.join(`
 `) !==
           this.lastServedCoreSkills.join(`
 `)
       ) {
-        this.lastServedCoreSkills = h;
-        y = true;
+        this.lastServedCoreSkills = narrowed;
+        changed = true;
       }
     }
     if (
-      !y &&
-      r.length === this.hintedTaints.length &&
+      !changed &&
+      nextTaints.length === this.hintedTaints.length &&
       sliced.length === this.hintedDeniedKeys.length &&
       sliced_2.length === this.hintedEnforcedKeys.length
     )
       return;
-    this.hintedTaints = r;
+    this.hintedTaints = nextTaints;
     this.hintedDeniedKeys = sliced;
     this.hintedEnforcedKeys = sliced_2;
     this.cacheRevision++;
     if (replaceComplianceTaints(this.effectiveTaints())) clearBetasCaches();
     this.emitVerdictChanged();
   }
-  narrowedServedList(e) {
-    let n = new Set(this.lastServedCoreSkills ?? BUILTIN_SKILL_NAMES);
-    return e.filter((r) => n.has(r));
+  narrowedServedList(skills) {
+    let allowed = new Set(this.lastServedCoreSkills ?? BUILTIN_SKILL_NAMES);
+    return skills.filter((skillName) => allowed.has(skillName));
   }
   emitVerdictChanged() {
     try {
@@ -268,17 +271,20 @@ class PolicyState {
   }
 }
 //@ chunk-55ht3bcx.js:11150-11177 placement
-var policyStates = new HostScoped(() => new PolicyState());
+var policyStates; // deferred: uses PolicyState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-55ht3bcx.js:11150", () => {
+  policyStates = new HostScoped(() => new PolicyState());
+});
 //@ chunk-55ht3bcx.js:11177-11214 placement
 function getPolicyLimitsState() {
   return policyStates.of(getRootSession().host);
 }
 //@ chunk-55ht3bcx.js:11214-11342 placement
-function setSessionCache(e) {
+function setSessionCache(cache) {
   let policyLimitsState = getPolicyLimitsState();
-  policyLimitsState.sessionFromServerFetch = e !== null;
-  if (e === null) policyLimitsState.sessionBodyReceivedAtMs = null;
-  policyLimitsState.replaceSessionCache(e);
+  policyLimitsState.sessionFromServerFetch = cache !== null;
+  if (cache === null) policyLimitsState.sessionBodyReceivedAtMs = null;
+  policyLimitsState.replaceSessionCache(cache);
 }
 //@ chunk-55ht3bcx.js:11342-11388 placement
 function noteSessionBodyReceived(sessionBodyReceivedAtMs) {
@@ -289,10 +295,10 @@ function getSessionBodyReceivedAt() {
   return getPolicyLimitsState().sessionBodyReceivedAtMs;
 }
 //@ chunk-55ht3bcx.js:11438-11517 placement
-function setSessionCacheAsPriorEvidence(e) {
+function setSessionCacheAsPriorEvidence(cache) {
   let policyLimitsState = getPolicyLimitsState();
   policyLimitsState.sessionFromServerFetch = false;
-  policyLimitsState.replaceSessionCache(e);
+  policyLimitsState.replaceSessionCache(cache);
 }
 //@ chunk-55ht3bcx.js:11517-11562 placement
 function noteSessionVerdictEnvBearer(verdictEnvBearerDigest) {
@@ -302,10 +308,10 @@ function noteSessionVerdictEnvBearer(verdictEnvBearerDigest) {
 function envBearerVerdictOnWire() {
   let verdictEnvBearerDigest = getPolicyLimitsState().verdictEnvBearerDigest;
   if (verdictEnvBearerDigest === null) return null;
-  let n = effectiveAuthTokenEnv();
+  let envToken = effectiveAuthTokenEnv();
   if (
     isGateAOn() ||
-    !n ||
+    !envToken ||
     hasInferenceScope({
       anthropicAuthEnabled: isAnthropicAuthEnabled(),
       oauthScopes: getClaudeAIOAuthTokens()?.scopes,
@@ -313,7 +319,7 @@ function envBearerVerdictOnWire() {
     getAnthropicApiKeySafe() != null
   )
     return "gone";
-  return tokenDigest(n) === verdictEnvBearerDigest ? "same" : "replaced";
+  return tokenDigest(envToken) === verdictEnvBearerDigest ? "same" : "replaced";
 }
 //@ chunk-55ht3bcx.js:11778-11892 placement
 function installFailOpenSessionVerdict() {
@@ -323,10 +329,10 @@ function installFailOpenSessionVerdict() {
   policyLimitsState.replaceSessionCache(EMPTY_POLICY_RESPONSE, true);
 }
 //@ chunk-55ht3bcx.js:11892-12313 placement
-function installDiskDerivedVerdict(e) {
+function installDiskDerivedVerdict(verdict) {
   let policyLimitsState = getPolicyLimitsState();
-  let r = policyLimitsState.sessionCache !== null;
-  if (!r) {
+  let hadSession = policyLimitsState.sessionCache !== null;
+  if (!hadSession) {
     policyLimitsState.sessionFromServerFetch = false;
     policyLimitsState.sessionAttributed = policyLimitsState.lastStampVerdict === "match";
     policyLimitsState.attributedBearerDigest = policyLimitsState.sessionAttributed
@@ -339,38 +345,40 @@ function installDiskDerivedVerdict(e) {
     policyLimitsState.evidenceRereadForBearer = undefined;
     policyLimitsState.sessionBodyReceivedAtMs = null;
   }
-  policyLimitsState.replaceSessionCache(e, false, r);
+  policyLimitsState.replaceSessionCache(verdict, false, hadSession);
 }
 //@ chunk-55ht3bcx.js:12313-12344 placement
-function latchComplianceTaintsBustingBetas(complianceTaints) {
-  if (latchComplianceTaints(complianceTaints)) clearBetasCaches();
+function latchComplianceTaintsBustingBetas(taints) {
+  if (latchComplianceTaints(taints)) clearBetasCaches();
 }
 //@ chunk-55ht3bcx.js:12344-12731 placement
-function setLastFetchOutcome(e, n, r = true) {
+function setLastFetchOutcome(outcome, principalIdentity, settleTransient = true) {
   let policyLimitsState = getPolicyLimitsState();
-  policyLimitsState.lastFetchOutcome = e;
-  if (e === null || e.success) policyLimitsState.settledWithoutVerdictFor = null;
-  else if (!e.retrying && (r || !isTransientFetchFailure(e))) {
-    let l =
-      e.errorCode === "network_error" ||
-      e.errorCode === "timeout" ||
-      (e.errorCode === "request_failed" &&
-        e.httpStatus !== null &&
-        (e.httpStatus === 404 || e.httpStatus >= 500));
-    policyLimitsState.settledWithoutVerdictFor = l ? (n ?? getPolicyPrincipalIdentity() ?? "") : null;
+  policyLimitsState.lastFetchOutcome = outcome;
+  if (outcome === null || outcome.success) policyLimitsState.settledWithoutVerdictFor = null;
+  else if (!outcome.retrying && (settleTransient || !isTransientFetchFailure(outcome))) {
+    let isTransient =
+      outcome.errorCode === "network_error" ||
+      outcome.errorCode === "timeout" ||
+      (outcome.errorCode === "request_failed" &&
+        outcome.httpStatus !== null &&
+        (outcome.httpStatus === 404 || outcome.httpStatus >= 500));
+    policyLimitsState.settledWithoutVerdictFor = isTransient
+      ? (principalIdentity ?? getPolicyPrincipalIdentity() ?? "")
+      : null;
   }
   policyLimitsState.cacheRevision++;
   policyLimitsState.emitVerdictChanged();
 }
 //@ chunk-55ht3bcx.js:12731-12922 placement
-function isTransientFetchFailure(e) {
+function isTransientFetchFailure(outcome) {
   return (
-    e.errorCode === "network_error" ||
-    e.errorCode === "timeout" ||
-    (e.errorCode === "request_failed" &&
-      (e.httpStatus === null ||
-        e.httpStatus >= 500 ||
-        (e.httpStatus >= 400 && !isNonRetryableClientError(e.httpStatus))))
+    outcome.errorCode === "network_error" ||
+    outcome.errorCode === "timeout" ||
+    (outcome.errorCode === "request_failed" &&
+      (outcome.httpStatus === null ||
+        outcome.httpStatus >= 500 ||
+        (outcome.httpStatus >= 400 && !isNonRetryableClientError(outcome.httpStatus))))
   );
 }
 //@ chunk-55ht3bcx.js:12922-12965 placement
@@ -424,12 +432,12 @@ function policyVerdictRebuildKey() {
   return isLovelyUmbrellaOn() ? -1 : getPolicyCacheRevision();
 }
 //@ chunk-55ht3bcx.js:13461-13515 placement
-function onPolicyVerdictChanged(e) {
-  return getPolicyLimitsState().verdictChanged.subscribe(e);
+function onPolicyVerdictChanged(listener) {
+  return getPolicyLimitsState().verdictChanged.subscribe(listener);
 }
 //@ chunk-55ht3bcx.js:13515-13571 placement
-function onPolicyVerdictHeldStart(e) {
-  return getPolicyLimitsState().heldStartSignal.subscribe(e);
+function onPolicyVerdictHeldStart(listener) {
+  return getPolicyLimitsState().heldStartSignal.subscribe(listener);
 }
 //@ chunk-55ht3bcx.js:13571-13605 placement
 function getCachePath() {
@@ -443,20 +451,23 @@ function getPolicyLimitsTunnelSocket() {
 function isSignInPinnedByMachine() {
   let policyLimitsState = getPolicyLimitsState();
   if (policyLimitsState.machinePinsSignIn !== undefined) return policyLimitsState.machinePinsSignIn;
-  let n = machineAdminMayPinSignInOrg();
-  if (hasMdmResult()) policyLimitsState.machinePinsSignIn = n;
-  return n;
+  let pinned = machineAdminMayPinSignInOrg();
+  if (hasMdmResult()) policyLimitsState.machinePinsSignIn = pinned;
+  return pinned;
 }
 //@ chunk-55ht3bcx.js:13767-13811 placement
 function _resetMachinePinsSignInForTesting() {
   getPolicyLimitsState().machinePinsSignIn = undefined;
 }
 //@ chunk-55ht3bcx.js:13811-13888 placement
-var PRINCIPALS_NEVER_SERVED = new Set(["prosumer_oauth", "third_party_provider", "custom_base_url"]);
+var PRINCIPALS_NEVER_SERVED; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-55ht3bcx.js:13811", () => {
+  PRINCIPALS_NEVER_SERVED = new Set(["prosumer_oauth", "third_party_provider", "custom_base_url"]);
+});
 //@ chunk-55ht3bcx.js:13888-14027 placement
-function getCredentialIndependentIneligibleReason(e = {}) {
+function getCredentialIndependentIneligibleReason(options = {}) {
   if (getAPIProvider() !== "firstParty") return "third_party_provider";
-  if (!e.skipBaseUrlCheck && !getPolicyLimitsTunnelSocket() && !isFirstPartyAnthropicBaseUrl())
+  if (!options.skipBaseUrlCheck && !getPolicyLimitsTunnelSocket() && !isFirstPartyAnthropicBaseUrl())
     return "custom_base_url";
   return;
 }
@@ -468,8 +479,8 @@ function isPolicyLimitsEligible() {
   return getPolicyLimitsIneligibleReason() === undefined;
 }
 //@ chunk-55ht3bcx.js:14062-14490 placement = isPolicyLimitsEligible (0.63)
-function getPolicyLimitsIneligibleReason(e = {}) {
-  let credentialIndependentIneligibleReason = getCredentialIndependentIneligibleReason(e);
+function getPolicyLimitsIneligibleReason(options = {}) {
+  let credentialIndependentIneligibleReason = getCredentialIndependentIneligibleReason(options);
   if (credentialIndependentIneligibleReason !== undefined) return credentialIndependentIneligibleReason;
   if (getPolicyLimitsTunnelSocket()) return;
   try {
@@ -504,15 +515,15 @@ function loadCachedResponse() {
   if (!policyLimitsState.hipaaEvidenceLoaded && !isTwinklingGlobeOn())
     applyStampReadToState(policyCacheStampForAdmission);
   policyLimitsState.storedCopyTrust = "not_asked";
-  let r;
+  let cached;
   try {
-    r = parseCachedResponse(readFileSync(getCachePath(), "utf-8"));
+    cached = parseCachedResponse(readFileSync(getCachePath(), "utf-8"));
   } catch {
     return null;
   }
-  if (r === null) return null;
+  if (cached === null) return null;
   try {
-    return admitCachedResponse(r, settleStampRead(policyCacheStampForAdmission));
+    return admitCachedResponse(cached, settleStampRead(policyCacheStampForAdmission));
   } catch (error) {
     logForDebugging(`Policy limits: cache admission failed (${errorMessage(error)}); cold start`, {
       level: "error",
@@ -521,45 +532,45 @@ function loadCachedResponse() {
   }
 }
 //@ chunk-55ht3bcx.js:14973-16292 placement
-function admitCachedResponse(e, n) {
+function admitCachedResponse(body, stampRead) {
   let policyLimitsState = getPolicyLimitsState();
   if (isTwinklingGlobeOn()) {
     policyLimitsState.lastStampVerdict = "disabled";
     policyLimitsState.lastStampMatchedIdentity = null;
     policyLimitsState.diskConfirmedAtMs = null;
     policyLimitsState.diskRefusedAtMs = null;
-    return applyStoredCopyTrust(e, undefined);
+    return applyStoredCopyTrust(body, undefined);
   }
-  let checksum = computeChecksum(serverBodyOf(e));
-  applyStampReadToState(n);
-  if (n.kind === "absent") {
+  let checksum = computeChecksum(serverBodyOf(body));
+  applyStampReadToState(stampRead);
+  if (stampRead.kind === "absent") {
     policyLimitsState.lastStampVerdict = "legacy";
     policyLimitsState.lastStampMatchedIdentity = null;
     policyLimitsState.diskBodyChecksum = checksum;
     policyLimitsState.diskConfirmedAtMs = null;
     policyLimitsState.diskRefusedAtMs = null;
-    return applyStoredCopyTrust(e, checksum);
+    return applyStoredCopyTrust(body, checksum);
   }
-  let stamp = n.kind === "ok" ? n.stamp : null;
+  let stamp = stampRead.kind === "ok" ? stampRead.stamp : null;
   let policyPrincipal = getPolicyPrincipal();
-  let c = policyPrincipal === null ? "" : identityDigestOfDescriptor(policyPrincipal);
-  let y = matchCacheStamp(stamp, c, checksum);
-  switch (((policyLimitsState.lastStampMatchedIdentity = null), y.kind)) {
+  let principalDigest = policyPrincipal === null ? "" : identityDigestOfDescriptor(policyPrincipal);
+  let stampMatch = matchCacheStamp(stamp, principalDigest, checksum);
+  switch (((policyLimitsState.lastStampMatchedIdentity = null), stampMatch.kind)) {
     case "match":
       policyLimitsState.lastStampVerdict = "match";
-      policyLimitsState.lastStampMatchedIdentity = c;
+      policyLimitsState.lastStampMatchedIdentity = principalDigest;
       policyLimitsState.diskBodyChecksum = checksum;
-      policyLimitsState.diskConfirmedAtMs = y.stamp.confirmed_at;
+      policyLimitsState.diskConfirmedAtMs = stampMatch.stamp.confirmed_at;
       policyLimitsState.diskRefusedAtMs = null;
-      let h = applyStoredCopyTrust(e, checksum);
-      if (h !== null) policyLimitsState.dropHintedTaints();
-      return h;
+      let admitted = applyStoredCopyTrust(body, checksum);
+      if (admitted !== null) policyLimitsState.dropHintedTaints();
+      return admitted;
     case "unstamped":
       policyLimitsState.lastStampVerdict = "torn";
       policyLimitsState.diskBodyChecksum = null;
       policyLimitsState.diskConfirmedAtMs = null;
       policyLimitsState.diskRefusedAtMs = Date.now();
-      policyLimitsState.hintFromRefusedBody(e);
+      policyLimitsState.hintFromRefusedBody(body);
       logForDebugging(
         "Policy limits: the cache stamp does not vouch for the cached body; cold start (its compliance taints and explicit denials still deny)",
       );
@@ -569,7 +580,7 @@ function admitCachedResponse(e, n) {
       policyLimitsState.diskBodyChecksum = null;
       policyLimitsState.diskConfirmedAtMs = null;
       policyLimitsState.diskRefusedAtMs = Date.now();
-      policyLimitsState.hintFromRefusedBody(e);
+      policyLimitsState.hintFromRefusedBody(body);
       logForDebugging(
         "Policy limits: the cache was written under another credential's identity; cold start (its compliance taints and explicit denials still deny until this credential's verdict lands)",
       );
@@ -580,56 +591,56 @@ function admitCachedResponse(e, n) {
 /**
  * 判定策略缓存副本是否可信（组织固定）。
  */
-function applyStoredCopyTrust(e, checksum) {
+function applyStoredCopyTrust(body, checksum) {
   let policyLimitsState = getPolicyLimitsState();
   if (!isSettingsGateSettled()) {
     policyLimitsState.storedCopyTrust = "not_asked";
-    return e;
+    return body;
   }
-  let s;
-  let l;
+  let reason;
+  let mdmState;
   try {
-    l = {
+    mdmState = {
       orgs: describeMdmSettingsState(),
     };
   } catch (error) {
     logForDebugging(`Policy limits: the admin organization pin is not known: ${errorMessage(error)}`);
-    l = undefined;
+    mdmState = undefined;
   }
-  if (l === undefined) s = "org_pin_unknown";
+  if (mdmState === undefined) reason = "org_pin_unknown";
   else
     try {
-      let f = verifySignedCache({
+      let verify = verifySignedCache({
         kind: "policy-limits",
         cachePath: getCachePath(),
-        body: serverBodyOf(e),
-        bodySha: checksum ?? computeChecksum(serverBodyOf(e)),
+        body: serverBodyOf(body),
+        bodySha: checksum ?? computeChecksum(serverBodyOf(body)),
         account: getStoredOauthAccountInfo(),
-        pinnedOrgs: l.orgs,
+        pinnedOrgs: mdmState.orgs,
         nowMs: Date.now(),
         roots: isSecDefaultPluginEnabled(),
       });
-      if (f.trusted) {
-        policyLimitsState.storedCopyTrust = f;
-        return e;
+      if (verify.trusted) {
+        policyLimitsState.storedCopyTrust = verify;
+        return body;
       }
-      s = f.reason;
+      reason = verify.reason;
     } catch (error) {
       logForDebugging(`Policy limits: the gate on a stored copy failed: ${errorMessage(error)}`, {
         level: "error",
       });
-      s = "error";
+      reason = "error";
     }
   policyLimitsState.storedCopyTrust = {
     trusted: false,
-    reason: s,
+    reason,
   };
   policyLimitsState.diskBodyChecksum = null;
   policyLimitsState.diskConfirmedAtMs = null;
   policyLimitsState.diskRefusedAtMs = Date.now();
-  policyLimitsState.hintFromRefusedBody(e);
+  policyLimitsState.hintFromRefusedBody(body);
   logForDebugging(
-    `Policy limits: the stored copy is not trusted at rest (${s}); cold start (its compliance taints and explicit denials still deny)`,
+    `Policy limits: the stored copy is not trusted at rest (${reason}); cold start (its compliance taints and explicit denials still deny)`,
   );
   return null;
 }
@@ -641,19 +652,19 @@ function getPolicyPrincipal() {
     policyLimitsState.principalRung = "tunnel";
     return null;
   }
-  let n = null;
-  let r = "none";
+  let apiKey = null;
+  let keySource = "none";
   try {
-    ({ key: n, source: r } = getAnthropicApiKeyWithSource());
+    ({ key: apiKey, source: keySource } = getAnthropicApiKeyWithSource());
   } catch {}
-  if (!n && shouldUseWIFAuth()) {
+  if (!apiKey && shouldUseWIFAuth()) {
     policyLimitsState.principalRung = "wif";
     if (policyLimitsState.wifAccountDiverged) return null;
     let wifPrecedenceSource = getWIFPrecedenceSource();
     let ANTHROPIC_PROFILE = env.ANTHROPIC_PROFILE;
-    let f;
+    let orgUuid;
     try {
-      f =
+      orgUuid =
         (wifPrecedenceSource === "env-quad"
           ? env.ANTHROPIC_ORGANIZATION_ID?.trim()
           : getWIFAccountInfo()?.organizationUuid?.trim()) || "";
@@ -674,21 +685,21 @@ function getPolicyPrincipal() {
       return null;
     }
     if (policyLimitsState.wifRecordedOrg === undefined)
-      policyLimitsState.wifRecordedOrg = f.toLowerCase() || null;
-    else if (policyLimitsState.wifRecordedOrg !== (f.toLowerCase() || null)) {
+      policyLimitsState.wifRecordedOrg = orgUuid.toLowerCase() || null;
+    else if (policyLimitsState.wifRecordedOrg !== (orgUuid.toLowerCase() || null)) {
       logForDebugging(
         "Policy limits: the WIF source now records a different organization than the one this process derived its principal from; its policy verdicts are session-only until restart",
       );
       policyLimitsState.wifAccountDiverged = true;
       return null;
     }
-    if (!f) return null;
-    let c = wifPrecedenceSource === "env-quad" ? null : resolveConfigDir();
-    let y =
+    if (!orgUuid) return null;
+    let configDir = wifPrecedenceSource === "env-quad" ? null : resolveConfigDir();
+    let sourceLocation =
       wifPrecedenceSource === "env-quad"
         ? federationProfileKey("env-quad")
         : ANTHROPIC_PROFILE
-          ? principalPathKey(c, ANTHROPIC_PROFILE)
+          ? principalPathKey(configDir, ANTHROPIC_PROFILE)
           : undefined;
     if (
       (wifPrecedenceSource === "profile-implicit" &&
@@ -696,13 +707,13 @@ function getPolicyPrincipal() {
         ANTHROPIC_PROFILE !== policyLimitsState.wifRecordProfile) ||
       (wifPrecedenceSource === "profile-explicit" &&
         (ANTHROPIC_PROFILE === undefined || ANTHROPIC_PROFILE !== policyLimitsState.wifRecordProfile)) ||
-      (y !== undefined && y !== policyLimitsState.wifSourceLocation) ||
-      (y === undefined &&
+      (sourceLocation !== undefined && sourceLocation !== policyLimitsState.wifSourceLocation) ||
+      (sourceLocation === undefined &&
         wifPrecedenceSource !== "env-quad" &&
         policyLimitsState.wifSourceLocation !== undefined &&
-        (c === null
+        (configDir === null
           ? policyLimitsState.wifSourceLocation !== ""
-          : !policyLimitsState.wifSourceLocation.startsWith(principalPathKey(c, ""))))
+          : !policyLimitsState.wifSourceLocation.startsWith(principalPathKey(configDir, ""))))
     ) {
       logForDebugging(
         "Policy limits: the environment now selects a different WIF source than the one this process derived its principal from; its policy verdicts are session-only until restart",
@@ -710,11 +721,11 @@ function getPolicyPrincipal() {
       policyLimitsState.wifAccountDiverged = true;
       return null;
     }
-    let h = normalizeUuidOrNull(f);
-    if (h) return shortArtifactIdPrincipal(h);
+    let uuid = normalizeUuidOrNull(orgUuid);
+    if (uuid) return shortArtifactIdPrincipal(uuid);
     return {
       kind: "wif",
-      descriptor: `wif:${tokenDigest([policyLimitsState.wifSourceLocation, f.toLowerCase()].join("\x00"))}`,
+      descriptor: `wif:${tokenDigest([policyLimitsState.wifSourceLocation, orgUuid.toLowerCase()].join("\x00"))}`,
     };
   }
   if (isClaudeAISubscriber()) {
@@ -724,15 +735,15 @@ function getPolicyPrincipal() {
       return policyCacheKey(accessToken);
     }
   }
-  if (r === "apiKeyHelper") {
+  if (keySource === "apiKeyHelper") {
     policyLimitsState.principalRung = "helper";
     return null;
   }
-  if (n) {
+  if (apiKey) {
     policyLimitsState.principalRung = "key";
     return {
       kind: "key",
-      descriptor: `key:${tokenDigest(n)}`,
+      descriptor: `key:${tokenDigest(apiKey)}`,
     };
   }
   return null;
@@ -741,9 +752,9 @@ function getPolicyPrincipal() {
 function noteWifAccountAtWire() {
   let policyLimitsState = getPolicyLimitsState();
   if (policyLimitsState.wifAccountDiverged || getAnthropicApiKeySafe() || !shouldUseWIFAuth()) return;
-  let n;
+  let diverged;
   try {
-    n =
+    diverged =
       policyLimitsState.wifSourceLocation !== undefined &&
       federationProfileKey(getWIFPrecedenceSource()) !== policyLimitsState.wifSourceLocation;
   } catch (error) {
@@ -753,20 +764,20 @@ function noteWifAccountAtWire() {
     policyLimitsState.wifAccountDiverged = true;
     return;
   }
-  if (n) {
+  if (diverged) {
     policyLimitsState.wifAccountDiverged = true;
     logForDebugging(
       "Policy limits: the active WIF source moved since this process derived its principal; its policy verdicts are session-only until restart",
     );
     return;
   }
-  let r;
+  let orgUuid;
   try {
     if (getWIFPrecedenceSource() === "env-quad")
-      r = env.ANTHROPIC_ORGANIZATION_ID?.trim().toLowerCase() || null;
+      orgUuid = env.ANTHROPIC_ORGANIZATION_ID?.trim().toLowerCase() || null;
     else {
       clearWIFAccountInfoCache();
-      r = getWIFAccountInfo()?.organizationUuid?.trim().toLowerCase() ?? null;
+      orgUuid = getWIFAccountInfo()?.organizationUuid?.trim().toLowerCase() ?? null;
     }
   } catch (error) {
     logForDebugging(
@@ -775,8 +786,8 @@ function noteWifAccountAtWire() {
     policyLimitsState.wifAccountDiverged = true;
     return;
   }
-  if (policyLimitsState.wifRecordedOrg === undefined) policyLimitsState.wifRecordedOrg = r;
-  else if (policyLimitsState.wifRecordedOrg !== r) {
+  if (policyLimitsState.wifRecordedOrg === undefined) policyLimitsState.wifRecordedOrg = orgUuid;
+  else if (policyLimitsState.wifRecordedOrg !== orgUuid) {
     policyLimitsState.wifAccountDiverged = true;
     logForDebugging(
       "Policy limits: the WIF profile now records a different organization than the one this process derived its principal from; its policy verdicts are session-only until restart",
@@ -790,39 +801,40 @@ function compareWifAccountOnDisk() {
     if (getAnthropicApiKeySafe() || !shouldUseWIFAuth() || getWIFPrecedenceSource() === "env-quad")
       return "not_in_use";
     let configDir = resolveConfigDir();
-    let r =
+    let configRecord =
       configDir === null
         ? undefined
         : readWIFAccountInfo(
             configDir,
             policyLimitsState.wifRecordProfile ?? resolveLiveProfileName(configDir),
           );
-    if (r === undefined) return "unreadable";
-    let s = normalizedOrgUuid(getWIFAccountInfo());
-    let l = policyLimitsState.wifRecordedOrg === undefined ? s : policyLimitsState.wifRecordedOrg;
-    if (normalizedOrgUuid(r) !== l) return "moved";
-    return s === l ? "same" : "memory_differs";
+    if (configRecord === undefined) return "unreadable";
+    let memoryOrg = normalizedOrgUuid(getWIFAccountInfo());
+    let expectedOrg =
+      policyLimitsState.wifRecordedOrg === undefined ? memoryOrg : policyLimitsState.wifRecordedOrg;
+    if (normalizedOrgUuid(configRecord) !== expectedOrg) return "moved";
+    return memoryOrg === expectedOrg ? "same" : "memory_differs";
   } catch {
     return "unreadable";
   }
 }
 //@ chunk-55ht3bcx.js:20472-20574 placement
-function normalizedOrgUuid(e) {
-  let organizationUuid = e?.organizationUuid;
+function normalizedOrgUuid(info) {
+  let organizationUuid = info?.organizationUuid;
   return typeof organizationUuid === "string" ? organizationUuid.trim().toLowerCase() || null : null;
 }
 //@ chunk-55ht3bcx.js:20574-20900 placement
-async function noteStoredLoginAccountAtWire(e, n) {
+async function noteStoredLoginAccountAtWire(storageV5, credentials) {
   let accessToken = getClaudeAIOAuthTokens()?.accessToken;
   if (!accessToken) return;
   let policyLimitsState = getPolicyLimitsState();
-  let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(n);
+  let claudeAIOAuthTokenOrigin = await getClaudeAIOAuthTokenOriginAsync(credentials);
   if (claudeAIOAuthTokenOrigin !== "store") {
     if (claudeAIOAuthTokenOrigin !== "none")
       policyLimitsState.storedLoginNotedTokenDigest = tokenDigest(accessToken);
     return;
   }
-  let storedLoginOrganizationAfresh = await readStoredLoginOrganizationAfresh(e);
+  let storedLoginOrganizationAfresh = await readStoredLoginOrganizationAfresh(storageV5);
   let accessToken_2 = getClaudeAIOAuthTokens()?.accessToken;
   if (!accessToken_2) return;
   policyLimitsState.storedLoginNotedTokenDigest = tokenDigest(accessToken_2);
@@ -836,12 +848,12 @@ function storedLoginAccountNeedsRead() {
   let accessToken = getClaudeAIOAuthTokens()?.accessToken;
   if (!accessToken) return false;
   let policyLimitsState = getPolicyLimitsState();
-  let r = tokenDigest(accessToken);
-  if (policyLimitsState.storedLoginNotedTokenDigest !== r) return true;
+  let tokenDigestValue = tokenDigest(accessToken);
+  if (policyLimitsState.storedLoginNotedTokenDigest !== tokenDigestValue) return true;
   let storedLoginAccountAtWire = policyLimitsState.storedLoginAccountAtWire;
   return (
     storedLoginAccountAtWire !== null &&
-    storedLoginAccountAtWire.tokenDigest === r &&
+    storedLoginAccountAtWire.tokenDigest === tokenDigestValue &&
     storedLoginAccountAtWire.organizationUuid !==
       (normalizeUuidOrNull(getStoredOauthAccountInfo()?.organizationUuid) ?? null)
   );
@@ -853,16 +865,16 @@ function storedLoginAccountNeedsRead() {
 function policyCacheKey(accessToken) {
   let policyLimitsState = getPolicyLimitsState();
   let storedOauthAccountInfo = getStoredOauthAccountInfo();
-  let s = normalizeUuidOrNull(env.CLAUDE_CODE_ORGANIZATION_UUID);
-  let l = tokenDigest(accessToken);
+  let envOrgUuid = normalizeUuidOrNull(env.CLAUDE_CODE_ORGANIZATION_UUID);
+  let tokenDigestValue = tokenDigest(accessToken);
   let storedLoginAccountAtWire = policyLimitsState.storedLoginAccountAtWire;
   let organizationUuid =
-    storedLoginAccountAtWire !== null && storedLoginAccountAtWire.tokenDigest === l
+    storedLoginAccountAtWire !== null && storedLoginAccountAtWire.tokenDigest === tokenDigestValue
       ? storedLoginAccountAtWire.organizationUuid
       : undefined;
   let joined = [
-    l,
-    s ?? "",
+    tokenDigestValue,
+    envOrgUuid ?? "",
     storedOauthAccountInfo?.organizationUuid ?? "",
     organizationUuid === undefined ? "" : `fresh:${organizationUuid ?? "-"}`,
     env.CLAUDE_CODE_OAUTH_TOKEN ? "env" : "",
@@ -873,26 +885,26 @@ function policyCacheKey(accessToken) {
     (oauthPrincipalMemo.expiresAtMs === null || Date.now() < oauthPrincipalMemo.expiresAtMs)
   )
     return oauthPrincipalMemo.principal;
-  let m = {
+  let principal = {
     kind: "token",
-    descriptor: `token:${l}`,
+    descriptor: `token:${tokenDigestValue}`,
   };
   let daemonSnapshotWorker = false;
   let claudeAIOAuthTokenOrigin = getClaudeAIOAuthTokenOrigin();
   switch (claudeAIOAuthTokenOrigin) {
     case "store": {
-      let S = normalizeUuidOrNull(storedOauthAccountInfo?.organizationUuid) ?? null;
-      if (organizationUuid !== undefined && organizationUuid !== S)
-        m = {
+      let storedOrg = normalizeUuidOrNull(storedOauthAccountInfo?.organizationUuid) ?? null;
+      if (organizationUuid !== undefined && organizationUuid !== storedOrg)
+        principal = {
           kind: "token",
-          descriptor: `token:${l}`,
+          descriptor: `token:${tokenDigestValue}`,
           unclassified: true,
         };
-      else if (S) m = shortArtifactIdPrincipal(S);
+      else if (storedOrg) principal = shortArtifactIdPrincipal(storedOrg);
       else
-        m = {
+        principal = {
           kind: "token",
-          descriptor: `token:${l}`,
+          descriptor: `token:${tokenDigestValue}`,
           storedLoginOrgless: true,
         };
       break;
@@ -900,47 +912,49 @@ function policyCacheKey(accessToken) {
     case "env":
     case "fd":
       if (claudeAIOAuthTokenOrigin === "fd" && isOauthTokenFromBgSnapshot() && !isHostManagedProviderAuth()) {
-        let S = normalizeUuidOrNull(getOauthOrgFromBgSnapshot());
-        let Ce = normalizeUuidOrNull(storedOauthAccountInfo?.organizationUuid);
-        m =
-          S !== null && S.toLowerCase() === Ce?.toLowerCase()
+        let snapshotOrg = normalizeUuidOrNull(getOauthOrgFromBgSnapshot());
+        let storedOrg = normalizeUuidOrNull(storedOauthAccountInfo?.organizationUuid);
+        principal =
+          snapshotOrg !== null && snapshotOrg.toLowerCase() === storedOrg?.toLowerCase()
             ? {
-                ...shortArtifactIdPrincipal(S),
+                ...shortArtifactIdPrincipal(snapshotOrg),
                 admitsOnly: true,
               }
             : null;
         daemonSnapshotWorker = true;
-      } else if (s)
-        m = {
-          ...shortArtifactIdPrincipal(s),
-          bearerDigest: l,
+      } else if (envOrgUuid)
+        principal = {
+          ...shortArtifactIdPrincipal(envOrgUuid),
+          bearerDigest: tokenDigestValue,
         };
       break;
     case "none":
-      m = {
+      principal = {
         kind: "token",
-        descriptor: `token:${l}`,
+        descriptor: `token:${tokenDigestValue}`,
         unclassified: true,
       };
       break;
   }
   policyLimitsState.oauthPrincipalMemo = {
     key: joined,
-    principal: m,
+    principal,
     daemonSnapshotWorker,
     expiresAtMs:
-      claudeAIOAuthTokenOrigin === "none" || m === null ? Date.now() + UNCLASSIFIED_ORIGIN_MEMO_MS : null,
+      claudeAIOAuthTokenOrigin === "none" || principal === null
+        ? Date.now() + UNCLASSIFIED_ORIGIN_MEMO_MS
+        : null,
   };
-  return m;
+  return principal;
 }
 //@ chunk-55ht3bcx.js:22225-22294 placement
 /**
  * 由短 artifact id 得到策略主体（不可用时返回 null）。
  */
-function shortArtifactIdPrincipal(e) {
+function shortArtifactIdPrincipal(orgUuid) {
   return {
     kind: "org",
-    descriptor: `org:${e.toLowerCase()}`,
+    descriptor: `org:${orgUuid.toLowerCase()}`,
   };
 }
 //@ chunk-55ht3bcx.js:22294-22629 placement
@@ -1008,4 +1022,7 @@ export {
   _resetMachinePinsSignInForTesting,
   UNCLASSIFIED_ORIGIN_MEMO_MS,
   POLICY_LIMITS_CACHE_FILENAME,
+  PolicyState,
+  compareWifAccountOnDisk,
+  policyStates,
 };

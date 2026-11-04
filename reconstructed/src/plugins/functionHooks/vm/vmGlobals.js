@@ -59,7 +59,7 @@ import {
   describeLogArg,
   createVmInboundCopier,
   createVmRealm,
-  vUe,
+  NO_IMPORT_OPTIONS,
   callWithArgs,
   createVmErrorDescriber,
   VM_HOST_FN_WRAPPER,
@@ -75,26 +75,29 @@ import {
 import { HooksError, hasWeakSetTag, addWeakSetTag, tagError, readTag } from "../hooksErrors.js";
 import { isUntrustedObject } from "../../../utils/untrustedValues.js";
 import { SubAgentContext } from "../../../components/CtrlOToExpand.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:230219-230408 placement
 /**
  * 为 VM 构造冻结的 console（log/info/warn/error/debug），输出带插件前缀写入调试日志。
  */
-function createVmConsole(e, o) {
-  let r = (n) =>
+function createVmConsole(wrapMethod, label) {
+  let logAt = (level) =>
     nullPrototypeFunction(
-      e((...s) => matcherLog().log(`${o} console.${n}: ${s.map(describeLogArg).join(" ")}`)),
+      wrapMethod((...args) =>
+        matcherLog().log(`${label} console.${level}: ${args.map(describeLogArg).join(" ")}`),
+      ),
     );
   return freezeApiObject({
-    log: r("log"),
-    info: r("info"),
-    warn: r("warn"),
-    error: r("error"),
-    debug: r("debug"),
+    log: logAt("log"),
+    info: logAt("info"),
+    warn: logAt("warn"),
+    error: logAt("error"),
+    debug: logAt("debug"),
   });
 }
 //@ chunk-4121qate.js:230430-232816 placement
-var VM_MATCHER_SOURCE = (e) =>
+var VM_MATCHER_SOURCE = (context) =>
   vmModule_2.runInContext(
     withUseStrict(`(() => {
       const _isArray = Array.isArray, _keys = Object.keys,
@@ -156,13 +159,13 @@ var VM_MATCHER_SOURCE = (e) =>
       }
       return matcher => copy(matcher, 0, { left: ${MAX_MATCHER_KEYS} })
     })()`),
-    e,
+    context,
   );
 //@ chunk-4121qate.js:232838-233062 placement
 /**
  * 在 VM 上下文中创建 "value instanceof Object" 判断函数（异常返回 false）。
  */
-var createVmInstanceofObject = (e) =>
+var createVmInstanceofObject = (context) =>
   vmModule_2.runInContext(
     withUseStrict(`(() => {
       const _Object = Object
@@ -174,64 +177,64 @@ var createVmInstanceofObject = (e) =>
         }
       }
     })()`),
-    e,
+    context,
   );
 //@ chunk-4121qate.js:233062-233135 placement
 /**
  * VM 入站复制器
  */
-function inboundCopier(e) {
-  return createVmInboundCopier(e, {
+function inboundCopier(context) {
+  return createVmInboundCopier(context, {
     arrayLengthCap: undefined,
     protoKey: "carried",
   });
 }
 //@ chunk-4121qate.js:233189-233399 placement
-var serializeUrl = (e) =>
+var serializeUrl = (url) =>
   JSON.stringify({
-    href: e.href,
-    origin: e.origin,
-    protocol: e.protocol,
-    username: e.username,
-    password: e.password,
-    host: e.host,
-    hostname: e.hostname,
-    port: e.port,
-    pathname: e.pathname,
-    search: e.search,
-    hash: e.hash,
+    href: url.href,
+    origin: url.origin,
+    protocol: url.protocol,
+    username: url.username,
+    password: url.password,
+    host: url.host,
+    hostname: url.hostname,
+    port: url.port,
+    pathname: url.pathname,
+    search: url.search,
+    hash: url.hash,
   });
 //@ chunk-4121qate.js:233443-233524 placement
 /**
  * 断言 ArrayBuffer
  */
-function requireArrayBuffer(e) {
-  if (!isArrayBuffer(e)) throw TypeError("an ArrayBuffer was expected");
-  return e;
+function requireArrayBuffer(value) {
+  if (!isArrayBuffer(value)) throw TypeError("an ArrayBuffer was expected");
+  return value;
 }
 //@ chunk-4121qate.js:233524-233616 placement
 /**
  * 断言函数
  */
-function requireFunction(e) {
-  if (typeof e !== "function") throw TypeError("a function was expected");
-  return e;
+function requireFunction(value) {
+  if (typeof value !== "function") throw TypeError("a function was expected");
+  return value;
 }
 //@ chunk-4121qate.js:233659-233738 placement
 /**
  * 断言 Uint8Array
  */
-function requireUint8Array(e) {
-  if (!isUint8Array(e)) throw TypeError("a Uint8Array was expected");
-  return e;
+function requireUint8Array(value) {
+  if (!isUint8Array(value)) throw TypeError("a Uint8Array was expected");
+  return value;
 }
 //@ chunk-4121qate.js:233738-233826 placement
 /**
  * 断言字符串
  */
-function requireString(e) {
-  if (typeof e !== "string") throw TypeError("a string was expected");
-  return e;
+function requireString(value) {
+  if (typeof value !== "string") throw TypeError("a string was expected");
+  return value;
 }
 //@ chunk-4121qate.js:233826-234554 placement
 /**
@@ -239,45 +242,45 @@ function requireString(e) {
  */
 var createVmHostHelpers = (root) => ({
   root,
-  byteLength: (o) => Buffer.byteLength(requireString(o), "utf8"),
-  encodeInto: (o, r) => {
-    new TextEncoder().encodeInto(requireString(o), requireUint8Array(r));
+  byteLength: (text) => Buffer.byteLength(requireString(text), "utf8"),
+  encodeInto: (text, target) => {
+    new TextEncoder().encodeInto(requireString(text), requireUint8Array(target));
   },
-  decodeUtf8: (o, r) =>
+  decodeUtf8: (bytes, isFatal) =>
     new TextDecoder("utf-8", {
-      fatal: r === true,
-    }).decode(requireUint8Array(o)),
-  parseUrl: (o, r) => {
-    let n = requireString(o);
-    let s = r === undefined ? r : requireString(r);
+      fatal: isFatal === true,
+    }).decode(requireUint8Array(bytes)),
+  parseUrl: (input, baseUrl) => {
+    let text = requireString(input);
+    let base = baseUrl === undefined ? baseUrl : requireString(baseUrl);
     try {
-      return serializeUrl(new URL(n, s));
+      return serializeUrl(new URL(text, base));
     } catch {
       return null;
     }
   },
-  setUrlPart: (o, r, n) => {
-    let s = requireString(o);
-    let i = requireString(r);
-    let p = requireString(n);
+  setUrlPart: (input, part, value) => {
+    let inputText = requireString(input);
+    let partName = requireString(part);
+    let partValue = requireString(value);
     try {
-      let f = new URL(s);
-      f[i] = p;
-      return serializeUrl(f);
+      let url = new URL(inputText);
+      url[partName] = partValue;
+      return serializeUrl(url);
     } catch {
       return null;
     }
   },
-  atob: (o) => globalThis.atob(requireString(o)),
-  btoa: (o) => globalThis.btoa(requireString(o)),
+  atob: (text) => globalThis.atob(requireString(text)),
+  btoa: (text) => globalThis.btoa(requireString(text)),
   randomUUID: () => crypto.randomUUID(),
-  fillRandom: (o) => {
-    crypto.getRandomValues(requireUint8Array(o));
+  fillRandom: (target) => {
+    crypto.getRandomValues(requireUint8Array(target));
   },
-  digestInto: async (o, r, n) => {
-    let s = requireFunction(n);
-    let i = await crypto.subtle.digest(requireString(o), requireUint8Array(r));
-    new Uint8Array(requireArrayBuffer(s(i.byteLength))).set(new Uint8Array(i));
+  digestInto: async (algorithm, data, alloc) => {
+    let allocBuffer = requireFunction(alloc);
+    let digest = await crypto.subtle.digest(requireString(algorithm), requireUint8Array(data));
+    new Uint8Array(requireArrayBuffer(allocBuffer(digest.byteLength))).set(new Uint8Array(digest));
   },
   now: () => performance.now(),
 });
@@ -312,15 +315,15 @@ function fireTimerOnce({ timers, id, fire }) {
 /**
  * 执行 VM 前导源码
  */
-var runVmPrelude = (e, o) =>
-  vmModule_2.runInContext(withUseStrict(VM_PRELUDE_SOURCE), e)(vmHostHelpers(resolve(o)));
+var runVmPrelude = (context, pluginRoot) =>
+  vmModule_2.runInContext(withUseStrict(VM_PRELUDE_SOURCE), context)(vmHostHelpers(resolve(pluginRoot)));
 //@ chunk-4121qate.js:234879-234925 placement
 /**
  * 出错返回 false
  */
-function safeCall(e) {
+function safeCall(fn) {
   try {
-    return e();
+    return fn();
   } catch {
     return false;
   }
@@ -329,12 +332,12 @@ function safeCall(e) {
 /**
  * 是否 VM 内 Error
  */
-var isVmError = (e) => safeCall(() => e instanceof Error);
+var isVmError = (value) => safeCall(() => value instanceof Error);
 //@ chunk-4121qate.js:234987-235753 placement
 /**
  * 改写 VM 中 Object.prototype.__proto__ 的 setter：对普通对象定义为自有属性而非修改原型（防原型污染）。
  */
-function patchProtoSetter(e) {
+function patchProtoSetter(context) {
   vmModule_2.runInContext(
     withUseStrict(`(() => {
       const define = Object.defineProperty
@@ -358,7 +361,7 @@ function patchProtoSetter(e) {
         configurable: true,
       })
     })()`),
-    e,
+    context,
   );
 }
 //@ chunk-4121qate.js:235753-235784 placement
@@ -413,7 +416,9 @@ var MAX_COPY_DEPTH = 64;
 /**
  * VM 边界复制出值的源码字符串（深度上限、错误包装）
  */
-var VM_COPY_OUT_SOURCE = `(kindOf => {
+var VM_COPY_OUT_SOURCE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:236826", () => {
+  VM_COPY_OUT_SOURCE = `(kindOf => {
   // Taken now, before any plugin runs: the global's bindings are the
   // plugin's to replace.
   const apply = Reflect.apply
@@ -958,6 +963,7 @@ var VM_COPY_OUT_SOURCE = `(kindOf => {
     refusal: made => REASONS.get(made),
   })
 })`;
+});
 //@ chunk-4121qate.js:257251-263210 placement
 /**
  * VM 内元素构造器表源码：本地元素构建时冻结并补上未接线的回调槽，外来构造器的结果按地址重接 onPress/onEvent 闭包。
@@ -1274,191 +1280,213 @@ var VM_HOST_CALL_WRAPPER_SOURCE = `(intoEnvironment => {
 /**
  * 修补 VM 中 Error 的 instanceof：宿主错误与 VM 内错误都识别为 Error。
  */
-function patchErrorHasInstance(e) {
-  let o = vmModule_2.runInContext(withUseStrict("Error"), e);
-  let r = Function.prototype[Symbol.hasInstance];
+function patchErrorHasInstance(context) {
+  let contextError = vmModule_2.runInContext(withUseStrict("Error"), context);
+  let defaultHasInstance = Function.prototype[Symbol.hasInstance];
   vmModule_2.runInContext(
     withUseStrict(ERROR_HAS_INSTANCE_SOURCE),
-    e,
-  )(nullPrototypeFunction((n) => isVmError(n) || safeCall(() => r.call(o, n))));
+    context,
+  )(
+    nullPrototypeFunction(
+      (value) => isVmError(value) || safeCall(() => defaultHasInstance.call(contextError, value)),
+    ),
+  );
 }
 //@ chunk-4121qate.js:267564-268076 placement
 /**
  * 创建 VM 与宿主之间的错误转换：fromEnvironment 转为 HooksError，intoEnvironment 转为环境内错误。
  */
-function createErrorConverters(vmErrorDescriber, o, vmInstanceofObject) {
-  function n(i) {
-    if (isVmError(i)) return i;
-    let { name: p, message } = vmErrorDescriber(i);
-    let a = new HooksError(message === "" ? p : message);
-    if (message !== "" && p !== a.name) a.thrownName = p;
-    return hasWeakSetTag(i) ? addWeakSetTag(a) : a;
+function createErrorConverters(vmErrorDescriber, makers, vmInstanceofObject) {
+  function fromEnvironment(error) {
+    if (isVmError(error)) return error;
+    let { name, message } = vmErrorDescriber(error);
+    let converted = new HooksError(message === "" ? name : message);
+    if (message !== "" && name !== converted.name) converted.thrownName = name;
+    return hasWeakSetTag(error) ? addWeakSetTag(converted) : converted;
   }
-  function s(i) {
-    if (isVmError(i)) {
-      let m = tagError(
-        o.makeError((i instanceof HooksError ? i.thrownName : undefined) ?? i.name, i.message),
-        readTag(i),
+  function intoEnvironment(error) {
+    if (isVmError(error)) {
+      let made = tagError(
+        makers.makeError(
+          (error instanceof HooksError ? error.thrownName : undefined) ?? error.name,
+          error.message,
+        ),
+        readTag(error),
       );
-      return hasWeakSetTag(i) ? addWeakSetTag(m) : m;
+      return hasWeakSetTag(error) ? addWeakSetTag(made) : made;
     }
-    if (i === null || (typeof i !== "object" && typeof i !== "function") || vmInstanceofObject(i)) return i;
-    let { name: f, message } = i;
-    return o.makeError(
-      typeof f === "string" ? f : "Error",
-      typeof message === "string" ? message : errorMessage(i),
+    if (
+      error === null ||
+      (typeof error !== "object" && typeof error !== "function") ||
+      vmInstanceofObject(error)
+    )
+      return error;
+    let { name, message } = error;
+    return makers.makeError(
+      typeof name === "string" ? name : "Error",
+      typeof message === "string" ? message : errorMessage(error),
     );
   }
   return {
-    fromEnvironment: n,
-    intoEnvironment: s,
+    fromEnvironment,
+    intoEnvironment,
   };
 }
 //@ chunk-4121qate.js:268548-268898 placement
 /**
  * 值种类判断表（veiled、array、typed、map、set、date 等）。
  */
-var VALUE_KIND_TESTS = [
-  [isUntrustedObject, "veiled"],
-  [Array.isArray, "array"],
-  [isTypedArray, "typed"],
-  [isDataView, "window"],
-  [isArrayBuffer, "buffer"],
-  [isMap, "map"],
-  [isSet, "set"],
-  [isDate, "date"],
-  [isRegExp, "pattern"],
-  [isNativeError, "error"],
-  [isNumberObject, "number"],
-  [isStringObject, "string"],
-  [isBooleanObject, "boolean"],
-  [isBigIntObject, "bigint"],
-  [isArgumentsObject, "arguments"],
-  [isSharedArrayBuffer, "veiled"],
-  [isPromise, "veiled"],
-  [isWeakMap, "veiled"],
-  [isWeakSet, "veiled"],
-  [isGeneratorObject, "veiled"],
-  [isSymbolObject, "veiled"],
-  [isMapIterator, "veiled"],
-  [isSetIterator, "veiled"],
-  [isModuleNamespaceObject, "veiled"],
-];
+var VALUE_KIND_TESTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:268548", () => {
+  VALUE_KIND_TESTS = [
+    [isUntrustedObject, "veiled"],
+    [Array.isArray, "array"],
+    [isTypedArray, "typed"],
+    [isDataView, "window"],
+    [isArrayBuffer, "buffer"],
+    [isMap, "map"],
+    [isSet, "set"],
+    [isDate, "date"],
+    [isRegExp, "pattern"],
+    [isNativeError, "error"],
+    [isNumberObject, "number"],
+    [isStringObject, "string"],
+    [isBooleanObject, "boolean"],
+    [isBigIntObject, "bigint"],
+    [isArgumentsObject, "arguments"],
+    [isSharedArrayBuffer, "veiled"],
+    [isPromise, "veiled"],
+    [isWeakMap, "veiled"],
+    [isWeakSet, "veiled"],
+    [isGeneratorObject, "veiled"],
+    [isSymbolObject, "veiled"],
+    [isMapIterator, "veiled"],
+    [isSetIterator, "veiled"],
+    [isModuleNamespaceObject, "veiled"],
+  ];
+});
 //@ chunk-4121qate.js:268898-268907 placement
 /**
  * 2
  */
 var KIND_SLACK = 2;
 //@ chunk-4121qate.js:268907-268941 placement
-var mapped = VALUE_KIND_TESTS.slice(KIND_SLACK).map(([e]) => e);
+var mapped; // deferred: uses VALUE_KIND_TESTS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:268907", () => {
+  mapped = VALUE_KIND_TESTS.slice(KIND_SLACK).map(([test]) => test);
+});
 //@ chunk-4121qate.js:268941-268998 placement
 /**
  * 任一谓词为真
  */
-function anyPredicate(e) {
-  for (let o of mapped) if (o(e)) return true;
+function anyPredicate(value) {
+  for (let test of mapped) if (test(value)) return true;
   return false;
 }
 //@ chunk-4121qate.js:268998-269098 placement
 /**
  * 判断值的种类（record、array、typed、map、set、date、error、veiled 等）。
  */
-function valueKindOf(e) {
-  return !isUntrustedObject(e) && !Array.isArray(e) && !anyPredicate(e)
+function valueKindOf(value) {
+  return !isUntrustedObject(value) && !Array.isArray(value) && !anyPredicate(value)
     ? "record"
-    : (VALUE_KIND_TESTS.find(([r]) => r(e))?.[1] ?? "record");
+    : (VALUE_KIND_TESTS.find(([test]) => test(value))?.[1] ?? "record");
 }
 //@ chunk-4121qate.js:269098-269144 placement
 /**
  * 执行值种类判定
  */
-var runValueKindOf = (e) =>
-  vmModule_2.runInContext(withUseStrict(VM_COPY_OUT_SOURCE), e)(nullPrototypeFunction(valueKindOf));
+var runValueKindOf = (context) =>
+  vmModule_2.runInContext(withUseStrict(VM_COPY_OUT_SOURCE), context)(nullPrototypeFunction(valueKindOf));
 //@ chunk-4121qate.js:269166-269513 placement
 /**
  * 检查答案原型链上的 then 是否已固定为不可变的非函数。
  */
-function isThenFixed(e) {
-  let r = typeof e === "function" || (typeof e === "object" && e !== null) ? e : null;
-  for (let n = 0; r !== null; n += 1) {
-    if (isUntrustedObject(r)) return false;
-    let s = Reflect.isExtensible(r);
-    let ownPropertyDescriptor = Reflect.getOwnPropertyDescriptor(r, "then");
+function isThenFixed(value) {
+  let current = typeof value === "function" || (typeof value === "object" && value !== null) ? value : null;
+  for (let depth = 0; current !== null; depth += 1) {
+    if (isUntrustedObject(current)) return false;
+    let isExtensible = Reflect.isExtensible(current);
+    let ownPropertyDescriptor = Reflect.getOwnPropertyDescriptor(current, "then");
     if (ownPropertyDescriptor !== undefined)
       return (
         ownPropertyDescriptor.writable === false &&
         ownPropertyDescriptor.configurable === false &&
         typeof ownPropertyDescriptor.value !== "function"
       );
-    if (s || n === MAX_COPY_DEPTH) return false;
-    r = Reflect.getPrototypeOf(r);
+    if (isExtensible || depth === MAX_COPY_DEPTH) return false;
+    current = Reflect.getPrototypeOf(current);
   }
   return true;
 }
 //@ chunk-4121qate.js:269513-269677 placement
-function createAnswerSettler(e) {
-  let o = vmModule_2.runInContext(withUseStrict(VM_ANSWER_PIN_SOURCE), e);
-  return async (r) => {
-    let n = await o(r);
-    if (!isThenFixed(n.v)) throw new HooksError("the answer holds a `then` that is not fixed");
-    return n;
+function createAnswerSettler(context) {
+  let pin = vmModule_2.runInContext(withUseStrict(VM_ANSWER_PIN_SOURCE), context);
+  return async (promise) => {
+    let settled = await pin(promise);
+    if (!isThenFixed(settled.v)) throw new HooksError("the answer holds a `then` that is not fixed");
+    return settled;
   };
 }
 //@ chunk-4121qate.js:269677-270409 placement
 /**
  * 创建 hooks VM 上下文（禁止字符串与 wasm 代码生成），装好 Error/proto 补丁与 realm，返回一组 VM 调用、克隆、错误转换与流工具。
  */
-function createVmContext(e) {
-  let o = nullPrototypeObject();
-  let r = SubAgentContext(o, {
+function createVmContext(pluginRoot) {
+  let globals = nullPrototypeObject();
+  let context = SubAgentContext(globals, {
     codeGeneration: {
       strings: false,
       wasm: false,
     },
   });
-  patchErrorHasInstance(r);
-  patchProtoSetter(r);
-  createVmRealm(r, vUe);
-  let vmCall = callWithArgs(r);
+  patchErrorHasInstance(context);
+  patchProtoSetter(context);
+  createVmRealm(context, NO_IMPORT_OPTIONS);
+  let vmCall = callWithArgs(context);
   let vmApply = vmModule_2.runInContext(
     withUseStrict("((self, fn, ...args) => Reflect.apply(fn, self, args))"),
-    r,
+    context,
   );
-  let vmSettle = createAnswerSettler(r);
-  let vmErrorDescriber = createVmErrorDescriber(r);
-  let vmInstanceofObject = createVmInstanceofObject(r);
-  let copyMatcher = VM_MATCHER_SOURCE(r);
-  let m = inboundCopier(r);
-  let vmAsyncWrap = VM_HOST_FN_WRAPPER(r);
-  let u = runValueKindOf(r);
-  let l = runVmPrelude(r, e);
-  let { fromEnvironment, intoEnvironment } = createErrorConverters(vmErrorDescriber, l, vmInstanceofObject);
+  let vmSettle = createAnswerSettler(context);
+  let vmErrorDescriber = createVmErrorDescriber(context);
+  let vmInstanceofObject = createVmInstanceofObject(context);
+  let copyMatcher = VM_MATCHER_SOURCE(context);
+  let vmClone = inboundCopier(context);
+  let vmAsyncWrap = VM_HOST_FN_WRAPPER(context);
+  let leaving = runValueKindOf(context);
+  let makers = runVmPrelude(context, pluginRoot);
+  let { fromEnvironment, intoEnvironment } = createErrorConverters(
+    vmErrorDescriber,
+    makers,
+    vmInstanceofObject,
+  );
   let wrapMethod = vmModule_2.runInContext(
     withUseStrict(VM_HOST_CALL_WRAPPER_SOURCE),
-    r,
+    context,
   )(nullPrototypeFunction(intoEnvironment));
   return {
-    globals: o,
-    context: r,
-    makers: l,
+    globals,
+    context,
+    makers,
     vmCall,
     vmApply,
     vmSettle,
     vmOwns: vmInstanceofObject,
     copyMatcher,
-    vmClone: m,
-    cloneIn: (T) => deepFreezeInPlace(m(T)),
-    leavingCopy: u.copy,
-    leavingAnswer: u.answer,
-    freezeOwn: u.freeze,
-    leavingRefusal: u.refusal,
+    vmClone,
+    cloneIn: (value) => deepFreezeInPlace(vmClone(value)),
+    leavingCopy: leaving.copy,
+    leavingAnswer: leaving.answer,
+    freezeOwn: leaving.freeze,
+    leavingRefusal: leaving.refusal,
     vmAsyncWrap,
     fromEnvironment,
     intoEnvironment,
     wrapMethod,
-    vmIterate: vmModule_2.runInContext(withUseStrict(VM_ITERATE_SOURCE), r),
-    vmStream: vmModule_2.runInContext(withUseStrict(VM_STREAM_SOURCE), r),
-    isGeneratorHook: vmModule_2.runInContext(withUseStrict(IS_ASYNC_GENERATOR_SOURCE), r),
+    vmIterate: vmModule_2.runInContext(withUseStrict(VM_ITERATE_SOURCE), context),
+    vmStream: vmModule_2.runInContext(withUseStrict(VM_STREAM_SOURCE), context),
+    isGeneratorHook: vmModule_2.runInContext(withUseStrict(IS_ASYNC_GENERATOR_SOURCE), context),
   };
 }
 //@ chunk-4121qate.js:270409-270419 placement

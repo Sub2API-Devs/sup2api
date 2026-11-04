@@ -15,6 +15,7 @@ import {
   getAllowedSettingSourcesAsConfigured,
   getAllowedSettingSources,
 } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-5hsd6qen.js:3444-3534 facade-exports = SETTING_SOURCES (1)
 /**
@@ -100,23 +101,23 @@ function getSettingSourceDisplayNameCapitalized(enabledSettingSource) {
  */
 function parseSettingSourcesFlag(flag) {
   if (flag === "") return [];
-  let names = flag.split(",").map((o) => o.trim());
-  let t = [];
+  let names = flag.split(",").map((name) => name.trim());
+  let sources = [];
   for (let name of names) {
-    let found = SETTING_SOURCE_FLAG_PAIRS.find(([s]) => s === name);
+    let found = SETTING_SOURCE_FLAG_PAIRS.find(([alias]) => alias === name);
     if (!found) {
-      let joined = SETTING_SOURCE_FLAG_PAIRS.map(([c]) => c).join(", ");
+      let joined = SETTING_SOURCE_FLAG_PAIRS.map(([alias]) => alias).join(", ");
       throw Error(`Invalid setting source: ${name}. Valid options are: ${joined}`);
     }
-    t.push(found[1]);
+    sources.push(found[1]);
   }
-  return t;
+  return sources;
 }
 //@ chunk-5hsd6qen.js:4988-5100 layout
 function formatSettingSourcesFlag(allowedSettingSourcesAsConfigured) {
-  let mapped = SETTING_SOURCE_FLAG_PAIRS.filter(([, t]) => allowedSettingSourcesAsConfigured.includes(t)).map(
-    ([t]) => t,
-  );
+  let mapped = SETTING_SOURCE_FLAG_PAIRS.filter(([, source]) =>
+    allowedSettingSourcesAsConfigured.includes(source),
+  ).map(([alias]) => alias);
   return mapped.length === SETTING_SOURCE_FLAG_PAIRS.length ? undefined : mapped.join(",");
 }
 //@ chunk-5hsd6qen.js:5100-5146 facade-exports
@@ -126,8 +127,8 @@ function appliedSettingSourcesFlagValue() {
 }
 //@ chunk-5hsd6qen.js:5146-5221 facade-exports
 function appliedSettingSourcesArgv() {
-  let e = appliedSettingSourcesFlagValue();
-  return e === undefined ? [] : [`--setting-sources=${e}`];
+  let flagValue = appliedSettingSourcesFlagValue();
+  return flagValue === undefined ? [] : [`--setting-sources=${flagValue}`];
 }
 //@ chunk-5hsd6qen.js:5221-5459 facade-exports
 /**
@@ -135,13 +136,13 @@ function appliedSettingSourcesArgv() {
  */
 function getEnabledSettingSources() {
   let allowedSettingSources = getAllowedSettingSources();
-  let n = commandSyncNameState();
-  if (n.enabledSources?.allowed === allowedSettingSources) return n.enabledSources.result;
-  let t = new Set(allowedSettingSources);
-  t.add("flagSettings");
-  t.add("policySettings");
-  let filtered = SETTING_SOURCES.filter((i) => t.has(i));
-  n.enabledSources = {
+  let cache = commandSyncNameState();
+  if (cache.enabledSources?.allowed === allowedSettingSources) return cache.enabledSources.result;
+  let allowed = new Set(allowedSettingSources);
+  allowed.add("flagSettings");
+  allowed.add("policySettings");
+  let filtered = SETTING_SOURCES.filter((source) => allowed.has(source));
+  cache.enabledSources = {
     allowed: allowedSettingSources,
     result: filtered,
   };
@@ -158,15 +159,25 @@ function isSettingSourceEnabled(source) {
 /**
  * 可由 --setting-sources 选择的三个来源 [user, project, local]；同语句定义仓库目录来源列表/集合与 flag 名映射。
  */
-var EDITABLE_SETTING_SOURCES = ["userSettings", "projectSettings", "localSettings"];
-var REPO_DIR_SETTING_SOURCE_LIST = ["projectSettings", "localSettings"];
-var REPO_DIR_SETTING_SOURCES = new Set(REPO_DIR_SETTING_SOURCE_LIST);
-var SETTING_SOURCE_FLAG_NAMES = {
-  userSettings: "user",
-  projectSettings: "project",
-  localSettings: "local",
-};
-var SETTING_SOURCE_FLAG_PAIRS = EDITABLE_SETTING_SOURCES.map((e) => [SETTING_SOURCE_FLAG_NAMES[e], e]);
+var EDITABLE_SETTING_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REPO_DIR_SETTING_SOURCE_LIST;
+var REPO_DIR_SETTING_SOURCES;
+var SETTING_SOURCE_FLAG_NAMES;
+var SETTING_SOURCE_FLAG_PAIRS;
+deferInit("chunk-5hsd6qen.js:5498", () => {
+  EDITABLE_SETTING_SOURCES = ["userSettings", "projectSettings", "localSettings"];
+  REPO_DIR_SETTING_SOURCE_LIST = ["projectSettings", "localSettings"];
+  REPO_DIR_SETTING_SOURCES = new Set(REPO_DIR_SETTING_SOURCE_LIST);
+  SETTING_SOURCE_FLAG_NAMES = {
+    userSettings: "user",
+    projectSettings: "project",
+    localSettings: "local",
+  };
+  SETTING_SOURCE_FLAG_PAIRS = EDITABLE_SETTING_SOURCES.map((source) => [
+    SETTING_SOURCE_FLAG_NAMES[source],
+    source,
+  ]);
+});
 //@ chunk-5hsd6qen.js:5706-5796 facade-exports = supportsPersistence (0.756)
 var SOURCES = ["localSettings", "projectSettings", "userSettings"];
 var INLINE_FLAG_SETTINGS_LABEL = "--settings (inline JSON)";
@@ -174,23 +185,27 @@ var INLINE_FLAG_SETTINGS_LABEL = "--settings (inline JSON)";
 var REPO_UNGRANTABLE_DEFAULT_MODES = ["auto", "bypassPermissions"];
 var HOST_FREE_FORM_SETTINGS_KEY = "organizationFreeFormSettings";
 //@ chunk-6zvepy0r.js:6733-6780 fingerprint = getEnabledSettingSources (1)
-var SETTING_SOURCES_BY_PRIORITY = ["policySettings", "flagSettings", ...EDITABLE_SETTING_SOURCES];
+var SETTING_SOURCES_BY_PRIORITY; // deferred: uses EDITABLE_SETTING_SOURCES of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-6zvepy0r.js:6733", () => {
+  SETTING_SOURCES_BY_PRIORITY = ["policySettings", "flagSettings", ...EDITABLE_SETTING_SOURCES];
+});
 export {
   isSettingSourceEnabled,
   getEnabledSettingSources,
   getSettingSourceDisplayNameCapitalized,
+  SETTING_SOURCES,
   getSettingSourceDisplayNameLowercase,
   EDITABLE_SETTING_SOURCES,
-  SETTING_SOURCES,
   REPO_DIR_SETTING_SOURCE_LIST,
   getSourceDisplayName,
+  HOST_FREE_FORM_SETTINGS_KEY,
   parseSettingSourcesFlag,
   REPO_DIR_SETTING_SOURCES,
-  HOST_FREE_FORM_SETTINGS_KEY,
   getSettingSourceName,
   appliedSettingSourcesFlagValue,
   INLINE_FLAG_SETTINGS_LABEL,
   SETTING_SOURCES_BY_PRIORITY,
   appliedSettingSourcesArgv,
   SOURCES,
+  REPO_UNGRANTABLE_DEFAULT_MODES,
 };

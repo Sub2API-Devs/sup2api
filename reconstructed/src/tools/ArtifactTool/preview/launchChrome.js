@@ -13,8 +13,8 @@ import {
   asArray,
   asProbeRecord,
   pageProbeScriptBuilder,
-  PAGE_PROBE_MAX_VALUE_CHARS,
-  pageProbeRequestScript,
+  PAGE_PROBE_ERROR_FRAME_LEFT,
+  PAGE_PROBE_ERROR_NO_ANSWER,
   previewEvalScript,
 } from "./pageChecks.js";
 import { TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../../../utils/errors.js";
@@ -67,8 +67,8 @@ function previewChromeArgs(noSandbox, allowedHosts) {
 /**
  * 自检预览浏览器的网络封锁：起一个本地 HTTP 服务，访问 127.0.0.1 与 localhost 必须得到 ERR_NAME_NOT_RESOLVED，否则说明浏览器忽略了主机规则，抛错停止预览。
  */
-async function assertNetworkLockdown(e, n) {
-  let s = Bun.serve({
+async function assertNetworkLockdown(probeUrl, newProbe) {
+  let server = Bun.serve({
     hostname: "127.0.0.1",
     port: 0,
     fetch: () =>
@@ -77,125 +77,134 @@ async function assertNetworkLockdown(e, n) {
       }),
   });
   try {
-    for (let r of ["127.0.0.1", "localhost"]) {
-      let h = n();
-      h.catch(() => {});
-      let y = await e(`http://${r}:${s.port}/preview-selftest`);
-      if (asProbeString(y.errorText) !== "net::ERR_NAME_NOT_RESOLVED")
+    for (let host of ["127.0.0.1", "localhost"]) {
+      let navigatePromise = newProbe();
+      navigatePromise.catch(() => {});
+      let probeResult = await probeUrl(`http://${host}:${server.port}/preview-selftest`);
+      if (asProbeString(probeResult.errorText) !== "net::ERR_NAME_NOT_RESOLVED")
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           "this browser ignored the preview network lock-down; preview stopped before loading the page",
           "artifact preview: browser ignored host rules",
         );
-      await h;
+      await navigatePromise;
     }
   } finally {
-    s.stop(true);
+    server.stop(true);
   }
 }
 //@ chunk-8wvtd8sr.js:200976-208758 placement
 /**
  * headless Chrome 预览会话：打开页面、收集控制台/网络错误并截图。
  */
-function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
+function createChromePreviewSession(chromeHost, lease, launch = launchPreviewChrome) {
   return {
-    async open(width, height, allowedHosts, p) {
-      let w = [];
-      let A = [];
-      let S = new Set();
-      let R = (oe) => {
-        if (S.size < 256) S.add(oe.slice(0, 512));
+    async open(width, height, allowedHosts, signal) {
+      let consoleErrors = [];
+      let pageErrors = [];
+      let seenUrls = new Set();
+      let markSeenUrl = (url) => {
+        if (seenUrls.size < 256) seenUrls.add(url.slice(0, 512));
       };
-      let T = (oe) => S.has(oe.slice(0, 512));
-      let P;
-      let L;
-      let V = "";
-      let M = (oe) => {
-        if (w.length < 200) w.push(oe.slice(0, 400));
+      let hasSeenUrl = (url) => seenUrls.has(url.slice(0, 512));
+      let loadedPageUrl;
+      let loadedWrapperUrl;
+      let mainFrameId = "";
+      let recordConsoleError = (errorText) => {
+        if (consoleErrors.length < 200) consoleErrors.push(errorText.slice(0, 400));
       };
-      let chrome = await e.resolveChrome();
+      let chrome = await chromeHost.resolveChrome();
       if (chrome === undefined) {
-        let oe = e.installHint();
+        let hint = chromeHost.installHint();
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          oe !== undefined
-            ? `Chrome not found. Run via Bash first (one-time, ~270 MB): ${oe}`
+          hint !== undefined
+            ? `Chrome not found. Run via Bash first (one-time, ~270 MB): ${hint}`
             : "Chrome not found: install Chrome or Chromium, or point BUN_CHROME_PATH at one.",
           "artifact preview: chrome not found",
         );
       }
-      if (p?.aborted) throw new PreviewBrowserGone("the preview gave up before its browser started");
-      let q = await lease.browser(chrome, previewChromeArgs(e.noSandbox(), allowedHosts), s);
-      let re = () => void q.kill().catch(() => {});
-      if (p?.aborted) await q.kill();
-      p?.addEventListener("abort", re, {
+      if (signal?.aborted) throw new PreviewBrowserGone("the preview gave up before its browser started");
+      let browser = await lease.browser(
+        chrome,
+        previewChromeArgs(chromeHost.noSandbox(), allowedHosts),
+        launch,
+      );
+      let killOnAbort = () => void browser.kill().catch(() => {});
+      if (signal?.aborted) await browser.kill();
+      signal?.addEventListener("abort", killOnAbort, {
         once: true,
       });
-      let cdp = q.cdp;
-      let ue = "";
-      let we = "";
+      let cdp = browser.cdp;
+      let sessionId = "";
+      let targetId = "";
       let browserContextId = "";
-      let ie = [() => p?.removeEventListener("abort", re)];
-      let _e = () => {
-        for (let oe of ie.splice(0)) oe();
+      let cleanups = [() => signal?.removeEventListener("abort", killOnAbort)];
+      let runCleanups = () => {
+        for (let runCleanup of cleanups.splice(0)) runCleanup();
       };
-      let Oe = (oe, ke) => cdp.send(oe, ke, ue);
-      let me = (oe, ke) => {
-        let Se = cdp.on(oe, (ce, Re) => {
-          if (Re === ue) ke(ce);
+      let sendToPage = (method, params) => cdp.send(method, params, sessionId);
+      let event = (eventName, handler) => {
+        let offEvent = cdp.on(eventName, (payload, payloadSessionId) => {
+          if (payloadSessionId === sessionId) handler(payload);
         });
-        ie.push(Se);
-        return Se;
+        cleanups.push(offEvent);
+        return offEvent;
       };
-      let ge = (oe) =>
+      let eventName = (awaitedName) =>
         new Promise((resolve, reject) => {
           if (cdp.closedBecause !== undefined) {
             reject(cdp.closedBecause);
             return;
           }
-          let ce = me(oe, (Fe) => {
-            ce();
-            Re();
-            resolve(Fe);
+          let off = event(awaitedName, (payload) => {
+            off();
+            offGone();
+            resolve(payload);
           });
-          let Re = cdp.onGone((Fe) => {
-            ce();
-            reject(Fe);
+          let offGone = cdp.onGone((reason) => {
+            off();
+            reject(reason);
           });
-          ie.push(() => {
-            Re();
+          cleanups.push(() => {
+            offGone();
             reject(new PreviewBrowserGone("the preview tab was closed"));
           });
         });
-      let Je = (width, height) =>
-        Oe("Emulation.setDeviceMetricsOverride", {
+      let setMetrics = (width, height) =>
+        sendToPage("Emulation.setDeviceMetricsOverride", {
           width,
           height,
           deviceScaleFactor: 1,
           mobile: false,
         });
-      let He = new Set();
-      let se = (oe) =>
-        oe.type === "page" && asProbeString(oe.targetId) !== we && !He.has(asProbeString(oe.targetId));
-      let B = (oe) =>
+      let usedIds = new Set();
+      let requestId = (otherTarget) =>
+        otherTarget.type === "page" &&
+        asProbeString(otherTarget.targetId) !== targetId &&
+        !usedIds.has(asProbeString(otherTarget.targetId));
+      let closeTarget = (infoToClose) =>
         cdp
           .send("Target.closeTarget", {
-            targetId: asProbeString(oe.targetId),
+            targetId: asProbeString(infoToClose.targetId),
           })
           .catch(() => {});
       try {
-        let oe = new Set(
-          asArray(asProbeRecord(await cdp.send("Target.getBrowserContexts")).browserContextIds).map((Re) =>
-            asProbeString(Re),
+        let existingContextIds = new Set(
+          asArray(asProbeRecord(await cdp.send("Target.getBrowserContexts")).browserContextIds).map(
+            (contextIdValue) => asProbeString(contextIdValue),
           ),
         );
-        for (let Re of asArray(asProbeRecord(await cdp.send("Target.getTargets")).targetInfos)) {
-          let Fe = asProbeRecord(Re);
-          if (Fe.type === "page" && !oe.has(asProbeString(Fe.browserContextId)))
-            He.add(asProbeString(Fe.targetId));
-          else if (se(Fe)) B(Fe);
+        for (let listedTarget of asArray(asProbeRecord(await cdp.send("Target.getTargets")).targetInfos)) {
+          let listedRecord = asProbeRecord(listedTarget);
+          if (
+            listedRecord.type === "page" &&
+            !existingContextIds.has(asProbeString(listedRecord.browserContextId))
+          )
+            usedIds.add(asProbeString(listedRecord.targetId));
+          else if (requestId(listedRecord)) closeTarget(listedRecord);
         }
         await cdp.send("Fetch.disable");
-        q.betweenCalls?.();
-        q.betweenCalls = undefined;
+        browser.betweenCalls?.();
+        browser.betweenCalls = undefined;
         browserContextId = asProbeString(
           (
             await cdp.send("Target.createBrowserContext", {
@@ -203,7 +212,7 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
             })
           ).browserContextId,
         );
-        we = asProbeString(
+        targetId = asProbeString(
           (
             await cdp.send("Target.createTarget", {
               url: "about:blank",
@@ -211,52 +220,59 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
             })
           ).targetId,
         );
-        ue = asProbeString(
+        sessionId = asProbeString(
           (
             await cdp.send("Target.attachToTarget", {
-              targetId: we,
+              targetId,
               flatten: true,
             })
           ).sessionId,
         );
-        ie.push(
-          cdp.on("Target.targetCreated", (Re) => {
-            let Fe = asProbeRecord(Re.targetInfo);
-            if (se(Fe)) B(Fe);
+        cleanups.push(
+          cdp.on("Target.targetCreated", (event) => {
+            let targetInfo = asProbeRecord(event.targetInfo);
+            if (requestId(targetInfo)) closeTarget(targetInfo);
           }),
         );
         await cdp.send("Target.setDiscoverTargets", {
           discover: true,
         });
-        for (let Re of asArray(asProbeRecord(await cdp.send("Target.getTargets")).targetInfos))
-          if (se(asProbeRecord(Re))) B(asProbeRecord(Re));
-        await Oe("Page.enable");
+        for (let targetInfo of asArray(asProbeRecord(await cdp.send("Target.getTargets")).targetInfos))
+          if (requestId(asProbeRecord(targetInfo))) closeTarget(asProbeRecord(targetInfo));
+        await sendToPage("Page.enable");
         await assertNetworkLockdown(
           (url) =>
-            Oe("Page.navigate", {
+            sendToPage("Page.navigate", {
               url,
             }),
-          () => ge("Page.loadEventFired"),
+          () => eventName("Page.loadEventFired"),
         );
-        await Oe("Runtime.enable");
-        await Oe("Log.enable");
-        V = asProbeString(
-          asProbeRecord(asProbeRecord(asProbeRecord(await Oe("Page.getFrameTree")).frameTree).frame).id,
+        await sendToPage("Runtime.enable");
+        await sendToPage("Log.enable");
+        mainFrameId = asProbeString(
+          asProbeRecord(asProbeRecord(asProbeRecord(await sendToPage("Page.getFrameTree")).frameTree).frame)
+            .id,
         );
-        await Je(width, height);
-        await Oe("Page.addScriptToEvaluateOnNewDocument", {
+        await setMetrics(width, height);
+        await sendToPage("Page.addScriptToEvaluateOnNewDocument", {
           source: CSP_AND_RTC_BLOCK_SCRIPT + pageProbeScriptBuilder,
         });
-        let ke = (Re, Fe) => {
-          let requestId = asProbeString(Re.requestId);
-          let it = asProbeRecord(Re.request);
-          let Tt = asProbeString(it.url);
-          let ze = it.hasPostData === true || typeof it.postData === "string";
-          let Mt = asProbeString(it.method) || "GET";
+        let onRequestPaused = (params, sessionId) => {
+          let requestId = asProbeString(params.requestId);
+          let request = asProbeRecord(params.request);
+          let url = asProbeString(request.url);
+          let hasBody = request.hasPostData === true || typeof request.postData === "string";
+          let method = asProbeString(request.method) || "GET";
           if (
-            L !== undefined && asProbeString(Re.frameId) === V
-              ? isSameUrlGetRequest(Tt, L, Mt, ze)
-              : isAllowedPreviewRequest(Tt, P, Mt, ze, asProbeString(Re.resourceType))
+            loadedWrapperUrl !== undefined && asProbeString(params.frameId) === mainFrameId
+              ? isSameUrlGetRequest(url, loadedWrapperUrl, method, hasBody)
+              : isAllowedPreviewRequest(
+                  url,
+                  loadedPageUrl,
+                  method,
+                  hasBody,
+                  asProbeString(params.resourceType),
+                )
           ) {
             cdp
               .send(
@@ -264,17 +280,17 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
                 {
                   requestId,
                 },
-                Fe,
+                sessionId,
               )
               .catch(() => {});
             return;
           }
-          if (!T(Tt) && A.length < 64)
-            A.push({
-              url: Tt.slice(0, 512),
-              type: asProbeString(Re.resourceType),
+          if (!hasSeenUrl(url) && pageErrors.length < 64)
+            pageErrors.push({
+              url: url.slice(0, 512),
+              type: asProbeString(params.resourceType),
             });
-          R(Tt);
+          markSeenUrl(url);
           cdp
             .send(
               "Fetch.failRequest",
@@ -282,12 +298,12 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
                 requestId,
                 errorReason: "BlockedByClient",
               },
-              Fe,
+              sessionId,
             )
             .catch(() => {});
         };
-        ie.push(cdp.on("Fetch.requestPaused", ke));
-        await Oe("Fetch.enable", {
+        cleanups.push(cdp.on("Fetch.requestPaused", onRequestPaused));
+        await sendToPage("Fetch.enable", {
           patterns: [
             {
               urlPattern: "*",
@@ -301,7 +317,7 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
             },
           ],
         });
-        let Se = async (Re) => {
+        let autoAttach = async (sessionId) => {
           await cdp.send(
             "Target.setAutoAttach",
             {
@@ -309,21 +325,26 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
               waitForDebuggerOnStart: true,
               flatten: true,
             },
-            Re,
+            sessionId,
           );
         };
-        let ce = cdp.on("Target.attachedToTarget", (Re, Fe) => {
-          if (Fe === undefined) return;
-          let xe = asProbeString(Re.sessionId);
-          let it = asProbeString(asProbeRecord(Re.targetInfo).type);
+        let onAttached = cdp.on("Target.attachedToTarget", (params, sessionId) => {
+          if (sessionId === undefined) return;
+          let workerSessionId = asProbeString(params.sessionId);
+          let targetType = asProbeString(asProbeRecord(params.targetInfo).type);
           if (
-            !(it === "worker" || it === "shared_worker" || it === "service_worker" || it === "worklet") ||
-            Re.waitingForDebugger !== true
+            !(
+              targetType === "worker" ||
+              targetType === "shared_worker" ||
+              targetType === "service_worker" ||
+              targetType === "worklet"
+            ) ||
+            params.waitingForDebugger !== true
           ) {
             cdp.fail(
               new PreviewBrowserGone("part of the page started outside the preview sandbox; preview stopped"),
             );
-            q.kill().catch(() => {});
+            browser.kill().catch(() => {});
             return;
           }
           (async () => {
@@ -337,133 +358,140 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
                     },
                   ],
                 },
-                xe,
+                workerSessionId,
               );
-              await Se(xe);
+              await autoAttach(workerSessionId);
             } catch {
             } finally {
-              cdp.send("Runtime.runIfWaitingForDebugger", {}, xe).catch(() => {});
+              cdp.send("Runtime.runIfWaitingForDebugger", {}, workerSessionId).catch(() => {});
             }
           })();
         });
-        ie.push(ce);
-        await Se(ue);
-        await Oe("Page.setDownloadBehavior", {
+        cleanups.push(onAttached);
+        await autoAttach(sessionId);
+        await sendToPage("Page.setDownloadBehavior", {
           behavior: "deny",
         });
-        me("Page.downloadWillBegin", (Re) => {
-          let Fe = asProbeString(Re.suggestedFilename) || asProbeString(Re.url);
-          if (!T(`download:${Fe}`) && A.length < 64)
-            A.push({
-              url: Fe.slice(0, 512),
+        event("Page.downloadWillBegin", (event) => {
+          let fileName = asProbeString(event.suggestedFilename) || asProbeString(event.url);
+          if (!hasSeenUrl(`download:${fileName}`) && pageErrors.length < 64)
+            pageErrors.push({
+              url: fileName.slice(0, 512),
               type: "download",
             });
-          R(`download:${Fe}`);
+          markSeenUrl(`download:${fileName}`);
         });
-        me("Page.windowOpen", (Re) => {
-          let Fe = asProbeString(Re.url);
-          if (!T(`popup:${Fe}`) && A.length < 64)
-            A.push({
-              url: Fe.slice(0, 512),
+        event("Page.windowOpen", (event) => {
+          let url = asProbeString(event.url);
+          if (!hasSeenUrl(`popup:${url}`) && pageErrors.length < 64)
+            pageErrors.push({
+              url: url.slice(0, 512),
               type: "popup",
             });
-          R(`popup:${Fe}`);
+          markSeenUrl(`popup:${url}`);
         });
-        me("Page.javascriptDialogOpening", (Re) => {
-          let Fe = asProbeString(Re.type);
-          Oe("Page.handleJavaScriptDialog", {
-            accept: Fe === "alert",
+        event("Page.javascriptDialogOpening", (event) => {
+          let dialogType = asProbeString(event.type);
+          sendToPage("Page.handleJavaScriptDialog", {
+            accept: dialogType === "alert",
           }).catch(() => {});
-          if (!T(`dialog:${Fe}`) && A.length < 64)
-            A.push({
-              url: Fe || "modal",
+          if (!hasSeenUrl(`dialog:${dialogType}`) && pageErrors.length < 64)
+            pageErrors.push({
+              url: dialogType || "modal",
               type: "dialog",
             });
-          R(`dialog:${Fe}`);
+          markSeenUrl(`dialog:${dialogType}`);
         });
-        me("Runtime.consoleAPICalled", (Re) => {
-          if (Re.type === "error" || Re.type === "assert")
-            M(asArray(Re.args).map(remoteObjectText).join(" "));
+        event("Runtime.consoleAPICalled", (event) => {
+          if (event.type === "error" || event.type === "assert")
+            recordConsoleError(asArray(event.args).map(remoteObjectText).join(" "));
         });
-        me("Runtime.exceptionThrown", (Re) => {
-          let Fe = asProbeRecord(Re.exceptionDetails);
-          let xe = asProbeRecord(Fe.exception);
-          let it = getFirstLine(asProbeString(xe.description)) || asProbeString(Fe.text) || "exception";
-          M(it.startsWith("Uncaught") ? it : `Uncaught ${it}`);
+        event("Runtime.exceptionThrown", (event) => {
+          let details = asProbeRecord(event.exceptionDetails);
+          let exception = asProbeRecord(details.exception);
+          let text =
+            getFirstLine(asProbeString(exception.description)) || asProbeString(details.text) || "exception";
+          recordConsoleError(text.startsWith("Uncaught") ? text : `Uncaught ${text}`);
         });
-        me("Log.entryAdded", (Re) => {
-          let Fe = asProbeRecord(Re.entry);
-          let match = /^Not allowed to load local resource: (\S+)/.exec(asProbeString(Fe.text));
+        event("Log.entryAdded", (event) => {
+          let entry = asProbeRecord(event.entry);
+          let match = /^Not allowed to load local resource: (\S+)/.exec(asProbeString(entry.text));
           if (match) {
-            if (!T(match[1]) && A.length < 64)
-              A.push({
+            if (!hasSeenUrl(match[1]) && pageErrors.length < 64)
+              pageErrors.push({
                 url: match[1].slice(0, 512),
                 type: "Local",
               });
-            R(match[1]);
+            markSeenUrl(match[1]);
             return;
           }
-          if (Fe.level !== "error" || Fe.source === "security" || Fe.source === "intervention") return;
-          let it = asProbeString(Fe.url);
-          let Tt = asProbeString(Fe.text);
-          if (T(it) || Tt.startsWith("Unrecognized Content-Security-Policy directive")) return;
-          M(`${Tt}${it ? ` (${it})` : ""}`);
+          if (entry.level !== "error" || entry.source === "security" || entry.source === "intervention")
+            return;
+          let entryUrl = asProbeString(entry.url);
+          let entryText = asProbeString(entry.text);
+          if (hasSeenUrl(entryUrl) || entryText.startsWith("Unrecognized Content-Security-Policy directive"))
+            return;
+          recordConsoleError(`${entryText}${entryUrl ? ` (${entryUrl})` : ""}`);
         });
       } catch (error) {
-        _e();
-        await q.close();
+        runCleanups();
+        await browser.close();
         throw error;
       }
-      let U = async () => {
-        let oe = asProbeRecord(asProbeRecord(await Oe("Page.getFrameTree")).frameTree);
-        let ke = asArray(oe.childFrames).map((Se) => asProbeRecord(asProbeRecord(Se).frame))[0];
-        return ke === undefined
+      let firstChildFrame = async () => {
+        let frameTree = asProbeRecord(asProbeRecord(await sendToPage("Page.getFrameTree")).frameTree);
+        let childFrame = asArray(frameTree.childFrames).map((child) =>
+          asProbeRecord(asProbeRecord(child).frame),
+        )[0];
+        return childFrame === undefined
           ? undefined
           : {
-              id: asProbeString(ke.id),
-              url: asProbeString(ke.url) + asProbeString(ke.urlFragment),
+              id: asProbeString(childFrame.id),
+              url: asProbeString(childFrame.url) + asProbeString(childFrame.urlFragment),
             };
       };
-      let he = async (expression) => {
-        let ke = await Oe("Runtime.evaluate", {
+      let evaluate = async (expression) => {
+        let result = await sendToPage("Runtime.evaluate", {
           expression,
           awaitPromise: true,
           returnByValue: true,
         });
-        if (ke.exceptionDetails !== undefined) {
-          let Se = asProbeRecord(ke.exceptionDetails);
-          let ce = asProbeRecord(Se.exception);
+        if (result.exceptionDetails !== undefined) {
+          let details = asProbeRecord(result.exceptionDetails);
+          let exception = asProbeRecord(details.exception);
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            stripPrefix(getFirstLine(asProbeString(ce.description)), "Error: ") ||
-              asProbeString(Se.text) ||
+            stripPrefix(getFirstLine(asProbeString(exception.description)), "Error: ") ||
+              asProbeString(details.text) ||
               "the page script failed",
             "artifact preview: wrapper script threw",
           );
         }
-        return asProbeRecord(ke.result).value;
+        return asProbeRecord(result.result).value;
       };
-      let $e = async (run, ke) => {
-        let Se = P;
-        if (L === undefined || Se === undefined)
+      let runInPage = async (run, args) => {
+        let expectedUrl = loadedPageUrl;
+        if (loadedWrapperUrl === undefined || expectedUrl === undefined)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
             "no page is loaded in the preview tab",
             "artifact preview: measure before load",
           );
-        let ce = async () => {
-          let Fe = await U();
-          return Fe !== undefined && isSameHttpOrigin(Fe.url, Se) ? undefined : (Fe?.url ?? "about:blank");
+        let checkFrameNav = async () => {
+          let frame = await firstChildFrame();
+          return frame !== undefined && isSameHttpOrigin(frame.url, expectedUrl)
+            ? undefined
+            : (frame?.url ?? "about:blank");
         };
-        let Re = (error) =>
+        let isRetriable = (error) =>
           error instanceof Error &&
-          (error.message.includes(PAGE_PROBE_MAX_VALUE_CHARS) ||
-            error.message.includes(pageProbeRequestScript));
+          (error.message.includes(PAGE_PROBE_ERROR_FRAME_LEFT) ||
+            error.message.includes(PAGE_PROBE_ERROR_NO_ANSWER));
         for (let j = 0; ; j++) {
-          let xe = await ce();
-          if (xe !== undefined) throw new PreviewNavigatedAway(xe, Se);
+          let navigatedTo = await checkFrameNav();
+          if (navigatedTo !== undefined) throw new PreviewNavigatedAway(navigatedTo, expectedUrl);
           try {
-            return await he(previewEvalScript(run, ke));
+            return await evaluate(previewEvalScript(run, args));
           } catch (error) {
-            if (!Re(error)) throw error;
+            if (!isRetriable(error)) throw error;
             if (j === 1)
               throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                 "the page reloaded or rewrote itself during the checks",
@@ -473,10 +501,10 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
         }
       };
       return {
-        async load(oe, value, Se) {
-          P = oe;
-          L = Se;
-          await Oe("Emulation.setEmulatedMedia", {
+        async load(pageUrl, value, wrapperUrl) {
+          loadedPageUrl = pageUrl;
+          loadedWrapperUrl = wrapperUrl;
+          await sendToPage("Emulation.setEmulatedMedia", {
             media: "screen",
             features: [
               {
@@ -485,53 +513,53 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
               },
             ],
           });
-          let ce = ge("Page.loadEventFired");
-          ce.catch(() => {});
-          let Re = await Oe("Page.navigate", {
-            url: Se,
+          let loadEvent = eventName("Page.loadEventFired");
+          loadEvent.catch(() => {});
+          let navigateResult = await sendToPage("Page.navigate", {
+            url: wrapperUrl,
           });
-          if (asProbeString(Re.errorText) !== "")
+          if (asProbeString(navigateResult.errorText) !== "")
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-              `the preview wrapper did not load (${asProbeString(Re.errorText)})`,
+              `the preview wrapper did not load (${asProbeString(navigateResult.errorText)})`,
               "artifact preview: wrapper navigation failed",
             );
-          await ce;
-          if ((await U()) === undefined)
+          await loadEvent;
+          if ((await firstChildFrame()) === undefined)
             throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
               "the page did not load in the preview frame",
               "artifact preview: frame missing",
             );
         },
         async resize(width, height) {
-          await Je(width, height);
+          await setMetrics(width, height);
         },
-        measure: (oe) => $e("probe", [oe]),
-        settle: () => $e("settle", []),
+        measure: (settleMs) => runInPage("probe", [settleMs]),
+        settle: () => runInPage("settle", []),
         async screenshot() {
-          let oe = await Oe("Page.captureScreenshot", {
+          let capture = await sendToPage("Page.captureScreenshot", {
             format: "png",
           });
-          return new Uint8Array(Buffer.from(asProbeString(oe.data), "base64"));
+          return new Uint8Array(Buffer.from(asProbeString(capture.data), "base64"));
         },
-        takeErrors: () => w.splice(0),
-        takeBlocked: () => A.splice(0),
+        takeErrors: () => consoleErrors.splice(0),
+        takeBlocked: () => pageErrors.splice(0),
         async closeStrayWindows() {
-          let oe = asArray(asProbeRecord(await cdp.send("Target.getTargets")).targetInfos);
-          let ke = 0;
-          for (let Se of oe)
-            if (se(asProbeRecord(Se))) {
-              await B(asProbeRecord(Se));
-              ke++;
+          let targetInfos = asArray(asProbeRecord(await cdp.send("Target.getTargets")).targetInfos);
+          let closedCount = 0;
+          for (let targetInfo of targetInfos)
+            if (requestId(asProbeRecord(targetInfo))) {
+              await closeTarget(asProbeRecord(targetInfo));
+              closedCount++;
             }
-          return ke;
+          return closedCount;
         },
         stopLoading: async () => {
-          await Oe("Page.stopLoading");
+          await sendToPage("Page.stopLoading");
         },
-        async close({ broken: oe = false } = {}) {
-          if (oe || cdp.closedBecause !== undefined || e.noSandbox()) {
-            _e();
-            await q.close();
+        async close({ broken: options = false } = {}) {
+          if (options || cdp.closedBecause !== undefined || chromeHost.noSandbox()) {
+            runCleanups();
+            await browser.close();
             return;
           }
           try {
@@ -539,19 +567,19 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
               browserContextId,
             });
           } catch {
-            await q.close();
+            await browser.close();
           } finally {
-            _e();
-            q.betweenCalls?.();
-            q.betweenCalls = cdp.on("Fetch.requestPaused", (ke, Se) => {
+            runCleanups();
+            browser.betweenCalls?.();
+            browser.betweenCalls = cdp.on("Fetch.requestPaused", (params, sessionId) => {
               cdp
                 .send(
                   "Fetch.failRequest",
                   {
-                    requestId: asProbeString(ke.requestId),
+                    requestId: asProbeString(params.requestId),
                     errorReason: "BlockedByClient",
                   },
-                  Se,
+                  sessionId,
                 )
                 .catch(() => {});
             });
@@ -565,21 +593,25 @@ function createChromePreviewSession(e, lease, s = launchPreviewChrome) {
 /**
  * 预览页面允许的请求：只放行无请求体的 GET/HEAD；页面自身来源、同源 mermaid 运行时脚本、data:/blob:/about:blank，以及白名单来源下的特定路径。
  */
-function isAllowedPreviewRequest(e, n, s = "GET", r = false, h = "") {
-  if (!((s === "GET" || s === "HEAD") && !r)) return false;
-  if (n !== undefined && urlsEqual(e, n)) return true;
+function isAllowedPreviewRequest(url, pageUrl, method = "GET", hasBody = false, resourceType = "") {
+  if (!((method === "GET" || method === "HEAD") && !hasBody)) return false;
+  if (pageUrl !== undefined && urlsEqual(url, pageUrl)) return true;
   try {
-    let p = new URL(e);
+    let parsed = new URL(url);
     if (
-      n !== undefined &&
-      h === "Script" &&
-      p.pathname === MERMAID_RUNTIME_PATH &&
-      p.search === "" &&
-      p.origin === new URL(n).origin
+      pageUrl !== undefined &&
+      resourceType === "Script" &&
+      parsed.pathname === MERMAID_RUNTIME_PATH &&
+      parsed.search === "" &&
+      parsed.origin === new URL(pageUrl).origin
     )
       return true;
-    if (p.protocol === "data:" || p.protocol === "blob:" || p.href === "about:blank") return true;
-    return CSP_ALLOWED_ORIGINS.has(p.origin) && ASSET_PATH_PREFIXES.some((w) => p.pathname.startsWith(w));
+    if (parsed.protocol === "data:" || parsed.protocol === "blob:" || parsed.href === "about:blank")
+      return true;
+    return (
+      CSP_ALLOWED_ORIGINS.has(parsed.origin) &&
+      ASSET_PATH_PREFIXES.some((prefix) => parsed.pathname.startsWith(prefix))
+    );
   } catch {
     return false;
   }
@@ -588,8 +620,13 @@ function isAllowedPreviewRequest(e, n, s = "GET", r = false, h = "") {
 /**
  * 判断请求是否是可复用缓存的 GET/HEAD 且地址相同。
  */
-function isSameUrlGetRequest(e, n, s = "GET", r = false) {
-  return n !== undefined && (s === "GET" || s === "HEAD") && !r && urlsEqual(e, n);
+function isSameUrlGetRequest(url, expectedUrl, method = "GET", hasBody = false) {
+  return (
+    expectedUrl !== undefined &&
+    (method === "GET" || method === "HEAD") &&
+    !hasBody &&
+    urlsEqual(url, expectedUrl)
+  );
 }
 //@ chunk-8wvtd8sr.js:209234-209293 placement
 /**
@@ -600,19 +637,20 @@ var ASSET_PATH_PREFIXES = ["/css", "/icon", "/earlyaccess/", "/s/", "/l/", "/ea/
 /**
  * 比较两个 URL 是否等价（解析失败退回字符串比较）。
  */
-function urlsEqual(e, n) {
+function urlsEqual(left, right) {
   try {
-    return new URL(e).href === new URL(n).href;
+    return new URL(left).href === new URL(right).href;
   } catch {
-    return e === n;
+    return left === right;
   }
 }
 //@ chunk-8wvtd8sr.js:209375-209605 placement
-function remoteObjectText(e) {
-  if (typeof e === "string") return e;
-  let n = asProbeRecord(e);
-  if (typeof n.description === "string") return getFirstLine(n.description);
-  if ("value" in n && (typeof n.value === "string" || typeof n.value === "number")) return String(n.value);
-  return String(e);
+function remoteObjectText(arg) {
+  if (typeof arg === "string") return arg;
+  let record = asProbeRecord(arg);
+  if (typeof record.description === "string") return getFirstLine(record.description);
+  if ("value" in record && (typeof record.value === "string" || typeof record.value === "number"))
+    return String(record.value);
+  return String(arg);
 }
 export { createChromePreviewSession };

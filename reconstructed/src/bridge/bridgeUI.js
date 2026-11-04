@@ -37,13 +37,13 @@ var QR_OPTIONS = {
  * 创建终端日志/状态显示器：printBanner 打印连接地址与 QR，logSession*\/logStatus 输出事件，updateIdleStatus/updateReconnectingStatus/updateSessionStatus 重绘状态行（ANSI 回退清除），支持多会话列表与 spawn 模式显示。
  */
 function createBridgeLogger(options) {
-  let write = options.write ?? ((h) => process.stdout.write(h));
+  let write = options.write ?? ((chunk) => process.stdout.write(chunk));
   let verbose = options.verbose;
-  let P = options.projectsHint ?? (() => false);
+  let projectsHint = options.projectsHint ?? (() => false);
   let statusLineCount = 0;
   let currentState = "idle";
   let currentStateText = "Ready";
-  let j = null;
+  let reconnectInfo = null;
   let repoName = "";
   let branch = "";
   let debugLogPath = "";
@@ -52,13 +52,13 @@ function createBridgeLogger(options) {
   let activeSessionUrl = null;
   let qrLines = [];
   let qrVisible = false;
-  let Oe = "";
+  let qrUrl = "";
   let lastToolSummary = null;
   let lastToolTime = 0;
   let sessionActive = 0;
   let sessionMax = 1;
   let spawnModeDisplay = null;
-  let X = null;
+  let cloudStatus = null;
   let spawnMode = "single-session";
   let sessionDisplayInfo = new Map();
   let connectingTimer = null;
@@ -95,12 +95,13 @@ function createBridgeLogger(options) {
   function printLog(line) {
     clearStatusLines();
     write(line);
-    if (currentState === "reconnecting" && j) Re(j.delayStr, j.elapsedStr);
+    if (currentState === "reconnecting" && reconnectInfo)
+      renderReconnecting(reconnectInfo.delayStr, reconnectInfo.elapsedStr);
     else renderStatusLine();
   }
   function regenerateQr(url) {
-    if (url === Oe) return;
-    Oe = url;
+    if (url === qrUrl) return;
+    qrUrl = url;
     toString(url, QR_OPTIONS)
       .then((lines) => {
         qrLines = lines
@@ -140,7 +141,7 @@ function createBridgeLogger(options) {
       connectingTimer = null;
     }
   }
-  function Re(delayStr, elapsedStr) {
+  function renderReconnecting(delayStr, elapsedStr) {
     if (qrVisible)
       for (let line of qrLines)
         writeStatus(`${sequential.dim(line)}
@@ -160,11 +161,11 @@ function createBridgeLogger(options) {
 `);
     let indicator = BRIDGE_READY_INDICATOR;
     let indicatorColor = isIdle ? sequential.green : sequential.cyan;
-    let we = (isIdle ? sequential.green : sequential.cyan)(currentStateText);
+    let stateText = (isIdle ? sequential.green : sequential.cyan)(currentStateText);
     let suffix = "";
     if (repoName) suffix += sequential.dim(" \xB7 ") + sequential.dim(repoName);
     if (branch && spawnMode !== "worktree") suffix += sequential.dim(" \xB7 ") + sequential.dim(branch);
-    writeStatus(`${indicatorColor(indicator)} ${we}${suffix}
+    writeStatus(`${indicatorColor(indicator)} ${stateText}${suffix}
 `);
     if (sessionMax > 1) {
       let modeHint =
@@ -177,26 +178,26 @@ function createBridgeLogger(options) {
         let titleText = info.title ? truncateToWidth(info.title, 35) : sequential.dim("Attached");
         let titleLinked = wrapWithOsc8Link(titleText, info.url);
         let act = info.activity;
-        let gt =
+        let activitySuffix =
           act && act.type !== "result" && act.type !== "error"
             ? sequential.dim(` ${truncateToWidth(act.summary, 40)}`)
             : "";
-        writeStatus(`    ${titleLinked}${gt}
+        writeStatus(`    ${titleLinked}${activitySuffix}
 `);
       }
     }
     if (sessionMax === 1) {
-      let Fe =
+      let capacityText =
         spawnMode === "single-session"
           ? "Single session \xB7 exits when complete"
           : spawnMode === "worktree"
             ? `Capacity: ${sessionActive}/1 \xB7 New sessions will be created in an isolated worktree`
             : `Capacity: ${sessionActive}/1 \xB7 New sessions will be created in the current directory`;
-      writeStatus(`    ${sequential.dim(Fe)}
+      writeStatus(`    ${sequential.dim(capacityText)}
 `);
     }
-    if (X) {
-      let { text, unattended } = X;
+    if (cloudStatus) {
+      let { text, unattended } = cloudStatus;
       writeStatus(`    ${unattended ? sequential.yellow(text) : sequential.dim(text)}
 `);
     }
@@ -214,7 +215,7 @@ function createBridgeLogger(options) {
       let toggleHint = spawnModeDisplay ? sequential.dim.italic(" \xB7 w to toggle spawn mode") : "";
       writeStatus(`${sequential.dim(footerText)}
 `);
-      if ((isIdle || sessionMax > 1) && P())
+      if ((isIdle || sessionMax > 1) && projectsHint())
         writeStatus(`${sequential.dim(PROJECTS_HINT_TEXT)}
 `);
       writeStatus(`${qrHint}${toggleHint}
@@ -265,7 +266,9 @@ function createBridgeLogger(options) {
         );
       }
       if (config.livePreviewPorts && config.livePreviewPorts.size > 0) {
-        let joined = [...config.livePreviewPorts].sort((je, we) => je - we).join(", ");
+        let joined = [...config.livePreviewPorts]
+          .sort((leftPort, rightPort) => leftPort - rightPort)
+          .join(", ");
         write(
           sequential.yellow(`\u26A0  Live preview enabled: 127.0.0.1 ${plural(config.livePreviewPorts.size, "port")} ${joined} ${config.livePreviewPorts.size > 1 ? "are" : "is"} reachable from this session's livepreview URL while Remote Control is running.
 `),
@@ -321,15 +324,15 @@ function createBridgeLogger(options) {
 `,
       );
     },
-    logWarning(h) {
+    logWarning(message) {
       printLog(
-        sequential.yellow(`[${timestamp()}] Warning: ${h}`) +
+        sequential.yellow(`[${timestamp()}] Warning: ${message}`) +
           `
 `,
       );
     },
     logReconnected(disconnectedMs) {
-      j = null;
+      reconnectInfo = null;
       printLog(
         sequential.dim(`[${timestamp()}]`) +
           ` ${sequential.green("Reconnected")} after ${formatDuration(disconnectedMs)}
@@ -369,11 +372,11 @@ function createBridgeLogger(options) {
       stopConnecting();
       clearStatusLines();
       currentState = "reconnecting";
-      j = {
+      reconnectInfo = {
         delayStr,
         elapsedStr,
       };
-      Re(delayStr, elapsedStr);
+      renderReconnecting(delayStr, elapsedStr);
     },
     updateSessionStatus(_sessionId, _elapsed, activity, _trail) {
       if (activity.type === "tool_start") {
@@ -382,14 +385,14 @@ function createBridgeLogger(options) {
       }
       renderStatusLine();
     },
-    clearStatus(h) {
+    clearStatus(options) {
       stopConnecting();
       clearStatusLines();
-      if (h?.final) j = null;
+      if (options?.final) reconnectInfo = null;
     },
-    setCloudSessionsStatus(h) {
-      if (h?.text === X?.text && h?.unattended === X?.unattended) return;
-      X = h;
+    setCloudSessionsStatus(status) {
+      if (status?.text === cloudStatus?.text && status?.unattended === cloudStatus?.unattended) return;
+      cloudStatus = status;
       if (statusLineCount > 0 && connectingTimer === null) renderStatusLine();
     },
     detachTerminal() {
@@ -420,15 +423,15 @@ function createBridgeLogger(options) {
       if (!info) return;
       info.activity = activity;
     },
-    setSessionTitle(sessionId, L) {
+    setSessionTitle(sessionId, title) {
       let info = sessionDisplayInfo.get(sessionId);
       if (!info) return;
-      let je = sanitizeSessionTitle(L);
-      info.title = je;
+      let cleanTitle = sanitizeSessionTitle(title);
+      info.title = cleanTitle;
       if (currentState === "reconnecting") return;
       if (sessionMax === 1) {
         currentState = "titled";
-        currentStateText = truncateToWidth(je, 40);
+        currentStateText = truncateToWidth(cleanTitle, 40);
       }
       renderStatusLine();
     },

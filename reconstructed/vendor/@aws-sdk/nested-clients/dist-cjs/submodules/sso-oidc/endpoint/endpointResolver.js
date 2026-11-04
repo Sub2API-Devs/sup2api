@@ -5,13 +5,13 @@
  * pieces: chunk-ddzww9ex.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../../runtime/bun-runtime.js";
 import { require_util_endpoints } from "../../../../../util-endpoints/dist-cjs/index.js";
 import { require_index_browser } from "../../../../../../@smithy/core/dist-cjs/submodules/endpoints/index.browser.js";
 import { require_ruleset } from "./ruleset.js";
 
 //@ chunk-ddzww9ex.js:3961-4361 cjs-require-graph
-var require_endpointResolver = x(function (cjsExports) {
+var require_endpointResolver = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

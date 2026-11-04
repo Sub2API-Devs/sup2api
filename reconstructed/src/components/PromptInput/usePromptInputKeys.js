@@ -41,10 +41,13 @@ function editorWaitBorderColor(mode) {
 //@ chunk-18hwfzwa.js:877699-878080 placement
 function useComposerEscape(event, { draft, vimEnabled, vimMode, helpOpen, setHelpOpen }) {
   if (event.name === "escape" && vimEnabled && vimMode !== "NORMAL") return;
-  let Re = isKbCohesionFixesOn() && event.name === "escape";
-  let Be = event.name === "backspace" || (event.ctrl && event.key === "u");
-  if ((draft.cursorOffset === 0 || Re) && (event.name === "escape" || event.name === "delete" || Be)) {
-    if (Be && (draft.mode !== "prompt" || helpOpen)) event.preventDefault();
+  let isKbEscape = isKbCohesionFixesOn() && event.name === "escape";
+  let isBackspaceOrClear = event.name === "backspace" || (event.ctrl && event.key === "u");
+  if (
+    (draft.cursorOffset === 0 || isKbEscape) &&
+    (event.name === "escape" || event.name === "delete" || isBackspaceOrClear)
+  ) {
+    if (isBackspaceOrClear && (draft.mode !== "prompt" || helpOpen)) event.preventDefault();
     draft.setMode("prompt");
     setHelpOpen(false);
   }
@@ -63,70 +66,75 @@ function dismissPromptOverlay({ store, clearQueueSelection, helpOpen, setHelpOpe
   return false;
 }
 //@ chunk-18hwfzwa.js:878232-878334 placement
-function clearFooterSelectionState(h) {
-  return h.footerSelection === null
-    ? h
+function clearFooterSelectionState(state) {
+  return state.footerSelection === null
+    ? state
     : {
-        ...h,
+        ...state,
         footerSelection: null,
         idleTeammatesExpanded: false,
       };
 }
 //@ chunk-18hwfzwa.js:878334-878397 placement
-function isDeleteKey(h) {
-  return h.name === "backspace" || h.name === "delete";
+function isDeleteKey(key) {
+  return key.name === "backspace" || key.name === "delete";
 }
 //@ chunk-18hwfzwa.js:878397-878476 placement
-function isDeleteOrKillKey(prev) {
-  return isDeleteKey(prev) || (prev.ctrl && (prev.key === "u" || prev.key === "w" || prev.key === "k"));
+function isDeleteOrKillKey(key) {
+  return isDeleteKey(key) || (key.ctrl && (key.key === "u" || key.key === "w" || key.key === "k"));
 }
 //@ chunk-18hwfzwa.js:878476-878607 placement = decodeModifier (0.87)
 function getPrintableKey(modifier) {
   if (modifier === null) return null;
-  let x = keyEventToKeystroke(modifier);
-  if (!x || x.ctrl || x.meta || x.super) return null;
+  let keystroke = keyEventToKeystroke(modifier);
+  if (!keystroke || keystroke.ctrl || keystroke.meta || keystroke.super) return null;
   return modifier.key.length === 1 ? modifier.key : null;
 }
 //@ chunk-18hwfzwa.js:878607-879066 placement
 function queuedHumanRows(viewSelectionMode, { queuedRowIds }) {
-  let D = [];
+  let rows = [];
   for (let idx = viewSelectionMode.length - 1; idx >= 0; idx--) {
-    let ee = viewSelectionMode[idx];
-    if (queuedRowIds.has(ee.uuid)) continue;
+    let message = viewSelectionMode[idx];
+    if (queuedRowIds.has(message.uuid)) continue;
     if (
-      ee.type === "user" &&
-      !ee.isMeta &&
-      !isSyntheticMessage(ee) &&
-      !(ee.origin && ee.origin.kind !== "human") &&
-      !ee.stackedExpansion
+      message.type === "user" &&
+      !message.isMeta &&
+      !isSyntheticMessage(message) &&
+      !(message.origin && message.origin.kind !== "human") &&
+      !message.stackedExpansion
     ) {
-      let userMessageText = getUserMessageText(ee);
-      let Re =
-        ee.stackedOriginalInput ??
-        (userMessageText !== null && ee.isCompactSummary
-          ? renderCompactSummaryText(userMessageText, ee.modelOnlyText)
+      let userMessageText = getUserMessageText(message);
+      let rawText =
+        message.stackedOriginalInput ??
+        (userMessageText !== null && message.isCompactSummary
+          ? renderCompactSummaryText(userMessageText, message.modelOnlyText)
           : userMessageText);
-      let Be = Re === null || ee.origin?.kind === "human" ? Re : escapePastedContentTag(Re);
-      if (Be?.trim() && !isTeammateMessageText(Be) && Be.length <= MAX_HISTORY_ENTRIES)
-        D.push({
-          display: Be,
+      let displayText =
+        rawText === null || message.origin?.kind === "human" ? rawText : escapePastedContentTag(rawText);
+      if (
+        displayText?.trim() &&
+        !isTeammateMessageText(displayText) &&
+        displayText.length <= MAX_HISTORY_ENTRIES
+      )
+        rows.push({
+          display: displayText,
           pastedContents: {},
         });
     }
   }
-  return D;
+  return rows;
 }
 //@ chunk-18hwfzwa.js:879066-879104 placement
-function selectCommands(UJo) {
-  return UJo.commands;
+function selectCommands(state) {
+  return state.commands;
 }
 //@ chunk-18hwfzwa.js:879104-879143 placement = _temp (1)
 function selectMcpClients2(s) {
   return s.mcp.clients;
 }
 //@ chunk-18hwfzwa.js:879143-879200 placement
-function selectAgentDefinitionsActiveAgents_3(GB) {
-  return GB.agentDefinitions.activeAgents;
+function selectAgentDefinitionsActiveAgents_3(state) {
+  return state.agentDefinitions.activeAgents;
 }
 export {
   getEditorWaitBorderStyle,

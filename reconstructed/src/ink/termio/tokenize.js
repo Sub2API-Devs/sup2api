@@ -12,6 +12,13 @@ import { C0, ESC_TYPE } from "./ansi.js";
 import { isCompleteEscapeSequence } from "../wrapAnsi.js";
 import { isCSIIntermediate, isCSIFinal, isCSIParam } from "./csi.js";
 
+//@ chunk-wz6vk74d.js:507-544 placement
+/**
+ * 判断码点是否在可打印 ASCII 区间（48–126）。
+ */
+function isPrintableAscii(code) {
+  return code >= 48 && code <= 126;
+}
 //@ chunk-tw8fk0yz.js:441-605 affinity
 var X10_MOUSE_PREFIX_RE = /^\[M[\x60-\x7f][\x20-\uffff]?$/;
 var OSC8_PREFIX_RE = /^\x1b\]8(?:;|\r?$)/;
@@ -71,9 +78,9 @@ function createTokenizer(options) {
 //@ chunk-tw8fk0yz.js:986-1056 layout
 function tokenizeAll(text) {
   let tokenizer = createTokenizer();
-  let s = tokenizer.feed(text);
-  s.push(...tokenizer.flush());
-  return s;
+  let tokens = tokenizer.feed(text);
+  tokens.push(...tokenizer.flush());
+  return tokens;
 }
 //@ chunk-tw8fk0yz.js:1056-3673 fingerprint = tokenize (0.834)
 /**
@@ -84,8 +91,8 @@ function tokenize(
   initialState,
   initialBuffer,
   flush,
-  t,
-  u,
+  forOutput,
+  allowC0Controls,
   stringsEndAtLineFeed,
   intermediatesRunToFinal,
 ) {
@@ -95,19 +102,19 @@ function tokenize(
     buffer: "",
   };
   let data = initialBuffer + input;
-  let i = 0;
+  let index = 0;
   let textStart = 0;
   let seqStart = 0;
   let flushText = () => {
-    if (i > textStart) {
-      let text = data.slice(textStart, i);
+    if (index > textStart) {
+      let text = data.slice(textStart, index);
       if (text)
         tokens.push({
           type: "text",
           value: text,
         });
     }
-    textStart = i;
+    textStart = index;
   };
   let emitSequence = (seq) => {
     if (seq)
@@ -116,123 +123,123 @@ function tokenize(
         value: seq,
       });
     result.state = "ground";
-    textStart = i;
+    textStart = index;
   };
-  while (i < data.length) {
-    let code = data.charCodeAt(i);
+  while (index < data.length) {
+    let code = data.charCodeAt(index);
     switch (result.state) {
       case "ground":
         if (code === C0.ESC) {
           flushText();
-          seqStart = i;
+          seqStart = index;
           result.state = "escape";
-          i++;
+          index++;
         } else if (code === C0.DEL) {
-          if (X10_MOUSE_PREFIX_RE.test(data.slice(textStart, i))) i++;
+          if (X10_MOUSE_PREFIX_RE.test(data.slice(textStart, index))) index++;
           else {
             flushText();
-            i++;
+            index++;
             tokens.push({
               type: "text",
               value: "\x7F",
             });
-            textStart = i;
+            textStart = index;
           }
-        } else if (t && code < 32 && (data.length < 64 || code === C0.BS)) {
+        } else if (forOutput && code < 32 && (data.length < 64 || code === C0.BS)) {
           flushText();
-          i++;
-          if (code === 13 && data.charCodeAt(i) === 10) i++;
+          index++;
+          if (code === 13 && data.charCodeAt(index) === 10) index++;
           tokens.push({
             type: "text",
             value: String.fromCharCode(code),
           });
-          textStart = i;
-        } else i++;
+          textStart = index;
+        } else index++;
         break;
       case "escape":
         if (code === ESC_TYPE.CSI) {
           result.state = "csi";
-          i++;
+          index++;
         } else if (code === ESC_TYPE.OSC) {
           result.state = "osc";
-          i++;
+          index++;
         } else if (code === ESC_TYPE.DCS) {
           result.state = "dcs";
-          i++;
+          index++;
         } else if (
           code === ESC_TYPE.APC &&
-          (!t || i + 1 >= data.length || isCompleteEscapeSequence(data, i + 1, i + 1))
+          (!forOutput || index + 1 >= data.length || isCompleteEscapeSequence(data, index + 1, index + 1))
         ) {
           result.state = "apc";
-          i++;
-        } else if (!t && code === ESC_TYPE.PM) {
+          index++;
+        } else if (!forOutput && code === ESC_TYPE.PM) {
           result.state = "pm";
-          i++;
-        } else if (!t && (code === ESC_TYPE.SOS || code === 107)) {
+          index++;
+        } else if (!forOutput && (code === ESC_TYPE.SOS || code === 107)) {
           result.state = "sos";
-          i++;
-        } else if (t && code === 79) {
+          index++;
+        } else if (forOutput && code === 79) {
           result.state = "ss3";
-          i++;
-        } else if (t && (code === 32 || code === 13 || code === 10 || code === 9)) {
-          i++;
+          index++;
+        } else if (forOutput && (code === 32 || code === 13 || code === 10 || code === 9)) {
+          index++;
           tokens.push({
             type: "text",
-            value: data.slice(seqStart, i),
+            value: data.slice(seqStart, index),
           });
           result.state = "ground";
-          textStart = i;
-        } else if (t && isCSIIntermediate(code)) {
+          textStart = index;
+        } else if (forOutput && isCSIIntermediate(code)) {
           tokens.push({
             type: "text",
-            value: data.slice(seqStart, i),
+            value: data.slice(seqStart, index),
           });
           result.state = "ground";
-          textStart = i;
+          textStart = index;
         } else if (isCSIIntermediate(code)) {
           result.state = "escapeIntermediate";
-          i++;
+          index++;
         } else if (code === C0.DEL) {
-          i++;
+          index++;
           tokens.push({
             type: "text",
-            value: data.slice(seqStart, i),
+            value: data.slice(seqStart, index),
           });
           result.state = "ground";
-          textStart = i;
+          textStart = index;
         } else if (isPrintableAscii(code)) {
-          i++;
-          emitSequence(data.slice(seqStart, i));
+          index++;
+          emitSequence(data.slice(seqStart, index));
         } else if (
           code === C0.ESC &&
-          u &&
-          i === seqStart + 1 &&
-          ESC_PREFIXED_KEY_RE.test(data.slice(i + 1, i + 1 + 8))
+          allowC0Controls &&
+          index === seqStart + 1 &&
+          ESC_PREFIXED_KEY_RE.test(data.slice(index + 1, index + 1 + 8))
         )
-          i++;
+          index++;
         else if (code === C0.ESC) {
-          emitSequence(data.slice(seqStart, i));
-          seqStart = i;
+          emitSequence(data.slice(seqStart, index));
+          seqStart = index;
           result.state = "escape";
-          i++;
+          index++;
         } else if (code < 32) {
-          i++;
+          index++;
           tokens.push({
             type: "text",
-            value: data.slice(seqStart, i),
+            value: data.slice(seqStart, index),
           });
           result.state = "ground";
-          textStart = i;
+          textStart = index;
         } else {
           result.state = "ground";
           textStart = seqStart;
         }
         break;
       case "escapeIntermediate":
-        if (intermediatesRunToFinal && isCSIIntermediate(code)) i++;
+        if (intermediatesRunToFinal && isCSIIntermediate(code)) index++;
         else if (isCSIIntermediate(code) || isPrintableAscii(code)) {
-          i++;
-          emitSequence(data.slice(seqStart, i));
+          index++;
+          emitSequence(data.slice(seqStart, index));
         } else {
           result.state = "ground";
           textStart = seqStart;
@@ -240,23 +247,23 @@ function tokenize(
         break;
       case "csi":
         if (
-          t &&
+          forOutput &&
           code === 77 &&
-          i - seqStart === 2 &&
-          (i + 1 >= data.length || data.charCodeAt(i + 1) >= 32) &&
-          (i + 2 >= data.length || data.charCodeAt(i + 2) >= 32) &&
-          (i + 3 >= data.length || data.charCodeAt(i + 3) >= 32)
+          index - seqStart === 2 &&
+          (index + 1 >= data.length || data.charCodeAt(index + 1) >= 32) &&
+          (index + 2 >= data.length || data.charCodeAt(index + 2) >= 32) &&
+          (index + 3 >= data.length || data.charCodeAt(index + 3) >= 32)
         ) {
-          if (i + 4 <= data.length) {
-            i += 4;
-            emitSequence(data.slice(seqStart, i));
-          } else i = data.length;
+          if (index + 4 <= data.length) {
+            index += 4;
+            emitSequence(data.slice(seqStart, index));
+          } else index = data.length;
           break;
         }
         if (isCSIFinal(code)) {
-          i++;
-          emitSequence(data.slice(seqStart, i));
-        } else if (isCSIParam(code) || isCSIIntermediate(code)) i++;
+          index++;
+          emitSequence(data.slice(seqStart, index));
+        } else if (isCSIParam(code) || isCSIIntermediate(code)) index++;
         else {
           result.state = "ground";
           textStart = seqStart;
@@ -264,8 +271,8 @@ function tokenize(
         break;
       case "ss3":
         if (code >= 64 && code <= 126) {
-          i++;
-          emitSequence(data.slice(seqStart, i));
+          index++;
+          emitSequence(data.slice(seqStart, index));
         } else {
           result.state = "ground";
           textStart = seqStart;
@@ -277,34 +284,34 @@ function tokenize(
       case "pm":
       case "sos":
         if (
-          t &&
+          forOutput &&
           result.state === "apc" &&
-          i >= seqStart + 2 &&
-          !isCompleteEscapeSequence(data, seqStart + 2, i)
+          index >= seqStart + 2 &&
+          !isCompleteEscapeSequence(data, seqStart + 2, index)
         ) {
           emitSequence(data.slice(seqStart, seqStart + 2));
           textStart = seqStart + 2;
         } else if (code === C0.BEL && result.state !== "pm" && result.state !== "sos") {
-          i++;
-          emitSequence(data.slice(seqStart, i));
-        } else if (code === C0.ESC && i + 1 < data.length) {
-          if (data.charCodeAt(i + 1) === ESC_TYPE.ST) {
-            i += 2;
-            emitSequence(data.slice(seqStart, i));
+          index++;
+          emitSequence(data.slice(seqStart, index));
+        } else if (code === C0.ESC && index + 1 < data.length) {
+          if (data.charCodeAt(index + 1) === ESC_TYPE.ST) {
+            index += 2;
+            emitSequence(data.slice(seqStart, index));
           } else {
-            emitSequence(data.slice(seqStart, i));
-            seqStart = i;
+            emitSequence(data.slice(seqStart, index));
+            seqStart = index;
             result.state = "escape";
-            i++;
+            index++;
           }
         } else if (code === C0.CAN || code === C0.SUB) {
-          i++;
-          emitSequence(data.slice(seqStart, i));
+          index++;
+          emitSequence(data.slice(seqStart, index));
         } else if (stringsEndAtLineFeed && code === C0.LF)
           emitSequence(
-            OSC8_PREFIX_RE.test(data.slice(seqStart, Math.min(i, seqStart + 5))) ? OSC8_CLOSE : "",
+            OSC8_PREFIX_RE.test(data.slice(seqStart, Math.min(index, seqStart + 5))) ? OSC8_CLOSE : "",
           );
-        else i++;
+        else index++;
         break;
     }
   }
@@ -322,12 +329,5 @@ function tokenize(
     tokens,
     state: result,
   };
-}
-//@ chunk-wz6vk74d.js:507-544 placement
-/**
- * 判断码点是否在可打印 ASCII 区间（48–126）。
- */
-function isPrintableAscii(code) {
-  return code >= 48 && code <= 126;
 }
 export { createTokenizer, tokenizeAll };

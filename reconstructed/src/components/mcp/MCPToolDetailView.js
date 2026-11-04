@@ -8,7 +8,7 @@
  * pieces: chunk-vrb44rx7.js (4)
  * attribution: callgraph-fingerprint 1, placement 1, layout 1, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -16,7 +16,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ConfigurableShortcutHint } from "../ConfigurableShortcutHint.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { getMcpDisplayName, extractMcpToolDisplayName } from "../../services/mcp/mcpStringUtils.js";
 import { toolTimeoutForServer } from "../../services/mcp/mcpTimeouts.js";
 import { isDeferredTool } from "../../tools/ToolSearchTool/prompt.js";
@@ -25,13 +25,14 @@ import { truncateWithCount } from "../../utils/stringUtils.js";
 import { BulletRow } from "../design-system/BulletRow.js";
 import { ParenHint } from "../diff/DiffDetailView.js";
 import { Dialog } from "../design-system/Dialog.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrb44rx7.js:26449-26810 callgraph-fingerprint = _temp (0.594)
 /**
  * 返回提示：等待二次按键时“再按一次返回”，否则显示 Esc 返回快捷键。
  */
 function BackHint(exitState) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { exitState: exitState_2 } = exitState;
   let children;
   if ($[0] !== exitState_2.keyName || $[1] !== exitState_2.pending) {
@@ -47,28 +48,31 @@ function BackHint(exitState) {
     $[1] = exitState_2.pending;
     $[2] = children;
   } else children = $[2];
-  let x;
+  let hint;
   if ($[3] !== children) {
-    x = jsxProd_default(Text, {
+    hint = jsxProd_default(Text, {
       dimColor: true,
       italic: true,
       children,
     });
     $[3] = children;
-    $[4] = x;
-  } else x = $[4];
-  return x;
+    $[4] = hint;
+  } else hint = $[4];
+  return hint;
 }
 //@ chunk-vrb44rx7.js:30172-30176 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrb44rx7.js:30172", () => {
+  init_react_production();
+});
 //@ chunk-vrb44rx7.js:30176-30195 layout
 var TOOL_DETAIL_REFRESH_MS = 1000;
 var TOOL_DETAIL_MIN_MS = 200;
 //@ chunk-vrb44rx7.js:30195-33767 fingerprint = MCPToolDetailView (0.553)
 function MCPToolDetailView(props) {
-  let $ = w(50);
+  let $ = useMemoCache(50);
   let { tool, server, onBack } = props;
-  let [toolDescription, setToolDescription] = y("");
+  let [toolDescription, setToolDescription] = useState("");
   let t1;
   let toolName;
   if ($[0] !== server.name || $[1] !== tool) {
@@ -105,17 +109,17 @@ function MCPToolDetailView(props) {
     $[9] = t4;
   } else t4 = $[9];
   let isOpenWorld = t4;
-  let me = toolTimeoutForServer(server.config);
-  let ne;
+  let descriptionLimit = toolTimeoutForServer(server.config);
+  let deferredLimit;
   if ($[10] !== server.config || $[11] !== tool) {
-    ne = toolTimeoutForServer(server.config, isDeferredTool(tool));
+    deferredLimit = toolTimeoutForServer(server.config, isDeferredTool(tool));
     $[10] = server.config;
     $[11] = tool;
-    $[12] = ne;
-  } else ne = $[12];
-  let he = ne;
+    $[12] = deferredLimit;
+  } else deferredLimit = $[12];
+  let deferredLimit_2 = deferredLimit;
   let t5;
-  let Oe;
+  let descDeps;
   if ($[13] !== tool) {
     t5 = () => {
       let loadDescription = async function loadDescription() {
@@ -143,57 +147,57 @@ function MCPToolDetailView(props) {
       };
       loadDescription();
     };
-    Oe = [tool];
+    descDeps = [tool];
     $[13] = tool;
     $[14] = t5;
-    $[15] = Oe;
+    $[15] = descDeps;
   } else {
     t5 = $[14];
-    Oe = $[15];
+    descDeps = $[15];
   }
-  P(t5, Oe);
-  let je;
+  useEffect(t5, descDeps);
+  let readOnlyTag;
   if ($[16] !== isReadOnly) {
-    je =
+    readOnlyTag =
       isReadOnly &&
       jsxProd_default(Text, {
         color: "success",
         children: " [read-only]",
       });
     $[16] = isReadOnly;
-    $[17] = je;
-  } else je = $[17];
-  let ae;
+    $[17] = readOnlyTag;
+  } else readOnlyTag = $[17];
+  let destructiveTag;
   if ($[18] !== isDestructive) {
-    ae =
+    destructiveTag =
       isDestructive &&
       jsxProd_default(Text, {
         color: "error",
         children: " [destructive]",
       });
     $[18] = isDestructive;
-    $[19] = ae;
-  } else ae = $[19];
-  let Se;
+    $[19] = destructiveTag;
+  } else destructiveTag = $[19];
+  let openWorldTag;
   if ($[20] !== isOpenWorld) {
-    Se =
+    openWorldTag =
       isOpenWorld &&
       jsxProd_default(Text, {
         dimColor: true,
         children: " [open-world]",
       });
     $[20] = isOpenWorld;
-    $[21] = Se;
-  } else Se = $[21];
+    $[21] = openWorldTag;
+  } else openWorldTag = $[21];
   let t10;
-  if ($[22] !== displayName || $[23] !== Se || $[24] !== je || $[25] !== ae) {
+  if ($[22] !== displayName || $[23] !== openWorldTag || $[24] !== readOnlyTag || $[25] !== destructiveTag) {
     t10 = jsxProd_default_2(Fragment, {
-      children: [displayName, je, ae, Se],
+      children: [displayName, readOnlyTag, destructiveTag, openWorldTag],
     });
     $[22] = displayName;
-    $[23] = Se;
-    $[24] = je;
-    $[25] = ae;
+    $[23] = openWorldTag;
+    $[24] = readOnlyTag;
+    $[25] = destructiveTag;
     $[26] = t10;
   } else t10 = $[26];
   let titleContent = t10;
@@ -208,19 +212,19 @@ function MCPToolDetailView(props) {
     });
     $[27] = inputGuide;
   } else inputGuide = $[27];
-  let He;
+  let nameLabel;
   if ($[28] === MEMO_CACHE_SENTINEL) {
-    He = jsxProd_default(Text, {
+    nameLabel = jsxProd_default(Text, {
       bold: true,
       children: "Tool name: ",
     });
-    $[28] = He;
-  } else He = $[28];
+    $[28] = nameLabel;
+  } else nameLabel = $[28];
   let t12;
   if ($[29] !== toolName) {
     t12 = jsxProd_default_2(Box, {
       children: [
-        He,
+        nameLabel,
         jsxProd_default(Text, {
           dimColor: true,
           children: toolName,
@@ -253,7 +257,7 @@ function MCPToolDetailView(props) {
     $[33] = t14;
   } else t14 = $[33];
   let t15;
-  if ($[34] !== he || $[35] !== me || $[36] !== toolDescription) {
+  if ($[34] !== deferredLimit_2 || $[35] !== descriptionLimit || $[36] !== toolDescription) {
     t15 =
       toolDescription &&
       jsxProd_default_2(Box, {
@@ -266,24 +270,25 @@ function MCPToolDetailView(props) {
           }),
           jsxProd_default(Text, {
             wrap: "wrap",
-            children: truncateWithCount(toolDescription, Math.min(TOOL_DETAIL_REFRESH_MS, me)),
+            children: truncateWithCount(toolDescription, Math.min(TOOL_DETAIL_REFRESH_MS, descriptionLimit)),
           }),
-          toolDescription.length > me &&
+          toolDescription.length > descriptionLimit &&
             jsxProd_default_2(Text, {
               dimColor: true,
               children: [
                 "The model receives only about the first ",
-                me,
+                descriptionLimit,
                 " ",
                 "characters",
-                he > me && `, or ${he} once the model loads the tool through tool search`,
+                deferredLimit_2 > descriptionLimit &&
+                  `, or ${deferredLimit_2} once the model loads the tool through tool search`,
                 ".",
               ],
             }),
         ],
       });
-    $[34] = he;
-    $[35] = me;
+    $[34] = deferredLimit_2;
+    $[35] = descriptionLimit;
     $[36] = toolDescription;
     $[37] = t15;
   } else t15 = $[37];

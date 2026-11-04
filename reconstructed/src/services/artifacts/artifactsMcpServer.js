@@ -22,10 +22,10 @@ import { posixPathToWindowsPath } from "../../utils/path.js";
  * 再启动自身的 argv 前缀：[execPath, argv[1]?]。
  */
 function getSelfExecArgv() {
-  let r = [process.execPath];
-  let o = process.argv[1];
-  if (!isStandaloneExecutable() && o) r.push(o);
-  return r;
+  let headerMap = [process.execPath];
+  let script = process.argv[1];
+  if (!isStandaloneExecutable() && script) headerMap.push(script);
+  return headerMap;
 }
 //@ chunk-hvmwwjxr.js:551-757 placement
 /**
@@ -46,8 +46,8 @@ var READ_TOOL_NAMES = [
 /**
  * 导出函数 `mcpToolNames`：参数 r，返回 r.map((o) => buildMcpToolName(CLAUDE_ARTIFACTS, o))。
  */
-function mcpToolNames(r) {
-  return r.map((o) => buildMcpToolName(CLAUDE_ARTIFACTS, o));
+function mcpToolNames(names) {
+  return names.map((name) => buildMcpToolName(CLAUDE_ARTIFACTS, name));
 }
 //@ chunk-hvmwwjxr.js:801-816 placement
 var GLOB_CHARS_RE = /[*?[{]/;
@@ -56,8 +56,8 @@ var GLOB_CHARS_RE = /[*?[{]/;
  * 求评测用 Artifacts MCP 服务可读的根目录：基础目录加上命令行 --allowedTools 里 Read(//绝对路径/**) 规则的路径（规范化、去尾斜杠，Windows 下转换）。
  */
 function getEvalReadRoots(originalCwd, toolPermissionContext) {
-  let flattened = (toolPermissionContext.alwaysAllowRules.cliArg ?? []).flatMap((t) => {
-    let { toolName, ruleContent } = permissionRuleValueFromString(t);
+  let flattened = (toolPermissionContext.alwaysAllowRules.cliArg ?? []).flatMap((dirs) => {
+    let { toolName, ruleContent } = permissionRuleValueFromString(dirs);
     return toolName === FILE_READ_TOOL_NAME && ruleContent?.startsWith("//") === true
       ? [ruleContent.slice(1).replace(/\/\*\*$/, "")]
       : [];
@@ -65,19 +65,19 @@ function getEvalReadRoots(originalCwd, toolPermissionContext) {
   return [
     originalCwd,
     ...flattened
-      .filter((t) => !GLOB_CHARS_RE.test(t))
-      .map((t) => path.posix.normalize(t).replace(/\/+$/, ""))
-      .filter((t) => t !== "" && t !== ".")
-      .map((t) => (getPlatform() === "windows" ? posixPathToWindowsPath(t) : t)),
+      .filter((dir) => !GLOB_CHARS_RE.test(dir))
+      .map((dir) => path.posix.normalize(dir).replace(/\/+$/, ""))
+      .filter((dir) => dir !== "" && dir !== ".")
+      .map((dir) => (getPlatform() === "windows" ? posixPathToWindowsPath(dir) : dir)),
   ];
 }
 //@ chunk-hvmwwjxr.js:1154-1266 placement = getServerCommandArray (0.769)
 function buildSelfStdioServerConfig(stubDir, evalReadRoots) {
-  let [e = process.execPath, ...t] = getSelfExecArgv();
+  let [execPath = process.execPath, ...rest] = getSelfExecArgv();
   return {
     type: "stdio",
-    command: e,
-    args: [...t, EVAL_ARTIFACTS_SERVER_FLAG, stubDir, ...evalReadRoots],
+    command: execPath,
+    args: [...rest, EVAL_ARTIFACTS_SERVER_FLAG, stubDir, ...evalReadRoots],
     env: {},
   };
 }

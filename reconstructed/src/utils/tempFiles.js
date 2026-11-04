@@ -25,54 +25,54 @@ var TENGU_MOSSY_KNUTH = "tengu_mossy_knuth";
 /**
  * 写入临时文件（校验临时目录所有权，随机名）。
  */
-async function writeTempFile(t, i, r, o) {
-  let e = claudeTempDir();
+async function writeTempFile(prefix, suffix, content, subdir) {
+  let tempDir = claudeTempDir();
   if (
     !readFlagWithOverride(TENGU_MOSSY_KNUTH, {
       safe: true,
     })
   ) {
-    let m = o ? join(e, o) : e;
-    await mkdir(m, {
+    let targetDir = subdir ? join(tempDir, subdir) : tempDir;
+    await mkdir(targetDir, {
       recursive: true,
       mode: 448,
     });
-    let c = join(m, `${t}${Date.now()}${i}`);
-    await writeFile(c, r);
-    return c;
+    let filePath = join(targetDir, `${prefix}${Date.now()}${suffix}`);
+    await writeFile(filePath, content);
+    return filePath;
   }
-  await mkdir(e, {
+  await mkdir(tempDir, {
     recursive: true,
     mode: 448,
   });
-  verifyTempDirOwnership(e);
-  let s = join(
-    safeResolvePath(getFsImplementation(), dirname(e)).resolvedPath,
-    basename(e),
-    `${t}${randomBytes(8).toString("hex")}${i}`,
+  verifyTempDirOwnership(tempDir);
+  let filePath = join(
+    safeResolvePath(getFsImplementation(), dirname(tempDir)).resolvedPath,
+    basename(tempDir),
+    `${prefix}${randomBytes(8).toString("hex")}${suffix}`,
   );
-  await writeNewFileExclusive(s, r);
-  return s;
+  await writeNewFileExclusive(filePath, content);
+  return filePath;
 }
 //@ chunk-kjv7wcqr.js:896-1128 placement
 /**
  * 以排他方式创建并写入文件（权限 600）。
  */
-async function writeNewFileExclusive(t, i) {
-  let r = await pinWriteTarget(t, [t], {
+async function writeNewFileExclusive(path, content) {
+  let pinned = await pinWriteTarget(path, [path], {
     leaf: "replace",
   });
   try {
-    await r.recheckBeforeWrite();
-    await assertPathSafeAsync(r.ioPath);
-    await writeFile(r.ioPath, i, {
+    await pinned.recheckBeforeWrite();
+    await assertPathSafeAsync(pinned.ioPath);
+    await writeFile(pinned.ioPath, content, {
       mode: 384,
       flag: constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | READ_LIMITS | O_NOFOLLOW_FLAG,
     });
   } catch (error) {
-    rethrowWithPath(error, r, t);
+    rethrowWithPath(error, pinned, path);
   } finally {
-    await r.close();
+    await pinned.close();
   }
 }
 export { writeTempFile, writeNewFileExclusive };

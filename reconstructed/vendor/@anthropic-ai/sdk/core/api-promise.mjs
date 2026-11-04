@@ -5,14 +5,14 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: esm-layout 1
  */
-import { Xo, addResponseIDs } from "../internal/parse.mjs";
+import { defaultParseResponse, addResponseIDs } from "../internal/parse.mjs";
 import { __classPrivateFieldSet, __classPrivateFieldGet } from "../internal/tslib.mjs";
 
 //@ chunk-hwmsct5x.js:36448-37300 esm-layout
 var _APIPromise_client;
 var APIPromise = (() => {
   class APIPromise extends Promise {
-    constructor(client, responsePromise, parseResponse = Xo) {
+    constructor(client, responsePromise, parseResponse = defaultParseResponse) {
       super((resolve) => {
         resolve(null);
       });

@@ -25,32 +25,32 @@ function createSeedSendHandle({
   description = noDescription,
   afterFirstReply = noopSkipped,
 }) {
-  let t;
+  let settled;
   completion.then((outcome) => {
-    t = {
+    settled = {
       outcome,
       atMs: Date.now(),
     };
   });
-  let d = afterFirstReply;
-  let o;
+  let pendingAfterFirstReply = afterFirstReply;
+  let resolveReadBack;
   let readBack = new Promise((resolve) => {
-    o = resolve;
+    resolveReadBack = resolve;
   });
   return {
     completion,
     status,
     description,
-    outcome: () => t?.outcome,
-    settledAtMs: () => t?.atMs,
-    async afterFirstReply(e) {
-      let i = d;
-      d = null;
-      if (i === null) return noopSkipped();
+    outcome: () => settled?.outcome,
+    settledAtMs: () => settled?.atMs,
+    async afterFirstReply(signal) {
+      let handler = pendingAfterFirstReply;
+      pendingAfterFirstReply = null;
+      if (handler === null) return noopSkipped();
       try {
-        return await i(e, o);
+        return await handler(signal, resolveReadBack);
       } finally {
-        o(undefined);
+        resolveReadBack(undefined);
       }
     },
     readBack,

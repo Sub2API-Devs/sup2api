@@ -44,8 +44,8 @@ var REGISTER_REPO_ROOT_ERROR_TONES = {
   screened_link_text_climbs: "bad_reported",
 };
 //@ chunk-2tyecnjj.js:969-1005 placement
-function screenedReason(e) {
-  return `screened_${e}`;
+function screenedReason(reason) {
+  return `screened_${reason}`;
 }
 //@ chunk-2tyecnjj.js:1005-1047 placement
 function isKnownRepoRootErrorCode(errorClass) {
@@ -71,28 +71,30 @@ function registerRepoRootErrorClass(error) {
 /**
  * 检查目录是否可注册（非当前目录、未重复、在范围内）。
  */
-function checkRepoRootScope(e, originalCwd, i, a) {
-  let t = {
+function checkRepoRootScope(candidatePath, originalCwd, cliArgRoots, registeredPaths) {
+  let pathOptions = {
     caseFold: false,
     skipPrivateAlias: true,
     uncShapeParity: true,
   };
-  let r = isAbsolute(originalCwd) && pathInWorkingPath(e, originalCwd, t);
-  if (r && pathInWorkingPath(originalCwd, e, t))
+  let insideCwd = isAbsolute(originalCwd) && pathInWorkingPath(candidatePath, originalCwd, pathOptions);
+  if (insideCwd && pathInWorkingPath(originalCwd, candidatePath, pathOptions))
     return {
       allowed: false,
       code: "is_cwd",
       reason:
         "is the session's working directory, which is already registered; pass the cloned repo's own directory instead",
     };
-  if (a.includes(e))
+  if (registeredPaths.includes(candidatePath))
     return {
       allowed: false,
       code: "already_registered",
       reason: "is already a registered working directory",
     };
-  let any = i.some((n) => e !== n && pathInWorkingPath(e, n, t));
-  if (!r && !any)
+  let any = cliArgRoots.some(
+    (cliArgRoot) => candidatePath !== cliArgRoot && pathInWorkingPath(candidatePath, cliArgRoot, pathOptions),
+  );
+  if (!insideCwd && !any)
     return {
       allowed: false,
       code: "outside_scope",
@@ -105,23 +107,25 @@ function checkRepoRootScope(e, originalCwd, i, a) {
 //@ chunk-2tyecnjj.js:1802-2042 placement
 async function resolveRepoRootPaths(additionalWorkingDirectories) {
   return Promise.all(
-    [...additionalWorkingDirectories.values()].map(async (o) => {
-      if (await entryReachesForeignNetwork(o.path, getPermissionScreenAnchor()))
+    [...additionalWorkingDirectories.values()].map(async (workingDirEntry) => {
+      if (await entryReachesForeignNetwork(workingDirEntry.path, getPermissionScreenAnchor()))
         return {
-          source: o.source,
-          resolved: o.path,
+          source: workingDirEntry.source,
+          resolved: workingDirEntry.path,
         };
-      let i = await realpath(o.path).catch(() => o.path);
+      let realPath = await realpath(workingDirEntry.path).catch(() => workingDirEntry.path);
       return {
-        source: o.source,
-        resolved: isDifferentNetworkLocation(o.path, i, getPermissionScreenAnchor()) ? o.path : i,
+        source: workingDirEntry.source,
+        resolved: isDifferentNetworkLocation(workingDirEntry.path, realPath, getPermissionScreenAnchor())
+          ? workingDirEntry.path
+          : realPath,
       };
     }),
   );
 }
 //@ chunk-2tyecnjj.js:2042-2170 placement
-async function checkIsDirectory(e) {
-  return (await stat(e)).isDirectory()
+async function checkIsDirectory(targetPath) {
+  return (await stat(targetPath)).isDirectory()
     ? {
         allowed: true,
       }
@@ -148,11 +152,11 @@ var SCREENED_PATH_MESSAGES = {
 /**
  * 解析并安全检查要注册的目录（网络路径、可疑拼写、目录类型）。
  */
-async function resolveRepoRootCandidate(e, o, i) {
-  let a;
-  let t;
+async function resolveRepoRootCandidate(targetPath, getPermissionContext, originalCwd) {
+  let expandedPath;
+  let resolvedPath;
   try {
-    a = expandPath(e, i);
+    expandedPath = expandPath(targetPath, originalCwd);
   } catch {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "register_repo_root: target path could not be resolved",
@@ -160,17 +164,22 @@ async function resolveRepoRootCandidate(e, o, i) {
       "expansion_failed",
     );
   }
-  let r = vetPathSpellingsOrChain(e, a, o().trustedNetworkDirectories, {
-    allowLinkTextClimbs: true,
-  });
-  if (!r.ok)
+  let spellingCheck = vetPathSpellingsOrChain(
+    targetPath,
+    expandedPath,
+    getPermissionContext().trustedNetworkDirectories,
+    {
+      allowLinkTextClimbs: true,
+    },
+  );
+  if (!spellingCheck.ok)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "register_repo_root: target is a network path, an obfuscated spelling, or a path whose directories and symbolic links could not all be examined, which cannot be registered",
-      SCREENED_PATH_MESSAGES[r.reason],
-      screenedReason(r.reason),
+      SCREENED_PATH_MESSAGES[spellingCheck.reason],
+      screenedReason(spellingCheck.reason),
     );
   try {
-    t = await realpath(a);
+    resolvedPath = await realpath(expandedPath);
   } catch (error) {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "register_repo_root: target path could not be resolved",
@@ -178,16 +187,16 @@ async function resolveRepoRootCandidate(e, o, i) {
       isSadFsErrno(error) || isEnvFsErrno(error) ? "resolve_failed" : undefined,
     );
   }
-  let s = pathVettingReason(t, o().trustedNetworkDirectories);
-  if (s !== undefined)
+  let vettingReason = pathVettingReason(resolvedPath, getPermissionContext().trustedNetworkDirectories);
+  if (vettingReason !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "register_repo_root: target is a network path, an obfuscated spelling, or a path whose directories and symbolic links could not all be examined, which cannot be registered",
       "register_repo_root: resolved path rejected by the spelling screen",
-      screenedReason(s),
+      screenedReason(vettingReason),
     );
-  let n;
+  let directoryCheck;
   try {
-    n = await checkIsDirectory(t);
+    directoryCheck = await checkIsDirectory(resolvedPath);
   } catch (error) {
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "register_repo_root: target path could not be resolved",
@@ -195,36 +204,36 @@ async function resolveRepoRootCandidate(e, o, i) {
       isSadFsErrno(error) || isEnvFsErrno(error) ? "stat_failed" : undefined,
     );
   }
-  if (!n.allowed)
+  if (!directoryCheck.allowed)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `register_repo_root: ${sanitizeTelemetryString(e)} ${n.reason}`,
+      `register_repo_root: ${sanitizeTelemetryString(targetPath)} ${directoryCheck.reason}`,
       "register_repo_root: target is not a directory",
-      n.code,
+      directoryCheck.code,
     );
-  return t;
+  return resolvedPath;
 }
 //@ chunk-2tyecnjj.js:4026-4372 placement
 /**
  * 注册额外工作目录（RegisterRepoRoot 工具的核心）。
  */
-async function registerRepoRoot(directory, o, originalCwd) {
-  let repoRootCandidate = await resolveRepoRootCandidate(directory, o, originalCwd);
-  let repoRootPaths = await resolveRepoRootPaths(o().additionalWorkingDirectories);
-  let r = checkRepoRootScope(
-    repoRootCandidate,
+async function registerRepoRoot(targetPath, getPermissionContext, originalCwd) {
+  let candidatePath = await resolveRepoRootCandidate(targetPath, getPermissionContext, originalCwd);
+  let repoRootPaths = await resolveRepoRootPaths(getPermissionContext().additionalWorkingDirectories);
+  let scopeCheck = checkRepoRootScope(
+    candidatePath,
     getOriginalCwd(),
     repoRootPaths
       .filter((repoRootPath) => repoRootPath.source === "cliArg")
       .map((repoRootPath) => repoRootPath.resolved),
     repoRootPaths.map((repoRootPath) => repoRootPath.resolved),
   );
-  if (!r.allowed)
+  if (!scopeCheck.allowed)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `register_repo_root: ${sanitizeTelemetryString(directory)} ${r.reason}`,
+      `register_repo_root: ${sanitizeTelemetryString(targetPath)} ${scopeCheck.reason}`,
       "register_repo_root: directory is outside the allowed registration scope",
-      r.code,
+      scopeCheck.code,
     );
-  return repoRootCandidate;
+  return candidatePath;
 }
 export {
   registerRepoRoot,

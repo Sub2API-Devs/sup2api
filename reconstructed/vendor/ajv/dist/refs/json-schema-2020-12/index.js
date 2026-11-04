@@ -5,7 +5,7 @@
  * pieces: chunk-1r4fv9mg.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_schema } from "./schema.json.js";
 import { require_applicator } from "./meta/applicator.json.js";
 import { require_unevaluated } from "./meta/unevaluated.json.js";
@@ -16,7 +16,7 @@ import { require_meta_data } from "./meta/meta-data.json.js";
 import { require_validation } from "./meta/validation.json.js";
 
 //@ chunk-1r4fv9mg.js:12940-13281 cjs-require-graph
-var require_json_schema_2020_12 = x(function (cjsExports) {
+var require_json_schema_2020_12 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

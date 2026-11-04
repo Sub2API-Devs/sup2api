@@ -39,14 +39,23 @@ import { resetEnvironmentCaches } from "../../utils/contextAttachments/environme
 import { clearOutputStyleCaches } from "../../outputStyles/loadOutputStylesDir.js";
 import { clearOutputStylesCache, getAllOutputStylesCached } from "../../constants/outputStyles.js";
 import { SETTINGS_JSON } from "./workingFiles.js";
-import { RWs } from "../../cli/remoteIO/fileStoreVerdicts.js";
+import { fileStoreVerdictChannel } from "../../cli/remoteIO/fileStoreVerdicts.js";
 import { getSyncedFile, putSyncedFile } from "../syncedFiles/syncedFileSyncer.js";
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { sleep } from "../../utils/sleep.js";
 import { getCwd } from "../../utils/cwd.js";
 import { settingsToCloudCapability } from "../../cli/remoteIO/workerAuth.js";
 import { isSettingsToCloudEnabledCached } from "../analytics/violinGates.js";
 
+//@ chunk-2yrk0gy1.js:191-331 placement
+/**
+ * 设置未完全应用到云端时的原因说明（文件跳过、设置文件未应用、部分未应用）。
+ */
+var HOME_SEED_PARTIAL_REASONS = {
+  files: "some files were skipped there",
+  settings: "your settings file was not applied there",
+  part: "part of it was not applied there",
+};
 //@ chunk-twq47pff.js:53774-55457 placement
 /**
  * 生成云环境重建后本机设置恢复情况的提示：未恢复时说明原因；恢复时列出 deny/ask 规则数、生效时间与被省略的规则，并说明其他设置未恢复。
@@ -91,9 +100,9 @@ function formatHomeSeedRestoreNotice(status) {
   };
 }
 //@ chunk-twq47pff.js:55457-58474 placement
-function formatHomeSeedAppliedNotice(t) {
-  let { applied } = t;
-  let n = [
+function formatHomeSeedAppliedNotice(input) {
+  let { applied } = input;
+  let appliedNames = [
     ...(applied.claudeMd ? ["CLAUDE.md"] : []),
     ...(applied.rules > 0 ? [`${applied.rules} ${plural(applied.rules, "rule")}`] : []),
     ...(applied.outputStyles > 0
@@ -103,10 +112,10 @@ function formatHomeSeedAppliedNotice(t) {
       ? [`${applied.permissionRules} ${plural(applied.permissionRules, "permission rule")}`]
       : []),
     ...applied.settingsKeys
-      .filter((settingsKey) => !(t.outputStyleMissing && settingsKey === "outputStyle"))
+      .filter((settingsKey) => !(input.outputStyleMissing && settingsKey === "outputStyle"))
       .map((settingsKey) => SEED_PREFERENCE_LABELS[settingsKey] ?? settingsKey),
   ];
-  let l = [
+  let problemLines = [
     ...(applied.settingsKeptForeign
       ? [
           applied.permissionRules > 0
@@ -129,7 +138,7 @@ function formatHomeSeedAppliedNotice(t) {
           `${applied.credentialFilesLeftOut} ${plural(applied.credentialFilesLeftOut, "file was", "files were")} left out: ${plural(applied.credentialFilesLeftOut, "it looks like it holds", "they look like they hold")} a credential`,
         ]
       : []),
-    ...(t.outputStyleMissing ? [OUTPUT_STYLE_UNAVAILABLE_NOTICE] : []),
+    ...(input.outputStyleMissing ? [OUTPUT_STYLE_UNAVAILABLE_NOTICE] : []),
     ...(applied.filesKeptForeign > 0
       ? [
           `${applied.filesKeptForeign} of your files ${plural(applied.filesKeptForeign, "was", "were")} not written: this environment has ${plural(applied.filesKeptForeign, "a file", "files")} of the same name`,
@@ -151,33 +160,37 @@ function formatHomeSeedAppliedNotice(t) {
       : []),
     ...(applied.settingsRemoveFailed ? ["the earlier settings could not be removed"] : []),
   ];
-  let d = [
+  let removedNames = [
     ...(applied.filesRemoved > 0 ? [`${applied.filesRemoved} ${plural(applied.filesRemoved, "file")}`] : []),
     ...(applied.settingsRemoved ? ["the forwarded settings"] : []),
   ];
-  let u = n.length === 0 && d.length > 0;
-  if (n.length === 0 && !u && l.length === 0) return null;
-  let w = t.beforeFirstAsk ? "" : t.duringHold ? " (in effect for this reply)" : " (from your next message)";
-  let v = l.length > 0 ? ` (${l.join("; ")})` : "";
-  let P = applied.filesRemoved + (applied.settingsRemoved ? 2 : 0);
+  let onlyRemoved = appliedNames.length === 0 && removedNames.length > 0;
+  if (appliedNames.length === 0 && !onlyRemoved && problemLines.length === 0) return null;
+  let timingSuffix = input.beforeFirstAsk
+    ? ""
+    : input.duringHold
+      ? " (in effect for this reply)"
+      : " (from your next message)";
+  let problemSuffix = problemLines.length > 0 ? ` (${problemLines.join("; ")})` : "";
+  let removedWeight = applied.filesRemoved + (applied.settingsRemoved ? 2 : 0);
   return {
-    text: u
-      ? `${d.join(" and ")} from your machine ${plural(P, "was", "were")} removed${v}${w}`
-      : n.length === 0
-        ? `Settings from your machine were not applied: ${l.join("; ")}`
-        : t.generation === 1
-          ? t.beforeFirstAsk
-            ? `Started with settings from your machine: ${n.join(", ")}${v}`
-            : `Applied settings from your machine: ${n.join(", ")}${v}${w}`
-          : `Updated settings from your machine: ${n.join(", ")}${v}${w}`,
+    text: onlyRemoved
+      ? `${removedNames.join(" and ")} from your machine ${plural(removedWeight, "was", "were")} removed${problemSuffix}${timingSuffix}`
+      : appliedNames.length === 0
+        ? `Settings from your machine were not applied: ${problemLines.join("; ")}`
+        : input.generation === 1
+          ? input.beforeFirstAsk
+            ? `Started with settings from your machine: ${appliedNames.join(", ")}${problemSuffix}`
+            : `Applied settings from your machine: ${appliedNames.join(", ")}${problemSuffix}${timingSuffix}`
+          : `Updated settings from your machine: ${appliedNames.join(", ")}${problemSuffix}${timingSuffix}`,
     level:
-      t.outcome === "partial" ||
-      t.outputStyleMissing ||
+      input.outcome === "partial" ||
+      input.outputStyleMissing ||
       applied.credentialRestrictionsLeftOut > 0 ||
       applied.rulesLeftOut > 0 ||
       applied.credentialFilesLeftOut > 0
         ? "warning"
-        : l.length === 0 && !t.answersNotRestored
+        : problemLines.length === 0 && !input.answersNotRestored
           ? "debug"
           : "notice",
   };
@@ -227,7 +240,7 @@ function createCloudHomeSeedAnnouncer({
     },
     {
       verdicts: {
-        subscribe: RWs.subscribe,
+        subscribe: fileStoreVerdictChannel.subscribe,
       },
       announcements: {
         remembered: record.announcements,
@@ -239,23 +252,23 @@ function createCloudHomeSeedAnnouncer({
       sidecarState: checkSidecarState,
       readStandingSettings: readCloudSettingsForSeed,
       execute: applyHomeSeedToCloudSession,
-      applyDeps: io(() =>
+      applyDeps: memoizeAlias(() =>
         createApplyDeps({
           storageV5,
           configHome,
         }),
       ),
-      afterApply: (y, j) => reloadAfterSeedApply(y, j, reloaders),
+      afterApply: (report, extra) => reloadAfterSeedApply(report, extra, reloaders),
       telemetry: createHomeSeedTelemetry(),
       now: () => Date.now(),
-      setTimer: (y, j) => {
-        let timer = setTimeout(y, j);
+      setTimer: (callback, delayMs) => {
+        let timer = setTimeout(callback, delayMs);
         return () => clearTimeout(timer);
       },
       sleep,
       epochGt1: isLaterEpoch,
-      outputStyleAvailable: async (y) =>
-        Object.hasOwn(await getAllOutputStylesCached(getCwd(), storageV5), y),
+      outputStyleAvailable: async (styleName) =>
+        Object.hasOwn(await getAllOutputStylesCached(getCwd(), storageV5), styleName),
       enabled: () => settingsToCloudCapability(isLaterEpoch),
       ...{
         enabledNow: isSettingsToCloudEnabledCached,
@@ -269,13 +282,9 @@ function createCloudHomeSeedAnnouncer({
     },
   );
 }
-//@ chunk-2yrk0gy1.js:191-331 placement
-/**
- * 设置未完全应用到云端时的原因说明（文件跳过、设置文件未应用、部分未应用）。
- */
-var HOME_SEED_PARTIAL_REASONS = {
-  files: "some files were skipped there",
-  settings: "your settings file was not applied there",
-  part: "part of it was not applied there",
+export {
+  HOME_SEED_PARTIAL_REASONS,
+  formatHomeSeedAppliedNotice,
+  formatHomeSeedRestoreNotice,
+  createCloudHomeSeedAnnouncer,
 };
-export { HOME_SEED_PARTIAL_REASONS };

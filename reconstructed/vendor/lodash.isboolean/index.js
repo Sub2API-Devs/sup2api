@@ -5,10 +5,10 @@
  * pieces: chunk-mrx6y2r5.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-mrx6y2r5.js:13288-13495 cjs-fingerprint
-var require_lodash_isboolean = x(function (cjsExports, cjsModule) {
+var require_lodash_isboolean = __commonJS(function (cjsExports, cjsModule) {
   var boolTag = "[object Boolean]";
   var objectProto = Object.prototype;
   var objectToString = objectProto.toString;

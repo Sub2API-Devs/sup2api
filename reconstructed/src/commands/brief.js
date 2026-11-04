@@ -9,7 +9,7 @@
  * attribution: fingerprint 3
  */
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, M } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, booleanSchema } from "../../vendor/zod/v4/classic/schemas.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
 import { isBriefEntitled } from "../tools/BriefTool/BriefTool.js";
 import { logEvent } from "../services/analytics/index.js";
@@ -22,8 +22,8 @@ import { BRIEF_TOOL_NAME } from "../tools/BriefTool/prompt.js";
  * DEFAULT_BRIEF_CONFIG：同旧版。
  */
 var BRIEF_CONFIG_SCHEMA = DoctorLazy(() =>
-  u({
-    enable_slash_command: M(),
+  objectSchema({
+    enable_slash_command: booleanSchema(),
   }),
 );
 var DEFAULT_BRIEF_CONFIG = {
@@ -86,3 +86,4 @@ ${newState ? `Brief mode is now enabled. Use the ${BRIEF_TOOL_NAME} tool for all
     }),
 };
 var briefCommand = briefCommandDefinition;
+export { briefCommand };

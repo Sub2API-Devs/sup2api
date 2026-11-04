@@ -37,15 +37,15 @@ class FocusManager {
   constructor(dispatchFocusEvent) {
     this.dispatchFocusEvent = dispatchFocusEvent;
   }
-  subscribe = (n) => {
-    this.listeners.add(n);
-    return () => this.listeners.delete(n);
+  subscribe = (listener) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   };
   notify() {
     for (let listener of this.listeners) listener();
   }
-  focus(n) {
-    let node = this.resolveScope(n);
+  focus(element) {
+    let node = this.resolveScope(element);
     if (node === this.activeElement) return;
     let previous = this.activeElement;
     if (previous) {
@@ -59,13 +59,18 @@ class FocusManager {
     this.dispatchFocusEvent(node, new FocusEvent("focus", previous));
     this.notify();
   }
-  resolveScope(n) {
-    if (n.attributes.tabIndex !== -1) return n;
-    let u = (node) => !!node && node !== n && isTabbable(node) && isDescendantOf(node, n);
-    if (u(this.activeElement)) return this.activeElement;
-    let last = this.focusStack.findLast(u);
+  resolveScope(element) {
+    if (element.attributes.tabIndex !== -1) return element;
+    let isFocusableIn = (node) =>
+      !!node && node !== element && isTabbable(node) && isDescendantOf(node, element);
+    if (isFocusableIn(this.activeElement)) return this.activeElement;
+    let last = this.focusStack.findLast(isFocusableIn);
     if (last) return last;
-    return this.autoFocusStack.findLast((p) => p.attributes.autoFocus === true && u(p)) ?? n;
+    return (
+      this.autoFocusStack.findLast(
+        (candidate) => candidate.attributes.autoFocus === true && isFocusableIn(candidate),
+      ) ?? element
+    );
   }
   blur() {
     if (!this.activeElement) return;
@@ -76,7 +81,9 @@ class FocusManager {
   }
   handleNodeRemoved(node, root) {
     this.focusStack = this.focusStack.filter((n) => n !== node && isDescendantOf(n, root));
-    this.autoFocusStack = this.autoFocusStack.filter((p) => p !== node && isDescendantOf(p, root));
+    this.autoFocusStack = this.autoFocusStack.filter(
+      (candidate) => candidate !== node && isDescendantOf(candidate, root),
+    );
     if (!this.activeElement) return;
     if (this.activeElement !== node && isDescendantOf(this.activeElement, root)) return;
     let removed = this.activeElement;
@@ -98,11 +105,11 @@ class FocusManager {
     }
     this.notify();
   }
-  pushAutoFocusFallback(n) {
-    if (this.autoFocusStack.at(-1) === n) return;
-    let index = this.autoFocusStack.indexOf(n);
+  pushAutoFocusFallback(tree) {
+    if (this.autoFocusStack.at(-1) === tree) return;
+    let index = this.autoFocusStack.indexOf(tree);
     if (index !== -1) this.autoFocusStack.splice(index, 1);
-    this.autoFocusStack.push(n);
+    this.autoFocusStack.push(tree);
     if (this.autoFocusStack.length > MAX_FOCUS_STACK) this.autoFocusStack.shift();
   }
   handleAutoFocus(node) {
@@ -126,20 +133,20 @@ class FocusManager {
     }
     let fromRect = getNodeScreenRect(this.activeElement);
     if (!fromRect) return false;
-    let m = null;
-    let p = 1 / 0;
-    for (let g of collectTabbable(root)) {
-      if (isDescendantOf(this.activeElement, g)) continue;
-      let toRect = getNodeScreenRect(g);
+    let bestNode = null;
+    let bestScore = 1 / 0;
+    for (let candidate of collectTabbable(root)) {
+      if (isDescendantOf(this.activeElement, candidate)) continue;
+      let toRect = getNodeScreenRect(candidate);
       if (!toRect) continue;
-      let T = directionalFocusScore(fromRect, toRect, direction);
-      if (T < p) {
-        p = T;
-        m = g;
+      let score = directionalFocusScore(fromRect, toRect, direction);
+      if (score < bestScore) {
+        bestScore = score;
+        bestNode = candidate;
       }
     }
-    if (m) {
-      this.focus(m);
+    if (bestNode) {
+      this.focus(bestNode);
       return true;
     }
     return false;
@@ -208,8 +215,8 @@ function distanceOutsideSpan(value, start, length) {
   return 0;
 }
 //@ chunk-bzr73sfg.js:194453-194525 placement
-function spanOverlap(n, u, f, m) {
-  return Math.max(0, Math.min(n + u, f + m) - Math.max(n, f));
+function spanOverlap(startA, lengthA, startB, lengthB) {
+  return Math.max(0, Math.min(startA + lengthA, startB + lengthB) - Math.max(startA, startB));
 }
 //@ chunk-bzr73sfg.js:194525-194881 placement
 /**
@@ -245,10 +252,10 @@ function getNodeScreenRect(node) {
  * 判断节点是否在另一节点之下。
  */
 function isDescendantOf(node, ancestor) {
-  let f = node;
-  while (f) {
-    if (f === ancestor) return true;
-    f = f.parentNode;
+  let current = node;
+  while (current) {
+    if (current === ancestor) return true;
+    current = current.parentNode;
   }
   return false;
 }
@@ -275,7 +282,7 @@ export {
   getFocusManager,
   isDescendantOf,
   markHasAbsoluteDescendant,
-  walkTabbable,
   getRootNode,
+  walkTabbable,
   FocusManager,
 };

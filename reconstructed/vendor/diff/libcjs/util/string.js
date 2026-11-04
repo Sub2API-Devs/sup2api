@@ -38,11 +38,11 @@ function replaceSuffix(string, oldSuffix, newSuffix) {
   return string.slice(0, -oldSuffix.length) + newSuffix;
 }
 //@ chunk-7vb8p3zb.js:3691-3724 esm-layout
-function W(string, oldPrefix) {
+function stripPrefixOnce(string, oldPrefix) {
   return replacePrefix(string, oldPrefix, "");
 }
 //@ chunk-7vb8p3zb.js:3724-3757 esm-layout
-function y(string, oldSuffix) {
+function stripSuffixOnce(string, oldSuffix) {
   return replaceSuffix(string, oldSuffix, "");
 }
 //@ chunk-7vb8p3zb.js:3757-3798 esm-layout
@@ -112,10 +112,10 @@ export {
   leadingAndTrailingWs,
   longestCommonPrefix,
   replaceSuffix,
-  W,
+  stripPrefixOnce,
   longestCommonSuffix,
   replacePrefix,
-  y,
+  stripSuffixOnce,
   leadingWs,
   trailingWs,
   maximumOverlap,

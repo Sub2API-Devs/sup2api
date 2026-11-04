@@ -78,8 +78,8 @@ var DEVICE_BINDING_REFUSAL_TEXTS_ALL = {
 /**
  * 判断某个字符串是否属于已知的设备绑定拒绝原因（用于决定是否按远端未绑定提示）。
  */
-function isKnownDeviceBindingRefusal(e) {
-  return Object.hasOwn(DEVICE_BINDING_REFUSAL_TEXTS, e);
+function isKnownDeviceBindingRefusal(refusalText) {
+  return Object.hasOwn(DEVICE_BINDING_REFUSAL_TEXTS, refusalText);
 }
 //@ chunk-s61vbvea.js:496757-496966 placement
 function formatUnboundSessionNotice(reason) {
@@ -107,15 +107,18 @@ function classifyDeviceBindingBlocker(error) {
 /**
  * 取设备绑定拒绝原因对应的用户可见文案（合并两组合文本）；未知原因返回 undefined。
  */
-function deviceBindingRefusalText(e) {
-  return DEVICE_BINDING_REFUSAL_TEXTS_ALL[e];
+function deviceBindingRefusalText(refusalText) {
+  return DEVICE_BINDING_REFUSAL_TEXTS_ALL[refusalText];
 }
 //@ chunk-s61vbvea.js:497195-497250 placement
 var NOT_BOUND_PREFIX = "Not bound to this machine (local tools off): ";
 //@ chunk-s61vbvea.js:497250-497351 placement
-function isDeviceRevokedError(e) {
-  let n = e === "device_revoked" ? "removed from claude.ai devices" : deviceBindingRefusalText(e);
-  return `${NOT_BOUND_PREFIX}${n}`;
+function isDeviceRevokedError(refusalText) {
+  let detail =
+    refusalText === "device_revoked"
+      ? "removed from claude.ai devices"
+      : deviceBindingRefusalText(refusalText);
+  return `${NOT_BOUND_PREFIX}${detail}`;
 }
 //@ chunk-s61vbvea.js:497351-497479 placement
 var LOCAL_TOOLS_OFF_PREFIX = "Local tools off in this window: ";
@@ -125,10 +128,10 @@ var LOCAL_TOOLS_IN_APPROVED_FOLDER_TEXT = `Local tools ${RUNS_IN_APPROVED_FOLDER
 /**
  * 按设备绑定状态（detached / other_state / unreadable / unstated）给出"本地工具为何不可用"的说明尾句；n 为"重新开会话"的位置描述。
  */
-function describeBindingState(e, n) {
-  switch (e) {
+function describeBindingState(state, suffix) {
+  switch (state) {
     case "detached":
-      return `this session runs them in its approved folder. If that folder is disconnected, ask Claude to use it again; or start a new session ${n}`;
+      return `this session runs them in its approved folder. If that folder is disconnected, ask Claude to use it again; or start a new session ${suffix}`;
     case "other_state":
     case "unreadable":
     case "unstated":
@@ -139,35 +142,36 @@ function describeBindingState(e, n) {
 /**
  * 附着设备时的状态提示：已连接/已请求时说明工具在批准目录运行（不弹 toast），否则拼"本窗口本地工具关闭"前缀和原因，非 detached 时弹 toast。
  */
-function getDeviceBindingStatusNotice(toolHostLink) {
-  return toolHostLink === "connected" || toolHostLink === "requested"
+function getDeviceBindingStatusNotice(state) {
+  return state === "connected" || state === "requested"
     ? {
         text: LOCAL_TOOLS_IN_APPROVED_FOLDER_TEXT,
         toast: false,
       }
     : {
-        text: `${LOCAL_TOOLS_OFF_PREFIX}${describeBindingState(toolHostLink, "here")}`,
-        toast: toolHostLink !== "detached",
+        text: `${LOCAL_TOOLS_OFF_PREFIX}${describeBindingState(state, "here")}`,
+        toast: state !== "detached",
       };
 }
 //@ chunk-s61vbvea.js:497967-498104 placement
 /**
  * 裸云会话附着时的提示：未连接时返回"此客户端不为该会话运行工具"及原因，已连接返回 undefined。
  */
-function getBareSessionNoToolsNotice(toolHostLink) {
-  return toolHostLink === "connected" || toolHostLink === "requested"
+function getBareSessionNoToolsNotice(state) {
+  return state === "connected" || state === "requested"
     ? undefined
-    : `This client runs no tools for this session: ${describeBindingState(toolHostLink, "from this folder")}`;
+    : `This client runs no tools for this session: ${describeBindingState(state, "from this folder")}`;
 }
 //@ chunk-s61vbvea.js:498104-498394 placement
-function formatDeviceNotBoundMessage(e) {
-  if (e.startsWith(NOT_BOUND_PREFIX))
-    return `not bound to this computer: ${e.slice(NOT_BOUND_PREFIX.length)}`;
-  if (e.startsWith(LOCAL_TOOLS_OFF_PREFIX))
-    return `off in this window: ${e.slice(LOCAL_TOOLS_OFF_PREFIX.length)}`;
-  if (e === LOCAL_TOOLS_IN_APPROVED_FOLDER_TEXT) return RUNS_IN_APPROVED_FOLDER_TEXT;
-  for (let n of ["Start ", "This "]) if (e.startsWith(n)) return `${n.toLowerCase()}${e.slice(n.length)}`;
-  return e;
+function formatDeviceNotBoundMessage(message) {
+  if (message.startsWith(NOT_BOUND_PREFIX))
+    return `not bound to this computer: ${message.slice(NOT_BOUND_PREFIX.length)}`;
+  if (message.startsWith(LOCAL_TOOLS_OFF_PREFIX))
+    return `off in this window: ${message.slice(LOCAL_TOOLS_OFF_PREFIX.length)}`;
+  if (message === LOCAL_TOOLS_IN_APPROVED_FOLDER_TEXT) return RUNS_IN_APPROVED_FOLDER_TEXT;
+  for (let prefix of ["Start ", "This "])
+    if (message.startsWith(prefix)) return `${prefix.toLowerCase()}${message.slice(prefix.length)}`;
+  return message;
 }
 //@ chunk-s61vbvea.js:498394-498428 placement
 var REMOTE_DEVICE_NOT_BOUND = "remote-device-not-bound";
@@ -189,7 +193,7 @@ function createDeviceNotBoundNotification(text) {
 /**
  * 本构建里恒返回 false：--project 会话不能绑定设备。
  */
-async function isProjectSessionBindable(e, n) {
+async function isProjectSessionBindable(session, options) {
   return false;
 }
 //@ chunk-s61vbvea.js:498563-498587 placement
@@ -203,44 +207,50 @@ function emptyBindingFacts() {
 /**
  * 判断工作目录是否根目录、home 目录或配置目录，这些目录不能绑定设备
  */
-function classifyBindingFolder(e, rootAnchors = {}, r = bindingFolderCandidates(e)) {
-  let mapped = [e, ...r].map(resolvePathCached);
-  if (mapped.some((x) => x === parse(x).root || isWslMntRoot(x))) return "folder_is_root";
-  let h = isAbsolute(rootAnchors.home ?? homedir());
-  let y = isAbsolute(rootAnchors.configHome ?? getClaudeConfigDir());
+function classifyBindingFolder(folder, rootAnchors = {}, candidates = bindingFolderCandidates(folder)) {
+  let mapped = [folder, ...candidates].map(resolvePathCached);
+  if (mapped.some((path) => path === parse(path).root || isWslMntRoot(path))) return "folder_is_root";
+  let homeConfigured = isAbsolute(rootAnchors.home ?? homedir());
+  let configHomeConfigured = isAbsolute(rootAnchors.configHome ?? getClaudeConfigDir());
   let { home, configHome, foldCase } = resolveBindingRoots({
     ...rootAnchors,
     folder: mapped[0],
   });
-  for (let x of mapped) {
-    if (h && isPathInside(x, home, foldCase)) return "folder_is_home";
-    if (y && (isPathInside(x, configHome, foldCase) || isPathInside(configHome, x, foldCase)))
+  for (let path of mapped) {
+    if (homeConfigured && isPathInside(path, home, foldCase)) return "folder_is_home";
+    if (
+      configHomeConfigured &&
+      (isPathInside(path, configHome, foldCase) || isPathInside(configHome, path, foldCase))
+    )
       return "folder_holds_config";
   }
   return null;
 }
 //@ chunk-s61vbvea.js:499073-499148 placement
-function bindingFolderCandidates(filePath, n = findCanonicalGitRoot) {
+function bindingFolderCandidates(filePath, findGitRoot = findCanonicalGitRoot) {
   let path = resolvePathCached(filePath);
-  let s = n(filePath) ?? filePath;
-  let h = n(path) ?? path;
-  return s === h ? [h] : [s, h];
+  let rawRoot = findGitRoot(filePath) ?? filePath;
+  let resolvedRoot = findGitRoot(path) ?? path;
+  return rawRoot === resolvedRoot ? [resolvedRoot] : [rawRoot, resolvedRoot];
 }
 //@ chunk-s61vbvea.js:499148-499209 placement = setCwdState (1)
-function foldCaseIf(cwd, n) {
-  return n ? cwd.normalize("NFC").toLowerCase() : cwd;
+function foldCaseIf(cwd, foldCase) {
+  return foldCase ? cwd.normalize("NFC").toLowerCase() : cwd;
 }
 //@ chunk-s61vbvea.js:499209-499342 placement
 function isPathInside(cwd, cwd_2, foldCase, { isAbsolute, relative, sep } = path) {
-  let S = relative(foldCaseIf(cwd, foldCase), foldCaseIf(cwd_2, foldCase));
-  return S === "" || (S !== ".." && !S.startsWith(".." + sep) && !isAbsolute(S));
+  let relativePath = relative(foldCaseIf(cwd, foldCase), foldCaseIf(cwd_2, foldCase));
+  return (
+    relativePath === "" ||
+    (relativePath !== ".." && !relativePath.startsWith(".." + sep) && !isAbsolute(relativePath))
+  );
 }
 //@ chunk-s61vbvea.js:499342-499399 placement = setCwdState (0.757)
 function nfcOnMacos(cwd) {
   return getPlatform_2() === "macos" ? cwd.normalize("NFC") : cwd;
 }
 //@ chunk-s61vbvea.js:499399-499633 placement
-function realpathSafe(filePath, n = (r) => r()) {
+function realpathSafe(filePath, readRealpath = (run) => run()) {
   if (hasBackslash(filePath))
     return {
       unresolved: Object.assign(Error("realpath would read a backslash in this path as a separator"), {
@@ -249,7 +259,7 @@ function realpathSafe(filePath, n = (r) => r()) {
     };
   try {
     return {
-      resolved: nfcOnMacos(n(() => realpathSync.native(filePath))),
+      resolved: nfcOnMacos(readRealpath(() => realpathSync.native(filePath))),
     };
   } catch (error) {
     return {
@@ -259,23 +269,23 @@ function realpathSafe(filePath, n = (r) => r()) {
 }
 //@ chunk-s61vbvea.js:499633-499702 placement = getResolvedDir (0.798)
 function resolvePathCached(filePath) {
-  let n = realpathSafe(filePath);
-  return "resolved" in n ? n.resolved : nfcOnMacos(resolve(filePath));
+  let result = realpathSafe(filePath);
+  return "resolved" in result ? result.resolved : nfcOnMacos(resolve(filePath));
 }
 //@ chunk-s61vbvea.js:499702-499888 placement
 function resolveBindingRoots({
-  folder: e,
+  folder,
   home: filePath = homedir(),
   configHome: filePath_2 = getClaudeConfigDir(),
 } = {}) {
-  let s = {
+  let roots = {
     home: resolvePathCached(filePath),
     configHome: resolvePathCached(filePath_2),
   };
   return {
-    ...s,
-    foldCase: [e, s.home, s.configHome].some((h) => isCaseInsensitivePlatform(h)),
-    wholeDrive: e !== undefined && isWslMntRoot(e),
+    ...roots,
+    foldCase: [folder, roots.home, roots.configHome].some((path) => isCaseInsensitivePlatform(path)),
+    wholeDrive: folder !== undefined && isWslMntRoot(folder),
   };
 }
 export {

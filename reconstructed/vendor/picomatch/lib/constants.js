@@ -5,10 +5,10 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:295542-298160 cjs-fingerprint
-var require_constants = x(function (cjsExports, cjsModule) {
+var require_constants = __commonJS(function (cjsExports, cjsModule) {
   var POSIX_CHARS = {
     DOT_LITERAL: "\\.",
     PLUS_LITERAL: "\\+",

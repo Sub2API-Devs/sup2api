@@ -22,8 +22,8 @@ class ConfigReaderSlot {
 //@ chunk-aepeg2w5.js:74937-74951 placement
 var configReaderSlot = new ConfigReaderSlot();
 //@ chunk-aepeg2w5.js:74951-74981 placement
-function registerJuniperShoalReader(e) {
-  configReaderSlot.register(e);
+function registerJuniperShoalReader(reader) {
+  configReaderSlot.register(reader);
 }
 //@ chunk-aepeg2w5.js:74981-75126 placement
 /**
@@ -43,40 +43,42 @@ var DEFAULT_JUNIPER_SHOAL_CONFIG = Object.freeze({
  * 读取 juniper_shoal 配置（每 N 回合、最大名字数）。
  */
 function getJuniperShoalConfig() {
-  let e;
+  let raw;
   try {
-    e = configReaderSlot.reader?.()?.juniper_shoal;
+    raw = configReaderSlot.reader?.()?.juniper_shoal;
   } catch {
     return DEFAULT_JUNIPER_SHOAL_CONFIG;
   }
-  if (typeof e !== "object" || e === null || Array.isArray(e)) return DEFAULT_JUNIPER_SHOAL_CONFIG;
-  let n = e;
-  let r = null;
-  let marshLantern = n.marsh_lantern;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return DEFAULT_JUNIPER_SHOAL_CONFIG;
+  let config = raw;
+  let reminder = null;
+  let marshLantern = config.marsh_lantern;
   if (marshLantern === true)
-    r = Object.freeze({
+    reminder = Object.freeze({
       everyNTurns: DEFAULT_EVERY_N_TURNS,
       maxNames: DEFAULT_MAX_NAMES,
     });
   else if (typeof marshLantern === "object" && marshLantern !== null && !Array.isArray(marshLantern)) {
-    let h = marshLantern;
+    let lantern = marshLantern;
     let everyNTurns =
-      typeof h.stride === "number" && Number.isInteger(h.stride) && h.stride >= 1
-        ? h.stride
+      typeof lantern.stride === "number" && Number.isInteger(lantern.stride) && lantern.stride >= 1
+        ? lantern.stride
         : DEFAULT_EVERY_N_TURNS;
     let maxNames =
-      typeof h.span === "number" && Number.isInteger(h.span) && h.span >= 1 ? h.span : DEFAULT_MAX_NAMES;
-    r = Object.freeze({
+      typeof lantern.span === "number" && Number.isInteger(lantern.span) && lantern.span >= 1
+        ? lantern.span
+        : DEFAULT_MAX_NAMES;
+    reminder = Object.freeze({
       everyNTurns,
       maxNames,
     });
   }
   return Object.freeze({
-    toolSearchReminder: r,
-    toolParamStrictness: n.bracken_spool === true,
-    emptyInputRepair: n.teasel_cove === true,
-    toolSearchFetchRule: n.gorse_hollow === true,
-    schemaDescFixes: n.thistle_skein === true,
+    toolSearchReminder: reminder,
+    toolParamStrictness: config.bracken_spool === true,
+    emptyInputRepair: config.teasel_cove === true,
+    toolSearchFetchRule: config.gorse_hollow === true,
+    schemaDescFixes: config.thistle_skein === true,
   });
 }
 //@ chunk-aepeg2w5.js:75812-75858 placement

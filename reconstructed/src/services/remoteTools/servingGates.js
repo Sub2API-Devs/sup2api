@@ -107,8 +107,8 @@ function isRemoteToolServingOnForSettings() {
   return isViolinWoodEnabledCached() && isRemoteToolServingSwitchOn();
 }
 //@ chunk-e2fknt7w.js:15874-15922 placement
-function isPersonFixableOffReason(e) {
-  return e === "launched_from_home";
+function isPersonFixableOffReason(reason) {
+  return reason === "launched_from_home";
 }
 //@ chunk-e2fknt7w.js:15922-16035 placement
 var TENGU_VIOLIN_MUTE = "tengu_violin_mute";
@@ -185,35 +185,35 @@ function isRemoteToolServingMuted() {
 //@ chunk-e2fknt7w.js:16694-16708 placement
 var SERVING_MUTE_RECHECK_INTERVAL_MS = 300000;
 //@ chunk-e2fknt7w.js:16708-16749 placement
-function logErrorSwallowed(e) {
+function logErrorSwallowed(fn) {
   try {
-    e();
+    fn();
   } catch (error) {
     logError(toError(error));
   }
 }
 //@ chunk-e2fknt7w.js:16749-16880 placement
-function onServingMuteRecheck(e) {
-  let n = onGrowthBookRefresh(e);
+function onServingMuteRecheck(listener) {
+  let unsubscribe = onGrowthBookRefresh(listener);
   let interval = setInterval(
     logErrorSwallowed,
     Math.round(SERVING_MUTE_RECHECK_INTERVAL_MS * (0.8 + Math.random() * 0.4)),
-    e,
+    listener,
   );
   interval.unref();
   return () => {
     clearInterval(interval);
-    n();
+    unsubscribe();
   };
 }
 //@ chunk-e2fknt7w.js:16880-17194 placement
-function remoteToolServingOffReason(e = getOriginalCwd(), n = {}) {
+function remoteToolServingOffReason(cwd = getOriginalCwd(), options = {}) {
   if (getPlatform() === "windows") return "windows";
-  if (!n.ignoringMute && isRemoteToolServingMuted()) return "muted";
+  if (!options.ignoringMute && isRemoteToolServingMuted()) return "muted";
   if (!isRemoteToolsServingEnvOn()) return "switch_off";
-  let o = isWslMountInfoUnreadable();
-  if (launchedFromHome(e)) return "launched_from_home";
-  if (o || isWslMountInfoUnreadable()) return "mount_table_unreadable";
+  let mountInfoUnreadable = isWslMountInfoUnreadable();
+  if (launchedFromHome(cwd)) return "launched_from_home";
+  if (mountInfoUnreadable || isWslMountInfoUnreadable()) return "mount_table_unreadable";
   if (windowsProfileDirsUnread()) return "profile_dirs_unread";
   if (windowsProfileDirsReadFailure() !== undefined) return "profile_dirs_unreadable";
   return;
@@ -229,13 +229,15 @@ function isRemoteToolsServingEnvOn() {
   return CLAUDE_CODE_REMOTE_TOOLS_SERVE === undefined || isEnvTruthy(CLAUDE_CODE_REMOTE_TOOLS_SERVE);
 }
 //@ chunk-e2fknt7w.js:17357-17396 placement
-function launchedFromHome(path = getOriginalCwd()) {
-  return classifyMountForServing(path, "all");
+function launchedFromHome(cwd = getOriginalCwd()) {
+  return classifyMountForServing(cwd, "all");
 }
 //@ chunk-e2fknt7w.js:17396-17469 placement
-function refusedOnlyAsProfileOnMountWithoutDrive(e = getOriginalCwd()) {
+function refusedOnlyAsProfileOnMountWithoutDrive(cwd = getOriginalCwd()) {
   return (
-    getPlatform() === "wsl" && classifyMountForServing(e, "all") && !classifyMountForServing(e, "drives_only")
+    getPlatform() === "wsl" &&
+    classifyMountForServing(cwd, "all") &&
+    !classifyMountForServing(cwd, "drives_only")
   );
 }
 //@ chunk-e2fknt7w.js:17469-17843 placement
@@ -243,71 +245,77 @@ function refusedOnlyAsProfileOnMountWithoutDrive(e = getOriginalCwd()) {
  * 计算远程工具服务目录的基础路径集合（目录本身、规范化路径、所在 git 根与规范 git 根）；.git 是符号链接或 Windows 上落在远程 UNC 主机时直接拒绝。
  */
 function servingBasesFor(dir) {
-  let n = realpathOrSpelling_2(dir);
-  let o = dir === n ? [dir] : [dir, n];
-  let filtered = o.map((a) => findGitRootUncached(a)).filter((a) => a !== null);
+  let realDir = realpathOrSpelling_2(dir);
+  let spellings = dir === realDir ? [dir] : [dir, realDir];
+  let filtered = spellings
+    .map((spelling) => findGitRootUncached(spelling))
+    .filter((gitRoot) => gitRoot !== null);
   if (
-    filtered.some((a) => {
+    filtered.some((root) => {
       try {
-        return lstatSync(join(a, ".git")).isSymbolicLink();
+        return lstatSync(join(root, ".git")).isSymbolicLink();
       } catch {
         return false;
       }
     })
   )
     return "refused_outright";
-  let filtered_2 = filtered.flatMap((a) => [a, findCanonicalGitRootUncached(a)]).filter((a) => a !== null);
-  let mapped = filtered_2.map((a) => realpathOrSpelling_2(a));
-  let d = [...filtered_2, ...mapped];
+  let filtered_2 = filtered
+    .flatMap((root) => [root, findCanonicalGitRootUncached(root)])
+    .filter((root) => root !== null);
+  let mapped = filtered_2.map((root) => realpathOrSpelling_2(root));
+  let allRoots = [...filtered_2, ...mapped];
   if (
     getPlatform() === "windows" &&
-    [n, ...mapped].some((a) => isRemoteUncHost(normalizeCommandForPlatform(a)))
+    [realDir, ...mapped].some((path) => isRemoteUncHost(normalizeCommandForPlatform(path)))
   )
     return "refused_outright";
-  return uniq([...o, ...d]);
+  return uniq([...spellings, ...allRoots]);
 }
 //@ chunk-e2fknt7w.js:17843-18105 placement
 function wslServingFacts(dir) {
-  let n = getPlatform() === "wsl" ? servingBasesFor(dir) : undefined;
-  if (n === undefined || n === "refused_outright") return;
+  let bases = getPlatform() === "wsl" ? servingBasesFor(dir) : undefined;
+  if (bases === undefined || bases === "refused_outright") return;
   return {
-    bases: n.map((o) => posix.normalize(o)),
+    bases: bases.map((base) => posix.normalize(base)),
     mountPoints: [
-      ...[...n, ...withPathAliases(getClaudeConfigDirs())].flatMap((o) => pathWithMountAliases(o).slice(1)),
+      ...[...bases, ...withPathAliases(getClaudeConfigDirs())].flatMap((path) =>
+        pathWithMountAliases(path).slice(1),
+      ),
       ...profileMountPointsUnder([homedir(), realpathOrSpelling_2(homedir())], "all"),
       ...windowsRootMountPoints("all").map(({ mountPoint }) => mountPoint),
     ],
   };
 }
 //@ chunk-e2fknt7w.js:18105-18250 placement
-function launchTouchesWindowsVolumeMountedTwice(e = getOriginalCwd()) {
-  let n = wslServingFacts(e);
+function launchTouchesWindowsVolumeMountedTwice(cwd = getOriginalCwd()) {
+  let facts = wslServingFacts(cwd);
   return (
-    n !== undefined &&
-    (n.bases.some((base) => listWslDrvfsMounts(base, "except_two_drive_mounts")) ||
-      n.mountPoints.some((mountPoint) => listWslDrvfsMounts(mountPoint, "all")))
+    facts !== undefined &&
+    (facts.bases.some((base) => listWslDrvfsMounts(base, "except_two_drive_mounts")) ||
+      facts.mountPoints.some((mountPoint) => listWslDrvfsMounts(mountPoint, "all")))
   );
 }
 //@ chunk-e2fknt7w.js:18250-18342 placement
-function launchTouchesWindowsVolumeBesideUnreadMount(e = getOriginalCwd()) {
-  let n = wslServingFacts(e);
-  return n !== undefined && [...n.bases, ...n.mountPoints].some(touchesVolumeBesideUnreadMount);
+function launchTouchesWindowsVolumeBesideUnreadMount(cwd = getOriginalCwd()) {
+  let facts = wslServingFacts(cwd);
+  return facts !== undefined && [...facts.bases, ...facts.mountPoints].some(touchesVolumeBesideUnreadMount);
 }
 //@ chunk-e2fknt7w.js:21869-21918 placement
-function realpathOrSpelling(e) {
+function realpathOrSpelling(path) {
   try {
-    return realpathSync(e);
+    return realpathSync(path);
   } catch {
-    return e;
+    return path;
   }
 }
 //@ chunk-e2fknt7w.js:21918-22010 placement
-function realpathOrSpelling_2(e) {
-  if (getPlatform() !== "windows") return realpathOrSpelling(e);
+function realpathOrSpelling_2(path) {
+  if (getPlatform() !== "windows") return realpathOrSpelling(path);
   try {
-    return realpathSync.native(e);
+    return realpathSync.native(path);
   } catch {
-    return realpathOrSpelling(e);
+    return realpathOrSpelling(path);
   }
 }
 //@ chunk-e2fknt7w.js:22010-22117 placement
@@ -353,4 +361,5 @@ export {
   launchTouchesWindowsVolumeBesideUnreadMount,
   realpathOrSpelling,
   servedCallRequestsJumpQueueOn,
+  adoptMcpOverChannelSwitchOn,
 };

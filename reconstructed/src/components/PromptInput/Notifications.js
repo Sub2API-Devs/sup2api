@@ -8,23 +8,39 @@
  * pieces: chunk-18hwfzwa.js (30), chunk-8jypjjdf.js (6)
  * attribution: placement 25, sole-consumer 7, affinity 1, fingerprint 3
  */
-import { init_react_production, y, R, P, Q, Rh, Se, qt } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+  Fragment,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { Text, Link, Box } from "../../ink/components/Text.js";
 import { useAppState, useAppState_2 } from "../../state/AppState.js";
+import {
+  holdsToasts,
+  useHeaderGauge,
+  isHeldNotice,
+  isGaugeSurface,
+  gaugeOf,
+  useNotifications,
+} from "../../context/notifications.js";
+import { showSwarmFooterGate } from "./footerGates.js";
+import {
+  init_react_production,
+  createContext,
+  useState,
+  useRef,
+  useEffect,
+  useMemo,
+  memo,
+  useContext,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   getRiskColor,
   EXPLANATION_NOTICE_TIMEOUT_MS,
   MAX_EXPLANATION_CHARS,
 } from "../permissions/PermissionExplanation.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2, useResolvedTheme } from "../design-system/ThemeProvider.js";
-import {
-  useNotifications,
-  useHeaderGauge,
-  isHeldNotice,
-  isGaugeSurface,
-  holdsToasts,
-  gaugeOf,
-} from "../../context/notifications.js";
 import { isFirstPartyProvider } from "../../utils/model/providers.js";
 import {
   selectNumber,
@@ -49,13 +65,7 @@ import {
   SETTLED_GREY_RGB,
 } from "../LogoV2/AnimatedAsterisk.js";
 import { formatDuration } from "../../utils/format.js";
-import {
-  jsxProd_default_2,
-  jsxProd_default,
-  Fragment,
-} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Box, Text, Link } from "../../ink/components/Text.js";
-import { BULLSEYE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BULLSEYE } from "../../constants/figures.js";
 import { setEnvHookNotifier } from "../../utils/hooks/fileChangedWatcher.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { getContextTokenCount } from "../../utils/tokens.js";
@@ -87,14 +97,190 @@ import { CACHE_TTL_1H_MS } from "../../services/api/promptCacheBreakDetection.js
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { FooterSlot } from "../FullscreenLayout.js";
 import { mergeClients } from "../../hooks/useMergedClients.js";
-import { showSwarmFooterGate } from "./footerGates.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-8jypjjdf.js:20372-20520 placement = _temp2 (0.843)
+function ToastText(props) {
+  let $ = useMemoCache(2);
+  let { text } = props;
+  let textElement;
+  if ($[0] !== text) {
+    textElement = jsxProd_default(Text, {
+      dimColor: true,
+      italic: true,
+      wrap: "truncate-end",
+      children: text,
+    });
+    $[0] = text;
+    $[1] = textElement;
+  } else textElement = $[1];
+  return textElement;
+}
+//@ chunk-8jypjjdf.js:20520-20697 placement = StyledText (0.767)
+/**
+ * 渲染通知的分段文本（颜色、加粗、可点链接）。
+ */
+function SegmentedText({ segments }) {
+  return segments.map((segment, index) => {
+    let segmentElement = jsxProd_default(
+      Text,
+      {
+        color: segment.color,
+        dimColor: segment.dim,
+        bold: segment.bold,
+        children: segment.text,
+      },
+      index,
+    );
+    return segment.url === undefined
+      ? segmentElement
+      : jsxProd_default(
+          Link,
+          {
+            url: segment.url,
+            children: segmentElement,
+          },
+          index,
+        );
+  });
+}
+//@ chunk-8jypjjdf.js:20697-20743 fingerprint = _temp (1)
+function selectNotificationsCurrent(s) {
+  return s.notifications.current;
+}
+//@ chunk-8jypjjdf.js:20743-21713 placement
+/**
+ * 输入框上方的 toast 通知行（第一行绘制时隐藏）。
+ */
+function PromptToast(props) {
+  let $ = useMemoCache(18);
+  let { drawnOnRow1 } = props;
+  let drawnOnFirstRow = drawnOnRow1 === undefined ? false : drawnOnRow1;
+  let appState = useAppState(selectNotificationsCurrent);
+  let appState_2 = useAppState(holdsToasts);
+  let swarmFooterVisible = showSwarmFooterGate();
+  let headerGauge = useHeaderGauge();
+  if (
+    !appState ||
+    !isHeldNotice(appState, appState_2) ||
+    (swarmFooterVisible && isGaugeSurface(appState, headerGauge))
+  ) {
+    return null;
+  }
+  if (drawnOnFirstRow) {
+    return null;
+  }
+  let gauge;
+  if ($[0] !== appState || $[1] !== swarmFooterVisible) {
+    gauge = swarmFooterVisible ? gaugeOf(appState) : undefined;
+    $[0] = appState;
+    $[1] = swarmFooterVisible;
+    $[2] = gauge;
+  } else gauge = $[2];
+  let gaugeState = gauge;
+  if (gaugeState?.surface === "toast") {
+    let toastTextElement;
+    if ($[3] !== appState.key || $[4] !== gaugeState.text) {
+      toastTextElement = jsxProd_default(
+        ToastText,
+        {
+          text: gaugeState.text,
+        },
+        appState.key,
+      );
+      $[3] = appState.key;
+      $[4] = gaugeState.text;
+      $[5] = toastTextElement;
+    } else toastTextElement = $[5];
+    return toastTextElement;
+  }
+  if ("jsx" in appState) {
+    let gaugeText;
+    if ($[6] !== appState.jsx || $[7] !== appState.key) {
+      gaugeText = jsxProd_default(
+        Text,
+        {
+          wrap: "truncate",
+          children: appState.jsx,
+        },
+        appState.key,
+      );
+      $[6] = appState.jsx;
+      $[7] = appState.key;
+      $[8] = gaugeText;
+    } else gaugeText = $[8];
+    return gaugeText;
+  }
+  if ("segments" in appState) {
+    let children;
+    if ($[9] !== appState.segments) {
+      children = jsxProd_default(SegmentedText, {
+        segments: appState.segments,
+      });
+      $[9] = appState.segments;
+      $[10] = children;
+    } else children = $[10];
+    let toastElement;
+    if ($[11] !== appState.key || $[12] !== children) {
+      toastElement = jsxProd_default(
+        Text,
+        {
+          wrap: "truncate",
+          children,
+        },
+        appState.key,
+      );
+      $[11] = appState.key;
+      $[12] = children;
+      $[13] = toastElement;
+    } else toastElement = $[13];
+    return toastElement;
+  }
+  const dimColor = !appState.color;
+  let toastText;
+  if ($[14] !== appState.color || $[15] !== appState.text || $[16] !== dimColor) {
+    toastText = jsxProd_default(Text, {
+      color: appState.color,
+      dimColor,
+      wrap: "truncate",
+      children: appState.text,
+    });
+    $[14] = appState.color;
+    $[15] = appState.text;
+    $[16] = dimColor;
+    $[17] = toastText;
+  } else toastText = $[17];
+  return toastText;
+}
+//@ chunk-8jypjjdf.js:21713-21717 placement
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8jypjjdf.js:21713", () => {
+  init_react_production();
+});
+//@ chunk-8jypjjdf.js:21717-21747 placement
+/**
+ * 导出值：同一声明里的多个绑定：MAX_NOTICE_LINES（2：通知行数）；NOTICE_WIDTH_LIMIT（15：通知宽度）；noticeDialogSlot（通知对话框槽）；位于「输入框右下的通知区：显示通知队列当前项（语音录制/处理、IDE、apiKeyHelper 慢、用量额度等），超时自动消失」模块。
+ */
+var MAX_NOTICE_LINES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var NOTICE_WIDTH_LIMIT;
+var noticeDialogSlot;
+deferInit("chunk-8jypjjdf.js:21717", () => {
+  MAX_NOTICE_LINES = 2;
+  NOTICE_WIDTH_LIMIT = 15;
+  noticeDialogSlot = createContext(null);
+});
 //@ chunk-18hwfzwa.js:643509-643513 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:643509", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:643547-643551 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:643547", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:643551-643569 placement
-function selectPinnedBridgeNotice(Be) {}
+function selectPinnedBridgeNotice(state) {}
 //@ chunk-18hwfzwa.js:643569-643741 placement
 /**
  * 订阅 bridge 提示并锁存最后一次出现的值（置顶提示时在消失后仍保留）。
@@ -103,11 +289,11 @@ function useLatchedBridgeNotice(props) {
   let { saysWhatToDo, isPinnedNotice } = props;
   if (saysWhatToDo === undefined) false;
   else saysWhatToDo;
-  let L = isPinnedNotice === undefined ? false : isPinnedNotice;
+  let isPinned = isPinnedNotice === undefined ? false : isPinnedNotice;
   let appState = useAppState(selectPinnedBridgeNotice);
-  let [ke, Re] = y(appState);
-  if (appState !== undefined && appState !== ke) Re(appState);
-  if (L) appState ?? ke;
+  let [lastNotice, setLastNotice] = useState(appState);
+  if (appState !== undefined && appState !== lastNotice) setLastNotice(appState);
+  if (isPinned) appState ?? lastNotice;
   else appState;
   return null;
 }
@@ -115,14 +301,14 @@ function useLatchedBridgeNotice(props) {
 /**
  * 生成 "你的 issue 已关闭" 通知的分段文本（单个或多个 issue 编号）。
  */
-function formatClosedIssuesNotice(h) {
-  if (h.length === 1)
+function formatClosedIssuesNotice(issues) {
+  if (issues.length === 1)
     return [
       {
         text: "\u2713 Your issue ",
         color: "success",
       },
-      getRiskColor(h[0].number),
+      getRiskColor(issues[0].number),
       {
         text: " has been closed. Thanks for reporting!",
         color: "success",
@@ -130,11 +316,11 @@ function formatClosedIssuesNotice(h) {
     ];
   return [
     {
-      text: `\u2713 ${h.length} of your issues have been closed (`,
+      text: `\u2713 ${issues.length} of your issues have been closed (`,
       color: "success",
     },
-    ...h.flatMap((x, D) => [
-      ...(D > 0
+    ...issues.flatMap((issue, index) => [
+      ...(index > 0
         ? [
             {
               text: ", ",
@@ -142,7 +328,7 @@ function formatClosedIssuesNotice(h) {
             },
           ]
         : []),
-      getRiskColor(x.number),
+      getRiskColor(issue.number),
     ]),
     {
       text: "). Thanks for reporting!",
@@ -155,110 +341,119 @@ function formatClosedIssuesNotice(h) {
  * 一方提供商下挂载时检查"我提交的 issue 已关闭"：先读缓存再拉取，新增未确认的关闭 issue 时弹出低优先级通知并标记已提示，记 tengu_closed_issue_notice_shown。
  */
 function ClosedIssueNotifier() {
-  let L = w(4);
+  let $ = useMemoCache(4);
   let { storageV5 } = useTheme_2();
   let { addNotification } = useNotifications();
-  let startedRef = R(false);
+  let startedRef = useRef(false);
   let effect;
   let deps;
-  if (L[0] !== addNotification || L[1] !== storageV5) {
+  if ($[0] !== addNotification || $[1] !== storageV5) {
     effect = () => {
       if (startedRef.current) {
         return;
       }
       startedRef.current = true;
       if (isFirstPartyProvider()) {
-        let Xe = function (Re) {
-          let He = new Set(Be.map(selectNumber));
-          let filtered = Re.filter((We) => !He.has(We.number));
+        let showClosedIssues = function (issues) {
+          let knownNumbers = new Set(shownIssues.map(selectNumber));
+          let filtered = issues.filter((issue) => !knownNumbers.has(issue.number));
           if (filtered.length === 0) {
             return;
           }
-          Be.push(...filtered);
+          shownIssues.push(...filtered);
           logEvent("tengu_closed_issue_notice_shown", {
             newClosedIssueCount: filtered.length,
-            totalClosedIssueCount: Be.length,
+            totalClosedIssueCount: shownIssues.length,
           });
           addNotification({
             key: "closed-issue-notice",
             kind: "event",
-            segments: formatClosedIssuesNotice(Be),
+            segments: formatClosedIssuesNotice(shownIssues),
             priority: "low",
             timeoutMs: EXPLANATION_NOTICE_TIMEOUT_MS,
             fold: identity_2,
           });
           acknowledgeClosedIssues(filtered.map(selectNumber2), storageV5);
         };
-        let rt = false;
-        let Be = [];
-        let Et = async function Et() {
+        let isCancelled = false;
+        let shownIssues = [];
+        let loadIssues = async function loadIssues() {
           let closedIssuesCache = await readClosedIssuesCache(storageV5);
-          let At = unacknowledgedClosedIssues(closedIssuesCache);
-          if (!rt && At.length > 0) Xe(At);
+          let cachedIssues = unacknowledgedClosedIssues(closedIssuesCache);
+          if (!isCancelled && cachedIssues.length > 0) showClosedIssues(cachedIssues);
           let myClosedIssues = await fetchMyClosedIssues(storageV5);
-          if (rt || myClosedIssues === null || myClosedIssues > MAX_EXPLANATION_CHARS) {
+          if (isCancelled || myClosedIssues === null || myClosedIssues > MAX_EXPLANATION_CHARS) {
             return;
           }
-          let Ot = unacknowledgedClosedIssues(await readClosedIssuesCache(storageV5));
-          if (!rt && Ot.length > 0) Xe(Ot);
+          let freshIssues = unacknowledgedClosedIssues(await readClosedIssuesCache(storageV5));
+          if (!isCancelled && freshIssues.length > 0) showClosedIssues(freshIssues);
         };
-        Et().catch(logError);
+        loadIssues().catch(logError);
         return () => {
-          rt = true;
+          isCancelled = true;
         };
       }
     };
     deps = [addNotification, storageV5];
-    L[0] = addNotification;
-    L[1] = storageV5;
-    L[2] = effect;
-    L[3] = deps;
+    $[0] = addNotification;
+    $[1] = storageV5;
+    $[2] = effect;
+    $[3] = deps;
   } else {
-    effect = L[2];
-    deps = L[3];
+    effect = $[2];
+    deps = $[3];
   }
-  P(effect, deps);
+  useEffect(effect, deps);
   return null;
 }
 //@ chunk-18hwfzwa.js:782955-782959 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:782955", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:782959-782963 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:782959", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:785667-785671 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:785667", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:785728-786605 placement
 /**
  * 页脚"/goal active"指示：显示目标设定以来的耗时（1 分钟内每秒刷新，之后每分钟），真彩终端下按权限色做呼吸动画。
  */
 function GoalActiveIndicator({ withSeparator }) {
-  let goalSetAt = useAppState((At) => At.activeGoal?.setAt);
+  let goalSetAt = useAppState((state) => state.activeGoal?.setAt);
   let hasGoal = goalSetAt !== undefined;
-  let [L, ee] = y(0);
+  let [tick, setTick] = useState(0);
   let clock = useClock();
-  let startRef = R(null);
+  let startRef = useRef(null);
   if (goalSetAt !== undefined && startRef.current?.setAt !== goalSetAt)
     startRef.current = {
       setAt: goalSetAt,
       clockStart: clock.now() - (Date.now() - goalSetAt),
     };
-  let Be = startRef.current;
-  P(() => {
+  let startInfo = startRef.current;
+  useEffect(() => {
     if (goalSetAt === undefined || startRef.current === null) return;
-    let At = clock.now() - startRef.current.clockStart;
-    let It = At < 60000 ? 1000 : 60000;
-    let Ot = It - (At % It);
-    return clock.setTimeout(() => ee((Et) => Et + 1), Ot);
-  }, [goalSetAt, L, clock]);
+    let elapsedMs = clock.now() - startRef.current.clockStart;
+    let intervalMs = elapsedMs < 60000 ? 1000 : 60000;
+    let nextDelayMs = intervalMs - (elapsedMs % intervalMs);
+    return clock.setTimeout(() => setTick((previous) => previous + 1), nextDelayMs);
+  }, [goalSetAt, tick, clock]);
   let theme = useResolvedTheme();
-  let pulseColors = Q(() => {
+  let pulseColors = useMemo(() => {
     if (sequential.level < 3) return null;
-    let At = interpolateColor(theme.permission);
-    return At ? goalPulseColors(At, isXtermJs()) : null;
+    let pulseBaseColor = interpolateColor(theme.permission);
+    return pulseBaseColor ? goalPulseColors(pulseBaseColor, isXtermJs()) : null;
   }, [theme.permission, sequential.level]);
   let animationTimer = useAnimationTimer(hasGoal && pulseColors ? ASTERISK_TICK_MS : null);
-  let Xe = Math.floor(animationTimer / ASTERISK_TICK_MS) % ASTERISK_RAY_COUNT;
-  if (!hasGoal || Be === null) return null;
-  let elapsedMs = clock.now() - Be.clockStart;
+  let rayIndex = Math.floor(animationTimer / ASTERISK_TICK_MS) % ASTERISK_RAY_COUNT;
+  if (!hasGoal || startInfo === null) return null;
+  let elapsedMs = clock.now() - startInfo.clockStart;
   let elapsedText =
     elapsedMs < 1000
       ? ""
@@ -275,7 +470,7 @@ function GoalActiveIndicator({ withSeparator }) {
           })
         : null,
       jsxProd_default_2(Text, {
-        color: pulseColors?.[Xe] ?? "permission",
+        color: pulseColors?.[rayIndex] ?? "permission",
         children: [
           jsxProd_default_2(Text, {
             "aria-hidden": true,
@@ -289,395 +484,414 @@ function GoalActiveIndicator({ withSeparator }) {
   });
 }
 //@ chunk-18hwfzwa.js:786605-786748 placement
-function goalPulseColors(h, x) {
+function goalPulseColors(baseColor, stepped) {
   return Array.from(
     {
       length: ASTERISK_RAY_COUNT,
     },
-    (D, L) => {
-      let ee = 0.5 - 0.5 * Math.cos((2 * Math.PI * L) / ASTERISK_RAY_COUNT);
-      let ke = ASTERISK_FADE_FLOOR * (x ? roundToStep(ee) : ee);
-      return toRGBColor(parseRGB(h, SETTLED_GREY_RGB, ke));
+    (unused, rayIndex) => {
+      let wave = 0.5 - 0.5 * Math.cos((2 * Math.PI * rayIndex) / ASTERISK_RAY_COUNT);
+      let fade = ASTERISK_FADE_FLOOR * (stepped ? roundToStep(wave) : wave);
+      return toRGBColor(parseRGB(baseColor, SETTLED_GREY_RGB, fade));
     },
   );
 }
 //@ chunk-18hwfzwa.js:786748-786752 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:786748", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:787614-787659 placement
-function selectAutoCompactWindow_2(wr) {
-  return wr.autoCompactWindow;
+function selectAutoCompactWindow_2(state) {
+  return state.autoCompactWindow;
 }
 //@ chunk-18hwfzwa.js:787659-787709 placement
-function selectRemoteAutocompactState_2(zr) {
-  return zr.remoteAutocompactState;
+function selectRemoteAutocompactState_2(state) {
+  return state.remoteAutocompactState;
 }
 //@ chunk-18hwfzwa.js:787709-787748 placement
-function selectIsBriefOnly_2(_r) {
-  return _r.isBriefOnly;
+function selectIsBriefOnly_2(state) {
+  return state.isBriefOnly;
 }
 //@ chunk-18hwfzwa.js:787830-787884 sole-consumer
-function hasActiveGoal($r) {
-  return $r.activeGoal?.setAt !== undefined;
+function hasActiveGoal(state) {
+  return state.activeGoal?.setAt !== undefined;
 }
 //@ chunk-18hwfzwa.js:787884-787916 sole-consumer
 function clearEnvHookNotifier() {
   return setEnvHookNotifier(null);
 }
 //@ chunk-18hwfzwa.js:787916-787946 sole-consumer
-function foldKeepLatest(Yr, Er) {
-  return Er;
+function foldKeepLatest(previous, next) {
+  return next;
 }
 //@ chunk-18hwfzwa.js:787946-787984 sole-consumer
-function selectVoiceState(kn) {
-  return kn.voiceState;
+function selectVoiceState(state) {
+  return state.voiceState;
 }
 //@ chunk-18hwfzwa.js:787984-788022 affinity
-function selectVoiceError(Fn) {
-  return Fn.voiceError;
+function selectVoiceError(state) {
+  return state.voiceError;
 }
 //@ chunk-18hwfzwa.js:788022-791970 fingerprint = Notifications (0.62)
-var NOTIFICATION_TIMEOUT_MS = 5000;
-var Notifications = Rh(function (props) {
-  let $ = w(59);
-  let {
-    apiKeyVerification,
-    hideLoginNotice,
-    isAutoUpdating,
-    verbose,
-    transcript,
-    onChangeIsUpdating,
-    isInputWrapped,
-    hasStash,
-    row1HintId,
-  } = props;
-  let isInputWrapped_2 = isInputWrapped === undefined ? false : isInputWrapped;
-  let rt = hasStash === undefined ? false : hasStash;
-  let kt = row1HintId === "timed";
-  let At = row1HintId === "voice";
-  let storeSelector = useStoreSelector(apiKeyVerification);
-  let Ot = storeSelector === "invalid" || storeSelector === "missing";
-  let Et = !hideLoginNotice && Ot;
-  let Dt = verbose && !Ot;
-  let storeSelector_2 = useStoreSelector(transcript, getContextTokenCount);
-  let mainLoopModel = useMainLoopModel_3();
-  let autoCompactWindow = useAppState(selectAutoCompactWindow_2);
-  let remoteAutocompactState = useAppState(selectRemoteAutocompactState_2);
-  let po;
-  if (
-    $[0] !== autoCompactWindow ||
-    $[1] !== mainLoopModel ||
-    $[2] !== remoteAutocompactState ||
-    $[3] !== storeSelector_2
-  ) {
-    po = calculateTokenWarningState(
-      storeSelector_2,
-      getModelContextInfo(mainLoopModel),
-      autoCompactWindow,
-      remoteAutocompactState,
-    );
-    $[0] = autoCompactWindow;
-    $[1] = mainLoopModel;
-    $[2] = remoteAutocompactState;
-    $[3] = storeSelector_2;
-    $[4] = po;
-  } else po = $[4];
-  let ao = po.level !== "ok";
-  let microCompactFlag = useMicroCompactFlag();
-  let bo = isNoForceUpdateRenders();
-  let isBriefOnly = useAppState(selectIsBriefOnly_2);
-  let headerGauge = useHeaderGauge();
-  let Ro;
-  if ($[5] !== headerGauge || $[6] !== kt) {
-    Ro = (Ho) =>
-      isHeldNotice(Ho.notifications.current, holdsToasts(Ho)) &&
-      !kt &&
-      !isGaugeSurface(Ho.notifications.current, headerGauge);
-    $[5] = headerGauge;
-    $[6] = kt;
-    $[7] = Ro;
-  } else Ro = $[7];
-  let appState = useAppState(Ro);
-  let { addNotification, removeNotification } = useNotifications();
-  let rateLimitState = useRateLimitState();
-  let isFullscreen = useIsFullscreen();
-  let voiceAvailable = useVoiceAvailable();
-  let appState_2 = useAppState_2(VoiceIndicatorImpl);
-  let appState_3 = useAppState(hasActiveGoal);
-  let [Fn, bn] = y(false);
-  let Go;
-  let hn;
-  if ($[8] !== addNotification) {
-    Go = () => {
-      setEnvHookNotifier((text, isError) => {
-        addNotification({
-          key: "env-hook",
-          kind: "event",
-          text,
-          color: isError ? "error" : undefined,
-          priority: isError ? "medium" : "low",
-          timeoutMs: isError ? 8000 : 5000,
-        });
-      });
-      return clearEnvHookNotifier;
-    };
-    hn = [addNotification];
-    $[8] = addNotification;
-    $[9] = Go;
-    $[10] = hn;
-  } else {
-    Go = $[9];
-    hn = $[10];
-  }
-  P(Go, hn);
-  let isUsingOverage = rateLimitState.isUsingOverage;
-  let subscriptionTypeWithRefresh = getSubscriptionTypeWithRefresh();
-  let on = subscriptionTypeWithRefresh === "team" || subscriptionTypeWithRefresh === "enterprise";
-  let _o;
-  if ($[11] === MEMO_CACHE_SENTINEL) {
-    _o = resolveEditorCommand();
-    $[11] = _o;
-  } else _o = $[11];
-  let editor = _o;
-  let Dn =
-    isInputWrapped_2 &&
-    !ao &&
-    storeSelector !== "invalid" &&
-    storeSelector !== "missing" &&
-    editor !== undefined;
-  let wn;
-  let mr;
-  if ($[12] !== addNotification || $[13] !== removeNotification || $[14] !== Dn) {
-    wn = () => {
-      if (Dn && editor) {
-        logEvent("tengu_external_editor_hint_shown", {});
-        addNotification({
-          key: "external-editor-hint",
-          kind: "hint",
-          jsx: jsxProd_default(Text, {
-            dimColor: true,
-            children: jsxProd_default(ConfigurableShortcutHint, {
-              action: "chat:externalEditor",
-              context: "Chat",
-              fallback: "ctrl+g",
-              description: `edit in ${toIDEDisplayName(editor)}`,
-            }),
-          }),
-          priority: "immediate",
-          timeoutMs: 5000,
-        });
-      } else removeNotification("external-editor-hint");
-    };
-    mr = [Dn, editor, addNotification, removeNotification];
-    $[12] = addNotification;
-    $[13] = removeNotification;
-    $[14] = Dn;
-    $[15] = wn;
-    $[16] = mr;
-  } else {
-    wn = $[15];
-    mr = $[16];
-  }
-  P(wn, mr);
-  let Kn;
-  let Wn;
-  if (
-    $[17] !== addNotification ||
-    $[18] !== isBriefOnly ||
-    $[19] !== ao ||
-    $[20] !== mainLoopModel ||
-    $[21] !== removeNotification ||
-    $[22] !== microCompactFlag ||
-    $[23] !== storeSelector_2
-  ) {
-    Kn = () => {
-      if (ao && !microCompactFlag && !isBriefOnly)
-        addNotification({
-          key: "token-warning",
-          jsx: jsxProd_default(TokenWarning, {
-            tokenUsage: storeSelector_2,
-            model: mainLoopModel,
-          }),
-          priority: "medium",
-          timeoutMs: 18000000,
-          fold: foldKeepLatest,
-          exemptFromDiffPanelHold: true,
-        });
-      else removeNotification("token-warning");
-    };
-    Wn = [
-      ao,
-      microCompactFlag,
-      isBriefOnly,
-      storeSelector_2,
-      mainLoopModel,
-      addNotification,
-      removeNotification,
-    ];
-    $[17] = addNotification;
-    $[18] = isBriefOnly;
-    $[19] = ao;
-    $[20] = mainLoopModel;
-    $[21] = removeNotification;
-    $[22] = microCompactFlag;
-    $[23] = storeSelector_2;
-    $[24] = Kn;
-    $[25] = Wn;
-  } else {
-    Kn = $[24];
-    Wn = $[25];
-  }
-  P(Kn, Wn);
-  let Fr = Boolean(appState || (isUsingOverage && !on) || Et || Dt || (!isFullscreen && isAutoUpdating));
-  let Zn = Fr || rt || appState_3;
-  const showSuccessMessage = bo && !ao;
-  const withSeparator = isFullscreen ? Zn : undefined;
-  let or;
-  if (
-    $[26] !== isAutoUpdating ||
-    $[27] !== onChangeIsUpdating ||
-    $[28] !== showSuccessMessage ||
-    $[29] !== withSeparator ||
-    $[30] !== verbose
-  ) {
-    or = jsxProd_default(AutoUpdaterWrapper, {
+var NOTIFICATION_TIMEOUT_MS; // deferred: uses getContextTokenCount (../../utils/tokens.js) of its import cycle while loading; runs once the cycle is complete
+var Notifications;
+deferInit("chunk-18hwfzwa.js:788022", () => {
+  NOTIFICATION_TIMEOUT_MS = 5000;
+  Notifications = memo(function (props) {
+    let $ = useMemoCache(59);
+    let {
+      apiKeyVerification,
+      hideLoginNotice,
+      isAutoUpdating,
       verbose,
-      isUpdating: isAutoUpdating,
+      transcript,
       onChangeIsUpdating,
-      showSuccessMessage,
-      withSeparator,
-      atPrompt: true,
-    });
-    $[26] = isAutoUpdating;
-    $[27] = onChangeIsUpdating;
-    $[28] = showSuccessMessage;
-    $[29] = withSeparator;
-    $[30] = verbose;
-    $[31] = or;
-  } else or = $[31];
-  let pr = or;
-  const isInOverageMode = isUsingOverage ?? false;
-  const autoUpdater = isFullscreen ? null : pr;
-  let Ir;
-  if (
-    $[32] !== on ||
-    $[33] !== Et ||
-    $[34] !== Dt ||
-    $[35] !== isInOverageMode ||
-    $[36] !== autoUpdater ||
-    $[37] !== kt ||
-    $[38] !== storeSelector_2 ||
-    $[39] !== At
-  ) {
-    Ir = jsxProd_default(Box, {
-      flexDirection: "column",
-      alignItems: "flex-end",
-      flexShrink: 1,
-      overflowX: "hidden",
-      children: jsxProd_default(NotificationContent, {
-        isInOverageMode,
-        isTeamOrEnterprise: on,
-        showLoginNotice: Et,
-        showVerboseTokens: Dt,
-        tokenUsage: storeSelector_2,
-        autoUpdater,
-        onCriticalMemoryShowingChange: bn,
-        toastOnRow1: kt,
-        voiceOnRow1: At,
-      }),
-    });
-    $[32] = on;
-    $[33] = Et;
-    $[34] = Dt;
-    $[35] = isInOverageMode;
-    $[36] = autoUpdater;
-    $[37] = kt;
-    $[38] = storeSelector_2;
-    $[39] = At;
-    $[40] = Ir;
-  } else Ir = $[40];
-  let Pr;
-  if ($[41] !== Fr || $[42] !== rt) {
-    Pr =
-      rt &&
-      jsxProd_default_2(Box, {
-        flexShrink: 0,
-        children: [
-          jsxProd_default(Text, {
-            dimColor: true,
-            children: Fr ? " \xB7 " : " ",
-          }),
-          jsxProd_default_2(Text, {
-            dimColor: true,
-            children: [figures_default.pointerSmall, " stashed"],
-          }),
-        ],
+      isInputWrapped,
+      hasStash,
+      row1HintId,
+    } = props;
+    let isInputWrapped_2 = isInputWrapped === undefined ? false : isInputWrapped;
+    let hasStashValue = hasStash === undefined ? false : hasStash;
+    let toastOnRow1 = row1HintId === "timed";
+    let voiceOnRow1 = row1HintId === "voice";
+    let storeSelector = useStoreSelector(apiKeyVerification);
+    let isInvalidKey = storeSelector === "invalid" || storeSelector === "missing";
+    let showLoginNotice = !hideLoginNotice && isInvalidKey;
+    let showVerboseTokens = verbose && !isInvalidKey;
+    let storeSelector_2 = useStoreSelector(transcript, getContextTokenCount);
+    let mainLoopModel = useMainLoopModel_3();
+    let autoCompactWindow = useAppState(selectAutoCompactWindow_2);
+    let remoteAutocompactState = useAppState(selectRemoteAutocompactState_2);
+    let tokenWarning;
+    if (
+      $[0] !== autoCompactWindow ||
+      $[1] !== mainLoopModel ||
+      $[2] !== remoteAutocompactState ||
+      $[3] !== storeSelector_2
+    ) {
+      tokenWarning = calculateTokenWarningState(
+        storeSelector_2,
+        getModelContextInfo(mainLoopModel),
+        autoCompactWindow,
+        remoteAutocompactState,
+      );
+      $[0] = autoCompactWindow;
+      $[1] = mainLoopModel;
+      $[2] = remoteAutocompactState;
+      $[3] = storeSelector_2;
+      $[4] = tokenWarning;
+    } else tokenWarning = $[4];
+    let hasTokenWarning = tokenWarning.level !== "ok";
+    let microCompactFlag = useMicroCompactFlag();
+    let canShowSuccess = isNoForceUpdateRenders();
+    let isBriefOnly = useAppState(selectIsBriefOnly_2);
+    let headerGauge = useHeaderGauge();
+    let heldSelector;
+    if ($[5] !== headerGauge || $[6] !== toastOnRow1) {
+      heldSelector = (appState) =>
+        isHeldNotice(appState.notifications.current, holdsToasts(appState)) &&
+        !toastOnRow1 &&
+        !isGaugeSurface(appState.notifications.current, headerGauge);
+      $[5] = headerGauge;
+      $[6] = toastOnRow1;
+      $[7] = heldSelector;
+    } else heldSelector = $[7];
+    let appState = useAppState(heldSelector);
+    let { addNotification, removeNotification } = useNotifications();
+    let rateLimitState = useRateLimitState();
+    let isFullscreen = useIsFullscreen();
+    let voiceAvailable = useVoiceAvailable();
+    let appState_2 = useAppState_2(VoiceIndicatorImpl);
+    let appState_3 = useAppState(hasActiveGoal);
+    let [isMemoryShowing, setMemoryShowing] = useState(false);
+    let envHookEffect;
+    let envHookDeps;
+    if ($[8] !== addNotification) {
+      envHookEffect = () => {
+        setEnvHookNotifier((text, isError) => {
+          addNotification({
+            key: "env-hook",
+            kind: "event",
+            text,
+            color: isError ? "error" : undefined,
+            priority: isError ? "medium" : "low",
+            timeoutMs: isError ? 8000 : 5000,
+          });
+        });
+        return clearEnvHookNotifier;
+      };
+      envHookDeps = [addNotification];
+      $[8] = addNotification;
+      $[9] = envHookEffect;
+      $[10] = envHookDeps;
+    } else {
+      envHookEffect = $[9];
+      envHookDeps = $[10];
+    }
+    useEffect(envHookEffect, envHookDeps);
+    let isUsingOverage = rateLimitState.isUsingOverage;
+    let subscriptionTypeWithRefresh = getSubscriptionTypeWithRefresh();
+    let isTeamOrEnterprise =
+      subscriptionTypeWithRefresh === "team" || subscriptionTypeWithRefresh === "enterprise";
+    let editor;
+    if ($[11] === MEMO_CACHE_SENTINEL) {
+      editor = resolveEditorCommand();
+      $[11] = editor;
+    } else editor = $[11];
+    let editor_2 = editor;
+    let shouldOfferEditorHint =
+      isInputWrapped_2 &&
+      !hasTokenWarning &&
+      storeSelector !== "invalid" &&
+      storeSelector !== "missing" &&
+      editor_2 !== undefined;
+    let editorHintEffect;
+    let editorHintDeps;
+    if ($[12] !== addNotification || $[13] !== removeNotification || $[14] !== shouldOfferEditorHint) {
+      editorHintEffect = () => {
+        if (shouldOfferEditorHint && editor_2) {
+          logEvent("tengu_external_editor_hint_shown", {});
+          addNotification({
+            key: "external-editor-hint",
+            kind: "hint",
+            jsx: jsxProd_default(Text, {
+              dimColor: true,
+              children: jsxProd_default(ConfigurableShortcutHint, {
+                action: "chat:externalEditor",
+                context: "Chat",
+                fallback: "ctrl+g",
+                description: `edit in ${toIDEDisplayName(editor_2)}`,
+              }),
+            }),
+            priority: "immediate",
+            timeoutMs: 5000,
+          });
+        } else removeNotification("external-editor-hint");
+      };
+      editorHintDeps = [shouldOfferEditorHint, editor_2, addNotification, removeNotification];
+      $[12] = addNotification;
+      $[13] = removeNotification;
+      $[14] = shouldOfferEditorHint;
+      $[15] = editorHintEffect;
+      $[16] = editorHintDeps;
+    } else {
+      editorHintEffect = $[15];
+      editorHintDeps = $[16];
+    }
+    useEffect(editorHintEffect, editorHintDeps);
+    let tokenWarningEffect;
+    let tokenWarningDeps;
+    if (
+      $[17] !== addNotification ||
+      $[18] !== isBriefOnly ||
+      $[19] !== hasTokenWarning ||
+      $[20] !== mainLoopModel ||
+      $[21] !== removeNotification ||
+      $[22] !== microCompactFlag ||
+      $[23] !== storeSelector_2
+    ) {
+      tokenWarningEffect = () => {
+        if (hasTokenWarning && !microCompactFlag && !isBriefOnly)
+          addNotification({
+            key: "token-warning",
+            jsx: jsxProd_default(TokenWarning, {
+              tokenUsage: storeSelector_2,
+              model: mainLoopModel,
+            }),
+            priority: "medium",
+            timeoutMs: 18000000,
+            fold: foldKeepLatest,
+            exemptFromDiffPanelHold: true,
+          });
+        else removeNotification("token-warning");
+      };
+      tokenWarningDeps = [
+        hasTokenWarning,
+        microCompactFlag,
+        isBriefOnly,
+        storeSelector_2,
+        mainLoopModel,
+        addNotification,
+        removeNotification,
+      ];
+      $[17] = addNotification;
+      $[18] = isBriefOnly;
+      $[19] = hasTokenWarning;
+      $[20] = mainLoopModel;
+      $[21] = removeNotification;
+      $[22] = microCompactFlag;
+      $[23] = storeSelector_2;
+      $[24] = tokenWarningEffect;
+      $[25] = tokenWarningDeps;
+    } else {
+      tokenWarningEffect = $[24];
+      tokenWarningDeps = $[25];
+    }
+    useEffect(tokenWarningEffect, tokenWarningDeps);
+    let hasContent = Boolean(
+      appState ||
+      (isUsingOverage && !isTeamOrEnterprise) ||
+      showLoginNotice ||
+      showVerboseTokens ||
+      (!isFullscreen && isAutoUpdating),
+    );
+    let hasContentOrStash = hasContent || hasStashValue || appState_3;
+    const showSuccessMessage = canShowSuccess && !hasTokenWarning;
+    const withSeparator = isFullscreen ? hasContentOrStash : undefined;
+    let autoUpdaterElement;
+    if (
+      $[26] !== isAutoUpdating ||
+      $[27] !== onChangeIsUpdating ||
+      $[28] !== showSuccessMessage ||
+      $[29] !== withSeparator ||
+      $[30] !== verbose
+    ) {
+      autoUpdaterElement = jsxProd_default(AutoUpdaterWrapper, {
+        verbose,
+        isUpdating: isAutoUpdating,
+        onChangeIsUpdating,
+        showSuccessMessage,
+        withSeparator,
+        atPrompt: true,
       });
-    $[41] = Fr;
-    $[42] = rt;
-    $[43] = Pr;
-  } else Pr = $[43];
-  const withSeparator_2 = Fr || rt;
-  let Gn;
-  if ($[44] !== withSeparator_2) {
-    Gn = jsxProd_default(GoalActiveIndicator, {
-      withSeparator: withSeparator_2,
-    });
-    $[44] = withSeparator_2;
-    $[45] = Gn;
-  } else Gn = $[45];
-  let Ur;
-  if (
-    $[46] !== pr ||
-    $[47] !== Zn ||
-    $[48] !== Fn ||
-    $[49] !== isFullscreen ||
-    $[50] !== appState_2 ||
-    $[51] !== voiceAvailable ||
-    $[52] !== At
-  ) {
-    Ur =
-      isFullscreen &&
-      jsxProd_default(Box, {
-        flexShrink: 0,
-        maxWidth: Zn ? "60%" : undefined,
-        display: (voiceAvailable && appState_2 && !At) || Fn ? "none" : "flex",
-        children: pr,
-      });
-    $[46] = pr;
-    $[47] = Zn;
-    $[48] = Fn;
-    $[49] = isFullscreen;
-    $[50] = appState_2;
-    $[51] = voiceAvailable;
-    $[52] = At;
-    $[53] = Ur;
-  } else Ur = $[53];
-  let Zr;
-  if ($[54] !== Ir || $[55] !== Pr || $[56] !== Gn || $[57] !== Ur) {
-    Zr = jsxProd_default(SentryErrorBoundary, {
-      children: jsxProd_default_2(Box, {
-        flexDirection: "row",
-        justifyContent: "flex-end",
+      $[26] = isAutoUpdating;
+      $[27] = onChangeIsUpdating;
+      $[28] = showSuccessMessage;
+      $[29] = withSeparator;
+      $[30] = verbose;
+      $[31] = autoUpdaterElement;
+    } else autoUpdaterElement = $[31];
+    let autoUpdaterElement_2 = autoUpdaterElement;
+    const isInOverageMode = isUsingOverage ?? false;
+    const autoUpdater = isFullscreen ? null : autoUpdaterElement_2;
+    let notificationContent;
+    if (
+      $[32] !== isTeamOrEnterprise ||
+      $[33] !== showLoginNotice ||
+      $[34] !== showVerboseTokens ||
+      $[35] !== isInOverageMode ||
+      $[36] !== autoUpdater ||
+      $[37] !== toastOnRow1 ||
+      $[38] !== storeSelector_2 ||
+      $[39] !== voiceOnRow1
+    ) {
+      notificationContent = jsxProd_default(Box, {
+        flexDirection: "column",
         alignItems: "flex-end",
-        flexShrink: 0,
+        flexShrink: 1,
         overflowX: "hidden",
-        children: [Ir, Pr, Gn, Ur],
-      }),
-    });
-    $[54] = Ir;
-    $[55] = Pr;
-    $[56] = Gn;
-    $[57] = Ur;
-    $[58] = Zr;
-  } else Zr = $[58];
-  return Zr;
+        children: jsxProd_default(NotificationContent, {
+          isInOverageMode,
+          isTeamOrEnterprise,
+          showLoginNotice,
+          showVerboseTokens,
+          tokenUsage: storeSelector_2,
+          autoUpdater,
+          onCriticalMemoryShowingChange: setMemoryShowing,
+          toastOnRow1,
+          voiceOnRow1,
+        }),
+      });
+      $[32] = isTeamOrEnterprise;
+      $[33] = showLoginNotice;
+      $[34] = showVerboseTokens;
+      $[35] = isInOverageMode;
+      $[36] = autoUpdater;
+      $[37] = toastOnRow1;
+      $[38] = storeSelector_2;
+      $[39] = voiceOnRow1;
+      $[40] = notificationContent;
+    } else notificationContent = $[40];
+    let stashIndicator;
+    if ($[41] !== hasContent || $[42] !== hasStashValue) {
+      stashIndicator =
+        hasStashValue &&
+        jsxProd_default_2(Box, {
+          flexShrink: 0,
+          children: [
+            jsxProd_default(Text, {
+              dimColor: true,
+              children: hasContent ? " \xB7 " : " ",
+            }),
+            jsxProd_default_2(Text, {
+              dimColor: true,
+              children: [figures_default.pointerSmall, " stashed"],
+            }),
+          ],
+        });
+      $[41] = hasContent;
+      $[42] = hasStashValue;
+      $[43] = stashIndicator;
+    } else stashIndicator = $[43];
+    const withSeparator_2 = hasContent || hasStashValue;
+    let goalIndicator;
+    if ($[44] !== withSeparator_2) {
+      goalIndicator = jsxProd_default(GoalActiveIndicator, {
+        withSeparator: withSeparator_2,
+      });
+      $[44] = withSeparator_2;
+      $[45] = goalIndicator;
+    } else goalIndicator = $[45];
+    let autoUpdaterBox;
+    if (
+      $[46] !== autoUpdaterElement_2 ||
+      $[47] !== hasContentOrStash ||
+      $[48] !== isMemoryShowing ||
+      $[49] !== isFullscreen ||
+      $[50] !== appState_2 ||
+      $[51] !== voiceAvailable ||
+      $[52] !== voiceOnRow1
+    ) {
+      autoUpdaterBox =
+        isFullscreen &&
+        jsxProd_default(Box, {
+          flexShrink: 0,
+          maxWidth: hasContentOrStash ? "60%" : undefined,
+          display: (voiceAvailable && appState_2 && !voiceOnRow1) || isMemoryShowing ? "none" : "flex",
+          children: autoUpdaterElement_2,
+        });
+      $[46] = autoUpdaterElement_2;
+      $[47] = hasContentOrStash;
+      $[48] = isMemoryShowing;
+      $[49] = isFullscreen;
+      $[50] = appState_2;
+      $[51] = voiceAvailable;
+      $[52] = voiceOnRow1;
+      $[53] = autoUpdaterBox;
+    } else autoUpdaterBox = $[53];
+    let footer;
+    if (
+      $[54] !== notificationContent ||
+      $[55] !== stashIndicator ||
+      $[56] !== goalIndicator ||
+      $[57] !== autoUpdaterBox
+    ) {
+      footer = jsxProd_default(SentryErrorBoundary, {
+        children: jsxProd_default_2(Box, {
+          flexDirection: "row",
+          justifyContent: "flex-end",
+          alignItems: "flex-end",
+          flexShrink: 0,
+          overflowX: "hidden",
+          children: [notificationContent, stashIndicator, goalIndicator, autoUpdaterBox],
+        }),
+      });
+      $[54] = notificationContent;
+      $[55] = stashIndicator;
+      $[56] = goalIndicator;
+      $[57] = autoUpdaterBox;
+      $[58] = footer;
+    } else footer = $[58];
+    return footer;
+  });
 });
 //@ chunk-18hwfzwa.js:791970-794488 fingerprint = NotificationContent (0.431)
 /**
  * 通知内容：语音 recording/processing、apiKeyHelper 慢、"Now using usage credits"、IDE 状态等按类型渲染；无通知时显示其他状态。
  */
 function NotificationContent(props) {
-  let $ = w(41);
+  let $ = useMemoCache(41);
   let {
     isInOverageMode,
     isTeamOrEnterprise,
@@ -690,52 +904,54 @@ function NotificationContent(props) {
     voiceOnRow1,
   } = props;
   let subscriptionTypeWithRefresh = getSubscriptionTypeWithRefresh();
-  let rt;
+  let isProPlan;
   if ($[0] !== subscriptionTypeWithRefresh) {
-    rt = !isRemoteSessionAvailable() && subscriptionTypeWithRefresh === "pro";
+    isProPlan = !isRemoteSessionAvailable() && subscriptionTypeWithRefresh === "pro";
     $[0] = subscriptionTypeWithRefresh;
-    $[1] = rt;
-  } else rt = $[1];
-  let kt = rt;
-  let nowTicker = useNowTicker(kt ? 30000 : null);
-  let It;
-  if ($[2] !== nowTicker || $[3] !== kt || $[4] !== tokenUsage) {
-    It = kt ? uncachedContextHint(tokenUsage, getLastApiCompletionTimestamp(), nowTicker) : null;
+    $[1] = isProPlan;
+  } else isProPlan = $[1];
+  let showContextHint = isProPlan;
+  let nowTicker = useNowTicker(showContextHint ? 30000 : null);
+  let contextHint;
+  if ($[2] !== nowTicker || $[3] !== showContextHint || $[4] !== tokenUsage) {
+    contextHint = showContextHint
+      ? uncachedContextHint(tokenUsage, getLastApiCompletionTimestamp(), nowTicker)
+      : null;
     $[2] = nowTicker;
-    $[3] = kt;
+    $[3] = showContextHint;
     $[4] = tokenUsage;
-    $[5] = It;
-  } else It = $[5];
-  let Ot = It;
-  let [Et, Dt] = y(null);
-  let Lt = !isRemoteSessionAvailable() && Boolean(getConfiguredApiKeyHelper());
-  let oo;
+    $[5] = contextHint;
+  } else contextHint = $[5];
+  let contextHint_2 = contextHint;
+  let [helperElapsed, setHelperElapsed] = useState(null);
+  let hasApiKeyHelper = !isRemoteSessionAvailable() && Boolean(getConfiguredApiKeyHelper());
+  let helperTick;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    oo = () => {
+    helperTick = () => {
       let ms = getApiKeyHelperElapsedMs();
       let next = ms >= 1e4 ? formatDuration(ms) : null;
-      Dt((prev) => (next === prev ? prev : next));
+      setHelperElapsed((prev) => (next === prev ? prev : next));
     };
-    $[6] = oo;
-  } else oo = $[6];
-  useInterval(oo, Lt ? 1000 : null);
+    $[6] = helperTick;
+  } else helperTick = $[6];
+  useInterval(helperTick, hasApiKeyHelper ? 1000 : null);
   let appState = useAppState_2(selectVoiceState);
   let voiceAvailable = useVoiceAvailable();
   let appState_2 = useAppState_2(selectVoiceError);
   if (!voiceOnRow1 && voiceAvailable && (appState === "recording" || appState === "processing")) {
-    let bo;
+    let voiceIndicator;
     if ($[7] !== appState) {
-      bo = jsxProd_default(VoiceStateIndicator, {
+      voiceIndicator = jsxProd_default(VoiceStateIndicator, {
         voiceState: appState,
       });
       $[7] = appState;
-      $[8] = bo;
-    } else bo = $[8];
-    return bo;
+      $[8] = voiceIndicator;
+    } else voiceIndicator = $[8];
+    return voiceIndicator;
   }
-  let bo;
+  let overageNotice;
   if ($[9] !== isInOverageMode || $[10] !== isTeamOrEnterprise) {
-    bo =
+    overageNotice =
       isInOverageMode &&
       !isTeamOrEnterprise &&
       jsxProd_default(Box, {
@@ -747,12 +963,12 @@ function NotificationContent(props) {
       });
     $[9] = isInOverageMode;
     $[10] = isTeamOrEnterprise;
-    $[11] = bo;
-  } else bo = $[11];
-  let Ao;
-  if ($[12] !== Et) {
-    Ao =
-      Et &&
+    $[11] = overageNotice;
+  } else overageNotice = $[11];
+  let helperWarning;
+  if ($[12] !== helperElapsed) {
+    helperWarning =
+      helperElapsed &&
       jsxProd_default_2(Box, {
         children: [
           jsxProd_default_2(Text, {
@@ -763,16 +979,16 @@ function NotificationContent(props) {
           jsxProd_default_2(Text, {
             dimColor: true,
             wrap: "truncate",
-            children: ["(", Et, ")"],
+            children: ["(", helperElapsed, ")"],
           }),
         ],
       });
-    $[12] = Et;
-    $[13] = Ao;
-  } else Ao = $[13];
-  let Bo;
+    $[12] = helperElapsed;
+    $[13] = helperWarning;
+  } else helperWarning = $[13];
+  let loginNotice;
   if ($[14] !== showLoginNotice) {
-    Bo =
+    loginNotice =
       showLoginNotice &&
       jsxProd_default(Box, {
         children: jsxProd_default(Text, {
@@ -786,11 +1002,11 @@ function NotificationContent(props) {
         }),
       });
     $[14] = showLoginNotice;
-    $[15] = Bo;
-  } else Bo = $[15];
-  let Ro;
+    $[15] = loginNotice;
+  } else loginNotice = $[15];
+  let tokenCount;
   if ($[16] !== showVerboseTokens || $[17] !== tokenUsage) {
-    Ro =
+    tokenCount =
       showVerboseTokens &&
       jsxProd_default(Box, {
         children: jsxProd_default_2(Text, {
@@ -801,30 +1017,30 @@ function NotificationContent(props) {
       });
     $[16] = showVerboseTokens;
     $[17] = tokenUsage;
-    $[18] = Ro;
-  } else Ro = $[18];
-  let Ho;
-  if ($[19] !== Ot) {
-    Ho =
-      Ot &&
+    $[18] = tokenCount;
+  } else tokenCount = $[18];
+  let contextWarning;
+  if ($[19] !== contextHint_2) {
+    contextWarning =
+      contextHint_2 &&
       jsxProd_default(Box, {
         children: jsxProd_default(Text, {
           dimColor: true,
           wrap: "truncate",
-          children: Ot,
+          children: contextHint_2,
         }),
       });
-    $[19] = Ot;
-    $[20] = Ho;
-  } else Ho = $[20];
-  let Io;
+    $[19] = contextHint_2;
+    $[20] = contextWarning;
+  } else contextWarning = $[20];
+  let closedIssueNotifier;
   if ($[21] === MEMO_CACHE_SENTINEL) {
-    Io = jsxProd_default(ClosedIssueNotifier, {});
-    $[21] = Io;
-  } else Io = $[21];
-  let Wo;
+    closedIssueNotifier = jsxProd_default(ClosedIssueNotifier, {});
+    $[21] = closedIssueNotifier;
+  } else closedIssueNotifier = $[21];
+  let voiceErrorText;
   if ($[22] !== voiceAvailable || $[23] !== appState_2) {
-    Wo =
+    voiceErrorText =
       voiceAvailable &&
       appState_2 &&
       jsxProd_default(Box, {
@@ -836,65 +1052,78 @@ function NotificationContent(props) {
       });
     $[22] = voiceAvailable;
     $[23] = appState_2;
-    $[24] = Wo;
-  } else Wo = $[24];
-  let mn;
-  let Cn;
+    $[24] = voiceErrorText;
+  } else voiceErrorText = $[24];
+  let highMemory;
+  let sandboxHint;
   if ($[25] === MEMO_CACHE_SENTINEL) {
-    mn = jsxProd_default(MemoryUsageIndicator, {
+    highMemory = jsxProd_default(MemoryUsageIndicator, {
       tier: "high",
     });
-    Cn = !isRemoteSessionAvailable() && jsxProd_default(SandboxPromptFooterHint, {});
-    $[25] = mn;
-    $[26] = Cn;
+    sandboxHint = !isRemoteSessionAvailable() && jsxProd_default(SandboxPromptFooterHint, {});
+    $[25] = highMemory;
+    $[26] = sandboxHint;
   } else {
-    mn = $[25];
-    Cn = $[26];
+    highMemory = $[25];
+    sandboxHint = $[26];
   }
-  let No;
+  let promptToast;
   if ($[27] !== toastOnRow1) {
-    No = jsxProd_default(PromptToast, {
+    promptToast = jsxProd_default(PromptToast, {
       drawnOnRow1: toastOnRow1,
     });
     $[27] = toastOnRow1;
-    $[28] = No;
-  } else No = $[28];
-  let vo;
+    $[28] = promptToast;
+  } else promptToast = $[28];
+  let criticalMemory;
   if ($[29] !== onCriticalMemoryShowingChange) {
-    vo = jsxProd_default(MemoryUsageIndicator, {
+    criticalMemory = jsxProd_default(MemoryUsageIndicator, {
       tier: "critical",
       onShowingChange: onCriticalMemoryShowingChange,
     });
     $[29] = onCriticalMemoryShowingChange;
-    $[30] = vo;
-  } else vo = $[30];
-  let Yo;
+    $[30] = criticalMemory;
+  } else criticalMemory = $[30];
+  let content;
   if (
     $[31] !== autoUpdater ||
-    $[32] !== Wo ||
-    $[33] !== No ||
-    $[34] !== vo ||
-    $[35] !== bo ||
-    $[36] !== Ao ||
-    $[37] !== Bo ||
-    $[38] !== Ro ||
-    $[39] !== Ho
+    $[32] !== voiceErrorText ||
+    $[33] !== promptToast ||
+    $[34] !== criticalMemory ||
+    $[35] !== overageNotice ||
+    $[36] !== helperWarning ||
+    $[37] !== loginNotice ||
+    $[38] !== tokenCount ||
+    $[39] !== contextWarning
   ) {
-    Yo = jsxProd_default_2(Fragment, {
-      children: [bo, Ao, Bo, Ro, Ho, autoUpdater, Io, Wo, mn, Cn, No, vo],
+    content = jsxProd_default_2(Fragment, {
+      children: [
+        overageNotice,
+        helperWarning,
+        loginNotice,
+        tokenCount,
+        contextWarning,
+        autoUpdater,
+        closedIssueNotifier,
+        voiceErrorText,
+        highMemory,
+        sandboxHint,
+        promptToast,
+        criticalMemory,
+      ],
     });
     $[31] = autoUpdater;
-    $[32] = Wo;
-    $[33] = No;
-    $[34] = vo;
-    $[35] = bo;
-    $[36] = Ao;
-    $[37] = Bo;
-    $[38] = Ro;
-    $[39] = Ho;
-    $[40] = Yo;
-  } else Yo = $[40];
-  return Yo;
+    $[32] = voiceErrorText;
+    $[33] = promptToast;
+    $[34] = criticalMemory;
+    $[35] = overageNotice;
+    $[36] = helperWarning;
+    $[37] = loginNotice;
+    $[38] = tokenCount;
+    $[39] = contextWarning;
+    $[40] = content;
+  } else content = $[40];
+  return content;
 }
 //@ chunk-18hwfzwa.js:794488-794502 placement
 var UNCACHED_CONTEXT_HINT_TOKENS = 50000;
@@ -906,20 +1135,23 @@ function uncachedContextHint(tokenUsage, lastApiCompletionTimestamp, nowTicker) 
   return `~${Math.round(tokenUsage / 1000)}k uncached \xB7 /clear to start fresh`;
 }
 //@ chunk-18hwfzwa.js:794658-794662 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:794658", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:794662-795108 placement
 /**
  * 通知区的绝对定位容器：宽度扣掉右侧占用列数，底部对齐、超出隐藏。
  */
-function NotificationOverlay(h) {
-  let $ = w(5);
+function NotificationOverlay(props) {
+  let $ = useMemoCache(5);
   let { columns } = useTerminalSize();
-  let D = Se(FooterSlot);
-  const { marginTop, height } = h;
-  const width = D > 0 ? Math.max(0, columns - D) : "100%";
-  let Be;
-  if ($[0] !== h.children || $[1] !== h.height || $[2] !== h.marginTop || $[3] !== width) {
-    Be = jsxProd_default(Box, {
+  let footerInset = useContext(FooterSlot);
+  const { marginTop, height } = props;
+  const width = footerInset > 0 ? Math.max(0, columns - footerInset) : "100%";
+  let overlayElement;
+  if ($[0] !== props.children || $[1] !== props.height || $[2] !== props.marginTop || $[3] !== width) {
+    overlayElement = jsxProd_default(Box, {
       position: "absolute",
       marginTop,
       height,
@@ -928,184 +1160,35 @@ function NotificationOverlay(h) {
       flexDirection: "column",
       justifyContent: "flex-end",
       overflow: "hidden",
-      children: h.children,
+      children: props.children,
     });
-    $[0] = h.children;
-    $[1] = h.height;
-    $[2] = h.marginTop;
+    $[0] = props.children;
+    $[1] = props.height;
+    $[2] = props.marginTop;
     $[3] = width;
-    $[4] = Be;
-  } else Be = $[4];
-  return Be;
+    $[4] = overlayElement;
+  } else overlayElement = $[4];
+  return overlayElement;
 }
 //@ chunk-18hwfzwa.js:795108-795112 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:795108", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:795112-795116 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:795112", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:795116-795120 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:795116", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:795120-795165 placement
 function useMergedClients(initialClients, mcpClients) {
-  return Q(() => mergeClients(initialClients, mcpClients), [initialClients, mcpClients]);
+  return useMemo(() => mergeClients(initialClients, mcpClients), [initialClients, mcpClients]);
 }
-//@ chunk-8jypjjdf.js:20372-20520 placement = _temp2 (0.843)
-function ToastText(props) {
-  let $ = w(2);
-  let { text } = props;
-  let l;
-  if ($[0] !== text) {
-    l = jsxProd_default(Text, {
-      dimColor: true,
-      italic: true,
-      wrap: "truncate-end",
-      children: text,
-    });
-    $[0] = text;
-    $[1] = l;
-  } else l = $[1];
-  return l;
-}
-//@ chunk-8jypjjdf.js:20520-20697 placement = StyledText (0.767)
-/**
- * 渲染通知的分段文本（颜色、加粗、可点链接）。
- */
-function SegmentedText({ segments }) {
-  return segments.map((segment, t) => {
-    let l = jsxProd_default(
-      Text,
-      {
-        color: segment.color,
-        dimColor: segment.dim,
-        bold: segment.bold,
-        children: segment.text,
-      },
-      t,
-    );
-    return segment.url === undefined
-      ? l
-      : jsxProd_default(
-          Link,
-          {
-            url: segment.url,
-            children: l,
-          },
-          t,
-        );
-  });
-}
-//@ chunk-8jypjjdf.js:20697-20743 fingerprint = _temp (1)
-function selectNotificationsCurrent(s) {
-  return s.notifications.current;
-}
-//@ chunk-8jypjjdf.js:20743-21713 placement
-/**
- * 输入框上方的 toast 通知行（第一行绘制时隐藏）。
- */
-function PromptToast(props) {
-  let d = w(18);
-  let { drawnOnRow1 } = props;
-  let t = drawnOnRow1 === undefined ? false : drawnOnRow1;
-  let appState = useAppState(selectNotificationsCurrent);
-  let appState_2 = useAppState(holdsToasts);
-  let m = showSwarmFooterGate();
-  let headerGauge = useHeaderGauge();
-  if (!appState || !isHeldNotice(appState, appState_2) || (m && isGaugeSurface(appState, headerGauge))) {
-    return null;
-  }
-  if (t) {
-    return null;
-  }
-  let f;
-  if (d[0] !== appState || d[1] !== m) {
-    f = m ? gaugeOf(appState) : undefined;
-    d[0] = appState;
-    d[1] = m;
-    d[2] = f;
-  } else f = d[2];
-  let h = f;
-  if (h?.surface === "toast") {
-    let u;
-    if (d[3] !== appState.key || d[4] !== h.text) {
-      u = jsxProd_default(
-        ToastText,
-        {
-          text: h.text,
-        },
-        appState.key,
-      );
-      d[3] = appState.key;
-      d[4] = h.text;
-      d[5] = u;
-    } else u = d[5];
-    return u;
-  }
-  if ("jsx" in appState) {
-    let u;
-    if (d[6] !== appState.jsx || d[7] !== appState.key) {
-      u = jsxProd_default(
-        Text,
-        {
-          wrap: "truncate",
-          children: appState.jsx,
-        },
-        appState.key,
-      );
-      d[6] = appState.jsx;
-      d[7] = appState.key;
-      d[8] = u;
-    } else u = d[8];
-    return u;
-  }
-  if ("segments" in appState) {
-    let children;
-    if (d[9] !== appState.segments) {
-      children = jsxProd_default(SegmentedText, {
-        segments: appState.segments,
-      });
-      d[9] = appState.segments;
-      d[10] = children;
-    } else children = d[10];
-    let b;
-    if (d[11] !== appState.key || d[12] !== children) {
-      b = jsxProd_default(
-        Text,
-        {
-          wrap: "truncate",
-          children,
-        },
-        appState.key,
-      );
-      d[11] = appState.key;
-      d[12] = children;
-      d[13] = b;
-    } else b = d[13];
-    return b;
-  }
-  const dimColor = !appState.color;
-  let b;
-  if (d[14] !== appState.color || d[15] !== appState.text || d[16] !== dimColor) {
-    b = jsxProd_default(Text, {
-      color: appState.color,
-      dimColor,
-      wrap: "truncate",
-      children: appState.text,
-    });
-    d[14] = appState.color;
-    d[15] = appState.text;
-    d[16] = dimColor;
-    d[17] = b;
-  } else b = d[17];
-  return b;
-}
-//@ chunk-8jypjjdf.js:21713-21717 placement
-init_react_production();
-//@ chunk-8jypjjdf.js:21717-21747 placement
-/**
- * 导出值：同一声明里的多个绑定：MAX_NOTICE_LINES（2：通知行数）；NOTICE_WIDTH_LIMIT（15：通知宽度）；noticeDialogSlot（通知对话框槽）；位于「输入框右下的通知区：显示通知队列当前项（语音录制/处理、IDE、apiKeyHelper 慢、用量额度等），超时自动消失」模块。
- */
-var MAX_NOTICE_LINES = 2;
-var NOTICE_WIDTH_LIMIT = 15;
-var noticeDialogSlot = qt(null);
 export {
   useMergedClients,
   NOTIFICATION_TIMEOUT_MS,

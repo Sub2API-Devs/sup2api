@@ -10,7 +10,7 @@
  */
 import { basename } from "path";
 import { getSleepPreventer } from "../services/preventSleep.js";
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../vendor/semver/index.js";
 import { isCrossSessionMessagingEnabled } from "./crossSessionMessagingGate.js";
 import { FORK_SOURCE } from "../constants/xml.js";
@@ -25,6 +25,7 @@ import { formatTaskNotification } from "./xmlTags.js";
 import { SENDMESSAGE } from "../tools/SendMessageTool/constants.js";
 import { mainAgentId } from "../bootstrap/state.js";
 import { getUserMessageText } from "./messages.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-0sfjpx19.js:49898-49928 placement
 /**
@@ -51,38 +52,45 @@ function isSleepPreventerHeld() {
 /**
  * fs/promises 模块引用。
  */
-var fsPromises = Re(require_semver_3(), 1);
+var fsPromises; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-0sfjpx19.js:49997", () => {
+  fsPromises = __toESM(require_semver_3(), 1);
+});
 //@ chunk-0sfjpx19.js:50096-51143 placement
 /**
  * 向 fork 会话注入 fork_source_note：说明共享历史截止时间及如何联系源会话。
  */
-async function appendForkSourceNote(e, parentSessionId, boundaryAt) {
+async function appendForkSourceNote(messages, sessionId, boundaryAt) {
   if (isCrossSessionMessagingEnabled()) {
-    let text = `<${FORK_SOURCE}>`;
-    if (e.some((T) => messageContainsText(T, text)) || hasQueuedCommandMentioning(text)) return;
+    let forkSourceTag = `<${FORK_SOURCE}>`;
+    if (
+      messages.some((message) => messageContainsText(message, forkSourceTag)) ||
+      hasQueuedCommandMentioning(forkSourceTag)
+    )
+      return;
     let timestamp = Date.parse(boundaryAt);
     if (Number.isNaN(timestamp)) return;
     let iso = new Date(timestamp).toISOString();
-    let livePeerBySessionId = await findLivePeerBySessionId(parentSessionId);
+    let livePeerBySessionId = await findLivePeerBySessionId(sessionId);
     if (livePeerBySessionId === null) {
       logFeatureSad("fork_source_note", "parent_gone");
       return;
     }
-    let b = clipTeammateText(livePeerBySessionId.name || basename(livePeerBySessionId.cwd));
-    let k = b && b !== "?" ? b : null;
-    let w = k
-      ? `a session whose self-reported name is '${escapeXml(k)}'`
+    let peerLabel = clipTeammateText(livePeerBySessionId.name || basename(livePeerBySessionId.cwd));
+    let selfReportedName = peerLabel && peerLabel !== "?" ? peerLabel : null;
+    let peerDescription = selfReportedName
+      ? `a session whose self-reported name is '${escapeXml(selfReportedName)}'`
       : "a session that was untitled when this note was written";
-    let S = k
+    let locateHint = selfReportedName
       ? `find it in the ${LISTAGENTS} listing under that name (it may have been renamed since)`
       : `find it in the ${LISTAGENTS} listing`;
-    if (hasQueuedCommandMentioning(text)) return;
+    if (hasQueuedCommandMentioning(forkSourceTag)) return;
     logFeatureOk("fork_source_note");
     enqueuePendingNotification({
       value: formatTaskNotification({
         body: `
 <${FORK_SOURCE}>
-This session began as a fork (copy) of another session that is still running: ${w}. The conversation up to ${iso} is shared history with it; the two sessions have since diverged, and neither sees the other's new activity. To coordinate with it \u2014 hand results back, ask what it has done since, avoid duplicating its work \u2014 ${S} and message it with ${SENDMESSAGE}.
+This session began as a fork (copy) of another session that is still running: ${peerDescription}. The conversation up to ${iso} is shared history with it; the two sessions have since diverged, and neither sees the other's new activity. To coordinate with it \u2014 hand results back, ask what it has done since, avoid duplicating its work \u2014 ${locateHint} and message it with ${SENDMESSAGE}.
 </${FORK_SOURCE}>`,
       }),
       agentId: mainAgentId(),

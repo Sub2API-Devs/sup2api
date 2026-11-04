@@ -6,23 +6,23 @@
  * attribution: placement 9
  */
 import { isSymbolAlias } from "./toString.js";
-import { RR } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { isObjectAlias } from "../@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 
 //@ chunk-bwbq4xvm.js:149990-150002 placement
 var reWhitespace = /\s/;
 //@ chunk-bwbq4xvm.js:150002-150074 placement
-function trimmedEndIndex(e) {
-  var s = e.length;
-  while (s-- && reWhitespace.test(e.charAt(s)));
-  return s;
+function trimmedEndIndex(string) {
+  var index = string.length;
+  while (index-- && reWhitespace.test(string.charAt(index)));
+  return index;
 }
 //@ chunk-bwbq4xvm.js:150074-150084 placement
 var trimmedEndIndexExport = trimmedEndIndex;
 //@ chunk-bwbq4xvm.js:150084-150098 placement
 var reTrimStart = /^\s+/;
 //@ chunk-bwbq4xvm.js:150098-150158 placement
-function baseTrim(e) {
-  return e ? e.slice(0, trimmedEndIndexExport(e) + 1).replace(reTrimStart, "") : e;
+function baseTrim(string) {
+  return string ? string.slice(0, trimmedEndIndexExport(string) + 1).replace(reTrimStart, "") : string;
 }
 //@ chunk-bwbq4xvm.js:150158-150168 placement
 var baseTrimExport = baseTrim;
@@ -36,9 +36,9 @@ var freeParseInt = parseInt;
 function toNumber(value) {
   if (typeof value == "number") return value;
   if (isSymbolAlias(value)) return NAN;
-  if (RR(value)) {
+  if (isObjectAlias(value)) {
     var other = typeof value.valueOf == "function" ? value.valueOf() : value;
-    value = RR(other) ? other + "" : other;
+    value = isObjectAlias(other) ? other + "" : other;
   }
   if (typeof value != "string") return value === 0 ? value : +value;
   value = baseTrimExport(value);

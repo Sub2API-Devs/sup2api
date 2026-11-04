@@ -25,15 +25,15 @@ import { escapeNonAscii } from "../../utils/resultError.js";
 var UNTRUSTED_FOLDER_REASON =
   "is not owned by you, is writable by other users, is a symlink, or could not be fully examined (see --debug)";
 //@ chunk-qchp9vrd.js:68824-69137 placement
-function checkTreeTrust(e) {
+function checkTreeTrust(options) {
   return {
-    treeMaxEntries: Math.min(e?.treeMaxEntries ?? MAX_WALK_DIRECTORIES, MAX_WALK_DIRECTORIES),
-    groups: e?.groups,
-    groupsLoading: e?.groups === undefined ? undefined : Promise.resolve(),
+    treeMaxEntries: Math.min(options?.treeMaxEntries ?? MAX_WALK_DIRECTORIES, MAX_WALK_DIRECTORIES),
+    groups: options?.groups,
+    groupsLoading: options?.groups === undefined ? undefined : Promise.resolve(),
     groupsUnverifiableWhy: undefined,
     modesByDevice: new Map(),
     verdicts: new Map(),
-    consentRoot: e?.consentRoot ?? null,
+    consentRoot: options?.consentRoot ?? null,
     reasons: new Map(),
     skillFolderProbes: new Map(),
     rootRealpaths: new Map(),
@@ -43,28 +43,28 @@ function checkTreeTrust(e) {
 /**
  * 判断路径是否在已同意的根目录内。
  */
-function isInsideConsentRoot(e, n) {
-  let consentRoot = e.consentRoot;
-  return consentRoot !== null && (n === consentRoot || toEvalPathError(consentRoot, n));
+function isInsideConsentRoot(path, candidate) {
+  let consentRoot = path.consentRoot;
+  return consentRoot !== null && (candidate === consentRoot || toEvalPathError(consentRoot, candidate));
 }
 //@ chunk-qchp9vrd.js:69208-69263 placement
 /**
  * 是否处于容器或 root 环境（用户库不再可靠）。
  */
-function isContainerOrRoot(e) {
-  return isDockerenvPresent() || e?.containerEvidence === true;
+function isContainerOrRoot(evidence) {
+  return isDockerenvPresent() || evidence?.containerEvidence === true;
 }
 //@ chunk-qchp9vrd.js:69263-69467 placement
-function isOwnedByUser(uid, n) {
+function isOwnedByUser(uid, ctx) {
   if (typeof process.getuid !== "function") return true;
-  let r = process.getuid();
-  if (r !== 0) return uid === r;
-  let verifiedSudoUser = getVerifiedSudoUser(n);
+  let currentUid = process.getuid();
+  if (currentUid !== 0) return uid === currentUid;
+  let verifiedSudoUser = getVerifiedSudoUser(ctx);
   if (verifiedSudoUser !== null) return uid === 0 || uid === verifiedSudoUser.uid;
-  return uid === 0 || (isContainerOrRoot(n) && n?.localUids?.has(uid) === false);
+  return uid === 0 || (isContainerOrRoot(ctx) && ctx?.localUids?.has(uid) === false);
 }
 //@ chunk-qchp9vrd.js:69467-69706 placement
-function getVerifiedSudoUser(e) {
+function getVerifiedSudoUser(about) {
   if (typeof process.getuid !== "function" || process.getuid() !== 0) return null;
   let SUDO_UID = env.SUDO_UID;
   let SUDO_GID = env.SUDO_GID;
@@ -72,10 +72,10 @@ function getVerifiedSudoUser(e) {
   return SUDO_UID !== undefined &&
     SUDO_GID !== undefined &&
     SUDO_USER !== undefined &&
-    e?.sudoVerified === true
+    about?.sudoVerified === true
     ? {
         uid: SUDO_UID,
-        gid: e.sudoPrimaryGid ?? SUDO_GID,
+        gid: about.sudoPrimaryGid ?? SUDO_GID,
         user: SUDO_USER,
       }
     : null;
@@ -84,49 +84,50 @@ function getVerifiedSudoUser(e) {
 /**
  * 计算应当匹配的 gid（root 下取目标用户的 gid）。
  */
-function expectedGid(e) {
+function expectedGid(about) {
   if (typeof process.getgid !== "function") return;
-  return getVerifiedSudoUser(e)?.gid ?? process.getgid();
+  return getVerifiedSudoUser(about)?.gid ?? process.getgid();
 }
 //@ chunk-qchp9vrd.js:69802-70127 placement
 /**
  * 判断文件属组是否为当前用户组：无 getgid 视为是，macOS 视为否，root 时按目标用户的 gid 判断。
  */
-function isOwnedByUserGroup(e, n) {
+function isOwnedByUserGroup(gid, ctx) {
   if (typeof process.getgid !== "function") return true;
   if (getPlatform() === "macos") return false;
   if (typeof process.getuid === "function" && process.getuid() === 0) {
-    let verifiedSudoUser = getVerifiedSudoUser(n);
-    if (verifiedSudoUser === null) return e === 0 || (isContainerOrRoot(n) && n?.localGids?.has(e) === false);
+    let verifiedSudoUser = getVerifiedSudoUser(ctx);
+    if (verifiedSudoUser === null)
+      return gid === 0 || (isContainerOrRoot(ctx) && ctx?.localGids?.has(gid) === false);
     return (
-      e === verifiedSudoUser.gid &&
-      isPrivateUserGroup(n, verifiedSudoUser.gid, verifiedSudoUser.uid, verifiedSudoUser.user)
+      gid === verifiedSudoUser.gid &&
+      isPrivateUserGroup(ctx, verifiedSudoUser.gid, verifiedSudoUser.uid, verifiedSudoUser.user)
     );
   }
-  return e === process.getgid() && isPrivateUserGroup(n, e, process.getuid(), getCachedUsername(n));
+  return gid === process.getgid() && isPrivateUserGroup(ctx, gid, process.getuid(), getCachedUsername(ctx));
 }
 //@ chunk-qchp9vrd.js:70127-70305 placement
-function isPrivateUserGroup(e, n, r, a) {
-  if (n !== r || a === undefined || a === "") return false;
-  let s = e?.groups?.get(n);
+function isPrivateUserGroup(ctx, gid, uid, username) {
+  if (gid !== uid || username === undefined || username === "") return false;
+  let groupInfo = ctx?.groups?.get(gid);
   return (
-    s !== undefined &&
-    s.name === a &&
-    s.members.every((member) => member === a) &&
-    s.primaryMembers.every((primaryMember) => primaryMember === a)
+    groupInfo !== undefined &&
+    groupInfo.name === username &&
+    groupInfo.members.every((member) => member === username) &&
+    groupInfo.primaryMembers.every((primaryMember) => primaryMember === username)
   );
 }
 //@ chunk-qchp9vrd.js:70305-70453 placement
-function getCachedUsername(e) {
-  if (e?.username !== undefined) return e.username ?? undefined;
-  let n;
+function getCachedUsername(ctx) {
+  if (ctx?.username !== undefined) return ctx.username ?? undefined;
+  let username;
   try {
-    n = userInfo().username;
+    username = userInfo().username;
   } catch {
-    n = undefined;
+    username = undefined;
   }
-  if (e !== undefined) e.username = n ?? null;
-  return n;
+  if (ctx !== undefined) ctx.username = username ?? null;
+  return username;
 }
 //@ chunk-qchp9vrd.js:70453-70691 placement
 /**
@@ -149,14 +150,15 @@ var SYSTEMD_USERDB_VENDORS = new Set([
 //@ chunk-qchp9vrd.js:70691-70976 placement
 async function readUserdbMembership() {
   try {
-    if ((await readdir(SYSTEMD_USERDB_DIR)).some((n) => !SYSTEMD_USERDB_VENDORS.has(n))) return true;
+    if ((await readdir(SYSTEMD_USERDB_DIR)).some((entryName) => !SYSTEMD_USERDB_VENDORS.has(entryName)))
+      return true;
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR") return true;
   }
-  for (let e of USERDB_DIRS)
+  for (let dir of USERDB_DIRS)
     try {
-      if ((await readdir(e)).some((n) => n.endsWith(".membership"))) return true;
+      if ((await readdir(dir)).some((entryName) => entryName.endsWith(".membership"))) return true;
     } catch (error) {
       let errnoCode = getErrnoCode(error);
       if (errnoCode !== "ENOENT" && errnoCode !== "ENOTDIR") return true;
@@ -167,12 +169,12 @@ async function readUserdbMembership() {
 /**
  * 读取组信息并检测容器用户命名空间。
  */
-function groupNamespaceInfo(e) {
-  e.groupsLoading ??= getGroupMembers(e).then(() => detectContainerUserNamespace(e));
-  return e.groupsLoading;
+function groupNamespaceInfo(info) {
+  info.groupsLoading ??= getGroupMembers(info).then(() => detectContainerUserNamespace(info));
+  return info.groupsLoading;
 }
 //@ chunk-qchp9vrd.js:71054-71823 placement
-async function getGroupMembers(e) {
+async function getGroupMembers(ctx) {
   if (
     typeof process.getuid !== "function" ||
     process.getuid() !== 0 ||
@@ -183,50 +185,50 @@ async function getGroupMembers(e) {
     return;
   let SUDO_USER = env.SUDO_USER;
   if (!/^[A-Za-z0-9._][A-Za-z0-9._-]*\$?$/.test(SUDO_USER)) {
-    e.sudoVerified = false;
+    ctx.sudoVerified = false;
     return;
   }
-  let parts = (await passwdText(e))
+  let parts = (await passwdText(ctx))
     ?.split(
       `
 `,
     )
     .find((line) => line.startsWith(`${SUDO_USER}:`))
     ?.split(":");
-  let s;
-  let h;
+  let uidMatches;
+  let primaryGid;
   if (parts !== undefined) {
-    s = Number(parts[2]) === env.SUDO_UID;
-    h = Number(parts[3]);
+    uidMatches = Number(parts[2]) === env.SUDO_UID;
+    primaryGid = Number(parts[3]);
   } else {
-    let [b, y] = await Promise.all([
+    let [uidResult, gidResult] = await Promise.all([
       runIdCommand(["-u", "--", SUDO_USER]),
       runIdCommand(["-g", "--", SUDO_USER]),
     ]);
-    s = b.code === 0 && Number(b.stdout.trim()) === env.SUDO_UID;
-    h = y.code === 0 ? Number(y.stdout.trim()) : null;
+    uidMatches = uidResult.code === 0 && Number(uidResult.stdout.trim()) === env.SUDO_UID;
+    primaryGid = gidResult.code === 0 ? Number(gidResult.stdout.trim()) : null;
   }
-  if (!s) {
-    e.sudoVerified = false;
+  if (!uidMatches) {
+    ctx.sudoVerified = false;
     return;
   }
-  e.sudoPrimaryGid = h ?? undefined;
-  if (h === env.SUDO_GID) {
-    e.sudoVerified = true;
+  ctx.sudoPrimaryGid = primaryGid ?? undefined;
+  if (primaryGid === env.SUDO_GID) {
+    ctx.sudoVerified = true;
     return;
   }
-  let w = await runIdCommand(["-G", "--", SUDO_USER]);
-  e.sudoVerified =
-    w.code === 0 &&
-    w.stdout
+  let groupsResult = await runIdCommand(["-G", "--", SUDO_USER]);
+  ctx.sudoVerified =
+    groupsResult.code === 0 &&
+    groupsResult.stdout
       .trim()
       .split(/\s+/)
-      .some((b) => Number(b) === env.SUDO_GID);
+      .some((gid) => Number(gid) === env.SUDO_GID);
 }
 //@ chunk-qchp9vrd.js:71823-72110 placement
-async function runIdCommand(e) {
-  for (let n of ["/usr/bin/id", "/bin/id"]) {
-    let r = await execFileNoThrowWithCwd(n, e, {
+async function runIdCommand(args) {
+  for (let idPath of ["/usr/bin/id", "/bin/id"]) {
+    let result = await execFileNoThrowWithCwd(idPath, args, {
       preserveOutputOnError: true,
       env: {
         PATH: "/usr/bin:/bin",
@@ -237,7 +239,7 @@ async function runIdCommand(e) {
       extendEnv: false,
       cwd: "/",
     });
-    if (r.code === 0 || r.stderr !== "" || r.stdout !== "") return r;
+    if (result.code === 0 || result.stderr !== "" || result.stdout !== "") return result;
   }
   return {
     code: 1,
@@ -248,12 +250,12 @@ async function runIdCommand(e) {
 /**
  * 读取 /etc/passwd 文本（失败为 null）。
  */
-function passwdText(e) {
-  e.passwdText ??= readFile("/etc/passwd", "utf8").catch(() => null);
-  return e.passwdText;
+function passwdText(info) {
+  info.passwdText ??= readFile("/etc/passwd", "utf8").catch(() => null);
+  return info.passwdText;
 }
 //@ chunk-qchp9vrd.js:72201-74312 placement
-function detectContainerUserNamespace(e) {
+function detectContainerUserNamespace(ctx) {
   if (getPlatform() !== "linux" && getPlatform() !== "wsl") return Promise.resolve();
   return Promise.all([
     Promise.all([
@@ -265,87 +267,100 @@ function detectContainerUserNamespace(e) {
         (file) => /docker|kubepods|containerd|libpod/i.test(file),
         () => false,
       ),
-    ]).then(([n, r]) => {
-      e.containerEvidence = n || r;
+    ]).then(([containerEnvPresent, cgroupSaysContainer]) => {
+      ctx.containerEvidence = containerEnvPresent || cgroupSaysContainer;
     }),
     readUserdbMembership(),
     readFile("/etc/group", "utf8").catch((error) => (getErrnoCode(error) === "ENOENT" ? "" : null)),
-    passwdText(e),
+    passwdText(ctx),
     readFile("/etc/nsswitch.conf", "utf8").catch((error) => (getErrnoCode(error) === "ENOENT" ? "" : null)),
   ])
-    .then(([, n, r, a, s]) => {
-      if (r === null) {
-        e.groups = new Map();
-        e.groupsUnverifiableWhy = "/etc/group could not be read";
+    .then(([, userdbMembership, groupText, passwdText_2, nsswitchText]) => {
+      if (groupText === null) {
+        ctx.groups = new Map();
+        ctx.groupsUnverifiableWhy = "/etc/group could not be read";
         return;
       }
-      let h = r;
-      if (s === null) {
-        e.groups = new Map();
-        e.groupsUnverifiableWhy = "/etc/nsswitch.conf could not be read";
+      let groupLines = groupText;
+      if (nsswitchText === null) {
+        ctx.groups = new Map();
+        ctx.groupsUnverifiableWhy = "/etc/nsswitch.conf could not be read";
         return;
       }
-      let w = !/^[+-]/m.test(h) && !/^[+-]/m.test(a ?? "+");
-      let b = (N) => {
-        let x = new RegExp(`^[ \\t]*${N}[ \\t]*:[ \\t]*([^#\\n]*)`, "m").exec(s)?.[1];
-        return x === undefined
+      let compatUsable = !/^[+-]/m.test(groupLines) && !/^[+-]/m.test(passwdText_2 ?? "+");
+      let readNssSources = (database) => {
+        let sourcesField = new RegExp(`^[ \\t]*${database}[ \\t]*:[ \\t]*([^#\\n]*)`, "m").exec(
+          nsswitchText,
+        )?.[1];
+        return sourcesField === undefined
           ? []
-          : x
+          : sourcesField
               .replace(/\[[^\]]*\]/g, " ")
               .split(/\s+/)
-              .filter((j) => j !== "" && j !== "files" && !(j === "compat" && w) && !(j === "systemd" && !n));
+              .filter(
+                (sourceName) =>
+                  sourceName !== "" &&
+                  sourceName !== "files" &&
+                  !(sourceName === "compat" && compatUsable) &&
+                  !(sourceName === "systemd" && !userdbMembership),
+              );
       };
-      let y = [...b("group"), ...b("initgroups")];
-      if (y.length > 0) {
-        e.groups = new Map();
-        e.groupsUnverifiableWhy = `nsswitch group sources: ${uniq(y).join(" ")}`;
+      let groupSources = [...readNssSources("group"), ...readNssSources("initgroups")];
+      if (groupSources.length > 0) {
+        ctx.groups = new Map();
+        ctx.groupsUnverifiableWhy = `nsswitch group sources: ${uniq(groupSources).join(" ")}`;
         return;
       }
-      let R = b("passwd");
-      if (R.length > 0) e.groupsUnverifiableWhy = `nsswitch passwd sources: ${uniq(R).join(" ")}`;
-      let S = R.length > 0 ? null : a;
-      if (a === null && e.groupsUnverifiableWhy === undefined)
-        e.groupsUnverifiableWhy = "/etc/passwd could not be read";
-      let T = new Map();
-      for (let line of h.split(`
+      let passwdSources = readNssSources("passwd");
+      if (passwdSources.length > 0)
+        ctx.groupsUnverifiableWhy = `nsswitch passwd sources: ${uniq(passwdSources).join(" ")}`;
+      let localPasswdText = passwdSources.length > 0 ? null : passwdText_2;
+      if (passwdText_2 === null && ctx.groupsUnverifiableWhy === undefined)
+        ctx.groupsUnverifiableWhy = "/etc/passwd could not be read";
+      let groups = new Map();
+      for (let line of groupLines.split(`
 `)) {
-        let [x, , j, K] = line.split(":");
-        let X = j === undefined ? NaN : Number.parseInt(j, 10);
-        if (!x || !Number.isInteger(X)) continue;
-        let filtered = (K ?? "")
+        let [groupName, , gidField, membersField] = line.split(":");
+        let gid = gidField === undefined ? NaN : Number.parseInt(gidField, 10);
+        if (!groupName || !Number.isInteger(gid)) continue;
+        let filtered = (membersField ?? "")
           .trim()
           .split(",")
-          .map((J) => J.trim())
-          .filter((J) => J !== "");
-        let G = T.get(X);
-        if (G === undefined)
-          T.set(X, {
-            name: x,
+          .map((member) => member.trim())
+          .filter((member) => member !== "");
+        let groupEntry = groups.get(gid);
+        if (groupEntry === undefined)
+          groups.set(gid, {
+            name: groupName,
             members: filtered,
-            primaryMembers: S === null ? ["?"] : [],
+            primaryMembers: localPasswdText === null ? ["?"] : [],
           });
         else {
-          G.members.push(...filtered);
-          if (x !== G.name) G.members.push(`(alias ${x})`);
+          groupEntry.members.push(...filtered);
+          if (groupName !== groupEntry.name) groupEntry.members.push(`(alias ${groupName})`);
         }
       }
-      for (let line of (S ?? "").split(`
+      for (let line of (localPasswdText ?? "").split(`
 `)) {
-        let [x, , , j] = line.split(":");
-        let K = j === undefined ? NaN : Number.parseInt(j, 10);
-        let X = Number.isInteger(K) ? T.get(K) : undefined;
-        if (x && X !== undefined) X.primaryMembers.push(x);
+        let [userName, , , gidField] = line.split(":");
+        let primaryGid = gidField === undefined ? NaN : Number.parseInt(gidField, 10);
+        let groupEntry = Number.isInteger(primaryGid) ? groups.get(primaryGid) : undefined;
+        if (userName && groupEntry !== undefined) groupEntry.primaryMembers.push(userName);
       }
-      e.groups ??= T;
-      if (S !== null) {
-        let filtered = S.split(
-          `
+      ctx.groups ??= groups;
+      if (localPasswdText !== null) {
+        let filtered = localPasswdText
+          .split(
+            `
 `,
-        )
+          )
           .map((line) => line.split(":"))
-          .filter((x) => x.length >= 4);
-        e.localUids = new Set(filtered.map((x) => Number(x[2])).filter(Number.isInteger));
-        e.localGids = new Set([...T.keys(), ...filtered.map((x) => Number(x[3])).filter(Number.isInteger)]);
+          .filter((fields) => fields.length >= 4);
+        ctx.localUids = new Set(filtered.map((fields) => Number(fields[2])).filter(Number.isInteger));
+        ctx.localGids = new Set([
+          ...groups.keys(),
+          ...filtered.map((fields) => Number(fields[3])).filter(Number.isInteger),
+        ]);
       }
     })
     .then(() => {
@@ -353,38 +368,38 @@ function detectContainerUserNamespace(e) {
     });
 }
 //@ chunk-qchp9vrd.js:74312-74598 placement
-function describeForeignOwner(e, n = "is not owned by you") {
+function describeForeignOwner(ctx, defaultMessage = "is not owned by you") {
   return typeof process.getuid === "function" &&
     process.getuid() === 0 &&
     env.SUDO_USER !== undefined &&
-    getVerifiedSudoUser(e) === null &&
-    !isContainerOrRoot(e)
+    getVerifiedSudoUser(ctx) === null &&
+    !isContainerOrRoot(ctx)
     ? `is not owned by root, and the sudo invoker ${formatGuardValueJson(env.SUDO_USER)} could not be confirmed on this system (run it as yourself, without sudo)`
-    : n;
+    : defaultMessage;
 }
 //@ chunk-qchp9vrd.js:74598-75170 placement
-function checkEntryOwnership(e, n) {
-  if (e.isSymbolicLink())
+function checkEntryOwnership(stats, ctx) {
+  if (stats.isSymbolicLink())
     return {
       code: "symlink",
       message: "is a symlink",
     };
-  if (!isOwnedByUser(e.uid, n))
+  if (!isOwnedByUser(stats.uid, ctx))
     return {
       code: "foreign_owner",
-      message: describeForeignOwner(n),
+      message: describeForeignOwner(ctx),
     };
   if (typeof process.getuid !== "function") return;
-  if ((e.mode & 2) !== 0)
+  if ((stats.mode & 2) !== 0)
     return {
       code: "other_writable",
       message: "is writable by other users",
     };
-  if ((e.mode & 16) !== 0 && !isOwnedByUserGroup(e.gid, n))
-    return n?.groupsUnverifiableWhy !== undefined && e.gid === expectedGid(n)
+  if ((stats.mode & 16) !== 0 && !isOwnedByUserGroup(stats.gid, ctx))
+    return ctx?.groupsUnverifiableWhy !== undefined && stats.gid === expectedGid(ctx)
       ? {
           code: "group_unverifiable",
-          message: `is group-writable, and group membership cannot be verified on this system (${n.groupsUnverifiableWhy})`,
+          message: `is group-writable, and group membership cannot be verified on this system (${ctx.groupsUnverifiableWhy})`,
         }
       : {
           code: "other_writable",
@@ -396,15 +411,18 @@ function checkEntryOwnership(e, n) {
 /**
  * 取某条目的不可信原因。
  */
-function reasonFor(e, n) {
-  return n.reasons.get(e) ?? UNTRUSTED_FOLDER_REASON;
+function reasonFor(folderPath, trust) {
+  return trust.reasons.get(folderPath) ?? UNTRUSTED_FOLDER_REASON;
 }
 //@ chunk-qchp9vrd.js:75215-75370 placement
-function logManifestNotConsulted(e, n, r) {
-  if (!n.reasons.has(e)) n.reasons.set(e, r);
-  logForDebugging(`plugin eval: not consulting the plugin manifest in ${escapeNonAscii(e)}: ${r}`, {
-    level: "warn",
-  });
+function logManifestNotConsulted(folderPath, trust, reason) {
+  if (!trust.reasons.has(folderPath)) trust.reasons.set(folderPath, reason);
+  logForDebugging(
+    `plugin eval: not consulting the plugin manifest in ${escapeNonAscii(folderPath)}: ${reason}`,
+    {
+      level: "warn",
+    },
+  );
   return false;
 }
 export {

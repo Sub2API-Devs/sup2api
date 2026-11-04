@@ -5,11 +5,11 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_gOPD } from "./gOPD.js";
 
 //@ chunk-h6b7mazd.js:8355-8451 cjs-fingerprint
-var require_gopd = x(function (cjsExports, cjsModule) {
+var require_gopd = __commonJS(function (cjsExports, cjsModule) {
   var $gOPD = require_gOPD();
   if ($gOPD)
     try {

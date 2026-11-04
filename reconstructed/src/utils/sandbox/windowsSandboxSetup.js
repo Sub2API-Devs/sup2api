@@ -9,7 +9,7 @@
  * attribution: placement 12
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   rgRunner,
   CLAUDECODESANDBOX,
@@ -45,14 +45,14 @@ import { errorMessage } from "../errors.js";
 
 //@ chunk-4aaff5r7.js:684-746 placement
 var windowsEgressProbeSchema = DoctorLazy(() =>
-  u({
-    egress_probe: string().refine((s) => s !== "not-run"),
+  objectSchema({
+    egress_probe: stringSchema().refine((value) => value !== "not-run"),
   }),
 );
 //@ chunk-4aaff5r7.js:746-1579 placement
-async function runSandboxSetupHelper(s, b) {
+async function runSandboxSetupHelper(timeoutMs, allowLoopback) {
   let { exe, prependArgs } = rgRunner();
-  let timeout = Math.floor(s);
+  let timeout = Math.floor(timeoutMs);
   let now = Date.now();
   let { exitCode, timedOut, stdout, stderr, error } = await execFileNoThrow(
     exe,
@@ -62,7 +62,7 @@ async function runSandboxSetupHelper(s, b) {
       "verify",
       "--target",
       "127.0.0.1:9",
-      ...(b ? ["--allow-loopback"] : []),
+      ...(allowLoopback ? ["--allow-loopback"] : []),
       "--write-restricted-token",
     ],
     {
@@ -75,23 +75,23 @@ async function runSandboxSetupHelper(s, b) {
   let max = Math.max(0, Date.now() - now);
   let max_2 = Math.max(1, Math.round(max / 1000));
   logForDebugging(
-    `[sandbox] starting the sandbox account: ${timedOut ? "stopped at the time limit" : `exit ${exitCode ?? "none"}`} after ${max_2}s (limit ${s} ms): ${stderr || stdout || error || (exitCode === undefined && !timedOut ? "srt-win never ran, or something other than the limit ended it" : "no output")}`,
+    `[sandbox] starting the sandbox account: ${timedOut ? "stopped at the time limit" : `exit ${exitCode ?? "none"}`} after ${max_2}s (limit ${timeoutMs} ms): ${stderr || stdout || error || (exitCode === undefined && !timedOut ? "srt-win never ran, or something other than the limit ended it" : "no output")}`,
   );
-  let C = {
+  let fields = {
     duration_ms: max,
     exit_code: exitCode ?? -1,
   };
   if (windowsEgressProbeSchema().safeParse(safeParseJSON(stdout, false)).success) {
-    logFeatureOk("sandbox_windows_first_start", C);
+    logFeatureOk("sandbox_windows_first_start", fields);
     return {
       outcome: "started",
       seconds: max_2,
     };
   }
-  let i = timedOut ? "timed_out" : "not_started";
-  logFeatureSad("sandbox_windows_first_start", i, C);
+  let outcome = timedOut ? "timed_out" : "not_started";
+  logFeatureSad("sandbox_windows_first_start", outcome, fields);
   return {
-    outcome: i,
+    outcome,
     seconds: max_2,
   };
 }
@@ -101,8 +101,8 @@ var WINDOWS_SANDBOX_SETUP_NOTICE =
 //@ chunk-4aaff5r7.js:1719-1828 placement
 class SingleFlight {
   inFlight = undefined;
-  run(s) {
-    this.inFlight ??= s().finally(() => {
+  run(run) {
+    this.inFlight ??= run().finally(() => {
       this.inFlight = undefined;
     });
     return this.inFlight;
@@ -111,76 +111,80 @@ class SingleFlight {
 //@ chunk-4aaff5r7.js:1828-1851 placement
 var windowsSetupSingleFlight = new HostScoped(() => new SingleFlight());
 //@ chunk-4aaff5r7.js:1851-1913 placement
-function setupWindowsSandboxOnce(host, b = () => {}, n = 1 / 0) {
-  return windowsSetupSingleFlight.of(host).run(() => setupWindowsSandbox(b, n));
+function setupWindowsSandboxOnce(host, onMessage = () => {}, deadline = 1 / 0) {
+  return windowsSetupSingleFlight.of(host).run(() => setupWindowsSandbox(onMessage, deadline));
 }
 //@ chunk-4aaff5r7.js:1913-11343 placement
 /**
  * 配置 Windows 沙箱：检查状态、运行管理员辅助程序、授予执行文件读取权限，汇总结果。
  */
-async function setupWindowsSandbox(s, b) {
-  let n = [];
+async function setupWindowsSandbox(onMessage, deadline) {
+  let notes = [];
   let srtWin = rgRunner();
-  let a = areWindowsLocalConnectionsOn();
-  let c = await checkWindowsSandboxStatusAsync({
+  let allowLoopback = areWindowsLocalConnectionsOn();
+  let status = await checkWindowsSandboxStatusAsync({
     srtWin,
   }).catch(() => {
     return;
   });
-  let x = c !== undefined && c.user.provisioned && c.wfp.state !== "absent" && c.wfp.allowLoopback !== a;
-  let _ = seclogonStatusMessage(c?.user);
+  let loopbackMismatch =
+    status !== undefined &&
+    status.user.provisioned &&
+    status.wfp.state !== "absent" &&
+    status.wfp.allowLoopback !== allowLoopback;
+  let seclogonMessage = seclogonStatusMessage(status?.user);
   if (
-    _ !== undefined &&
-    c?.user.provisioned &&
-    c.user.credPresent &&
-    windowsSetupVersionMismatch(c.user) === undefined &&
-    (c.wfp.state === "installed" || c.wfp.state === "cannot-read") &&
-    !x
+    seclogonMessage !== undefined &&
+    status?.user.provisioned &&
+    status.user.credPresent &&
+    windowsSetupVersionMismatch(status.user) === undefined &&
+    (status.wfp.state === "installed" || status.wfp.state === "cannot-read") &&
+    !loopbackMismatch
   ) {
-    let e = await SandboxManager.checkDependenciesAsync().catch(() => {
+    let deps = await SandboxManager.checkDependenciesAsync().catch(() => {
       return;
     });
-    if (e?.errors.length === 1 && e.errors[0] === _) {
+    if (deps?.errors.length === 1 && deps.errors[0] === seclogonMessage) {
       logFeatureSad("sandbox_windows_install", "secondary_logon_unusable");
       return {
         status: "partial",
-        message: `Set-up changed nothing. Run it again once this is fixed: ${_}`,
+        message: `Set-up changed nothing. Run it again once this is fixed: ${seclogonMessage}`,
       };
     }
   }
-  if (x)
-    n.push(
-      `The sandbox on this machine was set up with local connections ${a ? "off" : "on"}, and sandbox.network.allowLocalBinding asks for them ${a ? "on" : "off"}: this set-up replaces its network filters.`,
+  if (loopbackMismatch)
+    notes.push(
+      `The sandbox on this machine was set up with local connections ${allowLoopback ? "off" : "on"}, and sandbox.network.allowLocalBinding asks for them ${allowLoopback ? "on" : "off"}: this set-up replaces its network filters.`,
     );
-  if (a)
-    n.push(
+  if (allowLoopback)
+    notes.push(
       `Local connections are on (sandbox.network.allowLocalBinding). ${WINDOWS_ALLOW_LOOPBACK_EFFECT} To keep sandboxed commands off local ports, remove that setting and run /sandbox install again.`,
     );
-  for (let e of n) s(e);
+  for (let note of notes) onMessage(note);
   try {
-    let e = await installWindowsSandboxAsync({
+    let install = await installWindowsSandboxAsync({
       sandboxUser: CLAUDECODESANDBOX,
-      allowLoopback: a,
-      force: x,
-      onProfileGrantStart: (i) =>
-        s(
-          `${i.replace(/\s*Skip with[\s\S]*$/, "")} ${SHARED_SANDBOX_ACCOUNT_NOTE} This needs no further elevation and can take a few minutes. ${formatProfileForgetHint()}`,
+      allowLoopback,
+      force: loopbackMismatch,
+      onProfileGrantStart: (progress) =>
+        onMessage(
+          `${progress.replace(/\s*Skip with[\s\S]*$/, "")} ${SHARED_SANDBOX_ACCOUNT_NOTE} This needs no further elevation and can take a few minutes. ${formatProfileForgetHint()}`,
         ),
-      onProfileGrantProgress: s,
+      onProfileGrantProgress: onMessage,
       srtWin,
     });
-    if (e.cancelled) {
-      if (e.user.provisioned && e.user.credPresent) {
-        let i = seclogonStatusMessage(e.user);
+    if (install.cancelled) {
+      if (install.user.provisioned && install.user.credPresent) {
+        let seclogonMessage = seclogonStatusMessage(install.user);
         if (
-          i === undefined &&
+          seclogonMessage === undefined &&
           resolveWindowsTlsTerminateCaSource().source === "managed" &&
           willSandboxTlsTerminate()
         ) {
           SandboxManager.invalidateDependencyCache();
-          let k = await grantSandboxExecRead(e.user);
+          let caResult = await grantSandboxExecRead(install.user);
           await SandboxManager.checkDependenciesAsync();
-          if (k !== null) return k;
+          if (caResult !== null) return caResult;
           logFeatureOk("sandbox_windows_install");
           return {
             status: "ok",
@@ -195,7 +199,7 @@ async function setupWindowsSandbox(s, b) {
         await SandboxManager.checkDependenciesAsync();
         return {
           status: "cancelled",
-          message: `Install was cancelled at the elevation prompt, but the sandbox user is already provisioned. Network filters can't be verified from a non-elevated process${SandboxManager.areSandboxSettingsLockedByPolicy() ? "" : " \u2014 run /sandbox to check the current status"}; if sandboxing doesn't start, run /sandbox install again and approve the elevation prompt. If you don't have administrator rights, ask your administrator to run the sandbox set-up.${i === undefined ? "" : ` ${i}`}`,
+          message: `Install was cancelled at the elevation prompt, but the sandbox user is already provisioned. Network filters can't be verified from a non-elevated process${SandboxManager.areSandboxSettingsLockedByPolicy() ? "" : " \u2014 run /sandbox to check the current status"}; if sandboxing doesn't start, run /sandbox install again and approve the elevation prompt. If you don't have administrator rights, ask your administrator to run the sandbox set-up.${seclogonMessage === undefined ? "" : ` ${seclogonMessage}`}`,
         };
       }
       logFeatureSad("sandbox_windows_install", "uac_cancelled");
@@ -205,83 +209,86 @@ async function setupWindowsSandbox(s, b) {
           "Install was cancelled at the elevation prompt. Run /sandbox install again and approve the prompt to set up the sandbox user and network filters. If you don't have administrator rights, ask your administrator to install the network filters.",
       };
     }
-    let w =
-      e.user.provisioned &&
-      e.user.credPresent &&
-      (e.wfp.state === "installed" || e.wfp.state === "cannot-read");
-    let r = seclogonStatusMessage(e.user);
-    let l;
+    let provisioned =
+      install.user.provisioned &&
+      install.user.credPresent &&
+      (install.wfp.state === "installed" || install.wfp.state === "cannot-read");
+    let seclogonMessage = seclogonStatusMessage(install.user);
+    let firstStart;
     if (
-      w &&
-      r === undefined &&
+      provisioned &&
+      seclogonMessage === undefined &&
       !(resolveWindowsTlsTerminateCaSource().source === "managed" && willSandboxTlsTerminate())
     ) {
       await grantExecutableReadToSandboxGroup({
         exePath: process.execPath,
         previous: undefined,
-        getUserStatus: () => Promise.resolve(e.user),
+        getUserStatus: () => Promise.resolve(install.user),
       });
-      let min = Math.min(150000, b - Date.now());
-      if (min >= 1e4) l = await runSandboxSetupHelper(min, a);
+      let min = Math.min(150000, deadline - Date.now());
+      if (min >= 1e4) firstStart = await runSandboxSetupHelper(min, allowLoopback);
       else {
         logFeatureSad("sandbox_windows_first_start", "no_time_left");
-        l = "no_time_left";
+        firstStart = "no_time_left";
       }
     }
     SandboxManager.invalidateDependencyCache();
     await SandboxManager.checkDependenciesAsync();
-    if (w) {
+    if (provisioned) {
       if (
-        r === undefined &&
+        seclogonMessage === undefined &&
         resolveWindowsTlsTerminateCaSource().source === "managed" &&
         willSandboxTlsTerminate()
       ) {
-        let v = await grantSandboxExecRead(e.user);
-        if (v !== null) return v;
+        let caResult = await grantSandboxExecRead(install.user);
+        if (caResult !== null) return caResult;
       }
-      let unprotected = e.profileGrant?.applied === true ? e.profileGrant.result.unprotected : [];
+      let unprotected = install.profileGrant?.applied === true ? install.profileGrant.result.unprotected : [];
       if (unprotected.length > 0) {
         logFeatureSad("sandbox_windows_install", "profile_exclusion_unprotected");
         return {
           status: "partial",
           message: `WARNING: the sandbox is installed, but ${unprotected.length} credential store(s) that set-up excludes could not be closed, and sandboxed commands CAN READ ${unprotected.length === 1 ? "it" : "them"}: ${unprotected
             .slice(0, 10)
-            .map((v) => `${v.path} (${v.reason})`)
+            .map((entry) => `${entry.path} (${entry.reason})`)
             .join(
               "; ",
-            )}${unprotected.length > 10 ? "; \u2026" : ""}. Only the owner of such a path or an administrator can close it; run /sandbox install again afterwards.${profileReadableNote(e.profileGrant)}${sandboxSetupSummary(a, n)}${getTlsRestartHint()}${r === undefined ? "" : ` ${r}`}`,
+            )}${unprotected.length > 10 ? "; \u2026" : ""}. Only the owner of such a path or an administrator can close it; run /sandbox install again afterwards.${profileReadableNote(install.profileGrant)}${sandboxSetupSummary(allowLoopback, notes)}${getTlsRestartHint()}${seclogonMessage === undefined ? "" : ` ${seclogonMessage}`}`,
         };
       }
-      let k =
-        e.wfp.state === "installed"
+      let headline =
+        install.wfp.state === "installed"
           ? "Sandbox user and network filters installed"
           : "Sandbox user and network filters installed (filters can't be verified from a non-elevated process)";
-      if (r !== undefined) {
+      if (seclogonMessage !== undefined) {
         logFeatureSad("sandbox_windows_install", "secondary_logon_unusable");
         return {
           status: "partial",
-          message: `${k}.${getTlsRestartHint()}${sandboxSetupSummary(a, n)}${profileReadableNote(e.profileGrant)} ${r}`,
+          message: `${headline}.${getTlsRestartHint()}${sandboxSetupSummary(allowLoopback, notes)}${profileReadableNote(install.profileGrant)} ${seclogonMessage}`,
         };
       }
       logFeatureOk("sandbox_windows_install");
-      let R = l === undefined || l === "no_time_left" ? "" : `${l.seconds} ${plural(l.seconds, "second")}`;
-      let I =
-        l === undefined
+      let secondsText =
+        firstStart === undefined || firstStart === "no_time_left"
+          ? ""
+          : `${firstStart.seconds} ${plural(firstStart.seconds, "second")}`;
+      let loginNote =
+        firstStart === undefined
           ? ""
           : {
-              started: ` Windows signed in the sandbox user in ${R}.`,
-              timed_out: ` The sandbox user had not finished signing in after ${R}. If the sandbox fails to start, restart Claude Code. If it fails again, run /sandbox install again.`,
+              started: ` Windows signed in the sandbox user in ${secondsText}.`,
+              timed_out: ` The sandbox user had not finished signing in after ${secondsText}. If the sandbox fails to start, restart Claude Code. If it fails again, run /sandbox install again.`,
               not_started:
                 " Claude Code couldn't sign in the sandbox user. It will try again the next time it starts the sandbox, and show the reason if that fails too.",
               no_time_left:
                 " Set-up ran out of time before it could sign in the sandbox user, so the sandbox may fail to start the first time. If it does, restart Claude Code. If it fails again, run /sandbox install again.",
-            }[l === "no_time_left" ? l : l.outcome];
+            }[firstStart === "no_time_left" ? firstStart : firstStart.outcome];
       if (SandboxManager.isSandboxingEnabled())
         return {
           status: "ok",
-          message: `${k} and active.${getTlsRestartHint()}${sandboxSetupSummary(a, n)}${profileReadableNote(e.profileGrant)}${I}`,
+          message: `${headline} and active.${getTlsRestartHint()}${sandboxSetupSummary(allowLoopback, notes)}${profileReadableNote(install.profileGrant)}${loginNote}`,
         };
-      let F = SandboxManager.isSandboxEnabledInSettings()
+      let enableHint = SandboxManager.isSandboxEnabledInSettings()
         ? SandboxManager.areSandboxSettingsLockedByPolicy()
           ? "Run `claude sandbox status` in a terminal and check `installed` and `enabled` in its JSON output."
           : "Run /sandbox to check the current status."
@@ -290,15 +297,15 @@ async function setupWindowsSandbox(s, b) {
           : "Run /sandbox to choose a sandbox mode and turn it on.";
       return {
         status: "ok",
-        message: `${k}. ${F}${getTlsRestartHint()}${sandboxSetupSummary(a, n)}${profileReadableNote(e.profileGrant)}${I}`,
+        message: `${headline}. ${enableHint}${getTlsRestartHint()}${sandboxSetupSummary(allowLoopback, notes)}${profileReadableNote(install.profileGrant)}${loginNote}`,
       };
     }
-    let y = !e.user.provisioned
+    let reason = !install.user.provisioned
       ? "user_not_provisioned"
-      : !e.user.credPresent
+      : !install.user.credPresent
         ? "cred_not_readable"
         : "wfp_not_installed";
-    logFeatureSad("sandbox_windows_install", y);
+    logFeatureSad("sandbox_windows_install", reason);
     return {
       status: "partial",
       message: `Install completed (sandbox user: ${
@@ -306,16 +313,16 @@ async function setupWindowsSandbox(s, b) {
           user_not_provisioned: "not provisioned",
           cred_not_readable: "provisioned, credential not readable",
           wfp_not_installed: "provisioned",
-        }[y]
-      }, filters: ${e.wfp.state}). Run /sandbox install again to retry.`,
+        }[reason]
+      }, filters: ${install.wfp.state}). Run /sandbox install again to retry.`,
     };
   } catch (error) {
     SandboxManager.invalidateDependencyCache();
-    let w = errorMessage(error);
-    logForDebugging(`/sandbox install failed: ${w}`, {
+    let message = errorMessage(error);
+    logForDebugging(`/sandbox install failed: ${message}`, {
       level: "error",
     });
-    let replaced = describeWindowsSandboxRemedy(w, {
+    let replaced = describeWindowsSandboxRemedy(message, {
       omitCcRemedy: true,
     }).replace(/\.$/, "");
     if (error instanceof WindowsSandboxError && error.code === "install_timeout") {
@@ -332,7 +339,7 @@ async function setupWindowsSandbox(s, b) {
         status: "partial",
         message:
           "The sandbox account and network filters are installed, but the read access to your user profile was left as it was: it is changed only while no sandboxed session or command is running on this machine, and one is (another Claude Code window, or this one if it has run a sandboxed command). Close the sessions that use the sandbox, then run `claude sandbox install` in a terminal, or /sandbox install in a new session." +
-          sandboxSetupSummary(a, n),
+          sandboxSetupSummary(allowLoopback, notes),
       };
     }
     if (error instanceof WindowsSandboxError && error.code === "profile_operation_in_progress") {
@@ -342,7 +349,7 @@ async function setupWindowsSandbox(s, b) {
         status: "partial",
         message:
           "The sandbox account and network filters are installed, but the read access to your user profile was left as it was: another sandbox set-up step on this profile is still running (a /sandbox install in another window, or the removal of that access). Wait for it to finish, then run /sandbox install again." +
-          sandboxSetupSummary(a, n),
+          sandboxSetupSummary(allowLoopback, notes),
       };
     }
     if (error instanceof WindowsSandboxError && error.code === "profile_grant_failed") {
@@ -350,7 +357,7 @@ async function setupWindowsSandbox(s, b) {
       logFeatureSad("sandbox_windows_install", "profile_grant_failed");
       return {
         status: "partial",
-        message: `The sandbox account and network filters are installed, but your user profile could not be made readable to sandboxed commands: ${replaced.replace(/\s*No session starts until it is complete[\s\S]*$/, "").replace(/\.$/, "")}. Sandboxed commands will not start until that step completes. Run /sandbox install again to retry.${sandboxSetupSummary(a, n)}`,
+        message: `The sandbox account and network filters are installed, but your user profile could not be made readable to sandboxed commands: ${replaced.replace(/\s*No session starts until it is complete[\s\S]*$/, "").replace(/\.$/, "")}. Sandboxed commands will not start until that step completes. Run /sandbox install again to retry.${sandboxSetupSummary(allowLoopback, notes)}`,
       };
     }
     if (error instanceof WindowsSandboxError && error.code === "install_config_conflict") {
@@ -361,7 +368,7 @@ async function setupWindowsSandbox(s, b) {
           "A sandbox network-filter set is already installed with a different configuration: under a different sandbox account name, or with the other setting for local connections (sandbox.network.allowLocalBinding) while its state could not be read. Run /sandbox install again; if it is refused again, close every Claude Code session and run claude sandbox uninstall in a terminal, then run /sandbox install.",
       };
     }
-    if (/^srt-win (status|wfp|user)[ :]/.test(w)) {
+    if (/^srt-win (status|wfp|user)[ :]/.test(message)) {
       logFeatureSad("sandbox_windows_install", "status_probe_failed");
       return {
         status: "error",
@@ -387,13 +394,13 @@ function profileReadableNote(profileGrant) {
   return ` Sandboxed commands can now read your user profile (${profile}) except credential stores: ${granted} folders made readable, ${denied} excluded${notGranted.length > 0 ? `, ${notGranted.length} left unreadable because their permissions could not be changed` : ""}. That includes package-manager configuration that can hold feed tokens (.npmrc, pip.ini, NuGet.Config, Maven settings.xml, gradle.properties, .gitconfig). ${SHARED_SANDBOX_ACCOUNT_NOTE} ${formatProfileForgetHint()}`;
 }
 //@ chunk-4aaff5r7.js:12197-12471 placement
-function sandboxSetupSummary(s, b) {
-  let n = SandboxManager.untilRestart();
-  return `${b.map((h) => ` ${h}`).join("")}${n === undefined ? "" : ` This session started with local connections ${s ? "off" : "on"} and keeps that until it ends, so its sandbox ${n === "refused" ? "cannot run" : "is off"} now. ${n === "refused" ? REFUSED_UNTIL_RESTART : WITHOUT_SANDBOX_UNTIL_RESTART}.`}`;
+function sandboxSetupSummary(allowLoopback, notes) {
+  let restartMode = SandboxManager.untilRestart();
+  return `${notes.map((note) => ` ${note}`).join("")}${restartMode === undefined ? "" : ` This session started with local connections ${allowLoopback ? "off" : "on"} and keeps that until it ends, so its sandbox ${restartMode === "refused" ? "cannot run" : "is off"} now. ${restartMode === "refused" ? REFUSED_UNTIL_RESTART : WITHOUT_SANDBOX_UNTIL_RESTART}.`}`;
 }
 //@ chunk-4aaff5r7.js:12471-13364 placement
 async function grantSandboxExecRead(user) {
-  let b = await grantExecutableReadToSandboxGroup({
+  let grant = await grantExecutableReadToSandboxGroup({
     exePath: process.execPath,
     previous: undefined,
     getUserStatus: () => Promise.resolve(user),
@@ -404,13 +411,13 @@ async function grantSandboxExecRead(user) {
       srtWin: rgRunner(),
     });
   } catch (error) {
-    let h = errorMessage(error);
-    logForDebugging(`/sandbox install: managed sandbox CA step failed: ${h}`, {
+    let message = errorMessage(error);
+    logForDebugging(`/sandbox install: managed sandbox CA step failed: ${message}`, {
       level: "error",
     });
-    let replaced = describeWindowsSandboxRemedy(h, {
+    let replaced = describeWindowsSandboxRemedy(message, {
       omitCcRemedy: true,
-      programPermissionAdded: b?.added,
+      programPermissionAdded: grant?.added,
     }).replace(/\.$/, "");
     if (
       error instanceof WindowsSandboxError &&

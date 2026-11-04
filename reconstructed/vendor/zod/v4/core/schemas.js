@@ -5,13 +5,13 @@
  * pieces: chunk-7vp249v4.js (58)
  * attribution: esm-fingerprint 55, esm-layout 3
  */
-import { Fr, $ZodAsyncError, config, globalConfig, $ZodEncodeError } from "./core.js";
+import { $constructor, $ZodAsyncError, config, globalConfig, $ZodEncodeError } from "./core.js";
 import { version } from "./versions.js";
 import {
   aborted,
   explicitlyAborted,
   attachSchema,
-  shs,
+  hide,
   own,
   finalizeIssue,
   prefixIssues,
@@ -25,8 +25,8 @@ import {
   cleanRegex,
   rawShape,
   isPlainObject,
-  iSr,
-  CIi,
+  getEnumValues,
+  propertyKeyTypes,
   escapeRegex,
   defineLazy,
   issue,
@@ -37,17 +37,17 @@ import {
   uuid,
   email,
   httpProtocol,
-  vr,
+  emojiRegex,
   nanoid,
-  hr,
-  ar,
+  nanoidLength,
+  cuid,
   cuid2,
   ulid,
   xid,
   ksuid,
   datetime,
-  Or,
-  Ar,
+  date,
+  time,
   duration,
   ipv4,
   ipv6,
@@ -63,7 +63,7 @@ import { $ZodCheckStringFormat, $ZodCheckNumberFormat, $ZodCheck } from "./check
 import { Doc } from "./doc.js";
 
 //@ chunk-7vp249v4.js:14398-15969 esm-fingerprint
-var $ZodType = Fr(
+var $ZodType = $constructor(
   "$ZodType",
   (inst, def) => {
     var _a;
@@ -152,7 +152,7 @@ var $ZodType = Fr(
   },
   {
     get "~standard"() {
-      return shs(this, "~standard", standardProps(this));
+      return hide(this, "~standard", standardProps(this));
     },
     set "~standard"(value) {
       own(this, "~standard", value);
@@ -207,7 +207,7 @@ function standardProps(inst) {
   };
 }
 //@ chunk-7vp249v4.js:16252-16962 esm-fingerprint
-var $ZodString = Fr("$ZodString", (inst, def) => {
+var $ZodString = $constructor("$ZodString", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.pattern = def.pattern ?? anyString;
   inst._zod.parse = (payload, _) => {
@@ -225,15 +225,15 @@ var $ZodString = Fr("$ZodString", (inst, def) => {
     return payload;
   };
 });
-var $ZodStringFormat = Fr("$ZodStringFormat", (inst, def) => {
+var $ZodStringFormat = $constructor("$ZodStringFormat", (inst, def) => {
   $ZodCheckStringFormat.init(inst, def);
   $ZodString.init(inst, def);
 });
-var $ZodGUID = Fr("$ZodGUID", (inst, def) => {
+var $ZodGUID = $constructor("$ZodGUID", (inst, def) => {
   def.pattern ?? (def.pattern = guid);
   $ZodStringFormat.init(inst, def);
 });
-var $ZodUUID = Fr("$ZodUUID", (inst, def) => {
+var $ZodUUID = $constructor("$ZodUUID", (inst, def) => {
   if (def.version) {
     let v = {
       v1: 1,
@@ -250,7 +250,7 @@ var $ZodUUID = Fr("$ZodUUID", (inst, def) => {
   } else def.pattern ?? (def.pattern = uuid());
   $ZodStringFormat.init(inst, def);
 });
-var $ZodEmail = Fr("$ZodEmail", (inst, def) => {
+var $ZodEmail = $constructor("$ZodEmail", (inst, def) => {
   def.pattern ?? (def.pattern = email);
   $ZodStringFormat.init(inst, def);
 });
@@ -283,7 +283,7 @@ function urlProtocolOk(url, protocol) {
   return protocol.test(url.protocol.endsWith(":") ? url.protocol.slice(0, -1) : url.protocol);
 }
 //@ chunk-7vp249v4.js:17322-19131 esm-fingerprint
-var $ZodURL = Fr("$ZodURL", (inst, def) => {
+var $ZodURL = $constructor("$ZodURL", (inst, def) => {
   $ZodStringFormat.init(inst, def);
   inst._zod.check = (payload) => {
     try {
@@ -343,53 +343,53 @@ var $ZodURL = Fr("$ZodURL", (inst, def) => {
     }
   };
 });
-var $ZodEmoji = Fr("$ZodEmoji", (inst, def) => {
-  def.pattern ?? (def.pattern = vr());
+var $ZodEmoji = $constructor("$ZodEmoji", (inst, def) => {
+  def.pattern ?? (def.pattern = emojiRegex());
   $ZodStringFormat.init(inst, def);
 });
-var $ZodNanoID = Fr("$ZodNanoID", (inst, def) => {
+var $ZodNanoID = $constructor("$ZodNanoID", (inst, def) => {
   if (def.length !== undefined && (!Number.isInteger(def.length) || def.length < 1))
     throw Error(`Invalid nanoid length: ${def.length}`);
-  def.pattern ?? (def.pattern = def.length === undefined ? nanoid : hr(def.length));
+  def.pattern ?? (def.pattern = def.length === undefined ? nanoid : nanoidLength(def.length));
   $ZodStringFormat.init(inst, def);
 });
-var $ZodCUID = Fr("$ZodCUID", (inst, def) => {
-  def.pattern ?? (def.pattern = ar);
+var $ZodCUID = $constructor("$ZodCUID", (inst, def) => {
+  def.pattern ?? (def.pattern = cuid);
   $ZodStringFormat.init(inst, def);
 });
-var $ZodCUID2 = Fr("$ZodCUID2", (inst, def) => {
+var $ZodCUID2 = $constructor("$ZodCUID2", (inst, def) => {
   def.pattern ?? (def.pattern = cuid2);
   $ZodStringFormat.init(inst, def);
 });
-var $ZodULID = Fr("$ZodULID", (inst, def) => {
+var $ZodULID = $constructor("$ZodULID", (inst, def) => {
   def.pattern ?? (def.pattern = ulid);
   $ZodStringFormat.init(inst, def);
 });
-var $ZodXID = Fr("$ZodXID", (inst, def) => {
+var $ZodXID = $constructor("$ZodXID", (inst, def) => {
   def.pattern ?? (def.pattern = xid);
   $ZodStringFormat.init(inst, def);
 });
-var $ZodKSUID = Fr("$ZodKSUID", (inst, def) => {
+var $ZodKSUID = $constructor("$ZodKSUID", (inst, def) => {
   def.pattern ?? (def.pattern = ksuid);
   $ZodStringFormat.init(inst, def);
 });
-var $ZodISODateTime = Fr("$ZodISODateTime", (inst, def) => {
+var $ZodISODateTime = $constructor("$ZodISODateTime", (inst, def) => {
   def.pattern ?? (def.pattern = datetime(def));
   $ZodStringFormat.init(inst, def);
 });
-var $ZodISODate = Fr("$ZodISODate", (inst, def) => {
-  def.pattern ?? (def.pattern = Or);
+var $ZodISODate = $constructor("$ZodISODate", (inst, def) => {
+  def.pattern ?? (def.pattern = date);
   $ZodStringFormat.init(inst, def);
 });
-var $ZodISOTime = Fr("$ZodISOTime", (inst, def) => {
-  def.pattern ?? (def.pattern = Ar(def));
+var $ZodISOTime = $constructor("$ZodISOTime", (inst, def) => {
+  def.pattern ?? (def.pattern = time(def));
   $ZodStringFormat.init(inst, def);
 });
-var $ZodISODuration = Fr("$ZodISODuration", (inst, def) => {
+var $ZodISODuration = $constructor("$ZodISODuration", (inst, def) => {
   def.pattern ?? (def.pattern = duration);
   $ZodStringFormat.init(inst, def);
 });
-var $ZodIPv4 = Fr("$ZodIPv4", (inst, def) => {
+var $ZodIPv4 = $constructor("$ZodIPv4", (inst, def) => {
   def.pattern ?? (def.pattern = ipv4);
   $ZodStringFormat.init(inst, def);
 });
@@ -405,7 +405,7 @@ function isValidIPv6(value) {
   }
 }
 //@ chunk-7vp249v4.js:19225-19422 esm-fingerprint
-var $ZodIPv6 = Fr("$ZodIPv6", (inst, def) => {
+var $ZodIPv6 = $constructor("$ZodIPv6", (inst, def) => {
   def.pattern ?? (def.pattern = ipv6);
   $ZodStringFormat.init(inst, def);
   inst._zod.check = (payload) => {
@@ -420,7 +420,7 @@ var $ZodIPv6 = Fr("$ZodIPv6", (inst, def) => {
   };
 });
 //@ chunk-7vp249v4.js:19422-19493 esm-fingerprint
-var Co = Fr("$ZodCIDRv4", (inst, def) => {
+var $ZodCIDRv4 = $constructor("$ZodCIDRv4", (inst, def) => {
   def.pattern ?? (def.pattern = cidrv4);
   $ZodStringFormat.init(inst, def);
 });
@@ -436,7 +436,7 @@ function isValidCIDRv6(value) {
   return isValidIPv6(address);
 }
 //@ chunk-7vp249v4.js:19653-19854 esm-fingerprint
-var $ZodCIDRv6 = Fr("$ZodCIDRv6", (inst, def) => {
+var $ZodCIDRv6 = $constructor("$ZodCIDRv6", (inst, def) => {
   def.pattern ?? (def.pattern = cidrv6);
   $ZodStringFormat.init(inst, def);
   inst._zod.check = (payload) => {
@@ -464,7 +464,7 @@ function isValidBase64(data) {
 }
 //@ chunk-7vp249v4.js:19978-20235 esm-fingerprint
 var base64Charset = /^[0-9a-zA-Z+/]*={0,2}$/;
-var $ZodBase64 = Fr("$ZodBase64", (inst, def) => {
+var $ZodBase64 = $constructor("$ZodBase64", (inst, def) => {
   def.pattern ?? (def.pattern = base64Charset);
   $ZodStringFormat.init(inst, def);
   inst._zod.check = (payload) => {
@@ -487,7 +487,7 @@ function isValidBase64URL(data) {
   return isValidBase64(padded);
 }
 //@ chunk-7vp249v4.js:20373-20651 esm-fingerprint
-var $ZodBase64URL = Fr("$ZodBase64URL", (inst, def) => {
+var $ZodBase64URL = $constructor("$ZodBase64URL", (inst, def) => {
   def.pattern ?? (def.pattern = base64urlCharset);
   $ZodStringFormat.init(inst, def);
   inst._zod.check = (payload) => {
@@ -501,7 +501,7 @@ var $ZodBase64URL = Fr("$ZodBase64URL", (inst, def) => {
     });
   };
 });
-var $ZodE164 = Fr("$ZodE164", (inst, def) => {
+var $ZodE164 = $constructor("$ZodE164", (inst, def) => {
   def.pattern ?? (def.pattern = e164);
   $ZodStringFormat.init(inst, def);
 });
@@ -522,7 +522,7 @@ function isValidJWT(token, algorithm = null) {
   }
 }
 //@ chunk-7vp249v4.js:20894-21075 esm-fingerprint
-var $ZodJWT = Fr("$ZodJWT", (inst, def) => {
+var $ZodJWT = $constructor("$ZodJWT", (inst, def) => {
   $ZodStringFormat.init(inst, def);
   inst._zod.check = (payload) => {
     if (isValidJWT(payload.value, def.alg)) return;
@@ -536,7 +536,7 @@ var $ZodJWT = Fr("$ZodJWT", (inst, def) => {
   };
 });
 //@ chunk-7vp249v4.js:21075-21808 esm-fingerprint
-var $ZodNumber = Fr("$ZodNumber", (inst, def) => {
+var $ZodNumber = $constructor("$ZodNumber", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.pattern = number;
   inst._zod.parse = (payload, _ctx) => {
@@ -568,11 +568,11 @@ var $ZodNumber = Fr("$ZodNumber", (inst, def) => {
     return payload;
   };
 });
-var $ZodNumberFormat = Fr("$ZodNumberFormat", (inst, def) => {
+var $ZodNumberFormat = $constructor("$ZodNumberFormat", (inst, def) => {
   $ZodCheckNumberFormat.init(inst, def);
   $ZodNumber.init(inst, def);
 });
-var $ZodBoolean = Fr("$ZodBoolean", (inst, def) => {
+var $ZodBoolean = $constructor("$ZodBoolean", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.pattern = boolean;
   inst._zod.parse = (payload, _ctx) => {
@@ -592,7 +592,7 @@ var $ZodBoolean = Fr("$ZodBoolean", (inst, def) => {
   };
 });
 //@ chunk-7vp249v4.js:21808-22534 esm-fingerprint
-var Bo = Fr("$ZodUndefined", (inst, def) => {
+var $ZodUndefined = $constructor("$ZodUndefined", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.pattern = _undefined;
   inst._zod.values = new Set([undefined]);
@@ -608,7 +608,7 @@ var Bo = Fr("$ZodUndefined", (inst, def) => {
     return payload;
   };
 });
-var $ZodNull = Fr("$ZodNull", (inst, def) => {
+var $ZodNull = $constructor("$ZodNull", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.pattern = _null;
   inst._zod.values = new Set([null]);
@@ -624,15 +624,15 @@ var $ZodNull = Fr("$ZodNull", (inst, def) => {
     return payload;
   };
 });
-var $ZodAny = Fr("$ZodAny", (inst, def) => {
+var $ZodAny = $constructor("$ZodAny", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload) => payload;
 });
-var $ZodUnknown = Fr("$ZodUnknown", (inst, def) => {
+var $ZodUnknown = $constructor("$ZodUnknown", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload) => payload;
 });
-var $ZodNever = Fr("$ZodNever", (inst, def) => {
+var $ZodNever = $constructor("$ZodNever", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, _ctx) => {
     payload.issues.push({
@@ -650,7 +650,7 @@ function handleArrayResult(result, final, index) {
   final.value[index] = result.value;
 }
 //@ chunk-7vp249v4.js:22625-23167 esm-fingerprint
-var $ZodArray = Fr("$ZodArray", (inst, def) => {
+var $ZodArray = $constructor("$ZodArray", (inst, def) => {
   $ZodType.init(inst, def);
   let memo = globalConfig.memoizer;
   memo?.attach(inst);
@@ -733,50 +733,55 @@ function normalizeDef(def) {
   };
 }
 //@ chunk-7vp249v4.js:23939-24495 esm-fingerprint
-function Xo(e, t, payload, ctx, i, inst, c) {
-  let a = [];
-  let keySet = i.keySet;
-  let _zod = i.catchall._zod;
-  let f = _zod.def.type;
+function handleCatchallKeys(pendingPromises, input, payload, ctx, normalizedDef, inst, isAbortEarly) {
+  let unrecognizedKeys = [];
+  let keySet = normalizedDef.keySet;
+  let _zod = normalizedDef.catchall._zod;
+  let catchallType = _zod.def.type;
   let { optin, optout } = _zod;
-  let m = 0;
-  for (let key in t) {
-    if (c && payload.issues.length !== m) {
-      if (aborted(payload, m)) break;
-      m = payload.issues.length;
+  let issueCount = 0;
+  for (let key in input) {
+    if (isAbortEarly && payload.issues.length !== issueCount) {
+      if (aborted(payload, issueCount)) break;
+      issueCount = payload.issues.length;
     }
     if (keySet.has(key)) continue;
     if (key === "__proto__") {
-      if (f === "never") a.push(key);
+      if (catchallType === "never") unrecognizedKeys.push(key);
       continue;
     }
-    if (f === "never") {
-      a.push(key);
+    if (catchallType === "never") {
+      unrecognizedKeys.push(key);
       continue;
     }
-    let g = _zod.run(
+    let propertyResult = _zod.run(
       {
-        value: t[key],
+        value: input[key],
         issues: [],
       },
       ctx,
     );
-    if (g instanceof Promise) e.push(g.then((x) => handlePropertyResult(x, payload, key, t, optin, optout)));
-    else handlePropertyResult(g, payload, key, t, optin, optout);
+    if (propertyResult instanceof Promise)
+      pendingPromises.push(
+        propertyResult.then((resolvedResult) =>
+          handlePropertyResult(resolvedResult, payload, key, input, optin, optout),
+        ),
+      );
+    else handlePropertyResult(propertyResult, payload, key, input, optin, optout);
   }
-  if (a.length)
+  if (unrecognizedKeys.length)
     payload.issues.push({
       code: "unrecognized_keys",
-      keys: a,
-      input: t,
+      keys: unrecognizedKeys,
+      input,
       inst,
       continue: true,
     });
-  if (!e.length) return payload;
-  return Promise.all(e).then(() => payload);
+  if (!pendingPromises.length) return payload;
+  return Promise.all(pendingPromises).then(() => payload);
 }
 //@ chunk-7vp249v4.js:24495-28381 esm-fingerprint
-var $ZodObject = Fr("$ZodObject", (inst, def) => {
+var $ZodObject = $constructor("$ZodObject", (inst, def) => {
   $ZodType.init(inst, def);
   let desc = Object.getOwnPropertyDescriptor(def, "shape");
   let sh = desc?.get ? desc.get.raw : (def.shape ?? {});
@@ -853,10 +858,10 @@ var $ZodObject = Fr("$ZodObject", (inst, def) => {
       else handlePropertyResult(r, payload, key, input, optin, optout);
     }
     if (!catchall) return proms.length ? Promise.all(proms).then(() => payload) : payload;
-    return Xo(proms, input, payload, ctx, _normalized.value, inst, abortEarly === true);
+    return handleCatchallKeys(proms, input, payload, ctx, _normalized.value, inst, abortEarly === true);
   };
 });
-var $ZodObjectJIT = Fr("$ZodObjectJIT", (inst, def) => {
+var $ZodObjectJIT = $constructor("$ZodObjectJIT", (inst, def) => {
   $ZodObject.init(inst, def);
   let superParse = inst._zod.parse;
   let _normalized = cached(() => normalizeDef(def));
@@ -975,16 +980,16 @@ var $ZodObjectJIT = Fr("$ZodObjectJIT", (inst, def) => {
       if (!fastpass) fastpass = generateFastpass(def.shape);
       payload = fastpass(payload, ctx);
       if (!catchall) return payload;
-      return Xo([], input, payload, ctx, value, inst, ctx?.abortEarly === true);
+      return handleCatchallKeys([], input, payload, ctx, value, inst, ctx?.abortEarly === true);
     }
     return superParse(payload, ctx);
   };
 });
 //@ chunk-7vp249v4.js:28381-28662 esm-fingerprint
-function to(results, payload, inst, ctx) {
-  for (let s of results)
-    if (s.issues.length === 0) {
-      payload.value = s.value;
+function mergeUnionResults(results, payload, inst, ctx) {
+  for (let unionResult of results)
+    if (unionResult.issues.length === 0) {
+      payload.value = unionResult.value;
       return payload;
     }
   let filtered = results.filter((r) => !aborted(r));
@@ -1001,7 +1006,7 @@ function to(results, payload, inst, ctx) {
   return payload;
 }
 //@ chunk-7vp249v4.js:28662-29607 esm-fingerprint
-var $ZodUnion = Fr("$ZodUnion", (inst, def) => {
+var $ZodUnion = $constructor("$ZodUnion", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "optin", (zod) =>
     zod.def.options.some((o) => o._zod.optin === "defaulted")
@@ -1046,8 +1051,8 @@ var $ZodUnion = Fr("$ZodUnion", (inst, def) => {
         results.push(result);
       }
     }
-    if (!async) return to(results, payload, inst, ctx);
-    return Promise.all(results).then((results) => to(results, payload, inst, ctx));
+    if (!async) return mergeUnionResults(results, payload, inst, ctx);
+    return Promise.all(results).then((results) => mergeUnionResults(results, payload, inst, ctx));
   };
 });
 //@ chunk-7vp249v4.js:29607-29947 esm-fingerprint
@@ -1066,7 +1071,7 @@ function discriminatorMap(def) {
   return map;
 }
 //@ chunk-7vp249v4.js:29947-31503 esm-fingerprint
-var $ZodDiscriminatedUnion = Fr("$ZodDiscriminatedUnion", (inst, def) => {
+var $ZodDiscriminatedUnion = $constructor("$ZodDiscriminatedUnion", (inst, def) => {
   def.inclusive = false;
   $ZodUnion.init(inst, def);
   let _super = inst._zod.parse;
@@ -1120,7 +1125,7 @@ var $ZodDiscriminatedUnion = Fr("$ZodDiscriminatedUnion", (inst, def) => {
     return payload;
   };
 });
-var $ZodIntersection = Fr("$ZodIntersection", (inst, def) => {
+var $ZodIntersection = $constructor("$ZodIntersection", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, ctx) => {
     let input = payload.value;
@@ -1251,7 +1256,7 @@ function handleIntersectionResults(result, left, right) {
   return result;
 }
 //@ chunk-7vp249v4.js:33101-34211 esm-fingerprint
-var $ZodTuple = Fr("$ZodTuple", (inst, def) => {
+var $ZodTuple = $constructor("$ZodTuple", (inst, def) => {
   $ZodType.init(inst, def);
   let items = def.items;
   let memo = globalConfig.memoizer;
@@ -1379,7 +1384,7 @@ function handleTupleResults(itemResults, final, items, input, optoutStart) {
   return final;
 }
 //@ chunk-7vp249v4.js:34826-37256 esm-fingerprint
-var $ZodRecord = Fr("$ZodRecord", (inst, def) => {
+var $ZodRecord = $constructor("$ZodRecord", (inst, def) => {
   $ZodType.init(inst, def);
   let memo = globalConfig.memoizer;
   memo?.attach(inst);
@@ -1539,13 +1544,13 @@ var $ZodRecord = Fr("$ZodRecord", (inst, def) => {
   };
 });
 //@ chunk-7vp249v4.js:37256-38038 esm-fingerprint
-var on = Fr("$ZodEnum", (inst, def) => {
+var $ZodEnum = $constructor("$ZodEnum", (inst, def) => {
   $ZodType.init(inst, def);
-  let values = iSr(def.entries);
+  let values = getEnumValues(def.entries);
   let valuesSet = new Set(values);
   inst._zod.values = valuesSet;
   defineLazyInternal(inst, "pattern", (zod) => {
-    let patternValues = iSr(zod.def.entries).filter((k) => CIi.has(typeof k));
+    let patternValues = getEnumValues(zod.def.entries).filter((k) => propertyKeyTypes.has(typeof k));
     return new RegExp(
       patternValues.length
         ? `^(${patternValues.map((o) => escapeRegex(o.toString())).join("|")})$`
@@ -1564,7 +1569,7 @@ var on = Fr("$ZodEnum", (inst, def) => {
     return payload;
   };
 });
-var $ZodLiteral = Fr("$ZodLiteral", (inst, def) => {
+var $ZodLiteral = $constructor("$ZodLiteral", (inst, def) => {
   $ZodType.init(inst, def);
   let values = new Set(def.values);
   inst._zod.values = values;
@@ -1589,7 +1594,7 @@ var $ZodLiteral = Fr("$ZodLiteral", (inst, def) => {
   };
 });
 //@ chunk-7vp249v4.js:38038-38390 esm-fingerprint
-var sn = Fr("$ZodTransform", (inst, def) => {
+var $ZodTransform = $constructor("$ZodTransform", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.optin = "optional";
   globalConfig.memoizer?.guard(inst);
@@ -1612,7 +1617,7 @@ function handleOptionalResult(payload, result) {
   return payload;
 }
 //@ chunk-7vp249v4.js:38455-40043 esm-fingerprint
-var $ZodOptional = Fr("$ZodOptional", (inst, def) => {
+var $ZodOptional = $constructor("$ZodOptional", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "optin", (zod) =>
     zod.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional",
@@ -1642,13 +1647,13 @@ var $ZodOptional = Fr("$ZodOptional", (inst, def) => {
     return def.innerType._zod.run(payload, ctx);
   };
 });
-var $ZodExactOptional = Fr("$ZodExactOptional", (inst, def) => {
+var $ZodExactOptional = $constructor("$ZodExactOptional", (inst, def) => {
   $ZodOptional.init(inst, def);
   defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
   defineLazyInternal(inst, "pattern", (zod) => zod.def.innerType._zod.pattern);
   inst._zod.parse = (payload, ctx) => def.innerType._zod.run(payload, ctx);
 });
-var $ZodNullable = Fr("$ZodNullable", (inst, def) => {
+var $ZodNullable = $constructor("$ZodNullable", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "optin", (zod) => zod.def.innerType._zod.optin);
   defineLazyInternal(inst, "optout", (zod) => zod.def.innerType._zod.optout);
@@ -1664,7 +1669,7 @@ var $ZodNullable = Fr("$ZodNullable", (inst, def) => {
     return def.innerType._zod.run(payload, ctx);
   };
 });
-var $ZodDefault = Fr("$ZodDefault", (inst, def) => {
+var $ZodDefault = $constructor("$ZodDefault", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.optin = "defaulted";
   defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
@@ -1685,7 +1690,7 @@ function handleDefaultResult(payload, def) {
   return payload;
 }
 //@ chunk-7vp249v4.js:40112-40672 esm-fingerprint
-var $ZodPrefault = Fr("$ZodPrefault", (inst, def) => {
+var $ZodPrefault = $constructor("$ZodPrefault", (inst, def) => {
   $ZodType.init(inst, def);
   inst._zod.optin = "defaulted";
   defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
@@ -1695,7 +1700,7 @@ var $ZodPrefault = Fr("$ZodPrefault", (inst, def) => {
     return def.innerType._zod.run(payload, ctx);
   };
 });
-var $ZodNonOptional = Fr("$ZodNonOptional", (inst, def) => {
+var $ZodNonOptional = $constructor("$ZodNonOptional", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "values", (zod) => {
     let v = zod.def.innerType._zod.values;
@@ -1736,7 +1741,7 @@ function handleCatchResult(payload, result, def, ctx) {
   return payload;
 }
 //@ chunk-7vp249v4.js:41019-41457 esm-fingerprint
-var $ZodCatch = Fr("$ZodCatch", (inst, def) => {
+var $ZodCatch = $constructor("$ZodCatch", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "optin", (zod) =>
     zod.def.innerType._zod.optin === "defaulted" ? "defaulted" : "optional",
@@ -1758,7 +1763,7 @@ var $ZodCatch = Fr("$ZodCatch", (inst, def) => {
   };
 });
 //@ chunk-7vp249v4.js:41457-41930 esm-fingerprint
-var $ZodPipe = Fr("$ZodPipe", (inst, def) => {
+var $ZodPipe = $constructor("$ZodPipe", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "values", (zod) => zod.def.in._zod.values);
   defineLazyInternal(inst, "optin", (zod) => zod.def.in._zod.optin);
@@ -1790,10 +1795,10 @@ function handlePipeResult(left, next, ctx) {
   );
 }
 //@ chunk-7vp249v4.js:42076-42542 esm-fingerprint
-var dn = Fr("$ZodPreprocess", (inst, def) => {
+var $ZodPreprocess = $constructor("$ZodPreprocess", (inst, def) => {
   $ZodPipe.init(inst, def);
 });
-var $ZodReadonly = Fr("$ZodReadonly", (inst, def) => {
+var $ZodReadonly = $constructor("$ZodReadonly", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazyInternal(inst, "propValues", (zod) => zod.def.innerType._zod.propValues);
   defineLazyInternal(inst, "values", (zod) => zod.def.innerType._zod.values);
@@ -1812,20 +1817,20 @@ function freezeZodValue(payload) {
   return payload;
 }
 //@ chunk-7vp249v4.js:42608-43213 esm-fingerprint
-var nlo = Fr("$ZodLazy", (inst, def) => {
+var $ZodLazy = $constructor("$ZodLazy", (inst, def) => {
   $ZodType.init(inst, def);
   defineLazy(inst._zod, "innerType", () => {
     let d = def;
     if (!d._cachedInner) d._cachedInner = def.getter();
     return d._cachedInner;
   });
-  defineLazyInternal(inst, "pattern", (r) => r.innerType?._zod?.pattern);
-  defineLazyInternal(inst, "propValues", (r) => r.innerType?._zod?.propValues);
-  defineLazyInternal(inst, "optin", (r) => r.innerType?._zod?.optin ?? undefined);
-  defineLazyInternal(inst, "optout", (r) => r.innerType?._zod?.optout ?? undefined);
+  defineLazyInternal(inst, "pattern", (lazyInstance) => lazyInstance.innerType?._zod?.pattern);
+  defineLazyInternal(inst, "propValues", (lazyInstance) => lazyInstance.innerType?._zod?.propValues);
+  defineLazyInternal(inst, "optin", (lazyInstance) => lazyInstance.innerType?._zod?.optin ?? undefined);
+  defineLazyInternal(inst, "optout", (lazyInstance) => lazyInstance.innerType?._zod?.optout ?? undefined);
   inst._zod.parse = (payload, ctx) => inst._zod.innerType._zod.run(payload, ctx);
 });
-var hn = Fr("$ZodCustom", (inst, def) => {
+var $ZodCustom = $constructor("$ZodCustom", (inst, def) => {
   $ZodCheck.init(inst, def);
   $ZodType.init(inst, def);
   inst._zod.parse = (payload, _) => payload;
@@ -1856,7 +1861,7 @@ function handlePropertiesResult(result, payload, key) {
   if (result.issues.length) payload.issues.push(...prefixIssues(key, result.issues));
 }
 //@ chunk-7vp249v4.js:43478-44335 esm-fingerprint
-var $ZodProperties = Fr(
+var $ZodProperties = $constructor(
   "$ZodProperties",
   (inst, def) => {
     $ZodType.init(inst, def);
@@ -1948,7 +1953,7 @@ export {
   $ZodKSUID,
   $ZodIPv4,
   $ZodIPv6,
-  Co,
+  $ZodCIDRv4,
   $ZodCIDRv6,
   $ZodBase64,
   $ZodBase64URL,
@@ -1957,7 +1962,7 @@ export {
   $ZodNumber,
   $ZodNumberFormat,
   $ZodBoolean,
-  Bo,
+  $ZodUndefined,
   $ZodNull,
   $ZodAny,
   $ZodUnknown,
@@ -1969,9 +1974,9 @@ export {
   $ZodIntersection,
   $ZodTuple,
   $ZodRecord,
-  on,
+  $ZodEnum,
   $ZodLiteral,
-  sn,
+  $ZodTransform,
   $ZodOptional,
   $ZodExactOptional,
   $ZodNullable,
@@ -1980,10 +1985,10 @@ export {
   $ZodNonOptional,
   $ZodCatch,
   $ZodPipe,
-  dn,
+  $ZodPreprocess,
   $ZodReadonly,
-  nlo,
-  hn,
+  $ZodLazy,
+  $ZodCustom,
   base64Charset,
   base64urlCharset,
 };

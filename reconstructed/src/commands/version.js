@@ -26,7 +26,7 @@ var versionCommandDefinition = {
   },
 };
 var callVersion = async () => {
-  let e = `${
+  let versionText = `${
     {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -52,7 +52,7 @@ var callVersion = async () => {
       HOOKS_WORKER_URL: import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
       DD_SOURCEMAP_GROUP: "default",
     }.BUILD_TIME
-      ? `${e} (built ${
+      ? `${versionText} (built ${
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -65,7 +65,7 @@ var callVersion = async () => {
             DD_SOURCEMAP_GROUP: "default",
           }.BUILD_TIME
         })`
-      : e,
+      : versionText,
   };
 };
 var versionNonInteractiveCommand = {

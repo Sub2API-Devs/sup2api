@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:355589-361952 cjs-fingerprint
-var require_php = x(function (cjsExports, cjsModule) {
+var require_php = __commonJS(function (cjsExports, cjsModule) {
   function php(hljs) {
     let regex = hljs.regex;
     let NOT_PERL_ETC = /(?![A-Za-z0-9])(?![$])/;

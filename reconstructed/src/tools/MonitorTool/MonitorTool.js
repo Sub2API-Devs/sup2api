@@ -10,7 +10,13 @@
  */
 import { isIP } from "net";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { zodStrictObject, u, string, E, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  zodStrictObject,
+  objectSchema,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   persistentMonitorInputFields,
   exactlyOneSet,
@@ -86,25 +92,30 @@ import { getCommandField } from "../../utils/hooks/hookMatchers.js";
 import { buildRuleRelevanceFilter } from "../BashTool/bashCommandShape.js";
 import { hasBackgroundBashStopAfterReply } from "../AgentTool/backgroundGates.js";
 import { buildTool } from "../../services/tools/permissionCheckGuard.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-b91jfdd4.js:9609-9788 placement
-var monitorInputSchema = DoctorLazy(() =>
-  zodStrictObject({
-    ...persistentMonitorInputFields(),
-    ...IfConditionSchema(),
-  })
-    .refine((e) => exactlyOneSet(e.command, e.ws), EXACTLY_ONE_SOURCE_MESSAGE)
-    .refine(hasNoConflictingNetworkLists, ALLOWED_DOMAINS_COMMAND_ONLY)
-    .refine(isValidMonitorTimeout, MONITOR_TIMEOUT_LIMIT_ERROR),
-);
-var boundedMonitorInputSchema = DoctorLazy(() =>
-  u({
-    ...boundedMonitorInputFields(),
-    ...IfConditionSchema(),
-  })
-    .refine((e) => exactlyOneSet(e.command, e.ws), EXACTLY_ONE_SOURCE_MESSAGE)
-    .refine(hasNoConflictingNetworkLists, ALLOWED_DOMAINS_COMMAND_ONLY),
-);
+var monitorInputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var boundedMonitorInputSchema;
+deferInit("chunk-b91jfdd4.js:9609", () => {
+  monitorInputSchema = DoctorLazy(() =>
+    zodStrictObject({
+      ...persistentMonitorInputFields(),
+      ...IfConditionSchema(),
+    })
+      .refine((input) => exactlyOneSet(input.command, input.ws), EXACTLY_ONE_SOURCE_MESSAGE)
+      .refine(hasNoConflictingNetworkLists, ALLOWED_DOMAINS_COMMAND_ONLY)
+      .refine(isValidMonitorTimeout, MONITOR_TIMEOUT_LIMIT_ERROR),
+  );
+  boundedMonitorInputSchema = DoctorLazy(() =>
+    objectSchema({
+      ...boundedMonitorInputFields(),
+      ...IfConditionSchema(),
+    })
+      .refine((input) => exactlyOneSet(input.command, input.ws), EXACTLY_ONE_SOURCE_MESSAGE)
+      .refine(hasNoConflictingNetworkLists, ALLOWED_DOMAINS_COMMAND_ONLY),
+  );
+});
 //@ chunk-b91jfdd4.js:9788-9825 placement
 /**
  * 按是否允许持久监视返回 Monitor 的输入 schema。
@@ -113,15 +124,18 @@ function monitorToolInputSchema() {
   return isMonitorPersistentAllowed() ? boundedMonitorInputSchema() : monitorInputSchema();
 }
 //@ chunk-b91jfdd4.js:9825-10080 placement
-var remoteMonitorInputSchema_2 = DoctorLazy(() => {
-  let e = boundedMonitorInputFields();
-  let n = monitorMaxTimeoutMs();
-  return u({
-    ...e,
-    timeout_ms: e.timeout_ms.describe(
-      `Kill the monitor after this deadline. Default ${MONITOR_DEFAULT_TIMEOUT_MS}ms. Deadlines above ${n}ms are capped to ${n}ms. It may also stop soon after your reply.`,
-    ),
-    command: printableCommandSchema().describe(MONITOR_INPUT_DESCRIPTIONS),
+var remoteMonitorInputSchema_2; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-b91jfdd4.js:9825", () => {
+  remoteMonitorInputSchema_2 = DoctorLazy(() => {
+    let baseFields = boundedMonitorInputFields();
+    let maxTimeoutMs = monitorMaxTimeoutMs();
+    return objectSchema({
+      ...baseFields,
+      timeout_ms: baseFields.timeout_ms.describe(
+        `Kill the monitor after this deadline. Default ${MONITOR_DEFAULT_TIMEOUT_MS}ms. Deadlines above ${maxTimeoutMs}ms are capped to ${maxTimeoutMs}ms. It may also stop soon after your reply.`,
+      ),
+      command: printableCommandSchema().describe(MONITOR_INPUT_DESCRIPTIONS),
+    });
   });
 });
 //@ chunk-b91jfdd4.js:10080-10146 placement
@@ -130,41 +144,46 @@ var remoteMonitorInputSchema_2 = DoctorLazy(() => {
  */
 function remoteMonitorInputSchema() {
   if (!isDiskless()) return;
-  let e = toolInputJsonSchema(remoteMonitorInputSchema_2());
-  return isObjectSchema(e) ? e : undefined;
+  let schema = toolInputJsonSchema(remoteMonitorInputSchema_2());
+  return isObjectSchema(schema) ? schema : undefined;
 }
 //@ chunk-b91jfdd4.js:10146-10186 placement
 /**
  * 判断 schema 是否为对象类型。
  */
-function isObjectSchema(e) {
-  return e.type === "object";
+function isObjectSchema(schema) {
+  return schema.type === "object";
 }
 //@ chunk-b91jfdd4.js:10186-10435 placement
-var monitorOutputSchema = DoctorLazy(() =>
-  u({
-    taskId: string().describe("ID of the background monitor task."),
-    timeoutMs: E().describe("Timeout deadline in milliseconds (0 when persistent)."),
-    persistent: M().optional().describe("No timeout \u2014 runs until TaskStop or session end."),
-  }),
-);
+var monitorOutputSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-b91jfdd4.js:10186", () => {
+  monitorOutputSchema = DoctorLazy(() =>
+    objectSchema({
+      taskId: stringSchema().describe("ID of the background monitor task."),
+      timeoutMs: numberSchema().describe("Timeout deadline in milliseconds (0 when persistent)."),
+      persistent: booleanSchema()
+        .optional()
+        .describe("No timeout \u2014 runs until TaskStop or session end."),
+    }),
+  );
+});
 //@ chunk-b91jfdd4.js:10435-10587 placement
 function assertAgentNotStopping(monitorToolContext) {
-  let n = currentAgentId(monitorToolContext);
-  if (n !== undefined && isAgentStopPending(n))
+  let agentId = currentAgentId(monitorToolContext);
+  if (agentId !== undefined && isAgentStopPending(agentId))
     throw Error("This agent has been stopped and its stop is still completing; it cannot start monitors.");
 }
 //@ chunk-b91jfdd4.js:10587-10954 placement
 /**
  * Monitor 权限：先看整条 Bash 规则的裁决，再按 Bash 两轮权限检查（暂停沙箱自动放行）；ask 时带上命中的 ask 规则。
  */
-async function checkMonitorPermission(e, shellPermission) {
-  let s = wholeBashRuleVerdict(getToolPermissionContext(shellPermission), MONITOR);
-  if (s?.verdict.behavior === "deny") return s.verdict;
-  let r = await bashToolHasPermissionTwoPass(
+async function checkMonitorPermission(input, shellPermission) {
+  let ruleVerdict = wholeBashRuleVerdict(getToolPermissionContext(shellPermission), MONITOR);
+  if (ruleVerdict?.verdict.behavior === "deny") return ruleVerdict.verdict;
+  let bashVerdict = await bashToolHasPermissionTwoPass(
     {
-      ...e,
-      command: e.command,
+      ...input,
+      command: input.command,
     },
     {
       ...shellPermission,
@@ -176,217 +195,222 @@ async function checkMonitorPermission(e, shellPermission) {
       ],
     },
   );
-  if (s === null || r.behavior === "deny") return r;
-  if (r.behavior === "ask") {
-    let { suggestions, ...g } = r;
+  if (ruleVerdict === null || bashVerdict.behavior === "deny") return bashVerdict;
+  if (bashVerdict.behavior === "ask") {
+    let { suggestions, ...verdictWithoutSuggestions } = bashVerdict;
     return {
-      ...g,
-      matchedAskRule: s.rule,
+      ...verdictWithoutSuggestions,
+      matchedAskRule: ruleVerdict.rule,
     };
   }
-  return s.verdict;
+  return ruleVerdict.verdict;
 }
 //@ chunk-b91jfdd4.js:10954-11220 placement
-async function validateMonitorSandbox(e) {
-  if (e.command === undefined)
+async function validateMonitorSandbox(input) {
+  if (input.command === undefined)
     return {
       result: true,
     };
-  let n = shouldUseSandbox({
-    command: e.command,
+  let sandboxDecision = shouldUseSandbox({
+    command: input.command,
   });
-  let s = sandboxPolicyRefusal(n, e.command, false, "bash");
-  if (s !== null) {
+  let policyRefusal = sandboxPolicyRefusal(sandboxDecision, input.command, false, "bash");
+  if (policyRefusal !== null) {
     logFeatureSad("sandbox_exec", "sandbox_policy_refusal", {
       tool: lit("monitor"),
     });
     return {
       result: false,
-      message: s,
+      message: policyRefusal,
       errorCode: 14,
     };
   }
   return (
-    checkAllowedDomainsInput(e, n) ?? {
+    checkAllowedDomainsInput(input, sandboxDecision) ?? {
       result: true,
     }
   );
 }
 //@ chunk-b91jfdd4.js:11220-13006 placement
-async function checkMonitorSandbox(command, n, bounded, monitorToolContext, parentMessage) {
-  let { description, timeout_ms: timeoutMs, persistent } = n;
-  let { abortController, toolUseId, taskRegistry } = monitorToolContext;
-  let i = currentAgentId(monitorToolContext);
-  let V = shouldUseSandbox({
+async function checkMonitorSandbox(command, input, bounded, taskRegistry, parentMessage) {
+  let { description, timeout_ms: timeoutMs, persistent } = input;
+  let { abortController, toolUseId, taskRegistry: taskRegistry_2 } = taskRegistry;
+  let agentId = currentAgentId(taskRegistry);
+  let sandboxDecision = shouldUseSandbox({
     command,
   });
-  let O = sandboxPolicyRefusal(V, command, false, "bash");
-  if (O !== null) {
+  let policyRefusal = sandboxPolicyRefusal(sandboxDecision, command, false, "bash");
+  if (policyRefusal !== null) {
     logFeatureSad("sandbox_exec", "sandbox_policy_refusal", {
       tool: lit("monitor"),
     });
-    throw new SandboxPolicyRefusalError(O);
+    throw new SandboxPolicyRefusalError(policyRefusal);
   }
-  let P = {};
+  let taskRef = {};
   let monitorDelivery = createMonitorDelivery({
     description,
-    agentId: i,
-    taskRef: P,
+    agentId,
+    taskRef,
     arm: "bash",
     killTask: () => {
-      if (!P.id) return false;
-      killTask(P.id, taskRegistry);
+      if (!taskRef.id) return false;
+      killTask(taskRef.id, taskRegistry_2);
       return true;
     },
   });
-  let D = await exec(command, abortController.signal, "bash", {
-    session: monitorToolContext.session,
-    owningAgentId: i,
+  let execResult = await exec(command, abortController.signal, "bash", {
+    session: taskRegistry.session,
+    owningAgentId: agentId,
     preventCwdChanges: true,
-    shouldUseSandbox: V,
+    shouldUseSandbox: sandboxDecision,
     sandboxAttributionId: toolUseId,
     sandboxNetworkLists: takeCommandNetworkLists(toolUseId, command),
     attributionMessageId: parentMessage?.message.id,
     onStdout: monitorDelivery.onData,
-    agentWorktree: monitorToolContext.agentWorktree,
-    isolationRoot: isolationWorktreeFor(monitorToolContext),
-    sessionEnvVars: monitorToolContext.sessionEnvVars,
-    storageV5: monitorToolContext.storageV5,
+    agentWorktree: taskRegistry.agentWorktree,
+    isolationRoot: isolationWorktreeFor(taskRegistry),
+    sessionEnvVars: taskRegistry.sessionEnvVars,
+    storageV5: taskRegistry.storageV5,
   });
-  if (D.status === "completed") {
-    let I = await D.result;
-    if (I.preSpawnError) {
-      let R = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        I.preSpawnError,
+  if (execResult.status === "completed") {
+    let spawnResult = await execResult.result;
+    if (spawnResult.preSpawnError) {
+      let preSpawnError = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+        spawnResult.preSpawnError,
         "Monitor: pre-spawn error (cwd/argv redacted)",
       );
-      throw I.preSpawnErrorCode === "e2big"
-        ? tagObject(R, {
+      throw spawnResult.preSpawnErrorCode === "e2big"
+        ? tagObject(preSpawnError, {
             kind: "spawn_arg_limit",
           })
-        : R;
+        : preSpawnError;
     }
   }
-  if (D.status === "killed") {
-    await D.result;
-    D.cleanup();
-    if (i !== undefined && isAgentStopPending(i))
+  if (execResult.status === "killed") {
+    await execResult.result;
+    execResult.cleanup();
+    if (agentId !== undefined && isAgentStopPending(agentId))
       throw Error("This agent has been stopped and its stop is still completing; it cannot start monitors.");
     throw Error("This call was interrupted before the monitor started; nothing is running.");
   }
-  let m = await backgroundShellCommand(
+  let backgroundTask = await backgroundShellCommand(
     {
       command,
       description,
-      shellCommand: D,
+      shellCommand: execResult,
       toolUseId,
-      agentId: i,
+      agentId,
       kind: "monitor",
     },
     {
       abortController,
-      taskRegistry,
+      taskRegistry: taskRegistry_2,
     },
   );
-  P.id = m.taskId;
-  recordMonitorPlugin(m.taskId, monitorToolContext, taskRegistry);
-  addAgentKeepaliveReason(i, `monitor:${m.taskId}`, taskRegistry);
-  let W = persistent
+  taskRef.id = backgroundTask.taskId;
+  recordMonitorPlugin(backgroundTask.taskId, taskRegistry, taskRegistry_2);
+  addAgentKeepaliveReason(agentId, `monitor:${backgroundTask.taskId}`, taskRegistry_2);
+  let timeoutTimer = persistent
     ? undefined
     : setTimeout(
-        (I, R, x, agentId, q, U) => {
-          if (I.isClosed()) return;
-          I.flush();
-          if (I.isClosed()) return;
-          enqueueMonitorEvent(R, monitorTimedOutMessage(U.timeoutMs, I.eventCount(), U.bounded), x, {
-            isHousekeeping: true,
-            agentId,
-          });
-          killTask(x, q);
+        (delivery, taskDescription, taskId, agentId, registry, timeoutInfo) => {
+          if (delivery.isClosed()) return;
+          delivery.flush();
+          if (delivery.isClosed()) return;
+          enqueueMonitorEvent(
+            taskDescription,
+            monitorTimedOutMessage(timeoutInfo.timeoutMs, delivery.eventCount(), timeoutInfo.bounded),
+            taskId,
+            {
+              isHousekeeping: true,
+              agentId,
+            },
+          );
+          killTask(taskId, registry);
         },
         timeoutMs,
         monitorDelivery,
         description,
-        m.taskId,
-        i,
-        taskRegistry,
+        backgroundTask.taskId,
+        agentId,
+        taskRegistry_2,
         {
           timeoutMs,
           bounded,
         },
       );
-  D.result.then(async () => {
-    if (W) clearTimeout(W);
+  execResult.result.then(async () => {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
     try {
-      await monitorDelivery.reportExit(m);
+      await monitorDelivery.reportExit(backgroundTask);
     } catch (error) {
       logError(error);
     } finally {
-      removeKeepaliveReason(i, `monitor:${m.taskId}`, taskRegistry);
+      removeKeepaliveReason(agentId, `monitor:${backgroundTask.taskId}`, taskRegistry_2);
     }
   });
   return {
     data: {
-      taskId: m.taskId,
+      taskId: backgroundTask.taskId,
       timeoutMs: persistent ? 0 : timeoutMs,
       persistent,
     },
   };
 }
 //@ chunk-b91jfdd4.js:13006-13434 placement
-function wsEgressDenyReason(e) {
-  let n = policyDeniedReason("allow_web_fetch", "Arbitrary-URL egress", "is");
-  if (n !== null)
+function wsEgressDenyReason(url) {
+  let policyReason = policyDeniedReason("allow_web_fetch", "Arbitrary-URL egress", "is");
+  if (policyReason !== null)
     return {
       kind: "compliance",
       host: "",
-      detail: n,
+      detail: policyReason,
     };
-  let s = new URL(e);
-  let r = stripIpv6Brackets(s.hostname);
-  if (isIP(r) && isBlockedAddress(r))
+  let parsedUrl = new URL(url);
+  let hostname = stripIpv6Brackets(parsedUrl.hostname);
+  if (isIP(hostname) && isBlockedAddress(hostname))
     return {
       kind: "ssrf",
-      host: r,
+      host: hostname,
       detail: "the address is in a private, link-local, or cloud-metadata range",
     };
-  let d = s.port !== "" ? Number(s.port) : s.protocol === "wss:" ? 443 : 80;
-  let g = isHostAllowedBySandboxNetworkPolicy(r, d);
-  if (!g.allowed)
+  let port = parsedUrl.port !== "" ? Number(parsedUrl.port) : parsedUrl.protocol === "wss:" ? 443 : 80;
+  let policyVerdict = isHostAllowedBySandboxNetworkPolicy(hostname, port);
+  if (!policyVerdict.allowed)
     return {
       kind: "sandbox-policy",
-      host: r,
-      detail: g.reason,
+      host: hostname,
+      detail: policyVerdict.reason,
     };
   return null;
 }
 //@ chunk-b91jfdd4.js:13434-13993 placement
-function checkMonitorWebSocketAllowed(e) {
-  let n = wsEgressDenyReason(e.url);
-  if (n !== null)
+function checkMonitorWebSocketAllowed(wsRequest) {
+  let denyReason = wsEgressDenyReason(wsRequest.url);
+  if (denyReason !== null)
     return {
       behavior: "deny",
       message:
-        n.kind === "compliance"
-          ? `Monitor cannot open a WebSocket. ${n.detail}`
-          : `Monitor cannot open a WebSocket to ${n.host}: ${n.detail}.`,
+        denyReason.kind === "compliance"
+          ? `Monitor cannot open a WebSocket. ${denyReason.detail}`
+          : `Monitor cannot open a WebSocket to ${denyReason.host}: ${denyReason.detail}.`,
       decisionReason: {
         type: "other",
         reason:
-          n.kind === "compliance"
+          denyReason.kind === "compliance"
             ? "organization policy disables model-chosen URL egress"
-            : n.kind === "ssrf"
+            : denyReason.kind === "ssrf"
               ? "SSRF-blocked address range"
-              : n.detail,
+              : denyReason.detail,
       },
     };
-  let s =
-    e.protocols !== undefined && e.protocols.length > 0
-      ? ` (subprotocols: ${formatQuotedList(e.protocols)})`
+  let subprotocolNote =
+    wsRequest.protocols !== undefined && wsRequest.protocols.length > 0
+      ? ` (subprotocols: ${formatQuotedList(wsRequest.protocols)})`
       : "";
   return {
     behavior: "ask",
-    message: `Monitor will open a WebSocket to ${e.url}${s}`,
+    message: `Monitor will open a WebSocket to ${wsRequest.url}${subprotocolNote}`,
     suggestions: [],
   };
 }
@@ -452,128 +476,138 @@ function buildMonitorToolContext(parentContext, monitorScope) {
 /**
  * Monitor 工具的完整定义对象。
  */
-var MonitorToolUI = {
-  name: MONITOR,
-  enablesCodeExecution: true,
-  maxResultSizeChars: 1e4,
-  shouldDefer: true,
-  userFacingName() {
-    return "Monitor";
-  },
-  getToolUseSummary(e) {
-    if (!e?.description) return null;
-    return truncate(e.description, MAX_DESCRIPTION_CHARS);
-  },
-  getActivityDescription(e) {
-    return e?.description ? `Monitoring: ${e.description}` : "Monitoring";
-  },
-  isEnabled() {
-    return isBashAvailable();
-  },
-  async preparePermissionMatcher(e) {
-    let commandField = getCommandField(e);
-    return commandField === undefined ? () => false : buildRuleRelevanceFilter(commandField);
-  },
-  isConcurrencySafe() {
-    return true;
-  },
-  renderToolUseMessage(e) {
-    if (!e.description) return null;
-    return e.description;
-  },
-  get outputSchema() {
-    return monitorOutputSchema();
-  },
-  mapToolResultToToolResultBlockParam(e, toolUseId) {
-    let s = formatDuration(e.timeoutMs, {
-      hideTrailingZeros: true,
-    });
-    let r = isDiskless()
-      ? `expires in ${s} unless the command exits first, and may stop soon after your reply`
-      : e.persistent
-        ? "persistent \u2014 runs until TaskStop or session end"
-        : isMonitorPersistentAllowed()
-          ? `expires in ${s} unless the source ends first; you get one notice at expiry \u2014 re-arm if you still need the watch`
-          : `timeout ${e.timeoutMs}ms`;
-    let d =
-      !isDiskless() && hasBackgroundBashStopAfterReply()
-        ? `${r}; in this session it is also likely stopped a few minutes after your reply`
-        : r;
-    return {
-      tool_use_id: toolUseId,
-      type: "tool_result",
-      content: `Monitor started (task ${e.taskId}, ${d}). You will be notified on each event. Keep working \u2014 do not poll or sleep. ${isDiskless() ? "An event that arrives after your reply is not the user's reply." : "Events may arrive while you are waiting for the user \u2014 an event is not their reply."}`,
-    };
-  },
-};
-var MONITOR_TOOL_DEFINITION = buildTool({
-  ...MonitorToolUI,
-  backgrounding: "never",
-  searchHint:
-    "watch, monitor, or keep an eye on a process/log/command or WebSocket \u2014 stream each stdout line as a live notification",
-  async description() {
-    return monitorToolPrompt() + (isDiskless() ? "" : WS_SOURCE_PARAGRAPH) + monitorEventGuidance();
-  },
-  async prompt() {
-    return monitorToolPrompt() + (isDiskless() ? "" : WS_SOURCE_PARAGRAPH) + monitorEventGuidance();
-  },
-  get inputSchema() {
-    return monitorToolInputSchema();
-  },
-  get inputJSONSchema() {
-    return remoteMonitorInputSchema();
-  },
-  toAutoClassifierInput(e) {
-    return e.ws ? `websocket ${e.ws.url}${subprotocolsSuffix(e.ws)}` : mergeCommandNetworkLists(e);
-  },
-  sandboxNetworkLists(e) {
-    return getCommandNetworkLists(e);
-  },
-  create(parentContext) {
-    return {
-      permissionCheckFailureDecision(n, monitorScope) {
-        let monitorToolContext = buildMonitorToolContext(parentContext, monitorScope);
-        return denyCrashedCheckUnderCommandClamp(MONITOR, monitorToolContext.shellPermission);
-      },
-      validateInput: validateMonitorSandbox,
-      async checkPermissions(n, monitorScope) {
-        let monitorToolContext = buildMonitorToolContext(parentContext, monitorScope);
-        if (n.ws) {
-          let d = denyForBashCommandClamp("Monitor websocket", monitorToolContext.shellPermission);
-          if (d !== undefined) return d;
-          return checkMonitorWebSocketAllowed(n.ws);
-        }
-        return checkMonitorPermission(n, monitorToolContext.shellPermission);
-      },
-      async call(n, monitorScope) {
-        let monitorToolContext = buildMonitorToolContext(parentContext, monitorScope);
-        let { parentMessage } = monitorScope;
-        assertAgentNotStopping(monitorToolContext);
-        let bounded = isMonitorPersistentAllowed();
-        let w = clampMonitorTimeout(n, bounded);
-        if (n.ws)
-          return runWebSocketMonitor(
+var MonitorToolUI; // deferred: uses buildTool (../../services/tools/permissionCheckGuard.js) of its import cycle while loading; runs once the cycle is complete
+var MONITOR_TOOL_DEFINITION;
+var MonitorTool;
+deferInit("chunk-b91jfdd4.js:14632", () => {
+  MonitorToolUI = {
+    name: MONITOR,
+    enablesCodeExecution: true,
+    maxResultSizeChars: 1e4,
+    shouldDefer: true,
+    userFacingName() {
+      return "Monitor";
+    },
+    getToolUseSummary(input) {
+      if (!input?.description) return null;
+      return truncate(input.description, MAX_DESCRIPTION_CHARS);
+    },
+    getActivityDescription(input) {
+      return input?.description ? `Monitoring: ${input.description}` : "Monitoring";
+    },
+    isEnabled() {
+      return isBashAvailable();
+    },
+    async preparePermissionMatcher(input) {
+      let command = getCommandField(input);
+      return command === undefined ? () => false : buildRuleRelevanceFilter(command);
+    },
+    isConcurrencySafe() {
+      return true;
+    },
+    renderToolUseMessage(input) {
+      if (!input.description) return null;
+      return input.description;
+    },
+    get outputSchema() {
+      return monitorOutputSchema();
+    },
+    mapToolResultToToolResultBlockParam(result, toolUseId) {
+      let durationText = formatDuration(result.timeoutMs, {
+        hideTrailingZeros: true,
+      });
+      let lifetimeText = isDiskless()
+        ? `expires in ${durationText} unless the command exits first, and may stop soon after your reply`
+        : result.persistent
+          ? "persistent \u2014 runs until TaskStop or session end"
+          : isMonitorPersistentAllowed()
+            ? `expires in ${durationText} unless the source ends first; you get one notice at expiry \u2014 re-arm if you still need the watch`
+            : `timeout ${result.timeoutMs}ms`;
+      let finalLifetimeText =
+        !isDiskless() && hasBackgroundBashStopAfterReply()
+          ? `${lifetimeText}; in this session it is also likely stopped a few minutes after your reply`
+          : lifetimeText;
+      return {
+        tool_use_id: toolUseId,
+        type: "tool_result",
+        content: `Monitor started (task ${result.taskId}, ${finalLifetimeText}). You will be notified on each event. Keep working \u2014 do not poll or sleep. ${isDiskless() ? "An event that arrives after your reply is not the user's reply." : "Events may arrive while you are waiting for the user \u2014 an event is not their reply."}`,
+      };
+    },
+  };
+  MONITOR_TOOL_DEFINITION = buildTool({
+    ...MonitorToolUI,
+    backgrounding: "never",
+    searchHint:
+      "watch, monitor, or keep an eye on a process/log/command or WebSocket \u2014 stream each stdout line as a live notification",
+    async description() {
+      return monitorToolPrompt() + (isDiskless() ? "" : WS_SOURCE_PARAGRAPH) + monitorEventGuidance();
+    },
+    async prompt() {
+      return monitorToolPrompt() + (isDiskless() ? "" : WS_SOURCE_PARAGRAPH) + monitorEventGuidance();
+    },
+    get inputSchema() {
+      return monitorToolInputSchema();
+    },
+    get inputJSONSchema() {
+      return remoteMonitorInputSchema();
+    },
+    toAutoClassifierInput(input) {
+      return input.ws
+        ? `websocket ${input.ws.url}${subprotocolsSuffix(input.ws)}`
+        : mergeCommandNetworkLists(input);
+    },
+    sandboxNetworkLists(input) {
+      return getCommandNetworkLists(input);
+    },
+    create(parentContext) {
+      return {
+        permissionCheckFailureDecision(input, monitorScope) {
+          let monitorToolContext = buildMonitorToolContext(parentContext, monitorScope);
+          return denyCrashedCheckUnderCommandClamp(MONITOR, monitorToolContext.shellPermission);
+        },
+        validateInput: validateMonitorSandbox,
+        async checkPermissions(input, monitorScope) {
+          let monitorToolContext = buildMonitorToolContext(parentContext, monitorScope);
+          if (input.ws) {
+            let clampDenial = denyForBashCommandClamp(
+              "Monitor websocket",
+              monitorToolContext.shellPermission,
+            );
+            if (clampDenial !== undefined) return clampDenial;
+            return checkMonitorWebSocketAllowed(input.ws);
+          }
+          return checkMonitorPermission(input, monitorToolContext.shellPermission);
+        },
+        async call(input, monitorScope) {
+          let monitorToolContext = buildMonitorToolContext(parentContext, monitorScope);
+          let { parentMessage } = monitorScope;
+          assertAgentNotStopping(monitorToolContext);
+          let bounded = isMonitorPersistentAllowed();
+          let timeoutFields = clampMonitorTimeout(input, bounded);
+          if (input.ws)
+            return runWebSocketMonitor(
+              {
+                ...input,
+                ...timeoutFields,
+                bounded,
+                ws: input.ws,
+              },
+              pickMonitorContext(monitorToolContext),
+            );
+          return checkMonitorSandbox(
+            input.command,
             {
-              ...n,
-              ...w,
-              bounded,
-              ws: n.ws,
+              ...input,
+              ...timeoutFields,
             },
-            pickMonitorContext(monitorToolContext),
+            bounded,
+            monitorToolContext,
+            parentMessage,
           );
-        return checkMonitorSandbox(
-          n.command,
-          {
-            ...n,
-            ...w,
-          },
-          bounded,
-          monitorToolContext,
-          parentMessage,
-        );
-      },
-    };
-  },
+        },
+      };
+    },
+  });
+  MonitorTool = MONITOR_TOOL_DEFINITION;
 });
-var MonitorTool = MONITOR_TOOL_DEFINITION;
-export { wsEgressDenyReason };
+export { wsEgressDenyReason, MonitorTool };

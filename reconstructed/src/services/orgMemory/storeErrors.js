@@ -9,15 +9,20 @@
  * attribution: placement 6
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { MEMORY_ID_PATTERN } from "../../utils/taggedId.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:37477-37518 placement
 /**
  * 单个记忆内容的字节上限（102400）。
  */
-var memoryIdSchema = DoctorLazy(() => string().regex(MEMORY_ID_PATTERN));
-var MAX_CONTENT_BYTES = 102400;
+var memoryIdSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_CONTENT_BYTES;
+deferInit("chunk-82kqcve8.js:37477", () => {
+  memoryIdSchema = DoctorLazy(() => stringSchema().regex(MEMORY_ID_PATTERN));
+  MAX_CONTENT_BYTES = 102400;
+});
 //@ chunk-82kqcve8.js:37518-37799 placement
 class MemoryConflictError extends Error {
   path;
@@ -25,11 +30,11 @@ class MemoryConflictError extends Error {
   actual;
   existingId;
   conflictingPath;
-  constructor(e, n, r, existingId, conflictingPath) {
-    super(`conflict on ${e}: expected ${n ?? "<none>"}, actual ${r ?? "<unknown>"}`);
-    this.path = e;
-    this.expected = n;
-    this.actual = r;
+  constructor(path, expected, actual, existingId, conflictingPath) {
+    super(`conflict on ${path}: expected ${expected ?? "<none>"}, actual ${actual ?? "<unknown>"}`);
+    this.path = path;
+    this.expected = expected;
+    this.actual = actual;
     this.existingId = existingId;
     this.conflictingPath = conflictingPath;
     this.name = "ConflictError";
@@ -39,9 +44,9 @@ class MemoryConflictError extends Error {
 class MemoryNotFoundError extends Error {
   path;
   kind;
-  constructor(e, kind = "document") {
-    super(`not found: ${e}`);
-    this.path = e;
+  constructor(path, kind = "document") {
+    super(`not found: ${path}`);
+    this.path = path;
     this.kind = kind;
     this.name = "NotFoundError";
   }
@@ -65,9 +70,9 @@ var MEMORY_SYNC_DIR = ".memory-sync";
 //@ chunk-82kqcve8.js:38092-38209 placement
 class MemoryPermanentError extends Error {
   reason;
-  constructor(e, n) {
-    super(n ?? `permanent: ${e}`);
-    this.reason = e;
+  constructor(reason, message) {
+    super(message ?? `permanent: ${reason}`);
+    this.reason = reason;
     this.name = "PermanentError";
   }
 }

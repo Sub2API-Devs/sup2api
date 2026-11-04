@@ -5,10 +5,10 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-h6b7mazd.js:235-1799 cjs-fingerprint
-var require_delayed_stream = x(function (cjsExports, cjsModule) {
+var require_delayed_stream = __commonJS(function (cjsExports, cjsModule) {
   var Stream = importMetaRequire("stream").Stream;
   var util = importMetaRequire("util");
   cjsModule.exports = DelayedStream;

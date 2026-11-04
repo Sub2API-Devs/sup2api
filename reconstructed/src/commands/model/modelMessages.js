@@ -13,22 +13,22 @@
 /**
  * 把文本包成 Markdown 行内代码：换行换成空格，反引号围栏比内容里最长的反引号串多一个，首尾是反引号时补空格。
  */
-function toInlineCode(e) {
-  let replaced = e.replace(/\r\n?|\n/g, " ");
+function toInlineCode(text) {
+  let replaced = text.replace(/\r\n?|\n/g, " ");
   if (replaced === "") return "` `";
-  let r = replaced.match(/`+/g)?.reduce((acc, S) => Math.max(acc, S.length), 0) ?? 0;
-  let s = "`".repeat(r + 1);
-  let h = replaced.startsWith("`") || replaced.endsWith("`") ? " " : "";
-  return `${s}${h}${replaced}${h}${s}`;
+  let longest = replaced.match(/`+/g)?.reduce((acc, run) => Math.max(acc, run.length), 0) ?? 0;
+  let fence = "`".repeat(longest + 1);
+  let pad = replaced.startsWith("`") || replaced.endsWith("`") ? " " : "";
+  return `${fence}${pad}${replaced}${pad}${fence}`;
 }
 //@ chunk-e6aww6q8.js:4861423-4861569 placement
 /**
  * 把文本里的行内代码片段逐个交给回调替换（去掉围栏内两侧的单个空格）。
  */
-function replaceInlineCode(e, n) {
-  return e.replace(/(`+)(.+?)\1/g, (r, s, h) => {
-    let y = h.startsWith(" ") && h.endsWith(" ") && h.trim() !== "";
-    return n(y ? h.slice(1, -1) : h);
+function replaceInlineCode(text, replacer) {
+  return text.replace(/(`+)(.+?)\1/g, (match, fence, code) => {
+    let hasPad = code.startsWith(" ") && code.endsWith(" ") && code.trim() !== "";
+    return replacer(hasPad ? code.slice(1, -1) : code);
   });
 }
 //@ chunk-e6aww6q8.js:4861569-4861936 placement
@@ -64,9 +64,9 @@ export {
   SET_MODEL_PREFIX,
   toInlineCode,
   SAVED_AS_DEFAULT_SUFFIX,
+  CURRENT_MODEL_PREFIX,
   KEPT_MODEL_PREFIX,
   CLOUD_SWITCH_NO_RESPONSE_PREFIX,
   CLOUD_SWITCH_FAILED_PREFIX,
-  CURRENT_MODEL_PREFIX,
   SANDBOX_NOT_CHANGED_PREFIX,
 };

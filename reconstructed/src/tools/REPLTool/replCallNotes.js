@@ -14,16 +14,19 @@ import { getTerminalMcpTools } from "../../utils/transcript/deserialize.js";
 /**
  * 从助手消息中收集 REPL 调用说明：REPL 类工具直接取 input.text，其他工具调用取之前记录的、按 replCallId 关联的说明。
  */
-function replCallNotesText(s, r = []) {
-  let content = s.message.content;
+function replCallNotesText(message, replCallNotes = []) {
+  let content = message.message.content;
   if (!Array.isArray(content)) return "";
   let terminalMcpTools = getTerminalMcpTools();
   if (terminalMcpTools.size === 0) return "";
   return content
-    .flatMap((e) => {
-      if (e.type !== "tool_use") return [];
-      if (!terminalMcpTools.has(e.name)) return r.filter((n) => n.replCallId === e.id).map((n) => n.text);
-      let text = e.input?.text;
+    .flatMap((block) => {
+      if (block.type !== "tool_use") return [];
+      if (!terminalMcpTools.has(block.name))
+        return replCallNotes
+          .filter((replCall) => replCall.replCallId === block.id)
+          .map((replCall) => replCall.text);
+      let text = block.input?.text;
       return typeof text === "string" ? [text] : [];
     })
     .filter(Boolean).join(`
@@ -40,8 +43,8 @@ var MAX_REPL_CALL_NOTES = 8;
  */
 class ReplCallNoteBuffer {
   #t = [];
-  note(replCallId, r) {
-    let text = r.text;
+  note(replCallId, value) {
+    let text = value.text;
     if (typeof text !== "string" || !text) return;
     this.#t.push({
       replCallId,

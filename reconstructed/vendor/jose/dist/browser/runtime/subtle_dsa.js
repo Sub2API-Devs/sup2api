@@ -5,13 +5,13 @@
  * pieces: chunk-2tyrgda4.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { Xa } from "../../../../../runtime/bun-runtime.js";
+import { __esm } from "../../../../../runtime/bun-runtime.js";
 import { init_decrypt_2 } from "../../node/esm/jwe/compact/decrypt.js";
-import { init_content_encryption_2, f } from "../../webapi/lib/content_encryption.js";
+import { init_content_encryption_2, JOSENotSupported } from "../../webapi/lib/content_encryption.js";
 import { init_base64url } from "./base64url.js";
 
 //@ chunk-2tyrgda4.js:27304-27334 esm-layout
-var init_subtle_dsa = Xa(() => {
+var init_subtle_dsa = __esm(() => {
   init_decrypt_2();
   init_content_encryption_2();
   init_base64url();
@@ -55,7 +55,7 @@ function subtleDsa(alg, algorithm) {
         name: algorithm.name,
       };
     default:
-      throw new f(`alg ${alg} is not supported either by JOSE or your javascript runtime`);
+      throw new JOSENotSupported(`alg ${alg} is not supported either by JOSE or your javascript runtime`);
   }
 }
 export { subtleDsa, init_subtle_dsa };

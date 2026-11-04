@@ -44,12 +44,12 @@ var TIERS = [
  */
 function getCapabilityOverrideCached(model, capability) {
   let model_2 = model.toLowerCase();
-  let s = `${model_2}:${capability}`;
+  let cacheKey = `${model_2}:${capability}`;
   let capabilityOverrides = getProviderState().providerCache.capabilityOverrides;
-  if (capabilityOverrides.has(s)) return capabilityOverrides.get(s);
-  let y = get3PModelCapabilityOverride(model_2, capability);
-  capabilityOverrides.set(s, y);
-  return y;
+  if (capabilityOverrides.has(cacheKey)) return capabilityOverrides.get(cacheKey);
+  let override = get3PModelCapabilityOverride(model_2, capability);
+  capabilityOverrides.set(cacheKey, override);
+  return override;
 }
 //@ chunk-aepeg2w5.js:476239-476485 fingerprint = get3PModelCapabilityOverride (0.794)
 /**
@@ -65,7 +65,7 @@ function get3PModelCapabilityOverride(model, capability) {
     return capabilities
       .toLowerCase()
       .split(",")
-      .map((y) => y.trim())
+      .map((capability) => capability.trim())
       .includes(capability);
   }
   return;

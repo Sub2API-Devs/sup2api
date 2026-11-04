@@ -5,12 +5,12 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_attributes } from "./attributes.js";
 import { require_config } from "./config.js";
 
 //@ chunk-vwj6ccer.js:83403-84376 cjs-fingerprint
-var require_defineElement = x(function (cjsExports, cjsModule) {
+var require_defineElement = __commonJS(function (cjsExports, cjsModule) {
   var attributes = require_attributes();
   var isApiWritable = require_config().isApiWritable;
   cjsModule.exports = function (spec, defaultConstructor, tagList, tagNameToImpl) {
@@ -40,9 +40,9 @@ var require_defineElement = x(function (cjsExports, cjsModule) {
     });
     return c_2;
   };
-  function EventHandlerBuilder(body, t, form, element) {
+  function EventHandlerBuilder(body, doc, form, element) {
     this.body = body;
-    this.document = t;
+    this.document = doc;
     this.form = form;
     this.element = element;
   }

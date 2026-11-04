@@ -18,19 +18,19 @@ var ARTIFACT_CHANGED_TITLE = "Artifact changed";
 /**
  * "已自动回复 N 个评论线程"通知文案。
  */
-function autoRepliedNotice(artifactName, n = 1) {
-  return n === 1
+function autoRepliedNotice(artifactName, threadCount = 1) {
+  return threadCount === 1
     ? `Auto-replied to comment thread on Artifact: ${artifactName}`
-    : `Auto-replied to ${n} comment threads on Artifact: ${artifactName}`;
+    : `Auto-replied to ${threadCount} comment threads on Artifact: ${artifactName}`;
 }
 //@ chunk-e6aww6q8.js:4672334-4672493 placement
 /**
  * "已因 N 个评论线程自动编辑 Artifact"通知文案。
  */
-function autoEditedNotice(artifactName, n = 1) {
-  return n === 1
+function autoEditedNotice(artifactName, threadCount = 1) {
+  return threadCount === 1
     ? `Auto-edited Artifact: ${artifactName} in response to a comment thread`
-    : `Auto-edited Artifact: ${artifactName} in response to ${n} comment threads`;
+    : `Auto-edited Artifact: ${artifactName} in response to ${threadCount} comment threads`;
 }
 //@ chunk-e6aww6q8.js:4672493-4672558 placement
 /**
@@ -50,22 +50,24 @@ function autoRepliesPausedNotice(artifactName) {
 /**
  * 本次发布重新开启自动回复的通知。
  */
-function autoRepliesReenabledNotice(e) {
-  return `Auto-replies on Artifact: ${e} were re-enabled by this publish`;
+function autoRepliesReenabledNotice(artifactName) {
+  return `Auto-replies on Artifact: ${artifactName} were re-enabled by this publish`;
 }
 //@ chunk-e6aww6q8.js:4672711-4672779 placement
 /**
  * 自动回复已恢复的通知。
  */
-function autoRepliesResumedNotice(e) {
-  return `Auto-replies on Artifact: ${e} were resumed`;
+function autoRepliesResumedNotice(artifactName) {
+  return `Auto-replies on Artifact: ${artifactName} were resumed`;
 }
 //@ chunk-e6aww6q8.js:4672779-4672893 placement
 /**
  * "Artifact 已变更（N 次）"通知文案。
  */
-function artifactChangedNotice(e, n = 1, r = false) {
-  return n === 1 && !r ? `Artifact changed: ${e}` : `Artifact changed ${n}${r ? "+" : ""} times: ${e}`;
+function artifactChangedNotice(artifactName, changeCount = 1, isMore = false) {
+  return changeCount === 1 && !isMore
+    ? `Artifact changed: ${artifactName}`
+    : `Artifact changed ${changeCount}${isMore ? "+" : ""} times: ${artifactName}`;
 }
 //@ chunk-e6aww6q8.js:4672893-4672956 placement
 /**
@@ -99,16 +101,16 @@ function autoEditedReviewNotice(artifactName) {
 /**
  * 停止前已发生自动动作的提示：Artifact 已因 N 个评论线程被自动编辑，或已自动回复了 N 个线程；待发提示随停止丢弃，记录保留在线程与版本历史中。
  */
-function stoppedAfterAutoActionsNotice(e) {
-  let n = `${e.count} comment ${e.count === 1 ? "thread" : "threads"}`;
-  return `Before the stop, ${e.family === "auto-edited" ? `Artifact: ${e.artifactName} had already been auto-edited in response to ${n}` : `automatic replies had already been posted on ${n} of Artifact: ${e.artifactName}`} (the pending notice was discarded with the stop \u2014 the artifact's thread and version history carry the record).`;
+function stoppedAfterAutoActionsNotice(summary) {
+  let threadText = `${summary.count} comment ${summary.count === 1 ? "thread" : "threads"}`;
+  return `Before the stop, ${summary.family === "auto-edited" ? `Artifact: ${summary.artifactName} had already been auto-edited in response to ${threadText}` : `automatic replies had already been posted on ${threadText} of Artifact: ${summary.artifactName}`} (the pending notice was discarded with the stop \u2014 the artifact's thread and version history carry the record).`;
 }
 //@ chunk-e6aww6q8.js:4673599-4673664 placement
 /**
  * 已停止监视某 artifact 的通知。
  */
-function stoppedWatchingNotice(e, shortReason) {
-  return `Stopped watching Artifact: ${e} (${shortReason})`;
+function stoppedWatchingNotice(artifactName, shortReason) {
+  return `Stopped watching Artifact: ${artifactName} (${shortReason})`;
 }
 //@ chunk-e6aww6q8.js:4673664-4673725 placement
 /**

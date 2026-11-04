@@ -36,15 +36,15 @@ function isRemoteHomeSettingsDisabled() {
 /**
  * 外部构建恒 false 的启动同意阻断判断。
  */
-function isLaunchConsentBlocked(e) {
+function isLaunchConsentBlocked(consent) {
   return false;
 }
 //@ chunk-e6aww6q8.js:1939261-1939346 placement
 /**
  * 家目录设置转发特性开关（含当前生效值）。
  */
-function homeSettingsForwardingFeature(e) {
-  return isLaunchConsentBlocked(e)
+function homeSettingsForwardingFeature(consent) {
+  return isLaunchConsentBlocked(consent)
     ? {
         enabled: neverTrueAsync,
         enabledNow: neverTrue_2,
@@ -58,8 +58,8 @@ function homeSettingsForwardingFeature(e) {
 /**
  * 宿主同意值到模式的映射（forward → host）。
  */
-function hostConsentToMode(e) {
-  return e === "forward" ? "host" : undefined;
+function hostConsentToMode(mode) {
+  return mode === "forward" ? "host" : undefined;
 }
 //@ chunk-e6aww6q8.js:1939397-1939421 placement
 /**
@@ -87,9 +87,9 @@ function storedHomeSettingsMode() {
   );
 }
 //@ chunk-e6aww6q8.js:1939561-1939661 placement
-function isForwardModeEffective(e) {
-  if (e === undefined || e === "stored")
-    return (e === "stored" || isHomeSettingsForwardConsent()) && currentForwardMode() === "forward";
+function isForwardModeEffective(mode) {
+  if (mode === undefined || mode === "stored")
+    return (mode === "stored" || isHomeSettingsForwardConsent()) && currentForwardMode() === "forward";
   return true;
 }
 //@ chunk-e6aww6q8.js:1939661-1939751 placement
@@ -119,7 +119,7 @@ function storedForwardMode() {
 /**
  * 保存家目录设置转发模式到全局配置（forward 前检查是否被阻止），记录先前值并上报事件。
  */
-async function saveHomeSettingsMode(mode, n) {
+async function saveHomeSettingsMode(mode, mode_2) {
   if (mode === "forward") {
     let homeSettingsForwardingBlocker = getHomeSettingsForwardingBlocker(await isSettingsToCloudEnabled());
     if (homeSettingsForwardingBlocker !== null) {
@@ -127,42 +127,42 @@ async function saveHomeSettingsMode(mode, n) {
       return "refused";
     }
   }
-  let r = {
+  let saveState = {
     previous: "unspecified",
   };
-  let s = await saveGlobalConfigDurably((h) => {
-    r.previous = normalizeHomeSettingsMode(h.remoteHomeSettingsMode) ?? "unspecified";
+  let saved = await saveGlobalConfigDurably((config) => {
+    saveState.previous = normalizeHomeSettingsMode(config.remoteHomeSettingsMode) ?? "unspecified";
     return {
-      ...h,
+      ...config,
       remoteHomeSettingsMode: mode,
     };
-  }, n);
-  if (r.previous !== mode)
+  }, mode_2);
+  if (saveState.previous !== mode)
     logEvent("tengu_home_settings_mode_set", {
       mode: fromEnum(mode),
-      previous: fromEnum(r.previous),
-      persisted: s,
+      previous: fromEnum(saveState.previous),
+      persisted: saved,
     });
-  if (!s) {
-    let storedHomeSettingsMode = await readStoredHomeSettingsMode(n);
+  if (!saved) {
+    let storedHomeSettingsMode = await readStoredHomeSettingsMode(mode_2);
     if (storedHomeSettingsMode !== null && storedHomeSettingsMode.mode !== mode) {
-      let mode_2 = storedHomeSettingsMode.mode;
+      let mode_3 = storedHomeSettingsMode.mode;
       for (let idx = 0; idx < MAX_HOME_SETTINGS_SAVE_ATTEMPTS; idx++) {
-        let remoteHomeSettingsMode = mode_2;
-        let L = false;
-        saveGlobalConfig((q) => {
-          if (L) return q;
-          L = true;
+        let remoteHomeSettingsMode = mode_3;
+        let applied = false;
+        saveGlobalConfig((config) => {
+          if (applied) return config;
+          applied = true;
           return {
-            ...q,
+            ...config,
             remoteHomeSettingsMode,
           };
-        }, n);
-        let storedHomeSettingsMode = await readStoredHomeSettingsMode(n);
-        if (storedHomeSettingsMode === null || storedHomeSettingsMode.mode === mode_2) break;
-        mode_2 = storedHomeSettingsMode.mode;
+        }, mode_2);
+        let storedHomeSettingsMode = await readStoredHomeSettingsMode(mode_2);
+        if (storedHomeSettingsMode === null || storedHomeSettingsMode.mode === mode_3) break;
+        mode_3 = storedHomeSettingsMode.mode;
       }
-      if (mode_2 !== mode) {
+      if (mode_3 !== mode) {
         logFeatureBad("remote_home_settings_mode", "not_stored");
         return "not_stored";
       }
@@ -174,21 +174,21 @@ async function saveHomeSettingsMode(mode, n) {
   return "written";
 }
 //@ chunk-e6aww6q8.js:1940718-1940834 placement
-function shouldForwardHomeSettings(e) {
+function shouldForwardHomeSettings(options) {
   return (
-    canForwardHomeSettings(e.settingsToCloudEnabled) &&
-    e.launchMayForward &&
-    !isLaunchConsentBlocked(e.launchConsent) &&
-    isForwardModeEffective(e.launchConsent)
+    canForwardHomeSettings(options.settingsToCloudEnabled) &&
+    options.launchMayForward &&
+    !isLaunchConsentBlocked(options.launchConsent) &&
+    isForwardModeEffective(options.launchConsent)
   );
 }
 //@ chunk-e6aww6q8.js:1940834-1940975 placement
-function shouldPromptHomeSettingsMode(e) {
+function shouldPromptHomeSettingsMode(options) {
   if (!canForwardHomeSettings(isSettingsToCloudEnabledCached())) return false;
-  let n = homeSettingsPromptSkipReason(e);
-  if (n !== null) {
+  let skipReason = homeSettingsPromptSkipReason(options);
+  if (skipReason !== null) {
     logEvent("tengu_home_settings_mode_prompt_skipped", {
-      reason: fromEnum(n),
+      reason: fromEnum(skipReason),
     });
     return false;
   }
@@ -208,13 +208,15 @@ function homeSettingsPromptSkipReason({ staysAttached, launchMayForward, launchC
   return null;
 }
 //@ chunk-e6aww6q8.js:1941312-1941496 placement
-async function readStoredHomeSettingsMode(e) {
-  let n = await readGlobalConfigFromDiskOrThrow(e).catch(() => {
+async function readStoredHomeSettingsMode(options) {
+  let config = await readGlobalConfigFromDiskOrThrow(options).catch(() => {
     return;
   });
-  if (typeof n !== "object" || n === null) return null;
+  if (typeof config !== "object" || config === null) return null;
   return {
-    mode: normalizeHomeSettingsMode("remoteHomeSettingsMode" in n ? n.remoteHomeSettingsMode : undefined),
+    mode: normalizeHomeSettingsMode(
+      "remoteHomeSettingsMode" in config ? config.remoteHomeSettingsMode : undefined,
+    ),
   };
 }
 export {

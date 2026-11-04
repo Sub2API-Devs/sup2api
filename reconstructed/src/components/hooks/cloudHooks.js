@@ -10,7 +10,12 @@
  */
 import { basename } from "path";
 import { realpath } from "fs/promises";
-import { init_react_production, R, fo, Qr } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useRef,
+  suspenseTypeExport,
+  use,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   deviceHooksRegistrationState,
   hasCapturedHooks,
@@ -54,7 +59,7 @@ import { scriptFileReaderDeps } from "../../utils/hooks/servedHooks/hookSandbox.
 import { defaultShellKind } from "../../utils/shell/shellToolUtils.js";
 import { uniq } from "../../utils/collections.js";
 import { logError } from "../../utils/log.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import {
   plural,
@@ -89,9 +94,13 @@ import { getSortedMatchersForEvent } from "../../utils/hooks/hooksConfigManager.
 import { StatusRow } from "../Settings/Status.js";
 import { OrderedListWithItem } from "../CustomSelect/selectTable.js";
 import { hookSourceInlineDisplayString, getHookProgressDisplay } from "../../utils/hooks/hooksSettings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bajxb7bf.js:16364-16368 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bajxb7bf.js:16364", () => {
+  init_react_production();
+});
 //@ chunk-bajxb7bf.js:16441-17018 placement
 var NOT_REGISTERED_YET_TEXT = "not registered yet; your next message tries again";
 var NOT_REGISTERED_NOW_TEXT = "not registered right now; reopen /hooks to check again";
@@ -108,22 +117,22 @@ var CLOUD_HOOK_STATE_LABELS = {
   flag_off: "not switched on for your account",
 };
 //@ chunk-bajxb7bf.js:17018-17535 placement
-function describeCloudHookState(standing, lapsesUnusedAt, h) {
+function describeCloudHookState(standing, lapsesUnusedAt, state) {
   if (standing.kind === "dormant" && standing.senderUnverified)
     return {
       standing:
         "not running, because the session hasn't answered and doesn't recognize this machine as a trusted device; start a session from this machine to run them",
     };
-  let i = deviceHooksRegistrationState(
+  let registrationState = deviceHooksRegistrationState(
     {
       standing,
       lapsesUnusedAt,
     },
-    h,
+    state,
   );
-  if (i !== null)
+  if (registrationState !== null)
     return {
-      standing: i === "dormant" ? CLOUD_HOOK_STATE_LABELS.dormant : NOT_REGISTERED_YET_TEXT,
+      standing: registrationState === "dormant" ? CLOUD_HOOK_STATE_LABELS.dormant : NOT_REGISTERED_YET_TEXT,
       standingIsIdle: true,
     };
   switch (standing.kind) {
@@ -192,46 +201,46 @@ var HOOK_SOURCE_LABELS = {
 };
 //@ chunk-bajxb7bf.js:19407-19572 placement
 function hookDisplayName(command, path) {
-  let h =
+  let label =
     path !== undefined
       ? basename(path)
       : /^https?:\/\//i.test(command.trim())
         ? httpHostLabel(command.trim())
         : basename(command.trim().split(/\s+/)[0] ?? "") || "hook";
   return (
-    sanitizeDisplayText(h, {
+    sanitizeDisplayText(label, {
       maxCodeUnits: 120,
     }) || "hook"
   );
 }
 //@ chunk-bajxb7bf.js:19572-20580 placement
-function classifyHookForCloud(deviceHookAttestations, o = new Set()) {
-  let h = (source) =>
-    o.has(source)
+function classifyHookForCloud(deviceHookAttestations, writableSources = new Set()) {
+  let writableFlag = (source) =>
+    writableSources.has(source)
       ? {
           fromWritableFile: true,
         }
       : {};
-  let mapped = deviceHookAttestations.forwarded.map((t) => ({
+  let mapped = deviceHookAttestations.forwarded.map((entry) => ({
     where: "here",
     label:
-      t.local.hook.type === "http"
-        ? httpHostLabel(t.local.hook.url)
-        : t.local.hook.type === "command"
-          ? hookDisplayName(t.local.hook.command, t.local.pinnedTarget?.path)
+      entry.local.hook.type === "http"
+        ? httpHostLabel(entry.local.hook.url)
+        : entry.local.hook.type === "command"
+          ? hookDisplayName(entry.local.hook.command, entry.local.pinnedTarget?.path)
           : "hook",
-    event: t.wire.event,
-    ...(t.wire.matcher !== undefined && {
-      matcher: sanitizeDisplayText(t.wire.matcher, {
+    event: entry.wire.event,
+    ...(entry.wire.matcher !== undefined && {
+      matcher: sanitizeDisplayText(entry.wire.matcher, {
         maxCodeUnits: 200,
       }),
     }),
-    source: t.local.source,
-    ...h(t.local.source),
-    ...(mayTouchCodeEditingTool(t.wire.event, t.wire.matcher) && {
+    source: entry.local.source,
+    ...writableFlag(entry.local.source),
+    ...(mayTouchCodeEditingTool(entry.wire.event, entry.wire.matcher) && {
       exceptAfterEdits: true,
     }),
-    ...(t.wire.author_opt_in && {
+    ...(entry.wire.author_opt_in && {
       optedIn: true,
     }),
   }));
@@ -245,29 +254,31 @@ function classifyHookForCloud(deviceHookAttestations, o = new Set()) {
       }),
     }),
     source: template.local.source,
-    ...h(template.local.source),
+    ...writableFlag(template.local.source),
   }));
-  let mapped_3 = deviceHookAttestations.held.map((t) => {
-    let f =
-      t.cause !== undefined ? CLOUD_HOOK_BLOCK_REASONS[t.cause] : CLOUD_HOOK_INELIGIBLE_REASONS[t.reason];
+  let mapped_3 = deviceHookAttestations.held.map((held) => {
+    let reasonText =
+      held.cause !== undefined
+        ? CLOUD_HOOK_BLOCK_REASONS[held.cause]
+        : CLOUD_HOOK_INELIGIBLE_REASONS[held.reason];
     return {
       where: "local",
-      label: hookDisplayName(t.command),
-      event: t.event,
-      ...(t.matcher !== undefined && {
-        matcher: t.matcher,
+      label: hookDisplayName(held.command),
+      event: held.event,
+      ...(held.matcher !== undefined && {
+        matcher: held.matcher,
       }),
-      source: t.source,
-      reason: t.reason,
-      why: t.noRemedy ? f.replace(/\. .*$/, "") : f,
+      source: held.source,
+      reason: held.reason,
+      why: held.noRemedy ? reasonText.replace(/\. .*$/, "") : reasonText,
     };
   });
   return [...mapped, ...mapped_2, ...mapped_3];
 }
 //@ chunk-bajxb7bf.js:20580-20660 placement
-function httpHostLabel(m) {
+function httpHostLabel(url) {
   try {
-    return new URL(m).host || "http hook";
+    return new URL(url).host || "http hook";
   } catch {
     return "http hook";
   }
@@ -278,26 +289,26 @@ var NO_HOOK_REASON = {
   reason: "disabled_by_settings",
 };
 //@ chunk-bajxb7bf.js:20711-20978 placement
-function reconcileCapturedHooks(m, baseline, h) {
+function reconcileCapturedHooks(captured, baseline, launchInReach) {
   if (
-    m.kind === "none" &&
-    m.reason === "disabled_by_settings" &&
+    captured.kind === "none" &&
+    captured.reason === "disabled_by_settings" &&
     baseline !== null &&
     baseline.kind === "captured" &&
-    h &&
+    launchInReach &&
     hasCapturedHooks(baseline)
   )
     return {
       captured: baseline,
       kept: "launch_hooks",
     };
-  if (baseline?.kind === "none" && baseline.reason === "disabled_by_settings" && hasCapturedHooks(m))
+  if (baseline?.kind === "none" && baseline.reason === "disabled_by_settings" && hasCapturedHooks(captured))
     return {
       captured: NO_HOOK_REASON,
       kept: "off",
     };
   return {
-    captured: m,
+    captured,
   };
 }
 //@ chunk-bajxb7bf.js:20978-25112 placement
@@ -312,25 +323,25 @@ async function buildCloudHookRows({
   senderMemory,
   processMemory,
 }) {
-  let t = deviceHooksConsentPath();
+  let consentPath = deviceHooksConsentPath();
   if (forwarding !== "cloud")
     return {
       consent: forwarding,
-      consentLocation: t,
+      consentLocation: consentPath,
       rows: [],
     };
-  let deviceHooksConsent = readDeviceHooksConsent(storageV5);
-  let k = (M = []) => {
+  let deps = readDeviceHooksConsent(storageV5);
+  let standingFields = (rows = []) => {
     let now = Date.now();
-    let v = describeCloudHookState(senderMemory.standing, senderMemory.lapsesUnusedAt, now);
-    if (v.standing !== undefined)
-      return v.standingIsIdle && deviceHooksRegistrationState(senderMemory, now) === "dormant"
-        ? v
+    let described = describeCloudHookState(senderMemory.standing, senderMemory.lapsesUnusedAt, now);
+    if (described.standing !== undefined)
+      return described.standingIsIdle && deviceHooksRegistrationState(senderMemory, now) === "dormant"
+        ? described
         : {
-            ...v,
+            ...described,
             notInForce: true,
           };
-    return senderMemory.standing.kind === "idle" && M.some((P) => P.where === "here")
+    return senderMemory.standing.kind === "idle" && rows.some((row) => row.where === "here")
       ? {
           standing: NOT_REGISTERED_NOW_TEXT,
           standingIsIdle: true,
@@ -338,92 +349,96 @@ async function buildCloudHookRows({
         }
       : {};
   };
-  let C = consentPin;
-  let D = async (M) => (C.current?.origin === "given" ? C.current.value.catch(() => "unset") : M);
+  let consentPinRef = consentPin;
+  let resolveConsent = async (fallback) =>
+    consentPinRef.current?.origin === "given" ? consentPinRef.current.value.catch(() => "unset") : fallback;
   try {
-    let { stored, origin } = await resolveStoredConsent(C, deviceHooksConsent);
-    let v = stored;
-    let P = deviceHooksPolicyEligibility(collectDeviceHookSources());
+    let { stored, origin } = await resolveStoredConsent(consentPinRef, deps);
+    let storedConsent = stored;
+    let eligibility = deviceHooksPolicyEligibility(collectDeviceHookSources());
     let gitRootUncached = findGitRootUncached(launchDir);
-    let b = gitRootUncached ?? launchDir;
-    let E = [
+    let repoRoot = gitRootUncached ?? launchDir;
+    let baseRoots = [
       launchDir,
       await realpath(launchDir).catch(() => launchDir),
-      b,
-      await realpath(b).catch(() => b),
+      repoRoot,
+      await realpath(repoRoot).catch(() => repoRoot),
     ];
-    let B = senderMemory.commonRoots ?? collectBaseReachRoots(launchDir);
-    let N = new Map(senderMemory.pinnedRoots);
-    let stickyRoots = await collectStickyRoots({
+    let commonRoots = senderMemory.commonRoots ?? collectBaseReachRoots(launchDir);
+    let pinnedRoots = new Map(senderMemory.pinnedRoots);
+    let roots = await collectStickyRoots({
       stickyRoots: new Set(senderMemory.stickyRoots),
       pinnedScopes: new Set(senderMemory.pinnedScopes),
-      pinnedRoots: N,
-      baseRoots: E,
+      pinnedRoots,
+      baseRoots,
       reachBaseline:
         senderMemory.reachBaseline ??
-        new Map(SETTING_SOURCES.map((p) => [p, collectSettingsWriteRoots(p, launchDir)])),
-      scopeSettingsFile: (p) => getSettingsFilePathForSource(p) ?? null,
+        new Map(SETTING_SOURCES.map((source) => [source, collectSettingsWriteRoots(source, launchDir)])),
+      scopeSettingsFile: (source) => getSettingsFilePathForSource(source) ?? null,
       realpath,
-      commonRoots: () => B,
-      scopeRoots: (p, J) => settingsReachRootsForSource(launchDir, p, J),
+      commonRoots: () => commonRoots,
+      scopeRoots: (source, reachBaseline) => settingsReachRootsForSource(launchDir, source, reachBaseline),
     });
-    let x;
-    if (origin === "read" && v !== "unset") {
-      let p = t;
-      let J = await probeWritability(t, stickyRoots, async (ge) => {
-        p = await realpath(ge);
-        return p;
+    let storedAnswerNote;
+    if (origin === "read" && storedConsent !== "unset") {
+      let resolvedPath = consentPath;
+      let probeResult = await probeWritability(consentPath, roots, async (candidatePath) => {
+        resolvedPath = await realpath(candidatePath);
+        return resolvedPath;
       });
-      if (J !== false) v = "unset";
-      let U = stripInvisibleChars(t);
-      if (J === "unresolvable") x = `${U} couldn't be read.`;
-      else if (J === "writable") {
-        let ge = [t, p];
-        let I = anyPairMatches(ge, [...E, ...B])
+      if (probeResult !== false) storedConsent = "unset";
+      let consentPathText = stripInvisibleChars(consentPath);
+      if (probeResult === "unresolvable") storedAnswerNote = `${consentPathText} couldn't be read.`;
+      else if (probeResult === "writable") {
+        let pathPair = [consentPath, resolvedPath];
+        let allowingSource = anyPairMatches(pathPair, [...baseRoots, ...commonRoots])
           ? undefined
-          : SETTING_SOURCES.find((He) =>
-              anyPairMatches(ge, N.get(He) ?? settingsReachRootsForSource(launchDir, He, null)),
+          : SETTING_SOURCES.find((source) =>
+              anyPairMatches(
+                pathPair,
+                pinnedRoots.get(source) ?? settingsReachRootsForSource(launchDir, source, null),
+              ),
             );
-        let pe = I && getSettingsFilePathForSource(I);
-        let Se =
-          I === "policySettings"
+        let allowingFile = allowingSource && getSettingsFilePathForSource(allowingSource);
+        let allowsSuffix =
+          allowingSource === "policySettings"
             ? ", which your managed settings allow"
-            : I === "flagSettings" && getFlagSettingsExpectedContent() !== undefined
+            : allowingSource === "flagSettings" && getFlagSettingsExpectedContent() !== undefined
               ? ", which the --settings value allows"
-              : pe !== undefined
-                ? `, which ${stripInvisibleChars(pe)} allows`
+              : allowingFile !== undefined
+                ? `, which ${stripInvisibleChars(allowingFile)} allows`
                 : "";
-        x = `This cloud session can write ${U}${Se}.`;
+        storedAnswerNote = `This cloud session can write ${consentPathText}${allowsSuffix}.`;
       }
     }
     let { captured, kept } = reconcileCapturedHooks(
-      P,
+      eligibility,
       senderMemory.baseline,
-      P.kind === "none" && P.reason === "disabled_by_settings"
-        ? await isHookScopeInReach(stickyRoots, P.switchSources ?? ["user", "flag"], {
+      eligibility.kind === "none" && eligibility.reason === "disabled_by_settings"
+        ? await isHookScopeInReach(roots, eligibility.switchSources ?? ["user", "flag"], {
             realpath,
-            scopeSettingsFile: (p) => getSettingsFilePathForSource(p) ?? null,
+            scopeSettingsFile: (source) => getSettingsFilePathForSource(source) ?? null,
             everInReach: senderMemory.everInReach,
           })
         : false,
     );
     if (captured.kind === "none")
       return {
-        consent: await D(v),
-        consentLocation: t,
-        ...(x !== undefined && {
-          storedAnswerNotUsed: x,
+        consent: await resolveConsent(storedConsent),
+        consentLocation: consentPath,
+        ...(storedAnswerNote !== undefined && {
+          storedAnswerNotUsed: storedAnswerNote,
         }),
-        ...k(),
+        ...standingFields(),
         rows: [],
         unavailableReason: kept === "off" ? HOOKS_OFF_AT_START_TEXT : POLICY_BLOCK_REASONS[captured.reason],
       };
-    let X = subprocessEnv();
-    let ne = mergeHookEnv_2({
-      attached: X,
+    let baseEnv = subprocessEnv();
+    let mergedEnv = mergeHookEnv_2({
+      attached: baseEnv,
       beforeSettings: getLatchedPreSettingsEnvSnapshot(),
       ownEnv: settingsEnvInReach(senderMemory, legacyConfigFileOf(processMemory)),
-      childrenSee: (p) => Object.hasOwn(X, p),
+      childrenSee: (key) => Object.hasOwn(baseEnv, key),
     });
     let deviceHookAttestations = await collectDeviceHookAttestations(
       captured,
@@ -432,9 +447,9 @@ async function buildCloudHookRows({
         launchDir,
         projectDir: projectConfigRootOr(launchDir),
         configHome: getClaudeConfigDir(),
-        extraReachRoots: stickyRoots,
-        ...(b !== launchDir && {
-          repoRoot: b,
+        extraReachRoots: roots,
+        ...(repoRoot !== launchDir && {
+          repoRoot,
         }),
         inRepository: gitRootUncached !== null,
         ...(senderMemory.lastSyncRoot !== null && {
@@ -454,18 +469,18 @@ async function buildCloudHookRows({
       {
         realpath,
         open: scriptFileReaderDeps().openNoFollow,
-        home: resolveOptions(ne),
+        home: resolveOptions(mergedEnv),
         defaultShell: defaultShellKind(),
-        shellPrefix: shellPrefixOf(ne),
+        shellPrefix: shellPrefixOf(mergedEnv),
       },
     );
-    let ue = new Set([
+    let reachableSources = new Set([
       ...senderMemory.everInReach,
-      ...[captured, senderMemory.baseline].flatMap((p) =>
-        p?.kind === "captured" ? p.sources.map((source) => source.source) : [],
+      ...[captured, senderMemory.baseline].flatMap((captured) =>
+        captured?.kind === "captured" ? captured.sources.map((source) => source.source) : [],
       ),
     ]);
-    let de = [
+    let sourceFiles = [
       ["user", getSettingsFilePathForSource("userSettings")],
       ["local", getSettingsFilePathForSource("localSettings")],
       [
@@ -475,66 +490,75 @@ async function buildCloudHookRows({
           : undefined,
       ],
     ];
-    let se = new Set(
+    let syncRootSources = new Set(
       deviceHookAttestations.held
-        .filter((p) => p.reason === "source_in_sync_root" || p.reason === "sync_root_is_config_dir")
-        .map((p) => p.source),
+        .filter((held) => held.reason === "source_in_sync_root" || held.reason === "sync_root_is_config_dir")
+        .map((held) => held.source),
     );
-    let ke = new Set(captured.withheld.map((p) => p.source));
-    let le = new Set();
-    let me = new Set();
-    for (let [p, J] of de) {
-      if (J === undefined || !ue.has(p) || se.has(p) || (ke.has(p) && !senderMemory.everInReach.has(p)))
+    let withheldSources = new Set(captured.withheld.map((withheld) => withheld.source));
+    let writableLocal = new Set();
+    let writableOther = new Set();
+    for (let [source, filePath] of sourceFiles) {
+      if (
+        filePath === undefined ||
+        !reachableSources.has(source) ||
+        syncRootSources.has(source) ||
+        (withheldSources.has(source) && !senderMemory.everInReach.has(source))
+      )
         continue;
-      let U = p === "local" ? le : me;
-      if (senderMemory.everInReach.has(p)) {
-        U.add(p);
+      let targetSet = source === "local" ? writableLocal : writableOther;
+      if (senderMemory.everInReach.has(source)) {
+        targetSet.add(source);
         continue;
       }
-      let ge = uniq([J, await realpath(J).catch(() => J), ...(senderMemory.knownSpellings.get(p) ?? [])]);
-      if (anyPairMatches(ge, stickyRoots)) U.add(p);
+      let spellings = uniq([
+        filePath,
+        await realpath(filePath).catch(() => filePath),
+        ...(senderMemory.knownSpellings.get(source) ?? []),
+      ]);
+      if (anyPairMatches(spellings, roots)) targetSet.add(source);
     }
-    let ie = classifyHookForCloud(deviceHookAttestations, le);
-    let Le = [
+    let rows = classifyHookForCloud(deviceHookAttestations, writableLocal);
+    let withheldNotes = [
       ...captured.withheld
-        .filter((p) => !le.has(p.source) && !me.has(p.source))
+        .filter((withheld) => !writableLocal.has(withheld.source) && !writableOther.has(withheld.source))
         .map(
-          (p) =>
-            `Hooks from ${HOOK_SOURCE_LABELS[p.source].phrase} are not offered to the cloud session: ${UNTRUSTED_BLOCK_REASONS[p.reason]}.`,
+          (withheld) =>
+            `Hooks from ${HOOK_SOURCE_LABELS[withheld.source].phrase} are not offered to the cloud session: ${UNTRUSTED_BLOCK_REASONS[withheld.reason]}.`,
         ),
-      ...[...me].map(
-        (p) =>
-          `Hooks from ${HOOK_SOURCE_LABELS[p].phrase} are not offered to the cloud session: the cloud session may change that file.`,
+      ...[...writableOther].map(
+        (source) =>
+          `Hooks from ${HOOK_SOURCE_LABELS[source].phrase} are not offered to the cloud session: the cloud session may change that file.`,
       ),
     ];
     return {
-      consent: await D(v),
-      consentLocation: t,
-      ...(x !== undefined && {
-        storedAnswerNotUsed: x,
+      consent: await resolveConsent(storedConsent),
+      consentLocation: consentPath,
+      ...(storedAnswerNote !== undefined && {
+        storedAnswerNotUsed: storedAnswerNote,
       }),
-      ...k(ie),
-      rows: ie,
+      ...standingFields(rows),
+      rows,
       ...(kept === "launch_hooks" && {
         keptFromLaunch:
           "All hooks were switched off in your settings during this cloud session; for it, this machine keeps offering the hooks it had when you launched (listed here) until you restart claude --cloud.",
       }),
-      ...(le.size > 0 && {
-        writableSources: [...le].map(
-          (p) =>
-            `This cloud session can write ${HOOK_SOURCE_LABELS[p].phrase}, so only the hooks that file held when you attached are offered.`,
+      ...(writableLocal.size > 0 && {
+        writableSources: [...writableLocal].map(
+          (source) =>
+            `This cloud session can write ${HOOK_SOURCE_LABELS[source].phrase}, so only the hooks that file held when you attached are offered.`,
         ),
       }),
-      ...(Le.length > 0 && {
-        withheld: Le,
+      ...(withheldNotes.length > 0 && {
+        withheld: withheldNotes,
       }),
     };
   } catch (error) {
     logError(error);
     return {
-      consent: await D("unset"),
-      consentLocation: t,
-      ...k(),
+      consent: await resolveConsent("unset"),
+      consentLocation: consentPath,
+      ...standingFields(),
       rows: [],
       unavailableReason: "they could not be read",
     };
@@ -560,57 +584,61 @@ var UNTRUSTED_BLOCK_REASONS = {
   served_folder: "the cloud session this computer serves can write that file",
 };
 //@ chunk-bajxb7bf.js:26126-26130 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bajxb7bf.js:26126", () => {
+  init_react_production();
+});
 //@ chunk-bajxb7bf.js:26130-26141 placement
 var HOOK_LABEL_WIDTH = 250;
 //@ chunk-bajxb7bf.js:26141-28737 placement
 function describeWhereHookRuns(props) {
-  let k = w(34);
-  let { forwarded, templateNames, consentLocation, current: d, onDone } = props;
-  let t = R(false);
+  let $ = useMemoCache(34);
+  let { forwarded, templateNames, consentLocation, current: currentAnswer, onDone } = props;
+  let doneRef = useRef(false);
   let timeout = useTimeout(HOOK_LABEL_WIDTH);
-  let C;
-  if (k[0] !== timeout || k[1] !== onDone) {
-    C = function M(D) {
-      if (t.current || !timeout) {
+  let finish;
+  if ($[0] !== timeout || $[1] !== onDone) {
+    finish = function finish(answer) {
+      if (doneRef.current || !timeout) {
         return;
       }
-      t.current = true;
-      onDone(D);
+      doneRef.current = true;
+      onDone(answer);
     };
-    k[0] = timeout;
-    k[1] = onDone;
-    k[2] = C;
-  } else C = k[2];
-  let M = C;
-  let g;
-  if (k[3] !== forwarded) {
-    g = forwarded > 0 ? [`${forwarded} ${plural(forwarded, "hook")} would run here`] : [];
-    k[3] = forwarded;
-    k[4] = g;
-  } else g = k[4];
-  let v;
-  if (k[5] !== templateNames) {
-    v = templateNames.length > 0 ? [`${templateNames.join(", ")} would run in the cloud session`] : [];
-    k[5] = templateNames;
-    k[6] = v;
-  } else v = k[6];
-  let P;
-  if (k[7] !== g || k[8] !== v) {
-    P = [...g, ...v];
-    k[7] = g;
-    k[8] = v;
-    k[9] = P;
-  } else P = k[9];
-  let joined = P.join("; ");
+    $[0] = timeout;
+    $[1] = onDone;
+    $[2] = finish;
+  } else finish = $[2];
+  let finish_2 = finish;
+  let hereLines;
+  if ($[3] !== forwarded) {
+    hereLines = forwarded > 0 ? [`${forwarded} ${plural(forwarded, "hook")} would run here`] : [];
+    $[3] = forwarded;
+    $[4] = hereLines;
+  } else hereLines = $[4];
+  let cloudLines;
+  if ($[5] !== templateNames) {
+    cloudLines =
+      templateNames.length > 0 ? [`${templateNames.join(", ")} would run in the cloud session`] : [];
+    $[5] = templateNames;
+    $[6] = cloudLines;
+  } else cloudLines = $[6];
+  let lines;
+  if ($[7] !== hereLines || $[8] !== cloudLines) {
+    lines = [...hereLines, ...cloudLines];
+    $[7] = hereLines;
+    $[8] = cloudLines;
+    $[9] = lines;
+  } else lines = $[9];
+  let joined = lines.join("; ");
   let onCancel;
-  if (k[10] !== M) {
-    onCancel = () => M("not_now");
-    k[10] = M;
-    k[11] = onCancel;
-  } else onCancel = k[11];
+  if ($[10] !== finish_2) {
+    onCancel = () => finish_2("not_now");
+    $[10] = finish_2;
+    $[11] = onCancel;
+  } else onCancel = $[11];
   let inputGuide;
-  if (k[12] === MEMO_CACHE_SENTINEL) {
+  if ($[12] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default_2(Byline, {
       children: [
         jsxProd_default(KeyboardShortcutHint, {
@@ -625,71 +653,71 @@ function describeWhereHookRuns(props) {
         }),
       ],
     });
-    k[12] = inputGuide;
-  } else inputGuide = k[12];
-  let B;
-  let N;
-  if (k[13] === MEMO_CACHE_SENTINEL) {
-    B = jsxProd_default(Text, {
+    $[12] = inputGuide;
+  } else inputGuide = $[12];
+  let introText;
+  let timingText;
+  if ($[13] === MEMO_CACHE_SENTINEL) {
+    introText = jsxProd_default(Text, {
       children:
         "Hooks in your user and local settings, or a --settings file, don't run in cloud sessions. If you say yes, cloud sessions started from this machine ask Claude Code here to run them. What a hook returns becomes part of the session's transcript.",
     });
-    N = jsxProd_default(Text, {
+    timingText = jsxProd_default(Text, {
       children:
         "Hooks run here only while Claude Code stays connected and answers in time. Otherwise the session continues without them: a hook that blocks a command here won't block it there, and your allow rules still apply.",
     });
-    k[13] = B;
-    k[14] = N;
+    $[13] = introText;
+    $[14] = timingText;
   } else {
-    B = k[13];
-    N = k[14];
+    introText = $[13];
+    timingText = $[14];
   }
-  let L;
-  if (k[15] !== joined) {
-    L =
+  let rightNowText;
+  if ($[15] !== joined) {
+    rightNowText =
       joined !== "" &&
       jsxProd_default_2(Text, {
         dimColor: true,
         children: ["Right now: ", joined, "."],
       });
-    k[15] = joined;
-    k[16] = L;
-  } else L = k[16];
-  const x =
-    d === "accepted"
+    $[15] = joined;
+    $[16] = rightNowText;
+  } else rightNowText = $[16];
+  const notNowNote =
+    currentAnswer === "accepted"
       ? "Not now keeps your answer: yes."
-      : d === "declined"
+      : currentAnswer === "declined"
         ? "Not now keeps your answer: no."
         : "Not now: no hooks run until you say yes.";
-  let Y;
-  if (k[17] !== consentLocation || k[18] !== x) {
-    Y = jsxProd_default_2(Text, {
+  let savedText;
+  if ($[17] !== consentLocation || $[18] !== notNowNote) {
+    savedText = jsxProd_default_2(Text, {
       dimColor: true,
       children: [
         "Yes or No is saved for this machine in ",
         consentLocation,
         ". Change it in /hooks.",
         " ",
-        x,
+        notNowNote,
       ],
     });
-    k[17] = consentLocation;
-    k[18] = x;
-    k[19] = Y;
-  } else Y = k[19];
-  let W;
-  if (k[20] !== Y || k[21] !== L) {
-    W = jsxProd_default_2(Box, {
+    $[17] = consentLocation;
+    $[18] = notNowNote;
+    $[19] = savedText;
+  } else savedText = $[19];
+  let body;
+  if ($[20] !== savedText || $[21] !== rightNowText) {
+    body = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
-      children: [B, N, L, Y],
+      children: [introText, timingText, rightNowText, savedText],
     });
-    k[20] = Y;
-    k[21] = L;
-    k[22] = W;
-  } else W = k[22];
+    $[20] = savedText;
+    $[21] = rightNowText;
+    $[22] = body;
+  } else body = $[22];
   let options;
-  if (k[23] === MEMO_CACHE_SENTINEL) {
+  if ($[23] === MEMO_CACHE_SENTINEL) {
     options = [
       {
         label: "Yes, run hooks for cloud sessions",
@@ -704,63 +732,66 @@ function describeWhereHookRuns(props) {
         value: "not_now",
       },
     ];
-    k[23] = options;
-  } else options = k[23];
+    $[23] = options;
+  } else options = $[23];
   const isDisabled = !timeout;
   let onCancel_2;
-  if (k[24] !== M) {
-    onCancel_2 = () => M("not_now");
-    k[24] = M;
-    k[25] = onCancel_2;
-  } else onCancel_2 = k[25];
-  let ue;
-  if (k[26] !== M || k[27] !== isDisabled || k[28] !== onCancel_2) {
-    ue = jsxProd_default(ModelSelector, {
+  if ($[24] !== finish_2) {
+    onCancel_2 = () => finish_2("not_now");
+    $[24] = finish_2;
+    $[25] = onCancel_2;
+  } else onCancel_2 = $[25];
+  let selector;
+  if ($[26] !== finish_2 || $[27] !== isDisabled || $[28] !== onCancel_2) {
+    selector = jsxProd_default(ModelSelector, {
       selectedValue: NO_COMMITTED_ROW,
       options,
       defaultFocusValue: "not_now",
       hideIndexes: true,
       isDisabled,
-      onChange: M,
+      onChange: finish_2,
       onCancel: onCancel_2,
     });
-    k[26] = M;
-    k[27] = isDisabled;
-    k[28] = onCancel_2;
-    k[29] = ue;
-  } else ue = k[29];
-  let de;
-  if (k[30] !== W || k[31] !== ue || k[32] !== onCancel) {
-    de = jsxProd_default_2(Dialog, {
+    $[26] = finish_2;
+    $[27] = isDisabled;
+    $[28] = onCancel_2;
+    $[29] = selector;
+  } else selector = $[29];
+  let dialog;
+  if ($[30] !== body || $[31] !== selector || $[32] !== onCancel) {
+    dialog = jsxProd_default_2(Dialog, {
       title: "Run this machine's hooks for cloud sessions?",
       onCancel,
       inputGuide,
-      children: [W, ue],
+      children: [body, selector],
     });
-    k[30] = W;
-    k[31] = ue;
-    k[32] = onCancel;
-    k[33] = de;
-  } else de = k[33];
-  return de;
+    $[30] = body;
+    $[31] = selector;
+    $[32] = onCancel;
+    $[33] = dialog;
+  } else dialog = $[33];
+  return dialog;
 }
 //@ chunk-bajxb7bf.js:28737-28741 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bajxb7bf.js:28737", () => {
+  init_react_production();
+});
 //@ chunk-bajxb7bf.js:28741-28893 placement
 var PLUGIN_HOOKS_NOTE =
   "Plugin hooks are not listed above. A plugin's hooks run in this cloud session only if the session loaded that plugin (see the top of /plugin).";
 //@ chunk-bajxb7bf.js:28893-28993 placement
 function PluginHooksNote() {
-  let m = w(1);
-  let o;
-  if (m[0] === MEMO_CACHE_SENTINEL) {
-    o = jsxProd_default(Text, {
+  let $ = useMemoCache(1);
+  let note;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    note = jsxProd_default(Text, {
       dimColor: true,
       children: PLUGIN_HOOKS_NOTE,
     });
-    m[0] = o;
-  } else o = m[0];
-  return o;
+    $[0] = note;
+  } else note = $[0];
+  return note;
 }
 //@ chunk-bajxb7bf.js:28993-29037 placement
 function dimSegment(text) {
@@ -770,12 +801,12 @@ function dimSegment(text) {
   };
 }
 //@ chunk-bajxb7bf.js:29037-29068 placement
-function segmentText(Mo) {
-  return Mo.text;
+function segmentText(segment) {
+  return segment.text;
 }
 //@ chunk-bajxb7bf.js:29068-29190 placement
-function renderStatusLine(m, Ce) {
-  let { status, pieces } = m;
+function renderStatusLine(row, key) {
+  let { status, pieces } = row;
   return jsxProd_default_2(
     Text,
     {
@@ -789,19 +820,19 @@ function renderStatusLine(m, Ce) {
         }),
       ],
     },
-    Ce,
+    key,
   );
 }
 //@ chunk-bajxb7bf.js:29190-29279 placement
-function renderSegment(je, co) {
+function renderSegment(segment, index) {
   return jsxProd_default(
     Text,
     {
-      dimColor: je.dimColor,
-      color: je.color,
-      children: je.text,
+      dimColor: segment.dimColor,
+      color: segment.color,
+      children: segment.text,
     },
-    co,
+    index,
   );
 }
 //@ chunk-bajxb7bf.js:29279-29444 placement
@@ -814,38 +845,38 @@ var ROW_MATCHER_WIDTH = 8;
 var ROW_COMMAND_WIDTH = 3;
 //@ chunk-bajxb7bf.js:29444-30098 placement
 function renderCloudSessionBadge(props) {
-  let d = w(11);
+  let $ = useMemoCache(11);
   let { summaryPromise, savedLine, hasPluginHooks } = props;
-  let u;
-  if (d[0] === MEMO_CACHE_SENTINEL) {
-    u = jsxProd_default_2(Text, {
+  let badge;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    badge = jsxProd_default_2(Text, {
       color: "suggestion",
       children: [figures_default.info, " Cloud session"],
     });
-    d[0] = u;
-  } else u = d[0];
-  let t;
-  if (d[1] !== savedLine) {
-    t =
+    $[0] = badge;
+  } else badge = $[0];
+  let savedText;
+  if ($[1] !== savedLine) {
+    savedText =
       savedLine !== undefined &&
       jsxProd_default(Text, {
         color: "success",
         children: savedLine,
       });
-    d[1] = savedLine;
-    d[2] = t;
-  } else t = d[2];
+    $[1] = savedLine;
+    $[2] = savedText;
+  } else savedText = $[2];
   let fallback;
-  if (d[3] === MEMO_CACHE_SENTINEL) {
+  if ($[3] === MEMO_CACHE_SENTINEL) {
     fallback = jsxProd_default(Text, {
       dimColor: true,
       children: "Checking this machine's hooks\u2026",
     });
-    d[3] = fallback;
-  } else fallback = d[3];
-  let k;
-  if (d[4] !== hasPluginHooks || d[5] !== savedLine || d[6] !== summaryPromise) {
-    k = jsxProd_default(fo, {
+    $[3] = fallback;
+  } else fallback = $[3];
+  let notice;
+  if ($[4] !== hasPluginHooks || $[5] !== savedLine || $[6] !== summaryPromise) {
+    notice = jsxProd_default(suspenseTypeExport, {
       fallback,
       children: jsxProd_default(renderRemoteHostNotice, {
         summaryPromise,
@@ -853,94 +884,94 @@ function renderCloudSessionBadge(props) {
         hasPluginHooks,
       }),
     });
-    d[4] = hasPluginHooks;
-    d[5] = savedLine;
-    d[6] = summaryPromise;
-    d[7] = k;
-  } else k = d[7];
-  let C;
-  if (d[8] !== t || d[9] !== k) {
-    C = jsxProd_default_2(Box, {
+    $[4] = hasPluginHooks;
+    $[5] = savedLine;
+    $[6] = summaryPromise;
+    $[7] = notice;
+  } else notice = $[7];
+  let box;
+  if ($[8] !== savedText || $[9] !== notice) {
+    box = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [u, t, k],
+      children: [badge, savedText, notice],
     });
-    d[8] = t;
-    d[9] = k;
-    d[10] = C;
-  } else C = d[10];
-  return C;
+    $[8] = savedText;
+    $[9] = notice;
+    $[10] = box;
+  } else box = $[10];
+  return box;
 }
 //@ chunk-bajxb7bf.js:30098-30796 placement
 function renderRemoteHostNotice(props) {
-  let t = w(7);
+  let $ = useMemoCache(7);
   let { summaryPromise, savedLine, hasPluginHooks } = props;
-  let d = Qr(summaryPromise);
-  let consent = d.consent;
+  let summaryResult = use(summaryPromise);
+  let consent = summaryResult.consent;
   if (consent === "off") {
-    let f;
-    if (t[0] === MEMO_CACHE_SENTINEL) {
-      f = jsxProd_default(Text, {
+    let offText;
+    if ($[0] === MEMO_CACHE_SENTINEL) {
+      offText = jsxProd_default(Text, {
         dimColor: true,
         children:
           "Hooks from this machine's settings are not forwarded to this cloud session (hooks committed to the repository still run from the cloud's own copy).",
       });
-      t[0] = f;
-    } else f = t[0];
-    return f;
+      $[0] = offText;
+    } else offText = $[0];
+    return offText;
   }
   if (consent === "remote_host") {
-    let f;
-    if (t[1] === MEMO_CACHE_SENTINEL) {
-      f = jsxProd_default(Text, {
+    let remoteText;
+    if ($[1] === MEMO_CACHE_SENTINEL) {
+      remoteText = jsxProd_default(Text, {
         dimColor: true,
         children:
           "The hooks below are this machine's; this remote session runs the hooks configured on its own host.",
       });
-      t[1] = f;
-    } else f = t[1];
-    return f;
+      $[1] = remoteText;
+    } else remoteText = $[1];
+    return remoteText;
   }
-  let f;
-  if (t[2] !== consent || t[3] !== hasPluginHooks || t[4] !== savedLine || t[5] !== d) {
-    f = jsxProd_default(renderCloudHookOffers, {
-      summary: d,
+  let offers;
+  if ($[2] !== consent || $[3] !== hasPluginHooks || $[4] !== savedLine || $[5] !== summaryResult) {
+    offers = jsxProd_default(renderCloudHookOffers, {
+      summary: summaryResult,
       consent,
       savedLine,
       hasPluginHooks,
     });
-    t[2] = consent;
-    t[3] = hasPluginHooks;
-    t[4] = savedLine;
-    t[5] = d;
-    t[6] = f;
-  } else f = t[6];
-  return f;
+    $[2] = consent;
+    $[3] = hasPluginHooks;
+    $[4] = savedLine;
+    $[5] = summaryResult;
+    $[6] = offers;
+  } else offers = $[6];
+  return offers;
 }
 //@ chunk-bajxb7bf.js:30796-33547 placement
 function renderCloudHookOffers(props) {
-  let k = w(52);
+  let $ = useMemoCache(52);
   let { summary, consent, savedLine, hasPluginHooks } = props;
   let terminalSize = useTerminalSize();
   let reserve = useScrollColumnContext()?.reserve ?? SCROLL_COLUMN_MIN_ROWS;
   const rows = terminalSize.rows - reserve - ROW_COUNT_WIDTH;
-  let C;
-  if (k[0] !== rows || k[1] !== terminalSize.columns) {
-    C = {
+  let size;
+  if ($[0] !== rows || $[1] !== terminalSize.columns) {
+    size = {
       rows,
       columns: terminalSize.columns,
     };
-    k[0] = rows;
-    k[1] = terminalSize.columns;
-    k[2] = C;
-  } else C = k[2];
-  let { rows: rows_2, columns } = useScrollViewportSize(C);
-  let g = columns - 2 * (useHasScrollViewport() ? PANE_PADDING_X : PANE_PADDING);
-  let v;
-  if (k[3] !== summary.withheld) {
-    v = summary.withheld ?? [];
-    k[3] = summary.withheld;
-    k[4] = v;
-  } else v = k[4];
+    $[0] = rows;
+    $[1] = terminalSize.columns;
+    $[2] = size;
+  } else size = $[2];
+  let { rows: rows_2, columns } = useScrollViewportSize(size);
+  let width = columns - 2 * (useHasScrollViewport() ? PANE_PADDING_X : PANE_PADDING);
+  let withheld;
+  if ($[3] !== summary.withheld) {
+    withheld = summary.withheld ?? [];
+    $[3] = summary.withheld;
+    $[4] = withheld;
+  } else withheld = $[4];
   let notes;
   let inForce;
   let standIn;
@@ -948,101 +979,104 @@ function renderCloudHookOffers(props) {
   let isIntroShown;
   let rows_3;
   if (
-    k[5] !== consent ||
-    k[6] !== hasPluginHooks ||
-    k[7] !== rows_2 ||
-    k[8] !== savedLine ||
-    k[9] !== summary ||
-    k[10] !== v ||
-    k[11] !== g
+    $[5] !== consent ||
+    $[6] !== hasPluginHooks ||
+    $[7] !== rows_2 ||
+    $[8] !== savedLine ||
+    $[9] !== summary ||
+    $[10] !== withheld ||
+    $[11] !== width
   ) {
-    let L;
-    if (k[18] !== summary.writableSources) {
-      L = summary.writableSources ?? [];
-      k[18] = summary.writableSources;
-      k[19] = L;
-    } else L = k[19];
-    let mapped = v.concat(L).map(dimSegment);
+    let writableSources;
+    if ($[18] !== summary.writableSources) {
+      writableSources = summary.writableSources ?? [];
+      $[18] = summary.writableSources;
+      $[19] = writableSources;
+    } else writableSources = $[19];
+    let mapped = withheld.concat(writableSources).map(dimSegment);
     if (summary.keptFromLaunch !== undefined)
       mapped.push({
         text: summary.keptFromLaunch,
         color: "warning",
       });
-    let Y = renderHookOriginSummary(summary, consent);
-    const W = [
+    let inForce_2 = renderHookOriginSummary(summary, consent);
+    const noteTexts = [
       ...(savedLine === undefined ? [] : [savedLine]),
       ...mapped.map(segmentText),
       ...(hasPluginHooks ? [PLUGIN_HOOKS_NOTE] : []),
-      segmentsText(Y),
+      segmentsText(inForce_2),
     ];
-    let X;
-    if (k[20] !== g) {
-      X = (ne, ce) => ne - countWrappedLines(ce, g);
-      k[20] = g;
-      k[21] = X;
-    } else X = k[21];
-    let reduced = W.reduce(X, rows_2 - 1);
-    let de = countWrappedLines(CLOUD_HOOKS_INTRO, g) + 1;
-    let se =
+    let subtractHeight;
+    if ($[20] !== width) {
+      subtractHeight = (acc, text) => acc - countWrappedLines(text, width);
+      $[20] = width;
+      $[21] = subtractHeight;
+    } else subtractHeight = $[21];
+    let availableRows = noteTexts.reduce(subtractHeight, rows_2 - 1);
+    let introRows = countWrappedLines(CLOUD_HOOKS_INTRO, width) + 1;
+    let standIn_2 =
       summary.unavailableReason !== undefined
         ? `None of this machine's hooks are offered (${summary.unavailableReason}).`
         : summary.rows.length === 0
           ? "This machine has no hooks a cloud session could use."
           : undefined;
-    let ke = se === undefined ? summary.rows.length : 0;
-    let me =
-      se === undefined
-        ? summary.rows.slice(0, ROW_AGE_WIDTH).map((le) => classifyHookLocation(le, consent, summary))
+    let total_2 = standIn_2 === undefined ? summary.rows.length : 0;
+    let hookRows =
+      standIn_2 === undefined
+        ? summary.rows.slice(0, ROW_AGE_WIDTH).map((row) => classifyHookLocation(row, consent, summary))
         : [];
-    let ie;
-    if (k[22] !== g) {
-      ie = (V) => {
-        let { status, pieces } = V;
-        return countWrappedLines(`${STATUS_CONFIG[status].icon} ${segmentsText(pieces)}`, g);
+    let measureRow;
+    if ($[22] !== width) {
+      measureRow = (row) => {
+        let { status, pieces } = row;
+        return countWrappedLines(`${STATUS_CONFIG[status].icon} ${segmentsText(pieces)}`, width);
       };
-      k[22] = g;
-      k[23] = ie;
-    } else ie = k[23];
-    let mapped_2 = me.map(ie);
-    let U = fittingRowCount(mapped_2, ke, reduced - de);
-    let ge = se === undefined ? U > 0 : reduced - de - countWrappedLines(se, g) >= ROW_NAME_WIDTH;
+      $[22] = width;
+      $[23] = measureRow;
+    } else measureRow = $[23];
+    let heights = hookRows.map(measureRow);
+    let visibleCount = fittingRowCount(heights, total_2, availableRows - introRows);
+    let showIntro =
+      standIn_2 === undefined
+        ? visibleCount > 0
+        : availableRows - introRows - countWrappedLines(standIn_2, width) >= ROW_NAME_WIDTH;
     notes = mapped;
-    inForce = Y;
-    standIn = se;
-    total = ke;
-    isIntroShown = ge;
-    rows_3 = me.slice(0, ge ? U : fittingRowCount(mapped_2, ke, reduced));
-    k[5] = consent;
-    k[6] = hasPluginHooks;
-    k[7] = rows_2;
-    k[8] = savedLine;
-    k[9] = summary;
-    k[10] = v;
-    k[11] = g;
-    k[12] = notes;
-    k[13] = inForce;
-    k[14] = standIn;
-    k[15] = total;
-    k[16] = isIntroShown;
-    k[17] = rows_3;
+    inForce = inForce_2;
+    standIn = standIn_2;
+    total = total_2;
+    isIntroShown = showIntro;
+    rows_3 = hookRows.slice(0, showIntro ? visibleCount : fittingRowCount(heights, total_2, availableRows));
+    $[5] = consent;
+    $[6] = hasPluginHooks;
+    $[7] = rows_2;
+    $[8] = savedLine;
+    $[9] = summary;
+    $[10] = withheld;
+    $[11] = width;
+    $[12] = notes;
+    $[13] = inForce;
+    $[14] = standIn;
+    $[15] = total;
+    $[16] = isIntroShown;
+    $[17] = rows_3;
   } else {
-    notes = k[12];
-    inForce = k[13];
-    standIn = k[14];
-    total = k[15];
-    isIntroShown = k[16];
-    rows_3 = k[17];
+    notes = $[12];
+    inForce = $[13];
+    standIn = $[14];
+    total = $[15];
+    isIntroShown = $[16];
+    rows_3 = $[17];
   }
-  let L;
+  let layout;
   if (
-    k[24] !== notes ||
-    k[25] !== inForce ||
-    k[26] !== standIn ||
-    k[27] !== total ||
-    k[28] !== isIntroShown ||
-    k[29] !== rows_3
+    $[24] !== notes ||
+    $[25] !== inForce ||
+    $[26] !== standIn ||
+    $[27] !== total ||
+    $[28] !== isIntroShown ||
+    $[29] !== rows_3
   ) {
-    L = {
+    layout = {
       notes,
       inForce,
       standIn,
@@ -1050,100 +1084,106 @@ function renderCloudHookOffers(props) {
       isIntroShown,
       rows: rows_3,
     };
-    k[24] = notes;
-    k[25] = inForce;
-    k[26] = standIn;
-    k[27] = total;
-    k[28] = isIntroShown;
-    k[29] = rows_3;
-    k[30] = L;
-  } else L = k[30];
-  let I = L;
-  let W;
-  if (k[31] !== I.isIntroShown) {
-    W =
-      I.isIntroShown &&
+    $[24] = notes;
+    $[25] = inForce;
+    $[26] = standIn;
+    $[27] = total;
+    $[28] = isIntroShown;
+    $[29] = rows_3;
+    $[30] = layout;
+  } else layout = $[30];
+  let layout_2 = layout;
+  let introText;
+  if ($[31] !== layout_2.isIntroShown) {
+    introText =
+      layout_2.isIntroShown &&
       jsxProd_default(Text, {
         dimColor: true,
         children: CLOUD_HOOKS_INTRO,
       });
-    k[31] = I.isIntroShown;
-    k[32] = W;
-  } else W = k[32];
-  const marginTop = I.isIntroShown ? 1 : 0;
-  let ie;
-  if (k[33] !== I.rows || k[34] !== I.standIn || k[35] !== I.total) {
-    ie =
-      I.standIn !== undefined
+    $[31] = layout_2.isIntroShown;
+    $[32] = introText;
+  } else introText = $[32];
+  const marginTop = layout_2.isIntroShown ? 1 : 0;
+  let rowsView;
+  if ($[33] !== layout_2.rows || $[34] !== layout_2.standIn || $[35] !== layout_2.total) {
+    rowsView =
+      layout_2.standIn !== undefined
         ? jsxProd_default(Text, {
             dimColor: true,
-            children: I.standIn,
+            children: layout_2.standIn,
           })
         : jsxProd_default_2(Fragment, {
             children: [
-              I.rows.map(renderStatusLine),
+              layout_2.rows.map(renderStatusLine),
               jsxProd_default(OverflowHint, {
-                count: I.total - I.rows.length,
+                count: layout_2.total - layout_2.rows.length,
                 unit: "hook",
               }),
             ],
           });
-    k[33] = I.rows;
-    k[34] = I.standIn;
-    k[35] = I.total;
-    k[36] = ie;
-  } else ie = k[36];
-  let V;
-  if (k[37] !== I.notes) {
-    V = I.notes.map(renderSegment);
-    k[37] = I.notes;
-    k[38] = V;
-  } else V = k[38];
-  let pe;
-  if (k[39] !== hasPluginHooks) {
-    pe = hasPluginHooks && jsxProd_default(PluginHooksNote, {});
-    k[39] = hasPluginHooks;
-    k[40] = pe;
-  } else pe = k[40];
-  let Se;
-  if (k[41] !== I.inForce) {
-    Se = jsxProd_default(Text, {
+    $[33] = layout_2.rows;
+    $[34] = layout_2.standIn;
+    $[35] = layout_2.total;
+    $[36] = rowsView;
+  } else rowsView = $[36];
+  let notesView;
+  if ($[37] !== layout_2.notes) {
+    notesView = layout_2.notes.map(renderSegment);
+    $[37] = layout_2.notes;
+    $[38] = notesView;
+  } else notesView = $[38];
+  let pluginNote;
+  if ($[39] !== hasPluginHooks) {
+    pluginNote = hasPluginHooks && jsxProd_default(PluginHooksNote, {});
+    $[39] = hasPluginHooks;
+    $[40] = pluginNote;
+  } else pluginNote = $[40];
+  let inForceView;
+  if ($[41] !== layout_2.inForce) {
+    inForceView = jsxProd_default(Text, {
       children: jsxProd_default(TextPieces, {
-        pieces: I.inForce,
+        pieces: layout_2.inForce,
       }),
     });
-    k[41] = I.inForce;
-    k[42] = Se;
-  } else Se = k[42];
-  let He;
-  if (k[43] !== marginTop || k[44] !== ie || k[45] !== V || k[46] !== pe || k[47] !== Se) {
-    He = jsxProd_default_2(Box, {
+    $[41] = layout_2.inForce;
+    $[42] = inForceView;
+  } else inForceView = $[42];
+  let content;
+  if (
+    $[43] !== marginTop ||
+    $[44] !== rowsView ||
+    $[45] !== notesView ||
+    $[46] !== pluginNote ||
+    $[47] !== inForceView
+  ) {
+    content = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginTop,
-      children: [ie, V, pe, Se],
+      children: [rowsView, notesView, pluginNote, inForceView],
     });
-    k[43] = marginTop;
-    k[44] = ie;
-    k[45] = V;
-    k[46] = pe;
-    k[47] = Se;
-    k[48] = He;
-  } else He = k[48];
-  let he;
-  if (k[49] !== W || k[50] !== He) {
-    he = jsxProd_default_2(Box, {
+    $[43] = marginTop;
+    $[44] = rowsView;
+    $[45] = notesView;
+    $[46] = pluginNote;
+    $[47] = inForceView;
+    $[48] = content;
+  } else content = $[48];
+  let root;
+  if ($[49] !== introText || $[50] !== content) {
+    root = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [W, He],
+      children: [introText, content],
     });
-    k[49] = W;
-    k[50] = He;
-    k[51] = he;
-  } else he = k[51];
-  return he;
+    $[49] = introText;
+    $[50] = content;
+    $[51] = root;
+  } else root = $[51];
+  return root;
 }
 //@ chunk-bajxb7bf.js:33547-33663 placement
 function TextPieces({ pieces }) {
-  return pieces.map((piece, h) =>
+  return pieces.map((piece, index) =>
     jsxProd_default(
       Text,
       {
@@ -1152,32 +1192,32 @@ function TextPieces({ pieces }) {
         color: piece.color,
         children: piece.text,
       },
-      h,
+      index,
     ),
   );
 }
 //@ chunk-bajxb7bf.js:33663-33772 placement
-function fittingRowCount(m, o, h) {
-  let i = 0;
-  let d = 0;
-  for (let u of m) {
-    i += u;
-    let t = d < ROW_COMMAND_WIDTH ? ROW_MATCHER_WIDTH : ROW_NAME_WIDTH;
-    if (i + (d + 1 < o ? 1 : 0) > h - t) break;
-    d++;
+function fittingRowCount(heights, totalRows, availableRows) {
+  let usedRows = 0;
+  let shownCount = 0;
+  for (let height of heights) {
+    usedRows += height;
+    let gutterWidth = shownCount < ROW_COMMAND_WIDTH ? ROW_MATCHER_WIDTH : ROW_NAME_WIDTH;
+    if (usedRows + (shownCount + 1 < totalRows ? 1 : 0) > availableRows - gutterWidth) break;
+    shownCount++;
   }
-  return d;
+  return shownCount;
 }
 //@ chunk-bajxb7bf.js:33772-33822 placement
-function segmentsText(m) {
-  return m.map((o) => o.text).join("");
+function segmentsText(segments) {
+  return segments.map((segment) => segment.text).join("");
 }
 //@ chunk-bajxb7bf.js:33822-33888 placement
-function countWrappedLines(m, o) {
+function countWrappedLines(text, width) {
   return (
     1 +
     countCharInString(
-      wrapText(expandTabsInText(m), Math.max(1, o), "wrap"),
+      wrapText(expandTabsInText(text), Math.max(1, width), "wrap"),
       `
 `,
     )
@@ -1185,13 +1225,13 @@ function countWrappedLines(m, o) {
 }
 //@ chunk-bajxb7bf.js:33888-34513 placement
 function renderHookOriginSummary(summary, consent) {
-  let h = {
+  let prefix = {
     text: "Hooks from this machine: ",
   };
   switch (consent) {
     case "accepted":
       return [
-        h,
+        prefix,
         {
           text: "on",
           bold: true,
@@ -1206,7 +1246,7 @@ function renderHookOriginSummary(summary, consent) {
       ];
     case "declined":
       return [
-        h,
+        prefix,
         {
           text: "off",
           bold: true,
@@ -1219,7 +1259,7 @@ function renderHookOriginSummary(summary, consent) {
     case "unset":
       return summary.storedAnswerNotUsed !== undefined
         ? [
-            h,
+            prefix,
             {
               text: "saved answer not used",
               bold: true,
@@ -1230,7 +1270,7 @@ function renderHookOriginSummary(summary, consent) {
             },
           ]
         : [
-            h,
+            prefix,
             {
               text: "not decided",
               bold: true,
@@ -1243,48 +1283,49 @@ function renderHookOriginSummary(summary, consent) {
   }
 }
 //@ chunk-bajxb7bf.js:34513-35101 placement
-function describeCloudAcceptance(m, o) {
-  switch (m.where) {
+function describeCloudAcceptance(row, consent) {
+  switch (row.where) {
     case "cloud":
-      return o === "accepted"
+      return consent === "accepted"
         ? "runs in the cloud"
-        : o === "declined"
+        : consent === "declined"
           ? "would run in the cloud (hooks from this machine are off)"
           : "will run in the cloud once you allow it";
     case "local":
-      return m.reason === "event_runs_locally"
+      return row.reason === "event_runs_locally"
         ? "is not sent to the cloud"
-        : m.reason === "duplicate"
+        : row.reason === "duplicate"
           ? "duplicates a row above"
           : "does not run for cloud work";
     case "here":
-      return o === "declined"
+      return consent === "declined"
         ? "does not run (hooks from this machine are off)"
-        : `${o === "accepted" ? "runs here when the session asks" : "will run here once you allow it"}${m.exceptAfterEdits ? ", except after cloud file edits" : ""}`;
+        : `${consent === "accepted" ? "runs here when the session asks" : "will run here once you allow it"}${row.exceptAfterEdits ? ", except after cloud file edits" : ""}`;
   }
 }
 //@ chunk-bajxb7bf.js:35101-35863 placement
-function classifyHookLocation(m, consent, { notInForce, standingIsIdle }) {
-  let d = m.where === "here" && consent === "accepted" && notInForce === true;
-  let u = m.matcher !== undefined && m.matcher !== "" ? `${m.event}:${m.matcher}` : m.event;
+function classifyHookLocation(row, consent, { notInForce, standingIsIdle }) {
+  let isNotRunning = row.where === "here" && consent === "accepted" && notInForce === true;
+  let eventLabel =
+    row.matcher !== undefined && row.matcher !== "" ? `${row.event}:${row.matcher}` : row.event;
   return {
-    status: m.where === "local" || consent !== "accepted" || d ? "pending" : "success",
+    status: row.where === "local" || consent !== "accepted" || isNotRunning ? "pending" : "success",
     pieces: [
       {
-        text: m.label,
+        text: row.label,
         bold: true,
       },
       {
         text: " ",
       },
       {
-        text: `\xB7 ${u} \xB7 ${HOOK_SOURCE_LABELS[m.source].tag} \xB7`,
+        text: `\xB7 ${eventLabel} \xB7 ${HOOK_SOURCE_LABELS[row.source].tag} \xB7`,
         dimColor: true,
       },
       {
-        text: ` ${describeCloudAcceptance(m, consent)}`,
+        text: ` ${describeCloudAcceptance(row, consent)}`,
       },
-      ...(consent !== "declined" && m.where === "here" && m.optedIn
+      ...(consent !== "declined" && row.where === "here" && row.optedIn
         ? [
             {
               text: ', only because its entry is marked cloud: "device"',
@@ -1292,15 +1333,15 @@ function classifyHookLocation(m, consent, { notInForce, standingIsIdle }) {
             },
           ]
         : []),
-      ...(m.where === "local"
+      ...(row.where === "local"
         ? [
             {
-              text: `: ${m.why}`,
+              text: `: ${row.why}`,
               dimColor: true,
             },
           ]
         : []),
-      ...(m.where !== "local" && m.fromWritableFile
+      ...(row.where !== "local" && row.fromWritableFile
         ? [
             {
               text: " (its settings file can be written by the cloud session; what was registered when you attached is what runs)",
@@ -1308,7 +1349,7 @@ function classifyHookLocation(m, consent, { notInForce, standingIsIdle }) {
             },
           ]
         : []),
-      ...(d ? [segmentStyle(" \xB7 not running now", standingIsIdle)] : []),
+      ...(isNotRunning ? [segmentStyle(" \xB7 not running now", standingIsIdle)] : []),
     ],
   };
 }
@@ -1326,55 +1367,55 @@ function segmentStyle(text, standingIsIdle) {
 }
 //@ chunk-bajxb7bf.js:35935-36254 placement
 function useEnterEscape(props) {
-  let d = w(8);
-  let { enter, escape: h } = props;
+  let $ = useMemoCache(8);
+  let { enter, escape: escapeAction } = props;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let u;
-  if (d[0] !== enter || d[1] !== isScreenReaderEnabled) {
-    u =
+  let enterHint;
+  if ($[0] !== enter || $[1] !== isScreenReaderEnabled) {
+    enterHint =
       !isScreenReaderEnabled &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "enter",
         action: enter,
       });
-    d[0] = enter;
-    d[1] = isScreenReaderEnabled;
-    d[2] = u;
-  } else u = d[2];
-  let t;
-  if (d[3] !== h) {
-    t = jsxProd_default(KeyboardShortcutHint, {
+    $[0] = enter;
+    $[1] = isScreenReaderEnabled;
+    $[2] = enterHint;
+  } else enterHint = $[2];
+  let escapeHint;
+  if ($[3] !== escapeAction) {
+    escapeHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
-      action: h,
+      action: escapeAction,
     });
-    d[3] = h;
-    d[4] = t;
-  } else t = d[4];
-  let f;
-  if (d[5] !== u || d[6] !== t) {
-    f = jsxProd_default_2(Byline, {
-      children: [u, t],
+    $[3] = escapeAction;
+    $[4] = escapeHint;
+  } else escapeHint = $[4];
+  let hints;
+  if ($[5] !== enterHint || $[6] !== escapeHint) {
+    hints = jsxProd_default_2(Byline, {
+      children: [enterHint, escapeHint],
     });
-    d[5] = u;
-    d[6] = t;
-    d[7] = f;
-  } else f = d[7];
-  return f;
+    $[5] = enterHint;
+    $[6] = escapeHint;
+    $[7] = hints;
+  } else hints = $[7];
+  return hints;
 }
 //@ chunk-bajxb7bf.js:36254-36286 placement
-function hooksOf(co) {
-  return co.hooks;
+function hooksOf(entry) {
+  return entry.hooks;
 }
 //@ chunk-bajxb7bf.js:36286-36326 placement
-function lowercase(vt) {
-  return vt.toLowerCase();
+function lowercase(text) {
+  return text.toLowerCase();
 }
 //@ chunk-bajxb7bf.js:36326-40626 placement
 /**
  * /hooks 首页：列出事件及其钩子数量、托管钩子提示与云会话钩子状态。
  */
 function HooksOverview(props) {
-  let g = w(70);
+  let $ = useMemoCache(70);
   let {
     hookEventMetadata,
     hooksByEventAndMatcher,
@@ -1388,84 +1429,86 @@ function HooksOverview(props) {
     onOpenEvents,
     onCancel,
   } = props;
-  let v;
-  let P;
-  let _;
-  let b;
+  let listComponent;
+  let contentBox;
+  let dialogComponent;
+  let flatHooks;
   let defaultFocusIndex_2;
-  let B;
-  let N;
+  let policyNotice;
+  let readOnlyNote;
   let title;
   let subtitle;
   let onCancel_2;
   let inputGuide;
   let onFocus;
   let onSelect;
-  let ce;
-  let ue;
+  let cloudDecisionRow;
+  let eventRows;
   let flexDirection;
   let gap;
-  let ke;
-  let le;
+  let cloudPanel;
+  let safeModeNotice;
   if (
-    g[0] !== cloudSessionPanel ||
-    g[1] !== defaultFocusIndex ||
-    g[2] !== hookEventMetadata ||
-    g[3] !== hooksByEventAndMatcher ||
-    g[4] !== onCancel ||
-    g[5] !== onDecideCloudHooks ||
-    g[6] !== onFocusRow ||
-    g[7] !== onOpenEvents ||
-    g[8] !== onSelectHook ||
-    g[9] !== restrictedByPolicy ||
-    g[10] !== suspendedBySafeMode
+    $[0] !== cloudSessionPanel ||
+    $[1] !== defaultFocusIndex ||
+    $[2] !== hookEventMetadata ||
+    $[3] !== hooksByEventAndMatcher ||
+    $[4] !== onCancel ||
+    $[5] !== onDecideCloudHooks ||
+    $[6] !== onFocusRow ||
+    $[7] !== onOpenEvents ||
+    $[8] !== onSelectHook ||
+    $[9] !== restrictedByPolicy ||
+    $[10] !== suspendedBySafeMode
   ) {
     const entries = Object.entries(hookEventMetadata);
-    let ie;
-    if (g[30] !== hooksByEventAndMatcher) {
-      ie = (V) => {
-        let [Le, p] = V;
-        let event = Le;
-        let U = hooksByEventAndMatcher[event] ?? {};
-        let flattened = getSortedMatchersForEvent(hooksByEventAndMatcher, event).flatMap((ge) => U[ge] ?? []);
+    let eventMapper;
+    if ($[30] !== hooksByEventAndMatcher) {
+      eventMapper = (pair) => {
+        let [event, metadata] = pair;
+        let event_2 = event;
+        let byMatcher = hooksByEventAndMatcher[event_2] ?? {};
+        let flattened = getSortedMatchersForEvent(hooksByEventAndMatcher, event_2).flatMap(
+          (matcher) => byMatcher[matcher] ?? [],
+        );
         return flattened.length > 0
           ? [
               {
-                event,
-                metadata: p,
+                event: event_2,
+                metadata,
                 hooks: flattened,
               },
             ]
           : [];
       };
-      g[30] = hooksByEventAndMatcher;
-      g[31] = ie;
-    } else ie = g[31];
-    let flattened = entries.flatMap(ie);
-    b = flattened.flatMap(hooksOf);
-    let Se = onDecideCloudHooks ? 1 : 0;
-    _ = Dialog;
+      $[30] = hooksByEventAndMatcher;
+      $[31] = eventMapper;
+    } else eventMapper = $[31];
+    let flattened = entries.flatMap(eventMapper);
+    flatHooks = flattened.flatMap(hooksOf);
+    let cloudRowCount = onDecideCloudHooks ? 1 : 0;
+    dialogComponent = Dialog;
     title = "Hooks";
     subtitle =
-      b.length === 0
+      flatHooks.length === 0
         ? restrictedByPolicy
           ? "managed hooks only"
           : "no hooks yet"
-        : `${b.length} ${plural(b.length, "hook")} on ${flattened.length} ${plural(flattened.length, "event")}`;
+        : `${flatHooks.length} ${plural(flatHooks.length, "hook")} on ${flattened.length} ${plural(flattened.length, "event")}`;
     onCancel_2 = onCancel;
-    if (g[32] === MEMO_CACHE_SENTINEL) {
+    if ($[32] === MEMO_CACHE_SENTINEL) {
       inputGuide = jsxProd_default(useEnterEscape, {
         enter: "view",
         escape: "close",
       });
-      g[32] = inputGuide;
-    } else inputGuide = g[32];
-    P = Box;
+      $[32] = inputGuide;
+    } else inputGuide = $[32];
+    contentBox = Box;
     flexDirection = "column";
     gap = 1;
-    ke = cloudSessionPanel;
-    if (g[33] !== suspendedBySafeMode) {
-      le =
+    cloudPanel = cloudSessionPanel;
+    if ($[33] !== suspendedBySafeMode) {
+      safeModeNotice =
         suspendedBySafeMode &&
         jsxProd_default_2(Box, {
           flexDirection: "column",
@@ -1487,11 +1530,11 @@ function HooksOverview(props) {
             }),
           ],
         });
-      g[33] = suspendedBySafeMode;
-      g[34] = le;
-    } else le = g[34];
-    if (g[35] !== restrictedByPolicy) {
-      B =
+      $[33] = suspendedBySafeMode;
+      $[34] = safeModeNotice;
+    } else safeModeNotice = $[34];
+    if ($[35] !== restrictedByPolicy) {
+      policyNotice =
         restrictedByPolicy &&
         jsxProd_default_2(Box, {
           flexDirection: "column",
@@ -1507,11 +1550,11 @@ function HooksOverview(props) {
             }),
           ],
         });
-      g[35] = restrictedByPolicy;
-      g[36] = B;
-    } else B = g[36];
-    if (g[37] === MEMO_CACHE_SENTINEL) {
-      N = jsxProd_default_2(Text, {
+      $[35] = restrictedByPolicy;
+      $[36] = policyNotice;
+    } else policyNotice = $[36];
+    if ($[37] === MEMO_CACHE_SENTINEL) {
+      readOnlyNote = jsxProd_default_2(Text, {
         dimColor: true,
         children: [
           "This menu is read-only. To add or change a hook, edit settings.json or ask Claude.",
@@ -1522,25 +1565,25 @@ function HooksOverview(props) {
           }),
         ],
       });
-      g[37] = N;
-    } else N = g[37];
-    v = OrderedListWithItem;
+      $[37] = readOnlyNote;
+    } else readOnlyNote = $[37];
+    listComponent = OrderedListWithItem;
     defaultFocusIndex_2 = defaultFocusIndex;
     onFocus = onFocusRow;
-    onSelect = (He) => {
-      if (He < Se) {
+    onSelect = (index) => {
+      if (index < cloudRowCount) {
         onDecideCloudHooks?.();
         return;
       }
-      let he = b[He - Se];
-      if (he) {
-        onSelectHook(he);
+      let hook = flatHooks[index - cloudRowCount];
+      if (hook) {
+        onSelectHook(hook);
         return;
       }
       onOpenEvents();
     };
-    if (g[38] !== onDecideCloudHooks) {
-      ce =
+    if ($[38] !== onDecideCloudHooks) {
+      cloudDecisionRow =
         onDecideCloudHooks &&
         jsxProd_default(
           merged.Item,
@@ -1564,13 +1607,15 @@ function HooksOverview(props) {
           },
           "decide-cloud-hooks",
         );
-      g[38] = onDecideCloudHooks;
-      g[39] = ce;
-    } else ce = g[39];
-    let V;
-    if (g[40] !== onDecideCloudHooks) {
-      V = (xe, Mo) => [
-        ...(Mo > 0 || onDecideCloudHooks ? [jsxProd_default(merged.Heading, {}, `${xe.event}-gap`)] : []),
+      $[38] = onDecideCloudHooks;
+      $[39] = cloudDecisionRow;
+    } else cloudDecisionRow = $[39];
+    let eventRowMapper;
+    if ($[40] !== onDecideCloudHooks) {
+      eventRowMapper = (eventGroup, eventIndex) => [
+        ...(eventIndex > 0 || onDecideCloudHooks
+          ? [jsxProd_default(merged.Heading, {}, `${eventGroup.event}-gap`)]
+          : []),
         jsxProd_default(
           merged.Heading,
           {
@@ -1579,18 +1624,18 @@ function HooksOverview(props) {
               children: [
                 jsxProd_default(Text, {
                   bold: true,
-                  children: xe.event,
+                  children: eventGroup.event,
                 }),
                 jsxProd_default_2(Text, {
                   dimColor: true,
-                  children: ["  ", xe.metadata.summary.replace(/^\p{Lu}(?=\p{Ll}|\s)/u, lowercase)],
+                  children: ["  ", eventGroup.metadata.summary.replace(/^\p{Lu}(?=\p{Ll}|\s)/u, lowercase)],
                 }),
               ],
             }),
           },
-          `${xe.event}-heading`,
+          `${eventGroup.event}-heading`,
         ),
-        ...xe.hooks.map((hook, ao) =>
+        ...eventGroup.hooks.map((hook, hookIndex) =>
           jsxProd_default(
             OrderedListWithItem.Item,
             {
@@ -1607,173 +1652,174 @@ function HooksOverview(props) {
                 hook.config.type,
               ],
             },
-            `${xe.event}-${ao}`,
+            `${eventGroup.event}-${hookIndex}`,
           ),
         ),
       ];
-      g[40] = onDecideCloudHooks;
-      g[41] = V;
-    } else V = g[41];
-    ue = flattened.flatMap(V);
-    g[0] = cloudSessionPanel;
-    g[1] = defaultFocusIndex;
-    g[2] = hookEventMetadata;
-    g[3] = hooksByEventAndMatcher;
-    g[4] = onCancel;
-    g[5] = onDecideCloudHooks;
-    g[6] = onFocusRow;
-    g[7] = onOpenEvents;
-    g[8] = onSelectHook;
-    g[9] = restrictedByPolicy;
-    g[10] = suspendedBySafeMode;
-    g[11] = v;
-    g[12] = P;
-    g[13] = _;
-    g[14] = b;
-    g[15] = defaultFocusIndex_2;
-    g[16] = B;
-    g[17] = N;
-    g[18] = title;
-    g[19] = subtitle;
-    g[20] = onCancel_2;
-    g[21] = inputGuide;
-    g[22] = onFocus;
-    g[23] = onSelect;
-    g[24] = ce;
-    g[25] = ue;
-    g[26] = flexDirection;
-    g[27] = gap;
-    g[28] = ke;
-    g[29] = le;
+      $[40] = onDecideCloudHooks;
+      $[41] = eventRowMapper;
+    } else eventRowMapper = $[41];
+    eventRows = flattened.flatMap(eventRowMapper);
+    $[0] = cloudSessionPanel;
+    $[1] = defaultFocusIndex;
+    $[2] = hookEventMetadata;
+    $[3] = hooksByEventAndMatcher;
+    $[4] = onCancel;
+    $[5] = onDecideCloudHooks;
+    $[6] = onFocusRow;
+    $[7] = onOpenEvents;
+    $[8] = onSelectHook;
+    $[9] = restrictedByPolicy;
+    $[10] = suspendedBySafeMode;
+    $[11] = listComponent;
+    $[12] = contentBox;
+    $[13] = dialogComponent;
+    $[14] = flatHooks;
+    $[15] = defaultFocusIndex_2;
+    $[16] = policyNotice;
+    $[17] = readOnlyNote;
+    $[18] = title;
+    $[19] = subtitle;
+    $[20] = onCancel_2;
+    $[21] = inputGuide;
+    $[22] = onFocus;
+    $[23] = onSelect;
+    $[24] = cloudDecisionRow;
+    $[25] = eventRows;
+    $[26] = flexDirection;
+    $[27] = gap;
+    $[28] = cloudPanel;
+    $[29] = safeModeNotice;
   } else {
-    v = g[11];
-    P = g[12];
-    _ = g[13];
-    b = g[14];
-    defaultFocusIndex_2 = g[15];
-    B = g[16];
-    N = g[17];
-    title = g[18];
-    subtitle = g[19];
-    onCancel_2 = g[20];
-    inputGuide = g[21];
-    onFocus = g[22];
-    onSelect = g[23];
-    ce = g[24];
-    ue = g[25];
-    flexDirection = g[26];
-    gap = g[27];
-    ke = g[28];
-    le = g[29];
+    listComponent = $[11];
+    contentBox = $[12];
+    dialogComponent = $[13];
+    flatHooks = $[14];
+    defaultFocusIndex_2 = $[15];
+    policyNotice = $[16];
+    readOnlyNote = $[17];
+    title = $[18];
+    subtitle = $[19];
+    onCancel_2 = $[20];
+    inputGuide = $[21];
+    onFocus = $[22];
+    onSelect = $[23];
+    cloudDecisionRow = $[24];
+    eventRows = $[25];
+    flexDirection = $[26];
+    gap = $[27];
+    cloudPanel = $[28];
+    safeModeNotice = $[29];
   }
-  let me;
-  if (g[42] !== b.length || g[43] !== onDecideCloudHooks) {
-    me = (b.length > 0 || onDecideCloudHooks) && jsxProd_default(merged.Heading, {}, "events-gap");
-    g[42] = b.length;
-    g[43] = onDecideCloudHooks;
-    g[44] = me;
-  } else me = g[44];
-  let ie;
-  if (g[45] === MEMO_CACHE_SENTINEL) {
-    ie = jsxProd_default(
+  let eventsGap;
+  if ($[42] !== flatHooks.length || $[43] !== onDecideCloudHooks) {
+    eventsGap =
+      (flatHooks.length > 0 || onDecideCloudHooks) && jsxProd_default(merged.Heading, {}, "events-gap");
+    $[42] = flatHooks.length;
+    $[43] = onDecideCloudHooks;
+    $[44] = eventsGap;
+  } else eventsGap = $[44];
+  let allEventsRow;
+  if ($[45] === MEMO_CACHE_SENTINEL) {
+    allEventsRow = jsxProd_default(
       merged.Item,
       {
         children: jsxProd_default(AllEventsLabel, {}),
       },
       "events",
     );
-    g[45] = ie;
-  } else ie = g[45];
-  let V;
+    $[45] = allEventsRow;
+  } else allEventsRow = $[45];
+  let list;
   if (
-    g[46] !== v ||
-    g[47] !== defaultFocusIndex_2 ||
-    g[48] !== me ||
-    g[49] !== onFocus ||
-    g[50] !== onSelect ||
-    g[51] !== ce ||
-    g[52] !== ue
+    $[46] !== listComponent ||
+    $[47] !== defaultFocusIndex_2 ||
+    $[48] !== eventsGap ||
+    $[49] !== onFocus ||
+    $[50] !== onSelect ||
+    $[51] !== cloudDecisionRow ||
+    $[52] !== eventRows
   ) {
-    V = jsxProd_default_2(v, {
+    list = jsxProd_default_2(listComponent, {
       defaultFocusIndex: defaultFocusIndex_2,
       onFocus,
       onSelect,
-      children: [ce, ue, me, ie],
+      children: [cloudDecisionRow, eventRows, eventsGap, allEventsRow],
     });
-    g[46] = v;
-    g[47] = defaultFocusIndex_2;
-    g[48] = me;
-    g[49] = onFocus;
-    g[50] = onSelect;
-    g[51] = ce;
-    g[52] = ue;
-    g[53] = V;
-  } else V = g[53];
+    $[46] = listComponent;
+    $[47] = defaultFocusIndex_2;
+    $[48] = eventsGap;
+    $[49] = onFocus;
+    $[50] = onSelect;
+    $[51] = cloudDecisionRow;
+    $[52] = eventRows;
+    $[53] = list;
+  } else list = $[53];
   let children;
   if (
-    g[54] !== P ||
-    g[55] !== B ||
-    g[56] !== N ||
-    g[57] !== V ||
-    g[58] !== flexDirection ||
-    g[59] !== gap ||
-    g[60] !== ke ||
-    g[61] !== le
+    $[54] !== contentBox ||
+    $[55] !== policyNotice ||
+    $[56] !== readOnlyNote ||
+    $[57] !== list ||
+    $[58] !== flexDirection ||
+    $[59] !== gap ||
+    $[60] !== cloudPanel ||
+    $[61] !== safeModeNotice
   ) {
-    children = jsxProd_default_2(P, {
+    children = jsxProd_default_2(contentBox, {
       flexDirection,
       gap,
-      children: [ke, le, B, N, V],
+      children: [cloudPanel, safeModeNotice, policyNotice, readOnlyNote, list],
     });
-    g[54] = P;
-    g[55] = B;
-    g[56] = N;
-    g[57] = V;
-    g[58] = flexDirection;
-    g[59] = gap;
-    g[60] = ke;
-    g[61] = le;
-    g[62] = children;
-  } else children = g[62];
-  let je;
+    $[54] = contentBox;
+    $[55] = policyNotice;
+    $[56] = readOnlyNote;
+    $[57] = list;
+    $[58] = flexDirection;
+    $[59] = gap;
+    $[60] = cloudPanel;
+    $[61] = safeModeNotice;
+    $[62] = children;
+  } else children = $[62];
+  let dialog;
   if (
-    g[63] !== _ ||
-    g[64] !== title ||
-    g[65] !== subtitle ||
-    g[66] !== onCancel_2 ||
-    g[67] !== inputGuide ||
-    g[68] !== children
+    $[63] !== dialogComponent ||
+    $[64] !== title ||
+    $[65] !== subtitle ||
+    $[66] !== onCancel_2 ||
+    $[67] !== inputGuide ||
+    $[68] !== children
   ) {
-    je = jsxProd_default(_, {
+    dialog = jsxProd_default(dialogComponent, {
       title,
       subtitle,
       onCancel: onCancel_2,
       inputGuide,
       children,
     });
-    g[63] = _;
-    g[64] = title;
-    g[65] = subtitle;
-    g[66] = onCancel_2;
-    g[67] = inputGuide;
-    g[68] = children;
-    g[69] = je;
-  } else je = g[69];
-  return je;
+    $[63] = dialogComponent;
+    $[64] = title;
+    $[65] = subtitle;
+    $[66] = onCancel_2;
+    $[67] = inputGuide;
+    $[68] = children;
+    $[69] = dialog;
+  } else dialog = $[69];
+  return dialog;
 }
 //@ chunk-bajxb7bf.js:40626-40776 placement
 function AllEventsLabel() {
-  let h = w(2);
+  let $ = useMemoCache(2);
   const color = isMenuOpen() ? "suggestion" : undefined;
-  let i;
-  if (h[0] !== color) {
-    i = jsxProd_default(Text, {
+  let label;
+  if ($[0] !== color) {
+    label = jsxProd_default(Text, {
       color,
       children: "All events",
     });
-    h[0] = color;
-    h[1] = i;
-  } else i = h[1];
-  return i;
+    $[0] = color;
+    $[1] = label;
+  } else label = $[1];
+  return label;
 }
 export { useEnterEscape, buildCloudHookRows, renderCloudSessionBadge, HooksOverview, describeWhereHookRuns };

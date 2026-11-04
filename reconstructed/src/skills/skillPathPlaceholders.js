@@ -24,25 +24,25 @@ var SKILL_DIR_REF_RE = /\bCLAUDE_SKILL_DIR\b/;
 /**
  * 替换技能正文中的 ${CLAUDE_SKILL_DIR}、${CLAUDE_PROJECT_DIR}、${CLAUDE_SESSION_ID}、${CLAUDE_EFFORT}。
  */
-function expandSkillPlaceholders(e, { baseDir, loadedFrom, effortLevel }, h = (y) => y) {
-  let y = e;
+function expandSkillPlaceholders(text, { baseDir, loadedFrom, effortLevel }, resolve = (value) => value) {
+  let expanded = text;
   if (baseDir) {
-    let w = h(identityPath_2(baseDir));
-    y = y.replaceAll("${CLAUDE_SKILL_DIR}", () => w);
+    let skillDir = resolve(identityPath_2(baseDir));
+    expanded = expanded.replaceAll("${CLAUDE_SKILL_DIR}", () => skillDir);
   }
   if (
     !isSkillShownToModel({
       loadedFrom,
     })
   ) {
-    y = y.replace(/\$\{CLAUDE_PROJECT_DIR\}/g, () =>
-      h(identityPath_2(getProjectConfigRoot() ?? getProjectRoot())),
+    expanded = expanded.replace(/\$\{CLAUDE_PROJECT_DIR\}/g, () =>
+      resolve(identityPath_2(getProjectConfigRoot() ?? getProjectRoot())),
     );
-    let w = h(getSessionId());
-    y = y.replace(/\$\{CLAUDE_SESSION_ID\}/g, () => w);
+    let sessionId = resolve(getSessionId());
+    expanded = expanded.replace(/\$\{CLAUDE_SESSION_ID\}/g, () => sessionId);
   }
-  let S = h(effortLevel);
-  return y.replaceAll("${CLAUDE_EFFORT}", () => S);
+  let effort = resolve(effortLevel);
+  return expanded.replaceAll("${CLAUDE_EFFORT}", () => effort);
 }
 export {
   SKILL_DIR_PLACEHOLDER,

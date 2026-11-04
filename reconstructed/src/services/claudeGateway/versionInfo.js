@@ -18,10 +18,10 @@ import { getProxyFetchOptions } from "../../utils/proxy.js";
 /**
  * 原样转发请求到 HTTP 上游：过滤头、User-Agent 加 cc-gateway/版本、身份与认证头，带超时；回写过滤后的响应与上游请求 id。
  */
-async function forwardRawRequest(e, t, body, o, r, user) {
-  let a = forwardedRequestParts(e);
-  let l = `${o.baseUrl.replace(/\/$/, "")}${t}${a.search}`;
-  let headers = a.headers;
+async function forwardRawRequest(request, pathname, body, upstream, ttfbMs, identity) {
+  let requestParts = forwardedRequestParts(request);
+  let targetUrl = `${upstream.baseUrl.replace(/\/$/, "")}${pathname}${requestParts.search}`;
+  let headers = requestParts.headers;
   let VERSION =
     typeof {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -46,32 +46,32 @@ async function forwardRawRequest(e, t, body, o, r, user) {
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION
       : "unknown";
-  let f = headers.get("user-agent");
-  headers.set("user-agent", f ? `${f} cc-gateway/${VERSION}` : `cc-gateway/${VERSION}`);
-  copyHeadersInto(headers, o);
-  setUserIdentityHeaders(headers, o, user);
-  await o.applyAuth(headers);
-  let h = await fetchWithAbortTimeout(
-    o.fetch ?? ssrfSafeFetch,
-    l,
+  let userAgent = headers.get("user-agent");
+  headers.set("user-agent", userAgent ? `${userAgent} cc-gateway/${VERSION}` : `cc-gateway/${VERSION}`);
+  copyHeadersInto(headers, upstream);
+  setUserIdentityHeaders(headers, upstream, identity);
+  await upstream.applyAuth(headers);
+  let upstreamResponse = await fetchWithAbortTimeout(
+    upstream.fetch ?? ssrfSafeFetch,
+    targetUrl,
     {
-      method: e.method,
+      method: request.method,
       headers,
       body,
       duplex: "half",
       ...getProxyFetchOptions({
-        url: l,
+        url: targetUrl,
       }),
       timeout: false,
     },
-    e.signal,
-    r,
+    request.signal,
+    ttfbMs,
   );
-  let response = new Response(h.body, {
-    status: h.status,
-    statusText: h.statusText,
-    headers: stripResponseHeaders(h.headers, STRIPPED_RESPONSE_HEADERS),
+  let response = new Response(upstreamResponse.body, {
+    status: upstreamResponse.status,
+    statusText: upstreamResponse.statusText,
+    headers: stripResponseHeaders(upstreamResponse.headers, STRIPPED_RESPONSE_HEADERS),
   });
-  return withUpstreamRequestIds(response, h.headers);
+  return withUpstreamRequestIds(response, upstreamResponse.headers);
 }
 export { forwardRawRequest };

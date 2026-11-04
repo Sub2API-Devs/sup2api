@@ -8,15 +8,20 @@
  * pieces: chunk-kczn6qx7.js (49)
  * attribution: placement 49
  */
-import { init_react_production, y, R, P } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  string,
+  stringSchema,
   discriminatedUnion,
-  u,
+  objectSchema,
   literal,
-  E,
-  M,
+  numberSchema,
+  booleanSchema,
   union,
 } from "../../../vendor/zod/v4/classic/schemas.js";
 import { printableStatusText } from "../../utils/teleport/cloudErrorMessage.js";
@@ -82,7 +87,7 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { ModelSelector } from "../../components/agents/ModelSelector.js";
 import { Byline } from "../../components/design-system/Byline.js";
@@ -100,11 +105,11 @@ import { Spinner } from "../../components/Spinner.js";
 //@ chunk-kczn6qx7.js:18184-18188 placement
 init_react_production();
 //@ chunk-kczn6qx7.js:18188-18212 placement
-function emptyObjectResult(i) {
+function emptyObjectResult(props) {
   return {};
 }
 //@ chunk-kczn6qx7.js:18212-18236 placement
-function emptyArrayResult(i) {
+function emptyArrayResult(props) {
   return [];
 }
 //@ chunk-kczn6qx7.js:18236-18701 placement
@@ -114,27 +119,27 @@ function emptyArrayResult(i) {
 var TELEPORT_GIT_SCHEMAS = "Anything you haven\u2019t pushed stays on this computer.";
 var GIT_MID_OPERATION_KINDS = ["rebase", "merge", "cherry-pick", "revert", "bisect"];
 var teleportPreflightSchema = DoctorLazy(() => {
-  let i = string().catch("");
-  let _ = discriminatedUnion("type", [
-    u({
+  let teleportReadme = stringSchema().catch("");
+  let sourceRevisionSchema = discriminatedUnion("type", [
+    objectSchema({
       type: literal("source_revision_not_on_remote_error"),
-      result: i,
-      revision: i,
-      default_branch: i,
+      result: teleportReadme,
+      revision: teleportReadme,
+      default_branch: teleportReadme,
     }),
-    u({
+    objectSchema({
       type: literal("source_revision_stale_on_remote_error"),
-      revision: i,
-      unpushed_commit_count: E().int().nonnegative().catch(0),
-      is_dirty: M().catch(false),
-      mid_operation: i,
+      revision: teleportReadme,
+      unpushed_commit_count: numberSchema().int().nonnegative().catch(0),
+      is_dirty: booleanSchema().catch(false),
+      mid_operation: teleportReadme,
     }),
   ]);
   return union([
-    u({
-      error: _,
-    }).transform((h) => h.error),
-    _,
+    objectSchema({
+      error: sourceRevisionSchema,
+    }).transform((gitOperationKinds) => gitOperationKinds.error),
+    sourceRevisionSchema,
   ]);
 });
 //@ chunk-kczn6qx7.js:18701-19179 placement
@@ -142,17 +147,17 @@ var teleportPreflightSchema = DoctorLazy(() => {
  * 解析服务端"源修订不在远端/远端过旧"的错误体，返回 not_on_remote / inconclusive / stale（未推送提交数、是否有改动、进行中操作）。
  */
 function parseSourceRevisionError(body) {
-  let _ = teleportPreflightSchema().safeParse(body);
-  if (!_.success) return;
-  let h = _.data;
-  let revision = normalizeBranchName(h.revision);
-  switch (h.type) {
+  let parsed = teleportPreflightSchema().safeParse(body);
+  if (!parsed.success) return;
+  let data = parsed.data;
+  let revision = normalizeBranchName(data.revision);
+  switch (data.type) {
     case "source_revision_not_on_remote_error":
-      return normalizePreflightResult(h.result) === "not_on_remote"
+      return normalizePreflightResult(data.result) === "not_on_remote"
         ? {
             kind: "not_on_remote",
             revision,
-            defaultBranch: normalizeBranchName(h.default_branch),
+            defaultBranch: normalizeBranchName(data.default_branch),
           }
         : {
             kind: "inconclusive",
@@ -162,10 +167,11 @@ function parseSourceRevisionError(body) {
       return {
         kind: "stale",
         revision,
-        unpushedCount: h.unpushed_commit_count,
-        isDirty: h.is_dirty,
+        unpushedCount: data.unpushed_commit_count,
+        isDirty: data.is_dirty,
         midOperation:
-          GIT_MID_OPERATION_KINDS.find((k) => k === normalizePreflightResult(h.mid_operation)) ?? null,
+          GIT_MID_OPERATION_KINDS.find((kind) => kind === normalizePreflightResult(data.mid_operation)) ??
+          null,
       };
   }
 }
@@ -215,64 +221,70 @@ function describeLocalWorkNotice(worktreeState) {
       ],
       covers: ["proceed_as_is", "default_branch"],
     };
-  let _ =
+  let refName =
     worktreeState.branch === null
       ? "this commit"
       : normalizeBranchName(worktreeState.branch) || "this branch";
-  let h = listUnpushedWork(worktreeState.unpushed_count, worktreeState.is_dirty, worktreeState.mid_operation);
+  let unpushed = listUnpushedWork(
+    worktreeState.unpushed_count,
+    worktreeState.is_dirty,
+    worktreeState.mid_operation,
+  );
   if (worktreeState.unpushed_count === null)
     return {
-      notice: buildStayingBehindNotice(startsFromPushedNotice(_), h),
+      notice: buildStayingBehindNotice(startsFromPushedNotice(refName), unpushed),
       covers: ["proceed_as_is", "default_branch"],
     };
-  return h.length > 0
+  return unpushed.length > 0
     ? {
-        notice: buildStayingBehindNotice(cloudStartsFromBranchText(_), h),
+        notice: buildStayingBehindNotice(cloudStartsFromBranchText(refName), unpushed),
         covers: ["proceed_as_is"],
       }
     : undefined;
 }
 //@ chunk-kczn6qx7.js:20390-20470 placement
-function normalizePreflightResult(i) {
-  return i.replace(/^REVISION_PREFLIGHT_RESULT_/, "").toLowerCase();
+function normalizePreflightResult(rawResult) {
+  return rawResult.replace(/^REVISION_PREFLIGHT_RESULT_/, "").toLowerCase();
 }
 //@ chunk-kczn6qx7.js:20470-20555 placement
-function normalizeBranchName(i) {
-  let replaced = i.replace(/^refs\/heads\//, "");
+function normalizeBranchName(rawName) {
+  let replaced = rawName.replace(/^refs\/heads\//, "");
   return /\s/u.test(replaced) ? "" : printableStatusText(replaced, "");
 }
 //@ chunk-kczn6qx7.js:20555-20636 placement
-function cloudStartsFromBranchText(i) {
-  return `The cloud session starts from ${i} as it was last pushed.`;
+function cloudStartsFromBranchText(refName) {
+  return `The cloud session starts from ${refName} as it was last pushed.`;
 }
 //@ chunk-kczn6qx7.js:20636-20776 placement
-function startsFromPushedNotice(i) {
-  return `The cloud session starts from ${i} as it was last pushed, or from the default branch if it isn\u2019t on the remote.`;
+function startsFromPushedNotice(refName) {
+  return `The cloud session starts from ${refName} as it was last pushed, or from the default branch if it isn\u2019t on the remote.`;
 }
 //@ chunk-kczn6qx7.js:20776-20997 placement
-function listUnpushedWork(i, isDirty, midOperation) {
-  let C = [
-    ...(i ? [`${i} unpushed ${i === 1 ? "commit" : "commits"}`] : []),
+function listUnpushedWork(unpushedCount, isDirty, midOperation) {
+  let items = [
+    ...(unpushedCount ? [`${unpushedCount} unpushed ${unpushedCount === 1 ? "commit" : "commits"}`] : []),
     ...(isDirty ? ["uncommitted changes"] : []),
     ...(midOperation ? [`a ${midOperation} in progress`] : []),
   ];
-  return i === null && C.length > 0 ? [...C, "anything else you haven\u2019t pushed"] : C;
+  return unpushedCount === null && items.length > 0
+    ? [...items, "anything else you haven\u2019t pushed"]
+    : items;
 }
 //@ chunk-kczn6qx7.js:20997-21176 placement
-function buildStayingBehindNotice(i, _) {
-  return _.length > 0
+function buildStayingBehindNotice(leadLine, unpushed) {
+  return unpushed.length > 0
     ? [
-        `Some changes won\u2019t come with you. ${i}`,
+        `Some changes won\u2019t come with you. ${leadLine}`,
         `Staying on this computer: ${new Intl.ListFormat("en", {
           type: "conjunction",
-        }).format(_)}.`,
+        }).format(unpushed)}.`,
       ]
-    : [i, TELEPORT_GIT_SCHEMAS];
+    : [leadLine, TELEPORT_GIT_SCHEMAS];
 }
 //@ chunk-kczn6qx7.js:21176-21224 placement
 var TENGU_TELEPORT_PERMISSION_MODE_REFUSED = "tengu_teleport_permission_mode_refused";
 //@ chunk-kczn6qx7.js:21224-23933 placement
-async function moveSessionToCloud(i) {
+async function moveSessionToCloud(options) {
   let {
     sessionId,
     baseUrl,
@@ -282,14 +294,14 @@ async function moveSessionToCloud(i) {
     outcomeBranch,
     permissionMode,
     timeoutMs = 15000,
-  } = i;
-  let N = `${baseUrl}/v1/code/sessions/${sessionId}/move-to-cloud`;
-  let D = oauthHeaders(accessToken);
-  if (trustedDeviceToken) D["X-Trusted-Device-Token"] = trustedDeviceToken;
-  let O;
+  } = options;
+  let url = `${baseUrl}/v1/code/sessions/${sessionId}/move-to-cloud`;
+  let headers = oauthHeaders(accessToken);
+  if (trustedDeviceToken) headers["X-Trusted-Device-Token"] = trustedDeviceToken;
+  let response;
   try {
-    O = await axios_default.post(
-      N,
+    response = await axios_default.post(
+      url,
       {
         environment_id: environmentId,
         ...(outcomeBranch && {
@@ -298,32 +310,32 @@ async function moveSessionToCloud(i) {
         ...(permissionMode && {
           permission_mode: permissionMode,
         }),
-        ...emptyObjectResult_2(i.sourceRevision),
-        ...emptyObjectResult_3(i.memoryMode),
-        ...(i.revisionFallback && {
-          revision_fallback: i.revisionFallback,
+        ...emptyObjectResult_2(options.sourceRevision),
+        ...emptyObjectResult_3(options.memoryMode),
+        ...(options.revisionFallback && {
+          revision_fallback: options.revisionFallback,
         }),
       },
       {
-        headers: D,
+        headers,
         timeout: timeoutMs,
-        validateStatus: (F) => F < 600,
+        validateStatus: (status) => status < 600,
       },
     );
   } catch (error) {
-    let I = error !== null && typeof error === "object" && "code" in error ? String(error.code) : "";
-    let U = I === "ENOTFOUND" || I === "ECONNREFUSED";
-    let Q = `Couldn't reach the server \u2014 ${errorMessage(error)}${U ? "" : ". The move may still have gone through \u2014 check the session in the web UI."}`;
-    if (!U) i.onMayHaveMoved?.(Q);
+    let code = error !== null && typeof error === "object" && "code" in error ? String(error.code) : "";
+    let isUnreachable = code === "ENOTFOUND" || code === "ECONNREFUSED";
+    let message = `Couldn't reach the server \u2014 ${errorMessage(error)}${isUnreachable ? "" : ". The move may still have gone through \u2014 check the session in the web UI."}`;
+    if (!isUnreachable) options.onMayHaveMoved?.(message);
     return {
       ok: false,
-      message: Q,
-      mayHaveCommitted: !U,
+      message,
+      mayHaveCommitted: !isUnreachable,
     };
   }
-  if (O.status === 200 || O.status === 201) {
-    i.onMoved?.();
-    let sessionEnvironment = readSessionEnvironment(O.data);
+  if (response.status === 200 || response.status === 201) {
+    options.onMoved?.();
+    let sessionEnvironment = readSessionEnvironment(response.data);
     let environmentKind = sessionEnvironment?.environment_kind ?? "cloud";
     let environmentId_2 = sessionEnvironment?.environment_id ?? environmentId;
     logForDebugging(
@@ -334,102 +346,106 @@ async function moveSessionToCloud(i) {
       environmentKind,
       environmentId: environmentId_2,
       sessionId,
-      ...emptyObjectResult_5(i.sourceRevision, O.data),
-      ...emptyObjectResult_4(i.memoryMode, O.data),
-      ...emptyObjectResult(O.data),
+      ...emptyObjectResult_5(options.sourceRevision, response.data),
+      ...emptyObjectResult_4(options.memoryMode, response.data),
+      ...emptyObjectResult(response.data),
     };
   }
-  if (O.status === 401 && i.onAuth401 !== undefined) {
-    let onAuth401 = i.onAuth401;
-    let I = lacksAuthorizationHeader(O.config);
-    let U;
+  if (response.status === 401 && options.onAuth401 !== undefined) {
+    let onAuth401 = options.onAuth401;
+    let headerless = lacksAuthorizationHeader(response.config);
+    let newToken;
     try {
-      U = await onAuth401(accessToken, I);
+      newToken = await onAuth401(accessToken, headerless);
     } catch (error) {
       logForDebugging(
         `[code-session] move-to-cloud ${sessionId}: the 401 handler failed, not resending: ${errorMessage(error)}`,
       );
     }
-    if (U !== undefined && (I || U !== accessToken))
+    if (newToken !== undefined && (headerless || newToken !== accessToken))
       return moveSessionToCloud({
-        ...i,
-        accessToken: U,
-        onAuth401: (Q, ne) => {
-          onAuth401(Q, ne).catch(() => {});
+        ...options,
+        accessToken: newToken,
+        onAuth401: (token, headerless) => {
+          onAuth401(token, headerless).catch(() => {});
           return Promise.resolve(undefined);
         },
       });
   }
-  let z =
-    O.status >= 500
-      ? `The server responded with ${O.status}. The move may still have gone through \u2014 check the session in the web UI.`
+  let maybeMovedMessage =
+    response.status >= 500
+      ? `The server responded with ${response.status}. The move may still have gone through \u2014 check the session in the web UI.`
       : undefined;
-  if (z !== undefined) i.onMayHaveMoved?.(z);
-  let X = extractErrorDetail(O.data) ?? "";
-  let errorReason = getErrorReason(O.data);
-  if (z === undefined && permissionMode && errorReason === "move_permission_mode_refused") {
+  if (maybeMovedMessage !== undefined) options.onMayHaveMoved?.(maybeMovedMessage);
+  let errorDetail = extractErrorDetail(response.data) ?? "";
+  let errorReason = getErrorReason(response.data);
+  if (maybeMovedMessage === undefined && permissionMode && errorReason === "move_permission_mode_refused") {
     logForDebugging(
-      `[code-session] move-to-cloud ${sessionId} refused for its permission mode (${O.status})${X ? `: ${X}` : ""}; moving without one`,
+      `[code-session] move-to-cloud ${sessionId} refused for its permission mode (${response.status})${errorDetail ? `: ${errorDetail}` : ""}; moving without one`,
     );
-    let F = await moveSessionToCloud({
-      ...i,
+    let retryResult = await moveSessionToCloud({
+      ...options,
       permissionMode: undefined,
     });
     try {
       logEvent(TENGU_TELEPORT_PERMISSION_MODE_REFUSED, {
-        retry_without_mode: lit(F.ok ? "success" : F.mayHaveCommitted ? "maybe_committed" : "failed"),
+        retry_without_mode: lit(
+          retryResult.ok ? "success" : retryResult.mayHaveCommitted ? "maybe_committed" : "failed",
+        ),
       });
     } catch {}
-    return F;
+    return retryResult;
   }
-  let Z =
-    O.status === 400 && errorReason === "session_not_bridge"
+  let alreadyMovedMessage =
+    response.status === 400 && errorReason === "session_not_bridge"
       ? "This session is already on cloud \u2014 refresh the web UI to see it."
       : undefined;
-  if (Z !== undefined) i.onMayHaveMoved?.(Z);
+  if (alreadyMovedMessage !== undefined) options.onMayHaveMoved?.(alreadyMovedMessage);
   logForDebugging(
-    `[code-session] move-to-cloud ${sessionId} failed ${O.status}${errorReason ? ` [${errorReason}]` : ""}${X ? `: ${X}` : ""}`,
+    `[code-session] move-to-cloud ${sessionId} failed ${response.status}${errorReason ? ` [${errorReason}]` : ""}${errorDetail ? `: ${errorDetail}` : ""}`,
   );
-  if (z !== undefined)
+  if (maybeMovedMessage !== undefined)
     return {
       ok: false,
-      message: z,
+      message: maybeMovedMessage,
       mayHaveCommitted: true,
     };
-  if (Z !== undefined)
+  if (alreadyMovedMessage !== undefined)
     return {
       ok: false,
-      message: Z,
+      message: alreadyMovedMessage,
       mayHaveCommitted: true,
     };
-  let plainErrorDetail = extractPlainErrorDetail(O.data);
-  let oe = /^the request was invalid\.?$/i.test(plainErrorDetail ?? "") ? undefined : plainErrorDetail;
-  i.onRefusal?.({
-    status: O.status,
-    codes: refusalCodes(O.data),
-    message: oe,
+  let plainErrorDetail = extractPlainErrorDetail(response.data);
+  let plainDetail = /^the request was invalid\.?$/i.test(plainErrorDetail ?? "")
+    ? undefined
+    : plainErrorDetail;
+  options.onRefusal?.({
+    status: response.status,
+    codes: refusalCodes(response.data),
+    message: plainDetail,
   });
   return {
     ok: false,
     message:
-      oe ??
-      `The server couldn\u2019t move this session (HTTP ${O.status}). Run with --debug to see the raw response.`,
+      plainDetail ??
+      `The server couldn\u2019t move this session (HTTP ${response.status}). Run with --debug to see the raw response.`,
     mayHaveCommitted: false,
     reason: errorReason,
-    revisionConflict: O.status === 409 ? parseSourceRevisionError(O.data) : undefined,
+    revisionConflict: response.status === 409 ? parseSourceRevisionError(response.data) : undefined,
   };
 }
 //@ chunk-kczn6qx7.js:23933-24231 placement
-function readSessionEnvironment(i) {
+function readSessionEnvironment(body) {
   if (
-    i === null ||
-    typeof i !== "object" ||
-    !("session" in i) ||
-    i.session === null ||
-    typeof i.session !== "object"
+    body === null ||
+    typeof body !== "object" ||
+    !("session" in body) ||
+    body.session === null ||
+    typeof body.session !== "object"
   )
     return;
-  let session = i.session;
+  let session = body.session;
   return {
     environment_kind: typeof session.environment_kind === "string" ? session.environment_kind : undefined,
     environment_id: typeof session.environment_id === "string" ? session.environment_id : undefined,
@@ -474,21 +490,22 @@ function teleportPermissionMode() {
     return;
   }
   let _ = !canSeedAutoMode(getInitialSettings_2()) || isScrubEnabled();
-  let h =
+  let settingsUnreadable =
     getStoredDefaultModeBar() === "settings_unreadable" ||
     SETTING_SOURCES.filter(isSettingSourceEnabled).some(
-      (C) =>
-        C !== "policySettings" && getSettingsParseErrorsForSource(C).some((k) => k.severity !== "warning"),
+      (source) =>
+        source !== "policySettings" &&
+        getSettingsParseErrorsForSource(source).some((parseError) => parseError.severity !== "warning"),
     );
-  if (_ || h) {
-    let filtered = [_ && "auto_mode_off", h && "settings_unreadable"].filter(Boolean);
+  if (_ || settingsUnreadable) {
+    let filtered = [_ && "auto_mode_off", settingsUnreadable && "settings_unreadable"].filter(Boolean);
     logForDebugging(
       `[code-session] move-to-cloud names no permission mode: withheld for ${filtered.join("; ")}`,
     );
     logAutoModeAsked({
       kill_switch: false,
       auto_mode_off: _,
-      settings_unreadable: h,
+      settings_unreadable: settingsUnreadable,
     });
     return;
   }
@@ -497,17 +514,17 @@ function teleportPermissionMode() {
   return "auto";
 }
 //@ chunk-kczn6qx7.js:25168-25304 placement
-function logAutoModeAsked(i) {
+function logAutoModeAsked(detail) {
   try {
     logEvent(
       "tengu_teleport_to_cloud",
-      i === undefined
+      detail === undefined
         ? {
             action: lit("auto_mode_asked"),
           }
         : {
             action: lit("auto_mode_not_asked"),
-            ...i,
+            ...detail,
           },
     );
   } catch {}
@@ -520,14 +537,14 @@ async function collectTeleportCheckout(sessionId) {
     };
   let originalCwd = getOriginalCwd();
   let branch = await getBranch(originalCwd);
-  let [C, worktreeState] = await Promise.all([
+  let [checkout, worktreeState] = await Promise.all([
     branchOrHead(branch),
     collectWorktreeState(originalCwd, branch === "HEAD" ? null : branch),
   ]);
   return {
     kind: "ready",
     outcomeBranch: `claude/teleport-${sessionId.slice(-8)}`,
-    checkout: C,
+    checkout,
     localWork: worktreeState,
   };
 }
@@ -538,7 +555,7 @@ var UNCONFIRMED_BEFORE_MOVE_MESSAGE =
 /**
  * /teleport 移到云端：检查 Remote Control 连接、claude.ai 登录、git 仓库与未推送提交，确认后调用 move-to-cloud 接口，切换 Remote Control 会话并在本地记录 cloud_handoff。
  */
-async function teleportToCloud(i) {
+async function teleportToCloud(ui) {
   if (isRestrictedSession()) {
     logFeatureBad("teleport_to_cloud", "restricted_session");
     return {
@@ -546,9 +563,9 @@ async function teleportToCloud(i) {
       message: RESTRICTED_SESSION_CLOUD_REFUSAL,
     };
   }
-  let _ = inboundBridgeHandle(getReplBridgeHandle());
-  let bridgeSessionId = _?.bridgeSessionId;
-  if (!_ || !bridgeSessionId) {
+  let handle = inboundBridgeHandle(getReplBridgeHandle());
+  let bridgeSessionId = handle?.bridgeSessionId;
+  if (!handle || !bridgeSessionId) {
     logFeatureBad("teleport_to_cloud", "no_bridge");
     return {
       kind: "precondition",
@@ -556,11 +573,11 @@ async function teleportToCloud(i) {
         "This session isn\u2019t connected to Remote Control. Run /remote-control first, then try again.",
     };
   }
-  let C =
-    isStorageV5Enabled() && i.credentials !== undefined
-      ? await getBridgeSessionsAccessTokenAsync(i.credentials)
+  let accessToken =
+    isStorageV5Enabled() && ui.credentials !== undefined
+      ? await getBridgeSessionsAccessTokenAsync(ui.credentials)
       : getBridgeSessionsAccessToken();
-  if (!C) {
+  if (!accessToken) {
     logFeatureBad("teleport_to_cloud", "no_auth");
     return {
       kind: "precondition",
@@ -580,7 +597,7 @@ async function teleportToCloud(i) {
     default:
       return teleportCheckout;
   }
-  if (_.gitRepoUrl === null) {
+  if (handle.gitRepoUrl === null) {
     logFeatureBad("teleport_to_cloud", "no_git_remote");
     return {
       kind: "precondition",
@@ -589,18 +606,18 @@ async function teleportToCloud(i) {
     };
   }
   let { checkout, outcomeBranch } = teleportCheckout;
-  let H = describeLocalWorkNotice(teleportCheckout.localWork);
-  let V = H === undefined ? _.publishGitStateBeforeHandoff?.() : undefined;
-  let N = isEssentialTrafficOnly() ? null : await resolveSourceRepository(_);
-  let D =
-    N &&
-    isGithubDotCom(N.host) &&
+  let localWorkNotice = describeLocalWorkNotice(teleportCheckout.localWork);
+  let publishPromise = localWorkNotice === undefined ? handle.publishGitStateBeforeHandoff?.() : undefined;
+  let sourceRepo = isEssentialTrafficOnly() ? null : await resolveSourceRepository(handle);
+  let accessProbe =
+    sourceRepo &&
+    isGithubDotCom(sourceRepo.host) &&
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_teleport_github_access_precheck", true)
-      ? probeGithubRepoAccess(N.owner, N.name).catch(() => null)
+      ? probeGithubRepoAccess(sourceRepo.owner, sourceRepo.name).catch(() => null)
       : null;
-  let O;
+  let targets;
   try {
-    O = await fetchEnvironmentsAndPools(i.storageV5, i.credentials);
+    targets = await fetchEnvironmentsAndPools(ui.storageV5, ui.credentials);
   } catch (error) {
     logFeatureBad("teleport_to_cloud", "env_lookup_failed");
     return {
@@ -608,14 +625,18 @@ async function teleportToCloud(i) {
       message: `Couldn\u2019t look up cloud environments \u2014 ${errorMessage(error)}`,
     };
   }
-  let z = (selectedTarget) => selectedTarget.kind !== "bridge" && !isSelfHostedPoolEnv(selectedTarget);
-  let X = O.selectedTarget && z(O.selectedTarget) ? O.selectedTarget : findFirst(O.availableTargets, z);
-  if (!X || isSelfHostedPoolEnv(X)) {
-    if (O.environmentsError) {
+  let isManagedTarget = (selectedTarget) =>
+    selectedTarget.kind !== "bridge" && !isSelfHostedPoolEnv(selectedTarget);
+  let environment =
+    targets.selectedTarget && isManagedTarget(targets.selectedTarget)
+      ? targets.selectedTarget
+      : findFirst(targets.availableTargets, isManagedTarget);
+  if (!environment || isSelfHostedPoolEnv(environment)) {
+    if (targets.environmentsError) {
       logFeatureBad("teleport_to_cloud", "env_lookup_failed");
       return {
         kind: "precondition",
-        message: `Couldn\u2019t look up cloud environments \u2014 ${O.environmentsError}`,
+        message: `Couldn\u2019t look up cloud environments \u2014 ${targets.environmentsError}`,
       };
     }
     logFeatureBad("teleport_to_cloud", "no_environment");
@@ -623,122 +644,131 @@ async function teleportToCloud(i) {
       kind: "precondition",
       message:
         "No cloud environment available. Create one from the web UI (or run /web-setup), then try again." +
-        (isSelfHostedPoolEnv(O.selectedTarget)
+        (isSelfHostedPoolEnv(targets.selectedTarget)
           ? " Your default target is a self-hosted environment \u2014 continuing in the cloud needs a managed environment."
           : ""),
     };
   }
-  let G = await D;
-  if (N && (G?.verdict === "github_not_connected" || G?.verdict === "github_repo_not_found")) {
-    logFeatureBad("teleport_to_cloud", G.verdict);
+  let probeResult = await accessProbe;
+  if (
+    sourceRepo &&
+    (probeResult?.verdict === "github_not_connected" || probeResult?.verdict === "github_repo_not_found")
+  ) {
+    logFeatureBad("teleport_to_cloud", probeResult.verdict);
     return {
       kind: "precondition",
       message:
-        G.verdict === "github_not_connected"
+        probeResult.verdict === "github_not_connected"
           ? noAccessText({
-              subject: `Cloud sessions clone ${N.owner}/${N.name}`,
+              subject: `Cloud sessions clone ${sourceRepo.owner}/${sourceRepo.name}`,
               ...teleportSetupHints(),
             })
           : installAppHint({
-              owner: N.owner,
-              name: N.name,
+              owner: sourceRepo.owner,
+              name: sourceRepo.name,
               ...teleportSetupHints(),
               apostrophe: "\u2019",
             }),
     };
   }
-  await V;
+  await publishPromise;
   let memoryModeAtNotice;
-  let ee = _;
-  if (H !== undefined) {
+  let currentHandle = handle;
+  if (localWorkNotice !== undefined) {
     memoryModeAtNotice = emptyResult();
-    let x = await confirmBeforeMove(i, H.notice, bridgeSessionId, checkout);
-    if (x.kind !== "confirmed") return x;
-    ee = x.handle;
-    await ee.publishGitStateBeforeHandoff?.();
+    let confirmResult = await confirmBeforeMove(ui, localWorkNotice.notice, bridgeSessionId, checkout);
+    if (confirmResult.kind !== "confirmed") return confirmResult;
+    currentHandle = confirmResult.handle;
+    await currentHandle.publishGitStateBeforeHandoff?.();
   }
   logEvent("tengu_teleport_to_cloud", {
     action: lit("start"),
   });
-  let sessionUrl = getRemoteSessionUrl(bridgeSessionId, ee.sessionIngressUrl, {
+  let sessionUrl = getRemoteSessionUrl(bridgeSessionId, currentHandle.sessionIngressUrl, {
     from: "cli",
   });
-  let F = {
+  let moveOptions = {
     sessionUrl,
-    accessToken: C,
-    environmentId: X.environment_id,
+    accessToken,
+    environmentId: environment.environment_id,
     outcomeBranch,
     checkout,
   };
-  let { result: I, memoryMode } = await commitCloudMove(i, ee, {
-    ...F,
+  let { result: moveResult, memoryMode } = await commitCloudMove(ui, currentHandle, {
+    ...moveOptions,
     memoryModeAtNotice,
-    isAfterYes: H !== undefined,
+    isAfterYes: localWorkNotice !== undefined,
   });
-  let Q = new Set(H?.covers);
-  let ne;
-  while (!I.ok && I.revisionConflict !== undefined && ne === undefined) {
+  let coveredFallbacks = new Set(localWorkNotice?.covers);
+  let fallbackChoice;
+  while (!moveResult.ok && moveResult.revisionConflict !== undefined && fallbackChoice === undefined) {
     unmarkTeleportedSession(bridgeSessionId);
-    let { notice, fallback } = notOnRemoteNotice(I.revisionConflict);
-    let ae = !Q.has(fallback);
-    let de = await confirmBeforeMove(i, ae ? notice : undefined, bridgeSessionId, checkout);
-    if (de.kind !== "confirmed") return de;
-    Q.add(fallback);
-    if (ae && fallback === "default_branch") await de.handle.publishGitStateBeforeHandoff?.();
-    else ne = fallback;
-    ({ result: I, memoryMode } = await commitCloudMove(i, de.handle, {
-      ...F,
+    let { notice, fallback } = notOnRemoteNotice(moveResult.revisionConflict);
+    let needsNotice = !coveredFallbacks.has(fallback);
+    let nextConfirm = await confirmBeforeMove(
+      ui,
+      needsNotice ? notice : undefined,
+      bridgeSessionId,
+      checkout,
+    );
+    if (nextConfirm.kind !== "confirmed") return nextConfirm;
+    coveredFallbacks.add(fallback);
+    if (needsNotice && fallback === "default_branch")
+      await nextConfirm.handle.publishGitStateBeforeHandoff?.();
+    else fallbackChoice = fallback;
+    ({ result: moveResult, memoryMode } = await commitCloudMove(ui, nextConfirm.handle, {
+      ...moveOptions,
       memoryModeAtNotice: memoryMode,
       isAfterYes: true,
-      revisionFallback: ne,
+      revisionFallback: fallbackChoice,
     }));
   }
-  let ce = false;
-  if (!I.ok) {
-    let x = !I.mayHaveCommitted && I.reason === "github_token_missing";
-    if (I.mayHaveCommitted) logFeatureSad("teleport_to_cloud", "maybe_committed");
+  let tokenMissing = false;
+  if (!moveResult.ok) {
+    let isTokenMissing = !moveResult.mayHaveCommitted && moveResult.reason === "github_token_missing";
+    if (moveResult.mayHaveCommitted) logFeatureSad("teleport_to_cloud", "maybe_committed");
     else {
       logFeatureBad(
         "teleport_to_cloud",
-        x
+        isTokenMissing
           ? "github_not_connected"
-          : I.reason === "unconfirmed_before_move"
+          : moveResult.reason === "unconfirmed_before_move"
             ? "unconfirmed_before_move"
             : "request_failed",
       );
       unmarkTeleportedSession(bridgeSessionId);
     }
     logEvent("tengu_teleport_to_cloud", {
-      action: lit(I.mayHaveCommitted ? "maybe_committed" : "failed"),
+      action: lit(moveResult.mayHaveCommitted ? "maybe_committed" : "failed"),
     });
     return {
       kind: "server-error",
-      failure: x
+      failure: isTokenMissing
         ? {
-            ...I,
+            ...moveResult,
             message: `No GitHub account is connected to your Claude account (or the connection expired). ${connectAccountHint(teleportSetupHints())}`,
           }
-        : I,
+        : moveResult,
       sessionId: bridgeSessionId,
     };
   }
-  let Se = false;
-  if (ne !== undefined) logFeatureSad("teleport_to_cloud", `revision_${ne}`);
+  let revisionFallbackUsed = false;
+  if (fallbackChoice !== undefined) logFeatureSad("teleport_to_cloud", `revision_${fallbackChoice}`);
   else logFeatureOk("teleport_to_cloud");
-  let { environmentKind } = I;
+  let { environmentKind } = moveResult;
   logEvent("tengu_teleport_to_cloud", {
     action: lit("success"),
     environment_kind: isKnownWorkerState(environmentKind)
       ? fromEnum(environmentKind)
       : lit(environmentKind === "cloud" ? "cloud" : "other"),
   });
-  let se = [...[], ...emptyArrayResult(I)];
+  let afterMoveParts = [...[], ...emptyArrayResult(moveResult)];
   return {
     kind: "ok",
-    success: I,
+    success: moveResult,
     sessionUrl,
-    ...(se.length > 0 && {
-      afterMove: se.join(`
+    ...(afterMoveParts.length > 0 && {
+      afterMove: afterMoveParts.join(`
 `),
     }),
   };
@@ -749,9 +779,9 @@ async function teleportToCloud(i) {
  */
 async function confirmBeforeMove(ui, prompt, bridgeSessionId, checkout) {
   if (prompt !== undefined) {
-    let A = await ui.confirmMove?.(prompt);
-    if (A !== true) {
-      if (A === false)
+    let answer = await ui.confirmMove?.(prompt);
+    if (answer !== true) {
+      if (answer === false)
         logEvent("tengu_teleport_to_cloud", {
           action: lit("declined"),
         });
@@ -761,8 +791,8 @@ async function confirmBeforeMove(ui, prompt, bridgeSessionId, checkout) {
       };
     }
   }
-  let k = await recheckBridgeAndCheckout(bridgeSessionId, checkout);
-  if (k === null) {
+  let handle = await recheckBridgeAndCheckout(bridgeSessionId, checkout);
+  if (handle === null) {
     logFeatureBad("teleport_to_cloud", "unconfirmed_before_move");
     logEvent("tengu_teleport_to_cloud", {
       action: lit("failed"),
@@ -774,32 +804,37 @@ async function confirmBeforeMove(ui, prompt, bridgeSessionId, checkout) {
   }
   return {
     kind: "confirmed",
-    handle: k,
+    handle,
   };
 }
 //@ chunk-kczn6qx7.js:30406-30602 placement
 async function recheckBridgeAndCheckout(bridgeSessionId, checkout) {
-  let h = await withCollectTimeout(getBranch(getOriginalCwd()).then(branchOrHead)).catch((error) => {
-    logForDebugging(`[teleport] the checkout could not be read again: ${errorMessage(error)}`);
-    return;
-  });
-  let C = inboundBridgeHandle(getReplBridgeHandle());
-  return C?.bridgeSessionId === bridgeSessionId && h === checkout ? C : null;
+  let recheckedCheckout = await withCollectTimeout(getBranch(getOriginalCwd()).then(branchOrHead)).catch(
+    (error) => {
+      logForDebugging(`[teleport] the checkout could not be read again: ${errorMessage(error)}`);
+      return;
+    },
+  );
+  let handle = inboundBridgeHandle(getReplBridgeHandle());
+  return handle?.bridgeSessionId === bridgeSessionId && recheckedCheckout === checkout ? handle : null;
 }
 //@ chunk-kczn6qx7.js:30602-30653 placement
 async function branchOrHead(branch) {
   return branch === "HEAD" ? getHeadForDir(getOriginalCwd()) : branch;
 }
 //@ chunk-kczn6qx7.js:30653-31486 placement
-async function commitCloudMove(i, _, h) {
+async function commitCloudMove(ui, _, forcedOptions) {
   markTeleportedSession(_.bridgeSessionId);
-  let C = false;
+  let committed = false;
   try {
     _.stopLocalPreview?.();
     await _.settleUploadsBeforeHandoff?.();
-    let accessToken = (await getBridgeSessionsAccessTokenAsync(i.credentials)) ?? h.accessToken;
+    let accessToken = (await getBridgeSessionsAccessTokenAsync(ui.credentials)) ?? forcedOptions.accessToken;
     let trustedDeviceToken = await getTrustedDeviceToken();
-    if (h.isAfterYes && (await recheckBridgeAndCheckout(_.bridgeSessionId, h.checkout)) === null)
+    if (
+      forcedOptions.isAfterYes &&
+      (await recheckBridgeAndCheckout(_.bridgeSessionId, forcedOptions.checkout)) === null
+    )
       return {
         result: {
           ok: false,
@@ -807,43 +842,44 @@ async function commitCloudMove(i, _, h) {
           mayHaveCommitted: false,
           reason: "unconfirmed_before_move",
         },
-        memoryMode: h.memoryModeAtNotice,
+        memoryMode: forcedOptions.memoryModeAtNotice,
       };
     let permissionMode = teleportPermissionMode();
-    let memoryMode = emptyResult(h.memoryModeAtNotice);
-    C = true;
+    let memoryMode = emptyResult(forcedOptions.memoryModeAtNotice);
+    committed = true;
     return {
       result: await moveSessionToCloud({
         onMoved: () => {
-          i.onMoved?.(h.sessionUrl);
-          runBeforeMoveStep(i);
+          ui.onMoved?.(forcedOptions.sessionUrl);
+          runBeforeMoveStep(ui);
         },
-        onMayHaveMoved: (N) => {
-          i.onMayHaveMoved?.(N);
-          runBeforeMoveStep(i);
+        onMayHaveMoved: (message) => {
+          ui.onMayHaveMoved?.(message);
+          runBeforeMoveStep(ui);
         },
         sessionId: _.bridgeSessionId,
         baseUrl: getBridgeBaseUrl(),
         accessToken,
-        onAuth401: (N, D) => bridgeSessionsAccessTokenAfter401(N, i.credentials, D),
-        environmentId: h.environmentId,
+        onAuth401: (token, headerless) =>
+          bridgeSessionsAccessTokenAfter401(token, ui.credentials, headerless),
+        environmentId: forcedOptions.environmentId,
         trustedDeviceToken,
-        outcomeBranch: h.outcomeBranch,
+        outcomeBranch: forcedOptions.outcomeBranch,
         permissionMode,
         memoryMode,
-        revisionFallback: h.revisionFallback,
+        revisionFallback: forcedOptions.revisionFallback,
       }),
       memoryMode,
     };
   } catch (error) {
-    if (!C) unmarkTeleportedSession(_.bridgeSessionId);
+    if (!committed) unmarkTeleportedSession(_.bridgeSessionId);
     throw error;
   }
 }
 //@ chunk-kczn6qx7.js:31486-31616 placement
-function runBeforeMoveStep(i) {
+function runBeforeMoveStep(step) {
   try {
-    i.beforeMove?.();
+    step.beforeMove?.();
   } catch (error) {
     logForDebugging(`[teleport] the step at the move's commit point failed: ${errorMessage(error)}`, {
       level: "error",
@@ -869,16 +905,16 @@ var REMOTE_CONTROL_INACTIVE_TEXT =
  * 生成会话已移到云端的提示（远程控制断开、已重连或正在重连）。
  */
 function movedToCloudMessage(sessionUrl, _) {
-  let h = `Session now in the cloud: ${sessionUrl}`;
+  let headline = `Session now in the cloud: ${sessionUrl}`;
   switch (_.kind) {
     case "disconnected":
-      return `${h}
+      return `${headline}
 ${REMOTE_CONTROL_INACTIVE_TEXT}`;
     case "reconnected":
-      return `${h}
+      return `${headline}
 New /remote-control session is active \xB7 Continue here, on your phone, or at ${_.newUrl}`;
     case "reconnect-pending":
-      return `${h}
+      return `${headline}
 Starting a new /remote-control session \u2014 it\u2019ll show as /rc shortly.`;
   }
 }
@@ -887,9 +923,9 @@ function inboundBridgeHandle(replBridgeHandle) {
   return replBridgeHandle && !replBridgeHandle.outboundOnly ? replBridgeHandle : null;
 }
 //@ chunk-kczn6qx7.js:32183-32295 placement
-function resolveSourceRepository(i) {
-  if (i.gitRepoUrl === undefined) return detectCurrentRepositoryWithHost();
-  return i.gitRepoUrl ? parseGitSourceRepository(i.gitRepoUrl) : Promise.resolve(null);
+function resolveSourceRepository(handle) {
+  if (handle.gitRepoUrl === undefined) return detectCurrentRepositoryWithHost();
+  return handle.gitRepoUrl ? parseGitSourceRepository(handle.gitRepoUrl) : Promise.resolve(null);
 }
 //@ chunk-kczn6qx7.js:32295-32420 placement
 function teleportSetupHints() {
@@ -903,11 +939,11 @@ var NEW_BRIDGE_WAIT_TIMEOUT_MS = 1e4;
 var NEW_BRIDGE_POLL_MS = 100;
 var DISABLE_BRIDGE_DELAY_MS = 250;
 //@ chunk-kczn6qx7.js:32445-32674 placement
-function disableReplBridgeForMove(i, _ = false) {
-  i.setAppState((h) => {
-    if (!h.replBridgeEnabled) return h;
+function disableReplBridgeForMove(ui, _ = false) {
+  ui.setAppState((state) => {
+    if (!state.replBridgeEnabled) return state;
     return {
-      ...h,
+      ...state,
       replBridgeSkipNextArchive: true,
       replBridgeEnabled: false,
       replBridgeExplicit: false,
@@ -919,8 +955,8 @@ function disableReplBridgeForMove(i, _ = false) {
   });
 }
 //@ chunk-kczn6qx7.js:32674-32777 placement
-function enableReplBridge(i) {
-  i.setAppState((_) => {
+function enableReplBridge(ui) {
+  ui.setAppState((_) => {
     if (_.replBridgeEnabled) return _;
     return {
       ..._,
@@ -930,8 +966,8 @@ function enableReplBridge(i) {
 }
 //@ chunk-kczn6qx7.js:32777-32944 placement
 async function waitForNewBridgeSession(oldSessionId, signal, timeoutMs = NEW_BRIDGE_WAIT_TIMEOUT_MS) {
-  let C = Date.now() + timeoutMs;
-  while (Date.now() < C) {
+  let deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
     if (signal.aborted) return null;
     let bridgeSessionId = getReplBridgeHandle()?.bridgeSessionId;
     if (bridgeSessionId && bridgeSessionId !== oldSessionId) return bridgeSessionId;
@@ -944,56 +980,56 @@ async function waitForNewBridgeSession(oldSessionId, signal, timeoutMs = NEW_BRI
  * 执行 /teleport 移动；出错时若已移动或可能已移动，返回包含云端会话与错误说明的文本，否则继续抛出。
  */
 async function runTeleportWithRecovery(context, options) {
-  let h;
-  let C;
-  let k;
+  let movedUrl;
+  let afterMove;
+  let maybeMovedMessage;
   try {
     return await runTeleportFromRepl(context, options, {
-      onMoved: (A) => {
-        h = A;
+      onMoved: (url) => {
+        movedUrl = url;
       },
-      onAfterMove: (A) => {
-        C = A;
+      onAfterMove: (text) => {
+        afterMove = text;
       },
-      onMayHaveMoved: (A) => {
-        k = A;
+      onMayHaveMoved: (message) => {
+        maybeMovedMessage = message;
       },
     });
   } catch (error) {
-    if (h !== undefined) {
+    if (movedUrl !== undefined) {
       logError(error);
-      return `Session now in the cloud: ${h}
+      return `Session now in the cloud: ${movedUrl}
 Claude Code didn\u2019t finish updating Remote Control in this terminal after the move (${errorMessage(error)}).${
-        C === undefined
+        afterMove === undefined
           ? ""
           : `
-${C}`
+${afterMove}`
       }`;
     }
-    if (k !== undefined) {
+    if (maybeMovedMessage !== undefined) {
       logError(error);
-      return `${k}
+      return `${maybeMovedMessage}
 Claude Code didn\u2019t finish updating Remote Control in this terminal (${errorMessage(error)}).`;
     }
     throw error;
   }
 }
 //@ chunk-kczn6qx7.js:33387-34564 placement
-async function runTeleportFromRepl(context, confirmMove, h) {
-  let C = false;
-  let k;
+async function runTeleportFromRepl(context, confirmMove, confirmPrompt) {
+  let cancelledAutoContinue = false;
+  let outcome;
   try {
-    k = await teleportToCloud({
+    outcome = await teleportToCloud({
       beforeMove: () => {
-        C = cancelForHandoff("cloud_handoff");
-        if (C)
+        cancelledAutoContinue = cancelForHandoff("cloud_handoff");
+        if (cancelledAutoContinue)
           context.applyMessageOp({
             type: "append",
             messages: [createSystemMessage(AUTO_CONTINUE_CANCEL_MESSAGES.cloud_handoff, "warning")],
           });
       },
-      onMoved: h.onMoved,
-      onMayHaveMoved: (A) => h.onMayHaveMoved(`Couldn\u2019t teleport: ${A}`),
+      onMoved: confirmPrompt.onMoved,
+      onMayHaveMoved: (message) => confirmPrompt.onMayHaveMoved(`Couldn\u2019t teleport: ${message}`),
       credentials: context.credentials,
       storageV5: context.storageV5,
       confirmMove,
@@ -1001,38 +1037,40 @@ async function runTeleportFromRepl(context, confirmMove, h) {
   } finally {
     clearHandoffInProgress();
   }
-  switch (k.kind) {
+  switch (outcome.kind) {
     case "precondition":
-      return k.message;
+      return outcome.message;
     case "server-error": {
-      if (k.failure.mayHaveCommitted) {
-        h.onMayHaveMoved(withRelaunchHint(`Couldn\u2019t teleport: ${k.failure.message}`, C));
-        markTeleportedSession(k.sessionId);
+      if (outcome.failure.mayHaveCommitted) {
+        confirmPrompt.onMayHaveMoved(
+          withRelaunchHint(`Couldn\u2019t teleport: ${outcome.failure.message}`, cancelledAutoContinue),
+        );
+        markTeleportedSession(outcome.sessionId);
         clearBridgeSession(undefined, undefined, undefined, context.storageV5);
         setTimeout(disableReplBridgeForMove, DISABLE_BRIDGE_DELAY_MS, context, true);
         return withRelaunchHint(
-          `Couldn\u2019t teleport: ${k.failure.message}
+          `Couldn\u2019t teleport: ${outcome.failure.message}
 ${REMOTE_CONTROL_INACTIVE_TEXT}`,
-          C,
+          cancelledAutoContinue,
         );
       }
-      return withRelaunchHint(`Couldn\u2019t teleport: ${k.failure.message}`, C);
+      return withRelaunchHint(`Couldn\u2019t teleport: ${outcome.failure.message}`, cancelledAutoContinue);
     }
     case "ok": {
-      h.onAfterMove(k.afterMove);
-      markTeleportedSession(k.success.sessionId);
+      confirmPrompt.onAfterMove(outcome.afterMove);
+      markTeleportedSession(outcome.success.sessionId);
       clearBridgeSession(undefined, undefined, undefined, context.storageV5);
-      let sessionUrl = k.sessionUrl;
-      let { afterMove } = k;
-      let H = (D) =>
+      let sessionUrl = outcome.sessionUrl;
+      let { afterMove } = outcome;
+      let withAfterMove = (text) =>
         afterMove === undefined
-          ? D
-          : `${D}
+          ? text
+          : `${text}
 ${afterMove}`;
-      let V = bridgeMoveAction(k.success.sessionId);
-      if (V.kind === "disconnect") {
+      let bridgeAction = bridgeMoveAction(outcome.success.sessionId);
+      if (bridgeAction.kind === "disconnect") {
         setTimeout(disableReplBridgeForMove, DISABLE_BRIDGE_DELAY_MS, context, true);
-        return H(
+        return withAfterMove(
           movedToCloudMessage(sessionUrl, {
             kind: "disconnected",
           }),
@@ -1041,14 +1079,17 @@ ${afterMove}`;
       disableReplBridgeForMove(context);
       await sleep(0);
       enableReplBridge(context);
-      let N = await waitForNewBridgeSession(V.oldSessionId, context.abortController.signal);
-      return H(
+      let newSessionId = await waitForNewBridgeSession(
+        bridgeAction.oldSessionId,
+        context.abortController.signal,
+      );
+      return withAfterMove(
         movedToCloudMessage(
           sessionUrl,
-          N
+          newSessionId
             ? {
                 kind: "reconnected",
-                newUrl: getRemoteSessionUrl(N, undefined, {
+                newUrl: getRemoteSessionUrl(newSessionId, undefined, {
                   from: "cli",
                 }),
               }
@@ -1061,57 +1102,57 @@ ${afterMove}`;
   }
 }
 //@ chunk-kczn6qx7.js:34564-34609 placement
-function renderTextLine_3(oe) {
+function renderTextLine_3(line) {
   return jsxProd_default(
     Text,
     {
-      children: oe,
+      children: line,
     },
-    oe,
+    line,
   );
 }
 //@ chunk-kczn6qx7.js:34609-35726 placement
 function TeleportConfirm(props) {
-  let $ = w(21);
+  let $ = useMemoCache(21);
   let { title, moveLabel, lines, onAnswer } = props;
-  let K;
+  let titleText;
   if ($[0] !== title) {
-    K = jsxProd_default(Text, {
+    titleText = jsxProd_default(Text, {
       bold: true,
       children: title,
     });
     $[0] = title;
-    $[1] = K;
-  } else K = $[1];
+    $[1] = titleText;
+  } else titleText = $[1];
   let children;
   if ($[2] !== lines) {
     children = lines.map(renderTextLine_3);
     $[2] = lines;
     $[3] = children;
   } else children = $[3];
-  let V;
+  let linesBox;
   if ($[4] !== children) {
-    V = jsxProd_default(Box, {
+    linesBox = jsxProd_default(Box, {
       flexDirection: "column",
       marginTop: 1,
       gap: 1,
       children,
     });
     $[4] = children;
-    $[5] = V;
-  } else V = $[5];
-  let N;
+    $[5] = linesBox;
+  } else linesBox = $[5];
+  let cancelOption;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    N = {
+    cancelOption = {
       label: "Cancel",
       value: "cancel",
     };
-    $[6] = N;
-  } else N = $[6];
+    $[6] = cancelOption;
+  } else cancelOption = $[6];
   let options;
   if ($[7] !== moveLabel) {
     options = [
-      N,
+      cancelOption,
       {
         label: moveLabel,
         value: "move",
@@ -1124,7 +1165,7 @@ function TeleportConfirm(props) {
   let onChange;
   if ($[9] !== onAnswer) {
     onCancel = () => onAnswer(false);
-    onChange = (X) => onAnswer(X === "move");
+    onChange = (value) => onAnswer(value === "move");
     $[9] = onAnswer;
     $[10] = onCancel;
     $[11] = onChange;
@@ -1132,9 +1173,9 @@ function TeleportConfirm(props) {
     onCancel = $[10];
     onChange = $[11];
   }
-  let G;
+  let selectorBox;
   if ($[12] !== options || $[13] !== onCancel || $[14] !== onChange) {
-    G = jsxProd_default(Box, {
+    selectorBox = jsxProd_default(Box, {
       flexDirection: "column",
       marginTop: 1,
       children: jsxProd_default(ModelSelector, {
@@ -1146,11 +1187,11 @@ function TeleportConfirm(props) {
     $[12] = options;
     $[13] = onCancel;
     $[14] = onChange;
-    $[15] = G;
-  } else G = $[15];
-  let Z;
+    $[15] = selectorBox;
+  } else selectorBox = $[15];
+  let bylineBox;
   if ($[16] === MEMO_CACHE_SENTINEL) {
-    Z = jsxProd_default(Box, {
+    bylineBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
@@ -1172,21 +1213,21 @@ function TeleportConfirm(props) {
         }),
       }),
     });
-    $[16] = Z;
-  } else Z = $[16];
-  let ee;
-  if ($[17] !== K || $[18] !== V || $[19] !== G) {
-    ee = jsxProd_default_2(Box, {
+    $[16] = bylineBox;
+  } else bylineBox = $[16];
+  let dialogBox;
+  if ($[17] !== titleText || $[18] !== linesBox || $[19] !== selectorBox) {
+    dialogBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       padding: 1,
-      children: [K, V, G, Z],
+      children: [titleText, linesBox, selectorBox, bylineBox],
     });
-    $[17] = K;
-    $[18] = V;
-    $[19] = G;
-    $[20] = ee;
-  } else ee = $[20];
-  return ee;
+    $[17] = titleText;
+    $[18] = linesBox;
+    $[19] = selectorBox;
+    $[20] = dialogBox;
+  } else dialogBox = $[20];
+  return dialogBox;
 }
 //@ chunk-kczn6qx7.js:35726-35772 placement
 function nullLinesView({ lines, onAnswer }) {
@@ -1197,9 +1238,9 @@ function nullSendingView() {
   return null;
 }
 //@ chunk-kczn6qx7.js:35798-35852 placement
-function logTeleportMenu(i) {
+function logTeleportMenu(choice) {
   logEvent("tengu_teleport_menu", {
-    action: fromEnum(i),
+    action: fromEnum(choice),
   });
 }
 //@ chunk-kczn6qx7.js:35852-39156 placement
@@ -1207,78 +1248,78 @@ function logTeleportMenu(i) {
  * /teleport 菜单：选择移到云端或其他 teleport 操作。
  */
 function TeleportMenu({ onExit, context, exposure, retireOnSurface, canSend }) {
-  let [A, K] = y("menu");
-  let [H, V] = y();
-  let resolveRef = R(null);
-  let D = R(false);
-  let O = R(false);
-  let [z, X] = y();
-  let [G, Z] = y(false);
-  let [ee, oe] = y();
-  let [F, I] = y();
-  let U = R(undefined);
-  function Q(B) {}
-  function ne() {
-    let B = U.current;
-    U.current = undefined;
-    if (B !== undefined) Q(B);
+  let [phase, setPhase] = useState("menu");
+  let [confirmLines, setConfirmLines] = useState();
+  let resolveRef = useRef(null);
+  let unmountedRef = useRef(false);
+  let resolvedRef = useRef(false);
+  let [sendingDetail, setSendingDetail] = useState();
+  let [answeredMove, setAnsweredMove] = useState(false);
+  let [heldCopyAtMove, setHeldCopyAtMove] = useState();
+  let [finalLines, setFinalLines] = useState();
+  let queuedLineRef = useRef(undefined);
+  function deliverLine(line) {}
+  function flushQueuedLine() {
+    let line = queuedLineRef.current;
+    queuedLineRef.current = undefined;
+    if (line !== undefined) deliverLine(line);
   }
-  let pendingOfferRef = R(exposure.pendingOffer ?? null);
-  P(() => {}, [canSend, context.session, context.credentials, context.storageV5]);
-  let session = useSession();
-  P(() => {
-    D.current = false;
+  let pendingOfferRef = useRef(exposure.pendingOffer ?? null);
+  useEffect(() => {}, [canSend, context.session, context.credentials, context.storageV5]);
+  let options = useSession();
+  useEffect(() => {
+    unmountedRef.current = false;
     return () => {
-      D.current = true;
+      unmountedRef.current = true;
       if (resolveRef.current) {
-        O.current = true;
+        resolvedRef.current = true;
         resolveRef.current(undefined);
         resolveRef.current = null;
       }
     };
   }, []);
-  P(() => {
+  useEffect(() => {
     if (!exposure.logged) {
       exposure.logged = true;
       logTeleportMenu(canSend ? "shown" : "shown_no_bridge");
     }
   }, [exposure, canSend]);
-  let ie = R(false);
-  let se = (B) => {
-    if (ie.current) return false;
-    ie.current = true;
-    logTeleportMenu(B);
+  let finishedRef = useRef(false);
+  let finishOnce = (action) => {
+    if (finishedRef.current) return false;
+    finishedRef.current = true;
+    logTeleportMenu(action);
     return true;
   };
-  let x = () => {
+  let abandonOffer = () => {
     pendingOfferRef.current?.abandon();
     exposure.importHold?.close("unused");
-    me("not_moved");
+    endMove("not_moved");
     exposure.isOfferAnswered = true;
     exposure.pendingOffer = null;
     pendingOfferRef.current = null;
   };
-  let te = () => {
-    if (se("cancel")) {
-      x();
+  let handleCancel = () => {
+    if (finishOnce("cancel")) {
+      abandonOffer();
       onExit("Teleport cancelled", {
         display: "system",
       });
     }
   };
-  let globalExitKeybindings = useGlobalExitKeybindings(te, undefined, A === "menu");
-  function de(B, W) {}
-  function me(B) {
-    exposure.moveEnded ??= B;
+  let globalExitKeybindings = useGlobalExitKeybindings(handleCancel, undefined, phase === "menu");
+  function deliverHeld(line, isQueued) {}
+  function endMove(status) {
+    exposure.moveEnded ??= status;
     let heldCopy = exposure.heldCopy;
     exposure.heldCopy = undefined;
     if (heldCopy === undefined) return;
     if (exposure.moveEnded === "moved") {
-      let L = heldCopy.held.take();
-      if (L !== undefined)
+      let heldLine = heldCopy.held.take();
+      if (heldLine !== undefined)
         try {
-          de(L, false);
-          if (heldCopy.line !== undefined) Q(heldCopy.line);
+          deliverHeld(heldLine, false);
+          if (heldCopy.line !== undefined) deliverLine(heldCopy.line);
         } catch (error) {
           logError(error);
         }
@@ -1286,52 +1327,52 @@ function TeleportMenu({ onExit, context, exposure, retireOnSurface, canSend }) {
     }
     heldCopy.held.letGo();
   }
-  function Eo(B, W = false) {}
-  function ro(B = false) {
-    X(remoteSessionIfTrusted() ? noDisplaySessionStatus() : undefined);
-    K("sending");
-    let W = false;
+  function deliverHeldImpl(line, isQueued = false) {}
+  function startMove(quiet = false) {
+    setSendingDetail(remoteSessionIfTrusted() ? noDisplaySessionStatus() : undefined);
+    setPhase("sending");
+    let handledRef = false;
     runTeleportWithRecovery(
       context,
-      (L) =>
+      (lines) =>
         new Promise((resolve) => {
-          if (D.current) {
-            O.current = true;
+          if (unmountedRef.current) {
+            resolvedRef.current = true;
             resolve(undefined);
             return;
           }
           resolveRef.current = resolve;
-          let le = U.current;
-          V(le === undefined ? L : [le, ...L]);
+          let queuedLine = queuedLineRef.current;
+          setConfirmLines(queuedLine === undefined ? lines : [queuedLine, ...lines]);
         }),
     )
-      .then((L) => {
-        if (!O.current) {
-          me(L.startsWith("Session now in the cloud") ? "moved" : "not_moved");
+      .then((resultText) => {
+        if (!resolvedRef.current) {
+          endMove(resultText.startsWith("Session now in the cloud") ? "moved" : "not_moved");
           exposure.importHold?.close("unused");
-          W = true;
-          ne();
-          onExit(L, {
+          handledRef = true;
+          flushQueuedLine();
+          onExit(resultText, {
             display: "system",
           });
         }
       })
       .catch((error) => {
         logError(error);
-        if (!O.current && !W) {
-          me("not_moved");
+        if (!resolvedRef.current && !handledRef) {
+          endMove("not_moved");
           exposure.importHold?.close("unused");
-          ne();
+          flushQueuedLine();
           onExit(`Couldn\u2019t teleport: ${errorMessage(error)}`, {
             display: "system",
           });
         }
       });
   }
-  if (A === "resume")
+  if (phase === "resume")
     return jsxProd_default(TeleportResumeWrapper, {
-      onComplete: (B) => {
-        resetConversation(context, B.log, retireOnSurface, session);
+      onComplete: (result) => {
+        resetConversation(context, result.log, retireOnSurface, options);
         onExit("Session resumed successfully", {
           display: "system",
         });
@@ -1340,43 +1381,44 @@ function TeleportMenu({ onExit, context, exposure, retireOnSurface, canSend }) {
         onExit("Teleport cancelled", {
           display: "system",
         }),
-      onError: (B) =>
-        onExit(B, {
+      onError: (message) =>
+        onExit(message, {
           display: "system",
         }),
       isEmbedded: true,
       source: "localCommand",
     });
-  if (A === "sending" && H !== undefined) {
-    let onAnswer = (W) => {
-      let L = resolveRef.current;
-      if (!L) return;
-      if (W && exposure.importHold?.isEndTold === false) {
-        oe(H);
-        V(undefined);
+  if (phase === "sending" && confirmLines !== undefined) {
+    let onAnswer = (proceed) => {
+      let resolve = resolveRef.current;
+      if (!resolve) return;
+      if (proceed && exposure.importHold?.isEndTold === false) {
+        setHeldCopyAtMove(confirmLines);
+        setConfirmLines(undefined);
         return;
       }
       resolveRef.current = null;
-      V(undefined);
-      oe(undefined);
-      Z(W);
-      if (W) U.current = undefined;
-      L(W);
+      setConfirmLines(undefined);
+      setHeldCopyAtMove(undefined);
+      setAnsweredMove(proceed);
+      if (proceed) queuedLineRef.current = undefined;
+      resolve(proceed);
     };
-    return z === undefined
+    return sendingDetail === undefined
       ? jsxProd_default(TeleportConfirm, {
           title: "Continue this session in the cloud?",
           moveLabel: "Continue in the cloud",
-          lines: H,
+          lines: confirmLines,
           onAnswer,
         })
       : jsxProd_default(nullLinesView, {
-          lines: H,
+          lines: confirmLines,
           onAnswer,
         });
   }
-  if (A === "sending" && z !== undefined && !G) return jsxProd_default(nullSendingView, {});
-  if (A === "sending")
+  if (phase === "sending" && sendingDetail !== undefined && !answeredMove)
+    return jsxProd_default(nullSendingView, {});
+  if (phase === "sending")
     return jsxProd_default_2(Box, {
       flexDirection: "column",
       padding: 1,
@@ -1391,12 +1433,12 @@ function TeleportMenu({ onExit, context, exposure, retireOnSurface, canSend }) {
             }),
           ],
         }),
-        (z !== undefined || !G) &&
+        (sendingDetail !== undefined || !answeredMove) &&
           jsxProd_default(Box, {
             marginLeft: 2,
             children: jsxProd_default(Text, {
               dimColor: true,
-              children: z ?? "It continues from your branch\u2019s last push.",
+              children: sendingDetail ?? "It continues from your branch\u2019s last push.",
             }),
           }),
       ],
@@ -1427,17 +1469,17 @@ function TeleportMenu({ onExit, context, exposure, retireOnSurface, canSend }) {
             },
           ],
           defaultFocusValue: canSend ? undefined : "resume",
-          onCancel: te,
-          onChange: (B) => {
-            if (B === "resume") {
-              if (se("resume")) {
-                x();
-                K("resume");
+          onCancel: handleCancel,
+          onChange: (value) => {
+            if (value === "resume") {
+              if (finishOnce("resume")) {
+                abandonOffer();
+                setPhase("resume");
               }
               return;
             }
-            if (!se("send")) return;
-            ro();
+            if (!finishOnce("send")) return;
+            startMove();
           },
         }),
       }),
@@ -1468,3 +1510,4 @@ function TeleportMenu({ onExit, context, exposure, retireOnSurface, canSend }) {
     ],
   });
 }
+export { TeleportMenu };

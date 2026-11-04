@@ -5,13 +5,13 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../runtime/bun-runtime.js";
 import { require_parser_async } from "./parser-async.js";
 import { require_packer_async } from "./packer-async.js";
 import { require_png_sync } from "./png-sync.js";
 
 //@ chunk-spjgqa4y.js:48112-50618 cjs-fingerprint
-var require_png = x(function (cjsExports) {
+var require_png = __commonJS(function (cjsExports) {
   var util = importMetaRequire("util");
   var Stream = importMetaRequire("stream");
   var Parser = require_parser_async();

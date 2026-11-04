@@ -5,19 +5,19 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_Event } from "./Event.js";
 import { require_MouseEvent } from "./MouseEvent.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:7704-11263 cjs-fingerprint
-var require_EventTarget = x(function (cjsExports, cjsModule) {
-  var vt = require_Event();
+var require_EventTarget = __commonJS(function (cjsExports, cjsModule) {
+  var EventModule = require_Event();
   var MouseEvent = require_MouseEvent();
   var utils = require_utils();
-  cjsModule.exports = Fi;
-  function Fi() {}
-  Fi.prototype = {
+  cjsModule.exports = EventTargetClass;
+  function EventTargetClass() {}
+  EventTargetClass.prototype = {
     addEventListener: function (type, listener, capture) {
       if (!listener) return;
       if (capture === undefined) capture = false;
@@ -58,7 +58,7 @@ var require_EventTarget = x(function (cjsExports, cjsModule) {
       function invoke(target, event) {
         var { type, eventPhase: phase } = event;
         event.currentTarget = target;
-        if (phase !== vt.CAPTURING_PHASE && target._handlers && target._handlers[type]) {
+        if (phase !== EventModule.CAPTURING_PHASE && target._handlers && target._handlers[type]) {
           var handler = target._handlers[type];
           var rv;
           if (typeof handler === "function") rv = handler.call(event.currentTarget, event);
@@ -84,7 +84,10 @@ var require_EventTarget = x(function (cjsExports, cjsModule) {
         for (var i = 0, n = list.length; i < n; i++) {
           if (event._immediatePropagationStopped) return;
           var l = list[i];
-          if ((phase === vt.CAPTURING_PHASE && !l.capture) || (phase === vt.BUBBLING_PHASE && l.capture))
+          if (
+            (phase === EventModule.CAPTURING_PHASE && !l.capture) ||
+            (phase === EventModule.BUBBLING_PHASE && l.capture)
+          )
             continue;
           if (l.f) l.f.call(event.currentTarget, event);
           else {
@@ -101,24 +104,24 @@ var require_EventTarget = x(function (cjsExports, cjsModule) {
       event.target = this;
       var ancestors = [];
       for (var n = this.parentNode; n; n = n.parentNode) ancestors.push(n);
-      event.eventPhase = vt.CAPTURING_PHASE;
+      event.eventPhase = EventModule.CAPTURING_PHASE;
       for (var i = ancestors.length - 1; i >= 0; i--) {
         invoke(ancestors[i], event);
         if (event._propagationStopped) break;
       }
       if (!event._propagationStopped) {
-        event.eventPhase = vt.AT_TARGET;
+        event.eventPhase = EventModule.AT_TARGET;
         invoke(this, event);
       }
       if (event.bubbles && !event._propagationStopped) {
-        event.eventPhase = vt.BUBBLING_PHASE;
+        event.eventPhase = EventModule.BUBBLING_PHASE;
         for (var ii = 0, nn = ancestors.length; ii < nn; ii++) {
           invoke(ancestors[ii], event);
           if (event._propagationStopped) break;
         }
       }
       event._dispatching = false;
-      event.eventPhase = vt.AT_TARGET;
+      event.eventPhase = EventModule.AT_TARGET;
       event.currentTarget = null;
       if (trusted && !event.defaultPrevented && event instanceof MouseEvent)
         switch (event.type) {

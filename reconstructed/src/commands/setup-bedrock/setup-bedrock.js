@@ -27,3 +27,4 @@ async function setupBedrockCall(onDone, context) {
     context,
   });
 }
+export { setupBedrockCall };

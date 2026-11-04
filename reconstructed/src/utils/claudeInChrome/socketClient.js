@@ -26,45 +26,47 @@ import { BROWSER_TOOL_TIMEOUT_MS } from "./browserToolSchemas.js";
 import { classifyToolError, firstTextContent } from "./toolErrorClassification.js";
 
 //@ chunk-p7xf186d.js:27900-28175 placement
-function toolCallMeta(e, t) {
+function toolCallMeta(payload, ids) {
   return {
-    toolUseId: t.toolUseId,
-    requestId: t.requestId,
-    toolType: typeof e.tool_type === "string" ? e.tool_type : "unknown",
-    url: typeof e.url === "string" ? e.url : "",
+    toolUseId: ids.toolUseId,
+    requestId: ids.requestId,
+    toolType: typeof payload.tool_type === "string" ? payload.tool_type : "unknown",
+    url: typeof payload.url === "string" ? payload.url : "",
     actionData:
-      e.action_data && typeof e.action_data === "object" ? stripPrivateOptions(e.action_data) : undefined,
-    category: normalizeCategory(e.category),
+      payload.action_data && typeof payload.action_data === "object"
+        ? stripPrivateOptions(payload.action_data)
+        : undefined,
+    category: normalizeCategory(payload.category),
   };
 }
 //@ chunk-p7xf186d.js:28175-28438 placement
-function permissionContextFields(e) {
+function permissionContextFields(options) {
   return {
-    ...(e?.permissionMode
+    ...(options?.permissionMode
       ? {
-          permission_mode: e.permissionMode,
+          permission_mode: options.permissionMode,
         }
       : {}),
-    ...(e?.allowedDomains?.length
+    ...(options?.allowedDomains?.length
       ? {
-          allowed_domains: e.allowedDomains,
+          allowed_domains: options.allowedDomains,
         }
       : {}),
-    ...(e?.onPermissionRequest
+    ...(options?.onPermissionRequest
       ? {
           handle_permission_prompts: true,
         }
       : {}),
-    ...(e?.sessionScope
+    ...(options?.sessionScope
       ? {
-          session_scope: e.sessionScope,
+          session_scope: options.sessionScope,
         }
       : {}),
   };
 }
 //@ chunk-p7xf186d.js:28438-28503 placement
-function quoteTruncated(e, t = 64) {
-  return JSON.stringify(String(e).slice(0, t));
+function quoteTruncated(text, maxLength = 64) {
+  return JSON.stringify(String(text).slice(0, maxLength));
 }
 //@ chunk-p7xf186d.js:28503-28585 placement
 class SocketConnectionError extends Error {
@@ -90,10 +92,10 @@ class NoExtensionConnectedError extends Error {
 //@ chunk-p7xf186d.js:28757-28906 placement
 class ToolCallTimeoutError extends Error {
   routingAckReceived;
-  constructor(message, t) {
+  constructor(message, options) {
     super(message);
     this.name = "ToolCallTimeoutError";
-    this.routingAckReceived = t?.routingAckReceived;
+    this.routingAckReceived = options?.routingAckReceived;
   }
 }
 //@ chunk-p7xf186d.js:28906-29000 placement
@@ -121,8 +123,8 @@ function isJsonRpcResult(r) {
 /**
  * 判断解析结果是否为 JSON-RPC 请求（有字符串 method）。
  */
-function isJsonRpcRequest(e) {
-  return "method" in e && typeof e.method === "string";
+function isJsonRpcRequest(message) {
+  return "method" in message && typeof message.method === "string";
 }
 //@ chunk-p7xf186d.js:29191-29311 placement
 var CONNECT_TIMEOUT_MS = 5000;
@@ -138,8 +140,8 @@ var FRAME_OVERHEAD_BYTES = 1024;
 var MAX_REQUEST_PAYLOAD_BYTES = Math.floor(((MAX_LOCAL_FRAME_BYTES - FRAME_OVERHEAD_BYTES) * 3) / 4) - 16;
 //@ chunk-p7xf186d.js:29311-29418 placement
 class PeerRefusedPairing extends PairingError {
-  constructor(e, httpStatus) {
-    super(e, "peer-reported", {
+  constructor(wireCode, httpStatus) {
+    super(wireCode, "peer-reported", {
       httpStatus,
     });
     this.name = "PeerRefusedPairing";
@@ -148,20 +150,20 @@ class PeerRefusedPairing extends PairingError {
 //@ chunk-p7xf186d.js:29418-29600 placement
 class HandshakeTimeout extends Error {
   which;
-  constructor(e) {
-    super(e === "reply" ? "No reply to a pairing message" : "Our attest/JWKS step overran while pairing");
-    this.which = e;
+  constructor(which) {
+    super(which === "reply" ? "No reply to a pairing message" : "Our attest/JWKS step overran while pairing");
+    this.which = which;
     this.name = "HandshakeTimeout";
   }
 }
 //@ chunk-p7xf186d.js:29600-30110 placement
-function handlePairingResult(e, t) {
-  let n = e.result;
-  if (n && typeof n === "object" && n.local_pairing) {
-    if (n.local_pairing.msg === t) return n.local_pairing;
-    throw new PairingError("malformed", `expected ${t}`);
+function handlePairingResult(reply, expectedMsg) {
+  let result = reply.result;
+  if (result && typeof result === "object" && result.local_pairing) {
+    if (result.local_pairing.msg === expectedMsg) return result.local_pairing;
+    throw new PairingError("malformed", `expected ${expectedMsg}`);
   }
-  let error = e.error;
+  let error = reply.error;
   if (error && typeof error === "object" && error.local_pairing) {
     let refusal = parseRefusal(error.local_pairing);
     let code = error.local_pairing.code;
@@ -169,7 +171,8 @@ function handlePairingResult(e, t) {
       typeof code === "string" && /^attest_failed:\d{1,3}$/.test(code) ? Number(code.slice(14)) : undefined;
     throw new PeerRefusedPairing(refusal ?? "malformed", httpStatus);
   }
-  if (t === "accept" && isNoToolSpecifiedError(e)) throw new PeerRefusedPairing("unsupported_peer");
+  if (expectedMsg === "accept" && isNoToolSpecifiedError(reply))
+    throw new PeerRefusedPairing("unsupported_peer");
   throw new PairingError("malformed", "unrecognised reply to a pairing message");
 }
 //@ chunk-p7xf186d.js:30110-30158 placement
@@ -185,8 +188,8 @@ function isRetriableHttpStatus(httpStatus) {
  */
 var isDeadConnectionCode = (code) => code === "ENOENT" || code === "ECONNREFUSED";
 //@ chunk-p7xf186d.js:30203-30577 placement
-function pairingErrorMessage(e, t) {
-  switch (e) {
+function pairingErrorMessage(code, peerReported) {
+  switch (code) {
     case "pairing_disabled":
     case "org_not_permitted":
     case "unsupported_peer":
@@ -196,7 +199,7 @@ function pairingErrorMessage(e, t) {
     case "org_mismatch":
       return "peer_may_move";
     case "not_signed_in":
-      return t ? "peer_not_ready" : "awaits_token";
+      return peerReported ? "peer_not_ready" : "awaits_token";
     case "managed_org_missing":
       return "peer_not_ready";
     case "attest_failed":
@@ -220,16 +223,16 @@ function isRetryablePairingError(error) {
   }
 }
 //@ chunk-p7xf186d.js:30793-30940 placement
-function isNoToolSpecifiedError(e) {
-  let content = e.error?.content;
+function isNoToolSpecifiedError(response) {
+  let content = response.error?.content;
   if (!Array.isArray(content) || content.length !== 1) return false;
-  let n = content[0];
-  return n?.type === "text" && n.text === "No tool specified";
+  let firstBlock = content[0];
+  return firstBlock?.type === "text" && firstBlock.text === "No tool specified";
 }
 //@ chunk-p7xf186d.js:30940-31099 placement
-function requestTooLargeError(e, t = MAX_LOCAL_FRAME_BYTES) {
+function requestTooLargeError(sizeBytes, limitBytes = MAX_LOCAL_FRAME_BYTES) {
   return new RequestTooLargeError(
-    `Request too large for the local browser connection (${e} bytes; limit ${t}). Send smaller inputs or fewer files per call.`,
+    `Request too large for the local browser connection (${sizeBytes} bytes; limit ${limitBytes}). Send smaller inputs or fewer files per call.`,
   );
 }
 //@ chunk-p7xf186d.js:31099-31223 placement
@@ -242,9 +245,14 @@ function peerMaxReassemblyBytes(pairing) {
     : undefined;
 }
 //@ chunk-p7xf186d.js:31223-31336 placement
-function isInferenceRequest(e) {
-  let t = e;
-  return !!t && typeof t === "object" && typeof t.max_tokens === "number" && Array.isArray(t.messages);
+function isInferenceRequest(body) {
+  let request = body;
+  return (
+    !!request &&
+    typeof request === "object" &&
+    typeof request.max_tokens === "number" &&
+    Array.isArray(request.messages)
+  );
 }
 //@ chunk-p7xf186d.js:31336-55071 placement
 /**
@@ -294,18 +302,18 @@ class ChromeSocketClient {
     this.connecting = true;
     this.lastPairingRefuse = undefined;
     let connectEpoch = this.connectEpoch;
-    let r = this.context.getSocketPath?.() ?? this.context.socketPath;
-    this.currentPath = r;
-    this.logDial(`[${serverName}] Attempting to connect to: ${r}`);
-    let i;
+    let socketPath = this.context.getSocketPath?.() ?? this.context.socketPath;
+    this.currentPath = socketPath;
+    this.logDial(`[${serverName}] Attempting to connect to: ${socketPath}`);
+    let isSecure;
     try {
-      i = await this.validateSocketSecurity(r);
+      isSecure = await this.validateSocketSecurity(socketPath);
     } catch (error) {
       if (connectEpoch === this.connectEpoch) this.connecting = false;
       logger.info(`[${serverName}] Security validation failed:`, error);
       return;
     }
-    if (!i) {
+    if (!isSecure) {
       if (connectEpoch === this.connectEpoch) {
         this.connecting = false;
         this.scheduleReconnect("dead");
@@ -315,11 +323,11 @@ class ChromeSocketClient {
     if (connectEpoch !== this.connectEpoch) return;
     let localPairing = this.context.localPairing;
     if (localPairing && !(await this.ownIdentityPresent(localPairing, connectEpoch))) return;
-    let o;
+    let socket;
     let { connectVerified } = this.context;
     if (connectVerified) {
       try {
-        o = await connectVerified(r);
+        socket = await connectVerified(socketPath);
       } catch (error) {
         if (connectEpoch !== this.connectEpoch) return;
         this.connecting = false;
@@ -336,12 +344,12 @@ class ChromeSocketClient {
         return;
       }
       if (connectEpoch !== this.connectEpoch) {
-        o.destroy();
+        socket.destroy();
         return;
       }
-    } else o = createConnection(r);
-    this.socket = o;
-    let a = () => {
+    } else socket = createConnection(socketPath);
+    this.socket = socket;
+    let onConnected = () => {
       this.clearConnectTimer();
       this.clearReconnectTimer();
       if (localPairing) {
@@ -354,19 +362,21 @@ class ChromeSocketClient {
       this.reconnectAttempts = 0;
       logger.info(`[${serverName}] Successfully connected to bridge server`);
     };
-    o.on("data", (u) => {
+    socket.on("data", (chunk) => {
       let responseBuffer = this.responseBuffer;
-      let p = responseBuffer.length + this.responseChunkBytes + u.length;
-      if (responseBuffer.length >= 4 && p < 4 + responseBuffer.readUInt32LE(0)) {
-        this.responseChunks.push(u);
-        this.responseChunkBytes += u.length;
+      let totalBytes = responseBuffer.length + this.responseChunkBytes + chunk.length;
+      if (responseBuffer.length >= 4 && totalBytes < 4 + responseBuffer.readUInt32LE(0)) {
+        this.responseChunks.push(chunk);
+        this.responseChunkBytes += chunk.length;
         return;
       }
       if (this.responseChunks.length > 0) {
-        this.responseBuffer = Buffer.concat([responseBuffer, ...this.responseChunks, u], p);
+        this.responseBuffer = Buffer.concat([responseBuffer, ...this.responseChunks, chunk], totalBytes);
         this.responseChunks = [];
         this.responseChunkBytes = 0;
-      } else this.responseBuffer = responseBuffer.length === 0 ? u : Buffer.concat([responseBuffer, u], p);
+      } else
+        this.responseBuffer =
+          responseBuffer.length === 0 ? chunk : Buffer.concat([responseBuffer, chunk], totalBytes);
       while (this.responseBuffer.length >= 4) {
         let uInt32LE = this.responseBuffer.readUInt32LE(0);
         if (this.responseBuffer.length < 4 + uInt32LE) break;
@@ -393,17 +403,17 @@ class ChromeSocketClient {
         }
       }
     });
-    o.on("error", (u) => {
-      logger.info(`[${serverName}] Socket error (code: ${u.code}):`, u);
+    socket.on("error", (error) => {
+      logger.info(`[${serverName}] Socket error (code: ${error.code}):`, error);
       this.closeSocket();
-      this.scheduleReconnect(isDeadConnectionCode(u.code) ? "dead" : "transport");
+      this.scheduleReconnect(isDeadConnectionCode(error.code) ? "dead" : "transport");
     });
-    o.on("close", () => {
+    socket.on("close", () => {
       this.closeSocket();
       this.scheduleReconnect();
     });
     if (connectVerified) {
-      a();
+      onConnected();
       return;
     }
     this.connectTimer = setTimeout(() => {
@@ -413,12 +423,12 @@ class ChromeSocketClient {
         this.scheduleReconnect();
       }
     }, CONNECT_TIMEOUT_MS);
-    o.on("connect", a);
+    socket.on("connect", onConnected);
   }
-  scheduleReconnect(e = "transport") {
+  scheduleReconnect(cadence = "transport") {
     let { serverName, logger } = this.context;
     if (this.disableAutoReconnect) {
-      this.onRedialWanted?.(e);
+      this.onRedialWanted?.(cadence);
       return;
     }
     if (this.reconnectTimer) {
@@ -426,9 +436,9 @@ class ChromeSocketClient {
       return;
     }
     this.reconnectAttempts++;
-    let r = 100;
-    if (this.reconnectAttempts > r) {
-      logger.info(`[${serverName}] Giving up after ${r} attempts. Will retry on next tool call.`);
+    let maxAttempts = 100;
+    if (this.reconnectAttempts > maxAttempts) {
+      logger.info(`[${serverName}] Giving up after ${maxAttempts} attempts. Will retry on next tool call.`);
       this.reconnectAttempts = 0;
       return;
     }
@@ -442,47 +452,49 @@ class ChromeSocketClient {
       this.connect();
     }, min);
   }
-  dispatchPairingRail(e, t) {
+  dispatchPairingRail(frame, connectEpoch) {
     let { serverName, logger } = this.context;
-    if (!e || typeof e !== "object") {
+    if (!frame || typeof frame !== "object") {
       logger.info(`[${serverName}] Dropping a non-object frame`);
       return;
     }
     if (!this.connected) {
       if (
         this.pairingWaiter &&
-        isJsonRpcResult(e) &&
-        (e.tool_use_id === this.pairingWaiter.toolUseId ||
-          (e.tool_use_id === undefined && this.pairingWaiter.acceptsUntagged && isNoToolSpecifiedError(e)))
+        isJsonRpcResult(frame) &&
+        (frame.tool_use_id === this.pairingWaiter.toolUseId ||
+          (frame.tool_use_id === undefined &&
+            this.pairingWaiter.acceptsUntagged &&
+            isNoToolSpecifiedError(frame)))
       ) {
         let pairingWaiter = this.pairingWaiter;
         this.pairingWaiter = null;
         clearTimeout(pairingWaiter.timer);
-        pairingWaiter.resolve(e);
+        pairingWaiter.resolve(frame);
         return;
       }
       logger.info(`[${serverName}] Dropping frame received before the connection was admitted`);
       return;
     }
-    this.dispatchSealed(e, t);
+    this.dispatchSealed(frame, connectEpoch);
   }
-  async pair(e, t) {
+  async pair(connectEpoch, localPairing) {
     let { serverName, logger } = this.context;
-    let i = this.currentPath ?? this.context.socketPath;
+    let socketPath = this.currentPath ?? this.context.socketPath;
     this.handshaking = true;
-    this.reportPairingState(t, {
+    this.reportPairingState(localPairing, {
       state: "pairing",
-      socketPath: i,
+      socketPath,
     });
     try {
-      let { source, jwks } = ensurePairingContext(t);
-      let c = new LocalPairingHandshake({
+      let { source, jwks } = ensurePairingContext(localPairing);
+      let handshake = new LocalPairingHandshake({
         source,
         jwks,
         policy: {
-          requiredOrg: t.requiredOrg,
+          requiredOrg: localPairing.requiredOrg,
         },
-        instanceHint: t.instanceHint,
+        instanceHint: localPairing.instanceHint,
       });
       let min = Math.min(
         FORCED_TEARDOWN_GRACE_MS,
@@ -490,47 +502,47 @@ class ChromeSocketClient {
       );
       if (min > 0) {
         await new Promise((resolve) => setTimeout(resolve, min).unref?.());
-        if (e !== this.connectEpoch) return;
+        if (connectEpoch !== this.connectEpoch) return;
       }
-      let u = await this.withPairingStepDeadline(c.createOffer());
-      if (e !== this.connectEpoch) return;
-      let l = handlePairingResult(
+      let offer = await this.withPairingStepDeadline(handshake.createOffer());
+      if (connectEpoch !== this.connectEpoch) return;
+      let acceptMessage = handlePairingResult(
         await this.exchangePairing(
           {
-            ...u,
+            ...offer,
           },
           true,
         ),
         "accept",
       );
-      if (e !== this.connectEpoch) return;
-      let p = await this.withPairingStepDeadline(c.onAccept(l));
-      if (e !== this.connectEpoch) return;
-      let y = handlePairingResult(
+      if (connectEpoch !== this.connectEpoch) return;
+      let acceptReply = await this.withPairingStepDeadline(handshake.onAccept(acceptMessage));
+      if (connectEpoch !== this.connectEpoch) return;
+      let doneMessage = handlePairingResult(
         await this.exchangePairing(
           {
-            ...p,
+            ...acceptReply,
           },
           false,
         ),
         "done",
       );
-      if (e !== this.connectEpoch) return;
-      let g = await c.onDone(y);
-      if (e !== this.connectEpoch) {
-        g.channel.tearDown();
+      if (connectEpoch !== this.connectEpoch) return;
+      let established = await handshake.onDone(doneMessage);
+      if (connectEpoch !== this.connectEpoch) {
+        established.channel.tearDown();
         return;
       }
       if (!this.socket || this.socket.destroyed) {
-        g.channel.tearDown();
+        established.channel.tearDown();
         this.closeSocket();
         this.scheduleReconnect();
         return;
       }
-      this.pairing = g;
+      this.pairing = established;
       this.pairingExpired = false;
       this.pairingAgeTimer = setTimeout(() => {
-        if (this.pairing !== g) return;
+        if (this.pairing !== established) return;
         this.pairingExpired = true;
         if (!this.pending) {
           this.expirePairing();
@@ -547,27 +559,27 @@ class ChromeSocketClient {
       this.schedulePairingProbe();
       this.loggedRefusal = undefined;
       logger.info(
-        `[${serverName}] Local pairing established with ${i} (peer ${g.peer.client_kind}, sid ${g.sidB64.slice(0, 8)}\u2026)`,
+        `[${serverName}] Local pairing established with ${socketPath} (peer ${established.peer.client_kind}, sid ${established.sidB64.slice(0, 8)}\u2026)`,
       );
-      this.reportPairingState(t, {
+      this.reportPairingState(localPairing, {
         state: "established",
-        socketPath: i,
-        peerKind: g.peer.client_kind,
-        peerInstance: g.peerInstance,
-        assertionExp: g.peer.exp,
+        socketPath,
+        peerKind: established.peer.client_kind,
+        peerInstance: established.peerInstance,
+        assertionExp: established.peer.exp,
       });
     } catch (error) {
-      if (e !== this.connectEpoch) return;
+      if (connectEpoch !== this.connectEpoch) return;
       this.handshaking = false;
       if (error instanceof HandshakeTimeout) {
-        logger.warn(`[${serverName}] ${error.message} (${i}); reconnecting`);
+        logger.warn(`[${serverName}] ${error.message} (${socketPath}); reconnecting`);
         this.lastPairingRefuse = {
           code: "timeout",
           peerReported: false,
         };
-        this.reportPairingState(t, {
+        this.reportPairingState(localPairing, {
           state: "refused",
-          socketPath: i,
+          socketPath,
           code: "timeout",
           wire: "timeout",
           peerReported: false,
@@ -576,94 +588,94 @@ class ChromeSocketClient {
         this.scheduleReconnect();
         return;
       }
-      let o = error instanceof PeerRefusedPairing;
-      let c = error instanceof PairingError ? error : undefined;
-      let code = c?.code ?? "malformed";
-      let u = c?.wireCode() ?? code;
+      let peerReported = error instanceof PeerRefusedPairing;
+      let pairingError = error instanceof PairingError ? error : undefined;
+      let code = pairingError?.code ?? "malformed";
+      let wireCode = pairingError?.wireCode() ?? code;
       this.logRefusal(
-        `[${serverName}] Local pairing with ${i} refused: ${u}${o ? " (peer-reported, unauthenticated)" : ""}`,
-        c ? undefined : error,
+        `[${serverName}] Local pairing with ${socketPath} refused: ${wireCode}${peerReported ? " (peer-reported, unauthenticated)" : ""}`,
+        pairingError ? undefined : error,
       );
       this.lastPairingRefuse = {
         code,
-        peerReported: o,
+        peerReported,
       };
-      this.reportPairingState(t, {
+      this.reportPairingState(localPairing, {
         state: "refused",
-        socketPath: i,
+        socketPath,
         code,
-        wire: u,
-        ...(c?.httpStatus !== undefined && {
-          httpStatus: c.httpStatus,
+        wire: wireCode,
+        ...(pairingError?.httpStatus !== undefined && {
+          httpStatus: pairingError.httpStatus,
         }),
-        peerReported: o,
+        peerReported,
       });
       this.closeSocket();
       if (isRetryablePairingError(error)) this.scheduleReconnect();
     }
   }
-  async ownIdentityPresent(e, t) {
+  async ownIdentityPresent(localPairing, connectEpoch) {
     let { serverName } = this.context;
-    let r = this.currentPath ?? this.context.socketPath;
-    let i;
-    let s = false;
+    let socketPath = this.currentPath ?? this.context.socketPath;
+    let bearer;
+    let bearerFailed = false;
     try {
-      i = await this.withPairingStepDeadline(e.getBearer());
+      bearer = await this.withPairingStepDeadline(localPairing.getBearer());
     } catch {
-      s = true;
+      bearerFailed = true;
     }
-    if (t !== this.connectEpoch) return false;
-    if (i) return true;
+    if (connectEpoch !== this.connectEpoch) return false;
+    if (bearer) return true;
     this.connecting = false;
     this.lastPairingRefuse = {
       code: "not_signed_in",
       peerReported: false,
     };
     this.logRefusal(
-      `[${serverName}] Local pairing with ${r} refused: not_signed_in (no bearer of our own${s ? "; token source failed" : ""}; not dialing)`,
+      `[${serverName}] Local pairing with ${socketPath} refused: not_signed_in (no bearer of our own${bearerFailed ? "; token source failed" : ""}; not dialing)`,
     );
-    this.reportPairingState(e, {
+    this.reportPairingState(localPairing, {
       state: "refused",
-      socketPath: r,
+      socketPath,
       code: "not_signed_in",
       wire: "not_signed_in",
       peerReported: false,
     });
-    if (s) this.scheduleReconnect();
+    if (bearerFailed) this.scheduleReconnect();
     return false;
   }
-  logRefusal(e, ...t) {
-    if (e === this.loggedRefusal) {
-      this.context.logger.debug(e, ...t);
+  logRefusal(message, ...args) {
+    if (message === this.loggedRefusal) {
+      this.context.logger.debug(message, ...args);
       return;
     }
-    this.loggedRefusal = e;
-    this.context.logger.warn(e, ...t);
+    this.loggedRefusal = message;
+    this.context.logger.warn(message, ...args);
   }
-  logDial(e) {
-    if (this.loggedRefusal === undefined) this.context.logger.info(e);
-    else this.context.logger.debug(e);
+  logDial(message) {
+    if (this.loggedRefusal === undefined) this.context.logger.info(message);
+    else this.context.logger.debug(message);
   }
-  withPairingStepDeadline(e) {
-    let t;
-    let promise = new Promise((resolve, reject) => {
-      t = setTimeout(() => reject(new HandshakeTimeout("step")), HANDSHAKE_STEP_TIMEOUT_MS);
-      t.unref?.();
+  withPairingStepDeadline(promise) {
+    let timer;
+    let promise_2 = new Promise((resolve, reject) => {
+      timer = setTimeout(() => reject(new HandshakeTimeout("step")), HANDSHAKE_STEP_TIMEOUT_MS);
+      timer.unref?.();
     });
-    return Promise.race([e, promise]).finally(() => clearTimeout(t));
+    return Promise.race([promise, promise_2]).finally(() => clearTimeout(timer));
   }
-  reportPairingState(e, t) {
+  reportPairingState(localPairing, state) {
     try {
-      e.onPairingState?.(t);
+      localPairing.onPairingState?.(state);
     } catch (error) {
       this.context.logger.warn(`[${this.context.serverName}] onPairingState handler threw:`, error);
     }
   }
   exchangePairing(localPairing, acceptsUntagged) {
     return new Promise((resolve, reject) => {
-      let i = randomUUID();
+      let toolUseId = randomUUID();
       let timer = setTimeout(() => {
-        if (this.pairingWaiter?.toolUseId === i) {
+        if (this.pairingWaiter?.toolUseId === toolUseId) {
           this.pairingWaiter = null;
           reject(new HandshakeTimeout("reply"));
         }
@@ -673,7 +685,7 @@ class ChromeSocketClient {
         this.pairingWaiter.reject(new HandshakeTimeout("reply"));
       }
       this.pairingWaiter = {
-        toolUseId: i,
+        toolUseId,
         acceptsUntagged,
         resolve,
         reject,
@@ -683,27 +695,27 @@ class ChromeSocketClient {
         method: "execute_tool",
         params: {
           client_id: this.context.clientTypeId,
-          tool_use_id: i,
+          tool_use_id: toolUseId,
           local_pairing: localPairing,
         },
       });
     });
   }
-  async writeSealed(e, t) {
+  async writeSealed(toolUseId, payload) {
     let pairing = this.pairing;
     if (!pairing || !this.connected)
       throw new SocketConnectionError(`[${this.context.serverName}] Cannot send request: not paired`);
-    let r = Buffer.byteLength(JSON.stringify(t), "utf-8");
-    let i = peerMaxReassemblyBytes(pairing);
-    let s = r > MAX_REQUEST_PAYLOAD_BYTES && i !== undefined;
-    if (s && r > i) throw requestTooLargeError(r, i);
-    if (!s && Math.ceil((r * 4) / 3) > MAX_LOCAL_FRAME_BYTES)
-      throw requestTooLargeError(Math.ceil((r * 4) / 3));
-    let o;
+    let payloadBytes = Buffer.byteLength(JSON.stringify(payload), "utf-8");
+    let peerMaxBytes = peerMaxReassemblyBytes(pairing);
+    let mustChunk = payloadBytes > MAX_REQUEST_PAYLOAD_BYTES && peerMaxBytes !== undefined;
+    if (mustChunk && payloadBytes > peerMaxBytes) throw requestTooLargeError(payloadBytes, peerMaxBytes);
+    if (!mustChunk && Math.ceil((payloadBytes * 4) / 3) > MAX_LOCAL_FRAME_BYTES)
+      throw requestTooLargeError(Math.ceil((payloadBytes * 4) / 3));
+    let sealedFrames;
     try {
-      o = s
-        ? await pairing.channel.sealChunked("execute_tool", e, t, MAX_REQUEST_PAYLOAD_BYTES)
-        : [await pairing.channel.seal("execute_tool", e, t)];
+      sealedFrames = mustChunk
+        ? await pairing.channel.sealChunked("execute_tool", toolUseId, payload, MAX_REQUEST_PAYLOAD_BYTES)
+        : [await pairing.channel.seal("execute_tool", toolUseId, payload)];
     } catch (error) {
       if (this.pairing !== pairing || pairing.channel.isTornDown)
         throw new SocketConnectionError(`[${this.context.serverName}] Pairing changed while sealing`);
@@ -711,83 +723,85 @@ class ChromeSocketClient {
     }
     if (this.pairing !== pairing)
       throw new SocketConnectionError(`[${this.context.serverName}] Pairing changed while sealing`);
-    if (s)
+    if (mustChunk)
       this.context.logger.info(
-        `[${this.context.serverName}] Sealed request sliced into ${o.length} frames (${r} bytes, max ${MAX_REQUEST_PAYLOAD_BYTES} per slice)`,
+        `[${this.context.serverName}] Sealed request sliced into ${sealedFrames.length} frames (${payloadBytes} bytes, max ${MAX_REQUEST_PAYLOAD_BYTES} per slice)`,
       );
-    let mapped = o.map((sealed) => {
-      let u = {
+    let mapped = sealedFrames.map((sealed) => {
+      let frame = {
         method: "execute_tool",
         params: {
-          tool_use_id: e,
+          tool_use_id: toolUseId,
           sealed,
         },
       };
-      let buffer = Buffer.from(JSON.stringify(u), "utf-8");
+      let buffer = Buffer.from(JSON.stringify(frame), "utf-8");
       if (buffer.length > MAX_LOCAL_FRAME_BYTES) throw requestTooLargeError(buffer.length);
       return {
-        frame: u,
+        frame,
         bytes: buffer,
       };
     });
     for (let { frame, bytes } of mapped) this.writeRaw(frame, bytes);
   }
-  async answerInferenceRequest(e, t, n) {
+  async answerInferenceRequest(requestId, request, connectEpoch) {
     let { serverName, logger, localPairing } = this.context;
-    let o;
+    let result;
     try {
-      if (!e || !isInferenceRequest(t))
-        o = {
+      if (!requestId || !isInferenceRequest(request))
+        result = {
           ok: false,
           error: "malformed",
         };
       else if (this.context.isDisabled?.() || !localPairing?.onInferenceRequest)
-        o = {
+        result = {
           ok: false,
           error: "not_supported",
         };
-      else o = await localPairing.onInferenceRequest(t);
-      let a = Math.ceil((Buffer.byteLength(JSON.stringify(o), "utf-8") * 4) / 3);
-      if (a > MAX_LOCAL_FRAME_BYTES) {
-        logger.warn(`[${serverName}] inference_response too large (${a} bytes); answering too_large`);
-        o = {
+      else result = await localPairing.onInferenceRequest(request);
+      let sealedBytes = Math.ceil((Buffer.byteLength(JSON.stringify(result), "utf-8") * 4) / 3);
+      if (sealedBytes > MAX_LOCAL_FRAME_BYTES) {
+        logger.warn(
+          `[${serverName}] inference_response too large (${sealedBytes} bytes); answering too_large`,
+        );
+        result = {
           ok: false,
           error: "too_large",
         };
       }
     } catch (error) {
       logger.warn(`[${serverName}] inference seam failed:`, error);
-      o = {
+      result = {
         ok: false,
         error: "handler_error",
       };
     }
     let pairing = this.pairing;
-    if (n !== this.connectEpoch || !pairing) return;
+    if (connectEpoch !== this.connectEpoch || !pairing) return;
     try {
-      let sealed = await pairing.channel.seal("notification:inference_response", e, {
+      let sealed = await pairing.channel.seal("notification:inference_response", requestId, {
         method: "inference_response",
         params: {
-          request_id: e,
-          result: o,
+          request_id: requestId,
+          result,
         },
       });
-      if (n !== this.connectEpoch || this.pairing !== pairing) return;
-      let u = {
+      if (connectEpoch !== this.connectEpoch || this.pairing !== pairing) return;
+      let frame = {
         method: "inference_response",
         params: {
-          request_id: e,
+          request_id: requestId,
           sealed,
         },
       };
-      let buffer = Buffer.from(JSON.stringify(u), "utf-8");
+      let buffer = Buffer.from(JSON.stringify(frame), "utf-8");
       if (buffer.length > MAX_LOCAL_FRAME_BYTES) {
         logger.warn(
           `[${serverName}] inference_response frame oversized after seal (${buffer.length} bytes); dropped`,
         );
         return;
       }
-      this.writeRaw(u, buffer);
+      this.writeRaw(frame, buffer);
     } catch (error) {
       logger.warn(`[${serverName}] Failed to seal inference_response:`, error);
     }
@@ -808,19 +822,19 @@ class ChromeSocketClient {
     if (this.pairingExpired && this.pending) this.startAgeGrace(this.pending);
     return this.pairingExpired;
   }
-  startAgeGrace(e) {
+  startAgeGrace(pending) {
     if (this.pairingGraceTimer) return;
     let pairing = this.pairing;
     this.pairingGraceTimer = setTimeout(() => {
       if (this.pairing === pairing) this.expirePairing();
-    }, e.timeoutMs);
+    }, pending.timeoutMs);
     this.pairingGraceTimer.unref?.();
   }
-  forceRepair(e, t = false) {
+  forceRepair(error, peerDropped = false) {
     this.forcedTeardownAt = Date.now();
-    this.failPending(e);
+    this.failPending(error);
     this.closeSocket();
-    this.scheduleReconnect(t ? "peer_dropped" : "transport");
+    this.scheduleReconnect(peerDropped ? "peer_dropped" : "transport");
   }
   schedulePairingProbe() {
     this.clearPairingProbe();
@@ -835,19 +849,19 @@ class ChromeSocketClient {
         this.expirePairing();
         return;
       }
-      let e = {
+      let probeFrame = {
         method: "execute_tool",
         params: {
           client_id: this.context.clientTypeId,
           tool_use_id: randomUUID(),
         },
       };
-      this.probeToolUseId = e.params.tool_use_id;
-      let t = () => {
+      this.probeToolUseId = probeFrame.params.tool_use_id;
+      let afterProbe = () => {
         this.probeToolUseId = undefined;
         if (this.connected && this.pairing) this.schedulePairingProbe();
       };
-      this.sendRequest(e, LIVENESS_PROBE_TIMEOUT_MS).then(() => {
+      this.sendRequest(probeFrame, LIVENESS_PROBE_TIMEOUT_MS).then(() => {
         this.probesAnswered += 1;
         if (this.probesAnswered === 1)
           this.context.logger.info(
@@ -857,8 +871,8 @@ class ChromeSocketClient {
           this.context.logger.debug(
             `[${this.context.serverName}] Local pairing liveness probe ${this.probesAnswered} answered`,
           );
-        t();
-      }, t);
+        afterProbe();
+      }, afterProbe);
     }, this.context.localPairing?.probeIntervalMs ?? LIVENESS_PROBE_INTERVAL_MS);
     this.pairingProbeTimer.unref?.();
   }
@@ -878,7 +892,7 @@ class ChromeSocketClient {
     this.closeSocket();
     this.scheduleReconnect();
   }
-  clearPairing(e) {
+  clearPairing(explicit) {
     if (this.pairingWaiter) {
       clearTimeout(this.pairingWaiter.timer);
       let pairingWaiter = this.pairingWaiter;
@@ -904,49 +918,53 @@ class ChromeSocketClient {
     this.pairing?.channel.tearDown();
     this.pairing = null;
     this.pairingExpired = false;
-    if ((pairing || e) && this.context.localPairing)
+    if ((pairing || explicit) && this.context.localPairing)
       this.reportPairingState(this.context.localPairing, {
         state: "closed",
         socketPath: this.currentPath ?? this.context.socketPath,
         reason,
       });
   }
-  async dispatchSealed(e, t) {
+  async dispatchSealed(frame, connectEpoch) {
     let { serverName, logger } = this.context;
     let pairing = this.pairing;
     if (!pairing) return;
-    let s;
-    let o;
-    let c;
-    if (isJsonRpcRequest(e)) {
-      if (e.method === "permission_request") {
-        s = "notification:permission_request";
-        let toolUseId = e.params?.tool_use_id;
-        o = typeof toolUseId === "string" ? toolUseId : undefined;
-      } else if (e.method === "sealed_broadcast") {
-        s = "notification:sealed_broadcast";
-        o = undefined;
-      } else if (e.method === "inference_request") {
-        s = "notification:inference_request";
-        let requestId = e.params?.request_id;
-        o = typeof requestId === "string" ? requestId : undefined;
+    let frameKind;
+    let routingId;
+    let sealed;
+    if (isJsonRpcRequest(frame)) {
+      if (frame.method === "permission_request") {
+        frameKind = "notification:permission_request";
+        let toolUseId = frame.params?.tool_use_id;
+        routingId = typeof toolUseId === "string" ? toolUseId : undefined;
+      } else if (frame.method === "sealed_broadcast") {
+        frameKind = "notification:sealed_broadcast";
+        routingId = undefined;
+      } else if (frame.method === "inference_request") {
+        frameKind = "notification:inference_request";
+        let requestId = frame.params?.request_id;
+        routingId = typeof requestId === "string" ? requestId : undefined;
       } else {
         logger.info(`[${serverName}] Dropping unsealed notification on a paired connection`);
         return;
       }
-      c = e.params?.sealed;
+      sealed = frame.params?.sealed;
     } else {
-      let l = e;
-      if (typeof l.tool_use_id !== "string") {
+      let responseFrame = frame;
+      if (typeof responseFrame.tool_use_id !== "string") {
         logger.info(`[${serverName}] Dropping a response without a routing id on a paired connection`);
         return;
       }
-      s = "tool_response";
-      o = l.tool_use_id;
-      c = l.sealed;
-      if (c === undefined && o === this.pending?.toolUseId && l.error?.local_pairing) {
+      frameKind = "tool_response";
+      routingId = responseFrame.tool_use_id;
+      sealed = responseFrame.sealed;
+      if (
+        sealed === undefined &&
+        routingId === this.pending?.toolUseId &&
+        responseFrame.error?.local_pairing
+      ) {
         logger.warn(
-          `[${serverName}] Peer reports the pairing is unknown to it${o === this.probeToolUseId ? " (it dropped the pairing; found by the liveness probe)" : ""}; re-pairing`,
+          `[${serverName}] Peer reports the pairing is unknown to it${routingId === this.probeToolUseId ? " (it dropped the pairing; found by the liveness probe)" : ""}; re-pairing`,
         );
         this.forceRepair(
           new ExtensionDisconnectedMidCallError(
@@ -957,19 +975,21 @@ class ChromeSocketClient {
         return;
       }
     }
-    if (c === undefined) {
-      logger.info(`[${serverName}] Dropping clear-text ${s} on a paired connection`);
+    if (sealed === undefined) {
+      logger.info(`[${serverName}] Dropping clear-text ${frameKind} on a paired connection`);
       return;
     }
-    if (this.pairingAgedOut() && !(s === "tool_response" && o === this.pending?.toolUseId)) {
-      if (this.pending) logger.info(`[${serverName}] Dropping sealed ${s} past the pairing's maximum age`);
+    if (this.pairingAgedOut() && !(frameKind === "tool_response" && routingId === this.pending?.toolUseId)) {
+      if (this.pending)
+        logger.info(`[${serverName}] Dropping sealed ${frameKind} past the pairing's maximum age`);
       else this.expirePairing();
       return;
     }
-    let a = await pairing.channel.open(s, o, c);
-    if (t !== this.connectEpoch || this.pairing !== pairing) return;
-    if (!a.ok) {
-      if (a.reason !== "foreign_sid") logger.warn(`[${serverName}] Sealed ${s} rejected: ${a.reason}`);
+    let opened = await pairing.channel.open(frameKind, routingId, sealed);
+    if (connectEpoch !== this.connectEpoch || this.pairing !== pairing) return;
+    if (!opened.ok) {
+      if (opened.reason !== "foreign_sid")
+        logger.warn(`[${serverName}] Sealed ${frameKind} rejected: ${opened.reason}`);
       if (pairing.channel.isTornDown) {
         logger.warn(`[${serverName}] Sealed channel torn down; re-pairing`);
         this.forceRepair(
@@ -980,10 +1000,10 @@ class ChromeSocketClient {
       }
       return;
     }
-    let inner = a.inner;
+    let inner = opened.inner;
     if (!inner || typeof inner !== "object") return;
     try {
-      if (s === "tool_response")
+      if (frameKind === "tool_response")
         this.handleResponse(
           {
             ...("result" in inner && {
@@ -992,91 +1012,92 @@ class ChromeSocketClient {
             ...("error" in inner && {
               error: inner.error,
             }),
-            tool_use_id: o,
+            tool_use_id: routingId,
           },
           Buffer.byteLength(JSON.stringify(inner), "utf-8"),
         );
-      else if (s === "notification:permission_request") {
+      else if (frameKind === "notification:permission_request") {
         let params = inner.params ?? {};
-        if (inner.method !== "permission_request" || params.tool_use_id !== o) {
+        if (inner.method !== "permission_request" || params.tool_use_id !== routingId) {
           logger.warn(`[${serverName}] Sealed permission_request mislabelled; dropped`);
           return;
         }
         this.claimPermissionRequest(params);
-      } else if (s === "notification:inference_request") {
+      } else if (frameKind === "notification:inference_request") {
         let params = inner.params ?? {};
-        if (inner.method !== "inference_request" || params.request_id !== o) {
+        if (inner.method !== "inference_request" || params.request_id !== routingId) {
           logger.warn(`[${serverName}] Sealed inference_request mislabelled; dropped`);
           return;
         }
-        this.answerInferenceRequest(o, params.body, t);
+        this.answerInferenceRequest(routingId, params.body, connectEpoch);
       } else if (this.notificationHandler && typeof inner.method === "string")
         this.notificationHandler({
           method: inner.method,
           params: inner.params ?? undefined,
         });
     } catch (error) {
-      logger.error(`[${serverName}] Error handling a sealed ${s}:`, error);
+      logger.error(`[${serverName}] Error handling a sealed ${frameKind}:`, error);
     }
   }
-  handleResponse(e, t) {
+  handleResponse(response, responseBytes) {
     let pending = this.pending;
-    if (!pending || (typeof e.tool_use_id === "string" && e.tool_use_id !== pending.toolUseId)) return;
+    if (!pending || (typeof response.tool_use_id === "string" && response.tool_use_id !== pending.toolUseId))
+      return;
     this.pending = null;
     clearTimeout(pending.timer);
-    pending.resolve(e, t);
+    pending.resolve(response, responseBytes);
     if (this.pairingAgedOut()) this.expirePairing();
   }
-  claimPermissionRequest(e) {
+  claimPermissionRequest(params) {
     let pending = this.pending;
-    let requestId = e?.request_id;
+    let requestId = params?.request_id;
     if (
       !pending?.onPermissionRequest ||
       typeof requestId !== "string" ||
-      e?.tool_use_id !== pending.toolUseId
+      params?.tool_use_id !== pending.toolUseId
     )
       return false;
-    this.answerPermissionRequest(pending, pending.onPermissionRequest, requestId, e);
+    this.answerPermissionRequest(pending, pending.onPermissionRequest, requestId, params);
     return true;
   }
-  async answerPermissionRequest(e, t, n, r) {
-    let i = toolCallMeta(r, {
-      toolUseId: e.toolUseId,
-      requestId: n,
+  async answerPermissionRequest(pending, onPermissionRequest, requestId, params) {
+    let meta = toolCallMeta(params, {
+      toolUseId: pending.toolUseId,
+      requestId,
     });
-    clearTimeout(e.timer);
+    clearTimeout(pending.timer);
     let allowed = false;
     try {
-      allowed = await t(i);
+      allowed = await onPermissionRequest(meta);
     } catch (error) {
       this.context.logger.error(`[${this.context.serverName}] Error handling permission request:`, error);
     }
-    if (this.pending !== e) return;
+    if (this.pending !== pending) return;
     if (this.pairingAgedOut()) {
       this.expirePairing();
       return;
     }
-    let o = {
+    let response = {
       method: "permission_response",
       params: {
-        request_id: n,
+        request_id: requestId,
         allowed,
       },
     };
     if (this.context.localPairing) {
-      let c = {
-        ...o,
+      let sealedResponse = {
+        ...response,
         params: {
-          ...o.params,
-          tool_use_id: e.toolUseId,
+          ...response.params,
+          tool_use_id: pending.toolUseId,
         },
       };
-      await this.writeSealed(e.toolUseId, c).catch((error) => {
+      await this.writeSealed(pending.toolUseId, sealedResponse).catch((error) => {
         this.context.logger.warn(`[${this.context.serverName}] Could not send permission_response:`, error);
       });
-      if (this.pending !== e) return;
-    } else this.writeFrame(o);
-    this.armTimeout(e);
+      if (this.pending !== pending) return;
+    } else this.writeFrame(response);
+    this.armTimeout(pending);
   }
   setNotificationHandler(notificationHandler) {
     this.notificationHandler = notificationHandler;
@@ -1086,28 +1107,28 @@ class ChromeSocketClient {
     if (this.connected && this.socket) return true;
     if (!this.socket && !this.connecting) await this.connect();
     return new Promise((resolve, reject) => {
-      let r = null;
-      let i = CONNECT_TIMEOUT_MS;
-      let s = () => {
+      let retryTimer = null;
+      let waitMs = CONNECT_TIMEOUT_MS;
+      let onTimeout = () => {
         if (this.connected) {
-          if (r) clearTimeout(r);
+          if (retryTimer) clearTimeout(retryTimer);
           resolve(true);
           return;
         }
         if (
           this.context.localPairing &&
           (this.handshaking || this.lastPairingRefuse?.code === "timeout") &&
-          i < RECONNECT_WAIT_MS
+          waitMs < RECONNECT_WAIT_MS
         ) {
-          i = RECONNECT_WAIT_MS;
-          timer = setTimeout(s, i - CONNECT_TIMEOUT_MS);
+          waitMs = RECONNECT_WAIT_MS;
+          timer = setTimeout(onTimeout, waitMs - CONNECT_TIMEOUT_MS);
           return;
         }
-        if (r) clearTimeout(r);
-        reject(new SocketConnectionError(`[${serverName}] Connection attempt timed out after ${i}ms`));
+        if (retryTimer) clearTimeout(retryTimer);
+        reject(new SocketConnectionError(`[${serverName}] Connection attempt timed out after ${waitMs}ms`));
       };
-      let timer = setTimeout(s, i);
-      let c = () => {
+      let timer = setTimeout(onTimeout, waitMs);
+      let poll = () => {
         if (this.connected) {
           clearTimeout(timer);
           resolve(true);
@@ -1121,36 +1142,36 @@ class ChromeSocketClient {
         ) {
           clearTimeout(timer);
           resolve(false);
-        } else r = setTimeout(c, 500);
+        } else retryTimer = setTimeout(poll, 500);
       };
-      c();
+      poll();
     });
   }
-  armTimeout(e) {
+  armTimeout(pending) {
     let { serverName } = this.context;
-    clearTimeout(e.timer);
-    e.timer = setTimeout(() => {
-      if (this.pending !== e) return;
+    clearTimeout(pending.timer);
+    pending.timer = setTimeout(() => {
+      if (this.pending !== pending) return;
       this.failPending(
-        new ToolCallTimeoutError(`[${serverName}] Tool request timed out after ${e.timeoutMs}ms`),
+        new ToolCallTimeoutError(`[${serverName}] Tool request timed out after ${pending.timeoutMs}ms`),
       );
       this.closeSocket();
       this.scheduleReconnect();
-    }, e.timeoutMs);
+    }, pending.timeoutMs);
   }
-  writeRaw(e, t) {
+  writeRaw(frame, bytes) {
     if (!this.socket || this.socket.destroyed) return;
-    let n = t ?? Buffer.from(JSON.stringify(e), "utf-8");
-    let r = Buffer.allocUnsafe(4);
-    r.writeUInt32LE(n.length, 0);
-    this.socket.write(Buffer.concat([r, n]));
+    let payload = bytes ?? Buffer.from(JSON.stringify(frame), "utf-8");
+    let header = Buffer.allocUnsafe(4);
+    header.writeUInt32LE(payload.length, 0);
+    this.socket.write(Buffer.concat([header, payload]));
   }
-  writeFrame(e) {
+  writeFrame(frame) {
     if (this.context.localPairing)
       throw Error("clear-text frames are disabled when local pairing is configured");
-    this.writeRaw(e);
+    this.writeRaw(frame);
   }
-  async sendRequest(e, timeoutMs, onPermissionRequest) {
+  async sendRequest(request, timeoutMs, onPermissionRequest) {
     let { serverName } = this.context;
     if (this.pairingAgedOut()) this.closeSocket();
     if (!this.socket || this.socket.destroyed || (this.context.localPairing && !this.connected))
@@ -1162,8 +1183,8 @@ class ChromeSocketClient {
         ),
       );
       let sentAt = Date.now();
-      let c = {
-        toolUseId: e.params.tool_use_id,
+      let pending = {
+        toolUseId: request.params.tool_use_id,
         resolve: (response, responseBytes) =>
           resolve({
             response,
@@ -1174,103 +1195,103 @@ class ChromeSocketClient {
         timeoutMs,
         onPermissionRequest,
       };
-      this.armTimeout(c);
-      this.pending = c;
+      this.armTimeout(pending);
+      this.pending = pending;
       if (this.context.localPairing)
-        this.writeSealed(c.toolUseId, e).catch((error) => {
-          if (this.pending === c)
+        this.writeSealed(pending.toolUseId, request).catch((error) => {
+          if (this.pending === pending)
             this.failPending(error instanceof Error ? error : new SocketConnectionError(String(error)));
         });
-      else this.writeFrame(e);
+      else this.writeFrame(request);
     });
   }
-  async callTool(e, args, n) {
-    let r = {
+  async callTool(toolName, args, options) {
+    let frame = {
       method: "execute_tool",
       params: {
         client_id: this.context.clientTypeId,
-        tool: e,
+        tool: toolName,
         args,
         tool_use_id: randomUUID(),
-        ...permissionContextFields(n),
+        ...permissionContextFields(options),
       },
     };
     let { trackEvent } = this.context;
-    let s = this.context.getToolCallTimeoutMs?.(e) ?? BROWSER_TOOL_TIMEOUT_MS;
-    let sessionScope = n?.sessionScope;
+    let timeoutMs = this.context.getToolCallTimeoutMs?.(toolName) ?? BROWSER_TOOL_TIMEOUT_MS;
+    let sessionScope = options?.sessionScope;
     let now = Date.now();
-    let a = {
-      tool_name: `browser:${e}`,
-      tool_use_id: r.params.tool_use_id,
+    let telemetryBase = {
+      tool_name: `browser:${toolName}`,
+      tool_use_id: frame.params.tool_use_id,
       session_id: sessionScope?.sessionId,
       user_message_uuid: sessionScope?.userMessageUuid,
       transport: "native",
     };
     trackEvent?.("chrome_bridge_tool_call_started", {
-      ...a,
-      timeout_ms: s,
-      request_bytes: Buffer.byteLength(JSON.stringify(r), "utf-8"),
+      ...telemetryBase,
+      timeout_ms: timeoutMs,
+      request_bytes: Buffer.byteLength(JSON.stringify(frame), "utf-8"),
     });
-    let u = (h, U, rt) => {
+    let reportError = (errorText, startedAt, errorType) => {
       trackEvent?.("chrome_bridge_tool_call_error", {
-        ...a,
-        duration_ms: Date.now() - U,
-        error_type: rt ?? classifyToolError(e, h),
+        ...telemetryBase,
+        duration_ms: Date.now() - startedAt,
+        error_type: errorType ?? classifyToolError(toolName, errorText),
       });
     };
-    let l;
+    let outcome;
     try {
-      l = await this.sendRequestWithRetry(r, s, n?.onPermissionRequest);
+      outcome = await this.sendRequestWithRetry(frame, timeoutMs, options?.onPermissionRequest);
     } catch (error) {
       if (error instanceof ToolCallTimeoutError)
         trackEvent?.("chrome_bridge_tool_call_timeout", {
-          ...a,
+          ...telemetryBase,
           duration_ms: Date.now() - now,
-          timeout_ms: s,
+          timeout_ms: timeoutMs,
         });
       else
-        u(
+        reportError(
           error instanceof Error ? error.message : String(error),
           now,
           error instanceof RequestTooLargeError ? "request_too_large" : undefined,
         );
       throw error;
     }
-    let { response, responseBytes, sentAt } = l;
-    if ("error" in response) u(firstTextContent(response.error), sentAt);
+    let { response, responseBytes, sentAt } = outcome;
+    if ("error" in response) reportError(firstTextContent(response.error), sentAt);
     else
       trackEvent?.("chrome_bridge_tool_call_completed", {
-        ...a,
+        ...telemetryBase,
         duration_ms: Date.now() - sentAt,
         response_bytes: responseBytes,
       });
     return response;
   }
-  async sendRequestWithRetry(e, t, n) {
+  async sendRequestWithRetry(request, timeoutMs, onPermissionRequest) {
     let { serverName, logger } = this.context;
     try {
-      return await this.sendRequest(e, t, n);
+      return await this.sendRequest(request, timeoutMs, onPermissionRequest);
     } catch (error) {
       if (!(error instanceof SocketConnectionError)) throw error;
       logger.info(`[${serverName}] Connection error, forcing reconnect and retrying: ${error.message}`);
       if (!this.connecting) this.closeSocket();
-      let o;
+      let connected;
       try {
-        o = await this.ensureConnected();
+        connected = await this.ensureConnected();
       } catch (error) {
         if (!(this.context.localPairing && this.lastPairingRefuse)) throw error;
-        o = false;
+        connected = false;
       }
       let lastPairingRefuse = this.lastPairingRefuse;
-      if (!o && this.context.localPairing && lastPairingRefuse) {
-        let a = lastPairingRefuse.peerReported
+      if (!connected && this.context.localPairing && lastPairingRefuse) {
+        let reasonText = lastPairingRefuse.peerReported
           ? `reported by the extension, unverified: ${lastPairingRefuse.code}`
           : lastPairingRefuse.code;
         throw new SocketConnectionError(
-          `[${serverName}] Claude in Chrome isn't paired with your browser (${a})`,
+          `[${serverName}] Claude in Chrome isn't paired with your browser (${reasonText})`,
         );
       }
-      return await this.sendRequest(e, t, n);
+      return await this.sendRequest(request, timeoutMs, onPermissionRequest);
     }
   }
   isConnected() {
@@ -1315,12 +1336,12 @@ class ChromeSocketClient {
       this.reconnectTimer = null;
     }
   }
-  failPending(e) {
+  failPending(error) {
     let pending = this.pending;
     if (!pending) return;
     this.pending = null;
     clearTimeout(pending.timer);
-    pending.reject(e);
+    pending.reject(error);
   }
   disconnect() {
     this.clearReconnectTimer();
@@ -1330,28 +1351,28 @@ class ChromeSocketClient {
     this.closeSocket();
     this.reconnectAttempts = 0;
   }
-  async validateSocketSecurity(e) {
+  async validateSocketSecurity(socketPath) {
     let { serverName, logger } = this.context;
     if (platform() === "win32" || this.context.connectVerified) return true;
     try {
-      let r = dirname(e);
-      if ((r.split("/").pop() || "").startsWith("claude-mcp-browser-bridge-"))
+      let socketDir = dirname(socketPath);
+      if ((socketDir.split("/").pop() || "").startsWith("claude-mcp-browser-bridge-"))
         try {
-          let stats = await promises.lstat(r);
+          let stats = await promises.lstat(socketDir);
           if (stats.isSymbolicLink())
             throw Error(
-              `[${serverName}] Socket directory is a symlink: ${r}. Directory may have been tampered with.`,
+              `[${serverName}] Socket directory is a symlink: ${socketDir}. Directory may have been tampered with.`,
             );
           if (stats.isDirectory()) {
-            let l = stats.mode & 511;
-            if (l !== 448)
+            let dirMode = stats.mode & 511;
+            if (dirMode !== 448)
               throw Error(
-                `[${serverName}] Insecure socket directory permissions: ${l.toString(8)} (expected 0700). Directory may have been tampered with.`,
+                `[${serverName}] Insecure socket directory permissions: ${dirMode.toString(8)} (expected 0700). Directory may have been tampered with.`,
               );
-            let p = process.getuid?.();
-            if (p !== undefined && stats.uid !== p)
+            let uid = process.getuid?.();
+            if (uid !== undefined && stats.uid !== uid)
               throw Error(
-                `Socket directory not owned by current user (uid: ${p}, dir uid: ${stats.uid}). Potential security risk.`,
+                `Socket directory not owned by current user (uid: ${uid}, dir uid: ${stats.uid}). Potential security risk.`,
               );
           }
         } catch (error) {
@@ -1359,17 +1380,17 @@ class ChromeSocketClient {
           logger.info(`[${serverName}] Socket directory not found; not dialing`);
           return false;
         }
-      let stats = await promises.lstat(e);
-      if (!stats.isSocket()) throw Error(`[${serverName}] Path exists but it's not a socket: ${e}`);
-      let c = stats.mode & 511;
-      if (c !== 384)
+      let stats = await promises.lstat(socketPath);
+      if (!stats.isSocket()) throw Error(`[${serverName}] Path exists but it's not a socket: ${socketPath}`);
+      let socketMode = stats.mode & 511;
+      if (socketMode !== 384)
         throw Error(
-          `[${serverName}] Insecure socket permissions: ${c.toString(8)} (expected 0600). Socket may have been tampered with.`,
+          `[${serverName}] Insecure socket permissions: ${socketMode.toString(8)} (expected 0600). Socket may have been tampered with.`,
         );
-      let a = process.getuid?.();
-      if (a !== undefined && stats.uid !== a)
+      let uid = process.getuid?.();
+      if (uid !== undefined && stats.uid !== uid)
         throw Error(
-          `Socket not owned by current user (uid: ${a}, socket uid: ${stats.uid}). Potential security risk.`,
+          `Socket not owned by current user (uid: ${uid}, socket uid: ${stats.uid}). Potential security risk.`,
         );
       this.logDial(`[${serverName}] Socket security validation passed`);
       return true;
@@ -1390,8 +1411,8 @@ function createChromeSocketClient(context) {
 /**
  * 清除某会话的配对上下文来源。
  */
-function clearPairingSource(e) {
-  let pairingContext = getPairingContext(e);
+function clearPairingSource(session) {
+  let pairingContext = getPairingContext(session);
   if (!pairingContext) return false;
   pairingContext.source.clear();
   return true;
@@ -1408,4 +1429,5 @@ export {
   pairingErrorMessage,
   ToolCallSupersededError,
   RequestTooLargeError,
+  clearPairingSource,
 };

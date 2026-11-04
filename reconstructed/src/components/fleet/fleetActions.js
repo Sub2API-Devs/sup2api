@@ -40,7 +40,7 @@ import { daemonSessionStateLabel } from "../../services/daemon/sessionStatus.js"
 import { killJob, deleteJob } from "../../daemon/jobs/killJob.js";
 import { writePendingWakeup } from "../../utils/scheduledWakeup.js";
 import { formatRmOutcome } from "../../cli/bg/bgDispatch.js";
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { isBgSession } from "../../utils/concurrentSessions.js";
 import { shouldShowDisableAutoConnectDialog } from "../IdeAutoConnectDialog.js";
@@ -72,18 +72,18 @@ var RESTART_OFFER_TIMEOUT_MS = 5000;
 /**
  * 清空 fork 拒绝/重启/失效纪元等提示状态，并清掉对应的错误提示。
  */
-function clearFleetOfferState(h, E) {
-  h.forkRefusedJobId = null;
-  h.restartOfferedJobId = null;
-  h.deadEpochOfferedJobId = null;
-  let error = E.getSnapshot().error;
+function clearFleetOfferState(state, editor) {
+  state.forkRefusedJobId = null;
+  state.restartOfferedJobId = null;
+  state.deadEpochOfferedJobId = null;
+  let error = editor.getSnapshot().error;
   if (
     error === RESTART_FRESH_PROMPT ||
     error === RESTART_NOT_RESPONDING_PROMPT ||
     error === RESTART_RETRY_PROMPT ||
     error === RESUME_AFTER_SERVICE_PROMPT
   )
-    E.setError(null);
+    editor.setError(null);
 }
 //@ chunk-93kwxas0.js:89389-89500 placement
 /**
@@ -99,10 +99,10 @@ function offerJobRestart(fleetLiveStatus, fleetEditor, restartOfferedJobId) {
 /**
  * 错误提示仍为指定文案、且没有打开预览/帮助/调试/重命名/分组编辑等浮层时返回 true。
  */
-function isOfferStillShowing(editor, view, deleteConfirm, C) {
+function isOfferStillShowing(editor, view, deleteConfirm, error) {
   let snapshot = view.getSnapshot();
   return (
-    editor.getSnapshot().error === C &&
+    editor.getSnapshot().error === error &&
     !snapshot.previewOpen &&
     !snapshot.helpOpen &&
     !snapshot.debugOpen &&
@@ -116,14 +116,14 @@ function isOfferStillShowing(editor, view, deleteConfirm, C) {
 /**
  * 编辑器里的输入能否解析为一次派发。
  */
-function hasPendingDispatchInput(h) {
-  let { query, mode } = h.editor.getSnapshot();
+function hasPendingDispatchInput(surface) {
+  let { query, mode } = surface.editor.getSnapshot();
   return (
     parseDraftInput(
       query,
       mode,
-      prependModeCharacterToInput(query, mode, h.roster.jobs, h.cwdFilter),
-      h.parseScope,
+      prependModeCharacterToInput(query, mode, surface.roster.jobs, surface.cwdFilter),
+      surface.parseScope,
     ) !== null
   );
 }
@@ -131,86 +131,94 @@ function hasPendingDispatchInput(h) {
 /**
  * 打开更早的会话（resume 选择器）。
  */
-async function openEarlierSession(h, E, k) {
-  let { editor, roster, selection, view, attach, storageV5, mountAt, canonicalLauncherCwd } = h;
+async function openEarlierSession(surface, entry, via) {
+  let { editor, roster, selection, view, attach, storageV5, mountAt, canonicalLauncherCwd } = surface;
   let setError = editor.setError;
-  if (attach.getSnapshot().attachingJobId !== null || attach.isPromoting(E.sessionId)) return;
+  if (attach.getSnapshot().attachingJobId !== null || attach.isPromoting(entry.sessionId)) return;
   let resumePromoteSessionId = view.resumePromoteSessionId;
   if (
     resumePromoteSessionId !== null &&
-    E.sessionId !== resumePromoteSessionId &&
+    entry.sessionId !== resumePromoteSessionId &&
     attach.isPromoting(resumePromoteSessionId)
   )
     return;
-  attach.beginPromote(E.sessionId);
+  attach.beginPromote(entry.sessionId);
   view.closeResumePicker();
   logEvent("tengu_fleetview_earlier_open", {
     ms_since_mount: Date.now() - mountAt,
-    via: fromEnum(k),
+    via: fromEnum(via),
   });
-  let sliced = E.sessionId.slice(0, 8);
-  let W = (ge, se, ne) => {
-    attach.endPromote(E.sessionId);
-    if (view.resumePromoteSessionId === E.sessionId) view.resumePromoteSessionId = null;
-    if (k === "resume_picker")
-      if (ge === "bad") logFeatureBad("fleet_view_resume_picker", se);
-      else logFeatureSad("fleet_view_resume_picker", se);
-    setError(ne);
+  let sliced = entry.sessionId.slice(0, 8);
+  let finish = (level, feature, message) => {
+    attach.endPromote(entry.sessionId);
+    if (view.resumePromoteSessionId === entry.sessionId) view.resumePromoteSessionId = null;
+    if (via === "resume_picker")
+      if (level === "bad") logFeatureBad("fleet_view_resume_picker", feature);
+      else logFeatureSad("fleet_view_resume_picker", feature);
+    setError(message);
   };
-  let z;
+  let state;
   try {
-    if ((await listAllLiveSessions(storageV5)).some((me) => me.sessionId === E.sessionId)) {
-      W("sad", "session_live_elsewhere", SESSION_BUSY_ELSEWHERE_MESSAGE);
+    if ((await listAllLiveSessions(storageV5)).some((session) => session.sessionId === entry.sessionId)) {
+      finish("sad", "session_live_elsewhere", SESSION_BUSY_ELSEWHERE_MESSAGE);
       return;
     }
-    if (roster.isDeleting(sliced) || roster.isDeletingSession(E.sessionId)) {
-      W("sad", "deleting_in_flight", "This session is being deleted \u2014 reopen /resume once it finishes");
+    if (roster.isDeleting(sliced) || roster.isDeletingSession(entry.sessionId)) {
+      finish(
+        "sad",
+        "deleting_in_flight",
+        "This session is being deleted \u2014 reopen /resume once it finishes",
+      );
       return;
     }
     if ((await readJobState(getJobDir(sliced), storageV5)) !== null) {
-      W("sad", "already_in_list", "This session is already in the list \u2014 press enter on its row");
+      finish("sad", "already_in_list", "This session is already in the list \u2014 press enter on its row");
       return;
     }
     if (
       (await listJobs(undefined, storageV5)).some(
-        (me) => me.state.sessionId === E.sessionId || me.state.resumeSessionId === E.sessionId,
+        (job) => job.state.sessionId === entry.sessionId || job.state.resumeSessionId === entry.sessionId,
       )
     ) {
-      W("sad", "already_in_list", "This session is already in the list \u2014 press enter on its row");
+      finish("sad", "already_in_list", "This session is already in the list \u2014 press enter on its row");
       return;
     }
-    let ne;
+    let transcriptInfo;
     try {
-      ne = await statTranscript(E.fullPath, storageV5);
+      transcriptInfo = await statTranscript(entry.fullPath, storageV5);
     } catch {
-      ne = {
+      transcriptInfo = {
         kind: "absent",
       };
     }
-    if (ne.kind === "absent") {
-      W(
+    if (transcriptInfo.kind === "absent") {
+      finish(
         "bad",
         "transcript_gone",
         "This conversation's file is no longer on disk \u2014 it may have been cleaned up",
       );
       return;
     }
-    if (ne.kind === "refused") {
-      W(
+    if (transcriptInfo.kind === "refused") {
+      finish(
         "bad",
         "transcript_refused",
         "This conversation's file is a symbolic link or not a regular file, so it can't be opened from here \u2014 if it's a link, resume from the directory that holds the real file",
       );
       return;
     }
-    if (ne.kind === "unreadable") {
-      W("sad", "transcript_unverified", "Couldn't read this conversation's file just now \u2014 try again");
+    if (transcriptInfo.kind === "unreadable") {
+      finish(
+        "sad",
+        "transcript_unverified",
+        "Couldn't read this conversation's file just now \u2014 try again",
+      );
       return;
     }
-    let cwd = E.cwd;
+    let cwd = entry.cwd;
     if (
-      !isDispatchablePath(E.cwd) ||
-      (await findIntermediateUncJunctionAsync(NodeFsOperations, E.cwd, {
+      !isDispatchablePath(entry.cwd) ||
+      (await findIntermediateUncJunctionAsync(NodeFsOperations, entry.cwd, {
         surfaceNetworkRaw: true,
         unreadableAncestry: "unverified",
       })) !== undefined
@@ -218,23 +226,24 @@ async function openEarlierSession(h, E, k) {
       cwd = canonicalLauncherCwd;
     else
       try {
-        if (!(await stat(E.cwd)).isDirectory()) cwd = canonicalLauncherCwd;
+        if (!(await stat(entry.cwd)).isDirectory()) cwd = canonicalLauncherCwd;
       } catch {
         cwd = canonicalLauncherCwd;
       }
-    if (cwd !== E.cwd && k === "resume_picker") logFeatureSad("fleet_view_resume_picker", "cwd_fallback");
-    ({ state: z } = await preSeedReplBgJob(
-      E.sessionId,
+    if (cwd !== entry.cwd && via === "resume_picker")
+      logFeatureSad("fleet_view_resume_picker", "cwd_fallback");
+    ({ state } = await preSeedReplBgJob(
+      entry.sessionId,
       {
-        intent: E.title,
-        name: E.title,
+        intent: entry.title,
+        name: entry.title,
         cwd,
         inFlight: {
           tasks: 0,
           queued: 0,
           kinds: [],
         },
-        linkScanPath: E.fullPath,
+        linkScanPath: entry.fullPath,
       },
       storageV5,
     ));
@@ -244,180 +253,183 @@ async function openEarlierSession(h, E, k) {
         level: "error",
       });
     else logError(error);
-    W("bad", "promote_failed", `Couldn't open ${E.title} \u2014 ${errorMessage(error)}`);
+    finish("bad", "promote_failed", `Couldn't open ${entry.title} \u2014 ${errorMessage(error)}`);
     return;
   }
-  let oe = {
+  let jobRow = {
     id: sliced,
-    state: z,
-    activity: jobOutcome(z),
+    state,
+    activity: jobOutcome(state),
   };
   selection.followId = sliced;
-  roster.updatePendings((ge) => [...ge, oe]);
-  attachToJob(h, oe);
+  roster.updatePendings((previous) => [...previous, jobRow]);
+  attachToJob(surface, jobRow);
 }
 //@ chunk-93kwxas0.js:92349-95209 placement
 /**
  * 附加到选中的会话（在其他终端运行时拒绝），上报 fleet_view_open。
  */
-function attachToJob(h, E, k) {
-  let { editor, roster, view, attach, deleteConfirm, storageV5, onAction, pendings } = h;
+function attachToJob(surface, job, source) {
+  let { editor, roster, view, attach, deleteConfirm, storageV5, onAction, pendings } = surface;
   let setError = editor.setError;
   let gestureT0 = performance.now();
-  if (!E || attach.getSnapshot().attachingJobId !== null) return;
+  if (!job || attach.getSnapshot().attachingJobId !== null) return;
   let resumePromoteSessionId = view.resumePromoteSessionId;
   if (
     resumePromoteSessionId !== null &&
-    E.state.sessionId !== resumePromoteSessionId &&
+    job.state.sessionId !== resumePromoteSessionId &&
     attach.isPromoting(resumePromoteSessionId)
   )
     return;
   view.closeResumePicker();
-  if (pendings.some((pending) => pending.id === E.id)) return;
-  if (E.state.backend === "peer") {
+  if (pendings.some((pending) => pending.id === job.id)) return;
+  if (job.state.backend === "peer") {
     setError("Can't attach \u2014 this session is running in another terminal");
     logFeatureOk("fleet_view_open");
     return;
   }
-  if (E.state.backend === "remote") {
-    if (E.id.startsWith("remote-pending-")) {
+  if (job.state.backend === "remote") {
+    if (job.id.startsWith("remote-pending-")) {
       setError(STILL_STARTING_MESSAGE);
       logFeatureOk("fleet_view_open");
       return;
     }
     onAction({
       type: "open",
-      job: E,
-      ...(hasPendingDispatchInput(h) && {
+      job,
+      ...(hasPendingDispatchInput(surface) && {
         keepQuery: true,
       }),
       respawnResult: {
         ok: true,
-        short: E.id,
-        state: E.state,
+        short: job.id,
+        state: job.state,
       },
       gestureT0,
     });
     return;
   }
-  if (roster.terminalHolderOf(E) !== undefined) {
+  if (roster.terminalHolderOf(job) !== undefined) {
     setError(SESSION_BUSY_ELSEWHERE_MESSAGE);
     logFeatureOk("fleet_view_open");
     return;
   }
   if (
-    E.state.deadEpochReapedAt !== undefined &&
-    isSettled(E.state) &&
-    !isExecLaunch(E.state) &&
-    attach.forkRefusedJobId !== E.id
+    job.state.deadEpochReapedAt !== undefined &&
+    isSettled(job.state) &&
+    !isExecLaunch(job.state) &&
+    attach.forkRefusedJobId !== job.id
   ) {
-    if (attach.deadEpochGoneJobId === E.id) {
+    if (attach.deadEpochGoneJobId === job.id) {
       setError(TRANSCRIPT_GONE_TEXT);
       logFeatureOk("fleet_view_open");
       return;
     }
-    let ae =
-      attach.deadEpochOfferedJobId === E.id &&
+    let suppressOffer =
+      attach.deadEpochOfferedJobId === job.id &&
       isOfferStillShowing(editor, view, deleteConfirm, RESUME_AFTER_SERVICE_PROMPT);
-    if (ae && attach.deadEpochOfferAgeMs() < AUTO_REFRESH_DEBOUNCE_MS) {
-      attach.deadEpochOfferedJobId = E.id;
+    if (suppressOffer && attach.deadEpochOfferAgeMs() < AUTO_REFRESH_DEBOUNCE_MS) {
+      attach.deadEpochOfferedJobId = job.id;
       return;
     }
-    if (!ae) {
+    if (!suppressOffer) {
       attach.forkRefusedJobId = null;
       attach.restartOfferedJobId = null;
-      attach.deadEpochOfferedJobId = E.id;
+      attach.deadEpochOfferedJobId = job.id;
       setError(RESUME_AFTER_SERVICE_PROMPT);
       logEvent("tengu_fleetview_dead_epoch_offer", {});
       logFeatureOk("fleet_view_open");
       return;
     }
     attach.deadEpochOfferedJobId = null;
-  } else if (attach.deadEpochOfferedJobId === E.id) attach.deadEpochOfferedJobId = null;
-  let W =
-    k !== "esc" &&
+  } else if (attach.deadEpochOfferedJobId === job.id) attach.deadEpochOfferedJobId = null;
+  let retryFork =
+    source !== "esc" &&
     isOfferStillShowing(editor, view, deleteConfirm, RESTART_FRESH_PROMPT) &&
-    attach.forkRefusedJobId === E.id;
-  if (W) attach.forkRefusedJobId = null;
-  let z =
-    k !== "esc" &&
+    attach.forkRefusedJobId === job.id;
+  if (retryFork) attach.forkRefusedJobId = null;
+  let retryUnresponsive =
+    source !== "esc" &&
     (isOfferStillShowing(editor, view, deleteConfirm, RESTART_NOT_RESPONDING_PROMPT) ||
       isOfferStillShowing(editor, view, deleteConfirm, RESTART_RETRY_PROMPT)) &&
-    attach.restartOfferedJobId === E.id &&
-    !isExecLaunch(E.state);
-  let oe = attach.restartOfferedJobId === E.id;
-  if (oe) attach.restartOfferedJobId = null;
-  let ge = randomUUID();
-  startAttachBeacon(ge, "fleet", storageV5).catch(() => {});
-  attach.arm(E.id, ge);
+    attach.restartOfferedJobId === job.id &&
+    !isExecLaunch(job.state);
+  let wasOffered = attach.restartOfferedJobId === job.id;
+  if (wasOffered) attach.restartOfferedJobId = null;
+  let beaconId = randomUUID();
+  startAttachBeacon(beaconId, "fleet", storageV5).catch(() => {});
+  attach.arm(job.id, beaconId);
   setError(null);
-  let se = attach.nextRespawnAttempt();
-  let warming = attach.getWarming(E.id);
+  let attempt = attach.nextRespawnAttempt();
+  let warming = attach.getWarming(job.id);
   if (!warming) {
     warming = safeRespawnBgSession(
-      E.id,
+      job.id,
       {
-        knownState: E.state,
-        ...(W && {
+        knownState: job.state,
+        ...(retryFork && {
           forceRefusalRetry: true,
         }),
-        ...(z && {
+        ...(retryUnresponsive && {
           forceUnresponsive: true,
-          replyOnResume: E.state.tempo === "active",
+          replyOnResume: job.state.tempo === "active",
         }),
       },
       storageV5,
     );
-    attach.trackWarming(E.id, warming);
+    attach.trackWarming(job.id, warming);
   }
-  warming.then((ae) => {
-    if (!attach.isCurrentRespawnAttempt(se)) {
-      clearAttachBeacon(ge, storageV5).catch(() => {});
+  warming.then((respawn) => {
+    if (!attach.isCurrentRespawnAttempt(attempt)) {
+      clearAttachBeacon(beaconId, storageV5).catch(() => {});
       return;
     }
     attach.disarm();
-    if (!ae.ok && ae.errorCode === "kill_unconfirmed") {
+    if (!respawn.ok && respawn.errorCode === "kill_unconfirmed") {
       logFeatureSad("fleet_view_open", "restart_stop_unconfirmed");
-      logForDebugging(`[FV-attach] confirmed restart of ${E.id} could not stop the worker: ${ae.error}`, {
-        level: "warn",
-      });
-      clearAttachBeacon(ge, storageV5).catch(() => {});
-      attach.restartOfferedJobId = E.id;
+      logForDebugging(
+        `[FV-attach] confirmed restart of ${job.id} could not stop the worker: ${respawn.error}`,
+        {
+          level: "warn",
+        },
+      );
+      clearAttachBeacon(beaconId, storageV5).catch(() => {});
+      attach.restartOfferedJobId = job.id;
       setError(RESTART_RETRY_PROMPT);
       return;
     }
-    if (ae.ok || ae.alive)
+    if (respawn.ok || respawn.alive)
       onAction({
         type: "open",
-        job: E,
-        ...(hasPendingDispatchInput(h) && {
+        job,
+        ...(hasPendingDispatchInput(surface) && {
           keepQuery: true,
         }),
-        ...(oe && {
+        ...(wasOffered && {
           afterNoResponse: true,
         }),
-        respawnResult: ae,
+        respawnResult: respawn,
         gestureT0,
-        gestureId: ge,
+        gestureId: beaconId,
       });
-    else if (ae.errorCode === "fork_transcript_never_materialized") {
-      clearAttachBeacon(ge, storageV5).catch(() => {});
+    else if (respawn.errorCode === "fork_transcript_never_materialized") {
+      clearAttachBeacon(beaconId, storageV5).catch(() => {});
       logFeatureSad("fleet_view_open", "fork_transcript_never_materialized");
-      attach.forkRefusedJobId = E.id;
+      attach.forkRefusedJobId = job.id;
       setError(RESTART_FRESH_PROMPT);
-    } else if (ae.errorCode === "resume_session_live_elsewhere") {
-      clearAttachBeacon(ge, storageV5).catch(() => {});
+    } else if (respawn.errorCode === "resume_session_live_elsewhere") {
+      clearAttachBeacon(beaconId, storageV5).catch(() => {});
       logFeatureSad("fleet_view_open", "resume_session_live_elsewhere");
-      setError(ae.error);
-    } else if (ae.errorCode === "dead_epoch_transcript_gone") {
-      clearAttachBeacon(ge, storageV5).catch(() => {});
+      setError(respawn.error);
+    } else if (respawn.errorCode === "dead_epoch_transcript_gone") {
+      clearAttachBeacon(beaconId, storageV5).catch(() => {});
       logFeatureSad("fleet_view_open", "dead_epoch_transcript_gone");
-      attach.deadEpochGoneJobId = E.id;
+      attach.deadEpochGoneJobId = job.id;
       setError(TRANSCRIPT_GONE_TEXT);
     } else {
       logFeatureBad("fleet_view_open", "respawn_failed");
-      setError(ae.error);
-      clearAttachBeacon(ge, storageV5).catch(() => {});
+      setError(respawn.error);
+      clearAttachBeacon(beaconId, storageV5).catch(() => {});
     }
   });
 }
@@ -425,19 +437,19 @@ function attachToJob(h, E, k) {
 /**
  * 从 Agents 视图新建会话。
  */
-function openNewSession(h, E) {
-  let { editor, roster, attach, storageV5 } = h;
+function openNewSession(surface, spawnArg) {
+  let { editor, roster, attach, storageV5 } = surface;
   let setError = editor.setError;
   let snapshot = attach.getSnapshot();
   if (snapshot.newSessionOpening || snapshot.attachingJobId !== null) return;
-  let V = attach.beginNewSession();
+  let attempt = attach.beginNewSession();
   setError(null);
-  let D = () => attach.isCurrentNewSessionAttempt(V);
+  let isCurrent = () => attach.isCurrentNewSessionAttempt(attempt);
   spawnBgSession(
     [...spareExtraArgs()],
     undefined,
     "shell",
-    E,
+    spawnArg,
     undefined,
     undefined,
     undefined,
@@ -446,30 +458,30 @@ function openNewSession(h, E) {
     async (bgSession) => {
       try {
         if (!bgSession.ok) {
-          if (!D()) return;
+          if (!isCurrent()) return;
           attach.endNewSession();
           logFeatureBad("fleet_view_new_session", bgSession.reason ?? "spawn_failed");
           setError(bgSession.error);
           return;
         }
         roster.reload();
-        let N = Date.now() + RESTART_OFFER_TIMEOUT_MS;
-        let found = roster.jobs?.find((job) => job.id === bgSession.short);
-        while (!found && Date.now() < N && D()) {
+        let deadline = Date.now() + RESTART_OFFER_TIMEOUT_MS;
+        let job = roster.jobs?.find((job) => job.id === bgSession.short);
+        while (!job && Date.now() < deadline && isCurrent()) {
           await sleep(100);
-          found = roster.jobs?.find((job) => job.id === bgSession.short);
+          job = roster.jobs?.find((job) => job.id === bgSession.short);
         }
-        if (!D()) return;
+        if (!isCurrent()) return;
         attach.endNewSession();
-        if (!found) {
+        if (!job) {
           logFeatureSad("fleet_view_new_session", "row_pending");
           setError("Still starting \u2014 open the new session once it appears");
           return;
         }
         logFeatureOk("fleet_view_new_session");
-        attachToJob(h, found);
+        attachToJob(surface, job);
       } catch (error) {
-        if (!D()) return;
+        if (!isCurrent()) return;
         attach.endNewSession();
         logError(error);
         logFeatureBad("fleet_view_new_session", "threw");
@@ -477,7 +489,7 @@ function openNewSession(h, E) {
       }
     },
     (error) => {
-      if (!D()) return;
+      if (!isCurrent()) return;
       attach.endNewSession();
       logError(error);
       logFeatureBad("fleet_view_new_session", "threw");
@@ -489,14 +501,14 @@ function openNewSession(h, E) {
 /**
  * 记 tengu_bg_agent_action（action、来源 fleet、会话 id、状态、tempo）。
  */
-function logFleetJobAction(h, state, k) {
+function logFleetJobAction(action, state, extra) {
   logEvent("tengu_bg_agent_action", {
-    action: fromEnum(h),
+    action: fromEnum(action),
     source: lit("fleet"),
     jobSessionId: sanitizeMarkName(state.sessionId),
     jobState: daemonSessionStateLabel(state.state),
     tempo: fromEnum(state.tempo),
-    ...k,
+    ...extra,
   });
 }
 //@ chunk-93kwxas0.js:96372-96460 placement
@@ -510,55 +522,55 @@ class FleetActionUnconfirmedError extends Error {
 /**
  * 生成会话的操作菜单（停止、删除、重启等）。
  */
-function buildJobActions(reload, E, optimistic, noteDeleteRefusal, deleteRefusalOf, storageV5) {
+function buildJobActions(reload, noteKilling, optimistic, noteDeleteRefusal, deleteRefusalOf, storageV5) {
   return [
     {
       key: "x",
       label: "stop",
       bands: ["active", "blocked"],
-      run: async (A) => {
-        E(A.id);
+      run: async (job) => {
+        noteKilling(job.id);
         let iso = new Date().toISOString();
-        let V = optimistic(
-          (D) =>
-            D.map((U) =>
-              U.id === A.id && !isSettled(U.state)
+        let restore = optimistic(
+          (jobs) =>
+            jobs.map((row) =>
+              row.id === job.id && !isSettled(row.state)
                 ? {
-                    ...U,
+                    ...row,
                     state: {
-                      ...U.state,
+                      ...row.state,
                       state: "stopped",
                       detail: "stopped",
                       tempo: "idle",
                       updatedAt: iso,
-                      firstTerminalAt: U.state.firstTerminalAt ?? iso,
+                      firstTerminalAt: row.state.firstTerminalAt ?? iso,
                       lastTerminalAt: iso,
                     },
                     activity: "stopped",
                   }
-                : U,
+                : row,
             ),
           undefined,
-          A.id,
+          job.id,
         );
         try {
-          let D = await killJob(A.id, A.state, undefined, storageV5);
-          if (!D.confirmed) {
+          let result = await killJob(job.id, job.state, undefined, storageV5);
+          if (!result.confirmed) {
             logFeatureBad("fleet_view_stop_job", "kill_unconfirmed");
-            throw new FleetActionUnconfirmedError(D.error ?? "worker may still be running");
+            throw new FleetActionUnconfirmedError(result.error ?? "worker may still be running");
           }
           logEvent("tengu_bg_agent_action", {
             action: lit("stop"),
             source: lit("fleet"),
-            jobSessionId: sanitizeMarkName(A.state.sessionId),
+            jobSessionId: sanitizeMarkName(job.state.sessionId),
           });
           logFeatureOk("fleet_view_stop_job");
-          let jobDir = getJobDir(A.id);
-          await writePendingWakeup(jobDir, undefined);
-          let jobState = await readJobState(jobDir, storageV5);
+          let dir = getJobDir(job.id);
+          await writePendingWakeup(dir, undefined);
+          let jobState = await readJobState(dir, storageV5);
           if (jobState && !isSettled(jobState))
             await writeStateAtomic(
-              jobDir,
+              dir,
               {
                 ...jobState,
                 state: "stopped",
@@ -570,7 +582,7 @@ function buildJobActions(reload, E, optimistic, noteDeleteRefusal, deleteRefusal
               storageV5,
             );
         } finally {
-          V?.();
+          restore?.();
           reload();
         }
       },
@@ -579,24 +591,24 @@ function buildJobActions(reload, E, optimistic, noteDeleteRefusal, deleteRefusal
       key: "x",
       label: "delete",
       bands: ["completed"],
-      run: async (A, { bulk }) => {
-        let V = deleteRefusalOf(A.id);
-        let D = {
-          ...(V?.discardOffer !== undefined && {
-            discardOffer: V.discardOffer,
+      run: async (job, { bulk }) => {
+        let refusal = deleteRefusalOf(job.id);
+        let offers = {
+          ...(refusal?.discardOffer !== undefined && {
+            discardOffer: refusal.discardOffer,
           }),
-          ...(V?.forceRemoveOffer !== undefined && {
-            forceRemoveOffer: V.forceRemoveOffer,
+          ...(refusal?.forceRemoveOffer !== undefined && {
+            forceRemoveOffer: refusal.forceRemoveOffer,
           }),
         };
-        let discardOffer = bulk ? undefined : V?.discardOffer;
-        let forceRemoveOffer = bulk ? undefined : V?.forceRemoveOffer;
-        if (!bulk) noteDeleteRefusal(A.id, null);
-        let X = optimistic((W) => W.filter((z) => z.id !== A.id), A.id);
-        let K;
+        let discardOffer = bulk ? undefined : refusal?.discardOffer;
+        let forceRemoveOffer = bulk ? undefined : refusal?.forceRemoveOffer;
+        if (!bulk) noteDeleteRefusal(job.id, null);
+        let restore = optimistic((jobs) => jobs.filter((row) => row.id !== job.id), job.id);
+        let result;
         try {
-          K = await deleteJob(
-            A.id,
+          result = await deleteJob(
+            job.id,
             {
               force: true,
               ...(discardOffer !== undefined && {
@@ -608,19 +620,19 @@ function buildJobActions(reload, E, optimistic, noteDeleteRefusal, deleteRefusal
             },
             storageV5,
           );
-          if (!K.removed && !K.keptWorktree) {
-            logFeatureBad("fleet_view_delete_job", K.errorCode ?? "delete_unconfirmed");
-            noteDeleteRefusal(A.id, {
-              notice: K.error ?? "worker may still be running",
-              ...D,
+          if (!result.removed && !result.keptWorktree) {
+            logFeatureBad("fleet_view_delete_job", result.errorCode ?? "delete_unconfirmed");
+            noteDeleteRefusal(job.id, {
+              notice: result.error ?? "worker may still be running",
+              ...offers,
             });
-            throw new FleetActionUnconfirmedError(K.error ?? "worker may still be running");
+            throw new FleetActionUnconfirmedError(result.error ?? "worker may still be running");
           }
         } finally {
-          X?.();
+          restore?.();
           reload();
         }
-        if (!K.removed) {
+        if (!result.removed) {
           let {
             keptErrorSummary,
             keptUnpushed,
@@ -628,11 +640,11 @@ function buildJobActions(reload, E, optimistic, noteDeleteRefusal, deleteRefusal
             forceRemoveWorktree,
             forceRemoveWithheld,
             submoduleWork,
-          } = K;
-          let worktree = K.keptWorktree ?? "";
-          let keptReason = K.keptReason ?? "remove_failed";
+          } = result;
+          let worktree = result.keptWorktree ?? "";
+          let keptReason = result.keptReason ?? "remove_failed";
           logFeatureSad("fleet_view_delete_job", `worktree_kept_${keptReason}`);
-          let Je = formatRmOutcome(
+          let outcome = formatRmOutcome(
             {
               reason: keptReason,
               errorSummary: keptErrorSummary,
@@ -644,12 +656,12 @@ function buildJobActions(reload, E, optimistic, noteDeleteRefusal, deleteRefusal
             },
             {
               worktree,
-              jobId: A.id,
+              jobId: job.id,
             },
           );
-          noteDeleteRefusal(A.id, {
-            notice: Je.row,
-            ...(bulk && D),
+          noteDeleteRefusal(job.id, {
+            notice: outcome.row,
+            ...(bulk && offers),
             ...(discardUnpushed !== undefined && {
               discardOffer: {
                 pin: discardUnpushed,
@@ -662,25 +674,26 @@ function buildJobActions(reload, E, optimistic, noteDeleteRefusal, deleteRefusal
               },
             }),
           });
-          return Je.footer;
+          return outcome.footer;
         }
-        if (K.leftWorktreeDir) logFeatureSad("fleet_view_delete_job", "worktree_left_in_place");
-        else if (K.forcedWorktreeRemoval) logFeatureSad("fleet_view_delete_job", "worktree_force_removed");
+        if (result.leftWorktreeDir) logFeatureSad("fleet_view_delete_job", "worktree_left_in_place");
+        else if (result.forcedWorktreeRemoval)
+          logFeatureSad("fleet_view_delete_job", "worktree_force_removed");
         else logFeatureOk("fleet_view_delete_job");
-        if (A.state.pinned) writeJobPinned(A.id, false, storageV5).catch(() => {});
+        if (job.state.pinned) writeJobPinned(job.id, false, storageV5).catch(() => {});
         logEvent("tengu_bg_agent_action", {
           action: lit("delete"),
           source: lit("fleet"),
-          jobSessionId: sanitizeMarkName(A.state.sessionId),
+          jobSessionId: sanitizeMarkName(job.state.sessionId),
         });
-        if (K.leftWorktreeDir)
-          return `Worktree directory left at ${K.leftWorktreeDir} \u2014 git no longer recognized it; the session was deleted`;
-        if (K.forcedWorktreeRemoval) {
-          let { worktree, keptBranch } = K.forcedWorktreeRemoval;
+        if (result.leftWorktreeDir)
+          return `Worktree directory left at ${result.leftWorktreeDir} \u2014 git no longer recognized it; the session was deleted`;
+        if (result.forcedWorktreeRemoval) {
+          let { worktree, keptBranch } = result.forcedWorktreeRemoval;
           return `Session deleted and its worktree directory deleted by force: ${worktree}${keptBranch ? ` (branch ${keptBranch} was left in the repository)` : ""}`;
         }
         if (discardOffer !== undefined || forceRemoveOffer !== undefined)
-          return K.discardConfirmed && discardOffer !== undefined
+          return result.discardConfirmed && discardOffer !== undefined
             ? `Session deleted and its worktree removed: ${discardOffer.worktree}`
             : "Session deleted";
       },
@@ -695,15 +708,15 @@ init_react_production();
 /**
  * 检测 IDE 扩展并生成对应 MCP 客户端配置。
  */
-function useIdeMcpClients(h) {
-  let [E, k] = y([]);
-  P(() => {
+function useIdeMcpClients(props) {
+  let [clients, setClients] = useState([]);
+  useEffect(() => {
     if (isRemoteSessionAvailable() || isBgSession()) return;
     if (!shouldShowDisableAutoConnectDialog()) return;
-    let C = false;
+    let cancelled = false;
     findAvailableIDE().then(async (availableIDE) => {
-      if (C || !availableIDE) return;
-      let T = {
+      if (cancelled || !availableIDE) return;
+      let config = {
         type: availableIDE.url.startsWith("ws:") ? "ws-ide" : "sse-ide",
         url: availableIDE.url,
         ideName: availableIDE.name,
@@ -712,33 +725,34 @@ function useIdeMcpClients(h) {
         scope: "dynamic",
       };
       await awaitPolicyColdStartWaiter();
-      if (C || isMcpServerBlockedAtConnectTime("ide", T)) return;
-      let { clearServerCache, connectToServer } = require("./chunk-asne9cp8.js").mcpClientModule();
-      let V = await connectToServer("ide", T);
-      if (C) return;
-      if (V.type !== "connected") clearServerCache("ide", T).catch(() => {});
-      k([V]);
+      if (cancelled || isMcpServerBlockedAtConnectTime("ide", config)) return;
+      let { clearServerCache, connectToServer } =
+        require("../../services/mcp/emitTripwireEvent.lazy.js").mcpClientModule();
+      let connection = await connectToServer("ide", config);
+      if (cancelled) return;
+      if (connection.type !== "connected") clearServerCache("ide", config).catch(() => {});
+      setClients([connection]);
     });
     return () => {
-      C = true;
+      cancelled = true;
       abortIdeSearch();
     };
   }, []);
-  useIdeAtMentioned(E, h);
+  useIdeAtMentioned(clients, props);
 }
 //@ chunk-93kwxas0.js:99961-99965 placement
 init_react_production();
 //@ chunk-93kwxas0.js:99965-100002 placement
-function selectSessionModel(W) {
-  return W.sessionModel;
+function selectSessionModel(state) {
+  return state.sessionModel;
 }
 //@ chunk-93kwxas0.js:100002-100040 placement
-function selectSessionEffort(z) {
-  return z.sessionEffort;
+function selectSessionEffort(state) {
+  return state.sessionEffort;
 }
 //@ chunk-93kwxas0.js:100040-100082 placement
-function selectSessionFastMode(oe) {
-  return oe.sessionFastMode;
+function selectSessionFastMode(state) {
+  return state.sessionFastMode;
 }
 export {
   clearFleetOfferState,

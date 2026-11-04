@@ -49,7 +49,7 @@ import { modelFamilyOf, usesFirstPartyPricing, getAPIProvider } from "./provider
 import { isFastModeOnForModel, supportsFastMode } from "../fastMode.js";
 import { firstPartyNameToCanonical } from "./modelFallback.js";
 import { formatModelPricing, getFastModeCosts, getModelPricingDisplay } from "../modelCost.js";
-import { LIGHTNING } from "../permissions/autoModeRulesPrompt.js";
+import { LIGHTNING } from "../../constants/figures.js";
 import {
   getSubscriptionType,
   isTeamPremiumSubscriber,
@@ -83,27 +83,28 @@ import { getGatewayModelOptions, isSanitizedModelOption } from "../../services/g
 import { DEFAULT_MODEL_FAMILY_NAMES, isProbeWrittenValue, firstWord } from "./thirdPartyModelDefaults.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 import { identityModelId } from "./bedrock.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:429417-429528 placement = resolveAgentModelDisplay (1)
 /**
  * 判断字符串是否为客户端可用的模型写法（别名、模型 ID、default、inherit 等）；供 utils/model 的 isClientSpelling 使用（共享指纹误归 agentDisplay）。
  */
 function isClientModelSpelling(agent) {
-  let n = normalizeModelSpelling(agent);
-  if (n === "") return false;
+  let normalized = normalizeModelSpelling(agent);
+  if (normalized === "") return false;
   return (
-    isModelKeyAlias(n) ||
-    isModeDependentModelSetting(n) ||
-    isOpusFableAdvisorSetting(n) ||
-    n === "default" ||
-    n === "inherit" ||
-    isKnownCustomModel(n)
+    isModelKeyAlias(normalized) ||
+    isModeDependentModelSetting(normalized) ||
+    isOpusFableAdvisorSetting(normalized) ||
+    normalized === "default" ||
+    normalized === "inherit" ||
+    isKnownCustomModel(normalized)
   );
 }
 //@ chunk-aepeg2w5.js:459696-459792 placement
-function bytesPerTokenForModel(e) {
-  if (!e) return 4;
-  let userSpecifiedModel = parseUserSpecifiedModel(e);
+function bytesPerTokenForModel(model) {
+  if (!model) return 4;
+  let userSpecifiedModel = parseUserSpecifiedModel(model);
   let replaced = strip1mSuffix(getCanonicalName(userSpecifiedModel)).replace(/[._]/g, "-");
   return LEGACY_SUBAGENT_MODEL_IDS.has(replaced) ? 4 : 3;
 }
@@ -111,45 +112,46 @@ function bytesPerTokenForModel(e) {
 function getClaudeAiUserDefaultModelDescription(fastMode = false) {
   let { setting, attribution } = resolveDefaultMainLoopModelSetting();
   if (attribution === "served") {
-    let h = getMarketingNameForModel(stripAnyVersatileSuffix(setting)) ?? renderModelName(setting);
-    let y =
+    let name = getMarketingNameForModel(stripAnyVersatileSuffix(setting)) ?? renderModelName(setting);
+    let family =
       servedRowFamily(setting) ?? modelFamilyOf(setting, getCanonicalName(parseUserSpecifiedModel(setting)));
-    let S =
-      y === "opus"
+    let blurb =
+      family === "opus"
         ? " \xB7 Best for everyday, complex tasks"
-        : y === "sonnet"
+        : family === "sonnet"
           ? " \xB7 Efficient for routine tasks"
           : "";
-    let w =
+    let pricing =
       isFastModeOnForModel(fastMode, setting) && supportsFastMode(setting)
         ? getModelPricingSuffix(true, setting)
         : "";
-    return `${h}${S}${w}`;
+    return `${name}${blurb}${pricing}`;
   }
   if (attribution !== "tier")
     return `${getMarketingNameForModel(stripAnyVersatileSuffix(parseUserSpecifiedModel(setting))) ?? renderModelName(setting)}${defaultModelAttributionSuffix(attribution)}`;
   if (isOpusDefaultSubscriber()) {
     let defaultOpusModel = getDefaultOpusModel();
-    let y = getMarketingNameForModel(stripAnyVersatileSuffix(defaultOpusModel)) ?? "Opus";
-    let S = isFastModeOnForModel(fastMode, defaultOpusModel) && supportsFastMode(defaultOpusModel);
+    let opusName = getMarketingNameForModel(stripAnyVersatileSuffix(defaultOpusModel)) ?? "Opus";
+    let showFastPrice =
+      isFastModeOnForModel(fastMode, defaultOpusModel) && supportsFastMode(defaultOpusModel);
     if (opus1mMergeAddsTagTo(defaultOpusModel))
-      return `${y} with 1M context \xB7 Best for everyday, complex tasks${S ? getModelPricingSuffix(true, defaultOpusModel) : ""}`;
-    return `${y} \xB7 Best for everyday, complex tasks${S ? getModelPricingSuffix(true, defaultOpusModel) : ""}`;
+      return `${opusName} with 1M context \xB7 Best for everyday, complex tasks${showFastPrice ? getModelPricingSuffix(true, defaultOpusModel) : ""}`;
+    return `${opusName} \xB7 Best for everyday, complex tasks${showFastPrice ? getModelPricingSuffix(true, defaultOpusModel) : ""}`;
   }
   return `${getMarketingNameForModel(stripAnyVersatileSuffix(getDefaultSonnetModel())) ?? "Sonnet"} \xB7 Efficient for routine tasks`;
 }
 //@ chunk-aepeg2w5.js:460412-460502 placement
-function renderDefaultModelSetting(e) {
-  if (e === "opusplan") return "Opus in plan mode, else Sonnet";
-  return renderModelName(parseUserSpecifiedModel(e));
+function renderDefaultModelSetting(setting) {
+  if (setting === "opusplan") return "Opus in plan mode, else Sonnet";
+  return renderModelName(parseUserSpecifiedModel(setting));
 }
 //@ chunk-aepeg2w5.js:460502-460634 placement
-function getModelPricingSuffix(e, n) {
+function getModelPricingSuffix(fastMode, model) {
   if (!usesFirstPartyPricing()) return "";
-  let r = firstPartyNameToCanonical(n);
-  let s = e ? formatModelPricing(getFastModeCosts(r)) : getModelPricingDisplay(r);
-  if (s === undefined) return "";
-  return ` \xB7${e ? ` (${LIGHTNING})` : ""} ${s}`;
+  let canonical = firstPartyNameToCanonical(model);
+  let price = fastMode ? formatModelPricing(getFastModeCosts(canonical)) : getModelPricingDisplay(canonical);
+  if (price === undefined) return "";
+  return ` \xB7${fastMode ? ` (${LIGHTNING})` : ""} ${price}`;
 }
 //@ chunk-aepeg2w5.js:460634-460789 placement = hasOpusAccess (1)
 /**
@@ -177,11 +179,11 @@ function isOpus1mMergeEnabled() {
   if (is1mContextDisabled() || isProSubscriber() || getAPIProvider() !== "firstParty") return false;
   if (isClaudeAISubscriber() && getSubscriptionType() === null) return false;
   if (env.ANTHROPIC_DEFAULT_OPUS_MODEL === undefined) {
-    let e = tierOverrideModel("opus");
+    let opusOverride = tierOverrideModel("opus");
     if (
-      e !== undefined &&
-      get1mContextSupport(e) === "never" &&
-      !(isPublishedCatalogInUse() && e === getDefaultOpusBuiltin())
+      opusOverride !== undefined &&
+      get1mContextSupport(opusOverride) === "never" &&
+      !(isPublishedCatalogInUse() && opusOverride === getDefaultOpusBuiltin())
     )
       return false;
   }
@@ -191,8 +193,8 @@ function isOpus1mMergeEnabled() {
 /**
  * 合并启用且该模型 1M 模式为 optIn。
  */
-function opus1mMergeAddsTagTo(e) {
-  return isOpus1mMergeEnabled() && get1mContextSupport(e) === "optIn";
+function opus1mMergeAddsTagTo(model) {
+  return isOpus1mMergeEnabled() && get1mContextSupport(model) === "optIn";
 }
 //@ chunk-aepeg2w5.js:461055-461103 placement
 /**
@@ -239,23 +241,23 @@ function getModelSourceAnnotation() {
 /**
  * 规范名在 catalog 的 display_name（[1m] 且支持时加 " (1M context)"）。旧版名 resolveSkillModelOverride_5 为错配。
  */
-function getPublicModelDisplayName(e) {
+function getPublicModelDisplayName(model) {
   return getCatalogDisplayName(
-    getCanonicalName(e, {
+    getCanonicalName(model, {
       identity: true,
     }),
-    strip1mTagWhereBuiltIn(e).endsWith("[1m]"),
+    strip1mTagWhereBuiltIn(model).endsWith("[1m]"),
   );
 }
 //@ chunk-aepeg2w5.js:461525-461654 placement
 /**
  * catalog display_name，带 [1m] 且 supports_1m_suffix 时加 " (1M context)"。
  */
-function getCatalogDisplayName(e, n) {
-  let catalogEntry = getCatalogEntry(e);
+function getCatalogDisplayName(canonical, withSuffix) {
+  let catalogEntry = getCatalogEntry(canonical);
   if (!catalogEntry) return null;
-  let s = n && catalogEntry.context?.supports_1m_suffix ? " (1M context)" : "";
-  return catalogEntry.display_name + s;
+  let suffix = withSuffix && catalogEntry.context?.supports_1m_suffix ? " (1M context)" : "";
+  return catalogEntry.display_name + suffix;
 }
 //@ chunk-aepeg2w5.js:461654-461769 placement
 /**
@@ -271,8 +273,8 @@ function maskModelCodename(baseName) {
  */
 function getCuratedModelPicker() {
   let enabledSettingSources = getEnabledSettingSources();
-  let found = getSecuritySensitiveSettingWithSources("modelPicker").find((r) =>
-    enabledSettingSources.includes(r.source),
+  let found = getSecuritySensitiveSettingWithSources("modelPicker").find((entry) =>
+    enabledSettingSources.includes(entry.source),
   );
   return found
     ? {
@@ -285,8 +287,8 @@ function getCuratedModelPicker() {
 /**
  * modelPicker 选项里该模型的自定义 label。
  */
-function getModelPickerLabel(e) {
-  let trimmed = e.trim();
+function getModelPickerLabel(model) {
+  let trimmed = model.trim();
   let trimmed_2 = getCuratedModelPicker()
     ?.picker.options.find((option) => option.model.trim() === trimmed)
     ?.label?.trim();
@@ -296,11 +298,11 @@ function getModelPickerLabel(e) {
 /**
  * modelPicker 选项里该模型的 behavesAs（按哪个已知模型对待）。
  */
-function getModelPickerBehavesAs(e) {
-  let n = normalizeModelId(e);
-  if (n === "") return;
+function getModelPickerBehavesAs(model) {
+  let normalized = normalizeModelId(model);
+  if (normalized === "") return;
   let trimmed = getCuratedModelPicker()
-    ?.picker.options.find((option) => normalizeModelId(option.model) === n)
+    ?.picker.options.find((option) => normalizeModelId(option.model) === normalized)
     ?.behavesAs?.trim();
   return trimmed === undefined || trimmed === "" ? undefined : trimmed;
 }
@@ -317,97 +319,106 @@ function hasModelPickerBehavesAs() {
 /**
  * 注册模型知识回调（是否已知、是否模型 id、客户端拼写、身份拼写、behavesAs 等）供规范化使用（顶层副作用语句）。
  */
-MAX_LOOKUP_BUCKETS({
-  isKnown: (e) =>
-    isRecognizedCanonical(
-      getCanonicalName(e, {
-        identity: true,
-      }),
-    ),
-  isModelId: (e) => getCatalogEntry(e) !== undefined || catalogIdForProviderModelId(e) !== undefined,
-  isClientSpelling: isClientModelSpelling,
-  clientSpellingGeneration: () =>
-    `${[...getProviderState().providerCache.validatedModels].join(",")}|${getAdditionalModelOptionsCache()
-      .map((e) => (typeof e.value === "string" ? e.value : ""))
-      .join(
-        ",",
-      )}|${env.ANTHROPIC_CUSTOM_MODEL_OPTION ?? ""}|${Object.values(getSettingsModelOverrides() ?? {}).join(",")}`,
-  identitySpelling: (e) => {
-    let n = firstPartyNameToCanonical(strip1mSuffix(e.toLowerCase()).trim());
-    return isRecognizedCanonical(n) ? n : (gatewayCatalogRowId(e) ?? n);
-  },
-  settingsBehavesAs: getModelPickerBehavesAs,
-  hasSettingsBehavesAs: hasModelPickerBehavesAs,
-  settingsGeneration: () => commandSyncNameState().policy,
-  isRowNameable: hasProviderModelId,
-  isModelOverrideValue: isModelOverrideTarget,
-  namingGeneration: gatewayGeneration,
+// deferred: uses MAX_LOOKUP_BUCKETS (./modelCatalog/catalogCapabilities.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:462260", () => {
+  MAX_LOOKUP_BUCKETS({
+    isKnown: (value) =>
+      isRecognizedCanonical(
+        getCanonicalName(value, {
+          identity: true,
+        }),
+      ),
+    isModelId: (id) => getCatalogEntry(id) !== undefined || catalogIdForProviderModelId(id) !== undefined,
+    isClientSpelling: isClientModelSpelling,
+    clientSpellingGeneration: () =>
+      `${[...getProviderState().providerCache.validatedModels].join(",")}|${getAdditionalModelOptionsCache()
+        .map((option) => (typeof option.value === "string" ? option.value : ""))
+        .join(
+          ",",
+        )}|${env.ANTHROPIC_CUSTOM_MODEL_OPTION ?? ""}|${Object.values(getSettingsModelOverrides() ?? {}).join(",")}`,
+    identitySpelling: (model) => {
+      let canonical = firstPartyNameToCanonical(strip1mSuffix(model.toLowerCase()).trim());
+      return isRecognizedCanonical(canonical) ? canonical : (gatewayCatalogRowId(model) ?? canonical);
+    },
+    settingsBehavesAs: getModelPickerBehavesAs,
+    hasSettingsBehavesAs: hasModelPickerBehavesAs,
+    settingsGeneration: () => commandSyncNameState().policy,
+    isRowNameable: hasProviderModelId,
+    isModelOverrideValue: isModelOverrideTarget,
+    namingGeneration: gatewayGeneration,
+  });
 });
 //@ chunk-aepeg2w5.js:462820-462885 placement
 /**
  * 注册服务端能力查询：catalog 运行时说明了能力列表时以其为准（顶层副作用语句）。
  */
-setServedCapabilityLookup((e, n) => {
-  let r = matchesCatalogList(e, ...n);
-  return r === false && !anyModelDescribed(...n) ? undefined : r;
+// deferred: uses setServedCapabilityLookup (./modelCatalog.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:462820", () => {
+  setServedCapabilityLookup((capability, modelIds) => {
+    let result = matchesCatalogList(capability, ...modelIds);
+    return result === false && !anyModelDescribed(...modelIds) ? undefined : result;
+  });
 });
 //@ chunk-aepeg2w5.js:462885-462979 placement
 /**
  * 服务端目录对该模型 eager_input_streaming 的设置（仅在模型被描述时）。
  */
 function statedEagerInputStreaming(model) {
-  let n = strippedCanonicalName(model);
-  let eagerInputStreaming = servedRuntime(model, n)?.eager_input_streaming;
-  return eagerInputStreaming != null && anyModelDescribed(model, n) ? eagerInputStreaming : undefined;
+  let canonical = strippedCanonicalName(model);
+  let eagerInputStreaming = servedRuntime(model, canonical)?.eager_input_streaming;
+  return eagerInputStreaming != null && anyModelDescribed(model, canonical) ? eagerInputStreaming : undefined;
 }
 //@ chunk-aepeg2w5.js:462979-463465 placement
 /**
  * 模型显示名：modelPicker 标签 → 服务端目录名（机密时打码）→ 网关/附加模型选项标签 → catalog display_name → 原始字符串。
  */
-function renderModelName(e) {
-  let modelPickerLabel = getModelPickerLabel(e);
+function renderModelName(model) {
+  let modelPickerLabel = getModelPickerLabel(model);
   if (modelPickerLabel !== undefined) return modelPickerLabel;
-  let r = stripAnyVersatileSuffix(e);
-  if (findModelConfigById(r) === null) {
-    let h =
-      isPublishedCatalogInUse() && getPublicModelDisplayName(e) !== null
+  let stripped = stripAnyVersatileSuffix(model);
+  if (findModelConfigById(stripped) === null) {
+    let entry =
+      isPublishedCatalogInUse() && getPublicModelDisplayName(model) !== null
         ? undefined
         : findEffectiveServedEntry(
-            r,
-            getCanonicalName(r, {
+            stripped,
+            getCanonicalName(stripped, {
               identity: true,
             }),
           );
-    if (h !== undefined) {
-      let R = sanitizeTitle(h.name ?? "");
-      if (R) return R;
-      if (h.confidential === true) {
-        let x = sanitizeTitle(maskModelCodename(strip1mSuffix(h.id)));
-        if (x) return x;
+    if (entry !== undefined) {
+      let servedName = sanitizeTitle(entry.name ?? "");
+      if (servedName) return servedName;
+      if (entry.confidential === true) {
+        let codename = sanitizeTitle(maskModelCodename(strip1mSuffix(entry.id)));
+        if (codename) return codename;
       }
     }
-    let y = (R) => typeof R.value === "string" && stripAnyVersatileSuffix(R.value) === r;
-    let found = getGatewayModelOptions().find(y);
-    let w = found ?? (isServedCatalogActive() ? undefined : getAdditionalModelOptionsCache().find(y));
-    if (w?.label) {
-      if (w === found && isSanitizedModelOption(w)) return nameForUnnamedModelId(w.value) ?? w.label;
-      return w.label;
+    let matches = (option) =>
+      typeof option.value === "string" && stripAnyVersatileSuffix(option.value) === stripped;
+    let found = getGatewayModelOptions().find(matches);
+    let option =
+      found ?? (isServedCatalogActive() ? undefined : getAdditionalModelOptionsCache().find(matches));
+    if (option?.label) {
+      if (option === found && isSanitizedModelOption(option))
+        return nameForUnnamedModelId(option.value) ?? option.label;
+      return option.label;
     }
   }
-  let publicModelDisplayName = getPublicModelDisplayName(e);
+  let publicModelDisplayName = getPublicModelDisplayName(model);
   if (publicModelDisplayName) return publicModelDisplayName;
-  return sanitizeTitle(e) || "unknown model";
+  return sanitizeTitle(model) || "unknown model";
 }
 //@ chunk-aepeg2w5.js:463465-463621 placement
 /**
  * 模型族显示名（Fable/Haiku/Mythos/Opus/Sonnet）。
  */
-function getModelFamilyName(e) {
-  if (isFableFamilyOrPinnedModel(e)) return "Fable";
-  let canonicalName = getCanonicalName(e);
+function getModelFamilyName(model) {
+  if (isFableFamilyOrPinnedModel(model)) return "Fable";
+  let canonicalName = getCanonicalName(model);
   let family = getCatalogEntry(canonicalName)?.family;
-  return DEFAULT_MODEL_FAMILY_NAMES.find((s) => {
-    let lower = s.toLowerCase();
+  return DEFAULT_MODEL_FAMILY_NAMES.find((name) => {
+    let lower = name.toLowerCase();
     return lower === family || canonicalName.startsWith(`claude-${lower}-`);
   });
 }
@@ -415,13 +426,13 @@ function getModelFamilyName(e) {
 /**
  * 族名在 GrowthBook tengu_calm_seal 列表中（只走 usage credits 的族）时返回族名；Fable 直接返回。
  */
-function usageCreditsOnlyFamily(e) {
-  let modelFamilyName = getModelFamilyName(e);
+function usageCreditsOnlyFamily(model) {
+  let modelFamilyName = getModelFamilyName(model);
   if (modelFamilyName === undefined || modelFamilyName === "Fable") return modelFamilyName;
   let featureValue_CACHED_MAY_BE_STALE = getFeatureValue_CACHED_MAY_BE_STALE("tengu_calm_seal", null);
   return Array.isArray(featureValue_CACHED_MAY_BE_STALE) &&
     featureValue_CACHED_MAY_BE_STALE.some(
-      (s) => typeof s === "string" && s.trim().toLowerCase() === modelFamilyName.toLowerCase(),
+      (family) => typeof family === "string" && family.trim().toLowerCase() === modelFamilyName.toLowerCase(),
     )
     ? modelFamilyName
     : undefined;
@@ -430,19 +441,19 @@ function usageCreditsOnlyFamily(e) {
 /**
  * 模型族是否只能走 usage credits。
  */
-function isUsageCreditsOnlyModel(e) {
-  return usageCreditsOnlyFamily(e) !== undefined;
+function isUsageCreditsOnlyModel(model) {
+  return usageCreditsOnlyFamily(model) !== undefined;
 }
 //@ chunk-aepeg2w5.js:463863-463941 placement
 /**
  * 模型短名：族名或带版本的显示名（同族时）。
  */
-function renderUsageCreditsOnlyModelName(e) {
-  let n = getModelFamilyName(e) ?? "Fable";
-  let publicModelDisplayName = getPublicModelDisplayName(strip1mSuffix(e));
-  return isProbeWrittenValue(publicModelDisplayName) && firstWord(publicModelDisplayName) === n
+function renderUsageCreditsOnlyModelName(model) {
+  let family = getModelFamilyName(model) ?? "Fable";
+  let publicModelDisplayName = getPublicModelDisplayName(strip1mSuffix(model));
+  return isProbeWrittenValue(publicModelDisplayName) && firstWord(publicModelDisplayName) === family
     ? publicModelDisplayName
-    : n;
+    : family;
 }
 //@ chunk-aepeg2w5.js:463941-464016 placement = getPublicModelName (1)
 /**

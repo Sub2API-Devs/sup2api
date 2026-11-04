@@ -8,7 +8,15 @@
  * pieces: chunk-x6v6jz2y.js (14)
  * attribution: placement 14
  */
-import { Se, R, P, init_react_production, Q, yt, Vc } from "../../../vendor/react/cjs/react.production.js";
+import {
+  useContext,
+  useRef,
+  useEffect,
+  init_react_production,
+  useMemo,
+  useSyncExternalStore,
+  createElement,
+} from "../../../vendor/react/cjs/react.production.js";
 import { TerminalWriteContext } from "../useTerminalNotification.js";
 import {
   isTabStatusEnabled,
@@ -29,80 +37,91 @@ import { atlasResetConfig } from "../renderTelemetry.js";
 import { sessionServicesFor } from "../../utils/secureStorage/credentialsFileStore.js";
 import { wrappedRender, createRootAsync } from "../root.js";
 import { getSecondRootError } from "../terminal.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-x6v6jz2y.js:27473-27709 placement = IDLE_SPECULATION_STATE (1)
 /**
  * 把会话状态写到终端标签页（OSC 21337 标签状态，经 tmux/screen 透传）；kind 为 null 时清除；终端不支持时不写。
  */
 function useTabStatus(kind, idleText) {
-  let l = Se(TerminalWriteContext);
-  let kindRef = R(null);
-  P(() => {
+  let writeRaw = useContext(TerminalWriteContext);
+  let kindRef = useRef(null);
+  useEffect(() => {
     if (kind === null) {
-      if (kindRef.current !== null && l && isTabStatusEnabled()) l(wrapForMultiplexer(CLEAR_TAB_STATUS));
+      if (kindRef.current !== null && writeRaw && isTabStatusEnabled())
+        writeRaw(wrapForMultiplexer(CLEAR_TAB_STATUS));
       kindRef.current = null;
       return;
     }
     kindRef.current = kind;
-    if (!l || !isTabStatusEnabled()) return;
-    let d = TAB_STATUS_PRESETS[kind];
+    if (!writeRaw || !isTabStatusEnabled()) return;
+    let preset = TAB_STATUS_PRESETS[kind];
     let fields =
       kind === "idle" && idleText !== undefined
         ? {
-            ...d,
+            ...preset,
             status: idleText,
           }
-        : d;
-    l(wrapForMultiplexer(tabStatus(fields)));
-  }, [kind, idleText, l]);
+        : preset;
+    writeRaw(wrapForMultiplexer(tabStatus(fields)));
+  }, [kind, idleText, writeRaw]);
 }
 //@ chunk-x6v6jz2y.js:27709-27713 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:27709", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:27713-27823 placement = CLEAR_TERMINAL_TITLE (1)
 /**
  * 标题变化时用 OSC 0 设置终端窗口/标签标题（先去掉转义字符）；title 为 null 不写。
  */
 function useTerminalTitle(title) {
-  let writeRaw = Se(TerminalWriteContext);
-  P(() => {
+  let writeRaw = useContext(TerminalWriteContext);
+  useEffect(() => {
     if (title === null || !writeRaw) return;
-    let l = stripAnsi(title);
-    writeRaw(osc(OSC.SET_TITLE_AND_ICON, l));
+    let cleanTitle = stripAnsi(title);
+    writeRaw(osc(OSC.SET_TITLE_AND_ICON, cleanTitle));
   }, [title, writeRaw]);
 }
 //@ chunk-x6v6jz2y.js:27823-27827 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:27823", () => {
+  init_react_production();
+});
 //@ chunk-x6v6jz2y.js:27827-27841 placement
 /**
  * 恒 false 的选择器
  */
 var alwaysFalse_2 = () => false;
 //@ chunk-x6v6jz2y.js:27841-28173 placement
-function useTimeout(o, r, l) {
-  let u = Se(clockContext);
-  let d = typeof o === "function";
-  let p = d ? o : null;
-  let m = d ? r : o;
-  let b = d ? undefined : r;
-  let C = R(p);
-  C.current = p;
-  let h = R(null);
-  let k = u?.setTimeout ?? defaultSetTimeout;
-  let x = Q(() => {
-    if (m === null) return noopClock;
-    let A = (T) => {
-      h.current = null;
-      T();
-      return k(() => {
-        h.current = A;
-        if (d) C.current?.();
-        else T();
-      }, m);
+function useTimeout(first, second, extraDeps) {
+  let clock = useContext(clockContext);
+  let isCallback = typeof first === "function";
+  let callback = isCallback ? first : null;
+  let delayMs = isCallback ? second : first;
+  let callbackArg = isCallback ? undefined : second;
+  let callbackRef = useRef(callback);
+  callbackRef.current = callback;
+  let timerRef = useRef(null);
+  let setTimeoutFn = clock?.setTimeout ?? defaultSetTimeout;
+  let schedule = useMemo(() => {
+    if (delayMs === null) return noopClock;
+    let tick = (done) => {
+      timerRef.current = null;
+      done();
+      return setTimeoutFn(() => {
+        timerRef.current = tick;
+        if (isCallback) callbackRef.current?.();
+        else done();
+      }, delayMs);
     };
-    return A;
-  }, [k, m, d, b, ...(l ?? [])]);
-  let E = yt(x, d ? alwaysFalse_2 : () => h.current === x);
-  if (!d) return E;
+    return tick;
+  }, [setTimeoutFn, delayMs, isCallback, callbackArg, ...(extraDeps ?? [])]);
+  let isPending = useSyncExternalStore(
+    schedule,
+    isCallback ? alwaysFalse_2 : () => timerRef.current === schedule,
+  );
+  if (!isCallback) return isPending;
 }
 //@ chunk-x6v6jz2y.js:28173-28277 placement = measureElement (1)
 /**
@@ -125,17 +144,21 @@ function topWithin(node, ancestor) {
 }
 //@ chunk-x6v6jz2y.js:28398-28519 placement
 function wrapWithAppProviders(node, storage) {
-  let l = Vc(
+  let children = createElement(
     RenderModeProvider,
     null,
-    Vc(ThemeProvider, null, Vc(KillRingProvider, null, Vc(FrameRegistryProvider, null, node))),
+    createElement(
+      ThemeProvider,
+      null,
+      createElement(KillRingProvider, null, createElement(FrameRegistryProvider, null, node)),
+    ),
   );
   return storage !== undefined
-    ? Vc(StorageCredentialsProvider, {
+    ? createElement(StorageCredentialsProvider, {
         ...storage,
-        children: l,
+        children,
       })
-    : l;
+    : children;
 }
 //@ chunk-x6v6jz2y.js:28519-28578 placement
 /**
@@ -161,25 +184,28 @@ async function render(node, optionsOrStdout, extra) {
   });
 }
 //@ chunk-x6v6jz2y.js:28737-28756 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-x6v6jz2y.js:28737", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-x6v6jz2y.js:28756-28962 placement
-async function createRoot(baseRenderOptions, r) {
+async function createRoot(baseRenderOptions, options) {
   let root = await createRootAsync({
     ...getDefaultRenderOptions(),
     ...baseRenderOptions,
   });
-  let storage = r?.storageV5 !== undefined ? sessionServicesFor(r.storageV5) : undefined;
-  let d = {
+  let storage = options?.storageV5 !== undefined ? sessionServicesFor(options.storageV5) : undefined;
+  let rootWithProviders = {
     ...root,
     render: (node) => root.render(wrapWithAppProviders(node, storage)),
   };
-  let p = getSecondRootError().get(baseRenderOptions?.stdout ?? process.stdout);
-  if (p) weakMap.set(p, d);
-  return d;
+  let ink = getSecondRootError().get(baseRenderOptions?.stdout ?? process.stdout);
+  if (ink) weakMap.set(ink, rootWithProviders);
+  return rootWithProviders;
 }
 //@ chunk-x6v6jz2y.js:28962-29031 placement
 function rootOf(stdout = process.stdout) {
-  let r = getSecondRootError().get(stdout);
-  return r && weakMap.get(r);
+  let ink = getSecondRootError().get(stdout);
+  return ink && weakMap.get(ink);
 }
 export { measureElement, topWithin, rootOf, useTerminalTitle, useTimeout, useTabStatus, createRoot, render };

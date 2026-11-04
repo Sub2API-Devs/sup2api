@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (3)
  * attribution: placement 2, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { NoticeLine } from "../SlashCommandLink.js";
 import { Box } from "../../ink/components/Text.js";
@@ -18,38 +18,38 @@ import { Box } from "../../ink/components/Text.js";
  * 把一条提示行（NoticeLine，settled 状态）包成消息块，可加上边距。被多种消息组件复用。
  */
 function NoticeRowMessage(props) {
-  let f = w(5);
+  let $ = useMemoCache(5);
   let { row, addMargin } = props;
   const marginTop = addMargin ? 1 : 0;
   let children;
-  if (f[0] !== row) {
+  if ($[0] !== row) {
     children = jsxProd_default(NoticeLine, {
       state: "settled",
       ...row,
     });
-    f[0] = row;
-    f[1] = children;
-  } else children = f[1];
-  let M;
-  if (f[2] !== marginTop || f[3] !== children) {
-    M = jsxProd_default(Box, {
+    $[0] = row;
+    $[1] = children;
+  } else children = $[1];
+  let rowBox;
+  if ($[2] !== marginTop || $[3] !== children) {
+    rowBox = jsxProd_default(Box, {
       flexDirection: "column",
       marginTop,
       width: "100%",
       children,
     });
-    f[2] = marginTop;
-    f[3] = children;
-    f[4] = M;
-  } else M = f[4];
-  return M;
+    $[2] = marginTop;
+    $[3] = children;
+    $[4] = rowBox;
+  } else rowBox = $[4];
+  return rowBox;
 }
 //@ chunk-ah34pb7m.js:48347-48449 placement
 /**
  * 取消息里的动词（字母开头、≤32 字符），否则默认 "Saved"。
  */
-function getMemorySavedVerb(m) {
-  let verb = m.verb;
+function getMemorySavedVerb(row) {
+  let verb = row.verb;
   return typeof verb === "string" && /^[A-Za-z][A-Za-z-]{0,31}$/.test(verb) ? verb : "Saved";
 }
 //@ chunk-ah34pb7m.js:48449-48594 fingerprint = teamMemSavedPart (1)

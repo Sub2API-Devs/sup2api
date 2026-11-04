@@ -25,27 +25,28 @@ import { AsyncLocalStorage } from "async_hooks";
 import { getErrnoCode } from "./errors.js";
 import { writeFileAtomic } from "./atomicPublishWrite.js";
 import { NOFOLLOW_NONBLOCK_FLAGS } from "./fsFlags.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-7kr2r08r.js:528-1859 placement
 /**
  * 本地文件存储实现：读写文本与字节、删除、列目录。
  */
 class LocalFileStore {
-  read(r) {
-    return readFile(r, "utf8");
+  read(filePath) {
+    return readFile(filePath, "utf8");
   }
-  readBytes(r) {
-    return readFile(r);
+  readBytes(filePath) {
+    return readFile(filePath);
   }
-  write(r, e, mode) {
-    return writeFile(r, e, {
+  write(filePath, data, mode) {
+    return writeFile(filePath, data, {
       encoding: "utf8",
       mode,
     });
   }
-  async mkdir(r, mode) {
+  async mkdir(dirPath, mode) {
     try {
-      await mkdir(r, {
+      await mkdir(dirPath, {
         recursive: true,
         mode,
       });
@@ -53,94 +54,94 @@ class LocalFileStore {
       if (getErrnoCode(error) !== "EEXIST") throw error;
     }
   }
-  atomicWrite(r, e, t) {
-    return writeFileAtomic(r, e, t);
+  atomicWrite(filePath, data, writeOptions) {
+    return writeFileAtomic(filePath, data, writeOptions);
   }
-  delete(r) {
-    return unlink(r);
+  delete(filePath) {
+    return unlink(filePath);
   }
-  list(r) {
-    return readdir(r);
+  list(dirPath) {
+    return readdir(dirPath);
   }
-  append(r, e, mode) {
-    return appendFile(r, e, {
+  append(filePath, data, mode) {
+    return appendFile(filePath, data, {
       encoding: "utf8",
       mode,
     });
   }
-  writeExclusive(r, e, mode) {
-    return writeFile(r, e, {
+  writeExclusive(filePath, data, mode) {
+    return writeFile(filePath, data, {
       encoding: "utf8",
       flag: "wx",
       mode,
     });
   }
-  writeBytesExclusive(r, e, mode) {
-    return writeFile(r, e, {
+  writeBytesExclusive(filePath, data, mode) {
+    return writeFile(filePath, data, {
       flag: "wx",
       mode,
     });
   }
-  copy(r, e) {
-    return copyFile(r, e);
+  copy(sourcePath, destPath) {
+    return copyFile(sourcePath, destPath);
   }
-  async stat(r) {
+  async stat(filePath) {
     return {
-      mtimeMs: (await stat(r)).mtimeMs,
+      mtimeMs: (await stat(filePath)).mtimeMs,
     };
   }
-  async lstat(r) {
+  async lstat(filePath) {
     try {
-      let e = await lstat(r);
+      let stats = await lstat(filePath);
       return {
-        isSymbolicLink: e.isSymbolicLink(),
-        isFile: e.isFile(),
-        isDirectory: e.isDirectory(),
-        mtimeMs: e.mtimeMs,
-        nlink: e.nlink,
+        isSymbolicLink: stats.isSymbolicLink(),
+        isFile: stats.isFile(),
+        isDirectory: stats.isDirectory(),
+        mtimeMs: stats.mtimeMs,
+        nlink: stats.nlink,
       };
     } catch (error) {
       if (getErrnoCode(error) === "ENOENT") return;
       throw error;
     }
   }
-  async listEntries(r) {
+  async listEntries(dirPath) {
     return (
-      await readdir(r, {
+      await readdir(dirPath, {
         withFileTypes: true,
       })
-    ).map((t) => ({
-      name: t.name,
-      isDirectory: t.isDirectory(),
-      isFile: t.isFile(),
+    ).map((dirent) => ({
+      name: dirent.name,
+      isDirectory: dirent.isDirectory(),
+      isFile: dirent.isFile(),
     }));
   }
-  async readRange(r, e, t) {
-    assertNonNegativeInteger("readRange", "offset", e);
-    assertNonNegativeInteger("readRange", "length", t);
-    let n = await open(r, "r");
+  async readRange(filePath, offset, length) {
+    assertNonNegativeInteger("readRange", "offset", offset);
+    assertNonNegativeInteger("readRange", "length", length);
+    let handle = await open(filePath, "r");
     try {
-      return await readExactly(n, e, t);
+      return await readExactly(handle, offset, length);
     } finally {
-      await n.close();
+      await handle.close();
     }
   }
-  async readTail(r, e, t) {
-    assertNonNegativeInteger("readTail", "maxBytes", e);
-    let n = t?.noFollow ? constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS : "r";
-    let i = await open(r, n);
+  async readTail(filePath, maxBytes, options) {
+    assertNonNegativeInteger("readTail", "maxBytes", maxBytes);
+    let openFlags = options?.noFollow ? constants.O_RDONLY | NOFOLLOW_NONBLOCK_FLAGS : "r";
+    let handle = await open(filePath, openFlags);
     try {
-      let stats = await i.stat();
-      if (t?.noFollow && !stats.isFile())
+      let stats = await handle.stat();
+      if (options?.noFollow && !stats.isFile())
         throw Object.assign(Error("ENXIO: not a regular file"), {
           code: "ENXIO",
-          path: r,
+          path: filePath,
         });
       let { size } = stats;
-      let min = Math.min(e, size);
-      return await readExactly(i, size - min, min);
+      let min = Math.min(maxBytes, size);
+      return await readExactly(handle, size - min, min);
     } finally {
-      await i.close();
+      await handle.close();
     }
   }
 }
@@ -148,26 +149,30 @@ class LocalFileStore {
 /**
  * 参数不是非负整数时抛 RangeError。
  */
-function assertNonNegativeInteger(r, e, t) {
-  if (!Number.isInteger(t) || t < 0) throw RangeError(`${r}: ${e} must be a non-negative integer, got ${t}`);
+function assertNonNegativeInteger(methodName, parameterName, value) {
+  if (!Number.isInteger(value) || value < 0)
+    throw RangeError(`${methodName}: ${parameterName} must be a non-negative integer, got ${value}`);
 }
 //@ chunk-7kr2r08r.js:1978-2178 placement
 /**
  * 从句柄指定位置读取 n 字节（遇到文件结尾时返回已读部分）。
  */
-async function readExactly(r, e, t) {
-  if (t === 0) return Buffer.alloc(0);
-  let n = Buffer.alloc(t);
-  let i = 0;
-  while (i < t) {
-    let { bytesRead } = await r.read(n, i, t - i, e + i);
+async function readExactly(handle, offset, length) {
+  if (length === 0) return Buffer.alloc(0);
+  let buffer = Buffer.alloc(length);
+  let totalRead = 0;
+  while (totalRead < length) {
+    let { bytesRead } = await handle.read(buffer, totalRead, length - totalRead, offset + totalRead);
     if (bytesRead === 0) break;
-    i += bytesRead;
+    totalRead += bytesRead;
   }
-  return i === t ? n : Buffer.from(n.subarray(0, i));
+  return totalRead === length ? buffer : Buffer.from(buffer.subarray(0, totalRead));
 }
 //@ chunk-7kr2r08r.js:2178-2190 placement
-var fileReaderStorage = new AsyncLocalStorage();
+var fileReaderStorage; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7kr2r08r.js:2178", () => {
+  fileReaderStorage = new AsyncLocalStorage();
+});
 //@ chunk-7kr2r08r.js:2190-2233 placement = getAgentContext (1)
 /**
  * 取当前文件读取器（ALS 覆盖或默认 read/readBytes 实现）。

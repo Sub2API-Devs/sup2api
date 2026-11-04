@@ -52,16 +52,17 @@ function isAutoReactEnabled() {
 //@ chunk-9tgt55am.js:56187-56270 placement
 function isAutoreactArmed() {
   let liveState = getLiveState();
-  let t = !liveState.autoReact.userDisarmed && isCommentAutoreactOptedIn() && isArtifactsAvailable();
-  setAutoReactWakeEnabled(liveState, t);
-  return t;
+  let autoReactArmed =
+    !liveState.autoReact.userDisarmed && isCommentAutoreactOptedIn() && isArtifactsAvailable();
+  setAutoReactWakeEnabled(liveState, autoReactArmed);
+  return autoReactArmed;
 }
 //@ chunk-9tgt55am.js:56270-56459 placement
-function setAutoReactWakeEnabled(liveState, t) {
-  let n = t && !liveState.builtInArtifactHiddenForMcp;
-  if (liveState.autoReact.wakeEnabledMemo !== t || liveState.autoReact.enabledMemo !== n) {
-    liveState.autoReact.wakeEnabledMemo = t;
-    liveState.autoReact.enabledMemo = n;
+function setAutoReactWakeEnabled(liveState, enabled) {
+  let wakeEnabled = enabled && !liveState.builtInArtifactHiddenForMcp;
+  if (liveState.autoReact.wakeEnabledMemo !== enabled || liveState.autoReact.enabledMemo !== wakeEnabled) {
+    liveState.autoReact.wakeEnabledMemo = enabled;
+    liveState.autoReact.enabledMemo = wakeEnabled;
     emitSummonArmsForActivity(liveState.live);
   }
 }
@@ -69,40 +70,40 @@ function setAutoReactWakeEnabled(liveState, t) {
 /**
  * 判断自动回复产生的任务通知是否该丢弃：自动回复未开启，或对应 slug 已被停止。
  */
-function shouldDropAutoReactNotice(e) {
-  if (e?.kind !== "task-notification" || e.source !== "artifact-auto-react") return false;
-  return !isAutoreactArmed() || (e.slug !== undefined && isSlugStoppedAnywhere(e.slug));
+function shouldDropAutoReactNotice(noticeId) {
+  if (noticeId?.kind !== "task-notification" || noticeId.source !== "artifact-auto-react") return false;
+  return !isAutoreactArmed() || (noticeId.slug !== undefined && isSlugStoppedAnywhere(noticeId.slug));
 }
 //@ chunk-9tgt55am.js:56592-56621 placement
 /**
  * 导出函数 `hasThreadAgentForSlugPost`：参数 e，返回 hasThreadAgentForSlug(e)。
  */
-function hasThreadAgentForSlugPost(e) {
-  return hasThreadAgentForSlug(e);
+function hasThreadAgentForSlugPost(slug) {
+  return hasThreadAgentForSlug(slug);
 }
 //@ chunk-9tgt55am.js:56621-56732 placement
 /**
  * 收到 artifact 自动响应的任务通知时，标记该 slug 有待处理的自动响应提示。
  */
-function markAutoReactNotice(e) {
-  if (e?.kind === "task-notification" && e.source === "artifact-auto-react" && e.slug !== undefined)
-    markAutoReactNoticePending(e.slug);
+function markAutoReactNotice(slug) {
+  if (slug?.kind === "task-notification" && slug.source === "artifact-auto-react" && slug.slug !== undefined)
+    markAutoReactNoticePending(slug.slug);
 }
 //@ chunk-9tgt55am.js:56732-56992 placement
-function disarmAutoreact(e) {
-  let liveState = getLiveState();
-  liveState.autoReact.userDisarmed = true;
-  getWatchArtifactNoAutoreact(e?.storageV5);
-  stopAllCommentMonitorIntents(e);
-  for (let key of [...liveState.wakes.takenFrom.keys()])
-    import("./chunk-4te7h8m1.js").then((a) => a.notifyTakenOverSlugStopped(key));
+function disarmAutoreact(liveState) {
+  let liveState_2 = getLiveState();
+  liveState_2.autoReact.userDisarmed = true;
+  getWatchArtifactNoAutoreact(liveState?.storageV5);
+  stopAllCommentMonitorIntents(liveState);
+  for (let key of [...liveState_2.wakes.takenFrom.keys()])
+    import("../replyYieldHolder.js").then((mod) => mod.notifyTakenOverSlugStopped(key));
   resetAllLedgerSlugs();
   flushAutoreactLedger({
     flush: true,
-    storageV5: e?.storageV5,
+    storageV5: liveState?.storageV5,
   });
-  setAutoReactWakeEnabled(liveState, false);
-  emitSummonArmsForActivity(liveState.live);
+  setAutoReactWakeEnabled(liveState_2, false);
+  emitSummonArmsForActivity(liveState_2.live);
 }
 //@ chunk-9tgt55am.js:56992-57290 placement
 /**
@@ -142,7 +143,7 @@ function emptyAutoReactMessage(threadId) {
 /**
  * 根据回复发布结果更新线程/artifact 状态、通知与扣留提示。
  */
-function applyPostOutcome(e) {
+function applyPostOutcome(outcome) {
   let {
     post,
     threadState,
@@ -154,23 +155,23 @@ function applyPostOutcome(e) {
     notice,
     replyWithheldNotice,
     allowSiblingReset,
-  } = e;
-  let b = e.rulesOnlyProbe
+  } = outcome;
+  let probeTag = outcome.rulesOnlyProbe
     ? {
         rules_only: true,
       }
     : {};
-  let N = e.rulesOnlyProbe ? b : undefined;
+  let rulesOnlyProbe = outcome.rulesOnlyProbe ? probeTag : undefined;
   if (post.kind === "refused") {
-    if (e.heldForPerson === true && post.denial) {
+    if (outcome.heldForPerson === true && post.denial) {
       artifactState.heldReplyDeclined = true;
-      logFeatureSad("artifact_comments_autoreact", "held_reply_declined", N);
+      logFeatureSad("artifact_comments_autoreact", "held_reply_declined", rulesOnlyProbe);
       if (post.feedback !== undefined) {
         markAutoReactNoticePending(slug);
         notify({
-          summary: replyNotPostedNotice(e.artifactName),
+          summary: replyNotPostedNotice(outcome.artifactName),
           detail:
-            `The user declined a drafted reply to a comment thread on artifact ${e.url} and said: "${flattenCommentText(post.feedback)}". Act on that; replies to comments on this artifact will not be drafted for them again this session \u2014 use ${commentsToolReference()} to read and reply if they ask.` +
+            `The user declined a drafted reply to a comment thread on artifact ${outcome.url} and said: "${flattenCommentText(post.feedback)}". Act on that; replies to comments on this artifact will not be drafted for them again this session \u2014 use ${commentsToolReference()} to read and reply if they ask.` +
             replyThenResolveNote(),
         });
       }
@@ -182,37 +183,37 @@ function applyPostOutcome(e) {
     }
     if (post.denial) threadState.consecutivePipelineDenials += 1;
     artifactState.lastReplyDeclinedByAutoMode = post.autoModeDeclined || post.classifierUnavailable;
-    let S =
+    let autoReplyAllowed =
       (post.autoModeDeclined || post.unavailableUnderServerArbiter) &&
-      e.ownSendWithheld === undefined &&
+      outcome.ownSendWithheld === undefined &&
       !artifactState.autoModeDeclineNoticed &&
-      e.editLanded !== true &&
+      outcome.editLanded !== true &&
       isAutoReactEnabled() &&
       !isSlugStoppedAnywhere(slug) &&
       scanStamp(slug) === scanGen &&
       (post.autoModeDeclined || isGussetFlagOn());
-    let w = S && !post.autoModeDeclined && !e.pageOwnsThreads;
-    if (S) {
+    let shouldHoldReply = autoReplyAllowed && !post.autoModeDeclined && !outcome.pageOwnsThreads;
+    if (autoReplyAllowed) {
       artifactState.autoModeDeclineNoticed = true;
       markAutoReactNoticePending(slug);
-      let L = describeAutoReplyHeld(
-        e.trigger,
+      let heldDescription = describeAutoReplyHeld(
+        outcome.trigger,
         "auto_mode_declined",
-        e.url,
-        e.artifactName,
-        e.ackPosted
+        outcome.url,
+        outcome.artifactName,
+        outcome.ackPosted
           ? {
-              note: formatCommentIds([e.ackCommentId]),
+              note: formatCommentIds([outcome.ackCommentId]),
             }
           : undefined,
       );
       notify(
-        w
+        shouldHoldReply
           ? {
-              ...L,
+              ...heldDescription,
               handOff: registerSummonHandOff(summon),
             }
-          : L,
+          : heldDescription,
       );
     }
     if (post.autoModeDeclined) {
@@ -220,8 +221,8 @@ function applyPostOutcome(e) {
         "artifact_comments_autoreact",
         post.noVerdict ? "reply_auto_mode_no_verdict" : "reply_denied_by_auto_mode",
         {
-          notified: S,
-          ...b,
+          notified: autoReplyAllowed,
+          ...probeTag,
         },
       );
       emitArtifactSummonStatus(summon, {
@@ -235,29 +236,29 @@ function applyPostOutcome(e) {
       post.denial ? "content_gate_refused" : "reply_refused",
       post.classifierUnavailable
         ? {
-            notified: S,
-            ...b,
+            notified: autoReplyAllowed,
+            ...probeTag,
           }
-        : N,
+        : rulesOnlyProbe,
     );
-    if (w) logFeatureOk("artifact_comments_classifier_unavailable_handoff");
+    if (shouldHoldReply) logFeatureOk("artifact_comments_classifier_unavailable_handoff");
     else if (post.classifierUnavailable) {
-      let L = S
+      let heldResult = autoReplyAllowed
         ? "notified_page_owns_threads"
         : (post.arbiterWithheld ??
-          e.ownSendWithheld ??
+          outcome.ownSendWithheld ??
           (artifactState.autoModeDeclineNoticed
             ? "already_notified"
-            : e.editLanded === true
+            : outcome.editLanded === true
               ? "edit_landed"
               : !isAutoReactEnabled() || isSlugStoppedAnywhere(slug) || scanStamp(slug) !== scanGen
                 ? "auto_replies_stopped"
                 : "flag_off"));
-      logFeatureSad("artifact_comments_classifier_unavailable_handoff", `${L}_at_post`);
+      logFeatureSad("artifact_comments_classifier_unavailable_handoff", `${heldResult}_at_post`);
     }
     emitArtifactSummonStatus(
       summon,
-      w
+      shouldHoldReply
         ? {
             status: "working",
           }
@@ -275,7 +276,7 @@ function applyPostOutcome(e) {
   }
   if (post.kind === "no_result") {
     threadState.consecutivePipelineDenials += 1;
-    logFeatureSad("artifact_comments_autoreact", "pipeline_no_result", N);
+    logFeatureSad("artifact_comments_autoreact", "pipeline_no_result", rulesOnlyProbe);
     emitArtifactSummonStatus(summon, {
       status: "declined",
       reason: "blocked",
@@ -284,7 +285,7 @@ function applyPostOutcome(e) {
   }
   if (post.kind === "not_activated") {
     if (post.pageOwnsThreads) {
-      logFeatureSad("artifact_comments_autoreact", "page_owns_threads", N);
+      logFeatureSad("artifact_comments_autoreact", "page_owns_threads", rulesOnlyProbe);
       emitArtifactSummonStatus(summon, {
         status: "declined",
         reason: "blocked",
@@ -293,14 +294,15 @@ function applyPostOutcome(e) {
         if (isAutoReactEnabled() && !isSlugStoppedAnywhere(slug) && scanStamp(slug) === scanGen) {
           markAutoReactNoticePending(slug);
           notify(replyWithheldNotice);
-        } else logFeatureSad("artifact_comments_autoreact", "page_owns_threads_notice_suppressed", N);
+        } else
+          logFeatureSad("artifact_comments_autoreact", "page_owns_threads_notice_suppressed", rulesOnlyProbe);
       return;
     }
-    logFeatureSad("artifact_comments_autoreact", "deactivated_mid_turn", N);
+    logFeatureSad("artifact_comments_autoreact", "deactivated_mid_turn", rulesOnlyProbe);
     return;
   }
   if (post.kind === "account_changed") {
-    logFeatureSad("artifact_comments_autoreact", "held_reply_account_changed", N);
+    logFeatureSad("artifact_comments_autoreact", "held_reply_account_changed", rulesOnlyProbe);
     return;
   }
   if (
@@ -308,7 +310,7 @@ function applyPostOutcome(e) {
     post.kind === "answered_post_time" ||
     post.kind === "summon_foreign"
   ) {
-    logFeatureSad("artifact_comments_autoreact", toStandDownReason(post.kind), N);
+    logFeatureSad("artifact_comments_autoreact", toStandDownReason(post.kind), rulesOnlyProbe);
     if (replyWithheldNotice !== undefined)
       if (isAutoReactEnabled() && !isSlugStoppedAnywhere(slug) && scanStamp(slug) === scanGen) {
         markAutoReactNoticePending(slug);
@@ -321,13 +323,13 @@ function applyPostOutcome(e) {
             : post.kind === "answered_post_time"
               ? "answered_post_time_notice_suppressed"
               : "answered_elsewhere_notice_suppressed",
-          N,
+          rulesOnlyProbe,
         );
     return;
   }
   if (post.kind === "unexpected_result_shape") {
     threadState.consecutivePipelineDenials += 1;
-    logFeatureBad("artifact_comments_autoreact", "unexpected_result_shape", N);
+    logFeatureBad("artifact_comments_autoreact", "unexpected_result_shape", rulesOnlyProbe);
     emitArtifactSummonStatus(summon, {
       status: "declined",
       reason: "blocked",
@@ -343,13 +345,13 @@ function applyPostOutcome(e) {
   if (!canAutoReply()) bumpUnattendedReply(slug);
   recordOwnReply(threadState, post);
   if (
-    e.heldForPerson !== true &&
+    outcome.heldForPerson !== true &&
     (!isAutoReactEnabled() || isSlugStoppedAnywhere(slug) || scanStamp(slug) !== scanGen)
   ) {
     logFeatureOk("artifact_comments_autoreact", {
       replied: true,
       post_stop_notice_suppressed: true,
-      ...b,
+      ...probeTag,
     });
     return;
   }
@@ -357,46 +359,51 @@ function applyPostOutcome(e) {
   notify(notice);
   logFeatureOk("artifact_comments_autoreact", {
     replied: true,
-    ...b,
+    ...probeTag,
   });
 }
 //@ chunk-9tgt55am.js:61025-61481 placement
-async function recheckReplyTarget(e) {
-  let artifactUrl = parseArtifactUrl(e.url);
+async function recheckReplyTarget(request) {
+  let artifactUrl = parseArtifactUrl(request.url);
   if (artifactUrl === null) return false;
   if (
     isCommentReadGated(
-      e.context,
+      request.context,
       {
-        slug: e.slug,
+        slug: request.slug,
         env: artifactUrl.env,
       },
-      e.url,
+      request.url,
     )
   )
     return false;
-  let n = await readArtifactComments(
+  let comments = await readArtifactComments(
     {
-      slug: e.slug,
+      slug: request.slug,
       env: artifactUrl.env,
     },
-    e.context.abortController.signal,
-    e.context.credentials,
+    request.context.abortController.signal,
+    request.context.credentials,
     "artifact_autoreact_post_recheck",
   ).catch(() => ({
     err: "recheck_read_threw",
   }));
-  if (e.waited) return lastPersonComment(n, e.threadId, e.recheck.scanRowIds) !== null;
-  let a = threadAwaitsClaudeById(n, e.threadId);
-  return a !== null && !e.recheck.ownReplyIds.has(a.id) && !e.recheck.scanRowIds.has(a.id);
+  if (request.waited)
+    return lastPersonComment(comments, request.threadId, request.recheck.scanRowIds) !== null;
+  let awaitsClaude = threadAwaitsClaudeById(comments, request.threadId);
+  return (
+    awaitsClaude !== null &&
+    !request.recheck.ownReplyIds.has(awaitsClaude.id) &&
+    !request.recheck.scanRowIds.has(awaitsClaude.id)
+  );
 }
 //@ chunk-9tgt55am.js:61481-64634 placement
 /**
  * 以 Artifact 工具发布评论回复：先复查权限与线程状态，处理被扣留/等待的情况。
  */
-async function postThreadReply(e) {
-  let { tool, context, url, slug, threadId, text, declareAnswersSummon } = e;
-  let { recheck, held } = e;
+async function postThreadReply(request) {
+  let { tool, context, url, slug, threadId, text, declareAnswersSummon } = request;
+  let { recheck, held } = request;
   let waited = held !== undefined;
   if (
     recheck !== undefined &&
@@ -413,10 +420,10 @@ async function postThreadReply(e) {
       kind: "answered_post_time",
     };
   let epoch = getLiveState().accountEpoch;
-  let N = `autoreact-${threadId}-${getLiveState().autoReact.postSeq++}`;
-  let S = {
+  let toolUseId = `autoreact-${threadId}-${getLiveState().autoReact.postSeq++}`;
+  let toolUse = {
     type: "tool_use",
-    id: N,
+    id: toolUseId,
     ...commentsToolCall(tool.name, {
       action: "reply",
       url,
@@ -424,44 +431,51 @@ async function postThreadReply(e) {
       text,
     }),
   };
-  let w = declareAnswersSummon
+  let summonAnswer = declareAnswersSummon
     ? rememberSummonAnswer({
         slug,
         threadId,
-        expectedToolUseId: N,
+        expectedToolUseId: toolUseId,
       })
-    : e.continuesReplyId !== undefined
+    : request.continuesReplyId !== undefined
       ? rememberSummonAnswer({
           slug,
           threadId,
-          expectedToolUseId: N,
-          continuesReplyId: e.continuesReplyId,
+          expectedToolUseId: toolUseId,
+          continuesReplyId: request.continuesReplyId,
         })
       : null;
-  let L = registerPipelineReplyOrigin({
+  let pipelineOrigin = registerPipelineReplyOrigin({
     slug,
     threadId,
-    expectedToolUseId: N,
+    expectedToolUseId: toolUseId,
   });
-  let P = {
+  let standDownState = {
     stoodDown: null,
   };
-  let D = false;
-  let G = async (...Y) => {
-    let z = await (e.canUseTool ?? evaluateAskingNoHost)(...Y);
-    D =
-      z.behavior === "deny" &&
-      z.decisionReason?.type === "classifier" &&
-      z.decisionReason.monitorBlocked === true;
-    return z;
+  let autoModeUnavailable = false;
+  let canUseTool = async (...args) => {
+    let decision = await (request.canUseTool ?? evaluateAskingNoHost)(...args);
+    autoModeUnavailable =
+      decision.behavior === "deny" &&
+      decision.decisionReason?.type === "classifier" &&
+      decision.decisionReason.monitorBlocked === true;
+    return decision;
   };
-  let V =
+  let permissionCheck =
     held !== undefined
-      ? async (Y, z, Q, I, j, Z) => {
-          let ce = await G(Y, z, Q, I, j, Z);
-          let le = () => getLiveState().accountEpoch !== held.admittedEpoch;
-          if (le()) P.stoodDown = "account_changed";
-          else if (ce.behavior !== "allow") return ce;
+      ? async (toolName, input, suggestion, context, toolUseId, assistantMessage) => {
+          let permission = await canUseTool(
+            toolName,
+            input,
+            suggestion,
+            context,
+            toolUseId,
+            assistantMessage,
+          );
+          let epochChanged = () => getLiveState().accountEpoch !== held.admittedEpoch;
+          if (epochChanged()) standDownState.stoodDown = "account_changed";
+          else if (permission.behavior !== "allow") return permission;
           else if (
             recheck !== undefined &&
             (await recheckReplyTarget({
@@ -469,13 +483,13 @@ async function postThreadReply(e) {
               url,
               slug,
               threadId,
-              context: Q,
+              context: suggestion,
               waited,
             }))
           )
-            P.stoodDown = le() ? "account_changed" : "answered";
-          else if (le()) P.stoodDown = "account_changed";
-          else return ce;
+            standDownState.stoodDown = epochChanged() ? "account_changed" : "answered";
+          else if (epochChanged()) standDownState.stoodDown = "account_changed";
+          else return permission;
           return {
             behavior: "deny",
             message:
@@ -486,16 +500,16 @@ async function postThreadReply(e) {
             },
           };
         }
-      : G;
-  let q = {
+      : canUseTool;
+  let toolResult = {
     kind: "no_result",
   };
-  let threadTranscript = e.threadTranscript;
+  let threadTranscript = request.threadTranscript;
   try {
-    for await (let Y of runToolUse(
-      S,
+    for await (let event of runToolUse(
+      toolUse,
       emptyAutoReactMessage(threadId),
-      V,
+      permissionCheck,
       threadTranscript.length > 0
         ? {
             ...context,
@@ -505,26 +519,30 @@ async function postThreadReply(e) {
         : context,
       () => new Date().toISOString(),
     )) {
-      if (hasTypeField(Y)) continue;
-      let message = Y.message;
+      if (hasTypeField(event)) continue;
+      let message = event.message;
       if (message?.type !== "user" || !Array.isArray(message.message?.content)) continue;
       let found = message.message.content.find(
-        (j) => typeof j === "object" && j !== null && j.type === "tool_result" && j.tool_use_id === N,
+        (denial) =>
+          typeof denial === "object" &&
+          denial !== null &&
+          denial.type === "tool_result" &&
+          denial.tool_use_id === toolUseId,
       );
       if (!found) continue;
       if (found.is_error === true) {
         let toolDenialKind = message.toolDenialKind;
-        let Z = toolDenialKind === "automode-unavailable" && !D;
-        let ce = Z ? getAutoModeArbiterIssue(context) : undefined;
-        q = {
+        let autoModeBlocked = toolDenialKind === "automode-unavailable" && !autoModeUnavailable;
+        let arbiterIssue = autoModeBlocked ? getAutoModeArbiterIssue(context) : undefined;
+        toolResult = {
           kind: "refused",
           denial: isDecisiveClassifierOutcome(toolDenialKind),
           autoModeDeclined:
             toolDenialKind === "automode-blocked" || toolDenialKind === "automode-parsing-error",
           noVerdict: toolDenialKind === "automode-parsing-error",
-          classifierUnavailable: Z,
-          unavailableUnderServerArbiter: Z && ce === undefined,
-          arbiterWithheld: ce,
+          classifierUnavailable: autoModeBlocked,
+          unavailableUnderServerArbiter: autoModeBlocked && arbiterIssue === undefined,
+          arbiterWithheld: arbiterIssue,
           ...(typeof message.userFeedback === "string" &&
             message.userFeedback !== "" && {
               feedback: message.userFeedback,
@@ -534,55 +552,60 @@ async function postThreadReply(e) {
       }
       let toolUseResult = message.toolUseResult;
       if (toolUseResult && toolUseResult.replied === true) {
-        q = {
+        toolResult = {
           kind: "posted",
           commentId: typeof toolUseResult.comment_id === "string" ? toolUseResult.comment_id : undefined,
           epoch,
         };
-        if (q.commentId !== undefined && (await e.composedFromOwnWordsOnly().catch(() => false)))
-          markReplyClean(q.commentId);
+        if (
+          toolResult.commentId !== undefined &&
+          (await request.composedFromOwnWordsOnly().catch(() => false))
+        )
+          markReplyClean(toolResult.commentId);
       } else if (toolUseResult && toolUseResult.replied === false && toolUseResult.summon_answered === true)
-        q = {
+        toolResult = {
           kind: "answered_elsewhere",
         };
       else if (toolUseResult && toolUseResult.replied === false && toolUseResult.summon_foreign === true)
-        q = {
+        toolResult = {
           kind: "summon_foreign",
         };
       else if (toolUseResult && toolUseResult.replied === false && toolUseResult.already_answered === true)
-        q = {
+        toolResult = {
           kind: "answered_post_time",
         };
       else if (toolUseResult && toolUseResult.replied === false)
-        q = {
+        toolResult = {
           kind: "not_activated",
           ...(toolUseResult.page_owns_threads === true && {
             pageOwnsThreads: true,
           }),
         };
       else
-        q = {
+        toolResult = {
           kind: "unexpected_result_shape",
         };
     }
   } finally {
-    if (w !== null) clearSummonAnswer(w);
-    clearPipelineReplyOrigin(L);
+    if (summonAnswer !== null) clearSummonAnswer(summonAnswer);
+    clearPipelineReplyOrigin(pipelineOrigin);
   }
-  if (P.stoodDown === "account_changed")
+  if (standDownState.stoodDown === "account_changed")
     return {
       kind: "account_changed",
     };
-  if (P.stoodDown === "answered")
+  if (standDownState.stoodDown === "answered")
     return {
       kind: "answered_post_time",
     };
-  if (w !== null && q.kind === "posted" && !w.consumed)
+  if (summonAnswer !== null && toolResult.kind === "posted" && !summonAnswer.consumed)
     logFeatureSad(
       "artifact_comments_autoreact",
-      w.continuesReplyId !== undefined ? "follow_up_marker_unconsumed" : "summon_declaration_unconsumed",
+      summonAnswer.continuesReplyId !== undefined
+        ? "follow_up_marker_unconsumed"
+        : "summon_declaration_unconsumed",
     );
-  return q;
+  return toolResult;
 }
 export {
   isAutoreactArmed,

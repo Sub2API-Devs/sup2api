@@ -54,6 +54,7 @@ import { getOauthAccountInfo, isAnthropicAuthEnabled } from "./utils/auth.js";
 import { sessionDateCell } from "./utils/sessionTimeZone.js";
 import { resolvePromptContext } from "./plugins/functionHooks/promptComposition.js";
 import { clearMemoryFilesCache } from "./components/Message.js";
+import { deferInit } from "../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1353381-1353444 sole-consumer
 /**
@@ -65,15 +66,15 @@ var GIT_STATUS_ARGS = ["--no-optional-locks", "status", "--short", IGNORE_SUBMOD
 /**
  * getGitStatus 的转调。
  */
-async function computeGitStatus(e) {
-  return getGitStatus(e);
+async function computeGitStatus(session) {
+  return getGitStatus(session);
 }
 //@ chunk-e6aww6q8.js:1353480-1355662 fingerprint = getGitStatus (0.787)
 /**
  * 生成 gitStatus 文本："This is the git status at the start of the conversation…"、当前分支、主分支、Git user、Status（截断 2000 字）、Recent commits；非 git 仓库返回 null；worktree 时对比主检出。
  */
-async function getGitStatus(e) {
-  let id = e.id;
+async function getGitStatus(session) {
+  let id = session.id;
   let startTime = Date.now();
   logForDiagnosticsNoPII("info", "git_status_started");
   let isGitStart = Date.now();
@@ -91,7 +92,7 @@ async function getGitStatus(e) {
   }
   try {
     let gitCmdsStart = Date.now();
-    let S = null;
+    let pinnedContext = null;
     if (hasOutermostCallFrame() && !isRemoteSessionAvailable()) {
       let cwd = getCwd();
       let gitRoot = findGitRoot(cwd);
@@ -103,30 +104,30 @@ async function getGitStatus(e) {
         return null;
       }
       let originalCwdOrNull = getOriginalCwdOrNull();
-      let We = originalCwdOrNull === null ? null : findGitRoot(originalCwdOrNull);
-      let ze = We === null ? null : resolveGitDirs(We);
+      let originalGitRoot = originalCwdOrNull === null ? null : findGitRoot(originalCwdOrNull);
+      let originalGitDirs = originalGitRoot === null ? null : resolveGitDirs(originalGitRoot);
       let gitDirs = resolveGitDirs(gitRoot);
       if (
-        ze !== null &&
+        originalGitDirs !== null &&
         gitDirs !== null &&
         gitDirs.workTree !== null &&
         gitDirs.gitDir !== gitDirs.commonDir &&
-        gitDirs.commonDir === ze.commonDir &&
-        gitDirs.gitDir !== ze.gitDir
+        gitDirs.commonDir === originalGitDirs.commonDir &&
+        gitDirs.gitDir !== originalGitDirs.gitDir
       ) {
         let filterNeutralizingArgs = await buildFilterNeutralizingArgs(gitDirs.workTree, {
           pin: gitDirs,
         });
         if (filterNeutralizingArgs.ok)
-          S = {
+          pinnedContext = {
             cwd,
             pin: gitDirs,
             filterDriversOff: filterNeutralizingArgs.args,
           };
       }
     }
-    let w =
-      S === null
+    let execOptions =
+      pinnedContext === null
         ? {
             preserveOutputOnError: false,
             env: getRemoteHostSessionCount(undefined, {
@@ -134,36 +135,42 @@ async function getGitStatus(e) {
             }),
           }
         : {
-            cwd: S.cwd,
+            cwd: pinnedContext.cwd,
             preserveOutputOnError: false,
             env: getRemoteHostSessionCount(undefined, {
-              repository: S.pin,
+              repository: pinnedContext.pin,
               userLocale: true,
             }),
           };
-    let L = execFileNoThrow(gitExe(), [...(S?.filterDriversOff ?? []), ...GIT_STATUS_ARGS], w);
-    if (S === null) primeRulesForCritique(e, id, L);
-    let [G, defaultBranch, status, Se, ke] = await Promise.all([
-      S === null
+    let statusResult = execFileNoThrow(
+      gitExe(),
+      [...(pinnedContext?.filterDriversOff ?? []), ...GIT_STATUS_ARGS],
+      execOptions,
+    );
+    if (pinnedContext === null) primeRulesForCritique(session, id, statusResult);
+    let [currentBranch, defaultBranch, status, recentCommits, gitUserName] = await Promise.all([
+      pinnedContext === null
         ? getBranch()
-        : readGitHead(S.pin.gitDir).then((gitHead) => (gitHead?.type === "branch" ? gitHead.name : "HEAD")),
+        : readGitHead(pinnedContext.pin.gitDir).then((gitHead) =>
+            gitHead?.type === "branch" ? gitHead.name : "HEAD",
+          ),
       getDefaultBranch(),
-      L.then(({ stdout }) => stdout.trim()),
-      execFileNoThrow(gitExe(), ["--no-optional-locks", "log", "--oneline", "-n", "5"], w).then(
+      statusResult.then(({ stdout }) => stdout.trim()),
+      execFileNoThrow(gitExe(), ["--no-optional-locks", "log", "--oneline", "-n", "5"], execOptions).then(
         ({ stdout }) => stdout.trim(),
       ),
-      execFileNoThrow(gitExe(), ["config", "user.name"], w).then(({ stdout }) => stdout.trim()),
+      execFileNoThrow(gitExe(), ["config", "user.name"], execOptions).then(({ stdout }) => stdout.trim()),
     ]);
     logForDiagnosticsNoPII("info", "git_commands_completed", {
       duration_ms: Date.now() - gitCmdsStart,
       status_length: status.length,
     });
-    let we = isBashAvailable() ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
-    let Ee =
+    let shellToolName = isBashAvailable() ? BASH_TOOL_NAME : POWERSHELL_TOOL_NAME;
+    let statusText =
       status.length > MAX_GIT_STATUS_CHARS
         ? status.substring(0, MAX_GIT_STATUS_CHARS) +
           `
-... (truncated because it exceeds 2k characters. If you need more information, run "git status" using ${we})`
+... (truncated because it exceeds 2k characters. If you need more information, run "git status" using ${shellToolName})`
         : status;
     logForDiagnosticsNoPII("info", "git_status_completed", {
       duration_ms: Date.now() - startTime,
@@ -172,13 +179,13 @@ async function getGitStatus(e) {
     logFeatureOk("context_git_detect");
     return [
       "This is the git status at the start of the conversation. Note that this status is a snapshot in time, and will not update during the conversation.",
-      `Current branch: ${G}`,
+      `Current branch: ${currentBranch}`,
       `Main branch (you will usually use this for PRs): ${defaultBranch}`,
-      ...(ke ? [`Git user: ${ke}`] : []),
+      ...(gitUserName ? [`Git user: ${gitUserName}`] : []),
       `Status:
-${Ee || "(clean)"}`,
+${statusText || "(clean)"}`,
       `Recent commits:
-${Se}`,
+${recentCommits}`,
     ].join(`
 
 `);
@@ -194,27 +201,37 @@ ${Se}`,
   }
 }
 //@ chunk-e6aww6q8.js:1355784-1356192 placement
-var getProjectContextBlock = require("./chunk-5eyj98zq.js").getProjectContextBlock;
-var retryProjectContextWhenPolicyLands = require("./chunk-5eyj98zq.js").retryProjectContextWhenPolicyLands;
-var forgetKeptProjectDetail = require("./chunk-5eyj98zq.js").forgetKeptProjectDetail;
-var clearProjectMemoryCache = require("./chunk-frr1hkdd.js").clearProjectMemoryCache;
-var PROJECT_REREAD_BACKOFF_MS = [5000, 30000, 120000];
-var EMPTY_FILE_LIST = [];
-var sessionContextStore = new SessionRootSlot(() => ({
-  byId: new Map(),
-  userContextBuildsStarted: 0,
-  classifierClaudeMdBuildOrdinal: 0,
-  hasLoggedPluginInstructionFiles: false,
-}));
+var getProjectContextBlock; // deferred: loads other modules while loading; runs once its import cycle is complete
+var retryProjectContextWhenPolicyLands;
+var forgetKeptProjectDetail;
+var clearProjectMemoryCache;
+var PROJECT_REREAD_BACKOFF_MS;
+var EMPTY_FILE_LIST;
+var sessionContextStore;
+deferInit("chunk-e6aww6q8.js:1355784", () => {
+  getProjectContextBlock = require("./services/projects/projectContext.js").getProjectContextBlock;
+  retryProjectContextWhenPolicyLands =
+    require("./services/projects/projectContext.js").retryProjectContextWhenPolicyLands;
+  forgetKeptProjectDetail = require("./services/projects/projectContext.js").forgetKeptProjectDetail;
+  clearProjectMemoryCache = require("./services/projects/projectMemory.js").clearProjectMemoryCache;
+  PROJECT_REREAD_BACKOFF_MS = [5000, 30000, 120000];
+  EMPTY_FILE_LIST = [];
+  sessionContextStore = new SessionRootSlot(() => ({
+    byId: new Map(),
+    userContextBuildsStarted: 0,
+    classifierClaudeMdBuildOrdinal: 0,
+    hasLoggedPluginInstructionFiles: false,
+  }));
+});
 //@ chunk-e6aww6q8.js:1356192-1356491 placement
 /**
  * 取（或创建）当前会话的上下文缓存记录：git 状态预取、用户上下文与记忆/指令文件、刷新原因、项目重读计数、按短语缓存的系统上下文。
  */
-function getSessionContextState(e) {
-  let byId = sessionContextStore.of(e).byId;
-  let r = byId.get(e.id);
-  if (!r) {
-    r = {
+function getSessionContextState(session) {
+  let byId = sessionContextStore.of(session).byId;
+  let sessionState = byId.get(session.id);
+  if (!sessionState) {
+    sessionState = {
       gitStatusPrefetch: undefined,
       userContext: undefined,
       userContextMemoryFiles: undefined,
@@ -224,9 +241,9 @@ function getSessionContextState(e) {
       projectRereadDueAt: undefined,
       systemContextByPhrase: new Map(),
     };
-    byId.set(e.id, r);
+    byId.set(session.id, sessionState);
   }
-  return r;
+  return sessionState;
 }
 //@ chunk-e6aww6q8.js:1356491-1356541 placement
 /**
@@ -239,20 +256,20 @@ function shouldPrefetchGitStatus() {
 /**
  * 预取 git 状态（远程模式下跳过），结果缓存在会话上下文中。
  */
-function prefetchGitStatus(e) {
+function prefetchGitStatus(session) {
   if (getIsRemoteMode()) {
     logForDiagnosticsNoPII("info", "git_status_skipped_remote_mode");
     return;
   }
   if (shouldPrefetchGitStatus())
-    getSessionContextState(e).gitStatusPrefetch ??= computeGitStatus(e).catch((error) => {
+    getSessionContextState(session).gitStatusPrefetch ??= computeGitStatus(session).catch((error) => {
       logError(error);
       return null;
     });
 }
 //@ chunk-e6aww6q8.js:1356682-1356729 placement
-function getGitStatusPrefetch(e) {
-  return getSessionContextState(e).gitStatusPrefetch;
+function getGitStatusPrefetch(session) {
+  return getSessionContextState(session).gitStatusPrefetch;
 }
 //@ chunk-e6aww6q8.js:1356729-1356815 placement
 /**
@@ -270,24 +287,24 @@ function takeGitStatusPrefetch(session) {
  */
 function getCachedSystemContext(session, cacheBreakerPhrase) {
   let sessionContextState = getSessionContextState(session);
-  let s = cacheBreakerPhrase ?? "";
-  let h = sessionContextState.systemContextByPhrase.get(s);
-  if (!h) {
-    h = getSystemContext(session, cacheBreakerPhrase);
-    sessionContextState.systemContextByPhrase.set(s, h);
+  let phrase = cacheBreakerPhrase ?? "";
+  let cached = sessionContextState.systemContextByPhrase.get(phrase);
+  if (!cached) {
+    cached = getSystemContext(session, cacheBreakerPhrase);
+    sessionContextState.systemContextByPhrase.set(phrase, cached);
   }
-  return h;
+  return cached;
 }
 //@ chunk-e6aww6q8.js:1356944-1357428 fingerprint = getSystemContext (0.604)
 /**
  * 系统上下文：CLAUDE_CODE_PERFORCE_MODE 时加 perforceMode 说明；其余为空对象（gitStatus 另行通告）。
  */
-async function getSystemContext(e, n) {
+async function getSystemContext(session, cacheBreakerPhrase) {
   let startTime = Date.now();
   logForDiagnosticsNoPII("info", "system_context_started");
   logForDiagnosticsNoPII("info", "system_context_completed", {
     duration_ms: Date.now() - startTime,
-    has_injection: n !== undefined,
+    has_injection: cacheBreakerPhrase !== undefined,
   });
   return {
     ...(isEnvTruthy(env.CLAUDE_CODE_PERFORCE_MODE) && {
@@ -302,7 +319,7 @@ async function getSystemContext(e, n) {
  */
 function getOrBuildUserContext(session, storageV5, credentials) {
   let sessionContextState = getSessionContextState(session);
-  let h =
+  let previousContext =
     sessionContextState.projectRereadDueAt !== undefined &&
     Date.now() >= sessionContextState.projectRereadDueAt
       ? {
@@ -312,33 +329,34 @@ function getOrBuildUserContext(session, storageV5, credentials) {
           refreshReason: sessionContextState.refreshReason,
         }
       : undefined;
-  if (h !== undefined) {
+  if (previousContext !== undefined) {
     logForDiagnosticsNoPII("info", "user_context_project_reread", {
       failed_reads: sessionContextState.projectReadFailures,
     });
     invalidateUserContext(session, "project_reread");
   }
   if (sessionContextState.userContext === undefined) {
-    let y = sessionContextStore.of(session);
-    let S = ++y.userContextBuildsStarted;
+    let sessionState = sessionContextStore.of(session);
+    let buildStarted = ++sessionState.userContextBuildsStarted;
     noteUserContextBuild();
     let userContext = getUserContext(session, storageV5, credentials);
-    let L = userContext.then(
+    let userContextPromise = userContext.then(
       ({ blocks, claudeMd, instructionFiles, pluginInstructionFiles, isProjectWorthReadingAgain }) => {
-        if (sessionContextState.userContext === L) {
-          let we = isProjectWorthReadingAgain
+        if (sessionContextState.userContext === userContextPromise) {
+          let isWorthReadingAgain = isProjectWorthReadingAgain
             ? PROJECT_REREAD_BACKOFF_MS[sessionContextState.projectReadFailures]
             : undefined;
           sessionContextState.projectReadFailures = isProjectWorthReadingAgain
             ? sessionContextState.projectReadFailures + 1
             : 0;
-          sessionContextState.projectRereadDueAt = we === undefined ? undefined : Date.now() + we;
+          sessionContextState.projectRereadDueAt =
+            isWorthReadingAgain === undefined ? undefined : Date.now() + isWorthReadingAgain;
         }
-        if (S > y.classifierClaudeMdBuildOrdinal) {
-          y.classifierClaudeMdBuildOrdinal = S;
+        if (buildStarted > sessionState.classifierClaudeMdBuildOrdinal) {
+          sessionState.classifierClaudeMdBuildOrdinal = buildStarted;
           setCachedClaudeMdContent(claudeMd);
-          if (pluginInstructionFiles !== undefined && !y.hasLoggedPluginInstructionFiles) {
-            y.hasLoggedPluginInstructionFiles = true;
+          if (pluginInstructionFiles !== undefined && !sessionState.hasLoggedPluginInstructionFiles) {
+            sessionState.hasLoggedPluginInstructionFiles = true;
             if (pluginInstructionFiles.fileCount > 0)
               logEvent("tengu_instruction_files_from_plugins", {
                 file_count: pluginInstructionFiles.fileCount,
@@ -349,7 +367,7 @@ function getOrBuildUserContext(session, storageV5, credentials) {
         return blocks;
       },
       (error) => {
-        if (h?.userContext === undefined) throw error;
+        if (previousContext?.userContext === undefined) throw error;
         logForDiagnosticsNoPII("warn", "user_context_project_reread_threw");
         logForDebugging(
           `user context: the project re-read's build threw: ${error instanceof Error ? error.name : typeof error}`,
@@ -357,23 +375,23 @@ function getOrBuildUserContext(session, storageV5, credentials) {
             level: "warn",
           },
         );
-        if (sessionContextState.userContext === L) {
-          sessionContextState.userContext = h.userContext;
-          sessionContextState.userContextMemoryFiles = h.userContextMemoryFiles;
-          sessionContextState.userContextInstructionFiles = h.userContextInstructionFiles;
-          sessionContextState.refreshReason = h.refreshReason;
+        if (sessionContextState.userContext === userContextPromise) {
+          sessionContextState.userContext = previousContext.userContext;
+          sessionContextState.userContextMemoryFiles = previousContext.userContextMemoryFiles;
+          sessionContextState.userContextInstructionFiles = previousContext.userContextInstructionFiles;
+          sessionContextState.refreshReason = previousContext.refreshReason;
         }
-        return h.userContext;
+        return previousContext.userContext;
       },
     );
-    sessionContextState.userContext = L;
+    sessionContextState.userContext = userContextPromise;
     sessionContextState.userContextMemoryFiles = userContext.then(
       ({ memoryFiles }) => memoryFiles,
-      () => h?.userContextMemoryFiles ?? EMPTY_FILE_LIST,
+      () => previousContext?.userContextMemoryFiles ?? EMPTY_FILE_LIST,
     );
     sessionContextState.userContextInstructionFiles = userContext.then(
       ({ instructionFiles }) => instructionFiles,
-      () => h?.userContextInstructionFiles,
+      () => previousContext?.userContextInstructionFiles,
     );
   }
   return sessionContextState.userContext;
@@ -382,15 +400,18 @@ function getOrBuildUserContext(session, storageV5, credentials) {
 /**
  * 触发用户上下文构建并返回指令文件列表 promise。
  */
-function getUserContextInstructionFiles(e, n, r) {
-  getOrBuildUserContext(e, n, r).catch(() => {});
-  return getSessionContextState(e).userContextInstructionFiles ?? Promise.resolve(undefined);
+function getUserContextInstructionFiles(session, storageV5, credentials) {
+  getOrBuildUserContext(session, storageV5, credentials).catch(() => {});
+  return getSessionContextState(session).userContextInstructionFiles ?? Promise.resolve(undefined);
 }
 //@ chunk-e6aww6q8.js:1359240-1359249 layout
 /**
  * 模块加载时登记 getUserContextInstructionFiles（q3t）。
  */
-setMarkdownLexer(getUserContextInstructionFiles);
+// deferred: uses setMarkdownLexer (./utils/claudemd.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1359240", () => {
+  setMarkdownLexer(getUserContextInstructionFiles);
+});
 //@ chunk-e6aww6q8.js:1359249-1359347 layout
 /**
  * 指令文件中 Managed 类型的合并文本。
@@ -418,115 +439,128 @@ function getUserContextMemoryFiles(session) {
  * 指令文件中不在记忆文件里的部分。
  */
 async function getNonMemoryInstructionFiles(session) {
-  let n = sessionContextStore.peek(session)?.byId.get(session.id);
-  let [r, s] = await Promise.all([n?.userContextInstructionFiles, n?.userContextMemoryFiles]);
-  if (r === undefined || s === undefined) return EMPTY_FILE_LIST;
-  let h = new Set(s.map((y) => y.path));
-  return r.filter((y) => !h.has(y.path));
+  let pluginFiles = sessionContextStore.peek(session)?.byId.get(session.id);
+  let [nonMemoryFiles, memoryFiles] = await Promise.all([
+    pluginFiles?.userContextInstructionFiles,
+    pluginFiles?.userContextMemoryFiles,
+  ]);
+  if (nonMemoryFiles === undefined || memoryFiles === undefined) return EMPTY_FILE_LIST;
+  let memoryPaths = new Set(memoryFiles.map((file) => file.path));
+  return nonMemoryFiles.filter((file) => !memoryPaths.has(file.path));
 }
 //@ chunk-e6aww6q8.js:1359668-1359784 layout
 /**
  * 合并两个文件列表，按 path 去重。
  */
-function mergeByPath(e, n) {
-  let r = new Set(e.map((h) => h.path));
-  let filtered = n.filter((h) => !r.has(h.path));
-  return filtered.length > 0 ? e.concat(filtered) : e;
+function mergeByPath(first, second) {
+  let seenPaths = new Set(first.map((file) => file.path));
+  let filtered = second.filter((file) => !seenPaths.has(file.path));
+  return filtered.length > 0 ? first.concat(filtered) : first;
 }
 //@ chunk-e6aww6q8.js:1359784-1361624 fingerprint = getUserContext (0.462)
 /**
  * 构建用户上下文块 {claudeMd, userEmail?, attachedProject?, currentDate:"Today's date is …"}；CLAUDE.md 可被关闭；块可经 resolvePromptContext 钩子改写；这些块在请求里成为首条 user 消息前的 system-reminder 或 role=system 消息。
  */
-async function getUserContext(e, n, r) {
+async function getUserContext(session, storageV5, credentials) {
   let startTime = Date.now();
   logForDiagnosticsNoPII("info", "user_context_started");
-  let h = isClaudeMdLoadingDisabled();
-  let y = null;
-  let S = EMPTY_FILE_LIST;
-  let w = EMPTY_FILE_LIST;
+  let isMemoryDisabled = isClaudeMdLoadingDisabled();
+  let claudeMd = null;
+  let memoryFiles = EMPTY_FILE_LIST;
+  let includedFiles = EMPTY_FILE_LIST;
   try {
-    if (!h) {
-      S = filterAutoMemWhenDisabled(await getMemoryFilesCached(e, false, n));
-      w = includedMemoryFiles(S);
-      y = formatMemoryInstruction(w);
+    if (!isMemoryDisabled) {
+      memoryFiles = filterAutoMemWhenDisabled(await getMemoryFilesCached(session, false, storageV5));
+      includedFiles = includedMemoryFiles(memoryFiles);
+      claudeMd = formatMemoryInstruction(includedFiles);
     }
   } catch (error) {
     logFeatureBad("context_claude_md_load", "load_threw");
     throw error;
   }
-  if (!h) logFeatureOk("context_claude_md_load");
-  let L = env.ANTHROPIC_UNIX_SOCKET
+  if (!isMemoryDisabled) logFeatureOk("context_claude_md_load");
+  let userEmail = env.ANTHROPIC_UNIX_SOCKET
     ? undefined
     : (getOauthAccountInfo()?.emailAddress ??
       (isDiskless() && isAnthropicAuthEnabled() ? env.CLAUDE_CODE_USER_EMAIL : undefined));
-  let projectContextBlock = await getProjectContextBlock(r, e);
+  let projectContextBlock = await getProjectContextBlock(credentials, session);
   let block = projectContextBlock.block;
   let isProjectWorthReadingAgain =
     projectContextBlock.block === null && projectContextBlock.isWorthReadingAgain;
-  if (block === null) retryProjectContextWhenPolicyLands(e, () => invalidateUserContext(e, "policy_verdict"));
+  if (block === null)
+    retryProjectContextWhenPolicyLands(session, () => invalidateUserContext(session, "policy_verdict"));
   logForDiagnosticsNoPII("info", "user_context_completed", {
     duration_ms: Date.now() - startTime,
-    claudemd_length: y?.length ?? 0,
-    claudemd_disabled: Boolean(h),
-    has_user_email: Boolean(L),
+    claudemd_length: claudeMd?.length ?? 0,
+    claudemd_disabled: Boolean(isMemoryDisabled),
+    has_user_email: Boolean(userEmail),
     has_project_context: Boolean(block),
   });
-  let Se = {
-    claudeMd: y ?? "",
-    ...(L && {
-      userEmail: `The user's email address is ${L}. Use it only to identify the user, such as for authorship, attribution, or filtering their own work. Never send it to an unrelated service, such as in a request header, URL, or payload, unless the user explicitly asks.`,
+  let blocks = {
+    claudeMd: claudeMd ?? "",
+    ...(userEmail && {
+      userEmail: `The user's email address is ${userEmail}. Use it only to identify the user, such as for authorship, attribution, or filtering their own work. Never send it to an unrelated service, such as in a request header, URL, or payload, unless the user explicitly asks.`,
     }),
     ...(block && {
       attachedProject: block,
     }),
-    currentDate: `Today's date is ${sessionDateCell(e)}.`,
+    currentDate: `Today's date is ${sessionDateCell(session)}.`,
   };
-  let ke = [];
+  let pluginInstructionFiles = [];
   let promptContext = await resolvePromptContext(() => {
-    ke = w.map(toPluginInstructionFile);
+    pluginInstructionFiles = includedFiles.map(toPluginInstructionFile);
     return {
-      blocks: Object.entries(Se).map(([key, value]) => ({
+      blocks: Object.entries(blocks).map(([key, value]) => ({
         name: key,
         text: value,
       })),
-      instructionFiles: ke,
+      instructionFiles: pluginInstructionFiles,
     };
   });
   if (promptContext === undefined)
     return {
-      blocks: Se,
-      memoryFiles: S,
-      instructionFiles: w,
-      claudeMd: y || null,
+      blocks,
+      memoryFiles,
+      instructionFiles: includedFiles,
+      claudeMd: claudeMd || null,
       pluginInstructionFiles: undefined,
       isProjectWorthReadingAgain,
     };
-  let Ee =
-    promptContext.instructionFiles !== undefined && sameInstructionFiles(promptContext.instructionFiles, ke);
-  let Ae =
-    promptContext.instructionFiles === undefined || Ee
+  let instructionFilesMatch =
+    promptContext.instructionFiles !== undefined &&
+    sameInstructionFiles(promptContext.instructionFiles, pluginInstructionFiles);
+  let extraPluginFiles =
+    promptContext.instructionFiles === undefined || instructionFilesMatch
       ? []
-      : excludeInstructionFiles(promptContext.instructionFiles, ke);
-  let pluginInstructionFiles = {
-    fileCount: Ae.length,
-    totalContentLength: Ae.reduce((acc, Je) => acc + Je.content.length, 0),
+      : excludeInstructionFiles(promptContext.instructionFiles, pluginInstructionFiles);
+  let pluginInstructionFiles_2 = {
+    fileCount: extraPluginFiles.length,
+    totalContentLength: extraPluginFiles.reduce((acc, file) => acc + file.content.length, 0),
   };
-  let Me =
+  let mergedFiles =
     promptContext.instructionFiles === undefined
       ? undefined
-      : Ee
-        ? w
-        : fromPluginInstructionFiles(promptContext.instructionFiles, w);
-  let We = Me === undefined ? undefined : Ee ? Se.claudeMd : formatMemoryInstruction(Me);
-  let ze = Object.fromEntries(
-    promptContext.blocks.map(({ name: lt, text }) => [lt, lt === "claudeMd" && We !== undefined ? We : text]),
+      : instructionFilesMatch
+        ? includedFiles
+        : fromPluginInstructionFiles(promptContext.instructionFiles, includedFiles);
+  let mergedClaudeMd =
+    mergedFiles === undefined
+      ? undefined
+      : instructionFilesMatch
+        ? blocks.claudeMd
+        : formatMemoryInstruction(mergedFiles);
+  let blocksByKey = Object.fromEntries(
+    promptContext.blocks.map(({ name, text }) => [
+      name,
+      name === "claudeMd" && mergedClaudeMd !== undefined ? mergedClaudeMd : text,
+    ]),
   );
   return {
-    blocks: ze,
-    memoryFiles: S,
-    instructionFiles: Me,
-    claudeMd: ze.claudeMd || null,
-    pluginInstructionFiles,
+    blocks: blocksByKey,
+    memoryFiles,
+    instructionFiles: mergedFiles,
+    claudeMd: blocksByKey.claudeMd || null,
+    pluginInstructionFiles: pluginInstructionFiles_2,
     isProjectWorthReadingAgain,
   };
 }
@@ -534,39 +568,39 @@ async function getUserContext(e, n, r) {
 /**
  * 清除会话的项目记忆缓存与上下文缓存，并记录分类器 CLAUDE.md 构建序号。
  */
-function clearSessionContextCaches(e) {
+function clearSessionContextCaches(rootSession) {
   clearProjectMemoryCache();
-  clearAgentAnswers(e);
-  let n = sessionContextStore.peek(e);
-  if (!n) return;
-  n.byId.clear();
-  n.classifierClaudeMdBuildOrdinal = n.userContextBuildsStarted;
+  clearAgentAnswers(rootSession);
+  let sessionState = sessionContextStore.peek(rootSession);
+  if (!sessionState) return;
+  sessionState.byId.clear();
+  sessionState.classifierClaudeMdBuildOrdinal = sessionState.userContextBuildsStarted;
 }
 //@ chunk-e6aww6q8.js:1361758-1361833 placement
 /**
  * 函数 resetPluginInstructionLogged（清掉"已记录插件指令文件"标记）；位于「会话上下文：git 状态快照（getGitStatus）、系统上下文（Perforce 说明等，按短语缓存）、用户上下文（CLAUDE.md、用户邮箱、附加项目、当前日期）的构建、缓存与定期重读」模块。
  */
-function resetPluginInstructionLogged(e) {
-  let n = sessionContextStore.peek(e);
-  if (n) n.hasLoggedPluginInstructionFiles = false;
+function resetPluginInstructionLogged(rootSession) {
+  let sessionState = sessionContextStore.peek(rootSession);
+  if (sessionState) sessionState.hasLoggedPluginInstructionFiles = false;
 }
 //@ chunk-e6aww6q8.js:1361833-1362165 placement
 /**
  * 使所有会话的用户上下文失效并记录刷新原因（account_change 时同时丢弃保留的项目详情；非 project_reread 时重置读失败计数）。
  */
-function invalidateUserContext(e, n) {
+function invalidateUserContext(rootSession, reason) {
   clearProjectMemoryCache();
-  if (n === "account_change") forgetKeptProjectDetail();
-  let r = sessionContextStore.peek(e);
-  if (!r) return;
-  for (let s of r.byId.values()) {
-    let h = s.userContext !== undefined;
-    s.userContext = undefined;
-    s.userContextMemoryFiles = undefined;
-    s.userContextInstructionFiles = undefined;
-    s.projectRereadDueAt = undefined;
-    if (n !== "project_reread") s.projectReadFailures = 0;
-    if (h) s.refreshReason = n;
+  if (reason === "account_change") forgetKeptProjectDetail();
+  let sessionState = sessionContextStore.peek(rootSession);
+  if (!sessionState) return;
+  for (let sessionState_ of sessionState.byId.values()) {
+    let hasUserContext = sessionState_.userContext !== undefined;
+    sessionState_.userContext = undefined;
+    sessionState_.userContextMemoryFiles = undefined;
+    sessionState_.userContextInstructionFiles = undefined;
+    sessionState_.projectRereadDueAt = undefined;
+    if (reason !== "project_reread") sessionState_.projectReadFailures = 0;
+    if (hasUserContext) sessionState_.refreshReason = reason;
   }
 }
 //@ chunk-e6aww6q8.js:1362165-1362333 placement
@@ -575,24 +609,24 @@ function invalidateUserContext(e, n) {
  */
 function subscribeMemoryToggleRefresh(rootSession) {
   let root = rootSession.root;
-  let r = onMemoryPauseChange(
-    (h) => invalidateUserContextSafely(root, h ? "memory_paused" : "memory_resumed"),
+  let unsubscribePause = onMemoryPauseChange(
+    (isPaused) => invalidateUserContextSafely(root, isPaused ? "memory_paused" : "memory_resumed"),
     root,
   );
-  let s = onAutoMemorySessionSwitchChange(
-    (h) => invalidateUserContextSafely(root, h ? "auto_memory_off" : "auto_memory_back_on"),
+  let unsubscribeSwitch = onAutoMemorySessionSwitchChange(
+    (enabled) => invalidateUserContextSafely(root, enabled ? "auto_memory_off" : "auto_memory_back_on"),
     root,
   );
   return () => {
-    r();
-    s();
+    unsubscribePause();
+    unsubscribeSwitch();
   };
 }
 //@ chunk-e6aww6q8.js:1362333-1362384 placement
-function invalidateUserContextSafely(root, n) {
+function invalidateUserContextSafely(root, reason) {
   try {
     clearMemoryFilesCache(root);
-    invalidateUserContext(root, n);
+    invalidateUserContext(root, reason);
   } catch (error) {
     logError(error);
   }

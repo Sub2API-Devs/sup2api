@@ -10,7 +10,7 @@
  */
 import { join, dirname } from "path";
 import { mkdir, writeFile } from "fs/promises";
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { userWorkflowsDir, clearAllWorkflows } from "../../services/workflow/loadWorkflows.js";
 import { getProjectConfigRoot } from "../../bootstrap/state.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
@@ -27,7 +27,7 @@ import {
 import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "../design-system/ThemeProvider.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { useProject } from "../../context/session.js";
@@ -45,16 +45,20 @@ import { TextInput } from "../TextInput.js";
 import { ErrorText } from "../ErrorText.js";
 import { FocusColumn } from "../design-system/FocusColumn.js";
 import { Dialog } from "../design-system/Dialog.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-axsvbsqv.js:7923-7927 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-axsvbsqv.js:7923", () => {
+  init_react_production();
+});
 //@ chunk-axsvbsqv.js:8052-8096 placement
 var NAME_CONFLICT_HINT = "Use a different name or overwrite.";
 //@ chunk-axsvbsqv.js:8096-8470 placement
 /**
  * 求动态工作流保存目录：用户范围用用户目录；--project-config-root 下项目范围不可用；否则用仓库根或已有工作流目录下的 .claude/workflows。
  */
-async function getWorkflowSaveDir(scope, cwd) {
+async function getWorkflowSaveDir(scope, startPath) {
   if (scope === "user") return userWorkflowsDir();
   if (getProjectConfigRoot() !== null) {
     logFeatureSad("workflow_save", "project_scope_unavailable");
@@ -62,11 +66,11 @@ async function getWorkflowSaveDir(scope, cwd) {
       "Project-scope workflow saves are unavailable in a session started with --project-config-root",
     );
   }
-  let l = nearestNonHomeRoot(cwd);
-  if (l === null) return join(cwd, ".claude", "workflows");
-  let u = (await getProjectDirsUpToHome("workflows", cwd))[0];
-  if (u !== undefined) return u;
-  return join(l, ".claude", "workflows");
+  let projectRoot = nearestNonHomeRoot(startPath);
+  if (projectRoot === null) return join(startPath, ".claude", "workflows");
+  let existingWorkflowsDir = (await getProjectDirsUpToHome("workflows", startPath))[0];
+  if (existingWorkflowsDir !== undefined) return existingWorkflowsDir;
+  return join(projectRoot, ".claude", "workflows");
 }
 //@ chunk-axsvbsqv.js:8470-9114 placement
 /**
@@ -114,20 +118,20 @@ async function saveDynamicWorkflow(options, storage) {
   return finishWorkflowSave(name, filePath, options);
 }
 //@ chunk-axsvbsqv.js:9114-9379 placement
-async function finishWorkflowSave(name, path, l) {
+async function finishWorkflowSave(name, path, options) {
   clearAllWorkflows();
-  let { clearCommandMemoizationCaches } = await import("./chunk-aeccp9b6.js");
+  let { clearCommandMemoizationCaches } = await import("../../commands.js");
   clearCommandMemoizationCaches();
   logFeatureOk("workflow_save");
   logEvent("tengu_workflow_saved", {
-    scope: fromEnum(l.scope),
-    overwrite: l.overwrite,
-    script_size_chars: l.script.length,
+    scope: fromEnum(options.scope),
+    overwrite: options.overwrite,
+    script_size_chars: options.script.length,
   });
   return {
     name,
     path,
-    scope: l.scope,
+    scope: options.scope,
   };
 }
 //@ chunk-axsvbsqv.js:9379-9893 placement
@@ -135,7 +139,7 @@ async function finishWorkflowSave(name, path, l) {
  * 通过存储 v5 写入用户范围的工作流脚本（覆盖时原子写，否则要求不存在），失败时转换为对应错误。
  */
 async function saveWorkflowToStorage(storage, name, displayPath, options) {
-  let d = await storage.write(
+  let writeResult = await storage.write(
     STORAGE_SPACES.userConfigDir("workflows", [`${name}.js`]),
     options.script,
     options.overwrite
@@ -150,8 +154,8 @@ async function saveWorkflowToStorage(storage, name, displayPath, options) {
           },
         },
   );
-  if (!d.ok) {
-    if (!options.overwrite && d.error.code === "AlreadyExists") {
+  if (!writeResult.ok) {
+    if (!options.overwrite && writeResult.error.code === "AlreadyExists") {
       logFeatureSad("workflow_save", "already_exists");
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `Dynamic workflow "${name}" already exists at ${displayPath}. ${NAME_CONFLICT_HINT}`,
@@ -160,281 +164,284 @@ async function saveWorkflowToStorage(storage, name, displayPath, options) {
     }
     logFeatureBad("workflow_save", "write_failed");
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Workflow save failed: ${d.error.code} (${displayPath})`,
+      `Workflow save failed: ${writeResult.error.code} (${displayPath})`,
       "workflow save failed",
     );
   }
   return finishWorkflowSave(name, displayPath, options);
 }
 //@ chunk-axsvbsqv.js:9893-9923 placement
-function selectCwd(dn) {
-  return dn.cwd;
+function selectCwd(projectContext) {
+  return projectContext.cwd;
 }
 //@ chunk-axsvbsqv.js:9923-9978 placement
-function toggleSaveScope(ho) {
-  return ho === "project" ? "user" : "project";
+function toggleSaveScope(scope) {
+  return scope === "project" ? "user" : "project";
 }
 //@ chunk-axsvbsqv.js:9978-13272 placement
 /**
  * 保存动态工作流的对话框。
  */
 function WorkflowSaveDialog(props) {
-  let $ = w(54);
+  let $ = useMemoCache(54);
   let { script, defaultName, onDone } = props;
   let { storageV5 } = useTheme_2();
   let { columns } = useTerminalSize();
   let cwd = useProject(selectCwd);
-  let [b, x] = y(defaultName);
-  let [A, v] = y(defaultName.length);
-  let [T, M] = y("project");
-  let [I, N] = y(false);
-  let [E, V] = y(null);
-  let [J, z] = y(null);
-  let B;
+  let [nameInput, setNameInput] = useState(defaultName);
+  let [cursorOffset, setCursorOffset] = useState(defaultName.length);
+  let [saveScope, setSaveScope] = useState("project");
+  let [isSaving, setIsSaving] = useState(false);
+  let [conflictPath, setConflictPath] = useState(null);
+  let [errorMessage, setErrorMessage] = useState(null);
+  let clearErrors;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    B = () => {
-      V(null);
-      z(null);
+    clearErrors = () => {
+      setConflictPath(null);
+      setErrorMessage(null);
     };
-    $[0] = B;
-  } else B = $[0];
-  let H = B;
-  let Y;
+    $[0] = clearErrors;
+  } else clearErrors = $[0];
+  let resetErrors = clearErrors;
+  let handleNameChange;
   if ($[1] === MEMO_CACHE_SENTINEL) {
-    Y = (pt) => {
-      x(pt);
-      H();
+    handleNameChange = (nextName) => {
+      setNameInput(nextName);
+      resetErrors();
     };
-    $[1] = Y;
-  } else Y = $[1];
-  let onChange = Y;
-  let wt;
+    $[1] = handleNameChange;
+  } else handleNameChange = $[1];
+  let onChange = handleNameChange;
+  let handleSubmit;
   if (
-    $[2] !== E ||
+    $[2] !== conflictPath ||
     $[3] !== cwd ||
-    $[4] !== b ||
+    $[4] !== nameInput ||
     $[5] !== onDone ||
-    $[6] !== I ||
-    $[7] !== T ||
+    $[6] !== isSaving ||
+    $[7] !== saveScope ||
     $[8] !== script ||
     $[9] !== storageV5
   ) {
-    wt = () => {
-      if (I) {
+    handleSubmit = () => {
+      if (isSaving) {
         return;
       }
-      let trimmed = b.trim();
+      let trimmed = nameInput.trim();
       if (!trimmed) {
         return;
       }
-      N(true);
-      z(null);
+      setIsSaving(true);
+      setErrorMessage(null);
       saveDynamicWorkflow(
         {
           name: trimmed,
-          scope: T,
+          scope: saveScope,
           script,
-          overwrite: E !== null,
+          overwrite: conflictPath !== null,
           cwd,
         },
         storageV5,
       )
-        .then((at) => {
+        .then((saveResult) => {
           onDone(
-            `Dynamic workflow saved to ${at.path}. Invoke as /${at.name} or Workflow({name: "${at.name}"}) in future sessions.`,
+            `Dynamic workflow saved to ${saveResult.path}. Invoke as /${saveResult.name} or Workflow({name: "${saveResult.name}"}) in future sessions.`,
           );
         })
         .catch((error) => {
-          let U = error instanceof Error ? error.message : String(error);
-          if (U.includes(NAME_CONFLICT_HINT)) {
-            let match = U.match(/at (.+?)\. /);
-            V(match?.[1] ?? "(unknown path)");
-          } else z(U);
-          N(false);
+          let message = error instanceof Error ? error.message : String(error);
+          if (message.includes(NAME_CONFLICT_HINT)) {
+            let match = message.match(/at (.+?)\. /);
+            setConflictPath(match?.[1] ?? "(unknown path)");
+          } else setErrorMessage(message);
+          setIsSaving(false);
         });
     };
-    $[2] = E;
+    $[2] = conflictPath;
     $[3] = cwd;
-    $[4] = b;
+    $[4] = nameInput;
     $[5] = onDone;
-    $[6] = I;
-    $[7] = T;
+    $[6] = isSaving;
+    $[7] = saveScope;
     $[8] = script;
     $[9] = storageV5;
-    $[10] = wt;
-  } else wt = $[10];
-  let onSubmit = wt;
-  let rt;
+    $[10] = handleSubmit;
+  } else handleSubmit = $[10];
+  let onSubmit = handleSubmit;
+  let handleCancel;
   if ($[11] !== onDone) {
-    rt = () => onDone();
+    handleCancel = () => onDone();
     $[11] = onDone;
-    $[12] = rt;
-  } else rt = $[12];
-  let W = rt;
-  let G;
+    $[12] = handleCancel;
+  } else handleCancel = $[12];
+  let cancelDialog = handleCancel;
+  let cancelBindingOptions;
   if ($[13] === MEMO_CACHE_SENTINEL) {
-    G = {
+    cancelBindingOptions = {
       context: "Settings",
       isActive: true,
     };
-    $[13] = G;
-  } else G = $[13];
-  useKeybinding("confirm:no", W, G);
-  let dt;
+    $[13] = cancelBindingOptions;
+  } else cancelBindingOptions = $[13];
+  useKeybinding("confirm:no", cancelDialog, cancelBindingOptions);
+  let handleKeyDown;
   if ($[14] === MEMO_CACHE_SENTINEL) {
-    dt = (event) => {
+    handleKeyDown = (event) => {
       if (event.key === "tab") {
         event.preventDefault();
-        M(toggleSaveScope);
-        H();
+        setSaveScope(toggleSaveScope);
+        resetErrors();
       }
     };
-    $[14] = dt;
-  } else dt = $[14];
-  let onKeyDown = dt;
-  let zt;
-  if ($[15] !== b) {
-    zt = slugifyWorkflowName(b.trim() || "workflow");
-    $[15] = b;
-    $[16] = zt;
-  } else zt = $[16];
-  let ee = zt;
-  let Rt;
-  if ($[17] !== T || $[18] !== ee) {
-    Rt = T === "project" ? `.claude/workflows/${ee}.js` : tildify(join(userWorkflowsDir(), `${ee}.js`));
-    $[17] = T;
-    $[18] = ee;
-    $[19] = Rt;
-  } else Rt = $[19];
-  let yt = Rt;
-  const Ot = T === "project" ? "Project" : "User";
+    $[14] = handleKeyDown;
+  } else handleKeyDown = $[14];
+  let onKeyDown = handleKeyDown;
+  let slug;
+  if ($[15] !== nameInput) {
+    slug = slugifyWorkflowName(nameInput.trim() || "workflow");
+    $[15] = nameInput;
+    $[16] = slug;
+  } else slug = $[16];
+  let slugName = slug;
+  let targetPath;
+  if ($[17] !== saveScope || $[18] !== slugName) {
+    targetPath =
+      saveScope === "project"
+        ? `.claude/workflows/${slugName}.js`
+        : tildify(join(userWorkflowsDir(), `${slugName}.js`));
+    $[17] = saveScope;
+    $[18] = slugName;
+    $[19] = targetPath;
+  } else targetPath = $[19];
+  let displayPath = targetPath;
+  const scopeLabel = saveScope === "project" ? "Project" : "User";
   let subtitle;
-  if ($[20] !== Ot || $[21] !== yt) {
+  if ($[20] !== scopeLabel || $[21] !== displayPath) {
     subtitle = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [Ot, " scope \xB7 ", yt],
+      children: [scopeLabel, " scope \xB7 ", displayPath],
     });
-    $[20] = Ot;
-    $[21] = yt;
+    $[20] = scopeLabel;
+    $[21] = displayPath;
     $[22] = subtitle;
   } else subtitle = $[22];
-  const action = E ? "overwrite" : "save";
-  let qe;
+  const action = conflictPath ? "overwrite" : "save";
+  let submitHint;
   if ($[23] !== action) {
-    qe = jsxProd_default(KeyboardShortcutHint, {
+    submitHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "enter",
       action,
     });
     $[23] = action;
-    $[24] = qe;
-  } else qe = $[24];
-  let sn;
-  let po;
+    $[24] = submitHint;
+  } else submitHint = $[24];
+  let toggleScopeHint;
+  let cancelHint;
   if ($[25] === MEMO_CACHE_SENTINEL) {
-    sn = jsxProd_default(KeyboardShortcutHint, {
+    toggleScopeHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "tab",
       action: "toggle scope",
     });
-    po = jsxProd_default(KeyboardShortcutHint, {
+    cancelHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action: "cancel",
     });
-    $[25] = sn;
-    $[26] = po;
+    $[25] = toggleScopeHint;
+    $[26] = cancelHint;
   } else {
-    sn = $[25];
-    po = $[26];
+    toggleScopeHint = $[25];
+    cancelHint = $[26];
   }
   let inputGuide;
-  if ($[27] !== qe) {
+  if ($[27] !== submitHint) {
     inputGuide = jsxProd_default_2(Byline, {
-      children: [qe, sn, po],
+      children: [submitHint, toggleScopeHint, cancelHint],
     });
-    $[27] = qe;
+    $[27] = submitHint;
     $[28] = inputGuide;
   } else inputGuide = $[28];
-  let fo;
+  let promptLabel;
   if ($[29] === MEMO_CACHE_SENTINEL) {
-    fo = jsxProd_default(Text, {
+    promptLabel = jsxProd_default(Text, {
       children: "Save as:",
     });
-    $[29] = fo;
-  } else fo = $[29];
-  let an;
+    $[29] = promptLabel;
+  } else promptLabel = $[29];
+  let promptArrow;
   if ($[30] === MEMO_CACHE_SENTINEL) {
-    an = jsxProd_default(Text, {
+    promptArrow = jsxProd_default(Text, {
       children: ">",
     });
-    $[30] = an;
-  } else an = $[30];
-  const focus = !I;
-  const showCursor = !I;
-  let st;
+    $[30] = promptArrow;
+  } else promptArrow = $[30];
+  const focus = !isSaving;
+  const showCursor = !isSaving;
+  let inputBox;
   if (
     $[31] !== columns ||
-    $[32] !== A ||
+    $[32] !== cursorOffset ||
     $[33] !== onSubmit ||
-    $[34] !== b ||
+    $[34] !== nameInput ||
     $[35] !== focus ||
     $[36] !== showCursor
   ) {
-    st = jsxProd_default_2(Box, {
+    inputBox = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 1,
       marginTop: 1,
       children: [
-        an,
+        promptArrow,
         jsxProd_default(TextInput, {
-          value: b,
+          value: nameInput,
           onChange,
           onSubmit,
           focus,
           showCursor,
           columns,
-          cursorOffset: A,
-          onChangeCursorOffset: v,
+          cursorOffset,
+          onChangeCursorOffset: setCursorOffset,
         }),
       ],
     });
     $[31] = columns;
-    $[32] = A;
+    $[32] = cursorOffset;
     $[33] = onSubmit;
-    $[34] = b;
+    $[34] = nameInput;
     $[35] = focus;
     $[36] = showCursor;
-    $[37] = st;
-  } else st = $[37];
-  let Yt;
-  if ($[38] !== E) {
-    Yt =
-      E &&
+    $[37] = inputBox;
+  } else inputBox = $[37];
+  let conflictWarning;
+  if ($[38] !== conflictPath) {
+    conflictWarning =
+      conflictPath &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default_2(Text, {
           color: "warning",
-          children: [E, " already exists. Press Enter again to overwrite, or change the name."],
+          children: [conflictPath, " already exists. Press Enter again to overwrite, or change the name."],
         }),
       });
-    $[38] = E;
-    $[39] = Yt;
-  } else Yt = $[39];
-  let ve;
-  if ($[40] !== J) {
-    ve =
-      J &&
+    $[38] = conflictPath;
+    $[39] = conflictWarning;
+  } else conflictWarning = $[39];
+  let errorBox;
+  if ($[40] !== errorMessage) {
+    errorBox =
+      errorMessage &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(ErrorText, {
-          error: J,
+          error: errorMessage,
         }),
       });
-    $[40] = J;
-    $[41] = ve;
-  } else ve = $[41];
-  let We;
-  if ($[42] !== I) {
-    We =
-      I &&
+    $[40] = errorMessage;
+    $[41] = errorBox;
+  } else errorBox = $[41];
+  let savingNotice;
+  if ($[42] !== isSaving) {
+    savingNotice =
+      isSaving &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(Text, {
@@ -442,41 +449,41 @@ function WorkflowSaveDialog(props) {
           children: "Saving\u2026",
         }),
       });
-    $[42] = I;
-    $[43] = We;
-  } else We = $[43];
+    $[42] = isSaving;
+    $[43] = savingNotice;
+  } else savingNotice = $[43];
   let children;
-  if ($[44] !== st || $[45] !== Yt || $[46] !== ve || $[47] !== We) {
+  if ($[44] !== inputBox || $[45] !== conflictWarning || $[46] !== errorBox || $[47] !== savingNotice) {
     children = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [fo, st, Yt, ve, We],
+      children: [promptLabel, inputBox, conflictWarning, errorBox, savingNotice],
     });
-    $[44] = st;
-    $[45] = Yt;
-    $[46] = ve;
-    $[47] = We;
+    $[44] = inputBox;
+    $[45] = conflictWarning;
+    $[46] = errorBox;
+    $[47] = savingNotice;
     $[48] = children;
   } else children = $[48];
-  let cn;
-  if ($[49] !== W || $[50] !== subtitle || $[51] !== inputGuide || $[52] !== children) {
-    cn = jsxProd_default(FocusColumn, {
+  let dialogElement;
+  if ($[49] !== cancelDialog || $[50] !== subtitle || $[51] !== inputGuide || $[52] !== children) {
+    dialogElement = jsxProd_default(FocusColumn, {
       onKeyDown,
       children: jsxProd_default(Dialog, {
         title: "Save dynamic workflow",
         subtitle,
-        onCancel: W,
+        onCancel: cancelDialog,
         color: "permission",
         isCancelActive: false,
         inputGuide,
         children,
       }),
     });
-    $[49] = W;
+    $[49] = cancelDialog;
     $[50] = subtitle;
     $[51] = inputGuide;
     $[52] = children;
-    $[53] = cn;
-  } else cn = $[53];
-  return cn;
+    $[53] = dialogElement;
+  } else dialogElement = $[53];
+  return dialogElement;
 }
 export { WorkflowSaveDialog };

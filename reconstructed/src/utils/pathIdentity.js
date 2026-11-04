@@ -19,8 +19,8 @@ import { logForDebugging } from "./debug.js";
 /**
  * foldCaseBasic：大小写折叠的底层实现（ı→i、ſ→s），供 foldCaseForCompare 等使用。
  */
-function foldCaseBasic(n) {
-  return n
+function foldCaseBasic(text) {
+  return text
     .toLowerCase()
     .replace(/\u0131/g, "i")
     .replace(/\u017F/g, "s");
@@ -29,15 +29,15 @@ function foldCaseBasic(n) {
 /**
  * 逐字符转小写后再做 Unicode 规范化，并把词尾 sigma（ς）统一为 σ，用于大小写不敏感的路径比较。
  */
-function foldCaseForCompare(n) {
-  let e = "";
-  for (let o of n) e += o.toLowerCase();
-  return foldCaseBasic(e).replace(/\u03C2/g, "\u03C3");
+function foldCaseForCompare(text) {
+  let folded = "";
+  for (let character of text) folded += character.toLowerCase();
+  return foldCaseBasic(folded).replace(/\u03C2/g, "\u03C3");
 }
 //@ chunk-b00ssqeq.js:713-781 placement = getReservedShortcuts (1)
-function normalizeCaseForPlatform(n) {
+function normalizeCaseForPlatform(text) {
   let platform = getPlatform();
-  return platform === "windows" || platform === "macos" ? foldCaseBasic(n) : n;
+  return platform === "windows" || platform === "macos" ? foldCaseBasic(text) : text;
 }
 //@ chunk-b00ssqeq.js:781-1151 placement
 /**
@@ -47,8 +47,8 @@ function findUniqueWorktreeForBranch(stdout, branch) {
   let match = null;
   let matchCount = 0;
   let pathKeys = [];
-  for (let a of stdout.split("\x00\x00")) {
-    let fields = a.split("\x00");
+  for (let record of stdout.split("\x00\x00")) {
+    let fields = record.split("\x00");
     let worktreeLine = fields.find((field) => field.startsWith("worktree "));
     if (worktreeLine === undefined) continue;
     let rawPath = worktreeLine.slice(9);
@@ -70,36 +70,36 @@ function findUniqueWorktreeForBranch(stdout, branch) {
 /**
  * toForwardSlashesOnWindows：仅 Windows 下把反斜杠换成正斜杠。
  */
-function toForwardSlashesOnWindows(n) {
-  return getPlatform() === "windows" ? n.replaceAll("\\", "/") : n;
+function toForwardSlashesOnWindows(inputPath) {
+  return getPlatform() === "windows" ? inputPath.replaceAll("\\", "/") : inputPath;
 }
 //@ chunk-b00ssqeq.js:1215-1301 placement
 /**
  * stripTrailingSeparators：去掉路径末尾的分隔符（Windows 同时认 / 与 \），全为分隔符时原样返回。
  */
-function stripTrailingSeparators(n) {
-  let replaced = n.replace(getPlatform() === "windows" ? /[\\/]+$/ : /\/+$/, "");
-  return replaced === "" ? n : replaced;
+function stripTrailingSeparators(inputPath) {
+  let replaced = inputPath.replace(getPlatform() === "windows" ? /[\\/]+$/ : /\/+$/, "");
+  return replaced === "" ? inputPath : replaced;
 }
 //@ chunk-b00ssqeq.js:1301-1376 placement = setCwdState (0.757)
 function normalizePathKey(cwd) {
-  let e = stripTrailingSeparators(cwd);
-  return normalizeCaseForPlatform(getPlatform() === "macos" ? e.normalize("NFC") : e);
+  let inputPath = stripTrailingSeparators(cwd);
+  return normalizeCaseForPlatform(getPlatform() === "macos" ? inputPath.normalize("NFC") : inputPath);
 }
 //@ chunk-b00ssqeq.js:1376-1437 placement
-function containsSamePath(n, e) {
-  let o = nfcOnMacos(n);
-  return e.some((s) => nfcOnMacos(normalize(s)) === o);
+function containsSamePath(cwd, candidates) {
+  let normalizedCwd = nfcOnMacos(cwd);
+  return candidates.some((candidate) => nfcOnMacos(normalize(candidate)) === normalizedCwd);
 }
 //@ chunk-b00ssqeq.js:1437-1508 placement
-function findSamePath(n, e) {
-  let o = normalizePathKey(n);
-  return e.find((s) => normalizePathKey(normalize(s)) === o) ?? null;
+function findSamePath(cwd, candidates) {
+  let cwdKey = normalizePathKey(cwd);
+  return candidates.find((candidate) => normalizePathKey(normalize(candidate)) === cwdKey) ?? null;
 }
 //@ chunk-b00ssqeq.js:1508-1576 placement = setCwdState (0.757)
 function nfcOnMacos(cwd) {
-  let e = stripTrailingSeparators(cwd);
-  return getPlatform() === "macos" ? e.normalize("NFC") : e;
+  let inputPath = stripTrailingSeparators(cwd);
+  return getPlatform() === "macos" ? inputPath.normalize("NFC") : inputPath;
 }
 //@ chunk-b00ssqeq.js:1576-1592 placement
 var CONTROL_CHAR_PATTERN = /\p{Cc}/u;
@@ -107,18 +107,19 @@ var CONTROL_CHAR_PATTERN = /\p{Cc}/u;
 /**
  * 判断 worktree 路径是否可用：不含控制字符、是绝对路径且不是 UNC 等危险形式；Windows 下还要求盘符或双斜杠开头。
  */
-function isSafeAbsoluteWorktreePath(n) {
-  if (CONTROL_CHAR_PATTERN.test(n) || !isAbsolute(n) || hasDotSegmentAlias(n)) return false;
-  return getPlatform() !== "windows" || /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(n);
+function isSafeAbsoluteWorktreePath(inputPath) {
+  if (CONTROL_CHAR_PATTERN.test(inputPath) || !isAbsolute(inputPath) || hasDotSegmentAlias(inputPath))
+    return false;
+  return getPlatform() !== "windows" || /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(inputPath);
 }
 //@ chunk-b00ssqeq.js:1707-1981 placement
 /**
  * 检查 porcelain 输出中所有 worktree 路径都安全且互不重复（macOS 先做 NFC 规范化）。
  */
-function hasDistinctWorktreePaths(n) {
+function hasDistinctWorktreePaths(stdout) {
   let seenKeys = new Set();
-  for (let o of n.split("\x00\x00")) {
-    let worktreeLine = o.split("\x00").find((a) => a.startsWith("worktree "));
+  for (let record of stdout.split("\x00\x00")) {
+    let worktreeLine = record.split("\x00").find((field) => field.startsWith("worktree "));
     if (worktreeLine === undefined) continue;
     let rawPath = worktreeLine.slice(9);
     if (!isSafeAbsoluteWorktreePath(rawPath)) return false;
@@ -135,17 +136,22 @@ function hasDistinctWorktreePaths(n) {
 /**
  * 在 worktree 列表中找第一个与给定路径之一相同的 worktree（macOS 按 NFC 比较）；路径有重复或不安全时返回 null。
  */
-function findWorktreeMatchingPaths(stdout, e) {
+function findWorktreeMatchingPaths(stdout, paths) {
   if (!hasDistinctWorktreePaths(stdout)) return null;
-  let samePath = (r, l) => (getPlatform() === "macos" ? r.normalize("NFC") === l.normalize("NFC") : r === l);
+  let samePath = (leftPath, rightPath) =>
+    getPlatform() === "macos"
+      ? leftPath.normalize("NFC") === rightPath.normalize("NFC")
+      : leftPath === rightPath;
   let match = null;
-  for (let r of stdout.split("\x00\x00")) {
-    let worktreeLine = r.split("\x00").find((a) => a.startsWith("worktree "));
+  for (let record of stdout.split("\x00\x00")) {
+    let worktreeLine = record.split("\x00").find((field) => field.startsWith("worktree "));
     if (worktreeLine === undefined) continue;
     let worktreePath = normalize(worktreeLine.slice(9));
     if (
       match === null &&
-      e.some((a) => samePath(stripTrailingSeparators(worktreePath), stripTrailingSeparators(normalize(a))))
+      paths.some((candidate) =>
+        samePath(stripTrailingSeparators(worktreePath), stripTrailingSeparators(normalize(candidate))),
+      )
     )
       match = worktreePath;
   }
@@ -191,19 +197,19 @@ async function checkPathForSymlinks(targetPath, stopAt) {
     );
     if (linkState === "clear") {
       if (isWindows) {
-        let u = await lstat(resolvedAncestor).catch(() => null);
-        if (u === null || !u.isDirectory())
+        let stats = await lstat(resolvedAncestor).catch(() => null);
+        if (stats === null || !stats.isDirectory())
           return {
             verdict: "unknown",
             at: resolvedAncestor,
           };
-        let c = resolvedParent ?? (await realpath(dirname(resolvedAncestor)).catch(() => null));
+        let parentRealPath = resolvedParent ?? (await realpath(dirname(resolvedAncestor)).catch(() => null));
         let selfReal = await realpath(resolvedAncestor).catch(() => null);
         if (
-          c === null ||
+          parentRealPath === null ||
           selfReal === null ||
           foldCaseForCompare(stripTrailingSeparators(selfReal)) !==
-            foldCaseForCompare(join(stripTrailingSeparators(c), basename(resolvedAncestor)))
+            foldCaseForCompare(join(stripTrailingSeparators(parentRealPath), basename(resolvedAncestor)))
         )
           return {
             verdict: "unknown",
@@ -231,9 +237,9 @@ async function checkPathForSymlinks(targetPath, stopAt) {
 /**
  * isWindowsShortcutAbsent：Windows 下判断 <path>.lnk 不存在（非 Windows 恒为真）。
  */
-async function isWindowsShortcutAbsent(n) {
+async function isWindowsShortcutAbsent(inputPath) {
   if (getPlatform() !== "windows") return true;
-  return lstat(`${n}.lnk`).then(
+  return lstat(`${inputPath}.lnk`).then(
     () => false,
     (error) => isENOENT(error),
   );
@@ -242,8 +248,8 @@ async function isWindowsShortcutAbsent(n) {
 /**
  * isPathSymlinkClear：路径逐级检查结果为 clear 时返回 true。
  */
-async function isPathSymlinkClear(n, e) {
-  return (await symlinkVerdictForPath(n, e)) === "clear";
+async function isPathSymlinkClear(inputPath, stopAt) {
+  return (await symlinkVerdictForPath(inputPath, stopAt)) === "clear";
 }
 //@ chunk-b00ssqeq.js:3206-3417 placement
 /**
@@ -293,7 +299,7 @@ async function removeReparsePointsUnder(entryPath, allowedRoot) {
         )) !== "not-link" || allowedRoot == null
           ? null
           : await realpath(entryPath)
-              .then((a) => foldCaseBasic(a))
+              .then((resolvedTarget) => foldCaseBasic(resolvedTarget))
               .catch(() => null);
       if (linkTarget == null || (linkTarget !== allowedRoot && !linkTarget.startsWith(allowedRoot + sep))) {
         logForDebugging(`[worktree] refusing to enumerate unremovable entry before removal: ${entryPath}`, {

@@ -8,9 +8,9 @@
  * pieces: chunk-6rcbehen.js (5)
  * attribution: sole-consumer 3, affinity 1, callgraph-fingerprint 1
  */
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MessageActionsKeybindings } from "../messageActions.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../keybindings/useKeybinding.js";
@@ -26,304 +26,311 @@ import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { Byline } from "../design-system/Byline.js";
 import { Dialog } from "../design-system/Dialog.js";
 import { TextInput } from "../TextInput.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6rcbehen.js:701-705 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-6rcbehen.js:701", () => {
+  init_react_production();
+});
 //@ chunk-6rcbehen.js:705-741 sole-consumer
-function labelWidth(_o) {
-  return bunStringWidth(_o.label);
+function labelWidth(item) {
+  return bunStringWidth(item.label);
 }
 //@ chunk-6rcbehen.js:741-774 affinity
-function isNotNull_2(jo) {
-  return jo !== null;
+function isNotNull_2(value) {
+  return value !== null;
 }
 //@ chunk-6rcbehen.js:774-5753 callgraph-fingerprint = AgentsList (0.176)
 function AgentsList(props) {
-  let $ = w(107);
+  let $ = useMemoCache(107);
   let { title, subtitle, fields, values, onChange, onSubmit, onCancel, submitLabel } = props;
   let children = submitLabel === undefined ? "Save" : submitLabel;
-  let f = fields.length + 1;
-  let [d, h] = y(0);
-  let Z;
+  let submitIndex = fields.length + 1;
+  let [focusedIndex, setFocusedIndex] = useState(0);
+  let initialCursorCached;
   if ($[0] !== fields[0] || $[1] !== values) {
-    Z = () => {
-      let se = fields[0];
-      return se?.type === "text" ? (values[se.key] ?? "").length : 0;
+    initialCursorCached = () => {
+      let firstField = fields[0];
+      return firstField?.type === "text" ? (values[firstField.key] ?? "").length : 0;
     };
     $[0] = fields[0];
     $[1] = values;
-    $[2] = Z;
-  } else Z = $[2];
-  let [R, _] = y(Z);
-  let u = d < fields.length ? fields[d] : null;
-  let Te = u?.type === "text";
-  let M;
+    $[2] = initialCursorCached;
+  } else initialCursorCached = $[2];
+  let [cursor, setCursor] = useState(initialCursorCached);
+  let currentField = focusedIndex < fields.length ? fields[focusedIndex] : null;
+  let isTextField = currentField?.type === "text";
+  let maxLabelWidthCached;
   if ($[3] !== fields) {
-    M = Math.max(...fields.map(labelWidth));
+    maxLabelWidthCached = Math.max(...fields.map(labelWidth));
     $[3] = fields;
-    $[4] = M;
-  } else M = $[4];
-  let labelWidth_2 = M;
-  let N;
+    $[4] = maxLabelWidthCached;
+  } else maxLabelWidthCached = $[4];
+  let labelWidth_2 = maxLabelWidthCached;
+  let validateFieldCached;
   if ($[5] !== values) {
-    N = function F(agent_0) {
+    validateFieldCached = function validateField(agent_0) {
       if (agent_0.type !== "text") {
         return null;
       }
-      let P = values[agent_0.key] ?? "";
-      if (agent_0.required && P.trim() === "") {
+      let value = values[agent_0.key] ?? "";
+      if (agent_0.required && value.trim() === "") {
         return `${agent_0.label} is required`;
       }
-      return agent_0.validate ? agent_0.validate(P, values) : null;
+      return agent_0.validate ? agent_0.validate(value, values) : null;
     };
     $[5] = values;
-    $[6] = N;
-  } else N = $[6];
-  let F = N;
-  let Re;
-  if ($[7] !== F || $[8] !== fields) {
-    Re = fields.map(F).find(isNotNull_2);
-    $[7] = F;
+    $[6] = validateFieldCached;
+  } else validateFieldCached = $[6];
+  let firstValidation = validateFieldCached;
+  let firstErrorCached;
+  if ($[7] !== firstValidation || $[8] !== fields) {
+    firstErrorCached = fields.map(firstValidation).find(isNotNull_2);
+    $[7] = firstValidation;
     $[8] = fields;
-    $[9] = Re;
-  } else Re = $[9];
-  let b = Re;
-  let E;
-  if ($[10] !== fields || $[11] !== d || $[12] !== f || $[13] !== values) {
-    E = function m(Se) {
-      let max = Math.max(0, Math.min(f - 1, Se));
-      if (max === d) {
+    $[9] = firstErrorCached;
+  } else firstErrorCached = $[9];
+  let firstError = firstErrorCached;
+  let focusIndexCached;
+  if ($[10] !== fields || $[11] !== focusedIndex || $[12] !== submitIndex || $[13] !== values) {
+    focusIndexCached = function focusField(nextIndex) {
+      let max = Math.max(0, Math.min(submitIndex - 1, nextIndex));
+      if (max === focusedIndex) {
         return;
       }
-      h(max);
-      let Ze = fields[max];
-      if (Ze?.type === "text") _((values[Ze.key] ?? "").length);
+      setFocusedIndex(max);
+      let field = fields[max];
+      if (field?.type === "text") setCursor((values[field.key] ?? "").length);
     };
     $[10] = fields;
-    $[11] = d;
-    $[12] = f;
+    $[11] = focusedIndex;
+    $[12] = submitIndex;
     $[13] = values;
-    $[14] = E;
-  } else E = $[14];
-  let m = E;
-  let _e;
-  if ($[15] !== b || $[16] !== onSubmit) {
-    _e = function D() {
-      if (b) {
+    $[14] = focusIndexCached;
+  } else focusIndexCached = $[14];
+  let focusFieldCached = focusIndexCached;
+  let submitCached;
+  if ($[15] !== firstError || $[16] !== onSubmit) {
+    submitCached = function handleSubmit() {
+      if (firstError) {
         return;
       }
       onSubmit();
     };
-    $[15] = b;
+    $[15] = firstError;
     $[16] = onSubmit;
-    $[17] = _e;
-  } else _e = $[17];
-  let D = _e;
-  let je;
-  if ($[18] !== u || $[19] !== onChange || $[20] !== values) {
-    je = function ee($o) {
-      if (u?.type !== "select") {
+    $[17] = submitCached;
+  } else submitCached = $[17];
+  let submitForm = submitCached;
+  let cycleOptionCached;
+  if ($[18] !== currentField || $[19] !== onChange || $[20] !== values) {
+    cycleOptionCached = function cycleOption(delta) {
+      if (currentField?.type !== "select") {
         return;
       }
-      let options = u.options;
-      let zo = values[u.key] ?? options[0]?.value ?? "";
-      let index = options.findIndex((agent_1) => agent_1.value === zo);
-      let Ke = options[(index + $o + options.length) % options.length];
-      if (Ke) onChange(u.key, Ke.value);
+      let options = currentField.options;
+      let selectedValue = values[currentField.key] ?? options[0]?.value ?? "";
+      let index = options.findIndex((agent_1) => agent_1.value === selectedValue);
+      let nextOption = options[(index + delta + options.length) % options.length];
+      if (nextOption) onChange(currentField.key, nextOption.value);
     };
-    $[18] = u;
+    $[18] = currentField;
     $[19] = onChange;
     $[20] = values;
-    $[21] = je;
-  } else je = $[21];
-  let ee = je;
-  let de;
-  let ue;
-  if ($[22] !== d || $[23] !== m) {
-    ue = () => m(d - 1);
-    de = () => m(d + 1);
-    $[22] = d;
-    $[23] = m;
-    $[24] = de;
-    $[25] = ue;
+    $[21] = cycleOptionCached;
+  } else cycleOptionCached = $[21];
+  let cycleSelect = cycleOptionCached;
+  let focusNext;
+  let focusPrevious;
+  if ($[22] !== focusedIndex || $[23] !== focusFieldCached) {
+    focusPrevious = () => focusFieldCached(focusedIndex - 1);
+    focusNext = () => focusFieldCached(focusedIndex + 1);
+    $[22] = focusedIndex;
+    $[23] = focusFieldCached;
+    $[24] = focusNext;
+    $[25] = focusPrevious;
   } else {
-    de = $[24];
-    ue = $[25];
+    focusNext = $[24];
+    focusPrevious = $[25];
   }
-  let ce;
-  if ($[26] !== d || $[27] !== m || $[28] !== f || $[29] !== D) {
-    ce = () => {
-      if (d === f - 1) D();
-      else m(d + 1);
+  let acceptOrAdvance;
+  if ($[26] !== focusedIndex || $[27] !== focusFieldCached || $[28] !== submitIndex || $[29] !== submitForm) {
+    acceptOrAdvance = () => {
+      if (focusedIndex === submitIndex - 1) submitForm();
+      else focusFieldCached(focusedIndex + 1);
     };
-    $[26] = d;
-    $[27] = m;
-    $[28] = f;
-    $[29] = D;
-    $[30] = ce;
-  } else ce = $[30];
-  let eo;
-  if ($[31] !== onCancel || $[32] !== de || $[33] !== ce || $[34] !== ue) {
-    eo = {
-      "select:previous": ue,
-      "select:next": de,
-      "select:accept": ce,
+    $[26] = focusedIndex;
+    $[27] = focusFieldCached;
+    $[28] = submitIndex;
+    $[29] = submitForm;
+    $[30] = acceptOrAdvance;
+  } else acceptOrAdvance = $[30];
+  let selectBindings;
+  if ($[31] !== onCancel || $[32] !== focusNext || $[33] !== acceptOrAdvance || $[34] !== focusPrevious) {
+    selectBindings = {
+      "select:previous": focusPrevious,
+      "select:next": focusNext,
+      "select:accept": acceptOrAdvance,
       "select:cancel": onCancel,
     };
     $[31] = onCancel;
-    $[32] = de;
-    $[33] = ce;
-    $[34] = ue;
-    $[35] = eo;
-  } else eo = $[35];
-  const isActive = !Te;
-  let oo;
+    $[32] = focusNext;
+    $[33] = acceptOrAdvance;
+    $[34] = focusPrevious;
+    $[35] = selectBindings;
+  } else selectBindings = $[35];
+  const isActive = !isTextField;
+  let selectKeybindingOptions;
   if ($[36] !== isActive) {
-    oo = {
+    selectKeybindingOptions = {
       context: "Select",
       isActive,
     };
     $[36] = isActive;
-    $[37] = oo;
-  } else oo = $[37];
-  MessageActionsKeybindings(eo, oo);
-  let to;
+    $[37] = selectKeybindingOptions;
+  } else selectKeybindingOptions = $[37];
+  MessageActionsKeybindings(selectBindings, selectKeybindingOptions);
+  let settingsKeybindingOptions;
   if ($[38] === MEMO_CACHE_SENTINEL) {
-    to = {
+    settingsKeybindingOptions = {
       context: "Settings",
     };
-    $[38] = to;
-  } else to = $[38];
-  useKeybinding("confirm:no", onCancel, to);
+    $[38] = settingsKeybindingOptions;
+  } else settingsKeybindingOptions = $[38];
+  useKeybinding("confirm:no", onCancel, settingsKeybindingOptions);
   useRegisterTabsNavigationOwner();
-  let lo;
-  if ($[39] !== ee) {
-    lo = {
-      "tabs:previous": () => ee(-1),
-      "tabs:next": () => ee(1),
+  let tabBindings;
+  if ($[39] !== cycleSelect) {
+    tabBindings = {
+      "tabs:previous": () => cycleSelect(-1),
+      "tabs:next": () => cycleSelect(1),
     };
-    $[39] = ee;
-    $[40] = lo;
-  } else lo = $[40];
-  const isActive_2 = u?.type === "select";
-  let io;
+    $[39] = cycleSelect;
+    $[40] = tabBindings;
+  } else tabBindings = $[40];
+  const isActive_2 = currentField?.type === "select";
+  let tabKeybindingOptions;
   if ($[41] !== isActive_2) {
-    io = {
+    tabKeybindingOptions = {
       context: "Tabs",
       isActive: isActive_2,
     };
     $[41] = isActive_2;
-    $[42] = io;
-  } else io = $[42];
-  MessageActionsKeybindings(lo, io);
-  let O = u ? (values[u.key] ?? "") : "";
-  let no;
-  if ($[43] !== u || $[44] !== O || $[45] !== values) {
-    no = u?.type === "text" && u.validate ? u.validate(O, values) : null;
-    $[43] = u;
-    $[44] = O;
+    $[42] = tabKeybindingOptions;
+  } else tabKeybindingOptions = $[42];
+  MessageActionsKeybindings(tabBindings, tabKeybindingOptions);
+  let currentValue = currentField ? (values[currentField.key] ?? "") : "";
+  let fieldError;
+  if ($[43] !== currentField || $[44] !== currentValue || $[45] !== values) {
+    fieldError =
+      currentField?.type === "text" && currentField.validate
+        ? currentField.validate(currentValue, values)
+        : null;
+    $[43] = currentField;
+    $[44] = currentValue;
     $[45] = values;
-    $[46] = no;
-  } else no = $[46];
-  let L = no;
-  let ro;
-  if ($[47] !== L || $[48] !== u || $[49] !== O || $[50] !== values) {
-    ro = !L && u?.hint ? u.hint(O, values) : undefined;
-    $[47] = L;
-    $[48] = u;
-    $[49] = O;
+    $[46] = fieldError;
+  } else fieldError = $[46];
+  let errorText = fieldError;
+  let fieldHint;
+  if ($[47] !== errorText || $[48] !== currentField || $[49] !== currentValue || $[50] !== values) {
+    fieldHint = !errorText && currentField?.hint ? currentField.hint(currentValue, values) : undefined;
+    $[47] = errorText;
+    $[48] = currentField;
+    $[49] = currentValue;
     $[50] = values;
-    $[51] = ro;
-  } else ro = $[51];
-  let ae = ro;
-  let fe;
+    $[51] = fieldHint;
+  } else fieldHint = $[51];
+  let hintText = fieldHint;
+  let fieldRows;
   if (
-    $[52] !== R ||
+    $[52] !== cursor ||
     $[53] !== fields ||
-    $[54] !== d ||
+    $[54] !== focusedIndex ||
     $[55] !== labelWidth_2 ||
-    $[56] !== m ||
+    $[56] !== focusFieldCached ||
     $[57] !== onCancel ||
     $[58] !== onChange ||
-    $[59] !== D ||
+    $[59] !== submitForm ||
     $[60] !== values
   ) {
-    let G;
+    let renderField;
     if (
-      $[62] !== R ||
+      $[62] !== cursor ||
       $[63] !== fields.length ||
-      $[64] !== d ||
+      $[64] !== focusedIndex ||
       $[65] !== labelWidth_2 ||
-      $[66] !== m ||
+      $[66] !== focusFieldCached ||
       $[67] !== onCancel ||
       $[68] !== onChange ||
-      $[69] !== D ||
+      $[69] !== submitForm ||
       $[70] !== values
     ) {
-      G = (me, oe) => {
-        let isFocused = oe === d;
-        let value = values[me.key] ?? "";
+      renderField = (field, index) => {
+        let isFocused = index === focusedIndex;
+        let value = values[field.key] ?? "";
         return jsxProd_default(
           AgentFormFieldRow,
           {
-            field: me,
+            field,
             value,
             isFocused,
             labelWidth: labelWidth_2,
-            cursor: R,
-            setCursor: _,
-            onChange: (Zo) => onChange(me.key, Zo),
+            cursor,
+            setCursor,
+            onChange: (value) => onChange(field.key, value),
             onCancel,
-            onUp: () => m(oe - 1),
-            onDown: () => m(oe + 1),
+            onUp: () => focusFieldCached(index - 1),
+            onDown: () => focusFieldCached(index + 1),
             onEnter: () => {
-              if (oe === fields.length - 1) D();
-              else m(oe + 1);
+              if (index === fields.length - 1) submitForm();
+              else focusFieldCached(index + 1);
             },
           },
-          me.key,
+          field.key,
         );
       };
-      $[62] = R;
+      $[62] = cursor;
       $[63] = fields.length;
-      $[64] = d;
+      $[64] = focusedIndex;
       $[65] = labelWidth_2;
-      $[66] = m;
+      $[66] = focusFieldCached;
       $[67] = onCancel;
       $[68] = onChange;
-      $[69] = D;
+      $[69] = submitForm;
       $[70] = values;
-      $[71] = G;
-    } else G = $[71];
-    fe = fields.map(G);
-    $[52] = R;
+      $[71] = renderField;
+    } else renderField = $[71];
+    fieldRows = fields.map(renderField);
+    $[52] = cursor;
     $[53] = fields;
-    $[54] = d;
+    $[54] = focusedIndex;
     $[55] = labelWidth_2;
-    $[56] = m;
+    $[56] = focusFieldCached;
     $[57] = onCancel;
     $[58] = onChange;
-    $[59] = D;
+    $[59] = submitForm;
     $[60] = values;
-    $[61] = fe;
-  } else fe = $[61];
-  const color = d === f - 1 ? "suggestion" : undefined;
-  const pointer = d === f - 1 ? figures_default.pointer : " ";
-  let pe;
+    $[61] = fieldRows;
+  } else fieldRows = $[61];
+  const color = focusedIndex === submitIndex - 1 ? "suggestion" : undefined;
+  const pointer = focusedIndex === submitIndex - 1 ? figures_default.pointer : " ";
+  let submitPointer;
   if ($[72] !== color || $[73] !== pointer) {
-    pe = jsxProd_default_2(Text, {
+    submitPointer = jsxProd_default_2(Text, {
       color,
       children: [pointer, " "],
     });
     $[72] = color;
     $[73] = pointer;
-    $[74] = pe;
-  } else pe = $[74];
-  const bold = d === f - 1;
-  const dimColor = !!b;
-  let ve;
+    $[74] = submitPointer;
+  } else submitPointer = $[74];
+  const bold = focusedIndex === submitIndex - 1;
+  const dimColor = !!firstError;
+  let submitText;
   if ($[75] !== children || $[76] !== bold || $[77] !== dimColor) {
-    ve = jsxProd_default(Text, {
+    submitText = jsxProd_default(Text, {
       bold,
       dimColor,
       children,
@@ -331,120 +338,120 @@ function AgentsList(props) {
     $[75] = children;
     $[76] = bold;
     $[77] = dimColor;
-    $[78] = ve;
-  } else ve = $[78];
-  let ge;
-  if ($[79] !== b || $[80] !== d || $[81] !== f) {
-    ge =
-      b &&
-      d === f - 1 &&
+    $[78] = submitText;
+  } else submitText = $[78];
+  let submitError;
+  if ($[79] !== firstError || $[80] !== focusedIndex || $[81] !== submitIndex) {
+    submitError =
+      firstError &&
+      focusedIndex === submitIndex - 1 &&
       jsxProd_default_2(Text, {
         color: "error",
-        children: [" \xB7 ", b],
+        children: [" \xB7 ", firstError],
       });
-    $[79] = b;
-    $[80] = d;
-    $[81] = f;
-    $[82] = ge;
-  } else ge = $[82];
-  let be;
-  if ($[83] !== pe || $[84] !== ve || $[85] !== ge) {
-    be = jsxProd_default_2(Box, {
+    $[79] = firstError;
+    $[80] = focusedIndex;
+    $[81] = submitIndex;
+    $[82] = submitError;
+  } else submitError = $[82];
+  let submitRow;
+  if ($[83] !== submitPointer || $[84] !== submitText || $[85] !== submitError) {
+    submitRow = jsxProd_default_2(Box, {
       marginTop: 1,
-      children: [pe, ve, ge],
+      children: [submitPointer, submitText, submitError],
     });
-    $[83] = pe;
-    $[84] = ve;
-    $[85] = ge;
-    $[86] = be;
-  } else be = $[86];
-  let Ce;
-  if ($[87] !== L || $[88] !== ae) {
-    Ce = jsxProd_default(Box, {
+    $[83] = submitPointer;
+    $[84] = submitText;
+    $[85] = submitError;
+    $[86] = submitRow;
+  } else submitRow = $[86];
+  let messageRow;
+  if ($[87] !== errorText || $[88] !== hintText) {
+    messageRow = jsxProd_default(Box, {
       marginTop: 1,
       minHeight: 1,
-      children: L
+      children: errorText
         ? jsxProd_default(ErrorText, {
-            error: L,
+            error: errorText,
           })
-        : ae
+        : hintText
           ? jsxProd_default(Text, {
               dimColor: true,
-              children: ae,
+              children: hintText,
             })
           : jsxProd_default(Text, {
               children: " ",
             }),
     });
-    $[87] = L;
-    $[88] = ae;
-    $[89] = Ce;
-  } else Ce = $[89];
-  let so;
+    $[87] = errorText;
+    $[88] = hintText;
+    $[89] = messageRow;
+  } else messageRow = $[89];
+  let moveHint;
   if ($[90] === MEMO_CACHE_SENTINEL) {
-    so = jsxProd_default(KeyboardShortcutHint, {
+    moveHint = jsxProd_default(KeyboardShortcutHint, {
       chord: ["up", "down"],
       action: "move",
     });
-    $[90] = so;
-  } else so = $[90];
-  let he;
-  if ($[91] !== u?.type) {
-    he =
-      u?.type === "select" &&
+    $[90] = moveHint;
+  } else moveHint = $[90];
+  let changeHint;
+  if ($[91] !== currentField?.type) {
+    changeHint =
+      currentField?.type === "select" &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: ["left", "right"],
         action: "change",
       });
-    $[91] = u?.type;
-    $[92] = he;
-  } else he = $[92];
-  let uo;
-  let co;
+    $[91] = currentField?.type;
+    $[92] = changeHint;
+  } else changeHint = $[92];
+  let continueHint;
+  let cancelHint;
   if ($[93] === MEMO_CACHE_SENTINEL) {
-    uo = jsxProd_default(KeyboardShortcutHint, {
+    continueHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "enter",
       action: "continue",
     });
-    co = jsxProd_default(KeyboardShortcutHint, {
+    cancelHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action: "cancel",
     });
-    $[93] = uo;
-    $[94] = co;
+    $[93] = continueHint;
+    $[94] = cancelHint;
   } else {
-    uo = $[93];
-    co = $[94];
+    continueHint = $[93];
+    cancelHint = $[94];
   }
-  let Fe;
-  if ($[95] !== he) {
-    Fe = jsxProd_default(Box, {
+  let hintsRow;
+  if ($[95] !== changeHint) {
+    hintsRow = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
         children: jsxProd_default_2(Byline, {
-          children: [so, he, uo, co],
+          children: [moveHint, changeHint, continueHint, cancelHint],
         }),
       }),
     });
-    $[95] = he;
-    $[96] = Fe;
-  } else Fe = $[96];
+    $[95] = changeHint;
+    $[96] = hintsRow;
+  } else hintsRow = $[96];
   let children_2;
-  if ($[97] !== fe || $[98] !== be || $[99] !== Ce || $[100] !== Fe) {
+  if ($[97] !== fieldRows || $[98] !== submitRow || $[99] !== messageRow || $[100] !== hintsRow) {
     children_2 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [fe, be, Ce, Fe],
+      children: [fieldRows, submitRow, messageRow, hintsRow],
     });
-    $[97] = fe;
-    $[98] = be;
-    $[99] = Ce;
-    $[100] = Fe;
+    $[97] = fieldRows;
+    $[98] = submitRow;
+    $[99] = messageRow;
+    $[100] = hintsRow;
     $[101] = children_2;
   } else children_2 = $[101];
-  let ao;
+  let dialogElement;
   if ($[102] !== onCancel || $[103] !== subtitle || $[104] !== children_2 || $[105] !== title) {
-    ao = jsxProd_default(Dialog, {
+    dialogElement = jsxProd_default(Dialog, {
       title,
       subtitle,
       onCancel,
@@ -456,103 +463,92 @@ function AgentsList(props) {
     $[103] = subtitle;
     $[104] = children_2;
     $[105] = title;
-    $[106] = ao;
-  } else ao = $[106];
-  return ao;
+    $[106] = dialogElement;
+  } else dialogElement = $[106];
+  return dialogElement;
 }
 //@ chunk-6rcbehen.js:5753-7919 sole-consumer
 /**
  * 代理表单中的一行字段：左侧对齐标签与必填星号，select 字段显示 ◀ 值 ▶ 并左右切换，text 字段显示可编辑输入框；处理上下移动、回车与取消。
  */
 function AgentFormFieldRow(props) {
-  let $ = w(44);
-  let {
-    field,
-    value: c,
-    isFocused,
-    labelWidth,
-    cursor,
-    setCursor,
-    onChange,
-    onCancel,
-    onUp,
-    onDown,
-    onEnter,
-  } = props;
-  let o;
+  let $ = useMemoCache(44);
+  let { field, value, isFocused, labelWidth, cursor, setCursor, onChange, onCancel, onUp, onDown, onEnter } =
+    props;
+  let labelPadCached;
   if ($[0] !== field.label || $[1] !== labelWidth) {
-    o = " ".repeat(Math.max(0, labelWidth - bunStringWidth(field.label)));
+    labelPadCached = " ".repeat(Math.max(0, labelWidth - bunStringWidth(field.label)));
     $[0] = field.label;
     $[1] = labelWidth;
-    $[2] = o;
-  } else o = $[2];
-  let Z = o;
-  let se;
-  if ($[3] !== field.required || $[4] !== field.type || $[5] !== c) {
-    se = field.type === "text" && field.required && c.trim() === "";
+    $[2] = labelPadCached;
+  } else labelPadCached = $[2];
+  let labelPad = labelPadCached;
+  let isMissingRequiredCached;
+  if ($[3] !== field.required || $[4] !== field.type || $[5] !== value) {
+    isMissingRequiredCached = field.type === "text" && field.required && value.trim() === "";
     $[3] = field.required;
     $[4] = field.type;
-    $[5] = c;
-    $[6] = se;
-  } else se = $[6];
-  let R = se;
+    $[5] = value;
+    $[6] = isMissingRequiredCached;
+  } else isMissingRequiredCached = $[6];
+  let isMissingRequired = isMissingRequiredCached;
   const color = isFocused ? "suggestion" : undefined;
   const pointer = isFocused ? figures_default.pointer : " ";
-  let Te;
+  let pointerCached;
   if ($[7] !== color || $[8] !== pointer) {
-    Te = jsxProd_default_2(Text, {
+    pointerCached = jsxProd_default_2(Text, {
       color,
       children: [pointer, " "],
     });
     $[7] = color;
     $[8] = pointer;
-    $[9] = Te;
-  } else Te = $[9];
-  let M = Te;
+    $[9] = pointerCached;
+  } else pointerCached = $[9];
+  let pointerElement = pointerCached;
   const dimColor = !isFocused;
-  let N;
-  if ($[10] !== R) {
-    N = R
+  let requiredMark;
+  if ($[10] !== isMissingRequired) {
+    requiredMark = isMissingRequired
       ? jsxProd_default(Text, {
           color: "error",
           children: "*",
         })
       : " ";
-    $[10] = R;
-    $[11] = N;
-  } else N = $[11];
-  let U;
-  if ($[12] !== field.label || $[13] !== Z || $[14] !== dimColor || $[15] !== N) {
-    U = jsxProd_default_2(Text, {
+    $[10] = isMissingRequired;
+    $[11] = requiredMark;
+  } else requiredMark = $[11];
+  let labelElementCached;
+  if ($[12] !== field.label || $[13] !== labelPad || $[14] !== dimColor || $[15] !== requiredMark) {
+    labelElementCached = jsxProd_default_2(Text, {
       dimColor,
-      children: [field.label, N, Z, " "],
+      children: [field.label, requiredMark, labelPad, " "],
     });
     $[12] = field.label;
-    $[13] = Z;
+    $[13] = labelPad;
     $[14] = dimColor;
-    $[15] = N;
-    $[16] = U;
-  } else U = $[16];
-  let P = U;
+    $[15] = requiredMark;
+    $[16] = labelElementCached;
+  } else labelElementCached = $[16];
+  let labelElement = labelElementCached;
   if (field.type === "select") {
-    let F;
-    if ($[17] !== field.options || $[18] !== c) {
-      F = field.options.find((option) => option.value === c) ?? field.options[0];
+    let selectedOptionCached;
+    if ($[17] !== field.options || $[18] !== value) {
+      selectedOptionCached = field.options.find((option) => option.value === value) ?? field.options[0];
       $[17] = field.options;
-      $[18] = c;
-      $[19] = F;
-    } else F = $[19];
-    let b = F;
-    let E;
-    if ($[20] !== isFocused || $[21] !== b?.label || $[22] !== c) {
-      E = isFocused
+      $[18] = value;
+      $[19] = selectedOptionCached;
+    } else selectedOptionCached = $[19];
+    let selectedOption = selectedOptionCached;
+    let selectValueCached;
+    if ($[20] !== isFocused || $[21] !== selectedOption?.label || $[22] !== value) {
+      selectValueCached = isFocused
         ? jsxProd_default_2(Text, {
             children: [
               jsxProd_default_2(Text, {
                 dimColor: true,
                 children: [figures_default.triangleLeft, " "],
               }),
-              b?.label ?? c,
+              selectedOption?.label ?? value,
               jsxProd_default_2(Text, {
                 dimColor: true,
                 children: [" ", figures_default.triangleRight],
@@ -560,26 +556,26 @@ function AgentFormFieldRow(props) {
             ],
           })
         : jsxProd_default(Text, {
-            children: b?.label ?? c,
+            children: selectedOption?.label ?? value,
           });
       $[20] = isFocused;
-      $[21] = b?.label;
-      $[22] = c;
-      $[23] = E;
-    } else E = $[23];
-    let Se;
-    if ($[24] !== P || $[25] !== M || $[26] !== E) {
-      Se = jsxProd_default_2(Box, {
-        children: [M, P, E],
+      $[21] = selectedOption?.label;
+      $[22] = value;
+      $[23] = selectValueCached;
+    } else selectValueCached = $[23];
+    let selectRow;
+    if ($[24] !== labelElement || $[25] !== pointerElement || $[26] !== selectValueCached) {
+      selectRow = jsxProd_default_2(Box, {
+        children: [pointerElement, labelElement, selectValueCached],
       });
-      $[24] = P;
-      $[25] = M;
-      $[26] = E;
-      $[27] = Se;
-    } else Se = $[27];
-    return Se;
+      $[24] = labelElement;
+      $[25] = pointerElement;
+      $[26] = selectValueCached;
+      $[27] = selectRow;
+    } else selectRow = $[27];
+    return selectRow;
   }
-  let F;
+  let textElement;
   if (
     $[28] !== cursor ||
     $[29] !== field.mask ||
@@ -591,11 +587,11 @@ function AgentFormFieldRow(props) {
     $[35] !== onEnter ||
     $[36] !== onUp ||
     $[37] !== setCursor ||
-    $[38] !== c
+    $[38] !== value
   ) {
-    F = isFocused
+    textElement = isFocused
       ? jsxProd_default(TextInput, {
-          value: c,
+          value,
           onChange,
           onSubmit: () => onEnter(),
           onExit: onCancel,
@@ -611,9 +607,9 @@ function AgentFormFieldRow(props) {
           focus: true,
           showCursor: true,
         })
-      : c
+      : value
         ? jsxProd_default(Text, {
-            children: field.mask ? field.mask.repeat(Math.min(bunStringWidth(c), 60)) : c,
+            children: field.mask ? field.mask.repeat(Math.min(bunStringWidth(value), 60)) : value,
           })
         : jsxProd_default(Text, {
             dimColor: true,
@@ -629,19 +625,19 @@ function AgentFormFieldRow(props) {
     $[35] = onEnter;
     $[36] = onUp;
     $[37] = setCursor;
-    $[38] = c;
-    $[39] = F;
-  } else F = $[39];
-  let E;
-  if ($[40] !== P || $[41] !== M || $[42] !== F) {
-    E = jsxProd_default_2(Box, {
-      children: [M, P, F],
+    $[38] = value;
+    $[39] = textElement;
+  } else textElement = $[39];
+  let textRow;
+  if ($[40] !== labelElement || $[41] !== pointerElement || $[42] !== textElement) {
+    textRow = jsxProd_default_2(Box, {
+      children: [pointerElement, labelElement, textElement],
     });
-    $[40] = P;
-    $[41] = M;
-    $[42] = F;
-    $[43] = E;
-  } else E = $[43];
-  return E;
+    $[40] = labelElement;
+    $[41] = pointerElement;
+    $[42] = textElement;
+    $[43] = textRow;
+  } else textRow = $[43];
+  return textRow;
 }
 export { AgentsList };

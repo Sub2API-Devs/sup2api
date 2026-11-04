@@ -5,34 +5,35 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-aat7wt0p.js (14)
- * attribution: placement 14
+ * pieces: chunk-aat7wt0p.js (14), chunk-jhrww53q.js (1)
+ * attribution: placement 15
  */
 import { resolve, dirname, sep, basename } from "path";
 import { homedir } from "os";
 import { realpathNativeLongSync } from "../fsJunctions.js";
 import { isUncOrDevicePath } from "../pathClassification.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aat7wt0p.js:12312-12352 placement
 /**
  * realpathCacheEntry：realpath 缓存条目。
  */
-function realpathCacheEntry(t) {
-  return realpathNativeLongSync(t).real ?? null;
+function realpathCacheEntry(inputPath) {
+  return realpathNativeLongSync(inputPath).real ?? null;
 }
 //@ chunk-aat7wt0p.js:12352-12608 placement
-function classifyProtectedDir(t, n) {
-  let lower = resolve(n).toLowerCase();
-  let lower_2 = dirname(resolve(t)).toLowerCase();
+function classifyProtectedDir(inputPath, protectedDir) {
+  let lower = resolve(protectedDir).toLowerCase();
+  let lower_2 = dirname(resolve(inputPath)).toLowerCase();
   if (
     lower_2 === lower ||
     isUnderDependencyDir(lower_2, lower) ||
     isInWindowsAppsAliasDir(lower_2, lower, "lexical")
   )
     return true;
-  let lower_3 = realpathCacheEntry(n)?.toLowerCase();
+  let lower_3 = realpathCacheEntry(protectedDir)?.toLowerCase();
   if (lower_3 == null) return false;
-  let lower_4 = realpathCacheEntry(dirname(resolve(t)))?.toLowerCase();
+  let lower_4 = realpathCacheEntry(dirname(resolve(inputPath)))?.toLowerCase();
   if (lower_4 == null) return true;
   return (
     lower_4 === lower_3 ||
@@ -41,26 +42,29 @@ function classifyProtectedDir(t, n) {
   );
 }
 //@ chunk-aat7wt0p.js:12608-12723 placement
-var DEPENDENCY_DIR_NAMES = new Set([
-  "node_modules",
-  ".venv",
-  "venv",
-  "env",
-  ".env",
-  "virtualenv",
-  ".tox",
-  ".nox",
-  ".direnv",
-  "__pypackages__",
-]);
+var DEPENDENCY_DIR_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aat7wt0p.js:12608", () => {
+  DEPENDENCY_DIR_NAMES = new Set([
+    "node_modules",
+    ".venv",
+    "venv",
+    "env",
+    ".env",
+    "virtualenv",
+    ".tox",
+    ".nox",
+    ".direnv",
+    "__pypackages__",
+  ]);
+});
 //@ chunk-aat7wt0p.js:12723-12813 placement
-function isUnderDependencyDir(t, n) {
-  if (!t.startsWith(stripTrailingSep(n) + sep)) return false;
-  return t.split(sep).some((e) => DEPENDENCY_DIR_NAMES.has(e));
+function isUnderDependencyDir(parentDir, rootDir) {
+  if (!parentDir.startsWith(stripTrailingSep(rootDir) + sep)) return false;
+  return parentDir.split(sep).some((segment) => DEPENDENCY_DIR_NAMES.has(segment));
 }
 //@ chunk-aat7wt0p.js:12813-12864 placement
-function stripTrailingSep(t) {
-  return t.endsWith(sep) ? t.slice(0, -1) : t;
+function stripTrailingSep(text) {
+  return text.endsWith(sep) ? text.slice(0, -1) : text;
 }
 //@ chunk-aat7wt0p.js:12864-12870 placement
 var windowsAppsAliasCache;
@@ -68,54 +72,61 @@ var windowsAppsAliasCache;
 /**
  * 判断路径是否在 WindowsApps 应用执行别名目录下（lexical 模式只做字面比较，否则解析真实路径并缓存）。
  */
-function isInWindowsAppsAliasDir(t, n, e) {
-  let r = homedir();
-  let trimmed = (process.env.LOCALAPPDATA ?? "").trim();
-  if (e === "lexical")
+function isInWindowsAppsAliasDir(inputPath, aliasDir, mode) {
+  let homeDir = homedir();
+  let localAppData = (process.env.LOCALAPPDATA ?? "").trim();
+  if (mode === "lexical")
     return isUnderAliasDir(
-      getWindowsAppsDirs(r, trimmed, (a) => resolve(a).toLowerCase()),
-      t,
-      n,
+      getWindowsAppsDirs(homeDir, localAppData, (dir) => resolve(dir).toLowerCase()),
+      inputPath,
+      aliasDir,
     );
-  let i = r + "\x00" + trimmed;
-  if (windowsAppsAliasCache?.key === i) return isUnderAliasDir(windowsAppsAliasCache.aliasDirs, t, n);
-  let s = true;
-  let windowsAppsDirs = getWindowsAppsDirs(r, trimmed, (a) => {
-    if (!isPosixAbsoluteLocal(a)) return resolve(a).toLowerCase();
-    let lower = realpathCacheEntry(a)?.toLowerCase();
+  let cacheKey = homeDir + "\x00" + localAppData;
+  if (windowsAppsAliasCache?.key === cacheKey)
+    return isUnderAliasDir(windowsAppsAliasCache.aliasDirs, inputPath, aliasDir);
+  let allResolved = true;
+  let dirs = getWindowsAppsDirs(homeDir, localAppData, (dir) => {
+    if (!isPosixAbsoluteLocal(dir)) return resolve(dir).toLowerCase();
+    let lower = realpathCacheEntry(dir)?.toLowerCase();
     if (lower == null) {
-      s = false;
-      return resolve(a).toLowerCase();
+      allResolved = false;
+      return resolve(dir).toLowerCase();
     }
     return lower;
   });
-  if (s)
+  if (allResolved)
     windowsAppsAliasCache = {
-      key: i,
-      aliasDirs: windowsAppsDirs,
+      key: cacheKey,
+      aliasDirs: dirs,
     };
-  return isUnderAliasDir(windowsAppsDirs, t, n);
+  return isUnderAliasDir(dirs, inputPath, aliasDir);
 }
 //@ chunk-aat7wt0p.js:13242-13442 placement
-function getWindowsAppsDirs(t, n, e) {
-  let r = [];
-  if (t) r.push(stripTrailingSep(e(t)) + sep + ["appdata", "local", "microsoft", "windowsapps"].join(sep));
-  if (n) {
-    let o = stripTrailingSep(e(n)) + sep + ["microsoft", "windowsapps"].join(sep);
-    if (!r.includes(o)) r.push(o);
+function getWindowsAppsDirs(homeDir, localAppData, normalizeDir) {
+  let dirs = [];
+  if (homeDir)
+    dirs.push(
+      stripTrailingSep(normalizeDir(homeDir)) +
+        sep +
+        ["appdata", "local", "microsoft", "windowsapps"].join(sep),
+    );
+  if (localAppData) {
+    let localAppsDir =
+      stripTrailingSep(normalizeDir(localAppData)) + sep + ["microsoft", "windowsapps"].join(sep);
+    if (!dirs.includes(localAppsDir)) dirs.push(localAppsDir);
   }
-  return r;
+  return dirs;
 }
 //@ chunk-aat7wt0p.js:13442-13490 placement
-function isPosixAbsoluteLocal(t) {
-  return t.startsWith("/") && !isUncOrDevicePath(t);
+function isPosixAbsoluteLocal(inputPath) {
+  return inputPath.startsWith("/") && !isUncOrDevicePath(inputPath);
 }
 //@ chunk-aat7wt0p.js:13490-13621 placement
-function isUnderAliasDir(t, n, e) {
-  let r = stripTrailingSep(e);
-  for (let o of t) {
-    if (!(o === r || o.startsWith(r + sep))) continue;
-    if (n === o || n.startsWith(o + sep)) return true;
+function isUnderAliasDir(dirs, inputPath, aliasDir) {
+  let normalizedAlias = stripTrailingSep(aliasDir);
+  for (let dir of dirs) {
+    if (!(dir === normalizedAlias || dir.startsWith(normalizedAlias + sep))) continue;
+    if (inputPath === dir || inputPath.startsWith(dir + sep)) return true;
   }
   return false;
 }
@@ -139,8 +150,8 @@ var SYSTEM_ROOT_SUBDIRS = [
   "sw",
 ];
 //@ chunk-aat7wt0p.js:13793-14084 placement
-function isSystemVolumePath(t) {
-  let parts = t.split("/");
+function isSystemVolumePath(inputPath) {
+  let parts = inputPath.split("/");
   if (
     parts.length < 5 ||
     parts[0] !== "" ||
@@ -148,24 +159,32 @@ function isSystemVolumePath(t) {
     foldCasePair(parts[2] ?? "") !== "volumes" ||
     foldCasePair(parts[3] ?? "") !== "data"
   )
-    return t;
+    return inputPath;
   let sliced = parts.slice(4);
-  for (let r of SYSTEM_ROOT_SUBDIRS) {
-    let parts = r.split("/");
+  for (let subdir of SYSTEM_ROOT_SUBDIRS) {
+    let parts = subdir.split("/");
     if (sliced.length < parts.length) continue;
-    if (parts.every((i, s) => foldCasePair(sliced[s] ?? "") === foldCasePair(i)))
+    if (parts.every((segment, index) => foldCasePair(sliced[index] ?? "") === foldCasePair(segment)))
       return "/" + sliced.join("/");
   }
-  return t;
+  return inputPath;
 }
 //@ chunk-aat7wt0p.js:14084-14135 placement
-function foldCasePair(t) {
-  return t.toUpperCase().toLowerCase();
+function foldCasePair(value) {
+  return value.toUpperCase().toLowerCase();
 }
 //@ chunk-aat7wt0p.js:14135-14220 placement = isDangerousFilePathToAutoEdit (1)
 function getRepoRootForWorktreePath(path) {
   return basename(dirname(path)) === "worktrees" && basename(dirname(dirname(path))) === ".claude"
     ? dirname(dirname(dirname(path)))
     : null;
+}
+//@ chunk-jhrww53q.js:49190-49257 placement
+/**
+ * 从目录列表中过滤掉受保护的目录（当前无引用）。
+ */
+function filterUnprotectedDirs(dirPaths) {
+  let cwd = process.cwd();
+  return dirPaths.filter((dirPath) => !classifyProtectedDir(dirPath, cwd));
 }
 export { isSystemVolumePath, realpathCacheEntry, getRepoRootForWorktreePath, classifyProtectedDir };

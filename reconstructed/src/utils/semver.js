@@ -24,36 +24,36 @@ function order(a, b) {
 /**
  * 语义版本 a > b。
  */
-function semverGte(e, n) {
-  return order(e, n) === 1;
+function semverGte(left, right) {
+  return order(left, right) === 1;
 }
 //@ chunk-aepeg2w5.js:220917-220952 layout
 /**
  * 语义版本 a >= b。
  */
-function semverGt(e, n) {
-  return order(e, n) >= 0;
+function semverGt(left, right) {
+  return order(left, right) >= 0;
 }
 //@ chunk-aepeg2w5.js:220952-220989 layout
 /**
  * 语义版本 a < b。
  */
-function lt_2(e, n) {
-  return order(e, n) === -1;
+function lt_2(left, right) {
+  return order(left, right) === -1;
 }
 //@ chunk-aepeg2w5.js:220989-221025 layout
 /**
  * 语义版本 a <= b。
  */
-function semverLt(e, n) {
-  return order(e, n) <= 0;
+function semverLt(left, right) {
+  return order(left, right) <= 0;
 }
 //@ chunk-aepeg2w5.js:221025-221076 fingerprint = satisfies (0.639)
 function satisfies(version, range) {
   return Bun.semver.satisfies(version, range);
 }
 //@ chunk-aepeg2w5.js:221076-221109 placement
-function compareVersions(e, n) {
-  return order(e, n);
+function compareVersions(left, right) {
+  return order(left, right);
 }
 export { semverGte, lt_2, semverGt, semverLt, satisfies, compareVersions };

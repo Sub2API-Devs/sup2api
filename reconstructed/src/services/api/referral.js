@@ -20,10 +20,12 @@ import {
 } from "../../utils/auth.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E, string } from "../../../vendor/zod/v4/classic/schemas.js";
-import { bY } from "../../../vendor/zod/v4/core/core.js";
+import { objectSchema, numberSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { INVALID } from "../../../vendor/zod/v4/core/core.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { fetchUserSettingsOnce } from "../settingsSync/index.js";
+import { sessionsApiWire } from "../../utils/teleport/api.js";
+import { getOauthConfig } from "../../constants/oauth.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { env } from "../../utils/env.js";
 import {
@@ -32,25 +34,28 @@ import {
   API_CREDIT_MAX_ASKS,
 } from "../../components/LogoV2/ApiCreditLinkNotice.js";
 import { arePromoOffersAllowed, isConsumerPlan as isConsumerPlan_2 } from "../../utils/planTiers.js";
-import { sessionsApiWire } from "../../utils/teleport/api.js";
-import { getOauthConfig } from "../../constants/oauth.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:499888-500019 fingerprint = CURRENCY_SYMBOLS (0.783)
 /**
  * 货币符号表；JPY/KRW/VND 为零小数位货币。
  */
-var CURRENCY_SYMBOLS = {
-  USD: "$",
-  EUR: "\u20AC",
-  GBP: "\xA3",
-  JPY: "\xA5",
-  BRL: "R$",
-  CAD: "CA$",
-  AUD: "A$",
-  NZD: "NZ$",
-  SGD: "S$",
-};
-var ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW", "VND"]);
+var CURRENCY_SYMBOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ZERO_DECIMAL_CURRENCIES;
+deferInit("chunk-s61vbvea.js:499888", () => {
+  CURRENCY_SYMBOLS = {
+    USD: "$",
+    EUR: "\u20AC",
+    GBP: "\xA3",
+    JPY: "\xA5",
+    BRL: "R$",
+    CAD: "CA$",
+    AUD: "A$",
+    NZD: "NZ$",
+    SGD: "S$",
+  };
+  ZERO_DECIMAL_CURRENCIES = new Set(["JPY", "KRW", "VND"]);
+});
 //@ chunk-s61vbvea.js:500019-500079 layout
 /**
  * 货币符号，未知时 "<CODE> "。
@@ -60,14 +65,15 @@ function getCurrencySymbol(currency) {
   return CURRENCY_SYMBOLS[upper] ?? `${upper} `;
 }
 //@ chunk-s61vbvea.js:500079-500439 placement
-function formatCurrency(e, currency, r = "precise") {
+function formatCurrency(amount, currency, precision = "precise") {
   let upper = currency.toUpperCase();
   let currencySymbol = getCurrencySymbol(upper);
-  if (ZERO_DECIMAL_CURRENCIES.has(upper)) return `${currencySymbol}${Math.round(e).toLocaleString("en-US")}`;
-  let y = e / 100;
-  if (r === "whole") return `${currencySymbol}${Math.round(y).toLocaleString("en-US")}`;
-  if (r === "fit" && y % 1 === 0) return `${currencySymbol}${y.toLocaleString("en-US")}`;
-  return `${currencySymbol}${y.toLocaleString("en-US", {
+  if (ZERO_DECIMAL_CURRENCIES.has(upper))
+    return `${currencySymbol}${Math.round(amount).toLocaleString("en-US")}`;
+  let units = amount / 100;
+  if (precision === "whole") return `${currencySymbol}${Math.round(units).toLocaleString("en-US")}`;
+  if (precision === "fit" && units % 1 === 0) return `${currencySymbol}${units.toLocaleString("en-US")}`;
+  return `${currencySymbol}${units.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   })}`;
@@ -75,9 +81,9 @@ function formatCurrency(e, currency, r = "precise") {
 //@ chunk-s61vbvea.js:500439-500455 placement
 var REFERRAL_CACHE_TTL_MS = 86400000;
 //@ chunk-s61vbvea.js:500455-500539 placement
-function isStaleTimestamp(timestamp, n) {
+function isStaleTimestamp(timestamp, now) {
   return typeof timestamp === "number" && Number.isFinite(timestamp)
-    ? Math.abs(n - timestamp) > REFERRAL_CACHE_TTL_MS
+    ? Math.abs(now - timestamp) > REFERRAL_CACHE_TTL_MS
     : true;
 }
 //@ chunk-s61vbvea.js:500539-500562 placement
@@ -85,7 +91,10 @@ class ReferralState {
   inFlight = null;
 }
 //@ chunk-s61vbvea.js:500562-500587 placement
-var referralStateSlot = new HostScoped(() => new ReferralState());
+var referralStateSlot; // deferred: uses ReferralState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:500562", () => {
+  referralStateSlot = new HostScoped(() => new ReferralState());
+});
 //@ chunk-s61vbvea.js:500587-500624 placement
 function referralState() {
   return referralStateSlot.of(getRootSession().host);
@@ -109,26 +118,28 @@ class ReferralEligibilityUnavailableError extends Error {
 /**
  * 请求组织推荐活动资格接口，失败抛带原因分类的 ReferralEligibilityUnavailableError。
  */
-async function fetchReferralEligibility(e, credentials) {
-  let r = await apiClient.get(
-    `/api/oauth/organizations/:orgUUID/referral/eligibility?campaign=${encodeURIComponent(e)}`,
+async function fetchReferralEligibility(credentials, credentials_2) {
+  let response = await apiClient.get(
+    `/api/oauth/organizations/:orgUUID/referral/eligibility?campaign=${encodeURIComponent(credentials)}`,
     {
       auth: "teleport-org",
       timeout: 5000,
-      credentials,
+      credentials: credentials_2,
     },
   );
-  if (!r.ok)
+  if (!response.ok)
     throw new ReferralEligibilityUnavailableError(
-      r.reason === "no-auth" ? r.detail : `Referral eligibility unavailable: ${r.reason}`,
-      REFERRAL_REASON_CODES[r.reason],
+      response.reason === "no-auth"
+        ? response.detail
+        : `Referral eligibility unavailable: ${response.reason}`,
+      REFERRAL_REASON_CODES[response.reason],
     );
-  return r.data;
+  return response.data;
 }
 //@ chunk-s61vbvea.js:501433-501785 placement
 async function fetchReferralRedemptions(campaign, credentials) {
   return withFeatureTelemetry("api_referral_redemptions_fetch", async () => {
-    let r = await apiClient.get(
+    let response = await apiClient.get(
       `/api/oauth/organizations/:orgUUID/referral/redemptions?campaign=${encodeURIComponent(campaign)}`,
       {
         auth: "teleport-org",
@@ -136,9 +147,13 @@ async function fetchReferralRedemptions(campaign, credentials) {
         credentials,
       },
     );
-    if (!r.ok)
-      throw Error(r.reason === "no-auth" ? r.detail : `Referral redemptions unavailable: ${r.reason}`);
-    return r.data;
+    if (!response.ok)
+      throw Error(
+        response.reason === "no-auth"
+          ? response.detail
+          : `Referral redemptions unavailable: ${response.reason}`,
+      );
+    return response.data;
   });
 }
 //@ chunk-s61vbvea.js:501785-501879 placement = isConsumerPlan (0.894)
@@ -188,55 +203,61 @@ function checkCachedPassesEligibility() {
 /**
  * 按货币格式化最小单位金额。
  */
-function formatMinorUnits(e) {
-  return formatCurrency(e.amount_minor_units, e.currency, "fit");
+function formatMinorUnits(amount) {
+  return formatCurrency(amount.amount_minor_units, amount.currency, "fit");
 }
 //@ chunk-s61vbvea.js:502287-502365 fingerprint = formatCreditAmount (0.734)
 /**
  * {amount_minor_units, currency}。旧版名 formatCreditAmount 为错配。
  */
-var creditAmountSchema = DoctorLazy(() =>
-  u({
-    amount_minor_units: E(),
-    currency: string().regex(/^[A-Za-z]{3}$/),
-  }),
-);
+var creditAmountSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:502287", () => {
+  creditAmountSchema = DoctorLazy(() =>
+    objectSchema({
+      amount_minor_units: numberSchema(),
+      currency: stringSchema().regex(/^[A-Za-z]{3}$/),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:502365-502433 layout
 /**
  * 校验并解析 {amount_minor_units, currency}。
  */
 function parseCreditAmount(referrerReward) {
-  let n = creditAmountSchema().safeParse(referrerReward);
-  return n.success ? n.data : null;
+  let parsed = creditAmountSchema().safeParse(referrerReward);
+  return parsed.success ? parsed.data : null;
 }
 //@ chunk-s61vbvea.js:502433-502668 layout
 /**
  * 推荐活动 schema：campaign、code、referral_link（只接受 http/https）。
  */
-var referralCampaignSchema = DoctorLazy(() =>
-  u({
-    campaign: string(),
-    code: string(),
-    referral_link: string().transform((e, n) => {
-      try {
-        let r = new URL(e);
-        if (r.protocol === "https:" || r.protocol === "http:") return r.href;
-      } catch {}
-      n.addIssue({
-        code: "custom",
-        message: "not an http(s) URL",
-      });
-      return bY;
+var referralCampaignSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:502433", () => {
+  referralCampaignSchema = DoctorLazy(() =>
+    objectSchema({
+      campaign: stringSchema(),
+      code: stringSchema(),
+      referral_link: stringSchema().transform((link, index) => {
+        try {
+          let parsed = new URL(link);
+          if (parsed.protocol === "https:" || parsed.protocol === "http:") return parsed.href;
+        } catch {}
+        index.addIssue({
+          code: "custom",
+          message: "not an http(s) URL",
+        });
+        return INVALID;
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-s61vbvea.js:502668-502738 layout
 /**
  * 解析推荐活动。
  */
 function parseReferralCampaign(referralCodeDetails) {
-  let n = referralCampaignSchema().safeParse(referralCodeDetails);
-  return n.success ? n.data : undefined;
+  let parsed = referralCampaignSchema().safeParse(referralCodeDetails);
+  return parsed.success ? parsed.data : undefined;
 }
 //@ chunk-s61vbvea.js:502738-502869 fingerprint = getCachedReferrerReward (1)
 /**
@@ -262,15 +283,15 @@ function getCachedRemainingPasses() {
 /**
  * 拉取并保存 Passes 资格（复用进行中请求）。
  */
-async function fetchAndStorePassesEligibility(credentials, n) {
-  let r = referralState();
-  if (r.inFlight) {
+async function fetchAndStorePassesEligibility(credentials, fetchCredentials) {
+  let state = referralState();
+  if (state.inFlight) {
     logForDebugging("Passes: Reusing in-flight eligibility fetch");
-    return r.inFlight;
+    return state.inFlight;
   }
   let orgId = getOauthAccountInfo()?.organizationUuid;
   if (!orgId) return null;
-  r.inFlight = (async () => {
+  state.inFlight = (async () => {
     try {
       let response = await fetchReferralEligibility("claude_code_guest_pass", credentials);
       let cacheEntry = {
@@ -285,7 +306,7 @@ async function fetchAndStorePassesEligibility(credentials, n) {
             [orgId]: cacheEntry,
           },
         }),
-        n,
+        fetchCredentials,
       );
       logForDebugging(`Passes eligibility cached for org ${orgId}: ${response.eligible}`);
       logFeatureOk("api_referral_eligibility_fetch");
@@ -300,16 +321,16 @@ async function fetchAndStorePassesEligibility(credentials, n) {
       logFeatureSad("api_referral_eligibility_fetch", fetchUserSettingsOnce(error));
       return null;
     } finally {
-      r.inFlight = null;
+      state.inFlight = null;
     }
   })();
-  return r.inFlight;
+  return state.inFlight;
 }
 //@ chunk-s61vbvea.js:503691-504239 fingerprint = getCachedOrFetchPassesEligibility (0.889)
 /**
  * 读缓存，无缓存时后台拉取。
  */
-async function getCachedOrFetchPassesEligibility(e, n) {
+async function getCachedOrFetchPassesEligibility(credentials, key) {
   if (!isConsumerPlan()) return null;
   let orgId = getOauthAccountInfo()?.organizationUuid;
   if (!orgId) return null;
@@ -319,18 +340,39 @@ async function getCachedOrFetchPassesEligibility(e, n) {
     logForDebugging(
       "Passes: No cache, fetching eligibility in background (command unavailable this session)",
     );
-    fetchAndStorePassesEligibility(e, n);
+    fetchAndStorePassesEligibility(credentials, key);
     return null;
   }
   if (isStaleTimestamp(cachedEntry.timestamp, now)) {
     logForDebugging("Passes: Cache stale, returning cached data and refreshing in background");
-    fetchAndStorePassesEligibility(e, n);
+    fetchAndStorePassesEligibility(credentials, key);
   } else logForDebugging("Passes: Using fresh cached eligibility data");
-  let { timestamp, ...w } = cachedEntry;
+  let { timestamp, ...rest } = cachedEntry;
   return {
-    ...w,
-    referral_code_details: parseReferralCampaign(w.referral_code_details),
-    referrer_reward: parseCreditAmount(w.referrer_reward),
+    ...rest,
+    referral_code_details: parseReferralCampaign(rest.referral_code_details),
+    referrer_reward: parseCreditAmount(rest.referrer_reward),
+  };
+}
+//@ chunk-e6aww6q8.js:1878148-1878366 callgraph-fingerprint = fetchReferralEligibility (0.319)
+/**
+ * 构建远程会话请求描述（url、组织头、bearer 与恢复回调）。旧版名 fetchReferralEligibility 为错配。
+ */
+function fetchReferralEligibility_2(credentials, storageV5, sessionId, profile, readBearer, recoverBearer) {
+  let url = sessionsApiWire(credentials, getOauthConfig().BASE_API_URL, storageV5);
+  return {
+    url: url.url,
+    headers: {
+      ...url.headers,
+      "x-organization-uuid": sessionId,
+    },
+    bearer: storageV5,
+    readBearer,
+    recoverBearer,
+    profile,
+    recovery: undefined,
+    reenrolled: false,
+    reauthorized: false,
   };
 }
 //@ chunk-ag5x7vhf.js:94515-94708 fingerprint = shouldCheckForPasses (0.644)
@@ -339,7 +381,7 @@ async function getCachedOrFetchPassesEligibility(e, n) {
  */
 function shouldCheckForPasses() {
   let subscriptionType = getSubscriptionType();
-  let h = normalizeUuidOrNull(getOauthAccountInfo()?.organizationUuid) ?? undefined;
+  let orgUuid = normalizeUuidOrNull(getOauthAccountInfo()?.organizationUuid) ?? undefined;
   let CLAUDE_CODE_ORGANIZATION_UUID = env.CLAUDE_CODE_ORGANIZATION_UUID;
   return (subscriptionType === "max" || subscriptionType === "team") &&
     getApiCreditLinkText() !== null &&
@@ -347,30 +389,9 @@ function shouldCheckForPasses() {
     arePromoOffersAllowed() &&
     hasProfileScope() &&
     isConsumerPlan_2() &&
-    (!CLAUDE_CODE_ORGANIZATION_UUID || CLAUDE_CODE_ORGANIZATION_UUID === h)
-    ? h
+    (!CLAUDE_CODE_ORGANIZATION_UUID || CLAUDE_CODE_ORGANIZATION_UUID === orgUuid)
+    ? orgUuid
     : undefined;
-}
-//@ chunk-e6aww6q8.js:1878148-1878366 callgraph-fingerprint = fetchReferralEligibility (0.319)
-/**
- * 构建远程会话请求描述（url、组织头、bearer 与恢复回调）。旧版名 fetchReferralEligibility 为错配。
- */
-function fetchReferralEligibility_2(e, n, r, profile, readBearer, recoverBearer) {
-  let S = sessionsApiWire(e, getOauthConfig().BASE_API_URL, n);
-  return {
-    url: S.url,
-    headers: {
-      ...S.headers,
-      "x-organization-uuid": r,
-    },
-    bearer: n,
-    readBearer,
-    recoverBearer,
-    profile,
-    recovery: undefined,
-    reenrolled: false,
-    reauthorized: false,
-  };
 }
 export {
   formatCurrency,

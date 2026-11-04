@@ -28,3 +28,4 @@ function hasOpusAccess() {
     ? AUTO_MODE_DESCRIPTION_SHORT
     : AUTO_MODE_DESCRIPTION_FULL;
 }
+export { hasOpusAccess };

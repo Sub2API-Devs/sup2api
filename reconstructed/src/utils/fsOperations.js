@@ -83,63 +83,69 @@ function nonblockingReadFlags() {
 //@ chunk-cgr0tezp.js:19926-19939 placement
 var PATH_SEPARATOR_RUN_RE = /\/+/;
 //@ chunk-cgr0tezp.js:19939-20126 placement
-function isSpelledStrictAncestor(e, n) {
-  let r = (u) => u.split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
-  let resolved = pathModule.resolve(e);
-  let resolved_2 = pathModule.resolve(n);
-  let o = r(resolved);
-  let a = r(resolved_2);
+function isSpelledStrictAncestor(ancestorPath, descendantPath) {
+  let splitSegments = (path) => path.split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
+  let path = pathModule.resolve(ancestorPath);
+  let path_2 = pathModule.resolve(descendantPath);
+  let ancestorParts = splitSegments(path);
+  let descendantParts = splitSegments(path_2);
   return (
-    pathModule.parse(resolved).root === pathModule.parse(resolved_2).root &&
-    o.length < a.length &&
-    o.every((u, c) => u === a[c])
+    pathModule.parse(path).root === pathModule.parse(path_2).root &&
+    ancestorParts.length < descendantParts.length &&
+    ancestorParts.every((part, index) => part === descendantParts[index])
   );
 }
 //@ chunk-cgr0tezp.js:20126-20275 placement
-function truncateAtDotSegment(e) {
-  let n = "";
-  for (let i of e.split(/([\\/]+)/)) {
-    if (i === "." || i === "..") break;
-    n += i;
+function truncateAtDotSegment(path) {
+  let kept = "";
+  for (let token of path.split(/([\\/]+)/)) {
+    if (token === "." || token === "..") break;
+    kept += token;
   }
-  let replaced = n.replace(/(?<=[^\\/])[\\/]+$/, "");
-  return replaced === "" ? e : replaced;
+  let replaced = kept.replace(/(?<=[^\\/])[\\/]+$/, "");
+  return replaced === "" ? path : replaced;
 }
 //@ chunk-cgr0tezp.js:20275-20398 placement
-function normalizeNetworkMountPath(e) {
-  if (e.startsWith("\\\\")) return truncateAtDotSegment(e);
-  let replaced = e.replace(/^\/+/, "/");
-  let r = networkMountRootCached(replaced);
-  if (r !== null) return r;
-  return truncateAtDotSegment(e);
+function normalizeNetworkMountPath(path) {
+  if (path.startsWith("\\\\")) return truncateAtDotSegment(path);
+  let replaced = path.replace(/^\/+/, "/");
+  let root = networkMountRootCached(replaced);
+  if (root !== null) return root;
+  return truncateAtDotSegment(path);
 }
 //@ chunk-cgr0tezp.js:20398-20408 placement
 var networkMountPathOf = normalizeNetworkMountPath;
 //@ chunk-cgr0tezp.js:20408-20579 placement
-function joinRemainingSegments(e, n, onCollapsedLanding) {
-  let i = hasDotSegment(e);
-  if (n.length === 0 || i || n.some((s) => s === "." || s === "..")) {
-    if (onCollapsedLanding !== undefined && (n.length > 0 || i)) onCollapsedLanding(pathModule.join(e, ...n));
-    return i ? networkMountPathOf(e) : e;
+function joinRemainingSegments(basePath, segments, onCollapsedLanding) {
+  let hasDot = hasDotSegment(basePath);
+  if (segments.length === 0 || hasDot || segments.some((segment) => segment === "." || segment === "..")) {
+    if (onCollapsedLanding !== undefined && (segments.length > 0 || hasDot))
+      onCollapsedLanding(pathModule.join(basePath, ...segments));
+    return hasDot ? networkMountPathOf(basePath) : basePath;
   }
-  return pathModule.join(e, ...n);
+  return pathModule.join(basePath, ...segments);
 }
 //@ chunk-cgr0tezp.js:20579-20639 placement
 var UNVERIFIED_ANCESTRY = "\x00unverified-ancestry";
 var OPAQUE_LINK_TEXT = "\x00opaque-link-text";
 //@ chunk-cgr0tezp.js:20639-20722 placement
-function hasParentSegment(text) {
-  return hasDotDotSegment(pathModule.isAbsolute(text) ? text : text.replace(/^(?:\.\.(?:[\\/]+|$))+/, ""));
+function hasParentSegment(linkText) {
+  return hasDotDotSegment(
+    pathModule.isAbsolute(linkText) ? linkText : linkText.replace(/^(?:\.\.(?:[\\/]+|$))+/, ""),
+  );
 }
 //@ chunk-cgr0tezp.js:20722-20982 placement
-function isOpaqueLinkText(e, n = false) {
+function isOpaqueLinkText(linkText, strict = false) {
   return (
-    e.includes("\uFFFD") ||
-    hasParentSegment(e) ||
-    (n &&
-      (/^(?:[A-Za-z]:(?![\\/])|[\\/](?![\\/]))/.test(e) ||
-        (/^[\\/]{2}\?[\\/]/.test(e) && !/^[\\/]{2}\?[\\/](?:[A-Za-z]:[\\/]|UNC[\\/])/i.test(e)) ||
-        e.split(/[\\/]/).some((r) => r !== "." && r !== ".." && /[. ]$/.test(r))))
+    linkText.includes("\uFFFD") ||
+    hasParentSegment(linkText) ||
+    (strict &&
+      (/^(?:[A-Za-z]:(?![\\/])|[\\/](?![\\/]))/.test(linkText) ||
+        (/^[\\/]{2}\?[\\/]/.test(linkText) &&
+          !/^[\\/]{2}\?[\\/](?:[A-Za-z]:[\\/]|UNC[\\/])/i.test(linkText)) ||
+        linkText
+          .split(/[\\/]/)
+          .some((segment) => segment !== "." && segment !== ".." && /[. ]$/.test(segment))))
   );
 }
 //@ chunk-cgr0tezp.js:20982-21024 placement
@@ -154,139 +160,156 @@ function hopCapExhausted(path) {
   });
 }
 //@ chunk-cgr0tezp.js:21136-21370 placement
-function unverifiedAncestryReason(e, n, r = false, i = false, s = false) {
-  if (n?.unreadableAncestry !== "unverified") return;
-  let errno = e !== undefined && typeof e === "object" && "errno" in e ? e.errno : undefined;
-  if (errno === "ENOENT" || errno === "ENOTDIR") return;
-  if (errno === "ENAMETOOLONG" && !r && !i && !s) return;
+function unverifiedAncestryReason(
+  errno,
+  options,
+  allowTooLong = false,
+  allowLaunchAncestry = false,
+  allowVouched = false,
+) {
+  if (options?.unreadableAncestry !== "unverified") return;
+  let errno_2 =
+    errno !== undefined && typeof errno === "object" && "errno" in errno ? errno.errno : undefined;
+  if (errno_2 === "ENOENT" || errno_2 === "ENOTDIR") return;
+  if (errno_2 === "ENAMETOOLONG" && !allowTooLong && !allowLaunchAncestry && !allowVouched) return;
   return UNVERIFIED_ANCESTRY;
 }
 //@ chunk-cgr0tezp.js:21370-21398 placement
-function isUnderNetworkDir(e) {
-  return isUnderNetworkDirCached(e);
+function isUnderNetworkDir(path) {
+  return isUnderNetworkDirCached(path);
 }
 //@ chunk-cgr0tezp.js:21398-21481 placement
-function isNetworkPathUnderAnchors(e, anchors) {
+function isNetworkPathUnderAnchors(path, anchors) {
   return (
     anchors !== undefined &&
     anchors.some(
-      (r) =>
-        isUnderNetworkDirCached(r) &&
-        !isForeignMountPath(e, r) &&
-        (isPathUnderPosix(e, r) || isNetworkMountPath(e)),
+      (anchor) =>
+        isUnderNetworkDirCached(anchor) &&
+        !isForeignMountPath(path, anchor) &&
+        (isPathUnderPosix(path, anchor) || isNetworkMountPath(path)),
     )
   );
 }
 //@ chunk-cgr0tezp.js:21481-21545 placement
-function isAnchorUnderPath(e, anchors) {
-  return anchors !== undefined && anchors.some((r) => isUnderNetworkDirCached(r) && isPathUnderPosix(r, e));
+function isAnchorUnderPath(path, anchors) {
+  return (
+    anchors !== undefined &&
+    anchors.some((anchor) => isUnderNetworkDirCached(anchor) && isPathUnderPosix(anchor, path))
+  );
 }
 //@ chunk-cgr0tezp.js:21545-21669 placement
-function isPathUnderPosix(e, n) {
-  let r = (o) => (o.length > 1 ? o.replace(/\/+$/, "") : o);
-  let [i, s] = [r(e), r(n)];
-  return i === s || i.startsWith(s === "/" ? s : s + "/");
+function isPathUnderPosix(path, parentPath) {
+  let trimTrailingSep = (path) => (path.length > 1 ? path.replace(/\/+$/, "") : path);
+  let [normalizedPath, normalizedParent] = [trimTrailingSep(path), trimTrailingSep(parentPath)];
+  return (
+    normalizedPath === normalizedParent ||
+    normalizedPath.startsWith(normalizedParent === "/" ? normalizedParent : normalizedParent + "/")
+  );
 }
 //@ chunk-cgr0tezp.js:21669-21727 placement
-function isForeignToAllMounts(e, anchors) {
-  return anchors === undefined || anchors.every((r) => isForeignMountPath(e, r));
+function isForeignToAllMounts(path, anchors) {
+  return anchors === undefined || anchors.every((anchor) => isForeignMountPath(path, anchor));
 }
 //@ chunk-cgr0tezp.js:21727-21785 placement
-function isForeignToAllNetworks(e, anchors) {
-  return anchors === undefined || anchors.every((r) => isForeignNetworkPath(e, r));
+function isForeignToAllNetworks(path, anchors) {
+  return anchors === undefined || anchors.every((anchor) => isForeignNetworkPath(path, anchor));
 }
 //@ chunk-cgr0tezp.js:21785-21924 placement
-function collapseNetworkLanding(e, anchors, onCollapsedLanding) {
-  let i = isNetworkMountPath(e) ? networkMountRootCached(e) : null;
-  if (i === null || !isForeignToAllMounts(i, anchors)) return;
-  let joined = pathModule.join(e);
-  if (isNetworkMountPath(joined) && networkMountHost(joined) === networkMountHost(i)) return joined;
-  return joinRemainingSegments(e, [], onCollapsedLanding);
+function collapseNetworkLanding(path, anchors, onCollapsedLanding) {
+  let root = isNetworkMountPath(path) ? networkMountRootCached(path) : null;
+  if (root === null || !isForeignToAllMounts(root, anchors)) return;
+  let joined = pathModule.join(path);
+  if (isNetworkMountPath(joined) && networkMountHost(joined) === networkMountHost(root)) return joined;
+  return joinRemainingSegments(path, [], onCollapsedLanding);
 }
 //@ chunk-cgr0tezp.js:21924-22043 placement
-function getAnchors(e) {
-  if (e?.anchors !== undefined && e.anchors.length > 0) return e.anchors;
-  return e?.anchor !== undefined ? [e.anchor] : undefined;
+function getAnchors(options) {
+  if (options?.anchors !== undefined && options.anchors.length > 0) return options.anchors;
+  return options?.anchor !== undefined ? [options.anchor] : undefined;
 }
 //@ chunk-cgr0tezp.js:22043-22111 placement
-function hasUntouchableRecordSpelling(e) {
+function hasUntouchableRecordSpelling(path) {
   return (
-    hasDotDotSegment(e) ||
-    isNonWslUncPath(e) ||
-    isNetworkMountRoot(e) ||
-    isNetDir(e) ||
-    findIntermediateUncJunction(NodeFsOperations, e) !== undefined
+    hasDotDotSegment(path) ||
+    isNonWslUncPath(path) ||
+    isNetworkMountRoot(path) ||
+    isNetDir(path) ||
+    findIntermediateUncJunction(NodeFsOperations, path) !== undefined
   );
 }
 //@ chunk-cgr0tezp.js:22111-22192 placement
-async function hasUntouchableRecordSpellingAsync(e) {
+async function hasUntouchableRecordSpellingAsync(path) {
   return (
-    hasDotDotSegment(e) ||
-    isNonWslUncPath(e) ||
-    isNetworkMountRoot(e) ||
-    isNetDir(e) ||
-    (await findIntermediateUncJunctionAsync(NodeFsOperations, e)) !== undefined
+    hasDotDotSegment(path) ||
+    isNonWslUncPath(path) ||
+    isNetworkMountRoot(path) ||
+    isNetDir(path) ||
+    (await findIntermediateUncJunctionAsync(NodeFsOperations, path)) !== undefined
   );
 }
 //@ chunk-cgr0tezp.js:22192-22320 placement
-function hasUntouchableRecordSpellingStrict(e, n = NodeFsOperations) {
+function hasUntouchableRecordSpellingStrict(path, fsImpl = NodeFsOperations) {
   return (
-    hasDotDotSegment(e) ||
-    isNonWslUncPath(e) ||
-    isNetworkMountRoot(e) ||
-    isNetDir(e) ||
-    findIntermediateUncJunction(n, e, {
+    hasDotDotSegment(path) ||
+    isNonWslUncPath(path) ||
+    isNetworkMountRoot(path) ||
+    isNetDir(path) ||
+    findIntermediateUncJunction(fsImpl, path, {
       surfaceNetworkRaw: true,
       unreadableAncestry: "unverified",
     }) !== undefined
   );
 }
 //@ chunk-cgr0tezp.js:22320-22460 placement
-async function hasUntouchableRecordSpellingStrictAsync(e, n = NodeFsOperations) {
+async function hasUntouchableRecordSpellingStrictAsync(path, fsImpl = NodeFsOperations) {
   return (
-    hasDotDotSegment(e) ||
-    isNonWslUncPath(e) ||
-    isNetworkMountRoot(e) ||
-    isNetDir(e) ||
-    (await findIntermediateUncJunctionAsync(n, e, {
+    hasDotDotSegment(path) ||
+    isNonWslUncPath(path) ||
+    isNetworkMountRoot(path) ||
+    isNetDir(path) ||
+    (await findIntermediateUncJunctionAsync(fsImpl, path, {
       surfaceNetworkRaw: true,
       unreadableAncestry: "unverified",
     })) !== undefined
   );
 }
 //@ chunk-cgr0tezp.js:22460-22659 placement
-async function entryReachesForeignNetwork(e, permissionScreenAnchor, fsImpl = NodeFsOperations) {
-  if (hasDotDotSegment(e)) return true;
-  if (isNonWslUncPath(e)) return true;
-  if (isNetworkMountRoot(e)) {
-    let i = networkMountHost(e);
-    if (i === null || permissionScreenAnchor === null || i !== networkMountHost(permissionScreenAnchor))
+async function entryReachesForeignNetwork(path, permissionScreenAnchor, fsImpl = NodeFsOperations) {
+  if (hasDotDotSegment(path)) return true;
+  if (isNonWslUncPath(path)) return true;
+  if (isNetworkMountRoot(path)) {
+    let mountHost = networkMountHost(path);
+    if (
+      mountHost === null ||
+      permissionScreenAnchor === null ||
+      mountHost !== networkMountHost(permissionScreenAnchor)
+    )
       return true;
   }
-  if (isNetDir(e)) return true;
+  if (isNetDir(path)) return true;
   return (
     (
-      await examineEntryChain(e, permissionScreenAnchor, {
+      await examineEntryChain(path, permissionScreenAnchor, {
         fsImpl,
       })
     ).verdict !== "clean"
   );
 }
 //@ chunk-cgr0tezp.js:22659-22925 placement
-async function examineEntryChain(e, n, { fsImpl: r = NodeFsOperations, signal: i } = {}) {
+async function examineEntryChain(path, anchor, { fsImpl = NodeFsOperations, signal } = {}) {
   let intermediateUncJunction = await findIntermediateUncJunctionAsync(
-    r,
-    e,
+    fsImpl,
+    path,
     {
-      ...(n === null
+      ...(anchor === null
         ? {}
         : {
-            anchor: n,
+            anchor,
           }),
       unreadableAncestry: "unverified",
       surfaceNetworkRaw: true,
     },
-    i,
+    signal,
   );
   if (intermediateUncJunction === undefined)
     return {
@@ -302,64 +325,64 @@ async function examineEntryChain(e, n, { fsImpl: r = NodeFsOperations, signal: i
   };
 }
 //@ chunk-cgr0tezp.js:22925-23119 placement
-function findIntermediateUncJunction(e, n, r) {
-  return returnValue(resolvePathSafely(n, r), (i) => {
-    if (i.kind === "lstat") return e.lstatSync(i.path);
-    if (i.kind === "opendirNofollow") {
-      e.openDirNoFollowSync(i.path);
+function findIntermediateUncJunction(fsImpl, path, options) {
+  return returnValue(resolvePathSafely(path, options), (step) => {
+    if (step.kind === "lstat") return fsImpl.lstatSync(step.path);
+    if (step.kind === "opendirNofollow") {
+      fsImpl.openDirNoFollowSync(step.path);
       return "ok";
     }
-    return e.readlinkSync(i.path);
+    return fsImpl.readlinkSync(step.path);
   });
 }
 //@ chunk-cgr0tezp.js:23119-23428 placement
-function findIntermediateUncJunctionAsync(e, n, r, i, s) {
-  return returnValue_2(resolvePathSafely(n, r), i, async (o) => {
-    if (o.kind === "lstat") {
-      if (s === undefined) return e.lstat(o.path);
-      let a;
+function findIntermediateUncJunctionAsync(fsImpl, path, options, signal, onStat) {
+  return returnValue_2(resolvePathSafely(path, options), signal, async (step) => {
+    if (step.kind === "lstat") {
+      if (onStat === undefined) return fsImpl.lstat(step.path);
+      let stats;
       try {
-        a = await e.lstatBigint(o.path);
+        stats = await fsImpl.lstatBigint(step.path);
       } catch (error) {
-        s(o.path, undefined);
+        onStat(step.path, undefined);
         throw error;
       }
-      s(o.path, a);
-      return a;
+      onStat(step.path, stats);
+      return stats;
     }
-    if (o.kind === "opendirNofollow") {
-      await e.openDirNoFollow(o.path);
+    if (step.kind === "opendirNofollow") {
+      await fsImpl.openDirNoFollow(step.path);
       return "ok";
     }
-    return e.readlink(o.path);
+    return fsImpl.readlink(step.path);
   });
 }
 //@ chunk-cgr0tezp.js:23428-23543 placement = returnValue (0.769)
-function returnValue(e, n) {
-  let r;
+function returnValue(steps, runStep) {
+  let stepResult;
   for (;;) {
-    let i = e.next(r);
-    if (i.done) return i.value;
+    let nextStep = steps.next(stepResult);
+    if (nextStep.done) return nextStep.value;
     try {
-      r = n(i.value);
+      stepResult = runStep(nextStep.value);
     } catch (error) {
-      r = {
+      stepResult = {
         errno: getErrnoCode(error),
       };
     }
   }
 }
 //@ chunk-cgr0tezp.js:23543-23701 placement = returnValue (0.769)
-async function returnValue_2(path, n, r) {
-  let i;
+async function returnValue_2(path, signal, runStep) {
+  let stepResult;
   for (;;) {
-    let s = path.next(i);
-    if (s.done) return s.value;
-    if (n?.aborted === true) return UNVERIFIED_ANCESTRY;
+    let nextStep = path.next(stepResult);
+    if (nextStep.done) return nextStep.value;
+    if (signal?.aborted === true) return UNVERIFIED_ANCESTRY;
     try {
-      i = await r(s.value);
+      stepResult = await runStep(nextStep.value);
     } catch (error) {
-      i = {
+      stepResult = {
         errno: getErrnoCode(error),
       };
     }
@@ -369,84 +392,90 @@ async function returnValue_2(path, n, r) {
 /**
  * 驱动路径检查生成器执行文件系统步骤（可中止）。
  */
-async function runFsSteps(e, n, r, i, s) {
-  let o = Symbol("cut short");
-  let a;
-  let u =
-    n === undefined
+async function runFsSteps(steps, signal, shouldStop, runStep, cutShortResult) {
+  let cutShortToken = Symbol("cut short");
+  let onAbort;
+  let abortPromise =
+    signal === undefined
       ? undefined
       : new Promise((resolve) => {
-          a = () => resolve(o);
-          n.addEventListener("abort", a, {
+          onAbort = () => resolve(cutShortToken);
+          signal.addEventListener("abort", onAbort, {
             once: true,
           });
         });
-  let c;
+  let stepResult;
   try {
     for (;;) {
-      let l = e.next(c);
-      if (l.done) return l.value;
-      if (n?.aborted === true || r?.(l.value) === false) return s;
-      let d = i(l.value).catch((error) => ({
+      let nextStep = steps.next(stepResult);
+      if (nextStep.done) return nextStep.value;
+      if (signal?.aborted === true || shouldStop?.(nextStep.value) === false) return cutShortResult;
+      let stepPromise = runStep(nextStep.value).catch((error) => ({
         errno: getErrnoCode(error),
       }));
-      let g = await (u === undefined ? d : Promise.race([d, u]));
-      if (g === o) return s;
-      c = g;
+      let raced = await (abortPromise === undefined
+        ? stepPromise
+        : Promise.race([stepPromise, abortPromise]));
+      if (raced === cutShortToken) return cutShortResult;
+      stepResult = raced;
     }
   } finally {
-    if (a !== undefined) n?.removeEventListener("abort", a);
+    if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
   }
 }
 //@ chunk-cgr0tezp.js:24117-27079 placement
 /**
  * 逐段解析路径的生成器（链接、网络、junction 检查）。
  */
-function* resolvePathSafely(e, n) {
-  let anchors = getAnchors(n);
-  if (isUnderNetworkDir(e) && !isNetworkPathUnderAnchors(e, anchors)) return e;
+function* resolvePathSafely(requestedPath, options) {
+  let anchors = getAnchors(options);
+  if (isUnderNetworkDir(requestedPath) && !isNetworkPathUnderAnchors(requestedPath, anchors))
+    return requestedPath;
   if (
-    (isUncOrDevicePath(e) && !isWslUncPath(e) && isForeignToAllNetworks(e, anchors)) ||
-    (isNetworkMountPath(e) && isForeignToAllMounts(e, anchors))
+    (isUncOrDevicePath(requestedPath) &&
+      !isWslUncPath(requestedPath) &&
+      isForeignToAllNetworks(requestedPath, anchors)) ||
+    (isNetworkMountPath(requestedPath) && isForeignToAllMounts(requestedPath, anchors))
   )
     return;
-  let resolved = pathModule.resolve(e);
+  let resolved = pathModule.resolve(requestedPath);
   let root = pathModule.parse(resolved).root;
-  let o = root;
+  let currentPath = root;
   let filtered = resolved.slice(root.length).split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
-  let u = 0;
-  let c = filtered.length;
-  let l = false;
-  let d = false;
-  let g;
-  let y = 64;
-  let h = () => filtered.some((f) => hasDotSegment(f));
-  let S = () => /[. ]$/.test(filtered[0]);
-  while (filtered.length > 0 && u < y) {
-    if (l && hasDotSegment(filtered[0])) return UNVERIFIED_ANCESTRY;
-    let joined = pathModule.join(o, filtered[0]);
+  let hopCount = 0;
+  let originalRemainingCount = filtered.length;
+  let insideUnreadableAncestry = false;
+  let examinedAnyComponent = false;
+  let seenHopKeys;
+  let maxHops = 64;
+  let hasDotSegmentAnywhere = () => filtered.some((segment) => hasDotSegment(segment));
+  let leadingHasTrailingDotSpace = () => /[. ]$/.test(filtered[0]);
+  while (filtered.length > 0 && hopCount < maxHops) {
+    if (insideUnreadableAncestry && hasDotSegment(filtered[0])) return UNVERIFIED_ANCESTRY;
+    let joined = pathModule.join(currentPath, filtered[0]);
     if (
       (isNetworkMountPath(joined) && isForeignToAllMounts(joined, anchors)) ||
       (isUnderNetworkDir(joined) &&
         !(isNetworkPathUnderAnchors(joined, anchors) || isAnchorUnderPath(joined, anchors)))
     )
-      return joinRemainingSegments(joined, filtered.slice(1), n?.onCollapsedLanding);
+      return joinRemainingSegments(joined, filtered.slice(1), options?.onCollapsedLanding);
     if (isMacSpecialPath(joined)) {
-      if (n?.surfaceNetworkRaw === true || n?.unreadableAncestry === "unverified") return UNVERIFIED_ANCESTRY;
-      return joinRemainingSegments(joined, filtered.slice(1), n?.onCollapsedLanding);
+      if (options?.surfaceNetworkRaw === true || options?.unreadableAncestry === "unverified")
+        return UNVERIFIED_ANCESTRY;
+      return joinRemainingSegments(joined, filtered.slice(1), options?.onCollapsedLanding);
     }
-    let m = false;
+    let devFdSpecialCaseEnabled = false;
     if (
-      m &&
+      devFdSpecialCaseEnabled &&
       pathModule.dirname(joined) === "/dev/fd" &&
-      filtered.some((T, U) => U > 0 && (T === ".." || T === "."))
+      filtered.some((segment, index) => index > 0 && (segment === ".." || segment === "."))
     ) {
       filtered.shift();
       while (filtered[0] === "." && filtered.length > 1) filtered.shift();
-      o = joined;
+      currentPath = joined;
       continue;
     }
-    let b = m
+    let statResult = devFdSpecialCaseEnabled
       ? {
           errno: "ENOENT",
         }
@@ -454,14 +483,14 @@ function* resolvePathSafely(e, n) {
           kind: "lstat",
           path: joined,
         };
-    if (b === undefined || typeof b === "string" || "errno" in b) {
+    if (statResult === undefined || typeof statResult === "string" || "errno" in statResult) {
       if (
-        typeof b === "object" &&
-        "errno" in b &&
-        b.errno !== undefined &&
-        b.errno !== "ENOENT" &&
-        b.errno !== "ENOTDIR" &&
-        b.errno !== "ENAMETOOLONG"
+        typeof statResult === "object" &&
+        "errno" in statResult &&
+        statResult.errno !== undefined &&
+        statResult.errno !== "ENOENT" &&
+        statResult.errno !== "ENOTDIR" &&
+        statResult.errno !== "ENAMETOOLONG"
       ) {
         if (
           typeof (yield {
@@ -469,141 +498,176 @@ function* resolvePathSafely(e, n) {
             path: joined,
           }) === "string"
         ) {
-          d = true;
+          examinedAnyComponent = true;
           filtered.shift();
-          o = joined;
+          currentPath = joined;
           continue;
         }
       }
       if (
-        n?.launchAncestry &&
-        !d &&
-        typeof b === "object" &&
-        "errno" in b &&
-        (b.errno === "EPERM" || b.errno === "EACCES") &&
-        isSpelledStrictAncestor(joined, n.launchAncestry)
+        options?.launchAncestry &&
+        !examinedAnyComponent &&
+        typeof statResult === "object" &&
+        "errno" in statResult &&
+        (statResult.errno === "EPERM" || statResult.errno === "EACCES") &&
+        isSpelledStrictAncestor(joined, options.launchAncestry)
       ) {
-        l = true;
+        insideUnreadableAncestry = true;
         filtered.shift();
-        o = joined;
+        currentPath = joined;
         continue;
       }
-      if (typeof b === "object" && "errno" in b && (b.errno === "ENOENT" || b.errno === "ENOTDIR"))
-        n?.onOutcome?.({
+      if (
+        typeof statResult === "object" &&
+        "errno" in statResult &&
+        (statResult.errno === "ENOENT" || statResult.errno === "ENOTDIR")
+      )
+        options?.onOutcome?.({
           kind: "absent",
-          at: o,
+          at: currentPath,
           remaining: [...filtered],
-          fromLinkTarget: filtered.length > c,
-          ...(b.errno === "ENOTDIR" && {
+          fromLinkTarget: filtered.length > originalRemainingCount,
+          ...(statResult.errno === "ENOTDIR" && {
             notAFolder: true,
           }),
         });
-      return unverifiedAncestryReason(b, n, u > 0, h(), S());
+      return unverifiedAncestryReason(
+        statResult,
+        options,
+        hopCount > 0,
+        hasDotSegmentAnywhere(),
+        leadingHasTrailingDotSpace(),
+      );
     }
-    let A = b;
-    d = true;
-    if (!A.isSymbolicLink()) {
+    let stats = statResult;
+    examinedAnyComponent = true;
+    if (!stats.isSymbolicLink()) {
       filtered.shift();
-      o = joined;
+      currentPath = joined;
       continue;
     }
-    u++;
-    let x = joined + "\x00" + filtered.join("\x00");
-    if ((g ??= new Set()).has(x)) return;
-    g.add(x);
-    let L = yield {
+    hopCount++;
+    let hopKey = joined + "\x00" + filtered.join("\x00");
+    if ((seenHopKeys ??= new Set()).has(hopKey)) return;
+    seenHopKeys.add(hopKey);
+    let linkText = yield {
       kind: "readlink",
       path: joined,
     };
-    if (typeof L !== "string") return unverifiedAncestryReason(L, n, u > 0, h(), S());
-    let I = L;
-    if (n?.literalLinkText === "opaque" && isOpaqueLinkText(I)) return OPAQUE_LINK_TEXT;
-    if (!pathModule.isAbsolute(I)) {
-      let filtered_2 = I.split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
-      if (n?.surfaceNetworkRaw === true) {
-        let U = collapseNetworkLanding(
-          (o.endsWith(pathModule.sep) ? o : o + pathModule.sep) +
+    if (typeof linkText !== "string")
+      return unverifiedAncestryReason(
+        linkText,
+        options,
+        hopCount > 0,
+        hasDotSegmentAnywhere(),
+        leadingHasTrailingDotSpace(),
+      );
+    let targetText = linkText;
+    if (options?.literalLinkText === "opaque" && isOpaqueLinkText(targetText)) return OPAQUE_LINK_TEXT;
+    if (!pathModule.isAbsolute(targetText)) {
+      let filtered_2 = targetText.split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
+      if (options?.surfaceNetworkRaw === true) {
+        let collapsed = collapseNetworkLanding(
+          (currentPath.endsWith(pathModule.sep) ? currentPath : currentPath + pathModule.sep) +
             [...filtered_2, ...filtered.slice(1)].join(pathModule.sep),
           anchors,
-          n?.onCollapsedLanding,
+          options?.onCollapsedLanding,
         );
-        if (U !== undefined) return U;
+        if (collapsed !== undefined) return collapsed;
       }
       filtered.shift();
-      n?.onHop?.({
-        composed: pathModule.resolve(o, I, ...filtered),
+      options?.onHop?.({
+        composed: pathModule.resolve(currentPath, targetText, ...filtered),
         leaf: filtered.length === 0,
-        text: I,
+        text: targetText,
       });
-      c = Math.min(c, filtered.length);
+      originalRemainingCount = Math.min(originalRemainingCount, filtered.length);
       filtered = [...filtered_2, ...filtered];
       continue;
     }
-    let w = I;
-    if (n?.surfaceNetworkRaw === true && filtered.length > 1 && isNetDir(w)) {
-      let T = collapseNetworkLanding(
-        [w, ...filtered.slice(1)].join(pathModule.sep),
+    let targetPath = targetText;
+    if (options?.surfaceNetworkRaw === true && filtered.length > 1 && isNetDir(targetPath)) {
+      let collapsed = collapseNetworkLanding(
+        [targetPath, ...filtered.slice(1)].join(pathModule.sep),
         anchors,
-        n?.onCollapsedLanding,
+        options?.onCollapsedLanding,
       );
-      if (T !== undefined) return T;
+      if (collapsed !== undefined) return collapsed;
     }
     if (
-      (isUncOrDevicePath(w) && !isWslUncPath(w) && isForeignToAllNetworks(w, anchors)) ||
-      (isNetworkMountPath(w) && isForeignToAllMounts(w, anchors)) ||
-      (isUnderNetworkDir(w) &&
-        !(isNetworkPathUnderAnchors(w, anchors) || (filtered.length > 1 && isAnchorUnderPath(w, anchors))))
+      (isUncOrDevicePath(targetPath) &&
+        !isWslUncPath(targetPath) &&
+        isForeignToAllNetworks(targetPath, anchors)) ||
+      (isNetworkMountPath(targetPath) && isForeignToAllMounts(targetPath, anchors)) ||
+      (isUnderNetworkDir(targetPath) &&
+        !(
+          isNetworkPathUnderAnchors(targetPath, anchors) ||
+          (filtered.length > 1 && isAnchorUnderPath(targetPath, anchors))
+        ))
     ) {
       filtered.shift();
-      return joinRemainingSegments(w, filtered, n?.onCollapsedLanding);
+      return joinRemainingSegments(targetPath, filtered, options?.onCollapsedLanding);
     }
     if (
-      n?.surfaceNetworkRaw === true &&
-      hasDotSegment(w) &&
-      (isUncOrDevicePath(w) || isNetworkMountRoot(w) || isUnderNetworkDirCached(w) || isNetDir(w))
+      options?.surfaceNetworkRaw === true &&
+      hasDotSegment(targetPath) &&
+      (isUncOrDevicePath(targetPath) ||
+        isNetworkMountRoot(targetPath) ||
+        isUnderNetworkDirCached(targetPath) ||
+        isNetDir(targetPath))
     ) {
       filtered.shift();
-      return filtered.length === 0 ? w : w + pathModule.sep + filtered.join(pathModule.sep);
+      return filtered.length === 0 ? targetPath : targetPath + pathModule.sep + filtered.join(pathModule.sep);
     }
     filtered.shift();
-    let F = pathModule.parse(w).root || pathModule.sep;
+    let targetRoot = pathModule.parse(targetPath).root || pathModule.sep;
     let root = pathModule.parse(joined).root;
-    let P = /^[\\/]$/.test(F) && root !== "" && !/^[\\/]$/.test(root);
-    if (P && (n?.surfaceNetworkRaw === true || n?.unreadableAncestry === "unverified"))
+    let swapsToPosixRoot = /^[\\/]$/.test(targetRoot) && root !== "" && !/^[\\/]$/.test(root);
+    if (
+      swapsToPosixRoot &&
+      (options?.surfaceNetworkRaw === true || options?.unreadableAncestry === "unverified")
+    )
       return UNVERIFIED_ANCESTRY;
-    n?.onHop?.({
-      composed: filtered.length === 0 ? w : pathModule.resolve(w, ...filtered),
+    options?.onHop?.({
+      composed: filtered.length === 0 ? targetPath : pathModule.resolve(targetPath, ...filtered),
       leaf: filtered.length === 0,
-      text: I,
+      text: targetText,
     });
-    o = P ? root : F;
-    d = false;
-    c = Math.min(c, filtered.length);
-    filtered = [...w.slice(F.length).split(PATH_SEPARATOR_RUN_RE).filter(Boolean), ...filtered];
+    currentPath = swapsToPosixRoot ? root : targetRoot;
+    examinedAnyComponent = false;
+    originalRemainingCount = Math.min(originalRemainingCount, filtered.length);
+    filtered = [
+      ...targetPath.slice(targetRoot.length).split(PATH_SEPARATOR_RUN_RE).filter(Boolean),
+      ...filtered,
+    ];
   }
-  if (filtered.length > 0 && n?.literalLinkText === "opaque") return OPAQUE_LINK_TEXT;
+  if (filtered.length > 0 && options?.literalLinkText === "opaque") return OPAQUE_LINK_TEXT;
   if (filtered.length > 0) return UNVERIFIED_ANCESTRY;
-  if (u > 0 && isNetDir(o)) return o;
-  if (isUnderNetworkDir(o) && !isNetworkPathUnderAnchors(o, anchors)) return o;
+  if (hopCount > 0 && isNetDir(currentPath)) return currentPath;
+  if (isUnderNetworkDir(currentPath) && !isNetworkPathUnderAnchors(currentPath, anchors)) return currentPath;
   if (filtered.length === 0)
-    n?.onOutcome?.({
+    options?.onOutcome?.({
       kind: "resolved",
-      path: o,
+      path: currentPath,
     });
   return;
 }
 //@ chunk-cgr0tezp.js:27079-27452 placement
-function safeResolvePath(fsImplementation, n) {
-  if ((isUncOrDevicePath(n) && !isWslUncPath(n)) || isNetworkMountPath(n) || neverOtherHostMount(n))
+function safeResolvePath(fsImplementation, filePath) {
+  if (
+    (isUncOrDevicePath(filePath) && !isWslUncPath(filePath)) ||
+    isNetworkMountPath(filePath) ||
+    neverOtherHostMount(filePath)
+  )
     return {
-      resolvedPath: n,
+      resolvedPath: filePath,
       isSymlink: false,
       isCanonical: false,
     };
-  let intermediateUncJunction = findIntermediateUncJunction(fsImplementation, n);
+  let intermediateUncJunction = findIntermediateUncJunction(fsImplementation, filePath);
   if (intermediateUncJunction === UNVERIFIED_ANCESTRY)
     return {
-      resolvedPath: n,
+      resolvedPath: filePath,
       isSymlink: false,
       isCanonical: false,
     };
@@ -614,15 +678,15 @@ function safeResolvePath(fsImplementation, n) {
       isCanonical: false,
     };
   try {
-    let i = realpathExaminedSync(fsImplementation, n);
+    let realPath = realpathExaminedSync(fsImplementation, filePath);
     return {
-      resolvedPath: i,
-      isSymlink: i !== n,
+      resolvedPath: realPath,
+      isSymlink: realPath !== filePath,
       isCanonical: true,
     };
   } catch (error) {
     return {
-      resolvedPath: n,
+      resolvedPath: filePath,
       isSymlink: false,
       isCanonical: false,
     };
@@ -630,68 +694,73 @@ function safeResolvePath(fsImplementation, n) {
 }
 //@ chunk-cgr0tezp.js:27452-27808 placement
 function vouchedLaunchAncestry(fsImplementation) {
-  let n = launchCwd();
-  if (n === null) return null;
+  let launchDir = launchCwd();
+  if (launchDir === null) return null;
   try {
-    let resolved = pathModule.resolve(n);
+    let resolved = pathModule.resolve(launchDir);
     let resolved_2 = pathModule.resolve(fsImplementation.cwd());
     let root = pathModule.parse(resolved).root;
     if (root !== pathModule.parse(resolved_2).root) return null;
     let filtered = resolved.slice(root.length).split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
     let filtered_2 = resolved_2.slice(root.length).split(PATH_SEPARATOR_RUN_RE).filter(Boolean);
-    let u = 0;
-    while (u < filtered.length && u < filtered_2.length && filtered[u] === filtered_2[u]) u++;
-    return u > 0 ? pathModule.join(root, ...filtered.slice(0, u)) : null;
+    let commonCount = 0;
+    while (
+      commonCount < filtered.length &&
+      commonCount < filtered_2.length &&
+      filtered[commonCount] === filtered_2[commonCount]
+    )
+      commonCount++;
+    return commonCount > 0 ? pathModule.join(root, ...filtered.slice(0, commonCount)) : null;
   } catch {
     return null;
   }
 }
 //@ chunk-cgr0tezp.js:27808-28206 placement
-function realpathExaminedSync(fsImplementation, n) {
+function realpathExaminedSync(fsImplementation, filePath) {
   try {
-    return fsImplementation.realpathSync(n);
+    return fsImplementation.realpathSync(filePath);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode !== "EPERM" && errnoCode !== "EACCES") throw error;
-    let s;
+    let outcome;
     let launchAncestry = vouchedLaunchAncestry(fsImplementation);
     if (
-      findIntermediateUncJunction(fsImplementation, n, {
+      findIntermediateUncJunction(fsImplementation, filePath, {
         unreadableAncestry: "unverified",
         surfaceNetworkRaw: true,
         launchAncestry,
-        onOutcome: (u) => {
-          s = u;
+        onOutcome: (outcome_2) => {
+          outcome = outcome_2;
         },
       }) !== undefined ||
-      s === undefined
+      outcome === undefined
     )
       throw error;
-    if (s.kind === "absent")
+    if (outcome.kind === "absent")
       throw Object.assign(Error("ENOENT: no such file or directory"), {
         code: "ENOENT",
         syscall: "realpath",
-        path: n,
+        path: filePath,
       });
-    return identity(s.path);
+    return identity(outcome.path);
   }
 }
 //@ chunk-cgr0tezp.js:28206-28244 placement
 var SYMLINK_TO_NETWORK_PATH_CODE = "ERR_SYMLINK_TO_NETWORK_PATH";
 //@ chunk-cgr0tezp.js:28244-28406 placement
-function vetRepoSettingsPath(fsImplementation, path, r) {
-  let { asWritten, opts } = refuseUnvettablePath(fsImplementation, path, r);
+function vetRepoSettingsPath(fsImplementation, settingsPath, options) {
+  let { asWritten, opts } = refuseUnvettablePath(fsImplementation, settingsPath, options);
   let linksResolvedPath;
   let absentAt;
   refuseUnexaminedPath(
     findIntermediateUncJunction(fsImplementation, asWritten, {
       ...opts,
-      onOutcome: (target) => {
-        linksResolvedPath = getResolvedPath(target);
-        absentAt = absentSpellingInfo(target);
+      onOutcome: (walkOutcome) => {
+        linksResolvedPath = getResolvedPath(walkOutcome);
+        absentAt = absentSpellingInfo(walkOutcome);
       },
     }),
-    path,
+    settingsPath,
     asWritten,
   );
   return {
@@ -701,32 +770,32 @@ function vetRepoSettingsPath(fsImplementation, path, r) {
   };
 }
 //@ chunk-cgr0tezp.js:28406-29083 placement
-async function vetRepoSettingsPathAsync(fsImplementation, path, r) {
-  let { asWritten, opts, ownHost } = refuseUnvettablePath(fsImplementation, path, r);
+async function vetRepoSettingsPathAsync(fsImplementation, settingsPath, options) {
+  let { asWritten, opts, ownHost } = refuseUnvettablePath(fsImplementation, settingsPath, options);
   let linksResolvedPath;
   let absentAt;
-  let c;
-  let l;
-  let d = !ownHost;
-  let g = false;
-  let y;
-  let h = [];
-  let S = {
+  let identity;
+  let endStats;
+  let noFileSeen = !ownHost;
+  let sawOutcome = false;
+  let lastStat;
+  let linksFollowed = [];
+  let vetOptions = {
     ...opts,
-    onOutcome: (target) => {
-      g = true;
-      linksResolvedPath = getResolvedPath(target);
-      absentAt = absentSpellingInfo(target);
-      let m = y;
-      let b = target.kind === "resolved" && m?.path === target.path;
-      d = !b;
-      l = b ? m.stats : undefined;
-      c =
-        b && !isSentinelInode(m.stats.ino)
+    onOutcome: (walkOutcome) => {
+      sawOutcome = true;
+      linksResolvedPath = getResolvedPath(walkOutcome);
+      absentAt = absentSpellingInfo(walkOutcome);
+      let previousStat = lastStat;
+      let isSameFile = walkOutcome.kind === "resolved" && previousStat?.path === walkOutcome.path;
+      noFileSeen = !isSameFile;
+      endStats = isSameFile ? previousStat.stats : undefined;
+      identity =
+        isSameFile && !isSentinelInode(previousStat.stats.ino)
           ? {
-              dev: m.stats.dev,
-              ino: m.stats.ino,
-              ctimeNs: m.stats.ctimeNs,
+              dev: previousStat.stats.dev,
+              ino: previousStat.stats.ino,
+              ctimeNs: previousStat.stats.ctimeNs,
             }
           : undefined;
     },
@@ -735,52 +804,52 @@ async function vetRepoSettingsPathAsync(fsImplementation, path, r) {
     await findIntermediateUncJunctionAsync(
       fsImplementation,
       asWritten,
-      S,
+      vetOptions,
       undefined,
-      r?.fileIdentity === true
-        ? (path, m) => {
-            y =
-              m === undefined
+      options?.fileIdentity === true
+        ? (path, stats) => {
+            lastStat =
+              stats === undefined
                 ? undefined
                 : {
                     path,
-                    stats: m,
+                    stats,
                   };
-            if (m?.isSymbolicLink() === true) h.push(m);
+            if (stats?.isSymbolicLink() === true) linksFollowed.push(stats);
           }
         : undefined,
     ),
-    path,
+    settingsPath,
     asWritten,
   );
-  if (!g && y?.stats.isSymbolicLink() === true) d = true;
+  if (!sawOutcome && lastStat?.stats.isSymbolicLink() === true) noFileSeen = true;
   return {
     ...plainResolvedPathInfo(asWritten),
     linksResolvedPath,
     absentAt,
-    ...(c !== undefined && {
-      identity: c,
+    ...(identity !== undefined && {
+      identity,
     }),
-    ...(l !== undefined && {
-      endStats: l,
+    ...(endStats !== undefined && {
+      endStats,
     }),
-    ...(r?.fileIdentity === true && {
-      linksFollowed: h,
+    ...(options?.fileIdentity === true && {
+      linksFollowed,
     }),
-    ...(r?.fileIdentity === true &&
-      d && {
+    ...(options?.fileIdentity === true &&
+      noFileSeen && {
         noFileSeen: true,
       }),
   };
 }
 //@ chunk-cgr0tezp.js:29143-29287 placement
-function absentSpellingInfo(e) {
-  return e.kind === "absent"
+function absentSpellingInfo(outcome) {
+  return outcome.kind === "absent"
     ? {
-        at: e.at,
-        remaining: e.remaining,
-        fromLinkTarget: e.fromLinkTarget,
-        ...(e.notAFolder && {
+        at: outcome.at,
+        remaining: outcome.remaining,
+        fromLinkTarget: outcome.fromLinkTarget,
+        ...(outcome.notAFolder && {
           notAFolder: true,
         }),
       }
@@ -790,8 +859,8 @@ function absentSpellingInfo(e) {
 /**
  * 设备命名空间路径拒绝读取。
  */
-function refuseUnvettablePath(e, n, r) {
-  let uncLongPath = toUncLongPath(n);
+function refuseUnvettablePath(fsImpl, filePath, options) {
+  let uncLongPath = toUncLongPath(filePath);
   if (isDeviceNamespacePath(uncLongPath) || isDevicePrefixPath(uncLongPath))
     throw Object.assign(
       Error(
@@ -799,14 +868,14 @@ function refuseUnvettablePath(e, n, r) {
       ),
       {
         code: SYMLINK_TO_NETWORK_PATH_CODE,
-        path: n,
+        path: filePath,
         reason: "unexamined",
       },
     );
-  let s = pathModule.isAbsolute(uncLongPath)
+  let absolutePath = pathModule.isAbsolute(uncLongPath)
     ? pathModule.resolve(uncLongPath)
     : pathModule.resolve(process.cwd(), uncLongPath);
-  let uncLongPath_2 = toUncLongPath(s);
+  let uncLongPath_2 = toUncLongPath(absolutePath);
   if (isDeviceNamespacePath(uncLongPath_2) || isDevicePrefixPath(uncLongPath_2))
     throw Object.assign(
       Error(
@@ -814,25 +883,25 @@ function refuseUnvettablePath(e, n, r) {
       ),
       {
         code: SYMLINK_TO_NETWORK_PATH_CODE,
-        path: n,
+        path: filePath,
         reason: "unexamined",
       },
     );
-  let a =
+  let ownHost =
     isUnderNetworkDir(uncLongPath_2) ||
     isNetworkMountPath(uncLongPath_2) ||
     (isUncOrDevicePath(uncLongPath_2) && !isWslUncPath(uncLongPath_2));
   return {
     asWritten: uncLongPath_2,
-    ownHost: a,
+    ownHost,
     opts: {
-      ...(a && {
+      ...(ownHost && {
         anchors: [uncLongPath_2],
       }),
       surfaceNetworkRaw: true,
-      ...((!a || r?.failClosed) && {
+      ...((!ownHost || options?.failClosed) && {
         unreadableAncestry: "unverified",
-        launchAncestry: vouchedLaunchAncestry(e),
+        launchAncestry: vouchedLaunchAncestry(fsImpl),
       }),
     },
   };
@@ -851,7 +920,7 @@ function plainResolvedPathInfo(resolvedPath) {
  */
 function refuseUnexaminedPath(intermediateUncJunction, path, asWritten) {
   if (intermediateUncJunction === undefined) return;
-  let i = (reason) =>
+  let refusalError = (reason) =>
     Object.assign(
       Error(
         "Refusing to read a file whose path could not be vetted (a component that could not be examined, or a symbolic link chain too long to follow)",
@@ -862,7 +931,7 @@ function refuseUnexaminedPath(intermediateUncJunction, path, asWritten) {
         reason,
       },
     );
-  if (intermediateUncJunction === UNVERIFIED_ANCESTRY) throw i("unexamined");
+  if (intermediateUncJunction === UNVERIFIED_ANCESTRY) throw refusalError("unexamined");
   if (isUnderNetworkDir(asWritten) && intermediateUncJunction === asWritten) return;
   if (!(
     isUncOrDevicePath(intermediateUncJunction) ||
@@ -870,7 +939,7 @@ function refuseUnexaminedPath(intermediateUncJunction, path, asWritten) {
     isUnderNetworkDir(intermediateUncJunction) ||
     isNetDir(intermediateUncJunction)
   ))
-    throw i("unexamined");
+    throw refusalError("unexamined");
   throw Object.assign(
     Error(
       "Refusing to read a file through a symbolic link that leads onto a network share or automount path; replace the link with a regular file to use it",
@@ -883,18 +952,18 @@ function refuseUnexaminedPath(intermediateUncJunction, path, asWritten) {
   );
 }
 //@ chunk-cgr0tezp.js:30618-30652 placement
-function isSymlinkToNetworkPathError(e) {
-  return getErrnoCode(e) === SYMLINK_TO_NETWORK_PATH_CODE;
+function isSymlinkToNetworkPathError(error) {
+  return getErrnoCode(error) === SYMLINK_TO_NETWORK_PATH_CODE;
 }
 //@ chunk-cgr0tezp.js:30652-30749 placement
-function repoSettingsRefusalReason(e) {
-  if (!isSymlinkToNetworkPathError(e)) return;
-  let reason = e.reason;
+function repoSettingsRefusalReason(error) {
+  if (!isSymlinkToNetworkPathError(error)) return;
+  let reason = error.reason;
   return reason === "network" || reason === "unexamined" ? reason : undefined;
 }
 //@ chunk-cgr0tezp.js:30749-30837 placement
-function isDuplicatePath(e, n, loadedPaths) {
-  let { resolvedPath } = safeResolvePath(e, n);
+function isDuplicatePath(fsImpl, filePath, loadedPaths) {
+  let { resolvedPath } = safeResolvePath(fsImpl, filePath);
   if (loadedPaths.has(resolvedPath)) return true;
   loadedPaths.add(resolvedPath);
   return false;
@@ -902,18 +971,18 @@ function isDuplicatePath(e, n, loadedPaths) {
 //@ chunk-cgr0tezp.js:30837-30869 placement
 var DOTDOT_SEGMENT_PATTERN = /(^|[\\/])\.\.([\\/]|$)/;
 //@ chunk-cgr0tezp.js:30869-31047 placement
-function stripDotSegments(e, n = "linux") {
-  let replaced = e.replace(n === "win32" ? /[\\/]\.(?=[\\/]|$)/g : /\/\.(?=\/|$)/g, "");
-  if (replaced === "") return e[0];
-  if (n === "win32" && /^[A-Za-z]:$/.test(replaced)) return replaced + e[2];
+function stripDotSegments(path, platform = "linux") {
+  let replaced = path.replace(platform === "win32" ? /[\\/]\.(?=[\\/]|$)/g : /\/\.(?=\/|$)/g, "");
+  if (replaced === "") return path[0];
+  if (platform === "win32" && /^[A-Za-z]:$/.test(replaced)) return replaced + path[2];
   return replaced;
 }
 //@ chunk-cgr0tezp.js:31047-32818 placement = resolveDeepestExistingAncestorSync (0.643)
 /**
  * 对不存在的路径，找到最深的已存在祖先并 realpath，再拼回剩余部分（权限检查用于新建文件）。
  */
-function resolveDeepestExistingAncestorSync(fsImplementation, path, r) {
-  let anchors = getAnchors(r);
+function resolveDeepestExistingAncestorSync(fsImplementation, path, options) {
+  let anchors = getAnchors(options);
   if (
     (isUncOrDevicePath(path) && !isWslUncPath(path)) ||
     isNetworkMountPath(path) ||
@@ -926,10 +995,10 @@ function resolveDeepestExistingAncestorSync(fsImplementation, path, r) {
     ) {
       let intermediateUncJunction = findIntermediateUncJunction(fsImplementation, path, {
         anchors,
-        surfaceNetworkRaw: r?.surfaceNetworkRaw,
+        surfaceNetworkRaw: options?.surfaceNetworkRaw,
       });
-      if (intermediateUncJunction === UNVERIFIED_ANCESTRY && r?.surfaceNetworkRaw !== true) {
-        if (r?.surfaceDotDotTargets === true) throw hopCapExhausted(path);
+      if (intermediateUncJunction === UNVERIFIED_ANCESTRY && options?.surfaceNetworkRaw !== true) {
+        if (options?.surfaceDotDotTargets === true) throw hopCapExhausted(path);
         return path;
       }
       return intermediateUncJunction;
@@ -939,248 +1008,270 @@ function resolveDeepestExistingAncestorSync(fsImplementation, path, r) {
   let intermediateUncJunction = findIntermediateUncJunction(
     fsImplementation,
     path,
-    r?.surfaceNetworkRaw === true
+    options?.surfaceNetworkRaw === true
       ? {
           surfaceNetworkRaw: true,
           anchors,
         }
       : undefined,
   );
-  if (intermediateUncJunction === UNVERIFIED_ANCESTRY && r?.surfaceNetworkRaw !== true) {
-    if (r?.surfaceDotDotTargets === true) throw hopCapExhausted(path);
+  if (intermediateUncJunction === UNVERIFIED_ANCESTRY && options?.surfaceNetworkRaw !== true) {
+    if (options?.surfaceDotDotTargets === true) throw hopCapExhausted(path);
     return;
   }
   if (intermediateUncJunction !== undefined)
-    return r?.liveRoutesOnly === true ? undefined : intermediateUncJunction;
-  let o = path;
+    return options?.liveRoutesOnly === true ? undefined : intermediateUncJunction;
+  let currentPath = path;
   let segments = [];
-  let u = r?.surfaceDotDotTargets === true;
-  let c = (l) =>
+  let surfaceDotDot = options?.surfaceDotDotTargets === true;
+  let appendSegments = (basePath) =>
     segments.length === 0
-      ? l
-      : u && DOTDOT_SEGMENT_PATTERN.test(l)
-        ? [l, ...segments].join(pathModule.sep)
-        : pathModule.join(l, ...segments);
-  while (o !== pathModule.dirname(o)) {
-    let l;
-    let d;
+      ? basePath
+      : surfaceDotDot && DOTDOT_SEGMENT_PATTERN.test(basePath)
+        ? [basePath, ...segments].join(pathModule.sep)
+        : pathModule.join(basePath, ...segments);
+  while (currentPath !== pathModule.dirname(currentPath)) {
+    let linkText;
+    let errnoCode;
     try {
-      l = fsImplementation.readlinkSync(o);
+      linkText = fsImplementation.readlinkSync(currentPath);
     } catch (error) {
-      d = getErrnoCode(error);
+      errnoCode = getErrnoCode(error);
     }
-    if (l !== undefined) {
-      if (u && DOTDOT_SEGMENT_PATTERN.test(l))
-        return c(pathModule.isAbsolute(l) ? l : pathModule.dirname(o) + pathModule.sep + l);
-      let g = pathModule.isAbsolute(l) ? l : pathModule.resolve(pathModule.dirname(o), l);
+    if (linkText !== undefined) {
+      if (surfaceDotDot && DOTDOT_SEGMENT_PATTERN.test(linkText))
+        return appendSegments(
+          pathModule.isAbsolute(linkText)
+            ? linkText
+            : pathModule.dirname(currentPath) + pathModule.sep + linkText,
+        );
+      let targetPath = pathModule.isAbsolute(linkText)
+        ? linkText
+        : pathModule.resolve(pathModule.dirname(currentPath), linkText);
       if (
-        (isUncOrDevicePath(g) && !isWslUncPath(g)) ||
-        isNetworkMountPath(g) ||
-        neverOtherHostMount(g) ||
-        isMacSpecialPath(g) ||
-        (r?.surfaceNetworkRaw === true && hasDotSegment(g))
+        (isUncOrDevicePath(targetPath) && !isWslUncPath(targetPath)) ||
+        isNetworkMountPath(targetPath) ||
+        neverOtherHostMount(targetPath) ||
+        isMacSpecialPath(targetPath) ||
+        (options?.surfaceNetworkRaw === true && hasDotSegment(targetPath))
       ) {
-        if (r?.liveRoutesOnly === true) return;
-        return r?.surfaceNetworkRaw === true && segments.length > 0
-          ? g + pathModule.sep + segments.join(pathModule.sep)
-          : c(g);
+        if (options?.liveRoutesOnly === true) return;
+        return options?.surfaceNetworkRaw === true && segments.length > 0
+          ? targetPath + pathModule.sep + segments.join(pathModule.sep)
+          : appendSegments(targetPath);
       }
       try {
-        let y = realpathExaminedSync(fsImplementation, o);
-        return c(y);
+        let realPath = realpathExaminedSync(fsImplementation, currentPath);
+        return appendSegments(realPath);
       } catch {
-        if (r?.liveRoutesOnly === true) return;
-        let y = o;
-        let h = 0;
-        let S = 64;
-        while (h < S) {
-          let f;
+        if (options?.liveRoutesOnly === true) return;
+        let walkPath = currentPath;
+        let walkCount = 0;
+        let maxWalk = 64;
+        while (walkCount < maxWalk) {
+          let walkLinkText;
           try {
-            f = fsImplementation.readlinkSync(y);
+            walkLinkText = fsImplementation.readlinkSync(walkPath);
           } catch {
             break;
           }
-          if (u && DOTDOT_SEGMENT_PATTERN.test(f)) {
-            y = pathModule.isAbsolute(f) ? f : pathModule.dirname(y) + pathModule.sep + f;
+          if (surfaceDotDot && DOTDOT_SEGMENT_PATTERN.test(walkLinkText)) {
+            walkPath = pathModule.isAbsolute(walkLinkText)
+              ? walkLinkText
+              : pathModule.dirname(walkPath) + pathModule.sep + walkLinkText;
             break;
           }
-          let m = pathModule.isAbsolute(f)
-            ? u
-              ? stripDotSegments(f)
-              : f
-            : pathModule.resolve(pathModule.dirname(y), f);
+          let nextPath = pathModule.isAbsolute(walkLinkText)
+            ? surfaceDotDot
+              ? stripDotSegments(walkLinkText)
+              : walkLinkText
+            : pathModule.resolve(pathModule.dirname(walkPath), walkLinkText);
           if (
-            (isUncOrDevicePath(m) && !isWslUncPath(m) && isForeignToAllNetworks(m, anchors)) ||
-            (isNetworkMountPath(m) && isForeignToAllMounts(m, anchors)) ||
-            neverOtherHostMount(m) ||
-            isMacSpecialPath(m) ||
-            (r?.surfaceNetworkRaw === true && hasDotSegment(m))
+            (isUncOrDevicePath(nextPath) &&
+              !isWslUncPath(nextPath) &&
+              isForeignToAllNetworks(nextPath, anchors)) ||
+            (isNetworkMountPath(nextPath) && isForeignToAllMounts(nextPath, anchors)) ||
+            neverOtherHostMount(nextPath) ||
+            isMacSpecialPath(nextPath) ||
+            (options?.surfaceNetworkRaw === true && hasDotSegment(nextPath))
           ) {
-            y = m;
+            walkPath = nextPath;
             break;
           }
-          let b;
+          let nextStats;
           try {
-            b = fsImplementation.lstatSync(m);
+            nextStats = fsImplementation.lstatSync(nextPath);
           } catch {
-            y = m;
+            walkPath = nextPath;
             break;
           }
-          if (!b.isSymbolicLink()) {
-            y = m;
+          if (!nextStats.isSymbolicLink()) {
+            walkPath = nextPath;
             break;
           }
-          y = m;
-          h++;
+          walkPath = nextPath;
+          walkCount++;
         }
-        if (h >= S && r?.surfaceNetworkRaw === true) return UNVERIFIED_ANCESTRY;
-        return r?.surfaceNetworkRaw === true &&
+        if (walkCount >= maxWalk && options?.surfaceNetworkRaw === true) return UNVERIFIED_ANCESTRY;
+        return options?.surfaceNetworkRaw === true &&
           segments.length > 0 &&
-          ((isUncOrDevicePath(y) && !isWslUncPath(y)) ||
-            isNetworkMountPath(y) ||
-            neverOtherHostMount(y) ||
-            isMacSpecialPath(y) ||
-            hasDotSegment(y))
-          ? y + pathModule.sep + segments.join(pathModule.sep)
-          : c(y);
+          ((isUncOrDevicePath(walkPath) && !isWslUncPath(walkPath)) ||
+            isNetworkMountPath(walkPath) ||
+            neverOtherHostMount(walkPath) ||
+            isMacSpecialPath(walkPath) ||
+            hasDotSegment(walkPath))
+          ? walkPath + pathModule.sep + segments.join(pathModule.sep)
+          : appendSegments(walkPath);
       }
     }
-    if (d === "ENOENT") {
-      segments.unshift(pathModule.basename(o));
-      o = pathModule.dirname(o);
+    if (errnoCode === "ENOENT") {
+      segments.unshift(pathModule.basename(currentPath));
+      currentPath = pathModule.dirname(currentPath);
       continue;
     }
     try {
-      let g = realpathExaminedSync(fsImplementation, o);
-      if (g !== o) return c(g);
+      let realPath = realpathExaminedSync(fsImplementation, currentPath);
+      if (realPath !== currentPath) return appendSegments(realPath);
     } catch (error) {
-      if (u) throw error;
+      if (surfaceDotDot) throw error;
     }
     return;
   }
   return;
 }
 //@ chunk-cgr0tezp.js:32818-32868 placement
-function isSpecialPath(e) {
-  return (isUncOrDevicePath(e) && !isWslUncPath(e)) || isNetworkMountRoot(e) || isDeviceNamespacePath(e);
+function isSpecialPath(path) {
+  return (
+    (isUncOrDevicePath(path) && !isWslUncPath(path)) ||
+    isNetworkMountRoot(path) ||
+    isDeviceNamespacePath(path)
+  );
 }
 //@ chunk-cgr0tezp.js:32868-32903 placement
-function expandWin32ExistingLongNames(e) {
-  return resolveViaDeepestExistingAncestor(e, false) ?? e;
+function expandWin32ExistingLongNames(path) {
+  return resolveViaDeepestExistingAncestor(path, false) ?? path;
 }
 //@ chunk-cgr0tezp.js:32903-32935 placement
-function expandWin32ExistingLongNamesStrict(e) {
-  return resolveViaDeepestExistingAncestor(e, true);
+function expandWin32ExistingLongNamesStrict(path) {
+  return resolveViaDeepestExistingAncestor(path, true);
 }
 //@ chunk-cgr0tezp.js:32935-33259 placement
 /**
  * 找到最深的存在的祖先目录。
  */
-function resolveViaDeepestExistingAncestor(e, n) {
-  if (isSpecialPath(e)) return e;
-  let r = e;
-  let i = "";
+function resolveViaDeepestExistingAncestor(path, strict) {
+  if (isSpecialPath(path)) return path;
+  let currentPath = path;
+  let missingTail = "";
   for (;;) {
-    if (!hasDotSegment(r)) {
-      let o = realpathCacheEntry(r);
-      if (o !== null) {
-        let a = i === "" ? o : o.endsWith(pathModule.sep) ? o + i : o + pathModule.sep + i;
-        if (isSpecialPath(a)) return n ? a : e;
-        return a;
+    if (!hasDotSegment(currentPath)) {
+      let cached = realpathCacheEntry(currentPath);
+      if (cached !== null) {
+        let candidate =
+          missingTail === ""
+            ? cached
+            : cached.endsWith(pathModule.sep)
+              ? cached + missingTail
+              : cached + pathModule.sep + missingTail;
+        if (isSpecialPath(candidate)) return strict ? candidate : path;
+        return candidate;
       }
-      if (n)
+      if (strict)
         try {
-          fsModule.lstatSync(r);
+          fsModule.lstatSync(currentPath);
           return null;
         } catch (error) {
           if (!isENOENT(error)) return null;
         }
     }
-    let dir = pathModule.dirname(r);
-    if (dir === r) return e;
-    i = i === "" ? pathModule.basename(r) : pathModule.basename(r) + pathModule.sep + i;
-    r = dir;
+    let dir = pathModule.dirname(currentPath);
+    if (dir === currentPath) return path;
+    missingTail =
+      missingTail === ""
+        ? pathModule.basename(currentPath)
+        : pathModule.basename(currentPath) + pathModule.sep + missingTail;
+    currentPath = dir;
   }
 }
 //@ chunk-cgr0tezp.js:33259-33300 placement
-function walkPermissionCheckPaths(e) {
-  return walkPathSpellingsSync(e, "permission");
+function walkPermissionCheckPaths(path) {
+  return walkPathSpellingsSync(path, "permission");
 }
 //@ chunk-cgr0tezp.js:33300-33349 placement
-function walkPermissionCheckPathsAsync(e, signal, r) {
-  return vetPathAsync(e, "permission", signal, r);
+function walkPermissionCheckPathsAsync(path, signal, signal_2) {
+  return vetPathAsync(path, "permission", signal, signal_2);
 }
 //@ chunk-cgr0tezp.js:33349-33764 placement
 /**
  * 异步执行路径检查步骤。
  */
-function vetPathAsync(e, n, r, i) {
+function vetPathAsync(path, purpose, signal, shouldStop) {
   let fsImplementation = getFsImplementation();
   return runFsSteps(
-    vetPathSteps(e, n),
-    r,
-    i === undefined ? undefined : (o) => i(o.path),
-    async (o) => {
-      switch (o.kind) {
+    vetPathSteps(path, purpose),
+    signal,
+    shouldStop === undefined ? undefined : (step) => shouldStop(step.path),
+    async (step) => {
+      switch (step.kind) {
         case "lstat":
-          return fsImplementation.lstat(o.path);
+          return fsImplementation.lstat(step.path);
         case "opendirNofollow":
-          await fsImplementation.openDirNoFollow(o.path);
+          await fsImplementation.openDirNoFollow(step.path);
           return "ok";
         case "readlink":
-          return fsImplementation.readlink(o.path);
+          return fsImplementation.readlink(step.path);
         case "realpath":
           return fsImplementation === NodeFsOperations
-            ? identity(await realpathPromise(o.path))
-            : fsImplementation.realpath(o.path);
+            ? identity(await realpathPromise(step.path))
+            : fsImplementation.realpath(step.path);
       }
     },
     {
       unresolved: true,
-      requested: e,
-      spellings: [e],
-      stoppedAt: e,
+      requested: path,
+      spellings: [path],
+      stoppedAt: path,
       leafIsSymlink: false,
       reason: "cut-short",
     },
   );
 }
 //@ chunk-cgr0tezp.js:33764-33805 placement
-function getPathsForNetworkScreen(e) {
-  return toPathCheckResult(walkPathSpellingsSync(e, "screen"));
+function getPathsForNetworkScreen(path) {
+  return toPathCheckResult(walkPathSpellingsSync(path, "screen"));
 }
 //@ chunk-cgr0tezp.js:33805-33937 placement
-function toPathCheckResult(e) {
+function toPathCheckResult(result) {
   return {
-    paths: e.spellings,
-    vetted: !e.unresolved,
-    ...(!e.unresolved &&
-      e.linkTextClimbs && {
-        linkTextClimbs: e.linkTextClimbs,
+    paths: result.spellings,
+    vetted: !result.unresolved,
+    ...(!result.unresolved &&
+      result.linkTextClimbs && {
+        linkTextClimbs: result.linkTextClimbs,
       }),
   };
 }
 //@ chunk-cgr0tezp.js:33937-33998 placement
-async function getPathsForNetworkScreenAsync(e) {
-  return toPathCheckResult(await vetPathAsync(e, "screen", undefined));
+async function getPathsForNetworkScreenAsync(path) {
+  return toPathCheckResult(await vetPathAsync(path, "screen", undefined));
 }
 //@ chunk-cgr0tezp.js:33998-34261 placement
 /**
  * 同步驱动 pathSpellingWalker（lstat/readlink/opendir），得到路径的全部拼写。
  */
-function walkPathSpellingsSync(e, n) {
+function walkPathSpellingsSync(path, purpose) {
   let fsImplementation = getFsImplementation();
-  return returnValue(vetPathSteps(e, n), (i) => {
-    switch (i.kind) {
+  return returnValue(vetPathSteps(path, purpose), (step) => {
+    switch (step.kind) {
       case "lstat":
-        return fsImplementation.lstatSync(i.path);
+        return fsImplementation.lstatSync(step.path);
       case "opendirNofollow":
-        fsImplementation.openDirNoFollowSync(i.path);
+        fsImplementation.openDirNoFollowSync(step.path);
         return "ok";
       case "readlink":
-        return fsImplementation.readlinkSync(i.path);
+        return fsImplementation.readlinkSync(step.path);
       case "realpath":
-        return fsImplementation.realpathSync(i.path);
+        return fsImplementation.realpathSync(step.path);
     }
   });
 }
@@ -1188,166 +1279,179 @@ function walkPathSpellingsSync(e, n) {
 /**
  * 路径拼写生成器：展开 ~、逐段跟随符号链接，产出路径的全部等价拼写，供权限检查确保规则对真实位置生效；通过 yield 请求 lstat/readlink，可同步或异步驱动。
  */
-function* vetPathSteps(e, n) {
-  let r = e;
-  if (r === "~") r = homedir().normalize("NFC");
-  else if (r.startsWith("~/")) r = pathModule.join(homedir().normalize("NFC"), r.slice(2));
-  let i = new Set([r]);
-  let s = false;
-  let o = (landing, leafIsSymlink = false) => ({
+function* vetPathSteps(requestedPath, purpose) {
+  let inputPath = requestedPath;
+  if (inputPath === "~") inputPath = homedir().normalize("NFC");
+  else if (inputPath.startsWith("~/"))
+    inputPath = pathModule.join(homedir().normalize("NFC"), inputPath.slice(2));
+  let spellings = new Set([inputPath]);
+  let linkTextClimbs = false;
+  let resolvedResult = (landing, leafIsSymlink = false) => ({
     unresolved: false,
-    requested: r,
-    spellings: Array.from(i),
+    requested: inputPath,
+    spellings: Array.from(spellings),
     landing,
     leafIsSymlink,
-    ...(s && {
-      linkTextClimbs: s,
+    ...(linkTextClimbs && {
+      linkTextClimbs,
     }),
   });
-  if ((isUncOrDevicePath(r) && !isWslUncPath(r)) || isNetworkMountPath(r) || neverOtherHostMount(r))
-    return o(r);
+  if (
+    (isUncOrDevicePath(inputPath) && !isWslUncPath(inputPath)) ||
+    isNetworkMountPath(inputPath) ||
+    neverOtherHostMount(inputPath)
+  )
+    return resolvedResult(inputPath);
   let fsImplementation = getFsImplementation();
   let launchAncestry = vouchedLaunchAncestry(fsImplementation);
-  let c;
-  let l;
-  let d = false;
-  let g = false;
-  let y = false;
-  let h = false;
-  let S = [];
-  let f = new Set();
-  let m = (composed) => {
+  let collapsedLanding;
+  let outcome;
+  let leafIsSymlink = false;
+  let sawReadlink = false;
+  let readlinkFailed = false;
+  let loopAtOpenedDir = false;
+  let extraSpellings = [];
+  let extraSpellingKeys = new Set();
+  let addSpelling = (composed) => {
     let resolved = pathModule.resolve(composed);
-    if (!f.has(resolved)) {
-      f.add(resolved);
-      S.push(composed);
+    if (!extraSpellingKeys.has(resolved)) {
+      extraSpellingKeys.add(resolved);
+      extraSpellings.push(composed);
     }
   };
-  let stoppedAt = r;
-  let A;
-  let x = function* (path) {
-    let v;
+  let stoppedAt = inputPath;
+  let lastErrno;
+  let driveSteps = function* (path) {
+    let stepResult;
     for (;;) {
-      let j = path.next(v);
-      if (j.done) return j.value;
-      let G = j.value;
-      stoppedAt = G.path;
-      if (G.kind === "readlink") g = true;
-      else A = undefined;
-      v = yield G;
-      if (typeof v === "object" && "errno" in v)
-        if (G.kind === "readlink") y = true;
+      let nextStep = path.next(stepResult);
+      if (nextStep.done) return nextStep.value;
+      let step = nextStep.value;
+      stoppedAt = step.path;
+      if (step.kind === "readlink") sawReadlink = true;
+      else lastErrno = undefined;
+      stepResult = yield step;
+      if (typeof stepResult === "object" && "errno" in stepResult)
+        if (step.kind === "readlink") readlinkFailed = true;
         else {
-          A = v.errno;
-          h ||= G.kind === "opendirNofollow" && v.errno === "ELOOP";
+          lastErrno = stepResult.errno;
+          loopAtOpenedDir ||= step.kind === "opendirNofollow" && stepResult.errno === "ELOOP";
         }
     }
   };
-  let L = yield* x(
-    resolvePathSafely(r, {
+  let result = yield* driveSteps(
+    resolvePathSafely(inputPath, {
       unreadableAncestry: "unverified",
       launchAncestry,
       ...false,
-      onCollapsedLanding: (R) => {
-        c = R;
+      onCollapsedLanding: (landing) => {
+        collapsedLanding = landing;
       },
-      onOutcome: (R) => {
-        l = R;
+      onOutcome: (outcome_2) => {
+        outcome = outcome_2;
       },
       onHop: ({ composed, leaf, text }) => {
         if (leaf) {
-          i.add(composed);
-          d = true;
+          spellings.add(composed);
+          leafIsSymlink = true;
         }
-        if (n === "screen" && hasParentSegment(text)) {
-          s = true;
-          m(composed);
+        if (purpose === "screen" && hasParentSegment(text)) {
+          linkTextClimbs = true;
+          addSpelling(composed);
         }
       },
     }),
   );
-  let I = n === "permission" && !g && (A === "ENAMETOOLONG" || A === "EACCES" || A === "EPERM");
-  let w = () => {
-    let R = identity(r);
-    i.add(R);
-    return o(R);
+  let tooLongOrDenied =
+    purpose === "permission" &&
+    !sawReadlink &&
+    (lastErrno === "ENAMETOOLONG" || lastErrno === "EACCES" || lastErrno === "EPERM");
+  let fallbackResult = () => {
+    let inputSpelling = identity(inputPath);
+    spellings.add(inputSpelling);
+    return resolvedResult(inputSpelling);
   };
-  let M = () =>
-    I
-      ? w()
+  let unresolvedResult = () =>
+    tooLongOrDenied
+      ? fallbackResult()
       : {
           unresolved: true,
-          requested: r,
-          spellings: Array.from(i),
+          requested: inputPath,
+          spellings: Array.from(spellings),
           stoppedAt,
-          leafIsSymlink: d,
-          reason: g || h ? "past-a-link" : "unexamined",
+          leafIsSymlink,
+          reason: sawReadlink || loopAtOpenedDir ? "past-a-link" : "unexamined",
         };
-  let F = 8;
-  let O = function* () {
-    for (let idx = 0; idx < S.length; idx++) {
-      if (idx >= F) return false;
-      let v = S[idx];
-      if ((isUncOrDevicePath(v) && !isWslUncPath(v)) || isNetworkMountPath(v) || neverOtherHostMount(v)) {
-        i.add(v);
+  let maxExtraPaths = 8;
+  let resolveExtraSpellings = function* () {
+    for (let idx = 0; idx < extraSpellings.length; idx++) {
+      if (idx >= maxExtraPaths) return false;
+      let spelling = extraSpellings[idx];
+      if (
+        (isUncOrDevicePath(spelling) && !isWslUncPath(spelling)) ||
+        isNetworkMountPath(spelling) ||
+        neverOtherHostMount(spelling)
+      ) {
+        spellings.add(spelling);
         continue;
       }
-      let j = yield* x(
-        resolvePathSafely(v, {
+      let spellingResult = yield* driveSteps(
+        resolvePathSafely(spelling, {
           unreadableAncestry: "unverified",
           launchAncestry,
           onHop: ({ composed, text }) => {
-            if (hasParentSegment(text)) m(composed);
+            if (hasParentSegment(text)) addSpelling(composed);
           },
         }),
       );
-      if (j === UNVERIFIED_ANCESTRY || y) return false;
-      if (j !== undefined) i.add(j);
+      if (spellingResult === UNVERIFIED_ANCESTRY || readlinkFailed) return false;
+      if (spellingResult !== undefined) spellings.add(spellingResult);
     }
     return true;
   };
-  if (L === UNVERIFIED_ANCESTRY || L === OPAQUE_LINK_TEXT) return M();
-  if (L !== undefined) {
-    if (n === "screen" && !(yield* O())) return M();
-    if (c !== undefined) i.add(c);
-    i.delete(L);
-    i.add(L);
-    return o(L, d);
+  if (result === UNVERIFIED_ANCESTRY || result === OPAQUE_LINK_TEXT) return unresolvedResult();
+  if (result !== undefined) {
+    if (purpose === "screen" && !(yield* resolveExtraSpellings())) return unresolvedResult();
+    if (collapsedLanding !== undefined) spellings.add(collapsedLanding);
+    spellings.delete(result);
+    spellings.add(result);
+    return resolvedResult(result, leafIsSymlink);
   }
-  if (l === undefined) {
-    if (n === "screen" && !y) return (yield* O()) ? w() : M();
-    return M();
+  if (outcome === undefined) {
+    if (purpose === "screen" && !readlinkFailed)
+      return (yield* resolveExtraSpellings()) ? fallbackResult() : unresolvedResult();
+    return unresolvedResult();
   }
   if (
-    l.kind === "absent" &&
-    (n === "screen"
-      ? l.remaining.some((R) => hasDotSegment(R))
-      : g && l.remaining.some((R) => hasDotSegmentAlias(R)))
+    outcome.kind === "absent" &&
+    (purpose === "screen"
+      ? outcome.remaining.some((segment) => hasDotSegment(segment))
+      : sawReadlink && outcome.remaining.some((segment) => hasDotSegmentAlias(segment)))
   )
-    return M();
-  let P = l.kind === "absent" ? l.at : l.path;
-  let Z = l.kind === "absent" ? l.remaining.join(pathModule.sep) : "";
-  let T = identity(Z === "" ? P : pathModule.join(P, Z));
-  if (g || P !== pathModule.parse(P).root) i.add(T);
-  let U = joinIfChanged(
+    return unresolvedResult();
+  let landing = outcome.kind === "absent" ? outcome.at : outcome.path;
+  let tail = outcome.kind === "absent" ? outcome.remaining.join(pathModule.sep) : "";
+  let combined = identity(tail === "" ? landing : pathModule.join(landing, tail));
+  if (sawReadlink || landing !== pathModule.parse(landing).root) spellings.add(combined);
+  let realPath = joinIfChanged(
     yield {
       kind: "realpath",
-      path: P,
+      path: landing,
     },
-    P,
-    Z,
+    landing,
+    tail,
   );
-  if (U !== undefined && U !== T) {
-    i.delete(U);
-    i.add(U);
+  if (realPath !== undefined && realPath !== combined) {
+    spellings.delete(realPath);
+    spellings.add(realPath);
   }
-  if (n === "screen" && !(yield* O())) return M();
-  return o(T, d);
+  if (purpose === "screen" && !(yield* resolveExtraSpellings())) return unresolvedResult();
+  return resolvedResult(combined, leafIsSymlink);
 }
 //@ chunk-cgr0tezp.js:36346-36430 placement
-function joinIfChanged(e, n, r) {
-  if (typeof e !== "string" || e === n) return;
-  return r === "" ? e : pathModule.join(e, r);
+function joinIfChanged(realPath, basePath, tail) {
+  if (typeof realPath !== "string" || realPath === basePath) return;
+  return tail === "" ? realPath : pathModule.join(realPath, tail);
 }
 //@ chunk-cgr0tezp.js:36430-36521 placement
 function resolvedSpellingWalk(resolvedPath) {
@@ -1360,16 +1464,16 @@ function resolvedSpellingWalk(resolvedPath) {
   };
 }
 //@ chunk-cgr0tezp.js:36521-36554 placement
-function getPathsForPermissionCheck(e) {
-  return permissionCheckSpellings(walkPermissionCheckPaths(e));
+function getPathsForPermissionCheck(path) {
+  return permissionCheckSpellings(walkPermissionCheckPaths(path));
 }
 //@ chunk-cgr0tezp.js:36554-36743 placement
-function permissionCheckSpellings(e) {
-  if (!e.unresolved) return e.spellings;
-  let { resolvedPath, isCanonical, isSymlink } = safeResolvePath(getFsImplementation(), e.requested);
-  return (isCanonical || isSymlink) && !e.spellings.includes(resolvedPath)
-    ? [...e.spellings, resolvedPath]
-    : e.spellings;
+function permissionCheckSpellings(result) {
+  if (!result.unresolved) return result.spellings;
+  let { resolvedPath, isCanonical, isSymlink } = safeResolvePath(getFsImplementation(), result.requested);
+  return (isCanonical || isSymlink) && !result.spellings.includes(resolvedPath)
+    ? [...result.spellings, resolvedPath]
+    : result.spellings;
 }
 //@ chunk-cgr0tezp.js:36743-40014 placement = NodeFsOperations (0.851)
 var NodeFsOperations = {
@@ -1377,29 +1481,29 @@ var NodeFsOperations = {
     return process.cwd();
   },
   existsSync(fsPath) {
-    using n = slowLogging`fs.existsSync(${fsPath})`;
+    using span = slowLogging`fs.existsSync(${fsPath})`;
     return fsModule.existsSync(fsPath);
   },
   async stat(fsPath) {
     return stat(fsPath);
   },
-  async lstat(e) {
-    return lstat(e);
+  async lstat(path) {
+    return lstat(path);
   },
-  async openDirNoFollow(e) {
-    await (await open(e, fsModule.constants.O_DIRECTORY | fsModule.constants.O_NOFOLLOW)).close();
+  async openDirNoFollow(path) {
+    await (await open(path, fsModule.constants.O_DIRECTORY | fsModule.constants.O_NOFOLLOW)).close();
   },
-  openDirNoFollowSync(e) {
-    let n = fsModule.openSync(e, fsModule.constants.O_DIRECTORY | fsModule.constants.O_NOFOLLOW);
-    fsModule.closeSync(n);
+  openDirNoFollowSync(path) {
+    let fd = fsModule.openSync(path, fsModule.constants.O_DIRECTORY | fsModule.constants.O_NOFOLLOW);
+    fsModule.closeSync(fd);
   },
-  async lstatBigint(e) {
-    return lstat(e, {
+  async lstatBigint(path) {
+    return lstat(path, {
       bigint: true,
     });
   },
-  async statBigint(e) {
-    return stat(e, {
+  async statBigint(path) {
+    return stat(path, {
       bigint: true,
     });
   },
@@ -1435,14 +1539,14 @@ var NodeFsOperations = {
   async rename(oldPath, newPath) {
     return rename(oldPath, newPath);
   },
-  async realpath(e) {
-    return identity(await realpath(e));
+  async realpath(path) {
+    return identity(await realpath(path));
   },
-  async readlink(e) {
-    return readlink(e);
+  async readlink(path) {
+    return readlink(path);
   },
-  async copyFile(e, n) {
-    return copyFile(e, n);
+  async copyFile(fromPath, toPath) {
+    return copyFile(fromPath, toPath);
   },
   async appendFile(path, data, options) {
     if (options?.mode !== undefined)
@@ -1459,53 +1563,53 @@ var NodeFsOperations = {
       }
     return appendFile(path, data);
   },
-  async symlink(e, n, r) {
-    return symlink(e, n, r);
+  async symlink(target, linkPath, linkType) {
+    return symlink(target, linkPath, linkType);
   },
-  async link(e, n) {
-    return link(e, n);
+  async link(existingPath, newPath) {
+    return link(existingPath, newPath);
   },
-  async chmod(e, n) {
-    return chmod(e, n);
+  async chmod(path, mode) {
+    return chmod(path, mode);
   },
   statSync(fsPath) {
-    using n = slowLogging`fs.statSync(${fsPath})`;
+    using span = slowLogging`fs.statSync(${fsPath})`;
     return fsModule.statSync(fsPath);
   },
   lstatSync(fsPath) {
-    using n = slowLogging`fs.lstatSync(${fsPath})`;
+    using span = slowLogging`fs.lstatSync(${fsPath})`;
     return fsModule.lstatSync(fsPath);
   },
   readFileSync(fsPath, options) {
-    using r = slowLogging`fs.readFileSync(${fsPath})`;
+    using span = slowLogging`fs.readFileSync(${fsPath})`;
     return fsModule.readFileSync(fsPath, {
       encoding: options.encoding,
     });
   },
   readSync(fsPath, options) {
-    using r = slowLogging`fs.readSync(${fsPath}, ${options.length} bytes)`;
+    using span = slowLogging`fs.readSync(${fsPath}, ${options.length} bytes)`;
     let fd = undefined;
     try {
       fd = fsModule.openSync(fsPath, "r");
-      let s = [];
-      let o = 0;
-      while (o < options.length) {
-        let u = Buffer.allocUnsafe(Math.min(65536, options.length - o));
-        let sync = fsModule.readSync(fd, u, 0, u.length, o);
+      let chunks = [];
+      let totalRead = 0;
+      while (totalRead < options.length) {
+        let chunkBuffer = Buffer.allocUnsafe(Math.min(65536, options.length - totalRead));
+        let sync = fsModule.readSync(fd, chunkBuffer, 0, chunkBuffer.length, totalRead);
         if (sync === 0) break;
-        s.push(u.subarray(0, sync));
-        o += sync;
+        chunks.push(chunkBuffer.subarray(0, sync));
+        totalRead += sync;
       }
       return {
-        buffer: Buffer.concat(s, o),
-        bytesRead: o,
+        buffer: Buffer.concat(chunks, totalRead),
+        bytesRead: totalRead,
       };
     } finally {
       if (fd !== undefined) fsModule.closeSync(fd);
     }
   },
   appendFileSync(path, data, options) {
-    using i = slowLogging`fs.appendFileSync(${path}, ${data.length} chars)`;
+    using span = slowLogging`fs.appendFileSync(${path}, ${data.length} chars)`;
     if (options?.mode !== undefined)
       try {
         let fd = fsModule.openSync(path, "ax", options.mode);
@@ -1521,23 +1625,23 @@ var NodeFsOperations = {
     fsModule.appendFileSync(path, data);
   },
   unlinkSync(path) {
-    using n = slowLogging`fs.unlinkSync(${path})`;
+    using span = slowLogging`fs.unlinkSync(${path})`;
     fsModule.unlinkSync(path);
   },
   renameSync(oldPath, newPath) {
-    using r = slowLogging`fs.renameSync(${oldPath} ${RENAME_ARROW} ${newPath})`;
+    using span = slowLogging`fs.renameSync(${oldPath} ${RENAME_ARROW} ${newPath})`;
     fsModule.renameSync(oldPath, newPath);
   },
   readlinkSync(path) {
-    using n = slowLogging`fs.readlinkSync(${path})`;
+    using span = slowLogging`fs.readlinkSync(${path})`;
     return fsModule.readlinkSync(path);
   },
   realpathSync(path) {
-    using n = slowLogging`fs.realpathSync(${path})`;
+    using span = slowLogging`fs.realpathSync(${path})`;
     return identity(fsModule.realpathSync(path));
   },
   mkdirSync(dirPath, options) {
-    using r = slowLogging`fs.mkdirSync(${dirPath})`;
+    using span = slowLogging`fs.mkdirSync(${dirPath})`;
     let mkdirOptions = {
       recursive: true,
     };
@@ -1549,38 +1653,38 @@ var NodeFsOperations = {
     }
   },
   readdirSync(dirPath) {
-    using n = slowLogging`fs.readdirSync(${dirPath})`;
+    using span = slowLogging`fs.readdirSync(${dirPath})`;
     return fsModule.readdirSync(dirPath, {
       withFileTypes: true,
     });
   },
   rmSync(dirPath, options) {
-    using r = slowLogging`fs.rmSync(${dirPath})`;
+    using span = slowLogging`fs.rmSync(${dirPath})`;
     fsModule.rmSync(dirPath, options);
   },
-  createWriteStream(e) {
-    return fsModule.createWriteStream(e);
+  createWriteStream(filePath) {
+    return fsModule.createWriteStream(filePath);
   },
-  async readFileBytes(e, n) {
-    if (n === undefined) return readFile(e);
-    let r = await open(e, nonblockingReadFlags());
+  async readFileBytes(filePath, maxBytes) {
+    if (maxBytes === undefined) return readFile(filePath);
+    let handle = await open(filePath, nonblockingReadFlags());
     try {
-      if (!(await r.stat()).isFile()) return Buffer.alloc(0);
-      return await readHandleUpTo(r, n, "file");
+      if (!(await handle.stat()).isFile()) return Buffer.alloc(0);
+      return await readHandleUpTo(handle, maxBytes, "file");
     } finally {
-      await r.close();
+      await handle.close();
     }
   },
-  async readFileFdGated(fsPath, n) {
+  async readFileFdGated(fsPath, maxBytes) {
     try {
-      let r = noFollowNonblockFlags();
-      if (r === 0) {
+      let noFollowFlags = noFollowNonblockFlags();
+      if (noFollowFlags === 0) {
         if (!(await lstat(fsPath)).isFile()) return null;
       }
-      let handle = await open(fsPath, fsModule.constants.O_RDONLY | r);
+      let handle = await open(fsPath, fsModule.constants.O_RDONLY | noFollowFlags);
       try {
         let stats = await handle.stat();
-        if (!stats.isFile() || stats.size > n) return null;
+        if (!stats.isFile() || stats.size > maxBytes) return null;
         let readSize = Number(stats.size);
         let buffer = Buffer.allocUnsafe(readSize);
         let offset = 0;
@@ -1609,47 +1713,47 @@ function getFsImplementation() {
   return NodeFsOperations;
 }
 //@ chunk-cgr0tezp.js:40038-40367 placement
-function processChdir(e) {
-  let n;
+function processChdir(dirPath) {
+  let previousCwd;
   try {
-    n = process.cwd();
+    previousCwd = process.cwd();
   } catch {}
-  process.chdir(e);
-  let r;
+  process.chdir(dirPath);
+  let nextCwd;
   try {
-    r = process.cwd();
+    nextCwd = process.cwd();
   } catch {
-    r = e;
+    nextCwd = dirPath;
   }
-  if (!isBunVirtualPath(r)) return n;
-  if (n !== undefined)
+  if (!isBunVirtualPath(nextCwd)) return previousCwd;
+  if (previousCwd !== undefined)
     try {
-      process.chdir(n);
+      process.chdir(previousCwd);
       process.cwd();
     } catch {}
   throw Object.assign(
     new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `ENOENT: no such file or directory, chdir '${e}'`,
+      `ENOENT: no such file or directory, chdir '${dirPath}'`,
       "ENOENT: no such file or directory",
     ),
     {
       code: "ENOENT",
       syscall: "chdir",
-      path: e,
+      path: dirPath,
     },
   );
 }
 //@ chunk-cgr0tezp.js:40367-40709 placement = readFileRange (1)
 async function readFileRange(path, offset, maxBytes) {
-  await using i = typeof path === "string" ? await open(path, "r") : null;
-  let s = typeof path === "string" ? i : path;
-  let size = (await s.stat()).size;
+  await using openedHandle = typeof path === "string" ? await open(path, "r") : null;
+  let handle = typeof path === "string" ? openedHandle : path;
+  let size = (await handle.stat()).size;
   if (size <= offset) return null;
   let bytesToRead = Math.min(size - offset, maxBytes);
   let buffer = Buffer.allocUnsafe(bytesToRead);
   let totalRead = 0;
   while (totalRead < bytesToRead) {
-    let { bytesRead } = await s.read(buffer, totalRead, bytesToRead - totalRead, offset + totalRead);
+    let { bytesRead } = await handle.read(buffer, totalRead, bytesToRead - totalRead, offset + totalRead);
     if (bytesRead === 0) break;
     totalRead += bytesRead;
   }
@@ -1663,27 +1767,27 @@ async function readFileRange(path, offset, maxBytes) {
 /**
  * 读取文件末尾若干字节/行（日志、转录尾部读取用）。
  */
-async function readHandleUpTo(e, n, r) {
-  let i = r !== undefined ? r === "file" : (await e.stat()).isFile();
-  let s = [];
-  let o = 0;
-  while (o < n) {
-    let buffer = Buffer.allocUnsafe(Math.min(65536, n - o));
-    let { bytesRead } = await e.read(buffer, 0, buffer.length, i ? o : null);
+async function readHandleUpTo(handle, maxBytes, kind) {
+  let usePosition = kind !== undefined ? kind === "file" : (await handle.stat()).isFile();
+  let chunks = [];
+  let totalRead = 0;
+  while (totalRead < maxBytes) {
+    let buffer = Buffer.allocUnsafe(Math.min(65536, maxBytes - totalRead));
+    let { bytesRead } = await handle.read(buffer, 0, buffer.length, usePosition ? totalRead : null);
     if (bytesRead === 0) break;
-    s.push(buffer.subarray(0, bytesRead));
-    o += bytesRead;
+    chunks.push(buffer.subarray(0, bytesRead));
+    totalRead += bytesRead;
   }
-  return Buffer.concat(s, o);
+  return Buffer.concat(chunks, totalRead);
 }
 //@ chunk-cgr0tezp.js:40974-41352 placement = readFileRange (1)
 /**
  * 按字节范围读取文件片段。
  */
-async function tailFile(e, offset) {
-  await using r = typeof e === "string" ? await open(e, "r") : null;
-  let i = typeof e === "string" ? r : e;
-  let size = (await i.stat()).size;
+async function tailFile(fileOrHandle, offset) {
+  await using openedHandle = typeof fileOrHandle === "string" ? await open(fileOrHandle, "r") : null;
+  let handle = typeof fileOrHandle === "string" ? openedHandle : fileOrHandle;
+  let size = (await handle.stat()).size;
   if (size === 0)
     return {
       content: "",
@@ -1695,7 +1799,7 @@ async function tailFile(e, offset) {
   let buffer = Buffer.allocUnsafe(bytesToRead);
   let totalRead = 0;
   while (totalRead < bytesToRead) {
-    let { bytesRead } = await i.read(buffer, totalRead, bytesToRead - totalRead, offset_2 + totalRead);
+    let { bytesRead } = await handle.read(buffer, totalRead, bytesToRead - totalRead, offset_2 + totalRead);
     if (bytesRead === 0) break;
     totalRead += bytesRead;
   }
@@ -1706,39 +1810,43 @@ async function tailFile(e, offset) {
   };
 }
 //@ chunk-cgr0tezp.js:41352-41804 placement
-async function* readLines(e, n = 65536) {
-  let r = await open(e, "r");
-  let i = Buffer.alloc(n);
-  let s = 0;
-  let o = [];
-  let a = 0;
+async function* readLines(filePath, chunkBytes = 65536) {
+  let handle = await open(filePath, "r");
+  let readBuffer = Buffer.alloc(chunkBytes);
+  let position = 0;
+  let pendingParts = [];
+  let pendingBytes = 0;
   try {
     while (true) {
-      let { bytesRead } = await r.read(i, 0, n, s);
+      let { bytesRead } = await handle.read(readBuffer, 0, chunkBytes, position);
       if (bytesRead === 0) break;
-      s += bytesRead;
-      let chunk = i.subarray(0, bytesRead);
-      let l = 0;
-      while (l < bytesRead) {
-        let index = chunk.indexOf(10, l);
+      position += bytesRead;
+      let chunk = readBuffer.subarray(0, bytesRead);
+      let cursor = 0;
+      while (cursor < bytesRead) {
+        let index = chunk.indexOf(10, cursor);
         if (index === -1) {
-          o.push(Buffer.from(chunk.subarray(l)));
-          a += bytesRead - l;
+          pendingParts.push(Buffer.from(chunk.subarray(cursor)));
+          pendingBytes += bytesRead - cursor;
           break;
         }
-        if (a === 0) yield chunk.subarray(l, index);
+        if (pendingBytes === 0) yield chunk.subarray(cursor, index);
         else {
-          yield Buffer.concat([...o, chunk.subarray(l, index)], a + (index - l));
-          o = [];
-          a = 0;
+          yield Buffer.concat(
+            [...pendingParts, chunk.subarray(cursor, index)],
+            pendingBytes + (index - cursor),
+          );
+          pendingParts = [];
+          pendingBytes = 0;
         }
-        l = index + 1;
+        cursor = index + 1;
       }
     }
   } finally {
-    await r.close();
+    await handle.close();
   }
-  if (a > 0) yield o.length === 1 ? o[0] : Buffer.concat(o, a);
+  if (pendingBytes > 0)
+    yield pendingParts.length === 1 ? pendingParts[0] : Buffer.concat(pendingParts, pendingBytes);
 }
 //@ chunk-cgr0tezp.js:41804-41815 placement
 var REVERSE_READ_OVERLAP_BYTES = 256;
@@ -1752,189 +1860,215 @@ class FileChangedDuringReadError extends Error {
   }
 }
 //@ chunk-cgr0tezp.js:42032-43018 placement
-async function* readLinesReverse(e, n = 65536, { onOpen: r, strict: i = true } = {}) {
-  let s = await open(e, "r");
+async function* readLinesReverse(filePath, chunkBytes = 65536, { onOpen, strict = true } = {}) {
+  let handle = await open(filePath, "r");
   try {
-    let { size } = await s.stat();
-    r?.(size);
-    let a = Buffer.allocUnsafe(Math.min(n + REVERSE_READ_OVERLAP_BYTES, size));
-    let u = Buffer.allocUnsafe(Math.min(REVERSE_READ_OVERLAP_BYTES, size));
-    let c = 0;
-    let l = size;
-    let d = 0;
-    let g = size;
-    let y;
-    let h = async (f, m, b) => {
-      let A = 0;
-      while (A < m) {
-        let L = await s.read(f, A, m - A, b + A);
-        if (L.bytesRead === 0 || (i && L.bytesRead < m - A))
-          throw new FileChangedDuringReadError(L.bytesRead > 0);
-        A += L.bytesRead;
+    let { size } = await handle.stat();
+    onOpen?.(size);
+    let readBuffer = Buffer.allocUnsafe(Math.min(chunkBytes + REVERSE_READ_OVERLAP_BYTES, size));
+    let overlapBuffer = Buffer.allocUnsafe(Math.min(REVERSE_READ_OVERLAP_BYTES, size));
+    let overlapBytes = 0;
+    let readStart = size;
+    let readLength = 0;
+    let lineEnd = size;
+    let firstChunkCopy;
+    let readAndVerify = async (buffer, length, position) => {
+      let totalRead = 0;
+      while (totalRead < length) {
+        let chunkRead = await handle.read(buffer, totalRead, length - totalRead, position + totalRead);
+        if (chunkRead.bytesRead === 0 || (strict && chunkRead.bytesRead < length - totalRead))
+          throw new FileChangedDuringReadError(chunkRead.bytesRead > 0);
+        totalRead += chunkRead.bytesRead;
       }
-      let x = l + d - b;
-      if (!f.subarray(x, x + c).equals(u.subarray(0, c))) throw new FileChangedDuringReadError();
+      let overlapOffset = readStart + readLength - position;
+      if (
+        !buffer
+          .subarray(overlapOffset, overlapOffset + overlapBytes)
+          .equals(overlapBuffer.subarray(0, overlapBytes))
+      )
+        throw new FileChangedDuringReadError();
     };
-    let S = async (f) => {
-      let m = Math.max(g, l + d + c) - f;
-      let b = Buffer.allocUnsafe(m);
-      await h(b, m, f);
-      return b.toString("utf8", 0, g - f);
+    let readSpan = async (fromOffset) => {
+      let spanBytes = Math.max(lineEnd, readStart + readLength + overlapBytes) - fromOffset;
+      let spanBuffer = Buffer.allocUnsafe(spanBytes);
+      await readAndVerify(spanBuffer, spanBytes, fromOffset);
+      return spanBuffer.toString("utf8", 0, lineEnd - fromOffset);
     };
-    while (l > 0) {
-      c = Math.min(REVERSE_READ_OVERLAP_BYTES, d);
-      a.copy(u, 0, 0, c);
-      d = Math.min(n, l, i && l === size ? REVERSE_READ_OVERLAP_BYTES : 1 / 0);
-      l -= d;
-      await h(a, d + c, l);
-      if (i) y ??= Buffer.from(a.subarray(Math.max(0, d - REVERSE_READ_OVERLAP_BYTES), d));
-      let index = a.lastIndexOf(10, d - 1);
+    while (readStart > 0) {
+      overlapBytes = Math.min(REVERSE_READ_OVERLAP_BYTES, readLength);
+      readBuffer.copy(overlapBuffer, 0, 0, overlapBytes);
+      readLength = Math.min(
+        chunkBytes,
+        readStart,
+        strict && readStart === size ? REVERSE_READ_OVERLAP_BYTES : 1 / 0,
+      );
+      readStart -= readLength;
+      await readAndVerify(readBuffer, readLength + overlapBytes, readStart);
+      if (strict)
+        firstChunkCopy ??= Buffer.from(
+          readBuffer.subarray(Math.max(0, readLength - REVERSE_READ_OVERLAP_BYTES), readLength),
+        );
+      let index = readBuffer.lastIndexOf(10, readLength - 1);
       while (index !== -1) {
-        let m = l + index + 1;
-        if (m < g) yield g <= l + d ? a.toString("utf8", index + 1, g - l) : await S(m);
-        g = l + index;
-        index = index === 0 ? -1 : a.lastIndexOf(10, index - 1);
+        let lineStart = readStart + index + 1;
+        if (lineStart < lineEnd)
+          yield lineEnd <= readStart + readLength
+            ? readBuffer.toString("utf8", index + 1, lineEnd - readStart)
+            : await readSpan(lineStart);
+        lineEnd = readStart + index;
+        index = index === 0 ? -1 : readBuffer.lastIndexOf(10, index - 1);
       }
     }
-    if (g > 0) yield g <= d ? a.toString("utf8", 0, g) : await S(0);
-    if (y !== undefined) {
-      l = size - y.length;
-      d = 0;
-      c = y.copy(u);
-      await h(a, c, l);
+    if (lineEnd > 0)
+      yield lineEnd <= readLength ? readBuffer.toString("utf8", 0, lineEnd) : await readSpan(0);
+    if (firstChunkCopy !== undefined) {
+      readStart = size - firstChunkCopy.length;
+      readLength = 0;
+      overlapBytes = firstChunkCopy.copy(overlapBuffer);
+      await readAndVerify(readBuffer, overlapBytes, readStart);
     }
   } finally {
-    await s.close();
+    await handle.close();
   }
 }
 //@ chunk-cgr0tezp.js:43018-43122 placement
-function createOffsetMappedText(e) {
-  let int32Array = new Int32Array(e.length);
-  for (let i = 0; i < e.length; i++) int32Array[i] = i;
+function createOffsetMappedText(text) {
+  let int32Array = new Int32Array(text.length);
+  for (let i = 0; i < text.length; i++) int32Array[i] = i;
   return {
-    text: e,
+    text,
     origin: int32Array,
   };
 }
+//@ chunk-jhrww53q.js:47434-47579 fingerprint = safeResolvePath (0.602)
+function safeResolvePath_2(entryStats) {
+  return (
+    !entryStats.isDirectory() &&
+    !entryStats.isFile() &&
+    !entryStats.isSymbolicLink() &&
+    !entryStats.isFIFO() &&
+    !entryStats.isSocket() &&
+    !entryStats.isBlockDevice() &&
+    !entryStats.isCharacterDevice()
+  );
+}
 //@ chunk-e6aww6q8.js:1151949-1152000 placement
-function resolveForPermissionCheck(e, n) {
-  return isNonWslUncPath(n) || isMacSpecialPath(n) ? n : (resolveDeepestExistingAncestorSync(e, n) ?? n);
+function resolveForPermissionCheck(fsImpl, filePath) {
+  return isNonWslUncPath(filePath) || isMacSpecialPath(filePath)
+    ? filePath
+    : (resolveDeepestExistingAncestorSync(fsImpl, filePath) ?? filePath);
 }
 //@ chunk-e6aww6q8.js:1152000-1152140 layout
-function isPathMatchedForPermission(e, n) {
-  if (e === "") return false;
-  if (e.startsWith("~")) {
-    let r = expandTildeWithHome(e);
-    if (r.startsWith("~")) return true;
-    return getPathsForPermissionCheck_2(r, n) || getPathsForPermissionCheck_2(e, n);
+function isPathMatchedForPermission(rawPath, permissionCtx) {
+  if (rawPath === "") return false;
+  if (rawPath.startsWith("~")) {
+    let expandedPath = expandTildeWithHome(rawPath);
+    if (expandedPath.startsWith("~")) return true;
+    return (
+      getPathsForPermissionCheck_2(expandedPath, permissionCtx) ||
+      getPathsForPermissionCheck_2(rawPath, permissionCtx)
+    );
   }
-  return getPathsForPermissionCheck_2(e, n);
+  return getPathsForPermissionCheck_2(rawPath, permissionCtx);
 }
 //@ chunk-e6aww6q8.js:1152140-1153141 callgraph-fingerprint = getPathsForPermissionCheck (0.425)
 /**
  * 返回权限检查需要比对的路径集合（原始、规范化、符号链接解析后）。
  */
-function getPathsForPermissionCheck_2(e, n) {
+function getPathsForPermissionCheck_2(rawPath, baseCwd) {
   let fsImpl = getFsImplementation();
-  if (isMacSpecialPath(e)) return true;
-  if ((!isNonWslUncPath(e) || true) && !isNetworkMountPath(e) && /(^|[/\\])\.\.(?:[/\\]|$)/.test(e)) {
-    let Se = /\/+/;
-    let root = isAbsolute(e) ? parse(e).root : "";
-    let we = root ? parse(resolve_2(n, e)).root : n;
-    let parts = (root ? e.slice(root.length) : e).split(Se);
-    let Ae = we;
+  if (isMacSpecialPath(rawPath)) return true;
+  if (
+    (!isNonWslUncPath(rawPath) || true) &&
+    !isNetworkMountPath(rawPath) &&
+    /(^|[/\\])\.\.(?:[/\\]|$)/.test(rawPath)
+  ) {
+    let slashPattern = /\/+/;
+    let root = isAbsolute(rawPath) ? parse(rawPath).root : "";
+    let startPath = root ? parse(resolve_2(baseCwd, rawPath)).root : baseCwd;
+    let parts = (root ? rawPath.slice(root.length) : rawPath).split(slashPattern);
+    let currentPath = startPath;
     for (let depth = 0; depth < parts.length; depth++) {
-      let Me = parts[depth];
-      if (Me === "" || Me === ".") continue;
-      if (Me === "..") {
-        Ae = dirname(Ae);
+      let segment = parts[depth];
+      if (segment === "" || segment === ".") continue;
+      if (segment === "..") {
+        currentPath = dirname(currentPath);
         continue;
       }
-      Ae = Ae.endsWith(sep) ? Ae + Me : Ae + sep + Me;
-      if (isNetworkMountPath(Ae)) break;
-      if (isMacSpecialPath(Ae)) return true;
+      currentPath = currentPath.endsWith(sep) ? currentPath + segment : currentPath + sep + segment;
+      if (isNetworkMountPath(currentPath)) break;
+      if (isMacSpecialPath(currentPath)) return true;
       try {
-        if (fsImpl.lstatSync(Ae).isSymbolicLink() && parts.slice(depth + 1).includes("..")) return true;
+        if (fsImpl.lstatSync(currentPath).isSymbolicLink() && parts.slice(depth + 1).includes(".."))
+          return true;
       } catch {}
     }
   }
-  let resolved = resolve_2(n, e);
+  let resolved = resolve_2(baseCwd, rawPath);
   let normalized = resolveForPermissionCheck(fsImpl, resolved).normalize("NFC");
-  let normalized_2 = (resolveDeepestExistingAncestorSync(fsImpl, n) ?? n).normalize("NFC");
-  function S(Se) {
-    let ke = relative(Se, normalized);
-    if (ke === "" || ke.startsWith(".." + sep) || isAbsolute(ke)) return false;
-    let replaced = ke
+  let targetPath = (resolveDeepestExistingAncestorSync(fsImpl, baseCwd) ?? baseCwd).normalize("NFC");
+  function isGitInternalPath(targetPath) {
+    let relPath = relative(targetPath, normalized);
+    if (relPath === "" || relPath.startsWith(".." + sep) || isAbsolute(relPath)) return false;
+    let replaced = relPath
       .split(sep)
       .join("/")
       .toLowerCase()
       .replace(/\u0131/g, "i")
       .replace(/\u017f/g, "s");
-    return GIT_INTERNAL_PATH_PATTERNS.some((Ee) => Ee.test(replaced));
+    return GIT_INTERNAL_PATH_PATTERNS.some((pattern) => pattern.test(replaced));
   }
-  if (S(normalized_2)) return true;
-  if (!relative(normalized_2, normalized).startsWith(".." + sep)) return false;
+  if (isGitInternalPath(targetPath)) return true;
+  if (!relative(targetPath, normalized).startsWith(".." + sep)) return false;
   let originalCwd = getOriginalCwd();
-  let normalized_3 = (resolveDeepestExistingAncestorSync(fsImpl, originalCwd) ?? originalCwd).normalize(
+  let normalized_2 = (resolveDeepestExistingAncestorSync(fsImpl, originalCwd) ?? originalCwd).normalize(
     "NFC",
   );
-  let q = relative(normalized_3, normalized);
-  if (q === "" || q.startsWith(".." + sep) || isAbsolute(q)) return false;
-  let Z = normalized_2;
+  let cwdRelPath = relative(normalized_2, normalized);
+  if (cwdRelPath === "" || cwdRelPath.startsWith(".." + sep) || isAbsolute(cwdRelPath)) return false;
+  let walkDir = targetPath;
   do {
-    Z = dirname(Z);
-    if (S(Z)) return true;
-  } while (Z !== normalized_3 && Z !== dirname(Z));
+    walkDir = dirname(walkDir);
+    if (isGitInternalPath(walkDir)) return true;
+  } while (walkDir !== normalized_2 && walkDir !== dirname(walkDir));
   return false;
 }
 //@ chunk-e6aww6q8.js:1337160-1337480 fingerprint = isDuplicatePath (0.685)
 function isDuplicatePath_2(fsImplementation, patterns) {
-  let mapped = patterns.map((s) => s.replaceAll("\\", "/"));
-  for (let s of mapped) {
-    if (!s.startsWith("/")) continue;
-    let h = s.search(/[*?{[]/);
-    let y = h === -1 ? s : s.slice(0, h);
-    let S = dirname(y);
+  let mapped = patterns.map((pattern) => pattern.replaceAll("\\", "/"));
+  for (let pattern of mapped) {
+    if (!pattern.startsWith("/")) continue;
+    let wildcardIndex = pattern.search(/[*?{[]/);
+    let dirPart = wildcardIndex === -1 ? pattern : pattern.slice(0, wildcardIndex);
+    let dirPath = dirname(dirPart);
     try {
-      let w = safeResolvePath(fsImplementation, S);
-      let { resolvedPath } = w;
-      if (isSpecialOrUnsafePath(resolvedPath) || isNonCanonicalSymlink(S, w)) continue;
+      let resolved = safeResolvePath(fsImplementation, dirPath);
+      let { resolvedPath } = resolved;
+      if (isSpecialOrUnsafePath(resolvedPath) || isNonCanonicalSymlink(dirPath, resolved)) continue;
       let replaced = resolvedPath.replaceAll("\\", "/");
-      if (replaced !== S) {
-        let q = replaced + s.slice(S.length);
-        mapped.push(q);
+      if (replaced !== dirPath) {
+        let rewrittenPattern = replaced + pattern.slice(dirPath.length);
+        mapped.push(rewrittenPattern);
       }
     } catch {}
   }
   return mapped;
 }
 //@ chunk-awy329vy.js:49206-49477 fingerprint = readLinesReverse (0.747)
-async function readLinesReverse_2(n, e) {
-  let r;
+async function readLinesReverse_2(filePath, maxBytes) {
+  let handle;
   try {
-    r = await open(n, readOnlyNoFollowFlags());
-    let stats = await r.stat();
-    if (!stats.isFile() || stats.size > e) return;
+    handle = await open(filePath, readOnlyNoFollowFlags());
+    let stats = await handle.stat();
+    if (!stats.isFile() || stats.size > maxBytes) return;
     let remainder = Buffer.alloc(stats.size + 1);
-    let { bytesRead } = await r.read(remainder, 0, remainder.length, 0);
+    let { bytesRead } = await handle.read(remainder, 0, remainder.length, 0);
     return bytesRead === stats.size ? remainder.subarray(0, bytesRead) : undefined;
   } catch {
     return;
   } finally {
-    await r?.close().catch(() => {});
+    await handle?.close().catch(() => {});
   }
-}
-//@ chunk-jhrww53q.js:47434-47579 fingerprint = safeResolvePath (0.602)
-function safeResolvePath_2(o) {
-  return (
-    !o.isDirectory() &&
-    !o.isFile() &&
-    !o.isSymbolicLink() &&
-    !o.isFIFO() &&
-    !o.isSocket() &&
-    !o.isBlockDevice() &&
-    !o.isCharacterDevice()
-  );
 }
 export {
   getFsImplementation,

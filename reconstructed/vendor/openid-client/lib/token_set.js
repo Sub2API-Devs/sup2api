@@ -5,12 +5,12 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_base64url } from "./helpers/base64url.js";
 import { require_unix_timestamp } from "./helpers/unix_timestamp.js";
 
 //@ chunk-1ny7cxrt.js:10077-10596 cjs-fingerprint
-var require_token_set = x(function (cjsExports, cjsModule) {
+var require_token_set = __commonJS(function (cjsExports, cjsModule) {
   var base64url = require_base64url();
   var now = require_unix_timestamp();
   class TokenSet {

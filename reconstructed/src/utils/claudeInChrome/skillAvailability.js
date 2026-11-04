@@ -16,6 +16,7 @@ import { maybeAddBrowserBatchToChromeSelect, isToolSearchEnabledOptimistic } fro
 import { getChromeSystemPrompt } from "../toolSearchChrome.js";
 import { MCP_CLAUDE_DEVICE_CHROME } from "./chromeToolNames.js";
 import { logForDebugging } from "../debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hantmvxa.js:45246-46232 placement
 /**
@@ -30,26 +31,33 @@ var CHROME_POLICY_DENIED_RESULT =
 /**
  * Chrome 技能不可用时的三种说明：工具不在本 agent 上下文中、浏览器连接失效（可用 /chrome 或 /mcp 恢复）、本技能针对的 CFC 工具当前不可用；以及视为失效的 MCP 客户端状态集合。
  */
-var CHROME_TOOLS_NOT_IN_CONTEXT =
-  "Claude in Chrome browser tools are enabled for this session, but they are not part of this agent context (its tool set was fixed before the browser connection completed, or its agent type does not include them). Do not attempt mcp__claude-in-chrome__* tool calls here \u2014 complete the task with the tools this context does have, or report back so the main conversation can drive the browser.";
-var CHROME_CONNECTION_BROKEN =
-  "Claude in Chrome is enabled for this session, but the browser connection is not working (it failed or was disabled), so mcp__claude-in-chrome__* tools are not available. Do not attempt them. Continue the task without browser tools (WebFetch and WebSearch cover read-only web content), or ask the user to perform browser steps manually. The user can restart the connection with /chrome (Reconnect extension), or turn Claude in Chrome back on in /mcp if it was turned off there.";
-var CFC_TOOLS_UNAVAILABLE = `The ${CFC_TOOL_PREFIX}* tools, which this skill's guidance is written for, are not available right now, so do not call or load them, even if you still see their definitions. That applies to those tools only. Continue the task with the tools you do have.`;
-var DEAD_CLIENT_STATES = new Set(["failed", "disabled", "needs-auth"]);
+var CHROME_TOOLS_NOT_IN_CONTEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CHROME_CONNECTION_BROKEN;
+var CFC_TOOLS_UNAVAILABLE;
+var DEAD_CLIENT_STATES;
+deferInit("chunk-hantmvxa.js:46232", () => {
+  CHROME_TOOLS_NOT_IN_CONTEXT =
+    "Claude in Chrome browser tools are enabled for this session, but they are not part of this agent context (its tool set was fixed before the browser connection completed, or its agent type does not include them). Do not attempt mcp__claude-in-chrome__* tool calls here \u2014 complete the task with the tools this context does have, or report back so the main conversation can drive the browser.";
+  CHROME_CONNECTION_BROKEN =
+    "Claude in Chrome is enabled for this session, but the browser connection is not working (it failed or was disabled), so mcp__claude-in-chrome__* tools are not available. Do not attempt them. Continue the task without browser tools (WebFetch and WebSearch cover read-only web content), or ask the user to perform browser steps manually. The user can restart the connection with /chrome (Reconnect extension), or turn Claude in Chrome back on in /mcp if it was turned off there.";
+  CFC_TOOLS_UNAVAILABLE = `The ${CFC_TOOL_PREFIX}* tools, which this skill's guidance is written for, are not available right now, so do not call or load them, even if you still see their definitions. That applies to those tools only. Continue the task with the tools you do have.`;
+  DEAD_CLIENT_STATES = new Set(["failed", "disabled", "needs-auth"]);
+});
 //@ chunk-hantmvxa.js:47411-47512 placement
 function isChromeClientDead(mcpClients) {
-  let n = mcpClients?.filter((s) => s.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME) ?? [];
-  return n.length > 0 && n.every((s) => DEAD_CLIENT_STATES.has(s.type));
+  let chromeClients = mcpClients?.filter((client) => client.name === CLAUDE_IN_CHROME_MCP_SERVER_NAME) ?? [];
+  return chromeClients.length > 0 && chromeClients.every((client) => DEAD_CLIENT_STATES.has(client.type));
 }
 //@ chunk-hantmvxa.js:47512-48192 placement
 /**
  * claude-in-chrome 技能被调用时返回的指导：已接入且有工具时给 Chrome 系统提示；子代理/预加载、只有设备 Chrome 工具、连接失效时给相应说明；未接入时走安装推荐。
  */
 async function chromeSkillGuidance(context) {
-  let n = isClaudeInChromeWiredThisSession();
-  let s = context.options?.tools?.some((tool) => tool.name?.startsWith(CFC_TOOL_PREFIX)) ?? false;
-  if (!n) return resolveChromeInstallUpsell(context);
-  if (s) return maybeAddBrowserBatchToChromeSelect(getChromeSystemPrompt(isToolSearchEnabledOptimistic()));
+  let wired = isClaudeInChromeWiredThisSession();
+  let hasCfcTools = context.options?.tools?.some((tool) => tool.name?.startsWith(CFC_TOOL_PREFIX)) ?? false;
+  if (!wired) return resolveChromeInstallUpsell(context);
+  if (hasCfcTools)
+    return maybeAddBrowserBatchToChromeSelect(getChromeSystemPrompt(isToolSearchEnabledOptimistic()));
   if (context.agentId !== undefined || context.options?.isSkillPreload) return CHROME_TOOLS_NOT_IN_CONTEXT;
   if (
     context.options?.tools?.some((tool) => tool.name?.startsWith(MCP_CLAUDE_DEVICE_CHROME)) &&

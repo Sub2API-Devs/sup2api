@@ -45,15 +45,16 @@ import { MAX_TREE_TEXT_CHARS } from "./treeConstants.js";
 import { getPluginRegistry } from "../../../utils/plugins/pluginLoadState.js";
 import { isModuleAdmitted } from "../../../utils/plugins/functionHooks/admission.js";
 import { HooksError } from "../hooksErrors.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:642484-642502 placement
 var DESKTOP = "desktop";
 //@ chunk-s61vbvea.js:642502-642608 placement
-var desktopClientAddress = (e) => ({
-  plugin: e.plugin,
-  element: e.element,
-  component: e.component,
-  requestId: e.requestId,
+var desktopClientAddress = (held) => ({
+  plugin: held.plugin,
+  element: held.element,
+  component: held.component,
+  requestId: held.requestId,
   surface: DESKTOP,
 });
 //@ chunk-s61vbvea.js:642608-642690 placement
@@ -69,7 +70,7 @@ var desktopSurfaceRef = ({ component, requestId }) => ({
 /**
  * plugin\0module\0key
  */
-var drawnClientKey = (e) => [e.plugin, e.module, e.key].join("\x00");
+var drawnClientKey = (client) => [client.plugin, client.module, client.key].join("\x00");
 //@ chunk-s61vbvea.js:642741-642770 placement
 /**
  * component\0requestId
@@ -84,110 +85,128 @@ var MAX_DRAWN_CLIENTS = 1024;
 /**
  * 站点版本取值函数
  */
-var siteVersionThunk = (state, n) => () => siteVersionOf(state, n);
+var siteVersionThunk = (state, site) => () => siteVersionOf(state, site);
 //@ chunk-s61vbvea.js:642809-643837 placement
 /**
  * 记录各 (component, requestId) 渲染中画出的桌面 Client 及其版本、已报告失败的 Client（最多 1024 条，LRU）。
  */
 function createDrawnClientLedger() {
-  let e = new Map();
+  let byInstance = new Map();
   let generation = 0;
-  function r(s, h) {
-    e.delete(s);
-    e.set(s, h);
-    let [y] = e.keys();
-    if (e.size > MAX_DRAWN_CLIENTS && y !== undefined) e.delete(y);
+  function storeEntry(instanceKey, entry) {
+    byInstance.delete(instanceKey);
+    byInstance.set(instanceKey, entry);
+    let [oldest] = byInstance.keys();
+    if (byInstance.size > MAX_DRAWN_CLIENTS && oldest !== undefined) byInstance.delete(oldest);
   }
   return {
-    begin(s, h) {
-      let y = surfaceRefKey(s, h);
-      let { keys = new Map(), failed = new Map() } = e.get(y) ?? {};
+    begin(component, requestId) {
+      let instanceKey = surfaceRefKey(component, requestId);
+      let { keys = new Map(), failed = new Map() } = byInstance.get(instanceKey) ?? {};
       generation += 1;
-      r(y, {
+      storeEntry(instanceKey, {
         generation,
         keys,
         failed,
       });
       return {
-        instance: y,
+        instance: instanceKey,
         generation,
         version: siteVersionThunk(
           renderVersions().getState(),
           desktopSurfaceRef({
-            component: s,
-            requestId: h,
+            component,
+            requestId,
           }),
         ),
       };
     },
-    record({ instance, generation, version }, S) {
-      let w = e.get(instance);
-      if (w?.generation !== generation) return;
-      if (S.length === 0) {
-        e.delete(instance);
+    record({ instance, generation, version }, clients) {
+      let current = byInstance.get(instance);
+      if (current?.generation !== generation) return;
+      if (clients.length === 0) {
+        byInstance.delete(instance);
         return;
       }
-      let R = version();
-      let mapped = S.map(drawnClientKey);
-      r(instance, {
+      let currentVersion = version();
+      let mapped = clients.map(drawnClientKey);
+      storeEntry(instance, {
         generation,
-        keys: new Map(mapped.map((P) => [P, w.failed.has(P) ? R : (w.keys.get(P) ?? R)])),
-        failed: new Map(mapped.filter((P) => w.failed.get(P) === R).map((P) => [P, R])),
+        keys: new Map(
+          mapped.map((key) => [
+            key,
+            current.failed.has(key) ? currentVersion : (current.keys.get(key) ?? currentVersion),
+          ]),
+        ),
+        failed: new Map(
+          mapped
+            .filter((key) => current.failed.get(key) === currentVersion)
+            .map((key) => [key, currentVersion]),
+        ),
       });
     },
-    isDrawn({ component, requestId, ...y }) {
-      let S = surfaceRefKey(component, requestId);
-      let w = e.get(S);
-      let R = w?.keys.has(drawnClientKey(y)) === true;
-      if (R) r(S, w);
-      return R;
+    isDrawn({ component, requestId, ...address }) {
+      let instanceKey = surfaceRefKey(component, requestId);
+      let entry = byInstance.get(instanceKey);
+      let isDrawn = entry?.keys.has(drawnClientKey(address)) === true;
+      if (isDrawn) storeEntry(instanceKey, entry);
+      return isDrawn;
     },
-    toldFailed({ component, requestId, ...y }) {
-      let S = surfaceRefKey(component, requestId);
-      let w = e.get(S);
-      let R = drawnClientKey(y);
-      let x = desktopSurfaceRef({
+    toldFailed({ component, requestId, ...address }) {
+      let instanceKey = surfaceRefKey(component, requestId);
+      let entry = byInstance.get(instanceKey);
+      let clientKey = drawnClientKey(address);
+      let siteRef = desktopSurfaceRef({
         component,
         requestId,
       });
-      let P = w?.keys.get(R);
-      if (w === undefined || P === undefined) return;
-      if (w.failed.has(R)) return () => currentVersion(x);
-      r(S, {
-        ...w,
-        failed: new Map([...w.failed, [R, currentVersion(x)]]),
+      let version = entry?.keys.get(clientKey);
+      if (entry === undefined || version === undefined) return;
+      if (entry.failed.has(clientKey)) return () => currentVersion(siteRef);
+      storeEntry(instanceKey, {
+        ...entry,
+        failed: new Map([...entry.failed, [clientKey, currentVersion(siteRef)]]),
       });
-      return () => P;
+      return () => version;
     },
-    count: () => e.size,
+    count: () => byInstance.size,
   };
 }
 //@ chunk-s61vbvea.js:643837-643849 placement
 /**
  * 已绘制客户端账本
  */
-var drawnClientLedger = createDrawnClientLedger();
+var drawnClientLedger; // deferred: uses createDrawnClientLedger of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:643837", () => {
+  drawnClientLedger = createDrawnClientLedger();
+});
 //@ chunk-s61vbvea.js:643849-644013 placement
-function requireDrawnClient(e, n, r) {
-  let s = r(n);
-  if (!s)
+function requireDrawnClient(caller, address, isDrawn) {
+  let found = isDrawn(address);
+  if (!found)
     logForDebugging(
-      `${e}: no desktop Client ${n.plugin}/${n.key} (${n.module}) is drawn in ${n.component} ${n.requestId}; nothing ran`,
+      `${caller}: no desktop Client ${address.plugin}/${address.key} (${address.module}) is drawn in ${address.component} ${address.requestId}; nothing ran`,
     );
-  return s;
+  return found;
 }
 //@ chunk-s61vbvea.js:644013-644098 placement
-var ER = Object.freeze({
-  name: "core",
-  isCore: true,
-  budgetMs: 0,
-  run: () => Promise.resolve({}),
+var CORE_FAULT_BOTTOM; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:644013", () => {
+  CORE_FAULT_BOTTOM = Object.freeze({
+    name: "core",
+    isCore: true,
+    budgetMs: 0,
+    run: () => Promise.resolve({}),
+  });
 });
 //@ chunk-s61vbvea.js:644098-644120 placement
 /**
  * ui.fault 站点规则
  */
-var UI_FAULT_RULES = UI_ENV_SITE_RULES["ui.fault"];
+var UI_FAULT_RULES; // deferred: uses UI_ENV_SITE_RULES (../sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:644098", () => {
+  UI_FAULT_RULES = UI_ENV_SITE_RULES["ui.fault"];
+});
 //@ chunk-s61vbvea.js:644120-644227 placement
 function isNewFaultForSite({ site, bornAt }) {
   let versions = pluginStateRegistry().faultRuns.get(renderInstanceKey(site))?.versions;
@@ -197,13 +216,13 @@ function isNewFaultForSite({ site, bornAt }) {
 var faultIsHeard = (only, fault) =>
   modulesHookingEvent("ui.fault", undefined, {
     only,
-  }).some((r) => {
-    let s = r.matcherFor("ui.fault");
+  }).some((mod) => {
+    let matcher = mod.matcherFor("ui.fault");
     try {
-      return s === undefined || matchesLiteralMatcher(s, fault);
+      return matcher === undefined || matchesLiteralMatcher(matcher, fault);
     } catch (error) {
       logForDebugging(
-        `hooks module ${r.label}: on('ui.fault') matcher threw on the host (${errorMessage(error)}); taken as heard`,
+        `hooks module ${mod.label}: on('ui.fault') matcher threw on the host (${errorMessage(error)}); taken as heard`,
       );
       return true;
     }
@@ -214,68 +233,68 @@ var faultIsHeard = (only, fault) =>
  */
 var MAX_FAULT_RUNS = 4096;
 //@ chunk-s61vbvea.js:644478-644727 placement
-function recordFaultRun(site, n = burstRedrawSite) {
+function recordFaultRun(site, redraw = burstRedrawSite) {
   let { faultRuns } = pluginStateRegistry();
-  let s = renderInstanceKey(site);
-  let h = faultRuns.get(s);
-  let y = h?.versions.has(currentVersion(site)) === true;
+  let siteKey = renderInstanceKey(site);
+  let run = faultRuns.get(siteKey);
+  let hadVersion = run?.versions.has(currentVersion(site)) === true;
   try {
-    n(site);
+    redraw(site);
   } finally {
-    faultRuns.delete(s);
-    faultRuns.set(s, {
+    faultRuns.delete(siteKey);
+    faultRuns.set(siteKey, {
       site,
-      versions: new Set([...(y ? h.versions : []), currentVersion(site)]),
+      versions: new Set([...(hadVersion ? run.versions : []), currentVersion(site)]),
     });
-    let [S] = faultRuns;
-    if (faultRuns.size > MAX_FAULT_RUNS && S !== undefined) {
-      faultRuns.delete(S[0]);
-      dropUnheldRenderVersions(S[1].site);
+    let [oldest] = faultRuns;
+    if (faultRuns.size > MAX_FAULT_RUNS && oldest !== undefined) {
+      faultRuns.delete(oldest[0]);
+      dropUnheldRenderVersions(oldest[1].site);
     }
   }
 }
 //@ chunk-s61vbvea.js:644727-644859 placement
-var rerenderFaultSites = ({ plugin, fault, sites }, s) =>
+var rerenderFaultSites = ({ plugin, fault, sites }, redraw) =>
   runIgnoringAbort(() => {
-    for (let h of faultIsHeard(plugin, fault) ? sites() : [])
+    for (let entry of faultIsHeard(plugin, fault) ? sites() : [])
       runIgnoringAbort(() => {
-        if (h.site.requestId !== "" && isNewFaultForSite(h)) recordFaultRun(h.site, s);
+        if (entry.site.requestId !== "" && isNewFaultForSite(entry)) recordFaultRun(entry.site, redraw);
       });
   });
 //@ chunk-s61vbvea.js:644859-645198 placement
 /**
  * 运行 ui.fault 钩子链（只限出错插件），记录耗时，结束后对仍画着该 Client 的站点重新渲染。
  */
-async function dispatchUiFault(e, n) {
-  let { plugin, fault } = e;
+async function dispatchUiFault(request, redraw) {
+  let { plugin, fault } = request;
   let startTime = performance.now();
   try {
-    let y = await reportChainFailure({
+    let outcome = await reportChainFailure({
       e: fault,
       handlers: [
         ...hookMembersFor("ui.fault", undefined, {
           only: plugin,
         }),
-        ER,
+        CORE_FAULT_BOTTOM,
       ],
       site: UI_FAULT_RULES,
     });
-    let S = (performance.now() - startTime).toFixed(1);
+    let elapsedText = (performance.now() - startTime).toFixed(1);
     logForDebugging(
-      `ui.fault ${plugin}/${fault.element} (${fault.module}) in ${fault.component} from ${fault.surface}, ${fault.phase}: dispatched, settled in ${S}ms`,
+      `ui.fault ${plugin}/${fault.element} (${fault.module}) in ${fault.component} from ${fault.surface}, ${fault.phase}: dispatched, settled in ${elapsedText}ms`,
     );
-    return y ?? {};
+    return outcome ?? {};
   } finally {
-    rerenderFaultSites(e, n);
+    rerenderFaultSites(request, redraw);
   }
 }
 //@ chunk-s61vbvea.js:645198-645264 placement
 /**
  * 按插件排队分发故障
  */
-function desktopFaultDispatcher(e = burstRedrawSite) {
+function desktopFaultDispatcher(redraw = burstRedrawSite) {
   let perPluginQueues = createPerPluginQueues();
-  return (r) => perPluginQueues(r.plugin)(() => dispatchUiFault(r, e));
+  return (request) => perPluginQueues(request.plugin)(() => dispatchUiFault(request, redraw));
 }
 //@ chunk-s61vbvea.js:645264-645275 placement
 /**
@@ -286,8 +305,8 @@ var MAX_FAULT_TEXT = 500;
 /**
  * 去换行并截断
  */
-function scrubFaultText(e) {
-  let replaced = e.replace(LINE_SCRUB, " ");
+function scrubFaultText(text) {
+  let replaced = text.replace(LINE_SCRUB, " ");
   return replaced.length > MAX_FAULT_TEXT ? `${truncateToLength(replaced, MAX_FAULT_TEXT)}\u2026` : replaced;
 }
 //@ chunk-s61vbvea.js:645355-645401 placement
@@ -299,13 +318,15 @@ var DEFAULT_MODULE_FAILURE = "the module failed without a message";
 /**
  * 规范化 Client 模块失败原因：去掉插件名与 "Client 模块:" 前缀，空则用默认文字。
  */
-function describeClientFailure(e, n, r) {
-  let s = `${e}: `;
-  let h = `Client ${n}: `;
-  let y = scrubFaultText(r);
-  let w = y.startsWith(s) ? y.slice(s.length) : y;
-  let x = w.startsWith(h) ? w.slice(h.length) : w;
-  return x.trim() === "" ? DEFAULT_MODULE_FAILURE : x;
+function describeClientFailure(caller, moduleName, reason) {
+  let callerPrefix = `${caller}: `;
+  let modulePrefix = `Client ${moduleName}: `;
+  let scrubbed = scrubFaultText(reason);
+  let withoutCaller = scrubbed.startsWith(callerPrefix) ? scrubbed.slice(callerPrefix.length) : scrubbed;
+  let withoutModule = withoutCaller.startsWith(modulePrefix)
+    ? withoutCaller.slice(modulePrefix.length)
+    : withoutCaller;
+  return withoutModule.trim() === "" ? DEFAULT_MODULE_FAILURE : withoutModule;
 }
 //@ chunk-s61vbvea.js:645565-645581 placement
 /**
@@ -313,15 +334,18 @@ function describeClientFailure(e, n, r) {
  */
 var ELLIPSIS = "\u2026";
 //@ chunk-s61vbvea.js:645581-645636 placement
-var regExp_16 = new RegExp(String.raw`[\u{2028}\u{2029}]`, "gu");
+var regExp_16; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:645581", () => {
+  regExp_16 = new RegExp(String.raw`[\u{2028}\u{2029}]`, "gu");
+});
 //@ chunk-s61vbvea.js:645636-645647 placement
 /**
  * 200
  */
 var MAX_VISIBLE_TEXT = 200;
 //@ chunk-s61vbvea.js:645647-645754 placement
-function shortFaultReason(e, reason) {
-  let replaced = describeClientFailure(e.plugin, e.module, reason).replace(regExp_16, " ");
+function shortFaultReason(address, reason) {
+  let replaced = describeClientFailure(address.plugin, address.module, reason).replace(regExp_16, " ");
   return replaced.length > MAX_VISIBLE_TEXT
     ? truncateToLength(replaced, MAX_VISIBLE_TEXT - ELLIPSIS.length) + ELLIPSIS
     : replaced;
@@ -330,36 +354,38 @@ function shortFaultReason(e, reason) {
 /**
  * 构造 ui.fault 事件：界面、组件、请求、元素、模块、阶段与简短原因，附带受影响站点。
  */
-var toUiFaultEvent = (e, surface, r) => ({
-  plugin: e.plugin,
+var toUiFaultEvent = (address, surface, report) => ({
+  plugin: address.plugin,
   fault: {
     surface,
-    component: e.component,
-    requestId: e.requestId,
-    element: e.key,
-    module: e.module,
-    phase: r.phase,
-    reason: shortFaultReason(e, r.reason),
+    component: address.component,
+    requestId: address.requestId,
+    element: address.key,
+    module: address.module,
+    phase: report.phase,
+    reason: shortFaultReason(address, report.reason),
   },
-  sites: r.sites,
+  sites: report.sites,
 });
 //@ chunk-s61vbvea.js:645933-646160 placement
 /**
  * 处理桌面端 Client 报告的故障：仅对已画出且未报告过的 Client 分发 ui.fault。
  */
-function createDesktopFaultHandler(e = drawnClientLedger, n = desktopFaultDispatcher()) {
+function createDesktopFaultHandler(ledger = drawnClientLedger, dispatch = desktopFaultDispatcher()) {
   return async ({ address, report }) => {
-    let h = requireDrawnClient("ui.fault", address, e.isDrawn) ? e.toldFailed(address) : undefined;
-    if (h === undefined) return;
-    return n(
+    let toldFailed = requireDrawnClient("ui.fault", address, ledger.isDrawn)
+      ? ledger.toldFailed(address)
+      : undefined;
+    if (toldFailed === undefined) return;
+    return dispatch(
       toUiFaultEvent(address, "desktop", {
         ...report,
         sites: () =>
-          e.isDrawn(address)
+          ledger.isDrawn(address)
             ? [
                 {
                   site: desktopSurfaceRef(address),
-                  bornAt: h(),
+                  bornAt: toldFailed(),
                 },
               ]
             : [],
@@ -373,12 +399,12 @@ var SURFACE = "surface:///";
 /**
  * 界面模块在包里的路径键
  */
-var surfaceModuleKey = (e, n) =>
-  SURFACE + relative(n.pluginRoot, e).split(sep).map(encodeURIComponent).join("/");
+var surfaceModuleKey = (modulePath, plugin) =>
+  SURFACE + relative(plugin.pluginRoot, modulePath).split(sep).map(encodeURIComponent).join("/");
 //@ chunk-s61vbvea.js:646341-646818 placement
-function collectModuleImports(e) {
-  let n = [];
-  walkAst(e, ({ node }) => {
+function collectModuleImports(program) {
+  let imports = [];
+  walkAst(program, ({ node }) => {
     let source =
       node.type === "ImportDeclaration" ||
       node.type === "ExportAllDeclaration" ||
@@ -389,20 +415,20 @@ function collectModuleImports(e) {
     if (source === undefined || source === null) return;
     if (source.type === "Literal" && typeof source.value === "string") {
       let { start, end } = source;
-      n.push({
+      imports.push({
         kind: "literal",
         spelled: source.value,
         start,
         end,
       });
     } else if (node.type === "ImportExpression")
-      n.push({
+      imports.push({
         kind: "computed",
         start: source.start,
         end: source.end,
       });
   });
-  return n.toSorted((r, s) => r.start - s.start);
+  return imports.toSorted((a, b) => a.start - b.start);
 }
 //@ chunk-s61vbvea.js:646818-646848 placement
 var SURFACE_UNLINKED = "surface-unlinked:///";
@@ -410,27 +436,32 @@ var SURFACE_UNLINKED = "surface-unlinked:///";
 /**
  * 把界面模块源码中的导入说明符改写为 surface:/// 或未链接的占位地址（动态导入改为拼接）。
  */
-function rewriteSurfaceImports(e, n) {
-  let r = acornParser().parse(e, {
+function rewriteSurfaceImports(source, specifierFor) {
+  let program = acornParser().parse(source, {
     ecmaVersion: "latest",
     sourceType: "module",
   });
-  let s = jsonStringify(`${SURFACE_UNLINKED}computed#`);
-  let h = [];
-  let y = e;
-  for (let S of collectModuleImports(r).toReversed()) {
-    let w =
-      S.end +
-      h.filter((j) => j.span.start >= S.start && j.span.end <= S.end).reduce((acc, G) => acc + G.grewBy, 0);
-    let sliced = y.slice(S.start, w);
-    let P = S.kind === "literal" ? jsonStringify(n(S.spelled)) : `(${s} + String(${sliced}))`;
-    y = y.slice(0, S.start) + P + y.slice(w);
-    h.push({
-      span: S,
-      grewBy: P.length - sliced.length,
+  let computedPrefix = jsonStringify(`${SURFACE_UNLINKED}computed#`);
+  let edits = [];
+  let current = source;
+  for (let entry of collectModuleImports(program).toReversed()) {
+    let end =
+      entry.end +
+      edits
+        .filter((edit) => edit.span.start >= entry.start && edit.span.end <= entry.end)
+        .reduce((acc, edit) => acc + edit.grewBy, 0);
+    let sliced = current.slice(entry.start, end);
+    let replacement =
+      entry.kind === "literal"
+        ? jsonStringify(specifierFor(entry.spelled))
+        : `(${computedPrefix} + String(${sliced}))`;
+    current = current.slice(0, entry.start) + replacement + current.slice(end);
+    edits.push({
+      span: entry,
+      grewBy: replacement.length - sliced.length,
     });
   }
-  return y;
+  return current;
 }
 //@ chunk-s61vbvea.js:647256-647284 placement
 var CLAUDE_HOOKS_TYPES = "claude:hooks-types";
@@ -438,19 +469,21 @@ var CLAUDE_HOOKS_TYPES = "claude:hooks-types";
 /**
  * 未链接模块的键
  */
-var unlinkedSurfaceKey = (e) => SURFACE_UNLINKED + encodeURIComponent(e);
+var unlinkedSurfaceKey = (specifier) => SURFACE_UNLINKED + encodeURIComponent(specifier);
 //@ chunk-s61vbvea.js:647321-647567 placement
-function toSurfaceFile(e, n, links) {
-  let s = new Map(links.filter((S) => S.from === e.file).map((S) => [S.spelled, S.file]));
-  let h = transpileModule(e.file, e.source, n.pluginName);
-  function y(S) {
-    let w = s.get(S);
-    let x = S === CLAUDE_CODE ? CLAUDE_HOOKS_TYPES : unlinkedSurfaceKey(S);
-    return w === undefined ? x : surfaceModuleKey(w, n);
+function toSurfaceFile(file, plugin, links) {
+  let linkedBySpelled = new Map(
+    links.filter((link) => link.from === file.file).map((link) => [link.spelled, link.file]),
+  );
+  let transpiled = transpileModule(file.file, file.source, plugin.pluginName);
+  function specifierFor(specifier) {
+    let linkedFile = linkedBySpelled.get(specifier);
+    let unlinked = specifier === CLAUDE_CODE ? CLAUDE_HOOKS_TYPES : unlinkedSurfaceKey(specifier);
+    return linkedFile === undefined ? unlinked : surfaceModuleKey(linkedFile, plugin);
   }
   return {
-    key: surfaceModuleKey(e.file, n),
-    source: rewriteSurfaceImports(h, y),
+    key: surfaceModuleKey(file.file, plugin),
+    source: rewriteSurfaceImports(transpiled, specifierFor),
   };
 }
 //@ chunk-s61vbvea.js:647567-647599 placement
@@ -459,7 +492,9 @@ var CLAUDE_SURFACE_RUNTIME = "claude:surface-runtime";
 /**
  * 桌面 Client 表面的运行时源码（claude:surface-runtime），注入到 VM
  */
-var DESKTOP_SURFACE_RUNTIME_SOURCE = String.raw`((host, limits) => {
+var DESKTOP_SURFACE_RUNTIME_SOURCE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:647599", () => {
+  DESKTOP_SURFACE_RUNTIME_SOURCE = String.raw`((host, limits) => {
   const { freeze, defineProperty, defineProperties, keys: _keys } = Object
   const _isArray = Array.isArray
   const _Map = Map
@@ -814,12 +849,16 @@ var DESKTOP_SURFACE_RUNTIME_SOURCE = String.raw`((host, limits) => {
     },
   })
 })`;
+});
 //@ chunk-s61vbvea.js:660442-660561 placement
-var SURFACE_RUNTIME_MODULE_SOURCE = `const jsx = ${VM_BOOTSTRAP_SOURCE}
+var SURFACE_RUNTIME_MODULE_SOURCE; // deferred: uses DESKTOP_SURFACE_RUNTIME_SOURCE of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:660442", () => {
+  SURFACE_RUNTIME_MODULE_SOURCE = `const jsx = ${VM_BOOTSTRAP_SOURCE}
 export const h = jsx.h
 export const Fragment = jsx.Fragment
 export const install = ${DESKTOP_SURFACE_RUNTIME_SOURCE}
 `;
+});
 //@ chunk-s61vbvea.js:660561-660572 placement
 /**
  * 类型声明源码
@@ -840,9 +879,9 @@ var surfaceLimits = () => ({
 /**
  * 为插件的界面模块构建桌面运行包：运行时与类型模块、各模块文件（改写导入）、入口与组件、限额，并计算内容哈希。
  */
-function buildDesktopSurfaceBundle(e, surfaceModules) {
+function buildDesktopSurfaceBundle(plugin, surfaceModules) {
   let limits = surfaceLimits();
-  let s = new Map([
+  let filesByKey = new Map([
     [
       CLAUDE_SURFACE_RUNTIME,
       {
@@ -858,27 +897,27 @@ function buildDesktopSurfaceBundle(e, surfaceModules) {
       },
     ],
   ]);
-  for (let S of surfaceModules) {
-    let w = [
+  for (let surface of surfaceModules) {
+    let fileList = [
       {
-        file: S.modulePath,
-        source: S.source,
+        file: surface.modulePath,
+        source: surface.source,
       },
-      ...S.linked,
+      ...surface.linked,
     ];
-    for (let R of w) {
-      let x = surfaceModuleKey(R.file, e);
-      if (!s.has(x)) s.set(x, toSurfaceFile(R, e, S.links));
+    for (let file of fileList) {
+      let key = surfaceModuleKey(file.file, plugin);
+      if (!filesByKey.has(key)) filesByKey.set(key, toSurfaceFile(file, plugin, surface.links));
     }
   }
-  let files = [...s.values()];
-  let modules = surfaceModules.map((S) => ({
-    module: S.module,
-    entry: surfaceModuleKey(S.modulePath, e),
-    component: S.component,
+  let files = [...filesByKey.values()];
+  let modules = surfaceModules.map((surface) => ({
+    module: surface.module,
+    entry: surfaceModuleKey(surface.modulePath, plugin),
+    component: surface.component,
   }));
   return {
-    plugin: e.pluginName,
+    plugin: plugin.pluginName,
     hash: createHash("sha256")
       .update(
         jsonStringify({
@@ -899,26 +938,26 @@ function buildDesktopSurfaceBundle(e, surfaceModules) {
  * 界面运行包缓存：插件模块变化时重建，按插件取包。
  */
 function createSurfaceBundleCache() {
-  let e = new Map();
+  let cache = new Map();
   return {
-    moduleFor(n) {
-      let found = getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === n);
+    moduleFor(pluginName) {
+      let found = getPluginRegistry().loadedModules.find((loadedModule) => loadedModule.name === pluginName);
       let surfaceModules = found?.args.surfaceModules;
       if (!found || !surfaceModules || !isModuleAdmitted(found)) {
-        e.delete(n);
+        cache.delete(pluginName);
         return;
       }
-      let h = e.get(n);
-      if (h?.environmentId === found.environmentId) return h.built;
-      let { pluginRoot, pluginName } = found.args;
+      let cached = cache.get(pluginName);
+      if (cached?.environmentId === found.environmentId) return cached.built;
+      let { pluginRoot, pluginName: pluginName_2 } = found.args;
       let desktopSurfaceBundle = buildDesktopSurfaceBundle(
         {
           pluginRoot,
-          pluginName,
+          pluginName: pluginName_2,
         },
         surfaceModules,
       );
-      e.set(n, {
+      cache.set(pluginName, {
         environmentId: found.environmentId,
         built: desktopSurfaceBundle,
       });
@@ -930,36 +969,45 @@ function createSurfaceBundleCache() {
 /**
  * 界面运行包缓存
  */
-var surfaceBundleCache = createSurfaceBundleCache();
+var surfaceBundleCache; // deferred: uses createSurfaceBundleCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:661480", () => {
+  surfaceBundleCache = createSurfaceBundleCache();
+});
 //@ chunk-s61vbvea.js:661492-661504 placement
 /**
  * 各插件消息队列
  */
-var messageQueues = createPerPluginQueues();
+var messageQueues; // deferred: uses createPerPluginQueues (./interactions.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:661492", () => {
+  messageQueues = createPerPluginQueues();
+});
 //@ chunk-s61vbvea.js:661504-661642 placement
 /**
  * 为一组 Client 所属的插件返回其界面运行包哈希。
  */
-function surfaceBundleHashes(clientElements, n = (r) => surfaceBundleCache.moduleFor(r)?.hash) {
-  let r = {};
-  for (let s of new Set(clientElements.map((h) => h.plugin))) {
-    let h = n(s);
-    if (h !== undefined) r[s] = h;
+function surfaceBundleHashes(
+  clientElements,
+  hashOf = (pluginName) => surfaceBundleCache.moduleFor(pluginName)?.hash,
+) {
+  let hashes = {};
+  for (let pluginName of new Set(clientElements.map((element) => element.plugin))) {
+    let hash = hashOf(pluginName);
+    if (hash !== undefined) hashes[pluginName] = hash;
   }
-  return r;
+  return hashes;
 }
 //@ chunk-s61vbvea.js:661642-661780 placement
 /**
  * 构造 ui.message 事件：界面、组件、请求、元素、模块与数据。
  */
-var toUiMessageEvent = (e, surface, data) => ({
-  plugin: e.plugin,
+var toUiMessageEvent = (address, surface, data) => ({
+  plugin: address.plugin,
   message: {
     surface,
-    component: e.component,
-    requestId: e.requestId,
-    element: e.key,
-    module: e.module,
+    component: address.component,
+    requestId: address.requestId,
+    element: address.key,
+    module: address.module,
     data,
   },
 });
@@ -967,14 +1015,17 @@ var toUiMessageEvent = (e, surface, data) => ({
 /**
  * ui.message 站点规则
  */
-var UI_MESSAGE_RULES = UI_ENV_SITE_RULES["ui.message"];
+var UI_MESSAGE_RULES; // deferred: uses UI_ENV_SITE_RULES (../sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:661780", () => {
+  UI_MESSAGE_RULES = UI_ENV_SITE_RULES["ui.message"];
+});
 //@ chunk-s61vbvea.js:661804-662202 placement
 /**
  * 运行 ui.message 钩子链（只限该插件）并记录耗时，返回结果。
  */
 async function dispatchUiMessage({ plugin, message }) {
   let startTime = performance.now();
-  let s = await reportChainFailure({
+  let outcome = await reportChainFailure({
     e: message,
     handlers: [
       ...hookMembersFor("ui.message", undefined, {
@@ -996,96 +1047,99 @@ async function dispatchUiMessage({ plugin, message }) {
   logForDebugging(
     `ui.message ${plugin}/${message.element} (${message.module}) in ${message.component} from ${message.surface}: dispatched, settled in ${(performance.now() - startTime).toFixed(1)}ms`,
   );
-  return s ?? {};
+  return outcome ?? {};
 }
 //@ chunk-s61vbvea.js:662202-662436 placement
 /**
  * 桌面端 Client 发来消息：确认已画出、校验数据为纯数据后，按插件串行分发 ui.message。
  */
-async function postDesktopClientMessage(e, n = drawnClientLedger.isDrawn) {
-  let { data: r, ...s } = e;
-  if (!requireDrawnClient("ui.message", s, n)) return;
-  let h = checkPlainData(r);
-  if (h !== undefined) throw new HooksError(`${s.plugin}: Client ${s.module}: post: the data ${h}; not sent`);
-  return messageQueues(s.plugin)(() => dispatchUiMessage(toUiMessageEvent(s, DESKTOP, r)));
+async function postDesktopClientMessage(request, isDrawn = drawnClientLedger.isDrawn) {
+  let { data, ...address } = request;
+  if (!requireDrawnClient("ui.message", address, isDrawn)) return;
+  let dataProblem = checkPlainData(data);
+  if (dataProblem !== undefined)
+    throw new HooksError(
+      `${address.plugin}: Client ${address.module}: post: the data ${dataProblem}; not sent`,
+    );
+  return messageQueues(address.plugin)(() => dispatchUiMessage(toUiMessageEvent(address, DESKTOP, data)));
 }
 //@ chunk-s61vbvea.js:662436-663451 placement
-async function dispatchDesktopClient(e, n = drawnClientLedger.isDrawn) {
-  let { element, event, ...h } = e;
-  if (!n(h)) {
+async function dispatchDesktopClient(request, isDrawn = drawnClientLedger.isDrawn) {
+  let { element, event, ...address } = request;
+  if (!isDrawn(address)) {
     logForDebugging(
-      `ui.${event.type}: no desktop Client ${h.plugin}/${h.key} (${h.module}) is drawn in ${h.component} ${h.requestId}; nothing ran`,
+      `ui.${event.type}: no desktop Client ${address.plugin}/${address.key} (${address.module}) is drawn in ${address.component} ${address.requestId}; nothing ran`,
     );
     return;
   }
-  let y = desktopClientAddress(e);
+  let pressAddress = desktopClientAddress(request);
   let startTime = performance.now();
-  let w;
-  async function R() {
+  let reached;
+  async function runPress() {
     return {
       result: await reportChainFailure({
-        e: y,
+        e: pressAddress,
         handlers: hookMembersFor("ui.press"),
         site: UI_PRESS_RULES,
-        bottom: (q) => {
-          w = q;
+        bottom: (request) => {
+          reached = request;
           return Promise.resolve({
-            element: q.element,
+            element: request.element,
           });
         },
       }),
-      ...(w !== undefined && {
-        reached: w,
+      ...(reached !== undefined && {
+        reached,
       }),
     };
   }
-  async function x(L, q) {
+  async function runChain(site, input) {
     return {
       result: await reportChainFailure({
-        e: q,
-        handlers: hookMembersFor(L.event),
-        site: L,
-        bottom: (Z) => {
-          w = Z;
-          let ee = {
-            element: Z.element,
-            value: Z.value,
+        e: input,
+        handlers: hookMembersFor(site.event),
+        site,
+        bottom: (request) => {
+          reached = request;
+          let stoppedAt = {
+            element: request.element,
+            value: request.value,
           };
-          return Promise.resolve(ee);
+          return Promise.resolve(stoppedAt);
         },
       }),
-      ...(w !== undefined && {
-        reached: w,
+      ...(reached !== undefined && {
+        reached,
       }),
     };
   }
-  function P() {
+  function runEvent() {
     switch (event.type) {
       case "press":
-        return R();
+        return runPress();
       case "input":
-        return inputQueues(h.plugin)(() =>
-          x(UI_INPUT_RULES, {
-            ...y,
+        return inputQueues(address.plugin)(() =>
+          runChain(UI_INPUT_RULES, {
+            ...pressAddress,
             kind: event.kind,
             value: event.value,
           }),
         );
       case "select":
-        return selectQueues(h.plugin)(() =>
-          x(UI_SELECT_RULES, {
-            ...y,
+        return selectQueues(address.plugin)(() =>
+          runChain(UI_SELECT_RULES, {
+            ...pressAddress,
             value: event.value,
           }),
         );
     }
   }
-  let j = await P();
-  let G = j.reached === undefined ? "withheld" : "reached";
+  let outcome = await runEvent();
+  let statusText = outcome.reached === undefined ? "withheld" : "reached";
   logForDebugging(
-    `ui.${event.type} ${h.plugin}/${element} in Client ${h.key} (${h.module}) of ${h.component} from desktop: settled in ${(performance.now() - startTime).toFixed(1)}ms, ${G}`,
+    `ui.${event.type} ${address.plugin}/${element} in Client ${address.key} (${address.module}) of ${address.component} from desktop: settled in ${(performance.now() - startTime).toFixed(1)}ms, ${statusText}`,
   );
-  return j;
+  return outcome;
 }
 export {
   toUiMessageEvent,

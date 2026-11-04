@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_descriptors } from "../cjs/descriptors.js";
 import { require_scalar } from "./reflect/scalar.js";
 import { require_reflect } from "../cjs/reflect/reflect.js";
@@ -13,7 +13,7 @@ import { require_binary_encoding } from "./wire/binary-encoding.js";
 import { require_varint } from "../cjs/wire/varint.js";
 
 //@ chunk-fq0cr76a.js:410280-413424 cjs-require-graph
-var require_from_binary = x(function (cjsExports) {
+var require_from_binary = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -25,11 +25,11 @@ var require_from_binary = x(function (cjsExports) {
   var reflect_js_1 = require_reflect();
   var binary_encoding_js_1 = require_binary_encoding();
   var varint_js_1 = require_varint();
-  var GD = {
+  var readOptions = {
     readUnknownFields: true,
   };
   function makeReadContext(options) {
-    return options ? Object.assign(Object.assign({}, GD), options) : GD;
+    return options ? Object.assign(Object.assign({}, readOptions), options) : readOptions;
   }
   function fromBinary(schema, bytes, options) {
     let msg = reflect_js_1.reflect(schema, undefined, false);
@@ -54,11 +54,11 @@ var require_from_binary = x(function (cjsExports) {
   }
   function readMessage(message, reader, ctx, delimited, lengthOrDelimitedFieldNo) {
     var _a;
-    let b = delimited ? reader.len : reader.pos + lengthOrDelimitedFieldNo;
+    let end = delimited ? reader.len : reader.pos + lengthOrDelimitedFieldNo;
     let fieldNo;
     let wireType;
     let unknownFields = (_a = message.getUnknown()) !== null && _a !== undefined ? _a : [];
-    while (reader.pos < b) {
+    while (reader.pos < end) {
       [fieldNo, wireType] = reader.tag();
       if (delimited && wireType == binary_encoding_js_1.WireType.EndGroup) break;
       let field = message.findNumber(fieldNo);

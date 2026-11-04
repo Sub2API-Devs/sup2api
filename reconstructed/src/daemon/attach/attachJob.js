@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-vrr64ez0.js (12)
- * attribution: placement 12
+ * pieces: chunk-vrr64ez0.js (11)
+ * attribution: placement 11
  */
 import { randomUUID } from "crypto";
 import { connect } from "net";
@@ -18,7 +18,7 @@ import {
   parseDetachMsg,
   CLOUD_SESSION_ID_RE,
 } from "../../services/daemon/leaseProtocol.js";
-import { readDaemonToken } from "../../services/daemon/paths.js";
+import { readDaemonToken, daemonControlSocket, redactDaemonPipeKey } from "../../services/daemon/paths.js";
 import { recordAttachAttempt, updateAttachBeacon } from "../jobs/attachBeacon.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { sanitizeMarkName } from "../../utils/startupMarks.js";
@@ -47,7 +47,6 @@ import {
   decset,
 } from "../../ink/termio/dec.js";
 import { isNativeCursorRequested } from "../../ink/nativeCursor.js";
-import { daemonControlSocket, redactDaemonPipeKey } from "../../utils/sandbox/userNamespace.js";
 import { errorMessage } from "../../utils/errors.js";
 import { bgSupervisorStalledMessage } from "../../utils/fleetGates.js";
 import { RESET_SCROLL_REGION, ERASE_SCREEN, CURSOR_HOME } from "../../ink/termio/csi.js";
@@ -69,89 +68,115 @@ import { supportsHyperlinks } from "../../ink/supports-hyperlinks.js";
 import { sequential } from "../../utils/sequential.js";
 import { getSystemTheme } from "../../utils/systemTheme.js";
 import { firstLineOf } from "../../utils/stringUtils.js";
-import { DoctorLazy } from "../../cli/handlers/util.js";
-import { create, create_3, create_15, create_2 } from "../../../vendor/zod/lib/index.mjs";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-vrr64ez0.js:10911-11318 placement
 /**
  * 分离快捷键相关的字节常量。
  */
-var DETACH_KEYS = 2;
-var CTRL_Z_BYTE = 26;
-var DETACH_BYTE_NL = 100;
-var BACKSPACE_DETACH_BYTE = 8;
-var buffer = Buffer.from([127]);
-var DETACH_LETTER_B = 98;
-var DETACH_LETTER_Z = 122;
-var buffer_2 = Buffer.from("\x1B[27;5;98~", "latin1");
-var buffer_3 = Buffer.from("\x1B[27;5;122~", "latin1");
-var buffer_4 = Buffer.from("\x1B[27u", "latin1");
-var buffer_5 = Buffer.from("\x1B[27;1u", "latin1");
-var CTRL_C_BYTE = 3;
-var DETACH_LETTER_C = 99;
-var buffer_6 = Buffer.from("\x1B[27;5;99~", "latin1");
-var buffer_7 = Buffer.from(DAEMON_DETACH_APC, "ascii");
-var buffer_8 = Buffer.from(DAEMON_HINT_APC, "ascii");
-var buffer_9 = Buffer.from("\x1B_cc-d", "ascii");
-var buffer_10 = Buffer.from("\x1B[?9001", "ascii");
-var CURSOR_HIDE_DELAY_MS = 100;
+var DETACH_KEYS; // deferred: uses DAEMON_DETACH_APC (../../services/daemon/leaseProtocol.js) of its import cycle while loading; runs once the cycle is complete
+var CTRL_Z_BYTE;
+var DETACH_BYTE_NL;
+var BACKSPACE_DETACH_BYTE;
+var buffer;
+var DETACH_LETTER_B;
+var DETACH_LETTER_Z;
+var buffer_2;
+var buffer_3;
+var buffer_4;
+var buffer_5;
+var CTRL_C_BYTE;
+var DETACH_LETTER_C;
+var buffer_6;
+var buffer_7;
+var buffer_8;
+var buffer_9;
+var buffer_10;
+var CURSOR_HIDE_DELAY_MS;
+deferInit("chunk-vrr64ez0.js:10911", () => {
+  DETACH_KEYS = 2;
+  CTRL_Z_BYTE = 26;
+  DETACH_BYTE_NL = 100;
+  BACKSPACE_DETACH_BYTE = 8;
+  buffer = Buffer.from([127]);
+  DETACH_LETTER_B = 98;
+  DETACH_LETTER_Z = 122;
+  buffer_2 = Buffer.from("\x1B[27;5;98~", "latin1");
+  buffer_3 = Buffer.from("\x1B[27;5;122~", "latin1");
+  buffer_4 = Buffer.from("\x1B[27u", "latin1");
+  buffer_5 = Buffer.from("\x1B[27;1u", "latin1");
+  CTRL_C_BYTE = 3;
+  DETACH_LETTER_C = 99;
+  buffer_6 = Buffer.from("\x1B[27;5;99~", "latin1");
+  buffer_7 = Buffer.from(DAEMON_DETACH_APC, "ascii");
+  buffer_8 = Buffer.from(DAEMON_HINT_APC, "ascii");
+  buffer_9 = Buffer.from("\x1B_cc-d", "ascii");
+  buffer_10 = Buffer.from("\x1B[?9001", "ascii");
+  CURSOR_HIDE_DELAY_MS = 100;
+});
 //@ chunk-vrr64ez0.js:11318-11407 placement = hasPrefix (1)
-function hasPrefix(src, n, o) {
-  return src.length - n >= o.length && src.compare(o, 0, o.length, n, n + o.length) === 0;
+function hasPrefix(src, start, prefix) {
+  return (
+    src.length - start >= prefix.length &&
+    src.compare(prefix, 0, prefix.length, start, start + prefix.length) === 0
+  );
 }
 //@ chunk-vrr64ez0.js:11407-11748 placement
 /**
  * 匹配 CSI 形式的按键序列。
  */
-function matchCsiKey(e, n, o) {
-  if (e[n] !== 27 || e[n + 1] !== 91) return 0;
-  let r = n + 2;
-  let u = () => {
-    let w = -1;
-    for (let j = 0; j < 8 && r < e.length; j++) {
-      let S = e[r];
-      if (S < 48 || S > 57) break;
-      w = (w < 0 ? 0 : w) * 10 + (S - 48);
-      r++;
+function matchCsiKey(bytes, start, letter) {
+  if (bytes[start] !== 27 || bytes[start + 1] !== 91) return 0;
+  let pos = start + 2;
+  let readNumber = () => {
+    let value = -1;
+    for (let j = 0; j < 8 && pos < bytes.length; j++) {
+      let byte = bytes[pos];
+      if (byte < 48 || byte > 57) break;
+      value = (value < 0 ? 0 : value) * 10 + (byte - 48);
+      pos++;
     }
-    return w;
+    return value;
   };
-  let s = u();
-  if (s < 0) return 0;
-  let h = -1;
-  if (e[r] === 58) {
-    r++;
-    u();
-    if (e[r] === 58) {
-      r++;
-      h = u();
+  let param = readNumber();
+  if (param < 0) return 0;
+  let modifier = -1;
+  if (bytes[pos] === 58) {
+    pos++;
+    readNumber();
+    if (bytes[pos] === 58) {
+      pos++;
+      modifier = readNumber();
     }
   }
-  if (e[r] !== 59 || e[r + 1] !== 53 || e[r + 2] !== 117) return 0;
-  return (s > 127 && h >= 0 ? h : s) === o ? r + 3 - n : 0;
+  if (bytes[pos] !== 59 || bytes[pos + 1] !== 53 || bytes[pos + 2] !== 117) return 0;
+  return (param > 127 && modifier >= 0 ? modifier : param) === letter ? pos + 3 - start : 0;
 }
 //@ chunk-vrr64ez0.js:11748-11907 placement
-function suffixPrefixOverlap(e, n) {
-  let min = Math.min(e.length, n.length - 1);
-  e: for (let r = min; r > 0; r--) {
-    let u = e.length - r;
-    for (let j = 0; j < r; j++) if (e[u + j] !== n[j]) continue e;
-    return r;
+function suffixPrefixOverlap(a, b) {
+  let min = Math.min(a.length, b.length - 1);
+  e: for (let length = min; length > 0; length--) {
+    let offset = a.length - length;
+    for (let j = 0; j < length; j++) if (a[offset + j] !== b[j]) continue e;
+    return length;
   }
   return 0;
 }
 //@ chunk-vrr64ez0.js:11907-11929 placement
-var Z = Buffer.alloc(0);
+var EMPTY_BUFFER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-vrr64ez0.js:11907", () => {
+  EMPTY_BUFFER = Buffer.alloc(0);
+});
 //@ chunk-vrr64ez0.js:11929-12251 placement
 /**
  * 在输入字节中查找分离键。
  */
-function scanForDetachKey(e, n) {
-  for (let j = 0; j < e.length; j++) {
-    let r = e[j];
-    if (n) {
-      n = false;
-      if (r === DETACH_BYTE_NL)
+function scanForDetachKey(bytes, prefixArmed) {
+  for (let j = 0; j < bytes.length; j++) {
+    let byte = bytes[j];
+    if (prefixArmed) {
+      prefixArmed = false;
+      if (byte === DETACH_BYTE_NL)
         return {
           matched: true,
           prefixArmed: false,
@@ -159,29 +184,29 @@ function scanForDetachKey(e, n) {
       continue;
     }
     if (
-      r === CTRL_Z_BYTE ||
-      r === CTRL_C_BYTE ||
-      matchCsiKey(e, j, DETACH_LETTER_Z) ||
-      hasPrefix(e, j, buffer_3) ||
-      matchCsiKey(e, j, DETACH_LETTER_C) ||
-      hasPrefix(e, j, buffer_6)
+      byte === CTRL_Z_BYTE ||
+      byte === CTRL_C_BYTE ||
+      matchCsiKey(bytes, j, DETACH_LETTER_Z) ||
+      hasPrefix(bytes, j, buffer_3) ||
+      matchCsiKey(bytes, j, DETACH_LETTER_C) ||
+      hasPrefix(bytes, j, buffer_6)
     )
       return {
         matched: true,
         prefixArmed: false,
       };
-    let u =
-      r === DETACH_KEYS
+    let skip =
+      byte === DETACH_KEYS
         ? 1
-        : matchCsiKey(e, j, DETACH_LETTER_B) || (hasPrefix(e, j, buffer_2) ? buffer_2.length : 0);
-    if (u) {
-      j += u - 1;
-      n = true;
+        : matchCsiKey(bytes, j, DETACH_LETTER_B) || (hasPrefix(bytes, j, buffer_2) ? buffer_2.length : 0);
+    if (skip) {
+      j += skip - 1;
+      prefixArmed = true;
     }
   }
   return {
     matched: false,
-    prefixArmed: n,
+    prefixArmed,
   };
 }
 //@ chunk-vrr64ez0.js:12251-12610 placement
@@ -189,131 +214,131 @@ function scanForDetachKey(e, n) {
  * 等待用户按下分离键。
  */
 function waitForDetachKey(stdin) {
-  let n = false;
-  let o = false;
-  let r;
+  let done = false;
+  let prefixArmed = false;
+  let detachKeyMatched;
   let promise = new Promise((resolve) => {
-    r = resolve;
+    detachKeyMatched = resolve;
   });
-  let s = () => {
-    if (n) return;
-    let h;
-    while ((h = stdin.read()) !== null) {
-      let A = typeof h === "string" ? Buffer.from(h, "utf8") : h;
-      let w = scanForDetachKey(A, o);
-      o = w.prefixArmed;
-      if (w.matched) {
-        n = true;
-        r();
+  let onData = () => {
+    if (done) return;
+    let chunk;
+    while ((chunk = stdin.read()) !== null) {
+      let buffer = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+      let result = scanForDetachKey(buffer, prefixArmed);
+      prefixArmed = result.prefixArmed;
+      if (result.matched) {
+        done = true;
+        detachKeyMatched();
         return;
       }
     }
   };
-  stdin.on("readable", s);
+  stdin.on("readable", onData);
   if ("resume" in stdin && "pause" in stdin) {
     stdin.resume();
     stdin.pause();
   }
-  s();
+  onData();
   return {
     promise,
     cancel: () => {
-      n = true;
-      stdin.removeListener("readable", s);
+      done = true;
+      stdin.removeListener("readable", onData);
     },
   };
 }
 //@ chunk-vrr64ez0.js:12610-12650 placement
-function containsInterruptKey(e) {
-  return scanForDetachKey(e, false).matched;
+function containsInterruptKey(bytes) {
+  return scanForDetachKey(bytes, false).matched;
 }
 //@ chunk-vrr64ez0.js:12650-25318 placement
 /**
  * 附加到后台会话的 PTY：转发输入输出、处理窗口大小、分离键与遥测。
  */
-async function attachToJob(short, n = {}) {
-  let stdin = n.stdin ?? process.stdin;
-  let stdout = n.stdout ?? process.stdout;
-  let u = "columns" in stdout ? stdout.columns || 120 : 120;
-  let s = "rows" in stdout ? stdout.rows || 30 : 30;
-  let h = u;
-  let A = s;
+async function attachToJob(short, options = {}) {
+  let stdin = options.stdin ?? process.stdin;
+  let stdout = options.stdout ?? process.stdout;
+  let cols = "columns" in stdout ? stdout.columns || 120 : 120;
+  let rows = "rows" in stdout ? stdout.rows || 30 : 30;
+  let currentCols = cols;
+  let currentRows = rows;
   let attachId = randomUUID();
   let auth = await readDaemonToken();
   let now = Date.now();
   let startTime = performance.now();
-  let t0 = n.telemetry?.t0;
-  let U =
+  let t0 = options.telemetry?.t0;
+  let attachStartMs =
     t0 !== undefined && Number.isFinite(t0) && t0 >= 0 && t0 <= startTime && startTime - t0 < 86400000
       ? t0
       : startTime;
-  if (n.telemetry?.gestureId !== undefined)
-    recordAttachAttempt(n.telemetry.gestureId, n.telemetry.attempt, n.telemetry.storageV5);
-  let j;
-  let C;
-  let q;
-  let Q;
-  let K;
-  let D = Z;
-  let reached = n.telemetry?.interactive?.reached;
-  let _e = false;
-  let De;
+  if (options.telemetry?.gestureId !== undefined)
+    recordAttachAttempt(options.telemetry.gestureId, options.telemetry.attempt, options.telemetry.storageV5);
+  let contentPaintMs;
+  let promptIdleMs;
+  let msgsLoaded;
+  let msgsInJsonl;
+  let msgsRenderedAtFirstPaint;
+  let imarkCarry = EMPTY_BUFFER;
+  let reached = options.telemetry?.interactive?.reached;
+  let attachTimeoutFired = false;
+  let timeoutAttachMs;
   let timer = setTimeout(
     () => {
-      if (reached === undefined && (j === undefined || C === undefined)) {
-        _e = true;
-        De = performance.now() - U;
+      if (reached === undefined && (contentPaintMs === undefined || promptIdleMs === undefined)) {
+        attachTimeoutFired = true;
+        timeoutAttachMs = performance.now() - attachStartMs;
       }
     },
-    Math.max(0, 30000 - (startTime - U)),
+    Math.max(0, 30000 - (startTime - attachStartMs)),
   );
-  let Ce = false;
+  let isFirstFrameMeaningless = false;
   let ackMs;
-  let W;
-  let ce;
-  let Ne;
-  let we;
+  let viaState;
+  let booting;
+  let tempo;
+  let sessionState;
   let stale;
-  let Ee;
+  let workerCliVersion;
   let cached;
-  let ie;
-  let ue = false;
-  let pe;
-  function qe(meaningful) {
-    let R = Date.now() - now;
-    if (meaningful && pe === undefined) pe = R;
-    if (ue) return;
-    ue = true;
-    Ce = !meaningful;
+  let imarkNonce;
+  let gotFirstFrame = false;
+  let meaningfulMs;
+  function recordFirstFrame(meaningful) {
+    let elapsedMs = Date.now() - now;
+    if (meaningful && meaningfulMs === undefined) meaningfulMs = elapsedMs;
+    if (gotFirstFrame) return;
+    gotFirstFrame = true;
+    isFirstFrameMeaningless = !meaningful;
     logEvent("tengu_bg_attach_first_frame", {
-      ms: R,
-      meaningful_ms: pe,
+      ms: elapsedMs,
+      meaningful_ms: meaningfulMs,
       ack_ms: ackMs,
-      gesture_id: sanitizeMarkName(n.telemetry?.gestureId),
-      attempt: n.telemetry?.attempt,
-      via: fromEnumOpt(W),
-      tempo: fromEnumOpt(Ne),
+      gesture_id: sanitizeMarkName(options.telemetry?.gestureId),
+      attempt: options.telemetry?.attempt,
+      via: fromEnumOpt(viaState),
+      tempo: fromEnumOpt(tempo),
       stale,
-      state: daemonSessionStateLabel(we),
+      state: daemonSessionStateLabel(sessionState),
       cached,
     });
   }
-  let Ve;
+  let resolveOutcome;
   let promise = new Promise((resolve) => {
-    Ve = resolve;
+    resolveOutcome = resolve;
   });
-  let V = false;
-  let re = false;
-  let ae;
-  let X = false;
-  let oe;
-  let Pt = u;
-  let It = s;
+  let isFinished = false;
+  let gotAck = false;
+  let noResponseTimer;
+  let isDetachEscape = false;
+  let resizeTimer;
+  let previousCols = cols;
+  let previousRows = rows;
   let privateModeTracker = createPrivateModeTracker();
-  let Dt = () =>
+  let extendedKeysSequence = () =>
     enableExtendedKeysSequence({
       legacyKitty:
-        Ee !==
+        workerCliVersion !==
         {
           ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
           PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -326,27 +351,27 @@ async function attachToJob(short, n = {}) {
           DD_SOURCEMAP_GROUP: "default",
         }.VERSION,
     });
-  let Pn = getPlatform() === "windows" && !isBackspaceCtrlBackspaceHere();
-  let In =
-    n.holdScreenOnDisconnect && getPlatform() === "windows"
+  let isWindowsBackspaceDetach = getPlatform() === "windows" && !isBackspaceCtrlBackspaceHere();
+  let shouldRestoreRawMode =
+    options.holdScreenOnDisconnect && getPlatform() === "windows"
       ? true
       : "isRaw" in stdin
         ? Boolean(stdin.isRaw)
         : false;
-  let pt = getPlatform() === "windows";
+  let isWindowsPlatform = getPlatform() === "windows";
   let buffer_6 = Buffer.from(SHOW_CURSOR, "ascii");
   let buffer_11 = Buffer.from(HIDE_CURSOR, "ascii");
-  let Nt = pt && isNativeCursorRequested();
-  let Ft = false;
-  let ht;
-  let se;
+  let needsCursorTracking = isWindowsPlatform && isNativeCursorRequested();
+  let cursorHiddenByApp = false;
+  let cursorHideTimer;
+  let socket;
   try {
-    se = connect(daemonControlSocket());
+    socket = connect(daemonControlSocket());
   } catch (error) {
-    let reached = n.telemetry?.interactive?.reached;
+    let reached = options.telemetry?.interactive?.reached;
     let marksExpected =
-      typeof n.telemetry?.interactive?.marksExpected === "boolean"
-        ? n.telemetry.interactive.marksExpected
+      typeof options.telemetry?.interactive?.marksExpected === "boolean"
+        ? options.telemetry.interactive.marksExpected
         : undefined;
     logEvent("tengu_bg_attach_outcome", {
       outcome: fromEnum("error"),
@@ -355,15 +380,15 @@ async function attachToJob(short, n = {}) {
       ms: Date.now() - now,
       apc_detach: false,
       failure_class: fromEnum("connect_throw"),
-      gesture_id: sanitizeMarkName(n.telemetry?.gestureId),
-      attempt: n.telemetry?.attempt,
-      surface: fromEnumOpt(n.telemetry?.surface),
-      daemon_booted: n.telemetry?.daemonBooted,
+      gesture_id: sanitizeMarkName(options.telemetry?.gestureId),
+      attempt: options.telemetry?.attempt,
+      surface: fromEnumOpt(options.telemetry?.surface),
+      daemon_booted: options.telemetry?.daemonBooted,
       attach_ms:
         reached !== undefined
           ? reached.attachMs
           : marksExpected === true
-            ? Math.round(performance.now() - U)
+            ? Math.round(performance.now() - attachStartMs)
             : undefined,
       content_paint_ms: reached !== undefined ? Math.round(reached.contentPaintMs) : undefined,
       prompt_idle_ms: reached !== undefined ? Math.round(reached.promptIdleMs) : undefined,
@@ -373,8 +398,8 @@ async function attachToJob(short, n = {}) {
       first_frame_kind: fromEnumOpt(reached !== undefined ? "real" : undefined),
       marks_expected: reached !== undefined ? true : marksExpected,
       attach_censored: reached === undefined && marksExpected === true ? true : undefined,
-      via: fromEnumOpt(n.telemetry?.interactive?.via),
-      attach_cold: n.telemetry?.interactive?.attachCold,
+      via: fromEnumOpt(options.telemetry?.interactive?.via),
+      attach_cold: options.telemetry?.interactive?.attachCold,
     });
     clearTimeout(timer);
     return {
@@ -382,85 +407,98 @@ async function attachToJob(short, n = {}) {
       msg: redactDaemonPipeKey(errorMessage(error)),
     };
   }
-  se.setTimeout(1e4, () => {
-    if (!re)
-      ne("error", bgSupervisorStalledMessage(), {
+  socket.setTimeout(1e4, () => {
+    if (!gotAck)
+      finish("error", bgSupervisorStalledMessage(), {
         failureClass: "ack_timeout",
       });
   });
-  function ne(B, msg, E) {
-    if (V) return;
-    let { viaApc, beforeFirstFrame, failureClass } = E ?? {};
-    V = true;
-    clearTimeout(ht);
+  function finish(outcome, msg, finishOptions) {
+    if (isFinished) return;
+    let { viaApc, beforeFirstFrame, failureClass } = finishOptions ?? {};
+    isFinished = true;
+    clearTimeout(cursorHideTimer);
     clearTimeout(timer);
-    clearTimeout(ae);
-    let rounded = Math.round(performance.now() - U);
-    let x = j !== undefined && C !== undefined ? Math.round(Math.max(j, C)) : undefined;
-    let H = ie !== undefined || n.telemetry?.interactive?.marksExpected === true;
-    let G = reached === undefined && H && _e && x === undefined;
-    let ke = reached === undefined && H && !G && x === undefined;
+    clearTimeout(noResponseTimer);
+    let rounded = Math.round(performance.now() - attachStartMs);
+    let maxMarkMs =
+      contentPaintMs !== undefined && promptIdleMs !== undefined
+        ? Math.round(Math.max(contentPaintMs, promptIdleMs))
+        : undefined;
+    let marksExpectedKnown =
+      imarkNonce !== undefined || options.telemetry?.interactive?.marksExpected === true;
+    let isTimedOut =
+      reached === undefined && marksExpectedKnown && attachTimeoutFired && maxMarkMs === undefined;
+    let isCensored = reached === undefined && marksExpectedKnown && !isTimedOut && maxMarkMs === undefined;
     let attachMs =
-      reached !== undefined ? reached.attachMs : G ? Math.round(De ?? rounded) : ke ? rounded : x;
-    let $n =
+      reached !== undefined
+        ? reached.attachMs
+        : isTimedOut
+          ? Math.round(timeoutAttachMs ?? rounded)
+          : isCensored
+            ? rounded
+            : maxMarkMs;
+    let firstFrameKind =
       reached !== undefined
         ? "real"
-        : x !== undefined
+        : maxMarkMs !== undefined
           ? "real"
-          : ue
-            ? Ce && pe === undefined
+          : gotFirstFrame
+            ? isFirstFrameMeaningless && meaningfulMs === undefined
               ? "dimhint"
               : "unknown"
             : undefined;
     logEvent("tengu_bg_attach_outcome", {
-      outcome: fromEnum(B),
-      got_ack: re,
-      got_first_frame: ue,
+      outcome: fromEnum(outcome),
+      got_ack: gotAck,
+      got_first_frame: gotFirstFrame,
       ms: Date.now() - now,
-      gesture_id: sanitizeMarkName(n.telemetry?.gestureId),
-      attempt: n.telemetry?.attempt,
-      via: fromEnumOpt(n.telemetry?.interactive?.via ?? W),
-      tempo: fromEnumOpt(Ne),
+      gesture_id: sanitizeMarkName(options.telemetry?.gestureId),
+      attempt: options.telemetry?.attempt,
+      via: fromEnumOpt(options.telemetry?.interactive?.via ?? viaState),
+      tempo: fromEnumOpt(tempo),
       apc_detach: viaApc === true,
       failure_class: fromEnumOpt(failureClass),
-      state: daemonSessionStateLabel(we),
+      state: daemonSessionStateLabel(sessionState),
       cached,
-      meaningful_ms: pe,
-      input_accepted_ms: Ye,
-      input_delivered_ms: Ye,
-      keys_dropped: $t,
+      meaningful_ms: meaningfulMs,
+      input_accepted_ms: inputAcceptedMs,
+      input_delivered_ms: inputAcceptedMs,
+      keys_dropped: keysDropped,
       attach_ms: attachMs,
       content_paint_ms:
         reached !== undefined
           ? Math.round(reached.contentPaintMs)
-          : j !== undefined
-            ? Math.round(j)
+          : contentPaintMs !== undefined
+            ? Math.round(contentPaintMs)
             : undefined,
       prompt_idle_ms:
         reached !== undefined
           ? Math.round(reached.promptIdleMs)
-          : C !== undefined
-            ? Math.round(C)
+          : promptIdleMs !== undefined
+            ? Math.round(promptIdleMs)
             : undefined,
-      timed_out: G,
-      attach_censored: ke,
+      timed_out: isTimedOut,
+      attach_censored: isCensored,
       marks_expected:
         reached !== undefined
           ? true
-          : re || typeof n.telemetry?.interactive?.marksExpected === "boolean"
-            ? H
+          : gotAck || typeof options.telemetry?.interactive?.marksExpected === "boolean"
+            ? marksExpectedKnown
             : undefined,
       attach_cold:
-        n.telemetry?.interactive?.attachCold ?? (W !== undefined ? W === "cold" && (ce ?? true) : undefined),
-      daemon_booted: n.telemetry?.daemonBooted,
-      surface: fromEnumOpt(n.telemetry?.surface),
-      first_frame_kind: fromEnumOpt($n),
-      msgs_loaded: reached?.msgsLoaded ?? q,
-      msgs_in_jsonl: reached?.msgsInJsonl ?? Q,
-      msgs_rendered_at_first_paint: reached?.msgsRenderedAtFirstPaint ?? K,
+        options.telemetry?.interactive?.attachCold ??
+        (viaState !== undefined ? viaState === "cold" && (booting ?? true) : undefined),
+      daemon_booted: options.telemetry?.daemonBooted,
+      surface: fromEnumOpt(options.telemetry?.surface),
+      first_frame_kind: fromEnumOpt(firstFrameKind),
+      msgs_loaded: reached?.msgsLoaded ?? msgsLoaded,
+      msgs_in_jsonl: reached?.msgsInJsonl ?? msgsInJsonl,
+      msgs_rendered_at_first_paint: reached?.msgsRenderedAtFirstPaint ?? msgsRenderedAtFirstPaint,
     });
-    if (re) {
-      let Wn = n.alreadyInAlt || (B === "disconnected" && n.holdScreenOnDisconnect);
+    if (gotAck) {
+      let keepAltScreen =
+        options.alreadyInAlt || (outcome === "disconnected" && options.holdScreenOnDisconnect);
       stdout.write(
         ESU +
           privateModeTracker.snapshot().map(decreset).reverse().join("") +
@@ -470,443 +508,461 @@ async function attachToJob(short, n = {}) {
           RESET_SCROLL_REGION +
           "\x1B8" +
           (isProgressReportingAvailable() ? CLEAR_PROGRESS : "") +
-          (Wn ? "" : exitAltScreenSequence()),
+          (keepAltScreen ? "" : exitAltScreenSequence()),
       );
     }
-    if (!In) setRawModeSafe(stdin, false);
-    stdin.removeListener("readable", _t);
-    stdin.removeListener("end", Wt);
-    if ("removeListener" in stdout) stdout.removeListener("resize", gt);
-    clearTimeout(oe);
-    se.destroy();
-    Ve({
-      outcome: B,
+    if (!shouldRestoreRawMode) setRawModeSafe(stdin, false);
+    stdin.removeListener("readable", handleReadable);
+    stdin.removeListener("end", handleStdinEnd);
+    if ("removeListener" in stdout) stdout.removeListener("resize", handleResize);
+    clearTimeout(resizeTimer);
+    socket.destroy();
+    resolveOutcome({
+      outcome,
       msg,
       viaApc,
       beforeFirstFrame,
     });
   }
-  function Dn() {
-    ne("error", `${ENORESPONSE}: ${SESSION_NOT_RESPONDING_TEXT}`, {
+  function handleNoResponse() {
+    finish("error", `${ENORESPONSE}: ${SESSION_NOT_RESPONDING_TEXT}`, {
       failureClass: "no_response",
     });
   }
-  function gt() {
-    if (V) return;
-    if (oe === undefined) {
-      Pt = h;
-      It = A;
+  function handleResize() {
+    if (isFinished) return;
+    if (resizeTimer === undefined) {
+      previousCols = currentCols;
+      previousRows = currentRows;
     }
-    h = "columns" in stdout ? stdout.columns || u : u;
-    A = "rows" in stdout ? stdout.rows || s : s;
-    clearTimeout(oe);
-    oe = setTimeout(() => {
-      oe = undefined;
-      if (V) return;
-      if (h < Pt || A < It) stdout.write(ERASE_SCREEN + CURSOR_HOME);
-      Lt();
+    currentCols = "columns" in stdout ? stdout.columns || cols : cols;
+    currentRows = "rows" in stdout ? stdout.rows || rows : rows;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => {
+      resizeTimer = undefined;
+      if (isFinished) return;
+      if (currentCols < previousCols || currentRows < previousRows) stdout.write(ERASE_SCREEN + CURSOR_HOME);
+      reassertPrivateModes();
       controlRequest({
         proto: BG_PROTO,
         op: "resize",
         short,
-        cols: h,
-        rows: A,
+        cols: currentCols,
+        rows: currentRows,
         attachId,
       });
     }, 50);
   }
   let startTime_2 = performance.now();
-  function Lt() {
-    let B = privateModeTracker.snapshot();
-    if (!B.includes(1004)) return;
-    stdout.write(Dt() + B.map(decset).join(""));
+  function reassertPrivateModes() {
+    let decModes = privateModeTracker.snapshot();
+    if (!decModes.includes(1004)) return;
+    stdout.write(extendedKeysSequence() + decModes.map(decset).join(""));
   }
-  let Ut = n.gateStdinUntilFirstFrame === true && "isTTY" in stdin && stdin.isTTY === true;
-  let Ye;
-  let $t = 0;
+  let gateStdin = options.gateStdinUntilFirstFrame === true && "isTTY" in stdin && stdin.isTTY === true;
+  let inputAcceptedMs;
+  let keysDropped = 0;
   let terminalReplyFilter = createTerminalReplyFilter();
-  function Re(B) {
-    let R = () => terminalReplyFilter(B.toString("latin1"));
-    if (!Ut || ue) {
-      if (Ye === undefined && !R()) Ye = Date.now() - now;
-      se.write(B);
-    } else if (!R()) $t++;
+  function forwardInput(data) {
+    let isTerminalReply = () => terminalReplyFilter(data.toString("latin1"));
+    if (!gateStdin || gotFirstFrame) {
+      if (inputAcceptedMs === undefined && !isTerminalReply()) inputAcceptedMs = Date.now() - now;
+      socket.write(data);
+    } else if (!isTerminalReply()) keysDropped++;
   }
-  function Fn(B) {
-    if (V) return;
-    let R = typeof B === "string" ? Buffer.from(B, "utf8") : B;
-    let E = 0;
-    for (let idx = 0; idx < R.length; idx++) {
-      let y = R[idx];
-      if (X) {
-        X = false;
-        if (idx > E) Re(R.subarray(E, idx));
-        if (y === DETACH_BYTE_NL) return ne("detached");
-        Re(Buffer.from([DETACH_KEYS, y]));
-        E = idx + 1;
+  function handleStdinChunk(chunk) {
+    if (isFinished) return;
+    let buffer_6 = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+    let emittedEnd = 0;
+    for (let idx = 0; idx < buffer_6.length; idx++) {
+      let byte = buffer_6[idx];
+      if (isDetachEscape) {
+        isDetachEscape = false;
+        if (idx > emittedEnd) forwardInput(buffer_6.subarray(emittedEnd, idx));
+        if (byte === DETACH_BYTE_NL) return finish("detached");
+        forwardInput(Buffer.from([DETACH_KEYS, byte]));
+        emittedEnd = idx + 1;
         continue;
       }
       if (
-        Ut &&
-        !ue &&
-        ((y === 27 && R.length === 1) || hasPrefix(R, idx, buffer_4) || hasPrefix(R, idx, buffer_5))
+        gateStdin &&
+        !gotFirstFrame &&
+        ((byte === 27 && buffer_6.length === 1) ||
+          hasPrefix(buffer_6, idx, buffer_4) ||
+          hasPrefix(buffer_6, idx, buffer_5))
       )
-        return ne("detached", undefined, {
+        return finish("detached", undefined, {
           beforeFirstFrame: true,
         });
-      if (y === CTRL_Z_BYTE || matchCsiKey(R, idx, DETACH_LETTER_Z) || hasPrefix(R, idx, buffer_3)) {
-        if (idx > E) Re(R.subarray(E, idx));
-        return ne("detached");
+      if (
+        byte === CTRL_Z_BYTE ||
+        matchCsiKey(buffer_6, idx, DETACH_LETTER_Z) ||
+        hasPrefix(buffer_6, idx, buffer_3)
+      ) {
+        if (idx > emittedEnd) forwardInput(buffer_6.subarray(emittedEnd, idx));
+        return finish("detached");
       }
-      if (Pn && y === BACKSPACE_DETACH_BYTE) {
-        if (idx > E) Re(R.subarray(E, idx));
-        Re(buffer);
-        E = idx + 1;
+      if (isWindowsBackspaceDetach && byte === BACKSPACE_DETACH_BYTE) {
+        if (idx > emittedEnd) forwardInput(buffer_6.subarray(emittedEnd, idx));
+        forwardInput(buffer);
+        emittedEnd = idx + 1;
         continue;
       }
-      let L =
-        y === DETACH_KEYS
+      let detachSequenceLength =
+        byte === DETACH_KEYS
           ? 1
-          : matchCsiKey(R, idx, DETACH_LETTER_B) || (hasPrefix(R, idx, buffer_2) ? buffer_2.length : 0);
-      if (L) {
-        if (idx > E) Re(R.subarray(E, idx));
-        idx += L - 1;
-        E = idx + 1;
-        X = true;
+          : matchCsiKey(buffer_6, idx, DETACH_LETTER_B) ||
+            (hasPrefix(buffer_6, idx, buffer_2) ? buffer_2.length : 0);
+      if (detachSequenceLength) {
+        if (idx > emittedEnd) forwardInput(buffer_6.subarray(emittedEnd, idx));
+        idx += detachSequenceLength - 1;
+        emittedEnd = idx + 1;
+        isDetachEscape = true;
       }
     }
-    if (E < R.length) Re(R.subarray(E));
+    if (emittedEnd < buffer_6.length) forwardInput(buffer_6.subarray(emittedEnd));
   }
-  function _t() {
+  function handleReadable() {
     let startTime = performance.now();
-    if (startTime - startTime_2 > STDIN_IDLE_REASSERT_MS) Lt();
+    if (startTime - startTime_2 > STDIN_IDLE_REASSERT_MS) reassertPrivateModes();
     startTime_2 = startTime;
-    let R;
-    while ((R = stdin.read()) !== null) Fn(R);
+    let readChunk;
+    while ((readChunk = stdin.read()) !== null) handleStdinChunk(readChunk);
   }
-  function Wt() {
-    ne("detached");
+  function handleStdinEnd() {
+    finish("detached");
   }
-  let Ue = Z;
-  let Xe = Z;
-  let Pe = Z;
-  let Ae = Z;
-  function Jt(B) {
-    if (!pt) return B;
-    let R = Pe.length > 0;
-    let E = R ? Buffer.concat([Pe, B]) : B;
-    if (R) Pe = Z;
-    if (Nt) {
-      let index = E.lastIndexOf(buffer_6);
-      let index_2 = E.lastIndexOf(buffer_11);
-      if (index !== index_2) Ft = index > index_2;
+  let ackBuffer = EMPTY_BUFFER;
+  let apcCarry = EMPTY_BUFFER;
+  let privateModeQueryCarry = EMPTY_BUFFER;
+  let apcFilterCarry = EMPTY_BUFFER;
+  function filterCursorQueries(buffer) {
+    if (!isWindowsPlatform) return buffer;
+    let hasCarry = privateModeQueryCarry.length > 0;
+    let combined = hasCarry ? Buffer.concat([privateModeQueryCarry, buffer]) : buffer;
+    if (hasCarry) privateModeQueryCarry = EMPTY_BUFFER;
+    if (needsCursorTracking) {
+      let index = combined.lastIndexOf(buffer_6);
+      let index_2 = combined.lastIndexOf(buffer_11);
+      if (index !== index_2) cursorHiddenByApp = index > index_2;
     }
-    let index = E.indexOf(buffer_6);
+    let index = combined.indexOf(buffer_6);
     if (index < 0) {
-      let G = suffixPrefixOverlap(E, buffer_6);
-      if (G === 0) return E;
-      Pe = Buffer.from(E.subarray(E.length - G));
-      return E.subarray(0, E.length - G);
+      let overlap = suffixPrefixOverlap(combined, buffer_6);
+      if (overlap === 0) return combined;
+      privateModeQueryCarry = Buffer.from(combined.subarray(combined.length - overlap));
+      return combined.subarray(0, combined.length - overlap);
     }
-    let y = [];
-    let L = 0;
-    let F = index;
+    let pieces = [];
+    let segmentStart = 0;
+    let queryIndex = index;
     for (;;) {
-      if (F > L) y.push(E.subarray(L, F));
-      L = F + buffer_6.length;
-      F = E.indexOf(buffer_6, L);
-      if (F < 0) break;
+      if (queryIndex > segmentStart) pieces.push(combined.subarray(segmentStart, queryIndex));
+      segmentStart = queryIndex + buffer_6.length;
+      queryIndex = combined.indexOf(buffer_6, segmentStart);
+      if (queryIndex < 0) break;
     }
-    let chunk = E.subarray(L);
-    let H = suffixPrefixOverlap(chunk, buffer_6);
-    if (H > 0) Pe = Buffer.from(chunk.subarray(chunk.length - H));
-    if (chunk.length > H) y.push(chunk.subarray(0, chunk.length - H));
-    if (y.length === 0) return Z;
-    if (y.length === 1) return y[0];
-    return Buffer.concat(y);
+    let chunk = combined.subarray(segmentStart);
+    let overlap = suffixPrefixOverlap(chunk, buffer_6);
+    if (overlap > 0) privateModeQueryCarry = Buffer.from(chunk.subarray(chunk.length - overlap));
+    if (chunk.length > overlap) pieces.push(chunk.subarray(0, chunk.length - overlap));
+    if (pieces.length === 0) return EMPTY_BUFFER;
+    if (pieces.length === 1) return pieces[0];
+    return Buffer.concat(pieces);
   }
-  function Ht(B) {
-    let R = Ae.length > 0;
-    let E = R ? Buffer.concat([Ae, B]) : B;
-    if (R) Ae = Z;
-    let index = E.indexOf(buffer_10);
+  function filterApc(buffer) {
+    let hasCarry = apcFilterCarry.length > 0;
+    let combined = hasCarry ? Buffer.concat([apcFilterCarry, buffer]) : buffer;
+    if (hasCarry) apcFilterCarry = EMPTY_BUFFER;
+    let index = combined.indexOf(buffer_10);
     if (index < 0) {
-      let x = suffixPrefixOverlap(E, buffer_10);
-      if (x === 0) return E;
-      Ae = Buffer.from(E.subarray(E.length - x));
-      return E.subarray(0, E.length - x);
+      let overlap = suffixPrefixOverlap(combined, buffer_10);
+      if (overlap === 0) return combined;
+      apcFilterCarry = Buffer.from(combined.subarray(combined.length - overlap));
+      return combined.subarray(0, combined.length - overlap);
     }
-    let y = [];
-    let L = 0;
-    let F = index;
-    while (F >= 0) {
-      let x = F + buffer_10.length;
-      if (x >= E.length) {
-        if (F > L) y.push(E.subarray(L, F));
-        Ae = Buffer.from(E.subarray(F));
-        L = E.length;
+    let pieces = [];
+    let segmentStart = 0;
+    let apcIndex = index;
+    while (apcIndex >= 0) {
+      let contentStart = apcIndex + buffer_10.length;
+      if (contentStart >= combined.length) {
+        if (apcIndex > segmentStart) pieces.push(combined.subarray(segmentStart, apcIndex));
+        apcFilterCarry = Buffer.from(combined.subarray(apcIndex));
+        segmentStart = combined.length;
         break;
       }
-      let H = E[x];
-      if (H === 104 || H === 108) {
-        if (F > L) y.push(E.subarray(L, F));
-        L = x + 1;
+      let markerByte = combined[contentStart];
+      if (markerByte === 104 || markerByte === 108) {
+        if (apcIndex > segmentStart) pieces.push(combined.subarray(segmentStart, apcIndex));
+        segmentStart = contentStart + 1;
       }
-      F = E.indexOf(buffer_10, Math.max(L, F + 1));
+      apcIndex = combined.indexOf(buffer_10, Math.max(segmentStart, apcIndex + 1));
     }
-    if (L < E.length) {
-      let chunk = E.subarray(L);
-      let H = suffixPrefixOverlap(chunk, buffer_10);
-      if (H > 0) Ae = Buffer.from(chunk.subarray(chunk.length - H));
-      if (chunk.length > H) y.push(chunk.subarray(0, chunk.length - H));
+    if (segmentStart < combined.length) {
+      let chunk = combined.subarray(segmentStart);
+      let overlap = suffixPrefixOverlap(chunk, buffer_10);
+      if (overlap > 0) apcFilterCarry = Buffer.from(chunk.subarray(chunk.length - overlap));
+      if (chunk.length > overlap) pieces.push(chunk.subarray(0, chunk.length - overlap));
     }
-    if (y.length === 0) return Z;
-    if (y.length === 1) return y[0];
-    return Buffer.concat(y);
+    if (pieces.length === 0) return EMPTY_BUFFER;
+    if (pieces.length === 1) return pieces[0];
+    return Buffer.concat(pieces);
   }
-  let Gt = n.alreadyInAlt && !n.holdingFrame;
-  function Kt(B) {
-    let { out, meaningful, renders } = jn(B);
+  let clearBeforeFirstWrite = options.alreadyInAlt && !options.holdingFrame;
+  function writeOutput(buffer) {
+    let { out, meaningful, renders } = splitSyncBlocks(buffer);
     if (out.length === 0) return;
     if (!renders) {
       stdout.write(out);
       return;
     }
-    if (Gt) {
-      Gt = false;
+    if (clearBeforeFirstWrite) {
+      clearBeforeFirstWrite = false;
       stdout.write(ERASE_SCREEN + CURSOR_HOME);
     }
     stdout.write(out);
-    privateModeTracker.feed(out.toString("latin1"), (y) => {
-      if (y === 1004) {
-        let L = Dt();
-        if (L) stdout.write(L);
+    privateModeTracker.feed(out.toString("latin1"), (mode) => {
+      if (mode === 1004) {
+        let sequence = extendedKeysSequence();
+        if (sequence) stdout.write(sequence);
       }
     });
-    qe(meaningful);
+    recordFirstFrame(meaningful);
   }
-  let Qe = Z;
-  let et = false;
-  let Me = false;
-  let bt = false;
-  function qt(B) {
-    let R = false;
-    let E = 0;
-    if (bt) {
-      bt = false;
-      Me = false;
-      if (B[0] === 92) E = 1;
+  let syncCarry = EMPTY_BUFFER;
+  let inSyncBlock = false;
+  let inEscape = false;
+  let pendingEscape = false;
+  function hasMeaningfulText(buffer) {
+    let sawMeaningful = false;
+    let scanIndex = 0;
+    if (pendingEscape) {
+      pendingEscape = false;
+      inEscape = false;
+      if (buffer[0] === 92) scanIndex = 1;
     }
-    while (E < B.length) {
-      if (Me) {
-        let y = E;
-        while (y < B.length && B[y] !== 27 && B[y] !== 24 && B[y] !== 26) y++;
-        if (y >= B.length) return R;
-        if (B[y] !== 27) {
-          Me = false;
-          E = y + 1;
+    while (scanIndex < buffer.length) {
+      if (inEscape) {
+        let byteIndex = scanIndex;
+        while (
+          byteIndex < buffer.length &&
+          buffer[byteIndex] !== 27 &&
+          buffer[byteIndex] !== 24 &&
+          buffer[byteIndex] !== 26
+        )
+          byteIndex++;
+        if (byteIndex >= buffer.length) return sawMeaningful;
+        if (buffer[byteIndex] !== 27) {
+          inEscape = false;
+          scanIndex = byteIndex + 1;
           continue;
         }
-        if (y === B.length - 1) {
-          bt = true;
-          return R;
+        if (byteIndex === buffer.length - 1) {
+          pendingEscape = true;
+          return sawMeaningful;
         }
-        if (B[y + 1] === 92) {
-          Me = false;
-          E = y + 2;
+        if (buffer[byteIndex + 1] === 92) {
+          inEscape = false;
+          scanIndex = byteIndex + 2;
           continue;
         }
-        Me = false;
-        E = y;
+        inEscape = false;
+        scanIndex = byteIndex;
         continue;
       }
-      let index = B.indexOf(buffer_9, E);
+      let index = buffer.indexOf(buffer_9, scanIndex);
       if (index < 0) return true;
-      R ||= index > E;
-      Me = true;
-      E = index + buffer_9.length;
+      sawMeaningful ||= index > scanIndex;
+      inEscape = true;
+      scanIndex = index + buffer_9.length;
     }
-    return R;
+    return sawMeaningful;
   }
-  function jn(B) {
-    let R = Qe.length > 0 ? Buffer.concat([Qe, B]) : B;
-    Qe = Z;
-    let E = false;
-    let M = false;
-    let y = [];
-    let L = 0;
+  function splitSyncBlocks(buffer) {
+    let combined = syncCarry.length > 0 ? Buffer.concat([syncCarry, buffer]) : buffer;
+    syncCarry = EMPTY_BUFFER;
+    let sawMeaningful = false;
+    let sawUnchecked = false;
+    let pieces = [];
+    let blockIndex = 0;
     for (;;) {
-      let index = R.indexOf(buffer_8, L);
+      let index = combined.indexOf(buffer_8, blockIndex);
       if (index < 0) break;
-      if (index > L) {
-        let chunk = R.subarray(L, index);
-        y.push(chunk);
-        if (!et) E = qt(chunk) || E;
-        else M = true;
+      if (index > blockIndex) {
+        let buffer = combined.subarray(blockIndex, index);
+        pieces.push(buffer);
+        if (!inSyncBlock) sawMeaningful = hasMeaningfulText(buffer) || sawMeaningful;
+        else sawUnchecked = true;
       }
-      et = !et;
-      L = index + buffer_8.length;
+      inSyncBlock = !inSyncBlock;
+      blockIndex = index + buffer_8.length;
     }
-    let chunk = R.subarray(L);
-    let x = suffixPrefixOverlap(chunk, buffer_8);
-    if (x > 0) {
-      Qe = Buffer.from(chunk.subarray(chunk.length - x));
-      chunk = chunk.subarray(0, chunk.length - x);
+    let buffer_2 = combined.subarray(blockIndex);
+    let overlap = suffixPrefixOverlap(buffer_2, buffer_8);
+    if (overlap > 0) {
+      syncCarry = Buffer.from(buffer_2.subarray(buffer_2.length - overlap));
+      buffer_2 = buffer_2.subarray(0, buffer_2.length - overlap);
     }
-    if (chunk.length > 0) {
-      y.push(chunk);
-      if (!et) E = qt(chunk) || E;
-      else M = true;
+    if (buffer_2.length > 0) {
+      pieces.push(buffer_2);
+      if (!inSyncBlock) sawMeaningful = hasMeaningfulText(buffer_2) || sawMeaningful;
+      else sawUnchecked = true;
     }
     return {
-      out: y.length === 0 ? Z : y.length === 1 ? y[0] : Buffer.concat(y),
-      meaningful: E,
-      renders: E || M,
+      out: pieces.length === 0 ? EMPTY_BUFFER : pieces.length === 1 ? pieces[0] : Buffer.concat(pieces),
+      meaningful: sawMeaningful,
+      renders: sawMeaningful || sawUnchecked,
     };
   }
-  function Vt(B) {
-    if (V) return;
-    let R = ie !== undefined && reached === undefined && (j === undefined || C === undefined);
-    let interactiveMarks = extractInteractiveMarks(D, B, {
-      requireNonce: ie,
+  function handleSocketData(data) {
+    if (isFinished) return;
+    let collectingMarks =
+      imarkNonce !== undefined &&
+      reached === undefined &&
+      (contentPaintMs === undefined || promptIdleMs === undefined);
+    let interactiveMarks = extractInteractiveMarks(imarkCarry, data, {
+      requireNonce: imarkNonce,
     });
-    D = interactiveMarks.carry;
+    imarkCarry = interactiveMarks.carry;
     let cleaned = interactiveMarks.cleaned;
-    if (R)
+    if (collectingMarks)
       for (let mark of interactiveMarks.marks) {
-        let H = performance.now() - U;
-        if (mark.kind === "content_paint" && j === undefined) {
-          j = H;
-          q = mark.msgsLoaded;
-          Q = mark.msgsInJsonl;
-          K = mark.msgsRenderedAtFirstPaint;
-        } else if (mark.kind === "prompt_idle" && C === undefined) C = H;
-        if (j !== undefined && C !== undefined) {
+        let markMs = performance.now() - attachStartMs;
+        if (mark.kind === "content_paint" && contentPaintMs === undefined) {
+          contentPaintMs = markMs;
+          msgsLoaded = mark.msgsLoaded;
+          msgsInJsonl = mark.msgsInJsonl;
+          msgsRenderedAtFirstPaint = mark.msgsRenderedAtFirstPaint;
+        } else if (mark.kind === "prompt_idle" && promptIdleMs === undefined) promptIdleMs = markMs;
+        if (contentPaintMs !== undefined && promptIdleMs !== undefined) {
           clearTimeout(timer);
-          let attachMs = Math.round(Math.max(j, C));
-          if (n.telemetry?.interactive !== undefined)
-            n.telemetry.interactive.reached = {
+          let attachMs = Math.round(Math.max(contentPaintMs, promptIdleMs));
+          if (options.telemetry?.interactive !== undefined)
+            options.telemetry.interactive.reached = {
               attachMs,
-              contentPaintMs: j,
-              promptIdleMs: C,
-              msgsLoaded: q,
-              msgsInJsonl: Q,
-              msgsRenderedAtFirstPaint: K,
+              contentPaintMs,
+              promptIdleMs,
+              msgsLoaded,
+              msgsInJsonl,
+              msgsRenderedAtFirstPaint,
             };
-          if (n.telemetry?.gestureId !== undefined)
+          if (options.telemetry?.gestureId !== undefined)
             updateAttachBeacon(
-              n.telemetry.gestureId,
+              options.telemetry.gestureId,
               {
                 interactiveReached: true,
                 attachMs,
-                msgsLoaded: q,
-                msgsInJsonl: Q,
-                msgsRenderedAtFirstPaint: K,
+                msgsLoaded,
+                msgsInJsonl,
+                msgsRenderedAtFirstPaint,
               },
-              n.telemetry.storageV5,
+              options.telemetry.storageV5,
             );
         }
       }
-    let y = Xe.length > 0 ? Buffer.concat([Xe, cleaned]) : cleaned;
-    let index = y.indexOf(buffer_7);
+    let combined = apcCarry.length > 0 ? Buffer.concat([apcCarry, cleaned]) : cleaned;
+    let index = combined.indexOf(buffer_7);
     if (index >= 0) {
-      let chunk = y.subarray(0, index);
+      let buffer = combined.subarray(0, index);
       if (index > 0) {
-        let G = Ht(Jt(chunk));
-        if (G.length > 0) Kt(G);
+        let filteredOutput = filterApc(filterCursorQueries(buffer));
+        if (filteredOutput.length > 0) writeOutput(filteredOutput);
       }
-      Xe = Z;
-      Pe = Z;
-      Ae = Z;
-      let msg = parseDetachMsg(chunk);
-      return ne("detached", msg, {
+      apcCarry = EMPTY_BUFFER;
+      privateModeQueryCarry = EMPTY_BUFFER;
+      apcFilterCarry = EMPTY_BUFFER;
+      let detachMsg = parseDetachMsg(buffer);
+      return finish("detached", detachMsg, {
         viaApc: true,
-        failureClass: classifyAttachError(msg),
+        failureClass: classifyAttachError(detachMsg),
       });
     }
-    let F = suffixPrefixOverlap(y, buffer_7);
-    if (y.length > F) {
-      let chunk = y.subarray(0, y.length - F);
-      let H = Ht(Jt(chunk));
-      if (H.length > 0) Kt(H);
+    let overlap = suffixPrefixOverlap(combined, buffer_7);
+    if (combined.length > overlap) {
+      let buffer = combined.subarray(0, combined.length - overlap);
+      let cleanChunk = filterApc(filterCursorQueries(buffer));
+      if (cleanChunk.length > 0) writeOutput(cleanChunk);
     }
-    Xe = F > 0 ? Buffer.from(y.subarray(y.length - F)) : Z;
-    if (Nt) {
-      clearTimeout(ht);
-      ht = setTimeout(() => {
-        if (!V && Ft) stdout.write(SHOW_CURSOR);
+    apcCarry = overlap > 0 ? Buffer.from(combined.subarray(combined.length - overlap)) : EMPTY_BUFFER;
+    if (needsCursorTracking) {
+      clearTimeout(cursorHideTimer);
+      cursorHideTimer = setTimeout(() => {
+        if (!isFinished && cursorHiddenByApp) stdout.write(SHOW_CURSOR);
       }, CURSOR_HIDE_DELAY_MS);
     }
   }
-  se.on("data", (B) => {
-    if (V) return;
-    if (re) {
-      clearTimeout(ae);
-      Vt(B);
+  socket.on("data", (data) => {
+    if (isFinished) return;
+    if (gotAck) {
+      clearTimeout(noResponseTimer);
+      handleSocketData(data);
       return;
     }
-    Ue = Buffer.concat([Ue, B]);
-    let index = Ue.indexOf(10);
+    ackBuffer = Buffer.concat([ackBuffer, data]);
+    let index = ackBuffer.indexOf(10);
     if (index < 0) return;
-    let str = Ue.subarray(0, index).toString("utf8");
-    let chunk = Ue.subarray(index + 1);
-    let y;
+    let str = ackBuffer.subarray(0, index).toString("utf8");
+    let chunk = ackBuffer.subarray(index + 1);
+    let ack;
     try {
-      y = jsonParse(str);
+      ack = jsonParse(str);
     } catch (error) {
-      return ne("error", `bad ack: ${errorMessage(error)}`, {
+      return finish("error", `bad ack: ${errorMessage(error)}`, {
         failureClass: "bad_ack",
       });
     }
-    if (typeof y !== "object" || y === null)
-      return ne("error", "bad ack: non-object ack line", {
+    if (typeof ack !== "object" || ack === null)
+      return finish("error", "bad ack: non-object ack line", {
         failureClass: "bad_ack",
       });
-    if (!y.ok)
-      return ne("error", `${y.code}: ${y.error}`, {
-        failureClass: attachErrorCode(y.code),
+    if (!ack.ok)
+      return finish("error", `${ack.code}: ${ack.error}`, {
+        failureClass: attachErrorCode(ack.code),
       });
-    re = true;
-    se.setTimeout(0);
-    if (!n.holdingFrame && chunk.length === 0) ae = setTimeout(Dn, ATTACH_ERROR_CODES_2);
+    gotAck = true;
+    socket.setTimeout(0);
+    if (!options.holdingFrame && chunk.length === 0)
+      noResponseTimer = setTimeout(handleNoResponse, ATTACH_ERROR_CODES_2);
     ackMs = Date.now() - now;
-    W = y.op === "attach" ? normalizeDaemonSessionState(y.via) : undefined;
-    ce = y.op === "attach" && typeof y.booting === "boolean" ? y.booting : undefined;
-    ie = y.op === "attach" && typeof y.imarkNonce === "string" ? y.imarkNonce : undefined;
-    if (n.telemetry?.gestureId !== undefined)
+    viaState = ack.op === "attach" ? normalizeDaemonSessionState(ack.via) : undefined;
+    booting = ack.op === "attach" && typeof ack.booting === "boolean" ? ack.booting : undefined;
+    imarkNonce = ack.op === "attach" && typeof ack.imarkNonce === "string" ? ack.imarkNonce : undefined;
+    if (options.telemetry?.gestureId !== undefined)
       updateAttachBeacon(
-        n.telemetry.gestureId,
+        options.telemetry.gestureId,
         {
-          marksExpected: ie !== undefined,
-          daemonBooted: typeof n.telemetry.daemonBooted === "boolean" ? n.telemetry.daemonBooted : undefined,
-          attachCold: W !== undefined ? W === "cold" && (ce ?? true) : undefined,
-          via: W,
+          marksExpected: imarkNonce !== undefined,
+          daemonBooted:
+            typeof options.telemetry.daemonBooted === "boolean" ? options.telemetry.daemonBooted : undefined,
+          attachCold: viaState !== undefined ? viaState === "cold" && (booting ?? true) : undefined,
+          via: viaState,
         },
-        n.telemetry.storageV5,
+        options.telemetry.storageV5,
       );
-    if (n.telemetry?.interactive !== undefined) {
-      n.telemetry.interactive.marksExpected =
-        n.telemetry.interactive.marksExpected === true || ie !== undefined;
-      if (W !== undefined && n.telemetry.interactive.reached === undefined) {
-        n.telemetry.interactive.attachCold = W === "cold" && (ce ?? true);
-        n.telemetry.interactive.via = W;
+    if (options.telemetry?.interactive !== undefined) {
+      options.telemetry.interactive.marksExpected =
+        options.telemetry.interactive.marksExpected === true || imarkNonce !== undefined;
+      if (viaState !== undefined && options.telemetry.interactive.reached === undefined) {
+        options.telemetry.interactive.attachCold = viaState === "cold" && (booting ?? true);
+        options.telemetry.interactive.via = viaState;
       }
     }
-    Ne = y.op === "attach" ? y.tempo : undefined;
-    we = y.op === "attach" ? y.state : undefined;
-    stale = y.op === "attach" ? y.stale : undefined;
-    Ee = y.op === "attach" ? y.workerCliVersion : undefined;
-    cached = y.op === "attach" ? y.cached : undefined;
+    tempo = ack.op === "attach" ? ack.tempo : undefined;
+    sessionState = ack.op === "attach" ? ack.state : undefined;
+    stale = ack.op === "attach" ? ack.stale : undefined;
+    workerCliVersion = ack.op === "attach" ? ack.workerCliVersion : undefined;
+    cached = ack.op === "attach" ? ack.cached : undefined;
     if (env.TMUX && !getSpawnLauncherState().tmuxRgbApplied) {
       getSpawnLauncherState().tmuxRgbApplied = true;
       execFileNoThrow("tmux", ["set", "-as", "terminal-features", ",*:RGB"]);
     }
-    let joined = ((y.op === "attach" ? y.decModes : undefined) ?? []).map(decset).join("");
+    let joined = ((ack.op === "attach" ? ack.decModes : undefined) ?? []).map(decset).join("");
     privateModeTracker.feed(joined);
     if ("ref" in stdin) stdin.ref();
     setRawModeSafe(stdin, true);
     let legacyKitty =
-      Ee !==
+      workerCliVersion !==
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -919,7 +975,7 @@ async function attachToJob(short, n = {}) {
         DD_SOURCEMAP_GROUP: "default",
       }.VERSION;
     stdout.write(
-      n.alreadyInAlt
+      options.alreadyInAlt
         ? HIDE_CURSOR +
             enableExtendedKeysSequence({
               legacyKitty,
@@ -929,60 +985,60 @@ async function attachToJob(short, n = {}) {
             legacyKitty,
           }) +
             joined +
-            (pt ? HIDE_CURSOR : "") +
+            (isWindowsPlatform ? HIDE_CURSOR : "") +
             `
   \x1B[2mAttaching\u2026\x1B[0m
 `,
     );
-    if ("on" in stdout) stdout.on("resize", gt);
+    if ("on" in stdout) stdout.on("resize", handleResize);
     if (
-      ("columns" in stdout && (stdout.columns || u) !== u) ||
-      ("rows" in stdout && (stdout.rows || s) !== s)
+      ("columns" in stdout && (stdout.columns || cols) !== cols) ||
+      ("rows" in stdout && (stdout.rows || rows) !== rows)
     )
-      gt();
-    stdin.on("readable", _t);
+      handleResize();
+    stdin.on("readable", handleReadable);
     if ("resume" in stdin && "pause" in stdin) {
       stdin.resume();
       stdin.pause();
     }
-    stdin.once("end", Wt);
-    _t();
-    if (chunk.length) Vt(chunk);
+    stdin.once("end", handleStdinEnd);
+    handleReadable();
+    if (chunk.length) handleSocketData(chunk);
   });
-  se.on("error", (B) =>
-    ne("error", redactDaemonPipeKey(errorMessage(B)), {
+  socket.on("error", (socketError) =>
+    finish("error", redactDaemonPipeKey(errorMessage(socketError)), {
       failureClass: "socket_error",
     }),
   );
-  se.once("close", () => {
-    if (!V)
-      ne(re ? "disconnected" : "error", "control socket closed", {
+  socket.once("close", () => {
+    if (!isFinished)
+      finish(gotAck ? "disconnected" : "error", "control socket closed", {
         failureClass: "socket_closed",
       });
   });
-  se.once("connect", () => {
-    se.write(
+  socket.once("connect", () => {
+    socket.write(
       jsonStringify({
         proto: BG_PROTO,
         op: "attach",
         short,
         auth,
-        cols: u,
-        rows: s,
+        cols,
+        rows,
         attachId,
         caps: {
           ...terminalCapabilities(),
-          ...(n.sessionTabs !== undefined && {
-            sessionTabs: n.sessionTabs,
-            ...(n.cloudTabs === true && {
+          ...(options.sessionTabs !== undefined && {
+            sessionTabs: options.sessionTabs,
+            ...(options.cloudTabs === true && {
               cloudTabs: true,
             }),
-            ...(n.tabsLanding && {
-              tabsLanding: n.tabsLanding,
+            ...(options.tabsLanding && {
+              tabsLanding: options.tabsLanding,
             }),
           }),
         },
-        ...(n.holdingFrame && {
+        ...(options.holdingFrame && {
           holdingFrame: true,
         }),
       }) +
@@ -1020,43 +1076,15 @@ function terminalCapabilities() {
   };
 }
 //@ chunk-vrr64ez0.js:25777-25863 placement
-function parseSwitchTarget(e) {
-  return CLOUD_SESSION_ID_RE.test(e)
+function parseSwitchTarget(target) {
+  return CLOUD_SESSION_ID_RE.test(target)
     ? {
         kind: "cloud",
-        sessionId: e,
+        sessionId: target,
       }
     : {
         kind: "switch",
-        short: e,
+        short: target,
       };
 }
-//@ chunk-vrr64ez0.js:26163-26354 placement
-/**
- * 后台作业接管记录相关常量（时间、7 天保留期、上限）与 schema：写入时间与 shell 列表（pid、进程启动标记）。
- */
-var ADOPT_RECORD_SCHEMA_BASE = 250;
-var ADOPT_RECORD_MAX_AGE_MS = 604800000;
-var MAX_ADOPT_SHELLS = 256;
-var adoptRecordSchema = DoctorLazy(() =>
-  create({
-    writtenAtMs: create_3().optional(),
-    shells: create_15(
-      create({
-        pid: create_3().int().positive(),
-        procStart: create_2().optional(),
-        startTimeTicks: create_3().int().optional(),
-      }),
-    ).catch([]),
-  }),
-);
-export {
-  parseSwitchTarget,
-  attachToJob,
-  containsInterruptKey,
-  waitForDetachKey,
-  ADOPT_RECORD_SCHEMA_BASE,
-  adoptRecordSchema,
-  ADOPT_RECORD_MAX_AGE_MS,
-  MAX_ADOPT_SHELLS,
-};
+export { parseSwitchTarget, attachToJob, containsInterruptKey, waitForDetachKey };

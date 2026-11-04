@@ -9,8 +9,16 @@
  * attribution: placement 6, layout 1, fingerprint 1
  */
 import { basename, dirname } from "path";
-import { init_react_production, Q, y, P, R, ce, Oo } from "../../vendor/react/cjs/react.production.js";
-import { Re } from "../../runtime/bun-runtime.js";
+import {
+  init_react_production,
+  useMemo,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useEffectEvent,
+} from "../../vendor/react/cjs/react.production.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../vendor/semver/index.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useAppState, useSetAppState } from "../state/AppState.js";
@@ -45,25 +53,38 @@ import {
 } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../ink/components/Text.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-tzghj6zv.js:21690-21694 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tzghj6zv.js:21690", () => {
+  init_react_production();
+});
 //@ chunk-tzghj6zv.js:21694-21698 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tzghj6zv.js:21694", () => {
+  init_react_production();
+});
 //@ chunk-tzghj6zv.js:21745-21749 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tzghj6zv.js:21745", () => {
+  init_react_production();
+});
 //@ chunk-tzghj6zv.js:21749-21767 placement
-var installedVersionSemver_2 = Re(require_semver_3(), 1);
+var installedVersionSemver_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-tzghj6zv.js:21749", () => {
+  installedVersionSemver_2 = __toESM(require_semver_3(), 1);
+});
 //@ chunk-tzghj6zv.js:21767-21868 placement
 /**
  * 宽松解析版本，只保留 major.minor.patch。
  */
-function toMajorMinorPatch(d) {
-  return `${installedVersionSemver_2.major(d, {
+function toMajorMinorPatch(version) {
+  return `${installedVersionSemver_2.major(version, {
     loose: true,
-  })}.${installedVersionSemver_2.minor(d, {
+  })}.${installedVersionSemver_2.minor(version, {
     loose: true,
-  })}.${installedVersionSemver_2.patch(d, {
+  })}.${installedVersionSemver_2.patch(version, {
     loose: true,
   })}`;
 }
@@ -73,7 +94,7 @@ function toMajorMinorPatch(d) {
  */
 function useChangedVersion(
   version,
-  h = {
+  currentVersion = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
@@ -85,11 +106,11 @@ function useChangedVersion(
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
 ) {
-  return Q(() => {
+  return useMemo(() => {
     if (!version) return null;
     let majorMinorPatch = toMajorMinorPatch(version);
-    return majorMinorPatch === toMajorMinorPatch(h) ? null : majorMinorPatch;
-  }, [version, h]);
+    return majorMinorPatch === toMajorMinorPatch(currentVersion) ? null : majorMinorPatch;
+  }, [version, currentVersion]);
 }
 //@ chunk-tzghj6zv.js:22448-22457 layout
 var MAX_UPDATE_RESTARTS = 2;
@@ -99,23 +120,23 @@ var MAX_UPDATE_RESTARTS = 2;
  */
 function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbose, withSeparator }) {
   let { storageV5 } = useTheme_2();
-  let autoUpdaterResult = useAppState((te) => te.autoUpdaterResult);
+  let autoUpdaterResult = useAppState((appState) => appState.autoUpdaterResult);
   let setAppState = useSetAppState();
-  let [versions, setVersions] = y({});
-  let [hasLocalInstall, setHasLocalInstall] = y(false);
+  let [versions, setVersions] = useState({});
+  let [hasLocalInstall, setHasLocalInstall] = useState(false);
   let isUpdatingRef = useChangedVersion(autoUpdaterResult?.version);
-  P(() => {
+  useEffect(() => {
     localInstallationExists().then(setHasLocalInstall);
   }, []);
-  let isUpdatingRef_2 = R(isUpdating);
-  let statusRef = R(autoUpdaterResult?.status);
-  let consecutiveExeLockFailuresRef = R(autoUpdaterResult?.consecutiveExeLockFailures ?? 0);
-  P(() => {
+  let isUpdatingRef_2 = useRef(isUpdating);
+  let statusRef = useRef(autoUpdaterResult?.status);
+  let consecutiveExeLockFailuresRef = useRef(autoUpdaterResult?.consecutiveExeLockFailures ?? 0);
+  useEffect(() => {
     isUpdatingRef_2.current = isUpdating;
     statusRef.current = autoUpdaterResult?.status;
     consecutiveExeLockFailuresRef.current = autoUpdaterResult?.consecutiveExeLockFailures ?? 0;
   });
-  let checkForUpdates = ce(async () => {
+  let checkForUpdates = useCallback(async () => {
     if (isUpdatingRef_2.current) return;
     if (statusRef.current === "no_permissions") {
       logForDebugging("AutoUpdater: Skipping update check (no_permissions persists this session)");
@@ -143,33 +164,33 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
     let channel = autoUpdatesChannel();
     let latestVersion = await getLatestVersion(channel);
     let { maxVersion, forceDowngradeEnabled } = await resolveMaxVersionConfig();
-    let H = null;
-    let D = false;
+    let targetVersion = null;
+    let isForcedDowngrade = false;
     if (forceDowngradeEnabled && maxVersion) {
-      D = isForceDowngradeActive(currentVersion, maxVersion, "auto_updater");
-      if (D) H = maxVersion;
+      isForcedDowngrade = isForceDowngradeActive(currentVersion, maxVersion, "auto_updater");
+      if (isForcedDowngrade) targetVersion = maxVersion;
     }
-    if (!H && latestVersion) {
+    if (!targetVersion && latestVersion) {
       if (maxVersion && semverGte(latestVersion, maxVersion)) {
         logForDebugging(
           `AutoUpdater: maxVersion ${maxVersion} is set, capping update from ${latestVersion} to ${maxVersion}`,
         );
-        if (semverGte(maxVersion, currentVersion)) H = maxVersion;
+        if (semverGte(maxVersion, currentVersion)) targetVersion = maxVersion;
         else
           logForDebugging(
             `AutoUpdater: current version ${currentVersion} is already at or above maxVersion ${maxVersion}, skipping update`,
           );
-      } else if (semverGte(latestVersion, currentVersion)) H = latestVersion;
+      } else if (semverGte(latestVersion, currentVersion)) targetVersion = latestVersion;
     }
     setVersions({
       global: currentVersion,
-      latest: H ?? latestVersion,
+      latest: targetVersion ?? latestVersion,
     });
-    if (!H || shouldSkipVersion(H)) return;
-    if (D)
+    if (!targetVersion || shouldSkipVersion(targetVersion)) return;
+    if (isForcedDowngrade)
       logEvent("tengu_auto_updater_forced_downgrade", {
         from_version: sanitizeVersion(currentVersion),
-        to_version: sanitizeVersion(H),
+        to_version: sanitizeVersion(targetVersion),
       });
     let startTime = Date.now();
     onChangeIsUpdating(true);
@@ -183,18 +204,18 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
       onChangeIsUpdating(false);
       return;
     }
-    let se;
-    let le;
-    let Ce;
+    let updateStatus;
+    let installScope;
+    let globalInstallResult;
     if (installationType === "npm-local") {
       logForDebugging("AutoUpdater: Using local update method");
-      le = "local";
-      se = await installOrUpdateClaudePackage(channel, H, storageV5);
+      installScope = "local";
+      updateStatus = await installOrUpdateClaudePackage(channel, targetVersion, storageV5);
     } else if (installationType === "npm-global") {
       logForDebugging("AutoUpdater: Using global update method");
-      le = "global";
-      Ce = await installGlobalPackage(H, storageV5);
-      se = Ce.status;
+      installScope = "global";
+      globalInstallResult = await installGlobalPackage(targetVersion, storageV5);
+      updateStatus = globalInstallResult.status;
     } else if (installationType === "native") {
       logForDebugging("AutoUpdater: Unexpected native installation in non-native updater");
       onChangeIsUpdating(false);
@@ -202,97 +223,97 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
     } else {
       logForDebugging("AutoUpdater: Unknown installation type, falling back to config");
       let isMigrated = config.installMethod === "local";
-      le = isMigrated ? "local" : "global";
-      if (isMigrated) se = await installOrUpdateClaudePackage(channel, H, storageV5);
+      installScope = isMigrated ? "local" : "global";
+      if (isMigrated) updateStatus = await installOrUpdateClaudePackage(channel, targetVersion, storageV5);
       else {
-        Ce = await installGlobalPackage(H, storageV5);
-        se = Ce.status;
+        globalInstallResult = await installGlobalPackage(targetVersion, storageV5);
+        updateStatus = globalInstallResult.status;
       }
     }
     onChangeIsUpdating(false);
-    let failureHint = Ce?.failureHint;
-    if (se !== "in_progress")
+    let failureHint = globalInstallResult?.failureHint;
+    if (updateStatus !== "in_progress")
       recordUpdateResult(
         {
           timestamp: new Date().toISOString(),
-          path: le === "local" ? "npm-local" : "npm-global",
-          outcome: se === "success" ? "success" : "failed",
-          status: se,
+          path: installScope === "local" ? "npm-local" : "npm-global",
+          outcome: updateStatus === "success" ? "success" : "failed",
+          status: updateStatus,
           version_from: currentVersion,
-          version_to: H,
+          version_to: targetVersion,
           error_code:
-            se === "install_failed" && getUpdateRestoreFailure()
+            updateStatus === "install_failed" && getUpdateRestoreFailure()
               ? "update_apply_restore_failed"
               : updateApplyErrorKey(failureHint),
         },
         storageV5,
       );
-    if (se === "success") {
-      let probeDurationMs = Ce?.probeDurationMs ?? 0;
+    if (updateStatus === "success") {
+      let probeDurationMs = globalInstallResult?.probeDurationMs ?? 0;
       logEvent("tengu_auto_updater_success", {
         fromVersion: sanitizeVersion(currentVersion),
-        toVersion: sanitizeVersion(H),
+        toVersion: sanitizeVersion(targetVersion),
         durationMs: Date.now() - startTime - probeDurationMs,
         probeDurationMs,
-        wasMigrated: le === "local",
+        wasMigrated: installScope === "local",
         installationType: fromEnum(installationType),
       });
-    } else if (se !== "in_progress") {
-      let _e = se;
+    } else if (updateStatus !== "in_progress") {
+      let failureStatus = updateStatus;
       logEvent("tengu_auto_updater_fail", {
         fromVersion: sanitizeVersion(currentVersion),
-        attemptedVersion: sanitizeVersion(H),
-        status: fromEnum(_e),
+        attemptedVersion: sanitizeVersion(targetVersion),
+        status: fromEnum(failureStatus),
         durationMs: Date.now() - startTime,
-        wasMigrated: le === "local",
+        wasMigrated: installScope === "local",
         installationType: fromEnum(installationType),
       });
     }
-    setAppState((_e) => {
-      let autoUpdaterResult = _e.autoUpdaterResult;
+    setAppState((state) => {
+      let autoUpdaterResult = state.autoUpdaterResult;
       let consecutiveExeLockFailures = autoUpdaterResult?.consecutiveExeLockFailures ?? 0;
-      let _ =
-        se === "in_progress"
+      let nextExeLockFailures =
+        updateStatus === "in_progress"
           ? consecutiveExeLockFailures
           : failureHint === "windows_running_exe_lock"
             ? consecutiveExeLockFailures + 1
             : 0;
       if (
-        autoUpdaterResult?.version === H &&
-        autoUpdaterResult?.status === se &&
+        autoUpdaterResult?.version === targetVersion &&
+        autoUpdaterResult?.status === updateStatus &&
         autoUpdaterResult?.failureHint === failureHint &&
-        (autoUpdaterResult?.consecutiveExeLockFailures ?? 0) === _
+        (autoUpdaterResult?.consecutiveExeLockFailures ?? 0) === nextExeLockFailures
       )
-        return _e;
+        return state;
       return {
-        ..._e,
+        ...state,
         autoUpdaterResult: {
-          version: H,
-          status: se,
+          version: targetVersion,
+          status: updateStatus,
           failureHint,
-          consecutiveExeLockFailures: _,
+          consecutiveExeLockFailures: nextExeLockFailures,
         },
       };
     });
   }, [setAppState, storageV5]);
-  let Te = Oo((te) => {
+  let reportUpdateError = useEffectEvent((error) => {
     onChangeIsUpdating(false);
-    logError(te);
+    logError(error);
   });
-  P(() => {
-    checkForUpdates().catch(Te);
+  useEffect(() => {
+    checkForUpdates().catch(reportUpdateError);
   }, [checkForUpdates]);
-  useInterval(() => void checkForUpdates().catch(Te), 1800000);
+  useInterval(() => void checkForUpdates().catch(reportUpdateError), 1800000);
   if (!autoUpdaterResult?.version && (!versions.global || !versions.latest)) return null;
   if (!autoUpdaterResult?.version && !isUpdating) return null;
-  let L = autoUpdaterResult?.status === "install_failed" ? getUpdateRestoreFailure() : null;
-  let ee = null;
+  let restoreFailure = autoUpdaterResult?.status === "install_failed" ? getUpdateRestoreFailure() : null;
+  let failureHintText = null;
   switch (autoUpdaterResult?.failureHint) {
     case "windows_running_exe_lock":
-      ee = "claude.exe in use (close other Claude Code sessions, including VS Code)";
+      failureHintText = "claude.exe in use (close other Claude Code sessions, including VS Code)";
       break;
     case "native_binary_missing":
-      ee = "native binary for this platform was not downloaded (will retry)";
+      failureHintText = "native binary for this platform was not downloaded (will retry)";
       break;
     case "registry_session_refused":
     case undefined:
@@ -365,8 +386,8 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
           ],
         }),
       autoUpdaterResult?.status === "install_failed" &&
-        (L
-          ? L.preservedPath
+        (restoreFailure
+          ? restoreFailure.preservedPath
             ? jsxProd_default_2(Box, {
                 flexDirection: "column",
                 children: [
@@ -379,19 +400,19 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
                         withSpace: true,
                       }),
                       "Update failed and ",
-                      basename(L.originalPath),
+                      basename(restoreFailure.originalPath),
                       " could not be restored \u2014 it was preserved at:",
                     ],
                   }),
-                  dirname(L.preservedPath) === dirname(L.originalPath)
+                  dirname(restoreFailure.preservedPath) === dirname(restoreFailure.originalPath)
                     ? jsxProd_default_2(Text, {
                         color: "error",
                         wrap: "truncate",
                         children: [
-                          L.preservedPath,
+                          restoreFailure.preservedPath,
                           " \xB7 rename it back to",
                           " ",
-                          basename(L.originalPath),
+                          basename(restoreFailure.originalPath),
                           " or run",
                           " ",
                           jsxProd_default_2(Text, {
@@ -420,7 +441,7 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
                         color: "error",
                         wrap: "truncate",
                         children: [
-                          L.preservedPath,
+                          restoreFailure.preservedPath,
                           " \xB7 reinstall with",
                           " ",
                           jsxProd_default_2(Text, {
@@ -456,7 +477,7 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
                     withSpace: true,
                   }),
                   "Update failed and ",
-                  basename(L.originalPath),
+                  basename(restoreFailure.originalPath),
                   " could not be restored (no preserved copy found) \xB7 reinstall with",
                   " ",
                   jsxProd_default_2(Text, {
@@ -480,7 +501,7 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
                   }),
                 ],
               })
-          : ee
+          : failureHintText
             ? jsxProd_default_2(Text, {
                 color: "error",
                 wrap: "truncate",
@@ -490,7 +511,7 @@ function AutoUpdater({ isUpdating, onChangeIsUpdating, showSuccessMessage, verbo
                     withSpace: true,
                   }),
                   "Auto-update failed: ",
-                  ee,
+                  failureHintText,
                   " \xB7 Run",
                   " ",
                   jsxProd_default(Text, {

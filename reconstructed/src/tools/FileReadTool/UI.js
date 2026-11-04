@@ -191,4 +191,11 @@ function renderToolResultMessage(output) {
       });
   }
 }
-export { userFacingName, getToolUseSummary, getAgentOutputTaskId };
+export {
+  userFacingName,
+  getToolUseSummary,
+  getAgentOutputTaskId,
+  renderToolResultMessage,
+  renderToolUseMessage,
+  renderToolUseTag,
+};

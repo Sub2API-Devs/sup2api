@@ -42,52 +42,52 @@ import { setConsoleProfileBearerProvider } from "../../utils/telemetry/memorySum
 function promptForPastedCode(terminal, { expectedState, onCode, onCancel }) {
   if (!terminal.input.isTTY || !terminal.output.isTTY) return;
   stopCapturingEarlyInput();
-  let r = false;
-  let o = false;
-  let a = createInterface({
+  let gotCode = false;
+  let cancelled = false;
+  let rl = createInterface({
     input: terminal.input,
     output: terminal.output,
     prompt: PASTE_HERE_MSG,
   });
-  a.on("SIGINT", () => onCancel());
-  a.on("close", () => {
-    if (!r) onCancel();
+  rl.on("SIGINT", () => onCancel());
+  rl.on("close", () => {
+    if (!gotCode) onCancel();
   });
-  a.on("line", (n) => {
-    let trimmed = n.trim();
+  rl.on("line", (line) => {
+    let trimmed = line.trim();
     if (!trimmed) {
-      a.prompt();
+      rl.prompt();
       return;
     }
-    let [h, p] = trimmed.split("#");
-    if (!h || !p) {
+    let [code, state] = trimmed.split("#");
+    if (!code || !state) {
       terminal.output.write(`Invalid code. Please make sure the full code was copied.
 `);
-      a.prompt();
+      rl.prompt();
       return;
     }
-    if (expectedState !== undefined && p !== expectedState) {
+    if (expectedState !== undefined && state !== expectedState) {
       terminal.output
         .write(`That code is not from this sign-in. Paste the code shown after opening the address above.
 `);
-      a.prompt();
+      rl.prompt();
       return;
     }
-    o = true;
+    cancelled = true;
     onCode({
-      authorizationCode: h,
-      state: p,
+      authorizationCode: code,
+      state,
     });
   });
-  a.prompt();
+  rl.prompt();
   return {
     close: () => {
-      if (r) return;
-      r = true;
-      if (!o)
+      if (gotCode) return;
+      gotCode = true;
+      if (!cancelled)
         terminal.output.write(`
 `);
-      a.close();
+      rl.close();
     },
   };
 }
@@ -105,34 +105,34 @@ async function consoleSignInForCloudSessions({
 }) {
   let CLIENT_ID = getOauthConfig().CLIENT_ID;
   let accountEmail = getWIFAccountInfo()?.accountEmail;
-  let o = new OAuthService();
-  let a = false;
-  let n = false;
-  let c = false;
-  let h;
-  let p;
-  let S;
-  let y = false;
-  let I = () => {};
+  let oauthService = new OAuthService();
+  let timedOut = false;
+  let cancelled = false;
+  let abandoned = false;
+  let timeoutTimer;
+  let pastePrompt;
+  let unsavedSlot;
+  let done = false;
+  let failSignIn = () => {};
   let promise = new Promise((resolve, reject) => {
-    I = reject;
+    failSignIn = reject;
   });
   promise.catch(() => {});
   try {
-    let C = o.startOAuthFlow(
-      async (T, E) => {
-        onBrowserOpening?.(T);
-        p = promptForPastedCode(terminal, {
-          expectedState: getOAuthStateFromUrl(T),
-          onCode: (P) => o.handleManualAuthCodeInput(P),
+    let flowPromise = oauthService.startOAuthFlow(
+      async (authorizeUrl, openUrl) => {
+        onBrowserOpening?.(authorizeUrl);
+        pastePrompt = promptForPastedCode(terminal, {
+          expectedState: getOAuthStateFromUrl(authorizeUrl),
+          onCode: (pastedCode) => oauthService.handleManualAuthCodeInput(pastedCode),
           onCancel: () => {
-            if (y) return;
-            n = true;
-            c = true;
-            I(Error("cloud-sessions sign-in cancelled"));
+            if (done) return;
+            cancelled = true;
+            abandoned = true;
+            failSignIn(Error("cloud-sessions sign-in cancelled"));
           },
         });
-        await openValidatedUrlSucceeded(E ?? T);
+        await openValidatedUrlSucceeded(openUrl ?? authorizeUrl);
       },
       {
         loginWithClaudeAi: false,
@@ -146,28 +146,33 @@ async function consoleSignInForCloudSessions({
         successRedirectUrl: getOauthConfig().CLAUDEAI_SUCCESS_URL,
       },
     );
-    C.then((T) => {
-      if (c && T.refreshToken) revokeOAuthToken(T.refreshToken, CLIENT_ID);
-    }).catch(() => {});
-    h = setTimeout(() => {
-      a = true;
-      c = true;
-      I(Error("cloud-sessions sign-in timed out"));
+    flowPromise
+      .then((tokens) => {
+        if (abandoned && tokens.refreshToken) revokeOAuthToken(tokens.refreshToken, CLIENT_ID);
+      })
+      .catch(() => {});
+    timeoutTimer = setTimeout(() => {
+      timedOut = true;
+      abandoned = true;
+      failSignIn(Error("cloud-sessions sign-in timed out"));
     }, OAUTH_FLOW_TIMEOUT_MS);
-    let winner = await Promise.race([C, promise]);
-    y = true;
-    p?.close();
-    let _ = await finishConsoleSignIn(winner, CLIENT_ID, organizationUuid, accountEmail);
-    if (!_.ok) {
-      logFeatureBad("cloud_sessions_console_sign_in", _.reason);
-      return _;
+    let winner = await Promise.race([flowPromise, promise]);
+    done = true;
+    pastePrompt?.close();
+    let finished = await finishConsoleSignIn(winner, CLIENT_ID, organizationUuid, accountEmail);
+    if (!finished.ok) {
+      logFeatureBad("cloud_sessions_console_sign_in", finished.reason);
+      return finished;
     }
-    S = _.slot;
+    unsavedSlot = finished.slot;
     let freshCloudSessionsOAuth = await readFreshCloudSessionsOAuth();
-    if (freshCloudSessionsOAuth?.refreshToken && freshCloudSessionsOAuth.refreshToken !== _.slot.refreshToken)
+    if (
+      freshCloudSessionsOAuth?.refreshToken &&
+      freshCloudSessionsOAuth.refreshToken !== finished.slot.refreshToken
+    )
       await revokeOAuthToken(freshCloudSessionsOAuth.refreshToken, freshCloudSessionsOAuth.clientId);
-    if (!(await saveCloudSessionsOAuth(_.slot)).success) {
-      await revokeOAuthToken(_.slot.refreshToken, CLIENT_ID);
+    if (!(await saveCloudSessionsOAuth(finished.slot)).success) {
+      await revokeOAuthToken(finished.slot.refreshToken, CLIENT_ID);
       logFeatureBad("cloud_sessions_console_sign_in", "save_failed");
       return {
         ok: false,
@@ -175,17 +180,17 @@ async function consoleSignInForCloudSessions({
         message: "Could not save the cloud-sessions credential to secure storage. Try again.",
       };
     }
-    S = undefined;
+    unsavedSlot = undefined;
     logFeatureOk("cloud_sessions_console_sign_in");
     return {
       ok: true,
-      accessToken: _.slot.accessToken,
+      accessToken: finished.slot.accessToken,
     };
   } catch (error) {
-    y = true;
-    c = true;
-    if (S !== undefined) await revokeOAuthToken(S.refreshToken, S.clientId);
-    if (a) {
+    done = true;
+    abandoned = true;
+    if (unsavedSlot !== undefined) await revokeOAuthToken(unsavedSlot.refreshToken, unsavedSlot.clientId);
+    if (timedOut) {
       logFeatureBad("cloud_sessions_console_sign_in", "timed_out");
       return {
         ok: false,
@@ -193,7 +198,7 @@ async function consoleSignInForCloudSessions({
         message: "The browser sign-in for cloud sessions timed out after 5 minutes. Try again.",
       };
     }
-    if (n) {
+    if (cancelled) {
       logFeatureSad("cloud_sessions_console_sign_in", "cancelled");
       return {
         ok: false,
@@ -211,18 +216,18 @@ async function consoleSignInForCloudSessions({
       message: "The browser sign-in for cloud sessions failed. Try again.",
     };
   } finally {
-    if (h !== undefined) clearTimeout(h);
-    p?.close();
-    o.cleanup();
+    if (timeoutTimer !== undefined) clearTimeout(timeoutTimer);
+    pastePrompt?.close();
+    oauthService.cleanup();
   }
 }
 //@ chunk-4r7nqnx2.js:7748-7832 placement
 /**
  * 从回调 URL 里取 state 参数，取不到返回 undefined。
  */
-function getOAuthStateFromUrl(e) {
+function getOAuthStateFromUrl(url) {
   try {
-    return new URL(e).searchParams.get("state") ?? undefined;
+    return new URL(url).searchParams.get("state") ?? undefined;
   } catch {
     return;
   }
@@ -231,12 +236,12 @@ function getOAuthStateFromUrl(e) {
 /**
  * 校验作用域并保存云会话凭据。
  */
-async function finishConsoleSignIn(e, s, organizationUuid, accountEmail) {
-  let r = async () => {
-    if (e.refreshToken) await revokeOAuthToken(e.refreshToken, s);
+async function finishConsoleSignIn(tokens, clientId, organizationUuid, accountEmail) {
+  let revoke = async () => {
+    if (tokens.refreshToken) await revokeOAuthToken(tokens.refreshToken, clientId);
   };
-  if (!e.scopes.includes(CLAUDE_AI_SESSIONS_SCOPE)) {
-    await r();
+  if (!tokens.scopes.includes(CLAUDE_AI_SESSIONS_SCOPE)) {
+    await revoke();
     return {
       ok: false,
       reason: "scope_not_granted",
@@ -244,17 +249,17 @@ async function finishConsoleSignIn(e, s, organizationUuid, accountEmail) {
         "Your Console organization doesn't allow cloud sessions from Claude Code, so the sign-in didn't grant that permission. Cloud sessions stay unavailable with this sign-in.",
     };
   }
-  let o = e.tokenAccount?.organizationUuid ?? e.profile?.organization.uuid;
-  if (o === undefined) {
-    await r();
+  let orgUuid = tokens.tokenAccount?.organizationUuid ?? tokens.profile?.organization.uuid;
+  if (orgUuid === undefined) {
+    await revoke();
     return {
       ok: false,
       reason: "invalid",
       message: "The sign-in didn't say which organization it was for, so it can't be used. Try again.",
     };
   }
-  if (o.toLowerCase() !== organizationUuid.toLowerCase()) {
-    await r();
+  if (orgUuid.toLowerCase() !== organizationUuid.toLowerCase()) {
+    await revoke();
     return {
       ok: false,
       reason: "other_organization",
@@ -263,26 +268,26 @@ async function finishConsoleSignIn(e, s, organizationUuid, accountEmail) {
     };
   }
   if (accountEmail !== undefined) {
-    let a = (e.tokenAccount?.emailAddress || e.profile?.account.email)?.trim() || undefined;
-    if (a === undefined) {
-      await r();
+    let email = (tokens.tokenAccount?.emailAddress || tokens.profile?.account.email)?.trim() || undefined;
+    if (email === undefined) {
+      await revoke();
       return {
         ok: false,
         reason: "invalid",
         message: "The sign-in didn't say which account it was for, so it can't be used. Try again.",
       };
     }
-    if (a.trim().toLowerCase() !== accountEmail.trim().toLowerCase()) {
-      await r();
+    if (email.trim().toLowerCase() !== accountEmail.trim().toLowerCase()) {
+      await revoke();
       return {
         ok: false,
         reason: "other_account",
-        message: `The sign-in was for ${a}, but your Console sign-in is ${accountEmail}. Sign in again as ${accountEmail}.`,
+        message: `The sign-in was for ${email}, but your Console sign-in is ${accountEmail}. Sign in again as ${accountEmail}.`,
       };
     }
   }
-  if (!e.refreshToken || !e.expiresAt) {
-    await r();
+  if (!tokens.refreshToken || !tokens.expiresAt) {
+    await revoke();
     return {
       ok: false,
       reason: "invalid",
@@ -293,11 +298,13 @@ async function finishConsoleSignIn(e, s, organizationUuid, accountEmail) {
   return {
     ok: true,
     slot: {
-      accessToken: e.accessToken,
-      refreshToken: e.refreshToken,
-      expiresAt: e.expiresAt,
-      scopes: e.scopes.filter((scope) => CLOUD_SESSIONS_OAUTH_SCOPES.some((n) => n === scope)),
-      clientId: s,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: tokens.expiresAt,
+      scopes: tokens.scopes.filter((scope) =>
+        CLOUD_SESSIONS_OAUTH_SCOPES.some((allowedScope) => allowedScope === scope),
+      ),
+      clientId,
       organizationUuid,
     },
   };

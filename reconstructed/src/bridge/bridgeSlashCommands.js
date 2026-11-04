@@ -30,24 +30,25 @@ import { logEvent } from "../services/analytics/index.js";
 import { lit } from "../services/analytics/safeMetadata.js";
 import { logFeatureBad } from "../services/analytics/featureTelemetry.js";
 import { createUserMessage, createCommandInputMessage } from "../utils/messages.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ccc7emag.js:610-1308 placement
 /**
  * 桥接（Remote Control/中继）传来的斜杠命令：判断是否可用、是否对中继参与者隐藏，并构造分发请求。
  */
-function resolveBridgeSlashOverride(r) {
-  let { inputString, context, uuid, origin, verifiedSlackHumanTurn } = r;
+function resolveBridgeSlashOverride(input) {
+  let { inputString, context, uuid, origin, verifiedSlackHumanTurn } = input;
   let bridgeSlashTarget = resolveBridgeSlashTarget(inputString, context.options.commands, false);
   if (bridgeSlashTarget === undefined)
     return {
       kind: "none",
     };
   let { folded, effectiveCmd } = bridgeSlashTarget;
-  let c = admitsBridgeAuthor(effectiveCmd, {
+  let admitsAuthor = admitsBridgeAuthor(effectiveCmd, {
     origin,
     relayAuthored: verifiedSlackHumanTurn === true,
   });
-  if (isBridgeSafeCommand(effectiveCmd) && c)
+  if (isBridgeSafeCommand(effectiveCmd) && admitsAuthor)
     return {
       kind: "updated",
       effectiveSkipSlash: false,
@@ -56,7 +57,7 @@ function resolveBridgeSlashOverride(r) {
     };
   let bridgeFallback = findBridgeFallback(effectiveCmd);
   if (bridgeFallback && isCommandEnabled(effectiveCmd)) {
-    let g = {
+    let fallbackCmd = {
       ...bridgeFallback,
       isEnabled: () => isCommandEnabled(effectiveCmd),
     };
@@ -70,10 +71,10 @@ function resolveBridgeSlashOverride(r) {
         ...context,
         options: {
           ...context.options,
-          commands: [g, ...context.options.commands],
+          commands: [fallbackCmd, ...context.options.commands],
         },
       },
-      bridgeRewrite: g,
+      bridgeRewrite: fallbackCmd,
     };
   }
   return {
@@ -88,40 +89,44 @@ function resolveBridgeSlashOverride(r) {
   };
 }
 //@ chunk-ccc7emag.js:1308-1383 placement
-var PROMPT_COMMANDS_HIDDEN_FROM_RELAY = new Set([DESIGN, DESIGN_SYNC, LOOP, SCHEDULE]);
-var BOT_PROTECTED_TENGU_IRIDESCENT_CLOVER = "bot_protected_tengu_iridescent_clover";
+var PROMPT_COMMANDS_HIDDEN_FROM_RELAY; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var BOT_PROTECTED_TENGU_IRIDESCENT_CLOVER;
+deferInit("chunk-ccc7emag.js:1308", () => {
+  PROMPT_COMMANDS_HIDDEN_FROM_RELAY = new Set([DESIGN, DESIGN_SYNC, LOOP, SCHEDULE]);
+  BOT_PROTECTED_TENGU_IRIDESCENT_CLOVER = "bot_protected_tengu_iridescent_clover";
+});
 //@ chunk-ccc7emag.js:1383-1797 placement
 /**
  * 按入站来源/中继作者判断内置提示命令能否在桥接上执行
  */
-function isSlashCommandAllowedOverBridge(r, e) {
-  let n = e.inboundOrigin === OWNER_RELAY || e.inboundOrigin === HEARTH_HUMAN;
+function isSlashCommandAllowedOverBridge(cmd, author) {
+  let fromOwnerRelay = author.inboundOrigin === OWNER_RELAY || author.inboundOrigin === HEARTH_HUMAN;
   if (
-    !n &&
-    r.type === "prompt" &&
-    r.source === "bundled" &&
-    PROMPT_COMMANDS_HIDDEN_FROM_RELAY.has(r.name) &&
-    (r.name !== LOOP ||
+    !fromOwnerRelay &&
+    cmd.type === "prompt" &&
+    cmd.source === "bundled" &&
+    PROMPT_COMMANDS_HIDDEN_FROM_RELAY.has(cmd.name) &&
+    (cmd.name !== LOOP ||
       readFlagWithOverride(BOT_PROTECTED_TENGU_IRIDESCENT_CLOVER, {
         safe: true,
       })) &&
-    (e.relayAuthored || (e.origin?.kind !== "human" && !isScheduledTriggerOrigin(e.origin)))
+    (author.relayAuthored || (author.origin?.kind !== "human" && !isScheduledTriggerOrigin(author.origin)))
   )
     return false;
-  if (!e.relayAuthored && !e.bridgeCarried) return true;
+  if (!author.relayAuthored && !author.bridgeCarried) return true;
   if (
-    !admitsBridgeAuthor(r, {
-      origin: e.origin,
-      relayAuthored: e.relayAuthored,
+    !admitsBridgeAuthor(cmd, {
+      origin: author.origin,
+      relayAuthored: author.relayAuthored,
     })
   )
     return false;
-  if (r === e.bridgeRewrite) return true;
-  return (n && !e.bridgeCarried) || isBridgeDispatchable(r);
+  if (cmd === author.bridgeRewrite) return true;
+  return (fromOwnerRelay && !author.bridgeCarried) || isBridgeDispatchable(cmd);
 }
 //@ chunk-ccc7emag.js:1797-2130 placement
-function resolveRelaySlashRefusal(r) {
-  let { inputString, context, uuid, origin, inboundOrigin } = r;
+function resolveRelaySlashRefusal(input) {
+  let { inputString, context, uuid, origin, inboundOrigin } = input;
   let bridgeSlashTarget = resolveBridgeSlashTarget(inputString, context.options.commands, true);
   if (
     bridgeSlashTarget === undefined ||
@@ -148,8 +153,8 @@ function resolveRelaySlashRefusal(r) {
   };
 }
 //@ chunk-ccc7emag.js:2130-2428 placement
-function relayDispatchRefusal(r) {
-  let { cmd, commandName, args, inputString, uuid, author } = r;
+function relayDispatchRefusal(request) {
+  let { cmd, commandName, args, inputString, uuid, author } = request;
   if (isSlashCommandAllowedOverBridge(cmd, author)) return;
   let slashCommand = parseSlashCommand(inputString);
   return buildBridgeSlashDispatch({
@@ -196,11 +201,13 @@ function buildBridgeSlashDispatch({
       surface === "bridge" ? lit("unavailable_over_remote_control") : lit("withheld_from_relay_participant"),
   });
   logFeatureBad("cmd_dispatch", "cmd_unavailable_bridge");
-  let u = folded ? `/${getCommandName(cmd)} ${folded.consumedToken}` : `/${getCommandName(effectiveCmd)}`;
-  let g =
+  let commandRef = folded
+    ? `/${getCommandName(cmd)} ${folded.consumedToken}`
+    : `/${getCommandName(effectiveCmd)}`;
+  let unavailableMessage =
     surface === "bridge"
-      ? `${u} isn't available over Remote Control.`
-      : `${u} isn't available to a relay participant.`;
+      ? `${commandRef} isn't available over Remote Control.`
+      : `${commandRef} isn't available to a relay participant.`;
   let content =
     hasSensitiveArgs(cmd, parsed.args) || hasSensitiveArgs(effectiveCmd, folded ? folded.args : parsed.args)
       ? `/${parsed.commandName} ***`
@@ -212,39 +219,44 @@ function buildBridgeSlashDispatch({
   });
   userMessage.queueSkipSlashCommands = true;
   return {
-    messages: [userMessage, createCommandInputMessage(`<local-command-stdout>${g}</local-command-stdout>`)],
+    messages: [
+      userMessage,
+      createCommandInputMessage(`<local-command-stdout>${unavailableMessage}</local-command-stdout>`),
+    ],
     shouldQuery: false,
-    resultText: g,
+    resultText: unavailableMessage,
   };
 }
 //@ chunk-ccc7emag.js:3381-3867 placement
 /**
  * 解析斜杠命令行，含 命令:子命令 折叠查找
  */
-function resolveBridgeSlashTarget(inputString, commands, n) {
+function resolveBridgeSlashTarget(inputString, commands, foldColonSuffix) {
   let slashCommand = parseSlashCommand(inputString);
   if (slashCommand === null) return;
   let command = findCommand(slashCommand.commandName, commands);
   let args = slashCommand.args;
-  if (n && (command === undefined || !isCommandEnabled(command))) {
-    let c = args.trimStart();
-    let u = c.search(/\s/);
-    let g = u === -1 ? c : c.slice(0, u);
-    let f = g ? findCommand(`${slashCommand.commandName}:${g}`, commands) : undefined;
-    if (f) {
-      command = f;
-      args = u === -1 ? "" : c.slice(u + 1).trimStart();
+  if (foldColonSuffix && (command === undefined || !isCommandEnabled(command))) {
+    let trimmedArgs = args.trimStart();
+    let spaceIndex = trimmedArgs.search(/\s/);
+    let firstArg = spaceIndex === -1 ? trimmedArgs : trimmedArgs.slice(0, spaceIndex);
+    let colonCommand = firstArg
+      ? findCommand(`${slashCommand.commandName}:${firstArg}`, commands)
+      : undefined;
+    if (colonCommand) {
+      command = colonCommand;
+      args = spaceIndex === -1 ? "" : trimmedArgs.slice(spaceIndex + 1).trimStart();
     }
   }
   if (!command) return;
-  let t = matchSubcommand(command, args);
-  let d = t ? findCommand(t.targetName, commands) : undefined;
-  let l =
-    t && d && isCommandEnabled(d)
+  let subcommandMatch = matchSubcommand(command, args);
+  let subcommand = subcommandMatch ? findCommand(subcommandMatch.targetName, commands) : undefined;
+  let folded =
+    subcommandMatch && subcommand && isCommandEnabled(subcommand)
       ? {
-          command: d,
-          consumedToken: t.consumedToken,
-          args: t.remainingArgs,
+          command: subcommand,
+          consumedToken: subcommandMatch.consumedToken,
+          args: subcommandMatch.remainingArgs,
         }
       : undefined;
   return {
@@ -256,15 +268,20 @@ function resolveBridgeSlashTarget(inputString, commands, n) {
             args,
           },
     cmd: command,
-    folded: l,
-    effectiveCmd: l ? l.command : command,
+    folded,
+    effectiveCmd: folded ? folded.command : command,
   };
 }
 //@ chunk-ccc7emag.js:3867-3979 placement
-function bridgeSlashLineBuildsRequest(r, e) {
-  let bridgeSlashTarget = resolveBridgeSlashTarget(r, e, false);
+function bridgeSlashLineBuildsRequest(inputString, commands) {
+  let bridgeSlashTarget = resolveBridgeSlashTarget(inputString, commands, false);
   if (bridgeSlashTarget === undefined) return true;
   let { effectiveCmd } = bridgeSlashTarget;
   return effectiveCmd.type === "prompt" && isBridgeSafeCommand(effectiveCmd);
 }
-export { bridgeSlashLineBuildsRequest };
+export {
+  bridgeSlashLineBuildsRequest,
+  relayDispatchRefusal,
+  resolveBridgeSlashOverride,
+  resolveRelaySlashRefusal,
+};

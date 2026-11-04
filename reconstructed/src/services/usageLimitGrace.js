@@ -16,93 +16,99 @@ import { claudeAiLimits } from "./claudeAiLimits.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "./analytics/growthbook.js";
 import { sanitizeAttributeValue } from "../utils/sanitization.js";
 import { logFeatureSad } from "./analytics/featureTelemetry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-w5ndchqs.js:34489-35548 placement
 /**
  * 用量快照缓存：有效期常量与校验 schema。
  */
-var GRACE_WINDOW_MS = 3600000;
-var USAGE_CACHE_TTL_MS = 60000;
-var usageUtilizationSchema = DoctorLazy(() => {
-  let e = create({
-    utilization: create_3().nullable(),
-    resets_at: create_2().nullable(),
-  }).passthrough();
-  let utilization = create({
-    five_hour: e.nullish(),
-    seven_day: e.nullish(),
-    seven_day_oauth_apps: e.nullish(),
-    seven_day_opus: e.nullish(),
-    seven_day_sonnet: e.nullish(),
-    cinder_cove: e.nullish(),
-    wattle_ember: e
-      .extend({
-        label: create_2().nullish(),
-        limit_dollars: create_3().nullish(),
-        used_dollars: create_3().nullish(),
-        remaining_dollars: create_3().nullish(),
-        periods: create_15(
-          create({
-            starts_at: create_2(),
-            ends_at: create_2(),
-          }).passthrough(),
-        ).nullish(),
-      })
-      .nullish(),
-    extra_usage: create({
-      is_enabled: create_6(),
-      monthly_limit: create_3().nullable(),
-      used_credits: create_3().nullable(),
+var GRACE_WINDOW_MS; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var USAGE_CACHE_TTL_MS;
+var usageUtilizationSchema;
+deferInit("chunk-w5ndchqs.js:34489", () => {
+  GRACE_WINDOW_MS = 3600000;
+  USAGE_CACHE_TTL_MS = 60000;
+  usageUtilizationSchema = DoctorLazy(() => {
+    let periodSchema = create({
       utilization: create_3().nullable(),
-      currency: create_2().nullish(),
-      disabled_reason: create_2().nullish(),
-    })
-      .passthrough()
-      .nullish(),
-    limits: create_15(
-      create({
-        kind: create_2(),
-        group: create_2(),
-        percent: create_3(),
-        resets_at: create_2().nullable(),
-        severity: create_2(),
-        is_active: create_6(),
-        scope: create({
-          model: create({
-            display_name: create_2(),
-          })
-            .passthrough()
-            .nullish(),
-          surface: create({
-            display_name: create_2(),
-          })
-            .passthrough()
-            .nullish(),
+      resets_at: create_2().nullable(),
+    }).passthrough();
+    let utilization = create({
+      five_hour: periodSchema.nullish(),
+      seven_day: periodSchema.nullish(),
+      seven_day_oauth_apps: periodSchema.nullish(),
+      seven_day_opus: periodSchema.nullish(),
+      seven_day_sonnet: periodSchema.nullish(),
+      cinder_cove: periodSchema.nullish(),
+      wattle_ember: periodSchema
+        .extend({
+          label: create_2().nullish(),
+          limit_dollars: create_3().nullish(),
+          used_dollars: create_3().nullish(),
+          remaining_dollars: create_3().nullish(),
+          periods: create_15(
+            create({
+              starts_at: create_2(),
+              ends_at: create_2(),
+            }).passthrough(),
+          ).nullish(),
         })
-          .passthrough()
-          .nullish(),
-      }).passthrough(),
-    ).nullish(),
-  }).passthrough();
-  return create({
-    fetchedAtMs: create_3(),
-    accountUuid: create_2().optional(),
-    utilization,
+        .nullish(),
+      extra_usage: create({
+        is_enabled: create_6(),
+        monthly_limit: create_3().nullable(),
+        used_credits: create_3().nullable(),
+        utilization: create_3().nullable(),
+        currency: create_2().nullish(),
+        disabled_reason: create_2().nullish(),
+      })
+        .passthrough()
+        .nullish(),
+      limits: create_15(
+        create({
+          kind: create_2(),
+          group: create_2(),
+          percent: create_3(),
+          resets_at: create_2().nullable(),
+          severity: create_2(),
+          is_active: create_6(),
+          scope: create({
+            model: create({
+              display_name: create_2(),
+            })
+              .passthrough()
+              .nullish(),
+            surface: create({
+              display_name: create_2(),
+            })
+              .passthrough()
+              .nullish(),
+          })
+            .passthrough()
+            .nullish(),
+        }).passthrough(),
+      ).nullish(),
+    }).passthrough();
+    return create({
+      fetchedAtMs: create_3(),
+      accountUuid: create_2().optional(),
+      utilization,
+    });
   });
 });
 //@ chunk-w5ndchqs.js:35548-35849 placement
-function cacheUsageUtilization(utilization, accountUuid, r) {
+function cacheUsageUtilization(utilization, accountUuid, storageV5) {
   let accountUuid_2 = getOauthAccountInfo()?.accountUuid;
   if (accountUuid_2 !== accountUuid) return;
   let cachedUsageUtilization = getGlobalConfig().cachedUsageUtilization;
-  let m =
+  let cacheAgeMs =
     cachedUsageUtilization && cachedUsageUtilization.accountUuid === accountUuid_2
       ? Date.now() - cachedUsageUtilization.fetchedAtMs
       : Number.POSITIVE_INFINITY;
-  if (m >= 0 && m < USAGE_CACHE_TTL_MS) return;
+  if (cacheAgeMs >= 0 && cacheAgeMs < USAGE_CACHE_TTL_MS) return;
   saveGlobalConfig(
-    (h) => ({
-      ...h,
+    (config) => ({
+      ...config,
       cachedUsageUtilization: {
         fetchedAtMs: Date.now(),
         ...(accountUuid_2 !== undefined && {
@@ -111,41 +117,42 @@ function cacheUsageUtilization(utilization, accountUuid, r) {
         utilization,
       },
     }),
-    r,
+    storageV5,
   );
 }
 //@ chunk-w5ndchqs.js:35849-36202 placement
-function cachedUsageUtilization(e) {
+function cachedUsageUtilization(storageV5) {
   let cachedUsageUtilization = getGlobalConfig().cachedUsageUtilization;
   if (!cachedUsageUtilization) return null;
-  let r = usageUtilizationSchema().safeParse(cachedUsageUtilization);
-  if (!r.success) return null;
-  if (r.data.accountUuid !== getOauthAccountInfo()?.accountUuid) {
+  let parsed = usageUtilizationSchema().safeParse(cachedUsageUtilization);
+  if (!parsed.success) return null;
+  if (parsed.data.accountUuid !== getOauthAccountInfo()?.accountUuid) {
     saveGlobalConfig(
-      (d) => ({
-        ...d,
+      (config) => ({
+        ...config,
         cachedUsageUtilization: undefined,
       }),
-      e,
+      storageV5,
     );
     return null;
   }
-  let s = Date.now() - r.data.fetchedAtMs;
-  if (s < 0 || s > GRACE_WINDOW_MS) return null;
+  let ageMs = Date.now() - parsed.data.fetchedAtMs;
+  if (ageMs < 0 || ageMs > GRACE_WINDOW_MS) return null;
   return {
-    utilization: r.data.utilization,
-    fetchedAtMs: r.data.fetchedAtMs,
+    utilization: parsed.data.utilization,
+    fetchedAtMs: parsed.data.fetchedAtMs,
   };
 }
 //@ chunk-w5ndchqs.js:36202-36387 placement
-function freshCachedUtilization(e) {
-  let n = cachedUsageUtilization(e);
-  if (!n) return null;
-  let r = Date.now() - n.fetchedAtMs;
-  if (r >= USAGE_CACHE_TTL_MS || claudeAiLimits.lastAppliedObservationAtMs > n.fetchedAtMs) return null;
+function freshCachedUtilization(storageV5) {
+  let cached = cachedUsageUtilization(storageV5);
+  if (!cached) return null;
+  let ageMs = Date.now() - cached.fetchedAtMs;
+  if (ageMs >= USAGE_CACHE_TTL_MS || claudeAiLimits.lastAppliedObservationAtMs > cached.fetchedAtMs)
+    return null;
   return {
-    utilization: n.utilization,
-    ageMs: r,
+    utilization: cached.utilization,
+    ageMs,
   };
 }
 //@ chunk-w5ndchqs.js:36387-36547 placement
@@ -155,11 +162,11 @@ var USAGE_LIMIT_WRAP_UP_NOTE =
 var TENGU_LANTERN_WICK_MODE = "tengu_lantern_wick_mode";
 //@ chunk-w5ndchqs.js:36547-36661 placement
 function parseWrapUpMode(featureValue_CACHED_MAY_BE_STALE) {
-  let n =
+  let normalized =
     typeof featureValue_CACHED_MAY_BE_STALE === "string"
       ? featureValue_CACHED_MAY_BE_STALE.trim().toLowerCase()
       : featureValue_CACHED_MAY_BE_STALE;
-  return n === "wrap-up" || n === "next-steps" ? n : "off";
+  return normalized === "wrap-up" || normalized === "next-steps" ? normalized : "off";
 }
 //@ chunk-w5ndchqs.js:36661-36735 placement
 var WRAP_UP_TEXT_FLAG = "tengu_lantern_wick_text";
@@ -175,20 +182,20 @@ function isBotProtectedWrapUpTextOn() {
 /**
  * 校验并清理服务端下发的收尾提示文本；不合法时上报并返回 null。
  */
-function formatWrapUpText(e) {
+function formatWrapUpText(rawText) {
   if (isBotProtectedWrapUpTextOn()) {
-    let r = sanitizeAttributeValue(e);
-    if (r === null) {
-      if (typeof e === "string" && e.trim() !== "")
+    let sanitized = sanitizeAttributeValue(rawText);
+    if (sanitized === null) {
+      if (typeof rawText === "string" && rawText.trim() !== "")
         logFeatureSad("usage_limit_served_text_rejected", "wrap_up_text");
       return null;
     }
-    if (typeof e === "string" && r !== e.trim())
+    if (typeof rawText === "string" && sanitized !== rawText.trim())
       logFeatureSad("usage_limit_served_text_altered", "wrap_up_text");
-    return `[${r}]`;
+    return `[${sanitized}]`;
   }
-  let n = typeof e === "string" ? e.trim() : "";
-  return n === "" ? null : `[${n}]`;
+  let trimmed = typeof rawText === "string" ? rawText.trim() : "";
+  return trimmed === "" ? null : `[${trimmed}]`;
 }
 //@ chunk-w5ndchqs.js:37096-37636 placement
 /**

@@ -39,6 +39,7 @@ import {
   normalizeWhitespace,
   truncateWithEllipsis,
 } from "../../services/sessionStatus/sessionStateClassifier.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-a9ek44g8.js:2157-2250 placement
 class BetaTracingState {
@@ -47,15 +48,18 @@ class BetaTracingState {
   emittedUserPromptForSessionId = undefined;
 }
 //@ chunk-a9ek44g8.js:2250-2276 placement
-var betaTracingStateBySession = new SessionRootSlot(() => new BetaTracingState());
+var betaTracingStateBySession; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-a9ek44g8.js:2250", () => {
+  betaTracingStateBySession = new SessionRootSlot(() => new BetaTracingState());
+});
 //@ chunk-a9ek44g8.js:2276-2359 placement
 /**
  * 压缩后清空 beta 追踪的哈希与消息记录。
  */
 function clearBetaTracingState() {
-  let n = betaTracingStateBySession.of(getRootSession());
-  n.seenHashes.clear();
-  n.lastReportedMessage.clear();
+  let state = betaTracingStateBySession.of(getRootSession());
+  state.seenHashes.clear();
+  state.lastReportedMessage.clear();
 }
 //@ chunk-a9ek44g8.js:2359-2510 fingerprint = isBetaTracingEnabled (0.764)
 /**
@@ -84,7 +88,7 @@ function extractSystemReminderContent(text) {
   return /^<system-reminder>\n?([\s\S]*?)\n?<\/system-reminder>$/.exec(text.trim())?.[1]?.trim() || null;
 }
 //@ chunk-a9ek44g8.js:2787-3403 fingerprint = formatMessagesForContext (0.893)
-function formatMessagesForContext(messages, e) {
+function formatMessagesForContext(messages, includeUser) {
   let contextParts = [];
   let systemReminders = [];
   for (let message of messages) {
@@ -96,7 +100,7 @@ function formatMessagesForContext(messages, e) {
     if (typeof content === "string") {
       let reminderContent = extractSystemReminderContent(content);
       if (reminderContent) systemReminders.push(reminderContent);
-      else if (e)
+      else if (includeUser)
         contextParts.push(`[USER]
 ${content}`);
     } else if (Array.isArray(content)) {
@@ -104,17 +108,17 @@ ${content}`);
         if (block.type === "text") {
           let reminderContent = extractSystemReminderContent(block.text);
           if (reminderContent) systemReminders.push(reminderContent);
-          else if (e)
+          else if (includeUser)
             contextParts.push(`[USER]
 ${block.text}`);
         } else if (block.type === "tool_result") {
           if (typeof block.content === "string") {
             let reminderContent = extractSystemReminderContent(block.content);
             if (reminderContent) systemReminders.push(reminderContent);
-            else if (e)
+            else if (includeUser)
               contextParts.push(`[TOOL RESULT: ${block.tool_use_id}]
 ${block.content}`);
-          } else if (e)
+          } else if (includeUser)
             contextParts.push(`[TOOL RESULT: ${block.tool_use_id}]
 ${jsonStringify(block.content)}`);
         }
@@ -126,26 +130,26 @@ ${jsonStringify(block.content)}`);
   };
 }
 //@ chunk-a9ek44g8.js:3403-3505 layout
-function contextPartsFor(messages, e) {
+function contextPartsFor(messages, withheldReason) {
   let { systemReminders } = formatMessagesForContext(messages, false);
   return {
-    contextParts: [e],
-    systemReminders: systemReminders.map(() => e),
+    contextParts: [withheldReason],
+    systemReminders: systemReminders.map(() => withheldReason),
   };
 }
 //@ chunk-a9ek44g8.js:3505-3641 layout
-function redactToolUseIds(newMessages, messagesForAPI, r) {
+function redactToolUseIds(newMessages, messagesForAPI, memoryKeys) {
   let toolUseIds = collectToolUseIds(
-    newMessages.map((o) => o.message),
-    r,
-    messagesForAPI.map((o) => o.message),
+    newMessages.map((keptMessage) => keptMessage.message),
+    memoryKeys,
+    messagesForAPI.map((redactedMessage) => redactedMessage.message),
   );
-  return newMessages.map((o, a) =>
-    toolUseIds[a] === o.message
-      ? o
+  return newMessages.map((keptMessages, index) =>
+    toolUseIds[index] === keptMessages.message
+      ? keptMessages
       : {
-          ...o,
-          message: toolUseIds[a],
+          ...keptMessages,
+          message: toolUseIds[index],
         },
   );
 }
@@ -165,37 +169,40 @@ ${redactAccountMemoryText(() => accountMemoryRedactionKeys(getRootSession().host
   });
 }
 //@ chunk-a9ek44g8.js:3889-6437 fingerprint = addBetaLLMRequestAttributes (0.795)
-function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, s, o) {
+function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, memoryKeys, tracer) {
   if (!isBetaTracingEnabled()) return;
-  let a = betaTracingStateBySession.of(getRootSession());
-  let u = (f) =>
-    messagesForAPI !== undefined && s === undefined
+  let state = betaTracingStateBySession.of(getRootSession());
+  let redactWithKeys = (keySet) =>
+    messagesForAPI !== undefined && memoryKeys === undefined
       ? {
           withheld: "account_memory_text_not_identified",
         }
-      : redactWithIndex(s ?? accountMemoryKeysForSession, newContext?.querySource, f);
-  let h = (userSystemPrompt) => {
-    let promptHash = u((g) => applyRedactions(userSystemPrompt, g));
+      : redactWithIndex(memoryKeys ?? accountMemoryKeysForSession, newContext?.querySource, keySet);
+  let redactPrompt = (userSystemPrompt) => {
+    let promptHash = redactWithKeys((keySet_2) => applyRedactions(userSystemPrompt, keySet_2));
     return "withheld" in promptHash ? notRecordedReason(promptHash.withheld) : promptHash.value;
   };
   if (newContext?.systemPrompt) {
     let { systemPrompt } = newContext;
     let promptHash = hashSystemPrompt(systemPrompt);
-    let g;
-    let m = () => (g ??= u((d) => applyRedactions(systemPrompt, d)));
+    let redactedPrompt;
+    let getRedactedPrompt = () =>
+      (redactedPrompt ??= redactWithKeys((redact_3) => applyRedactions(systemPrompt, redact_3)));
     span.setAttribute("system_prompt_hash", promptHash);
     if (isUserPromptLoggingEnabled()) {
-      let d = m();
+      let redactedPrompt_2 = getRedactedPrompt();
       span.setAttribute(
         "system_prompt_preview",
-        "withheld" in d ? notRecordedReason(d.withheld) : d.value.slice(0, 500),
+        "withheld" in redactedPrompt_2
+          ? notRecordedReason(redactedPrompt_2.withheld)
+          : redactedPrompt_2.value.slice(0, 500),
       );
     }
     span.setAttribute("system_prompt_length", newContext.systemPrompt.length);
-    let b = isUserPromptLoggingEnabled() ? m() : undefined;
-    if (b !== undefined && "value" in b && !a.seenHashes.has(promptHash)) {
-      a.seenHashes.add(promptHash);
-      let { content: truncatedPrompt, truncated } = truncateContentForTelemetry(b.value);
+    let previewResult = isUserPromptLoggingEnabled() ? getRedactedPrompt() : undefined;
+    if (previewResult !== undefined && "value" in previewResult && !state.seenHashes.has(promptHash)) {
+      state.seenHashes.add(promptHash);
+      let { content: truncatedPrompt, truncated } = truncateContentForTelemetry(previewResult.value);
       logOTelEvent(
         "system_prompt",
         {
@@ -206,16 +213,16 @@ function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, s, o) {
             system_prompt_truncated: "true",
           }),
         },
-        o,
+        tracer,
       );
     }
   }
   if (newContext?.userSystemPrompt && isUserPromptLoggingEnabled()) {
     let sessionId = getSessionId();
-    if (a.emittedUserPromptForSessionId !== sessionId) {
-      a.emittedUserPromptForSessionId = sessionId;
+    if (state.emittedUserPromptForSessionId !== sessionId) {
+      state.emittedUserPromptForSessionId = sessionId;
       let { content: truncatedPrompt, truncated } = truncateContentForTelemetry(
-        h(newContext.userSystemPrompt),
+        redactPrompt(newContext.userSystemPrompt),
       );
       span.setAttributes({
         user_system_prompt: truncatedPrompt,
@@ -248,8 +255,8 @@ function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, s, o) {
       );
       span.setAttribute("tools_count", toolsWithHashes.length);
       for (let { name, hash, json } of toolsWithHashes)
-        if (!a.seenHashes.has(`tool_${hash}`)) {
-          a.seenHashes.add(`tool_${hash}`);
+        if (!state.seenHashes.has(`tool_${hash}`)) {
+          state.seenHashes.add(`tool_${hash}`);
           let { content: truncatedTool, truncated } = truncateContentForTelemetry(json);
           logOTelEvent(
             "tool",
@@ -261,7 +268,7 @@ function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, s, o) {
                 tool_truncated: "true",
               }),
             },
-            o,
+            tracer,
           );
         }
     } catch {
@@ -269,7 +276,7 @@ function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, s, o) {
     }
   if (messagesForAPI && messagesForAPI.length > 0 && newContext?.querySource) {
     let querySource = newContext.querySource;
-    let lastHash = a.lastReportedMessage.get(querySource);
+    let lastHash = state.lastReportedMessage.get(querySource);
     let startIndex = 0;
     if (lastHash) {
       let message = messagesForAPI[lastHash.index];
@@ -279,17 +286,21 @@ function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, s, o) {
       .slice(startIndex)
       .filter((m) => m.type === "user" || m.type === "api_system");
     if (newMessages.length > 0) {
-      let S = isUserPromptLoggingEnabled();
-      let E = S
-        ? u((M) => formatMessagesForContext(redactToolUseIds(newMessages, messagesForAPI, M), true))
+      let logEnabled = isUserPromptLoggingEnabled();
+      let formatted = logEnabled
+        ? redactWithKeys((redact_4) =>
+            formatMessagesForContext(redactToolUseIds(newMessages, messagesForAPI, redact_4), true),
+          )
         : {
             value: formatMessagesForContext(newMessages, false),
           };
       let { contextParts, systemReminders } =
-        "withheld" in E ? contextPartsFor(newMessages, notRecordedReason(E.withheld)) : E.value;
+        "withheld" in formatted
+          ? contextPartsFor(newMessages, notRecordedReason(formatted.withheld))
+          : formatted.value;
       span.setAttribute("new_context_message_count", newMessages.length);
       if (systemReminders.length > 0) span.setAttribute("system_reminders_count", systemReminders.length);
-      if (contextParts.length > 0 && S) {
+      if (contextParts.length > 0 && logEnabled) {
         let fullContext = contextParts.join(`
 
 ---
@@ -304,7 +315,7 @@ function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, s, o) {
           }),
         });
       }
-      if (systemReminders.length > 0 && S) {
+      if (systemReminders.length > 0 && logEnabled) {
         let fullReminders = systemReminders.join(`
 
 ---
@@ -321,11 +332,11 @@ function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, s, o) {
         });
       }
     }
-    let b = messagesForAPI.length - 1;
-    let message = messagesForAPI[b];
+    let lastIndex = messagesForAPI.length - 1;
+    let message = messagesForAPI[lastIndex];
     if (message)
-      a.lastReportedMessage.set(querySource, {
-        index: b,
+      state.lastReportedMessage.set(querySource, {
+        index: lastIndex,
         hash: hashMessage(message),
       });
   }
@@ -333,11 +344,11 @@ function addBetaLLMRequestAttributes(span, newContext, messagesForAPI, s, o) {
 //@ chunk-a9ek44g8.js:6437-6746 fingerprint = addBetaLLMResponseAttributes (0.81)
 function addBetaLLMResponseAttributes(endAttributes, metadata) {
   if (!isBetaTracingEnabled() || !isUserPromptLoggingEnabled() || !metadata) return;
-  let r = (modelOutput) =>
+  let redactOutput = (modelOutput) =>
     redactAccountMemoryText(metadata.accountMemoryKeys, metadata.querySource, modelOutput);
   if (metadata.modelOutput !== undefined) {
     let { content: modelOutput, truncated: outputTruncated } = truncateContentForTelemetry(
-      r(metadata.modelOutput),
+      redactOutput(metadata.modelOutput),
     );
     endAttributes["response.model_output"] = modelOutput;
     if (outputTruncated) {
@@ -347,10 +358,10 @@ function addBetaLLMResponseAttributes(endAttributes, metadata) {
   }
 }
 //@ chunk-a9ek44g8.js:6746-6958 fingerprint = addBetaToolInputAttributes (1)
-function addBetaToolInputAttributes(span, toolName, toolInput, s = false) {
+function addBetaToolInputAttributes(span, toolName, toolInput, notRecorded = false) {
   if (!isBetaTracingEnabled() || !isToolDetailsLoggingEnabled()) return;
   let { content: truncatedInput, truncated } = truncateContentForTelemetry(`[TOOL INPUT: ${toolName}]
-${s ? notRecordedLength(toolInput) : toolInput}`);
+${notRecorded ? notRecordedLength(toolInput) : toolInput}`);
   span.setAttributes({
     tool_input: truncatedInput,
     ...(truncated && {
@@ -360,28 +371,28 @@ ${s ? notRecordedLength(toolInput) : toolInput}`);
   });
 }
 //@ chunk-a9ek44g8.js:6958-7159 fingerprint = addBetaToolResultAttributes (1)
-function addBetaToolResultAttributes(endAttributes, toolName, r, s = false) {
+function addBetaToolResultAttributes(endAttributes, toolName, toolContent, notRecorded = false) {
   if (!isBetaTracingEnabled() || !isToolContentLoggingEnabled()) return;
   let { content: truncatedResult, truncated } = truncateContentForTelemetry(`[TOOL RESULT: ${toolName}]
-${s ? notRecordedLength(r) : r}`);
+${notRecorded ? notRecordedLength(toolContent) : toolContent}`);
   endAttributes.new_context = truncatedResult;
   if (truncated) {
     endAttributes.new_context_truncated = true;
-    endAttributes.new_context_original_length = r.length;
+    endAttributes.new_context_original_length = toolContent.length;
   }
 }
 //@ chunk-spwda8nt.js:16240-16395 fingerprint = truncateContent (0.693)
 function truncateContent(content, maxSize = MAX_HEADLINE_LENGTH_2) {
-  let t = normalizeWhitespace(content);
-  if (t.length <= maxSize)
+  let normalized = normalizeWhitespace(content);
+  if (normalized.length <= maxSize)
     return {
-      text: t,
+      text: normalized,
       truncated: false,
     };
-  let index = t.lastIndexOf(" ", maxSize - 1);
-  let i = index >= maxSize / 2 ? index : maxSize - 1;
+  let index = normalized.lastIndexOf(" ", maxSize - 1);
+  let cutIndex = index >= maxSize / 2 ? index : maxSize - 1;
   return {
-    text: truncateWithEllipsis(t, i + 1),
+    text: truncateWithEllipsis(normalized, cutIndex + 1),
     truncated: true,
   };
 }

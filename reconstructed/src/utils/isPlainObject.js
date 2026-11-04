@@ -13,7 +13,7 @@
 /**
  * 是否为非数组对象。
  */
-function isPlainObject(n) {
-  return typeof n === "object" && n !== null && !Array.isArray(n);
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 export { isPlainObject };

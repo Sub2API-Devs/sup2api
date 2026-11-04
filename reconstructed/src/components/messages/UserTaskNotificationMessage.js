@@ -9,7 +9,7 @@
  * attribution: placement 8
  */
 import { parseTaskResultOrNull } from "../../tasks/LocalShellTask/backgroundNotices.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { extractTag } from "../../utils/messages.js";
 import {
   SUMMARY,
@@ -31,7 +31,7 @@ import {
 } from "./TeammateResultMessage.js";
 import { BriefTimestampNamespace } from "../../utils/formatBriefTimestamp.js";
 import { noticeSystemLines } from "../SlashCommandLink.js";
-import { Se } from "../../../vendor/react/cjs/react.production.js";
+import { useContext } from "../../../vendor/react/cjs/react.production.js";
 import { formatDuration, formatNumber } from "../../utils/format.js";
 import { getTaskRunState } from "../../utils/task/taskNotifications.js";
 import { GET_TASK_TOOL_TEXT } from "../../remote/tools/nativeToolErrors.js";
@@ -39,7 +39,7 @@ import { NoticeRowMessage } from "./teamMemSaved.js";
 import { taskNotificationSummaryLine } from "./CompactBoundaryMessage.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
-import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { collapseWhitespace } from "../../utils/stringUtils.js";
 import { sanitizeDisplayText } from "../../utils/sanitizeDisplayText.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
@@ -65,7 +65,7 @@ function getStatusColor(status) {
 function completedTaskResultText(taskDelivery) {
   let taskResultOrNull = parseTaskResultOrNull(taskDelivery);
   return taskResultOrNull?.status === "completed"
-    ? taskResultOrNull.result.content.map((c) => c.text).join(`
+    ? taskResultOrNull.result.content.map((block) => block.text).join(`
 `)
     : "";
 }
@@ -74,364 +74,377 @@ function completedTaskResultText(taskDelivery) {
  * 某消息组件（taskDelivery/origin 参数），误配为 NotebookEdit 的错误渲染；归属疑似错误。
  */
 function renderToolUseErrorMessage_5(props) {
-  let E = w(11);
+  let $ = useMemoCache(11);
   let { addMargin, param, taskDelivery, messageId, origin, verbose, isExpanded } = props;
   let { text } = param;
-  let k = verbose === undefined ? false : verbose;
-  let isExpanded_2 = isExpanded === undefined ? k : isExpanded;
-  let B;
-  if (E[0] !== text) {
+  let isVerbose = verbose === undefined ? false : verbose;
+  let isExpanded_2 = isExpanded === undefined ? isVerbose : isExpanded;
+  let summaryTag;
+  if ($[0] !== text) {
     let tag = extractTag(text, SUMMARY);
-    B = tag === null ? null : unescapeHtmlEntities(tag);
-    E[0] = text;
-    E[1] = B;
-  } else B = E[1];
-  let N = B;
-  if (!N) {
+    summaryTag = tag === null ? null : unescapeHtmlEntities(tag);
+    $[0] = text;
+    $[1] = summaryTag;
+  } else summaryTag = $[1];
+  let summary = summaryTag;
+  if (!summary) {
     return null;
   }
-  let W;
+  let taskNotificationMessageElement;
   if (
-    E[2] !== addMargin ||
-    E[3] !== isExpanded_2 ||
-    E[4] !== messageId ||
-    E[5] !== origin ||
-    E[6] !== N ||
-    E[7] !== taskDelivery ||
-    E[8] !== text ||
-    E[9] !== k
+    $[2] !== addMargin ||
+    $[3] !== isExpanded_2 ||
+    $[4] !== messageId ||
+    $[5] !== origin ||
+    $[6] !== summary ||
+    $[7] !== taskDelivery ||
+    $[8] !== text ||
+    $[9] !== isVerbose
   ) {
-    W = jsxProd_default(TaskNotificationMessage, {
+    taskNotificationMessageElement = jsxProd_default(TaskNotificationMessage, {
       addMargin,
       text,
-      summary: N,
+      summary,
       taskDelivery,
       messageId,
       origin,
-      verbose: k,
+      verbose: isVerbose,
       isExpanded: isExpanded_2,
     });
-    E[2] = addMargin;
-    E[3] = isExpanded_2;
-    E[4] = messageId;
-    E[5] = origin;
-    E[6] = N;
-    E[7] = taskDelivery;
-    E[8] = text;
-    E[9] = k;
-    E[10] = W;
-  } else W = E[10];
-  return W;
+    $[2] = addMargin;
+    $[3] = isExpanded_2;
+    $[4] = messageId;
+    $[5] = origin;
+    $[6] = summary;
+    $[7] = taskDelivery;
+    $[8] = text;
+    $[9] = isVerbose;
+    $[10] = taskNotificationMessageElement;
+  } else taskNotificationMessageElement = $[10];
+  return taskNotificationMessageElement;
 }
 //@ chunk-ah34pb7m.js:99918-101686 placement
 /**
  * 任务完成通知消息
  */
 function TaskNotificationMessage(props) {
-  let k = w(49);
+  let $ = useMemoCache(49);
   let { addMargin, text, summary, taskDelivery, messageId, origin, verbose, isExpanded } = props;
-  let b;
-  if (k[0] !== text) {
-    b = extractTag(text, STATUS);
-    k[0] = text;
-    k[1] = b;
-  } else b = k[1];
-  let status = b;
-  let B;
-  if (k[2] !== text) {
-    B = extractTag(text, "duration_ms");
-    k[2] = text;
-    k[3] = B;
-  } else B = k[3];
-  let L = Number(B);
-  let N;
-  if (k[4] !== text) {
-    N = readTagText(text, TASK_ID);
-    k[4] = text;
-    k[5] = N;
-  } else N = k[5];
-  let W = N;
-  let U;
-  if (k[6] !== text) {
-    U = readTagText(text, STATUS);
-    k[6] = text;
-    k[7] = U;
-  } else U = k[7];
-  let K = U;
-  let V;
-  if (k[8] !== text) {
-    V = readTagText(text, TASK_TYPE);
-    k[8] = text;
-    k[9] = V;
-  } else V = k[9];
-  let Y = V;
-  let X;
-  if (k[10] !== text) {
-    X = readTagText(text, TOOL_USE_ID);
-    k[10] = text;
-    k[11] = X;
-  } else X = k[11];
-  let z = X;
-  let ee;
-  if (k[12] !== W) {
-    ee = W !== undefined && {
-      id: W,
+  let statusTag;
+  if ($[0] !== text) {
+    statusTag = extractTag(text, STATUS);
+    $[0] = text;
+    $[1] = statusTag;
+  } else statusTag = $[1];
+  let status = statusTag;
+  let durationRaw;
+  if ($[2] !== text) {
+    durationRaw = extractTag(text, "duration_ms");
+    $[2] = text;
+    $[3] = durationRaw;
+  } else durationRaw = $[3];
+  let durationMs = Number(durationRaw);
+  let taskIdRaw;
+  if ($[4] !== text) {
+    taskIdRaw = readTagText(text, TASK_ID);
+    $[4] = text;
+    $[5] = taskIdRaw;
+  } else taskIdRaw = $[5];
+  let taskId = taskIdRaw;
+  let statusRaw;
+  if ($[6] !== text) {
+    statusRaw = readTagText(text, STATUS);
+    $[6] = text;
+    $[7] = statusRaw;
+  } else statusRaw = $[7];
+  let statusText = statusRaw;
+  let typeRaw;
+  if ($[8] !== text) {
+    typeRaw = readTagText(text, TASK_TYPE);
+    $[8] = text;
+    $[9] = typeRaw;
+  } else typeRaw = $[9];
+  let taskType = typeRaw;
+  let toolUseIdRaw;
+  if ($[10] !== text) {
+    toolUseIdRaw = readTagText(text, TOOL_USE_ID);
+    $[10] = text;
+    $[11] = toolUseIdRaw;
+  } else toolUseIdRaw = $[11];
+  let toolUseId = toolUseIdRaw;
+  let taskIdPart;
+  if ($[12] !== taskId) {
+    taskIdPart = taskId !== undefined && {
+      id: taskId,
     };
-    k[12] = W;
-    k[13] = ee;
-  } else ee = k[13];
-  let le;
-  if (k[14] !== K) {
-    le = K !== undefined && {
-      status: K,
+    $[12] = taskId;
+    $[13] = taskIdPart;
+  } else taskIdPart = $[13];
+  let statusPart;
+  if ($[14] !== statusText) {
+    statusPart = statusText !== undefined && {
+      status: statusText,
     };
-    k[14] = K;
-    k[15] = le;
-  } else le = k[15];
-  let ge;
-  if (k[16] !== Y) {
-    ge = Y !== undefined && {
-      type: Y,
+    $[14] = statusText;
+    $[15] = statusPart;
+  } else statusPart = $[15];
+  let typePart;
+  if ($[16] !== taskType) {
+    typePart = taskType !== undefined && {
+      type: taskType,
     };
-    k[16] = Y;
-    k[17] = ge;
-  } else ge = k[17];
-  let ae;
-  if (k[18] !== z) {
-    ae = z !== undefined && {
-      toolUseId: z,
+    $[16] = taskType;
+    $[17] = typePart;
+  } else typePart = $[17];
+  let toolUseIdPart;
+  if ($[18] !== toolUseId) {
+    toolUseIdPart = toolUseId !== undefined && {
+      toolUseId,
     };
-    k[18] = z;
-    k[19] = ae;
-  } else ae = k[19];
-  let pe;
-  if (k[20] !== L) {
-    pe = Number.isFinite(L) &&
-      L > 0 && {
-        durationMs: L,
+    $[18] = toolUseId;
+    $[19] = toolUseIdPart;
+  } else toolUseIdPart = $[19];
+  let durationPart;
+  if ($[20] !== durationMs) {
+    durationPart = Number.isFinite(durationMs) &&
+      durationMs > 0 && {
+        durationMs,
       };
-    k[20] = L;
-    k[21] = pe;
-  } else pe = k[21];
-  let te;
-  if (k[22] !== ae || k[23] !== pe || k[24] !== ee || k[25] !== le || k[26] !== ge) {
-    te = {
-      ...ee,
-      ...le,
-      ...ge,
-      ...ae,
-      ...pe,
+    $[20] = durationMs;
+    $[21] = durationPart;
+  } else durationPart = $[21];
+  let task;
+  if (
+    $[22] !== toolUseIdPart ||
+    $[23] !== durationPart ||
+    $[24] !== taskIdPart ||
+    $[25] !== statusPart ||
+    $[26] !== typePart
+  ) {
+    task = {
+      ...taskIdPart,
+      ...statusPart,
+      ...typePart,
+      ...toolUseIdPart,
+      ...durationPart,
     };
-    k[22] = ae;
-    k[23] = pe;
-    k[24] = ee;
-    k[25] = le;
-    k[26] = ge;
-    k[27] = te;
-  } else te = k[27];
-  let task = te;
-  let ue;
-  if (k[28] !== origin || k[29] !== text) {
-    ue = parseTeammateResultBlock(text, origin);
-    k[28] = origin;
-    k[29] = text;
-    k[30] = ue;
-  } else ue = k[30];
-  let J = ue;
+    $[22] = toolUseIdPart;
+    $[23] = durationPart;
+    $[24] = taskIdPart;
+    $[25] = statusPart;
+    $[26] = typePart;
+    $[27] = task;
+  } else task = $[27];
+  let task_2 = task;
+  let monitorEvent;
+  if ($[28] !== origin || $[29] !== text) {
+    monitorEvent = parseTeammateResultBlock(text, origin);
+    $[28] = origin;
+    $[29] = text;
+    $[30] = monitorEvent;
+  } else monitorEvent = $[30];
+  let monitorEvent_2 = monitorEvent;
   let draw;
   if (
-    k[31] !== addMargin ||
-    k[32] !== L ||
-    k[33] !== isExpanded ||
-    k[34] !== messageId ||
-    k[35] !== J ||
-    k[36] !== status ||
-    k[37] !== summary ||
-    k[38] !== taskDelivery ||
-    k[39] !== text ||
-    k[40] !== verbose
+    $[31] !== addMargin ||
+    $[32] !== durationMs ||
+    $[33] !== isExpanded ||
+    $[34] !== messageId ||
+    $[35] !== monitorEvent_2 ||
+    $[36] !== status ||
+    $[37] !== summary ||
+    $[38] !== taskDelivery ||
+    $[39] !== text ||
+    $[40] !== verbose
   ) {
-    draw = (ye) =>
+    draw = (summaryText) =>
       jsxProd_default(MonitorNotificationMessage, {
         addMargin,
         text,
-        summary: ye,
-        monitorEvent: ye === summary ? J : null,
+        summary: summaryText,
+        monitorEvent: summaryText === summary ? monitorEvent_2 : null,
         status,
-        durationMs: L,
+        durationMs,
         taskDelivery,
         messageId,
         verbose,
         isExpanded,
       });
-    k[31] = addMargin;
-    k[32] = L;
-    k[33] = isExpanded;
-    k[34] = messageId;
-    k[35] = J;
-    k[36] = status;
-    k[37] = summary;
-    k[38] = taskDelivery;
-    k[39] = text;
-    k[40] = verbose;
-    k[41] = draw;
-  } else draw = k[41];
-  let Te;
+    $[31] = addMargin;
+    $[32] = durationMs;
+    $[33] = isExpanded;
+    $[34] = messageId;
+    $[35] = monitorEvent_2;
+    $[36] = status;
+    $[37] = summary;
+    $[38] = taskDelivery;
+    $[39] = text;
+    $[40] = verbose;
+    $[41] = draw;
+  } else draw = $[41];
+  let siteProps;
   if (
-    k[42] !== isExpanded ||
-    k[43] !== messageId ||
-    k[44] !== origin ||
-    k[45] !== summary ||
-    k[46] !== draw ||
-    k[47] !== task
+    $[42] !== isExpanded ||
+    $[43] !== messageId ||
+    $[44] !== origin ||
+    $[45] !== summary ||
+    $[46] !== draw ||
+    $[47] !== task_2
   ) {
-    Te = {
+    siteProps = {
       messageId,
       stored: origin,
       text: summary,
       isExpanded,
-      task,
+      task: task_2,
       draw,
     };
-    k[42] = isExpanded;
-    k[43] = messageId;
-    k[44] = origin;
-    k[45] = summary;
-    k[46] = draw;
-    k[47] = task;
-    k[48] = Te;
-  } else Te = k[48];
-  return BriefTimestampNamespace.useUserMessageSite(Te);
+    $[42] = isExpanded;
+    $[43] = messageId;
+    $[44] = origin;
+    $[45] = summary;
+    $[46] = draw;
+    $[47] = task_2;
+    $[48] = siteProps;
+  } else siteProps = $[48];
+  return BriefTimestampNamespace.useUserMessageSite(siteProps);
 }
 //@ chunk-ah34pb7m.js:101686-103536 placement
 /**
  * 监控任务通知消息
  */
 function MonitorNotificationMessage(props) {
-  let B = w(32);
+  let $ = useMemoCache(32);
   let { addMargin, summary, monitorEvent, status, durationMs, taskDelivery, messageId, verbose, isExpanded } =
     props;
-  let b = noticeSystemLines(verbose);
-  let sentMessages = Se(monitorEventCacheStore).get(messageId) ?? 0;
-  let L;
-  if (B[0] !== status) {
-    L = getStatusColor(status);
-    B[0] = status;
-    B[1] = L;
-  } else L = B[1];
-  let N = L;
-  let color = false && N === "text" ? "planMode" : N;
-  let U;
-  if (B[2] !== durationMs) {
-    U = Number.isFinite(durationMs) && durationMs > 0 ? ` \xB7 ${formatDuration(durationMs)}` : null;
-    B[2] = durationMs;
-    B[3] = U;
-  } else U = B[3];
-  let K = U;
-  let V =
+  let transcriptRows = noticeSystemLines(verbose);
+  let sentMessages = useContext(monitorEventCacheStore).get(messageId) ?? 0;
+  let statusColor;
+  if ($[0] !== status) {
+    statusColor = getStatusColor(status);
+    $[0] = status;
+    $[1] = statusColor;
+  } else statusColor = $[1];
+  let statusColor_2 = statusColor;
+  let color = false && statusColor_2 === "text" ? "planMode" : statusColor_2;
+  let durationText;
+  if ($[2] !== durationMs) {
+    durationText =
+      Number.isFinite(durationMs) && durationMs > 0 ? ` \xB7 ${formatDuration(durationMs)}` : null;
+    $[2] = durationMs;
+    $[3] = durationText;
+  } else durationText = $[3];
+  let durationText_2 = durationText;
+  let hasDelivery =
     taskDelivery !== undefined && getTaskRunState().bashTaskDeliveryOutcomes.get(messageId) !== "no_host";
-  let Y = V ? completedTaskResultText(taskDelivery) : "";
-  let X = V
-    ? `delivered to Claude as a ${GET_TASK_TOOL_TEXT} result${Y ? ` (${formatNumber(Y.length)} chars)` : ""}`
+  let deliveredText = hasDelivery ? completedTaskResultText(taskDelivery) : "";
+  let deliveryNote = hasDelivery
+    ? `delivered to Claude as a ${GET_TASK_TOOL_TEXT} result${deliveredText ? ` (${formatNumber(deliveredText.length)} chars)` : ""}`
     : null;
-  let z = X === null ? null : ` \xB7 ${X}`;
+  let deliverySuffix = deliveryNote === null ? null : ` \xB7 ${deliveryNote}`;
   if (monitorEvent !== null && !isExpanded) {
-    let ee;
-    if (B[4] !== addMargin || B[5] !== color || B[6] !== monitorEvent || B[7] !== status || B[8] !== b) {
-      ee = jsxProd_default(MonitorEventRow, {
+    let eventRow;
+    if (
+      $[4] !== addMargin ||
+      $[5] !== color ||
+      $[6] !== monitorEvent ||
+      $[7] !== status ||
+      $[8] !== transcriptRows
+    ) {
+      eventRow = jsxProd_default(MonitorEventRow, {
         addMargin,
         monitorEvent,
         status,
         color,
-        transcriptV2Rows: b,
+        transcriptV2Rows: transcriptRows,
       });
-      B[4] = addMargin;
-      B[5] = color;
-      B[6] = monitorEvent;
-      B[7] = status;
-      B[8] = b;
-      B[9] = ee;
-    } else ee = B[9];
-    return ee;
+      $[4] = addMargin;
+      $[5] = color;
+      $[6] = monitorEvent;
+      $[7] = status;
+      $[8] = transcriptRows;
+      $[9] = eventRow;
+    } else eventRow = $[9];
+    return eventRow;
   }
-  if (b) {
+  if (transcriptRows) {
     return jsxProd_default(NoticeRowMessage, {
       row: taskNotificationSummaryLine({
         status,
         summary,
         context: null,
         durationMs,
-        deliveryNote: X,
+        deliveryNote,
         sentMessages,
       }),
       addMargin,
     });
   }
-  const le = Box;
+  const BoxComponent = Box;
   const marginTop = addMargin ? 1 : 0;
   const flexDirection = "column";
-  let ae;
-  if (B[10] !== color) {
-    ae = jsxProd_default(Text, {
+  let statusDot;
+  if ($[10] !== color) {
+    statusDot = jsxProd_default(Text, {
       "aria-hidden": true,
       color,
       children: false ? figures_default.pointer : BLACK_CIRCLE,
     });
-    B[10] = color;
-    B[11] = ae;
-  } else ae = B[11];
-  let pe;
-  if (B[12] !== summary) {
-    pe = collapseWhitespace(sanitizeDisplayText(summary));
-    B[12] = summary;
-    B[13] = pe;
-  } else pe = B[13];
-  let te;
-  if (B[14] !== K) {
-    te =
-      K &&
+    $[10] = color;
+    $[11] = statusDot;
+  } else statusDot = $[11];
+  let summaryText;
+  if ($[12] !== summary) {
+    summaryText = collapseWhitespace(sanitizeDisplayText(summary));
+    $[12] = summary;
+    $[13] = summaryText;
+  } else summaryText = $[13];
+  let durationNode;
+  if ($[14] !== durationText_2) {
+    durationNode =
+      durationText_2 &&
       jsxProd_default(Text, {
         dimColor: true,
-        children: K,
+        children: durationText_2,
       });
-    B[14] = K;
-    B[15] = te;
-  } else te = B[15];
-  let de;
-  if (B[16] !== z) {
-    de =
-      z &&
+    $[14] = durationText_2;
+    $[15] = durationNode;
+  } else durationNode = $[15];
+  let deliveryNode;
+  if ($[16] !== deliverySuffix) {
+    deliveryNode =
+      deliverySuffix &&
       jsxProd_default(Text, {
         dimColor: true,
-        children: z,
+        children: deliverySuffix,
       });
-    B[16] = z;
-    B[17] = de;
-  } else de = B[17];
-  let ue;
-  if (B[18] !== ae || B[19] !== pe || B[20] !== te || B[21] !== de) {
-    ue = jsxProd_default_2(Text, {
-      children: [ae, " ", pe, te, de],
+    $[16] = deliverySuffix;
+    $[17] = deliveryNode;
+  } else deliveryNode = $[17];
+  let lineText;
+  if ($[18] !== statusDot || $[19] !== summaryText || $[20] !== durationNode || $[21] !== deliveryNode) {
+    lineText = jsxProd_default_2(Text, {
+      children: [statusDot, " ", summaryText, durationNode, deliveryNode],
     });
-    B[18] = ae;
-    B[19] = pe;
-    B[20] = te;
-    B[21] = de;
-    B[22] = ue;
-  } else ue = B[22];
-  const J =
-    verbose && Y
+    $[18] = statusDot;
+    $[19] = summaryText;
+    $[20] = durationNode;
+    $[21] = deliveryNode;
+    $[22] = lineText;
+  } else lineText = $[22];
+  const deliveredDetail =
+    verbose && deliveredText
       ? jsxProd_default(Box, {
           paddingLeft: 2,
           children: jsxProd_default(Text, {
             dimColor: true,
-            children: sanitizeDisplayText(Y),
+            children: sanitizeDisplayText(deliveredText),
           }),
         })
       : null;
-  let se;
-  if (B[23] !== isExpanded || B[24] !== monitorEvent) {
-    se =
+  let expandedBody;
+  if ($[23] !== isExpanded || $[24] !== monitorEvent) {
+    expandedBody =
       isExpanded && monitorEvent !== null
         ? jsxProd_default(Box, {
             paddingLeft: 2,
@@ -441,53 +454,59 @@ function MonitorNotificationMessage(props) {
             }),
           })
         : null;
-    B[23] = isExpanded;
-    B[24] = monitorEvent;
-    B[25] = se;
-  } else se = B[25];
-  let ye;
-  if (B[26] !== le || B[27] !== J || B[28] !== se || B[29] !== marginTop || B[30] !== ue) {
-    ye = jsxProd_default_2(le, {
+    $[23] = isExpanded;
+    $[24] = monitorEvent;
+    $[25] = expandedBody;
+  } else expandedBody = $[25];
+  let content;
+  if (
+    $[26] !== BoxComponent ||
+    $[27] !== deliveredDetail ||
+    $[28] !== expandedBody ||
+    $[29] !== marginTop ||
+    $[30] !== lineText
+  ) {
+    content = jsxProd_default_2(BoxComponent, {
       marginTop,
       flexDirection,
-      children: [ue, J, se],
+      children: [lineText, deliveredDetail, expandedBody],
     });
-    B[26] = le;
-    B[27] = J;
-    B[28] = se;
-    B[29] = marginTop;
-    B[30] = ue;
-    B[31] = ye;
-  } else ye = B[31];
-  return ye;
+    $[26] = BoxComponent;
+    $[27] = deliveredDetail;
+    $[28] = expandedBody;
+    $[29] = marginTop;
+    $[30] = lineText;
+    $[31] = content;
+  } else content = $[31];
+  return content;
 }
 //@ chunk-ah34pb7m.js:103536-104446 placement
 /**
  * 监控事件行
  */
 function MonitorEventRow(props) {
-  let T = w(19);
+  let $ = useMemoCache(19);
   let { addMargin, monitorEvent, status, color, transcriptV2Rows } = props;
   let { columns } = useTerminalSize();
-  let x;
-  let k;
-  let b;
+  let description;
+  let headline;
+  let noticeRowMessageElement;
   if (
-    T[0] !== addMargin ||
-    T[1] !== columns ||
-    T[2] !== monitorEvent ||
-    T[3] !== status ||
-    T[4] !== transcriptV2Rows
+    $[0] !== addMargin ||
+    $[1] !== columns ||
+    $[2] !== monitorEvent ||
+    $[3] !== status ||
+    $[4] !== transcriptV2Rows
   ) {
-    b = EARLY_RETURN_SENTINEL;
+    noticeRowMessageElement = EARLY_RETURN_SENTINEL;
     E: {
-      ({ headline: k, description: x } = fitMonitorEventText(monitorEvent, columns - NOTIFICATION_INDENT));
+      ({ headline, description } = fitMonitorEventText(monitorEvent, columns - NOTIFICATION_INDENT));
       if (transcriptV2Rows) {
-        b = jsxProd_default(NoticeRowMessage, {
+        noticeRowMessageElement = jsxProd_default(NoticeRowMessage, {
           row: taskNotificationSummaryLine({
             status,
-            summary: `${MONITOR_EVENT_PREFIX} ${k}`,
-            context: x,
+            summary: `${MONITOR_EVENT_PREFIX} ${headline}`,
+            context: description,
             durationMs: 0,
             deliveryNote: null,
             sentMessages: 0,
@@ -497,69 +516,69 @@ function MonitorEventRow(props) {
         break E;
       }
     }
-    T[0] = addMargin;
-    T[1] = columns;
-    T[2] = monitorEvent;
-    T[3] = status;
-    T[4] = transcriptV2Rows;
-    T[5] = x;
-    T[6] = k;
-    T[7] = b;
+    $[0] = addMargin;
+    $[1] = columns;
+    $[2] = monitorEvent;
+    $[3] = status;
+    $[4] = transcriptV2Rows;
+    $[5] = description;
+    $[6] = headline;
+    $[7] = noticeRowMessageElement;
   } else {
-    x = T[5];
-    k = T[6];
-    b = T[7];
+    description = $[5];
+    headline = $[6];
+    noticeRowMessageElement = $[7];
   }
-  if (b !== EARLY_RETURN_SENTINEL) return b;
+  if (noticeRowMessageElement !== EARLY_RETURN_SENTINEL) return noticeRowMessageElement;
   const marginTop = addMargin ? 1 : 0;
-  let L;
-  if (T[8] !== color) {
-    L = jsxProd_default(Text, {
+  let textElement;
+  if ($[8] !== color) {
+    textElement = jsxProd_default(Text, {
       "aria-hidden": true,
       color,
       children: BLACK_CIRCLE,
     });
-    T[8] = color;
-    T[9] = L;
-  } else L = T[9];
-  let N;
-  if (T[10] !== x) {
-    N =
-      x !== null &&
+    $[8] = color;
+    $[9] = textElement;
+  } else textElement = $[9];
+  let descriptionSuffix;
+  if ($[10] !== description) {
+    descriptionSuffix =
+      description !== null &&
       jsxProd_default(Text, {
         dimColor: true,
-        children: ` \xB7 ${x}`,
+        children: ` \xB7 ${description}`,
       });
-    T[10] = x;
-    T[11] = N;
-  } else N = T[11];
+    $[10] = description;
+    $[11] = descriptionSuffix;
+  } else descriptionSuffix = $[11];
   let children;
-  if (T[12] !== k || T[13] !== L || T[14] !== N) {
+  if ($[12] !== headline || $[13] !== textElement || $[14] !== descriptionSuffix) {
     children = jsxProd_default_2(Text, {
       wrap: "truncate-end",
-      children: [L, " ", MONITOR_EVENT_PREFIX, " ", k, N],
+      children: [textElement, " ", MONITOR_EVENT_PREFIX, " ", headline, descriptionSuffix],
     });
-    T[12] = k;
-    T[13] = L;
-    T[14] = N;
-    T[15] = children;
-  } else children = T[15];
-  let U;
-  if (T[16] !== marginTop || T[17] !== children) {
-    U = jsxProd_default(Box, {
+    $[12] = headline;
+    $[13] = textElement;
+    $[14] = descriptionSuffix;
+    $[15] = children;
+  } else children = $[15];
+  let boxElement;
+  if ($[16] !== marginTop || $[17] !== children) {
+    boxElement = jsxProd_default(Box, {
       marginTop,
       children,
     });
-    T[16] = marginTop;
-    T[17] = children;
-    T[18] = U;
-  } else U = T[18];
-  return U;
+    $[16] = marginTop;
+    $[17] = children;
+    $[18] = boxElement;
+  } else boxElement = $[18];
+  return boxElement;
 }
 //@ chunk-ah34pb7m.js:104446-104523 placement
-function readTagText(text, d) {
-  let tag = extractTag(text, d);
-  let g = tag === null ? "" : capIdFrameField(tag, IDLE_ID_FIELD_RECEIVE_BOUND);
-  return g === "" ? undefined : g;
+function readTagText(text, tagName) {
+  let tag = extractTag(text, tagName);
+  let field = tag === null ? "" : capIdFrameField(tag, IDLE_ID_FIELD_RECEIVE_BOUND);
+  return field === "" ? undefined : field;
 }
 export { renderToolUseErrorMessage_5 };

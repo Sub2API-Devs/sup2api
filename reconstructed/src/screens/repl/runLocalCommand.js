@@ -33,30 +33,30 @@ import { logForDebugging } from "../../utils/debug.js";
 import { commandThrowTextForTranscript } from "../../utils/processUserInput/processSlashCommand.js";
 
 //@ chunk-18hwfzwa.js:309809-310198 placement
-function isCommandHookedByPlugins(command) {
+function isCommandHookedByPlugins(wanted) {
   try {
     let filtered = getPluginRegistry().loadedModules.filter((loadedModule) => !hasLink(loadedModule));
-    let D = new Set(
+    let hookedNames = new Set(
       filtered
         .filter(
-          (L) =>
-            L.hooks("command.run") &&
-            isModuleAdmitted(L) &&
-            matchesSingleKeyFilter(L.matcherFor("command.run"), "command", command),
+          (loadedModule) =>
+            loadedModule.hooks("command.run") &&
+            isModuleAdmitted(loadedModule) &&
+            matchesSingleKeyFilter(loadedModule.matcherFor("command.run"), "command", wanted),
         )
-        .map((L) => L.name),
+        .map((skill) => skill.name),
     );
     return (
       !isHookRegistrationPending() &&
-      filtered.some((L) => D.has(L.name)) &&
+      filtered.some((command) => hookedNames.has(command.name)) &&
       filtered.every(
-        (L) =>
-          D.has(L.name) ||
+        (command) =>
+          hookedNames.has(command.name) ||
           !(
-            L.hooks("prompt.submit") ||
-            L.hooks("session.append") ||
-            L.hooks("session.receive") ||
-            L.hooks("command.run")
+            command.hooks("prompt.submit") ||
+            command.hooks("session.append") ||
+            command.hooks("session.receive") ||
+            command.hooks("command.run")
           ),
       )
     );
@@ -79,86 +79,90 @@ async function runLocalCommandFromRepl({ command, commandName, args, context, pr
 }
 //@ chunk-18hwfzwa.js:310397-311842 placement
 async function runLocalCommand({ command, input, displayName, invokedAs, context, printRows, ranAs }) {
-  let Be = cmdFeature(shippedCommandNames().has(command.name) ? command.name : "custom");
-  let He =
+  let featureName = cmdFeature(shippedCommandNames().has(command.name) ? command.name : "custom");
+  let leasedOverBridge =
     context.dispatchedOverBridge === true &&
     shouldEscapeNdjsonForBridge() &&
     !isCommandHookedByPlugins(input.command);
-  let args = isPromptHookObserved() || He ? "" : input.args;
-  let ze = snapshotHookRegistration();
-  let Xe = () => createCommandInputMessage(formatCommandInputTags(displayName, args));
+  let args = isPromptHookObserved() || leasedOverBridge ? "" : input.args;
+  let hookRegistration = snapshotHookRegistration();
+  let commandInputRow = () => createCommandInputMessage(formatCommandInputTags(displayName, args));
   try {
-    let rt;
-    let kt = await dispatchCommandRunHooks({
+    let retoldPlugin;
+    let hookResult = await dispatchCommandRunHooks({
       input,
       engine: {
-        run: async (Dt) => {
-          if (!He && !hasHookRegistrationChanged(ze)) args = Dt;
-          ranAs?.(Dt);
+        run: async (hookArgs) => {
+          if (!leasedOverBridge && !hasHookRegistrationChanged(hookRegistration)) args = hookArgs;
+          ranAs?.(hookArgs);
           return (await command.load()).call(
-            Dt,
+            hookArgs,
             {
               ...context,
-              rowCommit: (await import("./chunk-7qydycm2.js")).ROW_COMMIT,
+              rowCommit: (await import("../../commands/config/configShorthand.js")).ROW_COMMIT,
             },
             invokedAs,
           );
         },
         textOf: localCommandText,
         contextOf: localCommandMetaMessages,
-        retell: (Dt, Lt) => {
-          let oo = withCommandText(Dt, Lt);
-          rt = oo && Lt.plugin;
-          return oo;
+        retell: (text, context) => {
+          let retold = withCommandText(text, context);
+          retoldPlugin = retold && context.plugin;
+          return retold;
         },
       },
       queued: undefined,
       signal: context.abortController.signal,
     });
-    if (kt.kind === "answered" && hasSingleCommandRunHook(input.command)) {
-      if (!He && !hasHookRegistrationChanged(ze)) args = input.args;
+    if (hookResult.kind === "answered" && hasSingleCommandRunHook(input.command)) {
+      if (!leasedOverBridge && !hasHookRegistrationChanged(hookRegistration)) args = input.args;
       ranAs?.(input.args);
     }
-    let ran = kt.kind === "engine" ? kt.ran : undefined;
-    let It = kt.kind === "engine" ? localCommandText(kt.ran) : kt.text;
-    let Ot = ran?.type === "text" && ran.level === "error";
-    if (Ot) logFeatureBad(Be, "cmd_returned_error");
-    else logFeatureOk(Be, getTipAttribution(command.name));
-    if (kt.kind === "answered" && It === undefined) return;
-    let Et = Ot ? LOCAL_COMMAND_STDERR : LOCAL_COMMAND_STDOUT;
+    let ran = hookResult.kind === "engine" ? hookResult.ran : undefined;
+    let outputText = hookResult.kind === "engine" ? localCommandText(hookResult.ran) : hookResult.text;
+    let failed = ran?.type === "text" && ran.level === "error";
+    if (failed) logFeatureBad(featureName, "cmd_returned_error");
+    else logFeatureOk(featureName, getTipAttribution(command.name));
+    if (hookResult.kind === "answered" && outputText === undefined) return;
+    let outputTag = failed ? LOCAL_COMMAND_STDERR : LOCAL_COMMAND_STDOUT;
     printRows([
-      Xe(),
-      ...(It
+      commandInputRow(),
+      ...(outputText
         ? [
-            createCommandInputMessage(`<${Et}>${escapeXml(It)}</${Et}>`, {
+            createCommandInputMessage(`<${outputTag}>${escapeXml(outputText)}</${outputTag}>`, {
               ...(ran?.type === "text" && {
                 contextUsage: ran.contextUsage,
                 usageReport: ran.usageReport,
                 commandOutcome:
                   ran.outcome ??
-                  (Ot
+                  (failed
                     ? {
                         kind: "failed",
                       }
                     : undefined),
               }),
-              commandRun: buildCommandRunInfo(command, args, kt.kind === "engine" ? rt : kt.plugin),
+              commandRun: buildCommandRunInfo(
+                command,
+                args,
+                hookResult.kind === "engine" ? retoldPlugin : hookResult.plugin,
+              ),
             }),
           ]
         : []),
     ]);
   } catch (error) {
-    let kt = isAbortError(error);
-    if (kt) logForDebugging(`immediate command aborted: ${String(error)}`);
+    let aborted = isAbortError(error);
+    if (aborted) logForDebugging(`immediate command aborted: ${String(error)}`);
     else logError(withTelemetryMessage(toError(error), "immediate command threw"));
-    logFeatureBad(Be, kt ? "cmd_local_aborted" : "cmd_local_threw");
-    let At = kt ? LOCAL_COMMAND_STDOUT : LOCAL_COMMAND_STDERR;
-    let It = escapeXml(commandThrowTextForTranscript(error, command.name, context.session));
+    logFeatureBad(featureName, aborted ? "cmd_local_aborted" : "cmd_local_threw");
+    let errorTag = aborted ? LOCAL_COMMAND_STDOUT : LOCAL_COMMAND_STDERR;
+    let errorText = escapeXml(commandThrowTextForTranscript(error, command.name, context.session));
     printRows([
-      Xe(),
+      commandInputRow(),
       createCommandInputMessage(
-        `<${At}>${It}</${At}>`,
-        kt
+        `<${errorTag}>${errorText}</${errorTag}>`,
+        aborted
           ? undefined
           : {
               commandRun: buildCommandRunInfo(command, args),
@@ -171,35 +175,35 @@ async function runLocalCommand({ command, input, displayName, invokedAs, context
   }
 }
 //@ chunk-18hwfzwa.js:311842-311914 placement
-function localCommandText(h) {
-  return h.type === "text" || h.type === "query" ? h.value : undefined;
+function localCommandText(action) {
+  return action.type === "text" || action.type === "query" ? action.value : undefined;
 }
 //@ chunk-18hwfzwa.js:311914-311993 placement
-function localCommandMetaMessages(h) {
-  return h.type === "text" || h.type === "query" ? h.metaMessages : undefined;
+function localCommandMetaMessages(action) {
+  return action.type === "text" || action.type === "query" ? action.metaMessages : undefined;
 }
 //@ chunk-18hwfzwa.js:311993-312194 placement
 /**
  * 本地命令结果补上文本或上下文 meta 消息。
  */
-function withCommandText(h, { text, context }) {
-  if (h.type !== "text" && h.type !== "query") return;
-  let L = context ?? h.metaMessages;
-  let ee =
-    L === undefined
+function withCommandText(action, { text, context }) {
+  if (action.type !== "text" && action.type !== "query") return;
+  let metaSource = context ?? action.metaMessages;
+  let extra =
+    metaSource === undefined
       ? {}
       : {
-          metaMessages: [...L],
+          metaMessages: [...metaSource],
         };
   return text === undefined
     ? {
-        ...h,
-        ...ee,
+        ...action,
+        ...extra,
       }
     : {
         type: "text",
         value: text,
-        ...ee,
+        ...extra,
       };
 }
 export { runLocalCommand, runLocalCommandFromRepl };

@@ -10,10 +10,14 @@
  */
 import * as pathModule from "path";
 import { sep, join } from "path";
+import { readdir, stat } from "fs/promises";
 import * as osModule from "os";
 import { promises } from "fs";
-import { readdir, stat } from "fs/promises";
-import { getXDGDataHome, getNativeVersionsDir, getUserBinDir } from "../xdg.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
+import { require_semver_3 } from "../../../vendor/semver/index.js";
+import { isStandaloneExecutable } from "../slowOperations.js";
+import { getNativeVersionsDir, getUserBinDir, getXDGDataHome } from "../xdg.js";
+import { processWrapperArgv } from "../processWrapper.js";
 import { paths } from "../cachePaths.js";
 import { getErrnoCode, sanitizeErrnoForTelemetry } from "../errors.js";
 import { execFileNoThrow } from "../execFileNoThrow.js";
@@ -25,21 +29,133 @@ import { getClaudeConfigDir } from "../envUtils.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { logFeatureOk, logFeatureBad } from "../../services/analytics/featureTelemetry.js";
-import { Re } from "../../../runtime/bun-runtime.js";
-import { require_semver_3 } from "../../../vendor/semver/index.js";
-import { isStandaloneExecutable } from "../slowOperations.js";
-import { processWrapperArgv } from "../processWrapper.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-qrnm62fg.js:375-392 placement
+/**
+ * semver 模块的包装导入（用于版本排序）。
+ */
+var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qrnm62fg.js:375", () => {
+  semverModule = __toESM(require_semver_3(), 1);
+});
+//@ chunk-qrnm62fg.js:477-562 placement
+/**
+ * 是否从安装的版本目录运行。
+ */
+function isRunningFromVersionsDir_2() {
+  if (!isStandaloneExecutable()) return false;
+  let versionsPrefix = getNativeVersionsDir() + sep;
+  return process.execPath.startsWith(versionsPrefix);
+}
+//@ chunk-qrnm62fg.js:562-598 placement
+/**
+ * 生成重新启动 Claude Code 的命令。
+ */
+function getLaunchCommand(options = {}) {
+  return withProcessWrapper(resolveLaunchTarget(options));
+}
+//@ chunk-qrnm62fg.js:598-922 placement
+/**
+ * 决定启动目标（当前二进制、版本目录、node 脚本）。
+ */
+function resolveLaunchTarget(options = {}) {
+  if (!options.pinToCurrentBinary && isRunningFromVersionsDir_2()) {
+    let claudePath = resolveClaudePath();
+    return {
+      cmd: claudePath,
+      prefixArgs: [],
+      target: claudePath,
+    };
+  }
+  if (isStandaloneExecutable())
+    return {
+      cmd: process.execPath,
+      prefixArgs: [],
+      target: process.execPath,
+    };
+  let scriptPath = process.argv[1];
+  if (!scriptPath)
+    return {
+      cmd: process.execPath,
+      prefixArgs: [],
+      target: process.execPath,
+    };
+  return {
+    cmd: process.execPath,
+    prefixArgs: [scriptPath],
+    target: scriptPath,
+  };
+}
+//@ chunk-qrnm62fg.js:922-961 callgraph-fingerprint = resolveClaudePath (0.328)
+/**
+ * 本地安装的 claude 路径 <用户 bin 目录>/claude。
+ */
+function resolveClaudePath() {
+  return join(getUserBinDir(), "claude");
+}
+//@ chunk-qrnm62fg.js:961-1108 placement
+/**
+ * 套上进程包装器前缀。
+ */
+function withProcessWrapper(target) {
+  let wrapperArgv = processWrapperArgv();
+  if (wrapperArgv.length === 0 || target.cmd === wrapperArgv[0]) return target;
+  return {
+    cmd: wrapperArgv[0],
+    prefixArgs: [...wrapperArgv.slice(1), target.cmd, ...target.prefixArgs],
+    target: target.target,
+  };
+}
+//@ chunk-qrnm62fg.js:1108-1367 placement
+/**
+ * 查找已安装的最新版本二进制。
+ */
+async function findLatestInstalledVersion() {
+  let nativeVersionsDir = getNativeVersionsDir();
+  let entries;
+  try {
+    entries = await readdir(nativeVersionsDir);
+  } catch {
+    return null;
+  }
+  let sorted = entries
+    .filter((fileName) => !/\.tmp\.\d+\.\d+(\.\d+)?$/.test(fileName) && semverModule.valid(fileName))
+    .sort(semverModule.rcompare);
+  for (let version of sorted) {
+    let versionPath = join(nativeVersionsDir, version);
+    try {
+      let stats = await stat(versionPath);
+      if (stats.isFile() && stats.size > 0) return versionPath;
+    } catch {}
+  }
+  return null;
+}
+//@ chunk-x4gcvpxy.js:2021-2103 placement
+/**
+ * 判断当前进程是否从安装的版本目录运行。
+ */
+function isRunningFromVersionsDir() {
+  return process.execPath.startsWith(join(getXDGDataHome(), "claude", "versions") + sep);
+}
 //@ chunk-fb29jded.js:701-922 callgraph-witnessed = APP_NAME (0.232)
 /**
  * 协议处理器常量：macOS 包 ~/Applications/Claude Code URL Handler.app（bundle id com.anthropic.claude-code-url-handler）、Linux .desktop 文件名。
  */
-var MACOS_BUNDLE_ID = "com.anthropic.claude-code-url-handler";
-var APP_DISPLAY_NAME = "Claude Code URL Handler";
-var DESKTOP_FILE_NAME = "claude-code-url-handler.desktop";
-var MACOS_APP_NAME = "Claude Code URL Handler.app";
-var MACOS_APP_DIR = pathModule.join(osModule.homedir(), "Applications", MACOS_APP_NAME);
-var MACOS_SYMLINK_PATH = pathModule.join(MACOS_APP_DIR, "Contents", "MacOS", "claude");
+var MACOS_BUNDLE_ID; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var APP_DISPLAY_NAME;
+var DESKTOP_FILE_NAME;
+var MACOS_APP_NAME;
+var MACOS_APP_DIR;
+var MACOS_SYMLINK_PATH;
+deferInit("chunk-fb29jded.js:701", () => {
+  MACOS_BUNDLE_ID = "com.anthropic.claude-code-url-handler";
+  APP_DISPLAY_NAME = "Claude Code URL Handler";
+  DESKTOP_FILE_NAME = "claude-code-url-handler.desktop";
+  MACOS_APP_NAME = "Claude Code URL Handler.app";
+  MACOS_APP_DIR = pathModule.join(osModule.homedir(), "Applications", MACOS_APP_NAME);
+  MACOS_SYMLINK_PATH = pathModule.join(MACOS_APP_DIR, "Contents", "MacOS", "claude");
+});
 //@ chunk-fb29jded.js:922-973 fingerprint = linuxDesktopPath (1)
 /**
  * Linux .desktop 文件路径 $XDG_DATA_HOME/applications/claude-code-url-handler.desktop。
@@ -267,110 +383,6 @@ async function ensureDeepLinkProtocolRegistered(storage) {
         });
       else await promises.writeFile(failureMarkerPath, "").catch(() => {});
   }
-}
-//@ chunk-qrnm62fg.js:375-392 placement
-/**
- * semver 模块的包装导入（用于版本排序）。
- */
-var semverModule = Re(require_semver_3(), 1);
-//@ chunk-qrnm62fg.js:477-562 placement
-/**
- * 是否从安装的版本目录运行。
- */
-function isRunningFromVersionsDir_2() {
-  if (!isStandaloneExecutable()) return false;
-  let r = getNativeVersionsDir() + sep;
-  return process.execPath.startsWith(r);
-}
-//@ chunk-qrnm62fg.js:562-598 placement
-/**
- * 生成重新启动 Claude Code 的命令。
- */
-function getLaunchCommand(r = {}) {
-  return withProcessWrapper(resolveLaunchTarget(r));
-}
-//@ chunk-qrnm62fg.js:598-922 placement
-/**
- * 决定启动目标（当前二进制、版本目录、node 脚本）。
- */
-function resolveLaunchTarget(r = {}) {
-  if (!r.pinToCurrentBinary && isRunningFromVersionsDir_2()) {
-    let claudePath = resolveClaudePath();
-    return {
-      cmd: claudePath,
-      prefixArgs: [],
-      target: claudePath,
-    };
-  }
-  if (isStandaloneExecutable())
-    return {
-      cmd: process.execPath,
-      prefixArgs: [],
-      target: process.execPath,
-    };
-  let e = process.argv[1];
-  if (!e)
-    return {
-      cmd: process.execPath,
-      prefixArgs: [],
-      target: process.execPath,
-    };
-  return {
-    cmd: process.execPath,
-    prefixArgs: [e],
-    target: e,
-  };
-}
-//@ chunk-qrnm62fg.js:922-961 callgraph-fingerprint = resolveClaudePath (0.328)
-/**
- * 本地安装的 claude 路径 <用户 bin 目录>/claude。
- */
-function resolveClaudePath() {
-  return join(getUserBinDir(), "claude");
-}
-//@ chunk-qrnm62fg.js:961-1108 placement
-/**
- * 套上进程包装器前缀。
- */
-function withProcessWrapper(r) {
-  let e = processWrapperArgv();
-  if (e.length === 0 || r.cmd === e[0]) return r;
-  return {
-    cmd: e[0],
-    prefixArgs: [...e.slice(1), r.cmd, ...r.prefixArgs],
-    target: r.target,
-  };
-}
-//@ chunk-qrnm62fg.js:1108-1367 placement
-/**
- * 查找已安装的最新版本二进制。
- */
-async function findLatestInstalledVersion() {
-  let nativeVersionsDir = getNativeVersionsDir();
-  let e;
-  try {
-    e = await readdir(nativeVersionsDir);
-  } catch {
-    return null;
-  }
-  let sorted = e
-    .filter((n) => !/\.tmp\.\d+\.\d+(\.\d+)?$/.test(n) && semverModule.valid(n))
-    .sort(semverModule.rcompare);
-  for (let n of sorted) {
-    let i = join(nativeVersionsDir, n);
-    try {
-      let s = await stat(i);
-      if (s.isFile() && s.size > 0) return i;
-    } catch {}
-  }
-  return null;
-}
-//@ chunk-x4gcvpxy.js:2021-2103 placement
-/**
- * 判断当前进程是否从安装的版本目录运行。
- */
-function isRunningFromVersionsDir() {
-  return process.execPath.startsWith(join(getXDGDataHome(), "claude", "versions") + sep);
 }
 export {
   getLaunchCommand,

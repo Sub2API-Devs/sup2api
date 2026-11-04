@@ -34,7 +34,7 @@ import { hasSessionsTokenRequestId } from "../api/errorUtils.js";
 function verifyLiveAnswerSignature({ kind, answer, account }) {
   if (answer === undefined) return "no_answer";
   try {
-    let { result: o } = verifyCacheSignature({
+    let { result: verificationResult } = verifyCacheSignature({
       jws: answer.jws,
       kind,
       orgUuid: account?.organizationUuid || undefined,
@@ -45,7 +45,9 @@ function verifyLiveAnswerSignature({ kind, answer, account }) {
       nowMs: Date.now(),
       roots: isSecDefaultPluginEnabled(),
     });
-    return o === "valid" || o === "unsigned" ? o : "invalid";
+    return verificationResult === "valid" || verificationResult === "unsigned"
+      ? verificationResult
+      : "invalid";
   } catch {
     return "invalid";
   }
@@ -65,7 +67,7 @@ async function verifySignedCache({
     let signature = await readSignatureAsync(cachePath);
     let nowMs = Date.now();
     let startTime = performance.now();
-    let K = {
+    let verifyInput = {
       jws: signature?.jws,
       kind,
       orgUuid,
@@ -75,20 +77,20 @@ async function verifySignedCache({
       nowMs,
       roots: isSecDefaultPluginEnabled(),
     };
-    let b = verifyCacheSignature({
-      ...K,
+    let strictVerification = verifyCacheSignature({
+      ...verifyInput,
       unanchoredClaims: "refuse",
     });
     let verification =
-      (b.result === "aud_mismatch" && orgUuid === undefined) ||
-      (b.result === "sub_mismatch" && accountUuid === undefined)
+      (strictVerification.result === "aud_mismatch" && orgUuid === undefined) ||
+      (strictVerification.result === "sub_mismatch" && accountUuid === undefined)
         ? verifyCacheSignature({
-            ...K,
+            ...verifyInput,
             unanchoredClaims: "accept",
           })
-        : b;
+        : strictVerification;
     let verifyMicros = Math.round((performance.now() - startTime) * 1000);
-    let O = evaluateTrustWithPin({
+    let trustEvaluation = evaluateTrustWithPin({
       held: {
         orgUuid,
         accountUuid,
@@ -98,7 +100,7 @@ async function verifySignedCache({
       verification,
     });
     try {
-      onJudged(O);
+      onJudged(trustEvaluation);
     } catch (error) {
       logForDebugging(`signed-cache: telling the loader failed: ${errorMessage(error)}`, {
         level: "error",
@@ -106,17 +108,17 @@ async function verifySignedCache({
     }
     logEvent("tengu_signed_cache_shadow", {
       cache: fromEnum(kind),
-      result: fromEnum(b.result),
-      age_s: b.ageSeconds,
-      cert_hours_left: b.certHoursLeft,
+      result: fromEnum(strictVerification.result),
+      age_s: strictVerification.ageSeconds,
+      cert_hours_left: strictVerification.certHoursLeft,
       verify_micros: verifyMicros,
       has_org_uuid: orgUuid !== undefined,
       has_account_uuid: accountUuid !== undefined,
       has_workspace_uuid: workspaceUuid !== undefined,
-      ws_unanchored: b.wsUnanchored === true,
-      absence: b.absence === true,
-      states_lifetime: b.statesLifetime === true,
-      stored_copy: fromEnum(cacheTrustLabel(O)),
+      ws_unanchored: strictVerification.wsUnanchored === true,
+      absence: strictVerification.absence === true,
+      states_lifetime: strictVerification.statesLifetime === true,
+      stored_copy: fromEnum(cacheTrustLabel(trustEvaluation)),
     });
   } catch (error) {
     logForDebugging(`Signed cache: shadow check failed (${kind}) - ${errorMessage(error)}`);
@@ -166,7 +168,7 @@ function verifyStoredCacheAsync({ kind, cachePath, bodySha, readStoredAccount, r
 function logPrincipalChange({ kind, jws, trustedPrincipal, gate }) {
   try {
     if (jws === undefined) return;
-    let { result: u } = verifyCacheSignature({
+    let { result: mismatchResult } = verifyCacheSignature({
       jws,
       kind,
       orgUuid: trustedPrincipal.orgUuid,
@@ -177,10 +179,10 @@ function logPrincipalChange({ kind, jws, trustedPrincipal, gate }) {
       nowMs: Date.now(),
       roots: isSecDefaultPluginEnabled(),
     });
-    if (u !== "aud_mismatch" && u !== "sub_mismatch") return;
+    if (mismatchResult !== "aud_mismatch" && mismatchResult !== "sub_mismatch") return;
     logEvent("tengu_signed_cache_principal_change", {
       cache: fromEnum(kind),
-      differs: fromEnum(u === "aud_mismatch" ? "aud" : "sub"),
+      differs: fromEnum(mismatchResult === "aud_mismatch" ? "aud" : "sub"),
       stored_copy_gate: fromEnum(gate),
     });
   } catch (error) {
@@ -199,32 +201,32 @@ var NO_CACHE_HEADERS = {
 /**
  * 拼出策略限制接口的完整地址。
  */
-function policyLimitsUrl(e) {
-  return `${e}${POLICY_LIMITS_PATH}`;
+function policyLimitsUrl(baseUrl) {
+  return `${baseUrl}${POLICY_LIMITS_PATH}`;
 }
 //@ chunk-7t4fmt2f.js:12593-13420 placement
-async function fetchPolicyLimitsResponse(e) {
-  let r = await axios_default
-    .get(e.endpoint, {
+async function fetchPolicyLimitsResponse(requestOptions) {
+  let response = await axios_default
+    .get(requestOptions.endpoint, {
       headers: {
         "User-Agent": claudeCodeUserAgent(),
         ...NO_CACHE_HEADERS,
-        ...(e.ifNoneMatch !== undefined && {
-          "If-None-Match": `"${e.ifNoneMatch}"`,
+        ...(requestOptions.ifNoneMatch !== undefined && {
+          "If-None-Match": `"${requestOptions.ifNoneMatch}"`,
         }),
-        ...e.authHeaders,
+        ...requestOptions.authHeaders,
       },
-      timeout: e.timeoutMs,
+      timeout: requestOptions.timeoutMs,
       maxRedirects: 0,
       adapter: "http",
-      validateStatus: e.acceptAny2xx
-        ? (h) => (h >= 200 && h < 300) || h === 304
-        : (h) => h === 200 || h === 304,
-      ...(e.socketPath !== undefined && {
-        socketPath: e.socketPath,
+      validateStatus: requestOptions.acceptAny2xx
+        ? (status) => (status >= 200 && status < 300) || status === 304
+        : (status) => status === 200 || status === 304,
+      ...(requestOptions.socketPath !== undefined && {
+        socketPath: requestOptions.socketPath,
       }),
-      ...(e.signal !== undefined && {
-        signal: e.signal,
+      ...(requestOptions.signal !== undefined && {
+        signal: requestOptions.signal,
       }),
     })
     .catch((error) => {
@@ -232,11 +234,13 @@ async function fetchPolicyLimitsResponse(e) {
         error.code = "ERR_BAD_RESPONSE";
       throw error;
     });
-  let headers = r.headers ?? {};
+  let headers = response.headers ?? {};
   let signature = signatureHeaderValue(headers);
-  let u = headers[TUNNEL_CREDENTIAL_EPOCH_HEADER];
-  let tunnelCredentialEpoch = parseEpochNumber(typeof u === "string" ? u : undefined);
-  if (r.status === 304)
+  let rawEpochHeader = headers[TUNNEL_CREDENTIAL_EPOCH_HEADER];
+  let tunnelCredentialEpoch = parseEpochNumber(
+    typeof rawEpochHeader === "string" ? rawEpochHeader : undefined,
+  );
+  if (response.status === 304)
     return {
       kind: "not_modified",
       signature,
@@ -245,7 +249,7 @@ async function fetchPolicyLimitsResponse(e) {
     };
   return {
     kind: "ok",
-    data: r.data,
+    data: response.data,
     signature,
     contentType: String(headers["content-type"] ?? "").toLowerCase(),
     requestIdPresent: hasSessionsTokenRequestId(headers),
@@ -255,8 +259,8 @@ async function fetchPolicyLimitsResponse(e) {
 //@ chunk-7t4fmt2f.js:13420-13539 placement = isTransientNetworkError (1)
 function isTransientNetworkError(error) {
   if (!axios_default.isAxiosError(error)) return;
-  let r = error.response?.headers?.[TUNNEL_CREDENTIAL_EPOCH_HEADER];
-  return parseEpochNumber(typeof r === "string" ? r : undefined);
+  let rawEpochHeader = error.response?.headers?.[TUNNEL_CREDENTIAL_EPOCH_HEADER];
+  return parseEpochNumber(typeof rawEpochHeader === "string" ? rawEpochHeader : undefined);
 }
 export {
   fetchPolicyLimitsResponse,

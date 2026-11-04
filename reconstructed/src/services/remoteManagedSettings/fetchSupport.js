@@ -46,42 +46,42 @@ function pollIntervalOverrideMs() {
  * 定时轮询，但用户最近有交互时推迟执行（最多推迟 Jt 次），等下一次交互后立刻补跑；返回可 dispose 的句柄。
  */
 function startInteractionAwarePoll(onTick, intervalMs, options = {}) {
-  let o = 0;
-  let u = null;
-  let p = null;
-  let h = setDisposableInterval(R, intervalMs, options);
-  function y() {
-    u?.();
-    u = null;
-    if (p !== null) {
-      clearTimeout(p);
-      p = null;
+  let deferrals = 0;
+  let unsubscribeInteraction = null;
+  let pendingTimeout = null;
+  let intervalHandle = setDisposableInterval(onInterval, intervalMs, options);
+  function clearInteractionWait() {
+    unsubscribeInteraction?.();
+    unsubscribeInteraction = null;
+    if (pendingTimeout !== null) {
+      clearTimeout(pendingTimeout);
+      pendingTimeout = null;
     }
   }
-  function E() {
-    o = 0;
-    y();
+  function tick() {
+    deferrals = 0;
+    clearInteractionWait();
     onTick();
   }
-  function R() {
-    let S = pollIntervalOverrideMs();
-    if (!(S > 0 && isIdleLongerThan(S)) || o >= MAX_POLL_DEFERRALS) {
-      E();
+  function onInterval() {
+    let overrideMs = pollIntervalOverrideMs();
+    if (!(overrideMs > 0 && isIdleLongerThan(overrideMs)) || deferrals >= MAX_POLL_DEFERRALS) {
+      tick();
       return;
     }
-    o++;
-    u ??= onInteraction(() => {
-      p ??= setTimeout(() => {
-        h[Symbol.dispose]();
-        h = setDisposableInterval(R, intervalMs, options);
-        E();
+    deferrals++;
+    unsubscribeInteraction ??= onInteraction(() => {
+      pendingTimeout ??= setTimeout(() => {
+        intervalHandle[Symbol.dispose]();
+        intervalHandle = setDisposableInterval(onInterval, intervalMs, options);
+        tick();
       }, 0);
     });
   }
   return {
     [Symbol.dispose]: () => {
-      h[Symbol.dispose]();
-      y();
+      intervalHandle[Symbol.dispose]();
+      clearInteractionWait();
     },
   };
 }

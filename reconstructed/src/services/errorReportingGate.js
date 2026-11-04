@@ -8,7 +8,7 @@
  * pieces: chunk-wa9xapqs.js (6)
  * attribution: placement 6
  */
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../vendor/semver/index.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "./analytics/growthbook.js";
 import {
@@ -26,12 +26,16 @@ import { CLAUDE_AI_INFERENCE_SCOPE } from "../constants/oauth.js";
 import { isDiskless } from "../bootstrap/state.js";
 import { isFirstPartyTelemetryBlocked } from "../utils/hostEnvironment.js";
 import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from "../utils/model/providers.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-wa9xapqs.js:499-516 placement
 /**
  * 懒加载的 semver 模块。
  */
-var semverModule = Re(require_semver_3(), 1);
+var semverModule; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-wa9xapqs.js:499", () => {
+  semverModule = __toESM(require_semver_3(), 1);
+});
 //@ chunk-wa9xapqs.js:516-554 placement
 /**
  * 允许错误上报的最低版本（2.1.193）。
@@ -61,20 +65,20 @@ function errorReportingPolicyState() {
       ? "blocked_restriction"
       : "blocked_tainted";
   }
-  let o = areComplianceTaintsSettled();
-  if (responseFromCache !== null) return o ? "allowed_taints_clean" : "blocked_unsettled";
+  let state = areComplianceTaintsSettled();
+  if (responseFromCache !== null) return state ? "allowed_taints_clean" : "blocked_unsettled";
   if (hasStoredOAuthToken() && !hasOAuthScope(CLAUDE_AI_INFERENCE_SCOPE)) return "blocked_scopeless_oauth";
   if (getAuthTokenSource().source === "ANTHROPIC_AUTH_TOKEN") return "blocked_auth_token_env";
   if (getConfiguredApiKeyHelper()) return "blocked_api_key_helper";
-  return o ? "allowed_untaintable" : "blocked_unsettled";
+  return state ? "allowed_untaintable" : "blocked_unsettled";
 }
 //@ chunk-wa9xapqs.js:1084-1172 placement
 /**
  * 错误上报策略是否允许（已允许且无污染）。
  */
 function isErrorReportingPolicyAllowed() {
-  let e = errorReportingPolicyState();
-  return e === "allowed_taints_clean" || e === "allowed_untaintable";
+  let state = errorReportingPolicyState();
+  return state === "allowed_taints_clean" || state === "allowed_untaintable";
 }
 //@ chunk-wa9xapqs.js:1172-2353 placement
 /**

@@ -8,14 +8,14 @@
  * pieces: chunk-ae5g0zb5.js (1)
  * attribution: placement 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-ae5g0zb5.js:13304-24040 placement
 /**
  * Claude Test 插件声明的函数钩子能力清单（hooks: command.run、skill.prompt、tool.call、ui.render；calls: agent.list、fs.read、mcp.call 等）。
  */
-var CLAUDE_TEST_HOOK_SCAN = x(function (_y, Ma) {
-  Ma.exports = {
+var CLAUDE_TEST_HOOK_SCAN = __commonJS(function (requireFn, moduleObject) {
+  moduleObject.exports = {
     scan: {
       hooks: ["command.run", "skill.prompt", "classic.SubagentStop", "tool.call", "ui.render"],
       calls: [

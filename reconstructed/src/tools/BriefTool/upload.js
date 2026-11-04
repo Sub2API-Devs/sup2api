@@ -34,7 +34,7 @@ import {
 import { errorMessage, getErrnoCode, findInCauseChain } from "../../utils/errors.js";
 import { MAX_PEER_FILE_BYTES, MAX_PEER_SPOOL_BYTES } from "../../utils/peerFileTransfer.js";
 import { SSL_CERT_ERROR_CODES } from "../../services/api/errorUtils.js";
-import { Ph } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { sniffImageMediaType } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { logFeatureSad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { getPlatform } from "../../utils/platform.js";
 import { getAPIProvider } from "../../utils/model/providers.js";
@@ -51,7 +51,7 @@ import { env } from "../../utils/env.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, unknown, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, unknown, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   uploadBuffer,
   ATTACHMENT_CHUNK_BYTES,
@@ -77,9 +77,9 @@ import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 var BRIEF_UPLOAD_LIMITS = 20971520;
 var UPLOAD_FILENAME_RE = /^[^\\/\p{Cc}\p{Cf}\uFE00-\uFE0F]{1,255}$/u;
 //@ chunk-7kpfrhzn.js:4449-4586 placement
-function normalizeUploadFileName(e) {
+function normalizeUploadFileName(fileName) {
   return (
-    e
+    fileName
       .trim()
       .replace(/:.*$/su, "")
       .replace(/[. ]+$/, "")
@@ -94,8 +94,8 @@ function normalizeUploadFileName(e) {
  */
 var MAX_IMAGE_PIXELS = 40000000;
 //@ chunk-7kpfrhzn.js:4602-4731 placement
-function imageMimeToFormat(e) {
-  switch (e) {
+function imageMimeToFormat(mediaType) {
+  switch (mediaType) {
     case "image/png":
       return "png";
     case "image/jpeg":
@@ -107,57 +107,57 @@ function imageMimeToFormat(e) {
   }
 }
 //@ chunk-7kpfrhzn.js:4731-4768 placement
-function hasKnownImageType(e) {
-  return imageMimeToFormat(e) !== undefined;
+function hasKnownImageType(mediaType) {
+  return imageMimeToFormat(mediaType) !== undefined;
 }
 //@ chunk-7kpfrhzn.js:4768-4839 placement
-function isOversizeImage(e) {
-  let webpHeader = parseWebpHeader(e);
+function isOversizeImage(buffer) {
+  let webpHeader = parseWebpHeader(buffer);
   return (
     webpHeader !== undefined &&
     (webpHeader.width > MAX_IMAGE_DIMENSION || webpHeader.height > MAX_IMAGE_DIMENSION)
   );
 }
 //@ chunk-7kpfrhzn.js:4839-5052 placement
-async function maybeScaleImage(e, r, n, a) {
-  let h = imageMimeToFormat(r);
-  if (h === undefined || isAnimatedWebp(e)) return;
-  let webpHeader = parseWebpHeader(e);
+async function maybeScaleImage(buffer, mediaType, maxBytes, signal) {
+  let format = imageMimeToFormat(mediaType);
+  if (format === undefined || isAnimatedWebp(buffer)) return;
+  let webpHeader = parseWebpHeader(buffer);
   if (
     webpHeader === undefined ||
-    !isOversizeImage(e) ||
+    !isOversizeImage(buffer) ||
     webpHeader.width * webpHeader.height > MAX_IMAGE_PIXELS
   )
     return;
-  let m = await bridgeHostState().imageScaleLock.acquire();
+  let releaseLock = await bridgeHostState().imageScaleLock.acquire();
   try {
-    return await scaleOversizeImage(e, h, n, a);
+    return await scaleOversizeImage(buffer, format, maxBytes, signal);
   } finally {
-    m();
+    releaseLock();
   }
 }
 //@ chunk-7kpfrhzn.js:5052-5517 placement
-async function scaleOversizeImage(e, r, n, a) {
-  if (a?.aborted) return;
+async function scaleOversizeImage(buffer, format, maxBytes, signal) {
+  if (signal?.aborted) return;
   try {
     let imageDecoder = await loadImageDecoder();
-    let s = await imageDecoder(e).metadata();
-    if (s.width * s.height > MAX_IMAGE_PIXELS) return;
-    let m = await imageDecoder(e)
+    let metadata = await imageDecoder(buffer).metadata();
+    if (metadata.width * metadata.height > MAX_IMAGE_PIXELS) return;
+    let scaled = await imageDecoder(buffer)
       .resize(MAX_IMAGE_DIMENSION, MAX_IMAGE_DIMENSION, {
         fit: "inside",
         withoutEnlargement: true,
       })
-      [r]()
+      [format]()
       .toBuffer();
-    let webpHeader = parseWebpHeader(m);
-    if (webpHeader === undefined || isOversizeImage(m) || m.length > n) return;
+    let webpHeader = parseWebpHeader(scaled);
+    if (webpHeader === undefined || isOversizeImage(scaled) || scaled.length > maxBytes) return;
     return {
-      buffer: m,
+      buffer: scaled,
       width: webpHeader.width,
       height: webpHeader.height,
-      originalWidth: s.width,
-      originalHeight: s.height,
+      originalWidth: metadata.width,
+      originalHeight: metadata.height,
     };
   } catch (error) {
     logForDebugging(`[brief:upload] could not scale an oversize image, sending it unscaled: ${error}`);
@@ -169,87 +169,88 @@ async function scaleOversizeImage(e, r, n, a) {
 /**
  * 生成 multipart 文件名：去掉换行、转义反斜杠与双引号。
  */
-function escapeMultipartFilename(e) {
-  return e
+function escapeMultipartFilename(fileName) {
+  return fileName
     .replace(/[\r\n]/g, "")
     .replaceAll("\\", "\\\\")
     .replaceAll('"', '\\"');
 }
 //@ chunk-7kpfrhzn.js:5647-5870 placement
-function multipartParts(e, r) {
-  let n = `----FormBoundary${randomUUID()}`;
+function multipartParts(fileName, mediaType) {
+  let boundary = `----FormBoundary${randomUUID()}`;
   return {
-    boundary: n,
-    head: Buffer.from(`--${n}\r
-Content-Disposition: form-data; name="file"; filename="${escapeMultipartFilename(e)}"\r
-Content-Type: ${r}\r
+    boundary,
+    head: Buffer.from(`--${boundary}\r
+Content-Disposition: form-data; name="file"; filename="${escapeMultipartFilename(fileName)}"\r
+Content-Type: ${mediaType}\r
 \r
 `),
     tail: Buffer.from(`\r
---${n}--\r
+--${boundary}--\r
 `),
   };
 }
 //@ chunk-7kpfrhzn.js:5870-5951 placement
 class UploadSourceError extends Error {
-  constructor(message, r) {
-    super(message, r);
+  constructor(message, options) {
+    super(message, options);
     this.name = "UploadSourceError";
   }
 }
 //@ chunk-7kpfrhzn.js:5951-6200 placement
-function bufferMultipartBody(buffer, r, n) {
-  let { boundary, head, tail } = multipartParts(r, n);
-  async function* m() {
+function bufferMultipartBody(buffer, fileName, mediaType) {
+  let { boundary, head, tail } = multipartParts(fileName, mediaType);
+  async function* slices() {
     yield head;
-    for (let y = 0; y < buffer.length; y += UPLOAD_CHUNK_BYTES)
-      yield buffer.subarray(y, y + UPLOAD_CHUNK_BYTES);
+    for (let offset = 0; offset < buffer.length; offset += UPLOAD_CHUNK_BYTES)
+      yield buffer.subarray(offset, offset + UPLOAD_CHUNK_BYTES);
     yield tail;
   }
   return {
     boundary,
     contentLength: head.length + buffer.length + tail.length,
-    slices: m(),
+    slices: slices(),
     finished: () => Promise.resolve(),
   };
 }
 //@ chunk-7kpfrhzn.js:6200-6748 placement
-function streamMultipartBody(handle, r, n, a) {
-  let { boundary, head, tail } = multipartParts(n, a);
-  let y = false;
-  let w = () => {};
+function streamMultipartBody(handle, totalBytes, fileName, mediaType) {
+  let { boundary, head, tail } = multipartParts(fileName, mediaType);
+  let started = false;
+  let markFinished = () => {};
   let promise = new Promise((resolve) => {
-    w = resolve;
+    markFinished = resolve;
   });
-  async function* U() {
-    y = true;
+  async function* slices() {
+    started = true;
     try {
       yield head;
-      let A = 0;
-      while (A < r) {
-        let S = Buffer.allocUnsafe(Math.min(UPLOAD_CHUNK_BYTES, r - A));
-        let B;
+      let offset = 0;
+      while (offset < totalBytes) {
+        let chunk = Buffer.allocUnsafe(Math.min(UPLOAD_CHUNK_BYTES, totalBytes - offset));
+        let bytesRead;
         try {
-          B = (await handle.read(S, 0, S.length, A)).bytesRead;
+          bytesRead = (await handle.read(chunk, 0, chunk.length, offset)).bytesRead;
         } catch (error) {
           throw new UploadSourceError(`could not read file (${errorMessage(error)})`, {
             cause: error,
           });
         }
-        if (B === 0) throw new UploadSourceError("the file became shorter while it was being uploaded");
-        A += B;
-        yield B === S.length ? S : S.subarray(0, B);
+        if (bytesRead === 0)
+          throw new UploadSourceError("the file became shorter while it was being uploaded");
+        offset += bytesRead;
+        yield bytesRead === chunk.length ? chunk : chunk.subarray(0, bytesRead);
       }
       yield tail;
     } finally {
-      w();
+      markFinished();
     }
   }
   return {
     boundary,
-    contentLength: head.length + r + tail.length,
-    slices: U(),
-    finished: () => (y ? promise : Promise.resolve()),
+    contentLength: head.length + totalBytes + tail.length,
+    slices: slices(),
+    finished: () => (started ? promise : Promise.resolve()),
   };
 }
 //@ chunk-7kpfrhzn.js:6748-6799 layout
@@ -263,13 +264,13 @@ var SMALL_UPLOAD_BYTES = MIB;
 var UPLOAD_LIMIT_MEMORY_MS = 600000;
 var RESEND_WINDOW_PER_POST_MS = 4 * UPLOAD_CHUNK_BYTES;
 //@ chunk-7kpfrhzn.js:6799-6846 layout
-function formatMiB(e) {
-  return `${(e / MIB).toFixed(1)} MiB`;
+function formatMiB(bytes) {
+  return `${(bytes / MIB).toFixed(1)} MiB`;
 }
 //@ chunk-7kpfrhzn.js:6846-6970 layout
-function formatUploadLimitError(e, r) {
-  if (r === undefined) return `${formatMiB(e)} exceeds the upload limit`;
-  return `${formatMiB(e)} exceeds the ${formatMiB_2(r)} upload limit`;
+function formatUploadLimitError(size, limit) {
+  if (limit === undefined) return `${formatMiB(size)} exceeds the upload limit`;
+  return `${formatMiB(size)} exceeds the ${formatMiB_2(limit)} upload limit`;
 }
 //@ chunk-7kpfrhzn.js:6970-7276 fingerprint = MIME_BY_EXT (0.83)
 /**
@@ -314,92 +315,95 @@ var PREVIEW_COPY_FORMAT_BY_EXT = {
 var PREVIEW_JPEG_QUALITY = 90;
 var RESENDABLE_ERROR_CODES_SET = new Set(["http_413", "http_5xx", "network_error"]);
 //@ chunk-7kpfrhzn.js:7508-7671 layout
-function hasAuxiliaryAlphaImage(e) {
+function hasAuxiliaryAlphaImage(text) {
   return (
-    e.includes("urn:mpeg:hevc:2015:auxid:1") ||
-    e.includes("urn:mpeg:avc:2015:auxid:1") ||
-    e.includes("urn:mpeg:mpegB:cicp:systems:auxiliary:alpha")
+    text.includes("urn:mpeg:hevc:2015:auxid:1") ||
+    text.includes("urn:mpeg:avc:2015:auxid:1") ||
+    text.includes("urn:mpeg:mpegB:cicp:systems:auxiliary:alpha")
   );
 }
 //@ chunk-7kpfrhzn.js:7671-8139 layout
-function isTruncatedBmp(e) {
-  if (e.length < 30 || e[0] !== 66 || e[1] !== 77) return false;
-  let uInt32LE = e.readUInt32LE(14);
-  let n = uInt32LE === 12;
-  if (!n && (uInt32LE < 40 || uInt32LE === 64 || e.length < 34)) return false;
-  let a = Math.abs(n ? e.readUInt16LE(18) : e.readInt32LE(18));
-  let h = Math.abs(n ? e.readUInt16LE(20) : e.readInt32LE(22));
-  let uInt16LE = e.readUInt16LE(n ? 24 : 28);
-  let m = n ? 0 : e.readUInt32LE(30);
-  let y = e.length - e.readUInt32LE(10);
-  if (m === 1 || m === 2) return a * h > 127.5 * y;
-  if (m !== 0 && m !== 3 && m !== 6) return false;
-  let w = Math.floor((a * uInt16LE + 31) / 32) * 4;
-  let b = Math.ceil((a * uInt16LE) / 8);
-  return h > 0 && w * (h - 1) + b > y;
+function isTruncatedBmp(buffer) {
+  if (buffer.length < 30 || buffer[0] !== 66 || buffer[1] !== 77) return false;
+  let uInt32LE = buffer.readUInt32LE(14);
+  let isCoreHeader = uInt32LE === 12;
+  if (!isCoreHeader && (uInt32LE < 40 || uInt32LE === 64 || buffer.length < 34)) return false;
+  let width = Math.abs(isCoreHeader ? buffer.readUInt16LE(18) : buffer.readInt32LE(18));
+  let height = Math.abs(isCoreHeader ? buffer.readUInt16LE(20) : buffer.readInt32LE(22));
+  let uInt16LE = buffer.readUInt16LE(isCoreHeader ? 24 : 28);
+  let compression = isCoreHeader ? 0 : buffer.readUInt32LE(30);
+  let availableBytes = buffer.length - buffer.readUInt32LE(10);
+  if (compression === 1 || compression === 2) return width * height > 127.5 * availableBytes;
+  if (compression !== 0 && compression !== 3 && compression !== 6) return false;
+  let rowBytes = Math.floor((width * uInt16LE + 31) / 32) * 4;
+  let lastRowBits = Math.ceil((width * uInt16LE) / 8);
+  return height > 0 && rowBytes * (height - 1) + lastRowBits > availableBytes;
 }
 //@ chunk-7kpfrhzn.js:8139-8445 layout
-function readIsoBmffBoxes(e, r, end, a) {
-  let h = [];
-  let s = r;
-  while (s + 8 <= end) {
-    let uInt32BE = e.readUInt32BE(s);
-    let y = 8;
+function readIsoBmffBoxes(buffer, start, end, filterType) {
+  let boxes = [];
+  let offset = start;
+  while (offset + 8 <= end) {
+    let uInt32BE = buffer.readUInt32BE(offset);
+    let headerSize = 8;
     if (uInt32BE === 1) {
-      if (s + 16 > end) break;
-      uInt32BE = Number(e.readBigUInt64BE(s + 8));
-      y = 16;
-    } else if (uInt32BE === 0) uInt32BE = end - s;
-    if (uInt32BE < y || s + uInt32BE > end) break;
-    let w = {
-      type: e.toString("latin1", s + 4, s + 8),
-      start: s + y,
-      end: s + uInt32BE,
+      if (offset + 16 > end) break;
+      uInt32BE = Number(buffer.readBigUInt64BE(offset + 8));
+      headerSize = 16;
+    } else if (uInt32BE === 0) uInt32BE = end - offset;
+    if (uInt32BE < headerSize || offset + uInt32BE > end) break;
+    let box = {
+      type: buffer.toString("latin1", offset + 4, offset + 8),
+      start: offset + headerSize,
+      end: offset + uInt32BE,
     };
-    if (a === undefined) h.push(w);
-    else if (w.type === a) return [w];
-    s += uInt32BE;
+    if (filterType === undefined) boxes.push(box);
+    else if (box.type === filterType) return [box];
+    offset += uInt32BE;
   }
-  return h;
+  return boxes;
 }
 //@ chunk-7kpfrhzn.js:8445-9348 layout
-function readHeifPrimaryItemTransform(e) {
-  let [r] = readIsoBmffBoxes(e, 0, e.length, "meta");
-  if (r === undefined) return;
-  let [n] = readIsoBmffBoxes(e, r.start + 4, r.end, "pitm");
-  let [a] = readIsoBmffBoxes(e, r.start + 4, r.end, "iprp");
-  if (n === undefined || a === undefined) return;
-  let h = e[n.start] === 0;
-  if (n.start + (h ? 6 : 8) > n.end) return;
-  let s = h ? e.readUInt16BE(n.start + 4) : e.readUInt32BE(n.start + 4);
-  let [m] = readIsoBmffBoxes(e, a.start, a.end, "ipco");
-  let [y] = readIsoBmffBoxes(e, a.start, a.end, "ipma");
-  if (m === undefined || y === undefined) return;
-  let isoBmffBoxes = readIsoBmffBoxes(e, m.start, m.end);
-  let b = e[y.start];
-  let U = (e[y.start + 3] & 1) === 1;
-  let A = b < 1 ? 2 : 4;
-  let S = U ? 2 : 1;
-  let B = y.start + 4;
-  if (B + 4 > y.end) return;
-  let uInt32BE = e.readUInt32BE(B);
-  B += 4;
+function readHeifPrimaryItemTransform(buffer) {
+  let [metaBox] = readIsoBmffBoxes(buffer, 0, buffer.length, "meta");
+  if (metaBox === undefined) return;
+  let [pitmBox] = readIsoBmffBoxes(buffer, metaBox.start + 4, metaBox.end, "pitm");
+  let [iprpBox] = readIsoBmffBoxes(buffer, metaBox.start + 4, metaBox.end, "iprp");
+  if (pitmBox === undefined || iprpBox === undefined) return;
+  let isSmallItemId = buffer[pitmBox.start] === 0;
+  if (pitmBox.start + (isSmallItemId ? 6 : 8) > pitmBox.end) return;
+  let primaryItemId = isSmallItemId
+    ? buffer.readUInt16BE(pitmBox.start + 4)
+    : buffer.readUInt32BE(pitmBox.start + 4);
+  let [ipcoBox] = readIsoBmffBoxes(buffer, iprpBox.start, iprpBox.end, "ipco");
+  let [ipmaBox] = readIsoBmffBoxes(buffer, iprpBox.start, iprpBox.end, "ipma");
+  if (ipcoBox === undefined || ipmaBox === undefined) return;
+  let isoBmffBoxes = readIsoBmffBoxes(buffer, ipcoBox.start, ipcoBox.end);
+  let version = buffer[ipmaBox.start];
+  let hasFlags = (buffer[ipmaBox.start + 3] & 1) === 1;
+  let itemIdSize = version < 1 ? 2 : 4;
+  let associationSize = hasFlags ? 2 : 1;
+  let pos = ipmaBox.start + 4;
+  if (pos + 4 > ipmaBox.end) return;
+  let uInt32BE = buffer.readUInt32BE(pos);
+  pos += 4;
   let clockwise = 0;
   let mirrored = false;
   for (let idx = 0; idx < uInt32BE; idx++) {
-    if (B + A + 1 > y.end) return;
-    let x = A === 2 ? e.readUInt16BE(B) : e.readUInt32BE(B);
-    let P = e[B + A];
-    B += A + 1;
-    for (let j = 0; j < P; j++) {
-      if (B + S > y.end) return;
-      let D = S === 2 ? e.readUInt16BE(B) & 32767 : e[B] & 127;
-      B += S;
-      if (x !== s || D === 0) continue;
-      let M = isoBmffBoxes[D - 1];
-      if (M === undefined) return;
-      if (M.type === "imir") mirrored = true;
-      else if (M.type === "irot" && M.start < M.end) clockwise = ((4 - (e[M.start] & 3)) % 4) * 90;
+    if (pos + itemIdSize + 1 > ipmaBox.end) return;
+    let itemId = itemIdSize === 2 ? buffer.readUInt16BE(pos) : buffer.readUInt32BE(pos);
+    let associationCount = buffer[pos + itemIdSize];
+    pos += itemIdSize + 1;
+    for (let assocIdx = 0; assocIdx < associationCount; assocIdx++) {
+      if (pos + associationSize > ipmaBox.end) return;
+      let propertyIndex = associationSize === 2 ? buffer.readUInt16BE(pos) & 32767 : buffer[pos] & 127;
+      pos += associationSize;
+      if (itemId !== primaryItemId || propertyIndex === 0) continue;
+      let propertyBox = isoBmffBoxes[propertyIndex - 1];
+      if (propertyBox === undefined) return;
+      if (propertyBox.type === "imir") mirrored = true;
+      else if (propertyBox.type === "irot" && propertyBox.start < propertyBox.end)
+        clockwise = ((4 - (buffer[propertyBox.start] & 3)) % 4) * 90;
     }
   }
   return {
@@ -408,102 +412,108 @@ function readHeifPrimaryItemTransform(e) {
   };
 }
 //@ chunk-7kpfrhzn.js:9348-9663 layout
-function isMultiPageTiff(e) {
-  if (e.length < 8) return false;
-  let r = e[0] === 73 && e[1] === 73;
-  if (!r && !(e[0] === 77 && e[1] === 77)) return false;
-  let dataView = new DataView(e.buffer, e.byteOffset, e.byteLength);
-  if (dataView.getUint16(2, r) !== 42) return false;
-  let uint32 = dataView.getUint32(4, r);
-  if (uint32 + 2 > e.length) return false;
-  let h = uint32 + 2 + dataView.getUint16(uint32, r) * 12;
-  return h + 4 <= e.length && dataView.getUint32(h, r) !== 0;
+function isMultiPageTiff(bytes) {
+  if (bytes.length < 8) return false;
+  let isLittleEndian = bytes[0] === 73 && bytes[1] === 73;
+  if (!isLittleEndian && !(bytes[0] === 77 && bytes[1] === 77)) return false;
+  let dataView = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (dataView.getUint16(2, isLittleEndian) !== 42) return false;
+  let uint32 = dataView.getUint32(4, isLittleEndian);
+  if (uint32 + 2 > bytes.length) return false;
+  let secondIfdOffset = uint32 + 2 + dataView.getUint16(uint32, isLittleEndian) * 12;
+  return secondIfdOffset + 4 <= bytes.length && dataView.getUint32(secondIfdOffset, isLittleEndian) !== 0;
 }
 //@ chunk-7kpfrhzn.js:9663-11219 layout
 /**
  * 为 bmp/tiff/heic/heif/avif 等生成 png/jpeg 预览副本；多页 TIFF、截断 BMP、旋转/镜像 HEIF、超尺寸等情况放弃并上传原文件。
  */
-async function makePreviewCopy(e, r, signal, a, copyLock) {
-  let s = PREVIEW_COPY_FORMAT_BY_EXT[extname(r).toLowerCase()];
-  if (e.length === 0 || s === undefined || Ph(e) !== null) return;
-  let m = s === "jpeg" && hasAuxiliaryAlphaImage(e) ? "png" : s;
-  if (isMultiPageTiff(e)) {
-    logFeatureSad("bridge_attachment_preview_copy", "multi_page", a);
+async function makePreviewCopy(bytes, filePath, signal, telemetry, copyLock) {
+  let copyFormat = PREVIEW_COPY_FORMAT_BY_EXT[extname(filePath).toLowerCase()];
+  if (bytes.length === 0 || copyFormat === undefined || sniffImageMediaType(bytes) !== null) return;
+  let outputFormat = copyFormat === "jpeg" && hasAuxiliaryAlphaImage(bytes) ? "png" : copyFormat;
+  if (isMultiPageTiff(bytes)) {
+    logFeatureSad("bridge_attachment_preview_copy", "multi_page", telemetry);
     return;
   }
-  if (isTruncatedBmp(e)) {
-    logFeatureSad("bridge_attachment_preview_copy", "truncated", a);
+  if (isTruncatedBmp(bytes)) {
+    logFeatureSad("bridge_attachment_preview_copy", "truncated", telemetry);
     return;
   }
-  let y = 0;
-  if (e.toString("latin1", 4, 8) === "ftyp") {
-    let [b] = readIsoBmffBoxes(e, 0, e.length, "ftyp");
-    let U =
-      b === undefined
+  let rotationDegrees = 0;
+  if (bytes.toString("latin1", 4, 8) === "ftyp") {
+    let [ftypBox] = readIsoBmffBoxes(bytes, 0, bytes.length, "ftyp");
+    let brandString =
+      ftypBox === undefined
         ? ""
-        : e.toString("latin1", b.start, Math.min(b.start + 4, b.end)) +
-          e.toString("latin1", b.start + 8, b.end);
-    let matches = /avi[fs]/.test(U);
-    let S;
+        : bytes.toString("latin1", ftypBox.start, Math.min(ftypBox.start + 4, ftypBox.end)) +
+          bytes.toString("latin1", ftypBox.start + 8, ftypBox.end);
+    let matches = /avi[fs]/.test(brandString);
+    let transform;
     try {
-      S = readHeifPrimaryItemTransform(e);
+      transform = readHeifPrimaryItemTransform(bytes);
     } catch {
-      S = undefined;
+      transform = undefined;
     }
-    if (S === undefined || S.mirrored || (S.clockwise !== 0 && (matches || getPlatform() !== "macos"))) {
+    if (
+      transform === undefined ||
+      transform.mirrored ||
+      (transform.clockwise !== 0 && (matches || getPlatform() !== "macos"))
+    ) {
       logFeatureSad(
         "bridge_attachment_preview_copy",
-        S === undefined ? "unreadable_properties" : "turned_or_mirrored",
-        a,
+        transform === undefined ? "unreadable_properties" : "turned_or_mirrored",
+        telemetry,
       );
       return;
     }
-    y = S.clockwise;
+    rotationDegrees = transform.clockwise;
   }
   if (signal?.aborted) return;
-  let w = await copyLock.acquire();
+  let releaseCopyLock = await copyLock.acquire();
   try {
     if (signal?.aborted) return;
     let imageDecoder = await loadImageDecoder();
-    let { width, height } = await imageDecoder(e).metadata();
+    let { width, height } = await imageDecoder(bytes).metadata();
     if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
       logUploadDebug(
-        `${r} is ${width}x${height} pixels, over the ${MAX_IMAGE_DIMENSION}-pixel side the server previews; uploading the original, not a preview copy`,
+        `${filePath} is ${width}x${height} pixels, over the ${MAX_IMAGE_DIMENSION}-pixel side the server previews; uploading the original, not a preview copy`,
       );
-      logFeatureSad("bridge_attachment_preview_copy", "over_preview_size", a);
+      logFeatureSad("bridge_attachment_preview_copy", "over_preview_size", telemetry);
       return;
     }
-    let S = y === 0 ? imageDecoder(e) : imageDecoder(e).rotate(y);
-    let B = await (
-      m === "png"
-        ? S.png()
-        : S.jpeg({
+    let pipeline = rotationDegrees === 0 ? imageDecoder(bytes) : imageDecoder(bytes).rotate(rotationDegrees);
+    let copyBytes = await (
+      outputFormat === "png"
+        ? pipeline.png()
+        : pipeline.jpeg({
             quality: PREVIEW_JPEG_QUALITY,
           })
     ).toBuffer();
-    if (B.length > MAX_UPLOAD_BYTES) {
+    if (copyBytes.length > MAX_UPLOAD_BYTES) {
       logUploadDebug(
-        `the copy of ${r} is ${B.length} bytes, over the ${MAX_UPLOAD_BYTES}-byte limit for a copy; uploading the original`,
+        `the copy of ${filePath} is ${copyBytes.length} bytes, over the ${MAX_UPLOAD_BYTES}-byte limit for a copy; uploading the original`,
       );
-      logFeatureSad("bridge_attachment_preview_copy", "copy_over_upload_limit", a);
+      logFeatureSad("bridge_attachment_preview_copy", "copy_over_upload_limit", telemetry);
       return;
     }
     return {
-      bytes: B,
-      format: m,
+      bytes: copyBytes,
+      format: outputFormat,
     };
   } catch (error) {
-    logUploadDebug(`could not make a preview copy of ${r} (${errorMessage(error)}); uploading the original`);
+    logUploadDebug(
+      `could not make a preview copy of ${filePath} (${errorMessage(error)}); uploading the original`,
+    );
     if (isUnknownImageErrorType(classifyImageErrorCode(error))) logError(error);
     let errnoCode = getErrnoCode(error);
     logFeatureSad(
       "bridge_attachment_preview_copy",
       errnoCode?.startsWith("ERR_IMAGE_") ? errnoCode.toLowerCase() : "convert_failed",
-      a,
+      telemetry,
     );
     return;
   } finally {
-    w();
+    releaseCopyLock();
   }
 }
 //@ chunk-7kpfrhzn.js:11219-11258 fingerprint = debug (1)
@@ -514,28 +524,28 @@ function logUploadDebug(msg) {
 /**
  * 上传前置检查：非 firstParty 提供方、仅必要流量隐私配置、allow_send_file 策略不允许时返回错误。
  */
-function checkUploadAllowed(telemetry) {
+function checkUploadAllowed(props) {
   if (getAPIProvider() !== "firstParty") {
-    logFeatureSad("bridge_attachment_upload", "not_first_party", telemetry);
+    logFeatureSad("bridge_attachment_upload", "not_first_party", props);
     return {
       error:
         "upload disabled: uploading file contents to Anthropic servers is not permitted on this API provider",
     };
   }
   if (isEssentialTrafficOnly()) {
-    logFeatureSad("bridge_attachment_upload", "essential_traffic", telemetry);
+    logFeatureSad("bridge_attachment_upload", "essential_traffic", props);
     return {
       error:
         "upload disabled: uploading file contents to Anthropic servers is not permitted under this privacy configuration",
     };
   }
-  let r = policyDenyKind("allow_send_file");
-  if (r !== null) {
+  let denyKind = policyDenyKind("allow_send_file");
+  if (denyKind !== null) {
     logOrgPolicyDenied("allow_send_file", "tool");
     logFeatureSad(
       "bridge_attachment_upload",
-      r === "org_denied" ? "policy_denied" : `policy_${r}`,
-      telemetry,
+      denyKind === "org_denied" ? "policy_denied" : `policy_${denyKind}`,
+      props,
     );
     return {
       error: "upload disabled: " + policyDeniedReason("allow_send_file", "File upload", "is"),
@@ -549,26 +559,26 @@ function getBridgeBaseUrl() {
 }
 //@ chunk-7kpfrhzn.js:11954-12057 layout
 async function getUploadAuth(credentials) {
-  let r =
+  let accessToken =
     isStorageV5Enabled() && credentials !== undefined
       ? await getBridgeAccessTokenAsync(credentials)
       : getBridgeAccessToken();
-  return r
+  return accessToken
     ? {
-        token: r,
+        token: accessToken,
       }
     : bridgeHostState().sessionUploadRoute;
 }
 //@ chunk-7kpfrhzn.js:12057-12118 layout
-function getUploadUrl(e) {
-  return e.url ?? `${getBridgeBaseUrl()}/api/oauth/file_upload`;
+function getUploadUrl(route) {
+  return route.url ?? `${getBridgeBaseUrl()}/api/oauth/file_upload`;
 }
 //@ chunk-7kpfrhzn.js:12118-12176 layout
 /**
  * 没有上传地址且登录被搁置时返回 true，表示需要先恢复登录。
  */
-function isBridgeFileLoginRefused(e) {
-  return e.url === undefined && isBridgeFileLoginRefused_2(undefined, e.token);
+function isBridgeFileLoginRefused(route) {
+  return route.url === undefined && isBridgeFileLoginRefused_2(undefined, route.token);
 }
 //@ chunk-7kpfrhzn.js:12176-12311 layout
 function httpStatusFailureCode(status) {
@@ -579,49 +589,52 @@ function httpStatusFailureCode(status) {
 }
 //@ chunk-7kpfrhzn.js:12311-12440 layout
 var uploadSuccessSchema = DoctorLazy(() =>
-  u({
-    file_uuid: string(),
+  objectSchema({
+    file_uuid: stringSchema(),
     file_kind: unknown().optional(),
   }),
 );
 var uploadTooLargeSchema = DoctorLazy(() =>
-  u({
-    error: u({
-      details: u({
-        max_bytes: E().int().positive(),
+  objectSchema({
+    error: objectSchema({
+      details: objectSchema({
+        max_bytes: numberSchema().int().positive(),
       }),
     }),
   }),
 );
 //@ chunk-7kpfrhzn.js:12440-12531 fingerprint = uploadResponseSchema (0.525)
-async function uploadResponseSchema(e, r, n, a, h, s) {
-  let m = await uploadBuffer(e, r, n, a, h, s);
-  return "error" in m ? m : m.file_uuid;
+async function uploadResponseSchema(buffer, filename, mimeType, signal, telemetry, credentials) {
+  let uploadResult = await uploadBuffer(buffer, filename, mimeType, signal, telemetry, credentials);
+  return "error" in uploadResult ? uploadResult : uploadResult.file_uuid;
 }
 //@ chunk-7kpfrhzn.js:19309-19483 placement
-async function readBoundedFile({ handle, size }, n) {
-  let a = size > n ? undefined : await readHandleBounded(handle, n, Math.max(size, ATTACHMENT_CHUNK_BYTES));
-  if (a === undefined || a.overLimit) throw Error("the file is over the size limit");
-  return a.bytes;
+async function readBoundedFile({ handle, size }, maxBytes) {
+  let readResult =
+    size > maxBytes
+      ? undefined
+      : await readHandleBounded(handle, maxBytes, Math.max(size, ATTACHMENT_CHUNK_BYTES));
+  if (readResult === undefined || readResult.overLimit) throw Error("the file is over the size limit");
+  return readResult.bytes;
 }
 //@ chunk-7kpfrhzn.js:19483-19647 placement
-async function withOpenedFile(e, identity, signal, a, waitForTurn) {
-  let s = await uploadBridgeAttachment(e, identity, signal);
+async function withOpenedFile(fullPath, approvedIdentity, options, maxBytes, waitForTurn) {
+  let uploadSource = await uploadBridgeAttachment(fullPath, approvedIdentity, options);
   try {
     await waitForTurn();
-    signal?.throwIfAborted();
-    s.size = await isJetBrainsPluginInstalled_2(s.handle);
-    return await readBoundedFile(s, a);
+    options?.throwIfAborted();
+    uploadSource.size = await isJetBrainsPluginInstalled_2(uploadSource.handle);
+    return await readBoundedFile(uploadSource, maxBytes);
   } finally {
-    await s.handle.close();
+    await uploadSource.handle.close();
   }
 }
 //@ chunk-7kpfrhzn.js:19647-19800 placement
-function timestampedFileName(e) {
-  let r = extname(e);
-  let n = r ? e.slice(0, -r.length) : e;
+function timestampedFileName(fileName) {
+  let extension = extname(fileName);
+  let nameStem = extension ? fileName.slice(0, -extension.length) : fileName;
   let sliced = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15);
-  return `${n}-${sliced}-${randomUUID().slice(0, 4)}${r}`;
+  return `${nameStem}-${sliced}-${randomUUID().slice(0, 4)}${extension}`;
 }
 //@ chunk-7kpfrhzn.js:19800-19814 layout
 /**
@@ -629,49 +642,58 @@ function timestampedFileName(e) {
  */
 var IMAGE_HEAD_BYTES = 524288;
 //@ chunk-7kpfrhzn.js:19814-20100 layout
-async function readAndScaleImage(e, r, signal) {
-  if (!hasKnownImageType(r) || e.size > MAX_UPLOAD_BYTES) return;
+async function readAndScaleImage(source, mimeType, signal) {
+  if (!hasKnownImageType(mimeType) || source.size > MAX_UPLOAD_BYTES) return;
   try {
-    let { bytes } = await readHandleBounded(e.handle, Math.min(e.size, IMAGE_HEAD_BYTES));
+    let { bytes } = await readHandleBounded(source.handle, Math.min(source.size, IMAGE_HEAD_BYTES));
     if (!isOversizeImage(bytes)) return;
-    let h = bytes.length === e.size ? bytes : (await readHandleBounded(e.handle, e.size)).bytes;
-    return await maybeScaleImage(h, r, MAX_UPLOAD_BYTES, signal);
+    let imageBytes =
+      bytes.length === source.size ? bytes : (await readHandleBounded(source.handle, source.size)).bytes;
+    return await maybeScaleImage(imageBytes, mimeType, MAX_UPLOAD_BYTES, signal);
   } catch (error) {
-    logUploadDebug(`could not read ${e.size} bytes to scale an image: ${error}`);
+    logUploadDebug(`could not read ${source.size} bytes to scale an image: ${error}`);
     return;
   }
 }
 //@ chunk-7kpfrhzn.js:20100-20545 layout
-async function uploadScaledImage(e, filename, n, a, h) {
-  let s = guessMimeType(filename);
-  let m = await uploadWithResends(
-    (telemetry, S) =>
+async function uploadScaledImage(scaledImage, filename, ctx, telemetryFields, postState) {
+  let mimeType = guessMimeType(filename);
+  let uploadResult = await uploadWithResends(
+    (telemetry, reportProgress) =>
       isZodVersionCompatible()
         ? uploadStreamWithAuth(
-            bufferMultipartBody(e.buffer, filename, s),
-            e.buffer.length,
+            bufferMultipartBody(scaledImage.buffer, filename, mimeType),
+            scaledImage.buffer.length,
             filename,
-            n,
+            ctx,
             telemetry,
-            S,
+            reportProgress,
           )
-        : uploadBuffer(e.buffer, filename, s, n.signal, telemetry, n.credentials, S),
+        : uploadBuffer(
+            scaledImage.buffer,
+            filename,
+            mimeType,
+            ctx.signal,
+            telemetry,
+            ctx.credentials,
+            reportProgress,
+          ),
     {
       filename,
-      size: e.buffer.length,
+      size: scaledImage.buffer.length,
     },
-    h,
-    n.signal,
+    postState,
+    ctx.signal,
     {
-      ...a,
+      ...telemetryFields,
       image_scaled: true,
     },
   );
-  if ("error" in m) return m;
-  let { width, height, originalWidth, originalHeight } = e;
+  if ("error" in uploadResult) return uploadResult;
+  let { width, height, originalWidth, originalHeight } = scaledImage;
   logUploadDebug(`sent ${filename} scaled to ${width}x${height} from ${originalWidth}x${originalHeight}`);
   return {
-    file_uuid: m.file_uuid,
+    file_uuid: uploadResult.file_uuid,
     scaled: {
       width,
       height,
@@ -685,7 +707,7 @@ async function uploadScaledImage(e, filename, n, a, h) {
  * 上传 Brief 附件到 Anthropic 文件存储：策略/提供方检查（仅 firstParty、非仅必要流量、allow_send_file 策略），取 OAuth 凭证，等待轮次，按大小选择缓冲上传（可生成预览副本或缩放图）或流式上传，支持有限次重发与服务器上限记忆，返回 file_uuid 或错误。
  */
 async function uploadBriefAttachment(fullPath, size, ctx) {
-  let a = {
+  let telemetryFields = {
     upload_lane: fromEnum(ctx.lane),
     size_bucket: fromEnum(
       size <= MIB
@@ -700,162 +722,166 @@ async function uploadBriefAttachment(fullPath, size, ctx) {
     ),
     server_max_known: getKnownServerUploadLimit() !== undefined,
   };
-  let h = checkUploadAllowed(a);
-  if (h) {
+  let gateError = checkUploadAllowed(telemetryFields);
+  if (gateError) {
     logUploadDebug(`skip ${fullPath}: policy/provider gate denied`);
-    return h;
+    return gateError;
   }
   if (ctx.signal?.aborted) {
-    logFeatureSad("bridge_attachment_upload", "aborted", a);
+    logFeatureSad("bridge_attachment_upload", "aborted", telemetryFields);
     return {
       error: "upload aborted",
     };
   }
   if (!(await getUploadAuth(ctx.credentials))) {
     logUploadDebug("skip: no oauth token");
-    logFeatureSad("bridge_attachment_upload", "no_token", a);
+    logFeatureSad("bridge_attachment_upload", "no_token", telemetryFields);
     return {
       error: "upload failed: no OAuth token available",
     };
   }
   let filename = ctx.filename ?? basename(fullPath);
   let { resendMaxMiB = 0 } = ctx;
-  let y = {
+  let postState = {
     made: 0,
     max: Number.isInteger(ctx.maxPosts) ? Math.min(Math.max(ctx.maxPosts, 1), MAX_UPLOAD_POSTS) : 1,
     resendMaxBytes: Math.max(Number.isFinite(resendMaxMiB) ? resendMaxMiB * MIB : 0, MIN_RESEND_MAX_BYTES),
     firstAtMs: undefined,
     clock: ctx.clock ?? systemClock,
   };
-  if (y.max > 2)
-    a = {
-      ...a,
-      max_posts: y.max,
+  if (postState.max > 2)
+    telemetryFields = {
+      ...telemetryFields,
+      max_posts: postState.max,
     };
-  let w =
+  let wantsPreviewCopy =
     !ctx.originalsOnly &&
     !ctx.noPreviewCopies &&
     PREVIEW_COPY_FORMAT_BY_EXT[extname(filename).toLowerCase()] !== undefined;
-  let b = size <= MAX_UPLOAD_BYTES;
+  let underCopyLimit = size <= MAX_UPLOAD_BYTES;
   let token = isZodVersionCompatible();
-  if (w && !b && token) logFeatureSad("bridge_attachment_preview_copy", "original_over_copy_limit", a);
-  let A = !token || size <= SMALL_UPLOAD_BYTES || (w && b);
-  if (A && !b) {
+  if (wantsPreviewCopy && !underCopyLimit && token)
+    logFeatureSad("bridge_attachment_preview_copy", "original_over_copy_limit", telemetryFields);
+  let canBufferWholeFile = !token || size <= SMALL_UPLOAD_BYTES || (wantsPreviewCopy && underCopyLimit);
+  if (canBufferWholeFile && !underCopyLimit) {
     logUploadDebug(`skip ${fullPath}: ${size} bytes exceeds ${MAX_UPLOAD_BYTES} limit`);
-    logFeatureSad("bridge_attachment_upload", "too_large", a);
+    logFeatureSad("bridge_attachment_upload", "too_large", telemetryFields);
     return {
       error: formatUploadLimitError(size, MAX_UPLOAD_BYTES),
     };
   }
-  let S;
+  let source;
   try {
-    S = await uploadBridgeAttachment(fullPath, ctx.identity, ctx.signal);
+    source = await uploadBridgeAttachment(fullPath, ctx.identity, ctx.signal);
   } catch (error) {
     logUploadDebug(`open failed for ${fullPath}: ${error}`);
-    let v = ctx.signal?.aborted === true;
-    logFeatureSad("bridge_attachment_upload", v ? "aborted" : "read_failed", a);
+    let wasAborted = ctx.signal?.aborted === true;
+    logFeatureSad("bridge_attachment_upload", wasAborted ? "aborted" : "read_failed", telemetryFields);
     return {
-      error: v ? "upload aborted" : `upload failed: could not read file (${errorMessage(error)})`,
+      error: wasAborted ? "upload aborted" : `upload failed: could not read file (${errorMessage(error)})`,
     };
   }
   try {
     await ctx.waitForTurn();
     let baseUrl = getKnownServerUploadLimit();
-    a = {
-      ...a,
+    telemetryFields = {
+      ...telemetryFields,
       server_max_known: baseUrl !== undefined,
     };
-    let filename_2 = checkUploadAllowed(a);
+    let filename_2 = checkUploadAllowed(telemetryFields);
     if (filename_2) {
       logUploadDebug(`skip ${fullPath}: policy/provider gate denied after the wait for a turn`);
       return filename_2;
     }
     if (ctx.signal?.aborted) {
-      logFeatureSad("bridge_attachment_upload", "aborted", a);
+      logFeatureSad("bridge_attachment_upload", "aborted", telemetryFields);
       return {
         error: "upload aborted",
       };
     }
-    let L;
+    let fileBytes;
     try {
-      S.size = await isJetBrainsPluginInstalled_2(S.handle);
-      if (A) L = await readBoundedFile(S, MAX_UPLOAD_BYTES);
+      source.size = await isJetBrainsPluginInstalled_2(source.handle);
+      if (canBufferWholeFile) fileBytes = await readBoundedFile(source, MAX_UPLOAD_BYTES);
     } catch (error) {
       logUploadDebug(`read failed for ${fullPath}: ${error}`);
-      logFeatureSad("bridge_attachment_upload", "read_failed", a);
+      logFeatureSad("bridge_attachment_upload", "read_failed", telemetryFields);
       return {
         error: `upload failed: could not read file (${errorMessage(error)})`,
       };
     }
-    if (L !== undefined) return await uploadWithPreviewCopy(L, filename, ctx, a, y);
+    if (fileBytes !== undefined)
+      return await uploadWithPreviewCopy(fileBytes, filename, ctx, telemetryFields, postState);
     let min = Math.min(PEER_FILE_TRANSFER_SERVER_LIMIT, baseUrl ?? PEER_FILE_TRANSFER_SERVER_LIMIT);
-    if (S.size > min) {
+    if (source.size > min) {
       logUploadDebug(
-        `skip ${fullPath}: ${S.size} bytes exceeds the ${min} limit ${min === baseUrl ? "the store reported" : "of this client"}`,
+        `skip ${fullPath}: ${source.size} bytes exceeds the ${min} limit ${min === baseUrl ? "the store reported" : "of this client"}`,
       );
-      logFeatureSad("bridge_attachment_upload", "too_large", a);
+      logFeatureSad("bridge_attachment_upload", "too_large", telemetryFields);
       return {
-        error: formatUploadLimitError(S.size, min),
+        error: formatUploadLimitError(source.size, min),
       };
     }
-    let F =
+    let scaledImage =
       ctx.originalsOnly || ctx.noScaledCopies
         ? undefined
-        : await readAndScaleImage(S, guessMimeType(filename), ctx.signal);
-    if (F !== undefined) return await uploadScaledImage(F, filename, ctx, a, y);
-    let x = false;
-    let P = await uploadWithResends(
-      (telemetry, M) => {
-        x = false;
+        : await readAndScaleImage(source, guessMimeType(filename), ctx.signal);
+    if (scaledImage !== undefined)
+      return await uploadScaledImage(scaledImage, filename, ctx, telemetryFields, postState);
+    let canResend = false;
+    let uploadResult = await uploadWithResends(
+      (telemetry, reportProgress) => {
+        canResend = false;
         return uploadStreamWithAuth(
-          streamMultipartBody(S.handle, S.size, filename, guessMimeType(filename)),
-          S.size,
+          streamMultipartBody(source.handle, source.size, filename, guessMimeType(filename)),
+          source.size,
           filename,
           ctx,
           telemetry,
-          (fe, xe, ce, pe) => {
-            x = isResendableFailure(fe, ce, pe);
-            M(fe, xe, ce, pe);
+          (code, serverCode, bars, bytesHanded) => {
+            canResend = isResendableFailure(code, bars, bytesHanded);
+            reportProgress(code, serverCode, bars, bytesHanded);
           },
         );
       },
       {
         filename,
-        size: S.size,
+        size: source.size,
       },
-      y,
+      postState,
       ctx.signal,
-      a,
+      telemetryFields,
     );
-    if (!("error" in P))
+    if (!("error" in uploadResult))
       return {
-        file_uuid: P.file_uuid,
+        file_uuid: uploadResult.file_uuid,
       };
-    if (!x || !isTransientUploadFailure(P.error, P.errorCode)) return P;
-    let j = getKnownServerUploadLimit() ?? baseUrl;
-    if (j !== undefined)
-      return S.size > j
+    if (!canResend || !isTransientUploadFailure(uploadResult.error, uploadResult.errorCode))
+      return uploadResult;
+    let serverLimit = getKnownServerUploadLimit() ?? baseUrl;
+    if (serverLimit !== undefined)
+      return source.size > serverLimit
         ? {
-            error: formatUploadLimitError(S.size, j),
+            error: formatUploadLimitError(source.size, serverLimit),
           }
-        : P;
-    return S.size > SUSPECTED_UPLOAD_LIMIT_BYTES
+        : uploadResult;
+    return source.size > SUSPECTED_UPLOAD_LIMIT_BYTES
       ? {
-          ...P,
+          ...uploadResult,
           suspectedLimitBytes: SUSPECTED_UPLOAD_LIMIT_BYTES,
         }
-      : P;
+      : uploadResult;
   } finally {
-    await S.handle.close().catch((error) => {
+    await source.handle.close().catch((error) => {
       logUploadDebug(`close failed for ${fullPath}: ${error}`);
     });
   }
 }
 //@ chunk-7kpfrhzn.js:23135-23236 layout
-function isResendableFailure(e, r, n) {
-  return e === "http_5xx"
-    ? r !== "any_post" && r !== "reason_not_temporary"
-    : n !== undefined && n > RESEND_WINDOW_PER_POST_MS;
+function isResendableFailure(code, serverCode, waitedMs) {
+  return code === "http_5xx"
+    ? serverCode !== "any_post" && serverCode !== "reason_not_temporary"
+    : waitedMs !== undefined && waitedMs > RESEND_WINDOW_PER_POST_MS;
 }
 //@ chunk-7kpfrhzn.js:23236-23334 placement
 function getKnownServerUploadLimit() {
@@ -868,155 +894,174 @@ function getKnownServerUploadLimit() {
 /**
  * 先传预览副本，失败再传原件
  */
-async function uploadWithPreviewCopy(e, r, ctx, a, h) {
-  let s =
+async function uploadWithPreviewCopy(bytes, filePath, ctx, telemetryFields, postState) {
+  let previewCopy =
     ctx.originalsOnly || ctx.noPreviewCopies
       ? undefined
-      : await makePreviewCopy(e, r, ctx.signal, a, ctx.copyLock);
-  if (s !== undefined) {
-    let w;
-    let b;
-    let U;
-    countUploadPost(h);
-    let A = await uploadBuffer(
-      s.bytes,
-      `${basename(r, extname(r))}.${s.format === "png" ? "png" : "jpg"}`,
+      : await makePreviewCopy(bytes, filePath, ctx.signal, telemetryFields, ctx.copyLock);
+  if (previewCopy !== undefined) {
+    let copyErrorCode;
+    let copyServerCode;
+    let copyBars;
+    countUploadPost(postState);
+    let copyResult = await uploadBuffer(
+      previewCopy.bytes,
+      `${basename(filePath, extname(filePath))}.${previewCopy.format === "png" ? "png" : "jpg"}`,
       "application/octet-stream",
       ctx.signal,
-      a,
+      telemetryFields,
       ctx.credentials,
-      (S, B, v) => {
-        w = S;
-        b = B;
-        U = v;
+      (code, serverCode, bars) => {
+        copyErrorCode = code;
+        copyServerCode = serverCode;
+        copyBars = bars;
       },
     );
-    if (!("error" in A)) {
-      let S = A.file_kind === "image";
-      if (S) logFeatureOk("bridge_attachment_preview_copy", a);
-      else logFeatureSad("bridge_attachment_preview_copy", "no_preview", a);
+    if (!("error" in copyResult)) {
+      let isImage = copyResult.file_kind === "image";
+      if (isImage) logFeatureOk("bridge_attachment_preview_copy", telemetryFields);
+      else logFeatureSad("bridge_attachment_preview_copy", "no_preview", telemetryFields);
       return {
-        file_uuid: A.file_uuid,
+        file_uuid: copyResult.file_uuid,
         copy: {
-          isImage: S,
-          mediaType: s.format === "png" ? "image/png" : "image/jpeg",
+          isImage,
+          mediaType: previewCopy.format === "png" ? "image/png" : "image/jpeg",
         },
       };
     }
-    if (w === undefined || !RESENDABLE_ERROR_CODES_SET.has(w) || (h.max > 1 && U === "any_post")) {
-      if (w !== undefined) logUploadFailure(w, a, b);
-      return A;
+    if (
+      copyErrorCode === undefined ||
+      !RESENDABLE_ERROR_CODES_SET.has(copyErrorCode) ||
+      (postState.max > 1 && copyBars === "any_post")
+    ) {
+      if (copyErrorCode !== undefined) logUploadFailure(copyErrorCode, telemetryFields, copyServerCode);
+      return copyResult;
     }
-    logUploadDebug(`upload of the copy of ${r} failed (${w}); uploading the original`);
-    logFeatureSad("bridge_attachment_preview_copy", `upload_failed_${w}`, a);
+    logUploadDebug(`upload of the copy of ${filePath} failed (${copyErrorCode}); uploading the original`);
+    logFeatureSad("bridge_attachment_preview_copy", `upload_failed_${copyErrorCode}`, telemetryFields);
   }
-  let m =
+  let scaledImage =
     ctx.originalsOnly || ctx.noScaledCopies
       ? undefined
-      : await maybeScaleImage(e, guessMimeType(r), MAX_UPLOAD_BYTES, ctx.signal);
-  if (m !== undefined) return uploadScaledImage(m, r, ctx, a, h);
-  let y = await uploadWithResends(
-    (w, b) => uploadBuffer(e, r, guessMimeType(r), ctx.signal, w, ctx.credentials, b),
+      : await maybeScaleImage(bytes, guessMimeType(filePath), MAX_UPLOAD_BYTES, ctx.signal);
+  if (scaledImage !== undefined)
+    return uploadScaledImage(scaledImage, filePath, ctx, telemetryFields, postState);
+  let originalResult = await uploadWithResends(
+    (telemetry, reportProgress) =>
+      uploadBuffer(
+        bytes,
+        filePath,
+        guessMimeType(filePath),
+        ctx.signal,
+        telemetry,
+        ctx.credentials,
+        reportProgress,
+      ),
     {
-      filename: r,
-      size: e.length,
+      filename: filePath,
+      size: bytes.length,
     },
-    h,
+    postState,
     ctx.signal,
-    a,
+    telemetryFields,
   );
-  return "error" in y
-    ? y
+  return "error" in originalResult
+    ? originalResult
     : {
-        file_uuid: y.file_uuid,
+        file_uuid: originalResult.file_uuid,
       };
 }
 //@ chunk-7kpfrhzn.js:24341-24572 placement
-async function uploadStreamWithAuth(e, r, filename, a, telemetry, s) {
-  let uploadAuth = await getUploadAuth(a.credentials);
+async function uploadStreamWithAuth(body, contentLength, filename, ctx, telemetry, logSad) {
+  let uploadAuth = await getUploadAuth(ctx.credentials);
   if (!uploadAuth) {
     logUploadDebug("skip: no oauth token");
-    s("no_token");
+    logSad("no_token");
     return {
       error: "upload failed: no OAuth token available",
     };
   }
-  return uploadStream(e, r, uploadAuth, {
+  return uploadStream(body, contentLength, uploadAuth, {
     filename,
-    signal: a.signal,
+    signal: ctx.signal,
     telemetry,
-    logSad: s,
+    logSad,
   });
 }
 //@ chunk-7kpfrhzn.js:24572-25343 placement
-async function uploadStream(e, r, uploadAuth, { filename, signal, telemetry, logSad }) {
-  let y = checkUploadAllowed(telemetry);
-  if (y) {
+async function uploadStream(streamBody, outputFileName, route, { filename, signal, telemetry, logSad }) {
+  let gateError = checkUploadAllowed(telemetry);
+  if (gateError) {
     logUploadDebug(`skip ${filename}: policy/provider gate denied`);
-    return y;
+    return gateError;
   }
-  if (isBridgeFileLoginRefused(uploadAuth)) {
+  if (isBridgeFileLoginRefused(route)) {
     logSad("stored_login_refused");
     return {
       error: new StoredLoginHeldBackError(storedLoginRefusalReason()).message,
     };
   }
-  let w = uploadStreamWithProgress(e.slices, e.contentLength, {
+  let progressStream = uploadStreamWithProgress(streamBody.slices, streamBody.contentLength, {
     signal,
   });
   try {
-    let b = await axios_default.post(getUploadUrl(uploadAuth), w.body, {
-      headers: buildUploadHeaders(uploadAuth.token, e.boundary, e.contentLength, telemetry.upload_lane),
+    let response = await axios_default.post(getUploadUrl(route), progressStream.body, {
+      headers: buildUploadHeaders(
+        route.token,
+        streamBody.boundary,
+        streamBody.contentLength,
+        telemetry.upload_lane,
+      ),
       timeout: 0,
-      signal: w.signal,
+      signal: progressStream.signal,
       validateStatus: () => true,
       maxRedirects: 0,
     });
-    return handleUploadResponse(b, filename, r, telemetry, logSad);
+    return handleUploadResponse(response, filename, outputFileName, telemetry, logSad);
   } catch (error) {
     logUploadDebug(`upload threw for ${filename}: ${error}`);
-    let U = uploadAbortError(error, w, signal?.aborted === true);
+    let abortError = uploadAbortError(error, progressStream, signal?.aborted === true);
     logSad(
-      U.code,
+      abortError.code,
       undefined,
-      U.code === "network_error" && NON_TEMPORARY_ERRNOS.has(getErrnoCode(error))
+      abortError.code === "network_error" && NON_TEMPORARY_ERRNOS.has(getErrnoCode(error))
         ? "cause_not_temporary"
         : undefined,
-      w.seen().bytes_handed,
+      progressStream.seen().bytes_handed,
     );
     return {
-      error: U.error,
+      error: abortError.error,
     };
   } finally {
-    w.dispose();
-    w.body.on("error", () => {});
-    w.body.destroy(Error("the upload has already been answered"));
-    await e.finished();
+    progressStream.dispose();
+    progressStream.body.on("error", () => {});
+    progressStream.body.destroy(Error("the upload has already been answered"));
+    await streamBody.finished();
   }
 }
 //@ chunk-7kpfrhzn.js:25343-26073 placement
 /**
  * 上传中止/停滞的错误描述
  */
-function uploadAbortError(error, r, n) {
-  if (n)
+function uploadAbortError(error, progressStream, signalAborted) {
+  if (signalAborted)
     return {
       code: "aborted",
       error: "upload aborted",
     };
-  let reason = r.signal.reason;
+  let reason = progressStream.signal.reason;
   if (reason instanceof UploadStalledError) {
-    let m = r.seen();
+    let progress = progressStream.seen();
     let rounded = Math.round(reason.waitedMs / 1000);
     return {
       code: "stalled",
       error:
-        m.bytes_handed === m.body_bytes
+        progress.bytes_handed === progress.body_bytes
           ? `upload failed: the server did not answer within ${rounded} seconds of receiving the file`
           : `upload failed: the transfer stalled (nothing moved for ${rounded} seconds)`,
     };
   }
-  let inCauseChain = findInCauseChain(error, (m) => m instanceof UploadSourceError);
+  let inCauseChain = findInCauseChain(error, (cause) => cause instanceof UploadSourceError);
   if (inCauseChain)
     return {
       code: "read_failed",
@@ -1064,4 +1109,6 @@ export {
   normalizeUploadFileName,
   withOpenedFile,
   timestampedFileName,
+  uploadBriefAttachment,
+  uploadResponseSchema,
 };

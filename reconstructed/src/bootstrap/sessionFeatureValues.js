@@ -10,6 +10,7 @@
  */
 import { SessionRootSlot } from "./sessionSlices.js";
 import { getRootSession } from "./state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-vqdc30xc.js:229-1901 placement
 /**
@@ -91,7 +92,10 @@ class SessionFeatureValues {
 /**
  * 按根会话缓存 SessionFeatureValues 的 SessionRootSlot；of() 首次访问时建实例，peek() 只读窥视。
  */
-var SESSION_FEATURE_VALUES_SLOT = new SessionRootSlot(() => new SessionFeatureValues());
+var SESSION_FEATURE_VALUES_SLOT; // deferred: uses SessionRootSlot (./sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-vqdc30xc.js:1901", () => {
+  SESSION_FEATURE_VALUES_SLOT = new SessionRootSlot(() => new SessionFeatureValues());
+});
 //@ chunk-vqdc30xc.js:1927-1960 placement
 /**
  * 取当前根会话的特性取值缓存（getSessionFeatureValues），GrowthBook/环境开关按会话固定下来的入口；全项目 70 多处调用。

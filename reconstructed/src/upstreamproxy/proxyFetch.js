@@ -12,17 +12,20 @@ import { isStandaloneExecutable } from "../utils/slowOperations.js";
 import { getTLSFetchSession } from "../utils/mtls.js";
 
 //@ chunk-1p1fwh3h.js:264-412 placement
-function createTlsSessionFetch(s, e, o) {
-  let n = isStandaloneExecutable() ? getTLSFetchSession(s, o) : undefined;
-  if (!n) return;
-  let { tls, ...t } = e ?? {};
-  let d = e?.proxy === undefined && e?.unix === undefined ? t : e;
-  return (i) => n.fetch(i, d);
+function createTlsSessionFetch(sessionName, options, sessionKey) {
+  let session = isStandaloneExecutable() ? getTLSFetchSession(sessionName, sessionKey) : undefined;
+  if (!session) return;
+  let { tls, ...optionsWithoutTls } = options ?? {};
+  let fetchOptions =
+    options?.proxy === undefined && options?.unix === undefined ? optionsWithoutTls : options;
+  return (input) => session.fetch(input, fetchOptions);
 }
 //@ chunk-1p1fwh3h.js:412-514 placement
-function proxyAwareFetch(s, e, ownConnectionPool) {
-  let n =
-    e.proxy === undefined && ownConnectionPool?.() ? createTlsSessionFetch("ccr", e, undefined) : undefined;
-  return n ? n(s) : fetch(s, e);
+function proxyAwareFetch(input, options, ownConnectionPool) {
+  let sessionFetch =
+    options.proxy === undefined && ownConnectionPool?.()
+      ? createTlsSessionFetch("ccr", options, undefined)
+      : undefined;
+  return sessionFetch ? sessionFetch(input) : fetch(input, options);
 }
 export { proxyAwareFetch, createTlsSessionFetch };

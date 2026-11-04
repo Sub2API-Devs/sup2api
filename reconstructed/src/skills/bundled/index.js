@@ -8,7 +8,7 @@
  * pieces: chunk-hantmvxa.js (7), chunk-pjf54ny3.js (1)
  * attribution: placement 4, sole-consumer 3, callgraph-witnessed 1
  */
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { registerBundledSkill } from "../bundledSkills.js";
 import { VERIFY } from "./bundledSkillNames.js";
 import { isVerifySkillRolloutOn } from "../../services/projectsRelay/relayGates.js";
@@ -41,6 +41,13 @@ import { registerExplainUsageSkill } from "./explainUsageSkill.js";
 import { registerClaudeInChromeSkill } from "./claudeInChrome.js";
 import { isClaudeInChromeBlockedByEnterpriseMcpConfig } from "../../services/mcp/config.js";
 
+//@ chunk-pjf54ny3.js:191-224 placement
+/**
+ * 恒返回 null 的占位函数。
+ */
+async function alwaysNull() {
+  return null;
+}
 //@ chunk-hantmvxa.js:99414-99429 placement
 function noopCoworkPluginSkillStub() {}
 //@ chunk-hantmvxa.js:99429-99444 placement
@@ -57,7 +64,7 @@ function noop() {
  * 动态加载 verify 技能内容模块。
  */
 function loadVerifyContentModule() {
-  return import("./chunk-t40rc4mm.js");
+  return import("./verifyContent.js");
 }
 //@ chunk-hantmvxa.js:218963-219435 sole-consumer
 /**
@@ -70,7 +77,7 @@ var VERIFY_SKILL_DESCRIPTION =
  * 注册内置 verify 技能：描述"端到端验证改动"，模型调用受开关控制；提示词为 SKILL.md 正文，可追加项目 run 技能说明与用户请求。
  */
 function registerVerifySkill() {
-  let e = io(alwaysNull);
+  let loadExtraContent = memoizeAlias(alwaysNull);
   registerBundledSkill({
     name: VERIFY,
     description: VERIFY_SKILL_DESCRIPTION,
@@ -79,21 +86,21 @@ function registerVerifySkill() {
     disableModelInvocation: () => !isVerifySkillRolloutOn(),
     files: async () => ({
       ...(await loadVerifyContentModule().then((verifyContentModule) => verifyContentModule.SKILL_FILES)),
-      ...(await e())?.files,
+      ...(await loadExtraContent())?.files,
     }),
-    async getPromptForCommand(n, s, r) {
+    async getPromptForCommand(args, context, toolUseContext) {
       let { SKILL_MD } = await loadVerifyContentModule();
-      let y = [parseFrontmatter(SKILL_MD).content.trimStart()];
-      let w = await e();
-      if (w && r) y.push(w.note);
-      if (n)
-        y.push(`## User Request
+      let parts = [parseFrontmatter(SKILL_MD).content.trimStart()];
+      let extraContent = await loadExtraContent();
+      if (extraContent && toolUseContext) parts.push(extraContent.note);
+      if (args)
+        parts.push(`## User Request
 
-${n}`);
+${args}`);
       return [
         {
           type: "text",
-          text: y.join(`
+          text: parts.join(`
 
 `),
         },
@@ -154,40 +161,35 @@ function initBundledSkills() {
   registerCoworkPluginSkill();
   registerExplainUsageSkill();
   {
-    let { registerCoworkSetupSkill } = require("./chunk-7rek18ct.js");
+    let { registerCoworkSetupSkill } = require("./setupCowork.js");
     registerCoworkSetupSkill();
   }
-  let { registerLoopSkill } = require("./chunk-gbtb0mjv.js");
+  let { registerLoopSkill } = require("./loop.js");
   registerLoopSkill();
-  let { registerScheduleRemoteAgentsSkill } = require("./chunk-m3arwd1y.js");
+  let { registerScheduleRemoteAgentsSkill } = require("./scheduleRemoteAgents.js");
   registerScheduleRemoteAgentsSkill();
   {
-    let { registerContinueInProjectsSkill } = require("./chunk-9a33p5tx.js");
+    let {
+      registerContinueInProjectsSkill,
+    } = require("../../commands/send-to-project/registerContinueInProjectsSkill.lazy.js");
     registerContinueInProjectsSkill();
   }
-  let { registerClaudeApiSkill } = require("./chunk-7dsm65bp.js");
+  let { registerClaudeApiSkill } = require("./claudeApiSkill.js");
   registerClaudeApiSkill({
     disabled: env.CLAUDE_CODE_DISABLE_CLAUDE_API_SKILL === true,
   });
-  let { registerClaudeCodeSkill } = require("./chunk-ym2xht5h.js");
+  let { registerClaudeCodeSkill } = require("./claudeApi.js");
   registerClaudeCodeSkill({
     disabled: env.CLAUDE_CODE_DISABLE_CLAUDE_CODE_SKILL === true,
   });
-  let { registerWorkflowAuthoringSkill } = require("./chunk-rdqf4e9x.js");
+  let { registerWorkflowAuthoringSkill } = require("./workflowAuthoring.js");
   registerWorkflowAuthoringSkill();
   registerClaudeInChromeSkill({
     disabled: isClaudeInChromeBlockedByEnterpriseMcpConfig() || env.CLAUDE_CODE_DISABLE_CFC_PROMPT === true,
   });
-  let { registerRunSkill } = require("./chunk-g8z8w057.js");
-  let { registerRunSkillGeneratorSkill } = require("./chunk-9vtynjjv.js");
+  let { registerRunSkill } = require("./run.js");
+  let { registerRunSkillGeneratorSkill } = require("./runSkillGenerator.js");
   registerRunSkill();
   registerRunSkillGeneratorSkill();
-}
-//@ chunk-pjf54ny3.js:191-224 placement
-/**
- * 恒返回 null 的占位函数。
- */
-async function alwaysNull() {
-  return null;
 }
 export { initBundledSkills, alwaysNull };

@@ -10,13 +10,14 @@
  */
 import { identity as identity_2 } from "../identity.js";
 import { isVsCodeOrDesktop } from "../sessionShape.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:48613-48680 placement
 /**
  * updatedInputOrOriginal：拒绝时保留原输入，否则用更新后的输入。
  */
-function updatedInputOrOriginal(decided, n) {
-  return decided?.behavior === "deny" ? n : (decided?.updatedInput ?? n);
+function updatedInputOrOriginal(decided, originalInput) {
+  return decided?.behavior === "deny" ? originalInput : (decided?.updatedInput ?? originalInput);
 }
 //@ chunk-e6aww6q8.js:48680-48715 placement
 /**
@@ -46,23 +47,26 @@ function hasPermissionPromptTool(permissionPromptToolName) {
   return permissionPromptToolName !== undefined && permissionPromptToolName !== "none";
 }
 //@ chunk-e6aww6q8.js:48862-48933 placement
-var permissionPromptHostState = identity_2(
-  {
-    person: null,
-    host: emptyPermissionPromptHost(),
-  },
-  (e) => {
-    e.person = null;
-    e.host = emptyPermissionPromptHost();
-  },
-);
+var permissionPromptHostState; // deferred: uses emptyPermissionPromptHost of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:48862", () => {
+  permissionPromptHostState = identity_2(
+    {
+      person: null,
+      host: emptyPermissionPromptHost(),
+    },
+    (state) => {
+      state.person = null;
+      state.host = emptyPermissionPromptHost();
+    },
+  );
+});
 //@ chunk-e6aww6q8.js:48933-48971 placement
 /**
  * setPermissionPromptPerson：设置提示宿主为“人”。
  */
-function setPermissionPromptPerson(e) {
-  permissionPromptHostState.person = e;
-  return e;
+function setPermissionPromptPerson(person) {
+  permissionPromptHostState.person = person;
+  return person;
 }
 //@ chunk-e6aww6q8.js:48971-49004 placement
 /**
@@ -75,19 +79,19 @@ function getPermissionPromptPerson() {
 /**
  * setPermissionPromptHostProbe：登记某类宿主的探测函数。
  */
-function setPermissionPromptHostProbe(e, n, r) {
-  permissionPromptHostState.host[e] = r;
-  return n;
+function setPermissionPromptHostProbe(kind, value, probe) {
+  permissionPromptHostState.host[kind] = probe;
+  return value;
 }
 //@ chunk-e6aww6q8.js:49047-49209 placement
-function getPermissionPromptHostKind(e) {
-  if (e === "served") return isPermissionPromptHostKind("servedCall") ? "servedCall" : null;
+function getPermissionPromptHostKind(preference) {
+  if (preference === "served") return isPermissionPromptHostKind("servedCall") ? "servedCall" : null;
   if (isPermissionPromptHostKind("promptTool")) return "promptTool";
   return isPermissionPromptHostKind("callback") && !isVsCodeOrDesktop() ? "callback" : null;
 }
 //@ chunk-e6aww6q8.js:49209-49253 placement
-function isPermissionPromptHostKind(e) {
-  return permissionPromptHostState.host[e]?.() === true;
+function isPermissionPromptHostKind(kind) {
+  return permissionPromptHostState.host[kind]?.() === true;
 }
 //@ chunk-e6aww6q8.js:49253-49322 placement
 function emptyPermissionPromptHost() {

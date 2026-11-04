@@ -65,11 +65,11 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { normalizeEnvRefs } from "../../services/mcp/envExpansion.js";
-import { xr } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { redactSecretsDeep } from "../../services/teamMemorySync/secretScanner.js";
 import { mcpTransportType } from "../../services/mcp/mcpServerEndpoint.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { Qr, fo } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { use, suspenseTypeExport } from "../../../vendor/react/cjs/react.production.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 import { McpParsingWarnings } from "../../components/mcp/McpParsingWarnings.js";
 import { gracefulShutdown } from "../../utils/gracefulShutdown.js";
@@ -89,14 +89,23 @@ import { blockingLocalSettingsErrors, blockingSettingsErrors } from "../../utils
 import { isRestrictedToPluginOnly } from "../../utils/settings/pluginOnlyPolicy.js";
 import { collectProjectMcpServerNames } from "../../services/mcpServerApproval.js";
 import { formatMcpServerLabel } from "../../utils/plugins/lspPluginIntegration.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-dcmhvw5a.js:71956-72082 fingerprint = checkMcpServerHealth (0.518)
+/**
+ * checkMcpServerHealth（实为缓存行可被替换判定）：cached 行在已有 connected/disabled/needs-auth 时不覆盖。
+ */
+function checkMcpServerHealth_2(name, server) {
+  if (server.type !== "cached" || !name) return true;
+  return !(name.type === "connected" || name.type === "disabled" || name.type === "needs-auth");
+}
 //@ chunk-h2rjy0z4.js:20032-20063 sole-consumer
-function isNotNull(v) {
-  return v !== null;
+function isNotNull(value) {
+  return value !== null;
 }
 //@ chunk-h2rjy0z4.js:20063-20115 sole-consumer
 function mcpModulesChunk_2() {
-  return require("./chunk-asne9cp8.js");
+  return require("../../services/mcp/emitTripwireEvent.lazy.js");
 }
 //@ chunk-h2rjy0z4.js:20115-20156 sole-consumer
 function mcpAuthModule() {
@@ -113,32 +122,35 @@ function mcpListAuthErrorModule() {
 //@ chunk-h2rjy0z4.js:20253-20523 sole-consumer
 function formatMcpHealthError(serverName, config, error) {
   let issues = error?.issues;
-  let l = errorMessage(error);
+  let detail = errorMessage(error);
   if (Array.isArray(issues) && issues.length > 0) {
-    let a = issues[0];
-    let f = typeof a.message === "string" ? a.message : l;
-    let i = Array.isArray(a.path) && a.path.length > 0 ? ` (at ${a.path.join(".")})` : "";
-    let _ = issues.length > 1 ? ` (+${issues.length - 1} more)` : "";
-    l = f + i + _;
+    let firstIssue = issues[0];
+    let issueMessage = typeof firstIssue.message === "string" ? firstIssue.message : detail;
+    let pathSuffix =
+      Array.isArray(firstIssue.path) && firstIssue.path.length > 0
+        ? ` (at ${firstIssue.path.join(".")})`
+        : "";
+    let moreSuffix = issues.length > 1 ? ` (+${issues.length - 1} more)` : "";
+    detail = issueMessage + pathSuffix + moreSuffix;
   }
-  return sanitizeErrorDetail(redactMcpErrorDetail(serverName, config, l));
+  return sanitizeErrorDetail(redactMcpErrorDetail(serverName, config, detail));
 }
 //@ chunk-h2rjy0z4.js:20523-21290 sole-consumer
-async function checkMcpServerHealth(serverName, config, p) {
+async function checkMcpServerHealth(serverName, config, options) {
   try {
-    let u = mcpDialBlockCause(serverName, config);
-    if (u)
+    let blockCause = mcpDialBlockCause(serverName, config);
+    if (blockCause)
       return {
         status:
-          u === "project-approval"
+          blockCause === "project-approval"
             ? PENDING_APPROVAL_STATUS
-            : `${figures_default.cross} ${mcpGateError(u, serverName, config).error}`,
+            : `${figures_default.cross} ${mcpGateError(blockCause, serverName, config).error}`,
       };
-    let l = await mcpClientModule_4().connectToServer(serverName, config, undefined, p);
-    if (l.type === "connected") {
-      if (l.capabilities.tools)
+    let result = await mcpClientModule_4().connectToServer(serverName, config, undefined, options);
+    if (result.type === "connected") {
+      if (result.capabilities.tools)
         try {
-          await listMcpTools(l, {
+          await listMcpTools(result, {
             timeout: 5000,
           });
         } catch (error) {
@@ -154,20 +166,20 @@ async function checkMcpServerHealth(serverName, config, p) {
       return {
         status: `${figures_default.tick} Connected`,
       };
-    } else if (l.type === "needs-auth")
+    } else if (result.type === "needs-auth")
       return {
         status: "! Needs authentication",
       };
-    else if (isUnconfiguredFailure(l))
+    else if (isUnconfiguredFailure(result))
       return {
         status: "- Not configured",
       };
-    else if (l.type === "failed") {
-      let a = formatMcpHealthError_2(l);
+    else if (result.type === "failed") {
+      let issue = formatMcpHealthError_2(result);
       return {
         status: `${figures_default.cross} Failed to connect`,
-        ...(a !== "" && {
-          issue: a,
+        ...(issue !== "" && {
+          issue,
         }),
       };
     } else
@@ -184,41 +196,47 @@ async function checkMcpServerHealth(serverName, config, p) {
 /**
  * claude mcp remove：按作用域删除服务器并清理其安全存储里的认证缓存。
  */
-async function mcpRemoveHandler(m, name, p, u) {
+async function mcpRemoveHandler(root, serverName, options, storage) {
   let serverBeforeRemoval = null;
-  let a = (scope) => {
-    let found = MCP_SETTINGS_SCOPES.find((h) => h === scope);
-    serverBeforeRemoval = found ? (getMcpConfigsByScope(found).servers[name] ?? null) : null;
+  let recordScopeServer = (scope) => {
+    let found = MCP_SETTINGS_SCOPES.find((scopeName) => scopeName === scope);
+    serverBeforeRemoval = found ? (getMcpConfigsByScope(found).servers[serverName] ?? null) : null;
   };
   let cleanupSecureStorage = async () => {
-    await mcpClientModule_4().removeMcpAuthCacheEntry(name, u);
+    await mcpClientModule_4().removeMcpAuthCacheEntry(serverName, storage);
     if (serverBeforeRemoval && (serverBeforeRemoval.type === "sse" || serverBeforeRemoval.type === "http"))
       try {
-        await mcpAuthModule().clearServerTokensFromLocalStorage(name, serverBeforeRemoval);
-        await mcpAuthModule().clearMcpClientConfig(name, serverBeforeRemoval);
+        await mcpAuthModule().clearServerTokensFromLocalStorage(serverName, serverBeforeRemoval);
+        await mcpAuthModule().clearMcpClientConfig(serverName, serverBeforeRemoval);
       } catch (error) {
-        logForDebugging(`mcp remove: secure-storage cleanup for "${name}" failed: ${errorMessage(error)}`, {
-          level: "warn",
-        });
+        logForDebugging(
+          `mcp remove: secure-storage cleanup for "${serverName}" failed: ${errorMessage(error)}`,
+          {
+            level: "warn",
+          },
+        );
       }
   };
-  let i;
+  let removedScope;
   try {
-    let g = isMcpServerLoggableInAnalytics(name, getSettingsMcpConfigByName(name) ?? undefined);
-    if (p.scope) {
-      let scope = ensureConfigScope(p.scope);
+    let isLoggable = isMcpServerLoggableInAnalytics(
+      serverName,
+      getSettingsMcpConfigByName(serverName) ?? undefined,
+    );
+    if (options.scope) {
+      let scope = ensureConfigScope(options.scope);
       await logEventAsync("tengu_mcp_delete", {
-        name: mcpNameForAnalytics_GATE_EVALUATED(name, g),
+        name: mcpNameForAnalytics_GATE_EVALUATED(serverName, isLoggable),
         scope: fromEnum(scope),
       });
-      a(scope);
-      await removeMcpConfig(name, scope, u);
+      recordScopeServer(scope);
+      await removeMcpConfig(serverName, scope, storage);
       await cleanupSecureStorage();
-      i = scope;
+      removedScope = scope;
     } else {
       let projectConfig = getCurrentProjectConfig();
       let globalConfig = getGlobalConfig();
-      let x = await readRawMcpJsonServersFromCwd().catch((error) => {
+      let mcpJsonServers = await readRawMcpJsonServersFromCwd().catch((error) => {
         if (
           error instanceof TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS ||
           getErrnoCode(error) !== undefined
@@ -226,53 +244,53 @@ async function mcpRemoveHandler(m, name, p, u) {
           throw error;
         return {};
       });
-      let mcpJsonExists = Object.hasOwn(x, name);
+      let mcpJsonExists = Object.hasOwn(mcpJsonServers, serverName);
       let scopes = [];
-      if (projectConfig.mcpServers?.[name]) scopes.push("local");
+      if (projectConfig.mcpServers?.[serverName]) scopes.push("local");
       if (mcpJsonExists) scopes.push("project");
-      if (globalConfig.mcpServers?.[name]) scopes.push("user");
+      if (globalConfig.mcpServers?.[serverName]) scopes.push("user");
       if (scopes.length === 0) {
         await awaitMcpPolicyColdStart({
           hasDynamicMcpConfig: false,
         });
-        let scope = getSettingsMcpConfigByName(name)?.scope;
+        let scope = getSettingsMcpConfigByName(serverName)?.scope;
         if (scope && isManagedConfigScope(scope))
           return cliErrorAfterAnalyticsFlush(
-            `MCP server "${name}" is provided by your organization (${scope === "managed" ? "managed settings" : describeMcpConfigFilePath("enterprise")}) and cannot be removed locally.`,
+            `MCP server "${serverName}" is provided by your organization (${scope === "managed" ? "managed settings" : describeMcpConfigFilePath("enterprise")}) and cannot be removed locally.`,
           );
-        let E = [
+        let knownNames = [
           ...Object.keys(projectConfig.mcpServers ?? {}),
-          ...Object.keys(x),
+          ...Object.keys(mcpJsonServers),
           ...Object.keys(globalConfig.mcpServers ?? {}),
         ];
         await logFeatureBadAsync("cli_mcp_remove", "cli_mcp_remove_not_found");
-        return cliErrorAfterAnalyticsFlush(formatUnknownMcpServerHint(name, uniq(E)));
+        return cliErrorAfterAnalyticsFlush(formatUnknownMcpServerHint(serverName, uniq(knownNames)));
       } else if (scopes.length === 1) {
         let scope = scopes[0];
         await logEventAsync("tengu_mcp_delete", {
-          name: mcpNameForAnalytics_GATE_EVALUATED(name, g),
+          name: mcpNameForAnalytics_GATE_EVALUATED(serverName, isLoggable),
           scope: fromEnum(scope),
         });
-        a(scope);
-        await removeMcpConfig(name, scope, u);
+        recordScopeServer(scope);
+        await removeMcpConfig(serverName, scope, storage);
         await cleanupSecureStorage();
-        i = scope;
+        removedScope = scope;
       } else {
-        process.stderr.write(`MCP server "${name}" exists in multiple scopes:
+        process.stderr.write(`MCP server "${serverName}" exists in multiple scopes:
 `);
         scopes.forEach((scope) => {
           process.stderr.write(`  - ${getScopeLabel(scope)} (${describeMcpConfigFilePath(scope)})
 `);
         });
         let filtered = scopes
-          .map((scope) => claudeCommand("mcp remove", name, `-s ${scope}`))
-          .filter((E) => E !== null);
+          .map((scope) => claudeCommand("mcp remove", serverName, `-s ${scope}`))
+          .filter((commandLine) => commandLine !== null);
         if (filtered.length > 0) {
           process.stderr.write(`
 To remove from a specific scope, use:
 `);
-          filtered.forEach((E) =>
-            process.stderr.write(`  ${E}
+          filtered.forEach((commandLine) =>
+            process.stderr.write(`  ${commandLine}
 `),
           );
         } else
@@ -288,174 +306,180 @@ Specify a scope with -s to remove from a specific one.
     return cliErrorAfterAnalyticsFlush(errorMessage(error));
   }
   await logFeatureOkAsync("cli_mcp_remove");
-  let _ = p.scope ? name : `"${name}"`;
+  let displayName = options.scope ? serverName : `"${serverName}"`;
   await renderAndRun(
-    m,
+    root,
     jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
         jsxProd_default_2(Text, {
-          children: ["Removed MCP server ", _, " from ", i, " config"],
+          children: ["Removed MCP server ", displayName, " from ", removedScope, " config"],
         }),
         jsxProd_default_2(Text, {
-          children: ["File modified: ", describeMcpConfigFilePath(i)],
+          children: ["File modified: ", describeMcpConfigFilePath(removedScope)],
         }),
       ],
     }),
   );
 }
 //@ chunk-h2rjy0z4.js:23358-23482 layout
-function redactEnvRefs(m) {
-  let o = (p) =>
-    typeof p === "string"
-      ? normalizeEnvRefs(p)
-      : Array.isArray(p)
-        ? p.map(o)
-        : p && typeof p === "object"
-          ? xr(p, o)
-          : p;
-  return o(m);
+function redactEnvRefs(value) {
+  let walk = (item) =>
+    typeof item === "string"
+      ? normalizeEnvRefs(item)
+      : Array.isArray(item)
+        ? item.map(walk)
+        : item && typeof item === "object"
+          ? import_mapValues(item, walk)
+          : item;
+  return walk(value);
 }
 //@ chunk-h2rjy0z4.js:23482-23822 layout
-function redactServerConfig(m) {
-  let o = redactSecretsDeep(m);
-  let p = mcpTransportType(m);
-  if ("url" in o)
+function redactServerConfig(config) {
+  let redacted = redactSecretsDeep(config);
+  let transportType = mcpTransportType(config);
+  if ("url" in redacted)
     return {
-      ...o,
-      url: p,
-      ...("headers" in o &&
-        o.headers && {
-          headers: Object.fromEntries(Object.keys(o.headers).map((key) => [key, "[REDACTED]"])),
+      ...redacted,
+      url: transportType,
+      ...("headers" in redacted &&
+        redacted.headers && {
+          headers: Object.fromEntries(Object.keys(redacted.headers).map((key) => [key, "[REDACTED]"])),
         }),
     };
-  if ("command" in o)
+  if ("command" in redacted)
     return {
-      ...o,
-      command: p,
-      ...(o.args && {
+      ...redacted,
+      command: transportType,
+      ...(redacted.args && {
         args: [],
       }),
-      ...("env" in o &&
-        o.env && {
-          env: Object.fromEntries(Object.keys(o.env).map((key) => [key, "[REDACTED]"])),
+      ...("env" in redacted &&
+        redacted.env && {
+          env: Object.fromEntries(Object.keys(redacted.env).map((key) => [key, "[REDACTED]"])),
         }),
     };
-  return o;
+  return redacted;
 }
 //@ chunk-h2rjy0z4.js:23822-24167 layout
 function toDisplayServerConfigs(servers) {
-  let o = new Map();
-  let p = {};
+  let scopeServers = new Map();
+  let result = {};
   for (let [key, value] of Object.entries(servers)) {
-    let found = MCP_SETTINGS_SCOPES.find((f) => f === value.scope);
+    let found = MCP_SETTINGS_SCOPES.find((scopeName) => scopeName === value.scope);
     if (found !== undefined) {
-      let f = o.get(found);
-      if (!f) {
-        f = getMcpConfigsByScope(found, {
+      let serversOfScope = scopeServers.get(found);
+      if (!serversOfScope) {
+        serversOfScope = getMcpConfigsByScope(found, {
           expandVars: false,
         }).servers;
-        o.set(found, f);
+        scopeServers.set(found, serversOfScope);
       }
-      let original = f[key];
-      let _ =
+      let original = serversOfScope[key];
+      let displayed =
         original && matchesOriginalConfig(original, value)
           ? redactEnvRefs(original)
           : redactServerConfig(value);
-      if (_.scope !== "managed") {
-        p[key] = _;
+      if (displayed.scope !== "managed") {
+        result[key] = displayed;
         continue;
       }
-      let g = redactSecretsDeep(_);
-      p[key] = "url" in g ? redactManagedMcpServerConfig(g, _.scope) : g;
-    } else p[key] = value.type === "ws" ? redactServerConfig(value) : redactSecretsDeep(value);
+      let redacted = redactSecretsDeep(displayed);
+      result[key] = "url" in redacted ? redactManagedMcpServerConfig(redacted, displayed.scope) : redacted;
+    } else result[key] = value.type === "ws" ? redactServerConfig(value) : redactSecretsDeep(value);
   }
-  return p;
+  return result;
 }
 //@ chunk-h2rjy0z4.js:24167-24497 layout
 function formatServerStatusLine({ name, server, status, issue }) {
-  let l = issue ? `${status} \u2014 ${issue}` : status;
-  if (isRemoteTransport(server)) return `${name}: ${server.url} (${server.type.toUpperCase()}) - ${l}`;
-  if (server.type === "claudeai-proxy") return `${name}: ${server.url} - ${l}`;
+  let statusText = issue ? `${status} \u2014 ${issue}` : status;
+  if (isRemoteTransport(server))
+    return `${name}: ${server.url} (${server.type.toUpperCase()}) - ${statusText}`;
+  if (server.type === "claudeai-proxy") return `${name}: ${server.url} - ${statusText}`;
   if (!server.type || server.type === "stdio") {
     let args = Array.isArray(server.args) ? server.args : [];
-    return `${name}: ${server.command} ${args.join(" ")} - ${l}`;
+    return `${name}: ${server.command} ${args.join(" ")} - ${statusText}`;
   }
   return null;
 }
 //@ chunk-h2rjy0z4.js:24497-24848 layout
 function ServerStatusList(props) {
-  let u = w(10);
+  let $ = useMemoCache(10);
   let { promise } = props;
-  let p = Qr(promise);
-  let l;
-  let a;
+  let statuses = use(promise);
+  let Component;
+  let element;
   let children;
-  if (u[0] !== p) {
-    let mapped = p.map(formatServerStatusLine).filter(isNotNull).map(replaceControlChars);
-    a = RenderOnceAndExit;
-    l = Text;
+  if ($[0] !== statuses) {
+    let mapped = statuses.map(formatServerStatusLine).filter(isNotNull).map(replaceControlChars);
+    element = RenderOnceAndExit;
+    Component = Text;
     children = mapped.join(`
 `);
-    u[0] = p;
-    u[1] = l;
-    u[2] = a;
-    u[3] = children;
+    $[0] = statuses;
+    $[1] = Component;
+    $[2] = element;
+    $[3] = children;
   } else {
-    l = u[1];
-    a = u[2];
-    children = u[3];
+    Component = $[1];
+    element = $[2];
+    children = $[3];
   }
   let children_2;
-  if (u[4] !== l || u[5] !== children) {
-    children_2 = jsxProd_default(l, {
+  if ($[4] !== Component || $[5] !== children) {
+    children_2 = jsxProd_default(Component, {
       children,
     });
-    u[4] = l;
-    u[5] = children;
-    u[6] = children_2;
-  } else children_2 = u[6];
-  let g;
-  if (u[7] !== a || u[8] !== children_2) {
-    g = jsxProd_default(a, {
+    $[4] = Component;
+    $[5] = children;
+    $[6] = children_2;
+  } else children_2 = $[6];
+  let entry;
+  if ($[7] !== element || $[8] !== children_2) {
+    entry = jsxProd_default(element, {
       children: children_2,
     });
-    u[7] = a;
-    u[8] = children_2;
-    u[9] = g;
-  } else g = u[9];
-  return g;
+    $[7] = element;
+    $[8] = children_2;
+    $[9] = entry;
+  } else entry = $[9];
+  return entry;
 }
 //@ chunk-h2rjy0z4.js:24848-25033 layout
-var PENDING_APPROVAL_STATUS = "\u23F8 Pending approval (run `claude` to approve)";
-var REJECTED_STATUS = `${figures_default.cross} Rejected (see disabledMcpjsonServers in settings)`;
-var DISABLED_FOR_PROJECT_STATUS = "\u2298 Disabled for this project (re-enable via /mcp)";
+var PENDING_APPROVAL_STATUS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REJECTED_STATUS;
+var DISABLED_FOR_PROJECT_STATUS;
+deferInit("chunk-h2rjy0z4.js:24848", () => {
+  PENDING_APPROVAL_STATUS = "\u23F8 Pending approval (run `claude` to approve)";
+  REJECTED_STATUS = `${figures_default.cross} Rejected (see disabledMcpjsonServers in settings)`;
+  DISABLED_FOR_PROJECT_STATUS = "\u2298 Disabled for this project (re-enable via /mcp)";
+});
 //@ chunk-h2rjy0z4.js:25033-25903 fingerprint = mcpListHandler (0.423)
 /**
  * claude mcp list：列出全部 MCP 服务器并逐个做健康检查。
  */
-async function mcpListHandler(m, o, credentials) {
+async function mcpListHandler(root, storage, credentials) {
   await logEventAsync("tengu_mcp_list", {});
   await awaitMcpPolicyColdStart({
     hasDynamicMcpConfig: false,
   });
   let { servers, pendingProjectServers } = await getAllMcpConfigs({
     includePendingProjectServers: true,
-    storageV5: o,
+    storageV5: storage,
     credentials,
   });
   await logFeatureOkAsync("cli_mcp_list");
-  let a = jsxProd_default(McpParsingWarnings, {});
+  let warnings = jsxProd_default(McpParsingWarnings, {});
   if (Object.keys(servers).length === 0) {
     await renderAndRun(
-      m,
+      root,
       jsxProd_default_2(Box, {
         flexDirection: "column",
         children: [
           jsxProd_default(Text, {
             children: "No MCP servers configured. Use `claude mcp add` to add a server.",
           }),
-          a,
+          warnings,
         ],
       }),
     );
@@ -465,19 +489,19 @@ async function mcpListHandler(m, o, credentials) {
   let displayServerConfigs = toDisplayServerConfigs(servers);
   let promise = pMap(
     Object.entries(servers),
-    async ([_, g]) => {
-      let args = pendingProjectServers.has(_)
+    async ([name, config]) => {
+      let args = pendingProjectServers.has(name)
         ? {
             status: PENDING_APPROVAL_STATUS,
           }
-        : isMcpServerDisabled(_)
+        : isMcpServerDisabled(name)
           ? {
               status: DISABLED_FOR_PROJECT_STATUS,
             }
-          : await checkMcpServerHealth(_, g, o);
+          : await checkMcpServerHealth(name, config, storage);
       return {
-        name: _,
-        server: displayServerConfigs[_] ?? redactServerConfig(g),
+        name,
+        server: displayServerConfigs[name] ?? redactServerConfig(config),
         status: args.status,
         ...(args.issue !== undefined && {
           issue: args.issue,
@@ -488,8 +512,8 @@ async function mcpListHandler(m, o, credentials) {
       concurrency: mcpClientModule_4().getMcpServerConnectionBatchSize(),
     },
   );
-  m.render(
-    jsxProd_default(fo, {
+  root.render(
+    jsxProd_default(suspenseTypeExport, {
       fallback: jsxProd_default_2(Text, {
         children: [
           "Checking MCP server health\u2026",
@@ -504,23 +528,23 @@ async function mcpListHandler(m, o, credentials) {
           jsxProd_default(ServerStatusList, {
             promise,
           }),
-          a,
+          warnings,
         ],
       }),
     }),
   );
-  await m.waitUntilExit();
+  await root.waitUntilExit();
   await gracefulShutdown(0);
 }
 //@ chunk-h2rjy0z4.js:25903-28016 fingerprint = mcpGetHandler (0.567)
 /**
  * claude mcp get <name>：单个服务器的配置、作用域与连接状态（密钥脱敏）。
  */
-async function mcpGetHandler(m, o, p, credentials) {
+async function mcpGetHandler(root, name, storage, credentials) {
   await logEventAsync("tengu_mcp_get", {
     name: mcpNameForAnalytics_GATE_EVALUATED(
-      o,
-      isMcpServerLoggableInAnalytics(o, getSettingsMcpConfigByName(o) ?? undefined),
+      name,
+      isMcpServerLoggableInAnalytics(name, getSettingsMcpConfigByName(name) ?? undefined),
     ),
   });
   await awaitMcpPolicyColdStart({
@@ -529,101 +553,106 @@ async function mcpGetHandler(m, o, p, credentials) {
   let { servers, pendingProjectServers, rejectedProjectServers } = await getAllMcpConfigs({
     includePendingProjectServers: true,
     includeRejectedProjectServers: true,
-    storageV5: p,
+    storageV5: storage,
     credentials,
   });
-  let config = servers[o] ?? null;
-  let _ = pendingProjectServers.has(o) ? "pending" : rejectedProjectServers.has(o) ? "rejected" : null;
+  let config = servers[name] ?? null;
+  let projectState = pendingProjectServers.has(name)
+    ? "pending"
+    : rejectedProjectServers.has(name)
+      ? "rejected"
+      : null;
   if (!config) {
     await logFeatureBadAsync("cli_mcp_get", "cli_mcp_get_not_found");
-    let filtered = Object.keys(servers).filter(
+    let knownNames = Object.keys(servers).filter(
       (key) => !pendingProjectServers.has(key) && !rejectedProjectServers.has(key),
     );
     return cliErrorAfterAnalyticsFlush(
-      formatMcpServerNotFoundMessage(o, filtered, pendingProjectServers.size > 0),
+      formatMcpServerNotFoundMessage(name, knownNames, pendingProjectServers.size > 0),
     );
   }
-  let g =
-    _ === "pending"
+  let health =
+    projectState === "pending"
       ? {
           status: PENDING_APPROVAL_STATUS,
         }
-      : _ === "rejected"
+      : projectState === "rejected"
         ? {
             status: REJECTED_STATUS,
           }
-        : isMcpServerDisabled(o)
+        : isMcpServerDisabled(name)
           ? {
               status: DISABLED_FOR_PROJECT_STATUS,
             }
-          : await checkMcpServerHealth(o, config, p);
+          : await checkMcpServerHealth(name, config, storage);
   let config_2 =
     isStdioConfig(config) && !MCP_SETTINGS_SCOPE_SET.has(config.scope)
       ? redactServerConfig(config)
       : (toDisplayServerConfigs({
-          [o]: config,
-        })[o] ?? redactServerConfig(config));
-  let x = [
-    `${o}:`,
+          [name]: config,
+        })[name] ?? redactServerConfig(config));
+  let lines = [
+    `${name}:`,
     `  Scope: ${getScopeLabel(config.scope)}`,
-    `  Status: ${g.status}`,
-    ...(g.issue ? [`  Issue: ${g.issue}`] : []),
+    `  Status: ${health.status}`,
+    ...(health.issue ? [`  Issue: ${health.issue}`] : []),
   ];
   if (isRemoteTransport(config) && isRemoteTransport(config_2)) {
-    x.push(`  Type: ${config.type}`);
-    x.push(`  URL: ${config_2.url}`);
+    lines.push(`  Type: ${config.type}`);
+    lines.push(`  URL: ${config_2.url}`);
     if (config_2.headers) {
-      x.push("  Headers:");
-      for (let [key, value] of Object.entries(config_2.headers)) x.push(`    ${key}: ${value}`);
+      lines.push("  Headers:");
+      for (let [key, value] of Object.entries(config_2.headers)) lines.push(`    ${key}: ${value}`);
     }
     if (config.type !== "ws" && (config.oauth?.clientId || config.oauth?.callbackPort)) {
-      let E = [];
+      let oauthParts = [];
       if (config.oauth.clientId) {
-        E.push("client_id configured");
-        if ((await mcpAuthModule().getMcpClientConfig(o, config))?.clientSecret)
-          E.push("client_secret configured");
+        oauthParts.push("client_id configured");
+        if ((await mcpAuthModule().getMcpClientConfig(name, config))?.clientSecret)
+          oauthParts.push("client_secret configured");
       }
-      if (config.oauth.callbackPort) E.push(`callback_port ${config.oauth.callbackPort}`);
-      x.push(`  OAuth: ${E.join(", ")}`);
+      if (config.oauth.callbackPort) oauthParts.push(`callback_port ${config.oauth.callbackPort}`);
+      lines.push(`  OAuth: ${oauthParts.join(", ")}`);
     }
   } else if (isStdioConfig(config) && isStdioConfig(config_2)) {
-    x.push("  Type: stdio");
-    x.push(`  Command: ${config_2.command}`);
+    lines.push("  Type: stdio");
+    lines.push(`  Command: ${config_2.command}`);
     let args = Array.isArray(config_2.args) ? config_2.args : [];
-    x.push(`  Args: ${args.join(" ")}`);
+    lines.push(`  Args: ${args.join(" ")}`);
     if (config_2.env) {
-      x.push("  Environment:");
-      for (let [key, value] of Object.entries(config_2.env)) x.push(`    ${key}=${value}`);
+      lines.push("  Environment:");
+      for (let [key, value] of Object.entries(config_2.env)) lines.push(`    ${key}=${value}`);
     }
   }
   if (config.timeout !== undefined)
-    x.push(
+    lines.push(
       `  Timeout: ${config.timeout}ms${config.timeout < 1000 ? " (ignored: below 1000ms minimum)" : ""}`,
     );
-  let M =
+  let removeCommand =
     config.scope === "local" || config.scope === "project" || config.scope === "user"
-      ? claudeCommand("mcp remove", o, `-s ${config.scope}`)
+      ? claudeCommand("mcp remove", name, `-s ${config.scope}`)
       : null;
-  let N = null;
-  if (M) N = `To remove this server, run: ${M}`;
+  let removeHint = null;
+  if (removeCommand) removeHint = `To remove this server, run: ${removeCommand}`;
   else if (
     config.scope === "user" ||
     config.scope === "project" ||
     config.scope === "local" ||
     config.scope === "enterprise"
   )
-    N = `To remove this server, edit ${describeMcpConfigFilePath(config.scope)}`;
+    removeHint = `To remove this server, edit ${describeMcpConfigFilePath(config.scope)}`;
   else if (config.scope === "managed")
-    N = "This server is provided by your organization's managed settings and cannot be removed locally.";
-  if (N) {
-    x.push("");
-    x.push(N);
+    removeHint =
+      "This server is provided by your organization's managed settings and cannot be removed locally.";
+  if (removeHint) {
+    lines.push("");
+    lines.push(removeHint);
   }
   await logFeatureOkAsync("cli_mcp_get");
   await renderAndRun(
-    m,
+    root,
     jsxProd_default(Text, {
-      children: x.map(replaceControlChars).join(`
+      children: lines.map(replaceControlChars).join(`
 `),
     }),
   );
@@ -633,18 +662,18 @@ async function mcpGetHandler(m, o, p, credentials) {
 /**
  * claude mcp add-json：从 JSON 添加服务器（可带 client secret）。
  */
-async function mcpAddJsonHandler(m, o, p, u, l) {
-  let a;
-  let f;
+async function mcpAddJsonHandler(root, name, json, options, storage) {
+  let scope;
+  let type;
   try {
-    a = ensureConfigScope(u.scope);
-    let parsedJson = safeParseJSON(p, false);
+    scope = ensureConfigScope(options.scope);
+    let parsedJson = safeParseJSON(json, false);
     if (parsedJson === null)
       logForDebugging("mcp add-json: user-provided JSON was empty, invalid, or null", {
         level: "error",
       });
-    let g =
-      u.clientSecret &&
+    let clientSecret =
+      options.clientSecret &&
       parsedJson &&
       typeof parsedJson === "object" &&
       "type" in parsedJson &&
@@ -657,11 +686,11 @@ async function mcpAddJsonHandler(m, o, p, u, l) {
       "clientId" in parsedJson.oauth
         ? await mcpAuthModule().readClientSecret()
         : undefined;
-    await addMcpConfig(o, parsedJson, a, l);
-    let v = McpServerConfigSchema().safeParse(parsedJson);
-    f = (v.success ? v.data.type : undefined) ?? "stdio";
+    await addMcpConfig(name, parsedJson, scope, storage);
+    let parsedServer = McpServerConfigSchema().safeParse(parsedJson);
+    type = (parsedServer.success ? parsedServer.data.type : undefined) ?? "stdio";
     if (
-      g &&
+      clientSecret &&
       parsedJson &&
       typeof parsedJson === "object" &&
       "type" in parsedJson &&
@@ -669,25 +698,25 @@ async function mcpAddJsonHandler(m, o, p, u, l) {
       "url" in parsedJson &&
       typeof parsedJson.url === "string"
     ) {
-      let R = await mcpAuthModule().saveMcpClientSecret(
-        o,
+      let storeResult = await mcpAuthModule().saveMcpClientSecret(
+        name,
         {
           type: parsedJson.type === "sse" ? "sse" : "http",
           url: parsedJson.url,
         },
-        g,
+        clientSecret,
       );
-      if (!R.success)
+      if (!storeResult.success)
         process.stderr
-          .write(`Server added, but the client secret could not be stored${R.warning ? ` (${R.warning})` : ""}. Re-run with --client-secret once secure storage is available.
+          .write(`Server added, but the client secret could not be stored${storeResult.warning ? ` (${storeResult.warning})` : ""}. Re-run with --client-secret once secure storage is available.
 `);
     }
-    let h = a;
-    let x = f;
+    let loggedScope = scope;
+    let loggedType = type;
     await logEventAsync("tengu_mcp_add", {
-      scope: fromEnum(h),
+      scope: fromEnum(loggedScope),
       source: lit("json"),
-      type: fromEnum(x),
+      type: fromEnum(loggedType),
     });
   } catch (error) {
     await logFeatureBadAsync("cli_mcp_add_json", "cli_mcp_add_json_failed");
@@ -695,9 +724,9 @@ async function mcpAddJsonHandler(m, o, p, u, l) {
   }
   await logFeatureOkAsync("cli_mcp_add_json");
   await renderAndRun(
-    m,
+    root,
     jsxProd_default_2(Text, {
-      children: ["Added ", f, " MCP server ", o, " to ", a, " config"],
+      children: ["Added ", type, " MCP server ", name, " to ", scope, " config"],
     }),
   );
 }
@@ -714,7 +743,7 @@ async function mcpAddFromDesktopHandler(options, storageV5) {
       platform: fromEnum(platform),
       source: lit("desktop"),
     });
-    let { readClaudeDesktopMcpServers } = await import("./chunk-2sv0rqj8.js");
+    let { readClaudeDesktopMcpServers } = await import("../../utils/claudeDesktop.js");
     let servers = await readClaudeDesktopMcpServers();
     if (Object.keys(servers).length === 0) {
       await logFeatureOkAsync("cli_mcp_add_from_desktop");
@@ -748,12 +777,12 @@ async function mcpAddFromDesktopHandler(options, storageV5) {
 /**
  * claude mcp reset-project-choices：重置 .mcp.json 项目服务器的批准/拒绝记录。
  */
-async function mcpResetChoicesHandler(m, root) {
+async function mcpResetChoicesHandler(root, store) {
   await logEventAsync("tengu_mcp_reset_mcpjson_choices", {});
   if (
     !(await deleteCurrentProjectConfigFields(
       ["enabledMcpjsonServers", "disabledMcpjsonServers", "enableAllProjectMcpServers"],
-      root,
+      store,
     ))
   ) {
     printCliError(
@@ -787,7 +816,7 @@ async function mcpResetChoicesHandler(m, root) {
         enableAllProjectMcpServers: undefined,
       },
       undefined,
-      root,
+      store,
     );
     if (error) {
       printCliError(
@@ -799,30 +828,30 @@ async function mcpResetChoicesHandler(m, root) {
     }
   }
   await logFeatureOkAsync("cli_mcp_reset_choices");
-  let a = null;
+  let disclosure = null;
   try {
-    let f = isRestrictedToPluginOnly("mcp");
+    let isPluginOnly = isRestrictedToPluginOnly("mcp");
     if (!doesEnterpriseMcpConfigExist()) {
-      let { serverNames, pluginServerNames, rootServers } = await collectProjectMcpServerNames(root);
-      let v = (current) => formatMcpServerLabel(current, pluginServerNames.has(current));
-      let h = [];
-      let x = [];
-      let R = 0;
+      let { serverNames, pluginServerNames, rootServers } = await collectProjectMcpServerNames(store);
+      let label = (current) => formatMcpServerLabel(current, pluginServerNames.has(current));
+      let approved = [];
+      let rejected = [];
+      let pendingCount = 0;
       for (let serverName of serverNames) {
-        if (f && !pluginServerNames.has(serverName)) continue;
+        if (isPluginOnly && !pluginServerNames.has(serverName)) continue;
         let projectMcpServerStatus = getProjectMcpServerStatus(serverName);
         if (projectMcpServerStatus === "approved") {
           if (isMcpServerDisabled(serverName)) continue;
-          let E = rootServers[serverName];
-          if (E && !isMcpServerAllowedByPolicy(serverName, E)) continue;
-          h.push(v(serverName));
-        } else if (projectMcpServerStatus === "rejected") x.push(v(serverName));
-        else R++;
+          let serverConfig = rootServers[serverName];
+          if (serverConfig && !isMcpServerAllowedByPolicy(serverName, serverConfig)) continue;
+          approved.push(label(serverName));
+        } else if (projectMcpServerStatus === "rejected") rejected.push(label(serverName));
+        else pendingCount++;
       }
-      a = {
-        autoApprovedServers: h,
-        stillRejectedServers: x,
-        pendingCount: R,
+      disclosure = {
+        autoApprovedServers: approved,
+        stillRejectedServers: rejected,
+        pendingCount,
         gatingErrors: blockingSettingsErrors().length,
       };
     }
@@ -830,9 +859,9 @@ async function mcpResetChoicesHandler(m, root) {
     logForDebugging(`mcp reset-project-choices: post-reset disclosure scan failed: ${errorMessage(error)}`, {
       level: "warn",
     });
-    a = null;
+    disclosure = null;
   }
-  m.render(
+  root.render(
     jsxProd_default(RenderOnceAndExit, {
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
@@ -841,27 +870,27 @@ async function mcpResetChoicesHandler(m, root) {
             children:
               "Project-scoped (.mcp.json) server approvals and rejections stored for this project have been reset.",
           }),
-          a &&
-            a.autoApprovedServers.length > 0 &&
+          disclosure &&
+            disclosure.autoApprovedServers.length > 0 &&
             jsxProd_default(Text, {
               children: describeServerList(
-                a.autoApprovedServers,
+                disclosure.autoApprovedServers,
                 "is still approved by other settings and will connect automatically without prompting.",
                 "are still approved by other settings and will connect automatically without prompting.",
               ),
             }),
-          a &&
-            a.stillRejectedServers.length > 0 &&
+          disclosure &&
+            disclosure.stillRejectedServers.length > 0 &&
             jsxProd_default(Text, {
               children: describeServerList(
-                a.stillRejectedServers,
+                disclosure.stillRejectedServers,
                 "remains rejected by other settings and will not prompt.",
                 "remain rejected by other settings and will not prompt.",
               ),
             }),
-          a &&
-            a.pendingCount > 0 &&
-            (a.gatingErrors > 0
+          disclosure &&
+            disclosure.pendingCount > 0 &&
+            (disclosure.gatingErrors > 0
               ? jsxProd_default(Text, {
                   children:
                     "Settings errors are currently blocking the approval prompt \u2014 run `claude doctor` to list them, fix them, then restart Claude Code to be prompted.",
@@ -873,11 +902,13 @@ async function mcpResetChoicesHandler(m, root) {
       }),
     }),
   );
-  await m.waitUntilExit();
+  await root.waitUntilExit();
 }
 //@ chunk-h2rjy0z4.js:32744-32854 affinity
-function describeServerList(m, o, p) {
-  return m.length === 1 ? `1 server (${m[0]}) ${o}` : `${m.length} servers (${m.join(", ")}) ${p}`;
+function describeServerList(names, singleVerb, pluralVerb) {
+  return names.length === 1
+    ? `1 server (${names[0]}) ${singleVerb}`
+    : `${names.length} servers (${names.join(", ")}) ${pluralVerb}`;
 }
 //@ chunk-h2rjy0z4.js:32854-33032 affinity = expandEnvVars (0.913)
 function isRemoteTransport(config) {
@@ -897,12 +928,12 @@ function isRemoteTransport(config) {
       return false;
   }
 }
-//@ chunk-dcmhvw5a.js:71956-72082 fingerprint = checkMcpServerHealth (0.518)
-/**
- * checkMcpServerHealth（实为缓存行可被替换判定）：cached 行在已有 connected/disabled/needs-auth 时不覆盖。
- */
-function checkMcpServerHealth_2(name, server) {
-  if (server.type !== "cached" || !name) return true;
-  return !(name.type === "connected" || name.type === "disabled" || name.type === "needs-auth");
-}
-export { checkMcpServerHealth_2 };
+export {
+  checkMcpServerHealth_2,
+  mcpAddFromDesktopHandler,
+  mcpAddJsonHandler,
+  mcpGetHandler,
+  mcpListHandler,
+  mcpRemoveHandler,
+  mcpResetChoicesHandler,
+};

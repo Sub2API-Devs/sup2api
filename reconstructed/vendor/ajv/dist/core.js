@@ -5,8 +5,7 @@
  * pieces: chunk-r1g76qsy.js (1), chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 2
  */
-import { J } from "../../@modelcontextprotocol/core/(bundler runtime of a pre-bundled dist file).js";
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_validate_2 } from "./compile/validate/index.js";
 import { require_codegen_2 } from "./compile/codegen/index.js";
 import { require_validation_error_2 } from "./runtime/validation_error.js";
@@ -18,9 +17,658 @@ import { require_dataType_2 } from "./compile/validate/dataType.js";
 import { require_util_2 } from "./compile/util.js";
 import { require_data_2 } from "./refs/data.json.js";
 import { require_uri_2 } from "./runtime/uri.js";
+import { initModule } from "../../@modelcontextprotocol/core/(bundler runtime of a pre-bundled dist file).js";
 
+//@ chunk-s82q9s4x.js:68784-81111 cjs-fingerprint
+var require_core_2 = __commonJS(function (cjsExports) {
+  Object.defineProperty(cjsExports, "__esModule", {
+    value: true,
+  });
+  cjsExports.CodeGen =
+    cjsExports.Name =
+    cjsExports.nil =
+    cjsExports.stringify =
+    cjsExports.str =
+    cjsExports._ =
+    cjsExports.KeywordCxt =
+      undefined;
+  var validate_1 = require_validate_2();
+  Object.defineProperty(cjsExports, "KeywordCxt", {
+    enumerable: true,
+    get: function () {
+      return validate_1.KeywordCxt;
+    },
+  });
+  var codegen_1 = require_codegen_2();
+  Object.defineProperty(cjsExports, "_", {
+    enumerable: true,
+    get: function () {
+      return codegen_1._;
+    },
+  });
+  Object.defineProperty(cjsExports, "str", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.str;
+    },
+  });
+  Object.defineProperty(cjsExports, "stringify", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.stringify;
+    },
+  });
+  Object.defineProperty(cjsExports, "nil", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.nil;
+    },
+  });
+  Object.defineProperty(cjsExports, "Name", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.Name;
+    },
+  });
+  Object.defineProperty(cjsExports, "CodeGen", {
+    enumerable: true,
+    get: function () {
+      return codegen_1.CodeGen;
+    },
+  });
+  var validation_error_1 = require_validation_error_2();
+  var ref_error_1 = require_ref_error_2();
+  var rules_1 = require_rules_2();
+  var compile_1 = require_compile_2();
+  var codegen_2 = require_codegen_2();
+  var resolve_1 = require_resolve_2();
+  var dataType_1 = require_dataType_2();
+  var util_1 = require_util_2();
+  var $dataRefSchema = require_data_2();
+  var uri_1 = require_uri_2();
+  var defaultRegExp = (str, flags) => new RegExp(str, flags);
+  defaultRegExp.code = "new RegExp";
+  var META_IGNORE_OPTIONS = ["removeAdditional", "useDefaults", "coerceTypes"];
+  var EXT_SCOPE_NAMES = new Set([
+    "validate",
+    "serialize",
+    "parse",
+    "wrapper",
+    "root",
+    "schema",
+    "keyword",
+    "pattern",
+    "formats",
+    "validate$data",
+    "func",
+    "obj",
+    "Error",
+  ]);
+  var removedOptions = {
+    errorDataPath: "",
+    format: "`validateFormats: false` can be used instead.",
+    nullable: '"nullable" keyword is supported by default.',
+    jsonPointers: "Deprecated jsPropertySyntax can be used instead.",
+    extendRefs: "Deprecated ignoreKeywordsWithRef can be used instead.",
+    missingRefs: "Pass empty schema with $id that should be ignored to ajv.addSchema.",
+    processCode: "Use option `code: {process: (code, schemaEnv: object) => string}`",
+    sourceCode: "Use option `code: {source: true}`",
+    strictDefaults: "It is default now, see option `strict`.",
+    strictKeywords: "It is default now, see option `strict`.",
+    uniqueItems: '"uniqueItems" keyword is always validated.',
+    unknownFormats: "Disable strict mode or pass `true` to `ajv.addFormat` (or `formats` option).",
+    cache: "Map is used as cache, schema object as key.",
+    serialize: "Map is used as cache, schema object as key.",
+    ajvErrors: "It is default now.",
+  };
+  var deprecatedOptions = {
+    ignoreKeywordsWithRef: "",
+    jsPropertySyntax: "",
+    unicode: '"minLength"/"maxLength" account for unicode characters by default.',
+  };
+  var MAX_EXPRESSION = 200;
+  function requiredOptions(o_2) {
+    var _a;
+    var _b;
+    var _c;
+    var _d;
+    var _e;
+    var _f;
+    var _g;
+    var _h;
+    var _j;
+    var _k;
+    var _l;
+    var _m;
+    var _o;
+    var _p;
+    var _q;
+    var _r;
+    var _s;
+    var _t;
+    var _u;
+    var _v;
+    var _w;
+    var _x;
+    var _y;
+    var _z;
+    var _0;
+    let s = o_2.strict;
+    let _optz = (_a = o_2.code) === null || _a === undefined ? undefined : _a.optimize;
+    let optimize = _optz === true || _optz === undefined ? 1 : _optz || 0;
+    let regExp =
+      (_c = (_b = o_2.code) === null || _b === undefined ? undefined : _b.regExp) !== null && _c !== undefined
+        ? _c
+        : defaultRegExp;
+    let uriResolver = (_d = o_2.uriResolver) !== null && _d !== undefined ? _d : uri_1.default;
+    return {
+      strictSchema:
+        (_f = (_e = o_2.strictSchema) !== null && _e !== undefined ? _e : s) !== null && _f !== undefined
+          ? _f
+          : true,
+      strictNumbers:
+        (_h = (_g = o_2.strictNumbers) !== null && _g !== undefined ? _g : s) !== null && _h !== undefined
+          ? _h
+          : true,
+      strictTypes:
+        (_k = (_j = o_2.strictTypes) !== null && _j !== undefined ? _j : s) !== null && _k !== undefined
+          ? _k
+          : "log",
+      strictTuples:
+        (_m = (_l = o_2.strictTuples) !== null && _l !== undefined ? _l : s) !== null && _m !== undefined
+          ? _m
+          : "log",
+      strictRequired:
+        (_p = (_o = o_2.strictRequired) !== null && _o !== undefined ? _o : s) !== null && _p !== undefined
+          ? _p
+          : false,
+      code: o_2.code
+        ? {
+            ...o_2.code,
+            optimize,
+            regExp,
+          }
+        : {
+            optimize,
+            regExp,
+          },
+      loopRequired: (_q = o_2.loopRequired) !== null && _q !== undefined ? _q : MAX_EXPRESSION,
+      loopEnum: (_r = o_2.loopEnum) !== null && _r !== undefined ? _r : MAX_EXPRESSION,
+      meta: (_s = o_2.meta) !== null && _s !== undefined ? _s : true,
+      messages: (_t = o_2.messages) !== null && _t !== undefined ? _t : true,
+      inlineRefs: (_u = o_2.inlineRefs) !== null && _u !== undefined ? _u : true,
+      schemaId: (_v = o_2.schemaId) !== null && _v !== undefined ? _v : "$id",
+      addUsedSchema: (_w = o_2.addUsedSchema) !== null && _w !== undefined ? _w : true,
+      validateSchema: (_x = o_2.validateSchema) !== null && _x !== undefined ? _x : true,
+      validateFormats: (_y = o_2.validateFormats) !== null && _y !== undefined ? _y : true,
+      unicodeRegExp: (_z = o_2.unicodeRegExp) !== null && _z !== undefined ? _z : true,
+      int32range: (_0 = o_2.int32range) !== null && _0 !== undefined ? _0 : true,
+      uriResolver,
+    };
+  }
+  class Ajv {
+    constructor(opts = {}) {
+      this.schemas = {};
+      this.refs = {};
+      this.formats = {};
+      this._compilations = new Set();
+      this._loading = {};
+      this._cache = new Map();
+      opts = this.opts = {
+        ...opts,
+        ...requiredOptions(opts),
+      };
+      let { es5, lines } = this.opts.code;
+      this.scope = new codegen_2.ValueScope({
+        scope: {},
+        prefixes: EXT_SCOPE_NAMES,
+        es5,
+        lines,
+      });
+      this.logger = getLogger(opts.logger);
+      let formatOpt = opts.validateFormats;
+      opts.validateFormats = false;
+      this.RULES = rules_1.getRules();
+      checkOptions.call(this, removedOptions, opts, "NOT SUPPORTED");
+      checkOptions.call(this, deprecatedOptions, opts, "DEPRECATED", "warn");
+      this._metaOpts = getMetaSchemaOptions.call(this);
+      if (opts.formats) addInitialFormats.call(this);
+      this._addVocabularies();
+      this._addDefaultMetaSchema();
+      if (opts.keywords) addInitialKeywords.call(this, opts.keywords);
+      if (typeof opts.meta == "object") this.addMetaSchema(opts.meta);
+      addInitialSchemas.call(this);
+      opts.validateFormats = formatOpt;
+    }
+    _addVocabularies() {
+      this.addKeyword("$async");
+    }
+    _addDefaultMetaSchema() {
+      let { $data, meta, schemaId } = this.opts;
+      let _dataRefSchema = $dataRefSchema;
+      if (schemaId === "id") {
+        _dataRefSchema = {
+          ...$dataRefSchema,
+        };
+        _dataRefSchema.id = _dataRefSchema.$id;
+        delete _dataRefSchema.$id;
+      }
+      if (meta && $data) this.addMetaSchema(_dataRefSchema, _dataRefSchema[schemaId], false);
+    }
+    defaultMeta() {
+      let { meta, schemaId } = this.opts;
+      return (this.opts.defaultMeta = typeof meta == "object" ? meta[schemaId] || meta : undefined);
+    }
+    validate(schemaKeyRef, data) {
+      let v;
+      if (typeof schemaKeyRef == "string") {
+        v = this.getSchema(schemaKeyRef);
+        if (!v) throw Error(`no schema with key or ref "${schemaKeyRef}"`);
+      } else v = this.compile(schemaKeyRef);
+      let valid = v(data);
+      if (!("$async" in v)) this.errors = v.errors;
+      return valid;
+    }
+    compile(schema, _meta) {
+      let sch = this._addSchema(schema, _meta);
+      return sch.validate || this._compileSchemaEnv(sch);
+    }
+    compileAsync(schema, meta) {
+      if (typeof this.opts.loadSchema != "function") throw Error("options.loadSchema should be a function");
+      let { loadSchema } = this.opts;
+      return runCompileAsync.call(this, schema, meta);
+      async function runCompileAsync(_schema, _meta) {
+        await loadMetaSchema.call(this, _schema.$schema);
+        let sch = this._addSchema(_schema, _meta);
+        return sch.validate || _compileAsync.call(this, sch);
+      }
+      async function loadMetaSchema($ref) {
+        if ($ref && !this.getSchema($ref))
+          await runCompileAsync.call(
+            this,
+            {
+              $ref,
+            },
+            true,
+          );
+      }
+      async function _compileAsync(sch) {
+        try {
+          return this._compileSchemaEnv(sch);
+        } catch (e) {
+          if (!(e instanceof ref_error_1.default)) throw e;
+          checkLoaded.call(this, e);
+          await loadMissingSchema.call(this, e.missingSchema);
+          return _compileAsync.call(this, sch);
+        }
+      }
+      function checkLoaded({ missingSchema: ref, missingRef }) {
+        if (this.refs[ref]) throw Error(`AnySchema ${ref} is loaded but ${missingRef} cannot be resolved`);
+      }
+      async function loadMissingSchema(ref) {
+        let _schema = await _loadSchema.call(this, ref);
+        if (!this.refs[ref]) await loadMetaSchema.call(this, _schema.$schema);
+        if (!this.refs[ref]) this.addSchema(_schema, ref, meta);
+      }
+      async function _loadSchema(ref) {
+        let p = this._loading[ref];
+        if (p) return p;
+        try {
+          return await (this._loading[ref] = loadSchema(ref));
+        } finally {
+          delete this._loading[ref];
+        }
+      }
+    }
+    addSchema(schema, key, _meta, _validateSchema = this.opts.validateSchema) {
+      if (Array.isArray(schema)) {
+        for (let sch of schema) this.addSchema(sch, undefined, _meta, _validateSchema);
+        return this;
+      }
+      let id;
+      if (typeof schema === "object") {
+        let { schemaId } = this.opts;
+        id = schema[schemaId];
+        if (id !== undefined && typeof id != "string") throw Error(`schema ${schemaId} must be string`);
+      }
+      key = resolve_1.normalizeId(key || id);
+      this._checkUnique(key);
+      this.schemas[key] = this._addSchema(schema, _meta, key, _validateSchema, true);
+      return this;
+    }
+    addMetaSchema(schema, key, _validateSchema = this.opts.validateSchema) {
+      this.addSchema(schema, key, true, _validateSchema);
+      return this;
+    }
+    validateSchema(schema, throwOrLogError) {
+      if (typeof schema == "boolean") return true;
+      let $schema;
+      $schema = schema.$schema;
+      if ($schema !== undefined && typeof $schema != "string") throw Error("$schema must be a string");
+      $schema = $schema || this.opts.defaultMeta || this.defaultMeta();
+      if (!$schema) {
+        this.logger.warn("meta-schema not available");
+        this.errors = null;
+        return true;
+      }
+      let valid = this.validate($schema, schema);
+      if (!valid && throwOrLogError) {
+        let message = "schema is invalid: " + this.errorsText();
+        if (this.opts.validateSchema === "log") this.logger.error(message);
+        else throw Error(message);
+      }
+      return valid;
+    }
+    getSchema(keyRef) {
+      let sch;
+      while (typeof (sch = getSchEnv.call(this, keyRef)) == "string") keyRef = sch;
+      if (sch === undefined) {
+        let { schemaId } = this.opts;
+        let root = new compile_1.SchemaEnv({
+          schema: {},
+          schemaId,
+        });
+        sch = compile_1.resolveSchema.call(this, root, keyRef);
+        if (!sch) return;
+        this.refs[keyRef] = sch;
+      }
+      return sch.validate || this._compileSchemaEnv(sch);
+    }
+    removeSchema(schemaKeyRef) {
+      if (schemaKeyRef instanceof RegExp) {
+        this._removeAllSchemas(this.schemas, schemaKeyRef);
+        this._removeAllSchemas(this.refs, schemaKeyRef);
+        return this;
+      }
+      switch (typeof schemaKeyRef) {
+        case "undefined":
+          this._removeAllSchemas(this.schemas);
+          this._removeAllSchemas(this.refs);
+          this._cache.clear();
+          return this;
+        case "string": {
+          let sch = getSchEnv.call(this, schemaKeyRef);
+          if (typeof sch == "object") this._cache.delete(sch.schema);
+          delete this.schemas[schemaKeyRef];
+          delete this.refs[schemaKeyRef];
+          return this;
+        }
+        case "object": {
+          let cacheKey = schemaKeyRef;
+          this._cache.delete(cacheKey);
+          let id = schemaKeyRef[this.opts.schemaId];
+          if (id) {
+            id = resolve_1.normalizeId(id);
+            delete this.schemas[id];
+            delete this.refs[id];
+          }
+          return this;
+        }
+        default:
+          throw Error("ajv.removeSchema: invalid parameter");
+      }
+    }
+    addVocabulary(definitions) {
+      for (let def of definitions) this.addKeyword(def);
+      return this;
+    }
+    addKeyword(kwdOrDef, def) {
+      let keyword;
+      if (typeof kwdOrDef == "string") {
+        keyword = kwdOrDef;
+        if (typeof def == "object") {
+          this.logger.warn("these parameters are deprecated, see docs for addKeyword");
+          def.keyword = keyword;
+        }
+      } else if (typeof kwdOrDef == "object" && def === undefined) {
+        def = kwdOrDef;
+        keyword = def.keyword;
+        if (Array.isArray(keyword) && !keyword.length)
+          throw Error("addKeywords: keyword must be string or non-empty array");
+      } else throw Error("invalid addKeywords parameters");
+      checkKeyword.call(this, keyword, def);
+      if (!def) {
+        util_1.eachItem(keyword, (kwd) => addRule.call(this, kwd));
+        return this;
+      }
+      keywordMetaschema.call(this, def);
+      let definition = {
+        ...def,
+        type: dataType_1.getJSONTypes(def.type),
+        schemaType: dataType_1.getJSONTypes(def.schemaType),
+      };
+      util_1.eachItem(
+        keyword,
+        definition.type.length === 0
+          ? (k) => addRule.call(this, k, definition)
+          : (k) => definition.type.forEach((t) => addRule.call(this, k, definition, t)),
+      );
+      return this;
+    }
+    getKeyword(keyword) {
+      let rule = this.RULES.all[keyword];
+      return typeof rule == "object" ? rule.definition : !!rule;
+    }
+    removeKeyword(keyword) {
+      let { RULES } = this;
+      delete RULES.keywords[keyword];
+      delete RULES.all[keyword];
+      for (let group of RULES.rules) {
+        let i = group.rules.findIndex((rule) => rule.keyword === keyword);
+        if (i >= 0) group.rules.splice(i, 1);
+      }
+      return this;
+    }
+    addFormat(name, format) {
+      if (typeof format == "string") format = new RegExp(format);
+      this.formats[name] = format;
+      return this;
+    }
+    errorsText(errors = this.errors, { separator = ", ", dataVar = "data" } = {}) {
+      if (!errors || errors.length === 0) return "No errors";
+      return errors
+        .map((e) => `${dataVar}${e.instancePath} ${e.message}`)
+        .reduce((text, msg) => text + separator + msg);
+    }
+    $dataMetaSchema(metaSchema, keywordsJsonPointers) {
+      let rules = this.RULES.all;
+      metaSchema = JSON.parse(JSON.stringify(metaSchema));
+      for (let jsonPointer of keywordsJsonPointers) {
+        let segments = jsonPointer.split("/").slice(1);
+        let keywords = metaSchema;
+        for (let seg of segments) keywords = keywords[seg];
+        for (let key in rules) {
+          let rule = rules[key];
+          if (typeof rule != "object") continue;
+          let { $data } = rule.definition;
+          let schema = keywords[key];
+          if ($data && schema) keywords[key] = schemaOrData(schema);
+        }
+      }
+      return metaSchema;
+    }
+    _removeAllSchemas(schemas, regex) {
+      for (let keyRef in schemas) {
+        let sch = schemas[keyRef];
+        if (!regex || regex.test(keyRef)) {
+          if (typeof sch == "string") delete schemas[keyRef];
+          else if (sch && !sch.meta) {
+            this._cache.delete(sch.schema);
+            delete schemas[keyRef];
+          }
+        }
+      }
+    }
+    _addSchema(
+      schema,
+      meta,
+      baseId,
+      validateSchema = this.opts.validateSchema,
+      addSchema = this.opts.addUsedSchema,
+    ) {
+      let id;
+      let { schemaId } = this.opts;
+      if (typeof schema == "object") id = schema[schemaId];
+      else if (this.opts.jtd) throw Error("schema must be object");
+      else if (typeof schema != "boolean") throw Error("schema must be object or boolean");
+      let sch = this._cache.get(schema);
+      if (sch !== undefined) return sch;
+      baseId = resolve_1.normalizeId(id || baseId);
+      let localRefs = resolve_1.getSchemaRefs.call(this, schema, baseId);
+      sch = new compile_1.SchemaEnv({
+        schema,
+        schemaId,
+        meta,
+        baseId,
+        localRefs,
+      });
+      this._cache.set(sch.schema, sch);
+      if (addSchema && !baseId.startsWith("#")) {
+        if (baseId) this._checkUnique(baseId);
+        this.refs[baseId] = sch;
+      }
+      if (validateSchema) this.validateSchema(schema, true);
+      return sch;
+    }
+    _checkUnique(id) {
+      if (this.schemas[id] || this.refs[id]) throw Error(`schema with key or id "${id}" already exists`);
+    }
+    _compileSchemaEnv(sch) {
+      if (sch.meta) this._compileMetaSchema(sch);
+      else compile_1.compileSchema.call(this, sch);
+      if (!sch.validate) throw Error("ajv implementation error");
+      return sch.validate;
+    }
+    _compileMetaSchema(sch) {
+      let currentOpts = this.opts;
+      this.opts = this._metaOpts;
+      try {
+        compile_1.compileSchema.call(this, sch);
+      } finally {
+        this.opts = currentOpts;
+      }
+    }
+  }
+  Ajv.ValidationError = validation_error_1.default;
+  Ajv.MissingRefError = ref_error_1.default;
+  cjsExports.default = Ajv;
+  function checkOptions(checkOpts, options, msg, log = "error") {
+    for (let key in checkOpts) {
+      let opt = key;
+      if (opt in options) this.logger[log](`${msg}: option ${key}. ${checkOpts[opt]}`);
+    }
+  }
+  function getSchEnv(keyRef) {
+    keyRef = resolve_1.normalizeId(keyRef);
+    return this.schemas[keyRef] || this.refs[keyRef];
+  }
+  function addInitialSchemas() {
+    let optsSchemas = this.opts.schemas;
+    if (!optsSchemas) return;
+    if (Array.isArray(optsSchemas)) this.addSchema(optsSchemas);
+    else for (let key in optsSchemas) this.addSchema(optsSchemas[key], key);
+  }
+  function addInitialFormats() {
+    for (let name in this.opts.formats) {
+      let format = this.opts.formats[name];
+      if (format) this.addFormat(name, format);
+    }
+  }
+  function addInitialKeywords(defs) {
+    if (Array.isArray(defs)) {
+      this.addVocabulary(defs);
+      return;
+    }
+    this.logger.warn("keywords option as map is deprecated, pass array");
+    for (let keyword in defs) {
+      let def = defs[keyword];
+      if (!def.keyword) def.keyword = keyword;
+      this.addKeyword(def);
+    }
+  }
+  function getMetaSchemaOptions() {
+    let metaOpts = {
+      ...this.opts,
+    };
+    for (let opt of META_IGNORE_OPTIONS) delete metaOpts[opt];
+    return metaOpts;
+  }
+  var noLogs = {
+    log() {},
+    warn() {},
+    error() {},
+  };
+  function getLogger(logger) {
+    if (logger === false) return noLogs;
+    if (logger === undefined) return console;
+    if (logger.log && logger.warn && logger.error) return logger;
+    throw Error("logger must implement log, warn and error methods");
+  }
+  var KEYWORD_NAME = /^[a-z_$][a-z0-9_$:-]*$/i;
+  function checkKeyword(keyword, def) {
+    let { RULES } = this;
+    util_1.eachItem(keyword, (kwd) => {
+      if (RULES.keywords[kwd]) throw Error(`Keyword ${kwd} is already defined`);
+      if (!KEYWORD_NAME.test(kwd)) throw Error(`Keyword ${kwd} has invalid name`);
+    });
+    if (!def) return;
+    if (def.$data && !("code" in def || "validate" in def))
+      throw Error('$data keyword must have "code" or "validate" function');
+  }
+  function addRule(keyword, definition, dataType) {
+    var _a;
+    let post = definition === null || definition === undefined ? undefined : definition.post;
+    if (dataType && post) throw Error('keyword with "post" flag cannot have "type"');
+    let { RULES } = this;
+    let ruleGroup = post ? RULES.post : RULES.rules.find(({ type: t }) => t === dataType);
+    if (!ruleGroup) {
+      ruleGroup = {
+        type: dataType,
+        rules: [],
+      };
+      RULES.rules.push(ruleGroup);
+    }
+    RULES.keywords[keyword] = true;
+    if (!definition) return;
+    let rule = {
+      keyword,
+      definition: {
+        ...definition,
+        type: dataType_1.getJSONTypes(definition.type),
+        schemaType: dataType_1.getJSONTypes(definition.schemaType),
+      },
+    };
+    if (definition.before) addBeforeRule.call(this, ruleGroup, rule, definition.before);
+    else ruleGroup.rules.push(rule);
+    RULES.all[keyword] = rule;
+    if (!((_a = definition.implements) === null || _a === undefined))
+      _a.forEach((kwd) => this.addKeyword(kwd));
+  }
+  function addBeforeRule(ruleGroup, rule, before) {
+    let i = ruleGroup.rules.findIndex((_rule) => _rule.keyword === before);
+    if (i >= 0) ruleGroup.rules.splice(i, 0, rule);
+    else {
+      ruleGroup.rules.push(rule);
+      this.logger.warn(`rule ${before} is not defined`);
+    }
+  }
+  function keywordMetaschema(def) {
+    let { metaSchema } = def;
+    if (metaSchema === undefined) return;
+    if (def.$data && this.opts.$data) metaSchema = schemaOrData(metaSchema);
+    def.validateSchema = this.compile(metaSchema, true);
+  }
+  var $dataRef = {
+    $ref: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
+  };
+  function schemaOrData(schema) {
+    return {
+      anyOf: [schema, $dataRef],
+    };
+  }
+});
 //@ chunk-r1g76qsy.js:118380-197840 cjs-fingerprint
-var require_code = J((cjsExports) => {
+var require_code = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -179,7 +827,7 @@ var require_code = J((cjsExports) => {
   }
   cjsExports.regexpCode = regexpCode;
 });
-var require_scope = J((cjsExports) => {
+var require_scope = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -335,7 +983,7 @@ var require_scope = J((cjsExports) => {
   };
   cjsExports.ValueScope = ValueScope;
 });
-var require_codegen = J((cjsExports) => {
+var require_codegen = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1053,7 +1701,7 @@ var require_codegen = J((cjsExports) => {
     return x instanceof code_1.Name ? x : code_1._`(${x})`;
   }
 });
-var require_util = J((cjsExports) => {
+var require_util = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1092,10 +1740,10 @@ var require_util = J((cjsExports) => {
   }
   cjsExports.alwaysValidSchema = alwaysValidSchema;
   function checkUnknownRules(it, schema = it.schema) {
-    let { opts, self: V } = it;
+    let { opts, self: ajvInstance } = it;
     if (!opts.strictSchema) return;
     if (typeof schema === "boolean") return;
-    let rules = V.RULES.keywords;
+    let rules = ajvInstance.RULES.keywords;
     for (let key in schema) if (!rules[key]) checkStrictMode(it, `unknown keyword: "${key}"`);
   }
   cjsExports.checkUnknownRules = checkUnknownRules;
@@ -1242,7 +1890,7 @@ var require_util = J((cjsExports) => {
   }
   cjsExports.checkStrictMode = checkStrictMode;
 });
-var require_names = J((cjsExports) => {
+var require_names = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1267,7 +1915,7 @@ var require_names = J((cjsExports) => {
   };
   cjsExports.default = names;
 });
-var require_errors = J((cjsExports) => {
+var require_errors = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1406,7 +2054,7 @@ var require_errors = J((cjsExports) => {
     if (propertyName) keyValues.push([E.propertyName, propertyName]);
   }
 });
-var require_boolSchema = J((cjsExports) => {
+var require_boolSchema = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1450,14 +2098,14 @@ var require_boolSchema = J((cjsExports) => {
     (0, errors_1.reportError)(cxt, boolError, undefined, overrideAllErrors);
   }
 });
-var require_rules = J((cjsExports) => {
+var require_rules = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.getRules = cjsExports.isJSONType = undefined;
-  let t = new Set(["string", "number", "integer", "boolean", "null", "object", "array"]);
+  let jsonTypes = new Set(["string", "number", "integer", "boolean", "null", "object", "array"]);
   function isJSONType(x) {
-    return typeof x == "string" && t.has(x);
+    return typeof x == "string" && jsonTypes.has(x);
   }
   cjsExports.isJSONType = isJSONType;
   function getRules() {
@@ -1504,13 +2152,13 @@ var require_rules = J((cjsExports) => {
   }
   cjsExports.getRules = getRules;
 });
-var require_applicability = J((cjsExports) => {
+var require_applicability = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
   cjsExports.shouldUseRule = cjsExports.shouldUseGroup = cjsExports.schemaHasRulesForType = undefined;
-  function schemaHasRulesForType({ schema, self: n }, type) {
-    let group = n.RULES.types[type];
+  function schemaHasRulesForType({ schema, self: ajvInstance }, type) {
+    let group = ajvInstance.RULES.types[type];
     return group && group !== true && shouldUseGroup(schema, group);
   }
   cjsExports.schemaHasRulesForType = schemaHasRulesForType;
@@ -1529,7 +2177,7 @@ var require_applicability = J((cjsExports) => {
   }
   cjsExports.shouldUseRule = shouldUseRule;
 });
-var require_dataType = J((cjsExports) => {
+var require_dataType = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1740,7 +2388,7 @@ var require_dataType = J((cjsExports) => {
     };
   }
 });
-var require_defaults = J((cjsExports) => {
+var require_defaults = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1769,7 +2417,7 @@ var require_defaults = J((cjsExports) => {
     gen.if(condition, codegen_1._`${childData} = ${(0, codegen_1.stringify)(defaultValue)}`);
   }
 });
-var require_code_2 = J((cjsExports) => {
+var require_code_2 = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -1918,7 +2566,7 @@ var require_code_2 = J((cjsExports) => {
   function validateUnion(cxt) {
     let { gen, schema, keyword, it } = cxt;
     if (!Array.isArray(schema)) throw Error("ajv implementation error");
-    if (schema.some((H) => (0, util_1.alwaysValidSchema)(it, H)) && !it.opts.unevaluated) return;
+    if (schema.some((sch) => (0, util_1.alwaysValidSchema)(it, sch)) && !it.opts.unevaluated) return;
     let valid = gen.let("valid", false);
     let schValid = gen.name("_valid");
     gen.block(() =>
@@ -1943,7 +2591,7 @@ var require_code_2 = J((cjsExports) => {
   }
   cjsExports.validateUnion = validateUnion;
 });
-var require_keyword = J((cjsExports) => {
+var require_keyword = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2082,7 +2730,7 @@ var require_keyword = J((cjsExports) => {
     );
   }
   cjsExports.validSchemaType = validSchemaType;
-  function validateKeywordUsage({ schema, opts, self: v, errSchemaPath }, def, keyword) {
+  function validateKeywordUsage({ schema, opts, self: ajvInstance, errSchemaPath }, def, keyword) {
     if (Array.isArray(def.keyword) ? !def.keyword.includes(keyword) : def.keyword !== keyword)
       throw Error("ajv implementation error");
     let deps = def.dependencies;
@@ -2096,15 +2744,15 @@ var require_keyword = J((cjsExports) => {
       if (!def.validateSchema(schema[keyword])) {
         let msg =
           `keyword "${keyword}" value is invalid at path "${errSchemaPath}": ` +
-          v.errorsText(def.validateSchema.errors);
-        if (opts.validateSchema === "log") v.logger.error(msg);
+          ajvInstance.errorsText(def.validateSchema.errors);
+        if (opts.validateSchema === "log") ajvInstance.logger.error(msg);
         else throw Error(msg);
       }
     }
   }
   cjsExports.validateKeywordUsage = validateKeywordUsage;
 });
-var require_subschema = J((cjsExports) => {
+var require_subschema = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2183,18 +2831,18 @@ var require_subschema = J((cjsExports) => {
   }
   cjsExports.extendSubschemaMode = extendSubschemaMode;
 });
-var require_fast_deep_equal = J((cjsExports, cjsModule) => {
+var require_fast_deep_equal = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = function equal(a_2, b) {
     if (a_2 === b) return true;
     if (a_2 && b && typeof a_2 == "object" && typeof b == "object") {
       if (a_2.constructor !== b.constructor) return false;
       var length;
-      var i;
+      var index;
       var keys;
       if (Array.isArray(a_2)) {
         length = a_2.length;
         if (length != b.length) return false;
-        for (i = length; i-- !== 0;) if (!equal(a_2[i], b[i])) return false;
+        for (index = length; index-- !== 0;) if (!equal(a_2[index], b[index])) return false;
         return true;
       }
       if (a_2.constructor === RegExp) return a_2.source === b.source && a_2.flags === b.flags;
@@ -2203,9 +2851,10 @@ var require_fast_deep_equal = J((cjsExports, cjsModule) => {
       keys = Object.keys(a_2);
       length = keys.length;
       if (length !== Object.keys(b).length) return false;
-      for (i = length; i-- !== 0;) if (!Object.prototype.hasOwnProperty.call(b, keys[i])) return false;
-      for (i = length; i-- !== 0;) {
-        var key = keys[i];
+      for (index = length; index-- !== 0;)
+        if (!Object.prototype.hasOwnProperty.call(b, keys[index])) return false;
+      for (index = length; index-- !== 0;) {
+        var key = keys[index];
         if (!equal(a_2[key], b[key])) return false;
       }
       return true;
@@ -2213,7 +2862,7 @@ var require_fast_deep_equal = J((cjsExports, cjsModule) => {
     return a_2 !== a_2 && b !== b;
   };
 });
-var require_json_schema_traverse = J((cjsExports, cjsModule) => {
+var require_json_schema_traverse = initModule((cjsExports, cjsModule) => {
   var traverse = (cjsModule.exports = function (schema, opts, cb) {
     if (typeof opts == "function") {
       cb = opts;
@@ -2324,7 +2973,7 @@ var require_json_schema_traverse = J((cjsExports, cjsModule) => {
     return str.replace(/~/g, "~0").replace(/\//g, "~1");
   }
 });
-var require_resolve = J((cjsExports) => {
+var require_resolve = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2390,8 +3039,8 @@ var require_resolve = J((cjsExports) => {
     return _getFullPath(uriResolver, uriResolver.parse(id));
   }
   cjsExports.getFullPath = getFullPath;
-  function _getFullPath(p, p_2) {
-    return p.serialize(p_2).split("#")[0] + "#";
+  function _getFullPath(uriResolver, p) {
+    return uriResolver.serialize(p).split("#")[0] + "#";
   }
   cjsExports._getFullPath = _getFullPath;
   let TRAILING_SLASH_HASH = /#\/?$/;
@@ -2461,7 +3110,7 @@ var require_resolve = J((cjsExports) => {
   }
   cjsExports.getSchemaRefs = getSchemaRefs;
 });
-var require_validate = J((cjsExports) => {
+var require_validate = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2582,9 +3231,9 @@ var require_validate = J((cjsExports) => {
     }
     (0, boolSchema_1.boolOrEmptySchema)(it, valid);
   }
-  function schemaCxtHasRules({ schema, self: D }) {
+  function schemaCxtHasRules({ schema, self: ajvInstance }) {
     if (typeof schema == "boolean") return !schema;
-    for (let key in schema) if (D.RULES.all[key]) return true;
+    for (let key in schema) if (ajvInstance.RULES.all[key]) return true;
     return false;
   }
   function isSchemaObj(it) {
@@ -2609,9 +3258,13 @@ var require_validate = J((cjsExports) => {
     schemaKeywords(it, types, !(0, dataType_1.coerceAndCheckDataType)(it, types), errsCount);
   }
   function checkRefsAndKeywords(it) {
-    let { schema, errSchemaPath, opts, self: Z } = it;
-    if (schema.$ref && opts.ignoreKeywordsWithRef && (0, util_1.schemaHasRulesButRef)(schema, Z.RULES))
-      Z.logger.warn(`$ref: keywords ignored in schema at path "${errSchemaPath}"`);
+    let { schema, errSchemaPath, opts, self: ajvInstance } = it;
+    if (
+      schema.$ref &&
+      opts.ignoreKeywordsWithRef &&
+      (0, util_1.schemaHasRulesButRef)(schema, ajvInstance.RULES)
+    )
+      ajvInstance.logger.warn(`$ref: keywords ignored in schema at path "${errSchemaPath}"`);
   }
   function checkNoDefault(it) {
     let { schema, opts } = it;
@@ -2655,8 +3308,8 @@ var require_validate = J((cjsExports) => {
     if (items instanceof codegen_1.Name) gen.assign(codegen_1._`${evaluated}.items`, items);
   }
   function schemaKeywords(it, types, typeErrors, errsCount) {
-    let { gen, schema, data, allErrors, opts, self: ge } = it;
-    let { RULES } = ge;
+    let { gen, schema, data, allErrors, opts, self: ajvInstance } = it;
+    let { RULES } = ajvInstance;
     if (schema.$ref && (opts.ignoreKeywordsWithRef || !(0, util_1.schemaHasRulesButRef)(schema, RULES))) {
       gen.block(() => keywordCode(it, "$ref", RULES.all.$ref.definition));
       return;
@@ -2942,7 +3595,7 @@ var require_validate = J((cjsExports) => {
   }
   cjsExports.getData = getData;
 });
-var require_validation_error = J((cjsExports) => {
+var require_validation_error = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2955,7 +3608,7 @@ var require_validation_error = J((cjsExports) => {
   };
   cjsExports.default = ValidationError;
 });
-var require_ref_error = J((cjsExports) => {
+var require_ref_error = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -2969,7 +3622,7 @@ var require_ref_error = J((cjsExports) => {
   };
   cjsExports.default = MissingRefError;
 });
-var require_compile = J((cjsExports) => {
+var require_compile = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -3214,7 +3867,7 @@ var require_compile = J((cjsExports) => {
     if (env.schema !== env.root.schema) return env;
   }
 });
-var require_data = J((cjsExports, cjsModule) => {
+var require_data = initModule((cjsExports, cjsModule) => {
   cjsModule.exports = {
     $id: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
     description: "Meta-schema for $data reference (JSON AnySchema extension proposal)",
@@ -3236,7 +3889,7 @@ var require_data = J((cjsExports, cjsModule) => {
     additionalProperties: false,
   };
 });
-var require_utils = J((cjsExports, cjsModule) => {
+var require_utils = initModule((cjsExports, cjsModule) => {
   let isUUID = RegExp.prototype.test.bind(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/iu);
   let isIPv4 = RegExp.prototype.test.bind(
     /^(?:(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d{2}|[1-9]\d|\d)$/u,
@@ -3458,7 +4111,7 @@ var require_utils = J((cjsExports, cjsModule) => {
     stringArrayToHexStripped,
   };
 });
-var require_schemes = J((cjsExports, cjsModule) => {
+var require_schemes = initModule((cjsExports, cjsModule) => {
   let { isUUID } = require_utils();
   let URN_REG = /([\da-z][\d\-a-z]{0,31}):((?:[\w!$'()*+,\-.:;=@]|%[\da-f]{2})+)/iu;
   let supportedSchemeNames = ["http", "https", "ws", "wss", "urn", "urn:uuid"];
@@ -3551,7 +4204,7 @@ var require_schemes = J((cjsExports, cjsModule) => {
     urnComponent.nss = (uuidComponent.uuid || "").toLowerCase();
     return urnComponent;
   }
-  let v = {
+  let httpComponent = {
     scheme: "http",
     domainHost: true,
     parse: httpParse,
@@ -3559,7 +4212,7 @@ var require_schemes = J((cjsExports, cjsModule) => {
   };
   let https = {
     scheme: "https",
-    domainHost: v.domainHost,
+    domainHost: httpComponent.domainHost,
     parse: httpParse,
     serialize: httpSerialize,
   };
@@ -3576,7 +4229,7 @@ var require_schemes = J((cjsExports, cjsModule) => {
     serialize: ws.serialize,
   };
   let SCHEMES = {
-    http: v,
+    http: httpComponent,
     https,
     ws,
     wss,
@@ -3604,7 +4257,7 @@ var require_schemes = J((cjsExports, cjsModule) => {
     getSchemeHandler,
   };
 });
-var require_fast_uri = J((cjsExports, cjsModule) => {
+var require_fast_uri = initModule((cjsExports, cjsModule) => {
   let {
     normalizeIPv6,
     removeDotSegments,
@@ -3842,7 +4495,7 @@ var require_fast_uri = J((cjsExports, cjsModule) => {
   cjsModule.exports.default = fastUri;
   cjsModule.exports.fastUri = fastUri;
 });
-var require_uri = J((cjsExports) => {
+var require_uri = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -3850,7 +4503,7 @@ var require_uri = J((cjsExports) => {
   uri.code = 'require("ajv/dist/runtime/uri").default';
   cjsExports.default = uri;
 });
-var require_core = J((cjsExports) => {
+var require_core = initModule((cjsExports) => {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -4489,654 +5142,6 @@ var require_core = J((cjsExports) => {
     def.validateSchema = this.compile(metaSchema, true);
   }
   let $dataRef = {
-    $ref: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
-  };
-  function schemaOrData(schema) {
-    return {
-      anyOf: [schema, $dataRef],
-    };
-  }
-});
-//@ chunk-s82q9s4x.js:68784-81111 cjs-fingerprint
-var require_core_2 = x(function (cjsExports) {
-  Object.defineProperty(cjsExports, "__esModule", {
-    value: true,
-  });
-  cjsExports.CodeGen =
-    cjsExports.Name =
-    cjsExports.nil =
-    cjsExports.stringify =
-    cjsExports.str =
-    cjsExports._ =
-    cjsExports.KeywordCxt =
-      undefined;
-  var validate_1 = require_validate_2();
-  Object.defineProperty(cjsExports, "KeywordCxt", {
-    enumerable: true,
-    get: function () {
-      return validate_1.KeywordCxt;
-    },
-  });
-  var codegen_1 = require_codegen_2();
-  Object.defineProperty(cjsExports, "_", {
-    enumerable: true,
-    get: function () {
-      return codegen_1._;
-    },
-  });
-  Object.defineProperty(cjsExports, "str", {
-    enumerable: true,
-    get: function () {
-      return codegen_1.str;
-    },
-  });
-  Object.defineProperty(cjsExports, "stringify", {
-    enumerable: true,
-    get: function () {
-      return codegen_1.stringify;
-    },
-  });
-  Object.defineProperty(cjsExports, "nil", {
-    enumerable: true,
-    get: function () {
-      return codegen_1.nil;
-    },
-  });
-  Object.defineProperty(cjsExports, "Name", {
-    enumerable: true,
-    get: function () {
-      return codegen_1.Name;
-    },
-  });
-  Object.defineProperty(cjsExports, "CodeGen", {
-    enumerable: true,
-    get: function () {
-      return codegen_1.CodeGen;
-    },
-  });
-  var validation_error_1 = require_validation_error_2();
-  var ref_error_1 = require_ref_error_2();
-  var rules_1 = require_rules_2();
-  var compile_1 = require_compile_2();
-  var codegen_2 = require_codegen_2();
-  var resolve_1 = require_resolve_2();
-  var dataType_1 = require_dataType_2();
-  var util_1 = require_util_2();
-  var $dataRefSchema = require_data_2();
-  var uri_1 = require_uri_2();
-  var defaultRegExp = (str, flags) => new RegExp(str, flags);
-  defaultRegExp.code = "new RegExp";
-  var META_IGNORE_OPTIONS = ["removeAdditional", "useDefaults", "coerceTypes"];
-  var EXT_SCOPE_NAMES = new Set([
-    "validate",
-    "serialize",
-    "parse",
-    "wrapper",
-    "root",
-    "schema",
-    "keyword",
-    "pattern",
-    "formats",
-    "validate$data",
-    "func",
-    "obj",
-    "Error",
-  ]);
-  var removedOptions = {
-    errorDataPath: "",
-    format: "`validateFormats: false` can be used instead.",
-    nullable: '"nullable" keyword is supported by default.',
-    jsonPointers: "Deprecated jsPropertySyntax can be used instead.",
-    extendRefs: "Deprecated ignoreKeywordsWithRef can be used instead.",
-    missingRefs: "Pass empty schema with $id that should be ignored to ajv.addSchema.",
-    processCode: "Use option `code: {process: (code, schemaEnv: object) => string}`",
-    sourceCode: "Use option `code: {source: true}`",
-    strictDefaults: "It is default now, see option `strict`.",
-    strictKeywords: "It is default now, see option `strict`.",
-    uniqueItems: '"uniqueItems" keyword is always validated.',
-    unknownFormats: "Disable strict mode or pass `true` to `ajv.addFormat` (or `formats` option).",
-    cache: "Map is used as cache, schema object as key.",
-    serialize: "Map is used as cache, schema object as key.",
-    ajvErrors: "It is default now.",
-  };
-  var deprecatedOptions = {
-    ignoreKeywordsWithRef: "",
-    jsPropertySyntax: "",
-    unicode: '"minLength"/"maxLength" account for unicode characters by default.',
-  };
-  var MAX_EXPRESSION = 200;
-  function requiredOptions(o_2) {
-    var _a;
-    var _b;
-    var _c;
-    var _d;
-    var _e;
-    var _f;
-    var _g;
-    var _h;
-    var _j;
-    var _k;
-    var _l;
-    var _m;
-    var _o;
-    var _p;
-    var _q;
-    var _r;
-    var _s;
-    var _t;
-    var _u;
-    var _v;
-    var _w;
-    var _x;
-    var _y;
-    var _z;
-    var _0;
-    let s = o_2.strict;
-    let _optz = (_a = o_2.code) === null || _a === undefined ? undefined : _a.optimize;
-    let optimize = _optz === true || _optz === undefined ? 1 : _optz || 0;
-    let regExp =
-      (_c = (_b = o_2.code) === null || _b === undefined ? undefined : _b.regExp) !== null && _c !== undefined
-        ? _c
-        : defaultRegExp;
-    let uriResolver = (_d = o_2.uriResolver) !== null && _d !== undefined ? _d : uri_1.default;
-    return {
-      strictSchema:
-        (_f = (_e = o_2.strictSchema) !== null && _e !== undefined ? _e : s) !== null && _f !== undefined
-          ? _f
-          : true,
-      strictNumbers:
-        (_h = (_g = o_2.strictNumbers) !== null && _g !== undefined ? _g : s) !== null && _h !== undefined
-          ? _h
-          : true,
-      strictTypes:
-        (_k = (_j = o_2.strictTypes) !== null && _j !== undefined ? _j : s) !== null && _k !== undefined
-          ? _k
-          : "log",
-      strictTuples:
-        (_m = (_l = o_2.strictTuples) !== null && _l !== undefined ? _l : s) !== null && _m !== undefined
-          ? _m
-          : "log",
-      strictRequired:
-        (_p = (_o = o_2.strictRequired) !== null && _o !== undefined ? _o : s) !== null && _p !== undefined
-          ? _p
-          : false,
-      code: o_2.code
-        ? {
-            ...o_2.code,
-            optimize,
-            regExp,
-          }
-        : {
-            optimize,
-            regExp,
-          },
-      loopRequired: (_q = o_2.loopRequired) !== null && _q !== undefined ? _q : MAX_EXPRESSION,
-      loopEnum: (_r = o_2.loopEnum) !== null && _r !== undefined ? _r : MAX_EXPRESSION,
-      meta: (_s = o_2.meta) !== null && _s !== undefined ? _s : true,
-      messages: (_t = o_2.messages) !== null && _t !== undefined ? _t : true,
-      inlineRefs: (_u = o_2.inlineRefs) !== null && _u !== undefined ? _u : true,
-      schemaId: (_v = o_2.schemaId) !== null && _v !== undefined ? _v : "$id",
-      addUsedSchema: (_w = o_2.addUsedSchema) !== null && _w !== undefined ? _w : true,
-      validateSchema: (_x = o_2.validateSchema) !== null && _x !== undefined ? _x : true,
-      validateFormats: (_y = o_2.validateFormats) !== null && _y !== undefined ? _y : true,
-      unicodeRegExp: (_z = o_2.unicodeRegExp) !== null && _z !== undefined ? _z : true,
-      int32range: (_0 = o_2.int32range) !== null && _0 !== undefined ? _0 : true,
-      uriResolver,
-    };
-  }
-  class Ajv {
-    constructor(opts = {}) {
-      this.schemas = {};
-      this.refs = {};
-      this.formats = {};
-      this._compilations = new Set();
-      this._loading = {};
-      this._cache = new Map();
-      opts = this.opts = {
-        ...opts,
-        ...requiredOptions(opts),
-      };
-      let { es5, lines } = this.opts.code;
-      this.scope = new codegen_2.ValueScope({
-        scope: {},
-        prefixes: EXT_SCOPE_NAMES,
-        es5,
-        lines,
-      });
-      this.logger = getLogger(opts.logger);
-      let formatOpt = opts.validateFormats;
-      opts.validateFormats = false;
-      this.RULES = rules_1.getRules();
-      checkOptions.call(this, removedOptions, opts, "NOT SUPPORTED");
-      checkOptions.call(this, deprecatedOptions, opts, "DEPRECATED", "warn");
-      this._metaOpts = getMetaSchemaOptions.call(this);
-      if (opts.formats) addInitialFormats.call(this);
-      this._addVocabularies();
-      this._addDefaultMetaSchema();
-      if (opts.keywords) addInitialKeywords.call(this, opts.keywords);
-      if (typeof opts.meta == "object") this.addMetaSchema(opts.meta);
-      addInitialSchemas.call(this);
-      opts.validateFormats = formatOpt;
-    }
-    _addVocabularies() {
-      this.addKeyword("$async");
-    }
-    _addDefaultMetaSchema() {
-      let { $data, meta, schemaId } = this.opts;
-      let _dataRefSchema = $dataRefSchema;
-      if (schemaId === "id") {
-        _dataRefSchema = {
-          ...$dataRefSchema,
-        };
-        _dataRefSchema.id = _dataRefSchema.$id;
-        delete _dataRefSchema.$id;
-      }
-      if (meta && $data) this.addMetaSchema(_dataRefSchema, _dataRefSchema[schemaId], false);
-    }
-    defaultMeta() {
-      let { meta, schemaId } = this.opts;
-      return (this.opts.defaultMeta = typeof meta == "object" ? meta[schemaId] || meta : undefined);
-    }
-    validate(schemaKeyRef, data) {
-      let v;
-      if (typeof schemaKeyRef == "string") {
-        v = this.getSchema(schemaKeyRef);
-        if (!v) throw Error(`no schema with key or ref "${schemaKeyRef}"`);
-      } else v = this.compile(schemaKeyRef);
-      let valid = v(data);
-      if (!("$async" in v)) this.errors = v.errors;
-      return valid;
-    }
-    compile(schema, _meta) {
-      let sch = this._addSchema(schema, _meta);
-      return sch.validate || this._compileSchemaEnv(sch);
-    }
-    compileAsync(schema, meta) {
-      if (typeof this.opts.loadSchema != "function") throw Error("options.loadSchema should be a function");
-      let { loadSchema } = this.opts;
-      return runCompileAsync.call(this, schema, meta);
-      async function runCompileAsync(_schema, _meta) {
-        await loadMetaSchema.call(this, _schema.$schema);
-        let sch = this._addSchema(_schema, _meta);
-        return sch.validate || _compileAsync.call(this, sch);
-      }
-      async function loadMetaSchema($ref) {
-        if ($ref && !this.getSchema($ref))
-          await runCompileAsync.call(
-            this,
-            {
-              $ref,
-            },
-            true,
-          );
-      }
-      async function _compileAsync(sch) {
-        try {
-          return this._compileSchemaEnv(sch);
-        } catch (e) {
-          if (!(e instanceof ref_error_1.default)) throw e;
-          checkLoaded.call(this, e);
-          await loadMissingSchema.call(this, e.missingSchema);
-          return _compileAsync.call(this, sch);
-        }
-      }
-      function checkLoaded({ missingSchema: ref, missingRef }) {
-        if (this.refs[ref]) throw Error(`AnySchema ${ref} is loaded but ${missingRef} cannot be resolved`);
-      }
-      async function loadMissingSchema(ref) {
-        let _schema = await _loadSchema.call(this, ref);
-        if (!this.refs[ref]) await loadMetaSchema.call(this, _schema.$schema);
-        if (!this.refs[ref]) this.addSchema(_schema, ref, meta);
-      }
-      async function _loadSchema(ref) {
-        let p = this._loading[ref];
-        if (p) return p;
-        try {
-          return await (this._loading[ref] = loadSchema(ref));
-        } finally {
-          delete this._loading[ref];
-        }
-      }
-    }
-    addSchema(schema, key, _meta, _validateSchema = this.opts.validateSchema) {
-      if (Array.isArray(schema)) {
-        for (let sch of schema) this.addSchema(sch, undefined, _meta, _validateSchema);
-        return this;
-      }
-      let id;
-      if (typeof schema === "object") {
-        let { schemaId } = this.opts;
-        id = schema[schemaId];
-        if (id !== undefined && typeof id != "string") throw Error(`schema ${schemaId} must be string`);
-      }
-      key = resolve_1.normalizeId(key || id);
-      this._checkUnique(key);
-      this.schemas[key] = this._addSchema(schema, _meta, key, _validateSchema, true);
-      return this;
-    }
-    addMetaSchema(schema, key, _validateSchema = this.opts.validateSchema) {
-      this.addSchema(schema, key, true, _validateSchema);
-      return this;
-    }
-    validateSchema(schema, throwOrLogError) {
-      if (typeof schema == "boolean") return true;
-      let $schema;
-      $schema = schema.$schema;
-      if ($schema !== undefined && typeof $schema != "string") throw Error("$schema must be a string");
-      $schema = $schema || this.opts.defaultMeta || this.defaultMeta();
-      if (!$schema) {
-        this.logger.warn("meta-schema not available");
-        this.errors = null;
-        return true;
-      }
-      let valid = this.validate($schema, schema);
-      if (!valid && throwOrLogError) {
-        let message = "schema is invalid: " + this.errorsText();
-        if (this.opts.validateSchema === "log") this.logger.error(message);
-        else throw Error(message);
-      }
-      return valid;
-    }
-    getSchema(keyRef) {
-      let sch;
-      while (typeof (sch = getSchEnv.call(this, keyRef)) == "string") keyRef = sch;
-      if (sch === undefined) {
-        let { schemaId } = this.opts;
-        let root = new compile_1.SchemaEnv({
-          schema: {},
-          schemaId,
-        });
-        sch = compile_1.resolveSchema.call(this, root, keyRef);
-        if (!sch) return;
-        this.refs[keyRef] = sch;
-      }
-      return sch.validate || this._compileSchemaEnv(sch);
-    }
-    removeSchema(schemaKeyRef) {
-      if (schemaKeyRef instanceof RegExp) {
-        this._removeAllSchemas(this.schemas, schemaKeyRef);
-        this._removeAllSchemas(this.refs, schemaKeyRef);
-        return this;
-      }
-      switch (typeof schemaKeyRef) {
-        case "undefined":
-          this._removeAllSchemas(this.schemas);
-          this._removeAllSchemas(this.refs);
-          this._cache.clear();
-          return this;
-        case "string": {
-          let sch = getSchEnv.call(this, schemaKeyRef);
-          if (typeof sch == "object") this._cache.delete(sch.schema);
-          delete this.schemas[schemaKeyRef];
-          delete this.refs[schemaKeyRef];
-          return this;
-        }
-        case "object": {
-          let cacheKey = schemaKeyRef;
-          this._cache.delete(cacheKey);
-          let id = schemaKeyRef[this.opts.schemaId];
-          if (id) {
-            id = resolve_1.normalizeId(id);
-            delete this.schemas[id];
-            delete this.refs[id];
-          }
-          return this;
-        }
-        default:
-          throw Error("ajv.removeSchema: invalid parameter");
-      }
-    }
-    addVocabulary(definitions) {
-      for (let def of definitions) this.addKeyword(def);
-      return this;
-    }
-    addKeyword(kwdOrDef, def) {
-      let keyword;
-      if (typeof kwdOrDef == "string") {
-        keyword = kwdOrDef;
-        if (typeof def == "object") {
-          this.logger.warn("these parameters are deprecated, see docs for addKeyword");
-          def.keyword = keyword;
-        }
-      } else if (typeof kwdOrDef == "object" && def === undefined) {
-        def = kwdOrDef;
-        keyword = def.keyword;
-        if (Array.isArray(keyword) && !keyword.length)
-          throw Error("addKeywords: keyword must be string or non-empty array");
-      } else throw Error("invalid addKeywords parameters");
-      checkKeyword.call(this, keyword, def);
-      if (!def) {
-        util_1.eachItem(keyword, (kwd) => addRule.call(this, kwd));
-        return this;
-      }
-      keywordMetaschema.call(this, def);
-      let definition = {
-        ...def,
-        type: dataType_1.getJSONTypes(def.type),
-        schemaType: dataType_1.getJSONTypes(def.schemaType),
-      };
-      util_1.eachItem(
-        keyword,
-        definition.type.length === 0
-          ? (k) => addRule.call(this, k, definition)
-          : (k) => definition.type.forEach((t) => addRule.call(this, k, definition, t)),
-      );
-      return this;
-    }
-    getKeyword(keyword) {
-      let rule = this.RULES.all[keyword];
-      return typeof rule == "object" ? rule.definition : !!rule;
-    }
-    removeKeyword(keyword) {
-      let { RULES } = this;
-      delete RULES.keywords[keyword];
-      delete RULES.all[keyword];
-      for (let group of RULES.rules) {
-        let i = group.rules.findIndex((rule) => rule.keyword === keyword);
-        if (i >= 0) group.rules.splice(i, 1);
-      }
-      return this;
-    }
-    addFormat(name, format) {
-      if (typeof format == "string") format = new RegExp(format);
-      this.formats[name] = format;
-      return this;
-    }
-    errorsText(errors = this.errors, { separator = ", ", dataVar = "data" } = {}) {
-      if (!errors || errors.length === 0) return "No errors";
-      return errors
-        .map((e) => `${dataVar}${e.instancePath} ${e.message}`)
-        .reduce((text, msg) => text + separator + msg);
-    }
-    $dataMetaSchema(metaSchema, keywordsJsonPointers) {
-      let rules = this.RULES.all;
-      metaSchema = JSON.parse(JSON.stringify(metaSchema));
-      for (let jsonPointer of keywordsJsonPointers) {
-        let segments = jsonPointer.split("/").slice(1);
-        let keywords = metaSchema;
-        for (let seg of segments) keywords = keywords[seg];
-        for (let key in rules) {
-          let rule = rules[key];
-          if (typeof rule != "object") continue;
-          let { $data } = rule.definition;
-          let schema = keywords[key];
-          if ($data && schema) keywords[key] = schemaOrData(schema);
-        }
-      }
-      return metaSchema;
-    }
-    _removeAllSchemas(schemas, regex) {
-      for (let keyRef in schemas) {
-        let sch = schemas[keyRef];
-        if (!regex || regex.test(keyRef)) {
-          if (typeof sch == "string") delete schemas[keyRef];
-          else if (sch && !sch.meta) {
-            this._cache.delete(sch.schema);
-            delete schemas[keyRef];
-          }
-        }
-      }
-    }
-    _addSchema(
-      schema,
-      meta,
-      baseId,
-      validateSchema = this.opts.validateSchema,
-      addSchema = this.opts.addUsedSchema,
-    ) {
-      let id;
-      let { schemaId } = this.opts;
-      if (typeof schema == "object") id = schema[schemaId];
-      else if (this.opts.jtd) throw Error("schema must be object");
-      else if (typeof schema != "boolean") throw Error("schema must be object or boolean");
-      let sch = this._cache.get(schema);
-      if (sch !== undefined) return sch;
-      baseId = resolve_1.normalizeId(id || baseId);
-      let localRefs = resolve_1.getSchemaRefs.call(this, schema, baseId);
-      sch = new compile_1.SchemaEnv({
-        schema,
-        schemaId,
-        meta,
-        baseId,
-        localRefs,
-      });
-      this._cache.set(sch.schema, sch);
-      if (addSchema && !baseId.startsWith("#")) {
-        if (baseId) this._checkUnique(baseId);
-        this.refs[baseId] = sch;
-      }
-      if (validateSchema) this.validateSchema(schema, true);
-      return sch;
-    }
-    _checkUnique(id) {
-      if (this.schemas[id] || this.refs[id]) throw Error(`schema with key or id "${id}" already exists`);
-    }
-    _compileSchemaEnv(sch) {
-      if (sch.meta) this._compileMetaSchema(sch);
-      else compile_1.compileSchema.call(this, sch);
-      if (!sch.validate) throw Error("ajv implementation error");
-      return sch.validate;
-    }
-    _compileMetaSchema(sch) {
-      let currentOpts = this.opts;
-      this.opts = this._metaOpts;
-      try {
-        compile_1.compileSchema.call(this, sch);
-      } finally {
-        this.opts = currentOpts;
-      }
-    }
-  }
-  Ajv.ValidationError = validation_error_1.default;
-  Ajv.MissingRefError = ref_error_1.default;
-  cjsExports.default = Ajv;
-  function checkOptions(checkOpts, options, msg, log = "error") {
-    for (let key in checkOpts) {
-      let opt = key;
-      if (opt in options) this.logger[log](`${msg}: option ${key}. ${checkOpts[opt]}`);
-    }
-  }
-  function getSchEnv(keyRef) {
-    keyRef = resolve_1.normalizeId(keyRef);
-    return this.schemas[keyRef] || this.refs[keyRef];
-  }
-  function addInitialSchemas() {
-    let optsSchemas = this.opts.schemas;
-    if (!optsSchemas) return;
-    if (Array.isArray(optsSchemas)) this.addSchema(optsSchemas);
-    else for (let key in optsSchemas) this.addSchema(optsSchemas[key], key);
-  }
-  function addInitialFormats() {
-    for (let name in this.opts.formats) {
-      let format = this.opts.formats[name];
-      if (format) this.addFormat(name, format);
-    }
-  }
-  function addInitialKeywords(defs) {
-    if (Array.isArray(defs)) {
-      this.addVocabulary(defs);
-      return;
-    }
-    this.logger.warn("keywords option as map is deprecated, pass array");
-    for (let keyword in defs) {
-      let def = defs[keyword];
-      if (!def.keyword) def.keyword = keyword;
-      this.addKeyword(def);
-    }
-  }
-  function getMetaSchemaOptions() {
-    let metaOpts = {
-      ...this.opts,
-    };
-    for (let opt of META_IGNORE_OPTIONS) delete metaOpts[opt];
-    return metaOpts;
-  }
-  var noLogs = {
-    log() {},
-    warn() {},
-    error() {},
-  };
-  function getLogger(logger) {
-    if (logger === false) return noLogs;
-    if (logger === undefined) return console;
-    if (logger.log && logger.warn && logger.error) return logger;
-    throw Error("logger must implement log, warn and error methods");
-  }
-  var KEYWORD_NAME = /^[a-z_$][a-z0-9_$:-]*$/i;
-  function checkKeyword(keyword, def) {
-    let { RULES } = this;
-    util_1.eachItem(keyword, (kwd) => {
-      if (RULES.keywords[kwd]) throw Error(`Keyword ${kwd} is already defined`);
-      if (!KEYWORD_NAME.test(kwd)) throw Error(`Keyword ${kwd} has invalid name`);
-    });
-    if (!def) return;
-    if (def.$data && !("code" in def || "validate" in def))
-      throw Error('$data keyword must have "code" or "validate" function');
-  }
-  function addRule(keyword, definition, dataType) {
-    var _a;
-    let post = definition === null || definition === undefined ? undefined : definition.post;
-    if (dataType && post) throw Error('keyword with "post" flag cannot have "type"');
-    let { RULES } = this;
-    let ruleGroup = post ? RULES.post : RULES.rules.find(({ type: t }) => t === dataType);
-    if (!ruleGroup) {
-      ruleGroup = {
-        type: dataType,
-        rules: [],
-      };
-      RULES.rules.push(ruleGroup);
-    }
-    RULES.keywords[keyword] = true;
-    if (!definition) return;
-    let rule = {
-      keyword,
-      definition: {
-        ...definition,
-        type: dataType_1.getJSONTypes(definition.type),
-        schemaType: dataType_1.getJSONTypes(definition.schemaType),
-      },
-    };
-    if (definition.before) addBeforeRule.call(this, ruleGroup, rule, definition.before);
-    else ruleGroup.rules.push(rule);
-    RULES.all[keyword] = rule;
-    if (!((_a = definition.implements) === null || _a === undefined))
-      _a.forEach((kwd) => this.addKeyword(kwd));
-  }
-  function addBeforeRule(ruleGroup, rule, before) {
-    let i = ruleGroup.rules.findIndex((_rule) => _rule.keyword === before);
-    if (i >= 0) ruleGroup.rules.splice(i, 0, rule);
-    else {
-      ruleGroup.rules.push(rule);
-      this.logger.warn(`rule ${before} is not defined`);
-    }
-  }
-  function keywordMetaschema(def) {
-    let { metaSchema } = def;
-    if (metaSchema === undefined) return;
-    if (def.$data && this.opts.$data) metaSchema = schemaOrData(metaSchema);
-    def.validateSchema = this.compile(metaSchema, true);
-  }
-  var $dataRef = {
     $ref: "https://raw.githubusercontent.com/ajv-validator/ajv/master/lib/refs/data.json#",
   };
   function schemaOrData(schema) {

@@ -30,6 +30,7 @@ import { jsonStringifyRaw } from "./slowOperations.js";
 import { TOOLS_USED_BEFORE_SUMMARY_TAG } from "../bootstrap/stateSlices.js";
 import { toolsUsedManifestText } from "./messages/untrustedArtifactContent.js";
 import { logFeatureBad } from "../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-22r83hv0.js:4820-4904 placement
 /**
@@ -66,28 +67,41 @@ function isValidPollEventKind(kind) {
 /**
  * 轮询事件的 kind 格式及各类事件允许的字段。
  */
-var POLL_EVENT_KIND_RE_2 = /^[a-z][a-z0-9-]{0,63}$/;
-var POLL_EVENT_KIND_INNER_RE = new RegExp(POLL_EVENT_KIND_RE_2.source.slice(1, -1));
-var BASE_EVENT_ATTRIBUTES = new Set(["kind", "at", "status"]);
-var EVENT_CHILD_ELEMENTS = new Map([[REPL_EVAL, new Set(["log", "result", "error"])]]);
-var SESSION_NOTICE = "session-notice";
-var EVENT_KIND_ATTRIBUTES = new Map([
-  [SESSION_NOTICE, new Set(["notice-class", "from-session"])],
-  [REPL_EVAL, new Set(["eval", "ms"])],
-  [REPL_STATUS, new Set(["pending"])],
-]);
-var KNOWN_EVENT_ATTRIBUTES = new Set([
-  ...BASE_EVENT_ATTRIBUTES,
-  ...[...EVENT_KIND_ATTRIBUTES.values()].flatMap((e) => [...e]),
-]);
-var RESERVED_EVENT_KINDS_2 = new Set([...EVENT_KIND_ATTRIBUTES.keys(), REPL_EVAL, REPL_STATUS]);
+var POLL_EVENT_KIND_RE_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var POLL_EVENT_KIND_INNER_RE;
+var BASE_EVENT_ATTRIBUTES;
+var EVENT_CHILD_ELEMENTS;
+var SESSION_NOTICE;
+var EVENT_KIND_ATTRIBUTES;
+var KNOWN_EVENT_ATTRIBUTES;
+var RESERVED_EVENT_KINDS_2;
+deferInit("chunk-22r83hv0.js:5021", () => {
+  POLL_EVENT_KIND_RE_2 = /^[a-z][a-z0-9-]{0,63}$/;
+  POLL_EVENT_KIND_INNER_RE = new RegExp(POLL_EVENT_KIND_RE_2.source.slice(1, -1));
+  BASE_EVENT_ATTRIBUTES = new Set(["kind", "at", "status"]);
+  EVENT_CHILD_ELEMENTS = new Map([[REPL_EVAL, new Set(["log", "result", "error"])]]);
+  SESSION_NOTICE = "session-notice";
+  EVENT_KIND_ATTRIBUTES = new Map([
+    [SESSION_NOTICE, new Set(["notice-class", "from-session"])],
+    [REPL_EVAL, new Set(["eval", "ms"])],
+    [REPL_STATUS, new Set(["pending"])],
+  ]);
+  KNOWN_EVENT_ATTRIBUTES = new Set([
+    ...BASE_EVENT_ATTRIBUTES,
+    ...[...EVENT_KIND_ATTRIBUTES.values()].flatMap((kindAttributes) => [...kindAttributes]),
+  ]);
+  RESERVED_EVENT_KINDS_2 = new Set([...EVENT_KIND_ATTRIBUTES.keys(), REPL_EVAL, REPL_STATUS]);
+});
 //@ chunk-22r83hv0.js:5408-5430 placement
-var RESERVED_EVENT_KINDS = new Set([SESSION_NOTICE]);
+var RESERVED_EVENT_KINDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-22r83hv0.js:5408", () => {
+  RESERVED_EVENT_KINDS = new Set([SESSION_NOTICE]);
+});
 //@ chunk-22r83hv0.js:5430-5559 placement
-function normalizeLeetspeak(e) {
-  return e.replace(
+function normalizeLeetspeak(text) {
+  return text.replace(
     /[01345789i]/g,
-    (n) =>
+    (char) =>
       ({
         0: "o",
         1: "l",
@@ -98,35 +112,36 @@ function normalizeLeetspeak(e) {
         8: "b",
         9: "g",
         i: "l",
-      })[n],
+      })[char],
   );
 }
 //@ chunk-22r83hv0.js:5559-5823 placement
-function isWithinOneEdit(e, n) {
-  if (e === n) return true;
-  let [r, s] = e.length <= n.length ? [e, n] : [n, e];
-  if (s.length - r.length > 1) return false;
-  let d = 0;
-  let f = 0;
-  let E = 0;
-  while (d < r.length && f < s.length) {
-    if (r[d] === s[f]) {
-      d++;
-      f++;
+function isWithinOneEdit(left, right) {
+  if (left === right) return true;
+  let [shorter, longer] = left.length <= right.length ? [left, right] : [right, left];
+  if (longer.length - shorter.length > 1) return false;
+  let shortIndex = 0;
+  let longIndex = 0;
+  let edits = 0;
+  while (shortIndex < shorter.length && longIndex < longer.length) {
+    if (shorter[shortIndex] === longer[longIndex]) {
+      shortIndex++;
+      longIndex++;
       continue;
     }
-    if (E > 0) return false;
-    E++;
-    if (r.length === s.length) d++;
-    f++;
+    if (edits > 0) return false;
+    edits++;
+    if (shorter.length === longer.length) shortIndex++;
+    longIndex++;
   }
-  return E === 0 || d === r.length;
+  return edits === 0 || shortIndex === shorter.length;
 }
 //@ chunk-22r83hv0.js:5823-5987 placement
-function containsFuzzyMatch(e, n) {
-  for (let r of [n.length - 1, n.length, n.length + 1]) {
-    if (r <= 0 || r > e.length) continue;
-    for (let idx = 0; idx + r <= e.length; idx++) if (isWithinOneEdit(e.slice(idx, idx + r), n)) return true;
+function containsFuzzyMatch(haystack, needle) {
+  for (let windowLength of [needle.length - 1, needle.length, needle.length + 1]) {
+    if (windowLength <= 0 || windowLength > haystack.length) continue;
+    for (let idx = 0; idx + windowLength <= haystack.length; idx++)
+      if (isWithinOneEdit(haystack.slice(idx, idx + windowLength), needle)) return true;
   }
   return false;
 }
@@ -142,15 +157,16 @@ function mentionsReservedKind(kind) {
 /**
  * mentionsSessionNoticeKind：文本里是否提到 session notice kind。
  */
-function mentionsSessionNoticeKind(e) {
-  return containsTermLike(e, RESERVED_EVENT_KINDS);
+function mentionsSessionNoticeKind(text) {
+  return containsTermLike(text, RESERVED_EVENT_KINDS);
 }
 //@ chunk-22r83hv0.js:6065-6164 placement
-function containsTermLike(e, n) {
-  let r = normalizeLeetspeak(e);
-  for (let s of n) {
-    let d = normalizeLeetspeak(s);
-    if (r.includes(d) || containsFuzzyMatch(r, d)) return true;
+function containsTermLike(text, terms) {
+  let normalizedText = normalizeLeetspeak(text);
+  for (let term of terms) {
+    let normalizedTerm = normalizeLeetspeak(term);
+    if (normalizedText.includes(normalizedTerm) || containsFuzzyMatch(normalizedText, normalizedTerm))
+      return true;
   }
   return false;
 }
@@ -172,37 +188,41 @@ function isPeerAuthority(authority) {
  */
 function normalizeDeliveredPeers(provenance) {
   if (!Array.isArray(provenance)) return [];
-  return provenance.slice(0, MAX_POLL_EVENTS_PER_BATCH).map((n) => {
-    if (n === null || typeof n !== "object" || n.authority === "world-event")
+  return provenance.slice(0, MAX_POLL_EVENTS_PER_BATCH).map((peer) => {
+    if (peer === null || typeof peer !== "object" || peer.authority === "world-event")
       return {
         kind: "skipped",
       };
-    let senderText = n.senderText;
+    let senderText = peer.senderText;
     if (typeof senderText !== "string" || senderText === "")
       return {
         kind: "skipped",
       };
     let text = truncateToLength(senderText, MAX_POLL_EVENT_ENVELOPE_BYTES);
     return {
-      kind: n.authority === "human-principal" ? "principal" : "other",
-      entry: n,
+      kind: peer.authority === "human-principal" ? "principal" : "other",
+      entry: peer,
       text,
     };
   });
 }
 //@ chunk-22r83hv0.js:6627-6750 placement
-var CONTROL_CHARS_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u0085\u2028\u2029]/g;
-var CONTROL_OR_CR_RE = new RegExp(`[\\r${CONTROL_CHARS_RE.source.slice(1)}`);
+var CONTROL_CHARS_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CONTROL_OR_CR_RE;
+deferInit("chunk-22r83hv0.js:6627", () => {
+  CONTROL_CHARS_RE = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f\u0085\u2028\u2029]/g;
+  CONTROL_OR_CR_RE = new RegExp(`[\\r${CONTROL_CHARS_RE.source.slice(1)}`);
+});
 //@ chunk-22r83hv0.js:6750-6782 placement
-function hasControlOrCarriageReturn(e) {
-  return CONTROL_OR_CR_RE.test(e);
+function hasControlOrCarriageReturn(text) {
+  return CONTROL_OR_CR_RE.test(text);
 }
 //@ chunk-22r83hv0.js:6782-6843 placement
 /**
  * normalizeNewlines：统一换行并去掉控制字符。
  */
-function normalizeNewlines(e) {
-  return e
+function normalizeNewlines(text) {
+  return text
     .replace(
       /\r\n?/g,
       `
@@ -211,9 +231,9 @@ function normalizeNewlines(e) {
     .replace(CONTROL_CHARS_RE, "");
 }
 //@ chunk-22r83hv0.js:6843-6992 placement
-function escapeXmlText(e) {
+function escapeXmlText(text) {
   return normalizeNewlines(
-    e
+    text
       .replaceAll("&", "&amp;")
       .replaceAll("<", "&lt;")
       .replaceAll(">", "&gt;")
@@ -239,7 +259,7 @@ function validatePollEvent({ kind, at, content, attributes, children }) {
       `invalid poll event kind: ${JSON.stringify(kind)}`,
       "invalid poll event kind",
     );
-  let f = "";
+  let attributesText = "";
   for (let [key, value] of Object.entries(attributes ?? {})) {
     if (
       key === "kind" ||
@@ -250,41 +270,41 @@ function validatePollEvent({ kind, at, content, attributes, children }) {
         `invalid poll event attribute: ${key}`,
         "invalid poll event attribute",
       );
-    f += ` ${key}="${sanitizeEventAttributes(value)}"`;
+    attributesText += ` ${key}="${sanitizeEventAttributes(value)}"`;
   }
-  let E = escapeXmlText(content);
+  let body = escapeXmlText(content);
   if (children !== undefined) {
     if (content !== "")
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         "poll event: pass content or children, not both",
         "poll event: content or children",
       );
-    let h = EVENT_CHILD_ELEMENTS.get(kind);
-    E = `
+    let allowedTags = EVENT_CHILD_ELEMENTS.get(kind);
+    body = `
 `;
     for (let { tag, text } of children) {
-      if (h === undefined || !h.has(tag))
+      if (allowedTags === undefined || !allowedTags.has(tag))
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
           `invalid poll event child: <${tag}> on kind ${kind}`,
           "invalid poll event child",
         );
-      let y = escapedEventText(text);
-      E +=
-        y === ""
+      let childText = escapedEventText(text);
+      body +=
+        childText === ""
           ? `<${tag}/>
 `
-          : `<${tag}>${y}</${tag}>
+          : `<${tag}>${childText}</${tag}>
 `;
     }
   }
-  return `<event kind="${kind}" at="${sanitizeEventAttributes(at)}"${f}>${E}</event>`;
+  return `<event kind="${kind}" at="${sanitizeEventAttributes(at)}"${attributesText}>${body}</event>`;
 }
 //@ chunk-22r83hv0.js:7846-7891 placement
 /**
  * containsEventTag：文本里是否出现 event 标签。
  */
-function containsEventTag(e) {
-  return /<\/?event\b/i.test(e);
+function containsEventTag(text) {
+  return /<\/?event\b/i.test(text);
 }
 //@ chunk-22r83hv0.js:7891-8207 placement
 function renderPollEvent({ kind, at, content }) {
@@ -293,20 +313,20 @@ function renderPollEvent({ kind, at, content }) {
       `invalid poll event kind: ${JSON.stringify(kind)}`,
       "invalid poll event kind",
     );
-  let s = normalizeNewlines(content);
-  if (containsEventTag(s))
+  let body = normalizeNewlines(content);
+  if (containsEventTag(body))
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "verbatim poll event body breaks envelope",
       "verbatim poll event body breaks envelope",
     );
-  return `<event kind="${kind}" at="${sanitizeEventAttributes(at)}">${s}</event>`;
+  return `<event kind="${kind}" at="${sanitizeEventAttributes(at)}">${body}</event>`;
 }
 //@ chunk-22r83hv0.js:8207-8278 placement
 /**
  * sanitizeEventAttributes：属性文本里替换引号与控制字符。
  */
-function sanitizeEventAttributes(e) {
-  return e.replace(/[&<>"'=\r\n\t]/g, " ").replace(CONTROL_CHARS_RE, " ");
+function sanitizeEventAttributes(value) {
+  return value.replace(/[&<>"'=\r\n\t]/g, " ").replace(CONTROL_CHARS_RE, " ");
 }
 //@ chunk-22r83hv0.js:8278-10970 placement
 /**
@@ -318,200 +338,203 @@ function parsePollEventEnvelope(element) {
       ok: false,
       reason: "must be a single <event> element",
     };
-  let n = 6;
-  let r;
-  let s = new Set();
+  let offset = 6;
+  let kind;
+  let seenAttributes = new Set();
   for (;;) {
-    if (n >= element.length)
+    if (offset >= element.length)
       return {
         ok: false,
         reason: "unterminated opening tag",
       };
-    if (element[n] === ">" || element.startsWith("/>", n)) break;
-    if (element[n] !== " ")
+    if (element[offset] === ">" || element.startsWith("/>", offset)) break;
+    if (element[offset] !== " ")
       return {
         ok: false,
-        reason: `malformed opening tag at offset ${n}`,
+        reason: `malformed opening tag at offset ${offset}`,
       };
-    n++;
-    let match = POLL_EVENT_KIND_INNER_RE.exec(element.slice(n));
+    offset++;
+    let match = POLL_EVENT_KIND_INNER_RE.exec(element.slice(offset));
     if (!match || match.index !== 0)
       return {
         ok: false,
-        reason: `invalid attribute name at offset ${n}`,
+        reason: `invalid attribute name at offset ${offset}`,
       };
-    let h = match[0];
-    if (h.startsWith("xml"))
+    let attributeName = match[0];
+    if (attributeName.startsWith("xml"))
       return {
         ok: false,
-        reason: `reserved attribute name ${h}`,
+        reason: `reserved attribute name ${attributeName}`,
       };
-    if (s.has(h))
+    if (seenAttributes.has(attributeName))
       return {
         ok: false,
-        reason: `duplicate attribute ${h}`,
+        reason: `duplicate attribute ${attributeName}`,
       };
-    if (!KNOWN_EVENT_ATTRIBUTES.has(h))
+    if (!KNOWN_EVENT_ATTRIBUTES.has(attributeName))
       return {
         ok: false,
-        reason: `unknown attribute ${h}`,
+        reason: `unknown attribute ${attributeName}`,
       };
-    s.add(h);
-    n += h.length;
-    if (!element.startsWith('="', n))
+    seenAttributes.add(attributeName);
+    offset += attributeName.length;
+    if (!element.startsWith('="', offset))
       return {
         ok: false,
-        reason: `attribute ${h} must be ="\u2026"-quoted`,
+        reason: `attribute ${attributeName} must be ="\u2026"-quoted`,
       };
-    n += 2;
-    let g = n;
+    offset += 2;
+    let valueStart = offset;
     for (;;) {
-      if (n >= element.length)
+      if (offset >= element.length)
         return {
           ok: false,
-          reason: `unterminated value for attribute ${h}`,
+          reason: `unterminated value for attribute ${attributeName}`,
         };
-      let y = element[n];
-      if (y === '"') break;
-      if (y === "<" || y === ">" || y === "'" || y === "=")
+      let char = element[offset];
+      if (char === '"') break;
+      if (char === "<" || char === ">" || char === "'" || char === "=")
         return {
           ok: false,
-          reason: `raw special in attribute ${h}`,
+          reason: `raw special in attribute ${attributeName}`,
         };
       if (
-        hasControlOrCarriageReturn(y) ||
-        y ===
+        hasControlOrCarriageReturn(char) ||
+        char ===
           `
 ` ||
-        y === "\t"
+        char === "\t"
       )
         return {
           ok: false,
-          reason: `control character in attribute ${h}`,
+          reason: `control character in attribute ${attributeName}`,
         };
-      if (y === "&")
+      if (char === "&")
         return {
           ok: false,
-          reason: `ampersand in attribute ${h}`,
+          reason: `ampersand in attribute ${attributeName}`,
         };
-      n++;
+      offset++;
     }
-    let sliced = element.slice(g, n);
-    n++;
-    if (h === "kind") {
+    let sliced = element.slice(valueStart, offset);
+    offset++;
+    if (attributeName === "kind") {
       if (!POLL_EVENT_KIND_RE.test(sliced))
         return {
           ok: false,
           reason: "invalid kind attribute",
         };
-      r = sliced;
+      kind = sliced;
     }
   }
-  if (r === undefined)
+  if (kind === undefined)
     return {
       ok: false,
       reason: "missing kind attribute",
     };
-  if (!s.has("at"))
+  if (!seenAttributes.has("at"))
     return {
       ok: false,
       reason: "missing at attribute",
     };
-  for (let E of s) {
-    if (BASE_EVENT_ATTRIBUTES.has(E)) continue;
-    let h = EVENT_KIND_ATTRIBUTES.get(r);
-    if (h === undefined || !h.has(E))
+  for (let attributeName of seenAttributes) {
+    if (BASE_EVENT_ATTRIBUTES.has(attributeName)) continue;
+    let kindAttributes = EVENT_KIND_ATTRIBUTES.get(kind);
+    if (kindAttributes === undefined || !kindAttributes.has(attributeName))
       return {
         ok: false,
-        reason: `attribute ${E} not allowed on kind ${r}`,
+        reason: `attribute ${attributeName} not allowed on kind ${kind}`,
       };
   }
-  if (element.startsWith("/>", n)) {
-    if (n + 2 !== element.length)
+  if (element.startsWith("/>", offset)) {
+    if (offset + 2 !== element.length)
       return {
         ok: false,
         reason: "content after the root element",
       };
     return {
       ok: true,
-      kind: r,
+      kind,
     };
   }
-  n++;
-  let d = EVENT_CHILD_ELEMENTS.get(r);
-  let f;
-  for (; n < element.length; n++) {
-    let E = element[n];
-    if (E === "<") {
-      if (element.startsWith("</event>", n)) {
-        if (f !== undefined)
+  offset++;
+  let childTags = EVENT_CHILD_ELEMENTS.get(kind);
+  let openChildTag;
+  for (; offset < element.length; offset++) {
+    let char = element[offset];
+    if (char === "<") {
+      if (element.startsWith("</event>", offset)) {
+        if (openChildTag !== undefined)
           return {
             ok: false,
-            reason: `unclosed <${f}> at root close`,
+            reason: `unclosed <${openChildTag}> at root close`,
           };
-        if (n + 8 !== element.length)
+        if (offset + 8 !== element.length)
           return {
             ok: false,
             reason: "content after the root element",
           };
         return {
           ok: true,
-          kind: r,
+          kind,
         };
       }
-      let h = d === undefined ? null : /^<(\/?)([a-z]{1,16})(\/?)>/.exec(element.slice(n, n + 20));
-      if (h === null || !d.has(h[2]))
+      let tagMatch =
+        childTags === undefined
+          ? null
+          : /^<(\/?)([a-z]{1,16})(\/?)>/.exec(element.slice(offset, offset + 20));
+      if (tagMatch === null || !childTags.has(tagMatch[2]))
         return {
           ok: false,
-          reason: `markup in body at offset ${n}`,
+          reason: `markup in body at offset ${offset}`,
         };
-      let [g, v, y, A] = h;
-      if (v === "/" && A === "/")
+      let [wholeMatch, closingSlash, tagName, selfClosingSlash] = tagMatch;
+      if (closingSlash === "/" && selfClosingSlash === "/")
         return {
           ok: false,
-          reason: `malformed child tag at offset ${n}`,
+          reason: `malformed child tag at offset ${offset}`,
         };
-      if (v === "/") {
-        if (f !== y)
+      if (closingSlash === "/") {
+        if (openChildTag !== tagName)
           return {
             ok: false,
-            reason: `stray </${y}> at offset ${n}`,
+            reason: `stray </${tagName}> at offset ${offset}`,
           };
-        f = undefined;
+        openChildTag = undefined;
       } else {
-        if (f !== undefined)
+        if (openChildTag !== undefined)
           return {
             ok: false,
-            reason: `nested <${y}> inside <${f}>`,
+            reason: `nested <${tagName}> inside <${openChildTag}>`,
           };
-        if (A !== "/") f = y;
+        if (selfClosingSlash !== "/") openChildTag = tagName;
       }
-      n += g.length - 1;
+      offset += wholeMatch.length - 1;
       continue;
     }
-    if (E === ">" || (f === undefined && (E === '"' || E === "'")))
+    if (char === ">" || (openChildTag === undefined && (char === '"' || char === "'")))
       return {
         ok: false,
-        reason: `raw special in body at offset ${n}`,
+        reason: `raw special in body at offset ${offset}`,
       };
-    if (hasControlOrCarriageReturn(E))
+    if (hasControlOrCarriageReturn(char))
       return {
         ok: false,
-        reason: `control character in body at offset ${n}`,
+        reason: `control character in body at offset ${offset}`,
       };
     if (
-      E === "&" &&
+      char === "&" &&
       !(
-        element.startsWith("amp;", n + 1) ||
-        element.startsWith("lt;", n + 1) ||
-        element.startsWith("gt;", n + 1) ||
-        element.startsWith("quot;", n + 1) ||
-        element.startsWith("#39;", n + 1)
+        element.startsWith("amp;", offset + 1) ||
+        element.startsWith("lt;", offset + 1) ||
+        element.startsWith("gt;", offset + 1) ||
+        element.startsWith("quot;", offset + 1) ||
+        element.startsWith("#39;", offset + 1)
       )
     )
       return {
         ok: false,
-        reason: `unknown entity in body at offset ${n}`,
+        reason: `unknown entity in body at offset ${offset}`,
       };
   }
   return {
@@ -523,8 +546,8 @@ function parsePollEventEnvelope(element) {
 /**
  * isPollEventMode：模式为 poll-event。
  */
-function isPollEventMode(e) {
-  return e.mode === "poll-event";
+function isPollEventMode(context) {
+  return context.mode === "poll-event";
 }
 //@ chunk-22r83hv0.js:11014-11068 placement
 /**
@@ -550,13 +573,17 @@ function pollEventsEnvEnabled() {
   return env.CLAUDE_CODE_POLL_EVENTS === true || false;
 }
 //@ chunk-22r83hv0.js:11181-11419 placement
-function clearCommandAllowRules(e) {
-  let strippedDangerousRules = e.strippedDangerousRules;
-  if (e.alwaysAllowRules.command === undefined && strippedDangerousRules?.command === undefined) return e;
+function clearCommandAllowRules(permissionContext) {
+  let strippedDangerousRules = permissionContext.strippedDangerousRules;
+  if (
+    permissionContext.alwaysAllowRules.command === undefined &&
+    strippedDangerousRules?.command === undefined
+  )
+    return permissionContext;
   return {
-    ...e,
+    ...permissionContext,
     alwaysAllowRules: {
-      ...e.alwaysAllowRules,
+      ...permissionContext.alwaysAllowRules,
       command: undefined,
     },
     ...(strippedDangerousRules && {
@@ -568,24 +595,24 @@ function clearCommandAllowRules(e) {
   };
 }
 //@ chunk-22r83hv0.js:11419-11544 placement
-function setCommandAllowRules(e, command) {
-  let r = clearCommandAllowRules(e);
+function setCommandAllowRules(permissionContext, command) {
+  let cleared = clearCommandAllowRules(permissionContext);
   return {
-    ...r,
+    ...cleared,
     alwaysAllowRules: {
-      ...r.alwaysAllowRules,
+      ...cleared.alwaysAllowRules,
       command,
     },
     pollEventDeliveryGuard: undefined,
   };
 }
 //@ chunk-22r83hv0.js:11544-11645 placement
-function setPollEventDeliveryGuard(e) {
-  let n = clearCommandAllowRules(e);
-  return n.pollEventDeliveryGuard === true
-    ? n
+function setPollEventDeliveryGuard(permissionContext) {
+  let cleared = clearCommandAllowRules(permissionContext);
+  return cleared.pollEventDeliveryGuard === true
+    ? cleared
     : {
-        ...n,
+        ...cleared,
         pollEventDeliveryGuard: true,
       };
 }
@@ -593,53 +620,55 @@ function setPollEventDeliveryGuard(e) {
 /**
  * 投递轮询事件前重置技能权限规则（远程协作场景）。
  */
-function applyPollEventToolPermissions(e, command, r) {
-  if (r?.skipSkillPermissionReset !== true) {
-    let s = isRemoteCowork() || isCcsRemoteCowork();
-    e.setToolPermissionContext((d) => {
-      let command_2 = d.alwaysAllowRules.command;
+function applyPollEventToolPermissions(session, command, options) {
+  if (options?.skipSkillPermissionReset !== true) {
+    let isCowork = isRemoteCowork() || isCcsRemoteCowork();
+    session.setToolPermissionContext((current) => {
+      let command_2 = current.alwaysAllowRules.command;
       if (
-        s &&
-        d.pollEventDeliveryGuard === undefined &&
-        d.strippedDangerousRules?.command === undefined &&
+        isCowork &&
+        current.pollEventDeliveryGuard === undefined &&
+        current.strippedDangerousRules?.command === undefined &&
         (command_2 === command ||
           (command_2 !== undefined &&
             command !== undefined &&
             command_2.length === command.length &&
-            command_2.every((E, h) => E === command[h])))
+            command_2.every((rule, index) => rule === command[index])))
       )
-        return d;
-      return setCommandAllowRules(d, command);
+        return current;
+      return setCommandAllowRules(current, command);
     });
-  } else if (r.pollEventDelivery === true || r.pollEmptyDispatch === true)
-    e.setToolPermissionContext((s) => setPollEventDeliveryGuard(s));
+  } else if (options.pollEventDelivery === true || options.pollEmptyDispatch === true)
+    session.setToolPermissionContext((current) => setPollEventDeliveryGuard(current));
 }
 //@ chunk-22r83hv0.js:12075-12223 placement
-function hasPollEventsAttachmentSince(e, n) {
-  for (let max = Math.max(0, n); max < e.length; max++) {
-    let s = e[max];
-    if (s.type === "attachment" && s.attachment?.type === "poll_events") return true;
+function hasPollEventsAttachmentSince(messages, sinceIndex) {
+  for (let max = Math.max(0, sinceIndex); max < messages.length; max++) {
+    let message = messages[max];
+    if (message.type === "attachment" && message.attachment?.type === "poll_events") return true;
   }
   return false;
 }
 //@ chunk-22r83hv0.js:12223-12619 placement = countToolCallsSince (1)
 function countToolCallsSince(messages, sinceUuid) {
-  let r = messages[sinceUuid];
-  let content = r?.message?.content;
-  if (r?.type !== "user" || !Array.isArray(content)) return false;
-  let d = new Set();
+  let message = messages[sinceUuid];
+  let content = message?.message?.content;
+  if (message?.type !== "user" || !Array.isArray(content)) return false;
+  let pollToolUseIds = new Set();
   for (let toolCallCount = 0; toolCallCount < sinceUuid; toolCallCount++) {
-    let E = messages[toolCallCount];
-    let content = E.message?.content;
-    if (E.type === "assistant" && Array.isArray(content)) {
+    let message = messages[toolCallCount];
+    let content = message.message?.content;
+    if (message.type === "assistant" && Array.isArray(content)) {
       for (let message of content)
-        if (message?.type === "tool_use" && message.name === POLL_2) d.add(message.id);
+        if (message?.type === "tool_use" && message.name === POLL_2) pollToolUseIds.add(message.id);
     }
   }
-  if (d.size === 0) return false;
+  if (pollToolUseIds.size === 0) return false;
   return content.some(
     (block) =>
-      block?.type === "tool_result" && typeof block.tool_use_id === "string" && d.has(block.tool_use_id),
+      block?.type === "tool_result" &&
+      typeof block.tool_use_id === "string" &&
+      pollToolUseIds.has(block.tool_use_id),
   );
 }
 //@ chunk-22r83hv0.js:12619-12754 placement
@@ -651,14 +680,14 @@ function getPollEventEnvelope(command) {
   return command.pollEvent.envelope;
 }
 //@ chunk-22r83hv0.js:12754-12924 placement
-function collectDeclaredPollEvents(e) {
-  return e.some((n) => n.pollEvent?.declared !== undefined)
-    ? e.map((n) =>
-        n.pollEvent?.declared === undefined
+function collectDeclaredPollEvents(entries) {
+  return entries.some((entry) => entry.pollEvent?.declared !== undefined)
+    ? entries.map((entry) =>
+        entry.pollEvent?.declared === undefined
           ? null
           : {
-              kind: n.pollEvent.kind,
-              ...n.pollEvent.declared,
+              kind: entry.pollEvent.kind,
+              ...entry.pollEvent.declared,
             },
       )
     : undefined;
@@ -667,22 +696,22 @@ function collectDeclaredPollEvents(e) {
 /**
  * isMainAgentPollEventMode：主代理的轮询事件回合。
  */
-function isMainAgentPollEventMode(e) {
-  return e.mode === "poll-event" && e.agentId === mainAgentId();
+function isMainAgentPollEventMode(context) {
+  return context.mode === "poll-event" && context.agentId === mainAgentId();
 }
 //@ chunk-22r83hv0.js:12987-13012 placement
 /**
  * neverFalse：恒 false 占位。
  */
-function neverFalse(e) {
+function neverFalse(value) {
   return false;
 }
 //@ chunk-22r83hv0.js:13012-13082 placement
 /**
  * isPollEventForAgent：指定 agent 的轮询事件回合。
  */
-function isPollEventForAgent(e, n) {
-  return e.mode === "poll-event" && e.agentId === (n ?? mainAgentId());
+function isPollEventForAgent(context, agentId) {
+  return context.mode === "poll-event" && context.agentId === (agentId ?? mainAgentId());
 }
 //@ chunk-22r83hv0.js:13082-13137 placement
 /**
@@ -695,47 +724,52 @@ function eventByteLength(fields) {
 /**
  * 从排队的轮询事件中按组（同 group 不拆开）挑选本次要投递的一批，受最大条数与总字节预算限制；至少投递一组。
  */
-function selectPollEventBatch(e) {
-  let n = [];
-  let r = 0;
-  for (let s = 0; s < e.length;) {
-    let group = e[s].pollEvent?.group;
-    let f = s + 1;
-    while (group !== undefined && e[f]?.pollEvent?.group === group) f++;
-    let sliced = e.slice(s, f);
+function selectPollEventBatch(entries) {
+  let selected = [];
+  let selectedBytes = 0;
+  for (let index = 0; index < entries.length;) {
+    let group = entries[index].pollEvent?.group;
+    let groupEnd = index + 1;
+    while (group !== undefined && entries[groupEnd]?.pollEvent?.group === group) groupEnd++;
+    let sliced = entries.slice(index, groupEnd);
     let reduced = sliced.reduce(
-      (acc, v) =>
+      (acc, entry) =>
         acc +
         Math.max(
-          Buffer.byteLength(v.pollEvent?.envelope ?? "", "utf8"),
-          v.pollEvent?.declared === undefined ? 0 : eventByteLength(v.pollEvent.declared.fields),
+          Buffer.byteLength(entry.pollEvent?.envelope ?? "", "utf8"),
+          entry.pollEvent?.declared === undefined ? 0 : eventByteLength(entry.pollEvent.declared.fields),
         ),
       0,
     );
     if (
-      n.length > 0 &&
-      (n.length + sliced.length > MAX_POLL_EVENTS_PER_BATCH || r + reduced > MAX_POLL_EVENT_BATCH_BYTES)
+      selected.length > 0 &&
+      (selected.length + sliced.length > MAX_POLL_EVENTS_PER_BATCH ||
+        selectedBytes + reduced > MAX_POLL_EVENT_BATCH_BYTES)
     )
       break;
-    n.push(...sliced);
-    r += reduced;
-    s = f;
+    selected.push(...sliced);
+    selectedBytes += reduced;
+    index = groupEnd;
   }
-  return n;
+  return selected;
 }
 //@ chunk-22r83hv0.js:13529-13678 placement
-function deliveryChunkedNote(e) {
-  return `<system>delivery chunked: ${e} more queued event(s) follow in the next delivery, oldest first; nothing was dropped.</system>`;
+function deliveryChunkedNote(remainingCount) {
+  return `<system>delivery chunked: ${remainingCount} more queued event(s) follow in the next delivery, oldest first; nothing was dropped.</system>`;
 }
 //@ chunk-22r83hv0.js:13678-13707 placement
-var EVENT_NONCE_BYTES = 6;
-var EVENT_NONCE_BASE64_LENGTH = 9 + Math.ceil((EVENT_NONCE_BYTES * 4) / 3);
+var EVENT_NONCE_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EVENT_NONCE_BASE64_LENGTH;
+deferInit("chunk-22r83hv0.js:13678", () => {
+  EVENT_NONCE_BYTES = 6;
+  EVENT_NONCE_BASE64_LENGTH = 9 + Math.ceil((EVENT_NONCE_BYTES * 4) / 3);
+});
 //@ chunk-22r83hv0.js:13707-13779 placement
 /**
  * envelopeLengthFor：按信封类型取长度。
  */
-function envelopeLengthFor(e) {
-  switch (e) {
+function envelopeLengthFor(kind) {
+  switch (kind) {
     case "element":
       return EVENT_NONCE_BASE64_LENGTH;
     case "json":
@@ -761,15 +795,15 @@ function deriveEventNonce(uuid) {
     .toString("base64url");
 }
 //@ chunk-22r83hv0.js:13942-14120 placement
-function withEventNonce(e, eventNonce, r) {
-  let s = `<event nonce="${eventNonce}"${e.slice(6)}`;
-  switch (r) {
+function withEventNonce(envelope, nonce, kind) {
+  let withNonce = `<event nonce="${nonce}"${envelope.slice(6)}`;
+  switch (kind) {
     case "element":
-      return s;
+      return withNonce;
     case "json":
-      return s.endsWith(EVENT_CLOSE_TAG)
-        ? `${s.slice(0, -EVENT_CLOSE_TAG.length)}</event nonce="${eventNonce}">`
-        : s;
+      return withNonce.endsWith(EVENT_CLOSE_TAG)
+        ? `${withNonce.slice(0, -EVENT_CLOSE_TAG.length)}</event nonce="${nonce}">`
+        : withNonce;
   }
 }
 //@ chunk-22r83hv0.js:14120-14183 placement
@@ -779,25 +813,25 @@ var EVENT_CLOSE_TAG_RE = /<\/event(?: nonce="([A-Za-z0-9_-]+)")?>$/;
 /**
  * detectEnvelopeKind：按结束标签判断信封类型。
  */
-function detectEnvelopeKind(e) {
-  return EVENT_CLOSE_TAG_RE.exec(e)?.[1] === undefined ? "element" : "json";
+function detectEnvelopeKind(envelope) {
+  return EVENT_CLOSE_TAG_RE.exec(envelope)?.[1] === undefined ? "element" : "json";
 }
 //@ chunk-22r83hv0.js:14247-14322 placement
 /**
  * envelopeNonceMatches：结束标签 nonce 与开头一致。
  */
-function envelopeNonceMatches(e) {
-  let n = EVENT_CLOSE_TAG_RE.exec(e)?.[1];
-  return n === undefined || n === EVENT_OPEN_TAG_RE.exec(e)?.[1];
+function envelopeNonceMatches(envelope) {
+  let closeNonce = EVENT_CLOSE_TAG_RE.exec(envelope)?.[1];
+  return closeNonce === undefined || closeNonce === EVENT_OPEN_TAG_RE.exec(envelope)?.[1];
 }
 //@ chunk-22r83hv0.js:14322-14363 placement
 var EVENT_OPEN_TAG_RE = /^<event nonce="([A-Za-z0-9_-]+)"/;
 //@ chunk-22r83hv0.js:14363-14576 placement
-function remintEventNonce(e, envelopeKind) {
-  let r = EVENT_OPEN_TAG_RE.exec(e)?.[1];
-  if (r === undefined) return e;
-  let eventNonce = deriveEventNonce(`remint:${r}`);
-  let replaced = e.replace(EVENT_OPEN_TAG_RE, `<event nonce="${eventNonce}"`);
+function remintEventNonce(envelope, envelopeKind) {
+  let oldNonce = EVENT_OPEN_TAG_RE.exec(envelope)?.[1];
+  if (oldNonce === undefined) return envelope;
+  let eventNonce = deriveEventNonce(`remint:${oldNonce}`);
+  let replaced = envelope.replace(EVENT_OPEN_TAG_RE, `<event nonce="${eventNonce}"`);
   switch (envelopeKind) {
     case "element":
       return replaced;
@@ -809,13 +843,13 @@ function remintEventNonce(e, envelopeKind) {
 /**
  * collectEventNonces：收集各事件信封的 nonce。
  */
-function collectEventNonces(e) {
-  let n = [];
-  for (let r of e) {
-    let match = EVENT_OPEN_TAG_RE.exec(r);
-    if (match !== null) n.push(match[1]);
+function collectEventNonces(envelopes) {
+  let nonces = [];
+  for (let envelope of envelopes) {
+    let match = EVENT_OPEN_TAG_RE.exec(envelope);
+    if (match !== null) nonces.push(match[1]);
   }
-  return n;
+  return nonces;
 }
 //@ chunk-22r83hv0.js:14667-14726 placement
 var AUTHENTIC_NONCES_PREFIX = "<system>authentic event nonces for this delivery: ";
@@ -827,33 +861,33 @@ function nonceListPreamble(eventNonces) {
   );
 }
 //@ chunk-22r83hv0.js:14918-15056 placement
-function isPollEventDeliveryText(e) {
+function isPollEventDeliveryText(text) {
   return (
-    e.startsWith(AUTHENTIC_NONCES_PREFIX) ||
-    e.startsWith("<event ") ||
-    (e.startsWith(`<${TOOLS_USED_BEFORE_SUMMARY_TAG}>`) &&
-      e
+    text.startsWith(AUTHENTIC_NONCES_PREFIX) ||
+    text.startsWith("<event ") ||
+    (text.startsWith(`<${TOOLS_USED_BEFORE_SUMMARY_TAG}>`) &&
+      text
         .slice(
-          e.indexOf(`
+          text.indexOf(`
 `) + 1,
         )
         .startsWith("<event "))
   );
 }
 //@ chunk-22r83hv0.js:15056-15240 placement
-function parseToolsUsedBeforeSummary(e) {
+function parseToolsUsedBeforeSummary(text) {
   let firstLine = getFirstLine(
-    e.startsWith(AUTHENTIC_NONCES_PREFIX)
-      ? e.slice(
-          e.indexOf(`
+    text.startsWith(AUTHENTIC_NONCES_PREFIX)
+      ? text.slice(
+          text.indexOf(`
 `) + 1,
         )
-      : e,
+      : text,
   );
-  let r = new RegExp(
+  let tagBody = new RegExp(
     `^<${TOOLS_USED_BEFORE_SUMMARY_TAG}>([^<\\n]*)</${TOOLS_USED_BEFORE_SUMMARY_TAG}>$`,
   ).exec(firstLine)?.[1];
-  return r === undefined ? undefined : r.split(",").map((s) => s.trim());
+  return tagBody === undefined ? undefined : tagBody.split(",").map((name) => name.trim());
 }
 //@ chunk-22r83hv0.js:15240-15804 placement
 /**
@@ -878,14 +912,15 @@ function parseDeliveredPollEvents(text) {
   if (
     mapped.length !== names.length ||
     new Set(names).size !== names.length ||
-    !mapped.every((g, v) => g === names[v]) ||
+    !mapped.every((name, index) => name === names[index]) ||
     !events.every(envelopeNonceMatches)
   )
     return;
   let pollEventDelivery = buildPollEventDelivery(events, 0, toolsUsedBeforeSummary);
   if (text === pollEventDelivery) return events;
-  let h = /^<system>delivery chunked: (\d+) /.exec(text.slice(pollEventDelivery.length + 1))?.[1];
-  return h !== undefined && text === buildPollEventDelivery(events, Number(h), toolsUsedBeforeSummary)
+  let chunkedCount = /^<system>delivery chunked: (\d+) /.exec(text.slice(pollEventDelivery.length + 1))?.[1];
+  return chunkedCount !== undefined &&
+    text === buildPollEventDelivery(events, Number(chunkedCount), toolsUsedBeforeSummary)
     ? events
     : undefined;
 }
@@ -893,52 +928,53 @@ function parseDeliveredPollEvents(text) {
 /**
  * 组装一次轮询事件投递文本：先列出本次有效的 event nonce 列表说明（无 nonce 的 event 视为引用文本），可选附带"总结前使用过的工具"，再接各事件信封，剩余未投递数大于 0 时追加"分批投递"提示。
  */
-function buildPollEventDelivery(e, remainingWakeCount, r) {
-  let s = [];
-  let eventNonces = collectEventNonces(e);
-  if (eventNonces.length > 0) s.push(nonceListPreamble(eventNonces));
-  if (r !== undefined && r.length > 0) s.push(toolsUsedManifestText(r).trimEnd());
-  s.push(...e);
-  if (remainingWakeCount > 0) s.push(deliveryChunkedNote(remainingWakeCount));
-  return s.join(`
+function buildPollEventDelivery(events, remainingWakeCount, toolsUsedBeforeSummary) {
+  let parts = [];
+  let eventNonces = collectEventNonces(events);
+  if (eventNonces.length > 0) parts.push(nonceListPreamble(eventNonces));
+  if (toolsUsedBeforeSummary !== undefined && toolsUsedBeforeSummary.length > 0)
+    parts.push(toolsUsedManifestText(toolsUsedBeforeSummary).trimEnd());
+  parts.push(...events);
+  if (remainingWakeCount > 0) parts.push(deliveryChunkedNote(remainingWakeCount));
+  return parts.join(`
 `);
 }
 //@ chunk-22r83hv0.js:15974-16072 placement
 /**
  * prependAttachmentsToText：把附件前置到文本块。
  */
-function prependAttachmentsToText(e, media) {
-  let r = (media ?? []).flat();
-  if (r.length === 0) return e;
+function prependAttachmentsToText(text, media) {
+  let attachments = (media ?? []).flat();
+  if (attachments.length === 0) return text;
   return [
     {
       type: "text",
-      text: e,
+      text,
     },
-    ...r,
+    ...attachments,
   ];
 }
 //@ chunk-22r83hv0.js:16072-16136 placement
 /**
  * settleDeliveredEvents：标记事件已投递。
  */
-function settleDeliveredEvents(e) {
-  for (let n of e) n.pollEvent?.settleDelivered?.();
+function settleDeliveredEvents(entries) {
+  for (let entry of entries) entry.pollEvent?.settleDelivered?.();
 }
 //@ chunk-22r83hv0.js:16136-16370 placement
-function discardPollEvent(e, n) {
-  let r = false;
-  for (let s of e) {
-    if (s.pollEvent === undefined) continue;
-    r = true;
-    s.pollEvent.settleDropped?.(
+function discardPollEvent(entries, reason) {
+  let anyDiscarded = false;
+  for (let entry of entries) {
+    if (entry.pollEvent === undefined) continue;
+    anyDiscarded = true;
+    entry.pollEvent.settleDropped?.(
       new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `poll event discarded undelivered: ${n}`,
+        `poll event discarded undelivered: ${reason}`,
         "poll event discarded undelivered",
       ),
     );
   }
-  if (r) logFeatureBad("poll_event_delivery", "discarded");
+  if (anyDiscarded) logFeatureBad("poll_event_delivery", "discarded");
 }
 //@ chunk-22r83hv0.js:16370-16402 placement
 /**

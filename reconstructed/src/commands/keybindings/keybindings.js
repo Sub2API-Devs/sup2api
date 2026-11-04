@@ -36,19 +36,19 @@ async function call(args, context) {
       value: "Keybinding customization is disabled in this environment.",
     };
   let keybindingsPath = getKeybindingsPath();
-  let i = false;
+  let created = false;
   let storageV5 = context.storageV5;
   if (storageV5) {
-    let o = await storageV5.write(keybindingsStoreKey, generateKeybindingsTemplate(), {
+    let writeResult = await storageV5.write(keybindingsStoreKey, generateKeybindingsTemplate(), {
       precondition: {
         type: "ifAbsent",
       },
     });
-    if (!o.ok)
-      if (o.error.code === "AlreadyExists") i = true;
+    if (!writeResult.ok)
+      if (writeResult.error.code === "AlreadyExists") created = true;
       else
         throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-          `keybindings template write failed: ${formatStorageError(o.error)}`,
+          `keybindings template write failed: ${formatStorageError(writeResult.error)}`,
           "keybindings template write failed",
         );
   } else {
@@ -59,7 +59,7 @@ async function call(args, context) {
         flag: "wx",
       });
     } catch (e) {
-      if (getErrnoCode(e) === "EEXIST") i = true;
+      if (getErrnoCode(e) === "EEXIST") created = true;
       else throw e;
     }
   }
@@ -67,15 +67,16 @@ async function call(args, context) {
   if (result.error)
     return {
       type: "text",
-      value: `${i ? "Opened" : "Created"} ${keybindingsPath}. ${result.error}`,
+      value: `${created ? "Opened" : "Created"} ${keybindingsPath}. ${result.error}`,
     };
-  let d = isSafeMode()
+  let safeModeNote = isSafeMode()
     ? ` (Safe mode: custom keybindings are disabled this session \u2014 changes take effect after you ${getSafeModeExitHint()}.)`
     : "";
   return {
     type: "text",
-    value: i
-      ? `Opened ${keybindingsPath} in your editor.${d}`
-      : `Created ${keybindingsPath} with template. Opened in your editor.${d}`,
+    value: created
+      ? `Opened ${keybindingsPath} in your editor.${safeModeNote}`
+      : `Created ${keybindingsPath} with template. Opened in your editor.${safeModeNote}`,
   };
 }
+export { call };

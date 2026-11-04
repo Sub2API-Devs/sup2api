@@ -17,12 +17,12 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growt
 /**
  * 把 WebSocket 关闭码（4090–4094、401 等）和原因翻译成给用户看的断线说明。
  */
-function describeBridgeCloseCode(n, h, w) {
-  switch (n) {
+function describeBridgeCloseCode(code, reason, details) {
+  switch (code) {
     case undefined:
       return "no close code received";
     case 4090:
-      switch (h) {
+      switch (reason) {
         case "superseded_by_worker":
           return "another connection took over this session (usually another device or Claude Code session) \u2014 this device is standing down (code 4090)";
         case "session_not_active":
@@ -45,11 +45,11 @@ function describeBridgeCloseCode(n, h, w) {
     case 401:
       return "auth token expired (code 401)";
     case 403: {
-      if (!isNonOriginSource(w?.rejectSource)) return "server rejected connection (code 403)";
-      let C = describeNonOriginRefusal(w.rejectSource);
-      if (w.streak === undefined) return C;
-      let max = Math.max(1, Math.round(w.streak.streakMs / 60000));
-      return `${C}, and kept refusing for ${max} ${plural(max, "minute")}`;
+      if (!isNonOriginSource(details?.rejectSource)) return "server rejected connection (code 403)";
+      let refusal = describeNonOriginRefusal(details.rejectSource);
+      if (details.streak === undefined) return refusal;
+      let max = Math.max(1, Math.round(details.streak.streakMs / 60000));
+      return `${refusal}, and kept refusing for ${max} ${plural(max, "minute")}`;
     }
     case 404:
       return "session not found on server (code 404)";
@@ -60,7 +60,7 @@ function describeBridgeCloseCode(n, h, w) {
     case 4003:
       return "server rejected credentials (code 4003)";
     default:
-      return `code ${n}`;
+      return `code ${code}`;
   }
 }
 //@ chunk-4cm44bmp.js:29580-29592 placement

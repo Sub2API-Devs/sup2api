@@ -5,11 +5,11 @@
  * pieces: chunk-hq88884p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-hq88884p.js:4952-5166 cjs-fingerprint
-var require_util_uri_escape = x(function (cjsExports) {
-  var escapeUri = (e) => encodeURIComponent(e).replace(/[!'()*]/g, hexEncode);
+var require_util_uri_escape = __commonJS(function (cjsExports) {
+  var escapeUri = (uri) => encodeURIComponent(uri).replace(/[!'()*]/g, hexEncode);
   var hexEncode = (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`;
   var escapeUriPath = (uri) => uri.split("/").map(escapeUri).join("/");
   cjsExports.escapeUri = escapeUri;

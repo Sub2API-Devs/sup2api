@@ -127,11 +127,11 @@ function parsePluginArgs(args) {
         type: "menu",
       };
     case "tag": {
-      let r = new Set(["--push", "--dry-run", "--force", "-f"]);
+      let flagNames = new Set(["--push", "--dry-run", "--force", "-f"]);
       let sliced = parts.slice(1);
-      let filtered = sliced.filter((i) => i.startsWith("-"));
-      let filtered_2 = sliced.filter((i) => !i.startsWith("-"));
-      let isMarketplace = filtered.find((i) => !r.has(i)) ?? filtered_2[1];
+      let filtered = sliced.filter((flag) => flag.startsWith("-"));
+      let filtered_2 = sliced.filter((arg) => !arg.startsWith("-"));
+      let isMarketplace = filtered.find((flag) => !flagNames.has(flag)) ?? filtered_2[1];
       return {
         type: "tag",
         path: filtered_2[0],
@@ -187,24 +187,24 @@ function parsePluginArgs(args) {
 //@ chunk-bppzggd7.js:2263-2319 placement
 var PLUGIN_INSTALL_USAGE_TEXT = "/plugin install <plugin> --marketplace <source>";
 //@ chunk-bppzggd7.js:2319-2665 placement
-function parseMarketplaceFlag(a) {
-  let index = a.findIndex((n) => n === "--marketplace" || n.startsWith("--marketplace="));
+function parseMarketplaceFlag(argv) {
+  let index = argv.findIndex((arg) => arg === "--marketplace" || arg.startsWith("--marketplace="));
   if (index === -1) return;
-  let s = a[index];
-  let r = s !== "--marketplace";
-  let e = validateMarketplaceInstallArgs({
-    plugins: a.filter((n, l) => l !== index && (r || l !== index + 1)),
-    marketplaceSource: r ? s.slice(14) : a[index + 1],
+  let token = argv[index];
+  let isBareFlag = token !== "--marketplace";
+  let result = validateMarketplaceInstallArgs({
+    plugins: argv.filter((arg, argIndex) => argIndex !== index && (isBareFlag || argIndex !== index + 1)),
+    marketplaceSource: isBareFlag ? token.slice(14) : argv[index + 1],
     commandLine: PLUGIN_INSTALL_USAGE_TEXT,
   });
-  return "usageError" in e
+  return "usageError" in result
     ? {
         type: "usage-error",
-        message: e.usageError,
+        message: result.usageError,
       }
     : {
         type: "install-from-source",
-        ...e,
+        ...result,
       };
 }
 //@ chunk-bppzggd7.js:2665-3116 placement
@@ -213,17 +213,17 @@ function validateMarketplaceInstallArgs({ plugins, marketplaceSource, commandLin
     return {
       usageError: `--marketplace needs a marketplace source (owner/repo or a URL). Usage: ${commandLine}`,
     };
-  let r = plugins[0];
-  if (plugins.length !== 1 || !r || r.startsWith("-"))
+  let firstPlugin = plugins[0];
+  if (plugins.length !== 1 || !firstPlugin || firstPlugin.startsWith("-"))
     return {
       usageError: `--marketplace needs exactly one plugin name. Usage: ${commandLine}`,
     };
-  if (r.lastIndexOf("@") > 0)
+  if (firstPlugin.lastIndexOf("@") > 0)
     return {
       usageError: `Name the marketplace once: <plugin>@<marketplace>, or ${commandLine}`,
     };
   return {
-    plugin: r,
+    plugin: firstPlugin,
     marketplaceSource,
   };
 }

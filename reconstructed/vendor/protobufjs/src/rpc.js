@@ -5,11 +5,11 @@
  * pieces: chunk-798ashq9.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_service } from "./rpc/service.js";
 
 //@ chunk-798ashq9.js:40656-40707 cjs-fingerprint
-var require_rpc = x(function (cjsExports) {
+var require_rpc = __commonJS(function (cjsExports) {
   var rpc = cjsExports;
   rpc.Service = require_service();
 });

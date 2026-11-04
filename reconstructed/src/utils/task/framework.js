@@ -40,7 +40,7 @@ import { logForDebugging } from "../debug.js";
 import { getTaskOutputDelta, getTaskOutputPath } from "./diskOutput.js";
 import { isLocalAgent } from "../../state/teammateViewHelpers.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { TodoListSchema } from "../todo/types.js";
 import { TODO_WRITE_TOOL_NAME } from "../../tools/TodoWriteTool/constants.js";
 import { TASK_CREATE_TOOL_NAME } from "../../tools/TaskCreateTool/constants.js";
@@ -55,6 +55,7 @@ import { escapeXml_2 as escapeXml } from "../confusables.js";
 import { REMOTE_TASK_PREFIX, NOTE } from "../../constants/xml.js";
 import { mainAgentId } from "../../bootstrap/state.js";
 import { BACKGROUND_STOP_EXPLANATIONS } from "../../tasks/LocalShellTask/backgroundNotices.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6vnxsn99.js:62273-62322 placement
 /**
@@ -72,12 +73,13 @@ var MCP_TASK_KEEPALIVE_MS = 30000;
 var TASK_EVICTION_GRACE_MS = 30000;
 //@ chunk-6vnxsn99.js:63460-63652 placement
 function hasOtherActiveAgents(tasks, taskId) {
-  for (let r of Object.values(tasks))
+  for (let task of Object.values(tasks))
     if (
-      r.id !== taskId &&
-      (r.type === "in_process_teammate" || (r.type === "local_agent" && r.agentType !== "main-session")) &&
-      !isTerminalTaskStatus(r.status) &&
-      !r.isIdle
+      task.id !== taskId &&
+      (task.type === "in_process_teammate" ||
+        (task.type === "local_agent" && task.agentType !== "main-session")) &&
+      !isTerminalTaskStatus(task.status) &&
+      !task.isIdle
     )
       return true;
   return false;
@@ -86,158 +88,164 @@ function hasOtherActiveAgents(tasks, taskId) {
 /**
  * 任务框架（register/update/updateTranscript/remove…）：把任务状态写进 AppState.tasks，并发出 task_updated 等 SDK 事件。
  */
-function createTaskFramework(e, setAppState, { refillWebSearchBudgetByDefault: r = false } = {}) {
-  let o;
+function createTaskFramework(
+  getState,
+  setAppState,
+  { refillWebSearchBudgetByDefault: refillsByDefault = false } = {},
+) {
+  let webSearchBudget;
   return {
     register(task) {
       registerTask(task, setAppState);
     },
-    update(s, a) {
-      updateTaskState(s, setAppState, a);
+    update(taskId, patch) {
+      updateTaskState(taskId, setAppState, patch);
     },
-    updateTranscript(s, a) {
-      setAppState((u) => {
-        let h = ownProperty(u.transcripts, s) ?? INITIAL_IN_PROGRESS_STATE;
-        let p = a(h);
-        if (p === h) return u;
+    updateTranscript(taskId_2, updater) {
+      setAppState((prev) => {
+        let prevTranscript = ownProperty(prev.transcripts, taskId_2) ?? INITIAL_IN_PROGRESS_STATE;
+        let nextTranscript = updater(prevTranscript);
+        if (nextTranscript === prevTranscript) return prev;
         return {
-          ...u,
+          ...prev,
           transcripts: {
-            ...u.transcripts,
-            [s]: p,
+            ...prev.transcripts,
+            [taskId_2]: nextTranscript,
           },
         };
       });
     },
-    getTranscript(s) {
-      return ownProperty(e().transcripts, s);
+    getTranscript(taskId_3) {
+      return ownProperty(getState().transcripts, taskId_3);
     },
-    remove(s) {
-      getTaskRunState().taskEvicted.emit(s);
-      setAppState((a) => {
-        if (!Object.hasOwn(a.tasks, s)) return a;
-        let { [s]: u, ...h } = a.tasks;
-        let transcripts = a.transcripts ?? {};
-        let { [s]: S, ...y } = transcripts;
+    remove(taskId_4) {
+      getTaskRunState().taskEvicted.emit(taskId_4);
+      setAppState((prev_2) => {
+        if (!Object.hasOwn(prev_2.tasks, taskId_4)) return prev_2;
+        let { [taskId_4]: removedTask, ...remainingTasks } = prev_2.tasks;
+        let transcripts = prev_2.transcripts ?? {};
+        let { [taskId_4]: removedTranscript, ...remainingTranscripts } = transcripts;
         return {
-          ...a,
-          tasks: h,
-          transcripts: s in transcripts ? y : transcripts,
+          ...prev_2,
+          tasks: remainingTasks,
+          transcripts: taskId_4 in transcripts ? remainingTranscripts : transcripts,
         };
       });
     },
-    evictTerminal(s) {
-      evictTerminalTaskIfReady(s, setAppState);
+    evictTerminal(taskId_5) {
+      evictTerminalTaskIfReady(taskId_5, setAppState);
     },
     applyOffsetsAndEvict(updatedTaskOffsets, evictedTaskIds) {
       applyTaskOffsetsAndEvictions(setAppState, updatedTaskOffsets, evictedTaskIds);
     },
-    get(s) {
-      return ownProperty(e().tasks, s);
+    get(taskId_6) {
+      return ownProperty(getState().tasks, taskId_6);
     },
     all() {
-      return e().tasks;
+      return getState().tasks;
     },
     getWebSearchBudget() {
-      return (o ??= createWebSearchBudget({
-        refillsByDefault: r,
+      return (webSearchBudget ??= createWebSearchBudget({
+        refillsByDefault,
       }));
     },
     resetWebSearchBudget() {
-      o = undefined;
+      webSearchBudget = undefined;
     },
     takeConcurrencySlot() {
-      setAppState((a) => ({
-        ...a,
-        runningSubagents: a.runningSubagents + 1,
+      setAppState((prev_3) => ({
+        ...prev_3,
+        runningSubagents: prev_3.runningSubagents + 1,
       }));
-      let s = false;
+      let released = false;
       return () => {
-        if (s) return;
-        s = true;
-        setAppState((a) => {
-          let max = Math.max(0, a.runningSubagents - 1);
-          if (max === a.runningSubagents) return a;
+        if (released) return;
+        released = true;
+        setAppState((prev_4) => {
+          let max = Math.max(0, prev_4.runningSubagents - 1);
+          if (max === prev_4.runningSubagents) return prev_4;
           return {
-            ...a,
+            ...prev_4,
             runningSubagents: max,
           };
         });
       };
     },
     getConcurrentSubagents() {
-      return e().runningSubagents;
+      return getState().runningSubagents;
     },
   };
 }
 //@ chunk-6vnxsn99.js:64633-65517 placement
-function updateTaskState(e, n, r) {
-  let o = null;
-  let s = null;
-  let a = false;
-  using u = holdDiagLevels();
-  n((h) => {
-    let p = ownProperty(h.tasks, e);
-    if (!p) return h;
-    let S = r(p);
-    if (S === p) return h;
-    o = taskStateDiff(p, S);
-    a = isObserverAgentTask(S);
-    if (!isTerminalTaskStatus(p.status) && isTerminalTaskStatus(S.status))
-      s = {
-        status: S.status === "completed" ? "completed" : S.status === "failed" ? "failed" : "stopped",
+function updateTaskState(taskId, setAppState, updateFn) {
+  let patch = null;
+  let terminalNotice = null;
+  let isObserver = false;
+  using diagHold = holdDiagLevels();
+  setAppState((prev) => {
+    let existingTask = ownProperty(prev.tasks, taskId);
+    if (!existingTask) return prev;
+    let nextTask = updateFn(existingTask);
+    if (nextTask === existingTask) return prev;
+    patch = taskStateDiff(existingTask, nextTask);
+    isObserver = isObserverAgentTask(nextTask);
+    if (!isTerminalTaskStatus(existingTask.status) && isTerminalTaskStatus(nextTask.status))
+      terminalNotice = {
+        status:
+          nextTask.status === "completed" ? "completed" : nextTask.status === "failed" ? "failed" : "stopped",
         opts: {
-          toolUseId: S.toolUseId,
-          summary: S.terminal?.summary ?? S.description,
-          failureKind: failureKindOf(S.terminal),
+          toolUseId: nextTask.toolUseId,
+          summary: nextTask.terminal?.summary ?? nextTask.description,
+          failureKind: failureKindOf(nextTask.terminal),
           outputFile:
-            "webFetchSavedFiles" in S && S.webFetchSavedFiles !== undefined
+            "webFetchSavedFiles" in nextTask && nextTask.webFetchSavedFiles !== undefined
               ? undefined
-              : (S.terminal?.output_file ?? S.outputFile),
-          usage: S.terminal?.usage,
-          resourceLinks: S.terminal?.resource_links,
-          handback: S.terminal?.handback,
-          handbackReport: S.terminal?.handback_report,
-          skipTranscript: S.skipTranscript,
-          ambient: skipsTranscript(S),
+              : (nextTask.terminal?.output_file ?? nextTask.outputFile),
+          usage: nextTask.terminal?.usage,
+          resourceLinks: nextTask.terminal?.resource_links,
+          handback: nextTask.terminal?.handback,
+          handbackReport: nextTask.terminal?.handback_report,
+          skipTranscript: nextTask.skipTranscript,
+          ambient: skipsTranscript(nextTask),
         },
       };
     return {
-      ...h,
+      ...prev,
       tasks: {
-        ...h.tasks,
-        [e]: S,
+        ...prev.tasks,
+        [taskId]: nextTask,
       },
     };
   });
-  if (s === null) u.release();
-  if (o !== null && !a) {
-    let h = {
+  if (terminalNotice === null) diagHold.release();
+  if (patch !== null && !isObserver) {
+    let patchEvent = {
       type: "system",
       subtype: "task_updated",
-      task_id: e,
-      run_id: getRunId(e),
-      patch: o,
+      task_id: taskId,
+      run_id: getRunId(taskId),
+      patch,
     };
-    enqueueTaskNotification_2(withFailureKind(h, s?.opts?.failureKind));
+    enqueueTaskNotification_2(withFailureKind(patchEvent, terminalNotice?.opts?.failureKind));
   }
-  if (s !== null && !a) emitTaskNotification(e, s.status, s.opts);
+  if (terminalNotice !== null && !isObserver)
+    emitTaskNotification(taskId, terminalNotice.status, terminalNotice.opts);
 }
 //@ chunk-6vnxsn99.js:65517-66032 placement
-function taskStateDiff(e, n) {
-  let r = {};
-  if (n.status !== e.status) r.status = n.status;
-  if (n.description !== e.description) r.description = n.description;
-  if (n.endTime !== e.endTime) r.end_time = n.endTime;
-  if (n.totalPausedMs !== e.totalPausedMs) r.total_paused_ms = n.totalPausedMs;
-  let error = "error" in e ? e.error : undefined;
-  let error_2 = "error" in n ? n.error : undefined;
-  if (error_2 !== error && error_2 !== undefined) r.error = error_2;
-  let isBackgrounded = "isBackgrounded" in e ? e.isBackgrounded : undefined;
-  let isBackgrounded_2 = "isBackgrounded" in n ? n.isBackgrounded : undefined;
+function taskStateDiff(prevTask, nextTask) {
+  let patch = {};
+  if (nextTask.status !== prevTask.status) patch.status = nextTask.status;
+  if (nextTask.description !== prevTask.description) patch.description = nextTask.description;
+  if (nextTask.endTime !== prevTask.endTime) patch.end_time = nextTask.endTime;
+  if (nextTask.totalPausedMs !== prevTask.totalPausedMs) patch.total_paused_ms = nextTask.totalPausedMs;
+  let error = "error" in prevTask ? prevTask.error : undefined;
+  let error_2 = "error" in nextTask ? nextTask.error : undefined;
+  if (error_2 !== error && error_2 !== undefined) patch.error = error_2;
+  let isBackgrounded = "isBackgrounded" in prevTask ? prevTask.isBackgrounded : undefined;
+  let isBackgrounded_2 = "isBackgrounded" in nextTask ? nextTask.isBackgrounded : undefined;
   if (isBackgrounded_2 !== isBackgrounded && isBackgrounded_2 !== undefined)
-    r.is_backgrounded = isBackgrounded_2;
-  return Object.keys(r).length > 0 ? r : null;
+    patch.is_backgrounded = isBackgrounded_2;
+  return Object.keys(patch).length > 0 ? patch : null;
 }
 //@ chunk-6vnxsn99.js:66032-66129 placement
 function ownedBySubagentFlag(task) {
@@ -245,40 +253,40 @@ function ownedBySubagentFlag(task) {
   return;
 }
 //@ chunk-6vnxsn99.js:66129-66353 placement
-function isChildOfAgent(e, n) {
-  if (e.type !== "local_agent") return false;
-  for (let r of ["parentAgentId", "ownerAgentId"]) {
-    let o = r in e ? e[r] : undefined;
-    if (typeof o !== "string" || !Object.hasOwn(n, o)) continue;
-    if (n[o].chatPinForfeited === true) return true;
+function isChildOfAgent(task, tasks) {
+  if (task.type !== "local_agent") return false;
+  for (let idField of ["parentAgentId", "ownerAgentId"]) {
+    let idValue = idField in task ? task[idField] : undefined;
+    if (typeof idValue !== "string" || !Object.hasOwn(tasks, idValue)) continue;
+    if (tasks[idValue].chatPinForfeited === true) return true;
   }
   return false;
 }
 //@ chunk-6vnxsn99.js:66353-66494 placement
-function isChatPinForfeited(e) {
-  let agentId = e.type === "local_agent" && "agentId" in e ? e.agentId : undefined;
+function isChatPinForfeited(task) {
+  let agentId = task.type === "local_agent" && "agentId" in task ? task.agentId : undefined;
   return typeof agentId === "string" && getTaskRunState().chatPinForfeitedAgentIds.has(agentId);
 }
 //@ chunk-6vnxsn99.js:66494-66534 placement
 /**
  * 任务既不是子代理任务也不是被放弃的聊天任务。
  */
-function isChildOrForfeited(e, tasks) {
-  return isChildOfAgent(e, tasks) || isChatPinForfeited(e);
+function isChildOrForfeited(task, tasks) {
+  return isChildOfAgent(task, tasks) || isChatPinForfeited(task);
 }
 //@ chunk-6vnxsn99.js:66534-68435 fingerprint = registerTask (0.473)
 /**
  * 把后台任务注册进 AppState.tasks，并发出 SDK 任务开始事件。
  */
 function registerTask(task, setAppState) {
-  let o = claimTerminalEmit(task.id) && !isTerminalTaskStatus(task.status);
-  if (o || !getTaskRunState().runIds.has(task.id)) setTaskRunId(task.id);
-  let s = false;
-  let a = task;
+  let isNewRun = claimTerminalEmit(task.id) && !isTerminalTaskStatus(task.status);
+  if (isNewRun || !getTaskRunState().runIds.has(task.id)) setTaskRunId(task.id);
+  let isExisting = false;
+  let mergedTask = task;
   let parentTaskId;
   setAppState((prev) => {
     let existing = prev.tasks[task.id];
-    s = existing !== undefined;
+    isExisting = existing !== undefined;
     let merged =
       existing && "retain" in existing
         ? {
@@ -338,7 +346,7 @@ function registerTask(task, setAppState) {
               chatPinForfeited: true,
             }
           : task;
-    a = merged;
+    mergedTask = merged;
     parentTaskId = taskParentAgentId(merged, prev.tasks);
     return {
       ...prev,
@@ -348,7 +356,7 @@ function registerTask(task, setAppState) {
       },
     };
   });
-  if (s && !o) return;
+  if (isExisting && !isNewRun) return;
   if (isObserverAgentTask(task)) return;
   if (isHoldCappedMcpTask(task)) return;
   enqueueTaskNotification_2({
@@ -360,11 +368,11 @@ function registerTask(task, setAppState) {
     tool_use_id: task.toolUseId,
     description: task.description,
     subagent_type: getSelectableBackgroundTasks(task),
-    is_backgrounded: "isBackgrounded" in a ? a.isBackgrounded : undefined,
-    ...(isAwaitedAgentTask(a) && {
+    is_backgrounded: "isBackgrounded" in mergedTask ? mergedTask.isBackgrounded : undefined,
+    ...(isAwaitedAgentTask(mergedTask) && {
       awaited: true,
     }),
-    spawn_depth: "spawnDepth" in a ? a.spawnDepth : undefined,
+    spawn_depth: "spawnDepth" in mergedTask ? mergedTask.spawnDepth : undefined,
     parent_task_id: parentTaskId,
     task_type: task.type,
     workflow_name: "workflowName" in task ? task.workflowName : undefined,
@@ -376,31 +384,35 @@ function registerTask(task, setAppState) {
   });
 }
 //@ chunk-6vnxsn99.js:68435-68990 layout
-function evictTerminalTaskIfReady(e, n) {
-  let r = false;
-  n((prev) => {
-    let s = ownProperty(prev.tasks, e);
-    if (!s) return prev;
-    if (!isTerminalTaskStatus(s.status)) return prev;
-    if (!s.notified) return prev;
-    if ("retain" in s && (s.evictAfter ?? 1 / 0) > Date.now()) return prev;
-    if ("retain" in s && (s.keepaliveReasons?.size ?? 0) > 0) return prev;
-    if (s.type === "local_workflow" && ((s.evictAfter ?? 0) > Date.now() || !isTaskLoopSettled(e)))
+function evictTerminalTaskIfReady(taskId, setAppState) {
+  let evicted = false;
+  setAppState((prev) => {
+    let existingTask = ownProperty(prev.tasks, taskId);
+    if (!existingTask) return prev;
+    if (!isTerminalTaskStatus(existingTask.status)) return prev;
+    if (!existingTask.notified) return prev;
+    if ("retain" in existingTask && (existingTask.evictAfter ?? 1 / 0) > Date.now()) return prev;
+    if ("retain" in existingTask && (existingTask.keepaliveReasons?.size ?? 0) > 0) return prev;
+    if (
+      existingTask.type === "local_workflow" &&
+      ((existingTask.evictAfter ?? 0) > Date.now() || !isTaskLoopSettled(taskId))
+    )
       return prev;
-    if (s.type === "mcp_task" && (s.endTime ?? 0) + MCP_TASK_KEEPALIVE_MS > Date.now()) return prev;
-    r = true;
-    let { [e]: a, ...remainingTasks } = prev.tasks;
+    if (existingTask.type === "mcp_task" && (existingTask.endTime ?? 0) + MCP_TASK_KEEPALIVE_MS > Date.now())
+      return prev;
+    evicted = true;
+    let { [taskId]: removedTask, ...remainingTasks } = prev.tasks;
     let transcripts = prev.transcripts ?? {};
-    let { [e]: p, ...S } = transcripts;
+    let { [taskId]: removedTranscript, ...remainingTranscripts } = transcripts;
     return {
       ...prev,
       tasks: remainingTasks,
-      transcripts: e in transcripts ? S : transcripts,
+      transcripts: taskId in transcripts ? remainingTranscripts : transcripts,
     };
   });
-  if (r) {
-    logForDebugging(`evictTerminalTask: evicted task ${e}`);
-    getTaskRunState().taskEvicted.emit(e);
+  if (evicted) {
+    logForDebugging(`evictTerminalTask: evicted task ${taskId}`);
+    getTaskRunState().taskEvicted.emit(taskId);
   }
 }
 //@ chunk-6vnxsn99.js:68990-69082 fingerprint = getRunningTasks (1)
@@ -449,9 +461,9 @@ async function generateTaskAttachments(state) {
 function applyTaskOffsetsAndEvictions(setAppState, updatedTaskOffsets, evictedTaskIds) {
   let offsetIds = Object.keys(updatedTaskOffsets);
   if (offsetIds.length === 0 && evictedTaskIds.length === 0) return;
-  let s = [];
+  let evictedIds = [];
   setAppState((prev) => {
-    let u = false;
+    let changed = false;
     let newTasks = {
       ...prev.tasks,
     };
@@ -462,95 +474,123 @@ function applyTaskOffsetsAndEvictions(setAppState, updatedTaskOffsets, evictedTa
           ...fresh,
           outputOffset: updatedTaskOffsets[id],
         };
-        u = true;
+        changed = true;
       }
     }
     for (let id of evictedTaskIds) {
-      let y = newTasks[id];
-      if (!y || !isTerminalTaskStatus(y.status) || !y.notified) continue;
-      if ("retain" in y && (y.evictAfter ?? 1 / 0) > Date.now()) continue;
-      if ("retain" in y && (y.keepaliveReasons?.size ?? 0) > 0) continue;
-      if (y.type === "local_workflow" && ((y.evictAfter ?? 0) > Date.now() || !isTaskLoopSettled(id)))
+      let task = newTasks[id];
+      if (!task || !isTerminalTaskStatus(task.status) || !task.notified) continue;
+      if ("retain" in task && (task.evictAfter ?? 1 / 0) > Date.now()) continue;
+      if ("retain" in task && (task.keepaliveReasons?.size ?? 0) > 0) continue;
+      if (task.type === "local_workflow" && ((task.evictAfter ?? 0) > Date.now() || !isTaskLoopSettled(id)))
         continue;
-      if (y.type === "mcp_task" && (y.endTime ?? 0) + MCP_TASK_KEEPALIVE_MS > Date.now()) continue;
+      if (task.type === "mcp_task" && (task.endTime ?? 0) + MCP_TASK_KEEPALIVE_MS > Date.now()) continue;
       delete newTasks[id];
       claimTerminalEmit(id);
-      s.push(id);
-      u = true;
+      evictedIds.push(id);
+      changed = true;
     }
-    if (!u) return prev;
-    let p;
-    for (let S of s)
-      if (prev.transcripts && S in prev.transcripts) {
-        p ??= {
+    if (!changed) return prev;
+    let nextTranscripts;
+    for (let taskId of evictedIds)
+      if (prev.transcripts && taskId in prev.transcripts) {
+        nextTranscripts ??= {
           ...prev.transcripts,
         };
-        delete p[S];
+        delete nextTranscripts[taskId];
       }
     return {
       ...prev,
       tasks: newTasks,
-      ...(p && {
-        transcripts: p,
+      ...(nextTranscripts && {
+        transcripts: nextTranscripts,
       }),
     };
   });
-  for (let a of s) {
-    logForDebugging(`applyTaskOffsetsAndEvictions: evicted task ${a}`);
-    getTaskRunState().taskEvicted.emit(a);
+  for (let taskId_2 of evictedIds) {
+    logForDebugging(`applyTaskOffsetsAndEvictions: evicted task ${taskId_2}`);
+    getTaskRunState().taskEvicted.emit(taskId_2);
   }
 }
 //@ chunk-6vnxsn99.js:71537-71907 placement
-function removeKeepaliveReason(e, n, r) {
-  if (!e) return;
-  let o = r.get(e);
-  let s = isLocalAgent(o) && keepaliveReasons(o).has(n);
-  r.update(e, (a) => {
-    if (!isLocalAgent(a) || !keepaliveReasons(a).has(n)) return a;
-    let u = new Set(keepaliveReasons(a));
-    u.delete(n);
-    let h = isCompletedBackgroundAgent(a);
-    let p = u.size === 0 && isTerminalTaskStatus(a.status) && !a.retain && !h;
+function removeKeepaliveReason(taskId, reason, state) {
+  if (!taskId) return;
+  let currentTask = state.get(taskId);
+  let hadReason = isLocalAgent(currentTask) && keepaliveReasons(currentTask).has(reason);
+  state.update(taskId, (task) => {
+    if (!isLocalAgent(task) || !keepaliveReasons(task).has(reason)) return task;
+    let remainingReasons = new Set(keepaliveReasons(task));
+    remainingReasons.delete(reason);
+    let isParkedCompleted = isCompletedBackgroundAgent(task);
+    let shouldEvict =
+      remainingReasons.size === 0 && isTerminalTaskStatus(task.status) && !task.retain && !isParkedCompleted;
     return {
-      ...a,
-      keepaliveReasons: u,
-      ...(u.size === 0 &&
-        h &&
-        a.quietlyParked === true && {
+      ...task,
+      keepaliveReasons: remainingReasons,
+      ...(remainingReasons.size === 0 &&
+        isParkedCompleted &&
+        task.quietlyParked === true && {
           quietlyParked: false,
         }),
-      ...(p &&
-        a.evictAfter === undefined && {
+      ...(shouldEvict &&
+        task.evictAfter === undefined && {
           evictAfter: Date.now() + MCP_TASK_KEEPALIVE_MS,
         }),
     };
   });
-  if (s) releaseIfFinished(e, r);
+  if (hadReason) releaseIfFinished(taskId, state);
 }
 //@ chunk-6vnxsn99.js:71907-71957 placement
-function agentEvictAt(e) {
-  return isCompletedBackgroundAgent(e) ? undefined : Date.now() + MCP_TASK_KEEPALIVE_MS;
+function agentEvictAt(task) {
+  return isCompletedBackgroundAgent(task) ? undefined : Date.now() + MCP_TASK_KEEPALIVE_MS;
+}
+//@ chunk-gppkhxdv.js:261-450 placement
+/**
+ * 认领任务通知：任务尚未通知时标记为已通知（运行中且要求跳过时不标记），返回是否认领成功与任务快照。
+ */
+function claimTaskNotification(taskId, taskRegistry, options) {
+  let claimed = false;
+  let task;
+  taskRegistry.update(taskId, (task_2) => {
+    task = task_2;
+    if (task_2.notified) return task_2;
+    claimed = true;
+    if (options?.skipStampIfRunning && task_2.status === "running") return task_2;
+    return {
+      ...task_2,
+      notified: true,
+    };
+  });
+  return {
+    claimed,
+    task,
+  };
 }
 //@ chunk-e6aww6q8.js:1779529-1779561 placement
-var todoListSchema = DoctorLazy(() =>
-  u({
-    todos: TodoListSchema(),
-  }),
-);
+var todoListSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1779529", () => {
+  todoListSchema = DoctorLazy(() =>
+    objectSchema({
+      todos: TodoListSchema(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:1779561-1779826 placement = getLastToolUseName (0.817)
 /**
  * 从消息中取最后一次（非子代理）TodoWrite 调用的 todos。
  */
 function getTodosFromLastTodoWrite(message) {
   let block = message.findLast(
-    (s) =>
-      s.type === "assistant" &&
-      !s.parent_tool_use_id &&
-      s.message.content.some((h) => h.type === "tool_use" && h.name === TODO_WRITE_TOOL_NAME),
+    (messageBlock) =>
+      messageBlock.type === "assistant" &&
+      !messageBlock.parent_tool_use_id &&
+      messageBlock.message.content.some(
+        (toolBlock) => toolBlock.type === "tool_use" && toolBlock.name === TODO_WRITE_TOOL_NAME,
+      ),
   );
   if (!block) return [];
   let input = block.message.content.find(
-    (s) => s.type === "tool_use" && s.name === TODO_WRITE_TOOL_NAME,
+    (todoBlock) => todoBlock.type === "tool_use" && todoBlock.name === TODO_WRITE_TOOL_NAME,
   )?.input;
   if (!input) return [];
   return parseTodoWriteTodos(input);
@@ -559,126 +599,134 @@ function getTodosFromLastTodoWrite(message) {
 /**
  * 按 TodoWrite 输入 schema 解析 todos，失败返回 []。
  */
-function parseTodoWriteTodos(e) {
-  let n = todoListSchema().safeParse(e);
-  return n.success ? n.data.todos : [];
+function parseTodoWriteTodos(input) {
+  let parsed = todoListSchema().safeParse(input);
+  return parsed.success ? parsed.data.todos : [];
 }
 //@ chunk-e6aww6q8.js:1779900-1780143 placement
 /**
  * 任务创建成功消息的正则，以及 TaskCreate / TaskUpdate 输入 schema。
  */
-var TASK_CREATED_RE = /^Task #(\S+) created successfully/;
-var taskCreateInputSchema = DoctorLazy(() =>
-  u({
-    subject: string(),
-    activeForm: string().optional(),
-  }),
-);
-var taskUpdateInputSchema = DoctorLazy(() =>
-  u({
-    taskId: string(),
-    status: _enum(["pending", "in_progress", "completed", "deleted"]).optional(),
-    subject: string().optional(),
-    activeForm: string().optional(),
-  }),
-);
+var TASK_CREATED_RE; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var taskCreateInputSchema;
+var taskUpdateInputSchema;
+deferInit("chunk-e6aww6q8.js:1779900", () => {
+  TASK_CREATED_RE = /^Task #(\S+) created successfully/;
+  taskCreateInputSchema = DoctorLazy(() =>
+    objectSchema({
+      subject: stringSchema(),
+      activeForm: stringSchema().optional(),
+    }),
+  );
+  taskUpdateInputSchema = DoctorLazy(() =>
+    objectSchema({
+      taskId: stringSchema(),
+      status: _enum(["pending", "in_progress", "completed", "deleted"]).optional(),
+      subject: stringSchema().optional(),
+      activeForm: stringSchema().optional(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:1780143-1780717 placement
 /**
  * 跟踪 TaskCreate/TaskUpdate 工具调用以推断任务列表：创建时记入 pendingCreates（内容、进行时文案、pending），更新时按 taskId 记录状态/标题变更。
  */
-function trackTaskToolUse(e, n) {
-  if (n.name === TASK_CREATE_TOOL_NAME) {
-    let r = coerceTaskCreateInput(n.input);
-    let s = taskCreateInputSchema().safeParse(r?.input ?? n.input);
-    if (!s.success) return false;
-    e.pendingCreates.set(n.id, {
-      content: s.data.subject,
-      activeForm: s.data.activeForm ?? s.data.subject,
+function trackTaskToolUse(state, input) {
+  if (input.name === TASK_CREATE_TOOL_NAME) {
+    let coerced = coerceTaskCreateInput(input.input);
+    let parsed = taskCreateInputSchema().safeParse(coerced?.input ?? input.input);
+    if (!parsed.success) return false;
+    state.pendingCreates.set(input.id, {
+      content: parsed.data.subject,
+      activeForm: parsed.data.activeForm ?? parsed.data.subject,
       status: "pending",
     });
     return true;
   }
-  if (n.name === TASK_UPDATE_TOOL_NAME) {
-    let r = normalizeTaskInputAliases(n.input);
-    let s = taskUpdateInputSchema().safeParse(r?.input ?? n.input);
-    if (!s.success) return false;
-    let { taskId, status, subject, activeForm } = s.data;
-    if (status === "deleted") return e.tasks.delete(taskId);
-    let L = e.tasks.get(taskId);
-    e.tasks.set(taskId, {
-      content: subject ?? L?.content ?? taskId,
-      activeForm: activeForm ?? L?.activeForm ?? subject ?? taskId,
-      status: status ?? L?.status ?? "pending",
+  if (input.name === TASK_UPDATE_TOOL_NAME) {
+    let coerced_2 = normalizeTaskInputAliases(input.input);
+    let parsed_2 = taskUpdateInputSchema().safeParse(coerced_2?.input ?? input.input);
+    if (!parsed_2.success) return false;
+    let { taskId, status, subject, activeForm } = parsed_2.data;
+    if (status === "deleted") return state.tasks.delete(taskId);
+    let previousTask = state.tasks.get(taskId);
+    state.tasks.set(taskId, {
+      content: subject ?? previousTask?.content ?? taskId,
+      activeForm: activeForm ?? previousTask?.activeForm ?? subject ?? taskId,
+      status: status ?? previousTask?.status ?? "pending",
     });
     return true;
   }
   return false;
 }
 //@ chunk-e6aww6q8.js:1780717-1781079 layout
-function resolvePendingTaskCreate(e, n) {
-  let r = e.pendingCreates.get(n.tool_use_id);
-  if (!r) return false;
-  if (n.is_error) {
-    e.pendingCreates.delete(n.tool_use_id);
+function resolvePendingTaskCreate(state, result) {
+  let pendingCreate = state.pendingCreates.get(result.tool_use_id);
+  if (!pendingCreate) return false;
+  if (result.is_error) {
+    state.pendingCreates.delete(result.tool_use_id);
     return true;
   }
-  let s = "";
-  if (typeof n.content === "string") s = n.content;
-  else if (Array.isArray(n.content)) s = extractTextContent_2(n.content);
-  let h = s.match(TASK_CREATED_RE)?.[1];
-  if (!h) return false;
-  e.pendingCreates.delete(n.tool_use_id);
-  if (!e.tasks.has(h)) e.tasks.set(h, r);
+  let text = "";
+  if (typeof result.content === "string") text = result.content;
+  else if (Array.isArray(result.content)) text = extractTextContent_2(result.content);
+  let createdTaskId = text.match(TASK_CREATED_RE)?.[1];
+  if (!createdTaskId) return false;
+  state.pendingCreates.delete(result.tool_use_id);
+  if (!state.tasks.has(createdTaskId)) state.tasks.set(createdTaskId, pendingCreate);
   return true;
 }
 //@ chunk-e6aww6q8.js:1781079-1781152 layout
-function getAllTrackedTasks(e) {
-  return [...e.tasks.values(), ...e.pendingCreates.values()];
+function getAllTrackedTasks(state) {
+  return [...state.tasks.values(), ...state.pendingCreates.values()];
 }
 //@ chunk-e6aww6q8.js:1781152-1781696 callgraph-fingerprint = updateTaskState (0.217)
 function updateTaskState_2() {
-  let e = {
+  let state = {
     pendingCreates: new Map(),
     tasks: new Map(),
   };
-  let n;
-  let r;
+  let task;
+  let pendingCreate;
   return {
-    observe(s) {
-      if (s.type === "assistant" && !s.parent_tool_use_id) {
-        for (let y of s.message.content) if (y.type === "tool_use" && trackTaskToolUse(e, y)) r = undefined;
-        let found = s.message.content.find(
+    observe(message) {
+      if (message.type === "assistant" && !message.parent_tool_use_id) {
+        for (let block of message.message.content)
+          if (block.type === "tool_use" && trackTaskToolUse(state, block)) pendingCreate = undefined;
+        let found = message.message.content.find(
           (prev) => prev.type === "tool_use" && prev.name === TODO_WRITE_TOOL_NAME,
         );
         if (found) {
-          n = {
-            ...s,
+          task = {
+            ...message,
             message: {
-              ...s.message,
+              ...message.message,
               content: [found],
             },
           };
-          r = undefined;
+          pendingCreate = undefined;
         }
-      } else if (s.type === "user") {
-        let content = s.message.content;
+      } else if (message.type === "user") {
+        let content = message.message.content;
         if (!Array.isArray(content)) return;
-        for (let y of content) if (y.type === "tool_result" && resolvePendingTaskCreate(e, y)) r = undefined;
+        for (let task_2 of content)
+          if (task_2.type === "tool_result" && resolvePendingTaskCreate(state, task_2))
+            pendingCreate = undefined;
       }
     },
     todos() {
-      if (r === undefined) {
-        let updated = getAllTrackedTasks(e);
-        r = updated.length > 0 ? updated : n ? getTodosFromLastTodoWrite([n]) : [];
+      if (pendingCreate === undefined) {
+        let updated = getAllTrackedTasks(state);
+        pendingCreate = updated.length > 0 ? updated : task ? getTodosFromLastTodoWrite([task]) : [];
       }
-      return r;
+      return pendingCreate;
     },
   };
 }
 //@ chunk-e6aww6q8.js:1784439-1785040 fingerprint = getStatusText (0.36)
-function getStatusText(taskId, title, r, taskRegistry, toolUseId, y) {
+function getStatusText(taskId, title, status, taskRegistry, toolUseId, extra) {
   if (!claimTaskNotification(taskId, taskRegistry).claimed) return;
-  switch (r) {
+  switch (status) {
     case "completed":
       logFeatureOk("task_remote_agent");
       break;
@@ -691,12 +739,12 @@ function getStatusText(taskId, title, r, taskRegistry, toolUseId, y) {
     case "killed":
       break;
   }
-  let S =
-    r === "completed"
+  let statusPhrase =
+    status === "completed"
       ? "completed successfully"
-      : r === "failed"
+      : status === "failed"
         ? "failed"
-        : r === "blocked"
+        : status === "blocked"
           ? "is blocked"
           : "was stopped";
   enqueuePendingNotification(
@@ -706,8 +754,8 @@ function getStatusText(taskId, title, r, taskRegistry, toolUseId, y) {
         toolUseId,
         taskType: "remote_agent",
         outputFile: getTaskOutputPath(taskId),
-        status: r,
-        summary: y ?? escapeXml(`${REMOTE_TASK_PREFIX}${title}" ${S}`),
+        status,
+        summary: extra ?? escapeXml(`${REMOTE_TASK_PREFIX}${title}" ${statusPhrase}`),
       }),
       mode: "task-notification",
       skipAttachments: true,
@@ -766,28 +814,6 @@ function enqueueTaskNotification({
     ...(snapshot && {
       taskDelivery: snapshot,
     }),
-  };
-}
-//@ chunk-gppkhxdv.js:261-450 placement
-/**
- * 认领任务通知：任务尚未通知时标记为已通知（运行中且要求跳过时不标记），返回是否认领成功与任务快照。
- */
-function claimTaskNotification(taskId, taskRegistry, r) {
-  let claimed = false;
-  let task;
-  taskRegistry.update(taskId, (t) => {
-    task = t;
-    if (t.notified) return t;
-    claimed = true;
-    if (r?.skipStampIfRunning && t.status === "running") return t;
-    return {
-      ...t,
-      notified: true,
-    };
-  });
-  return {
-    claimed,
-    task,
   };
 }
 export {

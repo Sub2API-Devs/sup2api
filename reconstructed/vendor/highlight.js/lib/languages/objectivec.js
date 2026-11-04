@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:322813-325653 cjs-fingerprint
-var require_objectivec = x(function (cjsExports, cjsModule) {
+var require_objectivec = __commonJS(function (cjsExports, cjsModule) {
   function objectivec(hljs) {
     let API_CLASS = {
       className: "built_in",

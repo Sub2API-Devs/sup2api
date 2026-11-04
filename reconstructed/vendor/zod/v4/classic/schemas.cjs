@@ -5,7 +5,7 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_core_2 } from "../core/index.cjs";
 import { require_json_schema_processors } from "../core/json-schema-processors.cjs";
 import { require_to_json_schema } from "../core/to-json-schema.cjs";
@@ -14,7 +14,7 @@ import { require_checks_2 } from "./checks.cjs";
 import { require_parse_2 } from "./parse.cjs";
 
 //@ chunk-1ny7cxrt.js:595236-626893 cjs-fingerprint
-var require_schemas_2 = x(function (cjsExports) {
+var require_schemas_2 = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -1129,7 +1129,12 @@ var require_schemas_2 = x(function (cjsExports) {
       cjsExports.ZodType.init(inst, def);
       inst._zod.processJSONSchema = (ctx, json, params) =>
         processors.objectProcessor(inst, ctx, json, params);
-      index_js_1.util.installLazyProp(inst, "shape", (n) => n._zod.def.shape, false);
+      index_js_1.util.installLazyProp(
+        inst,
+        "shape",
+        (objectInstance) => objectInstance._zod.def.shape,
+        false,
+      );
     },
     {
       keyof() {

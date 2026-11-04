@@ -18,46 +18,47 @@ function exitZero() {
   process.exit(0);
 }
 //@ chunk-c82nj8g9.js:1479-2438 placement
-function installGatewayShutdownHandlers(o, p) {
+function installGatewayShutdownHandlers(gateway, onSignal) {
   let CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS = env.CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS || GATEWAY_DRAIN_TIMEOUT_MS;
-  let s = false;
-  let r = (a) => {
-    p();
-    if (s) {
+  let isShuttingDown = false;
+  let handleSignal = (signalName) => {
+    onSignal();
+    if (isShuttingDown) {
       gatewayLog(
         "warn",
-        `${a} received while shutting down: not waiting any longer, closing open requests now and exiting`,
+        `${signalName} received while shutting down: not waiting any longer, closing open requests now and exiting`,
       );
-      o.stop();
+      gateway.stop();
       exitZero();
     }
-    s = true;
+    isShuttingDown = true;
     gatewayLog(
       "info",
-      `${a} received: shutting down. Refusing new connections; open requests get up to ${CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS / 1000}s to finish (set by CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS)`,
+      `${signalName} received: shutting down. Refusing new connections; open requests get up to ${CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS / 1000}s to finish (set by CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS)`,
     );
-    let d = CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS + 3000;
+    let hardExitMs = CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS + 3000;
     setTimeout(
-      (e) => {
+      (elapsedMs) => {
         gatewayLog(
           "warn",
-          `shutdown still not finished ${e / 1000}s after the signal: exiting now. Requests still open are cut and their spend may not be recorded`,
+          `shutdown still not finished ${elapsedMs / 1000}s after the signal: exiting now. Requests still open are cut and their spend may not be recorded`,
         );
         exitZero();
       },
-      d,
-      d,
+      hardExitMs,
+      hardExitMs,
     ).unref();
-    o.drain(CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS).then((e) => {
+    gateway.drain(CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS).then((cutCount) => {
       gatewayLog(
-        e === 0 ? "info" : "warn",
-        e === 0
+        cutCount === 0 ? "info" : "warn",
+        cutCount === 0
           ? "shutdown complete: every open request finished, none was cut"
-          : `drain window over after ${CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS / 1000}s: cut ${e} request(s) still open. Raise CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS and the orchestrator's grace period together to give streams longer`,
+          : `drain window over after ${CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS / 1000}s: cut ${cutCount} request(s) still open. Raise CLAUDE_GATEWAY_DRAIN_TIMEOUT_MS and the orchestrator's grace period together to give streams longer`,
       );
       exitZero();
     });
   };
-  process.prependListener("SIGTERM", () => r("SIGTERM"));
-  process.prependListener("SIGINT", () => r("SIGINT"));
+  process.prependListener("SIGTERM", () => handleSignal("SIGTERM"));
+  process.prependListener("SIGINT", () => handleSignal("SIGINT"));
 }
+export { installGatewayShutdownHandlers };

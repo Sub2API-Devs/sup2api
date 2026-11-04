@@ -10,13 +10,13 @@
  */
 import { DoctorLazy } from "../../../cli/handlers/util.js";
 import {
-  string,
+  stringSchema,
   zodStrictObject,
   array,
   record,
-  u,
+  objectSchema,
   union,
-  E,
+  numberSchema,
   literal,
 } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { MAX_FILE_PATH_CHARS } from "../inputSchemaCheck.js";
@@ -35,7 +35,7 @@ import { attachableFileAt } from "../../taskFiles/taskFileUpload.js";
 /**
  * 文件上传接口的 schema：路径、哈希请求、上传请求（路径、sha256、URL、请求头）、单文件拒绝、哈希应答与上传应答。
  */
-var uploadPathSchema = DoctorLazy(() => string().min(1).max(MAX_FILE_PATH_CHARS));
+var uploadPathSchema = DoctorLazy(() => stringSchema().min(1).max(MAX_FILE_PATH_CHARS));
 var hashRequestSchema = DoctorLazy(() =>
   zodStrictObject({
     paths: array(uploadPathSchema()).min(1).max(MAX_FILES_PER_INPUT),
@@ -46,9 +46,9 @@ var putRequestSchema = DoctorLazy(() =>
     files: array(
       zodStrictObject({
         path: uploadPathSchema(),
-        sha256: string().regex(SHA256_HEX_RE),
-        url: string().min(1).max(2048),
-        headers: record(string(), string()),
+        sha256: stringSchema().regex(SHA256_HEX_RE),
+        url: stringSchema().min(1).max(2048),
+        headers: record(stringSchema(), stringSchema()),
       }),
     )
       .min(1)
@@ -56,33 +56,37 @@ var putRequestSchema = DoctorLazy(() =>
   }),
 );
 var fileRefusalSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     path: uploadPathSchema(),
-    code: string().max(64),
+    code: stringSchema().max(64),
   }),
 );
 var hashAnswerSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     files: array(
       union([
-        u({
+        objectSchema({
           path: uploadPathSchema(),
-          name: string().refine(isSafeFileName),
-          size: E().int().min(0).max(MAX_FILE_BYTES),
-          sha256: string().regex(SHA256_HEX_RE),
+          name: stringSchema().refine(isSafeFileName),
+          size: numberSchema().int().min(0).max(MAX_FILE_BYTES),
+          sha256: stringSchema().regex(SHA256_HEX_RE),
         }),
         fileRefusalSchema(),
       ]),
     )
       .max(MAX_FILES_PER_INPUT)
-      .refine((r) => r.reduce((acc, t) => acc + ("size" in t ? t.size : 0), 0) <= MAX_TOTAL_BYTES),
+      .refine(
+        (files) =>
+          files.reduce((acc, fileEntry) => acc + ("size" in fileEntry ? fileEntry.size : 0), 0) <=
+          MAX_TOTAL_BYTES,
+      ),
   }),
 );
 var putAnswerSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     files: array(
       union([
-        u({
+        objectSchema({
           path: uploadPathSchema(),
           ok: literal(true),
         }),
@@ -95,13 +99,15 @@ var putAnswerSchema = DoctorLazy(() =>
 /**
  * 处理计算文件哈希的请求：校验路径列表后计算（或返回不可用原因），附带摘要。
  */
-async function hashFiles(r, e, t) {
-  let { paths } = hashRequestSchema().parse(r);
-  let i = uploadsUnavailable(paths[0], t) ?? (await uploadScreenFor(t, "").hash(paths, e));
+async function hashFiles(request, signal, uploadContext) {
+  let { paths } = hashRequestSchema().parse(request);
+  let results =
+    uploadsUnavailable(paths[0], uploadContext) ??
+    (await uploadScreenFor(uploadContext, "").hash(paths, signal));
   return {
-    summary: uploadSummary("hashed", i),
+    summary: uploadSummary("hashed", results),
     output: {
-      files: i,
+      files: results,
     },
   };
 }
@@ -109,57 +115,57 @@ async function hashFiles(r, e, t) {
 /**
  * 处理上传文件的请求：校验文件列表后上传到给定地址（或返回不可用原因），附带摘要。
  */
-async function putFiles(r, e, t) {
-  let { files } = putRequestSchema().parse(r);
-  let i =
-    uploadsUnavailable(files[0].path, t) ??
-    (await uploadScreenFor(t, uploadPathPrefixFor(files[0].url)).put(files, e));
+async function putFiles(request, signal, uploadContext) {
+  let { files } = putRequestSchema().parse(request);
+  let results =
+    uploadsUnavailable(files[0].path, uploadContext) ??
+    (await uploadScreenFor(uploadContext, uploadPathPrefixFor(files[0].url)).put(files, signal));
   return {
-    summary: uploadSummary("sent", i),
+    summary: uploadSummary("sent", results),
     output: {
-      files: i,
+      files: results,
     },
   };
 }
 //@ chunk-amf531m0.js:13365-13526 placement
 function uploadsUnavailable(path, { launchRules }) {
-  let t = isPolicyLimitsCacheMissing()
+  let reason = isPolicyLimitsCacheMissing()
     ? "policy_pending"
     : launchRules === REPO_RULES_UNREAD
       ? launchRules
-      : FIRST_PARTY_UPLOAD_SERVERS.every((n) => isPolicyAllowed(n.policy))
+      : FIRST_PARTY_UPLOAD_SERVERS.every((server) => isPolicyAllowed(server.policy))
         ? filesApiUnavailableReason()
         : "policy_denied";
-  return t === undefined
+  return reason === undefined
     ? undefined
     : [
         {
           path,
-          code: t,
+          code: reason,
         },
       ];
 }
 //@ chunk-amf531m0.js:13526-13646 placement
 function uploadPathPrefixFor(url) {
   return (
-    FIRST_PARTY_UPLOAD_SERVERS.map((e) => e.uploadPathPrefix).find(
-      (e) => URL.canParse(url) && new URL(url).pathname.startsWith(e),
+    FIRST_PARTY_UPLOAD_SERVERS.map((server) => server.uploadPathPrefix).find(
+      (prefix) => URL.canParse(url) && new URL(url).pathname.startsWith(prefix),
     ) ?? ""
   );
 }
 //@ chunk-amf531m0.js:13646-13893 placement
 function uploadScreenFor({ session, paths, launchRules, heldAtLaunch }, uploadPathPrefix) {
-  let d = heldAtLaunch ? [PROJECT_FILES_LINK] : [];
+  let refusalHints = heldAtLaunch ? [PROJECT_FILES_LINK] : [];
   return createUploadScreen({
-    screen: async (h) => {
-      let a =
+    screen: async (path) => {
+      let attachable =
         launchRules === REPO_RULES_UNREAD
           ? undefined
-          : await attachableFileAt(h, session, paths, launchRules, d);
-      return a === undefined
+          : await attachableFileAt(path, session, paths, launchRules, refusalHints);
+      return attachable === undefined
         ? undefined
         : {
-            realPath: a,
+            realPath: attachable,
           };
     },
     maxFileBytes: MAX_FILE_BYTES,
@@ -168,7 +174,8 @@ function uploadScreenFor({ session, paths, launchRules, heldAtLaunch }, uploadPa
   });
 }
 //@ chunk-amf531m0.js:13893-14003 placement
-function uploadSummary(r, e) {
-  let found = e.find((n) => n.code !== undefined);
-  return found === undefined ? `${e.length} ${r}` : `not ${r}: ${found.code}`;
+function uploadSummary(verb, results) {
+  let found = results.find((result) => result.code !== undefined);
+  return found === undefined ? `${results.length} ${verb}` : `not ${verb}: ${found.code}`;
 }
+export { hashFiles, putFiles };

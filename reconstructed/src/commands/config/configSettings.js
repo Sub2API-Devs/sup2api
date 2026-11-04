@@ -103,7 +103,7 @@ import { getRemoteControlAtStartup, applyRemoteControlToAppState } from "../../b
 import { getThinkingCannotBeDisabledMessage, isThinkingEffectivelyEnabled } from "../../utils/thinking.js";
 import { isAgentsFleetEnabled } from "../../utils/fleetGates.js";
 import { isFleetBackgroundAllowed } from "../../utils/backgroundHandoff.js";
-import { LEFT_ARROW } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { LEFT_ARROW } from "../../constants/figures.js";
 import { isKairosInputNeededPushEnabled } from "../../tools/PushNotificationTool/prompt.js";
 import { isIdleCompactionEnabled } from "../../services/compact/compactSettings.js";
 import { isAutoContinueEnabled } from "../../services/quotaAutoResume/quotaAutoResume.js";
@@ -180,6 +180,7 @@ import { isAntBuild } from "../../utils/envUtils.js";
 import { tailOfId } from "../../utils/auth/lockHolderLiveness.js";
 import { emitCredentialChange } from "../../utils/auth/credentialEpoch.js";
 import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-snd3g4y1.js:2948-3032 placement
 function themeSettingLabel(themeSetting) {
@@ -191,25 +192,25 @@ function themeSettingLabel(themeSetting) {
 /**
  * /config 中的主题设置行（托管枚举，自定义主题提示用 /theme）。
  */
-var themeSettingRow = (n) => ({
+var themeSettingRow = (state) => ({
   id: "theme",
   label: "Theme",
-  value: themeSettingLabel(n.themeSetting),
+  value: themeSettingLabel(state.themeSetting),
   type: "managedEnum",
   options: CONFIG_SOURCE_LABELS,
   optionsHint: "For custom themes, use /theme.",
-  onChange: n.setTheme,
+  onChange: state.setTheme,
 });
 //@ chunk-snd3g4y1.js:3195-3229 placement
-function configRowLabel(n, s) {
-  return isSettingsMovedToConfig() ? s : n;
+function configRowLabel(row, state) {
+  return isSettingsMovedToConfig() ? state : row;
 }
 //@ chunk-snd3g4y1.js:3229-3391 placement
 /**
  * 通知渠道设置值的简短显示名（bell、iterm2+bell、none）。
  */
-function notificationChannelLabel(n) {
-  switch (n) {
+function notificationChannelLabel(channel) {
+  switch (channel) {
     case "terminal_bell":
       return "bell";
     case "iterm2_with_bell":
@@ -217,13 +218,18 @@ function notificationChannelLabel(n) {
     case "notifications_disabled":
       return "none";
     default:
-      return n;
+      return channel;
   }
 }
 //@ chunk-snd3g4y1.js:3391-3487 placement
-var ASK_QUESTION_TIMEOUT_OPTIONS = ["never", "60s", "5m", "10m"];
-var DIALOG_EXPIRY_OPTIONS = ["default", "60s", "5m", "10m", "never"];
-var GENERIC_TIMEOUT_OPTIONS = ["default", ...POLICY_HELPER_ON_FAILURE];
+var ASK_QUESTION_TIMEOUT_OPTIONS; // deferred: uses POLICY_HELPER_ON_FAILURE (../../utils/settings/types.js) of its import cycle while loading; runs once the cycle is complete
+var DIALOG_EXPIRY_OPTIONS;
+var GENERIC_TIMEOUT_OPTIONS;
+deferInit("chunk-snd3g4y1.js:3391", () => {
+  ASK_QUESTION_TIMEOUT_OPTIONS = ["never", "60s", "5m", "10m"];
+  DIALOG_EXPIRY_OPTIONS = ["default", "60s", "5m", "10m", "never"];
+  GENERIC_TIMEOUT_OPTIONS = ["default", ...POLICY_HELPER_ON_FAILURE];
+});
 //@ chunk-snd3g4y1.js:3487-3671 placement
 /**
  * 收集需要转发给远程会话的设置值（提问超时、对话框过期、跨会话入站、模型提议目标、Artifact 开关）。
@@ -239,8 +245,8 @@ function remoteForwardedSettings() {
   };
 }
 //@ chunk-snd3g4y1.js:3671-3723 placement
-function effectiveSettingSourceValue(n) {
-  return getSecuritySensitiveSettingWithSources(n).find((s) => isSettingSourceEnabled(s.source));
+function effectiveSettingSourceValue(key) {
+  return getSecuritySensitiveSettingWithSources(key).find((source) => isSettingSourceEnabled(source.source));
 }
 //@ chunk-snd3g4y1.js:3723-3796 placement = _temp5 (1)
 function isSettingSetOutsideUserSettings(a_0) {
@@ -303,45 +309,48 @@ function getEffectiveConfigValues() {
   };
 }
 //@ chunk-snd3g4y1.js:5114-5156 placement
-function settingOrDefault(globalConfig, s) {
-  return validateConfigValue(s, globalConfig[s]) ?? DEFAULT_GLOBAL_CONFIG[s];
+function settingOrDefault(globalConfig, key) {
+  return validateConfigValue(key, globalConfig[key]) ?? DEFAULT_GLOBAL_CONFIG[key];
 }
 //@ chunk-snd3g4y1.js:5156-5270 placement
 function selectableModelOptions() {
-  let n = isFableAvailable();
+  let fableAvailable = isFableAvailable();
   return [
     "default",
     ...LEGACY_MODEL_IDS.filter(
-      (s) =>
-        (n || !s.includes("fable")) &&
-        !isOpus1mUnavailable(s) &&
-        !requires1mEntitlementCheck(s) &&
-        isModelAllowed(s),
+      (value) =>
+        (fableAvailable || !value.includes("fable")) &&
+        !isOpus1mUnavailable(value) &&
+        !requires1mEntitlementCheck(value) &&
+        isModelAllowed(value),
     ),
   ];
 }
 //@ chunk-snd3g4y1.js:5270-5341 placement
-var COUNTRY_TO_LANGUAGE = new Map([
-  ["jp", "ja"],
-  ["kr", "ko"],
-  ["cn", "zh"],
-  ["tw", "zh-Hant"],
-]);
+var COUNTRY_TO_LANGUAGE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-snd3g4y1.js:5270", () => {
+  COUNTRY_TO_LANGUAGE = new Map([
+    ["jp", "ja"],
+    ["kr", "ko"],
+    ["cn", "zh"],
+    ["tw", "zh-Hant"],
+  ]);
+});
 //@ chunk-snd3g4y1.js:5341-5623 placement = capitalize (1)
 function capitalize(str) {
   let trimmed = sanitizeTelemetryString(str).trim();
   if (!trimmed || trimmed.toLowerCase() === "default") return "default";
   if (trimmed.length <= 3) {
     let lower = trimmed.toLowerCase();
-    let u = COUNTRY_TO_LANGUAGE.get(lower) ?? lower;
+    let languageTag = COUNTRY_TO_LANGUAGE.get(lower) ?? lower;
     try {
-      let p = languageDisplayNames().of(u);
-      if (p && p !== u) return p;
+      let displayName = languageDisplayNames().of(languageTag);
+      if (displayName && displayName !== languageTag) return displayName;
     } catch {}
   }
   return trimmed
     .split(/\s+/)
-    .map((r) => r.charAt(0).toUpperCase() + r.slice(1).toLowerCase())
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
     .join(" ");
 }
 //@ chunk-snd3g4y1.js:5623-5751 placement
@@ -360,18 +369,18 @@ var NOOP_CONFIG_WRITERS = {
   },
 };
 //@ chunk-snd3g4y1.js:5751-5829 placement
-function orgMemoryWritesRowSeen(n) {
-  uiSignals.orgMemoryWritesRowSeen ||= n;
+function orgMemoryWritesRowSeen(entry) {
+  uiSignals.orgMemoryWritesRowSeen ||= entry;
   return uiSignals.orgMemoryWritesRowSeen;
 }
 //@ chunk-snd3g4y1.js:5829-5903 placement
-function orgMemoryReadRowSeen(n) {
-  uiSignals.orgMemoryReadRowSeen ||= n;
+function orgMemoryReadRowSeen(entry) {
+  uiSignals.orgMemoryReadRowSeen ||= entry;
   return uiSignals.orgMemoryReadRowSeen;
 }
 //@ chunk-snd3g4y1.js:5903-5987 placement
-function remoteHomeSettingsRowSeen(n) {
-  uiSignals.remoteHomeSettingsRowSeen ||= n;
+function remoteHomeSettingsRowSeen(entry) {
+  uiSignals.remoteHomeSettingsRowSeen ||= entry;
   return uiSignals.remoteHomeSettingsRowSeen;
 }
 //@ chunk-snd3g4y1.js:5987-6011 placement
@@ -436,156 +445,161 @@ function buildConfigRows(shorthandRows) {
     promptSuggestionRun,
     mayBeAuthoredByNonOwner,
   } = shorthandRows;
-  function x(e) {
+  function saveUserSettings(patch) {
     return isStorageV5Enabled() && storageV5 !== undefined
-      ? updateSettingsForSource("userSettings", e, undefined, storageV5)
-      : updateSettingsForSource("userSettings", e);
+      ? updateSettingsForSource("userSettings", patch, undefined, storageV5)
+      : updateSettingsForSource("userSettings", patch);
   }
-  function pe(e) {
+  function saveLocalSettings(patch) {
     return isStorageV5Enabled() && storageV5 !== undefined
-      ? updateSettingsForSource("localSettings", e, undefined, storageV5)
-      : updateSettingsForSource("localSettings", e);
+      ? updateSettingsForSource("localSettings", patch, undefined, storageV5)
+      : updateSettingsForSource("localSettings", patch);
   }
-  function j(e, o) {
-    if (isStorageV5Enabled() && storageV5 !== undefined) saveUserIntentSetting(e, o, storageV5);
-    else saveUserIntentSetting(e, o);
+  function saveUserIntent(key, value) {
+    if (isStorageV5Enabled() && storageV5 !== undefined) saveUserIntentSetting(key, value, storageV5);
+    else saveUserIntentSetting(key, value);
   }
-  function G(e) {
-    if (isStorageV5Enabled() && storageV5 !== undefined) saveGlobalConfig(e, storageV5);
-    else saveGlobalConfig(e);
+  function saveConfig(update) {
+    if (isStorageV5Enabled() && storageV5 !== undefined) saveGlobalConfig(update, storageV5);
+    else saveGlobalConfig(update);
   }
-  async function Te(e, o) {
+  async function applyModelChange(model, effort) {
     logEvent("tengu_config_model_changed", {
       from_model: telemetrySafeModelName(mainLoopModel),
-      to_model: telemetrySafeModelName(e),
+      to_model: telemetrySafeModelName(model),
     });
-    let h = hasLadderForSetting(e);
-    let E = e === null ? managedDenyStartupRefusal(getDefaultMainLoopModel(), "switch") : null;
-    if (E !== null)
+    let isSessionOnly = hasLadderForSetting(model);
+    let denyReason = model === null ? managedDenyStartupRefusal(getDefaultMainLoopModel(), "switch") : null;
+    if (denyReason !== null)
       return {
-        error: new WireSafeControlError(E, "default model blocked by managed settings"),
+        error: new WireSafeControlError(denyReason, "default model blocked by managed settings"),
       };
-    let M = "";
+    let hookSuffix = "";
     if (modelSwitchHooks) {
       let { session, readState } = modelSwitchHooks;
       if (hasPreModelSwitchHook(session) || switchSerializerSlot.of(session).pending > 0) {
-        let mo = ++modelSwitchHooks.latestPick.current;
-        let ae = await serializeModelSwitch(session, () =>
-          runPreModelSwitchHooks(session, readState, e, "command"),
+        let pickTicket = ++modelSwitchHooks.latestPick.current;
+        let decision = await serializeModelSwitch(session, () =>
+          runPreModelSwitchHooks(session, readState, model, "command"),
         );
-        if (mo !== modelSwitchHooks.latestPick.current) return;
-        if (ae.decision !== "proceed") {
+        if (pickTicket !== modelSwitchHooks.latestPick.current) return;
+        if (decision.decision !== "proceed") {
           logFeatureSad("model_switch", "blocked_by_hook");
           return {
             error: new WireSafeControlError(
               preModelSwitchBlockedMessage(
-                e,
-                ae.decision === "ask"
-                  ? `${ae.reason ?? "confirmation required"} (run /model to confirm)`
-                  : ae.reason,
-                ae.messages,
+                model,
+                decision.decision === "ask"
+                  ? `${decision.reason ?? "confirmation required"} (run /model to confirm)`
+                  : decision.reason,
+                decision.messages,
               ),
               "model switch blocked by a PreModelSwitch hook",
             ),
           };
         }
-        if (ae.messages.length > 0) M = ` \xB7 ${ae.messages.map(sanitizeHookText).join(" \xB7 ")}`;
+        if (decision.messages.length > 0)
+          hookSuffix = ` \xB7 ${decision.messages.map(sanitizeHookText).join(" \xB7 ")}`;
       }
-      recordSwitchIfChanged(session, readState(), e, "command");
+      recordSwitchIfChanged(session, readState(), model, "command");
     }
-    if (o !== undefined) persistEffortSetting(o, resolveRequestedModel(e), undefined, storageV5);
+    if (effort !== undefined)
+      persistEffortSetting(effort, resolveRequestedModel(model), undefined, storageV5);
     clearRefusalFallbackModelLatch();
     if (isFastModeEnabled()) clearFastModeCooldown();
-    let P = false;
-    let I = false;
-    setAppState((Z) => {
-      P = !!Z.fastMode;
-      I = isFastModeEnabled() ? isFastModeActive(e, Z.fastMode) : P;
+    let wasFastMode = false;
+    let nextFastMode = false;
+    setAppState((prev) => {
+      wasFastMode = !!prev.fastMode;
+      nextFastMode = isFastModeEnabled() ? isFastModeActive(model, prev.fastMode) : wasFastMode;
       return {
-        ...Z,
-        mainLoopModel: e,
+        ...prev,
+        mainLoopModel: model,
         mainLoopModelForSession: null,
-        ...(o !== undefined && {
-          sessionEffort: levelEffortSetting(o),
+        ...(effort !== undefined && {
+          sessionEffort: levelEffortSetting(effort),
         }),
-        ...(I !== P && {
-          fastMode: I,
+        ...(nextFastMode !== wasFastMode && {
+          fastMode: nextFastMode,
         }),
       };
     });
-    reportFastModeToggle(P, I);
-    let X = formatFastModeSuffix(P, I, e);
+    reportFastModeToggle(wasFastMode, nextFastMode);
+    let fastModeSuffix = formatFastModeSuffix(wasFastMode, nextFastMode, model);
     changeLog.record(
       "model",
-      modelDisplayString(e) + X + M + (h ? " \xB7 this session only \u2014 /model to set up" : ""),
+      modelDisplayString(model) +
+        fastModeSuffix +
+        hookSuffix +
+        (isSessionOnly ? " \xB7 this session only \u2014 /model to set up" : ""),
       {
         moveToEnd: true,
       },
     );
-    let ye = h
+    let writeResult = isSessionOnly
       ? undefined
-      : await x({
-          model: e ?? undefined,
+      : await saveUserSettings({
+          model: model ?? undefined,
         });
-    let re = X + M;
-    if (ye?.error)
+    let suffix = fastModeSuffix + hookSuffix;
+    if (writeResult?.error)
       return {
-        error: ye.error,
-        ...(re && {
-          messageSuffix: re,
+        error: writeResult.error,
+        ...(suffix && {
+          messageSuffix: suffix,
         }),
       };
-    if (re)
+    if (suffix)
       return {
-        messageSuffix: re,
+        messageSuffix: suffix,
       };
   }
-  function Oe(e) {
-    j("verbose", e);
-    setGlobalConfig((o) => ({
-      ...o,
-      verbose: e,
+  function setVerbose(enabled) {
+    saveUserIntent("verbose", enabled);
+    setGlobalConfig((config) => ({
+      ...config,
+      verbose: enabled,
     }));
-    setAppState((o) => ({
-      ...o,
-      verbose: e,
+    setAppState((state) => ({
+      ...state,
+      verbose: enabled,
     }));
-    changeLog.toggle("verbose", e);
+    changeLog.toggle("verbose", enabled);
   }
-  function Ce(e) {
-    j("preferredNotifChannel", e);
-    setGlobalConfig((o) => ({
-      ...o,
-      preferredNotifChannel: e,
+  function setNotifChannel(channel) {
+    saveUserIntent("preferredNotifChannel", channel);
+    setGlobalConfig((config) => ({
+      ...config,
+      preferredNotifChannel: channel,
     }));
   }
-  function Ae(e) {
-    j("inputNeededNotifEnabled", e);
-    setGlobalConfig((o) => ({
-      ...o,
-      inputNeededNotifEnabled: e,
+  function setInputNeededNotif(enabled) {
+    saveUserIntent("inputNeededNotifEnabled", enabled);
+    setGlobalConfig((config) => ({
+      ...config,
+      inputNeededNotifEnabled: enabled,
     }));
     pushNotificationPreferences();
     logEvent("tengu_push_notif_pref_changed", {
       key: lit("inputNeededNotifEnabled"),
-      value: e,
+      value: enabled,
     });
   }
-  function Fe(e) {
-    j("agentPushNotifEnabled", e);
-    setGlobalConfig((o) => ({
-      ...o,
-      agentPushNotifEnabled: e,
+  function setAgentPushNotif(enabled) {
+    saveUserIntent("agentPushNotifEnabled", enabled);
+    setGlobalConfig((config) => ({
+      ...config,
+      agentPushNotifEnabled: enabled,
     }));
     pushNotificationPreferences();
     logEvent("tengu_push_notif_pref_changed", {
       key: lit("agentPushNotifEnabled"),
-      value: e,
+      value: enabled,
     });
   }
   let workflowSize = resolveWorkflowSize(globalConfig.workflowSizeGuideline, isProSubscriber());
-  function Le(e) {
-    if (e !== "false") {
+  function setRemoteControl(value) {
+    if (value !== "false") {
       let remoteControlPolicyLockReason = getRemoteControlPolicyLockReason();
       if (remoteControlPolicyLockReason !== null)
         return {
@@ -595,33 +609,33 @@ function buildConfigRows(shorthandRows) {
           ),
         };
     }
-    if (e === "default") {
-      j("remoteControlAtStartup", undefined);
-      G((l) => {
-        if (l.remoteControlAtStartup === undefined) return l;
-        let h = {
-          ...l,
+    if (value === "default") {
+      saveUserIntent("remoteControlAtStartup", undefined);
+      saveConfig((config) => {
+        if (config.remoteControlAtStartup === undefined) return config;
+        let next = {
+          ...config,
         };
-        delete h.remoteControlAtStartup;
-        return h;
+        delete next.remoteControlAtStartup;
+        return next;
       });
-      setGlobalConfig((l) => ({
-        ...l,
+      setGlobalConfig((config) => ({
+        ...config,
         remoteControlAtStartup: undefined,
       }));
     } else {
-      let l = e === "true";
-      j("remoteControlAtStartup", l);
-      setGlobalConfig((h) => ({
-        ...h,
-        remoteControlAtStartup: l,
+      let on = value === "true";
+      saveUserIntent("remoteControlAtStartup", on);
+      setGlobalConfig((config) => ({
+        ...config,
+        remoteControlAtStartup: on,
       }));
     }
     let remoteControlAtStartup = getRemoteControlAtStartup();
-    setAppState((l) => applyRemoteControlToAppState(l, remoteControlAtStartup));
+    setAppState((state) => applyRemoteControlToAppState(state, remoteControlAtStartup));
     return;
   }
-  function co() {
+  function remoteControlRow() {
     let remoteControlPolicyLockReason = getRemoteControlPolicyLockReason();
     if (remoteControlPolicyLockReason !== null)
       return {
@@ -635,15 +649,15 @@ function buildConfigRows(shorthandRows) {
         },
         options: ["true", "false", "default"],
         type: "managedEnum",
-        onChange(o) {
-          if (o !== "false")
+        onChange(value) {
+          if (value !== "false")
             return {
               error: new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                 remoteControlPolicyLockReason,
                 "Remote Control setting locked by org policy",
               ),
             };
-          return Le(o);
+          return setRemoteControl(value);
         },
       };
     return {
@@ -655,12 +669,12 @@ function buildConfigRows(shorthandRows) {
           : String(globalConfig.remoteControlAtStartup),
       options: ["true", "false", "default"],
       type: "enum",
-      onChange: Le,
+      onChange: setRemoteControl,
     };
   }
-  let requestedModel = resolveRequestedModel(currentModel);
-  let thinkingCannotBeDisabledMessage = getThinkingCannotBeDisabledMessage(requestedModel);
-  let we = [
+  let model = resolveRequestedModel(currentModel);
+  let thinkingCannotBeDisabledMessage = getThinkingCannotBeDisabledMessage(model);
+  let agentRows = [
     ...(isAgentsFleetEnabled()
       ? [
           {
@@ -669,12 +683,12 @@ function buildConfigRows(shorthandRows) {
             value: globalConfig.defaultToAgentsView ?? false,
             type: "boolean",
             onChange(defaultToAgentsView) {
-              G((o) => ({
-                ...o,
+              saveConfig((config) => ({
+                ...config,
                 defaultToAgentsView,
               }));
-              setGlobalConfig((o) => ({
-                ...o,
+              setGlobalConfig((config) => ({
+                ...config,
                 defaultToAgentsView,
               }));
             },
@@ -689,12 +703,12 @@ function buildConfigRows(shorthandRows) {
             value: globalConfig.leftArrowOpensAgents ?? true,
             type: "boolean",
             onChange(leftArrowOpensAgents) {
-              G((o) => ({
-                ...o,
+              saveConfig((config) => ({
+                ...config,
                 leftArrowOpensAgents,
               }));
-              setGlobalConfig((o) => ({
-                ...o,
+              setGlobalConfig((config) => ({
+                ...config,
                 leftArrowOpensAgents,
               }));
             },
@@ -702,16 +716,16 @@ function buildConfigRows(shorthandRows) {
         ]
       : []),
   ];
-  let go = tabsStandIn ? we.filter((e) => e.id !== "leftArrowOpensAgents") : we;
-  let Ne = {
+  let viewRows = tabsStandIn ? agentRows.filter((row) => row.id !== "leftArrowOpensAgents") : agentRows;
+  let notifRow = {
     id: "notifChannel",
     label: "Local notifications",
     value: globalConfig.preferredNotifChannel,
     options: [...NOTIFICATION_CHANNELS],
     type: "enum",
-    onChange: Ce,
+    onChange: setNotifChannel,
   };
-  let Ue = pushTogglesVisible
+  let pushRows = pushTogglesVisible
     ? [
         ...(isKairosInputNeededPushEnabled()
           ? [
@@ -720,7 +734,7 @@ function buildConfigRows(shorthandRows) {
                 label: "Push when actions required",
                 value: globalConfig.inputNeededNotifEnabled ?? false,
                 type: "boolean",
-                onChange: Ae,
+                onChange: setInputNeededNotif,
               },
             ]
           : []),
@@ -729,58 +743,59 @@ function buildConfigRows(shorthandRows) {
           label: "Push when Claude decides",
           value: globalConfig.agentPushNotifEnabled ?? false,
           type: "boolean",
-          onChange: Fe,
+          onChange: setAgentPushNotif,
         },
       ]
     : [];
   let source = resolveSetting("idleCompaction", true).source;
-  let po = source === "userSettings" || (source === "default" && isSettingSourceEnabled("userSettings"));
-  let Ge = [
+  let userSettingsEditable =
+    source === "userSettings" || (source === "default" && isSettingSourceEnabled("userSettings"));
+  let settingRows = [
     {
       id: "autoCompact",
       label: "Auto-compact",
       value: globalConfig.autoCompactEnabled,
       type: "boolean",
-      onChange(e) {
-        j("autoCompactEnabled", e);
-        setGlobalConfig((o) => ({
-          ...o,
-          autoCompactEnabled: e,
+      onChange(enabled) {
+        saveUserIntent("autoCompactEnabled", enabled);
+        setGlobalConfig((config) => ({
+          ...config,
+          autoCompactEnabled: enabled,
         }));
         logEvent("tengu_auto_compact_setting_changed", {
-          enabled: e,
+          enabled,
         });
       },
     },
-    ...(po
+    ...(userSettingsEditable
       ? [
           {
             id: "idleCompaction",
             label: "Idle compaction",
             value: settingsData?.idleCompaction ?? true,
             type: "boolean",
-            async onChange(e) {
-              setSettingsData((l) => ({
-                ...l,
-                idleCompaction: e,
+            async onChange(enabled) {
+              setSettingsData((data) => ({
+                ...data,
+                idleCompaction: enabled,
               }));
-              let o = await x({
-                idleCompaction: e,
+              let writeResult = await saveUserSettings({
+                idleCompaction: enabled,
               });
-              if (o?.error) {
+              if (writeResult?.error) {
                 let idleCompaction = isIdleCompactionEnabled();
-                setSettingsData((h) => ({
-                  ...h,
+                setSettingsData((data) => ({
+                  ...data,
                   idleCompaction,
                 }));
                 return {
-                  error: o.error,
+                  error: writeResult.error,
                 };
               }
               logEvent("tengu_idle_compaction_setting_changed", {
-                enabled: e,
+                enabled,
               });
-              changeLog.toggle("idleCompaction", e);
+              changeLog.toggle("idleCompaction", enabled);
             },
           },
         ]
@@ -793,26 +808,26 @@ function buildConfigRows(shorthandRows) {
             value: settingsData?.autoContinueAtUsageLimit ?? true,
             type: "boolean",
             consentGated: true,
-            async onChange(e) {
-              setSettingsData((l) => ({
-                ...l,
-                autoContinueAtUsageLimit: e,
+            async onChange(enabled) {
+              setSettingsData((data) => ({
+                ...data,
+                autoContinueAtUsageLimit: enabled,
               }));
-              let o = await x({
-                autoContinueAtUsageLimit: e,
+              let writeResult = await saveUserSettings({
+                autoContinueAtUsageLimit: enabled,
               });
-              if (o?.error) {
+              if (writeResult?.error) {
                 let autoContinueAtUsageLimit = isAutoContinueEnabled();
-                setSettingsData((h) => ({
-                  ...h,
+                setSettingsData((data) => ({
+                  ...data,
                   autoContinueAtUsageLimit,
                 }));
                 return {
-                  error: o.error,
+                  error: writeResult.error,
                 };
               }
               logEvent("tengu_quota_auto_resume_setting_changed", {
-                enabled: e,
+                enabled,
               });
             },
           },
@@ -830,13 +845,13 @@ function buildConfigRows(shorthandRows) {
               globalConfig.remoteHomeSettingsMode === "forward" &&
               isHomeSettingsForwardConsent() &&
               (isSettingsToCloudEnabledCached() || !neverTrue()),
-            isDefaultValue: !IDE_KIND_LABELS.some((e) => e === globalConfig.remoteHomeSettingsMode),
+            isDefaultValue: !IDE_KIND_LABELS.some((mode) => mode === globalConfig.remoteHomeSettingsMode),
             consentGated: true,
             canWithdraw: () => neverTrue() && globalConfig.remoteHomeSettingsMode !== "keep_local",
             grantBlocker: getHomeSettingsForwardingBlocker(true) ?? undefined,
             type: "boolean",
-            onChange(e) {
-              if (e)
+            onChange(value) {
+              if (value)
                 return {
                   error: new WireSafeControlError(
                     "Turn this on from the /config panel, which shows what will be sent",
@@ -844,39 +859,41 @@ function buildConfigRows(shorthandRows) {
                 };
               let mode = "keep_local";
               let remoteHomeSettingsMode = globalConfig.remoteHomeSettingsMode;
-              setGlobalConfig((h) => ({
-                ...h,
+              setGlobalConfig((config) => ({
+                ...config,
                 remoteHomeSettingsMode: mode,
               }));
-              return saveHomeSettingsMode(mode, isStorageV5Enabled() ? storageV5 : undefined).then((h) => {
-                switch (h) {
-                  case "written":
-                    return;
-                  case "unconfirmed":
-                    return {
-                      messageSuffix:
-                        " (could not confirm it was written to the config file; check /config after restarting Claude Code)",
-                    };
-                  case "not_stored":
-                    setGlobalConfig((E) => ({
-                      ...E,
-                      remoteHomeSettingsMode: getGlobalConfig().remoteHomeSettingsMode,
-                    }));
-                    return {
-                      error: new WireSafeControlError(CONFIG_SAVE_FAILED),
-                    };
-                  case "refused":
-                    setGlobalConfig((E) => ({
-                      ...E,
-                      remoteHomeSettingsMode,
-                    }));
-                    return {
-                      error: new WireSafeControlError(
-                        "Cloud settings forwarding is not available right now; nothing was changed",
-                      ),
-                    };
-                }
-              });
+              return saveHomeSettingsMode(mode, isStorageV5Enabled() ? storageV5 : undefined).then(
+                (saveResult) => {
+                  switch (saveResult) {
+                    case "written":
+                      return;
+                    case "unconfirmed":
+                      return {
+                        messageSuffix:
+                          " (could not confirm it was written to the config file; check /config after restarting Claude Code)",
+                      };
+                    case "not_stored":
+                      setGlobalConfig((config) => ({
+                        ...config,
+                        remoteHomeSettingsMode: getGlobalConfig().remoteHomeSettingsMode,
+                      }));
+                      return {
+                        error: new WireSafeControlError(CONFIG_SAVE_FAILED),
+                      };
+                    case "refused":
+                      setGlobalConfig((config) => ({
+                        ...config,
+                        remoteHomeSettingsMode,
+                      }));
+                      return {
+                        error: new WireSafeControlError(
+                          "Cloud settings forwarding is not available right now; nothing was changed",
+                        ),
+                      };
+                  }
+                },
+              );
             },
           },
         ]
@@ -900,18 +917,18 @@ function buildConfigRows(shorthandRows) {
                 writableWhileLocked: [UNATTENDED_CONSENT_LABELS.declined],
               },
             }),
-            onChange(e) {
+            onChange(value) {
               return saveUnattendedServingConsent(
-                e === UNATTENDED_CONSENT_LABELS.accepted ? "accepted" : "declined",
-              ).then((o) => {
-                if (o === "forbidden")
+                value === UNATTENDED_CONSENT_LABELS.accepted ? "accepted" : "declined",
+              ).then((outcome) => {
+                if (outcome === "forbidden")
                   return {
                     error: new WireSafeControlError(unattendedServingForbiddenText()),
                   };
-                setGlobalConfig((l) => ({
-                  ...l,
+                setGlobalConfig((config) => ({
+                  ...config,
                 }));
-                if (o === "not_saved")
+                if (outcome === "not_saved")
                   return {
                     error: new WireSafeControlError("The answer could not be saved; nothing was changed"),
                   };
@@ -930,8 +947,8 @@ function buildConfigRows(shorthandRows) {
             options: [FALLBACK_PREFERENCE_LABELS.switchAutomatically, FALLBACK_PREFERENCE_LABELS.askEachTime],
             type: "enum",
             pickToCommit: true,
-            coerce(e) {
-              let lower = e.trim().toLowerCase();
+            coerce(value) {
+              let lower = value.trim().toLowerCase();
               if (
                 ["true", "1", "on", "yes"].includes(lower) ||
                 lower === FALLBACK_PREFERENCE_LABELS.switchAutomatically.toLowerCase()
@@ -944,19 +961,22 @@ function buildConfigRows(shorthandRows) {
                 return FALLBACK_PREFERENCE_LABELS.askEachTime;
               return;
             },
-            onChange(e) {
-              let o = e === FALLBACK_PREFERENCE_LABELS.switchAutomatically;
-              setSettingsData((l) => ({
-                ...l,
-                switchModelsOnFlag: o,
+            onChange(value) {
+              let switchAutomatically = value === FALLBACK_PREFERENCE_LABELS.switchAutomatically;
+              setSettingsData((data) => ({
+                ...data,
+                switchModelsOnFlag: switchAutomatically,
               }));
-              return setSwitchModelsOnFlag(o, "config", isStorageV5Enabled() ? storageV5 : undefined).then(
-                ({ error }) =>
-                  error
-                    ? {
-                        error,
-                      }
-                    : undefined,
+              return setSwitchModelsOnFlag(
+                switchAutomatically,
+                "config",
+                isStorageV5Enabled() ? storageV5 : undefined,
+              ).then(({ error }) =>
+                error
+                  ? {
+                      error,
+                    }
+                  : undefined,
               );
             },
           },
@@ -968,16 +988,16 @@ function buildConfigRows(shorthandRows) {
       label: "Show tips",
       value: settingsData?.spinnerTipsEnabled ?? true,
       type: "boolean",
-      onChange(e) {
-        pe({
-          spinnerTipsEnabled: e,
+      onChange(value) {
+        saveLocalSettings({
+          spinnerTipsEnabled: value,
         });
-        setSettingsData((o) => ({
-          ...o,
-          spinnerTipsEnabled: e,
+        setSettingsData((data) => ({
+          ...data,
+          spinnerTipsEnabled: value,
         }));
         logEvent("tengu_tips_setting_changed", {
-          enabled: e,
+          enabled: value,
         });
       },
     },
@@ -989,15 +1009,15 @@ function buildConfigRows(shorthandRows) {
             value: settingsData?.feedbackDrafts ?? "notify",
             options: ["notify", "quiet", "off"],
             type: "enum",
-            onChange(e) {
-              let o = e;
-              setFeedbackDraftsSetting(o, {
+            onChange(value) {
+              let drafts = value;
+              setFeedbackDraftsSetting(drafts, {
                 storageV5,
                 via: "config",
               });
-              setSettingsData((l) => ({
-                ...l,
-                feedbackDrafts: o,
+              setSettingsData((data) => ({
+                ...data,
+                feedbackDrafts: drafts,
               }));
             },
           },
@@ -1008,30 +1028,30 @@ function buildConfigRows(shorthandRows) {
       label: "Reduce motion",
       value: settingsData?.prefersReducedMotion ?? false,
       type: "boolean",
-      onChange(e) {
-        pe({
-          prefersReducedMotion: e,
+      onChange(value) {
+        saveLocalSettings({
+          prefersReducedMotion: value,
         });
-        setSettingsData((o) => ({
-          ...o,
-          prefersReducedMotion: e,
+        setSettingsData((data) => ({
+          ...data,
+          prefersReducedMotion: value,
         }));
-        setAppState((o) => ({
-          ...o,
+        setAppState((state) => ({
+          ...state,
           settings: {
-            ...o.settings,
-            prefersReducedMotion: e,
+            ...state.settings,
+            prefersReducedMotion: value,
           },
         }));
         logEvent("tengu_reduce_motion_setting_changed", {
-          enabled: e,
+          enabled: value,
         });
       },
     },
     {
       id: "thinking",
       label: "Thinking mode",
-      value: isThinkingEffectivelyEnabled(requestedModel, thinkingEnabled),
+      value: isThinkingEffectivelyEnabled(model, thinkingEnabled),
       type: "boolean",
       ...(thinkingCannotBeDisabledMessage !== undefined && {
         lock: {
@@ -1041,23 +1061,23 @@ function buildConfigRows(shorthandRows) {
           writableWhileLocked: ["true", "1", "on", "yes"],
         },
       }),
-      onChange(e) {
-        if (!e && thinkingCannotBeDisabledMessage !== undefined)
+      onChange(value) {
+        if (!value && thinkingCannotBeDisabledMessage !== undefined)
           return {
             error: new WireSafeControlError(
               thinkingCannotBeDisabledMessage,
               "Thinking can't be turned off for this model",
             ),
           };
-        setAppState((o) => ({
-          ...o,
-          thinkingEnabled: e,
+        setAppState((state) => ({
+          ...state,
+          thinkingEnabled: value,
         }));
-        x({
-          alwaysThinkingEnabled: e ? undefined : false,
+        saveUserSettings({
+          alwaysThinkingEnabled: value ? undefined : false,
         });
         logEvent("tengu_thinking_toggled", {
-          enabled: e,
+          enabled: value,
         });
         logFeatureOk("thinking_toggle");
       },
@@ -1069,16 +1089,17 @@ function buildConfigRows(shorthandRows) {
             label: `Fast mode (${defaultOpusLabel()})`,
             value: !!isFastMode,
             type: "boolean",
-            async onChange(e) {
-              let o = (fastModeSwitchModel, h, E) => {
-                if (h) {
-                  let P = false;
-                  setAppState((I) => {
-                    let fastModeSwitchModel_2 = getFastModeSwitchModel(I);
-                    P = fastModeSwitchModel_2 !== undefined && fastModeSwitchModel_2 !== fastModeSwitchModel;
-                    return I;
+            async onChange(value) {
+              let runFastModeSwitch = (fastModeSwitchModel, model, effort) => {
+                if (model) {
+                  let wasFast = false;
+                  setAppState((state) => {
+                    let fastModeSwitchModel_2 = getFastModeSwitchModel(state);
+                    wasFast =
+                      fastModeSwitchModel_2 !== undefined && fastModeSwitchModel_2 !== fastModeSwitchModel;
+                    return state;
                   });
-                  if (P)
+                  if (wasFast)
                     return {
                       error: new WireSafeControlError(
                         "Fast mode was not enabled: the model changed while PreModelSwitch hooks ran; try again",
@@ -1087,89 +1108,96 @@ function buildConfigRows(shorthandRows) {
                     };
                 }
                 clearFastModeCooldown();
-                x({
+                saveUserSettings({
                   fastMode: true,
                 });
-                let M;
-                setAppState((P) => {
-                  let fastModeSwitchModel_2 = getFastModeSwitchModel(P);
-                  let X =
+                let nextFast;
+                setAppState((state) => {
+                  let fastModeSwitchModel_2 = getFastModeSwitchModel(state);
+                  let fastSuffix =
                     fastModeSwitchModel_2 !== undefined &&
-                    (!h || fastModeSwitchModel_2 === fastModeSwitchModel);
-                  if (X && modelSwitchHooks)
-                    recordSwitchIfChanged(modelSwitchHooks.session, P, fastModeSwitchModel_2, "command");
-                  M = X ? fastModeSwitchModel_2 : undefined;
+                    (!model || fastModeSwitchModel_2 === fastModeSwitchModel);
+                  if (fastSuffix && modelSwitchHooks)
+                    recordSwitchIfChanged(modelSwitchHooks.session, state, fastModeSwitchModel_2, "command");
+                  nextFast = fastSuffix ? fastModeSwitchModel_2 : undefined;
                   return {
-                    ...P,
-                    ...(X && {
+                    ...state,
+                    ...(fastSuffix && {
                       mainLoopModel: fastModeSwitchModel_2,
                       mainLoopModelForSession: null,
                     }),
                     fastMode: true,
                   };
                 });
-                if (M !== undefined) changeLog.record("model", M ?? defaultOpusAlias());
+                if (nextFast !== undefined) changeLog.record("model", nextFast ?? defaultOpusAlias());
                 changeLog.record("Fast mode", "ON");
-                return E
+                return effort
                   ? {
-                      messageSuffix: E,
+                      messageSuffix: effort,
                     }
                   : undefined;
               };
               if (
-                e &&
+                value &&
                 modelSwitchHooks &&
                 (hasPreModelSwitchHook(modelSwitchHooks.session) ||
                   switchSerializerSlot.of(modelSwitchHooks.session).pending > 0)
               ) {
                 let { session, readState } = modelSwitchHooks;
-                let E = ++modelSwitchHooks.latestFastPick.current;
+                let ticket = ++modelSwitchHooks.latestFastPick.current;
                 return serializeModelSwitch(session, async () => {
                   let fastModeSwitchModel = getFastModeSwitchModel(readState());
                   if (fastModeSwitchModel === undefined || !hasPreModelSwitchHook(session)) {
-                    if (E !== modelSwitchHooks.latestFastPick.current) return;
-                    return o(undefined, false, "");
+                    if (ticket !== modelSwitchHooks.latestFastPick.current) return;
+                    return runFastModeSwitch(undefined, false, "");
                   }
-                  let P = await runPreModelSwitchHooks(session, readState, fastModeSwitchModel, "command");
-                  if (E !== modelSwitchHooks.latestFastPick.current) return;
-                  if (P.decision !== "proceed") {
+                  let hookResult = await runPreModelSwitchHooks(
+                    session,
+                    readState,
+                    fastModeSwitchModel,
+                    "command",
+                  );
+                  if (ticket !== modelSwitchHooks.latestFastPick.current) return;
+                  if (hookResult.decision !== "proceed") {
                     logFeatureSad("model_switch", "blocked_by_hook");
                     return {
                       error: new WireSafeControlError(
                         preModelSwitchBlockedMessage(
                           fastModeSwitchModel,
-                          P.decision === "ask"
-                            ? `${P.reason ?? "confirmation required"} (run /model to switch, then enable fast mode)`
-                            : P.reason,
-                          P.messages,
+                          hookResult.decision === "ask"
+                            ? `${hookResult.reason ?? "confirmation required"} (run /model to switch, then enable fast mode)`
+                            : hookResult.reason,
+                          hookResult.messages,
                         ),
                         "model switch blocked by a PreModelSwitch hook",
                       ),
                     };
                   }
-                  return o(
+                  return runFastModeSwitch(
                     fastModeSwitchModel,
                     true,
-                    P.messages.length > 0 ? ` \xB7 ${P.messages.map(sanitizeHookText).join(" \xB7 ")}` : "",
+                    hookResult.messages.length > 0
+                      ? ` \xB7 ${hookResult.messages.map(sanitizeHookText).join(" \xB7 ")}`
+                      : "",
                   );
                 });
               }
-              if (e) return o(undefined, false, "");
+              if (value) return runFastModeSwitch(undefined, false, "");
               else {
-                let l = () => {
+                let disableFast = () => {
                   clearFastModeCooldown();
-                  x({
+                  saveUserSettings({
                     fastMode: undefined,
                   });
-                  setAppState((h) => ({
-                    ...h,
+                  setAppState((state) => ({
+                    ...state,
                     fastMode: false,
                   }));
                   changeLog.record("Fast mode", "OFF");
                 };
                 if (modelSwitchHooks && switchSerializerSlot.of(modelSwitchHooks.session).pending > 0)
-                  await serializeModelSwitch(modelSwitchHooks.session, async () => l());
-                else l();
+                  await serializeModelSwitch(modelSwitchHooks.session, async () => disableFast());
+                else disableFast();
               }
             },
           },
@@ -1182,15 +1210,15 @@ function buildConfigRows(shorthandRows) {
             label: "Prompt suggestions",
             value: promptSuggestionEnabled,
             type: "boolean",
-            onChange(e) {
-              setAppState((o) => ({
-                ...o,
-                promptSuggestionEnabled: e,
+            onChange(value) {
+              setAppState((state) => ({
+                ...state,
+                promptSuggestionEnabled: value,
               }));
-              x({
-                promptSuggestionEnabled: e ? undefined : false,
+              saveUserSettings({
+                promptSuggestionEnabled: value ? undefined : false,
               });
-              if (e && !promptSuggestionEnabled)
+              if (value && !promptSuggestionEnabled)
                 endBackOffFromConfigToggle(isStorageV5Enabled() ? storageV5 : undefined, promptSuggestionRun);
             },
           },
@@ -1201,17 +1229,17 @@ function buildConfigRows(shorthandRows) {
       label: "Session recap",
       value: awaySummaryEnabled,
       type: "boolean",
-      onChange(e) {
-        setAppState((o) => ({
-          ...o,
-          awaySummaryEnabled: e,
+      onChange(value) {
+        setAppState((state) => ({
+          ...state,
+          awaySummaryEnabled: value,
         }));
-        x({
-          awaySummaryEnabled: e ? undefined : false,
+        saveUserSettings({
+          awaySummaryEnabled: value ? undefined : false,
         });
-        setSettingsData((o) => ({
-          ...o,
-          awaySummaryEnabled: e ? undefined : false,
+        setSettingsData((data) => ({
+          ...data,
+          awaySummaryEnabled: value ? undefined : false,
         }));
       },
     },
@@ -1222,14 +1250,14 @@ function buildConfigRows(shorthandRows) {
             label: "Rewind code (checkpoints)",
             value: globalConfig.fileCheckpointingEnabled,
             type: "boolean",
-            onChange(e) {
-              j("fileCheckpointingEnabled", e);
-              setGlobalConfig((o) => ({
-                ...o,
-                fileCheckpointingEnabled: e,
+            onChange(value) {
+              saveUserIntent("fileCheckpointingEnabled", value);
+              setGlobalConfig((config) => ({
+                ...config,
+                fileCheckpointingEnabled: value,
               }));
               logEvent("tengu_file_history_snapshots_setting_changed", {
-                enabled: e,
+                enabled: value,
               });
             },
           },
@@ -1242,10 +1270,10 @@ function buildConfigRows(shorthandRows) {
             label: "Synced project memory (this directory; applies next session)",
             value: getCurrentProjectConfig().orgMemoryRead ?? true,
             type: "boolean",
-            onChange(e) {
-              setOrgMemoryRead(e, storageV5);
-              setGlobalConfig((o) => ({
-                ...o,
+            onChange(value) {
+              setOrgMemoryRead(value, storageV5);
+              setGlobalConfig((config) => ({
+                ...config,
               }));
             },
           },
@@ -1266,14 +1294,14 @@ function buildConfigRows(shorthandRows) {
             canWithdraw: () => getCurrentProjectConfig().orgMemoryWrites === true,
             type: "boolean",
             consentGated: true,
-            onChange(e) {
-              let o =
-                e &&
+            onChange(value) {
+              let orgMemoryWrites =
+                value &&
                 !isOrgMemoryWritesEnabledForAccount() &&
                 getCurrentProjectConfig().orgMemoryWrites === true;
-              applyOrgMemoryDecision(o ? false : e, storageV5);
-              setGlobalConfig((l) => ({
-                ...l,
+              applyOrgMemoryDecision(orgMemoryWrites ? false : value, storageV5);
+              setGlobalConfig((config) => ({
+                ...config,
               }));
             },
           },
@@ -1289,18 +1317,18 @@ function buildConfigRows(shorthandRows) {
                 ? false
                 : (settingsData?.enableWorkflows ?? workflowsDefaultOn()),
             type: "boolean",
-            onChange(e) {
-              let enableWorkflows = e === workflowsDefaultOn() ? undefined : e;
-              x({
+            onChange(value) {
+              let enableWorkflows = value === workflowsDefaultOn() ? undefined : value;
+              saveUserSettings({
                 enableWorkflows,
                 disableWorkflows: undefined,
               });
-              setSettingsData((l) => ({
-                ...l,
+              setSettingsData((data) => ({
+                ...data,
                 enableWorkflows,
                 disableWorkflows: undefined,
               }));
-              changeLog.record("workflows", e ? "on" : "off");
+              changeLog.record("workflows", value ? "on" : "off");
             },
           },
           {
@@ -1308,16 +1336,16 @@ function buildConfigRows(shorthandRows) {
             label: "Ultracode keyword trigger",
             value: settingsData?.workflowKeywordTriggerEnabled ?? true,
             type: "boolean",
-            onChange(e) {
-              let workflowKeywordTriggerEnabled = e ? undefined : false;
-              x({
+            onChange(value) {
+              let workflowKeywordTriggerEnabled = value ? undefined : false;
+              saveUserSettings({
                 workflowKeywordTriggerEnabled,
               });
-              setSettingsData((l) => ({
-                ...l,
+              setSettingsData((data) => ({
+                ...data,
                 workflowKeywordTriggerEnabled,
               }));
-              changeLog.record("ultracodeKeywordTrigger", e ? "on" : "off");
+              changeLog.record("ultracodeKeywordTrigger", value ? "on" : "off");
             },
           },
         ]
@@ -1331,20 +1359,20 @@ function buildConfigRows(shorthandRows) {
             isDefaultValue: workflowSize.isDefault,
             options: [...WORKFLOW_SIZE_NAMES],
             type: "enum",
-            onChange(e) {
-              let o = workflowSizeName(e) ?? "unrestricted";
-              G((l) => {
-                if (l.workflowSizeGuideline === o) return l;
+            onChange(value) {
+              let sizeName = workflowSizeName(value) ?? "unrestricted";
+              saveConfig((config) => {
+                if (config.workflowSizeGuideline === sizeName) return config;
                 return {
-                  ...l,
-                  workflowSizeGuideline: o,
+                  ...config,
+                  workflowSizeGuideline: sizeName,
                 };
               });
-              setGlobalConfig((l) => ({
-                ...l,
-                workflowSizeGuideline: o,
+              setGlobalConfig((config) => ({
+                ...config,
+                workflowSizeGuideline: sizeName,
               }));
-              changeLog.record("workflowSizeGuideline", o);
+              changeLog.record("workflowSizeGuideline", sizeName);
             },
           },
         ]
@@ -1356,26 +1384,26 @@ function buildConfigRows(shorthandRows) {
             label: "Artifacts",
             value: settingsData?.enableArtifact ?? getArtifactDefaultOn(),
             type: "boolean",
-            async onChange(e) {
-              let enableArtifact = e === getArtifactDefaultOn() ? undefined : e;
-              setSettingsData((h) => ({
-                ...h,
-                enableArtifact: e,
+            async onChange(value) {
+              let enableArtifact = value === getArtifactDefaultOn() ? undefined : value;
+              setSettingsData((data) => ({
+                ...data,
+                enableArtifact: value,
               }));
-              let l = await x({
+              let writeResult = await saveUserSettings({
                 enableArtifact,
                 disableArtifact: undefined,
               });
-              if (l?.error) {
-                setSettingsData((h) => ({
-                  ...h,
+              if (writeResult?.error) {
+                setSettingsData((data) => ({
+                  ...data,
                   enableArtifact: resolveArtifactEnableSetting().enabled,
                 }));
                 return {
-                  error: l.error,
+                  error: writeResult.error,
                 };
               }
-              changeLog.record("artifacts", e ? "on" : "off");
+              changeLog.record("artifacts", value ? "on" : "off");
             },
           },
         ]
@@ -1385,21 +1413,21 @@ function buildConfigRows(shorthandRows) {
       label: configRowLabel("Verbose output", "Verbose"),
       value: verbose,
       type: "boolean",
-      onChange: Oe,
+      onChange: setVerbose,
     },
     {
       id: "progressBar",
       label: "Terminal progress bar",
       value: globalConfig.terminalProgressBarEnabled,
       type: "boolean",
-      onChange(e) {
-        j("terminalProgressBarEnabled", e);
-        setGlobalConfig((o) => ({
-          ...o,
-          terminalProgressBarEnabled: e,
+      onChange(value) {
+        saveUserIntent("terminalProgressBarEnabled", value);
+        setGlobalConfig((config) => ({
+          ...config,
+          terminalProgressBarEnabled: value,
         }));
         logEvent("tengu_terminal_progress_bar_setting_changed", {
-          enabled: e,
+          enabled: value,
         });
       },
     },
@@ -1410,17 +1438,17 @@ function buildConfigRows(shorthandRows) {
             label: "Show status in terminal tab",
             value: globalConfig.showStatusInTerminalTab ?? false,
             type: "boolean",
-            onChange(e) {
-              G((o) => ({
-                ...o,
-                showStatusInTerminalTab: e,
+            onChange(value) {
+              saveConfig((config) => ({
+                ...config,
+                showStatusInTerminalTab: value,
               }));
-              setGlobalConfig((o) => ({
-                ...o,
-                showStatusInTerminalTab: e,
+              setGlobalConfig((config) => ({
+                ...config,
+                showStatusInTerminalTab: value,
               }));
               logEvent("tengu_terminal_tab_status_setting_changed", {
-                enabled: e,
+                enabled: value,
               });
             },
           },
@@ -1431,14 +1459,14 @@ function buildConfigRows(shorthandRows) {
       label: "Show turn duration",
       value: globalConfig.showTurnDuration,
       type: "boolean",
-      onChange(e) {
-        j("showTurnDuration", e);
-        setGlobalConfig((o) => ({
-          ...o,
-          showTurnDuration: e,
+      onChange(value) {
+        saveUserIntent("showTurnDuration", value);
+        setGlobalConfig((config) => ({
+          ...config,
+          showTurnDuration: value,
         }));
         logEvent("tengu_show_turn_duration_setting_changed", {
-          enabled: e,
+          enabled: value,
         });
       },
     },
@@ -1449,16 +1477,16 @@ function buildConfigRows(shorthandRows) {
             label: "Precompute compaction",
             value: settingsData?.precomputeCompactionEnabled ?? true,
             type: "boolean",
-            onChange(e) {
-              x({
-                precomputeCompactionEnabled: e,
+            onChange(value) {
+              saveUserSettings({
+                precomputeCompactionEnabled: value,
               });
-              setSettingsData((o) => ({
-                ...o,
-                precomputeCompactionEnabled: e,
+              setSettingsData((data) => ({
+                ...data,
+                precomputeCompactionEnabled: value,
               }));
               logEvent("tengu_precompute_compaction_setting_changed", {
-                enabled: e,
+                enabled: value,
               });
             },
           },
@@ -1471,18 +1499,18 @@ function buildConfigRows(shorthandRows) {
             label: "Show message timestamps",
             value: globalConfig.showMessageTimestamps,
             type: "boolean",
-            onChange(e) {
-              j("showMessageTimestamps", e);
-              setGlobalConfig((o) => ({
-                ...o,
-                showMessageTimestamps: e,
+            onChange(value) {
+              saveUserIntent("showMessageTimestamps", value);
+              setGlobalConfig((config) => ({
+                ...config,
+                showMessageTimestamps: value,
               }));
-              setAppState((o) => ({
-                ...o,
-                showMessageTimestamps: e,
+              setAppState((state) => ({
+                ...state,
+                showMessageTimestamps: value,
               }));
               logEvent("tengu_show_message_timestamps_setting_changed", {
-                enabled: e,
+                enabled: value,
               });
             },
           },
@@ -1495,14 +1523,14 @@ function buildConfigRows(shorthandRows) {
       options: [...AUTO_CONNECT_LABELS],
       type: "enum",
       pickToCommit: true,
-      onChange(e) {
-        let found = AUTO_CONNECT_LABELS.find((l) => l === e);
+      onChange(value) {
+        let found = AUTO_CONNECT_LABELS.find((option) => option === value);
         if (!found) return;
-        x({
+        saveUserSettings({
           timeFormat: found,
         });
-        setSettingsData((l) => ({
-          ...l,
+        setSettingsData((data) => ({
+          ...data,
           timeFormat: found,
         }));
         changeLog.record("timeFormat", found);
@@ -1516,43 +1544,48 @@ function buildConfigRows(shorthandRows) {
       label: "Default permission mode",
       value: settingsData?.permissions?.defaultMode || "default",
       options: (() => {
-        let e = ["default", "plan"];
-        let o = PERMISSION_MODES;
-        let l = ["bypassPermissions"];
-        return [...e, ...o.filter((h) => !e.includes(h) && !l.includes(h))];
+        let hiddenModes = ["default", "plan"];
+        let allModes = PERMISSION_MODES;
+        let excludedModes = ["bypassPermissions"];
+        return [
+          ...hiddenModes,
+          ...allModes.filter((mode) => !hiddenModes.includes(mode) && !excludedModes.includes(mode)),
+        ];
       })(),
       type: "enum",
-      async onChange(e) {
-        let o = permissionModeFromString(e);
-        let defaultMode = isExternalPermissionMode(o) ? toExternalPermissionMode(o) : o;
-        let defaultMode_2 = settingsData?.permissions?.defaultMode;
-        setSettingsData((M) => ({
-          ...M,
+      async onChange(value) {
+        let defaultMode = permissionModeFromString(value);
+        let defaultMode_2 = isExternalPermissionMode(defaultMode)
+          ? toExternalPermissionMode(defaultMode)
+          : defaultMode;
+        let defaultMode_3 = settingsData?.permissions?.defaultMode;
+        setSettingsData((data) => ({
+          ...data,
           permissions: {
-            ...M?.permissions,
-            defaultMode,
+            ...data?.permissions,
+            defaultMode: defaultMode_2,
           },
         }));
-        changeLog.record("permissionMode", e);
-        let E = await x({
+        changeLog.record("permissionMode", value);
+        let writeResult = await saveUserSettings({
           permissions: {
-            defaultMode,
+            defaultMode: defaultMode_2,
           },
         });
-        if (E.error) {
-          setSettingsData((M) => ({
-            ...M,
+        if (writeResult.error) {
+          setSettingsData((data) => ({
+            ...data,
             permissions: {
-              ...M?.permissions,
-              defaultMode: defaultMode_2,
+              ...data?.permissions,
+              defaultMode: defaultMode_3,
             },
           }));
           changeLog.clear("permissionMode");
-          logForDebugging(`Failed to update default permission mode setting: ${E.error.message}`, {
+          logForDebugging(`Failed to update default permission mode setting: ${writeResult.error.message}`, {
             level: "error",
           });
           return {
-            error: E.error,
+            error: writeResult.error,
           };
         }
       },
@@ -1563,36 +1596,36 @@ function buildConfigRows(shorthandRows) {
       value: settingsData?.worktree?.baseRef ?? "fresh",
       options: ["fresh", "head"],
       type: "enum",
-      async onChange(e) {
-        let o = e;
-        let baseRef = settingsData?.worktree?.baseRef;
-        setSettingsData((E) => ({
-          ...E,
+      async onChange(value) {
+        let baseRef = value;
+        let baseRef_2 = settingsData?.worktree?.baseRef;
+        setSettingsData((data) => ({
+          ...data,
           worktree: {
-            ...E?.worktree,
-            baseRef: o,
+            ...data?.worktree,
+            baseRef,
           },
         }));
-        changeLog.record("worktreeBaseRef", o);
-        let h = await x({
+        changeLog.record("worktreeBaseRef", baseRef);
+        let saveResult = await saveUserSettings({
           worktree: {
-            baseRef: o,
+            baseRef,
           },
         });
-        if (h.error) {
-          setSettingsData((E) => ({
-            ...E,
+        if (saveResult.error) {
+          setSettingsData((data) => ({
+            ...data,
             worktree: {
-              ...E?.worktree,
-              baseRef,
+              ...data?.worktree,
+              baseRef: baseRef_2,
             },
           }));
           changeLog.clear("worktreeBaseRef");
-          logForDebugging(`Failed to update worktree.baseRef in user settings: ${h.error.message}`, {
+          logForDebugging(`Failed to update worktree.baseRef in user settings: ${saveResult.error.message}`, {
             level: "error",
           });
           return {
-            error: h.error,
+            error: saveResult.error,
           };
         }
       },
@@ -1602,26 +1635,26 @@ function buildConfigRows(shorthandRows) {
       label: "Use auto mode during plan",
       value: settingsData?.useAutoModeDuringPlan ?? true,
       type: "boolean",
-      async onChange(e) {
-        setSettingsData((l) => ({
-          ...l,
-          useAutoModeDuringPlan: e,
+      async onChange(value) {
+        setSettingsData((data) => ({
+          ...data,
+          useAutoModeDuringPlan: value,
         }));
-        changeLog.record("Use auto mode during plan", e);
-        let { error } = await x({
-          useAutoModeDuringPlan: e,
+        changeLog.record("Use auto mode during plan", value);
+        let { error } = await saveUserSettings({
+          useAutoModeDuringPlan: value,
         });
         if (error)
           return {
             error,
           };
-        setPlanAutoModeOffAtLaunch(!e);
-        setAppState((l) => {
-          let h = transitionPlanAutoMode(l.toolPermissionContext);
-          if (h === l.toolPermissionContext) return l;
+        setPlanAutoModeOffAtLaunch(!value);
+        setAppState((state) => {
+          let nextContext = transitionPlanAutoMode(state.toolPermissionContext);
+          if (nextContext === state.toolPermissionContext) return state;
           return {
-            ...l,
-            toolPermissionContext: h,
+            ...state,
+            toolPermissionContext: nextContext,
           };
         });
       },
@@ -1631,17 +1664,17 @@ function buildConfigRows(shorthandRows) {
       label: "Respect .gitignore in file picker",
       value: globalConfig.respectGitignore ?? DEFAULT_GLOBAL_CONFIG.respectGitignore,
       type: "boolean",
-      onChange(e) {
-        G((o) => ({
-          ...o,
-          respectGitignore: e,
+      onChange(value) {
+        saveConfig((config) => ({
+          ...config,
+          respectGitignore: value,
         }));
-        setGlobalConfig((o) => ({
-          ...o,
-          respectGitignore: e,
+        setGlobalConfig((config) => ({
+          ...config,
+          respectGitignore: value,
         }));
         logEvent("tengu_respect_gitignore_setting_changed", {
-          enabled: e,
+          enabled: value,
         });
       },
     },
@@ -1651,12 +1684,12 @@ function buildConfigRows(shorthandRows) {
       value: globalConfig.copyFullResponse ?? DEFAULT_GLOBAL_CONFIG.copyFullResponse,
       type: "boolean",
       onChange(copyFullResponse) {
-        G((o) => ({
-          ...o,
+        saveConfig((config) => ({
+          ...config,
           copyFullResponse,
         }));
-        setGlobalConfig((o) => ({
-          ...o,
+        setGlobalConfig((config) => ({
+          ...config,
           copyFullResponse,
         }));
       },
@@ -1669,12 +1702,12 @@ function buildConfigRows(shorthandRows) {
             value: globalConfig.copyOnSelect ?? true,
             type: "boolean",
             onChange(copyOnSelect) {
-              G((o) => ({
-                ...o,
+              saveConfig((config) => ({
+                ...config,
                 copyOnSelect,
               }));
-              setGlobalConfig((o) => ({
-                ...o,
+              setGlobalConfig((config) => ({
+                ...config,
                 copyOnSelect,
               }));
             },
@@ -1684,11 +1717,11 @@ function buildConfigRows(shorthandRows) {
             label: configRowLabel("Auto-scroll", "Auto-scroll output"),
             value: globalConfig.autoScrollEnabled,
             type: "boolean",
-            onChange(e) {
-              j("autoScrollEnabled", e);
-              setGlobalConfig((o) => ({
-                ...o,
-                autoScrollEnabled: e,
+            onChange(value) {
+              saveUserIntent("autoScrollEnabled", value);
+              setGlobalConfig((config) => ({
+                ...config,
+                autoScrollEnabled: value,
               }));
             },
           },
@@ -1710,7 +1743,7 @@ function buildConfigRows(shorthandRows) {
             },
           ]
         : []
-      : go),
+      : viewRows),
     ...[],
     autoUpdaterDisabledReason
       ? {
@@ -1739,10 +1772,10 @@ function buildConfigRows(shorthandRows) {
             value: notificationChannelLabel(globalConfig.preferredNotifChannel),
             type: "managedEnum",
             options: [...NOTIFICATION_CHANNELS],
-            onChange: Ce,
+            onChange: setNotifChannel,
           },
         ]
-      : [Ne, ...Ue]),
+      : [notifRow, ...pushRows]),
     {
       id: "outputStyle",
       label: "Output style",
@@ -1753,15 +1786,15 @@ function buildConfigRows(shorthandRows) {
       type: "managedEnum",
       options: Object.keys(OUTPUT_STYLE_CONFIG),
       optionsHint: "For custom styles, open /config.",
-      async onChange(e) {
+      async onChange(value) {
         if (mayBeAuthoredByNonOwner) {
           let allOutputStyles = await getAllOutputStylesCached(getCwd(), storageV5);
-          if (!isBuiltInOrDefaultStyle(allOutputStyles[e]))
+          if (!isBuiltInOrDefaultStyle(allOutputStyles[value]))
             return {
               error: new WireSafeControlError(CUSTOM_STYLE_REMOTE_DENIED_MESSAGE),
             };
         }
-        if (e === currentOutputStyle)
+        if (value === currentOutputStyle)
           return {
             messageSuffix: " (already the current style)",
           };
@@ -1769,16 +1802,16 @@ function buildConfigRows(shorthandRows) {
           return {
             error: new WireSafeControlError(STYLE_SAVE_UNAVAILABLE_MESSAGE),
           };
-        setSettingsData((l) => ({
-          ...l,
-          outputStyle: e,
+        setSettingsData((data) => ({
+          ...data,
+          outputStyle: value,
         }));
-        let o = await pe({
-          outputStyle: e,
+        let writeResult = await saveLocalSettings({
+          outputStyle: value,
         });
-        if (o?.error)
+        if (writeResult?.error)
           return {
-            error: o.error,
+            error: writeResult.error,
           };
         noteSystemPromptSectionInvalidation("output_style");
       },
@@ -1791,27 +1824,27 @@ function buildConfigRows(shorthandRows) {
             value: settingsData?.defaultView === undefined ? "default" : String(settingsData.defaultView),
             options: ["transcript", "chat", "default"],
             type: "enum",
-            onChange(e) {
-              let o = e === "default" ? undefined : e;
-              pe({
-                defaultView: o,
+            onChange(value) {
+              let nextView = value === "default" ? undefined : value;
+              saveLocalSettings({
+                defaultView: nextView,
               });
-              setSettingsData((h) => ({
-                ...h,
-                defaultView: o,
+              setSettingsData((data) => ({
+                ...data,
+                defaultView: nextView,
               }));
-              let l = o === "chat";
-              setUserMsgOptIn(l);
-              setAppState((h) => {
-                if (h.isBriefOnly === l) return h;
+              let isChatView = nextView === "chat";
+              setUserMsgOptIn(isChatView);
+              setAppState((state) => {
+                if (state.isBriefOnly === isChatView) return state;
                 return {
-                  ...h,
-                  isBriefOnly: l,
+                  ...state,
+                  isBriefOnly: isChatView,
                 };
               });
-              changeLog.record("Default view", e);
+              changeLog.record("Default view", value);
               logEvent("tengu_default_view_setting_changed", {
-                value: fromEnum(o ?? "unset"),
+                value: fromEnum(nextView ?? "unset"),
               });
             },
           },
@@ -1824,18 +1857,18 @@ function buildConfigRows(shorthandRows) {
       type: "managedEnum",
       coerce: capitalize,
       optionsHint: "Any language name or ISO code (e.g. 'ja'); use 'default' for English.",
-      async onChange(e) {
-        let language = e.toLowerCase() === "default" ? undefined : e;
-        setSettingsData((h) => ({
-          ...h,
+      async onChange(value) {
+        let language = value.toLowerCase() === "default" ? undefined : value;
+        setSettingsData((data) => ({
+          ...data,
           language,
         }));
-        let l = await x({
+        let writeResult = await saveUserSettings({
           language,
         });
-        if (l?.error)
+        if (writeResult?.error)
           return {
-            error: l.error,
+            error: writeResult.error,
           };
       },
     },
@@ -1845,15 +1878,15 @@ function buildConfigRows(shorthandRows) {
       value: globalConfig.editorMode === "emacs" ? "normal" : globalConfig.editorMode || "normal",
       options: ["normal", "vim"],
       type: "enum",
-      onChange(e) {
-        let o = e;
-        j("editorMode", o);
-        setGlobalConfig((l) => ({
-          ...l,
-          editorMode: o,
+      onChange(value) {
+        let editorMode = value;
+        saveUserIntent("editorMode", editorMode);
+        setGlobalConfig((config) => ({
+          ...config,
+          editorMode,
         }));
         logEvent("tengu_editor_mode_changed", {
-          mode: fromEnum(o),
+          mode: fromEnum(editorMode),
           source: lit("config_panel"),
         });
       },
@@ -1868,24 +1901,24 @@ function buildConfigRows(shorthandRows) {
             value: settingsData?.askUserQuestionTimeout ?? getAskUserQuestionTimeout() ?? "never",
             options: [...ASK_QUESTION_TIMEOUT_OPTIONS],
             type: "enum",
-            async onChange(e) {
-              let found = ASK_QUESTION_TIMEOUT_OPTIONS.find((E) => E === e);
+            async onChange(value) {
+              let found = ASK_QUESTION_TIMEOUT_OPTIONS.find((option) => option === value);
               if (!found) return;
               let askUserQuestionTimeout = settingsData.askUserQuestionTimeout;
-              setSettingsData((E) => ({
-                ...E,
+              setSettingsData((data) => ({
+                ...data,
                 askUserQuestionTimeout: found,
               }));
-              let h = await x({
+              let writeResult = await saveUserSettings({
                 askUserQuestionTimeout: found,
               });
-              if (h?.error) {
-                setSettingsData((E) => ({
-                  ...E,
+              if (writeResult?.error) {
+                setSettingsData((data) => ({
+                  ...data,
                   askUserQuestionTimeout,
                 }));
                 return {
-                  error: h.error,
+                  error: writeResult.error,
                 };
               }
               logEvent("tengu_ask_user_question_timeout_changed", {
@@ -1904,19 +1937,19 @@ function buildConfigRows(shorthandRows) {
             options: [...CONFIG_BACKEND_LABELS],
             type: "enum",
             consentGated: true,
-            async onChange(e) {
-              let found = CONFIG_BACKEND_LABELS.find((h) => h === e);
+            async onChange(value) {
+              let found = CONFIG_BACKEND_LABELS.find((option) => option === value);
               if (!found) return;
-              setSettingsData((h) => ({
-                ...h,
+              setSettingsData((data) => ({
+                ...data,
                 modelProposedGoals: found,
               }));
-              let l = await x({
+              let writeResult = await saveUserSettings({
                 modelProposedGoals: found,
               });
-              if (l?.error)
+              if (writeResult?.error)
                 return {
-                  error: l.error,
+                  error: writeResult.error,
                 };
               logEvent("tengu_model_proposed_goals_changed", {
                 value: fromEnum(found),
@@ -1931,17 +1964,17 @@ function buildConfigRows(shorthandRows) {
       label: configRowLabel("Show last response in external editor", "Show responses in IDE"),
       value: globalConfig.externalEditorContext ?? false,
       type: "boolean",
-      onChange(e) {
-        G((o) => ({
-          ...o,
-          externalEditorContext: e,
+      onChange(value) {
+        saveConfig((config) => ({
+          ...config,
+          externalEditorContext: value,
         }));
-        setGlobalConfig((o) => ({
-          ...o,
-          externalEditorContext: e,
+        setGlobalConfig((config) => ({
+          ...config,
+          externalEditorContext: value,
         }));
         logEvent("tengu_external_editor_context_changed", {
-          enabled: e,
+          enabled: value,
         });
       },
     },
@@ -1950,20 +1983,20 @@ function buildConfigRows(shorthandRows) {
       label: configRowLabel("Show PR status footer", "Show PR status"),
       value: globalConfig.prStatusFooterEnabled ?? true,
       type: "boolean",
-      onChange(e) {
-        G((o) => {
-          if (o.prStatusFooterEnabled === e) return o;
+      onChange(value) {
+        saveConfig((config) => {
+          if (config.prStatusFooterEnabled === value) return config;
           return {
-            ...o,
-            prStatusFooterEnabled: e,
+            ...config,
+            prStatusFooterEnabled: value,
           };
         });
-        setGlobalConfig((o) => ({
-          ...o,
-          prStatusFooterEnabled: e,
+        setGlobalConfig((config) => ({
+          ...config,
+          prStatusFooterEnabled: value,
         }));
         logEvent("tengu_pr_status_footer_setting_changed", {
-          enabled: e,
+          enabled: value,
         });
       },
     },
@@ -1974,15 +2007,15 @@ function buildConfigRows(shorthandRows) {
       type: "managedEnum",
       options: selectableModelOptions(),
       optionsHint: "For a specific model ID, use /model.",
-      onChange(e) {
-        let o = e === "default" ? null : e;
-        if (hasLadderForSetting(o)) {
+      onChange(value) {
+        let diffTool = value === "default" ? null : value;
+        if (hasLadderForSetting(diffTool)) {
           logFeatureSad("model_fable_consent", "config_shorthand_blocked");
           return {
             error: new WireSafeControlError("needs usage-credits consent \u2014 run /model first"),
           };
         }
-        return Te(o);
+        return applyModelChange(diffTool);
       },
     },
     ...(isConnectedToIde
@@ -1993,18 +2026,18 @@ function buildConfigRows(shorthandRows) {
             value: globalConfig.diffTool ?? "auto",
             options: ["terminal", "auto"],
             type: "enum",
-            onChange(e) {
-              let o = e;
-              G((l) => ({
-                ...l,
-                diffTool: o,
+            onChange(value) {
+              let diffTool = value;
+              saveConfig((config) => ({
+                ...config,
+                diffTool,
               }));
-              setGlobalConfig((l) => ({
-                ...l,
-                diffTool: o,
+              setGlobalConfig((config) => ({
+                ...config,
+                diffTool,
               }));
               logEvent("tengu_diff_tool_changed", {
-                tool: fromEnum(o),
+                tool: fromEnum(diffTool),
                 source: lit("config_panel"),
               });
             },
@@ -2018,17 +2051,17 @@ function buildConfigRows(shorthandRows) {
             label: "Auto-connect to IDE (external terminal)",
             value: globalConfig.autoConnectIde ?? false,
             type: "boolean",
-            onChange(e) {
-              G((o) => ({
-                ...o,
-                autoConnectIde: e,
+            onChange(value) {
+              saveConfig((config) => ({
+                ...config,
+                autoConnectIde: value,
               }));
-              setGlobalConfig((o) => ({
-                ...o,
-                autoConnectIde: e,
+              setGlobalConfig((config) => ({
+                ...config,
+                autoConnectIde: value,
               }));
               logEvent("tengu_auto_connect_ide_changed", {
-                enabled: e,
+                enabled: value,
                 source: lit("config_panel"),
               });
             },
@@ -2042,17 +2075,17 @@ function buildConfigRows(shorthandRows) {
             label: "Auto-install IDE extension",
             value: globalConfig.autoInstallIdeExtension ?? true,
             type: "boolean",
-            onChange(e) {
-              G((o) => ({
-                ...o,
-                autoInstallIdeExtension: e,
+            onChange(value) {
+              saveConfig((config) => ({
+                ...config,
+                autoInstallIdeExtension: value,
               }));
-              setGlobalConfig((o) => ({
-                ...o,
-                autoInstallIdeExtension: e,
+              setGlobalConfig((config) => ({
+                ...config,
+                autoInstallIdeExtension: value,
               }));
               logEvent("tengu_auto_install_ide_extension_changed", {
-                enabled: e,
+                enabled: value,
                 source: lit("config_panel"),
               });
             },
@@ -2067,17 +2100,17 @@ function buildConfigRows(shorthandRows) {
       }),
       value: globalConfig.claudeInChromeDefaultEnabled ?? false,
       type: "boolean",
-      onChange(e) {
-        G((o) => ({
-          ...o,
-          claudeInChromeDefaultEnabled: e,
+      onChange(value) {
+        saveConfig((config) => ({
+          ...config,
+          claudeInChromeDefaultEnabled: value,
         }));
-        setGlobalConfig((o) => ({
-          ...o,
-          claudeInChromeDefaultEnabled: e,
+        setGlobalConfig((config) => ({
+          ...config,
+          claudeInChromeDefaultEnabled: value,
         }));
         logEvent("tengu_claude_in_chrome_setting_changed", {
-          enabled: e,
+          enabled: value,
         });
       },
     },
@@ -2103,9 +2136,9 @@ function buildConfigRows(shorthandRows) {
                   return;
                 clearCliTeammateModeOverride(newMode);
                 resetBackendDetection();
-                j("teammateMode", newMode);
-                setGlobalConfig((h) => ({
-                  ...h,
+                saveUserIntent("teammateMode", newMode);
+                setGlobalConfig((config) => ({
+                  ...config,
                   teammateMode: newMode,
                 }));
                 logEvent("tengu_teammate_mode_changed", {
@@ -2116,7 +2149,7 @@ function buildConfigRows(shorthandRows) {
           ];
         })()
       : []),
-    ...(isBridgeEnabled() || isRemoteControlHardDisabled() ? [co()] : []),
+    ...(isBridgeEnabled() || isRemoteControlHardDisabled() ? [remoteControlRow()] : []),
     ...(isSettingSetOutsideUserSettings("dialogExpiry")
       ? []
       : [
@@ -2127,25 +2160,25 @@ function buildConfigRows(shorthandRows) {
             value: settingsData.dialogExpiry ?? "default",
             options: [...DIALOG_EXPIRY_OPTIONS],
             type: "enum",
-            async onChange(e) {
-              let found = DIALOG_EXPIRY_OPTIONS.find((M) => M === e);
+            async onChange(value) {
+              let found = DIALOG_EXPIRY_OPTIONS.find((option) => option === value);
               if (!found) return;
               let dialogExpiry = found === "default" ? undefined : found;
               let dialogExpiry_2 = settingsData.dialogExpiry;
-              setSettingsData((M) => ({
-                ...M,
+              setSettingsData((data) => ({
+                ...data,
                 dialogExpiry,
               }));
-              let E = await x({
+              let writeResult = await saveUserSettings({
                 dialogExpiry,
               });
-              if (E?.error) {
-                setSettingsData((M) => ({
-                  ...M,
+              if (writeResult?.error) {
+                setSettingsData((data) => ({
+                  ...data,
                   dialogExpiry: dialogExpiry_2,
                 }));
                 return {
-                  error: E.error,
+                  error: writeResult.error,
                 };
               }
               logEvent("tengu_dialog_expiry_changed", {
@@ -2165,25 +2198,25 @@ function buildConfigRows(shorthandRows) {
             value: settingsData.crossSessionInbound ?? "default",
             options: [...GENERIC_TIMEOUT_OPTIONS],
             type: "enum",
-            async onChange(e) {
-              let found = GENERIC_TIMEOUT_OPTIONS.find((M) => M === e);
+            async onChange(value) {
+              let found = GENERIC_TIMEOUT_OPTIONS.find((option) => option === value);
               if (!found) return;
               let crossSessionInbound = found === "default" ? undefined : found;
               let crossSessionInbound_2 = settingsData.crossSessionInbound;
-              setSettingsData((M) => ({
-                ...M,
+              setSettingsData((data) => ({
+                ...data,
                 crossSessionInbound,
               }));
-              let E = await x({
+              let writeResult = await saveUserSettings({
                 crossSessionInbound,
               });
-              if (E?.error) {
-                setSettingsData((M) => ({
-                  ...M,
+              if (writeResult?.error) {
+                setSettingsData((data) => ({
+                  ...data,
                   crossSessionInbound: crossSessionInbound_2,
                 }));
                 return {
-                  error: E.error,
+                  error: writeResult.error,
                 };
               }
               logEvent("tengu_cross_session_inbound_changed", {
@@ -2221,23 +2254,23 @@ function buildConfigRows(shorthandRows) {
               customApiKeyResponsesOf(globalConfig).approved.includes(tailOfId(env.ANTHROPIC_API_KEY)),
             ),
             type: "boolean",
-            onChange(e) {
-              G((o) => {
-                if (!env.ANTHROPIC_API_KEY) return o;
-                let { approved, rejected } = customApiKeyResponsesOf(o);
-                let E = tailOfId(env.ANTHROPIC_API_KEY);
-                let filtered = approved.filter((I) => I !== E);
-                let filtered_2 = rejected.filter((I) => I !== E);
+            onChange(value) {
+              saveConfig((config) => {
+                if (!env.ANTHROPIC_API_KEY) return config;
+                let { approved, rejected } = customApiKeyResponsesOf(config);
+                let keyTail = tailOfId(env.ANTHROPIC_API_KEY);
+                let filtered = approved.filter((key) => key !== keyTail);
+                let filtered_2 = rejected.filter((key) => key !== keyTail);
                 return {
-                  ...o,
-                  customApiKeyResponses: e
+                  ...config,
+                  customApiKeyResponses: value
                     ? {
-                        approved: [...filtered, E],
+                        approved: [...filtered, keyTail],
                         rejected: filtered_2,
                       }
                     : {
                         approved: filtered,
-                        rejected: [...filtered_2, E],
+                        rejected: [...filtered_2, keyTail],
                       },
                 };
               });
@@ -2249,14 +2282,16 @@ function buildConfigRows(shorthandRows) {
       : []),
   ];
   return {
-    settings: isRemoteSessionAvailable() ? Ge.filter((e) => !isSessionScopedSetting(e.id)) : Ge,
-    dialogFieldRows: [...we, Ne, ...Ue],
+    settings: isRemoteSessionAvailable()
+      ? settingRows.filter((row) => !isSessionScopedSetting(row.id))
+      : settingRows,
+    dialogFieldRows: [...agentRows, notifRow, ...pushRows],
     helpers: {
-      onChangeMainModelConfig: Te,
-      onChangeVerbose: Oe,
-      changeNotifChannel: Ce,
-      changeInputNeededNotif: Ae,
-      changeAgentPushNotif: Fe,
+      onChangeMainModelConfig: applyModelChange,
+      onChangeVerbose: setVerbose,
+      changeNotifChannel: setNotifChannel,
+      changeInputNeededNotif: setInputNeededNotif,
+      changeAgentPushNotif: setAgentPushNotif,
     },
   };
 }

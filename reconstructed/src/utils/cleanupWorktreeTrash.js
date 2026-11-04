@@ -46,18 +46,18 @@ var MAX_GIT_POINTER_FILE_BYTES = 8192;
 var GIT_ENTRY_NAME = ".git";
 var PATH_SEPARATOR_SPLIT_RE = sep === "\\" ? /[\\/]+/ : /\/+/;
 //@ chunk-4nhpaxz9.js:1460-2116 placement
-async function pruneGitAlternates(e, cutoffMs, t = createDeviceTreeHost()) {
-  let r = {
+async function pruneGitAlternates(alternatesPath, cutoffMs, host = createDeviceTreeHost()) {
+  let result = {
     removed: 0,
     errors: 0,
     newestKeptMs: null,
   };
   try {
     let alternatePath = await resolveAlternatePath(
-      t,
-      join(e, SIDE_GIT, "objects", "info", "alternates"),
-      e,
-      (a) => a.split(/\r?\n/, 1)[0] ?? "",
+      host,
+      join(alternatesPath, SIDE_GIT, "objects", "info", "alternates"),
+      alternatesPath,
+      (line) => line.split(/\r?\n/, 1)[0] ?? "",
     );
     if (
       alternatePath === "absent" ||
@@ -65,107 +65,115 @@ async function pruneGitAlternates(e, cutoffMs, t = createDeviceTreeHost()) {
       alternatePath === "malformed" ||
       (alternatePath !== "refused" && basename(alternatePath) !== "objects")
     )
-      return r;
+      return result;
     if (alternatePath === "refused") {
-      markErrorAndNewest(r);
-      return r;
+      markErrorAndNewest(result);
+      return result;
     }
-    let i = dirname(alternatePath);
-    let identity = await t.fs.lstat(i, {
+    let gitDir = dirname(alternatePath);
+    let identity = await host.fs.lstat(gitDir, {
       bigint: true,
     });
-    let c = await t.fs.lstat(join(i, "HEAD")).catch(() => null);
-    if (!c?.isFile() && !c?.isSymbolicLink()) {
-      markErrorAndNewest(r);
-      return r;
+    let headStats = await host.fs.lstat(join(gitDir, "HEAD")).catch(() => null);
+    if (!headStats?.isFile() && !headStats?.isSymbolicLink()) {
+      markErrorAndNewest(result);
+      return result;
     }
     await cleanupTrashDir(
-      t,
+      host,
       {
         kind: "git_dir",
-        dir: i,
+        dir: gitDir,
         identity,
       },
       {
         cutoffMs,
-        isLive: await liveWriterChecker(t, e, dirname(i)),
-        tally: r,
+        isLive: await liveWriterChecker(host, alternatesPath, dirname(gitDir)),
+        tally: result,
       },
     );
-    for (let a of await cleanupWorktreeTrash(t, i, r))
-      await cleanupTrashDir(t, a, {
+    for (let trashEntry of await cleanupWorktreeTrash(host, gitDir, result))
+      await cleanupTrashDir(host, trashEntry, {
         cutoffMs,
-        isLive: await liveWriterChecker(t, e, a.dir),
-        tally: r,
-      }).catch(() => markErrorAndNewest(r));
+        isLive: await liveWriterChecker(host, alternatesPath, trashEntry.dir),
+        tally: result,
+      }).catch(() => markErrorAndNewest(result));
   } catch {
-    markErrorAndNewest(r);
+    markErrorAndNewest(result);
   }
-  return r;
+  return result;
 }
 //@ chunk-4nhpaxz9.js:2116-2156 placement
 /**
  * 记录最近一次保留时间。
  */
-function markNewestKept(e) {
-  e.newestKeptMs = Date.now();
+function markNewestKept(mtimeMs) {
+  mtimeMs.newestKeptMs = Date.now();
 }
 //@ chunk-4nhpaxz9.js:2156-2295 placement
 /**
  * 规范化后比较两个路径是否相同（Windows 盘符大小写）。
  */
-function samePath(e, n, t = sep) {
-  let [r, s] = [e, n].map((i) =>
-    identity((t === "\\" ? i.replaceAll("/", t) : i).replace(/^[a-z](?=:)/, (o) => o.toUpperCase())),
+function samePath(leftPath, rightPath, separator = sep) {
+  let [normalizedLeft, normalizedRight] = [leftPath, rightPath].map((path) =>
+    identity(
+      (separator === "\\" ? path.replaceAll("/", separator) : path).replace(/^[a-z](?=:)/, (driveLetter) =>
+        driveLetter.toUpperCase(),
+      ),
+    ),
   );
-  return r === s;
+  return normalizedLeft === normalizedRight;
 }
 //@ chunk-4nhpaxz9.js:2295-2391 placement
 /**
  * 判断两个路径是否相同（或大小写折叠后相同）。
  */
-function samePathCaseFolded(e, dir) {
-  let t = (r) => r.replace(/[A-Z]/g, (s) => s.toLowerCase());
-  return samePath(e, dir) || samePath(t(e), t(dir));
+function samePathCaseFolded(leftPath, path) {
+  let lowercase = (path) => path.replace(/[A-Z]/g, (upperChar) => upperChar.toLowerCase());
+  return samePath(leftPath, path) || samePath(lowercase(leftPath), lowercase(path));
 }
 //@ chunk-4nhpaxz9.js:2391-2421 placement
 /**
  * 记一次清理错误并更新最近保留时间。
  */
-function markErrorAndNewest(e) {
-  e.errors++;
-  markNewestKept(e);
+function markErrorAndNewest(mtimeMs) {
+  mtimeMs.errors++;
+  markNewestKept(mtimeMs);
 }
 //@ chunk-4nhpaxz9.js:2421-2468 placement
 /**
  * 去掉字符串末尾的换行。
  */
-var stripTrailingNewlines = (e) => e.replace(/(?<![\r\n])[\r\n]+$/, "");
+var stripTrailingNewlines = (text) => text.replace(/(?<![\r\n])[\r\n]+$/, "");
 //@ chunk-4nhpaxz9.js:2468-2753 placement
 /**
  * 读取并解析 alternates/gitdir 指向的路径，确认无链接，返回路径或 absent/malformed/refused/leads_nowhere。
  */
-async function resolveAlternatePath(e, n, t, r, s) {
-  let smallFile = await readSmallFile(e, n, r);
+async function resolveAlternatePath(worktreeDir, alternatePath, host, cutoffMs, objectsBaseDir) {
+  let smallFile = await readSmallFile(worktreeDir, alternatePath, cutoffMs);
   if (smallFile === "absent" || smallFile === "malformed" || smallFile === "refused") return smallFile;
-  if (isOnForeignMount(smallFile, t)) return "refused";
-  let o = s === undefined ? smallFile : resolve(s, smallFile);
-  if (!isAbsolute(o)) return "refused";
-  let c = await checkNoSymlinks(e, o);
-  return c === "plainly" ? o : c === "missing" && !/[\r\n]/.test(smallFile) ? "leads_nowhere" : "refused";
+  if (isOnForeignMount(smallFile, host)) return "refused";
+  let smallFilePath = objectsBaseDir === undefined ? smallFile : resolve(objectsBaseDir, smallFile);
+  if (!isAbsolute(smallFilePath)) return "refused";
+  let symlinkCheck = await checkNoSymlinks(worktreeDir, smallFilePath);
+  return symlinkCheck === "plainly"
+    ? smallFilePath
+    : symlinkCheck === "missing" && !/[\r\n]/.test(smallFile)
+      ? "leads_nowhere"
+      : "refused";
 }
 //@ chunk-4nhpaxz9.js:2753-2986 placement
 /**
  * 路径各级是否都不是符号链接（plainly/missing/refused）。
  */
-async function checkNoSymlinks(e, n) {
-  let { root } = parse(n);
-  let r = root;
-  for (let s of n.slice(root.length).split(PATH_SEPARATOR_SPLIT_RE)) {
-    if (s === "") continue;
-    r = join(r, s);
+async function checkNoSymlinks(host, fullPath) {
+  let { root } = parse(fullPath);
+  let currentPath = root;
+  for (let segment of fullPath.slice(root.length).split(PATH_SEPARATOR_SPLIT_RE)) {
+    if (segment === "") continue;
+    currentPath = join(currentPath, segment);
     try {
-      if ((await e.fs.lstat(r)).isSymbolicLink()) return "refused";
+      if ((await host.fs.lstat(currentPath)).isSymbolicLink()) return "refused";
     } catch (error) {
       return isPathAbsent(error) ? "missing" : "refused";
     }
@@ -176,15 +184,15 @@ async function checkNoSymlinks(e, n) {
 /**
  * 读取小文件内容并解析（不存在/过大/格式错误时返回原因）。
  */
-async function readSmallFile(e, n, t) {
+async function readSmallFile(host, filePath, normalize) {
   try {
-    let fileFdGated = await getFsImplementation().readFileFdGated(n, MAX_GIT_POINTER_FILE_BYTES);
+    let fileFdGated = await getFsImplementation().readFileFdGated(filePath, MAX_GIT_POINTER_FILE_BYTES);
     if (fileFdGated === null) {
-      let stats = await e.fs.lstat(n);
+      let stats = await host.fs.lstat(filePath);
       return stats.isFile() && stats.size <= MAX_GIT_POINTER_FILE_BYTES ? "refused" : "malformed";
     }
-    let s = t(fileFdGated.content);
-    return s === "" || s.includes("\x00") ? "malformed" : s;
+    let text = normalize(fileFdGated.content);
+    return text === "" || text.includes("\x00") ? "malformed" : text;
   } catch (error) {
     return isENOENT(error) ? "absent" : "refused";
   }
@@ -193,129 +201,149 @@ async function readSmallFile(e, n, t) {
 /**
  * 构造判断回收项是否仍有写者锁的函数。
  */
-async function liveWriterChecker(e, n, t) {
-  let r = dirname(dirname(n));
-  let s = join(getProjectDir(await canonicalizePath(t, undefined), r), CLOUD_SNAPSHOTS_DIR);
-  let results = await Promise.all(uniq([n, s]).map((o) => readWriterLocks(e, o)));
-  return (o) => results.some((c) => c(o));
+async function liveWriterChecker(host, worktreeDir, repoPath) {
+  let parentDir = dirname(dirname(worktreeDir));
+  let snapshotsDir = join(
+    getProjectDir(await canonicalizePath(repoPath, undefined), parentDir),
+    CLOUD_SNAPSHOTS_DIR,
+  );
+  let results = await Promise.all(
+    uniq([worktreeDir, snapshotsDir]).map((lockDir) => readWriterLocks(host, lockDir)),
+  );
+  return (candidate) => results.some((checker) => checker(candidate));
 }
 //@ chunk-4nhpaxz9.js:3398-3669 placement
 /**
  * 读取写者锁目录中仍新鲜的锁。
  */
-async function readWriterLocks(e, n) {
-  let t = join(n, WRITER_LOCKS);
-  let r;
+async function readWriterLocks(host, rootDir) {
+  let locksDir = join(rootDir, WRITER_LOCKS);
+  let lockNames;
   try {
-    r = await e.fs.readdir(t);
+    lockNames = await host.fs.readdir(locksDir);
   } catch (error) {
     return isENOENT(error) ? () => false : () => true;
   }
-  let s = new Set();
-  for (let i of r) {
-    let o = i.endsWith(".writer") ? await e.fs.lstat(join(t, i)).catch(() => null) : null;
-    if (o !== null && isWriterLockFresh(o.mtimeMs)) s.add(i.slice(0, -7));
+  let liveNames = new Set();
+  for (let lockName of lockNames) {
+    let lockStats = lockName.endsWith(".writer")
+      ? await host.fs.lstat(join(locksDir, lockName)).catch(() => null)
+      : null;
+    if (lockStats !== null && isWriterLockFresh(lockStats.mtimeMs)) liveNames.add(lockName.slice(0, -7));
   }
-  return (i) => s.has(i);
+  return (name) => liveNames.has(name);
 }
 //@ chunk-4nhpaxz9.js:3669-4809 placement
-async function cleanupWorktreeTrash(e, n, t) {
-  let r = join(n, "worktrees");
-  let s = await e.fs.lstat(r).catch((error) => (isENOENT(error) ? "absent" : null));
-  if (s === "absent") {
-    if (!(await e.fs.lstat(n).catch(() => null))?.isDirectory()) markErrorAndNewest(t);
+async function cleanupWorktreeTrash(host, gitDir, tally) {
+  let worktreesDir = join(gitDir, "worktrees");
+  let worktreesStats = await host.fs
+    .lstat(worktreesDir)
+    .catch((error) => (isENOENT(error) ? "absent" : null));
+  if (worktreesStats === "absent") {
+    if (!(await host.fs.lstat(gitDir).catch(() => null))?.isDirectory()) markErrorAndNewest(tally);
     return [];
   }
-  let i =
-    s?.isDirectory() && (await checkNoSymlinks(e, r)) === "plainly"
-      ? await e.fs.readdir(r).catch(() => null)
+  let entries =
+    worktreesStats?.isDirectory() && (await checkNoSymlinks(host, worktreesDir)) === "plainly"
+      ? await host.fs.readdir(worktreesDir).catch(() => null)
       : null;
-  if (i === null) {
-    markErrorAndNewest(t);
+  if (entries === null) {
+    markErrorAndNewest(tally);
     return [];
   }
-  let o = [];
-  for (let c of i) {
-    let a = join(r, c);
-    let u = await e.fs.lstat(a).catch(() => null);
-    if (u === null || u.isSymbolicLink()) {
-      markErrorAndNewest(t);
+  let linkedWorktrees = [];
+  for (let entryName of entries) {
+    let entryPath = join(worktreesDir, entryName);
+    let entryStats = await host.fs.lstat(entryPath).catch(() => null);
+    if (entryStats === null || entryStats.isSymbolicLink()) {
+      markErrorAndNewest(tally);
       continue;
     }
-    if (!u.isDirectory()) continue;
-    let alternatePath = await resolveAlternatePath(e, join(a, "gitdir"), a, (p) => p.trimEnd(), a);
-    if (alternatePath === "leads_nowhere") continue;
+    if (!entryStats.isDirectory()) continue;
+    let filePath = await resolveAlternatePath(
+      host,
+      join(entryPath, "gitdir"),
+      entryPath,
+      (line) => line.trimEnd(),
+      entryPath,
+    );
+    if (filePath === "leads_nowhere") continue;
     if (
-      alternatePath === "absent" ||
-      alternatePath === "refused" ||
-      alternatePath === "malformed" ||
-      basename(alternatePath) !== GIT_ENTRY_NAME
+      filePath === "absent" ||
+      filePath === "refused" ||
+      filePath === "malformed" ||
+      basename(filePath) !== GIT_ENTRY_NAME
     ) {
-      markErrorAndNewest(t);
+      markErrorAndNewest(tally);
       continue;
     }
-    let d = dirname(alternatePath);
-    if (hasBackslash(d)) {
-      markErrorAndNewest(t);
+    let alternateDir = dirname(filePath);
+    if (hasBackslash(alternateDir)) {
+      markErrorAndNewest(tally);
       continue;
     }
-    let smallFile = await readSmallFile(e, alternatePath, stripTrailingNewlines);
+    let smallFile = await readSmallFile(host, filePath, stripTrailingNewlines);
     if (smallFile === "absent" || smallFile === "refused") {
-      markErrorAndNewest(t);
+      markErrorAndNewest(tally);
       continue;
     }
     if (smallFile === "malformed" || !smallFile.startsWith("gitdir: ")) {
-      markNewestKept(t);
+      markNewestKept(tally);
       continue;
     }
     let sliced = smallFile.slice(8);
-    if (isOnForeignMount(sliced, d)) {
-      markNewestKept(t);
+    if (isOnForeignMount(sliced, alternateDir)) {
+      markNewestKept(tally);
       continue;
     }
-    let P = await checkNoSymlinks(e, resolve(d, sliced));
-    if (P === "refused") {
-      markErrorAndNewest(t);
+    let symlinkCheck = await checkNoSymlinks(host, resolve(alternateDir, sliced));
+    if (symlinkCheck === "refused") {
+      markErrorAndNewest(tally);
       continue;
     }
-    if (P === "missing") {
-      markNewestKept(t);
+    if (symlinkCheck === "missing") {
+      markNewestKept(tally);
       continue;
     }
-    if (samePath(resolve(d, sliced), a))
-      o.push({
+    if (samePath(resolve(alternateDir, sliced), entryPath))
+      linkedWorktrees.push({
         kind: "linked_worktree",
-        dir: d,
+        dir: alternateDir,
         gitFileLine: smallFile,
       });
     else {
-      let [p, O] = await Promise.all(
-        [resolve(d, sliced), a].map((B) =>
-          e.fs
-            .lstat(B, {
+      let [alternateStats, entryStats] = await Promise.all(
+        [resolve(alternateDir, sliced), entryPath].map((targetPath) =>
+          host.fs
+            .lstat(targetPath, {
               bigint: true,
             })
             .catch(() => null),
         ),
       );
-      if (p?.ino && p.dev === O?.dev && p.ino === O.ino) markErrorAndNewest(t);
-      else markNewestKept(t);
+      if (
+        alternateStats?.ino &&
+        alternateStats.dev === entryStats?.dev &&
+        alternateStats.ino === entryStats.ino
+      )
+        markErrorAndNewest(tally);
+      else markNewestKept(tally);
     }
   }
-  return o;
+  return linkedWorktrees;
 }
 //@ chunk-4nhpaxz9.js:4809-4992 placement
 /**
  * 核对锚点仍指向同一 git 目录或 worktree。
  */
-async function verifyGitIdentity(e, n) {
-  switch (n.kind) {
+async function verifyGitIdentity(anchor, target) {
+  switch (target.kind) {
     case "git_dir": {
-      let stats = await e.lstat("");
-      return stats.dev === n.identity.dev && sameTimestamp(stats.ino, n.identity.ino);
+      let stats = await anchor.lstat("");
+      return stats.dev === target.identity.dev && sameTimestamp(stats.ino, target.identity.ino);
     }
     case "linked_worktree":
-      return readGitFileMatches(e, n.gitFileLine);
+      return readGitFileMatches(anchor, target.gitFileLine);
   }
 }
 //@ chunk-4nhpaxz9.js:4992-5089 placement
@@ -336,38 +364,38 @@ var TRASH_LAYOUT_BY_KIND = {
 /**
  * 读取 .git 文件内容并核对与记录一致（防替换）。
  */
-async function readGitFileMatches(e, gitFileLine) {
-  let t = await e.open(GIT_ENTRY_NAME, constants.O_RDONLY | constants.O_NONBLOCK).catch(() => null);
-  if (t === null) return false;
+async function readGitFileMatches(anchor, gitFileLine) {
+  let handle = await anchor.open(GIT_ENTRY_NAME, constants.O_RDONLY | constants.O_NONBLOCK).catch(() => null);
+  if (handle === null) return false;
   try {
-    let [r, s] = await Promise.all([
-      t.stat({
+    let [handleStats, entryStats] = await Promise.all([
+      handle.stat({
         bigint: true,
       }),
-      e.lstat(GIT_ENTRY_NAME),
+      anchor.lstat(GIT_ENTRY_NAME),
     ]);
-    if (r.dev !== s.dev || r.ino !== s.ino) return false;
-    let i = Buffer.alloc(MAX_GIT_POINTER_FILE_BYTES + 1);
-    let { bytesRead } = await t.read(i, 0, i.length, 0);
+    if (handleStats.dev !== entryStats.dev || handleStats.ino !== entryStats.ino) return false;
+    let buffer = Buffer.alloc(MAX_GIT_POINTER_FILE_BYTES + 1);
+    let { bytesRead } = await handle.read(buffer, 0, buffer.length, 0);
     return (
       bytesRead <= MAX_GIT_POINTER_FILE_BYTES &&
-      stripTrailingNewlines(i.toString("utf8", 0, bytesRead)) === gitFileLine
+      stripTrailingNewlines(buffer.toString("utf8", 0, bytesRead)) === gitFileLine
     );
   } catch {
     return false;
   } finally {
-    await t.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 //@ chunk-4nhpaxz9.js:5465-5643 placement
 /**
  * Windows 下按根与相对路径打开目录锚点。
  */
-function openWin32Anchor(e, n, t) {
-  let { root, dir, base } = e.path.parse(e.path.normalize(t));
-  return n.holdOutside(
+function openWin32Anchor(host, anchor, anchorPath) {
+  let { root, dir, base } = host.path.parse(host.path.normalize(anchorPath));
+  return anchor.holdOutside(
     root,
-    [...dir.slice(root.length).split(e.path.sep), base].filter((o) => o !== "").join("/"),
+    [...dir.slice(root.length).split(host.path.sep), base].filter((segment) => segment !== "").join("/"),
     true,
   );
 }
@@ -375,114 +403,120 @@ function openWin32Anchor(e, n, t) {
 /**
  * 按平台打开目录并核对 inode 与锚点一致。
  */
-async function verifyAnchorInode(e, n, dir = n.realRoot, r) {
-  let s = constants.O_DIRECTORY | READ_LIMITS;
-  let i = s | O_NOFOLLOW_ANY | constants.O_NOFOLLOW;
-  let o = await (
-    n.backend === "win32_handle"
-      ? openWin32Anchor(e, n, dir)
-      : n.backend === "darwin_at"
-        ? e.fs.open(dir, s | O_NOFOLLOW_FLAG)
-        : dir
+async function verifyAnchorInode(host, anchor, anchorPath = anchor.realRoot, expectedStats) {
+  let baseFlags = constants.O_DIRECTORY | READ_LIMITS;
+  let openFlags = baseFlags | O_NOFOLLOW_ANY | constants.O_NOFOLLOW;
+  let handle = await (
+    anchor.backend === "win32_handle"
+      ? openWin32Anchor(host, anchor, anchorPath)
+      : anchor.backend === "darwin_at"
+        ? host.fs.open(anchorPath, baseFlags | O_NOFOLLOW_FLAG)
+        : anchorPath
             .split("/")
-            .filter((c) => c !== "")
+            .filter((segment) => segment !== "")
             .reduce(
-              async (acc, a) => {
-                let u = await acc;
-                return e.fs.open(`/proc/self/fd/${u.fd}/${a}`, i).finally(() => u.close().catch(() => {}));
+              async (acc, segment) => {
+                let current = await acc;
+                return host.fs
+                  .open(`/proc/self/fd/${current.fd}/${segment}`, openFlags)
+                  .finally(() => current.close().catch(() => {}));
               },
-              e.fs.open("/", i),
+              host.fs.open("/", openFlags),
             )
   ).catch(() => null);
-  if (o === null) return false;
+  if (handle === null) return false;
   try {
-    let [c, a] = await Promise.all([
-      "fd" in o
-        ? o.stat({
+    let [anchorStats, expectedInodeStats] = await Promise.all([
+      "fd" in handle
+        ? handle.stat({
             bigint: true,
           })
-        : o.stat(),
-      r ?? n.lstat(""),
+        : handle.stat(),
+      expectedStats ?? anchor.lstat(""),
     ]);
-    return !isSentinelInode(a.ino) && c.dev === a.dev && c.ino === a.ino;
+    return (
+      !isSentinelInode(expectedInodeStats.ino) &&
+      anchorStats.dev === expectedInodeStats.dev &&
+      anchorStats.ino === expectedInodeStats.ino
+    );
   } catch {
     return false;
   } finally {
-    await o.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 //@ chunk-4nhpaxz9.js:6209-6889 placement
 /**
  * 清理某仓库的回收站：核对路径与身份后删除过期项并移除空回收站。
  */
-async function cleanupTrashDir(e, n, { cutoffMs, isLive, tally }) {
-  let dir = n.dir;
-  let { trashName, ignoreFile } = TRASH_LAYOUT_BY_KIND[n.kind];
+async function cleanupTrashDir(host, target, { cutoffMs, isLive, tally }) {
+  let dir = target.dir;
+  let { trashName, ignoreFile } = TRASH_LAYOUT_BY_KIND[target.kind];
   try {
-    if (!(await e.fs.lstat(e.path.join(dir, trashName))).isDirectory()) {
+    if (!(await host.fs.lstat(host.path.join(dir, trashName))).isDirectory()) {
       markErrorAndNewest(tally);
       return;
     }
   } catch (error) {
-    if (!isENOENT(error) || (await checkNoSymlinks(e, dir)) !== "plainly") markErrorAndNewest(tally);
+    if (!isENOENT(error) || (await checkNoSymlinks(host, dir)) !== "plainly") markErrorAndNewest(tally);
     return;
   }
-  let a = await e.fs.realpath(dir).catch(() => null);
-  if (a === null || !samePathCaseFolded(a, dir)) {
+  let realDir = await host.fs.realpath(dir).catch(() => null);
+  if (realDir === null || !samePathCaseFolded(realDir, dir)) {
     markErrorAndNewest(tally);
     return;
   }
-  let joined = e.path.join(a, trashName);
-  let f = await openTreeAnchor(e, {
+  let trashDir = host.path.join(realDir, trashName);
+  let treeAnchor = await openTreeAnchor(host, {
     gitRoot: dir,
-    realRoot: a,
+    realRoot: realDir,
   }).catch(() => null);
-  if (f === null || "unavailable" in f) {
+  if (treeAnchor === null || "unavailable" in treeAnchor) {
     markErrorAndNewest(tally);
     return;
   }
-  let d = f;
+  let anchor = treeAnchor;
   try {
     if (
-      !(await verifyAnchorInode(e, d)) ||
-      (!samePath(a, dir) && !(await verifyAnchorInode(e, d, dir))) ||
-      !(await verifyGitIdentity(d, n)) ||
-      !(await d.lstat(trashName)).isDirectory()
+      !(await verifyAnchorInode(host, anchor)) ||
+      (!samePath(realDir, dir) && !(await verifyAnchorInode(host, anchor, dir))) ||
+      !(await verifyGitIdentity(anchor, target)) ||
+      !(await anchor.lstat(trashName)).isDirectory()
     ) {
       markErrorAndNewest(tally);
       return;
     }
-    await removeExpiredTrash(e, d, trashName, joined, {
+    await removeExpiredTrash(host, anchor, trashName, trashDir, {
       cutoffMs,
       isLive,
       tally,
     });
-    await removeEmptyTrashDir(e, d, trashName, joined, tally, ignoreFile);
+    await removeEmptyTrashDir(host, anchor, trashName, trashDir, tally, ignoreFile);
   } catch (error) {
     if (!isENOENT(error)) markErrorAndNewest(tally);
   } finally {
-    await d.close().catch(() => {});
+    await anchor.close().catch(() => {});
   }
 }
 //@ chunk-4nhpaxz9.js:6889-7296 placement
 /**
  * 删除回收站中超过截止时间且无写者的条目。
  */
-async function removeExpiredTrash(e, n, trashName, r, { cutoffMs, isLive, tally }) {
-  let entries = await e.fs.readdir(r);
-  for (let a of entries) {
-    let u = `${trashName}/${a}`;
+async function removeExpiredTrash(host, anchor, trashName, trashDir, { cutoffMs, isLive, tally }) {
+  let entries = await host.fs.readdir(trashDir);
+  for (let entryName of entries) {
+    let relativePath = `${trashName}/${entryName}`;
     try {
-      if (!(await n.lstat(u)).isDirectory()) continue;
-      if (isLive(a.replace(/\.(?:staging|set-aside)$/, ""))) {
+      if (!(await anchor.lstat(relativePath)).isDirectory()) continue;
+      if (isLive(entryName.replace(/\.(?:staging|set-aside)$/, ""))) {
         markNewestKept(tally);
         continue;
       }
-      let f = await cleanupSingleDirectory(e, e.path.join(r, a));
-      if (f < cutoffMs) {
-        await removeTreeIfOld(n, e, u, cutoffMs);
+      let newestMtimeMs = await cleanupSingleDirectory(host, host.path.join(trashDir, entryName));
+      if (newestMtimeMs < cutoffMs) {
+        await removeTreeIfOld(anchor, host, relativePath, cutoffMs);
         tally.removed++;
-      } else tally.newestKeptMs = Math.max(tally.newestKeptMs ?? -1 / 0, f);
+      } else tally.newestKeptMs = Math.max(tally.newestKeptMs ?? -1 / 0, newestMtimeMs);
     } catch (error) {
       if (error instanceof WorktreeChangedError) markNewestKept(tally);
       else if (!isENOENT(error)) markErrorAndNewest(tally);
@@ -493,15 +527,15 @@ async function removeExpiredTrash(e, n, trashName, r, { cutoffMs, isLive, tally 
 /**
  * 回收站只剩忽略文件或为空时删除它。
  */
-async function removeEmptyTrashDir(e, n, trashName, r, tally, ignoreFile) {
-  let o = await e.fs.readdir(r).catch(() => ["?"]);
+async function removeEmptyTrashDir(host, anchor, trashName, trashDir, tally, ignoreFile) {
+  let entries = await host.fs.readdir(trashDir).catch(() => ["?"]);
   try {
-    if (ignoreFile !== undefined && o.length === 1 && o[0] === ignoreFile) {
-      if ((await n.lstat(`${trashName}/${ignoreFile}`)).isFile()) {
-        await n.unlink(`${trashName}/${ignoreFile}`);
-        await n.rmdir(trashName).catch(async (error) => {
+    if (ignoreFile !== undefined && entries.length === 1 && entries[0] === ignoreFile) {
+      if ((await anchor.lstat(`${trashName}/${ignoreFile}`)).isFile()) {
+        await anchor.unlink(`${trashName}/${ignoreFile}`);
+        await anchor.rmdir(trashName).catch(async (error) => {
           if (getErrnoCode(error) !== "ENOTEMPTY") throw error;
-          await n.create(
+          await anchor.create(
             `${trashName}/${ignoreFile}`,
             Buffer.from(`*
 `),
@@ -509,7 +543,7 @@ async function removeEmptyTrashDir(e, n, trashName, r, tally, ignoreFile) {
           );
         });
       }
-    } else if (o.length === 0) await n.rmdir(trashName);
+    } else if (entries.length === 0) await anchor.rmdir(trashName);
   } catch (error) {
     if (!isENOENT(error) && getErrnoCode(error) !== "ENOTEMPTY") tally.errors++;
   }
@@ -523,20 +557,24 @@ class WorktreeChangedError extends Error {}
 /**
  * 递归删除比截止时间旧的目录树（期间变新则中止）。
  */
-async function removeTreeIfOld(e, n, t, r) {
-  if (!(Number((await e.lstat(t)).mtimeMs) < r)) throw new WorktreeChangedError();
-  let s = await n.fs.readdir(n.path.join(e.realRoot, ...t.split("/"))).catch(() => []);
-  let i = [];
-  for (let o of s) {
-    let c = `${t}/${o}`;
+async function removeTreeIfOld(anchor, host, relativePath, cutoffMs) {
+  if (!(Number((await anchor.lstat(relativePath)).mtimeMs) < cutoffMs)) throw new WorktreeChangedError();
+  let entries = await host.fs
+    .readdir(host.path.join(anchor.realRoot, ...relativePath.split("/")))
+    .catch(() => []);
+  let errors = [];
+  for (let entryName of entries) {
+    let entryPath = `${relativePath}/${entryName}`;
     try {
-      if ((await e.lstat(c)).isDirectory()) await removeTreeIfOld(e, n, c, r);
-      else await e.unlink(c);
+      if ((await anchor.lstat(entryPath)).isDirectory())
+        await removeTreeIfOld(anchor, host, entryPath, cutoffMs);
+      else await anchor.unlink(entryPath);
     } catch (error) {
       if (error instanceof WorktreeChangedError || getErrnoCode(error) === "ENOTEMPTY") throw error;
-      if (!isENOENT(error)) i.push(error);
+      if (!isENOENT(error)) errors.push(error);
     }
   }
-  if (i.length > 0) throw i[0];
-  await e.rmdir(t);
+  if (errors.length > 0) throw errors[0];
+  await anchor.rmdir(relativePath);
 }
+export { pruneGitAlternates };

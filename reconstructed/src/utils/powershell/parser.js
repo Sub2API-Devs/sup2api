@@ -19,6 +19,7 @@ import { memoizeWithLRU } from "../memoize.js";
 import { logError } from "../log.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:835740-835753 affinity
 var DEFAULT_PARSE_TIMEOUT_MS = 5000;
@@ -442,9 +443,9 @@ function stripModulePrefix(name) {
   if (idx < 0) return name;
   if (/^[A-Za-z]:/.test(name) || name.startsWith("\\\\") || name.startsWith(".\\") || name.startsWith("..\\"))
     return name;
-  let r = name.substring(idx + 1);
-  if (r === "") return name;
-  return r;
+  let moduleName = name.substring(idx + 1);
+  if (moduleName === "") return name;
+  return moduleName;
 }
 //@ chunk-e6aww6q8.js:849169-850065 fingerprint = transformCommandAst (1)
 function transformCommandAst(raw) {
@@ -468,12 +469,14 @@ function transformCommandAst(raw) {
     name = normalizeUnicodeDashes(stripModulePrefix(rawName));
     elementTypes.push(mapElementType(first.type, first.expressionType));
     for (let i = 1; i < cmdElements.length; i++) {
-      let Ee = cmdElements[i];
+      let element = cmdElements[i];
       let isStringLiteral =
-        Ee.type === "StringConstantExpressionAst" || Ee.type === "ExpandableStringExpressionAst";
-      args.push(normalizeUnicodeDashes(isStringLiteral && Ee.value != null ? Ee.value : Ee.text));
-      elementTypes.push(mapElementType(Ee.type, Ee.expressionType));
-      let rawChildren = ensureArray(Ee.children);
+        element.type === "StringConstantExpressionAst" || element.type === "ExpandableStringExpressionAst";
+      args.push(
+        normalizeUnicodeDashes(isStringLiteral && element.value != null ? element.value : element.text),
+      );
+      elementTypes.push(mapElementType(element.type, element.expressionType));
+      let rawChildren = ensureArray(element.children);
       if (rawChildren.length > 0) {
         hasChildren = true;
         children.push(
@@ -570,11 +573,11 @@ function transformStatement(raw) {
       }
     let seen = new Set(redirections.map((redirection) => `${redirection.operator}\x00${redirection.target}`));
     for (let redir of ensureArray(raw.redirections)) {
-      let G = transformRedirection(redir);
-      let key = `${G.operator}\x00${G.target}`;
+      let redirection = transformRedirection(redir);
+      let key = `${redirection.operator}\x00${redirection.target}`;
       if (!seen.has(key)) {
         seen.add(key);
-        redirections.push(G);
+        redirections.push(redirection);
       }
     }
   } else {
@@ -644,9 +647,9 @@ async function parsePowerShellCommandImpl(command) {
     );
   let pwshPath = await getCachedPowerShellPath();
   if (!pwshPath) return makeInvalidResult(command, "PowerShell is not available", "NoPowerShell");
-  let s;
+  let invocation;
   try {
-    s = buildParseInvocation(command);
+    invocation = buildParseInvocation(command);
   } catch (error) {
     logForDebugging(`PowerShell parser: could not encode the parse script: ${errorMessage(error)}`, {
       level: "error",
@@ -658,40 +661,41 @@ async function parsePowerShellCommandImpl(command) {
   let stdout = "";
   let stderr = "";
   let code = null;
-  let G = false;
-  let q = null;
+  let timedOut = false;
+  let spawnError = null;
   for (let attempt = 0; attempt < PARSE_ATTEMPTS; attempt++) {
-    q = null;
-    G = false;
+    spawnError = null;
+    timedOut = false;
     try {
-      let ke = safeExecFile(pwshPath, s.args, {
-        input: s.input,
+      let execPromise = safeExecFile(pwshPath, invocation.args, {
+        input: invocation.input,
         timeout: parseTimeoutMs,
         reject: false,
         useToolMemoryCgroup: false,
       });
-      let result = await withDeadline(ke, script);
+      let result = await withDeadline(execPromise, script);
       if (result === undefined) {
-        ke.catch(() => {});
-        G = true;
+        execPromise.catch(() => {});
+        timedOut = true;
         code = 1;
       } else {
         stdout = result.stdout;
         stderr = result.stderr;
-        G = result.timedOut;
+        timedOut = result.timedOut;
         code = result.failed ? (result.exitCode ?? 1) : 0;
       }
     } catch (e) {
-      q = e instanceof Error ? e.message : String(e);
+      spawnError = e instanceof Error ? e.message : String(e);
       code = null;
     }
     if (code === 0) break;
     logForDebugging(
-      `PowerShell parser: ${q ? `failed to spawn pwsh: ${q}` : G ? `pwsh timed out after ${parseTimeoutMs}ms` : `pwsh exited ${code}: ${stderr}`} (attempt ${attempt + 1})`,
+      `PowerShell parser: ${spawnError ? `failed to spawn pwsh: ${spawnError}` : timedOut ? `pwsh timed out after ${parseTimeoutMs}ms` : `pwsh exited ${code}: ${stderr}`} (attempt ${attempt + 1})`,
     );
   }
-  if (q) return makeInvalidResult(command, `Failed to spawn PowerShell: ${q}`, "PwshSpawnError");
-  if (G)
+  if (spawnError)
+    return makeInvalidResult(command, `Failed to spawn PowerShell: ${spawnError}`, "PwshSpawnError");
+  if (timedOut)
     return makeInvalidResult(command, `pwsh timed out after ${parseTimeoutMs}ms (2 attempts)`, "PwshTimeout");
   if (code !== 0) {
     logForDebugging(`PowerShell parser: pwsh exited with code ${code}, stderr: ${stderr}`);
@@ -722,16 +726,19 @@ async function parsePowerShellCommandImpl(command) {
 /**
  * 暂时性错误 id（spawn 失败、超时、空输出、JSON 无效…）：这类结果不进缓存，下次重解析。
  */
-var TRANSIENT_ERROR_IDS = new Set([
-  "PwshSpawnError",
-  "PwshError",
-  "PwshTimeout",
-  "EmptyOutput",
-  "InvalidJson",
-  "InputMismatch",
-  "EncodeError",
-  "UnexpectedError",
-]);
+var TRANSIENT_ERROR_IDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:853805", () => {
+  TRANSIENT_ERROR_IDS = new Set([
+    "PwshSpawnError",
+    "PwshError",
+    "PwshTimeout",
+    "EmptyOutput",
+    "InvalidJson",
+    "InputMismatch",
+    "EncodeError",
+    "UnexpectedError",
+  ]);
+});
 //@ chunk-e6aww6q8.js:853943-854273 fingerprint = parsePowerShellCommandCached (0.496)
 /**
  * 每宿主一个 LRU(256) 解析缓存；暂时性失败结果会从缓存删除。
@@ -745,122 +752,128 @@ class PowerShellParserCache {
         } catch {}
         return makeInvalidResult(command, "PowerShell parser failed unexpectedly", "UnexpectedError");
       });
-      let r = () => {
+      let forget = () => {
         if (this.cached.cache.get(command) === promise) this.cached.cache.delete(command);
       };
       promise.then((result) => {
-        if (!result.valid && TRANSIENT_ERROR_IDS.has(result.errors[0]?.errorId ?? "")) r();
-      }, r);
+        if (!result.valid && TRANSIENT_ERROR_IDS.has(result.errors[0]?.errorId ?? "")) forget();
+      }, forget);
       return promise;
     },
     (command) => command,
     256,
   );
-  parse(e) {
-    return this.cached(e);
+  parse(command) {
+    return this.cached(command);
   }
 }
 //@ chunk-e6aww6q8.js:854273-854300 layout
-var POWERSHELL_PARSER_PER_HOST = new HostScoped(() => new PowerShellParserCache());
+var powershellParserPerHost; // deferred: uses PowerShellParserCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:854273", () => {
+  powershellParserPerHost = new HostScoped(() => new PowerShellParserCache());
+});
 //@ chunk-e6aww6q8.js:854300-854349 layout
 /**
  * 解析 PowerShell 命令（当前宿主的缓存解析器），供 PowerShell 工具的权限/只读/前缀分析使用。
  */
 function parsePowerShellCommand(command) {
-  return POWERSHELL_PARSER_PER_HOST.of(getRootSession().host).parse(command);
+  return powershellParserPerHost.of(getRootSession().host).parse(command);
 }
 //@ chunk-e6aww6q8.js:854349-856049 fingerprint = COMMON_ALIASES (0.984)
 /**
  * PowerShell 常用别名到规范 cmdlet 的映射（无原型对象）：ls/dir/gci→Get-ChildItem、cat/gc→Get-Content、rm/del→Remove-Item、iex→Invoke-Expression、iwr→Invoke-WebRequest 等。权限与只读判定按规范名比较，防止用别名绕过规则。
  */
-var COMMON_ALIASES = Object.assign(Object.create(null), {
-  ls: "Get-ChildItem",
-  dir: "Get-ChildItem",
-  gci: "Get-ChildItem",
-  cat: "Get-Content",
-  type: "Get-Content",
-  gc: "Get-Content",
-  cd: "Set-Location",
-  sl: "Set-Location",
-  chdir: "Set-Location",
-  pushd: "Push-Location",
-  popd: "Pop-Location",
-  pwd: "Get-Location",
-  gl: "Get-Location",
-  gi: "Get-Item",
-  gp: "Get-ItemProperty",
-  ni: "New-Item",
-  mkdir: "New-Item",
-  md: "New-Item",
-  ri: "Remove-Item",
-  del: "Remove-Item",
-  rd: "Remove-Item",
-  rmdir: "Remove-Item",
-  rm: "Remove-Item",
-  erase: "Remove-Item",
-  mi: "Move-Item",
-  mv: "Move-Item",
-  move: "Move-Item",
-  ci: "Copy-Item",
-  cp: "Copy-Item",
-  copy: "Copy-Item",
-  cpi: "Copy-Item",
-  si: "Set-Item",
-  rni: "Rename-Item",
-  ren: "Rename-Item",
-  ps: "Get-Process",
-  gps: "Get-Process",
-  kill: "Stop-Process",
-  spps: "Stop-Process",
-  start: "Start-Process",
-  saps: "Start-Process",
-  sajb: "Start-Job",
-  ipmo: "Import-Module",
-  echo: "Write-Output",
-  write: "Write-Output",
-  sleep: "Start-Sleep",
-  help: "Get-Help",
-  man: "Get-Help",
-  gcm: "Get-Command",
-  gsv: "Get-Service",
-  gv: "Get-Variable",
-  sv: "Set-Variable",
-  h: "Get-History",
-  history: "Get-History",
-  iex: "Invoke-Expression",
-  iwr: "Invoke-WebRequest",
-  irm: "Invoke-RestMethod",
-  icm: "Invoke-Command",
-  ii: "Invoke-Item",
-  iwmi: "Invoke-WmiMethod",
-  icim: "Invoke-CimMethod",
-  nsn: "New-PSSession",
-  etsn: "Enter-PSSession",
-  exsn: "Exit-PSSession",
-  gsn: "Get-PSSession",
-  rsn: "Remove-PSSession",
-  cls: "Clear-Host",
-  clear: "Clear-Host",
-  select: "Select-Object",
-  where: "Where-Object",
-  foreach: "ForEach-Object",
-  "%": "ForEach-Object",
-  "?": "Where-Object",
-  measure: "Measure-Object",
-  ft: "Format-Table",
-  fl: "Format-List",
-  fw: "Format-Wide",
-  oh: "Out-Host",
-  ogv: "Out-GridView",
-  ac: "Add-Content",
-  clc: "Clear-Content",
-  tee: "Tee-Object",
-  epcsv: "Export-Csv",
-  sp: "Set-ItemProperty",
-  rp: "Remove-ItemProperty",
-  cli: "Clear-Item",
-  epal: "Export-Alias",
-  sls: "Select-String",
+var COMMON_ALIASES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:854349", () => {
+  COMMON_ALIASES = Object.assign(Object.create(null), {
+    ls: "Get-ChildItem",
+    dir: "Get-ChildItem",
+    gci: "Get-ChildItem",
+    cat: "Get-Content",
+    type: "Get-Content",
+    gc: "Get-Content",
+    cd: "Set-Location",
+    sl: "Set-Location",
+    chdir: "Set-Location",
+    pushd: "Push-Location",
+    popd: "Pop-Location",
+    pwd: "Get-Location",
+    gl: "Get-Location",
+    gi: "Get-Item",
+    gp: "Get-ItemProperty",
+    ni: "New-Item",
+    mkdir: "New-Item",
+    md: "New-Item",
+    ri: "Remove-Item",
+    del: "Remove-Item",
+    rd: "Remove-Item",
+    rmdir: "Remove-Item",
+    rm: "Remove-Item",
+    erase: "Remove-Item",
+    mi: "Move-Item",
+    mv: "Move-Item",
+    move: "Move-Item",
+    ci: "Copy-Item",
+    cp: "Copy-Item",
+    copy: "Copy-Item",
+    cpi: "Copy-Item",
+    si: "Set-Item",
+    rni: "Rename-Item",
+    ren: "Rename-Item",
+    ps: "Get-Process",
+    gps: "Get-Process",
+    kill: "Stop-Process",
+    spps: "Stop-Process",
+    start: "Start-Process",
+    saps: "Start-Process",
+    sajb: "Start-Job",
+    ipmo: "Import-Module",
+    echo: "Write-Output",
+    write: "Write-Output",
+    sleep: "Start-Sleep",
+    help: "Get-Help",
+    man: "Get-Help",
+    gcm: "Get-Command",
+    gsv: "Get-Service",
+    gv: "Get-Variable",
+    sv: "Set-Variable",
+    h: "Get-History",
+    history: "Get-History",
+    iex: "Invoke-Expression",
+    iwr: "Invoke-WebRequest",
+    irm: "Invoke-RestMethod",
+    icm: "Invoke-Command",
+    ii: "Invoke-Item",
+    iwmi: "Invoke-WmiMethod",
+    icim: "Invoke-CimMethod",
+    nsn: "New-PSSession",
+    etsn: "Enter-PSSession",
+    exsn: "Exit-PSSession",
+    gsn: "Get-PSSession",
+    rsn: "Remove-PSSession",
+    cls: "Clear-Host",
+    clear: "Clear-Host",
+    select: "Select-Object",
+    where: "Where-Object",
+    foreach: "ForEach-Object",
+    "%": "ForEach-Object",
+    "?": "Where-Object",
+    measure: "Measure-Object",
+    ft: "Format-Table",
+    fl: "Format-List",
+    fw: "Format-Wide",
+    oh: "Out-Host",
+    ogv: "Out-GridView",
+    ac: "Add-Content",
+    clc: "Clear-Content",
+    tee: "Tee-Object",
+    epcsv: "Export-Csv",
+    sp: "Set-ItemProperty",
+    rp: "Remove-ItemProperty",
+    cli: "Clear-Item",
+    epal: "Export-Alias",
+    sls: "Select-String",
+  });
 });
 //@ chunk-e6aww6q8.js:856049-856242 fingerprint = getAllCommandNames (1)
 /**
@@ -924,7 +937,10 @@ function hasCommandNamed(parsed, name) {
   return false;
 }
 //@ chunk-e6aww6q8.js:856917-856966 layout
-var PS_TOKENIZER_DASH_CHARS = new Set(["-", "\u2013", "\u2014", "\u2015"]);
+var PS_TOKENIZER_DASH_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:856917", () => {
+  PS_TOKENIZER_DASH_CHARS = new Set(["-", "\u2013", "\u2014", "\u2015"]);
+});
 //@ chunk-e6aww6q8.js:856966-857053 fingerprint = isPowerShellParameter (1)
 /**
  * 判断参数是否是 PowerShell 形参：有 AST 元素类型时看是否为 Parameter，否则看首字符是否属于 PowerShell 认的破折号集合（含 Unicode 破折号）。
@@ -966,7 +982,9 @@ function isNullRedirectionTarget(target) {
  * 取真正写文件的重定向：排除流合并（2>&1）和指向 $null 的重定向。
  */
 function getFileRedirections(parsed) {
-  return getAllRedirections(parsed).filter((n) => !n.isMerging && !isNullRedirectionTarget(n.target));
+  return getAllRedirections(parsed).filter(
+    (redirection) => !redirection.isMerging && !isNullRedirectionTarget(redirection.target),
+  );
 }
 //@ chunk-e6aww6q8.js:857493-858490 fingerprint = deriveSecurityFlags (1)
 /**

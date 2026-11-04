@@ -94,8 +94,8 @@ function formatErrorMessage(error) {
     case "mcpb-invalid-manifest":
       return `MCPB manifest invalid at ${printableOrEmpty(error.mcpbPath)}: ${quotedPrintable(error.validationError)}`;
     case "marketplace-blocked-by-policy": {
-      let k = pluginBlockSource(error);
-      if (k !== null) return directoryBlockedMessage(undefined, k);
+      let blockSource = pluginBlockSource(error);
+      if (blockSource !== null) return directoryBlockedMessage(undefined, blockSource);
       return error.blockedByBlocklist
         ? `Marketplace "${quotedPrintable(error.marketplace)}" is blocked by enterprise policy`
         : `Marketplace "${quotedPrintable(error.marketplace)}" is not in the allowed marketplace list`;
@@ -130,12 +130,12 @@ function formatErrorMessage(error) {
     case "autoupdate-disabled-by-policy":
       return error.message;
     case "autoupdate-blocked-by-pinner": {
-      let k = error.heldAt ? ` at ${printableOrEmpty(error.heldAt)}` : "";
-      let C =
+      let heldNote = error.heldAt ? ` at ${printableOrEmpty(error.heldAt)}` : "";
+      let hasBlockingPinners =
         error.disabledPinners.length > 0
           ? ` (${quotedPrintable(error.disabledPinners.join(", "))} ${error.disabledPinners.length === 1 ? "is" : "are"} disabled)`
           : "";
-      return `Autoupdate held${k} \u2014 version constraint from ${quotedPrintable(error.blockedBy.join(", "))}${C}`;
+      return `Autoupdate held${heldNote} \u2014 version constraint from ${quotedPrintable(error.blockedBy.join(", "))}${hasBlockingPinners}`;
     }
     case "generic-error":
       return truncateWithEllipsis(error.error);
@@ -189,8 +189,8 @@ function getErrorGuidance(error) {
       }
       return `Plugin may not exist in marketplace "${quotedPrintable(error.marketplace)}"`;
     case "marketplace-not-found": {
-      let k = marketplaceNotFoundMessage(error);
-      if (k !== undefined) return k;
+      let notFoundMessage = marketplaceNotFoundMessage(error);
+      if (notFoundMessage !== undefined) return notFoundMessage;
       return error.registryReadFailed
         ? "Check known_marketplaces.json in the plugins directory, then run /reload-plugins"
         : error.registrationHidden
@@ -237,23 +237,26 @@ function getErrorGuidance(error) {
     case "lsp-request-failed":
       return "Check LSP server logs with --debug for details";
     case "plugin-cache-miss": {
-      let k = error.installedListHeldNote === undefined ? "" : `. ${error.installedListHeldNote}`;
+      let installedListNote =
+        error.installedListHeldNote === undefined ? "" : `. ${error.installedListHeldNote}`;
       if (error.registryReadFailed === true)
-        return `Fix or restore installed_plugins.json in the plugins directory, then run /reload-plugins${k}`;
-      return `Run /plugin to refresh the plugin cache${k}`;
+        return `Fix or restore installed_plugins.json in the plugins directory, then run /reload-plugins${installedListNote}`;
+      return `Run /plugin to refresh the plugin cache${installedListNote}`;
     }
     case "plugin-not-installed": {
       if (error.installedListHeldNote !== undefined) return error.installedListHeldNote;
-      let k = claudeCommand("plugin install", error.source, "--scope project");
-      return k ? `Run \`${k}\` to install it for this project` : "Install it at project scope to fix this";
+      let installCommand = claudeCommand("plugin install", error.source, "--scope project");
+      return installCommand
+        ? `Run \`${installCommand}\` to install it for this project`
+        : "Install it at project scope to fix this";
     }
     case "autoupdate-deferred-entry-helper":
     case "autoupdate-disabled-by-policy":
       return null;
     case "autoupdate-blocked-by-pinner": {
-      let k = error.disabledPinners.length > 0 ? error.disabledPinners[0] : error.blockedBy[0];
-      return k
-        ? `Update or uninstall "${quotedPrintable(k)}" to unblock${error.disabledPinners.length > 0 ? " (it is currently disabled)" : ""}`
+      let blockingSource = error.disabledPinners.length > 0 ? error.disabledPinners[0] : error.blockedBy[0];
+      return blockingSource
+        ? `Update or uninstall "${quotedPrintable(blockingSource)}" to unblock${error.disabledPinners.length > 0 ? " (it is currently disabled)" : ""}`
         : null;
     }
     case "marketplace-load-failed":

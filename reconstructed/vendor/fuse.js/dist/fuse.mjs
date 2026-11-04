@@ -5,7 +5,15 @@
  * pieces: chunk-dcmhvw5a.js (50)
  * attribution: affinity 3, esm-fingerprint 38, esm-layout 9
  */
-import { Qe, ot, Ta, Gh, Bh, va } from "../../lodash-es/_inlinedHelpers.js";
+import {
+  isString,
+  isArrayInline,
+  isNumber,
+  isBoolean,
+  toStringInline,
+  isObject,
+} from "../../lodash-es/_inlinedHelpers.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:27251-27294 affinity
 function isDefined(value) {
@@ -24,12 +32,20 @@ function getTag(value) {
     : Object.prototype.toString.call(value);
 }
 //@ chunk-dcmhvw5a.js:27444-27702 esm-fingerprint
-var INCORRECT_INDEX_TYPE = "Incorrect 'index' type";
-var LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY = (key) => `Invalid value for key ${key}`;
-var PATTERN_LENGTH_TOO_LARGE = (max) => `Pattern length exceeds max of ${max}.`;
-var MISSING_KEY_PROPERTY = (name) => `Missing ${name} property in key`;
-var INVALID_KEY_WEIGHT_VALUE = (key) => `Property 'weight' in key '${key}' must be a positive integer`;
-var hasOwn = Object.prototype.hasOwnProperty;
+var INCORRECT_INDEX_TYPE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY;
+var PATTERN_LENGTH_TOO_LARGE;
+var MISSING_KEY_PROPERTY;
+var INVALID_KEY_WEIGHT_VALUE;
+var hasOwn;
+deferInit("chunk-dcmhvw5a.js:27444", () => {
+  INCORRECT_INDEX_TYPE = "Incorrect 'index' type";
+  LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY = (key) => `Invalid value for key ${key}`;
+  PATTERN_LENGTH_TOO_LARGE = (max) => `Pattern length exceeds max of ${max}.`;
+  MISSING_KEY_PROPERTY = (name) => `Missing ${name} property in key`;
+  INVALID_KEY_WEIGHT_VALUE = (key) => `Property 'weight' in key '${key}' must be a positive integer`;
+  hasOwn = Object.prototype.hasOwnProperty;
+});
 //@ chunk-dcmhvw5a.js:27702-27984 esm-fingerprint
 class KeyStore {
   constructor(keys) {
@@ -63,7 +79,7 @@ function createKey(key) {
   let src = null;
   let weight = 1;
   let getFn = null;
-  if (Qe(key) || ot(key)) {
+  if (isString(key) || isArrayInline(key)) {
     src = key;
     path = createKeyPath(key);
     id = createKeyId(key);
@@ -89,11 +105,11 @@ function createKey(key) {
 }
 //@ chunk-dcmhvw5a.js:28270-28313 esm-layout
 function createKeyPath(key) {
-  return ot(key) ? key : key.split(".");
+  return isArrayInline(key) ? key : key.split(".");
 }
 //@ chunk-dcmhvw5a.js:28313-28355 esm-layout
 function createKeyId(key) {
-  return ot(key) ? key.join(".") : key;
+  return isArrayInline(key) ? key.join(".") : key;
 }
 //@ chunk-dcmhvw5a.js:28355-28669 esm-fingerprint
 function get(obj, path) {
@@ -106,14 +122,15 @@ function get(obj, path) {
       let key = path[index];
       let value = obj[key];
       if (!isDefined(value)) return;
-      if (index === path.length - 1 && (Qe(value) || Ta(value) || Gh(value))) list.push(Bh(value));
-      else if (ot(value)) {
+      if (index === path.length - 1 && (isString(value) || isNumber(value) || isBoolean(value)))
+        list.push(toStringInline(value));
+      else if (isArrayInline(value)) {
         arr = true;
         for (let i = 0, len = value.length; i < len; i += 1) deepGet(value[i], path, index + 1);
       } else if (path.length) deepGet(value, path, index + 1);
     }
   };
-  deepGet(obj, Qe(path) ? path.split(".") : path, 0);
+  deepGet(obj, isString(path) ? path.split(".") : path, 0);
   return arr ? list : list[0];
 }
 //@ chunk-dcmhvw5a.js:28669-29041 esm-fingerprint
@@ -190,7 +207,7 @@ class FuseIndex {
   create() {
     if (this.isCreated || !this.docs.length) return;
     this.isCreated = true;
-    if (Qe(this.docs[0]))
+    if (isString(this.docs[0]))
       this.docs.forEach((doc, docIndex) => {
         this._addString(doc, docIndex);
       });
@@ -202,7 +219,7 @@ class FuseIndex {
   }
   add(doc) {
     let idx = this.size();
-    if (Qe(doc)) this._addString(doc, idx);
+    if (isString(doc)) this._addString(doc, idx);
     else this._addObject(doc, idx);
   }
   removeAt(idx) {
@@ -232,7 +249,7 @@ class FuseIndex {
     this.keys.forEach((key, keyIndex) => {
       let value = key.getFn ? key.getFn(doc) : this.getFn(doc, key.path);
       if (!isDefined(value)) return;
-      if (ot(value)) {
+      if (isArrayInline(value)) {
         let subRecords = [];
         let stack = [
           {
@@ -243,14 +260,14 @@ class FuseIndex {
         while (stack.length) {
           let { nestedArrIndex, value } = stack.pop();
           if (!isDefined(value)) continue;
-          if (Qe(value) && !isBlank(value)) {
+          if (isString(value) && !isBlank(value)) {
             let subRecord = {
               v: value,
               i: nestedArrIndex,
               n: this.norm.get(value),
             };
             subRecords.push(subRecord);
-          } else if (ot(value))
+          } else if (isArrayInline(value))
             value.forEach((item, k) => {
               stack.push({
                 nestedArrIndex: k,
@@ -259,7 +276,7 @@ class FuseIndex {
             });
         }
         record.$[keyIndex] = subRecords;
-      } else if (Qe(value) && !isBlank(value)) {
+      } else if (isString(value) && !isBlank(value)) {
         let subRecord = {
           v: value,
           n: this.norm.get(value),
@@ -563,228 +580,258 @@ function getMatch(pattern, exp) {
   return matches ? matches[1] : null;
 }
 //@ chunk-dcmhvw5a.js:34506-34763 esm-fingerprint
-class ExactMatch extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "exact";
-  }
-  static get multiRegex() {
-    return /^="(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^=(.*)$/;
-  }
-  search(text) {
-    let isMatch = text === this.pattern;
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [0, this.pattern.length - 1],
-    };
-  }
-}
-//@ chunk-dcmhvw5a.js:34763-35029 esm-fingerprint
-class InverseExactMatch extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "inverse-exact";
-  }
-  static get multiRegex() {
-    return /^!"(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^!(.*)$/;
-  }
-  search(text) {
-    let isMatch = text.indexOf(this.pattern) === -1;
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [0, text.length - 1],
-    };
-  }
-}
-//@ chunk-dcmhvw5a.js:35029-35305 esm-fingerprint
-class PrefixExactMatch extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "prefix-exact";
-  }
-  static get multiRegex() {
-    return /^\^"(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^\^(.*)$/;
-  }
-  search(text) {
-    let isMatch = text.startsWith(this.pattern);
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [0, this.pattern.length - 1],
-    };
-  }
-}
-//@ chunk-dcmhvw5a.js:35305-35581 esm-fingerprint
-class InversePrefixExactMatch extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "inverse-prefix-exact";
-  }
-  static get multiRegex() {
-    return /^!\^"(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^!\^(.*)$/;
-  }
-  search(text) {
-    let isMatch = !text.startsWith(this.pattern);
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [0, text.length - 1],
-    };
-  }
-}
-//@ chunk-dcmhvw5a.js:35581-35871 esm-fingerprint
-class SuffixExactMatch extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "suffix-exact";
-  }
-  static get multiRegex() {
-    return /^"(.*)"\$$/;
-  }
-  static get singleRegex() {
-    return /^(.*)\$$/;
-  }
-  search(text) {
-    let isMatch = text.endsWith(this.pattern);
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [text.length - this.pattern.length, text.length - 1],
-    };
-  }
-}
-//@ chunk-dcmhvw5a.js:35871-36145 esm-fingerprint
-class InverseSuffixExactMatch extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "inverse-suffix-exact";
-  }
-  static get multiRegex() {
-    return /^!"(.*)"\$$/;
-  }
-  static get singleRegex() {
-    return /^!(.*)\$$/;
-  }
-  search(text) {
-    let isMatch = !text.endsWith(this.pattern);
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices: [0, text.length - 1],
-    };
-  }
-}
-//@ chunk-dcmhvw5a.js:36145-36765 esm-fingerprint
-class FuzzyMatch extends BaseMatch {
-  constructor(
-    pattern,
-    {
-      location = Config.location,
-      threshold = Config.threshold,
-      distance = Config.distance,
-      includeMatches = Config.includeMatches,
-      findAllMatches = Config.findAllMatches,
-      minMatchCharLength = Config.minMatchCharLength,
-      isCaseSensitive = Config.isCaseSensitive,
-      ignoreLocation = Config.ignoreLocation,
-    } = {},
-  ) {
-    super(pattern);
-    this._bitapSearch = new BitapSearch(pattern, {
-      location,
-      threshold,
-      distance,
-      includeMatches,
-      findAllMatches,
-      minMatchCharLength,
-      isCaseSensitive,
-      ignoreLocation,
-    });
-  }
-  static get type() {
-    return "fuzzy";
-  }
-  static get multiRegex() {
-    return /^"(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^(.*)$/;
-  }
-  search(text) {
-    return this._bitapSearch.searchIn(text);
-  }
-}
-//@ chunk-dcmhvw5a.js:36765-37092 esm-fingerprint
-class IncludeMatch extends BaseMatch {
-  constructor(pattern) {
-    super(pattern);
-  }
-  static get type() {
-    return "include";
-  }
-  static get multiRegex() {
-    return /^'"(.*)"$/;
-  }
-  static get singleRegex() {
-    return /^'(.*)$/;
-  }
-  search(text) {
-    let location = 0;
-    let index;
-    let indices = [];
-    let patternLen = this.pattern.length;
-    while ((index = text.indexOf(this.pattern, location)) > -1) {
-      location = index + patternLen;
-      indices.push([index, location - 1]);
+let ExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:34506", () => {
+  ExactMatch = class ExactMatch extends BaseMatch {
+    constructor(pattern) {
+      super(pattern);
     }
-    let isMatch = !!indices.length;
-    return {
-      isMatch,
-      score: isMatch ? 0 : 1,
-      indices,
-    };
-  }
-}
+    static get type() {
+      return "exact";
+    }
+    static get multiRegex() {
+      return /^="(.*)"$/;
+    }
+    static get singleRegex() {
+      return /^=(.*)$/;
+    }
+    search(text) {
+      let isMatch = text === this.pattern;
+      return {
+        isMatch,
+        score: isMatch ? 0 : 1,
+        indices: [0, this.pattern.length - 1],
+      };
+    }
+  };
+});
+//@ chunk-dcmhvw5a.js:34763-35029 esm-fingerprint
+let InverseExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:34763", () => {
+  InverseExactMatch = class InverseExactMatch extends BaseMatch {
+    constructor(pattern) {
+      super(pattern);
+    }
+    static get type() {
+      return "inverse-exact";
+    }
+    static get multiRegex() {
+      return /^!"(.*)"$/;
+    }
+    static get singleRegex() {
+      return /^!(.*)$/;
+    }
+    search(text) {
+      let isMatch = text.indexOf(this.pattern) === -1;
+      return {
+        isMatch,
+        score: isMatch ? 0 : 1,
+        indices: [0, text.length - 1],
+      };
+    }
+  };
+});
+//@ chunk-dcmhvw5a.js:35029-35305 esm-fingerprint
+let PrefixExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:35029", () => {
+  PrefixExactMatch = class PrefixExactMatch extends BaseMatch {
+    constructor(pattern) {
+      super(pattern);
+    }
+    static get type() {
+      return "prefix-exact";
+    }
+    static get multiRegex() {
+      return /^\^"(.*)"$/;
+    }
+    static get singleRegex() {
+      return /^\^(.*)$/;
+    }
+    search(text) {
+      let isMatch = text.startsWith(this.pattern);
+      return {
+        isMatch,
+        score: isMatch ? 0 : 1,
+        indices: [0, this.pattern.length - 1],
+      };
+    }
+  };
+});
+//@ chunk-dcmhvw5a.js:35305-35581 esm-fingerprint
+let InversePrefixExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:35305", () => {
+  InversePrefixExactMatch = class InversePrefixExactMatch extends BaseMatch {
+    constructor(pattern) {
+      super(pattern);
+    }
+    static get type() {
+      return "inverse-prefix-exact";
+    }
+    static get multiRegex() {
+      return /^!\^"(.*)"$/;
+    }
+    static get singleRegex() {
+      return /^!\^(.*)$/;
+    }
+    search(text) {
+      let isMatch = !text.startsWith(this.pattern);
+      return {
+        isMatch,
+        score: isMatch ? 0 : 1,
+        indices: [0, text.length - 1],
+      };
+    }
+  };
+});
+//@ chunk-dcmhvw5a.js:35581-35871 esm-fingerprint
+let SuffixExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:35581", () => {
+  SuffixExactMatch = class SuffixExactMatch extends BaseMatch {
+    constructor(pattern) {
+      super(pattern);
+    }
+    static get type() {
+      return "suffix-exact";
+    }
+    static get multiRegex() {
+      return /^"(.*)"\$$/;
+    }
+    static get singleRegex() {
+      return /^(.*)\$$/;
+    }
+    search(text) {
+      let isMatch = text.endsWith(this.pattern);
+      return {
+        isMatch,
+        score: isMatch ? 0 : 1,
+        indices: [text.length - this.pattern.length, text.length - 1],
+      };
+    }
+  };
+});
+//@ chunk-dcmhvw5a.js:35871-36145 esm-fingerprint
+let InverseSuffixExactMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:35871", () => {
+  InverseSuffixExactMatch = class InverseSuffixExactMatch extends BaseMatch {
+    constructor(pattern) {
+      super(pattern);
+    }
+    static get type() {
+      return "inverse-suffix-exact";
+    }
+    static get multiRegex() {
+      return /^!"(.*)"\$$/;
+    }
+    static get singleRegex() {
+      return /^!(.*)\$$/;
+    }
+    search(text) {
+      let isMatch = !text.endsWith(this.pattern);
+      return {
+        isMatch,
+        score: isMatch ? 0 : 1,
+        indices: [0, text.length - 1],
+      };
+    }
+  };
+});
+//@ chunk-dcmhvw5a.js:36145-36765 esm-fingerprint
+let FuzzyMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:36145", () => {
+  FuzzyMatch = class FuzzyMatch extends BaseMatch {
+    constructor(
+      pattern,
+      {
+        location = Config.location,
+        threshold = Config.threshold,
+        distance = Config.distance,
+        includeMatches = Config.includeMatches,
+        findAllMatches = Config.findAllMatches,
+        minMatchCharLength = Config.minMatchCharLength,
+        isCaseSensitive = Config.isCaseSensitive,
+        ignoreLocation = Config.ignoreLocation,
+      } = {},
+    ) {
+      super(pattern);
+      this._bitapSearch = new BitapSearch(pattern, {
+        location,
+        threshold,
+        distance,
+        includeMatches,
+        findAllMatches,
+        minMatchCharLength,
+        isCaseSensitive,
+        ignoreLocation,
+      });
+    }
+    static get type() {
+      return "fuzzy";
+    }
+    static get multiRegex() {
+      return /^"(.*)"$/;
+    }
+    static get singleRegex() {
+      return /^(.*)$/;
+    }
+    search(text) {
+      return this._bitapSearch.searchIn(text);
+    }
+  };
+});
+//@ chunk-dcmhvw5a.js:36765-37092 esm-fingerprint
+let IncludeMatch; // deferred: uses BaseMatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:36765", () => {
+  IncludeMatch = class IncludeMatch extends BaseMatch {
+    constructor(pattern) {
+      super(pattern);
+    }
+    static get type() {
+      return "include";
+    }
+    static get multiRegex() {
+      return /^'"(.*)"$/;
+    }
+    static get singleRegex() {
+      return /^'(.*)$/;
+    }
+    search(text) {
+      let location = 0;
+      let index;
+      let indices = [];
+      let patternLen = this.pattern.length;
+      while ((index = text.indexOf(this.pattern, location)) > -1) {
+        location = index + patternLen;
+        indices.push([index, location - 1]);
+      }
+      let isMatch = !!indices.length;
+      return {
+        isMatch,
+        score: isMatch ? 0 : 1,
+        indices,
+      };
+    }
+  };
+});
 //@ chunk-dcmhvw5a.js:37092-37185 esm-layout
-var searchers = [
-  ExactMatch,
-  IncludeMatch,
-  PrefixExactMatch,
-  InversePrefixExactMatch,
-  InverseSuffixExactMatch,
-  SuffixExactMatch,
-  InverseExactMatch,
-  FuzzyMatch,
-];
-var searchersLen = searchers.length;
-var SPACE_RE = / +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/;
-var OR_TOKEN = "|";
+var searchers; // deferred: uses ExactMatch of its import cycle while loading; runs once the cycle is complete
+var searchersLen;
+var SPACE_RE;
+var OR_TOKEN;
+deferInit("chunk-dcmhvw5a.js:37092", () => {
+  searchers = [
+    ExactMatch,
+    IncludeMatch,
+    PrefixExactMatch,
+    InversePrefixExactMatch,
+    InverseSuffixExactMatch,
+    SuffixExactMatch,
+    InverseExactMatch,
+    FuzzyMatch,
+  ];
+  searchersLen = searchers.length;
+  SPACE_RE = / +(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)/;
+  OR_TOKEN = "|";
+});
 //@ chunk-dcmhvw5a.js:37185-37534 esm-fingerprint
 function parseQuery(pattern, options = {}) {
   return pattern.split(OR_TOKEN).map((item) => {
@@ -820,7 +867,10 @@ function parseQuery(pattern, options = {}) {
   });
 }
 //@ chunk-dcmhvw5a.js:37534-37568 esm-layout
-var MultiMatchSet = new Set([FuzzyMatch.type, IncludeMatch.type]);
+var MultiMatchSet; // deferred: uses FuzzyMatch of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:37534", () => {
+  MultiMatchSet = new Set([FuzzyMatch.type, IncludeMatch.type]);
+});
 //@ chunk-dcmhvw5a.js:37568-38641 esm-fingerprint
 class ExtendedSearch {
   constructor(
@@ -927,7 +977,7 @@ var KeyType = {
 };
 var isExpression = (query) => !!(query[LogicalOperator.AND] || query[LogicalOperator.OR]);
 var isPath = (query) => !!query[KeyType.PATH];
-var isLeaf = (query) => !ot(query) && va(query) && !isExpression(query);
+var isLeaf = (query) => !isArrayInline(query) && isObject(query) && !isExpression(query);
 var convertToExplicit = (query) => ({
   [LogicalOperator.AND]: Object.keys(query).map((key) => ({
     [key]: query[key],
@@ -942,7 +992,7 @@ function parse(query, options, { auto = true } = {}) {
     if (isLeaf(query)) {
       let key = isQueryPath ? query[KeyType.PATH] : keys[0];
       let pattern = isQueryPath ? query[KeyType.PATTERN] : query[key];
-      if (!Qe(pattern)) throw Error(LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY(key));
+      if (!isString(pattern)) throw Error(LOGICAL_SEARCH_INVALID_QUERY_FOR_KEY(key));
       let obj = {
         keyId: createKeyId(key),
         pattern,
@@ -956,7 +1006,7 @@ function parse(query, options, { auto = true } = {}) {
     };
     keys.forEach((key) => {
       let value = query[key];
-      if (ot(value))
+      if (isArrayInline(value))
         value.forEach((item) => {
           node.children.push(next(item));
         });
@@ -1071,8 +1121,8 @@ class Fuse {
   }
   search(query, { limit = -1 } = {}) {
     let { includeMatches, includeScore, shouldSort, sortFn, ignoreFieldNorm } = this.options;
-    let results = Qe(query)
-      ? Qe(this._docs[0])
+    let results = isString(query)
+      ? isString(this._docs[0])
         ? this._searchStringList(query)
         : this._searchObjectList(query)
       : this._searchLogical(query);
@@ -1080,7 +1130,7 @@ class Fuse {
       ignoreFieldNorm,
     });
     if (shouldSort) results.sort(sortFn);
-    if (Ta(limit) && limit > -1) results = results.slice(0, limit);
+    if (isNumber(limit) && limit > -1) results = results.slice(0, limit);
     return format(results, this._docs, {
       includeMatches,
       includeScore,
@@ -1189,7 +1239,7 @@ class Fuse {
   _findMatches({ key, value, searcher }) {
     if (!isDefined(value)) return [];
     let matches = [];
-    if (ot(value))
+    if (isArrayInline(value))
       value.forEach(({ v: text, i: idx, n: norm }) => {
         if (!isDefined(text)) return;
         let { isMatch, score, indices } = searcher.searchIn(text);
@@ -1219,15 +1269,33 @@ class Fuse {
   }
 }
 //@ chunk-dcmhvw5a.js:42656-42676 esm-fingerprint
-Fuse.version = "7.0.0";
+// deferred: uses Fuse of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:42656", () => {
+  Fuse.version = "7.0.0";
+});
 //@ chunk-dcmhvw5a.js:42676-42695 esm-fingerprint
-Fuse.createIndex = createIndex;
+// deferred: uses Fuse of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:42676", () => {
+  Fuse.createIndex = createIndex;
+});
 //@ chunk-dcmhvw5a.js:42695-42713 esm-fingerprint
-Fuse.parseIndex = parseIndex;
+// deferred: uses Fuse of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:42695", () => {
+  Fuse.parseIndex = parseIndex;
+});
 //@ chunk-dcmhvw5a.js:42713-42727 esm-layout
-Fuse.config = Config;
+// deferred: uses Fuse of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:42713", () => {
+  Fuse.config = Config;
+});
 //@ chunk-dcmhvw5a.js:42727-42745 esm-fingerprint
-Fuse.parseQuery = parse;
+// deferred: uses Fuse of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:42727", () => {
+  Fuse.parseQuery = parse;
+});
 //@ chunk-dcmhvw5a.js:42745-42752 affinity
-register(ExtendedSearch);
+// deferred: uses register of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:42745", () => {
+  register(ExtendedSearch);
+});
 export { Fuse, getTag };

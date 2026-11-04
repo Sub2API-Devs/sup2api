@@ -43,23 +43,23 @@ var DEVICE_ID_RE = /^[A-Za-z0-9-]{1,64}$/;
 /**
  * 平台名转成展示名（darwin→macOS、win32→Windows、其余 Linux）。
  */
-function platformDisplayName(e = "linux") {
-  return e === "darwin" ? "macOS" : e === "win32" ? "Windows" : "Linux";
+function platformDisplayName(platform = "linux") {
+  return platform === "darwin" ? "macOS" : platform === "win32" ? "Windows" : "Linux";
 }
 //@ chunk-4dj0g7y4.js:456-676 placement
-function wrapWebSocket(e) {
+function wrapWebSocket(socket) {
   return {
-    on: (n, t) => {
-      e.on(n, t);
+    on: (eventName, listener) => {
+      socket.on(eventName, listener);
     },
-    removeAllListeners: () => e.removeAllListeners(),
-    send: (n) => e.send(n),
-    close: (n, t) => {
-      if (e.readyState === ws.OPEN) e.close(n, t);
-      else e.terminate();
+    removeAllListeners: () => socket.removeAllListeners(),
+    send: (data) => socket.send(data),
+    close: (code, reason) => {
+      if (socket.readyState === ws.OPEN) socket.close(code, reason);
+      else socket.terminate();
     },
     get readyState() {
-      return e.readyState;
+      return socket.readyState;
     },
   };
 }
@@ -75,19 +75,19 @@ var DISCOVERY_TIMEOUT_MS = 30000;
 var EXTERNAL_MESSAGE_TYPES = new Set(["external_message", "external_message_result", "external_config"]);
 var RESPONSE_TIMEOUT_MS = 30000;
 //@ chunk-4dj0g7y4.js:870-1013 placement
-function cleanDeviceText(e, n) {
-  if (typeof e !== "string") return;
-  let trimmed = e.replace(/[\r\n\t\u0000-\u001f]/g, " ").trim();
-  return trimmed.length > n ? `${trimmed.slice(0, n)}\u2026` : trimmed;
+function cleanDeviceText(text, maxLength) {
+  if (typeof text !== "string") return;
+  let trimmed = text.replace(/[\r\n\t\u0000-\u001f]/g, " ").trim();
+  return trimmed.length > maxLength ? `${trimmed.slice(0, maxLength)}\u2026` : trimmed;
 }
 //@ chunk-4dj0g7y4.js:1013-1223 placement
-function parseConnectedExtension(e) {
-  if (typeof e.deviceId !== "string" || !DEVICE_ID_RE.test(e.deviceId)) return;
+function parseConnectedExtension(extension) {
+  if (typeof extension.deviceId !== "string" || !DEVICE_ID_RE.test(extension.deviceId)) return;
   return {
-    deviceId: e.deviceId,
-    name: cleanDeviceText(e.name, 50),
-    osPlatform: cleanDeviceText(e.osPlatform, 30),
-    connectedAt: typeof e.connectedAt === "number" ? e.connectedAt : 0,
+    deviceId: extension.deviceId,
+    name: cleanDeviceText(extension.name, 50),
+    osPlatform: cleanDeviceText(extension.osPlatform, 30),
+    connectedAt: typeof extension.connectedAt === "number" ? extension.connectedAt : 0,
   };
 }
 //@ chunk-4dj0g7y4.js:1223-1231 placement
@@ -99,39 +99,39 @@ var MAX_BRIDGE_NOTICES = 4;
 /**
  * 清洗桥接通知列表（种类、域名，有上限）。
  */
-function sanitizeBridgeNotices(notices, n) {
+function sanitizeBridgeNotices(notices, onCapReached) {
   if (!Array.isArray(notices)) return;
-  let t = new Map();
-  let s = (o, i) => {
-    if (t.has(o)) {
-      t.set(o, i);
+  let byKey = new Map();
+  let addNotice = (key, notice) => {
+    if (byKey.has(key)) {
+      byKey.set(key, notice);
       return;
     }
-    if (t.size >= MAX_BRIDGE_NOTICES) {
-      n?.(`sanitizeBridgeNotices: notice cap (${MAX_BRIDGE_NOTICES}) reached; dropping entry`);
+    if (byKey.size >= MAX_BRIDGE_NOTICES) {
+      onCapReached?.(`sanitizeBridgeNotices: notice cap (${MAX_BRIDGE_NOTICES}) reached; dropping entry`);
       return;
     }
-    t.set(o, i);
+    byKey.set(key, notice);
   };
-  for (let o of notices) {
-    if (typeof o !== "object" || o === null) continue;
-    let { kind, domain } = o;
+  for (let notice of notices) {
+    if (typeof notice !== "object" || notice === null) continue;
+    let { kind, domain } = notice;
     if (typeof kind !== "string" || !/^[a-z0-9_]{1,64}$/i.test(kind)) continue;
     let lower = kind.toLowerCase();
     if (domain === undefined)
-      s(`${lower}:`, {
+      addNotice(`${lower}:`, {
         kind: lower,
       });
     else if (typeof domain === "string" && domain.length <= 253 && /^[a-z0-9.-]+$/i.test(domain)) {
       let replaced = domain.toLowerCase().replace(/\.$/, "");
       if (replaced.length === 0) continue;
-      s(`${lower}:${replaced}`, {
+      addNotice(`${lower}:${replaced}`, {
         kind: lower,
         domain: replaced,
       });
     }
   }
-  return t.size > 0 ? Array.from(t.values()) : undefined;
+  return byKey.size > 0 ? Array.from(byKey.values()) : undefined;
 }
 //@ chunk-4dj0g7y4.js:1850-29137 placement
 /**
@@ -170,9 +170,9 @@ class ChromeBridgeClient {
   keepAliveInterval = null;
   lastPongReceived = 0;
   pendingExternalMessages = new Map();
-  constructor(e) {
-    this.context = e;
-    if (e.initialPermissionMode) this.permissionMode = e.initialPermissionMode;
+  constructor(context) {
+    this.context = context;
+    if (context.initialPermissionMode) this.permissionMode = context.initialPermissionMode;
   }
   async ensureConnected() {
     let { logger, serverName } = this.context;
@@ -188,15 +188,15 @@ class ChromeBridgeClient {
       await this.connect();
     } else logger.info(`[${serverName}] Connect in progress or reconnect scheduled, waiting...`);
     return new Promise((resolve) => {
-      let s = null;
+      let pollTimer = null;
       let timer = setTimeout(() => {
-        if (s) clearTimeout(s);
+        if (pollTimer) clearTimeout(pollTimer);
         logger.info(
           `[${serverName}] Connection timeout, connected=${this.connected}, authenticated=${this.authenticated}`,
         );
         resolve(false);
       }, 1e4);
-      let i = () => {
+      let checkConnected = () => {
         if (this.connected && this.authenticated) {
           logger.info(`[${serverName}] Connection successful`);
           clearTimeout(timer);
@@ -205,12 +205,12 @@ class ChromeBridgeClient {
           logger.info(`[${serverName}] No longer connecting, giving up`);
           clearTimeout(timer);
           resolve(false);
-        } else s = setTimeout(i, 200);
+        } else pollTimer = setTimeout(checkConnected, 200);
       };
-      i();
+      checkConnected();
     });
   }
-  async callTool(e, args, t) {
+  async callTool(toolName, args, options) {
     let { logger, serverName, trackEvent } = this.context;
     if (!this.ws || this.ws.readyState !== ws.OPEN)
       throw new SocketConnectionError(`[${serverName}] Bridge not connected`);
@@ -227,15 +227,15 @@ class ChromeBridgeClient {
       !this.multiBrowserPendingSelection
     )
       throw new NoExtensionConnectedError(`[${serverName}] No Chrome extension connected after discovery`);
-    let sessionId = t?.sessionScope?.sessionId;
-    let userMessageUuid = t?.sessionScope?.userMessageUuid;
+    let sessionId = options?.sessionScope?.sessionId;
+    let userMessageUuid = options?.sessionScope?.userMessageUuid;
     let onBeforeToolCall = this.context.browserActivityObserver?.onBeforeToolCall;
     if (onBeforeToolCall) {
       let selectedDeviceId = this.selectedDeviceId;
       try {
         await onBeforeToolCall({
           sessionId,
-          toolName: e,
+          toolName,
           args,
         });
       } catch {
@@ -246,55 +246,55 @@ class ChromeBridgeClient {
       if (selectedDeviceId !== undefined && this.selectedDeviceId === undefined)
         throw new ExtensionDisconnectedMidCallError("Chrome extension disconnected mid-call");
     }
-    let d = crypto.randomUUID();
+    let callId = crypto.randomUUID();
     let startTime = Date.now();
-    let l = this.context.getToolCallTimeoutMs?.(e) ?? BROWSER_TOOL_TIMEOUT_MS;
-    let g = {
+    let timeoutMs = this.context.getToolCallTimeoutMs?.(toolName) ?? BROWSER_TOOL_TIMEOUT_MS;
+    let message = {
       type: "tool_call",
-      tool_use_id: d,
+      tool_use_id: callId,
       client_type: this.context.clientTypeId,
-      tool: e,
+      tool: toolName,
       args,
       supports_tool_result_notices: true,
     };
-    if (this.selectedDeviceId) g.target_device_id = this.selectedDeviceId;
+    if (this.selectedDeviceId) message.target_device_id = this.selectedDeviceId;
     Object.assign(
-      g,
+      message,
       permissionContextFields({
-        ...t,
-        permissionMode: t?.permissionMode ?? this.permissionMode,
-        allowedDomains: t?.allowedDomains ?? this.allowedDomains,
+        ...options,
+        permissionMode: options?.permissionMode ?? this.permissionMode,
+        allowedDomains: options?.allowedDomains ?? this.allowedDomains,
       }),
     );
-    let json = JSON.stringify(g);
+    let json = JSON.stringify(message);
     trackEvent?.("chrome_bridge_tool_call_started", {
-      tool_name: `browser:${e}`,
-      tool_use_id: d,
+      tool_name: `browser:${toolName}`,
+      tool_use_id: callId,
       session_id: sessionId,
       user_message_uuid: userMessageUuid,
-      timeout_ms: l,
+      timeout_ms: timeoutMs,
       transport: "bridge",
       request_bytes: Buffer.byteLength(json, "utf-8"),
     });
     return new Promise((resolve, reject) => {
-      let timer = this.createTimeoutTimer(d, l);
-      this.pendingCalls.set(d, {
+      let timer = this.createTimeoutTimer(callId, timeoutMs);
+      this.pendingCalls.set(callId, {
         resolve,
         reject,
         timer,
-        onPermissionRequest: t?.onPermissionRequest,
+        onPermissionRequest: options?.onPermissionRequest,
         startTime,
-        toolName: e,
-        timeoutMs: l,
+        toolName,
+        timeoutMs,
         sessionId,
         userMessageUuid,
         args,
       });
-      logger.debug(`[${serverName}] Sending tool_call: ${quoteTruncated(e)} (${d.slice(0, 8)})`);
+      logger.debug(`[${serverName}] Sending tool_call: ${quoteTruncated(toolName)} (${callId.slice(0, 8)})`);
       this.ws.send(json);
     });
   }
-  sendExternalMessage(e, payload, t) {
+  sendExternalMessage(extensionIds, payload, options) {
     let { logger, serverName } = this.context;
     if (!this.ws || this.ws.readyState !== ws.OPEN)
       return Promise.reject(new SocketConnectionError(`[${serverName}] Bridge not connected`));
@@ -306,42 +306,42 @@ class ChromeBridgeClient {
       });
     }
     this.pushExternalConfig();
-    let i = crypto.randomUUID();
-    let timeoutMs = t?.timeoutMs;
+    let requestId = crypto.randomUUID();
+    let timeoutMs = options?.timeoutMs;
     let min = Math.min(
       typeof timeoutMs === "number" && Number.isFinite(timeoutMs) && timeoutMs > 0
         ? timeoutMs
         : BROWSER_LONG_TIMEOUT_MS,
       BROWSER_MAX_TIMEOUT_MS,
     );
-    let c = {
+    let message = {
       type: "external_message",
-      requestId: i,
-      extensionIds: [...e],
+      requestId,
+      extensionIds: [...extensionIds],
       payload,
       timeoutMs: min,
       target_device_id: this.selectedDeviceId,
     };
     return new Promise((resolve) => {
       let timer = setTimeout(() => {
-        if (this.pendingExternalMessages.delete(i)) {
-          logger.warn(`[${serverName}] external_message timed out locally (${i.slice(0, 8)})`);
+        if (this.pendingExternalMessages.delete(requestId)) {
+          logger.warn(`[${serverName}] external_message timed out locally (${requestId.slice(0, 8)})`);
           resolve({
             ok: false,
             error: "timeout",
           });
         }
       }, min + DISCOVERY_TIMEOUT_MS);
-      this.pendingExternalMessages.set(i, {
+      this.pendingExternalMessages.set(requestId, {
         resolve,
         timer,
       });
-      logger.debug(`[${serverName}] Sending external_message (${i.slice(0, 8)})`);
+      logger.debug(`[${serverName}] Sending external_message (${requestId.slice(0, 8)})`);
       try {
-        this.ws.send(JSON.stringify(c));
+        this.ws.send(JSON.stringify(message));
       } catch (error) {
         clearTimeout(timer);
-        this.pendingExternalMessages.delete(i);
+        this.pendingExternalMessages.delete(requestId);
         logger.warn(
           `[${serverName}] external_message serialization/send failed: ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -352,38 +352,39 @@ class ChromeBridgeClient {
       }
     });
   }
-  pushExternalConfig(e) {
+  pushExternalConfig(configOverride) {
     if (this.selectedDeviceId === undefined) return false;
-    return this.pushExternalConfigToPeer(this.selectedDeviceId, e);
+    return this.pushExternalConfigToPeer(this.selectedDeviceId, configOverride);
   }
-  pushExternalConfigToPeer(targetDeviceId, n) {
+  pushExternalConfigToPeer(targetDeviceId, config) {
     if (this.ws?.readyState !== ws.OPEN) return false;
-    let t = n;
-    if (!t) {
+    let relayConfig = config;
+    if (!relayConfig) {
       if (!this.context.getExternalRelayConfig) return false;
-      t = this.context.getExternalRelayConfig() ?? {
+      relayConfig = this.context.getExternalRelayConfig() ?? {
         extensionIds: [],
       };
     }
     this.ws.send(
       JSON.stringify({
         type: "external_config",
-        extensionIds: t.extensionIds,
-        ...(t.hooks !== undefined && {
-          hooks: t.hooks,
+        extensionIds: relayConfig.extensionIds,
+        ...(relayConfig.hooks !== undefined && {
+          hooks: relayConfig.hooks,
         }),
         target_device_id: targetDeviceId,
       }),
     );
     return true;
   }
-  async pushExternalConfigToAllPeers(e) {
+  async pushExternalConfigToAllPeers(config) {
     if (this.ws?.readyState !== ws.OPEN) return 0;
-    if (!e && !this.context.getExternalRelayConfig) return 0;
-    let n = await this.queryBridgeExtensions();
-    let t = 0;
-    for (let s of n) if (this.pushExternalConfigToPeer(s.deviceId, e)) t++;
-    return t;
+    if (!config && !this.context.getExternalRelayConfig) return 0;
+    let extensions = await this.queryBridgeExtensions();
+    let pushedCount = 0;
+    for (let extension of extensions)
+      if (this.pushExternalConfigToPeer(extension.deviceId, config)) pushedCount++;
+    return pushedCount;
   }
   isConnected() {
     return this.connected && this.authenticated && this.ws?.readyState === ws.OPEN;
@@ -397,12 +398,13 @@ class ChromeBridgeClient {
   async discoverAndSelectExtension() {
     let { logger, serverName } = this.context;
     this.persistedDeviceId = this.context.getPersistedDeviceId?.();
-    let t = await this.queryBridgeExtensions();
-    if (t.length === 0) {
+    let extensions = await this.queryBridgeExtensions();
+    if (extensions.length === 0) {
       logger.info(
         `[${serverName}] No extensions connected, waiting up to ${BROWSER_SELECT_TIMEOUT_MS}ms for peer_connected`,
       );
-      if (await this.waitForPeerConnected(BROWSER_SELECT_TIMEOUT_MS)) t = await this.queryBridgeExtensions();
+      if (await this.waitForPeerConnected(BROWSER_SELECT_TIMEOUT_MS))
+        extensions = await this.queryBridgeExtensions();
     }
     if (this.context.getRequirePairedDevice?.()) {
       if (!this.persistedDeviceId) {
@@ -413,14 +415,14 @@ class ChromeBridgeClient {
         return;
       }
       let persistedDeviceId = this.persistedDeviceId;
-      let found = t.find((a) => a.deviceId === persistedDeviceId);
+      let found = extensions.find((extension) => extension.deviceId === persistedDeviceId);
       if (!found) {
         logger.info(
-          `[${serverName}] requirePairedDevice: persisted ${persistedDeviceId.slice(0, 8)} not connected (${t.length} other(s) visible); waiting`,
+          `[${serverName}] requirePairedDevice: persisted ${persistedDeviceId.slice(0, 8)} not connected (${extensions.length} other(s) visible); waiting`,
         );
         if (await this.waitForPeerConnected(BROWSER_SELECT_TIMEOUT_MS)) {
-          t = await this.queryBridgeExtensions();
-          found = t.find((a) => a.deviceId === persistedDeviceId);
+          extensions = await this.queryBridgeExtensions();
+          found = extensions.find((extension) => extension.deviceId === persistedDeviceId);
         }
       }
       this.discoveryComplete = true;
@@ -431,30 +433,30 @@ class ChromeBridgeClient {
         );
       return;
     }
-    let s =
-      t.length > 1 && !t.some((i) => i.deviceId === this.persistedDeviceId)
+    let localDeviceIds =
+      extensions.length > 1 && !extensions.some((extension) => extension.deviceId === this.persistedDeviceId)
         ? await safeCallPromise(this.context.getLocalDeviceIds)
         : undefined;
     this.discoveryComplete = true;
     if (this.selectedDeviceId) return;
-    let o = pickBrowserDevice(t, this.persistedDeviceId, s);
-    if (o.kind === "none") {
+    let pick = pickBrowserDevice(extensions, this.persistedDeviceId, localDeviceIds);
+    if (pick.kind === "none") {
       logger.info(`[${serverName}] No extensions found after waiting`);
       this.multiBrowserPendingSelection = false;
       return;
     }
-    if (o.kind === "select") {
-      let { extension, reason } = o;
+    if (pick.kind === "select") {
+      let { extension, reason } = pick;
       logger.info(
         `[${serverName}] Auto-connecting to ${SELECTION_REASON_WORDS[reason]} extension: ${extension.name || extension.deviceId.slice(0, 8)}`,
       );
       if (reason === "only" && !this.isLocalExtension(extension))
         this.context.onRemoteExtensionWarning?.(extension);
       this.selectExtension(extension.deviceId);
-      this.reportBrowserSelected(reason, t, s);
+      this.reportBrowserSelected(reason, extensions, localDeviceIds);
       return;
     }
-    if (!this.multiBrowserPendingSelection) this.reportBrowserSelected("ask", t, s);
+    if (!this.multiBrowserPendingSelection) this.reportBrowserSelected("ask", extensions, localDeviceIds);
     if (this.context.askUserToolName) {
       this.multiBrowserPendingSelection = true;
       return;
@@ -463,16 +465,19 @@ class ChromeBridgeClient {
     this.pairingInProgress = true;
     this.firePairingPrompt();
   }
-  reportBrowserSelected(outcome, n, t) {
+  reportBrowserSelected(outcome, extensions, localDeviceIds) {
     this.context.trackEvent?.("chrome_bridge_browser_selected", {
       outcome,
-      connected_count: n.length,
-      local_count: t === undefined ? null : n.filter((s) => t.has(s.deviceId)).length,
+      connected_count: extensions.length,
+      local_count:
+        localDeviceIds === undefined
+          ? null
+          : extensions.filter((extension) => localDeviceIds.has(extension.deviceId)).length,
     });
   }
   queryBridgeExtensions() {
     if (this.listExtensionsPromise) return this.listExtensionsPromise;
-    let e = new Promise((resolve) => {
+    let listPromise = new Promise((resolve) => {
       let timeout = setTimeout(() => {
         this.pendingDiscovery = null;
         resolve([]);
@@ -486,19 +491,22 @@ class ChromeBridgeClient {
           type: "list_extensions",
         }),
       );
-    }).then((n) => {
-      let t = new Map();
-      for (let s of n) {
-        let o = t.get(s.deviceId);
-        if (!o || s.connectedAt > o.connectedAt) t.set(s.deviceId, s);
+    }).then((extensions) => {
+      let latestByDevice = new Map();
+      for (let extension of extensions) {
+        let existing = latestByDevice.get(extension.deviceId);
+        if (!existing || extension.connectedAt > existing.connectedAt)
+          latestByDevice.set(extension.deviceId, extension);
       }
-      return [...t.values()].map(parseConnectedExtension).filter((s) => s !== undefined);
+      return [...latestByDevice.values()]
+        .map(parseConnectedExtension)
+        .filter((extension) => extension !== undefined);
     });
-    this.listExtensionsPromise = e;
-    e.finally(() => {
-      if (this.listExtensionsPromise === e) this.listExtensionsPromise = null;
+    this.listExtensionsPromise = listPromise;
+    listPromise.finally(() => {
+      if (this.listExtensionsPromise === listPromise) this.listExtensionsPromise = null;
     });
-    return e;
+    return listPromise;
   }
   getSelectedDeviceId() {
     return this.selectedDeviceId ?? this.context.getPersistedDeviceId?.();
@@ -514,47 +522,48 @@ class ChromeBridgeClient {
     this.pairingInProgress = false;
     this.abortPairingPrompt();
   }
-  selectExtension(e) {
+  selectExtension(deviceId) {
     let { logger, serverName } = this.context;
-    this.selectedDeviceId = e;
+    this.selectedDeviceId = deviceId;
     this.previousSelectedDeviceId = undefined;
     this.multiBrowserPendingSelection = false;
-    logger.info(`[${serverName}] Selected Chrome extension: ${e.slice(0, 8)}...`);
+    logger.info(`[${serverName}] Selected Chrome extension: ${deviceId.slice(0, 8)}...`);
     this.pushExternalConfig();
   }
-  async clearSelectionIfGone(e) {
+  async clearSelectionIfGone(deviceId) {
     let { logger, serverName } = this.context;
-    let s = await this.queryBridgeExtensions();
-    if (this.selectedDeviceId !== e) return;
-    if (s.some((o) => o.deviceId === e)) return;
+    let extensions = await this.queryBridgeExtensions();
+    if (this.selectedDeviceId !== deviceId) return;
+    if (extensions.some((extension) => extension.deviceId === deviceId)) return;
     logger.info(
-      `[${serverName}] Selected extension ${e.slice(0, 8)} absent from bridge roster after error; clearing selection`,
+      `[${serverName}] Selected extension ${deviceId.slice(0, 8)} absent from bridge roster after error; clearing selection`,
     );
     this.selectedDeviceId = undefined;
     this.discoveryComplete = false;
   }
   async listConnectedExtensions() {
     if (!(await this.ensureConnected())) return [];
-    let e = await this.queryBridgeExtensions();
-    let n = e.length > 1 ? await safeCallPromise(this.context.getLocalDeviceIds) : undefined;
-    return e.map((t) => ({
-      ...t,
-      isLocal: this.isLocalExtension(t),
-      ...(n?.has(t.deviceId) && {
+    let extensions = await this.queryBridgeExtensions();
+    let localDeviceIds =
+      extensions.length > 1 ? await safeCallPromise(this.context.getLocalDeviceIds) : undefined;
+    return extensions.map((extension) => ({
+      ...extension,
+      isLocal: this.isLocalExtension(extension),
+      ...(localDeviceIds?.has(extension.deviceId) && {
         onThisComputer: true,
       }),
     }));
   }
-  selectExtensionById(e, n) {
+  selectExtensionById(deviceId, deviceName) {
     this.discoveryComplete = true;
     this.pairingInProgress = false;
     this.pendingPairingRequestId = undefined;
-    this.selectExtension(e);
-    this.context.onExtensionPaired?.(e, n);
+    this.selectExtension(deviceId);
+    this.context.onExtensionPaired?.(deviceId, deviceName);
     if (this.pendingSwitchResolve)
       this.pendingSwitchResolve({
-        deviceId: e,
-        name: n,
+        deviceId,
+        name: deviceName,
       });
     this.abortPairingPrompt();
   }
@@ -576,51 +585,55 @@ class ChromeBridgeClient {
       this.pairingPromptAbort = null;
     }
   }
-  isLocalExtension(e) {
-    if (!e.osPlatform) return false;
-    return e.osPlatform === platformDisplayName(this.context.getHostPlatform?.() ?? "linux");
+  isLocalExtension(extension) {
+    if (!extension.osPlatform) return false;
+    return extension.osPlatform === platformDisplayName(this.context.getHostPlatform?.() ?? "linux");
   }
-  waitForPeerConnected(e) {
+  waitForPeerConnected(timeoutMs) {
     return new Promise((resolve) => {
       let timer = setTimeout(() => {
         this.peerConnectedWaiters = this.peerConnectedWaiters.filter(
-          (peerConnectedWaiter) => peerConnectedWaiter !== s,
+          (peerConnectedWaiter) => peerConnectedWaiter !== waiter,
         );
         resolve(false);
-      }, e);
-      let s = (o) => {
+      }, timeoutMs);
+      let waiter = (connected) => {
         clearTimeout(timer);
-        resolve(o);
+        resolve(connected);
       };
-      this.peerConnectedWaiters.push(s);
+      this.peerConnectedWaiters.push(waiter);
     });
   }
   broadcastPairingRequest() {
-    let e = crypto.randomUUID();
-    this.pendingPairingRequestId = e;
+    let requestId = crypto.randomUUID();
+    this.pendingPairingRequestId = requestId;
     this.ws?.send(
       JSON.stringify({
         type: "pairing_request",
-        request_id: e,
+        request_id: requestId,
         client_type: this.context.clientTypeId,
       }),
     );
   }
   async switchBrowser() {
-    let e = await this.queryBridgeExtensions();
-    let n = this.selectedDeviceId ?? this.previousSelectedDeviceId;
-    if (e.length === 0 || (e.length === 1 && (!n || e[0].deviceId === n))) return "no_other_browsers";
+    let extensions = await this.queryBridgeExtensions();
+    let currentDeviceId = this.selectedDeviceId ?? this.previousSelectedDeviceId;
+    if (
+      extensions.length === 0 ||
+      (extensions.length === 1 && (!currentDeviceId || extensions[0].deviceId === currentDeviceId))
+    )
+      return "no_other_browsers";
     this.previousSelectedDeviceId = this.selectedDeviceId;
     this.selectedDeviceId = undefined;
     this.discoveryComplete = false;
     this.pairingInProgress = false;
-    let t = crypto.randomUUID();
-    this.pendingPairingRequestId = t;
+    let requestId = crypto.randomUUID();
+    this.pendingPairingRequestId = requestId;
     if (this.ws?.readyState !== ws.OPEN) return null;
     this.ws.send(
       JSON.stringify({
         type: "pairing_request",
-        request_id: t,
+        request_id: requestId,
         client_type: this.context.clientTypeId,
       }),
     );
@@ -628,15 +641,15 @@ class ChromeBridgeClient {
     if (this.pendingSwitchResolve) this.pendingSwitchResolve(null);
     return new Promise((resolve) => {
       let timer = setTimeout(() => {
-        if (this.pendingPairingRequestId === t) this.pendingPairingRequestId = undefined;
+        if (this.pendingPairingRequestId === requestId) this.pendingPairingRequestId = undefined;
         this.pendingSwitchResolve = null;
         this.abortPairingPrompt();
         resolve(null);
       }, 120000);
-      this.pendingSwitchResolve = (i) => {
+      this.pendingSwitchResolve = (result) => {
         clearTimeout(timer);
         this.pendingSwitchResolve = null;
-        resolve(i);
+        resolve(result);
       };
     });
   }
@@ -667,25 +680,25 @@ class ChromeBridgeClient {
       this.closeSocket();
       this.scheduleReconnect();
     }, RESPONSE_TIMEOUT_MS);
-    let o;
-    let i;
+    let userId;
+    let oauthToken;
     if (bridgeConfig.devUserId) {
-      o = bridgeConfig.devUserId;
+      userId = bridgeConfig.devUserId;
       logger.debug(`[${serverName}] Using dev user ID for bridge connection`);
     } else {
       logger.debug(`[${serverName}] Fetching user ID for bridge connection`);
       let errorDetail;
-      let c;
+      let userId_2;
       if (bridgeConfig.getUserIdResult) {
         let userIdResult = await bridgeConfig.getUserIdResult();
-        if (userIdResult.ok) c = userIdResult.userId;
+        if (userIdResult.ok) userId_2 = userIdResult.userId;
         else errorDetail = userIdResult.error;
-      } else c = await bridgeConfig.getUserId();
-      if (!c) {
-        let d = Date.now() - this.connectionStartTime;
-        logger.error(`[${serverName}] No user ID available after ${d}ms`);
+      } else userId_2 = await bridgeConfig.getUserId();
+      if (!userId_2) {
+        let elapsedMs = Date.now() - this.connectionStartTime;
+        logger.error(`[${serverName}] No user ID available after ${elapsedMs}ms`);
         trackEvent?.("chrome_bridge_connection_failed", {
-          duration_ms: d,
+          duration_ms: elapsedMs,
           error_type: "no_user_id",
           error_detail: errorDetail,
           reconnect_attempt: this.reconnectAttempts,
@@ -694,14 +707,14 @@ class ChromeBridgeClient {
         this.scheduleReconnect();
         return;
       }
-      o = c;
+      userId = userId_2;
       logger.debug(`[${serverName}] Fetching OAuth token for bridge connection`);
-      i = await bridgeConfig.getOAuthToken();
-      if (!i) {
-        let d = Date.now() - this.connectionStartTime;
-        logger.error(`[${serverName}] No OAuth token available after ${d}ms`);
+      oauthToken = await bridgeConfig.getOAuthToken();
+      if (!oauthToken) {
+        let elapsedMs = Date.now() - this.connectionStartTime;
+        logger.error(`[${serverName}] No OAuth token available after ${elapsedMs}ms`);
         trackEvent?.("chrome_bridge_connection_failed", {
-          duration_ms: d,
+          duration_ms: elapsedMs,
           error_type: "no_oauth_token",
           reconnect_attempt: this.reconnectAttempts,
         });
@@ -710,32 +723,32 @@ class ChromeBridgeClient {
         return;
       }
     }
-    let r = `${bridgeConfig.url}/chrome/${o}`;
-    logger.info(`[${serverName}] Connecting to bridge: ${r}`);
+    let bridgeUrl = `${bridgeConfig.url}/chrome/${userId}`;
+    logger.info(`[${serverName}] Connecting to bridge: ${bridgeUrl}`);
     trackEvent?.("chrome_bridge_connection_started", {
-      bridge_url: r,
+      bridge_url: bridgeUrl,
     });
     try {
-      if (bridgeConfig.createWebSocket) this.ws = await bridgeConfig.createWebSocket(r);
+      if (bridgeConfig.createWebSocket) this.ws = await bridgeConfig.createWebSocket(bridgeUrl);
       else {
-        let a = (await bridgeConfig.getWsOptions?.()) ?? bridgeConfig.wsOptions;
+        let wsOptions = (await bridgeConfig.getWsOptions?.()) ?? bridgeConfig.wsOptions;
         this.ws = wrapWebSocket(
           new ws(
-            r,
-            a
+            bridgeUrl,
+            wsOptions
               ? {
-                  ...a,
-                  tls: a,
+                  ...wsOptions,
+                  tls: wsOptions,
                 }
               : undefined,
           ),
         );
       }
     } catch (error) {
-      let c = Date.now() - this.connectionStartTime;
-      logger.error(`[${serverName}] Failed to create WebSocket after ${c}ms:`, error);
+      let elapsedMs = Date.now() - this.connectionStartTime;
+      logger.error(`[${serverName}] Failed to create WebSocket after ${elapsedMs}ms:`, error);
       trackEvent?.("chrome_bridge_connection_failed", {
-        duration_ms: c,
+        duration_ms: elapsedMs,
         error_type: "websocket_error",
         error_code: error?.code,
         reconnect_attempt: this.reconnectAttempts,
@@ -746,17 +759,17 @@ class ChromeBridgeClient {
     }
     this.ws.on("open", () => {
       logger.info(`[${serverName}] WebSocket connected, sending connect message`);
-      let a = {
+      let connectMessage = {
         type: "connect",
         client_type: this.context.clientTypeId,
       };
-      if (bridgeConfig.devUserId) a.dev_user_id = bridgeConfig.devUserId;
-      else a.oauth_token = i;
-      this.ws?.send(JSON.stringify(a));
+      if (bridgeConfig.devUserId) connectMessage.dev_user_id = bridgeConfig.devUserId;
+      else connectMessage.oauth_token = oauthToken;
+      this.ws?.send(JSON.stringify(connectMessage));
     });
-    this.ws.on("message", (a) => {
+    this.ws.on("message", (data) => {
       try {
-        let str = a.toString();
+        let str = data.toString();
         let parsed = JSON.parse(str);
         if (EXTERNAL_MESSAGE_TYPES.has(parsed.type))
           logger.debug(`[${serverName}] Bridge received: ${String(parsed.type)} (ok=${String(parsed.ok)})`);
@@ -767,12 +780,12 @@ class ChromeBridgeClient {
         logger.error(`[${serverName}] Failed to parse bridge message:`, error);
       }
     });
-    this.ws.on("close", (a) => {
-      let c = this.connectionEstablishedTime ? Date.now() - this.connectionEstablishedTime : 0;
-      logger.info(`[${serverName}] Bridge connection closed (code: ${a}, duration: ${c}ms)`);
+    this.ws.on("close", (closeCode) => {
+      let durationMs = this.connectionEstablishedTime ? Date.now() - this.connectionEstablishedTime : 0;
+      logger.info(`[${serverName}] Bridge connection closed (code: ${closeCode}, duration: ${durationMs}ms)`);
       trackEvent?.("chrome_bridge_disconnected", {
-        close_code: a,
-        duration_since_connect_ms: c,
+        close_code: closeCode,
+        duration_since_connect_ms: durationMs,
         reconnect_attempt: this.reconnectAttempts + 1,
       });
       this.connected = false;
@@ -782,27 +795,27 @@ class ChromeBridgeClient {
       this.rejectPendingCalls(new SocketConnectionError("Bridge connection closed mid-call"));
       this.scheduleReconnect();
     });
-    this.ws.on("error", (a) => {
-      let c = this.connectionStartTime ? Date.now() - this.connectionStartTime : 0;
-      logger.error(`[${serverName}] Bridge WebSocket error after ${c}ms: ${a.message}`);
+    this.ws.on("error", (error) => {
+      let durationMs = this.connectionStartTime ? Date.now() - this.connectionStartTime : 0;
+      logger.error(`[${serverName}] Bridge WebSocket error after ${durationMs}ms: ${error.message}`);
       trackEvent?.("chrome_bridge_connection_failed", {
-        duration_ms: c,
+        duration_ms: durationMs,
         error_type: "websocket_error",
-        error_code: a.code,
+        error_code: error.code,
         reconnect_attempt: this.reconnectAttempts,
       });
       this.connected = false;
       this.authenticated = false;
       this.connecting = false;
-      this.rejectPendingCalls(new SocketConnectionError(`Bridge connection error: ${a.message}`));
+      this.rejectPendingCalls(new SocketConnectionError(`Bridge connection error: ${error.message}`));
     });
   }
-  handleMessage(e, n) {
+  handleMessage(message, responseBytes) {
     let { logger, serverName, trackEvent } = this.context;
-    switch (e.type) {
+    switch (message.type) {
       case "paired": {
-        let i = this.connectionStartTime ? Date.now() - this.connectionStartTime : 0;
-        logger.info(`[${serverName}] Paired with Chrome extension (duration: ${i}ms)`);
+        let durationMs = this.connectionStartTime ? Date.now() - this.connectionStartTime : 0;
+        logger.info(`[${serverName}] Paired with Chrome extension (duration: ${durationMs}ms)`);
         this.connected = true;
         this.authenticated = true;
         this.connecting = false;
@@ -810,7 +823,7 @@ class ChromeBridgeClient {
         this.connectionEstablishedTime = Date.now();
         this.startKeepAlive();
         trackEvent?.("chrome_bridge_connection_succeeded", {
-          duration_ms: i,
+          duration_ms: durationMs,
           status: "paired",
         });
         this.pushExternalConfigToAllPeers();
@@ -818,8 +831,8 @@ class ChromeBridgeClient {
         break;
       }
       case "waiting": {
-        let i = this.connectionStartTime ? Date.now() - this.connectionStartTime : 0;
-        logger.info(`[${serverName}] Waiting for Chrome extension to connect (duration: ${i}ms)`);
+        let durationMs = this.connectionStartTime ? Date.now() - this.connectionStartTime : 0;
+        logger.info(`[${serverName}] Waiting for Chrome extension to connect (duration: ${durationMs}ms)`);
         this.connected = true;
         this.authenticated = true;
         this.connecting = false;
@@ -827,7 +840,7 @@ class ChromeBridgeClient {
         this.connectionEstablishedTime = Date.now();
         this.startKeepAlive();
         trackEvent?.("chrome_bridge_connection_succeeded", {
-          duration_ms: i,
+          duration_ms: durationMs,
           status: "waiting",
         });
         break;
@@ -838,7 +851,7 @@ class ChromeBridgeClient {
         if (!this.selectedDeviceId) this.discoveryComplete = false;
         if (
           this.previousSelectedDeviceId &&
-          e.deviceId === this.previousSelectedDeviceId &&
+          message.deviceId === this.previousSelectedDeviceId &&
           !this.pendingSwitchResolve
         ) {
           logger.info(`[${serverName}] Previously selected extension reconnected, auto-reselecting`);
@@ -850,13 +863,13 @@ class ChromeBridgeClient {
           this.peerConnectedWaiters = [];
           for (let peerConnectedWaiter of peerConnectedWaiters) peerConnectedWaiter(true);
         }
-        if (typeof e.deviceId === "string" && DEVICE_ID_RE.test(e.deviceId))
-          this.pushExternalConfigToPeer(e.deviceId);
+        if (typeof message.deviceId === "string" && DEVICE_ID_RE.test(message.deviceId))
+          this.pushExternalConfigToPeer(message.deviceId);
         else this.pushExternalConfig();
         this.context.onPeerRosterChanged?.();
         break;
       case "peer_disconnected": {
-        let deviceId = e.deviceId;
+        let deviceId = message.deviceId;
         logger.info(
           `[${serverName}] Chrome extension disconnected from bridge (deviceId=${deviceId ?? "none"}, selected=${this.selectedDeviceId ?? "none"})`,
         );
@@ -870,7 +883,7 @@ class ChromeBridgeClient {
           deviceId,
           wasSelected: deviceId !== null && deviceId !== undefined && deviceId === this.selectedDeviceId,
         });
-        if (e.deviceId && e.deviceId === this.selectedDeviceId) {
+        if (message.deviceId && message.deviceId === this.selectedDeviceId) {
           logger.info(`[${serverName}] Selected extension disconnected, clearing selection`);
           this.previousSelectedDeviceId = this.selectedDeviceId;
           this.selectedDeviceId = undefined;
@@ -887,49 +900,51 @@ class ChromeBridgeClient {
       }
       case "routing_ack": {
         trackEvent?.("chrome_bridge_routing_ack", {
-          tool_use_id: e.tool_use_id ?? null,
-          routed_to: e.routed_to ?? null,
-          target_connected_at: e.target_connected_at ?? null,
-          target_pong_age_ms: e.target_pong_age_ms ?? null,
-          extension_sockets: e.extension_sockets ?? null,
-          mcp_sockets: e.mcp_sockets ?? null,
+          tool_use_id: message.tool_use_id ?? null,
+          routed_to: message.routed_to ?? null,
+          target_connected_at: message.target_connected_at ?? null,
+          target_pong_age_ms: message.target_pong_age_ms ?? null,
+          extension_sockets: message.extension_sockets ?? null,
+          mcp_sockets: message.mcp_sockets ?? null,
         });
-        let i = this.pendingCalls.get(e.tool_use_id ?? "");
-        if (i) {
-          i.routingAckReceived = true;
-          i.routingAckPongAgeMs = e.target_pong_age_ms ?? null;
+        let pendingCall = this.pendingCalls.get(message.tool_use_id ?? "");
+        if (pendingCall) {
+          pendingCall.routingAckReceived = true;
+          pendingCall.routingAckPongAgeMs = message.target_pong_age_ms ?? null;
         }
         break;
       }
       case "extensions_list":
         if (this.pendingDiscovery) {
           clearTimeout(this.pendingDiscovery.timeout);
-          this.pendingDiscovery.resolve(e.extensions ?? []);
+          this.pendingDiscovery.resolve(message.extensions ?? []);
           this.pendingDiscovery = null;
         }
         break;
       case "pairing_response": {
-        let requestId = e.request_id;
+        let requestId = message.request_id;
         if (this.pendingPairingRequestId !== requestId) break;
-        if (e.dismissed === true) {
+        if (message.dismissed === true) {
           logger.info(`[${serverName}] Pairing prompt dismissed in extension`);
           this.abortPairingPrompt();
           break;
         }
         let deviceId =
-          typeof e.device_id === "string" && DEVICE_ID_RE.test(e.device_id) ? e.device_id : undefined;
-        let a = cleanDeviceText(e.name, 50);
-        if (deviceId && a) {
+          typeof message.device_id === "string" && DEVICE_ID_RE.test(message.device_id)
+            ? message.device_id
+            : undefined;
+        let deviceName = cleanDeviceText(message.name, 50);
+        if (deviceId && deviceName) {
           this.pendingPairingRequestId = undefined;
           this.pairingInProgress = false;
           this.selectExtension(deviceId);
-          this.context.onExtensionPaired?.(deviceId, a);
+          this.context.onExtensionPaired?.(deviceId, deviceName);
           this.abortPairingPrompt();
-          logger.info(`[${serverName}] Paired with "${a}" (${deviceId.slice(0, 8)})`);
+          logger.info(`[${serverName}] Paired with "${deviceName}" (${deviceId.slice(0, 8)})`);
           if (this.pendingSwitchResolve) {
             this.pendingSwitchResolve({
               deviceId,
-              name: a,
+              name: deviceName,
             });
             this.pendingSwitchResolve = null;
           }
@@ -947,27 +962,27 @@ class ChromeBridgeClient {
         this.lastPongReceived = Date.now();
         break;
       case "tool_result":
-        this.handleToolResult(e, n);
+        this.handleToolResult(message, responseBytes);
         break;
       case "external_message_result": {
-        let requestId = typeof e.requestId === "string" ? e.requestId : undefined;
-        let r = requestId ? this.pendingExternalMessages.get(requestId) : undefined;
-        if (!requestId || !r) {
+        let requestId = typeof message.requestId === "string" ? message.requestId : undefined;
+        let pendingMessage = requestId ? this.pendingExternalMessages.get(requestId) : undefined;
+        if (!requestId || !pendingMessage) {
           logger.debug(
             `[${serverName}] external_message_result for unknown request: ${requestId?.slice(0, 8) ?? "none"}`,
           );
           break;
         }
-        clearTimeout(r.timer);
+        clearTimeout(pendingMessage.timer);
         this.pendingExternalMessages.delete(requestId);
-        if (e.ok === true)
-          r.resolve({
+        if (message.ok === true)
+          pendingMessage.resolve({
             ok: true,
-            response: e.response,
+            response: message.response,
           });
         else {
-          let error = e.error;
-          r.resolve({
+          let error = message.error;
+          pendingMessage.resolve({
             ok: false,
             error: error === "no_target" || error === "timeout" ? error : "send_failed",
           });
@@ -978,180 +993,184 @@ class ChromeBridgeClient {
       case "external_config":
         break;
       case "permission_request":
-        this.handlePermissionRequest(e).catch((error) => {
+        this.handlePermissionRequest(message).catch((error) => {
           logger.error(`[${serverName}] Error handling permission_request:`, error);
         });
         break;
       case "notification":
-        if (typeof e.method !== "string")
+        if (typeof message.method !== "string")
           logger.warn(`[${serverName}] Dropped a notification whose method is not a string`);
         else
           this.notificationHandler?.({
-            method: e.method,
-            params: e.params,
+            method: message.method,
+            params: message.params,
           });
         break;
       case "error":
-        logger.warn(`[${serverName}] Bridge error: ${e.error}`);
+        logger.warn(`[${serverName}] Bridge error: ${message.error}`);
         if (this.selectedDeviceId) this.clearSelectionIfGone(this.selectedDeviceId);
         break;
       default:
-        logger.warn(`[${serverName}] Unrecognized bridge message type: ${e.type}`);
+        logger.warn(`[${serverName}] Unrecognized bridge message type: ${message.type}`);
     }
   }
-  async handlePermissionRequest(e) {
+  async handlePermissionRequest(message) {
     let { logger, serverName } = this.context;
-    let { tool_use_id: toolUseId, request_id: requestId } = e;
+    let { tool_use_id: toolUseId, request_id: requestId } = message;
     if (typeof toolUseId !== "string" || typeof requestId !== "string") {
       logger.warn(`[${serverName}] permission_request missing tool_use_id or request_id`);
       return;
     }
-    let i = this.pendingCalls.get(toolUseId);
-    if (!i?.onPermissionRequest) {
+    let pendingCall = this.pendingCalls.get(toolUseId);
+    if (!pendingCall?.onPermissionRequest) {
       logger.debug(
         `[${serverName}] Ignoring permission_request for unknown tool_use_id ${toolUseId.slice(0, 8)} (not our call)`,
       );
       return;
     }
-    let r = toolCallMeta(e, {
+    let toolCallMetaInfo = toolCallMeta(message, {
       toolUseId,
       requestId,
     });
-    clearTimeout(i.timer);
-    i.permissionPaused = true;
+    clearTimeout(pendingCall.timer);
+    pendingCall.permissionPaused = true;
     try {
-      let c = await i.onPermissionRequest(r);
-      this.sendPermissionResponse(requestId, c);
+      let allowed = await pendingCall.onPermissionRequest(toolCallMetaInfo);
+      this.sendPermissionResponse(requestId, allowed);
     } catch (error) {
       logger.error(`[${serverName}] Error handling permission request:`, error);
       this.sendPermissionResponse(requestId, false);
     }
-    let a = this.pendingCalls.get(toolUseId);
-    if (a) a.timer = this.createTimeoutTimer(toolUseId, a.timeoutMs);
+    let pendingCall_2 = this.pendingCalls.get(toolUseId);
+    if (pendingCall_2) pendingCall_2.timer = this.createTimeoutTimer(toolUseId, pendingCall_2.timeoutMs);
   }
   sendPermissionResponse(requestId, allowed) {
     if (this.ws?.readyState === ws.OPEN) {
-      let t = {
+      let response = {
         type: "permission_response",
         request_id: requestId,
         allowed,
       };
-      if (this.selectedDeviceId) t.target_device_id = this.selectedDeviceId;
-      this.ws.send(JSON.stringify(t));
+      if (this.selectedDeviceId) response.target_device_id = this.selectedDeviceId;
+      this.ws.send(JSON.stringify(response));
     }
   }
-  handleToolResult(e, responseBytes) {
+  handleToolResult(message, responseBytes) {
     let { logger, serverName, trackEvent } = this.context;
-    let toolUseId = e.tool_use_id;
+    let toolUseId = message.tool_use_id;
     if (typeof toolUseId !== "string") {
       logger.warn(`[${serverName}] Received tool_result without tool_use_id`);
       return;
     }
-    let r = this.pendingCalls.get(toolUseId);
-    if (!r) {
+    let pendingCall = this.pendingCalls.get(toolUseId);
+    if (!pendingCall) {
       logger.debug(`[${serverName}] Received tool_result for unknown call: ${toolUseId.slice(0, 8)}`);
-      let l = this.timedOutCalls.get(toolUseId);
+      let timedOutAt = this.timedOutCalls.get(toolUseId);
       trackEvent?.("chrome_bridge_tool_call_late_result", {
         tool_use_id: toolUseId,
-        gap_from_timeout_ms: l ? Date.now() - l : null,
-        reason: l ? "post_timeout" : "unknown",
-        is_error: typeof e.is_error === "boolean" ? e.is_error : null,
+        gap_from_timeout_ms: timedOutAt ? Date.now() - timedOutAt : null,
+        reason: timedOutAt ? "post_timeout" : "unknown",
+        is_error: typeof message.is_error === "boolean" ? message.is_error : null,
       });
-      if (l) this.timedOutCalls.delete(toolUseId);
+      if (timedOutAt) this.timedOutCalls.delete(toolUseId);
       return;
     }
-    let a = Date.now() - r.startTime;
-    let c = this.normalizeBridgeResponse(e);
-    let d = Boolean(e.is_error) || "error" in c;
-    clearTimeout(r.timer);
+    let durationMs = Date.now() - pendingCall.startTime;
+    let result = this.normalizeBridgeResponse(message);
+    let isError = Boolean(message.is_error) || "error" in result;
+    clearTimeout(pendingCall.timer);
     this.pendingCalls.delete(toolUseId);
     let onToolResult = this.context.browserActivityObserver?.onToolResult;
     if (onToolResult)
       try {
         onToolResult({
-          sessionId: r.sessionId,
-          toolName: r.toolName,
-          args: r.args,
-          ok: !d,
-          resultContent: d ? undefined : c.result?.content,
+          sessionId: pendingCall.sessionId,
+          toolName: pendingCall.toolName,
+          args: pendingCall.args,
+          ok: !isError,
+          resultContent: isError ? undefined : result.result?.content,
         });
       } catch {
         logger.debug(`[${serverName}] browser activity observer threw`);
       }
-    if (d) {
-      let sliced = firstTextContent(c.error).slice(0, 200);
-      logger.warn(`[${serverName}] Tool call error: ${r.toolName} (${toolUseId.slice(0, 8)}) after ${a}ms`);
-      let errorType = classifyToolError(r.toolName, sliced);
+    if (isError) {
+      let sliced = firstTextContent(result.error).slice(0, 200);
+      logger.warn(
+        `[${serverName}] Tool call error: ${pendingCall.toolName} (${toolUseId.slice(0, 8)}) after ${durationMs}ms`,
+      );
+      let errorType = classifyToolError(pendingCall.toolName, sliced);
       trackEvent?.("chrome_bridge_tool_call_error", {
-        tool_name: `browser:${r.toolName}`,
+        tool_name: `browser:${pendingCall.toolName}`,
         tool_use_id: toolUseId,
-        duration_ms: a,
+        duration_ms: durationMs,
         error_type: errorType,
-        session_id: r.sessionId,
-        user_message_uuid: r.userMessageUuid,
+        session_id: pendingCall.sessionId,
+        user_message_uuid: pendingCall.userMessageUuid,
         transport: "bridge",
       });
       if (!this.selectedDeviceId && !this.pairingInProgress) {
         this.discoveryComplete = false;
-        r.reject(
+        pendingCall.reject(
           new ExtensionDisconnectedMidCallError(
-            `[${serverName}] Extension disconnected during tool call: ${r.toolName}`,
+            `[${serverName}] Extension disconnected during tool call: ${pendingCall.toolName}`,
           ),
         );
         return;
       }
     } else {
-      logger.debug(`[${serverName}] Tool call completed: ${r.toolName} (${toolUseId.slice(0, 8)}) in ${a}ms`);
+      logger.debug(
+        `[${serverName}] Tool call completed: ${pendingCall.toolName} (${toolUseId.slice(0, 8)}) in ${durationMs}ms`,
+      );
       trackEvent?.("chrome_bridge_tool_call_completed", {
-        tool_name: `browser:${r.toolName}`,
+        tool_name: `browser:${pendingCall.toolName}`,
         tool_use_id: toolUseId,
-        duration_ms: a,
-        session_id: r.sessionId,
-        user_message_uuid: r.userMessageUuid,
+        duration_ms: durationMs,
+        session_id: pendingCall.sessionId,
+        user_message_uuid: pendingCall.userMessageUuid,
         transport: "bridge",
         response_bytes: responseBytes,
       });
     }
-    r.resolve(c);
+    pendingCall.resolve(result);
   }
-  normalizeBridgeResponse(e) {
-    let { notices, ...t } = e;
-    let s = sanitizeBridgeNotices(notices, (i) =>
-      this.context.logger.warn(`[${this.context.serverName}] ${i}`),
+  normalizeBridgeResponse(message) {
+    let { notices, ...body } = message;
+    let notices_2 = sanitizeBridgeNotices(notices, (warningText) =>
+      this.context.logger.warn(`[${this.context.serverName}] ${warningText}`),
     );
-    let o = s
+    let noticesField = notices_2
       ? {
-          notices: s,
+          notices: notices_2,
         }
       : undefined;
-    if (t.result || t.error)
-      return o
+    if (body.result || body.error)
+      return noticesField
         ? {
-            ...t,
-            ...o,
+            ...body,
+            ...noticesField,
           }
-        : t;
-    if (t.content) {
-      if (t.is_error)
+        : body;
+    if (body.content) {
+      if (body.is_error)
         return {
           error: {
-            content: t.content,
+            content: body.content,
           },
-          ...o,
+          ...noticesField,
         };
       return {
         result: {
-          content: t.content,
+          content: body.content,
         },
-        ...o,
+        ...noticesField,
       };
     }
-    return o
+    return noticesField
       ? {
-          ...t,
-          ...o,
+          ...body,
+          ...noticesField,
         }
-      : t;
+      : body;
   }
   getTimeoutDiagnostics() {
     let freeMemPct = -1;
@@ -1161,49 +1180,49 @@ class ChromeBridgeClient {
       pong_age_ms: pongAgeMs,
     };
   }
-  createTimeoutTimer(e, n) {
+  createTimeoutTimer(callId, timeoutMs) {
     let { logger, serverName, trackEvent } = this.context;
     return setTimeout(() => {
-      let i = this.pendingCalls.get(e);
-      if (!i) return;
-      this.timedOutCalls.set(e, Date.now());
+      let pendingCall = this.pendingCalls.get(callId);
+      if (!pendingCall) return;
+      this.timedOutCalls.set(callId, Date.now());
       if (this.timedOutCalls.size > 200) {
-        let d = this.timedOutCalls.keys().next().value;
-        if (d) this.timedOutCalls.delete(d);
+        let oldestCallId = this.timedOutCalls.keys().next().value;
+        if (oldestCallId) this.timedOutCalls.delete(oldestCallId);
       }
-      this.pendingCalls.delete(e);
-      let r = Date.now() - i.startTime;
+      this.pendingCalls.delete(callId);
+      let durationMs = Date.now() - pendingCall.startTime;
       let timeoutDiagnostics = this.getTimeoutDiagnostics();
-      let routingAckReceived = i.routingAckReceived ?? false;
+      let routingAckReceived = pendingCall.routingAckReceived ?? false;
       logger.warn(
-        `[${serverName}] Tool call timeout: ${i.toolName} (${e.slice(0, 8)}) after ${r}ms, pending calls: ${this.pendingCalls.size}`,
+        `[${serverName}] Tool call timeout: ${pendingCall.toolName} (${callId.slice(0, 8)}) after ${durationMs}ms, pending calls: ${this.pendingCalls.size}`,
       );
       trackEvent?.("chrome_bridge_tool_call_timeout", {
-        tool_name: `browser:${i.toolName}`,
-        tool_use_id: e,
-        duration_ms: r,
-        timeout_ms: n,
-        session_id: i.sessionId,
-        user_message_uuid: i.userMessageUuid,
+        tool_name: `browser:${pendingCall.toolName}`,
+        tool_use_id: callId,
+        duration_ms: durationMs,
+        timeout_ms: timeoutMs,
+        session_id: pendingCall.sessionId,
+        user_message_uuid: pendingCall.userMessageUuid,
         transport: "bridge",
         routing_ack_received: routingAckReceived,
-        routing_ack_pong_age_ms: i.routingAckPongAgeMs ?? null,
-        permission_paused: i.permissionPaused ?? false,
+        routing_ack_pong_age_ms: pendingCall.routingAckPongAgeMs ?? null,
+        permission_paused: pendingCall.permissionPaused ?? false,
         ...timeoutDiagnostics,
       });
       if (this.isConnected())
-        i.reject(
-          new ToolCallTimeoutError(`[${serverName}] Tool call timed out: ${i.toolName}`, {
+        pendingCall.reject(
+          new ToolCallTimeoutError(`[${serverName}] Tool call timed out: ${pendingCall.toolName}`, {
             routingAckReceived,
           }),
         );
       else
-        i.reject(
+        pendingCall.reject(
           new SocketConnectionError(
-            `[${serverName}] Tool call timed out with bridge disconnected: ${i.toolName}`,
+            `[${serverName}] Tool call timed out with bridge disconnected: ${pendingCall.toolName}`,
           ),
         );
-    }, n);
+    }, timeoutMs);
   }
   scheduleReconnect() {
     let { logger, serverName, trackEvent } = this.context;
@@ -1290,10 +1309,10 @@ class ChromeBridgeClient {
     }
     this.context.onPeerRosterChanged?.();
   }
-  rejectPendingCalls(e) {
+  rejectPendingCalls(error) {
     for (let pendingCall of this.pendingCalls.values()) {
       clearTimeout(pendingCall.timer);
-      pendingCall.reject(e);
+      pendingCall.reject(error);
     }
     this.pendingCalls.clear();
   }
@@ -1322,8 +1341,8 @@ class ChromeBridgeClient {
 /**
  * 创建 Chrome 桥接客户端。
  */
-function createChromeBridgeClient(e) {
-  return new ChromeBridgeClient(e);
+function createChromeBridgeClient(options) {
+  return new ChromeBridgeClient(options);
 }
 //@ chunk-4dj0g7y4.js:29171-29339 placement
 var MAX_QUEUED_MESSAGES = 300;
@@ -1342,30 +1361,30 @@ var MISMATCH_CADENCE = {
   steps: [[3000, 100]],
   thenMs: 1e4,
 };
-var exponentialBackoff = (e, n, t) => Math.min(e * 1.5 ** (n - 1), t);
+var exponentialBackoff = (baseMs, attempt, maxMs) => Math.min(baseMs * 1.5 ** (attempt - 1), maxMs);
 //@ chunk-4dj0g7y4.js:29339-29428 placement
 /**
  * 按累计毫秒在节奏表里选出下一次延迟。
  */
-function pickCadenceDelay({ steps, thenMs }, t) {
-  let s = 0;
-  for (let [o, i] of steps) {
-    s += i;
-    if (t <= s) return o;
+function pickCadenceDelay({ steps, thenMs }, elapsedMs) {
+  let cumulativeMs = 0;
+  for (let [delayMs, stepMs] of steps) {
+    cumulativeMs += stepMs;
+    if (elapsedMs <= cumulativeMs) return delayMs;
   }
   return thenMs;
 }
 //@ chunk-4dj0g7y4.js:29428-29572 placement
-function reconnectDelayMs(e, attempts) {
-  switch (e) {
+function reconnectDelayMs(cadence, elapsedMs) {
+  switch (cadence) {
     case "transport":
-      return exponentialBackoff(RECONNECT_BASE_MS, attempts, RECONNECT_MAX_MS);
+      return exponentialBackoff(RECONNECT_BASE_MS, elapsedMs, RECONNECT_MAX_MS);
     case "mismatch":
-      return pickCadenceDelay(MISMATCH_CADENCE, attempts);
+      return pickCadenceDelay(MISMATCH_CADENCE, elapsedMs);
     case "not_ready":
-      return pickCadenceDelay(NOT_READY_CADENCE, attempts);
+      return pickCadenceDelay(NOT_READY_CADENCE, elapsedMs);
     case "token":
-      return pickCadenceDelay(TOKEN_CADENCE, attempts);
+      return pickCadenceDelay(TOKEN_CADENCE, elapsedMs);
   }
 }
 //@ chunk-4dj0g7y4.js:29572-29724 placement
@@ -1382,8 +1401,8 @@ var newRetryState = (cadence) => ({
   cadence,
 });
 //@ chunk-4dj0g7y4.js:29724-29882 placement
-function escapeJsonForHtml(e) {
-  return e
+function escapeJsonForHtml(json) {
+  return json
     .replace(/</g, "\\u003c")
     .replace(/>/g, "\\u003e")
     .replace(/\u2028/g, "\\u2028")
@@ -1394,23 +1413,23 @@ function escapeJsonForHtml(e) {
 /**
  * 生成可用标签页上下文的工具结果。
  */
-function tabContextResult(e, n) {
-  let t = (i) => escapeJsonForHtml(JSON.stringify(i));
-  let joined = e.map((i) => {
-    let r = i;
-    return `  \u2022 tabId ${r.tabId}: ${t(r.title)} (${t(r.url)})`;
+function tabContextResult(tabs, tabGroupId) {
+  let escapeHtmlJson = (value) => escapeJsonForHtml(JSON.stringify(value));
+  let joined = tabs.map((tab) => {
+    let tab_2 = tab;
+    return `  \u2022 tabId ${tab_2.tabId}: ${escapeHtmlJson(tab_2.title)} (${escapeHtmlJson(tab_2.url)})`;
   }).join(`
 `);
-  let o = {
-    availableTabs: e,
+  let payload = {
+    availableTabs: tabs,
   };
-  if (n !== undefined) o.tabGroupId = n;
+  if (tabGroupId !== undefined) payload.tabGroupId = tabGroupId;
   return {
     result: {
       content: [
         {
           type: "text",
-          text: escapeJsonForHtml(JSON.stringify(o)),
+          text: escapeJsonForHtml(JSON.stringify(payload)),
         },
         {
           type: "text",
@@ -1466,144 +1485,148 @@ class LocalChromeBridgePool {
     if (this.refreshPromise) await this.refreshPromise;
     await this.refreshClients();
     if (generation !== this.generation || !this.unwatchSockets) return;
-    for (let [n, t] of this.clients.entries()) {
-      if (t.isConnected()) {
-        this.clearRedial(t);
+    for (let [socketPath, client] of this.clients.entries()) {
+      if (client.isConnected()) {
+        this.clearRedial(client);
         continue;
       }
-      if (this.parked.has(t) || this.dialing.has(t) || this.redials.get(t)?.timer) continue;
-      this.clearRedial(t);
-      this.dial(n, t);
+      if (this.parked.has(client) || this.dialing.has(client) || this.redials.get(client)?.timer) continue;
+      this.clearRedial(client);
+      this.dial(socketPath, client);
     }
   }
-  dial(e, n) {
-    this.dialing.add(n);
-    let t = this.redials.get(n);
-    if (t) t.wanted = false;
-    let s = (o) => {
-      this.dialing.delete(n);
-      if (this.clients.get(e) !== n || this.redials.get(n)?.cadence === "dead") return;
-      if (o) {
-        this.clearRedial(n);
+  dial(socketPath, client) {
+    this.dialing.add(client);
+    let retryState = this.redials.get(client);
+    if (retryState) retryState.wanted = false;
+    let onDialed = (connected) => {
+      this.dialing.delete(client);
+      if (this.clients.get(socketPath) !== client || this.redials.get(client)?.cadence === "dead") return;
+      if (connected) {
+        this.clearRedial(client);
         return;
       }
-      if (this.redials.get(n)?.wanted || n.isConnecting()) {
-        this.onRedialWanted(e, n);
+      if (this.redials.get(client)?.wanted || client.isConnecting()) {
+        this.onRedialWanted(socketPath, client);
         return;
       }
-      let i = n.lastPairingRefuseCode();
-      let r = i === undefined ? "durable" : pairingErrorMessage(i, n.lastPairingRefusePeerReported());
-      if (r === "durable") this.parked.add(n);
-      else this.onRedialWanted(e, n, RETRY_KIND_BY_REASON[r]);
+      let refuseCode = client.lastPairingRefuseCode();
+      let refuseKind =
+        refuseCode === undefined
+          ? "durable"
+          : pairingErrorMessage(refuseCode, client.lastPairingRefusePeerReported());
+      if (refuseKind === "durable") this.parked.add(client);
+      else this.onRedialWanted(socketPath, client, RETRY_KIND_BY_REASON[refuseKind]);
     };
-    n.ensureConnected().then(s, () => s(false));
+    client.ensureConnected().then(onDialed, () => onDialed(false));
   }
-  onRedialWanted(e, n, cadence = "transport") {
-    if (!this.unwatchSockets || this.clients.get(e) !== n) return;
-    if (this.orphaned.has(n)) {
-      this.removeClient(e, n);
+  onRedialWanted(socketPath, client, cadence = "transport") {
+    if (!this.unwatchSockets || this.clients.get(socketPath) !== client) return;
+    if (this.orphaned.has(client)) {
+      this.removeClient(socketPath, client);
       return;
     }
-    let s = this.redials.get(n) ?? newRetryState(cadence);
-    s.wanted = true;
-    if (s.cadence !== cadence) {
-      s.attempts = 0;
-      s.cadence = cadence;
+    let retryState = this.redials.get(client) ?? newRetryState(cadence);
+    retryState.wanted = true;
+    if (retryState.cadence !== cadence) {
+      retryState.attempts = 0;
+      retryState.cadence = cadence;
     }
-    this.redials.set(n, s);
-    if (s.timer) return;
-    if (cadence === "transport" && s.attempts >= MAX_RECONNECT_ATTEMPTS) {
+    this.redials.set(client, retryState);
+    if (retryState.timer) return;
+    if (cadence === "transport" && retryState.attempts >= MAX_RECONNECT_ATTEMPTS) {
       this.context.logger.info(
-        `[${this.context.serverName}] Giving up on ${e} after ${s.attempts} proactive redials`,
+        `[${this.context.serverName}] Giving up on ${socketPath} after ${retryState.attempts} proactive redials`,
       );
       return;
     }
-    s.attempts += 1;
-    let o = reconnectDelayMs(cadence, s.attempts);
-    s.timer = setTimeout(() => {
-      s.timer = null;
+    retryState.attempts += 1;
+    let delayMs = reconnectDelayMs(cadence, retryState.attempts);
+    retryState.timer = setTimeout(() => {
+      retryState.timer = null;
       if (
         this.unwatchSockets &&
-        this.clients.get(e) === n &&
+        this.clients.get(socketPath) === client &&
         !this.context.isDisabled?.() &&
-        !n.isConnected() &&
-        !this.dialing.has(n)
+        !client.isConnected() &&
+        !this.dialing.has(client)
       )
-        this.dial(e, n);
-    }, o);
-    s.timer.unref?.();
+        this.dial(socketPath, client);
+    }, delayMs);
+    retryState.timer.unref?.();
   }
-  onSocketDead(e, n) {
-    if (!this.unwatchSockets || this.clients.get(e) !== n) return;
-    this.clearRedial(n);
-    this.redials.set(n, newRetryState("dead"));
+  onSocketDead(socketPath, client) {
+    if (!this.unwatchSockets || this.clients.get(socketPath) !== client) return;
+    this.clearRedial(client);
+    this.redials.set(client, newRetryState("dead"));
     this.refreshClients();
   }
-  clearRedial(e) {
-    let n = this.redials.get(e);
-    if (n?.timer) clearTimeout(n.timer);
-    this.redials.delete(e);
+  clearRedial(socketPath) {
+    let retryState = this.redials.get(socketPath);
+    if (retryState?.timer) clearTimeout(retryState.timer);
+    this.redials.delete(socketPath);
   }
-  removeClient(e, n) {
-    this.context.logger.info(`[${this.context.serverName}] Removing stale socket from pool: ${e}`);
-    this.clearRedial(n);
-    this.orphaned.delete(n);
-    n.disconnect();
-    this.clients.delete(e);
-    for (let [t, s] of this.tabRoutes.entries()) if (s === e) this.tabRoutes.delete(t);
+  removeClient(socketPath, client) {
+    this.context.logger.info(`[${this.context.serverName}] Removing stale socket from pool: ${socketPath}`);
+    this.clearRedial(client);
+    this.orphaned.delete(client);
+    client.disconnect();
+    this.clients.delete(socketPath);
+    for (let [tabId, routeSocketPath] of this.tabRoutes.entries())
+      if (routeSocketPath === socketPath) this.tabRoutes.delete(tabId);
   }
-  setNotificationHandler(e) {
-    this.notificationHandler = e;
-    for (let client of this.clients.values()) client.setNotificationHandler(e);
+  setNotificationHandler(handler) {
+    this.notificationHandler = handler;
+    for (let client of this.clients.values()) client.setNotificationHandler(handler);
   }
   async ensureConnected() {
     let { logger, serverName } = this.context;
     await this.refreshClients();
-    let t = [];
-    let s = [];
+    let regularConnects = [];
+    let stragglerConnects = [];
     for (let client of this.clients.values()) {
       if (client.isConnected()) {
         this.stragglers.delete(client);
         continue;
       }
-      let r = this.stragglers.has(client);
-      let a = client.ensureConnected().then(
-        (c) => {
-          if (c) this.stragglers.delete(client);
+      let isStraggler = this.stragglers.has(client);
+      let connectPromise = client.ensureConnected().then(
+        (connected) => {
+          if (connected) this.stragglers.delete(client);
           else this.stragglers.add(client);
-          return c;
+          return connected;
         },
         () => {
           this.stragglers.add(client);
           return false;
         },
       );
-      (r ? s : t).push(a);
+      (isStraggler ? stragglerConnects : regularConnects).push(connectPromise);
     }
-    await Promise.all(t);
-    if (this.getConnectedClients().length === 0) await Promise.all(s);
-    let o = this.getConnectedClients().length;
-    if (o === 0) {
+    await Promise.all(regularConnects);
+    if (this.getConnectedClients().length === 0) await Promise.all(stragglerConnects);
+    let connectedCount = this.getConnectedClients().length;
+    if (connectedCount === 0) {
       logger.info(`[${serverName}] No connected sockets in pool`);
       return false;
     }
-    logger.info(`[${serverName}] Socket pool: ${o} connected`);
+    logger.info(`[${serverName}] Socket pool: ${connectedCount} connected`);
     return true;
   }
-  async callTool(e, n, t) {
-    if (e === "tabs_context_mcp") return this.callTabsContext(n, t);
-    let tabId = n.tabId;
+  async callTool(toolName, args, options) {
+    if (toolName === "tabs_context_mcp") return this.callTabsContext(args, options);
+    let tabId = args.tabId;
     if (tabId !== undefined) {
-      let i = this.tabRoutes.get(tabId);
-      if (i) {
-        let r = this.clients.get(i);
-        if (r?.isConnected()) return r.callTool(e, n, t);
+      let routedSocketPath = this.tabRoutes.get(tabId);
+      if (routedSocketPath) {
+        let routedClient = this.clients.get(routedSocketPath);
+        if (routedClient?.isConnected()) return routedClient.callTool(toolName, args, options);
       }
     }
     let connectedClients = this.getConnectedClients();
     if (connectedClients.length === 0)
       throw new SocketConnectionError(`[${this.context.serverName}] No connected sockets available`);
-    return connectedClients[0].callTool(e, n, t);
+    return connectedClients[0].callTool(toolName, args, options);
   }
   isConnected() {
     return this.getConnectedClients().length > 0;
@@ -1627,125 +1650,131 @@ class LocalChromeBridgePool {
   getConnectedClients() {
     return [...this.clients.values()].filter((client) => client.isConnected());
   }
-  async callTabsContext(e, n) {
+  async callTabsContext(args, options) {
     let { logger, serverName } = this.context;
     let connectedClients = this.getConnectedClients();
     if (connectedClients.length === 0)
       throw new SocketConnectionError(`[${serverName}] No connected sockets available`);
     if (connectedClients.length === 1) {
-      let c = await connectedClients[0].callTool("tabs_context_mcp", e, n);
-      this.updateTabRoutes(c, this.getSocketPathForClient(connectedClients[0]));
-      return c;
+      let result = await connectedClients[0].callTool("tabs_context_mcp", args, options);
+      this.updateTabRoutes(result, this.getSocketPathForClient(connectedClients[0]));
+      return result;
     }
     let settled = await Promise.allSettled(
-      connectedClients.map(async (c) => {
-        let result = await c.callTool("tabs_context_mcp", e, n);
-        let socketPath = this.getSocketPathForClient(c);
+      connectedClients.map(async (client) => {
+        let result = await client.callTool("tabs_context_mcp", args, options);
+        let socketPath = this.getSocketPathForClient(client);
         return {
           result,
           socketPath,
         };
       }),
     );
-    let r = [];
-    let a;
+    let tabs = [];
+    let tabGroupId;
     this.tabRoutes.clear();
-    for (let c of settled) {
-      if (c.status !== "fulfilled") {
-        logger.info(`[${serverName}] tabs_context_mcp failed on one socket: ${c.reason}`);
+    for (let settledResult of settled) {
+      if (settledResult.status !== "fulfilled") {
+        logger.info(`[${serverName}] tabs_context_mcp failed on one socket: ${settledResult.reason}`);
         continue;
       }
-      let { result: d, socketPath } = c.value;
-      this.updateTabRoutes(d, socketPath);
-      let l = this.extractTabs(d);
-      if (l) for (let g of l) r.push(g);
-      if (a === undefined) a = this.extractTabGroupId(d);
+      let { result, socketPath } = settledResult.value;
+      this.updateTabRoutes(result, socketPath);
+      let socketTabs = this.extractTabs(result);
+      if (socketTabs) for (let tab of socketTabs) tabs.push(tab);
+      if (tabGroupId === undefined) tabGroupId = this.extractTabGroupId(result);
     }
-    if (r.length > 0) return tabContextResult(r, a);
-    for (let c of settled) if (c.status === "fulfilled") return c.value.result;
+    if (tabs.length > 0) return tabContextResult(tabs, tabGroupId);
+    for (let settledResult of settled)
+      if (settledResult.status === "fulfilled") return settledResult.value.result;
     throw new SocketConnectionError(`[${serverName}] All sockets failed for tabs_context_mcp`);
   }
-  updateTabRoutes(e, n) {
-    let t = this.extractTabs(e);
-    if (!t) return;
-    for (let s of t)
-      if (typeof s === "object" && s !== null && "tabId" in s) {
-        let tabId = s.tabId;
-        this.tabRoutes.set(tabId, n);
+  updateTabRoutes(result, socketPath) {
+    let tabs = this.extractTabs(result);
+    if (!tabs) return;
+    for (let tab of tabs)
+      if (typeof tab === "object" && tab !== null && "tabId" in tab) {
+        let tabId = tab.tabId;
+        this.tabRoutes.set(tabId, socketPath);
       }
   }
-  extractTabs(e) {
-    if (!e || typeof e !== "object") return null;
-    let content = e.result?.content;
+  extractTabs(result) {
+    if (!result || typeof result !== "object") return null;
+    let content = result.result?.content;
     if (!content || !Array.isArray(content)) return null;
-    for (let s of content)
-      if (s.type === "text" && s.text)
+    for (let contentBlock of content)
+      if (contentBlock.type === "text" && contentBlock.text)
         try {
-          let parsed = JSON.parse(s.text);
+          let parsed = JSON.parse(contentBlock.text);
           if (Array.isArray(parsed)) return parsed;
-          let i = parsed;
-          if (i && Array.isArray(i.availableTabs)) return i.availableTabs;
+          let parsed_2 = parsed;
+          if (parsed_2 && Array.isArray(parsed_2.availableTabs)) return parsed_2.availableTabs;
         } catch {}
     return null;
   }
-  extractTabGroupId(e) {
-    if (!e || typeof e !== "object") return;
-    let content = e.result?.content;
+  extractTabGroupId(result) {
+    if (!result || typeof result !== "object") return;
+    let content = result.result?.content;
     if (!content || !Array.isArray(content)) return;
-    for (let s of content)
-      if (s.type === "text" && s.text)
+    for (let contentBlock of content)
+      if (contentBlock.type === "text" && contentBlock.text)
         try {
-          let parsed = JSON.parse(s.text);
+          let parsed = JSON.parse(contentBlock.text);
           if (typeof parsed.tabGroupId === "number") return parsed.tabGroupId;
         } catch {}
     return;
   }
-  getSocketPathForClient(e) {
-    for (let [n, t] of this.clients.entries()) if (t === e) return n;
+  getSocketPathForClient(client) {
+    for (let [socketPath, pooledClient] of this.clients.entries())
+      if (pooledClient === client) return socketPath;
     return "";
   }
   refreshClients() {
     if (!this.refreshPromise) {
-      let e = this.doRefreshClients().finally(() => {
-        if (this.refreshPromise === e) this.refreshPromise = null;
+      let refreshPromise = this.doRefreshClients().finally(() => {
+        if (this.refreshPromise === refreshPromise) this.refreshPromise = null;
       });
-      this.refreshPromise = e;
+      this.refreshPromise = refreshPromise;
     }
     return this.refreshPromise;
   }
   async doRefreshClients() {
     let { logger, serverName } = this.context;
     let generation = this.generation;
-    let s;
+    let socketPaths;
     try {
-      s = (await this.context.getSocketPaths?.()) ?? [];
+      socketPaths = (await this.context.getSocketPaths?.()) ?? [];
     } catch (error) {
       logger.info(`[${serverName}] Socket scan failed:`, error);
       return;
     }
     if (generation !== this.generation) return;
-    for (let o of s)
-      if (!this.clients.has(o)) {
-        logger.info(`[${serverName}] Adding socket to pool: ${o}`);
-        let i = {
+    for (let socketPath of socketPaths)
+      if (!this.clients.has(socketPath)) {
+        logger.info(`[${serverName}] Adding socket to pool: ${socketPath}`);
+        let clientContext = {
           ...this.context,
-          socketPath: o,
+          socketPath,
           getSocketPath: undefined,
           getSocketPaths: undefined,
         };
-        let chromeSocketClient = createChromeSocketClient(i);
+        let chromeSocketClient = createChromeSocketClient(clientContext);
         chromeSocketClient.disableAutoReconnect = true;
-        chromeSocketClient.onRedialWanted = (a) =>
-          a === "dead"
-            ? this.onSocketDead(o, chromeSocketClient)
-            : this.onRedialWanted(o, chromeSocketClient, a === "peer_dropped" ? "not_ready" : "transport");
+        chromeSocketClient.onRedialWanted = (cadence) =>
+          cadence === "dead"
+            ? this.onSocketDead(socketPath, chromeSocketClient)
+            : this.onRedialWanted(
+                socketPath,
+                chromeSocketClient,
+                cadence === "peer_dropped" ? "not_ready" : "transport",
+              );
         if (this.notificationHandler) chromeSocketClient.setNotificationHandler(this.notificationHandler);
-        this.clients.set(o, chromeSocketClient);
+        this.clients.set(socketPath, chromeSocketClient);
       }
-    for (let [o, i] of this.clients.entries())
-      if (s.includes(o)) this.orphaned.delete(i);
-      else if (i.isConnected()) this.orphaned.add(i);
-      else this.removeClient(o, i);
+    for (let [socketPath, client] of this.clients.entries())
+      if (socketPaths.includes(socketPath)) this.orphaned.delete(client);
+      else if (client.isConnected()) this.orphaned.add(client);
+      else this.removeClient(socketPath, client);
   }
 }
 //@ chunk-4dj0g7y4.js:37178-37210 placement
@@ -1755,4 +1784,4 @@ class LocalChromeBridgePool {
 function createLocalChromeBridgePool(context) {
   return new LocalChromeBridgePool(context);
 }
-export { createChromeBridgeClient, createLocalChromeBridgePool };
+export { createChromeBridgeClient, createLocalChromeBridgePool, ChromeBridgeClient, platformDisplayName };

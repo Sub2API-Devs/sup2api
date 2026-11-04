@@ -10,9 +10,9 @@
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  string,
-  u,
-  M,
+  stringSchema,
+  objectSchema,
+  booleanSchema,
   record,
   union,
   literal,
@@ -22,7 +22,7 @@ import { MAX_CLEAN_IDENTIFIER_LENGTH } from "../../utils/sanitization.js";
 import { getSettingsFieldSchema } from "../../utils/settings/types.js";
 import { foldLookalikeChars, foldConfusableCharacters } from "../../utils/confusables.js";
 import { EFFORT_LEVELS } from "../../utils/effort.js";
-import { wi, wS } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject, pickAlias } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { isUndefinedAlias, isEmpty } from "./callUtils.js";
 import {
   DEFAULT,
@@ -45,17 +45,17 @@ var MAX_MODEL_KEY_LENGTH = 256;
 var MAX_SKILL_OVERRIDES = 256;
 var MAX_SKILL_OVERRIDE_KEY = 256;
 var outputStyleNameSchema = DoctorLazy(() =>
-  string()
+  stringSchema()
     .max(MAX_CLEAN_IDENTIFIER_LENGTH)
-    .refine((e) => !(e in Object.prototype)),
+    .refine((name) => !(name in Object.prototype)),
 );
 var servedProjectSettingsSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     alwaysThinkingEnabled: getSettingsFieldSchema("alwaysThinkingEnabled").catch(undefined),
-    attribution: u({
+    attribution: objectSchema({
       commit: safeAttributionSchema(),
       pr: safeAttributionSchema(),
-      sessionUrl: M().optional().catch(undefined),
+      sessionUrl: booleanSchema().optional().catch(undefined),
     })
       .optional()
       .catch(undefined),
@@ -65,17 +65,17 @@ var servedProjectSettingsSchema = DoctorLazy(() =>
     effortLevel: getSettingsFieldSchema("effortLevel").catch(undefined),
     includeCoAuthoredBy: getSettingsFieldSchema("includeCoAuthoredBy").catch(undefined),
     includeGitInstructions: getSettingsFieldSchema("includeGitInstructions").catch(undefined),
-    language: string().max(MAX_CLEAN_IDENTIFIER_LENGTH).optional().catch(undefined),
+    language: stringSchema().max(MAX_CLEAN_IDENTIFIER_LENGTH).optional().catch(undefined),
     maxEffortLevel: getSettingsFieldSchema("maxEffortLevel").catch(undefined),
     modelSettings: record(
-      string().max(MAX_MODEL_KEY_LENGTH),
-      u({
+      stringSchema().max(MAX_MODEL_KEY_LENGTH),
+      objectSchema({
         autoCompactWindow: union([literal("auto"), getSettingsFieldSchema("autoCompactWindow")]),
         effortLevel: getSettingsFieldSchema("effortLevel"),
         maxEffortLevel: getSettingsFieldSchema("maxEffortLevel"),
       }),
     )
-      .refine((e) => Object.keys(e).length <= MAX_MODEL_SETTINGS)
+      .refine((modelSettings) => Object.keys(modelSettings).length <= MAX_MODEL_SETTINGS)
       .optional()
       .catch(undefined),
     outputStyle: outputStyleNameSchema().optional().catch(undefined),
@@ -86,10 +86,10 @@ var servedProjectSettingsSchema = DoctorLazy(() =>
     skillListingMaxDescChars: getSettingsFieldSchema("skillListingMaxDescChars").catch(undefined),
     skillOverrides: getSettingsFieldSchema("skillOverrides")
       .refine(
-        (e) =>
-          e === undefined ||
-          (Object.keys(e).length <= MAX_SKILL_OVERRIDES &&
-            Object.keys(e).every((key) => key.length <= MAX_SKILL_OVERRIDE_KEY)),
+        (overrides) =>
+          overrides === undefined ||
+          (Object.keys(overrides).length <= MAX_SKILL_OVERRIDES &&
+            Object.keys(overrides).every((key) => key.length <= MAX_SKILL_OVERRIDE_KEY)),
       )
       .catch(undefined),
     switchModelsOnFlag: getSettingsFieldSchema("switchModelsOnFlag").catch(undefined),
@@ -113,24 +113,24 @@ var SYSTEM_REMINDER_WORD_RE = /systemreminder/i;
  * 可安全使用的 attribution 文本 schema。
  */
 function safeAttributionSchema() {
-  return string().refine(isSafeAttributionText).optional().catch(undefined);
+  return stringSchema().refine(isSafeAttributionText).optional().catch(undefined);
 }
 //@ chunk-wy9dbk5f.js:48410-48674 placement
 /**
  * 判断 attribution 文本可安全使用：长度/行数有限，无控制或不可见字符、引号与 shell 元字符、heredoc 标记、尖括号（允许 trailer 邮箱）、system-reminder 字样。
  */
-function isSafeAttributionText(e) {
-  if (e.length > MAX_ATTRIBUTION_LENGTH) return false;
-  let lines = e.split(`
+function isSafeAttributionText(text) {
+  if (text.length > MAX_ATTRIBUTION_LENGTH) return false;
+  let lines = text.split(`
 `);
-  let normalized = e.normalize("NFKD");
-  let normalized_2 = e.replace(TRAILER_EMAIL_RE, "").normalize("NFKD");
+  let normalized = text.normalize("NFKD");
+  let normalized_2 = text.replace(TRAILER_EMAIL_RE, "").normalize("NFKD");
   return (
-    !UNSAFE_ATTRIBUTION_CHARS_RE.test(e) &&
+    !UNSAFE_ATTRIBUTION_CHARS_RE.test(text) &&
     !SHELL_META_CHARS_RE.test(normalized) &&
     !HEREDOC_MARKER_RE.test(normalized) &&
     !/[<>]/.test(foldLookalikeChars(normalized_2)) &&
-    !SYSTEM_REMINDER_WORD_RE.test(foldConfusableCharacters(e).replace(/[^a-z]/gi, "")) &&
+    !SYSTEM_REMINDER_WORD_RE.test(foldConfusableCharacters(text).replace(/[^a-z]/gi, "")) &&
     lines.length <= MAX_ATTRIBUTION_LINES &&
     lines.every((line) => line.length <= MAX_CLEAN_IDENTIFIER_LENGTH)
   );
@@ -143,12 +143,12 @@ function capModelSettings(settingsFileUncached) {
   if (settingsFileUncached.settings === null) return settingsFileUncached;
   let { maxEffortLevel } = settingsFileUncached.settings;
   let entries = Object.entries(settingsFileUncached.settings.modelSettings ?? {});
-  let s = new Map();
-  for (let [c, y] of entries) {
-    let maxEffortLevel_2 = y?.maxEffortLevel;
+  let capped = new Map();
+  for (let [model, entry] of entries) {
+    let maxEffortLevel_2 = entry?.maxEffortLevel;
     if (maxEffortLevel_2 === undefined) continue;
-    if (c.length <= MAX_MODEL_KEY_LENGTH && s.size < MAX_MODEL_SETTINGS)
-      s.set(c, {
+    if (model.length <= MAX_MODEL_KEY_LENGTH && capped.size < MAX_MODEL_SETTINGS)
+      capped.set(model, {
         maxEffortLevel: maxEffortLevel_2,
       });
     else if (
@@ -157,18 +157,25 @@ function capModelSettings(settingsFileUncached) {
     )
       maxEffortLevel = maxEffortLevel_2;
   }
-  for (let [c, y] of entries) {
-    let g = wi(wS(y, "autoCompactWindow", "effortLevel"), isUndefinedAlias);
-    if (!isEmpty(g) && c.length <= MAX_MODEL_KEY_LENGTH && (s.has(c) || s.size < MAX_MODEL_SETTINGS))
-      s.set(c, {
-        ...s.get(c),
-        ...g,
+  for (let [model, entry] of entries) {
+    let windowAndEffort = import_reject(
+      pickAlias(entry, "autoCompactWindow", "effortLevel"),
+      isUndefinedAlias,
+    );
+    if (
+      !isEmpty(windowAndEffort) &&
+      model.length <= MAX_MODEL_KEY_LENGTH &&
+      (capped.has(model) || capped.size < MAX_MODEL_SETTINGS)
+    )
+      capped.set(model, {
+        ...capped.get(model),
+        ...windowAndEffort,
       });
   }
-  let a = Object.fromEntries(
-    entries.flatMap(([c]) => {
-      let y = s.get(c);
-      return y === undefined ? [] : [[c, y]];
+  let modelSettings = Object.fromEntries(
+    entries.flatMap(([model]) => {
+      let value = capped.get(model);
+      return value === undefined ? [] : [[model, value]];
     }),
   );
   return {
@@ -176,38 +183,38 @@ function capModelSettings(settingsFileUncached) {
     settings: {
       ...settingsFileUncached.settings,
       maxEffortLevel,
-      modelSettings: s.size > 0 ? a : undefined,
+      modelSettings: capped.size > 0 ? modelSettings : undefined,
     },
   };
 }
 //@ chunk-wy9dbk5f.js:49304-49424 placement
 var MAX_OUTPUT_STYLE_PROMPT = 65536;
 var servedOutputStyleSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     name: outputStyleNameSchema(),
-    prompt: string().max(MAX_OUTPUT_STYLE_PROMPT),
-    keepCodingInstructions: M().optional(),
+    prompt: stringSchema().max(MAX_OUTPUT_STYLE_PROMPT),
+    keepCodingInstructions: booleanSchema().optional(),
   })
     .optional()
     .catch(undefined),
 );
 //@ chunk-wy9dbk5f.js:49424-49642 placement
-async function readServedOutputStyle(e, storageV5) {
-  let n = e || DEFAULT;
+async function readServedOutputStyle(styleName, storageV5) {
+  let name = styleName || DEFAULT;
   clearOutputStyleCaches();
   clearOutputStylesCache();
-  let a = (
+  let style = (
     await getAllOutputStylesCached(getOriginalCwd(), storageV5).catch((error) => {
       logError(error);
       return;
     })
-  )?.[n];
-  return a == null || isBuiltInOrDefaultStyle(a)
+  )?.[name];
+  return style == null || isBuiltInOrDefaultStyle(style)
     ? undefined
     : servedOutputStyleSchema().parse({
-        name: n,
-        prompt: a.prompt,
-        keepCodingInstructions: a.keepCodingInstructions,
+        name,
+        prompt: style.prompt,
+        keepCodingInstructions: style.keepCodingInstructions,
       });
 }
 //@ chunk-wy9dbk5f.js:49642-49897 placement
@@ -216,34 +223,34 @@ async function readServedOutputStyle(e, storageV5) {
  */
 var READPROJECTSETTINGS = "ReadProjectSettings";
 var projectSettingsInputSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     ...servedProjectSettingsSchema().shape,
-    respectGitignore: M().optional(),
+    respectGitignore: booleanSchema().optional(),
   }),
 );
 var projectSettingsStateSchema = DoctorLazy(() =>
   discriminatedUnion("state", [
-    u({
+    objectSchema({
       state: literal("absent"),
     }),
-    u({
+    objectSchema({
       state: literal("unreadable"),
     }),
-    u({
+    objectSchema({
       state: literal("read"),
       settings: projectSettingsInputSchema(),
     }),
   ]),
 );
 var readProjectSettingsResultSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     project: projectSettingsStateSchema(),
     local: projectSettingsStateSchema(),
     outputStyle: servedOutputStyleSchema(),
   }),
 );
 //@ chunk-wy9dbk5f.js:49897-50181 placement
-async function serveReadProjectSettings(e, r, n) {
+async function serveReadProjectSettings(input, signal, context) {
   let settingsSource = readSettingsSource("projectSettings");
   let settingsSource_2 = readSettingsSource("localSettings");
   return {
@@ -254,19 +261,19 @@ async function serveReadProjectSettings(e, r, n) {
       outputStyle: await readServedOutputStyle(
         (settingsSource_2.state === "read" ? settingsSource_2.settings.outputStyle : undefined) ??
           (settingsSource.state === "read" ? settingsSource.settings.outputStyle : undefined),
-        n.toolUseContext().storageV5,
+        context.toolUseContext().storageV5,
       ),
     },
   };
 }
 //@ chunk-wy9dbk5f.js:50181-50401 placement
-function readSettingsSource(e) {
-  let r = isSettingSourceEnabled(e) ? getSettingsFilePathForSource(e) : undefined;
-  if (r === undefined)
+function readSettingsSource(source) {
+  let filePath = isSettingSourceEnabled(source) ? getSettingsFilePathForSource(source) : undefined;
+  if (filePath === undefined)
     return {
       state: "absent",
     };
-  let { settings, loadState } = capModelSettings(parseSettingsFileUncached(r));
+  let { settings, loadState } = capModelSettings(parseSettingsFileUncached(filePath));
   if (settings === null)
     return {
       state: loadState === "absent" ? "absent" : "unreadable",

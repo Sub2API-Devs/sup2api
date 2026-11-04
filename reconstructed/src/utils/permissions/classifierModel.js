@@ -28,8 +28,8 @@ import { resolveClassifierMaxRetries } from "../../services/api/withRetry.js";
  * 分类器温度：环境变量 CLAUDE_CODE_AUTO_MODE_TEMPERATURE（有限数），默认 1。
  */
 function getClassifierTemperature() {
-  let e = Number(antEnv.CLAUDE_CODE_AUTO_MODE_TEMPERATURE);
-  return Number.isFinite(e) ? e : 1;
+  let configuredTemperature = Number(antEnv.CLAUDE_CODE_AUTO_MODE_TEMPERATURE);
+  return Number.isFinite(configuredTemperature) ? configuredTemperature : 1;
 }
 //@ chunk-e6aww6q8.js:2943440-2943520 placement
 function isOutcomeCodesEnabled() {
@@ -74,10 +74,10 @@ function resolveClassifierModel() {
     };
   }
   {
-    let s = vetClassifierModel(env.CLAUDE_CODE_AUTO_MODE_MODEL, "env");
-    if (s)
+    let envModel = vetClassifierModel(env.CLAUDE_CODE_AUTO_MODE_MODEL, "env");
+    if (envModel)
       return {
-        value: s,
+        value: envModel,
         src: "env",
       };
   }
@@ -113,10 +113,10 @@ function vetClassifierModel(model, source) {
         }
       : undefined;
   if (rejection === undefined) return model;
-  let s = `${source}:${model}`;
+  let skipKey = `${source}:${model}`;
   let { loggedPolicySkips } = classifierSessionState();
-  if (!loggedPolicySkips.has(s)) {
-    loggedPolicySkips.add(s);
+  if (!loggedPolicySkips.has(skipKey)) {
+    loggedPolicySkips.add(skipKey);
     logForDebugging(
       source === "env"
         ? `Auto mode classifier: ignoring CLAUDE_CODE_AUTO_MODE_MODEL=${model} because ${rejection.why}; using the default classifier model instead. ${rejection.next}`
@@ -131,37 +131,37 @@ function vetClassifierModel(model, source) {
 //@ chunk-e6aww6q8.js:2945012-2945409 placement
 function lookupModelMapping(mapping, options) {
   if (mapping == null || typeof mapping !== "object") return;
-  let r = options?.vet ?? ((h) => h);
-  let s = mainModelOverrideKeys();
-  for (let h of s) {
-    let ownProperty = getOwnProperty(mapping, h);
-    let S = ownProperty ? r(ownProperty) : undefined;
-    if (S) return S;
+  let vet = options?.vet ?? ((model) => model);
+  let modelKeys = mainModelOverrideKeys();
+  for (let modelKey of modelKeys) {
+    let ownProperty = getOwnProperty(mapping, modelKey);
+    let mapped = ownProperty ? vet(ownProperty) : undefined;
+    if (mapped) return mapped;
   }
   if (!options?.prefixPatterns) return;
-  for (let h of s) {
-    let y;
-    let S = 0;
+  for (let modelKey of modelKeys) {
+    let best;
+    let bestPrefixLength = 0;
     for (let [key, value] of Object.entries(mapping)) {
       if (!value || key.length <= 1 || !key.endsWith("*")) continue;
       let sliced = key.slice(0, -1);
-      if (!h.startsWith(sliced) || sliced.length <= S) continue;
-      let q = r(value);
-      if (q) {
-        y = q;
-        S = sliced.length;
+      if (!modelKey.startsWith(sliced) || sliced.length <= bestPrefixLength) continue;
+      let mapped = vet(value);
+      if (mapped) {
+        best = mapped;
+        bestPrefixLength = sliced.length;
       }
     }
-    if (y) return y;
+    if (best) return best;
   }
   return;
 }
 //@ chunk-e6aww6q8.js:2945409-2945445 placement
-function getFallbackClassifierModel(e) {
-  return resolveFallbackClassifierModel(e).value;
+function getFallbackClassifierModel(model) {
+  return resolveFallbackClassifierModel(model).value;
 }
 //@ chunk-e6aww6q8.js:2945445-2945496 placement
-function resolveFallbackClassifierModel(e) {
+function resolveFallbackClassifierModel(model) {
   return {
     value: undefined,
     src: "default",
@@ -182,11 +182,12 @@ function getProbeDemotionFallbackModel(probedModel) {
  * 取分类器的备用模型：外部默认模型走探测降级的备用，其他走配置的备用；与主模型相同则不返回。
  */
 function getClassifierFallbackModel(resolved) {
-  let n = resolved.externalDefault
+  let fallbackModel = resolved.externalDefault
     ? getProbeDemotionFallbackModel(resolved.value)
     : getFallbackClassifierModel(resolved.value);
-  return n !== undefined && strippedCanonicalName(n) !== strippedCanonicalName(resolved.value)
-    ? n
+  return fallbackModel !== undefined &&
+    strippedCanonicalName(fallbackModel) !== strippedCanonicalName(resolved.value)
+    ? fallbackModel
     : undefined;
 }
 //@ chunk-e6aww6q8.js:2945682-2945716 placement

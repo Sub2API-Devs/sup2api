@@ -15,13 +15,13 @@ import { nfc } from "./placedByName.js";
 /**
  * 判断给定文件中是否有与"按名称放置的文件"同名但 uuid 不同的冲突项。
  */
-function hasConflictingPlacedFile(e) {
-  let t = filesPlacedByNameRegistry();
+function hasConflictingPlacedFile(files) {
+  let registry = filesPlacedByNameRegistry();
   return (
-    t.size > 0 &&
-    e.some(({ fileUuid, name: a }) => {
-      let n = t.get(nfc(a));
-      return n !== undefined && n.fileUuid !== fileUuid.toLowerCase();
+    registry.size > 0 &&
+    files.some(({ fileUuid, name: fileName }) => {
+      let placed = registry.get(nfc(fileName));
+      return placed !== undefined && placed.fileUuid !== fileUuid.toLowerCase();
     })
   );
 }

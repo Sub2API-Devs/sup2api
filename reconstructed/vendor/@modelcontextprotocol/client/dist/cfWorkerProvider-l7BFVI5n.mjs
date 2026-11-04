@@ -5,77 +5,91 @@
  * pieces: chunk-dcmhvw5a.js (1), chunk-n332mrkv.js (2)
  * attribution: esm-fingerprint 2, esm-layout 1
  */
-import { xe, _e, require_ajv } from "./ajvProvider-BIwGVY6G.mjs";
+import { validationMetaSchema, simpleTypes, require_ajv } from "./ajvProvider-BIwGVY6G.mjs";
+import { deferInit, beginDeferredInits, runDeferredInits } from "../../../../runtime/deferred-init.js";
 
+// This module is the first evaluated of an import cycle of 2 modules closed by ./ajvProvider-BIwGVY6G.mjs (in the hooks worker thread);
+// the load-time work of the cycle's statements marked "deferred" waits until the cycle is complete (runtime/deferred-init.js).
+beginDeferredInits("worker:vendor/@modelcontextprotocol/client/dist/ajvProvider-BIwGVY6G.mjs");
+//@ chunk-dcmhvw5a.js:354157-354313 esm-fingerprint
+function countCodePointsInString(str, strLength) {
+  let i = 0;
+  for (let j = 0; j < strLength; j++) {
+    let charCode = str.charCodeAt(j);
+    if (
+      charCode >= 55296 &&
+      charCode <= 56319 &&
+      j + 1 < str.length &&
+      (str.charCodeAt(j + 1) & 64512) === 56320
+    )
+      j++;
+    i++;
+  }
+  return i;
+}
 //@ chunk-n332mrkv.js:24566-35916 esm-layout
-function b(
-  t,
-  {
-    instancePath: s = "",
-    parentData: z,
-    parentDataProperty: E,
-    rootData: c = t,
-    dynamicAnchors: i = {},
-  } = {},
+function validateValidationSchema(
+  data,
+  { instancePath = "", parentData, parentDataProperty, rootData = data, dynamicAnchors = {} } = {},
 ) {
-  let r = null;
-  let e = 0;
-  let evaluated = b.evaluated;
+  let vErrors = null;
+  let errorsCount = 0;
+  let evaluated = validateValidationSchema.evaluated;
   if (evaluated.dynamicProps) evaluated.props = undefined;
   if (evaluated.dynamicItems) evaluated.items = undefined;
-  if (!(t && typeof t == "object" && !Array.isArray(t)) && typeof t !== "boolean") {
-    b.errors = [
+  if (!(data && typeof data == "object" && !Array.isArray(data)) && typeof data !== "boolean") {
+    validateValidationSchema.errors = [
       {
-        instancePath: s,
+        instancePath,
         schemaPath: "#/type",
         keyword: "type",
         params: {
-          type: xe.type,
+          type: validationMetaSchema.type,
         },
         message: "must be object,boolean",
       },
     ];
     return false;
   }
-  if (!i.meta) i.meta = b;
-  if (e === 0) {
-    if (t && typeof t == "object" && !Array.isArray(t)) {
-      if (t.type !== undefined) {
-        let a = t.type;
-        let f = e;
-        let u = e;
-        let m = false;
-        let N = e;
+  if (!dynamicAnchors.meta) dynamicAnchors.meta = validateValidationSchema;
+  if (errorsCount === 0) {
+    if (data && typeof data == "object" && !Array.isArray(data)) {
+      if (data.type !== undefined) {
+        let typeValue = data.type;
+        let errsBeforeType = errorsCount;
+        let errsBeforeTypeAnyOf = errorsCount;
+        let isTypeAnyOfValid = false;
+        let errsBeforeTypeEnum = errorsCount;
         if (!(
-          a === "array" ||
-          a === "boolean" ||
-          a === "integer" ||
-          a === "null" ||
-          a === "number" ||
-          a === "object" ||
-          a === "string"
+          typeValue === "array" ||
+          typeValue === "boolean" ||
+          typeValue === "integer" ||
+          typeValue === "null" ||
+          typeValue === "number" ||
+          typeValue === "object" ||
+          typeValue === "string"
         )) {
-          let _ = {
-            instancePath: s + "/type",
+          let typeEnumError = {
+            instancePath: instancePath + "/type",
             schemaPath: "#/$defs/simpleTypes/enum",
             keyword: "enum",
             params: {
-              allowedValues: _e.enum,
+              allowedValues: simpleTypes.enum,
             },
             message: "must be equal to one of the allowed values",
           };
-          if (r === null) r = [_];
-          else r.push(_);
-          e++;
+          if (vErrors === null) vErrors = [typeEnumError];
+          else vErrors.push(typeEnumError);
+          errorsCount++;
         }
-        var d = N === e;
-        m = m || d;
-        let v = e;
-        if (e === v)
-          if (Array.isArray(a)) {
-            if (a.length < 1) {
-              let _ = {
-                instancePath: s + "/type",
+        var isTypeEnumValid = errsBeforeTypeEnum === errorsCount;
+        isTypeAnyOfValid = isTypeAnyOfValid || isTypeEnumValid;
+        let errsBeforeTypeArray = errorsCount;
+        if (errorsCount === errsBeforeTypeArray)
+          if (Array.isArray(typeValue)) {
+            if (typeValue.length < 1) {
+              let typeMinItemsError = {
+                instancePath: instancePath + "/type",
                 schemaPath: "#/properties/type/anyOf/1/minItems",
                 keyword: "minItems",
                 params: {
@@ -83,69 +97,73 @@ function b(
                 },
                 message: "must NOT have fewer than 1 items",
               };
-              if (r === null) r = [_];
-              else r.push(_);
-              e++;
+              if (vErrors === null) vErrors = [typeMinItemsError];
+              else vErrors.push(typeMinItemsError);
+              errorsCount++;
             } else {
-              var n = true;
-              let _ = a.length;
-              for (let j = 0; j < _; j++) {
-                let g = a[j];
-                let P = e;
+              var isTypeItemValid = true;
+              let typeItemCount = typeValue.length;
+              for (let typeIndex = 0; typeIndex < typeItemCount; typeIndex++) {
+                let typeItem = typeValue[typeIndex];
+                let errsBeforeTypeItem = errorsCount;
                 if (!(
-                  g === "array" ||
-                  g === "boolean" ||
-                  g === "integer" ||
-                  g === "null" ||
-                  g === "number" ||
-                  g === "object" ||
-                  g === "string"
+                  typeItem === "array" ||
+                  typeItem === "boolean" ||
+                  typeItem === "integer" ||
+                  typeItem === "null" ||
+                  typeItem === "number" ||
+                  typeItem === "object" ||
+                  typeItem === "string"
                 )) {
-                  let M = {
-                    instancePath: s + "/type/" + j,
+                  let typeItemEnumError = {
+                    instancePath: instancePath + "/type/" + typeIndex,
                     schemaPath: "#/$defs/simpleTypes/enum",
                     keyword: "enum",
                     params: {
-                      allowedValues: _e.enum,
+                      allowedValues: simpleTypes.enum,
                     },
                     message: "must be equal to one of the allowed values",
                   };
-                  if (r === null) r = [M];
-                  else r.push(M);
-                  e++;
+                  if (vErrors === null) vErrors = [typeItemEnumError];
+                  else vErrors.push(typeItemEnumError);
+                  errorsCount++;
                 }
-                var n = P === e;
-                if (!n) break;
+                var isTypeItemValid = errsBeforeTypeItem === errorsCount;
+                if (!isTypeItemValid) break;
               }
-              if (n) {
-                let j = a.length;
-                let g;
-                if (j > 1) {
-                  e: for (; j--;)
-                    for (g = j; g--;)
-                      if (require_ajv(a[j], a[g])) {
-                        let P = {
-                          instancePath: s + "/type",
+              if (isTypeItemValid) {
+                let typeItemIndex = typeValue.length;
+                let previousTypeIndex;
+                if (typeItemIndex > 1) {
+                  e: for (; typeItemIndex--;)
+                    for (previousTypeIndex = typeItemIndex; previousTypeIndex--;)
+                      if (require_ajv(typeValue[typeItemIndex], typeValue[previousTypeIndex])) {
+                        let typeUniqueItemError = {
+                          instancePath: instancePath + "/type",
                           schemaPath: "#/properties/type/anyOf/1/uniqueItems",
                           keyword: "uniqueItems",
                           params: {
-                            i: j,
-                            j: g,
+                            i: typeItemIndex,
+                            j: previousTypeIndex,
                           },
                           message:
-                            "must NOT have duplicate items (items ## " + g + " and " + j + " are identical)",
+                            "must NOT have duplicate items (items ## " +
+                            previousTypeIndex +
+                            " and " +
+                            typeItemIndex +
+                            " are identical)",
                         };
-                        if (r === null) r = [P];
-                        else r.push(P);
-                        e++;
+                        if (vErrors === null) vErrors = [typeUniqueItemError];
+                        else vErrors.push(typeUniqueItemError);
+                        errorsCount++;
                         break e;
                       }
                 }
               }
             }
           } else {
-            let _ = {
-              instancePath: s + "/type",
+            let typeArrayTypeError = {
+              instancePath: instancePath + "/type",
               schemaPath: "#/properties/type/anyOf/1/type",
               keyword: "type",
               params: {
@@ -153,41 +171,41 @@ function b(
               },
               message: "must be array",
             };
-            if (r === null) r = [_];
-            else r.push(_);
-            e++;
+            if (vErrors === null) vErrors = [typeArrayTypeError];
+            else vErrors.push(typeArrayTypeError);
+            errorsCount++;
           }
-        var d = v === e;
-        m = m || d;
-        if (!m) {
-          let _ = {
-            instancePath: s + "/type",
+        var isTypeEnumValid = errsBeforeTypeArray === errorsCount;
+        isTypeAnyOfValid = isTypeAnyOfValid || isTypeEnumValid;
+        if (!isTypeAnyOfValid) {
+          let typeAnyOfError = {
+            instancePath: instancePath + "/type",
             schemaPath: "#/properties/type/anyOf",
             keyword: "anyOf",
             params: {},
             message: "must match a schema in anyOf",
           };
-          if (r === null) r = [_];
-          else r.push(_);
-          e++;
-          b.errors = r;
+          if (vErrors === null) vErrors = [typeAnyOfError];
+          else vErrors.push(typeAnyOfError);
+          errorsCount++;
+          validateValidationSchema.errors = vErrors;
           return false;
         } else {
-          e = u;
-          if (r !== null)
-            if (u) r.length = u;
-            else r = null;
+          errorsCount = errsBeforeTypeAnyOf;
+          if (vErrors !== null)
+            if (errsBeforeTypeAnyOf) vErrors.length = errsBeforeTypeAnyOf;
+            else vErrors = null;
         }
-        var o = f === e;
-      } else var o = true;
-      if (o) {
-        if (t.enum !== undefined) {
-          let a = e;
-          if (e === a) {
-            if (!Array.isArray(t.enum)) {
-              b.errors = [
+        var isKeywordValid = errsBeforeType === errorsCount;
+      } else var isKeywordValid = true;
+      if (isKeywordValid) {
+        if (data.enum !== undefined) {
+          let errsBeforeEnum = errorsCount;
+          if (errorsCount === errsBeforeEnum) {
+            if (!Array.isArray(data.enum)) {
+              validateValidationSchema.errors = [
                 {
-                  instancePath: s + "/enum",
+                  instancePath: instancePath + "/enum",
                   schemaPath: "#/properties/enum/type",
                   keyword: "type",
                   params: {
@@ -199,18 +217,18 @@ function b(
               return false;
             }
           }
-          var o = a === e;
-        } else var o = true;
-        if (o) {
-          if (t.multipleOf !== undefined) {
-            let multipleOf = t.multipleOf;
-            let f = e;
-            if (e === f)
+          var isKeywordValid = errsBeforeEnum === errorsCount;
+        } else var isKeywordValid = true;
+        if (isKeywordValid) {
+          if (data.multipleOf !== undefined) {
+            let multipleOf = data.multipleOf;
+            let errsBeforeMultipleOf = errorsCount;
+            if (errorsCount === errsBeforeMultipleOf)
               if (typeof multipleOf == "number" && isFinite(multipleOf)) {
                 if (multipleOf <= 0 || isNaN(multipleOf)) {
-                  b.errors = [
+                  validateValidationSchema.errors = [
                     {
-                      instancePath: s + "/multipleOf",
+                      instancePath: instancePath + "/multipleOf",
                       schemaPath: "#/properties/multipleOf/exclusiveMinimum",
                       keyword: "exclusiveMinimum",
                       params: {
@@ -223,9 +241,9 @@ function b(
                   return false;
                 }
               } else {
-                b.errors = [
+                validateValidationSchema.errors = [
                   {
-                    instancePath: s + "/multipleOf",
+                    instancePath: instancePath + "/multipleOf",
                     schemaPath: "#/properties/multipleOf/type",
                     keyword: "type",
                     params: {
@@ -236,16 +254,16 @@ function b(
                 ];
                 return false;
               }
-            var o = f === e;
-          } else var o = true;
-          if (o) {
-            if (t.maximum !== undefined) {
-              let maximum = t.maximum;
-              let f = e;
+            var isKeywordValid = errsBeforeMultipleOf === errorsCount;
+          } else var isKeywordValid = true;
+          if (isKeywordValid) {
+            if (data.maximum !== undefined) {
+              let maximum = data.maximum;
+              let errsBeforeMaximum = errorsCount;
               if (!(typeof maximum == "number" && isFinite(maximum))) {
-                b.errors = [
+                validateValidationSchema.errors = [
                   {
-                    instancePath: s + "/maximum",
+                    instancePath: instancePath + "/maximum",
                     schemaPath: "#/properties/maximum/type",
                     keyword: "type",
                     params: {
@@ -256,16 +274,16 @@ function b(
                 ];
                 return false;
               }
-              var o = f === e;
-            } else var o = true;
-            if (o) {
-              if (t.exclusiveMaximum !== undefined) {
-                let exclusiveMaximum = t.exclusiveMaximum;
-                let f = e;
+              var isKeywordValid = errsBeforeMaximum === errorsCount;
+            } else var isKeywordValid = true;
+            if (isKeywordValid) {
+              if (data.exclusiveMaximum !== undefined) {
+                let exclusiveMaximum = data.exclusiveMaximum;
+                let errsBeforeExclusiveMaximum = errorsCount;
                 if (!(typeof exclusiveMaximum == "number" && isFinite(exclusiveMaximum))) {
-                  b.errors = [
+                  validateValidationSchema.errors = [
                     {
-                      instancePath: s + "/exclusiveMaximum",
+                      instancePath: instancePath + "/exclusiveMaximum",
                       schemaPath: "#/properties/exclusiveMaximum/type",
                       keyword: "type",
                       params: {
@@ -276,16 +294,16 @@ function b(
                   ];
                   return false;
                 }
-                var o = f === e;
-              } else var o = true;
-              if (o) {
-                if (t.minimum !== undefined) {
-                  let minimum = t.minimum;
-                  let f = e;
+                var isKeywordValid = errsBeforeExclusiveMaximum === errorsCount;
+              } else var isKeywordValid = true;
+              if (isKeywordValid) {
+                if (data.minimum !== undefined) {
+                  let minimum = data.minimum;
+                  let errsBeforeMinimum = errorsCount;
                   if (!(typeof minimum == "number" && isFinite(minimum))) {
-                    b.errors = [
+                    validateValidationSchema.errors = [
                       {
-                        instancePath: s + "/minimum",
+                        instancePath: instancePath + "/minimum",
                         schemaPath: "#/properties/minimum/type",
                         keyword: "type",
                         params: {
@@ -296,16 +314,16 @@ function b(
                     ];
                     return false;
                   }
-                  var o = f === e;
-                } else var o = true;
-                if (o) {
-                  if (t.exclusiveMinimum !== undefined) {
-                    let exclusiveMinimum = t.exclusiveMinimum;
-                    let f = e;
+                  var isKeywordValid = errsBeforeMinimum === errorsCount;
+                } else var isKeywordValid = true;
+                if (isKeywordValid) {
+                  if (data.exclusiveMinimum !== undefined) {
+                    let exclusiveMinimum = data.exclusiveMinimum;
+                    let errsBeforeExclusiveMinimum = errorsCount;
                     if (!(typeof exclusiveMinimum == "number" && isFinite(exclusiveMinimum))) {
-                      b.errors = [
+                      validateValidationSchema.errors = [
                         {
-                          instancePath: s + "/exclusiveMinimum",
+                          instancePath: instancePath + "/exclusiveMinimum",
                           schemaPath: "#/properties/exclusiveMinimum/type",
                           keyword: "type",
                           params: {
@@ -316,22 +334,22 @@ function b(
                       ];
                       return false;
                     }
-                    var o = f === e;
-                  } else var o = true;
-                  if (o) {
-                    if (t.maxLength !== undefined) {
-                      let maxLength = t.maxLength;
-                      let f = e;
-                      let u = e;
+                    var isKeywordValid = errsBeforeExclusiveMinimum === errorsCount;
+                  } else var isKeywordValid = true;
+                  if (isKeywordValid) {
+                    if (data.maxLength !== undefined) {
+                      let maxLength = data.maxLength;
+                      let errsBeforeMaxLength = errorsCount;
+                      let errsBeforeMaxLengthMinimum = errorsCount;
                       if (!(
                         typeof maxLength == "number" &&
                         !(maxLength % 1) &&
                         !isNaN(maxLength) &&
                         isFinite(maxLength)
                       )) {
-                        b.errors = [
+                        validateValidationSchema.errors = [
                           {
-                            instancePath: s + "/maxLength",
+                            instancePath: instancePath + "/maxLength",
                             schemaPath: "#/$defs/nonNegativeInteger/type",
                             keyword: "type",
                             params: {
@@ -342,12 +360,12 @@ function b(
                         ];
                         return false;
                       }
-                      if (e === u) {
+                      if (errorsCount === errsBeforeMaxLengthMinimum) {
                         if (typeof maxLength == "number" && isFinite(maxLength)) {
                           if (maxLength < 0 || isNaN(maxLength)) {
-                            b.errors = [
+                            validateValidationSchema.errors = [
                               {
-                                instancePath: s + "/maxLength",
+                                instancePath: instancePath + "/maxLength",
                                 schemaPath: "#/$defs/nonNegativeInteger/minimum",
                                 keyword: "minimum",
                                 params: {
@@ -361,22 +379,22 @@ function b(
                           }
                         }
                       }
-                      var o = f === e;
-                    } else var o = true;
-                    if (o) {
-                      if (t.minLength !== undefined) {
-                        let minLength = t.minLength;
-                        let f = e;
-                        let u = e;
+                      var isKeywordValid = errsBeforeMaxLength === errorsCount;
+                    } else var isKeywordValid = true;
+                    if (isKeywordValid) {
+                      if (data.minLength !== undefined) {
+                        let minLength = data.minLength;
+                        let errsBeforeMinLength = errorsCount;
+                        let errsBeforeMinLengthMinimum = errorsCount;
                         if (!(
                           typeof minLength == "number" &&
                           !(minLength % 1) &&
                           !isNaN(minLength) &&
                           isFinite(minLength)
                         )) {
-                          b.errors = [
+                          validateValidationSchema.errors = [
                             {
-                              instancePath: s + "/minLength",
+                              instancePath: instancePath + "/minLength",
                               schemaPath: "#/$defs/nonNegativeIntegerDefault0/type",
                               keyword: "type",
                               params: {
@@ -387,12 +405,12 @@ function b(
                           ];
                           return false;
                         }
-                        if (e === u) {
+                        if (errorsCount === errsBeforeMinLengthMinimum) {
                           if (typeof minLength == "number" && isFinite(minLength)) {
                             if (minLength < 0 || isNaN(minLength)) {
-                              b.errors = [
+                              validateValidationSchema.errors = [
                                 {
-                                  instancePath: s + "/minLength",
+                                  instancePath: instancePath + "/minLength",
                                   schemaPath: "#/$defs/nonNegativeIntegerDefault0/minimum",
                                   keyword: "minimum",
                                   params: {
@@ -406,17 +424,17 @@ function b(
                             }
                           }
                         }
-                        var o = f === e;
-                      } else var o = true;
-                      if (o) {
-                        if (t.pattern !== undefined) {
-                          let a = e;
-                          if (e === a) {
-                            if (e === a) {
-                              if (typeof t.pattern !== "string") {
-                                b.errors = [
+                        var isKeywordValid = errsBeforeMinLength === errorsCount;
+                      } else var isKeywordValid = true;
+                      if (isKeywordValid) {
+                        if (data.pattern !== undefined) {
+                          let errsBeforePattern = errorsCount;
+                          if (errorsCount === errsBeforePattern) {
+                            if (errorsCount === errsBeforePattern) {
+                              if (typeof data.pattern !== "string") {
+                                validateValidationSchema.errors = [
                                   {
-                                    instancePath: s + "/pattern",
+                                    instancePath: instancePath + "/pattern",
                                     schemaPath: "#/properties/pattern/type",
                                     keyword: "type",
                                     params: {
@@ -429,22 +447,22 @@ function b(
                               }
                             }
                           }
-                          var o = a === e;
-                        } else var o = true;
-                        if (o) {
-                          if (t.maxItems !== undefined) {
-                            let maxItems = t.maxItems;
-                            let f = e;
-                            let u = e;
+                          var isKeywordValid = errsBeforePattern === errorsCount;
+                        } else var isKeywordValid = true;
+                        if (isKeywordValid) {
+                          if (data.maxItems !== undefined) {
+                            let maxItems = data.maxItems;
+                            let errsBeforeMaxItems = errorsCount;
+                            let errsBeforeMaxItemsMinimum = errorsCount;
                             if (!(
                               typeof maxItems == "number" &&
                               !(maxItems % 1) &&
                               !isNaN(maxItems) &&
                               isFinite(maxItems)
                             )) {
-                              b.errors = [
+                              validateValidationSchema.errors = [
                                 {
-                                  instancePath: s + "/maxItems",
+                                  instancePath: instancePath + "/maxItems",
                                   schemaPath: "#/$defs/nonNegativeInteger/type",
                                   keyword: "type",
                                   params: {
@@ -455,12 +473,12 @@ function b(
                               ];
                               return false;
                             }
-                            if (e === u) {
+                            if (errorsCount === errsBeforeMaxItemsMinimum) {
                               if (typeof maxItems == "number" && isFinite(maxItems)) {
                                 if (maxItems < 0 || isNaN(maxItems)) {
-                                  b.errors = [
+                                  validateValidationSchema.errors = [
                                     {
-                                      instancePath: s + "/maxItems",
+                                      instancePath: instancePath + "/maxItems",
                                       schemaPath: "#/$defs/nonNegativeInteger/minimum",
                                       keyword: "minimum",
                                       params: {
@@ -474,22 +492,22 @@ function b(
                                 }
                               }
                             }
-                            var o = f === e;
-                          } else var o = true;
-                          if (o) {
-                            if (t.minItems !== undefined) {
-                              let minItems = t.minItems;
-                              let f = e;
-                              let u = e;
+                            var isKeywordValid = errsBeforeMaxItems === errorsCount;
+                          } else var isKeywordValid = true;
+                          if (isKeywordValid) {
+                            if (data.minItems !== undefined) {
+                              let minItems = data.minItems;
+                              let errsBeforeMinItems = errorsCount;
+                              let errsBeforeMinItemsMinimum = errorsCount;
                               if (!(
                                 typeof minItems == "number" &&
                                 !(minItems % 1) &&
                                 !isNaN(minItems) &&
                                 isFinite(minItems)
                               )) {
-                                b.errors = [
+                                validateValidationSchema.errors = [
                                   {
-                                    instancePath: s + "/minItems",
+                                    instancePath: instancePath + "/minItems",
                                     schemaPath: "#/$defs/nonNegativeIntegerDefault0/type",
                                     keyword: "type",
                                     params: {
@@ -500,12 +518,12 @@ function b(
                                 ];
                                 return false;
                               }
-                              if (e === u) {
+                              if (errorsCount === errsBeforeMinItemsMinimum) {
                                 if (typeof minItems == "number" && isFinite(minItems)) {
                                   if (minItems < 0 || isNaN(minItems)) {
-                                    b.errors = [
+                                    validateValidationSchema.errors = [
                                       {
-                                        instancePath: s + "/minItems",
+                                        instancePath: instancePath + "/minItems",
                                         schemaPath: "#/$defs/nonNegativeIntegerDefault0/minimum",
                                         keyword: "minimum",
                                         params: {
@@ -519,15 +537,15 @@ function b(
                                   }
                                 }
                               }
-                              var o = f === e;
-                            } else var o = true;
-                            if (o) {
-                              if (t.uniqueItems !== undefined) {
-                                let a = e;
-                                if (typeof t.uniqueItems !== "boolean") {
-                                  b.errors = [
+                              var isKeywordValid = errsBeforeMinItems === errorsCount;
+                            } else var isKeywordValid = true;
+                            if (isKeywordValid) {
+                              if (data.uniqueItems !== undefined) {
+                                let errsBeforeUniqueItems = errorsCount;
+                                if (typeof data.uniqueItems !== "boolean") {
+                                  validateValidationSchema.errors = [
                                     {
-                                      instancePath: s + "/uniqueItems",
+                                      instancePath: instancePath + "/uniqueItems",
                                       schemaPath: "#/properties/uniqueItems/type",
                                       keyword: "type",
                                       params: {
@@ -538,22 +556,22 @@ function b(
                                   ];
                                   return false;
                                 }
-                                var o = a === e;
-                              } else var o = true;
-                              if (o) {
-                                if (t.maxContains !== undefined) {
-                                  let maxContains = t.maxContains;
-                                  let f = e;
-                                  let u = e;
+                                var isKeywordValid = errsBeforeUniqueItems === errorsCount;
+                              } else var isKeywordValid = true;
+                              if (isKeywordValid) {
+                                if (data.maxContains !== undefined) {
+                                  let maxContains = data.maxContains;
+                                  let errsBeforeMaxContains = errorsCount;
+                                  let errsBeforeMaxContainsMinimum = errorsCount;
                                   if (!(
                                     typeof maxContains == "number" &&
                                     !(maxContains % 1) &&
                                     !isNaN(maxContains) &&
                                     isFinite(maxContains)
                                   )) {
-                                    b.errors = [
+                                    validateValidationSchema.errors = [
                                       {
-                                        instancePath: s + "/maxContains",
+                                        instancePath: instancePath + "/maxContains",
                                         schemaPath: "#/$defs/nonNegativeInteger/type",
                                         keyword: "type",
                                         params: {
@@ -564,12 +582,12 @@ function b(
                                     ];
                                     return false;
                                   }
-                                  if (e === u) {
+                                  if (errorsCount === errsBeforeMaxContainsMinimum) {
                                     if (typeof maxContains == "number" && isFinite(maxContains)) {
                                       if (maxContains < 0 || isNaN(maxContains)) {
-                                        b.errors = [
+                                        validateValidationSchema.errors = [
                                           {
-                                            instancePath: s + "/maxContains",
+                                            instancePath: instancePath + "/maxContains",
                                             schemaPath: "#/$defs/nonNegativeInteger/minimum",
                                             keyword: "minimum",
                                             params: {
@@ -583,22 +601,22 @@ function b(
                                       }
                                     }
                                   }
-                                  var o = f === e;
-                                } else var o = true;
-                                if (o) {
-                                  if (t.minContains !== undefined) {
-                                    let minContains = t.minContains;
-                                    let f = e;
-                                    let u = e;
+                                  var isKeywordValid = errsBeforeMaxContains === errorsCount;
+                                } else var isKeywordValid = true;
+                                if (isKeywordValid) {
+                                  if (data.minContains !== undefined) {
+                                    let minContains = data.minContains;
+                                    let errsBeforeMinContains = errorsCount;
+                                    let errsBeforeMinContainsMinimum = errorsCount;
                                     if (!(
                                       typeof minContains == "number" &&
                                       !(minContains % 1) &&
                                       !isNaN(minContains) &&
                                       isFinite(minContains)
                                     )) {
-                                      b.errors = [
+                                      validateValidationSchema.errors = [
                                         {
-                                          instancePath: s + "/minContains",
+                                          instancePath: instancePath + "/minContains",
                                           schemaPath: "#/$defs/nonNegativeInteger/type",
                                           keyword: "type",
                                           params: {
@@ -609,12 +627,12 @@ function b(
                                       ];
                                       return false;
                                     }
-                                    if (e === u) {
+                                    if (errorsCount === errsBeforeMinContainsMinimum) {
                                       if (typeof minContains == "number" && isFinite(minContains)) {
                                         if (minContains < 0 || isNaN(minContains)) {
-                                          b.errors = [
+                                          validateValidationSchema.errors = [
                                             {
-                                              instancePath: s + "/minContains",
+                                              instancePath: instancePath + "/minContains",
                                               schemaPath: "#/$defs/nonNegativeInteger/minimum",
                                               keyword: "minimum",
                                               params: {
@@ -628,22 +646,22 @@ function b(
                                         }
                                       }
                                     }
-                                    var o = f === e;
-                                  } else var o = true;
-                                  if (o) {
-                                    if (t.maxProperties !== undefined) {
-                                      let maxProperties = t.maxProperties;
-                                      let f = e;
-                                      let u = e;
+                                    var isKeywordValid = errsBeforeMinContains === errorsCount;
+                                  } else var isKeywordValid = true;
+                                  if (isKeywordValid) {
+                                    if (data.maxProperties !== undefined) {
+                                      let maxProperties = data.maxProperties;
+                                      let errsBeforeMaxProperties = errorsCount;
+                                      let errsBeforeMaxPropertiesMinimum = errorsCount;
                                       if (!(
                                         typeof maxProperties == "number" &&
                                         !(maxProperties % 1) &&
                                         !isNaN(maxProperties) &&
                                         isFinite(maxProperties)
                                       )) {
-                                        b.errors = [
+                                        validateValidationSchema.errors = [
                                           {
-                                            instancePath: s + "/maxProperties",
+                                            instancePath: instancePath + "/maxProperties",
                                             schemaPath: "#/$defs/nonNegativeInteger/type",
                                             keyword: "type",
                                             params: {
@@ -654,12 +672,12 @@ function b(
                                         ];
                                         return false;
                                       }
-                                      if (e === u) {
+                                      if (errorsCount === errsBeforeMaxPropertiesMinimum) {
                                         if (typeof maxProperties == "number" && isFinite(maxProperties)) {
                                           if (maxProperties < 0 || isNaN(maxProperties)) {
-                                            b.errors = [
+                                            validateValidationSchema.errors = [
                                               {
-                                                instancePath: s + "/maxProperties",
+                                                instancePath: instancePath + "/maxProperties",
                                                 schemaPath: "#/$defs/nonNegativeInteger/minimum",
                                                 keyword: "minimum",
                                                 params: {
@@ -673,22 +691,22 @@ function b(
                                           }
                                         }
                                       }
-                                      var o = f === e;
-                                    } else var o = true;
-                                    if (o) {
-                                      if (t.minProperties !== undefined) {
-                                        let minProperties = t.minProperties;
-                                        let f = e;
-                                        let u = e;
+                                      var isKeywordValid = errsBeforeMaxProperties === errorsCount;
+                                    } else var isKeywordValid = true;
+                                    if (isKeywordValid) {
+                                      if (data.minProperties !== undefined) {
+                                        let minProperties = data.minProperties;
+                                        let errsBeforeMinProperties = errorsCount;
+                                        let errsBeforeMinPropertiesMinimum = errorsCount;
                                         if (!(
                                           typeof minProperties == "number" &&
                                           !(minProperties % 1) &&
                                           !isNaN(minProperties) &&
                                           isFinite(minProperties)
                                         )) {
-                                          b.errors = [
+                                          validateValidationSchema.errors = [
                                             {
-                                              instancePath: s + "/minProperties",
+                                              instancePath: instancePath + "/minProperties",
                                               schemaPath: "#/$defs/nonNegativeIntegerDefault0/type",
                                               keyword: "type",
                                               params: {
@@ -699,12 +717,12 @@ function b(
                                           ];
                                           return false;
                                         }
-                                        if (e === u) {
+                                        if (errorsCount === errsBeforeMinPropertiesMinimum) {
                                           if (typeof minProperties == "number" && isFinite(minProperties)) {
                                             if (minProperties < 0 || isNaN(minProperties)) {
-                                              b.errors = [
+                                              validateValidationSchema.errors = [
                                                 {
-                                                  instancePath: s + "/minProperties",
+                                                  instancePath: instancePath + "/minProperties",
                                                   schemaPath: "#/$defs/nonNegativeIntegerDefault0/minimum",
                                                   keyword: "minimum",
                                                   params: {
@@ -718,22 +736,22 @@ function b(
                                             }
                                           }
                                         }
-                                        var o = f === e;
-                                      } else var o = true;
-                                      if (o) {
-                                        if (t.required !== undefined) {
-                                          let required = t.required;
-                                          let f = e;
-                                          if (e === e)
+                                        var isKeywordValid = errsBeforeMinProperties === errorsCount;
+                                      } else var isKeywordValid = true;
+                                      if (isKeywordValid) {
+                                        if (data.required !== undefined) {
+                                          let required = data.required;
+                                          let errsBeforeRequired = errorsCount;
+                                          if (errorsCount === errorsCount)
                                             if (Array.isArray(required)) {
-                                              var w = true;
-                                              let N = required.length;
-                                              for (let j = 0; j < N; j++) {
-                                                let _ = e;
+                                              var isRequiredItemValid = true;
+                                              let requiredItemCount = required.length;
+                                              for (let j = 0; j < requiredItemCount; j++) {
+                                                let errsBeforeRequiredItem = errorsCount;
                                                 if (typeof required[j] !== "string") {
-                                                  b.errors = [
+                                                  validateValidationSchema.errors = [
                                                     {
-                                                      instancePath: s + "/required/" + j,
+                                                      instancePath: instancePath + "/required/" + j,
                                                       schemaPath: "#/$defs/stringArray/items/type",
                                                       keyword: "type",
                                                       params: {
@@ -744,47 +762,48 @@ function b(
                                                   ];
                                                   return false;
                                                 }
-                                                var w = _ === e;
-                                                if (!w) break;
+                                                var isRequiredItemValid =
+                                                  errsBeforeRequiredItem === errorsCount;
+                                                if (!isRequiredItemValid) break;
                                               }
-                                              if (w) {
-                                                let v = required.length;
-                                                let _;
-                                                if (v > 1) {
-                                                  let j = {};
-                                                  for (; v--;) {
-                                                    let g = required[v];
-                                                    if (typeof g !== "string") continue;
-                                                    if (typeof j[g] == "number") {
-                                                      _ = j[g];
-                                                      b.errors = [
+                                              if (isRequiredItemValid) {
+                                                let requiredItemIndex = required.length;
+                                                let duplicateIndex;
+                                                if (requiredItemIndex > 1) {
+                                                  let seenRequiredItems = {};
+                                                  for (; requiredItemIndex--;) {
+                                                    let requiredItem = required[requiredItemIndex];
+                                                    if (typeof requiredItem !== "string") continue;
+                                                    if (typeof seenRequiredItems[requiredItem] == "number") {
+                                                      duplicateIndex = seenRequiredItems[requiredItem];
+                                                      validateValidationSchema.errors = [
                                                         {
-                                                          instancePath: s + "/required",
+                                                          instancePath: instancePath + "/required",
                                                           schemaPath: "#/$defs/stringArray/uniqueItems",
                                                           keyword: "uniqueItems",
                                                           params: {
-                                                            i: v,
-                                                            j: _,
+                                                            i: requiredItemIndex,
+                                                            j: duplicateIndex,
                                                           },
                                                           message:
                                                             "must NOT have duplicate items (items ## " +
-                                                            _ +
+                                                            duplicateIndex +
                                                             " and " +
-                                                            v +
+                                                            requiredItemIndex +
                                                             " are identical)",
                                                         },
                                                       ];
                                                       return false;
                                                       break;
                                                     }
-                                                    j[g] = v;
+                                                    seenRequiredItems[requiredItem] = requiredItemIndex;
                                                   }
                                                 }
                                               }
                                             } else {
-                                              b.errors = [
+                                              validateValidationSchema.errors = [
                                                 {
-                                                  instancePath: s + "/required",
+                                                  instancePath: instancePath + "/required",
                                                   schemaPath: "#/$defs/stringArray/type",
                                                   keyword: "type",
                                                   params: {
@@ -795,32 +814,32 @@ function b(
                                               ];
                                               return false;
                                             }
-                                          var o = f === e;
-                                        } else var o = true;
-                                        if (o)
-                                          if (t.dependentRequired !== undefined) {
-                                            let dependentRequired = t.dependentRequired;
-                                            let f = e;
-                                            if (e === f)
+                                          var isKeywordValid = errsBeforeRequired === errorsCount;
+                                        } else var isKeywordValid = true;
+                                        if (isKeywordValid)
+                                          if (data.dependentRequired !== undefined) {
+                                            let dependentRequired = data.dependentRequired;
+                                            let errsBeforeDependentRequired = errorsCount;
+                                            if (errorsCount === errsBeforeDependentRequired)
                                               if (
                                                 dependentRequired &&
                                                 typeof dependentRequired == "object" &&
                                                 !Array.isArray(dependentRequired)
                                               )
                                                 for (let key in dependentRequired) {
-                                                  let N = dependentRequired[key];
-                                                  let v = e;
-                                                  if (e === e)
-                                                    if (Array.isArray(N)) {
-                                                      var k = true;
-                                                      let j = N.length;
-                                                      for (let idx = 0; idx < j; idx++) {
-                                                        let P = e;
-                                                        if (typeof N[idx] !== "string") {
-                                                          b.errors = [
+                                                  let dependentValue = dependentRequired[key];
+                                                  let errsBeforeDependentValue = errorsCount;
+                                                  if (errorsCount === errorsCount)
+                                                    if (Array.isArray(dependentValue)) {
+                                                      var isDependentItemValid = true;
+                                                      let dependentItemCount = dependentValue.length;
+                                                      for (let idx = 0; idx < dependentItemCount; idx++) {
+                                                        let errsBeforeDependentItem = errorsCount;
+                                                        if (typeof dependentValue[idx] !== "string") {
+                                                          validateValidationSchema.errors = [
                                                             {
                                                               instancePath:
-                                                                s +
+                                                                instancePath +
                                                                 "/dependentRequired/" +
                                                                 key.replace(/~/g, "~0").replace(/\//g, "~1") +
                                                                 "/" +
@@ -835,23 +854,29 @@ function b(
                                                           ];
                                                           return false;
                                                         }
-                                                        var k = P === e;
-                                                        if (!k) break;
+                                                        var isDependentItemValid =
+                                                          errsBeforeDependentItem === errorsCount;
+                                                        if (!isDependentItemValid) break;
                                                       }
-                                                      if (k) {
-                                                        let g = N.length;
-                                                        let P;
-                                                        if (g > 1) {
-                                                          let S = {};
-                                                          for (; g--;) {
-                                                            let M = N[g];
-                                                            if (typeof M !== "string") continue;
-                                                            if (typeof S[M] == "number") {
-                                                              P = S[M];
-                                                              b.errors = [
+                                                      if (isDependentItemValid) {
+                                                        let dependentItemIndex = dependentValue.length;
+                                                        let dependentDuplicateIndex;
+                                                        if (dependentItemIndex > 1) {
+                                                          let seenDependentItems = {};
+                                                          for (; dependentItemIndex--;) {
+                                                            let dependentItem =
+                                                              dependentValue[dependentItemIndex];
+                                                            if (typeof dependentItem !== "string") continue;
+                                                            if (
+                                                              typeof seenDependentItems[dependentItem] ==
+                                                              "number"
+                                                            ) {
+                                                              dependentDuplicateIndex =
+                                                                seenDependentItems[dependentItem];
+                                                              validateValidationSchema.errors = [
                                                                 {
                                                                   instancePath:
-                                                                    s +
+                                                                    instancePath +
                                                                     "/dependentRequired/" +
                                                                     key
                                                                       .replace(/~/g, "~0")
@@ -860,29 +885,30 @@ function b(
                                                                     "#/$defs/stringArray/uniqueItems",
                                                                   keyword: "uniqueItems",
                                                                   params: {
-                                                                    i: g,
-                                                                    j: P,
+                                                                    i: dependentItemIndex,
+                                                                    j: dependentDuplicateIndex,
                                                                   },
                                                                   message:
                                                                     "must NOT have duplicate items (items ## " +
-                                                                    P +
+                                                                    dependentDuplicateIndex +
                                                                     " and " +
-                                                                    g +
+                                                                    dependentItemIndex +
                                                                     " are identical)",
                                                                 },
                                                               ];
                                                               return false;
                                                               break;
                                                             }
-                                                            S[M] = g;
+                                                            seenDependentItems[dependentItem] =
+                                                              dependentItemIndex;
                                                           }
                                                         }
                                                       }
                                                     } else {
-                                                      b.errors = [
+                                                      validateValidationSchema.errors = [
                                                         {
                                                           instancePath:
-                                                            s +
+                                                            instancePath +
                                                             "/dependentRequired/" +
                                                             key.replace(/~/g, "~0").replace(/\//g, "~1"),
                                                           schemaPath: "#/$defs/stringArray/type",
@@ -895,13 +921,14 @@ function b(
                                                       ];
                                                       return false;
                                                     }
-                                                  var I = v === e;
-                                                  if (!I) break;
+                                                  var isDependentEntryValid =
+                                                    errsBeforeDependentValue === errorsCount;
+                                                  if (!isDependentEntryValid) break;
                                                 }
                                               else {
-                                                b.errors = [
+                                                validateValidationSchema.errors = [
                                                   {
-                                                    instancePath: s + "/dependentRequired",
+                                                    instancePath: instancePath + "/dependentRequired",
                                                     schemaPath: "#/properties/dependentRequired/type",
                                                     keyword: "type",
                                                     params: {
@@ -912,8 +939,8 @@ function b(
                                                 ];
                                                 return false;
                                               }
-                                            var o = f === e;
-                                          } else var o = true;
+                                            var isKeywordValid = errsBeforeDependentRequired === errorsCount;
+                                          } else var isKeywordValid = true;
                                       }
                                     }
                                   }
@@ -933,45 +960,41 @@ function b(
       }
     }
   }
-  b.errors = r;
-  return e === 0;
+  validateValidationSchema.errors = vErrors;
+  return errorsCount === 0;
 }
 //@ chunk-n332mrkv.js:35916-36244 esm-fingerprint
-b.evaluated = {
-  props: {
-    type: true,
-    const: true,
-    enum: true,
-    multipleOf: true,
-    maximum: true,
-    exclusiveMaximum: true,
-    minimum: true,
-    exclusiveMinimum: true,
-    maxLength: true,
-    minLength: true,
-    pattern: true,
-    maxItems: true,
-    minItems: true,
-    uniqueItems: true,
-    maxContains: true,
-    minContains: true,
-    maxProperties: true,
-    minProperties: true,
-    required: true,
-    dependentRequired: true,
-  },
-  dynamicProps: false,
-  dynamicItems: false,
-};
-//@ chunk-dcmhvw5a.js:354157-354313 esm-fingerprint
-function dt(e, n) {
-  let i = 0;
-  for (let j = 0; j < n; j++) {
-    let charCode = e.charCodeAt(j);
-    if (charCode >= 55296 && charCode <= 56319 && j + 1 < e.length && (e.charCodeAt(j + 1) & 64512) === 56320)
-      j++;
-    i++;
-  }
-  return i;
-}
-export { dt, b };
+// deferred: uses validateValidationSchema of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-n332mrkv.js:35916", () => {
+  validateValidationSchema.evaluated = {
+    props: {
+      type: true,
+      const: true,
+      enum: true,
+      multipleOf: true,
+      maximum: true,
+      exclusiveMaximum: true,
+      minimum: true,
+      exclusiveMinimum: true,
+      maxLength: true,
+      minLength: true,
+      pattern: true,
+      maxItems: true,
+      minItems: true,
+      uniqueItems: true,
+      maxContains: true,
+      minContains: true,
+      maxProperties: true,
+      minProperties: true,
+      required: true,
+      dependentRequired: true,
+    },
+    dynamicProps: false,
+    dynamicItems: false,
+  };
+});
+
+// The import cycle this module closes (2 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("vendor/@modelcontextprotocol/client/dist/cfWorkerProvider-l7BFVI5n.mjs");
+export { countCodePointsInString, validateValidationSchema };

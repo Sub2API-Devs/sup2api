@@ -15,34 +15,34 @@ var TOKEN_REFILL_MS = 2000;
 /**
  * 创建令牌桶限流器。
  */
-function createTokenBucket(m, n, now = Date.now) {
-  let e = m;
-  let o = now();
-  function r() {
-    let k = now();
-    let floored = Math.floor((k - o) / n);
+function createTokenBucket(capacity, msPerToken, now = Date.now) {
+  let tokens = capacity;
+  let lastRefill = now();
+  function refill() {
+    let now_2 = now();
+    let floored = Math.floor((now_2 - lastRefill) / msPerToken);
     if (floored > 0) {
-      e = Math.min(m, e + floored);
-      o += floored * n;
+      tokens = Math.min(capacity, tokens + floored);
+      lastRefill += floored * msPerToken;
     }
   }
   return {
     tryConsume() {
-      r();
-      if (e > 0) {
-        e--;
+      refill();
+      if (tokens > 0) {
+        tokens--;
         return true;
       }
       return false;
     },
     tokens() {
-      r();
-      return e;
+      refill();
+      return tokens;
     },
     msUntilToken() {
-      r();
-      if (e > 0) return 0;
-      return Math.max(0, o + n - now());
+      refill();
+      if (tokens > 0) return 0;
+      return Math.max(0, lastRefill + msPerToken - now());
     },
   };
 }

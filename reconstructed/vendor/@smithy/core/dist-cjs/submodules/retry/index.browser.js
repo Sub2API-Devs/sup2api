@@ -5,10 +5,10 @@
  * pieces: chunk-edce4vxq.js (2)
  * attribution: cjs-fingerprint+context 1, cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-edce4vxq.js:120842-122470 cjs-fingerprint+context
-var require_index_browser_2 = x(function (cjsExports) {
+var require_index_browser_2 = __commonJS(function (cjsExports) {
   var CLOCK_SKEW_ERROR_CODES = [
     "AuthFailure",
     "InvalidSignatureException",
@@ -33,7 +33,7 @@ var require_index_browser_2 = x(function (cjsExports) {
     "TooManyRequestsException",
     "TransactionInProgressException",
   ];
-  var Pu = ["TimeoutError", "RequestTimeout", "RequestTimeoutException"];
+  var RETRYABLE_TIMEOUT_ERROR_CODES = ["TimeoutError", "RequestTimeout", "RequestTimeoutException"];
   var TRANSIENT_ERROR_STATUS_CODES = [500, 502, 503, 504];
   var NODEJS_TIMEOUT_ERROR_CODES = ["ECONNRESET", "ECONNREFUSED", "EPIPE", "ETIMEDOUT"];
   var NODEJS_NETWORK_ERROR_CODES = ["EHOSTUNREACH", "ENETUNREACH", "ENOTFOUND"];
@@ -58,7 +58,7 @@ var require_index_browser_2 = x(function (cjsExports) {
   var isTransientError = (error, depth = 0) =>
     isRetryableByTrait(error) ||
     isClockSkewCorrectedError(error) ||
-    Pu.includes(error.name) ||
+    RETRYABLE_TIMEOUT_ERROR_CODES.includes(error.name) ||
     NODEJS_TIMEOUT_ERROR_CODES.includes(error?.code || "") ||
     NODEJS_NETWORK_ERROR_CODES.includes(error?.code || "") ||
     TRANSIENT_ERROR_STATUS_CODES.includes(error.$metadata?.httpStatusCode || 0) ||
@@ -81,8 +81,8 @@ var require_index_browser_2 = x(function (cjsExports) {
   cjsExports.isTransientError = isTransientError;
 });
 //@ chunk-edce4vxq.js:122470-128258 cjs-fingerprint
-var require_index_browser = x(function (cjsExports) {
-  var Wu = require_index_browser_2();
+var require_index_browser = __commonJS(function (cjsExports) {
+  var retryableErrorCodes = require_index_browser_2();
   cjsExports.RETRY_MODES = undefined;
   (function (RETRY_MODES) {
     RETRY_MODES.STANDARD = "standard";
@@ -145,21 +145,21 @@ var require_index_browser = x(function (cjsExports) {
       this.currentCapacity = Math.min(this.maxCapacity, this.currentCapacity + fillAmount);
       this.lastTimestamp = timestamp;
     }
-    updateClientSendingRate(e) {
-      let t;
+    updateClientSendingRate(error) {
+      let rateToUse;
       this.updateMeasuredRate();
-      if (Wu.isThrottlingError(e)) {
-        let s = !this.enabled ? this.measuredTxRate : Math.min(this.measuredTxRate, this.fillRate);
-        this.lastMaxRate = s;
+      if (retryableErrorCodes.isThrottlingError(error)) {
+        let measuredRate = !this.enabled ? this.measuredTxRate : Math.min(this.measuredTxRate, this.fillRate);
+        this.lastMaxRate = measuredRate;
         this.calculateTimeWindow();
         this.lastThrottleTime = this.getCurrentTimeInSeconds();
-        t = this.cubicThrottle(s);
+        rateToUse = this.cubicThrottle(measuredRate);
         this.enableTokenBucket();
       } else {
         this.calculateTimeWindow();
-        t = this.cubicSuccess(this.getCurrentTimeInSeconds());
+        rateToUse = this.cubicSuccess(this.getCurrentTimeInSeconds());
       }
-      let min = Math.min(t, 2 * this.measuredTxRate);
+      let min = Math.min(rateToUse, 2 * this.measuredTxRate);
       this.updateTokenBucketRate(min);
     }
     calculateTimeWindow() {
@@ -202,42 +202,43 @@ var require_index_browser = x(function (cjsExports) {
       return parseFloat(num.toFixed(8));
     }
   }
-  var je = 100;
-  var cr = 20000;
-  var Nn = 500;
-  var ar = 500;
-  var Tn = 5;
-  var _n = 10;
+  var DEFAULT_RETRY_DELAY_BASE = 100;
+  var MAXIMUM_RETRY_DELAY = 20000;
+  var THROTTLING_RETRY_DELAY_BASE = 500;
+  var INITIAL_RETRY_TOKENS = 500;
+  var RETRY_COST = 5;
+  var TIMEOUT_RETRY_COST = 10;
   var NO_RETRY_INCREMENT = 1;
-  var Qu = "amz-sdk-invocation-id";
-  var Yu = "amz-sdk-request";
-  var Ju = () => {
-    let e = je;
+  var INVOCATION_ID_HEADER = "amz-sdk-invocation-id";
+  var REQUEST_HEADER = "amz-sdk-request";
+  var createDefaultRetryBackoffStrategy = () => {
+    let delayBase = DEFAULT_RETRY_DELAY_BASE;
     return {
-      computeNextBackoffDelay: (s) => Math.floor(Math.min(cr, Math.random() * 2 ** s * e)),
-      setDelayBase: (s) => {
-        e = s;
+      computeNextBackoffDelay: (attempt) =>
+        Math.floor(Math.min(MAXIMUM_RETRY_DELAY, Math.random() * 2 ** attempt * delayBase)),
+      setDelayBase: (base) => {
+        delayBase = base;
       },
     };
   };
-  var bn = ({ retryDelay, retryCount, retryCost }) => ({
+  var createRetryToken = ({ retryDelay, retryCount, retryCost }) => ({
     getRetryCount: () => retryCount,
-    getRetryDelay: () => Math.min(cr, retryDelay),
+    getRetryDelay: () => Math.min(MAXIMUM_RETRY_DELAY, retryDelay),
     getRetryCost: () => retryCost,
   });
   class StandardRetryStrategy$1 {
     maxAttempts;
     mode = cjsExports.RETRY_MODES.STANDARD;
-    capacity = ar;
-    retryBackoffStrategy = Ju();
+    capacity = INITIAL_RETRY_TOKENS;
+    retryBackoffStrategy = createDefaultRetryBackoffStrategy();
     maxAttemptsProvider;
     constructor(arg1) {
       this.maxAttempts = arg1;
       this.maxAttemptsProvider = typeof arg1 === "function" ? arg1 : async () => arg1;
     }
-    async acquireInitialRetryToken(e) {
-      return bn({
-        retryDelay: je,
+    async acquireInitialRetryToken(request) {
+      return createRetryToken({
+        retryDelay: DEFAULT_RETRY_DELAY_BASE,
         retryCount: 0,
       });
     }
@@ -245,14 +246,16 @@ var require_index_browser = x(function (cjsExports) {
       let maxAttempts = await this.getMaxAttempts();
       if (this.shouldRetry(token, errorInfo, maxAttempts)) {
         let errorType = errorInfo.errorType;
-        this.retryBackoffStrategy.setDelayBase(errorType === "THROTTLING" ? Nn : je);
-        let o = this.retryBackoffStrategy.computeNextBackoffDelay(token.getRetryCount());
+        this.retryBackoffStrategy.setDelayBase(
+          errorType === "THROTTLING" ? THROTTLING_RETRY_DELAY_BASE : DEFAULT_RETRY_DELAY_BASE,
+        );
+        let computedDelay = this.retryBackoffStrategy.computeNextBackoffDelay(token.getRetryCount());
         let retryDelay = errorInfo.retryAfterHint
-          ? Math.max(errorInfo.retryAfterHint.getTime() - Date.now() || 0, o)
-          : o;
+          ? Math.max(errorInfo.retryAfterHint.getTime() - Date.now() || 0, computedDelay)
+          : computedDelay;
         let capacityCost = this.getCapacityCost(errorType);
         this.capacity -= capacityCost;
-        return bn({
+        return createRetryToken({
           retryDelay,
           retryCount: token.getRetryCount() + 1,
           retryCost: capacityCost,
@@ -261,7 +264,10 @@ var require_index_browser = x(function (cjsExports) {
       throw Error("No retry token available");
     }
     recordSuccess(token) {
-      this.capacity = Math.max(ar, this.capacity + (token.getRetryCost() ?? NO_RETRY_INCREMENT));
+      this.capacity = Math.max(
+        INITIAL_RETRY_TOKENS,
+        this.capacity + (token.getRetryCost() ?? NO_RETRY_INCREMENT),
+      );
     }
     getCapacity() {
       return this.capacity;
@@ -274,15 +280,15 @@ var require_index_browser = x(function (cjsExports) {
         return DEFAULT_MAX_ATTEMPTS;
       }
     }
-    shouldRetry(tokenToRenew, errorInfo, r) {
+    shouldRetry(tokenToRenew, errorInfo, maxAttempts) {
       return (
-        tokenToRenew.getRetryCount() + 1 < r &&
+        tokenToRenew.getRetryCount() + 1 < maxAttempts &&
         this.capacity >= this.getCapacityCost(errorInfo.errorType) &&
         this.isRetryableError(errorInfo.errorType)
       );
     }
     getCapacityCost(errorType) {
-      return errorType === "TRANSIENT" ? _n : Tn;
+      return errorType === "TRANSIENT" ? TIMEOUT_RETRY_COST : RETRY_COST;
     }
     isRetryableError(errorType) {
       return errorType === "THROTTLING" || errorType === "TRANSIENT";
@@ -299,9 +305,9 @@ var require_index_browser = x(function (cjsExports) {
       this.rateLimiter = rateLimiter ?? new DefaultRateLimiter();
       this.standardRetryStrategy = new StandardRetryStrategy$1(maxAttemptsProvider);
     }
-    async acquireInitialRetryToken(e) {
+    async acquireInitialRetryToken(request) {
       await this.rateLimiter.getSendToken();
-      return this.standardRetryStrategy.acquireInitialRetryToken(e);
+      return this.standardRetryStrategy.acquireInitialRetryToken(request);
     }
     async refreshRetryTokenForRetry(tokenToRenew, errorInfo) {
       this.rateLimiter.updateClientSendingRate(errorInfo);
@@ -314,32 +320,32 @@ var require_index_browser = x(function (cjsExports) {
   }
   class ConfiguredRetryStrategy extends StandardRetryStrategy$1 {
     computeNextBackoffDelay;
-    constructor(maxAttempts, computeNextBackoffDelay = je) {
+    constructor(maxAttempts, computeNextBackoffDelay = DEFAULT_RETRY_DELAY_BASE) {
       super(typeof maxAttempts === "function" ? maxAttempts : async () => maxAttempts);
       if (typeof computeNextBackoffDelay === "number")
         this.computeNextBackoffDelay = () => computeNextBackoffDelay;
       else this.computeNextBackoffDelay = computeNextBackoffDelay;
     }
-    async refreshRetryTokenForRetry(e, t) {
-      let r = await super.refreshRetryTokenForRetry(e, t);
-      r.getRetryDelay = () => this.computeNextBackoffDelay(r.getRetryCount());
-      return r;
+    async refreshRetryTokenForRetry(token, errorInfo) {
+      let renewedToken = await super.refreshRetryTokenForRetry(token, errorInfo);
+      renewedToken.getRetryDelay = () => this.computeNextBackoffDelay(renewedToken.getRetryCount());
+      return renewedToken;
     }
   }
   cjsExports.AdaptiveRetryStrategy = AdaptiveRetryStrategy$1;
   cjsExports.ConfiguredRetryStrategy = ConfiguredRetryStrategy;
   cjsExports.DEFAULT_MAX_ATTEMPTS = DEFAULT_MAX_ATTEMPTS;
-  cjsExports.DEFAULT_RETRY_DELAY_BASE = je;
+  cjsExports.DEFAULT_RETRY_DELAY_BASE = DEFAULT_RETRY_DELAY_BASE;
   cjsExports.DEFAULT_RETRY_MODE = STANDARD;
   cjsExports.DefaultRateLimiter = DefaultRateLimiter;
-  cjsExports.INITIAL_RETRY_TOKENS = ar;
-  cjsExports.INVOCATION_ID_HEADER = Qu;
-  cjsExports.MAXIMUM_RETRY_DELAY = cr;
+  cjsExports.INITIAL_RETRY_TOKENS = INITIAL_RETRY_TOKENS;
+  cjsExports.INVOCATION_ID_HEADER = INVOCATION_ID_HEADER;
+  cjsExports.MAXIMUM_RETRY_DELAY = MAXIMUM_RETRY_DELAY;
   cjsExports.NO_RETRY_INCREMENT = NO_RETRY_INCREMENT;
-  cjsExports.REQUEST_HEADER = Yu;
-  cjsExports.RETRY_COST = Tn;
+  cjsExports.REQUEST_HEADER = REQUEST_HEADER;
+  cjsExports.RETRY_COST = RETRY_COST;
   cjsExports.StandardRetryStrategy = StandardRetryStrategy$1;
-  cjsExports.THROTTLING_RETRY_DELAY_BASE = Nn;
-  cjsExports.TIMEOUT_RETRY_COST = _n;
+  cjsExports.THROTTLING_RETRY_DELAY_BASE = THROTTLING_RETRY_DELAY_BASE;
+  cjsExports.TIMEOUT_RETRY_COST = TIMEOUT_RETRY_COST;
 });
 export { require_index_browser, require_index_browser_2 };

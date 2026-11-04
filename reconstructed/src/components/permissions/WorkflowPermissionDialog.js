@@ -8,7 +8,11 @@
  * pieces: chunk-sycr1qkz.js (17)
  * attribution: placement 17
  */
-import { init_react_production, Kc, y } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  fragmentTypeExport,
+  useState,
+} from "../../../vendor/react/cjs/react.production.js";
 import { truncate } from "../../utils/format.js";
 import {
   displayField,
@@ -31,7 +35,7 @@ import { isConsentRow, parseConsentSuggestions } from "./consentRows.js";
 import { WORKFLOW_TOOL_NAME } from "../../tools/WorkflowTool/constants.js";
 import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { parseWorkflowScript } from "../../services/workflows/workflowScriptMeta.js";
 import { editPromptInEditor } from "../../utils/promptEditor.js";
 import { normalizeCrLf } from "../../services/workflow/scriptFile.js";
@@ -64,295 +68,317 @@ function extractCallArgumentPreview(source, start) {
   let quote = source[pos];
   if (quote !== '"' && quote !== "'" && quote !== "`") {
     let min = Math.min(source.length, pos + PERMISSION_TIMEOUT_MS);
-    let i = 0;
-    let R = pos;
-    while (R < min) {
-      let g = source[R];
-      if (g === "(" || g === "[" || g === "{") i++;
-      else if (g === ")" || g === "]" || g === "}") {
-        if (i === 0) break;
-        i--;
-      } else if (g === "," && i === 0) break;
-      else if (g === '"' || g === "'" || g === "`") {
-        R++;
-        while (R < min && source[R] !== g) {
-          if (source[R] === "\\") R++;
-          R++;
+    let index = 0;
+    let cursor = pos;
+    while (cursor < min) {
+      let closeIndex = source[cursor];
+      if (closeIndex === "(" || closeIndex === "[" || closeIndex === "{") index++;
+      else if (closeIndex === ")" || closeIndex === "]" || closeIndex === "}") {
+        if (index === 0) break;
+        index--;
+      } else if (closeIndex === "," && index === 0) break;
+      else if (closeIndex === '"' || closeIndex === "'" || closeIndex === "`") {
+        cursor++;
+        while (cursor < min && source[cursor] !== closeIndex) {
+          if (source[cursor] === "\\") cursor++;
+          cursor++;
         }
       }
-      R++;
+      cursor++;
     }
-    return truncate(source.slice(pos, R).trim(), DECIDE_DELAY_MS);
+    return truncate(source.slice(pos, cursor).trim(), DECIDE_DELAY_MS);
   }
   pos++;
   let chars = [];
   while (pos < source.length) {
-    let f = source[pos];
-    if (f === "\\") {
+    let innerStart = source[pos];
+    if (innerStart === "\\") {
       chars.push(source[pos + 1] ?? "");
       pos += 2;
       continue;
     }
-    if (f === quote) break;
-    if (quote === "`" && f === "$" && source[pos + 1] === "{") {
+    if (innerStart === quote) break;
+    if (quote === "`" && innerStart === "$" && source[pos + 1] === "{") {
       chars.push("${\u2026}");
-      let i = 1;
+      let result = 1;
       pos += 2;
-      while (pos < source.length && i > 0) {
-        if (source[pos] === "{") i++;
-        if (source[pos] === "}") i--;
+      while (pos < source.length && result > 0) {
+        if (source[pos] === "{") result++;
+        if (source[pos] === "}") result--;
         pos++;
       }
       continue;
     }
-    chars.push(f);
+    chars.push(innerStart);
     pos++;
   }
   let trimmed = chars.join("").replace(/\s+/g, " ").trim();
   return truncate(trimmed, DECIDE_DELAY_MS);
 }
 //@ chunk-sycr1qkz.js:15383-15608 placement
-function extractParenthesized(t, o, l) {
-  if (t[o] !== "(") return;
-  let min = Math.min(t.length, o + PERMISSION_TIMEOUT_MS);
-  let a = 0;
-  let c = o;
-  while (c < min) {
-    let f = t[c];
-    if (f === "(") a++;
-    else if (f === ")") {
-      a--;
-      if (a === 0) return t.slice(o + 1, c);
-    } else if (l && f === ";" && a === 1) return t.slice(o + 1, c);
-    c++;
+function extractParenthesized(text, start, end) {
+  if (text[start] !== "(") return;
+  let min = Math.min(text.length, start + PERMISSION_TIMEOUT_MS);
+  let minEnd = 0;
+  let depth = start;
+  while (depth < min) {
+    let innerEnd = text[depth];
+    if (innerEnd === "(") minEnd++;
+    else if (innerEnd === ")") {
+      minEnd--;
+      if (minEnd === 0) return text.slice(start + 1, depth);
+    } else if (end && innerEnd === ";" && minEnd === 1) return text.slice(start + 1, depth);
+    depth++;
   }
   return;
 }
 //@ chunk-sycr1qkz.js:15608-15892 placement
-function findStatementEnd(t, o, l) {
-  let d = 0;
-  let a = o;
-  while (a < l) {
-    let c = t[a];
-    if (c === "(" || c === "[" || c === "{") d++;
-    else if (c === ")" || c === "]" || c === "}") {
-      if (d === 0) return a;
-      d--;
-    } else if (d === 0 && c === ";") return a + 1;
+function findStatementEnd(source, start, end) {
+  let depth = 0;
+  let index = start;
+  while (index < end) {
+    let char = source[index];
+    if (char === "(" || char === "[" || char === "{") depth++;
+    else if (char === ")" || char === "]" || char === "}") {
+      if (depth === 0) return index;
+      depth--;
+    } else if (depth === 0 && char === ";") return index + 1;
     else if (
-      d === 0 &&
-      c ===
+      depth === 0 &&
+      char ===
         `
 `
     ) {
-      let f = a + 1;
-      while (f < l && /\s/.test(t[f] ?? "")) f++;
-      if (t[f] !== "{") return a + 1;
+      let nextIndex = index + 1;
+      while (nextIndex < end && /\s/.test(source[nextIndex] ?? "")) nextIndex++;
+      if (source[nextIndex] !== "{") return index + 1;
     }
-    a++;
+    index++;
   }
   return -1;
 }
 //@ chunk-sycr1qkz.js:15892-15945 placement
-function hasIdentifierChar(t) {
-  return t != null && /[A-Za-z0-9_]/.test(t);
+function hasIdentifierChar(char) {
+  return char != null && /[A-Za-z0-9_]/.test(char);
 }
 //@ chunk-sycr1qkz.js:15945-17744 placement
-function summarizeWorkflowScript(source) {
+function summarizeWorkflowScript(scriptBody) {
   try {
-    let o = [];
-    let l = 0;
-    let d = 0;
-    let a = false;
-    let c;
-    let f = -1;
-    let i = [];
-    let R = [];
-    let g = source.length;
-    let p = 0;
-    while (p < g) {
-      if (f >= 0 && p >= f) {
-        a = false;
-        c = undefined;
-        f = -1;
+    let agents = [];
+    let braceDepth = 0;
+    let parenDepth = 0;
+    let pendingCondition = false;
+    let condition;
+    let statementEnd = -1;
+    let braceStack = [];
+    let parenStack = [];
+    let length = scriptBody.length;
+    let index = 0;
+    while (index < length) {
+      if (statementEnd >= 0 && index >= statementEnd) {
+        pendingCondition = false;
+        condition = undefined;
+        statementEnd = -1;
       }
-      let m = source[p];
-      if (m === "/" && source[p + 1] === "/")
+      let char = scriptBody[index];
+      if (char === "/" && scriptBody[index + 1] === "/")
         while (
-          p < g &&
-          source[p] !==
+          index < length &&
+          scriptBody[index] !==
             `
 `
         )
-          p++;
-      else if (m === "/" && source[p + 1] === "*") {
-        p += 2;
-        while (p < g && !(source[p] === "*" && source[p + 1] === "/")) p++;
-        p++;
-      } else if (m === '"' || m === "'" || m === "`") {
-        p++;
-        while (p < g && source[p] !== m) {
-          if (source[p] === "\\") p++;
-          p++;
+          index++;
+      else if (char === "/" && scriptBody[index + 1] === "*") {
+        index += 2;
+        while (index < length && !(scriptBody[index] === "*" && scriptBody[index + 1] === "/")) index++;
+        index++;
+      } else if (char === '"' || char === "'" || char === "`") {
+        index++;
+        while (index < length && scriptBody[index] !== char) {
+          if (scriptBody[index] === "\\") index++;
+          index++;
         }
-      } else if (m === "{") {
-        l++;
-        if (a && d === 0) {
-          i.push({
-            braceDepth: l,
-            cond: c,
+      } else if (char === "{") {
+        braceDepth++;
+        if (pendingCondition && parenDepth === 0) {
+          braceStack.push({
+            braceDepth,
+            cond: condition,
           });
-          a = false;
-          c = undefined;
-          f = -1;
+          pendingCondition = false;
+          condition = undefined;
+          statementEnd = -1;
         }
-      } else if (m === "}") {
-        let last = i.at(-1);
-        if (last && last.braceDepth === l) i.pop();
-        l--;
-      } else if (m === "(") d++;
-      else if (m === ")") {
-        let last = R.at(-1);
-        if (last !== undefined && last === d) R.pop();
-        d--;
-        if (a && d === 0 && f < 0) {
-          let b = p + 1;
-          let min = Math.min(g, b + PERMISSION_TIMEOUT_MS);
-          while (b < min && /\s/.test(source[b] ?? "")) b++;
-          if (source[b] !== "{") {
-            let statementEnd = findStatementEnd(source, b, Math.min(g, b + PERMISSION_TIMEOUT_MS));
-            if (statementEnd >= 0) f = statementEnd;
+      } else if (char === "}") {
+        let last = braceStack.at(-1);
+        if (last && last.braceDepth === braceDepth) braceStack.pop();
+        braceDepth--;
+      } else if (char === "(") parenDepth++;
+      else if (char === ")") {
+        let last = parenStack.at(-1);
+        if (last !== undefined && last === parenDepth) parenStack.pop();
+        parenDepth--;
+        if (pendingCondition && parenDepth === 0 && statementEnd < 0) {
+          let probe = index + 1;
+          let min = Math.min(length, probe + PERMISSION_TIMEOUT_MS);
+          while (probe < min && /\s/.test(scriptBody[probe] ?? "")) probe++;
+          if (scriptBody[probe] !== "{") {
+            let statementEnd_2 = findStatementEnd(
+              scriptBody,
+              probe,
+              Math.min(length, probe + PERMISSION_TIMEOUT_MS),
+            );
+            if (statementEnd_2 >= 0) statementEnd = statementEnd_2;
           }
         }
       } else if (
-        m === "w" &&
-        source.startsWith("while", p) &&
-        d === 0 &&
-        !hasIdentifierChar(source[p - 1]) &&
-        !hasIdentifierChar(source[p + 5])
+        char === "w" &&
+        scriptBody.startsWith("while", index) &&
+        parenDepth === 0 &&
+        !hasIdentifierChar(scriptBody[index - 1]) &&
+        !hasIdentifierChar(scriptBody[index + 5])
       ) {
-        let index = source.indexOf("(", p);
-        if (index === -1 || index - p > PERMISSION_TIMEOUT_MS) {
-          p++;
+        let start = scriptBody.indexOf("(", index);
+        if (start === -1 || start - index > PERMISSION_TIMEOUT_MS) {
+          index++;
           continue;
         }
-        a = true;
-        f = -1;
-        c = extractParenthesized(source, index, false);
+        pendingCondition = true;
+        statementEnd = -1;
+        condition = extractParenthesized(scriptBody, start, false);
       } else if (
-        m === "f" &&
-        source.startsWith("for", p) &&
-        d === 0 &&
-        !hasIdentifierChar(source[p - 1]) &&
-        !hasIdentifierChar(source[p + 3])
+        char === "f" &&
+        scriptBody.startsWith("for", index) &&
+        parenDepth === 0 &&
+        !hasIdentifierChar(scriptBody[index - 1]) &&
+        !hasIdentifierChar(scriptBody[index + 3])
       ) {
-        let index = source.indexOf("(", p);
-        if (index === -1 || index - p > PERMISSION_TIMEOUT_MS) {
-          p++;
+        let start = scriptBody.indexOf("(", index);
+        if (start === -1 || start - index > PERMISSION_TIMEOUT_MS) {
+          index++;
           continue;
         }
-        a = true;
-        f = -1;
-        c = extractParenthesized(source, index, true);
-      } else if (m === "p" && source.startsWith("parallel(", p) && !hasIdentifierChar(source[p - 1])) {
-        R.push(d + 1);
-        p += 7;
-      } else if (m === "a" && source.startsWith("agent", p) && !hasIdentifierChar(source[p - 1])) {
-        let u = p + 5;
-        while (u < g && /\s/.test(source[u] ?? "")) u++;
-        if (source[u] === "(") {
-          let b = R.length > 0 ? "parallel" : a || i.length > 0 ? "loop" : "sequential";
-          let C = a ? c : i.at(-1)?.cond;
-          let annotation = b === "loop" ? C?.trim().slice(0, 40) : b === "parallel" ? "\xD7 N" : undefined;
-          o.push({
-            prompt: extractCallArgumentPreview(source, u + 1),
-            kind: b,
+        pendingCondition = true;
+        statementEnd = -1;
+        condition = extractParenthesized(scriptBody, start, true);
+      } else if (
+        char === "p" &&
+        scriptBody.startsWith("parallel(", index) &&
+        !hasIdentifierChar(scriptBody[index - 1])
+      ) {
+        parenStack.push(parenDepth + 1);
+        index += 7;
+      } else if (
+        char === "a" &&
+        scriptBody.startsWith("agent", index) &&
+        !hasIdentifierChar(scriptBody[index - 1])
+      ) {
+        let probe = index + 5;
+        while (probe < length && /\s/.test(scriptBody[probe] ?? "")) probe++;
+        if (scriptBody[probe] === "(") {
+          let kind =
+            parenStack.length > 0
+              ? "parallel"
+              : pendingCondition || braceStack.length > 0
+                ? "loop"
+                : "sequential";
+          let agentCondition = pendingCondition ? condition : braceStack.at(-1)?.cond;
+          let annotation =
+            kind === "loop"
+              ? agentCondition?.trim().slice(0, 40)
+              : kind === "parallel"
+                ? "\xD7 N"
+                : undefined;
+          agents.push({
+            prompt: extractCallArgumentPreview(scriptBody, probe + 1),
+            kind,
             annotation,
           });
         }
       }
-      p++;
+      index++;
     }
-    if (o.length === 0) return null;
-    let P = [];
-    for (let m of o) {
-      let last = P.at(-1);
-      if (last && last.kind === m.kind && last.annotation === m.annotation)
+    if (agents.length === 0) return null;
+    let phases = [];
+    for (let agent of agents) {
+      let last = phases.at(-1);
+      if (last && last.kind === agent.kind && last.annotation === agent.annotation)
         last.agents.push({
-          prompt: m.prompt,
+          prompt: agent.prompt,
         });
       else
-        P.push({
-          kind: m.kind,
+        phases.push({
+          kind: agent.kind,
           agents: [
             {
-              prompt: m.prompt,
+              prompt: agent.prompt,
             },
           ],
-          annotation: m.annotation,
+          annotation: agent.annotation,
         });
     }
     let estimatedAgents = 0;
-    for (let m of P) {
-      let u = m.agents.length;
-      estimatedAgents += m.kind === "sequential" ? u : u * 3;
+    for (let phase of phases) {
+      let agentCount = phase.agents.length;
+      estimatedAgents += phase.kind === "sequential" ? agentCount : agentCount * 3;
     }
     return {
-      phases: P,
+      phases,
       estimatedAgents,
-      hasReturn: /\breturn\b/.test(source),
+      hasReturn: /\breturn\b/.test(scriptBody),
     };
   } catch {
     return null;
   }
 }
 //@ chunk-sycr1qkz.js:17744-17779 placement
-function rawText(co) {
-  return displayField(co).text;
+function rawText(field) {
+  return displayField(field).text;
 }
 //@ chunk-sycr1qkz.js:17779-17805 placement
-function isFalsy(mo) {
-  return !mo;
+function isFalsy(value) {
+  return !value;
 }
 //@ chunk-sycr1qkz.js:17805-17878 placement
-function quotedPreview(Qe) {
-  return `\xB7 "${stripNonPrintable(Qe.length > 60 ? truncateToLength(Qe, 59) + "\u2026" : Qe)}"`;
+function quotedPreview(text) {
+  return `\xB7 "${stripNonPrintable(text.length > 60 ? truncateToLength(text, 59) + "\u2026" : text)}"`;
 }
 //@ chunk-sycr1qkz.js:17878-18180 placement
 /**
  * 渲染工作流权限对话框中的一个步骤行：序号、标题与灰色详情，下方列出最多两个提示词，超出时显示 +N more。
  */
-function renderWorkflowStepRow(L, Nt) {
+function renderWorkflowStepRow(step, index) {
   return jsxProd_default_2(
-    Kc,
+    fragmentTypeExport,
     {
       children: [
         jsxProd_default_2(Text, {
           children: [
             "  ",
-            Nt + 1,
+            index + 1,
             ". ",
-            L.title,
-            L.detail
+            step.title,
+            step.detail
               ? jsxProd_default_2(Text, {
                   dimColor: true,
-                  children: [" \u2014 ", L.detail],
+                  children: [" \u2014 ", step.detail],
                 })
               : "",
           ],
         }),
-        L.prompts.length > 0 &&
+        step.prompts.length > 0 &&
           jsxProd_default_2(Text, {
             dimColor: true,
             children: [
               "     ",
-              L.prompts.slice(0, 2).map(quotedPreview).join("  "),
-              L.prompts.length > 2 ? `  +${L.prompts.length - 2} more` : "",
+              step.prompts.slice(0, 2).map(quotedPreview).join("  "),
+              step.prompts.length > 2 ? `  +${step.prompts.length - 2} more` : "",
             ],
           }),
       ],
     },
-    Nt,
+    index,
   );
 }
 //@ chunk-sycr1qkz.js:18180-18488 placement
@@ -373,8 +399,8 @@ var WORKFLOW_STEP_KIND_LABELS = {
 /**
  * 把工作流权限选项转换为结果（yes / yes-always 带权限更新 / no 带反馈），allow 时把脚本写回 input.script。
  */
-function workflowChoiceToResult(t, payload, script, d, a) {
-  switch (t) {
+function workflowChoiceToResult(choice, payload, script, selectedRow, feedback) {
+  switch (choice) {
     case "yes":
       return {
         behavior: "allow",
@@ -382,12 +408,12 @@ function workflowChoiceToResult(t, payload, script, d, a) {
           ...payload.input,
           script,
         },
-        ...(a && {
-          feedback: a,
+        ...(feedback && {
+          feedback,
         }),
       };
     case "yes-always": {
-      if (d === null || !isConsentRow(d))
+      if (selectedRow === null || !isConsentRow(selectedRow))
         return {
           behavior: "allow",
           updatedInput: {
@@ -401,14 +427,14 @@ function workflowChoiceToResult(t, payload, script, d, a) {
           ...payload.input,
           script,
         },
-        permissionUpdates: d.applies,
+        permissionUpdates: selectedRow.applies,
       };
     }
     case "no":
       return {
         behavior: "deny",
-        ...(a && {
-          feedback: a,
+        ...(feedback && {
+          feedback,
         }),
       };
   }
@@ -435,24 +461,24 @@ function workflowPermissionOptions(payload) {
     ],
     {
       displayedTypes: RULE_UPDATE_TYPES,
-      renderLabel: (l) => {
-        let d = l.length === 1 ? l[0] : undefined;
+      renderLabel: (updates) => {
+        let update = updates.length === 1 ? updates[0] : undefined;
         if (
-          d === undefined ||
-          d.type !== "addRules" ||
-          d.rules.length !== 1 ||
-          d.rules[0]?.toolName !== WORKFLOW_TOOL_NAME ||
-          d.rules[0]?.ruleContent !== workflowName
+          update === undefined ||
+          update.type !== "addRules" ||
+          update.rules.length !== 1 ||
+          update.rules[0]?.toolName !== WORKFLOW_TOOL_NAME ||
+          update.rules[0]?.ruleContent !== workflowName
         )
           return null;
-        let a = plainDisplay(d.rules[0].ruleContent);
-        if (a === null) return null;
+        let contentDisplay = plainDisplay(update.rules[0].ruleContent);
+        if (contentDisplay === null) return null;
         return jsxProd_default_2(Text, {
           children: [
             "Yes, and don't ask again for ",
             jsxProd_default(Text, {
               bold: true,
-              children: a.display,
+              children: contentDisplay.display,
             }),
             " ",
             "in",
@@ -472,324 +498,336 @@ function workflowPermissionOptions(payload) {
  * 工作流脚本权限对话框：展示脚本、允许/本地规则记住
  */
 function WorkflowPermissionDialog(props) {
-  let i = w(132);
+  let $ = useMemoCache(132);
   let { payload, answer, wouldTakeAnswer } = props;
-  let [script, setScript] = y(payload.script);
-  let f = script.length > MAX_WORKFLOW_SCRIPT_DISPLAY || payload.scriptForged;
-  let R;
-  if (i[0] !== script || i[1] !== f) {
-    R = f ? "" : stripUnsafeChars(script);
-    i[0] = script;
-    i[1] = f;
-    i[2] = R;
-  } else R = i[2];
-  let code = R;
-  let p;
-  if (i[3] !== script || i[4] !== f) {
-    p = f || hasSuspiciousText(script);
-    i[3] = script;
-    i[4] = f;
-    i[5] = p;
-  } else p = i[5];
-  let P = p;
-  let Y;
+  let [script, setScript] = useState(payload.script);
+  let isTooLarge = script.length > MAX_WORKFLOW_SCRIPT_DISPLAY || payload.scriptForged;
+  let safeCode;
+  if ($[0] !== script || $[1] !== isTooLarge) {
+    safeCode = isTooLarge ? "" : stripUnsafeChars(script);
+    $[0] = script;
+    $[1] = isTooLarge;
+    $[2] = safeCode;
+  } else safeCode = $[2];
+  let code = safeCode;
+  let isSuspicious;
+  if ($[3] !== script || $[4] !== isTooLarge) {
+    isSuspicious = isTooLarge || hasSuspiciousText(script);
+    $[3] = script;
+    $[4] = isTooLarge;
+    $[5] = isSuspicious;
+  } else isSuspicious = $[5];
+  let isSuspicious_2 = isSuspicious;
+  let parsed;
   m: {
-    if (P) {
-      Y = null;
+    if (isSuspicious_2) {
+      parsed = null;
       break m;
     }
-    let u;
-    if (i[6] !== script) {
-      u = parseWorkflowScript(script);
-      i[6] = script;
-      i[7] = u;
-    } else u = i[7];
-    let b = u;
-    Y = "error" in b ? null : b;
+    let parseResult;
+    if ($[6] !== script) {
+      parseResult = parseWorkflowScript(script);
+      $[6] = script;
+      $[7] = parseResult;
+    } else parseResult = $[7];
+    let parseResult_2 = parseResult;
+    parsed = "error" in parseResult_2 ? null : parseResult_2;
   }
-  let C = Y;
-  let N = P ? "" : (C?.scriptBody ?? script);
-  let u;
-  if (i[8] !== N) {
-    u = summarizeWorkflowScript(N);
-    i[8] = N;
-    i[9] = u;
-  } else u = i[9];
-  let M = u;
-  let H;
-  if (i[10] !== M || i[11] !== C?.meta.phases) {
+  let parsedScript = parsed;
+  let scriptBody = isSuspicious_2 ? "" : (parsedScript?.scriptBody ?? script);
+  let summary;
+  if ($[8] !== scriptBody) {
+    summary = summarizeWorkflowScript(scriptBody);
+    $[8] = scriptBody;
+    $[9] = summary;
+  } else summary = $[9];
+  let summary_2 = summary;
+  let steps;
+  if ($[10] !== summary_2 || $[11] !== parsedScript?.meta.phases) {
     Xo: {
-      let ao = rawText;
-      let re = (io) => replaceLineBreaks(ao(io)).replace(/\s+/g, " ").trim();
-      let bt = (lo) => {
-        let kt = new Set();
-        let Rt = [];
-        for (const pe of lo?.agents ?? []) {
-          if (pe.prompt && !kt.has(pe.prompt)) {
-            kt.add(pe.prompt);
-            Rt.push(re(pe.prompt));
+      let toRawText = rawText;
+      let normalizeText = (value) => replaceLineBreaks(toRawText(value)).replace(/\s+/g, " ").trim();
+      let collectPrompts = (step) => {
+        let seen = new Set();
+        let prompts = [];
+        for (const agent of step?.agents ?? []) {
+          if (agent.prompt && !seen.has(agent.prompt)) {
+            seen.add(agent.prompt);
+            prompts.push(normalizeText(agent.prompt));
           }
         }
-        return Rt;
+        return prompts;
       };
-      let Wt = (de) => ({
-        title: re(WORKFLOW_STEP_KIND_LABELS[de.kind] + (de.annotation ? ` ${de.annotation}` : "")),
-        prompts: bt(de),
+      let toStep = (step) => ({
+        title: normalizeText(
+          WORKFLOW_STEP_KIND_LABELS[step.kind] + (step.annotation ? ` ${step.annotation}` : ""),
+        ),
+        prompts: collectPrompts(step),
       });
-      let phases = C?.meta.phases;
+      let phases = parsedScript?.meta.phases;
       if (phases && phases.length > 0) {
-        let mapped = phases.map((phase, ro) => ({
-          title: re(phase.title),
-          detail: phase.detail !== undefined ? re(phase.detail) : undefined,
-          prompts: bt(M?.phases[ro]),
+        let mapped = phases.map((phase, index) => ({
+          title: normalizeText(phase.title),
+          detail: phase.detail !== undefined ? normalizeText(phase.detail) : undefined,
+          prompts: collectPrompts(summary_2?.phases[index]),
         }));
-        let J;
-        if (i[13] !== M?.phases) {
-          J = M?.phases ?? [];
-          i[13] = M?.phases;
-          i[14] = J;
-        } else J = i[14];
-        let mapped_2 = J.slice(phases.length).map(Wt);
-        H = [...mapped, ...mapped_2];
+        let summaryPhases;
+        if ($[13] !== summary_2?.phases) {
+          summaryPhases = summary_2?.phases ?? [];
+          $[13] = summary_2?.phases;
+          $[14] = summaryPhases;
+        } else summaryPhases = $[14];
+        let mapped_2 = summaryPhases.slice(phases.length).map(toStep);
+        steps = [...mapped, ...mapped_2];
         break Xo;
       }
-      if (M && M.phases.length > 0) {
-        H = M.phases.map(Wt);
+      if (summary_2 && summary_2.phases.length > 0) {
+        steps = summary_2.phases.map(toStep);
         break Xo;
       }
-      H = null;
+      steps = null;
     }
-    i[10] = M;
-    i[11] = C?.meta.phases;
-    i[12] = H;
-  } else H = i[12];
-  let T = H;
-  let [F, Ct] = y(T === null);
-  let J;
-  if (i[15] !== script || i[16] !== wouldTakeAnswer) {
-    J = function fe(event) {
+    $[10] = summary_2;
+    $[11] = parsedScript?.meta.phases;
+    $[12] = steps;
+  } else steps = $[12];
+  let steps_2 = steps;
+  let [showSummary, setShowSummary] = useState(steps_2 === null);
+  let onKeyDown;
+  if ($[15] !== script || $[16] !== wouldTakeAnswer) {
+    onKeyDown = function onKeyDownImpl(event) {
       if (event.ctrl && event.key === "g") {
         event.preventDefault();
         if (!wouldTakeAnswer()) {
           return;
         }
-        let St = editPromptInEditor(script);
-        let Ge = St.content === null ? null : normalizeCrLf(St.content);
-        if (Ge !== null && Ge !== script) {
-          setScript(Ge);
-          Ct(false);
+        let edited = editPromptInEditor(script);
+        let content = edited.content === null ? null : normalizeCrLf(edited.content);
+        if (content !== null && content !== script) {
+          setScript(content);
+          setShowSummary(false);
         }
       }
     };
-    i[15] = script;
-    i[16] = wouldTakeAnswer;
-    i[17] = J;
-  } else J = i[17];
-  let fe = J;
-  let Dt;
-  if (i[18] !== payload.args) {
-    Dt =
+    $[15] = script;
+    $[16] = wouldTakeAnswer;
+    $[17] = onKeyDown;
+  } else onKeyDown = $[17];
+  let onKeyDownStable = onKeyDown;
+  let argsText;
+  if ($[18] !== payload.args) {
+    argsText =
       payload.args === undefined
         ? undefined
         : serializeApprovalPayload(payload.args, {
             scrub: "key",
             maxUnits: MAX_PAYLOAD_UNITS,
           });
-    i[18] = payload.args;
-    i[19] = Dt;
-  } else Dt = i[19];
-  let D = Dt;
-  let ce = D === undefined ? undefined : D.kind === "full" ? D.text : D.marker;
-  let vt;
-  if (i[20] !== D?.kind || i[21] !== payload || i[22] !== P) {
-    vt =
-      shouldOfferAlwaysAllow(payload) && D?.kind !== "withheld" && !P
+    $[18] = payload.args;
+    $[19] = argsText;
+  } else argsText = $[19];
+  let argsText_2 = argsText;
+  let argsDisplay =
+    argsText_2 === undefined ? undefined : argsText_2.kind === "full" ? argsText_2.text : argsText_2.marker;
+  let alwaysAllowOption;
+  if ($[20] !== argsText_2?.kind || $[21] !== payload || $[22] !== isSuspicious_2) {
+    alwaysAllowOption =
+      shouldOfferAlwaysAllow(payload) && argsText_2?.kind !== "withheld" && !isSuspicious_2
         ? workflowPermissionOptions(payload)
         : null;
-    i[20] = D?.kind;
-    i[21] = payload;
-    i[22] = P;
-    i[23] = vt;
-  } else vt = i[23];
-  let v = vt;
-  let xt;
+    $[20] = argsText_2?.kind;
+    $[21] = payload;
+    $[22] = isSuspicious_2;
+    $[23] = alwaysAllowOption;
+  } else alwaysAllowOption = $[23];
+  let alwaysAllowOption_2 = alwaysAllowOption;
+  let onSelect;
   if (
-    i[24] !== v ||
-    i[25] !== answer ||
-    i[26] !== payload ||
-    i[27] !== script ||
-    i[28] !== P ||
-    i[29] !== wouldTakeAnswer
+    $[24] !== alwaysAllowOption_2 ||
+    $[25] !== answer ||
+    $[26] !== payload ||
+    $[27] !== script ||
+    $[28] !== isSuspicious_2 ||
+    $[29] !== wouldTakeAnswer
   ) {
-    xt = (Ue, fo) => {
-      if (Ue === "toggle") {
+    onSelect = (choice, feedback) => {
+      if (choice === "toggle") {
         if (!wouldTakeAnswer()) {
           return false;
         }
-        Ct(isFalsy);
+        setShowSummary(isFalsy);
         return;
       }
-      if (Ue !== "no" && P) {
+      if (choice !== "no" && isSuspicious_2) {
         return false;
       }
-      return answer(workflowChoiceToResult(Ue, payload, script, v, fo));
+      return answer(workflowChoiceToResult(choice, payload, script, alwaysAllowOption_2, feedback));
     };
-    i[24] = v;
-    i[25] = answer;
-    i[26] = payload;
-    i[27] = script;
-    i[28] = P;
-    i[29] = wouldTakeAnswer;
-    i[30] = xt;
-  } else xt = i[30];
-  let onSelect = xt;
-  let Ot;
-  if (i[31] !== answer) {
-    Ot = () =>
+    $[24] = alwaysAllowOption_2;
+    $[25] = answer;
+    $[26] = payload;
+    $[27] = script;
+    $[28] = isSuspicious_2;
+    $[29] = wouldTakeAnswer;
+    $[30] = onSelect;
+  } else onSelect = $[30];
+  let onSelect_2 = onSelect;
+  let onCancel;
+  if ($[31] !== answer) {
+    onCancel = () =>
       answer({
         behavior: "deny",
       });
-    i[31] = answer;
-    i[32] = Ot;
-  } else Ot = i[32];
-  let onCancel = Ot;
-  let me;
-  let he;
-  let we;
-  let x;
+    $[31] = answer;
+    $[32] = onCancel;
+  } else onCancel = $[32];
+  let onCancel_2 = onCancel;
+  let innerBox;
+  let outerBox;
+  let DialogComponent;
+  let hideIndexes;
   let options;
   let flexDirection;
   let paddingX;
   let marginBottom;
   let overflow;
-  let be;
+  let descriptionBox;
   let flexDirection_2;
   let marginTop;
   let tabIndex;
   let autoFocus;
-  let onKeyDown;
-  let ee;
+  let onKeyDown_2;
+  let ruleExplanation;
   let color;
   let title;
   let requestSource;
   let toolAnalyticsContext;
   if (
-    i[33] !== v ||
-    i[34] !== T ||
-    i[35] !== fe ||
-    i[36] !== C ||
-    i[37] !== payload ||
-    i[38] !== P ||
-    i[39] !== F
+    $[33] !== alwaysAllowOption_2 ||
+    $[34] !== steps_2 ||
+    $[35] !== onKeyDownStable ||
+    $[36] !== parsedScript ||
+    $[37] !== payload ||
+    $[38] !== isSuspicious_2 ||
+    $[39] !== showSummary
   ) {
-    let text = C?.meta.description !== undefined ? displayField(C.meta.description).text : undefined;
-    x = payload.permissionResult.inPlaceOfClassifier === true;
-    let _;
-    if (i[60] === MEMO_CACHE_SENTINEL) {
-      _ = {
+    let text =
+      parsedScript?.meta.description !== undefined
+        ? displayField(parsedScript.meta.description).text
+        : undefined;
+    hideIndexes = payload.permissionResult.inPlaceOfClassifier === true;
+    let noOption;
+    if ($[60] === MEMO_CACHE_SENTINEL) {
+      noOption = {
         label: "No",
         value: "no",
         feedbackConfig: {
           type: "reject",
         },
       };
-      i[60] = _;
-    } else _ = i[60];
-    let Tt = _;
-    let X;
-    if (i[61] !== v || i[62] !== T || i[63] !== x || i[64] !== P || i[65] !== F) {
-      X = x ? [Tt] : [];
-      if (!P) {
-        let k;
-        if (i[67] === MEMO_CACHE_SENTINEL) {
-          k = {
+      $[60] = noOption;
+    } else noOption = $[60];
+    let noOption_2 = noOption;
+    let optionsList;
+    if (
+      $[61] !== alwaysAllowOption_2 ||
+      $[62] !== steps_2 ||
+      $[63] !== hideIndexes ||
+      $[64] !== isSuspicious_2 ||
+      $[65] !== showSummary
+    ) {
+      optionsList = hideIndexes ? [noOption_2] : [];
+      if (!isSuspicious_2) {
+        let yesOption;
+        if ($[67] === MEMO_CACHE_SENTINEL) {
+          yesOption = {
             label: "Yes, run it",
             value: "yes",
             feedbackConfig: {
               type: "accept",
             },
           };
-          i[67] = k;
-        } else k = i[67];
-        X.push(k);
+          $[67] = yesOption;
+        } else yesOption = $[67];
+        optionsList.push(yesOption);
       }
-      if (v !== null) {
-        let k;
-        if (i[68] !== v.node) {
-          k = {
-            label: v.node,
+      if (alwaysAllowOption_2 !== null) {
+        let alwaysOption;
+        if ($[68] !== alwaysAllowOption_2.node) {
+          alwaysOption = {
+            label: alwaysAllowOption_2.node,
             value: "yes-always",
           };
-          i[68] = v.node;
-          i[69] = k;
-        } else k = i[69];
-        X.push(k);
+          $[68] = alwaysAllowOption_2.node;
+          $[69] = alwaysOption;
+        } else alwaysOption = $[69];
+        optionsList.push(alwaysOption);
       }
-      if (T && !P) {
-        const label = F ? "View workflow summary" : "View raw script";
-        let A;
-        if (i[70] !== label) {
-          A = {
+      if (steps_2 && !isSuspicious_2) {
+        const label = showSummary ? "View workflow summary" : "View raw script";
+        let toggleOption;
+        if ($[70] !== label) {
+          toggleOption = {
             label,
             value: "toggle",
           };
-          i[70] = label;
-          i[71] = A;
-        } else A = i[71];
-        X.push(A);
+          $[70] = label;
+          $[71] = toggleOption;
+        } else toggleOption = $[71];
+        optionsList.push(toggleOption);
       }
-      if (!x) X.push(Tt);
-      i[61] = v;
-      i[62] = T;
-      i[63] = x;
-      i[64] = P;
-      i[65] = F;
-      i[66] = X;
-    } else X = i[66];
-    options = X;
+      if (!hideIndexes) optionsList.push(noOption_2);
+      $[61] = alwaysAllowOption_2;
+      $[62] = steps_2;
+      $[63] = hideIndexes;
+      $[64] = isSuspicious_2;
+      $[65] = showSummary;
+      $[66] = optionsList;
+    } else optionsList = $[66];
+    options = optionsList;
     let toolName;
-    if (i[72] !== payload.toolName) {
+    if ($[72] !== payload.toolName) {
       toolName = sanitizeToolNameForAnalytics(payload.toolName);
-      i[72] = payload.toolName;
-      i[73] = toolName;
-    } else toolName = i[73];
-    let A;
-    if (i[74] !== payload.isMcp || i[75] !== toolName) {
-      A = {
+      $[72] = payload.toolName;
+      $[73] = toolName;
+    } else toolName = $[73];
+    let toolAnalytics;
+    if ($[74] !== payload.isMcp || $[75] !== toolName) {
+      toolAnalytics = {
         toolName,
         isMcp: payload.isMcp,
       };
-      i[74] = payload.isMcp;
-      i[75] = toolName;
-      i[76] = A;
-    } else A = i[76];
-    toolAnalyticsContext = A;
-    we = PermissionDialog_2;
+      $[74] = payload.isMcp;
+      $[75] = toolName;
+      $[76] = toolAnalytics;
+    } else toolAnalytics = $[76];
+    toolAnalyticsContext = toolAnalytics;
+    DialogComponent = PermissionDialog_2;
     color = "permission";
     title = "Run a dynamic workflow?";
     requestSource = payload.requestSource;
-    he = Box;
+    outerBox = Box;
     flexDirection_2 = "column";
     marginTop = 1;
     tabIndex = 0;
     autoFocus = true;
-    onKeyDown = fe;
-    if (i[77] !== payload.permissionResult) {
-      ee =
+    onKeyDown_2 = onKeyDownStable;
+    if ($[77] !== payload.permissionResult) {
+      ruleExplanation =
         payload.permissionResult.denialLimitFallback !== undefined &&
         jsxProd_default(PermissionRuleExplanation, {
           permissionResult: payload.permissionResult,
           toolType: "tool",
         });
-      i[77] = payload.permissionResult;
-      i[78] = ee;
-    } else ee = i[78];
-    me = Box;
+      $[77] = payload.permissionResult;
+      $[78] = ruleExplanation;
+    } else ruleExplanation = $[78];
+    innerBox = Box;
     flexDirection = "column";
     paddingX = 1;
     marginBottom = 1;
     overflow = "hidden";
-    be =
+    descriptionBox =
       text &&
       jsxProd_default(Box, {
         marginBottom: 1,
@@ -801,65 +839,65 @@ function WorkflowPermissionDialog(props) {
           }),
         }),
       });
-    i[33] = v;
-    i[34] = T;
-    i[35] = fe;
-    i[36] = C;
-    i[37] = payload;
-    i[38] = P;
-    i[39] = F;
-    i[40] = me;
-    i[41] = he;
-    i[42] = we;
-    i[43] = x;
-    i[44] = options;
-    i[45] = flexDirection;
-    i[46] = paddingX;
-    i[47] = marginBottom;
-    i[48] = overflow;
-    i[49] = be;
-    i[50] = flexDirection_2;
-    i[51] = marginTop;
-    i[52] = tabIndex;
-    i[53] = autoFocus;
-    i[54] = onKeyDown;
-    i[55] = ee;
-    i[56] = color;
-    i[57] = title;
-    i[58] = requestSource;
-    i[59] = toolAnalyticsContext;
+    $[33] = alwaysAllowOption_2;
+    $[34] = steps_2;
+    $[35] = onKeyDownStable;
+    $[36] = parsedScript;
+    $[37] = payload;
+    $[38] = isSuspicious_2;
+    $[39] = showSummary;
+    $[40] = innerBox;
+    $[41] = outerBox;
+    $[42] = DialogComponent;
+    $[43] = hideIndexes;
+    $[44] = options;
+    $[45] = flexDirection;
+    $[46] = paddingX;
+    $[47] = marginBottom;
+    $[48] = overflow;
+    $[49] = descriptionBox;
+    $[50] = flexDirection_2;
+    $[51] = marginTop;
+    $[52] = tabIndex;
+    $[53] = autoFocus;
+    $[54] = onKeyDown_2;
+    $[55] = ruleExplanation;
+    $[56] = color;
+    $[57] = title;
+    $[58] = requestSource;
+    $[59] = toolAnalyticsContext;
   } else {
-    me = i[40];
-    he = i[41];
-    we = i[42];
-    x = i[43];
-    options = i[44];
-    flexDirection = i[45];
-    paddingX = i[46];
-    marginBottom = i[47];
-    overflow = i[48];
-    be = i[49];
-    flexDirection_2 = i[50];
-    marginTop = i[51];
-    tabIndex = i[52];
-    autoFocus = i[53];
-    onKeyDown = i[54];
-    ee = i[55];
-    color = i[56];
-    title = i[57];
-    requestSource = i[58];
-    toolAnalyticsContext = i[59];
+    innerBox = $[40];
+    outerBox = $[41];
+    DialogComponent = $[42];
+    hideIndexes = $[43];
+    options = $[44];
+    flexDirection = $[45];
+    paddingX = $[46];
+    marginBottom = $[47];
+    overflow = $[48];
+    descriptionBox = $[49];
+    flexDirection_2 = $[50];
+    marginTop = $[51];
+    tabIndex = $[52];
+    autoFocus = $[53];
+    onKeyDown_2 = $[54];
+    ruleExplanation = $[55];
+    color = $[56];
+    title = $[57];
+    requestSource = $[58];
+    toolAnalyticsContext = $[59];
   }
-  let _;
+  let bodyContent;
   if (
-    i[79] !== T ||
-    i[80] !== payload.scriptForged ||
-    i[81] !== code ||
-    i[82] !== script.length ||
-    i[83] !== P ||
-    i[84] !== F
+    $[79] !== steps_2 ||
+    $[80] !== payload.scriptForged ||
+    $[81] !== code ||
+    $[82] !== script.length ||
+    $[83] !== isSuspicious_2 ||
+    $[84] !== showSummary
   ) {
-    _ = P
+    bodyContent = isSuspicious_2
       ? jsxProd_default(Box, {
           marginBottom: 1,
           children: jsxProd_default(Text, {
@@ -869,7 +907,7 @@ function WorkflowPermissionDialog(props) {
               : `(script of ${script.length.toLocaleString()} characters cannot be shown in full \u2014 approval is unavailable; deny or send feedback)`,
           }),
         })
-      : F || !T
+      : showSummary || !steps_2
         ? jsxProd_default(DiffFrame, {
             children: jsxProd_default(HighlightedCode, {
               code,
@@ -883,25 +921,25 @@ function WorkflowPermissionDialog(props) {
                 children:
                   "This dynamic workflow will spin up multiple subagents across the following phases:",
               }),
-              T.map(renderWorkflowStepRow),
+              steps_2.map(renderWorkflowStepRow),
             ],
           });
-    i[79] = T;
-    i[80] = payload.scriptForged;
-    i[81] = code;
-    i[82] = script.length;
-    i[83] = P;
-    i[84] = F;
-    i[85] = _;
-  } else _ = i[85];
-  let k;
-  if (i[86] !== ce || i[87] !== D) {
-    k =
-      ce &&
+    $[79] = steps_2;
+    $[80] = payload.scriptForged;
+    $[81] = code;
+    $[82] = script.length;
+    $[83] = isSuspicious_2;
+    $[84] = showSummary;
+    $[85] = bodyContent;
+  } else bodyContent = $[85];
+  let argsBox;
+  if ($[86] !== argsDisplay || $[87] !== argsText_2) {
+    argsBox =
+      argsDisplay &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(Blockquote, {
-          multiline: D?.kind === "full" && D.needsGutter,
+          multiline: argsText_2?.kind === "full" && argsText_2.needsGutter,
           children: jsxProd_default_2(Text, {
             children: [
               jsxProd_default_2(Text, {
@@ -911,70 +949,70 @@ function WorkflowPermissionDialog(props) {
               }),
               jsxProd_default(Text, {
                 dimColor: true,
-                children: ce,
+                children: argsDisplay,
               }),
             ],
           }),
         }),
       });
-    i[86] = ce;
-    i[87] = D;
-    i[88] = k;
-  } else k = i[88];
-  let A;
+    $[86] = argsDisplay;
+    $[87] = argsText_2;
+    $[88] = argsBox;
+  } else argsBox = $[88];
+  let bodyBox;
   if (
-    i[89] !== me ||
-    i[90] !== flexDirection ||
-    i[91] !== paddingX ||
-    i[92] !== marginBottom ||
-    i[93] !== overflow ||
-    i[94] !== be ||
-    i[95] !== _ ||
-    i[96] !== k
+    $[89] !== innerBox ||
+    $[90] !== flexDirection ||
+    $[91] !== paddingX ||
+    $[92] !== marginBottom ||
+    $[93] !== overflow ||
+    $[94] !== descriptionBox ||
+    $[95] !== bodyContent ||
+    $[96] !== argsBox
   ) {
-    A = jsxProd_default_2(me, {
+    bodyBox = jsxProd_default_2(innerBox, {
       flexDirection,
       paddingX,
       marginBottom,
       overflow,
-      children: [be, _, k],
+      children: [descriptionBox, bodyContent, argsBox],
     });
-    i[89] = me;
-    i[90] = flexDirection;
-    i[91] = paddingX;
-    i[92] = marginBottom;
-    i[93] = overflow;
-    i[94] = be;
-    i[95] = _;
-    i[96] = k;
-    i[97] = A;
-  } else A = i[97];
-  let Be;
-  if (i[98] !== x || i[99] !== payload.permissionResult) {
-    Be =
-      x &&
+    $[89] = innerBox;
+    $[90] = flexDirection;
+    $[91] = paddingX;
+    $[92] = marginBottom;
+    $[93] = overflow;
+    $[94] = descriptionBox;
+    $[95] = bodyContent;
+    $[96] = argsBox;
+    $[97] = bodyBox;
+  } else bodyBox = $[97];
+  let ruleExplanation_2;
+  if ($[98] !== hideIndexes || $[99] !== payload.permissionResult) {
+    ruleExplanation_2 =
+      hideIndexes &&
       jsxProd_default(PermissionRuleExplanation, {
         permissionResult: payload.permissionResult,
         toolType: "tool",
         rowBudget: MAX_EXPLANATION_LINES,
       });
-    i[98] = x;
-    i[99] = payload.permissionResult;
-    i[100] = Be;
-  } else Be = i[100];
-  let Ne;
-  if (i[101] !== payload.permissionResult) {
-    Ne =
+    $[98] = hideIndexes;
+    $[99] = payload.permissionResult;
+    $[100] = ruleExplanation_2;
+  } else ruleExplanation_2 = $[100];
+  let fallbackNotice;
+  if ($[101] !== payload.permissionResult) {
+    fallbackNotice =
       payload.permissionResult.denialLimitFallback === undefined &&
       payload.permissionResult.autoDenyWindow !== undefined &&
       jsxProd_default(DenialLimitFallbackNotice, {
         permissionResult: payload.permissionResult,
       });
-    i[101] = payload.permissionResult;
-    i[102] = Ne;
-  } else Ne = i[102];
+    $[101] = payload.permissionResult;
+    $[102] = fallbackNotice;
+  } else fallbackNotice = $[102];
   let question;
-  if (i[103] === MEMO_CACHE_SENTINEL) {
+  if ($[103] === MEMO_CACHE_SENTINEL) {
     question = jsxProd_default(Box, {
       marginBottom: 1,
       children: jsxProd_default(Text, {
@@ -982,108 +1020,109 @@ function WorkflowPermissionDialog(props) {
         children: DYNAMIC_WORKFLOW_USAGE_WARNING,
       }),
     });
-    i[103] = question;
-  } else question = i[103];
-  let qe;
+    $[103] = question;
+  } else question = $[103];
+  let prompt;
   if (
-    i[104] !== onCancel ||
-    i[105] !== onSelect ||
-    i[106] !== x ||
-    i[107] !== options ||
-    i[108] !== payload.requestSource ||
-    i[109] !== toolAnalyticsContext
+    $[104] !== onCancel_2 ||
+    $[105] !== onSelect_2 ||
+    $[106] !== hideIndexes ||
+    $[107] !== options ||
+    $[108] !== payload.requestSource ||
+    $[109] !== toolAnalyticsContext
   ) {
-    qe = jsxProd_default(PermissionPrompt, {
+    prompt = jsxProd_default(PermissionPrompt, {
       options,
-      hideIndexes: x,
-      onSelect,
-      onCancel,
+      hideIndexes,
+      onSelect: onSelect_2,
+      onCancel: onCancel_2,
       requestSource: payload.requestSource,
       question,
       toolAnalyticsContext,
     });
-    i[104] = onCancel;
-    i[105] = onSelect;
-    i[106] = x;
-    i[107] = options;
-    i[108] = payload.requestSource;
-    i[109] = toolAnalyticsContext;
-    i[110] = qe;
-  } else qe = i[110];
-  let Mt;
-  if (i[111] === MEMO_CACHE_SENTINEL) {
-    Mt = jsxProd_default(Text, {
+    $[104] = onCancel_2;
+    $[105] = onSelect_2;
+    $[106] = hideIndexes;
+    $[107] = options;
+    $[108] = payload.requestSource;
+    $[109] = toolAnalyticsContext;
+    $[110] = prompt;
+  } else prompt = $[110];
+  let editHint;
+  if ($[111] === MEMO_CACHE_SENTINEL) {
+    editHint = jsxProd_default(Text, {
       dimColor: true,
       children: jsxProd_default(KeyboardShortcutHint, {
         chord: "ctrl+g",
         action: "edit script in $EDITOR",
       }),
     });
-    i[111] = Mt;
-  } else Mt = i[111];
-  let Fe;
-  if (i[112] !== Be || i[113] !== Ne || i[114] !== qe) {
-    Fe = jsxProd_default_2(Box, {
+    $[111] = editHint;
+  } else editHint = $[111];
+  let promptBox;
+  if ($[112] !== ruleExplanation_2 || $[113] !== fallbackNotice || $[114] !== prompt) {
+    promptBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       paddingX: 1,
-      children: [Be, Ne, qe, Mt],
+      children: [ruleExplanation_2, fallbackNotice, prompt, editHint],
     });
-    i[112] = Be;
-    i[113] = Ne;
-    i[114] = qe;
-    i[115] = Fe;
-  } else Fe = i[115];
+    $[112] = ruleExplanation_2;
+    $[113] = fallbackNotice;
+    $[114] = prompt;
+    $[115] = promptBox;
+  } else promptBox = $[115];
   let children;
   if (
-    i[116] !== he ||
-    i[117] !== flexDirection_2 ||
-    i[118] !== marginTop ||
-    i[119] !== tabIndex ||
-    i[120] !== autoFocus ||
-    i[121] !== onKeyDown ||
-    i[122] !== ee ||
-    i[123] !== A ||
-    i[124] !== Fe
+    $[116] !== outerBox ||
+    $[117] !== flexDirection_2 ||
+    $[118] !== marginTop ||
+    $[119] !== tabIndex ||
+    $[120] !== autoFocus ||
+    $[121] !== onKeyDown_2 ||
+    $[122] !== ruleExplanation ||
+    $[123] !== bodyBox ||
+    $[124] !== promptBox
   ) {
-    children = jsxProd_default_2(he, {
+    children = jsxProd_default_2(outerBox, {
       flexDirection: flexDirection_2,
       marginTop,
       tabIndex,
       autoFocus,
-      onKeyDown,
-      children: [ee, A, Fe],
+      onKeyDown: onKeyDown_2,
+      children: [ruleExplanation, bodyBox, promptBox],
     });
-    i[116] = he;
-    i[117] = flexDirection_2;
-    i[118] = marginTop;
-    i[119] = tabIndex;
-    i[120] = autoFocus;
-    i[121] = onKeyDown;
-    i[122] = ee;
-    i[123] = A;
-    i[124] = Fe;
-    i[125] = children;
-  } else children = i[125];
-  let Bt;
+    $[116] = outerBox;
+    $[117] = flexDirection_2;
+    $[118] = marginTop;
+    $[119] = tabIndex;
+    $[120] = autoFocus;
+    $[121] = onKeyDown_2;
+    $[122] = ruleExplanation;
+    $[123] = bodyBox;
+    $[124] = promptBox;
+    $[125] = children;
+  } else children = $[125];
+  let dialog;
   if (
-    i[126] !== we ||
-    i[127] !== color ||
-    i[128] !== title ||
-    i[129] !== requestSource ||
-    i[130] !== children
+    $[126] !== DialogComponent ||
+    $[127] !== color ||
+    $[128] !== title ||
+    $[129] !== requestSource ||
+    $[130] !== children
   ) {
-    Bt = jsxProd_default(we, {
+    dialog = jsxProd_default(DialogComponent, {
       color,
       title,
       requestSource,
       children,
     });
-    i[126] = we;
-    i[127] = color;
-    i[128] = title;
-    i[129] = requestSource;
-    i[130] = children;
-    i[131] = Bt;
-  } else Bt = i[131];
-  return Bt;
+    $[126] = DialogComponent;
+    $[127] = color;
+    $[128] = title;
+    $[129] = requestSource;
+    $[130] = children;
+    $[131] = dialog;
+  } else dialog = $[131];
+  return dialog;
 }
+export { WorkflowPermissionDialog };

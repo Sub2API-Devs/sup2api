@@ -34,12 +34,12 @@ var MAX_MEMORY_NAME_CHARS = 256;
 var MEMORY_FRONTMATTER_KEYS = ["name", "description", "metadata"];
 var MEMORY_NAME_RE = /^[a-z0-9_-]+$/;
 var MEMORY = "memory";
-var nonEmptyStringOrNull = (e) => (typeof e === "string" && e.length > 0 ? e : null);
+var nonEmptyStringOrNull = (value) => (typeof value === "string" && value.length > 0 ? value : null);
 var normalizeMemoryFrontmatter = (frontmatter) => {
   let metadata = isPlainObject(frontmatter.metadata) ? frontmatter.metadata : {};
-  let reduced = Object.entries(frontmatter).reduce((acc, [h, y]) => {
-    if (MEMORY_FRONTMATTER_KEYS.includes(h) || y == null) return acc;
-    acc[h] = y;
+  let reduced = Object.entries(frontmatter).reduce((acc, [key, value]) => {
+    if (MEMORY_FRONTMATTER_KEYS.includes(key) || value == null) return acc;
+    acc[key] = value;
     return acc;
   }, {});
   return {
@@ -55,8 +55,8 @@ var normalizeMemoryFrontmatter = (frontmatter) => {
 /**
  * 解析记忆文件（frontmatter 与正文）。
  */
-function parseMemoryFile(e, n, r) {
-  let { frontmatter, content, rewriteHazard } = parseFrontmatter(e, n, r);
+function parseMemoryFile(raw, filePath, options) {
+  let { frontmatter, content, rewriteHazard } = parseFrontmatter(raw, filePath, options);
   return {
     frontmatter: normalizeMemoryFrontmatter(frontmatter),
     body: content,
@@ -69,8 +69,8 @@ function parseMemoryFile(e, n, r) {
 /**
  * 按行数与字节截断不受信任的 frontmatter。
  */
-function truncateUntrustedFrontmatter(e) {
-  return e
+function truncateUntrustedFrontmatter(text) {
+  return text
     .split(
       `
 `,
@@ -79,12 +79,12 @@ function truncateUntrustedFrontmatter(e) {
     .slice(0, MAX_UNTRUSTED_FRONTMATTER_LINES)
     .reduce(
       (acc, line) => {
-        let h = Buffer.byteLength(line) + (acc.lines.length > 0 ? 1 : 0);
-        if (acc.stopped || acc.bytes + h > MAX_UNTRUSTED_FRONTMATTER_BYTES) {
+        let lineBytes = Buffer.byteLength(line) + (acc.lines.length > 0 ? 1 : 0);
+        if (acc.stopped || acc.bytes + lineBytes > MAX_UNTRUSTED_FRONTMATTER_BYTES) {
           acc.stopped = true;
           return acc;
         }
-        acc.bytes += h;
+        acc.bytes += lineBytes;
         acc.lines.push(line);
         return acc;
       },
@@ -100,18 +100,18 @@ function truncateUntrustedFrontmatter(e) {
 /**
  * 读取元数据字段与更新元数据。
  */
-var getMemoryMetadata = (frontmatter, n) => nonEmptyStringOrNull(frontmatter.metadata[n]);
-var withMemoryMetadata = (frontmatter, n) => ({
+var getMemoryMetadata = (frontmatter, key) => nonEmptyStringOrNull(frontmatter.metadata[key]);
+var withMemoryMetadata = (frontmatter, metadata) => ({
   ...frontmatter,
   metadata: Object.freeze({
     ...frontmatter.metadata,
-    ...n,
+    ...metadata,
   }),
 });
-var slugifyMemoryName = (e) =>
-  MEMORY_NAME_RE.test(e)
-    ? e
-    : e
+var slugifyMemoryName = (name) =>
+  MEMORY_NAME_RE.test(name)
+    ? name
+    : name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
         .replace(/^-+|-+$/g, "");
@@ -119,22 +119,22 @@ var slugifyMemoryName = (e) =>
 /**
  * 生成带 frontmatter 的记忆文件内容。
  */
-function serializeMemoryFile(e, body) {
+function serializeMemoryFile(memory, body) {
   let metadata = Object.fromEntries(
-    [["node_type", MEMORY], ...Object.entries(e.metadata).filter(([key]) => key !== "node_type")].filter(
-      ([, y]) => y != null,
+    [["node_type", MEMORY], ...Object.entries(memory.metadata).filter(([key]) => key !== "node_type")].filter(
+      ([, value]) => value != null,
     ),
   );
-  let s = {
-    name: slugifyMemoryName(e.name ?? ""),
-    ...(e.description !== null && {
-      description: e.description,
+  let frontmatter = {
+    name: slugifyMemoryName(memory.name ?? ""),
+    ...(memory.description !== null && {
+      description: memory.description,
     }),
     metadata,
   };
   let replaced = body.replace(/^\n+/, "");
   return `---
-${serializeFrontmatter(s)}---
+${serializeFrontmatter(frontmatter)}---
 
 ${replaced}`;
 }
@@ -146,14 +146,14 @@ var MEMORY_LINKING_GUIDANCE_2 = [
 /**
  * 记忆文件 frontmatter 示例（name/description/type）。
  */
-function MEMORY_FRONTMATTER_EXAMPLE_2(e) {
+function MEMORY_FRONTMATTER_EXAMPLE_2(types) {
   return [
     "```markdown",
     "---",
     "name: {{short-kebab-case-slug}}",
     "description: {{one-line summary, used to decide relevance in future conversations, so be specific}}",
     "metadata:",
-    `  type: {{${e.join(", ")}}}`,
+    `  type: {{${types.join(", ")}}}`,
     "---",
     "",
     "{{memory content \u2014 for feedback/project types, structure as: rule/fact, then **Why:** and **How to apply:** lines. Link related memories with [[their-name]].}}",
@@ -196,21 +196,21 @@ var MEMORY_TYPE_DESCRIPTIONS = {
   reference: "where to find information in an external system (issue tracker, dashboard, channel)",
 };
 //@ chunk-82kqcve8.js:92151-92435 layout
-function buildCompactMemoryTypesSection(e) {
+function buildCompactMemoryTypesSection(types) {
   return [
     "## Types of memory",
     "",
     "Save a memory when you learn one of the following \u2014 pick the matching `type:`:",
     "",
-    ...e.map((n) => `- **${n}** \u2014 ${MEMORY_TYPE_DESCRIPTIONS[n]}`),
+    ...types.map((type) => `- **${type}** \u2014 ${MEMORY_TYPE_DESCRIPTIONS[type]}`),
     "",
     `Invoke the \`${MEMORY_TYPES_SECTION_ID}\` skill for scope, body structure and examples once you've decided to save.`,
     "",
   ];
 }
 //@ chunk-82kqcve8.js:92435-92477 layout
-function selectMemoryTypesSection(e, n = MEMORY_TYPES) {
-  return isCompactMemoryTypesEnabled() ? buildCompactMemoryTypesSection(n) : e;
+function selectMemoryTypesSection(fullSection, types = MEMORY_TYPES) {
+  return isCompactMemoryTypesEnabled() ? buildCompactMemoryTypesSection(types) : fullSection;
 }
 //@ chunk-82kqcve8.js:92477-109264 fingerprint = TYPES_SECTION_COMBINED (0.854)
 /**

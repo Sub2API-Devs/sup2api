@@ -23,7 +23,6 @@ import { getClaudeConfigDir, getProjectDirNameOverride } from "./envUtils.js";
 import { isDiskless } from "../bootstrap/state.js";
 import { getWorktreePathsPortable } from "./getWorktreePathsPortable.js";
 import { isByteViewUnsupportedError } from "./storage/storageErrors.js";
-import { skipNuls, buffer_5 } from "./transcript/entryTypes.js";
 import {
   contentBlockTypeBucket,
   stripCacheControl_2,
@@ -31,22 +30,29 @@ import {
   summarizeLongText,
   classifyUserText,
 } from "../services/api/promptCacheBreakParts.js";
+import { skipNuls, buffer_5 } from "./transcript/entryTypes.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-f9pzpnqt.js:1310-1366 placement
-var LITE_READ_BUF_SIZE = 65536;
-var PROGRAMMATIC_ENTRYPOINTS = new Set(["sdk-cli", "sdk-ts", "sdk-py"]);
+var LITE_READ_BUF_SIZE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PROGRAMMATIC_ENTRYPOINTS;
+deferInit("chunk-f9pzpnqt.js:1310", () => {
+  LITE_READ_BUF_SIZE = 65536;
+  PROGRAMMATIC_ENTRYPOINTS = new Set(["sdk-cli", "sdk-ts", "sdk-py"]);
+});
 //@ chunk-f9pzpnqt.js:1366-1581 placement
-function isHiddenFromSessionPicker(e, n) {
-  let t = extractJsonStringField(e, "entrypoint") ?? extractLastJsonStringField(n, "entrypoint");
-  if (t && PROGRAMMATIC_ENTRYPOINTS.has(t)) return true;
-  let r =
-    e
+function isHiddenFromSessionPicker(head, tail) {
+  let entrypoint =
+    extractJsonStringField(head, "entrypoint") ?? extractLastJsonStringField(tail, "entrypoint");
+  if (entrypoint && PROGRAMMATIC_ENTRYPOINTS.has(entrypoint)) return true;
+  let parentLine =
+    head
       .split(
         `
 `,
       )
-      .find((line) => line.includes('"parentUuid":')) ?? e;
-  let jsonStringField = extractJsonStringField(r, "sessionKind");
+      .find((line) => line.includes('"parentUuid":')) ?? head;
+  let jsonStringField = extractJsonStringField(parentLine, "sessionKind");
   return jsonStringField === "daemon" || jsonStringField === "daemon-worker";
 }
 //@ chunk-f9pzpnqt.js:1581-1654 placement
@@ -87,57 +93,57 @@ function extractJsonStringField(text, key) {
 //@ chunk-f9pzpnqt.js:2039-2301 placement = extractJsonStringFieldPrefix (1)
 function extractLastJsonStringField(text, key) {
   let patterns = [`"${key}":"`, `"${key}": "`];
-  let r;
-  let i = -1;
+  let value;
+  let bestIndex = -1;
   for (let pattern of patterns) {
-    let a = 0;
+    let from = 0;
     while (true) {
-      let index = text.indexOf(pattern, a);
+      let index = text.indexOf(pattern, from);
       if (index < 0) break;
       let valueStart = index + pattern.length;
-      let i_2 = valueStart;
-      while (i_2 < text.length) {
-        if (text[i_2] === "\\") {
-          i_2 += 2;
+      let i = valueStart;
+      while (i < text.length) {
+        if (text[i] === "\\") {
+          i += 2;
           continue;
         }
-        if (text[i_2] === '"') {
-          if (index > i) {
-            r = unescapeJsonString(text.slice(valueStart, i_2));
-            i = index;
+        if (text[i] === '"') {
+          if (index > bestIndex) {
+            value = unescapeJsonString(text.slice(valueStart, i));
+            bestIndex = index;
           }
           break;
         }
-        i_2++;
+        i++;
       }
-      a = i_2 + 1;
+      from = i + 1;
     }
   }
-  return r;
+  return value;
 }
 //@ chunk-f9pzpnqt.js:2301-2337 placement
-function extractFieldFromLastEntryOfTypeStrict(tail, n, t) {
-  return findLastJsonStringField(tail, t, n);
+function extractFieldFromLastEntryOfTypeStrict(text, type, key) {
+  return findLastJsonStringField(text, key, type);
 }
 //@ chunk-f9pzpnqt.js:2337-2680 placement
-function findLastJsonStringField(e, n, t) {
-  let r = t === undefined ? undefined : `"type":"${t}"`;
-  let i = `"${n}":`;
-  let o = e.length;
-  while (o > 0) {
-    let index = e.lastIndexOf(
+function findLastJsonStringField(text, key, type) {
+  let typeNeedle = type === undefined ? undefined : `"type":"${type}"`;
+  let keyNeedle = `"${key}":`;
+  let end = text.length;
+  while (end > 0) {
+    let index = text.lastIndexOf(
       `
 `,
-      o - 1,
+      end - 1,
     );
-    let sliced = e.slice(index + 1, o);
-    o = index;
-    if (sliced.includes(i) && (r === undefined || sliced.includes(r)))
+    let sliced = text.slice(index + 1, end);
+    end = index;
+    if (sliced.includes(keyNeedle) && (typeNeedle === undefined || sliced.includes(typeNeedle)))
       try {
         let parsed = JSON.parse(sliced);
-        if (typeof parsed === "object" && parsed !== null && (t === undefined || parsed.type === t)) {
-          let c = parsed[n];
-          if (typeof c === "string") return c;
+        if (typeof parsed === "object" && parsed !== null && (type === undefined || parsed.type === type)) {
+          let value = parsed[key];
+          if (typeof value === "string") return value;
         }
       } catch {}
     if (index < 0) break;
@@ -145,62 +151,62 @@ function findLastJsonStringField(e, n, t) {
   return;
 }
 //@ chunk-f9pzpnqt.js:2680-2942 placement
-function extractFieldFromFirstEntryStrict(head, n) {
-  let t = `"${n}":`;
-  let r = 0;
-  while (r < head.length) {
+function extractFieldFromFirstEntryStrict(head, key) {
+  let keyNeedle = `"${key}":`;
+  let start = 0;
+  while (start < head.length) {
     let index = head.indexOf(
       `
 `,
-      r,
+      start,
     );
-    let o = index < 0 ? head.slice(r) : head.slice(r, index);
-    r = index < 0 ? head.length : index + 1;
-    if (o.includes(t))
+    let line = index < 0 ? head.slice(start) : head.slice(start, index);
+    start = index < 0 ? head.length : index + 1;
+    if (line.includes(keyNeedle))
       try {
-        let parsed = JSON.parse(o);
+        let parsed = JSON.parse(line);
         if (typeof parsed === "object" && parsed !== null) {
-          let u = parsed[n];
-          if (typeof u === "string") return u;
+          let value = parsed[key];
+          if (typeof value === "string") return value;
         }
       } catch {}
   }
   return;
 }
 //@ chunk-f9pzpnqt.js:2942-2974 placement
-function extractFieldFromLastEntryStrict(e, n) {
-  return findLastJsonStringField(e, n);
+function extractFieldFromLastEntryStrict(text, key) {
+  return findLastJsonStringField(text, key);
 }
 //@ chunk-f9pzpnqt.js:2974-3081 placement
-function workspaceV5Of(e, hoverRestOn) {
-  return e?.realWorkspacePath === undefined
+function workspaceV5Of(v5State, hoverRestOn) {
+  return v5State?.realWorkspacePath === undefined
     ? undefined
     : {
         hoverRestOn,
-        realPath: e.realWorkspacePath,
+        realPath: v5State.realWorkspacePath,
       };
 }
 //@ chunk-f9pzpnqt.js:3081-3127 placement
-async function writeEntriesToJsonlFile(e, n, hydratedTranscriptTarget) {
-  return writeJsonlRecords(e, n, "w", hydratedTranscriptTarget);
+async function writeEntriesToJsonlFile(path, entries, target) {
+  return writeJsonlRecords(path, entries, "w", target);
 }
 //@ chunk-f9pzpnqt.js:3127-3173 placement
-async function appendEntriesToJsonlFile(transcriptPathForSession, n, hydratedTranscriptTarget) {
-  return writeJsonlRecords(transcriptPathForSession, n, "a", hydratedTranscriptTarget);
+async function appendEntriesToJsonlFile(path, entries, target) {
+  return writeJsonlRecords(path, entries, "a", target);
 }
 //@ chunk-f9pzpnqt.js:3173-3437 placement
-async function writeJsonlRecords(e, n, t, r) {
-  if (r !== undefined && r.hoverRestOn && (t === "w" || n.length > 0))
-    return writeRecordsToBackend(r.source, n, t);
-  let writeStream = createWriteStream(e, {
+async function writeJsonlRecords(path, entries, flags, target) {
+  if (target !== undefined && target.hoverRestOn && (flags === "w" || entries.length > 0))
+    return writeRecordsToBackend(target.source, entries, flags);
+  let writeStream = createWriteStream(path, {
     mode: 384,
-    flags: t,
+    flags,
   });
   try {
-    for (let o of n)
+    for (let entry of entries)
       if (
         !writeStream.write(
-          JSON.stringify(o) +
+          JSON.stringify(entry) +
             `
 `,
         )
@@ -217,33 +223,33 @@ async function writeJsonlRecords(e, n, t, r) {
 /**
  * 通过 v5 存储后端写转录记录：w 模式原地替换全部记录，否则追加；失败抛出带原因的错误。
  */
-async function writeRecordsToBackend(source, n, t) {
+async function writeRecordsToBackend(source, entries, flags) {
   let { backend, key } = source;
-  let mapped = n.map((u) => ({
+  let mapped = entries.map((entry) => ({
     data:
-      JSON.stringify(u) +
+      JSON.stringify(entry) +
       `
 `,
   }));
-  if (t === "w") {
-    let u = await backend.replaceRecords(key, mapped, {
+  if (flags === "w") {
+    let result = await backend.replaceRecords(key, mapped, {
       publishDiscipline: "inPlace",
       mode: 384,
     });
-    if (!u.ok)
+    if (!result.ok)
       throw Error("transcript stream replace failed", {
-        cause: u.error,
+        cause: result.error,
       });
     return;
   }
-  let a = await backend.append(key, mapped);
-  if (!a.ok)
+  let result = await backend.append(key, mapped);
+  if (!result.ok)
     throw Error("transcript stream append failed", {
-      cause: a.error,
+      cause: result.error,
     });
 }
 //@ chunk-f9pzpnqt.js:3793-4316 placement = extractFirstPromptFromHead (0.914)
-function extractFirstPromptFromHead(head, n = "stored") {
+function extractFirstPromptFromHead(head, mode = "stored") {
   let start = 0;
   let commandFallback = {
     commandFallback: "",
@@ -262,8 +268,8 @@ function extractFirstPromptFromHead(head, n = "stored") {
     if (line.includes('"isCompactSummary":true') || line.includes('"isCompactSummary": true')) continue;
     try {
       let entry = JSON.parse(line);
-      let u = renderPluginPrompt(entry, commandFallback, n);
-      if (u !== undefined) return u;
+      let prompt = renderPluginPrompt(entry, commandFallback, mode);
+      if (prompt !== undefined) return prompt;
     } catch {
       continue;
     }
@@ -290,38 +296,38 @@ function attachmentPromptLabelFromHead(head) {
   return "";
 }
 //@ chunk-f9pzpnqt.js:4786-4963 placement
-function extractFirstPromptFromEntries(e, n = "stored") {
-  let t = {
+function extractFirstPromptFromEntries(entries, mode = "stored") {
+  let state = {
     commandFallback: "",
   };
-  for (let r of e) {
-    if (typeof r !== "object" || r === null) continue;
-    let i = renderPluginPrompt(r, t, n);
-    if (i !== undefined) return i;
+  for (let entry of entries) {
+    if (typeof entry !== "object" || entry === null) continue;
+    let prompt = renderPluginPrompt(entry, state, mode);
+    if (prompt !== undefined) return prompt;
   }
-  return t.commandFallback;
+  return state.commandFallback;
 }
 //@ chunk-f9pzpnqt.js:4963-5006 placement
 var READ_NOFOLLOW_FLAGS = constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
 //@ chunk-f9pzpnqt.js:5006-5517 placement
-async function readHeadAndTail(e, fileSize, buf, r) {
-  if (r !== undefined && r.hoverRestOn) return readHeadAndTail_2(r.source);
+async function readHeadAndTail(path, fileSize, buf, target) {
+  if (target !== undefined && target.hoverRestOn) return readHeadAndTail_2(target.source);
   try {
     if (READ_NOFOLLOW_FLAGS === constants.O_RDONLY) {
-      if (!(await lstat(e)).isFile())
+      if (!(await lstat(path)).isFile())
         return {
           head: "",
           tail: "",
         };
     }
-    let i = await open(e, READ_NOFOLLOW_FLAGS);
+    let handle = await open(path, READ_NOFOLLOW_FLAGS);
     try {
-      if (!(await i.stat()).isFile())
+      if (!(await handle.stat()).isFile())
         return {
           head: "",
           tail: "",
         };
-      let headResult = await i.read(buf, 0, LITE_READ_BUF_SIZE, 0);
+      let headResult = await handle.read(buf, 0, LITE_READ_BUF_SIZE, 0);
       if (headResult.bytesRead === 0)
         return {
           head: "",
@@ -331,7 +337,7 @@ async function readHeadAndTail(e, fileSize, buf, r) {
       let tailOffset = Math.max(0, fileSize - LITE_READ_BUF_SIZE);
       let tail = head;
       if (tailOffset > 0) {
-        let tailResult = await i.read(buf, 0, LITE_READ_BUF_SIZE, tailOffset);
+        let tailResult = await handle.read(buf, 0, LITE_READ_BUF_SIZE, tailOffset);
         tail = buf.toString("utf8", 0, tailResult.bytesRead);
       }
       return {
@@ -339,7 +345,7 @@ async function readHeadAndTail(e, fileSize, buf, r) {
         tail,
       };
     } finally {
-      await i.close();
+      await handle.close();
     }
   } catch {
     return {
@@ -349,8 +355,8 @@ async function readHeadAndTail(e, fileSize, buf, r) {
   }
 }
 //@ chunk-f9pzpnqt.js:5517-5615 placement = readHeadAndTail (0.802)
-async function readHeadAndTail_2(source) {
-  let headTailV5 = await readHeadTailV5(source);
+async function readHeadAndTail_2(target) {
+  let headTailV5 = await readHeadTailV5(target);
   return headTailV5 === null
     ? {
         head: "",
@@ -371,10 +377,10 @@ function anchorOffsetTail(tail) {
 /**
  * 从 v5 存储后端一次读取转录的头部与尾部缓冲，返回 {head, tail, mtimeMs, totalBytes}；不存在或失败返回 null。
  */
-async function readHeadTailV5(e) {
-  let { backend, key } = e;
+async function readHeadTailV5(target) {
+  let { backend, key } = target;
   try {
-    let r = await backend.read([
+    let read = await backend.read([
       {
         key,
         offset: 0,
@@ -385,169 +391,177 @@ async function readHeadTailV5(e) {
         tail: LITE_READ_BUF_SIZE,
       },
     ]);
-    if (!r.ok) return null;
-    let [i, o] = r.value.items;
-    if (!i.found || i.value.length === 0) return null;
-    let a = bufferToString(i.value);
-    let tail = o.found && o.value.length > 0 ? bufferToString(o.value) : a;
+    if (!read.ok) return null;
+    let [headItem, tailItem] = read.value.items;
+    if (!headItem.found || headItem.value.length === 0) return null;
+    let head = bufferToString(headItem.value);
+    let tail = tailItem.found && tailItem.value.length > 0 ? bufferToString(tailItem.value) : head;
     return {
-      head: a,
+      head,
       tail,
-      mtimeMs: i.mtimeMs,
-      totalBytes: i.totalBytes,
+      mtimeMs: headItem.mtimeMs,
+      totalBytes: headItem.totalBytes,
     };
   } catch {
     return null;
   }
 }
 //@ chunk-f9pzpnqt.js:6021-6107 placement
-function bufferToString(e) {
-  return Buffer.from(e.buffer, e.byteOffset, e.byteLength).toString("utf8");
+function bufferToString(bytes) {
+  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("utf8");
 }
 //@ chunk-f9pzpnqt.js:6107-6158 placement
-async function _(filePath, n) {
-  return (await getTranscriptMessagesState(filePath, n)) !== "none";
+async function _(path, target) {
+  return (await getTranscriptMessagesState(path, target)) !== "none";
 }
 //@ chunk-f9pzpnqt.js:6158-6602 placement
 /**
  * 判断转录文件是否含 user/assistant 消息：逐行扫描，返回 has / none / unknown（v5 存储时交给后端判断）。
  */
-async function getTranscriptMessagesState(e, n) {
-  if (n !== undefined && n.hoverRestOn) return transcriptMessagesStateV5(n.source);
+async function getTranscriptMessagesState(path, target) {
+  if (target !== undefined && target.hoverRestOn) return transcriptMessagesStateV5(target.source);
   try {
-    if (!(await lstat(e)).isFile()) return "none";
+    if (!(await lstat(path)).isFile()) return "none";
   } catch (error) {
     return isEnoentError(error) ? "none" : "unknown";
   }
-  let t;
+  let handle;
   try {
-    t = await open(e, "r");
+    handle = await open(path, "r");
   } catch (error) {
     return isEnoentError(error) ? "none" : "unknown";
   }
   try {
-    let r = createInterface({
-      input: t.createReadStream(),
+    let lines = createInterface({
+      input: handle.createReadStream(),
     });
-    for await (let i of r)
-      if (i.includes('"type":"user"') || i.includes('"type":"assistant"')) {
-        r.close();
+    for await (let line of lines)
+      if (line.includes('"type":"user"') || line.includes('"type":"assistant"')) {
+        lines.close();
         return "has";
       }
     return "none";
   } catch {
     return "unknown";
   } finally {
-    await t.close().catch(() => {});
+    await handle.close().catch(() => {});
   }
 }
 //@ chunk-f9pzpnqt.js:6602-6695 placement
-var TRANSCRIPT_TAIL_READ_BYTES = 65536;
-var TRANSCRIPT_FULL_READ_BYTES = 4194304;
-var buffer = Buffer.from('"type":"user"');
-var buffer_2 = Buffer.from('"type":"assistant"');
+var TRANSCRIPT_TAIL_READ_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TRANSCRIPT_FULL_READ_BYTES;
+var buffer;
+var buffer_2;
+deferInit("chunk-f9pzpnqt.js:6602", () => {
+  TRANSCRIPT_TAIL_READ_BYTES = 65536;
+  TRANSCRIPT_FULL_READ_BYTES = 4194304;
+  buffer = Buffer.from('"type":"user"');
+  buffer_2 = Buffer.from('"type":"assistant"');
+});
 //@ chunk-f9pzpnqt.js:6695-6748 placement
-function hasConversationMarker(e) {
-  return e.includes(buffer) || e.includes(buffer_2);
+function hasConversationMarker(chunk) {
+  return chunk.includes(buffer) || chunk.includes(buffer_2);
 }
 //@ chunk-f9pzpnqt.js:6748-6760 placement
 var MAX_LISTING_PAGES = 1e4;
 //@ chunk-f9pzpnqt.js:6760-6946 placement
-function listedProjectKey(e, n) {
+function listedProjectKey(item, isKeySegment) {
   if (
-    e.kind !== "scope" ||
-    e.scope.namespace !== "transcript" ||
-    e.scope.projectKey === undefined ||
-    e.scope.sessionId !== undefined ||
-    !n(e.scope.projectKey)
+    item.kind !== "scope" ||
+    item.scope.namespace !== "transcript" ||
+    item.scope.projectKey === undefined ||
+    item.scope.sessionId !== undefined ||
+    !isKeySegment(item.scope.projectKey)
   )
     return;
-  return e.scope.projectKey;
+  return item.scope.projectKey;
 }
 //@ chunk-f9pzpnqt.js:6946-7686 placement
-async function transcriptMessagesStateV5(e, n = hasConversationMarker) {
-  let { backend, key } = e;
-  let i;
-  let o = false;
-  let a = 0;
-  let u = 0;
+async function transcriptMessagesStateV5(target, hasMarker = hasConversationMarker) {
+  let { backend, key } = target;
+  let fromSeq;
+  let truncated = false;
+  let count = 0;
+  let pages = 0;
   try {
     for (;;) {
-      if (++u > MAX_LISTING_PAGES) return "unknown";
+      if (++pages > MAX_LISTING_PAGES) return "unknown";
       let records = await backend.readRecords(key, {
         order: "forward",
-        maxBytes: i === undefined ? TRANSCRIPT_TAIL_READ_BYTES : TRANSCRIPT_FULL_READ_BYTES,
-        ...(i !== undefined && {
-          fromSeq: i,
+        maxBytes: fromSeq === undefined ? TRANSCRIPT_TAIL_READ_BYTES : TRANSCRIPT_FULL_READ_BYTES,
+        ...(fromSeq !== undefined && {
+          fromSeq,
         }),
       });
       if (!records.ok) return records.error.code === "NotFound" ? "none" : "unknown";
-      a += records.value.items.length;
+      count += records.value.items.length;
       for (let item of records.value.items) {
         let buffer = Buffer.from(item.data.buffer, item.data.byteOffset, item.data.byteLength);
-        if (n(buffer)) return "has";
-        if (item.truncated === true) o = true;
+        if (hasMarker(buffer)) return "has";
+        if (item.truncated === true) truncated = true;
       }
       let nextSeq = records.value.nextSeq;
       if (nextSeq === undefined) {
-        if (o) return "unknown";
-        if (records.value.items.length === 0 && i !== undefined) return "unknown";
-        let p = await backend.statStream(key);
-        if (!p.ok) return p.error.code === "NotFound" ? "none" : "unknown";
-        return p.value.recordCount > a ? "unknown" : "none";
+        if (truncated) return "unknown";
+        if (records.value.items.length === 0 && fromSeq !== undefined) return "unknown";
+        let stream = await backend.statStream(key);
+        if (!stream.ok) return stream.error.code === "NotFound" ? "none" : "unknown";
+        return stream.value.recordCount > count ? "unknown" : "none";
       }
-      if (i !== undefined && nextSeq <= i) return "unknown";
-      i = nextSeq;
+      if (fromSeq !== undefined && nextSeq <= fromSeq) return "unknown";
+      fromSeq = nextSeq;
     }
   } catch {
     return "unknown";
   }
 }
 //@ chunk-f9pzpnqt.js:7686-8156 placement
-async function quarantineJobTranscript(path, n) {
-  let t = `orphaned-${Date.now()}-${randomUUID().slice(0, 8)}`;
-  let source = n !== undefined && n.hoverRestOn ? n.source : undefined;
-  let i =
+async function quarantineJobTranscript(path, target) {
+  let suffix = `orphaned-${Date.now()}-${randomUUID().slice(0, 8)}`;
+  let source = target !== undefined && target.hoverRestOn ? target.source : undefined;
+  let key =
     source !== undefined && path.endsWith(".jsonl")
       ? transcriptStoreKey(path, basename(path, ".jsonl"), source)
       : undefined;
-  if (i !== undefined && source !== undefined) {
-    let { key } = i;
-    if (key.namespace !== "transcript") return false;
+  if (key !== undefined && source !== undefined) {
+    let { key: key_2 } = key;
+    if (key_2.namespace !== "transcript") return false;
     try {
-      return (await i.backend.move(key, source.transcriptKey(key.projectKey, `${key.sessionId}.${t}`))).ok;
+      return (
+        await key.backend.move(key_2, source.transcriptKey(key_2.projectKey, `${key_2.sessionId}.${suffix}`))
+      ).ok;
     } catch {
       return false;
     }
   }
-  let o = `${path.endsWith(".jsonl") ? path.slice(0, -6) : path}.${t}.jsonl`;
+  let targetPath = `${path.endsWith(".jsonl") ? path.slice(0, -6) : path}.${suffix}.jsonl`;
   try {
-    await rename(path, o);
+    await rename(path, targetPath);
     return true;
   } catch {
     return false;
   }
 }
 //@ chunk-f9pzpnqt.js:8156-8207 placement = getErrorsPath (1)
-function isTranscriptFileResumeArg(e) {
-  return isAbsolute(e) && e.endsWith(".jsonl");
+function isTranscriptFileResumeArg(value) {
+  return isAbsolute(value) && value.endsWith(".jsonl");
 }
 //@ chunk-f9pzpnqt.js:8207-9391 placement
 /**
  * 为恢复会话定位 transcript 文件：依次查链接路径、项目目录、计算路径，必要时跨 worktree 与全项目扫描，返回 {path, via, hasMessages, unverifiable?}。与 bridge 无关（会话存储）。
  */
-async function resolveJobTranscript(sessionId, cwd, linkScanPath, r, i) {
-  let o = await canonicalizePath(cwd, workspaceV5Of(i?.source, i?.hoverRestOn === true));
+async function resolveJobTranscript(sessionId, cwd, linkScanPath, options, target) {
+  let canonical = await canonicalizePath(cwd, workspaceV5Of(target?.source, target?.hoverRestOn === true));
   if (validateUuid(sessionId) === null)
     return {
-      path: join(getProjectDir(o), "invalid-resume-id.jsonl"),
+      path: join(getProjectDir(canonical), "invalid-resume-id.jsonl"),
       hasMessages: false,
       via: "computed",
     };
-  let path = join(getProjectDir(o), `${sessionId}.jsonl`);
-  let u = [];
+  let path = join(getProjectDir(canonical), `${sessionId}.jsonl`);
+  let candidates = [];
   if (linkScanPath !== undefined)
-    u.push(
+    candidates.push(
       linkScanPath.endsWith(`${sessionId}.jsonl`)
         ? {
             path: linkScanPath,
@@ -558,58 +572,62 @@ async function resolveJobTranscript(sessionId, cwd, linkScanPath, r, i) {
             via: "linkScanDir",
           },
     );
-  let s =
-    i !== undefined && i.hoverRestOn
+  let targetOpts =
+    target !== undefined && target.hoverRestOn
       ? {
-          ...i,
-          source: withSharedTranscriptListing(i.source),
+          ...target,
+          source: withSharedTranscriptListing(target.source),
         }
       : undefined;
-  for (let f of await findProjectDirs(o, s))
-    u.push({
-      path: join(f, `${sessionId}.jsonl`),
+  for (let dir of await findProjectDirs(canonical, targetOpts))
+    candidates.push({
+      path: join(dir, `${sessionId}.jsonl`),
       via: "projectDir",
     });
-  u.push({
+  candidates.push({
     path,
     via: "computed",
   });
-  let c = new Set();
-  let p = (filePath) => transcriptHasMessages(filePath, sessionId, s);
-  let l;
-  for (let f of u) {
-    if (c.has(f.path)) continue;
-    c.add(f.path);
-    let d = await p(f.path);
-    if (d === "has")
+  let seen = new Set();
+  let hasMessages = (filePath) => transcriptHasMessages(filePath, sessionId, targetOpts);
+  let unverifiable;
+  for (let candidate of candidates) {
+    if (seen.has(candidate.path)) continue;
+    seen.add(candidate.path);
+    let state = await hasMessages(candidate.path);
+    if (state === "has")
       return {
-        ...f,
+        ...candidate,
         hasMessages: true,
       };
-    if (d === "unverifiable" && l === undefined) l = f;
+    if (state === "unverifiable" && unverifiable === undefined) unverifiable = candidate;
   }
-  if (r?.crossWorktree !== false)
-    for (let { projectDir } of await findWorktreeProjectDirs(o, s)) {
-      let d = join(projectDir, `${sessionId}.jsonl`);
-      if (s !== undefined) {
-        if (c.has(d)) continue;
-        c.add(d);
+  if (options?.crossWorktree !== false)
+    for (let { projectDir } of await findWorktreeProjectDirs(canonical, targetOpts)) {
+      let path = join(projectDir, `${sessionId}.jsonl`);
+      if (targetOpts !== undefined) {
+        if (seen.has(path)) continue;
+        seen.add(path);
       }
-      let m = await p(d);
-      if (m === "has")
+      let state = await hasMessages(path);
+      if (state === "has")
         return {
-          path: d,
+          path,
           via: "worktreeProjectDir",
           hasMessages: true,
         };
-      if (m === "unverifiable" && l === undefined)
-        l = {
-          path: d,
+      if (state === "unverifiable" && unverifiable === undefined)
+        unverifiable = {
+          path,
           via: "worktreeProjectDir",
         };
     }
-  if (r?.crossWorktree !== false) {
-    let soleTranscriptWithMessagesById = await findSoleTranscriptWithMessagesById(sessionId, c, s);
+  if (options?.crossWorktree !== false) {
+    let soleTranscriptWithMessagesById = await findSoleTranscriptWithMessagesById(
+      sessionId,
+      seen,
+      targetOpts,
+    );
     if (soleTranscriptWithMessagesById !== null)
       return {
         path: soleTranscriptWithMessagesById,
@@ -617,37 +635,41 @@ async function resolveJobTranscript(sessionId, cwd, linkScanPath, r, i) {
         hasMessages: true,
       };
   }
-  if (l !== undefined)
+  if (unverifiable !== undefined)
     return {
-      ...l,
+      ...unverifiable,
       hasMessages: true,
       unverifiable: true,
     };
   return {
-    ...u[0],
+    ...candidates[0],
     hasMessages: false,
   };
 }
 //@ chunk-f9pzpnqt.js:9391-9553 placement
-function transcriptStoreKey(e, n, source) {
-  let r = addressableProjectKey(dirname(e), source.isKeySegment);
-  if (r === undefined || basename(e) !== `${n}.jsonl` || !source.isKeySegment(n)) return;
+function transcriptStoreKey(path, sessionId, source) {
+  let projectKey = addressableProjectKey(dirname(path), source.isKeySegment);
+  if (projectKey === undefined || basename(path) !== `${sessionId}.jsonl` || !source.isKeySegment(sessionId))
+    return;
   return {
     backend: source.backend,
-    key: source.transcriptKey(r, n),
+    key: source.transcriptKey(projectKey, sessionId),
   };
 }
 //@ chunk-f9pzpnqt.js:9553-9869 placement
-async function transcriptHasMessages(filePath, sessionId, t) {
-  let r = t !== undefined && t.hoverRestOn ? transcriptStoreKey(filePath, sessionId, t.source) : undefined;
-  if (r === undefined) return (await _(filePath)) ? "has" : "none";
-  let i = await transcriptMessagesStateV5(r);
-  if (i === "has") return "has";
+async function transcriptHasMessages(filePath, sessionId, target) {
+  let key =
+    target !== undefined && target.hoverRestOn
+      ? transcriptStoreKey(filePath, sessionId, target.source)
+      : undefined;
+  if (key === undefined) return (await _(filePath)) ? "has" : "none";
+  let state = await transcriptMessagesStateV5(key);
+  if (state === "has") return "has";
   try {
     if (!(await lstat(filePath)).isFile()) return "none";
   } catch (error) {
     if (!isEnoentError(error)) return "has";
-    return i === "unknown" ? "unverifiable" : "none";
+    return state === "unknown" ? "unverifiable" : "none";
   }
   return (await _(filePath)) ? "has" : "none";
 }
@@ -656,74 +678,74 @@ function isEnoentError(err) {
   return err !== null && typeof err === "object" && "code" in err && err.code === "ENOENT";
 }
 //@ chunk-f9pzpnqt.js:9951-10033 placement
-function cursorOptions(e) {
+function cursorOptions(cursor) {
   return {
     skipScopeStats: true,
     skipKeyStats: true,
-    ...(e !== undefined && {
-      cursor: e,
+    ...(cursor !== undefined && {
+      cursor,
     }),
   };
 }
 //@ chunk-f9pzpnqt.js:10033-10594 placement
-function withSharedTranscriptListing(e) {
-  let n = new Map();
-  let backend = new Proxy(e.backend, {
-    get(r, i, o) {
-      let a = Reflect.get(r, i, o);
-      if (i !== "listEntries") return typeof a === "function" ? a.bind(r) : a;
-      return (s, c) => {
+function withSharedTranscriptListing(target) {
+  let cache = new Map();
+  let backend = new Proxy(target.backend, {
+    get(backend, prop, receiver) {
+      let value = Reflect.get(backend, prop, receiver);
+      if (prop !== "listEntries") return typeof value === "function" ? value.bind(backend) : value;
+      return (filter, opts) => {
         if (!(
-          s.namespace === "transcript" &&
-          !("projectKey" in s) &&
-          Object.keys(c ?? {}).every(
+          filter.namespace === "transcript" &&
+          !("projectKey" in filter) &&
+          Object.keys(opts ?? {}).every(
             (key) => key === "cursor" || key === "skipScopeStats" || key === "skipKeyStats",
           )
         ))
-          return r.listEntries(s, c);
-        let joined = [c?.cursor ?? "", c?.skipScopeStats, c?.skipKeyStats].map(String).join("\x00");
-        let f = n.get(joined);
-        if (f === undefined) {
-          f = r.listEntries(s, c);
-          n.set(joined, f);
-          let d = () => {
-            n.delete(joined);
+          return backend.listEntries(filter, opts);
+        let joined = [opts?.cursor ?? "", opts?.skipScopeStats, opts?.skipKeyStats].map(String).join("\x00");
+        let cached = cache.get(joined);
+        if (cached === undefined) {
+          cached = backend.listEntries(filter, opts);
+          cache.set(joined, cached);
+          let evict = () => {
+            cache.delete(joined);
           };
-          f.then((m) => {
-            if (!m.ok) d();
-          }, d);
+          cached.then((result) => {
+            if (!result.ok) evict();
+          }, evict);
         }
-        return f;
+        return cached;
       };
     },
   });
   return {
-    ...e,
+    ...target,
     backend,
   };
 }
 //@ chunk-f9pzpnqt.js:10594-10969 placement
-async function findSoleTranscriptWithMessagesById(sessionId, excluded = new Set(), t) {
+async function findSoleTranscriptWithMessagesById(sessionId, excluded = new Set(), target) {
   if (validateUuid(sessionId) === null) return null;
-  if (t !== undefined && t.hoverRestOn && t.source.isKeySegment(sessionId))
-    return findTranscriptInOtherProjects(sessionId, excluded, t.source);
+  if (target !== undefined && target.hoverRestOn && target.source.isKeySegment(sessionId))
+    return findTranscriptInOtherProjects(sessionId, excluded, target.source);
   let projectsDir = getProjectsDir();
-  let i = null;
+  let found = null;
   try {
-    for (let o of await readdir(projectsDir, {
+    for (let dirent of await readdir(projectsDir, {
       withFileTypes: true,
     })) {
-      if (!o.isDirectory()) continue;
-      let a = join(projectsDir, o.name, `${sessionId}.jsonl`);
-      if (excluded.has(a)) continue;
-      if ((await getTranscriptMessagesState(a)) !== "has") continue;
-      if (i !== null) return null;
-      i = a;
+      if (!dirent.isDirectory()) continue;
+      let path = join(projectsDir, dirent.name, `${sessionId}.jsonl`);
+      if (excluded.has(path)) continue;
+      if ((await getTranscriptMessagesState(path)) !== "has") continue;
+      if (found !== null) return null;
+      found = path;
     }
   } catch {
     return null;
   }
-  return i;
+  return found;
 }
 //@ chunk-f9pzpnqt.js:10969-11512 placement
 /**
@@ -737,16 +759,16 @@ async function findTranscriptInOtherProjects(sessionId, excluded, storage) {
   let seen = new Set();
   try {
     let allPages = await readAllPages(
-      (l) =>
+      (cursor) =>
         backend.listEntries(
           {
             namespace: "transcript",
           },
-          cursorOptions(l),
+          cursorOptions(cursor),
         ),
-      async (l) => {
-        for (let f of l) {
-          let projectKey = listedProjectKey(f, isKeySegment);
+      async (items) => {
+        for (let item of items) {
+          let projectKey = listedProjectKey(item, isKeySegment);
           if (projectKey === undefined) continue;
           let transcriptPath = join(projectsDir, projectKey, `${sessionId}.jsonl`);
           if (seen.has(transcriptPath) || excluded.has(transcriptPath)) continue;
@@ -780,24 +802,24 @@ async function findTranscriptInOtherProjects(sessionId, excluded, storage) {
   return found;
 }
 //@ chunk-f9pzpnqt.js:11512-12042 placement = readSessionLite (0.859)
-async function readSessionLite(filePath, n) {
-  if (n !== undefined && n.hoverRestOn) return statWithHeadTail(n.source);
+async function readSessionLite(filePath, target) {
+  if (target !== undefined && target.hoverRestOn) return statWithHeadTail(target.source);
   try {
     if (READ_NOFOLLOW_FLAGS === constants.O_RDONLY) {
       if (!(await lstat(filePath)).isFile()) return null;
     }
-    let t = await open(filePath, READ_NOFOLLOW_FLAGS);
+    let handle = await open(filePath, READ_NOFOLLOW_FLAGS);
     try {
-      let stat = await t.stat();
+      let stat = await handle.stat();
       if (!stat.isFile()) return null;
       let buf = Buffer.allocUnsafe(LITE_READ_BUF_SIZE);
-      let headResult = await t.read(buf, 0, LITE_READ_BUF_SIZE, 0);
+      let headResult = await handle.read(buf, 0, LITE_READ_BUF_SIZE, 0);
       if (headResult.bytesRead === 0) return null;
       let head = buf.toString("utf8", 0, headResult.bytesRead);
       let tailOffset = Math.max(0, stat.size - LITE_READ_BUF_SIZE);
       let tail = head;
       if (tailOffset > 0) {
-        let tailResult = await t.read(buf, 0, LITE_READ_BUF_SIZE, tailOffset);
+        let tailResult = await handle.read(buf, 0, LITE_READ_BUF_SIZE, tailOffset);
         tail = buf.toString("utf8", 0, tailResult.bytesRead);
       }
       return {
@@ -807,15 +829,15 @@ async function readSessionLite(filePath, n) {
         tail,
       };
     } finally {
-      await t.close();
+      await handle.close();
     }
   } catch {
     return null;
   }
 }
 //@ chunk-f9pzpnqt.js:12042-12181 placement
-async function statWithHeadTail(source) {
-  let headTailV5 = await readHeadTailV5(source);
+async function statWithHeadTail(target) {
+  let headTailV5 = await readHeadTailV5(target);
   if (headTailV5 === null) return null;
   return {
     mtime: Math.trunc(headTailV5.mtimeMs),
@@ -831,63 +853,66 @@ function hashPathForSuffix(str) {
   return Math.abs(hashString31(str)).toString(36);
 }
 //@ chunk-f9pzpnqt.js:12245-12297 placement
-function sanitizePath_2(e) {
-  return e.replace(/[^a-zA-Z0-9]/g, "-");
+function sanitizePath_2(path) {
+  return path.replace(/[^a-zA-Z0-9]/g, "-");
 }
 //@ chunk-f9pzpnqt.js:12297-12384 placement
 /**
  * 把路径清洗成目录名：非字母数字替换为 '-'，超 200 字符时保留前 200 字符并追加 '-<hash36>'。
  */
-function sanitizePath(e) {
-  let n = sanitizePath_2(e);
-  if (n.length <= MAX_SANITIZED_LENGTH) return n;
-  return `${n.slice(0, MAX_SANITIZED_LENGTH)}-${hashPathForSuffix(e)}`;
+function sanitizePath(path) {
+  let sanitized = sanitizePath_2(path);
+  if (sanitized.length <= MAX_SANITIZED_LENGTH) return sanitized;
+  return `${sanitized.slice(0, MAX_SANITIZED_LENGTH)}-${hashPathForSuffix(path)}`;
 }
 //@ chunk-f9pzpnqt.js:12384-12458 placement
-function normalizePathForCwdCompare(e, n) {
-  let replaced = e.replaceAll("\\", "/");
-  return n ? replaced.toLowerCase() : replaced;
+function normalizePathForCwdCompare(path, foldCase) {
+  let replaced = path.replaceAll("\\", "/");
+  return foldCase ? replaced.toLowerCase() : replaced;
 }
 //@ chunk-f9pzpnqt.js:12458-12580 placement
-function isSanitizedNameCollision(e, n, t) {
-  let r = identity(e);
-  let i = identity(n);
-  let o = (a) => (t ? a.toLowerCase() : a);
-  if (o(sanitizePath_2(r)) !== o(sanitizePath_2(i))) return false;
-  return normalizePathForCwdCompare(r, t) !== normalizePathForCwdCompare(i, t);
+function isSanitizedNameCollision(a, b, foldCase) {
+  let left = identity(a);
+  let right = identity(b);
+  let fold = (value) => (foldCase ? value.toLowerCase() : value);
+  if (fold(sanitizePath_2(left)) !== fold(sanitizePath_2(right))) return false;
+  return normalizePathForCwdCompare(left, foldCase) !== normalizePathForCwdCompare(right, foldCase);
 }
 //@ chunk-f9pzpnqt.js:12580-12884 placement
 async function recordedCwdCollidesWithProjectResolved(
-  e,
-  n,
-  t,
+  recorded,
+  projectPath,
+  foldCase,
   hasUntouchableRecordSpellingAsync,
   realPathOptions,
 ) {
-  if (!isSanitizedNameCollision(e, n, t)) return false;
-  if (isNetworkishPath(e) || isNetworkishPath(n)) return false;
-  if ((await hasUntouchableRecordSpellingAsync(e)) || (await hasUntouchableRecordSpellingAsync(n)))
+  if (!isSanitizedNameCollision(recorded, projectPath, foldCase)) return false;
+  if (isNetworkishPath(recorded) || isNetworkishPath(projectPath)) return false;
+  if (
+    (await hasUntouchableRecordSpellingAsync(recorded)) ||
+    (await hasUntouchableRecordSpellingAsync(projectPath))
+  )
     return false;
-  let o;
+  let resolved;
   try {
     if (realPathOptions !== undefined && realPathOptions.hoverRestOn) {
-      let u = await realPathOptions.realPath(e);
-      if (!u.ok || !u.value.found) return false;
-      o = identity(u.value.path);
-    } else o = identity(await realpath(e));
+      let realResult = await realPathOptions.realPath(recorded);
+      if (!realResult.ok || !realResult.value.found) return false;
+      resolved = identity(realResult.value.path);
+    } else resolved = identity(await realpath(recorded));
   } catch {
     return false;
   }
-  let a = await canonicalizePath(n, realPathOptions);
-  return isSanitizedNameCollision(o, a, t);
+  let canonical = await canonicalizePath(projectPath, realPathOptions);
+  return isSanitizedNameCollision(resolved, canonical, foldCase);
 }
 //@ chunk-f9pzpnqt.js:12884-13039 placement
-function recordedCwdIsWithinOwnWorktrees(e, n, t) {
-  if (n === undefined) return false;
-  let r = normalizePathForCwdCompare(identity(e), t);
-  return n.some((i) => {
-    let o = normalizePathForCwdCompare(identity(i), t);
-    return r === o || r.startsWith(o.endsWith("/") ? o : o + "/");
+function recordedCwdIsWithinOwnWorktrees(recorded, worktrees, foldCase) {
+  if (worktrees === undefined) return false;
+  let path = normalizePathForCwdCompare(identity(recorded), foldCase);
+  return worktrees.some((wt) => {
+    let normalized = normalizePathForCwdCompare(identity(wt), foldCase);
+    return path === normalized || path.startsWith(normalized.endsWith("/") ? normalized : normalized + "/");
   });
 }
 //@ chunk-f9pzpnqt.js:13039-13063 placement
@@ -905,17 +930,17 @@ function getProjectsDir() {
 /**
  * 项目目录名：自定义配置目录或 diskless 时可由 CLAUDE_CODE_PROJECT_DIR_NAME 覆盖，否则清洗 cwd。
  */
-function getProjectKey(e) {
-  return getProjectDirNameOverride() ?? sanitizePath(e);
+function getProjectKey(path) {
+  return getProjectDirNameOverride() ?? sanitizePath(path);
 }
 //@ chunk-f9pzpnqt.js:13138-13192 placement
-function legacyDerivedProjectKey(e) {
-  let n = sanitizePath(e);
-  return n === getProjectKey(e) ? undefined : n;
+function legacyDerivedProjectKey(path) {
+  let legacyKey = sanitizePath(path);
+  return legacyKey === getProjectKey(path) ? undefined : legacyKey;
 }
 //@ chunk-f9pzpnqt.js:13192-13232 placement
-function getProjectDir(e, n = getProjectsDir()) {
-  return join(n, getProjectKey(e));
+function getProjectDir(path, projectsDir = getProjectsDir()) {
+  return join(projectsDir, getProjectKey(path));
 }
 //@ chunk-f9pzpnqt.js:13232-13292 placement
 function getPinnedProjectDir() {
@@ -923,60 +948,60 @@ function getPinnedProjectDir() {
   return projectDirNameOverride === undefined ? null : join(getProjectsDir(), projectDirNameOverride);
 }
 //@ chunk-f9pzpnqt.js:13292-13355 placement
-function addressableProjectKey(e, isKeySegment) {
-  let t = basename(e);
-  return dirname(e) === getProjectsDir() && isKeySegment(t) ? t : undefined;
+function addressableProjectKey(dir, isKeySegment) {
+  let key = basename(dir);
+  return dirname(dir) === getProjectsDir() && isKeySegment(key) ? key : undefined;
 }
 //@ chunk-f9pzpnqt.js:13355-13526 placement
-async function canonicalizePath(e, realPathOptions) {
+async function canonicalizePath(path, realPathOptions) {
   try {
     if (realPathOptions !== undefined && realPathOptions.hoverRestOn) {
-      let t = await realPathOptions.realPath(e);
-      return identity(t.ok && t.value.found ? t.value.path : e);
+      let realResult = await realPathOptions.realPath(path);
+      return identity(realResult.ok && realResult.value.found ? realResult.value.path : path);
     }
-    return identity(await realpath(e));
+    return identity(await realpath(path));
   } catch {
-    return identity(e);
+    return identity(path);
   }
 }
 //@ chunk-f9pzpnqt.js:13526-13554 placement
-function projectPathSpellingsForRead(e, n) {
-  return [n];
+function projectPathSpellingsForRead(path, cwd) {
+  return [cwd];
 }
 //@ chunk-f9pzpnqt.js:13554-13975 placement
-async function dirBelongsToProject(e, cwd, caseInsensitive, r) {
-  let source = r !== undefined && r.hoverRestOn ? r.source : undefined;
-  let projectKey = source === undefined ? undefined : addressableProjectKey(e, source.isKeySegment);
+async function dirBelongsToProject(dir, cwd, foldCase, target) {
+  let source = target !== undefined && target.hoverRestOn ? target.source : undefined;
+  let projectKey = source === undefined ? undefined : addressableProjectKey(dir, source.isKeySegment);
   if (source !== undefined && projectKey !== undefined) {
-    let s = await hasSessionForCwd(projectKey, cwd, caseInsensitive, source);
-    if (s !== undefined) return s;
+    let result = await hasSessionForCwd(projectKey, cwd, foldCase, source);
+    if (result !== undefined) return result;
   }
   if (isDiskless()) return false;
-  let a = sanitizePath_2(cwd);
-  let u;
+  let sanitizedCwd = sanitizePath_2(cwd);
+  let dirents;
   try {
-    u = await readdir(e, {
+    dirents = await readdir(dir, {
       withFileTypes: true,
     });
   } catch {
     return false;
   }
-  for (let s of u) {
-    if (!s.isFile() || !s.name.endsWith(".jsonl")) continue;
-    let sessionLite = await readSessionLite(join(e, s.name));
-    if (sessionLite === null) continue;
-    if (matchesSessionCwd(sessionLite, a, caseInsensitive)) return true;
+  for (let dirent of dirents) {
+    if (!dirent.isFile() || !dirent.name.endsWith(".jsonl")) continue;
+    let lite = await readSessionLite(join(dir, dirent.name));
+    if (lite === null) continue;
+    if (matchesSessionCwd(lite, sanitizedCwd, foldCase)) return true;
   }
   return false;
 }
 //@ chunk-f9pzpnqt.js:13975-14145 placement
-function matchesSessionCwd(e, n, t) {
-  let r =
-    extractFieldFromLastEntryOfTypeStrict(e.tail, "relocated", "relocatedCwd") ??
-    extractFieldFromFirstEntryStrict(e.head, "cwd");
-  if (r === undefined) return false;
-  let i = sanitizePath_2(identity(r));
-  return t ? i.toLowerCase() === n.toLowerCase() : i === n;
+function matchesSessionCwd(lite, sanitizedCwd, foldCase) {
+  let recorded =
+    extractFieldFromLastEntryOfTypeStrict(lite.tail, "relocated", "relocatedCwd") ??
+    extractFieldFromFirstEntryStrict(lite.head, "cwd");
+  if (recorded === undefined) return false;
+  let sanitized = sanitizePath_2(identity(recorded));
+  return foldCase ? sanitized.toLowerCase() === sanitizedCwd.toLowerCase() : sanitized === sanitizedCwd;
 }
 //@ chunk-f9pzpnqt.js:14145-14695 placement
 /**
@@ -989,26 +1014,26 @@ async function hasSessionForCwd(projectKey, cwd, caseInsensitive, storage) {
   let seen = new Set();
   try {
     let allPages = await readAllPages(
-      (l) =>
+      (cursor) =>
         backend.listEntries(
           {
             namespace: "transcript",
             projectKey,
           },
-          cursorOptions(l),
+          cursorOptions(cursor),
         ),
-      async (l) => {
-        for (let f of l) {
+      async (items) => {
+        for (let item of items) {
           if (
-            f.kind !== "key" ||
-            f.key.namespace !== "transcript" ||
-            f.key.projectKey !== projectKey ||
-            f.key.agentId !== undefined ||
-            !isKeySegment(f.key.sessionId) ||
-            seen.has(f.key.sessionId)
+            item.kind !== "key" ||
+            item.key.namespace !== "transcript" ||
+            item.key.projectKey !== projectKey ||
+            item.key.agentId !== undefined ||
+            !isKeySegment(item.key.sessionId) ||
+            seen.has(item.key.sessionId)
           )
             continue;
-          let sessionId = f.key.sessionId;
+          let sessionId = item.key.sessionId;
           let headTail = await statWithHeadTail({
             backend,
             key: transcriptKey(projectKey, sessionId),
@@ -1033,168 +1058,179 @@ async function hasSessionForCwd(projectKey, cwd, caseInsensitive, storage) {
   return false;
 }
 //@ chunk-f9pzpnqt.js:14695-15202 placement
-async function findProjectDirs(e, n, t = getProjectsDir()) {
-  if (n !== undefined && n.hoverRestOn) return listProjectDirsForCwd(e, n);
+async function findProjectDirs(cwd, target, projectsDir = getProjectsDir()) {
+  if (target !== undefined && target.hoverRestOn) return listProjectDirsForCwd(cwd, target);
   if (isDiskless()) return [];
-  let projectDir = getProjectDir(e, t);
-  let i = [];
+  let projectDir = getProjectDir(cwd, projectsDir);
+  let dirs = [];
   try {
     await readdir(projectDir);
-    i.push(projectDir);
+    dirs.push(projectDir);
   } catch {}
-  let exact = legacyDerivedProjectKey(e);
+  let exact = legacyDerivedProjectKey(cwd);
   if (exact !== undefined) {
-    let l = join(t, exact);
+    let legacyDir = join(projectsDir, exact);
     try {
-      await readdir(l);
-      i.push(l);
+      await readdir(legacyDir);
+      dirs.push(legacyDir);
     } catch {}
-    return i;
+    return dirs;
   }
-  let sanitized = sanitizePath(e);
-  if (sanitized.length <= MAX_SANITIZED_LENGTH) return i;
-  let u = false;
-  let s = (l) => (u ? l.toLowerCase() : l);
-  let prefix = s(sanitized.slice(0, MAX_SANITIZED_LENGTH) + "-");
-  let p = s(projectDir);
+  let sanitized = sanitizePath(cwd);
+  if (sanitized.length <= MAX_SANITIZED_LENGTH) return dirs;
+  let foldCase = false;
+  let fold = (value) => (foldCase ? value.toLowerCase() : value);
+  let prefix = fold(sanitized.slice(0, MAX_SANITIZED_LENGTH) + "-");
+  let ownDir = fold(projectDir);
   try {
-    for (let l of await readdir(t, {
+    for (let dirent of await readdir(projectsDir, {
       withFileTypes: true,
     })) {
-      if (!l.isDirectory() || !s(l.name).startsWith(prefix)) continue;
-      let f = join(t, l.name);
-      if (s(f) !== p && (await dirBelongsToProject(f, e, u))) i.push(f);
+      if (!dirent.isDirectory() || !fold(dirent.name).startsWith(prefix)) continue;
+      let dir = join(projectsDir, dirent.name);
+      if (fold(dir) !== ownDir && (await dirBelongsToProject(dir, cwd, foldCase))) dirs.push(dir);
     }
   } catch {}
-  return i;
+  return dirs;
 }
 //@ chunk-f9pzpnqt.js:15202-15341 placement
-async function listProjectDirsForCwd(e, n) {
-  let t = await listProjectDirNamesV5(n.source);
-  if (t === null) {
-    let r = legacyDerivedProjectKey(e);
-    return [getProjectDir(e), ...(r !== undefined ? [join(getProjectsDir(), r)] : [])];
+async function listProjectDirsForCwd(cwd, target) {
+  let names = await listProjectDirNamesV5(target.source);
+  if (names === null) {
+    let legacyKey = legacyDerivedProjectKey(cwd);
+    return [getProjectDir(cwd), ...(legacyKey !== undefined ? [join(getProjectsDir(), legacyKey)] : [])];
   }
-  return projectDirsFromListedNames(e, t, false, n);
+  return projectDirsFromListedNames(cwd, names, false, target);
 }
 //@ chunk-f9pzpnqt.js:15341-15641 placement
 async function listProjectDirNamesV5(source) {
   let { backend, isKeySegment } = source;
-  let r = [];
-  let i = new Set();
-  let o = 0;
+  let names = [];
+  let seen = new Set();
+  let pages = 0;
   try {
     if (
       (
         await readAllPages(
-          (u) =>
+          (cursor) =>
             backend.listEntries(
               {
                 namespace: "transcript",
               },
-              cursorOptions(u),
+              cursorOptions(cursor),
             ),
-          (u) => {
-            for (let s of u) {
-              let c = listedProjectKey(s, isKeySegment);
-              if (c !== undefined && !i.has(c)) {
-                i.add(c);
-                r.push(c);
+          (items) => {
+            for (let item of items) {
+              let key = listedProjectKey(item, isKeySegment);
+              if (key !== undefined && !seen.has(key)) {
+                seen.add(key);
+                names.push(key);
               }
             }
-            o++;
+            pages++;
           },
         )
       ).status === "error"
     )
-      return o === 0 ? null : r;
+      return pages === 0 ? null : names;
   } catch {
-    return o === 0 ? null : r;
+    return pages === 0 ? null : names;
   }
-  return r;
+  return names;
 }
 //@ chunk-f9pzpnqt.js:15641-16125 placement
-async function projectDirsFromListedNames(e, n, t, r) {
-  let projectKey = getProjectKey(e);
-  let projectDir = getProjectDir(e);
-  let a = legacyDerivedProjectKey(e);
-  let u =
-    a === undefined && projectKey.length > MAX_SANITIZED_LENGTH
+async function projectDirsFromListedNames(cwd, names, foldCase, target) {
+  let projectKey = getProjectKey(cwd);
+  let projectDir = getProjectDir(cwd);
+  let legacyKey = legacyDerivedProjectKey(cwd);
+  let truncatedPrefix =
+    legacyKey === undefined && projectKey.length > MAX_SANITIZED_LENGTH
       ? projectKey.slice(0, MAX_SANITIZED_LENGTH) + "-"
       : undefined;
   let projectsDir = getProjectsDir();
-  let c = (g) => (t ? g.toLowerCase() : g);
-  let p = u !== undefined ? c(u) : undefined;
-  let l = c(projectKey);
-  let f = false;
-  let d;
-  let m = [];
-  let y = new Set();
-  for (let g of n)
-    if (g === projectKey) f = true;
-    else if (a !== undefined) {
-      if (d === undefined && c(g) === c(a)) d = join(projectsDir, g);
-    } else if (p !== undefined && c(g).startsWith(p) && c(g) !== l && !y.has(c(g))) {
-      y.add(c(g));
-      m.push(g);
+  let fold = (value) => (foldCase ? value.toLowerCase() : value);
+  let prefix = truncatedPrefix !== undefined ? fold(truncatedPrefix) : undefined;
+  let ownKey = fold(projectKey);
+  let hasOwn = false;
+  let legacyDir;
+  let candidates = [];
+  let seen = new Set();
+  for (let name of names)
+    if (name === projectKey) hasOwn = true;
+    else if (legacyKey !== undefined) {
+      if (legacyDir === undefined && fold(name) === fold(legacyKey)) legacyDir = join(projectsDir, name);
+    } else if (
+      prefix !== undefined &&
+      fold(name).startsWith(prefix) &&
+      fold(name) !== ownKey &&
+      !seen.has(fold(name))
+    ) {
+      seen.add(fold(name));
+      candidates.push(name);
     }
-  let h = [];
-  for (let g of m) {
-    let I = join(projectsDir, g);
-    if (await dirBelongsToProject(I, e, t, r)) h.push(I);
+  let dirs = [];
+  for (let name of candidates) {
+    let dir = join(projectsDir, name);
+    if (await dirBelongsToProject(dir, cwd, foldCase, target)) dirs.push(dir);
   }
-  return [...(f ? [projectDir] : []), ...(d !== undefined ? [d] : []), ...h];
+  return [...(hasOwn ? [projectDir] : []), ...(legacyDir !== undefined ? [legacyDir] : []), ...dirs];
 }
 //@ chunk-f9pzpnqt.js:16125-16175 placement
-async function findProjectDir(originalCwd, n) {
-  return (await findProjectDirs(originalCwd, n))[0];
+async function findProjectDir(originalCwd, target) {
+  return (await findProjectDirs(originalCwd, target))[0];
 }
 //@ chunk-f9pzpnqt.js:16175-16414 placement
-async function findWorktreeProjectDirs(cwd, n, t = getProjectsDir()) {
-  let r = [];
-  for (let i of await getWorktreePathsPortable(cwd)) {
-    if (i === cwd) continue;
-    let projectDirs = await findProjectDirs(i, n, t);
-    if (n !== undefined && n.hoverRestOn) {
-      let projectDir = getProjectDir(i);
+async function findWorktreeProjectDirs(cwd, target, projectsDir = getProjectsDir()) {
+  let out = [];
+  for (let wt of await getWorktreePathsPortable(cwd)) {
+    if (wt === cwd) continue;
+    let projectDirs = await findProjectDirs(wt, target, projectsDir);
+    if (target !== undefined && target.hoverRestOn) {
+      let projectDir = getProjectDir(wt);
       if (!projectDirs.includes(projectDir)) projectDirs.push(projectDir);
     }
     for (let projectDir of projectDirs)
-      r.push({
-        worktreePath: i,
+      out.push({
+        worktreePath: wt,
         projectDir,
       });
   }
-  return r;
+  return out;
 }
 //@ chunk-f9pzpnqt.js:16414-17894 placement
-async function resolveSessionFilePath(e, n, transcriptStorageContext, hoverRestOn, i = getProjectsDir()) {
-  let o = `${e}.jsonl`;
-  let a =
-    hoverRestOn && transcriptStorageContext !== undefined && transcriptStorageContext.isKeySegment(e)
+async function resolveSessionFilePath(
+  sessionId,
+  projectPath,
+  transcriptStorageContext,
+  hoverRestOn,
+  projectsDir = getProjectsDir(),
+) {
+  let fileName = `${sessionId}.jsonl`;
+  let source =
+    hoverRestOn && transcriptStorageContext !== undefined && transcriptStorageContext.isKeySegment(sessionId)
       ? withSharedTranscriptListing(transcriptStorageContext)
       : undefined;
-  let u =
-    a === undefined
+  let target =
+    source === undefined
       ? undefined
       : {
-          source: a,
+          source,
           hoverRestOn,
         };
-  async function s(p, projectPath) {
-    let f = join(p, o);
-    if (a) {
-      let d = addressableProjectKey(p, a.isKeySegment);
-      if (d !== undefined) {
+  async function tryDir(dir, projectPath) {
+    let filePath = join(dir, fileName);
+    if (source) {
+      let projectKey = addressableProjectKey(dir, source.isKeySegment);
+      if (projectKey !== undefined) {
         try {
-          let stats = await a.backend.stat(a.transcriptKey(d, e));
+          let stats = await source.backend.stat(source.transcriptKey(projectKey, sessionId));
           if (stats.ok) {
-            let y = stats.value.storedBytes ?? stats.value.size;
-            if (y > 0)
+            let size = stats.value.storedBytes ?? stats.value.size;
+            if (size > 0)
               return {
-                filePath: f,
+                filePath,
                 projectPath,
-                fileSize: y,
+                fileSize: size,
               };
           }
         } catch {}
@@ -1202,62 +1238,65 @@ async function resolveSessionFilePath(e, n, transcriptStorageContext, hoverRestO
       }
     }
     try {
-      let d = await stat(f);
-      if (d.size > 0)
+      let stats = await stat(filePath);
+      if (stats.size > 0)
         return {
-          filePath: f,
+          filePath,
           projectPath,
-          fileSize: d.size,
+          fileSize: stats.size,
         };
     } catch {}
     return;
   }
-  if (n) {
-    let p = await canonicalizePath(n, workspaceV5Of(transcriptStorageContext, hoverRestOn));
-    let l = new Set();
-    for (let f of projectPathSpellingsForRead(n, p))
-      for (let d of await findProjectDirs(f, u, i)) {
-        let m = d;
-        if (l.has(m)) continue;
-        l.add(m);
-        let y = await s(d, f);
-        if (y) return y;
+  if (projectPath) {
+    let canonical = await canonicalizePath(projectPath, workspaceV5Of(transcriptStorageContext, hoverRestOn));
+    let seen = new Set();
+    for (let spelling of projectPathSpellingsForRead(projectPath, canonical))
+      for (let dir of await findProjectDirs(spelling, target, projectsDir)) {
+        let candidateDir = dir;
+        if (seen.has(candidateDir)) continue;
+        seen.add(candidateDir);
+        let found = await tryDir(dir, spelling);
+        if (found) return found;
       }
-    for (let { worktreePath, projectDir } of await findWorktreeProjectDirs(p, u, i)) {
-      let m = await s(projectDir, worktreePath);
-      if (m) return m;
+    for (let { worktreePath, projectDir } of await findWorktreeProjectDirs(canonical, target, projectsDir)) {
+      let found = await tryDir(projectDir, worktreePath);
+      if (found) return found;
     }
     return;
   }
-  if (a) {
-    let p = new Map();
+  if (source) {
+    let byKey = new Map();
     try {
       if (
         (
           await readAllPages(
-            (d) =>
-              a.backend.listEntries(
+            (cursor) =>
+              source.backend.listEntries(
                 {
                   namespace: "transcript",
                 },
-                d !== undefined
+                cursor !== undefined
                   ? {
-                      cursor: d,
+                      cursor,
                     }
                   : undefined,
               ),
-            (d) => {
-              for (let m of d) {
-                let y = listedProjectKey(m, a.isKeySegment);
-                if (y === undefined) continue;
-                let h = m.kind === "scope" && m.mtimeMs !== undefined ? m.mtimeMs : Number.NEGATIVE_INFINITY;
-                let g = p.get(y);
-                if (g === undefined)
-                  p.set(y, {
-                    projectKey: y,
-                    mtimeMs: h,
+            (items) => {
+              for (let item of items) {
+                let key = listedProjectKey(item, source.isKeySegment);
+                if (key === undefined) continue;
+                let mtime =
+                  item.kind === "scope" && item.mtimeMs !== undefined
+                    ? item.mtimeMs
+                    : Number.NEGATIVE_INFINITY;
+                let existing = byKey.get(key);
+                if (existing === undefined)
+                  byKey.set(key, {
+                    projectKey: key,
+                    mtimeMs: mtime,
                   });
-                else if (h > g.mtimeMs) g.mtimeMs = h;
+                else if (mtime > existing.mtimeMs) existing.mtimeMs = mtime;
               }
             },
           )
@@ -1267,38 +1306,43 @@ async function resolveSessionFilePath(e, n, transcriptStorageContext, hoverRestO
     } catch {
       return;
     }
-    let l = [...p.values()];
-    l.sort((f, d) =>
-      f.mtimeMs !== d.mtimeMs
-        ? d.mtimeMs - f.mtimeMs
-        : f.projectKey < d.projectKey
+    let entries = [...byKey.values()];
+    entries.sort((a, b) =>
+      a.mtimeMs !== b.mtimeMs
+        ? b.mtimeMs - a.mtimeMs
+        : a.projectKey < b.projectKey
           ? -1
-          : f.projectKey > d.projectKey
+          : a.projectKey > b.projectKey
             ? 1
             : 0,
     );
-    for (let { projectKey } of l) {
-      let d = await s(join(i, projectKey), undefined);
-      if (d) return d;
+    for (let { projectKey } of entries) {
+      let found = await tryDir(join(projectsDir, projectKey), undefined);
+      if (found) return found;
     }
     return;
   }
-  let c;
+  let names;
   try {
-    c = await readdir(i);
+    names = await readdir(projectsDir);
   } catch {
     return;
   }
-  for (let p of c) {
-    let l = await s(join(i, p), undefined);
-    if (l) return l;
+  for (let name of names) {
+    let found = await tryDir(join(projectsDir, name), undefined);
+    if (found) return found;
   }
   return;
 }
 //@ chunk-f9pzpnqt.js:17894-17960 placement = compactBoundaryMarker (1)
-var TRANSCRIPT_READ_CHUNK_SIZE = 1048576;
-var SKIP_PRECOMPACT_THRESHOLD = 5242880;
-var COMPACT_BOUNDARY_MARKER = Buffer.from('"compact_boundary"');
+var TRANSCRIPT_READ_CHUNK_SIZE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var SKIP_PRECOMPACT_THRESHOLD;
+var COMPACT_BOUNDARY_MARKER;
+deferInit("chunk-f9pzpnqt.js:17894", () => {
+  TRANSCRIPT_READ_CHUNK_SIZE = 1048576;
+  SKIP_PRECOMPACT_THRESHOLD = 5242880;
+  COMPACT_BOUNDARY_MARKER = Buffer.from('"compact_boundary"');
+});
 //@ chunk-f9pzpnqt.js:17960-18194 fingerprint = parseBoundaryLine (0.909)
 function parseBoundaryLine(line) {
   try {
@@ -1330,11 +1374,18 @@ function hasPrefix_2(src, prefix, at, end) {
   return end - at >= prefix.length && src.compare(prefix, 0, prefix.length, at, at + prefix.length) === 0;
 }
 //@ chunk-f9pzpnqt.js:18487-18606 fingerprint = SYSTEM_PREFIX (0.681)
-var ATTRIBUTION_SNAPSHOT_PREFIX = Buffer.from('{"type":"attribution-snapshot"');
-var buffer_3 = Buffer.from('{"type":"system"');
-var ATTRIBUTION_SNAPSHOT_PREFIX_BUFFER = 10;
-var buffer_4 = Buffer.from([ATTRIBUTION_SNAPSHOT_PREFIX_BUFFER]);
-var ATTRIBUTION_SNAPSHOT_MARKER = 256;
+var ATTRIBUTION_SNAPSHOT_PREFIX; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var buffer_3;
+var ATTRIBUTION_SNAPSHOT_PREFIX_BUFFER;
+var buffer_4;
+var ATTRIBUTION_SNAPSHOT_MARKER;
+deferInit("chunk-f9pzpnqt.js:18487", () => {
+  ATTRIBUTION_SNAPSHOT_PREFIX = Buffer.from('{"type":"attribution-snapshot"');
+  buffer_3 = Buffer.from('{"type":"system"');
+  ATTRIBUTION_SNAPSHOT_PREFIX_BUFFER = 10;
+  buffer_4 = Buffer.from([ATTRIBUTION_SNAPSHOT_PREFIX_BUFFER]);
+  ATTRIBUTION_SNAPSHOT_MARKER = 256;
+});
 //@ chunk-f9pzpnqt.js:18606-19241 fingerprint = processStraddle (1)
 function processStraddle(s, chunk, bytesRead) {
   s.straddleSnapCarryLen = 0;
@@ -1489,10 +1540,10 @@ async function streamTranscriptRecords(backend, key, maxBytes, onChunk) {
   }
 }
 //@ chunk-f9pzpnqt.js:21325-23272 placement = readTranscriptForLoad (0.788)
-async function readTranscriptForLoad(filePath, maxBytes, t) {
+async function readTranscriptForLoad(filePath, maxBytes, target) {
   let boundaryMarker = COMPACT_BOUNDARY_MARKER;
   let CHUNK_SIZE = TRANSCRIPT_READ_CHUNK_SIZE;
-  let o = {
+  let scanState = {
     out: {
       buf: Buffer.allocUnsafe(Math.min(maxBytes, 8388608)),
       len: 0,
@@ -1509,52 +1560,52 @@ async function readTranscriptForLoad(filePath, maxBytes, t) {
     straddleSnapCarryLen: 0,
     straddleSnapTailEnd: 0,
   };
-  if (t !== undefined && t.hoverRestOn) {
-    let { backend, key } = t.source;
-    let p = 0;
+  if (target !== undefined && target.hoverRestOn) {
+    let { backend, key } = target.source;
+    let position = 0;
     let onChunk = (chunk) => {
       let bytesRead = chunk.length;
-      p += bytesRead;
-      let m = processStraddle(o, chunk, bytesRead);
+      position += bytesRead;
+      let chunkOff = processStraddle(scanState, chunk, bytesRead);
       let buf;
-      if (o.carryLen > 0) {
-        let g = o.carryLen + (bytesRead - m);
-        buf = Buffer.allocUnsafe(g);
-        o.carryBuf.copy(buf, 0, 0, o.carryLen);
-        chunk.copy(buf, o.carryLen, m, bytesRead);
-      } else buf = chunk.subarray(m, bytesRead);
-      let h = scanChunkLines(o, buf, boundaryMarker);
-      captureSnap(o, buf, chunk, h.lastSnapStart, h.lastSnapEnd);
-      captureCarry(o, buf, h.trailStart);
-      o.bufFileOff += h.trailStart;
+      if (scanState.carryLen > 0) {
+        let bufLen = scanState.carryLen + (bytesRead - chunkOff);
+        buf = Buffer.allocUnsafe(bufLen);
+        scanState.carryBuf.copy(buf, 0, 0, scanState.carryLen);
+        chunk.copy(buf, scanState.carryLen, chunkOff, bytesRead);
+      } else buf = chunk.subarray(chunkOff, bytesRead);
+      let scan = scanChunkLines(scanState, buf, boundaryMarker);
+      captureSnap(scanState, buf, chunk, scan.lastSnapStart, scan.lastSnapEnd);
+      captureCarry(scanState, buf, scan.trailStart);
+      scanState.bufFileOff += scan.trailStart;
     };
-    while (p < maxBytes) {
-      let f = await backend.read([
+    while (position < maxBytes) {
+      let read = await backend.read([
         {
           key,
-          offset: p,
-          length: Math.min(CHUNK_SIZE, maxBytes - p),
+          offset: position,
+          length: Math.min(CHUNK_SIZE, maxBytes - position),
         },
       ]);
-      if (!f.ok) {
-        if (p === 0 && isByteViewUnsupportedError(f.error)) {
+      if (!read.ok) {
+        if (position === 0 && isByteViewUnsupportedError(read.error)) {
           await streamTranscriptRecords(backend, key, maxBytes, onChunk);
           break;
         }
         throw Error("transcript ranged read failed", {
-          cause: f.error,
+          cause: read.error,
         });
       }
-      let [d] = f.value.items;
-      if (!d.found) throw Error("transcript stream absent during load");
-      if (d.value.length === 0) break;
-      onChunk(Buffer.from(d.value.buffer, d.value.byteOffset, d.value.length));
+      let [item] = read.value.items;
+      if (!item.found) throw Error("transcript stream absent during load");
+      if (item.value.length === 0) break;
+      onChunk(Buffer.from(item.value.buffer, item.value.byteOffset, item.value.length));
     }
-    finalizeOutput(o);
+    finalizeOutput(scanState);
     return {
-      boundaryStartOffset: o.boundaryStartOffset,
-      postBoundaryBuf: o.out.buf.subarray(0, o.out.len),
-      hasPreservedSegment: o.hasPreservedSegment,
+      boundaryStartOffset: scanState.boundaryStartOffset,
+      postBoundaryBuf: scanState.out.buf.subarray(0, scanState.out.len),
+      hasPreservedSegment: scanState.hasPreservedSegment,
     };
   }
   if (typeof filePath !== "string")
@@ -1569,76 +1620,83 @@ async function readTranscriptForLoad(filePath, maxBytes, t) {
       let { bytesRead } = await fd.read(chunk, 0, Math.min(CHUNK_SIZE, maxBytes - filePos), filePos);
       if (bytesRead === 0) break;
       filePos += bytesRead;
-      let chunkOff = processStraddle(o, chunk, bytesRead);
+      let chunkOff = processStraddle(scanState, chunk, bytesRead);
       let buf;
-      if (o.carryLen > 0) {
-        let bufLen = o.carryLen + (bytesRead - chunkOff);
+      if (scanState.carryLen > 0) {
+        let bufLen = scanState.carryLen + (bytesRead - chunkOff);
         buf = Buffer.allocUnsafe(bufLen);
-        o.carryBuf.copy(buf, 0, 0, o.carryLen);
-        chunk.copy(buf, o.carryLen, chunkOff, bytesRead);
+        scanState.carryBuf.copy(buf, 0, 0, scanState.carryLen);
+        chunk.copy(buf, scanState.carryLen, chunkOff, bytesRead);
       } else buf = chunk.subarray(chunkOff, bytesRead);
-      let f = scanChunkLines(o, buf, boundaryMarker);
-      captureSnap(o, buf, chunk, f.lastSnapStart, f.lastSnapEnd);
-      captureCarry(o, buf, f.trailStart);
-      o.bufFileOff += f.trailStart;
+      let scan = scanChunkLines(scanState, buf, boundaryMarker);
+      captureSnap(scanState, buf, chunk, scan.lastSnapStart, scan.lastSnapEnd);
+      captureCarry(scanState, buf, scan.trailStart);
+      scanState.bufFileOff += scan.trailStart;
     }
-    finalizeOutput(o);
+    finalizeOutput(scanState);
   } finally {
     await fd.close();
   }
   return {
-    boundaryStartOffset: o.boundaryStartOffset,
-    postBoundaryBuf: o.out.buf.subarray(0, o.out.len),
-    hasPreservedSegment: o.hasPreservedSegment,
+    boundaryStartOffset: scanState.boundaryStartOffset,
+    postBoundaryBuf: scanState.out.buf.subarray(0, scanState.out.len),
+    hasPreservedSegment: scanState.hasPreservedSegment,
   };
 }
 //@ chunk-f9pzpnqt.js:23272-23319 placement
 var BACKUP_FILE_NAME_PATTERN_WITH_LEGACY = /^[0-9a-f]{16}(?:[0-9a-f]{48})?@v\d+$/;
 //@ chunk-f9pzpnqt.js:23319-23355 placement
-function isUuidShaped(e) {
-  return validateUuid(e) !== null;
+function isUuidShaped(value) {
+  return validateUuid(value) !== null;
 }
 //@ chunk-f9pzpnqt.js:23355-23493 placement
-function buildHistorySuppressionEntry(sessionId, cause, t) {
+function buildHistorySuppressionEntry(sessionId, cause, vetoed) {
   return {
     type: "history-suppression",
     sessionId,
     cause,
-    ...(t && {
-      vetoedAgainstAccountUuid: t,
+    ...(vetoed && {
+      vetoedAgainstAccountUuid: vetoed,
     }),
     ts: new Date().toISOString(),
   };
 }
+//@ chunk-g54kbxqw.js:54348-54510 fingerprint = sanitizePath (0.358)
+function sanitizePath_3(name) {
+  let type = contentBlockTypeBucket(name);
+  let text = stripCacheControl_2(name);
+  let hash = "text" in name ? name.text : undefined;
+  return {
+    type,
+    hash: saltedHash(summarizeLongText(text, name)),
+    length: text.length,
+    prefixClass: type === "text" && typeof hash === "string" ? classifyUserText(hash) : type,
+  };
+}
+//@ chunk-e6aww6q8.js:288436-288553 fingerprint = hasPrefix (1)
+function hasPrefix(src, start = 0, end = src.length) {
+  let offset = skipNuls(src, start, end);
+  return (
+    end - offset >= buffer_5.length &&
+    src.compare(buffer_5, 0, buffer_5.length, offset, offset + buffer_5.length) === 0
+  );
+}
 //@ chunk-dz3q485w.js:15117-15133 affinity
 var MAX_PORTABLE_TRANSCRIPT_BYTES = 67108864;
 //@ chunk-dz3q485w.js:15133-15191 fingerprint = resolveSessionFilePath (0.396)
-function resolveSessionFilePath_2(e) {
-  return e.fileSize !== undefined && e.fileSize <= MAX_PORTABLE_TRANSCRIPT_BYTES;
-}
-//@ chunk-e6aww6q8.js:288436-288553 fingerprint = hasPrefix (1)
-function hasPrefix(src, n = 0, r = src.length) {
-  let s = skipNuls(src, n, r);
-  return r - s >= buffer_5.length && src.compare(buffer_5, 0, buffer_5.length, s, s + buffer_5.length) === 0;
-}
-//@ chunk-g54kbxqw.js:54348-54510 fingerprint = sanitizePath (0.358)
-function sanitizePath_3(name) {
-  let n = contentBlockTypeBucket(name);
-  let s = stripCacheControl_2(name);
-  let hash = "text" in name ? name.text : undefined;
-  return {
-    type: n,
-    hash: saltedHash(summarizeLongText(s, name)),
-    length: s.length,
-    prefixClass: n === "text" && typeof hash === "string" ? classifyUserText(hash) : n,
-  };
+function resolveSessionFilePath_2(log) {
+  return log.fileSize !== undefined && log.fileSize <= MAX_PORTABLE_TRANSCRIPT_BYTES;
 }
 export {
   getProjectDir,
   findProjectDirs,
   findSoleTranscriptWithMessagesById,
-  PROGRAMMATIC_ENTRYPOINTS,
+  getProjectKey,
+  getPinnedProjectDir,
+  getProjectsDir,
+  readSessionLite,
   LITE_READ_BUF_SIZE,
+  PROGRAMMATIC_ENTRYPOINTS,
   extractLastJsonStringField,
   extractFieldFromLastEntryOfTypeStrict,
   buildHistorySuppressionEntry,
@@ -1650,7 +1708,6 @@ export {
   hasPrefix,
   isUuidShaped,
   SKIP_PRECOMPACT_THRESHOLD,
-  getProjectKey,
   legacyDerivedProjectKey,
   MAX_SANITIZED_LENGTH,
   MAX_LISTING_PAGES,
@@ -1664,9 +1721,6 @@ export {
   readHeadAndTail,
   extractJsonStringField,
   extractFieldFromFirstEntryStrict,
-  getPinnedProjectDir,
-  getProjectsDir,
-  readSessionLite,
   resolveSessionFilePath_2,
   isTranscriptFileResumeArg,
   extractFieldFromLastEntryStrict,
@@ -1680,4 +1734,14 @@ export {
   COMPACT_BOUNDARY_MARKER,
   readTranscriptForLoad,
   resolveSessionFilePath,
+  addressableProjectKey,
+  attachmentPromptLabelFromHead,
+  extractFirstPromptFromEntries,
+  extractFirstPromptFromHead,
+  isHiddenFromSessionPicker,
+  listProjectDirNamesV5,
+  projectDirsFromListedNames,
+  projectPathSpellingsForRead,
+  withSharedTranscriptListing,
+  workspaceV5Of,
 };

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:65209-69559 cjs-fingerprint
-var require_clojure = x(function (cjsExports, cjsModule) {
+var require_clojure = __commonJS(function (cjsExports, cjsModule) {
   function clojure(hljs) {
     let SYMBOL_RE = "[#]?[a-zA-Z_\\-!.?+*=<>&'][a-zA-Z_\\-!.?+*=<>&'0-9/;:$#]*";
     let globals =

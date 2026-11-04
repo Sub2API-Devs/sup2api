@@ -42,9 +42,9 @@ function snapshotBatchSiblings({
   setAppState,
   storageV5,
 }) {
-  return async (Re) => {
+  return async (op) => {
     for (let batchMessage of batchMessages.filter(isUserTextPrompt)) {
-      if (batchMessage.uuid === Re || preSnapshottedSiblings.has(batchMessage.uuid)) continue;
+      if (batchMessage.uuid === op || preSnapshottedSiblings.has(batchMessage.uuid)) continue;
       preSnapshottedSiblings.add(batchMessage.uuid);
       await makeFileHistorySnapshot({
         getAppState,
@@ -53,7 +53,7 @@ function snapshotBatchSiblings({
         storageV5,
       });
     }
-    await baseMakeFileHistorySnapshot(Re);
+    await baseMakeFileHistorySnapshot(op);
   };
 }
 //@ chunk-18hwfzwa.js:1494053-1494614 placement
@@ -61,30 +61,30 @@ function snapshotBatchSiblings({
  * 批量期间把追加/替换/插入消息的操作缓冲到批次中。
  */
 function createBatchedMessageOp({ baseApplyMessageOp, batchMessages, isBatchHandedOff, buffered }) {
-  return (ee) => {
-    let ke = batchMessages.length > 0 && !isBatchHandedOff();
-    if (ke && ee.type === "append") {
-      batchMessages.push(...ee.messages);
-      for (let message of ee.messages) buffered.add(message.uuid);
+  return (op) => {
+    let canBatch = batchMessages.length > 0 && !isBatchHandedOff();
+    if (canBatch && op.type === "append") {
+      batchMessages.push(...op.messages);
+      for (let message of op.messages) buffered.add(message.uuid);
       return;
     }
-    if (ke && ee.type === "replace-by-uuid") {
-      let index = batchMessages.findIndex((batchMessage) => batchMessage.uuid === ee.uuid);
+    if (canBatch && op.type === "replace-by-uuid") {
+      let index = batchMessages.findIndex((batchMessage) => batchMessage.uuid === op.uuid);
       if (index !== -1) {
-        batchMessages[index] = ee.message;
-        if (buffered.delete(ee.uuid)) buffered.add(ee.message.uuid);
+        batchMessages[index] = op.message;
+        if (buffered.delete(op.uuid)) buffered.add(op.message.uuid);
         return;
       }
     }
-    if (ke && ee.type === "insert-after-uuid") {
-      let index = batchMessages.findIndex((batchMessage) => batchMessage.uuid === ee.uuid);
+    if (canBatch && op.type === "insert-after-uuid") {
+      let index = batchMessages.findIndex((batchMessage) => batchMessage.uuid === op.uuid);
       if (index !== -1) {
-        batchMessages.splice(index + 1, 0, ...ee.messages);
-        for (let message of ee.messages) buffered.add(message.uuid);
+        batchMessages.splice(index + 1, 0, ...op.messages);
+        for (let message of op.messages) buffered.add(message.uuid);
         return;
       }
     }
-    baseApplyMessageOp(ee);
+    baseApplyMessageOp(op);
   };
 }
 //@ chunk-18hwfzwa.js:1494614-1494829 placement
@@ -94,13 +94,13 @@ function createBatchedMessageOp({ baseApplyMessageOp, batchMessages, isBatchHand
 function makeFileHistorySnapshot({ getAppState, setAppState, messageUuid, storageV5 }) {
   return fileHistoryMakeSnapshot(
     () => getAppState().fileHistory,
-    (ee) =>
-      setAppState((ke) => {
-        let Re = reduceFileHistoryState(ke.fileHistory, ee, storageV5);
-        if (Re === ke.fileHistory) return ke;
+    (nextFileHistory) =>
+      setAppState((state) => {
+        let fileHistory = reduceFileHistoryState(state.fileHistory, nextFileHistory, storageV5);
+        if (fileHistory === state.fileHistory) return state;
         return {
-          ...ke,
-          fileHistory: Re,
+          ...state,
+          fileHistory,
         };
       }),
     messageUuid,
@@ -110,26 +110,26 @@ function makeFileHistorySnapshot({ getAppState, setAppState, messageUuid, storag
 /**
  * 命令队列中没有可执行的用户提示。
  */
-function isQueueFreeOfPrompts(h, ideSelection) {
-  return !h
+function isQueueFreeOfPrompts(messageQueue, ideSelection) {
+  return !messageQueue
     .getCommandQueue()
     .some(
-      (D) =>
-        isMainAgentCommand(D) &&
-        isRefillableInput(D) &&
-        (ideSelection === undefined || D.ideSelection === undefined),
+      (command) =>
+        isMainAgentCommand(command) &&
+        isRefillableInput(command) &&
+        (ideSelection === undefined || command.ideSelection === undefined),
     );
 }
 //@ chunk-18hwfzwa.js:1494937-1495168 placement
 /**
  * 是否有 prompt.submit 钩子（读取失败时视为有）。
  */
-function hasPromptSubmitHooks(turn, x, D, L = "any") {
+function hasPromptSubmitHooks(turn, messages, options, mode = "any") {
   try {
-    let toolUseContext = turn.buildToolUseContext(x, [], createAbortController(), D);
-    return L === "installed"
-      ? hooksSnapshotKey(toolUseContext).hooks !== "" || hasThirdPartyPromptHooks()
-      : hasPromptSubmitHooks_2(toolUseContext);
+    let context = turn.buildToolUseContext(messages, [], createAbortController(), options);
+    return mode === "installed"
+      ? hooksSnapshotKey(context).hooks !== "" || hasThirdPartyPromptHooks()
+      : hasPromptSubmitHooks_2(context);
   } catch (error) {
     logForDebugging(`prompt.submit at Enter could not read the hooks: ${errorMessage(error)}`, {
       level: "error",
@@ -141,26 +141,26 @@ function hasPromptSubmitHooks(turn, x, D, L = "any") {
 /**
  * 被丢弃的输入放回输入框（含粘贴内容）。
  */
-function restoreDroppedInput(h, composer) {
-  if (!isReplayableHistoryEntry(h)) return;
-  composer.land(inputDisplayText(h), h);
-  let retainedPastedContents = getRetainedPastedContents(h);
+function restoreDroppedInput(entry, composer) {
+  if (!isReplayableHistoryEntry(entry)) return;
+  composer.land(inputDisplayText(entry), entry);
+  let retainedPastedContents = getRetainedPastedContents(entry);
   if (retainedPastedContents.length > 0)
-    composer.setPastedContents((L) => mergeTurnTags(L, retainedPastedContents));
+    composer.setPastedContents((pasted) => mergeTurnTags(pasted, retainedPastedContents));
 }
 //@ chunk-18hwfzwa.js:1495281-1495463 placement
 /**
  * 延迟写入一条历史记录（只写一次）。
  */
-function deferredHistoryWrite(h, storageV5) {
-  let D = false;
-  return (L) => {
-    if (D) return;
-    D = true;
+function deferredHistoryWrite(entry, storageV5) {
+  let written = false;
+  return (screened) => {
+    if (written) return;
+    written = true;
     try {
-      recordSubmittedPrompts([h], storageV5, {
+      recordSubmittedPrompts([entry], storageV5, {
         placed: withExpandedPastes,
-        screened: new Map([[h, L]]),
+        screened: new Map([[entry, screened]]),
       });
     } catch (error) {
       if (isAbortError(error)) logForDebugging(`a deferred line's write: ${errorMessage(error)}`);

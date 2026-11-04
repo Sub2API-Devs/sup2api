@@ -38,12 +38,13 @@ import { wrapUserTurnContent } from "../userTurnTags.js";
 /**
  * processBashCommand：! 前缀的 bash 输入直接执行并把输出作为 <bash-stdout> 消息。
  */
-async function processBashCommand(inputString, precedingInputBlocks, e, t = {}) {
-  let u = t.markOutputAsPasted === true && isVirtualPancakeEnabled() ? escapePastedOutput : identity;
-  let S = isPowerShellToolEnabled() && resolveDefaultShell() === "powershell";
+async function processBashCommand(inputString, precedingInputBlocks, context, options = {}) {
+  let transformOutput =
+    options.markOutputAsPasted === true && isVirtualPancakeEnabled() ? escapePastedOutput : identity;
+  let isPowerShell = isPowerShellToolEnabled() && resolveDefaultShell() === "powershell";
   let respondToBashCommands = getInitialSettings_2().respondToBashCommands ?? true;
   logEvent("tengu_input_bash", {
-    powershell: S,
+    powershell: isPowerShell,
     respond: respondToBashCommands,
   });
   let userMessage = createUserMessage({
@@ -52,7 +53,7 @@ async function processBashCommand(inputString, precedingInputBlocks, e, t = {}) 
       precedingInputBlocks,
     }),
   });
-  if (t.sentForDirectory !== undefined && resolve(t.sentForDirectory) !== resolve(getCwd())) {
+  if (options.sentForDirectory !== undefined && resolve(options.sentForDirectory) !== resolve(getCwd())) {
     logFeatureSad("input_remote_bash", "other_directory");
     return {
       messages: [
@@ -65,21 +66,21 @@ async function processBashCommand(inputString, precedingInputBlocks, e, t = {}) 
       shouldQuery: false,
     };
   }
-  let c = randomUUID();
-  let { emitToolProgress } = e;
+  let toolUseId = randomUUID();
+  let { emitToolProgress } = context;
   emitToolProgress?.({
     kind: "bash_mode_progress",
-    toolUseId: c,
+    toolUseId,
     input: inputString,
     progress: null,
-    verbose: e.options.verbose,
+    verbose: context.options.verbose,
   });
   try {
     let bashModeContext = {
-      ...e,
-      toolUseId: `${c}${INNER_TASK_SUFFIX}`,
+      ...context,
+      toolUseId: `${toolUseId}${INNER_TASK_SUFFIX}`,
     };
-    let l =
+    let dispatchContext =
       env.CLAUDE_CODE_SESSION_KIND === undefined
         ? {
             userTypedShellDispatch: true,
@@ -89,16 +90,16 @@ async function processBashCommand(inputString, precedingInputBlocks, e, t = {}) 
       if (progress.type !== "progress") return;
       emitToolProgress?.({
         kind: "bash_mode_progress",
-        toolUseId: c,
+        toolUseId,
         input: inputString,
         progress: progress.data,
-        verbose: e.options.verbose,
+        verbose: context.options.verbose,
       });
     };
     let PowerShellTool = null;
-    if (S) PowerShellTool = require("./chunk-v0yfsee9.js").PowerShellTool;
-    let y = PowerShellTool ?? BashTool;
-    recordToolUsed(y.name);
+    if (isPowerShell) PowerShellTool = require("../../tools/PowerShellTool/PowerShellTool.js").PowerShellTool;
+    let tool = PowerShellTool ?? BashTool;
+    recordToolUsed(tool.name);
     let data = (
       PowerShellTool
         ? await PowerShellTool.call(
@@ -110,7 +111,7 @@ async function processBashCommand(inputString, precedingInputBlocks, e, t = {}) 
             undefined,
             undefined,
             onProgress,
-            l,
+            dispatchContext,
           )
         : await BashTool.call(
             {
@@ -121,102 +122,108 @@ async function processBashCommand(inputString, precedingInputBlocks, e, t = {}) 
             undefined,
             undefined,
             onProgress,
-            l,
+            dispatchContext,
           )
     ).data;
     if (!data) throw Error("No result received from shell command");
     let stderr = data.stderr;
-    let _ = y.mapToolResultToToolResultBlockParam(
+    let resultBlock = tool.mapToolResultToToolResultBlockParam(
       {
         ...data,
         stderr: "",
       },
       randomUUID(),
     );
-    let b = await processToolResultBlock(_, y, toolResultsDirFor_2(e.session), e.storageV5);
-    let P = typeof b.content === "string" ? b.content : data.stdout;
-    let D =
-      typeof b.content === "string" &&
-      (data.persistedOutputPath !== undefined || b.content !== _.content) &&
-      P.startsWith(PERSISTED_OUTPUT_TAG)
-        ? P
-        : escapeXml(P);
-    let C =
+    let processed = await processToolResultBlock(
+      resultBlock,
+      tool,
+      toolResultsDirFor_2(context.session),
+      context.storageV5,
+    );
+    let stdoutText = typeof processed.content === "string" ? processed.content : data.stdout;
+    let outputText =
+      typeof processed.content === "string" &&
+      (data.persistedOutputPath !== undefined || processed.content !== resultBlock.content) &&
+      stdoutText.startsWith(PERSISTED_OUTPUT_TAG)
+        ? stdoutText
+        : escapeXml(stdoutText);
+    let shouldQuery =
       respondToBashCommands &&
       !data.interrupted &&
       !data.backgroundTaskId &&
-      !e.abortController.signal.aborted;
-    if (t.markOutputAsPasted === true)
+      !context.abortController.signal.aborted;
+    if (options.markOutputAsPasted === true)
       logFeatureOk("input_remote_bash", {
         joined: true,
         interrupted: data.interrupted === true,
       });
     return {
       messages: [
-        ...(C ? [] : [createSyntheticUserCaveatMessage()]),
+        ...(shouldQuery ? [] : [createSyntheticUserCaveatMessage()]),
         userMessage,
         createUserMessage({
-          content: `<bash-stdout>${u(D)}</bash-stdout><bash-stderr>${u(escapeXml(stderr))}</bash-stderr>`,
+          content: `<bash-stdout>${transformOutput(outputText)}</bash-stdout><bash-stderr>${transformOutput(escapeXml(stderr))}</bash-stderr>`,
         }),
       ],
-      shouldQuery: C,
+      shouldQuery,
     };
-  } catch (e_2) {
-    if (t.markOutputAsPasted === true)
-      if (e_2 instanceof ShellError)
+  } catch (e) {
+    if (options.markOutputAsPasted === true)
+      if (e instanceof ShellError)
         logFeatureOk("input_remote_bash", {
           joined: true,
-          interrupted: e_2.interrupted,
+          interrupted: e.interrupted,
         });
       else logFeatureBad("input_remote_bash", "spawn_failed");
-    if (e_2 instanceof ShellError) {
-      if (e_2.interrupted)
+    if (e instanceof ShellError) {
+      if (e.interrupted)
         return {
           messages: [
             createSyntheticUserCaveatMessage(),
             userMessage,
             createUserInterruptionMessage({
               toolUse: false,
-              interruptedByShutdown: shutdownInterruptStamp(e.abortController.signal),
+              interruptedByShutdown: shutdownInterruptStamp(context.abortController.signal),
             }),
           ],
           shouldQuery: false,
         };
-      let d = respondToBashCommands && !e.abortController.signal.aborted;
+      let shouldQuery = respondToBashCommands && !context.abortController.signal.aborted;
       return {
         messages: [
-          ...(d ? [] : [createSyntheticUserCaveatMessage()]),
+          ...(shouldQuery ? [] : [createSyntheticUserCaveatMessage()]),
           userMessage,
           createUserMessage({
-            content: `<bash-stdout>${u(escapeXml(e_2.stdout))}</bash-stdout><bash-stderr>${u(escapeXml(e_2.stderr))}</bash-stderr>`,
+            content: `<bash-stdout>${transformOutput(escapeXml(e.stdout))}</bash-stdout><bash-stderr>${transformOutput(escapeXml(e.stderr))}</bash-stderr>`,
           }),
         ],
-        shouldQuery: d,
+        shouldQuery,
       };
     }
-    let l = respondToBashCommands && !e.abortController.signal.aborted;
+    let shouldQuery = respondToBashCommands && !context.abortController.signal.aborted;
     return {
       messages: [
-        ...(l ? [] : [createSyntheticUserCaveatMessage()]),
+        ...(shouldQuery ? [] : [createSyntheticUserCaveatMessage()]),
         userMessage,
         createUserMessage({
-          content: `<bash-stderr>Command failed: ${escapeXml(describeSpawnFailure(e_2, e.session))}</bash-stderr>`,
+          content: `<bash-stderr>Command failed: ${escapeXml(describeSpawnFailure(e, context.session))}</bash-stderr>`,
         }),
       ],
-      shouldQuery: l,
+      shouldQuery,
     };
   } finally {
     emitToolProgress?.({
       kind: "clear",
-      toolUseId: c,
+      toolUseId,
     });
   }
 }
 //@ chunk-w235911v.js:14517-14540 affinity
-function identity(r) {
-  return r;
+function identity(value) {
+  return value;
 }
 //@ chunk-w235911v.js:14540-14578 sole-consumer
-function escapePastedOutput(r) {
-  return r === "" ? "" : wrapUserTurnContent(r);
+function escapePastedOutput(text) {
+  return text === "" ? "" : wrapUserTurnContent(text);
 }
+export { processBashCommand };

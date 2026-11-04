@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:305312-308874 cjs-fingerprint
-var require_n1ql = x(function (cjsExports, cjsModule) {
+var require_n1ql = __commonJS(function (cjsExports, cjsModule) {
   function n1ql(hljs) {
     return {
       name: "N1QL",

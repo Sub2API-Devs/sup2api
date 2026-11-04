@@ -8,6 +8,9 @@
  * pieces: chunk-s61vbvea.js (12), chunk-w5ndchqs.js (1)
  * attribution: placement 13
  */
+import { getAttributionHeader, getCLISyspromptPrefix } from "../../constants/system.js";
+import { isWIFDispatchAuth } from "../auth.js";
+import { parseAttributionProject } from "../attributionProject.js";
 import { classifyProviderModelError } from "../../services/api/providerModelErrors.js";
 import { getProviderForModel, isFirstPartyApiBackend } from "./providers.js";
 import { isAutoModeActive } from "../permissions/autoModeState.js";
@@ -42,13 +45,37 @@ import { getRootSession } from "../../bootstrap/state.js";
 import { logForDebugging } from "../debug.js";
 import { toProviderWireModelId } from "./model.js";
 import { computeFingerprint } from "../fingerprint.js";
-import { getCLISyspromptPrefix, getAttributionHeader } from "../../constants/system.js";
 import { mainAgentContext } from "../agentContext.js";
 import { getAPIMetadata } from "../../services/api/claude.js";
 import { errorMessage } from "../errors.js";
-import { isWIFDispatchAuth } from "../auth.js";
-import { parseAttributionProject } from "../attributionProject.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-w5ndchqs.js:3418-3633 placement
+/**
+ * 在内容块前加一个归因头文本块（可强制忽略环境变量的关闭设置），无头时原样返回。
+ */
+function prependAttributionHeader(content, options) {
+  let attributionHeader = getAttributionHeader(
+    options.fingerprint,
+    options.agentContext,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    {
+      ignoreEnvOptOut: options.forceAttributionHeader === true && !isWIFDispatchAuth(),
+      attributionProject: parseAttributionProject(),
+    },
+  );
+  if (!attributionHeader) return content;
+  return [
+    {
+      type: "text",
+      text: attributionHeader,
+    },
+    ...content,
+  ];
+}
 //@ chunk-s61vbvea.js:520484-520522 placement
 /**
  * 按模型所属提供商分类错误。
@@ -60,27 +87,27 @@ function classifyProviderErrorForModel(model, error) {
 /**
  * 自动模式激活时判断模型是否支持自动模式。
  */
-function supportsAutoModeIfActive(e) {
-  return !isAutoModeActive() || modelSupportsAutoMode(e);
+function supportsAutoModeIfActive(model) {
+  return !isAutoModeActive() || modelSupportsAutoMode(model);
 }
 //@ chunk-s61vbvea.js:520557-520644 placement
 /**
  * 判断模型既未被拒绝，也不在已发送的阶梯中。
  */
-function isRefusedOrSentModel(e, n) {
-  let r = strip1mSuffix(e) + n.slice(strip1mSuffix(n).length);
-  return !isModelRefused(r) && !ladderRungsToSend(n).includes(r);
+function isRefusedOrSentModel(fromModel, toModel) {
+  let targetModel = strip1mSuffix(fromModel) + toModel.slice(strip1mSuffix(toModel).length);
+  return !isModelRefused(targetModel) && !ladderRungsToSend(toModel).includes(targetModel);
 }
 //@ chunk-s61vbvea.js:520644-520718 placement
 /**
  * 判断回退会否丢失上下文（模型被拒或阶梯步缩小窗口）。
  */
-function wouldLoseContextOnFallback(e, n) {
+function wouldLoseContextOnFallback(currentModel, fallbackModel) {
   return (
-    isRefusedOrSentModel(e, n) ||
+    isRefusedOrSentModel(currentModel, fallbackModel) ||
     ladderStepLosesContext(
-      n,
-      strip1mSuffix(e) + n.slice(strip1mSuffix(n).length),
+      fallbackModel,
+      strip1mSuffix(currentModel) + fallbackModel.slice(strip1mSuffix(fallbackModel).length),
       largestSessionContextTokens,
     )
   );
@@ -89,110 +116,118 @@ function wouldLoseContextOnFallback(e, n) {
 /**
  * 为不可用模型在同族中找较旧、可用、上下文不缩小的模型作为回退（第一方后端且开关开启）。
  */
-function findOlderAccessibleModel(e) {
+function findOlderAccessibleModel(model) {
   if (
     !isFirstPartyApiBackend() ||
     isModelFallbackDisabled() ||
     !getFeatureValue_CACHED_MAY_BE_STALE("tengu_nifty_finch", true)
   )
     return;
-  let n = strip1mSuffix(e);
-  let sliced = e.slice(n.length);
-  let s = [n, ...olderFirstPartyIdsInFamily(n)];
-  let index = s.findIndex((S) => isModelRemappedOrRetired(S) || isModelDeprecated(S));
-  let found = (index < 0 ? s : s.slice(0, index))
+  let baseModel = strip1mSuffix(model);
+  let sliced = model.slice(baseModel.length);
+  let candidates = [baseModel, ...olderFirstPartyIdsInFamily(baseModel)];
+  let index = candidates.findIndex(
+    (candidate) => isModelRemappedOrRetired(candidate) || isModelDeprecated(candidate),
+  );
+  let found = (index < 0 ? candidates : candidates.slice(0, index))
     .slice(1)
     .find(
-      (S) =>
-        (sliced === "" || supports1mBeta(S)) &&
-        isModelAllowed(S + sliced) &&
-        !swapShrinksContextWindow(e, S + sliced),
+      (olderModel) =>
+        (sliced === "" || supports1mBeta(olderModel)) &&
+        isModelAllowed(olderModel + sliced) &&
+        !swapShrinksContextWindow(model, olderModel + sliced),
     );
   return found === undefined ? undefined : found + sliced;
 }
 //@ chunk-s61vbvea.js:520978-521023 placement
-var MODEL_ACCESS_BACKOFF_MS = 600000;
-var MODEL_ACCESS_BACKOFF_SLACK_MS = 60000;
-var modelAccessMemo = new HostScoped(() => new Map());
+var MODEL_ACCESS_BACKOFF_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MODEL_ACCESS_BACKOFF_SLACK_MS;
+var modelAccessMemo;
+deferInit("chunk-s61vbvea.js:520978", () => {
+  MODEL_ACCESS_BACKOFF_MS = 600000;
+  MODEL_ACCESS_BACKOFF_SLACK_MS = 60000;
+  modelAccessMemo = new HostScoped(() => new Map());
+});
 //@ chunk-s61vbvea.js:521023-521674 placement
-function classifyModelAccess(e, error, r = "denied", s = Date.now()) {
-  if (!mayStepDownOnRefusal(e) || sessionHasOwnFallback()) return;
-  let ladderRung = findLadderRung(e);
+function classifyModelAccess(model, error, kind = "denied", now = Date.now()) {
+  if (!mayStepDownOnRefusal(model) || sessionHasOwnFallback()) return;
+  let ladderRung = findLadderRung(model);
   if (ladderRung === undefined) return;
-  if (r === "refused") markModelRefused(e, error);
-  let y = `${ladderRung.provider}:${ladderRung.tier}`;
-  let S = modelAccessMemo.of(getRootSession().host);
-  let w = S.get(y);
-  if (w !== undefined && s - w < MODEL_ACCESS_BACKOFF_MS) return;
-  S.set(y, s);
-  let R = () => S.set(y, s - MODEL_ACCESS_BACKOFF_MS + MODEL_ACCESS_BACKOFF_SLACK_MS);
+  if (kind === "refused") markModelRefused(model, error);
+  let ladderKey = `${ladderRung.provider}:${ladderRung.tier}`;
+  let lastCheckByLadder = modelAccessMemo.of(getRootSession().host);
+  let lastCheck = lastCheckByLadder.get(ladderKey);
+  if (lastCheck !== undefined && now - lastCheck < MODEL_ACCESS_BACKOFF_MS) return;
+  lastCheckByLadder.set(ladderKey, now);
+  let markRateLimited = () =>
+    lastCheckByLadder.set(ladderKey, now - MODEL_ACCESS_BACKOFF_MS + MODEL_ACCESS_BACKOFF_SLACK_MS);
   (async () => {
-    for (let x of ladderRung.below) {
-      if (isModelRefused(x) || wouldLoseContextOnFallback(x, e)) continue;
-      if (!supportsAutoModeIfActive(x)) {
-        R();
+    for (let belowModel of ladderRung.below) {
+      if (isModelRefused(belowModel) || wouldLoseContextOnFallback(belowModel, model)) continue;
+      if (!supportsAutoModeIfActive(belowModel)) {
+        markRateLimited();
         return;
       }
-      let P = await checkProviderModelAccess(x);
-      if (P === "accessible") {
+      let access = await checkProviderModelAccess(belowModel);
+      if (access === "accessible") {
         if (
-          mayStepDownOnRefusal(e) &&
+          mayStepDownOnRefusal(model) &&
           !sessionHasOwnFallback() &&
-          (modelAnsweredAt(e) ?? 0) < s &&
-          !wouldLoseContextOnFallback(x, e) &&
-          supportsAutoModeIfActive(x)
+          (modelAnsweredAt(model) ?? 0) < now &&
+          !wouldLoseContextOnFallback(belowModel, model) &&
+          supportsAutoModeIfActive(belowModel)
         ) {
-          markModelRefused(e, error);
-          rememberModelAccess(e, "refused");
+          markModelRefused(model, error);
+          rememberModelAccess(model, "refused");
           advanceFallbackLadders(
-            x + e.slice(strip1mSuffix(e).length),
+            belowModel + model.slice(strip1mSuffix(model).length),
             wouldLoseContextOnFallback,
             supportsAutoModeIfActive,
           );
         }
         return;
       }
-      if (P !== "refused") {
-        if (P === undefined || P === "temporary") R();
+      if (access !== "refused") {
+        if (access === undefined || access === "temporary") markRateLimited();
         return;
       }
-      markModelRefused(x, modelNotAvailableError(x));
+      markModelRefused(belowModel, modelNotAvailableError(belowModel));
     }
   })().catch((error) => {
-    R();
+    markRateLimited();
     logForDebugging(`[model-access] background tier check failed: ${error}`);
   });
 }
 //@ chunk-s61vbvea.js:521674-522202 placement
-function checkProviderModelAccess(e, awsAccessKeyId) {
-  let r = strip1mSuffix(e);
-  let s;
+function checkProviderModelAccess(model, cacheKey) {
+  let baseModel = strip1mSuffix(model);
+  let wireModelId;
   try {
-    s = toProviderWireModelId(r);
+    wireModelId = toProviderWireModelId(baseModel);
   } catch {
     return Promise.resolve(undefined);
   }
-  let providerForModel = getProviderForModel(r);
+  let providerForModel = getProviderForModel(baseModel);
   if (providerForModel !== "bedrock" && providerForModel !== "vertex") return Promise.resolve(undefined);
-  let y = primaryRungTier(s);
+  let tier = primaryRungTier(wireModelId);
   return checkModelAccess(
-    r,
+    baseModel,
     async () => {
-      let S = {};
+      let probeState = {};
       let onVerdict = (verdict) => {
-        S.verdict = verdict;
+        probeState.verdict = verdict;
       };
       try {
         if (providerForModel === "bedrock") {
-          let { probeBedrockModel } = await import("./chunk-a7mvp1gg.js");
-          await probeBedrockModel(s, y, {
+          let { probeBedrockModel } = await import("./bedrockDefaultCheck.js");
+          await probeBedrockModel(wireModelId, tier, {
             live: true,
             versionTooOld: "unavailable",
             onVerdict,
           });
         } else {
-          let { probeVertexModel } = await import("./chunk-5wnerh16.js");
-          await probeVertexModel(s, {
+          let { probeVertexModel } = await import("./checkVertexDefaultAvailability.lazy.js");
+          await probeVertexModel(wireModelId, {
             live: true,
             versionTooOld: "unavailable",
             onVerdict,
@@ -201,32 +236,36 @@ function checkProviderModelAccess(e, awsAccessKeyId) {
       } catch {
         return;
       }
-      return S.verdict;
+      return probeState.verdict;
     },
-    awsAccessKeyId,
+    cacheKey,
   );
 }
 //@ chunk-s61vbvea.js:522202-522463 placement
 /**
  * 把模型访问结论记到 Bedrock 或 Vertex 的访问记忆中。
  */
-function rememberModelAccess(model, n) {
-  let r = primaryRungProvider(model);
-  let s = strip1mSuffix(model);
-  if (r === "bedrock")
-    import("./chunk-a7mvp1gg.js")
-      .then((h) => h.rememberBedrockModelAccess(s, primaryRungTier(model), n))
+function rememberModelAccess(model, state) {
+  let provider = primaryRungProvider(model);
+  let baseModel = strip1mSuffix(model);
+  if (provider === "bedrock")
+    import("./bedrockDefaultCheck.js")
+      .then((bedrockModule) =>
+        bedrockModule.rememberBedrockModelAccess(baseModel, primaryRungTier(model), state),
+      )
       .catch(() => {});
-  else if (r === "vertex")
-    import("./chunk-5wnerh16.js").then((h) => h.rememberVertexModelAccess(s, n)).catch(() => {});
+  else if (provider === "vertex")
+    import("./checkVertexDefaultAvailability.lazy.js")
+      .then((vertexModule) => vertexModule.rememberVertexModelAccess(baseModel, state))
+      .catch(() => {});
 }
 //@ chunk-s61vbvea.js:522463-522645 placement
 function getFirstUserText(messages) {
-  let found = messages.find((h) => h.role === "user");
+  let found = messages.find((message) => message.role === "user");
   if (!found) return "";
   let content = found.content;
   if (typeof content === "string") return content;
-  let found_2 = content.find((h) => h.type === "text");
+  let found_2 = content.find((block) => block.type === "text");
   return found_2?.type === "text" ? found_2.text : "";
 }
 //@ chunk-s61vbvea.js:522645-523454 placement
@@ -287,21 +326,21 @@ function buildSideQuerySystem({
   );
 }
 //@ chunk-s61vbvea.js:523454-523760 placement
-function sendStartupModelCheck(e) {
+function sendStartupModelCheck(model) {
   let messages = [
     {
       role: "user",
       content: ".",
     },
   ];
-  let r = {
-    model: e,
+  let request = {
+    model,
     max_tokens: 1,
     messages,
   };
   try {
     return {
-      ...r,
+      ...request,
       system: buildSideQuerySystem({
         messages,
         agentContext: mainAgentContext(),
@@ -310,39 +349,13 @@ function sendStartupModelCheck(e) {
     };
   } catch (error) {
     logForDebugging(
-      `[model-check] sending the ${e} start-up check without the Claude Code billing block and metadata: ${errorMessage(error)}`,
+      `[model-check] sending the ${model} start-up check without the Claude Code billing block and metadata: ${errorMessage(error)}`,
       {
         level: "warn",
       },
     );
-    return r;
+    return request;
   }
-}
-//@ chunk-w5ndchqs.js:3418-3633 placement
-/**
- * 在内容块前加一个归因头文本块（可强制忽略环境变量的关闭设置），无头时原样返回。
- */
-function prependAttributionHeader(e, n) {
-  let attributionHeader = getAttributionHeader(
-    n.fingerprint,
-    n.agentContext,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    {
-      ignoreEnvOptOut: n.forceAttributionHeader === true && !isWIFDispatchAuth(),
-      attributionProject: parseAttributionProject(),
-    },
-  );
-  if (!attributionHeader) return e;
-  return [
-    {
-      type: "text",
-      text: attributionHeader,
-    },
-    ...e,
-  ];
 }
 export {
   isRefusedOrSentModel,

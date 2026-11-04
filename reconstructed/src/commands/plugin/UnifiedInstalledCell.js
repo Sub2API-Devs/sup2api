@@ -8,7 +8,7 @@
  * pieces: chunk-vrb44rx7.js (3)
  * attribution: placement 2, fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { CLAUDE_AI_NAME_PREFIX } from "../../services/mcp/normalization.js";
 import {
   jsxProd_default,
@@ -30,66 +30,66 @@ import { formatToolConnectionState } from "../../components/mcp/CapabilitiesSect
 
 //@ chunk-vrb44rx7.js:142243-143655 placement
 function InstalledItemRow(props) {
-  let D = w(16);
+  let $ = useMemoCache(16);
   let { item, isSelected, health, nameWidth, statusHoisted } = props;
-  let U;
+  let content;
   if (
-    D[0] !== health ||
-    D[1] !== isSelected ||
-    D[2] !== item ||
-    D[3] !== nameWidth ||
-    D[4] !== statusHoisted
+    $[0] !== health ||
+    $[1] !== isSelected ||
+    $[2] !== item ||
+    $[3] !== nameWidth ||
+    $[4] !== statusHoisted
   ) {
-    let L = UnifiedInstalledCell(item);
+    let cell = UnifiedInstalledCell(item);
     let color = isSelected ? "suggestion" : undefined;
-    let K =
-      item.type === "mcp" && item.scope === "claudeai" && L.name.startsWith(CLAUDE_AI_NAME_PREFIX)
+    let namePrefix =
+      item.type === "mcp" && item.scope === "claudeai" && cell.name.startsWith(CLAUDE_AI_NAME_PREFIX)
         ? CLAUDE_AI_NAME_PREFIX
         : "";
-    let V = !L.statusIsDefault && (!statusHoisted || isSelected);
-    const B = jsxProd_default(Box, {
+    let showStatus = !cell.statusIsDefault && (!statusHoisted || isSelected);
+    const statusBox = jsxProd_default(Box, {
       flexShrink: 0,
       children: jsxProd_default(Text, {
-        color: L.tone,
-        "aria-label": V ? undefined : L.statusLabel,
-        children: L.glyph,
+        color: cell.tone,
+        "aria-label": showStatus ? undefined : cell.statusLabel,
+        children: cell.glyph,
       }),
     });
-    let _;
-    if (D[6] !== K || D[7] !== isSelected || D[8] !== color) {
-      _ =
-        K &&
+    let nameBox;
+    if ($[6] !== namePrefix || $[7] !== isSelected || $[8] !== color) {
+      nameBox =
+        namePrefix &&
         jsxProd_default(Text, {
           color,
           dimColor: !isSelected,
-          children: K,
+          children: namePrefix,
         });
-      D[6] = K;
-      D[7] = isSelected;
-      D[8] = color;
-      D[9] = _;
-    } else _ = D[9];
-    const J = jsxProd_default(Box, {
+      $[6] = namePrefix;
+      $[7] = isSelected;
+      $[8] = color;
+      $[9] = nameBox;
+    } else nameBox = $[9];
+    const labelBox = jsxProd_default(Box, {
       flexShrink: 1,
       children: jsxProd_default_2(Text, {
         wrap: "truncate-end",
         children: [
-          L.isChild &&
+          cell.isChild &&
             jsxProd_default(Text, {
               dimColor: !isSelected,
               children: "\u2514 ",
             }),
-          _,
+          nameBox,
           jsxProd_default(Text, {
             color,
-            children: L.name.slice(K.length),
+            children: cell.name.slice(namePrefix.length),
           }),
         ],
       }),
     });
-    let pe;
-    if (D[10] !== health) {
-      pe =
+    let detailRows;
+    if ($[10] !== health) {
+      detailRows =
         health &&
         jsxProd_default(Box, {
           flexShrink: 0,
@@ -98,53 +98,53 @@ function InstalledItemRow(props) {
             children: [" ", figures_default.bullet],
           }),
         });
-      D[10] = health;
-      D[11] = pe;
-    } else pe = D[11];
-    let fe;
-    if (D[12] !== nameWidth || D[13] !== J || D[14] !== pe) {
-      fe = jsxProd_default_2(Box, {
+      $[10] = health;
+      $[11] = detailRows;
+    } else detailRows = $[11];
+    let details;
+    if ($[12] !== nameWidth || $[13] !== labelBox || $[14] !== detailRows) {
+      details = jsxProd_default_2(Box, {
         width: nameWidth,
         flexShrink: 0,
-        children: [J, pe],
+        children: [labelBox, detailRows],
       });
-      D[12] = nameWidth;
-      D[13] = J;
-      D[14] = pe;
-      D[15] = fe;
-    } else fe = D[15];
-    U = jsxProd_default_2(ListItem, {
+      $[12] = nameWidth;
+      $[13] = labelBox;
+      $[14] = detailRows;
+      $[15] = details;
+    } else details = $[15];
+    content = jsxProd_default_2(ListItem, {
       isFocused: isSelected,
       styled: false,
       children: [
-        B,
-        fe,
+        statusBox,
+        details,
         jsxProd_default(Box, {
           width: INSTALLED_COLUMN_WIDTH,
           flexShrink: 0,
           marginLeft: 1,
           children: jsxProd_default(Text, {
             dimColor: true,
-            children: L.typeLabel,
+            children: cell.typeLabel,
           }),
         }),
-        (V || L.details.length > 0) &&
+        (showStatus || cell.details.length > 0) &&
           jsxProd_default(Box, {
             marginLeft: 1,
             flexShrink: 1,
             children: jsxProd_default_2(Text, {
               wrap: "truncate-end",
               children: [
-                V && (L.statusHint ?? L.statusLabel),
-                L.details.map((detail, ne) =>
+                showStatus && (cell.statusHint ?? cell.statusLabel),
+                cell.details.map((detail, detailEntry) =>
                   jsxProd_default_2(
                     Text,
                     {
                       dimColor: !isSelected && !detail.tone,
                       color: detail.tone,
-                      children: [ne > 0 || V ? " \xB7 " : "", detail.text],
+                      children: [detailEntry > 0 || showStatus ? " \xB7 " : "", detail.text],
                     },
-                    ne,
+                    detailEntry,
                   ),
                 ),
               ],
@@ -152,38 +152,38 @@ function InstalledItemRow(props) {
           }),
       ],
     });
-    D[0] = health;
-    D[1] = isSelected;
-    D[2] = item;
-    D[3] = nameWidth;
-    D[4] = statusHoisted;
-    D[5] = U;
-  } else U = D[5];
-  return U;
+    $[0] = health;
+    $[1] = isSelected;
+    $[2] = item;
+    $[3] = nameWidth;
+    $[4] = statusHoisted;
+    $[5] = content;
+  } else content = $[5];
+  return content;
 }
 //@ chunk-vrb44rx7.js:143655-143808 placement
 /**
  * 渲染"Enter auth"快捷键提示（可配置键位 select:accept）。
  */
 function AuthShortcutHint() {
-  let i = w(1);
-  let h;
-  if (i[0] === MEMO_CACHE_SENTINEL) {
-    h = jsxProd_default(ConfigurableShortcutHint, {
+  let $ = useMemoCache(1);
+  let content;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    content = jsxProd_default(ConfigurableShortcutHint, {
       action: "select:accept",
       context: "Select",
       fallback: "Enter",
       description: "auth",
     });
-    i[0] = h;
-  } else h = i[0];
-  return h;
+    $[0] = content;
+  } else content = $[0];
+  return content;
 }
 //@ chunk-vrb44rx7.js:143808-146689 fingerprint = UnifiedInstalledCell (0.475)
 function UnifiedInstalledCell(t0) {
   switch (t0.type) {
     case "plugin": {
-      let h = [
+      let rows = [
         {
           text: isSyncedMarketplacePlugin(t0.id)
             ? CLAUDE_AI_SYNC_LABEL
@@ -191,31 +191,31 @@ function UnifiedInstalledCell(t0) {
         },
       ];
       if (isRequiredPlugin(t0.id, t0.plugin.installationPreference))
-        h.push({
+        rows.push({
           text: "required by your org",
         });
       if (t0.activity && t0.activity.skillCount > 0) {
-        h.push({
+        rows.push({
           text: `${t0.activity.skillCount} ${plural(t0.activity.skillCount, "skill")}`,
         });
         if (t0.activity.totalCount > 0)
-          h.push({
+          rows.push({
             text: `${t0.activity.totalCount} ${plural(t0.activity.totalCount, "use")}`,
           });
       }
       if (t0.unusedDays !== undefined)
-        h.push({
+        rows.push({
           text: `not used in ${t0.unusedDays} ${plural(t0.unusedDays, "day")}`,
         });
-      let k = {
+      let entry = {
         name: getPluginDisplayName(t0),
         isChild: false,
         typeLabel: "Plugin",
-        details: h,
+        details: rows,
       };
       if (t0.pendingToggle)
         return {
-          ...k,
+          ...entry,
           glyph: figures_default.arrowRight,
           tone: "suggestion",
           statusLabel: t0.pendingToggle === "will-enable" ? "will enable" : "will disable",
@@ -223,7 +223,7 @@ function UnifiedInstalledCell(t0) {
         };
       if (t0.errorCount > 0)
         return {
-          ...k,
+          ...entry,
           glyph: figures_default.cross,
           tone: "error",
           statusLabel: `${t0.errorCount} ${plural(t0.errorCount, "error")}`,
@@ -231,14 +231,14 @@ function UnifiedInstalledCell(t0) {
         };
       if (!t0.isEnabled)
         return {
-          ...k,
+          ...entry,
           glyph: figures_default.radioOff,
           tone: "inactive",
           statusLabel: "disabled",
           statusIsDefault: false,
         };
       return {
-        ...k,
+        ...entry,
         glyph: figures_default.tick,
         tone: "success",
         statusLabel: "enabled",
@@ -279,14 +279,14 @@ function UnifiedInstalledCell(t0) {
         ],
       };
     case "skill": {
-      let h = SKILL_STATE_GLYPHS[t0.override];
+      let glyph = SKILL_STATE_GLYPHS[t0.override];
       return {
         name: t0.name,
         isChild: false,
         typeLabel: "Skill",
-        glyph: h.glyph,
-        tone: h.tone,
-        statusLabel: `${t0.lockSource ? "\uD83D\uDD12 " : ""}${h.label}`,
+        glyph: glyph.glyph,
+        tone: glyph.tone,
+        statusLabel: `${t0.lockSource ? "\uD83D\uDD12 " : ""}${glyph.label}`,
         statusIsDefault: t0.override === "on" && !t0.lockSource,
         details: [
           {
@@ -308,39 +308,39 @@ function UnifiedInstalledCell(t0) {
     }
     case "mcp": {
       let config = t0.client.config;
-      let k = [];
+      let warnings = [];
       if (
         config?.type === "claudeai-proxy" &&
         config.scope === "claudeai" &&
         config.enterpriseManaged === true
       )
-        k.push({
+        warnings.push({
           text: "managed",
         });
       if (t0.liftedFrom)
-        k.push({
+        warnings.push({
           text: `from ${getPluginDisplayName(t0.liftedFrom)}`,
         });
-      let C = {
+      let entry = {
         name: t0.name,
         isChild: t0.indented === true,
         typeLabel: "MCP",
-        details: k,
+        details: warnings,
         statusIsDefault: false,
       };
       if (t0.status === "cached" && t0.client.type === "cached") {
-        let x = formatToolConnectionState(t0.client.cacheSavedAt);
+        let connectionState = formatToolConnectionState(t0.client.cacheSavedAt);
         return {
-          ...C,
-          glyph: x.glyph,
-          tone: x.tone,
-          statusLabel: x.statusText,
+          ...entry,
+          glyph: connectionState.glyph,
+          tone: connectionState.tone,
+          statusLabel: connectionState.statusText,
         };
       }
       switch (t0.status) {
         case "connected":
           return {
-            ...C,
+            ...entry,
             glyph: figures_default.tick,
             tone: "success",
             statusLabel: "connected",
@@ -348,21 +348,21 @@ function UnifiedInstalledCell(t0) {
           };
         case "disabled":
           return {
-            ...C,
+            ...entry,
             glyph: figures_default.radioOff,
             tone: "inactive",
             statusLabel: "disabled",
           };
         case "pending":
           return {
-            ...C,
+            ...entry,
             glyph: figures_default.radioOff,
             tone: "inactive",
             statusLabel: "connecting\u2026",
           };
         case "needs-auth":
           return {
-            ...C,
+            ...entry,
             glyph: figures_default.warning,
             tone: "warning",
             statusLabel: "needs sign-in",
@@ -370,7 +370,7 @@ function UnifiedInstalledCell(t0) {
           };
         case "unconfigured":
           return {
-            ...C,
+            ...entry,
             glyph: figures_default.radioOff,
             tone: "inactive",
             statusLabel: "not configured",
@@ -378,7 +378,7 @@ function UnifiedInstalledCell(t0) {
         case "cached":
         case "failed":
           return {
-            ...C,
+            ...entry,
             glyph: figures_default.cross,
             tone: "error",
             statusLabel: "failed",

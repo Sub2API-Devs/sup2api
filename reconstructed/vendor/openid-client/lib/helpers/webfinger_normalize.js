@@ -5,10 +5,10 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:68948-69495 cjs-fingerprint
-var require_webfinger_normalize = x(function (cjsExports, cjsModule) {
+var require_webfinger_normalize = __commonJS(function (cjsExports, cjsModule) {
   var PORT = /^\d+$/;
   function hasScheme(input) {
     if (input.includes("://")) return true;

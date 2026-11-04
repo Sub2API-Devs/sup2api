@@ -49,17 +49,17 @@ var JWKS_NEGATIVE_CACHE_MS = 60000;
 /**
  * 网关 CRI JWT 校验器：组织白名单、audience、issuer、JWKS 地址校验与缓存。
  */
-function createCriJwtVerifier(e) {
-  let t = new Set(e.orgAllowlist.map((b) => b.toLowerCase()));
-  let audience = [...e.audience];
-  let issuer = e.issuer ?? HTTPS_API_ANTHROPIC_COM_API_OAUTH_CRI;
-  let r = e.jwksUrl ?? `${issuer}/jwks.json`;
-  if (e.jwksUrl !== undefined) {
-    if (!isLoopbackUrl(r))
+function createCriJwtVerifier(config) {
+  let allowedOrgs = new Set(config.orgAllowlist.map((org) => org.toLowerCase()));
+  let audience = [...config.audience];
+  let issuer = config.issuer ?? HTTPS_API_ANTHROPIC_COM_API_OAUTH_CRI;
+  let jwksUrl = config.jwksUrl ?? `${issuer}/jwks.json`;
+  if (config.jwksUrl !== undefined) {
+    if (!isLoopbackUrl(jwksUrl))
       throw Error(
         "cri.jwks_url must be a loopback URL \u2014 it exists for tests against local mocks, and honoring an external URL here would let it substitute the admission authority (its keys would mint CRI principals). Remove it.",
       );
-    if (!isAllowedLoopbackUrl(r))
+    if (!isAllowedLoopbackUrl(jwksUrl))
       throw Error(
         "cri.jwks_url targets loopback but CLAUDE_GATEWAY_ALLOW_LOOPBACK is not set \u2014 safeFetch would block every JWKS fetch at runtime. Set the escape (tests) or remove the override.",
       );
@@ -68,30 +68,30 @@ function createCriJwtVerifier(e) {
       `cri.jwks_url is set \u2014 CRI JWT verification keys are NOT coming from ${issuer}/jwks.json. This override exists for tests; never set it in production.`,
     );
   } else if (issuer !== HTTPS_API_ANTHROPIC_COM_API_OAUTH_CRI) {
-    if (!isLoopbackUrl(r)) {
-      if (!r.startsWith("https://"))
+    if (!isLoopbackUrl(jwksUrl)) {
+      if (!jwksUrl.startsWith("https://"))
         throw Error(
           "cri.issuer must be https:// (http:// allowed for loopback only) \u2014 the verification JWKS derives from it, and keys fetched over plaintext invite substitution.",
         );
-      if (!isAllowedOutboundUrl(r))
+      if (!isAllowedOutboundUrl(jwksUrl))
         throw Error(
           "cri.issuer must not target a cloud metadata endpoint \u2014 the verification JWKS derives from it.",
         );
-    } else if (!isAllowedLoopbackUrl(r))
+    } else if (!isAllowedLoopbackUrl(jwksUrl))
       throw Error(
         "cri.issuer targets loopback but CLAUDE_GATEWAY_ALLOW_LOOPBACK is not set \u2014 safeFetch would block every derived-JWKS fetch at runtime. Set the escape (tests) or remove the issuer override.",
       );
   }
-  let s = new Map();
-  let a = 0;
-  let l = 0;
-  let c = 0;
-  let u = null;
-  async function f() {
-    let b;
+  let keyCache = new Map();
+  let lastFetchMs = 0;
+  let cacheExpiresAt = 0;
+  let lastAttemptMs = 0;
+  let inflightFetch = null;
+  async function fetchJwks() {
+    let response;
     try {
-      b = await fetchWithTimeout(
-        r,
+      response = await fetchWithTimeout(
+        jwksUrl,
         {
           method: "GET",
         },
@@ -102,107 +102,108 @@ function createCriJwtVerifier(e) {
       gatewayLog("warn", `cri jwks unreachable: ${errorMessage(error)}`);
       return false;
     }
-    if (!b.ok) {
-      b.body?.cancel().catch(() => {});
-      gatewayLog("warn", `cri jwks fetch returned ${b.status}`);
+    if (!response.ok) {
+      response.body?.cancel().catch(() => {});
+      gatewayLog("warn", `cri jwks fetch returned ${response.status}`);
       return false;
     }
-    let w;
+    let body;
     try {
-      w = await b.json();
+      body = await response.json();
     } catch {
       gatewayLog("warn", "cri jwks fetch returned unparseable JSON");
       return false;
     }
-    if (typeof w !== "object" || w === null || !Array.isArray(w.keys)) {
+    if (typeof body !== "object" || body === null || !Array.isArray(body.keys)) {
       gatewayLog("warn", "cri jwks fetch returned a non-JWKS body");
       return false;
     }
-    let S = new Map();
-    for (let key of w.keys) {
+    let importedKeys = new Map();
+    for (let key of body.keys) {
       if (typeof key !== "object" || key === null) continue;
-      let M = key;
-      if (M.kty !== "EC" || M.crv !== "P-256" || typeof M.kid !== "string" || M.kid.length === 0) continue;
+      let jwk = key;
+      if (jwk.kty !== "EC" || jwk.crv !== "P-256" || typeof jwk.kid !== "string" || jwk.kid.length === 0)
+        continue;
       try {
-        let N = await importJWK(
+        let importedKey = await importJWK(
           {
-            ...M,
+            ...jwk,
             alg: ES256,
           },
           ES256,
         );
-        S.set(M.kid, N);
+        importedKeys.set(jwk.kid, importedKey);
       } catch (error) {
-        gatewayLog("warn", `cri jwks key ${M.kid} failed to import: ${errorMessage(error)}`);
+        gatewayLog("warn", `cri jwks key ${jwk.kid} failed to import: ${errorMessage(error)}`);
       }
     }
-    if (S.size === 0) {
+    if (importedKeys.size === 0) {
       gatewayLog("warn", "cri jwks fetch yielded no usable ES256 keys \u2014 keeping previous set");
       return false;
     }
-    s = S;
-    a = Date.now();
-    l = a + h(b);
+    keyCache = importedKeys;
+    lastFetchMs = Date.now();
+    cacheExpiresAt = lastFetchMs + ttlFromResponse(response);
     return true;
   }
-  function h(b) {
-    let w = b.headers.get("cache-control") ?? "";
-    let match = /(?:^|[,\s])max-age=(\d+)/i.exec(w);
+  function ttlFromResponse(response) {
+    let cacheControl = response.headers.get("cache-control") ?? "";
+    let match = /(?:^|[,\s])max-age=(\d+)/i.exec(cacheControl);
     if (!match) return JWKS_DEFAULT_TTL_MS;
     return Math.min(Number(match[1]) * 1000, JWKS_MAX_CACHE_MS / 2);
   }
-  function m(b = false) {
-    if (u) return u;
+  function ensureFresh(force = false) {
+    if (inflightFetch) return inflightFetch;
     let now = Date.now();
-    if (!b && now - c < JWKS_NEGATIVE_CACHE_MS) return Promise.resolve(false);
-    c = now;
-    u = f().finally(() => {
-      u = null;
+    if (!force && now - lastAttemptMs < JWKS_NEGATIVE_CACHE_MS) return Promise.resolve(false);
+    lastAttemptMs = now;
+    inflightFetch = fetchJwks().finally(() => {
+      inflightFetch = null;
     });
-    return u;
+    return inflightFetch;
   }
-  async function y() {
+  async function currentKeys() {
     let now = Date.now();
-    if (s.size > 0 && now < l) return s;
-    if (s.size > 0 && now - a <= JWKS_MAX_CACHE_MS) {
-      m().catch(() => {});
-      return s;
+    if (keyCache.size > 0 && now < cacheExpiresAt) return keyCache;
+    if (keyCache.size > 0 && now - lastFetchMs <= JWKS_MAX_CACHE_MS) {
+      ensureFresh().catch(() => {});
+      return keyCache;
     }
-    await m();
-    if (s.size === 0) return null;
-    if (Date.now() - a > JWKS_MAX_CACHE_MS) return null;
-    return s;
+    await ensureFresh();
+    if (keyCache.size === 0) return null;
+    if (Date.now() - lastFetchMs > JWKS_MAX_CACHE_MS) return null;
+    return keyCache;
   }
   return {
     async prime() {
-      if (!(await m(true)))
+      if (!(await ensureFresh(true)))
         gatewayLog(
           "warn",
           "cri jwks prefetch failed \u2014 the CRI wall will answer 503 until the first successful fetch (non-CRI traffic is unaffected)",
         );
     },
     async authenticate(token, requestId, clientIp, path) {
-      let M = (Ne, be) => {
+      let deny = (reason, org) => {
         gatewayJsonLog("auth.denied", {
           request_id: requestId,
-          reason: `cri_${Ne}`,
+          reason: `cri_${reason}`,
           path,
           client_ip: clientIp,
-          ...(be !== undefined && {
-            org: be,
+          ...(org !== undefined && {
+            org,
           }),
         });
         return {
           ok: false,
           status: 401,
-          reason: Ne,
-          ...(be !== undefined && {
-            org: be,
+          reason,
+          ...(org !== undefined && {
+            org,
           }),
         };
       };
-      let N = await y();
-      if (N === null) {
+      let keys = await currentKeys();
+      if (keys === null) {
         gatewayJsonLog("auth.denied", {
           request_id: requestId,
           reason: "cri_jwks_unavailable",
@@ -215,23 +216,23 @@ function createCriJwtVerifier(e) {
           reason: "jwks_unavailable",
         };
       }
-      let Z;
+      let header;
       try {
-        Z = decodeProtectedHeader(token);
+        header = decodeProtectedHeader(token);
       } catch {
-        return M("invalid_token");
+        return deny("invalid_token");
       }
-      if (Z.typ !== CRI_JWT_TYP || Z.alg !== ES256) return M("invalid_token");
-      if (typeof Z.kid !== "string" || Z.kid.length === 0) return M("invalid_token");
-      let key = N.get(Z.kid);
+      if (header.typ !== CRI_JWT_TYP || header.alg !== ES256) return deny("invalid_token");
+      if (typeof header.kid !== "string" || header.kid.length === 0) return deny("invalid_token");
+      let key = keys.get(header.kid);
       if (key === undefined) {
-        await m();
-        key = s.get(Z.kid);
-        if (key === undefined) return M("invalid_token");
+        await ensureFresh();
+        key = keyCache.get(header.kid);
+        if (key === undefined) return deny("invalid_token");
       }
-      let X;
+      let payload;
       try {
-        X = (
+        payload = (
           await jwtVerify(token, key, {
             algorithms: [ES256],
             issuer,
@@ -247,32 +248,34 @@ function createCriJwtVerifier(e) {
           error.claim === "aud" &&
           error.reason === "check_failed"
         )
-          return M("audience_mismatch");
-        return M("invalid_token");
+          return deny("audience_mismatch");
+        return deny("invalid_token");
       }
-      if (X.scope !== "inference") return M("scope_missing");
-      let he = typeof X.org === "string" ? X.org.toLowerCase() : null;
-      if (he === null || he.length === 0) return M("invalid_token");
-      if (!t.has(he)) return M("org_not_allowed", he);
-      if (typeof X.sub !== "string" || X.sub.length === 0) return M("invalid_token");
+      if (payload.scope !== "inference") return deny("scope_missing");
+      let org = typeof payload.org === "string" ? payload.org.toLowerCase() : null;
+      if (org === null || org.length === 0) return deny("invalid_token");
+      if (!allowedOrgs.has(org)) return deny("org_not_allowed", org);
+      if (typeof payload.sub !== "string" || payload.sub.length === 0) return deny("invalid_token");
       let sub =
-        typeof X.act === "object" && X.act !== null && typeof X.act.sub === "string" ? X.act.sub : undefined;
+        typeof payload.act === "object" && payload.act !== null && typeof payload.act.sub === "string"
+          ? payload.act.sub
+          : undefined;
       return {
         ok: true,
         claims: {
-          sub: X.sub,
+          sub: payload.sub,
           cri: true,
-          org: he,
+          org,
           ...(sub !== undefined && {
             act: {
               sub,
             },
           }),
-          ...(typeof X.exp === "number" && {
-            exp: X.exp,
+          ...(typeof payload.exp === "number" && {
+            exp: payload.exp,
           }),
-          ...(typeof X.iat === "number" && {
-            iat: X.iat,
+          ...(typeof payload.iat === "number" && {
+            iat: payload.iat,
           }),
         },
       };

@@ -5,13 +5,13 @@
  * pieces: chunk-2tyrgda4.js (7)
  * attribution: esm-layout 6, esm-fingerprint 1
  */
-import { Xa } from "../../../../runtime/bun-runtime.js";
+import { __esm } from "../../../../runtime/bun-runtime.js";
 import {
   init_decode_protected_header_2,
   init_decode_protected_header,
 } from "../node/esm/util/decode_protected_header.js";
 import { init_base64url } from "../browser/runtime/base64url.js";
-import { F } from "./lib/content_encryption.js";
+import { noopClaims } from "./lib/content_encryption.js";
 import { init_subtle_dsa } from "../browser/runtime/subtle_dsa.js";
 import { init_key_to_jwk } from "../browser/runtime/key_to_jwk.js";
 import { init_signing_3 } from "./lib/signing.js";
@@ -21,24 +21,24 @@ import { init_encrypt_key_management_2 } from "../node/esm/lib/encrypt_key_manag
 import { init_check_key_type } from "../node/esm/lib/check_key_type.js";
 
 //@ chunk-2tyrgda4.js:42251-42281 esm-layout
-var init_webapi = Xa(() => {
+var init_webapi = __esm(() => {
   init_decode_protected_header_2();
   init_base64url();
-  F();
+  noopClaims();
 });
 //@ chunk-2tyrgda4.js:42281-42303 esm-fingerprint
 var WEBCRYPTOAPI = "WebCryptoAPI";
 //@ chunk-2tyrgda4.js:42303-42317 esm-layout
-var dr = () => {};
+var noopWebCrypto = () => {};
 //@ chunk-2tyrgda4.js:42317-42324 esm-layout
-var Yr;
+var webCryptoApiName;
 //@ chunk-2tyrgda4.js:42324-42352 esm-layout
-var init_webapi_2 = Xa(() => {
-  dr();
-  Yr = WEBCRYPTOAPI;
+var init_webapi_2 = __esm(() => {
+  noopWebCrypto();
+  webCryptoApiName = WEBCRYPTOAPI;
 });
 //@ chunk-2tyrgda4.js:42352-42419 esm-layout
-var init_webapi_3 = Xa(() => {
+var init_webapi_3 = __esm(() => {
   init_subtle_dsa();
   init_key_to_jwk();
   init_signing_3();
@@ -52,3 +52,4 @@ var init_webapi_3 = Xa(() => {
 });
 //@ chunk-2tyrgda4.js:42419-42424 esm-layout
 init_webapi_3();
+export { webCryptoApiName };

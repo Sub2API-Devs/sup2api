@@ -20,23 +20,23 @@ var OVERLOAD_WARN_INTERVAL_MS = 60000;
 /**
  * 解析 BUN_CONFIG_MAX_HTTP_REQUESTS（1–65535，否则默认值）。
  */
-function parseMaxHttpRequests(e) {
-  if (e === undefined || !/^\+?\d(_*\d)*$/.test(e)) return DEFAULT_MAX_HTTP_REQUESTS;
-  let t = Number(e.replaceAll("_", ""));
-  return t >= 1 && t <= 65535 ? t : DEFAULT_MAX_HTTP_REQUESTS;
+function parseMaxHttpRequests(raw) {
+  if (raw === undefined || !/^\+?\d(_*\d)*$/.test(raw)) return DEFAULT_MAX_HTTP_REQUESTS;
+  let parsed = Number(raw.replaceAll("_", ""));
+  return parsed >= 1 && parsed <= 65535 ? parsed : DEFAULT_MAX_HTTP_REQUESTS;
 }
 //@ chunk-1ny7cxrt.js:1455022-1455483 placement
 /**
  * 打开的客户端请求数超过上游并发上限时（限频）警告。
  */
-function createOverloadWarner(maxHttpRequests, t = () => performance.now()) {
+function createOverloadWarner(maxHttpRequests, now = () => performance.now()) {
   let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
-  return (o) => {
-    if (o <= maxHttpRequests || t() - NEGATIVE_INFINITY < OVERLOAD_WARN_INTERVAL_MS) return;
-    NEGATIVE_INFINITY = t();
+  return (pendingRequests) => {
+    if (pendingRequests <= maxHttpRequests || now() - NEGATIVE_INFINITY < OVERLOAD_WARN_INTERVAL_MS) return;
+    NEGATIVE_INFINITY = now();
     gatewayLog(
       "warn",
-      `${o} client requests are open on this gateway process, more than the ${maxHttpRequests} it sends upstream at once. Requests past that limit wait inside the gateway for a free slot, so developers see slow or stalled responses, or a 502 after a long wait. Add replicas, or raise BUN_CONFIG_MAX_HTTP_REQUESTS and the replica's memory limit together.`,
+      `${pendingRequests} client requests are open on this gateway process, more than the ${maxHttpRequests} it sends upstream at once. Requests past that limit wait inside the gateway for a free slot, so developers see slow or stalled responses, or a 502 after a long wait. Add replicas, or raise BUN_CONFIG_MAX_HTTP_REQUESTS and the replica's memory limit together.`,
     );
   };
 }

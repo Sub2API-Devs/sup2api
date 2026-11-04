@@ -5,11 +5,11 @@
  * pieces: chunk-edce4vxq.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_fxp } from "../../../fast-xml-parser/lib/fxp.cjs";
 
 //@ chunk-edce4vxq.js:73699-74087 cjs-fingerprint
-var require_xml_parser = x(function (cjsExports) {
+var require_xml_parser = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

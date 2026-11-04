@@ -44,7 +44,9 @@ function shouldEscapeLineTerminators() {
  * JSON 序列化后把 U+2028/U+2029 转义，保证 NDJSON 一行一条。
  */
 function escapeJsLineTerminators(json) {
-  return jsonStringify(json).replace(LINE_SEPARATOR_PATTERN, (n) => (n === "\u2028" ? "\\u2028" : "\\u2029"));
+  return jsonStringify(json).replace(LINE_SEPARATOR_PATTERN, (json) =>
+    json === "\u2028" ? "\\u2028" : "\\u2029",
+  );
 }
 //@ chunk-2kh2r6st.js:652-705 placement
 function ndjsonStringify(json) {
@@ -52,8 +54,8 @@ function ndjsonStringify(json) {
   return escapeJsLineTerminators(json);
 }
 //@ chunk-2kh2r6st.js:705-773 placement
-function ndjsonStringifyWithReplacer(r, n) {
-  if (shouldEscapeLineTerminators()) return escapeInvisibleChars(jsonStringify(r, null, n));
-  return jsonStringify(r, null, n);
+function ndjsonStringifyWithReplacer(value, indent) {
+  if (shouldEscapeLineTerminators()) return escapeInvisibleChars(jsonStringify(value, null, indent));
+  return jsonStringify(value, null, indent);
 }
 export { shouldEscapeNdjsonForBridge, ndjsonStringifyWithReplacer, ndjsonStringify, escapeJsLineTerminators };

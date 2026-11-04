@@ -31,6 +31,57 @@ import { jsonStringify } from "./slowOperations.js";
 import { readAllPages, DEFAULT_MAX_PAGES } from "./pagedRead.js";
 import { listedProjectKey } from "./sessionStoragePortable.js";
 
+//@ chunk-e6aww6q8.js:302775-302788 affinity
+var SESSION_START_ENTRY_WINDOW_MS = 5000;
+//@ chunk-e6aww6q8.js:302788-303694 fingerprint = readSessionStartDate (0.359)
+function readSessionStartDate(cache, entries, currentMsg, seen) {
+  let time = new Date(currentMsg.timestamp).getTime();
+  if (Number.isNaN(time)) return;
+  let side = cache.timedSides.get(currentMsg.isSidechain);
+  if (!side) {
+    cache.entriesBySide ??= Map.groupBy(entries.values(), (entry) => entry.isSidechain);
+    let timedEntries = [];
+    for (let entry of cache.entriesBySide.get(currentMsg.isSidechain) ?? []) {
+      if (seen.has(entry.uuid)) continue;
+      let time = new Date(entry.timestamp).getTime();
+      if (!Number.isNaN(time))
+        timedEntries.push({
+          time,
+          entry,
+        });
+    }
+    timedEntries.reverse().sort((left, right) => left.time - right.time);
+    side = {
+      timedEntries,
+      previousCandidate: Int32Array.from(timedEntries.keys()),
+    };
+    cache.timedSides.set(currentMsg.isSidechain, side);
+  }
+  let high = side.timedEntries.length;
+  let low = 0;
+  while (low < high) {
+    let middle = (low + high) >>> 1;
+    if (side.timedEntries[middle].time <= time) low = middle + 1;
+    else high = middle;
+  }
+  let candidateIndex = high - 1;
+  while (candidateIndex >= 0) {
+    let previous = side.previousCandidate[candidateIndex];
+    if (previous !== candidateIndex) candidateIndex = previous;
+    else if (seen.has(side.timedEntries[candidateIndex].entry.uuid)) {
+      side.previousCandidate[candidateIndex] = candidateIndex - 1;
+      candidateIndex -= 1;
+    } else break;
+  }
+  let cursor = high - 1;
+  while (cursor > candidateIndex) {
+    let previous = side.previousCandidate[cursor];
+    side.previousCandidate[cursor] = candidateIndex;
+    cursor = previous;
+  }
+  let timedEntry = side.timedEntries[candidateIndex];
+  return timedEntry && time - timedEntry.time <= SESSION_START_ENTRY_WINDOW_MS ? timedEntry.entry : undefined;
+}
 //@ chunk-9h8dr0qb.js:77179-77213 affinity
 function todayDateString() {
   return toDateString(new Date());
@@ -42,82 +93,82 @@ function getNextDay() {
   return toDateString(date);
 }
 //@ chunk-9h8dr0qb.js:77280-77308 layout
-function dateBefore(o, u) {
-  return o < u;
+function dateBefore(left, right) {
+  return left < right;
 }
 //@ chunk-9h8dr0qb.js:77308-77379 layout
-function finiteOrUndefined(o) {
-  return typeof o === "number" && Number.isFinite(o) ? o : undefined;
+function finiteOrUndefined(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 //@ chunk-9h8dr0qb.js:77379-77450 placement
-function isPlainRecord(o) {
-  return typeof o === "object" && o !== null && !Array.isArray(o);
+function isPlainRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-9h8dr0qb.js:77450-77494 placement
-function isPrototypeKey(o) {
-  return o in Object.prototype;
+function isPrototypeKey(key) {
+  return key in Object.prototype;
 }
 //@ chunk-9h8dr0qb.js:77795-79905 placement = mergeCacheWithNewStats (0.85)
 /**
  * 合并统计缓存与新统计（缓存日期不可用时重置为全量重扫）。
  */
 function mergeCacheWithNewStats_2(parsed) {
-  let u = {};
+  let modelUsage = {};
   for (let [key, value] of Object.entries(isPlainRecord(parsed.modelUsage) ? parsed.modelUsage : {})) {
     if (isPrototypeKey(key)) continue;
-    let U = isPlainRecord(value) ? value : undefined;
-    u[key] = {
-      ...U,
-      inputTokens: finiteOrUndefined(U?.inputTokens) ?? 0,
-      outputTokens: finiteOrUndefined(U?.outputTokens) ?? 0,
-      cacheReadInputTokens: finiteOrUndefined(U?.cacheReadInputTokens) ?? 0,
-      cacheCreationInputTokens: finiteOrUndefined(U?.cacheCreationInputTokens) ?? 0,
-      webSearchRequests: finiteOrUndefined(U?.webSearchRequests) ?? 0,
-      costUSD: finiteOrUndefined(U?.costUSD) ?? 0,
-      contextWindow: finiteOrUndefined(U?.contextWindow) ?? 0,
-      maxOutputTokens: finiteOrUndefined(U?.maxOutputTokens) ?? 0,
+    let record = isPlainRecord(value) ? value : undefined;
+    modelUsage[key] = {
+      ...record,
+      inputTokens: finiteOrUndefined(record?.inputTokens) ?? 0,
+      outputTokens: finiteOrUndefined(record?.outputTokens) ?? 0,
+      cacheReadInputTokens: finiteOrUndefined(record?.cacheReadInputTokens) ?? 0,
+      cacheCreationInputTokens: finiteOrUndefined(record?.cacheCreationInputTokens) ?? 0,
+      webSearchRequests: finiteOrUndefined(record?.webSearchRequests) ?? 0,
+      costUSD: finiteOrUndefined(record?.costUSD) ?? 0,
+      contextWindow: finiteOrUndefined(record?.contextWindow) ?? 0,
+      maxOutputTokens: finiteOrUndefined(record?.maxOutputTokens) ?? 0,
     };
   }
-  let p = {};
+  let hourCounts = {};
   for (let [key, value] of Object.entries(isPlainRecord(parsed.hourCounts) ? parsed.hourCounts : {})) {
-    let U = parseInt(key, 10);
-    if (Number.isNaN(U)) continue;
-    p[U] = finiteOrUndefined(value) ?? 0;
+    let hour = parseInt(key, 10);
+    if (Number.isNaN(hour)) continue;
+    hourCounts[hour] = finiteOrUndefined(value) ?? 0;
   }
-  let h = [];
+  let dailyModelTokens = [];
   for (let dailyModelToken of parsed.dailyModelTokens) {
     let isoDate = parseIsoDate(dailyModelToken?.date);
     if (isoDate === null) continue;
-    let U = {};
+    let tokensByModel = {};
     for (let [key, value] of Object.entries(
       isPlainRecord(dailyModelToken.tokensByModel) ? dailyModelToken.tokensByModel : {},
     )) {
       if (isPrototypeKey(key)) continue;
-      U[key] = finiteOrUndefined(value) ?? 0;
+      tokensByModel[key] = finiteOrUndefined(value) ?? 0;
     }
-    h.push({
+    dailyModelTokens.push({
       date: isoDate,
-      tokensByModel: U,
+      tokensByModel,
     });
   }
-  let D = [];
+  let dailyActivity = [];
   for (let day of parsed.dailyActivity) {
     let isoDate = parseIsoDate(day?.date);
     if (isoDate === null) continue;
-    D.push({
+    dailyActivity.push({
       date: isoDate,
       messageCount: finiteOrUndefined(day.messageCount) ?? 0,
       sessionCount: finiteOrUndefined(day.sessionCount) ?? 0,
       toolCallCount: finiteOrUndefined(day.toolCallCount) ?? 0,
     });
   }
-  let E;
+  let shotDistribution;
   if (isPlainRecord(parsed.shotDistribution)) {
-    E = {};
+    shotDistribution = {};
     for (let [key, value] of Object.entries(parsed.shotDistribution)) {
       let hourNum = parseInt(key, 10);
       if (Number.isNaN(hourNum)) continue;
-      E[hourNum] = finiteOrUndefined(value) ?? 0;
+      shotDistribution[hourNum] = finiteOrUndefined(value) ?? 0;
     }
   }
   let longestSession = isPlainRecord(parsed.longestSession)
@@ -130,7 +181,8 @@ function mergeCacheWithNewStats_2(parsed) {
     : null;
   let isoDate = parseIsoDate(parsed.lastComputedDate);
   if (isoDate === null) {
-    for (let v of [D, h]) for (let F of v) if (isoDate === null || isoDate < F.date) isoDate = F.date;
+    for (let days of [dailyActivity, dailyModelTokens])
+      for (let day of days) if (isoDate === null || isoDate < day.date) isoDate = day.date;
   }
   if (isoDate === null) {
     logForDebugging(
@@ -140,7 +192,7 @@ function mergeCacheWithNewStats_2(parsed) {
       ...getEmptyCache(),
       version: parsed.version,
       dailyModelTokensVersion: finiteOrUndefined(parsed.dailyModelTokensVersion),
-      shotDistribution: E && {},
+      shotDistribution: shotDistribution && {},
     };
   }
   return {
@@ -148,11 +200,11 @@ function mergeCacheWithNewStats_2(parsed) {
     lastComputedDate: isoDate,
     firstSessionDate: parseIsoDateTimePrefix(parsed.firstSessionDate),
     dailyModelTokensVersion: finiteOrUndefined(parsed.dailyModelTokensVersion),
-    dailyModelTokens: h,
-    dailyActivity: D,
-    modelUsage: u,
-    hourCounts: p,
-    shotDistribution: E,
+    dailyModelTokens,
+    dailyActivity,
+    modelUsage,
+    hourCounts,
+    shotDistribution,
     totalSessions: finiteOrUndefined(parsed.totalSessions) ?? 0,
     totalMessages: finiteOrUndefined(parsed.totalMessages) ?? 0,
     longestSession,
@@ -168,7 +220,7 @@ function totalUsageTokens(usage) {
   );
 }
 //@ chunk-9h8dr0qb.js:80025-82770 fingerprint = processSessionFiles (0.986)
-async function processSessionFiles(sessionFiles, options = {}, p, mtimeMsByFile) {
+async function processSessionFiles(sessionFiles, options = {}, firstMessageByFile, mtimeMsByFile) {
   let { fromDate, toDate } = options;
   let fs = getFsImplementation();
   let dailyActivityMap = new Map();
@@ -187,9 +239,12 @@ async function processSessionFiles(sessionFiles, options = {}, p, mtimeMsByFile)
         try {
           if (fromDate)
             try {
-              let ae = isStorageV5Enabled() && p !== undefined ? mtimeMsByFile?.get(sessionFile) : undefined;
+              let cachedMtimeMs =
+                isStorageV5Enabled() && firstMessageByFile !== undefined
+                  ? mtimeMsByFile?.get(sessionFile)
+                  : undefined;
               let fileModifiedDate = toDateString(
-                ae !== undefined ? new Date(ae) : (await fs.stat(sessionFile)).mtime,
+                cachedMtimeMs !== undefined ? new Date(cachedMtimeMs) : (await fs.stat(sessionFile)).mtime,
               );
               if (dateBefore(fileModifiedDate, fromDate))
                 return {
@@ -239,8 +294,8 @@ async function processSessionFiles(sessionFiles, options = {}, p, mtimeMsByFile)
       }
       let dateKey = toDateString(firstTimestamp);
       if (toDate && dateBefore(toDate, dateKey)) continue;
-      let Ve = !fromDate || !dateBefore(dateKey, fromDate);
-      if (!isSubagentFile && Ve) {
+      let inRange = !fromDate || !dateBefore(dateKey, fromDate);
+      if (!isSubagentFile && inRange) {
         let duration = lastTimestamp.getTime() - firstTimestamp.getTime();
         sessions.push({
           sessionId,
@@ -248,17 +303,17 @@ async function processSessionFiles(sessionFiles, options = {}, p, mtimeMsByFile)
           messageCount: mainMessages.length,
           timestamp: firstMessage.timestamp,
         });
-        let Ue = dailyActivityMap.get(dateKey);
-        if (!Ue) {
-          Ue = {
+        let activityDay = dailyActivityMap.get(dateKey);
+        if (!activityDay) {
+          activityDay = {
             date: dateKey,
             messageCount: 0,
             sessionCount: 0,
             toolCallCount: 0,
           };
-          dailyActivityMap.set(dateKey, Ue);
+          dailyActivityMap.set(dateKey, activityDay);
         }
-        Ue.sessionCount++;
+        activityDay.sessionCount++;
         let hour = firstTimestamp.getHours();
         hourCounts.set(hour, (hourCounts.get(hour) || 0) + 1);
       }
@@ -268,24 +323,25 @@ async function processSessionFiles(sessionFiles, options = {}, p, mtimeMsByFile)
         let dateString = toDateString(date);
         if (fromDate && dateBefore(dateString, fromDate)) continue;
         if (toDate && dateBefore(toDate, dateString)) continue;
-        let ye = dailyActivityMap.get(dateString);
-        if (!ye && !isSubagentFile) {
-          ye = {
+        let activityDay = dailyActivityMap.get(dateString);
+        if (!activityDay && !isSubagentFile) {
+          activityDay = {
             date: dateString,
             messageCount: 0,
             sessionCount: 0,
             toolCallCount: 0,
           };
-          dailyActivityMap.set(dateString, ye);
+          dailyActivityMap.set(dateString, activityDay);
         }
         if (!isSubagentFile) {
           totalMessages++;
-          if (ye) ye.messageCount++;
+          if (activityDay) activityDay.messageCount++;
         }
         if (message.type === "assistant") {
           let content = message.message?.content;
           if (Array.isArray(content)) {
-            for (let block of content) if (block.type === "tool_use" && ye) ye.toolCallCount++;
+            for (let block of content)
+              if (block.type === "tool_use" && activityDay) activityDay.toolCallCount++;
           }
           if (message.message?.usage) {
             let usage = message.message.usage;
@@ -302,16 +358,16 @@ async function processSessionFiles(sessionFiles, options = {}, p, mtimeMsByFile)
                 contextWindow: 0,
                 maxOutputTokens: 0,
               };
-            let at = finiteOrUndefined(usage.input_tokens) ?? 0;
-            let ot = finiteOrUndefined(usage.output_tokens) ?? 0;
-            let st = finiteOrUndefined(usage.cache_read_input_tokens) ?? 0;
-            let et = finiteOrUndefined(usage.cache_creation_input_tokens) ?? 0;
-            let Ge = modelUsageAgg[model];
-            Ge.inputTokens += at;
-            Ge.outputTokens += ot;
-            Ge.cacheReadInputTokens += st;
-            Ge.cacheCreationInputTokens += et;
-            let totalTokens = at + ot + st + et;
+            let inputTokens = finiteOrUndefined(usage.input_tokens) ?? 0;
+            let outputTokens = finiteOrUndefined(usage.output_tokens) ?? 0;
+            let cacheReadTokens = finiteOrUndefined(usage.cache_read_input_tokens) ?? 0;
+            let cacheCreationTokens = finiteOrUndefined(usage.cache_creation_input_tokens) ?? 0;
+            let modelUsage = modelUsageAgg[model];
+            modelUsage.inputTokens += inputTokens;
+            modelUsage.outputTokens += outputTokens;
+            modelUsage.cacheReadInputTokens += cacheReadTokens;
+            modelUsage.cacheCreationInputTokens += cacheCreationTokens;
+            let totalTokens = inputTokens + outputTokens + cacheReadTokens + cacheCreationTokens;
             if (totalTokens > 0) {
               let dayTokens = dailyModelTokensMap.get(dateString) || {};
               dayTokens[model] = (dayTokens[model] || 0) + totalTokens;
@@ -323,13 +379,15 @@ async function processSessionFiles(sessionFiles, options = {}, p, mtimeMsByFile)
     }
   }
   return {
-    dailyActivity: Array.from(dailyActivityMap.values()).sort((ee, ne) => ee.date.localeCompare(ne.date)),
+    dailyActivity: Array.from(dailyActivityMap.values()).sort((leftDay, rightDay) =>
+      leftDay.date.localeCompare(rightDay.date),
+    ),
     dailyModelTokens: Array.from(dailyModelTokensMap.entries())
       .map(([date, tokensByModel]) => ({
         date,
         tokensByModel,
       }))
-      .sort((ee, ne) => ee.date.localeCompare(ne.date)),
+      .sort((leftDay, rightDay) => leftDay.date.localeCompare(rightDay.date)),
     modelUsage: modelUsageAgg,
     sessionStats: sessions,
     hourCounts: Object.fromEntries(hourCounts),
@@ -338,9 +396,9 @@ async function processSessionFiles(sessionFiles, options = {}, p, mtimeMsByFile)
   };
 }
 //@ chunk-9h8dr0qb.js:82770-83495 fingerprint = getAllSessionFiles (1)
-async function getAllSessionFiles(o) {
+async function getAllSessionFiles(storage) {
   let projectsDir = getProjectsDir();
-  if (isStorageV5Enabled() && o !== undefined) return collectStatsFromTranscripts(o, projectsDir);
+  if (isStorageV5Enabled() && storage !== undefined) return collectStatsFromTranscripts(storage, projectsDir);
   let fs = getFsImplementation();
   let allEntries;
   try {
@@ -391,101 +449,102 @@ async function getAllSessionFiles(o) {
   };
 }
 //@ chunk-9h8dr0qb.js:83495-85174 layout
-async function collectStatsFromTranscripts(o, projectsDir) {
-  let p = new Map();
-  let h = new Set();
-  let D = (sessionId) => {
+async function collectStatsFromTranscripts(storage, projectsDir) {
+  let mtimeMsByFile = new Map();
+  let warnedNames = new Set();
+  let isSafeName = (sessionId) => {
     if (isValidKeySegment(sessionId)) return true;
-    if (!h.has(sessionId)) {
-      h.add(sessionId);
+    if (!warnedNames.has(sessionId)) {
+      warnedNames.add(sessionId);
       logForDebugging(
         `stats: skipped listed transcript name ${jsonStringify(sessionId)}: not a single path segment`,
       );
     }
     return false;
   };
-  let E = (U, W, M) =>
+  let readPages = (scope, onEntries, options) =>
     readAllPages(
-      (B) =>
-        o.listEntries(U, {
+      (cursor) =>
+        storage.listEntries(scope, {
           skipScopeStats: true,
-          ...(B !== undefined && {
-            cursor: B,
+          ...(cursor !== undefined && {
+            cursor,
           }),
         }),
-      W,
+      onEntries,
       {
-        ...(M !== undefined && {
-          budget: M,
+        ...(options !== undefined && {
+          budget: options,
         }),
       },
     );
-  let T = new Set();
-  let A = await E(
+  let projectKeys = new Set();
+  let listing = await readPages(
     {
       namespace: "transcript",
     },
-    (U) => {
-      for (let W of U) {
-        let M = listedProjectKey(W, D);
-        if (M !== undefined) T.add(M);
+    (entries) => {
+      for (let entry of entries) {
+        let projectKey = listedProjectKey(entry, isSafeName);
+        if (projectKey !== undefined) projectKeys.add(projectKey);
       }
     },
   );
-  if (A.status === "error") throw Error("stats: transcript project listing failed");
-  if (A.status === "capped") throw Error("stats: transcript project listing unfinished at the page cap");
-  let v = {
-    pagesLeft: DEFAULT_MAX_PAGES + T.size,
+  if (listing.status === "error") throw Error("stats: transcript project listing failed");
+  if (listing.status === "capped")
+    throw Error("stats: transcript project listing unfinished at the page cap");
+  let budget = {
+    pagesLeft: DEFAULT_MAX_PAGES + projectKeys.size,
   };
   return {
     files: (
       await Promise.all(
-        [...T].map(async (U) => {
-          let W = join(projectsDir, U);
-          let M = [];
-          let B = new Set();
-          let H = new Set();
-          let K = await E(
+        [...projectKeys].map(async (projectKey) => {
+          let projectDir = join(projectsDir, projectKey);
+          let filePaths = [];
+          let seenSessionIds = new Set();
+          let scopeSessionIds = new Set();
+          let projectListing = await readPages(
             {
               namespace: "transcript",
-              projectKey: U,
+              projectKey,
             },
-            (V) => {
-              for (let L of V)
+            (pageEntries) => {
+              for (let entry of pageEntries)
                 if (
-                  L.kind === "key" &&
-                  L.key.namespace === "transcript" &&
-                  L.key.agentId === undefined &&
-                  L.key.journal !== true &&
-                  !B.has(L.key.sessionId) &&
-                  D(L.key.sessionId)
+                  entry.kind === "key" &&
+                  entry.key.namespace === "transcript" &&
+                  entry.key.agentId === undefined &&
+                  entry.key.journal !== true &&
+                  !seenSessionIds.has(entry.key.sessionId) &&
+                  isSafeName(entry.key.sessionId)
                 ) {
-                  B.add(L.key.sessionId);
-                  let J = join(W, `${L.key.sessionId}.jsonl`);
-                  M.push(J);
-                  if (L.mtimeMs !== undefined) p.set(J, L.mtimeMs);
+                  seenSessionIds.add(entry.key.sessionId);
+                  let filePath = join(projectDir, `${entry.key.sessionId}.jsonl`);
+                  filePaths.push(filePath);
+                  if (entry.mtimeMs !== undefined) mtimeMsByFile.set(filePath, entry.mtimeMs);
                 } else if (
-                  L.kind === "scope" &&
-                  L.scope.namespace === "transcript" &&
-                  L.scope.sessionId !== undefined &&
-                  D(L.scope.sessionId)
+                  entry.kind === "scope" &&
+                  entry.scope.namespace === "transcript" &&
+                  entry.scope.sessionId !== undefined &&
+                  isSafeName(entry.scope.sessionId)
                 )
-                  H.add(L.scope.sessionId);
+                  scopeSessionIds.add(entry.scope.sessionId);
             },
-            v,
+            budget,
           );
-          if (K.status === "error") {
-            logForDebugging(`Failed to read project directory ${W}: storage listing failed`);
+          if (projectListing.status === "error") {
+            logForDebugging(`Failed to read project directory ${projectDir}: storage listing failed`);
             return [];
           }
-          if (K.status === "capped")
+          if (projectListing.status === "capped")
             logForDebugging(
-              `stats: transcript listing of ${W} cut short at the page cap or budget; keeping what was listed`,
+              `stats: transcript listing of ${projectDir} cut short at the page cap or budget; keeping what was listed`,
             );
           let fsImplementation = getFsImplementation();
           let results = await Promise.all(
-            [...H].map(async (sessionDir) => {
-              let subagentsDir = join(W, sessionDir, "subagents");
+            [...scopeSessionIds].map(async (sessionDir) => {
+              let subagentsDir = join(projectDir, sessionDir, "subagents");
               try {
                 return (await fsImplementation.readdir(subagentsDir))
                   .filter(
@@ -498,11 +557,11 @@ async function collectStatsFromTranscripts(o, projectsDir) {
               }
             }),
           );
-          return [...M, ...results.flat()];
+          return [...filePaths, ...results.flat()];
         }),
       )
     ).flat(),
-    mtimeMsByFile: p,
+    mtimeMsByFile,
   };
 }
 //@ chunk-9h8dr0qb.js:85174-87409 fingerprint = cacheToStats (0.982)
@@ -568,14 +627,16 @@ function cacheToStats(cache, todayStats) {
       let hourNum = parseInt(hour, 10);
       hourCountsMap.set(hourNum, (hourCountsMap.get(hourNum) || 0) + count);
     }
-  let dailyActivityArray = Array.from(dailyActivityMap.values()).sort((V, L) => V.date.localeCompare(L.date));
+  let dailyActivityArray = Array.from(dailyActivityMap.values()).sort((left, right) =>
+    left.date.localeCompare(right.date),
+  );
   let streaks = calculateStreaks(dailyActivityArray);
   let dailyModelTokens = Array.from(dailyModelTokensMap.entries())
     .map(([date, tokensByModel]) => ({
       date,
       tokensByModel,
     }))
-    .sort((V, L) => V.date.localeCompare(L.date));
+    .sort((left, right) => left.date.localeCompare(right.date));
   let totalSessions = cache.totalSessions + (todayStats?.sessionStats.length || 0);
   let totalMessages = cache.totalMessages + (todayStats?.totalMessages || 0);
   let longestSession = cache.longestSession;
@@ -626,47 +687,47 @@ function cacheToStats(cache, todayStats) {
 //@ chunk-9h8dr0qb.js:87409-87418 layout
 var CACHE_MAX_STALENESS_DAYS = 7;
 //@ chunk-9h8dr0qb.js:87418-88578 fingerprint = aggregateClaudeCodeStats (0.582)
-async function aggregateClaudeCodeStats(o) {
-  let { files: allSessionFiles, mtimeMsByFile } = await getAllSessionFiles(o);
+async function aggregateClaudeCodeStats(storage) {
+  let { files: allSessionFiles, mtimeMsByFile } = await getAllSessionFiles(storage);
   if (allSessionFiles.length === 0) return getEmptyStats();
   let updatedCache = await withStatsCacheLock(async () => {
-    let updatedCache = await loadStatsCache(o);
+    let updatedCache = await loadStatsCache(storage);
     let dateStr = todayDateString();
     let yesterday = getNextDay();
-    let F =
+    let watermarkAhead =
       updatedCache.lastComputedDate !== null &&
       updatedCache.lastComputedDate >= dateStr &&
       updatedCache.lastComputedDate <= addDaysToDateString(dateStr, CACHE_MAX_STALENESS_DAYS);
-    if (F)
+    if (watermarkAhead)
       logForDebugging(
         `Stats watermark ${updatedCache.lastComputedDate} is ahead of ${dateStr}; skipping the dailyModelTokens rebuild until the clock catches up`,
       );
-    if ((updatedCache.dailyModelTokensVersion ?? 0) < DAILY_MODEL_TOKENS_VERSION && !F) {
-      let W =
+    if ((updatedCache.dailyModelTokensVersion ?? 0) < DAILY_MODEL_TOKENS_VERSION && !watermarkAhead) {
+      let rebuildThrough =
         updatedCache.lastComputedDate && dateBefore(yesterday, updatedCache.lastComputedDate)
           ? yesterday
           : updatedCache.lastComputedDate;
       let dailyModelTokens = [];
-      if (W) {
-        logForDebugging(`Rebuilding stats dailyModelTokens through ${W}`);
+      if (rebuildThrough) {
+        logForDebugging(`Rebuilding stats dailyModelTokens through ${rebuildThrough}`);
         dailyModelTokens = (
           await processSessionFiles(
             allSessionFiles,
             {
-              toDate: W,
+              toDate: rebuildThrough,
             },
-            o,
+            storage,
             mtimeMsByFile,
           )
         ).dailyModelTokens;
       }
       updatedCache = {
         ...updatedCache,
-        lastComputedDate: W,
+        lastComputedDate: rebuildThrough,
         dailyModelTokens,
         dailyModelTokensVersion: DAILY_MODEL_TOKENS_VERSION,
       };
-      await writeStatsCache(updatedCache, o);
+      await writeStatsCache(updatedCache, storage);
     }
     let result = updatedCache;
     if (!updatedCache.lastComputedDate) {
@@ -676,12 +737,12 @@ async function aggregateClaudeCodeStats(o) {
         {
           toDate: yesterday,
         },
-        o,
+        storage,
         mtimeMsByFile,
       );
       if (hasAnyStats(historicalStats)) {
         result = mergeCacheWithNewStats(updatedCache, historicalStats, yesterday);
-        await writeStatsCache(result, o);
+        await writeStatsCache(result, storage);
       }
     } else if (dateBefore(updatedCache.lastComputedDate, yesterday)) {
       let nextDay = nextDateString(updatedCache.lastComputedDate);
@@ -694,18 +755,18 @@ async function aggregateClaudeCodeStats(o) {
           fromDate: nextDay,
           toDate: yesterday,
         },
-        o,
+        storage,
         mtimeMsByFile,
       );
       if (hasAnyStats(newStats)) {
         result = mergeCacheWithNewStats(updatedCache, newStats, yesterday);
-        await writeStatsCache(result, o);
+        await writeStatsCache(result, storage);
       } else {
         result = {
           ...updatedCache,
           lastComputedDate: yesterday,
         };
-        await writeStatsCache(result, o);
+        await writeStatsCache(result, storage);
       }
     }
     return result;
@@ -717,15 +778,15 @@ async function aggregateClaudeCodeStats(o) {
       fromDate: today,
       toDate: today,
     },
-    o,
+    storage,
     mtimeMsByFile,
   );
   return cacheToStats(updatedCache, todayStats);
 }
 //@ chunk-9h8dr0qb.js:88578-88824 fingerprint = aggregateClaudeCodeStatsForRange (0.885)
-async function aggregateClaudeCodeStatsForRange(range, u) {
-  if (range === "all") return aggregateClaudeCodeStats(u);
-  let { files: allSessionFiles, mtimeMsByFile } = await getAllSessionFiles(u);
+async function aggregateClaudeCodeStatsForRange(range, storage) {
+  if (range === "all") return aggregateClaudeCodeStats(storage);
+  let { files: allSessionFiles, mtimeMsByFile } = await getAllSessionFiles(storage);
   if (allSessionFiles.length === 0) return getEmptyStats();
   let today = new Date();
   let daysBack = range === "7d" ? 7 : 30;
@@ -737,15 +798,19 @@ async function aggregateClaudeCodeStatsForRange(range, u) {
     {
       fromDate: fromDateStr,
     },
-    u,
+    storage,
     mtimeMsByFile,
   );
   return processedStatsToClaudeCodeStats(stats);
 }
 //@ chunk-9h8dr0qb.js:88824-89732 fingerprint = processedStatsToClaudeCodeStats (0.973)
 function processedStatsToClaudeCodeStats(stats) {
-  let dailyActivitySorted = stats.dailyActivity.slice().sort((M, B) => M.date.localeCompare(B.date));
-  let dailyModelTokensSorted = stats.dailyModelTokens.slice().sort((M, B) => M.date.localeCompare(B.date));
+  let dailyActivitySorted = stats.dailyActivity
+    .slice()
+    .sort((left, right) => left.date.localeCompare(right.date));
+  let dailyModelTokensSorted = stats.dailyModelTokens
+    .slice()
+    .sort((left, right) => left.date.localeCompare(right.date));
   let streaks = calculateStreaks(dailyActivitySorted);
   let longestSession = null;
   for (let session of stats.sessionStats)
@@ -758,7 +823,7 @@ function processedStatsToClaudeCodeStats(stats) {
   }
   let peakActivityDay =
     dailyActivitySorted.length > 0
-      ? dailyActivitySorted.reduce((max, B) => (B.messageCount > max.messageCount ? B : max)).date
+      ? dailyActivitySorted.reduce((max, day) => (day.messageCount > max.messageCount ? day : max)).date
       : null;
   let hourEntries = Object.entries(stats.hourCounts);
   let peakActivityHour =
@@ -791,9 +856,9 @@ function processedStatsToClaudeCodeStats(stats) {
   };
 }
 //@ chunk-9h8dr0qb.js:89732-89811 layout
-function addDaysToDateString(dateStr, u) {
+function addDaysToDateString(dateStr, days) {
   let date = new Date(dateStr);
-  date.setUTCDate(date.getUTCDate() + u);
+  date.setUTCDate(date.getUTCDate() + days);
   return toDateString(date);
 }
 //@ chunk-9h8dr0qb.js:89811-89841 layout
@@ -810,12 +875,12 @@ function calculateStreaks(dailyActivity) {
       longestStreakStart: null,
       longestStreakEnd: null,
     };
-  let u = 0;
+  let currentStreak = 0;
   let currentStreakStart = null;
   let dateStr = todayDateString();
-  let activeDates = new Set(dailyActivity.map((F) => F.date));
+  let activeDates = new Set(dailyActivity.map((day) => day.date));
   while (activeDates.has(dateStr)) {
-    u++;
+    currentStreak++;
     currentStreakStart = dateStr;
     dateStr = addDaysToDateString(dateStr, -1);
   }
@@ -847,7 +912,7 @@ function calculateStreaks(dailyActivity) {
     }
   }
   return {
-    currentStreak: u,
+    currentStreak,
     longestStreak,
     currentStreakStart,
     longestStreakStart,
@@ -879,58 +944,7 @@ function getEmptyStats() {
   };
 }
 //@ chunk-9h8dr0qb.js:90785-90886 affinity
-function hasAnyStats(o) {
-  return o.sessionStats.length > 0 || o.dailyActivity.length > 0 || o.dailyModelTokens.length > 0;
-}
-//@ chunk-e6aww6q8.js:302775-302788 affinity
-var SESSION_START_ENTRY_WINDOW_MS = 5000;
-//@ chunk-e6aww6q8.js:302788-303694 fingerprint = readSessionStartDate (0.359)
-function readSessionStartDate(e, n, currentMsg, seen) {
-  let time = new Date(currentMsg.timestamp).getTime();
-  if (Number.isNaN(time)) return;
-  let y = e.timedSides.get(currentMsg.isSidechain);
-  if (!y) {
-    e.entriesBySide ??= Map.groupBy(n.values(), (Se) => Se.isSidechain);
-    let Z = [];
-    for (let Se of e.entriesBySide.get(currentMsg.isSidechain) ?? []) {
-      if (seen.has(Se.uuid)) continue;
-      let time = new Date(Se.timestamp).getTime();
-      if (!Number.isNaN(time))
-        Z.push({
-          time,
-          entry: Se,
-        });
-    }
-    Z.reverse().sort((Se, ke) => Se.time - ke.time);
-    y = {
-      timedEntries: Z,
-      previousCandidate: Int32Array.from(Z.keys()),
-    };
-    e.timedSides.set(currentMsg.isSidechain, y);
-  }
-  let S = y.timedEntries.length;
-  let w = 0;
-  while (w < S) {
-    let Z = (w + S) >>> 1;
-    if (y.timedEntries[Z].time <= time) w = Z + 1;
-    else S = Z;
-  }
-  let L = S - 1;
-  while (L >= 0) {
-    let Z = y.previousCandidate[L];
-    if (Z !== L) L = Z;
-    else if (seen.has(y.timedEntries[L].entry.uuid)) {
-      y.previousCandidate[L] = L - 1;
-      L -= 1;
-    } else break;
-  }
-  let G = S - 1;
-  while (G > L) {
-    let Z = y.previousCandidate[G];
-    y.previousCandidate[G] = L;
-    G = Z;
-  }
-  let q = y.timedEntries[L];
-  return q && time - q.time <= SESSION_START_ENTRY_WINDOW_MS ? q.entry : undefined;
+function hasAnyStats(stats) {
+  return stats.sessionStats.length > 0 || stats.dailyActivity.length > 0 || stats.dailyModelTokens.length > 0;
 }
 export { readSessionStartDate, aggregateClaudeCodeStatsForRange, totalUsageTokens, mergeCacheWithNewStats_2 };

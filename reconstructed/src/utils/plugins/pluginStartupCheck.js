@@ -38,6 +38,8 @@ import { isPluginBlockedByPolicy } from "./marketplacePolicy.js";
 import { needsAuthCacheSpace } from "../../services/mcp/needsAuthCache.js";
 import { jsonParse } from "../slowOperations.js";
 
+//@ chunk-4121qate.js:274600-274614 fingerprint = isPersistableScope (1)
+var FLAG_SCOPE = "flag";
 //@ chunk-pd0t5xas.js:2621-2655 facade-exports
 /**
  * 返回当前启用的插件 id 列表（启动检查用的薄封装）。
@@ -60,9 +62,9 @@ function enabledPluginIds() {
   if (settings.enabledPlugins)
     for (let [pluginId, value] of Object.entries(settings.enabledPlugins)) {
       if (!pluginId.includes("@")) continue;
-      let d = hasTrustedOnlyBuiltinPlugin(pluginId) ? trustedEnabledPlugins(pluginId) : value;
+      let value_2 = hasTrustedOnlyBuiltinPlugin(pluginId) ? trustedEnabledPlugins(pluginId) : value;
       let idx = enabledPlugins.indexOf(pluginId);
-      if (d) {
+      if (value_2) {
         if (idx === -1) enabledPlugins.push(pluginId);
       } else if (idx !== -1) enabledPlugins.splice(idx, 1);
     }
@@ -128,60 +130,68 @@ function getPluginEditableScopes() {
 /**
  * 在"插件 id → 可编辑作用域"映射中查找；精确找不到且 id 允许大小写不敏感时按规范化后的 id 再找。
  */
-function editableScopeOf(e, n) {
-  let o = e.get(n);
-  if (o !== undefined || !isOfficialPluginId(n)) return o;
-  let r = nfcLower(n);
-  for (let [i, d] of e) if (nfcLower(i) === r) return d;
+function editableScopeOf(map, pluginId) {
+  let found = map.get(pluginId);
+  if (found !== undefined || !isOfficialPluginId(pluginId)) return found;
+  let lowered = nfcLower(pluginId);
+  for (let [key, value] of map) if (nfcLower(key) === lowered) return value;
   return;
 }
-//@ chunk-4121qate.js:274600-274614 fingerprint = isPersistableScope (1)
-var isPersistableScope = "flag";
 //@ chunk-e6aww6q8.js:4458476-4459079 fingerprint = installSelectedPlugins (0.466)
 /**
  * 如果输入的插件 ID 是某已安装插件的别名（同一插件在另一市场/ID），返回已安装的那个 ID。
  */
-async function installSelectedPlugins(e, n) {
+async function installSelectedPlugins(pluginId, storageV5) {
   {
-    let r = marketplaceNameOfId(e);
-    if (!r || !isPluginDirectoryAvailable()) return;
+    let marketplaceName = marketplaceNameOfId(pluginId);
+    if (!marketplaceName || !isPluginDirectoryAvailable()) return;
     let plugins = (
-      isStorageV5Enabled() && n !== undefined ? await loadInstalledPlugins(n) : loadInstalledPluginsSync()
+      isStorageV5Enabled() && storageV5 !== undefined
+        ? await loadInstalledPlugins(storageV5)
+        : loadInstalledPluginsSync()
     ).plugins;
-    let pluginName = findPluginName(Object.keys(plugins), e);
+    let pluginName = findPluginName(Object.keys(plugins), pluginId);
     if (pluginName !== undefined && plugins[pluginName]?.some(isInstallationRelevantToCurrentProject)) return;
-    let knownMarketplaces = await loadKnownMarketplacesSafe(n);
-    let pluginByIdCacheOnly = await getPluginByIdCacheOnly(e, n);
-    let w = pluginByIdCacheOnly
-      ? samePluginSource(pluginByIdCacheOnly.entry.source, sourceUrlAndRef(knownMarketplaces[r]?.source))
+    let knownMarketplaces = await loadKnownMarketplacesSafe(storageV5);
+    let pluginByIdCacheOnly = await getPluginByIdCacheOnly(pluginId, storageV5);
+    let repositoryKey = pluginByIdCacheOnly
+      ? samePluginSource(
+          pluginByIdCacheOnly.entry.source,
+          sourceUrlAndRef(knownMarketplaces[marketplaceName]?.source),
+        )
       : undefined;
-    if (!pluginByIdCacheOnly || w === undefined) return;
-    let [L, ...G] = await describeOtherMarketplaceInstalls(
-      e,
+    if (!pluginByIdCacheOnly || repositoryKey === undefined) return;
+    let [firstOther, ...restOthers] = await describeOtherMarketplaceInstalls(
+      pluginId,
       pluginByIdCacheOnly.entry,
       knownMarketplaces,
-      n,
+      storageV5,
     );
-    if (L === undefined || G.length > 0) return;
-    let settingSource = marketplaceNameOfId(L.pluginId);
+    if (firstOther === undefined || restOthers.length > 0) return;
+    let settingSource = marketplaceNameOfId(firstOther.pluginId);
     if (settingSource === OFFICIAL_MARKETPLACE_NAME) {
-      let pluginByIdCacheOnly = await getPluginByIdCacheOnly(L.pluginId, n);
-      let Se = pluginByIdCacheOnly
-        ? await describeOtherMarketplaceInstalls(L.pluginId, pluginByIdCacheOnly.entry, knownMarketplaces, n)
+      let pluginByIdCacheOnly = await getPluginByIdCacheOnly(firstOther.pluginId, storageV5);
+      let others = pluginByIdCacheOnly
+        ? await describeOtherMarketplaceInstalls(
+            firstOther.pluginId,
+            pluginByIdCacheOnly.entry,
+            knownMarketplaces,
+            storageV5,
+          )
         : [];
-      if (!pluginByIdCacheOnly || Se.length > 0) return;
+      if (!pluginByIdCacheOnly || others.length > 0) return;
     }
     if (
-      !isMarketplaceNamed(r, settingSource) ||
-      isPluginBlockedByPolicy(e) ||
-      isPluginBlockedByPolicy(L.pluginId) ||
-      findBlockedMarketplace(e, knownMarketplaces) !== undefined ||
-      findBlockedMarketplace(L.pluginId, knownMarketplaces) !== undefined
+      !isMarketplaceNamed(marketplaceName, settingSource) ||
+      isPluginBlockedByPolicy(pluginId) ||
+      isPluginBlockedByPolicy(firstOther.pluginId) ||
+      findBlockedMarketplace(pluginId, knownMarketplaces) !== undefined ||
+      findBlockedMarketplace(firstOther.pluginId, knownMarketplaces) !== undefined
     )
       return;
     return {
-      installed: L,
-      repositoryKey: w,
+      installed: firstOther,
+      repositoryKey,
     };
   }
   return;
@@ -192,11 +202,11 @@ async function installSelectedPlugins(e, n) {
  */
 async function findMissingPlugins(enabledPlugins) {
   try {
-    let r = await enabledPlugins.read([needsAuthCacheSpace()]);
-    if (!r.ok) return {};
-    let n = r.value.items[0];
-    if (!n.found) return {};
-    return jsonParse(Buffer.from(n.value).toString("utf8"));
+    let storageV5 = await enabledPlugins.read([needsAuthCacheSpace()]);
+    if (!storageV5.ok) return {};
+    let item = storageV5.value.items[0];
+    if (!item.found) return {};
+    return jsonParse(Buffer.from(item.value).toString("utf8"));
   } catch {
     return {};
   }
@@ -205,7 +215,7 @@ export {
   checkEnabledPlugins,
   installSelectedPlugins,
   getPluginEditableScopes,
-  isPersistableScope,
+  FLAG_SCOPE,
   editableScopeOf,
   enabledPluginIds,
   findMissingPlugins,

@@ -5,17 +5,17 @@
  * pieces: chunk-mrx6y2r5.js (5)
  * attribution: esm-layout 4, esm-fingerprint 1
  */
-import { Kn } from "../../../../../@typespec/ts-http-runtime/dist/esm/util/delay.js";
-import { tr } from "../../../../../@typespec/ts-http-runtime/dist/esm/util/error.js";
+import { calculateRetryDelay } from "../../../../../@typespec/ts-http-runtime/dist/esm/util/delay.js";
+import { isError } from "../../../../../@typespec/ts-http-runtime/dist/esm/util/error.js";
 import { isNodeLike } from "../../../../../@typespec/ts-http-runtime/dist/esm/util/checkEnvironment.js";
 
 //@ chunk-mrx6y2r5.js:56876-56908 esm-layout
-function Xl(retryCount, config) {
-  return Kn(retryCount, config);
+function readFileBody(retryAttempt, config) {
+  return calculateRetryDelay(retryAttempt, config);
 }
 //@ chunk-mrx6y2r5.js:56908-56936 esm-layout
-function Wo(e) {
-  return tr(e);
+function createFileBody(file) {
+  return isError(file);
 }
 //@ chunk-mrx6y2r5.js:56936-56952 esm-layout
 var isNodeLike_default = isNodeLike;
@@ -26,4 +26,11 @@ var rawContent = Symbol("rawContent");
 function isNodeReadableStream(x) {
   return typeof x[rawContent] === "function";
 }
-export { isNodeReadableStream, rawContent, Wo, isNodeLike_default_2, isNodeLike_default, Xl };
+export {
+  isNodeReadableStream,
+  rawContent,
+  createFileBody,
+  isNodeLike_default_2,
+  isNodeLike_default,
+  readFileBody,
+};

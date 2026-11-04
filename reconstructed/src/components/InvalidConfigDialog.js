@@ -8,7 +8,7 @@
  * pieces: chunk-zenpc8qn.js (3)
  * attribution: fingerprint 3
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -24,7 +24,7 @@ import { writeFileSync_DEPRECATED, jsonStringify } from "../utils/slowOperations
 
 //@ chunk-zenpc8qn.js:15109-16165 fingerprint = InvalidConfigDialog (0.687)
 function InvalidConfigDialog(props) {
-  let $ = w(19);
+  let $ = useMemoCache(19);
   let { filePath, errorDescription, onExit, onReset } = props;
   let t1;
   if ($[0] !== onExit || $[1] !== onReset) {
@@ -159,3 +159,4 @@ async function showInvalidConfigDialog({ error }) {
     );
   });
 }
+export { showInvalidConfigDialog };

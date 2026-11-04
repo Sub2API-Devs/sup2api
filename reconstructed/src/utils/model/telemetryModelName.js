@@ -27,12 +27,12 @@ function mainLoopCanonicalModel() {
   return getCatalogState().mainLoopCanonical?.();
 }
 //@ chunk-aepeg2w5.js:342344-342432 placement
-function clampNumber(e, n, r) {
-  if (e === e) {
-    if (r !== undefined) e = e <= r ? e : r;
-    if (n !== undefined) e = e >= n ? e : n;
+function clampNumber(value, min, max) {
+  if (value === value) {
+    if (max !== undefined) value = value <= max ? value : max;
+    if (min !== undefined) value = value >= min ? value : min;
   }
-  return e;
+  return value;
 }
 //@ chunk-aepeg2w5.js:342432-342442 placement
 /**
@@ -54,21 +54,21 @@ var DATED_MODEL_NAME_RE = /^[A-Za-z0-9._:[\]-]{1,91}@\d{8}(\[\d{1,3}[mM]\])?$/;
 /**
  * 模型名合规时原样返回，否则记为 nonconforming。
  */
-function telemetrySafeModelName(e) {
-  if (e == null) return;
-  return SAFE_MODEL_NAME_RE.test(e) || DATED_MODEL_NAME_RE.test(e)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e)
+function telemetrySafeModelName(modelId) {
+  if (modelId == null) return;
+  return SAFE_MODEL_NAME_RE.test(modelId) || DATED_MODEL_NAME_RE.test(modelId)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(modelId)
     : lit("nonconforming");
 }
 //@ chunk-aepeg2w5.js:342774-342842 placement
 /**
  * 把模型列表截断、逐个做遥测安全化并拼接。
  */
-function telemetrySafeModelList(e, n) {
+function telemetrySafeModelList(modelIds, limit) {
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(
-    e
-      .slice(0, n)
-      .map((r) => telemetrySafeModelName(r))
+    modelIds
+      .slice(0, limit)
+      .map((modelId) => telemetrySafeModelName(modelId))
       .join(","),
   );
 }

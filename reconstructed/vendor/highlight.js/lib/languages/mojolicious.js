@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:301777-302076 cjs-fingerprint
-var require_mojolicious = x(function (cjsExports, cjsModule) {
+var require_mojolicious = __commonJS(function (cjsExports, cjsModule) {
   function mojolicious(hljs) {
     return {
       name: "Mojolicious",

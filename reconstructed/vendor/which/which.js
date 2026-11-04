@@ -5,11 +5,11 @@
  * pieces: chunk-m4p5zn6n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../runtime/bun-runtime.js";
 import { require_isexe } from "../isexe/index.js";
 
 //@ chunk-m4p5zn6n.js:2251-3688 cjs-fingerprint
-var require_which = x(function (cjsExports, cjsModule) {
+var require_which = __commonJS(function (cjsExports, cjsModule) {
   var isWindows = process.env.OSTYPE === "cygwin" || process.env.OSTYPE === "msys";
   var path = importMetaRequire("path");
   var COLON = isWindows ? ";" : ":";
@@ -53,20 +53,20 @@ var require_which = x(function (cjsExports, cjsModule) {
         let p = !pathPart && /^\.[\\\/]/.test(cmd) ? cmd.slice(0, 2) + pCmd : pCmd;
         resolve(subStep(p, i, 0));
       });
-    let subStep = (p, i, ii) =>
+    let subStep = (cmdPath, i, ii) =>
       new Promise((resolve, reject) => {
         if (ii === pathExt.length) return resolve(step(i + 1));
         let ext = pathExt[ii];
         isexe(
-          p + ext,
+          cmdPath + ext,
           {
             pathExt: pathExtExe,
           },
           (er, is) => {
             if (!er && is)
-              if (opt.all) found.push(p + ext);
-              else return resolve(p + ext);
-            return resolve(subStep(p, i, ii + 1));
+              if (opt.all) found.push(cmdPath + ext);
+              else return resolve(cmdPath + ext);
+            return resolve(subStep(cmdPath, i, ii + 1));
           },
         );
       });

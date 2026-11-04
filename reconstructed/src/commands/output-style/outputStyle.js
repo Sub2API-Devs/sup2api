@@ -37,89 +37,92 @@ var CUSTOM_STYLE_LABEL = "a custom style";
  */
 async function setOutputStyleCommand(args, context) {
   let allOutputStyles = await getAllOutputStylesCached(getCwd(), context.storageV5);
-  let i = isBridgeOrVerifiedSlackTurn(context);
+  let isBridge = isBridgeOrVerifiedSlackTurn(context);
   let keys = Object.keys(allOutputStyles);
-  let l = i ? keys.filter((t) => isBuiltInOrDefaultStyle(allOutputStyles[t])) : keys;
-  let n = hasCustomOutputStyle();
-  let f = i
+  let eligibleKeys = isBridge ? keys.filter((key) => isBuiltInOrDefaultStyle(allOutputStyles[key])) : keys;
+  let currentStyle = hasCustomOutputStyle();
+  let bridgeNote = isBridge
     ? `
 ${CUSTOM_STYLE_REMOTE_DENIED_MESSAGE}`
     : "";
   let trimmed = args.trim();
   let lower = trimmed.toLowerCase();
-  let e = trimmed ? l.find((t) => t.toLowerCase() === lower) : undefined;
-  if (e === undefined) {
+  let matched = trimmed ? eligibleKeys.find((key) => key.toLowerCase() === lower) : undefined;
+  if (matched === undefined) {
     if (trimmed && !COMMON_INFO_ARGS_ALIAS.includes(lower) && !COMMON_HELP_ARGS.includes(lower))
       return {
         type: "text",
-        value: `Unknown output style "${sanitizeTelemetryString(trimmed)}". Available styles: ${l.map(sanitizeTelemetryString).join(", ")}${f}`,
+        value: `Unknown output style "${sanitizeTelemetryString(trimmed)}". Available styles: ${eligibleKeys.map(sanitizeTelemetryString).join(", ")}${bridgeNote}`,
       };
-    let mapped = l.map((p) => {
-      let description = allOutputStyles[p]?.description;
-      let S = sanitizeTelemetryString(p);
-      let O = p === n ? " (current)" : "";
-      return description ? `- ${S}${O}: ${sanitizeTelemetryString(description)}` : `- ${S}${O}`;
+    let mapped = eligibleKeys.map((key) => {
+      let description = allOutputStyles[key]?.description;
+      let sanitizedKey = sanitizeTelemetryString(key);
+      let currentMark = key === currentStyle ? " (current)" : "";
+      return description
+        ? `- ${sanitizedKey}${currentMark}: ${sanitizeTelemetryString(description)}`
+        : `- ${sanitizedKey}${currentMark}`;
     });
     return {
       type: "text",
-      value: `Output style: ${i && !isBuiltInOrDefaultStyle(allOutputStyles[n]) ? CUSTOM_STYLE_LABEL : sanitizeTelemetryString(n)}
+      value: `Output style: ${isBridge && !isBuiltInOrDefaultStyle(allOutputStyles[currentStyle]) ? CUSTOM_STYLE_LABEL : sanitizeTelemetryString(currentStyle)}
 
 Available styles:
 ${mapped.join(`
 `)}
 
-Usage: /output-style <style>${f}`,
+Usage: /output-style <style>${bridgeNote}`,
     };
   }
-  if (e === n)
+  if (matched === currentStyle)
     return {
       type: "text",
-      value: `Output style is already ${sanitizeTelemetryString(e)}`,
+      value: `Output style is already ${sanitizeTelemetryString(matched)}`,
     };
   if (!isSettingSourceEnabled("localSettings"))
     return {
       type: "text",
       value: STYLE_SAVE_UNAVAILABLE_MESSAGE,
     };
-  let m;
-  let u = await commitRowThroughConfigSet("outputStyle", e, context, async () => {
-    let t = await updateSettingsForSource(
+  let result;
+  let commitResult = await commitRowThroughConfigSet("outputStyle", matched, context, async () => {
+    let writeResult = await updateSettingsForSource(
       "localSettings",
       {
-        outputStyle: e,
+        outputStyle: matched,
       },
       undefined,
       context.storageV5,
     );
-    m = t.error ?? undefined;
-    return t.error
+    result = writeResult.error ?? undefined;
+    return writeResult.error
       ? {
-          error: t.error,
+          error: writeResult.error,
         }
       : undefined;
   });
-  if ("refusal" in u)
+  if ("refusal" in commitResult)
     return {
       type: "text",
       value: isBridgeOrTransport(context.session)
         ? _
-        : m
-          ? `Could not save output style: ${m.message}`
-          : u.refusal,
+        : result
+          ? `Could not save output style: ${result.message}`
+          : commitResult.refusal,
     };
-  if (u.written !== e)
+  if (commitResult.written !== matched)
     return {
       type: "text",
-      value: `Output style set to ${sanitizeTelemetryString(String(u.written))}`,
+      value: `Output style set to ${sanitizeTelemetryString(String(commitResult.written))}`,
     };
   noteSystemPromptSectionInvalidation("output_style");
   logEvent("tengu_output_style_changed", {
-    style: markCustomSetting(e),
+    style: markCustomSetting(matched),
     source: lit("slash_command"),
     settings_source: lit("localSettings"),
   });
   return {
     type: "text",
-    value: `Output style set to ${sanitizeTelemetryString(e)}`,
+    value: `Output style set to ${sanitizeTelemetryString(matched)}`,
   };
 }
+export { CUSTOM_STYLE_LABEL, _, setOutputStyleCommand };

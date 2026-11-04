@@ -30,50 +30,59 @@ import { isCustomizationDisabled } from "../../utils/settings/customizationDisab
 import { getBundledWorkflows } from "../workflows/bundledWorkflows.js";
 
 //@ chunk-rmpsted2.js:872-1139 placement
-async function readWorkflowDir(workflowsPath, name, plugin, pluginManifest, p) {
+async function readWorkflowDir(workflowsPath, pluginName, plugin, pluginManifest, seenPaths) {
   let fsImplementation = getFsImplementation();
-  let e;
+  let entries;
   try {
-    e = await fsImplementation.readdir(workflowsPath);
+    entries = await fsImplementation.readdir(workflowsPath);
   } catch {
     return [];
   }
   return (
     await Promise.all(
-      e.map(async (n) => {
-        if (!(n.isFile() || n.isSymbolicLink())) return null;
-        if (!n.name.endsWith(".js")) return null;
-        return readPluginWorkflowFile(join(workflowsPath, n.name), name, plugin, pluginManifest, p);
+      entries.map(async (entry) => {
+        if (!(entry.isFile() || entry.isSymbolicLink())) return null;
+        if (!entry.name.endsWith(".js")) return null;
+        return readPluginWorkflowFile(
+          join(workflowsPath, entry.name),
+          pluginName,
+          plugin,
+          pluginManifest,
+          seenPaths,
+        );
       }),
     )
-  ).filter((n) => n !== null);
+  ).filter((workflow) => workflow !== null);
 }
 //@ chunk-rmpsted2.js:1139-1774 placement
-async function readPluginWorkflowFile(o, a, plugin, pluginManifest, p) {
+async function readPluginWorkflowFile(filePath, pluginName, plugin, pluginManifest, seenPaths) {
   let fsImplementation = getFsImplementation();
-  if (isDuplicatePath(fsImplementation, o, p)) return null;
+  if (isDuplicatePath(fsImplementation, filePath, seenPaths)) return null;
   try {
-    let smallFileChecked = await readSmallFileChecked(fsImplementation, o, MAX_SCRIPT_FILE_BYTES);
+    let smallFileChecked = await readSmallFileChecked(fsImplementation, filePath, MAX_SCRIPT_FILE_BYTES);
     if (smallFileChecked === null) {
       logForDebugging(
-        `Plugin workflow ${o}: not a regular file or exceeds ${MAX_SCRIPT_FILE_BYTES} bytes \u2014 skipping`,
+        `Plugin workflow ${filePath}: not a regular file or exceeds ${MAX_SCRIPT_FILE_BYTES} bytes \u2014 skipping`,
         {
           level: "warn",
         },
       );
       return null;
     }
-    let s = normalizeCrLf(smallFileChecked);
-    let workflowScript = parseWorkflowScript(s, {
+    let scriptText = normalizeCrLf(smallFileChecked);
+    let workflowScript = parseWorkflowScript(scriptText, {
       validateBody: false,
     });
     if ("error" in workflowScript) {
-      logForDebugging(`Plugin workflow ${o} has invalid meta: ${workflowScript.error} \u2014 skipping`, {
-        level: "warn",
-      });
+      logForDebugging(
+        `Plugin workflow ${filePath} has invalid meta: ${workflowScript.error} \u2014 skipping`,
+        {
+          level: "warn",
+        },
+      );
       return null;
     }
-    let name = `${a}:${workflowScript.meta.name}`;
+    let name = `${pluginName}:${workflowScript.meta.name}`;
     return {
       source: "plugin",
       plugin,
@@ -82,87 +91,102 @@ async function readPluginWorkflowFile(o, a, plugin, pluginManifest, p) {
       description: workflowScript.meta.description,
       whenToUse: workflowScript.meta.whenToUse,
       phases: workflowScript.meta.phases,
-      script: s,
-      filePath: o,
+      script: scriptText,
+      filePath,
     };
   } catch (error) {
-    logForDebugging(`Failed to load workflow from ${o}: ${error}`, {
+    logForDebugging(`Failed to load workflow from ${filePath}: ${error}`, {
       level: "error",
     });
     return null;
   }
 }
 //@ chunk-rmpsted2.js:1774-3092 placement
-function loadPluginWorkflows(o) {
+function loadPluginWorkflows(storageV5) {
   let pluginRegistry = getPluginRegistry();
   pluginRegistry.workflows ??= (async () => {
-    let { enabled, errors } = await loadAllPluginsCacheOnly(o);
-    let p = [];
+    let { enabled, errors } = await loadAllPluginsCacheOnly(storageV5);
+    let workflows = [];
     if (errors.length > 0)
       logForDebugging(`Plugin loading errors: ${errors.map((error) => pluginErrorText(error)).join(", ")}`);
-    let w = null;
-    for (let e of enabled) {
-      let s = new Set();
-      let n = p.length;
-      if (e.workflowsPath)
+    let failureCode = null;
+    for (let plugin of enabled) {
+      let seenPaths = new Set();
+      let startCount = workflows.length;
+      if (plugin.workflowsPath)
         try {
-          let workflowDir = await readWorkflowDir(e.workflowsPath, e.name, e.source, e.manifest, s);
-          p.push(...workflowDir);
+          let workflowDir = await readWorkflowDir(
+            plugin.workflowsPath,
+            plugin.name,
+            plugin.source,
+            plugin.manifest,
+            seenPaths,
+          );
+          workflows.push(...workflowDir);
           if (workflowDir.length > 0)
-            logForDebugging(`Loaded ${workflowDir.length} workflows from plugin ${e.name} default directory`);
+            logForDebugging(
+              `Loaded ${workflowDir.length} workflows from plugin ${plugin.name} default directory`,
+            );
         } catch (error) {
-          w = "plugin_load_workflows_dir_failed";
-          logForDebugging(`Failed to load workflows from plugin ${e.name} default directory: ${error}`, {
+          failureCode = "plugin_load_workflows_dir_failed";
+          logForDebugging(`Failed to load workflows from plugin ${plugin.name} default directory: ${error}`, {
             level: "error",
           });
         }
-      if (e.workflowsPaths)
-        for (let workflowsPath of e.workflowsPaths)
+      if (plugin.workflowsPaths)
+        for (let workflowsPath of plugin.workflowsPaths)
           try {
             let stats = await getFsImplementation().stat(workflowsPath);
             if (stats.isDirectory()) {
-              let workflowDir = await readWorkflowDir(workflowsPath, e.name, e.source, e.manifest, s);
-              p.push(...workflowDir);
+              let workflowDir = await readWorkflowDir(
+                workflowsPath,
+                plugin.name,
+                plugin.source,
+                plugin.manifest,
+                seenPaths,
+              );
+              workflows.push(...workflowDir);
               if (workflowDir.length > 0)
                 logForDebugging(
-                  `Loaded ${workflowDir.length} workflows from plugin ${e.name} custom path: ${workflowsPath}`,
+                  `Loaded ${workflowDir.length} workflows from plugin ${plugin.name} custom path: ${workflowsPath}`,
                 );
             } else if (stats.isFile() && workflowsPath.endsWith(".js")) {
               let pluginWorkflowFile = await readPluginWorkflowFile(
                 workflowsPath,
-                e.name,
-                e.source,
-                e.manifest,
-                s,
+                plugin.name,
+                plugin.source,
+                plugin.manifest,
+                seenPaths,
               );
               if (pluginWorkflowFile) {
-                p.push(pluginWorkflowFile);
-                logForDebugging(`Loaded workflow from plugin ${e.name} custom file: ${workflowsPath}`);
+                workflows.push(pluginWorkflowFile);
+                logForDebugging(`Loaded workflow from plugin ${plugin.name} custom file: ${workflowsPath}`);
               }
             }
           } catch (error) {
-            w = "plugin_load_workflows_path_failed";
+            failureCode = "plugin_load_workflows_path_failed";
             logForDebugging(
-              `Failed to load workflows from plugin ${e.name} custom path ${workflowsPath}: ${error}`,
+              `Failed to load workflows from plugin ${plugin.name} custom path ${workflowsPath}: ${error}`,
               {
                 level: "error",
               },
             );
           }
-      if (e.serverPluginId !== undefined) for (let u of p.slice(n)) u.serverPluginId = e.serverPluginId;
+      if (plugin.serverPluginId !== undefined)
+        for (let workflow of workflows.slice(startCount)) workflow.serverPluginId = plugin.serverPluginId;
     }
-    logForDebugging(`Total plugin workflows loaded: ${p.length}`);
-    if (w) logFeatureBad("plugin_load_workflows", w);
+    logForDebugging(`Total plugin workflows loaded: ${workflows.length}`);
+    if (failureCode) logFeatureBad("plugin_load_workflows", failureCode);
     else logFeatureOk("plugin_load_workflows");
-    return p;
+    return workflows;
   })();
   return pluginRegistry.workflows;
 }
 //@ chunk-rmpsted2.js:3120-3321 placement
-function canOverrideWorkflow(o, a) {
-  if (!a || isValidWorkflowScript(o.script)) return true;
+function canOverrideWorkflow(incoming, existing) {
+  if (!existing || isValidWorkflowScript(incoming.script)) return true;
   logForDebugging(
-    `Workflow ${o.filePath ?? o.name} (${o.source}) would override ${o.name} but does not parse \u2014 keeping the ${a.source} copy`,
+    `Workflow ${incoming.filePath ?? incoming.name} (${incoming.source}) would override ${incoming.name} but does not parse \u2014 keeping the ${existing.source} copy`,
     {
       level: "warn",
     },
@@ -171,12 +195,12 @@ function canOverrideWorkflow(o, a) {
 }
 //@ chunk-rmpsted2.js:3321-3435 placement
 function dedupeWorkflowsByName(pluginWorkflows) {
-  let a = new Map();
-  for (let r of pluginWorkflows) {
-    if (!canOverrideWorkflow(r, a.get(r.name))) continue;
-    a.set(r.name, r);
+  let byName = new Map();
+  for (let workflow of pluginWorkflows) {
+    if (!canOverrideWorkflow(workflow, byName.get(workflow.name))) continue;
+    byName.set(workflow.name, workflow);
   }
-  return [...a.values()];
+  return [...byName.values()];
 }
 //@ chunk-rmpsted2.js:3463-3505 placement
 /**
@@ -186,119 +210,121 @@ function userWorkflowsDir() {
   return join(getClaudeConfigDir(), "workflows");
 }
 //@ chunk-rmpsted2.js:3505-3690 placement
-async function walkProjectWorkflowDirs(o, a) {
+async function walkProjectWorkflowDirs(cwd, stats) {
   try {
-    return await getProjectDirsUpToHome("workflows", o);
+    return await getProjectDirsUpToHome("workflows", cwd);
   } catch (error) {
     if (isSyscallError(error)) {
       logForDebugging(`loadWorkflowsDir: project-dir walk failed: ${error.code}`, {
         level: "error",
       });
-      a.walkFailed = true;
+      stats.walkFailed = true;
       return [];
     }
     throw error;
   }
 }
 //@ chunk-rmpsted2.js:3690-4792 placement
-async function loadUserWorkflows(o, a, r, l) {
-  if (l !== undefined && a === "userSettings") return loadWorkflowsDir(l, o, r);
+async function loadUserWorkflows(dirPath, source, stats, storageV5) {
+  if (storageV5 !== undefined && source === "userSettings")
+    return loadWorkflowsDir(storageV5, dirPath, stats);
   let fsImplementation = getFsImplementation();
-  let w;
+  let entries;
   try {
-    w = await fsImplementation.readdir(o);
+    entries = await fsImplementation.readdir(dirPath);
   } catch {
     return [];
   }
   return (
     await Promise.all(
-      w.map(async (s) => {
-        if (!(s.isFile() || s.isSymbolicLink())) return null;
-        if (!s.name.endsWith(".js")) {
-          if (/\.(mjs|cjs|ts)$/.test(s.name)) r.nearMissExt++;
+      entries.map(async (entry) => {
+        if (!(entry.isFile() || entry.isSymbolicLink())) return null;
+        if (!entry.name.endsWith(".js")) {
+          if (/\.(mjs|cjs|ts)$/.test(entry.name)) stats.nearMissExt++;
           return null;
         }
-        let n = join(o, s.name);
-        let u;
+        let filePath = join(dirPath, entry.name);
+        let bytes;
         try {
           if (
-            s.isSymbolicLink() &&
-            (await checkSmallFileReadable(fsImplementation, n, Number.POSITIVE_INFINITY)).verdict !== "read"
+            entry.isSymbolicLink() &&
+            (await checkSmallFileReadable(fsImplementation, filePath, Number.POSITIVE_INFINITY)).verdict !==
+              "read"
           ) {
             logForDebugging(
-              `Workflow ${n} is a link to no regular file, or one refused for where it leads \u2014 skipping`,
+              `Workflow ${filePath} is a link to no regular file, or one refused for where it leads \u2014 skipping`,
               {
                 level: "warn",
               },
             );
-            r.skippedUnreadable++;
+            stats.skippedUnreadable++;
             return null;
           }
-          u = await fsImplementation.readFileBytes(n, MAX_SCRIPT_FILE_BYTES + 1);
+          bytes = await fsImplementation.readFileBytes(filePath, MAX_SCRIPT_FILE_BYTES + 1);
         } catch {
-          r.skippedUnreadable++;
+          stats.skippedUnreadable++;
           return null;
         }
-        if (u.byteLength > MAX_SCRIPT_FILE_BYTES) {
-          logForDebugging(`Workflow ${n} exceeds ${MAX_SCRIPT_FILE_BYTES} bytes \u2014 skipping`, {
+        if (bytes.byteLength > MAX_SCRIPT_FILE_BYTES) {
+          logForDebugging(`Workflow ${filePath} exceeds ${MAX_SCRIPT_FILE_BYTES} bytes \u2014 skipping`, {
             level: "warn",
           });
-          r.skippedOversize++;
+          stats.skippedOversize++;
           return null;
         }
-        let d = normalizeCrLf(u.toString("utf-8"));
-        let workflowScript = parseWorkflowScript(d, {
+        let scriptText = normalizeCrLf(bytes.toString("utf-8"));
+        let workflowScript = parseWorkflowScript(scriptText, {
           validateBody: false,
         });
         if ("error" in workflowScript) {
-          logForDebugging(`Workflow ${n} has invalid meta: ${workflowScript.error} \u2014 skipping`, {
+          logForDebugging(`Workflow ${filePath} has invalid meta: ${workflowScript.error} \u2014 skipping`, {
             level: "warn",
           });
-          r.skippedInvalidMeta++;
+          stats.skippedInvalidMeta++;
           return null;
         }
         return {
-          source: a,
+          source,
           name: workflowScript.meta.name,
           description: workflowScript.meta.description,
           whenToUse: workflowScript.meta.whenToUse,
           phases: workflowScript.meta.phases,
-          script: d,
-          filePath: n,
+          script: scriptText,
+          filePath,
         };
       }),
     )
-  ).filter((s) => s !== null);
+  ).filter((workflow) => workflow !== null);
 }
 //@ chunk-rmpsted2.js:4792-6287 placement
-async function loadWorkflowsDir(o, a, r) {
-  let l = [];
+async function loadWorkflowsDir(storage, dirPath, stats) {
+  let candidates = [];
   switch (
     (
       await readAllPages(
-        (e) =>
-          o.listEntries(
+        (cursor) =>
+          storage.listEntries(
             {
               namespace: "userConfigDir",
               dir: "workflows",
             },
-            e === undefined
+            cursor === undefined
               ? undefined
               : {
-                  cursor: e,
+                  cursor,
                 },
           ),
-        (e) => {
-          for (let s of e) {
-            if (s.kind !== "key" || s.key.namespace !== "userConfigDir") continue;
-            let last = s.key.relPath.at(-1);
-            if (last === undefined || s.key.relPath.length !== 1) continue;
+        (entries) => {
+          for (let entry of entries) {
+            if (entry.kind !== "key" || entry.key.namespace !== "userConfigDir") continue;
+            let last = entry.key.relPath.at(-1);
+            if (last === undefined || entry.key.relPath.length !== 1) continue;
             if (!last.endsWith(".js")) {
-              if (/\.(mjs|cjs|ts)$/.test(last)) r.nearMissExt++;
+              if (/\.(mjs|cjs|ts)$/.test(last)) stats.nearMissExt++;
               continue;
             }
-            l.push({
-              key: s.key,
+            candidates.push({
+              key: entry.key,
               name: last,
             });
           }
@@ -312,56 +338,56 @@ async function loadWorkflowsDir(o, a, r) {
       return [];
     case "capped":
       logForDebugging(
-        `User workflows listing of ${a} truncated at ${DEFAULT_MAX_PAGES} pages \u2014 loading the ${l.length} workflow files seen`,
+        `User workflows listing of ${dirPath} truncated at ${DEFAULT_MAX_PAGES} pages \u2014 loading the ${candidates.length} workflow files seen`,
         {
           level: "warn",
         },
       );
-      r.userListingTruncated = true;
+      stats.userListingTruncated = true;
       break;
   }
   return (
     await Promise.all(
-      l.map(async ({ key, name: s }) => {
-        let n = await o.read([
+      candidates.map(async ({ key, name: fileName }) => {
+        let readResult = await storage.read([
           {
             key,
             offset: 0,
             length: MAX_SCRIPT_FILE_BYTES + 1,
           },
         ]);
-        if (!n.ok) {
+        if (!readResult.ok) {
           logForDebugging(
-            `Workflow ${join(a, s)} could not be read through the storage backend (${n.error.code}) \u2014 skipping`,
+            `Workflow ${join(dirPath, fileName)} could not be read through the storage backend (${readResult.error.code}) \u2014 skipping`,
             {
               level: "warn",
             },
           );
-          r.skippedUnreadable++;
+          stats.skippedUnreadable++;
           return null;
         }
-        let u = n.value.items[0];
-        if (u === undefined || !u.found) {
-          r.skippedUnreadable++;
+        let item = readResult.value.items[0];
+        if (item === undefined || !item.found) {
+          stats.skippedUnreadable++;
           return null;
         }
-        let d = join(a, s);
-        if (u.value.byteLength > MAX_SCRIPT_FILE_BYTES) {
-          logForDebugging(`Workflow ${d} exceeds ${MAX_SCRIPT_FILE_BYTES} bytes \u2014 skipping`, {
+        let filePath = join(dirPath, fileName);
+        if (item.value.byteLength > MAX_SCRIPT_FILE_BYTES) {
+          logForDebugging(`Workflow ${filePath} exceeds ${MAX_SCRIPT_FILE_BYTES} bytes \u2014 skipping`, {
             level: "warn",
           });
-          r.skippedOversize++;
+          stats.skippedOversize++;
           return null;
         }
-        let c = normalizeCrLf(Buffer.from(u.value).toString("utf-8"));
-        let workflowScript = parseWorkflowScript(c, {
+        let scriptText = normalizeCrLf(Buffer.from(item.value).toString("utf-8"));
+        let workflowScript = parseWorkflowScript(scriptText, {
           validateBody: false,
         });
         if ("error" in workflowScript) {
-          logForDebugging(`Workflow ${d} has invalid meta: ${workflowScript.error} \u2014 skipping`, {
+          logForDebugging(`Workflow ${filePath} has invalid meta: ${workflowScript.error} \u2014 skipping`, {
             level: "warn",
           });
-          r.skippedInvalidMeta++;
+          stats.skippedInvalidMeta++;
           return null;
         }
         return {
@@ -370,17 +396,17 @@ async function loadWorkflowsDir(o, a, r) {
           description: workflowScript.meta.description,
           whenToUse: workflowScript.meta.whenToUse,
           phases: workflowScript.meta.phases,
-          script: c,
-          filePath: d,
+          script: scriptText,
+          filePath,
         };
       }),
     )
-  ).filter((e) => e !== null);
+  ).filter((workflow) => workflow !== null);
 }
 //@ chunk-rmpsted2.js:6287-7480 placement
-async function discoverProjectWorkflows(o, a) {
-  let r = userWorkflowsDir();
-  let l = {
+async function discoverProjectWorkflows(cwd, storageV5) {
+  let userDir = userWorkflowsDir();
+  let stats = {
     skippedInvalidMeta: 0,
     skippedOversize: 0,
     skippedUnreadable: 0,
@@ -388,55 +414,57 @@ async function discoverProjectWorkflows(o, a) {
     walkFailed: false,
     userListingTruncated: false,
   };
-  let p = await walkProjectWorkflowDirs(o, l);
-  let [w, ...e] = await Promise.all([
-    isSettingSourceEnabled("userSettings") ? loadUserWorkflows(r, "userSettings", l, a) : Promise.resolve([]),
+  let projectDirs = await walkProjectWorkflowDirs(cwd, stats);
+  let [userWorkflows, ...projectResults] = await Promise.all([
+    isSettingSourceEnabled("userSettings")
+      ? loadUserWorkflows(userDir, "userSettings", stats, storageV5)
+      : Promise.resolve([]),
     ...(isSettingSourceEnabled("projectSettings")
-      ? p.map((d) => loadUserWorkflows(d, "projectSettings", l))
+      ? projectDirs.map((dir) => loadUserWorkflows(dir, "projectSettings", stats))
       : []),
   ]);
-  let s = new Map();
-  for (let d of w) {
-    if (!canOverrideWorkflow(d, s.get(d.name))) continue;
-    s.set(d.name, d);
+  let byName = new Map();
+  for (let workflow of userWorkflows) {
+    if (!canOverrideWorkflow(workflow, byName.get(workflow.name))) continue;
+    byName.set(workflow.name, workflow);
   }
-  for (let j = e.length - 1; j >= 0; j--)
-    for (let c of e[j]) {
-      if (!canOverrideWorkflow(c, s.get(c.name))) continue;
-      s.set(c.name, c);
+  for (let j = projectResults.length - 1; j >= 0; j--)
+    for (let workflow of projectResults[j]) {
+      if (!canOverrideWorkflow(workflow, byName.get(workflow.name))) continue;
+      byName.set(workflow.name, workflow);
     }
-  let n = l.walkFailed && isSettingSourceEnabled("projectSettings");
-  let u = l.skippedInvalidMeta + l.skippedOversize + l.skippedUnreadable;
-  if (n || l.userListingTruncated || u > 0 || l.nearMissExt > 0)
+  let walkFailed = stats.walkFailed && isSettingSourceEnabled("projectSettings");
+  let skippedTotal = stats.skippedInvalidMeta + stats.skippedOversize + stats.skippedUnreadable;
+  if (walkFailed || stats.userListingTruncated || skippedTotal > 0 || stats.nearMissExt > 0)
     logFeatureSad(
       "workflow_discover",
-      n
+      walkFailed
         ? "project_dir_walk_failed"
-        : l.userListingTruncated
+        : stats.userListingTruncated
           ? "user_listing_truncated"
-          : l.skippedInvalidMeta > 0
+          : stats.skippedInvalidMeta > 0
             ? "invalid_meta"
-            : l.skippedOversize > 0
+            : stats.skippedOversize > 0
               ? "oversize"
-              : l.skippedUnreadable > 0
+              : stats.skippedUnreadable > 0
                 ? "unreadable"
                 : "near_miss_extension",
       {
-        found: s.size,
-        skipped_invalid_meta: l.skippedInvalidMeta,
-        skipped_oversize: l.skippedOversize,
-        skipped_unreadable: l.skippedUnreadable,
-        near_miss_ext: l.nearMissExt,
-        ...(l.userListingTruncated && {
+        found: byName.size,
+        skipped_invalid_meta: stats.skippedInvalidMeta,
+        skipped_oversize: stats.skippedOversize,
+        skipped_unreadable: stats.skippedUnreadable,
+        near_miss_ext: stats.nearMissExt,
+        ...(stats.userListingTruncated && {
           user_listing_truncated: true,
         }),
       },
     );
   else
     logFeatureOk("workflow_discover", {
-      found: s.size,
+      found: byName.size,
     });
-  return [...s.values()].sort((d, c) => d.name.localeCompare(c.name));
+  return [...byName.values()].sort((left, right) => left.name.localeCompare(right.name));
 }
 //@ chunk-rmpsted2.js:7480-7586 placement
 var REMOTE_WORKFLOW_ENV = "CLAUDE_REMOTE_WORKFLOW_SCRIPT";
@@ -453,47 +481,51 @@ function workflowNameOnlyEnv() {
 /**
  * 按 host 与配置键缓存全部工作流。
  */
-function allWorkflowsForHost(o, a) {
+function allWorkflowsForHost(cwd, storageV5) {
   return getOrCreate(
     getHostState().allWorkflows,
-    `${bundledSkillsGateKey()}:${workflowNameOnlyEnv()}:${keyOrNull(o)}`,
-    () => loadAllWorkflows(o, a),
+    `${bundledSkillsGateKey()}:${workflowNameOnlyEnv()}:${keyOrNull(cwd)}`,
+    () => loadAllWorkflows(cwd, storageV5),
   );
 }
 //@ chunk-rmpsted2.js:7725-8087 placement
 /**
  * 汇总可用工作流：内置 + 插件（同名后者覆盖、不可解析的不覆盖）+ 项目目录工作流，按优先级去重；禁用自定义或只允许命名内置时只返回内置。
  */
-async function loadAllWorkflows(o, a) {
+async function loadAllWorkflows(cwd, storageV5) {
   if (isCustomizationDisabled("workflows") || workflowNameOnlyEnv()) return [...getBundledWorkflows()];
-  let [projectWorkflows, pluginWorkflows] = await Promise.all([
-    discoverProjectWorkflows(o, a),
-    loadPluginWorkflows(a),
+  let [workflows, pluginWorkflows] = await Promise.all([
+    discoverProjectWorkflows(cwd, storageV5),
+    loadPluginWorkflows(storageV5),
   ]);
-  let p = dedupeWorkflowsByName(pluginWorkflows);
+  let plugins = dedupeWorkflowsByName(pluginWorkflows);
   let bundledWorkflows = getBundledWorkflows();
-  let e = new Map(bundledWorkflows.map((y) => [y.name, y]));
-  let s = overridableWorkflows(p, e);
-  for (let y of s) e.set(y.name, y);
-  let n = overridableWorkflows(projectWorkflows, e);
-  let u = new Set(n.map((y) => y.name));
-  let filtered = s.filter((y) => !u.has(y.name));
-  let c = new Set([...u, ...filtered.map((y) => y.name)]);
-  return [...bundledWorkflows.filter((y) => !c.has(y.name)), ...filtered, ...n];
+  let byName = new Map(bundledWorkflows.map((workflow) => [workflow.name, workflow]));
+  let overridingPlugins = overridableWorkflows(plugins, byName);
+  for (let workflow of overridingPlugins) byName.set(workflow.name, workflow);
+  let overridingProjects = overridableWorkflows(workflows, byName);
+  let projectNames = new Set(overridingProjects.map((workflow) => workflow.name));
+  let filtered = overridingPlugins.filter((workflow) => !projectNames.has(workflow.name));
+  let overriddenNames = new Set([...projectNames, ...filtered.map((workflow) => workflow.name)]);
+  return [
+    ...bundledWorkflows.filter((workflow) => !overriddenNames.has(workflow.name)),
+    ...filtered,
+    ...overridingProjects,
+  ];
 }
 //@ chunk-rmpsted2.js:8087-8144 placement
 /**
  * 过滤出可被覆盖的工作流。
  */
-function overridableWorkflows(o, a) {
-  return o.filter((r) => canOverrideWorkflow(r, a.get(r.name)));
+function overridableWorkflows(workflows, byName) {
+  return workflows.filter((workflow) => canOverrideWorkflow(workflow, byName.get(workflow.name)));
 }
 //@ chunk-rmpsted2.js:8144-8215 placement
 /**
  * 按名字查找工作流。
  */
 async function findWorkflowByName(name, cwd, storageV5) {
-  return (await allWorkflowsForHost(cwd, storageV5)).find((p) => p.name === name);
+  return (await allWorkflowsForHost(cwd, storageV5)).find((workflow) => workflow.name === name);
 }
 //@ chunk-rmpsted2.js:8215-8262 placement
 /**

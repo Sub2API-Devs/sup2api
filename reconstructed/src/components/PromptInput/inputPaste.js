@@ -22,15 +22,15 @@ import { uniq } from "../../utils/collections.js";
 //@ chunk-18hwfzwa.js:312232-312870 placement
 function resolvePastedTextReference(text, nextPasteId) {
   let { stripped, expanded, removed } = stripPlaceholdersWithOptions(text, nextPasteId);
-  let ke = text.trimStart().startsWith("/");
-  if (removed.length > 0 && (stripped.trim() === "" || ke))
+  let isSlashText = text.trimStart().startsWith("/");
+  if (removed.length > 0 && (stripped.trim() === "" || isSlashText))
     return {
       kind: "cancel",
       reason: "paste_gone",
       removed,
     };
   let trimmed = expanded.trim();
-  let filtered = Object.values(nextPasteId).filter((Xe) => Xe.type === "image" && !Xe.unavailable);
+  let filtered = Object.values(nextPasteId).filter((state) => state.type === "image" && !state.unavailable);
   if (trimmed === "" && filtered.length === 0)
     return {
       kind: "cancel",
@@ -38,14 +38,19 @@ function resolvePastedTextReference(text, nextPasteId) {
       removed,
     };
   let postedText =
-    !ke && stripSystemReminders(trimmed).trimStart().startsWith("/")
+    !isSlashText && stripSystemReminders(trimmed).trimStart().startsWith("/")
       ? `Pasted text:
 ${trimmed}`
       : trimmed;
   let truncatedLines = uniq(
     [...getTypedPasteContents(text, nextPasteId), ...getInlinePasteTexts(nextPasteId)]
-      .map((Xe) => Xe.trim())
-      .filter((Xe) => Xe !== "" && trimmed.includes(Xe) && !(ke && trimmed.startsWith(Xe))),
+      .map((state) => state.trim())
+      .filter(
+        (removedFragment) =>
+          removedFragment !== "" &&
+          trimmed.includes(removedFragment) &&
+          !(isSlashText && trimmed.startsWith(removedFragment)),
+      ),
   );
   return {
     kind: "send",
@@ -63,8 +68,8 @@ var TRUNCATE_KEEP_CHARS = 1000;
 /**
  * 超过阈值时保留首尾各 500 字符，中段替换为 "[...Truncated text #id +N lines...]"，返回 {truncatedText, placeholderContent}。
  */
-function formatTruncatedTextRef(text, nextPasteId, D = false) {
-  if ((!D && text.length <= TRUNCATE_THRESHOLD_CHARS) || text.length <= TRUNCATE_KEEP_CHARS)
+function formatTruncatedTextRef(text, nextPasteId, force = false) {
+  if ((!force && text.length <= TRUNCATE_THRESHOLD_CHARS) || text.length <= TRUNCATE_KEEP_CHARS)
     return {
       truncatedText: text,
       placeholderContent: "",
@@ -75,9 +80,9 @@ function formatTruncatedTextRef(text, nextPasteId, D = false) {
   let endText = text.slice(-endLength);
   let placeholderContent = text.slice(startLength, -endLength);
   let truncatedLines = getPastedTextRefNumLines(placeholderContent);
-  let ze = `[...Truncated text #${nextPasteId} +${truncatedLines} lines...]`;
+  let placeholder = `[...Truncated text #${nextPasteId} +${truncatedLines} lines...]`;
   return {
-    truncatedText: startText + ze + endText,
+    truncatedText: startText + placeholder + endText,
     placeholderContent,
   };
 }
@@ -93,31 +98,31 @@ function maybeTruncateInput(input, pastedContents) {
     };
   let nextPasteId = mintPasteId(input, pastedContents);
   let floored = Math.floor(TRUNCATE_KEEP_CHARS / 2);
-  let ee = input.length - Math.floor(TRUNCATE_KEEP_CHARS / 2);
-  let ke = new Set();
-  let Re = new Set();
-  let Be = [];
+  let rightEdge = input.length - Math.floor(TRUNCATE_KEEP_CHARS / 2);
+  let pastesInWindow = new Set();
+  let pastesOutsideWindow = new Set();
+  let reinsertedRefs = [];
   let text = input;
   let pastedRefs = parsePastedRefs(input);
   for (let idx = pastedRefs.length - 1; idx >= 0; idx--) {
-    let It = pastedRefs[idx];
-    let Ot = pastedContents[It.id];
-    if (!Ot) continue;
-    let Et = It.index + It.match.length;
-    let Dt = Et > floored && It.index < ee;
-    if (Ot.type !== "text") {
-      if (Dt) {
-        Be.unshift(It.match);
-        text = text.slice(0, It.index) + text.slice(Et);
+    let ref = pastedRefs[idx];
+    let pasted = pastedContents[ref.id];
+    if (!pasted) continue;
+    let refEnd = ref.index + ref.match.length;
+    let inWindow = refEnd > floored && ref.index < rightEdge;
+    if (pasted.type !== "text") {
+      if (inWindow) {
+        reinsertedRefs.unshift(ref.match);
+        text = text.slice(0, ref.index) + text.slice(refEnd);
       }
       continue;
     }
-    if (!Dt) {
-      Re.add(It.id);
+    if (!inWindow) {
+      pastesOutsideWindow.add(ref.id);
       continue;
     }
-    text = text.slice(0, It.index) + Ot.content + text.slice(Et);
-    ke.add(It.id);
+    text = text.slice(0, ref.index) + pasted.content + text.slice(refEnd);
+    pastesInWindow.add(ref.id);
   }
   let { truncatedText, placeholderContent } = formatTruncatedTextRef(text, nextPasteId, true);
   if (!placeholderContent)
@@ -126,24 +131,24 @@ function maybeTruncateInput(input, pastedContents) {
       newPastedContents: pastedContents,
     };
   let newInput = truncatedText;
-  if (Be.length > 0) {
+  if (reinsertedRefs.length > 0) {
     let floored = Math.floor(TRUNCATE_KEEP_CHARS / 2);
-    newInput = truncatedText.slice(0, floored) + Be.join("") + truncatedText.slice(floored);
+    newInput = truncatedText.slice(0, floored) + reinsertedRefs.join("") + truncatedText.slice(floored);
   }
-  let kt = {};
+  let keptContents = {};
   for (let [key, value] of Object.entries(pastedContents)) {
-    let Ot = Number(key);
-    if (ke.has(Ot) && !Re.has(Ot)) continue;
-    kt[Ot] = value;
+    let pasteId = Number(key);
+    if (pastesInWindow.has(pasteId) && !pastesOutsideWindow.has(pasteId)) continue;
+    keptContents[pasteId] = value;
   }
-  kt[nextPasteId] = {
+  keptContents[nextPasteId] = {
     id: nextPasteId,
     type: "text",
     content: placeholderContent,
   };
   return {
     newInput,
-    newPastedContents: kt,
+    newPastedContents: keptContents,
   };
 }
 export { resolvePastedTextReference, maybeTruncateInput };

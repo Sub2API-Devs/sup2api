@@ -40,27 +40,27 @@ function validateSdkUrlFlag(sdkUrl) {
   return null;
 }
 //@ chunk-1wpnxx5r.js:1395-1831 placement
-function checkSdkUrl(e) {
-  let r;
+function checkSdkUrl(url) {
+  let parsed;
   try {
-    r = new URL(e);
+    parsed = new URL(url);
   } catch {
     return {
       code: "unparseable",
-      reason: `could not parse ${jsonStringify(e)} as a URL`,
+      reason: `could not parse ${jsonStringify(url)} as a URL`,
     };
   }
-  if (ALLOWED_API_HOSTS.has(r.hostname)) {
-    if (r.protocol !== "wss:" && r.protocol !== "https:")
+  if (ALLOWED_API_HOSTS.has(parsed.hostname)) {
+    if (parsed.protocol !== "wss:" && parsed.protocol !== "https:")
       return {
         code: "bad_scheme",
-        reason: `scheme ${jsonStringify(r.protocol)} is not permitted for host ${jsonStringify(r.hostname)}; only wss:// and https:// are accepted`,
+        reason: `scheme ${jsonStringify(parsed.protocol)} is not permitted for host ${jsonStringify(parsed.hostname)}; only wss:// and https:// are accepted`,
       };
     return null;
   }
   return {
     code: "not_allowlisted",
-    reason: `host ${jsonStringify(r.hostname)} is not an approved Anthropic endpoint`,
+    reason: `host ${jsonStringify(parsed.hostname)} is not an approved Anthropic endpoint`,
   };
 }
 //@ chunk-1wpnxx5r.js:1831-2162 placement
@@ -71,23 +71,23 @@ function resolveSdkUrl() {
       status: "ok",
       url: ccrSessionUrl,
     };
-  let r = eagerParseCliFlagAll("--sdk-url");
-  let last = r.filter(Boolean).at(-1);
+  let flags = eagerParseCliFlagAll("--sdk-url");
+  let last = flags.filter(Boolean).at(-1);
   if (!last)
     return {
       status: "absent",
     };
-  if (new Set(r).size > 1)
+  if (new Set(flags).size > 1)
     return {
       status: "rejected",
       code: "conflicting",
       reason: "conflicting --sdk-url occurrences",
     };
-  let t = checkSdkUrl(last);
-  if (t)
+  let error = checkSdkUrl(last);
+  if (error)
     return {
       status: "rejected",
-      ...t,
+      ...error,
     };
   return {
     status: "ok",

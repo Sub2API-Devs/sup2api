@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_utils_2 } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:52922-53699 cjs-fingerprint
-var require_utf8 = x(function (cjsExports) {
+var require_utf8 = __commonJS(function (cjsExports) {
   var Utils = require_utils_2();
   var BLOCK_CHAR = {
     WW: " ",

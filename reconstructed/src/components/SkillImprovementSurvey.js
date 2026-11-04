@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (2)
  * attribution: placement 1, fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../state/AppState.js";
 import { truncateToLines } from "../utils/stringUtils.js";
 import {
@@ -26,47 +26,47 @@ import { Text } from "../ink/components/Text.js";
 import { FeedbackSurveyView } from "./FeedbackSurvey/FeedbackSurveyView.js";
 
 //@ chunk-18hwfzwa.js:993905-993940 placement
-function selectVerbose_2(It) {
-  return It.verbose;
+function selectVerbose_2(state) {
+  return state.verbose;
 }
 //@ chunk-18hwfzwa.js:994017-994730 fingerprint = SkillImprovementSurvey (0.325)
 function SkillImprovementSurvey(props) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   let { citation, onSelect, inputValue, setInputValue, mountDelayMs } = props;
   let verbose = useAppState(selectVerbose_2);
-  let He;
+  let citationText;
   if ($[0] !== citation.sentence || $[1] !== verbose) {
     let text = citation.sentence.trim();
-    He = text && !verbose ? truncateToLines(text, MEMORY_SURVEY_MAX_LINES) : text;
+    citationText = text && !verbose ? truncateToLines(text, MEMORY_SURVEY_MAX_LINES) : text;
     $[0] = citation.sentence;
     $[1] = verbose;
-    $[2] = He;
-  } else He = $[2];
-  let ze = He;
-  let Xe = ze
+    $[2] = citationText;
+  } else citationText = $[2];
+  let text = citationText;
+  let truncated = text
     ? `${MEMORY_SURVEY_HEADER}
 
-${ze}
+${text}
 
 ${MEMORY_SURVEY_QUESTION}`
     : MEMORY_SURVEY_QUESTION;
-  let rt;
+  let textElement;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    rt = jsxProd_default(Text, {
+    textElement = jsxProd_default(Text, {
       dimColor: true,
       children: "(optional)",
     });
-    $[3] = rt;
-  } else rt = $[3];
+    $[3] = textElement;
+  } else textElement = $[3];
   let message;
-  if ($[4] !== Xe) {
+  if ($[4] !== truncated) {
     message = jsxProd_default_2(Fragment, {
-      children: [Xe, " ", rt],
+      children: [truncated, " ", textElement],
     });
-    $[4] = Xe;
+    $[4] = truncated;
     $[5] = message;
   } else message = $[5];
-  let At;
+  let feedbackSurveyViewElement;
   if (
     $[6] !== inputValue ||
     $[7] !== mountDelayMs ||
@@ -74,7 +74,7 @@ ${MEMORY_SURVEY_QUESTION}`
     $[9] !== setInputValue ||
     $[10] !== message
   ) {
-    At = jsxProd_default(FeedbackSurveyView, {
+    feedbackSurveyViewElement = jsxProd_default(FeedbackSurveyView, {
       onSelect,
       inputValue,
       setInputValue,
@@ -88,8 +88,8 @@ ${MEMORY_SURVEY_QUESTION}`
     $[8] = onSelect;
     $[9] = setInputValue;
     $[10] = message;
-    $[11] = At;
-  } else At = $[11];
-  return At;
+    $[11] = feedbackSurveyViewElement;
+  } else feedbackSurveyViewElement = $[11];
+  return feedbackSurveyViewElement;
 }
 export { SkillImprovementSurvey };

@@ -10,7 +10,14 @@
  */
 import { randomUUID } from "crypto";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { looseObject, literal, string, union, array, M } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  looseObject,
+  literal,
+  stringSchema,
+  union,
+  array,
+  booleanSchema,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import {
   createSystemMessage,
   createUserMessage,
@@ -26,40 +33,44 @@ import { KEYLESS_BLOCK_TYPES } from "../../../services/api/claude.js";
 import { contentBlockStableKeys } from "../../../engine/renderedRows.js";
 import { count } from "../../../utils/collections.js";
 import { NO_CONTENT_MESSAGE } from "../../../constants/messages.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-3xb70ww4.js:474-526 placement
 /**
  * text 块 schema
  */
-var TEXT_BLOCK_SCHEMA = DoctorLazy(() =>
-  looseObject({
-    type: literal("text"),
-    text: string().min(1),
-  }),
-);
+var TEXT_BLOCK_SCHEMA; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3xb70ww4.js:474", () => {
+  TEXT_BLOCK_SCHEMA = DoctorLazy(() =>
+    looseObject({
+      type: literal("text"),
+      text: stringSchema().min(1),
+    }),
+  );
+});
 //@ chunk-3xb70ww4.js:526-585 placement
 /**
  * 插件块的名字
  */
 var pluginNameOf = (origin) => (origin.kind === "plugin" && "name" in origin ? origin.name : undefined);
 //@ chunk-3xb70ww4.js:585-1408 placement
-function checkAppendBlock(t, uuid) {
-  let { message } = t;
-  let flattened = message.content.flatMap((s) => {
-    let u = TEXT_BLOCK_SCHEMA().safeParse(s);
-    return u.success ? [u.data.text] : [];
+function checkAppendBlock(entry, uuid) {
+  let { message } = entry;
+  let flattened = message.content.flatMap((block) => {
+    let parsed = TEXT_BLOCK_SCHEMA().safeParse(block);
+    return parsed.success ? [parsed.data.text] : [];
   });
-  let found = message.content.find((s) => s.type !== "text");
+  let found = message.content.find((block) => block.type !== "text");
   if (found !== undefined || flattened.length !== message.content.length)
     return {
       reason: `a ${found?.type ?? "text"} block the conversation does not take from a plugin (a row a plugin appends carries text blocks)`,
     };
   if (message.type === "system") {
-    let [s] = flattened;
-    return s !== undefined && flattened.length === 1
+    let [found] = flattened;
+    return found !== undefined && flattened.length === 1
       ? {
           row: {
-            ...createSystemMessage(s, "info"),
+            ...createSystemMessage(found, "info"),
             uuid,
           },
         }
@@ -67,9 +78,9 @@ function checkAppendBlock(t, uuid) {
           reason: "a notice that is not one text block",
         };
   }
-  let f = message.type === "user" && message.isMeta === true;
-  let m = pluginNameOf(t.origin);
-  return f
+  let reason = message.type === "user" && message.isMeta === true;
+  let extra = pluginNameOf(entry.origin);
+  return reason
     ? {
         row: createUserMessage({
           content: flattened.map((text) => ({
@@ -78,10 +89,10 @@ function checkAppendBlock(t, uuid) {
           })),
           isMeta: true,
           uuid,
-          ...(m !== undefined && {
+          ...(extra !== undefined && {
             origin: {
               kind: "plugin",
-              name: m,
+              name: extra,
             },
           }),
         }),
@@ -97,9 +108,9 @@ function checkAppendBlock(t, uuid) {
 /**
  * $.session.append 被拒原因：会话不允许插件塑形、会话不保留对话、或指定 agent 没有运行中的循环。
  */
-function describeAppendRefusal(agentId, e) {
-  let n = agentId ?? "main";
-  if (e) return `${n} is a conversation no plugin may shape`;
+function describeAppendRefusal(agentId, hasMessage) {
+  let label = agentId ?? "main";
+  if (hasMessage) return `${label} is a conversation no plugin may shape`;
   if (agentId === undefined) return "this session keeps no conversation to append to";
   return `no running loop is ${agentId}`;
 }
@@ -107,19 +118,19 @@ function describeAppendRefusal(agentId, e) {
 /**
  * 把附件展开为 {content} 消息列表。
  */
-var attachmentToContents = (t) =>
-  attachmentToMessages(t).messages.map((message) => ({
+var attachmentToContents = (attachment) =>
+  attachmentToMessages(attachment).messages.map((message) => ({
     content: message.message.content,
   }));
 //@ chunk-3xb70ww4.js:1669-1777 placement
 /**
  * 取消息内容中的全部文本片段。
  */
-function contentTextParts(t) {
-  let { content } = t;
+function contentTextParts(entry) {
+  let { content } = entry;
   return typeof content === "string"
     ? [content]
-    : content.flatMap((r) => (r.type === "text" ? [r.text] : []));
+    : content.flatMap((block) => (block.type === "text" ? [block.text] : []));
 }
 //@ chunk-3xb70ww4.js:1777-1874 placement
 /**
@@ -146,13 +157,13 @@ function messageToTextBlocks(message) {
           text,
         }));
     case "system": {
-      let e = systemMessageText(message);
-      return e === undefined
+      let secondMessage = systemMessageText(message);
+      return secondMessage === undefined
         ? []
         : [
             {
               type: "text",
-              text: e,
+              text: secondMessage,
             },
           ];
     }
@@ -163,21 +174,21 @@ function messageToTextBlocks(message) {
  * 生成消息的摘要描述（type、name、role、isMeta 等），用于导出/调试。
  */
 function summarizeMessageForExport(message) {
-  let e = message.type === "attachment";
-  let n = message.type === "system";
-  let r = e ? message.attachment.type : n ? message.subtype : undefined;
-  let i = !isNonConversationMessage(message);
+  let isAttachment = message.type === "attachment";
+  let isSystem = message.type === "system";
+  let subtype = isAttachment ? message.attachment.type : isSystem ? message.subtype : undefined;
+  let isConversation = !isNonConversationMessage(message);
   let role = message.type === "assistant" ? "assistant" : "user";
-  let m = "isMeta" in message && message.isMeta === true;
+  let isMeta = "isMeta" in message && message.isMeta === true;
   return {
     type: message.type,
-    ...(r !== undefined && {
-      name: r,
+    ...(subtype !== undefined && {
+      name: subtype,
     }),
-    ...(i && {
+    ...(isConversation && {
       role,
     }),
-    ...(m && {
+    ...(isMeta && {
       isMeta: true,
     }),
     content: messageToTextBlocks(message),
@@ -187,107 +198,122 @@ function summarizeMessageForExport(message) {
 /**
  * 判断要追加的内容是否全为文本块（且该来源允许）。
  */
-var isTextOnlyAppend = (type, e) =>
+var isTextOnlyAppend = (type, contentBlocks) =>
   !isStreamingMetadataEvent(type) &&
-  e.length > 0 &&
-  e.every(({ content }) => typeof content === "string" || content.every((r) => r.type === "text"));
+  contentBlocks.length > 0 &&
+  contentBlocks.every(
+    ({ content }) => typeof content === "string" || content.every((block) => block.type === "text"),
+  );
 //@ chunk-3xb70ww4.js:2501-2887 placement
-async function refuseSessionAppend(t, e) {
-  let r = e?.isHookable === true ? e : undefined;
-  let uuid = normalizeUuidOrNull(t.uuid);
-  let f = describeAppendRefusal(t.agentId, e !== undefined);
-  let s =
-    uuid !== null && r !== undefined
-      ? checkAppendBlock(t, uuid)
+async function refuseSessionAppend(entry, info) {
+  let hookable = info?.isHookable === true ? info : undefined;
+  let uuid = normalizeUuidOrNull(entry.uuid);
+  let refusal = describeAppendRefusal(entry.agentId, info !== undefined);
+  let check =
+    uuid !== null && hookable !== undefined
+      ? checkAppendBlock(entry, uuid)
       : {
-          reason: uuid === null ? "a uuid the engine did not mint" : f,
+          reason: uuid === null ? "a uuid the engine did not mint" : refusal,
         };
-  if (r === undefined || "reason" in s) {
-    let u = "reason" in s ? s.reason : f;
-    throw new HooksError(`$.session.append: refused: ${u}`);
+  if (hookable === undefined || "reason" in check) {
+    let reasonText = "reason" in check ? check.reason : refusal;
+    throw new HooksError(`$.session.append: refused: ${reasonText}`);
   }
-  (r.keepArrived ?? r.keep)([s.row]);
-  r.arrived([s.row]);
+  (hookable.keepArrived ?? hookable.keep)([check.row]);
+  hookable.arrived([check.row]);
   return {
-    message: summarizeMessageForExport(s.row),
-    uuid: s.row.uuid,
+    message: summarizeMessageForExport(check.row),
+    uuid: check.row.uuid,
   };
 }
 //@ chunk-3xb70ww4.js:3238-3268 placement
 /**
  * 带 type 的块 schema
  */
-var TYPED_BLOCK_SCHEMA = DoctorLazy(() =>
-  looseObject({
-    type: string(),
-  }),
-);
+var TYPED_BLOCK_SCHEMA; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3xb70ww4.js:3238", () => {
+  TYPED_BLOCK_SCHEMA = DoctorLazy(() =>
+    looseObject({
+      type: stringSchema(),
+    }),
+  );
+});
 //@ chunk-3xb70ww4.js:3268-3373 placement
 /**
  * 从数组中筛出带 type 字段的块，非数组返回空数组。
  */
 var parseTypedBlocks = (content) =>
   Array.isArray(content)
-    ? content.flatMap((e) => {
-        let n = TYPED_BLOCK_SCHEMA().safeParse(e);
-        return n.success ? [n.data] : [];
+    ? content.flatMap((raw) => {
+        let parsed = TYPED_BLOCK_SCHEMA().safeParse(raw);
+        return parsed.success ? [parsed.data] : [];
       })
     : [];
 //@ chunk-3xb70ww4.js:3373-3471 placement
 /**
  * 按索引取块
  */
-var resolveBlocks = (t, e) =>
-  e.flatMap((n) => {
-    let r = n.kind === "text" ? n.text : t[n.index];
-    return r === undefined ? [] : [r];
+var resolveBlocks = (content, blocks) =>
+  blocks.flatMap((block) => {
+    let resolved = block.kind === "text" ? block.text : content[block.index];
+    return resolved === undefined ? [] : [resolved];
   });
 //@ chunk-3xb70ww4.js:3471-3760 placement
 /**
  * 把插件返回的内容与原块对齐：能在原内容中找到相同块的保留原块，其余只接受文本块。
  */
-function reconcileAppendContent(t, e) {
-  if (e === undefined || typeof e === "string") return e ?? t;
-  let n = Array.isArray(t) ? t : [];
-  let r = new Set();
-  return e.flatMap((i) => {
-    let index = n.findIndex((u, x) => !r.has(x) && safeDeepEqual(u, i));
-    let m = n[index];
-    let s = TEXT_BLOCK_SCHEMA().safeParse(i);
-    if (m !== undefined) {
-      r.add(index);
-      return [m];
+function reconcileAppendContent(original, next) {
+  if (next === undefined || typeof next === "string") return next ?? original;
+  let originalBlocks = Array.isArray(original) ? original : [];
+  let usedIndices = new Set();
+  return next.flatMap((block) => {
+    let index = originalBlocks.findIndex(
+      (candidate, candidateIndex) => !usedIndices.has(candidateIndex) && safeDeepEqual(candidate, block),
+    );
+    let matched = originalBlocks[index];
+    let textBlock = TEXT_BLOCK_SCHEMA().safeParse(block);
+    if (matched !== undefined) {
+      usedIndices.add(index);
+      return [matched];
     }
-    return s.success
+    return textBlock.success
       ? [
           {
             type: "text",
-            text: s.data.text,
+            text: textBlock.data.text,
           },
         ]
       : [];
   });
 }
 //@ chunk-3xb70ww4.js:3760-3824 placement = hasThinkingContent (1)
-var THINKING_AND_RESULT_TYPES = new Set(["thinking", "redacted_thinking", "tool_result"]);
+var THINKING_AND_RESULT_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3xb70ww4.js:3760", () => {
+  THINKING_AND_RESULT_TYPES = new Set(["thinking", "redacted_thinking", "tool_result"]);
+});
 //@ chunk-3xb70ww4.js:3824-4037 placement
 /**
  * 在追加的内容块中找出与给定块对应的那一块（已匹配的跳过）；找不到时按 tool_result 形状解析。
  */
-function matchAppendBlock(t, e, n) {
-  let index = e.findIndex((f, m) => !n.has(m) && KEYLESS_BLOCK_TYPES.has(f.type) && safeDeepEqual(f, t));
+function matchAppendBlock(block, content, used) {
+  let index = content.findIndex(
+    (secondBlock, candidateIndex) =>
+      !used.has(candidateIndex) &&
+      KEYLESS_BLOCK_TYPES.has(secondBlock.type) &&
+      safeDeepEqual(secondBlock, block),
+  );
   if (index !== -1) {
-    n.add(index);
+    used.add(index);
     return {
       kind: "raised",
       index,
     };
   }
-  let i = TEXT_BLOCK_SCHEMA().safeParse(t);
-  return i.success
+  let textBlock = TEXT_BLOCK_SCHEMA().safeParse(block);
+  return textBlock.success
     ? {
         kind: "text",
-        text: i.data.text,
+        text: textBlock.data.text,
       }
     : undefined;
 }
@@ -312,82 +338,91 @@ var toolResultBlock = (index, content, isError) => ({
 /**
  * session.append 中 tool_result 块的 schema（content 为字符串或块列表，is_error 可选）。
  */
-var toolResultBlockSchema = DoctorLazy(() =>
-  looseObject({
-    type: literal("tool_result"),
-    content: union([
-      string(),
-      array(
-        looseObject({
-          type: string(),
-        }),
-      ),
-    ]).optional(),
-    is_error: M().optional(),
-  }),
-);
+var toolResultBlockSchema; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3xb70ww4.js:4134", () => {
+  toolResultBlockSchema = DoctorLazy(() =>
+    looseObject({
+      type: literal("tool_result"),
+      content: union([
+        stringSchema(),
+        array(
+          looseObject({
+            type: stringSchema(),
+          }),
+        ),
+      ]).optional(),
+      is_error: booleanSchema().optional(),
+    }),
+  );
+});
 //@ chunk-3xb70ww4.js:4248-4375 placement
 /**
  * 把追加的 tool_result 解析为结果记录；形状不合法时视为原样引发的块。
  */
-function parseAppendedToolResult(index, e, n) {
-  let r = toolResultBlockSchema().safeParse(e);
-  return r.success
-    ? toolResultBlock(index, r.data.content, r.data.is_error ?? n)
+function parseAppendedToolResult(index, result, isError) {
+  let parsed = toolResultBlockSchema().safeParse(result);
+  return parsed.success
+    ? toolResultBlock(index, parsed.data.content, parsed.data.is_error ?? isError)
     : {
         kind: "raised",
         index,
       };
 }
 //@ chunk-3xb70ww4.js:4375-5262 placement
-function normalizeAppendedToolResult(t, typedBlocks) {
-  if (t.length === 0) return [];
-  let n = contentBlockStableKeys(t);
-  let r = new Set(n.filter((a) => a !== undefined));
-  let filtered = n.filter((a, c) => a !== undefined && t[c]?.type === "tool_result");
-  let f = contentBlockStableKeys(typedBlocks);
-  let m =
-    count(typedBlocks, (a) => a.type === "tool_result" && typeof a.tool_use_id !== "string") ===
+function normalizeAppendedToolResult(original, typedBlocks) {
+  if (original.length === 0) return [];
+  let stableKeys = contentBlockStableKeys(original);
+  let knownKeys = new Set(stableKeys.filter((key) => key !== undefined));
+  let filtered = stableKeys.filter(
+    (key, index) => key !== undefined && original[index]?.type === "tool_result",
+  );
+  let nextKeys = contentBlockStableKeys(typedBlocks);
+  let allToolResultsKeyless =
+    count(typedBlocks, (block) => block.type === "tool_result" && typeof block.tool_use_id !== "string") ===
     filtered.length;
-  let s = new Map();
-  let u = new Map();
-  let x = new Set();
-  let g = START_KEY;
-  let C = 0;
-  typedBlocks.forEach((a, c) => {
-    let y = a.type === "tool_result" && typeof a.tool_use_id !== "string";
-    let d = y ? (m ? filtered[C++] : undefined) : f[c];
-    if (d === undefined && !y) {
-      let O = matchAppendBlock(a, t, x);
-      let H = s.get(g) ?? [];
-      if (O !== undefined) s.set(g, [...H, O]);
+  let raisedAfter = new Map();
+  let toolResultByKey = new Map();
+  let usedIndices = new Set();
+  let currentKey = START_KEY;
+  let keylessCount = 0;
+  typedBlocks.forEach((block, index) => {
+    let isKeylessResult = block.type === "tool_result" && typeof block.tool_use_id !== "string";
+    let key = isKeylessResult
+      ? allToolResultsKeyless
+        ? filtered[keylessCount++]
+        : undefined
+      : nextKeys[index];
+    if (key === undefined && !isKeylessResult) {
+      let raised = matchAppendBlock(block, original, usedIndices);
+      let existing = raisedAfter.get(currentKey) ?? [];
+      if (raised !== undefined) raisedAfter.set(currentKey, [...existing, raised]);
       return;
     }
-    if (d === undefined || !r.has(d)) return;
-    g = d;
-    if (a.type === "tool_result") u.set(d, a);
+    if (key === undefined || !knownKeys.has(key)) return;
+    currentKey = key;
+    if (block.type === "tool_result") toolResultByKey.set(key, block);
   });
-  let index = t.findIndex((a) => !THINKING_AND_RESULT_TYPES.has(a.type));
-  let h = index === -1 ? t.length : index;
-  let l = [];
-  t.forEach((a, c) => {
-    if (c === h) l.push(...(s.get(START_KEY) ?? []));
-    let y = n[c];
-    if (y === undefined) return;
-    let d = u.get(y);
-    l.push(
-      d === undefined
+  let index = original.findIndex((block) => !THINKING_AND_RESULT_TYPES.has(block.type));
+  let insertAt = index === -1 ? original.length : index;
+  let out = [];
+  original.forEach((block, index) => {
+    if (index === insertAt) out.push(...(raisedAfter.get(START_KEY) ?? []));
+    let key = stableKeys[index];
+    if (key === undefined) return;
+    let resultBlock = toolResultByKey.get(key);
+    out.push(
+      resultBlock === undefined
         ? {
             kind: "raised",
-            index: c,
+            index,
           }
-        : parseAppendedToolResult(c, d, a.is_error === true),
-      ...(s.get(y) ?? []),
+        : parseAppendedToolResult(index, resultBlock, block.is_error === true),
+      ...(raisedAfter.get(key) ?? []),
     );
   });
-  if (h === t.length) l.push(...(s.get(START_KEY) ?? []));
-  return l.length > 0
-    ? l
+  if (insertAt === original.length) out.push(...(raisedAfter.get(START_KEY) ?? []));
+  return out.length > 0
+    ? out
     : [
         {
           kind: "text",

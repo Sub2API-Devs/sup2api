@@ -8,7 +8,13 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: placement 1
  */
-import { R, y, ce, P, Q } from "../../vendor/react/cjs/react.production.js";
+import {
+  useRef,
+  useState,
+  useCallback,
+  useEffect,
+  useMemo,
+} from "../../vendor/react/cjs/react.production.js";
 import {
   createRetractionState,
   reconcileRemoteTasks,
@@ -66,7 +72,7 @@ function useRemoteTransportCore({
   onInit,
   turnStream,
 }) {
-  let He = !!adapter;
+  let isAttached = !!adapter;
   let streaming = turnStream?.streaming;
   let setStreamMode = turnStream?.setStreamMode;
   let setInProgressToolUseIDs = turnStream?.setInProgressToolUseIDs;
@@ -78,106 +84,109 @@ function useRemoteTransportCore({
     onTurnComplete,
     onTurnStopped,
   } = sink;
-  let managerRef = R(null);
-  let Lt = R(false);
-  let oo = R(false);
-  let [Xt] = y(createRetractionState);
-  let io = isLoading !== undefined;
-  let isLoadingRef = R(isLoading ?? false);
-  if (io) isLoadingRef.current = isLoading;
-  let po = ce(
-    (Sn) => {
-      if (Sn && io && isLoadingRef.current) return;
-      isLoadingRef.current = Sn;
-      setIsLoading(Sn);
+  let managerRef = useRef(null);
+  let initHandled = useRef(false);
+  let connected = useRef(false);
+  let [retractionState] = useState(createRetractionState);
+  let controlsLoading = isLoading !== undefined;
+  let previousLoadingRef = useRef(isLoading ?? false);
+  if (controlsLoading) previousLoadingRef.current = isLoading;
+  let trackLoading = useCallback(
+    (loading) => {
+      if (loading && controlsLoading && previousLoadingRef.current) return;
+      previousLoadingRef.current = loading;
+      setIsLoading(loading);
     },
-    [setIsLoading, io],
+    [setIsLoading, controlsLoading],
   );
-  let ao = R(false);
-  let co = R(0);
-  let bo = ce(() => {
-    if (!ao.current) co.current++;
-    ao.current = true;
-    po(false);
-  }, [po]);
+  let sending = useRef(false);
+  let pendingSends = useRef(0);
+  let markSendStarted = useCallback(() => {
+    if (!sending.current) pendingSends.current++;
+    sending.current = true;
+    trackLoading(false);
+  }, [trackLoading]);
   let setAppState = useSetAppState();
   let appStoreDirect = useAppStoreDirect();
   let { addNotification, removeNotification } = useNotifications();
-  let Io = ce(
-    (Sn) =>
-      setAppState(($n) =>
-        $n.remoteConnectionStatus === Sn
-          ? $n
+  let setConnectionStatus = useCallback(
+    (status) =>
+      setAppState((prevState) =>
+        prevState.remoteConnectionStatus === status
+          ? prevState
           : {
-              ...$n,
-              remoteConnectionStatus: Sn,
+              ...prevState,
+              remoteConnectionStatus: status,
             },
       ),
     [setAppState],
   );
-  let Wo = R(new Map());
-  let mn = R(new Map());
-  let Cn = R(new Set());
-  let No = ce(() => {
-    let Sn = [...Wo.current.values()];
-    let $n = Cn.current.size > 0 ? "in_turn" : "none";
-    let on = reconcileRemoteTasks(mn.current, Wo.current, Date.now());
-    setAppState((_o) => applyRemoteTaskState(_o, Sn, on, $n));
+  let runningTasks = useRef(new Map());
+  let remoteTasks = useRef(new Map());
+  let seededTaskIds = useRef(new Set());
+  let writeTaskSnapshot = useCallback(() => {
+    let taskList = [...runningTasks.current.values()];
+    let presence = seededTaskIds.current.size > 0 ? "in_turn" : "none";
+    let workflowRuns = reconcileRemoteTasks(remoteTasks.current, runningTasks.current, Date.now());
+    setAppState((prevState) => applyRemoteTaskState(prevState, taskList, workflowRuns, presence));
   }, [setAppState]);
-  let vo = ce(() => {
-    Wo.current.clear();
-    Cn.current.clear();
-    markTasksUnlisted(mn.current);
-    No();
+  let resetTaskLists = useCallback(() => {
+    runningTasks.current.clear();
+    seededTaskIds.current.clear();
+    markTasksUnlisted(remoteTasks.current);
+    writeTaskSnapshot();
     setInProgressToolUseIDs?.({
       action: "clear",
     });
-    Xt.inProgressToolUses.clear();
-  }, [No, setInProgressToolUseIDs, Xt]);
-  let [Yo] = useTheme();
+    retractionState.inProgressToolUses.clear();
+  }, [writeTaskSnapshot, setInProgressToolUseIDs, retractionState]);
+  let [theme] = useTheme();
   let inputs = {
-    sendResponse: (Sn, $n) => {
-      let on = managerRef.current;
-      if (!on) return;
-      on.respondToPermissionRequest(Sn, $n);
-      if ($n.behavior === "allow") po(true);
-      else if ($n.interrupt) {
-        bo();
+    sendResponse: (requestId, response) => {
+      let manager = managerRef.current;
+      if (!manager) return;
+      manager.respondToPermissionRequest(requestId, response);
+      if (response.behavior === "allow") trackLoading(true);
+      else if (response.interrupt) {
+        markSendStarted();
         onTurnStopped?.();
       }
     },
     requestDialog,
     toolRegistry: tools,
     toolPermissionContext,
-    theme: Yo,
+    theme,
     canInterruptTurn: !adapter?.readOnly,
     onAskNotShown: () => {
-      setMessages((Sn) => [...Sn, createSystemMessage(REMOTE_PERMISSION_UNSHOWABLE_WAITING, "warning")]);
+      setMessages((messages) => [
+        ...messages,
+        createSystemMessage(REMOTE_PERMISSION_UNSHOWABLE_WAITING, "warning"),
+      ]);
     },
   };
-  let [Fn] = y(() => new TransportPermissionDispatcher(inputs));
-  P(() => {
-    Fn.setInputs(inputs);
+  let [dispatcher] = useState(() => new TransportPermissionDispatcher(inputs));
+  useEffect(() => {
+    dispatcher.setInputs(inputs);
   });
-  P(() => {
+  useEffect(() => {
     if (!adapter) return;
     let { label, createManager, onDisconnected, cleanup } = adapter;
-    Lt.current = false;
-    let cn = false;
-    ao.current = false;
-    co.current = 0;
+    initHandled.current = false;
+    let modeSent = false;
+    sending.current = false;
+    pendingSends.current = 0;
     logForDebugging(`[${label}] connecting`);
-    function Dn(manager) {
-      if (cn || adapter?.readOnly) return;
+    function sendInitialPermissionMode(manager) {
+      if (modeSent || adapter?.readOnly) return;
       let mode = appStoreDirect.getState().toolPermissionContext.mode;
       if (mode === "bubble") return;
-      cn = true;
-      let dr = manager.sendControlRequest?.bind(manager);
-      if (!dr) {
+      modeSent = true;
+      let sendRequest = manager.sendControlRequest?.bind(manager);
+      if (!sendRequest) {
         manager.setPermissionMode?.(mode);
         return;
       }
-      dr({
+      sendRequest({
         subtype: "set_permission_mode",
         mode,
       }).catch((error) => {
@@ -191,7 +200,7 @@ function useRemoteTransportCore({
         if (appStoreDirect.getState().toolPermissionContext.mode !== mode) return;
         onPermissionModeChange("default");
         addNotification(notifyRemoteModeRejected(mode));
-        dr({
+        sendRequest({
           subtype: "set_permission_mode",
           mode: "default",
         }).catch((error) => {
@@ -210,15 +219,15 @@ function useRemoteTransportCore({
     );
     let replInputAccumulator = undefined;
     let manager = createManager({
-      onMessage: (Zn) => {
-        if (!capFrameDepth(Zn)) return;
-        if (Zn.type === "active_goal") {
-          let goalState = parseGoalState(Zn.value);
-          setAppState((Qn) =>
-            Qn.activeGoal === goalState
-              ? Qn
+      onMessage: (frame) => {
+        if (!capFrameDepth(frame)) return;
+        if (frame.type === "active_goal") {
+          let goalState = parseGoalState(frame.value);
+          setAppState((prevState) =>
+            prevState.activeGoal === goalState
+              ? prevState
               : {
-                  ...Qn,
+                  ...prevState,
                   activeGoal: goalState,
                 },
           );
@@ -228,142 +237,156 @@ function useRemoteTransportCore({
           });
           return;
         }
-        if (Zn.type === "autocompact_state") {
-          adoptRemoteAutocompactState(setAppState, Zn.value, lit_2("thin_client_stream"));
+        if (frame.type === "autocompact_state") {
+          adoptRemoteAutocompactState(setAppState, frame.value, lit_2("thin_client_stream"));
           return;
         }
-        let Un = isModelRefusalFallback_2(Zn);
-        if (Un)
+        let refusalSignal = isModelRefusalFallback_2(frame);
+        if (refusalSignal)
           evictRefusalRetraction({
-            index: Xt,
-            signal: Un,
+            index: retractionState,
+            signal: refusalSignal,
             surface: "thin_client",
             setMessages,
             setInProgressToolUseIDs,
           });
-        if (isResultEvent(Zn)) {
-          isSystemInitMessage(Cn.current, Zn);
-          No();
-          if (co.current > 0) co.current--;
-          else onTurnComplete?.(Zn);
-          ao.current = false;
-          po(false);
+        if (isResultEvent(frame)) {
+          isSystemInitMessage(seededTaskIds.current, frame);
+          writeTaskSnapshot();
+          if (pendingSends.current > 0) pendingSends.current--;
+          else onTurnComplete?.(frame);
+          sending.current = false;
+          trackLoading(false);
         }
         if (
-          !ao.current &&
-          (Zn.type === "assistant" ||
-            Zn.type === "stream_event" ||
-            (Zn.type === "system" && Zn.subtype === "status" && Zn.status === "requesting"))
+          !sending.current &&
+          (frame.type === "assistant" ||
+            frame.type === "stream_event" ||
+            (frame.type === "system" && frame.subtype === "status" && frame.status === "requesting"))
         )
-          po(true);
-        if (Zn.type === "system" && Zn.subtype === "status") {
-          let pr = permissionModeOfSystemEvent(Zn);
-          if (pr !== undefined) onPermissionModeChange(pr);
+          trackLoading(true);
+        if (frame.type === "system" && frame.subtype === "status") {
+          let mode = permissionModeOfSystemEvent(frame);
+          if (mode !== undefined) onPermissionModeChange(mode);
         }
-        if (Zn.type === "system" && Zn.subtype === "init") {
-          if (Lt.current) return;
-          Lt.current = true;
-          onInit?.(Zn);
+        if (frame.type === "system" && frame.subtype === "init") {
+          if (initHandled.current) return;
+          initHandled.current = true;
+          onInit?.(frame);
         }
-        if (Zn.type === "system") {
-          applyRemoteTaskEvent(mn.current, Zn, Date.now());
-          isSystemInitMessage(Cn.current, Zn);
-          if (toBackgroundTaskEvent(Wo.current, Zn)) {
-            No();
+        if (frame.type === "system") {
+          applyRemoteTaskEvent(remoteTasks.current, frame, Date.now());
+          isSystemInitMessage(seededTaskIds.current, frame);
+          if (toBackgroundTaskEvent(runningTasks.current, frame)) {
+            writeTaskSnapshot();
             return;
           }
-          if (Zn.subtype === "notification") {
-            if (isValidNotice(Zn)) {
-              let pr = normalizeSdkNotification(Zn, "remote");
-              let Qn = pickRemoteNotificationToEvict(appStoreDirect.getState().notifications, pr.key);
-              if (Qn !== null) removeNotification(Qn);
-              addNotification(pr);
+          if (frame.subtype === "notification") {
+            if (isValidNotice(frame)) {
+              let notification = normalizeSdkNotification(frame, "remote");
+              let evictedKey = pickRemoteNotificationToEvict(
+                appStoreDirect.getState().notifications,
+                notification.key,
+              );
+              if (evictedKey !== null) removeNotification(evictedKey);
+              addNotification(notification);
               logEvent("tengu_remote_notification_routed", {
                 via: lit_2("thin_client_stream"),
-                priority: fromEnum(Zn.priority),
+                priority: fromEnum(frame.priority),
               });
             } else logForDebugging("[useThinClientSession] Dropping malformed notification frame");
             return;
           }
         }
-        if (Zn.type === "rate_limit_event") {
-          let pr = dropRemoteRateLimitFrame(Zn.rate_limit_info);
-          if (pr === undefined)
+        if (frame.type === "rate_limit_event") {
+          let rateLimitInfo = dropRemoteRateLimitFrame(frame.rate_limit_info);
+          if (rateLimitInfo === undefined)
             logForDebugging(`[${label}] Dropping rate_limit_event with invalid rate_limit_info`, {
               level: "warn",
             });
           else {
-            let { canUserPurchaseCredits, hasChargeableSavedPaymentMethod, ...Ir } = pr;
-            remoteRateLimitAdopter.push(Ir);
+            let { canUserPurchaseCredits, hasChargeableSavedPaymentMethod, ...rateLimitFields } =
+              rateLimitInfo;
+            remoteRateLimitAdopter.push(rateLimitFields);
           }
           return;
         }
-        if (setInProgressToolUseIDs && Zn.type === "user") {
-          let content = Zn.message?.content;
+        if (setInProgressToolUseIDs && frame.type === "user") {
+          let content = frame.message?.content;
           if (Array.isArray(content)) {
-            let Qn = [];
-            for (let ur of content) if (ur.type === "tool_result") Qn.push(ur.tool_use_id);
-            if (Qn.length > 0) {
+            let toolUseIds = [];
+            for (let block of content) if (block.type === "tool_result") toolUseIds.push(block.tool_use_id);
+            if (toolUseIds.length > 0) {
               setInProgressToolUseIDs({
                 action: "remove",
-                ids: Qn,
+                ids: toolUseIds,
               });
-              clearInProgressToolUses(Xt, Qn);
-              countOrphanToolResults(Xt, Qn, "thin_client", typeof Zn.uuid === "string" ? Zn.uuid : null);
+              clearInProgressToolUses(retractionState, toolUseIds);
+              countOrphanToolResults(
+                retractionState,
+                toolUseIds,
+                "thin_client",
+                typeof frame.uuid === "string" ? frame.uuid : null,
+              );
             }
           }
         }
         if (
-          adapter.interceptMessage?.(Zn, {
+          adapter.interceptMessage?.(frame, {
             setMessages,
           }) === "consumed"
         )
           return;
-        let dr = null;
-        if (dr !== null) {
-          if (typeof Zn.uuid === "string" && dropLateRetracted(Xt, Zn.uuid, "thin_client")) return;
-          if (dr.length > 0) {
-            if (typeof Zn.uuid === "string")
+        let replayed = null;
+        if (replayed !== null) {
+          if (typeof frame.uuid === "string" && dropLateRetracted(retractionState, frame.uuid, "thin_client"))
+            return;
+          if (replayed.length > 0) {
+            if (typeof frame.uuid === "string")
               recordNestedUuidAliases(
-                Xt,
-                Zn.uuid,
-                dr.map((pr) => pr.uuid),
+                retractionState,
+                frame.uuid,
+                replayed.map((message) => message.uuid),
               );
-            setMessages((pr) => {
-              let filtered = dr.filter((ur) => !pr.some((Ir) => Ir.uuid === ur.uuid));
-              return filtered.length === 0 ? pr : [...pr, ...filtered];
+            setMessages((messages) => {
+              let filtered = replayed.filter(
+                (row) => !messages.some((existing) => existing.uuid === row.uuid),
+              );
+              return filtered.length === 0 ? messages : [...messages, ...filtered];
             });
           }
           return;
         }
-        let or = convertSDKMessage(Zn, adapter.convertOpts);
-        if (or.type === "conversation_reset") {
-          streaming?.setStreamingToolUses((pr) => (pr.length > 0 ? [] : pr));
+        let converted = convertSDKMessage(frame, adapter.convertOpts);
+        if (converted.type === "conversation_reset") {
+          streaming?.setStreamingToolUses((current) => (current.length > 0 ? [] : current));
           setInProgressToolUseIDs?.({
             action: "clear",
           });
-          Xt.inProgressToolUses.clear();
-          po(false);
-          onConversationReset?.(or.newConversationId);
+          retractionState.inProgressToolUses.clear();
+          trackLoading(false);
+          onConversationReset?.(converted.newConversationId);
           return;
         }
-        if (or.type === "message") {
-          streaming?.setStreamingToolUses((pr) => (pr.length > 0 ? [] : pr));
-          if (dropLateRetracted(Xt, or.message.uuid, "thin_client")) return;
-          if (setInProgressToolUseIDs && or.message.type === "assistant") {
-            let mapped = or.message.message.content.filter((Qn) => Qn.type === "tool_use").map((Qn) => Qn.id);
-            if (mapped.length > 0) {
+        if (converted.type === "message") {
+          streaming?.setStreamingToolUses((current) => (current.length > 0 ? [] : current));
+          if (dropLateRetracted(retractionState, converted.message.uuid, "thin_client")) return;
+          if (setInProgressToolUseIDs && converted.message.type === "assistant") {
+            let toolUseIds = converted.message.message.content
+              .filter((block) => block.type === "tool_use")
+              .map((block) => block.id);
+            if (toolUseIds.length > 0) {
               setInProgressToolUseIDs({
                 action: "add",
-                ids: mapped,
+                ids: toolUseIds,
               });
-              recordInProgressToolUses(Xt, or.message.uuid, mapped);
+              recordInProgressToolUses(retractionState, converted.message.uuid, toolUseIds);
             }
           }
-          setMessages((pr) => [...pr, or.message]);
-        } else if (or.type === "stream_event")
-          isNonRenderableSystemMessage(or.event, {
-            onMessage: (pr) => setMessages((Qn) => [...Qn, pr]),
+          setMessages((messages) => [...messages, converted.message]);
+        } else if (converted.type === "stream_event")
+          isNonRenderableSystemMessage(converted.event, {
+            onMessage: (message) => setMessages((messages) => [...messages, message]),
             onUpdateLength: () => {},
             onSetStreamMode: setStreamMode ?? (() => {}),
             onStreamingToolUses: streaming?.setStreamingToolUses ?? (() => {}),
@@ -371,93 +394,98 @@ function useRemoteTransportCore({
             onApiMetrics: streaming?.recordApiMetricsEvent,
           });
       },
-      onPermissionRequest: (Zn, requestId) => {
-        logForDebugging(`[${label}] permission request: ${Zn.tool_name}`);
+      onPermissionRequest: (request, requestId) => {
+        logForDebugging(`[${label}] permission request: ${request.tool_name}`);
         if (adapter.readOnly) {
-          po(false);
+          trackLoading(false);
           return;
         }
         if (
-          Fn.dispatch({
+          dispatcher.dispatch({
             type: "control_request",
             request_id: requestId,
-            request: Zn,
+            request,
           })
         )
-          po(false);
+          trackLoading(false);
       },
-      onPermissionCancelled: (Zn, Un) => {
-        logForDebugging(`[${label}] permission cancelled: ${Zn}`);
-        Fn.cancel(Zn);
-        if (!ao.current) po(true);
+      onPermissionCancelled: (requestId, reason) => {
+        logForDebugging(`[${label}] permission cancelled: ${requestId}`);
+        dispatcher.cancel(requestId);
+        if (!sending.current) trackLoading(true);
       },
       onConnected: () => {
         logForDebugging(`[${label}] connected`);
-        oo.current = true;
-        Io("connected");
-        Dn(manager);
+        connected.current = true;
+        setConnectionStatus("connected");
+        sendInitialPermissionMode(manager);
       },
-      onReconnecting: (Zn, Un) => {
-        cn = false;
-        logForDebugging(`[${label}] dropped, reconnecting${Zn != null ? ` (${Zn}/${Un})` : ""}`);
-        oo.current = false;
-        Io("reconnecting");
-        if (!adapter.replaysOnReconnect) po(false);
-        ao.current = false;
-        co.current = 0;
-        vo();
-        if (Zn != null)
-          setMessages((dr) => [
-            ...dr,
-            createSystemMessage(`Connection dropped \u2014 reconnecting (attempt ${Zn}/${Un})...`, "warning"),
+      onReconnecting: (attempt, maxAttempts) => {
+        modeSent = false;
+        logForDebugging(
+          `[${label}] dropped, reconnecting${attempt != null ? ` (${attempt}/${maxAttempts})` : ""}`,
+        );
+        connected.current = false;
+        setConnectionStatus("reconnecting");
+        if (!adapter.replaysOnReconnect) trackLoading(false);
+        sending.current = false;
+        pendingSends.current = 0;
+        resetTaskLists();
+        if (attempt != null)
+          setMessages((messages) => [
+            ...messages,
+            createSystemMessage(
+              `Connection dropped \u2014 reconnecting (attempt ${attempt}/${maxAttempts})...`,
+              "warning",
+            ),
           ]);
       },
       onDisconnected: () => {
         logForDebugging(`[${label}] disconnected`);
-        let Zn = oo.current;
-        oo.current = false;
-        Io("disconnected");
-        ao.current = false;
-        co.current = 0;
-        po(false);
-        vo();
-        onDisconnected(Zn);
+        let wasConnected = connected.current;
+        connected.current = false;
+        setConnectionStatus("disconnected");
+        sending.current = false;
+        pendingSends.current = 0;
+        trackLoading(false);
+        resetTaskLists();
+        onDisconnected(wasConnected);
       },
-      onError: (Zn) => {
-        logForDebugging(`[${label}] error: ${Zn.message}`);
+      onError: (error) => {
+        logForDebugging(`[${label}] error: ${error.message}`);
       },
     });
     managerRef.current = manager;
     manager.connect();
-    Dn(manager);
-    let Wn = adapter.afterConnect?.(manager);
-    let Fr = mn.current;
+    sendInitialPermissionMode(manager);
+    let afterConnectResult = adapter.afterConnect?.(manager);
+    let taskMap = remoteTasks.current;
     return () => {
       logForDebugging(`[${label}] cleanup`);
-      Fn.drain();
-      Wn?.();
-      setAppState((Zn) =>
-        Zn.activeGoal === undefined
-          ? Zn
+      dispatcher.drain();
+      afterConnectResult?.();
+      setAppState((prevState) =>
+        prevState.activeGoal === undefined
+          ? prevState
           : {
-              ...Zn,
+              ...prevState,
               activeGoal: undefined,
             },
       );
-      setAppState((Zn) =>
-        Zn.remoteAutocompactState === undefined
-          ? Zn
+      setAppState((prevState) =>
+        prevState.remoteAutocompactState === undefined
+          ? prevState
           : {
-              ...Zn,
+              ...prevState,
               remoteAutocompactState: undefined,
             },
       );
-      Fr.clear();
-      setAppState((Zn) =>
-        Zn.remoteWorkflowRuns.length === 0
-          ? Zn
+      taskMap.clear();
+      setAppState((prevState) =>
+        prevState.remoteWorkflowRuns.length === 0
+          ? prevState
           : {
-              ...Zn,
+              ...prevState,
               remoteWorkflowRuns: [],
             },
       );
@@ -469,7 +497,7 @@ function useRemoteTransportCore({
   }, [
     adapter,
     setMessages,
-    po,
+    trackLoading,
     onInit,
     onPermissionModeChange,
     streaming,
@@ -477,21 +505,21 @@ function useRemoteTransportCore({
     setInProgressToolUseIDs,
     onConversationReset,
     onTurnComplete,
-    Io,
-    No,
-    vo,
-    Fn,
+    setConnectionStatus,
+    writeTaskSnapshot,
+    resetTaskLists,
+    dispatcher,
     addNotification,
     removeNotification,
     appStoreDirect,
-    Xt,
+    retractionState,
   ]);
-  let bn = ce(
-    async (Sn, $n) => {
-      let on = managerRef.current;
-      if (!on) {
-        setMessages((Dn) => [
-          ...Dn,
+  let sendMessage = useCallback(
+    async (text, options) => {
+      let manager = managerRef.current;
+      if (!manager) {
+        setMessages((messages) => [
+          ...messages,
           createSystemMessage(
             "Not connected to the remote session \u2014 your message wasn't sent.",
             "warning",
@@ -499,59 +527,60 @@ function useRemoteTransportCore({
         ]);
         return false;
       }
-      let _o = ao.current;
-      ao.current = false;
-      po(true);
-      let cn = await on.sendMessage(Sn, $n);
-      if (!cn.ok) {
-        ao.current = ao.current || (_o && co.current > 0);
-        setMessages((Dn) => [
-          ...Dn,
+      let wasSending = sending.current;
+      sending.current = false;
+      trackLoading(true);
+      let result = await manager.sendMessage(text, options);
+      if (!result.ok) {
+        sending.current = sending.current || (wasSending && pendingSends.current > 0);
+        setMessages((messages) => [
+          ...messages,
           createSystemMessage(
-            `Couldn't send your message \u2014 ${cn.reason}. It wasn't delivered to the remote session.`,
+            `Couldn't send your message \u2014 ${result.reason}. It wasn't delivered to the remote session.`,
             "warning",
           ),
         ]);
-        po(false);
+        trackLoading(false);
         return false;
       }
       return true;
     },
-    [po, setMessages],
+    [trackLoading, setMessages],
   );
-  let Go = ce(() => {
+  let cancelRequest = useCallback(() => {
     if (!adapter?.readOnly) {
       managerRef.current?.sendInterrupt();
-      bo();
+      markSendStarted();
       return;
     }
-    po(false);
-  }, [adapter, po, bo]);
-  let hn = ce(() => {
+    trackLoading(false);
+  }, [adapter, trackLoading, markSendStarted]);
+  let disconnect = useCallback(() => {
     managerRef.current?.disconnect();
     managerRef.current = null;
-    oo.current = false;
+    connected.current = false;
   }, []);
   let label = adapter?.label;
-  let Xo = ce(
-    (Sn, $n) => {
-      let on = managerRef.current;
-      if (!on) return Promise.reject(Error("Remote session is not connected \u2014 try again in a moment"));
-      if (!on.sendControlRequest)
+  let sendControlRequest = useCallback(
+    (request, options) => {
+      let manager = managerRef.current;
+      if (!manager)
+        return Promise.reject(Error("Remote session is not connected \u2014 try again in a moment"));
+      if (!manager.sendControlRequest)
         return Promise.reject(Error(`sendControlRequest not yet wired for ${label ?? "this"} transport`));
-      return on.sendControlRequest(Sn, $n);
+      return manager.sendControlRequest(request, options);
     },
     [label],
   );
-  return Q(
+  return useMemo(
     () => ({
-      isRemoteMode: He,
-      sendMessage: bn,
-      cancelRequest: Go,
-      disconnect: hn,
-      sendControlRequest: Xo,
+      isRemoteMode: isAttached,
+      sendMessage,
+      cancelRequest,
+      disconnect,
+      sendControlRequest,
     }),
-    [He, bn, Go, hn, Xo],
+    [isAttached, sendMessage, cancelRequest, disconnect, sendControlRequest],
   );
 }
 export { useRemoteTransportCore };

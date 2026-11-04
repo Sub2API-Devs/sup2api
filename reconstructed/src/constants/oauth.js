@@ -10,6 +10,7 @@
  */
 import { uniq } from "../utils/collections.js";
 import { env } from "../utils/env.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-6ysndsgz.js:226-252 affinity
 /**
@@ -54,14 +55,24 @@ var LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS = 31536000;
 /**
  * setup-token 默认有效天数与各 scope 常量：user:inference、user:profile、user:sessions:claude_code、user:plugins、user:projects:read/write。
  */
-var SETUP_TOKEN_DEFAULT_EXPIRY_DAYS = Math.round(LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS / 86400);
-var CLAUDE_AI_INFERENCE_SCOPE = "user:inference";
-var CLAUDE_AI_PROFILE_SCOPE = "user:profile";
-var CLAUDE_AI_SESSIONS_SCOPE = "user:sessions:claude_code";
-var CLOUD_SESSIONS_OAUTH_SCOPES = [CLAUDE_AI_PROFILE_SCOPE, CLAUDE_AI_SESSIONS_SCOPE];
-var CLAUDE_AI_PLUGINS_SCOPE = "user:plugins";
-var CLAUDE_AI_PROJECTS_READ_SCOPE = "user:projects:read";
-var CLAUDE_AI_PROJECTS_WRITE_SCOPE = "user:projects:write";
+var SETUP_TOKEN_DEFAULT_EXPIRY_DAYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CLAUDE_AI_INFERENCE_SCOPE;
+var CLAUDE_AI_PROFILE_SCOPE;
+var CLAUDE_AI_SESSIONS_SCOPE;
+var CLOUD_SESSIONS_OAUTH_SCOPES;
+var CLAUDE_AI_PLUGINS_SCOPE;
+var CLAUDE_AI_PROJECTS_READ_SCOPE;
+var CLAUDE_AI_PROJECTS_WRITE_SCOPE;
+deferInit("chunk-6ysndsgz.js:559", () => {
+  SETUP_TOKEN_DEFAULT_EXPIRY_DAYS = Math.round(LONG_LIVED_OAUTH_TOKEN_TTL_SECONDS / 86400);
+  CLAUDE_AI_INFERENCE_SCOPE = "user:inference";
+  CLAUDE_AI_PROFILE_SCOPE = "user:profile";
+  CLAUDE_AI_SESSIONS_SCOPE = "user:sessions:claude_code";
+  CLOUD_SESSIONS_OAUTH_SCOPES = [CLAUDE_AI_PROFILE_SCOPE, CLAUDE_AI_SESSIONS_SCOPE];
+  CLAUDE_AI_PLUGINS_SCOPE = "user:plugins";
+  CLAUDE_AI_PROJECTS_READ_SCOPE = "user:projects:read";
+  CLAUDE_AI_PROJECTS_WRITE_SCOPE = "user:projects:write";
+});
 //@ chunk-6ysndsgz.js:742-798 facade-majority
 /**
  * scope 列表含 user:inference。
@@ -73,25 +84,31 @@ function isClaudeAiScopeSet(scopes) {
 /**
  * Console 登录 scope：org:create_api_key + user:profile。同语句 r 为 claude.ai 登录基础 scope。
  */
-var ORG_CREATE_API_KEY = "org:create_api_key";
-var OAUTH_BETA_HEADER = "oauth-2025-04-20";
-var CONSOLE_OAUTH_SCOPES = [ORG_CREATE_API_KEY, CLAUDE_AI_PROFILE_SCOPE];
-var CLAUDE_AI_BASE_OAUTH_SCOPES = [
-  CLAUDE_AI_PROFILE_SCOPE,
-  CLAUDE_AI_INFERENCE_SCOPE,
-  CLAUDE_AI_SESSIONS_SCOPE,
-  "user:mcp_servers",
-  "user:file_upload",
-];
+var ORG_CREATE_API_KEY; // deferred: uses SETUP_TOKEN_DEFAULT_EXPIRY_DAYS of its import cycle while loading; runs once the cycle is complete
+var OAUTH_BETA_HEADER;
+var CONSOLE_OAUTH_SCOPES;
+var CLAUDE_AI_BASE_OAUTH_SCOPES;
+deferInit("chunk-6ysndsgz.js:798", () => {
+  ORG_CREATE_API_KEY = "org:create_api_key";
+  OAUTH_BETA_HEADER = "oauth-2025-04-20";
+  CONSOLE_OAUTH_SCOPES = [ORG_CREATE_API_KEY, CLAUDE_AI_PROFILE_SCOPE];
+  CLAUDE_AI_BASE_OAUTH_SCOPES = [
+    CLAUDE_AI_PROFILE_SCOPE,
+    CLAUDE_AI_INFERENCE_SCOPE,
+    CLAUDE_AI_SESSIONS_SCOPE,
+    "user:mcp_servers",
+    "user:file_upload",
+  ];
+});
 //@ chunk-6ysndsgz.js:908-994 facade-majority
 /**
  * claude.ai 登录 scope（基础 + 注册了插件 scope 时加 user:plugins）。
  */
 function claudeAiLoginScopes() {
   let oauthConfig = getOauthConfig();
-  let e = [...CLAUDE_AI_BASE_OAUTH_SCOPES];
-  if (oauthConfig.PLUGINS_SCOPE_REGISTERED) e.push(CLAUDE_AI_PLUGINS_SCOPE);
-  return e;
+  let scopes = [...CLAUDE_AI_BASE_OAUTH_SCOPES];
+  if (oauthConfig.PLUGINS_SCOPE_REGISTERED) scopes.push(CLAUDE_AI_PLUGINS_SCOPE);
+  return scopes;
 }
 //@ chunk-6ysndsgz.js:994-1035 facade-majority
 /**
@@ -104,16 +121,20 @@ function allOAuthScopes() {
 /**
  * design 读写 scope。
  */
-var DESIGN_OAUTH_SCOPES = ["user:design:read", "user:design:write"];
-var PROJECTS_OAUTH_SCOPES = [CLAUDE_AI_PROJECTS_READ_SCOPE, CLAUDE_AI_PROJECTS_WRITE_SCOPE];
+var DESIGN_OAUTH_SCOPES; // deferred: uses SETUP_TOKEN_DEFAULT_EXPIRY_DAYS of its import cycle while loading; runs once the cycle is complete
+var PROJECTS_OAUTH_SCOPES;
+deferInit("chunk-6ysndsgz.js:1035", () => {
+  DESIGN_OAUTH_SCOPES = ["user:design:read", "user:design:write"];
+  PROJECTS_OAUTH_SCOPES = [CLAUDE_AI_PROJECTS_READ_SCOPE, CLAUDE_AI_PROJECTS_WRITE_SCOPE];
+});
 //@ chunk-6ysndsgz.js:1096-1186 facade-majority
 /**
  * 从已有 scope 中挑出刷新时可保留的（projects 读写）。
  */
-function preservableScopesFrom(t) {
-  if (!Array.isArray(t)) return [];
-  let e = PROJECTS_OAUTH_SCOPES;
-  return t.filter((o) => e.includes(o));
+function preservableScopesFrom(scopes) {
+  if (!Array.isArray(scopes)) return [];
+  let preservable = PROJECTS_OAUTH_SCOPES;
+  return scopes.filter((scope) => preservable.includes(scope));
 }
 //@ chunk-6ysndsgz.js:1186-1233 facade-majority
 /**

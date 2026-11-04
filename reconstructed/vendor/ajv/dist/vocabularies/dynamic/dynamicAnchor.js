@@ -5,14 +5,14 @@
  * pieces: chunk-1r4fv9mg.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_codegen_2 as require_codegen } from "../../compile/codegen/index.js";
 import { require_names } from "../../compile/names.js";
 import { require_compile_2 as require_compile } from "../../compile/index.js";
 import { require_ref } from "../core/ref.js";
 
 //@ chunk-1r4fv9mg.js:576-1267 cjs-fingerprint
-var require_dynamicAnchor = x(function (cjsExports) {
+var require_dynamicAnchor = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -35,9 +35,9 @@ var require_dynamicAnchor = x(function (cjsExports) {
   }
   cjsExports.dynamicAnchor = dynamicAnchor;
   function _getValidate(cxt) {
-    let { schemaEnv, schema, self: n } = cxt.it;
+    let { schemaEnv, schema, self: ajvInstance } = cxt.it;
     let { root, baseId, localRefs, meta } = schemaEnv.root;
-    let { schemaId } = n.opts;
+    let { schemaId } = ajvInstance.opts;
     let sch = new compile_1.SchemaEnv({
       schema,
       schemaId,
@@ -46,7 +46,7 @@ var require_dynamicAnchor = x(function (cjsExports) {
       localRefs,
       meta,
     });
-    compile_1.compileSchema.call(n, sch);
+    compile_1.compileSchema.call(ajvInstance, sch);
     return ref_1.getValidate(cxt, sch);
   }
   cjsExports.default = def;

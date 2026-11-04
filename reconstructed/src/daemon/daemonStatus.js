@@ -18,7 +18,7 @@ import { logForDebugging } from "../utils/debug.js";
 import { errorMessage } from "../utils/errors.js";
 import { getFileReader } from "../utils/fileStore.js";
 import { safeParseJSON } from "../utils/json.js";
-import { u, string, int } from "../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, int } from "../../vendor/zod/v4/classic/schemas.js";
 import { plural, cleanForDisplay } from "../utils/stringUtils.js";
 import { truncateWithEllipsis } from "../utils/printableName.js";
 
@@ -32,7 +32,7 @@ function daemonStatusKey() {
 }
 //@ chunk-nbg7qs8b.js:723-1148 placement
 async function writeDaemonStatus(workers, storageV5) {
-  let r = {
+  let status = {
     supervisorPid: process.pid,
     supervisorProcStart: ownProcStart(),
     writtenAt: Date.now(),
@@ -40,17 +40,17 @@ async function writeDaemonStatus(workers, storageV5) {
   };
   if (isStorageV5Enabled() && storageV5 !== undefined)
     try {
-      let e = await storageV5.write(daemonStatusKey(), jsonStringify(r, null, 2), {
+      let result = await storageV5.write(daemonStatusKey(), jsonStringify(status, null, 2), {
         mode: 438 & ~process.umask(),
       });
-      if (!e.ok) logForDebugging(`writeDaemonStatus: ${e.error.code}`);
-      return e.ok;
+      if (!result.ok) logForDebugging(`writeDaemonStatus: ${result.error.code}`);
+      return result.ok;
     } catch (error) {
       logForDebugging(`writeDaemonStatus: ${errorMessage(error)}`);
       return false;
     }
   try {
-    await getFileReader().atomicWrite(daemonStatusPath(), jsonStringify(r, null, 2));
+    await getFileReader().atomicWrite(daemonStatusPath(), jsonStringify(status, null, 2));
     return true;
   } catch (error) {
     logForDebugging(`writeDaemonStatus: ${errorMessage(error)}`);
@@ -61,8 +61,8 @@ async function writeDaemonStatus(workers, storageV5) {
 async function removeDaemonStatus(storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
     try {
-      let n = await storageV5.delete(daemonStatusKey());
-      if (!n.ok) logForDebugging(`removeDaemonStatus: ${n.error.code}`);
+      let result = await storageV5.delete(daemonStatusKey());
+      if (!result.ok) logForDebugging(`removeDaemonStatus: ${result.error.code}`);
     } catch (error) {
       logForDebugging(`removeDaemonStatus: ${errorMessage(error)}`);
     }
@@ -76,37 +76,43 @@ async function removeDaemonStatus(storageV5) {
 /**
  * 读取守护进程状态文件 daemon.status.json；本模块也负责写入与删除。
  */
-async function readDaemonStatus(s) {
-  let n;
-  if (isStorageV5Enabled() && s !== undefined) {
-    let i;
+async function readDaemonStatus(storageV5) {
+  let text;
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
+    let readResult;
     try {
-      i = await s.readText([daemonStatusKey()]);
+      readResult = await storageV5.readText([daemonStatusKey()]);
     } catch {
       return null;
     }
-    if (!i.ok) return null;
-    let c = i.value.items[0];
-    if (!c.found) return null;
-    n = c.value;
+    if (!readResult.ok) return null;
+    let item = readResult.value.items[0];
+    if (!item.found) return null;
+    text = item.value;
   } else
     try {
-      n = await getFileReader().read(daemonStatusPath());
+      text = await getFileReader().read(daemonStatusPath());
     } catch {
       return null;
     }
-  let r = safeParseJSON(n, false);
-  if (!r || typeof r !== "object") return null;
-  let e = r;
-  if (typeof e.supervisorPid !== "number" || typeof e.workers !== "object" || e.workers === null) return null;
+  let status = safeParseJSON(text, false);
+  if (!status || typeof status !== "object") return null;
+  let parsed = status;
+  if (
+    typeof parsed.supervisorPid !== "number" ||
+    typeof parsed.workers !== "object" ||
+    parsed.workers === null
+  )
+    return null;
   try {
-    process.kill(e.supervisorPid, 0);
+    process.kill(parsed.supervisorPid, 0);
   } catch {
     return null;
   }
-  let supervisorProcStart = typeof e.supervisorProcStart === "string" ? e.supervisorProcStart : undefined;
-  if (!(await isSameProcessAsync(e.supervisorPid, supervisorProcStart))) return null;
-  return r;
+  let supervisorProcStart =
+    typeof parsed.supervisorProcStart === "string" ? parsed.supervisorProcStart : undefined;
+  if (!(await isSameProcessAsync(parsed.supervisorPid, supervisorProcStart))) return null;
+  return status;
 }
 //@ chunk-nbg7qs8b.js:1932-1961 placement
 /**
@@ -121,23 +127,23 @@ var DAEMON_STATUS_ENTRIES = 32;
  * 从守护进程状态读服务的文件夹
  */
 function readServedFoldersFromStatus(daemonStatus) {
-  let n = [];
-  let r = u({
-    servedFolder: u({
-      dir: string().min(1).max(MAX_DAEMON_STATUS_BYTES),
+  let folders = [];
+  let workerSchema = objectSchema({
+    servedFolder: objectSchema({
+      dir: stringSchema().min(1).max(MAX_DAEMON_STATUS_BYTES),
       sessions: int().positive().max(SERVED_SESSIONS_MAX),
     }),
   });
-  for (let e of Object.values(daemonStatus?.workers ?? {})) {
-    let a = r.safeParse(e);
-    if (a.success) n.push(a.data.servedFolder);
+  for (let worker of Object.values(daemonStatus?.workers ?? {})) {
+    let parsed = workerSchema.safeParse(worker);
+    if (parsed.success) folders.push(parsed.data.servedFolder);
   }
-  return n;
+  return folders;
 }
 //@ chunk-nbg7qs8b.js:2180-2313 placement
-async function readServedFolders(pid, n) {
+async function readServedFolders(pid, storageV5) {
   try {
-    let daemonStatus = await readDaemonStatus(n);
+    let daemonStatus = await readDaemonStatus(storageV5);
     return daemonStatus?.supervisorPid === pid ? readServedFoldersFromStatus(daemonStatus) : [];
   } catch (error) {
     logForDebugging(`readServedFolders: ${errorMessage(error)}`);
@@ -145,15 +151,17 @@ async function readServedFolders(pid, n) {
   return [];
 }
 //@ chunk-nbg7qs8b.js:2313-2530 placement
-function servingToolsLines(s) {
-  let mapped = s
+function servingToolsLines(folders) {
+  let mapped = folders
     .slice(0, DAEMON_STATUS_ENTRIES)
     .map(
       ({ dir, sessions }) =>
         `serving tools: ${sessions} ${plural(sessions, "cloud session")} in ${truncateWithEllipsis(cleanForDisplay(dir), DAEMON_STATUS_TTL_MS)}`,
     );
-  let e = s.length - mapped.length;
-  return e > 0 ? mapped.concat(`serving tools: and ${e} more ${plural(e, "folder")}`) : mapped;
+  let omittedCount = folders.length - mapped.length;
+  return omittedCount > 0
+    ? mapped.concat(`serving tools: and ${omittedCount} more ${plural(omittedCount, "folder")}`)
+    : mapped;
 }
 export {
   readServedFolders,

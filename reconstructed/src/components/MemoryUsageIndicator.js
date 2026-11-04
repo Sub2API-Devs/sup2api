@@ -8,10 +8,10 @@
  * pieces: chunk-18hwfzwa.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useMemoryUsage } from "../hooks/useMemoryUsage.js";
 import { isRemoteSessionAvailable } from "../remote/remoteMode.js";
-import { zt } from "../../vendor/react/cjs/react.production.js";
+import { useLayoutEffect } from "../../vendor/react/cjs/react.production.js";
 import { formatFileSize } from "../utils/format.js";
 import { isFullscreenEnvEnabled } from "../utils/fullscreen.js";
 import {
@@ -22,66 +22,66 @@ import { Box, Text } from "../ink/components/Text.js";
 
 //@ chunk-18hwfzwa.js:783611-784345 fingerprint = MemoryUsageIndicator (0.397)
 function MemoryUsageIndicator(props) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { tier, onShowingChange } = props;
   let memoryUsage = useMemoryUsage("critical", tier === "critical");
-  let Re;
+  let isHidden;
   if ($[0] !== memoryUsage || $[1] !== tier) {
-    Re = isRemoteSessionAvailable() || !memoryUsage || memoryUsage.status !== tier;
+    isHidden = isRemoteSessionAvailable() || !memoryUsage || memoryUsage.status !== tier;
     $[0] = memoryUsage;
     $[1] = tier;
-    $[2] = Re;
-  } else Re = $[2];
-  let Be = Re;
-  let He;
-  let We;
-  if ($[3] !== Be || $[4] !== onShowingChange) {
-    He = () => {
-      onShowingChange?.(!Be);
+    $[2] = isHidden;
+  } else isHidden = $[2];
+  let isHiddenCopy = isHidden;
+  let reportShowingEffect;
+  let reportShowingDeps;
+  if ($[3] !== isHiddenCopy || $[4] !== onShowingChange) {
+    reportShowingEffect = () => {
+      onShowingChange?.(!isHiddenCopy);
       return () => onShowingChange?.(false);
     };
-    We = [Be, onShowingChange];
-    $[3] = Be;
+    reportShowingDeps = [isHiddenCopy, onShowingChange];
+    $[3] = isHiddenCopy;
     $[4] = onShowingChange;
-    $[5] = He;
-    $[6] = We;
+    $[5] = reportShowingEffect;
+    $[6] = reportShowingDeps;
   } else {
-    He = $[5];
-    We = $[6];
+    reportShowingEffect = $[5];
+    reportShowingDeps = $[6];
   }
-  zt(He, We);
-  if (Be) {
+  useLayoutEffect(reportShowingEffect, reportShowingDeps);
+  if (isHiddenCopy) {
     return null;
   }
-  let ze;
+  let heapUsedLabel;
   if ($[7] !== memoryUsage.heapUsed) {
-    ze = formatFileSize(memoryUsage.heapUsed);
+    heapUsedLabel = formatFileSize(memoryUsage.heapUsed);
     $[7] = memoryUsage.heapUsed;
-    $[8] = ze;
-  } else ze = $[8];
-  let Xe = ze;
+    $[8] = heapUsedLabel;
+  } else heapUsedLabel = $[8];
+  let heapUsedText = heapUsedLabel;
   if (tier === "high") {
     return null;
   }
-  let rt = !isFullscreenEnvEnabled();
-  let kt;
-  if ($[9] !== Xe) {
-    kt = jsxProd_default(Box, {
+  let canSuggestCompact = !isFullscreenEnvEnabled();
+  let warningElement;
+  if ($[9] !== heapUsedText) {
+    warningElement = jsxProd_default(Box, {
       children: jsxProd_default_2(Text, {
         color: "error",
         wrap: "truncate",
         children: [
           "Critical memory usage (",
-          Xe,
+          heapUsedText,
           ") \u2014 restart and resume with claude --continue",
-          rt ? ", or run /compact" : "",
+          canSuggestCompact ? ", or run /compact" : "",
           "",
         ],
       }),
     });
-    $[9] = Xe;
-    $[10] = kt;
-  } else kt = $[10];
-  return kt;
+    $[9] = heapUsedText;
+    $[10] = warningElement;
+  } else warningElement = $[10];
+  return warningElement;
 }
 export { MemoryUsageIndicator };

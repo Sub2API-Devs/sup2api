@@ -21,35 +21,43 @@ import { uniq } from "../utils/collections.js";
 import { getReservedShortcuts } from "./reservedShortcuts.js";
 import { isKeybindingBlockArray } from "./loadUserBindings.js";
 import { logForDebugging } from "../utils/debug.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-x1mwqya5.js:3103-3318 affinity = normalizeStep (0.875)
 /**
  * validate.ts 用的常量：合法上下文列表、修饰键名与别名（ctrl/control、alt/opt/option、shift、meta、cmd/command/super/win）、Keystroke 的修饰位字段、报错时最多列出 3 个非修饰键、引用按键串最长 80 字符。
  */
-var VALID_CONTEXTS = KEYBINDING_CONTEXTS;
-var MODIFIER_NAMES = [
-  {
-    name: "ctrl",
-    aliases: ["control"],
-  },
-  {
-    name: "alt",
-    aliases: ["opt", "option"],
-  },
-  {
-    name: "shift",
-  },
-  {
-    name: "meta",
-  },
-  {
-    name: "cmd",
-    aliases: ["command", "super", "win"],
-  },
-];
-var MODIFIER_FLAGS = ["ctrl", "alt", "shift", "meta", "super"];
-var MAX_LISTED_NON_MODIFIERS = 3;
-var MAX_QUOTED_KEY_LENGTH = 80;
+var VALID_CONTEXTS; // deferred: uses KEYBINDING_CONTEXTS (./schema.js) of its import cycle while loading; runs once the cycle is complete
+var MODIFIER_NAMES;
+var MODIFIER_FLAGS;
+var MAX_LISTED_NON_MODIFIERS;
+var MAX_QUOTED_KEY_LENGTH;
+deferInit("chunk-x1mwqya5.js:3103", () => {
+  VALID_CONTEXTS = KEYBINDING_CONTEXTS;
+  MODIFIER_NAMES = [
+    {
+      name: "ctrl",
+      aliases: ["control"],
+    },
+    {
+      name: "alt",
+      aliases: ["opt", "option"],
+    },
+    {
+      name: "shift",
+    },
+    {
+      name: "meta",
+    },
+    {
+      name: "cmd",
+      aliases: ["command", "super", "win"],
+    },
+  ];
+  MODIFIER_FLAGS = ["ctrl", "alt", "shift", "meta", "super"];
+  MAX_LISTED_NON_MODIFIERS = 3;
+  MAX_QUOTED_KEY_LENGTH = 80;
+});
 //@ chunk-x1mwqya5.js:3318-3355 file-local
 function isValidContext(value) {
   return VALID_CONTEXTS.includes(value);
@@ -61,16 +69,16 @@ function isValidContext(value) {
 function validateKeystroke(key, contextName) {
   let trimmed = key.trim();
   let steps = key === " " ? [] : trimmed.split(/\s+/);
-  let hasEmptyPart = key !== " " && key.split("+").some((B) => !B.trim());
+  let hasEmptyPart = key !== " " && key.split("+").some((part) => !part.trim());
   let hasSpaceAroundPlus = /\s\+|\+\s/.test(trimmed) && steps.some((step) => parseKeystroke(step).key === "");
   if (hasEmptyPart || hasSpaceAroundPlus) {
-    let B = truncateWithCount(key, MAX_QUOTED_KEY_LENGTH);
+    let quotedKey = truncateWithCount(key, MAX_QUOTED_KEY_LENGTH);
     return {
       type: "parse_error",
       severity: "error",
       message: hasEmptyPart
-        ? `Empty key part in "${B}"`
-        : `A space next to "+" splits "${B}" into separate presses, and one of them has no key`,
+        ? `Empty key part in "${quotedKey}"`
+        : `A space next to "+" splits "${quotedKey}" into separate presses, and one of them has no key`,
       key,
       suggestion: hasEmptyPart ? 'Remove extra "+" characters' : 'Remove the spaces next to "+"',
     };
@@ -83,8 +91,8 @@ function validateKeystroke(key, contextName) {
     let lastIndex = parts.findLastIndex((part) => parseKeystroke(part).key !== "");
     let parsedStep = parseKeystroke(step);
     let fixedParts = [];
-    for (let [R, part] of parts.entries()) {
-      if (R === lastIndex || parseKeystroke(part).key === "") {
+    for (let [partIndex, part] of parts.entries()) {
+      if (partIndex === lastIndex || parseKeystroke(part).key === "") {
         fixedParts.push(part);
         continue;
       }
@@ -95,7 +103,7 @@ function validateKeystroke(key, contextName) {
         continue;
       }
       let modifierKeystroke = parseKeystroke(canonicalModifier);
-      if (MODIFIER_FLAGS.some((A) => parsedStep[A] && modifierKeystroke[A])) continue;
+      if (MODIFIER_FLAGS.some((flag) => parsedStep[flag] && modifierKeystroke[flag])) continue;
       fixedParts.push(canonicalModifier);
       for (let part of MODIFIER_FLAGS) parsedStep[part] ||= modifierKeystroke[part];
     }
@@ -104,14 +112,16 @@ function validateKeystroke(key, contextName) {
   if (nonModifierParts.length === 0) return null;
   let parsed = uniq(nonModifierParts);
   let listedCount = parsed.length > MAX_LISTED_NON_MODIFIERS + 1 ? MAX_LISTED_NON_MODIFIERS : parsed.length;
-  let mapped = parsed.slice(0, listedCount).map((B) => `"${truncateWithCount(B, MAX_QUOTED_KEY_LENGTH)}"`);
+  let mapped = parsed
+    .slice(0, listedCount)
+    .map((part) => `"${truncateWithCount(part, MAX_QUOTED_KEY_LENGTH)}"`);
   if (parsed.length > listedCount) mapped.push(`${parsed.length - listedCount} more`);
-  let C = new Intl.ListFormat("en", {
+  let partsText = new Intl.ListFormat("en", {
     type: "conjunction",
   }).format(mapped);
-  let N = new Intl.ListFormat("en", {
+  let modifierNamesText = new Intl.ListFormat("en", {
     type: "disjunction",
-  }).format(MODIFIER_NAMES.map((B) => B.name));
+  }).format(MODIFIER_NAMES.map((modifier) => modifier.name));
   let verbPhrase = parsed.length === 1 ? "is not a modifier" : "are not modifiers";
   let contextSuffix = contextName ? ` in ${contextName}` : "";
   let quotedKey = truncateWithCount(key, MAX_QUOTED_KEY_LENGTH);
@@ -120,12 +130,12 @@ function validateKeystroke(key, contextName) {
   return {
     type: "parse_error",
     severity: "error",
-    message: `${C} ${verbPhrase}, so "${quotedKey}"${contextSuffix} applies to "${effectiveChord}" instead`,
+    message: `${partsText} ${verbPhrase}, so "${quotedKey}"${contextSuffix} applies to "${effectiveChord}" instead`,
     key,
     suggestion:
       allSuggestible && suggestion.length <= MAX_QUOTED_KEY_LENGTH
         ? `Did you mean "${suggestion}"?`
-        : `Use ${N} before "+"; for keys pressed one after another, put a space between them, as in "ctrl+x ctrl+s"`,
+        : `Use ${modifierNamesText} before "+"; for keys pressed one after another, put a space between them, as in "ctrl+x ctrl+s"`,
   };
 }
 //@ chunk-x1mwqya5.js:4825-6822 fingerprint = validateBlock (0.959)
@@ -142,8 +152,8 @@ function validateBlock(block, blockIndex) {
     });
     return warnings;
   }
-  let s = block;
-  let rawContext = s.context;
+  let objectBlock = block;
+  let rawContext = objectBlock.context;
   let contextName;
   if (typeof rawContext !== "string")
     warnings.push({
@@ -160,7 +170,7 @@ function validateBlock(block, blockIndex) {
       suggestion: `Valid contexts: ${VALID_CONTEXTS.join(", ")}`,
     });
   else contextName = rawContext;
-  if (typeof s.bindings !== "object" || s.bindings === null) {
+  if (typeof objectBlock.bindings !== "object" || objectBlock.bindings === null) {
     warnings.push({
       type: "parse_error",
       severity: "error",
@@ -168,7 +178,7 @@ function validateBlock(block, blockIndex) {
     });
     return warnings;
   }
-  let bindings = s.bindings;
+  let bindings = objectBlock.bindings;
   for (let [key, action] of Object.entries(bindings)) {
     let keyError = validateKeystroke(key, contextName);
     if (keyError) {
@@ -235,19 +245,19 @@ function validateBlock(block, blockIndex) {
 function suggestAction(action) {
   let bestAction;
   let bestDistance = 1 / 0;
-  for (let h of KEYBINDING_ACTIONS) {
-    let w = levenshteinDistance(action.toLowerCase(), h.toLowerCase());
-    if (w < bestDistance) {
-      bestDistance = w;
-      bestAction = h;
+  for (let candidate of KEYBINDING_ACTIONS) {
+    let distance = levenshteinDistance(action.toLowerCase(), candidate.toLowerCase());
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      bestAction = candidate;
     }
   }
   if (bestAction && bestDistance <= 2) return `Did you mean "${bestAction}"?`;
   let namespace = firstLineOf(action, ":");
-  let filtered = KEYBINDING_ACTIONS.filter((h) => h.startsWith(`${namespace}:`));
+  let filtered = KEYBINDING_ACTIONS.filter((action) => action.startsWith(`${namespace}:`));
   if (filtered.length > 0) return `Valid "${namespace}:" actions: ${filtered.join(", ")}`;
-  return `Valid action namespaces: ${uniq(KEYBINDING_ACTIONS.map((h) => firstLineOf(h, ":")))
-    .map((h) => `${h}:`)
+  return `Valid action namespaces: ${uniq(KEYBINDING_ACTIONS.map((action) => firstLineOf(action, ":")))
+    .map((prefix) => `${prefix}:`)
     .join(", ")}`;
 }
 //@ chunk-x1mwqya5.js:7174-7413 layout
@@ -256,15 +266,15 @@ function levenshteinDistance(a, b) {
     {
       length: b.length + 1,
     },
-    (s, l) => l,
+    (value, index) => index,
   );
   for (let k = 1; k <= a.length; k++) {
-    let l = [k];
+    let row = [k];
     for (let k_2 = 1; k_2 <= b.length; k_2++) {
-      let h = a[k - 1] === b[k_2 - 1] ? 0 : 1;
-      l[k_2] = Math.min((prevRow[k_2] ?? 0) + 1, (l[k_2 - 1] ?? 0) + 1, (prevRow[k_2 - 1] ?? 0) + h);
+      let cost = a[k - 1] === b[k_2 - 1] ? 0 : 1;
+      row[k_2] = Math.min((prevRow[k_2] ?? 0) + 1, (row[k_2 - 1] ?? 0) + 1, (prevRow[k_2 - 1] ?? 0) + cost);
     }
-    prevRow = l;
+    prevRow = row;
   }
   return prevRow[b.length] ?? 0;
 }
@@ -380,7 +390,7 @@ function parseUserBindings(blocks) {
   let bindings = [];
   for (let block of blocks)
     for (let [key, action] of Object.entries(block.bindings)) {
-      let chord = key.split(" ").map((h) => parseKeystroke(h));
+      let chord = key.split(" ").map((step) => parseKeystroke(step));
       bindings.push({
         chord,
         action,
@@ -414,9 +424,9 @@ function validateBindings(userBlocks, _parsedBindings) {
  * 把每条校验警告写调试日志（[keybindings] [severity] message — suggestion）。
  */
 function logKeybindingWarnings(warning) {
-  for (let r of warning)
+  for (let warning_2 of warning)
     logForDebugging(
-      `[keybindings] [${r.severity}] ${r.message}${r.suggestion ? ` \u2014 ${r.suggestion}` : ""}`,
+      `[keybindings] [${warning_2.severity}] ${warning_2.message}${warning_2.suggestion ? ` \u2014 ${warning_2.suggestion}` : ""}`,
       {
         level: "warn",
       },

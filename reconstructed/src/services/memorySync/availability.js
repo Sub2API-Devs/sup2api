@@ -67,11 +67,11 @@ function areMemoryToolsEnabled() {
 /**
  * 决定自动记忆以 tools 还是 files 形式提供：远程模式、自动记忆关闭、有目录覆盖等为 files；否则按开关与状态锁定结果。
  */
-function getMemoryToolsShape(e) {
+function getMemoryToolsShape(latchAllowed) {
   if (getIsRemoteMode()) return "files";
   let memoryToolsShapeLatch = getMemoryToolsShapeLatch();
   if (!isAutoMemoryEnabledIgnoringPause()) {
-    if (e && memoryToolsShapeLatch === null) setMemoryToolsShapeLatch(false);
+    if (latchAllowed && memoryToolsShapeLatch === null) setMemoryToolsShapeLatch(false);
     return "files";
   }
   if (memoryToolsShapeLatch !== null) return memoryToolsShapeLatch ? "tools" : "files";
@@ -84,12 +84,12 @@ function getMemoryToolsShape(e) {
     setMemoryToolsShapeLatch(false);
     return "files";
   }
-  let r =
+  let toolsShapeWanted =
     getFeatureValue_CACHED_MAY_BE_STALE("tengu_linen_orbit", false) ||
     getOrgMemoryPolicyState() !== "closed" ||
     isOrgMemoryEligible();
-  if (r || e) setMemoryToolsShapeLatch(r);
-  return r ? "tools" : "files";
+  if (toolsShapeWanted || latchAllowed) setMemoryToolsShapeLatch(toolsShapeWanted);
+  return toolsShapeWanted ? "tools" : "files";
 }
 //@ chunk-82kqcve8.js:64241-64341 placement
 /**
@@ -145,8 +145,8 @@ function orgMemoryIdentity() {
 /**
  * 判断某存储是否可写（两端 rw 且用户已选择写入）。
  */
-function isStoreWritable(e) {
-  return e.mode === "rw" && grantedModeFor(e.path) === "rw" && isOrgMemoryWriteOptedIn();
+function isStoreWritable(store) {
+  return store.mode === "rw" && grantedModeFor(store.path) === "rw" && isOrgMemoryWriteOptedIn();
 }
 //@ chunk-82kqcve8.js:121650-121796 placement
 function memorySyncAvailability() {

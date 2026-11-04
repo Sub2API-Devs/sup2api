@@ -69,231 +69,266 @@ import { sessionIdBody, isSafeBridgeId } from "../../bridge/sessionIdCompat.js";
  */
 function findRewindPoint(
   messages,
-  targetMessageUuid,
+  targetUuid,
   lastSeenUserMessageUuid,
-  { rowsOffDisk: s, allowSummarizedTarget: h = false, allowAssistantTarget: y = false } = {},
+  { rowsOffDisk, allowSummarizedTarget = false, allowAssistantTarget = false } = {},
 ) {
-  if (s !== undefined) {
-    let rewindPoint = findRewindPoint(messages, targetMessageUuid, lastSeenUserMessageUuid, {
-      allowSummarizedTarget: h,
-      allowAssistantTarget: y,
+  if (rowsOffDisk !== undefined) {
+    let rewindPoint = findRewindPoint(messages, targetUuid, lastSeenUserMessageUuid, {
+      allowSummarizedTarget,
+      allowAssistantTarget,
     });
-    if ("cut" in rewindPoint && isRewindCutPersistable(messages, rewindPoint.cut, s)) return rewindPoint;
+    if ("cut" in rewindPoint && isRewindCutPersistable(messages, rewindPoint.cut, rowsOffDisk))
+      return rewindPoint;
     let lastIndex = messages.findLastIndex(isCompactBoundaryMessage);
-    let We =
+    let slicedPoint =
       lastIndex > 0
-        ? findRewindPoint(messages.slice(lastIndex), targetMessageUuid, lastSeenUserMessageUuid, {
-            allowSummarizedTarget: h,
+        ? findRewindPoint(messages.slice(lastIndex), targetUuid, lastSeenUserMessageUuid, {
+            allowSummarizedTarget,
           })
         : undefined;
-    if (We !== undefined && "cut" in We) {
-      let Lt = {
-        ...We.cut,
-        index: We.cut.index + lastIndex,
+    if (slicedPoint !== undefined && "cut" in slicedPoint) {
+      let shiftedCut = {
+        ...slicedPoint.cut,
+        index: slicedPoint.cut.index + lastIndex,
       };
-      if (isRewindCutPersistable(messages, Lt, s))
+      if (isRewindCutPersistable(messages, shiftedCut, rowsOffDisk))
         return {
-          cut: Lt,
+          cut: shiftedCut,
         };
     }
     if ("refuse" in rewindPoint) return rewindPoint;
-    let wt = [rewindPoint, We].some(
-      (Lt) => Lt !== undefined && "cut" in Lt && Lt.cut.resolution !== undefined,
+    let missReason = [rewindPoint, slicedPoint].some(
+      (point) => point !== undefined && "cut" in point && point.cut.resolution !== undefined,
     )
       ? "cut_rows_not_on_disk"
-      : !rewindPoint.cut.assistantTarget && We !== undefined && "refuse" in We
-        ? We.summarizedTargetMiss
+      : !rewindPoint.cut.assistantTarget && slicedPoint !== undefined && "refuse" in slicedPoint
+        ? slicedPoint.summarizedTargetMiss
         : undefined;
     return {
       refuse: "target_not_found",
-      ...(wt !== undefined && {
-        summarizedTargetMiss: wt,
+      ...(missReason !== undefined && {
+        summarizedTargetMiss: missReason,
       }),
       ...(rewindPoint.cut.assistantTarget && {
         assistantTarget: true,
       }),
     };
   }
-  let rewindTarget = findRewindTarget(messages, targetMessageUuid, {
-    allowAssistantTarget: y,
+  let rewindTarget = findRewindTarget(messages, targetUuid, {
+    allowAssistantTarget,
   });
-  let R = rewindTarget !== null && messages[rewindTarget.index]?.type === "assistant";
-  let w = R && !isAwaitingToolResultAnchor(messages, rewindTarget.index) ? null : rewindTarget;
-  let P = R && w !== null;
-  let L = w === null && h ? checkRewindKeptRows(messages, targetMessageUuid) : undefined;
-  let q = L !== undefined && "index" in L ? L : undefined;
-  let x =
-    q !== undefined
+  let targetIsAssistant = rewindTarget !== null && messages[rewindTarget.index]?.type === "assistant";
+  let point =
+    targetIsAssistant && !isAwaitingToolResultAnchor(messages, rewindTarget.index) ? null : rewindTarget;
+  let assistantTarget = targetIsAssistant && point !== null;
+  let keptRowsCheck =
+    point === null && allowSummarizedTarget ? checkRewindKeptRows(messages, targetUuid) : undefined;
+  let summarizedResolution =
+    keptRowsCheck !== undefined && "index" in keptRowsCheck ? keptRowsCheck : undefined;
+  let target =
+    summarizedResolution !== undefined
       ? {
-          ...q,
+          ...summarizedResolution,
           prefillText: null,
         }
-      : (w ?? findStandInTarget(messages, targetMessageUuid));
-  let G = x ? x.index : -1;
-  let Z =
+      : (point ?? findStandInTarget(messages, targetUuid));
+  let targetIndex = target ? target.index : -1;
+  let lastSeenPrefix =
     typeof lastSeenUserMessageUuid === "string" ? lastSeenUserMessageUuid.slice(0, UUID_PREFIX_LENGTH) : null;
-  let re = (He, Xe) =>
-    Xe !== null && getMessageIdentityUuids(He).some((We) => We.slice(0, UUID_PREFIX_LENGTH) === Xe);
-  let index = messages.findIndex((He) => re(He, Z));
-  let Ue =
+  let matchesLastSeen = (message, prefix) =>
+    prefix !== null &&
+    getMessageIdentityUuids(message).some((uuid) => uuid.slice(0, UUID_PREFIX_LENGTH) === prefix);
+  let index = messages.findIndex((message) => matchesLastSeen(message, lastSeenPrefix));
+  let lastSeenIndex =
     index >= 0
       ? index
-      : messages.findIndex((He) =>
-          getDroppedPromptUuids(He).some((Xe) => Xe.slice(0, UUID_PREFIX_LENGTH) === Z),
+      : messages.findIndex((message) =>
+          getDroppedPromptUuids(message).some((uuid) => uuid.slice(0, UUID_PREFIX_LENGTH) === lastSeenPrefix),
         );
   let filtered = messages.filter(
-    (He, Xe) =>
-      Xe > G &&
-      Xe > Ue &&
-      !re(He, Z) &&
-      !re(He, targetMessageUuid.slice(0, UUID_PREFIX_LENGTH)) &&
-      isUserPromptAt(messages, Xe, Z !== null),
+    (message, index) =>
+      index > targetIndex &&
+      index > lastSeenIndex &&
+      !matchesLastSeen(message, lastSeenPrefix) &&
+      !matchesLastSeen(message, targetUuid.slice(0, UUID_PREFIX_LENGTH)) &&
+      isUserPromptAt(messages, index, lastSeenPrefix !== null),
   );
-  let nt = filtered.length > 0 ? indexByUuidPrefix(messages, Ue) : undefined;
-  let ie = nt !== undefined && filtered.some((He) => !hasMatchingPrefill(nt, He));
-  if (G < 0)
+  let indexByPrefix = filtered.length > 0 ? indexByUuidPrefix(messages, lastSeenIndex) : undefined;
+  let unseenLaterTurn =
+    indexByPrefix !== undefined && filtered.some((message) => !hasMatchingPrefill(indexByPrefix, message));
+  if (targetIndex < 0)
     return {
       refuse: "target_not_found",
-      ...(L !== undefined &&
-        "miss" in L && {
-          summarizedTargetMiss: L.miss,
+      ...(keptRowsCheck !== undefined &&
+        "miss" in keptRowsCheck && {
+          summarizedTargetMiss: keptRowsCheck.miss,
         }),
     };
-  if (ie) return rewindRefusal_2(Z === null ? "stale_target" : "unseen_later_turn", q !== undefined, P);
-  if (countToolCallsSince(messages, G)) return rewindRefusal_2("poll_tool_result_target", q !== undefined);
-  if (hasCronToolUse(messages, G)) return rewindRefusal_2("target_splits_tool_call", q !== undefined, P);
-  if (hasPollEventsAttachmentSince(messages, G))
-    return rewindRefusal_2("delivered_poll_events_in_range", q !== undefined, P);
-  let Se = messages[G];
-  let prefillText = w?.wordsNotKept || standInSourceUuid(Se) !== undefined ? null : (x?.prefillText ?? "");
-  let { persistAnchor, precedingAssistantUuid } = findPersistAnchor(messages, G);
-  if (q !== undefined && persistAnchor !== q.anchorUuid)
+  if (unseenLaterTurn)
+    return rewindRefusal_2(
+      lastSeenPrefix === null ? "stale_target" : "unseen_later_turn",
+      summarizedResolution !== undefined,
+      assistantTarget,
+    );
+  if (countToolCallsSince(messages, targetIndex))
+    return rewindRefusal_2("poll_tool_result_target", summarizedResolution !== undefined);
+  if (hasCronToolUse(messages, targetIndex))
+    return rewindRefusal_2("target_splits_tool_call", summarizedResolution !== undefined, assistantTarget);
+  if (hasPollEventsAttachmentSince(messages, targetIndex))
+    return rewindRefusal_2(
+      "delivered_poll_events_in_range",
+      summarizedResolution !== undefined,
+      assistantTarget,
+    );
+  let targetMessage = messages[targetIndex];
+  let prefillText =
+    point?.wordsNotKept || standInSourceUuid(targetMessage) !== undefined
+      ? null
+      : (target?.prefillText ?? "");
+  let { persistAnchor, precedingAssistantUuid } = findPersistAnchor(messages, targetIndex);
+  if (summarizedResolution !== undefined && persistAnchor !== summarizedResolution.anchorUuid)
     return {
       refuse: "target_not_found",
       summarizedTargetMiss: "anchor_not_as_placed",
     };
   return {
     cut: {
-      index: G,
-      target: Se,
-      echoUuid: x?.uuid ?? targetMessageUuid,
+      index: targetIndex,
+      target: targetMessage,
+      echoUuid: target?.uuid ?? targetUuid,
       prefillText,
       persistAnchor,
-      precedingAssistantUuid: q !== undefined ? null : precedingAssistantUuid,
-      ...(q !== undefined && {
+      precedingAssistantUuid: summarizedResolution !== undefined ? null : precedingAssistantUuid,
+      ...(summarizedResolution !== undefined && {
         resolution: "after_summary",
-        keptRows: q.keptRows,
+        keptRows: summarizedResolution.keptRows,
       }),
-      ...(P && {
+      ...(assistantTarget && {
         assistantTarget: true,
       }),
     },
   };
 }
 //@ chunk-tyg7f3ek.js:578104-578214 placement
-function indexByUuidPrefix(e, n) {
-  let r = new Map();
-  for (let s = n; s >= 0; s--)
-    for (let h of getMessageIdentityUuids(e[s])) r.set(h.slice(0, UUID_PREFIX_LENGTH), e[s]);
-  return r;
+function indexByUuidPrefix(messages, fromIndex) {
+  let index = new Map();
+  for (let cursor = fromIndex; cursor >= 0; cursor--)
+    for (let uuid of getMessageIdentityUuids(messages[cursor]))
+      index.set(uuid.slice(0, UUID_PREFIX_LENGTH), messages[cursor]);
+  return index;
 }
 //@ chunk-tyg7f3ek.js:578214-578401 placement
-function hasMatchingPrefill(e, n) {
-  let r = rewindPrefillText(n);
-  return getMessageIdentityUuids(n).some((s) => {
-    let h = e.get(s.slice(0, UUID_PREFIX_LENGTH));
-    let y = h === undefined ? undefined : rewindPrefillText(h);
-    return r !== undefined && y !== undefined && y.text === r.text && y.otherBlocks === r.otherBlocks;
+function hasMatchingPrefill(index, message) {
+  let candidatePrefill = rewindPrefillText(message);
+  return getMessageIdentityUuids(message).some((uuid) => {
+    let indexedMessage = index.get(uuid.slice(0, UUID_PREFIX_LENGTH));
+    let indexedPrefill = indexedMessage === undefined ? undefined : rewindPrefillText(indexedMessage);
+    return (
+      candidatePrefill !== undefined &&
+      indexedPrefill !== undefined &&
+      indexedPrefill.text === candidatePrefill.text &&
+      indexedPrefill.otherBlocks === candidatePrefill.otherBlocks
+    );
   });
 }
 //@ chunk-tyg7f3ek.js:578401-578693 placement
-function rewindPrefillText(e) {
-  let n =
-    e.type === "user"
-      ? e.message.content
-      : e.type === "attachment" && e.attachment.type === "queued_command"
-        ? e.attachment.prompt
+function rewindPrefillText(row) {
+  let content =
+    row.type === "user"
+      ? row.message.content
+      : row.type === "attachment" && row.attachment.type === "queued_command"
+        ? row.attachment.prompt
         : undefined;
-  let r = n === undefined ? undefined : getContentText(n)?.trim();
-  if (n === undefined || r === undefined || r === "") return;
+  let text = content === undefined ? undefined : getContentText(content)?.trim();
+  if (content === undefined || text === undefined || text === "") return;
   return {
-    text: r,
-    otherBlocks: typeof n === "string" ? 0 : count(n, (s) => s.type !== "text"),
+    text,
+    otherBlocks: typeof content === "string" ? 0 : count(content, (block) => block.type !== "text"),
   };
 }
 //@ chunk-tyg7f3ek.js:578693-578845 placement
-function rewindRefusal_2(e, n, r = false) {
-  return n
+function rewindRefusal_2(reason, summarized, assistantTarget = false) {
+  return summarized
     ? {
-        refuse: e === "target_splits_tool_call" ? "target_not_found" : e,
-        summarizedTargetMiss: e,
+        refuse: reason === "target_splits_tool_call" ? "target_not_found" : reason,
+        summarizedTargetMiss: reason,
       }
     : {
-        refuse: e,
-        ...(r && {
+        refuse: reason,
+        ...(assistantTarget && {
           assistantTarget: true,
         }),
       };
 }
 //@ chunk-tyg7f3ek.js:578845-579403 placement
-function reportRewindRefusal(e, n) {
-  if ("refuse" in e) {
-    if (e.summarizedTargetMiss !== undefined)
-      logFeatureSad("rewind_summarized_target", e.summarizedTargetMiss);
-    if (e.assistantTarget) logFeatureSad("rewind_assistant_target", e.refuse);
-  } else if (e.cut.assistantTarget) {
-    if (n === "rewound") logFeatureOk("rewind_assistant_target");
-    else logFeatureSad("rewind_assistant_target", n);
-  } else if (e.cut.resolution !== undefined) {
-    if (n === "rewound")
+function reportRewindRefusal(point, outcome) {
+  if ("refuse" in point) {
+    if (point.summarizedTargetMiss !== undefined)
+      logFeatureSad("rewind_summarized_target", point.summarizedTargetMiss);
+    if (point.assistantTarget) logFeatureSad("rewind_assistant_target", point.refuse);
+  } else if (point.cut.assistantTarget) {
+    if (outcome === "rewound") logFeatureOk("rewind_assistant_target");
+    else logFeatureSad("rewind_assistant_target", outcome);
+  } else if (point.cut.resolution !== undefined) {
+    if (outcome === "rewound")
       logFeatureOk("rewind_summarized_target", {
-        kept_rows: e.cut.keptRows ?? 0,
+        kept_rows: point.cut.keptRows ?? 0,
       });
-    else logFeatureSad("rewind_summarized_target", n);
-  } else if (n === "rewound" && standInSourceUuid(e.cut.target) !== undefined) {
+    else logFeatureSad("rewind_summarized_target", outcome);
+  } else if (outcome === "rewound" && standInSourceUuid(point.cut.target) !== undefined) {
     logFeatureOk("rewind_stand_in_served");
     logForDiagnosticsNoPII("info", "cli_rewind_stand_in_served");
   }
 }
 //@ chunk-tyg7f3ek.js:579403-580030 placement
-function isRewindCutPersistable(e, n, r) {
-  if (r === undefined) return true;
-  let s = [];
-  let lastIndex = e.findLastIndex(
-    (x, G) => G < n.index && isLoggableMessage(x) && isChainParticipant(x) && !isReorderedRow(x.uuid),
+function isRewindCutPersistable(messages, target, rowsOffDisk) {
+  if (rowsOffDisk === undefined) return true;
+  let indexes = [];
+  let lastIndex = messages.findLastIndex(
+    (message, index) =>
+      index < target.index &&
+      isLoggableMessage(message) &&
+      isChainParticipant(message) &&
+      !isReorderedRow(message.uuid),
   );
-  if (lastIndex >= 0) s.push(lastIndex);
-  let persistAnchor = n.persistAnchor;
-  let S = persistAnchor === null ? -1 : e.findLastIndex((x, G) => G < n.index && x.uuid === persistAnchor);
-  if (S >= 0) s.push(S);
-  let R = S >= 0 ? S : n.index;
+  if (lastIndex >= 0) indexes.push(lastIndex);
+  let persistAnchor = target.persistAnchor;
+  let anchorIndex =
+    persistAnchor === null
+      ? -1
+      : messages.findLastIndex((message, index) => index < target.index && message.uuid === persistAnchor);
+  if (anchorIndex >= 0) indexes.push(anchorIndex);
+  let endIndex = anchorIndex >= 0 ? anchorIndex : target.index;
   let max = Math.max(
     0,
-    e.findLastIndex((x, G) => G <= R && G < n.index && isCompactBoundaryMessage(x)),
+    messages.findLastIndex(
+      (message, index) => index <= endIndex && index < target.index && isCompactBoundaryMessage(message),
+    ),
   );
-  let max_2 = Math.max(0, e.findLastIndex(isCompactBoundaryMessage));
-  for (let x = max; x < Math.min(n.index, max_2); x++) s.push(x);
-  if (s.some((x) => r.deleted.has(e[x].uuid))) return false;
-  if (!r.rewriting || s.length === 0) return true;
-  let { lastBoundary } = r;
-  let q =
+  let max_2 = Math.max(0, messages.findLastIndex(isCompactBoundaryMessage));
+  for (let index = max; index < Math.min(target.index, max_2); index++) indexes.push(index);
+  if (indexes.some((index) => rowsOffDisk.deleted.has(messages[index].uuid))) return false;
+  if (!rowsOffDisk.rewriting || indexes.length === 0) return true;
+  let { lastBoundary } = rowsOffDisk;
+  let lastBoundaryIndex =
     lastBoundary === undefined
-      ? e.findLastIndex(isCompactBoundaryMessage)
-      : e.findLastIndex((x) => x.uuid === lastBoundary);
-  if (lastBoundary !== undefined && q < 0) return false;
-  return s.every((x) => x >= q);
+      ? messages.findLastIndex(isCompactBoundaryMessage)
+      : messages.findLastIndex((message) => message.uuid === lastBoundary);
+  if (lastBoundary !== undefined && lastBoundaryIndex < 0) return false;
+  return indexes.every((index) => index >= lastBoundaryIndex);
 }
 //@ chunk-tyg7f3ek.js:580030-580104 placement
-function queueStamp(e) {
+function queueStamp(session) {
   return {
-    dequeues: e.dequeueCount(),
-    length: e.messages.length,
+    dequeues: session.dequeueCount(),
+    length: session.messages.length,
   };
 }
 //@ chunk-tyg7f3ek.js:580104-580598 placement
-async function persistRewindCut({ persistAnchor, target }, r, s) {
-  let h = true;
-  let y = {
+async function persistRewindCut({ persistAnchor, target }, session, persistence) {
+  let persisted = true;
+  let marker = {
     rewound: true,
     ...(target !== undefined &&
       isFoamySpringEnabled() && {
@@ -301,117 +336,119 @@ async function persistRewindCut({ persistAnchor, target }, r, s) {
       }),
   };
   try {
-    await s.mirror(persistAnchor, y);
-    await s.flushInternalEvents();
-    await s.persistLocal(persistAnchor, y);
+    await persistence.mirror(persistAnchor, marker);
+    await persistence.flushInternalEvents();
+    await persistence.persistLocal(persistAnchor, marker);
   } catch (error) {
-    h = false;
-    s.logFailure("persist", error);
+    persisted = false;
+    persistence.logFailure("persist", error);
   }
-  if (!h)
+  if (!persisted)
     try {
-      let last = r.messages.findLast(
+      let last = session.messages.findLast(
         (message) =>
           (message.type === "user" || message.type === "assistant") && !isReorderedRow(message.uuid),
       );
       if (last !== undefined) {
-        await s.mirror(last.uuid, undefined);
-        await s.flushInternalEvents();
+        await persistence.mirror(last.uuid, undefined);
+        await persistence.flushInternalEvents();
       }
     } catch {
       logForDebugging("rewind persist-failure remote heal failed (persistence already degraded)");
     }
-  return h;
+  return persisted;
 }
 //@ chunk-tyg7f3ek.js:580598-580766 placement
-function rewindTargetMoved(prefix, n, r) {
+function rewindTargetMoved(prefix, session, target) {
   return (
-    n.messages[r.index]?.uuid !== r.target?.uuid ||
-    n.dequeueCount() !== prefix.dequeues ||
-    n.messages.length !== prefix.length ||
-    n.drainableMainThreadQueueLength() > 0
+    session.messages[target.index]?.uuid !== target.target?.uuid ||
+    session.dequeueCount() !== prefix.dequeues ||
+    session.messages.length !== prefix.length ||
+    session.drainableMainThreadQueueLength() > 0
   );
 }
 //@ chunk-tyg7f3ek.js:580766-581207 placement
-async function waitForRewindQuiet(e, n) {
+async function waitForRewindQuiet(session, persistence) {
   try {
     for (let j = 0; j < 3; j++) {
-      let s = e.dequeueCount();
-      let h = e.messages.length;
-      let last = e.messages.findLast(
+      let dequeues = session.dequeueCount();
+      let length = session.messages.length;
+      let last = session.messages.findLast(
         (message) =>
           (message.type === "user" || message.type === "assistant") && !isReorderedRow(message.uuid),
       );
       if (last === undefined) break;
-      await n.persistLocal(last.uuid, undefined);
-      await n.mirror(last.uuid, undefined);
-      await n.flushInternalEvents();
-      if (e.dequeueCount() === s && e.messages.length === h) break;
+      await persistence.persistLocal(last.uuid, undefined);
+      await persistence.mirror(last.uuid, undefined);
+      await persistence.flushInternalEvents();
+      if (session.dequeueCount() === dequeues && session.messages.length === length) break;
     }
   } catch (error) {
     if (isAbortError(error)) logForDebugging("rewind-refusal heal aborted by stream teardown");
-    else n.logFailure("heal", error);
+    else persistence.logFailure("heal", error);
   }
 }
 //@ chunk-tyg7f3ek.js:581207-582110 placement
 /**
  * 在内存中截断对话到切点，清理 thinking 范围与粘性 beta，并同步通知/任务状态。
  */
-function applyRewindCut(e, index) {
-  let r = e.messages.splice(index);
-  noopLedger(e.stickyBetas(), "rewind");
+function applyRewindCut(session, index) {
+  let removed = session.messages.splice(index);
+  noopLedger(session.stickyBetas(), "rewind");
   try {
-    let s = e.messages.some((message) => message.type === "assistant")
-      ? computeThinkingStrippedScope(e.messages, r)
+    let strippedScope = session.messages.some((message) => message.type === "assistant")
+      ? computeThinkingStrippedScope(session.messages, removed)
       : undefined;
-    if (s !== undefined) e.appendToConversation([createAttachmentMessage(s)]);
+    if (strippedScope !== undefined) session.appendToConversation([createAttachmentMessage(strippedScope)]);
     if (
-      e.messages.some((message) => message.type === "assistant") &&
-      r.some((h) => h.type === "attachment" && h.attachment.type === "advisor_stripped")
+      session.messages.some((message) => message.type === "assistant") &&
+      removed.some(
+        (message) => message.type === "attachment" && message.attachment.type === "advisor_stripped",
+      )
     )
-      e.appendToConversation([
+      session.appendToConversation([
         createAttachmentMessage({
           type: "advisor_stripped",
         }),
       ]);
   } catch (error) {
-    e.logFailure("strip", error);
+    session.logFailure("strip", error);
   }
   try {
-    let s = cronCarryAttachment(e.messages, r);
-    if (s !== null) e.appendToConversation([s]);
+    let carryAttachment = cronCarryAttachment(session.messages, removed);
+    if (carryAttachment !== null) session.appendToConversation([carryAttachment]);
   } catch (error) {
-    e.logFailure("crons", error);
+    session.logFailure("crons", error);
   }
   try {
-    let s = threadAskMarkerFor(e.messages);
-    if (s !== null) e.appendToConversation([createAttachmentMessage(s)]);
+    let threadAskMarker = threadAskMarkerFor(session.messages);
+    if (threadAskMarker !== null) session.appendToConversation([createAttachmentMessage(threadAskMarker)]);
   } catch (error) {
-    e.logFailure("thread_ask", error);
+    session.logFailure("thread_ask", error);
   }
   try {
-    let rewoundFileTrackingPaths = collectRewoundFileTrackingPaths(r, undefined, e.toolAliases);
+    let rewoundFileTrackingPaths = collectRewoundFileTrackingPaths(removed, undefined, session.toolAliases);
     for (let readFilePath of rewoundFileTrackingPaths.readFilePaths.concat(
       rewoundFileTrackingPaths.nestedMemoryPaths,
       rewoundFileTrackingPaths.spelledFilePaths,
     ))
-      e.readFileState.delete(readFilePath);
+      session.readFileState.delete(readFilePath);
   } catch (error) {
-    e.logFailure("evict", error);
+    session.logFailure("evict", error);
   }
-  resetPickerState(e.memorySelector);
+  resetPickerState(session.memorySelector);
   try {
-    markMemoryWriteCut(e.host, r);
+    markMemoryWriteCut(session.host, removed);
   } catch (error) {
-    e.logFailure("memory_cut_note", error);
+    session.logFailure("memory_cut_note", error);
   }
-  setLastCacheSafeForkMessages([...e.messages]);
-  return r;
+  setLastCacheSafeForkMessages([...session.messages]);
+  return removed;
 }
 //@ chunk-tyg7f3ek.js:582110-582292 placement
-function rewindReadNotifications(e, { kept, removed, targetUuid }) {
+function rewindReadNotifications(host, { kept, removed, targetUuid }) {
   try {
-    restoreReadsAfterRewind(e, {
+    restoreReadsAfterRewind(host, {
       idsInKeptRows: () => collectReadNotificationsResultIds(kept),
       idsInRemovedRows: () => collectReadNotificationsResultIds(removed),
       targetUuid,
@@ -422,46 +459,47 @@ function rewindReadNotifications(e, { kept, removed, targetUuid }) {
 }
 //@ chunk-tyg7f3ek.js:582292-583373 placement
 function stopTeammatesAfterCut({ taskRegistry, setAppState, storageV5, messages, cutIndex }) {
-  let y = taskRegistry.all();
-  let S = new Map();
-  for (let w of Object.values(y))
-    if (w.type === "in_process_teammate") {
-      S.set(w.identity.agentId, w);
-      if (w.identity.resumableAgentId !== undefined) S.set(w.identity.resumableAgentId, w);
+  let tasksById = taskRegistry.all();
+  let teammatesById = new Map();
+  for (let task of Object.values(tasksById))
+    if (task.type === "in_process_teammate") {
+      teammatesById.set(task.identity.agentId, task);
+      if (task.identity.resumableAgentId !== undefined)
+        teammatesById.set(task.identity.resumableAgentId, task);
     }
-  let R = (w) => {
-    let P = new Set();
-    let L = w;
-    let q = false;
+  let shouldStop = (task) => {
+    let seenAgentIds = new Set();
+    let current = task;
+    let ownedByTeam = false;
     for (;;) {
-      let Z =
-        "parentAgentId" in L && typeof L.parentAgentId === "string"
-          ? L.parentAgentId
-          : "ownerAgentId" in L && typeof L.ownerAgentId === "string"
-            ? L.ownerAgentId
+      let ownerId =
+        "parentAgentId" in current && typeof current.parentAgentId === "string"
+          ? current.parentAgentId
+          : "ownerAgentId" in current && typeof current.ownerAgentId === "string"
+            ? current.ownerAgentId
             : undefined;
-      if (Z === undefined || P.has(Z)) {
+      if (ownerId === undefined || seenAgentIds.has(ownerId)) {
         if (
-          Z === undefined &&
-          "spawnerAgentId" in L &&
-          typeof L.spawnerAgentId === "string" &&
-          S.has(L.spawnerAgentId)
+          ownerId === undefined &&
+          "spawnerAgentId" in current &&
+          typeof current.spawnerAgentId === "string" &&
+          teammatesById.has(current.spawnerAgentId)
         )
-          q = true;
+          ownedByTeam = true;
         break;
       }
-      P.add(Z);
-      let re = y[Z] ?? S.get(Z);
-      if (re === undefined) break;
-      if (re.type === "in_process_teammate") {
-        q = true;
+      seenAgentIds.add(ownerId);
+      let owner = tasksById[ownerId] ?? teammatesById.get(ownerId);
+      if (owner === undefined) break;
+      if (owner.type === "in_process_teammate") {
+        ownedByTeam = true;
         break;
       }
-      if (re.type !== "local_agent") break;
-      L = re;
+      if (owner.type !== "local_agent") break;
+      current = owner;
     }
-    if (q) return false;
-    let toolUseId = L.toolUseId;
+    if (ownedByTeam) return false;
+    let toolUseId = current.toolUseId;
     if (toolUseId === undefined) return true;
     let messageIndexByToolUseId = findMessageIndexByToolUseId(messages, toolUseId);
     return messageIndexByToolUseId < 0 || messageIndexByToolUseId >= cutIndex;
@@ -469,27 +507,31 @@ function stopTeammatesAfterCut({ taskRegistry, setAppState, storageV5, messages,
   stopAllRunningTasks({
     taskRegistry,
     setAppState,
-    shouldStop: R,
+    shouldStop,
     storageV5,
   });
-  for (let w of Object.values(taskRegistry.all())) {
-    if (!isUnnotifiedTerminalTask(w) || !R(w)) continue;
-    claimTaskNotification(w.id, taskRegistry);
-    emitTaskNotification(w.id, w.status === "completed" || w.status === "failed" ? w.status : "stopped", {
-      toolUseId: w.toolUseId,
-      summary: w.description,
-    });
+  for (let task of Object.values(taskRegistry.all())) {
+    if (!isUnnotifiedTerminalTask(task) || !shouldStop(task)) continue;
+    claimTaskNotification(task.id, taskRegistry);
+    emitTaskNotification(
+      task.id,
+      task.status === "completed" || task.status === "failed" ? task.status : "stopped",
+      {
+        toolUseId: task.toolUseId,
+        summary: task.description,
+      },
+    );
   }
 }
 //@ chunk-tyg7f3ek.js:583373-583746 placement
 function stopMcpTasksAfterCut({ taskRegistry, setAppState, storageV5, messages, cutIndex }) {
   try {
-    let y = runningMcpTasksAfter(taskRegistry, messages, cutIndex);
-    if (y.length === 0) return;
-    let mapped = y.map(async (R) => {
+    let runningTasks = runningMcpTasksAfter(taskRegistry, messages, cutIndex);
+    if (runningTasks.length === 0) return;
+    let mapped = runningTasks.map(async (task) => {
       let taskForStop = lookupTaskForStop("mcp_task");
       if (taskForStop === undefined) throw Error("no kill handler is registered for task type mcp_task");
-      await taskForStop.kill(R, taskRegistry, setAppState, "system", storageV5);
+      await taskForStop.kill(task, taskRegistry, setAppState, "system", storageV5);
     });
     Promise.allSettled(mapped).then(reportMcpTaskRewindStops);
   } catch (error) {
@@ -507,15 +549,18 @@ function stopMcpTasksAfterCut({ taskRegistry, setAppState, storageV5, messages, 
 //@ chunk-tyg7f3ek.js:583746-584146 placement
 function withdrawDeferredAfterCut({ endings, queue, messages, cutIndex }) {
   try {
-    let h = new Set(
+    let withdrawnTaskIds = new Set(
       endings?.withdraw((sinceUuid) => {
         let messageIndexByToolUseId = findMessageIndexByToolUseId(messages, sinceUuid);
         return messageIndexByToolUseId >= 0 && messageIndexByToolUseId >= cutIndex;
       }),
     );
-    if (h.size > 0)
+    if (withdrawnTaskIds.size > 0)
       queue.removeByFilter(
-        (y) => y.mode === "task-notification" && y.taskId !== undefined && h.has(y.taskId),
+        (message) =>
+          message.mode === "task-notification" &&
+          message.taskId !== undefined &&
+          withdrawnTaskIds.has(message.taskId),
         {
           reason: "rewound",
         },
@@ -532,13 +577,19 @@ function withdrawDeferredAfterCut({ endings, queue, messages, cutIndex }) {
 }
 //@ chunk-tyg7f3ek.js:584146-584359 placement
 function runningMcpTasksAfter(taskRegistry, messages, cutIndex) {
-  let s = [];
-  for (let h of Object.values(taskRegistry.all())) {
-    if (h.type !== "mcp_task" || h.status !== "running" || h.notified || h.toolUseId === undefined) continue;
-    let messageIndexByToolUseId = findMessageIndexByToolUseId(messages, h.toolUseId);
-    if (messageIndexByToolUseId >= 0 && messageIndexByToolUseId >= cutIndex) s.push(h.id);
+  let taskIds = [];
+  for (let task of Object.values(taskRegistry.all())) {
+    if (
+      task.type !== "mcp_task" ||
+      task.status !== "running" ||
+      task.notified ||
+      task.toolUseId === undefined
+    )
+      continue;
+    let messageIndexByToolUseId = findMessageIndexByToolUseId(messages, task.toolUseId);
+    if (messageIndexByToolUseId >= 0 && messageIndexByToolUseId >= cutIndex) taskIds.push(task.id);
   }
-  return s;
+  return taskIds;
 }
 //@ chunk-tyg7f3ek.js:584359-584517 placement = countToolCallsSince (0.778)
 function findMessageIndexByToolUseId(messages, sinceUuid) {
@@ -550,20 +601,20 @@ function findMessageIndexByToolUseId(messages, sinceUuid) {
   );
 }
 //@ chunk-tyg7f3ek.js:584517-584964 placement
-function reportMcpTaskRewindStops(e, n = "stop_failed") {
+function reportMcpTaskRewindStops(settled, failureReason = "stop_failed") {
   try {
-    let filtered = e.filter((s) => s.status === "rejected");
+    let filtered = settled.filter((result) => result.status === "rejected");
     if (filtered.length === 0) {
       logFeatureOk("mcp_task_rewind_stop");
       return;
     }
-    if (filtered.length === e.length) logFeatureBad("mcp_task_rewind_stop", n);
-    else logFeatureSad("mcp_task_rewind_stop", n);
+    if (filtered.length === settled.length) logFeatureBad("mcp_task_rewind_stop", failureReason);
+    else logFeatureSad("mcp_task_rewind_stop", failureReason);
     for (let { reason } of filtered)
       logError(
         withTelemetryMessage(
           toError(reason),
-          n === "choose_failed"
+          failureReason === "choose_failed"
             ? "rewind_conversation: choosing the MCP tasks to stop failed; none was stopped and the rewind went on"
             : "rewind_conversation: stopping an MCP task failed; the rewind went on",
         ),
@@ -575,43 +626,44 @@ function rewindRerunMode() {
   return isClaudeAiChatRemote() ? getRemoteFeatureGateState(TENGU_FALLOW_LANTERN) : "off";
 }
 //@ chunk-tyg7f3ek.js:585005-585395 placement
-function dropOwnRerunOnRewind(e) {
+function dropOwnRerunOnRewind(queue) {
   try {
-    let filtered = e.messageQueue.getCommandQueueSnapshot().filter(isResumedQueuedCommand);
-    if (filtered.length === 0 || !isClaudeAiChatRemote()) return;
-    let r = rerunDropVerdict(e, filtered);
-    if (r !== undefined) {
-      logFeatureSad("rewind_drops_own_rerun", r);
+    let queued = queue.messageQueue.getCommandQueueSnapshot().filter(isResumedQueuedCommand);
+    if (queued.length === 0 || !isClaudeAiChatRemote()) return;
+    let verdict = rerunDropVerdict(queue, queued);
+    if (verdict !== undefined) {
+      logFeatureSad("rewind_drops_own_rerun", verdict);
       return;
     }
-    for (let { uuid } of e.messageQueue.removeByFilter(isResumedQueuedCommand, {
+    for (let { uuid } of queue.messageQueue.removeByFilter(isResumedQueuedCommand, {
       reason: "rewound",
     }))
-      if (uuid !== undefined) e.io.onCommandLifecycle?.(uuid, "cancelled");
+      if (uuid !== undefined) queue.io.onCommandLifecycle?.(uuid, "cancelled");
     logFeatureOk("rewind_drops_own_rerun");
   } catch (error) {
-    e.logFailure(error);
+    queue.logFailure(error);
     logFeatureBad("rewind_drops_own_rerun", "threw");
   }
 }
 //@ chunk-tyg7f3ek.js:585395-585956 placement
-function rerunDropVerdict({ messageQueue, readSwitch, namedByTheRequest, decide }, h) {
-  if (!h.every((w) => w.mode === "prompt")) return "not_a_prompt";
-  let mapped = h.map((w) => w.resumedTurnUserMessageUuid);
+function rerunDropVerdict({ messageQueue, readSwitch, namedByTheRequest, decide }, queued) {
+  if (!queued.every((queued) => queued.mode === "prompt")) return "not_a_prompt";
+  let mapped = queued.map((queued) => queued.resumedTurnUserMessageUuid);
   if (mapped.includes(undefined)) return "opener_unknown";
-  let mapped_2 = namedByTheRequest.map((w) =>
-    typeof w === "string" ? w.slice(0, UUID_PREFIX_LENGTH) : undefined,
+  let mapped_2 = namedByTheRequest.map((message) =>
+    typeof message === "string" ? message.slice(0, UUID_PREFIX_LENGTH) : undefined,
   );
-  if (!mapped.every((w) => mapped_2.includes(w?.slice(0, UUID_PREFIX_LENGTH)))) return "turn_unseen";
-  if (h.some((w) => w.drainOnly === true)) return "answers_for_others";
-  if (messageQueue.getDrainableMainThreadQueueLength() !== h.length) return "others_queued";
+  if (!mapped.every((openerUuid) => mapped_2.includes(openerUuid?.slice(0, UUID_PREFIX_LENGTH))))
+    return "turn_unseen";
+  if (queued.some((queued) => queued.drainOnly === true)) return "answers_for_others";
+  if (messageQueue.getDrainableMainThreadQueueLength() !== queued.length) return "others_queued";
   if (!("cut" in decide())) return "no_cut";
-  let R = readSwitch();
-  return R === "on" ? undefined : `switch_${R}`;
+  let switchState = readSwitch();
+  return switchState === "on" ? undefined : `switch_${switchState}`;
 }
 //@ chunk-tyg7f3ek.js:585956-586009 placement
-function isResumedQueuedCommand(e) {
-  return e.resumeReason !== undefined && isActiveMainAgentCommand(e);
+function isResumedQueuedCommand(command) {
+  return command.resumeReason !== undefined && isActiveMainAgentCommand(command);
 }
 //@ chunk-tyg7f3ek.js:586009-586050 placement
 var TENGU_EBBING_TIDE = "tengu_ebbing_tide";
@@ -624,34 +676,34 @@ function isTurnAbortedForRewind({ drain, messageQueue, prewaitLatch }) {
     prewaitLatch.parkedBatchStartsAborted() ||
     prewaitLatch
       .parkedMembers()
-      .every((s) => s.uuid !== undefined && messageQueue.hasCancelPendingAcked(s.uuid))
+      .every((command) => command.uuid !== undefined && messageQueue.hasCancelPendingAcked(command.uuid))
   );
 }
 //@ chunk-tyg7f3ek.js:586283-586825 placement
-function rewindLimitQuestionGate(e) {
-  if (e.promptUpOrHeld()) return "skipped_prompt";
-  if (e.busy()) return "skipped_busy";
-  let n = e.runGoing();
-  if (n && !e.interruptAsked) return "skipped_busy";
-  let r = n && e.dequeues() > 0;
-  if (r) {
-    if (!e.runEnding()) return "skipped_busy";
+function rewindLimitQuestionGate(host) {
+  if (host.promptUpOrHeld()) return "skipped_prompt";
+  if (host.busy()) return "skipped_busy";
+  let runGoing = host.runGoing();
+  if (runGoing && !host.interruptAsked) return "skipped_busy";
+  let overEndingRun = runGoing && host.dequeues() > 0;
+  if (overEndingRun) {
+    if (!host.runEnding()) return "skipped_busy";
     let remoteFeatureGateState = getRemoteFeatureGateState(TENGU_EBBING_TIDE);
     if (remoteFeatureGateState !== "on")
       return remoteFeatureGateState === "cold" ? "skipped_busy_flags_not_fetched" : "skipped_busy";
   }
-  let s = e.decide();
-  if ("cut" in s)
-    return s.cut.index < e.rowCount()
+  let decision = host.decide();
+  if ("cut" in decision)
+    return decision.cut.index < host.rowCount()
       ? {
           targetFound: true,
-          overAnEndingRun: r,
+          overAnEndingRun: overEndingRun,
         }
       : "skipped_no_cut";
-  return s.refuse === "target_not_found" && e.missingTargetAsked
+  return decision.refuse === "target_not_found" && host.missingTargetAsked
     ? {
         targetFound: false,
-        overAnEndingRun: r,
+        overAnEndingRun: overEndingRun,
       }
     : "skipped_no_cut";
 }
@@ -666,91 +718,96 @@ function rewindLimitAccountGate() {
     : null;
 }
 //@ chunk-tyg7f3ek.js:587087-587207 placement
-async function askRewindLimitQuestion(e) {
+async function askRewindLimitQuestion(host) {
   try {
-    return await runRewindLimitQuestion(e);
+    return await runRewindLimitQuestion(host);
   } catch (error) {
-    e.logFailure(error);
+    host.logFailure(error);
     logFeatureSad("rewind_limit_question", "threw");
     return "go_on";
   }
 }
 //@ chunk-tyg7f3ek.js:587207-588419 placement
-async function runRewindLimitQuestion(e) {
-  let n = {
-    process_has_dequeued: e.dequeues() > 0,
-    after_interrupt_branch: e.afterTheInterruptBranch,
+async function runRewindLimitQuestion(host) {
+  let fields = {
+    process_has_dequeued: host.dequeues() > 0,
+    after_interrupt_branch: host.afterTheInterruptBranch,
     prompt_cache_relay_armed: env.CCR_SESSION_PROFILE,
   };
-  let r = rewindLimitQuestionGate(e);
-  if (typeof r === "string") {
-    logFeatureSad("rewind_limit_question", r, n);
+  let gate = rewindLimitQuestionGate(host);
+  if (typeof gate === "string") {
+    logFeatureSad("rewind_limit_question", gate, fields);
     return "go_on";
   }
-  let s = e.dequeues();
-  let h = rewindLimitAccountGate();
-  if (h !== null) {
-    logFeatureSad("rewind_limit_question", h, n);
+  let dequeues = host.dequeues();
+  let accountGate = rewindLimitAccountGate();
+  if (accountGate !== null) {
+    logFeatureSad("rewind_limit_question", accountGate, fields);
     return "go_on";
   }
   let bareCheckModel = getBareCheckModel();
-  let S = await preflightRateLimitCore({
+  let check = await preflightRateLimitCore({
     model: bareCheckModel,
-    credentials: e.credentials,
-    storageV5: e.storageV5,
-    stop: e.stop,
-    logFailure: e.logFailure,
+    credentials: host.credentials,
+    storageV5: host.storageV5,
+    stop: host.stop,
+    logFailure: host.logFailure,
   });
-  let R = {
-    ...n,
-    waited_ms: S.waitedMs,
-    asked_main_model: bareCheckModel === e.mainModel(),
-    target_found: r.targetFound,
+  let reportFields = {
+    ...fields,
+    waited_ms: check.waitedMs,
+    asked_main_model: bareCheckModel === host.mainModel(),
+    target_found: gate.targetFound,
   };
-  if (e.ending()) {
-    logFeatureSad("rewind_limit_question", "stopped", R);
+  if (host.ending()) {
+    logFeatureSad("rewind_limit_question", "stopped", reportFields);
     return "ending";
   }
-  if (S.answer === "admitted") {
+  if (check.answer === "admitted") {
     logFeatureOk("rewind_limit_question", {
-      ...R,
+      ...reportFields,
       refused: false,
     });
     return "go_on";
   }
-  if (S.answer !== "refused") {
-    logFeatureSad("rewind_limit_question", S.answer, R);
+  if (check.answer !== "refused") {
+    logFeatureSad("rewind_limit_question", check.answer, reportFields);
     return "go_on";
   }
-  if (r.overAnEndingRun && !(await waitForQueueQuiet(e, s))) {
-    logFeatureSad("rewind_limit_question", "run_outlasted_wait", R);
+  if (gate.overAnEndingRun && !(await waitForQueueQuiet(host, dequeues))) {
+    logFeatureSad("rewind_limit_question", "run_outlasted_wait", reportFields);
     return "turn_running";
   }
-  if (e.ending()) {
-    logFeatureSad("rewind_limit_question", "stopped", R);
+  if (host.ending()) {
+    logFeatureSad("rewind_limit_question", "stopped", reportFields);
     return "ending";
   }
-  let w = rewindLimitQuestionGate(e);
-  if (typeof w === "string" || w.overAnEndingRun || (r.targetFound && !w.targetFound)) {
-    logFeatureSad("rewind_limit_question", "changed_in_wait", R);
+  let gateAfterWait = rewindLimitQuestionGate(host);
+  if (
+    typeof gateAfterWait === "string" ||
+    gateAfterWait.overAnEndingRun ||
+    (gate.targetFound && !gateAfterWait.targetFound)
+  ) {
+    logFeatureSad("rewind_limit_question", "changed_in_wait", reportFields);
     return "go_on";
   }
   logFeatureOk("rewind_limit_question", {
-    ...R,
+    ...reportFields,
     refused: true,
-    target_found: w.targetFound,
+    target_found: gateAfterWait.targetFound,
   });
   return {
-    report: S.report,
-    targetFound: w.targetFound,
+    report: check.report,
+    targetFound: gateAfterWait.targetFound,
   };
 }
 //@ chunk-tyg7f3ek.js:588419-588600 placement
-async function waitForQueueQuiet(e, n) {
-  let r = performance.now() + REWIND_QUIET_WAIT_MS;
-  let s = () => !e.runWaitable() || e.dequeues() !== n || e.ending() || e.stop.aborted;
-  while (!s() && performance.now() < r) await sleep(REWIND_QUIET_POLL_MS, e.stop);
-  return s();
+async function waitForQueueQuiet(host, dequeues) {
+  let deadline = performance.now() + REWIND_QUIET_WAIT_MS;
+  let isQuiet = () =>
+    !host.runWaitable() || host.dequeues() !== dequeues || host.ending() || host.stop.aborted;
+  while (!isQuiet() && performance.now() < deadline) await sleep(REWIND_QUIET_POLL_MS, host.stop);
+  return isQuiet();
 }
 //@ chunk-tyg7f3ek.js:588785-588845 placement
 function forkSeedsDir() {
@@ -760,9 +817,9 @@ function forkSeedsDir() {
 var FORK_SEED_MAX_BYTES = 268435456;
 var FORK_SEED_UNLINK_RETRY_MS = 100;
 //@ chunk-tyg7f3ek.js:588869-588935 placement
-function forkSeedPath(e) {
-  let n = sessionIdBody(e);
-  return isSafeBridgeId(n) ? join(forkSeedsDir(), `${n}.json`) : null;
+function forkSeedPath(sessionId) {
+  let body = sessionIdBody(sessionId);
+  return isSafeBridgeId(body) ? join(forkSeedsDir(), `${body}.json`) : null;
 }
 export {
   findRewindPoint,

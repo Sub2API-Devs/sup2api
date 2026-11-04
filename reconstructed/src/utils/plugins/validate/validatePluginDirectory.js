@@ -44,218 +44,263 @@ import { plural } from "../../stringUtils.js";
 import { findOsMetadataFiles } from "./archiveChecks.js";
 import { figures_default } from "../../../../vendor/@inquirer/figures/dist/esm/index.js";
 import { checkUnreachableRules } from "../../doctorContextWarnings.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-5aas12zq.js:1524-6260 placement
 /**
- * PLUGIN_VALIDATION_ISSUES：插件目录校验的问题码表；manifestRelativePath：插件清单相对路径；README_CANDIDATES：README 候选文件名（同一声明共 38 个绑定）。
+ * 插件目录校验的常量组（38 个绑定）：Pe 是问题码表（码 → title/severity/hold/fix，g() 以 Pe[code] 取值）；R 是清单相对路径 .claude-plugin/plugin.json；ae/nn 是 README 候选名与根级子集；tn LICENSE 候选；rn 图标候选；ee 是 README 最少词数 40；sn/ge 是插件名 kebab-case 与图标格式错误的说明文案；ne README 字节上限 262144；me 图标体积上限 2097152；ye/Se/Ee/we/Ae/on/ie 分别是列表嵌套、缩进列数、分隔符段数、分隔符字符数、方括号数、截图条数、系统文件展示条数的上限；an/ln/dn/X/ke/$e/j/K/Y/un/cn 是系统文件集合、目录名、说明文案、扫描条数/深度/父目录层数、路径截断长度、MCP+hooks 文件数 16、逐条列出的路径数 20、hooks 事件名集合、列名前几条 3；xe/fn/hn/pn/gn/mn/yn/Sn/En/wn/An 是列表空白字符与各类识别正则。
  */
-var PLUGIN_VALIDATION_ISSUES_2 = {
-  README_MISSING: {
-    title: "README missing",
-    severity: "error",
-    hold: false,
-    fix: "Add a README.md to the plugin folder describing what the plugin does, how to use it, and any setup it needs, in at least 40 words. A README at the repository root also counts for a plugin in a sub-folder.",
-  },
-  README_TRIVIAL: {
-    title: "README too short or couldn\u2019t be read",
-    severity: "error",
-    hold: false,
-    fix: null,
-  },
-  README_NOT_RENDERED: {
-    title: "README not shown in the listing preview",
-    severity: "warning",
-    hold: false,
-    fix: null,
-  },
-  LICENSE_MISSING: {
-    title: "License missing",
-    severity: "error",
-    hold: false,
-    fix: "Add a LICENSE file to the plugin folder, or set `license` (an SPDX id) in plugin.json. A LICENSE at the repository root also counts for a plugin in a sub-folder.",
-  },
-  ICON_MISSING: {
-    title: "No icon",
-    severity: "warning",
-    hold: false,
-    fix: "Add a square PNG to the plugin folder at .claude-plugin/icon.png, or set `icon` in plugin.json to the path of a square PNG or JPEG in the plugin: 512 to 2048 px on each side, under 2 MB. SVG and WebP are not accepted. That file may become the listing icon only once: the first time the plugin is saved or submitted in the developer portal. Adding or changing it later does not change the icon.",
-  },
-  ICON_INVALID: {
-    title: "Icon can\u2019t be used",
-    severity: "warning",
-    hold: false,
-    fix: null,
-  },
-  PRIVACY_URL_MISSING: {
-    title: "No privacy policy URL",
-    severity: "warning",
-    hold: false,
-    fix: "Set `privacyPolicyUrl` in plugin.json.",
-  },
-  LISTING_URL_SCHEME: {
-    title: "Listing link or icon path not accepted",
-    severity: "warning",
-    hold: false,
-    fix: null,
-  },
-  PATH_TRAVERSAL: {
-    title: "Path climbs out of the plugin",
-    severity: "error",
-    hold: false,
-    fix: "Reference the file by its plain plugin-relative path (./servers.json).",
-  },
-  MANIFEST_NOT_FOUND: {
-    title: null,
-    severity: "info",
-    hold: false,
-    fix: "Add .claude-plugin/plugin.json to choose the plugin's name, description and version yourself.",
-  },
-  MANIFEST_NAME_FORMAT: {
-    title: null,
-    severity: "error",
-    hold: false,
-    fix: 'Add .claude-plugin/plugin.json with a valid "name", or rename the folder.',
-  },
-  MANIFEST_NAME_NOT_KEBAB: {
-    title: null,
-    severity: "warning",
-    hold: false,
-    fix: 'Add .claude-plugin/plugin.json with a kebab-case "name", or rename the folder.',
-  },
-  IDENTIFIER_NON_ASCII: {
-    title: null,
-    severity: "error",
-    hold: false,
-    fix: null,
-  },
-  MCP_FILE_UNREAD: {
-    title: null,
-    severity: "error",
-    hold: false,
-    fix: null,
-  },
-  HOOKS_FILE_UNREAD: {
-    title: null,
-    severity: "error",
-    hold: false,
-    fix: null,
-  },
-  MCPJSON_UNPARSEABLE: {
-    title: null,
-    severity: "error",
-    hold: false,
-    fix: null,
-  },
-  MANIFEST_INVALID_JSON: {
-    title: null,
-    severity: "error",
-    hold: false,
-    fix: null,
-  },
-  HOOKS_JSON_INVALID: {
-    title: null,
-    severity: "error",
-    hold: false,
-    fix: null,
-  },
-  HOOKS_MISSING_WRAPPER: {
-    title: null,
-    severity: "error",
-    hold: false,
-    fix: null,
-  },
-  HOOKS_SCHEMA_INVALID: {
-    title: null,
-    severity: "error",
-    hold: false,
-    fix: null,
-  },
-  ARCHIVE_OS_METADATA_FILE: {
-    title: "macOS or Windows system file in the plugin",
-    severity: "warning",
-    hold: false,
-    fix: null,
-  },
-};
-var PLUGIN_VALIDATION_ISSUES = ".claude-plugin/plugin.json";
-var manifestRelativePath = [
-  "README.md",
-  "readme.md",
-  "Readme.md",
-  "README.markdown",
-  "README",
-  "README.txt",
-  "docs/README.md",
-];
-var nn = manifestRelativePath.filter((e) => !e.includes("/")).toSorted();
-var README_CANDIDATES = [
-  "LICENSE",
-  "LICENSE.md",
-  "LICENSE.txt",
-  "LICENCE",
-  "LICENCE.md",
-  "COPYING",
-  "COPYING.md",
-  "LICENSE-MIT",
-  "LICENSE-APACHE",
-];
-var README_ROOT_CANDIDATES = [
-  ".claude-plugin/icon.svg",
-  ".claude-plugin/icon.png",
-  "icon.svg",
-  "icon.png",
-  "assets/icon.svg",
-  "assets/icon.png",
-  "assets/logo.svg",
-  "assets/logo.png",
-  "images/icon.png",
-  "images/icon.svg",
-];
-var LICENSE_CANDIDATES = 40;
-var ICON_CANDIDATES = 'Plugin name cannot contain spaces. Use kebab-case (e.g., "my-plugin")';
-var MIN_README_WORDS =
-  "Icon file is not a usable SVG/PNG (unrecognised format, or an SVG with script, event handlers, foreignObject, animation, style or non-fragment references).";
-var PLUGIN_NAME_SPACE_MESSAGE = 262144;
-var ICON_INVALID_MESSAGE = 2097152;
-var MAX_ICON_BYTES = 32;
-var MAX_SCREENSHOT_BYTES = 128;
-var MAX_NAME_SUGGESTION_COUNT = 20000;
-var MAX_DESCRIPTION_LENGTH = 1e5;
-var MAX_README_CHARS = 40000;
-var MAX_LISTING_CHARS = 20;
-var MAX_URL_LENGTH = 20;
-var MAX_SCREENSHOT_COUNT = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
-var MAX_LINK_CHECK_COUNT = "__MACOSX";
-var MAX_ISSUE_ROWS =
-  "System files: this command reads the folder on disk. A plugin submitted from a git repository holds only what is committed there. For each file a finding names, run `git ls-files <file>`. If it prints nothing, the file is not committed and so is not submitted with the plugin; add its name to .gitignore. If it prints the file, remove it as the finding says. In CI, run --profile directory --strict on a fresh checkout; --strict also fails on the directory's other warnings.";
-var ARCHIVE_OS_METADATA_NAMES = 20000;
-var MACOS_METADATA_DIR = 32;
-var SYSTEM_FILE_GIT_NOTE = 32;
-var MAX_FIELD_CHARS = 4096;
-var MAX_HOOK_SUGGESTIONS = 16;
-var MAX_COMMAND_LENGTH = 20;
-var HOOK_EVENT_NAME_SET = new Set(HOOK_EVENTS);
-var MAX_NAME_SUGGESTION_DISTANCE = 3;
-var LISTING_WHITESPACE_CHARS = `	
+var PLUGIN_VALIDATION_ISSUES; // deferred: uses HOOK_EVENTS (../../../entrypoints/sdk/coreSchemas.js) of its import cycle while loading; runs once the cycle is complete
+var PLUGIN_MANIFEST_PATH;
+var manifestRelativePath;
+var ROOT_MANIFEST_PATHS;
+var README_CANDIDATES;
+var README_ROOT_CANDIDATES;
+var LICENSE_CANDIDATES;
+var ICON_CANDIDATES;
+var ICON_INVALID_MESSAGE;
+var MAX_README_BYTES;
+var MAX_ICON_BYTES;
+var MAX_LIST_NESTING;
+var MAX_INDENT_COLUMNS;
+var MAX_DELIMITER_RUNS;
+var MAX_DELIMITER_CHARS;
+var MAX_BRACKET_CELLS;
+var MAX_SCREENSHOTS;
+var MAX_LISTED_SYSTEM_FILES;
+var SYSTEM_FILE_NAMES;
+var MACOSX_METADATA_DIR;
+var SYSTEM_FILES_FOUND_NOTE;
+var MAX_SCAN_ENTRIES;
+var MAX_SCAN_DEPTH;
+var MAX_REPO_ROOT_PARENTS;
+var MAX_PATH_DISPLAY_CHARS;
+var MAX_LISTED_MODULE_FILES;
+var MAX_LISTED_TRAVERSALS;
+var HOOK_EVENT_NAMES;
+var MAX_LISTED_NAMES;
+var LISTING_WHITESPACE_CHARS;
+var LISTING_WHITESPACE_RE;
+var URL_PATTERN;
+var URL_PATTERN_GLOBAL;
+var PRIVACY_WORD_RE;
+var SUPPORT_WORD_RE;
+var TERMS_WORD_RE;
+var DOCS_WORD_RE;
+var UNSAFE_SVG_ELEMENT_RE;
+var SVG_EVENT_HANDLER_RE;
+var SVG_EXTERNAL_REF_RE;
+deferInit("chunk-5aas12zq.js:1524", () => {
+  PLUGIN_VALIDATION_ISSUES = {
+    README_MISSING: {
+      title: "README missing",
+      severity: "error",
+      hold: false,
+      fix: "Add a README.md to the plugin folder describing what the plugin does, how to use it, and any setup it needs, in at least 40 words. A README at the repository root also counts for a plugin in a sub-folder.",
+    },
+    README_TRIVIAL: {
+      title: "README too short or couldn\u2019t be read",
+      severity: "error",
+      hold: false,
+      fix: null,
+    },
+    README_NOT_RENDERED: {
+      title: "README not shown in the listing preview",
+      severity: "warning",
+      hold: false,
+      fix: null,
+    },
+    LICENSE_MISSING: {
+      title: "License missing",
+      severity: "error",
+      hold: false,
+      fix: "Add a LICENSE file to the plugin folder, or set `license` (an SPDX id) in plugin.json. A LICENSE at the repository root also counts for a plugin in a sub-folder.",
+    },
+    ICON_MISSING: {
+      title: "No icon",
+      severity: "warning",
+      hold: false,
+      fix: "Add a square PNG to the plugin folder at .claude-plugin/icon.png, or set `icon` in plugin.json to the path of a square PNG or JPEG in the plugin: 512 to 2048 px on each side, under 2 MB. SVG and WebP are not accepted. That file may become the listing icon only once: the first time the plugin is saved or submitted in the developer portal. Adding or changing it later does not change the icon.",
+    },
+    ICON_INVALID: {
+      title: "Icon can\u2019t be used",
+      severity: "warning",
+      hold: false,
+      fix: null,
+    },
+    PRIVACY_URL_MISSING: {
+      title: "No privacy policy URL",
+      severity: "warning",
+      hold: false,
+      fix: "Set `privacyPolicyUrl` in plugin.json.",
+    },
+    LISTING_URL_SCHEME: {
+      title: "Listing link or icon path not accepted",
+      severity: "warning",
+      hold: false,
+      fix: null,
+    },
+    PATH_TRAVERSAL: {
+      title: "Path climbs out of the plugin",
+      severity: "error",
+      hold: false,
+      fix: "Reference the file by its plain plugin-relative path (./servers.json).",
+    },
+    MANIFEST_NOT_FOUND: {
+      title: null,
+      severity: "info",
+      hold: false,
+      fix: "Add .claude-plugin/plugin.json to choose the plugin's name, description and version yourself.",
+    },
+    MANIFEST_NAME_FORMAT: {
+      title: null,
+      severity: "error",
+      hold: false,
+      fix: 'Add .claude-plugin/plugin.json with a valid "name", or rename the folder.',
+    },
+    MANIFEST_NAME_NOT_KEBAB: {
+      title: null,
+      severity: "warning",
+      hold: false,
+      fix: 'Add .claude-plugin/plugin.json with a kebab-case "name", or rename the folder.',
+    },
+    IDENTIFIER_NON_ASCII: {
+      title: null,
+      severity: "error",
+      hold: false,
+      fix: null,
+    },
+    MCP_FILE_UNREAD: {
+      title: null,
+      severity: "error",
+      hold: false,
+      fix: null,
+    },
+    HOOKS_FILE_UNREAD: {
+      title: null,
+      severity: "error",
+      hold: false,
+      fix: null,
+    },
+    MCPJSON_UNPARSEABLE: {
+      title: null,
+      severity: "error",
+      hold: false,
+      fix: null,
+    },
+    MANIFEST_INVALID_JSON: {
+      title: null,
+      severity: "error",
+      hold: false,
+      fix: null,
+    },
+    HOOKS_JSON_INVALID: {
+      title: null,
+      severity: "error",
+      hold: false,
+      fix: null,
+    },
+    HOOKS_MISSING_WRAPPER: {
+      title: null,
+      severity: "error",
+      hold: false,
+      fix: null,
+    },
+    HOOKS_SCHEMA_INVALID: {
+      title: null,
+      severity: "error",
+      hold: false,
+      fix: null,
+    },
+    ARCHIVE_OS_METADATA_FILE: {
+      title: "macOS or Windows system file in the plugin",
+      severity: "warning",
+      hold: false,
+      fix: null,
+    },
+  };
+  PLUGIN_MANIFEST_PATH = ".claude-plugin/plugin.json";
+  manifestRelativePath = [
+    "README.md",
+    "readme.md",
+    "Readme.md",
+    "README.markdown",
+    "README",
+    "README.txt",
+    "docs/README.md",
+  ];
+  ROOT_MANIFEST_PATHS = manifestRelativePath.filter((path) => !path.includes("/")).toSorted();
+  README_CANDIDATES = [
+    "LICENSE",
+    "LICENSE.md",
+    "LICENSE.txt",
+    "LICENCE",
+    "LICENCE.md",
+    "COPYING",
+    "COPYING.md",
+    "LICENSE-MIT",
+    "LICENSE-APACHE",
+  ];
+  README_ROOT_CANDIDATES = [
+    ".claude-plugin/icon.svg",
+    ".claude-plugin/icon.png",
+    "icon.svg",
+    "icon.png",
+    "assets/icon.svg",
+    "assets/icon.png",
+    "assets/logo.svg",
+    "assets/logo.png",
+    "images/icon.png",
+    "images/icon.svg",
+  ];
+  LICENSE_CANDIDATES = 40;
+  ICON_CANDIDATES = 'Plugin name cannot contain spaces. Use kebab-case (e.g., "my-plugin")';
+  ICON_INVALID_MESSAGE =
+    "Icon file is not a usable SVG/PNG (unrecognised format, or an SVG with script, event handlers, foreignObject, animation, style or non-fragment references).";
+  MAX_README_BYTES = 262144;
+  MAX_ICON_BYTES = 2097152;
+  MAX_LIST_NESTING = 32;
+  MAX_INDENT_COLUMNS = 128;
+  MAX_DELIMITER_RUNS = 20000;
+  MAX_DELIMITER_CHARS = 1e5;
+  MAX_BRACKET_CELLS = 40000;
+  MAX_SCREENSHOTS = 20;
+  MAX_LISTED_SYSTEM_FILES = 20;
+  SYSTEM_FILE_NAMES = new Set([".DS_Store", "Thumbs.db", "desktop.ini"]);
+  MACOSX_METADATA_DIR = "__MACOSX";
+  SYSTEM_FILES_FOUND_NOTE =
+    "System files: this command reads the folder on disk. A plugin submitted from a git repository holds only what is committed there. For each file a finding names, run `git ls-files <file>`. If it prints nothing, the file is not committed and so is not submitted with the plugin; add its name to .gitignore. If it prints the file, remove it as the finding says. In CI, run --profile directory --strict on a fresh checkout; --strict also fails on the directory's other warnings.";
+  MAX_SCAN_ENTRIES = 20000;
+  MAX_SCAN_DEPTH = 32;
+  MAX_REPO_ROOT_PARENTS = 32;
+  MAX_PATH_DISPLAY_CHARS = 4096;
+  MAX_LISTED_MODULE_FILES = 16;
+  MAX_LISTED_TRAVERSALS = 20;
+  HOOK_EVENT_NAMES = new Set(HOOK_EVENTS);
+  MAX_LISTED_NAMES = 3;
+  LISTING_WHITESPACE_CHARS = `	
 \v\f\r \x85\xA0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200A\u2028\u2029\u202F\u205F\u3000`;
-var LISTING_WHITESPACE_RE = /[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/;
-var URL_PATTERN = /https?:\/\/[^ \t\n\f\r)<>"']+/;
-var URL_PATTERN_GLOBAL = /https?:\/\/[^ \t\n\f\r)<>"']+/g;
-var PRIVACY_WORD_RE = /privacy/i;
-var SUPPORT_WORD_RE = /\b(support|issues|bug reports?|contact)\b/i;
-var TERMS_WORD_RE = /\b(terms of service|terms of use|terms)\b/i;
-var DOCS_WORD_RE = /\b(documentation|docs)\b/i;
-var UNSAFE_SVG_ELEMENT_RE =
-  /<\s*(?:script|foreignobject|animate|animatemotion|animatetransform|set|discard|style|iframe|embed|object)\b/i;
-var SVG_EVENT_HANDLER_RE = /\son[a-z]+\s*=/i;
-var SVG_EXTERNAL_REF_RE = /href\s*=\s*(?:["']\s*)?[^"'#\s>]/i;
+  LISTING_WHITESPACE_RE = /[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+/;
+  URL_PATTERN = /https?:\/\/[^ \t\n\f\r)<>"']+/;
+  URL_PATTERN_GLOBAL = /https?:\/\/[^ \t\n\f\r)<>"']+/g;
+  PRIVACY_WORD_RE = /privacy/i;
+  SUPPORT_WORD_RE = /\b(support|issues|bug reports?|contact)\b/i;
+  TERMS_WORD_RE = /\b(terms of service|terms of use|terms)\b/i;
+  DOCS_WORD_RE = /\b(documentation|docs)\b/i;
+  UNSAFE_SVG_ELEMENT_RE =
+    /<\s*(?:script|foreignobject|animate|animatemotion|animatetransform|set|discard|style|iframe|embed|object)\b/i;
+  SVG_EVENT_HANDLER_RE = /\son[a-z]+\s*=/i;
+  SVG_EXTERNAL_REF_RE = /href\s*=\s*(?:["']\s*)?[^"'#\s>]/i;
+});
 //@ chunk-5aas12zq.js:6260-6384 placement
 /**
  * 校验用的插件根（无 manifest 且不在全局 .claude 时取解析路径）。
  */
-function getEffectivePluginRoot(e) {
-  if (e.pluginRoot !== null) return e.pluginRoot;
-  return e.manifest === null && !isInGlobalClaudeFolder(e.resolvedPath) ? e.resolvedPath : null;
+function getEffectivePluginRoot(result) {
+  if (result.pluginRoot !== null) return result.pluginRoot;
+  return result.manifest === null && !isInGlobalClaudeFolder(result.resolvedPath)
+    ? result.resolvedPath
+    : null;
 }
 //@ chunk-5aas12zq.js:6384-6432 placement = isInGlobalClaudeFolder (0.775)
 function isInGlobalClaudeFolder(filePath) {
@@ -265,96 +310,105 @@ function isInGlobalClaudeFolder(filePath) {
 /**
  * 校验插件目录：读取清单、检查 README/许可、组件文件与目录名，返回问题列表。
  */
-async function validatePluginDirectory(e) {
-  let cwd = pathModule.resolve(e);
-  let pluginFile = await readPluginFileSafe(cwd, PLUGIN_VALIDATION_ISSUES, ONE_MIB);
-  let r =
+async function validatePluginDirectory(inputDir) {
+  let resolved = pathModule.resolve(inputDir);
+  let pluginFile = await readPluginFileSafe(resolved, PLUGIN_MANIFEST_PATH, ONE_MIB);
+  let manifestEncodingProblem =
     pluginFile.found && pluginFile.bytes !== undefined
       ? detectJsonEncodingProblem(pluginFile.bytes)
       : undefined;
-  let s;
+  let manifestJson;
   try {
-    s =
+    manifestJson =
       !pluginFile.found || pluginFile.bytes === undefined
         ? undefined
         : jsonParse(stripBom(pluginFile.bytes.toString("utf-8")));
   } catch {
-    s = undefined;
+    manifestJson = undefined;
   }
-  let o = [];
-  let a = [];
-  let l = await preferPwdSpelling(cwd);
-  let d;
-  let f = () => (d ??= locateGitRepository(l));
-  let p;
-  let S;
-  if (isPlainObject(s)) {
-    p = s;
-    if (r !== undefined)
-      o.push({
+  let findings = [];
+  let notes = [];
+  let displayPath = await preferPwdSpelling(resolved);
+  let repositoryCache;
+  let getRepository = () => (repositoryCache ??= locateGitRepository(displayPath));
+  let manifest;
+  let derivedName;
+  if (isPlainObject(manifestJson)) {
+    manifest = manifestJson;
+    if (manifestEncodingProblem !== undefined)
+      findings.push({
         ...makeFinding(
           "MANIFEST_INVALID_JSON",
-          PLUGIN_VALIDATION_ISSUES,
+          PLUGIN_MANIFEST_PATH,
           "json",
-          `Invalid JSON syntax: ${r.error}`,
+          `Invalid JSON syntax: ${manifestEncodingProblem.error}`,
         ),
-        fix: r.fix,
+        fix: manifestEncodingProblem.fix,
       });
-    appendAll(o, checkNonAsciiName(p.name, "written"));
-  } else if (await isSkillsOnlyFolder(cwd)) {
-    S = (await f()).kind === "parent" ? pathModule.basename(l) : "";
-    p =
-      S === ""
+    appendAll(findings, checkNonAsciiName(manifest.name, "written"));
+  } else if (await isSkillsOnlyFolder(resolved)) {
+    derivedName = (await getRepository()).kind === "parent" ? pathModule.basename(displayPath) : "";
+    manifest =
+      derivedName === ""
         ? {}
         : {
-            name: S,
+            name: derivedName,
           };
-    o.push(
+    findings.push(
       makeFinding(
         "MANIFEST_NOT_FOUND",
-        PLUGIN_VALIDATION_ISSUES,
+        PLUGIN_MANIFEST_PATH,
         "file",
         "No .claude-plugin/plugin.json. This folder holds a skills tree (skills/<name>/SKILL.md), which Claude Code loads without a manifest, so the directory accepts it as a plugin; anything else in it (agents/, commands/, hooks/, \u2026) is validated and loads with it." +
-          (S === ""
+          (derivedName === ""
             ? ""
-            : ` It is listed as ${quoteForDisplay(S)}, the name of its folder, repository or marketplace entry.`),
+            : ` It is listed as ${quoteForDisplay(derivedName)}, the name of its folder, repository or marketplace entry.`),
       ),
     );
-    appendAll(o, checkDerivedName(S));
+    appendAll(findings, checkDerivedName(derivedName));
   } else return null;
-  let b = S === "";
+  let hasDerivedName = derivedName === "";
   if (
-    (S === undefined
-      ? await readdir(pathModule.join(cwd, ".claude-plugin"), {
+    (derivedName === undefined
+      ? await readdir(pathModule.join(resolved, ".claude-plugin"), {
           withFileTypes: true,
         }).catch(() => [])
       : []
-    ).some((w) => w.name === "marketplace.json" && w.isFile())
+    ).some((dirent) => dirent.name === "marketplace.json" && dirent.isFile())
   )
-    a.push(MARKETPLACE_FOLDER_NOTE);
-  let firstDoc = await readFirstDoc(cwd, manifestRelativePath, false);
-  let L = trimmedStringField(p, "license") === "" && (await findFileCaseInsensitive(cwd)) === undefined;
-  let C = firstDoc === undefined || L || S !== undefined ? await f() : undefined;
-  let dir = C?.kind === "parent" ? C.dir : undefined;
-  let x = firstDoc === undefined ? await copyDir_2(cwd) : undefined;
-  let c = firstDoc ?? (dir === undefined || x !== undefined ? undefined : await readFirstDoc(dir, nn, true));
-  let h = L && dir !== undefined ? await findFileCaseInsensitive(dir) : undefined;
-  if (x !== undefined)
-    a.push(
-      `${extractToolInputForTelemetry(x, 200)} in this folder is a symbolic link. These checks do not follow links and the directory drops them, so it does not count as the plugin's README, and a README at the repository root does not stand in for it. Replace the link with a regular file.`,
+    notes.push(MARKETPLACE_FOLDER_NOTE);
+  let firstDoc = await readFirstDoc(resolved, manifestRelativePath, false);
+  let licenseMissing =
+    trimmedStringField(manifest, "license") === "" && (await findFileCaseInsensitive(resolved)) === undefined;
+  let repository =
+    firstDoc === undefined || licenseMissing || derivedName !== undefined ? await getRepository() : undefined;
+  let dir = repository?.kind === "parent" ? repository.dir : undefined;
+  let readmeLink = firstDoc === undefined ? await copyDir_2(resolved) : undefined;
+  let readme =
+    firstDoc ??
+    (dir === undefined || readmeLink !== undefined
+      ? undefined
+      : await readFirstDoc(dir, ROOT_MANIFEST_PATHS, true));
+  let licenseAtRoot = licenseMissing && dir !== undefined ? await findFileCaseInsensitive(dir) : undefined;
+  if (readmeLink !== undefined)
+    notes.push(
+      `${extractToolInputForTelemetry(readmeLink, 200)} in this folder is a symbolic link. These checks do not follow links and the directory drops them, so it does not count as the plugin's README, and a README at the repository root does not stand in for it. Replace the link with a regular file.`,
     );
   appendAll(
-    a,
-    describeLinkedReadme(C, pathModule.basename(l), S, {
-      used: [...(c?.fromRepositoryRoot === true ? [c.displayPath] : []), ...(h === undefined ? [] : [h])],
+    notes,
+    describeLinkedReadme(repository, pathModule.basename(displayPath), derivedName, {
+      used: [
+        ...(readme?.fromRepositoryRoot === true ? [readme.displayPath] : []),
+        ...(licenseAtRoot === undefined ? [] : [licenseAtRoot]),
+      ],
       notFound: [
-        ...(c === undefined && x === undefined ? ["README"] : []),
-        ...(L && h === undefined ? ["license file"] : []),
+        ...(readme === undefined && readmeLink === undefined ? ["README"] : []),
+        ...(licenseMissing && licenseAtRoot === undefined ? ["license file"] : []),
       ],
     }),
   );
-  if (c === undefined)
-    o.push(
+  if (readme === undefined)
+    findings.push(
       makeFinding(
         "README_MISSING",
         "README.md",
@@ -363,56 +417,56 @@ async function validatePluginDirectory(e) {
       ),
     );
   else {
-    let w = c.fromRepositoryRoot
+    let readmeLabel = readme.fromRepositoryRoot
       ? "The repository-root README (this plugin folder has none of its own)"
       : "README";
-    if (c.unread === "too-large") {
-      let E = formatByteSize(ONE_MIB);
-      o.push({
+    if (readme.unread === "too-large") {
+      let sizeLimitText = formatByteSize(ONE_MIB);
+      findings.push({
         ...makeFinding(
           "README_TRIVIAL",
-          c.displayPath,
+          readme.displayPath,
           "",
-          `${w} is larger than the ${E} size limit and was not read, so the listing has no usable description.`,
+          `${readmeLabel} is larger than the ${sizeLimitText} size limit and was not read, so the listing has no usable description.`,
         ),
-        fix: `Cut the README to under ${E}; move long reference material into other files and link to them.`,
+        fix: `Cut the README to under ${sizeLimitText}; move long reference material into other files and link to them.`,
       });
-    } else if (c.unread === "unreadable")
-      o.push({
+    } else if (readme.unread === "unreadable")
+      findings.push({
         ...makeFinding(
           "README_TRIVIAL",
-          c.displayPath,
+          readme.displayPath,
           "",
-          `${w} was found but could not be opened or read, so the listing has no usable description.`,
+          `${readmeLabel} was found but could not be opened or read, so the listing has no usable description.`,
         ),
         fix: "Check that the README is an ordinary, readable file and submit again.",
       });
     else {
-      if (c.words < LICENSE_CANDIDATES)
-        o.push({
+      if (readme.words < LICENSE_CANDIDATES)
+        findings.push({
           ...makeFinding(
             "README_TRIVIAL",
-            c.displayPath,
+            readme.displayPath,
             "",
-            `${w} has ${c.words} words; at least ${LICENSE_CANDIDATES} are required so the listing has a usable description.`,
+            `${readmeLabel} has ${readme.words} words; at least ${LICENSE_CANDIDATES} are required so the listing has a usable description.`,
           ),
           fix: `Add a few sentences on what the plugin does, how to use it and any setup it needs: at least ${LICENSE_CANDIDATES} words in all.`,
         });
-      let E = checkReadmeRenderable(c.text);
-      if (E !== undefined)
-        o.push({
+      let renderProblem = checkReadmeRenderable(readme.text);
+      if (renderProblem !== undefined)
+        findings.push({
           ...makeFinding(
             "README_NOT_RENDERED",
-            c.displayPath,
+            readme.displayPath,
             "",
-            `README was not rendered for the listing preview: ${E.why}.`,
+            `README was not rendered for the listing preview: ${renderProblem.why}.`,
           ),
-          fix: E.fix,
+          fix: renderProblem.fix,
         });
     }
   }
-  if (L && h === undefined)
-    o.push(
+  if (licenseMissing && licenseAtRoot === undefined)
+    findings.push(
       makeFinding(
         "LICENSE_MISSING",
         "LICENSE",
@@ -420,124 +474,135 @@ async function validatePluginDirectory(e) {
         "This plugin has no LICENSE file and plugin.json has no `license`. The directory requires one of them.",
       ),
     );
-  appendAll(o, await checkPluginIcon(cwd, p));
-  let y = checkListingUrls(p, c?.text, o);
-  appendAll(o, checkScreenshotUrls(p, a));
-  let m = await checkComponentFiles(cwd, p, o);
-  let v = groupFindingsByFileReason(m.unusable);
-  let J = m.leftOut.mcp.length > 0 || m.leftOut.hooks.length > 0;
-  let W = (J || v.length > 0) && !m.connectsToRemote && y.url === undefined;
-  let fe = [
-    ...(m.leftOut.mcp.length > 0 ? ["MCP_FILE_UNREAD", "MCPJSON_UNPARSEABLE"] : []),
-    ...(m.leftOut.hooks.length > 0 ? ["HOOKS_FILE_UNREAD"] : []),
-    ...(J && W ? ["PRIVACY_URL_MISSING"] : []),
+  appendAll(findings, await checkPluginIcon(resolved, manifest));
+  let privacy = checkListingUrls(manifest, readme?.text, findings);
+  appendAll(findings, checkScreenshotUrls(manifest, notes));
+  let components = await checkComponentFiles(resolved, manifest, findings);
+  let groupedUnusable = groupFindingsByFileReason(components.unusable);
+  let hasLeftOutComponents = components.leftOut.mcp.length > 0 || components.leftOut.hooks.length > 0;
+  let privacyUndecided =
+    (hasLeftOutComponents || groupedUnusable.length > 0) &&
+    !components.connectsToRemote &&
+    privacy.url === undefined;
+  let relevantRules = [
+    ...(components.leftOut.mcp.length > 0 ? ["MCP_FILE_UNREAD", "MCPJSON_UNPARSEABLE"] : []),
+    ...(components.leftOut.hooks.length > 0 ? ["HOOKS_FILE_UNREAD"] : []),
+    ...(hasLeftOutComponents && privacyUndecided ? ["PRIVACY_URL_MISSING"] : []),
   ];
-  let U = [...fe];
-  for (let { rules } of v) for (let rule of rules) if (!U.includes(rule)) U.push(rule);
-  if (W && !U.includes("PRIVACY_URL_MISSING")) U.push("PRIVACY_URL_MISSING");
-  for (let [w, E] of [
-    ["MCP servers", m.traversalsNotListed.mcp],
-    ["hooks", m.traversalsNotListed.hooks],
+  let undecidedRules = [...relevantRules];
+  for (let { rules } of groupedUnusable)
+    for (let rule of rules) if (!undecidedRules.includes(rule)) undecidedRules.push(rule);
+  if (privacyUndecided && !undecidedRules.includes("PRIVACY_URL_MISSING"))
+    undecidedRules.push("PRIVACY_URL_MISSING");
+  for (let [categoryLabel, skippedCount] of [
+    ["MCP servers", components.traversalsNotListed.mcp],
+    ["hooks", components.traversalsNotListed.hooks],
   ])
-    if (E > 0)
-      a.push(
-        `${E} more ${plural(E, "path")} that plugin.json lists for ${w} ${E === 1 ? "contains" : "contain"} ".." and ${E === 1 ? "is" : "are"} not shown one by one.`,
+    if (skippedCount > 0)
+      notes.push(
+        `${skippedCount} more ${plural(skippedCount, "path")} that plugin.json lists for ${categoryLabel} ${skippedCount === 1 ? "contains" : "contain"} ".." and ${skippedCount === 1 ? "is" : "are"} not shown one by one.`,
       );
-  let he = "set `privacyPolicyUrl` in plugin.json if the plugin connects to a remote service";
-  if (J)
-    a.push(
-      `These checks read at most ${MAX_HOOK_SUGGESTIONS} of the files that plugin.json lists for MCP servers and ${MAX_HOOK_SUGGESTIONS} of those it lists for hooks. Not checked at all: ${[formatIssuesSummary(m.leftOut.mcp, "MCP servers"), formatIssuesSummary(m.leftOut.hooks, "hooks")].filter((w) => w !== "").join("; ")}. For the files left out these directory rules are undecided: ${fe.join(", ")}. List at most ${MAX_HOOK_SUGGESTIONS} files of each kind, or --profile directory fails the run${W ? `; and ${he}` : ""}.`,
+  let privacyHint = "set `privacyPolicyUrl` in plugin.json if the plugin connects to a remote service";
+  if (hasLeftOutComponents)
+    notes.push(
+      `These checks read at most ${MAX_LISTED_MODULE_FILES} of the files that plugin.json lists for MCP servers and ${MAX_LISTED_MODULE_FILES} of those it lists for hooks. Not checked at all: ${[formatIssuesSummary(components.leftOut.mcp, "MCP servers"), formatIssuesSummary(components.leftOut.hooks, "hooks")].filter((summary) => summary !== "").join("; ")}. For the files left out these directory rules are undecided: ${relevantRules.join(", ")}. List at most ${MAX_LISTED_MODULE_FILES} files of each kind, or --profile directory fails the run${privacyUndecided ? `; and ${privacyHint}` : ""}.`,
     );
-  for (let { file, reason, todo, rules } of v)
-    a.push(
+  for (let { file, reason, todo, rules } of groupedUnusable)
+    notes.push(
       `${extractToolInputForTelemetry(file, 100)} ${reason}. The directory refuses a plugin with such a file (${rules.join(", ")}). ${todo}`,
     );
-  if (W && !J)
-    a.push(
-      `No remote service was seen in what these checks could read, and plugin.json sets no privacy policy URL that they accept, so the directory's privacy warning (PRIVACY_URL_MISSING) cannot be ruled out until the ${v.length === 1 ? "file" : "files"} named above can be read in full. Fix that first, or ${he}.`,
+  if (privacyUndecided && !hasLeftOutComponents)
+    notes.push(
+      `No remote service was seen in what these checks could read, and plugin.json sets no privacy policy URL that they accept, so the directory's privacy warning (PRIVACY_URL_MISSING) cannot be ruled out until the ${groupedUnusable.length === 1 ? "file" : "files"} named above can be read in full. Fix that first, or ${privacyHint}.`,
     );
-  if (m.hooksModuleFiles.length > 0) {
-    let mapped = m.hooksModuleFiles.map((hooksModuleFile) =>
+  if (components.hooksModuleFiles.length > 0) {
+    let mapped = components.hooksModuleFiles.map((hooksModuleFile) =>
       extractToolInputForTelemetry(hooksModuleFile, 100),
     );
-    let E = mapped.pop() ?? "";
-    let Z =
+    let lastName = mapped.pop() ?? "";
+    let moduleNote =
       mapped.length === 0
-        ? `${E} names a hooks module`
-        : `${mapped.join(", ")} and ${E} each name a hooks module`;
-    a.push(
-      `${Z} (a code file listed under \`modules\`). The plugin directory has rules of its own for such code, and these checks apply none of them, so passing here does not mean the directory accepts the plugin. The developer portal's own validation applies those rules.`,
+        ? `${lastName} names a hooks module`
+        : `${mapped.join(", ")} and ${lastName} each name a hooks module`;
+    notes.push(
+      `${moduleNote} (a code file listed under \`modules\`). The plugin directory has rules of its own for such code, and these checks apply none of them, so passing here does not mean the directory accepts the plugin. The developer portal's own validation applies those rules.`,
     );
   }
-  if (m.connectsToRemote && y.url === undefined)
-    o.push(
+  if (components.connectsToRemote && privacy.url === undefined)
+    findings.push(
       makeFinding(
         "PRIVACY_URL_MISSING",
-        PLUGIN_VALIDATION_ISSUES,
+        PLUGIN_MANIFEST_PATH,
         "privacyPolicyUrl",
         "This plugin connects to a remote MCP server or HTTP hook but declares no privacy policy URL (plugin.json `privacyPolicyUrl`, or a 'Privacy' link in README).",
       ),
     );
-  else if (m.connectsToRemote && y.fromReadme)
-    o.push({
+  else if (components.connectsToRemote && privacy.fromReadme)
+    findings.push({
       ...makeFinding(
         "PRIVACY_URL_MISSING",
-        PLUGIN_VALIDATION_ISSUES,
+        PLUGIN_MANIFEST_PATH,
         "privacyPolicyUrl",
-        `Privacy policy URL taken from README (${extractToolInputForTelemetry(y.url ?? "", 1000)}); set \`privacyPolicyUrl\` in plugin.json to make it explicit.`,
+        `Privacy policy URL taken from README (${extractToolInputForTelemetry(privacy.url ?? "", 1000)}); set \`privacyPolicyUrl\` in plugin.json to make it explicit.`,
       ),
       title: null,
       severity: "info",
       blocking: false,
       fix: null,
     });
-  let osMetadataFiles = await findOsMetadataFiles(cwd, a);
-  appendAll(o, osMetadataFiles.findings);
+  let osMetadataFiles = await findOsMetadataFiles(resolved, notes);
+  appendAll(findings, osMetadataFiles.findings);
   return {
-    findings: dedupeFindings(o).toSorted(compareSeverity),
-    notes: a,
-    undecided: U,
-    incomplete: U.length > 0 || osMetadataFiles.notSearched || b || m.hooksModuleFiles.length > 0,
+    findings: dedupeFindings(findings).toSorted(compareSeverity),
+    notes,
+    undecided: undecidedRules,
+    incomplete:
+      undecidedRules.length > 0 ||
+      osMetadataFiles.notSearched ||
+      hasDerivedName ||
+      components.hooksModuleFiles.length > 0,
   };
 }
 //@ chunk-5aas12zq.js:12701-12887 placement
 function groupFindingsByFileReason(unusable) {
-  let n = new Map();
-  for (let { rule, ...r } of unusable) {
-    let s = `${r.file}
-${r.reason}`;
-    let o = n.get(s) ?? {
-      ...r,
+  let byFileAndReason = new Map();
+  for (let { rule, ...rest } of unusable) {
+    let key = `${rest.file}
+${rest.reason}`;
+    let grouped = byFileAndReason.get(key) ?? {
+      ...rest,
       rules: [],
     };
-    if (!o.rules.includes(rule)) o.rules.push(rule);
-    n.set(s, o);
+    if (!grouped.rules.includes(rule)) grouped.rules.push(rule);
+    byFileAndReason.set(key, grouped);
   }
-  return [...n.values()];
+  return [...byFileAndReason.values()];
 }
 //@ chunk-5aas12zq.js:12887-13011 placement = formatFailureDetails (0.777)
-function formatFailureDetails(e) {
-  let mapped = e.slice(0, MAX_NAME_SUGGESTION_DISTANCE).map((r) => extractToolInputForTelemetry(r, 100));
-  let remaining = e.length - mapped.length;
+function formatFailureDetails(items) {
+  let mapped = items.slice(0, MAX_LISTED_NAMES).map((item) => extractToolInputForTelemetry(item, 100));
+  let remaining = items.length - mapped.length;
   return `${mapped.join(", ")}${remaining > 0 ? ` and ${remaining} more` : ""}`;
 }
 //@ chunk-5aas12zq.js:13011-13092 placement
-function formatIssuesSummary(e, n) {
-  return e.length === 0 ? "" : `${e.length} listed for ${n} (${formatFailureDetails(e)})`;
+function formatIssuesSummary(items, label) {
+  return items.length === 0 ? "" : `${items.length} listed for ${label} (${formatFailureDetails(items)})`;
 }
 //@ chunk-5aas12zq.js:13092-13217 placement
 /**
  * 保留会导致失败的问题码（error，strict 时含 warning）。
  */
-function filterBlockingIssueCodes(e, n) {
-  return e.filter((t) => {
-    let r = PLUGIN_VALIDATION_ISSUES_2[t];
-    return !r.hold && (r.severity === "error" || (n.strict && r.severity === "warning"));
+function filterBlockingIssueCodes(codes, strict) {
+  return codes.filter((code) => {
+    let issue = PLUGIN_VALIDATION_ISSUES[code];
+    return !issue.hold && (issue.severity === "error" || (strict.strict && issue.severity === "warning"));
   });
 }
 //@ chunk-5aas12zq.js:13217-13310 placement
-function hasBlockingInvalidIssue(e, n) {
-  return e.some((t) => !t.hold && (t.blocking || (n.strict && t.severity === "warning")));
+function hasBlockingInvalidIssue(findings, strict) {
+  return findings.some(
+    (finding) => !finding.hold && (finding.blocking || (strict.strict && finding.severity === "warning")),
+  );
 }
 //@ chunk-5aas12zq.js:13310-13672 placement
 /**
@@ -548,12 +613,17 @@ var MARKETPLACE_FOLDER_NOTE =
 var INTERNAL_CHECK_FAILURE_NOTE =
   "The plugin directory checks did not run because of a problem inside this command, not in your plugin.";
 //@ chunk-5aas12zq.js:13672-13835 placement
-function formatDirectoryChecksHeading(e) {
-  return `Plugin directory checks for ${extractToolInputForTelemetry(e, MAX_FIELD_CHARS)}. The plugin directory is the catalog that plugins are submitted to; this is a subset of what it runs.`;
+function formatDirectoryChecksHeading(dirPath) {
+  return `Plugin directory checks for ${extractToolInputForTelemetry(dirPath, MAX_PATH_DISPLAY_CHARS)}. The plugin directory is the catalog that plugins are submitted to; this is a subset of what it runs.`;
 }
 //@ chunk-5aas12zq.js:13835-13890 placement
-function directoryChecksHeaderLines(e) {
-  return [formatDirectoryChecksHeading(e), "", `${figures_default.cross} ${INTERNAL_CHECK_FAILURE_NOTE}`, ""];
+function directoryChecksHeaderLines(dirPath) {
+  return [
+    formatDirectoryChecksHeading(dirPath),
+    "",
+    `${figures_default.cross} ${INTERNAL_CHECK_FAILURE_NOTE}`,
+    "",
+  ];
 }
 //@ chunk-5aas12zq.js:13890-15043 placement
 /**
@@ -561,26 +631,26 @@ function directoryChecksHeaderLines(e) {
  */
 function formatDirectoryCheckReport(pluginName, result, strictCommand) {
   let lines = [formatDirectoryChecksHeading(pluginName), ""];
-  let s = (d, f) => {
-    if (f.length === 0) return;
-    lines.push(d, "");
-    for (let p of f) appendAll(lines, checkUnreachableRules(p));
+  let pushSection = (heading, findings) => {
+    if (findings.length === 0) return;
+    lines.push(heading, "");
+    for (let finding of findings) appendAll(lines, checkUnreachableRules(finding));
     lines.push("");
   };
-  let filtered = result.findings.filter((finding) => finding.blocking);
-  let filtered_2 = result.findings.filter((finding) => !finding.blocking && finding.severity !== "info");
-  let filtered_3 = result.findings.filter((finding) => finding.severity === "info");
-  s(
-    `${figures_default.cross} Found ${filtered.length} ${plural(filtered.length, "problem")} the plugin directory refuses a submission for:`,
-    filtered,
+  let findings = result.findings.filter((finding) => finding.blocking);
+  let findings_2 = result.findings.filter((finding) => !finding.blocking && finding.severity !== "info");
+  let findings_3 = result.findings.filter((finding) => finding.severity === "info");
+  pushSection(
+    `${figures_default.cross} Found ${findings.length} ${plural(findings.length, "problem")} the plugin directory refuses a submission for:`,
+    findings,
   );
-  s(
-    `${figures_default.warning} Found ${filtered_2.length} plugin directory ${plural(filtered_2.length, "warning")}:`,
-    filtered_2,
+  pushSection(
+    `${figures_default.warning} Found ${findings_2.length} plugin directory ${plural(findings_2.length, "warning")}:`,
+    findings_2,
   );
-  s(
-    `${figures_default.info} Found ${filtered_3.length} plugin directory ${plural(filtered_3.length, "note")}:`,
-    filtered_3,
+  pushSection(
+    `${figures_default.info} Found ${findings_3.length} plugin directory ${plural(findings_3.length, "note")}:`,
+    findings_3,
   );
   if (result.notes.length > 0) {
     lines.push("About these checks:", "");
@@ -597,7 +667,7 @@ function formatDirectoryCheckReport(pluginName, result, strictCommand) {
   else if (strictCommand !== null)
     lines.push(
       "These plugin directory checks do not change the result below." +
-        (filtered.length > 0
+        (findings.length > 0
           ? ` To fail on problems the directory refuses a submission for, run ${strictCommand}.`
           : ""),
       "",
@@ -606,48 +676,56 @@ function formatDirectoryCheckReport(pluginName, result, strictCommand) {
   return lines;
 }
 //@ chunk-5aas12zq.js:24816-24938 placement
-function formatByteSize(e) {
-  if (e > 0 && e % 1048576 === 0) return `${e / 1048576} MiB`;
-  if (e > 0 && e % 1024 === 0) return `${e / 1024} KiB`;
-  return `${e} bytes`;
+function formatByteSize(size) {
+  if (size > 0 && size % 1048576 === 0) return `${size / 1048576} MiB`;
+  if (size > 0 && size % 1024 === 0) return `${size / 1024} KiB`;
+  return `${size} bytes`;
 }
 export {
   manifestRelativePath,
-  PLUGIN_VALIDATION_ISSUES_2,
-  LISTING_WHITESPACE_CHARS,
-  ARCHIVE_OS_METADATA_NAMES,
   PLUGIN_VALIDATION_ISSUES,
+  LISTING_WHITESPACE_CHARS,
+  MAX_SCAN_ENTRIES,
+  PLUGIN_MANIFEST_PATH,
   ICON_CANDIDATES,
-  SYSTEM_FILE_GIT_NOTE,
-  MAX_FIELD_CHARS,
+  MAX_REPO_ROOT_PARENTS,
+  MAX_PATH_DISPLAY_CHARS,
   URL_PATTERN_GLOBAL,
   LISTING_WHITESPACE_RE,
   URL_PATTERN,
-  PLUGIN_NAME_SPACE_MESSAGE,
-  MAX_README_CHARS,
-  MAX_DESCRIPTION_LENGTH,
-  MAX_NAME_SUGGESTION_COUNT,
-  MAX_SCREENSHOT_BYTES,
-  MAX_ICON_BYTES,
+  MAX_README_BYTES,
+  MAX_BRACKET_CELLS,
+  MAX_DELIMITER_CHARS,
+  MAX_DELIMITER_RUNS,
+  MAX_INDENT_COLUMNS,
+  MAX_LIST_NESTING,
   README_CANDIDATES,
   PRIVACY_WORD_RE,
   SUPPORT_WORD_RE,
   TERMS_WORD_RE,
   DOCS_WORD_RE,
-  MAX_LISTING_CHARS,
+  MAX_SCREENSHOTS,
   README_ROOT_CANDIDATES,
+  MAX_ICON_BYTES,
   ICON_INVALID_MESSAGE,
-  MIN_README_WORDS,
   UNSAFE_SVG_ELEMENT_RE,
   SVG_EVENT_HANDLER_RE,
   SVG_EXTERNAL_REF_RE,
-  MAX_HOOK_SUGGESTIONS,
-  MAX_COMMAND_LENGTH,
-  HOOK_EVENT_NAME_SET,
-  MAX_LINK_CHECK_COUNT,
-  MACOS_METADATA_DIR,
-  MAX_SCREENSHOT_COUNT,
+  MAX_LISTED_MODULE_FILES,
+  MAX_LISTED_TRAVERSALS,
+  HOOK_EVENT_NAMES,
+  MACOSX_METADATA_DIR,
+  MAX_SCAN_DEPTH,
+  SYSTEM_FILE_NAMES,
   formatFailureDetails,
-  MAX_ISSUE_ROWS,
-  MAX_URL_LENGTH,
+  SYSTEM_FILES_FOUND_NOTE,
+  MAX_LISTED_SYSTEM_FILES,
+  INTERNAL_CHECK_FAILURE_NOTE,
+  getEffectivePluginRoot,
+  hasBlockingInvalidIssue,
+  directoryChecksHeaderLines,
+  formatDirectoryCheckReport,
+  isInGlobalClaudeFolder,
+  validatePluginDirectory,
+  filterBlockingIssueCodes,
 };

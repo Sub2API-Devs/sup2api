@@ -18,14 +18,14 @@ import { consumeReadPermission } from "../../../utils/fsSafety/atomicWriteStagin
 import { resolveRipgrepTarget } from "../../../utils/ripgrep.js";
 
 //@ chunk-e6aww6q8.js:1452836-1453023 fingerprint = pathFromToolUse (0.43)
-async function pathFromToolUse(e, n) {
-  let toolPermissionContext = GrepTool.getPath(e);
-  let s = consumeReadPermission(n, toolPermissionContext);
-  if (e.path) await assertGrepPathExists(e.path, s, n);
-  let searchTarget = await resolveRipgrepTarget(toolPermissionContext, s);
-  if (searchTarget === null) return emptyGrepResult(e);
+async function pathFromToolUse(toolUse, context) {
+  let toolPermissionContext = GrepTool.getPath(toolUse);
+  let consumed = consumeReadPermission(context, toolPermissionContext);
+  if (toolUse.path) await assertGrepPathExists(toolUse.path, consumed, context);
+  let searchTarget = await resolveRipgrepTarget(toolPermissionContext, consumed);
+  if (searchTarget === null) return emptyGrepResult(toolUse);
   try {
-    return await runGrep(searchTarget, e, n);
+    return await runGrep(searchTarget, toolUse, context);
   } finally {
     await searchTarget.close();
   }

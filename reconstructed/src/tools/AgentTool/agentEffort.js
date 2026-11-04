@@ -19,6 +19,7 @@ import { toolMatchesName } from "../../Tool.js";
 import { SENDMESSAGE } from "../SendMessageTool/constants.js";
 import { ENTER_PLAN_MODE_TOOL_NAME } from "../EnterPlanModeTool/constants.js";
 import { EXITPLANMODE_2 } from "../ExitPlanModeTool/constants.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1428917-1428944 placement
 /**
@@ -39,15 +40,19 @@ function isRelativeEffortDisabled() {
   return getFeatureValue_SESSION_PINNED("tengu_snappy_pelican", false);
 }
 //@ chunk-e6aww6q8.js:1429151-1429316 placement
-function dropRelativeEffortInput(e) {
-  if (isRelativeEffortDisabled() || !isPlainObject_5(e) || (e.effort !== "lower" && e.effort !== "higher"))
+function dropRelativeEffortInput(input) {
+  if (
+    isRelativeEffortDisabled() ||
+    !isPlainObject_5(input) ||
+    (input.effort !== "lower" && input.effort !== "higher")
+  )
     return null;
-  let n = {
-    ...e,
+  let remainingInput = {
+    ...input,
   };
-  delete n.effort;
+  delete remainingInput.effort;
   return {
-    input: n,
+    input: remainingInput,
     shapeClass: "drop_relative_effort",
   };
 }
@@ -55,8 +60,8 @@ function dropRelativeEffortInput(e) {
 /**
  * 无盘会话里且工具表未显式包含该工具。
  */
-function toolMissingInDiskless(e, n) {
-  return isDiskless() && (n === undefined || !n.some((r) => toolMatchesName(r, e)));
+function toolMissingInDiskless(toolName, tools) {
+  return isDiskless() && (tools === undefined || !tools.some((tool) => toolMatchesName(tool, toolName)));
 }
 //@ chunk-e6aww6q8.js:1429382-1429412 placement
 /**
@@ -78,7 +83,10 @@ function isPlanModeToolUnavailable(tools) {
 /**
  * 保存当前远程会话 id 的 AsyncLocalStorage。
  */
-var remoteSessionContext = new AsyncLocalStorage();
+var remoteSessionContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:1429559", () => {
+  remoteSessionContext = new AsyncLocalStorage();
+});
 //@ chunk-e6aww6q8.js:1429575-1429629 placement
 /**
  * 取当前远程会话 id。
@@ -90,12 +98,12 @@ function currentRemoteSessionId() {
 /**
  * 在指定远程会话 id 下执行函数。
  */
-function runWithRemoteSessionId(remoteSessionId, n) {
+function runWithRemoteSessionId(remoteSessionId, fn) {
   return remoteSessionContext.run(
     {
       remoteSessionId,
     },
-    n,
+    fn,
   );
 }
 export {

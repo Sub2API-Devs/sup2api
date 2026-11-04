@@ -27,7 +27,10 @@ function isConnectionStringName(name) {
 var MIXED_CASE_AUTH_WORDS = ["OAuth", "NextAuth"];
 //@ chunk-q8cqcff6.js:32937-33103 placement = normalize (1)
 function camelToSnakeEnvName(name) {
-  return MIXED_CASE_AUTH_WORDS.reduce((acc, r) => acc.replaceAll(r, r[0] + r.slice(1).toLowerCase()), name)
+  return MIXED_CASE_AUTH_WORDS.reduce(
+    (acc, word) => acc.replaceAll(word, word[0] + word.slice(1).toLowerCase()),
+    name,
+  )
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
     .replace(/([A-Z])([A-Z][a-z])/g, "$1_$2");
 }

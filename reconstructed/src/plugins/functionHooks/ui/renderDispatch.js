@@ -85,66 +85,73 @@ import {
 import { installRenderBridge, engineElement } from "./renderBridge.js";
 import { findEngineRef } from "./index.js";
 import { collectClientElements } from "./elements.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:633150-633238 placement
-var chainModules = (e, n) =>
-  modulesHookingEvent(RENDER_EVENT, n, {
-    e,
-  }).filter((r) => matchesField(r.matcherFor(RENDER_EVENT), "component", e.component));
+var chainModules = (input, origin) =>
+  modulesHookingEvent(RENDER_EVENT, origin, {
+    e: input,
+  }).filter((mod) => matchesField(mod.matcherFor(RENDER_EVENT), "component", input.component));
 //@ chunk-s61vbvea.js:633238-633254 placement
 var UNATTRIBUTED_LEAD = "hooks";
 //@ chunk-s61vbvea.js:633254-633322 placement
-function leadOf(e) {
-  let [n, ...r] = e;
-  return n !== undefined && r.length === 0 ? n : UNATTRIBUTED_LEAD;
+function leadOf(names) {
+  let [first, ...rest] = names;
+  return first !== undefined && rest.length === 0 ? first : UNATTRIBUTED_LEAD;
 }
 //@ chunk-s61vbvea.js:633322-633385 placement
-var loadOf = (e) => e.map((n) => `${n.name}#${n.environmentId}`).join();
+var loadOf = (modules) => modules.map((mod) => `${mod.name}#${mod.environmentId}`).join();
 //@ chunk-s61vbvea.js:633385-633443 placement
-var tellerOf = (e) => ({
-  load: loadOf(e),
-  lead: leadOf(e.map((n) => n.name)),
+var tellerOf = (modules) => ({
+  load: loadOf(modules),
+  lead: leadOf(modules.map((mod) => mod.name)),
 });
 //@ chunk-s61vbvea.js:633443-633472 placement
-var chainTeller = (e, origin) => tellerOf(chainModules(e, origin));
+var chainTeller = (input, origin) => tellerOf(chainModules(input, origin));
 //@ chunk-s61vbvea.js:633472-633590 placement
-var coreHandler = (stepRecorder, n) => ({
+var coreHandler = (stepRecorder, draw) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
-  run: (r) =>
+  run: (request) =>
     Promise.resolve({
       type: "engine",
-      ref: stepRecorder.keep(n(r), undefined),
+      ref: stepRecorder.keep(draw(request), undefined),
     }),
 });
 //@ chunk-s61vbvea.js:633590-633614 placement
-var RENDER_SITE = UI_ENV_SITE_RULES["ui.render"];
+var RENDER_SITE; // deferred: uses UI_ENV_SITE_RULES (../sites/siteRules.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:633590", () => {
+  RENDER_SITE = UI_ENV_SITE_RULES["ui.render"];
+});
 //@ chunk-s61vbvea.js:633614-633697 placement
 function ledgersByTree() {
   let weakMap = new WeakMap();
   return {
-    get: (n) => weakMap.get(n),
-    set: (n, r) => {
-      weakMap.set(n, r);
+    get: (tree) => weakMap.get(tree),
+    set: (tree, ledger) => {
+      weakMap.set(tree, ledger);
     },
   };
 }
 //@ chunk-s61vbvea.js:633697-633711 placement
-var heldByTree = ledgersByTree();
+var heldByTree; // deferred: uses ledgersByTree of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:633697", () => {
+  heldByTree = ledgersByTree();
+});
 //@ chunk-s61vbvea.js:633711-633751 placement
-var heldRenderInput = (e, engineRef) => heldByTree.get(e)?.of(engineRef)?.input;
+var heldRenderInput = (tree, engineRef) => heldByTree.get(tree)?.of(engineRef)?.input;
 //@ chunk-s61vbvea.js:633751-633782 placement
-var logLine = (e) => e.replace(LINE_SCRUB, "?");
+var logLine = (line) => line.replace(LINE_SCRUB, "?");
 //@ chunk-s61vbvea.js:633782-633837 placement
-var isPlainCodeSaid = (e) => toldRefusals.has(`noted ${e}`) && (toldRefusals.has(e) || !hasUiLogSink());
+var isPlainCodeSaid = (key) => toldRefusals.has(`noted ${key}`) && (toldRefusals.has(key) || !hasUiLogSink());
 //@ chunk-s61vbvea.js:633837-633877 placement
-var plainCodeText = (component, n) => `ui.render (${component}): ${n}`;
+var plainCodeText = (component, note) => `ui.render (${component}): ${note}`;
 //@ chunk-s61vbvea.js:633877-634013 placement
 function sayPlainCode({ key, lead, text }) {
-  let s = `noted ${key}`;
-  if (!toldRefusals.has(s)) {
-    toldRefusals.add(s);
+  let notedKey = `noted ${key}`;
+  if (!toldRefusals.has(notedKey)) {
+    toldRefusals.add(notedKey);
     logForDebugging(`${lead}: ${text}`, {
       level: "warn",
     });
@@ -156,70 +163,73 @@ function sayPlainCode({ key, lead, text }) {
   });
 }
 //@ chunk-s61vbvea.js:634013-634191 placement
-function plainKey(e, n) {
-  let r = MESSAGE_COMPONENT_NAMES.has(e.component);
+function plainKey(input, finding) {
+  let isMessageComponent = MESSAGE_COMPONENT_NAMES.has(input.component);
   return [
     getPluginRegistry()
       .loadedModules.map((loadedModule) => `${loadedModule.name}#${loadedModule.environmentId}`)
       .join(),
-    r ? e.component : `${e.component} ${e.requestId}`,
-    n,
+    isMessageComponent ? input.component : `${input.component} ${input.requestId}`,
+    finding,
   ].join(" ");
 }
 //@ chunk-s61vbvea.js:634191-634335 placement
 function tellPlainCode({ input, drawnPlain, origin }) {
-  let s = plainKey(input, plainCodeFinding(drawnPlain));
-  if (isPlainCodeSaid(s)) return;
+  let key = plainKey(input, plainCodeFinding(drawnPlain));
+  if (isPlainCodeSaid(key)) return;
   sayPlainCode({
-    key: s,
+    key,
     lead: chainTeller(input, origin).lead,
     text: plainCodeText(input.component, plainCodeNote(drawnPlain)),
   });
 }
 //@ chunk-s61vbvea.js:634335-634497 placement
 function tellPlainLink({ input, drawnPlain, origin }) {
-  let s = plainKey(input, `${input.surface} ${plainLinkFinding(drawnPlain)}`);
-  if (isPlainCodeSaid(s)) return;
+  let key = plainKey(input, `${input.surface} ${plainLinkFinding(drawnPlain)}`);
+  if (isPlainCodeSaid(key)) return;
   sayPlainCode({
-    key: s,
+    key,
     lead: chainTeller(input, origin).lead,
     text: plainCodeText(input.component, plainLinkNote(drawnPlain)),
   });
 }
 //@ chunk-s61vbvea.js:634497-634581 placement
-var NOTHING_LEFT = Object.freeze({
-  AbovePrompt: "nothing was drawn",
-  Pane: "the pane was closed",
+var NOTHING_LEFT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:634497", () => {
+  NOTHING_LEFT = Object.freeze({
+    AbovePrompt: "nothing was drawn",
+    Pane: "the pane was closed",
+  });
 });
 //@ chunk-s61vbvea.js:634581-634799 placement
-function countRefused(component, n) {
-  let r = NOTHING_LEFT[component] !== undefined;
-  let s = r ? "tree_refused_left_empty" : "tree_refused";
-  let h = throttledRunTelemetry(
+function countRefused(component, origin) {
+  let isLeftEmpty = NOTHING_LEFT[component] !== undefined;
+  let reason = isLeftEmpty ? "tree_refused_left_empty" : "tree_refused";
+  let fields = throttledRunTelemetry(
     {
       subject: component,
       event: RENDER_EVENT,
-      reason: s,
+      reason,
     },
-    n,
+    origin,
   );
-  if (h === undefined) return;
-  if (r) logFeatureBad("plugin_function_hooks_draw", s, h);
-  else logFeatureSad("plugin_function_hooks_draw", s, h);
+  if (fields === undefined) return;
+  if (isLeftEmpty) logFeatureBad("plugin_function_hooks_draw", reason, fields);
+  else logFeatureSad("plugin_function_hooks_draw", reason, fields);
 }
 //@ chunk-s61vbvea.js:634799-634953 placement
-function countLeftEmpty(e, n) {
-  let { component } = e;
-  let s = RENDER_SITE.refusedSubject?.(e) ?? component;
-  let h = engineCreateErrors.get(s);
-  engineCreateErrors.delete(s);
-  if (h !== undefined && NOTHING_LEFT[component] !== undefined && n.type === "engine")
-    countRefused(component, () => h);
+function countLeftEmpty(input, drawn) {
+  let { component } = input;
+  let subject = RENDER_SITE.refusedSubject?.(input) ?? component;
+  let error = engineCreateErrors.get(subject);
+  engineCreateErrors.delete(subject);
+  if (error !== undefined && NOTHING_LEFT[component] !== undefined && drawn.type === "engine")
+    countRefused(component, () => error);
 }
 //@ chunk-s61vbvea.js:634953-635084 placement
 function refusedText(component, problem) {
-  let s = NOTHING_LEFT[component] !== undefined ? "nothing was drawn" : "the engine drew its own";
-  return `ui.render (${component}) refused: ${problem}; ${s}`;
+  let tail = NOTHING_LEFT[component] !== undefined ? "nothing was drawn" : "the engine drew its own";
+  return `ui.render (${component}) refused: ${problem}; ${tail}`;
 }
 //@ chunk-s61vbvea.js:635084-635241 placement
 function tellRefused({ input, problem, origin }) {
@@ -232,10 +242,10 @@ function tellRefused({ input, problem, origin }) {
   });
 }
 //@ chunk-s61vbvea.js:635241-635359 placement
-function sayOnce({ input, origin }, r, text) {
+function sayOnce({ input, origin }, reasonKey, text) {
   let { load, lead } = chainTeller(input, origin);
   sayPlainCode({
-    key: [load, input.component, r].join(" "),
+    key: [load, input.component, reasonKey].join(" "),
     lead,
     text,
   });
@@ -244,145 +254,159 @@ function sayOnce({ input, origin }, r, text) {
 var shownTextLine = (component, { written, drawn }) =>
   `ui.render (${component}): ${written} characters of text are drawn up to the first ${drawn}`;
 //@ chunk-s61vbvea.js:635467-635693 placement
-var tellOwnProps = (e) =>
+var tellOwnProps = (report) =>
   sayOnce(
-    e,
+    report,
     "own props",
-    `ui.render (${e.input.component}): props.${e.names.join(", props.")} rewritten with more than ${SHOWN_TEXT_MAX} characters of keys and short strings, or nested past ${MAX_DEPTH} deep; the engine's own is drawn`,
+    `ui.render (${report.input.component}): props.${report.names.join(", props.")} rewritten with more than ${SHOWN_TEXT_MAX} characters of keys and short strings, or nested past ${MAX_DEPTH} deep; the engine's own is drawn`,
   );
 //@ chunk-s61vbvea.js:635693-635757 placement
-var tellShownText = (e) => sayOnce(e, "text cut", shownTextLine(e.input.component, e.clipped));
+var tellShownText = (report) =>
+  sayOnce(report, "text cut", shownTextLine(report.input.component, report.clipped));
 //@ chunk-s61vbvea.js:635757-635769 placement
 var NAME_CHARS = 256;
 //@ chunk-s61vbvea.js:635769-636004 placement
-function namesLength(e, n) {
-  if (typeof e === "string") return e.length <= NAME_CHARS ? e.length : 0;
-  let r = Array.isArray(e);
-  if (!r && !isPlainDataObject(e)) return 0;
-  return n > MAX_DEPTH
+function namesLength(value, depth) {
+  if (typeof value === "string") return value.length <= NAME_CHARS ? value.length : 0;
+  let isArray = Array.isArray(value);
+  if (!isArray && !isPlainDataObject(value)) return 0;
+  return depth > MAX_DEPTH
     ? 1 / 0
-    : r
-      ? denseListCopy(e).reduce((acc, y) => acc + namesLength(y, n + 1), 0)
-      : Object.entries(e).reduce((acc, [y, S]) => acc + y.length + namesLength(S, n + 1), 0);
+    : isArray
+      ? denseListCopy(value).reduce((acc, entry) => acc + namesLength(entry, depth + 1), 0)
+      : Object.entries(value).reduce(
+          (acc, [key, value]) => acc + key.length + namesLength(value, depth + 1),
+          0,
+        );
 }
 //@ chunk-s61vbvea.js:636004-636313 placement
-function cutValue(e, n) {
-  if (typeof e === "string") return e.length <= NAME_CHARS ? e : n.shown(e, " ");
-  if (Array.isArray(e)) {
-    let y = denseListCopy(e);
-    let mapped = y.map((R) => cutValue(R, n));
-    return mapped.every((R, x) => R === y[x]) ? e : mapped;
+function cutValue(value, room) {
+  if (typeof value === "string") return value.length <= NAME_CHARS ? value : room.shown(value, " ");
+  if (Array.isArray(value)) {
+    let list = denseListCopy(value);
+    let mapped = list.map((entry) => cutValue(entry, room));
+    return mapped.every((cut, index) => cut === list[index]) ? value : mapped;
   }
-  if (!isPlainDataObject(e)) return e;
-  let entries = Object.entries(e);
-  let mapped = entries.map(([y, S]) => [y, cutValue(S, n)]);
-  return mapped.every(([, y], S) => y === entries[S]?.[1]) ? e : Object.fromEntries(mapped);
+  if (!isPlainDataObject(value)) return value;
+  let entries = Object.entries(value);
+  let mapped = entries.map(([key, value]) => [key, cutValue(value, room)]);
+  return mapped.every(([, cut], index) => cut === entries[index]?.[1]) ? value : Object.fromEntries(mapped);
 }
 //@ chunk-s61vbvea.js:636313-636361 placement
-var textLength = (e) => collectStrings(e).reduce((acc, r) => acc + r.length, 0);
+var textLength = (value) => collectStrings(value).reduce((acc, text) => acc + text.length, 0);
 //@ chunk-s61vbvea.js:636361-636783 placement
-function withShownProps(e, n, r) {
-  let props = n.props;
-  let h = textRoom();
-  let flattened = Object.entries(e.props).flatMap(([key, value]) => {
+function withShownProps(drawn, input, report) {
+  let props = input.props;
+  let budget = textRoom();
+  let flattened = Object.entries(drawn.props).flatMap(([key, value]) => {
     if (value === props[key] || textLength(value) <= textLength(props[key])) return [];
-    let j = namesLength(value, 0) > SHOWN_TEXT_MAX;
-    let G = j ? props[key] : cutValue(value, h);
-    return G === value
+    let isOwnProp = namesLength(value, 0) > SHOWN_TEXT_MAX;
+    let shown = isOwnProp ? props[key] : cutValue(value, budget);
+    return shown === value
       ? []
       : [
           {
             key,
-            drawn: G,
-            isOwn: j,
+            drawn: shown,
+            isOwn: isOwnProp,
           },
         ];
   });
-  let mapped = flattened.filter((R) => R.isOwn).map((R) => R.key);
-  if (h.isCut())
-    r.cut({
-      written: h.written(),
+  let mapped = flattened.filter((entry) => entry.isOwn).map((entry) => entry.key);
+  if (budget.isCut())
+    report.cut({
+      written: budget.written(),
       drawn: SHOWN_TEXT_MAX,
     });
-  if (mapped.length > 0) r.own(mapped);
+  if (mapped.length > 0) report.own(mapped);
   return flattened.length === 0
-    ? e
+    ? drawn
     : {
-        ...e,
+        ...drawn,
         props: {
-          ...e.props,
-          ...Object.fromEntries(flattened.map((R) => [R.key, R.drawn])),
+          ...drawn.props,
+          ...Object.fromEntries(flattened.map((entry) => [entry.key, entry.drawn])),
         },
       };
 }
 //@ chunk-s61vbvea.js:636783-636807 placement
 var linksByLedger = () => new WeakMap();
 //@ chunk-s61vbvea.js:636807-636821 placement
-var heldLinks = linksByLedger();
+var heldLinks; // deferred: uses linksByLedger of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:636807", () => {
+  heldLinks = linksByLedger();
+});
 //@ chunk-s61vbvea.js:636821-636994 placement
-function drawersOf(e, n) {
-  let r = n && heldByTree.get(n);
-  let flattened = (r && heldLinks.get(r))?.flatMap((y) => (e.some((S) => S.name === y) ? [y] : y.split("+")));
-  let filtered = e.filter((y) => flattened?.includes(y.name));
-  return filtered.length === 0 ? e : filtered;
+function drawersOf(modules, tree) {
+  let ledger = tree && heldByTree.get(tree);
+  let flattened = (ledger && heldLinks.get(ledger))?.flatMap((drawer) =>
+    modules.some((mod) => mod.name === drawer) ? [drawer] : drawer.split("+"),
+  );
+  let filtered = modules.filter((mod) => flattened?.includes(mod.name));
+  return filtered.length === 0 ? modules : filtered;
 }
 //@ chunk-s61vbvea.js:636994-637050 placement
-var thrownKey = (e, n) => [n.load, e, "threw while drawn"].join(" ");
+var thrownKey = (component, teller) => [teller.load, component, "threw while drawn"].join(" ");
 //@ chunk-s61vbvea.js:637050-637509 placement
-function firstThrowReport(component, n, r) {
-  let s = `reported ${r} ${thrownKey(component, n)}`;
-  if (toldRefusals.has(s)) return null;
-  toldRefusals.add(s);
-  let h = loadedModuleArgs(n.lead);
-  let y = h && classifyPluginOrigin(h);
-  let S = {
-    ...y,
+function firstThrowReport(component, teller, kind) {
+  let dedupeKey = `reported ${kind} ${thrownKey(component, teller)}`;
+  if (toldRefusals.has(dedupeKey)) return null;
+  toldRefusals.add(dedupeKey);
+  let pluginArgs = loadedModuleArgs(teller.lead);
+  let originInfo = pluginArgs && classifyPluginOrigin(pluginArgs);
+  let fields = {
+    ...originInfo,
     component: fromEnum(component),
   };
-  let w = r === "Client";
-  if (!w && NOTHING_LEFT[component] !== undefined)
-    logFeatureBad("plugin_function_hooks_draw", "threw_while_drawn", S);
-  else logFeatureSad("plugin_function_hooks_draw", w ? "client_threw_while_drawn" : "threw_while_drawn", S);
-  return `ui.render (${component}): a plugin's ${r} threw while drawn (plugin ${y?.plugin_name_redacted ?? "unattributed"}, ${y?.provenance ?? "unattributed"})`;
+  let isClient = kind === "Client";
+  if (!isClient && NOTHING_LEFT[component] !== undefined)
+    logFeatureBad("plugin_function_hooks_draw", "threw_while_drawn", fields);
+  else
+    logFeatureSad(
+      "plugin_function_hooks_draw",
+      isClient ? "client_threw_while_drawn" : "threw_while_drawn",
+      fields,
+    );
+  return `ui.render (${component}): a plugin's ${kind} threw while drawn (plugin ${originInfo?.plugin_name_redacted ?? "unattributed"}, ${originInfo?.provenance ?? "unattributed"})`;
 }
 //@ chunk-s61vbvea.js:637551-637731 placement
-var standingLinks = (e) =>
-  e
-    .filter((n, r) => {
-      let s = e[r + 1];
-      let h =
-        s !== undefined &&
-        isDeepStrictEqual(n.received, s.received) &&
-        isDeepStrictEqual(n.returned, s.returned);
-      return n.plugin !== ENGINE && n.outcome !== "skipped" && !h;
+var standingLinks = (steps) =>
+  steps
+    .filter((step, index) => {
+      let next = steps[index + 1];
+      let isPassThrough =
+        next !== undefined &&
+        isDeepStrictEqual(step.received, next.received) &&
+        isDeepStrictEqual(step.returned, next.returned);
+      return step.plugin !== ENGINE && step.outcome !== "skipped" && !isPassThrough;
     })
-    .map((n) => n.plugin);
+    .map((step) => step.plugin);
 //@ chunk-s61vbvea.js:637731-637827 placement
-var thrownText = (component, n) =>
-  `ui.render (${component}) threw while drawn: ${n}; ` +
+var thrownText = (component, message) =>
+  `ui.render (${component}) threw while drawn: ${message}; ` +
   (NOTHING_LEFT[component] ?? "the engine drew its own");
 //@ chunk-s61vbvea.js:637827-637959 placement
 function tellThrown({ component, teller, error }) {
-  let s = thrownKey(component, teller);
-  if (isPlainCodeSaid(s)) return;
+  let dedupeKey = thrownKey(component, teller);
+  if (isPlainCodeSaid(dedupeKey)) return;
   sayPlainCode({
-    key: s,
+    key: dedupeKey,
     lead: teller.lead,
     text: thrownText(component, logLine(String(errorMessage(error)))),
   });
 }
 //@ chunk-s61vbvea.js:637959-637988 placement
-var thrownTeller = (e, n) => tellerOf(drawersOf(e, n));
+var thrownTeller = (modules, tree) => tellerOf(drawersOf(modules, tree));
 //@ chunk-s61vbvea.js:637988-638191 placement
-function unknownBorderNote(e) {
-  return `Box borderStyle ${typeof e === "string" ? `"${shownKey(e)}" is not a border style` : `is ${valueKind(e)}, not a style name`} (the styles are ${[...BORDER_STYLES].join(", ")}); the Box is drawn with no border`;
+function unknownBorderNote(style) {
+  return `Box borderStyle ${typeof style === "string" ? `"${shownKey(style)}" is not a border style` : `is ${valueKind(style)}, not a style name`} (the styles are ${[...BORDER_STYLES].join(", ")}); the Box is drawn with no border`;
 }
 //@ chunk-s61vbvea.js:638191-638337 placement
 function tellUnknownBorder({ input, style, origin }) {
-  let s = plainKey(input, "borderStyle");
-  if (isPlainCodeSaid(s)) return;
+  let dedupeKey = plainKey(input, "borderStyle");
+  if (isPlainCodeSaid(dedupeKey)) return;
   sayPlainCode({
-    key: s,
+    key: dedupeKey,
     lead: chainTeller(input, origin).lead,
     text: plainCodeText(input.component, unknownBorderNote(style)),
   });
@@ -390,15 +414,15 @@ function tellUnknownBorder({ input, style, origin }) {
 //@ chunk-s61vbvea.js:638337-639581 placement
 async function dispatchRenderSite({ input, signal, origin }) {
   let stepRecorder = createStepRecorder();
-  let h = (clipped) =>
+  let onShownText = (clipped) =>
     tellShownText({
       input,
       clipped,
       origin,
     });
-  let y = coreHandler(stepRecorder, (re) =>
-    withShownProps(re, input, {
-      cut: h,
+  let coreStep = coreHandler(stepRecorder, (request) =>
+    withShownProps(request, input, {
+      cut: onShownText,
       own: (names) =>
         tellOwnProps({
           input,
@@ -407,15 +431,15 @@ async function dispatchRenderSite({ input, signal, origin }) {
         }),
     }),
   );
-  let S = hasCurrentDispatch() ? [] : [y];
+  let coreSteps = hasCurrentDispatch() ? [] : [coreStep];
   let drawingScope = createDrawingScope(renderInstanceKey(input), input, () =>
     renderPluginsForInstance(input),
   );
   let scope = newScope({
     drawing: drawingScope,
   });
-  let x = [];
-  let P = await dispatchScopeStorage
+  let traceSteps = [];
+  let rawDrawn = await dispatchScopeStorage
     .run(scope, () =>
       reportChainFailure({
         e: input,
@@ -423,7 +447,7 @@ async function dispatchRenderSite({ input, signal, origin }) {
           ...hookMembersFor(RENDER_EVENT, origin, {
             e: input,
           }),
-          ...S,
+          ...coreSteps,
         ],
         site: RENDER_SITE,
         signal,
@@ -431,8 +455,8 @@ async function dispatchRenderSite({ input, signal, origin }) {
           isUnfolded: true,
         }),
         origin: hookOriginFromStack(origin),
-        trace: (re) => {
-          x = re;
+        trace: (steps) => {
+          traceSteps = steps;
         },
       }),
     )
@@ -442,114 +466,120 @@ async function dispatchRenderSite({ input, signal, origin }) {
       scope.values = undefined;
     });
   if (input.requestId !== "" && !signal.aborted) recordStateReads(drawingScope);
-  let G = wellFormed(P);
-  let L = input.component === ONE_ENGINE_NODE_COMPONENT;
-  let q = 0;
-  let Q = validateTree(G, input.component, {
+  let drawn = wellFormed(rawDrawn);
+  let isEngineNode = input.component === ONE_ENGINE_NODE_COMPONENT;
+  let clientRows = 0;
+  let treeProblem = validateTree(drawn, input.component, {
     surface: input.surface,
-    note: (re) => logForDebugging(`ui.render (${input.component}): ${logLine(re)}`),
-    ...(L && {
-      clientRows: (re) => {
-        let he = surfaceRowLedger.clientRows(clientMountKey(input, re));
-        q += he;
-        return he;
+    note: (note) => logForDebugging(`ui.render (${input.component}): ${logLine(note)}`),
+    ...(isEngineNode && {
+      clientRows: (client) => {
+        let rows = surfaceRowLedger.clientRows(clientMountKey(input, client));
+        clientRows += rows;
+        return rows;
       },
-      measured: (re) => surfaceRowLedger.recordOwn(input, re - q),
+      measured: (total) => surfaceRowLedger.recordOwn(input, total - clientRows),
     }),
   });
-  countLeftEmpty(input, G);
-  if (Q !== undefined) {
+  countLeftEmpty(input, drawn);
+  if (treeProblem !== undefined) {
     logForDebugging(
-      `ui.render (${input.component}): the chain settled on a tree that does not validate (${logLine(Q)}); drawing the engine's own`,
+      `ui.render (${input.component}): the chain settled on a tree that does not validate (${logLine(treeProblem)}); drawing the engine's own`,
       {
         level: "warn",
       },
     );
     tellRefused({
       input,
-      problem: Q,
+      problem: treeProblem,
       origin,
     });
-    releaseAllPresses(G, input);
+    releaseAllPresses(drawn, input);
     countRefused(input.component, () => chainTeller(input, origin).lead);
     return ENGINE_ELEMENT;
   }
-  let Z = withKnownBorders(withUsableBoxKeys(G), (style) =>
+  let withBorders = withKnownBorders(withUsableBoxKeys(drawn), (style) =>
     tellUnknownBorder({
       input,
       style,
       origin,
     }),
   );
-  let ee = withRemoteProps(Z, input.surface);
-  let ae = withPlainLinks(ee, input.surface, (drawnPlain) =>
+  let withRemote = withRemoteProps(withBorders, input.surface);
+  let withLinks = withPlainLinks(withRemote, input.surface, (drawnPlain) =>
     tellPlainLink({
       input,
       drawnPlain,
       origin,
     }),
   );
-  let se = withPlainCode(withShownText(ae, h), (drawnPlain) =>
+  let finalTree = withPlainCode(withShownText(withLinks, onShownText), (drawnPlain) =>
     tellPlainCode({
       input,
       drawnPlain,
       origin,
     }),
   );
-  releaseDroppedPresses(G, se, input);
-  heldByTree.set(se, stepRecorder);
-  heldLinks.set(stepRecorder, standingLinks(x));
-  return se;
+  releaseDroppedPresses(drawn, finalTree, input);
+  heldByTree.set(finalTree, stepRecorder);
+  heldLinks.set(stepRecorder, standingLinks(traceSteps));
+  return finalTree;
 }
 //@ chunk-s61vbvea.js:639581-639701 placement
 function memoizedStableKey() {
   let weakMap = new WeakMap();
-  return (n) => {
-    let r = weakMap.get(n);
-    if (r !== undefined) return r;
-    let contentHash = computeContentHash(stableStringifySafe(n));
-    weakMap.set(n, contentHash);
+  return (value) => {
+    let cached = weakMap.get(value);
+    if (cached !== undefined) return cached;
+    let contentHash = computeContentHash(stableStringifySafe(value));
+    weakMap.set(value, contentHash);
     return contentHash;
   };
 }
 //@ chunk-s61vbvea.js:639701-639715 placement
-var propsKey = memoizedStableKey();
+var propsKey; // deferred: uses memoizedStableKey of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:639701", () => {
+  propsKey = memoizedStableKey();
+});
 //@ chunk-s61vbvea.js:639715-639809 placement
-var valueKeyOf = (e) =>
-  [e.viewport?.columns ?? "", e.viewport?.isFullscreen ?? "", propsKey(e.props)].join("\x00");
+var valueKeyOf = (input) =>
+  [input.viewport?.columns ?? "", input.viewport?.isFullscreen ?? "", propsKey(input.props)].join("\x00");
 //@ chunk-s61vbvea.js:639809-639895 placement
-var answers = (e, n, r) =>
-  e.settled !== undefined && e.propsKey === n && e.versions === renderVersions() && e.version === r;
+var answers = (record, propsKey, version) =>
+  record.settled !== undefined &&
+  record.propsKey === propsKey &&
+  record.versions === renderVersions() &&
+  record.version === version;
 //@ chunk-s61vbvea.js:639895-639941 placement
-var siteVersionOf = (state, n) =>
+var siteVersionOf = (versions, input) =>
   withPluginVersions(
-    renderVersionKey(state, renderPluginsForInstance(n), renderPaceOf(n)),
-    state,
-    renderInstanceKey(n),
+    renderVersionKey(versions, renderPluginsForInstance(input), renderPaceOf(input)),
+    versions,
+    renderInstanceKey(input),
   );
 //@ chunk-s61vbvea.js:639941-639977 placement
-var currentVersion = (e) => siteVersionOf(renderVersions().getState(), e);
+var currentVersion = (input) => siteVersionOf(renderVersions().getState(), input);
 //@ chunk-s61vbvea.js:639977-640133 placement
-var heldFor = (e, n) =>
-  n.then((r) => {
-    let s = hostDrawnPresses(r, {
-      component: e.component,
-      requestId: e.requestId,
-      surface: e.surface,
+var heldFor = (input, drawn) =>
+  drawn.then((tree) => {
+    let withPresses = hostDrawnPresses(tree, {
+      component: input.component,
+      requestId: input.requestId,
+      surface: input.surface,
     });
-    let h = heldByTree.get(r);
-    if (h !== undefined) heldByTree.set(s, h);
-    return s;
+    let ledger = heldByTree.get(tree);
+    if (ledger !== undefined) heldByTree.set(withPresses, ledger);
+    return withPresses;
   });
 //@ chunk-s61vbvea.js:640133-640145 placement
 var MAX_SHARED_DRAWS = 500;
 //@ chunk-s61vbvea.js:640145-640450 placement
-function onScreenOf(e) {
-  let onScreen = Object.hasOwn(e.props, "onScreen") ? e.props.onScreen : undefined;
-  let r = typeof onScreen === "object" ? onScreen : undefined;
-  let first = r && "first" in r ? r.first : null;
-  let last = r && "last" in r ? r.last : null;
-  let of = r && "of" in r ? r.of : null;
+function onScreenOf(input) {
+  let onScreen = Object.hasOwn(input.props, "onScreen") ? input.props.onScreen : undefined;
+  let screenProps = typeof onScreen === "object" ? onScreen : undefined;
+  let first = screenProps && "first" in screenProps ? screenProps.first : null;
+  let last = screenProps && "last" in screenProps ? screenProps.last : null;
+  let of = screenProps && "of" in screenProps ? screenProps.of : null;
   return typeof first === "number" && typeof last === "number" && typeof of === "number"
     ? {
         first,
@@ -561,12 +591,12 @@ function onScreenOf(e) {
       : undefined;
 }
 //@ chunk-s61vbvea.js:640450-640580 placement
-function sharedDrawOf(e, drawn) {
-  let r = renderVersions();
+function sharedDrawOf(record, drawn) {
+  let versions = renderVersions();
   return {
-    ...e,
-    versions: r,
-    engineVersion: r.getState().get(RENDER_EVENT) ?? 0,
+    ...record,
+    versions,
+    engineVersion: versions.getState().get(RENDER_EVENT) ?? 0,
     heldRows: undefined,
     drawn,
     settled: undefined,
@@ -574,87 +604,87 @@ function sharedDrawOf(e, drawn) {
 }
 //@ chunk-s61vbvea.js:640580-640911 placement
 function sharedDrawStore() {
-  let e = new Map();
-  let n;
-  let r = 0;
-  let s = 0;
+  let byInstance = new Map();
+  let versions;
+  let engineVersion = 0;
+  let reuseCount = 0;
   return {
-    get: (h) => e.get(h),
-    set: (h, y) => {
-      if (y.versions !== n || y.engineVersion !== r) {
-        e.clear();
-        n = y.versions;
-        r = y.engineVersion;
+    get: (instanceKey) => byInstance.get(instanceKey),
+    set: (instanceKey, record) => {
+      if (record.versions !== versions || record.engineVersion !== engineVersion) {
+        byInstance.clear();
+        versions = record.versions;
+        engineVersion = record.engineVersion;
       }
-      e.delete(h);
-      e.set(h, y);
-      for (let key of e.keys()) {
-        if (e.size <= MAX_SHARED_DRAWS) break;
-        e.delete(key);
+      byInstance.delete(instanceKey);
+      byInstance.set(instanceKey, record);
+      for (let key of byInstance.keys()) {
+        if (byInstance.size <= MAX_SHARED_DRAWS) break;
+        byInstance.delete(key);
       }
     },
-    drop: (h, y) => {
-      if (e.get(h) === y) e.delete(h);
+    drop: (instanceKey, record) => {
+      if (byInstance.get(instanceKey) === record) byInstance.delete(instanceKey);
     },
-    size: () => e.size,
-    reused: () => s,
+    size: () => byInstance.size,
+    reused: () => reuseCount,
     countReuse: () => {
-      s += 1;
+      reuseCount += 1;
     },
   };
 }
 //@ chunk-s61vbvea.js:640911-640951 placement
-var sharedPropsKey = (e, n) => `${originChainText(n)}\x00${valueKeyOf(e)}`;
+var sharedPropsKey = (input, origin) => `${originChainText(origin)}\x00${valueKeyOf(input)}`;
 //@ chunk-s61vbvea.js:640951-642484 placement
 function createRenderDraws() {
-  let e = sharedDrawStore();
-  async function n(h, { signal, origin }) {
+  let store = sharedDrawStore();
+  async function uiRender(input, { signal, origin }) {
     if (hasCurrentDispatch())
       return heldFor(
-        h,
+        input,
         dispatchRenderSite({
-          input: h,
+          input,
           signal,
           origin,
         }),
       );
-    let w = renderInstanceKey(h);
-    let R = sharedPropsKey(h, origin);
-    let x = currentVersion(h);
-    let P = h.requestId === "" ? undefined : e.get(w);
-    if (P && answers(P, R, x)) {
-      e.countReuse();
+    let instanceKey = renderInstanceKey(input);
+    let propsKey = sharedPropsKey(input, origin);
+    let version = currentVersion(input);
+    let shared = input.requestId === "" ? undefined : store.get(instanceKey);
+    if (shared && answers(shared, propsKey, version)) {
+      store.countReuse();
       logForDebugging(
-        `ui.render (${h.component} ${h.requestId}): ${h.surface} reuses its settled evaluation (one dispatch per draw)`,
+        `ui.render (${input.component} ${input.requestId}): ${input.surface} reuses its settled evaluation (one dispatch per draw)`,
       );
-      return heldFor(h, P.drawn);
+      return heldFor(input, shared.drawn);
     }
     let now = Date.now();
-    let L = renderPaceOf(h) === "live" ? renderPluginsForInstance(h) : [];
-    let q = P === undefined;
+    let plugins = renderPaceOf(input) === "live" ? renderPluginsForInstance(input) : [];
+    let isFirst = shared === undefined;
     let drawn = dispatchRenderSite({
-      input: h,
+      input,
       signal,
       origin,
     });
-    if (h.requestId !== "") {
-      let Z = sharedDrawOf(
+    if (input.requestId !== "") {
+      let record = sharedDrawOf(
         {
-          propsKey: R,
-          version: x,
-          onScreen: onScreenOf(h),
+          propsKey,
+          version,
+          onScreen: onScreenOf(input),
         },
         drawn,
       );
-      e.set(w, Z);
+      store.set(instanceKey, record);
       drawn.then(
         (settled) => {
-          Z.settled = settled;
-          if (!q) throttleLive(L, Date.now() - now);
+          record.settled = settled;
+          if (!isFirst) throttleLive(plugins, Date.now() - now);
         },
         (error) =>
           logForDebugging(
-            `ui.render (${h.component} ${h.requestId}): evaluation failed: ${errorMessage(error)}`,
+            `ui.render (${input.component} ${input.requestId}): evaluation failed: ${errorMessage(error)}`,
             {
               level: "error",
             },
@@ -663,9 +693,9 @@ function createRenderDraws() {
       signal.addEventListener(
         "abort",
         () => {
-          if (!Z.settled) {
-            e.drop(w, Z);
-            throttleSteady(L, Date.now() - now);
+          if (!record.settled) {
+            store.drop(instanceKey, record);
+            throttleSteady(plugins, Date.now() - now);
           }
         },
         {
@@ -673,145 +703,160 @@ function createRenderDraws() {
         },
       );
     }
-    return heldFor(h, drawn);
+    return heldFor(input, drawn);
   }
-  function r(h, y) {
-    let S = e.get(renderInstanceKey(h));
-    return h.requestId !== "" &&
-      S !== undefined &&
-      answers(S, S.propsKey, currentVersion(h)) &&
-      S.propsKey ===
+  function sharedFor(input, origin) {
+    let record = store.get(renderInstanceKey(input));
+    return input.requestId !== "" &&
+      record !== undefined &&
+      answers(record, record.propsKey, currentVersion(input)) &&
+      record.propsKey ===
         sharedPropsKey(
           {
-            viewport: h.viewport,
+            viewport: input.viewport,
             props: {
-              ...h.props,
-              onScreen: S.onScreen,
+              ...input.props,
+              onScreen: record.onScreen,
             },
           },
-          y,
+          origin,
         )
-      ? S
+      ? record
       : undefined;
   }
-  function s(h, y) {
-    if (h.requestId === "") return;
-    let S = e.get(renderInstanceKey(h));
-    return S !== undefined && answers(S, sharedPropsKey(h, y), currentVersion(h)) ? S.settled : undefined;
+  function settledFor(input, origin) {
+    if (input.requestId === "") return;
+    let record = store.get(renderInstanceKey(input));
+    return record !== undefined && answers(record, sharedPropsKey(input, origin), currentVersion(input))
+      ? record.settled
+      : undefined;
   }
   return {
-    uiRender: n,
-    settled: s,
-    held: (h) => e.get(renderInstanceKey(h))?.settled,
-    askedOnScreen: (h, y) => r(h, y)?.onScreen,
-    heldRowsOf: (h, y) => r(h, y)?.heldRows,
-    noteHeldRows: (h, heldRows) => {
-      let S = e.get(renderInstanceKey(h));
-      if (S?.onScreen === null) S.heldRows = heldRows;
+    uiRender,
+    settled: settledFor,
+    held: (input) => store.get(renderInstanceKey(input))?.settled,
+    askedOnScreen: (input, origin) => sharedFor(input, origin)?.onScreen,
+    heldRowsOf: (input, origin) => sharedFor(input, origin)?.heldRows,
+    noteHeldRows: (input, heldRows) => {
+      let record = store.get(renderInstanceKey(input));
+      if (record?.onScreen === null) record.heldRows = heldRows;
     },
-    noteThrown: (h, y) => {
-      let S = e.get(renderInstanceKey(h));
-      if (S !== undefined && (S.settled === undefined || heldByTree.get(S.settled) !== heldByTree.get(y)))
+    noteThrown: (input, drawn) => {
+      let record = store.get(renderInstanceKey(input));
+      if (
+        record !== undefined &&
+        (record.settled === undefined || heldByTree.get(record.settled) !== heldByTree.get(drawn))
+      )
         return;
-      if (S !== undefined) {
-        S.settled = ENGINE_ELEMENT;
-        S.drawn = Promise.resolve(ENGINE_ELEMENT);
+      if (record !== undefined) {
+        record.settled = ENGINE_ELEMENT;
+        record.drawn = Promise.resolve(ENGINE_ELEMENT);
       }
-      hostDrawnPresses(ENGINE_ELEMENT, h);
+      hostDrawnPresses(ENGINE_ELEMENT, input);
     },
-    reuseCount: e.reused,
-    sharedCount: e.size,
+    reuseCount: store.reused,
+    sharedCount: store.size,
   };
 }
 //@ chunk-s61vbvea.js:663451-663537 placement
-function desktopTicketOf(e) {
-  return e.surface === "desktop" ? drawnClientLedger.begin(e.component, e.requestId) : undefined;
+function desktopTicketOf(input) {
+  return input.surface === "desktop" ? drawnClientLedger.begin(input.component, input.requestId) : undefined;
 }
 //@ chunk-s61vbvea.js:663537-663589 placement
-var hasRenderHooks = (e) =>
+var hasRenderHooks = (component) =>
   hasModuleHookingSite(
     RENDER_EVENT,
-    e === undefined
+    component === undefined
       ? undefined
       : {
-          component: e,
+          component,
         },
   );
 //@ chunk-s61vbvea.js:663589-663711 placement
-var hasRenderHooksFor = (e) =>
+var hasRenderHooksFor = (input) =>
   getPluginRegistry().loadedModules.some(
     (loadedModule) =>
       loadedModule.hooks(RENDER_EVENT) &&
       isModuleAdmitted(loadedModule) &&
-      matchesField(loadedModule.matcherFor(RENDER_EVENT), "component", e.component) &&
-      matcherAdmits(loadedModule, RENDER_EVENT, e),
+      matchesField(loadedModule.matcherFor(RENDER_EVENT), "component", input.component) &&
+      matcherAdmits(loadedModule, RENDER_EVENT, input),
   );
 //@ chunk-s61vbvea.js:663711-663725 placement
-var renderDraws = createRenderDraws();
+var renderDraws; // deferred: uses createRenderDraws of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:663711", () => {
+  renderDraws = createRenderDraws();
+});
 //@ chunk-s61vbvea.js:663725-663797 placement
-setRenderSites(
-  Object.keys(RENDER_SITES).map((key) => ({
-    event: RENDER_EVENT,
-    component: key,
-    drawnBy: RENDER_SITES[key],
-  })),
-);
+// deferred: uses setRenderSites (../../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:663725", () => {
+  setRenderSites(
+    Object.keys(RENDER_SITES).map((key) => ({
+      event: RENDER_EVENT,
+      component: key,
+      drawnBy: RENDER_SITES[key],
+    })),
+  );
+});
 //@ chunk-s61vbvea.js:663797-664592 placement
-installRenderBridge({
-  async run(e) {
-    let props = e.props;
-    let r = desktopTicketOf(e);
-    if (!hasRenderHooksFor(e)) {
-      if (r !== undefined) drawnClientLedger.record(r, []);
-      return engineElement(props);
-    }
-    let s = await renderDraws.uiRender(e, {
-      signal: new AbortController().signal,
-    });
-    let engineRef = findEngineRef(s);
-    let y = engineRef === undefined ? undefined : heldRenderInput(s, engineRef);
-    let w = y !== undefined && y.component === e.component ? y.props : props;
-    let clientElements = collectClientElements(s);
-    if (r !== undefined) drawnClientLedger.record(r, clientElements);
-    return {
-      props: w,
-      rewritten: w !== props,
-      tree: s,
-      clientModules: surfaceBundleHashes(clientElements),
-      drawnBy: getActiveModNames(drawersOf(chainModules(e), s)),
-    };
-  },
-  hooked: hasRenderHooks,
-  onInvalidate: (e) => {
-    let n = subscribeRenderVersions(() => e());
-    let r = subscribeStale((s) => {
-      let filtered = s.filter((y) => y.surface !== "terminal");
-      if (filtered.length > 0) e(filtered);
-    });
-    return () => {
-      n();
-      r();
-    };
-  },
-  press: ({ surface = "desktop", ...n }) =>
-    handleUiPress({
-      ...n,
-      surface,
-    }),
-  input: ({ surface = "desktop", ...n }) =>
-    dispatchInputQueued({
-      ...n,
-      surface,
-    }),
-  select: ({ surface = "desktop", ...n }) =>
-    dispatchSelectQueued({
-      ...n,
-      surface,
-    }),
-  clientModule: (e) => surfaceBundleCache.moduleFor(e),
-  clientPress: (e) => dispatchDesktopClient(e),
-  clientMessage: (e) => postDesktopClientMessage(e),
-  clientFault: createDesktopFaultHandler(),
+// deferred: uses createDesktopFaultHandler (./desktopSurface.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:663797", () => {
+  installRenderBridge({
+    async run(request) {
+      let props = request.props;
+      let ticket = desktopTicketOf(request);
+      if (!hasRenderHooksFor(request)) {
+        if (ticket !== undefined) drawnClientLedger.record(ticket, []);
+        return engineElement(props);
+      }
+      let tree = await renderDraws.uiRender(request, {
+        signal: new AbortController().signal,
+      });
+      let engineRef = findEngineRef(tree);
+      let heldInput = engineRef === undefined ? undefined : heldRenderInput(tree, engineRef);
+      let effectiveProps =
+        heldInput !== undefined && heldInput.component === request.component ? heldInput.props : props;
+      let clientElements = collectClientElements(tree);
+      if (ticket !== undefined) drawnClientLedger.record(ticket, clientElements);
+      return {
+        props: effectiveProps,
+        rewritten: effectiveProps !== props,
+        tree,
+        clientModules: surfaceBundleHashes(clientElements),
+        drawnBy: getActiveModNames(drawersOf(chainModules(request), tree)),
+      };
+    },
+    hooked: hasRenderHooks,
+    onInvalidate: (listener) => {
+      let releaseVersions = subscribeRenderVersions(() => listener());
+      let releaseStale = subscribeStale((stale) => {
+        let filtered = stale.filter((entry) => entry.surface !== "terminal");
+        if (filtered.length > 0) listener(filtered);
+      });
+      return () => {
+        releaseVersions();
+        releaseStale();
+      };
+    },
+    press: ({ surface = "desktop", ...rest }) =>
+      handleUiPress({
+        ...rest,
+        surface,
+      }),
+    input: ({ surface = "desktop", ...rest }) =>
+      dispatchInputQueued({
+        ...rest,
+        surface,
+      }),
+    select: ({ surface = "desktop", ...rest }) =>
+      dispatchSelectQueued({
+        ...rest,
+        surface,
+      }),
+    clientModule: (address) => surfaceBundleCache.moduleFor(address),
+    clientPress: (request) => dispatchDesktopClient(request),
+    clientMessage: (request) => postDesktopClientMessage(request),
+    clientFault: createDesktopFaultHandler(),
+  });
 });
 export {
   thrownTeller,

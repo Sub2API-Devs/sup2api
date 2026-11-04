@@ -10,7 +10,14 @@
  */
 import { withHideWhile } from "../../components/dialogs/dialogRequests.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, M, hu, string, E, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  booleanSchema,
+  custom,
+  stringSchema,
+  numberSchema,
+  _enum,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { isProbeWrittenValue, firstWord } from "../../utils/model/thirdPartyModelDefaults.js";
 import {
   isSdkDialogHostActive,
@@ -41,28 +48,32 @@ import { getLspManager } from "../lsp/manager.js";
 import { cacheExtraUsageDisabledReason } from "../claudeAiLimits.js";
 import { fetchUtilization, isLimitEnabled } from "./usage.js";
 import { enableOverageBilling } from "./billing.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:1627336-1627628 placement
 /**
  * Fable 超额同意对话框的定义：载荷（是否开启超额、模型、余额与币种）与结果（同意、切换默认、取消）。
  */
-var FABLE_OVERAGE_CONSENT_DIALOG = withHideWhile({
-  kind: "fable_overage_consent_prompt",
-  payload: DoctorLazy(() =>
-    u({
-      overagesEnabled: M(),
-      modelName: hu(isProbeWrittenValue).optional(),
-      model: string().optional(),
-      balanceCents: E().nullable().optional(),
-      currency: string().nullable().optional(),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(["consent", "switch_default", "cancelled"])),
-  default: "cancelled",
+var FABLE_OVERAGE_CONSENT_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:1627336", () => {
+  FABLE_OVERAGE_CONSENT_DIALOG = withHideWhile({
+    kind: "fable_overage_consent_prompt",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        overagesEnabled: booleanSchema(),
+        modelName: custom(isProbeWrittenValue).optional(),
+        model: stringSchema().optional(),
+        balanceCents: numberSchema().nullable().optional(),
+        currency: stringSchema().nullable().optional(),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(["consent", "switch_default", "cancelled"])),
+    default: "cancelled",
+  });
 });
 //@ chunk-e6aww6q8.js:1627628-1627726 placement
-function canShowOverageConsentDialog(e) {
-  if (e === undefined) return false;
+function canShowOverageConsentDialog(model) {
+  if (model === undefined) return false;
   if (
     isSdkDialogHostActive() &&
     !(getSdkSupportedDialogKinds() ?? []).includes(FABLE_OVERAGE_CONSENT_DIALOG.kind)
@@ -74,10 +85,10 @@ function canShowOverageConsentDialog(e) {
 /**
  * 导出函数 `needsOverageConsentForModel`：参数 e, n，返回 fPe(e) && !isModelBlockedByOverride(getCanonicalName(e)) && YJt(n)。
  */
-function needsOverageConsentForModel(e, requestDialog) {
+function needsOverageConsentForModel(model, requestDialog) {
   return (
-    needsConsentOrCredits(e) &&
-    !isModelBlockedByOverride(getCanonicalName(e)) &&
+    needsConsentOrCredits(model) &&
+    !isModelBlockedByOverride(getCanonicalName(model)) &&
     canShowOverageConsentDialog(requestDialog)
   );
 }
@@ -85,8 +96,8 @@ function needsOverageConsentForModel(e, requestDialog) {
 /**
  * 导出函数 `needsOverageConsentOnMainThread`：参数 e，返回 e.isMainThread && YJt(e.requestDialog)。
  */
-function needsOverageConsentOnMainThread(e) {
-  return e.isMainThread && canShowOverageConsentDialog(e.requestDialog);
+function needsOverageConsentOnMainThread(model) {
+  return model.isMainThread && canShowOverageConsentDialog(model.requestDialog);
 }
 //@ chunk-e6aww6q8.js:1627839-1628191 placement
 /**
@@ -95,21 +106,22 @@ function needsOverageConsentOnMainThread(e) {
 function switchDefaultFromCreditsOnlyModel(model, newModel, storage) {
   if (getMainLoopModelOverride() !== undefined) return false;
   if (env.ANTHROPIC_MODEL) return false;
-  let s = usageCreditsOnlyFamily(model);
-  if (s === undefined) return false;
+  let family = usageCreditsOnlyFamily(model);
+  if (family === undefined) return false;
   let effectiveSettingSource = getEffectiveSettingSource_2("model");
   if (effectiveSettingSource === null) {
     let envDefaultModel = getEnvDefaultModel();
     if (
       envDefaultModel === null ||
       !isEnvDefaultModelGoverning() ||
-      usageCreditsOnlyFamily(parseUserSpecifiedModel(envDefaultModel)) !== s
+      usageCreditsOnlyFamily(parseUserSpecifiedModel(envDefaultModel)) !== family
     )
       return false;
   } else {
     if (effectiveSettingSource !== "userSettings") return false;
     let model = getSettingsForSource("userSettings")?.model;
-    if (model === undefined || usageCreditsOnlyFamily(parseUserSpecifiedModel(model)) !== s) return false;
+    if (model === undefined || usageCreditsOnlyFamily(parseUserSpecifiedModel(model)) !== family)
+      return false;
   }
   updateSettingsForSource(
     "userSettings",
@@ -131,13 +143,13 @@ async function checkExtraUsageStatus(credentials, storage) {
     cacheExtraUsageDisabledReason(lspManager.isEnabled ? null : "overage_not_provisioned", storage);
     return lspManager.isEnabled ? "enabled" : "disabled";
   }
-  let s = null;
+  let pending = null;
   try {
-    s = await fetchUtilization(credentials);
+    pending = await fetchUtilization(credentials);
   } catch {
     return "unknown";
   }
-  let extraUsage = s?.extra_usage;
+  let extraUsage = pending?.extra_usage;
   if (extraUsage?.is_enabled === true) {
     cacheExtraUsageDisabledReason(null, storage);
     return "enabled";
@@ -154,26 +166,21 @@ async function checkExtraUsageStatus(credentials, storage) {
  */
 async function enableOverageForConsent({ skipLiveCheck = false, credentials, storageV5 }) {
   if (!skipLiveCheck) {
-    let h = await checkExtraUsageStatus(credentials, storageV5);
-    if (h === "enabled" || h === "blocked") return true;
+    let status = await checkExtraUsageStatus(credentials, storageV5);
+    if (status === "enabled" || status === "blocked") return true;
   }
-  let s = await enableOverageBilling(credentials);
-  if (s) cacheExtraUsageDisabledReason(null, storageV5);
-  return s;
+  let enabled = await enableOverageBilling(credentials);
+  if (enabled) cacheExtraUsageDisabledReason(null, storageV5);
+  return enabled;
 }
 //@ chunk-e6aww6q8.js:1628731-1628861 placement
 /**
  * 记录用户对只能用额度的模型的同意（会话内或持久），必要时刷新超额状态，返回是否仍需额外处理。
  */
-async function recordCreditsOnlyConsent(
-  attemptModel,
-  storageV5,
-  credentials,
-  { sessionOnly: s = false } = {},
-) {
-  let h = firstWord(renderUsageCreditsOnlyModelName(attemptModel));
-  if (s) setSessionConsentKey(h);
-  else saveModelConsent(h, storageV5);
+async function recordCreditsOnlyConsent(attemptModel, storageV5, credentials, { sessionOnly = false } = {}) {
+  let familyName = firstWord(renderUsageCreditsOnlyModelName(attemptModel));
+  if (sessionOnly) setSessionConsentKey(familyName);
+  else saveModelConsent(familyName, storageV5);
   if (!hasExtraUsageProvisioned()) await checkExtraUsageStatus(credentials, storageV5);
   return !needsConsentOrCredits(attemptModel);
 }

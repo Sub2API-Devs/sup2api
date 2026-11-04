@@ -8,7 +8,8 @@
  * pieces: chunk-18hwfzwa.js (2), chunk-4t8fx0s8.js (2)
  * attribution: affinity 1, callgraph-fingerprint 1, fingerprint 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { getDynamicConfig_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTimeout } from "../../ink/hooks/useTerminalHooks.js";
 import { RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3 } from "../../hooks/useRecentInputGuard.js";
 import { sanitizeOneLineLabel, LabelValueRow } from "../EffortMediumNudgeDialog.js";
@@ -21,13 +22,21 @@ import {
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { ModelSelector } from "../agents/ModelSelector.js";
-import { getDynamicConfig_CACHED_MAY_BE_STALE } from "../../services/analytics/growthbook.js";
 
+//@ chunk-4t8fx0s8.js:13747-13804 fingerprint = DESKTOP_UPSELL_DEFAULT (0.667)
+var DESKTOP_UPSELL_DEFAULT = {
+  enable_shortcut_tip: false,
+  enable_contextual_tip: false,
+};
+//@ chunk-4t8fx0s8.js:13804-13854 fingerprint = getDesktopUpsellConfig (1)
+function getDesktopUpsellConfig() {
+  return getDynamicConfig_CACHED_MAY_BE_STALE("tengu_desktop_upsell", DESKTOP_UPSELL_DEFAULT);
+}
 //@ chunk-18hwfzwa.js:1106798-1106812 affinity
 var DESKTOP_UPSELL_TIMEOUT_MS = 30000;
 //@ chunk-18hwfzwa.js:1106812-1108717 callgraph-fingerprint = DesktopUpsellStartup (0.167)
 function DesktopUpsellStartup(props) {
-  let $ = w(33);
+  let $ = useMemoCache(33);
   let {
     title,
     intro,
@@ -41,7 +50,7 @@ function DesktopUpsellStartup(props) {
     onResponse,
   } = props;
   let timeout = useTimeout(RECENT_INPUT_GUARD_MS_3);
-  let rt = [
+  let identityRows = [
     {
       label: "Plugin:",
       value: pluginName,
@@ -56,29 +65,31 @@ function DesktopUpsellStartup(props) {
     },
     ...(extraIdentityRow ? [extraIdentityRow] : []),
   ];
-  let At;
+  let descriptionLabelCached;
   if ($[0] !== pluginDescription) {
-    At = pluginDescription === undefined ? undefined : sanitizeOneLineLabel(pluginDescription);
+    descriptionLabelCached =
+      pluginDescription === undefined ? undefined : sanitizeOneLineLabel(pluginDescription);
     $[0] = pluginDescription;
-    $[1] = At;
-  } else At = $[1];
-  let It = At;
-  let Ot;
+    $[1] = descriptionLabelCached;
+  } else descriptionLabelCached = $[1];
+  let descriptionLabel = descriptionLabelCached;
+  let timeoutHandlerCached;
   if ($[2] !== onResponse || $[3] !== unansweredResponse) {
-    Ot = () => onResponse(isUnattendedInteractiveSession() ? "cancelled" : unansweredResponse);
+    timeoutHandlerCached = () =>
+      onResponse(isUnattendedInteractiveSession() ? "cancelled" : unansweredResponse);
     $[2] = onResponse;
     $[3] = unansweredResponse;
-    $[4] = Ot;
-  } else Ot = $[4];
-  let Et;
+    $[4] = timeoutHandlerCached;
+  } else timeoutHandlerCached = $[4];
+  let timeoutDeps;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    Et = [];
-    $[5] = Et;
-  } else Et = $[5];
-  useTimeout(Ot, DESKTOP_UPSELL_TIMEOUT_MS, Et);
-  let Dt;
+    timeoutDeps = [];
+    $[5] = timeoutDeps;
+  } else timeoutDeps = $[5];
+  useTimeout(timeoutHandlerCached, DESKTOP_UPSELL_TIMEOUT_MS, timeoutDeps);
+  let answerCached;
   if ($[6] !== timeout || $[7] !== onResponse) {
-    Dt = function oo(value) {
+    answerCached = function handleAnswer(value) {
       if (!timeout) {
         return;
       }
@@ -90,28 +101,28 @@ function DesktopUpsellStartup(props) {
     };
     $[6] = timeout;
     $[7] = onResponse;
-    $[8] = Dt;
-  } else Dt = $[8];
-  let oo = Dt;
-  const Xt = PermissionDialog_2;
-  const io = Box;
+    $[8] = answerCached;
+  } else answerCached = $[8];
+  let answer = answerCached;
+  const DialogComponent = PermissionDialog_2;
+  const BoxComponent = Box;
   const flexDirection = "column";
   const paddingX = 2;
   const paddingY = 1;
-  let co;
+  let introElement;
   if ($[9] !== intro) {
-    co = jsxProd_default(Box, {
+    introElement = jsxProd_default(Box, {
       marginBottom: 1,
       children: intro,
     });
     $[9] = intro;
-    $[10] = co;
-  } else co = $[10];
-  const mapped = rt.map(LabelValueRow);
-  let Ao;
-  if ($[11] !== It) {
-    Ao =
-      It &&
+    $[10] = introElement;
+  } else introElement = $[10];
+  const mapped = identityRows.map(LabelValueRow);
+  let descriptionRow;
+  if ($[11] !== descriptionLabel) {
+    descriptionRow =
+      descriptionLabel &&
       jsxProd_default_2(Box, {
         children: [
           jsxProd_default(Box, {
@@ -124,83 +135,81 @@ function DesktopUpsellStartup(props) {
           jsxProd_default_2(Text, {
             dimColor: true,
             wrap: "truncate-end",
-            children: [" ", It],
+            children: [" ", descriptionLabel],
           }),
         ],
       });
-    $[11] = It;
-    $[12] = Ao;
-  } else Ao = $[12];
-  let Bo;
+    $[11] = descriptionLabel;
+    $[12] = descriptionRow;
+  } else descriptionRow = $[12];
+  let questionElement;
   if ($[13] !== question) {
-    Bo = jsxProd_default(Box, {
+    questionElement = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         children: question,
       }),
     });
     $[13] = question;
-    $[14] = Bo;
-  } else Bo = $[14];
+    $[14] = questionElement;
+  } else questionElement = $[14];
   const isDisabled = !timeout;
   let onCancel;
-  if ($[15] !== oo) {
-    onCancel = () => oo("no");
-    $[15] = oo;
+  if ($[15] !== answer) {
+    onCancel = () => answer("no");
+    $[15] = answer;
     $[16] = onCancel;
   } else onCancel = $[16];
-  let Io;
-  if ($[17] !== options || $[18] !== oo || $[19] !== isDisabled || $[20] !== onCancel) {
-    Io = jsxProd_default(Box, {
+  let selectorElement;
+  if ($[17] !== options || $[18] !== answer || $[19] !== isDisabled || $[20] !== onCancel) {
+    selectorElement = jsxProd_default(Box, {
       children: jsxProd_default(ModelSelector, {
         options,
         isDisabled,
-        onChange: oo,
+        onChange: answer,
         onCancel,
       }),
     });
     $[17] = options;
-    $[18] = oo;
+    $[18] = answer;
     $[19] = isDisabled;
     $[20] = onCancel;
-    $[21] = Io;
-  } else Io = $[21];
+    $[21] = selectorElement;
+  } else selectorElement = $[21];
   let children;
-  if ($[22] !== io || $[23] !== Ao || $[24] !== Bo || $[25] !== Io || $[26] !== co || $[27] !== mapped) {
-    children = jsxProd_default_2(io, {
+  if (
+    $[22] !== BoxComponent ||
+    $[23] !== descriptionRow ||
+    $[24] !== questionElement ||
+    $[25] !== selectorElement ||
+    $[26] !== introElement ||
+    $[27] !== mapped
+  ) {
+    children = jsxProd_default_2(BoxComponent, {
       flexDirection,
       paddingX,
       paddingY,
-      children: [co, mapped, Ao, Bo, Io],
+      children: [introElement, mapped, descriptionRow, questionElement, selectorElement],
     });
-    $[22] = io;
-    $[23] = Ao;
-    $[24] = Bo;
-    $[25] = Io;
-    $[26] = co;
+    $[22] = BoxComponent;
+    $[23] = descriptionRow;
+    $[24] = questionElement;
+    $[25] = selectorElement;
+    $[26] = introElement;
     $[27] = mapped;
     $[28] = children;
   } else children = $[28];
-  let mn;
-  if ($[29] !== Xt || $[30] !== children || $[31] !== title) {
-    mn = jsxProd_default(Xt, {
+  let dialogElement;
+  if ($[29] !== DialogComponent || $[30] !== children || $[31] !== title) {
+    dialogElement = jsxProd_default(DialogComponent, {
       title,
       children,
     });
-    $[29] = Xt;
+    $[29] = DialogComponent;
     $[30] = children;
     $[31] = title;
-    $[32] = mn;
-  } else mn = $[32];
-  return mn;
-}
-//@ chunk-4t8fx0s8.js:13747-13804 fingerprint = DESKTOP_UPSELL_DEFAULT (0.667)
-var DESKTOP_UPSELL_DEFAULT = {
-  enable_shortcut_tip: false,
-  enable_contextual_tip: false,
-};
-//@ chunk-4t8fx0s8.js:13804-13854 fingerprint = getDesktopUpsellConfig (1)
-function getDesktopUpsellConfig() {
-  return getDynamicConfig_CACHED_MAY_BE_STALE("tengu_desktop_upsell", DESKTOP_UPSELL_DEFAULT);
+    $[32] = dialogElement;
+  } else dialogElement = $[32];
+  return dialogElement;
 }
 export { DesktopUpsellStartup, getDesktopUpsellConfig };

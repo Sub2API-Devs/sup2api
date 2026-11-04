@@ -39,13 +39,13 @@ function getSessionTokenEnvKeys() {
 /**
  * 使用会话访问令牌时，把令牌类环境变量写入对应的内存缓存（会话入口令牌或 OAuth 令牌），返回是否已处理。
  */
-function applySessionTokenEnv(r, token) {
+function applySessionTokenEnv(name, token) {
   if (!usesSessionAccessToken()) return false;
-  if (r === "CLAUDE_CODE_SESSION_ACCESS_TOKEN") {
+  if (name === "CLAUDE_CODE_SESSION_ACCESS_TOKEN") {
     if (token !== "") setSessionIngressToken(token);
     return true;
   }
-  if (r === "CLAUDE_CODE_OAUTH_TOKEN") {
+  if (name === "CLAUDE_CODE_OAUTH_TOKEN") {
     if (token !== "") setOauthTokenFromFd(token);
     return true;
   }

@@ -45,45 +45,45 @@ var IGNORED_WARNING_PATTERNS = [
  * 接管 process 'warning' 事件：非开发构建时移除默认监听并禁止默认输出，按名称去重上报 tengu_node_warning，忽略 MaxListenersExceededWarning（AbortSignal/EventTarget）。
  */
 function initializeWarningHandler() {
-  let n = new Map();
+  let seen = new Map();
   if (!isRunningFromBuildDirectory()) {
     process.removeAllListeners("warning");
     process.noProcessWarnings = true;
   }
-  let S = (warning) => {
+  let onWarning = (warning) => {
     try {
       if (isUntrustedObject(warning) || !types.isNativeError(warning)) return;
       let ownPropertyDescriptor = Object.getOwnPropertyDescriptor(warning, "message");
-      let s =
+      let message =
         ownPropertyDescriptor && typeof ownPropertyDescriptor.value === "string"
           ? ownPropertyDescriptor.value
           : "";
       let ownPropertyDescriptor_2 = Object.getOwnPropertyDescriptor(warning, "name");
-      let E =
+      let errorName =
         ownPropertyDescriptor_2 && typeof ownPropertyDescriptor_2.value === "string"
           ? ownPropertyDescriptor_2.value
           : "Error";
-      let warningKey = `${E}: ${s.slice(0, 50)}`;
-      let count = n.get(warningKey) || 0;
-      if (n.has(warningKey) || n.size < MAX_WARNING_KEYS) n.set(warningKey, count + 1);
-      let oe = `${E}: ${s}`;
-      let any = IGNORED_WARNING_PATTERNS.some((Me) => Me.test(oe));
+      let warningKey = `${errorName}: ${message.slice(0, 50)}`;
+      let count = seen.get(warningKey) || 0;
+      if (seen.has(warningKey) || seen.size < MAX_WARNING_KEYS) seen.set(warningKey, count + 1);
+      let fullText = `${errorName}: ${message}`;
+      let any = IGNORED_WARNING_PATTERNS.some((pattern) => pattern.test(fullText));
       logEvent("tengu_node_warning", {
         is_internal: any ? 1 : 0,
         occurrence_count: count + 1,
-        classname: sanitizeClassName(E) ?? lit("Error"),
+        classname: sanitizeClassName(errorName) ?? lit("Error"),
         ...false,
       });
       if (env.CLAUDE_DEBUG)
-        logForDebugging(`${any ? "[Internal Warning]" : "[Warning]"} ${E}: ${s}`, {
+        logForDebugging(`${any ? "[Internal Warning]" : "[Warning]"} ${errorName}: ${message}`, {
           level: "warn",
         });
     } catch {}
   };
-  process.on("warning", S);
+  process.on("warning", onWarning);
   return {
     uninstall() {
-      process.removeListener("warning", S);
+      process.removeListener("warning", onWarning);
     },
   };
 }

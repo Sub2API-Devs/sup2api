@@ -21,6 +21,7 @@ import { helperProcessEnv } from "../utils/settings/policyHelper/helperEnv.js";
 import { subprocessEnv } from "../utils/subprocessEnv.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-0sfjpx19.js:47509-49786 placement
 /**
@@ -74,8 +75,8 @@ class SleepPreventer {
   }
   getSpawnArgs() {
     if (this.spawnDisabledForTests || !isMacOS()) return null;
-    let e = String(CAFFEINATE_TIMEOUT_SECONDS);
-    if (getPlatform() === "macos") return ["caffeinate", ["-i", "-t", e]];
+    let timeoutSeconds = String(CAFFEINATE_TIMEOUT_SECONDS);
+    if (getPlatform() === "macos") return ["caffeinate", ["-i", "-t", timeoutSeconds]];
     return null;
   }
   startRestartInterval() {
@@ -97,8 +98,8 @@ class SleepPreventer {
     }
   }
   spawnInhibitor() {
-    let e = this.getSpawnArgs();
-    if (e === null) return;
+    let spawnArgs = this.getSpawnArgs();
+    if (spawnArgs === null) return;
     if (this.inhibitorProcess !== null) return;
     if (!this.cleanupRegistered) {
       this.cleanupRegistered = true;
@@ -107,22 +108,22 @@ class SleepPreventer {
       });
     }
     try {
-      let [n, r] = e;
-      let s = spawn(n, r, {
+      let [command, args] = spawnArgs;
+      let child = spawn(command, args, {
         stdio: "ignore",
         windowsHide: true,
         env: helperProcessEnv(subprocessEnv(), getPlatform() === "windows" ? "win32" : "posix"),
       });
-      this.inhibitorProcess = s;
-      s.unref();
-      s.on("error", (h) => {
-        logForDebugging(`sleep inhibitor spawn error: ${h.message}`);
-        if (this.inhibitorProcess === s) this.inhibitorProcess = null;
+      this.inhibitorProcess = child;
+      child.unref();
+      child.on("error", (spawnError) => {
+        logForDebugging(`sleep inhibitor spawn error: ${spawnError.message}`);
+        if (this.inhibitorProcess === child) this.inhibitorProcess = null;
       });
-      s.on("exit", () => {
-        if (this.inhibitorProcess === s) this.inhibitorProcess = null;
+      child.on("exit", () => {
+        if (this.inhibitorProcess === child) this.inhibitorProcess = null;
       });
-      logForDebugging(`Started ${n} to prevent sleep`);
+      logForDebugging(`Started ${command} to prevent sleep`);
     } catch {
       this.inhibitorProcess = null;
     }
@@ -139,7 +140,10 @@ class SleepPreventer {
   }
 }
 //@ chunk-0sfjpx19.js:49786-49811 placement
-var sleepPreventerByHost = new HostScoped(() => new SleepPreventer());
+var sleepPreventerByHost; // deferred: uses SleepPreventer of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-0sfjpx19.js:49786", () => {
+  sleepPreventerByHost = new HostScoped(() => new SleepPreventer());
+});
 //@ chunk-0sfjpx19.js:49811-49848 placement
 function getSleepPreventer() {
   return sleepPreventerByHost.of(getRootSession().host);

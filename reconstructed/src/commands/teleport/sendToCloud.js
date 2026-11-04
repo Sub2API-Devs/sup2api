@@ -8,14 +8,14 @@
  * pieces: chunk-c2tx3syd.js (5)
  * attribution: placement 5
  */
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { retireResumeSwapPair } from "../../screens/repl/sessionRehydration.js";
 import {
   applyArtifactResumeCarry,
   emptyArtifactCarry,
 } from "../../tools/ArtifactTool/artifactResumeCarry.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppStoreDirect, useAppState } from "../../state/AppState.js";
 import { useDialogStore } from "../../state/dialogQueue.js";
 import { useSession } from "../../context/session.js";
@@ -27,8 +27,8 @@ import { TeleportResumeWrapper } from "../../components/TeleportResumeWrapper.js
 //@ chunk-c2tx3syd.js:17543-17547 placement
 init_react_production();
 //@ chunk-c2tx3syd.js:17547-17626 placement
-function isInboundBridgeConnected(B) {
-  return Boolean(B.replBridgeSessionId) && !B.replBridgeOutboundOnly;
+function isInboundBridgeConnected(appState) {
+  return Boolean(appState.replBridgeSessionId) && !appState.replBridgeOutboundOnly;
 }
 //@ chunk-c2tx3syd.js:17626-17692 placement
 /**
@@ -48,11 +48,11 @@ var teleportCommandCall = async (onDone, context) =>
  */
 function retireSendToCloudState(getAppState, setAppState, dialogStore, session) {
   retireResumeSwapPair(getAppState, setAppState, dialogStore, session);
-  setAppState((t) =>
-    Object.keys(t.sendMessagePins).length === 0
-      ? t
+  setAppState((state) =>
+    Object.keys(state.sendMessagePins).length === 0
+      ? state
       : {
-          ...t,
+          ...state,
           sendMessagePins: {},
         },
   );
@@ -63,103 +63,111 @@ function retireSendToCloudState(getAppState, setAppState, dialogStore, session) 
  * /teleport 的界面：开启 tengu_teleport_send_to_cloud 且可发送（或可提供 Remote Control）时显示 TeleportMenu；否则显示从云端恢复会话的 TeleportResumeWrapper。
  */
 function TeleportCommandView(props) {
-  let a = w(25);
+  let $ = useMemoCache(25);
   let { onExit, context, exposure } = props;
   let appStoreDirect = useAppStoreDirect();
   let dialogStore = useDialogStore();
   let session = useSession();
-  let _;
+  let retireStateCached;
   if (
-    a[0] !== dialogStore ||
-    a[1] !== session ||
-    a[2] !== appStoreDirect.getState ||
-    a[3] !== appStoreDirect.setState
+    $[0] !== dialogStore ||
+    $[1] !== session ||
+    $[2] !== appStoreDirect.getState ||
+    $[3] !== appStoreDirect.setState
   ) {
-    _ = () => retireSendToCloudState(appStoreDirect.getState, appStoreDirect.setState, dialogStore, session);
-    a[0] = dialogStore;
-    a[1] = session;
-    a[2] = appStoreDirect.getState;
-    a[3] = appStoreDirect.setState;
-    a[4] = _;
-  } else _ = a[4];
-  let i = _;
+    retireStateCached = () =>
+      retireSendToCloudState(appStoreDirect.getState, appStoreDirect.setState, dialogStore, session);
+    $[0] = dialogStore;
+    $[1] = session;
+    $[2] = appStoreDirect.getState;
+    $[3] = appStoreDirect.setState;
+    $[4] = retireStateCached;
+  } else retireStateCached = $[4];
+  let retireState = retireStateCached;
   let appState = useAppState(isInboundBridgeConnected);
-  let L;
-  if (a[5] !== appState) {
-    L = () =>
+  let shouldTeleportCached;
+  if ($[5] !== appState) {
+    shouldTeleportCached = () =>
       (appState || isRemoteControlOfferable()) &&
       getFeatureValue_CACHED_MAY_BE_STALE("tengu_teleport_send_to_cloud", false);
-    a[5] = appState;
-    a[6] = L;
-  } else L = a[6];
-  let [I] = y(L);
-  if (I) {
-    let { TeleportMenu } = require("./chunk-kczn6qx7.js");
-    let r;
-    if (a[7] !== context || a[8] !== exposure || a[9] !== appState || a[10] !== onExit || a[11] !== i) {
-      r = jsxProd_default(TeleportMenu, {
+    $[5] = appState;
+    $[6] = shouldTeleportCached;
+  } else shouldTeleportCached = $[6];
+  let [shouldTeleport] = useState(shouldTeleportCached);
+  if (shouldTeleport) {
+    let { TeleportMenu } = require("./teleportToCloud.js");
+    let menuElement;
+    if (
+      $[7] !== context ||
+      $[8] !== exposure ||
+      $[9] !== appState ||
+      $[10] !== onExit ||
+      $[11] !== retireState
+    ) {
+      menuElement = jsxProd_default(TeleportMenu, {
         onExit,
         context,
         exposure,
-        retireOnSurface: i,
+        retireOnSurface: retireState,
         canSend: appState,
       });
-      a[7] = context;
-      a[8] = exposure;
-      a[9] = appState;
-      a[10] = onExit;
-      a[11] = i;
-      a[12] = r;
-    } else r = a[12];
-    return r;
+      $[7] = context;
+      $[8] = exposure;
+      $[9] = appState;
+      $[10] = onExit;
+      $[11] = retireState;
+      $[12] = menuElement;
+    } else menuElement = $[12];
+    return menuElement;
   }
   let onComplete;
-  if (a[13] !== context || a[14] !== onExit || a[15] !== i || a[16] !== session) {
-    onComplete = (k) => {
-      resetConversation(context, k.log, i, session);
+  if ($[13] !== context || $[14] !== onExit || $[15] !== retireState || $[16] !== session) {
+    onComplete = (resumeResult) => {
+      resetConversation(context, resumeResult.log, retireState, session);
       onExit("Session resumed successfully", {
         display: "system",
       });
     };
-    a[13] = context;
-    a[14] = onExit;
-    a[15] = i;
-    a[16] = session;
-    a[17] = onComplete;
-  } else onComplete = a[17];
+    $[13] = context;
+    $[14] = onExit;
+    $[15] = retireState;
+    $[16] = session;
+    $[17] = onComplete;
+  } else onComplete = $[17];
   let onCancel;
   let onError;
-  if (a[18] !== onExit) {
+  if ($[18] !== onExit) {
     onCancel = () => {
       onExit("Teleport cancelled", {
         display: "system",
       });
     };
-    onError = (q, me) => {
-      onExit(q, {
+    onError = (errorMessage, errorDetails) => {
+      onExit(errorMessage, {
         display: "system",
       });
     };
-    a[18] = onExit;
-    a[19] = onCancel;
-    a[20] = onError;
+    $[18] = onExit;
+    $[19] = onCancel;
+    $[20] = onError;
   } else {
-    onCancel = a[19];
-    onError = a[20];
+    onCancel = $[19];
+    onError = $[20];
   }
-  let A;
-  if (a[21] !== onComplete || a[22] !== onCancel || a[23] !== onError) {
-    A = jsxProd_default(TeleportResumeWrapper, {
+  let resumeWrapper;
+  if ($[21] !== onComplete || $[22] !== onCancel || $[23] !== onError) {
+    resumeWrapper = jsxProd_default(TeleportResumeWrapper, {
       onComplete,
       onCancel,
       onError,
       isEmbedded: true,
       source: "localCommand",
     });
-    a[21] = onComplete;
-    a[22] = onCancel;
-    a[23] = onError;
-    a[24] = A;
-  } else A = a[24];
-  return A;
+    $[21] = onComplete;
+    $[22] = onCancel;
+    $[23] = onError;
+    $[24] = resumeWrapper;
+  } else resumeWrapper = $[24];
+  return resumeWrapper;
 }
+export { TeleportCommandView, teleportCommandCall, retireSendToCloudState };

@@ -23,10 +23,15 @@ import { isUnderNetworkDirCached } from "../networkPaths.js";
 import { launchCwd } from "../cwd.js";
 import { getErrnoCode } from "../errors.js";
 import { isSuspiciousUrl } from "../fsBoundRead.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:72144-72261 placement
-var GITHUB_REPO_SLUG_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/;
-var MARKETPLACE_INPUT_ERRNOS = new Set(["ENOTDIR", "ENAMETOOLONG", "ELOOP"]);
+var GITHUB_REPO_SLUG_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MARKETPLACE_INPUT_ERRNOS;
+deferInit("chunk-dcmhvw5a.js:72144", () => {
+  GITHUB_REPO_SLUG_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?\/[A-Za-z0-9._-]+$/;
+  MARKETPLACE_INPUT_ERRNOS = new Set(["ENOTDIR", "ENAMETOOLONG", "ELOOP"]);
+});
 //@ chunk-dcmhvw5a.js:72261-75406 fingerprint = parseMarketplaceInput (0.677)
 /**
  * 解析 /plugin marketplace add 的输入：git@ SSH URL（可带 #ref）、https URL（.git 视为 git，.json 视为 url，github.com 转 github）、owner/repo[#ref]、本地路径（目录或 .json 文件）、npm 包等，返回市场来源对象或错误。
@@ -51,34 +56,34 @@ async function parseMarketplaceInput(input) {
   }
   if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
     let fragmentMatch = trimmed.match(/^([^#]+)(#(.+))?$/);
-    let m = fragmentMatch?.[1] || trimmed;
+    let url = fragmentMatch?.[1] || trimmed;
     let ref = fragmentMatch?.[3];
-    if (m.endsWith(".git") || m.includes("/_git/"))
+    if (url.endsWith(".git") || url.includes("/_git/"))
       return ref
         ? {
             source: "git",
-            url: m,
+            url,
             ref,
           }
         : {
             source: "git",
-            url: m,
+            url,
           };
-    let h;
+    let parsed;
     try {
-      h = new URL(m);
+      parsed = new URL(url);
     } catch (_err) {
       return {
         source: "url",
-        url: m,
+        url,
       };
     }
-    if (isGithubDotCom(h.hostname)) {
-      if (h.pathname.match(/^\/([^/]+\/[^/]+?)(\/|\.git|$)/)?.[1] && !hasBackslashInUrlAuthority(m)) {
-        let replaced = m.replace(/(?:[/?#]|%2[Ff]|%3[Ff]|%23)+$/, "");
+    if (isGithubDotCom(parsed.hostname)) {
+      if (parsed.pathname.match(/^\/([^/]+\/[^/]+?)(\/|\.git|$)/)?.[1] && !hasBackslashInUrlAuthority(url)) {
+        let replaced = url.replace(/(?:[/?#]|%2[Ff]|%3[Ff]|%23)+$/, "");
         let index = replaced.indexOf("/", replaced.indexOf("://") + 3);
-        let C = index === -1 ? "" : replaced.slice(index);
-        if (/^\/[^/]+\/[^/]+/.test(C)) {
+        let pathPart = index === -1 ? "" : replaced.slice(index);
+        if (/^\/[^/]+\/[^/]+/.test(pathPart)) {
           let url = replaced.endsWith(".git") ? replaced : `${replaced}.git`;
           return ref
             ? {
@@ -93,52 +98,52 @@ async function parseMarketplaceInput(input) {
         }
       }
     }
-    if (isGitlabHost(h.hostname)) {
-      let filtered = h.pathname.split("/").filter(Boolean);
-      let index = m.indexOf("/", m.indexOf("://") + 3);
-      let S = index === -1 ? "" : m.slice(index).replace(/\/+$/, "");
-      let mapped = filtered.map((L) => {
+    if (isGitlabHost(parsed.hostname)) {
+      let filtered = parsed.pathname.split("/").filter(Boolean);
+      let index = url.indexOf("/", url.indexOf("://") + 3);
+      let pathSuffix = index === -1 ? "" : url.slice(index).replace(/\/+$/, "");
+      let mapped = filtered.map((segment) => {
         try {
-          return decodeURIComponent(L);
+          return decodeURIComponent(segment);
         } catch {
           return null;
         }
       });
       if (
         filtered.length >= 2 &&
-        S === `/${filtered.join("/")}` &&
-        !/[\t\n\r]/.test(m) &&
-        !hasBackslashInUrlAuthority(m) &&
-        mapped.every((L) => L !== null) &&
+        pathSuffix === `/${filtered.join("/")}` &&
+        !/[\t\n\r]/.test(url) &&
+        !hasBackslashInUrlAuthority(url) &&
+        mapped.every((decoded) => decoded !== null) &&
         mapped[0] !== "api" &&
         !mapped.includes("-")
       ) {
-        let replaced = m.replace(/\/+$/, "");
-        let url = replaced.endsWith(".git") ? replaced : `${replaced}.git`;
+        let replaced = url.replace(/\/+$/, "");
+        let url_2 = replaced.endsWith(".git") ? replaced : `${replaced}.git`;
         return ref
           ? {
               source: "git",
-              url,
+              url: url_2,
               ref,
             }
           : {
               source: "git",
-              url,
+              url: url_2,
             };
       }
     }
     return {
       source: "url",
-      url: m,
+      url,
     };
   }
-  let c = false;
+  let isWindowsAbsPath = false;
   if (
     trimmed.startsWith("./") ||
     trimmed.startsWith("../") ||
     trimmed.startsWith("/") ||
     trimmed.startsWith("~") ||
-    c
+    isWindowsAbsPath
   ) {
     let resolvedPath = resolve(trimmed.startsWith("~") ? trimmed.replace(/^~/, () => homedir()) : trimmed);
     if (isDeviceNamespacePath(resolvedPath))
@@ -146,9 +151,9 @@ async function parseMarketplaceInput(input) {
         error: `${resolvedPath} is a device-namespace path, which can't be checked for links to a network location. Give it without the \\\\?\\ or \\\\.\\ prefix.`,
       };
     if (!isUnderNetworkDirCached(resolvedPath)) {
-      let f = launchCwd();
+      let cwd = launchCwd();
       let intermediateUncJunction = await findIntermediateUncJunctionAsync(fs, resolvedPath, {
-        anchors: f === null ? [resolvedPath] : [f, resolvedPath],
+        anchors: cwd === null ? [resolvedPath] : [cwd, resolvedPath],
         launchAncestry: vouchedLaunchAncestry(fs),
         surfaceNetworkRaw: true,
         unreadableAncestry: "unverified",
@@ -224,35 +229,38 @@ async function parseMarketplaceInput(input) {
 /**
  * 把 GitHub 仓库引用（https/ssh URL、git@host:owner/repo、owner/repo）规范成小写 `owner/repo`；非 GitHub 主机、带非法路径段或解析失败返回 null。
  */
-function normalizeGithubRepoSlug(e) {
-  if (isUnsafeRemoteUrl(e) || isSuspiciousUrl(e)) return null;
-  let n = e;
-  let index = e.indexOf("://");
+function normalizeGithubRepoSlug(input) {
+  if (isUnsafeRemoteUrl(input) || isSuspiciousUrl(input)) return null;
+  let repoPath = input;
+  let index = input.indexOf("://");
   if (index !== -1) {
-    let a;
+    let parsedUrl;
     try {
-      a = new URL(e);
+      parsedUrl = new URL(input);
     } catch {
-      a = null;
+      parsedUrl = null;
     }
-    let c = e.slice(index + 3).search(/[/?#]/) + index + 3;
+    let firstPathIndex = input.slice(index + 3).search(/[/?#]/) + index + 3;
     if (
-      a === null ||
-      !GIT_URL_PROTOCOLS.has(a.protocol) ||
-      !(SSH_URL_PROTOCOLS.has(a.protocol)
-        ? isGithubOrSshGithubHost(a.hostname)
-        : isGithubDotCom(a.hostname)) ||
-      e[c] !== "/"
+      parsedUrl === null ||
+      !GIT_URL_PROTOCOLS.has(parsedUrl.protocol) ||
+      !(SSH_URL_PROTOCOLS.has(parsedUrl.protocol)
+        ? isGithubOrSshGithubHost(parsedUrl.hostname)
+        : isGithubDotCom(parsedUrl.hostname)) ||
+      input[firstPathIndex] !== "/"
     )
       return null;
-    n = e.slice(c + 1).split(/[?#]/)[0] ?? "";
-  } else if (e.includes(":")) {
-    let index = e.indexOf(":");
-    if (e.slice(0, index).includes("/") || !isGithubOrSshGithubHost(e.slice(e.indexOf("@") + 1, index)))
+    repoPath = input.slice(firstPathIndex + 1).split(/[?#]/)[0] ?? "";
+  } else if (input.includes(":")) {
+    let index = input.indexOf(":");
+    if (
+      input.slice(0, index).includes("/") ||
+      !isGithubOrSshGithubHost(input.slice(input.indexOf("@") + 1, index))
+    )
       return null;
-    n = e.slice(index + 1).replace(/^\//, "");
+    repoPath = input.slice(index + 1).replace(/^\//, "");
   }
-  let replaced = n.replace(/\/$/, "").replace(/\.git$/i, "");
+  let replaced = repoPath.replace(/\/$/, "").replace(/\.git$/i, "");
   if (!GITHUB_REPO_SLUG_RE.test(replaced) || /\/\.\.?$/.test(replaced)) return null;
   return replaced.toLowerCase();
 }

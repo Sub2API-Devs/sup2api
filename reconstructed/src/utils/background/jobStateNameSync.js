@@ -37,16 +37,21 @@ import { isValidKeySegment } from "../storage/storageSpaces.js";
 import { setOnRename } from "../udsMessaging.js";
 import { renameSessionName, saveSessionAgentName } from "../sessionTitle.js";
 import { getSessionNamingState, takePendingYield } from "../sessionNameUniqueness.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:360922-360949 placement
 /**
  * 同步 job 状态名称时的轮询间隔（50 毫秒）。
  */
-var JOB_NAME_SYNC_POLL_MS = 50;
-var weakMap = new WeakMap();
+var JOB_NAME_SYNC_POLL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakMap;
+deferInit("chunk-18hwfzwa.js:360922", () => {
+  JOB_NAME_SYNC_POLL_MS = 50;
+  weakMap = new WeakMap();
+});
 //@ chunk-18hwfzwa.js:360949-361171 placement
-async function checkJobStorePresent(h, jobId) {
-  let D = await h.listEntries(
+async function checkJobStorePresent(storage, jobId) {
+  let listResult = await storage.listEntries(
     {
       namespace: "job",
       jobId,
@@ -57,159 +62,159 @@ async function checkJobStorePresent(h, jobId) {
       skipScopeStats: true,
     },
   );
-  if (!D.ok)
+  if (!listResult.ok)
     return {
-      refused: formatStorageError(D.error),
+      refused: formatStorageError(listResult.error),
     };
   return {
-    present: D.value.items.length > 0 || D.value.cursor !== undefined,
+    present: listResult.value.items.length > 0 || listResult.value.cursor !== undefined,
   };
 }
 //@ chunk-18hwfzwa.js:361171-361409 placement
-function checkJobStorePresentCached(h, jobId) {
-  let D = weakMap.get(h);
-  if (D === undefined) {
-    D = new Map();
-    weakMap.set(h, D);
+function checkJobStorePresentCached(storage, jobId) {
+  let cache = weakMap.get(storage);
+  if (cache === undefined) {
+    cache = new Map();
+    weakMap.set(storage, cache);
   }
-  let L = D.get(jobId);
-  if (L !== undefined) return L;
-  let ee = D;
-  let ke = (Be) => {
-    if (!(Be && "present" in Be && Be.present)) ee.delete(jobId);
+  let cached = cache.get(jobId);
+  if (cached !== undefined) return cached;
+  let cacheRef = cache;
+  let evictIfAbsent = (result) => {
+    if (!(result && "present" in result && result.present)) cacheRef.delete(jobId);
   };
-  let Re = checkJobStorePresent(h, jobId);
-  Re.then(ke, () => ke());
-  ee.set(jobId, Re);
-  return Re;
+  let promise = checkJobStorePresent(storage, jobId);
+  promise.then(evictIfAbsent, () => evictIfAbsent());
+  cacheRef.set(jobId, promise);
+  return promise;
 }
 //@ chunk-18hwfzwa.js:361409-362477 placement
-function watchJobStateFile(storageV5, ownJobShortId, D, L, ee) {
-  let ke = false;
-  let Re;
-  let Be = 0;
-  let He = false;
-  let We;
-  let ze = false;
-  let Xe = false;
-  let rt = () => {
-    if (ee?.deferWhile?.()) {
-      if (We === undefined) {
-        We = setTimeout(() => {
-          We = undefined;
-          if (!ke) rt();
+function watchJobStateFile(storage, ownJobShortId, readState, logLabel, options) {
+  let disposed = false;
+  let subscription;
+  let watchGeneration = 0;
+  let needsResubscribe = false;
+  let deferTimer;
+  let running = false;
+  let rerunQueued = false;
+  let runRead = () => {
+    if (options?.deferWhile?.()) {
+      if (deferTimer === undefined) {
+        deferTimer = setTimeout(() => {
+          deferTimer = undefined;
+          if (!disposed) runRead();
         }, JOB_NAME_SYNC_POLL_MS);
-        We.unref();
+        deferTimer.unref();
       }
       return;
     }
-    if (ze) {
-      Xe = true;
+    if (running) {
+      rerunQueued = true;
       return;
     }
-    ze = true;
+    running = true;
     Promise.resolve()
-      .then(D)
+      .then(readState)
       .catch((error) => {
-        logForDebugging(`${L} re-read failed: ${errorMessage(error)}`, {
+        logForDebugging(`${logLabel} re-read failed: ${errorMessage(error)}`, {
           level: "warn",
         });
       })
       .finally(() => {
-        ze = false;
-        if (Xe && !ke) {
-          Xe = false;
-          rt();
+        running = false;
+        if (rerunQueued && !disposed) {
+          rerunQueued = false;
+          runRead();
         }
       });
   };
-  let kt = (Dt) => {
-    logForDebugging(`${L} watch unavailable: ${Dt}`, {
+  let logWatchGone = (detail) => {
+    logForDebugging(`${logLabel} watch unavailable: ${detail}`, {
       level: "warn",
     });
   };
-  let At = (Dt, Lt) => {
-    if (ke) return;
-    if (Dt.ok) {
-      rt();
+  let onEvent = (event, generation) => {
+    if (disposed) return;
+    if (event.ok) {
+      runRead();
       return;
     }
-    if (Lt !== Be) return;
-    logForDebugging(`${L} watch ended: ${formatStorageError(Dt.error)}`, {
+    if (generation !== watchGeneration) return;
+    logForDebugging(`${logLabel} watch ended: ${formatStorageError(event.error)}`, {
       level: "warn",
     });
-    Re = undefined;
-    if (He) {
-      Be++;
+    subscription = undefined;
+    if (needsResubscribe) {
+      watchGeneration++;
       return;
     }
-    He = true;
-    It();
+    needsResubscribe = true;
+    subscribe();
   };
-  let It = () => {
-    let Dt = ++Be;
-    let Lt = (oo) => {
-      if (!oo.ok) {
-        kt(formatStorageError(oo.error));
+  let subscribe = () => {
+    let generation = ++watchGeneration;
+    let onSubscribed = (result) => {
+      if (!result.ok) {
+        logWatchGone(formatStorageError(result.error));
         return;
       }
-      if (ke || Dt !== Be) {
-        oo.value.unsubscribe();
+      if (disposed || generation !== watchGeneration) {
+        result.value.unsubscribe();
         return;
       }
-      Re = oo.value;
+      subscription = result.value;
     };
     try {
-      storageV5
+      storage
         .subscribe(
           {
             target: "key",
             key: jobStateKey(ownJobShortId),
           },
-          (oo) => At(oo, Dt),
+          (event) => onEvent(event, generation),
         )
-        .then(Lt, (error) => kt(errorMessage(error)));
+        .then(onSubscribed, (error) => logWatchGone(errorMessage(error)));
     } catch (error) {
-      kt(errorMessage(error));
+      logWatchGone(errorMessage(error));
     }
   };
-  let Ot = (Dt) => {
-    logForDebugging(`${L} watch skipped: ${Dt}`);
+  let logSkipped = (reason) => {
+    logForDebugging(`${logLabel} watch skipped: ${reason}`);
   };
   (async () => {
-    let Dt;
+    let presence;
     try {
-      Dt = await checkJobStorePresentCached(storageV5, ownJobShortId);
+      presence = await checkJobStorePresentCached(storage, ownJobShortId);
     } catch (error) {
-      Ot(errorMessage(error));
+      logSkipped(errorMessage(error));
       return;
     }
-    if (ke) return;
-    if ("refused" in Dt) {
-      Ot(Dt.refused);
+    if (disposed) return;
+    if ("refused" in presence) {
+      logSkipped(presence.refused);
       return;
     }
-    if (!Dt.present) {
-      Ot("no job directory");
+    if (!presence.present) {
+      logSkipped("no job directory");
       return;
     }
-    It();
+    subscribe();
   })();
   return () => {
-    ke = true;
-    clearTimeout(We);
-    Re?.unsubscribe();
-    Re = undefined;
+    disposed = true;
+    clearTimeout(deferTimer);
+    subscription?.unsubscribe();
+    subscription = undefined;
   };
 }
 //@ chunk-18hwfzwa.js:362477-362851 placement
 function syncJobStateName({ session, storageV5, credentials, setAppState, onYieldedName }) {
-  let ke = [];
-  let Re = () => {
-    for (let idx = ke.length - 1; idx >= 0; idx--) ke[idx]();
+  let cleanups = [];
+  let disposeAll = () => {
+    for (let idx = cleanups.length - 1; idx >= 0; idx--) cleanups[idx]();
   };
   try {
-    ke.push(
+    cleanups.push(
       syncSessionNameWithJobState({
         session,
         storageV5,
@@ -217,13 +222,13 @@ function syncJobStateName({ session, storageV5, credentials, setAppState, onYiel
         setAppState,
       }),
     );
-    ke.push(
+    cleanups.push(
       syncRenameToPeers({
         storageV5,
         credentials,
       }),
     );
-    ke.push(
+    cleanups.push(
       adoptYieldedSessionName({
         session,
         storageV5,
@@ -233,24 +238,24 @@ function syncJobStateName({ session, storageV5, credentials, setAppState, onYiel
       }),
     );
   } catch (error) {
-    Re();
+    disposeAll();
     throw error;
   }
-  return Re;
+  return disposeAll;
 }
 //@ chunk-18hwfzwa.js:362851-364026 placement
 function syncSessionNameWithJobState({ session, storageV5, credentials, setAppState }) {
   if (isRemoteSessionAvailable()) return () => {};
   let ownJobShortId = getOwnJobShortId();
   let jobDir = getJobDir(ownJobShortId);
-  let Re;
-  let Be = async () => {
+  let fsWatcher;
+  let syncOnce = async () => {
     if (isOwnStateWriteInFlight()) return;
     let jobState = await readJobState(jobDir, storageV5);
     if (!jobState) return;
-    setAppState((It) => {
-      let standaloneAgentContext = It.standaloneAgentContext;
-      let Et = {};
+    setAppState((prevState) => {
+      let standaloneAgentContext = prevState.standaloneAgentContext;
+      let patch = {};
       if (
         jobState.name &&
         (jobState.nameSource === "user" ||
@@ -258,71 +263,71 @@ function syncSessionNameWithJobState({ session, storageV5, credentials, setAppSt
             sanitizeSessionTitle(jobState.name) === getRegisteredSessionName()?.name)) &&
         !standaloneAgentContext?.name
       ) {
-        let Dt = sanitizeSessionTitle(jobState.name);
-        if (Dt) Et.name = Dt;
+        let name = sanitizeSessionTitle(jobState.name);
+        if (name) patch.name = name;
       }
-      if (isAgentColorName(jobState.color) && !standaloneAgentContext?.color) Et.color = jobState.color;
-      return updateStandaloneAgentContext(It, Et);
+      if (isAgentColorName(jobState.color) && !standaloneAgentContext?.color) patch.color = jobState.color;
+      return updateStandaloneAgentContext(prevState, patch);
     });
     if (!jobState.name) return;
-    let rt = sanitizeSessionTitle(jobState.name);
-    if (!rt) return;
-    if (rt === getCurrentSessionAgentName() || rt === getCurrentSessionTitle(session.id)) return;
-    if (jobState.nameSource === "collision" && rt !== getRegisteredSessionName()?.name) {
+    let name = sanitizeSessionTitle(jobState.name);
+    if (!name) return;
+    if (name === getCurrentSessionAgentName() || name === getCurrentSessionTitle(session.id)) return;
+    if (jobState.nameSource === "collision" && name !== getRegisteredSessionName()?.name) {
       logForDebugging(
         "[jobStateNameSync] ignoring a collision-suffixed name another process wrote to this job",
       );
       return;
     }
     let nameSource = jobState.nameSource ?? "auto";
-    await renameSessionQuietly(rt, nameSource === "user" ? "peer" : nameSource, storageV5, credentials);
+    await renameSessionQuietly(name, nameSource === "user" ? "peer" : nameSource, storageV5, credentials);
   };
-  let He = false;
-  let We = false;
-  let ze = async () => {
-    if (He) {
-      We = true;
+  let running = false;
+  let rerunQueued = false;
+  let runSync = async () => {
+    if (running) {
+      rerunQueued = true;
       return;
     }
-    He = true;
+    running = true;
     try {
       do {
-        We = false;
-        await Be();
-      } while (We);
+        rerunQueued = false;
+        await syncOnce();
+      } while (rerunQueued);
     } finally {
-      He = false;
+      running = false;
     }
   };
   if (storageV5 && isValidKeySegment(ownJobShortId))
-    return watchJobStateFile(storageV5, ownJobShortId, ze, "[jobStateNameSync]", {
+    return watchJobStateFile(storageV5, ownJobShortId, runSync, "[jobStateNameSync]", {
       deferWhile: isOwnStateWriteInFlight,
     });
   try {
-    Re = watch(jobDir, (Xe, rt) => {
-      if (rt && !rt.startsWith("state.json")) return;
-      ze();
+    fsWatcher = watch(jobDir, (event, filename) => {
+      if (filename && !filename.startsWith("state.json")) return;
+      runSync();
     });
-    Re.on("error", (Xe) =>
-      logForDebugging(`[jobStateNameSync] watcher error: ${errorMessage(Xe)}`, {
+    fsWatcher.on("error", (error) =>
+      logForDebugging(`[jobStateNameSync] watcher error: ${errorMessage(error)}`, {
         level: "warn",
       }),
     );
-    Re.unref();
+    fsWatcher.unref();
   } catch (error) {
     logForDebugging(`[jobStateNameSync] watch skipped: ${error}`);
     return () => {};
   }
-  ze();
-  return () => Re?.close();
+  runSync();
+  return () => fsWatcher?.close();
 }
 //@ chunk-18hwfzwa.js:364026-364180 placement
 function syncRenameToPeers({ storageV5, credentials }) {
   if (isRemoteSessionAvailable()) return () => {};
-  setOnRename((D) => {
-    let L = sanitizeSessionTitle(D ?? "");
-    if (!L || L === getCurrentSessionAgentName()) return;
-    renameSessionQuietly(L, "peer", storageV5, credentials);
+  setOnRename((name) => {
+    let title = sanitizeSessionTitle(name ?? "");
+    if (!title || title === getCurrentSessionAgentName()) return;
+    renameSessionQuietly(title, "peer", storageV5, credentials);
   });
   return () => setOnRename(null);
 }
@@ -331,35 +336,35 @@ function syncRenameToPeers({ storageV5, credentials }) {
  * 接收后台任务让出的会话名称，并同步到应用状态。
  */
 function adoptYieldedSessionName({ session, storageV5, credentials, setAppState, onYieldedName }) {
-  let ke = (We, ze) => {
-    let Xe = sanitizeSessionTitle(We);
-    if (!Xe || getRegisteredSessionName()?.name !== We) return;
-    setAppState((rt) =>
-      updateStandaloneAgentContext(rt, {
-        name: Xe,
+  let applyYield = (name, generation) => {
+    let title = sanitizeSessionTitle(name);
+    if (!title || getRegisteredSessionName()?.name !== name) return;
+    setAppState((prevState) =>
+      updateStandaloneAgentContext(prevState, {
+        name: title,
       }),
     );
     if (!getMaterializedSessionFile()) {
-      if (titleCacheStillOn(session.id, ze, Xe)) {
-        cacheSessionTitle(Xe);
-        cacheAgentName(Xe);
+      if (titleCacheStillOn(session.id, generation, title)) {
+        cacheSessionTitle(title);
+        cacheAgentName(title);
       }
-    } else if (titleCacheStillOn(session.id, ze, Xe))
-      renameSessionName(Xe, "collision", storageV5, false, false, credentials);
-    else saveSessionAgentName(Xe, "collision", storageV5, undefined, false, undefined, credentials);
-    onYieldedName?.(Xe, ze);
+    } else if (titleCacheStillOn(session.id, generation, title))
+      renameSessionName(title, "collision", storageV5, false, false, credentials);
+    else saveSessionAgentName(title, "collision", storageV5, undefined, false, undefined, credentials);
+    onYieldedName?.(title, generation);
   };
   let sessionNamingState = getSessionNamingState();
-  let Be = takePendingYield();
-  if (Be) ke(...Be);
+  let pendingYield = takePendingYield();
+  if (pendingYield) applyYield(...pendingYield);
   sessionNamingState.hasAdopter = true;
-  let He = sessionNamingState.yielded.subscribe((We, ze) => {
+  let unsubscribe = sessionNamingState.yielded.subscribe((name, generation) => {
     takePendingYield();
-    ke(We, ze);
+    applyYield(name, generation);
   });
   return () => {
     sessionNamingState.hasAdopter = false;
-    He();
+    unsubscribe();
   };
 }
 export { syncJobStateName, watchJobStateFile };

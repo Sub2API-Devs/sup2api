@@ -9,9 +9,9 @@
 var X_STAINLESS_HELPER = "x-stainless-helper";
 var STAINLESS_HELPER_METHOD_HEADER = "x-stainless-helper-method";
 //@ chunk-hwmsct5x.js:49457-49505 esm-layout
-function wr(e) {
+function stainlessHelperHeader(method) {
   return {
-    ["x-stainless-helper"]: e,
+    ["x-stainless-helper"]: method,
   };
 }
 //@ chunk-hwmsct5x.js:49505-49552 esm-fingerprint
@@ -40,7 +40,7 @@ function collectStainlessHelpers(tools, messages) {
   return Array.from(helpers);
 }
 //@ chunk-hwmsct5x.js:49874-49974 esm-layout
-function stainlessHelperHeader(tools, messages) {
+function stainlessHelperHeader_2(tools, messages) {
   let helpers = collectStainlessHelpers(tools, messages);
   if (helpers.length === 0) return {};
   return {
@@ -48,7 +48,7 @@ function stainlessHelperHeader(tools, messages) {
   };
 }
 //@ chunk-hwmsct5x.js:49974-50044 esm-layout
-function is(file) {
+function stainlessHelperHeaders(file) {
   if (wasCreatedByStainlessHelper(file))
     return {
       ["x-stainless-helper"]: file[SDK_HELPER_SYMBOL],
@@ -56,10 +56,10 @@ function is(file) {
   return {};
 }
 export {
-  is,
+  stainlessHelperHeaders,
   X_STAINLESS_HELPER,
-  wr,
+  stainlessHelperHeader,
   STAINLESS_HELPER_METHOD_HEADER,
   collectStainlessHelpers,
-  stainlessHelperHeader,
+  stainlessHelperHeader_2,
 };

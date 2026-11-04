@@ -11,6 +11,14 @@
 import * as pathModule from "path";
 import { watch, readdirSync } from "fs";
 import { stat, realpath } from "fs/promises";
+import { withAskedWhere, mdmLoader, mdmResult, setMdmReadOutcomes } from "./mdm/mdmLoader.js";
+import {
+  EMPTY_MDM_SETTINGS,
+  wslInheritsSettings,
+  hasManagedSettingsFile,
+  readMdmSnapshot,
+  replaceMdmSetting,
+} from "./mdm/settings.js";
 import {
   SETTINGS_STABILITY_THRESHOLD_MS,
   SETTINGS_POLL_INTERVAL_MS,
@@ -44,14 +52,6 @@ import { seedProjectSettings } from "./settingsSeed.js";
 import { commandSyncNameState, invalidateCommandNames } from "./commandSyncNames.js";
 import { logError } from "../log.js";
 import { jsonStringify } from "../slowOperations.js";
-import { mdmResult, withAskedWhere, setMdmReadOutcomes, mdmLoader } from "./managedPluginTiers.js";
-import {
-  wslInheritsSettings,
-  hasManagedSettingsFile,
-  readMdmSnapshot,
-  replaceMdmSetting,
-  me,
-} from "./mdm/settings.js";
 import { getSessionFeatureValues } from "../../bootstrap/sessionFeatureValues.js";
 import { getSettingsFilePathForSource, getLegacyLocalSettingsFilePath } from "./settings.js";
 import { USER_SETTINGS_FILE_NAMES, isInClaudeConfigHome } from "./settingsFileParsing.js";
@@ -60,144 +60,149 @@ import { isPathConfigDir } from "../envUtils.js";
 import { getDropInDir } from "../fileStateCache.js";
 import { vetRepoSettingsPath, getFsImplementation } from "../fsOperations.js";
 import { hasDotSegment } from "../pathClassification.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-q8cqcff6.js:10635-10676 callgraph-fingerprint = startMdmPoll (0.169)
+function startMdmPoll() {
+  return withAskedWhere(mdmLoader()).hkcu ?? EMPTY_MDM_SETTINGS;
+}
 //@ chunk-82kqcve8.js:24807-34017 callgraph-fingerprint = initialize (0.232)
 /**
  * 设置文件变更检测器：监视各来源设置文件与 managed-settings.d（文件事件或轮询），MDM 定时重读，变化时按来源发出 ConfigChange 事件并触发重新加载。
  */
-function createSettingsChangeDetector(e) {
-  let stabilityThreshold = e?.stabilityThreshold ?? SETTINGS_STABILITY_THRESHOLD_MS;
-  let pollInterval = e?.pollInterval ?? SETTINGS_POLL_INTERVAL_MS;
-  let mdmPollInterval = e?.mdmPollInterval ?? SETTINGS_MDM_POLL_INTERVAL_MS;
-  let deletionGrace = e?.deletionGrace ?? SETTINGS_DELETION_GRACE_MS;
-  let subscribedObservationLag = e?.subscribedObservationLag ?? SETTINGS_OBSERVATION_LAG_MS;
-  let bridgeStore = e?.bridgeStore ?? true;
-  let watchPollInterval = e?.watchPollInterval ?? SETTINGS_WATCH_POLL_INTERVAL_MS;
-  let R = (q) => Math.max(deletionGrace, q + stabilityThreshold + 200);
-  let O = R(subscribedObservationLag);
+function createSettingsChangeDetector(options) {
+  let stabilityThreshold = options?.stabilityThreshold ?? SETTINGS_STABILITY_THRESHOLD_MS;
+  let pollInterval = options?.pollInterval ?? SETTINGS_POLL_INTERVAL_MS;
+  let mdmPollInterval = options?.mdmPollInterval ?? SETTINGS_MDM_POLL_INTERVAL_MS;
+  let deletionGrace = options?.deletionGrace ?? SETTINGS_DELETION_GRACE_MS;
+  let subscribedObservationLag = options?.subscribedObservationLag ?? SETTINGS_OBSERVATION_LAG_MS;
+  let bridgeStore = options?.bridgeStore ?? true;
+  let watchPollInterval = options?.watchPollInterval ?? SETTINGS_WATCH_POLL_INTERVAL_MS;
+  let graceFor = (lag) => Math.max(deletionGrace, lag + stabilityThreshold + 200);
+  let observedGrace = graceFor(subscribedObservationLag);
   let signal = createSignal();
-  let L = null;
-  let j = false;
-  let G = false;
-  let Z = false;
-  let ae = null;
-  let ee = null;
-  let re = 0;
-  let ce = null;
-  let we = null;
-  let me = false;
-  let se = false;
-  let ye = null;
-  let Ee = null;
-  let ie = new Map();
-  let he = null;
-  let He;
-  let We;
-  let st;
-  let yt = null;
-  let It = false;
-  let fr = false;
-  let Gi = false;
-  let qt;
-  let gr = new Map();
-  let Ft = new Set();
-  let St = new Map();
-  let Xt = new Set();
-  let Pn = null;
-  async function pd(q, Q, { machineServesSession: de = false } = {}) {
+  let watcher = null;
+  let polling = false;
+  let nativeOk = false;
+  let probing = false;
+  let watchingSince = null;
+  let pollFloor = null;
+  let watchGeneration = 0;
+  let mdmTimer = null;
+  let mdmSnapshot = null;
+  let started = false;
+  let disposed = false;
+  let commandState = null;
+  let commandUnsub = null;
+  let pendingDeletions = new Map();
+  let cleanupUnsub = null;
+  let configGate;
+  let sessionArg;
+  let servedByV5;
+  let pendingDeleteTimer = null;
+  let sawChange = false;
+  let recreated = false;
+  let resubscribeRetried = false;
+  let presence;
+  let realpathMap = new Map();
+  let pendingDirs = new Set();
+  let creationWatchers = new Map();
+  let appearedDirs = new Set();
+  let readyResolve = null;
+  async function initialize(bridge, session, { machineServesSession = false } = {}) {
     if (
       !shouldUseNativeWatch({
-        machineServesSession: de,
+        machineServesSession,
       })
     )
       return;
-    if (me || se) return;
-    me = true;
-    He = q;
-    We = Q;
-    await Ed();
-    if (se) return;
-    he = registerCleanup(ao);
-    let Se = ++re;
-    let watchTargets = await getWatchTargets(Q);
-    if (se) return;
-    st = watchTargets.servedByV5;
-    if (isStorageV5Enabled() && Q !== undefined && st !== undefined) {
-      await Vi(Q, st);
-      if (se) return;
+    if (started || disposed) return;
+    started = true;
+    configGate = bridge;
+    sessionArg = session;
+    await startMdmPolling();
+    if (disposed) return;
+    cleanupUnsub = registerCleanup(dispose);
+    let generation = ++watchGeneration;
+    let watchTargets = await getWatchTargets(session);
+    if (disposed) return;
+    servedByV5 = watchTargets.servedByV5;
+    if (isStorageV5Enabled() && session !== undefined && servedByV5 !== undefined) {
+      await subscribeV5(session, servedByV5);
+      if (disposed) return;
     }
-    Hi(watchTargets, Se);
+    startWatching(watchTargets, generation);
   }
-  function hd() {
-    return j ? "polling" : "native";
+  function mode() {
+    return polling ? "polling" : "native";
   }
-  function yd() {
-    if (Z || j || se) return;
-    Z = true;
-    (e?.fsWatchProbe ?? probeFsWatch)().then((q) => {
-      Z = false;
-      if (se || j) return;
-      if (q === "silent" || q === "refused") {
-        zi(G ? `fs_watch_${q}_late` : `fs_watch_${q}`);
+  function probeNative() {
+    if (probing || polling || disposed) return;
+    probing = true;
+    (options?.fsWatchProbe ?? probeFsWatch)().then((outcome) => {
+      probing = false;
+      if (disposed || polling) return;
+      if (outcome === "silent" || outcome === "refused") {
+        fallBackPolling(nativeOk ? `fs_watch_${outcome}_late` : `fs_watch_${outcome}`);
         return;
       }
-      if (!G) {
-        G = true;
+      if (!nativeOk) {
+        nativeOk = true;
         logFeatureOk("settings_watcher_start");
       }
     });
   }
-  function zi(q) {
-    if (j || se) return;
-    j = true;
-    ee = (ae ?? Date.now()) - SETTINGS_WATCH_LAG_MS;
+  function fallBackPolling(reason) {
+    if (polling || disposed) return;
+    polling = true;
+    pollFloor = (watchingSince ?? Date.now()) - SETTINGS_WATCH_LAG_MS;
     logForDebugging(
-      `[settings] native file watching is not delivering events on this host (${q}); polling settings files every ${watchPollInterval}ms instead`,
+      `[settings] native file watching is not delivering events on this host (${reason}); polling settings files every ${watchPollInterval}ms instead`,
       {
         level: "warn",
       },
     );
-    logFeatureSad("settings_watcher_start", q);
-    co();
+    logFeatureSad("settings_watcher_start", reason);
+    restart();
   }
-  function io(q) {
-    let errnoCode = getErrnoCode(q);
-    let syscall = q instanceof Error && "syscall" in q ? q.syscall : undefined;
+  function onHandleError(error) {
+    let errnoCode = getErrnoCode(error);
+    let syscall = error instanceof Error && "syscall" in error ? error.syscall : undefined;
     if (
       (errnoCode === "EMFILE" || errnoCode === "ENFILE" || errnoCode === "ENOSPC") &&
       (syscall === undefined || syscall === "watch")
     )
-      zi(`fs_watch_refused_late_${errnoCode.toLowerCase()}`);
+      fallBackPolling(`fs_watch_refused_late_${errnoCode.toLowerCase()}`);
   }
-  function Hi(watchTargets, Q) {
-    if (Q !== re) return;
-    let de = hd();
+  function startWatching(watchTargets, generation) {
+    if (generation !== watchGeneration) return;
+    let watchMode = mode();
     let { dirs, settingsFiles, dropInDir } = watchTargets;
-    gr = watchTargets.realpathToCanonical;
-    let Ke = new Set();
-    for (let De of setDifference(Ft, watchTargets.pendingDirs)) Xt.add(De);
-    Ft = new Set(watchTargets.pendingDirs);
-    ae ??= Date.now();
-    let hr = L;
-    L = null;
-    if (hr) hr.close().catch(() => {});
-    Pn?.();
-    Pn = null;
-    for (let De of St.values()) De.close();
-    St.clear();
-    for (let De of Ft) wd(De, de);
+    realpathMap = watchTargets.realpathToCanonical;
+    let projectScoped = new Set();
+    for (let dir of setDifference(pendingDirs, watchTargets.pendingDirs)) appearedDirs.add(dir);
+    pendingDirs = new Set(watchTargets.pendingDirs);
+    watchingSince ??= Date.now();
+    let previousWatcher = watcher;
+    watcher = null;
+    if (previousWatcher) previousWatcher.close().catch(() => {});
+    readyResolve?.();
+    readyResolve = null;
+    for (let watcher of creationWatchers.values()) watcher.close();
+    creationWatchers.clear();
+    for (let dir of pendingDirs) watchForAppear(dir, watchMode);
     if (dirs.length === 0) {
-      Yi(settingsFiles, Promise.resolve(), Ke);
+      settleChanges(settingsFiles, Promise.resolve(), projectScoped);
       return;
     }
     logForDebugging(
-      `Watching for changes in setting files ${[...settingsFiles].join(", ")}...${dropInDir ? ` and drop-in directory ${dropInDir}` : ""}${de === "polling" ? ` (polling every ${watchPollInterval}ms)` : ""}`,
+      `Watching for changes in setting files ${[...settingsFiles].join(", ")}...${dropInDir ? ` and drop-in directory ${dropInDir}` : ""}${watchMode === "polling" ? ` (polling every ${watchPollInterval}ms)` : ""}`,
     );
-    for (let [De, Mt] of gr)
+    for (let [target, file] of realpathMap)
       logForDebugging(
-        `Settings file ${Mt} is a symlink to ${De}; also watching ${pathModule.dirname(De)} so atomic-save edits to the target are detected`,
+        `Settings file ${file} is a symlink to ${target}; also watching ${pathModule.dirname(target)} so atomic-save edits to the target are detected`,
       );
-    let Et = chokidar_default.watch(dirs, {
+    let chokidarWatcher = chokidar_default.watch(dirs, {
       persistent: true,
       ignoreInitial: true,
       depth: 0,
@@ -210,13 +215,13 @@ function createSettingsChangeDetector(e) {
         if (path.split(/[/\\]/).some((dir) => dir === ".git")) return true;
         if (!stats || stats.isDirectory()) return false;
         let normalized = pathModule.normalize(path);
-        if (settingsFiles.has(normalized)) return Ke.has(normalized) && isEmptyPrivateFile(stats);
+        if (settingsFiles.has(normalized)) return projectScoped.has(normalized) && isEmptyPrivateFile(stats);
         if (dropInDir && normalized.startsWith(dropInDir + pathModule.sep) && normalized.endsWith(".json"))
           return false;
         return true;
       },
       ignorePermissionErrors: true,
-      ...(de === "polling"
+      ...(watchMode === "polling"
         ? {
             usePolling: true,
             interval: watchPollInterval,
@@ -227,465 +232,493 @@ function createSettingsChangeDetector(e) {
           }),
       atomic: true,
     });
-    L = Et;
-    if (Et.options?.usePolling === false && (getPlatform() === "linux" || getPlatform() === "wsl"))
-      Ke = watchTargets.projectScoped;
+    watcher = chokidarWatcher;
+    if (
+      chokidarWatcher.options?.usePolling === false &&
+      (getPlatform() === "linux" || getPlatform() === "wsl")
+    )
+      projectScoped = watchTargets.projectScoped;
     let promise = new Promise((resolve) => {
-      Pn = resolve;
-      Et.once("ready", resolve);
+      readyResolve = resolve;
+      chokidarWatcher.once("ready", resolve);
     });
-    Et.on("change", pr);
-    Et.on("unlink", Ji);
-    Et.on("add", Xi);
-    Et.on("unlinkDir", (De) => {
-      if (settingsFiles.has(pathModule.normalize(De))) Ji(De);
+    chokidarWatcher.on("change", onChange);
+    chokidarWatcher.on("unlink", onUnlink);
+    chokidarWatcher.on("add", onAdd);
+    chokidarWatcher.on("unlinkDir", (dir) => {
+      if (settingsFiles.has(pathModule.normalize(dir))) onUnlink(dir);
     });
-    Et.on("error", (De) => {
-      logForDebugging(`[settings] watcher error: ${errorMessage(De)}`, {
+    chokidarWatcher.on("error", (error) => {
+      logForDebugging(`[settings] watcher error: ${errorMessage(error)}`, {
         level: "warn",
       });
-      if (de === "native") io(De);
+      if (watchMode === "native") onHandleError(error);
     });
-    Yi(settingsFiles, promise, Ke);
-    if (de === "native") yd();
+    settleChanges(settingsFiles, promise, projectScoped);
+    if (watchMode === "native") probeNative();
   }
-  async function Yi(settingsFiles, Q, de) {
-    if (Xt.size === 0 && ee === null) return;
-    let Se = new Set(Xt);
-    Xt.clear();
-    let Ce = ee;
-    ee = null;
-    await Q;
+  async function settleChanges(settingsFiles, ready, projectScoped) {
+    if (appearedDirs.size === 0 && pollFloor === null) return;
+    let appeared = new Set(appearedDirs);
+    appearedDirs.clear();
+    let floor = pollFloor;
+    pollFloor = null;
+    await ready;
     await Promise.all(
       [...settingsFiles]
-        .filter((xe) => Ce !== null || Se.has(pathModule.dirname(xe)))
-        .map(async (xe) => {
-          let Ke = await _d(xe);
-          if (se || Ke === null) return;
-          let hr = de.has(xe) && isEmptyPrivateFile(Ke);
-          if ((Se.has(pathModule.dirname(xe)) && !hr) || (Ce !== null && Ke.mtimeMs >= Ce)) pr(xe);
+        .filter((file) => floor !== null || appeared.has(pathModule.dirname(file)))
+        .map(async (file) => {
+          let stats = await statStable(file);
+          if (disposed || stats === null) return;
+          let empty = projectScoped.has(file) && isEmptyPrivateFile(stats);
+          if (
+            (appeared.has(pathModule.dirname(file)) && !empty) ||
+            (floor !== null && stats.mtimeMs >= floor)
+          )
+            onChange(file);
         }),
     );
   }
-  function wd(q, Q) {
-    let dir = pathModule.dirname(q);
-    if (Q === "polling") {
-      if (!St.has(q)) {
-        let interval = setInterval((Ce, xe) => void Ce(xe), watchPollInterval, so, q);
+  function watchForAppear(path, mode) {
+    let dir = pathModule.dirname(path);
+    if (mode === "polling") {
+      if (!creationWatchers.has(path)) {
+        let interval = setInterval((tick, path) => void tick(path), watchPollInterval, checkAppeared, path);
         interval.unref();
-        St.set(q, {
+        creationWatchers.set(path, {
           close: () => clearInterval(interval),
         });
-        logForDebugging(`Polling for ${q} to appear every ${watchPollInterval}ms`);
+        logForDebugging(`Polling for ${path} to appear every ${watchPollInterval}ms`);
       }
-    } else if (!St.has(dir))
+    } else if (!creationWatchers.has(dir))
       try {
-        let Se = watch(dir, (Ce, xe) => {
-          for (let Ke of Ft)
-            if (pathModule.dirname(Ke) === dir && (xe === null || xe === pathModule.basename(Ke))) so(Ke);
+        let watcher = watch(dir, (event, filename) => {
+          for (let target of pendingDirs)
+            if (
+              pathModule.dirname(target) === dir &&
+              (filename === null || filename === pathModule.basename(target))
+            )
+              checkAppeared(target);
         });
-        Se.on("error", (Ce) => {
-          logForDebugging(`[settings] creation watcher error on ${dir}: ${errorMessage(Ce)}`, {
+        watcher.on("error", (error) => {
+          logForDebugging(`[settings] creation watcher error on ${dir}: ${errorMessage(error)}`, {
             level: "warn",
           });
-          io(Ce);
+          onHandleError(error);
         });
-        St.set(dir, Se);
-        logForDebugging(`Watching ${dir} for ${q} to appear`);
+        creationWatchers.set(dir, watcher);
+        logForDebugging(`Watching ${dir} for ${path} to appear`);
       } catch (error) {
-        logForDebugging(`[settings] cannot watch ${dir} for ${q} to appear: ${errorMessage(error)}`, {
+        logForDebugging(`[settings] cannot watch ${dir} for ${path} to appear: ${errorMessage(error)}`, {
           level: "warn",
         });
-        io(error);
+        onHandleError(error);
       }
-    so(q);
+    checkAppeared(path);
   }
-  async function so(q) {
-    if (!Ft.has(q)) return;
+  async function checkAppeared(path) {
+    if (!pendingDirs.has(path)) return;
     try {
-      if (!(await stat(q)).isDirectory()) return;
+      if (!(await stat(path)).isDirectory()) return;
     } catch {
       return;
     }
-    Sd(q);
+    onDirAppeared(path);
   }
-  function ao() {
-    se = true;
-    if (he) {
-      he();
-      he = null;
+  function dispose() {
+    disposed = true;
+    if (cleanupUnsub) {
+      cleanupUnsub();
+      cleanupUnsub = null;
     }
-    if (ce) {
-      clearInterval(ce);
-      ce = null;
+    if (mdmTimer) {
+      clearInterval(mdmTimer);
+      mdmTimer = null;
     }
-    for (let Q of ie.values()) clearTimeout(Q);
-    ie.clear();
-    qi();
-    st = undefined;
-    qt = undefined;
-    gr = new Map();
-    we = null;
+    for (let timer of pendingDeletions.values()) clearTimeout(timer);
+    pendingDeletions.clear();
+    clearFlushTimer();
+    servedByV5 = undefined;
+    presence = undefined;
+    realpathMap = new Map();
+    mdmSnapshot = null;
     clearInternalWrites();
-    Ee?.();
-    Ee = null;
-    ye = null;
+    commandUnsub?.();
+    commandUnsub = null;
+    commandState = null;
     signal.clear();
-    for (let Q of St.values()) Q.close();
-    St.clear();
-    Ft.clear();
-    Xt.clear();
-    Pn?.();
-    Pn = null;
-    let q = L;
-    L = null;
-    return q ? q.close() : Promise.resolve();
+    for (let watcher of creationWatchers.values()) watcher.close();
+    creationWatchers.clear();
+    pendingDirs.clear();
+    appearedDirs.clear();
+    readyResolve?.();
+    readyResolve = null;
+    let closeWatcher = watcher;
+    watcher = null;
+    return closeWatcher ? closeWatcher.close() : Promise.resolve();
   }
-  async function bd() {
-    if (!me || se || isRemoteSessionAvailable()) return;
-    for (let [q, Q] of ie)
-      if (getSourceForPath(q) === undefined) {
-        clearTimeout(Q);
-        ie.delete(q);
+  async function rehome() {
+    if (!started || disposed || isRemoteSessionAvailable()) return;
+    for (let [path, timer] of pendingDeletions)
+      if (getSourceForPath(path) === undefined) {
+        clearTimeout(timer);
+        pendingDeletions.delete(path);
       }
-    await co();
+    await restart();
   }
-  async function co() {
-    let q = ++re;
-    let watchTargets = await getWatchTargets(We);
-    if (se) return;
-    Hi(watchTargets, q);
+  async function restart() {
+    let generation = ++watchGeneration;
+    let watchTargets = await getWatchTargets(sessionArg);
+    if (disposed) return;
+    startWatching(watchTargets, generation);
   }
-  function Sd(q) {
-    if (!Ft.delete(q)) return;
-    logForDebugging(`Settings directory ${q} appeared; watching it`);
-    Xt.add(q);
-    co();
+  function onDirAppeared(dir) {
+    if (!pendingDirs.delete(dir)) return;
+    logForDebugging(`Settings directory ${dir} appeared; watching it`);
+    appearedDirs.add(dir);
+    restart();
   }
-  async function _d(q) {
+  async function statStable(path) {
     try {
-      let Q = await stat(q);
+      let previous = await stat(path);
       while (true) {
         await sleep(stabilityThreshold);
-        if (se) return null;
-        let de = await stat(q);
-        if (de.size === Q.size && de.mtimeMs === Q.mtimeMs) return de.isFile() ? de : null;
-        Q = de;
+        if (disposed) return null;
+        let current = await stat(path);
+        if (current.size === previous.size && current.mtimeMs === previous.mtimeMs)
+          return current.isFile() ? current : null;
+        previous = current;
       }
     } catch {}
     return null;
   }
-  async function Vi(q, Q) {
-    let de = await q.subscribe(
+  async function subscribeV5(bridge, target) {
+    let sub = await bridge.subscribe(
       {
         target: "key",
         key: STORAGE_SPACES.userSettings(),
       },
-      vd,
+      onObservation,
       {
         maxObservationLagMs: subscribedObservationLag,
       },
     );
-    if (!de.ok) {
+    if (!sub.ok) {
       logForDebugging(
-        `[settings] watching ${Q} through the storage interface failed: ${formatStorageError(de.error)}`,
+        `[settings] watching ${target} through the storage interface failed: ${formatStorageError(sub.error)}`,
         {
           level: "warn",
         },
       );
       return false;
     }
-    if (e?.subscribedObservationLag === undefined) O = Math.max(O, R(de.value.observationLagMs));
-    logForDebugging(`Watching for changes in ${Q} through the storage interface`);
+    if (options?.subscribedObservationLag === undefined)
+      observedGrace = Math.max(observedGrace, graceFor(sub.value.observationLagMs));
+    logForDebugging(`Watching for changes in ${target} through the storage interface`);
     return true;
   }
-  function vd(q) {
-    let Q = st;
-    if (se || Q === undefined) return;
-    if (!q.ok) {
+  function onObservation(observation) {
+    let target = servedByV5;
+    if (disposed || target === undefined) return;
+    if (!observation.ok) {
       logForDebugging(
-        `[settings] watching ${Q} through the storage interface ended: ${formatStorageError(q.error)}`,
+        `[settings] watching ${target} through the storage interface ended: ${formatStorageError(observation.error)}`,
         {
           level: "warn",
         },
       );
-      if (!Gi && isStorageV5Enabled() && We !== undefined) {
-        Gi = true;
-        Vi(We, Q);
+      if (!resubscribeRetried && isStorageV5Enabled() && sessionArg !== undefined) {
+        resubscribeRetried = true;
+        subscribeV5(sessionArg, target);
       }
       return;
     }
-    switch (q.value.kind) {
+    switch (observation.value.kind) {
       case "snapshot": {
-        let de = qt;
-        let Se =
-          "absent" in q.value
+        let previous = presence;
+        let next =
+          "absent" in observation.value
             ? {
                 present: false,
               }
             : {
                 present: true,
-                version: q.value.version,
+                version: observation.value.version,
               };
-        qt = Se;
-        if (de === undefined) return;
-        if (Se.present) {
-          let Ce = !de.present || ie.has(Q);
-          if (Ce || de.version !== Se.version) {
-            if (Ce) It = true;
-            uo(Q);
+        presence = next;
+        if (previous === undefined) return;
+        if (next.present) {
+          let shouldFire = !previous.present || pendingDeletions.has(target);
+          if (shouldFire || previous.version !== next.version) {
+            if (shouldFire) sawChange = true;
+            onRecreated(target);
           }
           return;
         }
-        if (de.present && !ie.has(Q)) Ki(Q, " (while unwatched)");
+        if (previous.present && !pendingDeletions.has(target)) onDeleted(target, " (while unwatched)");
         return;
       }
       case "appended":
       case "tombstoned":
         return;
       case "created":
-        qt = {
+        presence = {
           present: true,
-          version: q.value.version,
+          version: observation.value.version,
         };
-        It = true;
-        uo(Q);
+        sawChange = true;
+        onRecreated(target);
         return;
       case "updated":
-        qt = {
+        presence = {
           present: true,
-          version: q.value.version,
+          version: observation.value.version,
         };
-        uo(Q);
+        onRecreated(target);
         return;
       case "deleted":
-        qt = {
+        presence = {
           present: false,
         };
-        Ki(Q, "");
+        onDeleted(target, "");
         return;
     }
   }
-  function Ki(q, Q) {
-    let de = yt !== null && It && !fr;
-    qi();
-    if (de) return;
-    logForDebugging(`Detected deletion of ${q}${Q}`);
-    Qi(q, "userSettings", O);
+  function onDeleted(target, suffix) {
+    let deferred = pendingDeleteTimer !== null && sawChange && !recreated;
+    clearFlushTimer();
+    if (deferred) return;
+    logForDebugging(`Detected deletion of ${target}${suffix}`);
+    scheduleDelete(target, "userSettings", observedGrace);
   }
-  function uo(q) {
-    let Q = ie.get(q);
-    if (Q) {
-      clearTimeout(Q);
-      ie.delete(q);
-      fr = true;
-      It = true;
-      logForDebugging(`Cancelled pending deletion of ${q} \u2014 file was recreated`);
+  function onRecreated(target) {
+    let timer = pendingDeletions.get(target);
+    if (timer) {
+      clearTimeout(timer);
+      pendingDeletions.delete(target);
+      recreated = true;
+      sawChange = true;
+      logForDebugging(`Cancelled pending deletion of ${target} \u2014 file was recreated`);
     }
-    if (yt) clearTimeout(yt);
-    yt = setTimeout(kd, stabilityThreshold);
+    if (pendingDeleteTimer) clearTimeout(pendingDeleteTimer);
+    pendingDeleteTimer = setTimeout(flushTimer, stabilityThreshold);
   }
-  function qi() {
-    if (yt) {
-      clearTimeout(yt);
-      yt = null;
+  function clearFlushTimer() {
+    if (pendingDeleteTimer) {
+      clearTimeout(pendingDeleteTimer);
+      pendingDeleteTimer = null;
     }
-    It = false;
-    fr = false;
+    sawChange = false;
+    recreated = false;
   }
-  function kd() {
-    yt = null;
-    let q = It;
-    It = false;
-    fr = false;
-    let Q = st;
-    if (se || Q === undefined) return;
-    if (q) Xi(Q);
-    else pr(Q);
+  function flushTimer() {
+    pendingDeleteTimer = null;
+    let changed = sawChange;
+    sawChange = false;
+    recreated = false;
+    let target = servedByV5;
+    if (disposed || target === undefined) return;
+    if (changed) onAdd(target);
+    else onChange(target);
   }
-  function mo(q) {
-    return gr.get(pathModule.normalize(q)) ?? q;
+  function canonical(path) {
+    return realpathMap.get(pathModule.normalize(path)) ?? path;
   }
-  function pr(q) {
-    if (se) return;
-    let Q = mo(q);
-    let sourceForPath = getSourceForPath(Q);
+  function onChange(path) {
+    if (disposed) return;
+    let canonicalPath = canonical(path);
+    let sourceForPath = getSourceForPath(canonicalPath);
     if (!sourceForPath) return;
-    let Se = ie.get(Q);
-    if (Se) {
-      clearTimeout(Se);
-      ie.delete(Q);
-      logForDebugging(`Cancelled pending deletion of ${Q} \u2014 file was recreated`);
+    let pending = pendingDeletions.get(canonicalPath);
+    if (pending) {
+      clearTimeout(pending);
+      pendingDeletions.delete(canonicalPath);
+      logForDebugging(`Cancelled pending deletion of ${canonicalPath} \u2014 file was recreated`);
     }
-    if (consumeInternalWrite(Q, INTERNAL_WRITE_WINDOW_MS)) {
+    if (consumeInternalWrite(canonicalPath, INTERNAL_WRITE_WINDOW_MS)) {
       logForDebugging(
-        `Suppressed change to ${Q} \u2014 echo of our own write within the last ${INTERNAL_WRITE_WINDOW_MS}ms`,
+        `Suppressed change to ${canonicalPath} \u2014 echo of our own write within the last ${INTERNAL_WRITE_WINDOW_MS}ms`,
       );
       return;
     }
-    logForDebugging(`Detected change to ${Q}${q !== Q ? ` (via symlink target ${q})` : ""}`);
-    es(sourceForPath, Q).then((Ce) => {
-      if (Ce) {
-        logForDebugging(`ConfigChange hook blocked change to ${Q}`);
+    logForDebugging(
+      `Detected change to ${canonicalPath}${path !== canonicalPath ? ` (via symlink target ${path})` : ""}`,
+    );
+    gate(sourceForPath, canonicalPath).then((blocked) => {
+      if (blocked) {
+        logForDebugging(`ConfigChange hook blocked change to ${canonicalPath}`);
         return;
       }
-      if (isStorageV5Enabled() && We !== undefined && Q === st) {
-        seedProjectSettings(We, commandSyncNameState(), Q).then((xe) => {
+      if (isStorageV5Enabled() && sessionArg !== undefined && canonicalPath === servedByV5) {
+        seedProjectSettings(sessionArg, commandSyncNameState(), canonicalPath).then((released) => {
           try {
-            Cn(
+            fanOut(
               sourceForPath,
-              xe !== undefined && !se
+              released !== undefined && !disposed
                 ? {
                     userLayer: "retain",
                   }
                 : undefined,
             );
           } finally {
-            xe?.();
+            released?.();
           }
         });
         return;
       }
-      Cn(sourceForPath);
+      fanOut(sourceForPath);
     });
   }
-  function Xi(q) {
-    let Q = mo(q);
-    if (!getSourceForPath(Q)) return;
-    let pendingTimer = ie.get(Q);
+  function onAdd(path) {
+    let canonicalPath = canonical(path);
+    if (!getSourceForPath(canonicalPath)) return;
+    let pendingTimer = pendingDeletions.get(canonicalPath);
     if (pendingTimer) {
       clearTimeout(pendingTimer);
-      ie.delete(Q);
-      logForDebugging(`Cancelled pending deletion of ${Q} \u2014 file was re-added`);
+      pendingDeletions.delete(canonicalPath);
+      logForDebugging(`Cancelled pending deletion of ${canonicalPath} \u2014 file was re-added`);
     }
-    pr(q);
+    onChange(path);
   }
-  function Ji(q) {
-    let Q = mo(q);
-    let sourceForPath = getSourceForPath(Q);
-    if (!sourceForPath) return;
-    logForDebugging(`Detected deletion of ${Q}`);
-    if (getPlatform() === "macos") L?.add(pathModule.dirname(q));
-    Qi(Q, sourceForPath);
+  function onUnlink(path) {
+    let canonicalPath = canonical(path);
+    let source = getSourceForPath(canonicalPath);
+    if (!source) return;
+    logForDebugging(`Detected deletion of ${canonicalPath}`);
+    if (getPlatform() === "macos") watcher?.add(pathModule.dirname(path));
+    scheduleDelete(canonicalPath, source);
   }
-  function Qi(q, Q, de = j ? R(watchPollInterval) : deletionGrace) {
-    if (ie.has(q)) return;
-    let timer = setTimeout(Rd, de, q, Q);
-    ie.set(q, timer);
+  function scheduleDelete(path, source, delay = polling ? graceFor(watchPollInterval) : deletionGrace) {
+    if (pendingDeletions.has(path)) return;
+    let timer = setTimeout(onDeleteTimer, delay, path, source);
+    pendingDeletions.set(path, timer);
   }
-  function Rd(q, src) {
-    ie.delete(q);
-    es(src, q).then((results) => {
+  function onDeleteTimer(path, src) {
+    pendingDeletions.delete(path);
+    gate(src, path).then((results) => {
       if (results) {
-        logForDebugging(`ConfigChange hook blocked deletion of ${q}`);
+        logForDebugging(`ConfigChange hook blocked deletion of ${path}`);
         return;
       }
-      Cn(src);
+      fanOut(src);
     });
   }
-  function es(source, Q) {
-    if (!He) {
+  function gate(source, path) {
+    if (!configGate) {
       logError(Error("settingsChangeDetector: ConfigChange hook gate not wired"));
       return Promise.resolve(true);
     }
-    return He(settingSourceToConfigChangeSource(source), Q);
+    return configGate(settingSourceToConfigChangeSource(source), path);
   }
-  function ts(q, Q, wslInherits, wslWindowsFile) {
+  function mdmDigest(mdm, hkcu, wslInherits, wslWindowsFile) {
     return jsonStringify({
-      mdm: q.settings,
-      mdmErrors: q.errors,
-      mdmUserWritable: q.userWritable === true,
-      mdmDocumentHasPolicyContent: q.documentHasPolicyContent === true,
-      mdmLoadState: q.loadState,
-      mdmHeldDocuments: q.heldDocuments ?? [],
-      hkcu: Q.settings,
-      hkcuErrors: Q.errors,
+      mdm: mdm.settings,
+      mdmErrors: mdm.errors,
+      mdmUserWritable: mdm.userWritable === true,
+      mdmDocumentHasPolicyContent: mdm.documentHasPolicyContent === true,
+      mdmLoadState: mdm.loadState,
+      mdmHeldDocuments: mdm.heldDocuments ?? [],
+      hkcu: hkcu.settings,
+      hkcuErrors: hkcu.errors,
       wslInherits,
       wslWindowsFile,
     });
   }
-  async function Ed() {
-    we = ts(mdmResult(), startMdmPoll(), wslInheritsSettings(), await hasManagedSettingsFile(We));
-    if (se) return;
-    ce = setInterval(() => {
-      if (se) return;
+  async function startMdmPolling() {
+    mdmSnapshot = mdmDigest(
+      mdmResult(),
+      startMdmPoll(),
+      wslInheritsSettings(),
+      await hasManagedSettingsFile(sessionArg),
+    );
+    if (disposed) return;
+    mdmTimer = setInterval(() => {
+      if (disposed) return;
       (async () => {
         try {
-          let mdmSnapshot = await readMdmSnapshot(We);
-          if (se) return;
-          let { mdm, hkcu, wslInherits } = withAskedWhere(mdmSnapshot);
+          let mdmSnapshot_2 = await readMdmSnapshot(sessionArg);
+          if (disposed) return;
+          let { mdm, hkcu, wslInherits } = withAskedWhere(mdmSnapshot_2);
           setMdmReadOutcomes(undefined);
           replaceMdmSetting(
-            mdmSnapshot.mdm,
-            mdmSnapshot.hkcu,
-            mdmSnapshot.wslInherits,
-            mdmSnapshot.whereAsked,
+            mdmSnapshot_2.mdm,
+            mdmSnapshot_2.hkcu,
+            mdmSnapshot_2.wslInherits,
+            mdmSnapshot_2.whereAsked,
           );
-          let wslWindowsFile = await hasManagedSettingsFile(We);
-          if (se) return;
-          let xe = ts(mdm, hkcu, wslInherits, wslWindowsFile);
-          if (xe !== we) {
-            we = xe;
+          let wslWindowsFile = await hasManagedSettingsFile(sessionArg);
+          if (disposed) return;
+          let digest = mdmDigest(mdm, hkcu, wslInherits, wslWindowsFile);
+          if (digest !== mdmSnapshot) {
+            mdmSnapshot = digest;
             logForDebugging("Detected MDM settings change via poll");
-            Cn("policySettings");
+            fanOut("policySettings");
           }
-          setMdmReadOutcomes(mdmSnapshot.readOutcomes);
+          setMdmReadOutcomes(mdmSnapshot_2.readOutcomes);
         } catch (error) {
           logForDebugging(`MDM poll error: ${errorMessage(error)}`);
         }
       })();
     }, mdmPollInterval);
-    ce.unref();
+    mdmTimer.unref();
   }
-  function Pd() {
-    if (se || !bridgeStore) return;
-    let q = commandSyncNameState();
-    if (q === ye) return;
-    Ee?.();
-    ye = q;
-    Ee = q.changed.subscribe((Q) => rs(Q));
+  function ensureCommandSub() {
+    if (disposed || !bridgeStore) return;
+    let state = commandSyncNameState();
+    if (state === commandState) return;
+    commandUnsub?.();
+    commandState = state;
+    commandUnsub = state.changed.subscribe((change) => emit(change));
   }
-  function Cn(q, Q, de) {
-    invalidateCommandNames(Q);
+  function fanOut(source, options, notifyOptions) {
+    invalidateCommandNames(options);
     try {
-      rs(q, de);
+      emit(source, notifyOptions);
     } catch (error) {
-      for (let Ce of error instanceof AggregateError ? error.errors : [error])
-        logError(withTelemetryMessage(toError(Ce), "settingsChangeDetector: subscriber threw during fanOut"));
+      for (let subscriberError of error instanceof AggregateError ? error.errors : [error])
+        logError(
+          withTelemetryMessage(
+            toError(subscriberError),
+            "settingsChangeDetector: subscriber threw during fanOut",
+          ),
+        );
     }
   }
-  function rs(q, Q) {
+  function emit(source, payload) {
     let sessionFeatureValues = getSessionFeatureValues();
     sessionFeatureValues.settingsChangesUnfinished =
       (sessionFeatureValues.settingsChangesUnfinished ?? 0) + 1;
-    signal.emit(q, Q);
+    signal.emit(source, payload);
     sessionFeatureValues.settingsChangesUnfinished--;
   }
-  function Md(q, Q) {
-    logForDebugging(`Programmatic settings change notification for ${q}`);
-    Cn(q, undefined, Q);
+  function notifyChange(source, options) {
+    logForDebugging(`Programmatic settings change notification for ${source}`);
+    fanOut(source, undefined, options);
   }
   return {
-    initialize: pd,
-    dispose: ao,
-    rehome: bd,
-    [Symbol.asyncDispose]: ao,
-    subscribe: (q) => {
-      Pd();
-      return signal.subscribe(q);
+    initialize,
+    dispose,
+    rehome,
+    [Symbol.asyncDispose]: dispose,
+    subscribe: (listener) => {
+      ensureCommandSub();
+      return signal.subscribe(listener);
     },
-    notifyChange: Md,
-    isWatching: () => me && !se,
+    notifyChange,
+    isWatching: () => started && !disposed,
   };
 }
 //@ chunk-82kqcve8.js:34017-34030 layout
 /**
  * 设置变更检测器单例（initialize() 的返回值）。
  */
-var settingsChangeDetector = createSettingsChangeDetector();
+var settingsChangeDetector; // deferred: uses createSettingsChangeDetector of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-82kqcve8.js:34017", () => {
+  settingsChangeDetector = createSettingsChangeDetector();
+});
 //@ chunk-82kqcve8.js:34030-34153 layout
-function isUserSettingsSource(e) {
-  if (!isStorageV5Enabled() || e === undefined) return;
+function isUserSettingsSource(session) {
+  if (!isStorageV5Enabled() || session === undefined) return;
   let settingsFilePathForSource = getSettingsFilePathForSource("userSettings");
   return settingsFilePathForSource !== undefined &&
     pathModule.basename(settingsFilePathForSource) === USER_SETTINGS_FILE_NAMES.default
@@ -693,82 +726,84 @@ function isUserSettingsSource(e) {
     : undefined;
 }
 //@ chunk-82kqcve8.js:34153-36037 fingerprint = getWatchTargets (0.327)
-async function getWatchTargets(e) {
+async function getWatchTargets(session) {
   let dirToSettingsFiles = new Map();
   let dirsWithExistingFiles = new Set();
-  let s = new Map();
-  let h = new Set();
-  let y = [];
-  let w = new Set();
-  let S = isUserSettingsSource(e);
+  let symlinkMap = new Map();
+  let configDirs = new Set();
+  let files = [];
+  let projectScoped = new Set();
+  let servedByV5 = isUserSettingsSource(session);
   for (let source of SETTING_SOURCES) {
     if (source === "flagSettings") continue;
     let path = getSettingsFilePathForSource(source);
-    if (S !== undefined && path === S) continue;
+    if (servedByV5 !== undefined && path === servedByV5) continue;
     if (path) {
-      y.push(path);
-      if (source === "projectSettings" || source === "localSettings") w.add(path);
+      files.push(path);
+      if (source === "projectSettings" || source === "localSettings") projectScoped.add(path);
     }
   }
   let legacyLocalSettingsFilePath = getLegacyLocalSettingsFilePath();
   if (legacyLocalSettingsFilePath) {
-    y.push(legacyLocalSettingsFilePath);
-    w.add(legacyLocalSettingsFilePath);
+    files.push(legacyLocalSettingsFilePath);
+    projectScoped.add(legacyLocalSettingsFilePath);
   }
-  let O = new Set();
-  for (let ee of new Set(
-    y.filter((re) => w.has(re) && !isInClaudeConfigHome(re)).map((re) => pathModule.dirname(re)),
+  let skippedDirs = new Set();
+  for (let dir of new Set(
+    files
+      .filter((file) => projectScoped.has(file) && !isInClaudeConfigHome(file))
+      .map((file) => pathModule.dirname(file)),
   ))
-    if (!isMissingPathError(ee)) {
-      O.add(ee);
+    if (!isMissingPathError(dir)) {
+      skippedDirs.add(dir);
       logForDebugging(
-        `Not watching settings directory ${ee}: it or an entry in it leads onto a network path or could not be vetted (its settings files are unwatched this session)`,
+        `Not watching settings directory ${dir}: it or an entry in it leads onto a network path or could not be vetted (its settings files are unwatched this session)`,
       );
     }
-  let P = new Set();
-  for (let ee of y) {
-    let dir = pathModule.dirname(ee);
-    if (O.has(dir)) continue;
+  let pendingDirs = new Set();
+  for (let file of files) {
+    let dir = pathModule.dirname(file);
+    if (skippedDirs.has(dir)) continue;
     if (!dirToSettingsFiles.has(dir)) dirToSettingsFiles.set(dir, new Set());
-    dirToSettingsFiles.get(dir).add(ee);
-    if (!dirsWithExistingFiles.has(dir) && !P.has(dir))
+    dirToSettingsFiles.get(dir).add(file);
+    if (!dirsWithExistingFiles.has(dir) && !pendingDirs.has(dir))
       try {
         if ((await stat(dir)).isDirectory()) dirsWithExistingFiles.add(dir);
       } catch {
-        if (w.has(ee))
+        if (projectScoped.has(file))
           try {
-            if ((await stat(pathModule.dirname(dir))).isDirectory()) P.add(dir);
+            if ((await stat(pathModule.dirname(dir))).isDirectory()) pendingDirs.add(dir);
           } catch {}
       }
     try {
-      let stats = await realpath(ee);
-      if (stats === ee) continue;
-      let we = await realpath(dir);
+      let stats = await realpath(file);
+      if (stats === file) continue;
+      let dirReal = await realpath(dir);
       let dir_2 = pathModule.dirname(stats);
-      if (pathModule.join(we, pathModule.basename(ee)) === stats) continue;
-      let se = dir_2 === we;
-      let ye = se ? pathModule.join(dir, pathModule.basename(stats)) : stats;
-      if (getSourceForPath(ye) !== undefined) continue;
+      if (pathModule.join(dirReal, pathModule.basename(file)) === stats) continue;
+      let sameDir = dir_2 === dirReal;
+      let target = sameDir ? pathModule.join(dir, pathModule.basename(stats)) : stats;
+      if (getSourceForPath(target) !== undefined) continue;
       if (
-        !se &&
-        w.has(ee) &&
-        !isInClaudeConfigHome(ee) &&
+        !sameDir &&
+        projectScoped.has(file) &&
+        !isInClaudeConfigHome(file) &&
         !isPathConfigDir(dir_2) &&
         !isMissingPathError(dir_2)
       ) {
         logForDebugging(
-          `Not watching ${dir_2} (the resolved directory of settings file ${ee}): an entry in it leads onto a network path or could not be vetted`,
+          `Not watching ${dir_2} (the resolved directory of settings file ${file}): an entry in it leads onto a network path or could not be vetted`,
         );
         continue;
       }
-      s.set(ye, ee);
-      h.add(dir);
-      if (se) dirToSettingsFiles.get(dir).add(ye);
+      symlinkMap.set(target, file);
+      configDirs.add(dir);
+      if (sameDir) dirToSettingsFiles.get(dir).add(target);
       else {
         if (!dirToSettingsFiles.has(dir_2)) dirToSettingsFiles.set(dir_2, new Set());
-        dirToSettingsFiles.get(dir_2).add(ye);
+        dirToSettingsFiles.get(dir_2).add(target);
         dirsWithExistingFiles.add(dir_2);
-        h.add(dir_2);
+        configDirs.add(dir_2);
       }
     } catch {}
   }
@@ -783,61 +818,61 @@ async function getWatchTargets(e) {
     if ((await stat(managedDropIn)).isDirectory()) {
       dirsWithExistingFiles.add(managedDropIn);
       dropInDir = managedDropIn;
-      h.add(managedDropIn);
+      configDirs.add(managedDropIn);
     }
   } catch {}
-  let Z = getPlatform() === "macos";
-  let ae = new Set();
+  let isMac = getPlatform() === "macos";
+  let dirs = new Set();
   for (let dirsWithExistingFile of dirsWithExistingFiles) {
-    let re = dirToSettingsFiles.get(dirsWithExistingFile);
-    if (!re || !Z || h.has(dirsWithExistingFile)) {
-      ae.add(dirsWithExistingFile);
+    let files = dirToSettingsFiles.get(dirsWithExistingFile);
+    if (!files || !isMac || configDirs.has(dirsWithExistingFile)) {
+      dirs.add(dirsWithExistingFile);
       continue;
     }
-    let ce = false;
-    for (let we of re)
+    let hasMissing = false;
+    for (let file of files)
       try {
-        if ((await stat(we)).isFile()) ae.add(we);
-        else ce = true;
+        if ((await stat(file)).isFile()) dirs.add(file);
+        else hasMissing = true;
       } catch {
-        ce = true;
+        hasMissing = true;
       }
-    if (ce) ae.add(dirsWithExistingFile);
+    if (hasMissing) dirs.add(dirsWithExistingFile);
   }
   return {
-    dirs: [...ae],
+    dirs: [...dirs],
     settingsFiles,
-    projectScoped: w,
+    projectScoped,
     dropInDir,
-    realpathToCanonical: s,
-    servedByV5: S,
-    pendingDirs: P,
+    realpathToCanonical: symlinkMap,
+    servedByV5,
+    pendingDirs,
   };
 }
 //@ chunk-82kqcve8.js:36037-36340 layout
-function isMissingPathError(e) {
+function isMissingPathError(dir) {
   try {
-    vetRepoSettingsPath(getFsImplementation(), e, {
+    vetRepoSettingsPath(getFsImplementation(), dir, {
       failClosed: true,
     });
   } catch {
     return false;
   }
-  let n;
+  let entries;
   try {
-    n = readdirSync(e);
+    entries = readdirSync(dir);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     return errnoCode === "ENOENT" || errnoCode === "ENOTDIR";
   }
-  for (let r of n) {
-    let joined = pathModule.join(e, r);
-    let h = true;
-    if (!hasDotSegment(r))
+  for (let entry of entries) {
+    let joined = pathModule.join(dir, entry);
+    let suspect = true;
+    if (!hasDotSegment(entry))
       try {
-        h = getFsImplementation().lstatSync(joined).isSymbolicLink();
+        suspect = getFsImplementation().lstatSync(joined).isSymbolicLink();
       } catch {}
-    if (!h) continue;
+    if (!suspect) continue;
     try {
       vetRepoSettingsPath(getFsImplementation(), joined, {
         failClosed: true,
@@ -875,11 +910,7 @@ function getSourceForPath(path) {
   return;
 }
 //@ chunk-82kqcve8.js:36765-36843 affinity
-function isEmptyPrivateFile(e) {
-  return e.isFile() && e.size === 0 && e.nlink === 1 && (e.mode & 511) === 292;
-}
-//@ chunk-q8cqcff6.js:10635-10676 callgraph-fingerprint = startMdmPoll (0.169)
-function startMdmPoll() {
-  return withAskedWhere(mdmLoader()).hkcu ?? me;
+function isEmptyPrivateFile(stats) {
+  return stats.isFile() && stats.size === 0 && stats.nlink === 1 && (stats.mode & 511) === 292;
 }
 export { settingsChangeDetector, createSettingsChangeDetector, startMdmPoll };

@@ -51,7 +51,7 @@ async function createGoogleGroupsLookup(googleGroups) {
       .setIssuedAt(floored)
       .setExpirationTime(floored + 3600)
       .sign(privateKey);
-    let c = await fetchWithCa(HTTPS_OAUTH2_GOOGLEAPIS_COM_TOKEN, {
+    let tokenResponse = await fetchWithCa(HTTPS_OAUTH2_GOOGLEAPIS_COM_TOKEN, {
       method: "POST",
       headers: {
         "content-type": "application/x-www-form-urlencoded",
@@ -62,8 +62,11 @@ async function createGoogleGroupsLookup(googleGroups) {
       }),
       signal: AbortSignal.timeout(1e4),
     });
-    if (!c.ok) throw Error(`google token endpoint ${c.status}: ${(await c.text()).slice(0, 500)}`);
-    let body = await c.json();
+    if (!tokenResponse.ok)
+      throw Error(
+        `google token endpoint ${tokenResponse.status}: ${(await tokenResponse.text()).slice(0, 500)}`,
+      );
+    let body = await tokenResponse.json();
     if (typeof body.access_token !== "string") throw Error("google token endpoint returned no access_token");
     cachedToken = {
       token: body.access_token,
@@ -71,36 +74,39 @@ async function createGoogleGroupsLookup(googleGroups) {
     };
     return body.access_token;
   }
-  return async function (l) {
+  return async function (userKey) {
     try {
       let accessToken = await getAccessToken();
-      let u = [];
-      let f;
+      let groupEmails = [];
+      let pageToken;
       for (let j = 0; j < 50; j++) {
-        let m = new URL(GOOGLE_ADMIN_GROUPS_URL);
-        m.searchParams.set("userKey", l);
-        m.searchParams.set("maxResults", "200");
-        if (f) m.searchParams.set("pageToken", f);
-        let y = await fetchWithCa(m, {
+        let groupsUrl = new URL(GOOGLE_ADMIN_GROUPS_URL);
+        groupsUrl.searchParams.set("userKey", userKey);
+        groupsUrl.searchParams.set("maxResults", "200");
+        if (pageToken) groupsUrl.searchParams.set("pageToken", pageToken);
+        let groupsResponse = await fetchWithCa(groupsUrl, {
           headers: {
             authorization: `Bearer ${accessToken}`,
           },
           signal: AbortSignal.timeout(1e4),
         });
-        if (!y.ok) {
-          if (y.status === 401) cachedToken = undefined;
-          throw Error(`directory API ${y.status}: ${(await y.text()).slice(0, 500)}`);
+        if (!groupsResponse.ok) {
+          if (groupsResponse.status === 401) cachedToken = undefined;
+          throw Error(
+            `directory API ${groupsResponse.status}: ${(await groupsResponse.text()).slice(0, 500)}`,
+          );
         }
-        let body = await y.json();
-        for (let w of body.groups ?? []) if (typeof w.email === "string") u.push(w.email.toLowerCase());
-        f = body.nextPageToken;
-        if (!f) break;
+        let body = await groupsResponse.json();
+        for (let groupEntry of body.groups ?? [])
+          if (typeof groupEntry.email === "string") groupEmails.push(groupEntry.email.toLowerCase());
+        pageToken = body.nextPageToken;
+        if (!pageToken) break;
       }
-      return u;
+      return groupEmails;
     } catch (error) {
-      let u = error instanceof Error ? error.message : String(error);
-      gatewayLog("warn", `google_groups lookup failed: ${u}`);
-      throw Object.assign(Error(`google_groups lookup failed: ${u}`), {
+      let message = error instanceof Error ? error.message : String(error);
+      gatewayLog("warn", `google_groups lookup failed: ${message}`);
+      throw Object.assign(Error(`google_groups lookup failed: ${message}`), {
         code: "GOOGLE_GROUPS_UNAVAILABLE",
       });
     }

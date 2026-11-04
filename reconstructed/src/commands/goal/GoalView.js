@@ -8,15 +8,15 @@
  * pieces: chunk-hgfnw8bk.js (6)
  * attribution: placement 6
  */
-import { init_react_production, y } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { MEMO_CACHE_SENTINEL, EARLY_RETURN_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { useInterval } from "../../ink/components/Input.js";
 import { formatDuration, formatTokens } from "../../utils/format.js";
 import { getTotalOutputTokens } from "../../bootstrap/state.js";
 import { plural, getFirstLine } from "../../utils/stringUtils.js";
-import { BULLSEYE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BULLSEYE } from "../../constants/figures.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -40,68 +40,68 @@ import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
 //@ chunk-hgfnw8bk.js:5734-5738 placement
 init_react_production();
 //@ chunk-hgfnw8bk.js:5738-5774 placement
-function selectActiveGoal(et) {
-  return et.activeGoal;
+function selectActiveGoal(state) {
+  return state.activeGoal;
 }
 //@ chunk-hgfnw8bk.js:5774-5801 placement
-function increment(at) {
-  return at + 1;
+function increment(state) {
+  return state + 1;
 }
 //@ chunk-hgfnw8bk.js:5801-8335 placement
 /**
  * /goal 无参数时显示当前目标条件、已运行时长与轮数的视图。
  */
 function GoalStatusView(props) {
-  let o = w(38);
+  let $ = useMemoCache(38);
   let { messages, onDone } = props;
   let appState = useAppState(selectActiveGoal);
-  let [, u] = y(0);
-  let A;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
-    A = () => u(increment);
-    o[0] = A;
-  } else A = o[0];
-  useInterval(A, appState ? 1000 : null);
+  let [, tick] = useState(0);
+  let content;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    content = () => tick(increment);
+    $[0] = content;
+  } else content = $[0];
+  useInterval(content, appState ? 1000 : null);
   if (appState) {
-    const b = Date.now() - appState.setAt;
-    let g;
-    if (o[1] !== b) {
-      g = formatDuration(b, {
+    const elapsedMs = Date.now() - appState.setAt;
+    let running;
+    if ($[1] !== elapsedMs) {
+      running = formatDuration(elapsedMs, {
         mostSignificantOnly: true,
       });
-      o[1] = b;
-      o[2] = g;
-    } else g = o[2];
-    let H = g;
-    const m = getTotalOutputTokens() - appState.tokensAtStart;
-    let h;
-    if (o[3] !== m) {
-      h = formatTokens(m);
-      o[3] = m;
-      o[4] = h;
-    } else h = o[4];
-    let tt = h;
-    const k = `running ${H}`;
-    let N;
-    if (o[5] !== appState.iterations) {
-      N = appState.iterations > 0 && `${appState.iterations} ${plural(appState.iterations, "turn")}`;
-      o[5] = appState.iterations;
-      o[6] = N;
-    } else N = o[6];
-    const L = `${tt} tokens`;
-    let B;
-    if (o[7] !== k || o[8] !== N || o[9] !== L) {
-      B = [k, N, L].filter(Boolean);
-      o[7] = k;
-      o[8] = N;
-      o[9] = L;
-      o[10] = B;
-    } else B = o[10];
-    let ot = B;
+      $[1] = elapsedMs;
+      $[2] = running;
+    } else running = $[2];
+    let runningText = running;
+    const outputTokens = getTotalOutputTokens() - appState.tokensAtStart;
+    let tokens;
+    if ($[3] !== outputTokens) {
+      tokens = formatTokens(outputTokens);
+      $[3] = outputTokens;
+      $[4] = tokens;
+    } else tokens = $[4];
+    let tokenText = tokens;
+    const runningLabel = `running ${runningText}`;
+    let tokenRow;
+    if ($[5] !== appState.iterations) {
+      tokenRow = appState.iterations > 0 && `${appState.iterations} ${plural(appState.iterations, "turn")}`;
+      $[5] = appState.iterations;
+      $[6] = tokenRow;
+    } else tokenRow = $[6];
+    const tokenLabel = `${tokenText} tokens`;
+    let header;
+    if ($[7] !== runningLabel || $[8] !== tokenRow || $[9] !== tokenLabel) {
+      header = [runningLabel, tokenRow, tokenLabel].filter(Boolean);
+      $[7] = runningLabel;
+      $[8] = tokenRow;
+      $[9] = tokenLabel;
+      $[10] = header;
+    } else header = $[10];
+    let headerRow = header;
     const title = `${BULLSEYE} Goal active`;
-    const subtitle = ot.join(" \xB7 ");
+    const subtitle = headerRow.join(" \xB7 ");
     let inputGuide;
-    if (o[11] === MEMO_CACHE_SENTINEL) {
+    if ($[11] === MEMO_CACHE_SENTINEL) {
       inputGuide = jsxProd_default_2(Byline, {
         children: [
           jsxProd_default(Text, {
@@ -113,72 +113,72 @@ function GoalStatusView(props) {
           }),
         ],
       });
-      o[11] = inputGuide;
-    } else inputGuide = o[11];
-    let D;
-    if (o[12] !== appState.condition) {
-      D = jsxProd_default(GoalField, {
+      $[11] = inputGuide;
+    } else inputGuide = $[11];
+    let body;
+    if ($[12] !== appState.condition) {
+      body = jsxProd_default(GoalField, {
         label: "Goal",
         children: appState.condition,
       });
-      o[12] = appState.condition;
-      o[13] = D;
-    } else D = o[13];
-    let M;
-    if (o[14] !== appState.lastReason) {
-      M = appState.lastReason
+      $[12] = appState.condition;
+      $[13] = body;
+    } else body = $[13];
+    let footer;
+    if ($[14] !== appState.lastReason) {
+      footer = appState.lastReason
         ? jsxProd_default(GoalField, {
             label: "Last check",
             children: getFirstLine(appState.lastReason.trim()),
           })
         : null;
-      o[14] = appState.lastReason;
-      o[15] = M;
-    } else M = o[15];
+      $[14] = appState.lastReason;
+      $[15] = footer;
+    } else footer = $[15];
     let children;
-    if (o[16] !== D || o[17] !== M) {
+    if ($[16] !== body || $[17] !== footer) {
       children = jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [D, M],
+        children: [body, footer],
       });
-      o[16] = D;
-      o[17] = M;
-      o[18] = children;
-    } else children = o[18];
-    let I;
-    if (o[19] !== onDone || o[20] !== subtitle || o[21] !== children) {
-      I = jsxProd_default(Dialog, {
+      $[16] = body;
+      $[17] = footer;
+      $[18] = children;
+    } else children = $[18];
+    let lastMetRow;
+    if ($[19] !== onDone || $[20] !== subtitle || $[21] !== children) {
+      lastMetRow = jsxProd_default(Dialog, {
         title,
         subtitle,
         onCancel: onDone,
         inputGuide,
         children,
       });
-      o[19] = onDone;
-      o[20] = subtitle;
-      o[21] = children;
-      o[22] = I;
-    } else I = o[22];
-    return I;
+      $[19] = onDone;
+      $[20] = subtitle;
+      $[21] = children;
+      $[22] = lastMetRow;
+    } else lastMetRow = $[22];
+    return lastMetRow;
   }
-  let b;
-  if (o[23] !== messages || o[24] !== onDone) {
-    b = EARLY_RETURN_SENTINEL;
+  let statusLine;
+  if ($[23] !== messages || $[24] !== onDone) {
+    statusLine = EARLY_RETURN_SENTINEL;
     Rt: {
       let lastMetGoal = findLastMetGoal(messages);
       if (lastMetGoal) {
-        let T = [];
+        let lines = [];
         if (lastMetGoal.durationMs !== undefined)
-          T.push(
+          lines.push(
             formatDuration(lastMetGoal.durationMs, {
               mostSignificantOnly: true,
             }),
           );
         if (lastMetGoal.iterations !== undefined)
-          T.push(`${lastMetGoal.iterations} ${plural(lastMetGoal.iterations, "turn")}`);
-        if (lastMetGoal.tokens !== undefined) T.push(`${formatTokens(lastMetGoal.tokens)} tokens`);
+          lines.push(`${lastMetGoal.iterations} ${plural(lastMetGoal.iterations, "turn")}`);
+        if (lastMetGoal.tokens !== undefined) lines.push(`${formatTokens(lastMetGoal.tokens)} tokens`);
         let title;
-        if (o[26] === MEMO_CACHE_SENTINEL) {
+        if ($[26] === MEMO_CACHE_SENTINEL) {
           title = jsxProd_default_2(Text, {
             children: [
               jsxProd_default(StatusIcon, {
@@ -188,11 +188,11 @@ function GoalStatusView(props) {
               "Goal achieved",
             ],
           });
-          o[26] = title;
-        } else title = o[26];
-        const subtitle = T.join(" \xB7 ");
+          $[26] = title;
+        } else title = $[26];
+        const subtitle = lines.join(" \xB7 ");
         let inputGuide;
-        if (o[27] === MEMO_CACHE_SENTINEL) {
+        if ($[27] === MEMO_CACHE_SENTINEL) {
           inputGuide = jsxProd_default_2(Byline, {
             children: [
               jsxProd_default(Text, {
@@ -204,20 +204,20 @@ function GoalStatusView(props) {
               }),
             ],
           });
-          o[27] = inputGuide;
-        } else inputGuide = o[27];
+          $[27] = inputGuide;
+        } else inputGuide = $[27];
         let children;
-        if (o[28] !== lastMetGoal) {
+        if ($[28] !== lastMetGoal) {
           children = jsxProd_default(GoalField, {
             label: "Goal",
             children: lastMetGoal.condition,
           });
-          o[28] = lastMetGoal;
-          o[29] = children;
-        } else children = o[29];
-        let N;
-        if (o[30] !== onDone || o[31] !== subtitle || o[32] !== children) {
-          N = jsxProd_default(Dialog, {
+          $[28] = lastMetGoal;
+          $[29] = children;
+        } else children = $[29];
+        let hintRow;
+        if ($[30] !== onDone || $[31] !== subtitle || $[32] !== children) {
+          hintRow = jsxProd_default(Dialog, {
             title,
             subtitle,
             color: "success",
@@ -225,23 +225,23 @@ function GoalStatusView(props) {
             inputGuide,
             children,
           });
-          o[30] = onDone;
-          o[31] = subtitle;
-          o[32] = children;
-          o[33] = N;
-        } else N = o[33];
-        b = N;
+          $[30] = onDone;
+          $[31] = subtitle;
+          $[32] = children;
+          $[33] = hintRow;
+        } else hintRow = $[33];
+        statusLine = hintRow;
         break Rt;
       }
     }
-    o[23] = messages;
-    o[24] = onDone;
-    o[25] = b;
-  } else b = o[25];
-  if (b !== EARLY_RETURN_SENTINEL) return b;
+    $[23] = messages;
+    $[24] = onDone;
+    $[25] = statusLine;
+  } else statusLine = $[25];
+  if (statusLine !== EARLY_RETURN_SENTINEL) return statusLine;
   let inputGuide;
   let children;
-  if (o[34] === MEMO_CACHE_SENTINEL) {
+  if ($[34] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action: "dismiss",
@@ -250,72 +250,72 @@ function GoalStatusView(props) {
       hint: "/goal <condition> to set one",
       children: "No goal set",
     });
-    o[34] = inputGuide;
-    o[35] = children;
+    $[34] = inputGuide;
+    $[35] = children;
   } else {
-    inputGuide = o[34];
-    children = o[35];
+    inputGuide = $[34];
+    children = $[35];
   }
-  let h;
-  if (o[36] !== onDone) {
-    h = jsxProd_default(Dialog, {
+  let footerRows;
+  if ($[36] !== onDone) {
+    footerRows = jsxProd_default(Dialog, {
       title: "Goal",
       onCancel: onDone,
       inputGuide,
       children,
     });
-    o[36] = onDone;
-    o[37] = h;
-  } else h = o[37];
-  return h;
+    $[36] = onDone;
+    $[37] = footerRows;
+  } else footerRows = $[37];
+  return footerRows;
 }
 //@ chunk-hgfnw8bk.js:8335-8708 placement
 function GoalField(props) {
-  let t = w(7);
+  let $ = useMemoCache(7);
   let { label, children } = props;
-  let u;
-  if (t[0] !== label) {
-    u = jsxProd_default(Box, {
+  let content;
+  if ($[0] !== label) {
+    content = jsxProd_default(Box, {
       flexShrink: 0,
       children: jsxProd_default_2(Text, {
         dimColor: true,
         children: [label, ": "],
       }),
     });
-    t[0] = label;
-    t[1] = u;
-  } else u = t[1];
-  let o;
-  if (t[2] !== children) {
-    o = jsxProd_default(Box, {
+    $[0] = label;
+    $[1] = content;
+  } else content = $[1];
+  let footer;
+  if ($[2] !== children) {
+    footer = jsxProd_default(Box, {
       flexGrow: 1,
       children: jsxProd_default(Text, {
         wrap: "wrap",
         children,
       }),
     });
-    t[2] = children;
-    t[3] = o;
-  } else o = t[3];
-  let A;
-  if (t[4] !== u || t[5] !== o) {
-    A = jsxProd_default_2(Box, {
+    $[2] = children;
+    $[3] = footer;
+  } else footer = $[3];
+  let status;
+  if ($[4] !== content || $[5] !== footer) {
+    status = jsxProd_default_2(Box, {
       flexDirection: "row",
-      children: [u, o],
+      children: [content, footer],
     });
-    t[4] = u;
-    t[5] = o;
-    t[6] = A;
-  } else A = t[6];
-  return A;
+    $[4] = content;
+    $[5] = footer;
+    $[6] = status;
+  } else status = $[6];
+  return status;
 }
 //@ chunk-hgfnw8bk.js:8708-9206 placement
 /**
  * /goal <condition>|clear：设置或清除会话目标（以会话级 Stop 钩子实现）。
  */
 var runGoalCommand = async (onDone, context, args) => {
-  let trimmed = args.trim();
-  if (trimmed === "")
+  let condition = args.trim();
+  if (condition === "")
     return jsxProd_default(GoalStatusView, {
       messages: context.messages,
       onDone: () =>
@@ -323,30 +323,31 @@ var runGoalCommand = async (onDone, context, args) => {
           display: "skip",
         }),
     });
-  if (isGoalClearKeyword(trimmed)) {
-    let o = clearSessionGoal(context);
-    onDone(o === null ? "No goal set" : `Goal cleared: ${o}`, {
+  if (isGoalClearKeyword(condition)) {
+    let cleared = clearSessionGoal(context);
+    onDone(cleared === null ? "No goal set" : `Goal cleared: ${cleared}`, {
       display: "system",
     });
     return null;
   }
-  if (trimmed.length > MAX_GOAL_CONDITION_CHARS) {
+  if (condition.length > MAX_GOAL_CONDITION_CHARS) {
     logFeatureSad("goal_set", "too_long");
-    onDone(`Goal condition is limited to ${MAX_GOAL_CONDITION_CHARS} characters (got ${trimmed.length})`, {
+    onDone(`Goal condition is limited to ${MAX_GOAL_CONDITION_CHARS} characters (got ${condition.length})`, {
       display: "system",
     });
     return null;
   }
-  let u = setSessionGoal(trimmed, context);
-  if (u !== null) {
-    onDone(u, {
+  let set = setSessionGoal(condition, context);
+  if (set !== null) {
+    onDone(set, {
       display: "system",
     });
     return null;
   }
-  onDone(`Goal set: ${trimmed}`, {
+  onDone(`Goal set: ${condition}`, {
     shouldQuery: true,
-    metaMessages: [buildGoalSetMessage(trimmed)],
+    metaMessages: [buildGoalSetMessage(condition)],
   });
   return null;
 };
+export { runGoalCommand };

@@ -33,6 +33,7 @@ import {
 import { isSafeMode } from "../../envUtils.js";
 import { isRestrictedToPluginOnly } from "../../settings/pluginOnlyPolicy.js";
 import { isCustomizationDisabled } from "../../settings/customizationDisabled.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:339130-339224 placement
 /**
@@ -47,127 +48,131 @@ function emptyEligibilityState() {
   };
 }
 //@ chunk-s61vbvea.js:339291-339349 placement
-function realpathOrSelf(e, n) {
+function realpathOrSelf(deps, path) {
   try {
-    return e.realpath(n);
+    return deps.realpath(path);
   } catch {
-    return n;
+    return path;
   }
 }
 //@ chunk-s61vbvea.js:339349-339453 placement
-var DEVICE_HOOK_SETTING_SOURCES = [
-  ["userSettings", "user"],
-  ["localSettings", "local"],
-  ["flagSettings", "flag"],
-];
-var DEVICE_HOOK_SCOPES = DEVICE_HOOK_SETTING_SOURCES.map(([, e]) => e);
+var DEVICE_HOOK_SETTING_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var DEVICE_HOOK_SCOPES;
+deferInit("chunk-s61vbvea.js:339349", () => {
+  DEVICE_HOOK_SETTING_SOURCES = [
+    ["userSettings", "user"],
+    ["localSettings", "local"],
+    ["flagSettings", "flag"],
+  ];
+  DEVICE_HOOK_SCOPES = DEVICE_HOOK_SETTING_SOURCES.map(([, pair]) => pair);
+});
 //@ chunk-s61vbvea.js:339453-339510 placement
-function isHooksDisabledForSource(e) {
-  return isSettingSourceEnabled(e) && getSettingsForSource(e)?.disableAllHooks === true;
+function isHooksDisabledForSource(source) {
+  return isSettingSourceEnabled(source) && getSettingsForSource(source)?.disableAllHooks === true;
 }
 //@ chunk-s61vbvea.js:339510-339589 placement
 /**
  * 判断钩子配置对象中是否至少有一个非空事件列表。
  */
 function hasAnyHookEntries(hooks) {
-  return Object.values(hooks).some((n) => Array.isArray(n) && n.length > 0);
+  return Object.values(hooks).some((list) => Array.isArray(list) && list.length > 0);
 }
 //@ chunk-s61vbvea.js:339589-341136 placement
-function deviceHooksPolicyEligibility(deviceHookSources) {
-  if (deviceHookSources.policyUnreadable())
+function deviceHooksPolicyEligibility(deps) {
+  if (deps.policyUnreadable())
     return {
       kind: "none",
       reason: "policy_unreadable",
     };
-  let settingsForSource = deviceHookSources.getSettingsForSource("policySettings");
+  let settingsForSource = deps.getSettingsForSource("policySettings");
   if (settingsForSource?.disableAllHooks === true)
     return {
       kind: "none",
       reason: "policy_disable_all",
     };
-  if (settingsForSource?.allowManagedHooksOnly === true || deviceHookSources.isSafeMode())
+  if (settingsForSource?.allowManagedHooksOnly === true || deps.isSafeMode())
     return {
       kind: "none",
       reason: "managed_only",
     };
-  if (deviceHookSources.isRestrictedToPluginOnly())
+  if (deps.isRestrictedToPluginOnly())
     return {
       kind: "none",
       reason: "plugin_only",
     };
-  let r = deviceHookSources.disableAllHooksByUser();
-  if (r.length > 0)
+  let switches = deps.disableAllHooksByUser();
+  if (switches.length > 0)
     return {
       kind: "none",
       reason: "disabled_by_settings",
-      switchSources: r.filter((S) => S !== "flag" || !deviceHookSources.flagSettingsInline()),
+      switchSources: switches.filter((source) => source !== "flag" || !deps.flagSettingsInline()),
     };
-  if (deviceHookSources.isBare())
+  if (deps.isBare())
     return {
       kind: "none",
       reason: "bare",
     };
-  if (deviceHookSources.hooksSkippedForTrust())
+  if (deps.hooksSkippedForTrust())
     return {
       kind: "none",
       reason: "untrusted_workspace",
     };
-  let s = new Set();
-  let h = [];
+  let seenFiles = new Set();
+  let withheld = [];
   return {
     kind: "captured",
-    sources: DEVICE_HOOK_SETTING_SOURCES.flatMap(([S, w]) => {
-      if (!deviceHookSources.isSettingSourceEnabled(S)) return [];
-      if (S === "flagSettings" && deviceHookSources.flagPatchHasHooks()) {
-        h.push({
-          source: w,
+    sources: DEVICE_HOOK_SETTING_SOURCES.flatMap(([source, scope]) => {
+      if (!deps.isSettingSourceEnabled(source)) return [];
+      if (source === "flagSettings" && deps.flagPatchHasHooks()) {
+        withheld.push({
+          source: scope,
           reason: "runtime_patch",
         });
         return [];
       }
-      let R =
-        S === "flagSettings" && deviceHookSources.flagSettingsInline()
+      let settingsFile =
+        source === "flagSettings" && deps.flagSettingsInline()
           ? null
-          : (deviceHookSources.getSettingsFilePathForSource(S) ?? null);
-      let hooks = deviceHookSources.getSettingsForSource(S)?.hooks;
+          : (deps.getSettingsFilePathForSource(source) ?? null);
+      let hooks = deps.getSettingsForSource(source)?.hooks;
       if (!hooks || !hasAnyHookEntries(hooks)) return [];
-      if (S === "localSettings" && !deviceHookSources.isWorkspaceTrusted()) {
-        h.push({
-          source: w,
+      if (source === "localSettings" && !deps.isWorkspaceTrusted()) {
+        withheld.push({
+          source: scope,
           reason: "untrusted",
         });
         return [];
       }
-      if (S === "localSettings" && deviceHookSources.servesWithNoTerminal()) {
-        h.push({
-          source: w,
+      if (source === "localSettings" && deps.servesWithNoTerminal()) {
+        withheld.push({
+          source: scope,
           reason: "served_folder",
         });
         return [];
       }
-      if (S === "localSettings" && deviceHookSources.isLocalSettingsGitTracked()) {
-        h.push({
-          source: w,
+      if (source === "localSettings" && deps.isLocalSettingsGitTracked()) {
+        withheld.push({
+          source: scope,
           reason: "repo_provenance",
         });
         return [];
       }
-      if (R !== null && S !== "flagSettings") {
-        let P = realpathOrSelf(deviceHookSources, resolve(R));
-        if (s.has(P)) return [];
-        s.add(P);
+      if (settingsFile !== null && source !== "flagSettings") {
+        let realPath = realpathOrSelf(deps, resolve(settingsFile));
+        if (seenFiles.has(realPath)) return [];
+        seenFiles.add(realPath);
       }
       return [
         {
-          source: w,
-          settingsFile: R,
+          source: scope,
+          settingsFile,
           hooks,
         },
       ];
     }),
-    withheld: h,
-    capturedAtMs: deviceHookSources.now(),
-    ...(deviceHookSources.disableAllHooksInCheckout() && {
+    withheld,
+    capturedAtMs: deps.now(),
+    ...(deps.disableAllHooksInCheckout() && {
       checkoutDisablesAllHooks: true,
     }),
   };
@@ -175,8 +180,10 @@ function deviceHooksPolicyEligibility(deviceHookSources) {
 //@ chunk-s61vbvea.js:341136-341975 placement
 function collectDeviceHookSources() {
   return {
-    getSettingsForSource: (e) =>
-      e === "localSettings" ? getSettingsForSourceWriteSeed("localSettings") : getSettingsForSource(e),
+    getSettingsForSource: (source) =>
+      source === "localSettings"
+        ? getSettingsForSourceWriteSeed("localSettings")
+        : getSettingsForSource(source),
     getSettingsFilePathForSource,
     disableAllHooksByUser: () => [
       ...(isHooksDisabledForSource("userSettings") ? ["user"] : []),

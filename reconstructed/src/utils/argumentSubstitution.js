@@ -31,72 +31,82 @@ function parseArgumentNames(args) {
 /**
  * 把参数代入技能/命令/hook 模板（$ARGUMENTS、$1…、命名参数），超过字符上限抛错；先把模板中的保留占位符替换为 U+FFFD。
  */
-function substituteArguments(e, n, appendIfNoPlaceholder = true, argumentNames = [], h, y) {
-  if (n === undefined || n === null) return y ? y(e, (ke) => ke) : e;
-  e = e.replaceAll(DOLLAR_PLACEHOLDER_CHAR, "\uFFFD").replaceAll(LITERAL_PLACEHOLDER_CHAR, "\uFFFD");
-  if (y) e = y(e, wrapLiteralForSubstitution);
-  let S = e.length;
-  let w = (ke) => {
-    let we = ke ?? "";
-    let Ee = h ? h(we) : we;
-    S += Math.max(we.length, Ee.length);
-    if (S > MAX_SUBSTITUTION_CHARS)
+function substituteArguments(
+  template,
+  argumentsText,
+  appendIfNoPlaceholder = true,
+  argumentNames = [],
+  transformArgument,
+  mapTemplate,
+) {
+  if (argumentsText === undefined || argumentsText === null)
+    return mapTemplate ? mapTemplate(template, (segment) => segment) : template;
+  template = template
+    .replaceAll(DOLLAR_PLACEHOLDER_CHAR, "\uFFFD")
+    .replaceAll(LITERAL_PLACEHOLDER_CHAR, "\uFFFD");
+  if (mapTemplate) template = mapTemplate(template, wrapLiteralForSubstitution);
+  let totalLength = template.length;
+  let substituteOne = (argText) => {
+    let rawArgText = argText ?? "";
+    let transformedText = transformArgument ? transformArgument(rawArgText) : rawArgText;
+    totalLength += Math.max(rawArgText.length, transformedText.length);
+    if (totalLength > MAX_SUBSTITUTION_CHARS)
       throw new MalformedCommandError(
         `This skill, command or hook and the arguments filled into it add up to more than ${MAX_SUBSTITUTION_CHARS.toLocaleString("en-US")} characters. Use shorter arguments or fewer placeholders such as $ARGUMENTS.`,
       );
-    return wrapLiteralForSubstitution(Ee);
+    return wrapLiteralForSubstitution(transformedText);
   };
-  let L;
-  let G = (index) => (L ??= parseArgumentNames(n))[index];
+  let parsedNames;
+  let getNameAt = (index) => (parsedNames ??= parseArgumentNames(argumentsText))[index];
   let sorted = argumentNames
-    .map((name, we) => ({
+    .map((name, position) => ({
       name,
-      i: we,
+      i: position,
     }))
-    .filter((ke) => Boolean(ke.name) && ke.name.length <= MAX_ARGUMENT_NAME_CHARS)
+    .filter((namedArg) => Boolean(namedArg.name) && namedArg.name.length <= MAX_ARGUMENT_NAME_CHARS)
     .slice(0, MAX_LISTED_ARGUMENTS)
-    .sort((ke, we) => we.name.length - ke.name.length);
+    .sort((leftArg, rightArg) => rightArg.name.length - leftArg.name.length);
   let joined = [
     "\\d",
     "ARGUMENTS",
-    ...sorted.map(({ name: ke }) => `${urlPatternToRegex_2(ke)}(?![\\[\\w])`),
+    ...sorted.map(({ name }) => `${urlPatternToRegex_2(name)}(?![\\[\\w])`),
   ].join("|");
-  e = e.replace(new RegExp(`(?<!\\\\)\\\\\\$(?=${joined})`, "g"), DOLLAR_PLACEHOLDER_CHAR);
-  let Se = false;
-  for (let { name: ke, i: we } of sorted)
-    e = e.replace(new RegExp(`\\$${urlPatternToRegex_2(ke)}(?![\\[\\w])`, "g"), () => {
-      Se = true;
-      return w(G(we));
+  template = template.replace(new RegExp(`(?<!\\\\)\\\\\\$(?=${joined})`, "g"), DOLLAR_PLACEHOLDER_CHAR);
+  let didSubstitute = false;
+  for (let { name, i: position } of sorted)
+    template = template.replace(new RegExp(`\\$${urlPatternToRegex_2(name)}(?![\\[\\w])`, "g"), () => {
+      didSubstitute = true;
+      return substituteOne(getNameAt(position));
     });
-  e = e.replace(/\$ARGUMENTS\[(\d+)\]/g, (ke, indexStr) => {
+  template = template.replace(/\$ARGUMENTS\[(\d+)\]/g, (matchText, indexStr) => {
     let index = parseInt(indexStr, 10);
-    if (G(index) === undefined) return DOLLAR_PLACEHOLDER_CHAR + ke.slice(1);
-    Se = true;
-    return w(G(index));
+    if (getNameAt(index) === undefined) return DOLLAR_PLACEHOLDER_CHAR + matchText.slice(1);
+    didSubstitute = true;
+    return substituteOne(getNameAt(index));
   });
-  e = e.replace(/\$(\d+)(?!\w)/g, (ke, indexStr) => {
+  template = template.replace(/\$(\d+)(?!\w)/g, (matchText, indexStr) => {
     let index = parseInt(indexStr, 10);
-    if (G(index) === undefined) return ke;
-    Se = true;
-    return w(G(index));
+    if (getNameAt(index) === undefined) return matchText;
+    didSubstitute = true;
+    return substituteOne(getNameAt(index));
   });
-  e = e.replaceAll("$ARGUMENTS", () => {
-    Se = true;
-    return w(n);
+  template = template.replaceAll("$ARGUMENTS", () => {
+    didSubstitute = true;
+    return substituteOne(argumentsText);
   });
-  if (!Se && appendIfNoPlaceholder && n)
-    e =
-      e +
+  if (!didSubstitute && appendIfNoPlaceholder && argumentsText)
+    template =
+      template +
       `
 
-ARGUMENTS: ${w(n)}`;
-  return e.replaceAll(DOLLAR_PLACEHOLDER_CHAR, "$").replaceAll(LITERAL_PLACEHOLDER_CHAR, "");
+ARGUMENTS: ${substituteOne(argumentsText)}`;
+  return template.replaceAll(DOLLAR_PLACEHOLDER_CHAR, "$").replaceAll(LITERAL_PLACEHOLDER_CHAR, "");
 }
 //@ chunk-e6aww6q8.js:985654-985752 affinity
-function wrapLiteralForSubstitution(e) {
+function wrapLiteralForSubstitution(text) {
   return (
     LITERAL_PLACEHOLDER_CHAR +
-    e
+    text
       .replaceAll(DOLLAR_PLACEHOLDER_CHAR, "\uFFFD")
       .replaceAll(LITERAL_PLACEHOLDER_CHAR, "\uFFFD")
       .replaceAll("$", DOLLAR_PLACEHOLDER_CHAR) +

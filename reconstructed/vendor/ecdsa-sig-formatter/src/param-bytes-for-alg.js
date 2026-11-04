@@ -5,10 +5,10 @@
  * pieces: chunk-82d8c88w.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-82d8c88w.js:1109-1328 cjs-fingerprint
-var require_param_bytes_for_alg = x(function (cjsExports, cjsModule) {
+var require_param_bytes_for_alg = __commonJS(function (cjsExports, cjsModule) {
   function getParamSize(keySize) {
     var result = ((keySize / 8) | 0) + (keySize % 8 === 0 ? 0 : 1);
     return result;

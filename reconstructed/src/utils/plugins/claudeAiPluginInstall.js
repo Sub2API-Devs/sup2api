@@ -20,14 +20,18 @@ import { downloadWithRetry } from "../../services/plugins/accountSync/listPlugin
 import { unzipPluginCache } from "./zipCache.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { retryFsOp } from "../atomicPublishWrite.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:693320-693442 placement
-class ClaudeAiPluginInstallError extends ClaudeAiMarketplaceError {
-  constructor(e, n) {
-    super(e, n, "claude.ai plugin install failed");
-    this.name = "ClaudeAiPluginInstallError";
-  }
-}
+let ClaudeAiPluginInstallError; // deferred: uses ClaudeAiMarketplaceError (./claudeAiMarketplaces.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:693320", () => {
+  ClaudeAiPluginInstallError = class ClaudeAiPluginInstallError extends ClaudeAiMarketplaceError {
+    constructor(message, code) {
+      super(message, code, "claude.ai plugin install failed");
+      this.name = "ClaudeAiPluginInstallError";
+    }
+  };
+});
 //@ chunk-e6aww6q8.js:693442-693734 placement
 function normalizeDownloadErrorCode(reason) {
   if (/^http_\d{3}$/.test(reason)) return `http_${reason.charAt(5)}xx`;
@@ -50,8 +54,8 @@ function normalizeDownloadErrorCode(reason) {
 /**
  * 从 claude.ai 下载插件压缩包，处理网络、超时、未登录与被拒。
  */
-function downloadClaudeAiPluginArchive(e) {
-  switch (e) {
+function downloadClaudeAiPluginArchive(reason) {
+  switch (reason) {
     case "network":
     case "timeout":
     case "empty_body":
@@ -75,7 +79,7 @@ function downloadClaudeAiPluginArchive(e) {
 /**
  * 安装 claude.ai 列出的插件，不可安装或没有作用域时跳过。
  */
-async function installClaudeAiPlugin(source, n, tempPath, credentials) {
+async function installClaudeAiPlugin(source, cachePath, tempPath, credentials) {
   return withFeatureTelemetry(
     "claudeai_plugin_install",
     async () => {
@@ -84,11 +88,11 @@ async function installClaudeAiPlugin(source, n, tempPath, credentials) {
           "This plugin is listed on claude.ai but cannot be installed (no published version, or its content scan blocks it).",
           "not_installable",
         );
-      let h = `${tempPath}${TEMP_CACHE_LINK_SUFFIX}`;
-      let y = join(h, "archive.zip");
-      let S = join(h, "tree");
+      let tempDir = `${tempPath}${TEMP_CACHE_LINK_SUFFIX}`;
+      let archivePath = join(tempDir, "archive.zip");
+      let treePath = join(tempDir, "tree");
       try {
-        await mkdir(h, {
+        await mkdir(tempDir, {
           recursive: true,
         });
         if ((await pluginsScopeGate(undefined, credentials)) === "skip_no_scope")
@@ -96,51 +100,51 @@ async function installClaudeAiPlugin(source, n, tempPath, credentials) {
             "The plugin archive wasn't downloaded: this claude.ai login doesn't have plugin access yet. Access is usually added automatically within a few hours. Try again later.",
             "no_plugins_scope",
           );
-        let L = await downloadWithRetry(source.pluginId, y, source.version, {
+        let downloadResult = await downloadWithRetry(source.pluginId, archivePath, source.version, {
           isBackground: false,
           credentials,
         });
-        if (!L.ok) {
-          let Z = normalizeDownloadErrorCode(L.reason);
-          throw new ClaudeAiPluginInstallError(downloadClaudeAiPluginArchive(Z), Z);
+        if (!downloadResult.ok) {
+          let reason = normalizeDownloadErrorCode(downloadResult.reason);
+          throw new ClaudeAiPluginInstallError(downloadClaudeAiPluginArchive(reason), reason);
         }
-        let G = await sha256File(y);
-        let q;
+        let sha256 = await sha256File(archivePath);
+        let extracted;
         try {
-          q = await unzipPluginCache(y, S);
+          extracted = await unzipPluginCache(archivePath, treePath);
         } catch {
           throw new ClaudeAiPluginInstallError(
             "The plugin archive from claude.ai was refused: it is not a safe, well-formed zip.",
             "extract_refused",
           );
         }
-        if (!q.ok)
+        if (!extracted.ok)
           throw new ClaudeAiPluginInstallError(
             "The plugin archive from claude.ai was refused: it carries a git repository layout.",
             "extract_refused",
           );
-        if (!(await pluginRootHasMarker(q.root)))
+        if (!(await pluginRootHasMarker(extracted.root)))
           throw new ClaudeAiPluginInstallError(
             "The plugin archive from claude.ai has no plugin content at its root. It was not installed.",
             "no_plugin_content",
           );
-        await getFsImplementation().mkdir(dirname(n));
-        await retryFsOp(q.root, n);
-        return G;
+        await getFsImplementation().mkdir(dirname(cachePath));
+        await retryFsOp(extracted.root, cachePath);
+        return sha256;
       } finally {
-        await rm_2(h, {
+        await rm_2(tempDir, {
           recursive: true,
           force: true,
         }).catch(() => {});
       }
     },
-    (h) => (h instanceof ClaudeAiPluginInstallError ? h.code : "unexpected"),
+    (failure) => (failure instanceof ClaudeAiPluginInstallError ? failure.code : "unexpected"),
   );
 }
 //@ chunk-e6aww6q8.js:696060-696163 placement
-async function sha256File(e) {
+async function sha256File(filePath) {
   let hash = createHash("sha256");
-  for await (let r of createReadStream(e)) hash.update(r);
+  for await (let chunk of createReadStream(filePath)) hash.update(chunk);
   return hash.digest("hex");
 }
 export { installClaudeAiPlugin };

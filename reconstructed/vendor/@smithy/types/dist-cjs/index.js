@@ -5,10 +5,10 @@
  * pieces: chunk-hq88884p.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-hq88884p.js:1015-2578 cjs-fingerprint
-var require_types = x(function (cjsExports) {
+var require_types = __commonJS(function (cjsExports) {
   cjsExports.HttpAuthLocation = undefined;
   (function (HttpAuthLocation) {
     HttpAuthLocation.HEADER = "header";
@@ -53,7 +53,7 @@ var require_types = x(function (cjsExports) {
       },
     };
   };
-  var Er = (clientConfig) => {
+  var resolveChecksumRuntimeConfig = (clientConfig) => {
     let runtimeConfig = {};
     clientConfig.checksumAlgorithms().forEach((checksumAlgorithm) => {
       runtimeConfig[checksumAlgorithm.algorithmId()] = checksumAlgorithm.checksumConstructor();
@@ -61,7 +61,7 @@ var require_types = x(function (cjsExports) {
     return runtimeConfig;
   };
   var getDefaultClientConfiguration = (runtimeConfig) => getChecksumConfiguration(runtimeConfig);
-  var resolveDefaultRuntimeConfig = (config) => Er(config);
+  var resolveDefaultRuntimeConfig = (config) => resolveChecksumRuntimeConfig(config);
   cjsExports.FieldPosition = undefined;
   (function (FieldPosition) {
     FieldPosition[(FieldPosition.HEADER = 0)] = "HEADER";

@@ -54,13 +54,13 @@ ${takeLastChars(text, SESSION_TAIL_CHARS).trimStart()}`;
 async function collectSessionsForProject(context, storageV5) {
   let sliced = context.sessions.logs.filter(resolveSessionFilePath_2).slice(0, MAX_SESSIONS_SCANNED);
   let results = await Promise.all(
-    sliced.map((S) =>
-      S.fullPath === undefined
+    sliced.map((sessionLog) =>
+      sessionLog.fullPath === undefined
         ? null
-        : scanTranscriptForSuppression(S.fullPath, {}, storageV5).catch(() => null),
+        : scanTranscriptForSuppression(sessionLog.fullPath, {}, storageV5).catch(() => null),
     ),
   );
-  let matchingLogs = sliced.filter((S, P) => results[P] === "clean");
+  let matchingLogs = sliced.filter((sessionLog, index) => results[index] === "clean");
   let nonMatchingLogs = (
     await Promise.all(
       matchingLogs.map((log) =>
@@ -85,7 +85,7 @@ async function collectSessionsForProject(context, storageV5) {
         ),
       ),
     }))
-    .filter((S) => S.transcript !== "");
+    .filter((sessionEntry) => sessionEntry.transcript !== "");
   let model = emptyCallCounts();
   for (let { log } of nonMatchingLogs) countMcpCallsByServer(log.messages, model);
   let sessions = nonMatchingLogs.map(({ log, transcript }) => ({
@@ -102,17 +102,17 @@ async function collectSessionsForProject(context, storageV5) {
           oldest: new Date(Math.min(...relevantLogs)),
           newest: new Date(Math.max(...relevantLogs)),
         };
-  let j = new Set();
+  let toolsUsed = new Set();
   for (let { log } of nonMatchingLogs)
-    for (let P of [
+    for (let toolName of [
       ...(log.toolsUsed ?? []),
       ...tagUntrustedArtifactContent(log.messages, undefined, true, true),
     ])
-      j.add(P);
+      toolsUsed.add(toolName);
   return {
     sessions,
     mcpCalls: model,
-    toolsUsed: [...j],
+    toolsUsed: [...toolsUsed],
     sessionsParsed: nonMatchingLogs.length,
     span,
   };

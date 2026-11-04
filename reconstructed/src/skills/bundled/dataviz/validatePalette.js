@@ -18,3 +18,4 @@ var validatePalettePath = __cc_resource_0;
  * dataviz 技能附带的调色板校验脚本文本。
  */
 var validatePalette = readEmbeddedTextSync(validatePalettePath, import.meta.dirname);
+export { validatePalette };

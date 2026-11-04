@@ -11,40 +11,47 @@
 import { isPromptHookObserved } from "../telemetry/sessionTracing.js";
 import { isScreeningPendingEntry } from "../historyFile.js";
 import { identity as identity_2 } from "../identity.js";
-import { pu } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
+import { subscribe } from "../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { isAbortError } from "../errors.js";
 import { logForDebugging } from "../debug.js";
 import { logError } from "../log.js";
 import { registerCleanup, isCleanupStarted } from "../cleanupRegistry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:548224-548377 placement
 /**
  * 队列记录的文本：提交过的取提交文本，否则在不被钩子观察时取原值。
  */
-function queueRecordText(e) {
-  let { promptSubmitted, value: r } = e;
-  let s = e.mode === "prompt" && isPromptHookObserved("queue-record");
-  let h = typeof r === "string" && !isScreeningPendingEntry(e) && !s;
-  return promptSubmitted?.text ?? (h ? r : undefined);
+function queueRecordText(record) {
+  let { promptSubmitted, value: contentValue } = record;
+  let hookObserved = record.mode === "prompt" && isPromptHookObserved("queue-record");
+  let plainContent = typeof contentValue === "string" && !isScreeningPendingEntry(record) && !hookObserved;
+  return promptSubmitted?.text ?? (plainContent ? contentValue : undefined);
 }
 //@ chunk-e6aww6q8.js:548377-548410 placement
-var currentQueueRecordChain = identity_2(pu(), (e) => e.set(null));
+var currentQueueRecordChain; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:548377", () => {
+  currentQueueRecordChain = identity_2(subscribe(), (store) => store.set(null));
+});
 //@ chunk-e6aww6q8.js:548410-548489 placement
 /**
  * 登记队列记录链并在完成（成功或失败）后自动清除。
  */
-function trackQueueRecordChain(e) {
-  let n = () => {
-    if (currentQueueRecordChain.get() === e) currentQueueRecordChain.set(null);
+function trackQueueRecordChain(chain) {
+  let clearIfCurrent = () => {
+    if (currentQueueRecordChain.get() === chain) currentQueueRecordChain.set(null);
   };
-  currentQueueRecordChain.set(e);
-  e.then(n, n);
+  currentQueueRecordChain.set(chain);
+  chain.then(clearIfCurrent, clearIfCurrent);
 }
 //@ chunk-e6aww6q8.js:548489-548523 placement
 /**
  * 宿主隔离的队列记录文本构造器存储。
  */
-var queueRecordTextBuilder = identity_2(pu(), (e) => e.set(null));
+var queueRecordTextBuilder; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:548489", () => {
+  queueRecordTextBuilder = identity_2(subscribe(), (store) => store.set(null));
+});
 //@ chunk-e6aww6q8.js:548523-548536 placement
 var RECORD_VISIBILITY_TTL_MS = 1000;
 //@ chunk-e6aww6q8.js:548536-548676 placement
@@ -64,110 +71,113 @@ function logQueueRecordError(error) {
  * 创建队列记录写入器：需经钩子改写的记录按序等待（最多 1 秒），之后按原顺序写出。
  */
 function createQueueRecorder(recordQueueOperation) {
-  let n = [];
-  let r = new Map();
-  let s = new Map();
-  let h = false;
-  let y = false;
-  function S() {
-    let Se = n[0];
-    while (Se !== undefined && !r.has(Se) && !s.has(Se)) {
-      n.shift();
+  let pending = [];
+  let visibilityTimers = new Map();
+  let deferredHooks = new Map();
+  let cleanupRegistered = false;
+  let stopped = false;
+  function flushPending() {
+    let head = pending[0];
+    while (head !== undefined && !visibilityTimers.has(head) && !deferredHooks.has(head)) {
+      pending.shift();
       try {
-        recordQueueOperation(Se);
+        recordQueueOperation(head);
       } catch (error) {
         logQueueRecordError(error);
       }
-      Se = n[0];
+      head = pending[0];
     }
   }
-  function w(Se) {
-    let ke = currentQueueRecordChain.get();
-    let we = ke === null || ke === Se;
-    for (let [Ee, Ae] of we ? s : []) {
-      s.delete(Ee);
+  function releaseChain(chain) {
+    let currentChain = currentQueueRecordChain.get();
+    let shouldRelease = currentChain === null || currentChain === chain;
+    for (let [id, runHook] of shouldRelease ? deferredHooks : []) {
+      deferredHooks.delete(id);
       try {
-        if (Ae()) break;
+        if (runHook()) break;
       } catch (error) {
         logQueueRecordError(error);
       }
     }
-    S();
+    flushPending();
   }
-  function L(Se, ke) {
-    let we = r.get(Se);
-    if (we === undefined) return;
-    clearTimeout(we);
-    r.delete(Se);
-    n[n.indexOf(Se)] = ke;
-    w();
+  function releaseAfterVisibility(id, finalRecord) {
+    let timer = visibilityTimers.get(id);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    visibilityTimers.delete(id);
+    pending[pending.indexOf(id)] = finalRecord;
+    releaseChain();
   }
-  function G() {
-    y = true;
-    for (let Se of r.values()) clearTimeout(Se);
-    r.clear();
-    s.clear();
-    S();
+  function stop() {
+    stopped = true;
+    for (let timer of visibilityTimers.values()) clearTimeout(timer);
+    visibilityTimers.clear();
+    deferredHooks.clear();
+    flushPending();
   }
-  function q() {
-    if (!h) {
-      h = true;
-      registerCleanup(G);
+  function ensureCleanup() {
+    if (!cleanupRegistered) {
+      cleanupRegistered = true;
+      registerCleanup(stop);
     }
   }
-  function Z(Se, content, we) {
-    let Ee = queueRecordTextBuilder.get()?.(content, we);
-    if (Ee === undefined) return false;
-    q();
-    r.set(Se, setTimeout(L, RECORD_VISIBILITY_TTL_MS, Se, Se).unref());
-    Promise.resolve(Ee).then(
-      (Ae) => {
-        if (typeof Ae === "string") {
-          L(Se, {
-            ...Se,
-            content: Ae,
+  function startTextHooks(record, content, context) {
+    let hookText = queueRecordTextBuilder.get()?.(content, context);
+    if (hookText === undefined) return false;
+    ensureCleanup();
+    visibilityTimers.set(
+      record,
+      setTimeout(releaseAfterVisibility, RECORD_VISIBILITY_TTL_MS, record, record).unref(),
+    );
+    Promise.resolve(hookText).then(
+      (text) => {
+        if (typeof text === "string") {
+          releaseAfterVisibility(record, {
+            ...record,
+            content: text,
           });
           return;
         }
         logQueueRecordError(Error("A queue record came back from its hooks no text"));
-        L(Se, Se);
+        releaseAfterVisibility(record, record);
       },
       (error) => {
         logQueueRecordError(error);
-        L(Se, Se);
+        releaseAfterVisibility(record, record);
       },
     );
     return true;
   }
-  return (Se, ke) => {
-    let { content } = Se;
-    let Ee = typeof content === "string" && !y && !isCleanupStarted();
-    let Ae = currentQueueRecordChain.get();
-    if (Ee && (Ae !== null || s.size > 0)) {
-      n.push(Se);
-      s.set(Se, () => Z(Se, content, ke));
-      q();
-      if (Ae !== null && s.size === 1)
-        Ae.then(
-          () => w(Ae),
-          () => w(Ae),
+  return (record, context) => {
+    let { content } = record;
+    let canDefer = typeof content === "string" && !stopped && !isCleanupStarted();
+    let currentChain = currentQueueRecordChain.get();
+    if (canDefer && (currentChain !== null || deferredHooks.size > 0)) {
+      pending.push(record);
+      deferredHooks.set(record, () => startTextHooks(record, content, context));
+      ensureCleanup();
+      if (currentChain !== null && deferredHooks.size === 1)
+        currentChain.then(
+          () => releaseChain(currentChain),
+          () => releaseChain(currentChain),
         );
       return;
     }
-    let Ie = false;
+    let deferred = false;
     try {
-      Ie = Ee && Z(Se, content, ke);
+      deferred = canDefer && startTextHooks(record, content, context);
     } catch (error) {
       logQueueRecordError(error);
-      n.push(Se);
-      S();
+      pending.push(record);
+      flushPending();
       return;
     }
-    if (!Ie && n.length === 0) {
-      recordQueueOperation(Se);
+    if (!deferred && pending.length === 0) {
+      recordQueueOperation(record);
       return;
     }
-    n.push(Se);
+    pending.push(record);
   };
 }
 export { createQueueRecorder, queueRecordText, queueRecordTextBuilder, trackQueueRecordChain };

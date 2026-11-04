@@ -8,6 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1), chunk-9h8dr0qb.js (31)
  * attribution: fingerprint 16, placement 3, affinity 1, file-local 3, layout 7, callgraph-witnessed 1, callgraph-fingerprint 1
  */
+import { DEFAULT_PROGRESS_DISPLAY } from "../screens/repl/InlineProgressList.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -16,9 +17,15 @@ import {
 import { Text, Box } from "../ink/components/Text.js";
 import { Ansi } from "../ink/components/AnsiText.js";
 import { aggregateClaudeCodeStatsForRange, totalUsageTokens } from "../utils/stats.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
-import { y, fo, Qr, y5r, R } from "../../vendor/react/cjs/react.production.js";
+import {
+  useState,
+  suspenseTypeExport,
+  use,
+  useTransition,
+  useRef,
+} from "../../vendor/react/cjs/react.production.js";
 import { isStatsScanAllowed } from "../services/usageInsights/transcriptScan.js";
 import { useScrollViewportSize } from "./ScrollViewportContext.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
@@ -42,8 +49,13 @@ import { copyAnsiToClipboard } from "../utils/screenshotClipboard.js";
 import { stripAnsi } from "../utils/stripAnsi.js";
 import { bunStringWidth } from "../ink/stringWidth.js";
 import { sequential } from "../utils/sequential.js";
-import { DEFAULT_PROGRESS_DISPLAY } from "../_unattributed/chunk-18hwfzwa/part-001.js";
 
+//@ chunk-18hwfzwa.js:1668742-1668823 fingerprint = DATE_RANGE_ORDER (0.539)
+function DATE_RANGE_ORDER(toolProgress) {
+  for (let toolProgressEntry of toolProgress.values())
+    if (DEFAULT_PROGRESS_DISPLAY[toolProgressEntry.kind] === "all") return true;
+  return false;
+}
 //@ chunk-9h8dr0qb.js:77494-77547 placement
 /**
  * ISO 日期（YYYY-MM-DD）前缀与整串正则。错归（统计界面）。
@@ -54,17 +66,19 @@ var ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /**
  * 严格的 YYYY-MM-DD 字符串，日期有效则原样返回，否则 null。错归（统计界面 mergeCacheWithNewStats 使用），旧版名 evaluateTimeBasedTrigger 为错配。
  */
-function parseIsoDate(o) {
-  if (typeof o !== "string" || !ISO_DATE_RE.test(o)) return null;
-  let date = new Date(o);
-  return Number.isFinite(date.getTime()) && date.toISOString().startsWith(o) ? o : null;
+function parseIsoDate(value) {
+  if (typeof value !== "string" || !ISO_DATE_RE.test(value)) return null;
+  let date = new Date(value);
+  return Number.isFinite(date.getTime()) && date.toISOString().startsWith(value) ? value : null;
 }
 //@ chunk-9h8dr0qb.js:77702-77795 placement
 /**
  * 以 YYYY-MM-DD 开头且可解析的时间字符串。
  */
-function parseIsoDateTimePrefix(o) {
-  return typeof o === "string" && ISO_DATE_PREFIX_RE.test(o) && Number.isFinite(Date.parse(o)) ? o : null;
+function parseIsoDateTimePrefix(value) {
+  return typeof value === "string" && ISO_DATE_PREFIX_RE.test(value) && Number.isFinite(Date.parse(value))
+    ? value
+    : null;
 }
 //@ chunk-9h8dr0qb.js:90886-90915 affinity
 function emptyStatsMap() {
@@ -75,9 +89,9 @@ function rowsAboveTwo(prev) {
   return Math.max(prev - 2, 0);
 }
 //@ chunk-9h8dr0qb.js:90955-90990 layout
-function firstItem(o) {
-  let [Xe] = o;
-  return Xe;
+function firstItem(items) {
+  let [first] = items;
+  return first;
 }
 //@ chunk-9h8dr0qb.js:90990-91107 fingerprint = _temp1 (1)
 function renderModelLegendItem(item, i) {
@@ -116,8 +130,8 @@ function getNextDateRange(current) {
   return STATS_RANGES[(currentIndex + 1) % STATS_RANGES.length];
 }
 //@ chunk-9h8dr0qb.js:91361-91575 fingerprint = createAllTimeStatsPromise (1)
-function createAllTimeStatsPromise(storageV5) {
-  return aggregateClaudeCodeStatsForRange("all", storageV5)
+function createAllTimeStatsPromise(storage) {
+  return aggregateClaudeCodeStatsForRange("all", storage)
     .then((data) => {
       if (!data || data.totalSessions === 0)
         return {
@@ -154,47 +168,47 @@ function emptyStatsProvider(storageV5) {
  * /stats：活跃热力图、token 用量图表、常用模型、峰值日与连续天数等统计。
  */
 function Stats(props) {
-  let $ = w(21);
+  let $ = useMemoCache(21);
   let { onClose } = props;
   let { storageV5 } = useTheme_2();
-  let [h] = y(isStatsScanAllowed);
-  let E;
-  if ($[0] !== storageV5 || $[1] !== h.allowed) {
-    E = h.allowed ? createAllTimeStatsPromise(storageV5) : null;
+  let [scanAllowed] = useState(isStatsScanAllowed);
+  let statsPromise;
+  if ($[0] !== storageV5 || $[1] !== scanAllowed.allowed) {
+    statsPromise = scanAllowed.allowed ? createAllTimeStatsPromise(storageV5) : null;
     $[0] = storageV5;
-    $[1] = h.allowed;
-    $[2] = E;
-  } else E = $[2];
-  let T = E;
-  let A;
-  if ($[3] !== storageV5 || $[4] !== h.allowed) {
-    A = h.allowed ? emptyStatsProvider(storageV5) : null;
+    $[1] = scanAllowed.allowed;
+    $[2] = statsPromise;
+  } else statsPromise = $[2];
+  let statsPromiseValue = statsPromise;
+  let emptyProvider;
+  if ($[3] !== storageV5 || $[4] !== scanAllowed.allowed) {
+    emptyProvider = scanAllowed.allowed ? emptyStatsProvider(storageV5) : null;
     $[3] = storageV5;
-    $[4] = h.allowed;
-    $[5] = A;
-  } else A = $[5];
-  let v = A;
+    $[4] = scanAllowed.allowed;
+    $[5] = emptyProvider;
+  } else emptyProvider = $[5];
+  let emptyProviderValue = emptyProvider;
   let { rows } = useScrollViewportSize(useTerminalSize());
   let minHeight = Math.max(8, Math.min(rows - 4, 31));
-  let W;
+  let dismiss;
   if ($[6] !== onClose) {
-    W = () =>
+    dismiss = () =>
       onClose("Stats dialog dismissed", {
         display: "system",
       });
     $[6] = onClose;
-    $[7] = W;
-  } else W = $[7];
-  let M;
+    $[7] = dismiss;
+  } else dismiss = $[7];
+  let keybindingOptions;
   if ($[8] === MEMO_CACHE_SENTINEL) {
-    M = {
+    keybindingOptions = {
       context: "Settings",
     };
-    $[8] = M;
-  } else M = $[8];
-  useKeybinding("confirm:no", W, M);
-  if (T === null || v === null || !h.allowed) {
-    const children = h.allowed ? null : h.reason;
+    $[8] = keybindingOptions;
+  } else keybindingOptions = $[8];
+  useKeybinding("confirm:no", dismiss, keybindingOptions);
+  if (statsPromiseValue === null || emptyProviderValue === null || !scanAllowed.allowed) {
+    const children = scanAllowed.allowed ? null : scanAllowed.reason;
     let children_2;
     if ($[9] !== children) {
       children_2 = jsxProd_default(Box, {
@@ -208,18 +222,18 @@ function Stats(props) {
       $[9] = children;
       $[10] = children_2;
     } else children_2 = $[10];
-    let K;
+    let emptyBox;
     if ($[11] !== minHeight || $[12] !== children_2) {
-      K = jsxProd_default(Box, {
+      emptyBox = jsxProd_default(Box, {
         flexDirection: "column",
         minHeight,
         children: children_2,
       });
       $[11] = minHeight;
       $[12] = children_2;
-      $[13] = K;
-    } else K = $[13];
-    return K;
+      $[13] = emptyBox;
+    } else emptyBox = $[13];
+    return emptyBox;
   }
   let fallback;
   if ($[14] === MEMO_CACHE_SENTINEL) {
@@ -235,108 +249,108 @@ function Stats(props) {
     $[14] = fallback;
   } else fallback = $[14];
   let children;
-  if ($[15] !== v || $[16] !== T) {
-    children = jsxProd_default(fo, {
+  if ($[15] !== emptyProviderValue || $[16] !== statsPromiseValue) {
+    children = jsxProd_default(suspenseTypeExport, {
       fallback,
       children: jsxProd_default(StatsContent, {
-        allTimePromise: T,
-        activeTimePromise: v,
+        allTimePromise: statsPromiseValue,
+        activeTimePromise: emptyProviderValue,
       }),
     });
-    $[15] = v;
-    $[16] = T;
+    $[15] = emptyProviderValue;
+    $[16] = statsPromiseValue;
     $[17] = children;
   } else children = $[17];
-  let K;
+  let columnBoxElement;
   if ($[18] !== minHeight || $[19] !== children) {
-    K = jsxProd_default(Box, {
+    columnBoxElement = jsxProd_default(Box, {
       flexDirection: "column",
       minHeight,
       children,
     });
     $[18] = minHeight;
     $[19] = children;
-    $[20] = K;
-  } else K = $[20];
-  return K;
+    $[20] = columnBoxElement;
+  } else columnBoxElement = $[20];
+  return columnBoxElement;
 }
 //@ chunk-9h8dr0qb.js:92964-96305 fingerprint = StatsContent (0.519)
 function StatsContent(props) {
-  let $ = w(50);
+  let $ = useMemoCache(50);
   let { allTimePromise, activeTimePromise } = props;
   let { storageV5 } = useTheme_2();
-  let allTimeResult = Qr(allTimePromise);
-  let activeTab = Qr(activeTimePromise);
-  let [T, A] = y("all");
-  let [v] = y(emptyStatsMap);
-  let [F, U] = y5r();
-  let [W, M] = y(null);
-  let allTimeResult_2 = R(null);
-  let K;
-  if ($[0] !== T || $[1] !== v || $[2] !== storageV5) {
-    K = function J() {
-      let ee = allTimeResult_2.current ?? T;
-      let range = getNextDateRange(ee);
-      let V = range !== "all" && !v.has(range);
-      if (V && !isStatsScanAllowed().allowed) {
+  let allTimeResult = use(allTimePromise);
+  let activeTab = use(activeTimePromise);
+  let [dateRange, setDateRange] = useState("all");
+  let [pendingRanges] = useState(emptyStatsMap);
+  let [isScanning, setScanning] = useTransition();
+  let [pendingSelectorRange, setPendingSelectorRange] = useState(null);
+  let allTimeResult_2 = useRef(null);
+  let cycleRange;
+  if ($[0] !== dateRange || $[1] !== pendingRanges || $[2] !== storageV5) {
+    cycleRange = function cycleRangeImpl() {
+      let fromRange = allTimeResult_2.current ?? dateRange;
+      let range = getNextDateRange(fromRange);
+      let needsScan = range !== "all" && !pendingRanges.has(range);
+      if (needsScan && !isStatsScanAllowed().allowed) {
         do range = getNextDateRange(range);
-        while (range !== "all" && !v.has(range) && range !== ee);
-        if (range === ee) {
+        while (range !== "all" && !pendingRanges.has(range) && range !== fromRange);
+        if (range === fromRange) {
           return;
         }
-        V = false;
+        needsScan = false;
       }
       allTimeResult_2.current = range;
-      if (V) {
-        let L = aggregateClaudeCodeStatsForRange(range, storageV5).catch(() => {
-          v.delete(range);
+      if (needsScan) {
+        let scanPromise = aggregateClaudeCodeStatsForRange(range, storageV5).catch(() => {
+          pendingRanges.delete(range);
           return null;
         });
-        v.set(range, L);
+        pendingRanges.set(range, scanPromise);
       }
-      M(range);
-      U(() => {
-        A(range);
-        M(null);
+      setPendingSelectorRange(range);
+      setScanning(() => {
+        setDateRange(range);
+        setPendingSelectorRange(null);
       });
     };
-    $[0] = T;
-    $[1] = v;
+    $[0] = dateRange;
+    $[1] = pendingRanges;
     $[2] = storageV5;
-    $[3] = K;
-  } else K = $[3];
-  let J = K;
-  let selectorRange = W ?? T;
-  let [me, fe] = y("Overview");
-  let [De, de] = y(null);
+    $[3] = cycleRange;
+  } else cycleRange = $[3];
+  let cycleRangeStable = cycleRange;
+  let selectorRange = pendingSelectorRange ?? dateRange;
+  let [activeTabName, setActiveTab] = useState("Overview");
+  let [copyStatus, setCopyStatus] = useState(null);
   let clock = useClock();
-  let pe;
-  if ($[4] !== T || $[5] !== v) {
-    pe = T === "all" ? null : (v.get(T) ?? null);
-    $[4] = T;
-    $[5] = v;
-    $[6] = pe;
-  } else pe = $[6];
-  let Ce = pe;
-  let He = Ce ? Qr(Ce) : null;
+  let rangePromise;
+  if ($[4] !== dateRange || $[5] !== pendingRanges) {
+    rangePromise = dateRange === "all" ? null : (pendingRanges.get(dateRange) ?? null);
+    $[4] = dateRange;
+    $[5] = pendingRanges;
+    $[6] = rangePromise;
+  } else rangePromise = $[6];
+  let rangePromise_2 = rangePromise;
+  let rangeResult = rangePromise_2 ? use(rangePromise_2) : null;
   let stats =
-    T === "all"
+    dateRange === "all"
       ? allTimeResult.type === "success"
         ? allTimeResult.data
         : null
-      : (He ?? (allTimeResult.type === "success" ? allTimeResult.data : null));
-  let Oe = allTimeResult.type === "success" ? allTimeResult.data : null;
+      : (rangeResult ?? (allTimeResult.type === "success" ? allTimeResult.data : null));
+  let allTimeData = allTimeResult.type === "success" ? allTimeResult.data : null;
   let { headerFocused, focusHeader } = useTabHeaderFocus();
-  let Ue;
+  let onKeyDown;
   if (
-    $[7] !== me ||
+    $[7] !== activeTabName ||
     $[8] !== activeTab ||
     $[9] !== clock ||
-    $[10] !== J ||
+    $[10] !== cycleRangeStable ||
     $[11] !== stats ||
     $[12] !== focusHeader
   ) {
-    Ue = function ye(event) {
+    onKeyDown = function onKeyDownImpl(event) {
       if (event.key === "up") {
         event.preventDefault();
         focusHeader();
@@ -344,23 +358,23 @@ function StatsContent(props) {
       }
       if (event.key === "r" && !event.ctrl && !event.meta) {
         event.preventDefault();
-        J();
+        cycleRangeStable();
         return;
       }
       if (event.ctrl && event.key === "s" && stats) {
         event.preventDefault();
-        handleScreenshot(stats, activeTab, me, de, clock);
+        handleScreenshot(stats, activeTab, activeTabName, setCopyStatus, clock);
       }
     };
-    $[7] = me;
+    $[7] = activeTabName;
     $[8] = activeTab;
     $[9] = clock;
-    $[10] = J;
+    $[10] = cycleRangeStable;
     $[11] = stats;
     $[12] = focusHeader;
-    $[13] = Ue;
-  } else Ue = $[13];
-  let onKeyDown = Ue;
+    $[13] = onKeyDown;
+  } else onKeyDown = $[13];
+  let onKeyDown_2 = onKeyDown;
   if (allTimeResult.type === "error") {
     let children;
     if ($[14] !== allTimeResult.message) {
@@ -371,20 +385,20 @@ function StatsContent(props) {
       $[14] = allTimeResult.message;
       $[15] = children;
     } else children = $[15];
-    let _e;
-    if ($[16] !== onKeyDown || $[17] !== children) {
-      _e = jsxProd_default(Box, {
+    let errorBox;
+    if ($[16] !== onKeyDown_2 || $[17] !== children) {
+      errorBox = jsxProd_default(Box, {
         marginTop: 1,
         tabIndex: 0,
         autoFocus: false,
-        onKeyDown,
+        onKeyDown: onKeyDown_2,
         children,
       });
-      $[16] = onKeyDown;
+      $[16] = onKeyDown_2;
       $[17] = children;
-      $[18] = _e;
-    } else _e = $[18];
-    return _e;
+      $[18] = errorBox;
+    } else errorBox = $[18];
+    return errorBox;
   }
   if (allTimeResult.type === "empty") {
     let children;
@@ -395,98 +409,98 @@ function StatsContent(props) {
       });
       $[19] = children;
     } else children = $[19];
-    let _e;
-    if ($[20] !== onKeyDown) {
-      _e = jsxProd_default(Box, {
+    let emptyBox;
+    if ($[20] !== onKeyDown_2) {
+      emptyBox = jsxProd_default(Box, {
         marginTop: 1,
         tabIndex: 0,
         autoFocus: false,
-        onKeyDown,
+        onKeyDown: onKeyDown_2,
         children,
       });
-      $[20] = onKeyDown;
-      $[21] = _e;
-    } else _e = $[21];
-    return _e;
+      $[20] = onKeyDown_2;
+      $[21] = emptyBox;
+    } else emptyBox = $[21];
+    return emptyBox;
   }
-  if (!stats || !Oe) {
-    let We;
-    let _e;
+  if (!stats || !allTimeData) {
+    let spinner;
+    let loadingText;
     if ($[22] === MEMO_CACHE_SENTINEL) {
-      We = jsxProd_default(Spinner, {});
-      _e = jsxProd_default(Text, {
+      spinner = jsxProd_default(Spinner, {});
+      loadingText = jsxProd_default(Text, {
         children: " Loading stats\u2026",
       });
-      $[22] = We;
-      $[23] = _e;
+      $[22] = spinner;
+      $[23] = loadingText;
     } else {
-      We = $[22];
-      _e = $[23];
+      spinner = $[22];
+      loadingText = $[23];
     }
-    let Ne;
-    if ($[24] !== onKeyDown) {
-      Ne = jsxProd_default_2(Box, {
+    let loadingBox;
+    if ($[24] !== onKeyDown_2) {
+      loadingBox = jsxProd_default_2(Box, {
         marginTop: 1,
         tabIndex: 0,
         autoFocus: false,
-        onKeyDown,
-        children: [We, _e],
+        onKeyDown: onKeyDown_2,
+        children: [spinner, loadingText],
       });
-      $[24] = onKeyDown;
-      $[25] = Ne;
-    } else Ne = $[25];
-    return Ne;
+      $[24] = onKeyDown_2;
+      $[25] = loadingBox;
+    } else loadingBox = $[25];
+    return loadingBox;
   }
   let onTabChange;
   if ($[26] === MEMO_CACHE_SENTINEL) {
-    onTabChange = (at) => fe(at);
+    onTabChange = (tab) => setActiveTab(tab);
     $[26] = onTabChange;
   } else onTabChange = $[26];
   let t7;
   if (
     $[27] !== activeTab ||
-    $[28] !== Oe ||
-    $[29] !== T ||
+    $[28] !== allTimeData ||
+    $[29] !== dateRange ||
     $[30] !== stats ||
-    $[31] !== F ||
+    $[31] !== isScanning ||
     $[32] !== selectorRange
   ) {
     t7 = jsxProd_default(Tab, {
       title: "Overview",
       children: jsxProd_default(OverviewTab, {
         stats,
-        allTimeStats: Oe,
+        allTimeStats: allTimeData,
         activeTimeStats: activeTab,
-        dateRange: T,
+        dateRange,
         selectorRange,
-        isLoading: F,
+        isLoading: isScanning,
       }),
     });
     $[27] = activeTab;
-    $[28] = Oe;
-    $[29] = T;
+    $[28] = allTimeData;
+    $[29] = dateRange;
     $[30] = stats;
-    $[31] = F;
+    $[31] = isScanning;
     $[32] = selectorRange;
     $[33] = t7;
   } else t7 = $[33];
   let t8;
-  if ($[34] !== stats || $[35] !== F || $[36] !== selectorRange) {
+  if ($[34] !== stats || $[35] !== isScanning || $[36] !== selectorRange) {
     t8 = jsxProd_default(Tab, {
       title: "Models",
       children: jsxProd_default(ModelsTab, {
         stats,
         selectorRange,
-        isLoading: F,
+        isLoading: isScanning,
       }),
     });
     $[34] = stats;
-    $[35] = F;
+    $[35] = isScanning;
     $[36] = selectorRange;
     $[37] = t8;
   } else t8 = $[37];
   let t9;
-  if ($[38] !== me || $[39] !== headerFocused || $[40] !== t7 || $[41] !== t8) {
+  if ($[38] !== activeTabName || $[39] !== headerFocused || $[40] !== t7 || $[41] !== t8) {
     t9 = jsxProd_default(Box, {
       flexDirection: "row",
       gap: 1,
@@ -495,43 +509,43 @@ function StatsContent(props) {
         initialHeaderFocused: false,
         title: null,
         color: "claude",
-        selectedTab: me,
+        selectedTab: activeTabName,
         onTabChange,
         disableNavigation: headerFocused,
         children: [t7, t8],
       }),
     });
-    $[38] = me;
+    $[38] = activeTabName;
     $[39] = headerFocused;
     $[40] = t7;
     $[41] = t8;
     $[42] = t9;
   } else t9 = $[42];
-  const st = headerFocused ? "\u2193 stats" : "\u2191 tabs \xB7 r to cycle dates \xB7 ctrl+s to copy";
-  const et = De ? ` \xB7 ${De}` : "";
+  const hintText = headerFocused ? "\u2193 stats" : "\u2191 tabs \xB7 r to cycle dates \xB7 ctrl+s to copy";
+  const copySuffix = copyStatus ? ` \xB7 ${copyStatus}` : "";
   let t11;
-  if ($[43] !== st || $[44] !== et) {
+  if ($[43] !== hintText || $[44] !== copySuffix) {
     t11 = jsxProd_default(Box, {
       paddingLeft: 2,
       children: jsxProd_default_2(Text, {
         dimColor: true,
-        children: [st, et],
+        children: [hintText, copySuffix],
       }),
     });
-    $[43] = st;
-    $[44] = et;
+    $[43] = hintText;
+    $[44] = copySuffix;
     $[45] = t11;
   } else t11 = $[45];
   let t12;
-  if ($[46] !== onKeyDown || $[47] !== t11 || $[48] !== t9) {
+  if ($[46] !== onKeyDown_2 || $[47] !== t11 || $[48] !== t9) {
     t12 = jsxProd_default_2(Box, {
       flexDirection: "column",
       tabIndex: 0,
       autoFocus: false,
-      onKeyDown,
+      onKeyDown: onKeyDown_2,
       children: [t9, t11],
     });
-    $[46] = onKeyDown;
+    $[46] = onKeyDown_2;
     $[47] = t11;
     $[48] = t9;
     $[49] = t12;
@@ -540,7 +554,7 @@ function StatsContent(props) {
 }
 //@ chunk-9h8dr0qb.js:96305-96800 fingerprint = DateRangeSelector (0.89)
 function DateRangeSelector(props) {
-  let $ = w(9);
+  let $ = useMemoCache(9);
   let { dateRange, isLoading } = props;
   let children;
   if ($[0] !== dateRange) {
@@ -601,27 +615,27 @@ function DateRangeSelector(props) {
 }
 //@ chunk-9h8dr0qb.js:96800-96935 layout
 function sortModelUsage(modelUsage) {
-  let sorted = Object.entries(modelUsage).sort(([, p], [, h]) => totalUsageTokens(h) - totalUsageTokens(p));
+  let sorted = Object.entries(modelUsage).sort(([, a], [, b]) => totalUsageTokens(b) - totalUsageTokens(a));
   return {
     modelEntries: sorted,
-    totalTokens: sorted.reduce((acc, [, h]) => acc + totalUsageTokens(h), 0),
+    totalTokens: sorted.reduce((acc, [, usage]) => acc + totalUsageTokens(usage), 0),
   };
 }
 //@ chunk-9h8dr0qb.js:96935-97201 file-local
 function formatTokenBreakdown(modelUsage) {
-  let u = 0;
-  let p = 0;
-  let h = 0;
-  let D = 0;
-  for (let E of Object.values(modelUsage)) {
-    u += E.inputTokens || 0;
-    p += E.outputTokens || 0;
-    h += E.cacheReadInputTokens || 0;
-    D += E.cacheCreationInputTokens || 0;
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let cacheReadTokens = 0;
+  let cacheWriteTokens = 0;
+  for (let usage of Object.values(modelUsage)) {
+    inputTokens += usage.inputTokens || 0;
+    outputTokens += usage.outputTokens || 0;
+    cacheReadTokens += usage.cacheReadInputTokens || 0;
+    cacheWriteTokens += usage.cacheCreationInputTokens || 0;
   }
   return (
-    `Input ${formatNumber(u)} \xB7 Output ${formatNumber(p)} \xB7 ` +
-    `Cache read ${formatNumber(h)} \xB7 Cache write ${formatNumber(D)}`
+    `Input ${formatNumber(inputTokens)} \xB7 Output ${formatNumber(outputTokens)} \xB7 ` +
+    `Cache read ${formatNumber(cacheReadTokens)} \xB7 Cache write ${formatNumber(cacheWriteTokens)}`
   );
 }
 //@ chunk-9h8dr0qb.js:97201-97269 layout
@@ -638,16 +652,16 @@ function formatCacheTokens(usage) {
 }
 //@ chunk-9h8dr0qb.js:97388-103714 fingerprint = OverviewTab (0.688)
 function OverviewTab(props) {
-  let $ = w(102);
+  let $ = useMemoCache(102);
   let { stats, allTimeStats, dateRange, selectorRange, isLoading } = props;
   let { columns: terminalWidth } = useTerminalSize();
-  let v;
-  let F;
-  let U;
-  let W;
-  let M;
+  let modelBox;
+  let statsRowBox;
+  let outerBox;
+  let funFact;
+  let rangeDays;
   let flexDirection;
-  let H;
+  let dateRangeSelector;
   let width;
   let children;
   let flexDirection_2;
@@ -655,8 +669,8 @@ function OverviewTab(props) {
   let marginBottom;
   let flexDirection_3;
   let marginTop;
-  let me;
-  let fe;
+  let heatmap;
+  let totalTokens;
   if (
     $[0] !== allTimeStats.dailyActivity ||
     $[1] !== dateRange ||
@@ -665,22 +679,22 @@ function OverviewTab(props) {
     $[4] !== stats ||
     $[5] !== terminalWidth
   ) {
-    let { modelEntries, totalTokens } = sortModelUsage(stats.modelUsage);
-    fe = totalTokens;
+    let { modelEntries, totalTokens: totalTokens_2 } = sortModelUsage(stats.modelUsage);
+    totalTokens = totalTokens_2;
     let favoriteModel = modelEntries[0];
-    let pe;
+    let funFactoid;
     if ($[22] !== stats) {
-      pe = generateFunFactoid(stats);
+      funFactoid = generateFunFactoid(stats);
       $[22] = stats;
-      $[23] = pe;
-    } else pe = $[23];
-    W = pe;
-    M = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : stats.totalDays;
-    U = Box;
+      $[23] = funFactoid;
+    } else funFactoid = $[23];
+    funFact = funFactoid;
+    rangeDays = dateRange === "7d" ? 7 : dateRange === "30d" ? 30 : stats.totalDays;
+    outerBox = Box;
     flexDirection_3 = "column";
     marginTop = 1;
     if ($[24] !== allTimeStats.dailyActivity || $[25] !== terminalWidth) {
-      me =
+      heatmap =
         allTimeStats.dailyActivity.length > 0 &&
         jsxProd_default(Box, {
           flexDirection: "column",
@@ -693,22 +707,22 @@ function OverviewTab(props) {
         });
       $[24] = allTimeStats.dailyActivity;
       $[25] = terminalWidth;
-      $[26] = me;
-    } else me = $[26];
+      $[26] = heatmap;
+    } else heatmap = $[26];
     if ($[27] !== isLoading || $[28] !== selectorRange) {
-      H = jsxProd_default(DateRangeSelector, {
+      dateRangeSelector = jsxProd_default(DateRangeSelector, {
         dateRange: selectorRange,
         isLoading,
       });
       $[27] = isLoading;
       $[28] = selectorRange;
-      $[29] = H;
-    } else H = $[29];
-    F = Box;
+      $[29] = dateRangeSelector;
+    } else dateRangeSelector = $[29];
+    statsRowBox = Box;
     flexDirection_2 = "row";
     gap = 4;
     marginBottom = 1;
-    v = Box;
+    modelBox = Box;
     flexDirection = "column";
     width = 28;
     children =
@@ -731,13 +745,13 @@ function OverviewTab(props) {
     $[3] = selectorRange;
     $[4] = stats;
     $[5] = terminalWidth;
-    $[6] = v;
-    $[7] = F;
-    $[8] = U;
-    $[9] = W;
-    $[10] = M;
+    $[6] = modelBox;
+    $[7] = statsRowBox;
+    $[8] = outerBox;
+    $[9] = funFact;
+    $[10] = rangeDays;
     $[11] = flexDirection;
-    $[12] = H;
+    $[12] = dateRangeSelector;
     $[13] = width;
     $[14] = children;
     $[15] = flexDirection_2;
@@ -745,16 +759,16 @@ function OverviewTab(props) {
     $[17] = marginBottom;
     $[18] = flexDirection_3;
     $[19] = marginTop;
-    $[20] = me;
-    $[21] = fe;
+    $[20] = heatmap;
+    $[21] = totalTokens;
   } else {
-    v = $[6];
-    F = $[7];
-    U = $[8];
-    W = $[9];
-    M = $[10];
+    modelBox = $[6];
+    statsRowBox = $[7];
+    outerBox = $[8];
+    funFact = $[9];
+    rangeDays = $[10];
     flexDirection = $[11];
-    H = $[12];
+    dateRangeSelector = $[12];
     width = $[13];
     children = $[14];
     flexDirection_2 = $[15];
@@ -762,31 +776,31 @@ function OverviewTab(props) {
     marginBottom = $[17];
     flexDirection_3 = $[18];
     marginTop = $[19];
-    me = $[20];
-    fe = $[21];
+    heatmap = $[20];
+    totalTokens = $[21];
   }
-  let de;
-  if ($[30] !== v || $[31] !== flexDirection || $[32] !== width || $[33] !== children) {
-    de = jsxProd_default(v, {
+  let favoriteModelBox;
+  if ($[30] !== modelBox || $[31] !== flexDirection || $[32] !== width || $[33] !== children) {
+    favoriteModelBox = jsxProd_default(modelBox, {
       flexDirection,
       width,
       children,
     });
-    $[30] = v;
+    $[30] = modelBox;
     $[31] = flexDirection;
     $[32] = width;
     $[33] = children;
-    $[34] = de;
-  } else de = $[34];
+    $[34] = favoriteModelBox;
+  } else favoriteModelBox = $[34];
   let children_2;
-  if ($[35] !== fe) {
-    children_2 = formatNumber(fe);
-    $[35] = fe;
+  if ($[35] !== totalTokens) {
+    children_2 = formatNumber(totalTokens);
+    $[35] = totalTokens;
     $[36] = children_2;
   } else children_2 = $[36];
-  let Ce;
+  let totalTokensBox;
   if ($[37] !== children_2) {
-    Ce = jsxProd_default(Box, {
+    totalTokensBox = jsxProd_default(Box, {
       flexDirection: "column",
       width: 28,
       children: jsxProd_default_2(Text, {
@@ -802,40 +816,40 @@ function OverviewTab(props) {
       }),
     });
     $[37] = children_2;
-    $[38] = Ce;
-  } else Ce = $[38];
-  let He;
+    $[38] = totalTokensBox;
+  } else totalTokensBox = $[38];
+  let topRow;
   if (
-    $[39] !== F ||
-    $[40] !== de ||
-    $[41] !== Ce ||
+    $[39] !== statsRowBox ||
+    $[40] !== favoriteModelBox ||
+    $[41] !== totalTokensBox ||
     $[42] !== flexDirection_2 ||
     $[43] !== gap ||
     $[44] !== marginBottom
   ) {
-    He = jsxProd_default_2(F, {
+    topRow = jsxProd_default_2(statsRowBox, {
       flexDirection: flexDirection_2,
       gap,
       marginBottom,
-      children: [de, Ce],
+      children: [favoriteModelBox, totalTokensBox],
     });
-    $[39] = F;
-    $[40] = de;
-    $[41] = Ce;
+    $[39] = statsRowBox;
+    $[40] = favoriteModelBox;
+    $[41] = totalTokensBox;
     $[42] = flexDirection_2;
     $[43] = gap;
     $[44] = marginBottom;
-    $[45] = He;
-  } else He = $[45];
+    $[45] = topRow;
+  } else topRow = $[45];
   let children_3;
   if ($[46] !== stats.totalSessions) {
     children_3 = formatNumber(stats.totalSessions);
     $[46] = stats.totalSessions;
     $[47] = children_3;
   } else children_3 = $[47];
-  let Oe;
+  let sessionsBox;
   if ($[48] !== children_3) {
-    Oe = jsxProd_default(Box, {
+    sessionsBox = jsxProd_default(Box, {
       flexDirection: "column",
       width: 28,
       children: jsxProd_default_2(Text, {
@@ -851,8 +865,8 @@ function OverviewTab(props) {
       }),
     });
     $[48] = children_3;
-    $[49] = Oe;
-  } else Oe = $[49];
+    $[49] = sessionsBox;
+  } else sessionsBox = $[49];
   let children_4;
   if ($[50] !== stats.longestSession) {
     children_4 =
@@ -871,95 +885,95 @@ function OverviewTab(props) {
     $[50] = stats.longestSession;
     $[51] = children_4;
   } else children_4 = $[51];
-  let ke;
+  let longestSessionBox;
   if ($[52] !== children_4) {
-    ke = jsxProd_default(Box, {
+    longestSessionBox = jsxProd_default(Box, {
       flexDirection: "column",
       width: 28,
       children: children_4,
     });
     $[52] = children_4;
-    $[53] = ke;
-  } else ke = $[53];
-  let Ue;
-  if ($[54] !== Oe || $[55] !== ke) {
-    Ue = jsxProd_default_2(Box, {
+    $[53] = longestSessionBox;
+  } else longestSessionBox = $[53];
+  let sessionRow;
+  if ($[54] !== sessionsBox || $[55] !== longestSessionBox) {
+    sessionRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 4,
-      children: [Oe, ke],
+      children: [sessionsBox, longestSessionBox],
     });
-    $[54] = Oe;
-    $[55] = ke;
-    $[56] = Ue;
-  } else Ue = $[56];
-  let Ie;
+    $[54] = sessionsBox;
+    $[55] = longestSessionBox;
+    $[56] = sessionRow;
+  } else sessionRow = $[56];
+  let activeDaysText;
   if ($[57] !== stats.activeDays) {
-    Ie = jsxProd_default(Text, {
+    activeDaysText = jsxProd_default(Text, {
       color: "claude",
       children: stats.activeDays,
     });
     $[57] = stats.activeDays;
-    $[58] = Ie;
-  } else Ie = $[58];
-  let ye;
-  if ($[59] !== M) {
-    ye = jsxProd_default_2(Text, {
+    $[58] = activeDaysText;
+  } else activeDaysText = $[58];
+  let totalDaysText;
+  if ($[59] !== rangeDays) {
+    totalDaysText = jsxProd_default_2(Text, {
       color: "subtle",
-      children: ["/", M],
+      children: ["/", rangeDays],
     });
-    $[59] = M;
-    $[60] = ye;
-  } else ye = $[60];
-  let We;
-  if ($[61] !== Ie || $[62] !== ye) {
-    We = jsxProd_default(Box, {
+    $[59] = rangeDays;
+    $[60] = totalDaysText;
+  } else totalDaysText = $[60];
+  let activeDaysBox;
+  if ($[61] !== activeDaysText || $[62] !== totalDaysText) {
+    activeDaysBox = jsxProd_default(Box, {
       flexDirection: "column",
       width: 28,
       children: jsxProd_default_2(Text, {
         wrap: "truncate",
-        children: ["Active days: ", Ie, ye],
+        children: ["Active days: ", activeDaysText, totalDaysText],
       }),
     });
-    $[61] = Ie;
-    $[62] = ye;
-    $[63] = We;
-  } else We = $[63];
-  let _e;
+    $[61] = activeDaysText;
+    $[62] = totalDaysText;
+    $[63] = activeDaysBox;
+  } else activeDaysBox = $[63];
+  let longestStreakText;
   if ($[64] !== stats.streaks.longestStreak) {
-    _e = jsxProd_default(Text, {
+    longestStreakText = jsxProd_default(Text, {
       color: "claude",
       bold: true,
       children: stats.streaks.longestStreak,
     });
     $[64] = stats.streaks.longestStreak;
-    $[65] = _e;
-  } else _e = $[65];
-  const Ne = stats.streaks.longestStreak === 1 ? "day" : "days";
-  let at;
-  if ($[66] !== _e || $[67] !== Ne) {
-    at = jsxProd_default(Box, {
+    $[65] = longestStreakText;
+  } else longestStreakText = $[65];
+  const dayWord = stats.streaks.longestStreak === 1 ? "day" : "days";
+  let longestStreakBox;
+  if ($[66] !== longestStreakText || $[67] !== dayWord) {
+    longestStreakBox = jsxProd_default(Box, {
       flexDirection: "column",
       width: 28,
       children: jsxProd_default_2(Text, {
         wrap: "truncate",
-        children: ["Longest streak:", " ", _e, " ", Ne],
+        children: ["Longest streak:", " ", longestStreakText, " ", dayWord],
       }),
     });
-    $[66] = _e;
-    $[67] = Ne;
-    $[68] = at;
-  } else at = $[68];
-  let ot;
-  if ($[69] !== We || $[70] !== at) {
-    ot = jsxProd_default_2(Box, {
+    $[66] = longestStreakText;
+    $[67] = dayWord;
+    $[68] = longestStreakBox;
+  } else longestStreakBox = $[68];
+  let streakRow;
+  if ($[69] !== activeDaysBox || $[70] !== longestStreakBox) {
+    streakRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 4,
-      children: [We, at],
+      children: [activeDaysBox, longestStreakBox],
     });
-    $[69] = We;
-    $[70] = at;
-    $[71] = ot;
-  } else ot = $[71];
+    $[69] = activeDaysBox;
+    $[70] = longestStreakBox;
+    $[71] = streakRow;
+  } else streakRow = $[71];
   let children_5;
   if ($[72] !== stats.peakActivityDay) {
     children_5 =
@@ -978,68 +992,68 @@ function OverviewTab(props) {
     $[72] = stats.peakActivityDay;
     $[73] = children_5;
   } else children_5 = $[73];
-  let et;
+  let peakDayBox;
   if ($[74] !== children_5) {
-    et = jsxProd_default(Box, {
+    peakDayBox = jsxProd_default(Box, {
       flexDirection: "column",
       width: 28,
       children: children_5,
     });
     $[74] = children_5;
-    $[75] = et;
-  } else et = $[75];
-  let Ge;
+    $[75] = peakDayBox;
+  } else peakDayBox = $[75];
+  let currentStreakText;
   if ($[76] !== allTimeStats.streaks.currentStreak) {
-    Ge = jsxProd_default(Text, {
+    currentStreakText = jsxProd_default(Text, {
       color: "claude",
       bold: true,
       children: allTimeStats.streaks.currentStreak,
     });
     $[76] = allTimeStats.streaks.currentStreak;
-    $[77] = Ge;
-  } else Ge = $[77];
-  const Qe = allTimeStats.streaks.currentStreak === 1 ? "day" : "days";
-  let ze;
-  if ($[78] !== Ge || $[79] !== Qe) {
-    ze = jsxProd_default(Box, {
+    $[77] = currentStreakText;
+  } else currentStreakText = $[77];
+  const streakDayWord = allTimeStats.streaks.currentStreak === 1 ? "day" : "days";
+  let currentStreakBox;
+  if ($[78] !== currentStreakText || $[79] !== streakDayWord) {
+    currentStreakBox = jsxProd_default(Box, {
       flexDirection: "column",
       width: 28,
       children: jsxProd_default_2(Text, {
         wrap: "truncate",
-        children: ["Current streak:", " ", Ge, " ", Qe],
+        children: ["Current streak:", " ", currentStreakText, " ", streakDayWord],
       }),
     });
-    $[78] = Ge;
-    $[79] = Qe;
-    $[80] = ze;
-  } else ze = $[80];
-  let rt;
-  if ($[81] !== et || $[82] !== ze) {
-    rt = jsxProd_default_2(Box, {
+    $[78] = currentStreakText;
+    $[79] = streakDayWord;
+    $[80] = currentStreakBox;
+  } else currentStreakBox = $[80];
+  let peakRow;
+  if ($[81] !== peakDayBox || $[82] !== currentStreakBox) {
+    peakRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       gap: 4,
-      children: [et, ze],
+      children: [peakDayBox, currentStreakBox],
     });
-    $[81] = et;
-    $[82] = ze;
-    $[83] = rt;
-  } else rt = $[83];
-  let kt;
-  if ($[84] !== stats.modelUsage || $[85] !== fe) {
-    kt =
-      fe > 0 &&
+    $[81] = peakDayBox;
+    $[82] = currentStreakBox;
+    $[83] = peakRow;
+  } else peakRow = $[83];
+  let tokenBreakdown;
+  if ($[84] !== stats.modelUsage || $[85] !== totalTokens) {
+    tokenBreakdown =
+      totalTokens > 0 &&
       jsxProd_default(Text, {
         color: "subtle",
         wrap: "truncate",
         children: formatTokenBreakdown(stats.modelUsage),
       });
     $[84] = stats.modelUsage;
-    $[85] = fe;
-    $[86] = kt;
-  } else kt = $[86];
-  let Ze;
+    $[85] = totalTokens;
+    $[86] = tokenBreakdown;
+  } else tokenBreakdown = $[86];
+  let shotDistribution;
   if ($[87] === MEMO_CACHE_SENTINEL) {
-    Ze =
+    shotDistribution =
       null &&
       jsxProd_default_2(Fragment, {
         children: [
@@ -1162,55 +1176,66 @@ function OverviewTab(props) {
           }),
         ],
       });
-    $[87] = Ze;
-  } else Ze = $[87];
-  let Xe;
-  if ($[88] !== W) {
-    Xe =
-      W &&
+    $[87] = shotDistribution;
+  } else shotDistribution = $[87];
+  let funFactBox;
+  if ($[88] !== funFact) {
+    funFactBox =
+      funFact &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(Text, {
           color: "suggestion",
-          children: W,
+          children: funFact,
         }),
       });
-    $[88] = W;
-    $[89] = Xe;
-  } else Xe = $[89];
-  let tt;
+    $[88] = funFact;
+    $[89] = funFactBox;
+  } else funFactBox = $[89];
+  let content;
   if (
-    $[90] !== U ||
-    $[91] !== H ||
-    $[92] !== He ||
-    $[93] !== Ue ||
-    $[94] !== ot ||
-    $[95] !== rt ||
-    $[96] !== kt ||
-    $[97] !== Xe ||
+    $[90] !== outerBox ||
+    $[91] !== dateRangeSelector ||
+    $[92] !== topRow ||
+    $[93] !== sessionRow ||
+    $[94] !== streakRow ||
+    $[95] !== peakRow ||
+    $[96] !== tokenBreakdown ||
+    $[97] !== funFactBox ||
     $[98] !== flexDirection_3 ||
     $[99] !== marginTop ||
-    $[100] !== me
+    $[100] !== heatmap
   ) {
-    tt = jsxProd_default_2(U, {
+    content = jsxProd_default_2(outerBox, {
       flexDirection: flexDirection_3,
       marginTop,
-      children: [me, H, He, Ue, ot, rt, kt, null, Ze, Xe],
+      children: [
+        heatmap,
+        dateRangeSelector,
+        topRow,
+        sessionRow,
+        streakRow,
+        peakRow,
+        tokenBreakdown,
+        null,
+        shotDistribution,
+        funFactBox,
+      ],
     });
-    $[90] = U;
-    $[91] = H;
-    $[92] = He;
-    $[93] = Ue;
-    $[94] = ot;
-    $[95] = rt;
-    $[96] = kt;
-    $[97] = Xe;
+    $[90] = outerBox;
+    $[91] = dateRangeSelector;
+    $[92] = topRow;
+    $[93] = sessionRow;
+    $[94] = streakRow;
+    $[95] = peakRow;
+    $[96] = tokenBreakdown;
+    $[97] = funFactBox;
     $[98] = flexDirection_3;
     $[99] = marginTop;
-    $[100] = me;
-    $[101] = tt;
-  } else tt = $[101];
-  return tt;
+    $[100] = heatmap;
+    $[101] = content;
+  } else content = $[101];
+  return content;
 }
 //@ chunk-9h8dr0qb.js:103714-105109 fingerprint = BOOK_COMPARISONS (0.823)
 /**
@@ -1360,7 +1385,8 @@ var TOKEN_COMPARISONS = [
 function generateFunFactoid(stats) {
   let factoids = [];
   let totalTokens = 0;
-  for (let D of Object.values(stats.modelUsage)) totalTokens += (D.inputTokens || 0) + (D.outputTokens || 0);
+  for (let usage of Object.values(stats.modelUsage))
+    totalTokens += (usage.inputTokens || 0) + (usage.outputTokens || 0);
   if (totalTokens > 0) {
     let matchingBooks = BOOK_TOKEN_COMPARISONS.filter((book) => totalTokens >= book.tokens);
     for (let book of matchingBooks) {
@@ -1384,29 +1410,29 @@ function generateFunFactoid(stats) {
 }
 //@ chunk-9h8dr0qb.js:105714-108735 fingerprint = ModelsTab (0.61)
 function ModelsTab(props) {
-  let $ = w(61);
+  let $ = useMemoCache(61);
   let { stats, selectorRange, isLoading } = props;
   let { headerFocused, focusHeader } = useTabHeaderFocus();
-  let [T, A] = y(0);
+  let [scrollIndex, setScrollIndex] = useState(0);
   let { columns: terminalWidth } = useTerminalSize();
-  let U;
-  let W;
-  let M;
-  let B;
-  let H;
-  let K;
-  let ee;
+  let rightBox;
+  let statsRowBox;
+  let outerBox;
+  let canScrollDown;
+  let canScrollUp;
+  let modelEntries;
+  let isScrollable;
   let flexDirection;
   let autoFocus;
   let onKeyDown;
-  let J;
-  let ae;
-  let me;
+  let chartBox;
+  let dateRangeSelector;
+  let earlyReturn;
   let width;
   let children;
   let flexDirection_2;
   let gap;
-  let pe;
+  let leftBox;
   let flexDirection_3;
   let marginTop;
   let tabIndex;
@@ -1414,62 +1440,66 @@ function ModelsTab(props) {
     $[0] !== focusHeader ||
     $[1] !== headerFocused ||
     $[2] !== isLoading ||
-    $[3] !== T ||
+    $[3] !== scrollIndex ||
     $[4] !== selectorRange ||
     $[5] !== stats.dailyModelTokens ||
     $[6] !== stats.modelUsage ||
     $[7] !== terminalWidth
   ) {
-    me = EARLY_RETURN_SENTINEL;
+    earlyReturn = EARLY_RETURN_SENTINEL;
     We: {
-      let { modelEntries, totalTokens } = sortModelUsage(stats.modelUsage);
-      K = modelEntries;
-      let Ie = function Ie(event) {
+      let { modelEntries: modelEntries_2, totalTokens } = sortModelUsage(stats.modelUsage);
+      modelEntries = modelEntries_2;
+      let onKeyDownImpl = function memoCache(event) {
         if (headerFocused) {
           return;
         }
-        if (event.key === "down" && T < K.length - 4) {
+        if (event.key === "down" && scrollIndex < modelEntries.length - 4) {
           event.preventDefault();
-          A((prev) => Math.min(prev + 2, K.length - 4));
+          setScrollIndex((prev) => Math.min(prev + 2, modelEntries.length - 4));
           return;
         }
         if (event.key === "up") {
           event.preventDefault();
-          if (T > 0) {
+          if (scrollIndex > 0) {
             event.stopPropagation();
-            A(rowsAboveTwo);
+            setScrollIndex(rowsAboveTwo);
           } else focusHeader();
         }
       };
-      if (K.length === 0) {
-        let ye;
+      if (modelEntries.length === 0) {
+        let emptyBox;
         if ($[29] === MEMO_CACHE_SENTINEL) {
-          ye = jsxProd_default(Box, {
+          emptyBox = jsxProd_default(Box, {
             children: jsxProd_default(Text, {
               color: "subtle",
               children: "No model usage data available",
             }),
           });
-          $[29] = ye;
-        } else ye = $[29];
-        me = ye;
+          $[29] = emptyBox;
+        } else emptyBox = $[29];
+        earlyReturn = emptyBox;
         break We;
       }
-      let chartOutput = generateTokenChart(stats.dailyModelTokens, K.map(firstItem), terminalWidth);
-      let visibleModels = K.slice(T, T + 4);
+      let chartOutput = generateTokenChart(
+        stats.dailyModelTokens,
+        modelEntries.map(firstItem),
+        terminalWidth,
+      );
+      let visibleModels = modelEntries.slice(scrollIndex, scrollIndex + 4);
       let midpoint = Math.ceil(visibleModels.length / 2);
       let leftModels = visibleModels.slice(0, midpoint);
       let rightModels = visibleModels.slice(midpoint);
-      H = T > 0;
-      B = T < K.length - 4;
-      ee = K.length > 4;
-      M = Box;
+      canScrollUp = scrollIndex > 0;
+      canScrollDown = scrollIndex < modelEntries.length - 4;
+      isScrollable = modelEntries.length > 4;
+      outerBox = Box;
       flexDirection_3 = "column";
       marginTop = 1;
       tabIndex = 0;
       autoFocus = false;
-      onKeyDown = Ie;
-      J =
+      onKeyDown = onKeyDownImpl;
+      chartBox =
         chartOutput &&
         jsxProd_default_2(Box, {
           flexDirection: "column",
@@ -1492,34 +1522,34 @@ function ModelsTab(props) {
           ],
         });
       if ($[30] !== isLoading || $[31] !== selectorRange) {
-        ae = jsxProd_default(DateRangeSelector, {
+        dateRangeSelector = jsxProd_default(DateRangeSelector, {
           dateRange: selectorRange,
           isLoading,
         });
         $[30] = isLoading;
         $[31] = selectorRange;
-        $[32] = ae;
-      } else ae = $[32];
-      W = Box;
+        $[32] = dateRangeSelector;
+      } else dateRangeSelector = $[32];
+      statsRowBox = Box;
       flexDirection_2 = "row";
       gap = 4;
-      pe = jsxProd_default(Box, {
+      leftBox = jsxProd_default(Box, {
         flexDirection: "column",
         width: 36,
         children: leftModels.map((leftModel) => {
-          let [et, Ge] = leftModel;
+          let [model, usage] = leftModel;
           return jsxProd_default(
             ModelEntry,
             {
-              model: et,
-              usage: Ge,
+              model,
+              usage,
               totalTokens,
             },
-            et,
+            model,
           );
         }),
       });
-      U = Box;
+      rightBox = Box;
       flexDirection = "column";
       width = 36;
       children = rightModels.map((rightModel) => {
@@ -1538,102 +1568,114 @@ function ModelsTab(props) {
     $[0] = focusHeader;
     $[1] = headerFocused;
     $[2] = isLoading;
-    $[3] = T;
+    $[3] = scrollIndex;
     $[4] = selectorRange;
     $[5] = stats.dailyModelTokens;
     $[6] = stats.modelUsage;
     $[7] = terminalWidth;
-    $[8] = U;
-    $[9] = W;
-    $[10] = M;
-    $[11] = B;
-    $[12] = H;
-    $[13] = K;
-    $[14] = ee;
+    $[8] = rightBox;
+    $[9] = statsRowBox;
+    $[10] = outerBox;
+    $[11] = canScrollDown;
+    $[12] = canScrollUp;
+    $[13] = modelEntries;
+    $[14] = isScrollable;
     $[15] = flexDirection;
     $[16] = autoFocus;
     $[17] = onKeyDown;
-    $[18] = J;
-    $[19] = ae;
-    $[20] = me;
+    $[18] = chartBox;
+    $[19] = dateRangeSelector;
+    $[20] = earlyReturn;
     $[21] = width;
     $[22] = children;
     $[23] = flexDirection_2;
     $[24] = gap;
-    $[25] = pe;
+    $[25] = leftBox;
     $[26] = flexDirection_3;
     $[27] = marginTop;
     $[28] = tabIndex;
   } else {
-    U = $[8];
-    W = $[9];
-    M = $[10];
-    B = $[11];
-    H = $[12];
-    K = $[13];
-    ee = $[14];
+    rightBox = $[8];
+    statsRowBox = $[9];
+    outerBox = $[10];
+    canScrollDown = $[11];
+    canScrollUp = $[12];
+    modelEntries = $[13];
+    isScrollable = $[14];
     flexDirection = $[15];
     autoFocus = $[16];
     onKeyDown = $[17];
-    J = $[18];
-    ae = $[19];
-    me = $[20];
+    chartBox = $[18];
+    dateRangeSelector = $[19];
+    earlyReturn = $[20];
     width = $[21];
     children = $[22];
     flexDirection_2 = $[23];
     gap = $[24];
-    pe = $[25];
+    leftBox = $[25];
     flexDirection_3 = $[26];
     marginTop = $[27];
     tabIndex = $[28];
   }
-  if (me !== EARLY_RETURN_SENTINEL) return me;
-  let Oe;
-  if ($[33] !== U || $[34] !== flexDirection || $[35] !== width || $[36] !== children) {
-    Oe = jsxProd_default(U, {
+  if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
+  let rightColumn;
+  if ($[33] !== rightBox || $[34] !== flexDirection || $[35] !== width || $[36] !== children) {
+    rightColumn = jsxProd_default(rightBox, {
       flexDirection,
       width,
       children,
     });
-    $[33] = U;
+    $[33] = rightBox;
     $[34] = flexDirection;
     $[35] = width;
     $[36] = children;
-    $[37] = Oe;
-  } else Oe = $[37];
-  let ye;
-  if ($[38] !== W || $[39] !== Oe || $[40] !== flexDirection_2 || $[41] !== gap || $[42] !== pe) {
-    ye = jsxProd_default_2(W, {
+    $[37] = rightColumn;
+  } else rightColumn = $[37];
+  let modelColumns;
+  if (
+    $[38] !== statsRowBox ||
+    $[39] !== rightColumn ||
+    $[40] !== flexDirection_2 ||
+    $[41] !== gap ||
+    $[42] !== leftBox
+  ) {
+    modelColumns = jsxProd_default_2(statsRowBox, {
       flexDirection: flexDirection_2,
       gap,
-      children: [pe, Oe],
+      children: [leftBox, rightColumn],
     });
-    $[38] = W;
-    $[39] = Oe;
+    $[38] = statsRowBox;
+    $[39] = rightColumn;
     $[40] = flexDirection_2;
     $[41] = gap;
-    $[42] = pe;
-    $[43] = ye;
-  } else ye = $[43];
-  let Qe;
-  if ($[44] !== B || $[45] !== H || $[46] !== K || $[47] !== T || $[48] !== ee) {
-    Qe =
-      ee &&
+    $[42] = leftBox;
+    $[43] = modelColumns;
+  } else modelColumns = $[43];
+  let scrollHint;
+  if (
+    $[44] !== canScrollDown ||
+    $[45] !== canScrollUp ||
+    $[46] !== modelEntries ||
+    $[47] !== scrollIndex ||
+    $[48] !== isScrollable
+  ) {
+    scrollHint =
+      isScrollable &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default_2(Text, {
           color: "subtle",
           children: [
-            H ? figures_default.arrowUp : " ",
+            canScrollUp ? figures_default.arrowUp : " ",
             " ",
-            B ? figures_default.arrowDown : " ",
+            canScrollDown ? figures_default.arrowDown : " ",
             " ",
-            T + 1,
+            scrollIndex + 1,
             "-",
-            Math.min(T + 4, K.length),
+            Math.min(scrollIndex + 4, modelEntries.length),
             " of",
             " ",
-            K.length,
+            modelEntries.length,
             " models",
             " ",
             jsxProd_default(KeyboardShortcutHint, {
@@ -1644,60 +1686,60 @@ function ModelsTab(props) {
           ],
         }),
       });
-    $[44] = B;
-    $[45] = H;
-    $[46] = K;
-    $[47] = T;
-    $[48] = ee;
-    $[49] = Qe;
-  } else Qe = $[49];
-  let kt;
+    $[44] = canScrollDown;
+    $[45] = canScrollUp;
+    $[46] = modelEntries;
+    $[47] = scrollIndex;
+    $[48] = isScrollable;
+    $[49] = scrollHint;
+  } else scrollHint = $[49];
+  let content;
   if (
-    $[50] !== M ||
+    $[50] !== outerBox ||
     $[51] !== autoFocus ||
     $[52] !== onKeyDown ||
-    $[53] !== J ||
-    $[54] !== ae ||
-    $[55] !== ye ||
-    $[56] !== Qe ||
+    $[53] !== chartBox ||
+    $[54] !== dateRangeSelector ||
+    $[55] !== modelColumns ||
+    $[56] !== scrollHint ||
     $[57] !== flexDirection_3 ||
     $[58] !== marginTop ||
     $[59] !== tabIndex
   ) {
-    kt = jsxProd_default_2(M, {
+    content = jsxProd_default_2(outerBox, {
       flexDirection: flexDirection_3,
       marginTop,
       tabIndex,
       autoFocus,
       onKeyDown,
-      children: [J, ae, ye, Qe],
+      children: [chartBox, dateRangeSelector, modelColumns, scrollHint],
     });
-    $[50] = M;
+    $[50] = outerBox;
     $[51] = autoFocus;
     $[52] = onKeyDown;
-    $[53] = J;
-    $[54] = ae;
-    $[55] = ye;
-    $[56] = Qe;
+    $[53] = chartBox;
+    $[54] = dateRangeSelector;
+    $[55] = modelColumns;
+    $[56] = scrollHint;
     $[57] = flexDirection_3;
     $[58] = marginTop;
     $[59] = tabIndex;
-    $[60] = kt;
-  } else kt = $[60];
-  return kt;
+    $[60] = content;
+  } else content = $[60];
+  return content;
 }
 //@ chunk-9h8dr0qb.js:108735-109824 fingerprint = ModelEntry (0.556)
 function ModelEntry(props) {
-  let $ = w(27);
+  let $ = useMemoCache(27);
   let { model, usage, totalTokens } = props;
-  let E;
+  let percent;
   if ($[0] !== totalTokens || $[1] !== usage) {
-    E = percentOf(usage, totalTokens);
+    percent = percentOf(usage, totalTokens);
     $[0] = totalTokens;
     $[1] = usage;
-    $[2] = E;
-  } else E = $[2];
-  let percentage = E;
+    $[2] = percent;
+  } else percent = $[2];
+  let percentage = percent;
   let children;
   if ($[3] !== model) {
     children = renderModelName(model);
@@ -1713,72 +1755,72 @@ function ModelEntry(props) {
     $[5] = children;
     $[6] = t4;
   } else t4 = $[6];
-  let F;
+  let costText;
   if ($[7] !== percentage) {
-    F = jsxProd_default_2(Text, {
+    costText = jsxProd_default_2(Text, {
       color: "subtle",
       children: ["(", percentage, "%)"],
     });
     $[7] = percentage;
-    $[8] = F;
-  } else F = $[8];
-  let U;
-  if ($[9] !== t4 || $[10] !== F) {
-    U = jsxProd_default_2(BulletRow, {
-      children: [t4, " ", F],
+    $[8] = costText;
+  } else costText = $[8];
+  let bulletRowElement;
+  if ($[9] !== t4 || $[10] !== costText) {
+    bulletRowElement = jsxProd_default_2(BulletRow, {
+      children: [t4, " ", costText],
     });
     $[9] = t4;
-    $[10] = F;
-    $[11] = U;
-  } else U = $[11];
+    $[10] = costText;
+    $[11] = bulletRowElement;
+  } else bulletRowElement = $[11];
   let t7;
   if ($[12] !== usage.inputTokens) {
     t7 = formatNumber(usage.inputTokens);
     $[12] = usage.inputTokens;
     $[13] = t7;
   } else t7 = $[13];
-  let M;
+  let barElement;
   if ($[14] !== usage.outputTokens) {
-    M = formatNumber(usage.outputTokens);
+    barElement = formatNumber(usage.outputTokens);
     $[14] = usage.outputTokens;
-    $[15] = M;
-  } else M = $[15];
-  let B;
-  if ($[16] !== t7 || $[17] !== M) {
-    B = jsxProd_default_2(Text, {
+    $[15] = barElement;
+  } else barElement = $[15];
+  let lineElement;
+  if ($[16] !== t7 || $[17] !== barElement) {
+    lineElement = jsxProd_default_2(Text, {
       color: "subtle",
       wrap: "truncate",
-      children: ["  ", "In: ", t7, " \xB7 Out:", " ", M],
+      children: ["  ", "In: ", t7, " \xB7 Out:", " ", barElement],
     });
     $[16] = t7;
-    $[17] = M;
-    $[18] = B;
-  } else B = $[18];
-  let H;
+    $[17] = barElement;
+    $[18] = lineElement;
+  } else lineElement = $[18];
+  let formattedCacheTokens;
   if ($[19] !== usage) {
-    H = formatCacheTokens(usage);
+    formattedCacheTokens = formatCacheTokens(usage);
     $[19] = usage;
-    $[20] = H;
-  } else H = $[20];
-  let K;
-  if ($[21] !== H) {
-    K = jsxProd_default_2(Text, {
+    $[20] = formattedCacheTokens;
+  } else formattedCacheTokens = $[20];
+  let cacheTokenTextElement;
+  if ($[21] !== formattedCacheTokens) {
+    cacheTokenTextElement = jsxProd_default_2(Text, {
       color: "subtle",
       wrap: "truncate",
-      children: ["  ", H],
+      children: ["  ", formattedCacheTokens],
     });
-    $[21] = H;
-    $[22] = K;
-  } else K = $[22];
+    $[21] = formattedCacheTokens;
+    $[22] = cacheTokenTextElement;
+  } else cacheTokenTextElement = $[22];
   let t10;
-  if ($[23] !== K || $[24] !== U || $[25] !== B) {
+  if ($[23] !== cacheTokenTextElement || $[24] !== bulletRowElement || $[25] !== lineElement) {
     t10 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [U, B, K],
+      children: [bulletRowElement, lineElement, cacheTokenTextElement],
     });
-    $[23] = K;
-    $[24] = U;
-    $[25] = B;
+    $[23] = cacheTokenTextElement;
+    $[24] = bulletRowElement;
+    $[25] = lineElement;
     $[26] = t10;
   } else t10 = $[26];
   return t10;
@@ -1805,14 +1847,17 @@ function generateTokenChart(dailyTokens, models, terminalWidth) {
   let series = [];
   let legend = [];
   let topModels = models.slice(0, 3);
-  let M = [theme.suggestion, theme.success, theme.warning];
+  let seriesColors = [theme.suggestion, theme.success, theme.warning];
   for (let model of topModels) {
     let data = recentData.map((day) => day.tokensByModel[model] || 0);
     if (data.some((v) => v > 0)) {
       series.push(data);
       legend.push({
         model: renderModelName(model),
-        coloredBullet: applyColor(figures_default.bullet, M[(series.length - 1) % M.length]),
+        coloredBullet: applyColor(
+          figures_default.bullet,
+          seriesColors[(series.length - 1) % seriesColors.length],
+        ),
       });
     }
   }
@@ -1861,23 +1906,23 @@ function generateXAxisLabels(data, _chartWidth, yAxisOffset) {
   return result;
 }
 //@ chunk-9h8dr0qb.js:111044-111190 fingerprint = handleScreenshot (0.953)
-async function handleScreenshot(stats, activeTab, p, h, clock) {
-  h("copying\u2026");
-  let ansiText = renderStatsToAnsi(stats, activeTab, p);
+async function handleScreenshot(stats, activeTab, tab, setStatus, clock) {
+  setStatus("copying\u2026");
+  let ansiText = renderStatsToAnsi(stats, activeTab, tab);
   let result = await copyAnsiToClipboard(ansiText);
-  h(result.success ? "copied!" : "copy failed");
-  clock.setTimeout(() => h(null), 2000);
+  setStatus(result.success ? "copied!" : "copy failed");
+  clock.setTimeout(() => setStatus(null), 2000);
 }
 //@ chunk-9h8dr0qb.js:111190-111487 fingerprint = renderStatsToAnsi (1)
-function renderStatsToAnsi(stats, activeTab, p) {
+function renderStatsToAnsi(stats, theme, tab) {
   let lines = [];
-  if (p === "Overview") lines.push(...renderOverviewToAnsi(stats, activeTab));
+  if (tab === "Overview") lines.push(...renderOverviewToAnsi(stats, theme));
   else lines.push(...renderModelsToAnsi(stats));
   while (lines.length > 0 && stripAnsi(lines.at(-1)).trim() === "") lines.pop();
   if (lines.length > 0) {
     let lastLine = lines.at(-1);
     let lastLineLen = bunStringWidth(lastLine);
-    let contentWidth = p === "Overview" ? 70 : 80;
+    let contentWidth = tab === "Overview" ? 70 : 80;
     let statsLabel = "/stats";
     let padding = Math.max(2, contentWidth - lastLineLen - 6);
     lines[lines.length - 1] = lastLine + " ".repeat(padding) + sequential.gray("/stats");
@@ -1886,10 +1931,10 @@ function renderStatsToAnsi(stats, activeTab, p) {
 `);
 }
 //@ chunk-9h8dr0qb.js:111487-112580 fingerprint = renderOverviewToAnsi (0.843)
-function renderOverviewToAnsi(stats, u) {
+function renderOverviewToAnsi(stats, theme) {
   let lines = [];
-  let theme = getThemeWithOverrides(resolveSetting("theme", "dark").value);
-  let D = (text) => applyColor(text, theme.claude);
+  let theme_2 = getThemeWithOverrides(resolveSetting("theme", "dark").value);
+  let paint = (text) => applyColor(text, theme_2.claude);
   let COL1_LABEL_WIDTH = 18;
   let COL2_START = 40;
   let COL2_LABEL_WIDTH = 18;
@@ -1898,7 +1943,7 @@ function renderOverviewToAnsi(stats, u) {
     let col1PlainLen = label1.length + v1.length;
     let spaceBetween = Math.max(2, 40 - col1PlainLen);
     let label2 = (l2 + ":").padEnd(18);
-    return label1 + D(v1) + " ".repeat(spaceBetween) + label2 + D(v2);
+    return label1 + paint(v1) + " ".repeat(spaceBetween) + label2 + paint(v2);
   };
   if (stats.dailyActivity.length > 0) {
     lines.push(
@@ -1933,7 +1978,7 @@ function renderOverviewToAnsi(stats, u) {
   if (totalTokens > 0) lines.push(sequential.gray(formatTokenBreakdown(stats.modelUsage)));
   lines.push("");
   let factoid = generateFunFactoid(stats);
-  lines.push(D(factoid));
+  lines.push(paint(factoid));
   lines.push(sequential.gray(`Stats from the last ${stats.totalDays} days`));
   return lines;
 }
@@ -1965,9 +2010,9 @@ function renderModelsToAnsi(stats) {
   lines.push("");
   let topModels = modelEntries.slice(0, 3);
   for (let [model, usage] of topModels) {
-    let F = percentOf(usage, totalTokens);
+    let percent = percentOf(usage, totalTokens);
     lines.push(
-      `${figures_default.bullet} ${sequential.bold(renderModelName(model))} ${sequential.gray(`(${F}%)`)}`,
+      `${figures_default.bullet} ${sequential.bold(renderModelName(model))} ${sequential.gray(`(${percent}%)`)}`,
     );
     lines.push(
       sequential.dim(
@@ -1977,10 +2022,5 @@ function renderModelsToAnsi(stats) {
     lines.push(sequential.dim(`  ${formatCacheTokens(usage)}`));
   }
   return lines;
-}
-//@ chunk-18hwfzwa.js:1668742-1668823 fingerprint = DATE_RANGE_ORDER (0.539)
-function DATE_RANGE_ORDER(toolProgress) {
-  for (let x of toolProgress.values()) if (DEFAULT_PROGRESS_DISPLAY[x.kind] === "all") return true;
-  return false;
 }
 export { DATE_RANGE_ORDER, parseIsoDate, parseIsoDateTimePrefix, Stats };

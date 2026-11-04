@@ -9,40 +9,46 @@
  * attribution: placement 3
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { getCatalogEntry as getCatalogEntry_2 } from "../model/modelCatalog.js";
 import { getCanonicalName } from "../model/canonicalModelName.js";
 import { getMarketingNameForModel } from "../model/model.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:105191-105341 placement
 /**
  * 环境信息里的模型 schema（id、展示名、训练截止）。
  */
-var ENV_INFO_MODEL = "env_info_model";
-var modelInfoSchema = DoctorLazy(() =>
-  u({
-    modelId: string(),
-    marketingName: string().nullable(),
-    knowledgeCutoff: string().nullable(),
-  }),
-);
-var modelInfoNullableSchema = DoctorLazy(() => string().nullable().optional());
+var ENV_INFO_MODEL; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var modelInfoSchema;
+var modelInfoNullableSchema;
+deferInit("chunk-e6aww6q8.js:105191", () => {
+  ENV_INFO_MODEL = "env_info_model";
+  modelInfoSchema = DoctorLazy(() =>
+    objectSchema({
+      modelId: stringSchema(),
+      marketingName: stringSchema().nullable(),
+      knowledgeCutoff: stringSchema().nullable(),
+    }),
+  );
+  modelInfoNullableSchema = DoctorLazy(() => stringSchema().nullable().optional());
+});
 //@ chunk-e6aww6q8.js:105341-105398 placement
 /**
  * 从模型目录取训练截止时间。
  */
-function knowledgeCutoffForModel(e) {
-  return getCatalogEntry_2(getCanonicalName(e))?.knowledge_cutoff ?? null;
+function knowledgeCutoffForModel(model) {
+  return getCatalogEntry_2(getCanonicalName(model))?.knowledge_cutoff ?? null;
 }
 //@ chunk-e6aww6q8.js:105398-105481 placement
 /**
  * 构造模型信息（id、展示名与训练截止时间）。
  */
-function modelInfoForModel(runtimeMainLoopModel) {
+function modelInfoForModel(model) {
   return {
-    modelId: runtimeMainLoopModel,
-    marketingName: getMarketingNameForModel(runtimeMainLoopModel) ?? null,
-    knowledgeCutoff: knowledgeCutoffForModel(runtimeMainLoopModel),
+    modelId: model,
+    marketingName: getMarketingNameForModel(model) ?? null,
+    knowledgeCutoff: knowledgeCutoffForModel(model),
   };
 }
 export { ENV_INFO_MODEL, modelInfoNullableSchema, modelInfoSchema, modelInfoForModel };

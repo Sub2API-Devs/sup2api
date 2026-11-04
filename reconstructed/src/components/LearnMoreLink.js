@@ -8,7 +8,7 @@
  * pieces: chunk-chhhkvva.js (1)
  * attribution: placement 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -20,11 +20,11 @@ import { Text, Link } from "../ink/components/Text.js";
  * 显示"Learn more: <链接>"的暗色文字。
  */
 function LearnMoreLink(props) {
-  let l = w(2);
+  let $ = useMemoCache(2);
   let { url } = props;
-  let t;
-  if (l[0] !== url) {
-    t = jsxProd_default_2(Text, {
+  let content;
+  if ($[0] !== url) {
+    content = jsxProd_default_2(Text, {
       dimColor: true,
       children: [
         "Learn more: ",
@@ -33,9 +33,9 @@ function LearnMoreLink(props) {
         }),
       ],
     });
-    l[0] = url;
-    l[1] = t;
-  } else t = l[1];
-  return t;
+    $[0] = url;
+    $[1] = content;
+  } else content = $[1];
+  return content;
 }
 export { LearnMoreLink };

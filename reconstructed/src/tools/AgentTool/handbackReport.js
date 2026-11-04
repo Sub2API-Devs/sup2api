@@ -17,6 +17,7 @@ import { SUBAGENTHANDBACK, NO_HANDBACK_REPORT_TEXT, ASK_FOR_REPORT_HINT } from "
 import { SENDMESSAGE } from "../SendMessageTool/constants.js";
 import { escapeXmlText } from "../../utils/sanitization.js";
 import { logFeatureSad } from "../../services/analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-7jmp8260.js:487-1023 placement
 /**
@@ -45,10 +46,10 @@ function indentLines(text) {
 /**
  * 统一换行后统计行数。
  */
-function countLines(e) {
+function countLines(text) {
   return (
     countCharInString(
-      e.replace(
+      text.replace(
         LINE_BREAK_CHARS_RE,
         `
 `,
@@ -62,20 +63,20 @@ function countLines(e) {
 /**
  * 交回报告的标题加缩进后的正文。
  */
-function handbackReportText(e) {
+function handbackReportText(report) {
   return (
     HANDBACK_REPORT_HEADER +
     `
 ` +
-    indentLines(e)
+    indentLines(report)
   );
 }
 //@ chunk-7jmp8260.js:1182-1399 placement
-function parseHandbackReport(e) {
-  let lines = e.split(`
+function parseHandbackReport(text) {
+  let lines = text.split(`
 `);
   let index = lines.indexOf(HANDBACK_REPORT_HEADER);
-  if (index === -1 || lines.some((line, o) => o !== index && !line.startsWith("  "))) return;
+  if (index === -1 || lines.some((line, lineIndex) => lineIndex !== index && !line.startsWith("  "))) return;
   let mapped = lines.map((line) => line.slice(2));
   return {
     ...(index > 0 && {
@@ -87,61 +88,67 @@ function parseHandbackReport(e) {
   };
 }
 //@ chunk-7jmp8260.js:1435-1449 placement
-var pendingHandbacksBySender = new Map();
+var pendingHandbacksBySender; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7jmp8260.js:1435", () => {
+  pendingHandbacksBySender = new Map();
+});
 //@ chunk-7jmp8260.js:1449-1574 placement
 /**
  * 记录一次交回：同收件人且已标记时保留标记。
  */
-function noteHandback(e) {
-  let t = pendingHandbacksBySender.get(e.sender);
-  let n =
-    t?.recipient === e.recipient && t.flagged
+function noteHandback(handback) {
+  let existing = pendingHandbacksBySender.get(handback.sender);
+  let entry =
+    existing?.recipient === handback.recipient && existing.flagged
       ? {
-          ...e,
+          ...handback,
           flagged: true,
         }
-      : e;
-  pendingHandbacksBySender.set(e.sender, n);
-  return n;
+      : handback;
+  pendingHandbacksBySender.set(handback.sender, entry);
+  return entry;
 }
 //@ chunk-7jmp8260.js:1574-1640 placement
 /**
  * 取某发送者发给指定收件人的交回记录。
  */
-function handbackForRecipient(agentId, t) {
-  let n = pendingHandbacksBySender.get(agentId);
-  return n?.recipient === t ? n : undefined;
+function handbackForRecipient(agentId, recipient) {
+  let entry = pendingHandbacksBySender.get(agentId);
+  return entry?.recipient === recipient ? entry : undefined;
 }
 //@ chunk-7jmp8260.js:1640-1672 placement
 /**
  * 判断是否有来自给定代理的交接报告。
  */
-function hasHandbackFrom(e) {
-  return pendingHandbacksBySender.has(e);
+function hasHandbackFrom(agentId) {
+  return pendingHandbacksBySender.has(agentId);
 }
 //@ chunk-7jmp8260.js:1672-1704 placement
 /**
  * 取来自某代理的交接报告。
  */
-function handbackFrom(e) {
-  return pendingHandbacksBySender.get(e);
+function handbackFrom(agentId) {
+  return pendingHandbacksBySender.get(agentId);
 }
 //@ chunk-7jmp8260.js:1704-1732 placement
 /**
  * 丢弃某代理的交接报告。
  */
-function forgetHandback(e) {
-  pendingHandbacksBySender.delete(e);
+function forgetHandback(agentId) {
+  pendingHandbacksBySender.delete(agentId);
 }
 //@ chunk-7jmp8260.js:1732-1765 placement
-var agentContractState = identity(new Map(), (e) => e.clear());
+var agentContractState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7jmp8260.js:1732", () => {
+  agentContractState = identity(new Map(), (state) => state.clear());
+});
 //@ chunk-7jmp8260.js:1765-1866 placement
-function recordHandbackContract(agentId, t, n) {
+function recordHandbackContract(agentId, contract, miss) {
   agentContractState.set(agentId, {
-    contract: t,
-    ...(!t &&
-      n !== undefined && {
-        miss: n,
+    contract,
+    ...(!contract &&
+      miss !== undefined && {
+        miss,
       }),
     flagged: agentContractState.get(agentId)?.flagged === true,
   });
@@ -150,30 +157,36 @@ function recordHandbackContract(agentId, t, n) {
 /**
  * 给某代理的契约状态打上 flagged。
  */
-function flagAgentContract(e) {
-  agentContractState.set(e, {
-    ...agentContractState.get(e),
+function flagAgentContract(agentId) {
+  agentContractState.set(agentId, {
+    ...agentContractState.get(agentId),
     flagged: true,
   });
 }
 //@ chunk-7jmp8260.js:1916-1949 placement
-var flaggedContractAgents = identity(new Set(), (e) => e.clear());
+var flaggedContractAgents; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7jmp8260.js:1916", () => {
+  flaggedContractAgents = identity(new Set(), (agents) => agents.clear());
+});
 //@ chunk-7jmp8260.js:1949-1995 placement
 /**
  * 某代理的契约是否被标记。
  */
-function isAgentFlagged(e) {
-  return agentContractState.get(e)?.flagged === true;
+function isAgentFlagged(agentId) {
+  return agentContractState.get(agentId)?.flagged === true;
 }
 //@ chunk-7jmp8260.js:1995-2037 placement
 /**
  * 某代理的交回契约。
  */
-function agentContract(e) {
-  return agentContractState.get(e)?.contract;
+function agentContract(agentId) {
+  return agentContractState.get(agentId)?.contract;
 }
 //@ chunk-7jmp8260.js:2037-2070 placement
-var agentMissState = identity(new Map(), (e) => e.clear());
+var agentMissState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-7jmp8260.js:2037", () => {
+  agentMissState = identity(new Map(), (state) => state.clear());
+});
 //@ chunk-7jmp8260.js:2070-2099 placement
 /**
  * 记录某代理的未守约原因。
@@ -185,16 +198,16 @@ function setAgentMissState(agentId, toolUseId) {
 /**
  * 取某代理的未守约原因。
  */
-function getAgentMissState(e) {
-  return agentMissState.get(e);
+function getAgentMissState(agentId) {
+  return agentMissState.get(agentId);
 }
 //@ chunk-7jmp8260.js:2131-2202 placement
 /**
  * 代理契约所处阶段：已武装或具体未守约原因。
  */
 function agentContractPhase(childAgentId) {
-  let t = agentContractState.get(childAgentId);
-  return t?.contract === true ? "armed" : t?.miss;
+  let entry = agentContractState.get(childAgentId);
+  return entry?.contract === true ? "armed" : entry?.miss;
 }
 //@ chunk-7jmp8260.js:2202-2317 placement
 function isSendMessageHandbackEnabled() {
@@ -214,10 +227,12 @@ function isAutoHandbackArmed(toolPermissionContext) {
 //@ chunk-7jmp8260.js:2393-2446 placement
 var HANDBAck_DELIVERY_NOTE = `Your final report is delivered through ${SUBAGENTHANDBACK}`;
 //@ chunk-7jmp8260.js:2446-2784 placement
-function buildHandbackInstruction(e) {
+function buildHandbackInstruction(canSendMessage) {
   return (
     `${HANDBAck_DELIVERY_NOTE}: when your work is complete, call ${SUBAGENTHANDBACK}({message: <your full report>}). The call ends your run, so make it your last step. Only a ${SUBAGENTHANDBACK} call reaches your caller as your result; plain text you write at the end is not delivered.` +
-    (e ? ` Do not also send the report with ${SENDMESSAGE}: your caller would get it twice.` : "")
+    (canSendMessage
+      ? ` Do not also send the report with ${SENDMESSAGE}: your caller would get it twice.`
+      : "")
   );
 }
 //@ chunk-7jmp8260.js:2784-2827 placement
@@ -235,22 +250,22 @@ var MAX_HANDBACK_ENFORCE_RETRIES = 3;
 var HANDBACK_REMINDER_HEADER = `<system-reminder>
 ${HANDBAck_DELIVERY_NOTE}`;
 //@ chunk-7jmp8260.js:3047-3171 placement
-function isMetaUserMessageStartingWith(e, t) {
+function isMetaUserMessageStartingWith(message, prefix) {
   return (
-    e.type === "user" &&
-    e.isMeta === true &&
-    typeof e.message.content === "string" &&
-    e.message.content.startsWith(t)
+    message.type === "user" &&
+    message.isMeta === true &&
+    typeof message.message.content === "string" &&
+    message.message.content.startsWith(prefix)
   );
 }
 //@ chunk-7jmp8260.js:3171-3316 placement
 function findLatestHandbackReminder(initialMessages) {
   for (let j = initialMessages.length - 1; j >= 0; j--) {
-    let n = initialMessages[j];
-    if (isMetaUserMessageStartingWith(n, HANDBACK_REMINDER_HEADER)) return "reminder";
+    let message = initialMessages[j];
+    if (isMetaUserMessageStartingWith(message, HANDBACK_REMINDER_HEADER)) return "reminder";
     if (
       isMetaUserMessageStartingWith(
-        n,
+        message,
         `<system-reminder>
 ${HANDBACK_UNAVAILABLE_NOTE}`,
       )
@@ -263,16 +278,16 @@ ${HANDBACK_UNAVAILABLE_NOTE}`,
 /**
  * 取交接契约文本。
  */
-function handbackContractOf(e) {
-  return getSelectableBackgroundTasks(e)?.handbackContract;
+function handbackContractOf(task) {
+  return getSelectableBackgroundTasks(task)?.handbackContract;
 }
 //@ chunk-7jmp8260.js:3364-3420 placement = getSelectableBackgroundTasks (1)
-function getSelectableBackgroundTasks(e) {
-  return e?.type === "local_agent" ? e : undefined;
+function getSelectableBackgroundTasks(task) {
+  return task?.type === "local_agent" ? task : undefined;
 }
 //@ chunk-7jmp8260.js:3420-3680 placement
 function resolveHandbackRecipient({ contract, registered, callerInbox, resumerInbox, inboxReadable }) {
-  let o =
+  let recipient =
     registered.recipient !== undefined && inboxReadable(registered.recipient)
       ? registered.recipient
       : registered.recipient === undefined && inboxReadable(callerInbox)
@@ -280,33 +295,33 @@ function resolveHandbackRecipient({ contract, registered, callerInbox, resumerIn
         : resumerInbox;
   return {
     handbackContract: contract ? true : undefined,
-    handbackRecipient: contract ? o : registered.recipient,
+    handbackRecipient: contract ? recipient : registered.recipient,
     handbackBounces: 0,
   };
 }
 //@ chunk-7jmp8260.js:3680-3863 placement
-function getPendingHandbackReport(e, t) {
-  let selectableBackgroundTasks = getSelectableBackgroundTasks(e);
+function getPendingHandbackReport(task, agentId) {
+  let selectableBackgroundTasks = getSelectableBackgroundTasks(task);
   if (selectableBackgroundTasks?.handbackContract !== true) return;
   let { handbackRecipient } = selectableBackgroundTasks;
   if (handbackRecipient === undefined) return;
-  let r = handbackForRecipient(t, handbackRecipient);
-  return r === undefined
+  let handback = handbackForRecipient(agentId, handbackRecipient);
+  return handback === undefined
     ? []
     : [
         {
-          ...r,
+          ...handback,
           report: selectableBackgroundTasks.handbackReport,
         },
       ];
 }
 //@ chunk-7jmp8260.js:3863-4242 placement
-function describeDeliveredReport(e, t) {
-  let n = escapeXmlText(t);
-  return e
-    ? `This agent's report was delivered to you as a message from "${n}" (its ${SUBAGENTHANDBACK} call), under a SECURITY WARNING from auto mode \u2014 the warning above the report says why. Read it there; it is not repeated here.
+function describeDeliveredReport(flagged, senderName) {
+  let escapedName = escapeXmlText(senderName);
+  return flagged
+    ? `This agent's report was delivered to you as a message from "${escapedName}" (its ${SUBAGENTHANDBACK} call), under a SECURITY WARNING from auto mode \u2014 the warning above the report says why. Read it there; it is not repeated here.
 `
-    : `This agent's report was delivered to you as a message from "${n}" (its ${SUBAGENTHANDBACK} call). Read it there; it is not repeated here.
+    : `This agent's report was delivered to you as a message from "${escapedName}" (its ${SUBAGENTHANDBACK} call). Read it there; it is not repeated here.
 `;
 }
 //@ chunk-7jmp8260.js:4242-4389 placement
@@ -316,8 +331,8 @@ var HANDBACK_PENDING_NOTE = `This agent has not reported yet: it is waiting on i
 /**
  * 子代理未交回报告时给模型的说明与后续建议。
  */
-function missingHandbackReportText(e) {
-  return `${NO_HANDBACK_REPORT_TEXT} Its unsent text is not shown.${e ? ASK_FOR_REPORT_HINT : ""}
+function missingHandbackReportText(canAskForReport) {
+  return `${NO_HANDBACK_REPORT_TEXT} Its unsent text is not shown.${canAskForReport ? ASK_FOR_REPORT_HINT : ""}
 `;
 }
 //@ chunk-7jmp8260.js:4462-4574 placement
@@ -327,68 +342,69 @@ function isHandbackProvenanceEnabled() {
   return getFeatureValue_CACHED_MAY_BE_STALE("tengu_melodic_wolf", true);
 }
 //@ chunk-7jmp8260.js:4574-4734 placement
-function hashTextSections(e) {
+function hashTextSections(sections) {
   let hash = createHash("sha256");
-  hash.update(String(e.length));
-  for (let n of e) {
-    hash.update(":" + n.text.length + ":");
-    hash.update(n.text);
+  hash.update(String(sections.length));
+  for (let section of sections) {
+    hash.update(":" + section.text.length + ":");
+    hash.update(section.text);
   }
   return hash.digest("hex").slice(0, 16);
 }
 //@ chunk-7jmp8260.js:4734-5068 placement
-function logHandbackSections(e, t, n, a) {
-  let r = e.length;
-  let o = t ?? 0;
-  let s = n ?? 0;
+function logHandbackSections(sections, noteCount, tailCount, expectedHash) {
+  let total = sections.length;
+  let notesLength = noteCount ?? 0;
+  let tailLength = tailCount ?? 0;
   if (!(
-    Number.isInteger(o) &&
-    Number.isInteger(s) &&
-    o >= 0 &&
-    s >= 0 &&
-    o + s <= r &&
-    (o + s === 0 || (a !== undefined && a === hashTextSections(e)))
+    Number.isInteger(notesLength) &&
+    Number.isInteger(tailLength) &&
+    notesLength >= 0 &&
+    tailLength >= 0 &&
+    notesLength + tailLength <= total &&
+    (notesLength + tailLength === 0 ||
+      (expectedHash !== undefined && expectedHash === hashTextSections(sections)))
   )) {
-    if (o + s !== 0)
+    if (notesLength + tailLength !== 0)
       logFeatureSad("melodic_wolf", "sections_degraded", {
-        hashMismatch: a !== hashTextSections(e),
+        hashMismatch: expectedHash !== hashTextSections(sections),
       });
     return {
       notes: [],
-      body: e.slice(),
+      body: sections.slice(),
       tail: [],
     };
   }
   return {
-    notes: e.slice(0, o),
-    body: e.slice(o, r - s),
-    tail: e.slice(r - s),
+    notes: sections.slice(0, notesLength),
+    body: sections.slice(notesLength, total - tailLength),
+    tail: sections.slice(total - tailLength),
   };
 }
 //@ chunk-7jmp8260.js:5068-5400 placement
 /**
  * 组装子代理交回结果文本：正文为空但有附注/尾注且启用 handback 时只给附注；否则附注、尾注加正文（无文本时 "(no text output)"），附注与正文分别按溯源格式包装。
  */
-function buildHandbackResultContent(e, t, n, harnessSectionHash) {
-  let { notes, body, tail } = logHandbackSections(e, t, n, harnessSectionHash);
+function buildHandbackResultContent(sections, noteCount, tailCount, expectedHash) {
+  let { notes, body, tail } = logHandbackSections(sections, noteCount, tailCount, expectedHash);
   if (body.length === 0 && notes.length + tail.length > 0 && isSendMessageHandbackEnabled())
     return [
       {
         type: "text",
-        text: [...notes, ...tail].map((d) => indentLines(d.text)).join(`
+        text: [...notes, ...tail].map((section) => indentLines(section.text)).join(`
 `),
       },
     ];
-  let l =
-    body.map((d) => d.text).join(`
+  let bodyText =
+    body.map((section) => section.text).join(`
 `) || "(no text output)";
   return [
     {
       type: "text",
       text: [
         ...notes.map((note) => indentLines(note.text)),
-        ...tail.map((d) => indentLines(d.text)),
-        handbackReportText(l),
+        ...tail.map((section) => indentLines(section.text)),
+        handbackReportText(bodyText),
       ].join(`
 `),
     },

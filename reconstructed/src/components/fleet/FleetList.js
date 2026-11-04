@@ -9,7 +9,7 @@
  * attribution: placement 25
  */
 import { basename } from "path";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { getLogoDisplayData, truncatePathForDisplay } from "../../utils/logoV2Utils.js";
 import { tildify } from "../../utils/path.js";
@@ -26,7 +26,12 @@ import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { selectSessionModel, selectSessionEffort, selectSessionFastMode } from "./fleetActions.js";
 import { resolveDispatchDefaults } from "./dispatchDefaults.js";
 import { truncateToWidth, truncateStartToWidth, truncate, formatDuration } from "../../utils/format.js";
-import { init_react_production, R, zt, Kc } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useRef,
+  useLayoutEffect,
+  fragmentTypeExport,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   isFrameRow,
   activityVerb,
@@ -50,7 +55,7 @@ import {
 } from "./FleetRow.js";
 import { getGraphemeSegmenter } from "../../utils/intl.js";
 import { terminalOutcome, IDLE_NEEDS, EARLIER, UNGROUPED } from "../../services/daemon/jobState.js";
-import { BULLET_OPERATOR, BOXED_DIAMOND_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BULLET_OPERATOR, BOXED_DIAMOND_GLYPH } from "../../constants/figures.js";
 import {
   returnFalse_2,
   isTerminalDetail,
@@ -78,7 +83,7 @@ import { DEFAULT_BINDINGS } from "../../keybindings/defaultBindings.js";
  * Agents 视图底部的派发输入区（布局、简化视图、派发默认值、当前目录）。
  */
 function FleetComposer(props) {
-  let me = w(33);
+  let $ = useMemoCache(33);
   let {
     editor,
     layout,
@@ -93,56 +98,59 @@ function FleetComposer(props) {
   let { compactHeader, simpleBuilt, bandCounts, earlierVisible } = layout;
   let { version, cwd } = getLogoDisplayData();
   let { newSession, width, pathOwnRow } = useDispatchWindowDefaults(editor, dispatchDefaults);
-  let ne = !!cwd && targetCwd !== launcherCwd && targetCwd !== canonicalLauncherCwd;
-  let path = ne ? tildify(targetCwd) : cwd;
-  let Je;
-  let le;
-  if (me[0] !== newSession || me[1] !== pathOwnRow || me[2] !== width) {
-    Je = fitDispatchDefaultsLabel(newSession, width);
-    le = pathOwnRow ? width : width - 3 - bunStringWidth(Je);
-    me[0] = newSession;
-    me[1] = pathOwnRow;
-    me[2] = width;
-    me[3] = Je;
-    me[4] = le;
+  let showsTargetPath = !!cwd && targetCwd !== launcherCwd && targetCwd !== canonicalLauncherCwd;
+  let path = showsTargetPath ? tildify(targetCwd) : cwd;
+  let defaultsLabel;
+  let pathWidth;
+  if ($[0] !== newSession || $[1] !== pathOwnRow || $[2] !== width) {
+    defaultsLabel = fitDispatchDefaultsLabel(newSession, width);
+    pathWidth = pathOwnRow ? width : width - 3 - bunStringWidth(defaultsLabel);
+    $[0] = newSession;
+    $[1] = pathOwnRow;
+    $[2] = width;
+    $[3] = defaultsLabel;
+    $[4] = pathWidth;
   } else {
-    Je = me[3];
-    le = me[4];
+    defaultsLabel = $[3];
+    pathWidth = $[4];
   }
-  let Oe = le;
-  let De = truncatePathForDisplay(path, Math.min(bunStringWidth(path), Math.max(Oe, 1)));
-  let we = simpleView && ne;
-  let Re;
-  if (me[5] !== we || me[6] !== De) {
-    Re =
-      De &&
+  let availablePathWidth = pathWidth;
+  let displayPath = truncatePathForDisplay(
+    path,
+    Math.min(bunStringWidth(path), Math.max(availablePathWidth, 1)),
+  );
+  let highlightPath = simpleView && showsTargetPath;
+  let pathElementCached;
+  if ($[5] !== highlightPath || $[6] !== displayPath) {
+    pathElementCached =
+      displayPath &&
       jsxProd_default(Text, {
-        color: we ? "suggestion" : undefined,
-        dimColor: !we,
-        children: De,
+        color: highlightPath ? "suggestion" : undefined,
+        dimColor: !highlightPath,
+        children: displayPath,
       });
-    me[5] = we;
-    me[6] = De;
-    me[7] = Re;
-  } else Re = me[7];
-  let je = Re;
-  let st;
-  if (me[8] !== columns || me[9] !== compactHeader) {
-    st = !compactHeader && columns >= 70 && jsxProd_default(Clawd, {});
-    me[8] = columns;
-    me[9] = compactHeader;
-    me[10] = st;
-  } else st = me[10];
-  let mt;
+    $[5] = highlightPath;
+    $[6] = displayPath;
+    $[7] = pathElementCached;
+  } else pathElementCached = $[7];
+  let pathElement = pathElementCached;
+  let clawdElement;
+  if ($[8] !== columns || $[9] !== compactHeader) {
+    clawdElement = !compactHeader && columns >= 70 && jsxProd_default(Clawd, {});
+    $[8] = columns;
+    $[9] = compactHeader;
+    $[10] = clawdElement;
+  } else clawdElement = $[10];
+  let titleRow;
   if (
-    me[11] !== compactHeader ||
-    me[12] !== je ||
-    me[13] !== Je ||
-    me[14] !== pathOwnRow ||
-    me[15] !== simpleView ||
-    me[16] !== version
+    $[11] !== compactHeader ||
+    $[12] !== pathElement ||
+    $[13] !== defaultsLabel ||
+    $[14] !== pathOwnRow ||
+    $[15] !== simpleView ||
+    $[16] !== version
   ) {
-    mt =
+    titleRow =
       !compactHeader &&
       jsxProd_default_2(Fragment, {
         children: [
@@ -177,27 +185,27 @@ function FleetComposer(props) {
           jsxProd_default_2(Text, {
             dimColor: true,
             wrap: "truncate",
-            children: [Je, !pathOwnRow && je && " \xB7 ", !pathOwnRow && je],
+            children: [defaultsLabel, !pathOwnRow && pathElement && " \xB7 ", !pathOwnRow && pathElement],
           }),
           pathOwnRow &&
-            je &&
+            pathElement &&
             jsxProd_default(Text, {
               wrap: "truncate",
-              children: je,
+              children: pathElement,
             }),
         ],
       });
-    me[11] = compactHeader;
-    me[12] = je;
-    me[13] = Je;
-    me[14] = pathOwnRow;
-    me[15] = simpleView;
-    me[16] = version;
-    me[17] = mt;
-  } else mt = me[17];
-  let Ye;
-  if (me[18] !== bandCounts || me[19] !== earlierVisible || me[20] !== simpleBuilt) {
-    Ye = simpleBuilt
+    $[11] = compactHeader;
+    $[12] = pathElement;
+    $[13] = defaultsLabel;
+    $[14] = pathOwnRow;
+    $[15] = simpleView;
+    $[16] = version;
+    $[17] = titleRow;
+  } else titleRow = $[17];
+  let countsRow;
+  if ($[18] !== bandCounts || $[19] !== earlierVisible || $[20] !== simpleBuilt) {
+    countsRow = simpleBuilt
       ? jsxProd_default(Text, {
           dimColor: true,
           wrap: "truncate",
@@ -221,35 +229,35 @@ function FleetComposer(props) {
             ],
           }),
         });
-    me[18] = bandCounts;
-    me[19] = earlierVisible;
-    me[20] = simpleBuilt;
-    me[21] = Ye;
-  } else Ye = me[21];
-  let Lt;
-  if (me[22] !== mt || me[23] !== Ye) {
-    Lt = jsxProd_default_2(Box, {
+    $[18] = bandCounts;
+    $[19] = earlierVisible;
+    $[20] = simpleBuilt;
+    $[21] = countsRow;
+  } else countsRow = $[21];
+  let headerColumn;
+  if ($[22] !== titleRow || $[23] !== countsRow) {
+    headerColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [mt, Ye],
+      children: [titleRow, countsRow],
     });
-    me[22] = mt;
-    me[23] = Ye;
-    me[24] = Lt;
-  } else Lt = me[24];
-  let dt;
-  if (me[25] !== st || me[26] !== Lt) {
-    dt = jsxProd_default_2(Box, {
+    $[22] = titleRow;
+    $[23] = countsRow;
+    $[24] = headerColumn;
+  } else headerColumn = $[24];
+  let headerRow;
+  if ($[25] !== clawdElement || $[26] !== headerColumn) {
+    headerRow = jsxProd_default_2(Box, {
       gap: 2,
       marginBottom: 1,
-      children: [st, Lt],
+      children: [clawdElement, headerColumn],
     });
-    me[25] = st;
-    me[26] = Lt;
-    me[27] = dt;
-  } else dt = me[27];
-  let Dt;
-  if (me[28] !== originJobId) {
-    Dt =
+    $[25] = clawdElement;
+    $[26] = headerColumn;
+    $[27] = headerRow;
+  } else headerRow = $[27];
+  let originNotice;
+  if ($[28] !== originJobId) {
+    originNotice =
       originJobId !== undefined &&
       jsxProd_default(Box, {
         marginBottom: 1,
@@ -259,33 +267,33 @@ function FleetComposer(props) {
             "Your conversation moved to the background \u2014 enter opens it \xB7 esc returns to it \xB7 ctrl+c twice quits",
         }),
       });
-    me[28] = originJobId;
-    me[29] = Dt;
-  } else Dt = me[29];
-  let eo;
-  if (me[30] !== dt || me[31] !== Dt) {
-    eo = jsxProd_default_2(Fragment, {
-      children: [dt, Dt],
+    $[28] = originJobId;
+    $[29] = originNotice;
+  } else originNotice = $[29];
+  let composerHeader;
+  if ($[30] !== headerRow || $[31] !== originNotice) {
+    composerHeader = jsxProd_default_2(Fragment, {
+      children: [headerRow, originNotice],
     });
-    me[30] = dt;
-    me[31] = Dt;
-    me[32] = eo;
-  } else eo = me[32];
-  return eo;
+    $[30] = headerRow;
+    $[31] = originNotice;
+    $[32] = composerHeader;
+  } else composerHeader = $[32];
+  return composerHeader;
 }
 //@ chunk-93kwxas0.js:102493-102976 placement
 /**
  * 计算派发窗口（模型、effort、快速模式）对新会话的有效默认值。
  */
-function useDispatchWindowDefaults(h, launch) {
-  let A = w(12);
+function useDispatchWindowDefaults(store, launch) {
+  let $ = useMemoCache(12);
   let { columns } = useTerminalSize();
-  let model = useStoreSelector(h, selectSessionModel);
-  let effort = useStoreSelector(h, selectSessionEffort);
-  let fastMode = useStoreSelector(h, selectSessionFastMode);
-  let L;
-  if (A[0] !== launch || A[1] !== effort || A[2] !== fastMode || A[3] !== model) {
-    L = resolveDispatchDefaults({
+  let model = useStoreSelector(store, selectSessionModel);
+  let effort = useStoreSelector(store, selectSessionEffort);
+  let fastMode = useStoreSelector(store, selectSessionFastMode);
+  let resolvedDefaults;
+  if ($[0] !== launch || $[1] !== effort || $[2] !== fastMode || $[3] !== model) {
+    resolvedDefaults = resolveDispatchDefaults({
       launch,
       window: {
         model,
@@ -293,56 +301,61 @@ function useDispatchWindowDefaults(h, launch) {
         fastMode,
       },
     });
-    A[0] = launch;
-    A[1] = effort;
-    A[2] = fastMode;
-    A[3] = model;
-    A[4] = L;
-  } else L = A[4];
-  let V = L;
-  let D = columns - (columns >= 70 ? 11 : 0);
-  let U;
-  if (A[5] !== V || A[6] !== D) {
+    $[0] = launch;
+    $[1] = effort;
+    $[2] = fastMode;
+    $[3] = model;
+    $[4] = resolvedDefaults;
+  } else resolvedDefaults = $[4];
+  let sessionDefaults = resolvedDefaults;
+  let availableWidth = columns - (columns >= 70 ? 11 : 0);
+  let cwdNeedsOwnRow;
+  if ($[5] !== sessionDefaults || $[6] !== availableWidth) {
     let cwd = getLogoDisplayData().cwd;
-    U = !!cwd && bunStringWidth(formatDispatchDefaultsLabel(V)) + 3 + bunStringWidth(cwd) > D;
-    A[5] = V;
-    A[6] = D;
-    A[7] = U;
-  } else U = A[7];
-  let pathOwnRow = U;
-  let K;
-  if (A[8] !== V || A[9] !== pathOwnRow || A[10] !== D) {
-    K = {
-      newSession: V,
-      width: D,
+    cwdNeedsOwnRow =
+      !!cwd &&
+      bunStringWidth(formatDispatchDefaultsLabel(sessionDefaults)) + 3 + bunStringWidth(cwd) > availableWidth;
+    $[5] = sessionDefaults;
+    $[6] = availableWidth;
+    $[7] = cwdNeedsOwnRow;
+  } else cwdNeedsOwnRow = $[7];
+  let pathOwnRow = cwdNeedsOwnRow;
+  let defaultsLayout;
+  if ($[8] !== sessionDefaults || $[9] !== pathOwnRow || $[10] !== availableWidth) {
+    defaultsLayout = {
+      newSession: sessionDefaults,
+      width: availableWidth,
       pathOwnRow,
     };
-    A[8] = V;
-    A[9] = pathOwnRow;
-    A[10] = D;
-    A[11] = K;
-  } else K = A[11];
-  return K;
+    $[8] = sessionDefaults;
+    $[9] = pathOwnRow;
+    $[10] = availableWidth;
+    $[11] = defaultsLayout;
+  } else defaultsLayout = $[11];
+  return defaultsLayout;
 }
 //@ chunk-93kwxas0.js:102976-103108 placement
 /**
  * “New sessions: 模型 · effort · ultracode” 标签。
  */
-function formatDispatchDefaultsLabel(h) {
-  let E = h.effort ? ` \xB7 ${h.effort} effort` : "";
-  return `New sessions: ${h.model}${E}${h.ultracode ? " \xB7 ultracode" : ""}`;
+function formatDispatchDefaultsLabel(newSession) {
+  let effortSuffix = newSession.effort ? ` \xB7 ${newSession.effort} effort` : "";
+  return `New sessions: ${newSession.model}${effortSuffix}${newSession.ultracode ? " \xB7 ultracode" : ""}`;
 }
 //@ chunk-93kwxas0.js:103108-103288 placement
 /**
  * 按可用宽度依次尝试完整/缩短的默认值标签，都放不下时截断模型名。
  */
 function fitDispatchDefaultsLabel(newSession, width) {
-  let k = newSession.effort ? ` \xB7 ${newSession.effort} effort` : "";
-  let C = newSession.ultracode ? " \xB7 ultracode" : "";
+  let effortSuffix = newSession.effort ? ` \xB7 ${newSession.effort} effort` : "";
+  let ultracodeSuffix = newSession.ultracode ? " \xB7 ultracode" : "";
   return (
-    [formatDispatchDefaultsLabel(newSession), newSession.model + k + C, newSession.model + C].find(
-      (T) => bunStringWidth(T) <= width,
-    ) ?? truncateToWidth(newSession.model, Math.max(width, 1))
+    [
+      formatDispatchDefaultsLabel(newSession),
+      newSession.model + effortSuffix + ultracodeSuffix,
+      newSession.model + ultracodeSuffix,
+    ].find((candidate) => bunStringWidth(candidate) <= width) ??
+    truncateToWidth(newSession.model, Math.max(width, 1))
   );
 }
 //@ chunk-93kwxas0.js:103288-103292 placement
@@ -350,12 +363,12 @@ init_react_production();
 //@ chunk-93kwxas0.js:103292-103296 placement
 init_react_production();
 //@ chunk-93kwxas0.js:103329-103359 placement
-function isNotFrameRow(rt) {
-  return !isFrameRow(rt);
+function isNotFrameRow(row) {
+  return !isFrameRow(row);
 }
 //@ chunk-93kwxas0.js:103359-103400 placement
-function hasColor(Qe) {
-  return Qe.color !== undefined;
+function hasColor(row) {
+  return row.color !== undefined;
 }
 //@ chunk-93kwxas0.js:103400-103430 placement
 var RESERVED_NAME_SUFFIX_WIDTH = bunStringWidth(" (reserved name)");
@@ -363,9 +376,9 @@ var RESERVED_NAME_SUFFIX_WIDTH = bunStringWidth(" (reserved name)");
 /**
  * 在文本中绘制光标（反显字符）。
  */
-function renderCursorText(draft, cursor, k, C = false) {
-  if (C && draft) {
-    let children = truncateStartToWidth(draft, Math.max(k - 1, 1));
+function renderCursorText(draft, cursor, width, selected = false) {
+  if (selected && draft) {
+    let children = truncateStartToWidth(draft, Math.max(width - 1, 1));
     return jsxProd_default_2(Fragment, {
       children: [
         jsxProd_default(Text, {
@@ -379,16 +392,19 @@ function renderCursorText(draft, cursor, k, C = false) {
       ],
     });
   }
-  let { length: x, length: T } = draft;
+  let { length: charStart, length: charEnd } = draft;
   for (let { segment, index } of getGraphemeSegmenter().segment(draft))
     if (index + segment.length > cursor) {
-      x = index;
-      T = index + segment.length;
+      charStart = index;
+      charEnd = index + segment.length;
       break;
     }
-  let A = draft.slice(x, T) || " ";
-  let sliced = draft.slice(T);
-  let children = truncateStartToWidth(draft.slice(0, x), k - bunStringWidth(A) - (sliced ? 1 : 0));
+  let cursorChar = draft.slice(charStart, charEnd) || " ";
+  let sliced = draft.slice(charEnd);
+  let children = truncateStartToWidth(
+    draft.slice(0, charStart),
+    width - bunStringWidth(cursorChar) - (sliced ? 1 : 0),
+  );
   return jsxProd_default_2(Fragment, {
     children: [
       jsxProd_default(Text, {
@@ -396,7 +412,7 @@ function renderCursorText(draft, cursor, k, C = false) {
       }),
       jsxProd_default(Text, {
         inverse: true,
-        children: A,
+        children: cursorChar,
       }),
       jsxProd_default(Text, {
         children: sliced,
@@ -409,7 +425,7 @@ function renderCursorText(draft, cursor, k, C = false) {
  * Agents 视图中一个会话（job）行：状态、详情、子行、重命名/分组/删除状态。
  */
 function FleetJobRow(props) {
-  let je = w(67);
+  let $ = useMemoCache(67);
   let {
     job,
     isFocused,
@@ -429,62 +445,66 @@ function FleetJobRow(props) {
     attaching,
     heldInTerminal,
   } = props;
-  let se = terminalOutcome(job.state.state);
-  let ne = se && job.state.tempo !== "active" ? deleteRefused : undefined;
-  let ae = cols.detail - bunStringWidth("group: ") - RESERVED_NAME_SUFFIX_WIDTH >= 24;
-  let me = activityVerb(job.activity, job.state.tempo, status, se);
-  let { color, dim } = me;
-  let Oe = status === "busy" ? color : pickHighestPriorityColor(color, childRows);
-  let De = Oe === color && dim;
-  let we =
+  let outcome = terminalOutcome(job.state.state);
+  let deleteRefusedNotice = outcome && job.state.tempo !== "active" ? deleteRefused : undefined;
+  let hasRoomForSuffix = cols.detail - bunStringWidth("group: ") - RESERVED_NAME_SUFFIX_WIDTH >= 24;
+  let activity = activityVerb(job.activity, job.state.tempo, status, outcome);
+  let { color, dim } = activity;
+  let rowColor = status === "busy" ? color : pickHighestPriorityColor(color, childRows);
+  let rowDim = rowColor === color && dim;
+  let glyph =
     attaching === "armed"
       ? undefined
       : deleteArmed?.justKilled
         ? BULLET_OPERATOR
         : attaching
           ? undefined
-          : jobRowGlyph(job.state, se, status);
-  let Re = job.state.output?.result;
-  let st;
-  if (je[0] !== Re || je[1] !== job.state) {
-    st = Re && !returnFalse_2(job.state) ? toOpenableUrl(Re) : null;
-    je[0] = Re;
-    je[1] = job.state;
-    je[2] = st;
-  } else st = je[2];
-  let mt = st;
-  let Ye = mt ? undefined : Re;
-  let Lt = se !== "success" ? logTail || undefined : undefined;
-  let dt =
+          : jobRowGlyph(job.state, outcome, status);
+  let outputResult = job.state.output?.result;
+  let resultUrl;
+  if ($[0] !== outputResult || $[1] !== job.state) {
+    resultUrl = outputResult && !returnFalse_2(job.state) ? toOpenableUrl(outputResult) : null;
+    $[0] = outputResult;
+    $[1] = job.state;
+    $[2] = resultUrl;
+  } else resultUrl = $[2];
+  let openUrl = resultUrl;
+  let plainResult = openUrl ? undefined : outputResult;
+  let activeLogTail = outcome !== "success" ? logTail || undefined : undefined;
+  let previewDetail =
     isOrigin && isFocused
       ? job.state.tempo === "blocked"
         ? job.state.needs
-        : se === "failure"
+        : outcome === "failure"
           ? job.state.detail
           : undefined
       : undefined;
-  let Dt;
-  if (je[3] !== job.state.detail) {
-    Dt = isTerminalDetail(job.state.detail);
-    je[3] = job.state.detail;
-    je[4] = Dt;
-  } else Dt = je[4];
-  let eo = Dt;
+  let cachedDetailIsTerminal;
+  if ($[3] !== job.state.detail) {
+    cachedDetailIsTerminal = isTerminalDetail(job.state.detail);
+    $[3] = job.state.detail;
+    $[4] = cachedDetailIsTerminal;
+  } else cachedDetailIsTerminal = $[4];
+  let detailIsTerminal = cachedDetailIsTerminal;
   let detail =
-    isOrigin && job.state.tempo === "blocked" && job.state.needs === IDLE_NEEDS && job.state.detail && !eo
+    isOrigin &&
+    job.state.tempo === "blocked" &&
+    job.state.needs === IDLE_NEEDS &&
+    job.state.detail &&
+    !detailIsTerminal
       ? job.state.detail
       : undefined;
-  let ke =
+  let previewText =
     isOrigin && isFocused
-      ? dt
-        ? dt === IDLE_NEEDS
+      ? previewDetail
+        ? previewDetail === IDLE_NEEDS
           ? detail
             ? jobPreviewText(job.state, detail)
             : basename(job.state.cwd) || job.state.cwd
-          : jobPreviewText(job.state, dt)
+          : jobPreviewText(job.state, previewDetail)
         : jobPreviewText(job.state, job.state.detail ?? "")
-      : se === "success"
-        ? jobPreviewText(job.state, Ye || job.state.detail)
+      : outcome === "success"
+        ? jobPreviewText(job.state, plainResult || job.state.detail)
         : jobPreviewText(
             job.state,
             detail ||
@@ -494,78 +514,80 @@ function FleetJobRow(props) {
                 job.state.needs === IDLE_NEEDS &&
                 "space to send it a prompt") ||
               (job.state.tempo === "blocked" && job.state.needs) ||
-              (!eo && job.state.detail) ||
+              (!detailIsTerminal && job.state.detail) ||
               "",
           ) ||
-          (job.state.tempo === "active" && stripJobPreviewText(Lt ?? "")) ||
+          (job.state.tempo === "active" && stripJobPreviewText(activeLogTail ?? "")) ||
           stripJobPreviewText(job.state.detail);
-  let Ge;
-  if (je[5] !== isOrigin || je[6] !== job.state) {
-    Ge = getJobTitle(job.state, isOrigin);
-    je[5] = isOrigin;
-    je[6] = job.state;
-    je[7] = Ge;
-  } else Ge = je[7];
-  let yt = Ge;
-  let Bt = isAgentColorName(job.state.color) ? AGENT_COLOR_TO_THEME_COLOR[job.state.color] : undefined;
-  let autoTitle = useAutoTitle(yt, !!job.state.name);
+  let rawTitle;
+  if ($[5] !== isOrigin || $[6] !== job.state) {
+    rawTitle = getJobTitle(job.state, isOrigin);
+    $[5] = isOrigin;
+    $[6] = job.state;
+    $[7] = rawTitle;
+  } else rawTitle = $[7];
+  let jobTitle = rawTitle;
+  let titleColor = isAgentColorName(job.state.color)
+    ? AGENT_COLOR_TO_THEME_COLOR[job.state.color]
+    : undefined;
+  let autoTitle = useAutoTitle(jobTitle, !!job.state.name);
   let filtered = childRows.filter(isFrameRow);
   let filtered_2 = childRows.filter(isNotFrameRow);
-  let Ot = filtered_2.find(hasColor) ?? filtered_2.at(-1) ?? filtered.at(-1);
-  let Yt = isFocused ? "selected, " : "";
-  let Ue = attaching
-    ? `${Yt}opening:`
+  let prRow = filtered_2.find(hasColor) ?? filtered_2.at(-1) ?? filtered.at(-1);
+  let selectedPrefix = isFocused ? "selected, " : "";
+  let ariaLabel = attaching
+    ? `${selectedPrefix}opening:`
     : deleteArmed?.justKilled
-      ? `${Yt}stopped:`
-      : Oe !== color
-        ? `${Yt}needs attention:`
-        : jobRowAriaLabel(job.activity, job.state.tempo, status, se, isFocused);
-  const Qt = Box;
+      ? `${selectedPrefix}stopped:`
+      : rowColor !== color
+        ? `${selectedPrefix}needs attention:`
+        : jobRowAriaLabel(job.activity, job.state.tempo, status, outcome, isFocused);
+  const rowContainer = Box;
   const width = cols.label + 2;
   const dimColor = !isFocused && !isOrigin;
-  const dimColor_2 = De || (Oe === undefined && !isFocused);
+  const dimColor_2 = rowDim || (rowColor === undefined && !isFocused);
   let children;
-  if (je[8] !== we) {
-    children = we ?? jsxProd_default(useFleetSpinnerFrame, {});
-    je[8] = we;
-    je[9] = children;
-  } else children = je[9];
-  let Vt;
-  if (je[10] !== Oe || je[11] !== Ue || je[12] !== dimColor_2 || je[13] !== children) {
-    Vt = jsxProd_default(Text, {
-      "aria-label": Ue,
-      color: Oe,
+  if ($[8] !== glyph) {
+    children = glyph ?? jsxProd_default(useFleetSpinnerFrame, {});
+    $[8] = glyph;
+    $[9] = children;
+  } else children = $[9];
+  let verbText;
+  if ($[10] !== rowColor || $[11] !== ariaLabel || $[12] !== dimColor_2 || $[13] !== children) {
+    verbText = jsxProd_default(Text, {
+      "aria-label": ariaLabel,
+      color: rowColor,
       dimColor: dimColor_2,
       children,
     });
-    je[10] = Oe;
-    je[11] = Ue;
-    je[12] = dimColor_2;
-    je[13] = children;
-    je[14] = Vt;
-  } else Vt = je[14];
+    $[10] = rowColor;
+    $[11] = ariaLabel;
+    $[12] = dimColor_2;
+    $[13] = children;
+    $[14] = verbText;
+  } else verbText = $[14];
   let children_2;
   if (
-    je[15] !== cols.label ||
-    je[16] !== mt ||
-    je[17] !== isFocused ||
-    je[18] !== isOrigin ||
-    je[19] !== yt ||
-    je[20] !== renaming ||
-    je[21] !== autoTitle ||
-    je[22] !== Bt
+    $[15] !== cols.label ||
+    $[16] !== openUrl ||
+    $[17] !== isFocused ||
+    $[18] !== isOrigin ||
+    $[19] !== jobTitle ||
+    $[20] !== renaming ||
+    $[21] !== autoTitle ||
+    $[22] !== titleColor
   ) {
     children_2 =
-      Bt && !renaming
+      titleColor && !renaming
         ? jsxProd_default(TagTabs, {
-            color: Bt,
+            color: titleColor,
             bold: isFocused,
-            children: mt
+            children: openUrl
               ? jsxProd_default(Link, {
-                  url: mt,
-                  children: yt,
+                  url: openUrl,
+                  children: jobTitle,
                 })
-              : yt,
+              : jobTitle,
           })
         : renaming
           ? renderCursorText(renaming.draft, renaming.cursor, cols.label)
@@ -582,71 +604,71 @@ function FleetJobRow(props) {
                   }),
                 ],
               })
-            : mt
+            : openUrl
               ? jsxProd_default(Link, {
-                  url: mt,
-                  children: yt,
+                  url: openUrl,
+                  children: jobTitle,
                 })
-              : yt;
-    je[15] = cols.label;
-    je[16] = mt;
-    je[17] = isFocused;
-    je[18] = isOrigin;
-    je[19] = yt;
-    je[20] = renaming;
-    je[21] = autoTitle;
-    je[22] = Bt;
-    je[23] = children_2;
-  } else children_2 = je[23];
-  let gt;
-  if (je[24] !== isOrigin || je[25] !== children_2) {
-    gt = jsxProd_default(Text, {
+              : jobTitle;
+    $[15] = cols.label;
+    $[16] = openUrl;
+    $[17] = isFocused;
+    $[18] = isOrigin;
+    $[19] = jobTitle;
+    $[20] = renaming;
+    $[21] = autoTitle;
+    $[22] = titleColor;
+    $[23] = children_2;
+  } else children_2 = $[23];
+  let titleText;
+  if ($[24] !== isOrigin || $[25] !== children_2) {
+    titleText = jsxProd_default(Text, {
       bold: isOrigin,
       children: children_2,
     });
-    je[24] = isOrigin;
-    je[25] = children_2;
-    je[26] = gt;
-  } else gt = je[26];
+    $[24] = isOrigin;
+    $[25] = children_2;
+    $[26] = titleText;
+  } else titleText = $[26];
   let children_3;
-  if (je[27] !== focusFg || je[28] !== gt || je[29] !== dimColor || je[30] !== Vt) {
+  if ($[27] !== focusFg || $[28] !== titleText || $[29] !== dimColor || $[30] !== verbText) {
     children_3 = jsxProd_default_2(Text, {
       color: focusFg,
       dimColor,
       wrap: "truncate",
-      children: [Vt, " ", gt],
+      children: [verbText, " ", titleText],
     });
-    je[27] = focusFg;
-    je[28] = gt;
-    je[29] = dimColor;
-    je[30] = Vt;
-    je[31] = children_3;
-  } else children_3 = je[31];
-  let $e;
-  if (je[32] !== children_3 || je[33] !== width) {
-    $e = jsxProd_default(Box, {
+    $[27] = focusFg;
+    $[28] = titleText;
+    $[29] = dimColor;
+    $[30] = verbText;
+    $[31] = children_3;
+  } else children_3 = $[31];
+  let labelBox;
+  if ($[32] !== children_3 || $[33] !== width) {
+    labelBox = jsxProd_default(Box, {
       width,
       flexShrink: 0,
       children: children_3,
     });
-    je[32] = children_3;
-    je[33] = width;
-    je[34] = $e;
-  } else $e = je[34];
-  let ht;
+    $[32] = children_3;
+    $[33] = width;
+    $[34] = labelBox;
+  } else labelBox = $[34];
+  let detailText;
   if (
-    je[35] !== attaching ||
-    je[36] !== cols.detail ||
-    je[37] !== deleteArmed ||
-    je[38] !== ne ||
-    je[39] !== groupEditing ||
-    je[40] !== ae ||
-    je[41] !== heldInTerminal ||
-    je[42] !== ke ||
-    je[43] !== showVerb ||
-    je[44] !== me
+    $[35] !== attaching ||
+    $[36] !== cols.detail ||
+    $[37] !== deleteArmed ||
+    $[38] !== deleteRefusedNotice ||
+    $[39] !== groupEditing ||
+    $[40] !== hasRoomForSuffix ||
+    $[41] !== heldInTerminal ||
+    $[42] !== previewText ||
+    $[43] !== showVerb ||
+    $[44] !== activity
   ) {
-    ht = groupEditing
+    detailText = groupEditing
       ? jsxProd_default_2(Text, {
           wrap: "truncate",
           children: [
@@ -657,7 +679,10 @@ function FleetJobRow(props) {
             renderCursorText(
               groupEditing.draft,
               groupEditing.cursor,
-              Math.max(cols.detail - bunStringWidth("group: ") - (ae ? RESERVED_NAME_SUFFIX_WIDTH : 0), 8),
+              Math.max(
+                cols.detail - bunStringWidth("group: ") - (hasRoomForSuffix ? RESERVED_NAME_SUFFIX_WIDTH : 0),
+                8,
+              ),
               groupEditing.selected,
             ),
             groupEditing.reserved
@@ -665,7 +690,7 @@ function FleetJobRow(props) {
                   color: "error",
                   children: " (reserved name)",
                 })
-              : !ae
+              : !hasRoomForSuffix
                 ? null
                 : groupEditing.isNew
                   ? jsxProd_default(Text, {
@@ -701,7 +726,7 @@ function FleetJobRow(props) {
                   ? "stopped \xB7 ctrl+x again to delete"
                   : "ctrl+x again to delete",
             })
-          : ne
+          : deleteRefusedNotice
             ? jsxProd_default_2(Text, {
                 wrap: "truncate",
                 children: [
@@ -711,7 +736,7 @@ function FleetJobRow(props) {
                   }),
                   jsxProd_default_2(Text, {
                     dimColor: true,
-                    children: [" \xB7 ", ne],
+                    children: [" \xB7 ", deleteRefusedNotice],
                   }),
                 ],
               })
@@ -743,14 +768,14 @@ function FleetJobRow(props) {
                       children: jsxProd_default_2(Byline, {
                         children: [
                           jsxProd_default(Text, {
-                            color: me.color,
-                            dimColor: me.dim,
-                            children: me.word,
+                            color: activity.color,
+                            dimColor: activity.dim,
+                            children: activity.word,
                           }),
-                          ke &&
+                          previewText &&
                             jsxProd_default(Text, {
                               dimColor: true,
-                              children: ke,
+                              children: previewText,
                             }),
                         ],
                       }),
@@ -758,31 +783,31 @@ function FleetJobRow(props) {
                   : jsxProd_default(Text, {
                       dimColor: true,
                       wrap: "truncate",
-                      children: ke,
+                      children: previewText,
                     });
-    je[35] = attaching;
-    je[36] = cols.detail;
-    je[37] = deleteArmed;
-    je[38] = ne;
-    je[39] = groupEditing;
-    je[40] = ae;
-    je[41] = heldInTerminal;
-    je[42] = ke;
-    je[43] = showVerb;
-    je[44] = me;
-    je[45] = ht;
-  } else ht = je[45];
-  let jt;
+    $[35] = attaching;
+    $[36] = cols.detail;
+    $[37] = deleteArmed;
+    $[38] = deleteRefusedNotice;
+    $[39] = groupEditing;
+    $[40] = hasRoomForSuffix;
+    $[41] = heldInTerminal;
+    $[42] = previewText;
+    $[43] = showVerb;
+    $[44] = activity;
+    $[45] = detailText;
+  } else detailText = $[45];
+  let kickBadge;
   if (
-    je[46] !== attaching ||
-    je[47] !== deleteArmed ||
-    je[48] !== ne ||
-    je[49] !== groupEditing ||
-    je[50] !== heldInTerminal ||
-    je[51] !== loopKickCount
+    $[46] !== attaching ||
+    $[47] !== deleteArmed ||
+    $[48] !== deleteRefusedNotice ||
+    $[49] !== groupEditing ||
+    $[50] !== heldInTerminal ||
+    $[51] !== loopKickCount
   ) {
-    jt =
-      loopKickCount && !groupEditing && !deleteArmed && !ne && !attaching && !heldInTerminal
+    kickBadge =
+      loopKickCount && !groupEditing && !deleteArmed && !deleteRefusedNotice && !attaching && !heldInTerminal
         ? jsxProd_default(Box, {
             flexShrink: 0,
             paddingLeft: 1,
@@ -792,27 +817,27 @@ function FleetJobRow(props) {
             }),
           })
         : null;
-    je[46] = attaching;
-    je[47] = deleteArmed;
-    je[48] = ne;
-    je[49] = groupEditing;
-    je[50] = heldInTerminal;
-    je[51] = loopKickCount;
-    je[52] = jt;
-  } else jt = je[52];
-  let We;
-  if (je[53] !== ht || je[54] !== jt) {
-    We = jsxProd_default_2(Box, {
+    $[46] = attaching;
+    $[47] = deleteArmed;
+    $[48] = deleteRefusedNotice;
+    $[49] = groupEditing;
+    $[50] = heldInTerminal;
+    $[51] = loopKickCount;
+    $[52] = kickBadge;
+  } else kickBadge = $[52];
+  let detailBox;
+  if ($[53] !== detailText || $[54] !== kickBadge) {
+    detailBox = jsxProd_default_2(Box, {
       flexGrow: 1,
       width: 0,
       paddingLeft: 2,
-      children: [ht, jt],
+      children: [detailText, kickBadge],
     });
-    je[53] = ht;
-    je[54] = jt;
-    je[55] = We;
-  } else We = je[55];
-  const Jt =
+    $[53] = detailText;
+    $[54] = kickBadge;
+    $[55] = detailBox;
+  } else detailBox = $[55];
+  const artifactBox =
     cols.artifact > 0
       ? jsxProd_default(Box, {
           width: cols.artifact + 2,
@@ -822,17 +847,17 @@ function FleetJobRow(props) {
           children:
             filtered_2.length > 1
               ? jsxProd_default_2(Text, {
-                  color: Ot?.color,
-                  dimColor: !isFocused || !Ot?.color,
+                  color: prRow?.color,
+                  dimColor: !isFocused || !prRow?.color,
                   children: [filtered_2.length, " PRs"],
                 })
               : filtered_2.length === 1
-                ? Ot?.prNumber !== undefined
+                ? prRow?.prNumber !== undefined
                   ? jsxProd_default(PrBadge, {
-                      number: Ot.prNumber,
-                      url: Ot.row.href,
-                      kind: prKindOf(Ot.row),
-                      color: Ot.color,
+                      number: prRow.prNumber,
+                      url: prRow.row.href,
+                      kind: prKindOf(prRow.row),
+                      color: prRow.color,
                       dimColor: !isFocused,
                       underline: false,
                       hidePrefix: true,
@@ -842,9 +867,9 @@ function FleetJobRow(props) {
                       dimColor: !isFocused,
                       children: "PR",
                     })
-                : Ot
+                : prRow
                   ? jsxProd_default(Link, {
-                      url: Ot.row.href,
+                      url: prRow.row.href,
                       children: jsxProd_default_2(Text, {
                         color: "claude",
                         children: [filtered.length > 1 && `${filtered.length} `, BOXED_DIAMOND_GLYPH],
@@ -855,40 +880,46 @@ function FleetJobRow(props) {
       : null;
   const width_2 = cols.age + 2;
   let children_4;
-  if (je[56] !== age) {
+  if ($[56] !== age) {
     children_4 = jsxProd_default(Text, {
       dimColor: true,
       children: age,
     });
-    je[56] = age;
-    je[57] = children_4;
-  } else children_4 = je[57];
-  let ct;
-  if (je[58] !== width_2 || je[59] !== children_4) {
-    ct = jsxProd_default(Box, {
+    $[56] = age;
+    $[57] = children_4;
+  } else children_4 = $[57];
+  let ageBox;
+  if ($[58] !== width_2 || $[59] !== children_4) {
+    ageBox = jsxProd_default(Box, {
       width: width_2,
       flexShrink: 0,
       paddingLeft: 2,
       justifyContent: "flex-end",
       children: children_4,
     });
-    je[58] = width_2;
-    je[59] = children_4;
-    je[60] = ct;
-  } else ct = je[60];
-  let vt;
-  if (je[61] !== Qt || je[62] !== $e || je[63] !== We || je[64] !== Jt || je[65] !== ct) {
-    vt = jsxProd_default_2(Qt, {
-      children: [$e, We, Jt, ct],
+    $[58] = width_2;
+    $[59] = children_4;
+    $[60] = ageBox;
+  } else ageBox = $[60];
+  let row;
+  if (
+    $[61] !== rowContainer ||
+    $[62] !== labelBox ||
+    $[63] !== detailBox ||
+    $[64] !== artifactBox ||
+    $[65] !== ageBox
+  ) {
+    row = jsxProd_default_2(rowContainer, {
+      children: [labelBox, detailBox, artifactBox, ageBox],
     });
-    je[61] = Qt;
-    je[62] = $e;
-    je[63] = We;
-    je[64] = Jt;
-    je[65] = ct;
-    je[66] = vt;
-  } else vt = je[66];
-  return vt;
+    $[61] = rowContainer;
+    $[62] = labelBox;
+    $[63] = detailBox;
+    $[64] = artifactBox;
+    $[65] = ageBox;
+    $[66] = row;
+  } else row = $[66];
+  return row;
 }
 //@ chunk-93kwxas0.js:109675-109684 placement
 var SESSION_ROW_INDENT = 3;
@@ -897,7 +928,7 @@ var SESSION_ROW_INDENT = 3;
  * 会话行的单行绘制（图标、标签、时长、令牌、状态、展开）。
  */
 function FleetRowLine(props) {
-  let ae = w(27);
+  let $ = useMemoCache(27);
   let {
     icon,
     iconColor,
@@ -918,41 +949,41 @@ function FleetRowLine(props) {
     srLabel,
   } = props;
   const dimColor = iconDim || (iconColor === undefined && !isFocused);
-  const ne = isFocused ? "\u276F" : " ";
-  let me;
+  const pointerGlyph = isFocused ? "\u276F" : " ";
+  let iconText;
   if (
-    ae[0] !== focusBg ||
-    ae[1] !== icon ||
-    ae[2] !== iconColor ||
-    ae[3] !== srLabel ||
-    ae[4] !== dimColor ||
-    ae[5] !== ne
+    $[0] !== focusBg ||
+    $[1] !== icon ||
+    $[2] !== iconColor ||
+    $[3] !== srLabel ||
+    $[4] !== dimColor ||
+    $[5] !== pointerGlyph
   ) {
-    me = jsxProd_default_2(Text, {
+    iconText = jsxProd_default_2(Text, {
       "aria-label": srLabel,
       color: iconColor,
       dimColor,
       backgroundColor: focusBg,
-      children: [ne, icon, "  "],
+      children: [pointerGlyph, icon, "  "],
     });
-    ae[0] = focusBg;
-    ae[1] = icon;
-    ae[2] = iconColor;
-    ae[3] = srLabel;
-    ae[4] = dimColor;
-    ae[5] = ne;
-    ae[6] = me;
-  } else me = ae[6];
-  let Je;
+    $[0] = focusBg;
+    $[1] = icon;
+    $[2] = iconColor;
+    $[3] = srLabel;
+    $[4] = dimColor;
+    $[5] = pointerGlyph;
+    $[6] = iconText;
+  } else iconText = $[6];
+  let labelText;
   if (
-    ae[7] !== focusFg ||
-    ae[8] !== isFocused ||
-    ae[9] !== isOrigin ||
-    ae[10] !== label ||
-    ae[11] !== renameWidth ||
-    ae[12] !== renaming
+    $[7] !== focusFg ||
+    $[8] !== isFocused ||
+    $[9] !== isOrigin ||
+    $[10] !== label ||
+    $[11] !== renameWidth ||
+    $[12] !== renaming
   ) {
-    Je = renaming
+    labelText = renaming
       ? jsxProd_default(Text, {
           children: renderCursorText(renaming.draft, renaming.cursor, renameWidth),
         })
@@ -963,33 +994,33 @@ function FleetRowLine(props) {
           wrap: "truncate",
           children: label,
         });
-    ae[7] = focusFg;
-    ae[8] = isFocused;
-    ae[9] = isOrigin;
-    ae[10] = label;
-    ae[11] = renameWidth;
-    ae[12] = renaming;
-    ae[13] = Je;
-  } else Je = ae[13];
-  let le;
-  if (ae[14] !== me || ae[15] !== Je) {
-    le = jsxProd_default_2(Box, {
-      children: [me, Je],
+    $[7] = focusFg;
+    $[8] = isFocused;
+    $[9] = isOrigin;
+    $[10] = label;
+    $[11] = renameWidth;
+    $[12] = renaming;
+    $[13] = labelText;
+  } else labelText = $[13];
+  let headerBox;
+  if ($[14] !== iconText || $[15] !== labelText) {
+    headerBox = jsxProd_default_2(Box, {
+      children: [iconText, labelText],
     });
-    ae[14] = me;
-    ae[15] = Je;
-    ae[16] = le;
-  } else le = ae[16];
-  let Oe;
+    $[14] = iconText;
+    $[15] = labelText;
+    $[16] = headerBox;
+  } else headerBox = $[16];
+  let detailText;
   if (
-    ae[17] !== age ||
-    ae[18] !== expanded ||
-    ae[19] !== extra ||
-    ae[20] !== refusal ||
-    ae[21] !== state ||
-    ae[22] !== tokens
+    $[17] !== age ||
+    $[18] !== expanded ||
+    $[19] !== extra ||
+    $[20] !== refusal ||
+    $[21] !== state ||
+    $[22] !== tokens
   ) {
-    Oe =
+    detailText =
       (expanded || refusal) &&
       jsxProd_default(Box, {
         paddingLeft: SESSION_ROW_INDENT,
@@ -1017,33 +1048,33 @@ function FleetRowLine(props) {
           }),
         }),
       });
-    ae[17] = age;
-    ae[18] = expanded;
-    ae[19] = extra;
-    ae[20] = refusal;
-    ae[21] = state;
-    ae[22] = tokens;
-    ae[23] = Oe;
-  } else Oe = ae[23];
-  let De;
-  if (ae[24] !== le || ae[25] !== Oe) {
-    De = jsxProd_default_2(Box, {
+    $[17] = age;
+    $[18] = expanded;
+    $[19] = extra;
+    $[20] = refusal;
+    $[21] = state;
+    $[22] = tokens;
+    $[23] = detailText;
+  } else detailText = $[23];
+  let row;
+  if ($[24] !== headerBox || $[25] !== detailText) {
+    row = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [le, Oe],
+      children: [headerBox, detailText],
     });
-    ae[24] = le;
-    ae[25] = Oe;
-    ae[26] = De;
-  } else De = ae[26];
-  return De;
+    $[24] = headerBox;
+    $[25] = detailText;
+    $[26] = row;
+  } else row = $[26];
+  return row;
 }
 //@ chunk-93kwxas0.js:111065-111097 placement
-function selectEditorQuery(lu) {
-  return lu.query;
+function selectEditorQuery(editor) {
+  return editor.query;
 }
 //@ chunk-93kwxas0.js:111097-111131 placement
-function selectHistoryLoading(cu) {
-  return cu.loading;
+function selectHistoryLoading(earlier) {
+  return earlier.loading;
 }
 //@ chunk-93kwxas0.js:111131-111154 placement
 function returnFalse() {
@@ -1052,15 +1083,15 @@ function returnFalse() {
 //@ chunk-93kwxas0.js:111154-111169 placement
 function noopEffect() {}
 //@ chunk-93kwxas0.js:111169-111208 placement
-function isJobRow(pu) {
-  return pu.kind === "job";
+function isJobRow(row) {
+  return row.kind === "job";
 }
 //@ chunk-93kwxas0.js:111208-123201 placement
 /**
  * Agents 视图的滚动列表（分组头、选中、过滤、旧会话行）。
  */
 function FleetRowList(props) {
-  let Nt = w(117);
+  let $ = useMemoCache(117);
   let {
     owners,
     layout,
@@ -1118,164 +1149,164 @@ function FleetRowList(props) {
   } = groupInput;
   let { toggleCollapse, openOrRespawn, openEarlier, openNewSessionRow } = actions;
   let jobId = renaming?.jobId ?? null;
-  let oo;
-  if (Nt[0] !== roster) {
-    oo = (Ce) => roster.liveStatus(Ce);
-    Nt[0] = roster;
-    Nt[1] = oo;
-  } else oo = Nt[1];
-  let Ke = oo;
+  let getLiveStatus;
+  if ($[0] !== roster) {
+    getLiveStatus = (job) => roster.liveStatus(job);
+    $[0] = roster;
+    $[1] = getLiveStatus;
+  } else getLiveStatus = $[1];
+  let liveStatus = getLiveStatus;
   let setError = editor.setError;
-  let Mt;
-  if (Nt[2] !== groupMode) {
-    Mt = (so) => groupCollapseKey(groupMode, so);
-    Nt[2] = groupMode;
-    Nt[3] = Mt;
-  } else Mt = Nt[3];
-  let Jo = Mt;
-  let vo;
-  if (Nt[4] !== groupMode) {
-    vo = (zo) => `header:${groupMode}:${zo}`;
-    Nt[4] = groupMode;
-    Nt[5] = vo;
-  } else vo = Nt[5];
-  let no = vo;
-  let _e = columns >= 120 ? 1 : 0;
-  let It = R(null);
-  let go =
+  let makeCollapseKey;
+  if ($[2] !== groupMode) {
+    makeCollapseKey = (group) => groupCollapseKey(groupMode, group);
+    $[2] = groupMode;
+    $[3] = makeCollapseKey;
+  } else makeCollapseKey = $[3];
+  let collapseKeyOf = makeCollapseKey;
+  let makeHeaderKey;
+  if ($[4] !== groupMode) {
+    makeHeaderKey = (group) => `header:${groupMode}:${group}`;
+    $[4] = groupMode;
+    $[5] = makeHeaderKey;
+  } else makeHeaderKey = $[5];
+  let headerKeyOf = makeHeaderKey;
+  let columnIndent = columns >= 120 ? 1 : 0;
+  let focusedRowRef = useRef(null);
+  let showNoMatches =
     filtered.length === 0 && !!storeSelector && queryIsFilter && (simpleView || earlierVisible.length === 0);
-  R(null);
-  let No = returnFalse;
-  let Qo = R(null);
-  let Po;
-  if (Nt[6] !== suggestions) {
-    Po = suggestions.join(`
+  useRef(null);
+  let isScrollBlocked = returnFalse;
+  let groupPanelRef = useRef(null);
+  let suggestionsText;
+  if ($[6] !== suggestions) {
+    suggestionsText = suggestions.join(`
 `);
-    Nt[6] = suggestions;
-    Nt[7] = Po;
-  } else Po = Nt[7];
-  let xe = Po;
-  let qt;
+    $[6] = suggestions;
+    $[7] = suggestionsText;
+  } else suggestionsText = $[7];
+  let suggestionsKey = suggestionsText;
+  let scrollToFocused;
   if (
-    Nt[8] !== focusIsFromHover ||
-    Nt[9] !== focusedIdx ||
-    Nt[10] !== rows_2 ||
-    Nt[11] !== scrollRef ||
-    Nt[12] !== selection
+    $[8] !== focusIsFromHover ||
+    $[9] !== focusedIdx ||
+    $[10] !== rows_2 ||
+    $[11] !== scrollRef ||
+    $[12] !== selection
   ) {
-    qt = () => {
-      let it = selection.takeRevealAtTop(focusedIdx);
-      if (!It.current || focusIsFromHover) {
+    scrollToFocused = () => {
+      let revealAtTop = selection.takeRevealAtTop(focusedIdx);
+      if (!focusedRowRef.current || focusIsFromHover) {
         return;
       }
       if (focusedIdx === 0) {
         scrollRef.current?.scrollTo(0);
         return;
       }
-      if (No()) {
+      if (isScrollBlocked()) {
         return;
       }
-      let io = rows_2[focusedIdx]?.kind === "header" ? -1 : 0;
-      scrollRef.current?.scrollToElement(It.current, io, {
-        block: it ? "start" : "nearest",
+      let scrollOffset = rows_2[focusedIdx]?.kind === "header" ? -1 : 0;
+      scrollRef.current?.scrollToElement(focusedRowRef.current, scrollOffset, {
+        block: revealAtTop ? "start" : "nearest",
       });
     };
-    Nt[8] = focusIsFromHover;
-    Nt[9] = focusedIdx;
-    Nt[10] = rows_2;
-    Nt[11] = scrollRef;
-    Nt[12] = selection;
-    Nt[13] = qt;
-  } else qt = Nt[13];
-  let bo;
-  if (Nt[14] !== focusIsFromHover || Nt[15] !== focusedIdx || Nt[16] !== rows) {
-    bo = [focusedIdx, focusIsFromHover, rows];
-    Nt[14] = focusIsFromHover;
-    Nt[15] = focusedIdx;
-    Nt[16] = rows;
-    Nt[17] = bo;
-  } else bo = Nt[17];
-  zt(qt, bo);
-  let wo;
-  if (Nt[18] !== endsWithOlderSessionsLine) {
-    wo = [endsWithOlderSessionsLine];
-    Nt[18] = endsWithOlderSessionsLine;
-    Nt[19] = wo;
-  } else wo = Nt[19];
-  zt(noopEffect, wo);
-  let Ho = R(0);
-  let zr;
-  if (Nt[20] !== helpOpen || Nt[21] !== scrollRef) {
-    zr = () => {
-      if (!helpOpen) Ho.current = scrollRef.current?.getViewportHeight() ?? 0;
+    $[8] = focusIsFromHover;
+    $[9] = focusedIdx;
+    $[10] = rows_2;
+    $[11] = scrollRef;
+    $[12] = selection;
+    $[13] = scrollToFocused;
+  } else scrollToFocused = $[13];
+  let scrollDeps;
+  if ($[14] !== focusIsFromHover || $[15] !== focusedIdx || $[16] !== rows) {
+    scrollDeps = [focusedIdx, focusIsFromHover, rows];
+    $[14] = focusIsFromHover;
+    $[15] = focusedIdx;
+    $[16] = rows;
+    $[17] = scrollDeps;
+  } else scrollDeps = $[17];
+  useLayoutEffect(scrollToFocused, scrollDeps);
+  let olderLineDeps;
+  if ($[18] !== endsWithOlderSessionsLine) {
+    olderLineDeps = [endsWithOlderSessionsLine];
+    $[18] = endsWithOlderSessionsLine;
+    $[19] = olderLineDeps;
+  } else olderLineDeps = $[19];
+  useLayoutEffect(noopEffect, olderLineDeps);
+  let viewportHeightRef = useRef(0);
+  let rememberViewportHeight;
+  if ($[20] !== helpOpen || $[21] !== scrollRef) {
+    rememberViewportHeight = () => {
+      if (!helpOpen) viewportHeightRef.current = scrollRef.current?.getViewportHeight() ?? 0;
     };
-    Nt[20] = helpOpen;
-    Nt[21] = scrollRef;
-    Nt[22] = zr;
-  } else zr = Nt[22];
-  zt(zr);
-  let Dn;
-  if (Nt[23] !== helpOpen || Nt[24] !== scrollRef) {
-    Dn = () => {
-      let ir = scrollRef.current;
-      let computedTop = It.current?.yogaNode?.getComputedTop();
-      if (!helpOpen || !ir || !It.current || computedTop === undefined) {
+    $[20] = helpOpen;
+    $[21] = scrollRef;
+    $[22] = rememberViewportHeight;
+  } else rememberViewportHeight = $[22];
+  useLayoutEffect(rememberViewportHeight);
+  let restoreScrollOnHelpClose;
+  if ($[23] !== helpOpen || $[24] !== scrollRef) {
+    restoreScrollOnHelpClose = () => {
+      let viewport = scrollRef.current;
+      let computedTop = focusedRowRef.current?.yogaNode?.getComputedTop();
+      if (!helpOpen || !viewport || !focusedRowRef.current || computedTop === undefined) {
         return;
       }
-      let Qr = computedTop - ir.getScrollTop();
-      if (Qr >= 0 && Qr < Ho.current)
-        ir.scrollToElement(It.current, 0, {
+      let offsetTop = computedTop - viewport.getScrollTop();
+      if (offsetTop >= 0 && offsetTop < viewportHeightRef.current)
+        viewport.scrollToElement(focusedRowRef.current, 0, {
           block: "nearest",
         });
     };
-    Nt[23] = helpOpen;
-    Nt[24] = scrollRef;
-    Nt[25] = Dn;
-  } else Dn = Nt[25];
-  let Xr;
-  if (Nt[26] !== helpOpen) {
-    Xr = [helpOpen];
-    Nt[26] = helpOpen;
-    Nt[27] = Xr;
-  } else Xr = Nt[27];
-  zt(Dn, Xr);
-  let qi;
-  if (Nt[28] !== panelOpen || Nt[29] !== scrollRef) {
-    qi = () => {
-      if (panelOpen && Qo.current)
-        scrollRef.current?.scrollToElement(Qo.current, 0, {
+    $[23] = helpOpen;
+    $[24] = scrollRef;
+    $[25] = restoreScrollOnHelpClose;
+  } else restoreScrollOnHelpClose = $[25];
+  let helpCloseDeps;
+  if ($[26] !== helpOpen) {
+    helpCloseDeps = [helpOpen];
+    $[26] = helpOpen;
+    $[27] = helpCloseDeps;
+  } else helpCloseDeps = $[27];
+  useLayoutEffect(restoreScrollOnHelpClose, helpCloseDeps);
+  let revealGroupPanel;
+  if ($[28] !== panelOpen || $[29] !== scrollRef) {
+    revealGroupPanel = () => {
+      if (panelOpen && groupPanelRef.current)
+        scrollRef.current?.scrollToElement(groupPanelRef.current, 0, {
           block: "nearest",
         });
     };
-    Nt[28] = panelOpen;
-    Nt[29] = scrollRef;
-    Nt[30] = qi;
-  } else qi = Nt[30];
-  let vn;
-  if (Nt[31] !== panelOpen || Nt[32] !== groupPickIdx || Nt[33] !== xe) {
-    vn = [panelOpen, xe, groupPickIdx];
-    Nt[31] = panelOpen;
-    Nt[32] = groupPickIdx;
-    Nt[33] = xe;
-    Nt[34] = vn;
-  } else vn = Nt[34];
-  zt(qi, vn);
-  let Zr;
+    $[28] = panelOpen;
+    $[29] = scrollRef;
+    $[30] = revealGroupPanel;
+  } else revealGroupPanel = $[30];
+  let panelDeps;
+  if ($[31] !== panelOpen || $[32] !== groupPickIdx || $[33] !== suggestionsKey) {
+    panelDeps = [panelOpen, suggestionsKey, groupPickIdx];
+    $[31] = panelOpen;
+    $[32] = groupPickIdx;
+    $[33] = suggestionsKey;
+    $[34] = panelDeps;
+  } else panelDeps = $[34];
+  useLayoutEffect(revealGroupPanel, panelDeps);
+  let groupPanel;
   if (
-    Nt[35] !== cols ||
-    Nt[36] !== panelOpen ||
-    Nt[37] !== groupPickIdx ||
-    Nt[38] !== suggestions ||
-    Nt[39] !== _e
+    $[35] !== cols ||
+    $[36] !== panelOpen ||
+    $[37] !== groupPickIdx ||
+    $[38] !== suggestions ||
+    $[39] !== columnIndent
   ) {
-    Zr = panelOpen
+    groupPanel = panelOpen
       ? (() => {
           let max = Math.max(0, Math.min(groupPickIdx - 1, suggestions.length - 4));
           let sliced = suggestions.slice(max, max + 4);
-          let fo = suggestions.length - max - sliced.length;
-          let paddingLeft = _e + cols.label + 4 + 7 - 2;
+          let hiddenBelow = suggestions.length - max - sliced.length;
+          let paddingLeft = columnIndent + cols.label + 4 + 7 - 2;
           return jsxProd_default_2(Box, {
-            ref: Qo,
+            ref: groupPanelRef,
             flexDirection: "column",
             paddingLeft,
             children: [
@@ -1284,147 +1315,149 @@ function FleetRowList(props) {
                   dimColor: true,
                   children: ["  ", "\u2026 ", max, " above"],
                 }),
-              sliced.map((ei, iu) => {
-                let Yi = max + iu === groupPickIdx;
+              sliced.map((suggestion, suggestionIndex) => {
+                let isPicked = max + suggestionIndex === groupPickIdx;
                 return jsxProd_default_2(
                   Text,
                   {
-                    color: Yi ? "suggestion" : undefined,
-                    dimColor: !Yi,
+                    color: isPicked ? "suggestion" : undefined,
+                    dimColor: !isPicked,
                     wrap: "truncate",
-                    children: [Yi ? figures_default.pointer : " ", " ", ei],
+                    children: [isPicked ? figures_default.pointer : " ", " ", suggestion],
                   },
-                  ei,
+                  suggestion,
                 );
               }),
-              fo > 0 &&
+              hiddenBelow > 0 &&
                 jsxProd_default_2(Text, {
                   dimColor: true,
-                  children: ["  ", "\u2026 ", fo, " more"],
+                  children: ["  ", "\u2026 ", hiddenBelow, " more"],
                 }),
             ],
           });
         })()
       : null;
-    Nt[35] = cols;
-    Nt[36] = panelOpen;
-    Nt[37] = groupPickIdx;
-    Nt[38] = suggestions;
-    Nt[39] = _e;
-    Nt[40] = Zr;
-  } else Zr = Nt[40];
-  let ti = Zr;
-  let sr;
+    $[35] = cols;
+    $[36] = panelOpen;
+    $[37] = groupPickIdx;
+    $[38] = suggestions;
+    $[39] = columnIndent;
+    $[40] = groupPanel;
+  } else groupPanel = $[40];
+  let panelElement = groupPanel;
+  let rowElements;
   if (
-    Nt[41] !== activeTab ||
-    Nt[42] !== ageNow ||
-    Nt[43] !== attachingJobId ||
-    Nt[44] !== byGroup ||
-    Nt[45] !== byState ||
-    Nt[46] !== Jo ||
-    Nt[47] !== collapsed ||
-    Nt[48] !== cols ||
-    Nt[49] !== columns ||
-    Nt[50] !== cwdFilter ||
-    Nt[51] !== deleteRefusals ||
-    Nt[52] !== dispatchTargetGroup ||
-    Nt[53] !== storeSelector_2 ||
-    Nt[54] !== earlierVisible ||
-    Nt[55] !== focusedGroup ||
-    Nt[56] !== focusedIdx ||
-    Nt[57] !== groupCounts ||
-    Nt[58] !== cursor_2 ||
-    Nt[59] !== draft_2 ||
-    Nt[60] !== isNew ||
-    Nt[61] !== matchesExisting ||
-    Nt[62] !== reserved ||
-    Nt[63] !== groupEdit ||
-    Nt[64] !== groupPickIdx ||
-    Nt[65] !== groupPristine ||
-    Nt[66] !== ti ||
-    Nt[67] !== suggestions ||
-    Nt[68] !== hasComposedDispatch ||
-    Nt[69] !== hasCredentials ||
-    Nt[70] !== hasMultipleOrigins ||
-    Nt[71] !== no ||
-    Nt[72] !== hoverFocusIdx ||
-    Nt[73] !== initialJobId ||
-    Nt[74] !== isOnboarding ||
-    Nt[75] !== Ke ||
-    Nt[76] !== logTails ||
-    Nt[77] !== loopJobIds ||
-    Nt[78] !== loopKicks ||
-    Nt[79] !== mountAt ||
-    Nt[80] !== newSessionOpening ||
-    Nt[81] !== openEarlier ||
-    Nt[82] !== openNewSessionRow ||
-    Nt[83] !== openOrRespawn ||
-    Nt[84] !== pending ||
-    Nt[85] !== prStatuses ||
-    Nt[86] !== previewOpen ||
-    Nt[87] !== storeSelector ||
-    Nt[88] !== queryIsFilter ||
-    Nt[89] !== cursor ||
-    Nt[90] !== draft ||
-    Nt[91] !== jobId ||
-    Nt[92] !== roster ||
-    Nt[93] !== _e ||
-    Nt[94] !== rows_2 ||
-    Nt[95] !== selection ||
-    Nt[96] !== setError ||
-    Nt[97] !== simpleBuilt ||
-    Nt[98] !== simpleView ||
-    Nt[99] !== toggleCollapse ||
-    Nt[100] !== warmingJobIds
+    $[41] !== activeTab ||
+    $[42] !== ageNow ||
+    $[43] !== attachingJobId ||
+    $[44] !== byGroup ||
+    $[45] !== byState ||
+    $[46] !== collapseKeyOf ||
+    $[47] !== collapsed ||
+    $[48] !== cols ||
+    $[49] !== columns ||
+    $[50] !== cwdFilter ||
+    $[51] !== deleteRefusals ||
+    $[52] !== dispatchTargetGroup ||
+    $[53] !== storeSelector_2 ||
+    $[54] !== earlierVisible ||
+    $[55] !== focusedGroup ||
+    $[56] !== focusedIdx ||
+    $[57] !== groupCounts ||
+    $[58] !== cursor_2 ||
+    $[59] !== draft_2 ||
+    $[60] !== isNew ||
+    $[61] !== matchesExisting ||
+    $[62] !== reserved ||
+    $[63] !== groupEdit ||
+    $[64] !== groupPickIdx ||
+    $[65] !== groupPristine ||
+    $[66] !== panelElement ||
+    $[67] !== suggestions ||
+    $[68] !== hasComposedDispatch ||
+    $[69] !== hasCredentials ||
+    $[70] !== hasMultipleOrigins ||
+    $[71] !== headerKeyOf ||
+    $[72] !== hoverFocusIdx ||
+    $[73] !== initialJobId ||
+    $[74] !== isOnboarding ||
+    $[75] !== liveStatus ||
+    $[76] !== logTails ||
+    $[77] !== loopJobIds ||
+    $[78] !== loopKicks ||
+    $[79] !== mountAt ||
+    $[80] !== newSessionOpening ||
+    $[81] !== openEarlier ||
+    $[82] !== openNewSessionRow ||
+    $[83] !== openOrRespawn ||
+    $[84] !== pending ||
+    $[85] !== prStatuses ||
+    $[86] !== previewOpen ||
+    $[87] !== storeSelector ||
+    $[88] !== queryIsFilter ||
+    $[89] !== cursor ||
+    $[90] !== draft ||
+    $[91] !== jobId ||
+    $[92] !== roster ||
+    $[93] !== columnIndent ||
+    $[94] !== rows_2 ||
+    $[95] !== selection ||
+    $[96] !== setError ||
+    $[97] !== simpleBuilt ||
+    $[98] !== simpleView ||
+    $[99] !== toggleCollapse ||
+    $[100] !== warmingJobIds
   ) {
-    sr = rows_2.map((Ct, cn) => {
-      let So = cn === focusedIdx;
-      let zi = isOnboarding && Ct.kind === "header";
-      let pn =
-        Ct.kind === "header"
+    rowElements = rows_2.map((row, rowIndex) => {
+      let isFocused = rowIndex === focusedIdx;
+      let isOnboardingHeader = isOnboarding && row.kind === "header";
+      let isGroupHighlighted =
+        row.kind === "header"
           ? hasComposedDispatch
-            ? Ct.group === dispatchTargetGroup
-            : So && !zi
-          : !hasComposedDispatch && So;
-      let jo =
-        !hasComposedDispatch && So && cn !== hoverFocusIdx && !zi ? "userMessageBackground" : undefined;
-      let Vn = jo && "text";
-      let Oa = (Ta) => {
-        if (previewOpen && Ct.kind !== "job") {
+            ? row.group === dispatchTargetGroup
+            : isFocused && !isOnboardingHeader
+          : !hasComposedDispatch && isFocused;
+      let backgroundColor =
+        !hasComposedDispatch && isFocused && rowIndex !== hoverFocusIdx && !isOnboardingHeader
+          ? "userMessageBackground"
+          : undefined;
+      let focusColor = backgroundColor && "text";
+      let selectRow = (fromHover) => {
+        if (previewOpen && row.kind !== "job") {
           return;
         }
-        if (cn === focusedIdx) {
-          if (!Ta) selection.setHoverFocusIdx(null);
+        if (rowIndex === focusedIdx) {
+          if (!fromHover) selection.setHoverFocusIdx(null);
           return;
         }
         setError(null);
-        if (Ta) selection.hoverTo(cn, Ct);
-        else selection.navigateTo(cn, Ct);
+        if (fromHover) selection.hoverTo(rowIndex, row);
+        else selection.navigateTo(rowIndex, row);
       };
-      let Cn = () => Oa(true);
-      let fn = () => Oa(false);
-      if (Ct.kind === "header") {
-        let su = !hasComposedDispatch && hasMultipleOrigins && Ct.group === focusedGroup;
-        let children = groupCounts.get(Ct.group) ?? 0;
-        let xa = collapsed.has(Jo(Ct.group));
+      let handleEnter = () => selectRow(true);
+      let handleClick = () => selectRow(false);
+      if (row.kind === "header") {
+        let isFocusedGroup = !hasComposedDispatch && hasMultipleOrigins && row.group === focusedGroup;
+        let children = groupCounts.get(row.group) ?? 0;
+        let isCollapsed = collapsed.has(collapseKeyOf(row.group));
         return jsxProd_default_2(
           Box,
           {
-            ref: So ? It : undefined,
-            marginTop: cn > 0 ? 1 : 0,
+            ref: isFocused ? focusedRowRef : undefined,
+            marginTop: rowIndex > 0 ? 1 : 0,
             flexDirection: "column",
-            backgroundColor: jo,
-            onMouseEnter: storeSelector || previewOpen || isOnboarding ? undefined : Cn,
+            backgroundColor,
+            onMouseEnter: storeSelector || previewOpen || isOnboarding ? undefined : handleEnter,
             onClick: isOnboarding
               ? undefined
               : () => {
-                  fn();
-                  selection.followOrigin = Ct.group;
+                  handleClick();
+                  selection.followOrigin = row.group;
                   selection.followId = null;
-                  if (!queryIsFilter) toggleCollapse(Ct.group);
+                  if (!queryIsFilter) toggleCollapse(row.group);
                 },
             children: [
-              groupEdit?.kind === "rename" && groupEdit.from === Ct.group
+              groupEdit?.kind === "rename" && groupEdit.from === row.group
                 ? jsxProd_default_2(Text, {
                     wrap: "truncate",
                     children: [
@@ -1450,27 +1483,27 @@ function FleetRowList(props) {
                     ],
                   })
                 : jsxProd_default_2(Text, {
-                    bold: su || pn,
-                    color: Vn,
-                    dimColor: !pn,
+                    bold: isFocusedGroup || isGroupHighlighted,
+                    color: focusColor,
+                    dimColor: !isGroupHighlighted,
                     children: [
-                      Ct.group === "pinned"
+                      row.group === "pinned"
                         ? "Pinned"
-                        : Ct.group === EARLIER
+                        : row.group === EARLIER
                           ? "Past"
                           : byState
-                            ? FLEET_BUCKET_LABELS[Ct.group]
+                            ? FLEET_BUCKET_LABELS[row.group]
                             : byGroup
-                              ? Ct.group === UNGROUPED
+                              ? row.group === UNGROUPED
                                 ? "Ungrouped"
-                                : truncate(Ct.group, Math.max(columns - 10, 10))
+                                : truncate(row.group, Math.max(columns - 10, 10))
                               : truncatePathForDisplay(
                                   activeTab === "remote"
-                                    ? sanitizeAttentionText(shortenPath(Ct.group))
-                                    : shortenPath(Ct.group),
+                                    ? sanitizeAttentionText(shortenPath(row.group))
+                                    : shortenPath(row.group),
                                   Math.max(columns - 10, 10),
                                 ),
-                      xa &&
+                      isCollapsed &&
                         jsxProd_default_2(Fragment, {
                           children: [
                             " ",
@@ -1480,7 +1513,7 @@ function FleetRowList(props) {
                             }),
                           ],
                         }),
-                      (byState ? Ct.group === "done" : Ct.group === EARLIER) &&
+                      (byState ? row.group === "done" : row.group === EARLIER) &&
                         storeSelector_2 &&
                         activeTab !== "remote" &&
                         !cwdFilter &&
@@ -1496,76 +1529,76 @@ function FleetRowList(props) {
                     ],
                   }),
               isOnboarding &&
-                !(Ct.group === "done" && earlierVisible.length > 0) &&
+                !(row.group === "done" && earlierVisible.length > 0) &&
                 jsxProd_default(Box, {
                   paddingLeft: 1,
                   children: jsxProd_default(Text, {
                     dimColor: true,
-                    children: FLEET_BUCKET_HINTS[Ct.group],
+                    children: FLEET_BUCKET_HINTS[row.group],
                   }),
                 }),
             ],
           },
-          `h:${Ct.group}`,
+          `h:${row.group}`,
         );
       }
-      if (Ct.kind === "fold") {
+      if (row.kind === "fold") {
         return jsxProd_default(
           Box,
           {
-            ref: So ? It : undefined,
-            marginTop: simpleView && isDifferentDoneGroup(rows_2[cn - 1], Ct) ? 1 : 0,
-            paddingLeft: _e,
-            backgroundColor: jo,
-            onMouseEnter: storeSelector || previewOpen ? undefined : Cn,
+            ref: isFocused ? focusedRowRef : undefined,
+            marginTop: simpleView && isDifferentDoneGroup(rows_2[rowIndex - 1], row) ? 1 : 0,
+            paddingLeft: columnIndent,
+            backgroundColor,
+            onMouseEnter: storeSelector || previewOpen ? undefined : handleEnter,
             onClick: () => {
-              fn();
-              selection.expandCap(Ct.group);
+              handleClick();
+              selection.expandCap(row.group);
               logEvent("tengu_fleetview_fold_expand", {
-                hidden_count: Ct.hidden,
+                hidden_count: row.hidden,
                 ms_since_mount: Date.now() - mountAt,
                 via_click: true,
               });
             },
             children: jsxProd_default_2(Text, {
-              color: Vn,
-              dimColor: !pn,
-              "aria-label": `${So ? "selected, " : ""}${Ct.hidden} more finished sessions folded:`,
+              color: focusColor,
+              dimColor: !isGroupHighlighted,
+              "aria-label": `${isFocused ? "selected, " : ""}${row.hidden} more finished sessions folded:`,
               children: [
-                simpleView ? (So ? "\u276F" : " ") + repeatString(" ", SESSION_ROW_INDENT - 1) : "",
-                Ct.group === SIMPLE_FINISHED
-                  ? `\u2026 show all (${Ct.hidden} more${simpleBuilt !== null && simpleBuilt.doneFoldHiddenFailed > 0 ? ` \xB7 ${simpleBuilt.doneFoldHiddenFailed} failed` : ""})`
-                  : `\u2026 ${Ct.hidden} more`,
+                simpleView ? (isFocused ? "\u276F" : " ") + repeatString(" ", SESSION_ROW_INDENT - 1) : "",
+                row.group === SIMPLE_FINISHED
+                  ? `\u2026 show all (${row.hidden} more${simpleBuilt !== null && simpleBuilt.doneFoldHiddenFailed > 0 ? ` \xB7 ${simpleBuilt.doneFoldHiddenFailed} failed` : ""})`
+                  : `\u2026 ${row.hidden} more`,
               ],
             }),
           },
-          `f:${Ct.group}`,
+          `f:${row.group}`,
         );
       }
-      if (Ct.kind === "newsession") {
+      if (row.kind === "newsession") {
         return jsxProd_default_2(
           Box,
           {
             flexDirection: "column",
             children: [
               jsxProd_default_2(Box, {
-                ref: So ? It : undefined,
-                paddingLeft: _e,
-                backgroundColor: jo,
-                onMouseEnter: storeSelector || previewOpen ? undefined : Cn,
+                ref: isFocused ? focusedRowRef : undefined,
+                paddingLeft: columnIndent,
+                backgroundColor,
+                onMouseEnter: storeSelector || previewOpen ? undefined : handleEnter,
                 onClick: () => {
-                  fn();
-                  openNewSessionRow(Ct.origin);
+                  handleClick();
+                  openNewSessionRow(row.origin);
                 },
                 children: [
                   jsxProd_default_2(Text, {
-                    color: Vn ?? "suggestion",
-                    "aria-label": So ? "selected, new session:" : undefined,
+                    color: focusColor ?? "suggestion",
+                    "aria-label": isFocused ? "selected, new session:" : undefined,
                     children: [
-                      So ? "\u276F" : " ",
+                      isFocused ? "\u276F" : " ",
                       "+  ",
                       jsxProd_default(Text, {
-                        underline: So,
+                        underline: isFocused,
                         children: "new session",
                       }),
                     ],
@@ -1581,7 +1614,7 @@ function FleetRowList(props) {
               simpleBuilt !== null &&
                 !simpleBuilt.rows.some(isJobRow) &&
                 jsxProd_default_2(Box, {
-                  paddingLeft: _e + SESSION_ROW_INDENT,
+                  paddingLeft: columnIndent + SESSION_ROW_INDENT,
                   marginTop: 1,
                   flexDirection: "column",
                   children: [
@@ -1662,18 +1695,18 @@ function FleetRowList(props) {
           "newsession",
         );
       }
-      if (Ct.kind === "earlier") {
-        let entry = Ct.entry;
+      if (row.kind === "earlier") {
+        let entry = row.entry;
         return jsxProd_default_2(
           Box,
           {
-            ref: So ? It : undefined,
+            ref: isFocused ? focusedRowRef : undefined,
             width: "100%",
-            paddingLeft: _e,
-            backgroundColor: jo,
-            onMouseEnter: storeSelector || previewOpen ? undefined : Cn,
+            paddingLeft: columnIndent,
+            backgroundColor,
+            onMouseEnter: storeSelector || previewOpen ? undefined : handleEnter,
             onClick: () => {
-              fn();
+              handleClick();
               openEarlier(entry, "section");
             },
             children: [
@@ -1682,8 +1715,8 @@ function FleetRowList(props) {
                 flexShrink: 1,
                 overflow: "hidden",
                 children: jsxProd_default_2(Text, {
-                  color: Vn,
-                  dimColor: !pn,
+                  color: focusColor,
+                  dimColor: !isGroupHighlighted,
                   wrap: "truncate",
                   children: ["\xB7 ", entry.title],
                 }),
@@ -1703,41 +1736,41 @@ function FleetRowList(props) {
           `e:${entry.sessionId}`,
         );
       }
-      let job = Ct.job;
+      let job = row.job;
       if (simpleView) {
-        let ri = terminalOutcome(job.state.state);
-        let ar = Ke(job);
-        let Xo = jobActivityDisplay(job, Ke);
-        let du =
-          (ri === "stopped" ? "\u23F9" : ri === "failure" ? "\u2717" : null) ??
-          jobRowGlyph(job.state, ri, ar);
-        let ii = job.id === initialJobId;
+        let outcome = terminalOutcome(job.state.state);
+        let status = liveStatus(job);
+        let activity = jobActivityDisplay(job, liveStatus);
+        let glyph =
+          (outcome === "stopped" ? "\u23F9" : outcome === "failure" ? "\u2717" : null) ??
+          jobRowGlyph(job.state, outcome, status);
+        let isOrigin = job.id === initialJobId;
         return jsxProd_default(
           Box,
           {
-            ref: So ? It : undefined,
+            ref: isFocused ? focusedRowRef : undefined,
             flexDirection: "column",
             width: "100%",
-            paddingLeft: _e,
-            marginTop: isDifferentDoneGroup(rows_2[cn - 1], Ct) ? 1 : 0,
-            backgroundColor: jo,
-            onMouseEnter: storeSelector || previewOpen ? undefined : Cn,
-            onClick: (si) => {
-              if (si.hyperlinkUrl && !returnFalse_2(job.state)) {
-                return si.allowDefault();
+            paddingLeft: columnIndent,
+            marginTop: isDifferentDoneGroup(rows_2[rowIndex - 1], row) ? 1 : 0,
+            backgroundColor,
+            onMouseEnter: storeSelector || previewOpen ? undefined : handleEnter,
+            onClick: (event) => {
+              if (event.hyperlinkUrl && !returnFalse_2(job.state)) {
+                return event.allowDefault();
               }
-              if (si.isWindowActivation) {
-                return si.dropAsStray();
+              if (event.isWindowActivation) {
+                return event.dropAsStray();
               }
-              fn();
+              handleClick();
               openOrRespawn(job);
             },
             children: jsxProd_default(FleetRowLine, {
-              icon: du ?? jsxProd_default(useFleetSpinnerFrame, {}),
-              iconColor: Xo.color,
-              iconDim: Xo.dim,
-              label: getJobTitle(job.state, ii, true),
-              renameWidth: Math.max(12, columns - _e - SESSION_ROW_INDENT),
+              icon: glyph ?? jsxProd_default(useFleetSpinnerFrame, {}),
+              iconColor: activity.color,
+              iconDim: activity.dim,
+              label: getJobTitle(job.state, isOrigin, true),
+              renameWidth: Math.max(12, columns - columnIndent - SESSION_ROW_INDENT),
               renaming:
                 jobId === job.id
                   ? {
@@ -1745,49 +1778,56 @@ function FleetRowList(props) {
                       cursor,
                     }
                   : undefined,
-              isOrigin: ii,
-              isFocused: So,
-              focusFg: Vn,
-              focusBg: jo,
+              isOrigin,
+              isFocused,
+              focusFg: focusColor,
+              focusBg: backgroundColor,
               age: jobAgeLabel(job, loopJobIds, loopKicks, ageNow),
-              tokens: jobTokenLabel(job, Xo),
-              state: Xo,
-              extra: jobNeedsLine(job, Xo, ar, columns),
-              expanded: Boolean(job.state.pinned) || jobBucket_2(job.state, ar) === "needs",
+              tokens: jobTokenLabel(job, activity),
+              state: activity,
+              extra: jobNeedsLine(job, activity, status, columns),
+              expanded: Boolean(job.state.pinned) || jobBucket_2(job.state, status) === "needs",
               refusal: deleteRefusals.get(job.id)?.notice,
-              srLabel: jobRowAriaLabel(job.activity, job.state.tempo, ar, ri, So, job.state.pinned === true),
+              srLabel: jobRowAriaLabel(
+                job.activity,
+                job.state.tempo,
+                status,
+                outcome,
+                isFocused,
+                job.state.pinned === true,
+              ),
             }),
           },
           job.id,
         );
       }
-      let Fa = groupEdit?.kind === "assign" && groupEdit.jobId === job.id;
-      let Xi = jsxProd_default(
+      let isAssigningGroup = groupEdit?.kind === "assign" && groupEdit.jobId === job.id;
+      let jobElement = jsxProd_default(
         Box,
         {
-          ref: So ? It : undefined,
+          ref: isFocused ? focusedRowRef : undefined,
           width: "100%",
-          paddingLeft: _e,
-          backgroundColor: jo,
-          onMouseEnter: storeSelector || previewOpen ? undefined : Cn,
-          onClick: (li) => {
-            if (li.hyperlinkUrl && !returnFalse_2(job.state)) {
-              return li.allowDefault();
+          paddingLeft: columnIndent,
+          backgroundColor,
+          onMouseEnter: storeSelector || previewOpen ? undefined : handleEnter,
+          onClick: (event) => {
+            if (event.hyperlinkUrl && !returnFalse_2(job.state)) {
+              return event.allowDefault();
             }
-            if (li.isWindowActivation) {
-              return li.dropAsStray();
+            if (event.isWindowActivation) {
+              return event.dropAsStray();
             }
-            fn();
+            handleClick();
             openOrRespawn(job);
           },
           children: jsxProd_default(FleetJobRow, {
             job,
-            isFocused: So,
-            focusFg: Vn,
+            isFocused,
+            focusFg: focusColor,
             isOrigin: job.id === initialJobId,
             logTail: logTails[job.id],
             cols,
-            status: Ke(job),
+            status: liveStatus(job),
             heldInTerminal: roster.terminalHolderOf(job) !== undefined,
             showVerb: !byState,
             loopKickCount: loopJobIds.has(job.id) ? loopKicks.get(job.state.sessionId)?.count : undefined,
@@ -1804,7 +1844,7 @@ function FleetRowList(props) {
                     cursor,
                   }
                 : undefined,
-            groupEditing: Fa
+            groupEditing: isAssigningGroup
               ? {
                   draft: draft_2,
                   cursor: cursor_2,
@@ -1822,15 +1862,15 @@ function FleetRowList(props) {
                 }
               : undefined,
             deleteArmed:
-              pending && (pending.id === job.id || pending.id === no(Ct.group))
+              pending && (pending.id === job.id || pending.id === headerKeyOf(row.group))
                 ? {
                     justKilled: pending.justKilled,
                     ungroup:
                       byGroup &&
-                      pending.id === no(Ct.group) &&
-                      Ct.group !== "pinned" &&
-                      Ct.group !== UNGROUPED &&
-                      Ct.group !== EARLIER,
+                      pending.id === headerKeyOf(row.group) &&
+                      row.group !== "pinned" &&
+                      row.group !== UNGROUPED &&
+                      row.group !== EARLIER,
                   }
                 : undefined,
             deleteRefused: deleteRefusals.get(job.id)?.notice,
@@ -1840,79 +1880,79 @@ function FleetRowList(props) {
         job.id,
       );
       return jsxProd_default_2(
-        Kc,
+        fragmentTypeExport,
         {
-          children: [Xi, Fa && ti],
+          children: [jobElement, isAssigningGroup && panelElement],
         },
         job.id,
       );
     });
-    Nt[41] = activeTab;
-    Nt[42] = ageNow;
-    Nt[43] = attachingJobId;
-    Nt[44] = byGroup;
-    Nt[45] = byState;
-    Nt[46] = Jo;
-    Nt[47] = collapsed;
-    Nt[48] = cols;
-    Nt[49] = columns;
-    Nt[50] = cwdFilter;
-    Nt[51] = deleteRefusals;
-    Nt[52] = dispatchTargetGroup;
-    Nt[53] = storeSelector_2;
-    Nt[54] = earlierVisible;
-    Nt[55] = focusedGroup;
-    Nt[56] = focusedIdx;
-    Nt[57] = groupCounts;
-    Nt[58] = cursor_2;
-    Nt[59] = draft_2;
-    Nt[60] = isNew;
-    Nt[61] = matchesExisting;
-    Nt[62] = reserved;
-    Nt[63] = groupEdit;
-    Nt[64] = groupPickIdx;
-    Nt[65] = groupPristine;
-    Nt[66] = ti;
-    Nt[67] = suggestions;
-    Nt[68] = hasComposedDispatch;
-    Nt[69] = hasCredentials;
-    Nt[70] = hasMultipleOrigins;
-    Nt[71] = no;
-    Nt[72] = hoverFocusIdx;
-    Nt[73] = initialJobId;
-    Nt[74] = isOnboarding;
-    Nt[75] = Ke;
-    Nt[76] = logTails;
-    Nt[77] = loopJobIds;
-    Nt[78] = loopKicks;
-    Nt[79] = mountAt;
-    Nt[80] = newSessionOpening;
-    Nt[81] = openEarlier;
-    Nt[82] = openNewSessionRow;
-    Nt[83] = openOrRespawn;
-    Nt[84] = pending;
-    Nt[85] = prStatuses;
-    Nt[86] = previewOpen;
-    Nt[87] = storeSelector;
-    Nt[88] = queryIsFilter;
-    Nt[89] = cursor;
-    Nt[90] = draft;
-    Nt[91] = jobId;
-    Nt[92] = roster;
-    Nt[93] = _e;
-    Nt[94] = rows_2;
-    Nt[95] = selection;
-    Nt[96] = setError;
-    Nt[97] = simpleBuilt;
-    Nt[98] = simpleView;
-    Nt[99] = toggleCollapse;
-    Nt[100] = warmingJobIds;
-    Nt[101] = sr;
-  } else sr = Nt[101];
-  let Wo;
-  if (Nt[102] !== go) {
-    Wo =
-      go &&
+    $[41] = activeTab;
+    $[42] = ageNow;
+    $[43] = attachingJobId;
+    $[44] = byGroup;
+    $[45] = byState;
+    $[46] = collapseKeyOf;
+    $[47] = collapsed;
+    $[48] = cols;
+    $[49] = columns;
+    $[50] = cwdFilter;
+    $[51] = deleteRefusals;
+    $[52] = dispatchTargetGroup;
+    $[53] = storeSelector_2;
+    $[54] = earlierVisible;
+    $[55] = focusedGroup;
+    $[56] = focusedIdx;
+    $[57] = groupCounts;
+    $[58] = cursor_2;
+    $[59] = draft_2;
+    $[60] = isNew;
+    $[61] = matchesExisting;
+    $[62] = reserved;
+    $[63] = groupEdit;
+    $[64] = groupPickIdx;
+    $[65] = groupPristine;
+    $[66] = panelElement;
+    $[67] = suggestions;
+    $[68] = hasComposedDispatch;
+    $[69] = hasCredentials;
+    $[70] = hasMultipleOrigins;
+    $[71] = headerKeyOf;
+    $[72] = hoverFocusIdx;
+    $[73] = initialJobId;
+    $[74] = isOnboarding;
+    $[75] = liveStatus;
+    $[76] = logTails;
+    $[77] = loopJobIds;
+    $[78] = loopKicks;
+    $[79] = mountAt;
+    $[80] = newSessionOpening;
+    $[81] = openEarlier;
+    $[82] = openNewSessionRow;
+    $[83] = openOrRespawn;
+    $[84] = pending;
+    $[85] = prStatuses;
+    $[86] = previewOpen;
+    $[87] = storeSelector;
+    $[88] = queryIsFilter;
+    $[89] = cursor;
+    $[90] = draft;
+    $[91] = jobId;
+    $[92] = roster;
+    $[93] = columnIndent;
+    $[94] = rows_2;
+    $[95] = selection;
+    $[96] = setError;
+    $[97] = simpleBuilt;
+    $[98] = simpleView;
+    $[99] = toggleCollapse;
+    $[100] = warmingJobIds;
+    $[101] = rowElements;
+  } else rowElements = $[101];
+  let noMatchesNotice;
+  if ($[102] !== showNoMatches) {
+    noMatchesNotice =
+      showNoMatches &&
       true &&
       jsxProd_default(Box, {
         paddingLeft: 2,
@@ -1921,24 +1961,24 @@ function FleetRowList(props) {
           children: "no sessions match",
         }),
       });
-    Nt[102] = go;
-    Nt[103] = Wo;
-  } else Wo = Nt[103];
-  let Co;
+    $[102] = showNoMatches;
+    $[103] = noMatchesNotice;
+  } else noMatchesNotice = $[103];
+  let earlierLoadingNotice;
   if (
-    Nt[104] !== activeTab ||
-    Nt[105] !== byState ||
-    Nt[106] !== cwdFilter ||
-    Nt[107] !== storeSelector_2 ||
-    Nt[108] !== rows_2 ||
-    Nt[109] !== simpleView
+    $[104] !== activeTab ||
+    $[105] !== byState ||
+    $[106] !== cwdFilter ||
+    $[107] !== storeSelector_2 ||
+    $[108] !== rows_2 ||
+    $[109] !== simpleView
   ) {
-    Co =
+    earlierLoadingNotice =
       storeSelector_2 &&
       !simpleView &&
       activeTab !== "remote" &&
       !cwdFilter &&
-      !rows_2.some((Zi) => Zi.kind === "header" && Zi.group === (byState ? "done" : EARLIER)) &&
+      !rows_2.some((row) => row.kind === "header" && row.group === (byState ? "done" : EARLIER)) &&
       jsxProd_default(Box, {
         paddingLeft: 2,
         children: jsxProd_default(Text, {
@@ -1946,48 +1986,54 @@ function FleetRowList(props) {
           children: "\xB7 looking for past sessions\u2026",
         }),
       });
-    Nt[104] = activeTab;
-    Nt[105] = byState;
-    Nt[106] = cwdFilter;
-    Nt[107] = storeSelector_2;
-    Nt[108] = rows_2;
-    Nt[109] = simpleView;
-    Nt[110] = Co;
-  } else Co = Nt[110];
-  let Ma;
-  if (Nt[111] !== header || Nt[112] !== scrollRef || Nt[113] !== sr || Nt[114] !== Wo || Nt[115] !== Co) {
-    Ma = jsxProd_default_2(ScrollBoxDefault, {
+    $[104] = activeTab;
+    $[105] = byState;
+    $[106] = cwdFilter;
+    $[107] = storeSelector_2;
+    $[108] = rows_2;
+    $[109] = simpleView;
+    $[110] = earlierLoadingNotice;
+  } else earlierLoadingNotice = $[110];
+  let scrollBox;
+  if (
+    $[111] !== header ||
+    $[112] !== scrollRef ||
+    $[113] !== rowElements ||
+    $[114] !== noMatchesNotice ||
+    $[115] !== earlierLoadingNotice
+  ) {
+    scrollBox = jsxProd_default_2(ScrollBoxDefault, {
       ref: scrollRef,
       flexGrow: 1,
       flexDirection: "column",
       paddingTop: 1,
       stickyScroll: false,
-      children: [header, sr, Wo, false, Co],
+      children: [header, rowElements, noMatchesNotice, false, earlierLoadingNotice],
     });
-    Nt[111] = header;
-    Nt[112] = scrollRef;
-    Nt[113] = sr;
-    Nt[114] = Wo;
-    Nt[115] = Co;
-    Nt[116] = Ma;
-  } else Ma = Nt[116];
-  return Ma;
+    $[111] = header;
+    $[112] = scrollRef;
+    $[113] = rowElements;
+    $[114] = noMatchesNotice;
+    $[115] = earlierLoadingNotice;
+    $[116] = scrollBox;
+  } else scrollBox = $[116];
+  return scrollBox;
 }
 //@ chunk-93kwxas0.js:123201-123205 placement
 init_react_production();
 //@ chunk-93kwxas0.js:123205-123244 placement
-function selectSessionModel_2(me) {
-  return me.sessionModel;
+function selectSessionModel_2(state) {
+  return state.sessionModel;
 }
 //@ chunk-93kwxas0.js:123244-123284 placement
-function selectSessionEffort_2(Je) {
-  return Je.sessionEffort;
+function selectSessionEffort_2(state) {
+  return state.sessionEffort;
 }
 //@ chunk-93kwxas0.js:123284-123326 placement
 function createLatch() {
-  let le = false;
+  let latched = false;
   return () => {
-    le = true;
+    latched = true;
   };
 }
 //@ chunk-93kwxas0.js:123326-123555 placement

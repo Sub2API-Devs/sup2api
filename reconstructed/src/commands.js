@@ -9,6 +9,9 @@
  * attribution: facade-exports 39, fingerprint 7, layout 47, affinity 2, callgraph-fingerprint 1, placement 30, file-local 1
  */
 import { resolve as resolve_2, basename, dirname, relative, sep, isAbsolute } from "path";
+import { commandPolicyGateAllows } from "./services/policyLimits/policyVerdicts.js";
+import { SECRET_REDACTION_PATTERNS, containsSecret } from "./utils/redactSecrets.js";
+import { isSkillFromUserSource } from "./skills/skillSources.js";
 import {
   getSkillOverrideState,
   isHiddenFromModel,
@@ -217,7 +220,7 @@ import { bundledSkillsGateKey } from "./skills/bundledSkillsGate.js";
 import { isSkillsSyncEnvOn, getSyncedSkillCommands } from "./utils/claudeAiSync/skillsSync.js";
 import { managedFolderCondition } from "./plugins/functionHooks/sites/promptContextSites.js";
 import { recordPhase } from "./utils/startupTiming.js";
-import { SS } from "../vendor/lodash-es/_inlinedHelpers.js";
+import { partitionAlias } from "../vendor/lodash-es/_inlinedHelpers.js";
 import { groupPluginSourcesByName } from "./utils/telemetry/pluginTelemetry.js";
 import { claimOnce } from "./services/api/verificationRequired.js";
 import { setHistoryStore } from "./history.js";
@@ -228,13 +231,302 @@ import { reportRefusedSkillName } from "./skills/skillNameRules.js";
 import { clearPluginCommands, clearPluginSkillsCache } from "./utils/plugins/pluginLoadState.js";
 import { getBuiltinPlugins } from "./plugins/builtinPlugins.js";
 import { lit as lit_2 } from "./services/analytics/safeMetadata.js";
-import { commandPolicyGateAllows } from "./services/policyLimits/policyVerdicts.js";
-import { SECRET_REDACTION_PATTERNS, containsSecret } from "./utils/redactSecrets.js";
-import { isSkillFromUserSource } from "./skills/skillSources.js";
+import { deferInit } from "../runtime/deferred-init.js";
 
+//@ chunk-s61vbvea.js:17411-17462 facade-exports = getCommandName (1)
+/**
+ * getCommandName：命令显示名（userFacingName?.() ?? name）。
+ */
+function getCommandName(cmd) {
+  return cmd.userFacingName?.() ?? cmd.name;
+}
+//@ chunk-s61vbvea.js:17462-17606 layout
+/**
+ * clearUserFacingName：把 userFacingName 挪进 shedAliases 后清空。
+ */
+function clearUserFacingName(command) {
+  if (command.type === "prompt" && command.userFacingName !== undefined)
+    command.shedAliases = [...(command.shedAliases ?? []), command.userFacingName()];
+  command.userFacingName = undefined;
+}
+//@ chunk-s61vbvea.js:17606-17668 facade-exports
+/**
+ * isCommandEnabled：先检查 policyGate（commandPolicyGateAllows，getter 抛错按 false），再 isEnabled?.() ?? true。
+ */
+function isCommandEnabled(cmd) {
+  if (!passesPolicyGate(cmd)) return false;
+  return cmd.isEnabled?.() ?? true;
+}
+//@ chunk-s61vbvea.js:17668-17765 layout
+/**
+ * passesPolicyGate：policyGate.policy 由 commandPolicyGateAllows 判定。
+ */
+function passesPolicyGate(cmd) {
+  let policyGate;
+  try {
+    policyGate = cmd.policyGate;
+  } catch {
+    return false;
+  }
+  if (policyGate == null) return true;
+  return commandPolicyGateAllows(policyGate.policy);
+}
+//@ chunk-s61vbvea.js:17765-17984 layout
+function inputStartsWithMatchingCommand(input, command) {
+  let trimmed = input.trimStart();
+  if (!trimmed.startsWith("/")) return false;
+  let name = trimmed.slice(1).match(/^[a-zA-Z0-9:_-]+/)?.[0];
+  let word = trimmed.slice(1).split(/\s/, 1)[0];
+  if (name !== undefined && command(name)) return true;
+  return word !== undefined && word !== name && word.length > 0 && command(word);
+}
+//@ chunk-s61vbvea.js:17984-18052 layout
+/**
+ * getCommandContextMode：getContext?.() ?? context ?? "inline"（inline/fork）。
+ */
+function getCommandContextMode(cmd, args, context) {
+  return cmd.getContext?.(args, context) ?? cmd.context ?? "inline";
+}
+//@ chunk-s61vbvea.js:18052-18134 layout
+/**
+ * isImmediateCommand：immediate 可为布尔或 (args, presentation) 函数。
+ */
+function isImmediateCommand(cmd, args, presentation) {
+  let immediate = cmd?.immediate;
+  return typeof immediate === "function" ? immediate(args, presentation) : immediate === true;
+}
+//@ chunk-s61vbvea.js:18134-18287 layout
+/**
+ * splitSlashCommandInput："/name args" → {name, args}。
+ */
+function splitSlashCommandInput(input) {
+  let body = input.startsWith("/") ? input.slice(1) : input;
+  let spaceIndex = body.search(/\s/);
+  if (spaceIndex === -1)
+    return {
+      name: body,
+      args: "",
+    };
+  return {
+    name: body.slice(0, spaceIndex),
+    args: body.slice(spaceIndex + 1).trim(),
+  };
+}
+//@ chunk-s61vbvea.js:18287-18483 layout
+/**
+ * looksLikeSlashInput：字符串或最后一个文本块以 / 开头。
+ */
+function looksLikeSlashInput(inputContent) {
+  if (typeof inputContent === "string") return inputContent.trim().startsWith("/");
+  if (!Array.isArray(inputContent)) return false;
+  let last = inputContent.at(-1);
+  return last?.type === "text" && typeof last.text === "string" && last.text.trim().startsWith("/");
+}
+//@ chunk-s61vbvea.js:18483-18673 layout
+/**
+ * TEAM_SETUP_GUIDE_LABEL："✦ Team setup guide"。
+ */
+var TEAM_SETUP_GUIDE_LABEL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PLACEHOLDER_LABELS_PATTERN;
+var regExp;
+deferInit("chunk-s61vbvea.js:18483", () => {
+  TEAM_SETUP_GUIDE_LABEL = "\u2726 Team setup guide";
+  PLACEHOLDER_LABELS_PATTERN = String.raw`Pasted text|Image|\.\.\.Truncated text|${"\u2726 Team setup guide"}`;
+  regExp = new RegExp(String.raw`\[(${PLACEHOLDER_LABELS_PATTERN}) #(\d+)(?: \+\d+ lines)?(\.)*\]`, "g");
+});
+//@ chunk-s61vbvea.js:18673-18719 layout
+function isImagePlaceholder(match) {
+  return match.startsWith("[Image");
+}
+//@ chunk-s61vbvea.js:18719-18795 layout
+/**
+ * commandMatchesName：name、显示名或 aliases 命中。
+ */
+function commandMatchesName(cmd, name) {
+  return cmd.name === name || getCommandName(cmd) === name || (cmd.aliases?.includes(name) ?? false);
+}
+//@ chunk-s61vbvea.js:18795-19014 facade-exports
+/**
+ * findCommand：先按 name 精确匹配，再按显示名或 aliases，最后按 directoryListingName。
+ */
+function findCommand(commandName, commands) {
+  let aliasMatch;
+  let directoryMatch;
+  return (
+    commands.find((cmd) => {
+      if (cmd.name === commandName) return true;
+      if (aliasMatch === undefined && commandMatchesName(cmd, commandName)) aliasMatch = cmd;
+      if (directoryMatch !== null && cmd.type === "prompt" && cmd.directoryListingName === commandName)
+        directoryMatch =
+          directoryMatch === undefined || directoryMatch.name === cmd.name ? (directoryMatch ?? cmd) : null;
+      return false;
+    }) ??
+    aliasMatch ??
+    directoryMatch ??
+    undefined
+  );
+}
+//@ chunk-s61vbvea.js:19014-19178 layout
+/**
+ * buildCommandLookup：name/显示名/aliases → 命令 的 Map。
+ */
+function buildCommandLookup(commands) {
+  let lookup = new Map();
+  for (let command of commands) if (!lookup.has(command.name)) lookup.set(command.name, command);
+  for (let command of commands)
+    for (let name of [getCommandName(command), ...(command.aliases ?? [])])
+      if (!lookup.has(name)) lookup.set(name, command);
+  return lookup;
+}
+//@ chunk-s61vbvea.js:19178-19220 facade-exports
+/**
+ * hasCommand：findCommand 是否找到。
+ */
+function hasCommand(commandName, commands) {
+  return findCommand(commandName, commands) !== undefined;
+}
+//@ chunk-s61vbvea.js:19220-19326 layout
+/**
+ * hasSensitiveArgs：isSensitive 为布尔或函数。
+ */
+function hasSensitiveArgs(cmd, args) {
+  if (args.trim() === "") return false;
+  let { isSensitive } = cmd;
+  return typeof isSensitive === "function" ? isSensitive(args) : isSensitive === true;
+}
+//@ chunk-s61vbvea.js:19326-19440 layout
+/**
+ * buildCommandRunInfo：{command, args（敏感则 ***）, plugin}。
+ */
+function buildCommandRunInfo(cmd, args, plugin) {
+  let registeredBy = plugin ?? cmd.registeredBy;
+  return {
+    command: getCommandName(cmd),
+    args: hasSensitiveArgs(cmd, args) ? "***" : args,
+    ...(registeredBy !== undefined && {
+      plugin: registeredBy,
+    }),
+  };
+}
+//@ chunk-s61vbvea.js:19440-19582 layout
+var regExp_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_3;
+deferInit("chunk-s61vbvea.js:19440", () => {
+  regExp_2 = new RegExp(String.raw`\[(?:Pasted text|\.\.\.Truncated text|${TEAM_SETUP_GUIDE_LABEL}) #\d+`);
+  regExp_3 = new RegExp(String.raw`^(\/[^\s[]+)\[(?=(?:${PLACEHOLDER_LABELS_PATTERN}) #\d+)`);
+});
+//@ chunk-s61vbvea.js:19582-19604 layout
+/**
+ * SECRET_SCAN_CHUNK：65536。
+ */
+var SECRET_SCAN_CHUNK = 65536;
+var SECRET_SCAN_PATTERN_SPAN = 2 * SECRET_REDACTION_PATTERNS;
+//@ chunk-s61vbvea.js:19604-19913 layout
+/**
+ * shouldRedactInput：粘贴内容或命令参数命中敏感模式时不写入历史。
+ */
+function shouldRedactInput(value, commands, { pastedTexts = [] } = {}) {
+  if (pastedTexts.some(containsSecretPattern)) return true;
+  let text = value.trim();
+  if (text.startsWith("!")) {
+    text = text.slice(1).trimStart();
+    if (containsSecretPattern(text)) return true;
+  }
+  if (!text.startsWith("/")) return false;
+  let { name, args } = splitSlashCommandInput(text.replace(regExp_3, "$1 ["));
+  let command = findCommand(name, commands);
+  if (!command?.isSensitive) return containsSecretPattern(text.slice(1));
+  return hasSensitiveArgs(command, args) || (pastedTexts.length > 0 && regExp_2.test(args));
+}
+//@ chunk-s61vbvea.js:19913-20093 layout
+function filterCommandsByAllowlist(commands, allowlist) {
+  if (allowlist === undefined) return commands;
+  return commands.filter((command) =>
+    allowlist.some(
+      (name) =>
+        command.name === name ||
+        (command.loadedFrom === "syncedSkills"
+          ? (command.aliases?.includes(name) ?? false)
+          : isProjectScopedCommand(command) && command.name.endsWith(`:${name}`)),
+    ),
+  );
+}
+//@ chunk-s61vbvea.js:20093-20225 layout
+/**
+ * 判断命令不是用户来源技能，也不是 memoryStore/mcp 来源或只允许按全名调用的提示词命令。
+ */
+function isProjectScopedCommand(command) {
+  return (
+    !isSkillFromUserSource(command) &&
+    !(
+      command.type === "prompt" &&
+      (command.source === "memoryStore" ||
+        command.source === "mcp" ||
+        command.allowlistedByFullNameOnly === true)
+    )
+  );
+}
+//@ chunk-s61vbvea.js:20225-20540 layout
+/**
+ * resolveBarePluginSkillName：{kind: none|ambiguous|unique}。
+ */
+function resolveBarePluginSkillName(name, commands) {
+  if (name === "" || name.includes(":"))
+    return {
+      kind: "none",
+    };
+  let suffix = `:${name}`;
+  let matches = commands.filter(
+    (command) =>
+      command.type === "prompt" && command.loadedFrom !== "syncedSkills" && command.name.endsWith(suffix),
+  );
+  if (matches.length > 1)
+    return {
+      kind: "ambiguous",
+      candidates: matches,
+    };
+  let match = matches[0];
+  if (match === undefined || match.source !== "plugin")
+    return {
+      kind: "none",
+    };
+  return {
+    kind: "unique",
+    command: match,
+  };
+}
+//@ chunk-s61vbvea.js:20540-20788 facade-exports = getCommand (1)
+/**
+ * getCommand：findCommand，找不到时抛出列出全部可用命令的 ReferenceError。
+ */
+function getCommand(commandName, commands) {
+  let command = findCommand(commandName, commands);
+  if (!command)
+    throw ReferenceError(
+      `Command ${commandName} not found. Available commands: ${commands
+        .map((command) => {
+          let name = getCommandName(command);
+          return command.aliases ? `${name} (aliases: ${command.aliases.join(", ")})` : name;
+        })
+        .sort((a, b) => a.localeCompare(b))
+        .join(", ")}`,
+    );
+  return command;
+}
+//@ chunk-s61vbvea.js:20788-20915 affinity
+/**
+ * containsSecretPattern：按 64KB 分段（带重叠）扫描。
+ */
+function containsSecretPattern(text) {
+  if (text.length <= SECRET_SCAN_CHUNK) return containsSecret(text);
+  let step = SECRET_SCAN_CHUNK - SECRET_SCAN_PATTERN_SPAN;
+  for (let index = 0; index < text.length; index += step)
+    if (containsSecret(text.slice(index, index + SECRET_SCAN_CHUNK))) return true;
+  return false;
+}
 //@ chunk-e6aww6q8.js:953787-953824 facade-exports
-function isSkillOff(e) {
-  return getSkillOverrideState(e) === "off";
+function isSkillOff(name) {
+  return getSkillOverrideState(name) === "off";
 }
 //@ chunk-e6aww6q8.js:953824-954135 fingerprint = meetsAvailabilityRequirement (0.639)
 /**
@@ -345,7 +637,7 @@ function dedupeBundledSkills(commands) {
   return result;
 }
 //@ chunk-e6aww6q8.js:955309-955350 layout
-function hiddenCommandsWhenSlashDisabled(e) {
+function hiddenCommandsWhenSlashDisabled(x) {
   if (getDisableSlashCommands()) return [];
   return [];
 }
@@ -393,15 +685,18 @@ function addCommandSpellings(spellings, cmd) {
  * （旧版名 buildTool 是错配）过滤命令（Skill）的 aliases：保留谓词为真的别名；syncedSkills 来源的命令若规范名与 userFacingName 不一致，再改写 userFacingName。
  */
 function filterCommandAliases(command, keepAlias) {
-  let r = dropReservedAliases(command, keepAlias);
-  if (r.loadedFrom !== "syncedSkills") return r;
-  let commandName = getCommandName(r);
-  if (withSyncedSkillPrefix(commandName) === commandName || getSyncedSkillUnqualifiedAlias(r) !== undefined)
-    return r;
-  let h = withSyncedSkillPrefix(commandName);
+  let filteredCommand = dropReservedAliases(command, keepAlias);
+  if (filteredCommand.loadedFrom !== "syncedSkills") return filteredCommand;
+  let commandName = getCommandName(filteredCommand);
+  if (
+    withSyncedSkillPrefix(commandName) === commandName ||
+    getSyncedSkillUnqualifiedAlias(filteredCommand) !== undefined
+  )
+    return filteredCommand;
+  let prefixed = withSyncedSkillPrefix(commandName);
   return {
-    ...r,
-    userFacingName: () => h,
+    ...filteredCommand,
+    userFacingName: () => prefixed,
   };
 }
 //@ chunk-e6aww6q8.js:1661511-1661811 placement
@@ -413,30 +708,30 @@ function getHeldBackSyncedPlugins() {
   let lastSyncedLaneLoad = getLastSyncedLaneLoad();
   if (lastSyncedLaneLoad === null) return EMPTY_COMMAND_CACHE;
   if (isImmutableLadybugActive()) return EMPTY_COMMAND_CACHE;
-  let n = new Map();
+  let held = new Map();
   for (let { bucket, outcome, pluginName, pluginId } of lastSyncedLaneLoad)
     if (
       outcome !== "not_loaded" &&
       pluginId !== undefined &&
       isPluginDirMissingFromSyncedList(bucket, pluginId) &&
-      n.get(pluginId)?.heldBack !== false
+      held.get(pluginId)?.heldBack !== false
     )
-      n.set(pluginId, {
+      held.set(pluginId, {
         pluginName,
         heldBack: outcome === "held_back",
       });
-  return n.size === 0 ? EMPTY_COMMAND_CACHE : n;
+  return held.size === 0 ? EMPTY_COMMAND_CACHE : held;
 }
 //@ chunk-e6aww6q8.js:1661811-1661890 placement
 /**
  * 判断某插件目录是否尚未出现在最近一次完整同步的插件列表里（用于触发补充加载）。
  */
-function isPluginDirMissingFromSyncedList(e, n) {
+function isPluginDirMissingFromSyncedList(bucket, pluginId) {
   let lastCompleteSyncedPluginList = getLastCompleteSyncedPluginList();
   return (
     lastCompleteSyncedPluginList === null ||
-    lastCompleteSyncedPluginList.bucket !== e ||
-    lastCompleteSyncedPluginList.dirsById.has(n)
+    lastCompleteSyncedPluginList.bucket !== bucket ||
+    lastCompleteSyncedPluginList.dirsById.has(pluginId)
   );
 }
 //@ chunk-e6aww6q8.js:1661890-1661969 placement
@@ -449,95 +744,97 @@ function hidePrefixForSkills(hiddenPlugins) {
  */
 function hideSkillsBehindPlugins(commands, heldBackPlugins, userCommands) {
   if (heldBackPlugins.size === 0) return commands;
-  let s = new Set(userCommands.map((userCommand) => foldName_2(userCommand.name)));
-  let h;
-  let y = false;
+  let userNames = new Set(userCommands.map((userCommand) => foldName_2(userCommand.name)));
+  let isAttributionEnabled;
+  let changed = false;
   let mappedCommands = commands.map((command) => {
-    let L =
+    let heldBack =
       command.type === "prompt" &&
       command.loadedFrom === "syncedSkills" &&
       command.serverAttribution?.pluginId !== undefined
         ? heldBackPlugins.get(command.serverAttribution.pluginId)
         : undefined;
     if (
-      L === undefined ||
+      heldBack === undefined ||
       command.type !== "prompt" ||
       command.skillRoot === undefined ||
-      s.has(foldName_2(command.name)) ||
-      (h ??= isSkillAttributionEnabled())(command.skillRoot) !== undefined
+      userNames.has(foldName_2(command.name)) ||
+      (isAttributionEnabled ??= isSkillAttributionEnabled())(command.skillRoot) !== undefined
     )
       return command;
-    let G = L.heldBack ? undefined : findPluginReplacementSkill(commands, L.pluginName, command);
-    if (!L.heldBack && G === undefined) return command;
-    y = true;
+    let replacement = heldBack.heldBack
+      ? undefined
+      : findPluginReplacementSkill(commands, heldBack.pluginName, command);
+    if (!heldBack.heldBack && replacement === undefined) return command;
+    changed = true;
     return {
       ...command,
       isHidden: true,
       hiddenBehindPlugin: {
-        plugin: L.pluginName,
-        heldBack: L.heldBack,
-        ...(G !== undefined && {
-          replacement: G,
+        plugin: heldBack.pluginName,
+        heldBack: heldBack.heldBack,
+        ...(replacement !== undefined && {
+          replacement,
         }),
       },
     };
   });
-  return y ? mappedCommands : commands;
+  return changed ? mappedCommands : commands;
 }
 //@ chunk-e6aww6q8.js:1662547-1662736 placement
 function findPluginReplacementSkill(commands, pluginName, command) {
-  let s = foldName_2(command.unqualifiedName ?? command.name);
+  let name = foldName_2(command.unqualifiedName ?? command.name);
   return commands.find(
-    (h) =>
-      h.type === "prompt" &&
-      h.pluginInfo?.repository === `${pluginName}@synced` &&
-      !isShadowedSkillName(h) &&
-      (h.aliases ?? []).some((y) => foldName_2(y) === s),
+    (command) =>
+      command.type === "prompt" &&
+      command.pluginInfo?.repository === `${pluginName}@synced` &&
+      !isShadowedSkillName(command) &&
+      (command.aliases ?? []).some((alias) => foldName_2(alias) === name),
   )?.name;
 }
 //@ chunk-e6aww6q8.js:1662736-1663073 placement
 /**
  * 为被插件接管而隐藏的技能生成提示："现在是插件技能 /X" 或 "属于已关闭的插件 X，去 /plugin 打开"。
  */
-function describeSkillHiddenBehindPlugin(e) {
-  if (e.type !== "prompt" || e.hiddenBehindPlugin === undefined) return;
-  let n = (y) => normalizeServerNameShort(y, 200);
-  let { plugin, replacement } = e.hiddenBehindPlugin;
-  let h = n(e.name);
+function describeSkillHiddenBehindPlugin(command) {
+  if (command.type !== "prompt" || command.hiddenBehindPlugin === undefined) return;
+  let safe = (name) => normalizeServerNameShort(name, 200);
+  let { plugin, replacement } = command.hiddenBehindPlugin;
+  let name = safe(command.name);
   if (replacement !== undefined)
-    return `${h} is now the plugin skill ${n(replacement)}. Use /${n(replacement)}.`;
-  return `${h} is now part of the plugin ${n(plugin)}, which is turned off. Check /plugin to turn it on and run it.`;
+    return `${name} is now the plugin skill ${safe(replacement)}. Use /${safe(replacement)}.`;
+  return `${name} is now part of the plugin ${safe(plugin)}, which is turned off. Check /plugin to turn it on and run it.`;
 }
 //@ chunk-e6aww6q8.js:1683563-1683709 placement
-function findAdditionalDirRoot(e) {
-  let n = resolve_2(e);
-  let r = null;
-  for (let s of getAdditionalDirectoriesForClaudeMd()) {
-    let h = resolve_2(s);
+function findAdditionalDirRoot(path) {
+  let resolved = resolve_2(path);
+  let best = null;
+  for (let dir of getAdditionalDirectoriesForClaudeMd()) {
+    let resolvedDir = resolve_2(dir);
     if (
-      isPathWithin_2(h, n, {
+      isPathWithin_2(resolvedDir, resolved, {
         alreadyComparable: true,
       }) &&
-      (r === null || h.length > r.length)
+      (best === null || resolvedDir.length > best.length)
     )
-      r = h;
+      best = resolvedDir;
   }
-  return r;
+  return best;
 }
 //@ chunk-e6aww6q8.js:1683709-1683961 placement
-function getAdditionalDirRelativeLabel(skillProjectRoot) {
-  let additionalDirRoot = findAdditionalDirRoot(skillProjectRoot);
+function getAdditionalDirRelativeLabel(path) {
+  let additionalDirRoot = findAdditionalDirRoot(path);
   if (additionalDirRoot === null) return null;
-  let r = basename(additionalDirRoot);
-  if (r === "") return null;
-  let any = getAdditionalDirectoriesForClaudeMd().some((w) => {
-    let L = resolve_2(w);
-    return L !== additionalDirRoot && basename(L) === r;
+  let base = basename(additionalDirRoot);
+  if (base === "") return null;
+  let any = getAdditionalDirectoriesForClaudeMd().some((dir) => {
+    let resolved = resolve_2(dir);
+    return resolved !== additionalDirRoot && basename(resolved) === base;
   });
-  let h = basename(dirname(additionalDirRoot));
-  let y = any && h !== "" ? `${h}/${r}` : r;
-  let S = relative(additionalDirRoot, resolve_2(skillProjectRoot));
-  return S === "" ? y : [y, ...S.split(sep)].join("/");
+  let parent = basename(dirname(additionalDirRoot));
+  let label = any && parent !== "" ? `${parent}/${base}` : base;
+  let rest = relative(additionalDirRoot, resolve_2(path));
+  return rest === "" ? label : [label, ...rest.split(sep)].join("/");
 }
 //@ chunk-e6aww6q8.js:1732452-1732503 placement = default (1)
 var stubCommand_1 = {
@@ -555,10 +852,10 @@ var stubCommand_2 = {
 /**
  * getCommandOriginKind：builtin/plugin/mcp/user。
  */
-function getCommandOriginKind(e) {
-  if (isPluginLocalCommand_2(e)) return "plugin";
-  if (e.type !== "prompt") return e.loadedFrom === "mcp" ? "mcp" : "builtin";
-  switch (e.source) {
+function getCommandOriginKind(command) {
+  if (isPluginLocalCommand_2(command)) return "plugin";
+  if (command.type !== "prompt") return command.loadedFrom === "mcp" ? "mcp" : "builtin";
+  switch (command.source) {
     case "builtin":
     case "bundled":
       return "builtin";
@@ -657,8 +954,8 @@ var WORKER_ONLY_SKILL_NAMES = ["autopilot", "bugfix", "dashboard", "deep-researc
 /**
  * 把名字匹配到仅 worker 可用的技能名（autopilot/bugfix/dashboard/deep-research/docs/investigate）。
  */
-function workerOnlySkillName(e) {
-  return WORKER_ONLY_SKILL_NAMES.find((n) => n === e);
+function workerOnlySkillName(name) {
+  return WORKER_ONLY_SKILL_NAMES.find((candidate) => candidate === name);
 }
 //@ chunk-e6aww6q8.js:2053280-2053302 placement
 /**
@@ -667,107 +964,149 @@ function workerOnlySkillName(e) {
 var gatedInternalCommand = null;
 var gatedInPlaceWriteCommand = null;
 //@ chunk-e6aww6q8.js:2053302-2053315 placement
-if (gatedInPlaceWriteCommand) markInPlaceWriteForced();
+// deferred: uses markInPlaceWriteForced (./utils/plugins/safeCopy.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2053302", () => {
+  if (gatedInPlaceWriteCommand) markInPlaceWriteForced();
+});
 //@ chunk-e6aww6q8.js:2053315-2054702 fingerprint = usageReport (0.431)
 /**
  * promoteMemoryCommands：构建期为 null；注册表里取 .promoteMemory/.promoteMemoryNonInteractive。
  */
-var promoteMemoryCommands = null;
-var accountMemoryCommands = null;
-var gatedCommandSlot_1 = null;
-var gatedCommandSlot_5 = null;
-var gatedCommandSlot_2 = null;
-var gatedCommandSlot_3 = null;
-var gatedCommandSlot_4 = null;
-var briefCommand = require("./chunk-gv7qjj2t.js").default;
-var remoteControlCommand = require("./chunk-53mky9yr.js").default;
-var daemonCommand = require("./chunk-0e9ty0k2.js").default;
-var gatedCommandSlot_6 = null;
-var gatedCommandSlot_7 = null;
-var recapCommand = require("./chunk-66drwgm7.js").default;
-var gatedCommandSlot_8 = null;
-var gatedCommandSlot_9 = null;
-var gatedCommandSlot_10 = null;
-var gatedCommandSlot_11 = null;
-var goalCommandModule = require("./chunk-nn4xbsmj.js");
-var goalCommand = goalCommandModule.default;
-var goalNonInteractive = goalCommandModule.goalNonInteractive;
-var workflowsCommand = require("./chunk-g8tswn69.js").default;
-var webSetupCommand = require("./chunk-yddv4we7.js").default;
-var EMPTY_COMMAND_LIST = [];
-var listAgentsCommand = require("./chunk-yxzqxbzv.js").default;
-var gatedCommandSlot_12 = null;
-var gatedCommandSlot_13 = null;
-var gatedCommandSlot_14 = null;
-var gatedCommandSlot_15 = null;
-var backgroundCommand = require("./chunk-3m7t4vj8.js").default;
-var stopCommandModule = require("./chunk-adzz9hc5.js");
-var stopCommand = stopCommandModule?.default ?? null;
-var stopNonInteractive = stopCommandModule?.stopNonInteractive ?? null;
-var gatedCommandSlot_16 = null;
-var loginCommand = loginCommand_2();
-var usageReport = {
-  type: "prompt",
-  name: "insights",
-  description: "Generate a report analyzing your Claude Code sessions",
-  contentLength: 0,
-  progressMessage: "analyzing your sessions",
-  source: "builtin",
-  disableModelInvocation: true,
-  policyGate: {
-    policy: "allow_insights",
-  },
-  requires: {
-    workspace: true,
-  },
-  async getPromptForCommand(args, context) {
-    let real = (await import("./chunk-yt6zn9vg.js")).default;
-    if (real.type !== "prompt") throw Error("unreachable");
-    return real.getPromptForCommand(args, context);
-  },
-};
-var INTERNAL_ONLY_COMMANDS = [
-  ...(gatedCommandSlot_2 ? [gatedCommandSlot_2] : []),
-  ...(gatedCommandSlot_3 ? [gatedCommandSlot_3] : []),
-  ...(gatedCommandSlot_1 ? [gatedCommandSlot_1] : []),
-  stubCommand_1,
-  stubTerminalSetupCommand,
-  commitPushPrCommand,
-  stubAntTraceCommand,
-  ...(gatedCommandSlot_16 ? [gatedCommandSlot_16] : []),
-  stubCommand_3,
-  versionCommand,
-  versionNonInteractiveCommand,
-  stubCommand_4a,
-  stubCommand_4b,
-  stubCommand_8,
-  stubCommand_5a,
-  stubCommand_6a,
-  stubCommand_2,
-  stubScrollSpeedCommand_2,
-  stubScrollSpeedCommand,
-  stubCommand_7,
-  stubCommand_9,
-  stubCommand_10,
-  stubC4EUpsellCommand,
-  stubCommand_11,
-  stubCommand_12,
-  stubCommand_13,
-  gatedInternalCommand,
-  ...(gatedCommandSlot_13 ? [gatedCommandSlot_13] : []),
-  ...(gatedCommandSlot_14 ? [gatedCommandSlot_14] : []),
-].filter(Boolean);
-var filtered = [
-  gatedInPlaceWriteCommand,
-  gatedCommandSlot_8,
-  gatedCommandSlot_9,
-  gatedCommandSlot_10,
-  gatedCommandSlot_11,
-  gatedCommandSlot_6,
-  gatedCommandSlot_15,
-  gatedCommandSlot_5,
-  gatedCommandSlot_7,
-].filter(Boolean);
+var promoteMemoryCommands; // deferred: loads other modules while loading; runs once its import cycle is complete
+var accountMemoryCommands;
+var gatedCommandSlot_1;
+var gatedCommandSlot_5;
+var gatedCommandSlot_2;
+var gatedCommandSlot_3;
+var gatedCommandSlot_4;
+var briefCommand;
+var remoteControlCommand;
+var daemonCommand;
+var gatedCommandSlot_6;
+var gatedCommandSlot_7;
+var recapCommand;
+var gatedCommandSlot_8;
+var gatedCommandSlot_9;
+var gatedCommandSlot_10;
+var gatedCommandSlot_11;
+var goalCommandModule;
+var goalCommand;
+var goalNonInteractive;
+var workflowsCommand;
+var webSetupCommand;
+var EMPTY_COMMAND_LIST;
+var listAgentsCommand;
+var gatedCommandSlot_12;
+var gatedCommandSlot_13;
+var gatedCommandSlot_14;
+var gatedCommandSlot_15;
+var backgroundCommand;
+var stopCommandModule;
+var stopCommand;
+var stopNonInteractive;
+var gatedCommandSlot_16;
+var loginCommand;
+var usageReport;
+var INTERNAL_ONLY_COMMANDS;
+var filtered;
+deferInit("chunk-e6aww6q8.js:2053315", () => {
+  promoteMemoryCommands = null;
+  accountMemoryCommands = null;
+  gatedCommandSlot_1 = null;
+  gatedCommandSlot_5 = null;
+  gatedCommandSlot_2 = null;
+  gatedCommandSlot_3 = null;
+  gatedCommandSlot_4 = null;
+  briefCommand = require("./commands/default.lazy.js").default;
+  remoteControlCommand = require("./commands/bridge/default.lazy.js").default;
+  daemonCommand = require("./commands/daemon/default.lazy.js").default;
+  gatedCommandSlot_6 = null;
+  gatedCommandSlot_7 = null;
+  recapCommand = require("./commands/recap/default.lazy.js").default;
+  gatedCommandSlot_8 = null;
+  gatedCommandSlot_9 = null;
+  gatedCommandSlot_10 = null;
+  gatedCommandSlot_11 = null;
+  goalCommandModule = require("./commands/goal/default.lazy.js");
+  goalCommand = goalCommandModule.default;
+  goalNonInteractive = goalCommandModule.goalNonInteractive;
+  workflowsCommand = require("./commands/workflows/default.lazy.js").default;
+  webSetupCommand = require("./services/cloudSessions/connectGithubUrl.lazy.js").default;
+  EMPTY_COMMAND_LIST = [];
+  listAgentsCommand = require("./commands/list-agents/default.lazy.js").default;
+  gatedCommandSlot_12 = null;
+  gatedCommandSlot_13 = null;
+  gatedCommandSlot_14 = null;
+  gatedCommandSlot_15 = null;
+  backgroundCommand = require("./commands/background/default.lazy.js").default;
+  stopCommandModule = require("./commands/stop/default.lazy.js");
+  stopCommand = stopCommandModule?.default ?? null;
+  stopNonInteractive = stopCommandModule?.stopNonInteractive ?? null;
+  gatedCommandSlot_16 = null;
+  loginCommand = loginCommand_2();
+  usageReport = {
+    type: "prompt",
+    name: "insights",
+    description: "Generate a report analyzing your Claude Code sessions",
+    contentLength: 0,
+    progressMessage: "analyzing your sessions",
+    source: "builtin",
+    disableModelInvocation: true,
+    policyGate: {
+      policy: "allow_insights",
+    },
+    requires: {
+      workspace: true,
+    },
+    async getPromptForCommand(args, context) {
+      let real = (await import("./commands/default_2.lazy.js")).default;
+      if (real.type !== "prompt") throw Error("unreachable");
+      return real.getPromptForCommand(args, context);
+    },
+  };
+  INTERNAL_ONLY_COMMANDS = [
+    ...(gatedCommandSlot_2 ? [gatedCommandSlot_2] : []),
+    ...(gatedCommandSlot_3 ? [gatedCommandSlot_3] : []),
+    ...(gatedCommandSlot_1 ? [gatedCommandSlot_1] : []),
+    stubCommand_1,
+    stubTerminalSetupCommand,
+    commitPushPrCommand,
+    stubAntTraceCommand,
+    ...(gatedCommandSlot_16 ? [gatedCommandSlot_16] : []),
+    stubCommand_3,
+    versionCommand,
+    versionNonInteractiveCommand,
+    stubCommand_4a,
+    stubCommand_4b,
+    stubCommand_8,
+    stubCommand_5a,
+    stubCommand_6a,
+    stubCommand_2,
+    stubScrollSpeedCommand_2,
+    stubScrollSpeedCommand,
+    stubCommand_7,
+    stubCommand_9,
+    stubCommand_10,
+    stubC4EUpsellCommand,
+    stubCommand_11,
+    stubCommand_12,
+    stubCommand_13,
+    gatedInternalCommand,
+    ...(gatedCommandSlot_13 ? [gatedCommandSlot_13] : []),
+    ...(gatedCommandSlot_14 ? [gatedCommandSlot_14] : []),
+  ].filter(Boolean);
+  filtered = [
+    gatedInPlaceWriteCommand,
+    gatedCommandSlot_8,
+    gatedCommandSlot_9,
+    gatedCommandSlot_10,
+    gatedCommandSlot_11,
+    gatedCommandSlot_6,
+    gatedCommandSlot_15,
+    gatedCommandSlot_5,
+    gatedCommandSlot_7,
+  ].filter(Boolean);
+});
 //@ chunk-e6aww6q8.js:2054702-2055052 layout
 /**
  * getRuntimeGatedCommandGroups：fleetFork/fleetBackground/daemon/skillDoctor/logout 五组 {open, whenOpen, whenClosed}。
@@ -821,8 +1160,8 @@ function getRuntimeGatedGroup(groupName) {
  * getRuntimeGatedBuiltinCommands：五个运行时门控组（fleetFork、fleetBackground、daemon、skillDoctor、logout）的 whenOpen 与 whenClosed 全部成员。
  */
 function getRuntimeGatedBuiltinCommands() {
-  return Object.values(getRuntimeGatedCommandGroups()).flatMap((e) =>
-    compactCommandList([...e.whenOpen, ...e.whenClosed]),
+  return Object.values(getRuntimeGatedCommandGroups()).flatMap((group) =>
+    compactCommandList([...group.whenOpen, ...group.whenClosed]),
   );
 }
 //@ chunk-e6aww6q8.js:2055270-2056322 facade-exports
@@ -990,115 +1329,119 @@ function buildBuiltinCommandTable() {
 /**
  * REMOTE_SAFE_COMMANDS：远程模式（--remote）下仍可在本地执行的命令集合。
  */
-var REMOTE_SAFE_COMMANDS = new Set([
-  sessionCommand,
-  exitCommand,
-  helpCommand,
-  themeCommand,
-  colorCommand,
-  ...(gatedCommandSlot_15 ? [gatedCommandSlot_15] : []),
-  usageCommand,
-  copyCommand,
-  feedbackCommand,
-  bugCommand,
-  mobileCommand,
-  releaseNotesCommand,
-  exportCommand,
-  terminalSetupCommand,
-  privacySettingsCommand,
-  focusCommand,
-  wellbeingCommand,
-  cloudPluginsCommand,
-  hooksCommand,
-  configCommand,
-  statusCommand,
-  vimMovedToConfigCommand,
-  keybindingsCommand,
-  ...(gatedCommandSlot_1 ? [gatedCommandSlot_1] : []),
-  ...(gatedCommandSlot_5 ? [gatedCommandSlot_5] : []),
-  powerupCommand,
-  passesCommand,
-  usageCreditsCommand,
-  extraUsageCommand,
-  upgradeCommand,
-  loginCommand,
-  rateLimitOptionsCommand,
-  claimCreditCommand,
-  ...(gatedInternalCommand ? [gatedInternalCommand] : []),
-  ...(gatedCommandSlot_6 ? [gatedCommandSlot_6] : []),
-  ...(gatedCommandSlot_7 ? [gatedCommandSlot_7] : []),
-  ...[],
-  ...(daemonCommand ? [daemonCommand] : []),
-  renameCommand,
-  btwCommand,
-  contextCommand,
-  diffCommand,
-  planCommand,
-  advisorCommand,
-  effortCommand,
-  fastCommand,
-  modelCommand,
-  versionCommand,
-  clearCommand,
-  compactCommand,
-  autocompactNonInteractiveCommand,
-  goalNonInteractive,
-  ...(gatedCommandSlot_14 ? [gatedCommandSlot_14] : []),
-  recapCommand,
-  reloadSkillsCommand,
-  pauseMemoryCommand,
-  agentsRemovedCommand,
-  reloadPluginsCommand,
-  ...(gatedCommandSlot_16 ? [gatedCommandSlot_16] : []),
-  skillDoctorCommand,
-  skillDoctorNonInteractiveCommand,
-  mcpCommand,
-  mcpNonInteractiveCommand,
-  addDirCommand,
-  addDirNonInteractiveCommand,
-  permissionsCommand,
-  sandboxCommand,
-  tasksCommand,
-  workflowsCommand,
-  rewindCommand,
-  memoryCommand,
-  ...(accountMemoryCommands ? [accountMemoryCommands.memoryNotes] : []),
-  skillsCommand,
-  pluginCommand,
-]);
-var BRIDGE_SAFE_COMMANDS = new Set([
-  autoModeSetupNonInteractiveCommand,
-  compactCommand,
-  autocompactNonInteractiveCommand,
-  clearCommand,
-  usageNonInteractiveCommand,
-  contextNonInteractiveCommand,
-  configNonInteractiveCommand,
-  outputStyleCommand,
-  goalNonInteractive,
-  exitNonInteractiveCommand,
-  ...(stopNonInteractive ? [stopNonInteractive] : []),
-  versionNonInteractiveCommand,
-  usageCreditsNonInteractiveCommand,
-  extraUsageNonInteractiveCommand,
-  renameNonInteractiveCommand,
-  colorNonInteractiveCommand,
-  ...(gatedCommandSlot_12 ? [gatedCommandSlot_12] : []),
-  fastNonInteractiveCommand,
-  focusNonInteractiveCommand,
-  effortNonInteractiveCommand,
-  advisorNonInteractiveCommand,
-  modelNonInteractiveCommand,
-  mcpNonInteractiveCommand,
-  ...(gatedCommandSlot_14 ? [gatedCommandSlot_14] : []),
-  ...(recapCommand ? [recapCommand] : []),
-  skillDoctorNonInteractiveCommand,
-  ...(listAgentsCommand ? [listAgentsCommand] : []),
-  ...(gatedCommandSlot_8 ? [gatedCommandSlot_8] : []),
-  reloadPluginsCommand,
-  reloadSkillsCommand,
-  restartCommand,
-]);
+var REMOTE_SAFE_COMMANDS; // deferred: uses colorCommandDefinition (./commands/color/index.js) of its import cycle while loading; runs once the cycle is complete
+var BRIDGE_SAFE_COMMANDS;
+deferInit("chunk-e6aww6q8.js:2056322", () => {
+  REMOTE_SAFE_COMMANDS = new Set([
+    sessionCommand,
+    exitCommand,
+    helpCommand,
+    themeCommand,
+    colorCommand,
+    ...(gatedCommandSlot_15 ? [gatedCommandSlot_15] : []),
+    usageCommand,
+    copyCommand,
+    feedbackCommand,
+    bugCommand,
+    mobileCommand,
+    releaseNotesCommand,
+    exportCommand,
+    terminalSetupCommand,
+    privacySettingsCommand,
+    focusCommand,
+    wellbeingCommand,
+    cloudPluginsCommand,
+    hooksCommand,
+    configCommand,
+    statusCommand,
+    vimMovedToConfigCommand,
+    keybindingsCommand,
+    ...(gatedCommandSlot_1 ? [gatedCommandSlot_1] : []),
+    ...(gatedCommandSlot_5 ? [gatedCommandSlot_5] : []),
+    powerupCommand,
+    passesCommand,
+    usageCreditsCommand,
+    extraUsageCommand,
+    upgradeCommand,
+    loginCommand,
+    rateLimitOptionsCommand,
+    claimCreditCommand,
+    ...(gatedInternalCommand ? [gatedInternalCommand] : []),
+    ...(gatedCommandSlot_6 ? [gatedCommandSlot_6] : []),
+    ...(gatedCommandSlot_7 ? [gatedCommandSlot_7] : []),
+    ...[],
+    ...(daemonCommand ? [daemonCommand] : []),
+    renameCommand,
+    btwCommand,
+    contextCommand,
+    diffCommand,
+    planCommand,
+    advisorCommand,
+    effortCommand,
+    fastCommand,
+    modelCommand,
+    versionCommand,
+    clearCommand,
+    compactCommand,
+    autocompactNonInteractiveCommand,
+    goalNonInteractive,
+    ...(gatedCommandSlot_14 ? [gatedCommandSlot_14] : []),
+    recapCommand,
+    reloadSkillsCommand,
+    pauseMemoryCommand,
+    agentsRemovedCommand,
+    reloadPluginsCommand,
+    ...(gatedCommandSlot_16 ? [gatedCommandSlot_16] : []),
+    skillDoctorCommand,
+    skillDoctorNonInteractiveCommand,
+    mcpCommand,
+    mcpNonInteractiveCommand,
+    addDirCommand,
+    addDirNonInteractiveCommand,
+    permissionsCommand,
+    sandboxCommand,
+    tasksCommand,
+    workflowsCommand,
+    rewindCommand,
+    memoryCommand,
+    ...(accountMemoryCommands ? [accountMemoryCommands.memoryNotes] : []),
+    skillsCommand,
+    pluginCommand,
+  ]);
+  BRIDGE_SAFE_COMMANDS = new Set([
+    autoModeSetupNonInteractiveCommand,
+    compactCommand,
+    autocompactNonInteractiveCommand,
+    clearCommand,
+    usageNonInteractiveCommand,
+    contextNonInteractiveCommand,
+    configNonInteractiveCommand,
+    outputStyleCommand,
+    goalNonInteractive,
+    exitNonInteractiveCommand,
+    ...(stopNonInteractive ? [stopNonInteractive] : []),
+    versionNonInteractiveCommand,
+    usageCreditsNonInteractiveCommand,
+    extraUsageNonInteractiveCommand,
+    renameNonInteractiveCommand,
+    colorNonInteractiveCommand,
+    ...(gatedCommandSlot_12 ? [gatedCommandSlot_12] : []),
+    fastNonInteractiveCommand,
+    focusNonInteractiveCommand,
+    effortNonInteractiveCommand,
+    advisorNonInteractiveCommand,
+    modelNonInteractiveCommand,
+    mcpNonInteractiveCommand,
+    ...(gatedCommandSlot_14 ? [gatedCommandSlot_14] : []),
+    ...(recapCommand ? [recapCommand] : []),
+    skillDoctorNonInteractiveCommand,
+    ...(listAgentsCommand ? [listAgentsCommand] : []),
+    ...(gatedCommandSlot_8 ? [gatedCommandSlot_8] : []),
+    reloadPluginsCommand,
+    reloadSkillsCommand,
+    restartCommand,
+  ]);
+});
 //@ chunk-e6aww6q8.js:2056969-2057141 facade-exports = isBridgeSafeCommand (0.82)
 /**
  * isBridgeSafeCommand：prompt 命令一律可桥接；local-jsx 不可；local 命令需在 BRIDGE_SAFE_COMMANDS 里。
@@ -1121,7 +1464,10 @@ function admitsBridgeAuthor(cmd, submission) {
 /**
  * BRIDGE_TWINS_FOR_PLUGIN_COMMANDS：new Set([contextNonInteractive])：插件同名 local 命令也可由这些桥接安全孪生代答。
  */
-var BRIDGE_TWINS_FOR_PLUGIN_COMMANDS = new Set([contextNonInteractiveCommand]);
+var BRIDGE_TWINS_FOR_PLUGIN_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2057229", () => {
+  BRIDGE_TWINS_FOR_PLUGIN_COMMANDS = new Set([contextNonInteractiveCommand]);
+});
 //@ chunk-e6aww6q8.js:2057252-2057408 facade-exports
 /**
  * findBridgeFallback：为插件注册的同名 local 命令找到可代答的桥接安全内建孪生命令。
@@ -1138,8 +1484,8 @@ function findBridgeFallback(cmd) {
 /**
  * isBridgeDispatchable：命令能否通过桥接派发（综合 isBridgeSafeCommand 与插件孪生回退）。
  */
-function isBridgeDispatchable(e) {
-  return isBridgeSafeCommand(e) || findBridgeFallback(e) !== undefined;
+function isBridgeDispatchable(command) {
+  return isBridgeSafeCommand(command) || findBridgeFallback(command) !== undefined;
 }
 //@ chunk-e6aww6q8.js:2057455-2057577 facade-exports
 /**
@@ -1220,9 +1566,9 @@ function formatDescriptionWithSource(cmd, description = cmd.description) {
 /**
  * toSlashCommands：把命令列表转换为 SDK/控制协议用的 slash_commands 条目（name、description、argumentHint、aliases）。
  */
-function toSlashCommands(e) {
+function toSlashCommands(clients) {
   let isFolderAlias = folderNameAliasCheck();
-  return mergeClients(e).map((r) => toSlashCommand(r, isFolderAlias));
+  return mergeClients(clients).map((client) => toSlashCommand(client, isFolderAlias));
 }
 //@ chunk-e6aww6q8.js:2058596-2058962 facade-exports
 /**
@@ -1256,8 +1602,8 @@ function toSlashCommand(cmd, isFolderAlias) {
 /**
  * 插件 ID 的市场部分是否为 builtin（内置插件）。
  */
-function isBuiltinCommand(cmd) {
-  return getCommandOriginKind(cmd) === "builtin";
+function isBuiltinCommand(command) {
+  return getCommandOriginKind(command) === "builtin";
 }
 //@ chunk-e6aww6q8.js:2059003-2059045 facade-exports
 /**
@@ -1298,7 +1644,7 @@ function toBridgeSlashCommands(commands) {
     if (isBuiltinCommand(cmd)) entry.builtin = true;
     else delete entry.builtin;
     let aliases = (source !== cmd ? (cmd.aliases ?? []) : (entry.aliases ?? [])).filter(
-      (Z) => Z !== advertisedName && findCommand(Z, commands) === cmd,
+      (alias) => alias !== advertisedName && findCommand(alias, commands) === cmd,
     );
     entry.aliases = aliases.length ? aliases : undefined;
     result.push(entry);
@@ -1316,17 +1662,17 @@ function isPluginLocalCommand(cmd) {
 /**
  * addShippedCommandSpellings：运行时门控内建、内建技能、内建插件技能名都加入集合。
  */
-function addShippedCommandSpellings(e) {
-  addRuntimeGatedCommandSpellings(e);
-  for (let n of getRegisteredBundledSkillsIgnoringKillSwitch()) addCommandSpellings(e, n);
-  for (let n of builtinPluginSkillNames()) addSpelling(e, n);
+function addShippedCommandSpellings(spellings) {
+  addRuntimeGatedCommandSpellings(spellings);
+  for (let skill of getRegisteredBundledSkillsIgnoringKillSwitch()) addCommandSpellings(spellings, skill);
+  for (let name of builtinPluginSkillNames()) addSpelling(spellings, name);
 }
 //@ chunk-e6aww6q8.js:2059665-2059708 layout
 /**
  * addRuntimeGatedCommandSpellings：对 getRuntimeGatedBuiltinCommands() 逐个 addCommandSpellings。
  */
-function addRuntimeGatedCommandSpellings(e) {
-  for (let n of getRuntimeGatedBuiltinCommands()) addCommandSpellings(e, n);
+function addRuntimeGatedCommandSpellings(spellings) {
+  for (let command of getRuntimeGatedBuiltinCommands()) addCommandSpellings(spellings, command);
 }
 //@ chunk-e6aww6q8.js:2059708-2059852 layout
 /**
@@ -1334,10 +1680,11 @@ function addRuntimeGatedCommandSpellings(e) {
  */
 function getReservedSpellingsFor(allCommands) {
   return getHostState().reservedSpellingsFor(allCommands, () => {
-    let n = new Set();
-    for (let r of allCommands) if (r.loadedFrom !== "syncedSkills") addCommandSpellings(n, r);
-    addShippedCommandSpellings(n);
-    return n;
+    let names = new Set();
+    for (let command of allCommands)
+      if (command.loadedFrom !== "syncedSkills") addCommandSpellings(names, command);
+    addShippedCommandSpellings(names);
+    return names;
   });
 }
 //@ chunk-e6aww6q8.js:2059852-2059936 layout
@@ -1356,7 +1703,7 @@ function getBuiltinCommandTable() {
 function builtInCommandNames() {
   let hostState = getHostState();
   hostState.builtinCommandNames ??= new Set(
-    getBuiltinCommandTable().flatMap((n) => [n.name, ...(n.aliases ?? [])]),
+    getBuiltinCommandTable().flatMap((command) => [command.name, ...(command.aliases ?? [])]),
   );
   return hostState.builtinCommandNames;
 }
@@ -1368,7 +1715,7 @@ function shippedCommandNames() {
   let hostState = getHostState();
   hostState.shippedCommandNames ??= new Set([
     ...builtInCommandNames(),
-    ...getBundledSkills().flatMap((n) => [n.name, ...(n.aliases ?? [])]),
+    ...getBundledSkills().flatMap((skill) => [skill.name, ...(skill.aliases ?? [])]),
     ...builtinPluginSkillNames(),
   ]);
   return hostState.shippedCommandNames;
@@ -1386,16 +1733,17 @@ function isFirstPartyCommandName(name) {
  */
 function firstPartyCommandNameCheck() {
   let builtinCommandSpellings = collectBuiltinCommandSpellings();
-  return (n) => builtinCommandSpellings.has(foldName_2(n));
+  return (name) => builtinCommandSpellings.has(foldName_2(name));
 }
 //@ chunk-e6aww6q8.js:2060306-2060368 facade-exports
 /**
  * folderNameAliasCheck：插件命名目录别名（named-folder）是否与已有命令冲突。
  */
 function folderNameAliasCheck() {
-  let e;
-  return (n) =>
-    isSafeSkillName(n) && !isQualifiedToolReference(foldName_2(n), (e ??= collectBuiltinCommandSpellings()));
+  let spellings;
+  return (name) =>
+    isSafeSkillName(name) &&
+    !isQualifiedToolReference(foldName_2(name), (spellings ??= collectBuiltinCommandSpellings()));
 }
 //@ chunk-e6aww6q8.js:2060368-2060439 layout
 /**
@@ -1403,7 +1751,7 @@ function folderNameAliasCheck() {
  */
 function collectBuiltinCommandSpellings() {
   let spellings = new Set();
-  for (let n of getBuiltinCommandTable()) addCommandSpellings(spellings, n);
+  for (let command of getBuiltinCommandTable()) addCommandSpellings(spellings, command);
   addShippedCommandSpellings(spellings);
   return spellings;
 }
@@ -1411,8 +1759,8 @@ function collectBuiltinCommandSpellings() {
 /**
  * shippedCommandNameForAnalytics：命令名属于发行内建拼写时原样返回，否则返回 "custom"，避免上报用户自定义命令名。
  */
-function shippedCommandNameForAnalytics(e) {
-  return parentCommandName(e, shippedCommandNames().has(e));
+function shippedCommandNameForAnalytics(name) {
+  return parentCommandName(name, shippedCommandNames().has(name));
 }
 //@ chunk-e6aww6q8.js:2060481-2060507 facade-exports
 /**
@@ -1480,7 +1828,16 @@ async function getSkills(cwd, storage) {
   }
 }
 //@ chunk-e6aww6q8.js:2061509-2061615 fingerprint = getWorkflowCommands (0.344)
-var { getWorkflowCommands, invalidateWorkflowCache, warmWorkflows } = require("./chunk-qzez70vf.js");
+var getWorkflowCommands; // deferred: loads other modules while loading; runs once its import cycle is complete
+var invalidateWorkflowCache;
+var warmWorkflows;
+deferInit("chunk-e6aww6q8.js:2061509", () => {
+  ({
+    getWorkflowCommands,
+    invalidateWorkflowCache,
+    warmWorkflows,
+  } = require("./commands/workflows/getWorkflowCommands.lazy.js"));
+});
 //@ chunk-e6aww6q8.js:2061615-2061737 facade-exports
 /**
  * commandsMemoKey：命令缓存键，由 cwd、存储 v5 开关与隐藏插件列表组成。
@@ -1567,12 +1924,12 @@ async function loadAllCommandsUncached(cwd, storage, storageV5) {
       ...builtinPluginSkills,
       ...getBuiltinCommandTable(),
     ],
-    (We) => {
-      let ze = usesReservedSkillNamespace(We.name);
+    (command) => {
+      let reserved = usesReservedSkillNamespace(command.name);
       refuseReservedSkillName({
-        name: ze ? We.name : getCommandName(We),
-        path: We.type === "prompt" ? We.skillRoot : undefined,
-        change: We.kind === "workflow" ? "workflow-name" : ze ? "path" : "frontmatter-name",
+        name: reserved ? command.name : getCommandName(command),
+        path: command.type === "prompt" ? command.skillRoot : undefined,
+        change: command.kind === "workflow" ? "workflow-name" : reserved ? "path" : "frontmatter-name",
       });
     },
   );
@@ -1592,12 +1949,14 @@ async function loadAllCommandsUncached(cwd, storage, storageV5) {
   let acceptedSyncedSkills = admitSyncedSkills(
     trustedNamesFailedToLoad ? syncedSkills.map(admitAllAliases) : syncedSkills,
     reserved,
-    (We) =>
+    (command) =>
       logForDebugging(
-        `[skills] dropping synced skill '${We.name}' (display '${getCommandName(We)}'): its name is blank, or another command or an earlier synced skill already owns that namespaced name`,
+        `[skills] dropping synced skill '${command.name}' (display '${getCommandName(command)}'): its name is blank, or another command or an earlier synced skill already owns that namespaced name`,
       ),
   ).map(markBareNameReserved);
-  let [reservedNameCommands, otherCommands] = SS(listed, (We) => isShadowedSkillName(We));
+  let [reservedNameCommands, otherCommands] = partitionAlias(listed, (command) =>
+    isShadowedSkillName(command),
+  );
   let result = shedReservedAliases(
     dropShadowedFallbackSkills([...otherCommands, ...acceptedSyncedSkills, ...reservedNameCommands]),
     storageV5,
@@ -1606,9 +1965,9 @@ async function loadAllCommandsUncached(cwd, storage, storageV5) {
   groupPluginSourcesByName(
     "command",
     result
-      .map((We) => ({
-        name: We.name,
-        source: We.type === "prompt" ? We.source : "builtin",
+      .map((command) => ({
+        name: command.name,
+        source: command.type === "prompt" ? command.source : "builtin",
       }))
       .reverse(),
     {
@@ -1623,19 +1982,19 @@ async function loadAllCommandsUncached(cwd, storage, storageV5) {
  * logRefusedReservedSkillNames：一次性上报 skill_reserved_namespace 遥测。
  */
 function logRefusedReservedSkillNames() {
-  let e = getHostState().refusedReservedSkillNames();
-  if (e.length === 0 || !claimOnce().claim("skill_reserved_namespace_refused")) return;
-  let n = {
-    refused: e.length,
+  let refusals = getHostState().refusedReservedSkillNames();
+  if (refusals.length === 0 || !claimOnce().claim("skill_reserved_namespace_refused")) return;
+  let counts = {
+    refused: refusals.length,
   };
-  for (let { name: r, change } of e) {
-    let y = [
-      `ns_${(getReservedSkillNamespace(r) ?? "unknown").replaceAll("-", "_")}`,
+  for (let { name, change } of refusals) {
+    let keys = [
+      `ns_${(getReservedSkillNamespace(name) ?? "unknown").replaceAll("-", "_")}`,
       `kind_${change.replaceAll("-", "_")}`,
     ];
-    for (let S of y) n[S] = (n[S] ?? 0) + 1;
+    for (let key of keys) counts[key] = (counts[key] ?? 0) + 1;
   }
-  logFeatureSad("skill_reserved_namespace", "names_refused", n);
+  logFeatureSad("skill_reserved_namespace", "names_refused", counts);
 }
 //@ chunk-e6aww6q8.js:2063886-2063994 facade-exports
 /**
@@ -1659,7 +2018,7 @@ async function getCommands(
 async function getHiddenSyncedSkills(cwd, storage, hiddenPlugins) {
   if (hiddenPlugins.size === 0) return [];
   return (await getCommands(cwd, storage, hiddenPlugins)).filter(
-    (s) => s.type === "prompt" && s.hiddenBehindPlugin !== undefined,
+    (command) => command.type === "prompt" && command.hiddenBehindPlugin !== undefined,
   );
 }
 //@ chunk-e6aww6q8.js:2064129-2067775 layout
@@ -1671,26 +2030,26 @@ async function assembleCommands(cwd, storage, storageV5) {
   let allCommands = await loadAllCommands(cwd, storage, storageV5);
   let shadowedProjectSkills = new Set();
   if (getAdditionalDirectoriesForClaudeMd().length > 0) {
-    let hn = new Set();
+    let aliasNames = new Set();
     for (let command of allCommands) {
-      let yn =
+      let isProjectSkill =
         command.type === "prompt" && command.loadedFrom === "skills" && command.source === "projectSettings"
           ? getSkillProjectRoot(command)
           : null;
       if (
-        yn !== null &&
-        hn.has(command.name) &&
+        isProjectSkill !== null &&
+        aliasNames.has(command.name) &&
         (cwd === null ||
-          !isPathWithin_2(yn, cwd, {
+          !isPathWithin_2(isProjectSkill, cwd, {
             alreadyComparable: true,
           })) &&
-        findAdditionalDirRoot(yn) !== null
+        findAdditionalDirRoot(isProjectSkill) !== null
       ) {
         shadowedProjectSkills.add(command);
         continue;
       }
-      hn.add(command.name);
-      for (let Kn of command.aliases ?? []) hn.add(Kn);
+      aliasNames.add(command.name);
+      for (let alias of command.aliases ?? []) aliasNames.add(alias);
     }
   }
   let baseCommands =
@@ -1699,23 +2058,26 @@ async function assembleCommands(cwd, storage, storageV5) {
       : allCommands.filter((command) => !shadowedProjectSkills.has(command));
   let syncAllowed = !getSkillsSyncVetoed();
   let withTrustedNames = getHostState().loadedResultIsMissingTrustedNames(allCommands)
-    ? (hn) => hn.map((ho) => (ho.loadedFrom === "syncedSkills" ? admitAllAliases(ho) : ho))
-    : (hn) => hn;
+    ? (commands) =>
+        commands.map((command) =>
+          command.loadedFrom === "syncedSkills" ? admitAllAliases(command) : command,
+        )
+    : (command) => command;
   let dynamicSkills = getDynamicSkills();
   let realRootByCommand = getHostState().realSkillRootByCommand;
   if (shadowedProjectSkills.size > 0) {
-    let hn = [];
-    for (let ho of [...dynamicSkills, ...shadowedProjectSkills]) {
-      if (ho.type !== "prompt" || !ho.skillRoot || realRootByCommand.has(ho)) continue;
-      hn.push(
-        realpathNativeAsync(ho.skillRoot).then((yn) => {
-          if (yn !== null) realRootByCommand.set(ho, yn);
+    let out = [];
+    for (let skill of [...dynamicSkills, ...shadowedProjectSkills]) {
+      if (skill.type !== "prompt" || !skill.skillRoot || realRootByCommand.has(skill)) continue;
+      out.push(
+        realpathNativeAsync(skill.skillRoot).then((realRoot) => {
+          if (realRoot !== null) realRootByCommand.set(skill, realRoot);
         }),
       );
     }
-    await Promise.all(hn);
+    await Promise.all(out);
   }
-  let q = new Set(
+  let hostSkillNames = new Set(
     dynamicSkills.flatMap((dynamicSkill) =>
       dynamicSkill.type === "prompt" && dynamicSkill.skillRoot
         ? [realRootByCommand.get(dynamicSkill) ?? resolve_2(dynamicSkill.skillRoot)]
@@ -1729,36 +2091,38 @@ async function assembleCommands(cwd, storage, storageV5) {
         !(
           shadowedProjectSkill.type === "prompt" &&
           shadowedProjectSkill.skillRoot &&
-          q.has(realRootByCommand.get(shadowedProjectSkill) ?? resolve_2(shadowedProjectSkill.skillRoot))
+          hostSkillNames.has(
+            realRootByCommand.get(shadowedProjectSkill) ?? resolve_2(shadowedProjectSkill.skillRoot),
+          )
         ),
     ),
   ]);
   let hostCatalogSkills = syncAllowed
-    ? SS(
-        withTrustedNames(getSyncedSkillCommands()).filter((hn) => !isKilledHostCatalogSkill(hn)),
-        (hn) => !isHostCatalogSkill(hn),
+    ? partitionAlias(
+        withTrustedNames(getSyncedSkillCommands()).filter((name) => !isKilledHostCatalogSkill(name)),
+        (name) => !isHostCatalogSkill(name),
       ).flat()
     : [];
   let dropHostDuplicates =
     hostSkillCatalog() === undefined
-      ? (hn) => hn
-      : (hn) =>
-          hideDuplicateCatalogSkills(hn, [...dynamicAndShadowed, ...hostCatalogSkills]).filter(
-            (ho) => !isKilledHostCatalogSkill(ho),
+      ? (skill) => skill
+      : (skill) =>
+          hideDuplicateCatalogSkills(skill, [...dynamicAndShadowed, ...hostCatalogSkills]).filter(
+            (name) => !isKilledHostCatalogSkill(name),
           );
   let extraCommands = dropHostDuplicates(dynamicAndShadowed);
   let filteredBase = dropHostDuplicates(baseCommands).filter(
-    (hn) => meetsAvailabilityRequirement(hn) && isCommandEnabled(hn),
+    (skill) => meetsAvailabilityRequirement(skill) && isCommandEnabled(skill),
   );
   if (extraCommands.length === 0 && hostCatalogSkills.length === 0) return filteredBase;
   let scopeCache = new Map();
-  let scopeOf = (hn) => {
-    let ho = scopeCache.get(hn);
-    if (ho === undefined) {
-      ho = getSkillScopeLabel(hn, cwd);
-      scopeCache.set(hn, ho);
+  let scopeOf = (skill) => {
+    let scope = scopeCache.get(skill);
+    if (scope === undefined) {
+      scope = getSkillScopeLabel(skill, cwd);
+      scopeCache.set(skill, scope);
     }
-    return ho;
+    return scope;
   };
   let offeredExtras = dropAmbiguousScopedSkills(
     extraCommands.filter(
@@ -1769,16 +2133,16 @@ async function assembleCommands(cwd, storage, storageV5) {
   );
   let needsReservedCheck =
     hostCatalogSkills.length > 0 ||
-    offeredExtras.some((hn) => hn.loadedFrom === "syncedSkills") ||
-    filteredBase.some((hn) => hn.loadedFrom === "syncedSkills");
+    offeredExtras.some((skill) => skill.loadedFrom === "syncedSkills") ||
+    filteredBase.some((skill) => skill.loadedFrom === "syncedSkills");
   let reserved = new Set(needsReservedCheck ? getReservedSpellingsFor(allCommands) : []);
   if (needsReservedCheck) {
     addNonSyncedSpellings(reserved, offeredExtras);
     addNonSyncedSpellings(reserved, conditionalSkillEntries());
-    for (let hn of offeredExtras) {
-      if (hn.loadedFrom === "syncedSkills" || isFallbackSkill(hn)) continue;
-      let ho = scopeOf(hn);
-      if (ho) addSpelling(reserved, joinScopedName(ho, hn.name));
+    for (let skill of offeredExtras) {
+      if (skill.loadedFrom === "syncedSkills" || isFallbackSkill(skill)) continue;
+      let skillScope = scopeOf(skill);
+      if (skillScope) addSpelling(reserved, joinScopedName(skillScope, skill.name));
     }
   }
   let base = needsReservedCheck
@@ -1786,199 +2150,213 @@ async function assembleCommands(cwd, storage, storageV5) {
     : filteredBase;
   let baseNames = new Set();
   let baseSkillRoots = new Set();
-  for (let hn of base) {
-    baseNames.add(hn.name);
-    for (let ho of hn.aliases ?? []) baseNames.add(ho);
-    if (hn.type === "prompt" && hn.skillRoot) baseSkillRoots.add(hn.skillRoot);
+  for (let command of base) {
+    baseNames.add(command.name);
+    for (let alias of command.aliases ?? []) baseNames.add(alias);
+    if (command.type === "prompt" && command.skillRoot) baseSkillRoots.add(command.skillRoot);
   }
   let nameCounts = new Map();
-  for (let hn of offeredExtras) {
-    if (isFallbackSkill(hn) || hn.loadedFrom === "syncedSkills") continue;
-    nameCounts.set(hn.name, (nameCounts.get(hn.name) ?? 0) + 1);
+  for (let skill of offeredExtras) {
+    if (isFallbackSkill(skill) || skill.loadedFrom === "syncedSkills") continue;
+    nameCounts.set(skill.name, (nameCounts.get(skill.name) ?? 0) + 1);
   }
-  let Et = new Set();
-  let yt = new Set();
-  let gt = new Map();
-  for (let hn of offeredExtras) {
-    let ho = scopeOf(hn);
-    let skillProjectRoot = getSkillProjectRoot(hn);
-    if (ho === null || skillProjectRoot === null || hn.type !== "prompt" || !hn.skillRoot) continue;
-    let Kn = joinScopedName(ho, hn.name);
-    let Xn = cwd === null ? null : relative(cwd, skillProjectRoot);
-    if (Xn !== null && !Xn.startsWith("..") && !isAbsolute(Xn)) {
-      yt.add(Kn);
+  let scopedNames = new Set();
+  let seenNames = new Set();
+  let namesByScope = new Map();
+  for (let skill of offeredExtras) {
+    let skillScope = scopeOf(skill);
+    let skillProjectRoot = getSkillProjectRoot(skill);
+    if (skillScope === null || skillProjectRoot === null || skill.type !== "prompt" || !skill.skillRoot)
+      continue;
+    let scopedName = joinScopedName(skillScope, skill.name);
+    let relativeRoot = cwd === null ? null : relative(cwd, skillProjectRoot);
+    if (relativeRoot !== null && !relativeRoot.startsWith("..") && !isAbsolute(relativeRoot)) {
+      seenNames.add(scopedName);
       continue;
     }
-    Et.add(hn);
-    let fo = gt.get(Kn) ?? new Set();
-    fo.add(realRootByCommand.get(hn) ?? resolve_2(hn.skillRoot));
-    gt.set(Kn, fo);
+    scopedNames.add(skill);
+    let names = namesByScope.get(scopedName) ?? new Set();
+    names.add(realRootByCommand.get(skill) ?? resolve_2(skill.skillRoot));
+    namesByScope.set(scopedName, names);
   }
   let inserted = [];
   let insertedNames = new Set();
-  for (let hn of offeredExtras) {
-    if (hn.type === "prompt" && hn.skillRoot && baseSkillRoots.has(hn.skillRoot)) continue;
-    if (hn.loadedFrom === "syncedSkills") {
-      let cmd = admitSyncedSkill(hn, reserved);
+  for (let skill of offeredExtras) {
+    if (skill.type === "prompt" && skill.skillRoot && baseSkillRoots.has(skill.skillRoot)) continue;
+    if (skill.loadedFrom === "syncedSkills") {
+      let cmd = admitSyncedSkill(skill, reserved);
       if (cmd === null) continue;
-      let bo = markBareNameReserved(cmd);
-      inserted.push(bo);
-      insertedNames.add(bo.name);
-      addNameAndAliases(reserved, bo);
+      let reservedSet = markBareNameReserved(cmd);
+      inserted.push(reservedSet);
+      insertedNames.add(reservedSet.name);
+      addNameAndAliases(reserved, reservedSet);
       continue;
     }
-    let ho = scopeOf(hn);
-    let yn =
-      (ho !== null && isPlaidHarborOn() && usesReservedSkillNamespace(joinScopedName(ho, hn.name))) ||
-      !canOfferUnscoped(hn, ho)
+    let skillScope = scopeOf(skill);
+    let scopePrefix =
+      (skillScope !== null &&
+        isPlaidHarborOn() &&
+        usesReservedSkillNamespace(joinScopedName(skillScope, skill.name))) ||
+      !canOfferUnscoped(skill, skillScope)
         ? null
-        : ho;
-    let Kn = baseNames.has(hn.name);
-    if (isFallbackSkill(hn)) {
-      if (Kn || (nameCounts.get(hn.name) ?? 0) > 0 || insertedNames.has(hn.name)) continue;
-      inserted.push(yn ? withNestedSkillDescription(hn, yn) : hn);
-      insertedNames.add(hn.name);
+        : skillScope;
+    let isBare = baseNames.has(skill.name);
+    if (isFallbackSkill(skill)) {
+      if (isBare || (nameCounts.get(skill.name) ?? 0) > 0 || insertedNames.has(skill.name)) continue;
+      inserted.push(scopePrefix ? withNestedSkillDescription(skill, scopePrefix) : skill);
+      insertedNames.add(skill.name);
       continue;
     }
-    if (!(Kn || (nameCounts.get(hn.name) ?? 0) > 1)) {
-      inserted.push(yn ? withNestedSkillDescription(hn, yn) : hn);
-      insertedNames.add(hn.name);
+    if (!(isBare || (nameCounts.get(skill.name) ?? 0) > 1)) {
+      inserted.push(scopePrefix ? withNestedSkillDescription(skill, scopePrefix) : skill);
+      insertedNames.add(skill.name);
       continue;
     }
-    if (!yn) {
-      if (Kn || insertedNames.has(hn.name)) {
-        if (ho !== null)
+    if (!scopePrefix) {
+      if (isBare || insertedNames.has(skill.name)) {
+        if (skillScope !== null)
           refuseReservedSkillName({
-            name: joinScopedName(ho, hn.name),
-            path: hn.type === "prompt" ? hn.skillRoot : undefined,
+            name: joinScopedName(skillScope, skill.name),
+            path: skill.type === "prompt" ? skill.skillRoot : undefined,
             change: "path",
           });
         continue;
       }
-      inserted.push(hn);
-      insertedNames.add(hn.name);
+      inserted.push(skill);
+      insertedNames.add(skill.name);
       continue;
     }
-    let fo = joinScopedName(yn, hn.name);
-    if (baseNames.has(fo) || insertedNames.has(fo)) continue;
-    if (Et.has(hn) && (yt.has(fo) || (gt.get(fo)?.size ?? 0) > 1)) {
+    let scopedName = joinScopedName(scopePrefix, skill.name);
+    if (baseNames.has(scopedName) || insertedNames.has(scopedName)) continue;
+    if (
+      scopedNames.has(skill) &&
+      (seenNames.has(scopedName) || (namesByScope.get(scopedName)?.size ?? 0) > 1)
+    ) {
       logForDebugging(
-        `[skills] ${escapeControlCharsForDisplay(fo)} is not offered: another skill would share the name`,
+        `[skills] ${escapeControlCharsForDisplay(scopedName)} is not offered: another skill would share the name`,
       );
       continue;
     }
-    inserted.push(toScopedSkillCommand(hn, yn, Kn || insertedNames.has(hn.name), cwd));
-    insertedNames.add(fo);
+    inserted.push(toScopedSkillCommand(skill, scopePrefix, isBare || insertedNames.has(skill.name), cwd));
+    insertedNames.add(scopedName);
   }
   if (hostCatalogSkills.length > 0) addNonSyncedSpellings(reserved, inserted);
   let filtered = admitSyncedSkills(hostCatalogSkills, reserved)
     .map(markBareNameReserved)
-    .filter((hn) => meetsAvailabilityRequirement(hn) && isCommandEnabled(hn));
-  let [qt, Zt] = SS(inserted, (hn) => isShadowedSkillName(hn));
-  let rn = [...Zt, ...filtered];
-  if (rn.length === 0 && qt.length === 0) return base;
-  let builtinNames = new Set(getBuiltinCommandTable().map((hn) => hn.name));
-  let insertIndex = base.findIndex((hn) => builtinNames.has(hn.name));
-  if (insertIndex === -1) return dropShadowedFallbackSkills([...base, ...rn, ...qt]);
+    .filter((skill) => meetsAvailabilityRequirement(skill) && isCommandEnabled(skill));
+  let [unshadowed, shadowed] = partitionAlias(inserted, (name) => isShadowedSkillName(name));
+  let merged = [...shadowed, ...filtered];
+  if (merged.length === 0 && unshadowed.length === 0) return base;
+  let builtinNames = new Set(getBuiltinCommandTable().map((command) => command.name));
+  let insertIndex = base.findIndex((command) => builtinNames.has(command.name));
+  if (insertIndex === -1) return dropShadowedFallbackSkills([...base, ...merged, ...unshadowed]);
   return dropShadowedFallbackSkills([
     ...base.slice(0, insertIndex),
-    ...rn,
+    ...merged,
     ...base.slice(insertIndex),
-    ...qt,
+    ...unshadowed,
   ]);
 }
 //@ chunk-e6aww6q8.js:2067775-2068260 layout
 /**
  * dropAmbiguousScopedSkills：同名且无法加作用域前缀的嵌套技能不提供。
  */
-function dropAmbiguousScopedSkills(e, scopeOf, filteredBase) {
-  let filtered = e.filter((w) => !canOfferUnscoped(w, scopeOf(w)));
-  if (filtered.length === 0) return e;
-  let h = new Map();
-  for (let w of [...filteredBase, ...e.filter((L) => !isFallbackSkill(L))]) {
-    if (w.loadedFrom === "syncedSkills") continue;
-    for (let L of [w.name, ...(w.aliases ?? [])]) h.set(L, (h.get(L) ?? 0) + 1);
+function dropAmbiguousScopedSkills(skills, scopeOf, filteredBase) {
+  let filtered = skills.filter((skill) => !canOfferUnscoped(skill, scopeOf(skill)));
+  if (filtered.length === 0) return skills;
+  let namesBySkill = new Map();
+  for (let skill of [...filteredBase, ...skills.filter((skill) => !isFallbackSkill(skill))]) {
+    if (skill.loadedFrom === "syncedSkills") continue;
+    for (let name of [skill.name, ...(skill.aliases ?? [])])
+      namesBySkill.set(name, (namesBySkill.get(name) ?? 0) + 1);
   }
-  let y = new Set(filteredBase.map((w) => (w.type === "prompt" ? w.skillRoot : undefined)));
-  let S = new Set(
-    filtered.filter((w) => (h.get(w.name) ?? 0) > 1 && !(w.type === "prompt" && y.has(w.skillRoot))),
+  let skillRoots = new Set(filteredBase.map((base) => (base.type === "prompt" ? base.skillRoot : undefined)));
+  let ambiguous = new Set(
+    filtered.filter(
+      (skill) =>
+        (namesBySkill.get(skill.name) ?? 0) > 1 &&
+        !(skill.type === "prompt" && skillRoots.has(skill.skillRoot)),
+    ),
   );
-  for (let w of S) reportRefusedSkillName(joinScopedName(scopeOf(w) ?? "", w.name), "is not offered");
-  return e.filter((w) => !S.has(w));
+  for (let skill of ambiguous)
+    reportRefusedSkillName(joinScopedName(scopeOf(skill) ?? "", skill.name), "is not offered");
+  return skills.filter((skill) => !ambiguous.has(skill));
 }
 //@ chunk-e6aww6q8.js:2068260-2068343 layout
 /**
  * canOfferUnscoped：无作用域、同步技能或作用域名被保留时返回 true。
  */
-function canOfferUnscoped(e, n) {
+function canOfferUnscoped(skill, scope) {
   return (
-    n === null || e.loadedFrom === "syncedSkills" || isSkillFilePathOrIdentifier(joinScopedName(n, e.name))
+    scope === null ||
+    skill.loadedFrom === "syncedSkills" ||
+    isSkillFilePathOrIdentifier(joinScopedName(scope, skill.name))
   );
 }
 //@ chunk-e6aww6q8.js:2068343-2068533 layout
 /**
  * getSkillScopeLabel：技能所在项目相对 cwd 的路径（或目录名）作为作用域。
  */
-function getSkillScopeLabel(e, cwd) {
-  let skillProjectRoot = getSkillProjectRoot(e);
+function getSkillScopeLabel(skill, cwd) {
+  let skillProjectRoot = getSkillProjectRoot(skill);
   if (skillProjectRoot === null) return null;
-  let s = cwd === null ? null : relative(cwd, skillProjectRoot);
-  if (s === "") return null;
-  if (s === null || s.startsWith("..") || isAbsolute(s))
+  let relativeRoot = cwd === null ? null : relative(cwd, skillProjectRoot);
+  if (relativeRoot === "") return null;
+  if (relativeRoot === null || relativeRoot.startsWith("..") || isAbsolute(relativeRoot))
     return getAdditionalDirRelativeLabel(skillProjectRoot);
-  return s.split(sep).join("/");
+  return relativeRoot.split(sep).join("/");
 }
 //@ chunk-e6aww6q8.js:2068533-2068691 layout
 /**
  * getSkillProjectRoot：skillRoot 中 /.claude/ 之前的部分。
  */
-function getSkillProjectRoot(e) {
-  if (e.type !== "prompt" || !e.skillRoot) return null;
-  let index = e.skillRoot.lastIndexOf(`${sep}.claude${sep}`);
-  return index === -1 ? null : e.skillRoot.slice(0, index);
+function getSkillProjectRoot(skill) {
+  if (skill.type !== "prompt" || !skill.skillRoot) return null;
+  let index = skill.skillRoot.lastIndexOf(`${sep}.claude${sep}`);
+  return index === -1 ? null : skill.skillRoot.slice(0, index);
 }
 //@ chunk-e6aww6q8.js:2068691-2068859 layout
 /**
  * withNestedSkillDescription：描述追加 "(from X/.claude/skills — applies when working on files under X/)"。
  */
-function withNestedSkillDescription(e, n) {
-  if (e.type !== "prompt") return e;
+function withNestedSkillDescription(description, nested) {
+  if (description.type !== "prompt") return description;
   return {
-    ...e,
-    description: `${e.description} (from ${n}/.claude/skills \u2014 applies when working on files under ${n}/)`,
+    ...description,
+    description: `${description.description} (from ${nested}/.claude/skills \u2014 applies when working on files under ${nested}/)`,
   };
 }
 //@ chunk-e6aww6q8.js:2068859-2069423 layout
 /**
  * toScopedSkillCommand：生成 "scope:name" 形式的嵌套技能命令。
  */
-function toScopedSkillCommand(e, n, r, cwd) {
-  if (e.type !== "prompt") return e;
-  let h = joinScopedName(n, e.name);
-  let y = r
-    ? `scoped to ${n}/ \u2014 use this instead of the unscoped "${e.name}" skill when the files being changed are under ${n}/`
-    : `from ${n}/.claude/skills \u2014 applies when working on files under ${n}/`;
-  let skillProjectRoot = getSkillProjectRoot(e);
-  let w = skillProjectRoot === null ? null : findAdditionalDirRoot(skillProjectRoot);
-  let L =
-    skillProjectRoot !== null &&
-    w !== null &&
+function toScopedSkillCommand(skill, scope, base, cwd) {
+  if (skill.type !== "prompt") return skill;
+  let scopedName = joinScopedName(scope, skill.name);
+  let sourceLabel = base
+    ? `scoped to ${scope}/ \u2014 use this instead of the unscoped "${skill.name}" skill when the files being changed are under ${scope}/`
+    : `from ${scope}/.claude/skills \u2014 applies when working on files under ${scope}/`;
+  let path = getSkillProjectRoot(skill);
+  let root = path === null ? null : findAdditionalDirRoot(path);
+  let isScoped =
+    path !== null &&
+    root !== null &&
     (cwd === null ||
-      !isPathWithin_2(cwd, skillProjectRoot, {
+      !isPathWithin_2(cwd, path, {
         alreadyComparable: true,
       }) ||
-      (w !== cwd &&
-        isPathWithin_2(cwd, w, {
+      (root !== cwd &&
+        isPathWithin_2(cwd, root, {
           alreadyComparable: true,
         })));
   return {
-    ...e,
-    name: h,
-    unqualifiedName: e.name,
-    allowlistedByFullNameOnly: L ? true : undefined,
+    ...skill,
+    name: scopedName,
+    unqualifiedName: skill.name,
+    allowlistedByFullNameOnly: isScoped ? true : undefined,
     aliases: undefined,
-    userFacingName: () => h,
-    description: `${e.description} (${y})`,
+    userFacingName: () => scopedName,
+    description: `${skill.description} (${sourceLabel})`,
   };
 }
 //@ chunk-e6aww6q8.js:2069423-2069469 facade-exports
@@ -2003,7 +2381,10 @@ function clearCommandsCache() {
 /**
  * HEADLESS_YIELDABLE_NAMES：无头模式下内建命令可以让给插件/技能的名字（help、feedback）。
  */
-var HEADLESS_YIELDABLE_NAMES = new Set(["help", "feedback"]);
+var HEADLESS_YIELDABLE_NAMES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2069505", () => {
+  HEADLESS_YIELDABLE_NAMES = new Set(["help", "feedback"]);
+});
 //@ chunk-e6aww6q8.js:2069542-2071229 layout
 /**
  * shedReservedAliases：插件/同步技能的别名若与内建/保留名冲突则移入 shedAliases；无头模式让出 help/feedback。
@@ -2014,78 +2395,80 @@ function shedReservedAliases(commands, checkNamedFolders) {
   let nonInteractive = getIsNonInteractiveSession();
   let takenNames = new Set();
   for (let command of commands) {
-    let Se = nonInteractive && !supportsNonInteractive(command);
-    if (!Se || !HEADLESS_YIELDABLE_NAMES.has(command.name)) takenNames.add(command.name);
+    let needsNonInteractive = nonInteractive && !supportsNonInteractive(command);
+    if (!needsNonInteractive || !HEADLESS_YIELDABLE_NAMES.has(command.name)) takenNames.add(command.name);
     if (!isPluginOrSynced(command)) {
-      for (let ke of command.aliases ?? []) if (!Se || !HEADLESS_YIELDABLE_NAMES.has(ke)) takenNames.add(ke);
+      for (let alias of command.aliases ?? [])
+        if (!needsNonInteractive || !HEADLESS_YIELDABLE_NAMES.has(alias)) takenNames.add(alias);
     }
   }
-  let y;
-  let S = (Z) => {
-    let Se = foldName_2(Z);
-    if (nonInteractive && HEADLESS_YIELDABLE_NAMES.has(Se)) return false;
-    if (y === undefined) {
-      y = new Set();
-      for (let we of getBuiltinCommandTable()) addCommandSpellings(y, we);
-      for (let we of getBundledSkills()) addCommandSpellings(y, we);
-      addRuntimeGatedCommandSpellings(y);
-      let mapped = getBuiltinPlugins().disabled.map((we) => we.name);
-      for (let we of builtinPluginSkillNames(new Set(mapped))) addSpelling(y, we);
+  let spellings;
+  let isBuiltinName = (name) => {
+    let folded = foldName_2(name);
+    if (nonInteractive && HEADLESS_YIELDABLE_NAMES.has(folded)) return false;
+    if (spellings === undefined) {
+      spellings = new Set();
+      for (let command of getBuiltinCommandTable()) addCommandSpellings(spellings, command);
+      for (let skill of getBundledSkills()) addCommandSpellings(spellings, skill);
+      addRuntimeGatedCommandSpellings(spellings);
+      let mapped = getBuiltinPlugins().disabled.map((plugin) => plugin.name);
+      for (let name of builtinPluginSkillNames(new Set(mapped))) addSpelling(spellings, name);
     }
-    return isQualifiedToolReference(Se, y);
+    return isQualifiedToolReference(folded, spellings);
   };
-  let isTaken = (Z) => takenNames.has(Z) || S(Z);
-  let L;
+  let isTaken = (name) => takenNames.has(name) || isBuiltinName(name);
+  let finalNames;
   if (checkNamedFolders) {
-    let Z = new Map();
-    for (let command of commands) Z.set(command.name, (Z.get(command.name) ?? 0) + 1);
+    let nameCounts = new Map();
+    for (let command of commands) nameCounts.set(command.name, (nameCounts.get(command.name) ?? 0) + 1);
     let filtered = commands.filter(getCommandId);
-    let ke = new Map();
-    for (let we of filtered) {
-      let sliced = we.name.slice(we.name.lastIndexOf(":") + 1);
-      for (let Ae of new Set([...(we.aliases ?? []), sliced])) ke.set(Ae, (ke.get(Ae) ?? 0) + 1);
+    let aliasCounts = new Map();
+    for (let command of filtered) {
+      let sliced = command.name.slice(command.name.lastIndexOf(":") + 1);
+      for (let name of new Set([...(command.aliases ?? []), sliced]))
+        aliasCounts.set(name, (aliasCounts.get(name) ?? 0) + 1);
     }
-    L = new Set(
-      filtered.flatMap((we) =>
-        Z.get(we.name) === 1 && !(we.type === "prompt" && we.userInvocable === false)
-          ? (we.aliases ?? []).filter((Ee) => ke.get(Ee) === 1 && !isTaken(Ee))
+    finalNames = new Set(
+      filtered.flatMap((command) =>
+        nameCounts.get(command.name) === 1 && !(command.type === "prompt" && command.userInvocable === false)
+          ? (command.aliases ?? []).filter((name) => aliasCounts.get(name) === 1 && !isTaken(name))
           : [],
       ),
     );
   }
-  let G = 0;
+  let keptCount = 0;
   let mapped = commands.map((command) => {
     if (!isPluginOrSynced(command) || command.type !== "prompt") return command;
     if (command.loadedFrom === "syncedSkills")
-      return filterCommandAliases(command, (Ae) => takenNames.has(Ae));
-    let ke =
-      (L !== undefined && getCommandId(command)) || command.pluginInfo === undefined
+      return filterCommandAliases(command, (alias) => takenNames.has(alias));
+    let isAliasFree =
+      (finalNames !== undefined && getCommandId(command)) || command.pluginInfo === undefined
         ? []
-        : (command.aliases ?? []).filter((Ae) => !isTaken(Ae) && L?.has(Ae) === true);
-    G += ke.length;
-    let filtered = (command.aliases ?? []).filter((Ae) => isTaken(Ae) || ke.includes(Ae));
+        : (command.aliases ?? []).filter((alias) => !isTaken(alias) && finalNames?.has(alias) === true);
+    keptCount += isAliasFree.length;
+    let filtered = (command.aliases ?? []).filter((alias) => isTaken(alias) || isAliasFree.includes(alias));
     if (filtered.length === 0) return command;
-    let Ee = {
-      ...filterCommandAliases(command, (Ae) => filtered.includes(Ae)),
+    let entry = {
+      ...filterCommandAliases(command, (alias) => filtered.includes(alias)),
       shedAliases: command.shedAliases ? [...command.shedAliases, ...filtered] : filtered,
     };
-    return ke.length > 0 && Ee.pluginInfo !== undefined
+    return isAliasFree.length > 0 && entry.pluginInfo !== undefined
       ? {
-          ...Ee,
+          ...entry,
           pluginInfo: {
-            ...Ee.pluginInfo,
+            ...entry.pluginInfo,
             namedFolderYield: {
-              yielded: ke,
-              aliasesBefore: (command.aliases ?? []).filter((Ae) => !isTaken(Ae)),
+              yielded: isAliasFree,
+              aliasesBefore: (command.aliases ?? []).filter((alias) => !isTaken(alias)),
             },
           },
         }
-      : Ee;
+      : entry;
   });
-  if (G > 0 && claimOnce().claim("skill_reserved_namespace_named_folder"))
+  if (keptCount > 0 && claimOnce().claim("skill_reserved_namespace_named_folder"))
     logFeatureOk("skill_reserved_namespace", {
       check: lit_2("desktop_skills_folder_took_short_names"),
-      plugin_aliases_dropped: G,
+      plugin_aliases_dropped: keptCount,
     });
   return mapped;
 }
@@ -2094,22 +2477,22 @@ function shedReservedAliases(commands, checkNamedFolders) {
  * withNamedFolderYieldsRestored：恢复插件命名目录让出的别名（用于展示完整命令列表）。
  */
 function withNamedFolderYieldsRestored(commands) {
-  return commands.map((n) => {
-    if (n.type !== "prompt") return n;
-    let namedFolderYield = n.pluginInfo?.namedFolderYield;
-    if (namedFolderYield === undefined) return n;
+  return commands.map((command) => {
+    if (command.type !== "prompt") return command;
+    let namedFolderYield = command.pluginInfo?.namedFolderYield;
+    if (namedFolderYield === undefined) return command;
     let { yielded, aliasesBefore } = namedFolderYield;
-    let { shedAliases, ...S } = n;
-    let w = [...(shedAliases ?? [])];
-    for (let L of yielded) {
-      let index = w.lastIndexOf(L);
-      if (index !== -1) w.splice(index, 1);
+    let { shedAliases, ...rest } = command;
+    let shed = [...(shedAliases ?? [])];
+    for (let name of yielded) {
+      let index = shed.lastIndexOf(name);
+      if (index !== -1) shed.splice(index, 1);
     }
     return {
-      ...S,
+      ...rest,
       aliases: aliasesBefore,
-      ...(w.length > 0 && {
-        shedAliases: w,
+      ...(shed.length > 0 && {
+        shedAliases: shed,
       }),
     };
   });
@@ -2171,285 +2554,6 @@ async function getSlashCommandToolSkillsUncached(cwd, storage, options) {
     logForDebugging("Returning empty skills array due to load failure");
     return [];
   }
-}
-//@ chunk-s61vbvea.js:17411-17462 facade-exports = getCommandName (1)
-/**
- * getCommandName：命令显示名（userFacingName?.() ?? name）。
- */
-function getCommandName(cmd) {
-  return cmd.userFacingName?.() ?? cmd.name;
-}
-//@ chunk-s61vbvea.js:17462-17606 layout
-/**
- * clearUserFacingName：把 userFacingName 挪进 shedAliases 后清空。
- */
-function clearUserFacingName(e) {
-  if (e.type === "prompt" && e.userFacingName !== undefined)
-    e.shedAliases = [...(e.shedAliases ?? []), e.userFacingName()];
-  e.userFacingName = undefined;
-}
-//@ chunk-s61vbvea.js:17606-17668 facade-exports
-/**
- * isCommandEnabled：先检查 policyGate（commandPolicyGateAllows，getter 抛错按 false），再 isEnabled?.() ?? true。
- */
-function isCommandEnabled(cmd) {
-  if (!passesPolicyGate(cmd)) return false;
-  return cmd.isEnabled?.() ?? true;
-}
-//@ chunk-s61vbvea.js:17668-17765 layout
-/**
- * passesPolicyGate：policyGate.policy 由 commandPolicyGateAllows 判定。
- */
-function passesPolicyGate(cmd) {
-  let policyGate;
-  try {
-    policyGate = cmd.policyGate;
-  } catch {
-    return false;
-  }
-  if (policyGate == null) return true;
-  return commandPolicyGateAllows(policyGate.policy);
-}
-//@ chunk-s61vbvea.js:17765-17984 layout
-function inputStartsWithMatchingCommand(e, n) {
-  let r = e.trimStart();
-  if (!r.startsWith("/")) return false;
-  let s = r.slice(1).match(/^[a-zA-Z0-9:_-]+/)?.[0];
-  let h = r.slice(1).split(/\s/, 1)[0];
-  if (s !== undefined && n(s)) return true;
-  return h !== undefined && h !== s && h.length > 0 && n(h);
-}
-//@ chunk-s61vbvea.js:17984-18052 layout
-/**
- * getCommandContextMode：getContext?.() ?? context ?? "inline"（inline/fork）。
- */
-function getCommandContextMode(cmd, args, context) {
-  return cmd.getContext?.(args, context) ?? cmd.context ?? "inline";
-}
-//@ chunk-s61vbvea.js:18052-18134 layout
-/**
- * isImmediateCommand：immediate 可为布尔或 (args, presentation) 函数。
- */
-function isImmediateCommand(cmd, args, presentation) {
-  let immediate = cmd?.immediate;
-  return typeof immediate === "function" ? immediate(args, presentation) : immediate === true;
-}
-//@ chunk-s61vbvea.js:18134-18287 layout
-/**
- * splitSlashCommandInput："/name args" → {name, args}。
- */
-function splitSlashCommandInput(input) {
-  let body = input.startsWith("/") ? input.slice(1) : input;
-  let spaceIndex = body.search(/\s/);
-  if (spaceIndex === -1)
-    return {
-      name: body,
-      args: "",
-    };
-  return {
-    name: body.slice(0, spaceIndex),
-    args: body.slice(spaceIndex + 1).trim(),
-  };
-}
-//@ chunk-s61vbvea.js:18287-18483 layout
-/**
- * looksLikeSlashInput：字符串或最后一个文本块以 / 开头。
- */
-function looksLikeSlashInput(e) {
-  if (typeof e === "string") return e.trim().startsWith("/");
-  if (!Array.isArray(e)) return false;
-  let last = e.at(-1);
-  return last?.type === "text" && typeof last.text === "string" && last.text.trim().startsWith("/");
-}
-//@ chunk-s61vbvea.js:18483-18673 layout
-/**
- * TEAM_SETUP_GUIDE_LABEL："✦ Team setup guide"。
- */
-var TEAM_SETUP_GUIDE_LABEL = "\u2726 Team setup guide";
-var PLACEHOLDER_LABELS_PATTERN = String.raw`Pasted text|Image|\.\.\.Truncated text|${"\u2726 Team setup guide"}`;
-var regExp = new RegExp(String.raw`\[(${PLACEHOLDER_LABELS_PATTERN}) #(\d+)(?: \+\d+ lines)?(\.)*\]`, "g");
-//@ chunk-s61vbvea.js:18673-18719 layout
-function isImagePlaceholder(match) {
-  return match.startsWith("[Image");
-}
-//@ chunk-s61vbvea.js:18719-18795 layout
-/**
- * commandMatchesName：name、显示名或 aliases 命中。
- */
-function commandMatchesName(cmd, name) {
-  return cmd.name === name || getCommandName(cmd) === name || (cmd.aliases?.includes(name) ?? false);
-}
-//@ chunk-s61vbvea.js:18795-19014 facade-exports
-/**
- * findCommand：先按 name 精确匹配，再按显示名或 aliases，最后按 directoryListingName。
- */
-function findCommand(commandName, commands) {
-  let aliasMatch;
-  let directoryMatch;
-  return (
-    commands.find((cmd) => {
-      if (cmd.name === commandName) return true;
-      if (aliasMatch === undefined && commandMatchesName(cmd, commandName)) aliasMatch = cmd;
-      if (directoryMatch !== null && cmd.type === "prompt" && cmd.directoryListingName === commandName)
-        directoryMatch =
-          directoryMatch === undefined || directoryMatch.name === cmd.name ? (directoryMatch ?? cmd) : null;
-      return false;
-    }) ??
-    aliasMatch ??
-    directoryMatch ??
-    undefined
-  );
-}
-//@ chunk-s61vbvea.js:19014-19178 layout
-/**
- * buildCommandLookup：name/显示名/aliases → 命令 的 Map。
- */
-function buildCommandLookup(commands) {
-  let lookup = new Map();
-  for (let command of commands) if (!lookup.has(command.name)) lookup.set(command.name, command);
-  for (let command of commands)
-    for (let s of [getCommandName(command), ...(command.aliases ?? [])])
-      if (!lookup.has(s)) lookup.set(s, command);
-  return lookup;
-}
-//@ chunk-s61vbvea.js:19178-19220 facade-exports
-/**
- * hasCommand：findCommand 是否找到。
- */
-function hasCommand(commandName, commands) {
-  return findCommand(commandName, commands) !== undefined;
-}
-//@ chunk-s61vbvea.js:19220-19326 layout
-/**
- * hasSensitiveArgs：isSensitive 为布尔或函数。
- */
-function hasSensitiveArgs(cmd, args) {
-  if (args.trim() === "") return false;
-  let { isSensitive } = cmd;
-  return typeof isSensitive === "function" ? isSensitive(args) : isSensitive === true;
-}
-//@ chunk-s61vbvea.js:19326-19440 layout
-/**
- * buildCommandRunInfo：{command, args（敏感则 ***）, plugin}。
- */
-function buildCommandRunInfo(cmd, args, plugin) {
-  let registeredBy = plugin ?? cmd.registeredBy;
-  return {
-    command: getCommandName(cmd),
-    args: hasSensitiveArgs(cmd, args) ? "***" : args,
-    ...(registeredBy !== undefined && {
-      plugin: registeredBy,
-    }),
-  };
-}
-//@ chunk-s61vbvea.js:19440-19582 layout
-var regExp_2 = new RegExp(String.raw`\[(?:Pasted text|\.\.\.Truncated text|${TEAM_SETUP_GUIDE_LABEL}) #\d+`);
-var regExp_3 = new RegExp(String.raw`^(\/[^\s[]+)\[(?=(?:${PLACEHOLDER_LABELS_PATTERN}) #\d+)`);
-//@ chunk-s61vbvea.js:19582-19604 layout
-/**
- * SECRET_SCAN_CHUNK：65536。
- */
-var SECRET_SCAN_CHUNK = 65536;
-var SECRET_SCAN_PATTERN_SPAN = 2 * SECRET_REDACTION_PATTERNS;
-//@ chunk-s61vbvea.js:19604-19913 layout
-/**
- * shouldRedactInput：粘贴内容或命令参数命中敏感模式时不写入历史。
- */
-function shouldRedactInput(e, commands, { pastedTexts: r = [] } = {}) {
-  if (r.some(containsSecretPattern)) return true;
-  let trimmed = e.trim();
-  if (trimmed.startsWith("!")) {
-    trimmed = trimmed.slice(1).trimStart();
-    if (containsSecretPattern(trimmed)) return true;
-  }
-  if (!trimmed.startsWith("/")) return false;
-  let { name: h, args } = splitSlashCommandInput(trimmed.replace(regExp_3, "$1 ["));
-  let command = findCommand(h, commands);
-  if (!command?.isSensitive) return containsSecretPattern(trimmed.slice(1));
-  return hasSensitiveArgs(command, args) || (r.length > 0 && regExp_2.test(args));
-}
-//@ chunk-s61vbvea.js:19913-20093 layout
-function filterCommandsByAllowlist(commands, allowlist) {
-  if (allowlist === undefined) return commands;
-  return commands.filter((command) =>
-    allowlist.some(
-      (s) =>
-        command.name === s ||
-        (command.loadedFrom === "syncedSkills"
-          ? (command.aliases?.includes(s) ?? false)
-          : isProjectScopedCommand(command) && command.name.endsWith(`:${s}`)),
-    ),
-  );
-}
-//@ chunk-s61vbvea.js:20093-20225 layout
-/**
- * 判断命令不是用户来源技能，也不是 memoryStore/mcp 来源或只允许按全名调用的提示词命令。
- */
-function isProjectScopedCommand(e) {
-  return (
-    !isSkillFromUserSource(e) &&
-    !(
-      e.type === "prompt" &&
-      (e.source === "memoryStore" || e.source === "mcp" || e.allowlistedByFullNameOnly === true)
-    )
-  );
-}
-//@ chunk-s61vbvea.js:20225-20540 layout
-/**
- * resolveBarePluginSkillName：{kind: none|ambiguous|unique}。
- */
-function resolveBarePluginSkillName(name, commands) {
-  if (name === "" || name.includes(":"))
-    return {
-      kind: "none",
-    };
-  let suffix = `:${name}`;
-  let matches = commands.filter(
-    (command) =>
-      command.type === "prompt" && command.loadedFrom !== "syncedSkills" && command.name.endsWith(suffix),
-  );
-  if (matches.length > 1)
-    return {
-      kind: "ambiguous",
-      candidates: matches,
-    };
-  let match = matches[0];
-  if (match === undefined || match.source !== "plugin")
-    return {
-      kind: "none",
-    };
-  return {
-    kind: "unique",
-    command: match,
-  };
-}
-//@ chunk-s61vbvea.js:20540-20788 facade-exports = getCommand (1)
-/**
- * getCommand：findCommand，找不到时抛出列出全部可用命令的 ReferenceError。
- */
-function getCommand(commandName, commands) {
-  let command = findCommand(commandName, commands);
-  if (!command)
-    throw ReferenceError(
-      `Command ${commandName} not found. Available commands: ${commands
-        .map((command) => {
-          let name = getCommandName(command);
-          return command.aliases ? `${name} (aliases: ${command.aliases.join(", ")})` : name;
-        })
-        .sort((s, h) => s.localeCompare(h))
-        .join(", ")}`,
-    );
-  return command;
-}
-//@ chunk-s61vbvea.js:20788-20915 affinity
-/**
- * containsSecretPattern：按 64KB 分段（带重叠）扫描。
- */
-function containsSecretPattern(e) {
-  if (e.length <= SECRET_SCAN_CHUNK) return containsSecret(e);
-  let n = SECRET_SCAN_CHUNK - SECRET_SCAN_PATTERN_SPAN;
-  for (let r = 0; r < e.length; r += n) if (containsSecret(e.slice(r, r + SECRET_SCAN_CHUNK))) return true;
-  return false;
 }
 export {
   getSkillToolCommands,
@@ -2521,4 +2625,8 @@ export {
   toSlashCommand,
   isBuiltinCommand,
   workerOnlySkillName,
+  HEADLESS_YIELDABLE_NAMES,
+  commandsMemoKey,
+  buildBuiltinCommandTable,
+  getRuntimeGatedBuiltinCommands,
 };

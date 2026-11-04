@@ -19,6 +19,7 @@ import { isAxiosError } from "../../../vendor/axios/dist/esm/axios.js";
 import { errorMessage } from "../../utils/errors.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-f5bay0pe.js:554-640 placement
 /**
@@ -40,17 +41,17 @@ function getFlushIntervalMs() {
 /**
  * 把错误批次发到 Datadog 日志入口
  */
-async function sendErrorBatch(e) {
+async function sendErrorBatch(batch) {
   if (!isErrorReportingPolicyAllowed()) {
     logForDebugging(
-      `dd-error-tracking: compliance verdict now blocks reporting; dropping batch=${e.length}`,
+      `dd-error-tracking: compliance verdict now blocks reporting; dropping batch=${batch.length}`,
       {
         level: "warn",
       },
     );
     return;
   }
-  let r = jsonStringify(e);
+  let text = jsonStringify(batch);
   let uRLSearchParams = new URLSearchParams({
     ddsource: "browser",
     "dd-api-key": DATADOG_CLIENT_TOKEN,
@@ -69,7 +70,7 @@ async function sendErrorBatch(e) {
     "dd-request-id": randomUUID(),
   });
   try {
-    await externalHttp.post(`${DATADOG_LOGS_URL}?${uRLSearchParams}`, r, {
+    await externalHttp.post(`${DATADOG_LOGS_URL}?${uRLSearchParams}`, text, {
       headers: {
         "Content-Type": "application/json",
       },
@@ -77,9 +78,12 @@ async function sendErrorBatch(e) {
     });
   } catch (error) {
     if (isAxiosError(error) && error.response)
-      logForDebugging(`dd-error-tracking: intake responded ${error.response.status} (batch=${e.length})`, {
-        level: "warn",
-      });
+      logForDebugging(
+        `dd-error-tracking: intake responded ${error.response.status} (batch=${batch.length})`,
+        {
+          level: "warn",
+        },
+      );
     else
       logForDebugging(`dd-error-tracking: intake failed: ${errorMessage(error)}`, {
         level: "warn",
@@ -101,7 +105,10 @@ class DatadogErrorSinkState {
 /**
  * 按宿主保存的 Datadog 错误收集状态。
  */
-var datadogSinkState = new HostScoped(() => new DatadogErrorSinkState());
+var datadogSinkState; // deferred: uses DatadogErrorSinkState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-f5bay0pe.js:1897", () => {
+  datadogSinkState = new HostScoped(() => new DatadogErrorSinkState());
+});
 //@ chunk-f5bay0pe.js:1920-1957 placement
 function errorTrackingClient() {
   return datadogSinkState.of(getRootSession().host);
@@ -114,9 +121,9 @@ function isErrorTrackingCapReached() {
 /**
  * 达到每进程上限时的最后一条记录
  */
-function capReachedEntry(e) {
+function capReachedEntry(entry) {
   return {
-    ...e,
+    ...entry,
     message: `ErrorTrackingCapReached: per-process cap of ${PER_PROCESS_CAP} hit, dropping further reports`,
     error: {
       kind: "ErrorTrackingCapReached",
@@ -133,23 +140,23 @@ function capReachedEntry(e) {
 /**
  * 把错误日志排队发往 Datadog 错误跟踪，受合规判定和每进程上限约束。
  */
-function enqueueErrorLog(errorTrackingEvent) {
-  let r = errorTrackingClient();
-  if (r.reportsEnqueued >= PER_PROCESS_CAP) return;
-  r.reportsEnqueued++;
-  if (r.reportsEnqueued === PER_PROCESS_CAP && !r.capSentinelSent) {
-    r.capSentinelSent = true;
+function enqueueErrorLog(entry) {
+  let client = errorTrackingClient();
+  if (client.reportsEnqueued >= PER_PROCESS_CAP) return;
+  client.reportsEnqueued++;
+  if (client.reportsEnqueued === PER_PROCESS_CAP && !client.capSentinelSent) {
+    client.capSentinelSent = true;
     logForDebugging(
       `dd-error-tracking: per-process report cap reached (${PER_PROCESS_CAP}); dropping further reports`,
       {
         level: "warn",
       },
     );
-    r.sender.enqueue(capReachedEntry(errorTrackingEvent));
-  } else r.sender.enqueue(errorTrackingEvent);
+    client.sender.enqueue(capReachedEntry(entry));
+  } else client.sender.enqueue(entry);
 }
 //@ chunk-f5bay0pe.js:2661-2712 placement
 async function shutdownErrorTracking() {
   await errorTrackingClient().sender.shutdown();
 }
-export { errorTrackingClient, isErrorTrackingCapReached, enqueueErrorLog };
+export { errorTrackingClient, isErrorTrackingCapReached, enqueueErrorLog, shutdownErrorTracking };

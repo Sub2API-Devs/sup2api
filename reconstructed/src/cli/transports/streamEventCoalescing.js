@@ -12,7 +12,8 @@ import { jsonStringifyRaw } from "../../utils/slowOperations.js";
 import { updateLastInteractionTime } from "../../bootstrap/state.js";
 import { hasNonHumanOrigin } from "../../utils/messageProvenance.js";
 import { DoctorLazy } from "../handlers/util.js";
-import { zodStrictObject, _enum, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { zodStrictObject, _enum, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-w1p9g89k.js:375-400 placement
 /**
@@ -25,14 +26,14 @@ function _(chunk) {
   return Buffer.byteLength(jsonStringifyRaw(chunk)) - 2;
 }
 //@ chunk-w1p9g89k.js:448-678 placement
-function canMergeIntoRun(e, t, event, deltaType, i) {
+function canMergeIntoRun(run, event, event_2, deltaType, index) {
   return (
-    e.firstEvent.index === event.index &&
-    e.deltaType === deltaType &&
-    e.first.parent_tool_use_id === t.parent_tool_use_id &&
-    e.first.thinking_display === t.thinking_display &&
-    e.first.api_message_id === t.api_message_id &&
-    e.bytes + i <= FRAME_BUDGET_BYTES
+    run.firstEvent.index === event_2.index &&
+    run.deltaType === deltaType &&
+    run.first.parent_tool_use_id === event.parent_tool_use_id &&
+    run.first.thinking_display === event.thinking_display &&
+    run.first.api_message_id === event.api_message_id &&
+    run.bytes + index <= FRAME_BUDGET_BYTES
   );
 }
 //@ chunk-w1p9g89k.js:678-1219 placement
@@ -76,37 +77,37 @@ function extractMergeableDelta(event) {
 /**
  * 把累积的同类增量合成一个流事件；只有一个时直接返回原事件。
  */
-function buildMergedStreamEvent(e) {
-  if (e.count === 1) return e.first;
-  let t;
-  switch (e.deltaType) {
+function buildMergedStreamEvent(run) {
+  if (run.count === 1) return run.first;
+  let merged;
+  switch (run.deltaType) {
     case "text_delta":
-      t = {
+      merged = {
         type: "text_delta",
-        text: e.accumulated,
+        text: run.accumulated,
       };
       break;
     case "input_json_delta":
-      t = {
+      merged = {
         type: "input_json_delta",
-        partial_json: e.accumulated,
+        partial_json: run.accumulated,
       };
       break;
     case "thinking_delta":
-      t = {
+      merged = {
         type: "thinking_delta",
-        thinking: e.accumulated,
-        estimated_tokens: e.estimatedTokens ?? null,
+        thinking: run.accumulated,
+        estimated_tokens: run.estimatedTokens ?? null,
       };
       break;
   }
   return {
-    ...e.first,
+    ...run.first,
     event: {
-      ...e.firstEvent,
+      ...run.firstEvent,
       delta: {
-        ...e.firstEvent.delta,
-        ...t,
+        ...run.firstEvent.delta,
+        ...merged,
       },
     },
   };
@@ -115,103 +116,112 @@ function buildMergedStreamEvent(e) {
 /**
  * 合并相邻且可合并的 stream_event 增量（text/input_json/thinking，同 index、同父工具、同 message id，单段不超过字节上限）为一个事件，减少下行帧数；其他事件原样保留。
  */
-function coalesceStreamEvents(e) {
-  if (e.length <= 1) return e;
-  let t = [];
-  let n = null;
-  for (let s of e) {
-    let mergeableDelta = extractMergeableDelta(s.event);
+function coalesceStreamEvents(events) {
+  if (events.length <= 1) return events;
+  let merged = [];
+  let run = null;
+  for (let event of events) {
+    let mergeableDelta = extractMergeableDelta(event.event);
     if (mergeableDelta === null) {
-      if (n !== null) {
-        t.push(buildMergedStreamEvent(n));
-        n = null;
+      if (run !== null) {
+        merged.push(buildMergedStreamEvent(run));
+        run = null;
       }
-      t.push(s);
+      merged.push(event);
       continue;
     }
-    let { event, deltaType, chunk, estimatedTokens } = mergeableDelta;
-    let u = _(chunk);
-    if (n !== null && canMergeIntoRun(n, s, event, deltaType, u)) {
-      n.accumulated += chunk;
-      n.bytes += u;
-      n.count += 1;
-      if (typeof estimatedTokens === "number") n.estimatedTokens = (n.estimatedTokens ?? 0) + estimatedTokens;
+    let { event: event_2, deltaType, chunk, estimatedTokens } = mergeableDelta;
+    let next = _(chunk);
+    if (run !== null && canMergeIntoRun(run, event, event_2, deltaType, next)) {
+      run.accumulated += chunk;
+      run.bytes += next;
+      run.count += 1;
+      if (typeof estimatedTokens === "number")
+        run.estimatedTokens = (run.estimatedTokens ?? 0) + estimatedTokens;
       continue;
     }
-    if (n !== null) t.push(buildMergedStreamEvent(n));
-    n = {
-      first: s,
-      firstEvent: event,
+    if (run !== null) merged.push(buildMergedStreamEvent(run));
+    run = {
+      first: event,
+      firstEvent: event_2,
       deltaType,
       accumulated: chunk,
       estimatedTokens,
-      bytes: u,
+      bytes: next,
       count: 1,
     };
   }
-  if (n !== null) t.push(buildMergedStreamEvent(n));
-  return t;
+  if (run !== null) merged.push(buildMergedStreamEvent(run));
+  return merged;
 }
 //@ chunk-w1p9g89k.js:2130-2438 placement
 /**
  * 在事件列表中按与 coalesceStreamEvents 相同的规则，找出给定 uuid 所在合并段的第一个事件 uuid（找不到返回原 uuid）。
  */
-function findCoalescedRunHead(e, uuid) {
-  let index = e.findIndex((i) => i.uuid === uuid);
+function findCoalescedRunHead(events, uuid) {
+  let index = events.findIndex((event) => event.uuid === uuid);
   if (index < 0) return uuid;
-  let s = null;
-  for (let i = 0; i <= index; i++) {
-    let r = e[i];
-    let mergeableDelta = extractMergeableDelta(r.event);
+  let headUuid = null;
+  for (let runStart = 0; runStart <= index; runStart++) {
+    let event = events[runStart];
+    let mergeableDelta = extractMergeableDelta(event.event);
     if (mergeableDelta === null) {
-      s = null;
+      headUuid = null;
       continue;
     }
-    let { event, deltaType, chunk } = mergeableDelta;
-    let d = _(chunk);
-    if (s !== null && canMergeIntoRun(s, r, event, deltaType, d)) s.bytes += d;
+    let { event: event_2, deltaType, chunk } = mergeableDelta;
+    let next = _(chunk);
+    if (headUuid !== null && canMergeIntoRun(headUuid, event, event_2, deltaType, next))
+      headUuid.bytes += next;
     else
-      s = {
-        first: r,
-        firstEvent: event,
+      headUuid = {
+        first: event,
+        firstEvent: event_2,
         deltaType,
-        bytes: d,
+        bytes: next,
       };
   }
-  return s?.first.uuid ?? uuid;
+  return headUuid?.first.uuid ?? uuid;
 }
 //@ chunk-w1p9g89k.js:2438-2860 placement
 /**
  * 交互式控制请求子类型集合（中断、停止任务、改权限模式、改模型等），这些请求不参与合并。
  */
-var INTERACTIVE_CONTROL_SUBTYPES = new Set([
-  "interrupt",
-  "stop_task",
-  "send_task_message",
-  "set_permission_mode",
-  "set_model",
-  "set_max_thinking_tokens",
-  "set_color",
-  "mcp_toggle",
-  "message_rated",
-  "side_question",
-  "ui_press",
-  "ui_input",
-  "ui_select",
-  "ui_client_press",
-  "ui_pane_show",
-  "ui_close",
-  "ui_scroll",
-  "ui_prompt_edit",
-]);
-var PERMISSION_PROMPT_SUBTYPES = new Set(["can_use_tool", "request_user_dialog", "elicitation"]);
-var SESSION_SETTING_SUBTYPES = new Set(["set_model", "set_permission_mode", "set_max_thinking_tokens"]);
+var INTERACTIVE_CONTROL_SUBTYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var PERMISSION_PROMPT_SUBTYPES;
+var SESSION_SETTING_SUBTYPES;
+deferInit("chunk-w1p9g89k.js:2438", () => {
+  INTERACTIVE_CONTROL_SUBTYPES = new Set([
+    "interrupt",
+    "stop_task",
+    "send_task_message",
+    "set_permission_mode",
+    "set_model",
+    "set_max_thinking_tokens",
+    "set_color",
+    "mcp_toggle",
+    "message_rated",
+    "side_question",
+    "ui_press",
+    "ui_input",
+    "ui_select",
+    "ui_client_press",
+    "ui_pane_show",
+    "ui_close",
+    "ui_scroll",
+    "ui_prompt_edit",
+  ]);
+  PERMISSION_PROMPT_SUBTYPES = new Set(["can_use_tool", "request_user_dialog", "elicitation"]);
+  SESSION_SETTING_SUBTYPES = new Set(["set_model", "set_permission_mode", "set_max_thinking_tokens"]);
+});
 //@ chunk-w1p9g89k.js:2860-2923 placement
 /**
  * 判断控制请求能否合并转发：是交互类子类型且不是会话设置类。
  */
-function isCoalescableControlRequest(e) {
-  return isInteractiveControlSubtype(e.request) && !SESSION_SETTING_SUBTYPES.has(e.request.subtype);
+function isCoalescableControlRequest(request) {
+  return (
+    isInteractiveControlSubtype(request.request) && !SESSION_SETTING_SUBTYPES.has(request.request.subtype)
+  );
 }
 //@ chunk-w1p9g89k.js:2923-2945 placement
 /**
@@ -221,14 +231,14 @@ function noteInteractiveInput() {
   updateLastInteractionTime(true);
 }
 //@ chunk-w1p9g89k.js:2945-3138 placement
-function isUserInitiatedInboundEvent(e, t) {
-  switch (e.type) {
+function isUserInitiatedInboundEvent(event, uuid) {
+  switch (event.type) {
     case "user":
-      return !(t?.hostOwnsOrigin === true && hasNonHumanOrigin(e.origin, e.isSynthetic));
+      return !(uuid?.hostOwnsOrigin === true && hasNonHumanOrigin(event.origin, event.isSynthetic));
     case "bash_command":
       return true;
     case "control_request":
-      return isInteractiveControlSubtype(e.request);
+      return isInteractiveControlSubtype(event.request);
     default:
       return false;
   }
@@ -249,30 +259,34 @@ function isPermissionPromptSubtype(request) {
 /**
  * x-ccr-session-writers 头的 schema：writers（仅所有者/非仅所有者）与声明时间。
  */
-var X_CCR_SESSION_WRITERS = "x-ccr-session-writers";
-var sessionWritersSchema = DoctorLazy(() =>
-  zodStrictObject({
-    writers: _enum(["owner_account_only", "not_owner_only"]),
-    statedAtMs: E(),
-  }),
-);
+var X_CCR_SESSION_WRITERS; // deferred: uses DoctorLazy (../handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var sessionWritersSchema;
+deferInit("chunk-w1p9g89k.js:3269", () => {
+  X_CCR_SESSION_WRITERS = "x-ccr-session-writers";
+  sessionWritersSchema = DoctorLazy(() =>
+    zodStrictObject({
+      writers: _enum(["owner_account_only", "not_owner_only"]),
+      statedAtMs: numberSchema(),
+    }),
+  );
+});
 //@ chunk-w1p9g89k.js:3384-3746 placement
 /**
  * 解析 x-ccr-session-writers 头（分号分隔键值，v=1），返回 owner_account_only / not_owner_only；格式不符或有重复键时返回 undefined。
  */
-function parseSessionWritersHeader(e) {
-  if (e === null || e.includes(",")) return;
-  let t = new Map();
-  for (let n of e.split(";")) {
-    let trimmed = n.trim();
+function parseSessionWritersHeader(header) {
+  if (header === null || header.includes(",")) return;
+  let writers = new Map();
+  for (let part of header.split(";")) {
+    let trimmed = part.trim();
     let index = trimmed.indexOf("=");
-    let r = index === -1 ? "" : trimmed.slice(0, index);
-    if (r === "") continue;
-    if (t.has(r)) return;
-    t.set(r, trimmed.slice(index + 1));
+    let key = index === -1 ? "" : trimmed.slice(0, index);
+    if (key === "") continue;
+    if (writers.has(key)) return;
+    writers.set(key, trimmed.slice(index + 1));
   }
-  if (t.get("v") !== "1") return;
-  switch (t.get("owner_account_only")) {
+  if (writers.get("v") !== "1") return;
+  switch (writers.get("owner_account_only")) {
     case "true":
       return "owner_account_only";
     case "false":
@@ -285,8 +299,8 @@ function parseSessionWritersHeader(e) {
 /**
  * 判断写者声明是否为 "owner_account_only"（会话仅所有者可写）。
  */
-function isOwnerAccountOnlyWriters(e) {
-  return e === "owner_account_only";
+function isOwnerAccountOnlyWriters(writers) {
+  return writers === "owner_account_only";
 }
 //@ chunk-w1p9g89k.js:3794-4139 placement
 /**
@@ -304,8 +318,8 @@ function checkSessionWritersFreshness({
   if (sessionWriters === undefined) return "session_writers_unknown";
   if (!isOwnerAccountOnlyWriters(sessionWriters.writers)) return "session_not_owner_only";
   if (maxStatementAgeMs === undefined) return;
-  let r = now - sessionWriters.statedAtMs;
-  return r >= 0 && r <= maxStatementAgeMs ? undefined : "session_writers_stale";
+  let ageMs = now - sessionWriters.statedAtMs;
+  return ageMs >= 0 && ageMs <= maxStatementAgeMs ? undefined : "session_writers_stale";
 }
 export {
   MAX_FRAME_BYTES,

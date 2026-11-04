@@ -6,46 +6,46 @@
  * attribution: esm-fingerprint 1
  */
 import { isObject, isDisjoint } from "../../lib/type_checks.js";
-import { JWEInvalid, JOSENotSupported, JOSEAlgNotAllowed } from "../../../node/esm/util/errors.js";
+import { JWEInvalid_2, JOSENotSupported_2, JOSEAlgNotAllowed } from "../../../node/esm/util/errors.js";
 import { decode_2 } from "../../util/base64url.js";
 import { textDecoder, encode, concat } from "../../lib/buffer_utils.js";
-import { N, validateAlgorithms_2 } from "../../lib/options.js";
+import { validateCrit, validateAlgorithms_2 } from "../../lib/options.js";
 import { decodeBase64url } from "../../lib/helpers.js";
 import { checkKeyType } from "../../lib/check_key_type.js";
 import { normalizeKey } from "../../lib/normalize_key.js";
 import { decryptKeyManagement } from "../../lib/key_management.js";
-import { generateCek, decrypt } from "../../lib/content_encryption.js";
+import { generateCek_2, decrypt } from "../../lib/content_encryption.js";
 import { decompress } from "../../lib/deflate.js";
 
 //@ chunk-5h78gfwc.js:31501-34826 esm-fingerprint
 async function flattenedDecrypt_2(jwe, key, options) {
-  if (!isObject(jwe)) throw new JWEInvalid("Flattened JWE must be an object");
+  if (!isObject(jwe)) throw new JWEInvalid_2("Flattened JWE must be an object");
   if (jwe.protected === undefined && jwe.header === undefined && jwe.unprotected === undefined)
-    throw new JWEInvalid("JOSE Header missing");
+    throw new JWEInvalid_2("JOSE Header missing");
   if (jwe.iv !== undefined && typeof jwe.iv !== "string")
-    throw new JWEInvalid("JWE Initialization Vector incorrect type");
-  if (typeof jwe.ciphertext !== "string") throw new JWEInvalid("JWE Ciphertext missing or incorrect type");
+    throw new JWEInvalid_2("JWE Initialization Vector incorrect type");
+  if (typeof jwe.ciphertext !== "string") throw new JWEInvalid_2("JWE Ciphertext missing or incorrect type");
   if (jwe.tag !== undefined && typeof jwe.tag !== "string")
-    throw new JWEInvalid("JWE Authentication Tag incorrect type");
+    throw new JWEInvalid_2("JWE Authentication Tag incorrect type");
   if (jwe.protected !== undefined && typeof jwe.protected !== "string")
-    throw new JWEInvalid("JWE Protected Header incorrect type");
+    throw new JWEInvalid_2("JWE Protected Header incorrect type");
   if (jwe.encrypted_key !== undefined && typeof jwe.encrypted_key !== "string")
-    throw new JWEInvalid("JWE Encrypted Key incorrect type");
-  if (jwe.aad !== undefined && typeof jwe.aad !== "string") throw new JWEInvalid("JWE AAD incorrect type");
+    throw new JWEInvalid_2("JWE Encrypted Key incorrect type");
+  if (jwe.aad !== undefined && typeof jwe.aad !== "string") throw new JWEInvalid_2("JWE AAD incorrect type");
   if (jwe.header !== undefined && !isObject(jwe.header))
-    throw new JWEInvalid("JWE Shared Unprotected Header incorrect type");
+    throw new JWEInvalid_2("JWE Shared Unprotected Header incorrect type");
   if (jwe.unprotected !== undefined && !isObject(jwe.unprotected))
-    throw new JWEInvalid("JWE Per-Recipient Unprotected Header incorrect type");
+    throw new JWEInvalid_2("JWE Per-Recipient Unprotected Header incorrect type");
   let parsedProt;
   if (jwe.protected)
     try {
       let protectedHeader = decode_2(jwe.protected);
       parsedProt = JSON.parse(textDecoder.decode(protectedHeader));
     } catch {
-      throw new JWEInvalid("JWE Protected Header is invalid");
+      throw new JWEInvalid_2("JWE Protected Header is invalid");
     }
   if (!isDisjoint(parsedProt, jwe.header, jwe.unprotected))
-    throw new JWEInvalid(
+    throw new JWEInvalid_2(
       "JWE Protected, JWE Unprotected Header, and JWE Per-Recipient Unprotected Header Parameter names must be disjoint",
     );
   let joseHeader = {
@@ -53,15 +53,17 @@ async function flattenedDecrypt_2(jwe, key, options) {
     ...jwe.header,
     ...jwe.unprotected,
   };
-  N(JWEInvalid, new Map(), options?.crit, parsedProt, joseHeader);
+  validateCrit(JWEInvalid_2, new Map(), options?.crit, parsedProt, joseHeader);
   if (joseHeader.zip !== undefined && joseHeader.zip !== "DEF")
-    throw new JOSENotSupported('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value.');
+    throw new JOSENotSupported_2('Unsupported JWE "zip" (Compression Algorithm) Header Parameter value.');
   if (joseHeader.zip !== undefined && !parsedProt?.zip)
-    throw new JWEInvalid('JWE "zip" (Compression Algorithm) Header Parameter MUST be in a protected header.');
+    throw new JWEInvalid_2(
+      'JWE "zip" (Compression Algorithm) Header Parameter MUST be in a protected header.',
+    );
   let { alg, enc } = joseHeader;
-  if (typeof alg !== "string" || !alg) throw new JWEInvalid("missing JWE Algorithm (alg) in JWE Header");
+  if (typeof alg !== "string" || !alg) throw new JWEInvalid_2("missing JWE Algorithm (alg) in JWE Header");
   if (typeof enc !== "string" || !enc)
-    throw new JWEInvalid("missing JWE Encryption Algorithm (enc) in JWE Header");
+    throw new JWEInvalid_2("missing JWE Encryption Algorithm (enc) in JWE Header");
   let keyManagementAlgorithms =
     options && validateAlgorithms_2("keyManagementAlgorithms", options.keyManagementAlgorithms);
   let contentEncryptionAlgorithms =
@@ -75,7 +77,7 @@ async function flattenedDecrypt_2(jwe, key, options) {
     throw new JOSEAlgNotAllowed('"enc" (Encryption Algorithm) Header Parameter value not allowed');
   let encryptedKey;
   if (jwe.encrypted_key !== undefined)
-    encryptedKey = decodeBase64url(jwe.encrypted_key, "encrypted_key", JWEInvalid);
+    encryptedKey = decodeBase64url(jwe.encrypted_key, "encrypted_key", JWEInvalid_2);
   let resolvedKey = false;
   if (typeof key === "function") {
     key = await key(parsedProt, jwe);
@@ -87,18 +89,19 @@ async function flattenedDecrypt_2(jwe, key, options) {
   try {
     cek = await decryptKeyManagement(alg, k, encryptedKey, joseHeader, options);
   } catch (err) {
-    if (err instanceof TypeError || err instanceof JWEInvalid || err instanceof JOSENotSupported) throw err;
-    cek = generateCek(enc);
+    if (err instanceof TypeError || err instanceof JWEInvalid_2 || err instanceof JOSENotSupported_2)
+      throw err;
+    cek = generateCek_2(enc);
   }
   let iv;
   let tag;
-  if (jwe.iv !== undefined) iv = decodeBase64url(jwe.iv, "iv", JWEInvalid);
-  if (jwe.tag !== undefined) tag = decodeBase64url(jwe.tag, "tag", JWEInvalid);
+  if (jwe.iv !== undefined) iv = decodeBase64url(jwe.iv, "iv", JWEInvalid_2);
+  if (jwe.tag !== undefined) tag = decodeBase64url(jwe.tag, "tag", JWEInvalid_2);
   let protectedHeader = jwe.protected !== undefined ? encode(jwe.protected) : new Uint8Array();
   let additionalData;
   if (jwe.aad !== undefined) additionalData = concat(protectedHeader, encode("."), encode(jwe.aad));
   else additionalData = protectedHeader;
-  let ciphertext = decodeBase64url(jwe.ciphertext, "ciphertext", JWEInvalid);
+  let ciphertext = decodeBase64url(jwe.ciphertext, "ciphertext", JWEInvalid_2);
   let plaintext = await decrypt(enc, cek, ciphertext, iv, tag, additionalData);
   let result = {
     plaintext,
@@ -106,21 +109,22 @@ async function flattenedDecrypt_2(jwe, key, options) {
   if (joseHeader.zip === "DEF") {
     let maxDecompressedLength = options?.maxDecompressedLength ?? 250000;
     if (maxDecompressedLength === 0)
-      throw new JOSENotSupported('JWE "zip" (Compression Algorithm) Header Parameter is not supported.');
+      throw new JOSENotSupported_2('JWE "zip" (Compression Algorithm) Header Parameter is not supported.');
     if (
       maxDecompressedLength !== 1 / 0 &&
       (!Number.isSafeInteger(maxDecompressedLength) || maxDecompressedLength < 1)
     )
       throw TypeError("maxDecompressedLength must be 0, a positive safe integer, or Infinity");
     result.plaintext = await decompress(plaintext, maxDecompressedLength).catch((cause) => {
-      if (cause instanceof JWEInvalid) throw cause;
-      throw new JWEInvalid("Failed to decompress plaintext", {
+      if (cause instanceof JWEInvalid_2) throw cause;
+      throw new JWEInvalid_2("Failed to decompress plaintext", {
         cause,
       });
     });
   }
   if (jwe.protected !== undefined) result.protectedHeader = parsedProt;
-  if (jwe.aad !== undefined) result.additionalAuthenticatedData = decodeBase64url(jwe.aad, "aad", JWEInvalid);
+  if (jwe.aad !== undefined)
+    result.additionalAuthenticatedData = decodeBase64url(jwe.aad, "aad", JWEInvalid_2);
   if (jwe.unprotected !== undefined) result.sharedUnprotectedHeader = jwe.unprotected;
   if (jwe.header !== undefined) result.unprotectedHeader = jwe.header;
   if (resolvedKey)

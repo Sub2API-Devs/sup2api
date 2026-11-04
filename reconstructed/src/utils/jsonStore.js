@@ -19,59 +19,59 @@ import { writeFileAtomic } from "./atomicPublishWrite.js";
 /**
  * 创建 JSON 文件存储（默认值、权限、缩进、schema 校验）。
  */
-function createJsonStore(e, f, c) {
-  let { defaultValue, mode, ensureDir = false, indent, trailingNewline = false } = c;
-  function u() {
+function createJsonStore(filePath, schemaFactory, options) {
+  let { defaultValue, mode, ensureDir = false, indent, trailingNewline = false } = options;
+  function makeDefault() {
     return isFunction(defaultValue) ? defaultValue() : defaultValue;
   }
-  async function m() {
-    let n;
+  async function read() {
+    let text;
     try {
-      n = await readFile(e, "utf8");
+      text = await readFile(filePath, "utf8");
     } catch (error) {
-      if (isENOENT(error)) return u();
+      if (isENOENT(error)) return makeDefault();
       throw error;
     }
-    let r;
+    let parsed;
     try {
-      r = jsonParse(n);
+      parsed = jsonParse(text);
     } catch (error) {
-      logForDebugging(`jsonStore: ${e} is not valid JSON: ${error}`, {
+      logForDebugging(`jsonStore: ${filePath} is not valid JSON: ${error}`, {
         level: "warn",
       });
-      return u();
+      return makeDefault();
     }
-    let o = f().safeParse(r);
-    if (!o.success) {
-      logForDebugging(`jsonStore: ${e} failed schema validation: ${o.error.message}`, {
+    let validation = schemaFactory().safeParse(parsed);
+    if (!validation.success) {
+      logForDebugging(`jsonStore: ${filePath} failed schema validation: ${validation.error.message}`, {
         level: "warn",
       });
-      return u();
+      return makeDefault();
     }
-    return o.data;
+    return validation.data;
   }
-  async function d(n) {
+  async function write(data) {
     if (ensureDir !== false)
-      await mkdir(dirname(e), {
+      await mkdir(dirname(filePath), {
         recursive: true,
         mode: ensureDir === true ? undefined : ensureDir.mode,
       });
-    let r =
-      jsonStringify(n, null, indent) +
+    let serialized =
+      jsonStringify(data, null, indent) +
       (trailingNewline
         ? `
 `
         : "");
-    await writeFileAtomic(e, r, mode);
+    await writeFileAtomic(filePath, serialized, mode);
   }
   let resolved = Promise.resolve();
-  function y(n) {
-    let r = resolved.then(async () => {
-      let o = n(await m());
-      await d(o);
-      return o;
+  function update(updater) {
+    let pendingWrite = resolved.then(async () => {
+      let nextValue = updater(await read());
+      await write(nextValue);
+      return nextValue;
     });
-    resolved = r.then(
+    resolved = pendingWrite.then(
       () => {
         return;
       },
@@ -79,15 +79,15 @@ function createJsonStore(e, f, c) {
         return;
       },
     );
-    return r;
+    return pendingWrite;
   }
   return {
     path() {
-      return e;
+      return filePath;
     },
-    read: m,
-    write: d,
-    update: y,
+    read,
+    write,
+    update,
   };
 }
 //@ chunk-5rq13jpv.js:1160-1203 placement

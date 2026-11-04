@@ -45,11 +45,11 @@ var linux = (name) => {
   };
 };
 //@ chunk-bbtre4r8.js:11343-11558 esm-fingerprint
-function f(name, { suffix = "nodejs" } = {}) {
+function envPaths(name, { suffix = "nodejs" } = {}) {
   if (typeof name !== "string") throw TypeError(`Expected a string, got ${typeof name}`);
   if (suffix) name += `-${suffix}`;
   if (E.platform === "darwin") return macos(name);
   if (E.platform === "win32") return windows(name);
   return linux(name);
 }
-export { f };
+export { envPaths };

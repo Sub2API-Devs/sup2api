@@ -13,6 +13,20 @@ import { join, dirname, resolve } from "path";
 import { createHash } from "crypto";
 import { exec, execFile } from "child_process";
 import { homedir } from "os";
+import { countUtf16CodePoints, findUnsafeChar, describeUnsafeValue } from "./settings/managedSettingsKeys.js";
+import {
+  getHostPolicyLoginPins,
+  getMachineAdminDocumentTier,
+  getSettings_DEPRECATED,
+  getSettingsForSource,
+  getSettingsForSourceTightenOnly,
+  getSettingsFilePathForSource,
+  getEffectiveSettingSource_2,
+  isAdminPolicyUnreadable,
+  adminPolicyLoadFailureRefusesLaunch,
+  getFatalAdminPolicyLoadErrors,
+  getInitialSettings_2,
+} from "./settings/settings.js";
 import {
   getMockRateLimitState,
   MAX,
@@ -71,7 +85,7 @@ import {
   logFeatureSad,
   logFeatureBadAsync,
 } from "../services/analytics/featureTelemetry.js";
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { jsonParse } from "./slowOperations.js";
 import { getAWSProxyRequestHandler, resolveStsEndpointForProxyUrl } from "./proxy.js";
 import { HostScoped } from "./hostScoped.js";
@@ -114,19 +128,6 @@ import {
   getOAuthTokenFromFileDescriptorAsync,
   getGatewayTokenFromFileDescriptor,
 } from "./authFileDescriptor.js";
-import {
-  getHostPolicyLoginPins,
-  getMachineAdminDocumentTier,
-  getSettings_DEPRECATED,
-  getSettingsForSource,
-  getSettingsForSourceTightenOnly,
-  getSettingsFilePathForSource,
-  getEffectiveSettingSource_2,
-  isAdminPolicyUnreadable,
-  adminPolicyLoadFailureRefusesLaunch,
-  getFatalAdminPolicyLoadErrors,
-  getInitialSettings_2,
-} from "./settings/settings.js";
 import { probeGatewayManagedSettings, normalizeGatewayUrl } from "../services/gateway/hostCheck.js";
 import {
   isVouchedHostSetMember,
@@ -183,7 +184,6 @@ import { sequential } from "./sequential.js";
 import { AwsAuthStatusManager } from "./awsAuthStatusManager.js";
 import { safeExecShell, safeExecFile } from "./safeSpawn.js";
 import { truncateToLength, cleanForDisplay } from "./stringUtils.js";
-import { findUnsafeChar, describeUnsafeValue, countUtf16CodePoints } from "./settings/managedSettingsKeys.js";
 import {
   CloudAuthRefreshRuns,
   RefreshController,
@@ -255,14 +255,47 @@ import { isPlanDisplayName, validateOauthToken } from "../services/oauth/validat
 import { stripControlChars } from "./settings/writeQueues.js";
 import { getHostAuthEnvVar } from "./managedEnvConstants.js";
 import { LRUCache } from "../../vendor/lru-cache/dist/esm/index.min.js";
-import { getDesignConsentKey } from "../services/design/designApi.js";
 import {
   computeChecksumFromSettings,
   gatewayTrustFor,
   consentIdentityAsync,
 } from "../services/remoteManagedSettings/index.js";
 import { getEmail } from "./user.js";
+import { getDesignConsentKey } from "../services/design/designApi.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-3g8vhh6f.js:809-824 fingerprint = isTeamSubscriber (1)
+/**
+ * 团队记忆的目录名 "team"：记忆文件路径 …/memory/team/<file> 里以 n[2]===aDn 判定属于团队记忆（另一支是个人记忆）；导出为 aDn。
+ */
+var TEAM_MEMORY_SCOPE = "team";
+//@ chunk-dcmhvw5a.js:352457-352629 placement
+/**
+ * 统计文本的长度与行数（\n、\r、\r\n 都算换行）。
+ */
+function textLengthAndLines(text) {
+  let lineCount = 1;
+  for (let j = 0; j < text.length; j++) {
+    let code = text.charCodeAt(j);
+    if (code === 10) lineCount++;
+    else if (code === 13) {
+      lineCount++;
+      if (text.charCodeAt(j + 1) === 10) j++;
+    }
+  }
+  return {
+    length: countUtf16CodePoints(text),
+    lineCount,
+  };
+}
+//@ chunk-30p0tvt0.js:818-918 placement
+/**
+ * 判断主机策略是否强制使用网关登录（强制登录方式为 gateway 或指定了网关地址）。
+ */
+function isGatewayLoginForced() {
+  let { forceLoginMethod, forceLoginGatewayUrl } = getHostPolicyLoginPins();
+  return forceLoginMethod === "gateway" || forceLoginGatewayUrl !== undefined;
+}
 //@ chunk-aepeg2w5.js:288708-288779 fingerprint = getRateLimitTier (1)
 /**
  * 环境覆盖的限流档位；本构建中覆盖开关被编译成恒为 null。
@@ -344,19 +377,24 @@ function usesHostProvidedAuth() {
   return isHostManagedProviderAuth() || isHttpMcpServeInvocation() || usesSessionAccessToken();
 }
 //@ chunk-aepeg2w5.js:504957-504978 facade-majority
-class HostManagedNoCredsError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {}
+let HostManagedNoCredsError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (./errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:504957", () => {
+  HostManagedNoCredsError = class HostManagedNoCredsError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {};
+});
 //@ chunk-aepeg2w5.js:504978-505255 facade-majority
 function hostManagedNoCredsError(
-  e,
-  n = "The app may have quit or its credential file is stale \u2014 restart the desktop app.",
+  providerLabel,
+  detail = "The app may have quit or its credential file is stale \u2014 restart the desktop app.",
 ) {
   return new HostManagedNoCredsError(
-    `${e} credentials are managed by the desktop app, but none are available. ${n}`,
+    `${providerLabel} credentials are managed by the desktop app, but none are available. ${detail}`,
     "host-managed provider credentials unavailable \u2014 restart desktop app",
   );
 }
 //@ chunk-aepeg2w5.js:505255-505682 facade-majority
-function hostManagedAwsProviderChain(e) {
+function hostManagedAwsProviderChain(providerLabel) {
   return async () => {
     let { accessKeyId, secretAccessKey, profile, configFile, credsFile } = getAwsEnvCredentials();
     if (accessKeyId && secretAccessKey) {
@@ -374,7 +412,8 @@ function hostManagedAwsProviderChain(e) {
         let ssoCredentials = await resolveSsoCredentials(configFile, credsFile, profile);
         if (ssoCredentials) return async () => ssoCredentials;
       }
-      let { fromIni } = await import("./chunk-thwbpw6e.js");
+      let { fromIni } =
+        await import("../../vendor/@aws-sdk/credential-providers/dist-cjs/createCredentialChain.lazy.js");
       return fromIni({
         ...(profile && {
           profile,
@@ -384,7 +423,7 @@ function hostManagedAwsProviderChain(e) {
         ignoreCache: true,
       });
     }
-    throw hostManagedNoCredsError(e, BACKGROUND_UNSUPPORTED_CREDENTIAL_MSG);
+    throw hostManagedNoCredsError(providerLabel, BACKGROUND_UNSUPPORTED_CREDENTIAL_MSG);
   };
 }
 //@ chunk-aepeg2w5.js:505682-505921 layout
@@ -409,80 +448,89 @@ function hasAwsEnvCredentials() {
 /**
  * 存储的访问令牌结构（accessToken 与 expiresAt）。
  */
-var storedAccessTokenSchema = DoctorLazy(() =>
-  create({
-    accessToken: create_2().min(1),
-    expiresAt: create_2(),
-  }),
-);
-var AWS_SSO_PROFILE_RE = /^[a-z0-9-]{1,32}$/;
-var MAX_AWS_CHAIN_CACHE_ENTRIES = 128;
+var storedAccessTokenSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var AWS_SSO_PROFILE_RE;
+var MAX_AWS_CHAIN_CACHE_ENTRIES;
+deferInit("chunk-aepeg2w5.js:506214", () => {
+  storedAccessTokenSchema = DoctorLazy(() =>
+    create({
+      accessToken: create_2().min(1),
+      expiresAt: create_2(),
+    }),
+  );
+  AWS_SSO_PROFILE_RE = /^[a-z0-9-]{1,32}$/;
+  MAX_AWS_CHAIN_CACHE_ENTRIES = 128;
+});
 //@ chunk-aepeg2w5.js:506303-508382 layout
 /**
  * 按宿主缓存的 AWS 凭据解析器：ssoProfile 从 AWS 配置/凭据文件解析出纯 SSO 角色配置（排除静态密钥、credential_process、角色链等）；ssoRole 用 SSO 缓存令牌换取角色临时凭据（按过期时间缓存）；helper 通过凭据助手解析；defaultChain 为默认链解析器的有界缓存。
  */
 class AwsCredentialMemos {
-  ssoProfile = memoizeWithTTL(async (e, n, r) => {
-    let { loadSharedConfigFiles } = await import("./chunk-72ngr4xp.js").then((m) => Re(m.default, 1));
-    let { configFile, credentialsFile } = await loadSharedConfigFiles({
-      configFilepath: e,
-      filepath: n ?? e,
+  ssoProfile = memoizeWithTTL(async (configFile, credsFile, profile) => {
+    let { loadSharedConfigFiles } =
+      await import("../../vendor/@smithy/shared-ini-file-loader/default.js").then((sdkModule) =>
+        __toESM(sdkModule.default, 1),
+      );
+    let { configFile: configFile_2, credentialsFile } = await loadSharedConfigFiles({
+      configFilepath: configFile,
+      filepath: credsFile ?? configFile,
       ignoreCache: true,
     });
-    let S = configFile[r ?? "default"];
-    let w = credentialsFile[r ?? "default"];
-    let R = {
-      ...S,
-      ...w,
+    let configProfile = configFile_2[profile ?? "default"];
+    let credsProfile = credentialsFile[profile ?? "default"];
+    let merged = {
+      ...configProfile,
+      ...credsProfile,
     };
-    let { sso_account_id: ssoAccountId, sso_role_name: ssoRoleName } = R;
-    if (!S || !ssoAccountId || !ssoRoleName) return null;
+    let { sso_account_id: ssoAccountId, sso_role_name: ssoRoleName } = merged;
+    if (!configProfile || !ssoAccountId || !ssoRoleName) return null;
     if (
-      (R.aws_access_key_id && R.aws_secret_access_key) ||
-      R.credential_process ||
-      R.role_arn ||
-      R.source_profile ||
-      R.credential_source ||
-      R.web_identity_token_file
+      (merged.aws_access_key_id && merged.aws_secret_access_key) ||
+      merged.credential_process ||
+      merged.role_arn ||
+      merged.source_profile ||
+      merged.credential_source ||
+      merged.web_identity_token_file
     )
       return null;
-    let F = R.sso_session ? configFile[`sso-session.${R.sso_session}`] : R;
-    let ssoStartUrl = F?.sso_start_url;
-    let ssoRegion = F?.sso_region;
+    let ssoSessionEntry = merged.sso_session ? configFile_2[`sso-session.${merged.sso_session}`] : merged;
+    let ssoStartUrl = ssoSessionEntry?.sso_start_url;
+    let ssoRegion = ssoSessionEntry?.sso_region;
     if (!ssoStartUrl || !ssoRegion || !AWS_SSO_PROFILE_RE.test(ssoRegion)) return null;
     if (
-      R.sso_session &&
-      ((R.sso_start_url && R.sso_start_url !== ssoStartUrl) || (R.sso_region && R.sso_region !== ssoRegion))
+      merged.sso_session &&
+      ((merged.sso_start_url && merged.sso_start_url !== ssoStartUrl) ||
+        (merged.sso_region && merged.sso_region !== ssoRegion))
     )
       return null;
     return {
-      cacheId: R.sso_session ?? ssoStartUrl,
+      cacheId: merged.sso_session ?? ssoStartUrl,
       accountId: ssoAccountId,
       roleName: ssoRoleName,
       region: ssoRegion,
     };
   });
   ssoRole = memoizeWithTTL(
-    async (e, accountId, roleName, s) => {
-      let h;
+    async (cachePath, accountId, roleName, region) => {
+      let cacheText;
       try {
-        h = jsonParse(await readFile(e, "utf-8"));
+        cacheText = jsonParse(await readFile(cachePath, "utf-8"));
       } catch {
         return null;
       }
-      let y = storedAccessTokenSchema().safeParse(h);
-      if (!y.success) return null;
-      let timestamp = Date.parse(y.data.expiresAt);
+      let parseResult = storedAccessTokenSchema().safeParse(cacheText);
+      if (!parseResult.success) return null;
+      let timestamp = Date.parse(parseResult.data.expiresAt);
       if (!Number.isFinite(timestamp) || timestamp <= Date.now()) return null;
-      let [{ SSOClient: w, GetRoleCredentialsCommand: R }, awsProxyRequestHandler] = await Promise.all([
-        import("./chunk-4hyzk0wr.js"),
+      let [{ SSOClient, GetRoleCredentialsCommand }, awsProxyRequestHandler] = await Promise.all([
+        import("../../vendor/@aws-sdk/client-sso/dist-cjs/GetRoleCredentialsCommand.lazy.js"),
         getAWSProxyRequestHandler({
-          url: `https://portal.sso.${s}.amazonaws.com`,
+          url: `https://portal.sso.${region}.amazonaws.com`,
           requestTimeoutMs: AWS_CHAIN_RESOLVE_REQUEST_TIMEOUT_MS,
         }),
       ]);
-      let P = new w({
-        region: s,
+      let client = new SSOClient({
+        region,
         requestHandler:
           awsProxyRequestHandler ??
           new smithyFetchHttpHandlerModule.FetchHttpHandler({
@@ -490,9 +538,9 @@ class AwsCredentialMemos {
           }),
       });
       let { roleCredentials } = await resolveWithStallGuard(
-        P.send(
-          new R({
-            accessToken: y.data.accessToken,
+        client.send(
+          new GetRoleCredentialsCommand({
+            accessToken: parseResult.data.accessToken,
             accountId,
             roleName,
           }),
@@ -512,57 +560,60 @@ class AwsCredentialMemos {
         expiration: new Date(roleCredentials.expiration),
       };
     },
-    (e) => computeAwsCredsCacheTtl(e?.expiration?.getTime()),
-    (e, n) => {
-      if (e === null) return false;
-      if (e.expiration === undefined) return true;
-      let time = e.expiration.getTime();
+    (credentials) => computeAwsCredsCacheTtl(credentials?.expiration?.getTime()),
+    (entry, nowMs) => {
+      if (entry === null) return false;
+      if (entry.expiration === undefined) return true;
+      let time = entry.expiration.getTime();
       if (time > Date.now() + AWS_CHAIN_REQUEST_TIMEOUT_MS) return true;
-      return n >= time - AWS_CHAIN_REQUEST_TIMEOUT_MS && time > Date.now();
+      return nowMs >= time - AWS_CHAIN_REQUEST_TIMEOUT_MS && time > Date.now();
     },
   );
   helper = memoizeWithTTL(
     () => resolveAwsCredentialsViaHelpers(this),
-    (e) => computeAwsCredsCacheTtl(e?.expiration),
+    (credentials) => computeAwsCredsCacheTtl(credentials?.expiration),
   );
   defaultChain;
   chainEvictionAt = new Map();
   constructor() {
-    let e = new Map();
-    function n(r) {
-      let s = awsChainCacheKey(r);
-      let h = e.get(s);
-      if (h) return h;
-      let awsDefaultChainResolver = createAwsDefaultChainResolver(r);
-      if (e.size >= MAX_AWS_CHAIN_CACHE_ENTRIES) e.delete(e.keys().next().value);
-      e.set(s, awsDefaultChainResolver);
+    let cache = new Map();
+    function resolveCached(context) {
+      let key = awsChainCacheKey(context);
+      let cached = cache.get(key);
+      if (cached) return cached;
+      let awsDefaultChainResolver = createAwsDefaultChainResolver(context);
+      if (cache.size >= MAX_AWS_CHAIN_CACHE_ENTRIES) cache.delete(cache.keys().next().value);
+      cache.set(key, awsDefaultChainResolver);
       awsDefaultChainResolver.catch(() => {
-        if (e.get(s) === awsDefaultChainResolver) e.delete(s);
+        if (cache.get(key) === awsDefaultChainResolver) cache.delete(key);
       });
       return awsDefaultChainResolver;
     }
-    n.cache = e;
-    this.defaultChain = n;
+    resolveCached.cache = cache;
+    this.defaultChain = resolveCached;
   }
 }
 //@ chunk-aepeg2w5.js:508382-508408 facade-majority
-var awsCredentialMemos = new HostScoped(() => new AwsCredentialMemos());
+var awsCredentialMemos; // deferred: uses AwsCredentialMemos of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:508382", () => {
+  awsCredentialMemos = new HostScoped(() => new AwsCredentialMemos());
+});
 //@ chunk-aepeg2w5.js:508408-508788 layout
 /**
  * 用宿主固定的缓存解析 AWS SSO 凭据：读取配置找到 SSO 会话，按 sso-session/start_url 的 sha1 定位缓存令牌文件并换取角色凭据；失败时记调试日志并返回 null（回退 fromIni）。
  */
 async function resolveSsoCredentials(configFile, credsFile, profile) {
-  let s = awsCredentialMemos.of(getRootSession().host);
+  let memos = awsCredentialMemos.of(getRootSession().host);
   try {
-    let h = await s.ssoProfile(configFile, credsFile, profile);
-    if (!h) return null;
-    let y = join(
+    let ssoProfile = await memos.ssoProfile(configFile, credsFile, profile);
+    if (!ssoProfile) return null;
+    let cachePath = join(
       dirname(configFile),
       "sso",
       "cache",
-      `${createHash("sha1").update(h.cacheId).digest("hex")}.json`,
+      `${createHash("sha1").update(ssoProfile.cacheId).digest("hex")}.json`,
     );
-    return await s.ssoRole(y, h.accountId, h.roleName, h.region);
+    return await memos.ssoRole(cachePath, ssoProfile.accountId, ssoProfile.roleName, ssoProfile.region);
   } catch (error) {
     logForDebugging(
       `[API:auth] host-pinned SSO leg failed (${error instanceof Error ? error.name : "unknown"}) \u2014 falling back to fromIni`,
@@ -571,12 +622,13 @@ async function resolveSsoCredentials(configFile, credsFile, profile) {
   }
 }
 //@ chunk-aepeg2w5.js:508788-508911 facade-majority
-function hostManagedAwsSdkCredentials(e) {
-  if (!hasAwsEnvCredentials()) throw hostManagedNoCredsError(e, BACKGROUND_UNSUPPORTED_CREDENTIAL_MSG);
-  let n = hostManagedAwsProviderChain(e);
+function hostManagedAwsSdkCredentials(providerLabel) {
+  if (!hasAwsEnvCredentials())
+    throw hostManagedNoCredsError(providerLabel, BACKGROUND_UNSUPPORTED_CREDENTIAL_MSG);
+  let providerChainResolver = hostManagedAwsProviderChain(providerLabel);
   return {
-    providerChainResolver: n,
-    credentials: async (r) => (await n())(r),
+    providerChainResolver,
+    credentials: async (credentials) => (await providerChainResolver())(credentials),
   };
 }
 //@ chunk-aepeg2w5.js:508911-509028 facade-majority
@@ -597,13 +649,16 @@ class WifAuthDebugNoticeState {
   profileAuthSelectedLogged = false;
 }
 //@ chunk-aepeg2w5.js:509098-509124 facade-majority
-var wifAuthDebugNotices = new HostScoped(() => new WifAuthDebugNoticeState());
+var wifAuthDebugNotices; // deferred: uses WifAuthDebugNoticeState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:509098", () => {
+  wifAuthDebugNotices = new HostScoped(() => new WifAuthDebugNoticeState());
+});
 //@ chunk-aepeg2w5.js:509124-509493 layout
 /**
  * 同时存在 Anthropic profile 与 claude.ai 登录时提示使用 claude.ai 登录（只提示并打点一次）。
  */
-function logImplicitProfileSkipped(e) {
-  if (e.implicitProfileSkippedLogged) return;
+function logImplicitProfileSkipped(state) {
+  if (state.implicitProfileSkippedLogged) return;
   logForDebugging(
     `An Anthropic profile (~/.config/anthropic) is configured, but a claude.ai login exists \u2014 using the claude.ai login. Set ANTHROPIC_PROFILE=<name> to use the profile instead.${""}`,
     {
@@ -611,22 +666,22 @@ function logImplicitProfileSkipped(e) {
     },
   );
   queueMicrotask(() => logEvent("tengu_wif_implicit_profile_skipped_stored_login", {}));
-  e.implicitProfileSkippedLogged = true;
+  state.implicitProfileSkippedLogged = true;
 }
 //@ chunk-aepeg2w5.js:509493-509780 layout
-function logProfileAuthSelected(e) {
-  if (e.profileAuthSelectedLogged) return;
-  let n = getWIFPrecedenceSource() ?? "profile";
+function logProfileAuthSelected(state) {
+  if (state.profileAuthSelectedLogged) return;
+  let precedenceSource = getWIFPrecedenceSource() ?? "profile";
   logForDebugging(
-    `Using Anthropic profile auth (${n}); ${wouldWIFProfileYieldToClaudeAILogin() ? "a claude.ai login (/login) would take precedence over it" : "this takes precedence over any stored claude.ai login"}`,
+    `Using Anthropic profile auth (${precedenceSource}); ${wouldWIFProfileYieldToClaudeAILogin() ? "a claude.ai login (/login) would take precedence over it" : "this takes precedence over any stored claude.ai login"}`,
     {
       level: "info",
     },
   );
-  e.profileAuthSelectedLogged = true;
+  state.profileAuthSelectedLogged = true;
 }
 //@ chunk-aepeg2w5.js:509780-509952 facade-majority
-function isProfileAuthShadowed(e = {}) {
+function isProfileAuthShadowed(options = {}) {
   return Boolean(
     isBareModeAuthRestricted() ||
     env.ANTHROPIC_UNIX_SOCKET ||
@@ -635,23 +690,23 @@ function isProfileAuthShadowed(e = {}) {
     env.ANTHROPIC_AUTH_TOKEN ||
     env.CLAUDE_CODE_OAUTH_TOKEN ||
     getOAuthTokenFromFileDescriptor() ||
-    (e.skipApiKeyHelper ? false : getConfiguredApiKeyHelper()) ||
+    (options.skipApiKeyHelper ? false : getConfiguredApiKeyHelper()) ||
     !isFirstPartyProvider(),
   );
 }
 //@ chunk-aepeg2w5.js:509952-510157 facade-majority
-function shouldUseWIFAuth(e = {}) {
+function shouldUseWIFAuth(options = {}) {
   if (!isWIFActive()) return false;
-  if (isProfileAuthShadowed(e)) return false;
-  let n = e.skipApiKeyHelper ? undefined : wifAuthDebugNotices.of(getRootSession().host);
+  if (isProfileAuthShadowed(options)) return false;
+  let debugState = options.skipApiKeyHelper ? undefined : wifAuthDebugNotices.of(getRootSession().host);
   if (getWIFPrecedenceSource() === "profile-implicit") {
     let claudeAIOAuthTokens = getClaudeAIOAuthTokens();
     if (isUsableClaudeAILoginRecord(claudeAIOAuthTokens) && wouldWIFProfileYieldToClaudeAILogin()) {
-      if (n) logImplicitProfileSkipped(n);
+      if (debugState) logImplicitProfileSkipped(debugState);
       return false;
     }
   }
-  if (n) logProfileAuthSelected(n);
+  if (debugState) logProfileAuthSelected(debugState);
   return true;
 }
 //@ chunk-aepeg2w5.js:510157-510197 facade-majority
@@ -672,7 +727,10 @@ function isProfileRemoteSettingsCredential() {
   );
 }
 //@ chunk-aepeg2w5.js:510341-510407 facade-majority
-var SDK_OAUTH_REFRESH_ENTRYPOINTS = new Set(["claude-desktop", "local-agent", "claude-vscode"]);
+var SDK_OAUTH_REFRESH_ENTRYPOINTS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:510341", () => {
+  SDK_OAUTH_REFRESH_ENTRYPOINTS = new Set(["claude-desktop", "local-agent", "claude-vscode"]);
+});
 //@ chunk-aepeg2w5.js:510407-510485 layout
 /**
  * 需要时校验登录网关是否是本机托管设置指定的组织网关。
@@ -698,44 +756,44 @@ var GATEWAY_PROBE_TIMEOUT_MS = 3000;
  * 校验登录网关是否为本机托管设置指定的组织网关；未通过时探测网关的托管设置（是否有 Code 标签页规则或未应答），把判定写回当前网关认证状态。
  */
 async function verifyGatewayHost_2(gatewayAuth) {
-  let n = `Bearer ${gatewayAuth.jwt}`;
+  let authorization = `Bearer ${gatewayAuth.jwt}`;
   let hostPolicyLoginPins = getHostPolicyLoginPins();
-  let s = await hostLaunchedSettingsSourceVerdict(gatewayAuth.url, hostPolicyLoginPins, n);
-  if ("verified" in s && !s.verified) {
+  let verdict = await hostLaunchedSettingsSourceVerdict(gatewayAuth.url, hostPolicyLoginPins, authorization);
+  if ("verified" in verdict && !verdict.verified) {
     let forceLoginGatewayUrl =
       hostPolicyLoginPins.forceLoginGatewayUrl ?? getMachineAdminDocumentTier()?.forceLoginGatewayUrl;
-    let S =
+    let probeResult =
       isManagedGatewayOrigin(gatewayAuth.url) || isManagedGatewayOrigin(forceLoginGatewayUrl)
         ? undefined
-        : await probeGatewayManagedSettings(gatewayAuth.url, n, GATEWAY_PROBE_TIMEOUT_MS);
-    let w =
+        : await probeGatewayManagedSettings(gatewayAuth.url, authorization, GATEWAY_PROBE_TIMEOUT_MS);
+    let forceLoginDiffers =
       forceLoginGatewayUrl !== undefined &&
       compareGatewayUrls(forceLoginGatewayUrl, new URL(gatewayAuth.url)) !== "same";
-    if (typeof S === "object")
-      s = {
-        ...s,
-        codeTabRulesUnanswered: S.unanswered,
+    if (typeof probeResult === "object")
+      verdict = {
+        ...verdict,
+        codeTabRulesUnanswered: probeResult.unanswered,
       };
-    else if (S || (S === false && !w))
-      s = {
-        ...s,
-        hasCodeTabRules: S,
+    else if (probeResult || (probeResult === false && !forceLoginDiffers))
+      verdict = {
+        ...verdict,
+        hasCodeTabRules: probeResult,
       };
   }
   let gatewayAuth_2 = getGatewayAuth();
   if (gatewayAuth_2 !== null && gatewayAuth_2.url === gatewayAuth.url)
     setGatewayAuth({
       ...gatewayAuth_2,
-      hostVerdict: s,
+      hostVerdict: verdict,
     });
 }
 //@ chunk-aepeg2w5.js:511005-511084 layout
 /**
  * URL 是否指向本机托管设置指定的网关。
  */
-function isManagedGatewayOrigin(e) {
+function isManagedGatewayOrigin(urlValue) {
   try {
-    return e !== undefined && isVouchedHostSetMember(hostOf(new URL(normalizeGatewayUrl(e))));
+    return urlValue !== undefined && isVouchedHostSetMember(hostOf(new URL(normalizeGatewayUrl(urlValue))));
   } catch {
     return false;
   }
@@ -744,35 +802,40 @@ function isManagedGatewayOrigin(e) {
 var GATEWAY_NOT_NAMED_REASON =
   "this machine's managed settings do not name it as the organization's gateway (forceLoginGatewayUrl).";
 //@ chunk-aepeg2w5.js:511194-511833 facade-majority
-async function hostLaunchedSettingsSourceVerdict(url, hostPolicyLoginPins, r) {
-  let actualUrl = new URL(url);
-  if (/[?#]/.test(actualUrl.href) || actualUrl.username || actualUrl.password)
+async function hostLaunchedSettingsSourceVerdict(gatewayUrl, hostPolicyLoginPins, signal) {
+  let parsedGatewayUrl = new URL(gatewayUrl);
+  if (/[?#]/.test(parsedGatewayUrl.href) || parsedGatewayUrl.username || parsedGatewayUrl.password)
     return {
       verified: false,
       reason:
         "the gateway address it was started with carries a query, fragment or user name, which no gateway address has.",
     };
-  let h = isVouchedHostSetMember(hostOf(actualUrl));
+  let isVouched = isVouchedHostSetMember(hostOf(parsedGatewayUrl));
   let gatewayInternalNetworks = hostPolicyLoginPins.gatewayInternalNetworks ?? [];
   let forceLoginGatewayUrl = hostPolicyLoginPins.forceLoginGatewayUrl;
-  let w;
-  if (forceLoginGatewayUrl === undefined) w = h ? undefined : GATEWAY_NOT_NAMED_REASON;
+  let mismatchReason;
+  if (forceLoginGatewayUrl === undefined) mismatchReason = isVouched ? undefined : GATEWAY_NOT_NAMED_REASON;
   else {
-    let R = compareGatewayUrls(forceLoginGatewayUrl, actualUrl);
-    if (typeof R === "object") {
-      if (R.voucher === undefined)
+    let comparison = compareGatewayUrls(forceLoginGatewayUrl, parsedGatewayUrl);
+    if (typeof comparison === "object") {
+      if (comparison.voucher === undefined)
         return {
           verified: false,
-          reason: R.reason,
+          reason: comparison.reason,
         };
-      return verifyGatewayHost(url, [], undefined, R.reason, R.voucher);
+      return verifyGatewayHost(gatewayUrl, [], undefined, comparison.reason, comparison.voucher);
     }
-    w =
-      R === "same" || h
+    mismatchReason =
+      comparison === "same" || isVouched
         ? undefined
-        : `this machine's managed settings name ${actualUrl.origin} as the organization's gateway, not ${actualUrl.origin}${trimTrailingSlashes(actualUrl)}.`;
+        : `this machine's managed settings name ${parsedGatewayUrl.origin} as the organization's gateway, not ${parsedGatewayUrl.origin}${trimTrailingSlashes(parsedGatewayUrl)}.`;
   }
-  return verifyGatewayHost(url, w === undefined ? gatewayInternalNetworks : [], r, w);
+  return verifyGatewayHost(
+    gatewayUrl,
+    mismatchReason === undefined ? gatewayInternalNetworks : [],
+    signal,
+    mismatchReason,
+  );
 }
 //@ chunk-aepeg2w5.js:511833-512377 layout
 /**
@@ -790,12 +853,13 @@ function compareGatewayUrls(configuredUrl, actualUrl) {
       reason:
         "this machine's managed settings name the organization's gateway (forceLoginGatewayUrl) with a value /login cannot use either.",
     };
-  let s = trimTrailingSlashes(configured);
-  let h = trimTrailingSlashes(actualUrl);
-  let y = s === "" || s === h;
-  if (configured.origin === actualUrl.origin && y) return s === h ? "same" : "origin";
-  let reason = `this machine's managed settings name ${configured.origin}${s} as the organization's gateway, not ${actualUrl.origin}${h}.`;
-  return y &&
+  let configuredPath = trimTrailingSlashes(configured);
+  let actualPath = trimTrailingSlashes(actualUrl);
+  let pathMatches = configuredPath === "" || configuredPath === actualPath;
+  if (configured.origin === actualUrl.origin && pathMatches)
+    return configuredPath === actualPath ? "same" : "origin";
+  let reason = `this machine's managed settings name ${configured.origin}${configuredPath} as the organization's gateway, not ${actualUrl.origin}${actualPath}.`;
+  return pathMatches &&
     actualUrl.protocol === "https:" &&
     configured.protocol === "https:" &&
     configured.port === "" &&
@@ -812,8 +876,8 @@ function compareGatewayUrls(configuredUrl, actualUrl) {
 /**
  * 去掉 URL 路径末尾的斜杠。
  */
-function trimTrailingSlashes(e) {
-  return e.pathname.replace(/\/+$/, "");
+function trimTrailingSlashes(url) {
+  return url.pathname.replace(/\/+$/, "");
 }
 //@ chunk-aepeg2w5.js:512429-512535 facade-majority
 function sdkHostOffersOAuthRefresh() {
@@ -831,8 +895,8 @@ function hostSessionsBearerOffered() {
   );
 }
 //@ chunk-aepeg2w5.js:512625-512701 facade-majority
-function isClaudeAISignInToken(e) {
-  return e === env.CLAUDE_CODE_OAUTH_TOKEN || e === getClaudeAIOAuthTokens()?.accessToken;
+function isClaudeAISignInToken(accessToken) {
+  return accessToken === env.CLAUDE_CODE_OAUTH_TOKEN || accessToken === getClaudeAIOAuthTokens()?.accessToken;
 }
 //@ chunk-aepeg2w5.js:512701-512768 facade-majority
 function claudeAISignInTokenInForce() {
@@ -843,28 +907,31 @@ function hasClaudeAISignInToken() {
   return Boolean(env.CLAUDE_CODE_OAUTH_TOKEN) || getClaudeAIOAuthTokens()?.accessToken !== undefined;
 }
 //@ chunk-aepeg2w5.js:512853-512897 facade-majority
-var gatewayAuthProvenance = new HostScoped(() => ({
-  restoredFromStore: false,
-}));
+var gatewayAuthProvenance; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:512853", () => {
+  gatewayAuthProvenance = new HostScoped(() => ({
+    restoredFromStore: false,
+  }));
+});
 //@ chunk-aepeg2w5.js:512897-512954 facade-majority
 function isGatewayAuthRestoredFromStore() {
   return gatewayAuthProvenance.of(getRootSession().host).restoredFromStore;
 }
 //@ chunk-aepeg2w5.js:512954-514913 facade-majority
-async function restoreGatewayAuth(e, n = () => !getIsNonInteractiveSession()) {
-  let r = gatewayAuthProvenance.of(getRootSession().host);
-  r.restoredFromStore = false;
+async function restoreGatewayAuth(session, shouldWarn = () => !getIsNonInteractiveSession()) {
+  let provenance = gatewayAuthProvenance.of(getRootSession().host);
+  provenance.restoredFromStore = false;
   if (readGatewayEnvConfig()) {
     await verifyGatewayHostIfNeeded();
     return;
   }
   if (env.CLAUDE_CODE_USE_GATEWAY && !env.ANTHROPIC_AUTH_TOKEN && hasBgAuthSnapshotPending()) {
-    let s = await consumeBgAuthSnapshot();
+    let snapshotResult = await consumeBgAuthSnapshot();
     if (readGatewayEnvConfig()) {
       await verifyGatewayHostIfNeeded();
       return;
     }
-    if (hasBgAuthSnapshotPending() && isPermissionDeniedCode(s))
+    if (hasBgAuthSnapshotPending() && isPermissionDeniedCode(snapshotResult))
       throw new PassingCauseError(
         "CLAUDE_CODE_USE_GATEWAY is set but the credential hand-off file is still locked by another process (an antivirus scan?), or this process is refused the file: check its permissions. Try again.",
       );
@@ -875,20 +942,20 @@ async function restoreGatewayAuth(e, n = () => !getIsNonInteractiveSession()) {
   }
   if (usesHostProvidedAuth()) return;
   try {
-    let async = await getSecureStorage().readAsync(e);
+    let async = await getSecureStorage().readAsync(session);
     let enterpriseGateway = async?.enterpriseGateway;
     if (!enterpriseGateway) return;
-    let y = hostOf(new URL(enterpriseGateway.url));
-    let S = async?.gatewayTrust?.[y];
-    if (!S) {
-      if (n())
+    let gatewayHost = hostOf(new URL(enterpriseGateway.url));
+    let pinnedFingerprint = async?.gatewayTrust?.[gatewayHost];
+    if (!pinnedFingerprint) {
+      if (shouldWarn())
         process.stderr
-          .write(`Cloud gateway ${y} is not trusted on this machine \u2014 run /login to reconnect.
+          .write(`Cloud gateway ${gatewayHost} is not trusted on this machine \u2014 run /login to reconnect.
 `);
       return;
     }
     if (enterpriseGateway.expiresAt <= Date.now() && !enterpriseGateway.idpRefreshToken) {
-      if (n())
+      if (shouldWarn())
         process.stderr.write(
           GATEWAY_SESSION_EXPIRED_MESSAGE +
             `
@@ -896,44 +963,49 @@ async function restoreGatewayAuth(e, n = () => !getIsNonInteractiveSession()) {
         );
       return;
     }
-    let w = async?.gatewayAllowlistEntries?.[y];
-    if (w !== undefined && !activeAllowlistEntries().some((R) => allowlistFactsHash(R) === w)) {
-      let R = `Not connected to Cloud gateway ${y}: the saved sign-in has ended. Run /login. If that is refused, update Claude Code, or ask your administrator which version to use.`;
-      if (n())
+    let savedAllowlistHash = async?.gatewayAllowlistEntries?.[gatewayHost];
+    if (
+      savedAllowlistHash !== undefined &&
+      !activeAllowlistEntries().some(
+        (allowlistEntry) => allowlistFactsHash(allowlistEntry) === savedAllowlistHash,
+      )
+    ) {
+      let endedMessage = `Not connected to Cloud gateway ${gatewayHost}: the saved sign-in has ended. Run /login. If that is refused, update Claude Code, or ask your administrator which version to use.`;
+      if (shouldWarn())
         process.stderr.write(
-          R +
+          endedMessage +
             `
 `,
         );
-      logForDebugging(R, {
+      logForDebugging(endedMessage, {
         level: "warn",
       });
       return;
     }
     if (isGatewayLoginRequired(enterpriseGateway.url)) {
-      let R = `Not connected to Cloud gateway ${y}: your organization's settings name another gateway or none.`;
-      if (n())
+      let wrongGatewayMessage = `Not connected to Cloud gateway ${gatewayHost}: your organization's settings name another gateway or none.`;
+      if (shouldWarn())
         process.stderr.write(
-          R +
+          wrongGatewayMessage +
             `
 `,
         );
-      logForDebugging(R, {
+      logForDebugging(wrongGatewayMessage, {
         level: "warn",
       });
       return;
     }
     if (enterpriseGateway.vouchedAtLogin === true || isFigJwt(enterpriseGateway.jwt))
-      holdGatewayHostStrict(y);
+      holdGatewayHostStrict(gatewayHost);
     try {
       let gatewayCertificate = await fetchGatewayCertificate(enterpriseGateway.url, 3000);
-      if (gatewayCertificate.fingerprint !== S) {
-        if (n())
+      if (gatewayCertificate.fingerprint !== pinnedFingerprint) {
+        if (shouldWarn())
           process.stderr
-            .write(`Cloud gateway ${y} TLS certificate changed since you connected \u2014 run /login to verify and reconnect.
+            .write(`Cloud gateway ${gatewayHost} TLS certificate changed since you connected \u2014 run /login to verify and reconnect.
 `);
         logForDebugging(
-          `[gateway] TLS fingerprint mismatch on restore for ${y}: pinned ${S}, live ${gatewayCertificate.fingerprint}`,
+          `[gateway] TLS fingerprint mismatch on restore for ${gatewayHost}: pinned ${pinnedFingerprint}, live ${gatewayCertificate.fingerprint}`,
           {
             level: "warn",
           },
@@ -942,19 +1014,22 @@ async function restoreGatewayAuth(e, n = () => !getIsNonInteractiveSession()) {
       }
     } catch (error) {
       logForDebugging(
-        `[gateway] TLS fingerprint probe failed on restore for ${y} (${errorMessage(error)}); proceeding without re-verify`,
+        `[gateway] TLS fingerprint probe failed on restore for ${gatewayHost} (${errorMessage(error)}); proceeding without re-verify`,
       );
     }
     setGatewayAuth(enterpriseGateway);
-    r.restoredFromStore = true;
+    provenance.restoredFromStore = true;
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-aepeg2w5.js:514913-514949 facade-majority
-var bareSignInRefusals = new HostScoped(() => ({
-  isRefused: false,
-}));
+var bareSignInRefusals; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:514913", () => {
+  bareSignInRefusals = new HostScoped(() => ({
+    isRefused: false,
+  }));
+});
 //@ chunk-aepeg2w5.js:514949-514990 facade-majority
 function isBareModeAuthRestricted() {
   if (!isBareMode()) return false;
@@ -965,27 +1040,32 @@ function isBareModeAuthRestricted() {
  * 是否走 Anthropic 第一方认证（Claude.ai OAuth）。--bare 且仅 bare 凭证、第三方提供方、profile（WIF）时为 false；存在 ANTHROPIC_AUTH_TOKEN / ANTHROPIC_API_KEY / apiKeyHelper / API key FD（且非远程会话）时也为 false。ANTHROPIC_UNIX_SOCKET 时只看 CLAUDE_CODE_OAUTH_TOKEN。
  */
 function isAnthropicAuthEnabled() {
-  let e = isBareMode();
-  if (e && isBareModeAuthRestricted()) return false;
+  let bareMode = isBareMode();
+  if (bareMode && isBareModeAuthRestricted()) return false;
   if (env.ANTHROPIC_UNIX_SOCKET) return !!env.CLAUDE_CODE_OAUTH_TOKEN;
   if (shouldUseWIFAuth()) return false;
-  let n = !isFirstPartyProvider();
-  let r = getSettings_DEPRECATED() || {};
-  let s = e ? getConfiguredApiKeyHelper() : warnPinnedHelper("apiKeyHelper", r.apiKeyHelper);
-  let h = effectiveAuthTokenEnv();
-  let y;
+  let nonFirstParty = !isFirstPartyProvider();
+  let settings = getSettings_DEPRECATED() || {};
+  let apiKeyHelper = bareMode
+    ? getConfiguredApiKeyHelper()
+    : warnPinnedHelper("apiKeyHelper", settings.apiKeyHelper);
+  let envAuthToken = effectiveAuthTokenEnv();
+  let apiKeySource;
   try {
-    y = getAnthropicApiKeyWithSource({
+    apiKeySource = getAnthropicApiKeyWithSource({
       skipRetrievingKeyFromApiKeyHelper: true,
     }).source;
   } catch {
     return false;
   }
-  let S = y === "ANTHROPIC_API_KEY" || y === "apiKeyHelper";
-  let w = isManagedOAuthContext();
-  let R = !w && hasPossibleCredentialFromDescriptor("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR");
-  let shouldDisableAuth = ((h || S) && !isFirstPartyManagedOAuthContext()) || ((s || R) && !w);
-  return !(n || shouldDisableAuth);
+  let isApiKeySource = apiKeySource === "ANTHROPIC_API_KEY" || apiKeySource === "apiKeyHelper";
+  let isManagedOAuth = isManagedOAuthContext();
+  let hasDescriptorKey =
+    !isManagedOAuth && hasPossibleCredentialFromDescriptor("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR");
+  let shouldDisableAuth =
+    ((envAuthToken || isApiKeySource) && !isFirstPartyManagedOAuthContext()) ||
+    ((apiKeyHelper || hasDescriptorKey) && !isManagedOAuth);
+  return !(nonFirstParty || shouldDisableAuth);
 }
 //@ chunk-aepeg2w5.js:515409-515842 facade-majority = bothAuthMethodsNotice (0.523)
 function describeHowToDisableAuthTokenSource(source) {
@@ -1067,20 +1147,24 @@ function getAuthTokenSource() {
   };
 }
 //@ chunk-aepeg2w5.js:516563-516708 facade-majority
-function isOAuthBearerSource(e) {
+function isOAuthBearerSource(source) {
   return (
-    e === "claude.ai" ||
-    e === "CLAUDE_CODE_OAUTH_TOKEN" ||
-    e === "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR" ||
-    e === "CCR_OAUTH_TOKEN_FILE"
+    source === "claude.ai" ||
+    source === "CLAUDE_CODE_OAUTH_TOKEN" ||
+    source === "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR" ||
+    source === "CCR_OAUTH_TOKEN_FILE"
   );
 }
 //@ chunk-aepeg2w5.js:516708-516820 facade-majority
-function getRequestCredentials(e, apiKeySource) {
-  let r = apiKeySource !== "none" && !isClaudeAISubscriber();
+function getRequestCredentials(tokenSource, apiKeySource) {
+  let useApiKey = apiKeySource !== "none" && !isClaudeAISubscriber();
   return {
-    tokenSource: (e === "profile" ? !isWIFDispatchAuth() : r && isOAuthBearerSource(e)) ? "none" : e,
-    apiKey: r,
+    tokenSource: (
+      tokenSource === "profile" ? !isWIFDispatchAuth() : useApiKey && isOAuthBearerSource(tokenSource)
+    )
+      ? "none"
+      : tokenSource,
+    apiKey: useApiKey,
   };
 }
 //@ chunk-aepeg2w5.js:516820-516860 facade-majority
@@ -1137,7 +1221,10 @@ function isApiKeyHelperTheActiveCredential() {
   );
 }
 //@ chunk-aepeg2w5.js:517233-517252 layout
-var weakMap_5 = new WeakMap();
+var weakMap_5; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:517233", () => {
+  weakMap_5 = new WeakMap();
+});
 //@ chunk-aepeg2w5.js:517252-517384 facade-majority
 function hasBootstrapModelOptions() {
   let globalConfig = getGlobalConfig();
@@ -1153,26 +1240,27 @@ function hasBootstrapModelOptions() {
 function getAdditionalModelOptionsCache() {
   let additionalModelOptionsCache = getGlobalConfig().additionalModelOptionsCache;
   if (!Array.isArray(additionalModelOptionsCache)) return [];
-  let n = weakMap_5.get(additionalModelOptionsCache);
-  if (n) return n;
+  let cachedOptions = weakMap_5.get(additionalModelOptionsCache);
+  if (cachedOptions) return cachedOptions;
   let mapped = additionalModelOptionsCache
     .filter(
-      (s) =>
-        s != null &&
-        typeof s === "object" &&
-        (typeof s.value === "string" || s.value === null) &&
-        typeof s.label === "string" &&
-        typeof s.description === "string",
+      (option) =>
+        option != null &&
+        typeof option === "object" &&
+        (typeof option.value === "string" || option.value === null) &&
+        typeof option.label === "string" &&
+        typeof option.description === "string",
     )
-    .map((s) => ({
-      value: s.value,
-      label: sanitizeTitle(s.label) || (typeof s.value === "string" ? sanitizeTitle(s.value) : ""),
-      description: markdownSafeText(s.description),
-      ...(s.disabled === true && {
+    .map((option) => ({
+      value: option.value,
+      label:
+        sanitizeTitle(option.label) || (typeof option.value === "string" ? sanitizeTitle(option.value) : ""),
+      description: markdownSafeText(option.description),
+      ...(option.disabled === true && {
         disabled: true,
       }),
-      ...(typeof s.promoListPrice === "string" && {
-        promoListPrice: sanitizeTitle(s.promoListPrice),
+      ...(typeof option.promoListPrice === "string" && {
+        promoListPrice: sanitizeTitle(option.promoListPrice),
       }),
     }));
   weakMap_5.set(additionalModelOptionsCache, mapped);
@@ -1185,8 +1273,11 @@ function getAdditionalModelOptionsCache() {
 function getModelAccessCache() {
   let modelAccessCache = getGlobalConfig().modelAccessCache;
   return (Array.isArray(modelAccessCache) ? modelAccessCache : []).filter(
-    (n) =>
-      n != null && typeof n === "object" && typeof n.apiName === "string" && typeof n.entitled === "boolean",
+    (entry) =>
+      entry != null &&
+      typeof entry === "object" &&
+      typeof entry.apiName === "string" &&
+      typeof entry.entitled === "boolean",
   );
 }
 //@ chunk-aepeg2w5.js:518080-518489 facade-majority
@@ -1356,8 +1447,8 @@ function getAnthropicApiKeyWithSource(opts = {}) {
 function getUnapprovedCustomApiKey() {
   let ANTHROPIC_API_KEY = env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_API_KEY || isAntBuild() || !isFirstPartyProvider()) return;
-  let n = tailOfId(ANTHROPIC_API_KEY);
-  return getCustomApiKeyStatus(n) === "new" ? n : undefined;
+  let keyTail = tailOfId(ANTHROPIC_API_KEY);
+  return getCustomApiKeyStatus(keyTail) === "new" ? keyTail : undefined;
 }
 //@ chunk-aepeg2w5.js:520284-520400 layout
 function isEnvApiKeyApproved() {
@@ -1372,20 +1463,20 @@ function isEnvApiKeyApproved() {
 }
 //@ chunk-aepeg2w5.js:520400-520517 facade-majority
 function onEnvApiKeyApprovalFlipped(onCredentialMayHaveChanged) {
-  let n = isEnvApiKeyApproved();
-  let r = [
+  let approved = isEnvApiKeyApproved();
+  let unsubscribers = [
     onCredentialChange(() => {
-      n = isEnvApiKeyApproved();
+      approved = isEnvApiKeyApproved();
     }),
     subscribeGlobalConfigInstalled(() => {
-      let s = isEnvApiKeyApproved();
-      if (s !== n) {
-        n = s;
+      let nextApproved = isEnvApiKeyApproved();
+      if (nextApproved !== approved) {
+        approved = nextApproved;
         onCredentialMayHaveChanged();
       }
     }),
   ];
-  return () => r.forEach((s) => s());
+  return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }
 //@ chunk-aepeg2w5.js:520517-520651 facade-majority = getConfiguredApiKeyHelper (0.742)
 /**
@@ -1475,12 +1566,15 @@ function calculateApiKeyHelperTTL() {
 /**
  * 按宿主的 apiKeyHelper 状态：{cache:{value,timestamp}, inflight, epoch, lastFailure}。
  */
-var apiKeyHelperStates = new HostScoped(() => ({
-  cache: null,
-  inflight: null,
-  epoch: 0,
-  lastFailure: null,
-}));
+var apiKeyHelperStates; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:521558", () => {
+  apiKeyHelperStates = new HostScoped(() => ({
+    cache: null,
+    inflight: null,
+    epoch: 0,
+    lastFailure: null,
+  }));
+});
 //@ chunk-aepeg2w5.js:521631-521713 facade-majority = createBudgetTracker (0.62)
 function getApiKeyHelperElapsedMs() {
   let startedAt = apiKeyHelperStates.of(getRootSession().host).inflight?.startedAt;
@@ -1488,19 +1582,19 @@ function getApiKeyHelperElapsedMs() {
 }
 //@ chunk-aepeg2w5.js:521713-521830 layout
 function isTokenStillValid(cache) {
-  let n = decodeJwtExpiry(cache.value);
-  if (n === null) return true;
-  let r = n * 1000 - JWT_EXPIRY_SKEW_MS;
-  if (cache.timestamp >= r) return true;
-  return Date.now() < r;
+  let expirySeconds = decodeJwtExpiry(cache.value);
+  if (expirySeconds === null) return true;
+  let expiryMs = expirySeconds * 1000 - JWT_EXPIRY_SKEW_MS;
+  if (cache.timestamp >= expiryMs) return true;
+  return Date.now() < expiryMs;
 }
 //@ chunk-aepeg2w5.js:521830-521895 layout
 /**
  * 判断令牌过期时间是否仍有余量。
  */
 function isOauthExpiryFresh(promise) {
-  let n = decodeJwtExpiry(promise);
-  return n === null || Date.now() < n * 1000 - JWT_EXPIRY_SKEW_MS;
+  let expirySeconds = decodeJwtExpiry(promise);
+  return expirySeconds === null || Date.now() < expirySeconds * 1000 - JWT_EXPIRY_SKEW_MS;
 }
 //@ chunk-aepeg2w5.js:521895-521977 facade-majority = getApiKeyFromApiKeyHelper (0.655)
 function getColdApiKeyHelperRun() {
@@ -1511,85 +1605,85 @@ function getColdApiKeyHelperRun() {
 async function getApiKeyFromApiKeyHelper(isNonInteractiveSession) {
   if (!getConfiguredApiKeyHelper()) return null;
   let apiKeyHelperTTL = calculateApiKeyHelperTTL();
-  let r = apiKeyHelperStates.of(getRootSession().host);
-  let s = () => {
-    r.inflight = {
-      promise: _runAndCache(r, isNonInteractiveSession, true, r.epoch),
+  let state = apiKeyHelperStates.of(getRootSession().host);
+  let startFetch = () => {
+    state.inflight = {
+      promise: _runAndCache(state, isNonInteractiveSession, true, state.epoch),
       startedAt: Date.now(),
     };
-    return r.inflight.promise;
+    return state.inflight.promise;
   };
-  if (r.cache) {
+  if (state.cache) {
     if (
-      !isTokenStillValid(r.cache) &&
+      !isTokenStillValid(state.cache) &&
       isFirstPartyProvider() &&
       isApiKeyHelperTheActiveCredential() &&
       !effectiveAuthTokenEnv()
     ) {
-      if (r.inflight) {
-        if (!r.inflight.startedAt) r.inflight.startedAt = Date.now();
-        let promise = await r.inflight.promise;
+      if (state.inflight) {
+        if (!state.inflight.startedAt) state.inflight.startedAt = Date.now();
+        let promise = await state.inflight.promise;
         if (promise === null || isOauthExpiryFresh(promise)) return promise;
-        if (r.inflight) return r.inflight.promise;
-        return s();
+        if (state.inflight) return state.inflight.promise;
+        return startFetch();
       }
-      return s();
+      return startFetch();
     }
-    if (Date.now() - r.cache.timestamp < apiKeyHelperTTL) return r.cache.value;
-    if (!r.inflight)
-      r.inflight = {
-        promise: _runAndCache(r, isNonInteractiveSession, false, r.epoch),
+    if (Date.now() - state.cache.timestamp < apiKeyHelperTTL) return state.cache.value;
+    if (!state.inflight)
+      state.inflight = {
+        promise: _runAndCache(state, isNonInteractiveSession, false, state.epoch),
         startedAt: null,
       };
-    return r.cache.value;
+    return state.cache.value;
   }
-  if (r.inflight) return r.inflight.promise;
-  return s();
+  if (state.inflight) return state.inflight.promise;
+  return startFetch();
 }
 //@ chunk-aepeg2w5.js:522578-523255 fingerprint = _runAndCache (0.627)
 /**
  * 执行 apiKeyHelper 并写缓存；失败时打印红字错误，若有旧缓存则沿用并刷新时间戳，否则缓存一个空格占位并记录 lastFailure（epoch 变化后的结果丢弃）。
  */
-async function _runAndCache(e, isNonInteractiveSession, r, epoch) {
+async function _runAndCache(state, isNonInteractiveSession, isBackground, epoch) {
   try {
     let value = await _executeApiKeyHelper(isNonInteractiveSession);
-    if (epoch !== e.epoch) return value;
+    if (epoch !== state.epoch) return value;
     if (value !== null) {
-      e.cache = {
+      state.cache = {
         value,
         timestamp: Date.now(),
       };
-      e.lastFailure = null;
+      state.lastFailure = null;
     }
     return value;
-  } catch (e_2) {
-    if (epoch !== e.epoch) return " ";
-    let detail = e_2 instanceof Error ? e_2.message : String(e_2);
+  } catch (e) {
+    if (epoch !== state.epoch) return " ";
+    let detail = e instanceof Error ? e.message : String(e);
     console.error(sequential.red(`apiKeyHelper failed: ${detail}`));
     logForDebugging(`Error getting API key from apiKeyHelper: ${detail}`, {
       level: "error",
     });
-    if (!r && e.cache && e.cache.value !== " ") {
-      e.cache = {
-        ...e.cache,
+    if (!isBackground && state.cache && state.cache.value !== " ") {
+      state.cache = {
+        ...state.cache,
         timestamp: Date.now(),
       };
-      return e.cache.value;
+      return state.cache.value;
     }
-    e.lastFailure = detail;
+    state.lastFailure = detail;
     if (isApiKeyHelperTheActiveCredential()) {
       let instance = AwsAuthStatusManager.getInstance();
       instance.startAuthentication();
       instance.setError(`apiKeyHelper failed: ${detail}`);
       instance.endAuthentication(false);
     }
-    e.cache = {
+    state.cache = {
       value: " ",
       timestamp: Date.now(),
     };
     return " ";
   } finally {
-    if (epoch === e.epoch) e.inflight = null;
+    if (epoch === state.epoch) state.inflight = null;
   }
 }
 //@ chunk-aepeg2w5.js:523255-524614 fingerprint = _executeApiKeyHelper (0.54)
@@ -1622,7 +1716,7 @@ async function _executeApiKeyHelper(isNonInteractiveSession) {
     }
   }
   let hasTrust = getProjectConfigRoot();
-  let s = await runManagedHelperWithoutProjectEnv(
+  let result = await runManagedHelperWithoutProjectEnv(
     "apiKeyHelper",
     apiKeyHelper,
     () =>
@@ -1636,20 +1730,20 @@ async function _executeApiKeyHelper(isNonInteractiveSession) {
       }),
     isProjectScopeTrustAccepted,
   );
-  if (s.failed) {
-    let why = s.timedOut ? "timed out" : `exited ${s.exitCode}`;
-    let stderr = s.stderr && truncateToLength(s.stderr.trim(), 500);
+  if (result.failed) {
+    let why = result.timedOut ? "timed out" : `exited ${result.exitCode}`;
+    let stderr = result.stderr && truncateToLength(result.stderr.trim(), 500);
     throw Error(stderr ? `${why}: ${stderr}` : why);
   }
-  let stdout = s.stdout?.trim();
+  let stdout = result.stdout?.trim();
   if (!stdout) throw Error("did not return a value");
-  let unsafeChar = findUnsafeChar(stdout, {
+  let found = findUnsafeChar(stdout, {
     maxLength: MAX_HELPER_STDERR_CHARS,
   });
-  if (unsafeChar) {
-    let S = describeUnsafeValue(unsafeChar, textLengthAndLines(stdout));
+  if (found) {
+    let reason = describeUnsafeValue(found, textLengthAndLines(stdout));
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `returned output that cannot be used as an API key: ${S}. The script must print only the key to stdout.`,
+      `returned output that cannot be used as an API key: ${reason}. The script must print only the key to stdout.`,
       "apiKeyHelper output rejected: not a printable-ASCII token",
     );
   }
@@ -1669,10 +1763,10 @@ function getApiKeyHelperLastFailure() {
  * 让 apiKeyHelper 缓存失效（epoch+1）。
  */
 function clearApiKeyHelperCache() {
-  let e = apiKeyHelperStates.of(getRootSession().host);
-  e.epoch++;
-  e.cache = null;
-  e.inflight = null;
+  let state = apiKeyHelperStates.of(getRootSession().host);
+  state.epoch++;
+  state.cache = null;
+  state.inflight = null;
 }
 //@ chunk-aepeg2w5.js:524821-524857 facade-majority
 function isApiKeyHelperSafeToInvoke() {
@@ -1701,17 +1795,20 @@ class AwsAuthRefreshState {
   waiters = new RefreshController(this.singleFlight);
 }
 //@ chunk-aepeg2w5.js:525061-525087 facade-majority
-var awsAuthRefreshStates = new HostScoped(() => new AwsAuthRefreshState());
+var awsAuthRefreshStates; // deferred: uses AwsAuthRefreshState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:525061", () => {
+  awsAuthRefreshStates = new HostScoped(() => new AwsAuthRefreshState());
+});
 //@ chunk-aepeg2w5.js:525087-527401 fingerprint = runAwsAuthRefresh (0.349)
 /**
  * 按需运行 awsAuthRefresh：先用 STS GetCallerIdentity 检查现有凭证是否有效，无效才执行刷新命令（IDE 配置探测时跳过）。
  */
 async function runAwsAuthRefresh() {
   let host = getRootSession().host;
-  let n = awsAuthRefreshStates.of(host);
+  let state = awsAuthRefreshStates.of(host);
   let awsAuthRefresh = getConfiguredAwsAuthRefresh();
-  let epoch = n.epoch;
-  let signal = n.waiters.signal;
+  let epoch = state.epoch;
+  let signal = state.waiters.signal;
   if (!awsAuthRefresh) return false;
   if (env.CLAUDE_CODE_CONFIG_PROBE) {
     logForDebugging("Skipping awsAuthRefresh in the IDE config probe");
@@ -1719,7 +1816,7 @@ async function runAwsAuthRefresh() {
   }
   if (isAwsAuthRefreshFromProjectSettings()) {
     if (!checkHasTrustDialogAccepted() && !getIsNonInteractiveSession()) {
-      let w = Error(
+      let error = Error(
         `Security: awsAuthRefresh executed before workspace trust is confirmed. If you see this message, post in ${
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -1734,48 +1831,54 @@ async function runAwsAuthRefresh() {
           }.FEEDBACK_CHANNEL
         }.`,
       );
-      logAntError("awsAuthRefresh invoked before trust check", w);
+      logAntError("awsAuthRefresh invoked before trust check", error);
       logEvent("tengu_awsAuthRefresh_missing_trust", {});
       return false;
     }
   }
-  if (n.inFlight) return n.inFlight;
+  if (state.inFlight) return state.inFlight;
   let probedAt = Date.now();
   try {
     logForDebugging("Fetching AWS caller identity for AWS auth refresh command");
     await checkStsCallerIdentity();
     logForDebugging("Fetched AWS caller identity, skipping AWS auth refresh command");
-    n.waiters.clearTakeover();
+    state.waiters.clearTakeover();
     return false;
   } catch {
-    if (n.inFlight) return n.inFlight;
-    if (n.lastRefreshAt !== null && Date.now() - n.lastRefreshAt < AWS_REFRESH_MIN_INTERVAL_MS) return false;
-    let S = () => awsCredentialMemos.of(host).helper.cache.clear();
-    if (signal.aborted && !n.waiters.hasCallers()) {
-      S();
+    if (state.inFlight) return state.inFlight;
+    if (state.lastRefreshAt !== null && Date.now() - state.lastRefreshAt < AWS_REFRESH_MIN_INTERVAL_MS)
+      return false;
+    let forgetCache = () => awsCredentialMemos.of(host).helper.cache.clear();
+    if (signal.aborted && !state.waiters.hasCallers()) {
+      forgetCache();
       return false;
     }
-    let signal_2 = n.waiters.signal;
-    let R = false;
-    let x;
-    let P = () => {
-      if (x === undefined || x.endedByLock.aborted) {
-        R = false;
-        S();
-        if (n.inFlight === F) n.inFlight = null;
+    let signal_2 = state.waiters.signal;
+    let didRefresh = false;
+    let refreshCommand;
+    let onAbort = () => {
+      if (refreshCommand === undefined || refreshCommand.endedByLock.aborted) {
+        didRefresh = false;
+        forgetCache();
+        if (state.inFlight === refreshPromise) state.inFlight = null;
       }
     };
-    let F = (async () => {
+    let refreshPromise = (async () => {
       try {
         let refreshed = await runCloudAuthRefresh({
           setting: "awsAuthRefresh",
           command: awsAuthRefresh,
-          readEnvAsCommandStarts: (ee) =>
-            managedHelperSettingsGate("awsAuthRefresh", awsAuthRefresh, ee, isProjectScopeTrustAccepted),
+          readEnvAsCommandStarts: (gateContext) =>
+            managedHelperSettingsGate(
+              "awsAuthRefresh",
+              awsAuthRefresh,
+              gateContext,
+              isProjectScopeTrustAccepted,
+            ),
           probedAt,
-          singleFlight: n.singleFlight,
+          singleFlight: state.singleFlight,
           signal: signal_2,
-          takeover: n.waiters.takeTakeover(),
+          takeover: state.waiters.takeTakeover(),
           reprobe: async () =>
             (await getAwsProfileRegionHints())
               ? "unknown"
@@ -1783,50 +1886,50 @@ async function runAwsAuthRefresh() {
                   () => "valid",
                   () => "unknown",
                 ),
-          refresh: (signal, q) => {
-            R = true;
-            n.waiters.clearTakeover();
-            let Q = refreshAwsAuth_2(awsAuthRefresh, signal, q);
-            x = {
-              outcome: Q,
+          refresh: (signal, onSpawned) => {
+            didRefresh = true;
+            state.waiters.clearTakeover();
+            let outcome = refreshAwsAuth_2(awsAuthRefresh, signal, onSpawned);
+            refreshCommand = {
+              outcome,
               endedByLock: signal,
             };
-            return Q;
+            return outcome;
           },
         });
-        let j = await settleRefreshOutcome({
+        let settled = await settleRefreshOutcome({
           refreshed,
           stop: signal_2,
-          command: x,
-          forget: S,
+          command: refreshCommand,
+          forget: forgetCache,
         });
-        if (!j && signal_2.aborted && x?.endedByLock.aborted) R = false;
-        R ||= j;
-        if (j) n.waiters.clearTakeover();
+        if (!settled && signal_2.aborted && refreshCommand?.endedByLock.aborted) didRefresh = false;
+        didRefresh ||= settled;
+        if (settled) state.waiters.clearTakeover();
         else if (
           isRefreshStillWanted({
             stop: signal_2,
-            command: x,
-            waiters: n.waiters,
+            command: refreshCommand,
+            waiters: state.waiters,
           }) &&
           isAuthRefreshLockEnabled()
         )
-          n.signInFailures++;
-        return j;
+          state.signInFailures++;
+        return settled;
       } finally {
-        if (R && epoch === n.epoch) n.lastRefreshAt = Date.now();
+        if (didRefresh && epoch === state.epoch) state.lastRefreshAt = Date.now();
       }
     })();
-    n.inFlight = F;
-    signal_2.addEventListener("abort", P, {
+    state.inFlight = refreshPromise;
+    signal_2.addEventListener("abort", onAbort, {
       once: true,
     });
-    let L = () => {
-      signal_2.removeEventListener("abort", P);
-      if (n.inFlight === F) n.inFlight = null;
+    let cleanup = () => {
+      signal_2.removeEventListener("abort", onAbort);
+      if (state.inFlight === refreshPromise) state.inFlight = null;
     };
-    F.then(L, L);
-    return F;
+    refreshPromise.then(cleanup, cleanup);
+    return refreshPromise;
   }
 }
 //@ chunk-aepeg2w5.js:527401-527562 facade-majority
@@ -1863,14 +1966,14 @@ function isTerminationSignal(signal) {
 //@ chunk-aepeg2w5.js:527927-527941 layout
 var AWS_AUTH_REFRESH_TIMEOUT_MS = 180000;
 //@ chunk-aepeg2w5.js:527941-527996 facade-majority
-function refreshAwsAuth(...e) {
-  return refreshAwsAuth_2(...e).then((n) => n === "ok");
+function refreshAwsAuth(...args) {
+  return refreshAwsAuth_2(...args).then((result) => result === "ok");
 }
 //@ chunk-aepeg2w5.js:527996-529663 fingerprint = refreshAwsAuth (0.581)
 /**
  * 运行 awsAuthRefresh 命令（字符串走 shell，或 {file,args,env} 走 execFile），超时 3 分钟，输出转发到 AwsAuthStatusManager 供 UI 显示，返回 ok/failed。
  */
-function refreshAwsAuth_2(awsAuthRefresh, signal, r) {
+function refreshAwsAuth_2(awsAuthRefresh, signal, onSpawned) {
   if (isDisklessSession()) {
     logForDebugging(`AWS auth refresh: ${DISKLESS_PROGRAM_REFUSAL}`);
     return Promise.resolve("failed");
@@ -1879,10 +1982,10 @@ function refreshAwsAuth_2(awsAuthRefresh, signal, r) {
   let authStatusManager = AwsAuthStatusManager.getInstance();
   authStatusManager.startAuthentication();
   return new Promise((resolve) => {
-    let y;
+    let child;
     if (typeof awsAuthRefresh === "string") {
       let projectConfigRoot = getProjectConfigRoot();
-      y = runManagedHelperWithoutProjectEnv(
+      child = runManagedHelperWithoutProjectEnv(
         "awsAuthRefresh",
         awsAuthRefresh,
         () =>
@@ -1902,7 +2005,7 @@ function refreshAwsAuth_2(awsAuthRefresh, signal, r) {
         resolve("failed");
         return;
       }
-      y = execFile(
+      child = execFile(
         /\.(cmd|bat)$/i.test(refreshProc) ? '"' + refreshProc + '"' : refreshProc,
         awsAuthRefresh.args,
         {
@@ -1912,13 +2015,13 @@ function refreshAwsAuth_2(awsAuthRefresh, signal, r) {
         },
       );
     }
-    moveKeeperPid(y.pid);
-    if (y.pid !== undefined) r?.(y.pid);
-    let S = new TimedOperation(y, {
+    moveKeeperPid(child.pid);
+    if (child.pid !== undefined) onSpawned?.(child.pid);
+    let timedOperation = new TimedOperation(child, {
       timeoutMs: AWS_AUTH_REFRESH_TIMEOUT_MS,
       signal,
     });
-    y.stdout.on("data", (data) => {
+    child.stdout.on("data", (data) => {
       let output = data.toString().trim();
       if (output) {
         authStatusManager.addOutput(output);
@@ -1927,7 +2030,7 @@ function refreshAwsAuth_2(awsAuthRefresh, signal, r) {
         });
       }
     });
-    y.stderr.on("data", (data) => {
+    child.stderr.on("data", (data) => {
       let error = data.toString().trim();
       if (error) {
         authStatusManager.setError(error);
@@ -1936,19 +2039,21 @@ function refreshAwsAuth_2(awsAuthRefresh, signal, r) {
         });
       }
     });
-    y.on("close", (code, signal) => {
-      S.settle();
+    child.on("close", (code, signal) => {
+      timedOperation.settle();
       if (code === 0) {
         logForDebugging("AWS auth refresh completed successfully");
         authStatusManager.endAuthentication(true);
         resolve("ok");
-      } else if (S.killReason === "abort") {
+      } else if (timedOperation.killReason === "abort") {
         authStatusManager.dismiss();
         resolve("interrupted");
       } else {
-        let x = S.killReason === "shutdown" || (isTerminationSignal(signal) && S.killReason === undefined);
-        let timedOut = S.killReason === "timeout";
-        let message = x
+        let wasShutdown =
+          timedOperation.killReason === "shutdown" ||
+          (isTerminationSignal(signal) && timedOperation.killReason === undefined);
+        let timedOut = timedOperation.killReason === "timeout";
+        let message = wasShutdown
           ? null
           : timedOut
             ? sequential.red(
@@ -1967,7 +2072,7 @@ function refreshAwsAuth_2(awsAuthRefresh, signal, r) {
                 );
         if (message) console.error(message);
         authStatusManager.endAuthentication(false);
-        resolve(x ? "interrupted" : "failed");
+        resolve(wasShutdown ? "interrupted" : "failed");
       }
     });
   });
@@ -2019,17 +2124,17 @@ async function getAwsCredsFromCredentialExport() {
     );
     if (result.exitCode !== 0 || !result.stdout)
       throw Error("awsCredentialExport did not return a valid value");
-    let s = jsonParse(result.stdout.trim());
-    let awsOutput = extractStsCredentials(s);
+    let parsedOutput = jsonParse(result.stdout.trim());
+    let awsOutput = extractStsCredentials(parsedOutput);
     if (!awsOutput) throw Error("awsCredentialExport did not return valid AWS STS output structure");
     logForDebugging("AWS credentials retrieved from awsCredentialExport");
     let Expiration = awsOutput.Expiration;
-    let S = typeof Expiration === "string" ? Date.parse(Expiration) : NaN;
+    let expirationMs = typeof Expiration === "string" ? Date.parse(Expiration) : NaN;
     return {
       accessKeyId: awsOutput.AccessKeyId,
       secretAccessKey: awsOutput.SecretAccessKey,
       sessionToken: awsOutput.SessionToken,
-      expiration: Number.isFinite(S) ? S : undefined,
+      expiration: Number.isFinite(expirationMs) ? expirationMs : undefined,
     };
   } catch (e) {
     let message = sequential.red(
@@ -2044,36 +2149,36 @@ async function getAwsCredsFromCredentialExport() {
 /**
  * 解析 AWS 凭证：先 awsAuthRefresh、再 awsCredentialExport；刷新成功后清 AWS ini 与默认链缓存。
  */
-async function resolveAwsCredentialsViaHelpers(e) {
+async function resolveAwsCredentialsViaHelpers(memos) {
   let startTime = performance.now();
   logForDebugging("[API:auth] AWS credential resolve start");
-  let r = await runAwsAuthRefresh();
+  let refreshed = await runAwsAuthRefresh();
   let awsCredsFromCredentialExport = await getAwsCredsFromCredentialExport();
-  if (r) {
+  if (refreshed) {
     await clearAwsIniCache();
-    e.defaultChain.cache.clear();
+    memos.defaultChain.cache.clear();
   }
   logForDebugging(`[API:auth] AWS credential resolve done in ${Math.round(performance.now() - startTime)}ms`);
   return awsCredsFromCredentialExport;
 }
 //@ chunk-aepeg2w5.js:531567-531697 facade-majority
-function refreshAndGetAwsCredentials(signal, { userTurn: n = false } = {}) {
+function refreshAndGetAwsCredentials(signal, { userTurn = false } = {}) {
   let host = getRootSession().host;
   return awsAuthRefreshStates.of(host).waiters.wait(
     () => awsCredentialMemos.of(host).helper(),
     {
       signal,
-      userTurn: n,
+      userTurn,
     },
     null,
   );
 }
 //@ chunk-aepeg2w5.js:531697-531795 layout
-function computeAwsCredsCacheTtl(e) {
-  let n = e === undefined ? undefined : e - Date.now();
-  if (n === undefined || n <= AWS_CREDS_REFRESH_SKEW_MS + AWS_CREDS_MIN_TTL_MS)
+function computeAwsCredsCacheTtl(expirationMs) {
+  let timeLeftMs = expirationMs === undefined ? undefined : expirationMs - Date.now();
+  if (timeLeftMs === undefined || timeLeftMs <= AWS_CREDS_REFRESH_SKEW_MS + AWS_CREDS_MIN_TTL_MS)
     return DEFAULT_AWS_CREDS_TTL_MS;
-  return n - AWS_CREDS_REFRESH_SKEW_MS;
+  return timeLeftMs - AWS_CREDS_REFRESH_SKEW_MS;
 }
 //@ chunk-aepeg2w5.js:531795-531818 facade-majority
 var AWS_CHAIN_REQUEST_TIMEOUT_MS = 30000;
@@ -2082,48 +2187,51 @@ var AWS_CHAIN_RESOLVE_REQUEST_TIMEOUT_MS = 30000;
 /**
  * 给 AWS 默认凭证链解析加超时（CLAUDE_CODE_AWS_CHAIN_RESOLVE_TIMEOUT_MS，默认 60 秒）。
  */
-async function resolveWithStallGuard(e, n = env.CLAUDE_CODE_AWS_CHAIN_RESOLVE_TIMEOUT_MS ?? 60000) {
-  let r;
+async function resolveWithStallGuard(
+  resolvePromise,
+  timeoutMs = env.CLAUDE_CODE_AWS_CHAIN_RESOLVE_TIMEOUT_MS ?? 60000,
+) {
+  let timer;
   try {
     return await Promise.race([
-      e,
+      resolvePromise,
       new Promise((resolve, reject) => {
-        r = setTimeout(
-          (y) =>
-            y(
+        timer = setTimeout(
+          (reject) =>
+            reject(
               Object.assign(Error("AWS default-chain credential resolve timed out"), {
                 name: "CredentialsProviderError",
               }),
             ),
-          n,
+          timeoutMs,
           reject,
         );
       }),
     ]);
   } finally {
-    clearTimeout(r);
-    e.catch(() => {});
+    clearTimeout(timer);
+    resolvePromise.catch(() => {});
   }
 }
 //@ chunk-aepeg2w5.js:532127-532748 layout
 /**
  * 创建按区域缓存的 AWS 默认凭证链（@aws-sdk fromNodeProviderChain + STS 代理配置），CLAUDE_CODE_AWS_CHAIN_RESOLVE_TIMEOUT_MS 超时。
  */
-async function createAwsDefaultChainResolver(e) {
-  let n = memoizeWithTTL(
+async function createAwsDefaultChainResolver(region) {
+  let memoized = memoizeWithTTL(
     async () => {
-      logForDebugging(`[API:auth] resolving default AWS provider chain (region: ${e})`);
-      let [{ fromNodeProviderChain: r }, awsProxyRequestHandler] = await Promise.all([
-        import("./chunk-thwbpw6e.js"),
+      logForDebugging(`[API:auth] resolving default AWS provider chain (region: ${region})`);
+      let [{ fromNodeProviderChain }, awsProxyRequestHandler] = await Promise.all([
+        import("../../vendor/@aws-sdk/credential-providers/dist-cjs/createCredentialChain.lazy.js"),
         getAWSProxyRequestHandler({
-          url: resolveStsEndpointForProxyUrl(e),
+          url: resolveStsEndpointForProxyUrl(region),
           requestTimeoutMs: AWS_CHAIN_RESOLVE_REQUEST_TIMEOUT_MS,
         }),
       ]);
-      let h = r({
+      let providerChain = fromNodeProviderChain({
         ignoreCache: true,
         parentClientConfig: {
-          region: e,
+          region,
           requestHandler:
             awsProxyRequestHandler ??
             new smithyFetchHttpHandlerModule.FetchHttpHandler({
@@ -2138,33 +2246,34 @@ async function createAwsDefaultChainResolver(e) {
             }),
         },
       });
-      return resolveWithStallGuard(h());
+      return resolveWithStallGuard(providerChain());
     },
-    (r) => computeAwsCredsCacheTtl(r.expiration?.getTime()),
-    (r, s) => {
-      if (r.expiration === undefined) return true;
-      let time = r.expiration.getTime();
+    (credentials) => computeAwsCredsCacheTtl(credentials.expiration?.getTime()),
+    (entry, nowMs) => {
+      if (entry.expiration === undefined) return true;
+      let time = entry.expiration.getTime();
       if (time > Date.now() + AWS_CHAIN_REQUEST_TIMEOUT_MS) return true;
-      return s >= time - AWS_CHAIN_REQUEST_TIMEOUT_MS && time > Date.now();
+      return nowMs >= time - AWS_CHAIN_REQUEST_TIMEOUT_MS && time > Date.now();
     },
   );
-  return () => n();
+  return () => memoized();
 }
 //@ chunk-aepeg2w5.js:532748-532804 facade-majority
-function getDefaultAwsProviderChain(e) {
-  return awsCredentialMemos.of(getRootSession().host).defaultChain(e);
+function getDefaultAwsProviderChain(region) {
+  return awsCredentialMemos.of(getRootSession().host).defaultChain(region);
 }
 //@ chunk-aepeg2w5.js:532804-532895 facade-majority
 /**
  * 返回 Bedrock 用的 AWS 凭证提供器：CLAUDE_CODE_SKIP_AWS_CRED_CACHE 时每次重建默认链，否则按区域缓存。
  */
-function defaultAwsProviderChainResolver(e, getNativeCaBlocks = getCACertificates) {
+function defaultAwsProviderChainResolver(region, getNativeCaBlocks = getCACertificates) {
   if (env.CLAUDE_CODE_SKIP_AWS_CRED_CACHE) return () => createUncachedAwsDefaultChain(getNativeCaBlocks);
-  return () => getDefaultAwsProviderChain(e);
+  return () => getDefaultAwsProviderChain(region);
 }
 //@ chunk-aepeg2w5.js:532895-533033 layout
 async function createUncachedAwsDefaultChain(caList) {
-  let { fromNodeProviderChain } = await import("./chunk-thwbpw6e.js");
+  let { fromNodeProviderChain } =
+    await import("../../vendor/@aws-sdk/credential-providers/dist-cjs/createCredentialChain.lazy.js");
   return fromNodeProviderChain({
     clientConfig: {
       requestHandler: new CaFetchHttpHandler(caList),
@@ -2172,8 +2281,8 @@ async function createUncachedAwsDefaultChain(caList) {
   });
 }
 //@ chunk-aepeg2w5.js:533033-533085 layout
-function awsChainCacheKey(e) {
-  return `${env.AWS_PROFILE ?? ""}\x00${e}`;
+function awsChainCacheKey(region) {
+  return `${env.AWS_PROFILE ?? ""}\x00${region}`;
 }
 //@ chunk-aepeg2w5.js:533085-533096 layout
 /**
@@ -2182,14 +2291,14 @@ function awsChainCacheKey(e) {
 var CHAIN_EVICTION_COOLDOWN_MS = 1e4;
 //@ chunk-aepeg2w5.js:533096-533322 facade-majority
 function invalidateDefaultAwsProviderChainDebounced(region) {
-  let n = awsChainCacheKey(region);
+  let cacheKey = awsChainCacheKey(region);
   let now = Date.now();
-  let s = awsCredentialMemos.of(getRootSession().host);
-  if (now - (s.chainEvictionAt.get(n) ?? 0) < CHAIN_EVICTION_COOLDOWN_MS) return false;
-  s.chainEvictionAt.set(n, now);
-  s.defaultChain.cache.delete(n);
-  s.ssoRole.cache.clear();
-  s.ssoProfile.cache.clear();
+  let memos = awsCredentialMemos.of(getRootSession().host);
+  if (now - (memos.chainEvictionAt.get(cacheKey) ?? 0) < CHAIN_EVICTION_COOLDOWN_MS) return false;
+  memos.chainEvictionAt.set(cacheKey, now);
+  memos.defaultChain.cache.delete(cacheKey);
+  memos.ssoRole.cache.clear();
+  memos.ssoProfile.cache.clear();
   return true;
 }
 //@ chunk-aepeg2w5.js:533322-533489 facade-majority
@@ -2197,12 +2306,12 @@ function invalidateDefaultAwsProviderChainDebounced(region) {
  * 清空 AWS 凭证相关缓存（helper、默认链、SSO role/profile）。
  */
 function clearAwsCredentialsCache() {
-  let e = awsCredentialMemos.of(getRootSession().host);
-  e.helper.cache.clear();
-  e.defaultChain.cache.clear();
-  e.ssoRole.cache.clear();
-  e.ssoProfile.cache.clear();
-  e.chainEvictionAt.clear();
+  let memos = awsCredentialMemos.of(getRootSession().host);
+  memos.helper.cache.clear();
+  memos.defaultChain.cache.clear();
+  memos.ssoRole.cache.clear();
+  memos.ssoProfile.cache.clear();
+  memos.chainEvictionAt.clear();
 }
 //@ chunk-aepeg2w5.js:533489-533542 facade-majority
 function clearAwsHelperCredentialsCache() {
@@ -2210,9 +2319,9 @@ function clearAwsHelperCredentialsCache() {
 }
 //@ chunk-aepeg2w5.js:533542-533611 facade-majority
 function resetAwsAuthRefreshCooldown() {
-  let e = awsAuthRefreshStates.of(getRootSession().host);
-  e.lastRefreshAt = null;
-  e.epoch++;
+  let state = awsAuthRefreshStates.of(getRootSession().host);
+  state.lastRefreshAt = null;
+  state.epoch++;
 }
 //@ chunk-aepeg2w5.js:533611-533702 facade-majority = getConfiguredGcpAuthRefresh (0.524)
 /**
@@ -2260,12 +2369,14 @@ function getConfiguredVertexProjectId() {
 async function checkGcpCredentialsValid() {
   let now = Date.now();
   try {
-    let { GoogleAuth } = await import("./chunk-ndb2dret.js").then((m) => Re(m.default, 1));
-    let r = getConfiguredVertexProjectId() || env.ANTHROPIC_GOOGLE_CLOUD_PROJECT;
+    let { GoogleAuth } = await import("./lazyDefaultExport.js").then((sdkModule) =>
+      __toESM(sdkModule.default, 1),
+    );
+    let projectId = getConfiguredVertexProjectId() || env.ANTHROPIC_GOOGLE_CLOUD_PROJECT;
     let auth = new GoogleAuth({
       scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-      ...(r && {
-        projectId: r,
+      ...(projectId && {
+        projectId,
       }),
       clientOptions: vertexAuthClientOptions(),
     });
@@ -2278,14 +2389,14 @@ async function checkGcpCredentialsValid() {
     await Promise.race([probe, timeout]);
     return "valid";
   } catch (error) {
-    let r = Date.now() - now;
+    let elapsedMs = Date.now() - now;
     if (error instanceof GcpCredentialsTimeoutError) {
-      logForDebugging(`GCP credentials check did not finish within ${r}ms`, {
+      logForDebugging(`GCP credentials check did not finish within ${elapsedMs}ms`, {
         level: "warn",
       });
       return "timeout";
     }
-    logForDebugging(`GCP credentials check failed after ${r}ms: ${errorMessage(error)}`);
+    logForDebugging(`GCP credentials check failed after ${elapsedMs}ms: ${errorMessage(error)}`);
     return "invalid";
   }
 }
@@ -2298,7 +2409,10 @@ class GcpAuthRefreshState {
   waiters = new RefreshController(this.singleFlight);
 }
 //@ chunk-aepeg2w5.js:534781-534807 facade-majority
-var gcpAuthRefreshStates = new HostScoped(() => new GcpAuthRefreshState());
+var gcpAuthRefreshStates; // deferred: uses GcpAuthRefreshState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:534781", () => {
+  gcpAuthRefreshStates = new HostScoped(() => new GcpAuthRefreshState());
+});
 //@ chunk-aepeg2w5.js:534807-534888 facade-majority
 function markGcpCredentialsRejected() {
   let host = getRootSession().host;
@@ -2313,8 +2427,8 @@ var GCP_AUTH_REFRESH_TTL_MS = 3600000;
  */
 async function runGcpAuthRefresh() {
   let host = getRootSession().host;
-  let n = gcpAuthRefreshStates.of(host);
-  let signal = n.waiters.signal;
+  let state = gcpAuthRefreshStates.of(host);
+  let signal = state.waiters.signal;
   let gcpAuthRefresh = getConfiguredGcpAuthRefresh();
   if (!gcpAuthRefresh) return false;
   if (env.CLAUDE_CODE_CONFIG_PROBE) {
@@ -2323,7 +2437,7 @@ async function runGcpAuthRefresh() {
   }
   if (isGcpAuthRefreshFromProjectSettings()) {
     if (!checkHasTrustDialogAccepted() && !getIsNonInteractiveSession()) {
-      let j = Error(
+      let error = Error(
         `Security: gcpAuthRefresh executed before workspace trust is confirmed. If you see this message, post in ${
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
@@ -2338,26 +2452,26 @@ async function runGcpAuthRefresh() {
           }.FEEDBACK_CHANNEL
         }.`,
       );
-      logAntError("gcpAuthRefresh invoked before trust check", j);
+      logAntError("gcpAuthRefresh invoked before trust check", error);
       logEvent("tengu_gcpAuthRefresh_missing_trust", {});
       return false;
     }
   }
-  let { lockfilePath } = getOperationLockPaths("gcpAuthRefresh", gcpAuthRefresh, (G) =>
-    managedHelperSettingsGate("gcpAuthRefresh", gcpAuthRefresh, G, isProjectScopeTrustAccepted),
+  let { lockfilePath } = getOperationLockPaths("gcpAuthRefresh", gcpAuthRefresh, (gateContext) =>
+    managedHelperSettingsGate("gcpAuthRefresh", gcpAuthRefresh, gateContext, isProjectScopeTrustAccepted),
   );
-  if (n.inFlight?.lockfilePath === lockfilePath) {
-    n.rejectedByApi = false;
-    return n.inFlight.run;
+  if (state.inFlight?.lockfilePath === lockfilePath) {
+    state.rejectedByApi = false;
+    return state.inFlight.run;
   }
-  let rejectedByApi = n.rejectedByApi;
-  n.rejectedByApi = false;
+  let rejectedByApi = state.rejectedByApi;
+  state.rejectedByApi = false;
   logForDebugging("Checking GCP credentials validity for auth refresh");
   let probedAt = Date.now();
   switch (await checkGcpCredentialsValid()) {
     case "valid":
       logForDebugging("GCP credentials are valid, skipping auth refresh command");
-      n.waiters.clearTakeover();
+      state.waiters.clearTakeover();
       return false;
     case "timeout":
       if (!rejectedByApi) {
@@ -2370,82 +2484,82 @@ async function runGcpAuthRefresh() {
     case "invalid":
       break;
   }
-  if (n.inFlight?.lockfilePath === lockfilePath) return n.inFlight.run;
-  let R = () => {
+  if (state.inFlight?.lockfilePath === lockfilePath) return state.inFlight.run;
+  let forgetCache = () => {
     gcpRefreshMemos.of(host).cache.clear();
-    n.rejectedByApi ||= rejectedByApi;
+    state.rejectedByApi ||= rejectedByApi;
   };
-  if (signal.aborted && !n.waiters.hasCallers()) {
-    R();
+  if (signal.aborted && !state.waiters.hasCallers()) {
+    forgetCache();
     return false;
   }
-  let signal_2 = n.waiters.signal;
-  let P;
-  let F = () => {
-    if (P === undefined || P.endedByLock.aborted) {
-      R();
-      if (n.inFlight?.run === L) n.inFlight = null;
+  let signal_2 = state.waiters.signal;
+  let refreshCommand;
+  let onAbort = () => {
+    if (refreshCommand === undefined || refreshCommand.endedByLock.aborted) {
+      forgetCache();
+      if (state.inFlight?.run === refreshPromise) state.inFlight = null;
     }
   };
-  let L = runCloudAuthRefresh({
+  let refreshPromise = runCloudAuthRefresh({
     setting: "gcpAuthRefresh",
     command: gcpAuthRefresh,
-    readEnvAsCommandStarts: (G) =>
-      managedHelperSettingsGate("gcpAuthRefresh", gcpAuthRefresh, G, isProjectScopeTrustAccepted),
+    readEnvAsCommandStarts: (gateContext) =>
+      managedHelperSettingsGate("gcpAuthRefresh", gcpAuthRefresh, gateContext, isProjectScopeTrustAccepted),
     probedAt,
-    singleFlight: n.singleFlight,
+    singleFlight: state.singleFlight,
     signal: signal_2,
-    takeover: n.waiters.takeTakeover(),
+    takeover: state.waiters.takeTakeover(),
     reprobe: async () => {
       let isValid = await checkGcpCredentialsValid();
       return isValid === "timeout" ? "unknown" : isValid;
     },
-    refresh: (signal, j) => {
-      n.waiters.clearTakeover();
-      let ee = refreshGcpAuth(gcpAuthRefresh, signal, j);
-      P = {
-        outcome: ee,
+    refresh: (signal, onSpawned) => {
+      state.waiters.clearTakeover();
+      let outcome = refreshGcpAuth(gcpAuthRefresh, signal, onSpawned);
+      refreshCommand = {
+        outcome,
         endedByLock: signal,
       };
-      return ee;
+      return outcome;
     },
   })
     .then(async (refreshed) => {
-      let j = await settleRefreshOutcome({
+      let settled = await settleRefreshOutcome({
         refreshed,
         stop: signal_2,
-        command: P,
-        forget: R,
+        command: refreshCommand,
+        forget: forgetCache,
       });
-      if (j) n.waiters.clearTakeover();
+      if (settled) state.waiters.clearTakeover();
       else if (
         isRefreshStillWanted({
           stop: signal_2,
-          command: P,
-          waiters: n.waiters,
+          command: refreshCommand,
+          waiters: state.waiters,
         }) &&
         isAuthRefreshLockEnabled()
       )
-        n.signInFailures++;
-      return j;
+        state.signInFailures++;
+      return settled;
     })
     .finally(() => {
-      signal_2.removeEventListener("abort", F);
-      if (n.inFlight?.run === L) n.inFlight = null;
+      signal_2.removeEventListener("abort", onAbort);
+      if (state.inFlight?.run === refreshPromise) state.inFlight = null;
     });
-  n.inFlight = {
+  state.inFlight = {
     lockfilePath,
-    run: L,
+    run: refreshPromise,
   };
-  signal_2.addEventListener("abort", F, {
+  signal_2.addEventListener("abort", onAbort, {
     once: true,
   });
-  return L;
+  return refreshPromise;
 }
 //@ chunk-aepeg2w5.js:537379-537393 layout
 var GCP_AUTH_REFRESH_TIMEOUT_MS = 180000;
 //@ chunk-aepeg2w5.js:537393-538481 facade-majority = refreshGcpAuth (0.712)
-function refreshGcpAuth(gcpAuthRefresh, signal, r) {
+function refreshGcpAuth(gcpAuthRefresh, signal, onSpawned) {
   if (isDisklessSession()) {
     logForDebugging(`GCP auth refresh: ${DISKLESS_PROGRAM_REFUSAL}`);
     return Promise.resolve("failed");
@@ -2455,7 +2569,7 @@ function refreshGcpAuth(gcpAuthRefresh, signal, r) {
   authStatusManager.startAuthentication();
   return new Promise((resolve) => {
     let projectConfigRoot = getProjectConfigRoot();
-    let S = runManagedHelperWithoutProjectEnv(
+    let child = runManagedHelperWithoutProjectEnv(
       "gcpAuthRefresh",
       gcpAuthRefresh,
       () =>
@@ -2467,13 +2581,13 @@ function refreshGcpAuth(gcpAuthRefresh, signal, r) {
         }),
       isProjectScopeTrustAccepted,
     );
-    moveKeeperPid(S.pid);
-    if (S.pid !== undefined) r?.(S.pid);
-    let w = new TimedOperation(S, {
+    moveKeeperPid(child.pid);
+    if (child.pid !== undefined) onSpawned?.(child.pid);
+    let timedOperation = new TimedOperation(child, {
       timeoutMs: GCP_AUTH_REFRESH_TIMEOUT_MS,
       signal,
     });
-    S.stdout.on("data", (data) => {
+    child.stdout.on("data", (data) => {
       let output = data.toString().trim();
       if (output) {
         authStatusManager.addOutput(output);
@@ -2482,7 +2596,7 @@ function refreshGcpAuth(gcpAuthRefresh, signal, r) {
         });
       }
     });
-    S.stderr.on("data", (data) => {
+    child.stderr.on("data", (data) => {
       let error = data.toString().trim();
       if (error) {
         authStatusManager.setError(error);
@@ -2491,42 +2605,47 @@ function refreshGcpAuth(gcpAuthRefresh, signal, r) {
         });
       }
     });
-    S.on("close", (code, signal) => {
-      w.settle();
+    child.on("close", (code, signal) => {
+      timedOperation.settle();
       if (code === 0) {
         logForDebugging("GCP auth refresh completed successfully");
         authStatusManager.endAuthentication(true);
         resolve("ok");
-      } else if (w.killReason === "abort") {
+      } else if (timedOperation.killReason === "abort") {
         authStatusManager.dismiss();
         resolve("interrupted");
       } else {
-        let P = w.killReason === "shutdown" || (isTerminationSignal(signal) && w.killReason === undefined);
+        let wasShutdown =
+          timedOperation.killReason === "shutdown" ||
+          (isTerminationSignal(signal) && timedOperation.killReason === undefined);
         let message =
-          w.killReason === "timeout"
+          timedOperation.killReason === "timeout"
             ? sequential.red(
                 "GCP auth refresh timed out after 3 minutes. Run your auth command manually in a separate terminal.",
               )
             : sequential.red("Error running gcpAuthRefresh (in settings or ~/.claude.json):");
-        if (!P) console.error(message);
+        if (!wasShutdown) console.error(message);
         authStatusManager.endAuthentication(false);
-        resolve(P ? "interrupted" : "failed");
+        resolve(wasShutdown ? "interrupted" : "failed");
       }
     });
   });
 }
 //@ chunk-aepeg2w5.js:538481-538528 facade-majority
-var gcpRefreshMemos = new HostScoped(() =>
-  memoizeWithTTL(async () => await runGcpAuthRefresh(), GCP_AUTH_REFRESH_TTL_MS),
-);
+var gcpRefreshMemos; // deferred: uses memoizeWithTTL (./memoize.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:538481", () => {
+  gcpRefreshMemos = new HostScoped(() =>
+    memoizeWithTTL(async () => await runGcpAuthRefresh(), GCP_AUTH_REFRESH_TTL_MS),
+  );
+});
 //@ chunk-aepeg2w5.js:538528-538650 facade-majority
-function refreshGcpCredentialsIfNeeded(signal, { userTurn: n = false } = {}) {
+function refreshGcpCredentialsIfNeeded(signal, { userTurn = false } = {}) {
   let host = getRootSession().host;
   return gcpAuthRefreshStates.of(host).waiters.wait(
     () => gcpRefreshMemos.of(host)(),
     {
       signal,
-      userTurn: n,
+      userTurn,
     },
     false,
   );
@@ -2593,7 +2712,10 @@ class ApiKeyConfigCache {
   }
 }
 //@ chunk-aepeg2w5.js:539314-539340 facade-majority
-var loginManagedKeyMemos = new HostScoped(() => new ApiKeyConfigCache());
+var loginManagedKeyMemos; // deferred: uses ApiKeyConfigCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:539314", () => {
+  loginManagedKeyMemos = new HostScoped(() => new ApiKeyConfigCache());
+});
 //@ chunk-aepeg2w5.js:539340-539378 layout
 function getApiKeyConfigCache() {
   return loginManagedKeyMemos.of(getRootSession().host);
@@ -2615,7 +2737,7 @@ function isValidApiKey(apiKey) {
 /**
  * 保存 /login 得到的 API key：校验字符集，写入全局配置 primaryApiKey，并把截断值加入 customApiKeyResponses.approved（macOS 上同时 security add-generic-password 写钥匙串）。
  */
-async function saveApiKey(apiKey, n) {
+async function saveApiKey(apiKey, saveOptions) {
   if (!isValidApiKey(apiKey))
     throw Error(
       "Invalid API key format. API key must contain only alphanumeric characters, dashes, and underscores.",
@@ -2629,17 +2751,17 @@ async function saveApiKey(apiKey, n) {
     let hexValue = Buffer.from(apiKey, "utf-8").toString("hex");
     let command = `add-generic-password -U -a "${username}" -s "${storageServiceName}" -X "${hexValue}"
 `;
-    let x = await safeExecFile("security", ["-i"], {
+    let keychainResult = await safeExecFile("security", ["-i"], {
       input: command,
       reject: false,
       timeout: 5000,
     });
-    if (x.exitCode !== 0) {
-      let stderr = (x.stderr || x.stdout || "").trim().replace(/\s*\n\s*/g, "; ");
+    if (keychainResult.exitCode !== 0) {
+      let stderr = (keychainResult.stderr || keychainResult.stdout || "").trim().replace(/\s*\n\s*/g, "; ");
       logEvent("tengu_api_key_keychain_error", {
         error_class: fromEnum(classifyKeychainError(stderr)),
         error_hash: shortHash(scrubErrorText(stderr)),
-        exit_code: x.exitCode ?? -1,
+        exit_code: keychainResult.exitCode ?? -1,
       });
       throw Error(
         `Failed to save API key to macOS Keychain${stderr ? ` (${stderr})` : ""}. Run \`claude doctor\` to diagnose keychain access.`,
@@ -2658,7 +2780,7 @@ async function saveApiKey(apiKey, n) {
         rejected,
       },
     };
-  }, n);
+  }, saveOptions);
   apiKeyConfigCache.clear();
   clearLegacyApiKeyPrefetch();
 }
@@ -2766,12 +2888,12 @@ function mergeSubscriptionType(previous, tokens) {
           subscriptionType: newType,
         }
       : kept;
-  let y = prevType !== null && previous?.subscriptionTypeSource !== "profile";
-  let S = isProvisionalProfilePlan(previous);
+  let hasUnmarkedSignInPlan = prevType !== null && previous?.subscriptionTypeSource !== "profile";
+  let isProvisional = isProvisionalProfilePlan(previous);
   if (
-    (!S && isProfilePlanDowngrade(prevType, newType)) ||
-    (y && newType === prevType) ||
-    (tokens.subscriptionTypeVerifiedAt === undefined && prevType !== null && !S)
+    (!isProvisional && isProfilePlanDowngrade(prevType, newType)) ||
+    (hasUnmarkedSignInPlan && newType === prevType) ||
+    (tokens.subscriptionTypeVerifiedAt === undefined && prevType !== null && !isProvisional)
   )
     return kept;
   return {
@@ -2795,8 +2917,8 @@ async function saveRefreshedOAuthTokensRespectingLock({
     refreshedTokens.refreshToken &&
     refreshedTokens.expiresAt
   ) {
-    let y = isCompromised();
-    if (y) logEvent("tengu_oauth_token_refresh_lock_compromised_post_post", {});
+    let compromised = isCompromised();
+    if (compromised) logEvent("tengu_oauth_token_refresh_lock_compromised_post_post", {});
     let tokens = {
       accessToken: refreshedTokens.accessToken,
       refreshToken: refreshedTokens.refreshToken,
@@ -2809,79 +2931,79 @@ async function saveRefreshedOAuthTokensRespectingLock({
       rateLimitTier: refreshedTokens.rateLimitTier,
       clientId: refreshedTokens.clientId,
     };
-    let w = false;
+    let adoptedSibling = false;
     let storageBackend = storageKindForTelemetry();
-    let x = {
+    let saveResult = {
       success: false,
     };
-    let P = false;
-    let F;
+    let failed = false;
+    let lastError;
     for (let idx = 0; idx < 3; idx++) {
       if (idx > 0) await sleep(100 * idx);
-      w = false;
-      P = false;
+      adoptedSibling = false;
+      failed = false;
       try {
-        x = await getSecureStorage().mutate((G) => {
-          let refreshToken = G.claudeAiOauth?.refreshToken;
+        saveResult = await getSecureStorage().mutate((current) => {
+          let refreshToken = current.claudeAiOauth?.refreshToken;
           if (!(
-            G.claudeAiOauth !== undefined &&
-            G.claudeAiOauth !== null &&
+            current.claudeAiOauth !== undefined &&
+            current.claudeAiOauth !== null &&
             (refreshToken === "" || refreshToken === postedRefreshToken)
           )) {
-            w = true;
-            return G;
+            adoptedSibling = true;
+            return current;
           }
           return {
-            ...G,
-            claudeAiOauth: buildStoredOAuthTokens(G.claudeAiOauth, tokens),
+            ...current,
+            claudeAiOauth: buildStoredOAuthTokens(current.claudeAiOauth, tokens),
           };
         }, credentials);
       } catch (error) {
         logForDebugging(`OAuth refresh CAS save failed: ${errorMessage(error)}`, {
           level: "error",
         });
-        x = {
+        saveResult = {
           success: false,
         };
-        P = true;
-        F = error;
+        failed = true;
+        lastError = error;
         continue;
       }
-      if (w || x.success) break;
+      if (adoptedSibling || saveResult.success) break;
     }
-    if (P) clearOAuthTokenCache();
+    if (failed) clearOAuthTokenCache();
     else {
-      let L = isStorageV5Enabled() && credentials !== undefined ? credentials : undefined;
-      let promise = L && oauthTokenReadMemos.of(getRootSession().host).promise;
+      let storage = isStorageV5Enabled() && credentials !== undefined ? credentials : undefined;
+      let promise = storage && oauthTokenReadMemos.of(getRootSession().host).promise;
       clearOAuthAndKeychainCaches();
-      if (L !== undefined) await primeStoredLogin(L, promise);
+      if (storage !== undefined) await primeStoredLogin(storage, promise);
     }
-    if (P)
+    if (failed)
       logEvent("tengu_oauth_tokens_save_exception", {
         storageBackend,
-        ...errorTelemetryFields(F),
+        ...errorTelemetryFields(lastError),
       });
-    if (!w && !P)
-      logEvent(x.success ? "tengu_oauth_tokens_saved" : "tengu_oauth_tokens_save_failed", {
+    if (!adoptedSibling && !failed)
+      logEvent(saveResult.success ? "tengu_oauth_tokens_saved" : "tengu_oauth_tokens_save_failed", {
         storageBackend,
       });
-    if (y)
+    if (compromised)
       logEvent(
-        w
+        adoptedSibling
           ? "tengu_oauth_refresh_compromised_cas_adopted_sibling"
           : "tengu_oauth_refresh_compromised_cas_saved",
         {},
       );
-    else if (w) logEvent("tengu_oauth_refresh_save_adopted_newer_write", {});
-    if (w) {
+    else if (adoptedSibling) logEvent("tengu_oauth_refresh_save_adopted_newer_write", {});
+    if (adoptedSibling) {
       notifyOAuthTokenReplaced();
       return "adopted_sibling";
     }
-    return x.success ? "saved" : "save_failed";
+    return saveResult.success ? "saved" : "save_failed";
   }
-  let h = await saveOAuthTokensIfNeeded(refreshedTokens, credentials);
+  let saveResult = await saveOAuthTokensIfNeeded(refreshedTokens, credentials);
   clearOAuthTokenCache();
-  return h.success ? "saved" : "save_failed";
+  return saveResult.success ? "saved" : "save_failed";
 }
 //@ chunk-aepeg2w5.js:543890-543925 layout
 /**
@@ -2893,24 +3015,32 @@ function storageKindForTelemetry() {
 //@ chunk-aepeg2w5.js:543925-543963 facade-majority
 var OAUTH_TOKEN_SAVE_FAILED_WARNING = "Failed to save OAuth tokens";
 //@ chunk-aepeg2w5.js:543963-544048 facade-majority = isBigQueryMetricsEnabled (1)
-function isProfilePlanDowngrade(e, n) {
-  return (e === "team" || e === "enterprise") && n !== "team" && n !== "enterprise";
+function isProfilePlanDowngrade(previousType, nextType) {
+  return (
+    (previousType === "team" || previousType === "enterprise") &&
+    nextType !== "team" &&
+    nextType !== "enterprise"
+  );
 }
 //@ chunk-aepeg2w5.js:544048-544148 facade-majority
-function isProvisionalProfilePlan(e) {
-  return e?.subscriptionTypeSource === "profile" && e.subscriptionTypeVerifiedAt === undefined;
+function isProvisionalProfilePlan(previous) {
+  return previous?.subscriptionTypeSource === "profile" && previous.subscriptionTypeVerifiedAt === undefined;
 }
 //@ chunk-aepeg2w5.js:544148-544249 facade-majority
-function isUnmarkedStoredPlan(e) {
-  return e != null && (e.subscriptionType ?? null) !== null && e.subscriptionTypeSource === undefined;
+function isUnmarkedStoredPlan(stored) {
+  return (
+    stored != null &&
+    (stored.subscriptionType ?? null) !== null &&
+    stored.subscriptionTypeSource === undefined
+  );
 }
 //@ chunk-aepeg2w5.js:544249-544340 layout
 /**
  * 取较晚且有效的“订阅类型已验证”时间。
  */
-function pickLaterVerifiedAt(e, n) {
-  if (e === undefined || n === undefined) return e ?? n;
-  return n > Date.now() ? e : Math.max(e, n);
+function pickLaterVerifiedAt(verifiedAt, previousVerifiedAt) {
+  if (verifiedAt === undefined || previousVerifiedAt === undefined) return verifiedAt ?? previousVerifiedAt;
+  return previousVerifiedAt > Date.now() ? verifiedAt : Math.max(verifiedAt, previousVerifiedAt);
 }
 //@ chunk-aepeg2w5.js:544340-545376 facade-majority
 async function backfillStoredOAuthTier({
@@ -2922,23 +3052,23 @@ async function backfillStoredOAuthTier({
   credentials,
 }) {
   if (!originStamped) return "unstamped";
-  let S = "failed";
+  let outcome = "failed";
   try {
-    let w = await getSecureStorage().mutate((R) => {
-      let claudeAiOauth = R.claudeAiOauth;
+    let writeResult = await getSecureStorage().mutate((current) => {
+      let claudeAiOauth = current.claudeAiOauth;
       if (!claudeAiOauth || claudeAiOauth.refreshToken !== expectedRefreshToken) {
-        S = "rotated";
-        return R;
+        outcome = "rotated";
+        return current;
       }
       let subscriptionType_2 = claudeAiOauth.subscriptionType ?? null;
       if (subscriptionType_2 !== null && claudeAiOauth.subscriptionTypeSource === "sign_in") {
-        S = "already_tiered";
-        return R;
+        outcome = "already_tiered";
+        return current;
       }
       if (isUnmarkedStoredPlan(claudeAiOauth) && subscriptionType_2 === subscriptionType) {
-        S = "confirmed";
+        outcome = "confirmed";
         return {
-          ...R,
+          ...current,
           claudeAiOauth: {
             ...claudeAiOauth,
             subscriptionTypeSource: "sign_in",
@@ -2950,12 +3080,12 @@ async function backfillStoredOAuthTier({
         !isProvisionalProfilePlan(claudeAiOauth) &&
         isProfilePlanDowngrade(subscriptionType_2, subscriptionType)
       ) {
-        S = "downgrade_refused";
-        return R;
+        outcome = "downgrade_refused";
+        return current;
       }
-      S = subscriptionType_2 === subscriptionType ? "reverified" : "written";
+      outcome = subscriptionType_2 === subscriptionType ? "reverified" : "written";
       return {
-        ...R,
+        ...current,
         claudeAiOauth: {
           ...claudeAiOauth,
           subscriptionType,
@@ -2968,11 +3098,11 @@ async function backfillStoredOAuthTier({
         },
       };
     }, credentials);
-    if (S === "written" || S === "reverified" || S === "confirmed") {
-      if (!w.success) return "failed";
+    if (outcome === "written" || outcome === "reverified" || outcome === "confirmed") {
+      if (!writeResult.success) return "failed";
       clearOAuthAndKeychainCaches();
     }
-    return S;
+    return outcome;
   } catch (error) {
     logForDebugging(
       `OAuth: recording the stored login plan failed (${error instanceof Error ? error.name : "unknown error"})`,
@@ -2987,7 +3117,7 @@ async function backfillStoredOAuthTier({
 /**
  * 把 OAuth 令牌写入安全存储的 claudeAiOauth（accessToken/refreshToken/expiresAt/scopes/subscriptionType/rateLimitTier…）；非 claude.ai scope 或仅推理令牌（无 refresh/expires）不保存。
  */
-async function saveOAuthTokensIfNeeded(tokens, n, reason = "refresh") {
+async function saveOAuthTokensIfNeeded(tokens, credentials, reason = "refresh") {
   if (!shouldUseClaudeAIAuth(tokens.scopes)) {
     logEvent("tengu_oauth_tokens_not_claude_ai", {});
     return {
@@ -3004,20 +3134,20 @@ async function saveOAuthTokensIfNeeded(tokens, n, reason = "refresh") {
   let secureStorage = getSecureStorage();
   let storageBackend = storageKindForTelemetry();
   try {
-    let F = oauthTokenReadMemos.of(getRootSession().host);
-    let L;
-    let G = await secureStorage.mutate((q) => {
+    let memos = oauthTokenReadMemos.of(getRootSession().host);
+    let replacedTokens;
+    let writeResult = await secureStorage.mutate((current) => {
       if (
         reason === "sign_in" &&
-        L === undefined &&
-        q.claudeAiOauth != null &&
-        q.claudeAiOauth.accessToken !== accessToken
+        replacedTokens === undefined &&
+        current.claudeAiOauth != null &&
+        current.claudeAiOauth.accessToken !== accessToken
       )
-        L = q.claudeAiOauth;
+        replacedTokens = current.claudeAiOauth;
       return {
-        ...q,
+        ...current,
         claudeAiOauth: buildStoredOAuthTokens(
-          q.claudeAiOauth,
+          current.claudeAiOauth,
           {
             accessToken,
             refreshToken,
@@ -3033,9 +3163,9 @@ async function saveOAuthTokensIfNeeded(tokens, n, reason = "refresh") {
           reason,
         ),
       };
-    }, n);
-    if (G.success) {
-      F.lastOwnSavedAccessToken = accessToken;
+    }, credentials);
+    if (writeResult.success) {
+      memos.lastOwnSavedAccessToken = accessToken;
       logEvent("tengu_oauth_tokens_saved", {
         storageBackend,
       });
@@ -3043,16 +3173,16 @@ async function saveOAuthTokensIfNeeded(tokens, n, reason = "refresh") {
       logEvent("tengu_oauth_tokens_save_failed", {
         storageBackend,
       });
-    let j = isStorageV5Enabled() && n !== undefined ? n : undefined;
-    let storageData = j && F.promise;
+    let storage = isStorageV5Enabled() && credentials !== undefined ? credentials : undefined;
+    let storageData = storage && memos.promise;
     clearOAuthTokenMemos();
     invalidateAuthDerivedCaches();
-    if (j !== undefined) await primeStoredLogin(j, storageData);
+    if (storage !== undefined) await primeStoredLogin(storage, storageData);
     return {
-      ...G,
+      ...writeResult,
       backendName: secureStorage.name,
-      ...(L !== undefined && {
-        replaced: L,
+      ...(replacedTokens !== undefined && {
+        replaced: replacedTokens,
       }),
     };
   } catch (error) {
@@ -3074,17 +3204,21 @@ async function saveOAuthTokensIfNeeded(tokens, n, reason = "refresh") {
 /**
  * 进程内记录已知失效的 refresh token；同语句 $i 记录账户冻结（account_on_hold）的令牌，避免反复刷新。
  */
-var deadRefreshTokens = identity_2(new Set(), (e) => e.clear());
-var onHoldRefreshTokens = identity_2(new Map(), (e) => e.clear());
+var deadRefreshTokens; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var onHoldRefreshTokens;
+deferInit("chunk-aepeg2w5.js:546640", () => {
+  deadRefreshTokens = identity_2(new Set(), (set) => set.clear());
+  onHoldRefreshTokens = identity_2(new Map(), (map) => map.clear());
+});
 //@ chunk-aepeg2w5.js:546704-546809 facade-majority
 function getOAuthAccountOnHold() {
   let refreshToken = getClaudeAIOAuthTokens()?.refreshToken;
   if (!refreshToken) return null;
-  let n = onHoldRefreshTokens.get(refreshToken);
-  return n === undefined
+  let holdUrl = onHoldRefreshTokens.get(refreshToken);
+  return holdUrl === undefined
     ? null
     : {
-        url: n,
+        url: holdUrl,
       };
 }
 //@ chunk-aepeg2w5.js:546809-546846 facade-majority
@@ -3093,17 +3227,17 @@ function __resetKnownDeadRefreshTokensForTest() {
   onHoldRefreshTokens.clear();
 }
 //@ chunk-aepeg2w5.js:546846-547345 facade-majority
-async function markRefreshTokenDeadAfterInvalidGrant(e, n) {
-  deadRefreshTokens.add(e);
+async function markRefreshTokenDeadAfterInvalidGrant(refreshToken, credentials) {
+  deadRefreshTokens.add(refreshToken);
   logEvent("tengu_oauth_refresh_token_marked_dead_invalid_grant", {});
   try {
-    let r = false;
-    let s = await getSecureStorage().mutate((h) => {
-      let claudeAiOauth = h.claudeAiOauth;
-      if (!claudeAiOauth || claudeAiOauth.refreshToken !== e) return h;
-      r = true;
+    let matched = false;
+    let writeResult = await getSecureStorage().mutate((current) => {
+      let claudeAiOauth = current.claudeAiOauth;
+      if (!claudeAiOauth || claudeAiOauth.refreshToken !== refreshToken) return current;
+      matched = true;
       return {
-        ...h,
+        ...current,
         claudeAiOauth: {
           ...claudeAiOauth,
           refreshToken: "",
@@ -3111,9 +3245,9 @@ async function markRefreshTokenDeadAfterInvalidGrant(e, n) {
           expiresAt: 0,
         },
       };
-    }, n);
-    if (r && s.success) logEvent("tengu_oauth_refresh_token_cleared_on_disk", {});
-    else if (r)
+    }, credentials);
+    if (matched && writeResult.success) logEvent("tengu_oauth_refresh_token_cleared_on_disk", {});
+    else if (matched)
       logForDebugging("OAuth dead-token disk clear: backend write failed", {
         level: "error",
       });
@@ -3125,8 +3259,8 @@ async function markRefreshTokenDeadAfterInvalidGrant(e, n) {
 }
 //@ chunk-aepeg2w5.js:547345-547441 facade-majority
 function isOAuthRefreshKnownDead() {
-  let e = isRefreshTokenDead(getClaudeAIOAuthTokens());
-  if (e !== undefined) return e;
+  let known = isRefreshTokenDead(getClaudeAIOAuthTokens());
+  if (known !== undefined) return known;
   try {
     return hasDeadStoredRefreshToken(getSecureStorage().read());
   } catch {
@@ -3135,8 +3269,8 @@ function isOAuthRefreshKnownDead() {
 }
 //@ chunk-aepeg2w5.js:547441-547562 facade-majority
 async function isOAuthRefreshKnownDeadAsync(credentials) {
-  let n = isRefreshTokenDead(await getClaudeAIOAuthTokensAsync(credentials));
-  if (n !== undefined) return n;
+  let known = isRefreshTokenDead(await getClaudeAIOAuthTokensAsync(credentials));
+  if (known !== undefined) return known;
   try {
     return hasDeadStoredRefreshToken(await getSecureStorage().readAsync(credentials));
   } catch {
@@ -3147,9 +3281,9 @@ async function isOAuthRefreshKnownDeadAsync(credentials) {
 /**
  * 判断刷新令牌是否已失效（空串或已列入吊销表）。
  */
-function isRefreshTokenDead(claudeAIOAuthTokens) {
-  if (claudeAIOAuthTokens) {
-    let refreshToken = claudeAIOAuthTokens.refreshToken;
+function isRefreshTokenDead(tokens) {
+  if (tokens) {
+    let refreshToken = tokens.refreshToken;
     return refreshToken === "" || (!!refreshToken && deadRefreshTokens.has(refreshToken));
   }
   if (usesHostProvidedAuth()) return false;
@@ -3159,15 +3293,15 @@ function isRefreshTokenDead(claudeAIOAuthTokens) {
 /**
  * 判断存储的刷新令牌是否为空串（已登出）。
  */
-function hasDeadStoredRefreshToken(e) {
-  return e?.claudeAiOauth?.refreshToken === "";
+function hasDeadStoredRefreshToken(storageData) {
+  return storageData?.claudeAiOauth?.refreshToken === "";
 }
 //@ chunk-aepeg2w5.js:547716-547770 placement = CLAUDE_AI_INFERENCE_SCOPE (1)
 /**
  * CLAUDE_CODE_OAUTH_SCOPES（空白分隔）覆盖，否则用默认 ["user:inference"]。旧版名 CLAUDE_AI_INFERENCE_SCOPE 为错配。
  */
-function getRequestedOAuthScopes(e = ["user:inference"]) {
-  return oauthScopesFromEnv() ?? [...e];
+function getRequestedOAuthScopes(defaultScopes = ["user:inference"]) {
+  return oauthScopesFromEnv() ?? [...defaultScopes];
 }
 //@ chunk-aepeg2w5.js:547939-548126 placement = isUsingOAuth (0.294)
 function isUsingOAuth(accessToken) {
@@ -3192,7 +3326,7 @@ function getLauncherOAuthTokens() {
 function getClaudeAIOAuthTokens_2() {
   if (env.CLAUDE_CODE_OAUTH_TOKEN) return isUsingOAuth(env.CLAUDE_CODE_OAUTH_TOKEN);
   let oauthTokenFromFd = getOAuthTokenFromFileDescriptor();
-  let n = (accessToken) => ({
+  let tokensFromFd = (accessToken) => ({
     accessToken,
     refreshToken: null,
     expiresAt: null,
@@ -3201,7 +3335,7 @@ function getClaudeAIOAuthTokens_2() {
     rateLimitTier: env.CLAUDE_CODE_RATE_LIMIT_TIER || null,
   });
   if (oauthTokenFromFd && (!isOauthTokenFromBgSnapshot() || isHostManagedProviderAuth()))
-    return n(oauthTokenFromFd);
+    return tokensFromFd(oauthTokenFromFd);
   if (usesHostProvidedAuth()) return null;
   try {
     let oauthData = getSecureStorage().read({
@@ -3211,7 +3345,7 @@ function getClaudeAIOAuthTokens_2() {
   } catch (error) {
     logError(error);
   }
-  if (oauthTokenFromFd) return n(oauthTokenFromFd);
+  if (oauthTokenFromFd) return tokensFromFd(oauthTokenFromFd);
   return null;
 }
 //@ chunk-aepeg2w5.js:548630-549302 layout
@@ -3255,16 +3389,19 @@ class OAuthTokenCache {
   }
 }
 //@ chunk-aepeg2w5.js:549302-549328 facade-majority
-var oauthTokenReadMemos = new HostScoped(() => new OAuthTokenCache());
+var oauthTokenReadMemos; // deferred: uses OAuthTokenCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:549302", () => {
+  oauthTokenReadMemos = new HostScoped(() => new OAuthTokenCache());
+});
 //@ chunk-aepeg2w5.js:549328-549439 facade-majority
 /**
  * 当前 OAuth 令牌（按宿主缓存，未缓存时调用 getClaudeAIOAuthTokens，回退宿主启动器注入令牌）。全模块最常用的令牌读取入口。
  */
 function getClaudeAIOAuthTokens() {
   if (isBareModeAuthRestricted()) return null;
-  let e = oauthTokenReadMemos.of(getRootSession().host);
-  if (e.value === undefined) e.value = getClaudeAIOAuthTokens_2();
-  return e.value ?? getLauncherOAuthTokens();
+  let memos = oauthTokenReadMemos.of(getRootSession().host);
+  if (memos.value === undefined) memos.value = getClaudeAIOAuthTokens_2();
+  return memos.value ?? getLauncherOAuthTokens();
 }
 //@ chunk-aepeg2w5.js:549439-549479 facade-majority
 function clearOAuthTokenMemos() {
@@ -3278,10 +3415,10 @@ function getClaudeAIOAuthTokenOrigin() {
   return classifyBearerAgainstStore(oAuthTokenOrigin, accessToken);
 }
 //@ chunk-aepeg2w5.js:549597-549736 facade-majority = getClaudeAIOAuthTokensAsync (0.854)
-async function getClaudeAIOAuthTokenOriginAsync(e) {
+async function getClaudeAIOAuthTokenOriginAsync(credentials) {
   let secureStorage = getOAuthTokenOrigin();
   if (typeof secureStorage === "string") return secureStorage;
-  let oauthData = (await getSecureStorage().readAsync(e))?.claudeAiOauth?.accessToken;
+  let oauthData = (await getSecureStorage().readAsync(credentials))?.claudeAiOauth?.accessToken;
   return classifyBearerAgainstStore(secureStorage, oauthData);
 }
 //@ chunk-aepeg2w5.js:549736-549788 facade-majority
@@ -3303,9 +3440,9 @@ function managedConfigNotAttemptedInput(ineligibleReason) {
   };
 }
 //@ chunk-aepeg2w5.js:549946-550024 facade-majority
-function storeRecheckNeeded(e) {
-  if (e === "env") return false;
-  if (e === "fd") return isOauthTokenFromBgSnapshot() && !isHostManagedProviderAuth();
+function storeRecheckNeeded(origin) {
+  if (origin === "env") return false;
+  if (origin === "fd") return isOauthTokenFromBgSnapshot() && !isHostManagedProviderAuth();
   return true;
 }
 //@ chunk-aepeg2w5.js:550024-550110 facade-majority
@@ -3329,16 +3466,16 @@ function getOAuthTokenOrigin() {
     claudeAIOAuthTokens.accessToken === usableLauncherHostLoginToken()
   )
     return "env";
-  let n = env.CLAUDE_CODE_OAUTH_TOKEN ? null : getOAuthTokenFromFileDescriptor();
-  if (n && (!isOauthTokenFromBgSnapshot() || isHostManagedProviderAuth())) return "fd";
+  let fdToken = env.CLAUDE_CODE_OAUTH_TOKEN ? null : getOAuthTokenFromFileDescriptor();
+  if (fdToken && (!isOauthTokenFromBgSnapshot() || isHostManagedProviderAuth())) return "fd";
   return {
     bearer: claudeAIOAuthTokens.accessToken,
-    fdToken: n,
+    fdToken,
   };
 }
 //@ chunk-aepeg2w5.js:550358-550456 layout
-function classifyBearerAgainstStore({ bearer, fdToken }, r) {
-  if (r && r === bearer) return "store";
+function classifyBearerAgainstStore({ bearer, fdToken }, storedAccessToken) {
+  if (storedAccessToken && storedAccessToken === bearer) return "store";
   if (fdToken && bearer === fdToken) return "fd";
   return "none";
 }
@@ -3387,34 +3524,34 @@ function _resetCredentialsChangeCheckForTesting() {
   oauthTokenReadMemos.of(getRootSession().host).resetChangeCheck();
 }
 //@ chunk-aepeg2w5.js:550733-551197 facade-majority
-async function primeStoredLogin(e, n) {
+async function primeStoredLogin(storage, pendingRead) {
   if (!startupReadsStoredLogin()) return;
-  let r = oauthTokenReadMemos.of(getRootSession().host);
-  let s;
+  let memos = oauthTokenReadMemos.of(getRootSession().host);
+  let version;
   try {
-    let S = await e.probeCredentials();
-    s = S.state === "present" ? S.version : undefined;
+    let probe = await storage.probeCredentials();
+    version = probe.state === "present" ? probe.version : undefined;
   } catch (error) {
     logForDebugging(`Credentials version prime failed: ${errorMessage(error)}`, {
       level: "error",
     });
   }
-  await n?.catch(() => null);
-  await r.promise?.catch(() => null);
-  r.promise = null;
-  if (s !== undefined) r.lastCredentialsVersion = s;
-  let storedOAuthTokens = readStoredOAuthTokensAsync(e);
-  r.promise = storedOAuthTokens;
+  await pendingRead?.catch(() => null);
+  await memos.promise?.catch(() => null);
+  memos.promise = null;
+  if (version !== undefined) memos.lastCredentialsVersion = version;
+  let storedOAuthTokens = readStoredOAuthTokensAsync(storage);
+  memos.promise = storedOAuthTokens;
   if ((await storedOAuthTokens) === null) {
-    if (s !== undefined) r.lastCredentialsVersion = undefined;
-    if (r.promise === storedOAuthTokens) r.promise = null;
+    if (version !== undefined) memos.lastCredentialsVersion = undefined;
+    if (memos.promise === storedOAuthTokens) memos.promise = null;
   }
-  r.value = undefined;
+  memos.value = undefined;
 }
 //@ chunk-aepeg2w5.js:551197-551424 layout
-async function readStoredOAuthTokensAsync(e) {
+async function readStoredOAuthTokensAsync(credentials) {
   try {
-    let claudeAiOauth = (await getSecureStorage().readAsync(e))?.claudeAiOauth;
+    let claudeAiOauth = (await getSecureStorage().readAsync(credentials))?.claudeAiOauth;
     return claudeAiOauth?.accessToken ? claudeAiOauth : null;
   } catch (error) {
     logForDebugging(
@@ -3430,61 +3567,61 @@ async function readStoredOAuthTokensAsync(e) {
 /**
  * 检测凭证是否被别的进程改过（storage v5 比 version，文件比 mtime），变化则清缓存并发出 credentialsChangedOnDisk 信号。
  */
-async function invalidateOAuthCacheIfDiskChanged(e, n) {
-  if (isStorageV5Enabled() && n !== undefined) {
-    let s = await n.probeCredentials();
-    if (s.state !== "present") return recheckStoredOAuthToken(e, n);
-    if (s.version !== e.lastCredentialsVersion) {
-      e.lastCredentialsVersion = s.version;
+async function invalidateOAuthCacheIfDiskChanged(memos, credentials) {
+  if (isStorageV5Enabled() && credentials !== undefined) {
+    let probe = await credentials.probeCredentials();
+    if (probe.state !== "present") return recheckStoredOAuthToken(memos, credentials);
+    if (probe.version !== memos.lastCredentialsVersion) {
+      memos.lastCredentialsVersion = probe.version;
       clearOAuthTokenCache();
-      emitCredentialsChangedOnDisk(e);
+      emitCredentialsChangedOnDisk(memos);
       return;
     }
-    return recheckUnusableOAuthToken(e, n);
+    return recheckUnusableOAuthToken(memos, credentials);
   }
-  let r;
+  let mtimeMs;
   try {
-    let s = keychainProjectDirs();
-    if (s === null) return recheckStoredOAuthToken(e, n);
-    r = (await stat(join(s, ".credentials.json"))).mtimeMs;
+    let configDir = keychainProjectDirs();
+    if (configDir === null) return recheckStoredOAuthToken(memos, credentials);
+    mtimeMs = (await stat(join(configDir, ".credentials.json"))).mtimeMs;
   } catch {
-    return recheckStoredOAuthToken(e, n);
+    return recheckStoredOAuthToken(memos, credentials);
   }
-  if (r !== e.lastCredentialsMtimeMs) {
-    e.lastCredentialsMtimeMs = r;
+  if (mtimeMs !== memos.lastCredentialsMtimeMs) {
+    memos.lastCredentialsMtimeMs = mtimeMs;
     clearOAuthTokenCache();
-    emitCredentialsChangedOnDisk(e);
+    emitCredentialsChangedOnDisk(memos);
     return;
   }
-  await recheckUnusableOAuthToken(e, n);
+  await recheckUnusableOAuthToken(memos, credentials);
 }
 //@ chunk-aepeg2w5.js:551857-552178 layout
-async function recheckUnusableOAuthToken(e, n) {
+async function recheckUnusableOAuthToken(memos, credentials) {
   try {
     if (!isFirstPartyProvider()) return;
-    let r = e.promise ? await e.promise.catch(() => null) : e.value;
-    if (r === undefined) return;
-    if (r !== null && !isRefreshTokenDead(r)) return;
+    let cachedTokens = memos.promise ? await memos.promise.catch(() => null) : memos.value;
+    if (cachedTokens === undefined) return;
+    if (cachedTokens !== null && !isRefreshTokenDead(cachedTokens)) return;
     let now = Date.now();
-    if (now - e.lastUnusableTokenRecheckAt < KEYCHAIN_CACHE_TTL_MS) return;
-    e.lastUnusableTokenRecheckAt = now;
-    if (r !== null) e.lastKeychainAccessToken = r.accessToken;
-    await recheckStoredOAuthToken(e, n);
+    if (now - memos.lastUnusableTokenRecheckAt < KEYCHAIN_CACHE_TTL_MS) return;
+    memos.lastUnusableTokenRecheckAt = now;
+    if (cachedTokens !== null) memos.lastKeychainAccessToken = cachedTokens.accessToken;
+    await recheckStoredOAuthToken(memos, credentials);
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-aepeg2w5.js:552178-552246 layout
-function emitCredentialsChangedOnDisk(e) {
+function emitCredentialsChangedOnDisk(memos) {
   try {
-    e.credentialsChangedOnDisk.emit();
+    memos.credentialsChangedOnDisk.emit();
   } catch (e) {
     logError(e);
   }
 }
 //@ chunk-aepeg2w5.js:552246-552319 facade-majority
-function subscribeOAuthCredentialsChangedOnDisk(host, n) {
-  return oauthTokenReadMemos.of(host).credentialsChangedOnDisk.subscribe(n);
+function subscribeOAuthCredentialsChangedOnDisk(host, listener) {
+  return oauthTokenReadMemos.of(host).credentialsChangedOnDisk.subscribe(listener);
 }
 //@ chunk-aepeg2w5.js:552319-552382 facade-majority
 function wasOAuthAccessTokenSavedByThisProcess(host, accessToken) {
@@ -3500,116 +3637,124 @@ async function checkOAuthCredentialsChangedOnDisk(host, credentials) {
   await invalidateOAuthCacheIfDiskChanged(oauthTokenReadMemos.of(host), credentials);
 }
 //@ chunk-aepeg2w5.js:552472-552629 layout
-async function recheckStoredOAuthToken(e, n) {
-  e.clear();
+async function recheckStoredOAuthToken(memos, credentials) {
+  memos.clear();
   if (isStorageV5Enabled()) invalidatePlainTextStoreCopy();
-  let accessToken = (await getClaudeAIOAuthTokensAsync(n))?.accessToken ?? null;
-  if (accessToken !== e.lastKeychainAccessToken) {
-    e.lastKeychainAccessToken = accessToken;
+  let accessToken = (await getClaudeAIOAuthTokensAsync(credentials))?.accessToken ?? null;
+  if (accessToken !== memos.lastKeychainAccessToken) {
+    memos.lastKeychainAccessToken = accessToken;
     invalidateAuthDerivedCaches();
-    emitCredentialsChangedOnDisk(e);
+    emitCredentialsChangedOnDisk(memos);
   }
 }
 //@ chunk-aepeg2w5.js:552629-552663 layout
 var TOKEN_STORE_TIERS = ["bare", "store", "backend"];
 //@ chunk-aepeg2w5.js:552663-552694 layout
-function isLoginOffFirstParty(e) {
-  return e && !isFirstPartyProvider();
+function isLoginOffFirstParty(flag) {
+  return flag && !isFirstPartyProvider();
 }
 //@ chunk-aepeg2w5.js:552694-552750 layout
-function pending401HandlerKey(e, n, r) {
-  return `${e}|${n}${r ? "|opted-in" : ""}`;
+function pending401HandlerKey(accessToken, tier, optedIn) {
+  return `${accessToken}|${tier}${optedIn ? "|opted-in" : ""}`;
 }
 //@ chunk-aepeg2w5.js:552750-552907 layout
-function getTokenStoreTier(e, n) {
-  if (!(isStorageV5Enabled() && e !== undefined) || isBareModeAuthRestricted() || env.CLAUDE_CODE_OAUTH_TOKEN)
+function getTokenStoreTier(credentials, storageV5) {
+  if (
+    !(isStorageV5Enabled() && credentials !== undefined) ||
+    isBareModeAuthRestricted() ||
+    env.CLAUDE_CODE_OAUTH_TOKEN
+  )
     return "bare";
   if (getOAuthTokenFromFileDescriptor() && (!isOauthTokenFromBgSnapshot() || isHostManagedProviderAuth()))
     return "bare";
-  return n !== undefined ? "backend" : "store";
+  return storageV5 !== undefined ? "backend" : "store";
 }
 //@ chunk-aepeg2w5.js:552907-552994 layout
 /**
  * 从当前令牌层级向下查找可用的令牌。
  */
-function findTokenInLowerTier(e, n) {
-  for (let r of TOKEN_STORE_TIERS.slice(TOKEN_STORE_TIERS.indexOf(n))) {
-    let s = e(r);
-    if (s) return s;
+function findTokenInLowerTier(lookup, tier) {
+  for (let candidateTier of TOKEN_STORE_TIERS.slice(TOKEN_STORE_TIERS.indexOf(tier))) {
+    let entry = lookup(candidateTier);
+    if (entry) return entry;
   }
   return;
 }
 //@ chunk-aepeg2w5.js:552994-553105 layout
-function findHigherTierToken(e, n) {
-  for (let j = TOKEN_STORE_TIERS.indexOf(n) - 1; j >= 0; j--) {
-    let s = TOKEN_STORE_TIERS[j];
-    let h = s === undefined ? undefined : e(s);
-    if (h) return h;
+function findHigherTierToken(lookup, tier) {
+  for (let j = TOKEN_STORE_TIERS.indexOf(tier) - 1; j >= 0; j--) {
+    let candidateTier = TOKEN_STORE_TIERS[j];
+    let entry = candidateTier === undefined ? undefined : lookup(candidateTier);
+    if (entry) return entry;
   }
   return;
 }
 //@ chunk-aepeg2w5.js:553105-553258 facade-majority
-async function recoverCloudSessionsBearer(e, n, r, s = "refused") {
-  let h = await recoverHostSessionsBearer(e, s);
-  if (h !== "not_held") return h === "recovered" || hasClaudeAISignInToken();
+async function recoverCloudSessionsBearer(accessToken, credentials, storageV5, refusal = "refused") {
+  let hostResult = await recoverHostSessionsBearer(accessToken, refusal);
+  if (hostResult !== "not_held") return hostResult === "recovered" || hasClaudeAISignInToken();
   if ((await ensureHostSessionsBearer()) !== null) return true;
-  return handleOAuth401Error(e, n, r);
+  return handleOAuth401Error(accessToken, credentials, storageV5);
 }
 //@ chunk-aepeg2w5.js:553258-553795 facade-majority = checkAndRefreshOAuthTokenIfNeeded (0.189)
 /**
  * 检查并按需刷新 OAuth 令牌的入口：按（令牌, 存储层级, 是否非第一方登录）合并并发调用，再走 checkAndRefreshOAuthTokenIfNeededImpl。
  */
 function handleOAuth401Error(
-  e,
-  n,
+  accessToken,
+  credentials,
   storageV5,
-  { usesLoginOffFirstParty = false, onForcedRefreshOutcome: h } = {},
+  { usesLoginOffFirstParty: loginOffFirstParty = false, onForcedRefreshOutcome } = {},
 ) {
-  let y = oauthTokenReadMemos.of(getRootSession().host);
-  let promise = getTokenStoreTier(n, storageV5);
-  let w = isLoginOffFirstParty(usesLoginOffFirstParty);
-  let R = (j) => y.pending401Handlers.get(pending401HandlerKey(e, j, w));
-  let tokenInLowerTier = findTokenInLowerTier(R, promise);
+  let memos = oauthTokenReadMemos.of(getRootSession().host);
+  let promise = getTokenStoreTier(credentials, storageV5);
+  let optedIn = isLoginOffFirstParty(loginOffFirstParty);
+  let lookup = (tier) => memos.pending401Handlers.get(pending401HandlerKey(accessToken, tier, optedIn));
+  let tokenInLowerTier = findTokenInLowerTier(lookup, promise);
   if (tokenInLowerTier) {
-    if (!h) return tokenInLowerTier.promise;
-    return tokenInLowerTier.promise.then((j) => {
-      if (tokenInLowerTier.forcedOutcome !== undefined) h(tokenInLowerTier.forcedOutcome);
-      return j;
+    if (!onForcedRefreshOutcome) return tokenInLowerTier.promise;
+    return tokenInLowerTier.promise.then((result) => {
+      if (tokenInLowerTier.forcedOutcome !== undefined)
+        onForcedRefreshOutcome(tokenInLowerTier.forcedOutcome);
+      return result;
     });
   }
-  let P = pending401HandlerKey(e, promise, w);
-  let F = {
+  let key = pending401HandlerKey(accessToken, promise, optedIn);
+  let entry = {
     promise: Promise.resolve(false),
   };
-  let L = () =>
-    handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty, (j) => {
-      F.forcedOutcome = j;
-      h?.(j);
+  let startRequest = () =>
+    handleOAuth401ErrorImpl(accessToken, credentials, storageV5, loginOffFirstParty, (outcome) => {
+      entry.forcedOutcome = outcome;
+      onForcedRefreshOutcome?.(outcome);
     });
-  let higherTierToken = findHigherTierToken(R, promise);
-  F.promise = (higherTierToken ? higherTierToken.promise.catch(() => false).then(L) : L()).finally(() => {
-    y.pending401Handlers.delete(P);
+  let higherTierToken = findHigherTierToken(lookup, promise);
+  entry.promise = (
+    higherTierToken ? higherTierToken.promise.catch(() => false).then(startRequest) : startRequest()
+  ).finally(() => {
+    memos.pending401Handlers.delete(key);
   });
-  y.pending401Handlers.set(P, F);
-  return F.promise;
+  memos.pending401Handlers.set(key, entry);
+  return entry.promise;
 }
 //@ chunk-aepeg2w5.js:553795-554117 facade-majority
 /**
  * 轮询 CLAUDE_CODE_OAUTH_TOKEN / OAuth FD，直到出现与失败令牌不同的新令牌或超时。
  */
-async function waitForRotatedEnvToken(e) {
-  let pollMs = e.pollMs ?? 2000;
-  let r =
-    e.readToken ?? (() => env.CLAUDE_CODE_OAUTH_TOKEN ?? getOAuthTokenFromFileDescriptor() ?? undefined);
-  let s = e.sleeper ?? ((S) => sleep(S));
-  let h = Date.now() + e.timeoutMs;
-  while (Date.now() < h) {
-    let S = r();
-    if (S && S !== e.failedAccessToken) return true;
-    await s(Math.min(pollMs, Math.max(1, h - Date.now())));
+async function waitForRotatedEnvToken(options) {
+  let pollMs = options.pollMs ?? 2000;
+  let readToken =
+    options.readToken ??
+    (() => env.CLAUDE_CODE_OAUTH_TOKEN ?? getOAuthTokenFromFileDescriptor() ?? undefined);
+  let sleeper = options.sleeper ?? ((ms) => sleep(ms));
+  let deadline = Date.now() + options.timeoutMs;
+  while (Date.now() < deadline) {
+    let token = readToken();
+    if (token && token !== options.failedAccessToken) return true;
+    await sleeper(Math.min(pollMs, Math.max(1, deadline - Date.now())));
   }
-  let y = r();
-  return Boolean(y && y !== e.failedAccessToken);
+  let token = readToken();
+  return Boolean(token && token !== options.failedAccessToken);
 }
 //@ chunk-aepeg2w5.js:554117-554179 layout
 function isRemoteSessionChild() {
@@ -3639,26 +3784,29 @@ class AuthFailureClock {
   firstUnrecoveredAtMs = null;
 }
 //@ chunk-aepeg2w5.js:554500-554526 facade-majority
-var authFailureClocks = new HostScoped(() => new AuthFailureClock());
+var authFailureClocks; // deferred: uses AuthFailureClock of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:554500", () => {
+  authFailureClocks = new HostScoped(() => new AuthFailureClock());
+});
 //@ chunk-aepeg2w5.js:554526-554916 facade-majority
 /**
  * 远程子进程认证连续失败计时：超过 CLAUDE_CODE_AUTH_FAIL_EXIT_MS（默认 10 分钟）返回 exit，恢复后清零。
  */
-function noteAuthRecoveryOutcome(e) {
-  let n = e.nowMs ?? Date.now();
-  let r = authFailureClocks.of(getRootSession().host);
-  if (e.recovered) {
-    r.firstUnrecoveredAtMs = null;
+function noteAuthRecoveryOutcome(options) {
+  let nowMs = options.nowMs ?? Date.now();
+  let clocks = authFailureClocks.of(getRootSession().host);
+  if (options.recovered) {
+    clocks.firstUnrecoveredAtMs = null;
     return "continue";
   }
-  if (!(e.isRemoteChild ?? isRemoteSessionChild())) return "continue";
-  let h = e.thresholdMs ?? env.CLAUDE_CODE_AUTH_FAIL_EXIT_MS ?? 600000;
-  if (h <= 0) return "continue";
-  if (r.firstUnrecoveredAtMs === null) {
-    r.firstUnrecoveredAtMs = n;
+  if (!(options.isRemoteChild ?? isRemoteSessionChild())) return "continue";
+  let thresholdMs = options.thresholdMs ?? env.CLAUDE_CODE_AUTH_FAIL_EXIT_MS ?? 600000;
+  if (thresholdMs <= 0) return "continue";
+  if (clocks.firstUnrecoveredAtMs === null) {
+    clocks.firstUnrecoveredAtMs = nowMs;
     return "continue";
   }
-  if (n - r.firstUnrecoveredAtMs >= h) return "exit";
+  if (nowMs - clocks.firstUnrecoveredAtMs >= thresholdMs) return "exit";
   return "continue";
 }
 //@ chunk-aepeg2w5.js:554916-554974 facade-majority
@@ -3666,17 +3814,23 @@ function resetAuthFailureTracking() {
   authFailureClocks.of(getRootSession().host).firstUnrecoveredAtMs = null;
 }
 //@ chunk-aepeg2w5.js:554974-555006 layout
-function notifyOAuthTokenReplaced(e) {
+function notifyOAuthTokenReplaced(previousToken) {
   setAuthenticatedAccount(null);
-  forgetHeldHostSessionsBearer(e);
+  forgetHeldHostSessionsBearer(previousToken);
 }
 //@ chunk-aepeg2w5.js:555006-558274 layout
 /**
  * 处理 API 返回 401：先清令牌缓存；没有 refresh token 时尝试宿主启动器或 SDK getOAuthToken 回调换新令牌（写回 CLAUDE_CODE_OAUTH_TOKEN）；有则强制刷新。结果写 oauth_401_recovery 诊断。
  */
-async function handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty = false, h) {
+async function handleOAuth401ErrorImpl(
+  failedAccessToken,
+  credentials,
+  storageV5,
+  usesLoginOffFirstParty = false,
+  onOutcome,
+) {
   clearOAuthTokenCache();
-  let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(n);
+  let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(credentials);
   if (!claudeAIOAuthTokens?.refreshToken) {
     let sdkOAuthTokenRefreshCallback = getSdkOAuthTokenRefreshCallback();
     if (isLauncherStartedProcess()) {
@@ -3690,7 +3844,7 @@ async function handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty =
             },
           );
         }
-      } else if (await renewLauncherHostLogin(e)) {
+      } else if (await renewLauncherHostLogin(failedAccessToken)) {
         clearOAuthTokenCache();
         logEvent("tengu_oauth_401_sdk_callback_refreshed", {});
         logFeatureOk("oauth_401_recovery");
@@ -3701,13 +3855,14 @@ async function handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty =
       }
     } else if (sdkOAuthTokenRefreshCallback)
       try {
-        let L = await sdkOAuthTokenRefreshCallback();
-        if (L && L !== e) {
-          let G = env.CLAUDE_CODE_OAUTH_TOKEN ?? claudeAIOAuthTokens?.accessToken ?? e;
-          if (L !== G) {
-            process.env.CLAUDE_CODE_OAUTH_TOKEN = L;
+        let newToken = await sdkOAuthTokenRefreshCallback();
+        if (newToken && newToken !== failedAccessToken) {
+          let currentToken =
+            env.CLAUDE_CODE_OAUTH_TOKEN ?? claudeAIOAuthTokens?.accessToken ?? failedAccessToken;
+          if (newToken !== currentToken) {
+            process.env.CLAUDE_CODE_OAUTH_TOKEN = newToken;
             clearOAuthTokenCache();
-            notifyOAuthTokenReplaced(G);
+            notifyOAuthTokenReplaced(currentToken);
           }
           logEvent("tengu_oauth_401_sdk_callback_refreshed", {});
           logFeatureOk("oauth_401_recovery");
@@ -3717,11 +3872,11 @@ async function handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty =
           return true;
         }
         logForDebugging(
-          L === null
+          newToken === null
             ? "SDK getOAuthToken callback returned null (no token available)"
             : "SDK getOAuthToken callback returned the same expired token; treating as no refresh",
           {
-            level: L === null ? "debug" : "error",
+            level: newToken === null ? "debug" : "error",
           },
         );
       } catch (error) {
@@ -3733,25 +3888,25 @@ async function handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty =
           },
         );
       }
-    let x = false;
-    let P = false;
+    let userEnvTokenKept = false;
+    let hostTokenRefused = false;
     if (!usesHostProvidedAuth()) {
-      x = isUserExportedOAuthEnvToken();
-      P =
+      userEnvTokenKept = isUserExportedOAuthEnvToken();
+      hostTokenRefused =
         !env.CLAUDE_CODE_OAUTH_TOKEN &&
         sdkHostOffersOAuthRefresh() &&
         Boolean(getOAuthTokenFromFileDescriptor()) &&
         (hasPossibleCredentialFromDescriptor("CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR") ||
           isLoginStashedInTokenSlot()) &&
         !isOauthTokenFromBgSnapshot();
-      if (x)
+      if (userEnvTokenKept)
         logForDebugging(
           "OAuth 401: keeping the user-supplied CLAUDE_CODE_OAUTH_TOKEN instead of adopting the stored credential. Mint a fresh token with `claude setup-token` and restart with it, or unset the variable and run /login.",
           {
             level: "error",
           },
         );
-      else if (P)
+      else if (hostTokenRefused)
         logForDebugging(
           "OAuth 401: the login this session is using was refused. The login saved on this machine was not used because it may be a different account. Sign in again in the app that started this session, or run /login.",
           {
@@ -3760,23 +3915,23 @@ async function handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty =
         );
       else if (env.CLAUDE_CODE_OAUTH_TOKEN || getOAuthTokenFromFileDescriptor())
         try {
-          let claudeAiOauth = (await getSecureStorage().readAsync(n))?.claudeAiOauth;
+          let claudeAiOauth = (await getSecureStorage().readAsync(credentials))?.claudeAiOauth;
           if (
             claudeAiOauth?.accessToken &&
-            claudeAiOauth.accessToken !== e &&
+            claudeAiOauth.accessToken !== failedAccessToken &&
             !isOAuthTokenExpired(claudeAiOauth.expiresAt)
           ) {
-            let G = Boolean(withoutSSHTunnelVars());
+            let hadSshTunnelVars = Boolean(withoutSSHTunnelVars());
             if (env.CLAUDE_CODE_OAUTH_TOKEN) process.env.CLAUDE_CODE_OAUTH_TOKEN = claudeAiOauth.accessToken;
             if (
-              isStorageV5Enabled() && n !== undefined
-                ? await getOAuthTokenFromFileDescriptorAsync(n)
+              isStorageV5Enabled() && credentials !== undefined
+                ? await getOAuthTokenFromFileDescriptorAsync(credentials)
                 : getOAuthTokenFromFileDescriptor()
             ) {
               setOauthTokenFromFd(claudeAiOauth.accessToken);
               setOauthScopesFromFd(claudeAiOauth.scopes);
             }
-            setLoginStashedInTokenSlot(G ? null : claudeAiOauth.accessToken);
+            setLoginStashedInTokenSlot(hadSshTunnelVars ? null : claudeAiOauth.accessToken);
             clearOAuthTokenCache();
             notifyOAuthTokenReplaced();
             logEvent("tengu_oauth_401_recovered_from_disk", {});
@@ -3791,20 +3946,21 @@ async function handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty =
           logError(error);
         }
     }
-    let F = Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN) || Boolean(getOAuthTokenFromFileDescriptor());
-    if (F) {
-      let L = getOAuth401WaitMs();
-      if (L > 0) {
-        logForDebugging(`OAuth 401 recovery: waiting up to ${L}ms for a rotated env token`);
+    let hasTokenSlot =
+      Boolean(process.env.CLAUDE_CODE_OAUTH_TOKEN) || Boolean(getOAuthTokenFromFileDescriptor());
+    if (hasTokenSlot) {
+      let waitMs = getOAuth401WaitMs();
+      if (waitMs > 0) {
+        logForDebugging(`OAuth 401 recovery: waiting up to ${waitMs}ms for a rotated env token`);
         if (
           await waitForRotatedEnvToken({
-            failedAccessToken: e,
-            timeoutMs: L,
+            failedAccessToken,
+            timeoutMs: waitMs,
           })
         ) {
           if (
-            isStorageV5Enabled() && n !== undefined
-              ? await getOAuthTokenFromFileDescriptorAsync(n)
+            isStorageV5Enabled() && credentials !== undefined
+              ? await getOAuthTokenFromFileDescriptorAsync(credentials)
               : getOAuthTokenFromFileDescriptor()
           ) {
             let CLAUDE_CODE_OAUTH_TOKEN = env.CLAUDE_CODE_OAUTH_TOKEN;
@@ -3823,11 +3979,11 @@ async function handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty =
     }
     logFeatureBad(
       "oauth_401_recovery",
-      x
+      userEnvTokenKept
         ? "oauth_401_skipped_user_env_token"
-        : P
+        : hostTokenRefused
           ? "oauth_401_skipped_sdk_host_fd_token"
-          : F || isLauncherStartedProcess()
+          : hasTokenSlot || isLauncherStartedProcess()
             ? "oauth_401_no_refresh_token_bg_worker"
             : "oauth_401_no_refresh_token_interactive",
     );
@@ -3847,7 +4003,7 @@ async function handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty =
     }
     return false;
   }
-  if (claudeAIOAuthTokens.accessToken !== e) {
+  if (claudeAIOAuthTokens.accessToken !== failedAccessToken) {
     notifyOAuthTokenReplaced();
     logEvent("tengu_oauth_401_recovered_from_keychain", {});
     logFeatureOk("oauth_401_recovery");
@@ -3856,55 +4012,56 @@ async function handleOAuth401ErrorImpl(e, n, storageV5, usesLoginOffFirstParty =
     });
     return true;
   }
-  let S = {
+  let refreshOptions = {
     force: true,
-    entryAccessToken: e,
-    credentials: n,
+    entryAccessToken: failedAccessToken,
+    credentials,
     storageV5,
     usesLoginOffFirstParty,
   };
-  if (!h) return checkAndRefreshOAuthTokenIfNeeded(S);
-  let w = await checkAndRefreshOAuthTokenIfNeededWithOutcome(S);
-  h(w);
-  return w === "refreshed";
+  if (!onOutcome) return checkAndRefreshOAuthTokenIfNeeded(refreshOptions);
+  let refreshOutcome = await checkAndRefreshOAuthTokenIfNeededWithOutcome(refreshOptions);
+  onOutcome(refreshOutcome);
+  return refreshOutcome === "refreshed";
 }
 //@ chunk-aepeg2w5.js:558274-558478 facade-majority
 /**
  * 异步读取 OAuth 令牌并缓存 promise；调用失败时清掉缓存的 promise。
  */
-function getClaudeAIOAuthTokensAsync(e) {
+function getClaudeAIOAuthTokensAsync(credentials) {
   if (isBareModeAuthRestricted()) return Promise.resolve(null);
-  let n = oauthTokenReadMemos.of(getRootSession().host);
-  let promise = n.promise;
+  let memos = oauthTokenReadMemos.of(getRootSession().host);
+  let promise = memos.promise;
   if (!promise) {
-    let oAuthBearerOrigin = getOAuthBearerOriginAsync(e);
+    let oAuthBearerOrigin = getOAuthBearerOriginAsync(credentials);
     promise = oAuthBearerOrigin;
-    n.promise = oAuthBearerOrigin;
+    memos.promise = oAuthBearerOrigin;
     oAuthBearerOrigin.catch(() => {
-      if (n.promise === oAuthBearerOrigin) n.promise = null;
+      if (memos.promise === oAuthBearerOrigin) memos.promise = null;
     });
   }
-  return isLauncherStartedProcess() ? promise.then((s) => s ?? getLauncherOAuthTokens()) : promise;
+  return isLauncherStartedProcess() ? promise.then((tokens) => tokens ?? getLauncherOAuthTokens()) : promise;
 }
 //@ chunk-aepeg2w5.js:558478-558753 fingerprint = getClaudeAIOAuthTokensAsync (1)
 /**
  * 异步版 getClaudeAIOAuthTokens，支持 storage v5 后端读取。
  */
-async function getOAuthBearerOriginAsync(e) {
+async function getOAuthBearerOriginAsync(credentials) {
   if (env.CLAUDE_CODE_OAUTH_TOKEN) return getClaudeAIOAuthTokens();
-  let n =
-    isStorageV5Enabled() && e !== undefined
-      ? await getOAuthTokenFromFileDescriptorAsync(e)
+  let fdToken =
+    isStorageV5Enabled() && credentials !== undefined
+      ? await getOAuthTokenFromFileDescriptorAsync(credentials)
       : getOAuthTokenFromFileDescriptor();
-  if (n && (!isOauthTokenFromBgSnapshot() || isHostManagedProviderAuth())) return getClaudeAIOAuthTokens();
+  if (fdToken && (!isOauthTokenFromBgSnapshot() || isHostManagedProviderAuth()))
+    return getClaudeAIOAuthTokens();
   if (usesHostProvidedAuth()) return null;
   try {
-    let oauthData = (await getSecureStorage().readAsync(e))?.claudeAiOauth;
+    let oauthData = (await getSecureStorage().readAsync(credentials))?.claudeAiOauth;
     if (oauthData?.accessToken) return oauthData;
   } catch (error) {
     logError(error);
   }
-  if (n) return getClaudeAIOAuthTokens();
+  if (fdToken) return getClaudeAIOAuthTokens();
   return null;
 }
 //@ chunk-aepeg2w5.js:558753-558814 facade-majority
@@ -3924,20 +4081,20 @@ function startupReadsStoredLogin() {
   return !(getOauthTokenFromFd() && !isOauthTokenFromBgSnapshot());
 }
 //@ chunk-aepeg2w5.js:558943-559025 facade-majority
-async function primeStoredLoginCopy(e) {
+async function primeStoredLoginCopy(credentials) {
   if (!startupReadsStoredLogin()) return;
   try {
-    await getSecureStorage().readAsync(e);
+    await getSecureStorage().readAsync(credentials);
   } catch (error) {
     logError(error);
   }
 }
 //@ chunk-aepeg2w5.js:559025-559169 facade-majority
-function sameOwnerAccount(e, n) {
+function sameOwnerAccount(previousAccount, nextAccount) {
   return (
-    Boolean(e?.accountUuid) &&
-    e?.accountUuid === n?.accountUuid &&
-    (e?.organizationUuid || undefined) === (n?.organizationUuid || undefined)
+    Boolean(previousAccount?.accountUuid) &&
+    previousAccount?.accountUuid === nextAccount?.accountUuid &&
+    (previousAccount?.organizationUuid || undefined) === (nextAccount?.organizationUuid || undefined)
   );
 }
 //@ chunk-aepeg2w5.js:559169-559376 facade-majority = hasVoiceAuth (0.484)
@@ -3946,20 +4103,20 @@ function sameOwnerAccount(e, n) {
  */
 async function readFreshOAuthCredentialSnapshot(config, credentials) {
   clearOAuthCachesForReload();
-  let [claudeAIOAuthTokens, s] = await Promise.all([
+  let [claudeAIOAuthTokens, account] = await Promise.all([
     getClaudeAIOAuthTokensAsync(credentials),
     isAnthropicAuthEnabled() ? readFreshOauthAccountFromDisk(config) : undefined,
   ]);
   if (!claudeAIOAuthTokens?.accessToken) return;
   return {
     accessToken: claudeAIOAuthTokens.accessToken,
-    accountUuid: s?.accountUuid,
-    organizationUuid: s?.organizationUuid,
+    accountUuid: account?.accountUuid,
+    organizationUuid: account?.organizationUuid,
   };
 }
 //@ chunk-aepeg2w5.js:559376-559453 facade-majority
-async function readStoredLoginOrganizationAfresh(e) {
-  let freshOauthAccountFromDisk = await readFreshOauthAccountFromDisk(e);
+async function readStoredLoginOrganizationAfresh(config) {
+  let freshOauthAccountFromDisk = await readFreshOauthAccountFromDisk(config);
   return normalizeUuidOrNull(freshOauthAccountFromDisk?.organizationUuid) ?? null;
 }
 //@ chunk-aepeg2w5.js:559453-559789 layout
@@ -3971,20 +4128,20 @@ async function getRefreshLockInfo(err, tokens) {
     typeof err === "object" && err !== null && "file" in err && typeof err.file === "string"
       ? err.file
       : undefined;
-  let s = file === undefined || resolve(file) === resolve(tokens);
-  let h = s ? oauthRefreshLockOptions(tokens).lockfilePath : file;
-  let y;
+  let isCurrentLock = file === undefined || resolve(file) === resolve(tokens);
+  let lockfilePath = isCurrentLock ? oauthRefreshLockOptions(tokens).lockfilePath : file;
+  let lockAgeMs;
   let mtimeMs;
   try {
-    let w = await stat(h);
-    mtimeMs = w.mtimeMs;
-    y = Math.max(0, Math.round(Date.now() - w.mtimeMs));
+    let stats = await stat(lockfilePath);
+    mtimeMs = stats.mtimeMs;
+    lockAgeMs = Math.max(0, Math.round(Date.now() - stats.mtimeMs));
   } catch {
-    y = undefined;
+    lockAgeMs = undefined;
   }
   return {
-    contendedLock: s ? lit("current") : lit("legacy"),
-    lockAgeMs: y,
+    contendedLock: isCurrentLock ? lit("current") : lit("legacy"),
+    lockAgeMs,
     mtimeMs,
   };
 }
@@ -3994,26 +4151,26 @@ async function getRefreshLockInfo(err, tokens) {
  */
 var REFRESH_LOCK_OBSERVE_MS = 7500;
 //@ chunk-aepeg2w5.js:559801-559922 layout
-function sameLockObservation(e, refreshedTokens) {
+function sameLockObservation(observation, refreshedTokens) {
   return (
-    e.mtimeMs !== undefined &&
+    observation.mtimeMs !== undefined &&
     refreshedTokens.mtimeMs !== undefined &&
-    e.contendedLock === refreshedTokens.contendedLock &&
-    e.mtimeMs === refreshedTokens.mtimeMs
+    observation.contendedLock === refreshedTokens.contendedLock &&
+    observation.mtimeMs === refreshedTokens.mtimeMs
   );
 }
 //@ chunk-aepeg2w5.js:559922-560119 facade-majority
-function oauthRefreshLockOptions(e, n) {
+function oauthRefreshLockOptions(configDir, onCompromised) {
   return {
-    lockfilePath: join(e, ".oauth_refresh.lock"),
+    lockfilePath: join(configDir, ".oauth_refresh.lock"),
     realpath: false,
     stale: 60000,
     update: 5000,
-    onCompromised: (r) => {
-      logForDebugging(`OAuth refresh lock compromised: ${r.message}`, {
+    onCompromised: (error) => {
+      logForDebugging(`OAuth refresh lock compromised: ${error.message}`, {
         level: "error",
       });
-      n?.(r);
+      onCompromised?.(error);
     },
   };
 }
@@ -4026,37 +4183,37 @@ async function getLockfilePathFor(taskListId) {
 }
 //@ chunk-aepeg2w5.js:560181-560348 facade-majority
 class OAuthRefreshLockContendedError extends Error {
-  constructor(e) {
-    super(`Lock acquisition failed after ${e} attempts: another process is refreshing`);
+  constructor(attempts) {
+    super(`Lock acquisition failed after ${attempts} attempts: another process is refreshing`);
     this.name = "OAuthRefreshLockContendedError";
   }
 }
 //@ chunk-aepeg2w5.js:560348-561108 facade-majority
-async function acquireOAuthRefreshLock(taskListId) {
-  let n = false;
+async function acquireOAuthRefreshLock(configDir) {
+  let compromised = false;
   let abortController = new AbortController();
-  let s = () => {
-    n = true;
+  let onCompromised = () => {
+    compromised = true;
     abortController.abort();
   };
-  let h = oauthRefreshLockOptions(taskListId, s);
-  let y = await lock(taskListId, {
-    ...h,
-    ...getFsSettler(h.lockfilePath),
+  let lockOptions = oauthRefreshLockOptions(configDir, onCompromised);
+  let releaseCurrentLock = await lock(configDir, {
+    ...lockOptions,
+    ...getFsSettler(lockOptions.lockfilePath),
   });
-  let lockfilePathFor = await getLockfilePathFor(taskListId);
-  let w = null;
+  let dir = await getLockfilePathFor(configDir);
+  let releaseLegacyLock = null;
   try {
-    w = await lock(lockfilePathFor, {
-      ...oauthRefreshLockOptions(taskListId, s),
-      lockfilePath: lockfilePathFor,
-      ...getFsSettler(lockfilePathFor),
+    releaseLegacyLock = await lock(dir, {
+      ...oauthRefreshLockOptions(configDir, onCompromised),
+      lockfilePath: dir,
+      ...getFsSettler(dir),
     });
   } catch (error) {
     if (error.code === "ELOCKED") {
       logEvent("tengu_oauth_refresh_legacy_lock_contended", {});
-      await y().catch((error) =>
-        isFsInaccessible(error) || n
+      await releaseCurrentLock().catch((error) =>
+        isFsInaccessible(error) || compromised
           ? logForDebugging(`OAuth refresh new-lock release failed: ${error}`)
           : logError(error),
       );
@@ -4065,27 +4222,27 @@ async function acquireOAuthRefreshLock(taskListId) {
     if (isFsInaccessible(error)) logForDebugging(`OAuth refresh legacy-lock acquire failed: ${error}`);
     else logError(error);
   }
-  let R = beginOAuthRefreshLockHold();
-  let x = await writeLockOwnerRecord({
-    claudeDir: taskListId,
-    lockfilePath: oauthRefreshLockOptions(taskListId).lockfilePath,
-    legacyLockfilePath: w ? lockfilePathFor : null,
+  let endHold = beginOAuthRefreshLockHold();
+  let ownerRecord = await writeLockOwnerRecord({
+    claudeDir: configDir,
+    lockfilePath: oauthRefreshLockOptions(configDir).lockfilePath,
+    legacyLockfilePath: releaseLegacyLock ? dir : null,
   });
   return {
-    isCompromised: () => n,
+    isCompromised: () => compromised,
     signal: abortController.signal,
     release: async () => {
       try {
-        if (x !== null) await removeOwnLockOwnerRecord(taskListId, x);
-        if (w)
-          await w().catch((error) =>
-            isFsInaccessible(error) || n
+        if (ownerRecord !== null) await removeOwnLockOwnerRecord(configDir, ownerRecord);
+        if (releaseLegacyLock)
+          await releaseLegacyLock().catch((error) =>
+            isFsInaccessible(error) || compromised
               ? logForDebugging(`OAuth refresh legacy-lock release failed: ${error}`)
               : logError(error),
           );
-        await y();
+        await releaseCurrentLock();
       } finally {
-        R();
+        endHold();
       }
     },
   };
@@ -4099,27 +4256,30 @@ class OauthRefreshLockHolds {
   released = null;
 }
 //@ chunk-aepeg2w5.js:561138-561164 facade-majority
-var oauthRefreshLockHolds = new HostScoped(() => new OauthRefreshLockHolds());
+var oauthRefreshLockHolds; // deferred: uses OauthRefreshLockHolds of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:561138", () => {
+  oauthRefreshLockHolds = new HostScoped(() => new OauthRefreshLockHolds());
+});
 //@ chunk-aepeg2w5.js:561164-561295 facade-majority
 function beginOAuthRefreshLockHold() {
-  let e = onProcessRootHost(oauthRefreshLockHolds);
-  e.held++;
-  let n = true;
+  let holdState = onProcessRootHost(oauthRefreshLockHolds);
+  holdState.held++;
+  let released = true;
   return () => {
-    if (!n) return;
-    n = false;
-    if (--e.held === 0) {
-      e.released?.resolve();
-      e.released = null;
+    if (!released) return;
+    released = false;
+    if (--holdState.held === 0) {
+      holdState.released?.resolve();
+      holdState.released = null;
     }
   };
 }
 //@ chunk-aepeg2w5.js:561295-561413 facade-majority
 function waitForOAuthRefreshLocksReleased() {
-  let e = onProcessRootHost(oauthRefreshLockHolds);
-  if (e.held === 0) return null;
-  e.released ??= Promise.withResolvers();
-  return e.released.promise;
+  let holdState = onProcessRootHost(oauthRefreshLockHolds);
+  if (holdState.held === 0) return null;
+  holdState.released ??= Promise.withResolvers();
+  return holdState.released.promise;
 }
 //@ chunk-aepeg2w5.js:561413-561433 facade-majority
 /**
@@ -4128,75 +4288,78 @@ function waitForOAuthRefreshLocksReleased() {
 var OAUTH_REFRESH_EXIT_WAIT_CAP_MS = 2000;
 var OAUTH_REFRESH_EXIT_WAIT_STEP_MS = 250;
 //@ chunk-aepeg2w5.js:561433-561714 facade-majority
-async function waitForInFlightOAuthRefresh(e) {
+async function waitForInFlightOAuthRefresh(timeoutMs) {
   try {
-    let n = waitForOAuthRefreshLocksReleased();
-    if (n === null) return true;
-    let r =
+    let released = waitForOAuthRefreshLocksReleased();
+    if (released === null) return true;
+    let finishPromise =
       (await withDeadline(
-        n.then(() => true),
-        e,
+        released.then(() => true),
+        timeoutMs,
       )) ?? false;
-    if (!r) {
-      logForDebugging(`OAuth refresh still in flight after ${e}ms; exiting without waiting further`);
+    if (!finishPromise) {
+      logForDebugging(`OAuth refresh still in flight after ${timeoutMs}ms; exiting without waiting further`);
       await withDeadline(
         logFeatureSadAsync("oauth_token_refresh", "exit_wait_timeout").catch(() => {}),
         OAUTH_REFRESH_EXIT_WAIT_STEP_MS,
       );
     }
-    return r;
+    return finishPromise;
   } catch {
     return false;
   }
 }
 //@ chunk-aepeg2w5.js:561714-561732 layout
-registerOAuthRefreshExitWait(() => waitForInFlightOAuthRefresh(OAUTH_REFRESH_EXIT_WAIT_CAP_MS));
+// deferred: uses waitForInFlightOAuthRefresh of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:561714", () => {
+  registerOAuthRefreshExitWait(() => waitForInFlightOAuthRefresh(OAUTH_REFRESH_EXIT_WAIT_CAP_MS));
+});
 //@ chunk-aepeg2w5.js:561732-561741 layout
 /**
  * 刷新令牌的最大尝试次数（5）。
  */
 var MAX_REFRESH_ATTEMPTS = 5;
 //@ chunk-aepeg2w5.js:561741-562393 facade-majority
-async function withOAuthRefreshLock(e, n) {
+async function withOAuthRefreshLock(run, credentials) {
   if (isDiskless()) {
     logFeatureBad("oauth_token_refresh", "oauth_refresh_diskless");
     throw Error("This hosted session (claude-code-server) cannot refresh an OAuth token");
   }
-  let projectDirsUpToHome = getProjectDirsUpToHome();
-  await getFsImplementation().mkdir(projectDirsUpToHome);
-  let s;
-  let h = 0;
-  while (!s) {
-    h++;
+  let configDir = getProjectDirsUpToHome();
+  await getFsImplementation().mkdir(configDir);
+  let lockHandle;
+  let attempts = 0;
+  while (!lockHandle) {
+    attempts++;
     try {
-      s = await acquireOAuthRefreshLock(projectDirsUpToHome);
+      lockHandle = await acquireOAuthRefreshLock(configDir);
     } catch (error) {
       if (error.code === "ELOCKED") {
-        if (h < MAX_REFRESH_ATTEMPTS) {
+        if (attempts < MAX_REFRESH_ATTEMPTS) {
           await sleep(1000 + Math.random() * 1000);
           continue;
         }
-        throw new OAuthRefreshLockContendedError(h);
+        throw new OAuthRefreshLockContendedError(attempts);
       }
       throw error;
     }
   }
   try {
     clearOAuthTokenCache();
-    if ((await getSecureStorage().readAsyncStrict?.(n)) === READ_FAILED)
-      throw new OAuthRefreshLockContendedError(h);
-    let lockedTokens = await getClaudeAIOAuthTokensAsync(n);
-    return await e({
+    if ((await getSecureStorage().readAsyncStrict?.(credentials)) === READ_FAILED)
+      throw new OAuthRefreshLockContendedError(attempts);
+    let lockedTokens = await getClaudeAIOAuthTokensAsync(credentials);
+    return await run({
       lockedTokens,
-      lockAttempts: h,
-      isCompromised: s.isCompromised,
-      signal: s.signal,
+      lockAttempts: attempts,
+      isCompromised: lockHandle.isCompromised,
+      signal: lockHandle.signal,
     });
   } finally {
     try {
-      await s.release();
+      await lockHandle.release();
     } catch (error) {
-      if (isFsInaccessible(error) || s.isCompromised())
+      if (isFsInaccessible(error) || lockHandle.isCompromised())
         logForDebugging(`OAuth refresh lock release failed: ${error}`);
       else logError(error);
     }
@@ -4206,64 +4369,87 @@ async function withOAuthRefreshLock(e, n) {
 /**
  * 锁超时/忙碌后可重试的结束原因集合。
  */
-var TOKEN_REFRESH_OUTCOMES_BEFORE_POST = new Set([
-  "lock_timeout",
-  "lock_busy",
-  "lock_error",
-  "lock_disk_full",
-]);
-var MAY_RETRY_AFTER_LOCK_REFUSAL = new Set(["lock_timeout", "lock_busy"]);
+var TOKEN_REFRESH_OUTCOMES_BEFORE_POST; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAY_RETRY_AFTER_LOCK_REFUSAL;
+deferInit("chunk-aepeg2w5.js:562393", () => {
+  TOKEN_REFRESH_OUTCOMES_BEFORE_POST = new Set(["lock_timeout", "lock_busy", "lock_error", "lock_disk_full"]);
+  MAY_RETRY_AFTER_LOCK_REFUSAL = new Set(["lock_timeout", "lock_busy"]);
+});
 //@ chunk-aepeg2w5.js:562510-562611 facade-majority
-function isAuthFailureWorthRetrying(e, n) {
+function isAuthFailureWorthRetrying(errorCode, observation) {
   return (
-    e !== undefined &&
-    MAY_RETRY_AFTER_LOCK_REFUSAL.has(e) &&
-    (n === undefined || (n.outcome !== undefined && TOKEN_REFRESH_OUTCOMES_BEFORE_POST.has(n.outcome)))
+    errorCode !== undefined &&
+    MAY_RETRY_AFTER_LOCK_REFUSAL.has(errorCode) &&
+    (observation === undefined ||
+      (observation.outcome !== undefined && TOKEN_REFRESH_OUTCOMES_BEFORE_POST.has(observation.outcome)))
   );
 }
 //@ chunk-aepeg2w5.js:562611-562670 facade-majority
-function checkAndRefreshOAuthTokenIfNeeded(e = {}) {
-  return checkAndRefreshOAuthTokenIfNeededWithOutcome(e).then((n) => n === "refreshed");
+function checkAndRefreshOAuthTokenIfNeeded(options = {}) {
+  return checkAndRefreshOAuthTokenIfNeededWithOutcome(options).then((outcome) => outcome === "refreshed");
 }
 //@ chunk-aepeg2w5.js:562670-563134 facade-majority
 function checkAndRefreshOAuthTokenIfNeededWithOutcome({
-  retryCount: e = 0,
-  force: n = false,
-  entryAccessToken: r,
-  credentials: s,
-  storageV5: h,
-  usesLoginOffFirstParty: y = false,
+  retryCount = 0,
+  force = false,
+  entryAccessToken,
+  credentials,
+  storageV5,
+  usesLoginOffFirstParty = false,
 } = {}) {
-  let S = oauthTokenReadMemos.of(getRootSession().host);
-  if (e === 0 && !n) {
-    let w = isLoginOffFirstParty(y) ? "pendingOptedInRefreshChecks" : "pendingRefreshChecks";
-    let tokenStoreTier = getTokenStoreTier(s, h);
-    let x = (j) => S[w][j];
-    let tokenInLowerTier = findTokenInLowerTier(x, tokenStoreTier);
+  let memos = oauthTokenReadMemos.of(getRootSession().host);
+  if (retryCount === 0 && !force) {
+    let pendingKey = isLoginOffFirstParty(usesLoginOffFirstParty)
+      ? "pendingOptedInRefreshChecks"
+      : "pendingRefreshChecks";
+    let tier = getTokenStoreTier(credentials, storageV5);
+    let lookup = (tier) => memos[pendingKey][tier];
+    let tokenInLowerTier = findTokenInLowerTier(lookup, tier);
     if (tokenInLowerTier) return tokenInLowerTier;
-    let F = () => checkAndRefreshOAuthTokenIfNeededImpl(S, e, 0, undefined, n, undefined, s, h, y);
-    let higherTierToken = findHigherTierToken(x, tokenStoreTier);
-    let G = (
+    let startRefresh = () =>
+      checkAndRefreshOAuthTokenIfNeededImpl(
+        memos,
+        retryCount,
+        0,
+        undefined,
+        force,
+        undefined,
+        credentials,
+        storageV5,
+        usesLoginOffFirstParty,
+      );
+    let higherTierToken = findHigherTierToken(lookup, tier);
+    let refreshPromise = (
       higherTierToken
         ? higherTierToken
             .catch(() => {
               return;
             })
-            .then(F)
-        : F()
+            .then(startRefresh)
+        : startRefresh()
     ).finally(() => {
-      S[w] = {
-        ...S[w],
-        [tokenStoreTier]: null,
+      memos[pendingKey] = {
+        ...memos[pendingKey],
+        [tier]: null,
       };
     });
-    S[w] = {
-      ...S[w],
-      [tokenStoreTier]: G,
+    memos[pendingKey] = {
+      ...memos[pendingKey],
+      [tier]: refreshPromise,
     };
-    return G;
+    return refreshPromise;
   }
-  return checkAndRefreshOAuthTokenIfNeededImpl(S, e, 0, undefined, n, r, s, h, y);
+  return checkAndRefreshOAuthTokenIfNeededImpl(
+    memos,
+    retryCount,
+    0,
+    undefined,
+    force,
+    entryAccessToken,
+    credentials,
+    storageV5,
+    usesLoginOffFirstParty,
+  );
 }
 //@ chunk-aepeg2w5.js:563134-563220 facade-majority
 function isExpectedOAuthRefreshError(error, { isDefaultFirstPartyClient }) {
@@ -4278,10 +4464,21 @@ function isExpectedOAuthRefreshError(error, { isDefaultFirstPartyClient }) {
 /**
  * 刷新 OAuth 令牌：未过期（提前 5 分钟判定）返回 not_needed；无 refresh token、已知失效或账户冻结直接返回原因；在配置目录加文件锁（ELOCKED 时随机退避重试 5 次，必要时接管死锁持有者），锁内再次确认后调用 refreshOAuthToken 并写回安全存储。
  */
-async function checkAndRefreshOAuthTokenIfNeededImpl(e, n, r, s, h, y, S, w, R = false, x = false) {
-  await invalidateOAuthCacheIfDiskChanged(e, S);
-  let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(S);
-  if (!h) {
+async function checkAndRefreshOAuthTokenIfNeededImpl(
+  memos,
+  retryCount,
+  waitedMs,
+  observedLock,
+  force,
+  entryAccessToken,
+  credentials,
+  storageV5,
+  usesLoginOffFirstParty = false,
+  lockTakeoverRetried = false,
+) {
+  await invalidateOAuthCacheIfDiskChanged(memos, credentials);
+  let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(credentials);
+  if (!force) {
     if (claudeAIOAuthTokens && !isOAuthTokenExpired(claudeAIOAuthTokens.expiresAt)) return "not_needed";
     if (!claudeAIOAuthTokens?.refreshToken) return "no_refresh_token";
   }
@@ -4290,76 +4487,104 @@ async function checkAndRefreshOAuthTokenIfNeededImpl(e, n, r, s, h, y, S, w, R =
   if (onHoldRefreshTokens.has(claudeAIOAuthTokens.refreshToken)) return "account_on_hold";
   if (!shouldUseClaudeAIAuth(claudeAIOAuthTokens.scopes) && !claudeAIOAuthTokens.subscriptionType)
     return "not_refreshable";
-  if (!isFirstPartyProvider() && !R) return "not_needed";
-  let L = y ?? claudeAIOAuthTokens.accessToken;
+  if (!isFirstPartyProvider() && !usesLoginOffFirstParty) return "not_needed";
+  let expectedAccessToken = entryAccessToken ?? claudeAIOAuthTokens.accessToken;
   clearOAuthTokenCache();
-  let claudeAIOAuthTokens_2 = await getClaudeAIOAuthTokensAsync(S);
+  let claudeAIOAuthTokens_2 = await getClaudeAIOAuthTokensAsync(credentials);
   if (!claudeAIOAuthTokens_2?.refreshToken) return "no_refresh_token";
-  if (claudeAIOAuthTokens_2.accessToken !== L) {
+  if (claudeAIOAuthTokens_2.accessToken !== expectedAccessToken) {
     notifyOAuthTokenReplaced();
     logEvent("tengu_oauth_token_refresh_race_resolved", {});
     return "refreshed";
   }
-  if (!h && !isOAuthTokenExpired(claudeAIOAuthTokens_2.expiresAt)) return "not_needed";
+  if (!force && !isOAuthTokenExpired(claudeAIOAuthTokens_2.expiresAt)) return "not_needed";
   if (isDiskless()) {
     logFeatureBad("oauth_token_refresh", "oauth_refresh_diskless");
     return "not_refreshable";
   }
   let tokens = getProjectDirsUpToHome();
   await getFsImplementation().mkdir(tokens);
-  let ee;
+  let lockHandle;
   try {
     logEvent("tengu_oauth_token_refresh_lock_acquiring", {});
-    ee = await acquireOAuthRefreshLock(tokens);
+    lockHandle = await acquireOAuthRefreshLock(tokens);
   } catch (err) {
     if (err.code === "ELOCKED") {
-      let se = s ?? (await getRefreshLockInfo(err, tokens));
-      if (n < 5) {
+      let lockInfo = observedLock ?? (await getRefreshLockInfo(err, tokens));
+      if (retryCount < 5) {
         logEvent("tengu_oauth_token_refresh_lock_retry", {
-          retryCount: n + 1,
+          retryCount: retryCount + 1,
         });
-        let fe = 1000 + Math.random() * 1000;
-        await sleep(fe);
-        return checkAndRefreshOAuthTokenIfNeededImpl(e, n + 1, r + fe, se, h, L, S, w, R, x);
+        let retryDelayMs = 1000 + Math.random() * 1000;
+        await sleep(retryDelayMs);
+        return checkAndRefreshOAuthTokenIfNeededImpl(
+          memos,
+          retryCount + 1,
+          waitedMs + retryDelayMs,
+          lockInfo,
+          force,
+          expectedAccessToken,
+          credentials,
+          storageV5,
+          usesLoginOffFirstParty,
+          lockTakeoverRetried,
+        );
       }
-      let Se = claudeAIOAuthTokens_2.expiresAt !== null && Date.now() >= claudeAIOAuthTokens_2.expiresAt;
+      let tokenPastExpiry =
+        claudeAIOAuthTokens_2.expiresAt !== null && Date.now() >= claudeAIOAuthTokens_2.expiresAt;
       let refreshedTokens = await getRefreshLockInfo(err, tokens);
-      if (sameLockObservation(se, refreshedTokens) && r < REFRESH_LOCK_OBSERVE_MS) {
-        await sleep(REFRESH_LOCK_OBSERVE_MS - r);
+      if (sameLockObservation(lockInfo, refreshedTokens) && waitedMs < REFRESH_LOCK_OBSERVE_MS) {
+        await sleep(REFRESH_LOCK_OBSERVE_MS - waitedMs);
         refreshedTokens = await getRefreshLockInfo(err, tokens);
       }
       let { contendedLock, lockAgeMs } = refreshedTokens;
-      let ce = !sameLockObservation(se, refreshedTokens);
-      if (!ce && !x && String(contendedLock) === "current" && refreshedTokens.mtimeMs !== undefined) {
-        let fe = await checkLockStillOwned({
+      let holderAlive = !sameLockObservation(lockInfo, refreshedTokens);
+      if (
+        !holderAlive &&
+        !lockTakeoverRetried &&
+        String(contendedLock) === "current" &&
+        refreshedTokens.mtimeMs !== undefined
+      ) {
+        let takeoverOutcome = await checkLockStillOwned({
           claudeDir: tokens,
           lockfilePath: oauthRefreshLockOptions(tokens).lockfilePath,
           legacyLockfilePath: await getLockfilePathFor(tokens),
           watchedMtimeMs: refreshedTokens.mtimeMs,
         });
         logEvent("tengu_oauth_token_refresh_lock_dead_holder_takeover", {
-          outcome: fromEnum(fe),
+          outcome: fromEnum(takeoverOutcome),
           lockAgeMs,
         });
-        if (fe === "taken_over" || fe === "lock_changed")
-          return checkAndRefreshOAuthTokenIfNeededImpl(e, 0, 0, undefined, h, L, S, w, R, true);
+        if (takeoverOutcome === "taken_over" || takeoverOutcome === "lock_changed")
+          return checkAndRefreshOAuthTokenIfNeededImpl(
+            memos,
+            0,
+            0,
+            undefined,
+            force,
+            expectedAccessToken,
+            credentials,
+            storageV5,
+            usesLoginOffFirstParty,
+            true,
+          );
       }
       logEvent("tengu_oauth_token_refresh_lock_retry_limit_reached", {
         maxRetries: 5,
-        tokenPastExpiry: Se,
+        tokenPastExpiry,
         contendedLock,
         lockAgeMs,
-        holderAlive: ce,
+        holderAlive,
       });
       logFeatureSad("oauth_token_refresh", "oauth_refresh_lock_timeout", {
-        token_past_expiry: Se,
+        token_past_expiry: tokenPastExpiry,
         contended_lock: contendedLock,
-        holder_alive: ce,
+        holder_alive: holderAlive,
         ...(lockAgeMs !== undefined && {
           lock_age_ms: lockAgeMs,
         }),
       });
-      return ce ? "lock_busy" : "lock_timeout";
+      return holderAlive ? "lock_busy" : "lock_timeout";
     }
     logError(err);
     logEvent("tengu_oauth_token_refresh_lock_error", {
@@ -4368,74 +4593,76 @@ async function checkAndRefreshOAuthTokenIfNeededImpl(e, n, r, s, h, y, S, w, R =
     logFeatureBad("oauth_token_refresh", "oauth_refresh_lock_error");
     return isDiskFullErrno(err) ? "lock_disk_full" : "lock_error";
   }
-  let q = null;
-  let Q = true;
+  let postedRefreshToken = null;
+  let isDefaultFirstPartyClient = true;
   try {
     logEvent("tengu_oauth_token_refresh_lock_acquired", {});
     clearOAuthTokenCache();
-    if ((await getSecureStorage().readAsyncStrict?.(S)) === READ_FAILED) {
+    if ((await getSecureStorage().readAsyncStrict?.(credentials)) === READ_FAILED) {
       logEvent("tengu_oauth_token_refresh_locked_read_failed", {});
       logFeatureSad("oauth_token_refresh", "oauth_refresh_locked_read_failed");
       return "lock_error";
     }
-    let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(S);
+    let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(credentials);
     if (!claudeAIOAuthTokens?.refreshToken) return "no_refresh_token";
-    q = claudeAIOAuthTokens.refreshToken;
-    if (claudeAIOAuthTokens.accessToken !== L) {
+    postedRefreshToken = claudeAIOAuthTokens.refreshToken;
+    if (claudeAIOAuthTokens.accessToken !== expectedAccessToken) {
       notifyOAuthTokenReplaced();
       logEvent("tengu_oauth_token_refresh_race_resolved", {});
       return "refreshed";
     }
-    if (!h && !isOAuthTokenExpired(claudeAIOAuthTokens.expiresAt)) return "not_needed";
+    if (!force && !isOAuthTokenExpired(claudeAIOAuthTokens.expiresAt)) return "not_needed";
     if (deadRefreshTokens.has(claudeAIOAuthTokens.refreshToken)) return "known_dead_refresh_token";
     if (onHoldRefreshTokens.has(claudeAIOAuthTokens.refreshToken)) return "account_on_hold";
-    if (ee.isCompromised()) {
+    if (lockHandle.isCompromised()) {
       logEvent("tengu_oauth_token_refresh_lock_compromised_pre_post", {});
       logFeatureSad("oauth_token_refresh", "oauth_refresh_lock_compromised");
       return "lock_compromised";
     }
     logEvent("tengu_oauth_token_refresh_starting", {});
-    Q = Boolean(
+    isDefaultFirstPartyClient = Boolean(
       (shouldUseClaudeAIAuth(claudeAIOAuthTokens.scopes) || claudeAIOAuthTokens.subscriptionType) &&
       !claudeAIOAuthTokens.clientId,
     );
-    let scopes = Q ? firstPartyRefreshScopes(claudeAIOAuthTokens.scopes) : claudeAIOAuthTokens.scopes;
-    let ae = Q && isClaudeAiScopeSet(claudeAIOAuthTokens.scopes);
-    let ie;
+    let scopes = isDefaultFirstPartyClient
+      ? firstPartyRefreshScopes(claudeAIOAuthTokens.scopes)
+      : claudeAIOAuthTokens.scopes;
+    let retryWithOriginalScopes = isDefaultFirstPartyClient && isClaudeAiScopeSet(claudeAIOAuthTokens.scopes);
+    let refreshedTokens;
     try {
-      ie = await refreshOAuthToken(claudeAIOAuthTokens.refreshToken, {
+      refreshedTokens = await refreshOAuthToken(claudeAIOAuthTokens.refreshToken, {
         scopes,
         clientId: claudeAIOAuthTokens.clientId,
-        signal: ee.signal,
-        invalidScopeRetried: ae,
-        storageV5: w,
+        signal: lockHandle.signal,
+        invalidScopeRetried: retryWithOriginalScopes,
+        storageV5,
       });
     } catch (error) {
-      if (!ae || !isInvalidScopeError(error)) throw error;
+      if (!retryWithOriginalScopes || !isInvalidScopeError(error)) throw error;
       logEvent("tengu_oauth_refresh_invalid_scope_fallback", {});
-      ie = await refreshOAuthToken(claudeAIOAuthTokens.refreshToken, {
+      refreshedTokens = await refreshOAuthToken(claudeAIOAuthTokens.refreshToken, {
         scopes: claudeAIOAuthTokens.scopes,
         clientId: claudeAIOAuthTokens.clientId,
-        signal: ee.signal,
-        storageV5: w,
+        signal: lockHandle.signal,
+        storageV5,
       });
     }
     await saveRefreshedOAuthTokensRespectingLock({
-      isCompromised: ee.isCompromised,
-      postedRefreshToken: q,
-      refreshedTokens: ie,
-      credentials: S,
+      isCompromised: lockHandle.isCompromised,
+      postedRefreshToken,
+      refreshedTokens,
+      credentials,
     });
     return "refreshed";
   } catch (error) {
-    if (ee.isCompromised()) {
+    if (lockHandle.isCompromised()) {
       logForDebugging(`OAuth refresh failed while lock compromised: ${errorMessage(error)}`, {
         level: "error",
       });
       logEvent("tengu_oauth_token_refresh_lock_compromised_in_catch", {});
       clearOAuthTokenCache();
-      let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(S);
-      if (claudeAIOAuthTokens && claudeAIOAuthTokens.accessToken !== L) {
+      let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(credentials);
+      if (claudeAIOAuthTokens && claudeAIOAuthTokens.accessToken !== expectedAccessToken) {
         notifyOAuthTokenReplaced();
         logEvent("tengu_oauth_token_refresh_race_recovered", {});
         return "refreshed";
@@ -4445,7 +4672,7 @@ async function checkAndRefreshOAuthTokenIfNeededImpl(e, n, r, s, h, y, S, w, R =
     }
     if (
       isExpectedOAuthRefreshError(error, {
-        isDefaultFirstPartyClient: Q,
+        isDefaultFirstPartyClient,
       })
     )
       logForDebugging(`OAuth refresh failed (expected): ${errorMessage(error)}`, {
@@ -4453,15 +4680,16 @@ async function checkAndRefreshOAuthTokenIfNeededImpl(e, n, r, s, h, y, S, w, R =
       });
     else logError(error);
     clearOAuthTokenCache();
-    let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(S);
-    if (claudeAIOAuthTokens && claudeAIOAuthTokens.accessToken !== L) {
+    let claudeAIOAuthTokens = await getClaudeAIOAuthTokensAsync(credentials);
+    if (claudeAIOAuthTokens && claudeAIOAuthTokens.accessToken !== expectedAccessToken) {
       notifyOAuthTokenReplaced();
       logEvent("tengu_oauth_token_refresh_race_recovered", {});
       return "refreshed";
     }
-    if (isInvalidGrantError(error) && q) await markRefreshTokenDeadAfterInvalidGrant(q, S);
-    if (isAccountOnHoldError(error) && q) {
-      onHoldRefreshTokens.set(q, getAccountOnHoldErrorUrl(error));
+    if (isInvalidGrantError(error) && postedRefreshToken)
+      await markRefreshTokenDeadAfterInvalidGrant(postedRefreshToken, credentials);
+    if (isAccountOnHoldError(error) && postedRefreshToken) {
+      onHoldRefreshTokens.set(postedRefreshToken, getAccountOnHoldErrorUrl(error));
       logEvent("tengu_oauth_refresh_token_account_on_hold", {});
       return "account_on_hold";
     }
@@ -4475,7 +4703,7 @@ async function checkAndRefreshOAuthTokenIfNeededImpl(e, n, r, s, h, y, S, w, R =
       });
     }
     try {
-      await ee.release();
+      await lockHandle.release();
       logEvent("tengu_oauth_token_refresh_lock_released", {});
     } catch (error) {
       logForDebugging(`OAuth refresh lock release failed: ${error}`, {
@@ -4546,12 +4774,15 @@ function hasLoginManagedKey() {
   }
 }
 //@ chunk-aepeg2w5.js:568330-568451 layout
-var OAUTH_TOKEN_SOURCES = new Set([
-  "claude.ai",
-  "CLAUDE_CODE_OAUTH_TOKEN",
-  "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
-  "CCR_OAUTH_TOKEN_FILE",
-]);
+var OAUTH_TOKEN_SOURCES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:568330", () => {
+  OAUTH_TOKEN_SOURCES = new Set([
+    "claude.ai",
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
+    "CCR_OAUTH_TOKEN_FILE",
+  ]);
+});
 //@ chunk-aepeg2w5.js:568451-569031 facade-majority
 function hasExistingSignIn() {
   try {
@@ -4561,22 +4792,25 @@ function hasExistingSignIn() {
     if (forcedLoginMethod === "gateway") return false;
     if (getSettingsForSource("policySettings")?.forceLoginOrgUUID !== undefined) return false;
     let { source } = getAuthTokenSource();
-    let s = source === "claude.ai" ? getClaudeAIOAuthTokens() : null;
-    let h =
-      !!s?.refreshToken &&
-      (typeof s.refreshTokenExpiresAt !== "number" || s.refreshTokenExpiresAt > Date.now());
-    let y =
+    let oauthTokens = source === "claude.ai" ? getClaudeAIOAuthTokens() : null;
+    let refreshTokenUsable =
+      !!oauthTokens?.refreshToken &&
+      (typeof oauthTokens.refreshTokenExpiresAt !== "number" ||
+        oauthTokens.refreshTokenExpiresAt > Date.now());
+    let hasClaudeAiLogin =
       OAUTH_TOKEN_SOURCES.has(source) &&
       (source !== "claude.ai" ||
-        (s !== null && isRefreshTokenDead(s) !== true && (h || !isOAuthTokenExpired(s.expiresAt))));
-    let S = source === "none" && hasLoginManagedKey();
+        (oauthTokens !== null &&
+          isRefreshTokenDead(oauthTokens) !== true &&
+          (refreshTokenUsable || !isOAuthTokenExpired(oauthTokens.expiresAt))));
+    let hasManagedKeyLogin = source === "none" && hasLoginManagedKey();
     switch (forcedLoginMethod) {
       case "claudeai":
-        return y;
+        return hasClaudeAiLogin;
       case "console":
-        return S;
+        return hasManagedKeyLogin;
       case undefined:
-        return y || S;
+        return hasClaudeAiLogin || hasManagedKeyLogin;
     }
   } catch (error) {
     logForDebugging(`Existing sign-in check failed: ${errorMessage(error)}`, {
@@ -4598,9 +4832,9 @@ function storedOAuthTokenEquals(accessToken) {
 /**
  * OAuth 令牌 scopes 是否包含指定 scope。
  */
-function hasOAuthScope(e) {
+function hasOAuthScope(scope) {
   let scopes = getClaudeAIOAuthTokens()?.scopes;
-  return Array.isArray(scopes) && scopes.includes(e);
+  return Array.isArray(scopes) && scopes.includes(scope);
 }
 //@ chunk-aepeg2w5.js:569217-569354 facade-majority
 function canAuthenticateChromeBridge() {
@@ -4625,9 +4859,11 @@ function getStoredOAuthTierVerifiedAt() {
   return storedPlanVerifiedAtOf(getClaudeAIOAuthTokens());
 }
 //@ chunk-aepeg2w5.js:569481-569636 facade-majority
-function storedPlanVerifiedAtOf(e) {
-  if (!e || e.subscriptionTypeSource !== "profile") return;
-  return typeof e.subscriptionTypeVerifiedAt === "number" ? e.subscriptionTypeVerifiedAt : null;
+function storedPlanVerifiedAtOf(storedTokens) {
+  if (!storedTokens || storedTokens.subscriptionTypeSource !== "profile") return;
+  return typeof storedTokens.subscriptionTypeVerifiedAt === "number"
+    ? storedTokens.subscriptionTypeVerifiedAt
+    : null;
 }
 //@ chunk-aepeg2w5.js:569636-569683 facade-majority
 function hasStoredOAuthRefreshToken() {
@@ -4659,15 +4895,18 @@ function getStoredOauthAccountInfo() {
   return getGlobalConfig().oauthAccount;
 }
 //@ chunk-aepeg2w5.js:569883-570090 fingerprint = isOverageProvisioningAllowed (0.694)
-var isOverageProvisioningAllowed_2 = new Set([
-  "stripe_subscription",
-  "stripe_subscription_contracted",
-  "stripe_subscription_enterprise_self_serve",
-  "aws_marketplace",
-  "c4e_consumption_trial",
-  "apple_subscription",
-  "google_play_subscription",
-]);
+var isOverageProvisioningAllowed_2; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-aepeg2w5.js:569883", () => {
+  isOverageProvisioningAllowed_2 = new Set([
+    "stripe_subscription",
+    "stripe_subscription_contracted",
+    "stripe_subscription_enterprise_self_serve",
+    "aws_marketplace",
+    "c4e_consumption_trial",
+    "apple_subscription",
+    "google_play_subscription",
+  ]);
+});
 //@ chunk-aepeg2w5.js:570090-570168 facade-majority
 /**
  * 订阅账户的 billingType 是否允许开通超额（stripe_subscription 等）。
@@ -4885,20 +5124,24 @@ class HelperCommandError extends Error {
   }
 }
 //@ chunk-aepeg2w5.js:572737-572790 facade-majority
-function otelHeadersHelperFailureKind(e) {
-  return e instanceof HelperCommandError ? e.kind : undefined;
+function otelHeadersHelperFailureKind(error) {
+  return error instanceof HelperCommandError ? error.kind : undefined;
 }
 //@ chunk-aepeg2w5.js:572790-572931 facade-majority
-var otelHeadersHelperStates = new HostScoped(() => ({
-  cache: null,
-  timestamp: 0,
-  inflight: null,
-  lastFailure: null,
-  failed: createSignal(),
-  prefetched: false,
-  repoHelperIgnoredLogged: false,
-}));
-var OTEL_HEADERS_HELPER_TTL_MS = 1740000;
+var otelHeadersHelperStates; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var OTEL_HEADERS_HELPER_TTL_MS;
+deferInit("chunk-aepeg2w5.js:572790", () => {
+  otelHeadersHelperStates = new HostScoped(() => ({
+    cache: null,
+    timestamp: 0,
+    inflight: null,
+    lastFailure: null,
+    failed: createSignal(),
+    prefetched: false,
+    repoHelperIgnoredLogged: false,
+  }));
+  OTEL_HEADERS_HELPER_TTL_MS = 1740000;
+});
 //@ chunk-aepeg2w5.js:572931-573004 facade-majority
 function getOtelHeadersHelperLastFailure() {
   if (!getConfiguredOtelHeadersHelper()) return null;
@@ -4906,23 +5149,23 @@ function getOtelHeadersHelperLastFailure() {
 }
 //@ chunk-aepeg2w5.js:573004-573120 facade-majority
 function clearOtelHeadersCache() {
-  let e = otelHeadersHelperStates.of(getRootSession().host);
-  e.cache = null;
-  e.timestamp = 0;
-  e.inflight = null;
-  e.lastFailure = null;
-  e.prefetched = false;
+  let state = otelHeadersHelperStates.of(getRootSession().host);
+  state.cache = null;
+  state.timestamp = 0;
+  state.inflight = null;
+  state.lastFailure = null;
+  state.prefetched = false;
 }
 //@ chunk-aepeg2w5.js:573120-573180 facade-majority
-function onOtelHeadersHelperFailure(e) {
-  return otelHeadersHelperStates.of(getRootSession().host).failed.subscribe(e);
+function onOtelHeadersHelperFailure(listener) {
+  return otelHeadersHelperStates.of(getRootSession().host).failed.subscribe(listener);
 }
 //@ chunk-aepeg2w5.js:573180-573292 facade-majority
 function prefetchOtelHeadersFromHelper() {
   if (getIsNonInteractiveSession()) return;
-  let e = otelHeadersHelperStates.of(getRootSession().host);
-  if (e.prefetched) return;
-  e.prefetched = true;
+  let state = otelHeadersHelperStates.of(getRootSession().host);
+  if (state.prefetched) return;
+  state.prefetched = true;
   getOtelHeadersFromHelper().catch(() => {});
 }
 //@ chunk-aepeg2w5.js:573292-575524 facade-majority = getOtelHeadersFromHelper (0.321)
@@ -4936,39 +5179,48 @@ async function getOtelHeadersFromHelper() {
     process.env.CLAUDE_CODE_OTEL_HEADERS_HELPER_DEBOUNCE_MS,
     OTEL_HEADERS_HELPER_TTL_MS,
   );
-  let r = otelHeadersHelperStates.of(getRootSession().host);
-  if (r.cache && Date.now() - r.timestamp < numberOrDefault) return r.cache;
-  if (r.inflight) return r.inflight;
+  let state = otelHeadersHelperStates.of(getRootSession().host);
+  if (state.cache && Date.now() - state.timestamp < numberOrDefault) return state.cache;
+  if (state.inflight) return state.inflight;
   if (isOtelHeadersHelperFromProjectOrLocalSettings()) {
     if (!checkHasTrustDialogAccepted()) return {};
   }
-  r.inflight = (async () => {
+  state.inflight = (async () => {
     try {
       let trimmed = otelHeadersHelper.trim();
-      let h = false;
+      let isFilePath = false;
       try {
         let projectConfigRoot = getProjectConfigRoot();
-        let P = projectConfigRoot === null ? trimmed : resolve(projectConfigRoot, trimmed);
-        h = (await stat(P)).isFile();
+        let resolvedPath = projectConfigRoot === null ? trimmed : resolve(projectConfigRoot, trimmed);
+        isFilePath = (await stat(resolvedPath)).isFile();
       } catch {}
-      let y = null;
+      let result = null;
       let hasTrust = getProjectConfigRoot();
-      if (h)
+      if (isFilePath)
         try {
-          let x = await runManagedHelperWithoutProjectEnv("otelHeadersHelper", otelHeadersHelper, () =>
-            safeExecFile(trimmed, [], {
-              ...(hasTrust !== null && {
-                cwd: hasTrust,
+          let directResult = await runManagedHelperWithoutProjectEnv(
+            "otelHeadersHelper",
+            otelHeadersHelper,
+            () =>
+              safeExecFile(trimmed, [], {
+                ...(hasTrust !== null && {
+                  cwd: hasTrust,
+                }),
+                timeout: 30000,
+                reject: false,
+                useToolMemoryCgroup: false,
               }),
-              timeout: 30000,
-              reject: false,
-              useToolMemoryCgroup: false,
-            }),
           );
-          if (!(x.failed && !x.timedOut && typeof x.exitCode !== "number" && !x.signal)) y = x;
+          if (!(
+            directResult.failed &&
+            !directResult.timedOut &&
+            typeof directResult.exitCode !== "number" &&
+            !directResult.signal
+          ))
+            result = directResult;
         } catch {}
-      if (!y)
-        y = await runManagedHelperWithoutProjectEnv("otelHeadersHelper", otelHeadersHelper, () =>
+      if (!result)
+        result = await runManagedHelperWithoutProjectEnv("otelHeadersHelper", otelHeadersHelper, () =>
           safeExecShell(otelHeadersHelper, {
             ...(hasTrust !== null && {
               cwd: hasTrust,
@@ -4978,64 +5230,64 @@ async function getOtelHeadersFromHelper() {
             useToolMemoryCgroup: false,
           }),
         );
-      if (y.failed) {
-        let x;
+      if (result.failed) {
+        let failureText;
         let kind;
-        if (y.timedOut) {
-          x = "timed out";
+        if (result.timedOut) {
+          failureText = "timed out";
           kind = "timeout";
-        } else if (typeof y.exitCode === "number") {
-          x = `exited ${y.exitCode}`;
+        } else if (typeof result.exitCode === "number") {
+          failureText = `exited ${result.exitCode}`;
           kind = "exit_code";
-        } else if (y.signal) {
-          x = `was killed by ${y.signal}`;
+        } else if (result.signal) {
+          failureText = `was killed by ${result.signal}`;
           kind = "killed";
         } else {
-          x = "could not be started";
+          failureText = "could not be started";
           kind = "spawn_failed";
         }
-        let result = y.stderr?.trim();
+        let result_2 = result.stderr?.trim();
         throw new HelperCommandError(
-          result ? `${x}: ${result}` : x,
+          result_2 ? `${failureText}: ${result_2}` : failureText,
           kind,
-          kind === "exit_code" ? y.exitCode : undefined,
+          kind === "exit_code" ? result.exitCode : undefined,
         );
       }
-      let trimmed_2 = y.stdout?.toString().trim();
+      let trimmed_2 = result.stdout?.toString().trim();
       if (!trimmed_2)
         throw new HelperCommandError("otelHeadersHelper did not return a valid value", "empty_output");
-      let R;
+      let parsedHeaders;
       try {
-        R = jsonParse(trimmed_2);
+        parsedHeaders = jsonParse(trimmed_2);
       } catch {
         throw new HelperCommandError("otelHeadersHelper did not return valid JSON", "invalid_json");
       }
-      if (typeof R !== "object" || R === null || Array.isArray(R))
+      if (typeof parsedHeaders !== "object" || parsedHeaders === null || Array.isArray(parsedHeaders))
         throw new HelperCommandError(
           "otelHeadersHelper must return a JSON object with string key-value pairs",
           "not_an_object",
         );
-      for (let [key, value] of Object.entries(R))
+      for (let [key, value] of Object.entries(parsedHeaders))
         if (typeof value !== "string")
           throw new HelperCommandError(
             `otelHeadersHelper returned non-string value for key "${key}": ${typeof value}`,
             "non_string_value",
           );
-      r.cache = R;
-      r.timestamp = Date.now();
-      r.lastFailure = null;
-      return r.cache;
+      state.cache = parsedHeaders;
+      state.timestamp = Date.now();
+      state.lastFailure = null;
+      return state.cache;
     } catch (error) {
       let headers = errorMessage(error);
-      let y = r.lastFailure === null;
-      r.lastFailure = headers;
+      let isFirstFailure = state.lastFailure === null;
+      state.lastFailure = headers;
       logForDebugging(
         `Error getting OpenTelemetry headers from otelHeadersHelper (in settings): ${headers}`,
         {
           level: "error",
         },
       );
-      if (y) {
+      if (isFirstFailure) {
         if (getIsNonInteractiveSession())
           process.stderr.write(
             sequential.red(
@@ -5046,7 +5298,7 @@ async function getOtelHeadersFromHelper() {
           );
         let kind = error instanceof HelperCommandError ? error.kind : "unknown";
         try {
-          r.failed.emit(headers);
+          state.failed.emit(headers);
         } catch (error) {
           logForDebugging(`otelHeadersHelper failure listener threw: ${errorMessage(error)}`, {
             level: "error",
@@ -5059,10 +5311,10 @@ async function getOtelHeadersFromHelper() {
       }
       throw error;
     } finally {
-      r.inflight = null;
+      state.inflight = null;
     }
   })();
-  return r.inflight;
+  return state.inflight;
 }
 //@ chunk-aepeg2w5.js:575524-575568 facade-majority = isConsumerPlan (1)
 /**
@@ -5140,7 +5392,7 @@ async function getManagedPrimaryApiKey() {
   };
 }
 //@ chunk-aepeg2w5.js:576594-577686 facade-majority
-async function getAnthropicApiKeyWithSourceAsync(e = {}) {
+async function getAnthropicApiKeyWithSourceAsync(options = {}) {
   if (isBareModeAuthRestricted()) {
     if (env.ANTHROPIC_API_KEY)
       return {
@@ -5149,7 +5401,7 @@ async function getAnthropicApiKeyWithSourceAsync(e = {}) {
       };
     if (getConfiguredApiKeyHelper())
       return {
-        key: e.skipRetrievingKeyFromApiKeyHelper ? null : getApiKeyFromApiKeyHelperCached(),
+        key: options.skipRetrievingKeyFromApiKeyHelper ? null : getApiKeyFromApiKeyHelperCached(),
         source: "apiKeyHelper",
       };
     return {
@@ -5205,7 +5457,7 @@ async function getAnthropicApiKeyWithSourceAsync(e = {}) {
       source: "ANTHROPIC_API_KEY",
     };
   if (getConfiguredApiKeyHelper()) {
-    if (e.skipRetrievingKeyFromApiKeyHelper)
+    if (options.skipRetrievingKeyFromApiKeyHelper)
       return {
         key: null,
         source: "apiKeyHelper",
@@ -5228,9 +5480,9 @@ async function getAnthropicApiKeyAsync() {
   return key;
 }
 //@ chunk-aepeg2w5.js:577739-577826 facade-majority
-async function getAnthropicApiKeyWithSourceAsyncSafe(e = {}) {
+async function getAnthropicApiKeyWithSourceAsyncSafe(options = {}) {
   try {
-    return await getAnthropicApiKeyWithSourceAsync(e);
+    return await getAnthropicApiKeyWithSourceAsync(options);
   } catch {
     return {
       key: null,
@@ -5254,13 +5506,15 @@ async function isAnthropicAuthEnabledAsync() {
   if (isBareModeAuthRestricted()) return false;
   if (env.ANTHROPIC_UNIX_SOCKET) return !!env.CLAUDE_CODE_OAUTH_TOKEN;
   if (shouldUseWIFAuth()) return false;
-  let e = !isFirstPartyProvider();
-  let n = getSettings_DEPRECATED() || {};
-  let r = isBareMode() ? getConfiguredApiKeyHelper() : warnPinnedHelper("apiKeyHelper", n.apiKeyHelper);
-  let s = effectiveAuthTokenEnv();
-  let h;
+  let nonFirstParty = !isFirstPartyProvider();
+  let settings = getSettings_DEPRECATED() || {};
+  let apiKeyHelper = isBareMode()
+    ? getConfiguredApiKeyHelper()
+    : warnPinnedHelper("apiKeyHelper", settings.apiKeyHelper);
+  let envAuthToken = effectiveAuthTokenEnv();
+  let apiKeySource;
   try {
-    h = (
+    apiKeySource = (
       await getAnthropicApiKeyWithSourceAsync({
         skipRetrievingKeyFromApiKeyHelper: true,
       })
@@ -5268,17 +5522,18 @@ async function isAnthropicAuthEnabledAsync() {
   } catch {
     return false;
   }
-  let y = h === "ANTHROPIC_API_KEY" || h === "apiKeyHelper";
-  let S = hasPossibleCredentialFromDescriptor("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR");
+  let isApiKeySource = apiKeySource === "ANTHROPIC_API_KEY" || apiKeySource === "apiKeyHelper";
+  let hasDescriptorKey = hasPossibleCredentialFromDescriptor("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR");
   let shouldDisableAuth =
-    ((s || y) && !isFirstPartyManagedOAuthContext()) || ((r || S) && !isManagedOAuthContext());
-  return !(e || shouldDisableAuth);
+    ((envAuthToken || isApiKeySource) && !isFirstPartyManagedOAuthContext()) ||
+    ((apiKeyHelper || hasDescriptorKey) && !isManagedOAuthContext());
+  return !(nonFirstParty || shouldDisableAuth);
 }
 //@ chunk-aepeg2w5.js:578381-579061 facade-majority = getAuthTokenSource (0.886)
 /**
  * getAuthTokenSource 的异步版本（storage v5 读取令牌）。
  */
-async function getAuthTokenSourceAsync(e) {
+async function getAuthTokenSourceAsync(storageV5) {
   if (isBareModeAuthRestricted()) {
     if (getConfiguredApiKeyHelper())
       return {
@@ -5321,7 +5576,7 @@ async function getAuthTokenSourceAsync(e) {
       source: "profile",
       hasToken: true,
     };
-  let oauthTokens = await getClaudeAIOAuthTokensAsync(e);
+  let oauthTokens = await getClaudeAIOAuthTokensAsync(storageV5);
   if (shouldUseClaudeAIAuth(oauthTokens?.scopes) && oauthTokens?.accessToken)
     return {
       source: "claude.ai",
@@ -5333,19 +5588,19 @@ async function getAuthTokenSourceAsync(e) {
   };
 }
 //@ chunk-aepeg2w5.js:579061-579141 facade-majority
-async function isClaudeAISubscriberAsync(e) {
+async function isClaudeAISubscriberAsync(credentials) {
   if (!(await isAnthropicAuthEnabledAsync())) return false;
-  return shouldUseClaudeAIAuth((await getClaudeAIOAuthTokensAsync(e))?.scopes);
+  return shouldUseClaudeAIAuth((await getClaudeAIOAuthTokensAsync(credentials))?.scopes);
 }
 //@ chunk-aepeg2w5.js:579141-579231 facade-majority
-async function hasProfileScopeAsync(e) {
-  let scopes = (await getClaudeAIOAuthTokensAsync(e))?.scopes;
+async function hasProfileScopeAsync(credentials) {
+  let scopes = (await getClaudeAIOAuthTokensAsync(credentials))?.scopes;
   return Array.isArray(scopes) && scopes.includes(CLAUDE_AI_PROFILE_SCOPE);
 }
 //@ chunk-aepeg2w5.js:579231-579305 facade-majority
-async function is1PApiCustomerAsync(e) {
+async function is1PApiCustomerAsync(credentials) {
   if (!isFirstPartyProvider()) return false;
-  if (await isClaudeAISubscriberAsync(e)) return false;
+  if (await isClaudeAISubscriberAsync(credentials)) return false;
   return true;
 }
 //@ chunk-aepeg2w5.js:579305-579370 facade-majority = getOauthAccountInfo (1)
@@ -5353,22 +5608,22 @@ async function getOauthAccountInfoAsync() {
   return (await isAnthropicAuthEnabledAsync()) ? getGlobalConfig().oauthAccount : undefined;
 }
 //@ chunk-aepeg2w5.js:579370-579472 facade-majority
-async function isOverageProvisioningAllowedAsync(e) {
+async function isOverageProvisioningAllowedAsync(credentials) {
   let billingType = (await getOauthAccountInfoAsync())?.billingType;
-  if (!(await isClaudeAISubscriberAsync(e)) || !billingType) return false;
+  if (!(await isClaudeAISubscriberAsync(credentials)) || !billingType) return false;
   return isOverageProvisioningAllowed_2.has(billingType);
 }
 //@ chunk-aepeg2w5.js:579472-579616 facade-majority = getSubscriptionType (1)
-async function getSubscriptionTypeAsync(e) {
+async function getSubscriptionTypeAsync(credentials) {
   if (getStoredSubscriptionType()) return hasSubscriptionTypeOverride();
   if (!(await isAnthropicAuthEnabledAsync())) return null;
-  let oauthTokens = await getClaudeAIOAuthTokensAsync(e);
+  let oauthTokens = await getClaudeAIOAuthTokensAsync(credentials);
   if (!oauthTokens) return null;
   return oauthTokens.subscriptionType ?? getSubscriptionTypeFromProfile() ?? null;
 }
 //@ chunk-aepeg2w5.js:579616-579725 facade-majority = hasOpusAccess (1)
-async function hasOpusAccessAsync(e) {
-  let subscriptionType = await getSubscriptionTypeAsync(e);
+async function hasOpusAccessAsync(credentials) {
+  let subscriptionType = await getSubscriptionTypeAsync(credentials);
   return (
     subscriptionType === "max" ||
     subscriptionType === "enterprise" ||
@@ -5378,11 +5633,11 @@ async function hasOpusAccessAsync(e) {
   );
 }
 //@ chunk-aepeg2w5.js:579725-579879 facade-majority = getRateLimitTier (1)
-async function getRateLimitTierAsync(e) {
+async function getRateLimitTierAsync(credentials) {
   let oauthTokens = getRateLimitTier_2();
   if (oauthTokens !== null) return oauthTokens;
   if (!(await isAnthropicAuthEnabledAsync())) return null;
-  let oauthTokens_2 = await getClaudeAIOAuthTokensAsync(e);
+  let oauthTokens_2 = await getClaudeAIOAuthTokensAsync(credentials);
   if (!oauthTokens_2) return null;
   return oauthTokens_2.rateLimitTier ?? getRateLimitTierFromProfile() ?? null;
 }
@@ -5391,28 +5646,28 @@ async function getSeatTierAsync() {
   return (await getOauthAccountInfoAsync())?.seatTier ?? null;
 }
 //@ chunk-aepeg2w5.js:579936-579986 facade-majority = getRequestTooLargeErrorMessage (1)
-async function isMaxSubscriberAsync(e) {
-  return (await getSubscriptionTypeAsync(e)) === "max";
+async function isMaxSubscriberAsync(credentials) {
+  return (await getSubscriptionTypeAsync(credentials)) === "max";
 }
 //@ chunk-aepeg2w5.js:579986-580037 facade-majority = isTeamSubscriber (1)
-async function isTeamSubscriberAsync(e) {
-  return (await getSubscriptionTypeAsync(e)) === "team";
+async function isTeamSubscriberAsync(credentials) {
+  return (await getSubscriptionTypeAsync(credentials)) === "team";
 }
 //@ chunk-aepeg2w5.js:580037-580128 facade-majority = isTeamPremiumSubscriber (1)
-async function isTeamPremiumSubscriberAsync(e) {
+async function isTeamPremiumSubscriberAsync(credentials) {
   return (
-    (await getSubscriptionTypeAsync(e)) === "team" &&
-    (await getRateLimitTierAsync(e)) === "default_claude_max_5x"
+    (await getSubscriptionTypeAsync(credentials)) === "team" &&
+    (await getRateLimitTierAsync(credentials)) === "default_claude_max_5x"
   );
 }
 //@ chunk-aepeg2w5.js:580128-580185 facade-majority = isEnterpriseSubscriber (1)
-async function isEnterpriseSubscriberAsync(e) {
-  return (await getSubscriptionTypeAsync(e)) === "enterprise";
+async function isEnterpriseSubscriberAsync(credentials) {
+  return (await getSubscriptionTypeAsync(credentials)) === "enterprise";
 }
 //@ chunk-aepeg2w5.js:580185-580282 facade-majority
-async function isEnterprisePAYGSubscriberAsync(e) {
+async function isEnterprisePAYGSubscriberAsync(credentials) {
   return (
-    (await getSubscriptionTypeAsync(e)) === "enterprise" &&
+    (await getSubscriptionTypeAsync(credentials)) === "enterprise" &&
     (await getSeatTierAsync()) === "enterprise_usage_based"
   );
 }
@@ -5421,8 +5676,8 @@ async function isProSubscriberAsync(plan) {
   return (await getSubscriptionTypeAsync(plan)) === "pro";
 }
 //@ chunk-aepeg2w5.js:580332-580599 facade-majority = getSubscriptionName (1)
-async function getSubscriptionNameAsync(e) {
-  let subscriptionType = await getSubscriptionTypeAsync(e);
+async function getSubscriptionNameAsync(credentials) {
+  let subscriptionType = await getSubscriptionTypeAsync(credentials);
   if (subscriptionType !== null) {
     let planDisplayNameLabel = getPlanDisplayNameLabel(await getOauthAccountInfoAsync());
     if (planDisplayNameLabel !== null) return planDisplayNameLabel;
@@ -5441,26 +5696,29 @@ async function getSubscriptionNameAsync(e) {
   }
 }
 //@ chunk-aepeg2w5.js:580599-580678 facade-majority
-async function isConsumerSubscriberAsync(e) {
-  let subscriptionType = await getSubscriptionTypeAsync(e);
+async function isConsumerSubscriberAsync(credentials) {
+  let subscriptionType = await getSubscriptionTypeAsync(credentials);
   return (
-    (await isClaudeAISubscriberAsync(e)) && subscriptionType !== null && isConsumerPlan(subscriptionType)
+    (await isClaudeAISubscriberAsync(credentials)) &&
+    subscriptionType !== null &&
+    isConsumerPlan(subscriptionType)
   );
 }
 //@ chunk-aepeg2w5.js:580678-581208 facade-majority = getAccountInformation (0.951)
 /**
  * getAccountInformation 的异步版本（storage v5）。
  */
-async function getAccountInformationAsync(e) {
+async function getAccountInformationAsync(credentials) {
   if (getAPIProvider() !== "firstParty") return;
-  let { source: authTokenSource } = await getAuthTokenSourceAsync(e);
+  let { source: authTokenSource } = await getAuthTokenSourceAsync(credentials);
   let accountInfo = {};
   if (
     authTokenSource === "CLAUDE_CODE_OAUTH_TOKEN" ||
     authTokenSource === "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"
   )
     accountInfo.tokenSource = authTokenSource;
-  else if (await isClaudeAISubscriberAsync(e)) accountInfo.subscription = await getSubscriptionNameAsync(e);
+  else if (await isClaudeAISubscriberAsync(credentials))
+    accountInfo.subscription = await getSubscriptionNameAsync(credentials);
   else if (authTokenSource !== "profile") accountInfo.tokenSource = authTokenSource;
   let { key: apiKey, source: apiKeySource } = await getAnthropicApiKeyWithSourceAsyncSafe();
   if (apiKey) accountInfo.apiKeySource = apiKeySource;
@@ -5474,131 +5732,134 @@ async function getAccountInformationAsync(e) {
   return accountInfo;
 }
 //@ chunk-aepeg2w5.js:581208-581544 facade-majority
-async function providerAllowlistRefusal(e) {
-  let n = policyUnreadableMessage();
-  if (n !== undefined)
+async function providerAllowlistRefusal(apiProvider) {
+  let policyMessage = policyUnreadableMessage();
+  if (policyMessage !== undefined)
     return {
       valid: false,
       reason: "managed_settings_invalid",
       policyUnreadable: true,
-      message: n,
+      message: policyMessage,
     };
-  await recheckAllowedProviderEndpoint(e);
-  let r = checkAllowedProvider(e);
-  if (r === undefined) return;
+  await recheckAllowedProviderEndpoint(apiProvider);
+  let refusal = checkAllowedProvider(apiProvider);
+  if (refusal === undefined) return;
   await logFeatureBadAsync("auth_force_login_org", "provider_not_allowed", {
-    api_provider: fromEnum(r.refused[0].provider),
+    api_provider: fromEnum(refusal.refused[0].provider),
   });
   return {
     valid: false,
     reason: "provider_not_allowed",
-    message: r.message,
+    message: refusal.message,
   };
 }
 //@ chunk-aepeg2w5.js:581544-581630 layout = hasAnthropicApiKeyAuth (1)
-setWifProfileBaseUrlInUse(() =>
-  shouldUseWIFAuth() &&
-  getAnthropicApiKeyWithSourceSafe({
-    skipRetrievingKeyFromApiKeyHelper: true,
-  }).source === "none"
-    ? getWIFProfileBaseUrl()
-    : undefined,
-);
+// deferred: uses setWifProfileBaseUrlInUse (./model/allowedProviders.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:581544", () => {
+  setWifProfileBaseUrlInUse(() =>
+    shouldUseWIFAuth() &&
+    getAnthropicApiKeyWithSourceSafe({
+      skipRetrievingKeyFromApiKeyHelper: true,
+    }).source === "none"
+      ? getWIFProfileBaseUrl()
+      : undefined,
+  );
+});
 //@ chunk-aepeg2w5.js:581630-583044 layout
 function buildForceLoginConflictMessage({ orgPinned }) {
-  let n = describeActiveCredential();
-  let joined = n.fixes.join("; also ");
+  let credential = describeActiveCredential();
+  let joined = credential.fixes.join("; also ");
   let apiProvider = getAPIProvider();
-  let h =
+  let providerLabel =
     apiProvider !== "firstParty" && apiProvider !== "gateway"
       ? THIRD_PARTY_PROVIDER_LABELS[apiProvider]
       : undefined;
   if (isGatewayLoginForced())
     return [
-      `Administrator policy requires a Cloud gateway sign-in on this machine, but this session is configured with ${n.what}, which a gateway machine does not accept.`,
+      `Administrator policy requires a Cloud gateway sign-in on this machine, but this session is configured with ${credential.what}, which a gateway machine does not accept.`,
       "",
-      n.complete
+      credential.complete
         ? `To continue: ${joined}.`
         : withoutHostManagedProviderVars()
           ? `To continue: ${joined}, then run claude and sign in with /login.`
-          : `To continue: ${joined}, then run claude again; ${h ?? "your cloud provider"} needs no Anthropic sign-in.`,
+          : `To continue: ${joined}, then run claude again; ${providerLabel ?? "your cloud provider"} needs no Anthropic sign-in.`,
     ].join(`
 `);
   let forceLoginMethod = getSettingsForSource("policySettings")?.forceLoginMethod;
-  let S = orgPinned
+  let policyRequirement = orgPinned
     ? "pin Anthropic sign-ins to your organization (forceLoginOrgUUID)"
     : forceLoginMethod === "claudeai" || forceLoginMethod === "console"
       ? "require a claude.ai or Console sign-in (forceLoginMethod)"
       : "set a sign-in method (forceLoginMethod)";
-  let w = apiProvider === "firstParty" ? configuredApiProxyHost() : undefined;
-  let R = `This machine's managed settings require a first-party login: they ${S}, and this session is configured with ${n.what}, which cannot be checked against that policy${h ? ` \u2014 even alongside ${h}` : ""}${w ? ` (requests go through ${w}, per ANTHROPIC_BASE_URL)` : ""}.`;
-  let x = n.complete
+  let proxyHost = apiProvider === "firstParty" ? configuredApiProxyHost() : undefined;
+  let explanation = `This machine's managed settings require a first-party login: they ${policyRequirement}, and this session is configured with ${credential.what}, which cannot be checked against that policy${providerLabel ? ` \u2014 even alongside ${providerLabel}` : ""}${proxyHost ? ` (requests go through ${proxyHost}, per ANTHROPIC_BASE_URL)` : ""}.`;
+  let nextStep = credential.complete
     ? `To continue: ${joined}.`
-    : h
-      ? `To continue: ${joined}, then run claude again; ${h} needs no Anthropic sign-in.`
+    : providerLabel
+      ? `To continue: ${joined}, then run claude again; ${providerLabel} needs no Anthropic sign-in.`
       : `To continue: ${joined}, then run: claude auth login`;
   return [
-    R,
+    explanation,
     "",
-    x,
+    nextStep,
     "Admins: if this is a third-party desktop session, forceLoginOrgUUID / forceLoginMethod target first-party OAuth and should be removed from this machine's managed settings.",
   ].join(`
 `);
 }
 //@ chunk-aepeg2w5.js:583044-583137 layout
-function describeSettingsSourcePath(e) {
-  let settingsFilePathForSource = getSettingsFilePathForSource(e);
+function describeSettingsSourcePath(source) {
+  let settingsFilePathForSource = getSettingsFilePathForSource(source);
   return settingsFilePathForSource === undefined
     ? "your settings"
     : stripControlChars(settingsFilePathForSource).replace(/[\t\n\r]+/g, " ");
 }
 //@ chunk-aepeg2w5.js:583137-583405 layout
-function findEnvSettingSource(e, n) {
-  if (getSettingsForSource("policySettings")?.env?.[e] === n)
+function findEnvSettingSource(envKey, envValue) {
+  if (getSettingsForSource("policySettings")?.env?.[envKey] === envValue)
     return {
       managed: true,
     };
-  for (let r of ["flagSettings", "localSettings", "projectSettings", "userSettings"])
-    if (getSettingsForSource(r)?.env?.[e] === n)
+  for (let source of ["flagSettings", "localSettings", "projectSettings", "userSettings"])
+    if (getSettingsForSource(source)?.env?.[envKey] === envValue)
       return {
         managed: false,
         file:
-          r === "flagSettings" && getFlagSettingsInline() !== null
+          source === "flagSettings" && getFlagSettingsInline() !== null
             ? "your --settings value"
-            : describeSettingsSourcePath(r),
+            : describeSettingsSourcePath(source),
       };
   return;
 }
 //@ chunk-aepeg2w5.js:583405-583891 layout
-function describeEnvCredential(e, n, r) {
-  let envSettingSource = findEnvSettingSource(e, n);
+function describeEnvCredential(envVarName, envValue, credentialLabel) {
+  let envSettingSource = findEnvSettingSource(envVarName, envValue);
   if (envSettingSource === undefined)
     return {
-      what: `${r} from ${e}`,
-      fix: `unset ${e} (or run in a shell without it)`,
+      what: `${credentialLabel} from ${envVarName}`,
+      fix: `unset ${envVarName} (or run in a shell without it)`,
       complete: false,
     };
   if (envSettingSource.managed)
     return {
-      what: `${r} from ${e}, set by your organization's managed settings`,
-      fix: `ask your administrator (managed settings set both env.${e} and a sign-in policy; that credential cannot satisfy it)`,
+      what: `${credentialLabel} from ${envVarName}, set by your organization's managed settings`,
+      fix: `ask your administrator (managed settings set both env.${envVarName} and a sign-in policy; that credential cannot satisfy it)`,
       complete: true,
     };
   return {
-    what: `${r} from ${e}, set in the env block of ${envSettingSource.file}`,
-    fix: `remove ${e} from the env block of ${envSettingSource.file}`,
+    what: `${credentialLabel} from ${envVarName}, set in the env block of ${envSettingSource.file}`,
+    fix: `remove ${envVarName} from the env block of ${envSettingSource.file}`,
     complete: false,
   };
 }
 //@ chunk-aepeg2w5.js:583891-585825 layout
 function describeActiveCredential() {
-  let e = [];
-  let n = {
+  let candidates = [];
+  let hostCredential = {
     what: "a credential supplied by the host application that launched Claude Code",
     fix: "sign in inside that application, or run claude from a terminal and sign in there",
     complete: true,
   };
-  let r =
+  let hostAuthEnvVar =
     getHostAuthEnvVar({
       CLAUDE_CODE_HOST_AUTH_ENV_VAR: env.CLAUDE_CODE_HOST_AUTH_ENV_VAR,
     }) ?? (env.CLAUDE_CODE_ENTRYPOINT === "claude-desktop-3p" ? "any" : undefined);
@@ -5606,63 +5867,63 @@ function describeActiveCredential() {
     skipRetrievingKeyFromApiKeyHelper: true,
   });
   if (env.ANTHROPIC_API_KEY && key === env.ANTHROPIC_API_KEY)
-    e.push(
-      r === "ANTHROPIC_API_KEY" || r === "any"
-        ? n
+    candidates.push(
+      hostAuthEnvVar === "ANTHROPIC_API_KEY" || hostAuthEnvVar === "any"
+        ? hostCredential
         : describeEnvCredential("ANTHROPIC_API_KEY", env.ANTHROPIC_API_KEY, "an API key"),
     );
   else if (
     source === "ANTHROPIC_API_KEY" ||
     hasPossibleCredentialFromDescriptor("CLAUDE_CODE_API_KEY_FILE_DESCRIPTOR")
   )
-    e.push(n);
+    candidates.push(hostCredential);
   if (env.ANTHROPIC_AUTH_TOKEN)
-    e.push(
-      r === "ANTHROPIC_AUTH_TOKEN" || r === "any"
-        ? n
+    candidates.push(
+      hostAuthEnvVar === "ANTHROPIC_AUTH_TOKEN" || hostAuthEnvVar === "any"
+        ? hostCredential
         : describeEnvCredential("ANTHROPIC_AUTH_TOKEN", env.ANTHROPIC_AUTH_TOKEN, "a bearer token"),
     );
-  else if (getGatewayTokenFromFileDescriptor()) e.push(n);
+  else if (getGatewayTokenFromFileDescriptor()) candidates.push(hostCredential);
   if (source === "/login managed key")
-    e.push({
+    candidates.push({
       what: "a Console API key saved by an earlier login",
       fix: "run: claude auth logout (removes the saved key)",
       complete: false,
     });
   if (getConfiguredApiKeyHelper()) {
-    let w = isBareMode() ? "flagSettings" : getEffectiveSettingSource_2("apiKeyHelper");
-    if (w === "policySettings")
-      e.push({
+    let helperSource = isBareMode() ? "flagSettings" : getEffectiveSettingSource_2("apiKeyHelper");
+    if (helperSource === "policySettings")
+      candidates.push({
         what: "an API key from the apiKeyHelper your organization's managed settings configure",
         fix: "ask your administrator (managed settings set both apiKeyHelper and a sign-in policy; a helper key cannot satisfy it)",
         complete: true,
       });
     else {
-      let R =
-        w === null
+      let sourceLabel =
+        helperSource === null
           ? "your settings"
-          : w === "flagSettings" && getFlagSettingsInline() !== null
+          : helperSource === "flagSettings" && getFlagSettingsInline() !== null
             ? "your --settings value"
-            : describeSettingsSourcePath(w);
-      e.push({
-        what: `an API key from the apiKeyHelper in ${R}`,
-        fix: `remove apiKeyHelper from ${R}`,
+            : describeSettingsSourcePath(helperSource);
+      candidates.push({
+        what: `an API key from the apiKeyHelper in ${sourceLabel}`,
+        fix: `remove apiKeyHelper from ${sourceLabel}`,
         complete: false,
       });
     }
   }
-  let y = new Set();
-  let S = [];
-  for (let w of e)
-    if (!y.has(w.fix)) {
-      y.add(w.fix);
-      S.push(w);
+  let seenFixes = new Set();
+  let unique = [];
+  for (let candidate of candidates)
+    if (!seenFixes.has(candidate.fix)) {
+      seenFixes.add(candidate.fix);
+      unique.push(candidate);
     }
-  if (S.length === 0)
-    return r !== undefined
+  if (unique.length === 0)
+    return hostAuthEnvVar !== undefined
       ? {
-          what: n.what,
-          fixes: [n.fix],
+          what: hostCredential.what,
+          fixes: [hostCredential.fix],
           complete: true,
         }
       : isBareModeAuthRestricted()
@@ -5677,9 +5938,9 @@ function describeActiveCredential() {
             complete: true,
           };
   return {
-    what: S[0].what,
-    fixes: S.map((w) => w.fix),
-    complete: S.every((w) => w.complete),
+    what: unique[0].what,
+    fixes: unique.map((candidate) => candidate.fix),
+    complete: unique.every((candidate) => candidate.complete),
   };
 }
 //@ chunk-aepeg2w5.js:585825-585984 layout
@@ -5698,51 +5959,56 @@ function hasNonOAuthCredential() {
   return getAPIProvider() === "firstParty" && !shouldUseWIFAuth() && !isAnthropicAuthEnabled();
 }
 //@ chunk-aepeg2w5.js:585984-586082 layout
-var UNREADABLE_POLICY_ERRNOS = ["EACCES", "EPERM", "EBUSY", "EIO", "EISDIR", "ELOOP"];
-var regExp_30 = new RegExp(`\\b(${UNREADABLE_POLICY_ERRNOS.join("|")})\\b`);
+var UNREADABLE_POLICY_ERRNOS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var regExp_30;
+deferInit("chunk-aepeg2w5.js:585984", () => {
+  UNREADABLE_POLICY_ERRNOS = ["EACCES", "EPERM", "EBUSY", "EIO", "EISDIR", "ELOOP"];
+  regExp_30 = new RegExp(`\\b(${UNREADABLE_POLICY_ERRNOS.join("|")})\\b`);
+});
 //@ chunk-aepeg2w5.js:586082-588528 facade-majority = validateForceLoginOrg (0.287)
 /**
  * 见 AD：托管设置组织 pin 校验。
  */
-async function validateForceLoginOrg(credentials, n, r) {
+async function validateForceLoginOrg(credentials, existingTokens, verifiedLogin) {
   let settingsForSource = getSettingsForSource("policySettings");
   let requiredOrgUuid = settingsForSource?.forceLoginOrgUUID;
-  let y = requiredOrgUuid !== undefined || settingsForSource?.forceLoginMethod !== undefined;
+  let hasOrgPin = requiredOrgUuid !== undefined || settingsForSource?.forceLoginMethod !== undefined;
   if (isAdminPolicyUnreadable() && !adminPolicyLoadFailureRefusesLaunch()) {
-    let found = UNREADABLE_POLICY_ERRNOS.find((re) => re === getFatalAdminPolicyLoadErrors()[0]?.errno);
+    let found = UNREADABLE_POLICY_ERRNOS.find((errno) => errno === getFatalAdminPolicyLoadErrors()[0]?.errno);
     logFeatureSad("auth_force_login_org", "policy_denied_passthrough", {
       errno: fromEnumOpt(found) ?? lit("other"),
       api_provider: fromEnum(getAPIProvider()),
     });
   }
-  let S = await checkForceLoginPolicyReadable();
-  if (S) return S;
-  let w = await providerAllowlistRefusal();
-  if (w) return w;
-  let forceLoginOrgRequirement = getForceLoginOrgRequirement(requiredOrgUuid, r !== undefined);
+  let unreadableRefusal = await checkForceLoginPolicyReadable();
+  if (unreadableRefusal) return unreadableRefusal;
+  let providerRefusal = await providerAllowlistRefusal();
+  if (providerRefusal) return providerRefusal;
+  let forceLoginOrgRequirement = getForceLoginOrgRequirement(requiredOrgUuid, verifiedLogin !== undefined);
   if (forceLoginOrgRequirement.kind === "host_managed") {
-    if (y) logFeatureSad("auth_force_login_org", "managed_by_host_under_pin");
+    if (hasOrgPin) logFeatureSad("auth_force_login_org", "managed_by_host_under_pin");
     return {
       valid: true,
     };
   }
   if (forceLoginOrgRequirement.kind === "unix_socket") {
-    let Q = {
+    let telemetryFields = {
       api_provider: fromEnum(getAPIProvider()),
       auth_token_source: fromEnum(getAuthTokenSource().source),
     };
-    if (!isAnthropicAuthEnabled() && y) logFeatureSad("auth_force_login_org", "unix_socket_3p_under_pin", Q);
+    if (!isAnthropicAuthEnabled() && hasOrgPin)
+      logFeatureSad("auth_force_login_org", "unix_socket_3p_under_pin", telemetryFields);
     else if (isAnthropicAuthEnabled() && requiredOrgUuid !== undefined)
-      logFeatureSad("auth_force_login_org", "unix_socket_ssh_under_pin", Q);
+      logFeatureSad("auth_force_login_org", "unix_socket_ssh_under_pin", telemetryFields);
     else if (adminPolicyLoadFailureRefusesLaunch())
-      logFeatureSad("auth_force_login_org", "unix_socket_unreadable_policy", Q);
+      logFeatureSad("auth_force_login_org", "unix_socket_unreadable_policy", telemetryFields);
     else logFeatureOk("auth_force_login_org");
     return {
       valid: true,
     };
   }
   if (forceLoginOrgRequirement.kind === "auth_disabled") {
-    if (y && hasNonOAuthCredential())
+    if (hasOrgPin && hasNonOAuthCredential())
       return {
         valid: false,
         reason: "org_pin_api_key_conflict",
@@ -5765,67 +6031,70 @@ async function validateForceLoginOrg(credentials, n, r) {
       message: EMPTY_FORCE_LOGIN_ORG_MESSAGE,
     };
   let { requiredOrgUuids } = forceLoginOrgRequirement;
-  let P = formatRequiredOrgs(requiredOrgUuids);
-  let F;
-  if (r !== undefined) F = isUsingOAuth(r.accessToken);
+  let requiredOrgsText = formatRequiredOrgs(requiredOrgUuids);
+  let oauthTokens;
+  if (verifiedLogin !== undefined) oauthTokens = isUsingOAuth(verifiedLogin.accessToken);
   else {
     await checkAndRefreshOAuthTokenIfNeeded({
       credentials,
     });
-    F = getClaudeAIOAuthTokens();
+    oauthTokens = getClaudeAIOAuthTokens();
   }
-  if (!F)
+  if (!oauthTokens)
     return {
       valid: true,
     };
   let { source } = getAuthTokenSource();
-  let G = source === "CLAUDE_CODE_OAUTH_TOKEN" || source === "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR";
-  let j = r === undefined && F.accessToken === usableLauncherHostLoginToken();
-  let envVarName = j ? launcherHostLoginIdentity() : null;
-  let q;
-  if (r !== undefined) q = r.organizationUuid;
-  else if (n?.accessToken === F.accessToken) q = n.organizationUuid;
+  let isEnvTokenSource =
+    source === "CLAUDE_CODE_OAUTH_TOKEN" || source === "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR";
+  let isLauncherToken =
+    verifiedLogin === undefined && oauthTokens.accessToken === usableLauncherHostLoginToken();
+  let envVarName = isLauncherToken ? launcherHostLoginIdentity() : null;
+  let tokenOrgUuid;
+  if (verifiedLogin !== undefined) tokenOrgUuid = verifiedLogin.organizationUuid;
+  else if (existingTokens?.accessToken === oauthTokens.accessToken)
+    tokenOrgUuid = existingTokens.organizationUuid;
   else if (envVarName !== null)
-    q = ((await envVarName) ?? (await askLauncherHostLoginIdentityAgain()))?.organizationUuid;
-  else q = (await validateOauthToken(F.accessToken))?.organization_uuid;
-  if (q === undefined)
+    tokenOrgUuid = ((await envVarName) ?? (await askLauncherHostLoginIdentityAgain()))?.organizationUuid;
+  else tokenOrgUuid = (await validateOauthToken(oauthTokens.accessToken))?.organization_uuid;
+  if (tokenOrgUuid === undefined)
     return {
       valid: false,
       reason: "org_verify_failed",
-      message: orgVerificationFailedMessage(P),
+      message: orgVerificationFailedMessage(requiredOrgsText),
     };
-  if (requiredOrgUuids.includes(q))
+  if (requiredOrgUuids.includes(tokenOrgUuid))
     return {
       valid: true,
     };
-  if (r !== undefined || j)
+  if (verifiedLogin !== undefined || isLauncherToken)
     return {
       valid: false,
       reason: "org_pin_mismatch",
       message: `The sign-in the desktop app provided belongs to a different
 organization than required by this machine's managed settings.
 
-Required: ${P}
-Token organization: ${q}
+Required: ${requiredOrgsText}
+Token organization: ${tokenOrgUuid}
 
 Sign in to the desktop app with a permitted organization.`,
     };
-  if (G)
+  if (isEnvTokenSource)
     return {
       valid: false,
       reason: "org_pin_mismatch",
       message: `The ${source === "CLAUDE_CODE_OAUTH_TOKEN" ? "CLAUDE_CODE_OAUTH_TOKEN" : "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR"} environment variable provides a token for a
 different organization than required by this machine's managed settings.
 
-Required: ${P}
-Token organization: ${q}
+Required: ${requiredOrgsText}
+Token organization: ${tokenOrgUuid}
 
 Remove the environment variable or obtain a token for a permitted organization.`,
     };
   return {
     valid: false,
     reason: "org_pin_mismatch",
-    message: formatWrongOrgMessage(q, P),
+    message: formatWrongOrgMessage(tokenOrgUuid, requiredOrgsText),
   };
 }
 //@ chunk-aepeg2w5.js:588528-588706 layout
@@ -5835,12 +6104,12 @@ Contact your administrator.`;
 //@ chunk-aepeg2w5.js:588706-589274 layout
 async function checkForceLoginPolicyReadable() {
   if (!isAdminPolicyUnreadable() || !adminPolicyLoadFailureRefusesLaunch()) return;
-  let e = getFatalAdminPolicyLoadErrors()[0];
-  if (!e) return;
-  let n = e.errorClass === "unreadable";
-  let match = e.message.match(regExp_30);
-  let found = UNREADABLE_POLICY_ERRNOS.find((S) => S === match?.[1]);
-  let errno = n ? (fromEnumOpt(found) ?? lit("other")) : lit("malformed");
+  let failure = getFatalAdminPolicyLoadErrors()[0];
+  if (!failure) return;
+  let isUnreadable = failure.errorClass === "unreadable";
+  let match = failure.message.match(regExp_30);
+  let found = UNREADABLE_POLICY_ERRNOS.find((errno) => errno === match?.[1]);
+  let errno = isUnreadable ? (fromEnumOpt(found) ?? lit("other")) : lit("malformed");
   await logFeatureBadAsync("auth_force_login_org", "policy_unreadable_fail_close", {
     errno,
   });
@@ -5852,7 +6121,7 @@ async function checkForceLoginPolicyReadable() {
 This machine may require organization login enforcement, but the policy file failed to load.
 Contact your administrator.
 
-Detail: ${e.file ? `${cleanForDisplay(e.file)}: ${e.message}` : e.message}`,
+Detail: ${failure.file ? `${cleanForDisplay(failure.file)}: ${failure.message}` : failure.message}`,
   };
 }
 //@ chunk-aepeg2w5.js:589274-589378 layout
@@ -5862,9 +6131,9 @@ function formatRequiredOrgs(requiredOrgUuids) {
     : `one of these organizations: ${requiredOrgUuids.join(", ")}`;
 }
 //@ chunk-aepeg2w5.js:589378-589555 layout
-function formatWrongOrgMessage(e, n) {
-  return `Your authentication token belongs to organization ${e},
-but this machine requires ${n}.
+function formatWrongOrgMessage(tokenOrgUuid, requiredOrgsText) {
+  return `Your authentication token belongs to organization ${tokenOrgUuid},
+but this machine requires ${requiredOrgsText}.
 
 Please log in with a permitted organization: claude auth login`;
 }
@@ -5872,8 +6141,8 @@ Please log in with a permitted organization: claude auth login`;
 /**
  * 计算组织 pin 要求：host_managed / unix_socket / auth_disabled / no_pin / empty_pin / required（列出允许的组织 UUID）。
  */
-function getForceLoginOrgRequirement(e, n) {
-  if (isHostManagedProviderAuth() && !n && usableLauncherHostLoginToken() === null)
+function getForceLoginOrgRequirement(pinValue, hasVerifiedLogin) {
+  if (isHostManagedProviderAuth() && !hasVerifiedLogin && usableLauncherHostLoginToken() === null)
     return {
       kind: "host_managed",
     };
@@ -5885,18 +6154,18 @@ function getForceLoginOrgRequirement(e, n) {
     return {
       kind: "auth_disabled",
     };
-  if (e === undefined)
+  if (pinValue === undefined)
     return {
       kind: "no_pin",
     };
-  let r = typeof e === "string" ? [e] : e;
-  return r.length === 0
+  let requiredOrgUuids = typeof pinValue === "string" ? [pinValue] : pinValue;
+  return requiredOrgUuids.length === 0
     ? {
         kind: "empty_pin",
       }
     : {
         kind: "required",
-        requiredOrgUuids: r,
+        requiredOrgUuids,
       };
 }
 //@ chunk-aepeg2w5.js:589861-589879 layout
@@ -5906,11 +6175,11 @@ function getForceLoginOrgRequirement(e, n) {
 var OAUTH_VALIDATE_RETRY_DELAYS_MS = [500, 1500];
 //@ chunk-aepeg2w5.js:589879-590413 facade-majority
 async function resolveLoginOrgPin(scopes) {
-  let n = await checkForceLoginPolicyReadable();
-  if (n)
+  let unreadableRefusal = await checkForceLoginPolicyReadable();
+  if (unreadableRefusal)
     return {
       outcome: "refused",
-      rejection: n,
+      rejection: unreadableRefusal,
     };
   let forceLoginOrgUUID = getSettingsForSource("policySettings")?.forceLoginOrgUUID;
   if (forceLoginOrgUUID === undefined)
@@ -5947,12 +6216,12 @@ async function resolveLoginOrgPin(scopes) {
   }
 }
 //@ chunk-aepeg2w5.js:590413-590892 facade-majority
-async function checkNewLoginTokenOrg(e) {
-  let loginOrgPin = await resolveLoginOrgPin(e.scopes);
+async function checkNewLoginTokenOrg(tokens) {
+  let loginOrgPin = await resolveLoginOrgPin(tokens.scopes);
   if (loginOrgPin.outcome !== "required") return loginOrgPin;
   let { requiredOrgUuids } = loginOrgPin;
-  let s = formatRequiredOrgs(requiredOrgUuids);
-  let organizationUuid = (await validateOauthToken(e.accessToken, OAUTH_VALIDATE_RETRY_DELAYS_MS))
+  let requiredOrgsText = formatRequiredOrgs(requiredOrgUuids);
+  let organizationUuid = (await validateOauthToken(tokens.accessToken, OAUTH_VALIDATE_RETRY_DELAYS_MS))
     ?.organization_uuid;
   if (typeof organizationUuid !== "string" || organizationUuid === "")
     return {
@@ -5960,7 +6229,7 @@ async function checkNewLoginTokenOrg(e) {
       rejection: {
         valid: false,
         reason: "org_verify_failed",
-        message: orgVerificationFailedMessage(s),
+        message: orgVerificationFailedMessage(requiredOrgsText),
       },
     };
   if (!requiredOrgUuids.includes(organizationUuid))
@@ -5969,21 +6238,21 @@ async function checkNewLoginTokenOrg(e) {
       rejection: {
         valid: false,
         reason: "org_pin_mismatch",
-        message: formatWrongOrgMessage(organizationUuid, s),
+        message: formatWrongOrgMessage(organizationUuid, requiredOrgsText),
       },
     };
   return {
     outcome: "permitted",
     verified: {
-      accessToken: e.accessToken,
+      accessToken: tokens.accessToken,
       organizationUuid,
     },
   };
 }
 //@ chunk-aepeg2w5.js:590892-591151 facade-majority
-function orgVerificationFailedMessage(e) {
+function orgVerificationFailedMessage(requiredOrgsText) {
   return `Unable to verify organization for the current authentication token.
-This machine requires ${e} but the token could not be validated.
+This machine requires ${requiredOrgsText} but the token could not be validated.
 This may be a network error, or the token may have been revoked.
 Try again, or run: claude auth login`;
 }
@@ -6014,8 +6283,8 @@ function validateForceLoginMethod(isClaudeAi) {
 }
 //@ chunk-aepeg2w5.js:591461-591519 facade-majority
 function launcherSignInMethodRefusal() {
-  let e = checkForcedLoginMethod(true);
-  return e.valid ? null : e.message;
+  let check = checkForcedLoginMethod(true);
+  return check.valid ? null : check.message;
 }
 //@ chunk-aepeg2w5.js:591519-592092 affinity
 /**
@@ -6037,14 +6306,14 @@ function checkForcedLoginMethod(isClaudeAi) {
     return {
       valid: true,
     };
-  let r =
+  let sourceLabel =
     getEffectiveSettingSource_2("forceLoginMethod") === "policySettings" ? "managed settings" : "settings";
   return {
     valid: false,
     message:
       forced === "claudeai"
-        ? `forceLoginMethod is 'claudeai' in ${r}; log in with a Claude.ai subscription account instead.`
-        : `forceLoginMethod is 'console' in ${r}; log in with an Anthropic Console account instead.`,
+        ? `forceLoginMethod is 'claudeai' in ${sourceLabel}; log in with a Claude.ai subscription account instead.`
+        : `forceLoginMethod is 'console' in ${sourceLabel}; log in with an Anthropic Console account instead.`,
   };
 }
 //@ chunk-aepeg2w5.js:592092-592116 affinity
@@ -6052,58 +6321,9 @@ function checkForcedLoginMethod(isClaudeAi) {
  * GCP 凭据检查超时的错误类型。
  */
 class GcpCredentialsTimeoutError extends Error {}
-//@ chunk-e6aww6q8.js:2297152-2297165 affinity
-/**
- * 并发 401 处理结果缓存的条数上限（1000）。
- */
-var MAX_401_HANDLERS = 1000;
-//@ chunk-e6aww6q8.js:2297165-2297458 fingerprint = handleOAuth401Error (0.67)
-/**
- * 按 key 合并并发的 401 处理，结果缓存（LRU 1000）避免同一令牌重复刷新。
- */
-class OAuth401Deduper {
-  #e = new LRUCache({
-    max: MAX_401_HANDLERS,
-  });
-  #t = new Map();
-  run(e, n) {
-    let r = this.#e.get(e);
-    if (r !== undefined) return Promise.resolve(r);
-    let s = this.#t.get(e);
-    if (s !== undefined) return s;
-    let h = n()
-      .then((y) => {
-        if (typeof y === "number" && y > 0) this.#e.set(e, y);
-        return y;
-      })
-      .finally(() => {
-        this.#t.delete(e);
-      });
-    this.#t.set(e, h);
-    return h;
-  }
-}
-//@ chunk-e6aww6q8.js:2297458-2297485 placement
-var oauth401DedupByHost = new HostScoped(() => new OAuth401Deduper());
-//@ chunk-171dhyhe.js:50416-50428 affinity
-/**
- * 等待 401 处理完成的超时（5 秒）。
- */
-var OAUTH_401_RACE_TIMEOUT_MS = 5000;
-//@ chunk-171dhyhe.js:50428-50760 fingerprint = handleOAuth401ErrorImpl (0.484)
-async function handleOAuth401ErrorImpl_2(e, t, c) {
-  let n;
-  if (isStorageV5Enabled() && c !== undefined) n = await getClaudeAIOAuthTokensAsync(c);
-  else n = getClaudeAIOAuthTokens();
-  if (e === n?.accessToken && Boolean(n?.refreshToken)) {
-    await Promise.race([handleOAuth401Error(e, c).catch(() => false), sleep(OAUTH_401_RACE_TIMEOUT_MS, t)]);
-    if (t.aborted) return null;
-  }
-  let winner = await Promise.race([
-    getDesignConsentKey(c).catch(() => null),
-    sleep(OAUTH_401_RACE_TIMEOUT_MS, t).then(() => null),
-  ]);
-  return winner?.ok === true && winner.accessToken !== e ? winner.accessToken : null;
+//@ chunk-g54kbxqw.js:60108-60183 fingerprint = isManagedOAuthContext (0.881)
+function isManagedOAuthContext_2() {
+  return process.env.CLAUDE_CODE_ENTRYPOINT === "claude-desktop";
 }
 //@ chunk-cdz6g143.js:407-459 fingerprint = invalidateOAuthCacheIfDiskChanged (0.513)
 /**
@@ -6118,34 +6338,13 @@ var DEVICE_KEYS_FILE_NAME = ".device-keys.json";
 function getDeviceKeysFilePath() {
   return join(homedir(), ".claude", DEVICE_KEYS_FILE_NAME).normalize("NFC");
 }
-//@ chunk-30p0tvt0.js:818-918 placement
-/**
- * 判断主机策略是否强制使用网关登录（强制登录方式为 gateway 或指定了网关地址）。
- */
-function isGatewayLoginForced() {
-  let { forceLoginMethod, forceLoginGatewayUrl } = getHostPolicyLoginPins();
-  return forceLoginMethod === "gateway" || forceLoginGatewayUrl !== undefined;
-}
-//@ chunk-3g8vhh6f.js:809-824 fingerprint = isTeamSubscriber (1)
-var isTeamSubscriber_2 = "team";
-//@ chunk-4pc1m5n9.js:13047-13220 fingerprint = hasAnthropicApiKeyAuth (1)
-async function hasAnthropicApiKeyAuth_2(e) {
-  let gatewayAuth = getGatewayAuth();
-  if (gatewayAuth)
-    return computeChecksumFromSettings(
-      gatewayAuth,
-      await gatewayTrustFor(gatewayAuth, e).catch(() => {
-        return;
-      }),
-    );
-  if (
-    getAnthropicApiKeyWithSourceSafe({
-      skipRetrievingKeyFromApiKeyHelper: true,
-    }).key === null &&
-    isProfileRemoteSettingsCredential()
-  )
-    return getEmail();
-  return consentIdentityAsync(e);
+//@ chunk-71c4j971.js:14757-14813 fingerprint = getOauthAccountInfo (1)
+function getOauthAccountInfo_2() {
+  try {
+    return getGlobalConfig().oauthAccount;
+  } catch {
+    return;
+  }
 }
 //@ chunk-4xpk3fhh.js:18749-18830 fingerprint = hasOpusAccess (1)
 function hasOpusAccess_2(subscriptionType) {
@@ -6157,36 +6356,83 @@ function hasOpusAccess_2(subscriptionType) {
     subscriptionType == null
   );
 }
-//@ chunk-71c4j971.js:14757-14813 fingerprint = getOauthAccountInfo (1)
-function getOauthAccountInfo_2() {
-  try {
-    return getGlobalConfig().oauthAccount;
-  } catch {
-    return;
-  }
-}
-//@ chunk-dcmhvw5a.js:352457-352629 placement
+//@ chunk-e6aww6q8.js:2297152-2297165 affinity
 /**
- * 统计文本的长度与行数（\n、\r、\r\n 都算换行）。
+ * 并发 401 处理结果缓存的条数上限（1000）。
  */
-function textLengthAndLines(e) {
-  let n = 1;
-  for (let j = 0; j < e.length; j++) {
-    let code = e.charCodeAt(j);
-    if (code === 10) n++;
-    else if (code === 13) {
-      n++;
-      if (e.charCodeAt(j + 1) === 10) j++;
-    }
+var MAX_401_HANDLERS = 1000;
+//@ chunk-e6aww6q8.js:2297165-2297458 fingerprint = handleOAuth401Error (0.67)
+/**
+ * 按 key 合并并发的 401 处理，结果缓存（LRU 1000）避免同一令牌重复刷新。
+ */
+class OAuth401Deduper {
+  #e = new LRUCache({
+    max: MAX_401_HANDLERS,
+  });
+  #t = new Map();
+  run(key, compute) {
+    let cached = this.#e.get(key);
+    if (cached !== undefined) return Promise.resolve(cached);
+    let inflight = this.#t.get(key);
+    if (inflight !== undefined) return inflight;
+    let promise = compute()
+      .then((result) => {
+        if (typeof result === "number" && result > 0) this.#e.set(key, result);
+        return result;
+      })
+      .finally(() => {
+        this.#t.delete(key);
+      });
+    this.#t.set(key, promise);
+    return promise;
   }
-  return {
-    length: countUtf16CodePoints(e),
-    lineCount: n,
-  };
 }
-//@ chunk-g54kbxqw.js:60108-60183 fingerprint = isManagedOAuthContext (0.881)
-function isManagedOAuthContext_2() {
-  return process.env.CLAUDE_CODE_ENTRYPOINT === "claude-desktop";
+//@ chunk-e6aww6q8.js:2297458-2297485 placement
+var oauth401DedupByHost; // deferred: uses OAuth401Deduper of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2297458", () => {
+  oauth401DedupByHost = new HostScoped(() => new OAuth401Deduper());
+});
+//@ chunk-4pc1m5n9.js:13047-13220 fingerprint = hasAnthropicApiKeyAuth (1)
+async function hasAnthropicApiKeyAuth_2(options) {
+  let gatewayAuth = getGatewayAuth();
+  if (gatewayAuth)
+    return computeChecksumFromSettings(
+      gatewayAuth,
+      await gatewayTrustFor(gatewayAuth, options).catch(() => {
+        return;
+      }),
+    );
+  if (
+    getAnthropicApiKeyWithSourceSafe({
+      skipRetrievingKeyFromApiKeyHelper: true,
+    }).key === null &&
+    isProfileRemoteSettingsCredential()
+  )
+    return getEmail();
+  return consentIdentityAsync(options);
+}
+//@ chunk-171dhyhe.js:50416-50428 affinity
+/**
+ * 等待 401 处理完成的超时（5 秒）。
+ */
+var OAUTH_401_RACE_TIMEOUT_MS = 5000;
+//@ chunk-171dhyhe.js:50428-50760 fingerprint = handleOAuth401ErrorImpl (0.484)
+async function handleOAuth401ErrorImpl_2(usedAccessToken, signal, storage) {
+  let tokens;
+  if (isStorageV5Enabled() && storage !== undefined) tokens = await getClaudeAIOAuthTokensAsync(storage);
+  else tokens = getClaudeAIOAuthTokens();
+  if (usedAccessToken === tokens?.accessToken && Boolean(tokens?.refreshToken)) {
+    await Promise.race([
+      handleOAuth401Error(usedAccessToken, storage).catch(() => false),
+      sleep(OAUTH_401_RACE_TIMEOUT_MS, signal),
+    ]);
+    if (signal.aborted) return null;
+  }
+  let winner = await Promise.race([
+    getDesignConsentKey(storage).catch(() => null),
+    sleep(OAUTH_401_RACE_TIMEOUT_MS, signal).then(() => null),
+  ]);
+  return winner?.ok === true && winner.accessToken !== usedAccessToken ? winner.accessToken : null;
 }
 export {
   hasOpusAccess_2,
@@ -6220,13 +6466,13 @@ export {
   credentialIsOwnStoredLogin,
   getClaudeAIOAuthTokenOriginAsync,
   getClaudeAIOAuthTokenOrigin,
-  validateForceLoginOrg,
-  getStoredOauthAccountInfo,
+  getAnthropicApiKeyWithSourceSafe,
   isHostManagedProviderAuth,
   isGatewayLoginForced,
   getAuthTokenSource,
+  validateForceLoginOrg,
   rejudgeHostLaunchedGateway,
-  getAnthropicApiKeyWithSourceSafe,
+  getStoredOauthAccountInfo,
   getClaudeAIOAuthTokensAsync,
   getAuthTokenSourceAsync,
   handleOAuth401ErrorImpl_2,
@@ -6308,11 +6554,11 @@ export {
   refreshGcpCredentialsIfNeeded,
   claudeAISignInTokenInForce,
   hasOAuthScope,
-  isClaudeAISubscriberAsync,
   getClaudeAIOAuthTokenFingerprint,
+  isClaudeAISubscriberAsync,
   resetEnvDerivedAuthCaches,
   onEnvApiKeyApprovalFlipped,
-  isTeamSubscriber_2,
+  TEAM_MEMORY_SCOPE,
   getForcedLoginMethod,
   providerAllowlistRefusal,
   resolveLoginOrgPin,
@@ -6386,4 +6632,63 @@ export {
   saveOAuthTokensIfNeeded,
   OAUTH_TOKEN_SAVE_FAILED_WARNING,
   storedOAuthTokenEquals,
+  SDK_OAUTH_REFRESH_ENTRYPOINTS,
+  __resetKnownDeadRefreshTokensForTest,
+  _resetCredentialsChangeCheckForTesting,
+  acquireOAuthRefreshLock,
+  apiKeyHelperStates,
+  authFailureClocks,
+  awsAuthRefreshStates,
+  awsCredentialMemos,
+  bareSignInRefusals,
+  calculateApiKeyHelperTTL,
+  checkGcpCredentialsValid,
+  clearOtelHeadersCache,
+  gatewayAuthProvenance,
+  gcpAuthRefreshStates,
+  gcpRefreshMemos,
+  getAccountInformationAsync,
+  getAnthropicApiKeyAsync,
+  getAnthropicApiKeyWithSourceAsync,
+  getApiKeyFromApiKeyHelperCached,
+  getApiKeyFromConfigOrMacOSKeychainAsync,
+  getOauthAccountInfoAsync,
+  getRateLimitTierAsync,
+  getSeatTierAsync,
+  getSubscriptionNameAsync,
+  getSubscriptionTypeAsync,
+  hasAnthropicApiKeyAuthAsync,
+  hasOpusAccess,
+  hasOpusAccessAsync,
+  hasProfileScopeAsync,
+  hasStoredUsableClaudeAILogin,
+  hostLaunchedSettingsSourceVerdict,
+  hostManagedAwsProviderChain,
+  is1PApiCustomerAsync,
+  isAnthropicAuthEnabledAsync,
+  isAwsCredentialExportFromProjectSettings,
+  isConsumerSubscriberAsync,
+  isEnterprisePAYGSubscriberAsync,
+  isEnterpriseSubscriberAsync,
+  isExpectedOAuthRefreshError,
+  isMaxSubscriberAsync,
+  isOtelHeadersHelperFromProjectOrLocalSettings,
+  isOverageProvisioningAllowed,
+  isOverageProvisioningAllowedAsync,
+  isProSubscriberAsync,
+  isTeamPremiumSubscriberAsync,
+  isTeamSubscriberAsync,
+  isUserExportedOAuthEnvToken,
+  loginManagedKeyMemos,
+  loginSwitchMemo,
+  noteAuthRecoveryOutcome,
+  oauthRefreshLockHolds,
+  oauthRefreshLockOptions,
+  oauthTokenReadMemos,
+  orgVerificationFailedMessage,
+  otelHeadersHelperStates,
+  refreshGcpAuth,
+  resolveWithStallGuard,
+  waitForRotatedEnvToken,
+  wifAuthDebugNotices,
 };

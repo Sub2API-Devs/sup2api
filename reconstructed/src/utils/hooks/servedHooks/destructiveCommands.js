@@ -18,6 +18,7 @@ import { EXTERNAL_ALWAYS_AVAILABLE_TOOLS } from "../../toolPool.js";
 import { AGENT } from "../../../tools/AgentTool/constants.js";
 import { POLL } from "../../../tools/PollTool/prompt.js";
 import { BASH_TOOL_NAME } from "../../../tools/BashTool/toolName.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3393213-3394222 placement
 /**
@@ -42,17 +43,17 @@ var COMMAND_PREFIX_WRAPPERS_RE =
 /**
  * 判断 Bash 命令是否可能具破坏性（rm -rf、git push --delete/force、git clean -f、find -delete、kubectl/terraform 等）：过长或嵌套过深时直接视为破坏性；会展开 sh -c、eval 与反引号里的命令递归检查。
  */
-function isDestructiveCommand(e, n = 0) {
-  if (e.length > MAX_COMMAND_CHARS_TO_CHECK || n > MAX_PIPE_HOPS) return true;
-  let r = splitCommandOrUndefined(e);
-  if (r === undefined) return true;
-  return uniq([e, ...r]).some((s) => {
-    let h = stripCommandWrappers(s);
-    let nestedShellCommand = extractNestedShellCommand(h);
+function isDestructiveCommand(command, depth = 0) {
+  if (command.length > MAX_COMMAND_CHARS_TO_CHECK || depth > MAX_PIPE_HOPS) return true;
+  let parts = splitCommandOrUndefined(command);
+  if (parts === undefined) return true;
+  return uniq([command, ...parts]).some((part) => {
+    let stripped = stripCommandWrappers(part);
+    let command = extractNestedShellCommand(stripped);
     return (
-      matchesDestructivePattern(s) ||
-      matchesDestructivePattern(h) ||
-      (nestedShellCommand !== undefined && isDestructiveCommand(nestedShellCommand, n + 1))
+      matchesDestructivePattern(part) ||
+      matchesDestructivePattern(stripped) ||
+      (command !== undefined && isDestructiveCommand(command, depth + 1))
     );
   });
 }
@@ -62,140 +63,150 @@ var MAX_PIPE_HOPS = 3;
 /**
  * 判断命令是否把输出管道给 shell 执行。
  */
-function pipesIntoShell(e) {
-  return e
+function pipesIntoShell(command) {
+  return command
     .replace(/(?<!\\)>\|/g, "> ")
     .split("|")
     .slice(1)
-    .some((n) => {
-      let filtered = n
+    .some((segment) => {
+      let filtered = segment
         .trim()
         .replace(/^&\s*/, "")
         .split(/[ \t]+/)
         .filter(
-          (S, w, L) =>
-            !/^(?:\d*[<>]{1,2}&?\S*|&>{1,2}\S*)$/.test(S) &&
-            !(w > 0 && /^(?:\d*[<>]{1,2}&?|&>{1,2})$/.test(L[w - 1])),
+          (word, wordIndex, words) =>
+            !/^(?:\d*[<>]{1,2}&?\S*|&>{1,2}\S*)$/.test(word) &&
+            !(wordIndex > 0 && /^(?:\d*[<>]{1,2}&?|&>{1,2})$/.test(words[wordIndex - 1])),
         );
-      if (filtered.some((S) => ASSIGNMENT_RE.test(S) && /["'`$\\]/.test(S))) return true;
-      let index = filtered.findIndex((S) => !ASSIGNMENT_RE.test(S));
-      let h =
+      if (filtered.some((word) => ASSIGNMENT_RE.test(word) && /["'`$\\]/.test(word))) return true;
+      let index = filtered.findIndex((word) => !ASSIGNMENT_RE.test(word));
+      let head =
         filtered
           .slice(index === -1 ? filtered.length : index)
           .join(" ")
           .split(/[<>;&)]/, 1)[0] ?? "";
-      let y = stripCommandWrappers(h).split(/[ \t]+/, 1)[0] ?? "";
-      return SHELL_PROGRAM_RE.test(y);
+      let program = stripCommandWrappers(head).split(/[ \t]+/, 1)[0] ?? "";
+      return SHELL_PROGRAM_RE.test(program);
     });
 }
 //@ chunk-e6aww6q8.js:3394885-3394961 placement
 var SHELL_PROGRAM_RE = /^(?:\S*\/)?(?:ba|z|da|k|mk)?sh$/;
 var ASSIGNMENT_RE = /^[A-Za-z_][A-Za-z0-9_]*\+?=/;
 //@ chunk-e6aww6q8.js:3394961-3395080 placement
-function matchesDestructivePattern(e) {
-  let n = stripQuotesAndSlashes(e);
-  return [e, n, stripQuotesAndSlashes(stripGitKubectlGlobalOptions(e)), stripGitKubectlGlobalOptions(n)].some(
-    (r) =>
-      getDestructiveTargetCategory(r) !== null ||
-      DESTRUCTIVE_COMMAND_PATTERNS.some((s) => s.test(r)) ||
-      pipesIntoShell(r),
+function matchesDestructivePattern(command) {
+  let unquoted = stripQuotesAndSlashes(command);
+  return [
+    command,
+    unquoted,
+    stripQuotesAndSlashes(stripGitKubectlGlobalOptions(command)),
+    stripGitKubectlGlobalOptions(unquoted),
+  ].some(
+    (candidate) =>
+      getDestructiveTargetCategory(candidate) !== null ||
+      DESTRUCTIVE_COMMAND_PATTERNS.some((pattern) => pattern.test(candidate)) ||
+      pipesIntoShell(candidate),
   );
 }
 //@ chunk-e6aww6q8.js:3395080-3395474 placement
 /**
  * git、kubectl 等命令带值的全局选项集合。
  */
-var TOOL_OPTIONS_WITH_VALUE = new Set([
-  "-C",
-  "-c",
-  "-n",
-  "-s",
-  "--namespace",
-  "--context",
-  "--cluster",
-  "--kubeconfig",
-  "--user",
-  "--token",
-  "--server",
-  "--as",
-  "--git-dir",
-  "--work-tree",
-  "--exec-path",
-  "--config-env",
-  "--request-timeout",
-  "--as-group",
-  "--as-uid",
-  "--username",
-  "--password",
-  "--cache-dir",
-  "--certificate-authority",
-  "--client-certificate",
-  "--client-key",
-  "--tls-server-name",
-  "--profile",
-  "--profile-output",
-  "-v",
-  "--v",
-]);
+var TOOL_OPTIONS_WITH_VALUE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:3395080", () => {
+  TOOL_OPTIONS_WITH_VALUE = new Set([
+    "-C",
+    "-c",
+    "-n",
+    "-s",
+    "--namespace",
+    "--context",
+    "--cluster",
+    "--kubeconfig",
+    "--user",
+    "--token",
+    "--server",
+    "--as",
+    "--git-dir",
+    "--work-tree",
+    "--exec-path",
+    "--config-env",
+    "--request-timeout",
+    "--as-group",
+    "--as-uid",
+    "--username",
+    "--password",
+    "--cache-dir",
+    "--certificate-authority",
+    "--client-certificate",
+    "--client-key",
+    "--tls-server-name",
+    "--profile",
+    "--profile-output",
+    "-v",
+    "--v",
+  ]);
+});
 //@ chunk-e6aww6q8.js:3395474-3395781 placement
 /**
  * 去掉 git、kubectl、terraform 的全局选项，便于识别子命令。
  */
-function stripGitKubectlGlobalOptions(e) {
-  let n = splitShellWords_2(e);
-  let r = [];
-  for (let s = 0; s < n.length; s += 1) {
-    let h = n[s];
-    r.push(h);
-    if (h !== "git" && h !== "kubectl" && h !== "terraform") continue;
-    let y = (w) => n[w].replace(/['"]/g, "");
-    let S = s + 1;
-    while (S < n.length && y(S).startsWith("-")) S += TOOL_OPTIONS_WITH_VALUE.has(y(S)) ? 2 : 1;
-    if (S > s + 1 && S < n.length && /^[a-z]/.test(n[S])) s = S - 1;
+function stripGitKubectlGlobalOptions(command) {
+  let words = splitShellWords_2(command);
+  let kept = [];
+  for (let wordIndex = 0; wordIndex < words.length; wordIndex += 1) {
+    let word = words[wordIndex];
+    kept.push(word);
+    if (word !== "git" && word !== "kubectl" && word !== "terraform") continue;
+    let cleanWord = (index) => words[index].replace(/['"]/g, "");
+    let nextIndex = wordIndex + 1;
+    while (nextIndex < words.length && cleanWord(nextIndex).startsWith("-"))
+      nextIndex += TOOL_OPTIONS_WITH_VALUE.has(cleanWord(nextIndex)) ? 2 : 1;
+    if (nextIndex > wordIndex + 1 && nextIndex < words.length && /^[a-z]/.test(words[nextIndex]))
+      wordIndex = nextIndex - 1;
   }
-  return r.join(" ");
+  return kept.join(" ");
 }
 //@ chunk-e6aww6q8.js:3395781-3395836 placement
-function stripQuotesAndSlashes(e) {
-  return e.replace(/\\\r?\n|['"\\]/g, "");
+function stripQuotesAndSlashes(command) {
+  return command.replace(/\\\r?\n|['"\\]/g, "");
 }
 //@ chunk-e6aww6q8.js:3395836-3396098 placement
-function splitShellWords_2(e) {
-  let n = [];
-  let r = "";
-  let s;
-  let h = false;
-  for (let y of e)
-    if (h) {
-      r += y;
-      h = false;
-    } else if (y === "\\" && s !== "'") h = true;
-    else if (s !== undefined) {
-      r += y;
-      if (y === s) s = undefined;
-    } else if (y === '"' || y === "'") {
-      s = y;
-      r += y;
-    } else if (y === " " || y === "\t") {
-      if (r !== "") {
-        n.push(r);
-        r = "";
+function splitShellWords_2(command) {
+  let words = [];
+  let current = "";
+  let quote;
+  let escaped = false;
+  for (let char of command)
+    if (escaped) {
+      current += char;
+      escaped = false;
+    } else if (char === "\\" && quote !== "'") escaped = true;
+    else if (quote !== undefined) {
+      current += char;
+      if (char === quote) quote = undefined;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+      current += char;
+    } else if (char === " " || char === "\t") {
+      if (current !== "") {
+        words.push(current);
+        current = "";
       }
-    } else r += y;
-  return r === "" ? n : [...n, r];
+    } else current += char;
+  return current === "" ? words : [...words, current];
 }
 //@ chunk-e6aww6q8.js:3396098-3396174 placement
-function stripCommandWrappers(e) {
-  let replaced = e.trim().replace(COMMAND_PREFIX_WRAPPERS_RE, "");
-  return replaced === e.trim() ? replaced : stripCommandWrappers(replaced);
+function stripCommandWrappers(command) {
+  let command_2 = command.trim().replace(COMMAND_PREFIX_WRAPPERS_RE, "");
+  return command_2 === command.trim() ? command_2 : stripCommandWrappers(command_2);
 }
 //@ chunk-e6aww6q8.js:3396174-3396353 placement
-function extractNestedShellCommand(e) {
+function extractNestedShellCommand(command) {
   return (
     (
-      /^(?:ba|z|da|k|mk)?sh\s+(?:-\w*\s+)*-\w*c\s+(['"]?)([\s\S]*)\1\s*$/.exec(e) ??
-      /^eval\s+(['"]?)([\s\S]*)\1\s*$/.exec(e) ??
-      /`([^`]+)`/.exec(e)
+      /^(?:ba|z|da|k|mk)?sh\s+(?:-\w*\s+)*-\w*c\s+(['"]?)([\s\S]*)\1\s*$/.exec(command) ??
+      /^eval\s+(['"]?)([\s\S]*)\1\s*$/.exec(command) ??
+      /`([^`]+)`/.exec(command)
     )?.at(-1) ?? undefined
   );
 }
@@ -209,11 +220,11 @@ function splitCommandOrUndefined(command) {
  */
 function filterNonGuardTools(tools) {
   return tools.filter(
-    (n) =>
-      !toolMatchesName(n, STRUCTUREDOUTPUT) &&
-      !toolMatchesAnyName(n, EXTERNAL_ALWAYS_AVAILABLE_TOOLS) &&
-      !toolMatchesName(n, AGENT) &&
-      !toolMatchesName(n, POLL),
+    (tool) =>
+      !toolMatchesName(tool, STRUCTUREDOUTPUT) &&
+      !toolMatchesAnyName(tool, EXTERNAL_ALWAYS_AVAILABLE_TOOLS) &&
+      !toolMatchesName(tool, AGENT) &&
+      !toolMatchesName(tool, POLL),
   );
 }
 //@ chunk-e6aww6q8.js:3401578-3401941 placement
@@ -221,18 +232,18 @@ function filterNonGuardTools(tools) {
  * 包装权限检查：服务端 hook 代理评估时，拒绝其运行破坏性 Bash 命令。
  */
 function denyDestructiveForHookAgent(hasPermissionsToUseTool) {
-  return async (n, r, ...s) => {
-    let h = Reflect.get(r, "command");
-    if (n.name === BASH_TOOL_NAME && typeof h === "string" && isDestructiveCommand(h))
+  return async (tool, input, ...restArgs) => {
+    let command = Reflect.get(input, "command");
+    if (tool.name === BASH_TOOL_NAME && typeof command === "string" && isDestructiveCommand(command))
       return {
         behavior: "deny",
-        message: `A hook agent evaluating a call served for a cloud session may not run a destructive command here (${n.name}); refused.`,
+        message: `A hook agent evaluating a call served for a cloud session may not run a destructive command here (${tool.name}); refused.`,
         decisionReason: {
           type: "other",
           reason: "served_call_hook_agent_destructive",
         },
       };
-    return hasPermissionsToUseTool(n, r, ...s);
+    return hasPermissionsToUseTool(tool, input, ...restArgs);
   };
 }
 export { filterNonGuardTools, denyDestructiveForHookAgent, isDestructiveCommand };

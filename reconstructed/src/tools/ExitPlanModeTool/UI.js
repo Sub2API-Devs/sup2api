@@ -15,7 +15,7 @@ import {
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Box, Text } from "../../ink/components/Text.js";
 import { themeColorOf } from "../../utils/spellcheck.js";
-import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
 import { MarkdownText_2 } from "../../components/pluginUi/render/MarkdownBlock.js";
 import { getPlan } from "../../utils/plans.js";

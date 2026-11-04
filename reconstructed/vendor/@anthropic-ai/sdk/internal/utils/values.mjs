@@ -9,7 +9,7 @@ import { AnthropicError } from "../../core/error.mjs";
 
 //@ chunk-hwmsct5x.js:16686-16774 esm-fingerprint
 var startsWithSchemeRegexp = /^[a-z][a-z0-9+.-]*:/i;
-var ql = (url) => startsWithSchemeRegexp.test(url);
+var isAbsoluteURL = (url) => startsWithSchemeRegexp.test(url);
 var isArray = (val) => {
   isArray = Array.isArray;
   return isArray(val);
@@ -21,7 +21,7 @@ function maybeObj(x) {
   return x ?? {};
 }
 //@ chunk-hwmsct5x.js:16834-16897 esm-layout
-function Ui(obj) {
+function isEmptyObj(obj) {
   if (!obj) return true;
   for (let key in obj) return false;
   return true;
@@ -35,18 +35,28 @@ function isObj(obj) {
   return obj != null && typeof obj === "object" && !Array.isArray(obj);
 }
 //@ chunk-hwmsct5x.js:17033-17198 esm-fingerprint
-var Do = (name, timeout) => {
+var validatePositiveInteger = (name, timeout) => {
   if (typeof timeout !== "number" || !Number.isInteger(timeout))
     throw new AnthropicError(`${name} must be an integer`);
   if (timeout < 0) throw new AnthropicError(`${name} must be a positive integer`);
   return timeout;
 };
 //@ chunk-hwmsct5x.js:17198-17254 esm-layout
-var Uo = (text) => {
+var safeJSON = (text) => {
   try {
     return JSON.parse(text);
   } catch (err) {
     return;
   }
 };
-export { isArray, hasOwn, Uo, maybeObj, isArray_default, isObj, Do, ql, Ui };
+export {
+  isArray,
+  hasOwn,
+  safeJSON,
+  maybeObj,
+  isArray_default,
+  isObj,
+  validatePositiveInteger,
+  isAbsoluteURL,
+  isEmptyObj,
+};

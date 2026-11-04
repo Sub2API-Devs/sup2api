@@ -44,44 +44,44 @@ import { sleep } from "../sleep.js";
 /**
  * 已有目录状态缓存时直接取 branch，否则 git rev-parse --abbrev-ref HEAD。
  */
-async function getGitBranchForDir(gitState, n, gitOptions) {
-  if (gitState.hasDir(n)) return gitState.dirState(n)?.branch;
-  return execGitNoThrow(n, ["rev-parse", "--abbrev-ref", "HEAD"], gitOptions);
+async function getGitBranchForDir(gitState, directory, gitOptions) {
+  if (gitState.hasDir(directory)) return gitState.dirState(directory)?.branch;
+  return execGitNoThrow(directory, ["rev-parse", "--abbrev-ref", "HEAD"], gitOptions);
 }
 //@ chunk-s61vbvea.js:532001-532138 placement
-async function getDirRemoteState(gitState, n) {
-  if (gitState.hasDir(n)) {
-    let r = gitState.dirState(n);
-    return r
+async function getDirRemoteState(gitState, dir) {
+  if (gitState.hasDir(dir)) {
+    let state = gitState.dirState(dir);
+    return state
       ? {
-          slug: r.slug,
-          host: r.host,
-          visibility: r.visibility,
+          slug: state.slug,
+          host: state.host,
+          visibility: state.visibility,
         }
       : null;
   }
-  return checkCurrentRepoVisibility(n);
+  return checkCurrentRepoVisibility(dir);
 }
 //@ chunk-s61vbvea.js:532376-532583 placement
-async function getRemoteUrlForPush(e, n, r, s) {
-  if (e.hasDir(n)) return e.namedRemoteUrl(n, r);
-  let h = await execGitNoThrow(n, ["config", "--get", `remote.${r}.pushurl`], s);
-  if (h !== undefined) return h;
-  return execGitNoThrow(n, ["config", "--get", `remote.${r}.url`], s);
+async function getRemoteUrlForPush(gitState, dir, remote, gitOptions) {
+  if (gitState.hasDir(dir)) return gitState.namedRemoteUrl(dir, remote);
+  let pushUrl = await execGitNoThrow(dir, ["config", "--get", `remote.${remote}.pushurl`], gitOptions);
+  if (pushUrl !== undefined) return pushUrl;
+  return execGitNoThrow(dir, ["config", "--get", `remote.${remote}.url`], gitOptions);
 }
 //@ chunk-s61vbvea.js:532583-533196 placement
 /**
  * 把收集到的 origin 状态与推送目标去重排序，生成分类器 repoVisibility 元数据列表；有无法解析或（超时后）仍在等待的目标时追加 remote 为空、visibility 为 unknown 的一项。
  */
-function buildRepoVisibilityMeta(collected, n) {
+function buildRepoVisibilityMeta(collected, timedOut) {
   let entries = [];
   let seen = new Set();
   let hasUnresolved = false;
   for (let origin of collected.origins.values())
     if (origin.state) {
-      let w = `${origin.state.host}/${origin.state.slug}`;
-      if (!seen.has(w)) {
-        seen.add(w);
+      let entryKey = `${origin.state.host}/${origin.state.slug}`;
+      if (!seen.has(entryKey)) {
+        seen.add(entryKey);
         entries.push({
           remote: sanitizeCacheKey(origin.state.slug),
           ...(origin.branch !== undefined && {
@@ -95,17 +95,17 @@ function buildRepoVisibilityMeta(collected, n) {
   for (let target of collected.targets)
     if (target === "unresolved") hasUnresolved = true;
     else targets.push(target);
-  targets.sort((S, w) => `${S.host}/${S.slug}`.localeCompare(`${w.host}/${w.slug}`));
+  targets.sort((left, right) => `${left.host}/${left.slug}`.localeCompare(`${right.host}/${right.slug}`));
   for (let target of targets) {
-    let w = `${target.host}/${target.slug}`;
-    if (seen.has(w)) continue;
-    seen.add(w);
+    let targetKey = `${target.host}/${target.slug}`;
+    if (seen.has(targetKey)) continue;
+    seen.add(targetKey);
     entries.push({
       remote: sanitizeCacheKey(target.slug),
       visibility: effectiveVisibility(target),
     });
   }
-  if (n && collected.pendingTargets > 0) hasUnresolved = true;
+  if (timedOut && collected.pendingTargets > 0) hasUnresolved = true;
   if (hasUnresolved)
     entries.push({
       remote: "",
@@ -114,24 +114,24 @@ function buildRepoVisibilityMeta(collected, n) {
   return entries;
 }
 //@ chunk-s61vbvea.js:533196-533258 placement
-function looksLikeGitRemoteUrl(e) {
-  return e.includes("://") || e.startsWith("git@");
+function looksLikeGitRemoteUrl(remoteUrl) {
+  return remoteUrl.includes("://") || remoteUrl.startsWith("git@");
 }
 //@ chunk-s61vbvea.js:533258-533360 placement
-async function resolveRemoteVisibility(e) {
-  let n = looksLikeGitRemoteUrl(e) ? parseGitRemote(e) : null;
-  if (!n) return "unresolved";
-  return checkRepoVisibility(n.host, n.owner, n.name);
+async function resolveRemoteVisibility(remoteUrl) {
+  let parsed = looksLikeGitRemoteUrl(remoteUrl) ? parseGitRemote(remoteUrl) : null;
+  if (!parsed) return "unresolved";
+  return checkRepoVisibility(parsed.host, parsed.owner, parsed.name);
 }
 //@ chunk-s61vbvea.js:533360-533523 placement
-async function resolveNamedRemoteVisibility(gitState, cwdOption, r, s, gitOptions) {
-  if (r === "origin") {
-    await s.stateP;
-    return s.state ? null : "unresolved";
+async function resolveNamedRemoteVisibility(gitState, dir, remote, origin, gitOptions) {
+  if (remote === "origin") {
+    await origin.stateP;
+    return origin.state ? null : "unresolved";
   }
-  let remoteUrlForPush = await getRemoteUrlForPush(gitState, cwdOption, r, gitOptions);
-  if (remoteUrlForPush === undefined) return "unresolved";
-  return resolveRemoteVisibility(remoteUrlForPush);
+  let remoteUrl = await getRemoteUrlForPush(gitState, dir, remote, gitOptions);
+  if (remoteUrl === undefined) return "unresolved";
+  return resolveRemoteVisibility(remoteUrl);
 }
 //@ chunk-s61vbvea.js:533523-535191 placement
 /**
@@ -161,76 +161,76 @@ async function collectRepoVisibilityMeta(toolName, input, gitOptions, timeoutMs 
       pendingTargets: 0,
     };
     let pending = [];
-    let trackOrigin = (se) => {
-      let re = collected.origins.get(se);
-      if (re === undefined) {
-        let he = {};
-        he.branchP = getGitBranchForDir(gitState, se, gitOptions).then((branch) => {
-          he.branch = branch;
+    let trackOrigin = (dir) => {
+      let entry = collected.origins.get(dir);
+      if (entry === undefined) {
+        let newEntry = {};
+        newEntry.branchP = getGitBranchForDir(gitState, dir, gitOptions).then((branch) => {
+          newEntry.branch = branch;
         });
-        he.stateP = getDirRemoteState(gitState, se).then((state) => {
-          he.state = state;
+        newEntry.stateP = getDirRemoteState(gitState, dir).then((state) => {
+          newEntry.state = state;
         });
-        re = he;
-        collected.origins.set(se, re);
-        pending.push(re.branchP, re.stateP);
+        entry = newEntry;
+        collected.origins.set(dir, entry);
+        pending.push(entry.branchP, entry.stateP);
       }
-      return re;
+      return entry;
     };
-    let addTarget = (se) => {
+    let addTarget = (targetPromise) => {
       collected.pendingTargets++;
       pending.push(
-        se.then((re) => {
+        targetPromise.then((target) => {
           collected.pendingTargets--;
-          if (re !== null) collected.targets.push(re);
+          if (target !== null) collected.targets.push(target);
         }),
       );
     };
-    let resolveGhRepoVisibility = async (se) => {
-      let repoSpec = parseRepoSpec(se);
+    let resolveGhRepoVisibility = async (repoSpecText) => {
+      let repoSpec = parseRepoSpec(repoSpecText);
       if (!repoSpec) return "unresolved";
       return checkRepoVisibility(repoSpec.host, repoSpec.owner, repoSpec.name);
     };
     trackOrigin(cwd);
-    let resolveCwdOption = (optsSpan) => {
-      let gitDirOption = getGitDirOption(optsSpan);
+    let resolveCwdOption = (optionSpan) => {
+      let gitDirOption = getGitDirOption(optionSpan);
       if (gitDirOption === undefined) return cwd;
       return isAbsolute(gitDirOption) ? gitDirOption : resolve(cwd, gitDirOption);
     };
     for (let gitMutation of gitMutations) {
-      let cwdOption = resolveCwdOption(gitMutation.optsSpan);
-      let he = trackOrigin(cwdOption);
+      let dir = resolveCwdOption(gitMutation.optsSpan);
+      let origin = trackOrigin(dir);
       if (gitMutation.kind === "remote-mutate") {
-        let ce = secondOperandOf(gitMutation.rest);
-        if (ce !== undefined) addTarget(resolveRemoteVisibility(ce));
+        let url = secondOperandOf(gitMutation.rest);
+        if (url !== undefined) addTarget(resolveRemoteVisibility(url));
         continue;
       }
-      let Se = listGhRepoTargets(gitMutation.rest);
-      if (Se.length === 0) {
+      let targets = listGhRepoTargets(gitMutation.rest);
+      if (targets.length === 0) {
         addTarget(
           (async () => {
-            await he.branchP;
-            let ce = await gitPull(gitState, cwdOption, he.branch, gitOptions);
-            return resolveNamedRemoteVisibility(gitState, cwdOption, ce, he, gitOptions);
+            await origin.branchP;
+            let branch = await gitPull(gitState, dir, origin.branch, gitOptions);
+            return resolveNamedRemoteVisibility(gitState, dir, branch, origin, gitOptions);
           })(),
         );
         continue;
       }
-      for (let ce of Se)
-        if (looksLikeGitRemoteUrl(ce)) addTarget(resolveRemoteVisibility(ce));
-        else addTarget(resolveNamedRemoteVisibility(gitState, cwdOption, ce, he, gitOptions));
+      for (let target of targets)
+        if (looksLikeGitRemoteUrl(target)) addTarget(resolveRemoteVisibility(target));
+        else addTarget(resolveNamedRemoteVisibility(gitState, dir, target, origin, gitOptions));
     }
     for (let ghCommand of ghCommands) {
       let replaced = (ghCommand[1] ?? "").replace(/\s+/g, " ");
-      let he = ghCommand[2] ?? "";
-      let ghRepoFlag = getGhRepoFlag(he);
-      let ce =
+      let repoSpec = ghCommand[2] ?? "";
+      let ghRepoFlag = getGhRepoFlag(repoSpec);
+      let forkSpec =
         replaced === "repo fork" && ghRepoFlag === undefined
-          ? firstOperandOf(he, GH_FORK_VALUE_FLAGS)
+          ? firstOperandOf(repoSpec, GH_FORK_VALUE_FLAGS)
           : undefined;
-      let we = ghRepoFlag ?? ce;
-      if (we !== undefined) addTarget(resolveGhRepoVisibility(we));
-      if (replaced === "pr create" && getHeadOwner(he) !== undefined)
+      let repoTarget = ghRepoFlag ?? forkSpec;
+      if (repoTarget !== undefined) addTarget(resolveGhRepoVisibility(repoTarget));
+      if (replaced === "pr create" && getHeadOwner(repoSpec) !== undefined)
         addTarget(Promise.resolve("unresolved"));
     }
     let allSettled = Promise.all(pending).then(() => buildRepoVisibilityMeta(collected, false));

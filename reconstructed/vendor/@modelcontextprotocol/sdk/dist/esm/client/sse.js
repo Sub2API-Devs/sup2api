@@ -8,7 +8,7 @@
 import { createFetchWithDefaults, headersToObject } from "../../../../../../src/utils/fetchWithDefaults.js";
 import { UnauthorizedError, auth, extractWWWAuthenticateParams } from "./auth.js";
 import { EventSource } from "../../../../../eventsource/dist/index.js";
-import { JSONRPCMessageSchema } from "../types.js";
+import { JSONRPCMessageSchema as JSONRPCMessageSchema_2 } from "../types.js";
 
 //@ chunk-z1n5m6nf.js:28313-28406 esm-fingerprint
 class SseError extends Error {
@@ -109,7 +109,7 @@ class SSEClientTransport {
         let messageEvent = event;
         let message;
         try {
-          message = JSONRPCMessageSchema.parse(JSON.parse(messageEvent.data));
+          message = JSONRPCMessageSchema_2.parse(JSON.parse(messageEvent.data));
         } catch (error) {
           this.onerror?.(error);
           return;

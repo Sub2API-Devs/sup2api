@@ -5,12 +5,12 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_mode } from "./mode.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:13100-13686 cjs-fingerprint
-var require_kanji_data = x(function (cjsExports, cjsModule) {
+var require_kanji_data = __commonJS(function (cjsExports, cjsModule) {
   var Mode = require_mode();
   var Utils = require_utils();
   function KanjiData(data) {

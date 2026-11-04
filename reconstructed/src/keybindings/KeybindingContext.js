@@ -8,23 +8,27 @@
  * pieces: chunk-8pssrarc.js (5)
  * attribution: affinity 1, fingerprint 2, layout 2
  */
-import { qt, Se, zt } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { createContext, useContext, useLayoutEffect } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { resolveKeyWithChordState } from "./resolver.js";
 import { toInkKeyEvent, noop, didHandlerConsume } from "./keyNames.js";
 import { getActionDisplayText } from "./match.js";
 import { logError } from "../utils/log.js";
 import { withTelemetryMessage, toError } from "../utils/errors.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-8pssrarc.js:1788-1803 affinity
-var KeybindingContext = qt(null);
+var KeybindingContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-8pssrarc.js:1788", () => {
+  KeybindingContext = createContext(null);
+});
 //@ chunk-8pssrarc.js:1803-3569 fingerprint = KeybindingProvider (0.611)
 /**
  * KeybindingContext 的 Provider：对外提供 resolve（按当前待定和弦解析）、getDisplayText、registerHandler（按动作登记处理器并发 handlersChanged）、hasHandler/runAction（只算非回退处理器）、registerPreDispatch、singleKeyEvent、活动上下文登记等。
  */
 function KeybindingProvider(props) {
-  let $ = w(33);
+  let $ = useMemoCache(33);
   let {
     bindings,
     pendingChordRef,
@@ -79,13 +83,13 @@ function KeybindingProvider(props) {
   let hasHandler;
   let runAction;
   if ($[8] !== handlerRegistryRef) {
-    hasHandler = (Ke) => getPrimaryHandlers(handlerRegistryRef.current, Ke).length > 0;
-    runAction = (Re) => {
+    hasHandler = (action) => getPrimaryHandlers(handlerRegistryRef.current, action).length > 0;
+    runAction = (action) => {
       try {
-        return getPrimaryHandlers(handlerRegistryRef.current, Re).some(didHandlerConsume);
+        return getPrimaryHandlers(handlerRegistryRef.current, action).some(didHandlerConsume);
       } catch (error) {
-        let we = error;
-        logError(withTelemetryMessage(toError(we), "Key action handler threw"));
+        let error_2 = error;
+        logError(withTelemetryMessage(toError(error_2), "Key action handler threw"));
         return false;
       }
     };
@@ -174,19 +178,19 @@ function KeybindingProvider(props) {
   return t6;
 }
 //@ chunk-8pssrarc.js:3569-3634 layout
-function getPrimaryHandlers(n, t) {
-  return [...(n.get(t) ?? [])].filter((r) => !r.fallback);
+function getPrimaryHandlers(registry, action) {
+  return [...(registry.get(action) ?? [])].filter((registration) => !registration.fallback);
 }
 //@ chunk-8pssrarc.js:3634-3661 layout
 function useKeybindingContext() {
-  return Se(KeybindingContext);
+  return useContext(KeybindingContext);
 }
 //@ chunk-8pssrarc.js:3661-3917 fingerprint = useRegisterKeybindingContext (1)
 /**
  * 组件挂载且 isActive 时把上下文加入活动集合，卸载时移除（layout effect，保证首个按键前生效）。
  */
 function useRegisterKeybindingContext(context, t0) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let isActive = t0 === undefined ? true : t0;
   let keybindingContext = useKeybindingContext();
   let t1;
@@ -211,6 +215,6 @@ function useRegisterKeybindingContext(context, t0) {
     t1 = $[3];
     t2 = $[4];
   }
-  zt(t1, t2);
+  useLayoutEffect(t1, t2);
 }
 export { useKeybindingContext, useRegisterKeybindingContext, KeybindingProvider };

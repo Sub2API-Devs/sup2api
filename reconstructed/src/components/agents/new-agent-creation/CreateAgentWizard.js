@@ -20,7 +20,7 @@ import {
 import { GenerateStep } from "./wizard-steps/GenerateStep.js";
 import { DescriptionStep } from "./wizard-steps/DescriptionStep.js";
 import { BedrockSaveStep } from "../../providerSetup/bedrock/BedrockSaveStep.js";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { WizardProvider } from "../../wizard/WizardProvider.js";
@@ -40,7 +40,7 @@ var BEDROCK_SETUP_STEPS = [
 ];
 //@ chunk-sx9xc5ee.js:23475-23866 fingerprint = CreateAgentWizard (0.552)
 function CreateAgentWizard(props) {
-  let $ = w(7);
+  let $ = useMemoCache(7);
   let { onComplete, onCancel, exitOnCtrlCD } = props;
   let stepProps;
   if ($[0] !== onComplete) {
@@ -55,9 +55,9 @@ function CreateAgentWizard(props) {
     initialData = {};
     $[2] = initialData;
   } else initialData = $[2];
-  let h;
+  let wizard;
   if ($[3] !== exitOnCtrlCD || $[4] !== onCancel || $[5] !== stepProps) {
-    h = jsxProd_default(WizardProvider, {
+    wizard = jsxProd_default(WizardProvider, {
       steps: BEDROCK_SETUP_STEPS,
       stepProps,
       initialData,
@@ -70,8 +70,8 @@ function CreateAgentWizard(props) {
     $[3] = exitOnCtrlCD;
     $[4] = onCancel;
     $[5] = stepProps;
-    $[6] = h;
-  } else h = $[6];
-  return h;
+    $[6] = wizard;
+  } else wizard = $[6];
+  return wizard;
 }
 export { CreateAgentWizard };

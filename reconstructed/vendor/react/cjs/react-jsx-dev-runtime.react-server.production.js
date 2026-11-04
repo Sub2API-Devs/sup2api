@@ -7,7 +7,7 @@
  */
 //@ chunk-nn4p932b.js:191-269 esm-fingerprint
 var REACT_ELEMENT_TYPE = Symbol.for("react.transitional.element");
-var x = Symbol.for("react.fragment");
+var REACT_FRAGMENT_TYPE = Symbol.for("react.fragment");
 //@ chunk-nn4p932b.js:269-485 esm-fingerprint
 function jsx(type, config, maybeKey) {
   var key = null;
@@ -27,7 +27,7 @@ function jsx(type, config, maybeKey) {
   };
 }
 //@ chunk-nn4p932b.js:485-501 esm-layout
-var Fragment = x;
+var Fragment = REACT_FRAGMENT_TYPE;
 var jsxProd_default = jsx;
 var jsxProd_default_2 = jsx;
 export { jsxProd_default_2, jsxProd_default, Fragment };

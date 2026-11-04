@@ -45,11 +45,19 @@ import { uiLog } from "../../functionHooks/hooksWorkerClient.js";
 import { clearPluginAgents } from "../../../utils/plugins/pluginLoadState.js";
 import { refreshAgentsAndDefinitions } from "../../functionHooks/hooksModuleLoader.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, E, M, array, unknown, literal, _enum } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  numberSchema,
+  booleanSchema,
+  array,
+  unknown,
+  literal,
+  _enum,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import { isSubpathOf } from "../../../utils/pathPrefix.js";
 import { isUntouchableSpelling } from "../../../utils/networkPaths.js";
 import { logForDebugging } from "../../../utils/debug.js";
-import { readPluginFileSafe, mcpAuthCacheContent } from "../../../utils/plugins/safeFileRead.js";
+import { readPluginFileSafe, readSmallFileText } from "../../../utils/plugins/safeFileRead.js";
 import {
   logFeatureOkAsync,
   logFeatureBadAsync,
@@ -65,6 +73,7 @@ import {
   alwaysFalseRefresh,
 } from "../../../tools/RefreshMcpToolsTool/RefreshMcpToolsTool.js";
 import { getToolPermissionContext } from "../../../utils/permissions/toolPermissionContext.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-ae5g0zb5.js:106307-106319 placement
 /**
@@ -75,18 +84,18 @@ var CLAUDE_TEST_RELOAD_TIMEOUT_MS = 5000;
 /**
  * 确保 Claude Test 模块已重新加载（带超时），返回 not-tried/loaded/held/slow/failed。
  */
-async function ensureClaudeTestReloaded(opts, n = CLAUDE_TEST_RELOAD_TIMEOUT_MS) {
+async function ensureClaudeTestReloaded(opts, timeoutMs = CLAUDE_TEST_RELOAD_TIMEOUT_MS) {
   try {
-    let r = claudeTestMarkState();
-    if (r.reload === undefined) {
+    let state = claudeTestMarkState();
+    if (state.reload === undefined) {
       if (!isSyntheticOutputToolEnabled(opts)) return "not-tried";
-      r.reload = reloadClaudeTestModule().then((s) => {
-        r.outcome = s;
-        return s;
+      state.reload = reloadClaudeTestModule().then((outcome) => {
+        state.outcome = outcome;
+        return outcome;
       });
     }
-    let o = (await withDeadline(r.reload, n)) ?? "slow";
-    return o === "loaded" && !isAbortableAndEnabled(opts)() ? "failed" : o;
+    let outcome = (await withDeadline(state.reload, timeoutMs)) ?? "slow";
+    return outcome === "loaded" && !isAbortableAndEnabled(opts)() ? "failed" : outcome;
   } catch {
     return "failed";
   }
@@ -103,15 +112,15 @@ function isClaudeTestReloadPending() {
  * 判断重载已发起但还没有结果。
  */
 function isClaudeTestReloadOutstanding() {
-  let e = claudeTestMarkState();
-  return e.reload !== undefined && e.outcome === undefined;
+  let state = claudeTestMarkState();
+  return state.reload !== undefined && state.outcome === undefined;
 }
 //@ chunk-ae5g0zb5.js:106661-106735 placement
 /**
  * 返回一个检查函数：信号未中止且 Claude Test 插件仍启用。
  */
-function isAbortableAndEnabled(e) {
-  let { signal } = e.abortController;
+function isAbortableAndEnabled(opts) {
+  let { signal } = opts.abortController;
   return () => !signal.aborted && isClaudeTestPluginEnabled();
 }
 //@ chunk-ae5g0zb5.js:106735-106792 placement
@@ -119,7 +128,7 @@ function isAbortableAndEnabled(e) {
  * 判断 Claude Test 是否在内置插件的启用列表中。
  */
 function isClaudeTestPluginEnabled() {
-  return getBuiltinPlugins().enabled.some((e) => e.name === CC_PLUGIN_CLAUDE_TEST);
+  return getBuiltinPlugins().enabled.some((plugin) => plugin.name === CC_PLUGIN_CLAUDE_TEST);
 }
 //@ chunk-ae5g0zb5.js:106956-107081 placement
 /**
@@ -137,9 +146,11 @@ async function reloadClaudeTestModule() {
 /**
  * 若消息由 composer 直接提交且非冻结标记、非子代理，返回其标记。
  */
-function composerSubmitMarker(e) {
-  let submittedFromComposer = e.submittedFromComposer;
-  return isFrozenMarker(submittedFromComposer) && !isBridgeOrVerifiedSlackTurn(e) && e.agentId === undefined
+function composerSubmitMarker(payload) {
+  let submittedFromComposer = payload.submittedFromComposer;
+  return isFrozenMarker(submittedFromComposer) &&
+    !isBridgeOrVerifiedSlackTurn(payload) &&
+    payload.agentId === undefined
     ? submittedFromComposer
     : undefined;
 }
@@ -147,15 +158,15 @@ function composerSubmitMarker(e) {
 /**
  * 把本次工具调用的参数与 composer 提交标记记到助手状态里。
  */
-function rememberComposerMark(args, n) {
+function rememberComposerMark(args, ctx) {
   try {
-    let r = composerSubmitMarker(n);
+    let marker = composerSubmitMarker(ctx);
     claudeTestMarkState().mark =
-      r === undefined
+      marker === undefined
         ? undefined
         : {
             args,
-            marker: r,
+            marker,
           };
   } catch {}
 }
@@ -163,15 +174,15 @@ function rememberComposerMark(args, n) {
 /**
  * 取出并清除提交标记，判断本次调用是否由 composer 直接提交同样参数触发。
  */
-function consumeComposerMark(e, n) {
-  let r = claudeTestMarkState();
-  let mark = r.mark;
-  r.mark = undefined;
+function consumeComposerMark(args, ctx) {
+  let state = claudeTestMarkState();
+  let mark = state.mark;
+  state.mark = undefined;
   return (
     mark !== undefined &&
-    mark.args === e &&
-    n.agentId === undefined &&
-    n.submittedFromComposer === mark.marker
+    mark.args === args &&
+    ctx.agentId === undefined &&
+    ctx.submittedFromComposer === mark.marker
   );
 }
 //@ chunk-ae5g0zb5.js:107400-107892 placement
@@ -200,21 +211,21 @@ function createHelperWatchState() {
 /**
  * 浏览器助手控制器：start / mayRun / takeOut / mayConnect（登录未变化且未在停止时才允许连接）。
  */
-function createBrowserHelperController(e, n = createHelperWatchState()) {
+function createBrowserHelperController(helper, state = createHelperWatchState()) {
   return {
-    start: () => describeHelperStop(e, n),
-    mayRun: () => checkHelperMayRun(e, n),
-    takeOut: () => void removeBrowserHelper(e, n),
+    start: () => describeHelperStop(helper, state),
+    mayRun: () => checkHelperMayRun(helper, state),
+    takeOut: () => void removeBrowserHelper(helper, state),
     mayConnect: () => {
-      let { watched } = n;
-      let o = e.login();
-      if (watched !== undefined && o === undefined) queueLoginRecheck(e, n);
+      let { watched } = state;
+      let login = helper.login();
+      if (watched !== undefined && login === undefined) queueLoginRecheck(helper, state);
       return (
         watched !== undefined &&
-        n.stopsInFlight === 0 &&
-        !n.isRemovalOwed &&
-        e.isModuleLoaded() &&
-        sameLogin(o, watched.login)
+        state.stopsInFlight === 0 &&
+        !state.isRemovalOwed &&
+        helper.isModuleLoaded() &&
+        sameLogin(login, watched.login)
       );
     },
   };
@@ -228,30 +239,30 @@ var NO_LOGIN_ALIAS = "";
 /**
  * 登录等价比较
  */
-function sameLogin(e, login) {
-  return e === login;
+function sameLogin(login, login_2) {
+  return login === login_2;
 }
 //@ chunk-ae5g0zb5.js:108316-108788 placement
-function describeHelperStop(e, n) {
-  let r = e.login();
-  let { watched } = n;
-  if (n.stopsInFlight > 0 || n.isRemovalOwed) {
-    stopLoginWatch_2(e, n);
+function describeHelperStop(helper, state) {
+  let login = helper.login();
+  let { watched } = state;
+  if (state.stopsInFlight > 0 || state.isRemovalOwed) {
+    stopLoginWatch_2(helper, state);
     return "not_offered";
   }
-  if (watched !== undefined && !sameLogin(r, watched.login)) {
-    stopLoginWatch_2(e, n, HELPER_OFF_LOGIN_CHANGED_TEXT);
+  if (watched !== undefined && !sameLogin(login, watched.login)) {
+    stopLoginWatch_2(helper, state, HELPER_OFF_LOGIN_CHANGED_TEXT);
     return "login_changed";
   }
   if (watched === undefined) {
-    if (r === undefined) {
-      stopLoginWatch_2(e, n);
+    if (login === undefined) {
+      stopLoginWatch_2(helper, state);
       return "failed";
     }
     try {
-      n.watched = {
-        login: r,
-        stop: e.subscribe(() => queueLoginRecheck(e, n)),
+      state.watched = {
+        login,
+        stop: helper.subscribe(() => queueLoginRecheck(helper, state)),
       };
     } catch (error) {
       logError(
@@ -260,12 +271,12 @@ function describeHelperStop(e, n) {
           "claude-test: could not watch who is signed in; stopping the browser helper",
         ),
       );
-      stopLoginWatch_2(e, n);
+      stopLoginWatch_2(helper, state);
       return "failed";
     }
   }
-  if (!e.isOffered()) {
-    stopLoginWatch_2(e, n);
+  if (!helper.isOffered()) {
+    stopLoginWatch_2(helper, state);
     return "not_offered";
   }
   return "watching";
@@ -274,81 +285,85 @@ function describeHelperStop(e, n) {
 /**
  * 判断助手能否运行：停止中或待移除时不提供；登录变化时停止并返回 login_changed。
  */
-function checkHelperMayRun(e, n) {
-  let { watched } = n;
-  if (n.stopsInFlight > 0) return "not_offered";
-  if (n.isRemovalOwed) {
-    stopLoginWatch_2(e, n);
+function checkHelperMayRun(helper, state) {
+  let { watched } = state;
+  if (state.stopsInFlight > 0) return "not_offered";
+  if (state.isRemovalOwed) {
+    stopLoginWatch_2(helper, state);
     return "not_offered";
   }
-  if (watched !== undefined && !sameLogin(e.login(), watched.login)) {
-    stopLoginWatch_2(e, n, HELPER_OFF_LOGIN_CHANGED_TEXT);
+  if (watched !== undefined && !sameLogin(helper.login(), watched.login)) {
+    stopLoginWatch_2(helper, state, HELPER_OFF_LOGIN_CHANGED_TEXT);
     return "login_changed";
   }
-  if (e.isOffered()) return "yes";
-  if (watched !== undefined || e.isRunning()) stopLoginWatch_2(e, n);
+  if (helper.isOffered()) return "yes";
+  if (watched !== undefined || helper.isRunning()) stopLoginWatch_2(helper, state);
   return "not_offered";
 }
 //@ chunk-ae5g0zb5.js:109069-109164 placement
 /**
  * 把“重新核对浏览器助手登录状态”排到微任务里，避免重复排队。
  */
-function queueLoginRecheck(e, n) {
-  if (n.isCheckQueued) return;
-  n.isCheckQueued = true;
-  queueMicrotask(() => void recheckHelperLogin(e, n));
+function queueLoginRecheck(helper, state) {
+  if (state.isCheckQueued) return;
+  state.isCheckQueued = true;
+  queueMicrotask(() => void recheckHelperLogin(helper, state));
 }
 //@ chunk-ae5g0zb5.js:109164-109443 placement
 /**
  * 预热登录后重新核对：登录变了或插件不再提供时停止助手。
  */
-async function recheckHelperLogin(e, n) {
+async function recheckHelperLogin(helper, state) {
   await Promise.resolve()
-    .then(e.warmLogin)
+    .then(helper.warmLogin)
     .catch(() => {});
-  n.isCheckQueued = false;
-  let { watched } = n;
+  state.isCheckQueued = false;
+  let { watched } = state;
   if (watched === undefined) return;
-  if (n.stopsInFlight > 0) {
-    n.isRecheckOwed = true;
+  if (state.stopsInFlight > 0) {
+    state.isRecheckOwed = true;
     return;
   }
-  let o = sameLogin(e.login(), watched.login);
-  if (!n.isRemovalOwed && o && e.isOffered()) return;
-  await stopLoginWatch_2(e, n, o ? HELPER_OFF_UNAVAILABLE_TEXT : HELPER_OFF_LOGIN_CHANGED_TEXT);
+  let loginUnchanged = sameLogin(helper.login(), watched.login);
+  if (!state.isRemovalOwed && loginUnchanged && helper.isOffered()) return;
+  await stopLoginWatch_2(
+    helper,
+    state,
+    loginUnchanged ? HELPER_OFF_UNAVAILABLE_TEXT : HELPER_OFF_LOGIN_CHANGED_TEXT,
+  );
 }
 //@ chunk-ae5g0zb5.js:109443-109900 placement
-async function stopLoginWatch_2(e, n, r) {
-  let { watched } = n;
-  if (r !== undefined && e.isRunning()) n.owedLine = r;
-  n.stopsInFlight += 1;
-  let s = await stopHelperServer(e);
-  n.stopsInFlight -= 1;
-  if (!s) {
-    n.isRemovalOwed = true;
-    if (n.isRecheckOwed && n.stopsInFlight === 0) {
-      n.isRecheckOwed = false;
-      queueLoginRecheck(e, n);
+async function stopLoginWatch_2(helper, state, reason) {
+  let { watched } = state;
+  if (reason !== undefined && helper.isRunning()) state.owedLine = reason;
+  state.stopsInFlight += 1;
+  let stopped = await stopHelperServer(helper);
+  state.stopsInFlight -= 1;
+  if (!stopped) {
+    state.isRemovalOwed = true;
+    if (state.isRecheckOwed && state.stopsInFlight === 0) {
+      state.isRecheckOwed = false;
+      queueLoginRecheck(helper, state);
     }
     return;
   }
-  n.isRecheckOwed = false;
-  n.isRemovalOwed = false;
-  let { owedLine } = n;
-  n.owedLine = undefined;
-  if (n.watched === watched) n.watched = undefined;
+  state.isRecheckOwed = false;
+  state.isRemovalOwed = false;
+  let { owedLine } = state;
+  state.owedLine = undefined;
+  if (state.watched === watched) state.watched = undefined;
   if (watched !== undefined) runCleanupStep("end the login watch", watched.stop);
-  stopLoginWatch(n);
-  if (owedLine !== undefined) runCleanupStep("show the stop message", () => e.tell(owedLine));
+  stopLoginWatch(state);
+  if (owedLine !== undefined) runCleanupStep("show the stop message", () => helper.tell(owedLine));
 }
 //@ chunk-ae5g0zb5.js:109900-109999 placement
 /**
  * 停掉当前登录监视并清空监视对象。
  */
-function stopLoginWatch(e) {
-  let { watched } = e;
+function stopLoginWatch(state) {
+  let { watched } = state;
   if (watched?.login === NO_LOGIN_ALIAS) {
-    e.watched = undefined;
+    state.watched = undefined;
     runCleanupStep("end the login watch", watched.stop);
   }
 }
@@ -356,34 +371,34 @@ function stopLoginWatch(e) {
 /**
  * 从会话中移除浏览器助手，失败时安排重试。
  */
-async function removeBrowserHelper(e, n) {
-  n.stopsInFlight += 1;
-  let r = await stopHelperServer(e);
-  n.stopsInFlight -= 1;
-  if (r) {
-    n.isRemovalOwed = false;
-    stopLoginWatch(n);
-    let { owedLine } = n;
-    n.owedLine = undefined;
-    if (owedLine !== undefined) runCleanupStep("show the stop message", () => e.tell(owedLine));
-    if (n.isRecheckOwed && n.stopsInFlight === 0) {
-      n.isRecheckOwed = false;
-      queueLoginRecheck(e, n);
+async function removeBrowserHelper(helper, state) {
+  state.stopsInFlight += 1;
+  let stopped = await stopHelperServer(helper);
+  state.stopsInFlight -= 1;
+  if (stopped) {
+    state.isRemovalOwed = false;
+    stopLoginWatch(state);
+    let { owedLine } = state;
+    state.owedLine = undefined;
+    if (owedLine !== undefined) runCleanupStep("show the stop message", () => helper.tell(owedLine));
+    if (state.isRecheckOwed && state.stopsInFlight === 0) {
+      state.isRecheckOwed = false;
+      queueLoginRecheck(helper, state);
     }
     return;
   }
-  n.isRemovalOwed = true;
-  if (n.watched !== undefined) {
-    if (n.isRecheckOwed && n.stopsInFlight === 0) {
-      n.isRecheckOwed = false;
-      queueLoginRecheck(e, n);
+  state.isRemovalOwed = true;
+  if (state.watched !== undefined) {
+    if (state.isRecheckOwed && state.stopsInFlight === 0) {
+      state.isRecheckOwed = false;
+      queueLoginRecheck(helper, state);
     }
     return;
   }
   try {
-    n.watched = {
+    state.watched = {
       login: NO_LOGIN_ALIAS,
-      stop: e.subscribe(() => queueLoginRecheck(e, n)),
+      stop: helper.subscribe(() => queueLoginRecheck(helper, state)),
     };
   } catch (error) {
     logError(
@@ -398,9 +413,9 @@ async function removeBrowserHelper(e, n) {
 /**
  * 停止浏览器助手 MCP 服务器，失败时记录并返回 false。
  */
-async function stopHelperServer(e) {
+async function stopHelperServer(helper) {
   try {
-    await e.stopServer();
+    await helper.stopServer();
     return true;
   } catch (error) {
     logError(
@@ -416,12 +431,12 @@ async function stopHelperServer(e) {
 /**
  * 执行一步清理，失败时记录。
  */
-function runCleanupStep(e, stop) {
+function runCleanupStep(step, stop) {
   try {
     stop();
   } catch (error) {
     logError(
-      withTelemetryMessage(toError(error), `claude-test: removed the browser helper, but could not ${e}`),
+      withTelemetryMessage(toError(error), `claude-test: removed the browser helper, but could not ${step}`),
     );
   }
 }
@@ -429,28 +444,31 @@ function runCleanupStep(e, stop) {
 /**
  * 按宿主保存浏览器助手的监视与重试状态。
  */
-var helperWatchStateSlot = new HostScoped(createHelperWatchState);
+var helperWatchStateSlot; // deferred: uses createHelperWatchState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ae5g0zb5.js:110866", () => {
+  helperWatchStateSlot = new HostScoped(createHelperWatchState);
+});
 //@ chunk-ae5g0zb5.js:110883-111071 placement
 /**
  * 订阅会影响助手可用性的事件（会话、GrowthBook、策略、全局配置、合规污点），返回统一取消函数。
  */
-function subscribeHelperInvalidation(rootSession, n) {
-  let r = [];
-  let o = () => {
-    for (let s of r) s();
+function subscribeHelperInvalidation(rootSession, onChange) {
+  let unsubscribers = [];
+  let unsubscribeAll = () => {
+    for (let unsubscribe of unsubscribers) unsubscribe();
   };
   try {
-    r.push(loginEventCounter.of(rootSession).subscribe(n));
-    r.push(onGrowthBookRefresh(n));
-    r.push(onPolicyVerdictChanged(n));
-    r.push(subscribeGlobalConfigInstalled(n));
-    r.push(onCredentialChange(n));
-    r.push(onComplianceTaintsChanged(n));
+    unsubscribers.push(loginEventCounter.of(rootSession).subscribe(onChange));
+    unsubscribers.push(onGrowthBookRefresh(onChange));
+    unsubscribers.push(onPolicyVerdictChanged(onChange));
+    unsubscribers.push(subscribeGlobalConfigInstalled(onChange));
+    unsubscribers.push(onCredentialChange(onChange));
+    unsubscribers.push(onComplianceTaintsChanged(onChange));
   } catch (error) {
-    o();
+    unsubscribeAll();
     throw error;
   }
-  return o;
+  return unsubscribeAll;
 }
 //@ chunk-ae5g0zb5.js:111071-111310 placement
 /**
@@ -462,9 +480,9 @@ async function removeBrowserHelperServer() {
   try {
     clearPluginCache("claude-test: the browser helper stopped");
   } finally {
-    let e = currentSurfaceBinding();
-    if (e === undefined) throw Error("no session to remove the browser helper from");
-    await e.removeMcpServer(HELPER_SERVER_NAME);
+    let binding = currentSurfaceBinding();
+    if (binding === undefined) throw Error("no session to remove the browser helper from");
+    await binding.removeMcpServer(HELPER_SERVER_NAME);
   }
 }
 //@ chunk-ae5g0zb5.js:111310-111322 placement
@@ -492,9 +510,9 @@ function getBrowserHelperController() {
           ),
           HELPER_RECHECK_INTERVAL_MS,
         ).then(() => {}),
-      subscribe: (n) => subscribeHelperInvalidation(rootSession, n),
+      subscribe: (onChange) => subscribeHelperInvalidation(rootSession, onChange),
       stopServer: removeBrowserHelperServer,
-      tell: (n) => uiLog(CC_PLUGIN_CLAUDE_TEST, n),
+      tell: (line) => uiLog(CC_PLUGIN_CLAUDE_TEST, line),
     },
     helperWatchStateSlot.of(rootSession.host),
   );
@@ -507,21 +525,25 @@ var browserHelperHooks = {
   start: () => getBrowserHelperController().start(),
   mayRun: () => getBrowserHelperController().mayRun(),
   takeOut: () => getBrowserHelperController().takeOut(),
-  mayConnectMcpServer: (e) => e === BROWSER && getBrowserHelperController().mayConnect(),
+  mayConnectMcpServer: (serverName) => serverName === BROWSER && getBrowserHelperController().mayConnect(),
 };
 //@ chunk-ae5g0zb5.js:111748-111777 placement
 /**
  * Claude Test 需要的三个代理类型（explorer/author/runner），以及代理定义重读结果的缓存时长。
  */
-var CLAUDE_TEST_AGENT_TYPES = [CLAUDE_TEST_EXPLORER, CLAUDE_TEST_AUTHOR, CLAUDE_TEST_RUNNER];
-var AGENTS_REREAD_CACHE_MS = 5000;
+var CLAUDE_TEST_AGENT_TYPES; // deferred: uses CLAUDE_TEST_EXPLORER (./constants.js) of its import cycle while loading; runs once the cycle is complete
+var AGENTS_REREAD_CACHE_MS;
+deferInit("chunk-ae5g0zb5.js:111748", () => {
+  CLAUDE_TEST_AGENT_TYPES = [CLAUDE_TEST_EXPLORER, CLAUDE_TEST_AUTHOR, CLAUDE_TEST_RUNNER];
+  AGENTS_REREAD_CACHE_MS = 5000;
+});
 //@ chunk-ae5g0zb5.js:111777-111862 placement
 /**
  * 判断给定代理定义里 explorer/author/runner 是否都在。
  */
-function hasAllTestAgents(e) {
-  let n = new Set(e.map((r) => r.agentType));
-  return CLAUDE_TEST_AGENT_TYPES.every((r) => n.has(r));
+function hasAllTestAgents(agents) {
+  let types = new Set(agents.map((agent) => agent.agentType));
+  return CLAUDE_TEST_AGENT_TYPES.every((type) => types.has(type));
 }
 //@ chunk-ae5g0zb5.js:111862-111985 placement
 /**
@@ -547,29 +569,29 @@ async function rereadPluginAgents() {
     return;
   }
   clearPluginAgents();
-  let n = refreshAgentsAndDefinitions().finally(() => {
-    if (claudeTestState.agentsReread?.read === n) claudeTestState.agentsReread = undefined;
+  let read = refreshAgentsAndDefinitions().finally(() => {
+    if (claudeTestState.agentsReread?.read === read) claudeTestState.agentsReread = undefined;
   });
   claudeTestState.agentsReread = {
-    read: n,
+    read,
     at: Date.now(),
   };
-  await n;
+  await read;
 }
 //@ chunk-ae5g0zb5.js:112211-112397 placement
 async function seatOwnAgents(
-  e = getActiveAgentDefinitions,
-  n = rereadPluginAgents,
-  r = AGENTS_REREAD_CACHE_MS,
+  getAgents = getActiveAgentDefinitions,
+  reread = rereadPluginAgents,
+  cacheMs = AGENTS_REREAD_CACHE_MS,
 ) {
   try {
-    if (hasAllTestAgents(e())) return "listed";
-    let o = await withDeadline(
-      n().then(() => true),
-      r,
+    if (hasAllTestAgents(getAgents())) return "listed";
+    let read = await withDeadline(
+      reread().then(() => true),
+      cacheMs,
     );
-    if (hasAllTestAgents(e())) return "listed";
-    return o === undefined ? "reading" : "missing";
+    if (hasAllTestAgents(getAgents())) return "listed";
+    return read === undefined ? "reading" : "missing";
   } catch {
     return "missing";
   }
@@ -594,38 +616,44 @@ var BLOCKED_STATES_2 = [
   "other",
 ];
 //@ chunk-ae5g0zb5.js:112879-112999 placement
-var SPEC_PROPOSAL_EVENT_SCHEMA = DoctorLazy(() =>
-  u({
-    proposed: E().int().min(0).max(1000),
-    firstTime: M(),
-    filed: array(unknown()).max(1000),
-    replaced: array(unknown()).max(1000),
-  }),
-);
+var SPEC_PROPOSAL_EVENT_SCHEMA; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ae5g0zb5.js:112879", () => {
+  SPEC_PROPOSAL_EVENT_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      proposed: numberSchema().int().min(0).max(1000),
+      firstTime: booleanSchema(),
+      filed: array(unknown()).max(1000),
+      replaced: array(unknown()).max(1000),
+    }),
+  );
+});
 //@ chunk-ae5g0zb5.js:112999-113190 placement
 /**
  * 解析规格提议事件为遥测计数（proposed/filed/first_time）。
  */
 function parseSpecProposalEvent(runResultsFile) {
-  let n = SPEC_PROPOSAL_EVENT_SCHEMA().safeParse(runResultsFile);
-  if (!n.success || n.data.proposed === 0) return;
+  let parsed = SPEC_PROPOSAL_EVENT_SCHEMA().safeParse(runResultsFile);
+  if (!parsed.success || parsed.data.proposed === 0) return;
   return {
-    proposed: n.data.proposed,
-    filed: n.data.filed.length + n.data.replaced.length,
-    first_time: n.data.firstTime,
+    proposed: parsed.data.proposed,
+    filed: parsed.data.filed.length + parsed.data.replaced.length,
+    first_time: parsed.data.firstTime,
   };
 }
 //@ chunk-ae5g0zb5.js:113239-113265 placement
 /**
  * HostScoped 的运行目录表
  */
-var runFolderMapSlot = new HostScoped(() => new Map());
+var notedRunsByHost; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ae5g0zb5.js:113239", () => {
+  notedRunsByHost = new HostScoped(() => new Map());
+});
 //@ chunk-ae5g0zb5.js:113265-113302 placement
 /**
  * 取当前宿主的运行目录表
  */
 function runFolderMap() {
-  return runFolderMapSlot.of(getRootSession().host);
+  return notedRunsByHost.of(getRootSession().host);
 }
 //@ chunk-ae5g0zb5.js:113302-113312 placement
 /**
@@ -633,18 +661,23 @@ function runFolderMap() {
  */
 var MAX_REMEMBERED_RUN_FOLDERS = 64;
 //@ chunk-ae5g0zb5.js:113312-113671 placement
-function rememberRunFolder(e) {
+function rememberRunFolder(folder) {
   try {
-    if (!isAbsolute(e)) return;
+    if (!isAbsolute(folder)) return;
     let projectRoot = getProjectRoot();
-    let r = resolve(e);
-    let o = runFolderMap();
-    if (!isSubpathOf(projectRoot, r, false) || isUntouchableSpelling(r) || o.has(r)) return;
-    if (o.size >= MAX_REMEMBERED_RUN_FOLDERS) {
-      let s = o.keys().next();
-      if (s.done !== true) o.delete(s.value);
+    let resolved = resolve(folder);
+    let folders = runFolderMap();
+    if (
+      !isSubpathOf(projectRoot, resolved, false) ||
+      isUntouchableSpelling(resolved) ||
+      folders.has(resolved)
+    )
+      return;
+    if (folders.size >= MAX_REMEMBERED_RUN_FOLDERS) {
+      let first = folders.keys().next();
+      if (first.done !== true) folders.delete(first.value);
     }
-    o.set(r, {
+    folders.set(resolved, {
       root: projectRoot,
       isDraftSent: false,
       isRunSent: false,
@@ -660,19 +693,22 @@ function rememberRunFolder(e) {
   }
 }
 //@ chunk-ae5g0zb5.js:113700-113943 placement
-var RUN_RESULTS_SCHEMA = DoctorLazy(() => {
-  let e = E().int().min(0).max(1e4);
-  return u({
-    schema: literal("claude-test-results/1"),
-    counts: u({
-      specs: e,
-      passed: e,
-      failed: e,
-      blocked: e,
-    }),
-    runnerSeconds: E().int().min(0).max(86400),
-    hostsRefused: e,
-    blockedWord: _enum(BLOCKED_STATES_2).optional().catch("other"),
+var RUN_RESULTS_SCHEMA; // deferred: uses DoctorLazy (../../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ae5g0zb5.js:113700", () => {
+  RUN_RESULTS_SCHEMA = DoctorLazy(() => {
+    let countField = numberSchema().int().min(0).max(1e4);
+    return objectSchema({
+      schema: literal("claude-test-results/1"),
+      counts: objectSchema({
+        specs: countField,
+        passed: countField,
+        failed: countField,
+        blocked: countField,
+      }),
+      runnerSeconds: numberSchema().int().min(0).max(86400),
+      hostsRefused: countField,
+      blockedWord: _enum(BLOCKED_STATES_2).optional().catch("other"),
+    });
   });
 });
 //@ chunk-ae5g0zb5.js:113943-114230 placement
@@ -680,9 +716,9 @@ var RUN_RESULTS_SCHEMA = DoctorLazy(() => {
  * 解析 claude-test-results/1 结果，返回计数与错误码（没有通过也没有失败时取 blockedWord）。
  */
 function parseRunResults(runResultsFile) {
-  let n = RUN_RESULTS_SCHEMA().safeParse(runResultsFile);
-  if (!n.success) return;
-  let { counts, runnerSeconds, hostsRefused, blockedWord } = n.data;
+  let parsed = RUN_RESULTS_SCHEMA().safeParse(runResultsFile);
+  if (!parsed.success) return;
+  let { counts, runnerSeconds, hostsRefused, blockedWord } = parsed.data;
   return {
     errorCode: counts.passed + counts.failed > 0 ? undefined : (blockedWord ?? "other"),
     counts: {
@@ -697,32 +733,32 @@ function parseRunResults(runResultsFile) {
 }
 //@ chunk-ae5g0zb5.js:114230-114952 placement
 var countRunsFromUsageEvents = async () => {
-  let e;
+  let folders;
   try {
-    e = runFolderMap();
+    folders = runFolderMap();
   } catch (error) {
     logForDebugging(`Claude Test could not count runs in the usage events: ${errorMessage(error)}`, {
       level: "error",
     });
     return;
   }
-  for (let [n, r] of e) {
-    if (r.isRunSent || r.isBusy) continue;
-    r.isBusy = true;
+  for (let [folder, entry] of folders) {
+    if (entry.isRunSent || entry.isBusy) continue;
+    entry.isBusy = true;
     try {
-      if ((await readPluginFileSafe(r.root, n)) !== "ok") continue;
-      let o = r.isDraftSent
+      if ((await readPluginFileSafe(entry.root, folder)) !== "ok") continue;
+      let draft = entry.isDraftSent
         ? undefined
-        : parseSpecProposalEvent(await readRunResultsFile(join(n, "saved.json")));
-      if (o !== undefined) {
-        await logFeatureOkAsync("claude_test_draft", o);
-        r.isDraftSent = true;
+        : parseSpecProposalEvent(await readRunResultsFile(join(folder, "saved.json")));
+      if (draft !== undefined) {
+        await logFeatureOkAsync("claude_test_draft", draft);
+        entry.isDraftSent = true;
       }
-      let runResults = parseRunResults(await readRunResultsFile(join(n, "results.json")));
+      let runResults = parseRunResults(await readRunResultsFile(join(folder, "results.json")));
       if (runResults === undefined) continue;
       if (runResults.errorCode === undefined) await logFeatureOkAsync("claude_test_run", runResults.counts);
       else await logFeatureBadAsync("claude_test_run", runResults.errorCode, runResults.counts);
-      r.isRunSent = true;
+      entry.isRunSent = true;
     } catch (error) {
       logForDebugging(
         `Claude Test could not count a run in the usage events; it is looked at again when the runner next stops: ${errorMessage(error)}`,
@@ -731,7 +767,7 @@ var countRunsFromUsageEvents = async () => {
         },
       );
     } finally {
-      r.isBusy = false;
+      entry.isBusy = false;
     }
   }
 };
@@ -739,11 +775,11 @@ var countRunsFromUsageEvents = async () => {
 /**
  * 读取并解析运行结果文件，失败返回 null。
  */
-async function readRunResultsFile(e) {
-  let n = await mcpAuthCacheContent(e);
-  if (n === undefined) return null;
+async function readRunResultsFile(filePath) {
+  let raw = await readSmallFileText(filePath);
+  if (raw === undefined) return null;
   try {
-    return jsonParse(stripBom(n));
+    return jsonParse(stripBom(raw));
   } catch {
     return null;
   }
@@ -752,9 +788,9 @@ async function readRunResultsFile(e) {
 /**
  * 以 claude_test_helper_start 打点记录助手启动成功或失败原因。
  */
-function logHelperStart(e) {
-  if (e === "listed") logFeatureOk("claude_test_helper_start");
-  else logFeatureBad("claude_test_helper_start", e);
+function logHelperStart(result) {
+  if (result === "listed") logFeatureOk("claude_test_helper_start");
+  else logFeatureBad("claude_test_helper_start", result);
 }
 //@ chunk-ae5g0zb5.js:115223-115588 placement
 var LOCAL_TASK_DESCRIPTIONS = [
@@ -778,18 +814,18 @@ var LOCAL_TASK_DESCRIPTIONS = [
 /**
  * /claude-test 参数补全：本地任务描述与 .claude-test/specs 下的规格名。
  */
-async function completeSpecArgs(e, n) {
-  let r = new Set(e);
-  if (LOCAL_TASK_DESCRIPTIONS.some((s) => r.has(s.value))) return [];
-  let o = await readdir(join(getCwd(), ".claude-test", "specs")).catch(() => []);
+async function completeSpecArgs(used, prefix) {
+  let seen = new Set(used);
+  if (LOCAL_TASK_DESCRIPTIONS.some((task) => seen.has(task.value))) return [];
+  let files = await readdir(join(getCwd(), ".claude-test", "specs")).catch(() => []);
   return [
-    ...(e.length === 0 ? LOCAL_TASK_DESCRIPTIONS : []),
-    ...o
-      .filter((s) => s.endsWith(".md"))
-      .map((s) => ({
-        value: s.slice(0, -3),
+    ...(used.length === 0 ? LOCAL_TASK_DESCRIPTIONS : []),
+    ...files
+      .filter((fileName) => fileName.endsWith(".md"))
+      .map((fileName) => ({
+        value: fileName.slice(0, -3),
       })),
-  ].filter((s) => s.value.startsWith(n) && !r.has(s.value));
+  ].filter((option) => option.value.startsWith(prefix) && !seen.has(option.value));
 }
 //@ chunk-ae5g0zb5.js:115883-115918 placement
 /**
@@ -800,9 +836,9 @@ var CLAUDE_TEST_BACKGROUND = "${CLAUDE_TEST_BACKGROUND}";
 /**
  * 判断当前会话是否允许后台 shell（禁用或 plan 模式为 none，否则 kept）。
  */
-function backgroundShellPolicy(e) {
+function backgroundShellPolicy(ctx) {
   if (isBackgroundShellDisabled()) return "none";
-  if (alwaysFalseGateway() && alwaysFalseRefresh(getToolPermissionContext(e).mode)) return "none";
+  if (alwaysFalseGateway() && alwaysFalseRefresh(getToolPermissionContext(ctx).mode)) return "none";
   return "kept";
 }
 export {
@@ -812,7 +848,7 @@ export {
   CLAUDE_TEST_RELOAD_TIMEOUT_MS,
   browserHelperHooks,
   helperWatchStateSlot,
-  runFolderMapSlot,
+  notedRunsByHost,
   CLAUDE_TEST_AGENT_TYPES,
   LOCAL_RUN_DESCRIPTION,
   AGENTS_REREAD_CACHE_MS,

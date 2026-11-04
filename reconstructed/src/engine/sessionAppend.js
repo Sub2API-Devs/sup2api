@@ -14,22 +14,22 @@ import { safeDeepEqual } from "../plugins/functionHooks/apiDispatch.js";
 import { logForDebugging } from "../utils/debug.js";
 
 //@ chunk-1nk4j4sn.js:15092-15461 placement
-var appendCoreOf = (e, row, r) => ({
+var appendCoreOf = (options, row, onApplied) => ({
   name: "core",
   isCore: true,
   budgetMs: 0,
-  run: async (n) => {
-    let p = rowWithContent(row, n.message);
-    let message = e.fills || row.type === "assistant" ? mergeMessageInPlace(row, p) : p;
-    let a = summarizeMessageForExport(message);
-    if (p === row && !safeDeepEqual(n.message.content, a.content))
+  run: async (input) => {
+    let rewritten = rowWithContent(row, input.message);
+    let message = options.fills || row.type === "assistant" ? mergeMessageInPlace(row, rewritten) : rewritten;
+    let summarized = summarizeMessageForExport(message);
+    if (rewritten === row && !safeDeepEqual(input.message.content, summarized.content))
       logForDebugging(
         `session.append: a rewrite of row ${row.uuid} is not kept: what it changed is pinned, rendered per request or carries media`,
       );
-    if (!e.fills) e.keep([message]);
-    r(message);
+    if (!options.fills) options.keep([message]);
+    onApplied(message);
     return {
-      message: a,
+      message: summarized,
       uuid: row.uuid,
     };
   },

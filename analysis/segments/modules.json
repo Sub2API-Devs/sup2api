@@ -3278,14 +3278,16 @@
    "chunk-0e8j1zzj.js#uTr",
    "chunk-0e8j1zzj.js#qmo",
    "chunk-0e8j1zzj.js#e$n",
-   "chunk-0e8j1zzj.js#fTr"
+   "chunk-0e8j1zzj.js#fTr",
+   "chunk-xkyzvvf1.js#y3e"
   ],
   "chunks": {
-   "chunk-0e8j1zzj.js": 27
+   "chunk-0e8j1zzj.js": 27,
+   "chunk-xkyzvvf1.js": 1
   },
-  "bytes": 8676,
+  "bytes": 8706,
   "methods": {
-   "placement": 27
+   "placement": 28
   }
  },
  "components/permissions/shellPermissionHelpers.tsx": {
@@ -3840,7 +3842,6 @@
    "chunk-0wdgqhcf.js#Cn",
    "chunk-18hwfzwa.js#FMt",
    "chunk-38x90rmj.js#q",
-   "chunk-ddkccdnb.js#cpr",
    "chunk-dyjqn2aj.js#tqn",
    "chunk-pc1rmcr2.js#k",
    "chunk-xde1fhwg.js#I$t",
@@ -3853,7 +3854,6 @@
    "chunk-18hwfzwa.js": 1,
    "chunk-38x90rmj.js": 1,
    "chunk-8wvtd8sr.js": 3,
-   "chunk-ddkccdnb.js": 1,
    "chunk-dyjqn2aj.js": 1,
    "chunk-e6aww6q8.js": 203,
    "chunk-pc1rmcr2.js": 1,
@@ -3861,11 +3861,11 @@
    "chunk-xde1fhwg.js": 1,
    "chunk-xr4xc2mq.js": 1
   },
-  "bytes": 100633,
+  "bytes": 100600,
   "methods": {
    "fingerprint": 15,
    "callgraph-witnessed": 2,
-   "placement": 208,
+   "placement": 207,
    "shared-adjacent": 1,
    "layout": 30,
    "file-local": 1
@@ -6057,8 +6057,6 @@
    "chunk-e6aww6q8.js#fVe",
    "chunk-e6aww6q8.js#vIt",
    "chunk-e6aww6q8.js#pVe",
-   "chunk-e6aww6q8.js#Q9o",
-   "chunk-e6aww6q8.js#ZGn",
    "chunk-qzv7ezvq.js#um",
    "chunk-qzv7ezvq.js#U2",
    "chunk-qzv7ezvq.js#sQo",
@@ -6115,15 +6113,15 @@
    "chunk-cg2r2hy6.js": 2,
    "chunk-cgs3vg0v.js": 1,
    "chunk-dz3q485w.js": 1,
-   "chunk-e6aww6q8.js": 505,
+   "chunk-e6aww6q8.js": 503,
    "chunk-qzv7ezvq.js": 19,
    "chunk-rds552kq.js": 1,
    "chunk-wd9kxbpn.js": 1,
    "chunk-x753sk9t.js": 8
   },
-  "bytes": 219198,
+  "bytes": 218782,
   "methods": {
-   "fingerprint": 34,
+   "fingerprint": 32,
    "callgraph-fingerprint": 6,
    "placement": 29,
    "affinity": 1,
@@ -6694,19 +6692,21 @@
    "chunk-0n43rj0b.js#S",
    "chunk-ha3km179.js#fd",
    "chunk-ha3km179.js#md",
+   "chunk-ah34pb7m.js#bWe",
    "chunk-e6aww6q8.js#Wue",
    "chunk-p7xejzdb.js#p"
   ],
   "chunks": {
    "chunk-0n43rj0b.js": 2,
+   "chunk-ah34pb7m.js": 1,
    "chunk-e6aww6q8.js": 1,
    "chunk-ha3km179.js": 2,
    "chunk-nw7jbebs.js": 49,
    "chunk-p7xejzdb.js": 1
   },
-  "bytes": 15262,
+  "bytes": 15342,
   "methods": {
-   "placement": 6,
+   "placement": 7,
    "fingerprint": 10,
    "callgraph-fingerprint": 5,
    "affinity": 1,
@@ -9252,26 +9252,19 @@
    "chunk-10q8r8ck.js#ue",
    "chunk-10q8r8ck.js#h",
    "chunk-10q8r8ck.js#G",
-   "chunk-ag5x7vhf.js#rC",
-   "chunk-ag5x7vhf.js#ch",
-   "chunk-ag5x7vhf.js#_u",
-   "chunk-ag5x7vhf.js#oC",
-   "chunk-ag5x7vhf.js#mh",
    "chunk-e6aww6q8.js#VOr"
   ],
   "chunks": {
    "chunk-10q8r8ck.js": 27,
-   "chunk-ag5x7vhf.js": 5,
    "chunk-e6aww6q8.js": 1
   },
-  "bytes": 12374,
+  "bytes": 9899,
   "methods": {
-   "fingerprint": 11,
+   "fingerprint": 10,
    "file-local": 2,
    "layout": 7,
    "callgraph-fingerprint": 8,
-   "placement": 3,
-   "sole-consumer": 2
+   "placement": 1
   }
  },
  "commands/context/context.tsx": {
@@ -14373,6 +14366,12 @@
  "utils/effort.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-kswt4qha.js#U",
+   "chunk-kswt4qha.js#VZo",
+   "chunk-kswt4qha.js#re",
+   "chunk-kswt4qha.js#scr",
+   "chunk-kswt4qha.js#yhi",
+   "chunk-kswt4qha.js#icr",
    "chunk-kswt4qha.js#iS",
    "chunk-kswt4qha.js#mae",
    "chunk-kswt4qha.js#VFe",
@@ -14480,12 +14479,12 @@
    "chunk-3rwvzn82.js": 1,
    "chunk-dcmhvw5a.js": 2,
    "chunk-kcvmr83c.js": 2,
-   "chunk-kswt4qha.js": 94
+   "chunk-kswt4qha.js": 100
   },
-  "bytes": 13570,
+  "bytes": 13859,
   "methods": {
    "callgraph-fingerprint": 4,
-   "placement": 19,
+   "placement": 25,
    "callgraph-witnessed": 2,
    "layout": 68,
    "file-local": 3,
@@ -17120,14 +17119,22 @@
    "chunk-18hwfzwa.js#fko",
    "chunk-18hwfzwa.js#zCe",
    "chunk-18hwfzwa.js#@1115666",
-   "chunk-18hwfzwa.js#AL"
+   "chunk-18hwfzwa.js#AL",
+   "chunk-kswt4qha.js#zCt",
+   "chunk-kswt4qha.js#rQr",
+   "chunk-kswt4qha.js#lhi",
+   "chunk-kswt4qha.js#dhi",
+   "chunk-kswt4qha.js#Q",
+   "chunk-kswt4qha.js#O",
+   "chunk-kswt4qha.js#q"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 20
+   "chunk-18hwfzwa.js": 20,
+   "chunk-kswt4qha.js": 7
   },
-  "bytes": 6002,
+  "bytes": 7111,
   "methods": {
-   "placement": 20
+   "placement": 27
   }
  },
  "components/AutocompactOfferDialog.tsx": {
@@ -17707,18 +17714,16 @@
    "chunk-18hwfzwa.js#$Mo",
    "chunk-18hwfzwa.js#VMo",
    "chunk-18hwfzwa.js#KMo",
-   "chunk-18hwfzwa.js#mk",
-   "chunk-bwbq4xvm.js#k"
+   "chunk-18hwfzwa.js#mk"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 5,
-   "chunk-bwbq4xvm.js": 1
+   "chunk-18hwfzwa.js": 5
   },
-  "bytes": 3272,
+  "bytes": 3216,
   "methods": {
    "placement": 3,
    "layout": 1,
-   "fingerprint": 2
+   "fingerprint": 1
   }
  },
  "components/permissions/AskUserQuestionPermissionRequest/PreviewQuestionView.tsx": {
@@ -19350,17 +19355,23 @@
    "fingerprint": 1
   }
  },
- "_unattributed/chunk-18hwfzwa/part-001.js": {
-  "kind": "unattributed",
+ "screens/repl/InlineProgressList.tsx": {
+  "kind": "first-party",
   "decls": [
-   "chunk-18hwfzwa.js#aCt"
+   "chunk-18hwfzwa.js#aCt",
+   "chunk-18hwfzwa.js#tEe",
+   "chunk-18hwfzwa.js#oEe",
+   "chunk-18hwfzwa.js#vte",
+   "chunk-18hwfzwa.js#lCt",
+   "chunk-18hwfzwa.js#Cte",
+   "chunk-18hwfzwa.js#@1669995"
   ],
   "chunks": {
-   "chunk-18hwfzwa.js": 1
+   "chunk-18hwfzwa.js": 7
   },
-  "bytes": 104,
+  "bytes": 1280,
   "methods": {
-   "leftover": 1
+   "placement": 7
   }
  },
  "components/Stats.tsx": {
@@ -19412,24 +19423,6 @@
    "layout": 7,
    "callgraph-witnessed": 1,
    "callgraph-fingerprint": 1
-  }
- },
- "screens/repl/InlineProgressList.tsx": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-18hwfzwa.js#tEe",
-   "chunk-18hwfzwa.js#oEe",
-   "chunk-18hwfzwa.js#vte",
-   "chunk-18hwfzwa.js#lCt",
-   "chunk-18hwfzwa.js#Cte",
-   "chunk-18hwfzwa.js#@1669995"
-  ],
-  "chunks": {
-   "chunk-18hwfzwa.js": 6
-  },
-  "bytes": 1176,
-  "methods": {
-   "placement": 6
   }
  },
  "tools/SendMessageTool/SendMessageTool.ts": {
@@ -19840,6 +19833,7 @@
  "services/analytics/metadata.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-aepeg2w5.js#Aro",
    "chunk-aepeg2w5.js#VV",
    "chunk-aepeg2w5.js#zo",
    "chunk-aepeg2w5.js#mu",
@@ -19905,9 +19899,6 @@
    "chunk-aepeg2w5.js#ias",
    "chunk-aepeg2w5.js#nxn",
    "chunk-aepeg2w5.js#HO",
-   "chunk-aepeg2w5.js#aas",
-   "chunk-aepeg2w5.js#las",
-   "chunk-aepeg2w5.js#Oro",
    "chunk-aepeg2w5.js#hd",
    "chunk-aepeg2w5.js#KO",
    "chunk-aepeg2w5.js#j8t",
@@ -19985,12 +19976,12 @@
    "chunk-18hwfzwa.js": 1,
    "chunk-1wpnxx5r.js": 1,
    "chunk-6vnxsn99.js": 1,
-   "chunk-aepeg2w5.js": 137
+   "chunk-aepeg2w5.js": 135
   },
-  "bytes": 33447,
+  "bytes": 33361,
   "methods": {
    "fingerprint": 15,
-   "placement": 83,
+   "placement": 81,
    "sole-consumer": 2,
    "layout": 39,
    "file-local": 1
@@ -24922,23 +24913,23 @@
    "chunk-1ny7cxrt.js#O1",
    "chunk-1ny7cxrt.js#_1",
    "chunk-1ny7cxrt.js#Fbe",
-   "chunk-1ny7cxrt.js#Bbe",
-   "chunk-1ny7cxrt.js#Kbe",
    "chunk-1ny7cxrt.js#C1",
    "chunk-1ny7cxrt.js#Jbe",
    "chunk-1ny7cxrt.js#Xbe"
   ],
   "chunks": {
-   "chunk-1ny7cxrt.js": 56
+   "chunk-1ny7cxrt.js": 54
   },
-  "bytes": 24085,
+  "bytes": 23946,
   "methods": {
-   "placement": 56
+   "placement": 54
   }
  },
  "services/claudeGateway/usageMetering.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-1ny7cxrt.js#Bbe",
+   "chunk-1ny7cxrt.js#Kbe",
    "chunk-1ny7cxrt.js#b1",
    "chunk-1ny7cxrt.js#v1",
    "chunk-1ny7cxrt.js#W0",
@@ -24952,11 +24943,11 @@
    "chunk-1ny7cxrt.js#A1"
   ],
   "chunks": {
-   "chunk-1ny7cxrt.js": 11
+   "chunk-1ny7cxrt.js": 13
   },
-  "bytes": 3943,
+  "bytes": 4082,
   "methods": {
-   "placement": 11
+   "placement": 13
   }
  },
  "services/claudeGateway/mockRateLimits.ts": {
@@ -33689,7 +33680,6 @@
   "kind": "first-party",
   "decls": [
    "chunk-ah34pb7m.js#LHt",
-   "chunk-ah34pb7m.js#bWe",
    "chunk-ah34pb7m.js#mP",
    "chunk-ah34pb7m.js#IT",
    "chunk-ah34pb7m.js#uP",
@@ -33699,12 +33689,12 @@
   ],
   "chunks": {
    "chunk-3k33hyyp.js": 2,
-   "chunk-ah34pb7m.js": 6
+   "chunk-ah34pb7m.js": 5
   },
-  "bytes": 3498,
+  "bytes": 3418,
   "methods": {
    "fingerprint": 5,
-   "placement": 3
+   "placement": 2
   }
  },
  "@modelcontextprotocol/sdk/dist/esm/server/webStandardStreamableHttp.js": {
@@ -38887,51 +38877,16 @@
    "chunk-41w44bgm.js#Rr",
    "chunk-41w44bgm.js#ZMr",
    "chunk-41w44bgm.js#Mr",
-   "chunk-41w44bgm.js#BGn"
+   "chunk-41w44bgm.js#BGn",
+   "chunk-41w44bgm.js#Fs"
   ],
   "chunks": {
-   "chunk-41w44bgm.js": 5,
+   "chunk-41w44bgm.js": 6,
    "chunk-82kqcve8.js": 7
   },
-  "bytes": 2631,
+  "bytes": 2705,
   "methods": {
-   "placement": 12
-  }
- },
- "skills/bundledSkills.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-yjaa68dq.js#S",
-   "chunk-yjaa68dq.js#B",
-   "chunk-yjaa68dq.js#P",
-   "chunk-yjaa68dq.js#x8r",
-   "chunk-yjaa68dq.js#mEn",
-   "chunk-yjaa68dq.js#mst",
-   "chunk-yjaa68dq.js#YFi",
-   "chunk-yjaa68dq.js#ol",
-   "chunk-yjaa68dq.js#ste",
-   "chunk-yjaa68dq.js#m4t",
-   "chunk-yjaa68dq.js#gEn",
-   "chunk-yjaa68dq.js#gst",
-   "chunk-yjaa68dq.js#R",
-   "chunk-yjaa68dq.js#P8r",
-   "chunk-yjaa68dq.js#x",
-   "chunk-41w44bgm.js#Fs",
-   "chunk-e6aww6q8.js#HRr",
-   "chunk-hddjmtjj.js#Ie",
-   "chunk-wy9dbk5f.js#Zo"
-  ],
-  "chunks": {
-   "chunk-41w44bgm.js": 1,
-   "chunk-e6aww6q8.js": 1,
-   "chunk-hddjmtjj.js": 1,
-   "chunk-wy9dbk5f.js": 1,
-   "chunk-yjaa68dq.js": 15
-  },
-  "bytes": 5289,
-  "methods": {
-   "fingerprint": 5,
-   "placement": 14
+   "placement": 13
   }
  },
  "services/workflow/scriptSandbox.ts": {
@@ -40516,13 +40471,6 @@
    "chunk-zfbhezv9.js#ve",
    "chunk-kswt4qha.js#me",
    "chunk-kswt4qha.js#j",
-   "chunk-kswt4qha.js#zCt",
-   "chunk-kswt4qha.js#rQr",
-   "chunk-kswt4qha.js#lhi",
-   "chunk-kswt4qha.js#dhi",
-   "chunk-kswt4qha.js#Q",
-   "chunk-kswt4qha.js#O",
-   "chunk-kswt4qha.js#q",
    "chunk-kswt4qha.js#W",
    "chunk-kswt4qha.js#oQr",
    "chunk-kswt4qha.js#ee",
@@ -40563,20 +40511,14 @@
    "chunk-kswt4qha.js#De",
    "chunk-kswt4qha.js#Ite",
    "chunk-kswt4qha.js#ke",
-   "chunk-kswt4qha.js#U",
    "chunk-kswt4qha.js#ghi",
    "chunk-kswt4qha.js#Ykn",
    "chunk-kswt4qha.js#KZo",
-   "chunk-kswt4qha.js#VZo",
-   "chunk-kswt4qha.js#re",
    "chunk-kswt4qha.js#R",
    "chunk-kswt4qha.js#ocr",
    "chunk-kswt4qha.js#hhi",
-   "chunk-kswt4qha.js#scr",
-   "chunk-kswt4qha.js#yhi",
    "chunk-kswt4qha.js#_hi",
    "chunk-kswt4qha.js#Uwe",
-   "chunk-kswt4qha.js#icr",
    "chunk-kswt4qha.js#acr",
    "chunk-sfy7bm1n.js#V",
    "chunk-sfy7bm1n.js#Har",
@@ -40620,17 +40562,17 @@
    "chunk-9rkt9tdt.js": 2,
    "chunk-e6aww6q8.js": 8,
    "chunk-gz7b768t.js": 1,
-   "chunk-kswt4qha.js": 64,
+   "chunk-kswt4qha.js": 51,
    "chunk-sfy7bm1n.js": 20,
    "chunk-tr0s0d0k.js": 2,
    "chunk-zfbhezv9.js": 79
   },
-  "bytes": 47486,
+  "bytes": 46088,
   "methods": {
    "fingerprint": 9,
    "facade-exports": 64,
    "layout": 50,
-   "placement": 47,
+   "placement": 34,
    "callgraph-fingerprint": 2,
    "file-local": 4,
    "affinity": 2
@@ -49372,7 +49314,6 @@
   "kind": "first-party",
   "decls": [
    "chunk-77a3xzkb.js#l",
-   "chunk-77a3xzkb.js#i",
    "chunk-77a3xzkb.js#jQe",
    "chunk-77a3xzkb.js#s",
    "chunk-77a3xzkb.js#u",
@@ -49385,11 +49326,62 @@
    "chunk-77a3xzkb.js#n"
   ],
   "chunks": {
-   "chunk-77a3xzkb.js": 12
+   "chunk-77a3xzkb.js": 11
   },
-  "bytes": 2799,
+  "bytes": 2764,
   "methods": {
-   "placement": 12
+   "placement": 11
+  }
+ },
+ "services/lowPriority/lowPriorityMode.ts": {
+  "kind": "first-party",
+  "decls": [
+   "chunk-hwmsct5x.js#Yd",
+   "chunk-hwmsct5x.js#y_",
+   "chunk-hwmsct5x.js#w_",
+   "chunk-hwmsct5x.js#We",
+   "chunk-hwmsct5x.js#dD",
+   "chunk-hwmsct5x.js#_st",
+   "chunk-hwmsct5x.js#U8r",
+   "chunk-hwmsct5x.js#B8r",
+   "chunk-hwmsct5x.js#j8r",
+   "chunk-hwmsct5x.js#Ydi",
+   "chunk-hwmsct5x.js#K4e",
+   "chunk-hwmsct5x.js#fir",
+   "chunk-hwmsct5x.js#Ka",
+   "chunk-hwmsct5x.js#aAt",
+   "chunk-hwmsct5x.js#pir",
+   "chunk-hwmsct5x.js#kEn",
+   "chunk-hwmsct5x.js#Kd",
+   "chunk-hwmsct5x.js#To",
+   "chunk-hwmsct5x.js#Xdi",
+   "chunk-hwmsct5x.js#Jdi",
+   "chunk-hwmsct5x.js#Qdi",
+   "chunk-hwmsct5x.js#Vd",
+   "chunk-hwmsct5x.js#Xd",
+   "chunk-hwmsct5x.js#g1",
+   "chunk-hwmsct5x.js#S_",
+   "chunk-hwmsct5x.js#Wd",
+   "chunk-hwmsct5x.js#Jd",
+   "chunk-hwmsct5x.js#Va",
+   "chunk-hwmsct5x.js#Zdi",
+   "chunk-hwmsct5x.js#mir",
+   "chunk-hwmsct5x.js#W8r",
+   "chunk-hwmsct5x.js#E_",
+   "chunk-hwmsct5x.js#zd",
+   "chunk-hwmsct5x.js#v_",
+   "chunk-hwmsct5x.js#R_",
+   "chunk-hwmsct5x.js#A_",
+   "chunk-hwmsct5x.js#gir",
+   "chunk-77a3xzkb.js#i"
+  ],
+  "chunks": {
+   "chunk-77a3xzkb.js": 1,
+   "chunk-hwmsct5x.js": 37
+  },
+  "bytes": 6521,
+  "methods": {
+   "placement": 38
   }
  },
  "utils/swarm/backends/it2Setup.ts": {
@@ -57296,16 +57288,116 @@
    "chunk-8wvtd8sr.js#Bm",
    "chunk-8wvtd8sr.js#Gd",
    "chunk-8wvtd8sr.js#Pv",
-   "chunk-8wvtd8sr.js#Js",
    "chunk-8wvtd8sr.js#Iv",
    "chunk-8wvtd8sr.js#Lv"
   ],
   "chunks": {
-   "chunk-8wvtd8sr.js": 10
+   "chunk-8wvtd8sr.js": 9
   },
-  "bytes": 3675,
+  "bytes": 3647,
   "methods": {
-   "placement": 10
+   "placement": 9
+  }
+ },
+ "tools/ArtifactTool/artifactUrls.ts": {
+  "kind": "first-party",
+  "decls": [
+   "chunk-yxnffbzs.js#Ln",
+   "chunk-yxnffbzs.js#Kge",
+   "chunk-yxnffbzs.js#C3e",
+   "chunk-yxnffbzs.js#TPn",
+   "chunk-yxnffbzs.js#Gw",
+   "chunk-yxnffbzs.js#lso",
+   "chunk-yxnffbzs.js#rcs",
+   "chunk-yxnffbzs.js#R3e",
+   "chunk-yxnffbzs.js#fa",
+   "chunk-yxnffbzs.js#dso",
+   "chunk-yxnffbzs.js#vdt",
+   "chunk-yxnffbzs.js#oe",
+   "chunk-yxnffbzs.js#w",
+   "chunk-yxnffbzs.js#RIt",
+   "chunk-yxnffbzs.js#ke",
+   "chunk-yxnffbzs.js#He",
+   "chunk-yxnffbzs.js#APn",
+   "chunk-yxnffbzs.js#scs",
+   "chunk-yxnffbzs.js#eyr",
+   "chunk-yxnffbzs.js#X",
+   "chunk-yxnffbzs.js#xIt",
+   "chunk-yxnffbzs.js#CPn",
+   "chunk-yxnffbzs.js#QT",
+   "chunk-yxnffbzs.js#BD",
+   "chunk-yxnffbzs.js#Lx",
+   "chunk-yxnffbzs.js#jBe",
+   "chunk-yxnffbzs.js#je",
+   "chunk-yxnffbzs.js#ae",
+   "chunk-yxnffbzs.js#kdt",
+   "chunk-yxnffbzs.js#gCi",
+   "chunk-yxnffbzs.js#qe",
+   "chunk-yxnffbzs.js#tyr",
+   "chunk-yxnffbzs.js#nyr",
+   "chunk-yxnffbzs.js#PIt",
+   "chunk-yxnffbzs.js#cso",
+   "chunk-yxnffbzs.js#tt",
+   "chunk-yxnffbzs.js#_R",
+   "chunk-yxnffbzs.js#nt",
+   "chunk-yxnffbzs.js#EQ",
+   "chunk-yxnffbzs.js#Ale",
+   "chunk-yxnffbzs.js#ot",
+   "chunk-yxnffbzs.js#uso",
+   "chunk-yxnffbzs.js#Rne",
+   "chunk-yxnffbzs.js#bR",
+   "chunk-yxnffbzs.js#H4i",
+   "chunk-yxnffbzs.js#acs",
+   "chunk-yxnffbzs.js#QEe",
+   "chunk-yxnffbzs.js#IOe",
+   "chunk-yxnffbzs.js#fso",
+   "chunk-yxnffbzs.js#st",
+   "chunk-yxnffbzs.js#pso",
+   "chunk-yxnffbzs.js#ue",
+   "chunk-yxnffbzs.js#XBi",
+   "chunk-yxnffbzs.js#ce",
+   "chunk-yxnffbzs.js#lcs",
+   "chunk-yxnffbzs.js#D",
+   "chunk-yxnffbzs.js#RPn",
+   "chunk-yxnffbzs.js#at",
+   "chunk-yxnffbzs.js#JBi",
+   "chunk-yxnffbzs.js#hd",
+   "chunk-yxnffbzs.js#dcs",
+   "chunk-yxnffbzs.js#$G",
+   "chunk-yxnffbzs.js#QBi",
+   "chunk-yxnffbzs.js#Adt",
+   "chunk-yxnffbzs.js#$K",
+   "chunk-yxnffbzs.js#P",
+   "chunk-yxnffbzs.js#hCi",
+   "chunk-yxnffbzs.js#x3e",
+   "chunk-yxnffbzs.js#xPn",
+   "chunk-yxnffbzs.js#WBe",
+   "chunk-yxnffbzs.js#ryr",
+   "chunk-yxnffbzs.js#FK",
+   "chunk-yxnffbzs.js#e0",
+   "chunk-yxnffbzs.js#ZBi",
+   "chunk-yxnffbzs.js#xne",
+   "chunk-yxnffbzs.js#Cdt",
+   "chunk-yxnffbzs.js#Rdt",
+   "chunk-yxnffbzs.js#Et",
+   "chunk-yxnffbzs.js#xdt",
+   "chunk-yxnffbzs.js#e1i",
+   "chunk-yxnffbzs.js#aj",
+   "chunk-yxnffbzs.js#iyr",
+   "chunk-yxnffbzs.js#Hx",
+   "chunk-yxnffbzs.js#BO",
+   "chunk-yxnffbzs.js#At",
+   "chunk-yxnffbzs.js#mcs",
+   "chunk-yxnffbzs.js#OPn",
+   "chunk-8wvtd8sr.js#Js"
+  ],
+  "chunks": {
+   "chunk-8wvtd8sr.js": 1,
+   "chunk-yxnffbzs.js": 87
+  },
+  "bytes": 16117,
+  "methods": {
+   "placement": 88
   }
  },
  "tools/ArtifactTool/ArtifactTool.ts": {
@@ -58931,7 +59023,6 @@
    "chunk-9cjx5pnm.js#Ls",
    "chunk-9cjx5pnm.js#Ye",
    "chunk-9cjx5pnm.js#Ms",
-   "chunk-9cjx5pnm.js#R",
    "chunk-9cjx5pnm.js#X0s",
    "chunk-9cjx5pnm.js#ks",
    "chunk-9cjx5pnm.js#Ds",
@@ -58939,8 +59030,6 @@
    "chunk-9cjx5pnm.js#Cs",
    "chunk-9cjx5pnm.js#Bs",
    "chunk-9cjx5pnm.js#js",
-   "chunk-9cjx5pnm.js#Ks",
-   "chunk-9cjx5pnm.js#qs",
    "chunk-9cjx5pnm.js#pr",
    "chunk-9cjx5pnm.js#$s",
    "chunk-9cjx5pnm.js#J0s",
@@ -58948,16 +59037,19 @@
    "chunk-9cjx5pnm.js#Vs"
   ],
   "chunks": {
-   "chunk-9cjx5pnm.js": 35
+   "chunk-9cjx5pnm.js": 32
   },
-  "bytes": 2711,
+  "bytes": 2361,
   "methods": {
-   "placement": 35
+   "placement": 32
   }
  },
  "services/plugins/publish/publishSnapshot.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-9cjx5pnm.js#R",
+   "chunk-9cjx5pnm.js#Ks",
+   "chunk-9cjx5pnm.js#qs",
    "chunk-9cjx5pnm.js#Ys",
    "chunk-9cjx5pnm.js#Js",
    "chunk-9cjx5pnm.js#gr",
@@ -59041,11 +59133,11 @@
    "chunk-9cjx5pnm.js#wn"
   ],
   "chunks": {
-   "chunk-9cjx5pnm.js": 81
+   "chunk-9cjx5pnm.js": 84
   },
-  "bytes": 9490,
+  "bytes": 9840,
   "methods": {
-   "placement": 81
+   "placement": 84
   }
  },
  "services/api/apiPath.ts": {
@@ -63218,14 +63310,16 @@
    "chunk-aat7wt0p.js#$t",
    "chunk-aat7wt0p.js#AL",
    "chunk-aat7wt0p.js#y",
-   "chunk-aat7wt0p.js#Gft"
+   "chunk-aat7wt0p.js#Gft",
+   "chunk-jhrww53q.js#d_"
   ],
   "chunks": {
-   "chunk-aat7wt0p.js": 14
+   "chunk-aat7wt0p.js": 14,
+   "chunk-jhrww53q.js": 1
   },
-  "bytes": 1908,
+  "bytes": 1975,
   "methods": {
-   "placement": 14
+   "placement": 15
   }
  },
  "utils/pathResolution.ts": {
@@ -63664,6 +63758,15 @@
  "plugins/bundled/claudeTest/constants.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-e6aww6q8.js#pet",
+   "chunk-e6aww6q8.js#K6n",
+   "chunk-e6aww6q8.js#V6n",
+   "chunk-e6aww6q8.js#p$o",
+   "chunk-e6aww6q8.js#B_e",
+   "chunk-e6aww6q8.js#$Et",
+   "chunk-e6aww6q8.js#zEt",
+   "chunk-e6aww6q8.js#mNi",
+   "chunk-e6aww6q8.js#m$o",
    "chunk-e6aww6q8.js#Ffn",
    "chunk-e6aww6q8.js#m1r",
    "chunk-e6aww6q8.js#Ufn",
@@ -63695,11 +63798,11 @@
   ],
   "chunks": {
    "chunk-ae5g0zb5.js": 13,
-   "chunk-e6aww6q8.js": 15
+   "chunk-e6aww6q8.js": 24
   },
-  "bytes": 6618,
+  "bytes": 7344,
   "methods": {
-   "placement": 28
+   "placement": 37
   }
  },
  "utils/swarm/spawnUtils.ts": {
@@ -65145,6 +65248,7 @@
    "chunk-aepeg2w5.js#SU",
    "chunk-aepeg2w5.js#lA",
    "chunk-aepeg2w5.js#xmr",
+   "chunk-bwbq4xvm.js#k",
    "chunk-bwbq4xvm.js#Jl",
    "chunk-bwbq4xvm.js#i9t",
    "chunk-bwbq4xvm.js#qPt",
@@ -65161,12 +65265,12 @@
   ],
   "chunks": {
    "chunk-aepeg2w5.js": 51,
-   "chunk-bwbq4xvm.js": 13
+   "chunk-bwbq4xvm.js": 14
   },
-  "bytes": 11291,
+  "bytes": 11347,
   "methods": {
    "fingerprint": 9,
-   "placement": 20,
+   "placement": 21,
    "affinity": 1,
    "layout": 7,
    "facade-exports": 27
@@ -66268,8 +66372,6 @@
    "chunk-hwmsct5x.js#Fci",
    "chunk-hwmsct5x.js#Fl",
    "chunk-hwmsct5x.js#Kpe",
-   "chunk-hwmsct5x.js#Qy",
-   "chunk-hwmsct5x.js#fh",
    "chunk-aepeg2w5.js#IIe",
    "chunk-aepeg2w5.js#MEi",
    "chunk-aepeg2w5.js#es",
@@ -66302,11 +66404,11 @@
   ],
   "chunks": {
    "chunk-aepeg2w5.js": 29,
-   "chunk-hwmsct5x.js": 41
+   "chunk-hwmsct5x.js": 39
   },
-  "bytes": 14935,
+  "bytes": 14583,
   "methods": {
-   "placement": 70
+   "placement": 68
   }
  },
  "utils/errorRedaction.ts": {
@@ -68309,19 +68411,6 @@
    "chunk-aepeg2w5.js#Dj",
    "chunk-aepeg2w5.js#Nx",
    "chunk-aepeg2w5.js#cgr",
-   "chunk-aepeg2w5.js#Tlt",
-   "chunk-aepeg2w5.js#Wis",
-   "chunk-aepeg2w5.js#Fj",
-   "chunk-aepeg2w5.js#Lj",
-   "chunk-aepeg2w5.js#pne",
-   "chunk-aepeg2w5.js#Uj",
-   "chunk-aepeg2w5.js#q6e",
-   "chunk-aepeg2w5.js#ugr",
-   "chunk-aepeg2w5.js#fgr",
-   "chunk-aepeg2w5.js#cro",
-   "chunk-aepeg2w5.js#Hj",
-   "chunk-aepeg2w5.js#I8t",
-   "chunk-aepeg2w5.js#Ko",
    "chunk-aepeg2w5.js#Eg",
    "chunk-aepeg2w5.js#$ki",
    "chunk-aepeg2w5.js#$o",
@@ -68339,11 +68428,36 @@
    "chunk-aepeg2w5.js#fro"
   ],
   "chunks": {
-   "chunk-aepeg2w5.js": 50
+   "chunk-aepeg2w5.js": 37
   },
-  "bytes": 21469,
+  "bytes": 7249,
   "methods": {
-   "placement": 50
+   "placement": 37
+  }
+ },
+ "utils/telemetry/clientEventUploader.ts": {
+  "kind": "first-party",
+  "decls": [
+   "chunk-aepeg2w5.js#Tlt",
+   "chunk-aepeg2w5.js#Wis",
+   "chunk-aepeg2w5.js#Fj",
+   "chunk-aepeg2w5.js#Lj",
+   "chunk-aepeg2w5.js#pne",
+   "chunk-aepeg2w5.js#Uj",
+   "chunk-aepeg2w5.js#q6e",
+   "chunk-aepeg2w5.js#ugr",
+   "chunk-aepeg2w5.js#fgr",
+   "chunk-aepeg2w5.js#cro",
+   "chunk-aepeg2w5.js#Hj",
+   "chunk-aepeg2w5.js#I8t",
+   "chunk-aepeg2w5.js#Ko"
+  ],
+  "chunks": {
+   "chunk-aepeg2w5.js": 13
+  },
+  "bytes": 14220,
+  "methods": {
+   "placement": 13
   }
  },
  "utils/teleport/cloudErrorMessage.ts": {
@@ -68428,15 +68542,14 @@
    "chunk-aepeg2w5.js#qki",
    "chunk-aepeg2w5.js#kro",
    "chunk-aepeg2w5.js#PV",
-   "chunk-aepeg2w5.js#Tro",
-   "chunk-aepeg2w5.js#Aro"
+   "chunk-aepeg2w5.js#Tro"
   ],
   "chunks": {
-   "chunk-aepeg2w5.js": 46
+   "chunk-aepeg2w5.js": 45
   },
-  "bytes": 14721,
+  "bytes": 14650,
   "methods": {
-   "placement": 46
+   "placement": 45
   }
  },
  "tools/GlobTool/prompt.ts": {
@@ -68517,9 +68630,118 @@
    "placement": 5
   }
  },
+ "services/daemon/jobState.ts": {
+  "kind": "first-party",
+  "decls": [
+   "chunk-y162pn60.js#gN",
+   "chunk-y162pn60.js#ayn",
+   "chunk-y162pn60.js#oqr",
+   "chunk-y162pn60.js#ye",
+   "chunk-y162pn60.js#tt",
+   "chunk-y162pn60.js#nt",
+   "chunk-y162pn60.js#rt",
+   "chunk-y162pn60.js#JVr",
+   "chunk-y162pn60.js#QVr",
+   "chunk-y162pn60.js#le",
+   "chunk-y162pn60.js#ue",
+   "chunk-y162pn60.js#we",
+   "chunk-y162pn60.js#hN",
+   "chunk-y162pn60.js#ho",
+   "chunk-y162pn60.js#lh",
+   "chunk-y162pn60.js#st",
+   "chunk-y162pn60.js#gvt",
+   "chunk-y162pn60.js#hvt",
+   "chunk-y162pn60.js#LKo",
+   "chunk-y162pn60.js#sqr",
+   "chunk-y162pn60.js#kd",
+   "chunk-y162pn60.js#Ql",
+   "chunk-y162pn60.js#lyn",
+   "chunk-y162pn60.js#qfe",
+   "chunk-y162pn60.js#I",
+   "chunk-y162pn60.js#ke",
+   "chunk-y162pn60.js#Wt",
+   "chunk-y162pn60.js#Ee",
+   "chunk-y162pn60.js#dt",
+   "chunk-y162pn60.js#Gt",
+   "chunk-y162pn60.js#Kt",
+   "chunk-y162pn60.js#qt",
+   "chunk-y162pn60.js#ot",
+   "chunk-y162pn60.js#lm",
+   "chunk-y162pn60.js#Yt",
+   "chunk-y162pn60.js#Xt",
+   "chunk-y162pn60.js#_e",
+   "chunk-y162pn60.js#dyn",
+   "chunk-y162pn60.js#yo",
+   "chunk-y162pn60.js#cyn",
+   "chunk-y162pn60.js#Pe",
+   "chunk-y162pn60.js#uyn",
+   "chunk-y162pn60.js#Q",
+   "chunk-y162pn60.js#Zt",
+   "chunk-y162pn60.js#VRe",
+   "chunk-y162pn60.js#Qt",
+   "chunk-y162pn60.js#lt",
+   "chunk-y162pn60.js#xe",
+   "chunk-y162pn60.js#he",
+   "chunk-y162pn60.js#Qse",
+   "chunk-y162pn60.js#fyn",
+   "chunk-y162pn60.js#iqr",
+   "chunk-y162pn60.js#pyn",
+   "chunk-y162pn60.js#HKo",
+   "chunk-y162pn60.js#bnt",
+   "chunk-y162pn60.js#ut",
+   "chunk-y162pn60.js#BM",
+   "chunk-y162pn60.js#NKo",
+   "chunk-y162pn60.js#Ie",
+   "chunk-y162pn60.js#Ce",
+   "chunk-y162pn60.js#$Ko",
+   "chunk-y162pn60.js#FKo",
+   "chunk-y162pn60.js#PZn",
+   "chunk-y162pn60.js#UKo",
+   "chunk-y162pn60.js#ct",
+   "chunk-y162pn60.js#Snt",
+   "chunk-y162pn60.js#IZn",
+   "chunk-y162pn60.js#en",
+   "chunk-y162pn60.js#xP",
+   "chunk-y162pn60.js#tn",
+   "chunk-y162pn60.js#nn",
+   "chunk-y162pn60.js#yvt",
+   "chunk-y162pn60.js#rn",
+   "chunk-y162pn60.js#on",
+   "chunk-y162pn60.js#oSe",
+   "chunk-y162pn60.js#_vt",
+   "chunk-y162pn60.js#wnt",
+   "chunk-y162pn60.js#qRe",
+   "chunk-y162pn60.js#BKo",
+   "chunk-y162pn60.js#q_",
+   "chunk-y162pn60.js#nx",
+   "chunk-y162pn60.js#nl",
+   "chunk-y162pn60.js#sn",
+   "chunk-y162pn60.js#Fv",
+   "chunk-y162pn60.js#bvt",
+   "chunk-y162pn60.js#j2t",
+   "chunk-y162pn60.js#Yfe",
+   "chunk-y162pn60.js#myn",
+   "chunk-y162pn60.js#Svt",
+   "chunk-y162pn60.js#$X",
+   "chunk-y162pn60.js#Ent",
+   "chunk-aepeg2w5.js#aas",
+   "chunk-aepeg2w5.js#las",
+   "chunk-aepeg2w5.js#Oro"
+  ],
+  "chunks": {
+   "chunk-aepeg2w5.js": 3,
+   "chunk-y162pn60.js": 91
+  },
+  "bytes": 28229,
+  "methods": {
+   "placement": 94
+  }
+ },
  "utils/worktree.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-e6aww6q8.js#BTr",
+   "chunk-e6aww6q8.js#jTr",
    "chunk-e6aww6q8.js#uoe",
    "chunk-e6aww6q8.js#jZ",
    "chunk-e6aww6q8.js#Ap",
@@ -68662,11 +68884,11 @@
   "chunks": {
    "chunk-aepeg2w5.js": 7,
    "chunk-dcmhvw5a.js": 6,
-   "chunk-e6aww6q8.js": 125
+   "chunk-e6aww6q8.js": 127
   },
-  "bytes": 91986,
+  "bytes": 92164,
   "methods": {
-   "placement": 12,
+   "placement": 14,
    "facade-exports": 49,
    "affinity": 9,
    "sole-consumer": 14,
@@ -68891,7 +69113,12 @@
    "chunk-ag5x7vhf.js#SB",
    "chunk-ag5x7vhf.js#JT",
    "chunk-ag5x7vhf.js#@25012",
+   "chunk-ag5x7vhf.js#rC",
+   "chunk-ag5x7vhf.js#ch",
    "chunk-ag5x7vhf.js#Wr",
+   "chunk-ag5x7vhf.js#_u",
+   "chunk-ag5x7vhf.js#oC",
+   "chunk-ag5x7vhf.js#mh",
    "chunk-ag5x7vhf.js#bM",
    "chunk-ag5x7vhf.js#SM",
    "chunk-ag5x7vhf.js#wM",
@@ -68920,11 +69147,11 @@
    "chunk-ag5x7vhf.js#@46512"
   ],
   "chunks": {
-   "chunk-ag5x7vhf.js": 60
+   "chunk-ag5x7vhf.js": 65
   },
-  "bytes": 23995,
+  "bytes": 26470,
   "methods": {
-   "placement": 37,
+   "placement": 42,
    "sole-consumer": 5,
    "affinity": 1,
    "fingerprint": 8,
@@ -70030,12 +70257,24 @@
    "placement": 1
   }
  },
- "bridge/inboundMessages.ts": {
+ "components/pluginUi/renderSiteExports.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-ah34pb7m.js#Qn",
+   "chunk-ah34pb7m.js#rn"
+  ],
+  "chunks": {
+   "chunk-ah34pb7m.js": 2
+  },
+  "bytes": 20,
+  "methods": {
+   "placement": 2
+  }
+ },
+ "bridge/inboundMessages.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-ah34pb7m.js#@7736",
-   "chunk-ah34pb7m.js#rn",
    "chunk-ah34pb7m.js#@7788",
    "chunk-ah34pb7m.js#@7873",
    "chunk-ah34pb7m.js#ZXe",
@@ -70048,13 +70287,13 @@
    "chunk-e6aww6q8.js#TWr"
   ],
   "chunks": {
-   "chunk-ah34pb7m.js": 10,
+   "chunk-ah34pb7m.js": 8,
    "chunk-e6aww6q8.js": 1,
    "chunk-mketzrwm.js": 2
   },
-  "bytes": 1931,
+  "bytes": 1911,
   "methods": {
-   "placement": 9,
+   "placement": 7,
    "fingerprint": 3,
    "affinity": 1
   }
@@ -75844,23 +76083,18 @@
    "chunk-bhxaz9j0.js#fpe",
    "chunk-bhxaz9j0.js#knr",
    "chunk-bhxaz9j0.js#B",
-   "chunk-bhxaz9j0.js#_Vt",
-   "chunk-bhxaz9j0.js#b",
-   "chunk-bhxaz9j0.js#FYo",
-   "chunk-bhxaz9j0.js#Toi",
-   "chunk-bhxaz9j0.js#A",
    "chunk-e6aww6q8.js#Mjt",
    "chunk-e6aww6q8.js#Q3n",
    "chunk-e6aww6q8.js#fir",
    "chunk-e6aww6q8.js#zTe"
   ],
   "chunks": {
-   "chunk-bhxaz9j0.js": 25,
+   "chunk-bhxaz9j0.js": 20,
    "chunk-e6aww6q8.js": 4
   },
-  "bytes": 9790,
+  "bytes": 9416,
   "methods": {
-   "placement": 22,
+   "placement": 17,
    "fingerprint": 6,
    "layout": 1
   }
@@ -75883,20 +76117,25 @@
   "kind": "first-party",
   "decls": [
    "chunk-bhxaz9j0.js#koi",
+   "chunk-bhxaz9j0.js#_Vt",
+   "chunk-bhxaz9j0.js#b",
+   "chunk-bhxaz9j0.js#FYo",
+   "chunk-bhxaz9j0.js#Toi",
    "chunk-bhxaz9j0.js#UYo",
    "chunk-bhxaz9j0.js#Aoi",
    "chunk-bhxaz9j0.js#Coi",
    "chunk-bhxaz9j0.js#Roi",
    "chunk-bhxaz9j0.js#xoi",
    "chunk-bhxaz9j0.js#Poi",
+   "chunk-bhxaz9j0.js#A",
    "chunk-bhxaz9j0.js#Ioi"
   ],
   "chunks": {
-   "chunk-bhxaz9j0.js": 8
+   "chunk-bhxaz9j0.js": 13
   },
-  "bytes": 1526,
+  "bytes": 1900,
   "methods": {
-   "placement": 8
+   "placement": 13
   }
  },
  "services/artifacts/rejectBreaker.ts": {
@@ -79925,7 +80164,7 @@
    "fingerprint": 1
   }
  },
- "ink/line-width-cache.ts": {
+ "ink/stdinReader.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-bzr73sfg.js#Wn",
@@ -79934,21 +80173,71 @@
    "chunk-bzr73sfg.js#xy",
    "chunk-bzr73sfg.js#$c",
    "chunk-bzr73sfg.js#ed",
-   "chunk-bzr73sfg.js#Cy",
+   "chunk-bzr73sfg.js#Cy"
+  ],
+  "chunks": {
+   "chunk-bzr73sfg.js": 7
+  },
+  "bytes": 2000,
+  "methods": {
+   "placement": 7
+  }
+ },
+ "ink/eventLoopLag.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-bzr73sfg.js#Nx",
-   "chunk-bzr73sfg.js#td",
+   "chunk-bzr73sfg.js#td"
+  ],
+  "chunks": {
+   "chunk-bzr73sfg.js": 2
+  },
+  "bytes": 497,
+  "methods": {
+   "placement": 2
+  }
+ },
+ "ink/reconciler.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-bzr73sfg.js#lg",
+   "chunk-bzr73sfg.js#d1",
+   "chunk-bzr73sfg.js#ag",
+   "chunk-bzr73sfg.js#f1",
+   "chunk-bzr73sfg.js#sg",
+   "chunk-bzr73sfg.js#rg",
+   "chunk-bzr73sfg.js#ug",
+   "chunk-bzr73sfg.js#h1",
+   "chunk-bzr73sfg.js#cg",
+   "chunk-bzr73sfg.js#og",
+   "chunk-bzr73sfg.js#$7",
+   "chunk-cg2r2hy6.js#hr"
+  ],
+  "chunks": {
+   "chunk-bzr73sfg.js": 11,
+   "chunk-cg2r2hy6.js": 1
+  },
+  "bytes": 4291,
+  "methods": {
+   "placement": 4,
+   "fingerprint": 6,
+   "layout": 2
+  }
+ },
+ "ink/line-width-cache.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-bzr73sfg.js#Lx",
    "chunk-bzr73sfg.js#Fy",
    "chunk-bzr73sfg.js#Px",
    "chunk-bzr73sfg.js#orn"
   ],
   "chunks": {
-   "chunk-bzr73sfg.js": 14
+   "chunk-bzr73sfg.js": 4
   },
-  "bytes": 2783,
+  "bytes": 268,
   "methods": {
-   "placement": 12,
+   "placement": 2,
    "layout": 1,
    "callgraph-witnessed": 1
   }
@@ -80069,15 +80358,17 @@
    "chunk-bzr73sfg.js#NR",
    "chunk-bzr73sfg.js#DR",
    "chunk-bzr73sfg.js#xf",
-   "chunk-bzr73sfg.js#rgt"
+   "chunk-bzr73sfg.js#rgt",
+   "chunk-bzr73sfg.js#HR",
+   "chunk-bzr73sfg.js#LR"
   ],
   "chunks": {
-   "chunk-bzr73sfg.js": 47
+   "chunk-bzr73sfg.js": 49
   },
-  "bytes": 21884,
+  "bytes": 22686,
   "methods": {
    "fingerprint": 11,
-   "placement": 6,
+   "placement": 8,
    "layout": 18,
    "file-local": 1,
    "sole-consumer": 10,
@@ -80166,32 +80457,6 @@
   "bytes": 115,
   "methods": {
    "fingerprint": 1
-  }
- },
- "ink/reconciler.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-bzr73sfg.js#d1",
-   "chunk-bzr73sfg.js#ag",
-   "chunk-bzr73sfg.js#f1",
-   "chunk-bzr73sfg.js#sg",
-   "chunk-bzr73sfg.js#rg",
-   "chunk-bzr73sfg.js#ug",
-   "chunk-bzr73sfg.js#h1",
-   "chunk-bzr73sfg.js#cg",
-   "chunk-bzr73sfg.js#og",
-   "chunk-bzr73sfg.js#$7",
-   "chunk-cg2r2hy6.js#hr"
-  ],
-  "chunks": {
-   "chunk-bzr73sfg.js": 10,
-   "chunk-cg2r2hy6.js": 1
-  },
-  "bytes": 4273,
-  "methods": {
-   "fingerprint": 6,
-   "layout": 2,
-   "placement": 3
   }
  },
  "ink/layout/geometry.ts": {
@@ -80627,34 +80892,21 @@
    "chunk-dxdtyerk.js#bQs",
    "chunk-bzr73sfg.js#FC",
    "chunk-bzr73sfg.js#Do",
-   "chunk-bzr73sfg.js#Yb"
-  ],
-  "chunks": {
-   "chunk-bzr73sfg.js": 3,
-   "chunk-dxdtyerk.js": 33
-  },
-  "bytes": 8530,
-  "methods": {
-   "fingerprint": 12,
-   "affinity": 2,
-   "callgraph-fingerprint": 2,
-   "layout": 18,
-   "callgraph-witnessed": 1,
-   "placement": 1
-  }
- },
- "_unattributed/chunk-bzr73sfg/part-001.js": {
-  "kind": "unattributed",
-  "decls": [
+   "chunk-bzr73sfg.js#Yb",
    "chunk-bzr73sfg.js#jb",
    "chunk-bzr73sfg.js#Vb"
   ],
   "chunks": {
-   "chunk-bzr73sfg.js": 2
+   "chunk-bzr73sfg.js": 5,
+   "chunk-dxdtyerk.js": 33
   },
-  "bytes": 599,
+  "bytes": 9129,
   "methods": {
-   "leftover": 2
+   "fingerprint": 12,
+   "layout": 20,
+   "placement": 3,
+   "callgraph-fingerprint": 2,
+   "callgraph-witnessed": 1
   }
  },
  "ink/optimizer.ts": {
@@ -80793,8 +81045,6 @@
  "ink/render-to-screen-reader.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-bzr73sfg.js#HR",
-   "chunk-bzr73sfg.js#LR",
    "chunk-bzr73sfg.js#lrn",
    "chunk-bzr73sfg.js#PR",
    "chunk-bzr73sfg.js#Us",
@@ -80809,11 +81059,11 @@
    "chunk-bzr73sfg.js#Tv"
   ],
   "chunks": {
-   "chunk-bzr73sfg.js": 14
+   "chunk-bzr73sfg.js": 12
   },
-  "bytes": 4238,
+  "bytes": 3436,
   "methods": {
-   "placement": 14
+   "placement": 12
   }
  },
  "ink/renderer.ts": {
@@ -82345,6 +82595,7 @@
    "chunk-cgr0tezp.js#Ps",
    "chunk-cgr0tezp.js#$s",
    "chunk-cgr0tezp.js#Ot",
+   "chunk-cgr0tezp.js#Bs",
    "chunk-cgr0tezp.js#Hs",
    "chunk-cgr0tezp.js#Lt",
    "chunk-cgr0tezp.js#vt",
@@ -82358,26 +82609,12 @@
    "chunk-cgr0tezp.js#zs"
   ],
   "chunks": {
-   "chunk-cgr0tezp.js": 49
+   "chunk-cgr0tezp.js": 50
   },
-  "bytes": 8518,
+  "bytes": 8672,
   "methods": {
-   "placement": 46,
-   "affinity": 1,
-   "sole-consumer": 2
-  }
- },
- "services/mcp/officialRegistry.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-cgr0tezp.js#Bs"
-  ],
-  "chunks": {
-   "chunk-cgr0tezp.js": 1
-  },
-  "bytes": 154,
-  "methods": {
-   "fingerprint": 1
+   "placement": 47,
+   "layout": 3
   }
  },
  "tasks/taskState.ts": {
@@ -84608,6 +84845,8 @@
    "chunk-d4eg9at2.js#ge",
    "chunk-d4eg9at2.js#oe",
    "chunk-d4eg9at2.js#_n",
+   "chunk-d4eg9at2.js#yn",
+   "chunk-d4eg9at2.js#bn",
    "chunk-d4eg9at2.js#Sn",
    "chunk-d4eg9at2.js#be",
    "chunk-d4eg9at2.js#iji",
@@ -84618,19 +84857,18 @@
    "chunk-z2kk8ttr.js#ae"
   ],
   "chunks": {
-   "chunk-d4eg9at2.js": 62,
+   "chunk-d4eg9at2.js": 64,
    "chunk-y5m1jrzk.js": 2,
    "chunk-z2kk8ttr.js": 2
   },
-  "bytes": 53669,
+  "bytes": 53858,
   "methods": {
-   "placement": 18,
+   "placement": 20,
    "facade-exports": 20,
-   "layout": 16,
+   "layout": 18,
    "fingerprint": 2,
-   "sole-consumer": 8,
-   "file-local": 1,
-   "affinity": 1
+   "sole-consumer": 7,
+   "file-local": 1
   }
  },
  "utils/withResolvers.ts": {
@@ -84685,30 +84923,6 @@
    "placement": 8,
    "layout": 6,
    "file-local": 1
-  }
- },
- "ink/root.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-x6v6jz2y.js#bt",
-   "chunk-x6v6jz2y.js#se",
-   "chunk-x6v6jz2y.js#vt",
-   "chunk-x6v6jz2y.js#we",
-   "chunk-x6v6jz2y.js#Rt",
-   "chunk-x6v6jz2y.js#St",
-   "chunk-d4eg9at2.js#yn",
-   "chunk-d4eg9at2.js#bn"
-  ],
-  "chunks": {
-   "chunk-d4eg9at2.js": 2,
-   "chunk-x6v6jz2y.js": 6
-  },
-  "bytes": 1608,
-  "methods": {
-   "affinity": 2,
-   "fingerprint": 3,
-   "sole-consumer": 2,
-   "layout": 1
   }
  },
  "utils/runSteps.tsx": {
@@ -85560,21 +85774,6 @@
   "kind": "first-party",
   "decls": [
    "chunk-dcmhvw5a.js#S1e",
-   "chunk-dcmhvw5a.js#Jy",
-   "chunk-dcmhvw5a.js#on",
-   "chunk-dcmhvw5a.js#Xy",
-   "chunk-dcmhvw5a.js#dd",
-   "chunk-dcmhvw5a.js#rn",
-   "chunk-dcmhvw5a.js#Zy",
-   "chunk-dcmhvw5a.js#ud",
-   "chunk-dcmhvw5a.js#Qy",
-   "chunk-dcmhvw5a.js#pd",
-   "chunk-dcmhvw5a.js#md",
-   "chunk-dcmhvw5a.js#eS",
-   "chunk-dcmhvw5a.js#fd",
-   "chunk-dcmhvw5a.js#hio",
-   "chunk-dcmhvw5a.js#hd",
-   "chunk-dcmhvw5a.js#oS",
    "chunk-dcmhvw5a.js#Kr",
    "chunk-dcmhvw5a.js#Ed",
    "chunk-dcmhvw5a.js#Cd",
@@ -85604,11 +85803,38 @@
    "chunk-dcmhvw5a.js#UIn"
   ],
   "chunks": {
-   "chunk-dcmhvw5a.js": 43
+   "chunk-dcmhvw5a.js": 28
   },
-  "bytes": 30218,
+  "bytes": 29453,
   "methods": {
-   "placement": 43
+   "placement": 28
+  }
+ },
+ "lodash-es/_mergeWithFamily.js": {
+  "kind": "vendor",
+  "decls": [
+   "chunk-dcmhvw5a.js#Jy",
+   "chunk-dcmhvw5a.js#on",
+   "chunk-dcmhvw5a.js#Xy",
+   "chunk-dcmhvw5a.js#dd",
+   "chunk-dcmhvw5a.js#rn",
+   "chunk-dcmhvw5a.js#Zy",
+   "chunk-dcmhvw5a.js#ud",
+   "chunk-dcmhvw5a.js#Qy",
+   "chunk-dcmhvw5a.js#pd",
+   "chunk-dcmhvw5a.js#md",
+   "chunk-dcmhvw5a.js#eS",
+   "chunk-dcmhvw5a.js#fd",
+   "chunk-dcmhvw5a.js#hio",
+   "chunk-dcmhvw5a.js#hd",
+   "chunk-dcmhvw5a.js#oS"
+  ],
+  "chunks": {
+   "chunk-dcmhvw5a.js": 15
+  },
+  "bytes": 765,
+  "methods": {
+   "placement": 15
   }
  },
  "lodash-es/_safeGet.js": {
@@ -85841,36 +86067,49 @@
    "chunk-dcmhvw5a.js#Db",
    "chunk-dcmhvw5a.js#Nxi",
    "chunk-dcmhvw5a.js#$xi",
-   "chunk-dcmhvw5a.js#Ib",
-   "chunk-dcmhvw5a.js#ze",
    "chunk-dcmhvw5a.js#vOt",
    "chunk-dcmhvw5a.js#Zr",
-   "chunk-dcmhvw5a.js#cn",
-   "chunk-dcmhvw5a.js#$o",
-   "chunk-dcmhvw5a.js#QOe",
-   "chunk-dcmhvw5a.js#CE",
-   "chunk-dcmhvw5a.js#lps",
-   "chunk-dcmhvw5a.js#dps",
-   "chunk-dcmhvw5a.js#ups"
+   "chunk-dcmhvw5a.js#cn"
   ],
   "chunks": {
-   "chunk-dcmhvw5a.js": 35
+   "chunk-dcmhvw5a.js": 27
   },
-  "bytes": 8072,
+  "bytes": 6351,
   "methods": {
-   "placement": 35
+   "placement": 27
+  }
+ },
+ "zod/v4/classic/deferredOptional.js": {
+  "kind": "vendor",
+  "decls": [
+   "chunk-dcmhvw5a.js#Ib",
+   "chunk-dcmhvw5a.js#ze"
+  ],
+  "chunks": {
+   "chunk-dcmhvw5a.js": 2
+  },
+  "bytes": 1123,
+  "methods": {
+   "placement": 2
   }
  },
  "constants/figures.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-dcmhvw5a.js#$o",
+   "chunk-dcmhvw5a.js#QOe",
+   "chunk-dcmhvw5a.js#CE",
+   "chunk-dcmhvw5a.js#lps",
+   "chunk-dcmhvw5a.js#dps",
+   "chunk-dcmhvw5a.js#ups",
    "chunk-dcmhvw5a.js#T_r"
   ],
   "chunks": {
-   "chunk-dcmhvw5a.js": 1
+   "chunk-dcmhvw5a.js": 7
   },
-  "bytes": 248,
+  "bytes": 846,
   "methods": {
+   "placement": 6,
    "fingerprint": 1
   }
  },
@@ -87177,6 +87416,91 @@
   "bytes": 302,
   "methods": {
    "placement": 5
+  }
+ },
+ "utils/plugins/marketplaceNames.ts": {
+  "kind": "first-party",
+  "decls": [
+   "chunk-e6aww6q8.js#Gre",
+   "chunk-e6aww6q8.js#qgs",
+   "chunk-e6aww6q8.js#But",
+   "chunk-e6aww6q8.js#J1n",
+   "chunk-e6aww6q8.js#Ose",
+   "chunk-e6aww6q8.js#Z1n",
+   "chunk-e6aww6q8.js#eGn",
+   "chunk-e6aww6q8.js#Kj",
+   "chunk-e6aww6q8.js#Kgs",
+   "chunk-e6aww6q8.js#tGn",
+   "chunk-e6aww6q8.js#Vgs",
+   "chunk-e6aww6q8.js#Ygs",
+   "chunk-e6aww6q8.js#nGn",
+   "chunk-e6aww6q8.js#A1n",
+   "chunk-e6aww6q8.js#Xgs",
+   "chunk-e6aww6q8.js#oGn",
+   "chunk-e6aww6q8.js#Uut",
+   "chunk-e6aww6q8.js#Aut",
+   "chunk-e6aww6q8.js#Qgs",
+   "chunk-e6aww6q8.js#wIe",
+   "chunk-e6aww6q8.js#Ure",
+   "chunk-e6aww6q8.js#q6",
+   "chunk-e6aww6q8.js#MO",
+   "chunk-e6aww6q8.js#zre",
+   "chunk-e6aww6q8.js#Jre",
+   "chunk-e6aww6q8.js#Jgs",
+   "chunk-e6aww6q8.js#qre",
+   "chunk-e6aww6q8.js#rGn",
+   "chunk-e6aww6q8.js#sGn",
+   "chunk-e6aww6q8.js#Zgs",
+   "chunk-e6aww6q8.js#ehs",
+   "chunk-e6aww6q8.js#xIe",
+   "chunk-e6aww6q8.js#DIe",
+   "chunk-e6aww6q8.js#ths",
+   "chunk-f3qhjfah.js#sgi",
+   "chunk-f3qhjfah.js#bdr",
+   "chunk-f3qhjfah.js#Ce",
+   "chunk-f3qhjfah.js#IJ",
+   "chunk-f3qhjfah.js#J_",
+   "chunk-f3qhjfah.js#s5t",
+   "chunk-f3qhjfah.js#ddr",
+   "chunk-f3qhjfah.js#cdr",
+   "chunk-f3qhjfah.js#_t",
+   "chunk-f3qhjfah.js#T",
+   "chunk-f3qhjfah.js#we",
+   "chunk-f3qhjfah.js#Ne",
+   "chunk-f3qhjfah.js#Ie",
+   "chunk-f3qhjfah.js#udr",
+   "chunk-f3qhjfah.js#Z7o",
+   "chunk-f3qhjfah.js#eZo",
+   "chunk-f3qhjfah.js#tZo",
+   "chunk-f3qhjfah.js#Q",
+   "chunk-f3qhjfah.js#_it",
+   "chunk-f3qhjfah.js#Dt",
+   "chunk-f3qhjfah.js#EJr",
+   "chunk-f3qhjfah.js#Mt",
+   "chunk-f3qhjfah.js#vJr",
+   "chunk-f3qhjfah.js#nZo",
+   "chunk-f3qhjfah.js#i5t",
+   "chunk-f3qhjfah.js#a5t",
+   "chunk-f3qhjfah.js#Skn",
+   "chunk-f3qhjfah.js#ee",
+   "chunk-f3qhjfah.js#kJr",
+   "chunk-f3qhjfah.js#l5t",
+   "chunk-f3qhjfah.js#wkn",
+   "chunk-f3qhjfah.js#IFe",
+   "chunk-f3qhjfah.js#$Ye",
+   "chunk-k2t0a8ve.js#_K",
+   "chunk-k2t0a8ve.js#Sxt",
+   "chunk-ddkccdnb.js#cpr"
+  ],
+  "chunks": {
+   "chunk-ddkccdnb.js": 1,
+   "chunk-e6aww6q8.js": 34,
+   "chunk-f3qhjfah.js": 33,
+   "chunk-k2t0a8ve.js": 2
+  },
+  "bytes": 15167,
+  "methods": {
+   "placement": 70
   }
  },
  "@aws-sdk/nested-clients/dist-cjs/submodules/sso-oidc/auth/httpAuthSchemeProvider.js": {
@@ -90877,27 +91201,6 @@
    "facade-exports": 1
   }
  },
- "services/pluginTest/claudeTestPlugin.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#pet",
-   "chunk-e6aww6q8.js#K6n",
-   "chunk-e6aww6q8.js#V6n",
-   "chunk-e6aww6q8.js#p$o",
-   "chunk-e6aww6q8.js#B_e",
-   "chunk-e6aww6q8.js#$Et",
-   "chunk-e6aww6q8.js#zEt",
-   "chunk-e6aww6q8.js#mNi",
-   "chunk-e6aww6q8.js#m$o"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 9
-  },
-  "bytes": 726,
-  "methods": {
-   "placement": 9
-  }
- },
  "constants/buildInfo.ts": {
   "kind": "first-party",
   "decls": [
@@ -93299,18 +93602,10 @@
   "decls": [
    "chunk-e6aww6q8.js#Ege",
    "chunk-e6aww6q8.js#Iwn",
-   "chunk-e6aww6q8.js#Uwn",
-   "chunk-e6aww6q8.js#Qvr",
-   "chunk-e6aww6q8.js#Jvr",
-   "chunk-e6aww6q8.js#pZe",
-   "chunk-e6aww6q8.js#Gwn",
-   "chunk-e6aww6q8.js#Zvr",
    "chunk-e6aww6q8.js#wne",
    "chunk-e6aww6q8.js#zwn",
    "chunk-e6aww6q8.js#qwn",
-   "chunk-e6aww6q8.js#Kwn",
    "chunk-e6aww6q8.js#Wwn",
-   "chunk-e6aww6q8.js#eEr",
    "chunk-e6aww6q8.js#hN",
    "chunk-e6aww6q8.js#Vwn",
    "chunk-e6aww6q8.js#Qwn",
@@ -93328,11 +93623,11 @@
    "chunk-e6aww6q8.js#gEr"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 29
+   "chunk-e6aww6q8.js": 21
   },
-  "bytes": 7279,
+  "bytes": 6983,
   "methods": {
-   "placement": 18,
+   "placement": 10,
    "layout": 9,
    "fingerprint": 2
   }
@@ -95611,21 +95906,21 @@
    "chunk-e6aww6q8.js#NNo",
    "chunk-e6aww6q8.js#F4t",
    "chunk-e6aww6q8.js#_pn",
-   "chunk-e6aww6q8.js#N5s",
-   "chunk-e6aww6q8.js#Lqe",
-   "chunk-e6aww6q8.js#B4t"
+   "chunk-e6aww6q8.js#N5s"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 11
+   "chunk-e6aww6q8.js": 9
   },
-  "bytes": 1079,
+  "bytes": 1007,
   "methods": {
-   "placement": 11
+   "placement": 9
   }
  },
  "utils/permissions/browserComputerUseTools.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-e6aww6q8.js#Lqe",
+   "chunk-e6aww6q8.js#B4t",
    "chunk-e6aww6q8.js#PQ",
    "chunk-e6aww6q8.js#ise",
    "chunk-e6aww6q8.js#j4t",
@@ -95664,11 +95959,11 @@
    "chunk-e6aww6q8.js#n2e"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 36
+   "chunk-e6aww6q8.js": 38
   },
-  "bytes": 6693,
+  "bytes": 6765,
   "methods": {
-   "placement": 36
+   "placement": 38
   }
  },
  "utils/permissions/denialTracking.ts": {
@@ -96610,15 +96905,18 @@
    "chunk-e6aww6q8.js#rYo",
    "chunk-e6aww6q8.js#J1r",
    "chunk-e6aww6q8.js#iYo",
+   "chunk-s61vbvea.js#bZs",
+   "chunk-s61vbvea.js#vqr",
    "chunk-tyg7f3ek.js#Wb"
   ],
   "chunks": {
    "chunk-e6aww6q8.js": 25,
+   "chunk-s61vbvea.js": 2,
    "chunk-tyg7f3ek.js": 1
   },
-  "bytes": 5827,
+  "bytes": 5918,
   "methods": {
-   "placement": 9,
+   "placement": 11,
    "layout": 9,
    "fingerprint": 6,
    "file-local": 1,
@@ -98007,6 +98305,7 @@
  "commands/team-onboarding/gather.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-e6aww6q8.js#Q9o",
    "chunk-e6aww6q8.js#Nen",
    "chunk-e6aww6q8.js#m8o",
    "chunk-e6aww6q8.js#g8o",
@@ -98014,11 +98313,11 @@
    "chunk-e6aww6q8.js#y8o"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 5
+   "chunk-e6aww6q8.js": 6
   },
-  "bytes": 2802,
+  "bytes": 3182,
   "methods": {
-   "placement": 5
+   "placement": 6
   }
  },
  "commands/team-onboarding/index.ts": {
@@ -98547,14 +98846,17 @@
    "chunk-e6aww6q8.js#Per",
    "chunk-e6aww6q8.js#pXe",
    "chunk-e6aww6q8.js#Qnn",
-   "chunk-e6aww6q8.js#Ier"
+   "chunk-e6aww6q8.js#Ier",
+   "chunk-k50y1rw8.js#kAo",
+   "chunk-k50y1rw8.js#CMr"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 56
+   "chunk-e6aww6q8.js": 56,
+   "chunk-k50y1rw8.js": 2
   },
-  "bytes": 17769,
+  "bytes": 17887,
   "methods": {
-   "placement": 56
+   "placement": 58
   }
  },
  "utils/teleport/dirSyncRules.ts": {
@@ -100924,8 +101226,6 @@
    "chunk-e6aww6q8.js#Mbn",
    "chunk-e6aww6q8.js#Obn",
    "chunk-e6aww6q8.js#Opn",
-   "chunk-e6aww6q8.js#BTr",
-   "chunk-e6aww6q8.js#jTr",
    "chunk-e6aww6q8.js#uTn",
    "chunk-e6aww6q8.js#$Er",
    "chunk-e6aww6q8.js#GEr",
@@ -100972,12 +101272,12 @@
    "chunk-s61vbvea.js#tVo"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 43,
+   "chunk-e6aww6q8.js": 41,
    "chunk-s61vbvea.js": 6
   },
-  "bytes": 23858,
+  "bytes": 23680,
   "methods": {
-   "placement": 45,
+   "placement": 43,
    "fingerprint": 4
   }
  },
@@ -101253,6 +101553,26 @@
    "layout": 1
   }
  },
+ "utils/sandbox/sandboxRuntimeStubs.ts": {
+  "kind": "first-party",
+  "decls": [
+   "chunk-e6aww6q8.js#Uwn",
+   "chunk-e6aww6q8.js#Qvr",
+   "chunk-e6aww6q8.js#Jvr",
+   "chunk-e6aww6q8.js#pZe",
+   "chunk-e6aww6q8.js#Gwn",
+   "chunk-e6aww6q8.js#Zvr",
+   "chunk-e6aww6q8.js#Kwn",
+   "chunk-e6aww6q8.js#eEr"
+  ],
+  "chunks": {
+   "chunk-e6aww6q8.js": 8
+  },
+  "bytes": 296,
+  "methods": {
+   "placement": 8
+  }
+ },
  "utils/shell/windowsShellLauncher.ts": {
   "kind": "first-party",
   "decls": [
@@ -101406,6 +101726,40 @@
   "bytes": 455,
   "methods": {
    "placement": 2
+  }
+ },
+ "skills/bundledSkills.ts": {
+  "kind": "first-party",
+  "decls": [
+   "chunk-yjaa68dq.js#S",
+   "chunk-yjaa68dq.js#B",
+   "chunk-yjaa68dq.js#P",
+   "chunk-yjaa68dq.js#x8r",
+   "chunk-yjaa68dq.js#mEn",
+   "chunk-yjaa68dq.js#mst",
+   "chunk-yjaa68dq.js#YFi",
+   "chunk-yjaa68dq.js#ol",
+   "chunk-yjaa68dq.js#ste",
+   "chunk-yjaa68dq.js#m4t",
+   "chunk-yjaa68dq.js#gEn",
+   "chunk-yjaa68dq.js#gst",
+   "chunk-yjaa68dq.js#R",
+   "chunk-yjaa68dq.js#P8r",
+   "chunk-yjaa68dq.js#x",
+   "chunk-e6aww6q8.js#HRr",
+   "chunk-hddjmtjj.js#Ie",
+   "chunk-wy9dbk5f.js#Zo"
+  ],
+  "chunks": {
+   "chunk-e6aww6q8.js": 1,
+   "chunk-hddjmtjj.js": 1,
+   "chunk-wy9dbk5f.js": 1,
+   "chunk-yjaa68dq.js": 15
+  },
+  "bytes": 5215,
+  "methods": {
+   "fingerprint": 4,
+   "placement": 14
   }
  },
  "utils/notebook.ts": {
@@ -102172,20 +102526,14 @@
    "chunk-e6aww6q8.js#EMr",
    "chunk-e6aww6q8.js#RMr",
    "chunk-e6aww6q8.js#qAn",
-   "chunk-e6aww6q8.js#WAn",
-   "chunk-tp07j3pd.js#M",
-   "chunk-tp07j3pd.js#y",
-   "chunk-tp07j3pd.js#_",
-   "chunk-tp07j3pd.js#S",
-   "chunk-tp07j3pd.js#b"
+   "chunk-e6aww6q8.js#WAn"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 13,
-   "chunk-tp07j3pd.js": 5
+   "chunk-e6aww6q8.js": 13
   },
-  "bytes": 4214,
+  "bytes": 3832,
   "methods": {
-   "placement": 11,
+   "placement": 6,
    "callgraph-witnessed": 1,
    "layout": 2,
    "fingerprint": 4
@@ -103347,6 +103695,7 @@
    "chunk-yj65zw1g.js#i",
    "chunk-yj65zw1g.js#IRr",
    "chunk-yj65zw1g.js#r",
+   "chunk-yj65zw1g.js#PJe",
    "chunk-yj65zw1g.js#KWe",
    "chunk-hxkp4105.js#@300",
    "chunk-hxkp4105.js#Jw",
@@ -103355,12 +103704,12 @@
   "chunks": {
    "chunk-e6aww6q8.js": 1,
    "chunk-hxkp4105.js": 2,
-   "chunk-yj65zw1g.js": 7
+   "chunk-yj65zw1g.js": 8
   },
-  "bytes": 909,
+  "bytes": 941,
   "methods": {
    "fingerprint": 4,
-   "placement": 5,
+   "placement": 6,
    "callgraph-fingerprint": 1
   }
  },
@@ -104113,89 +104462,6 @@
    "placement": 30
   }
  },
- "utils/plugins/marketplaceNames.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-e6aww6q8.js#Gre",
-   "chunk-e6aww6q8.js#qgs",
-   "chunk-e6aww6q8.js#But",
-   "chunk-e6aww6q8.js#J1n",
-   "chunk-e6aww6q8.js#Ose",
-   "chunk-e6aww6q8.js#Z1n",
-   "chunk-e6aww6q8.js#eGn",
-   "chunk-e6aww6q8.js#Kj",
-   "chunk-e6aww6q8.js#Kgs",
-   "chunk-e6aww6q8.js#tGn",
-   "chunk-e6aww6q8.js#Vgs",
-   "chunk-e6aww6q8.js#Ygs",
-   "chunk-e6aww6q8.js#nGn",
-   "chunk-e6aww6q8.js#A1n",
-   "chunk-e6aww6q8.js#Xgs",
-   "chunk-e6aww6q8.js#oGn",
-   "chunk-e6aww6q8.js#Uut",
-   "chunk-e6aww6q8.js#Aut",
-   "chunk-e6aww6q8.js#Qgs",
-   "chunk-e6aww6q8.js#wIe",
-   "chunk-e6aww6q8.js#Ure",
-   "chunk-e6aww6q8.js#q6",
-   "chunk-e6aww6q8.js#MO",
-   "chunk-e6aww6q8.js#zre",
-   "chunk-e6aww6q8.js#Jre",
-   "chunk-e6aww6q8.js#Jgs",
-   "chunk-e6aww6q8.js#qre",
-   "chunk-e6aww6q8.js#rGn",
-   "chunk-e6aww6q8.js#sGn",
-   "chunk-e6aww6q8.js#Zgs",
-   "chunk-e6aww6q8.js#ehs",
-   "chunk-e6aww6q8.js#xIe",
-   "chunk-e6aww6q8.js#DIe",
-   "chunk-e6aww6q8.js#ths",
-   "chunk-f3qhjfah.js#sgi",
-   "chunk-f3qhjfah.js#bdr",
-   "chunk-f3qhjfah.js#Ce",
-   "chunk-f3qhjfah.js#IJ",
-   "chunk-f3qhjfah.js#J_",
-   "chunk-f3qhjfah.js#s5t",
-   "chunk-f3qhjfah.js#ddr",
-   "chunk-f3qhjfah.js#cdr",
-   "chunk-f3qhjfah.js#_t",
-   "chunk-f3qhjfah.js#T",
-   "chunk-f3qhjfah.js#we",
-   "chunk-f3qhjfah.js#Ne",
-   "chunk-f3qhjfah.js#Ie",
-   "chunk-f3qhjfah.js#udr",
-   "chunk-f3qhjfah.js#Z7o",
-   "chunk-f3qhjfah.js#eZo",
-   "chunk-f3qhjfah.js#tZo",
-   "chunk-f3qhjfah.js#Q",
-   "chunk-f3qhjfah.js#_it",
-   "chunk-f3qhjfah.js#Dt",
-   "chunk-f3qhjfah.js#EJr",
-   "chunk-f3qhjfah.js#Mt",
-   "chunk-f3qhjfah.js#vJr",
-   "chunk-f3qhjfah.js#nZo",
-   "chunk-f3qhjfah.js#i5t",
-   "chunk-f3qhjfah.js#a5t",
-   "chunk-f3qhjfah.js#Skn",
-   "chunk-f3qhjfah.js#ee",
-   "chunk-f3qhjfah.js#kJr",
-   "chunk-f3qhjfah.js#l5t",
-   "chunk-f3qhjfah.js#wkn",
-   "chunk-f3qhjfah.js#IFe",
-   "chunk-f3qhjfah.js#$Ye",
-   "chunk-k2t0a8ve.js#_K",
-   "chunk-k2t0a8ve.js#Sxt"
-  ],
-  "chunks": {
-   "chunk-e6aww6q8.js": 34,
-   "chunk-f3qhjfah.js": 33,
-   "chunk-k2t0a8ve.js": 2
-  },
-  "bytes": 15134,
-  "methods": {
-   "placement": 69
-  }
- },
  "utils/plugins/marketplaceSources.ts": {
   "kind": "first-party",
   "decls": [
@@ -104344,6 +104610,7 @@
    "chunk-e6aww6q8.js#bys",
    "chunk-e6aww6q8.js#TX",
    "chunk-e6aww6q8.js#fF",
+   "chunk-e6aww6q8.js#ZGn",
    "chunk-e6aww6q8.js#Tys",
    "chunk-e6aww6q8.js#Rys",
    "chunk-e6aww6q8.js#Cys",
@@ -104412,14 +104679,14 @@
    "chunk-e6aww6q8.js#d_s"
   ],
   "chunks": {
-   "chunk-e6aww6q8.js": 111
+   "chunk-e6aww6q8.js": 112
   },
-  "bytes": 39970,
+  "bytes": 40006,
   "methods": {
    "fingerprint": 21,
    "layout": 54,
    "callgraph-fingerprint": 3,
-   "placement": 32,
+   "placement": 33,
    "affinity": 1
   }
  },
@@ -117556,16 +117823,19 @@
    "chunk-g86zfxfd.js#Vq",
    "chunk-g86zfxfd.js#C$e",
    "chunk-g86zfxfd.js#R$e",
-   "chunk-g86zfxfd.js#Gkt"
+   "chunk-g86zfxfd.js#Gkt",
+   "chunk-gfcxsygg.js#Bht",
+   "chunk-gfcxsygg.js#BQe"
   ],
   "chunks": {
-   "chunk-g86zfxfd.js": 5
+   "chunk-g86zfxfd.js": 5,
+   "chunk-gfcxsygg.js": 2
   },
-  "bytes": 592,
+  "bytes": 927,
   "methods": {
    "fingerprint": 2,
    "layout": 2,
-   "placement": 1
+   "placement": 3
   }
  },
  "services/analytics/violinGates.ts": {
@@ -117905,18 +118175,28 @@
    "chunk-gfcxsygg.js#l",
    "chunk-gfcxsygg.js#c",
    "chunk-gfcxsygg.js#nCo",
-   "chunk-gfcxsygg.js#Uht",
-   "chunk-gfcxsygg.js#Bht",
-   "chunk-gfcxsygg.js#BQe",
+   "chunk-gfcxsygg.js#Uht"
+  ],
+  "chunks": {
+   "chunk-gfcxsygg.js": 6
+  },
+  "bytes": 877,
+  "methods": {
+   "placement": 6
+  }
+ },
+ "screens/repl/bridgeChannelSlot.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-gfcxsygg.js#Jce",
    "chunk-gfcxsygg.js#VMr"
   ],
   "chunks": {
-   "chunk-gfcxsygg.js": 10
+   "chunk-gfcxsygg.js": 2
   },
-  "bytes": 1439,
+  "bytes": 227,
   "methods": {
-   "placement": 10
+   "placement": 2
   }
  },
  "ink/stringWidth.ts": {
@@ -121295,19 +121575,6 @@
    "callgraph-fingerprint": 1
   }
  },
- "_unattributed/chunk-hantmvxa/part-001.js": {
-  "kind": "unattributed",
-  "decls": [
-   "chunk-hantmvxa.js#Uo"
-  ],
-  "chunks": {
-   "chunk-hantmvxa.js": 1
-  },
-  "bytes": 51,
-  "methods": {
-   "leftover": 1
-  }
- },
  "skills/bundled/claudeApi.ts": {
   "kind": "first-party",
   "decls": [
@@ -121316,18 +121583,20 @@
    "chunk-ym2xht5h.js#D",
    "chunk-ym2xht5h.js#I",
    "chunk-ym2xht5h.js#B",
+   "chunk-hantmvxa.js#Uo",
    "chunk-hantmvxa.js#mi",
    "chunk-jy3v56kg.js#Be",
    "chunk-v8425tx0.js#B"
   ],
   "chunks": {
-   "chunk-hantmvxa.js": 1,
+   "chunk-hantmvxa.js": 2,
    "chunk-jy3v56kg.js": 1,
    "chunk-v8425tx0.js": 1,
    "chunk-ym2xht5h.js": 5
   },
-  "bytes": 5846,
+  "bytes": 5897,
   "methods": {
+   "placement": 1,
    "fingerprint": 4,
    "sole-consumer": 3,
    "affinity": 1
@@ -125128,55 +125397,6 @@
    "placement": 16
   }
  },
- "services/lowPriority/lowPriorityMode.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-hwmsct5x.js#Yd",
-   "chunk-hwmsct5x.js#y_",
-   "chunk-hwmsct5x.js#w_",
-   "chunk-hwmsct5x.js#We",
-   "chunk-hwmsct5x.js#dD",
-   "chunk-hwmsct5x.js#_st",
-   "chunk-hwmsct5x.js#U8r",
-   "chunk-hwmsct5x.js#B8r",
-   "chunk-hwmsct5x.js#j8r",
-   "chunk-hwmsct5x.js#Ydi",
-   "chunk-hwmsct5x.js#K4e",
-   "chunk-hwmsct5x.js#fir",
-   "chunk-hwmsct5x.js#Ka",
-   "chunk-hwmsct5x.js#aAt",
-   "chunk-hwmsct5x.js#pir",
-   "chunk-hwmsct5x.js#kEn",
-   "chunk-hwmsct5x.js#Kd",
-   "chunk-hwmsct5x.js#To",
-   "chunk-hwmsct5x.js#Xdi",
-   "chunk-hwmsct5x.js#Jdi",
-   "chunk-hwmsct5x.js#Qdi",
-   "chunk-hwmsct5x.js#Vd",
-   "chunk-hwmsct5x.js#Xd",
-   "chunk-hwmsct5x.js#g1",
-   "chunk-hwmsct5x.js#S_",
-   "chunk-hwmsct5x.js#Wd",
-   "chunk-hwmsct5x.js#Jd",
-   "chunk-hwmsct5x.js#Va",
-   "chunk-hwmsct5x.js#Zdi",
-   "chunk-hwmsct5x.js#mir",
-   "chunk-hwmsct5x.js#W8r",
-   "chunk-hwmsct5x.js#E_",
-   "chunk-hwmsct5x.js#zd",
-   "chunk-hwmsct5x.js#v_",
-   "chunk-hwmsct5x.js#R_",
-   "chunk-hwmsct5x.js#A_",
-   "chunk-hwmsct5x.js#gir"
-  ],
-  "chunks": {
-   "chunk-hwmsct5x.js": 37
-  },
-  "bytes": 6486,
-  "methods": {
-   "placement": 37
-  }
- },
  "services/requestUserDialog.ts": {
   "kind": "first-party",
   "decls": [
@@ -125761,17 +125981,19 @@
  "services/api/unwatchedReplyHold.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-hwmsct5x.js#Qy",
+   "chunk-hwmsct5x.js#fh",
    "chunk-hwmsct5x.js#ph",
    "chunk-hwmsct5x.js#hh",
    "chunk-hwmsct5x.js#Dl",
    "chunk-hwmsct5x.js#dh"
   ],
   "chunks": {
-   "chunk-hwmsct5x.js": 4
+   "chunk-hwmsct5x.js": 6
   },
-  "bytes": 3877,
+  "bytes": 4229,
   "methods": {
-   "placement": 4
+   "placement": 6
   }
  },
  "services/workflow/usageConsent.ts": {
@@ -126675,15 +126897,14 @@
    "chunk-jhrww53q.js#nft",
    "chunk-jhrww53q.js#Y",
    "chunk-jhrww53q.js#Va",
-   "chunk-jhrww53q.js#m_",
-   "chunk-jhrww53q.js#d_"
+   "chunk-jhrww53q.js#m_"
   ],
   "chunks": {
-   "chunk-jhrww53q.js": 8
+   "chunk-jhrww53q.js": 7
   },
-  "bytes": 1761,
+  "bytes": 1694,
   "methods": {
-   "placement": 7,
+   "placement": 6,
    "layout": 1
   }
  },
@@ -127864,16 +128085,14 @@
    "chunk-k50y1rw8.js#c",
    "chunk-k50y1rw8.js#d",
    "chunk-k50y1rw8.js#C$s",
-   "chunk-k50y1rw8.js#R$s",
-   "chunk-k50y1rw8.js#kAo",
-   "chunk-k50y1rw8.js#CMr"
+   "chunk-k50y1rw8.js#R$s"
   ],
   "chunks": {
-   "chunk-k50y1rw8.js": 7
+   "chunk-k50y1rw8.js": 5
   },
-  "bytes": 530,
+  "bytes": 412,
   "methods": {
-   "placement": 7
+   "placement": 5
   }
  },
  "utils/bash/bashParser.ts": {
@@ -129030,20 +129249,20 @@
    "chunk-ksvdmrg0.js#jt",
    "chunk-ksvdmrg0.js#Zr",
    "chunk-ksvdmrg0.js#wxs",
-   "chunk-ksvdmrg0.js#Gt",
-   "chunk-ksvdmrg0.js#dn"
+   "chunk-ksvdmrg0.js#Gt"
   ],
   "chunks": {
-   "chunk-ksvdmrg0.js": 47
+   "chunk-ksvdmrg0.js": 46
   },
-  "bytes": 17039,
+  "bytes": 16763,
   "methods": {
-   "placement": 47
+   "placement": 46
   }
  },
  "services/daemon/controlServer.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-ksvdmrg0.js#dn",
    "chunk-ksvdmrg0.js#cn",
    "chunk-ksvdmrg0.js#mn",
    "chunk-ksvdmrg0.js#Jt",
@@ -129069,11 +129288,11 @@
    "chunk-ksvdmrg0.js#Mn"
   ],
   "chunks": {
-   "chunk-ksvdmrg0.js": 23
+   "chunk-ksvdmrg0.js": 24
   },
-  "bytes": 25807,
+  "bytes": 26083,
   "methods": {
-   "placement": 22,
+   "placement": 23,
    "sole-consumer": 1
   }
  },
@@ -137470,17 +137689,40 @@
    "chunk-nt75hmzb.js#Uwn",
    "chunk-nt75hmzb.js#q3r",
    "chunk-nt75hmzb.js#A",
+   "chunk-nt75hmzb.js#Y3r",
+   "chunk-nt75hmzb.js#S",
+   "chunk-nt75hmzb.js#q8o"
+  ],
+  "chunks": {
+   "chunk-nt75hmzb.js": 16
+  },
+  "bytes": 2253,
+  "methods": {
+   "placement": 16
+  }
+ },
+ "services/daemon/paths.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-nt75hmzb.js#c",
    "chunk-nt75hmzb.js#q",
+   "chunk-nt75hmzb.js#G$e",
    "chunk-nt75hmzb.js#G",
    "chunk-nt75hmzb.js#K8o",
+   "chunk-nt75hmzb.js#Q",
    "chunk-nt75hmzb.js#y",
    "chunk-nt75hmzb.js#$A",
    "chunk-nt75hmzb.js#jqt",
    "chunk-nt75hmzb.js#hsr",
-   "chunk-nt75hmzb.js#Y3r",
-   "chunk-nt75hmzb.js#S",
-   "chunk-nt75hmzb.js#q8o",
+   "chunk-nt75hmzb.js#Sli",
+   "chunk-nt75hmzb.js#z$e",
+   "chunk-nt75hmzb.js#wli",
+   "chunk-nt75hmzb.js#Bwn",
+   "chunk-nt75hmzb.js#O",
+   "chunk-nt75hmzb.js#V8o",
+   "chunk-nt75hmzb.js#Eli",
+   "chunk-nt75hmzb.js#vli",
+   "chunk-nt75hmzb.js#Z",
    "chunk-nt75hmzb.js#nwe",
    "chunk-nt75hmzb.js#Y8o",
    "chunk-nt75hmzb.js#Q6",
@@ -137503,41 +137745,18 @@
    "chunk-nt75hmzb.js#JC",
    "chunk-nt75hmzb.js#xN",
    "chunk-nt75hmzb.js#P",
-   "chunk-nt75hmzb.js#Z6"
-  ],
-  "chunks": {
-   "chunk-nt75hmzb.js": 47
-  },
-  "bytes": 3869,
-  "methods": {
-   "placement": 47
-  }
- },
- "services/daemon/paths.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-nt75hmzb.js#G$e",
-   "chunk-nt75hmzb.js#Q",
-   "chunk-nt75hmzb.js#Sli",
-   "chunk-nt75hmzb.js#z$e",
-   "chunk-nt75hmzb.js#wli",
-   "chunk-nt75hmzb.js#Bwn",
-   "chunk-nt75hmzb.js#O",
-   "chunk-nt75hmzb.js#V8o",
-   "chunk-nt75hmzb.js#Eli",
-   "chunk-nt75hmzb.js#vli",
-   "chunk-nt75hmzb.js#Z",
    "chunk-nt75hmzb.js#nte",
+   "chunk-nt75hmzb.js#Z6",
    "chunk-z5p8mhdc.js#jL",
    "chunk-z5p8mhdc.js#Fye"
   ],
   "chunks": {
-   "chunk-nt75hmzb.js": 12,
+   "chunk-nt75hmzb.js": 43,
    "chunk-z5p8mhdc.js": 2
   },
-  "bytes": 3172,
+  "bytes": 4788,
   "methods": {
-   "placement": 14
+   "placement": 45
   }
  },
  "tools/MemoryTool/memoryToolNames.ts": {
@@ -138285,15 +138504,39 @@
    "chunk-p52gp8zk.js#Icr",
    "chunk-p52gp8zk.js#D",
    "chunk-p52gp8zk.js#bQr",
-   "chunk-p52gp8zk.js#Me",
    "chunk-p52gp8zk.js#R"
   ],
   "chunks": {
-   "chunk-p52gp8zk.js": 8
+   "chunk-p52gp8zk.js": 7
   },
-  "bytes": 1410,
+  "bytes": 950,
   "methods": {
-   "placement": 8
+   "placement": 7
+  }
+ },
+ "utils/telemetry/repositoryAttributes.ts": {
+  "kind": "first-party",
+  "decls": [
+   "chunk-p52gp8zk.js#Me",
+   "chunk-p52gp8zk.js#Ue",
+   "chunk-p52gp8zk.js#Q",
+   "chunk-p52gp8zk.js#Be",
+   "chunk-p52gp8zk.js#pyi",
+   "chunk-p52gp8zk.js#myi",
+   "chunk-p52gp8zk.js#je",
+   "chunk-p52gp8zk.js#Fe",
+   "chunk-p52gp8zk.js#He",
+   "chunk-p52gp8zk.js#U",
+   "chunk-p52gp8zk.js#fTn",
+   "chunk-p52gp8zk.js#Z",
+   "chunk-p52gp8zk.js#A"
+  ],
+  "chunks": {
+   "chunk-p52gp8zk.js": 13
+  },
+  "bytes": 2612,
+  "methods": {
+   "placement": 13
   }
  },
  "utils/telemetryAttributes.ts": {
@@ -138311,30 +138554,6 @@
    "file-last-pair": 1,
    "layout": 1,
    "fingerprint": 1
-  }
- },
- "utils/telemetry/repositoryAttributes.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-p52gp8zk.js#Ue",
-   "chunk-p52gp8zk.js#Q",
-   "chunk-p52gp8zk.js#Be",
-   "chunk-p52gp8zk.js#pyi",
-   "chunk-p52gp8zk.js#myi",
-   "chunk-p52gp8zk.js#je",
-   "chunk-p52gp8zk.js#Fe",
-   "chunk-p52gp8zk.js#He",
-   "chunk-p52gp8zk.js#U",
-   "chunk-p52gp8zk.js#fTn",
-   "chunk-p52gp8zk.js#Z",
-   "chunk-p52gp8zk.js#A"
-  ],
-  "chunks": {
-   "chunk-p52gp8zk.js": 12
-  },
-  "bytes": 2152,
-  "methods": {
-   "placement": 12
   }
  },
  "utils/telemetry/thirdPartyEventRecords.ts": {
@@ -141912,7 +142131,19 @@
   "kind": "first-party",
   "decls": [
    "chunk-q8cqcff6.js#Qt",
-   "chunk-q8cqcff6.js#Ni",
+   "chunk-q8cqcff6.js#Ni"
+  ],
+  "chunks": {
+   "chunk-q8cqcff6.js": 2
+  },
+  "bytes": 127,
+  "methods": {
+   "placement": 2
+  }
+ },
+ "utils/settings/mdm/mdmLoader.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-q8cqcff6.js#Ci",
    "chunk-q8cqcff6.js#se",
    "chunk-q8cqcff6.js#bi",
@@ -141925,11 +142156,11 @@
    "chunk-q8cqcff6.js#uIn"
   ],
   "chunks": {
-   "chunk-q8cqcff6.js": 12
+   "chunk-q8cqcff6.js": 10
   },
-  "bytes": 652,
+  "bytes": 525,
   "methods": {
-   "placement": 12
+   "placement": 10
   }
  },
  "utils/settings/managedSettingsFiles.ts": {
@@ -141937,7 +142168,19 @@
   "decls": [
    "chunk-q8cqcff6.js#Ue",
    "chunk-q8cqcff6.js#xi",
-   "chunk-q8cqcff6.js#Et",
+   "chunk-q8cqcff6.js#Et"
+  ],
+  "chunks": {
+   "chunk-q8cqcff6.js": 3
+  },
+  "bytes": 1415,
+  "methods": {
+   "placement": 3
+  }
+ },
+ "utils/settings/hostEnvWrites.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-q8cqcff6.js#sn",
    "chunk-q8cqcff6.js#ue",
    "chunk-q8cqcff6.js#Pe",
@@ -141961,11 +142204,11 @@
    "chunk-q8cqcff6.js#xXt"
   ],
   "chunks": {
-   "chunk-q8cqcff6.js": 24
+   "chunk-q8cqcff6.js": 21
   },
-  "bytes": 3401,
+  "bytes": 1986,
   "methods": {
-   "placement": 24
+   "placement": 21
   }
  },
  "utils/settings/policyHelper/helperExec.ts": {
@@ -147610,8 +147853,6 @@
   "kind": "first-party",
   "decls": [
    "chunk-s61vbvea.js#vA",
-   "chunk-s61vbvea.js#bZs",
-   "chunk-s61vbvea.js#vqr",
    "chunk-s61vbvea.js#AA",
    "chunk-s61vbvea.js#Qh",
    "chunk-s61vbvea.js#kVo",
@@ -147633,11 +147874,11 @@
    "chunk-s61vbvea.js#AVo"
   ],
   "chunks": {
-   "chunk-s61vbvea.js": 22
+   "chunk-s61vbvea.js": 20
   },
-  "bytes": 5637,
+  "bytes": 5546,
   "methods": {
-   "placement": 22
+   "placement": 20
   }
  },
  "utils/git/builderGit/sandboxReach.ts": {
@@ -153197,7 +153438,7 @@
    "placement": 1
   }
  },
- "utils/truncateGraphemes.ts": {
+ "utils/mediaLimits.ts": {
   "kind": "first-party",
   "decls": [
    "chunk-t0gq9gyw.js#nOi",
@@ -153205,7 +153446,19 @@
    "chunk-t0gq9gyw.js#Tlo",
    "chunk-t0gq9gyw.js#vt",
    "chunk-t0gq9gyw.js#Y1e",
-   "chunk-t0gq9gyw.js#dA",
+   "chunk-t0gq9gyw.js#dA"
+  ],
+  "chunks": {
+   "chunk-t0gq9gyw.js": 6
+  },
+  "bytes": 674,
+  "methods": {
+   "placement": 6
+  }
+ },
+ "utils/truncateGraphemes.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-t0gq9gyw.js#Ct",
    "chunk-t0gq9gyw.js#At",
    "chunk-t0gq9gyw.js#Nr",
@@ -153228,11 +153481,11 @@
    "chunk-t0gq9gyw.js#gut"
   ],
   "chunks": {
-   "chunk-t0gq9gyw.js": 26
+   "chunk-t0gq9gyw.js": 20
   },
-  "bytes": 3022,
+  "bytes": 2348,
   "methods": {
-   "placement": 26
+   "placement": 20
   }
  },
  "tools/AppifactReplTool/AppifactReplTool.ts": {
@@ -154733,6 +154986,11 @@
  "services/cloudSessions/setupProgress.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-tp07j3pd.js#M",
+   "chunk-tp07j3pd.js#y",
+   "chunk-tp07j3pd.js#_",
+   "chunk-tp07j3pd.js#S",
+   "chunk-tp07j3pd.js#b",
    "chunk-tp07j3pd.js#A",
    "chunk-tp07j3pd.js#ben",
    "chunk-tp07j3pd.js#R",
@@ -154756,11 +155014,11 @@
    "chunk-tp07j3pd.js#h"
   ],
   "chunks": {
-   "chunk-tp07j3pd.js": 21
+   "chunk-tp07j3pd.js": 26
   },
-  "bytes": 7013,
+  "bytes": 7395,
   "methods": {
-   "placement": 21
+   "placement": 26
   }
  },
  "services/artifacts/comments/repliesConsent.ts": {
@@ -156427,22 +156685,10 @@
    "placement": 12
   }
  },
- "cli/print/_new/elicitationRegistrar.helpers-tyg7.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-tyg7f3ek.js#nA"
-  ],
-  "chunks": {
-   "chunk-tyg7f3ek.js": 1
-  },
-  "bytes": 862,
-  "methods": {
-   "sole-consumer-new": 1
-  }
- },
  "cli/print/elicitationRegistrar.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-tyg7f3ek.js#nA",
    "chunk-tyg7f3ek.js#sA",
    "chunk-tyg7f3ek.js#rA",
    "chunk-tyg7f3ek.js#oA",
@@ -156478,11 +156724,11 @@
    "chunk-tyg7f3ek.js#MA"
   ],
   "chunks": {
-   "chunk-tyg7f3ek.js": 33
+   "chunk-tyg7f3ek.js": 34
   },
-  "bytes": 14249,
+  "bytes": 15111,
   "methods": {
-   "placement": 33
+   "placement": 34
   }
  },
  "utils/streamJsonStdoutGuard.ts": {
@@ -156752,7 +156998,19 @@
    "chunk-tyg7f3ek.js#EO",
    "chunk-tyg7f3ek.js#IO",
    "chunk-tyg7f3ek.js#OO",
-   "chunk-tyg7f3ek.js#fk",
+   "chunk-tyg7f3ek.js#fk"
+  ],
+  "chunks": {
+   "chunk-tyg7f3ek.js": 10
+  },
+  "bytes": 10453,
+  "methods": {
+   "placement": 10
+  }
+ },
+ "cli/print/hostOtelEvents.ts": {
+  "kind": "first-party",
+  "decls": [
    "chunk-tyg7f3ek.js#iK",
    "chunk-tyg7f3ek.js#LO",
    "chunk-tyg7f3ek.js#FO",
@@ -156782,11 +157040,11 @@
    "chunk-tyg7f3ek.js#GO"
   ],
   "chunks": {
-   "chunk-tyg7f3ek.js": 37
+   "chunk-tyg7f3ek.js": 27
   },
-  "bytes": 16469,
+  "bytes": 6016,
   "methods": {
-   "placement": 37
+   "placement": 27
   }
  },
  "cli/print/hostTelemetryProxy.ts": {
@@ -159337,29 +159595,29 @@
    "chunk-vrr64ez0.js#Z$n",
    "chunk-vrr64ez0.js#SAr",
    "chunk-vrr64ez0.js#mr",
-   "chunk-vrr64ez0.js#btn",
-   "chunk-vrr64ez0.js#_r"
+   "chunk-vrr64ez0.js#btn"
   ],
   "chunks": {
-   "chunk-vrr64ez0.js": 12
+   "chunk-vrr64ez0.js": 11
   },
-  "bytes": 15143,
+  "bytes": 14952,
   "methods": {
-   "placement": 12
+   "placement": 11
   }
  },
  "daemon/jobs/adoptRecord.ts": {
   "kind": "first-party",
   "decls": [
+   "chunk-vrr64ez0.js#_r",
    "chunk-vrr64ez0.js#gn",
    "chunk-vrr64ez0.js#kr"
   ],
   "chunks": {
-   "chunk-vrr64ez0.js": 2
+   "chunk-vrr64ez0.js": 3
   },
-  "bytes": 947,
+  "bytes": 1138,
   "methods": {
-   "placement": 2
+   "placement": 3
   }
  },
  "utils/git/unpushedCommits.ts": {
@@ -163950,6 +164208,27 @@
    "placement": 16
   }
  },
+ "ink/root.ts": {
+  "kind": "first-party",
+  "decls": [
+   "chunk-x6v6jz2y.js#bt",
+   "chunk-x6v6jz2y.js#se",
+   "chunk-x6v6jz2y.js#vt",
+   "chunk-x6v6jz2y.js#we",
+   "chunk-x6v6jz2y.js#Rt",
+   "chunk-x6v6jz2y.js#St"
+  ],
+  "chunks": {
+   "chunk-x6v6jz2y.js": 6
+  },
+  "bytes": 1419,
+  "methods": {
+   "sole-consumer": 2,
+   "affinity": 1,
+   "fingerprint": 2,
+   "layout": 1
+  }
+ },
  "components/design-system/ThemedBox.tsx": {
   "kind": "first-party",
   "decls": [
@@ -164802,7 +165081,6 @@
  "utils/deepFreezePlainData.ts": {
   "kind": "first-party",
   "decls": [
-   "chunk-xkyzvvf1.js#y3e",
    "chunk-xkyzvvf1.js#Fh",
    "chunk-xkyzvvf1.js#ple",
    "chunk-xkyzvvf1.js#Yls",
@@ -164812,11 +165090,11 @@
    "chunk-xkyzvvf1.js#s"
   ],
   "chunks": {
-   "chunk-xkyzvvf1.js": 8
+   "chunk-xkyzvvf1.js": 7
   },
-  "bytes": 1989,
+  "bytes": 1959,
   "methods": {
-   "placement": 8
+   "placement": 7
   }
  },
  "services/compact/compactErrors.ts": {
@@ -165461,109 +165739,6 @@
   "bytes": 3102,
   "methods": {
    "placement": 19
-  }
- },
- "services/daemon/jobState.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-y162pn60.js#gN",
-   "chunk-y162pn60.js#ayn",
-   "chunk-y162pn60.js#oqr",
-   "chunk-y162pn60.js#ye",
-   "chunk-y162pn60.js#tt",
-   "chunk-y162pn60.js#nt",
-   "chunk-y162pn60.js#rt",
-   "chunk-y162pn60.js#JVr",
-   "chunk-y162pn60.js#QVr",
-   "chunk-y162pn60.js#le",
-   "chunk-y162pn60.js#ue",
-   "chunk-y162pn60.js#we",
-   "chunk-y162pn60.js#hN",
-   "chunk-y162pn60.js#ho",
-   "chunk-y162pn60.js#lh",
-   "chunk-y162pn60.js#st",
-   "chunk-y162pn60.js#gvt",
-   "chunk-y162pn60.js#hvt",
-   "chunk-y162pn60.js#LKo",
-   "chunk-y162pn60.js#sqr",
-   "chunk-y162pn60.js#kd",
-   "chunk-y162pn60.js#Ql",
-   "chunk-y162pn60.js#lyn",
-   "chunk-y162pn60.js#qfe",
-   "chunk-y162pn60.js#I",
-   "chunk-y162pn60.js#ke",
-   "chunk-y162pn60.js#Wt",
-   "chunk-y162pn60.js#Ee",
-   "chunk-y162pn60.js#dt",
-   "chunk-y162pn60.js#Gt",
-   "chunk-y162pn60.js#Kt",
-   "chunk-y162pn60.js#qt",
-   "chunk-y162pn60.js#ot",
-   "chunk-y162pn60.js#lm",
-   "chunk-y162pn60.js#Yt",
-   "chunk-y162pn60.js#Xt",
-   "chunk-y162pn60.js#_e",
-   "chunk-y162pn60.js#dyn",
-   "chunk-y162pn60.js#yo",
-   "chunk-y162pn60.js#cyn",
-   "chunk-y162pn60.js#Pe",
-   "chunk-y162pn60.js#uyn",
-   "chunk-y162pn60.js#Q",
-   "chunk-y162pn60.js#Zt",
-   "chunk-y162pn60.js#VRe",
-   "chunk-y162pn60.js#Qt",
-   "chunk-y162pn60.js#lt",
-   "chunk-y162pn60.js#xe",
-   "chunk-y162pn60.js#he",
-   "chunk-y162pn60.js#Qse",
-   "chunk-y162pn60.js#fyn",
-   "chunk-y162pn60.js#iqr",
-   "chunk-y162pn60.js#pyn",
-   "chunk-y162pn60.js#HKo",
-   "chunk-y162pn60.js#bnt",
-   "chunk-y162pn60.js#ut",
-   "chunk-y162pn60.js#BM",
-   "chunk-y162pn60.js#NKo",
-   "chunk-y162pn60.js#Ie",
-   "chunk-y162pn60.js#Ce",
-   "chunk-y162pn60.js#$Ko",
-   "chunk-y162pn60.js#FKo",
-   "chunk-y162pn60.js#PZn",
-   "chunk-y162pn60.js#UKo",
-   "chunk-y162pn60.js#ct",
-   "chunk-y162pn60.js#Snt",
-   "chunk-y162pn60.js#IZn",
-   "chunk-y162pn60.js#en",
-   "chunk-y162pn60.js#xP",
-   "chunk-y162pn60.js#tn",
-   "chunk-y162pn60.js#nn",
-   "chunk-y162pn60.js#yvt",
-   "chunk-y162pn60.js#rn",
-   "chunk-y162pn60.js#on",
-   "chunk-y162pn60.js#oSe",
-   "chunk-y162pn60.js#_vt",
-   "chunk-y162pn60.js#wnt",
-   "chunk-y162pn60.js#qRe",
-   "chunk-y162pn60.js#BKo",
-   "chunk-y162pn60.js#q_",
-   "chunk-y162pn60.js#nx",
-   "chunk-y162pn60.js#nl",
-   "chunk-y162pn60.js#sn",
-   "chunk-y162pn60.js#Fv",
-   "chunk-y162pn60.js#bvt",
-   "chunk-y162pn60.js#j2t",
-   "chunk-y162pn60.js#Yfe",
-   "chunk-y162pn60.js#myn",
-   "chunk-y162pn60.js#Svt",
-   "chunk-y162pn60.js#$X",
-   "chunk-y162pn60.js#Ent"
-  ],
-  "chunks": {
-   "chunk-y162pn60.js": 91
-  },
-  "bytes": 28072,
-  "methods": {
-   "placement": 91
   }
  },
  "cli/cloudSessionArgs.ts": {
@@ -166763,19 +166938,6 @@
    "esm-fingerprint": 1
   }
  },
- "_unattributed/chunk-yj65zw1g/part-001.js": {
-  "kind": "unattributed",
-  "decls": [
-   "chunk-yj65zw1g.js#PJe"
-  ],
-  "chunks": {
-   "chunk-yj65zw1g.js": 1
-  },
-  "bytes": 32,
-  "methods": {
-   "leftover": 1
-  }
- },
  "plugins/bundled/secDefault/index.ts": {
   "kind": "first-party",
   "decls": [
@@ -167200,105 +167362,6 @@
   "bytes": 3398,
   "methods": {
    "placement": 11
-  }
- },
- "tools/ArtifactTool/artifactUrls.ts": {
-  "kind": "first-party",
-  "decls": [
-   "chunk-yxnffbzs.js#Ln",
-   "chunk-yxnffbzs.js#Kge",
-   "chunk-yxnffbzs.js#C3e",
-   "chunk-yxnffbzs.js#TPn",
-   "chunk-yxnffbzs.js#Gw",
-   "chunk-yxnffbzs.js#lso",
-   "chunk-yxnffbzs.js#rcs",
-   "chunk-yxnffbzs.js#R3e",
-   "chunk-yxnffbzs.js#fa",
-   "chunk-yxnffbzs.js#dso",
-   "chunk-yxnffbzs.js#vdt",
-   "chunk-yxnffbzs.js#oe",
-   "chunk-yxnffbzs.js#w",
-   "chunk-yxnffbzs.js#RIt",
-   "chunk-yxnffbzs.js#ke",
-   "chunk-yxnffbzs.js#He",
-   "chunk-yxnffbzs.js#APn",
-   "chunk-yxnffbzs.js#scs",
-   "chunk-yxnffbzs.js#eyr",
-   "chunk-yxnffbzs.js#X",
-   "chunk-yxnffbzs.js#xIt",
-   "chunk-yxnffbzs.js#CPn",
-   "chunk-yxnffbzs.js#QT",
-   "chunk-yxnffbzs.js#BD",
-   "chunk-yxnffbzs.js#Lx",
-   "chunk-yxnffbzs.js#jBe",
-   "chunk-yxnffbzs.js#je",
-   "chunk-yxnffbzs.js#ae",
-   "chunk-yxnffbzs.js#kdt",
-   "chunk-yxnffbzs.js#gCi",
-   "chunk-yxnffbzs.js#qe",
-   "chunk-yxnffbzs.js#tyr",
-   "chunk-yxnffbzs.js#nyr",
-   "chunk-yxnffbzs.js#PIt",
-   "chunk-yxnffbzs.js#cso",
-   "chunk-yxnffbzs.js#tt",
-   "chunk-yxnffbzs.js#_R",
-   "chunk-yxnffbzs.js#nt",
-   "chunk-yxnffbzs.js#EQ",
-   "chunk-yxnffbzs.js#Ale",
-   "chunk-yxnffbzs.js#ot",
-   "chunk-yxnffbzs.js#uso",
-   "chunk-yxnffbzs.js#Rne",
-   "chunk-yxnffbzs.js#bR",
-   "chunk-yxnffbzs.js#H4i",
-   "chunk-yxnffbzs.js#acs",
-   "chunk-yxnffbzs.js#QEe",
-   "chunk-yxnffbzs.js#IOe",
-   "chunk-yxnffbzs.js#fso",
-   "chunk-yxnffbzs.js#st",
-   "chunk-yxnffbzs.js#pso",
-   "chunk-yxnffbzs.js#ue",
-   "chunk-yxnffbzs.js#XBi",
-   "chunk-yxnffbzs.js#ce",
-   "chunk-yxnffbzs.js#lcs",
-   "chunk-yxnffbzs.js#D",
-   "chunk-yxnffbzs.js#RPn",
-   "chunk-yxnffbzs.js#at",
-   "chunk-yxnffbzs.js#JBi",
-   "chunk-yxnffbzs.js#hd",
-   "chunk-yxnffbzs.js#dcs",
-   "chunk-yxnffbzs.js#$G",
-   "chunk-yxnffbzs.js#QBi",
-   "chunk-yxnffbzs.js#Adt",
-   "chunk-yxnffbzs.js#$K",
-   "chunk-yxnffbzs.js#P",
-   "chunk-yxnffbzs.js#hCi",
-   "chunk-yxnffbzs.js#x3e",
-   "chunk-yxnffbzs.js#xPn",
-   "chunk-yxnffbzs.js#WBe",
-   "chunk-yxnffbzs.js#ryr",
-   "chunk-yxnffbzs.js#FK",
-   "chunk-yxnffbzs.js#e0",
-   "chunk-yxnffbzs.js#ZBi",
-   "chunk-yxnffbzs.js#xne",
-   "chunk-yxnffbzs.js#Cdt",
-   "chunk-yxnffbzs.js#Rdt",
-   "chunk-yxnffbzs.js#Et",
-   "chunk-yxnffbzs.js#xdt",
-   "chunk-yxnffbzs.js#e1i",
-   "chunk-yxnffbzs.js#aj",
-   "chunk-yxnffbzs.js#iyr",
-   "chunk-yxnffbzs.js#Hx",
-   "chunk-yxnffbzs.js#BO",
-   "chunk-yxnffbzs.js#At",
-   "chunk-yxnffbzs.js#mcs",
-   "chunk-yxnffbzs.js#OPn"
-  ],
-  "chunks": {
-   "chunk-yxnffbzs.js": 87
-  },
-  "bytes": 16089,
-  "methods": {
-   "placement": 87
   }
  },
  "commands/list-agents/index.ts": {

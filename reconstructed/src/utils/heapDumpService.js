@@ -51,12 +51,12 @@ async function captureMemoryDiagnostics(trigger, dumpNumber = 0) {
   let mimalloc;
   try {
     let { heapStats } = await import("bun:jsc");
-    let b = heapStats(true);
-    objectTypeCounts = b.objectTypeCounts;
-    protectedObjectTypeCounts = b.protectedObjectTypeCounts;
-    mimalloc = b.mimalloc || undefined;
+    let jscStats = heapStats(true);
+    objectTypeCounts = jscStats.objectTypeCounts;
+    protectedObjectTypeCounts = jscStats.protectedObjectTypeCounts;
+    mimalloc = jscStats.mimalloc || undefined;
   } catch {}
-  let x = usage.rss - usage.heapUsed;
+  let nativeMemory = usage.rss - usage.heapUsed;
   let bytesPerSecond = uptimeSeconds > 0 ? usage.rss / uptimeSeconds : 0;
   let mbPerHour = (bytesPerSecond * 3600) / 1048576;
   let potentialLeaks = [];
@@ -66,7 +66,7 @@ async function captureMemoryDiagnostics(trigger, dumpNumber = 0) {
     );
   if (activeHandles > 100)
     potentialLeaks.push(`${activeHandles} active handles - possible timer/socket leak`);
-  if (x > usage.heapUsed)
+  if (nativeMemory > usage.heapUsed)
     potentialLeaks.push("Native memory > heap - leak may be in native addons (node-pty, etc.)");
   if (mbPerHour > 100) potentialLeaks.push(`High memory growth rate: ${mbPerHour.toFixed(1)} MB/hour`);
   if (openFileDescriptors && openFileDescriptors > 500)

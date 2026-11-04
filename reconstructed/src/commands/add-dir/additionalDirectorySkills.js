@@ -42,10 +42,10 @@ import { isCustomizationDisabled } from "../../utils/settings/customizationDisab
 import { isRestrictedToPluginOnly } from "../../utils/settings/pluginOnlyPolicy.js";
 
 //@ chunk-wwhzwan6.js:912-1036 placement
-function addClaudeMdDirectory(session, o) {
+function addClaudeMdDirectory(session, normalizedDir) {
   let additionalDirectoriesForClaudeMd = getAdditionalDirectoriesForClaudeMd();
-  if (additionalDirectoriesForClaudeMd.some((m) => identity(resolve(m)) === o)) return false;
-  setAdditionalDirectoriesForClaudeMd([...additionalDirectoriesForClaudeMd, o]);
+  if (additionalDirectoriesForClaudeMd.some((dir) => identity(resolve(dir)) === normalizedDir)) return false;
+  setAdditionalDirectoriesForClaudeMd([...additionalDirectoriesForClaudeMd, normalizedDir]);
   clearMemoryFilesCache(session);
   invalidateUserContext(session, "directory_added");
   reloadSkillsAfterDirectoryChange();
@@ -55,29 +55,29 @@ function addClaudeMdDirectory(session, o) {
 /**
  * /add-dir：把目录加入权限上下文（会话或 localSettings），刷新配置并加载其中的 skills/commands/agents。
  */
-async function addWorkingDirectory(context, directory, s) {
-  let n = {
+async function addWorkingDirectory(context, directoryPath, options) {
+  let update = {
     type: "addDirectories",
-    directories: [directory],
-    destination: s ? "localSettings" : "session",
+    directories: [directoryPath],
+    destination: options ? "localSettings" : "session",
   };
-  context.setToolPermissionContext((i) => applyValidatedPermissionUpdate(i, n));
-  addClaudeMdDirectory(context.session, directory);
+  context.setToolPermissionContext((context) => applyValidatedPermissionUpdate(context, update));
+  addClaudeMdDirectory(context.session, directoryPath);
   SandboxManager.refreshConfig();
-  if (context.storageV5) recordSessionAlias(directory, context.storageV5);
-  else recordSessionAlias(directory);
-  appendRespawnFlag("--add-dir", directory, context.storageV5);
-  let d;
-  if (s)
+  if (context.storageV5) recordSessionAlias(directoryPath, context.storageV5);
+  else recordSessionAlias(directoryPath);
+  appendRespawnFlag("--add-dir", directoryPath, context.storageV5);
+  let skillsResult;
+  if (options)
     try {
-      await persistValidatedPermissionUpdate(n, context.storageV5);
-      d = `Added ${sequential.bold(directory)} as a working directory and saved to local settings`;
+      await persistValidatedPermissionUpdate(update, context.storageV5);
+      skillsResult = `Added ${sequential.bold(directoryPath)} as a working directory and saved to local settings`;
     } catch (error) {
-      d = `Added ${sequential.bold(directory)} as a working directory. Failed to save to local settings: ${error instanceof Error ? error.message : "Unknown error"}`;
+      skillsResult = `Added ${sequential.bold(directoryPath)} as a working directory. Failed to save to local settings: ${error instanceof Error ? error.message : "Unknown error"}`;
     }
-  else d = `Added ${sequential.bold(directory)} as a working directory for this session`;
-  let u = randomUUID();
-  executeDirectoryAddedHooks(context.session, directory, "slash_command", {
+  else skillsResult = `Added ${sequential.bold(directoryPath)} as a working directory for this session`;
+  let hookRunId = randomUUID();
+  executeDirectoryAddedHooks(context.session, directoryPath, "slash_command", {
     storageV5: context.storageV5,
     credentials: context.credentials,
   })
@@ -87,22 +87,24 @@ async function addWorkingDirectory(context, directory, s) {
           logForDebugging(`DirectoryAdded hook failed: ${result.output}`, {
             level: "error",
           });
-      let a = count(results, (r) => !r.succeeded);
-      let g = [
+      let failedCount = count(results, (result) => !result.succeeded);
+      let messages = [
         ...(await Promise.all(
-          systemMessages.map((systemMessage, f) =>
-            persistLargeHookOutput(systemMessage, `add-dir-${u}-${f}`, "systemMessage", {
+          systemMessages.map((systemMessage, index) =>
+            persistLargeHookOutput(systemMessage, `add-dir-${hookRunId}-${index}`, "systemMessage", {
               storageV5: context.storageV5,
-            }).then((p) => `DirectoryAdded hook: ${p}`),
+            }).then((hookText) => `DirectoryAdded hook: ${hookText}`),
           ),
         )),
-        ...(a > 0
-          ? [`${a} DirectoryAdded ${plural(a, "hook")} failed; output is in the debug log, not shown here`]
+        ...(failedCount > 0
+          ? [
+              `${failedCount} DirectoryAdded ${plural(failedCount, "hook")} failed; output is in the debug log, not shown here`,
+            ]
           : []),
       ];
-      if (g.length > 0)
+      if (messages.length > 0)
         context.messageQueue.enqueuePendingNotification({
-          value: g.join(`
+          value: messages.join(`
 `),
           mode: "task-notification",
           skipAttachments: true,
@@ -119,30 +121,30 @@ async function addWorkingDirectory(context, directory, s) {
         isMeta: true,
       });
     });
-  return d;
+  return skillsResult;
 }
 //@ chunk-wwhzwan6.js:2497-4078 placement
-function explainAddDirSkillsSkipped(context, o) {
+function explainAddDirSkillsSkipped(context, outcome) {
   let toolPermissionContext = getToolPermissionContext(context);
-  if (o.isExactMatch || !o.isOriginalCwd) return null;
+  if (outcome.isExactMatch || !outcome.isOriginalCwd) return null;
   let fsImplementation = getFsImplementation();
-  let { resolvedPath, isCanonical } = safeResolvePath(fsImplementation, o.absolutePath);
+  let { resolvedPath, isCanonical } = safeResolvePath(fsImplementation, outcome.absolutePath);
   let { resolvedPath: resolvedPath_2, isCanonical: isCanonical_2 } = safeResolvePath(
     fsImplementation,
-    o.workingDir,
+    outcome.workingDir,
   );
-  let l = sequential.bold(stripInvisibleChars(o.directoryPath));
+  let boldPath = sequential.bold(stripInvisibleChars(outcome.directoryPath));
   if (!isCanonical || !isCanonical_2) {
     if (
-      [o.absolutePath, o.workingDir].some(
-        (c) => isNonWslUncPath(c) || isNetworkMountPath(c) || neverOtherHostMount(c),
+      [outcome.absolutePath, outcome.workingDir].some(
+        (path) => isNonWslUncPath(path) || isNetworkMountPath(path) || neverOtherHostMount(path),
       )
     )
       return null;
-    return `${l} couldn't be resolved to a real location, so its skills, commands, and agents weren't loaded. Check that it is a directory inside the working directory and try again.`;
+    return `${boldPath} couldn't be resolved to a real location, so its skills, commands, and agents weren't loaded. Check that it is a directory inside the working directory and try again.`;
   }
   if (
-    !pathInAllowedWorkingPath(o.absolutePath, {
+    !pathInAllowedWorkingPath(outcome.absolutePath, {
       ...toolPermissionContext,
       additionalWorkingDirectories: new Map(),
     }) ||
@@ -152,28 +154,34 @@ function explainAddDirSkillsSkipped(context, o) {
       uncShapeParity: true,
     })
   ) {
-    let c = stripInvisibleChars(resolvedPath);
-    return resolvedPath === o.absolutePath
-      ? `${l} leads outside the working directory, so its skills, commands, and agents weren't loaded. Add that location with /add-dir to grant access to it.`
-      : `${l} leads outside the working directory through a link (it resolves to ${sequential.bold(c)}), so its skills, commands, and agents weren't loaded. Run /add-dir ${c} to grant access to it.`;
+    let pathText = stripInvisibleChars(resolvedPath);
+    return resolvedPath === outcome.absolutePath
+      ? `${boldPath} leads outside the working directory, so its skills, commands, and agents weren't loaded. Add that location with /add-dir to grant access to it.`
+      : `${boldPath} leads outside the working directory through a link (it resolves to ${sequential.bold(pathText)}), so its skills, commands, and agents weren't loaded. Run /add-dir ${pathText} to grant access to it.`;
   }
   if (resolvedPath === resolvedPath_2) return null;
-  let a = `${l} is inside the current working directory ${sequential.bold(stripInvisibleChars(o.workingDir))}`;
-  let g = isSettingSourceEnabled("projectSettings");
-  let r =
-    g &&
+  let insideCwd = `${boldPath} is inside the current working directory ${sequential.bold(stripInvisibleChars(outcome.workingDir))}`;
+  let projectSettingsOn = isSettingSourceEnabled("projectSettings");
+  let agentsAllowed =
+    projectSettingsOn &&
     !isCustomizationDisabled("skills", {
       explicitlyRequested: true,
     }) &&
     !isRestrictedToPluginOnly("skills");
-  let f = g && !isCustomizationDisabled("agents") && !isRestrictedToPluginOnly("agents");
-  if (!r && !f)
-    return `${a}; skills, commands, and agents from additional directories are disabled in this session, so nothing was loaded.`;
-  let p = r && f ? "skills, commands, and agents" : r ? "skills and commands" : "agents";
-  let y = addClaudeMdDirectory(context.session, o.absolutePath);
-  if (y) SandboxManager.refreshConfig();
-  return y
-    ? `${a}; loading its ${p} for this session.`
-    : `${a}; its ${p} are already included for this session.`;
+  let agentsManageable =
+    projectSettingsOn && !isCustomizationDisabled("agents") && !isRestrictedToPluginOnly("agents");
+  if (!agentsAllowed && !agentsManageable)
+    return `${insideCwd}; skills, commands, and agents from additional directories are disabled in this session, so nothing was loaded.`;
+  let claudeMdSkipped =
+    agentsAllowed && agentsManageable
+      ? "skills, commands, and agents"
+      : agentsAllowed
+        ? "skills and commands"
+        : "agents";
+  let claudeMdAdded = addClaudeMdDirectory(context.session, outcome.absolutePath);
+  if (claudeMdAdded) SandboxManager.refreshConfig();
+  return claudeMdAdded
+    ? `${insideCwd}; loading its ${claudeMdSkipped} for this session.`
+    : `${insideCwd}; its ${claudeMdSkipped} are already included for this session.`;
 }
-export { addWorkingDirectory, explainAddDirSkillsSkipped };
+export { explainAddDirSkillsSkipped, addWorkingDirectory };

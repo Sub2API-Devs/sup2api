@@ -5,7 +5,7 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_object_hash } from "../../../object-hash/index.js";
 import { require_lru_cache } from "../../../lru-cache/index.js";
 import { require_errors } from "../errors.js";
@@ -16,7 +16,7 @@ import { require_process_response } from "./process_response.js";
 import { require_request } from "./request.js";
 
 //@ chunk-1ny7cxrt.js:37631-38946 cjs-fingerprint
-var require_issuer_2 = x(function (cjsExports, cjsModule) {
+var require_issuer_2 = __commonJS(function (cjsExports, cjsModule) {
   var objectHash = require_object_hash();
   var LRU = require_lru_cache();
   var { RPError } = require_errors();

@@ -61,8 +61,8 @@ var HEADER_LINE_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+:/;
 /**
  * 清洗日志文本：去掉控制字符（含代理）并截断到给定长度。
  */
-function sanitizeLogText(e, n = 200) {
-  return truncateToLength(e.replace(/[\p{Cc}\p{Cs}]/gu, ""), n);
+function sanitizeLogText(text, maxLength = 200) {
+  return truncateToLength(text.replace(/[\p{Cc}\p{Cs}]/gu, ""), maxLength);
 }
 //@ chunk-88g43zt5.js:1523-1637 placement
 function sanitizeAuthorization(headerValue) {
@@ -71,8 +71,8 @@ function sanitizeAuthorization(headerValue) {
   return CONTROL_CHAR_PATTERN.test(headerValue) ? undefined : headerValue;
 }
 //@ chunk-88g43zt5.js:1637-1971 placement
-function validateProxyAuthorization(e) {
-  let trimmed = e.trim();
+function validateProxyAuthorization(rawValue) {
+  let trimmed = rawValue.trim();
   if (!trimmed) throw new ProxyAuthorizationMintError("proxy authorization source returned an empty value");
   if (Buffer.byteLength(trimmed) > MAX_HEAD_BYTES)
     throw new ProxyAuthorizationMintError(`proxy authorization value exceeds ${MAX_HEAD_BYTES} bytes`);
@@ -86,60 +86,62 @@ function validateProxyAuthorization(e) {
 /**
  * 从 --proxy-authorization-command（执行命令）或 --proxy-authorization-file（读文件）取得代理认证值，带超时与大小限制。
  */
-function mintProxyAuthorization(e) {
-  let { source } = e;
-  let commandTimeoutMs = e.commandTimeoutMs ?? HEAD_TIMEOUT_MS;
-  let o;
+function mintProxyAuthorization(options) {
+  let { source } = options;
+  let commandTimeoutMs = options.commandTimeoutMs ?? HEAD_TIMEOUT_MS;
+  let proxyHostname;
   try {
-    o = new URL(e.upstreamProxyUrl).hostname;
+    proxyHostname = new URL(options.upstreamProxyUrl).hostname;
   } catch {
-    o = undefined;
+    proxyHostname = undefined;
   }
-  let u;
-  let c = async (challenge) => {
+  let pendingFileRead;
+  let mintValue = async (challenge) => {
     if (source.kind === "file") {
-      if (u)
+      if (pendingFileRead)
         throw new ProxyAuthorizationMintError(
           "proxy authorization file could not be read: an earlier read has not returned yet (stalled mount?); not issuing another",
         );
-      let l;
-      let R = false;
-      let Y = (async () => {
-        let U = await open(source.path, "r");
+      let fileContents;
+      let settled = false;
+      let readPromise = (async () => {
+        let fileHandle = await open(source.path, "r");
         try {
-          let F = Buffer.alloc(MAX_HEAD_BYTES + 1);
-          let { bytesRead } = await U.read(F, 0, F.length, 0);
-          return F.subarray(0, bytesRead).toString("utf8");
+          let readBuffer = Buffer.alloc(MAX_HEAD_BYTES + 1);
+          let { bytesRead } = await fileHandle.read(readBuffer, 0, readBuffer.length, 0);
+          return readBuffer.subarray(0, bytesRead).toString("utf8");
         } finally {
-          await U.close();
+          await fileHandle.close();
         }
       })();
-      let v = () => {
-        R = true;
-        if (u === Y) u = undefined;
+      let onReadSettled = () => {
+        settled = true;
+        if (pendingFileRead === readPromise) pendingFileRead = undefined;
       };
-      Y.then(v, v);
+      readPromise.then(onReadSettled, onReadSettled);
       try {
-        l = await withBoundedTimeout(Y, commandTimeoutMs, "read");
+        fileContents = await withBoundedTimeout(readPromise, commandTimeoutMs, "read");
       } catch (error) {
-        if (!R) u = Y;
+        if (!settled) pendingFileRead = readPromise;
         throw new ProxyAuthorizationMintError(
           `proxy authorization file could not be read: ${redactSecretsInText(errorMessage(error))}`,
         );
       }
-      return validateProxyAuthorization(l);
+      return validateProxyAuthorization(fileContents);
     }
     let env = {
-      ...(typeof e.commandEnv === "function" ? e.commandEnv() : (e.commandEnv ?? process.env)),
-      CLAUDE_CODE_PROXY_URL: e.upstreamProxyUrl,
-      ...(o && {
-        CLAUDE_CODE_PROXY_HOST: o,
+      ...(typeof options.commandEnv === "function"
+        ? options.commandEnv()
+        : (options.commandEnv ?? process.env)),
+      CLAUDE_CODE_PROXY_URL: options.upstreamProxyUrl,
+      ...(proxyHostname && {
+        CLAUDE_CODE_PROXY_HOST: proxyHostname,
       }),
       ...(challenge && {
         CLAUDE_CODE_PROXY_AUTHENTICATE: challenge,
       }),
     };
-    let h = await safeExecShell(source.command, {
+    let commandResult = await safeExecShell(source.command, {
       timeout: commandTimeoutMs,
       reject: false,
       stdin: "ignore",
@@ -147,70 +149,73 @@ function mintProxyAuthorization(e) {
       extendEnv: false,
       env,
     });
-    if (h.failed) {
-      let l = h.timedOut
+    if (commandResult.failed) {
+      let failureText = commandResult.timedOut
         ? `timed out after ${commandTimeoutMs}ms`
-        : `exited ${h.exitCode ?? h.signal ?? "abnormally"}`;
-      let trimmed = h.stderr?.trim();
+        : `exited ${commandResult.exitCode ?? commandResult.signal ?? "abnormally"}`;
+      let trimmed = commandResult.stderr?.trim();
       throw new ProxyAuthorizationMintError(
-        `proxy authorization command ${l}${trimmed ? `: ${truncateToLength(redactSecretsInText(trimmed), 500)}` : ""}`,
+        `proxy authorization command ${failureText}${trimmed ? `: ${truncateToLength(redactSecretsInText(trimmed), 500)}` : ""}`,
       );
     }
-    return validateProxyAuthorization(h.stdout ?? "");
+    return validateProxyAuthorization(commandResult.stdout ?? "");
   };
-  let f = new Map();
+  let inFlightMints = new Map();
   return {
     source: source.kind,
-    mint(x) {
-      let P = x === undefined ? "plain" : `remint:${x.challenge ?? ""}`;
-      let h = f.get(P);
-      if (!h) {
-        h = c(x?.challenge).finally(() => {
-          f.delete(P);
+    mint(retryHint) {
+      let mintKey = retryHint === undefined ? "plain" : `remint:${retryHint.challenge ?? ""}`;
+      let mintPromise = inFlightMints.get(mintKey);
+      if (!mintPromise) {
+        mintPromise = mintValue(retryHint?.challenge).finally(() => {
+          inFlightMints.delete(mintKey);
         });
-        f.set(P, h);
+        inFlightMints.set(mintKey, mintPromise);
       }
-      return h;
+      return mintPromise;
     },
   };
 }
 //@ chunk-88g43zt5.js:3329-3484 placement
-function getHeaderValue(headerLines, n) {
-  let lower = n.toLowerCase();
-  for (let o of headerLines) {
-    let index = o.indexOf(":");
-    if (index > 0 && o.slice(0, index).trim().toLowerCase() === lower) return o.slice(index + 1).trim();
+function getHeaderValue(headerLines, headerName) {
+  let lower = headerName.toLowerCase();
+  for (let headerLine of headerLines) {
+    let index = headerLine.indexOf(":");
+    if (index > 0 && headerLine.slice(0, index).trim().toLowerCase() === lower)
+      return headerLine.slice(index + 1).trim();
   }
   return;
 }
 //@ chunk-88g43zt5.js:3484-3642 placement
-function pickHeaders(headerLines, n) {
-  let s = new Set(n.map((o) => o.toLowerCase()));
-  return headerLines.filter((o) => {
-    let index = o.indexOf(":");
-    return index > 0 && s.has(o.slice(0, index).trim().toLowerCase());
+function pickHeaders(headerLines, headerNames) {
+  let wantedNames = new Set(headerNames.map((headerName) => headerName.toLowerCase()));
+  return headerLines.filter((headerLine) => {
+    let index = headerLine.indexOf(":");
+    return index > 0 && wantedNames.has(headerLine.slice(0, index).trim().toLowerCase());
   });
 }
 //@ chunk-88g43zt5.js:3642-3801 placement
-function omitHeaders(headerLines, n) {
-  let s = new Set(n.map((o) => o.toLowerCase()));
-  return headerLines.filter((o) => {
-    let index = o.indexOf(":");
-    return !(index > 0 && s.has(o.slice(0, index).trim().toLowerCase()));
+function omitHeaders(headerLines, headerNames) {
+  let omittedNames = new Set(headerNames.map((headerName) => headerName.toLowerCase()));
+  return headerLines.filter((headerLine) => {
+    let index = headerLine.indexOf(":");
+    return !(index > 0 && omittedNames.has(headerLine.slice(0, index).trim().toLowerCase()));
   });
 }
 //@ chunk-88g43zt5.js:3801-3811 placement
 var MIN_TRIM_LINE_CHARS = 16;
 //@ chunk-88g43zt5.js:3811-4034 placement
-function headContainsSecret(e, n) {
-  let str = Buffer.from(n, "utf8").toString("latin1");
-  let o = [str];
-  let u = str.search(/[ \t]/);
-  if (u > 0) {
-    let trimmed = str.slice(u).trim();
-    if (trimmed.length >= MIN_TRIM_LINE_CHARS) o.push(trimmed);
+function headContainsSecret(head, secretValue) {
+  let str = Buffer.from(secretValue, "utf8").toString("latin1");
+  let needleVariants = [str];
+  let spaceIndex = str.search(/[ \t]/);
+  if (spaceIndex > 0) {
+    let trimmed = str.slice(spaceIndex).trim();
+    if (trimmed.length >= MIN_TRIM_LINE_CHARS) needleVariants.push(trimmed);
   }
-  return [e.startLine, ...e.headerLines].some((c) => o.some((f) => c.includes(f)));
+  return [head.startLine, ...head.headerLines].some((headLine) =>
+    needleVariants.some((needle) => headLine.includes(needle)),
+  );
 }
 //@ chunk-88g43zt5.js:4034-4091 placement
 var PROXY_AUTH_HEADER_NAMES = ["proxy-authenticate", "proxy-authentication-info"];
@@ -218,28 +223,28 @@ var PROXY_AUTH_HEADER_NAMES = ["proxy-authenticate", "proxy-authentication-info"
 /**
  * 把一个流的数据转发到另一个流，最多转发指定字节数（超出时回调一次），处理背压。
  */
-function pipeLimited(e, n, s, o, u) {
-  let c = s;
-  let f = false;
-  let x = (P) => {
-    if (n.destroyed || !n.writable) return;
-    if (P.length > c && !f) {
-      f = true;
-      u();
+function pipeLimited(source, destination, bodyLength, firstChunk, onOverflow) {
+  let remaining = bodyLength;
+  let overflowed = false;
+  let onData = (chunk) => {
+    if (destination.destroyed || !destination.writable) return;
+    if (chunk.length > remaining && !overflowed) {
+      overflowed = true;
+      onOverflow();
     }
-    if (c === 0 || P.length === 0) return;
-    let h = P.length <= c ? P : P.subarray(0, c);
-    c -= h.length;
-    if (!n.write(h) && c > 0) {
-      e.pause();
-      n.once("drain", () => e.resume());
+    if (remaining === 0 || chunk.length === 0) return;
+    let allowed = chunk.length <= remaining ? chunk : chunk.subarray(0, remaining);
+    remaining -= allowed.length;
+    if (!destination.write(allowed) && remaining > 0) {
+      source.pause();
+      destination.once("drain", () => source.resume());
     }
   };
-  x(o);
-  e.on("data", x);
-  e.resume();
+  onData(firstChunk);
+  source.on("data", onData);
+  source.resume();
   return () => {
-    e.removeListener("data", x);
+    source.removeListener("data", onData);
   };
 }
 //@ chunk-88g43zt5.js:4408-5258 placement
@@ -248,65 +253,65 @@ function pipeLimited(e, n, s, o, u) {
  */
 function readHttpHead(socket, maxBytes, timeoutMs, prefix = Buffer.alloc(0)) {
   return new Promise((resolve, reject) => {
-    let f = prefix;
-    let x = false;
-    let P = (v, U) => {};
+    let buffered = prefix;
+    let settled = false;
+    let finish = (rejectWith, head) => {};
     let timer = setTimeout(
-      (v) => v(Error("timed out waiting for the request/response head")),
+      (rejectMessage) => rejectMessage(Error("timed out waiting for the request/response head")),
       timeoutMs,
-      (v) => P(v),
+      (rejectFn) => finish(rejectFn),
     );
-    let l = (v) => {
-      f = Buffer.concat([f, v]);
-      let index = f.indexOf(`\r
+    let onData = (chunk) => {
+      buffered = Buffer.concat([buffered, chunk]);
+      let index = buffered.indexOf(`\r
 \r
 `);
       if (index === -1) {
-        if (f.length > maxBytes) P(Error("request/response head exceeded the size limit"));
+        if (buffered.length > maxBytes) finish(Error("request/response head exceeded the size limit"));
         return;
       }
       if (index > maxBytes) {
-        P(Error("request/response head exceeded the size limit"));
+        finish(Error("request/response head exceeded the size limit"));
         return;
       }
-      let str = f.subarray(0, index).toString("latin1");
-      let [q = "", ...V] = str.split(`\r
+      let str = buffered.subarray(0, index).toString("latin1");
+      let [startLine = "", ...headerLines] = str.split(`\r
 `);
-      P(null, {
-        startLine: q,
-        headerLines: V,
-        rest: f.subarray(index + 4),
+      finish(null, {
+        startLine,
+        headerLines,
+        rest: buffered.subarray(index + 4),
       });
     };
-    let R = () => P(Error("connection closed before the head was complete"));
-    let Y = (v) => P(v);
-    P = (v, U) => {
-      x = true;
+    let onClose = () => finish(Error("connection closed before the head was complete"));
+    let onError = (error) => finish(error);
+    finish = (error, head) => {
+      settled = true;
       clearTimeout(timer);
-      socket.removeListener("data", l);
-      socket.removeListener("close", R);
-      socket.removeListener("error", Y);
+      socket.removeListener("data", onData);
+      socket.removeListener("close", onClose);
+      socket.removeListener("error", onError);
       socket.pause();
-      if (v) reject(v);
-      else resolve(U);
+      if (error) reject(error);
+      else resolve(head);
     };
-    socket.on("data", l);
-    socket.once("close", R);
-    socket.once("error", Y);
-    if (f.length > 0) l(Buffer.alloc(0));
-    if (!x) socket.resume();
+    socket.on("data", onData);
+    socket.once("close", onClose);
+    socket.once("error", onError);
+    if (buffered.length > 0) onData(Buffer.alloc(0));
+    if (!settled) socket.resume();
   });
 }
 //@ chunk-88g43zt5.js:5258-5372 placement
-function endSocket(e, n) {
-  if (e.destroyed) return;
-  e.resume();
-  if (e.writable) e.end(n);
-  setTimeout((s) => s.destroy(), DESTROY_GRACE_MS, e).unref();
+function endSocket(socket, body) {
+  if (socket.destroyed) return;
+  socket.resume();
+  if (socket.writable) socket.end(body);
+  setTimeout((pendingSocket) => pendingSocket.destroy(), DESTROY_GRACE_MS, socket).unref();
 }
 //@ chunk-88g43zt5.js:5372-5417 placement
-function latin1Buffer(e) {
-  return Buffer.from(e, "latin1");
+function latin1Buffer(text) {
+  return Buffer.from(text, "latin1");
 }
 //@ chunk-88g43zt5.js:5417-5570 placement
 function proxyAuthRequiredResponse() {
@@ -318,14 +323,14 @@ Connection: close\r
 `;
 }
 //@ chunk-88g43zt5.js:5570-5712 placement
-function plainHttpResponse(e, n, s) {
+function plainHttpResponse(status, statusText, body) {
   return (
-    `HTTP/1.1 ${e} ${n}\r
+    `HTTP/1.1 ${status} ${statusText}\r
 Content-Type: text/plain\r
-Content-Length: ${Buffer.byteLength(s)}\r
+Content-Length: ${Buffer.byteLength(body)}\r
 Connection: close\r
 \r
-` + s
+` + body
   );
 }
 //@ chunk-88g43zt5.js:5712-6305 placement
@@ -335,25 +340,25 @@ Connection: close\r
 function parseAbsoluteFormRequest(head) {
   let match = head.startLine.match(/^([A-Z]+)\s+http:\/\/([^/?#\s]+)(\S*)\s+(HTTP\/1\.[01])$/i);
   if (!match) return;
-  let [, s, o, u, c] = match;
-  let match_2 = o.match(/^(\[[0-9A-Fa-f:.]+\]|[^:@[\]]+)(?::(\d{1,5}))?$/);
+  let [, method, hostPort, requestTarget, httpVersion] = match;
+  let match_2 = hostPort.match(/^(\[[0-9A-Fa-f:.]+\]|[^:@[\]]+)(?::(\d{1,5}))?$/);
   if (!match_2 || (match_2[2] !== undefined && Number(match_2[2]) > 65535)) return;
   let target = `${match_2[1]}:${match_2[2] ?? "80"}`;
-  let P = u.startsWith("/") ? u : `/${u}`;
+  let path = requestTarget.startsWith("/") ? requestTarget : `/${requestTarget}`;
   let filtered = head.headerLines.filter((headerLine) => {
     let lower = headerLine.slice(0, headerLine.indexOf(":")).trim().toLowerCase();
     return !lower.startsWith("proxy-") && lower !== "connection" && lower !== "keep-alive";
   });
-  if (getHeaderValue(filtered, "host") === undefined) filtered.push(`Host: ${o}`);
+  if (getHeaderValue(filtered, "host") === undefined) filtered.push(`Host: ${hostPort}`);
   return {
     target,
     head: latin1Buffer(
-      `${s} ${P} ${c}\r
+      `${method} ${path} ${httpVersion}\r
 ` +
         filtered
           .map(
-            (l) =>
-              l +
+            (headerLine) =>
+              headerLine +
               `\r
 `,
           )
@@ -375,30 +380,30 @@ class ClientGoneError extends Error {
 /**
  * 暂时缓冲 socket 的数据（超量时暂停），返回是否已关闭与取出缓冲的方法。
  */
-function bufferSocket(e, n) {
-  let s = false;
-  let o = n.length > 0 ? [n] : [];
-  let u = n.length;
-  let c = (x) => {
-    o.push(x);
-    u += x.length;
-    if (u > MAX_BUFFERED_BYTES) e.pause();
+function bufferSocket(socket, prefix) {
+  let closed = false;
+  let chunks = prefix.length > 0 ? [prefix] : [];
+  let totalBytes = prefix.length;
+  let onData = (chunk) => {
+    chunks.push(chunk);
+    totalBytes += chunk.length;
+    if (totalBytes > MAX_BUFFERED_BYTES) socket.pause();
   };
-  let f = () => {
-    s = true;
+  let onEnd = () => {
+    closed = true;
   };
-  e.on("data", c);
-  e.once("end", f);
-  e.once("close", f);
-  e.resume();
+  socket.on("data", onData);
+  socket.once("end", onEnd);
+  socket.once("close", onEnd);
+  socket.resume();
   return {
-    gone: () => s || e.destroyed,
+    gone: () => closed || socket.destroyed,
     release: () => {
-      e.removeListener("data", c);
-      let x = o.length === 1 ? o[0] : Buffer.concat(o);
-      o = [];
-      u = 0;
-      return x;
+      socket.removeListener("data", onData);
+      let joined = chunks.length === 1 ? chunks[0] : Buffer.concat(chunks);
+      chunks = [];
+      totalBytes = 0;
+      return joined;
     },
   };
 }
@@ -406,112 +411,113 @@ function bufferSocket(e, n) {
 /**
  * 自托管 runner 的出口代理（runner:egress-proxy）：本地监听并转发到上游 HTTP(S) 代理，注入 Proxy-Authorization，处理 CONNECT 与 407。
  */
-async function startEgressProxy(e) {
-  let n = new URL(e.upstreamProxyUrl);
-  let s = n.protocol === "https:";
-  if (n.protocol !== "http:" && !s) throw Error("the upstream proxy URL must be http:// or https://");
-  let replaced = n.hostname.replace(/^\[(.*)\]$/, "$1");
-  let port = n.port ? Number(n.port) : s ? 443 : 80;
-  let logLabel = e.logLabel ?? "runner:egress-proxy";
-  if (n.username || n.password)
-    e.onStatus(
+async function startEgressProxy(options) {
+  let upstreamUrl = new URL(options.upstreamProxyUrl);
+  let isTls = upstreamUrl.protocol === "https:";
+  if (upstreamUrl.protocol !== "http:" && !isTls)
+    throw Error("the upstream proxy URL must be http:// or https://");
+  let host = upstreamUrl.hostname.replace(/^\[(.*)\]$/, "$1");
+  let port = upstreamUrl.port ? Number(upstreamUrl.port) : isTls ? 443 : 80;
+  let logLabel = options.logLabel ?? "runner:egress-proxy";
+  if (upstreamUrl.username || upstreamUrl.password)
+    options.onStatus(
       `[${logLabel}] note: the upstream proxy URL carries user:password credentials; they are replaced by the minted Proxy-Authorization value on every request to the upstream proxy`,
     );
   let str = randomBytes(24).toString("base64url");
   let buffer = Buffer.from("Basic " + Buffer.from(`runner:${str}`).toString("base64"));
-  let P = (headerLines) => {
+  let hasValidClientAuth = (headerLines) => {
     let headerValue = getHeaderValue(headerLines, "proxy-authorization");
     if (headerValue === undefined) return false;
     let buffer_2 = Buffer.from(headerValue);
     return buffer_2.length === buffer.length && timingSafeEqual(buffer_2, buffer);
   };
-  let h = (r) => e.onDebug?.(`[${logLabel}] ${r}`);
-  let l = (r) => e.onStatus(`[${logLabel}] ${r}`);
-  let R = new Set();
-  let Y = (r) => {
-    R.add(r);
-    r.on("error", (a) => h(`socket: ${errorMessage(a)}`));
-    r.once("close", () => R.delete(r));
+  let debug = (message) => options.onDebug?.(`[${logLabel}] ${message}`);
+  let status = (message) => options.onStatus(`[${logLabel}] ${message}`);
+  let openSockets = new Set();
+  let trackSocket = (socket) => {
+    openSockets.add(socket);
+    socket.on("error", (socketError) => debug(`socket: ${errorMessage(socketError)}`));
+    socket.once("close", () => openSockets.delete(socket));
   };
-  let v = () => {
-    e.onUpstreamFailure?.().catch((error) =>
-      h(`reload after a failed upstream connection: ${errorMessage(error)}`),
-    );
+  let reportUpstreamFailure = () => {
+    options
+      .onUpstreamFailure?.()
+      .catch((error) => debug(`reload after a failed upstream connection: ${errorMessage(error)}`));
   };
-  let U = () =>
+  let connectUpstream = () =>
     new Promise((resolve, reject) => {
-      let E = s
+      let socket = isTls
         ? connect_2({
-            host: replaced,
+            host,
             port,
-            servername: isIpLiteralHost(replaced) ? undefined : replaced,
-            ...(typeof e.upstreamTls === "function" ? e.upstreamTls() : e.upstreamTls),
+            servername: isIpLiteralHost(host) ? undefined : host,
+            ...(typeof options.upstreamTls === "function" ? options.upstreamTls() : options.upstreamTls),
           })
         : connect({
-            host: replaced,
+            host,
             port,
           });
-      Y(E);
-      let T = s ? "secureConnect" : "connect";
-      let A = (y) => {};
+      trackSocket(socket);
+      let connectEvent = isTls ? "secureConnect" : "connect";
+      let finishConnect = (rejectMessage) => {};
       let timer = setTimeout(
-        (y) => y(Error("timed out connecting to the upstream proxy")),
+        (rejectFn) => rejectFn(Error("timed out connecting to the upstream proxy")),
         UPSTREAM_TIMEOUT_MS,
-        (y) => A(y),
+        (rejectFunction) => finishConnect(rejectFunction),
       );
-      let S = () => A(null);
-      let L = (y) => A(y);
-      let N = () => A(Error("upstream proxy closed the connection during connect"));
-      A = (y) => {
+      let onConnect = () => finishConnect(null);
+      let onError = (error) => finishConnect(error);
+      let onClose = () => finishConnect(Error("upstream proxy closed the connection during connect"));
+      finishConnect = (error) => {
         clearTimeout(timer);
-        E.removeListener(T, S);
-        E.removeListener("error", L);
-        E.removeListener("close", N);
-        if (y) {
-          E.destroy();
-          v();
-          reject(y);
-        } else resolve(E);
+        socket.removeListener(connectEvent, onConnect);
+        socket.removeListener("error", onError);
+        socket.removeListener("close", onClose);
+        if (error) {
+          socket.destroy();
+          reportUpstreamFailure();
+          reject(error);
+        } else resolve(socket);
       };
-      E.once(T, S);
-      E.once("error", L);
-      E.once("close", N);
+      socket.once(connectEvent, onConnect);
+      socket.once("error", onError);
+      socket.once("close", onClose);
     });
-  let F = (r, a) => {
-    r.pipe(a);
-    a.pipe(r);
-    let E = () => {
-      r.destroy();
-      a.destroy();
+  let pipeBothWays = (left, right) => {
+    left.pipe(right);
+    right.pipe(left);
+    let destroyBoth = () => {
+      left.destroy();
+      right.destroy();
     };
-    r.on("error", E);
-    a.on("error", E);
-    r.on("close", () => endSocket(a, ""));
-    a.on("close", () => endSocket(r, ""));
-    r.resume();
-    a.resume();
+    left.on("error", destroyBoth);
+    right.on("error", destroyBoth);
+    left.on("close", () => endSocket(right, ""));
+    right.on("close", () => endSocket(left, ""));
+    left.resume();
+    right.resume();
   };
-  let q = async (r, a, E, T) => {
-    let A = await e.minter.mint(E);
-    if (T()) throw new ClientGoneError();
-    let p = await U();
-    if (T()) {
-      p.destroy();
+  let openTunnel = async (target, extraHeaders, mintHint, isClientGone) => {
+    let authorization = await options.minter.mint(mintHint);
+    if (isClientGone()) throw new ClientGoneError();
+    let upstreamSocket = await connectUpstream();
+    if (isClientGone()) {
+      upstreamSocket.destroy();
       throw new ClientGoneError();
     }
     try {
-      p.write(
+      upstreamSocket.write(
         Buffer.concat([
-          latin1Buffer(`CONNECT ${r} HTTP/1.1\r
-Host: ${r}\r
+          latin1Buffer(`CONNECT ${target} HTTP/1.1\r
+Host: ${target}\r
 `),
-          Buffer.from(`Proxy-Authorization: ${A}\r
+          Buffer.from(`Proxy-Authorization: ${authorization}\r
 `),
           latin1Buffer(
-            a
+            extraHeaders
               .map(
-                (L) =>
-                  L +
+                (headerLine) =>
+                  headerLine +
                   `\r
 `,
               )
@@ -521,35 +527,35 @@ Host: ${r}\r
           ),
         ]),
       );
-      let head = await readHttpHead(p, MAX_RESPONSE_HEAD, AUTH_REFRESH_MS);
-      if (T()) throw new ClientGoneError();
+      let head = await readHttpHead(upstreamSocket, MAX_RESPONSE_HEAD, AUTH_REFRESH_MS);
+      if (isClientGone()) throw new ClientGoneError();
       return {
-        up: p,
+        up: upstreamSocket,
         head,
-        value: A,
+        value: authorization,
       };
     } catch (error) {
-      p.destroy();
-      if (!(error instanceof ClientGoneError)) v();
+      upstreamSocket.destroy();
+      if (!(error instanceof ClientGoneError)) reportUpstreamFailure();
       throw error;
     }
   };
-  let V = (head) => {
+  let headStatus = (head) => {
     let match = head.startLine.match(/^HTTP\/1\.[01]\s+(\d{3})(?=\s|$)/);
     return match ? Number(match[1]) : 0;
   };
-  let me = (r, error, E) => {
-    if (error instanceof ClientGoneError || r.destroyed) {
-      r.destroy();
+  let failClient = (clientSocket, error, targetLabel) => {
+    if (error instanceof ClientGoneError || clientSocket.destroyed) {
+      clientSocket.destroy();
       return;
     }
-    let T =
+    let reasonText =
       error instanceof ProxyAuthorizationMintError
         ? error.message
         : `upstream proxy connection failed: ${redactSecretsInText(errorMessage(error))}`;
-    l(`${T} (${sanitizeLogText(E)} answered 502)`);
+    status(`${reasonText} (${sanitizeLogText(targetLabel)} answered 502)`);
     endSocket(
-      r,
+      clientSocket,
       plainHttpResponse(
         502,
         "Bad Gateway",
@@ -561,13 +567,13 @@ Host: ${r}\r
       ),
     );
   };
-  let Ue = (r, a, E, startLine) => {
-    a.destroy();
-    l(
-      `upstream proxy rejected the minted Proxy-Authorization for ${sanitizeLogText(E)} (${sanitizeLogText(startLine)}); answering the client 502`,
+  let rejectReflectedAuthorization = (clientSocket, upstreamSocket, targetLabel, startLine) => {
+    upstreamSocket.destroy();
+    status(
+      `upstream proxy rejected the minted Proxy-Authorization for ${sanitizeLogText(targetLabel)} (${sanitizeLogText(startLine)}); answering the client 502`,
     );
     endSocket(
-      r,
+      clientSocket,
       plainHttpResponse(
         502,
         "Bad Gateway",
@@ -576,13 +582,13 @@ Host: ${r}\r
       ),
     );
   };
-  let re = (r, a, E, T) => {
-    a.destroy();
-    l(
-      `upstream response to ${sanitizeLogText(E)} (status ${T}) reflected the minted Proxy-Authorization in its head; withheld, answering the client 502`,
+  let refuseSecretInHead = (clientSocket, upstreamSocket, targetLabel, reflectedStatus) => {
+    upstreamSocket.destroy();
+    status(
+      `upstream response to ${sanitizeLogText(targetLabel)} (status ${reflectedStatus}) reflected the minted Proxy-Authorization in its head; withheld, answering the client 502`,
     );
     endSocket(
-      r,
+      clientSocket,
       plainHttpResponse(
         502,
         "Bad Gateway",
@@ -591,42 +597,42 @@ Host: ${r}\r
       ),
     );
   };
-  let ye = async (r, a, E, T, A) => {
-    let p = pickHeaders(E.headerLines, ["user-agent"]);
-    let S = () => T.gone();
+  let handleConnectRequest = async (clientSocket, target, clientState, bufferedSocket, plainRequest) => {
+    let forwardHeaders = pickHeaders(clientState.headerLines, ["user-agent"]);
+    let isClientGone = () => bufferedSocket.gone();
     try {
-      let L = await q(a, p, undefined, S);
-      let N = V(L.head);
-      if (N === 407) {
-        let challenge = sanitizeAuthorization(getHeaderValue(L.head.headerLines, "proxy-authenticate"));
-        L.up.destroy();
-        h(`upstream answered 407 for CONNECT ${a}; re-minting once`);
-        L = await q(
-          a,
-          p,
+      let tunnel = await openTunnel(target, forwardHeaders, undefined, isClientGone);
+      let connectStatus = headStatus(tunnel.head);
+      if (connectStatus === 407) {
+        let challenge = sanitizeAuthorization(getHeaderValue(tunnel.head.headerLines, "proxy-authenticate"));
+        tunnel.up.destroy();
+        debug(`upstream answered 407 for CONNECT ${target}; re-minting once`);
+        tunnel = await openTunnel(
+          target,
+          forwardHeaders,
           {
             challenge,
           },
-          S,
+          isClientGone,
         );
-        N = V(L.head);
+        connectStatus = headStatus(tunnel.head);
       }
-      let { up, head, value: se } = L;
-      if (N !== 200 && headContainsSecret(head, se)) {
-        re(r, up, `CONNECT ${a}`, N);
+      let { up, head, value: authorization } = tunnel;
+      if (connectStatus !== 200 && headContainsSecret(head, authorization)) {
+        refuseSecretInHead(clientSocket, up, `CONNECT ${target}`, connectStatus);
         return;
       }
-      if (N === 407) {
-        Ue(r, up, `CONNECT ${a}`, head.startLine);
+      if (connectStatus === 407) {
+        rejectReflectedAuthorization(clientSocket, up, `CONNECT ${target}`, head.startLine);
         return;
       }
-      if (N < 100) {
+      if (connectStatus < 100) {
         up.destroy();
-        l(
-          `upstream proxy sent an unparseable reply to CONNECT ${sanitizeLogText(a)}; answering the client 502`,
+        status(
+          `upstream proxy sent an unparseable reply to CONNECT ${sanitizeLogText(target)}; answering the client 502`,
         );
         endSocket(
-          r,
+          clientSocket,
           plainHttpResponse(
             502,
             "Bad Gateway",
@@ -636,37 +642,44 @@ Host: ${r}\r
         );
         return;
       }
-      if (N === 200) {
-        h(`tunnel established: CONNECT ${a}`);
-        if (A === undefined)
-          r.write(`HTTP/1.1 200 Connection Established\r
+      if (connectStatus === 200) {
+        debug(`tunnel established: CONNECT ${target}`);
+        if (plainRequest === undefined)
+          clientSocket.write(`HTTP/1.1 200 Connection Established\r
 \r
 `);
-        if (head.rest.length > 0) r.write(head.rest);
-        if (A !== undefined) {
-          up.write(A.head);
-          let _e = pipeLimited(r, up, A.bodyLength, T.release(), () =>
-            h("client sent bytes past its declared Content-Length on a plain HTTP request; not forwarded"),
+        if (head.rest.length > 0) clientSocket.write(head.rest);
+        if (plainRequest !== undefined) {
+          up.write(plainRequest.head);
+          let stopForwarding = pipeLimited(
+            clientSocket,
+            up,
+            plainRequest.bodyLength,
+            bufferedSocket.release(),
+            () =>
+              debug(
+                "client sent bytes past its declared Content-Length on a plain HTTP request; not forwarded",
+              ),
           );
-          up.pipe(r);
+          up.pipe(clientSocket);
           up.once("close", () => {
-            _e();
-            endSocket(r, "");
+            stopForwarding();
+            endSocket(clientSocket, "");
           });
-          r.once("close", () => {
-            _e();
+          clientSocket.once("close", () => {
+            stopForwarding();
             up.destroy();
           });
           return;
         }
-        let b = T.release();
-        if (b.length > 0) up.write(b);
-        F(r, up);
+        let pendingBytes = bufferedSocket.release();
+        if (pendingBytes.length > 0) up.write(pendingBytes);
+        pipeBothWays(clientSocket, up);
         return;
       }
       up.destroy();
-      l(`upstream proxy refused CONNECT ${sanitizeLogText(a)}: ${sanitizeLogText(head.startLine)}`);
-      let z = omitHeaders(head.headerLines, [
+      status(`upstream proxy refused CONNECT ${sanitizeLogText(target)}: ${sanitizeLogText(head.startLine)}`);
+      let keptHeaderLines = omitHeaders(head.headerLines, [
         "connection",
         "proxy-connection",
         "keep-alive",
@@ -675,15 +688,15 @@ Host: ${r}\r
         ...PROXY_AUTH_HEADER_NAMES,
       ]);
       endSocket(
-        r,
+        clientSocket,
         latin1Buffer(
           head.startLine +
             `\r
 ` +
-            z
+            keptHeaderLines
               .map(
-                (b) =>
-                  b +
+                (headerLine) =>
+                  headerLine +
                   `\r
 `,
               )
@@ -695,11 +708,11 @@ Connection: close\r
         ),
       );
     } catch (error) {
-      me(r, error, `CONNECT ${a}`);
+      failClient(clientSocket, error, `CONNECT ${target}`);
     }
   };
-  let be = async (r, a, E) => {
-    let T = omitHeaders(a.headerLines, [
+  let handlePlainHttpRequest = async (clientSocket, clientState, bufferedSocket) => {
+    let forwardedHeaders = omitHeaders(clientState.headerLines, [
       "proxy-authorization",
       "proxy-connection",
       "connection",
@@ -709,71 +722,80 @@ Connection: close\r
       "trailer",
       "max-forwards",
     ]);
-    let A = Number(getHeaderValue(a.headerLines, "content-length") ?? "0");
-    let p;
-    let S = () => {};
-    let L = () => {
-      S();
-      p?.destroy();
-      r.destroy();
+    let contentLength = Number(getHeaderValue(clientState.headerLines, "content-length") ?? "0");
+    let upstreamSocket;
+    let stopForwarding = () => {};
+    let abortRequest = () => {
+      stopForwarding();
+      upstreamSocket?.destroy();
+      clientSocket.destroy();
     };
     try {
       {
-        let N = await e.minter.mint();
-        if (E.gone()) {
-          L();
+        let authorization = await options.minter.mint();
+        if (bufferedSocket.gone()) {
+          abortRequest();
           return;
         }
-        p = await U();
-        if (E.gone()) {
-          L();
+        upstreamSocket = await connectUpstream();
+        if (bufferedSocket.gone()) {
+          abortRequest();
           return;
         }
-        p.write(
+        upstreamSocket.write(
           Buffer.concat([
             latin1Buffer(
-              a.startLine +
+              clientState.startLine +
                 `\r
 ` +
-                T.map(
-                  (b) =>
-                    b +
-                    `\r
+                forwardedHeaders
+                  .map(
+                    (headerLine) =>
+                      headerLine +
+                      `\r
 `,
-                ).join(""),
+                  )
+                  .join(""),
             ),
-            Buffer.from(`Proxy-Authorization: ${N}\r
+            Buffer.from(`Proxy-Authorization: ${authorization}\r
 `),
             latin1Buffer(`Connection: close\r
 \r
 `),
           ]),
         );
-        if (A > 0)
-          S = pipeLimited(r, p, A, E.release(), () =>
-            h("client sent bytes past its declared Content-Length on a plain HTTP request; not forwarded"),
+        if (contentLength > 0)
+          stopForwarding = pipeLimited(
+            clientSocket,
+            upstreamSocket,
+            contentLength,
+            bufferedSocket.release(),
+            () =>
+              debug(
+                "client sent bytes past its declared Content-Length on a plain HTTP request; not forwarded",
+              ),
           );
-        let httpHead = await readHttpHead(p, MAX_RESPONSE_HEAD, AUTH_REFRESH_MS);
-        let O = V(httpHead);
-        let se = 0;
-        while (O >= 100 && O < 200 && O !== 101) {
-          if (E.gone()) {
-            L();
+        let head = await readHttpHead(upstreamSocket, MAX_RESPONSE_HEAD, AUTH_REFRESH_MS);
+        let plainStatus = headStatus(head);
+        let interimCount = 0;
+        while (plainStatus >= 100 && plainStatus < 200 && plainStatus !== 101) {
+          if (bufferedSocket.gone()) {
+            abortRequest();
             return;
           }
-          if (headContainsSecret(httpHead, N)) {
-            S();
-            re(r, p, "a plain HTTP request", O);
+          if (headContainsSecret(head, authorization)) {
+            stopForwarding();
+            refuseSecretInHead(clientSocket, upstreamSocket, "a plain HTTP request", plainStatus);
             return;
           }
-          if (++se > MAX_PENDING_CONNECTIONS) {
-            p.destroy();
-            S();
-            l(
+          if (++interimCount > MAX_PENDING_CONNECTIONS) {
+            upstreamSocket.destroy();
+            stopForwarding();
+            status(
               `upstream sent more than ${MAX_PENDING_CONNECTIONS} interim responses to a plain HTTP request; answering the client 502`,
             );
             endSocket(
-              r,
+              clientSocket,
               plainHttpResponse(
                 502,
                 "Bad Gateway",
@@ -783,15 +805,15 @@ Connection: close\r
             );
             return;
           }
-          r.write(
+          clientSocket.write(
             latin1Buffer(
-              httpHead.startLine +
+              head.startLine +
                 `\r
 ` +
-                omitHeaders(httpHead.headerLines, PROXY_AUTH_HEADER_NAMES)
+                omitHeaders(head.headerLines, PROXY_AUTH_HEADER_NAMES)
                   .map(
-                    (b) =>
-                      b +
+                    (headerLine) =>
+                      headerLine +
                       `\r
 `,
                   )
@@ -800,26 +822,26 @@ Connection: close\r
 `,
             ),
           );
-          httpHead = await readHttpHead(p, MAX_RESPONSE_HEAD, AUTH_REFRESH_MS, httpHead.rest);
-          O = V(httpHead);
+          head = await readHttpHead(upstreamSocket, MAX_RESPONSE_HEAD, AUTH_REFRESH_MS, head.rest);
+          plainStatus = headStatus(head);
         }
-        if (E.gone()) {
-          L();
+        if (bufferedSocket.gone()) {
+          abortRequest();
           return;
         }
-        if (headContainsSecret(httpHead, N)) {
-          S();
-          re(r, p, "a plain HTTP request", O);
+        if (headContainsSecret(head, authorization)) {
+          stopForwarding();
+          refuseSecretInHead(clientSocket, upstreamSocket, "a plain HTTP request", plainStatus);
           return;
         }
-        if (O === 407) {
-          S();
-          p.destroy();
-          l(
-            `upstream answered 407 to a plain HTTP request (${sanitizeLogText(httpHead.startLine)}); it may have come from the destination site rather than the proxy, and re-mint is only attempted for CONNECT tunnels; answering the client 502`,
+        if (plainStatus === 407) {
+          stopForwarding();
+          upstreamSocket.destroy();
+          status(
+            `upstream answered 407 to a plain HTTP request (${sanitizeLogText(head.startLine)}); it may have come from the destination site rather than the proxy, and re-mint is only attempted for CONNECT tunnels; answering the client 502`,
           );
           endSocket(
-            r,
+            clientSocket,
             plainHttpResponse(
               502,
               "Bad Gateway",
@@ -829,12 +851,14 @@ Connection: close\r
           );
           return;
         }
-        if (O < 100) {
-          p.destroy();
-          S();
-          l("upstream proxy sent an unparseable reply to a plain HTTP request; answering the client 502");
+        if (plainStatus < 100) {
+          upstreamSocket.destroy();
+          stopForwarding();
+          status(
+            "upstream proxy sent an unparseable reply to a plain HTTP request; answering the client 502",
+          );
           endSocket(
-            r,
+            clientSocket,
             plainHttpResponse(
               502,
               "Bad Gateway",
@@ -844,19 +868,19 @@ Connection: close\r
           );
           return;
         }
-        if (O >= 400) {
-          p.destroy();
-          S();
-          l(
-            `upstream answered ${sanitizeLogText(httpHead.startLine)} to a plain HTTP request; error body withheld from the client`,
+        if (plainStatus >= 400) {
+          upstreamSocket.destroy();
+          stopForwarding();
+          status(
+            `upstream answered ${sanitizeLogText(head.startLine)} to a plain HTTP request; error body withheld from the client`,
           );
           endSocket(
-            r,
+            clientSocket,
             latin1Buffer(
-              httpHead.startLine +
+              head.startLine +
                 `\r
 ` +
-                omitHeaders(httpHead.headerLines, [
+                omitHeaders(head.headerLines, [
                   "connection",
                   "proxy-connection",
                   "keep-alive",
@@ -865,8 +889,8 @@ Connection: close\r
                   ...PROXY_AUTH_HEADER_NAMES,
                 ])
                   .map(
-                    (b) =>
-                      b +
+                    (headerLine) =>
+                      headerLine +
                       `\r
 `,
                   )
@@ -879,20 +903,20 @@ Connection: close\r
           );
           return;
         }
-        r.write(
+        clientSocket.write(
           latin1Buffer(
-            httpHead.startLine +
+            head.startLine +
               `\r
 ` +
-              omitHeaders(httpHead.headerLines, [
+              omitHeaders(head.headerLines, [
                 "connection",
                 "proxy-connection",
                 "keep-alive",
                 ...PROXY_AUTH_HEADER_NAMES,
               ])
                 .map(
-                  (b) =>
-                    b +
+                  (headerLine) =>
+                    headerLine +
                     `\r
 `,
                 )
@@ -902,46 +926,46 @@ Connection: close\r
 `,
           ),
         );
-        if (httpHead.rest.length > 0) r.write(httpHead.rest);
-        let z = p;
-        z.pipe(r);
-        z.on("error", () => r.destroy());
-        r.on("error", () => z.destroy());
-        z.on("close", () => endSocket(r, ""));
-        r.on("close", () => z.destroy());
-        z.resume();
-        r.resume();
+        if (head.rest.length > 0) clientSocket.write(head.rest);
+        let upstream = upstreamSocket;
+        upstream.pipe(clientSocket);
+        upstream.on("error", () => clientSocket.destroy());
+        clientSocket.on("error", () => upstream.destroy());
+        upstream.on("close", () => endSocket(clientSocket, ""));
+        clientSocket.on("close", () => upstream.destroy());
+        upstream.resume();
+        clientSocket.resume();
       }
     } catch (error) {
-      S();
-      p?.destroy();
-      me(r, error, "plain HTTP request");
+      stopForwarding();
+      upstreamSocket?.destroy();
+      failClient(clientSocket, error, "plain HTTP request");
     }
   };
-  let oe = 0;
-  let maxPendingClients = e.maxPendingClients ?? MAX_HEADER_LINES;
+  let pendingHeads = 0;
+  let maxPendingClients = options.maxPendingClients ?? MAX_HEADER_LINES;
   let server = createServer(
     {
       pauseOnConnect: true,
     },
-    (r) => {
-      Y(r);
-      r.on("error", () => r.destroy());
-      if (oe >= maxPendingClients) {
-        h("too many connections still sending a request head; refusing one");
-        r.destroy();
+    (clientSocket) => {
+      trackSocket(clientSocket);
+      clientSocket.on("error", () => clientSocket.destroy());
+      if (pendingHeads >= maxPendingClients) {
+        debug("too many connections still sending a request head; refusing one");
+        clientSocket.destroy();
         return;
       }
-      oe++;
+      pendingHeads++;
       (async () => {
-        let head;
+        let clientState;
         try {
-          head = await readHttpHead(r, MAX_HEADER_LINE, CONNECT_TIMEOUT_MS);
+          clientState = await readHttpHead(clientSocket, MAX_HEADER_LINE, CONNECT_TIMEOUT_MS);
         } catch (error) {
-          h(`client: ${errorMessage(error)}`);
-          if (!r.destroyed && r.writable && r.bytesRead > 0)
+          debug(`client: ${errorMessage(error)}`);
+          if (!clientSocket.destroyed && clientSocket.writable && clientSocket.bytesRead > 0)
             endSocket(
-              r,
+              clientSocket,
               plainHttpResponse(
                 400,
                 "Bad Request",
@@ -949,19 +973,19 @@ Connection: close\r
 `,
               ),
             );
-          else r.destroy();
+          else clientSocket.destroy();
           return;
         } finally {
-          oe--;
+          pendingHeads--;
         }
         if (
-          CONTROL_CHAR_PATTERN.test(head.startLine) ||
-          head.headerLines.some(
+          CONTROL_CHAR_PATTERN.test(clientState.startLine) ||
+          clientState.headerLines.some(
             (headerLine) => CONTROL_CHAR_PATTERN.test(headerLine) || !HEADER_LINE_PATTERN.test(headerLine),
           )
         ) {
           endSocket(
-            r,
+            clientSocket,
             plainHttpResponse(
               400,
               "Bad Request",
@@ -971,11 +995,11 @@ Connection: close\r
           );
           return;
         }
-        let match = head.startLine.match(/^CONNECT\s+(\S+)\s+HTTP\/1\.[01]$/i);
-        let T = !match && /^[A-Z]+\s+http:\/\/\S+\s+HTTP\/1\.[01]$/i.test(head.startLine);
-        if (!match && !T) {
+        let match = clientState.startLine.match(/^CONNECT\s+(\S+)\s+HTTP\/1\.[01]$/i);
+        let isAbsoluteForm = !match && /^[A-Z]+\s+http:\/\/\S+\s+HTTP\/1\.[01]$/i.test(clientState.startLine);
+        if (!match && !isAbsoluteForm) {
           endSocket(
-            r,
+            clientSocket,
             plainHttpResponse(
               400,
               "Bad Request",
@@ -985,16 +1009,16 @@ Connection: close\r
           );
           return;
         }
-        if (!P(head.headerLines)) {
-          h(
+        if (!hasValidClientAuth(clientState.headerLines)) {
+          debug(
             `client ${match ? "CONNECT" : "request"} without valid loopback credentials \u2192 407 challenge`,
           );
-          endSocket(r, proxyAuthRequiredResponse());
+          endSocket(clientSocket, proxyAuthRequiredResponse());
           return;
         }
-        if (T && /^TRACE\s/i.test(head.startLine)) {
+        if (isAbsoluteForm && /^TRACE\s/i.test(clientState.startLine)) {
           endSocket(
-            r,
+            clientSocket,
             plainHttpResponse(
               405,
               "Method Not Allowed",
@@ -1004,11 +1028,11 @@ Connection: close\r
           );
           return;
         }
-        if (T) {
-          let p = pickHeaders(head.headerLines, ["content-length"]);
-          if (getHeaderValue(head.headerLines, "transfer-encoding") !== undefined) {
+        if (isAbsoluteForm) {
+          let contentLengthHeaders = pickHeaders(clientState.headerLines, ["content-length"]);
+          if (getHeaderValue(clientState.headerLines, "transfer-encoding") !== undefined) {
             endSocket(
-              r,
+              clientSocket,
               plainHttpResponse(
                 501,
                 "Not Implemented",
@@ -1018,9 +1042,13 @@ Connection: close\r
             );
             return;
           }
-          if (p.length > 1 || (p.length === 1 && !/^content-length:[ \t]*\d{1,15}[ \t]*$/i.test(p[0]))) {
+          if (
+            contentLengthHeaders.length > 1 ||
+            (contentLengthHeaders.length === 1 &&
+              !/^content-length:[ \t]*\d{1,15}[ \t]*$/i.test(contentLengthHeaders[0]))
+          ) {
             endSocket(
-              r,
+              clientSocket,
               plainHttpResponse(
                 400,
                 "Bad Request",
@@ -1031,11 +1059,11 @@ Connection: close\r
             return;
           }
         }
-        if (T && e.connectOnly) {
-          let absoluteFormRequest = parseAbsoluteFormRequest(head);
+        if (isAbsoluteForm && options.connectOnly) {
+          let absoluteFormRequest = parseAbsoluteFormRequest(clientState);
           if (absoluteFormRequest === undefined) {
             endSocket(
-              r,
+              clientSocket,
               plainHttpResponse(
                 400,
                 "Bad Request",
@@ -1045,18 +1073,24 @@ Connection: close\r
             );
             return;
           }
-          await ye(r, absoluteFormRequest.target, head, bufferSocket(r, head.rest), {
-            head: absoluteFormRequest.head,
-            bodyLength: Number(getHeaderValue(head.headerLines, "content-length") ?? "0"),
-          });
+          await handleConnectRequest(
+            clientSocket,
+            absoluteFormRequest.target,
+            clientState,
+            bufferSocket(clientSocket, clientState.rest),
+            {
+              head: absoluteFormRequest.head,
+              bodyLength: Number(getHeaderValue(clientState.headerLines, "content-length") ?? "0"),
+            },
+          );
           return;
         }
-        let A = bufferSocket(r, head.rest);
-        if (match) await ye(r, match[1], head, A);
-        else await be(r, head, A);
+        let clientState_2 = bufferSocket(clientSocket, clientState.rest);
+        if (match) await handleConnectRequest(clientSocket, match[1], clientState, clientState_2);
+        else await handlePlainHttpRequest(clientSocket, clientState, clientState_2);
       })().catch((error) => {
-        l(`internal error handling a proxied connection: ${redactSecretsInText(errorMessage(error))}`);
-        r.destroy();
+        status(`internal error handling a proxied connection: ${redactSecretsInText(errorMessage(error))}`);
+        clientSocket.destroy();
       });
     },
   );
@@ -1073,23 +1107,23 @@ Connection: close\r
       },
     );
   });
-  server.on("error", (r) => l(`listener error: ${errorMessage(r)}`));
-  if (e.unrefListener) server.unref();
+  server.on("error", (error) => status(`listener error: ${errorMessage(error)}`));
+  if (options.unrefListener) server.unref();
   let port_2 = server.address().port;
   return {
     url: `http://runner:${str}@127.0.0.1:${port_2}`,
     port: port_2,
-    openConnections: () => R.size,
+    openConnections: () => openSockets.size,
     close: () =>
       new Promise((resolve) => {
-        for (let a of R) a.destroy();
+        for (let socket of openSockets) socket.destroy();
         server.close(() => resolve());
       }),
   };
 }
 //@ chunk-88g43zt5.js:16132-16189 placement
-function isIpLiteralHost(e) {
-  return /^[\d.]+$/.test(e) || e.includes(":");
+function isIpLiteralHost(host) {
+  return /^[\d.]+$/.test(host) || host.includes(":");
 }
 //@ chunk-88g43zt5.js:16189-16212 placement
 /**
@@ -1114,50 +1148,52 @@ function isEgressProxyActive() {
 }
 //@ chunk-88g43zt5.js:16308-16461 placement
 function rewriteProxyEnv(url, env) {
-  let mapped = PROXY_ENV_VARS.map((c) => [c, env[c]]);
-  let o = {};
-  let u = [];
-  for (let [c, f] of mapped) {
-    if (f !== undefined) o[c] = f;
-    if (f) {
-      env[c] = url;
-      u.push(c);
+  let mapped = PROXY_ENV_VARS.map((proxyEnvName) => [proxyEnvName, env[proxyEnvName]]);
+  let originalEnv = {};
+  let rewrittenNames = [];
+  for (let [proxyEnvName, value] of mapped) {
+    if (value !== undefined) originalEnv[proxyEnvName] = value;
+    if (value) {
+      env[proxyEnvName] = url;
+      rewrittenNames.push(proxyEnvName);
     }
   }
   return {
     url,
-    rewritten: u,
-    original: o,
+    rewritten: rewrittenNames,
+    original: originalEnv,
   };
 }
 //@ chunk-88g43zt5.js:16461-16601 placement
-function originalProxyEnv(e = process.env) {
+function originalProxyEnv(sourceEnv = process.env) {
   let active = currentEgressProxy().active;
   if (!active)
     return {
-      ...e,
+      ...sourceEnv,
     };
-  let s = {
-    ...e,
+  let restoredEnv = {
+    ...sourceEnv,
   };
-  for (let o of PROXY_ENV_VARS) if (o in active.original) s[o] = active.original[o];
-  return s;
+  for (let proxyEnvName of PROXY_ENV_VARS)
+    if (proxyEnvName in active.original) restoredEnv[proxyEnvName] = active.original[proxyEnvName];
+  return restoredEnv;
 }
 //@ chunk-88g43zt5.js:16601-16881 placement
-function egressProxyChildEnv(e = process.env) {
+function egressProxyChildEnv(sourceEnv = process.env) {
   let active = currentEgressProxy().active;
   if (!active) return {};
-  let s = {
+  let childEnv = {
     [PROXY_AUTHORIZATION_COMMAND_ENV_VAR]: undefined,
     [RUNNER_PROXY_AUTHORIZATION_FILE_ENV]: undefined,
-    NO_PROXY: e.NO_PROXY,
-    no_proxy: e.no_proxy,
+    NO_PROXY: sourceEnv.NO_PROXY,
+    no_proxy: sourceEnv.no_proxy,
     CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER: undefined,
     ALL_PROXY: undefined,
     all_proxy: undefined,
   };
-  for (let o of PROXY_ENV_VARS) s[o] = active.rewritten.includes(o) ? active.url : undefined;
-  return s;
+  for (let proxyEnvName of PROXY_ENV_VARS)
+    childEnv[proxyEnvName] = active.rewritten.includes(proxyEnvName) ? active.url : undefined;
+  return childEnv;
 }
 //@ chunk-88g43zt5.js:16881-17471 placement
 /**
@@ -1171,22 +1207,22 @@ function resolveProxyAuthSource(options, env = process.env) {
     throw Error("--proxy-authorization-command / --proxy-authorization-file must not be empty");
   let trimmed = (options.command ?? env[PROXY_AUTHORIZATION_COMMAND_ENV_VAR])?.trim();
   let trimmed_2 = (options.file ?? env[RUNNER_PROXY_AUTHORIZATION_FILE_ENV])?.trim();
-  let u = trimmed_2 ? resolve(trimmed_2) : trimmed_2;
-  let c = trimmed !== undefined && trimmed !== "";
-  let f = u !== undefined && u !== "";
-  if (c && f)
+  let filePath = trimmed_2 ? resolve(trimmed_2) : trimmed_2;
+  let hasCommand = trimmed !== undefined && trimmed !== "";
+  let hasFile = filePath !== undefined && filePath !== "";
+  if (hasCommand && hasFile)
     throw Error(
       "set only one of --proxy-authorization-command (SELF_HOSTED_RUNNER_PROXY_AUTHORIZATION_COMMAND) and --proxy-authorization-file (SELF_HOSTED_RUNNER_PROXY_AUTHORIZATION_FILE)",
     );
-  if (c)
+  if (hasCommand)
     return {
       kind: "command",
       command: trimmed,
     };
-  if (f)
+  if (hasFile)
     return {
       kind: "file",
-      path: u,
+      path: filePath,
     };
   return;
 }
@@ -1213,13 +1249,13 @@ function proxyAuthorizationConfig(options, env = process.env) {
   };
 }
 //@ chunk-88g43zt5.js:18045-19510 placement
-async function startRunnerEgressProxy(e, n) {
-  let s = currentEgressProxy();
+async function startRunnerEgressProxy(options, hooks) {
+  let proxyState = currentEgressProxy();
   let mtlsConfig = getMTLSConfig();
   let caCertificates = getCACertificates();
   let minter = mintProxyAuthorization({
-    source: e.source,
-    upstreamProxyUrl: e.upstreamProxyUrl,
+    source: options.source,
+    upstreamProxyUrl: options.upstreamProxyUrl,
     commandEnv: () => ({
       ...originalProxyEnv(),
       SELF_HOSTED_RUNNER_POOL_SECRET: undefined,
@@ -1227,7 +1263,7 @@ async function startRunnerEgressProxy(e, n) {
     }),
   });
   let egressProxy = await startEgressProxy({
-    upstreamProxyUrl: e.upstreamProxyUrl,
+    upstreamProxyUrl: options.upstreamProxyUrl,
     minter,
     upstreamTls: {
       ...(mtlsConfig && {
@@ -1239,44 +1275,48 @@ async function startRunnerEgressProxy(e, n) {
         ca: caCertificates,
       }),
     },
-    onStatus: n.onStatus,
-    onDebug: n.onDebug,
+    onStatus: hooks.onStatus,
+    onDebug: hooks.onDebug,
   });
-  let x = rewriteProxyEnv(egressProxy.url, process.env);
-  s.active = x;
-  if (new Set(x.rewritten.map((h) => x.original[h])).size > 1)
-    n.onStatus(
-      `[runner:egress-proxy] note: ${x.rewritten.join("/")} named different proxies; all of them now go through the listener to ${redactSecretsInText(e.upstreamProxyUrl)} (the one this runner resolves for its own traffic)`,
+  let proxyEnv = rewriteProxyEnv(egressProxy.url, process.env);
+  proxyState.active = proxyEnv;
+  if (new Set(proxyEnv.rewritten.map((proxyEnvName) => proxyEnv.original[proxyEnvName])).size > 1)
+    hooks.onStatus(
+      `[runner:egress-proxy] note: ${proxyEnv.rewritten.join("/")} named different proxies; all of them now go through the listener to ${redactSecretsInText(options.upstreamProxyUrl)} (the one this runner resolves for its own traffic)`,
     );
   configureGlobalAgents();
   if (process.env.CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER)
-    n.onStatus(
+    hooks.onStatus(
       "[runner:egress-proxy] note: CLAUDE_CODE_ENABLE_PROXY_AUTH_HELPER is set on the runner; it is cleared for sessions while --proxy-authorization-* is active (the runner now mints Proxy-Authorization for all proxied traffic, and a session-side proxyAuthHelper header would be refused by the loopback listener)",
     );
-  n.onStatus(
-    `[runner:egress-proxy] enabled: minting Proxy-Authorization from the configured ${e.source.kind} for every CONNECT to the upstream proxy ${redactSecretsInText(e.upstreamProxyUrl)}; this runner and its sessions now use the loopback listener 127.0.0.1:${egressProxy.port} (rewrote ${x.rewritten.join(", ")})`,
+  hooks.onStatus(
+    `[runner:egress-proxy] enabled: minting Proxy-Authorization from the configured ${options.source.kind} for every CONNECT to the upstream proxy ${redactSecretsInText(options.upstreamProxyUrl)}; this runner and its sessions now use the loopback listener 127.0.0.1:${egressProxy.port} (rewrote ${proxyEnv.rewritten.join(", ")})`,
   );
-  s.handle = {
+  proxyState.handle = {
     ...egressProxy,
     close: async () => {
       await egressProxy.close();
-      s.active = undefined;
-      s.handle = undefined;
+      proxyState.active = undefined;
+      proxyState.handle = undefined;
     },
   };
-  return s.handle;
+  return proxyState.handle;
 }
 //@ chunk-88g43zt5.js:19510-19972 placement
 /**
  * 编排器子命令不支持 Proxy-Authorization 参数，传入时报错。
  */
-function rejectOrchestratorProxyAuth(e, n = process.env) {
-  let s =
-    e.find((o) => o === "--proxy-authorization-command" || o === "--proxy-authorization-file") ??
-    [PROXY_AUTHORIZATION_COMMAND_ENV_VAR, RUNNER_PROXY_AUTHORIZATION_FILE_ENV].find((o) => n[o]?.trim());
-  if (s !== undefined)
+function rejectOrchestratorProxyAuth(argv, envVars = process.env) {
+  let offendingOption =
+    argv.find(
+      (option) => option === "--proxy-authorization-command" || option === "--proxy-authorization-file",
+    ) ??
+    [PROXY_AUTHORIZATION_COMMAND_ENV_VAR, RUNNER_PROXY_AUTHORIZATION_FILE_ENV].find((envName) =>
+      envVars[envName]?.trim(),
+    );
+  if (offendingOption !== undefined)
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `${s} is not yet supported with the orchestrator subcommand (only worker runners mint Proxy-Authorization for their egress proxy today). Unset it for the orchestrator process; the runners it spawns can still use it.`,
+      `${offendingOption} is not yet supported with the orchestrator subcommand (only worker runners mint Proxy-Authorization for their egress proxy today). Unset it for the orchestrator process; the runners it spawns can still use it.`,
       "proxy-authorization knob given to the orchestrator subcommand",
     );
 }

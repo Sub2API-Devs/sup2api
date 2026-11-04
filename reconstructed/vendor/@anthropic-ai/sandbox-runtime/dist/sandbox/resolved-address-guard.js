@@ -8,7 +8,14 @@
 import { networkInterfaces } from "os";
 import { BlockList, isIP } from "net";
 import { lookup } from "dns";
-import { LOOPBACK_RANGES, addRange, addressInSet, embeddedIPv4, isLoopbackName, M3r } from "./address.js";
+import {
+  LOOPBACK_RANGES,
+  addRange,
+  addressInSet,
+  embeddedIPv4,
+  isLoopbackName,
+  ipFamily,
+} from "./address.js";
 import { ipLiteralRules } from "./domain-pattern.js";
 import { logForDebugging as logForDebugging_2 } from "../utils/debug.js";
 
@@ -64,7 +71,7 @@ class ResolvedAddressDeniedError extends Error {
   }
 }
 //@ chunk-fq0cr76a.js:651865-651903 esm-layout
-function ol(err) {
+function isResolvedAddressDeniedError(err) {
   return err instanceof ResolvedAddressDeniedError;
 }
 //@ chunk-fq0cr76a.js:651903-652198 esm-fingerprint
@@ -113,7 +120,7 @@ function createResolvedAddressGuard(opts = {}) {
     let denies = (set) => inRuleSet(set, address, port) || (v4 !== undefined && inRuleSet(set, v4, port));
     if (denies(refused)) return "a deny-listed address";
     if (inRuleSet(allowed, address, port)) return;
-    if (isLoopbackName(hostname)) return M3r(address) ? undefined : "a non-loopback address";
+    if (isLoopbackName(hostname)) return ipFamily(address) ? undefined : "a non-loopback address";
     let why = denied.find(([, set]) => denies(set))?.[0];
     if (why) return why;
     if (addressInSet(local, address) || (v4 !== undefined && addressInSet(local, v4)))
@@ -168,4 +175,4 @@ function createResolvedAddressGuard(opts = {}) {
     },
   };
 }
-export { ol, createResolvedAddressGuard };
+export { isResolvedAddressDeniedError, createResolvedAddressGuard };

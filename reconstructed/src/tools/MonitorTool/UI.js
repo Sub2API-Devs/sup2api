@@ -22,11 +22,11 @@ import { SlashCommandLink } from "../../components/SlashCommandLink.js";
 /**
  * 监视结果（JSON）超出终端行数时返回 true。
  */
-function exceedsMonitorLineLimit(m, { columns }) {
-  return exceedsLineLimit(jsonStringify(m, null, 2), columns);
+function exceedsMonitorLineLimit(result, { columns }) {
+  return exceedsLineLimit(jsonStringify(result, null, 2), columns);
 }
 //@ chunk-ah34pb7m.js:31431-31631 placement
-function renderMonitorStarted(m) {
+function renderMonitorStarted(result) {
   return jsxProd_default(MessageResponse, {
     children: jsxProd_default_2(Text, {
       children: [
@@ -36,10 +36,10 @@ function renderMonitorStarted(m) {
           dimColor: true,
           children: [
             "\xB7 task ",
-            m.taskId,
+            result.taskId,
             " \xB7",
             " ",
-            m.persistent ? "persistent" : `timeout ${m.timeoutMs / 1000}s`,
+            result.persistent ? "persistent" : `timeout ${result.timeoutMs / 1000}s`,
           ],
         }),
       ],
@@ -50,10 +50,10 @@ function renderMonitorStarted(m) {
 /**
  * 推送通知结果说明（未发送原因）。
  */
-function PushNotificationResult(m) {
-  let d;
-  if (m.disabledReason === "config_off")
-    d = jsxProd_default_2(Box, {
+function PushNotificationResult(result) {
+  let body;
+  if (result.disabledReason === "config_off")
+    body = jsxProd_default_2(Box, {
       flexDirection: "row",
       children: [
         jsxProd_default_2(Text, {
@@ -67,12 +67,12 @@ function PushNotificationResult(m) {
         }),
       ],
     });
-  else if (m.disabledReason === "user_present")
-    d = jsxProd_default(Text, {
+  else if (result.disabledReason === "user_present")
+    body = jsxProd_default(Text, {
       children: "Not sent because you're active in this terminal.",
     });
-  else if (m.disabledReason === "no_transport")
-    d = m.localSent
+  else if (result.disabledReason === "no_transport")
+    body = result.localSent
       ? jsxProd_default(Text, {
           children: "Terminal notification sent.",
         })
@@ -91,23 +91,23 @@ function PushNotificationResult(m) {
           ],
         });
   else {
-    if (m.localSent === undefined) return null;
-    d = jsxProd_default(Text, {
-      children: m.localSent ? "Terminal and mobile notification sent." : "Mobile notification sent.",
+    if (result.localSent === undefined) return null;
+    body = jsxProd_default(Text, {
+      children: result.localSent ? "Terminal and mobile notification sent." : "Mobile notification sent.",
     });
   }
   return jsxProd_default(MessageResponse, {
     height: 1,
-    children: d,
+    children: body,
   });
 }
 //@ chunk-ah34pb7m.js:32641-32725 placement
 /**
  * 推送通知结果（错误文本或 JSON）超出终端行数时返回 true。
  */
-function exceedsPushNotificationLineLimit(m, { columns }) {
-  if (m.error) return exceedsLineLimit(m.error, columns);
-  return exceedsLineLimit(jsonStringify(m, null, 2), columns);
+function exceedsPushNotificationLineLimit(result, { columns }) {
+  if (result.error) return exceedsLineLimit(result.error, columns);
+  return exceedsLineLimit(jsonStringify(result, null, 2), columns);
 }
 export {
   exceedsMonitorLineLimit,

@@ -10,7 +10,7 @@
  */
 import { basename } from "path";
 import { readlinkSync } from "fs";
-import { Re } from "../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../../vendor/semver/index.js";
 import { getLaunchCommand } from "../../utils/deepLink/registerProtocol.js";
 import { identity as identity_2 } from "../../utils/identity.js";
@@ -20,29 +20,36 @@ import {
   isGrowthBookEnabled,
   hasFreshGrowthBookFeatures,
 } from "../../services/analytics/growthbook.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2037905-2037923 placement
-var installedVersionSemver = Re(require_semver_3(), 1);
+var installedVersionSemver; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2037905", () => {
+  installedVersionSemver = __toESM(require_semver_3(), 1);
+});
 //@ chunk-e6aww6q8.js:2037993-2038093 placement
 /**
  * 读取启动命令链接指向的已安装版本名（不是合法版本号时返回 undefined）。
  */
-function installedVersionName(e) {
+function installedVersionName(requestedTarget) {
   try {
-    let n = basename(readlinkSync(e ?? getLaunchCommand().target));
-    return installedVersionSemver.parse(n) === null ? undefined : n;
+    let versionName = basename(readlinkSync(requestedTarget ?? getLaunchCommand().target));
+    return installedVersionSemver.parse(versionName) === null ? undefined : versionName;
   } catch {
     return;
   }
 }
 //@ chunk-e6aww6q8.js:2038093-2038133 placement
-var INSTALLED_VERSION_CACHE = identity_2(
-  {
-    until: 0,
-    version: undefined,
-  },
-  resetInstalledVersionCache,
-);
+var INSTALLED_VERSION_CACHE; // deferred: uses resetInstalledVersionCache of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:2038093", () => {
+  INSTALLED_VERSION_CACHE = identity_2(
+    {
+      until: 0,
+      version: undefined,
+    },
+    resetInstalledVersionCache,
+  );
+});
 //@ chunk-e6aww6q8.js:2038133-2038238 placement
 function cachedInstalledVersion() {
   let startTime = performance.now();
@@ -65,7 +72,7 @@ function resetInstalledVersionCache() {
  */
 function restartVersionTarget(requested) {
   let targetVersion = requested === undefined ? cachedInstalledVersion() : installedVersionName(requested);
-  let r = installedVersionSemver.parse(
+  let currentVersion = installedVersionSemver.parse(
     {
       ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
       PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -78,11 +85,11 @@ function restartVersionTarget(requested) {
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
   );
-  if (targetVersion === undefined || r === null)
+  if (targetVersion === undefined || currentVersion === null)
     return {
       kind: "unknown",
     };
-  let comparison = installedVersionSemver.parse(targetVersion)?.compare(r) ?? 0;
+  let comparison = installedVersionSemver.parse(targetVersion)?.compare(currentVersion) ?? 0;
   if (comparison === 0)
     return {
       kind: "same",
@@ -96,10 +103,10 @@ function restartVersionTarget(requested) {
 function resolveMaxVersionConfig(installedVersionName = cachedInstalledVersion) {
   let external = getDynamicConfig_CACHED_MAY_BE_STALE("tengu_max_version_config", {}).external;
   if (!external) return;
-  let s = installedVersionName();
+  let currentVersion = installedVersionName();
   if (
-    s === undefined ||
-    s ===
+    currentVersion === undefined ||
+    currentVersion ===
       {
         ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
         PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -114,7 +121,9 @@ function resolveMaxVersionConfig(installedVersionName = cachedInstalledVersion) 
   )
     return;
   try {
-    return (installedVersionSemver.parse(s)?.compare(external) ?? 0) > 0 ? s : undefined;
+    return (installedVersionSemver.parse(currentVersion)?.compare(external) ?? 0) > 0
+      ? currentVersion
+      : undefined;
   } catch {
     return;
   }

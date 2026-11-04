@@ -12,20 +12,20 @@ import { getPlatform as getPlatform_2 } from "./platform.js";
 import { WSL_MNT_DRIVE_PATTERN, DEFAULT_IGNORABLE_RE } from "./teleport/remoteTaskLabels.js";
 
 //@ chunk-s61vbvea.js:475683-475804 placement
-function isCaseInsensitivePlatform(e) {
+function isCaseInsensitivePlatform(inputPath) {
   switch (getPlatform_2()) {
     case "macos":
     case "windows":
       return true;
     case "wsl":
-      return e !== undefined && WSL_MNT_DRIVE_PATTERN.test(e);
+      return inputPath !== undefined && WSL_MNT_DRIVE_PATTERN.test(inputPath);
     default:
       return false;
   }
 }
 //@ chunk-s61vbvea.js:475919-476087 placement
-function foldPathCase(e) {
-  return e
+function foldPathCase(path) {
+  return path
     .replace(DEFAULT_IGNORABLE_RE, "")
     .normalize("NFKD")
     .toLowerCase()

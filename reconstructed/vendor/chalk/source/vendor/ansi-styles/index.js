@@ -74,7 +74,7 @@ var styles_2 = {
 var modifierNames = Object.keys(styles_2.modifier);
 var foregroundColorNames = Object.keys(styles_2.color);
 var backgroundColorNames = Object.keys(styles_2.bgColor);
-var ue = [...foregroundColorNames, ...backgroundColorNames];
+var colorNames = [...foregroundColorNames, ...backgroundColorNames];
 //@ chunk-4ymxyb4g.js:1241-2723 esm-fingerprint
 function assembleStyles() {
   let codes = new Map();

@@ -19,21 +19,21 @@ import { logError } from "./log.js";
 /**
  * 判断能否把提示词直接交给正在后台运行的会话：有可打开的会话与提示、标准输入输出可用，且没有任何 SDK/结构化输出/回合限制/恢复等参数时，返回打开方式与提示。
  */
-function getAttachablePrompt(liveBackgroundHandoff, n, o) {
+function getAttachablePrompt(liveBackgroundHandoff, options, io) {
   return liveBackgroundHandoff !== undefined &&
     liveBackgroundHandoff.prompt !== null &&
-    o.stdin &&
-    o.stdout &&
-    (n.outputFormat === undefined || n.outputFormat === "text") &&
-    n.sdkUrl === undefined &&
-    n.jsonSchema === undefined &&
-    !n.includePartialMessages &&
-    !n.replayUserMessages &&
-    n.maxTurns === undefined &&
-    n.maxBudgetUsd === undefined &&
-    n.resumeSessionAt === undefined &&
-    n.resumeDropsTurn === undefined &&
-    n.rewindFiles === undefined
+    io.stdin &&
+    io.stdout &&
+    (options.outputFormat === undefined || options.outputFormat === "text") &&
+    options.sdkUrl === undefined &&
+    options.jsonSchema === undefined &&
+    !options.includePartialMessages &&
+    !options.replayUserMessages &&
+    options.maxTurns === undefined &&
+    options.maxBudgetUsd === undefined &&
+    options.resumeSessionAt === undefined &&
+    options.resumeDropsTurn === undefined &&
+    options.rewindFiles === undefined
     ? {
         open: liveBackgroundHandoff.open,
         prompt: liveBackgroundHandoff.prompt,
@@ -61,19 +61,19 @@ function quoteTitleForBackgroundNotice(title) {
  */
 function formatSessionRunningInBackground({ title, holder, canFork, handoff }) {
   let { jobId } = holder;
-  let r = title ? quoteTitleForBackgroundNotice(title) : "That session";
-  let a = jobId
+  let titleText = title ? quoteTitleForBackgroundNotice(title) : "That session";
+  let openHint = jobId
     ? `Run \`claude attach ${jobId}\` to open it, or \`claude stop ${jobId}\` first to resume it here.`
     : "Run `claude agents` to find it and open it, or stop it there first to resume it here.";
-  let u = canFork ? " Add --fork-session to branch off a copy instead." : "";
-  return `${r} is running in the background${jobId ? ` (${jobId})` : ""}.${formatHandoffOutcome(handoff)} ${a}${u}`;
+  let forkHint = canFork ? " Add --fork-session to branch off a copy instead." : "";
+  return `${titleText} is running in the background${jobId ? ` (${jobId})` : ""}.${formatHandoffOutcome(handoff)} ${openHint}${forkHint}`;
 }
 //@ chunk-369n4ea8.js:1420-1623 placement
 /**
  * 找到持有该会话的后台（非交互）进程，并在确认任务状态对应该会话时附上任务 id。
  */
 async function findBackgroundSessionHolder(sessionId, storageV5) {
-  let found = (await listLiveSessionHolders(sessionId)).find((i) => i.kind !== "interactive");
+  let found = (await listLiveSessionHolders(sessionId)).find((holder) => holder.kind !== "interactive");
   if (!found) return null;
   let jobId =
     found.jobId !== undefined &&
@@ -90,11 +90,11 @@ async function findBackgroundSessionHolder(sessionId, storageV5) {
 /**
  * 读取任务状态，判断任务是否属于指定会话（会话 id 或恢复会话 id 一致），读取失败返回 false。
  */
-async function isJobForSession(jobId, n, o) {
+async function isJobForSession(jobId, sessionId, storageV5) {
   try {
-    let { getJobDir, readJobState } = await import("./chunk-bytagq68.js");
-    let jobState = await readJobState(getJobDir(jobId), o);
-    let lower = n.toLowerCase();
+    let { getJobDir, readJobState } = await import("../services/daemon/jobState.js");
+    let jobState = await readJobState(getJobDir(jobId), storageV5);
+    let lower = sessionId.toLowerCase();
     return (
       jobState !== null &&
       (jobState.sessionId.toLowerCase() === lower || jobState.resumeSessionId?.toLowerCase() === lower)
@@ -112,15 +112,17 @@ async function isJobForSession(jobId, n, o) {
 /**
  * 列出其他进程中持有指定会话 id 的存活会话（排除自身与已停靠的交互会话），返回类型、任务 id 与 pid。
  */
-async function listLiveSessionHolders(e, n) {
-  let sessions = n?.rejectUnreadable
+async function listLiveSessionHolders(sessionId, options) {
+  let sessions = options?.rejectUnreadable
     ? await (
-        await import("./chunk-ewxn4535.js")
+        await import("./udsMessaging/SessionRecordsUnreadableError.lazy.js")
       ).listAllLiveSessions(undefined, {
         rejectUnreadable: true,
       })
-    : await import("./chunk-ewxn4535.js").then((session) => session.listAllLiveSessions()).catch(() => []);
-  let normalizedId = e.toLowerCase();
+    : await import("./udsMessaging/SessionRecordsUnreadableError.lazy.js")
+        .then((session) => session.listAllLiveSessions())
+        .catch(() => []);
+  let normalizedId = sessionId.toLowerCase();
   let holders = [];
   for (let session of sessions) {
     if (session.sessionId?.toLowerCase() !== normalizedId || session.pid === process.pid || !session.kind)

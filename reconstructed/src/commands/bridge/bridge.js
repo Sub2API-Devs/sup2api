@@ -8,18 +8,30 @@
  * pieces: chunk-18hwfzwa.js (6), chunk-fnmk6x3n.js (3), chunk-k7ve8htw.js (26)
  * attribution: fingerprint 10, sole-consumer 7, affinity 1, layout 16, file-local 1
  */
-import { init_react_production, y, P, R } from "../../../vendor/react/cjs/react.production.js";
-import { getOauthAccountInfo } from "../../utils/auth.js";
-import { getGatewayAuth } from "../../bootstrap/state.js";
-import { removeNotificationByKey } from "../../context/notifications.js";
-import { BRIDGE_FAILED } from "../../bridge/bridgeStatusUtil.js";
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  useRef,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { idleAmberFinchOn } from "../../utils/planTiers.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Text, Box } from "../../ink/components/Text.js";
+import { Box, Text } from "../../ink/components/Text.js";
+import { logEvent } from "../../services/analytics/index.js";
+import { callUpgradeFromSurface } from "../upgrade/upgrade.js";
+import { call as call_2 } from "../usage-credits/usageCredits.js";
+import { ModelSelector } from "../../components/agents/ModelSelector.js";
+import { Dialog } from "../../components/design-system/Dialog.js";
+import { getOauthAccountInfo } from "../../utils/auth.js";
+import { getGatewayAuth } from "../../bootstrap/state.js";
+import { removeNotificationByKey } from "../../context/notifications.js";
+import { BRIDGE_FAILED } from "../../bridge/bridgeStatusUtil.js";
 import { OrderedListWithItem } from "../../components/CustomSelect/selectTable.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
 import { useSetAppState, useAppState } from "../../state/AppState.js";
 import { markRemoteControlUsed } from "../../services/tips/remoteControlNudges.js";
 import {
@@ -29,15 +41,12 @@ import {
 import { hasOpenDialogOfKind } from "../../state/dialogQueue.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { saveGlobalConfig } from "../../utils/config.js";
-import { logEvent } from "../../services/analytics/index.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { logError } from "../../utils/log.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { Login, runPostLoginHooks } from "../../services/oauth/postLoginHooks.js";
 import { useRegisterOverlay } from "../../context/overlayContext.js";
 import { toString } from "../../../vendor/qrcode/lib/server.js";
 import { REMOTE_CONTROL_DISCONNECTED_MSG, BRIDGE_LOGIN_INSTRUCTION } from "../../bridge/types.js";
-import { Dialog } from "../../components/design-system/Dialog.js";
 import { useLatchedBridgeNotice } from "../../components/PromptInput/Notifications.js";
 import { Byline } from "../../components/design-system/Byline.js";
 import { KeyboardShortcutHint } from "../../components/design-system/KeyboardShortcutHint.js";
@@ -53,13 +62,150 @@ import {
   PROACTIVE_ENROLLMENT_DISABLED_MESSAGE,
 } from "../../bridge/trustedDevice.js";
 import { nullStub3 } from "../../utils/externalBuildStubs.js";
-import { idleAmberFinchOn } from "../../utils/planTiers.js";
-import { callUpgradeFromSurface } from "../upgrade/upgrade.js";
-import { call as call_2 } from "../usage-credits/usageCredits.js";
-import { ModelSelector } from "../../components/agents/ModelSelector.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-18hwfzwa.js:643741-643788 fingerprint = _temp (1)
+function selectBridgeConnected_2(s) {
+  return s.replBridgeConnected;
+}
+//@ chunk-18hwfzwa.js:643788-643839 fingerprint = _temp6 (1)
+function selectBridgeSessionActive_2(s_1) {
+  return s_1.replBridgeSessionActive;
+}
+//@ chunk-18hwfzwa.js:643889-643937 fingerprint = _temp5 (1)
+function selectBridgeConnectUrl_2(s_0) {
+  return s_0.replBridgeConnectUrl;
+}
+//@ chunk-18hwfzwa.js:643937-643985 fingerprint = _temp4 (1)
+function selectBridgeSessionUrl_2(s) {
+  return s.replBridgeSessionUrl;
+}
+//@ chunk-18hwfzwa.js:644121-644166 fingerprint = _temp2 (1)
+function selectBridgeEnabled_2(s_0) {
+  return s_0.replBridgeEnabled;
+}
+//@ chunk-18hwfzwa.js:1785048-1785137 fingerprint = _temp7 (0.688)
+function isBridgeInboundAllowed(prev) {
+  let state = prev.getState();
+  return state.replBridgeEnabled && !state.replBridgeOutboundOnly;
+}
+//@ chunk-fnmk6x3n.js:17782-17786 sole-consumer
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fnmk6x3n.js:17782", () => {
+  init_react_production();
+});
+//@ chunk-fnmk6x3n.js:17786-18799 sole-consumer
+/**
+ * Pro 试用到期对话框：提示试用结束，选项"升级到 Max"（非受限账号）与"充值继续用"，记 tengu_pro_trial_expired_choice 后进入对应流程。
+ */
+function ProTrialExpiredDialog(props) {
+  let $ = useMemoCache(15);
+  let { onDone, caller } = props;
+  let [error, setError] = useState(null);
+  if (error) {
+    return error;
+  }
+  let content;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    content = [
+      ...(idleAmberFinchOn()
+        ? []
+        : [
+            {
+              label: "Upgrade to Max",
+              value: "upgrade",
+            },
+          ]),
+      {
+        label: "Add funds to continue with usage credits",
+        value: "extra-usage",
+      },
+    ];
+    $[0] = content;
+  } else content = $[0];
+  let options = content;
+  let footer;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    footer = jsxProd_default(Box, {
+      paddingX: 2,
+      children: jsxProd_default(Text, {
+        color: "error",
+        children: "Your Claude Code trial has ended.",
+      }),
+    });
+    $[1] = footer;
+  } else footer = $[1];
+  let onCancel;
+  if ($[2] !== onDone) {
+    onCancel = () => onDone();
+    $[2] = onDone;
+    $[3] = onCancel;
+  } else onCancel = $[3];
+  let onCancel_2;
+  if ($[4] !== onDone) {
+    onCancel_2 = () => onDone();
+    $[4] = onDone;
+    $[5] = onCancel_2;
+  } else onCancel_2 = $[5];
+  let onChange;
+  if ($[6] !== caller || $[7] !== onDone) {
+    onChange = (choice) => {
+      logEvent("tengu_pro_trial_expired_choice", {
+        chose_upgrade: choice === "upgrade",
+      });
+      if (choice === "upgrade")
+        callUpgradeFromSurface(onDone, caller, "pro_trial_expired_dialog").then((result) => setError(result));
+      else call_2(onDone, caller).then((message) => setError(message));
+    };
+    $[6] = caller;
+    $[7] = onDone;
+    $[8] = onChange;
+  } else onChange = $[8];
+  let children;
+  if ($[9] !== onCancel_2 || $[10] !== onChange) {
+    children = jsxProd_default(ModelSelector, {
+      options,
+      onCancel: onCancel_2,
+      onChange,
+    });
+    $[9] = onCancel_2;
+    $[10] = onChange;
+    $[11] = children;
+  } else children = $[11];
+  let body;
+  if ($[12] !== onCancel || $[13] !== children) {
+    body = jsxProd_default_2(Box, {
+      flexDirection: "column",
+      children: [
+        footer,
+        jsxProd_default(Dialog, {
+          title: "What do you want to do?",
+          onCancel,
+          children,
+        }),
+      ],
+    });
+    $[12] = onCancel;
+    $[13] = children;
+    $[14] = body;
+  } else body = $[14];
+  return body;
+}
+//@ chunk-fnmk6x3n.js:18799-18853 fingerprint = call (0.627)
+/**
+ * /pro-trial-expired 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
+ */
+async function call(onDone, context) {
+  return jsxProd_default(ProTrialExpiredDialog, {
+    onDone,
+    caller: context,
+  });
+}
 //@ chunk-k7ve8htw.js:18017-18021 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-k7ve8htw.js:18017", () => {
+  init_react_production();
+});
 //@ chunk-k7ve8htw.js:18021-18067 sole-consumer = _temp (1)
 function selectBridgeConnected(s) {
   return s.replBridgeConnected;
@@ -87,11 +233,11 @@ function gatewayAuthSnapshot() {
   return getGatewayAuth();
 }
 //@ chunk-k7ve8htw.js:18285-18355 layout = shouldShowRemoteCallout (0.779)
-function shouldShowRemoteCallout(x) {
-  return x.remoteDialogSeen
-    ? x
+function shouldShowRemoteCallout(state) {
+  return state.remoteDialogSeen
+    ? state
     : {
-        ...x,
+        ...state,
         remoteDialogSeen: true,
       };
 }
@@ -108,9 +254,9 @@ function selectBridgeSessionActive(s_1) {
   return s_1.replBridgeSessionActive;
 }
 //@ chunk-k7ve8htw.js:18499-18516 layout
-function selectNothing(Gr) {}
+function selectNothing(state) {}
 //@ chunk-k7ve8htw.js:18516-18541 layout
-function selectFalse(Ur) {
+function selectFalse(state) {
   return false;
 }
 //@ chunk-k7ve8htw.js:18541-18567 layout
@@ -136,36 +282,36 @@ function clearBridgeAppState(prev) {
   };
 }
 //@ chunk-k7ve8htw.js:18870-18896 layout
-function logicalNot(Ao) {
-  return !Ao;
+function logicalNot(value) {
+  return !value;
 }
 //@ chunk-k7ve8htw.js:18896-18931 file-local
 function isNonEmpty(l) {
   return l.length > 0;
 }
 //@ chunk-k7ve8htw.js:18931-18962 layout
-function shareRowPort(So) {
-  return So.port;
+function shareRowPort(row) {
+  return row.port;
 }
 //@ chunk-k7ve8htw.js:18962-19010 layout
-function renderTextRow(children, xo) {
+function renderTextRow(children, key) {
   return jsxProd_default(
     Text,
     {
       children,
     },
-    xo,
+    key,
   );
 }
 //@ chunk-k7ve8htw.js:19010-19081 layout
-function renderListItem(en) {
+function renderListItem(item) {
   return jsxProd_default(
     OrderedListWithItem.Item,
     {
-      label: en.label,
-      meta: en.meta,
+      label: item.label,
+      meta: item.meta,
     },
-    en.key,
+    item.key,
   );
 }
 //@ chunk-k7ve8htw.js:19081-19276 layout
@@ -173,27 +319,27 @@ var PROJECT_FIXED_WHEN_CONNECTED_MESSAGE =
   "Remote Control is already connected \u2014 a session's Project is fixed when it's created. Disconnect first, then re-run /remote-control --project to start a new session in the Project.";
 //@ chunk-k7ve8htw.js:19276-23125 fingerprint = BridgeToggle (0.346)
 function BridgeToggle(props) {
-  let g = w(25);
+  let $ = useMemoCache(25);
   let { onDone, name, sessionGroupingId, context } = props;
   let setAppState = useSetAppState();
   let replBridgeConnected = useAppState(selectBridgeConnected);
   let replBridgeEnabled = useAppState(selectBridgeEnabled);
   let replBridgeOutboundOnly = useAppState(selectBridgeOutboundOnly);
-  let [Ze, J] = y(false);
-  let [te, ie] = y(false);
-  let [se] = y(oauthAccountKey);
-  let [T] = y(gatewayAuthSnapshot);
-  let i;
+  let [connecting, setConnecting] = useState(false);
+  let [enabling, setEnabling] = useState(false);
+  let [accountKey] = useState(oauthAccountKey);
+  let [initialAuth] = useState(gatewayAuthSnapshot);
+  let handleEnable;
   if (
-    g[0] !== context?.dialogStore ||
-    g[1] !== context?.requestDialog ||
-    g[2] !== context?.storageV5 ||
-    g[3] !== name ||
-    g[4] !== onDone ||
-    g[5] !== sessionGroupingId ||
-    g[6] !== setAppState
+    $[0] !== context?.dialogStore ||
+    $[1] !== context?.requestDialog ||
+    $[2] !== context?.storageV5 ||
+    $[3] !== name ||
+    $[4] !== onDone ||
+    $[5] !== sessionGroupingId ||
+    $[6] !== setAppState
   ) {
-    i = function k() {
+    handleEnable = function handleEnable() {
       markRemoteControlUsed(context?.storageV5);
       if (shouldShowRemoteCallout_2()) {
         let requestDialog = context?.requestDialog;
@@ -213,11 +359,11 @@ function BridgeToggle(props) {
           });
           return;
         }
-        setAppState((W) =>
-          W.replBridgeInitialName === name && W.replBridgeSessionGroupingId === sessionGroupingId
-            ? W
+        setAppState((state) =>
+          state.replBridgeInitialName === name && state.replBridgeSessionGroupingId === sessionGroupingId
+            ? state
             : {
-                ...W,
+                ...state,
                 replBridgeInitialName: name,
                 replBridgeSessionGroupingId: sessionGroupingId,
               },
@@ -225,7 +371,7 @@ function BridgeToggle(props) {
         onDone("", {
           display: "system",
         });
-        let A = accountKeyOf(getOauthAccountInfo());
+        let accountAtPrompt = accountKeyOf(getOauthAccountInfo());
         requestDialog(
           REMOTE_CALLOUT_DIALOG,
           {},
@@ -233,20 +379,20 @@ function BridgeToggle(props) {
             place: "under",
           },
         )
-          .then((_) => {
-            let le = _ === "enable" && accountKeyOf(getOauthAccountInfo()) === A;
-            if (_ === "enable" && !le)
+          .then((answer) => {
+            let sameAccount = answer === "enable" && accountKeyOf(getOauthAccountInfo()) === accountAtPrompt;
+            if (answer === "enable" && !sameAccount)
               logForDebugging(
                 "[bridge:repl] Remote Control callout answered under a different account than it was asked for \u2014 not enabling",
               );
-            if (le) {
+            if (sameAccount) {
               saveGlobalConfig(shouldShowRemoteCallout, context?.storageV5);
               logEvent("tengu_bridge_command", {
                 action: lit("connect"),
               });
             }
             setAppState((prev) => {
-              if (le) {
+              if (sameAccount) {
                 return prev.replBridgeEnabled && prev.replBridgeExplicit && !prev.replBridgeOutboundOnly
                   ? prev
                   : {
@@ -272,10 +418,10 @@ function BridgeToggle(props) {
       logEvent("tengu_bridge_command", {
         action: lit("connect"),
       });
-      let Oe = false;
+      let prereqOk = false;
       setAppState((prev) => {
         if (prev.replBridgeEnabled && !prev.replBridgeOutboundOnly) {
-          if (sessionGroupingId !== undefined) Oe = true;
+          if (sessionGroupingId !== undefined) prereqOk = true;
           return prev;
         }
         return {
@@ -287,7 +433,7 @@ function BridgeToggle(props) {
           replBridgeSessionGroupingId: sessionGroupingId,
         };
       });
-      if (Oe) {
+      if (prereqOk) {
         onDone(PROJECT_FIXED_WHEN_CONNECTED_MESSAGE, {
           display: "system",
         });
@@ -297,86 +443,86 @@ function BridgeToggle(props) {
         display: "system",
       });
     };
-    g[0] = context?.dialogStore;
-    g[1] = context?.requestDialog;
-    g[2] = context?.storageV5;
-    g[3] = name;
-    g[4] = onDone;
-    g[5] = sessionGroupingId;
-    g[6] = setAppState;
-    g[7] = i;
-  } else i = g[7];
-  let k = i;
-  let Le;
+    $[0] = context?.dialogStore;
+    $[1] = context?.requestDialog;
+    $[2] = context?.storageV5;
+    $[3] = name;
+    $[4] = onDone;
+    $[5] = sessionGroupingId;
+    $[6] = setAppState;
+    $[7] = handleEnable;
+  } else handleEnable = $[7];
+  let enable = handleEnable;
+  let prereq;
   if (
-    g[8] !== context?.credentials ||
-    g[9] !== k ||
-    g[10] !== onDone ||
-    g[11] !== replBridgeConnected ||
-    g[12] !== replBridgeEnabled ||
-    g[13] !== replBridgeOutboundOnly
+    $[8] !== context?.credentials ||
+    $[9] !== enable ||
+    $[10] !== onDone ||
+    $[11] !== replBridgeConnected ||
+    $[12] !== replBridgeEnabled ||
+    $[13] !== replBridgeOutboundOnly
   ) {
-    Le = () => {
+    prereq = () => {
       if ((replBridgeConnected || replBridgeEnabled) && !replBridgeOutboundOnly) {
-        J(true);
+        setConnecting(true);
         return;
       }
-      let Te = false;
+      let loggedIn = false;
       (async () => {
-        let O = await checkBridgePrerequisites(context?.credentials);
-        if (Te) {
+        let prerequisites = await checkBridgePrerequisites(context?.credentials);
+        if (loggedIn) {
           return;
         }
-        if (O?.kind === "error") {
+        if (prerequisites?.kind === "error") {
           logEvent("tengu_bridge_command", {
             action: lit("preflight_failed"),
           });
-          onDone(O.message, {
+          onDone(prerequisites.message, {
             display: "system",
           });
           return;
         }
-        if (O?.kind === "unenrolled-trusted-device") {
+        if (prerequisites?.kind === "unenrolled-trusted-device") {
           logEvent("tengu_bridge_command", {
             action: lit("preflight_login_for_enrollment"),
           });
-          ie(true);
+          setEnabling(true);
           return;
         }
-        k();
+        enable();
       })();
       return () => {
-        Te = true;
+        loggedIn = true;
       };
     };
-    g[8] = context?.credentials;
-    g[9] = k;
-    g[10] = onDone;
-    g[11] = replBridgeConnected;
-    g[12] = replBridgeEnabled;
-    g[13] = replBridgeOutboundOnly;
-    g[14] = Le;
-  } else Le = g[14];
-  let X;
-  if (g[15] === MEMO_CACHE_SENTINEL) {
-    X = [];
-    g[15] = X;
-  } else X = g[15];
-  P(Le, X);
-  if (Ze) {
-    let N;
-    if (g[16] !== onDone || g[17] !== sessionGroupingId) {
-      N = jsxProd_default(BridgeDisconnectDialog, {
+    $[8] = context?.credentials;
+    $[9] = enable;
+    $[10] = onDone;
+    $[11] = replBridgeConnected;
+    $[12] = replBridgeEnabled;
+    $[13] = replBridgeOutboundOnly;
+    $[14] = prereq;
+  } else prereq = $[14];
+  let content;
+  if ($[15] === MEMO_CACHE_SENTINEL) {
+    content = [];
+    $[15] = content;
+  } else content = $[15];
+  useEffect(prereq, content);
+  if (connecting) {
+    let footer;
+    if ($[16] !== onDone || $[17] !== sessionGroupingId) {
+      footer = jsxProd_default(BridgeDisconnectDialog, {
         onDone,
         sessionGroupingId,
       });
-      g[16] = onDone;
-      g[17] = sessionGroupingId;
-      g[18] = N;
-    } else N = g[18];
-    return N;
+      $[16] = onDone;
+      $[17] = sessionGroupingId;
+      $[18] = footer;
+    } else footer = $[18];
+    return footer;
   }
-  if (te) {
+  if (enabling) {
     if (!context) {
       onDone(
         "Your organization requires Trusted Devices for Remote Control, but this device is not enrolled. Please run `/login` in Claude Code to enroll this device.",
@@ -386,21 +532,27 @@ function BridgeToggle(props) {
       );
       return null;
     }
-    let N;
-    if (g[19] !== context || g[20] !== k || g[21] !== onDone || g[22] !== se || g[23] !== T) {
-      N = jsxProd_default(Login, {
+    let status;
+    if (
+      $[19] !== context ||
+      $[20] !== enable ||
+      $[21] !== onDone ||
+      $[22] !== accountKey ||
+      $[23] !== initialAuth
+    ) {
+      status = jsxProd_default(Login, {
         startingMessage: "Sign in to enroll this device for Remote Control.",
-        onDone: async (H, ke, setAppState) => {
-          let z = await runPostLoginHooks(context, H, {
+        onDone: async (result, agentId, setAppState) => {
+          let postLogin = await runPostLoginHooks(context, result, {
             setAppState,
             awaitEnrollment: true,
-            previousAccount: se,
-            previousGatewayAuth: T,
+            previousAccount: accountKey,
+            previousGatewayAuth: initialAuth,
           });
-          if (z.gatewayLoginError !== undefined || z.relaunching) {
+          if (postLogin.gatewayLoginError !== undefined || postLogin.relaunching) {
             onDone(
-              z.gatewayLoginError,
-              z.gatewayLoginError !== undefined
+              postLogin.gatewayLoginError,
+              postLogin.gatewayLoginError !== undefined
                 ? {
                     display: "system",
                   }
@@ -408,7 +560,7 @@ function BridgeToggle(props) {
             );
             return;
           }
-          if (!H) {
+          if (!result) {
             logEvent("tengu_bridge_command", {
               action: lit("preflight_login_canceled"),
             });
@@ -417,14 +569,14 @@ function BridgeToggle(props) {
             });
             return;
           }
-          let h = await checkBridgePrerequisites(context?.credentials);
-          if (h?.kind === "error") {
-            onDone(h.message, {
+          let recheck = await checkBridgePrerequisites(context?.credentials);
+          if (recheck?.kind === "error") {
+            onDone(recheck.message, {
               display: "system",
             });
             return;
           }
-          if (h?.kind === "unenrolled-trusted-device") {
+          if (recheck?.kind === "unenrolled-trusted-device") {
             logEvent("tengu_bridge_command", {
               action: lit("preflight_enrollment_did_not_complete"),
             });
@@ -436,23 +588,23 @@ function BridgeToggle(props) {
             );
             return;
           }
-          k();
+          enable();
         },
       });
-      g[19] = context;
-      g[20] = k;
-      g[21] = onDone;
-      g[22] = se;
-      g[23] = T;
-      g[24] = N;
-    } else N = g[24];
-    return N;
+      $[19] = context;
+      $[20] = enable;
+      $[21] = onDone;
+      $[22] = accountKey;
+      $[23] = initialAuth;
+      $[24] = status;
+    } else status = $[24];
+    return status;
   }
   return null;
 }
 //@ chunk-k7ve8htw.js:23125-27247 fingerprint = BridgeDisconnectDialog (0.423)
 function BridgeDisconnectDialog(props) {
-  let i = w(91);
+  let $ = useMemoCache(91);
   let { onDone, sessionGroupingId } = props;
   useRegisterOverlay("bridge-disconnect-dialog");
   let setAppState = useSetAppState();
@@ -460,44 +612,44 @@ function BridgeDisconnectDialog(props) {
   let connectUrl = useAppState(selectBridgeConnectUrl);
   let sessionActive = useAppState(selectBridgeSessionActive);
   let appState = useAppState(selectNothing);
-  let [u, Ze] = y(false);
-  let [J, te] = y("");
-  let [ie] = y(appState);
+  let [connecting, setConnecting] = useState(false);
+  let [statusText, setStatusText] = useState("");
+  let [initialState] = useState(appState);
   let appState_2 = useAppState(selectFalse);
-  y(!appState_2);
-  let [T] = y(selectNull);
-  let [g] = y(ie);
-  let ae;
-  if (i[0] !== g || i[1] !== T) {
-    ae = () =>
-      T === null || g === "ready"
-        ? T
+  useState(!appState_2);
+  let [snapshot] = useState(selectNull);
+  let [state] = useState(initialState);
+  let store;
+  if ($[0] !== state || $[1] !== snapshot) {
+    store = () =>
+      snapshot === null || state === "ready"
+        ? snapshot
         : {
-            ...T,
+            ...snapshot,
             shared: [],
             shareRows: [],
           };
-    i[0] = g;
-    i[1] = T;
-    i[2] = ae;
-  } else ae = i[2];
-  let [m] = y(ae);
-  R(null);
-  let W;
-  if (i[3] !== m) {
-    W = [m];
-    i[3] = m;
-    i[4] = W;
-  } else W = i[4];
-  P(noopEffect, W);
-  let [A] = y(null);
+    $[0] = state;
+    $[1] = snapshot;
+    $[2] = store;
+  } else store = $[2];
+  let [storeSnapshot] = useState(store);
+  useRef(null);
+  let helpText;
+  if ($[3] !== storeSnapshot) {
+    helpText = [storeSnapshot];
+    $[3] = storeSnapshot;
+    $[4] = helpText;
+  } else helpText = $[4];
+  useEffect(noopEffect, helpText);
+  let [error] = useState(null);
   let text = sessionActive ? sessionUrl : connectUrl;
-  let le;
-  let D;
-  if (i[5] !== text || i[6] !== u) {
-    le = () => {
-      if (!u || !text) {
-        te("");
+  let body;
+  let footer;
+  if ($[5] !== text || $[6] !== connecting) {
+    body = () => {
+      if (!connecting || !text) {
+        setStatusText("");
         return;
       }
       toString(text, {
@@ -505,22 +657,22 @@ function BridgeDisconnectDialog(props) {
         errorCorrectionLevel: "L",
         small: true,
       })
-        .then(te)
-        .catch(() => te(""));
+        .then(setStatusText)
+        .catch(() => setStatusText(""));
     };
-    D = [u, text];
-    i[5] = text;
-    i[6] = u;
-    i[7] = le;
-    i[8] = D;
+    footer = [connecting, text];
+    $[5] = text;
+    $[6] = connecting;
+    $[7] = body;
+    $[8] = footer;
   } else {
-    le = i[7];
-    D = i[8];
+    body = $[7];
+    footer = $[8];
   }
-  P(le, D);
-  let Oe;
-  if (i[9] !== onDone || i[10] !== setAppState) {
-    Oe = function handleDisconnect() {
+  useEffect(body, footer);
+  let statusLine;
+  if ($[9] !== onDone || $[10] !== setAppState) {
+    statusLine = function handleDisconnect() {
       setAppState(clearBridgeAppState);
       logEvent("tengu_bridge_command", {
         action: lit("disconnect"),
@@ -529,232 +681,235 @@ function BridgeDisconnectDialog(props) {
         display: "system",
       });
     };
-    i[9] = onDone;
-    i[10] = setAppState;
-    i[11] = Oe;
-  } else Oe = i[11];
-  let run = Oe;
-  let k;
-  if (i[12] === MEMO_CACHE_SENTINEL) {
-    k = function handleShowQR() {
-      Ze(logicalNot);
+    $[9] = onDone;
+    $[10] = setAppState;
+    $[11] = statusLine;
+  } else statusLine = $[11];
+  let run = statusLine;
+  let urlLine;
+  if ($[12] === MEMO_CACHE_SENTINEL) {
+    urlLine = function handleShowQR() {
+      setConnecting(logicalNot);
     };
-    i[12] = k;
-  } else k = i[12];
-  let run_2 = k;
-  let Te;
-  if (i[13] !== A || i[14] !== onDone) {
-    Te = function handleContinue() {
-      if (A === null)
+    $[12] = urlLine;
+  } else urlLine = $[12];
+  let run_2 = urlLine;
+  let content;
+  if ($[13] !== error || $[14] !== onDone) {
+    content = function handleContinue() {
+      if (error === null)
         onDone(undefined, {
           display: "skip",
         });
     };
-    i[13] = A;
-    i[14] = onDone;
-    i[15] = Te;
-  } else Te = i[15];
-  let O = Te;
-  let X;
-  if (i[16] !== run) {
-    X = {
+    $[13] = error;
+    $[14] = onDone;
+    $[15] = content;
+  } else content = $[15];
+  let contentBlock = content;
+  let links;
+  if ($[16] !== run) {
+    links = {
       key: "disconnect",
       run,
       label: "Disconnect this session",
     };
-    i[16] = run;
-    i[17] = X;
-  } else X = i[17];
-  const label = u ? "Hide QR code" : "Show QR code";
+    $[16] = run;
+    $[17] = links;
+  } else links = $[17];
+  const label = connecting ? "Hide QR code" : "Show QR code";
   let meta;
-  if (i[18] !== u) {
-    meta = u ? [] : ["Scan with your phone to open this session"];
-    i[18] = u;
-    i[19] = meta;
-  } else meta = i[19];
-  let ke;
-  if (i[20] !== meta || i[21] !== label) {
-    ke = {
+  if ($[18] !== connecting) {
+    meta = connecting ? [] : ["Scan with your phone to open this session"];
+    $[18] = connecting;
+    $[19] = meta;
+  } else meta = $[19];
+  let hintFooter;
+  if ($[20] !== meta || $[21] !== label) {
+    hintFooter = {
       key: "qr",
       run: run_2,
       label,
       meta,
     };
-    i[20] = meta;
-    i[21] = label;
-    i[22] = ke;
-  } else ke = i[22];
-  let de;
-  if (i[23] !== O) {
-    de = {
+    $[20] = meta;
+    $[21] = label;
+    $[22] = hintFooter;
+  } else hintFooter = $[22];
+  let hintRow;
+  if ($[23] !== contentBlock) {
+    hintRow = {
       key: "continue",
-      run: O,
+      run: contentBlock,
       label: "Continue",
     };
-    i[23] = O;
-    i[24] = de;
-  } else de = i[24];
-  let z;
-  if (i[25] !== ke || i[26] !== de || i[27] !== X) {
-    z = [X, ke, de];
-    i[25] = ke;
-    i[26] = de;
-    i[27] = X;
-    i[28] = z;
-  } else z = i[28];
-  let h = z;
-  let ce;
-  let pe;
+    $[23] = contentBlock;
+    $[24] = hintRow;
+  } else hintRow = $[24];
+  let bodyRows;
+  if ($[25] !== hintFooter || $[26] !== hintRow || $[27] !== links) {
+    bodyRows = [links, hintFooter, hintRow];
+    $[25] = hintFooter;
+    $[26] = hintRow;
+    $[27] = links;
+    $[28] = bodyRows;
+  } else bodyRows = $[28];
+  let panelBody = bodyRows;
+  let statusRow;
+  let helpRow;
   let flexDirection;
   let gap;
-  let x;
-  let ge;
-  let me;
-  let Ce;
-  let Ae;
-  let Be;
+  let dialogBody;
+  let box;
+  let titleRow;
+  let urlRow;
+  let hintLine;
+  let footerLine;
   let title;
   let onCancel;
   let hideInputGuide;
   if (
-    i[29] !== text ||
-    i[30] !== m ||
-    i[31] !== O ||
-    i[32] !== g ||
-    i[33] !== J ||
-    i[34] !== sessionGroupingId ||
-    i[35] !== u
+    $[29] !== text ||
+    $[30] !== storeSnapshot ||
+    $[31] !== contentBlock ||
+    $[32] !== state ||
+    $[33] !== statusText ||
+    $[34] !== sessionGroupingId ||
+    $[35] !== connecting
   ) {
-    let Pn = J
-      ? J.split(
-          `
+    let groupingId = statusText
+      ? statusText
+          .split(
+            `
 `,
-        ).filter(isNonEmpty)
+          )
+          .filter(isNonEmpty)
       : [];
-    pe = Dialog;
+    helpRow = Dialog;
     title = "Remote Control";
-    onCancel = O;
+    onCancel = contentBlock;
     hideInputGuide = true;
-    ce = Box;
+    statusRow = Box;
     flexDirection = "column";
     gap = 1;
-    if (i[49] !== sessionGroupingId) {
-      x =
+    if ($[49] !== sessionGroupingId) {
+      dialogBody =
         sessionGroupingId !== undefined &&
         jsxProd_default(Text, {
           children:
             "A session's Project is fixed when it's created \u2014 disconnect first, then re-run /remote-control --project to start a new one.",
         });
-      i[49] = sessionGroupingId;
-      i[50] = x;
-    } else x = i[50];
-    const he = text ? ` and at ${text}` : " and claude.ai/code";
-    if (i[51] !== he) {
-      ge = jsxProd_default_2(Text, {
-        children: ["This session is available in the Claude mobile app", he, "."],
+      $[49] = sessionGroupingId;
+      $[50] = dialogBody;
+    } else dialogBody = $[50];
+    const atText = text ? ` and at ${text}` : " and claude.ai/code";
+    if ($[51] !== atText) {
+      box = jsxProd_default_2(Text, {
+        children: ["This session is available in the Claude mobile app", atText, "."],
       });
-      i[51] = he;
-      i[52] = ge;
-    } else ge = i[52];
+      $[51] = atText;
+      $[52] = box;
+    } else box = $[52];
     let endedShares;
-    if (i[53] !== m?.endedShares) {
-      endedShares = m?.endedShares ?? [];
-      i[53] = m?.endedShares;
-      i[54] = endedShares;
-    } else endedShares = i[54];
+    if ($[53] !== storeSnapshot?.endedShares) {
+      endedShares = storeSnapshot?.endedShares ?? [];
+      $[53] = storeSnapshot?.endedShares;
+      $[54] = endedShares;
+    } else endedShares = $[54];
     let portsWithRow;
-    if (i[55] !== m?.shareRows) {
-      portsWithRow = m?.shareRows.map(shareRowPort) ?? [];
-      i[55] = m?.shareRows;
-      i[56] = portsWithRow;
-    } else portsWithRow = i[56];
-    const drewReason = g === "ready" && m !== null && m.sharesNothingBecause !== null;
-    if (i[57] !== g || i[58] !== endedShares || i[59] !== portsWithRow || i[60] !== drewReason) {
-      me = jsxProd_default(useLatchedBridgeNotice, {
+    if ($[55] !== storeSnapshot?.shareRows) {
+      portsWithRow = storeSnapshot?.shareRows.map(shareRowPort) ?? [];
+      $[55] = storeSnapshot?.shareRows;
+      $[56] = portsWithRow;
+    } else portsWithRow = $[56];
+    const drewReason =
+      state === "ready" && storeSnapshot !== null && storeSnapshot.sharesNothingBecause !== null;
+    if ($[57] !== state || $[58] !== endedShares || $[59] !== portsWithRow || $[60] !== drewReason) {
+      titleRow = jsxProd_default(useLatchedBridgeNotice, {
         inRemoteControl: {
-          stateAtOpen: g,
+          stateAtOpen: state,
           endedShares,
           portsWithRow,
           drewReason,
         },
       });
-      i[57] = g;
-      i[58] = endedShares;
-      i[59] = portsWithRow;
-      i[60] = drewReason;
-      i[61] = me;
-    } else me = i[61];
-    Ce = false;
-    Ae = false;
-    Be =
-      u &&
-      Pn.length > 0 &&
+      $[57] = state;
+      $[58] = endedShares;
+      $[59] = portsWithRow;
+      $[60] = drewReason;
+      $[61] = titleRow;
+    } else titleRow = $[61];
+    urlRow = false;
+    hintLine = false;
+    footerLine =
+      connecting &&
+      groupingId.length > 0 &&
       jsxProd_default(Box, {
         flexDirection: "column",
-        children: Pn.map(renderTextRow),
+        children: groupingId.map(renderTextRow),
       });
-    i[29] = text;
-    i[30] = m;
-    i[31] = O;
-    i[32] = g;
-    i[33] = J;
-    i[34] = sessionGroupingId;
-    i[35] = u;
-    i[36] = ce;
-    i[37] = pe;
-    i[38] = flexDirection;
-    i[39] = gap;
-    i[40] = x;
-    i[41] = ge;
-    i[42] = me;
-    i[43] = Ce;
-    i[44] = Ae;
-    i[45] = Be;
-    i[46] = title;
-    i[47] = onCancel;
-    i[48] = hideInputGuide;
+    $[29] = text;
+    $[30] = storeSnapshot;
+    $[31] = contentBlock;
+    $[32] = state;
+    $[33] = statusText;
+    $[34] = sessionGroupingId;
+    $[35] = connecting;
+    $[36] = statusRow;
+    $[37] = helpRow;
+    $[38] = flexDirection;
+    $[39] = gap;
+    $[40] = dialogBody;
+    $[41] = box;
+    $[42] = titleRow;
+    $[43] = urlRow;
+    $[44] = hintLine;
+    $[45] = footerLine;
+    $[46] = title;
+    $[47] = onCancel;
+    $[48] = hideInputGuide;
   } else {
-    ce = i[36];
-    pe = i[37];
-    flexDirection = i[38];
-    gap = i[39];
-    x = i[40];
-    ge = i[41];
-    me = i[42];
-    Ce = i[43];
-    Ae = i[44];
-    Be = i[45];
-    title = i[46];
-    onCancel = i[47];
-    hideInputGuide = i[48];
+    statusRow = $[36];
+    helpRow = $[37];
+    flexDirection = $[38];
+    gap = $[39];
+    dialogBody = $[40];
+    box = $[41];
+    titleRow = $[42];
+    urlRow = $[43];
+    hintLine = $[44];
+    footerLine = $[45];
+    title = $[46];
+    onCancel = $[47];
+    hideInputGuide = $[48];
   }
-  const visibleCount = h.length;
-  const defaultFocusIndex = h.length - 1;
-  const isDisabled = A !== null;
+  const visibleCount = panelBody.length;
+  const defaultFocusIndex = panelBody.length - 1;
+  const isDisabled = error !== null;
   let onSelect;
-  if (i[62] !== A || i[63] !== h) {
-    onSelect = (To) => {
-      if (A === null) h[To]?.run();
+  if ($[62] !== error || $[63] !== panelBody) {
+    onSelect = (index) => {
+      if (error === null) panelBody[index]?.run();
     };
-    i[62] = A;
-    i[63] = h;
-    i[64] = onSelect;
-  } else onSelect = i[64];
+    $[62] = error;
+    $[63] = panelBody;
+    $[64] = onSelect;
+  } else onSelect = $[64];
   let children;
-  if (i[65] !== h) {
-    children = h.map(renderListItem);
-    i[65] = h;
-    i[66] = children;
-  } else children = i[66];
-  let je;
+  if ($[65] !== panelBody) {
+    children = panelBody.map(renderListItem);
+    $[65] = panelBody;
+    $[66] = children;
+  } else children = $[66];
+  let result;
   if (
-    i[67] !== h.length ||
-    i[68] !== defaultFocusIndex ||
-    i[69] !== isDisabled ||
-    i[70] !== onSelect ||
-    i[71] !== children
+    $[67] !== panelBody.length ||
+    $[68] !== defaultFocusIndex ||
+    $[69] !== isDisabled ||
+    $[70] !== onSelect ||
+    $[71] !== children
   ) {
-    je = jsxProd_default(OrderedListWithItem, {
+    result = jsxProd_default(OrderedListWithItem, {
       visibleCount,
       defaultFocusIndex,
       wrap: true,
@@ -763,16 +918,16 @@ function BridgeDisconnectDialog(props) {
       onSelect,
       children,
     });
-    i[67] = h.length;
-    i[68] = defaultFocusIndex;
-    i[69] = isDisabled;
-    i[70] = onSelect;
-    i[71] = children;
-    i[72] = je;
-  } else je = i[72];
-  let bn;
-  if (i[73] === MEMO_CACHE_SENTINEL) {
-    bn = jsxProd_default(Text, {
+    $[67] = panelBody.length;
+    $[68] = defaultFocusIndex;
+    $[69] = isDisabled;
+    $[70] = onSelect;
+    $[71] = children;
+    $[72] = result;
+  } else result = $[72];
+  let status;
+  if ($[73] === MEMO_CACHE_SENTINEL) {
+    status = jsxProd_default(Text, {
       dimColor: true,
       children: jsxProd_default_2(Byline, {
         children: [
@@ -787,60 +942,60 @@ function BridgeDisconnectDialog(props) {
         ],
       }),
     });
-    i[73] = bn;
-  } else bn = i[73];
+    $[73] = status;
+  } else status = $[73];
   let children_2;
   if (
-    i[74] !== ce ||
-    i[75] !== flexDirection ||
-    i[76] !== gap ||
-    i[77] !== x ||
-    i[78] !== ge ||
-    i[79] !== me ||
-    i[80] !== Ce ||
-    i[81] !== Ae ||
-    i[82] !== Be ||
-    i[83] !== je
+    $[74] !== statusRow ||
+    $[75] !== flexDirection ||
+    $[76] !== gap ||
+    $[77] !== dialogBody ||
+    $[78] !== box ||
+    $[79] !== titleRow ||
+    $[80] !== urlRow ||
+    $[81] !== hintLine ||
+    $[82] !== footerLine ||
+    $[83] !== result
   ) {
-    children_2 = jsxProd_default_2(ce, {
+    children_2 = jsxProd_default_2(statusRow, {
       flexDirection,
       gap,
-      children: [x, ge, me, Ce, Ae, Be, je, bn],
+      children: [dialogBody, box, titleRow, urlRow, hintLine, footerLine, result, status],
     });
-    i[74] = ce;
-    i[75] = flexDirection;
-    i[76] = gap;
-    i[77] = x;
-    i[78] = ge;
-    i[79] = me;
-    i[80] = Ce;
-    i[81] = Ae;
-    i[82] = Be;
-    i[83] = je;
-    i[84] = children_2;
-  } else children_2 = i[84];
-  let _n;
+    $[74] = statusRow;
+    $[75] = flexDirection;
+    $[76] = gap;
+    $[77] = dialogBody;
+    $[78] = box;
+    $[79] = titleRow;
+    $[80] = urlRow;
+    $[81] = hintLine;
+    $[82] = footerLine;
+    $[83] = result;
+    $[84] = children_2;
+  } else children_2 = $[84];
+  let reason;
   if (
-    i[85] !== pe ||
-    i[86] !== title ||
-    i[87] !== onCancel ||
-    i[88] !== hideInputGuide ||
-    i[89] !== children_2
+    $[85] !== helpRow ||
+    $[86] !== title ||
+    $[87] !== onCancel ||
+    $[88] !== hideInputGuide ||
+    $[89] !== children_2
   ) {
-    _n = jsxProd_default(pe, {
+    reason = jsxProd_default(helpRow, {
       title,
       onCancel,
       hideInputGuide,
       children: children_2,
     });
-    i[85] = pe;
-    i[86] = title;
-    i[87] = onCancel;
-    i[88] = hideInputGuide;
-    i[89] = children_2;
-    i[90] = _n;
-  } else _n = i[90];
-  return _n;
+    $[85] = helpRow;
+    $[86] = title;
+    $[87] = onCancel;
+    $[88] = hideInputGuide;
+    $[89] = children_2;
+    $[90] = reason;
+  } else reason = $[90];
+  return reason;
 }
 //@ chunk-k7ve8htw.js:27247-27751 sole-consumer
 /**
@@ -872,11 +1027,11 @@ async function checkBridgePrerequisites(storageV5) {
     };
   await enrollTrustedDeviceIfNeeded(storageV5);
   if (await isTrustedDeviceUnenrolled()) {
-    let d = nullStub3();
-    if (d !== null)
+    let stub = nullStub3();
+    if (stub !== null)
       return {
         kind: "error",
-        message: d,
+        message: stub,
       };
     if (isProactiveEnrollmentDisabled())
       return {
@@ -908,140 +1063,6 @@ async function remoteControlCall(onDone, context, args) {
 function accountKeyOf(oauthAccountInfo) {
   return oauthAccountInfo && `${oauthAccountInfo.accountUuid}/${oauthAccountInfo.organizationUuid || ""}`;
 }
-//@ chunk-18hwfzwa.js:643741-643788 fingerprint = _temp (1)
-function selectBridgeConnected_2(s) {
-  return s.replBridgeConnected;
-}
-//@ chunk-18hwfzwa.js:643788-643839 fingerprint = _temp6 (1)
-function selectBridgeSessionActive_2(s_1) {
-  return s_1.replBridgeSessionActive;
-}
-//@ chunk-18hwfzwa.js:643889-643937 fingerprint = _temp5 (1)
-function selectBridgeConnectUrl_2(s_0) {
-  return s_0.replBridgeConnectUrl;
-}
-//@ chunk-18hwfzwa.js:643937-643985 fingerprint = _temp4 (1)
-function selectBridgeSessionUrl_2(s) {
-  return s.replBridgeSessionUrl;
-}
-//@ chunk-18hwfzwa.js:644121-644166 fingerprint = _temp2 (1)
-function selectBridgeEnabled_2(s_0) {
-  return s_0.replBridgeEnabled;
-}
-//@ chunk-18hwfzwa.js:1785048-1785137 fingerprint = _temp7 (0.688)
-function isBridgeInboundAllowed(prev) {
-  let state = prev.getState();
-  return state.replBridgeEnabled && !state.replBridgeOutboundOnly;
-}
-//@ chunk-fnmk6x3n.js:17782-17786 sole-consumer
-init_react_production();
-//@ chunk-fnmk6x3n.js:17786-18799 sole-consumer
-/**
- * Pro 试用到期对话框：提示试用结束，选项"升级到 Max"（非受限账号）与"充值继续用"，记 tengu_pro_trial_expired_choice 后进入对应流程。
- */
-function ProTrialExpiredDialog(props) {
-  let t = w(15);
-  let { onDone, caller } = props;
-  let [J, h] = y(null);
-  if (J) {
-    return J;
-  }
-  let x;
-  if (t[0] === MEMO_CACHE_SENTINEL) {
-    x = [
-      ...(idleAmberFinchOn()
-        ? []
-        : [
-            {
-              label: "Upgrade to Max",
-              value: "upgrade",
-            },
-          ]),
-      {
-        label: "Add funds to continue with usage credits",
-        value: "extra-usage",
-      },
-    ];
-    t[0] = x;
-  } else x = t[0];
-  let options = x;
-  let L;
-  if (t[1] === MEMO_CACHE_SENTINEL) {
-    L = jsxProd_default(Box, {
-      paddingX: 2,
-      children: jsxProd_default(Text, {
-        color: "error",
-        children: "Your Claude Code trial has ended.",
-      }),
-    });
-    t[1] = L;
-  } else L = t[1];
-  let onCancel;
-  if (t[2] !== onDone) {
-    onCancel = () => onDone();
-    t[2] = onDone;
-    t[3] = onCancel;
-  } else onCancel = t[3];
-  let onCancel_2;
-  if (t[4] !== onDone) {
-    onCancel_2 = () => onDone();
-    t[4] = onDone;
-    t[5] = onCancel_2;
-  } else onCancel_2 = t[5];
-  let onChange;
-  if (t[6] !== caller || t[7] !== onDone) {
-    onChange = (R) => {
-      logEvent("tengu_pro_trial_expired_choice", {
-        chose_upgrade: R === "upgrade",
-      });
-      if (R === "upgrade")
-        callUpgradeFromSurface(onDone, caller, "pro_trial_expired_dialog").then((N) => h(N));
-      else call_2(onDone, caller).then((T) => h(T));
-    };
-    t[6] = caller;
-    t[7] = onDone;
-    t[8] = onChange;
-  } else onChange = t[8];
-  let children;
-  if (t[9] !== onCancel_2 || t[10] !== onChange) {
-    children = jsxProd_default(ModelSelector, {
-      options,
-      onCancel: onCancel_2,
-      onChange,
-    });
-    t[9] = onCancel_2;
-    t[10] = onChange;
-    t[11] = children;
-  } else children = t[11];
-  let _;
-  if (t[12] !== onCancel || t[13] !== children) {
-    _ = jsxProd_default_2(Box, {
-      flexDirection: "column",
-      children: [
-        L,
-        jsxProd_default(Dialog, {
-          title: "What do you want to do?",
-          onCancel,
-          children,
-        }),
-      ],
-    });
-    t[12] = onCancel;
-    t[13] = children;
-    t[14] = _;
-  } else _ = t[14];
-  return _;
-}
-//@ chunk-fnmk6x3n.js:18799-18853 fingerprint = call (0.627)
-/**
- * /pro-trial-expired 的 local-jsx call(onDone, context, args, invokedName) 实现入口（由命令对象 load() 返回）。
- */
-async function call(onDone, context) {
-  return jsxProd_default(ProTrialExpiredDialog, {
-    onDone,
-    caller: context,
-  });
-}
 export {
   selectBridgeConnected_2,
   selectBridgeSessionActive_2,
@@ -1049,4 +1070,6 @@ export {
   selectBridgeSessionUrl_2,
   selectBridgeEnabled_2,
   isBridgeInboundAllowed,
+  call,
+  remoteControlCall,
 };

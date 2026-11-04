@@ -32,19 +32,19 @@ function describeRepoFact(repo) {
       return `git repository on ${factLabel(repo.branch)} \xB7 ${repo.hasOrigin ? "origin is not a github.com repository" : "no origin remote"}`;
     case "github": {
       let access = repo.access;
-      let s =
+      let locationText =
         access?.defaultBranch != null && access.defaultBranch !== repo.branch
           ? `git repository on ${factLabel(repo.branch)} (default ${factLabel(access.defaultBranch)})`
           : `git repository on ${factLabel(repo.branch)}`;
-      if (access === null) return `${s} \xB7 github.com/${repo.owner}/${repo.name}`;
-      let r = access.transient
+      if (access === null) return `${locationText} \xB7 github.com/${repo.owner}/${repo.name}`;
+      let accessPhrase = access.transient
         ? "couldn\u2019t check your access just now"
         : !access.accessible
           ? "your Claude account can\u2019t reach it"
           : access.appInstalled
             ? "you have access, Claude GitHub App installed"
             : "you have access, Claude GitHub App not installed";
-      return `${s} \xB7 github.com/${repo.owner}/${repo.name} (${r})`;
+      return `${locationText} \xB7 github.com/${repo.owner}/${repo.name} (${accessPhrase})`;
     }
   }
 }
@@ -60,23 +60,24 @@ function disclosureFactsLine(context, sessionsRead) {
   else if (sessionsRead.count === 0) facts.push("no past local sessions read");
   else {
     let { count, span } = sessionsRead;
-    let l =
+    let spanText =
       span === null
         ? ""
         : formatPeakDay(span.oldest) === formatPeakDay(span.newest)
           ? ` (${formatPeakDay(span.newest)})`
           : ` (${formatPeakDay(span.oldest)}\u2013${formatPeakDay(span.newest)})`;
-    facts.push(`${count} recent local ${plural(count, "session")} read${l}`);
+    facts.push(`${count} recent local ${plural(count, "session")} read${spanText}`);
   }
   if (context.repo.kind !== "no-git") {
-    let r = context.uncommittedFileCount + context.untrackedFileCount;
-    if (r > 0) facts.push(`${r} uncommitted ${plural(r, "file")}`);
+    let changedFileCount = context.uncommittedFileCount + context.untrackedFileCount;
+    if (changedFileCount > 0)
+      facts.push(`${changedFileCount} uncommitted ${plural(changedFileCount, "file")}`);
     if (context.hasUnpushedCommits) facts.push("unpushed commits");
   }
   if (context.docs.length > 0) {
     let sliced = context.docs.slice(0, 3);
-    let a = context.docs.length - sliced.length;
-    facts.push(`${sliced.join(", ")}${a > 0 ? ` +${a} more` : ""} found`);
+    let moreDocCount = context.docs.length - sliced.length;
+    facts.push(`${sliced.join(", ")}${moreDocCount > 0 ? ` +${moreDocCount} more` : ""} found`);
   }
   return facts.join(" \xB7 ");
 }
@@ -95,11 +96,11 @@ function notSentLine(context, hasRepo) {
   else {
     let { uncommittedFileCount, untrackedFileCount } = context;
     if (uncommittedFileCount > 0 || untrackedFileCount > 0) {
-      let c = [];
-      if (uncommittedFileCount > 0) c.push(`${uncommittedFileCount} uncommitted`);
-      if (untrackedFileCount > 0) c.push(`${untrackedFileCount} untracked`);
-      let h = uncommittedFileCount + untrackedFileCount;
-      items.push(`${c.join(" and ")} ${plural(h, "file")}`);
+      let countParts = [];
+      if (uncommittedFileCount > 0) countParts.push(`${uncommittedFileCount} uncommitted`);
+      if (untrackedFileCount > 0) countParts.push(`${untrackedFileCount} untracked`);
+      let changedFileCount = uncommittedFileCount + untrackedFileCount;
+      items.push(`${countParts.join(" and ")} ${plural(changedFileCount, "file")}`);
     }
     if (context.hasUnpushedCommits) items.push("unpushed commits");
     items.push("files outside the repository");
@@ -127,25 +128,25 @@ function parseProjectReference(firstToken) {
       projectId: match[1] ?? "",
       threadId: match[2] ?? null,
     };
-  let s;
+  let url;
   try {
-    s = new URL(firstToken.trim());
+    url = new URL(firstToken.trim());
   } catch {
     return null;
   }
-  let match_2 = /^\/code\/project\/(chan_[A-Za-z0-9_-]+)\/?$/.exec(s.pathname);
-  let a = s.searchParams.get("thread");
+  let match_2 = /^\/code\/project\/(chan_[A-Za-z0-9_-]+)\/?$/.exec(url.pathname);
+  let threadParam = url.searchParams.get("thread");
   let CLAUDE_AI_ORIGIN = getOauthConfig().CLAUDE_AI_ORIGIN;
   if (
-    (s.origin !== CLAUDE_AI_ORIGIN &&
-      !(CLAUDE_AI_ORIGIN === HTTPS_CLAUDE_AI && s.origin === HTTPS_PREVIEW_CLAUDE_AI)) ||
+    (url.origin !== CLAUDE_AI_ORIGIN &&
+      !(CLAUDE_AI_ORIGIN === HTTPS_CLAUDE_AI && url.origin === HTTPS_PREVIEW_CLAUDE_AI)) ||
     match_2 === null ||
-    (a !== null && !/^cmsg_[A-Za-z0-9_-]+$/.test(a))
+    (threadParam !== null && !/^cmsg_[A-Za-z0-9_-]+$/.test(threadParam))
   )
     return null;
   return {
     projectId: match_2[1] ?? "",
-    threadId: a,
+    threadId: threadParam,
   };
 }
 //@ chunk-dz3q485w.js:19691-19887 placement

@@ -50,16 +50,16 @@ var classifierConnectors = null;
 /**
  * 为自动模式分类器构造 Artifact 相关上下文（路径、房间）
  */
-function buildArtifactClassifierContext({ tools: t } = {}) {
+function buildArtifactClassifierContext({ tools } = {}) {
   if (
-    !(t === undefined
+    !(tools === undefined
       ? isArtifactToolRegistered()
-      : t.some((e) => ARTIFACT_FAMILY_TOOL_NAMES.includes(e.name)))
+      : tools.some((tool) => ARTIFACT_FAMILY_TOOL_NAMES.includes(tool.name)))
   )
     return;
-  let u = hasLiveState();
+  let hasState = hasLiveState();
   let antBuild = false;
-  let m = {
+  let context = {
     by_slug: {},
     by_path: {},
     live_docs: [],
@@ -87,41 +87,44 @@ function buildArtifactClassifierContext({ tools: t } = {}) {
       ...getArtifactGateContext(),
     },
   };
-  if (!u) return clampArtifactClassifierState(m);
+  if (!hasState) return clampArtifactClassifierState(context);
   runCommentMonitorWithIntent();
   let liveState = getLiveState();
   let { shareStatus } = liveState;
-  let p = {};
-  let a = (e) => (p[e] ??= {});
-  let h = (e) => Math.max(e.lastProbeLandedAt ?? 0, e.lastCapsLandedAt ?? 0, e.lastProbeIssuedAt ?? 0);
-  let b = (e) => {
-    for (let s of e) if (!shareStatus.bySlug.has(s)) a(s);
+  let bySlug = {};
+  let slotFor = (slug) => (bySlug[slug] ??= {});
+  let markLive = (slug) =>
+    Math.max(slug.lastProbeLandedAt ?? 0, slug.lastCapsLandedAt ?? 0, slug.lastProbeIssuedAt ?? 0);
+  let markMany = (slugs) => {
+    for (let slug of slugs) if (!shareStatus.bySlug.has(slug)) slotFor(slug);
   };
-  let n = new Set([
+  let handled = new Set([
     ...liveState.durable.stopLatches.stoppedSlugs(),
     ...liveState.wakes.stoppedSlugs,
     ...liveState.wakes.sweptSlugs,
     ...liveState.live.repliesConsent.declined.keys(),
   ]);
-  b(
+  markMany(
     [
       ...liveState.attestedTypeArtifacts.keys(),
       ...shareStatus.pendingNoticeSlugs.keys(),
       ...liveState.ownPublishedSlugs.keys(),
-    ].filter((e) => !n.has(e)),
+    ].filter((slug) => !handled.has(slug)),
   );
-  for (let [e, entry] of [...shareStatus.bySlug].sort(
-    ([r, c], [k, C]) => Number(n.has(r)) - Number(n.has(k)) || h(c) - h(C),
+  for (let [slug, entry] of [...shareStatus.bySlug].sort(
+    ([keyA, entryA], [keyB, entryB]) =>
+      Number(handled.has(keyA)) - Number(handled.has(keyB)) || markLive(entryA) - markLive(entryB),
   )) {
-    let r = a(e);
-    if (!shareFactsWithheld(e)) r.share = getArtifactEntryContext(entry);
+    let slot = slotFor(slug);
+    if (!shareFactsWithheld(slug)) slot.share = getArtifactEntryContext(entry);
   }
-  b(n);
-  for (let [e, s] of liveState.attestedTypeArtifacts) if (s.mark !== undefined) a(e).attested = s.mark.kind;
-  for (let key of shareStatus.pendingNoticeSlugs.keys()) a(key).notice_pending = true;
-  for (let [e, s] of liveState.ownPublishedSlugs) a(e).published_env = s.env;
-  for (let key of Object.keys(p)) {
-    let s = {
+  markMany(handled);
+  for (let [slug, record] of liveState.attestedTypeArtifacts)
+    if (record.mark !== undefined) slotFor(slug).attested = record.mark.kind;
+  for (let key of shareStatus.pendingNoticeSlugs.keys()) slotFor(key).notice_pending = true;
+  for (let [slug, version] of liveState.ownPublishedSlugs) slotFor(slug).published_env = version.env;
+  for (let key of Object.keys(bySlug)) {
+    let entry = {
       ...(liveState.durable.stopLatches.isStopped(key) && {
         stopped: true,
       }),
@@ -135,45 +138,45 @@ function buildArtifactClassifierContext({ tools: t } = {}) {
         replies_declined: true,
       }),
     };
-    if (Object.keys(s).length > 0) a(key).watch = s;
+    if (Object.keys(entry).length > 0) slotFor(key).watch = entry;
   }
-  let l = {};
-  for (let [e, s] of shareStatus.filePathToSlug)
-    l[toPosixPath(e)] = {
-      slug: s,
+  let pathToSlug = {};
+  for (let [path, slug] of shareStatus.filePathToSlug)
+    pathToSlug[toPosixPath(path)] = {
+      slug,
     };
-  for (let [e, s] of liveState.gatedThumbnailHrefs) {
-    let posixPath = toPosixPath(e);
-    l[posixPath] = {
-      ...l[posixPath],
-      thumbnail_named: [...s.named],
+  for (let [href, slug] of liveState.gatedThumbnailHrefs) {
+    let posixPath = toPosixPath(href);
+    pathToSlug[posixPath] = {
+      ...pathToSlug[posixPath],
+      thumbnail_named: [...slug.named],
     };
   }
-  let g = [];
+  let workingCopies = [];
   if (classifierWorkingCopy !== null)
-    for (let [e, s] of shareStatus.bySlug)
-      for (let r of s.livePaths ?? []) {
-        let c = classifierWorkingCopy.workingCopyOf(e, r);
-        if (c !== undefined)
-          g.push({
-            slug: e,
-            live_path: r,
-            working_copy: toPosixPath(c.path),
+    for (let [slug, share] of shareStatus.bySlug)
+      for (let path of share.livePaths ?? []) {
+        let copy = classifierWorkingCopy.workingCopyOf(slug, path);
+        if (copy !== undefined)
+          workingCopies.push({
+            slug,
+            live_path: path,
+            working_copy: toPosixPath(copy.path),
           });
       }
   return clampArtifactClassifierState({
-    ...m,
-    by_slug: p,
-    by_path: l,
-    live_docs: g,
-    room_armed: Array.from(liveState.roomJoinArming, (e) =>
-      e.startsWith("path:") ? `path:${toPosixPath(e.slice(5))}` : e,
+    ...context,
+    by_slug: bySlug,
+    by_path: pathToSlug,
+    live_docs: workingCopies,
+    room_armed: Array.from(liveState.roomJoinArming, (entry) =>
+      entry.startsWith("path:") ? `path:${toPosixPath(entry.slice(5))}` : entry,
     ),
     type_reads: Object.fromEntries(
-      Array.from(liveState.typeCapabilityReads, ([e, s]) => [
-        e,
+      Array.from(liveState.typeCapabilityReads, ([slug, caps]) => [
+        slug,
         {
-          declares_room: s.capabilities?.includes("room") === true,
+          declares_room: caps.capabilities?.includes("room") === true,
         },
       ]),
     ),
@@ -208,7 +211,7 @@ function getArtifactGateContext() {
  * 给自动模式分类器的单个 artifact 上下文：模式、是否共享实时、角色、探测情况、协作/外部写者、类型与类型锁、实时路径、能力声明、授权观察结果、端点连接器名等。
  */
 function getArtifactEntryContext(entry) {
-  let d = typeSlugOf(entry);
+  let typeEntry = typeSlugOf(entry);
   return {
     mode: entry.mode,
     is_shared_live: entry.isSharedLive,
@@ -237,8 +240,8 @@ function getArtifactEntryContext(entry) {
       type_lock: entry.typeLock !== null,
     }),
     ...(isInheritedTypeGrantEnabled() && {
-      ...(d !== undefined &&
-        getAttestationKind(d) === "first_party_type" && {
+      ...(typeEntry !== undefined &&
+        getAttestationKind(typeEntry) === "first_party_type" && {
           type_first_party: true,
         }),
       ...(entry.capsReadNotFound === true && {
@@ -269,3 +272,4 @@ function scratchpadDirPosix() {
   let scratchpadDir = getScratchpadDir(getSessionId());
   return scratchpadDir === null ? null : toPosixPath(scratchpadDir);
 }
+export { buildArtifactClassifierContext };

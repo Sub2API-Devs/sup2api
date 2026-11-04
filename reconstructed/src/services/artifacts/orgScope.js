@@ -15,30 +15,31 @@ import { denyPolicyBody } from "./publishErrors.js";
 import { normalizeUuidOrNull } from "../../utils/agentId.js";
 import { BOOT_ORG_MISMATCH_CODE } from "./shareEntries.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, M, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, booleanSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-jv307fw4.js:25608-25934 placement
 /**
  * 解析 artifact URL 并校验属于本会话的 claude.ai 环境；不是 artifact 链接或环境不符时返回带错误码的说明。
  */
-function parseSessionArtifactUrl(url, n = {}) {
-  let artifactUrl = parseArtifactUrl_2(url);
+function parseSessionArtifactUrl(urlText, options = {}) {
+  let artifactUrl = parseArtifactUrl_2(urlText);
   if (artifactUrl === null)
     return {
       ok: false,
       message:
-        n.notUrlMessage ??
-        explainNonArtifactUrl(url, {
-          field: n.field,
+        options.notUrlMessage ??
+        explainNonArtifactUrl(urlText, {
+          field: options.field,
         }),
       errorCode: 4,
     };
-  let s = claudeAiEnvironment();
-  if (artifactUrl.env !== s) {
-    let a = n.envHint ? ` \u2014 ${n.envHint(s)}` : "";
+  let envName = claudeAiEnvironment();
+  if (artifactUrl.env !== envName) {
+    let envHint = options.envHint ? ` \u2014 ${options.envHint(envName)}` : "";
     return {
       ok: false,
-      message: `that artifact URL is for ${artifactUrl.env}, but this session targets ${s} claude.ai${a}`,
+      message: `that artifact URL is for ${artifactUrl.env}, but this session targets ${envName} claude.ai${envHint}`,
       errorCode: 5,
     };
   }
@@ -53,35 +54,35 @@ var ORG_SCOPE_CACHE_MS = 60000;
 /**
  * 导出函数 `isGone`：参数 e，返回 e.gone === !0。
  */
-function isGone(e) {
-  return e.gone === true;
+function isGone(body) {
+  return body.gone === true;
 }
 //@ chunk-jv307fw4.js:25982-26027 placement
 /**
  * 导出函数 `isNeverPublished`：参数 e，返回 e.neverPublished === !0。
  */
-function isNeverPublished(e) {
-  return e.neverPublished === true;
+function isNeverPublished(body) {
+  return body.neverPublished === true;
 }
 //@ chunk-jv307fw4.js:26027-26065 placement
 /**
  * 导出函数 `isOtherOrg`：参数 e，返回 e.otherOrg === !0。
  */
-function isOtherOrg(e) {
-  return e.otherOrg === true;
+function isOtherOrg(body) {
+  return body.otherOrg === true;
 }
 //@ chunk-jv307fw4.js:26065-26222 placement
 /**
  * 判断响应体是否是"组织不匹配"的拒绝，且带有合法的所属组织 id。
  */
-function isOrgMismatchBody(e) {
+function isOrgMismatchBody(body) {
   return (
-    typeof e === "object" &&
-    e !== null &&
-    denyPolicyBody(e)?.reason === "org_mismatch" &&
-    "owner_org" in e &&
-    typeof e.owner_org === "string" &&
-    normalizeUuidOrNull(e.owner_org) !== null
+    typeof body === "object" &&
+    body !== null &&
+    denyPolicyBody(body)?.reason === "org_mismatch" &&
+    "owner_org" in body &&
+    typeof body.owner_org === "string" &&
+    normalizeUuidOrNull(body.owner_org) !== null
   );
 }
 //@ chunk-jv307fw4.js:26222-26493 placement
@@ -97,25 +98,32 @@ var PUBLIC_OUTSIDE_ORG_NOTE =
 /**
  * 读取别的组织/邮件分享 artifact 失败时的提示文字、会导致不应重试的 boot 403 错误码集合，以及"不要重试，告知用户后继续"的指令。
  */
-var OTHER_ORG_MESSAGE = `${OTHER_ORG_PHRASE} \u2014 it opens here only after ${LOGIN_OTHER_ORG_REMEDY}`;
-var EMAIL_INVITE_HINT =
-  "If it was shared with you by email, accept the invitation in a browser first, and check that Claude Code is signed in to the invited account";
-var CROSS_ORG_SHARE_HINT =
-  "If this was shared with you from another organization, open it in Claude Code on your computer or in a Claude Code on the web session";
-var ACCESS_REFUSAL_CODES = new Set([
-  BOOT_ORG_MISMATCH_CODE,
-  "boot_403_agent_not_added",
-  "boot_403_agent_owned",
-  "boot_403_request_access",
-]);
-var DO_NOT_RETRY_READ_NOTE =
-  "Do not retry this read; tell the user now that the artifact could not be read, then go on without it.";
+var OTHER_ORG_MESSAGE; // deferred: uses BOOT_ORG_MISMATCH_CODE (./shareEntries.js) of its import cycle while loading; runs once the cycle is complete
+var EMAIL_INVITE_HINT;
+var CROSS_ORG_SHARE_HINT;
+var ACCESS_REFUSAL_CODES;
+var DO_NOT_RETRY_READ_NOTE;
+deferInit("chunk-jv307fw4.js:26493", () => {
+  OTHER_ORG_MESSAGE = `${OTHER_ORG_PHRASE} \u2014 it opens here only after ${LOGIN_OTHER_ORG_REMEDY}`;
+  EMAIL_INVITE_HINT =
+    "If it was shared with you by email, accept the invitation in a browser first, and check that Claude Code is signed in to the invited account";
+  CROSS_ORG_SHARE_HINT =
+    "If this was shared with you from another organization, open it in Claude Code on your computer or in a Claude Code on the web session";
+  ACCESS_REFUSAL_CODES = new Set([
+    BOOT_ORG_MISMATCH_CODE,
+    "boot_403_agent_not_added",
+    "boot_403_agent_owned",
+    "boot_403_request_access",
+  ]);
+  DO_NOT_RETRY_READ_NOTE =
+    "Do not retry this read; tell the user now that the artifact could not be read, then go on without it.";
+});
 //@ chunk-jv307fw4.js:27035-27108 placement
 /**
  * 导出函数 `isAccessRefused`：参数 e，返回 k_e(e) || (e.errorCode !== void 0 && ACCESS_REFUSAL_CODES.has(e.errorCode))。
  */
-function isAccessRefused(e) {
-  return isGone(e) || (e.errorCode !== undefined && ACCESS_REFUSAL_CODES.has(e.errorCode));
+function isAccessRefused(body) {
+  return isGone(body) || (body.errorCode !== undefined && ACCESS_REFUSAL_CODES.has(body.errorCode));
 }
 //@ chunk-jv307fw4.js:27108-27177 placement
 /**
@@ -128,13 +136,17 @@ function stripInviteHints(message) {
 /**
  * 导出函数 `requestAccessSchema`。
  */
-var requestAccessSchema = DoctorLazy(() =>
-  u({
-    request_access: M(),
-    reason: string().optional(),
-  }),
-);
-var ACCESS_PROBE_TIMEOUT_MS = 15000;
+var requestAccessSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var ACCESS_PROBE_TIMEOUT_MS;
+deferInit("chunk-jv307fw4.js:27177", () => {
+  requestAccessSchema = DoctorLazy(() =>
+    objectSchema({
+      request_access: booleanSchema(),
+      reason: stringSchema().optional(),
+    }),
+  );
+  ACCESS_PROBE_TIMEOUT_MS = 15000;
+});
 export {
   isGone,
   isOtherOrg,

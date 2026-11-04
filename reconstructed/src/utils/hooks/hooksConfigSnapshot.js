@@ -33,10 +33,11 @@ import { isManagedHooksOnlyMode } from "./hooksPolicy.js";
 import { invalidateCommandNames } from "../settings/commandSyncNames.js";
 import { resetSettingsCacheWithBackendRead } from "../settings/settingsPrime.js";
 import { isStatusLineManagedOnly } from "./hookInputRewrite.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-2jdf5m4m.js:769-792 placement
-function identityHooksConfig(o) {
-  return o;
+function identityHooksConfig(config) {
+  return config;
 }
 //@ chunk-2jdf5m4m.js:792-819 placement
 /**
@@ -56,7 +57,7 @@ function neverSkipSessionHooks(projectRoot) {
 /**
  * 恒返回 null（策略状态下没有 statusLine）。
  */
-function noPolicyStatusLine(o) {
+function noPolicyStatusLine(input) {
   return null;
 }
 //@ chunk-2jdf5m4m.js:872-884 placement
@@ -72,34 +73,38 @@ class HooksConfigSnapshots {
     this.snapshotKey = snapshotKey;
   }
   current() {
-    let o = this.snapshotKey();
-    let t = this.snapshotsBySessionId.get(o);
-    if (!t) {
-      t = {
+    let key = this.snapshotKey();
+    let snapshot = this.snapshotsBySessionId.get(key);
+    if (!snapshot) {
+      snapshot = {
         initialHooksConfig: null,
       };
-      this.snapshotsBySessionId.set(o, t);
+      this.snapshotsBySessionId.set(key, snapshot);
     }
-    return t;
+    return snapshot;
   }
   store(initialHooksConfig) {
-    let t = this.current();
-    t.initialHooksConfig = initialHooksConfig;
-    if (isPersonalConfigRestricted()) t.userHooksConfig = getSettingsForSource("userSettings")?.hooks ?? {};
-    else delete t.userHooksConfig;
+    let state = this.current();
+    state.initialHooksConfig = initialHooksConfig;
+    if (isPersonalConfigRestricted())
+      state.userHooksConfig = getSettingsForSource("userSettings")?.hooks ?? {};
+    else delete state.userHooksConfig;
     try {
-      t.policyHooksConfig = getSettingsForSource("policySettings")?.hooks ?? {};
+      state.policyHooksConfig = getSettingsForSource("policySettings")?.hooks ?? {};
     } catch {
-      t.policyHooksConfig = "unreadable";
+      state.policyHooksConfig = "unreadable";
     }
   }
-  evict(o) {
-    if (o === DEFAULT_SNAPSHOT_KEY) return;
-    this.snapshotsBySessionId.delete(o);
+  evict(sessionId) {
+    if (sessionId === DEFAULT_SNAPSHOT_KEY) return;
+    this.snapshotsBySessionId.delete(sessionId);
   }
 }
 //@ chunk-2jdf5m4m.js:1421-1444 placement
-var hooksSnapshotsRegistry = new HostScoped(() => new HooksConfigSnapshots());
+var hooksSnapshotsRegistry; // deferred: uses HooksConfigSnapshots of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-2jdf5m4m.js:1421", () => {
+  hooksSnapshotsRegistry = new HostScoped(() => new HooksConfigSnapshots());
+});
 //@ chunk-2jdf5m4m.js:1444-1470 placement
 function currentHooksSnapshots() {
   return onProcessRootHost(hooksSnapshotsRegistry);
@@ -123,23 +128,25 @@ function getHooksFromAllowedSources() {
 //@ chunk-2jdf5m4m.js:1796-1855 placement
 function trustedHooksConfig() {
   return mergeHooksConfigs(
-    TRUSTED_SETTING_SOURCES.filter(isSettingSourceEnabled).map((o) => getSettingsForSource(o)?.hooks),
+    TRUSTED_SETTING_SOURCES.filter(isSettingSourceEnabled).map(
+      (source) => getSettingsForSource(source)?.hooks,
+    ),
   );
 }
 //@ chunk-2jdf5m4m.js:1855-1944 placement
-function withoutCheckoutSettingsHooks(o, t) {
-  let n = new Set((trustedHooksConfig()[t] ?? []).map(stableStringifySafe));
-  return o.filter((s) => n.has(stableStringifySafe(s)));
+function withoutCheckoutSettingsHooks(matchers, event) {
+  let allowed = new Set((trustedHooksConfig()[event] ?? []).map(stableStringifySafe));
+  return matchers.filter((matcher) => allowed.has(stableStringifySafe(matcher)));
 }
 //@ chunk-2jdf5m4m.js:1944-2065 placement
-function mergeHooksConfigs(o) {
-  let t = {};
-  for (let n of o)
-    for (let [key, value] of Object.entries(n ?? {})) {
-      let i = key;
-      t[i] = [...(t[i] ?? []), ...(value ?? [])];
+function mergeHooksConfigs(configs) {
+  let merged = {};
+  for (let config of configs)
+    for (let [key, value] of Object.entries(config ?? {})) {
+      let event = key;
+      merged[event] = [...(merged[event] ?? []), ...(value ?? [])];
     }
-  return t;
+  return merged;
 }
 //@ chunk-2jdf5m4m.js:2065-2098 placement
 /**
@@ -170,7 +177,7 @@ function isDisableAllHooksUserOnly() {
   return (
     getSettingsForSource("policySettings")?.allowManagedHooksOnly !== true &&
     TRUSTED_SETTING_SOURCES.filter(isSettingSourceEnabled).every(
-      (t) => getSettingsForSource(t)?.disableAllHooks !== true,
+      (source) => getSettingsForSource(source)?.disableAllHooks !== true,
     )
   );
 }
@@ -178,17 +185,17 @@ function isDisableAllHooksUserOnly() {
 /**
  * 是否只运行 managed（策略）钩子。
  */
-function shouldAllowManagedHooksOnly(o = getSettings_DEPRECATED().disableAllHooks) {
-  return isSafeMode() || shouldAllowManagedHooksOnlyByPolicy(o);
+function shouldAllowManagedHooksOnly(disableAllHooks = getSettings_DEPRECATED().disableAllHooks) {
+  return isSafeMode() || shouldAllowManagedHooksOnlyByPolicy(disableAllHooks);
 }
 //@ chunk-2jdf5m4m.js:2373-2532 placement = shouldAllowManagedHooksOnly (0.843)
 /**
  * policy 设 allowManagedHooksOnly，或非 policy 层设 disableAllHooks 时只允许 managed 钩子。
  */
-function shouldAllowManagedHooksOnlyByPolicy(o = getSettings_DEPRECATED().disableAllHooks) {
+function shouldAllowManagedHooksOnlyByPolicy(disableAllHooks = getSettings_DEPRECATED().disableAllHooks) {
   let policySettings = getSettingsForSource("policySettings");
   if (policySettings?.allowManagedHooksOnly === true) return true;
-  if (o === true && policySettings?.disableAllHooks !== true) return true;
+  if (disableAllHooks === true && policySettings?.disableAllHooks !== true) return true;
   return false;
 }
 //@ chunk-2jdf5m4m.js:2532-2564 placement
@@ -207,9 +214,10 @@ function userSettingsTightenOnly() {
 }
 //@ chunk-2jdf5m4m.js:2723-2818 placement
 function personTurnedHooksOff() {
-  let o = userSettingsTightenOnly();
+  let userSettings = userSettingsTightenOnly();
   return (
-    o?.disableAllHooks === true || (o === null && getSettingsParseErrorsForSource("userSettings").length > 0)
+    userSettings?.disableAllHooks === true ||
+    (userSettings === null && getSettingsParseErrorsForSource("userSettings").length > 0)
   );
 }
 //@ chunk-2jdf5m4m.js:2818-2872 placement
@@ -237,35 +245,35 @@ function captureHooksConfigSnapshotFromLoadedSettings() {
   emitHookStoresChanged();
 }
 //@ chunk-2jdf5m4m.js:3046-3088 placement
-function updateHooksConfigSnapshot(o) {
-  invalidateCommandNames(o);
+function updateHooksConfigSnapshot(settings) {
+  invalidateCommandNames(settings);
   currentHooksSnapshots().store(getHooksFromAllowedSources());
   emitHookStoresChanged();
 }
 //@ chunk-2jdf5m4m.js:3088-3169 placement
-async function updateHooksConfigSnapshotThroughBackend(o) {
-  let t = await resetSettingsCacheWithBackendRead(o);
+async function updateHooksConfigSnapshotThroughBackend(settings) {
+  let restore = await resetSettingsCacheWithBackendRead(settings);
   try {
     currentHooksSnapshots().store(getHooksFromAllowedSources());
     emitHookStoresChanged();
   } finally {
-    t?.();
+    restore?.();
   }
 }
 //@ chunk-2jdf5m4m.js:3169-3289 placement
 function* listProcessHooksConfigSnapshots() {
-  for (let o of currentHooksSnapshots().snapshotsBySessionId.values())
-    if (o.initialHooksConfig !== null) yield o.initialHooksConfig;
+  for (let snapshot of currentHooksSnapshots().snapshotsBySessionId.values())
+    if (snapshot.initialHooksConfig !== null) yield snapshot.initialHooksConfig;
 }
 //@ chunk-2jdf5m4m.js:3289-3408 placement
 function getHooksConfigFromSnapshot() {
-  let o = currentHooksSnapshots().current();
-  if (o.initialHooksConfig === null) {
+  let snapshot = currentHooksSnapshots().current();
+  if (snapshot.initialHooksConfig === null) {
     invalidateCommandNames();
     currentHooksSnapshots().store(getHooksFromAllowedSources());
     emitHookStoresChanged();
   }
-  return o.initialHooksConfig;
+  return snapshot.initialHooksConfig;
 }
 //@ chunk-2jdf5m4m.js:3408-3481 placement
 function getPolicyHooksFromSnapshot() {
@@ -295,16 +303,16 @@ export {
   getEffectiveStatusLine,
   shouldAllowManagedHooksOnly,
   updateHooksConfigSnapshot,
+  areDeviceHooksStoodDown,
+  areRepoHooksElsewhereStoodDown,
   getHooksConfigFromSnapshot,
-  getPolicyHooksFromSnapshot,
   withoutCheckoutSettingsHooks,
+  shouldHoldDeviceHooksByPolicy,
+  getPolicyHooksFromSnapshot,
   getUserHooksFromSnapshot,
   shouldSkipSessionHooksByPolicy,
   neverSkipSessionHooks,
   noSnapshotOverride,
-  areDeviceHooksStoodDown,
-  areRepoHooksElsewhereStoodDown,
-  shouldHoldDeviceHooksByPolicy,
   personTurnedHooksOff,
   keepsOwnHooksDespiteDisableAll,
   ownHooksOffForUnreadablePolicy,

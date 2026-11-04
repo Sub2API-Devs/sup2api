@@ -5,10 +5,10 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-hwmsct5x.js:3818-4328 cjs-fingerprint
-var require_timing_safe_equal = x(function (cjsExports) {
+var require_timing_safe_equal = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

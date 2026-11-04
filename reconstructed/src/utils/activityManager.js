@@ -20,6 +20,7 @@ import { jsonParse, jsonStringify } from "./slowOperations.js";
 import { resolveSetting } from "./settings/userIntentSettings.js";
 import { HostScoped } from "./hostScoped.js";
 import { getActiveTimeCounter, getRootSession } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-3jjz3v21.js:618-643 placement
 var ACTIVE_TIME_JSON = "active-time.json";
@@ -57,36 +58,36 @@ function activeTimeLedgerStore() {
 /**
  * 读取活跃时长账本（v5 存储或本地文件），只保留结构正确的时间窗口；不存在或格式不对时返回空账本，读取失败抛出。
  */
-async function readActiveTimeLedger(e) {
-  let i;
-  if (isStorageV5Enabled() && e !== undefined) {
-    let text = await e.readText([activeTimeLedgerStore()]);
+async function readActiveTimeLedger(storage) {
+  let ledgerText;
+  if (isStorageV5Enabled() && storage !== undefined) {
+    let text = await storage.readText([activeTimeLedgerStore()]);
     if (!text.ok) {
       logForDebugging(`Failed to read active-time ledger: ${formatStorageError(text.error)}`);
       throw Error("active-time ledger read failed");
     }
-    let n = text.value.items[0];
-    if (!n.found) return emptyLedger();
-    i = n.value;
+    let readResult = text.value.items[0];
+    if (!readResult.found) return emptyLedger();
+    ledgerText = readResult.value;
   } else
     try {
-      i = await getFileReader().read(activeTimeFilePath());
+      ledgerText = await getFileReader().read(activeTimeFilePath());
     } catch (error) {
       if (isENOENT(error)) return emptyLedger();
       logForDebugging(`Failed to read active-time ledger: ${errorMessage(error)}`);
       throw error;
     }
   try {
-    let r = jsonParse(i);
-    if (r.version !== 1 || !Array.isArray(r.windows)) return emptyLedger();
+    let parsedLedger = jsonParse(ledgerText);
+    if (parsedLedger.version !== 1 || !Array.isArray(parsedLedger.windows)) return emptyLedger();
     return {
       version: 1,
-      windows: r.windows.filter(
-        (s) =>
-          typeof s?.start === "number" &&
-          typeof s?.end === "number" &&
-          typeof s?.userSeconds === "number" &&
-          s.end >= s.start,
+      windows: parsedLedger.windows.filter(
+        (activeWindow) =>
+          typeof activeWindow?.start === "number" &&
+          typeof activeWindow?.end === "number" &&
+          typeof activeWindow?.userSeconds === "number" &&
+          activeWindow.end >= activeWindow.start,
       ),
     };
   } catch {
@@ -102,68 +103,74 @@ class ActiveTimeLedger {
   cleanupHandle = null;
   flushInFlight = null;
   #t = undefined;
-  noteUserActivity(e, i) {
-    if (e <= 0) return;
-    if (this.activeStretch === null || i - this.activeStretch.lastActivityMs >= this.cachedBreakThresholdMs)
+  noteUserActivity(seconds, nowMs) {
+    if (seconds <= 0) return;
+    if (
+      this.activeStretch === null ||
+      nowMs - this.activeStretch.lastActivityMs >= this.cachedBreakThresholdMs
+    )
       this.activeStretch = {
-        windowStartMs: i - e * 1000,
-        lastActivityMs: i,
+        windowStartMs: nowMs - seconds * 1000,
+        lastActivityMs: nowMs,
       };
-    else this.activeStretch.lastActivityMs = i;
-    this.pendingSeconds += e;
+    else this.activeStretch.lastActivityMs = nowMs;
+    this.pendingSeconds += seconds;
     this.ensureFlushTimer();
   }
-  getCurrentContinuousUse(e) {
+  getCurrentContinuousUse(nowMs) {
     if (this.activeStretch === null) return null;
-    if (e - this.activeStretch.lastActivityMs >= this.cachedBreakThresholdMs) return null;
+    if (nowMs - this.activeStretch.lastActivityMs >= this.cachedBreakThresholdMs) return null;
     return {
       startMs: this.activeStretch.windowStartMs,
-      durationMs: Math.max(0, e - this.activeStretch.windowStartMs),
+      durationMs: Math.max(0, nowMs - this.activeStretch.windowStartMs),
     };
   }
-  armStorage(e) {
-    this.#t ??= e;
+  armStorage(storage) {
+    this.#t ??= storage;
   }
-  flush(e, i) {
+  flush(nowMs, storage) {
     if (this.flushInFlight) return this.flushInFlight;
-    this.flushInFlight = this.doFlush(e, i).finally(() => {
+    this.flushInFlight = this.doFlush(nowMs, storage).finally(() => {
       this.flushInFlight = null;
     });
     return this.flushInFlight;
   }
-  async doFlush(e, i) {
-    let r = resolveSetting("breakReminder", {
+  async doFlush(nowMs, storage) {
+    let breakReminderSetting = resolveSetting("breakReminder", {
       enabled: false,
     }).value;
-    this.cachedBreakThresholdMs = (r.breakThresholdMinutes ?? DEFAULT_BREAK_THRESHOLD_MINUTES) * 60000;
+    this.cachedBreakThresholdMs =
+      (breakReminderSetting.breakThresholdMinutes ?? DEFAULT_BREAK_THRESHOLD_MINUTES) * 60000;
     if (this.pendingSeconds <= 0) return;
     let pendingSeconds = this.pendingSeconds;
     try {
-      let activeTimeLedger = await readActiveTimeLedger(i);
+      let activeTimeLedger = await readActiveTimeLedger(storage);
       let last = activeTimeLedger.windows.at(-1);
-      if (last && e - last.end < this.cachedBreakThresholdMs) {
-        last.end = Math.max(last.end, e);
+      if (last && nowMs - last.end < this.cachedBreakThresholdMs) {
+        last.end = Math.max(last.end, nowMs);
         last.userSeconds = Math.min(last.userSeconds + pendingSeconds, (last.end - last.start) / 1000);
         if (this.activeStretch) this.activeStretch.windowStartMs = last.start;
       } else {
-        let a = this.activeStretch?.windowStartMs ?? e - pendingSeconds * 1000;
-        let u = last ? Math.max(a, last.end) : a;
-        let max = Math.max(u, e);
+        let stretchStartMs = this.activeStretch?.windowStartMs ?? nowMs - pendingSeconds * 1000;
+        let windowStartMs = last ? Math.max(stretchStartMs, last.end) : stretchStartMs;
+        let max = Math.max(windowStartMs, nowMs);
         activeTimeLedger.windows.push({
-          start: u,
+          start: windowStartMs,
           end: max,
-          userSeconds: Math.min(pendingSeconds, (max - u) / 1000),
+          userSeconds: Math.min(pendingSeconds, (max - windowStartMs) / 1000),
         });
-        if (this.activeStretch) this.activeStretch.windowStartMs = u;
+        if (this.activeStretch) this.activeStretch.windowStartMs = windowStartMs;
       }
-      let S = e - ACTIVITY_WINDOW_LOOKBACK_MS;
-      activeTimeLedger.windows = activeTimeLedger.windows.filter((a) => a.end >= S);
-      if (isStorageV5Enabled() && i !== undefined) {
-        let a = await i.write(activeTimeLedgerStore(), jsonStringify(activeTimeLedger), {
+      let lookbackStartMs = nowMs - ACTIVITY_WINDOW_LOOKBACK_MS;
+      activeTimeLedger.windows = activeTimeLedger.windows.filter(
+        (activeWindow) => activeWindow.end >= lookbackStartMs,
+      );
+      if (isStorageV5Enabled() && storage !== undefined) {
+        let writeResult = await storage.write(activeTimeLedgerStore(), jsonStringify(activeTimeLedger), {
           mode: 384,
         });
-        if (!a.ok) {
-          logForDebugging(`Failed to flush active-time ledger: ${formatStorageError(a.error)}`);
+        if (!writeResult.ok) {
+          logForDebugging(`Failed to flush active-time ledger: ${formatStorageError(writeResult.error)}`);
           return;
         }
       } else {
@@ -197,7 +204,10 @@ class ActiveTimeLedger {
 /**
  * 按宿主隔离的活跃时长账本（当前无引用）。
  */
-var activeTimeLedgerByHost = new HostScoped(() => new ActiveTimeLedger());
+var activeTimeLedgerByHost; // deferred: uses ActiveTimeLedger of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3jjz3v21.js:3521", () => {
+  activeTimeLedgerByHost = new HostScoped(() => new ActiveTimeLedger());
+});
 //@ chunk-3jjz3v21.js:3544-5126 fingerprint = ActivityManager (0.953)
 class ActivityManager {
   activeOperations = new Set();
@@ -221,19 +231,19 @@ class ActivityManager {
     getActivityState().current = null;
   }
   static createInstance(options) {
-    let i = new ActivityManager(options);
-    getActivityState().current = i;
-    return i;
+    let instance = new ActivityManager(options);
+    getActivityState().current = instance;
+    return instance;
   }
   recordUserActivity() {
     if (!this.isCLIActive && this.lastUserActivityTime !== 0) {
-      let i = (this.getNow() - this.lastUserActivityTime) / 1000;
-      if (i > 0) {
-        let r = this.USER_ACTIVITY_TIMEOUT_MS / 1000;
-        if (i < r) {
+      let elapsedSeconds = (this.getNow() - this.lastUserActivityTime) / 1000;
+      if (elapsedSeconds > 0) {
+        let timeoutSeconds = this.USER_ACTIVITY_TIMEOUT_MS / 1000;
+        if (elapsedSeconds < timeoutSeconds) {
           let activeTimeCounter = this.getActiveTimeCounter();
           if (activeTimeCounter)
-            activeTimeCounter.add(i, {
+            activeTimeCounter.add(elapsedSeconds, {
               type: "user",
             });
         }
@@ -293,7 +303,10 @@ class ActivityState {
 /**
  * 按宿主隔离的活动状态。
  */
-var activityStateByHost = new HostScoped(() => new ActivityState());
+var activityStateByHost; // deferred: uses ActivityState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3jjz3v21.js:5147", () => {
+  activityStateByHost = new HostScoped(() => new ActivityState());
+});
 //@ chunk-3jjz3v21.js:5170-5205 layout
 function getActivityState() {
   return activityStateByHost.of(getRootSession().host);
@@ -301,7 +314,7 @@ function getActivityState() {
 //@ chunk-3jjz3v21.js:5205-5386 callgraph-witnessed = activityManager (0.357)
 var activityManager = {
   recordUserActivity: () => ActivityManager.getInstance().recordUserActivity(),
-  startCLIActivity: (e) => ActivityManager.getInstance().startCLIActivity(e),
-  endCLIActivity: (e) => ActivityManager.getInstance().endCLIActivity(e),
+  startCLIActivity: (operationId) => ActivityManager.getInstance().startCLIActivity(operationId),
+  endCLIActivity: (operationId) => ActivityManager.getInstance().endCLIActivity(operationId),
 };
 export { activityManager };

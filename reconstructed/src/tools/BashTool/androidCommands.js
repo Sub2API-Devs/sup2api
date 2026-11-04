@@ -24,28 +24,37 @@ import { withTelemetryMessage, toError } from "../../utils/errors.js";
 import { logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { HostScoped } from "../../utils/hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-xcsefmky.js:566-1114 placement
 /**
  * Android 开发意图识别：manifest、gradle 插件、import android 的正则，adb/emulator/sdkmanager/gradlew assemble 等命令正则，Kotlin/Java 扩展名与编辑工具集合。
  */
-var ANDROID_MANIFEST_RE = /AndroidManifest\.xml|<manifest xmlns:android=/;
-var ANDROID_GRADLE_PLUGIN_RE = /com\.android\.(application|library|tools\.build)/;
-var ANDROID_IMPORT_RE = /\bimport android\./;
-var ANDROID_COMMAND_RE = new RegExp(
-  String.raw`(?:^|[;&|(]\s*)(?:(?:\w+=\S*|sudo|time|env)\s+)*(?:\S*[\\/])?(?:` +
-    [
-      String.raw`adb(?:\.exe)?\s`,
-      String.raw`emulator(?:\.exe)?\s+(?:-|@)`,
-      String.raw`(?:sdkmanager|avdmanager)\b`,
-      String.raw`gradlew?(?:\.bat)?\s(?:\\\n|[^\n&|;])*\b(?:assemble|install|bundle)\w*(?:Debug|Release)\b`,
-      String.raw`(?:npx\s+)?react-native\s+run-android\b`,
-    ].join("|") +
-    ")",
-  "m",
-);
-var KOTLIN_JAVA_EXTENSIONS = [".kt", ".kts", ".java"];
-var FILE_WRITE_TOOLS = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME]);
+var ANDROID_MANIFEST_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var ANDROID_GRADLE_PLUGIN_RE;
+var ANDROID_IMPORT_RE;
+var ANDROID_COMMAND_RE;
+var KOTLIN_JAVA_EXTENSIONS;
+var FILE_WRITE_TOOLS;
+deferInit("chunk-xcsefmky.js:566", () => {
+  ANDROID_MANIFEST_RE = /AndroidManifest\.xml|<manifest xmlns:android=/;
+  ANDROID_GRADLE_PLUGIN_RE = /com\.android\.(application|library|tools\.build)/;
+  ANDROID_IMPORT_RE = /\bimport android\./;
+  ANDROID_COMMAND_RE = new RegExp(
+    String.raw`(?:^|[;&|(]\s*)(?:(?:\w+=\S*|sudo|time|env)\s+)*(?:\S*[\\/])?(?:` +
+      [
+        String.raw`adb(?:\.exe)?\s`,
+        String.raw`emulator(?:\.exe)?\s+(?:-|@)`,
+        String.raw`(?:sdkmanager|avdmanager)\b`,
+        String.raw`gradlew?(?:\.bat)?\s(?:\\\n|[^\n&|;])*\b(?:assemble|install|bundle)\w*(?:Debug|Release)\b`,
+        String.raw`(?:npx\s+)?react-native\s+run-android\b`,
+      ].join("|") +
+      ")",
+    "m",
+  );
+  KOTLIN_JAVA_EXTENSIONS = [".kt", ".kts", ".java"];
+  FILE_WRITE_TOOLS = new Set([FILE_EDIT_TOOL_NAME, FILE_WRITE_TOOL_NAME]);
+});
 //@ chunk-xcsefmky.js:1114-1175 placement
 /**
  * 创建 Android 开发证据检测的初始状态：未编辑 Kotlin/Java、无证据。
@@ -60,54 +69,55 @@ function createAndroidEvidenceState() {
 /**
  * 判断是否已收集到 Android 开发证据（编辑过 Kotlin/Java 且找到证据）。
  */
-function hasAndroidEvidence(e) {
-  return e.kotlinOrJavaFileEdited && e.evidence !== null;
+function hasAndroidEvidence(state) {
+  return state.kotlinOrJavaFileEdited && state.evidence !== null;
 }
 //@ chunk-xcsefmky.js:1240-2152 placement
 /**
  * 扫描消息（含 agent/skill 进度中的消息），记录是否编辑了 Kotlin/Java 文件，并从写入内容、Android 命令或工具结果中找出 Android 开发证据。
  */
-function absorbAndroidEvidence(androidEvidenceState, r) {
-  for (let o of r) {
-    if (hasAndroidEvidence(androidEvidenceState)) return;
-    let t =
-      o.type === "progress" && (o.data.type === "agent_progress" || o.data.type === "skill_progress")
-        ? o.data.message
-        : o;
-    if (t.type === "assistant") {
-      if (!Array.isArray(t.message.content)) continue;
-      for (let i of t.message.content) {
-        if (i.type !== "tool_use") continue;
-        let input = i.input;
+function absorbAndroidEvidence(state, events) {
+  for (let event of events) {
+    if (hasAndroidEvidence(state)) return;
+    let message =
+      event.type === "progress" &&
+      (event.data.type === "agent_progress" || event.data.type === "skill_progress")
+        ? event.data.message
+        : event;
+    if (message.type === "assistant") {
+      if (!Array.isArray(message.message.content)) continue;
+      for (let contentBlock of message.message.content) {
+        if (contentBlock.type !== "tool_use") continue;
+        let input = contentBlock.input;
         if (typeof input !== "object" || input === null) continue;
-        if (FILE_WRITE_TOOLS.has(i.name)) {
+        if (FILE_WRITE_TOOLS.has(contentBlock.name)) {
           if (
             "file_path" in input &&
             typeof input.file_path === "string" &&
             isKotlinOrJavaPath(input.file_path)
           )
-            androidEvidenceState.kotlinOrJavaFileEdited = true;
-          if (androidEvidenceState.evidence === null)
-            androidEvidenceState.evidence =
+            state.kotlinOrJavaFileEdited = true;
+          if (state.evidence === null)
+            state.evidence =
               ("content" in input && detectAndroidImportEvidence(input.content)) ||
               ("new_string" in input && detectAndroidImportEvidence(input.new_string)) ||
               null;
         } else if (
-          androidEvidenceState.evidence === null &&
-          SHELL_TOOL_NAMES.includes(i.name) &&
+          state.evidence === null &&
+          SHELL_TOOL_NAMES.includes(contentBlock.name) &&
           "command" in input &&
           typeof input.command === "string" &&
           ANDROID_COMMAND_RE.test(input.command)
         )
-          androidEvidenceState.evidence = "android_command";
+          state.evidence = "android_command";
       }
-    } else if (t.type === "user" && androidEvidenceState.evidence === null) {
-      if (!Array.isArray(t.message.content)) continue;
-      for (let i of t.message.content) {
-        if (i.type !== "tool_result") continue;
-        let androidEvidenceInResult = findAndroidEvidenceInResult(i.content);
+    } else if (message.type === "user" && state.evidence === null) {
+      if (!Array.isArray(message.message.content)) continue;
+      for (let contentBlock of message.message.content) {
+        if (contentBlock.type !== "tool_result") continue;
+        let androidEvidenceInResult = findAndroidEvidenceInResult(contentBlock.content);
         if (androidEvidenceInResult !== null) {
-          androidEvidenceState.evidence = androidEvidenceInResult;
+          state.evidence = androidEvidenceInResult;
           break;
         }
       }
@@ -120,55 +130,55 @@ function absorbAndroidEvidence(androidEvidenceState, r) {
  */
 function isKotlinOrJavaPath(filePath) {
   let lower = filePath.toLowerCase();
-  return KOTLIN_JAVA_EXTENSIONS.some((o) => lower.endsWith(o));
+  return KOTLIN_JAVA_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }
 //@ chunk-xcsefmky.js:2222-2319 placement
 /**
  * 在文本里找 Android 证据：先看 import，再看清单与 gradle 插件。
  */
-function detectAndroidImportEvidence(e) {
-  if (typeof e !== "string") return null;
-  if (ANDROID_IMPORT_RE.test(e)) return "android_import";
-  return detectAndroidFileEvidence(e);
+function detectAndroidImportEvidence(text) {
+  if (typeof text !== "string") return null;
+  if (ANDROID_IMPORT_RE.test(text)) return "android_import";
+  return detectAndroidFileEvidence(text);
 }
 //@ chunk-xcsefmky.js:2319-2409 placement
 /**
  * 在文本里识别 AndroidManifest.xml 引用或 com.android.application 插件。
  */
-function detectAndroidFileEvidence(e) {
-  if (ANDROID_MANIFEST_RE.test(e)) return "android_manifest";
-  return ANDROID_GRADLE_PLUGIN_RE.test(e) ? "gradle_plugin" : null;
+function detectAndroidFileEvidence(text) {
+  if (ANDROID_MANIFEST_RE.test(text)) return "android_manifest";
+  return ANDROID_GRADLE_PLUGIN_RE.test(text) ? "gradle_plugin" : null;
 }
 //@ chunk-xcsefmky.js:2409-2577 placement
-function findAndroidEvidenceInResult(content) {
-  if (typeof content === "string") return detectAndroidFileEvidence(content);
-  if (!Array.isArray(content)) return null;
-  for (let r of content) {
-    let o = r.type === "text" ? detectAndroidFileEvidence(r.text) : null;
-    if (o !== null) return o;
+function findAndroidEvidenceInResult(text) {
+  if (typeof text === "string") return detectAndroidFileEvidence(text);
+  if (!Array.isArray(text)) return null;
+  for (let contentBlock of text) {
+    let evidence = contentBlock.type === "text" ? detectAndroidFileEvidence(contentBlock.text) : null;
+    if (evidence !== null) return evidence;
   }
   return null;
 }
 //@ chunk-xcsefmky.js:2577-2747 placement
 var DEV_INTENT_DETECTORS = {
   ios_app: () => {
-    let e = emptyProjectFactsEvidence();
+    let evidenceState = emptyProjectFactsEvidence();
     return {
-      absorb: (r) => countToolProgress(e, r),
-      trigger: () => conclusiveEvidenceOf(e),
+      absorb: (events) => countToolProgress(evidenceState, events),
+      trigger: () => conclusiveEvidenceOf(evidenceState),
     };
   },
   android_app: () => {
-    let androidEvidenceState = createAndroidEvidenceState();
+    let state = createAndroidEvidenceState();
     return {
-      absorb: (r) => absorbAndroidEvidence(androidEvidenceState, r),
-      trigger: () => (hasAndroidEvidence(androidEvidenceState) ? androidEvidenceState.evidence : null),
+      absorb: (events) => absorbAndroidEvidence(state, events),
+      trigger: () => (hasAndroidEvidence(state) ? state.evidence : null),
     };
   },
 };
 //@ chunk-xcsefmky.js:2747-2801 placement
 function _() {
-  return new Map(MOBILE_APP_KINDS.map((e) => [e, DEV_INTENT_DETECTORS[e]()]));
+  return new Map(MOBILE_APP_KINDS.map((kind) => [kind, DEV_INTENT_DETECTORS[kind]()]));
 }
 //@ chunk-xcsefmky.js:2801-3470 placement
 /**
@@ -182,44 +192,44 @@ class DevIntentDetector {
   get intents() {
     return this.#e;
   }
-  absorb(e) {
-    let r = [];
-    if (this.#e.size === this.#t.size) return r;
-    let filtered = e.filter((t) => !this.#r.has(t));
-    for (let t of filtered) if (isPlainObject(t)) this.#r.add(t);
-    for (let [t, i] of this.#t) {
-      if (this.#e.has(t)) continue;
-      let n = null;
+  absorb(events) {
+    let newlyDetected = [];
+    if (this.#e.size === this.#t.size) return newlyDetected;
+    let filtered = events.filter((event) => !this.#r.has(event));
+    for (let event of filtered) if (isPlainObject(event)) this.#r.add(event);
+    for (let [kind, detector] of this.#t) {
+      if (this.#e.has(kind)) continue;
+      let trigger = null;
       try {
-        i.absorb(filtered);
-        let s = i.trigger();
-        if (s !== null) {
+        detector.absorb(filtered);
+        let detectorTrigger = detector.trigger();
+        if (detectorTrigger !== null) {
           enqueueTaskNotification({
             type: "system",
             subtype: "dev_intent",
-            kind: t,
-            trigger: s,
+            kind,
+            trigger: detectorTrigger,
           });
-          this.#e.add(t);
-          n = s;
+          this.#e.add(kind);
+          trigger = detectorTrigger;
         }
       } catch (error) {
         logError(withTelemetryMessage(toError(error), "dev intent fold"));
-        if (!this.#n.has(t)) {
-          this.#n.add(t);
+        if (!this.#n.has(kind)) {
+          this.#n.add(kind);
           logFeatureBad("dev_intent_detect", "fold_threw");
         }
       }
-      let p = n;
-      if (p !== null) {
-        r.push(t);
+      let foundTrigger = trigger;
+      if (foundTrigger !== null) {
+        newlyDetected.push(kind);
         logFeatureOk("dev_intent_detect", {
-          kind: fromEnum(t),
-          trigger: fromEnum(p),
+          kind: fromEnum(kind),
+          trigger: fromEnum(foundTrigger),
         });
       }
     }
-    return r;
+    return newlyDetected;
   }
   reset() {
     this.#t = _();
@@ -232,5 +242,8 @@ class DevIntentDetector {
 /**
  * 按宿主会话隔离的 Android 开发意图检测器实例，供 CLI 与 QueryEngine 记录/取出证据。
  */
-var androidEvidenceByHost = new HostScoped(() => new DevIntentDetector());
+var androidEvidenceByHost; // deferred: uses DevIntentDetector of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-xcsefmky.js:3470", () => {
+  androidEvidenceByHost = new HostScoped(() => new DevIntentDetector());
+});
 export { androidEvidenceByHost };

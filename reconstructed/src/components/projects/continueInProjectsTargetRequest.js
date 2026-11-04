@@ -11,12 +11,12 @@
 import { formatRelativeTimeAgo } from "../../utils/format.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
-  u,
+  objectSchema,
   _enum,
-  string,
+  stringSchema,
   array,
-  E,
-  M,
+  numberSchema,
+  booleanSchema,
   discriminatedUnion,
   literal,
 } from "../../../vendor/zod/v4/classic/schemas.js";
@@ -37,30 +37,30 @@ function lastActiveLabel(lastMessageAtMs, now) {
  * 选择"发送到项目"目标项目的对话框请求。
  */
 var continueInProjectsTargetSchemas = DoctorLazy(() =>
-  u({
+  objectSchema({
     sends: _enum(["message", "brief"]),
-    newProjectName: string(),
+    newProjectName: stringSchema(),
     projects: array(
-      u({
-        id: string(),
-        name: string(),
-        lastMessageAtMs: E().nullable(),
+      objectSchema({
+        id: stringSchema(),
+        name: stringSchema(),
+        lastMessageAtMs: numberSchema().nullable(),
       }),
     ).max(TARGET_PROJECT_ROWS_MAX),
-    truncated: M(),
-    listError: string().optional(),
+    truncated: booleanSchema(),
+    listError: stringSchema().optional(),
   }),
 );
 var TargetChoiceSchema = DoctorLazy(() =>
   discriminatedUnion("choice", [
-    u({
+    objectSchema({
       choice: literal("new"),
     }),
-    u({
+    objectSchema({
       choice: literal("existing"),
-      projectId: string(),
+      projectId: stringSchema(),
     }),
-    u({
+    objectSchema({
       choice: literal("cancel"),
     }),
   ]),

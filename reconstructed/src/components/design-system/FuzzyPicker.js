@@ -8,8 +8,8 @@
  * pieces: chunk-18hwfzwa.js (8)
  * attribution: sole-consumer 4, affinity 1, fingerprint 2, file-local 1
  */
-import { init_react_production, y, P } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState, useEffect } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useTerminalFocus } from "../../ink/hooks/use-terminal-focus.js";
 import { useTerminalSize } from "../../hooks/useTerminalSize.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
@@ -29,11 +29,18 @@ import { useStrayClickGuard } from "../CustomSelect/strayClickGuard.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { HintText } from "./HintText.js";
 import { ListItem } from "./ListItem.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:654611-654615 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:654611", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:654615-654619 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:654615", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:654619-654643 sole-consumer
 function returnFalse_4() {
   return false;
@@ -49,7 +56,7 @@ var MIN_VISIBLE_COUNT = 2;
  * 模糊搜索选择器：顶部（或底部）搜索框，按查询过滤并高亮，上下选择，回车确认，Esc 取消，无结果显示 "No results"。
  */
 function FuzzyPicker(props) {
-  let $ = w(115);
+  let $ = useMemoCache(115);
   let {
     title,
     placeholder,
@@ -74,86 +81,94 @@ function FuzzyPicker(props) {
     extraHints,
   } = props;
   let placeholder_2 = placeholder === undefined ? "Type to search\u2026" : placeholder;
-  let so = previewPosition === undefined ? "bottom" : previewPosition;
-  let po = visibleCount === undefined ? DEFAULT_VISIBLE_COUNT : visibleCount;
-  let ao = direction === undefined ? "down" : direction;
-  let co = emptyMessage === undefined ? "No results" : emptyMessage;
-  let bo = selectAction === undefined ? "select" : selectAction;
+  let previewSide = previewPosition === undefined ? "bottom" : previewPosition;
+  let visibleCountLimit = visibleCount === undefined ? DEFAULT_VISIBLE_COUNT : visibleCount;
+  let navDirection = direction === undefined ? "down" : direction;
+  let emptyMessageValue = emptyMessage === undefined ? "No results" : emptyMessage;
+  let selectHintAction = selectAction === undefined ? "select" : selectAction;
   let action = cancelAction === undefined ? "cancel" : cancelAction;
   let isTerminalFocused = useTerminalFocus();
   let { rows, columns } = useTerminalSize();
-  let Wo;
+  let initialPickerState;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    Wo = {
+    initialPickerState = {
       focus: 0,
       window: 0,
     };
-    $[0] = Wo;
-  } else Wo = $[0];
-  let [mn, Cn] = y(Wo);
-  let { focus, window: vo } = mn;
-  let [Yo, kn] = y(undefined);
-  let Fn = Boolean(matchLabel);
-  let visibleCount_2 = Math.max(MIN_VISIBLE_COUNT, Math.min(po, rows - PICKER_CHROME_ROWS - (Fn ? 1 : 0)));
-  let Go = columns < 120;
-  let [hn] = y(returnFalse_4);
-  let Mn;
-  if ($[1] !== hn) {
-    Mn = stableEmptyObject(hn);
-    $[1] = hn;
-    $[2] = Mn;
-  } else Mn = $[2];
-  let Xo = Mn;
+    $[0] = initialPickerState;
+  } else initialPickerState = $[0];
+  let [pickerState, setPickerState] = useState(initialPickerState);
+  let { focus, window: windowStart } = pickerState;
+  let [hoveredItem, setHoveredItem] = useState(undefined);
+  let hasMatchLabel = Boolean(matchLabel);
+  let visibleCount_2 = Math.max(
+    MIN_VISIBLE_COUNT,
+    Math.min(visibleCountLimit, rows - PICKER_CHROME_ROWS - (hasMatchLabel ? 1 : 0)),
+  );
+  let isNarrow = columns < 120;
+  let [isItalicHint] = useState(returnFalse_4);
+  let hintExtras;
+  if ($[1] !== isItalicHint) {
+    hintExtras = stableEmptyObject(isItalicHint);
+    $[1] = isItalicHint;
+    $[2] = hintExtras;
+  } else hintExtras = $[2];
+  let keyHintProps = hintExtras;
   let max = Math.max(0, items.length - visibleCount_2);
-  let $n;
+  let moveFocusCached;
   if ($[3] !== items.length || $[4] !== visibleCount_2) {
-    $n = (on) => {
-      kn(undefined);
-      Cn((_o) => {
-        let { focus, window: Dn } = _o;
-        let wn = clamp(focus + on, 0, items.length - 1);
+    moveFocusCached = (delta) => {
+      setHoveredItem(undefined);
+      setPickerState((previous) => {
+        let { focus, window: previousWindow } = previous;
+        let nextFocus = clamp(focus + delta, 0, items.length - 1);
         return {
-          focus: wn,
-          window: wn < Dn ? wn : wn >= Dn + visibleCount_2 ? wn - visibleCount_2 + 1 : Dn,
+          focus: nextFocus,
+          window:
+            nextFocus < previousWindow
+              ? nextFocus
+              : nextFocus >= previousWindow + visibleCount_2
+                ? nextFocus - visibleCount_2 + 1
+                : previousWindow,
         };
       });
     };
     $[3] = items.length;
     $[4] = visibleCount_2;
-    $[5] = $n;
-  } else $n = $[5];
-  let mr = $n;
-  let _o;
+    $[5] = moveFocusCached;
+  } else moveFocusCached = $[5];
+  let moveFocus = moveFocusCached;
+  let scrollWindowCached;
   if ($[6] !== max) {
-    _o = (Kn) => {
-      Cn((delta) => ({
-        ...delta,
-        window: clamp(delta.window + Kn, 0, max),
+    scrollWindowCached = (delta) => {
+      setPickerState((delta_2) => ({
+        ...delta_2,
+        window: clamp(delta_2.window + delta, 0, max),
       }));
     };
     $[6] = max;
-    $[7] = _o;
-  } else _o = $[7];
-  let Fr = _o;
-  let Zn;
-  if ($[8] !== ao || $[9] !== Fr) {
-    Zn = (event) => {
+    $[7] = scrollWindowCached;
+  } else scrollWindowCached = $[7];
+  let scrollWindow = scrollWindowCached;
+  let wheelHandlerCached;
+  if ($[8] !== navDirection || $[9] !== scrollWindow) {
+    wheelHandlerCached = (event) => {
       if (event.deltaY === 0) {
         return;
       }
-      let dr = event.deltaY > 0;
-      if (ao === "up") Fr(dr ? -1 : 1);
-      else Fr(dr ? 1 : -1);
+      let isForward = event.deltaY > 0;
+      if (navDirection === "up") scrollWindow(isForward ? -1 : 1);
+      else scrollWindow(isForward ? 1 : -1);
       event.stopImmediatePropagation();
     };
-    $[8] = ao;
-    $[9] = Fr;
-    $[10] = Zn;
-  } else Zn = $[10];
-  let onWheel = Zn;
-  let pr;
+    $[8] = navDirection;
+    $[9] = scrollWindow;
+    $[10] = wheelHandlerCached;
+  } else wheelHandlerCached = $[10];
+  let onWheel = wheelHandlerCached;
+  let searchInputOptions;
   if ($[11] !== initialQuery || $[12] !== onCancel) {
-    pr = {
+    searchInputOptions = {
       isActive: true,
       onExit: noop_3,
       onCancel,
@@ -162,38 +177,38 @@ function FuzzyPicker(props) {
     };
     $[11] = initialQuery;
     $[12] = onCancel;
-    $[13] = pr;
-  } else pr = $[13];
-  let { query, cursorOffset, handleKeyDown, handlePaste } = useSearchInput(pr);
-  let ts;
+    $[13] = searchInputOptions;
+  } else searchInputOptions = $[13];
+  let { query, cursorOffset, handleKeyDown, handlePaste } = useSearchInput(searchInputOptions);
+  let keyHandlerCached;
   if (
-    $[14] !== ao ||
+    $[14] !== navDirection ||
     $[15] !== focus ||
     $[16] !== items ||
     $[17] !== onSelect ||
     $[18] !== onTab ||
     $[19] !== handleKeyDown ||
-    $[20] !== mr ||
+    $[20] !== moveFocus ||
     $[21] !== visibleCount_2
   ) {
-    ts = (e) => {
+    keyHandlerCached = (e) => {
       if (e.key === "up" || (e.ctrl && e.key === "p")) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        mr(ao === "up" ? 1 : -1);
+        moveFocus(navDirection === "up" ? 1 : -1);
         return;
       }
       if (e.key === "down" || (e.ctrl && e.key === "n")) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        mr(ao === "up" ? -1 : 1);
+        moveFocus(navDirection === "up" ? -1 : 1);
         return;
       }
       if (e.key === "pageup" || e.key === "pagedown") {
         e.preventDefault();
         e.stopImmediatePropagation();
-        let Ur = e.key === "pagedown" ? 1 : -1;
-        mr((ao === "up" ? -Ur : Ur) * visibleCount_2);
+        let pageDirection = e.key === "pagedown" ? 1 : -1;
+        moveFocus((navDirection === "up" ? -pageDirection : pageDirection) * visibleCount_2);
         return;
       }
       if (e.key === "return") {
@@ -213,129 +228,129 @@ function FuzzyPicker(props) {
       }
       handleKeyDown(e);
     };
-    $[14] = ao;
+    $[14] = navDirection;
     $[15] = focus;
     $[16] = items;
     $[17] = onSelect;
     $[18] = onTab;
     $[19] = handleKeyDown;
-    $[20] = mr;
+    $[20] = moveFocus;
     $[21] = visibleCount_2;
-    $[22] = ts;
-  } else ts = $[22];
-  let onKeyDown = ts;
-  let _r;
+    $[22] = keyHandlerCached;
+  } else keyHandlerCached = $[22];
+  let onKeyDown = keyHandlerCached;
+  let queryChanged;
   if ($[23] !== onQueryChange || $[24] !== query) {
-    _r = () => {
+    queryChanged = () => {
       onQueryChange(query);
-      Cn({
+      setPickerState({
         focus: 0,
         window: 0,
       });
-      kn(undefined);
+      setHoveredItem(undefined);
     };
     $[23] = onQueryChange;
     $[24] = query;
-    $[25] = _r;
-  } else _r = $[25];
-  let fr;
+    $[25] = queryChanged;
+  } else queryChanged = $[25];
+  let queryDeps;
   if ($[26] !== query) {
-    fr = [query];
+    queryDeps = [query];
     $[26] = query;
-    $[27] = fr;
-  } else fr = $[27];
-  P(_r, fr);
-  let $r;
-  let Yr;
+    $[27] = queryDeps;
+  } else queryDeps = $[27];
+  useEffect(queryChanged, queryDeps);
+  let clampPickerState;
+  let clampDeps;
   if ($[28] !== items.length || $[29] !== max) {
-    $r = () => {
-      Cn((Er) => ({
-        focus: clamp(Er.focus, 0, items.length - 1),
-        window: clamp(Er.window, 0, max),
+    clampPickerState = () => {
+      setPickerState((previous) => ({
+        focus: clamp(previous.focus, 0, items.length - 1),
+        window: clamp(previous.window, 0, max),
       }));
-      kn(undefined);
+      setHoveredItem(undefined);
     };
-    Yr = [items.length, max, Cn];
+    clampDeps = [items.length, max, setPickerState];
     $[28] = items.length;
     $[29] = max;
-    $[30] = $r;
-    $[31] = Yr;
+    $[30] = clampPickerState;
+    $[31] = clampDeps;
   } else {
-    $r = $[30];
-    Yr = $[31];
+    clampPickerState = $[30];
+    clampDeps = $[31];
   }
-  P($r, Yr);
-  let Vr;
-  let ms;
+  useEffect(clampPickerState, clampDeps);
+  let resetPickerState;
+  let resetDeps;
   if ($[32] !== resetKey) {
-    Vr = () => {
+    resetPickerState = () => {
       if (resetKey === undefined) {
         return;
       }
-      Cn({
+      setPickerState({
         focus: 0,
         window: 0,
       });
-      kn(undefined);
+      setHoveredItem(undefined);
     };
-    ms = [resetKey, Cn];
+    resetDeps = [resetKey, setPickerState];
     $[32] = resetKey;
-    $[33] = Vr;
-    $[34] = ms;
+    $[33] = resetPickerState;
+    $[34] = resetDeps;
   } else {
-    Vr = $[33];
-    ms = $[34];
+    resetPickerState = $[33];
+    resetDeps = $[34];
   }
-  P(Vr, ms);
-  let Xs = items[focus];
-  let Ls = Yo ?? Xs;
-  let is;
-  if ($[35] !== onFocus || $[36] !== Ls) {
-    is = () => {
-      onFocus?.(Ls);
+  useEffect(resetPickerState, resetDeps);
+  let focusedItem = items[focus];
+  let activeItem = hoveredItem ?? focusedItem;
+  let focusReportCached;
+  if ($[35] !== onFocus || $[36] !== activeItem) {
+    focusReportCached = () => {
+      onFocus?.(activeItem);
     };
     $[35] = onFocus;
-    $[36] = Ls;
-    $[37] = is;
-  } else is = $[37];
-  let ws;
-  if ($[38] !== Ls) {
-    ws = [Ls];
-    $[38] = Ls;
-    $[39] = ws;
-  } else ws = $[39];
-  P(is, ws);
-  let Ci;
-  if ($[40] !== items || $[41] !== visibleCount_2 || $[42] !== vo) {
-    Ci = items.slice(vo, vo + visibleCount_2);
+    $[36] = activeItem;
+    $[37] = focusReportCached;
+  } else focusReportCached = $[37];
+  let focusReportDeps;
+  if ($[38] !== activeItem) {
+    focusReportDeps = [activeItem];
+    $[38] = activeItem;
+    $[39] = focusReportDeps;
+  } else focusReportDeps = $[39];
+  useEffect(focusReportCached, focusReportDeps);
+  let visibleItems;
+  if ($[40] !== items || $[41] !== visibleCount_2 || $[42] !== windowStart) {
+    visibleItems = items.slice(windowStart, windowStart + visibleCount_2);
     $[40] = items;
     $[41] = visibleCount_2;
-    $[42] = vo;
-    $[43] = Ci;
-  } else Ci = $[43];
-  let visible = Ci;
-  let Oi;
-  if ($[44] !== co || $[45] !== query) {
-    Oi = typeof co === "function" ? co(query) : co;
-    $[44] = co;
+    $[42] = windowStart;
+    $[43] = visibleItems;
+  } else visibleItems = $[43];
+  let visible = visibleItems;
+  let emptyText;
+  if ($[44] !== emptyMessageValue || $[45] !== query) {
+    emptyText = typeof emptyMessageValue === "function" ? emptyMessageValue(query) : emptyMessageValue;
+    $[44] = emptyMessageValue;
     $[45] = query;
-    $[46] = Oi;
-  } else Oi = $[46];
-  let emptyText = Oi;
-  let Zi;
-  if ($[47] !== Fn || $[48] !== matchLabel) {
-    Zi = Fn
+    $[46] = emptyText;
+  } else emptyText = $[46];
+  let emptyText_2 = emptyText;
+  let matchLabelElement;
+  if ($[47] !== hasMatchLabel || $[48] !== matchLabel) {
+    matchLabelElement = hasMatchLabel
       ? jsxProd_default(Text, {
           dimColor: true,
           children: matchLabel,
         })
       : null;
-    $[47] = Fn;
+    $[47] = hasMatchLabel;
     $[48] = matchLabel;
-    $[49] = Zi;
-  } else Zi = $[49];
-  let da = Zi;
-  let qn;
+    $[49] = matchLabelElement;
+  } else matchLabelElement = $[49];
+  let matchLabelRow = matchLabelElement;
+  let searchBoxElement;
   if (
     $[50] !== cursorOffset ||
     $[51] !== onKeyDown ||
@@ -344,7 +359,7 @@ function FuzzyPicker(props) {
     $[54] !== placeholder_2 ||
     $[55] !== query
   ) {
-    qn = jsxProd_default(SearchBox, {
+    searchBoxElement = jsxProd_default(SearchBox, {
       query,
       cursorOffset,
       placeholder: placeholder_2,
@@ -360,13 +375,13 @@ function FuzzyPicker(props) {
     $[53] = isTerminalFocused;
     $[54] = placeholder_2;
     $[55] = query;
-    $[56] = qn;
-  } else qn = $[56];
-  let ps = qn;
-  let xs;
+    $[56] = searchBoxElement;
+  } else searchBoxElement = $[56];
+  let searchBox = searchBoxElement;
+  let listElement;
   if (
-    $[57] !== ao ||
-    $[58] !== emptyText ||
+    $[57] !== navDirection ||
+    $[58] !== emptyText_2 ||
     $[59] !== focus ||
     $[60] !== getKey ||
     $[61] !== items.length ||
@@ -374,23 +389,23 @@ function FuzzyPicker(props) {
     $[63] !== renderItem ||
     $[64] !== visible ||
     $[65] !== visibleCount_2 ||
-    $[66] !== vo
+    $[66] !== windowStart
   ) {
-    xs = jsxProd_default(List, {
+    listElement = jsxProd_default(List, {
       visible,
-      windowStart: vo,
+      windowStart,
       visibleCount: visibleCount_2,
       total: items.length,
       focusedIndex: focus,
-      direction: ao,
+      direction: navDirection,
       getKey,
       renderItem,
-      emptyText,
+      emptyText: emptyText_2,
       onItemClick: onSelect,
-      onItemHover: kn,
+      onItemHover: setHoveredItem,
     });
-    $[57] = ao;
-    $[58] = emptyText;
+    $[57] = navDirection;
+    $[58] = emptyText_2;
     $[59] = focus;
     $[60] = getKey;
     $[61] = items.length;
@@ -398,47 +413,47 @@ function FuzzyPicker(props) {
     $[63] = renderItem;
     $[64] = visible;
     $[65] = visibleCount_2;
-    $[66] = vo;
-    $[67] = xs;
-  } else xs = $[67];
-  let kr = xs;
-  let ls;
-  if ($[68] !== Ls || $[69] !== renderPreview) {
-    ls =
-      renderPreview && Ls
+    $[66] = windowStart;
+    $[67] = listElement;
+  } else listElement = $[67];
+  let list = listElement;
+  let previewElement;
+  if ($[68] !== activeItem || $[69] !== renderPreview) {
+    previewElement =
+      renderPreview && activeItem
         ? jsxProd_default(Box, {
             flexDirection: "column",
             flexGrow: 1,
-            children: renderPreview(Ls),
+            children: renderPreview(activeItem),
           })
         : null;
-    $[68] = Ls;
+    $[68] = activeItem;
     $[69] = renderPreview;
-    $[70] = ls;
-  } else ls = $[70];
-  let Ms = ls;
-  let qs;
+    $[70] = previewElement;
+  } else previewElement = $[70];
+  let preview = previewElement;
+  let bodyElement;
   if (
-    $[71] !== kr ||
-    $[72] !== Ms ||
-    $[73] !== so ||
+    $[71] !== list ||
+    $[72] !== preview ||
+    $[73] !== previewSide ||
     $[74] !== renderPreview ||
-    $[75] !== da ||
+    $[75] !== matchLabelRow ||
     $[76] !== visibleCount_2
   ) {
-    qs =
-      renderPreview && so === "right"
+    bodyElement =
+      renderPreview && previewSide === "right"
         ? jsxProd_default_2(Box, {
             flexDirection: "row",
             gap: 2,
-            height: visibleCount_2 + (da ? 1 : 0),
+            height: visibleCount_2 + (matchLabelRow ? 1 : 0),
             children: [
               jsxProd_default_2(Box, {
                 flexDirection: "column",
                 flexShrink: 0,
-                children: [kr, da],
+                children: [list, matchLabelRow],
               }),
-              Ms ??
+              preview ??
                 jsxProd_default(Box, {
                   flexGrow: 1,
                 }),
@@ -446,150 +461,156 @@ function FuzzyPicker(props) {
           })
         : jsxProd_default_2(Box, {
             flexDirection: "column",
-            children: [kr, da, Ms],
+            children: [list, matchLabelRow, preview],
           });
-    $[71] = kr;
-    $[72] = Ms;
-    $[73] = so;
+    $[71] = list;
+    $[72] = preview;
+    $[73] = previewSide;
     $[74] = renderPreview;
-    $[75] = da;
+    $[75] = matchLabelRow;
     $[76] = visibleCount_2;
-    $[77] = qs;
-  } else qs = $[77];
-  let gs = qs;
-  let es = ao !== "up";
-  let ds;
+    $[77] = bodyElement;
+  } else bodyElement = $[77];
+  let body = bodyElement;
+  let searchBoxFirst = navDirection !== "up";
+  let titleElement;
   if ($[78] !== title) {
-    ds = jsxProd_default(Text, {
+    titleElement = jsxProd_default(Text, {
       bold: true,
       color: "permission",
       children: title,
     });
     $[78] = title;
-    $[79] = ds;
-  } else ds = $[79];
-  const Hs = es && ps;
-  const _s = !es && ps;
+    $[79] = titleElement;
+  } else titleElement = $[79];
+  const searchAboveBody = searchBoxFirst && searchBox;
+  const searchBelowBody = !searchBoxFirst && searchBox;
   let chord;
   if ($[80] === MEMO_CACHE_SENTINEL) {
     chord = ["up", "down"];
     $[80] = chord;
   } else chord = $[80];
-  const action_2 = Go ? "nav" : "navigate";
-  let ua;
-  if ($[81] !== Xo || $[82] !== action_2) {
-    ua = jsxProd_default(KeyboardShortcutHint, {
+  const action_2 = isNarrow ? "nav" : "navigate";
+  let navHintElement;
+  if ($[81] !== keyHintProps || $[82] !== action_2) {
+    navHintElement = jsxProd_default(KeyboardShortcutHint, {
       chord,
       action: action_2,
-      ...Xo,
+      ...keyHintProps,
     });
-    $[81] = Xo;
+    $[81] = keyHintProps;
     $[82] = action_2;
-    $[83] = ua;
-  } else ua = $[83];
+    $[83] = navHintElement;
+  } else navHintElement = $[83];
   let action_3;
-  if ($[84] !== Go || $[85] !== bo) {
-    action_3 = Go ? firstWord(bo) : bo;
-    $[84] = Go;
-    $[85] = bo;
+  if ($[84] !== isNarrow || $[85] !== selectHintAction) {
+    action_3 = isNarrow ? firstWord(selectHintAction) : selectHintAction;
+    $[84] = isNarrow;
+    $[85] = selectHintAction;
     $[86] = action_3;
   } else action_3 = $[86];
-  let Xa;
-  if ($[87] !== Xo || $[88] !== action_3) {
-    Xa = jsxProd_default(KeyboardShortcutHint, {
+  let selectHintElement;
+  if ($[87] !== keyHintProps || $[88] !== action_3) {
+    selectHintElement = jsxProd_default(KeyboardShortcutHint, {
       chord: "enter",
       action: action_3,
-      ...Xo,
+      ...keyHintProps,
     });
-    $[87] = Xo;
+    $[87] = keyHintProps;
     $[88] = action_3;
-    $[89] = Xa;
-  } else Xa = $[89];
-  let dl;
-  if ($[90] !== Xo || $[91] !== onTab) {
-    dl =
+    $[89] = selectHintElement;
+  } else selectHintElement = $[89];
+  let tabHintElement;
+  if ($[90] !== keyHintProps || $[91] !== onTab) {
+    tabHintElement =
       onTab &&
       jsxProd_default(KeyboardShortcutHint, {
         chord: "tab",
         action: onTab.action,
-        ...Xo,
+        ...keyHintProps,
       });
-    $[90] = Xo;
+    $[90] = keyHintProps;
     $[91] = onTab;
-    $[92] = dl;
-  } else dl = $[92];
-  let Vl;
-  if ($[93] !== action || $[94] !== Xo) {
-    Vl = jsxProd_default(KeyboardShortcutHint, {
+    $[92] = tabHintElement;
+  } else tabHintElement = $[92];
+  let cancelHintElement;
+  if ($[93] !== action || $[94] !== keyHintProps) {
+    cancelHintElement = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action,
-      ...Xo,
+      ...keyHintProps,
     });
     $[93] = action;
-    $[94] = Xo;
-    $[95] = Vl;
-  } else Vl = $[95];
-  let Hd;
-  if ($[96] !== extraHints || $[97] !== Xo) {
-    Hd = extraHints?.(Xo);
+    $[94] = keyHintProps;
+    $[95] = cancelHintElement;
+  } else cancelHintElement = $[95];
+  let extraHintElements;
+  if ($[96] !== extraHints || $[97] !== keyHintProps) {
+    extraHintElements = extraHints?.(keyHintProps);
     $[96] = extraHints;
-    $[97] = Xo;
-    $[98] = Hd;
-  } else Hd = $[98];
+    $[97] = keyHintProps;
+    $[98] = extraHintElements;
+  } else extraHintElements = $[98];
   let children;
-  if ($[99] !== ua || $[100] !== Xa || $[101] !== dl || $[102] !== Vl || $[103] !== Hd) {
+  if (
+    $[99] !== navHintElement ||
+    $[100] !== selectHintElement ||
+    $[101] !== tabHintElement ||
+    $[102] !== cancelHintElement ||
+    $[103] !== extraHintElements
+  ) {
     children = jsxProd_default_2(Byline, {
-      children: [ua, Xa, dl, Vl, Hd],
+      children: [navHintElement, selectHintElement, tabHintElement, cancelHintElement, extraHintElements],
     });
-    $[99] = ua;
-    $[100] = Xa;
-    $[101] = dl;
-    $[102] = Vl;
-    $[103] = Hd;
+    $[99] = navHintElement;
+    $[100] = selectHintElement;
+    $[101] = tabHintElement;
+    $[102] = cancelHintElement;
+    $[103] = extraHintElements;
     $[104] = children;
   } else children = $[104];
-  let yi;
-  if ($[105] !== hn || $[106] !== children) {
-    yi = jsxProd_default(Text, {
+  let hintRow;
+  if ($[105] !== isItalicHint || $[106] !== children) {
+    hintRow = jsxProd_default(Text, {
       dimColor: true,
-      italic: hn,
+      italic: isItalicHint,
       children,
     });
-    $[105] = hn;
+    $[105] = isItalicHint;
     $[106] = children;
-    $[107] = yi;
-  } else yi = $[107];
-  let Ws;
+    $[107] = hintRow;
+  } else hintRow = $[107];
+  let pickerElement;
   if (
     $[108] !== onWheel ||
-    $[109] !== gs ||
-    $[110] !== ds ||
-    $[111] !== Hs ||
-    $[112] !== _s ||
-    $[113] !== yi
+    $[109] !== body ||
+    $[110] !== titleElement ||
+    $[111] !== searchAboveBody ||
+    $[112] !== searchBelowBody ||
+    $[113] !== hintRow
   ) {
-    Ws = jsxProd_default(Pane, {
+    pickerElement = jsxProd_default(Pane, {
       color: "permission",
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
         tabIndex: -1,
         onWheel,
-        children: [ds, Hs, gs, _s, yi],
+        children: [titleElement, searchAboveBody, body, searchBelowBody, hintRow],
       }),
     });
     $[108] = onWheel;
-    $[109] = gs;
-    $[110] = ds;
-    $[111] = Hs;
-    $[112] = _s;
-    $[113] = yi;
-    $[114] = Ws;
-  } else Ws = $[114];
-  return Ws;
+    $[109] = body;
+    $[110] = titleElement;
+    $[111] = searchAboveBody;
+    $[112] = searchBelowBody;
+    $[113] = hintRow;
+    $[114] = pickerElement;
+  } else pickerElement = $[114];
+  return pickerElement;
 }
 //@ chunk-18hwfzwa.js:661223-662906 fingerprint = List (0.841)
 function List(props) {
-  let $ = w(38);
+  let $ = useMemoCache(38);
   let {
     visible,
     windowStart,
@@ -642,7 +663,7 @@ function List(props) {
     $[15] !== visibleCount ||
     $[16] !== windowStart
   ) {
-    let Ot;
+    let renderRow;
     if (
       $[18] !== direction ||
       $[19] !== focusedIndex ||
@@ -657,7 +678,7 @@ function List(props) {
       $[28] !== visibleCount ||
       $[29] !== windowStart
     ) {
-      Ot = (item, i) => {
+      renderRow = (item, i) => {
         let key = getKey(item);
         let isFocused = windowStart + i === focusedIndex;
         let atLowEdge = i === 0 && windowStart > 0;
@@ -670,13 +691,13 @@ function List(props) {
             showScrollUp: direction === "up" ? atHighEdge : atLowEdge,
             showScrollDown: direction === "up" ? atLowEdge : atHighEdge,
             styled: false,
-            onClick: (so) => {
-              if (strayClickGuard(so)) {
+            onClick: (event) => {
+              if (strayClickGuard(event)) {
                 return;
               }
               onItemClick(item);
             },
-            onHoverChange: (po) => po && onItemHover(item),
+            onHoverChange: (isHovered) => isHovered && onItemHover(item),
             children: renderItem(item, isFocused),
           },
           key,
@@ -694,9 +715,9 @@ function List(props) {
       $[27] = visible.length;
       $[28] = visibleCount;
       $[29] = windowStart;
-      $[30] = Ot;
-    } else Ot = $[30];
-    t1 = visible.map(Ot);
+      $[30] = renderRow;
+    } else renderRow = $[30];
+    t1 = visible.map(renderRow);
     $[5] = direction;
     $[6] = focusedIndex;
     $[7] = getKey;
@@ -719,9 +740,9 @@ function List(props) {
     $[31] = onItemHover;
     $[32] = onMouseLeave;
   } else onMouseLeave = $[32];
-  let bo;
+  let listBoxElement;
   if ($[33] !== rows || $[34] !== flexDirection || $[35] !== onMouseLeave || $[36] !== visibleCount) {
-    bo = jsxProd_default(Box, {
+    listBoxElement = jsxProd_default(Box, {
       height: visibleCount,
       flexShrink: 0,
       flexDirection,
@@ -732,9 +753,9 @@ function List(props) {
     $[34] = flexDirection;
     $[35] = onMouseLeave;
     $[36] = visibleCount;
-    $[37] = bo;
-  } else bo = $[37];
-  return bo;
+    $[37] = listBoxElement;
+  } else listBoxElement = $[37];
+  return listBoxElement;
 }
 //@ chunk-18hwfzwa.js:662906-662972 file-local
 function firstWord(s) {

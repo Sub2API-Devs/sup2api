@@ -23,7 +23,7 @@ var keybindingsCommandDefinition = {
   requires: {
     workspace: false,
   },
-  load: () => import("./chunk-1nat7wre.js"),
+  load: () => import("./keybindings.js"),
 };
 var keybindingsCommand = keybindingsCommandDefinition;
 export { keybindingsCommand };

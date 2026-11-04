@@ -10,5 +10,5 @@
  */
 
 //@ chunk-s61vbvea.js:461142-461181 fingerprint = isUltrareviewEnabled (1)
-var isUltrareviewEnabled = "tengu_review_bughunter_config";
-export { isUltrareviewEnabled };
+var ULTRA_REVIEW_CONFIG_FLAG = "tengu_review_bughunter_config";
+export { ULTRA_REVIEW_CONFIG_FLAG };

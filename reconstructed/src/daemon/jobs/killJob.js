@@ -8,8 +8,8 @@
  * pieces: chunk-e6aww6q8.js (1), chunk-vrr64ez0.js (35)
  * attribution: placement 36
  */
+import { dirname, basename, join, normalize, isAbsolute, relative } from "path";
 import { writeFile, realpath, rm, unlink, lstat, readdir } from "fs/promises";
-import { join, normalize, isAbsolute, relative, dirname, basename } from "path";
 import { randomUUID } from "crypto";
 import { isStorageV5Enabled } from "../../utils/hoverRest.js";
 import { STORAGE_SPACES } from "../../utils/storage/storageSpaces.js";
@@ -48,7 +48,7 @@ import { checkProcessLiveness, isProcessLive } from "../../services/daemon/proce
 import { provenSameProcessAsync } from "../../utils/processIdentity.js";
 import { logError } from "../../utils/log.js";
 import { killViaPtySocket } from "../../services/daemon/reapJobs.js";
-import { daemonPtySocket, hostManagedEntry } from "../../utils/sandbox/userNamespace.js";
+import { daemonPtySocket, readDaemonToken, hostManagedEntry } from "../../services/daemon/paths.js";
 import { listAllLiveSessions, sendToUdsSocket } from "../../utils/udsMessaging/udsClient.js";
 import { logEvent } from "../../services/analytics/index.js";
 import { looksLikeApproveLine } from "../../components/fleet/sessionAttention.js";
@@ -66,7 +66,6 @@ import {
 import { fromEnum, fromEnumOpt, lit } from "../../services/analytics/safeMetadata.js";
 import { sanitizeErrnoTokenForTelemetry, errorMessage, isENOENT } from "../../utils/errors.js";
 import { logFeatureOk, logFeatureBad, logFeatureSad } from "../../services/analytics/featureTelemetry.js";
-import { readDaemonToken } from "../../services/daemon/paths.js";
 import {
   ensureDaemon,
   canUseServiceDaemon,
@@ -121,33 +120,43 @@ import {
   getFsImplementation,
   UNVERIFIED_ANCESTRY,
 } from "../../utils/fsOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:3654790-3654875 placement = isDangerousFilePathToAutoEdit (1)
+function isDirectlyUnderClaudeWorktreesDir(path) {
+  let absolutePath = dirname(path);
+  return (
+    absolutePath !== path &&
+    basename(absolutePath) === "worktrees" &&
+    basename(dirname(absolutePath)) === ".claude"
+  );
+}
 //@ chunk-vrr64ez0.js:28269-28293 placement
 var RECAP_TRIGGER_FILE = "recap.trigger";
 //@ chunk-vrr64ez0.js:28293-28472 placement
-function touchRecapTrigger(e, storageV5) {
+function touchRecapTrigger(jobId, storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
-    let o = STORAGE_SPACES.job(e, [RECAP_TRIGGER_FILE]);
-    if (validateStorageKey(o) === undefined) {
+    let key = STORAGE_SPACES.job(jobId, [RECAP_TRIGGER_FILE]);
+    if (validateStorageKey(key) === undefined) {
       storageV5
-        .write(o, "", {
+        .write(key, "", {
           publishDiscipline: "inPlace",
         })
         .catch(() => {});
       return;
     }
   }
-  writeFile(join(getJobDir(e), RECAP_TRIGGER_FILE), "").catch(() => {});
+  writeFile(join(getJobDir(jobId), RECAP_TRIGGER_FILE), "").catch(() => {});
 }
 //@ chunk-vrr64ez0.js:28472-29740 placement
-async function killJob(e, n, o, r) {
-  if (n?.backend === "peer")
+async function killJob(short, options, flags, storageV5) {
+  if (options?.backend === "peer")
     return {
       confirmed: true,
     };
-  let handoff = o?.handoff ? true : undefined;
-  let s = o?.evict ? true : undefined;
-  let h = o?.knownGone
+  let handoff = flags?.handoff ? true : undefined;
+  let evict = flags?.evict ? true : undefined;
+  let killReply = flags?.knownGone
     ? {
         ok: false,
         code: "ENOJOB",
@@ -156,82 +165,85 @@ async function killJob(e, n, o, r) {
     : await controlRequest({
         proto: BG_PROTO,
         op: "kill",
-        short: e,
+        short,
         handoff,
-        evict: s,
+        evict,
       });
-  for (let j = 0; !h.ok && h.code === "ESTARTING" && j < 10; j++) {
+  for (let j = 0; !killReply.ok && killReply.code === "ESTARTING" && j < 10; j++) {
     await sleep(200);
-    h = await controlRequest({
+    killReply = await controlRequest({
       proto: BG_PROTO,
       op: "kill",
-      short: e,
+      short,
       handoff,
-      evict: s,
+      evict,
     });
   }
-  if (h.ok)
+  if (killReply.ok)
     return {
       confirmed: true,
     };
-  if (h.code === "ENOJOB" || h.code === "ENOCONN" || h.code === "ETIMEOUT") {
-    let A = await killOrphanedWorker(e, r);
-    if (A.anyMatch && h.code === "ENOJOB")
+  if (killReply.code === "ENOJOB" || killReply.code === "ENOCONN" || killReply.code === "ETIMEOUT") {
+    let orphanSweep = await killOrphanedWorker(short, storageV5);
+    if (orphanSweep.anyMatch && killReply.code === "ENOJOB")
       return {
-        confirmed: A.confirmed,
+        confirmed: orphanSweep.confirmed,
       };
-    let w = false;
-    let T = false;
-    if (h.code === "ENOCONN" || h.code === "ETIMEOUT") {
-      let S;
-      if (A.anyMatch) S = A.confirmed;
+    let confirmed = false;
+    let scanned = false;
+    if (killReply.code === "ENOCONN" || killReply.code === "ETIMEOUT") {
+      let result;
+      if (orphanSweep.anyMatch) result = orphanSweep.confirmed;
       else {
         let roster = await readRoster(
           {
             silent: true,
           },
-          r,
+          storageV5,
         );
-        let N = roster.workers[e];
-        if (N !== undefined) {
-          let U = await checkProcessLiveness(N.pid, N.procStart);
-          if (U === "zombie") {
-            if (N.procStart !== undefined && (await provenSameProcessAsync(N.pid, N.procStart)) === true) {
+        let entry = roster.workers[short];
+        if (entry !== undefined) {
+          let liveness = await checkProcessLiveness(entry.pid, entry.procStart);
+          if (liveness === "zombie") {
+            if (
+              entry.procStart !== undefined &&
+              (await provenSameProcessAsync(entry.pid, entry.procStart)) === true
+            ) {
               try {
-                process.kill(-N.pid, "SIGKILL");
+                process.kill(-entry.pid, "SIGKILL");
               } catch {
                 try {
-                  process.kill(N.pid, "SIGKILL");
+                  process.kill(entry.pid, "SIGKILL");
                 } catch {}
               }
-              S = true;
-            } else S = false;
-          } else S = U !== "live";
+              result = true;
+            } else result = false;
+          } else result = liveness !== "live";
         } else {
-          let U = !A.scanFailed && !roster.parseFailed;
-          w =
-            h.code === "ENOCONN" &&
-            U &&
-            n?.state !== undefined &&
+          let scanUsable = !orphanSweep.scanFailed && !roster.parseFailed;
+          confirmed =
+            killReply.code === "ENOCONN" &&
+            scanUsable &&
+            options?.state !== undefined &&
             isSettled({
-              state: n.state,
-              tempo: n.tempo,
+              state: options.state,
+              tempo: options.tempo,
             });
-          S = w;
-          T = U && !S;
+          result = confirmed;
+          scanned = scanUsable && !result;
         }
       }
-      if (s && S && h.code === "ENOCONN" && !w)
-        await updateRoster((v) => {
-          delete v.workers[e];
-        }, r).catch((error) => logError(error));
-      return T
+      if (evict && result && killReply.code === "ENOCONN" && !confirmed)
+        await updateRoster((roster) => {
+          delete roster.workers[short];
+        }, storageV5).catch((error) => logError(error));
+      return scanned
         ? {
-            confirmed: S,
-            noWorkerFound: T,
+            confirmed: result,
+            noWorkerFound: scanned,
           }
         : {
-            confirmed: S,
+            confirmed: result,
           };
     }
     return {
@@ -240,40 +252,45 @@ async function killJob(e, n, o, r) {
   }
   return {
     confirmed: false,
-    error: h.error,
+    error: killReply.error,
   };
 }
 //@ chunk-vrr64ez0.js:29740-30247 placement
-async function killOrphanedWorker(e, n) {
-  let o = await killViaPtySocket(daemonPtySocket(e));
+async function killOrphanedWorker(short, storageV5) {
+  let killed = await killViaPtySocket(daemonPtySocket(short));
   let anyMatch = false;
   let confirmed = true;
   let scanFailed = false;
-  let h = await listAllLiveSessions(n).catch(() => {
+  let sessions = await listAllLiveSessions(storageV5).catch(() => {
     scanFailed = true;
     return [];
   });
-  for (let A of h)
-    if (matchesJobRef(A, e)) {
+  for (let session of sessions)
+    if (matchesJobRef(session, short)) {
       anyMatch = true;
-      if (!o)
+      if (!killed)
         try {
-          process.kill(A.pid, "SIGTERM");
+          process.kill(session.pid, "SIGTERM");
         } catch {}
-      let w = Date.now() + 3000;
-      let T = true;
-      while ((T = await isProcessLive(A.pid, A.procStart)) && Date.now() < w) await sleep(100);
-      if (T) {
+      let deadline = Date.now() + 3000;
+      let anyMatch_2 = true;
+      while ((anyMatch_2 = await isProcessLive(session.pid, session.procStart)) && Date.now() < deadline)
+        await sleep(100);
+      if (anyMatch_2) {
         logEvent("tengu_bg_killjob_ctrl_fallback", {
-          ctrlSent: o,
+          ctrlSent: killed,
         });
         try {
-          process.kill(A.pid, "SIGTERM");
+          process.kill(session.pid, "SIGTERM");
         } catch {}
-        let S = Date.now() + 500;
-        while ((T = await isProcessLive(A.pid, A.procStart)) && Date.now() < S) await sleep(100);
+        let pollDeadline = Date.now() + 500;
+        while (
+          (anyMatch_2 = await isProcessLive(session.pid, session.procStart)) &&
+          Date.now() < pollDeadline
+        )
+          await sleep(100);
       }
-      if (T) confirmed = false;
+      if (anyMatch_2) confirmed = false;
     }
   return {
     confirmed,
@@ -282,77 +299,80 @@ async function killOrphanedWorker(e, n) {
   };
 }
 //@ chunk-vrr64ez0.js:30247-30605 placement
-async function listAliveDaemonJobs(e) {
-  let n = await controlRequest({
+async function listAliveDaemonJobs(storageV5) {
+  let reply = await controlRequest({
     proto: BG_PROTO,
     op: "list",
   });
-  if (n.ok && n.op === "list")
+  if (reply.ok && reply.op === "list")
     return {
-      shorts: new Set(n.jobs.map((job) => job.short)),
-      records: n.jobs.filter((job) => !job.outcome),
+      shorts: new Set(reply.jobs.map((job) => job.short)),
+      records: reply.jobs.filter((job) => !job.outcome),
     };
   let roster = await readRoster(
     {
       silent: true,
     },
-    e,
+    storageV5,
   );
   let entries = Object.entries(roster.workers);
-  let results = await Promise.all(entries.map(([, s]) => isProcessLive(s.pid, s.procStart)));
+  let results = await Promise.all(entries.map(([, entry]) => isProcessLive(entry.pid, entry.procStart)));
   return {
-    shorts: new Set(entries.filter((s, h) => results[h]).map(([s]) => s)),
+    shorts: new Set(entries.filter((entry, index) => results[index]).map(([short]) => short)),
     records: [],
   };
 }
 //@ chunk-vrr64ez0.js:30605-30880 placement
-async function probeDaemonJob(e, n) {
-  let o = await controlRequest({
+async function probeDaemonJob(short, storageV5) {
+  let reply = await controlRequest({
     proto: BG_PROTO,
     op: "has",
-    short: e,
+    short,
   });
-  if (o.ok && o.op === "has")
+  if (reply.ok && reply.op === "has")
     return {
-      alive: o.alive,
-      present: o.present ?? o.alive,
+      alive: reply.alive,
+      present: reply.present ?? reply.alive,
       daemonUp: true,
     };
-  let r = (
+  let entry = (
     await readRoster(
       {
         silent: true,
       },
-      n,
+      storageV5,
     )
-  ).workers[e];
-  let u = r !== undefined && (await isProcessLive(r.pid, r.procStart));
+  ).workers[short];
+  let isLive = entry !== undefined && (await isProcessLive(entry.pid, entry.procStart));
   return {
-    alive: u,
-    present: u,
+    alive: isLive,
+    present: isLive,
     daemonUp: false,
   };
 }
 //@ chunk-vrr64ez0.js:30880-30994 placement
 async function isDaemonJobPresent(short) {
-  let n = await controlRequest({
+  let reply = await controlRequest({
     proto: BG_PROTO,
     op: "has",
     short,
   });
-  return n.ok && n.op === "has" ? (n.present ?? n.alive) : false;
+  return reply.ok && reply.op === "has" ? (reply.present ?? reply.alive) : false;
 }
 //@ chunk-vrr64ez0.js:30994-31299 placement
-function applyReplyPatch(e, n) {
-  let o =
-    e.tempo === "blocked" && e.state !== "blocked" && e.block === undefined && looksLikeApproveLine(e.needs);
+function applyReplyPatch(jobState, patch) {
+  let reply =
+    jobState.tempo === "blocked" &&
+    jobState.state !== "blocked" &&
+    jobState.block === undefined &&
+    looksLikeApproveLine(jobState.needs);
   return {
-    ...e,
-    ...(hasOutstandingAsk(e) && {
+    ...jobState,
+    ...(hasOutstandingAsk(jobState) && {
       state: "working",
     }),
-    detail: truncateWithEllipsis(redactSecrets(n).replace(/\s+/g, " ").trim(), MAX_HEADLINE_LENGTH),
-    ...(!o && {
+    detail: truncateWithEllipsis(redactSecrets(patch).replace(/\s+/g, " ").trim(), MAX_HEADLINE_LENGTH),
+    ...(!reply && {
       tempo: "active",
       needs: undefined,
       block: undefined,
@@ -370,68 +390,68 @@ function daemonUnreachableMessage() {
   return `Couldn't reach the ${bgSupervisorNoun()} \u2014 it may be restarting. Press Enter to retry`;
 }
 //@ chunk-vrr64ez0.js:31527-31569 placement
-function isReplyDaemonRestartingMsg(e) {
-  return e.startsWith(daemonUnreachableMessage());
+function isReplyDaemonRestartingMsg(message) {
+  return message.startsWith(daemonUnreachableMessage());
 }
 //@ chunk-vrr64ez0.js:31569-31661 placement
 var MESSAGE_SAVED_SUFFIX =
   " \u2014 your message was saved and will be sent when you next restart this session";
 //@ chunk-vrr64ez0.js:31661-31797 placement
-async function isReplyDeliverable(jobDir, n, o) {
+async function isReplyDeliverable(jobDir, patch, storageV5) {
   invalidateJobStateCache(jobDir);
-  let jobState = await readJobState(jobDir, o);
-  if (!jobState || isNonPromptInput(n, jobState)) return false;
-  let u = queuedPromptOrUndefined(jobState);
-  if (u !== undefined) return u === n;
-  return queuePromptForJob(jobDir, jobState, n, o);
+  let jobState = await readJobState(jobDir, storageV5);
+  if (!jobState || isNonPromptInput(patch, jobState)) return false;
+  let prompt = queuedPromptOrUndefined(jobState);
+  if (prompt !== undefined) return prompt === patch;
+  return queuePromptForJob(jobDir, jobState, patch, storageV5);
 }
 //@ chunk-vrr64ez0.js:31797-34943 placement
-async function replyToJob(id, n, state, r, u, storageV5, { nextTurn: h = false } = {}) {
+async function replyToJob(id, text, state, jobState, extraTelemetry, storageV5, { nextTurn = false } = {}) {
   let now = Date.now();
-  let w = (D, P, code) => {
+  let logOutcome = (outcome, errorCode, code) => {
     logEvent("tengu_bg_reply_outcome", {
       ms: Date.now() - now,
-      outcome: fromEnum(D),
-      error_code: fromEnumOpt(P),
+      outcome: fromEnum(outcome),
+      error_code: fromEnumOpt(errorCode),
       errno: sanitizeErrnoTokenForTelemetry(code),
     });
   };
   if (state?.backend === "peer") {
     if (!state.sock) {
       logFeatureOk("job_reply");
-      w("ok");
+      logOutcome("ok");
       return {
         err: REPLY_PEER_NO_SOCK_MSG,
       };
     }
     try {
-      await sendToUdsSocket(state.sock, n, storageV5);
+      await sendToUdsSocket(state.sock, text, storageV5);
       logFeatureOk("job_reply");
-      w("ok");
+      logOutcome("ok");
       return null;
     } catch (error) {
       logFeatureBad("job_reply", "job_reply_peer_send_failed");
-      w("bad", "job_reply_peer_send_failed");
+      logOutcome("bad", "job_reply_peer_send_failed");
       return {
         err: `Couldn't send to that session \u2014 ${errorMessage(error)}`,
       };
     }
   }
   let jobDir = getJobDir(id);
-  let S = r ?? (await readJobState(jobDir, storageV5));
+  let currentState = jobState ?? (await readJobState(jobDir, storageV5));
   let daemonToken = await readDaemonToken();
-  let N = false;
-  let U = false;
-  let j = async () => {
-    if (h) {
-      let P = await controlRequest({
+  let replyDelivered = false;
+  let versionSkewed = false;
+  let sendReplyRequest = async () => {
+    if (nextTurn) {
+      let pingResponse = await controlRequest({
         proto: BG_PROTO,
         op: "ping",
       });
-      if (!P.ok) return P;
+      if (!pingResponse.ok) return pingResponse;
       if (
-        P.op !== "ping" ||
-        P.version !==
+        pingResponse.op !== "ping" ||
+        pingResponse.version !==
           {
             ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
             PACKAGE_URL: "@anthropic-ai/claude-code",
@@ -444,7 +464,7 @@ async function replyToJob(id, n, state, r, u, storageV5, { nextTurn: h = false }
             DD_SOURCEMAP_GROUP: "default",
           }.VERSION
       ) {
-        U = true;
+        versionSkewed = true;
         return {
           ok: false,
           error: "its supervisor runs a different Claude Code build",
@@ -452,42 +472,49 @@ async function replyToJob(id, n, state, r, u, storageV5, { nextTurn: h = false }
         };
       }
     }
-    let D = await controlRequest({
+    let replyResponse = await controlRequest({
       proto: BG_PROTO,
       op: "reply",
       short: id,
-      text: n,
+      text,
       auth: daemonToken,
-      ...(h && {
-        nextTurn: h,
+      ...(nextTurn && {
+        nextTurn,
       }),
     });
-    if (!D.ok && "connected" in D && D.connected === true) N = true;
-    return D;
+    if (!replyResponse.ok && "connected" in replyResponse && replyResponse.connected === true)
+      replyDelivered = true;
+    return replyResponse;
   };
-  let C = await j();
-  let q = async () => {
-    let D = 10;
+  let response = await sendReplyRequest();
+  let retryTransient = async () => {
+    let maxAttempts = 10;
     for (
       let idx = 0;
-      !C.ok && (C.code === "ESTARTING" || C.code === "ENOREPLY" || C.code === "ERESPAWNING") && idx < D;
+      !response.ok &&
+      (response.code === "ESTARTING" || response.code === "ENOREPLY" || response.code === "ERESPAWNING") &&
+      idx < maxAttempts;
       idx++
     ) {
-      if (C.code === "ERESPAWNING") D = 60;
+      if (response.code === "ERESPAWNING") maxAttempts = 60;
       await sleep(200);
-      C = await j();
+      response = await sendReplyRequest();
     }
   };
-  await q();
-  if (!C.ok && C.code === "EAUTH") {
+  await retryTransient();
+  if (!response.ok && response.code === "EAUTH") {
     let daemonToken_2 = await readDaemonToken();
     if (daemonToken_2 && daemonToken_2 !== daemonToken) {
       daemonToken = daemonToken_2;
-      C = await j();
+      response = await sendReplyRequest();
     }
   }
   let ensureFailed = false;
-  if (!C.ok && (C.code === "ENOCONN" || C.code === "ETIMEOUT") && !(h && N)) {
+  if (
+    !response.ok &&
+    (response.code === "ENOCONN" || response.code === "ETIMEOUT") &&
+    !(nextTurn && replyDelivered)
+  ) {
     let daemon = await ensureDaemon(
       {
         forceTransient: true,
@@ -497,173 +524,170 @@ async function replyToJob(id, n, state, r, u, storageV5, { nextTurn: h = false }
     ensureFailed = !daemon.ok;
     if (daemon.ok) {
       daemonToken = (await readDaemonToken()) ?? daemonToken;
-      C = await j();
-      await q();
+      response = await sendReplyRequest();
+      await retryTransient();
     }
   }
-  if (C.ok) {
-    if (S && !r) {
+  if (response.ok) {
+    if (currentState && !jobState) {
       invalidateJobStateCache(jobDir);
-      let D = (await readJobState(jobDir, storageV5)) ?? S;
-      let P = applyReplyPatch(D, n);
-      if (P.queuedPrompt === n) P.queuedPrompt = undefined;
-      writeStateAtomic(jobDir, P, storageV5).catch(logJobWriteError);
+      let latestState = (await readJobState(jobDir, storageV5)) ?? currentState;
+      let patchedState = applyReplyPatch(latestState, text);
+      if (patchedState.queuedPrompt === text) patchedState.queuedPrompt = undefined;
+      writeStateAtomic(jobDir, patchedState, storageV5).catch(logJobWriteError);
     }
-    if (!r) {
+    if (!jobState) {
       logEvent("tengu_bg_agent_action", {
         action: lit("reply"),
-        wasTerminal: S ? isTerminal(S.state) : false,
+        wasTerminal: currentState ? isTerminal(currentState.state) : false,
         daemon: true,
-        jobSessionId: sanitizeMarkName(state?.sessionId ?? S?.sessionId),
-        ...u?.(),
+        jobSessionId: sanitizeMarkName(state?.sessionId ?? currentState?.sessionId),
+        ...extraTelemetry?.(),
       });
       logFeatureOk("job_reply");
-      w("ok");
+      logOutcome("ok");
     }
     return null;
   }
-  if (C.code === "ESKEW") {
-    let D = U ? "job_reply_daemon_skewed" : "job_reply_worker_skewed";
-    logFeatureBad("job_reply", D);
-    w("bad", D);
+  if (response.code === "ESKEW") {
+    let skewMetric = versionSkewed ? "job_reply_daemon_skewed" : "job_reply_worker_skewed";
+    logFeatureBad("job_reply", skewMetric);
+    logOutcome("bad", skewMetric);
     return {
-      err: C.error,
-      code: C.code,
+      err: response.error,
+      code: response.code,
     };
   }
-  if (C.code === "ENOJOB") {
-    if (!r) {
+  if (response.code === "ENOJOB") {
+    if (!jobState) {
       logFeatureSad("job_reply", "job_reply_not_running");
-      w("sad", "job_reply_not_running");
+      logOutcome("sad", "job_reply_not_running");
     }
     return {
       err: REPLY_ENOJOB_MSG,
-      code: C.code,
+      code: response.code,
     };
   }
-  if (C.code === "ENOCONN" || C.code === "ETIMEOUT") {
-    if (!r && C.code === "ENOCONN") {
-      let P = (
+  if (response.code === "ENOCONN" || response.code === "ETIMEOUT") {
+    if (!jobState && response.code === "ENOCONN") {
+      let rosterEntry = (
         await readRoster(
           {
             silent: true,
           },
           storageV5,
         )
-      ).workers[S?.daemonShort ?? id];
-      if (P && !(await isProcessLive(P.pid, P.procStart))) {
+      ).workers[currentState?.daemonShort ?? id];
+      if (rosterEntry && !(await isProcessLive(rosterEntry.pid, rosterEntry.procStart))) {
         logFeatureSad("job_reply", "job_reply_not_running");
-        w("sad", "job_reply_not_running");
+        logOutcome("sad", "job_reply_not_running");
         return {
           err: REPLY_ENOJOB_MSG,
           code: "ENOJOB",
         };
       }
     }
-    if (!r) {
+    if (!jobState) {
       logFeatureBad("job_reply", "job_reply_daemon_unreachable", {
-        errno: fromEnum(C.code),
+        errno: fromEnum(response.code),
         ensure_failed: ensureFailed,
       });
-      w("bad", "job_reply_daemon_unreachable");
+      logOutcome("bad", "job_reply_daemon_unreachable");
     }
-    let D =
-      !r && C.code === "ENOCONN" && !C.connected && !N && (await isReplyDeliverable(jobDir, n, storageV5));
-    if (h && !N)
+    let queuedForLater =
+      !jobState &&
+      response.code === "ENOCONN" &&
+      !response.connected &&
+      !replyDelivered &&
+      (await isReplyDeliverable(jobDir, text, storageV5));
+    if (nextTurn && !replyDelivered)
       return {
-        err: "its supervisor did not answer" + (D ? MESSAGE_SAVED_SUFFIX : ""),
+        err: "its supervisor did not answer" + (queuedForLater ? MESSAGE_SAVED_SUFFIX : ""),
         code: "EUNREACHABLE",
-        queued: D,
+        queued: queuedForLater,
       };
     return {
-      err: daemonUnreachableMessage() + (D ? MESSAGE_SAVED_SUFFIX : ""),
-      code: C.code,
-      queued: D,
+      err: daemonUnreachableMessage() + (queuedForLater ? MESSAGE_SAVED_SUFFIX : ""),
+      code: response.code,
+      queued: queuedForLater,
     };
   }
-  if (!r) {
+  if (!jobState) {
     logFeatureBad("job_reply", "job_reply_send_failed");
-    w("bad", "job_reply_send_failed", C.code);
+    logOutcome("bad", "job_reply_send_failed", response.code);
   }
-  let K = !r && !N && (await isReplyDeliverable(jobDir, n, storageV5));
+  let queuedForLater = !jobState && !replyDelivered && (await isReplyDeliverable(jobDir, text, storageV5));
   return {
-    err: `Couldn't send your message \u2014 ${C.error}` + (K ? MESSAGE_SAVED_SUFFIX : ""),
-    code: C.code,
-    queued: K,
+    err: `Couldn't send your message \u2014 ${response.error}` + (queuedForLater ? MESSAGE_SAVED_SUFFIX : ""),
+    code: response.code,
+    queued: queuedForLater,
   };
 }
 //@ chunk-vrr64ez0.js:34943-35138 placement
-async function hasConversationToResume(e, n) {
-  if (isExecLaunch(e)) return false;
-  let o = wrapStorageSource(getTranscriptStorageContext(n));
-  let r = await resolveJobTranscript(
-    e.resumeSessionId ?? e.sessionId,
-    e.cwd,
-    e.linkScanPath,
+async function hasConversationToResume(jobState, storageV5) {
+  if (isExecLaunch(jobState)) return false;
+  let storageSource = wrapStorageSource(getTranscriptStorageContext(storageV5));
+  let transcriptInfo = await resolveJobTranscript(
+    jobState.resumeSessionId ?? jobState.sessionId,
+    jobState.cwd,
+    jobState.linkScanPath,
     undefined,
-    o,
+    storageSource,
   ).catch(() => {
     return;
   });
-  return r?.hasMessages === true && !r.unverifiable;
+  return transcriptInfo?.hasMessages === true && !transcriptInfo.unverifiable;
 }
 //@ chunk-vrr64ez0.js:35138-36245 placement
 /**
  * 附加前检查会话状态：已删除/已结束时返回错误并上报 detached。
  */
-async function resolveAttachTarget(e, n, storageV5) {
-  let jobStateAfterSettle = await readJobStateAfterSettle(getJobDir(e), storageV5);
-  if (jobStateAfterSettle === null) {
+async function resolveAttachTarget(short, gesture, storageV5) {
+  let jobState = await readJobStateAfterSettle(getJobDir(short), storageV5);
+  if (jobState === null) {
     logFeatureOk("job_attach");
-    reportAttachTelemetry(n, "detached");
+    reportAttachTelemetry(gesture, "detached");
     return {
       kind: "error",
       ended: true,
       msg: "That session was removed \u2014 back to the list",
     };
   }
-  if (
-    jobStateAfterSettle.state === "done" ||
-    jobStateAfterSettle.state === "stopped" ||
-    jobStateAfterSettle.state === "blocked"
-  ) {
+  if (jobState.state === "done" || jobState.state === "stopped" || jobState.state === "blocked") {
     logFeatureOk("job_attach");
-    reportAttachTelemetry(n, "detached");
+    reportAttachTelemetry(gesture, "detached");
     return {
       kind: "error",
       ended: true,
       msg:
-        jobStateAfterSettle.state === "stopped"
+        jobState.state === "stopped"
           ? "That session was stopped \u2014 back to the list"
-          : jobStateAfterSettle.state === "blocked"
+          : jobState.state === "blocked"
             ? "That session is blocked \u2014 back to the list"
-            : (await hasConversationToResume(jobStateAfterSettle, storageV5))
+            : (await hasConversationToResume(jobState, storageV5))
               ? "That session's process exited \u2014 press Enter to resume it (the conversation is saved)"
               : "That session ended \u2014 back to the list",
     };
   }
-  if (jobStateAfterSettle.state === "failed") {
-    if (
-      jobStateAfterSettle.detail === HOST_DIED_DETAIL ||
-      jobStateAfterSettle.detail === HOST_DIED_EXEC_DETAIL
-    ) {
+  if (jobState.state === "failed") {
+    if (jobState.detail === HOST_DIED_DETAIL || jobState.detail === HOST_DIED_EXEC_DETAIL) {
       logFeatureBad("job_attach", "job_attach_host_dead");
-      reportAttachTelemetry(n, "error");
+      reportAttachTelemetry(gesture, "error");
       return {
         kind: "error",
         msg:
-          jobStateAfterSettle.detail === HOST_DIED_EXEC_DETAIL
+          jobState.detail === HOST_DIED_EXEC_DETAIL
             ? HOST_DIED_EXEC_ATTACH_MESSAGE
             : `${HOST_DIED_ATTACH_MESSAGE} \u2014 press Enter to restart it`,
       };
     }
-    let included = jobStateAfterSettle.detail.includes("before init");
+    let included = jobState.detail.includes("before init");
     logFeatureSad("job_attach", included ? "job_attach_pre_init_crash" : "job_attach_crash_loop");
     return {
       kind: "error",
       ended: true,
       crashed: true,
-      msg: `Session can't start \u2014 ${jobStateAfterSettle.detail.replace(/^.*?before init(?: \u2014 )?/, "").replace(/^Error:\s*/, "") || jobStateAfterSettle.detail || "it crashed repeatedly"}`,
+      msg: `Session can't start \u2014 ${jobState.detail.replace(/^.*?before init(?: \u2014 )?/, "").replace(/^Error:\s*/, "") || jobState.detail || "it crashed repeatedly"}`,
     };
   }
   return;
@@ -674,8 +698,8 @@ var TRANSIENT_STOP_OPTIONS = {
   standsDownAtExit: true,
 };
 //@ chunk-vrr64ez0.js:36292-36371 placement
-async function attachJob(e, n = {}) {
-  return await attachToBackgroundSession(e, n, {
+async function attachJob(short, options = {}) {
+  return await attachToBackgroundSession(short, options, {
     overStream: false,
     onlyToRetry: false,
   });
@@ -684,80 +708,80 @@ async function attachJob(e, n = {}) {
 /**
  * 附加到后台会话的完整流程：屏幕保持、首帧前门控 stdin、云/本地会话标签。
  */
-async function attachToBackgroundSession(short, n, o) {
-  touchRecapTrigger(short, n.storageV5);
+async function attachToBackgroundSession(short, options, attachOptions) {
+  touchRecapTrigger(short, options.storageV5);
   logForDebugging("[PERF:bg-attach-start]");
   drainStdin();
-  let r = RACED_SOCKET_GAP;
+  let racedSocketGapPattern = RACED_SOCKET_GAP;
   let sessionTabs = undefined;
-  let s = TRANSIENT_ATTACH_CODE;
-  let h = {
+  let transientAttachPattern = TRANSIENT_ATTACH_CODE;
+  let attachOptionsFirst = {
     holdScreenOnDisconnect: true,
-    alreadyInAlt: n.alreadyInAlt,
-    gateStdinUntilFirstFrame: n.gateStdinUntilFirstFrame,
+    alreadyInAlt: options.alreadyInAlt,
+    gateStdinUntilFirstFrame: options.gateStdinUntilFirstFrame,
     sessionTabs,
-    cloudTabs: n.cloudTabs,
-    tabsLanding: n.tabsLanding,
+    cloudTabs: options.cloudTabs,
+    tabsLanding: options.tabsLanding,
   };
-  let A = {
-    ...h,
+  let attachOptionsReconnect = {
+    ...attachOptionsFirst,
     holdingFrame: true,
     gateStdinUntilFirstFrame: false,
     tabsLanding: undefined,
   };
-  let w = n.gesture ?? {
+  let gesture = options.gesture ?? {
     gestureId: randomUUID(),
     attempt: 0,
     interactive: {},
   };
-  let T = !n.alreadyInAlt;
-  let S = await killJobWithSignal(short, o, {
-    ...h,
+  let shouldExitAltScreen = !options.alreadyInAlt;
+  let attachResult = await killJobWithSignal(short, attachOptions, {
+    ...attachOptionsFirst,
     telemetry: {
-      gestureId: w.gestureId,
-      attempt: ++w.attempt,
-      t0: w.t0,
-      surface: w.surface,
-      daemonBooted: w.daemonBooted,
-      interactive: w.interactive,
-      storageV5: n.storageV5,
+      gestureId: gesture.gestureId,
+      attempt: ++gesture.attempt,
+      t0: gesture.t0,
+      surface: gesture.surface,
+      daemonBooted: gesture.daemonBooted,
+      interactive: gesture.interactive,
+      storageV5: options.storageV5,
     },
   });
-  let v;
-  if (S.outcome === "error" && S.msg && r.test(S.msg)) {
-    v = await ensureDaemon(TRANSIENT_STOP_OPTIONS, n.storageV5);
-    if (v.ok)
-      S = await killJobWithSignal(short, o, {
-        ...h,
+  let daemonResult;
+  if (attachResult.outcome === "error" && attachResult.msg && racedSocketGapPattern.test(attachResult.msg)) {
+    daemonResult = await ensureDaemon(TRANSIENT_STOP_OPTIONS, options.storageV5);
+    if (daemonResult.ok)
+      attachResult = await killJobWithSignal(short, attachOptions, {
+        ...attachOptionsFirst,
         telemetry: {
-          gestureId: w.gestureId,
-          attempt: ++w.attempt,
-          t0: w.t0,
-          surface: w.surface,
-          daemonBooted: w.daemonBooted,
-          interactive: w.interactive,
-          storageV5: n.storageV5,
+          gestureId: gesture.gestureId,
+          attempt: ++gesture.attempt,
+          t0: gesture.t0,
+          surface: gesture.surface,
+          daemonBooted: gesture.daemonBooted,
+          interactive: gesture.interactive,
+          storageV5: options.storageV5,
         },
       });
   }
-  for (let j = 0; S.msg && s.test(S.msg) && j < 20; j++) {
+  for (let j = 0; attachResult.msg && transientAttachPattern.test(attachResult.msg) && j < 20; j++) {
     await sleep(500);
-    S = await killJobWithSignal(short, o, {
-      ...h,
+    attachResult = await killJobWithSignal(short, attachOptions, {
+      ...attachOptionsFirst,
       telemetry: {
-        gestureId: w.gestureId,
-        attempt: ++w.attempt,
-        t0: w.t0,
-        surface: w.surface,
-        daemonBooted: w.daemonBooted,
-        interactive: w.interactive,
-        storageV5: n.storageV5,
+        gestureId: gesture.gestureId,
+        attempt: ++gesture.attempt,
+        t0: gesture.t0,
+        surface: gesture.surface,
+        daemonBooted: gesture.daemonBooted,
+        interactive: gesture.interactive,
+        storageV5: options.storageV5,
       },
     });
   }
-  let N = async () => {
-    if (T) process.stdout.write(exitAltScreenSequence());
-    let attachTarget = await resolveAttachTarget(short, w, n.storageV5);
+  let resolveCrashResult = async () => {
+    if (shouldExitAltScreen) process.stdout.write(exitAltScreenSequence());
+    let attachTarget = await resolveAttachTarget(short, gesture, options.storageV5);
     if (attachTarget) return attachTarget;
     logFeatureSad("job_attach", "job_attach_crashed");
     return {
@@ -766,55 +790,55 @@ async function attachToBackgroundSession(short, n, o) {
       msg: "Session crashed \u2014 press Enter to respawn",
     };
   };
-  while (S.outcome === "disconnected") {
+  while (attachResult.outcome === "disconnected") {
     if (isTerminalShutdown()) {
-      if (T) process.stdout.write(exitAltScreenSequence());
-      return shouldStartDaemonForAttach("loop_head", n);
+      if (shouldExitAltScreen) process.stdout.write(exitAltScreenSequence());
+      return shouldStartDaemonForAttach("loop_head", options);
     }
-    let U = " Reconnecting\u2026 ";
-    let max = Math.max(1, (process.stdout.columns ?? 80) - U.length);
-    process.stdout.write(`\x1B7${cursorPosition(1, max)}\x1B[2;7m${U}\x1B[0m\x1B8`);
-    let C;
+    let reconnectingLabel = " Reconnecting\u2026 ";
+    let max = Math.max(1, (process.stdout.columns ?? 80) - reconnectingLabel.length);
+    process.stdout.write(`\x1B7${cursorPosition(1, max)}\x1B[2;7m${reconnectingLabel}\x1B[0m\x1B8`);
+    let ensureOutcome;
     if (process.stdin.isTTY) {
-      let K = "isRaw" in process.stdin ? Boolean(process.stdin.isRaw) : false;
-      if (!K) setRawModeSafe(process.stdin, true);
-      let D = waitForDetachKey(process.stdin);
+      let wasRawMode = "isRaw" in process.stdin ? Boolean(process.stdin.isRaw) : false;
+      if (!wasRawMode) setRawModeSafe(process.stdin, true);
+      let detachWaiter = waitForDetachKey(process.stdin);
       try {
-        C = await Promise.race([
-          ensureDaemon(TRANSIENT_STOP_OPTIONS, n.storageV5),
-          D.promise.then(() => "detach"),
+        ensureOutcome = await Promise.race([
+          ensureDaemon(TRANSIENT_STOP_OPTIONS, options.storageV5),
+          detachWaiter.promise.then(() => "detach"),
         ]);
       } finally {
-        D.cancel();
-        if (!K) setRawModeSafe(process.stdin, false);
+        detachWaiter.cancel();
+        if (!wasRawMode) setRawModeSafe(process.stdin, false);
       }
-    } else C = await ensureDaemon(TRANSIENT_STOP_OPTIONS, n.storageV5);
-    if (C === "detach") {
-      if (T) process.stdout.write(exitAltScreenSequence());
+    } else ensureOutcome = await ensureDaemon(TRANSIENT_STOP_OPTIONS, options.storageV5);
+    if (ensureOutcome === "detach") {
+      if (shouldExitAltScreen) process.stdout.write(exitAltScreenSequence());
       logForDebugging("[PERF:bg-attach-end]");
       logFeatureOk("job_attach");
-      reportAttachTelemetry(w, "detached");
+      reportAttachTelemetry(gesture, "detached");
       return {
         kind: "detached",
       };
     }
-    let q = C;
-    if (!q.ok) {
-      if (T) process.stdout.write(exitAltScreenSequence());
-      if (q.stoodDown) return shouldStartDaemonForAttach("reconnect", n, q);
-      logFeatureBad("job_attach", `job_attach_daemon_start_failed_${q.causeCode}`);
-      reportAttachTelemetry(w, "error");
+    let ensureResult = ensureOutcome;
+    if (!ensureResult.ok) {
+      if (shouldExitAltScreen) process.stdout.write(exitAltScreenSequence());
+      if (ensureResult.stoodDown) return shouldStartDaemonForAttach("reconnect", options, ensureResult);
+      logFeatureBad("job_attach", `job_attach_daemon_start_failed_${ensureResult.causeCode}`);
+      reportAttachTelemetry(gesture, "error");
       return {
         kind: "error",
-        msg: `Couldn't restart the ${bgSupervisorNoun()} \u2014 ${q.reason}`,
+        msg: `Couldn't restart the ${bgSupervisorNoun()} \u2014 ${ensureResult.reason}`,
       };
     }
-    let Q = drainStdin();
-    if (Q && containsInterruptKey(Q)) {
-      if (T) process.stdout.write(exitAltScreenSequence());
+    let pendingInput = drainStdin();
+    if (pendingInput && containsInterruptKey(pendingInput)) {
+      if (shouldExitAltScreen) process.stdout.write(exitAltScreenSequence());
       logForDebugging("[PERF:bg-attach-end]");
       logFeatureOk("job_attach");
-      reportAttachTelemetry(w, "detached");
+      reportAttachTelemetry(gesture, "detached");
       return {
         kind: "detached",
       };
@@ -823,70 +847,74 @@ async function attachToBackgroundSession(short, n, o) {
       logForDebugging(
         `[bg-attach] worker gone on reconnect probe short=${short} \u2014 settled while attached`,
       );
-      return N();
+      return resolveCrashResult();
     }
-    S = await killJobWithSignal(short, o, {
-      ...A,
+    attachResult = await killJobWithSignal(short, attachOptions, {
+      ...attachOptionsReconnect,
       telemetry: {
-        gestureId: w.gestureId,
-        attempt: ++w.attempt,
-        t0: w.t0,
-        surface: w.surface,
-        daemonBooted: w.daemonBooted,
-        interactive: w.interactive,
-        storageV5: n.storageV5,
+        gestureId: gesture.gestureId,
+        attempt: ++gesture.attempt,
+        t0: gesture.t0,
+        surface: gesture.surface,
+        daemonBooted: gesture.daemonBooted,
+        interactive: gesture.interactive,
+        storageV5: options.storageV5,
       },
     });
-    for (let idx = 0; S.msg && s.test(S.msg) && idx < 10; idx++) {
+    for (let idx = 0; attachResult.msg && transientAttachPattern.test(attachResult.msg) && idx < 10; idx++) {
       await sleep(200);
-      S = await killJobWithSignal(short, o, {
-        ...A,
+      attachResult = await killJobWithSignal(short, attachOptions, {
+        ...attachOptionsReconnect,
         telemetry: {
-          gestureId: w.gestureId,
-          attempt: ++w.attempt,
-          t0: w.t0,
-          surface: w.surface,
-          daemonBooted: w.daemonBooted,
-          interactive: w.interactive,
-          storageV5: n.storageV5,
+          gestureId: gesture.gestureId,
+          attempt: ++gesture.attempt,
+          t0: gesture.t0,
+          surface: gesture.surface,
+          daemonBooted: gesture.daemonBooted,
+          interactive: gesture.interactive,
+          storageV5: options.storageV5,
         },
       });
     }
-    if (S.msg?.includes("ENOJOB")) {
+    if (attachResult.msg?.includes("ENOJOB")) {
       logForDebugging(
         `[bg-attach] ENOJOB on reconnect short=${short} \u2014 daemon has no handle (or it's killing/settled)`,
       );
-      return N();
+      return resolveCrashResult();
     }
-    if (S.outcome === "error" && T) process.stdout.write(exitAltScreenSequence());
+    if (attachResult.outcome === "error" && shouldExitAltScreen)
+      process.stdout.write(exitAltScreenSequence());
   }
   if (
-    S.outcome === "detached" &&
-    S.msg &&
-    !o.onlyToRetry &&
-    (FATAL_ATTACH_CODE.test(S.msg) || s.test(S.msg))
+    attachResult.outcome === "detached" &&
+    attachResult.msg &&
+    !attachOptions.onlyToRetry &&
+    (FATAL_ATTACH_CODE.test(attachResult.msg) || transientAttachPattern.test(attachResult.msg))
   ) {
-    if (T) process.stdout.write(exitAltScreenSequence());
+    if (shouldExitAltScreen) process.stdout.write(exitAltScreenSequence());
     logFeatureBad("job_attach", "job_attach_stalled");
     return {
       kind: "error",
-      msg: S.msg.replace(/^E(STALLED|RESPAWNING|STARTING):\s*/, ""),
+      msg: attachResult.msg.replace(/^E(STALLED|RESPAWNING|STARTING):\s*/, ""),
     };
   }
-  if (S.outcome === "error") {
-    if (S.msg?.startsWith(`${HOST_DEAD_ATTACH_CODE}:`)) {
+  if (attachResult.outcome === "error") {
+    if (attachResult.msg?.startsWith(`${HOST_DEAD_ATTACH_CODE}:`)) {
       logFeatureBad("job_attach", "job_attach_host_dead");
-      let j = await readJobState(getJobDir(short), n.storageV5).catch(() => null);
-      let trimmed = S.msg.slice(HOST_DEAD_ATTACH_CODE.length + 1).trim();
+      let jobState = await readJobState(getJobDir(short), options.storageV5).catch(() => null);
+      let trimmed = attachResult.msg.slice(HOST_DEAD_ATTACH_CODE.length + 1).trim();
       return {
         kind: "error",
-        msg: j !== null && isExecLaunch(j) ? trimmed : `${trimmed} \u2014 press Enter to restart it`,
+        msg:
+          jobState !== null && isExecLaunch(jobState)
+            ? trimmed
+            : `${trimmed} \u2014 press Enter to restart it`,
       };
     }
-    if (S.msg?.startsWith(`${ENORESPONSE}:`)) {
+    if (attachResult.msg?.startsWith(`${ENORESPONSE}:`)) {
       logFeatureBad("job_attach", "job_attach_no_response");
-      let j = await readJobState(getJobDir(short), n.storageV5).catch(() => null);
-      if (j !== null && isExecLaunch(j))
+      let jobState = await readJobState(getJobDir(short), options.storageV5).catch(() => null);
+      if (jobState !== null && isExecLaunch(jobState))
         return {
           kind: "error",
           msg: `${SESSION_NOT_RESPONDING_TEXT} \u2014 it runs a shell command, which is never run again for you; ctrl+x stops it`,
@@ -897,11 +925,11 @@ async function attachToBackgroundSession(short, n, o) {
         msg: `${SESSION_NOT_RESPONDING_TEXT} \u2014 press Enter again to restart it (the conversation is saved)`,
       };
     }
-    if (S.msg?.includes("ENOJOB")) {
+    if (attachResult.msg?.includes("ENOJOB")) {
       logForDebugging(
         `[bg-attach] ENOJOB on first attach short=${short} \u2014 daemon has no handle (or it's killing/settled)`,
       );
-      let attachTarget = await resolveAttachTarget(short, undefined, n.storageV5);
+      let attachTarget = await resolveAttachTarget(short, undefined, options.storageV5);
       if (attachTarget) return attachTarget;
       logFeatureSad("job_attach", "job_attach_orphaned");
       return {
@@ -910,22 +938,22 @@ async function attachToBackgroundSession(short, n, o) {
         msg: `${bgSupervisorNounCap()} lost track of this job \u2014 press Enter to respawn it`,
       };
     }
-    if (v && !v.ok) {
-      if (v.stoodDown) return shouldStartDaemonForAttach("first_attach", n, v);
-      logFeatureBad("job_attach", `job_attach_daemon_start_failed_${v.causeCode}`);
-      reportAttachTelemetry(w, "error");
+    if (daemonResult && !daemonResult.ok) {
+      if (daemonResult.stoodDown) return shouldStartDaemonForAttach("first_attach", options, daemonResult);
+      logFeatureBad("job_attach", `job_attach_daemon_start_failed_${daemonResult.causeCode}`);
+      reportAttachTelemetry(gesture, "error");
       return {
         kind: "error",
-        msg: `Couldn't start the ${bgSupervisorNoun()} \u2014 ${v.reason}`,
+        msg: `Couldn't start the ${bgSupervisorNoun()} \u2014 ${daemonResult.reason}`,
       };
     }
     let msg =
-      S.msg && s.test(S.msg)
+      attachResult.msg && transientAttachPattern.test(attachResult.msg)
         ? `${bgSupervisorNounCap()} is still starting \u2014 try again in a moment`
-        : S.msg && r.test(S.msg)
+        : attachResult.msg && racedSocketGapPattern.test(attachResult.msg)
           ? `${bgSupervisorNounCap()} didn't respond after starting \u2014 try again in a moment`
-          : S.msg
-            ? `Couldn't attach \u2014 ${S.msg}`
+          : attachResult.msg
+            ? `Couldn't attach \u2014 ${attachResult.msg}`
             : "Couldn't attach to that session";
     logFeatureBad("job_attach", "job_attach_failed");
     return {
@@ -935,12 +963,12 @@ async function attachToBackgroundSession(short, n, o) {
   }
   logForDebugging("[PERF:bg-attach-end]");
   logFeatureOk("job_attach");
-  if (S.msg && KICKED_ATTACH_CODE.test(S.msg))
+  if (attachResult.msg && KICKED_ATTACH_CODE.test(attachResult.msg))
     return {
       kind: "detached",
-      msg: S.msg.replace(KICKED_ATTACH_CODE, ""),
+      msg: attachResult.msg.replace(KICKED_ATTACH_CODE, ""),
     };
-  return S.beforeFirstFrame
+  return attachResult.beforeFirstFrame
     ? {
         kind: "detached",
         beforeFirstFrame: true,
@@ -956,10 +984,10 @@ var BACKGROUND_SESSIONS_STOP_WARNING =
 /**
  * 判断附加前是否需要拉起 daemon（ping 超时、服务管理器状态、平台）。
  */
-async function shouldStartDaemonForAttach(e, n, o) {
+async function shouldStartDaemonForAttach(phase, options, ensureResult) {
   let platform = getPlatform();
-  let [u, s] = o
-    ? [undefined, o.viaService === true && platform !== "macos"]
+  let [pingResponse, serviceRestart] = ensureResult
+    ? [undefined, ensureResult.viaService === true && platform !== "macos"]
     : await Promise.all([
         controlRequest(
           {
@@ -972,223 +1000,260 @@ async function shouldStartDaemonForAttach(e, n, o) {
         ),
         canUseServiceDaemon(),
       ]);
-  let h = u !== undefined && (u.ok || u.code === "ETIMEOUT");
-  let A =
-    !h && !s && platform !== "windows" && process.stdout.isTTY
+  let isDaemonUp = pingResponse !== undefined && (pingResponse.ok || pingResponse.code === "ETIMEOUT");
+  let stopWarning =
+    !isDaemonUp && !serviceRestart && platform !== "windows" && process.stdout.isTTY
       ? `${BACKGROUND_SESSIONS_STOP_WARNING}
 `
       : "";
-  logForDebugging(`[bg-attach] held: this process is exiting (${e})`);
+  logForDebugging(`[bg-attach] held: this process is exiting (${phase})`);
   logEvent("tengu_bg_attach_held_at_exit", {
-    loop_head: e === "loop_head",
-    first_attach: e === "first_attach",
-    daemon_up: h,
-    service_restart: s,
-    notice: A !== "",
+    loop_head: phase === "loop_head",
+    first_attach: phase === "first_attach",
+    daemon_up: isDaemonUp,
+    service_restart: serviceRestart,
+    notice: stopWarning !== "",
   });
-  if (n.alreadyInAlt) n.onExitNotice?.(A);
-  else if (A) process.stdout.write(A);
+  if (options.alreadyInAlt) options.onExitNotice?.(stopWarning);
+  else if (stopWarning) process.stdout.write(stopWarning);
   return heldUntilExit();
 }
 //@ chunk-vrr64ez0.js:42043-42132 placement
 /**
  * 导出值：同一声明里的多个绑定：MAX_KILL_OUTPUT_LINES（32：停止输出保留行数）；HEAD_TAIL_LINES_STOP（{head:50,tail:30}）；HEAD_TAIL_LINES_LOG（{head:60,tail:100}：日志首尾行数）。
  */
-var MAX_KILL_OUTPUT_LINES = 32;
-var HEAD_TAIL_LINES_STOP = {
-  head: 50,
-  tail: 30,
-};
-var HEAD_TAIL_LINES_LOG = {
-  head: 60,
-  tail: 100,
-};
-var WORKTREE_DIGEST_PATTERN = new RegExp(`^[0-9a-f]{${MAX_KILL_OUTPUT_LINES}}$`);
+var MAX_KILL_OUTPUT_LINES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var HEAD_TAIL_LINES_STOP;
+var HEAD_TAIL_LINES_LOG;
+var WORKTREE_DIGEST_PATTERN;
+deferInit("chunk-vrr64ez0.js:42043", () => {
+  MAX_KILL_OUTPUT_LINES = 32;
+  HEAD_TAIL_LINES_STOP = {
+    head: 50,
+    tail: 30,
+  };
+  HEAD_TAIL_LINES_LOG = {
+    head: 60,
+    tail: 100,
+  };
+  WORKTREE_DIGEST_PATTERN = new RegExp(`^[0-9a-f]{${MAX_KILL_OUTPUT_LINES}}$`);
+});
 //@ chunk-vrr64ez0.js:42132-42172 placement
-function killOutputTail(e) {
-  return computeContentHash(e).slice(0, MAX_KILL_OUTPUT_LINES);
+function killOutputTail(worktreePath) {
+  return computeContentHash(worktreePath).slice(0, MAX_KILL_OUTPUT_LINES);
 }
 //@ chunk-vrr64ez0.js:42172-48331 placement
-async function deleteJob(e, n = {}, o) {
-  let jobState = await readJobState(getJobDir(e), o);
-  let u = jobState?.worktreePath ? await listAllLiveSessions(o).catch(() => []) : [];
-  let s = new Set();
-  for (let v of u) if (matchesJobRef(v, e)) s.add(v.pid);
-  let h = await killJob(
-    e,
+async function deleteJob(short, options = {}, storageV5) {
+  let jobState = await readJobState(getJobDir(short), storageV5);
+  let liveSessions = jobState?.worktreePath ? await listAllLiveSessions(storageV5).catch(() => []) : [];
+  let ownPids = new Set();
+  for (let session of liveSessions) if (matchesJobRef(session, short)) ownPids.add(session.pid);
+  let killResult = await killJob(
+    short,
     jobState ?? undefined,
     {
-      knownGone: n.knownGone,
+      knownGone: options.knownGone,
       evict: true,
     },
-    o,
+    storageV5,
   ).catch((error) => ({
     confirmed: false,
     error: errorMessage(error),
   }));
-  if (!h.confirmed) {
+  if (!killResult.confirmed) {
     logForDebugging(
-      `deleteJob: kill unconfirmed for ${e} \u2014 skipping jobdir/worktree removal to avoid stranding a live worker`,
+      `deleteJob: kill unconfirmed for ${short} \u2014 skipping jobdir/worktree removal to avoid stranding a live worker`,
       {
         level: "warn",
       },
     );
-    if (!n.internal)
+    if (!options.internal)
       logFeatureBad("job_delete", "kill_unconfirmed", {
         had_worktree: Boolean(jobState?.worktreePath),
       });
     return {
       removed: false,
-      error: h.error,
+      error: killResult.error,
       errorCode: "kill_unconfirmed",
     };
   }
-  let A;
-  let w;
-  let T = false;
+  let leftWorktreeDir;
+  let forcedRemoval;
+  let discardConfirmed = false;
   if (jobState?.worktreePath) {
     let worktreePath = jobState.worktreePath;
-    let N;
-    let U;
-    let j;
-    let C = null;
-    let q = "present";
-    let Q = false;
-    let K;
-    let D;
-    let P;
+    let keptReason;
+    let forceRemovable;
+    let forceRemoveWithheld;
+    let otherRecord = null;
+    let presence = "present";
+    let notInGitRepo = false;
+    let keptErrorSummary;
+    let unpushedInfo;
+    let occupyingSession;
     let { dirty, trackedChanges, gitError, submoduleWork } = await getAgentWorktreeChanges(
       worktreePath,
       undefined,
     );
-    let ee = resolveWorktreeCleanupRoot(worktreePath, jobState.originCwd) ?? undefined;
-    let path = await realpath(worktreePath).catch(() => worktreePath);
-    let ce = killOutputTail(path);
-    T =
-      n.discardUnpushed !== undefined &&
+    let cleanupRoot = resolveWorktreeCleanupRoot(worktreePath, jobState.originCwd) ?? undefined;
+    let resolvedWorktreePath = await realpath(worktreePath).catch(() => worktreePath);
+    let worktreeDigest = killOutputTail(resolvedWorktreePath);
+    discardConfirmed =
+      options.discardUnpushed !== undefined &&
       !gitError &&
-      n.discardUnpushed.worktreeDigest === ce &&
-      (await isHeadAt(path, n.discardUnpushed.headSha));
-    let Ne = !gitError && ee ? await listRegisteredWorktrees(ee).catch(() => null) : null;
-    let we;
-    let Fe = false;
-    for (let [re, ae] of (Ne ?? []).entries())
-      if ((await realpath(ae.worktreePath).catch(() => ae.worktreePath)) === path) {
-        we = ae;
-        Fe = re > 0 && !ae.prunable;
+      options.discardUnpushed.worktreeDigest === worktreeDigest &&
+      (await isHeadAt(resolvedWorktreePath, options.discardUnpushed.headSha));
+    let registeredWorktrees =
+      !gitError && cleanupRoot ? await listRegisteredWorktrees(cleanupRoot).catch(() => null) : null;
+    let ownWorktreeEntry;
+    let isNestedEntry = false;
+    for (let [entryIndex, worktreeEntry] of (registeredWorktrees ?? []).entries())
+      if (
+        (await realpath(worktreeEntry.worktreePath).catch(() => worktreeEntry.worktreePath)) ===
+        resolvedWorktreePath
+      ) {
+        ownWorktreeEntry = worktreeEntry;
+        isNestedEntry = entryIndex > 0 && !worktreeEntry.prunable;
         break;
       }
-    let Ee = repositoryVouchedByWorktree(path);
-    let Le =
-      ee !== undefined &&
-      Ee !== null &&
-      (await realpath(Ee).catch(() => Ee)) === (await realpath(ee).catch(() => ee));
-    let ie =
-      Fe && Le
+    let vouchingRepo = repositoryVouchedByWorktree(resolvedWorktreePath);
+    let rootMatches =
+      cleanupRoot !== undefined &&
+      vouchingRepo !== null &&
+      (await realpath(vouchingRepo).catch(() => vouchingRepo)) ===
+        (await realpath(cleanupRoot).catch(() => cleanupRoot));
+    let withheldReason =
+      isNestedEntry && rootMatches
         ? submoduleWork?.kind === "unverifiable"
           ? "submodule"
           : trackedChanges
             ? "tracked_changes"
             : undefined
-        : ee !== undefined && (await worktreeDeregisteredByRemoval(path, ee))
+        : cleanupRoot !== undefined &&
+            (await worktreeDeregisteredByRemoval(resolvedWorktreePath, cleanupRoot))
           ? undefined
           : "not_registered";
-    let ue = n.forceRemoveWorktree !== undefined && n.forceRemoveWorktree === ce;
-    let pe = ue && ie === undefined && isDirectlyUnderClaudeWorktreesDir(path);
-    let qe = pe ? "job_delete_force_remove" : n.force === true || T ? "job_delete_force" : "job_delete";
-    let Ve = carriesDiscardConsent(qe);
-    let Oe = claudeWorktreeLockPid(we?.lockReason);
-    let V;
-    if ((V = await findJobSharingWorktree(e, path, worktreePath, o)) !== null) {
-      N = "in_use";
-      K = V.verified && SHORT_RE.test(V.jobId) ? V.jobId : undefined;
+    let forceRemoveRequested =
+      options.forceRemoveWorktree !== undefined && options.forceRemoveWorktree === worktreeDigest;
+    let canForceRemove =
+      forceRemoveRequested &&
+      withheldReason === undefined &&
+      isDirectlyUnderClaudeWorktreesDir(resolvedWorktreePath);
+    let deleteKind = canForceRemove
+      ? "job_delete_force_remove"
+      : options.force === true || discardConfirmed
+        ? "job_delete_force"
+        : "job_delete";
+    let hasDiscardConsent = carriesDiscardConsent(deleteKind);
+    let lockPid = claudeWorktreeLockPid(ownWorktreeEntry?.lockReason);
+    let sharingJob;
+    if (
+      (sharingJob = await findJobSharingWorktree(short, resolvedWorktreePath, worktreePath, storageV5)) !==
+      null
+    ) {
+      keptReason = "in_use";
+      keptErrorSummary =
+        sharingJob.verified && SHORT_RE.test(sharingJob.jobId) ? sharingJob.jobId : undefined;
       logForDebugging(
-        `deleteJob: ${worktreePath} is claimed by running job ${V.jobId}'s state.json (${V.verified ? "verified" : "unverifiable claim"}) \u2014 not ours to remove`,
+        `deleteJob: ${worktreePath} is claimed by running job ${sharingJob.jobId}'s state.json (${sharingJob.verified ? "verified" : "unverifiable claim"}) \u2014 not ours to remove`,
         {
           level: "warn",
         },
       );
     } else if (
-      ((Q = (await findGitRootVerifyingPositive(worktreePath)) === null) || T || pe) &&
-      (q = await pathPresence(worktreePath)) !== "gone" &&
-      (C =
-        q === "unreadable"
+      ((notInGitRepo = (await findGitRootVerifyingPositive(worktreePath)) === null) ||
+        discardConfirmed ||
+        canForceRemove) &&
+      (presence = await pathPresence(worktreePath)) !== "gone" &&
+      (otherRecord =
+        presence === "unreadable"
           ? "unreadable"
           : await findOtherJobsInDir(
-              e,
-              path,
+              short,
+              resolvedWorktreePath,
               worktreePath,
               {
-                includeUnsettled: T || pe,
+                includeUnsettled: discardConfirmed || canForceRemove,
               },
-              o,
+              storageV5,
             )) !== null
     ) {
-      if (C === "claimed" && !Q && T) {
-        N = "unpushed_shared";
-        D = await listUnpushedCommits(worktreePath).catch(() => {
+      if (otherRecord === "claimed" && !notInGitRepo && discardConfirmed) {
+        keptReason = "unpushed_shared";
+        unpushedInfo = await listUnpushedCommits(worktreePath).catch(() => {
           return;
         });
-      } else N = C === "claimed" ? "shared_record" : "records_unreadable";
+      } else keptReason = otherRecord === "claimed" ? "shared_record" : "records_unreadable";
       logForDebugging(
-        C === "claimed"
+        otherRecord === "claimed"
           ? `deleteJob: ${worktreePath} is also recorded by another settled job's state.json \u2014 not removing another session's output`
           : `deleteJob: could not verify ${worktreePath} against sibling records \u2014 refusing until records are readable`,
         {
           level: "warn",
         },
       );
-    } else if (!(await mayReleaseWorktreeLock(we?.lockReason)) && !(Oe !== null && s.has(Oe))) {
-      N = "live_lock";
-      K = Oe !== null ? `pid ${Oe}` : undefined;
+    } else if (
+      !(await mayReleaseWorktreeLock(ownWorktreeEntry?.lockReason)) &&
+      !(lockPid !== null && ownPids.has(lockPid))
+    ) {
+      keptReason = "live_lock";
+      keptErrorSummary = lockPid !== null ? `pid ${lockPid}` : undefined;
       logForDebugging(
-        `deleteJob: ${worktreePath} is locked by a live Claude Code process, or with a reason we did not write (${we?.lockReason}) \u2014 not ours to remove`,
+        `deleteJob: ${worktreePath} is locked by a live Claude Code process, or with a reason we did not write (${ownWorktreeEntry?.lockReason}) \u2014 not ours to remove`,
         {
           level: "warn",
         },
       );
     } else if (
-      (P = await findSessionsInDirectory(u, e, s, path, worktreePath)) !== undefined &&
+      (occupyingSession = await findSessionsInDirectory(
+        liveSessions,
+        short,
+        ownPids,
+        resolvedWorktreePath,
+        worktreePath,
+      )) !== undefined &&
       (await pathPresence(worktreePath)) !== "gone"
     ) {
-      N = "occupied";
-      K =
-        P.pid === process.pid
-          ? `${typeof P.parkedJobId === "string" && SHORT_RE.test(P.parkedJobId) ? `session ${P.parkedJobId},` : "a session"} moved to the background from this window, pid ${P.pid}`
-          : P.kind === "bg" && typeof P.jobId === "string" && SHORT_RE.test(P.jobId)
-            ? `background session ${P.jobId}, pid ${P.pid}`
-            : `pid ${P.pid}, ${P.kind}`;
+      keptReason = "occupied";
+      keptErrorSummary =
+        occupyingSession.pid === process.pid
+          ? `${typeof occupyingSession.parkedJobId === "string" && SHORT_RE.test(occupyingSession.parkedJobId) ? `session ${occupyingSession.parkedJobId},` : "a session"} moved to the background from this window, pid ${occupyingSession.pid}`
+          : occupyingSession.kind === "bg" &&
+              typeof occupyingSession.jobId === "string" &&
+              SHORT_RE.test(occupyingSession.jobId)
+            ? `background session ${occupyingSession.jobId}, pid ${occupyingSession.pid}`
+            : `pid ${occupyingSession.pid}, ${occupyingSession.kind}`;
       logForDebugging(
-        `deleteJob: ${worktreePath} is the working directory of a live session (pid ${P.pid}, ${P.kind}) \u2014 not ours to remove`,
+        `deleteJob: ${worktreePath} is the working directory of a live session (pid ${occupyingSession.pid}, ${occupyingSession.kind}) \u2014 not ours to remove`,
         {
           level: "warn",
         },
       );
-    } else if (dirty && !gitError && !Ve) {
-      N = "dirty";
+    } else if (dirty && !gitError && !hasDiscardConsent) {
+      keptReason = "dirty";
       logForDebugging(`deleteJob: worktree has uncommitted changes, kept ${worktreePath}`, {
         level: "warn",
       });
     } else if (
       !gitError &&
-      ee &&
-      !T &&
-      !(await passesCommitSafetyChecks(worktreePath, await getDefaultRemoteRef(ee), {
+      cleanupRoot &&
+      !discardConfirmed &&
+      !(await passesCommitSafetyChecks(worktreePath, await getDefaultRemoteRef(cleanupRoot), {
         primaryCheckoutVouches: true,
       }))
     ) {
       if (
         (await findOtherJobsInDir(
-          e,
-          path,
+          short,
+          resolvedWorktreePath,
           worktreePath,
           {
             includeUnsettled: false,
           },
-          o,
+          storageV5,
         )) === "claimed"
       ) {
-        N = "unpushed_shared";
+        keptReason = "unpushed_shared";
         logForDebugging(
           `deleteJob: ${worktreePath} has unpushed commits and is also recorded by another settled job's state.json \u2014 not offering a discard`,
           {
@@ -1196,36 +1261,40 @@ async function deleteJob(e, n = {}, o) {
           },
         );
       } else {
-        N = "unpushed";
+        keptReason = "unpushed";
         logForDebugging(`deleteJob: ${worktreePath} has commits that are on no remote, kept`, {
           level: "warn",
         });
       }
-      D = await listUnpushedCommits(worktreePath).catch(() => {
+      unpushedInfo = await listUnpushedCommits(worktreePath).catch(() => {
         return;
       });
-    } else if (T && n.discardUnpushed !== undefined && !(await isHeadAt(path, n.discardUnpushed.headSha))) {
-      N = "unpushed";
+    } else if (
+      discardConfirmed &&
+      options.discardUnpushed !== undefined &&
+      !(await isHeadAt(resolvedWorktreePath, options.discardUnpushed.headSha))
+    ) {
+      keptReason = "unpushed";
       logForDebugging(`deleteJob: ${worktreePath} HEAD moved past the confirmed discard pin, kept`, {
         level: "warn",
       });
-      D = await listUnpushedCommits(worktreePath).catch(() => {
+      unpushedInfo = await listUnpushedCommits(worktreePath).catch(() => {
         return;
       });
     } else {
-      let re = resolveWorktreeCleanupRoot(worktreePath, jobState.originCwd) ?? undefined;
-      let ae = (jobState.originCwd ? findGitRoot(jobState.originCwd) : null) ?? undefined;
-      let X = await removeAgentWorktree(
+      let cleanupRoot = resolveWorktreeCleanupRoot(worktreePath, jobState.originCwd) ?? undefined;
+      let originGitRoot = (jobState.originCwd ? findGitRoot(jobState.originCwd) : null) ?? undefined;
+      let removalResult = await removeAgentWorktree(
         worktreePath,
         jobState.worktreeBranch,
-        re,
+        cleanupRoot,
         jobState.worktreeHookBased,
-        qe,
-        path,
-        ae,
+        deleteKind,
+        resolvedWorktreePath,
+        originGitRoot,
         {
-          storageV5: o,
-          forceRemoveRequested: ue,
+          storageV5,
+          forceRemoveRequested,
         },
       ).catch((error) => {
         logForDebugging(`deleteJob: removeAgentWorktree threw for ${worktreePath}: ${errorMessage(error)}`, {
@@ -1236,99 +1305,103 @@ async function deleteJob(e, n = {}, o) {
           errorSummary: `the removal failed unexpectedly (${printableLabel(errorMessage(error), HEAD_TAIL_LINES_LOG)})`,
         };
       });
-      if (X.outcome === "failed") {
-        N = X.needsForce
+      if (removalResult.outcome === "failed") {
+        keptReason = removalResult.needsForce
           ? "unverified"
-          : X.errorSummary === IDENTITY_CHANGED_SUMMARY
+          : removalResult.errorSummary === IDENTITY_CHANGED_SUMMARY
             ? "identity_changed"
-            : X.holdsWorktreesInside
+            : removalResult.holdsWorktreesInside
               ? "worktrees_inside"
               : "remove_failed";
-        K = X.needsForce ? undefined : X.errorSummary;
-        if (X.forceRemovable !== undefined && isDirectlyUnderClaudeWorktreesDir(path))
-          if (ie !== undefined) j = ie;
+        keptErrorSummary = removalResult.needsForce ? undefined : removalResult.errorSummary;
+        if (
+          removalResult.forceRemovable !== undefined &&
+          isDirectlyUnderClaudeWorktreesDir(resolvedWorktreePath)
+        )
+          if (withheldReason !== undefined) forceRemoveWithheld = withheldReason;
           else if (
             (await findOtherJobsInDir(
-              e,
-              path,
+              short,
+              resolvedWorktreePath,
               worktreePath,
               {
                 includeUnsettled: false,
               },
-              o,
+              storageV5,
             )) === "claimed"
           )
-            j = "shared_record";
-          else U = X.forceRemovable;
-      } else if (X.outcome === "left_in_place") A = printableLabel(worktreePath);
-      else if (X.forcedDirectoryRemoval) {
-        let { keptBranch } = X.forcedDirectoryRemoval;
-        w = {
-          worktree: printableLabel(path),
+            forceRemoveWithheld = "shared_record";
+          else forceRemovable = removalResult.forceRemovable;
+      } else if (removalResult.outcome === "left_in_place") leftWorktreeDir = printableLabel(worktreePath);
+      else if (removalResult.forcedDirectoryRemoval) {
+        let { keptBranch } = removalResult.forcedDirectoryRemoval;
+        forcedRemoval = {
+          worktree: printableLabel(resolvedWorktreePath),
           ...(keptBranch !== undefined && {
             keptBranch: printableLabel(keptBranch, HEAD_TAIL_LINES_STOP),
           }),
         };
       }
     }
-    if (N) {
-      if (!n.internal)
-        logFeatureSad("job_delete", `worktree_kept_${N}`, {
+    if (keptReason) {
+      if (!options.internal)
+        logFeatureSad("job_delete", `worktree_kept_${keptReason}`, {
           had_worktree: true,
         });
       return {
         removed: false,
-        keptWorktree: printableLabel(path),
-        keptReason: N,
-        ...(K !== undefined && {
-          keptErrorSummary: K,
+        keptWorktree: printableLabel(resolvedWorktreePath),
+        keptReason,
+        ...(keptErrorSummary !== undefined && {
+          keptErrorSummary,
         }),
-        ...(D !== undefined && {
-          keptUnpushed: D,
+        ...(unpushedInfo !== undefined && {
+          keptUnpushed: unpushedInfo,
         }),
-        ...(N === "unpushed" && D !== undefined
+        ...(keptReason === "unpushed" && unpushedInfo !== undefined
           ? {
               discardUnpushed: {
-                headSha: D.headSha,
-                worktreeDigest: ce,
+                headSha: unpushedInfo.headSha,
+                worktreeDigest,
               },
             }
-          : U !== undefined &&
-            T &&
-            n.discardUnpushed !== undefined && {
-              discardUnpushed: n.discardUnpushed,
+          : forceRemovable !== undefined &&
+            discardConfirmed &&
+            options.discardUnpushed !== undefined && {
+              discardUnpushed: options.discardUnpushed,
             }),
-        ...(U !== undefined && {
+        ...(forceRemovable !== undefined && {
           forceRemoveWorktree: {
-            worktreeDigest: ce,
-            cause: U,
+            worktreeDigest,
+            cause: forceRemovable,
           },
         }),
-        ...(j !== undefined && {
-          forceRemoveWithheld: j,
+        ...(forceRemoveWithheld !== undefined && {
+          forceRemoveWithheld,
         }),
         ...(submoduleWork !== undefined &&
-          (N === "dirty" || N === "remove_failed") && {
+          (keptReason === "dirty" || keptReason === "remove_failed") && {
             submoduleWork,
           }),
       };
     }
   }
-  let S = jobState?.fan?.some((v) => v.kind === "shell" && v.doneAt === undefined) ?? false;
-  await reapAdoptRecord(getJobDir(e), {
-    waitMs: S ? 4000 : 0,
+  let hasLiveShell =
+    jobState?.fan?.some((fanEntry) => fanEntry.kind === "shell" && fanEntry.doneAt === undefined) ?? false;
+  await reapAdoptRecord(getJobDir(short), {
+    waitMs: hasLiveShell ? 4000 : 0,
   });
   try {
-    await rm(getJobDir(e), {
+    await rm(getJobDir(short), {
       recursive: true,
       force: true,
     });
   } catch (error) {
-    invalidateJobStateCache(getJobDir(e));
-    logForDebugging(`deleteJob: failed to remove job dir for ${e}: ${errorMessage(error)}`, {
+    invalidateJobStateCache(getJobDir(short));
+    logForDebugging(`deleteJob: failed to remove job dir for ${short}: ${errorMessage(error)}`, {
       level: "warn",
     });
-    if (!n.internal)
+    if (!options.internal)
       logFeatureBad("job_delete", "jobdir_rm_failed", {
         had_worktree: Boolean(jobState?.worktreePath),
       });
@@ -1338,34 +1411,38 @@ async function deleteJob(e, n = {}, o) {
       errorCode: "jobdir_rm_failed",
     };
   }
-  if (isStorageV5Enabled() && o !== undefined && validateStorageKey(hostTombstonePath(e)) === undefined)
-    await deleteHostTombstone(o, e);
-  else await unlink(hostManagedEntry(e)).catch(() => {});
-  invalidateJobStateCache(getJobDir(e));
-  if (!n.internal)
-    if (A)
+  if (
+    isStorageV5Enabled() &&
+    storageV5 !== undefined &&
+    validateStorageKey(hostTombstonePath(short)) === undefined
+  )
+    await deleteHostTombstone(storageV5, short);
+  else await unlink(hostManagedEntry(short)).catch(() => {});
+  invalidateJobStateCache(getJobDir(short));
+  if (!options.internal)
+    if (leftWorktreeDir)
       logFeatureSad("job_delete", "worktree_left_in_place", {
         had_worktree: true,
-        discard_confirmed: T,
+        discard_confirmed: discardConfirmed,
       });
-    else if (w)
+    else if (forcedRemoval)
       logFeatureSad("job_delete", "worktree_force_removed", {
         had_worktree: true,
-        discard_confirmed: T,
+        discard_confirmed: discardConfirmed,
       });
     else
       logFeatureOk("job_delete", {
         had_worktree: Boolean(jobState?.worktreePath),
-        discard_confirmed: T,
+        discard_confirmed: discardConfirmed,
       });
   return {
     removed: true,
-    discardConfirmed: T,
-    ...(A && {
-      leftWorktreeDir: A,
+    discardConfirmed,
+    ...(leftWorktreeDir && {
+      leftWorktreeDir,
     }),
-    ...(w && {
-      forcedWorktreeRemoval: w,
+    ...(forcedRemoval && {
+      forcedWorktreeRemoval: forcedRemoval,
     }),
   };
 }
@@ -1373,96 +1450,97 @@ async function deleteJob(e, n = {}, o) {
 /**
  * 找出与指定 worktree 路径相同的其他存活 job（已验证/无法验证）。
  */
-async function findJobSharingWorktree(e, n, worktreePath, r) {
-  for (let u of await listJobs(undefined, r).catch(() => [])) {
-    if (u.id === e || !u.state.worktreePath || isSettled(u.state)) continue;
-    let s = matchWorktreePath(u.state.worktreePath, n, worktreePath);
-    if (s === "match")
+async function findJobSharingWorktree(short, realPath, worktreePath, storageV5) {
+  for (let job of await listJobs(undefined, storageV5).catch(() => [])) {
+    if (job.id === short || !job.state.worktreePath || isSettled(job.state)) continue;
+    let matchKind = matchWorktreePath(job.state.worktreePath, realPath, worktreePath);
+    if (matchKind === "match")
       return {
-        jobId: u.id,
+        jobId: job.id,
         verified: true,
       };
-    if (s === "unverifiable")
+    if (matchKind === "unverifiable")
       return {
-        jobId: u.id,
+        jobId: job.id,
         verified: false,
       };
-    let comparablePath = await resolveComparablePath(u.state.worktreePath, worktreePath);
-    if (isSamePath(comparablePath, n))
+    let comparablePath = await resolveComparablePath(job.state.worktreePath, worktreePath);
+    if (isSamePath(comparablePath, realPath))
       return {
-        jobId: u.id,
+        jobId: job.id,
         verified: true,
       };
   }
   return null;
 }
 //@ chunk-vrr64ez0.js:48689-48870 placement
-function matchWorktreePath(worktreePath, n, o) {
-  if (isSamePath(worktreePath, o) || isSamePath(worktreePath, n)) return "match";
+function matchWorktreePath(worktreePath, realPath, worktreePath_2) {
+  if (isSamePath(worktreePath, worktreePath_2) || isSamePath(worktreePath, realPath)) return "match";
   if (!hasDotSegment(worktreePath)) return "no_match";
-  let r = normalize(worktreePath);
-  if (isSamePath(r, o) || isSamePath(r, n)) return "match";
+  let normalizedPath = normalize(worktreePath);
+  if (isSamePath(normalizedPath, worktreePath_2) || isSamePath(normalizedPath, realPath)) return "match";
   return isAbsolute(worktreePath) && !isUncOrDevicePath(worktreePath) && !isNetworkMountRoot(worktreePath)
     ? "unverifiable"
     : "no_match";
 }
 //@ chunk-vrr64ez0.js:48870-48908 placement
-function isSamePath(e, n) {
-  return realCwd(e) === realCwd(n);
+function isSamePath(pathA, pathB) {
+  return realCwd(pathA) === realCwd(pathB);
 }
 //@ chunk-vrr64ez0.js:48908-48940 placement
-function realCwd(e) {
-  return foldCaseBasic(identity(e));
+function realCwd(path) {
+  return foldCaseBasic(identity(path));
 }
 //@ chunk-vrr64ez0.js:48940-49023 placement
-function isCwdInside(e, n) {
-  let o = relative(realCwd(n), realCwd(e));
-  return o.split(/[/\\]/, 1)[0] !== ".." && !isAbsolute(o);
+function isCwdInside(candidatePath, rootPath) {
+  let relativePath = relative(realCwd(rootPath), realCwd(candidatePath));
+  return relativePath.split(/[/\\]/, 1)[0] !== ".." && !isAbsolute(relativePath);
 }
 //@ chunk-vrr64ez0.js:49023-49451 placement
 /**
  * 在会话列表中找出与当前目录相同的交互/后台会话进程。
  */
-async function findSessionsInDirectory(e, n, o, r, worktreePath) {
-  for (let s of e) {
-    if (s.kind !== "interactive" && s.kind !== "bg") continue;
-    if (o.has(s.pid) || s.parkedJobId === n) continue;
-    if (s.pid === process.pid && s.parkedJobId === undefined) continue;
-    let h = s.pid === process.pid ? getOriginalCwd() : s.cwd;
-    if (typeof h !== "string" || !isAbsolute(h)) continue;
-    if (!isCwdInside(h, r) && !isCwdInside(h, worktreePath)) continue;
-    if (s.kind === "bg" && typeof s.jobId === "string" && SHORT_RE.test(s.jobId)) {
-      if ((await probeJobStateFile(getJobDir(s.jobId))) === "missing") continue;
+async function findSessionsInDirectory(sessions, short, ownPids, realPath, rootPath) {
+  for (let session of sessions) {
+    if (session.kind !== "interactive" && session.kind !== "bg") continue;
+    if (ownPids.has(session.pid) || session.parkedJobId === short) continue;
+    if (session.pid === process.pid && session.parkedJobId === undefined) continue;
+    let sessionCwd = session.pid === process.pid ? getOriginalCwd() : session.cwd;
+    if (typeof sessionCwd !== "string" || !isAbsolute(sessionCwd)) continue;
+    if (!isCwdInside(sessionCwd, realPath) && !isCwdInside(sessionCwd, rootPath)) continue;
+    if (session.kind === "bg" && typeof session.jobId === "string" && SHORT_RE.test(session.jobId)) {
+      if ((await probeJobStateFile(getJobDir(session.jobId))) === "missing") continue;
     }
-    return s;
+    return session;
   }
   return;
 }
 //@ chunk-vrr64ez0.js:49451-49672 placement
-function resolveComparablePath(worktreePath, n) {
+function resolveComparablePath(worktreePath, worktreePath_2) {
   let cwd = getCwd();
   if (
     !isAbsolute(worktreePath) ||
     hasDotSegment(worktreePath) ||
-    (isOnForeignMount(worktreePath, cwd) && isOnForeignMount(worktreePath, n))
+    (isOnForeignMount(worktreePath, cwd) && isOnForeignMount(worktreePath, worktreePath_2))
   )
     return worktreePath;
   let deepestExistingAncestor = resolveDeepestExistingAncestorSync(getFsImplementation(), worktreePath, {
     surfaceNetworkRaw: true,
-    anchors: [cwd, n],
+    anchors: [cwd, worktreePath_2],
   });
   if (deepestExistingAncestor === UNVERIFIED_ANCESTRY) return worktreePath;
   if (
     deepestExistingAncestor !== undefined &&
     (hasDotSegment(deepestExistingAncestor) ||
-      (isOnForeignMount(deepestExistingAncestor, cwd) && isOnForeignMount(deepestExistingAncestor, n)))
+      (isOnForeignMount(deepestExistingAncestor, cwd) &&
+        isOnForeignMount(deepestExistingAncestor, worktreePath_2)))
   )
     return worktreePath;
   return realpath(worktreePath).catch(() => worktreePath);
 }
 //@ chunk-vrr64ez0.js:49672-49776 placement
-async function probeJobStateFile(e) {
-  return lstat(join(e, "state.json")).then(
+async function probeJobStateFile(jobDir) {
+  return lstat(join(jobDir, "state.json")).then(
     () => "present",
     (error) => (isENOENT(error) ? "missing" : "unreadable"),
   );
@@ -1471,48 +1549,39 @@ async function probeJobStateFile(e) {
 /**
  * 扫描 jobs 目录，找出在同一目录工作的其他 job。
  */
-async function findOtherJobsInDir(e, n, worktreePath, { includeUnsettled }, u) {
-  let s;
+async function findOtherJobsInDir(short, realPath, worktreePath, { includeUnsettled }, storageV5) {
+  let entries;
   try {
-    s = await readdir(getJobsDir(), {
+    entries = await readdir(getJobsDir(), {
       withFileTypes: true,
     });
   } catch (error) {
     return isENOENT(error) ? null : "unreadable";
   }
-  for (let h of s) {
-    if (!h.isDirectory() || h.name === e) continue;
-    let A = join(getJobsDir(), h.name);
-    let jobState = await readJobState(A, u);
+  for (let entry of entries) {
+    if (!entry.isDirectory() || entry.name === short) continue;
+    let otherJobDir = join(getJobsDir(), entry.name);
+    let jobState = await readJobState(otherJobDir, storageV5);
     if (jobState === null) {
-      if ((await probeJobStateFile(A)) === "missing") continue;
+      if ((await probeJobStateFile(otherJobDir)) === "missing") continue;
       return "unreadable";
     }
     if (!jobState.worktreePath || (!includeUnsettled && !isSettled(jobState))) continue;
-    let T = matchWorktreePath(jobState.worktreePath, n, worktreePath);
-    if (T === "match") return "claimed";
-    if (T === "unverifiable") return "unreadable";
+    let matchKind = matchWorktreePath(jobState.worktreePath, realPath, worktreePath);
+    if (matchKind === "match") return "claimed";
+    if (matchKind === "unverifiable") return "unreadable";
     let comparablePath = await resolveComparablePath(jobState.worktreePath, worktreePath);
-    if (isSamePath(comparablePath, n)) return "claimed";
+    if (isSamePath(comparablePath, realPath)) return "claimed";
   }
   return null;
 }
 //@ chunk-vrr64ez0.js:50285-50332 placement
-async function killJobWithSignal(short, n, o) {
-  return await attachToJob(short, o);
+async function killJobWithSignal(short, options, attachOptions) {
+  return await attachToJob(short, attachOptions);
 }
 //@ chunk-vrr64ez0.js:50332-50418 placement
-function matchesJobRef(e, n) {
-  return e.kind === "bg" && (e.jobId === n || e.sessionId?.startsWith(n) === true);
-}
-//@ chunk-e6aww6q8.js:3654790-3654875 placement = isDangerousFilePathToAutoEdit (1)
-function isDirectlyUnderClaudeWorktreesDir(path) {
-  let absolutePath = dirname(path);
-  return (
-    absolutePath !== path &&
-    basename(absolutePath) === "worktrees" &&
-    basename(dirname(absolutePath)) === ".claude"
-  );
+function matchesJobRef(session, short) {
+  return session.kind === "bg" && (session.jobId === short || session.sessionId?.startsWith(short) === true);
 }
 export {
   RECAP_TRIGGER_FILE,

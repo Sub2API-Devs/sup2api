@@ -14,18 +14,18 @@ var getAllProperties = (object) => {
   return properties;
 };
 //@ chunk-bzr73sfg.js:145026-145365 esm-fingerprint
-function autoBind(n, { include, exclude } = {}) {
+function autoBind(selfRef, { include, exclude } = {}) {
   let filter = (key) => {
     let match = (pattern) => (typeof pattern === "string" ? key === pattern : pattern.test(key));
     if (include) return include.some(match);
     if (exclude) return !exclude.some(match);
     return true;
   };
-  for (let [object, key] of getAllProperties(n.constructor.prototype)) {
+  for (let [object, key] of getAllProperties(selfRef.constructor.prototype)) {
     if (key === "constructor" || !filter(key)) continue;
     let descriptor = Reflect.getOwnPropertyDescriptor(object, key);
-    if (descriptor && typeof descriptor.value === "function") n[key] = n[key].bind(n);
+    if (descriptor && typeof descriptor.value === "function") selfRef[key] = selfRef[key].bind(selfRef);
   }
-  return n;
+  return selfRef;
 }
 export { autoBind };

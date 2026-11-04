@@ -5,25 +5,25 @@
  * pieces: chunk-hwmsct5x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 
 //@ chunk-hwmsct5x.js:7869-14156 cjs-fingerprint
-var require_sha256 = x(function (cjsExports, cjsModule) {
+var require_sha256 = __commonJS(function (cjsExports, cjsModule) {
   (function (root, factory) {
-    var r = {};
-    factory(r);
-    var sha256 = r.default;
-    for (var k in r) sha256[k] = r[k];
+    var umdExports = {};
+    factory(umdExports);
+    var sha256 = umdExports.default;
+    for (var k in umdExports) sha256[k] = umdExports[k];
     if (typeof cjsModule === "object" && typeof cjsModule.exports === "object") cjsModule.exports = sha256;
     else if (typeof define === "function" && define.amd)
       define(function () {
         return sha256;
       });
     else root.sha256 = sha256;
-  })(cjsExports, function (e) {
-    e.__esModule = true;
-    e.digestLength = 32;
-    e.blockSize = 64;
+  })(cjsExports, function (umdExports2) {
+    umdExports2.__esModule = true;
+    umdExports2.digestLength = 32;
+    umdExports2.blockSize = 64;
     var K = new Uint32Array([
       1116352408, 1899447441, 3049323471, 3921009573, 961987163, 1508970993, 2453635748, 2870763221,
       3624381080, 310598401, 607225278, 1426881987, 1925078388, 2162078206, 2614888103, 3248222580,
@@ -103,8 +103,8 @@ var require_sha256 = x(function (cjsExports, cjsModule) {
     }
     var Hash = (function () {
       function Hash() {
-        this.digestLength = e.digestLength;
-        this.blockSize = e.blockSize;
+        this.digestLength = umdExports2.digestLength;
+        this.blockSize = umdExports2.blockSize;
         this.state = new Int32Array(8);
         this.temp = new Int32Array(64);
         this.buffer = new Uint8Array(128);
@@ -201,7 +201,7 @@ var require_sha256 = x(function (cjsExports, cjsModule) {
       };
       return Hash;
     })();
-    e.Hash = Hash;
+    umdExports2.Hash = Hash;
     var HMAC = (function () {
       function HMAC(key) {
         this.inner = new Hash();
@@ -250,22 +250,22 @@ var require_sha256 = x(function (cjsExports, cjsModule) {
       };
       return HMAC;
     })();
-    e.HMAC = HMAC;
+    umdExports2.HMAC = HMAC;
     function hash(data) {
       var h = new Hash().update(data);
       var digest = h.digest();
       h.clean();
       return digest;
     }
-    e.hash = hash;
-    e.default = hash;
+    umdExports2.hash = hash;
+    umdExports2.default = hash;
     function hmac(key, data) {
       var h = new HMAC(key).update(data);
       var digest = h.digest();
       h.clean();
       return digest;
     }
-    e.hmac = hmac;
+    umdExports2.hmac = hmac;
     function fillBuffer(buffer, hmac, info, counter) {
       var num = counter[0];
       if (num === 0) throw Error("hkdf: cannot expand more");
@@ -276,7 +276,7 @@ var require_sha256 = x(function (cjsExports, cjsModule) {
       hmac.finish(buffer);
       counter[0]++;
     }
-    var hkdfSalt = new Uint8Array(e.digestLength);
+    var hkdfSalt = new Uint8Array(umdExports2.digestLength);
     function hkdf(key, salt, info, length) {
       if (salt === undefined) salt = hkdfSalt;
       if (length === undefined) length = 32;
@@ -298,7 +298,7 @@ var require_sha256 = x(function (cjsExports, cjsModule) {
       counter.fill(0);
       return out;
     }
-    e.hkdf = hkdf;
+    umdExports2.hkdf = hkdf;
     function pbkdf2(password, salt, iterations, dkLen) {
       var prf = new HMAC(password);
       var len = prf.digestLength;
@@ -329,7 +329,7 @@ var require_sha256 = x(function (cjsExports, cjsModule) {
       prf.clean();
       return dk;
     }
-    e.pbkdf2 = pbkdf2;
+    umdExports2.pbkdf2 = pbkdf2;
   });
 });
 export { require_sha256 };

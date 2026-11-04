@@ -8,7 +8,7 @@
  * pieces: chunk-znr63w8n.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -22,21 +22,21 @@ import { Box, Text } from "../../ink/components/Text.js";
  * 队友徽章：显示发起请求的队友名与颜色（被 37 处使用）。
  */
 function WorkerBadge(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { message, bold, dimColor, subtitle } = props;
   let bold_2 = bold === undefined ? false : bold;
   let dimColor_2 = dimColor === undefined ? false : dimColor;
-  let g;
+  let spinnerElement;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    g = jsxProd_default(Spinner, {});
-    $[0] = g;
-  } else g = $[0];
-  let l;
+    spinnerElement = jsxProd_default(Spinner, {});
+    $[0] = spinnerElement;
+  } else spinnerElement = $[0];
+  let rowElement;
   if ($[1] !== bold_2 || $[2] !== dimColor_2 || $[3] !== message) {
-    l = jsxProd_default_2(Box, {
+    rowElement = jsxProd_default_2(Box, {
       flexDirection: "row",
       children: [
-        g,
+        spinnerElement,
         jsxProd_default_2(Text, {
           bold: bold_2,
           dimColor: dimColor_2,
@@ -47,29 +47,29 @@ function WorkerBadge(props) {
     $[1] = bold_2;
     $[2] = dimColor_2;
     $[3] = message;
-    $[4] = l;
-  } else l = $[4];
-  let c;
+    $[4] = rowElement;
+  } else rowElement = $[4];
+  let badgeSpinner;
   if ($[5] !== subtitle) {
-    c =
+    badgeSpinner =
       subtitle &&
       jsxProd_default(Text, {
         dimColor: true,
         children: subtitle,
       });
     $[5] = subtitle;
-    $[6] = c;
-  } else c = $[6];
-  let p;
-  if ($[7] !== l || $[8] !== c) {
-    p = jsxProd_default_2(Box, {
+    $[6] = badgeSpinner;
+  } else badgeSpinner = $[6];
+  let labelElement;
+  if ($[7] !== rowElement || $[8] !== badgeSpinner) {
+    labelElement = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [l, c],
+      children: [rowElement, badgeSpinner],
     });
-    $[7] = l;
-    $[8] = c;
-    $[9] = p;
-  } else p = $[9];
-  return p;
+    $[7] = rowElement;
+    $[8] = badgeSpinner;
+    $[9] = labelElement;
+  } else labelElement = $[9];
+  return labelElement;
 }
 export { WorkerBadge };

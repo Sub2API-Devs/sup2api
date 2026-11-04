@@ -171,8 +171,8 @@ function detectCodeIndexingFromCommand(command) {
   if (!firstWord) return;
   if (firstWord === "npx" || firstWord === "bunx") {
     let secondWord = trimmed.split(/\s+/)[1]?.toLowerCase();
-    let h = secondWord && getOwn(CLI_COMMAND_PATTERNS, secondWord);
-    if (h) return h;
+    let pattern = secondWord && getOwn(CLI_COMMAND_PATTERNS, secondWord);
+    if (pattern) return pattern;
   }
   return getOwn(CLI_COMMAND_PATTERNS, firstWord);
 }

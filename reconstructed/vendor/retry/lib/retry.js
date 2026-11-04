@@ -5,11 +5,11 @@
  * pieces: chunk-bmbhxpfm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_retry_operation } from "./retry_operation.js";
 
 //@ chunk-bmbhxpfm.js:13629-14791 cjs-fingerprint
-var require_retry = x(function (cjsExports) {
+var require_retry = __commonJS(function (cjsExports) {
   var RetryOperation = require_retry_operation();
   cjsExports.operation = function (options) {
     var timeouts = cjsExports.timeouts(options);

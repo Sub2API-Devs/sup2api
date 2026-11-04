@@ -16,7 +16,14 @@ import { createZstdDecompress } from "zlib";
 import { chmod, rm } from "fs/promises";
 import { join } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string, looseObject, record, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  stringSchema,
+  looseObject,
+  record,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   hasExactErrorMessage,
@@ -51,6 +58,7 @@ import { getBinaryName, getPlatform } from "./installer.js";
 import { getFsImplementation } from "../fsOperations.js";
 import { lt_2 } from "../semver.js";
 import { isEnvDefinedFalsy } from "../envUtils.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-zw17mz74.js:2482-3305 placement
 function verifyReleaseManifest() {
@@ -71,89 +79,110 @@ IgmI+CePUPB1pDf+lhPkU1MCAwEAAQ==
 `;
 }
 //@ chunk-zw17mz74.js:3305-3378 placement
-var buffer = Buffer.from("claude-code-manifest-v1\x00");
-var FLAG_ENFORCEMENT = "2.1.207";
-var FLAG = "flag";
+var buffer; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var FLAG_ENFORCEMENT;
+var FLAG;
+deferInit("chunk-zw17mz74.js:3305", () => {
+  buffer = Buffer.from("claude-code-manifest-v1\x00");
+  FLAG_ENFORCEMENT = "2.1.207";
+  FLAG = "flag";
+});
 //@ chunk-zw17mz74.js:3378-3677 placement
-var MANIFEST_SIGNATURE_VERSION = 1;
-var RSASSA_PKCS1_V1_5_SHA512 = "RSASSA-PKCS1-v1_5-SHA512";
-var manifestSignatureSchema = DoctorLazy(() =>
-  u({
-    schema: literal(MANIFEST_SIGNATURE_VERSION),
-    algorithm: literal(RSASSA_PKCS1_V1_5_SHA512),
-    signature: string().min(1),
-    publicKeySha256: string().regex(/^[0-9a-f]{64}$/),
-  }),
-);
-var releaseManifestSchema = DoctorLazy(() =>
-  looseObject({
-    version: string(),
-    manifestSignatureEnforcement: string().optional(),
-    platforms: record(
-      string(),
-      looseObject({
-        checksum: string(),
-        size: E().optional(),
-        binary: string().optional(),
-      }),
-    ),
-  }),
-);
+var MANIFEST_SIGNATURE_VERSION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var RSASSA_PKCS1_V1_5_SHA512;
+var manifestSignatureSchema;
+var releaseManifestSchema;
+deferInit("chunk-zw17mz74.js:3378", () => {
+  MANIFEST_SIGNATURE_VERSION = 1;
+  RSASSA_PKCS1_V1_5_SHA512 = "RSASSA-PKCS1-v1_5-SHA512";
+  manifestSignatureSchema = DoctorLazy(() =>
+    objectSchema({
+      schema: literal(MANIFEST_SIGNATURE_VERSION),
+      algorithm: literal(RSASSA_PKCS1_V1_5_SHA512),
+      signature: stringSchema().min(1),
+      publicKeySha256: stringSchema().regex(/^[0-9a-f]{64}$/),
+    }),
+  );
+  releaseManifestSchema = DoctorLazy(() =>
+    looseObject({
+      version: stringSchema(),
+      manifestSignatureEnforcement: stringSchema().optional(),
+      platforms: record(
+        stringSchema(),
+        looseObject({
+          checksum: stringSchema(),
+          size: numberSchema().optional(),
+          binary: stringSchema().optional(),
+        }),
+      ),
+    }),
+  );
+});
 //@ chunk-zw17mz74.js:3677-3917 placement
-class ManifestSignatureError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  reason;
-  constructor(expectedVersion, n) {
-    super(
-      `Release verification failed for Claude Code ${expectedVersion} (${n}). The update was not installed.`,
-      "Release manifest signature verification failed",
-      n,
-    );
-    this.name = "ManifestSignatureError";
-    this.reason = n;
-  }
-}
+let ManifestSignatureError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-zw17mz74.js:3677", () => {
+  ManifestSignatureError = class ManifestSignatureError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    reason;
+    constructor(version, reason) {
+      super(
+        `Release verification failed for Claude Code ${version} (${reason}). The update was not installed.`,
+        "Release manifest signature verification failed",
+        reason,
+      );
+      this.name = "ManifestSignatureError";
+      this.reason = reason;
+    }
+  };
+});
 //@ chunk-zw17mz74.js:3917-4656 placement
 /**
  * 校验发布清单的签名附件（格式、密钥不符、签名无效、版本不符）。
  */
 function verifyManifestSidecar({ manifestBytes, sidecar, expectedVersion, publicKeyPem }) {
-  let h = manifestSignatureSchema().safeParse(sidecar);
-  if (!h.success) throw new ManifestSignatureError(expectedVersion, "sidecar_malformed");
-  let { signature, publicKeySha256 } = h.data;
+  let parsed = manifestSignatureSchema().safeParse(sidecar);
+  if (!parsed.success) throw new ManifestSignatureError(expectedVersion, "sidecar_malformed");
+  let { signature, publicKeySha256 } = parsed.data;
   if (Buffer.from(signature, "base64").toString("base64") !== signature)
     throw new ManifestSignatureError(expectedVersion, "sidecar_malformed");
-  let y;
+  let publicKey;
   try {
-    y = createPublicKey(publicKeyPem);
+    publicKey = createPublicKey(publicKeyPem);
   } catch {
     throw new ManifestSignatureError(expectedVersion, "key_mismatch");
   }
-  let S = createHash("sha256")
+  let keyFingerprint = createHash("sha256")
     .update(
-      y.export({
+      publicKey.export({
         type: "spki",
         format: "der",
       }),
     )
     .digest("hex");
-  if (publicKeySha256 !== S) throw new ManifestSignatureError(expectedVersion, "key_mismatch");
-  let R = false;
+  if (publicKeySha256 !== keyFingerprint) throw new ManifestSignatureError(expectedVersion, "key_mismatch");
+  let verified = false;
   try {
-    R = verify("sha512", Buffer.concat([buffer, manifestBytes]), y, Buffer.from(signature, "base64"));
+    verified = verify(
+      "sha512",
+      Buffer.concat([buffer, manifestBytes]),
+      publicKey,
+      Buffer.from(signature, "base64"),
+    );
   } catch {
-    R = false;
+    verified = false;
   }
-  if (!R) throw new ManifestSignatureError(expectedVersion, "signature_invalid");
-  let F;
+  if (!verified) throw new ManifestSignatureError(expectedVersion, "signature_invalid");
+  let manifest;
   try {
-    let I = releaseManifestSchema().safeParse(jsonParse(manifestBytes.toString("utf8")));
-    F = I.success ? I.data : undefined;
+    let manifestResult = releaseManifestSchema().safeParse(jsonParse(manifestBytes.toString("utf8")));
+    manifest = manifestResult.success ? manifestResult.data : undefined;
   } catch {
-    F = undefined;
+    manifest = undefined;
   }
-  if (!F || F.version !== expectedVersion)
+  if (!manifest || manifest.version !== expectedVersion)
     throw new ManifestSignatureError(expectedVersion, "version_mismatch");
-  return F;
+  return manifest;
 }
 //@ chunk-zw17mz74.js:4656-4728 placement
 var DOWNLOAD_BASE_URL = "https://downloads.claude.ai/claude-code-releases";
@@ -163,10 +192,17 @@ var VERSION_CHECK_ATTEMPTS = 3;
 /**
  * 版本清单错误（可安全上报遥测的文案）。
  */
-class ReleaseManifestError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {}
+let ReleaseManifestError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-zw17mz74.js:4728", () => {
+  ReleaseManifestError = class ReleaseManifestError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {};
+});
 //@ chunk-zw17mz74.js:4749-4803 layout
-function httpGet(e, n) {
-  return isAnthropicOwnedHost(e) ? publicCdnGuardedClient.get(e, n) : externalHttp.get(e, n);
+function httpGet(url, options) {
+  return isAnthropicOwnedHost(url)
+    ? publicCdnGuardedClient.get(url, options)
+    : externalHttp.get(url, options);
 }
 //@ chunk-zw17mz74.js:4803-5961 fingerprint = getLatestVersionFromBinaryRepo (0.413)
 /**
@@ -174,12 +210,12 @@ function httpGet(e, n) {
  */
 async function getLatestVersionFromBinaryRepo(channel = "latest", baseUrl, authConfig) {
   let startTime = Date.now();
-  let h = 0;
-  let w;
+  let attempts = 0;
+  let response;
   try {
-    w = await retryWithTimeout(
+    response = await retryWithTimeout(
       (signal) => {
-        h++;
+        attempts++;
         return httpGet(`${baseUrl}/${channel}`, {
           timeout: VERSION_CHECK_TIMEOUT_MS,
           responseType: "text",
@@ -190,9 +226,9 @@ async function getLatestVersionFromBinaryRepo(channel = "latest", baseUrl, authC
       {
         attempts: VERSION_CHECK_ATTEMPTS,
         timeoutMs: VERSION_CHECK_TIMEOUT_MS,
-        onRetry: (R, F) => {
+        onRetry: (attempt, error) => {
           logForDebugging(
-            `Version check failed on attempt ${R}/${VERSION_CHECK_ATTEMPTS}, retrying: ${F instanceof Error ? F.message : String(F)}`,
+            `Version check failed on attempt ${attempt}/${VERSION_CHECK_ATTEMPTS}, retrying: ${error instanceof Error ? error.message : String(error)}`,
           );
         },
       },
@@ -206,37 +242,37 @@ async function getLatestVersionFromBinaryRepo(channel = "latest", baseUrl, authC
       latency_ms: latencyMs,
       http_status: httpStatus,
       is_timeout: isTimeoutError(error),
-      attempt: h,
+      attempt: attempts,
       platform: platformOrOther(safePlatform()),
       channel: fromEnum(channel),
     });
-    let L = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Failed to fetch version from ${baseUrl}/${channel} after ${h} attempt(s): ${errorMessage}`,
+    let wrappedError = new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
+      `Failed to fetch version from ${baseUrl}/${channel} after ${attempts} attempt(s): ${errorMessage}`,
       "Failed to fetch version from binary repo",
     );
     logForDebugging(
-      `Failed to fetch version from ${baseUrl}/${channel} after ${h} attempt(s): ${errorMessage}`,
+      `Failed to fetch version from ${baseUrl}/${channel} after ${attempts} attempt(s): ${errorMessage}`,
       {
         level: "error",
       },
     );
-    throw L;
+    throw wrappedError;
   }
   let latencyMs = Date.now() - startTime;
-  let trimmed = w.data.trim();
-  let S = trimmed.length;
+  let trimmed = response.data.trim();
+  let bodyLength = trimmed.length;
   if (!isSemverVersion(trimmed)) {
     logFeatureBad("update_check", "update_check_binary_repo_invalid_response");
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-      `Version pointer for ${channel} did not return a version (got ${S} bytes)`,
+      `Version pointer for ${channel} did not return a version (got ${bodyLength} bytes)`,
       "Version pointer returned a non-version body",
     );
   }
   logEvent("tengu_version_check_success", {
     latency_ms: latencyMs,
-    attempt: h,
+    attempt: attempts,
   });
-  if (h > 1) logFeatureSad("update_check", "update_check_binary_repo_retry");
+  if (attempts > 1) logFeatureSad("update_check", "update_check_binary_repo_retry");
   else logFeatureOk("update_check");
   return trimmed;
 }
@@ -268,14 +304,17 @@ async function getLatestVersion(channelOrVersion) {
   return getLatestVersionFromBinaryRepo(channel, DOWNLOAD_BASE_URL);
 }
 //@ chunk-zw17mz74.js:6486-6566 layout
-var npmManifestSchema = DoctorLazy(() =>
-  u({
-    dist: u({
-      integrity: string().min(1),
-      tarball: string().min(1).optional(),
+var npmManifestSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-zw17mz74.js:6486", () => {
+  npmManifestSchema = DoctorLazy(() =>
+    objectSchema({
+      dist: objectSchema({
+        integrity: stringSchema().min(1),
+        tarball: stringSchema().min(1).optional(),
+      }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-zw17mz74.js:6566-6632 layout
 var DEFAULT_STALL_TIMEOUT_MS = 120000;
 var MAX_DOWNLOAD_RETRIES = 3;
@@ -303,13 +342,13 @@ class StallTimeoutError extends Error {
   }
 }
 //@ chunk-zw17mz74.js:6917-7098 layout
-function isRetriableConnectionDrop(e) {
-  if (isAxiosError(e) && e.response) return false;
-  let code = extractConnectionErrorDetails(e)?.code;
+function isRetriableConnectionDrop(error) {
+  if (isAxiosError(error) && error.response) return false;
+  let code = extractConnectionErrorDetails(error)?.code;
   if (code === "ECONNABORTED" || code === "ETIMEDOUT") return false;
   if (code !== undefined && (TRANSIENT_SOCKET_CODES.has(code) || UNREACHABLE_ERROR_CODES.has(code)))
     return true;
-  return hasExactErrorMessage(e, "aborted");
+  return hasExactErrorMessage(error, "aborted");
 }
 //@ chunk-zw17mz74.js:7098-9731 layout
 /**
@@ -338,11 +377,20 @@ async function downloadAndVerifyBinary(url, expectedChecksum, destPath, requestO
     };
     let resetStallTimer = () => {
       if (stallTimer) stallTimer.refresh();
-      else stallTimer = setTimeout((x) => x.abort("stall"), getStallTimeoutMs(), abortController);
+      else
+        stallTimer = setTimeout(
+          (controller) => controller.abort("stall"),
+          getStallTimeoutMs(),
+          abortController,
+        );
     };
     try {
       resetStallTimer();
-      deadlineTimer = setTimeout((j) => j.abort("deadline"), getDownloadDeadlineMs(), abortController);
+      deadlineTimer = setTimeout(
+        (controller) => controller.abort("deadline"),
+        getDownloadDeadlineMs(),
+        abortController,
+      );
       let response = await httpGet(url, {
         timeout: DOWNLOAD_DEADLINE_MS,
         responseType: "stream",
@@ -353,10 +401,10 @@ async function downloadAndVerifyBinary(url, expectedChecksum, destPath, requestO
       let compressedHash = compressed ? createHash("sha256") : undefined;
       let activeHash = compressedHash ?? hash;
       let hashingTransform = new Transform({
-        transform(j, G, K) {
+        transform(chunk, encoding, callback) {
           resetStallTimer();
-          activeHash.update(j);
-          K(null, j);
+          activeHash.update(chunk);
+          callback(null, chunk);
         },
       });
       fileStream = createWriteStream(destPath, {
@@ -364,12 +412,12 @@ async function downloadAndVerifyBinary(url, expectedChecksum, destPath, requestO
       });
       fileStream.on("drain", resetStallTimer);
       if (compressed) {
-        let j = 0;
-        let G = new Transform({
-          transform(K, ee, ae) {
-            j += K.length;
-            if (j > compressed.decompressedSize) {
-              ae(
+        let decompressedBytes = 0;
+        let sizeGuard = new Transform({
+          transform(chunk, encoding, callback) {
+            decompressedBytes += chunk.length;
+            if (decompressedBytes > compressed.decompressedSize) {
+              callback(
                 new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
                   `Decompressed binary exceeds the manifest size of ${compressed.decompressedSize} bytes`,
                   "Decompressed binary larger than manifest size",
@@ -377,11 +425,11 @@ async function downloadAndVerifyBinary(url, expectedChecksum, destPath, requestO
               );
               return;
             }
-            hash.update(K);
-            ae(null, K);
+            hash.update(chunk);
+            callback(null, chunk);
           },
         });
-        await pipeline(response.data, hashingTransform, createZstdDecompress(), G, fileStream, {
+        await pipeline(response.data, hashingTransform, createZstdDecompress(), sizeGuard, fileStream, {
           signal: abortController.signal,
         });
       } else
@@ -391,18 +439,18 @@ async function downloadAndVerifyBinary(url, expectedChecksum, destPath, requestO
       streamFinished = true;
       clearTimers();
       if (compressed) {
-        let j = compressedHash?.digest("hex");
-        if (j !== compressed.checksum)
+        let compressedDigest = compressedHash?.digest("hex");
+        if (compressedDigest !== compressed.checksum)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Checksum mismatch: expected ${compressed.checksum}, got ${j} (compressed)`,
+            `Checksum mismatch: expected ${compressed.checksum}, got ${compressedDigest} (compressed)`,
             "Checksum mismatch during compressed binary download",
           );
       }
-      let Q = hash.digest("hex");
-      if (Q !== expectedChecksum)
+      let digest = hash.digest("hex");
+      if (digest !== expectedChecksum)
         throw Object.assign(
           new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `Checksum mismatch: expected ${expectedChecksum}, got ${Q}`,
+            `Checksum mismatch: expected ${expectedChecksum}, got ${digest}`,
             "Checksum mismatch during binary download",
           ),
           {
@@ -431,8 +479,8 @@ async function downloadAndVerifyBinary(url, expectedChecksum, destPath, requestO
       if (isAxiosError(normalizedError) && normalizedError.response?.data instanceof Readable)
         normalizedError.response.data.destroy();
       if (fileStream && !completed) {
-        let K = fileStream;
-        await new Promise((resolve) => K.close(() => resolve()));
+        let stream = fileStream;
+        await new Promise((resolve) => stream.close(() => resolve()));
         await rm(destPath, {
           force: true,
         }).catch((error) =>
@@ -529,8 +577,8 @@ function isSignatureEnforced(manifestSignatureEnforcement, options) {
  * 获取版本的 manifest.json 并按策略校验签名旁文件（RSASSA-PKCS1-v1_5-SHA512）：缺签名时可按旧版放行，核对二进制名与强制签名的发布时间；失败按是否强制决定抛错或告警继续，返回 manifest 与认证状态。
  */
 async function fetchReleaseManifest(
-  e,
-  n,
+  baseUrl,
+  version,
   { authConfig, signaturePolicy, platform, startTime, purpose = "download" },
 ) {
   let isDownload = purpose === "download";
@@ -539,24 +587,24 @@ async function fetchReleaseManifest(
   let dropRetried = false;
   let binaryName = getBinaryName(platform);
   try {
-    let D = await fetchWithDropRetry(`${e}/${n}/manifest.json`, {
+    let manifestResponse = await fetchWithDropRetry(`${baseUrl}/${version}/manifest.json`, {
       timeout: VERSION_CHECK_TIMEOUT_MS_2,
       ...authConfig,
       responseType: "arraybuffer",
       maxContentLength: 1048576,
     });
-    dropRetried = D.dropRetried;
-    manifestBytes = Buffer.from(D.data);
-    let A = releaseManifestSchema().safeParse(jsonParse(manifestBytes.toString("utf8")));
-    if (!A.success)
+    dropRetried = manifestResponse.dropRetried;
+    manifestBytes = Buffer.from(manifestResponse.data);
+    let parsed = releaseManifestSchema().safeParse(jsonParse(manifestBytes.toString("utf8")));
+    if (!parsed.success)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Manifest for ${n} is not a valid release manifest`,
+        `Manifest for ${version} is not a valid release manifest`,
         "Release manifest failed schema validation",
       );
-    manifest = A.data;
+    manifest = parsed.data;
   } catch (error) {
     let latencyMs = Date.now() - startTime;
-    let P = error instanceof Error ? error.message : String(error);
+    let message = error instanceof Error ? error.message : String(error);
     if (isDownload) logFeatureBad("update_download", "update_download_manifest_failed");
     logEvent("tengu_binary_manifest_fetch_failure", {
       latency_ms: latencyMs,
@@ -564,7 +612,7 @@ async function fetchReleaseManifest(
       is_timeout: isTimeoutError(error),
       platform: platformOrOther(platform),
     });
-    logForDebugging(`Failed to fetch manifest from ${e}/${n}/manifest.json: ${P}`, {
+    logForDebugging(`Failed to fetch manifest from ${baseUrl}/${version}/manifest.json: ${message}`, {
       level: "error",
     });
     throw error;
@@ -572,7 +620,7 @@ async function fetchReleaseManifest(
   let authenticated = false;
   let signatureVerified = false;
   if (signaturePolicy !== "skip") {
-    let sidecarUrl = `${e}/${n}/manifest.json.raw-sig.json`;
+    let sidecarUrl = `${baseUrl}/${version}/manifest.json.raw-sig.json`;
     let now = Date.now();
     let sidecarStatus;
     let enforcement;
@@ -580,20 +628,20 @@ async function fetchReleaseManifest(
       let sidecar;
       let isUnsigned = false;
       try {
-        let V = await fetchWithDropRetry(sidecarUrl, {
+        let sidecarResponse = await fetchWithDropRetry(sidecarUrl, {
           timeout: VERSION_CHECK_TIMEOUT_MS_2,
           ...authConfig,
           responseType: "json",
           maxContentLength: 65536,
           signal: AbortSignal.timeout(VERSION_CHECK_BUDGET_MS),
         });
-        dropRetried ||= V.dropRetried;
-        sidecar = V.data;
+        dropRetried ||= sidecarResponse.dropRetried;
+        sidecar = sidecarResponse.data;
       } catch (error) {
         sidecarStatus = httpStatusOf(error);
         if (sidecarStatus !== 404)
           throw new ManifestSignatureError(
-            n,
+            version,
             sidecarStatus !== undefined
               ? "sidecar_fetch_http_error"
               : Date.now() - now > VERSION_CHECK_TOTAL_MS
@@ -603,36 +651,37 @@ async function fetchReleaseManifest(
                   : "sidecar_fetch_connection_error",
           );
         if (signaturePolicy !== "allow-unsigned-legacy")
-          throw new ManifestSignatureError(n, "sidecar_missing");
+          throw new ManifestSignatureError(version, "sidecar_missing");
         isUnsigned = true;
       }
       if (isUnsigned) {
         logFeatureSad("update_manifest_signature", "unsigned_legacy");
         logForDebugging(
-          `No manifest signature published for ${n} (predates ${FLAG_ENFORCEMENT}); continuing with checksum-only verification`,
+          `No manifest signature published for ${version} (predates ${FLAG_ENFORCEMENT}); continuing with checksum-only verification`,
           {
             level: "warn",
           },
         );
       } else {
-        let V = verifyManifestSidecar({
+        let signedManifest = verifyManifestSidecar({
           manifestBytes,
           sidecar,
-          expectedVersion: n,
+          expectedVersion: version,
           publicKeyPem: verifyReleaseManifest(),
         });
-        logForDebugging(`Verified manifest signature for ${n}`);
-        let q = V.platforms[platform];
-        if (q && q.binary !== binaryName) throw new ManifestSignatureError(n, "binary_name_mismatch");
-        manifest = V;
+        logForDebugging(`Verified manifest signature for ${version}`);
+        let platformEntry = signedManifest.platforms[platform];
+        if (platformEntry && platformEntry.binary !== binaryName)
+          throw new ManifestSignatureError(version, "binary_name_mismatch");
+        manifest = signedManifest;
         authenticated = true;
         if (signaturePolicy === "require-enforcing-release") {
           await initializeGrowthBook().catch(() => null);
           enforcement = {
             flag: signatureEnforcementFlag(),
           };
-          if (!isSignatureEnforced(V.manifestSignatureEnforcement, enforcement.flag))
-            throw new ManifestSignatureError(n, "release_predates_enforcement");
+          if (!isSignatureEnforced(signedManifest.manifestSignatureEnforcement, enforcement.flag))
+            throw new ManifestSignatureError(version, "release_predates_enforcement");
         }
         signatureVerified = true;
         logFeatureOk("update_manifest_signature");
@@ -641,21 +690,21 @@ async function fetchReleaseManifest(
       if (!(error instanceof ManifestSignatureError)) throw error;
       let latencyMs = Date.now() - now;
       await initializeGrowthBook().catch(() => null);
-      let V = enforcement
+      let enforcedMode = enforcement
         ? formatRelativeTimeAgo(flagEnforcementMode(), enforcement.flag)
         : enforcementFlagTime();
       logEvent("tengu_binary_manifest_signature_failed", {
         reason: fromEnum(error.reason),
         http_status: sidecarStatus,
-        enforced: V,
+        enforced: enforcedMode,
         platform: platformOrOther(platform),
         latency_ms: latencyMs,
       });
-      if (V) {
+      if (enforcedMode) {
         if (error.reason === "release_predates_enforcement") {
           logFeatureSad("update_manifest_signature", error.reason);
           logForDebugging(
-            `${n} is signed but predates manifest-signature enforcement; not eligible as a channel target for this client`,
+            `${version} is signed but predates manifest-signature enforcement; not eligible as a channel target for this client`,
             {
               level: "warn",
             },
@@ -663,7 +712,7 @@ async function fetchReleaseManifest(
         } else if (error.reason === "sidecar_fetch_interrupted") {
           logFeatureSad("update_manifest_signature", error.reason);
           logForDebugging(
-            `Signature sidecar fetch for ${n} was interrupted (process suspended mid-request); will retry on the next update check`,
+            `Signature sidecar fetch for ${version} was interrupted (process suspended mid-request); will retry on the next update check`,
             {
               level: "warn",
             },
@@ -707,7 +756,7 @@ async function downloadVersionFromBinaryRepo(version, stagingPath, baseUrl, { au
   let binaryName = getBinaryName(platform);
   let startTime = Date.now();
   logEvent("tengu_binary_download_attempt", {});
-  let [releaseManifest, F] = await Promise.all([
+  let [releaseManifest, compressedManifestResponse] = await Promise.all([
     fetchReleaseManifest(baseUrl, version, {
       authConfig,
       signaturePolicy,
@@ -725,8 +774,9 @@ async function downloadVersionFromBinaryRepo(version, stagingPath, baseUrl, { au
     }),
   ]);
   let { manifest, signatureVerified } = releaseManifest;
-  let L = F?.data;
-  let D = releaseManifest.metadataDropRetried || F?.dropRetried === true;
+  let compressedManifest = compressedManifestResponse?.data;
+  let metadataDropRetried =
+    releaseManifest.metadataDropRetried || compressedManifestResponse?.dropRetried === true;
   let platformInfo = manifest.platforms[platform];
   if (!platformInfo) {
     logFeatureBad("update_download", "update_download_platform_not_found");
@@ -737,7 +787,7 @@ async function downloadVersionFromBinaryRepo(version, stagingPath, baseUrl, { au
     );
   }
   let expectedChecksum = platformInfo.checksum;
-  let checksum = L?.platforms?.[platform]?.checksum;
+  let checksum = compressedManifest?.platforms?.[platform]?.checksum;
   let size = platformInfo.size;
   let compressed =
     checksum !== undefined &&
@@ -753,31 +803,38 @@ async function downloadVersionFromBinaryRepo(version, stagingPath, baseUrl, { au
   let binaryUrl = `${baseUrl}/${version}/${platform}/${binaryName}`;
   await fs.mkdir(stagingPath);
   let binaryPath = join(stagingPath, binaryName);
-  let Q = compressed !== undefined;
-  let url = Q ? `${binaryUrl}.zst` : binaryUrl;
+  let useCompressed = compressed !== undefined;
+  let url = useCompressed ? `${binaryUrl}.zst` : binaryUrl;
   try {
-    let G;
+    let downloadResult;
     if (compressed)
       try {
-        G = await downloadAndVerifyBinary(url, expectedChecksum, binaryPath, authConfig || {}, compressed);
+        downloadResult = await downloadAndVerifyBinary(
+          url,
+          expectedChecksum,
+          binaryPath,
+          authConfig || {},
+          compressed,
+        );
       } catch (error) {
         if (httpStatusOf(error) === undefined && !isChecksumFailure(error)) throw error;
-        Q = false;
+        useCompressed = false;
         url = binaryUrl;
         logForDebugging(
           `Compressed binary unusable (${error instanceof Error ? error.message : String(error)}), falling back to ${binaryUrl}`,
         );
       }
     let { checksumRetried, dropRetried } =
-      G ?? (await downloadAndVerifyBinary(url, expectedChecksum, binaryPath, authConfig || {}));
+      downloadResult ?? (await downloadAndVerifyBinary(url, expectedChecksum, binaryPath, authConfig || {}));
     let latencyMs = Date.now() - startTime;
-    if (compressed && !Q) logFeatureSad("update_download", "update_download_zst_fallback");
+    if (compressed && !useCompressed) logFeatureSad("update_download", "update_download_zst_fallback");
     else if (checksumRetried) logFeatureSad("update_download", "update_download_checksum_retry");
-    else if (dropRetried || D) logFeatureSad("update_download", "update_download_drop_retry");
+    else if (dropRetried || metadataDropRetried)
+      logFeatureSad("update_download", "update_download_drop_retry");
     else logFeatureOk("update_download");
     logEvent("tengu_binary_download_success", {
       latency_ms: latencyMs,
-      compressed: Q,
+      compressed: useCompressed,
     });
     return {
       signatureVerified,
@@ -785,8 +842,8 @@ async function downloadVersionFromBinaryRepo(version, stagingPath, baseUrl, { au
     };
   } catch (error) {
     let latencyMs = Date.now() - startTime;
-    let ee = error instanceof Error ? error.message : String(error);
-    let included = ee.includes("Checksum mismatch");
+    let downloadType = error instanceof Error ? error.message : String(error);
+    let included = downloadType.includes("Checksum mismatch");
     if (included) logFeatureBad("update_download", "update_download_checksum_mismatch");
     else if (error instanceof StallTimeoutError)
       logFeatureBad("update_download", "update_download_stall_timeout");
@@ -800,30 +857,30 @@ async function downloadVersionFromBinaryRepo(version, stagingPath, baseUrl, { au
       is_checksum_mismatch: included,
       attempt: getAttemptNumber(error),
       platform: platformOrOther(platform),
-      compressed: Q,
+      compressed: useCompressed,
     });
-    logForDebugging(`Failed to download binary from ${url}: ${ee}`, {
+    logForDebugging(`Failed to download binary from ${url}: ${downloadType}`, {
       level: "error",
     });
     throw error;
   }
 }
 //@ chunk-zw17mz74.js:15273-15426 layout
-function signaturePolicyFor(e, { explicitVersionRequested, requireEnforcingRelease }) {
+function signaturePolicyFor(version, { explicitVersionRequested, requireEnforcingRelease }) {
   return requireEnforcingRelease
     ? "require-enforcing-release"
-    : explicitVersionRequested && lt_2(e, FLAG_ENFORCEMENT)
+    : explicitVersionRequested && lt_2(version, FLAG_ENFORCEMENT)
       ? "allow-unsigned-legacy"
       : "require";
 }
 //@ chunk-zw17mz74.js:15426-16020 layout
-async function reverifyRetainedVersion(version, installPath, r) {
+async function reverifyRetainedVersion(version, filePath, options) {
   let platform = getPlatform();
   let { manifest, manifestAuthenticated, signatureVerified } = await fetchReleaseManifest(
     DOWNLOAD_BASE_URL,
     version,
     {
-      signaturePolicy: signaturePolicyFor(version, r),
+      signaturePolicy: signaturePolicyFor(version, options),
       platform,
       startTime: Date.now(),
       purpose: "reverify",
@@ -843,11 +900,12 @@ async function reverifyRetainedVersion(version, installPath, r) {
     };
   }
   let checksum = manifest.platforms[platform]?.checksum;
-  let S = checksum !== undefined && (await fileMatchesChecksum(installPath, checksum));
-  if (!S) logForDebugging(`Retained ${version} does not match its signed manifest checksum; re-downloading`);
+  let checksumMatches = checksum !== undefined && (await fileMatchesChecksum(filePath, checksum));
+  if (!checksumMatches)
+    logForDebugging(`Retained ${version} does not match its signed manifest checksum; re-downloading`);
   return {
     signatureVerified,
-    binaryMatches: S,
+    binaryMatches: checksumMatches,
     expectedChecksum: checksum,
   };
 }
@@ -858,18 +916,18 @@ function isRetryableNetworkError(error) {
   return code !== undefined && (UNREACHABLE_ERROR_CODES.has(code) || code === "ETIMEDOUT");
 }
 //@ chunk-zw17mz74.js:16132-16213 layout
-async function sha256File(e) {
+async function sha256File(filePath) {
   let hash = createHash("sha256");
-  await pipeline(createReadStream(e), hash);
+  await pipeline(createReadStream(filePath), hash);
   return hash.digest("hex");
 }
 //@ chunk-zw17mz74.js:16213-16353 layout
-async function fileMatchesChecksum(e, n) {
+async function fileMatchesChecksum(filePath, expectedHash) {
   try {
-    return (await sha256File(e)) === n;
+    return (await sha256File(filePath)) === expectedHash;
   } catch (error) {
     logForDebugging(
-      `Could not hash ${e} (${getErrnoCode(error) ?? toError(error).name}); treating as mismatched`,
+      `Could not hash ${filePath} (${getErrnoCode(error) ?? toError(error).name}); treating as mismatched`,
     );
     return false;
   }
@@ -914,8 +972,8 @@ function isZstdError(error) {
 }
 //@ chunk-zw17mz74.js:17087-17227 placement
 function isChecksumFailure(error) {
-  let n = error instanceof Error ? error.message : String(error);
-  return n.includes("Checksum mismatch") || n.includes("exceeds the manifest size");
+  let message = error instanceof Error ? error.message : String(error);
+  return message.includes("Checksum mismatch") || message.includes("exceeds the manifest size");
 }
 //@ chunk-zw17mz74.js:17227-17322 placement
 function isDeterministicError(normalizedError) {
@@ -947,19 +1005,19 @@ function safePlatform() {
   }
 }
 //@ chunk-zw17mz74.js:17587-17813 placement
-async function fetchWithDropRetry(sidecarUrl, n) {
+async function fetchWithDropRetry(url, requestOptions) {
   let dropRetried = false;
   for (let j = 1; ; j++)
     try {
       return {
-        data: (await httpGet(sidecarUrl, n)).data,
+        data: (await httpGet(url, requestOptions)).data,
         dropRetried,
       };
     } catch (error) {
       if (j >= MAX_DOWNLOAD_RETRIES || !isRetriableConnectionDrop(error)) throw error;
       dropRetried = true;
       logForDebugging(
-        `Fetch of ${sidecarUrl} connection dropped on attempt ${j}/${MAX_DOWNLOAD_RETRIES}, retrying...`,
+        `Fetch of ${url} connection dropped on attempt ${j}/${MAX_DOWNLOAD_RETRIES}, retrying...`,
       );
       await sleep(RETRY_BASE_DELAY_MS);
     }

@@ -38,31 +38,31 @@ var FORKED_SKILL_SIDECAR_MAX_BYTES = 524288;
 /**
  * 由 transcript 路径得到 forked 技能的 scoping 与 marker 文件路径。
  */
-function forkedSkillSidecarPaths(e) {
+function forkedSkillSidecarPaths(transcriptPath) {
   return {
-    scoping: e.replace(/\.jsonl$/, ".forked-skill.json"),
-    provenanceMarker: e.replace(/\.jsonl$/, ".forked-skill.marker.json"),
+    scoping: transcriptPath.replace(/\.jsonl$/, ".forked-skill.json"),
+    provenanceMarker: transcriptPath.replace(/\.jsonl$/, ".forked-skill.marker.json"),
   };
 }
 //@ chunk-jb5bg5s7.js:936-968 placement
 /**
  * 由代理 id 得到 forked 技能的两个侧车文件路径。
  */
-function sidecarPathsForAgent(e) {
-  return forkedSkillSidecarPaths(getAgentTranscriptPath(e));
+function sidecarPathsForAgent(agentId) {
+  return forkedSkillSidecarPaths(getAgentTranscriptPath(agentId));
 }
 //@ chunk-jb5bg5s7.js:968-1142 placement
 /**
  * 定位 forked 技能侧车文件（两者都找到才返回）。
  */
-function locateForkedSkillSidecars(e) {
-  if (e === undefined) return;
-  let r = subagentSidecarKey(e, ".forked-skill.json");
-  let n = subagentSidecarKey(e, ".forked-skill.marker.json");
-  return r !== undefined && n !== undefined
+function locateForkedSkillSidecars(agentId) {
+  if (agentId === undefined) return;
+  let scopingKey = subagentSidecarKey(agentId, ".forked-skill.json");
+  let markerKey = subagentSidecarKey(agentId, ".forked-skill.marker.json");
+  return scopingKey !== undefined && markerKey !== undefined
     ? {
-        scoping: r,
-        provenanceMarker: n,
+        scoping: scopingKey,
+        provenanceMarker: markerKey,
       }
     : undefined;
 }
@@ -70,44 +70,48 @@ function locateForkedSkillSidecars(e) {
 /**
  * 序列化 forked 技能的来源标记 JSON。
  */
-function forkedSkillMarkerJson(e) {
+function forkedSkillMarkerJson(skillName) {
   return jsonStringify({
     forkedSkill: true,
-    ...(e !== undefined && {
-      skillName: e,
+    ...(skillName !== undefined && {
+      skillName,
     }),
   });
 }
 //@ chunk-jb5bg5s7.js:1212-1761 placement
-function readForkedSkillMarker(e) {
-  let r = locateSessionProjectDir();
-  if (typeof r !== "string") {
-    let u = locateForkedSkillSidecars(locateAgentTranscript(e));
-    return u && toSidecarStorageKeys(u);
+function readForkedSkillMarker(agentId) {
+  let projectDir = locateSessionProjectDir();
+  if (typeof projectDir !== "string") {
+    let filePaths = locateForkedSkillSidecars(locateAgentTranscript(agentId));
+    return filePaths && toSidecarStorageKeys(filePaths);
   }
-  if (dirname(r) !== getProjectsDir()) return;
-  let n = basename(r);
+  if (dirname(projectDir) !== getProjectsDir()) return;
+  let projectKey = basename(projectDir);
   let sessionId = getSessionId();
-  let o = join(r, sessionId) + sep;
-  let agentTranscriptPath = getAgentTranscriptPath(e);
-  if (!agentTranscriptPath.startsWith(o)) return;
-  let parts = agentTranscriptPath.slice(o.length).split(sep);
+  let sessionPrefix = join(projectDir, sessionId) + sep;
+  let agentTranscriptPath = getAgentTranscriptPath(agentId);
+  if (!agentTranscriptPath.startsWith(sessionPrefix)) return;
+  let parts = agentTranscriptPath.slice(sessionPrefix.length).split(sep);
   let last = parts.at(-1);
-  if (last === undefined || !last.endsWith(".jsonl") || ![n, sessionId, ...parts].every(isValidKeySegment))
+  if (
+    last === undefined ||
+    !last.endsWith(".jsonl") ||
+    ![projectKey, sessionId, ...parts].every(isValidKeySegment)
+  )
     return;
   let sliced = parts.slice(0, -1);
-  let S = (u) => ({
+  let makeKey = (fileName) => ({
     namespace: "sidecar",
-    projectKey: n,
+    projectKey,
     sessionId,
-    relPath: [...sliced, u],
+    relPath: [...sliced, fileName],
   });
-  let g = S(last.replace(/\.jsonl$/, ".forked-skill.json"));
-  let y = S(last.replace(/\.jsonl$/, ".forked-skill.marker.json"));
-  return validateStorageKey(g) === undefined && validateStorageKey(y) === undefined
+  let scopingKey = makeKey(last.replace(/\.jsonl$/, ".forked-skill.json"));
+  let markerKey = makeKey(last.replace(/\.jsonl$/, ".forked-skill.marker.json"));
+  return validateStorageKey(scopingKey) === undefined && validateStorageKey(markerKey) === undefined
     ? {
-        scoping: g,
-        provenanceMarker: y,
+        scoping: scopingKey,
+        provenanceMarker: markerKey,
       }
     : undefined;
 }
@@ -115,9 +119,9 @@ function readForkedSkillMarker(e) {
 /**
  * 侧车路径转为存储键。
  */
-function toSidecarStorageKeys(e) {
-  let storageKey = toStorageKey(e.scoping);
-  let storageKey_2 = toStorageKey(e.provenanceMarker);
+function toSidecarStorageKeys(paths) {
+  let storageKey = toStorageKey(paths.scoping);
+  let storageKey_2 = toStorageKey(paths.provenanceMarker);
   return storageKey && storageKey_2
     ? {
         scoping: storageKey,
@@ -129,32 +133,32 @@ function toSidecarStorageKeys(e) {
 /**
  * 经存储后端读取侧车文本（absent/unusable/text）。
  */
-async function readSidecarText(e, r) {
-  let n = await e.statMeta(r);
-  if (!n.ok)
-    return n.error.code === "NotFound"
+async function readSidecarText(storage, key) {
+  let metaResult = await storage.statMeta(key);
+  if (!metaResult.ok)
+    return metaResult.error.code === "NotFound"
       ? {
           kind: "absent",
         }
       : {
           kind: "unusable",
-          ...unavailableFlag(n.error),
+          ...unavailableFlag(metaResult.error),
         };
-  if (n.value.size > FORKED_SKILL_SIDECAR_MAX_BYTES)
+  if (metaResult.value.size > FORKED_SKILL_SIDECAR_MAX_BYTES)
     return {
       kind: "unusable",
     };
-  let i = await e.read([r]);
-  if (!i.ok)
+  let readResult = await storage.read([key]);
+  if (!readResult.ok)
     return {
       kind: "unusable",
-      ...unavailableFlag(i.error),
+      ...unavailableFlag(readResult.error),
     };
-  let o = i.value.items[0];
-  return o.found
+  let item = readResult.value.items[0];
+  return item.found
     ? {
         kind: "text",
-        text: Buffer.from(o.value).toString("utf8"),
+        text: Buffer.from(item.value).toString("utf8"),
       }
     : {
         kind: "absent",
@@ -164,24 +168,24 @@ async function readSidecarText(e, r) {
 /**
  * 侧车是否存在（读取失败视为存在）。
  */
-async function sidecarPresent(e, provenanceMarker) {
-  let n = await e.statMeta(provenanceMarker);
-  if (n.ok)
+async function sidecarPresent(storage, provenanceMarker) {
+  let metaResult = await storage.statMeta(provenanceMarker);
+  if (metaResult.ok)
     return {
       present: true,
     };
-  return n.error.code === "NotFound"
+  return metaResult.error.code === "NotFound"
     ? {
         present: false,
       }
     : {
         present: true,
-        ...unavailableFlag(n.error),
+        ...unavailableFlag(metaResult.error),
       };
 }
 //@ chunk-jb5bg5s7.js:2382-2432 placement
-function transientReadFlag(e) {
-  return e === true
+function transientReadFlag(flag) {
+  return flag === true
     ? {
         transientRead: true,
       }
@@ -195,12 +199,12 @@ function unavailableFlag(error) {
 /**
  * 经存储后端写侧车文件，失败抛错。
  */
-async function writeSidecar(e, r, n) {
-  let i = await e.write(r, forkedSkillMarkerJson(n), {
+async function writeSidecar(storage, key, skillName) {
+  let writeResult = await storage.write(key, forkedSkillMarkerJson(skillName), {
     mode: 438 & ~process.umask(),
   });
-  if (!i.ok) {
-    logForDebugging(`forked-skill provenance marker write: ${i.error.code}`);
+  if (!writeResult.ok) {
+    logForDebugging(`forked-skill provenance marker write: ${writeResult.error.code}`);
     throw Error("forked-skill provenance marker write failed");
   }
 }
@@ -218,93 +222,93 @@ function assertNotDiskless() {
 /**
  * 写入 forked 技能标记：有存储后端时写存储，否则原子写文件。
  */
-async function writeForkedSkillMarker(provenanceMarker, r, n) {
-  let i = isStorageV5Enabled() && n ? pathToSessionSideKey(provenanceMarker) : undefined;
-  if (n && i) return writeSidecar(n, i, r);
+async function writeForkedSkillMarker(provenanceMarker, skillName, storageV5) {
+  let sideKey = isStorageV5Enabled() && storageV5 ? pathToSessionSideKey(provenanceMarker) : undefined;
+  if (storageV5 && sideKey) return writeSidecar(storageV5, sideKey, skillName);
   assertNotDiskless();
-  await writeFileAtomic(provenanceMarker, forkedSkillMarkerJson(r));
+  await writeFileAtomic(provenanceMarker, forkedSkillMarkerJson(skillName));
 }
 //@ chunk-jb5bg5s7.js:2899-3305 placement
-async function writeForkedSkillScoping(e, r, storageV5) {
-  let i = isStorageV5Enabled() && storageV5 ? readForkedSkillMarker(e) : undefined;
-  if (storageV5 && i) {
-    await writeSidecar(storageV5, i.provenanceMarker, r.skillName);
-    let a = await storageV5.write(i.scoping, jsonStringify(r), {
+async function writeForkedSkillScoping(agentId, scoping, storage) {
+  let paths = isStorageV5Enabled() && storage ? readForkedSkillMarker(agentId) : undefined;
+  if (storage && paths) {
+    await writeSidecar(storage, paths.provenanceMarker, scoping.skillName);
+    let writeResult = await storage.write(paths.scoping, jsonStringify(scoping), {
       mode: 438 & ~process.umask(),
     });
-    if (!a.ok) {
-      logForDebugging(`forked-skill scoping write: ${a.error.code}`);
+    if (!writeResult.ok) {
+      logForDebugging(`forked-skill scoping write: ${writeResult.error.code}`);
       throw Error("forked-skill scoping record write failed");
     }
     return;
   }
   assertNotDiskless();
-  let o = sidecarPathsForAgent(e);
-  await mkdir(dirname(o.scoping), {
+  let sidecarPaths = sidecarPathsForAgent(agentId);
+  await mkdir(dirname(sidecarPaths.scoping), {
     recursive: true,
   });
-  await writeForkedSkillMarker(o.provenanceMarker, r.skillName);
-  await writeFileAtomic(o.scoping, jsonStringify(r));
+  await writeForkedSkillMarker(sidecarPaths.provenanceMarker, scoping.skillName);
+  await writeFileAtomic(sidecarPaths.scoping, jsonStringify(scoping));
 }
 //@ chunk-jb5bg5s7.js:3305-3437 placement
 /**
  * 读取某代理的 forked 技能 scoping（存储后端或本地文件）。
  */
-async function readForkedSkillScoping(e, r) {
-  let n = isStorageV5Enabled() && r ? readForkedSkillMarker(e) : undefined;
-  if (r && n) return readScopingViaStorage(r, n);
-  let i = locateForkedSkillSidecars(locateAgentTranscript(e));
-  return i === undefined
+async function readForkedSkillScoping(agentId, storageV5) {
+  let paths = isStorageV5Enabled() && storageV5 ? readForkedSkillMarker(agentId) : undefined;
+  if (storageV5 && paths) return readScopingViaStorage(storageV5, paths);
+  let filePaths = locateForkedSkillSidecars(locateAgentTranscript(agentId));
+  return filePaths === undefined
     ? {
         status: "diskless",
       }
-    : readScopingFromFiles(i);
+    : readScopingFromFiles(filePaths);
 }
 //@ chunk-jb5bg5s7.js:3437-3794 placement
 /**
  * 从本地文件读取 scoping；不存在时检查 marker 判断 absent-but-marked。
  */
-async function readScopingFromFiles(e, r) {
-  let n = isStorageV5Enabled() && r ? toSidecarStorageKeys(e) : undefined;
-  if (r && n) return readScopingViaStorage(r, n);
-  let i = worktreeFromProgress(e.scoping);
-  let o = worktreeFromProgress(e.provenanceMarker);
-  if (i === undefined || o === undefined)
+async function readScopingFromFiles(paths, storageV5) {
+  let storageKeys = isStorageV5Enabled() && storageV5 ? toSidecarStorageKeys(paths) : undefined;
+  if (storageV5 && storageKeys) return readScopingViaStorage(storageV5, storageKeys);
+  let scopingPath = worktreeFromProgress(paths.scoping);
+  let markerPath = worktreeFromProgress(paths.provenanceMarker);
+  if (scopingPath === undefined || markerPath === undefined)
     return {
       status: "diskless",
     };
-  let a;
+  let text;
   try {
-    let s = await lstat(i);
-    if (!s.isFile() || s.size > FORKED_SKILL_SIDECAR_MAX_BYTES)
+    let stats = await lstat(scopingPath);
+    if (!stats.isFile() || stats.size > FORKED_SKILL_SIDECAR_MAX_BYTES)
       return {
         status: "malformed",
       };
-    a = await readFile(i, "utf-8");
+    text = await readFile(scopingPath, "utf-8");
   } catch (error) {
-    if (isENOENT(error)) return await checkMarkerFile(o);
+    if (isENOENT(error)) return await checkMarkerFile(markerPath);
     return {
       status: "malformed",
       ...transientReadFlag(isUnavailableErrorCode(getErrnoCode(error))),
     };
   }
-  return parseSkillScoping(a);
+  return parseSkillScoping(text);
 }
 //@ chunk-jb5bg5s7.js:3794-3954 placement = _temp9 (0.56)
 function parseSkillScoping(v_0) {
-  let r;
+  let parsed;
   try {
-    r = jsonParse(v_0);
+    parsed = jsonParse(v_0);
   } catch {
     return {
       status: "malformed",
     };
   }
-  let n = FORKED_SKILL_SCOPING_SCHEMA().safeParse(r);
-  return n.success
+  let validated = FORKED_SKILL_SCOPING_SCHEMA().safeParse(parsed);
+  return validated.success
     ? {
         status: "valid",
-        scoping: n.data,
+        scoping: validated.data,
       }
     : {
         status: "malformed",
@@ -314,8 +318,8 @@ function parseSkillScoping(v_0) {
 /**
  * 经存储后端读取 scoping。
  */
-async function readScopingViaStorage(e, r) {
-  let sidecarText = await readSidecarText(e, r.scoping);
+async function readScopingViaStorage(storage, keys) {
+  let sidecarText = await readSidecarText(storage, keys.scoping);
   switch (sidecarText.kind) {
     case "text":
       return parseSkillScoping(sidecarText.text);
@@ -325,11 +329,11 @@ async function readScopingViaStorage(e, r) {
         ...transientReadFlag(sidecarText.transientRead),
       };
     case "absent": {
-      let i = await sidecarPresent(e, r.provenanceMarker);
-      return i.present
+      let markerResult = await sidecarPresent(storage, keys.provenanceMarker);
+      return markerResult.present
         ? {
             status: "absent-but-marked",
-            ...transientReadFlag(i.transientRead),
+            ...transientReadFlag(markerResult.transientRead),
           }
         : {
             status: "absent",
@@ -341,9 +345,9 @@ async function readScopingViaStorage(e, r) {
 /**
  * 只有 marker 文件时返回 absent-but-marked。
  */
-async function checkMarkerFile(e) {
+async function checkMarkerFile(markerPath) {
   try {
-    await lstat(e);
+    await lstat(markerPath);
     return {
       status: "absent-but-marked",
     };
@@ -362,32 +366,32 @@ async function checkMarkerFile(e) {
 /**
  * 从 provenance marker 读出 forked 技能名。
  */
-async function readForkedSkillName(e, r) {
-  let n;
-  let i = isStorageV5Enabled() && r ? readForkedSkillMarker(e) : undefined;
-  if (r && i) {
-    let sidecarText = await readSidecarText(r, i.provenanceMarker);
+async function readForkedSkillName(agentId, storageV5) {
+  let text;
+  let paths = isStorageV5Enabled() && storageV5 ? readForkedSkillMarker(agentId) : undefined;
+  if (storageV5 && paths) {
+    let sidecarText = await readSidecarText(storageV5, paths.provenanceMarker);
     if (sidecarText.kind !== "text") return;
-    n = sidecarText.text;
+    text = sidecarText.text;
   } else if (isDiskless()) return;
   else {
-    let { provenanceMarker } = sidecarPathsForAgent(e);
+    let { provenanceMarker } = sidecarPathsForAgent(agentId);
     try {
-      let d = await lstat(provenanceMarker);
-      if (!d.isFile() || d.size > FORKED_SKILL_SIDECAR_MAX_BYTES) return;
-      n = await readFile(provenanceMarker, "utf-8");
+      let stats = await lstat(provenanceMarker);
+      if (!stats.isFile() || stats.size > FORKED_SKILL_SIDECAR_MAX_BYTES) return;
+      text = await readFile(provenanceMarker, "utf-8");
     } catch {
       return;
     }
   }
-  let o;
+  let parsed;
   try {
-    o = jsonParse(n);
+    parsed = jsonParse(text);
   } catch {
     return;
   }
-  let a = FORKED_SKILL_MARKER_SCHEMA().safeParse(o);
-  return a.success ? a.data.skillName : undefined;
+  let validated = FORKED_SKILL_MARKER_SCHEMA().safeParse(parsed);
+  return validated.success ? validated.data.skillName : undefined;
 }
 export {
   writeForkedSkillScoping,

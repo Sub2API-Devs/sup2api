@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:1742-3199 cjs-fingerprint
-var require_actionscript = x(function (cjsExports, cjsModule) {
+var require_actionscript = __commonJS(function (cjsExports, cjsModule) {
   function actionscript(hljs) {
     let regex = hljs.regex;
     let IDENT_RE = /[a-zA-Z_$][a-zA-Z0-9_$]*/;

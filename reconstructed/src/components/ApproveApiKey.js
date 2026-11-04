@@ -8,7 +8,7 @@
  * pieces: chunk-7hdssadt.js (1)
  * attribution: facade-exports 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useIsFullPageNotice, NoticeAccent } from "./design-system/NoticeUnderScene.js";
 import { saveGlobalConfig, customApiKeyResponsesOf } from "../utils/config.js";
@@ -27,7 +27,7 @@ import { Dialog } from "./design-system/Dialog.js";
  * 询问是否使用环境中的 ANTHROPIC_API_KEY（推荐否时使用订阅登录），结果记入配置的已批准/已拒绝列表。
  */
 function ApproveApiKey(props) {
-  let $ = w(20);
+  let $ = useMemoCache(20);
   let { customApiKeyTruncated, onDone } = props;
   let { storageV5 } = useTheme_2();
   let paddingLeft = useIsFullPageNotice() ? 2 : 0;
@@ -98,23 +98,23 @@ function ApproveApiKey(props) {
     $[7] = customApiKeyTruncated;
     $[8] = children;
   } else children = $[8];
-  let p;
+  let bodyElement;
   if ($[9] !== paddingLeft || $[10] !== children) {
-    p = jsxProd_default(Box, {
+    bodyElement = jsxProd_default(Box, {
       paddingLeft,
       children,
     });
     $[9] = paddingLeft;
     $[10] = children;
-    $[11] = p;
-  } else p = $[11];
-  let P;
+    $[11] = bodyElement;
+  } else bodyElement = $[11];
+  let questionElement;
   if ($[12] === MEMO_CACHE_SENTINEL) {
-    P = jsxProd_default(Text, {
+    questionElement = jsxProd_default(Text, {
       children: "Do you want to use this API key?",
     });
-    $[12] = P;
-  } else P = $[12];
+    $[12] = questionElement;
+  } else questionElement = $[12];
   let cancelLabel;
   if ($[13] === MEMO_CACHE_SENTINEL) {
     cancelLabel = jsxProd_default_2(Text, {
@@ -142,16 +142,16 @@ function ApproveApiKey(props) {
     $[15] = t8;
   } else t8 = $[15];
   let t9;
-  if ($[16] !== onCancel || $[17] !== p || $[18] !== t8) {
+  if ($[16] !== onCancel || $[17] !== bodyElement || $[18] !== t8) {
     t9 = jsxProd_default_2(Dialog, {
       title: "Detected a custom API key in your environment",
       color: "warning",
       onCancel,
       exitOnCtrlCD: true,
-      children: [p, P, t8],
+      children: [bodyElement, questionElement, t8],
     });
     $[16] = onCancel;
-    $[17] = p;
+    $[17] = bodyElement;
     $[18] = t8;
     $[19] = t9;
   } else t9 = $[19];

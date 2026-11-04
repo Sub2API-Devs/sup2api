@@ -33,12 +33,18 @@ import { stdinOverrideCache } from "../../utils/renderOptions.js";
 import { isShuttingDown, emitExitMessage, gracefulShutdownSync } from "../../utils/gracefulShutdown.js";
 import { latchTerminalShutdown } from "../../utils/terminalShutdown.js";
 import { promptInputValue } from "../../state/promptInputStore.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-cjtj3nae.js:731-742 placement
 var SECURITY_DIALOG_SETTLE_MS = 5000;
 //@ chunk-cjtj3nae.js:742-815 placement
-function canReviewSilently(e, t) {
-  return t !== undefined && !e.hasOpenReview() && pendingPreReplSecurityDialog() === null && t();
+function canReviewSilently(coordinator, canSkip) {
+  return (
+    canSkip !== undefined &&
+    !coordinator.hasOpenReview() &&
+    pendingPreReplSecurityDialog() === null &&
+    canSkip()
+  );
 }
 //@ chunk-cjtj3nae.js:815-1026 placement
 /**
@@ -59,9 +65,9 @@ class SecurityDialogSupersession {
     });
     owner_2("superseded");
   }
-  settle(e) {
+  settle(outcome) {
     this.updates.done();
-    this.owner(e);
+    this.owner(outcome);
   }
 }
 //@ chunk-cjtj3nae.js:1026-2520 placement
@@ -76,55 +82,55 @@ class SecurityDialogCoordinator {
   standaloneDialogUnanswered = null;
   rootDrawnDialog = null;
   pendingReview = null;
-  registerRequester(e) {
-    this.replRequester = e;
-    if (e && this.requesterWaiters.length > 0) {
+  registerRequester(requester) {
+    this.replRequester = requester;
+    if (requester && this.requesterWaiters.length > 0) {
       let requesterWaiters = this.requesterWaiters;
       this.requesterWaiters = [];
-      for (let requesterWaiter of requesterWaiters) requesterWaiter(e);
+      for (let requesterWaiter of requesterWaiters) requesterWaiter(requester);
     }
   }
-  addWaiter(e) {
-    this.requesterWaiters.push(e);
+  addWaiter(waiter) {
+    this.requesterWaiters.push(waiter);
   }
-  dropWaiter(e) {
-    this.requesterWaiters = this.requesterWaiters.filter((requesterWaiter) => requesterWaiter !== e);
+  dropWaiter(waiter) {
+    this.requesterWaiters = this.requesterWaiters.filter((requesterWaiter) => requesterWaiter !== waiter);
   }
-  review(e, t, s, o) {
+  review(askDialog, settings, baseline, canSkip) {
     return new Promise((resolve) => {
       if (this.pendingReview) {
-        this.pendingReview.supersede(t, s, resolve);
+        this.pendingReview.supersede(settings, baseline, resolve);
         return;
       }
-      if (canReviewSilently(this, o)) {
+      if (canReviewSilently(this, canSkip)) {
         resolve("first_party_silent");
         return;
       }
-      let l = new SecurityDialogSupersession(resolve);
-      this.pendingReview = l;
+      let supersession = new SecurityDialogSupersession(resolve);
+      this.pendingReview = supersession;
       logEvent("tengu_managed_settings_security_dialog_shown", {});
-      let u;
+      let dialogResult;
       try {
-        u = e(t, s, l.updates);
+        dialogResult = askDialog(settings, baseline, supersession.updates);
       } catch {
-        u = Promise.resolve("deferred_no_consent_surface");
+        dialogResult = Promise.resolve("deferred_no_consent_surface");
       }
-      u.then(
-        (d) => this.close(l, d),
-        () => this.close(l, "deferred_no_consent_surface"),
+      dialogResult.then(
+        (outcome) => this.close(supersession, outcome),
+        () => this.close(supersession, "deferred_no_consent_surface"),
       );
     });
   }
   hasOpenReview() {
     return this.pendingReview !== null;
   }
-  close(e, t) {
+  close(review, outcome) {
     this.pendingReview = null;
-    if (t === "approved") {
+    if (outcome === "approved") {
       logEvent("tengu_managed_settings_security_dialog_accepted", {});
       logFeatureOk("remote_managed_settings_security_check");
-    } else if (t === "rejected") logEvent("tengu_managed_settings_security_dialog_rejected", {});
-    e.settle(t);
+    } else if (outcome === "rejected") logEvent("tengu_managed_settings_security_dialog_rejected", {});
+    review.settle(outcome);
   }
   startupConsentRelease = null;
   fireStartupConsentRelease() {
@@ -147,7 +153,10 @@ class SecurityDialogCoordinator {
   consentHandoffRevealActive = false;
 }
 //@ chunk-cjtj3nae.js:2520-2543 placement
-var securityDialogCoordinatorSlots = new HostScoped(() => new SecurityDialogCoordinator());
+var securityDialogCoordinatorSlots; // deferred: uses SecurityDialogCoordinator of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-cjtj3nae.js:2520", () => {
+  securityDialogCoordinatorSlots = new HostScoped(() => new SecurityDialogCoordinator());
+});
 //@ chunk-cjtj3nae.js:2543-2578 placement
 function currentSecurityCoordinator() {
   return securityDialogCoordinatorSlots.of(getRootSession().host);
@@ -175,25 +184,26 @@ function pendingPreReplSecurityDialog() {
   return rootDrawnDialogPromise();
 }
 //@ chunk-cjtj3nae.js:2831-2872 placement
-function setSecurityDialogRequester(e) {
-  currentSecurityCoordinator().registerRequester(e);
+function setSecurityDialogRequester(requester) {
+  currentSecurityCoordinator().registerRequester(requester);
 }
 //@ chunk-cjtj3nae.js:2872-2997 placement
-function armStartupConsentRelease(e) {
-  let t = currentSecurityCoordinator();
-  t.startupConsentRelease = e;
+function armStartupConsentRelease(release) {
+  let coordinator = currentSecurityCoordinator();
+  coordinator.startupConsentRelease = release;
   return () => {
-    if (t.startupConsentRelease === e) t.startupConsentRelease = null;
+    if (coordinator.startupConsentRelease === release) coordinator.startupConsentRelease = null;
   };
 }
 //@ chunk-cjtj3nae.js:2997-3257 placement
 function acquireConsentHandoffHold() {
-  let e = currentSecurityCoordinator();
-  let t = Symbol("consent-handoff-hold");
-  e.consentHandoffHolds.add(t);
-  if (e.consentHandoffHolds.size === 1) e.consentHandoffSignal.emit();
+  let coordinator = currentSecurityCoordinator();
+  let hold = Symbol("consent-handoff-hold");
+  coordinator.consentHandoffHolds.add(hold);
+  if (coordinator.consentHandoffHolds.size === 1) coordinator.consentHandoffSignal.emit();
   return () => {
-    if (e.consentHandoffHolds.delete(t) && e.consentHandoffHolds.size === 0) e.consentHandoffSignal.emit();
+    if (coordinator.consentHandoffHolds.delete(hold) && coordinator.consentHandoffHolds.size === 0)
+      coordinator.consentHandoffSignal.emit();
   };
 }
 //@ chunk-cjtj3nae.js:3257-3310 placement
@@ -205,15 +215,15 @@ function isConsentHandoffReveal() {
   return currentSecurityCoordinator().consentHandoffRevealActive;
 }
 //@ chunk-cjtj3nae.js:3363-3424 placement
-function subscribeConsentHandoffPending(e) {
-  return currentSecurityCoordinator().consentHandoffSignal.subscribe(e);
+function subscribeConsentHandoffPending(listener) {
+  return currentSecurityCoordinator().consentHandoffSignal.subscribe(listener);
 }
 //@ chunk-cjtj3nae.js:3424-3546 placement
-function armConsentNeededRelease(e) {
-  let t = currentSecurityCoordinator();
-  t.consentNeededRelease = e;
+function armConsentNeededRelease(release) {
+  let coordinator = currentSecurityCoordinator();
+  coordinator.consentNeededRelease = release;
   return () => {
-    if (t.consentNeededRelease === e) t.consentNeededRelease = null;
+    if (coordinator.consentNeededRelease === release) coordinator.consentNeededRelease = null;
   };
 }
 //@ chunk-cjtj3nae.js:3546-3591 placement
@@ -234,31 +244,32 @@ function hasDeclaredNoConsentSurface() {
  * 等待安全对话框请求者
  */
 async function waitForDialogRequester() {
-  let e = currentSecurityCoordinator();
-  let t;
+  let coordinator = currentSecurityCoordinator();
+  let resolveWaiter;
   let promise = new Promise((resolve) => {
-    t = resolve;
-    e.addWaiter(resolve);
+    resolveWaiter = resolve;
+    coordinator.addWaiter(resolve);
   });
-  let o = await withTimeout(
+  let requester = await withTimeout(
     promise,
     SECURITY_DIALOG_SETTLE_MS,
     "managed-settings security dialog requester wait timed out",
   ).catch(() => null);
-  if (o === null) e.dropWaiter(t);
-  return o;
+  if (requester === null) coordinator.dropWaiter(resolveWaiter);
+  return requester;
 }
 //@ chunk-cjtj3nae.js:3888-4115 placement
 /**
  * 等待请求者并审阅托管设置
  */
-async function reviewWithRequester(e, t, s) {
-  let o = currentSecurityCoordinator();
+async function reviewWithRequester(settings, baseline, signed) {
+  let coordinator = currentSecurityCoordinator();
   let consentHandoffHold = acquireConsentHandoffHold();
   try {
     for (;;) {
       await untilKeyboardRests();
-      if (o.replRequester) return await o.review(o.replRequester, e, t, s);
+      if (coordinator.replRequester)
+        return await coordinator.review(coordinator.replRequester, settings, baseline, signed);
       if (!getSecondRootError().has(process.stdout) || (await waitForDialogRequester()) === null)
         return "deferred_no_consent_surface";
     }
@@ -270,117 +281,146 @@ async function reviewWithRequester(e, t, s) {
 /**
  * 托管设置安全检查：需要时弹出确认对话框，拒绝则退出；无交互界面时延后或按策略处理。
  */
-async function checkManagedSettingsSecurity(e, code, showSecurityDialog, remoteManagedSettingsSigned) {
-  if (!code || !hasDangerousManagedSettings(summarizeManagedSettingsRisk(code))) return "no_check_needed";
-  if (!managedSettingsNeedReconsent(e, code)) return "no_check_needed";
-  let n = currentSecurityCoordinator();
+async function checkManagedSettingsSecurity(
+  baseline,
+  settings,
+  showSecurityDialog,
+  remoteManagedSettingsSigned,
+) {
+  if (!settings || !hasDangerousManagedSettings(summarizeManagedSettingsRisk(settings)))
+    return "no_check_needed";
+  if (!managedSettingsNeedReconsent(baseline, settings)) return "no_check_needed";
+  let coordinator = currentSecurityCoordinator();
   if (!isInteractiveSettingsHost())
-    return n.noConsentSurface ? "deferred_no_consent_surface" : "deferred_non_interactive";
-  let l = e.source === "consented_payload" ? e.settings : e.consentedPayload;
-  if (n.replRequester)
-    if (n.consentNeededRelease) {
-      let i = null;
+    return coordinator.noConsentSurface ? "deferred_no_consent_surface" : "deferred_non_interactive";
+  let consentedSettings =
+    baseline.source === "consented_payload" ? baseline.settings : baseline.consentedPayload;
+  if (coordinator.replRequester)
+    if (coordinator.consentNeededRelease) {
+      let hold = null;
       try {
-        i = acquireConsentHandoffHold();
-        await n.fireConsentNeededRelease();
-        let replRequester = n.replRequester;
+        hold = acquireConsentHandoffHold();
+        await coordinator.fireConsentNeededRelease();
+        let replRequester = coordinator.replRequester;
         if (replRequester) {
-          n.consentHandoffRevealActive = true;
-          return await n.review(replRequester, code, l, remoteManagedSettingsSigned);
+          coordinator.consentHandoffRevealActive = true;
+          return await coordinator.review(
+            replRequester,
+            settings,
+            consentedSettings,
+            remoteManagedSettingsSigned,
+          );
         }
         if (getSecondRootError().has(process.stdout)) {
-          let h = await waitForDialogRequester();
-          if (h) {
-            n.consentHandoffRevealActive = true;
-            return await n.review(h, code, l, remoteManagedSettingsSigned);
+          let requester = await waitForDialogRequester();
+          if (requester) {
+            coordinator.consentHandoffRevealActive = true;
+            return await coordinator.review(
+              requester,
+              settings,
+              consentedSettings,
+              remoteManagedSettingsSigned,
+            );
           }
         }
         return "deferred_no_consent_surface";
       } finally {
-        n.consentHandoffRevealActive = false;
-        i?.();
+        coordinator.consentHandoffRevealActive = false;
+        hold?.();
       }
-    } else if (wasEarlyInputFieldOpened()) return reviewWithRequester(code, l, remoteManagedSettingsSigned);
-    else return n.review(n.replRequester, code, l, remoteManagedSettingsSigned);
-  if (n.noConsentSurface) return "deferred_no_consent_surface";
+    } else if (wasEarlyInputFieldOpened())
+      return reviewWithRequester(settings, consentedSettings, remoteManagedSettingsSigned);
+    else
+      return coordinator.review(
+        coordinator.replRequester,
+        settings,
+        consentedSettings,
+        remoteManagedSettingsSigned,
+      );
+  if (coordinator.noConsentSurface) return "deferred_no_consent_surface";
   let secondRootError = getSecondRootError();
   if (secondRootError.has(process.stdout)) {
-    n.fireStartupConsentRelease();
-    let i;
-    do i = await waitForDialogRequester();
+    coordinator.fireStartupConsentRelease();
+    let requester;
+    do requester = await waitForDialogRequester();
     while (
-      i === null &&
+      requester === null &&
       (hasEarlyInputField() || msSinceEarlyInputFieldClosed() < SECURITY_DIALOG_SETTLE_MS)
     );
-    if (i)
+    if (requester)
       return wasEarlyInputFieldOpened()
-        ? reviewWithRequester(code, l, remoteManagedSettingsSigned)
-        : n.review(i, code, l, remoteManagedSettingsSigned);
+        ? reviewWithRequester(settings, consentedSettings, remoteManagedSettingsSigned)
+        : coordinator.review(requester, settings, consentedSettings, remoteManagedSettingsSigned);
     if (wasEarlyInputFieldOpened()) return "deferred_no_consent_surface";
   }
   if (
     showSecurityDialog === undefined ||
-    n.noConsentSurface ||
-    (n.stopsWhenApprovalCannotBeAsked && stdinOverrideCache.get().kind === "unavailable")
+    coordinator.noConsentSurface ||
+    (coordinator.stopsWhenApprovalCannotBeAsked && stdinOverrideCache.get().kind === "unavailable")
   ) {
-    if (!n.noConsentSurface) n.standaloneDialogUnanswered = "not_asked";
+    if (!coordinator.noConsentSurface) coordinator.standaloneDialogUnanswered = "not_asked";
     return "deferred_no_consent_surface";
   }
-  if (canReviewSilently(n, remoteManagedSettingsSigned)) {
-    n.standaloneDialogUnanswered = null;
+  if (canReviewSilently(coordinator, remoteManagedSettingsSigned)) {
+    coordinator.standaloneDialogUnanswered = null;
     return "first_party_silent";
   }
   logEvent("tengu_managed_settings_security_dialog_shown", {});
-  let d = secondRootError.has(process.stdout);
-  let f = showSecurityDialog(code, d, l);
-  if (!d) secondRootError.claimForStandaloneRender(f);
+  let rootDrawn = secondRootError.has(process.stdout);
+  let dialog = showSecurityDialog(settings, rootDrawn, consentedSettings);
+  if (!rootDrawn) secondRootError.claimForStandaloneRender(dialog);
   else {
-    let i = f.then(
+    let dialogDone = dialog.then(
       () => {},
       () => {},
     );
-    n.rootDrawnDialog = i;
-    i.then(() => {
-      if (n.rootDrawnDialog === i) n.rootDrawnDialog = null;
+    coordinator.rootDrawnDialog = dialogDone;
+    dialogDone.then(() => {
+      if (coordinator.rootDrawnDialog === dialogDone) coordinator.rootDrawnDialog = null;
     });
   }
-  let c;
+  let outcome;
   try {
-    c = await f;
-    n.standaloneDialogUnanswered = null;
+    outcome = await dialog;
+    coordinator.standaloneDialogUnanswered = null;
   } catch (error) {
-    n.standaloneDialogUnanswered = "closed_unanswered";
+    coordinator.standaloneDialogUnanswered = "closed_unanswered";
     logFeatureBad("remote_managed_settings_security_check", "dialog_unavailable");
     throw error;
   }
   logEvent(
-    c === "approved"
+    outcome === "approved"
       ? "tengu_managed_settings_security_dialog_accepted"
       : "tengu_managed_settings_security_dialog_rejected",
     {},
   );
-  if (c === "approved") logFeatureOk("remote_managed_settings_security_check");
-  return c;
+  if (outcome === "approved") logFeatureOk("remote_managed_settings_security_check");
+  return outcome;
 }
 //@ chunk-cjtj3nae.js:6020-6277 placement
-var REJECTED_EXIT_MESSAGE = "Managed settings were not approved; exiting without applying them.";
-var APPROVAL_NOT_ASKED_EXIT_MESSAGE =
-  "Your organization's managed settings need your approval, which couldn't be asked for here. Run `claude` in a terminal and approve them, then run this command again.";
-var managedSettingsConsentRejected = createSignal();
+var REJECTED_EXIT_MESSAGE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var APPROVAL_NOT_ASKED_EXIT_MESSAGE;
+var managedSettingsConsentRejected;
+deferInit("chunk-cjtj3nae.js:6020", () => {
+  REJECTED_EXIT_MESSAGE = "Managed settings were not approved; exiting without applying them.";
+  APPROVAL_NOT_ASKED_EXIT_MESSAGE =
+    "Your organization's managed settings need your approval, which couldn't be asked for here. Run `claude` in a terminal and approve them, then run this command again.";
+  managedSettingsConsentRejected = createSignal();
+});
 //@ chunk-cjtj3nae.js:6277-6652 placement
 function handleSecurityCheckResult(result) {
   switch (result) {
     case "rejected":
       if (process.stderr.isTTY && !isShuttingDown()) {
         latchTerminalShutdown();
-        let t = wasEarlyInputFieldOpened() ? promptInputValue(getRootSession()).trim() : "";
+        let typedMessage = wasEarlyInputFieldOpened() ? promptInputValue(getRootSession()).trim() : "";
         emitExitMessage(
-          t === ""
+          typedMessage === ""
             ? REJECTED_EXIT_MESSAGE
             : `${REJECTED_EXIT_MESSAGE}
 
 Your message was not sent:
-${t}`,
+${typedMessage}`,
         );
       }
       if (!isShuttingDown()) managedSettingsConsentRejected.emit();

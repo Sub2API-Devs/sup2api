@@ -5,19 +5,19 @@
  * pieces: chunk-5h78gfwc.js (3)
  * attribution: esm-fingerprint 3
  */
-import { JOSENotSupported, JWEInvalid } from "../../node/esm/util/errors.js";
+import { JOSENotSupported_2, JWEInvalid_2 } from "../../node/esm/util/errors.js";
 import { concat } from "./buffer_utils.js";
 
 //@ chunk-5h78gfwc.js:30709-30841 esm-fingerprint
-function Pt(name) {
+function assertGlobal(name) {
   if (typeof globalThis[name] === "undefined")
-    throw new JOSENotSupported(
+    throw new JOSENotSupported_2(
       `JWE "zip" (Compression Algorithm) Header Parameter requires the ${name} API.`,
     );
 }
 //@ chunk-5h78gfwc.js:30841-31116 esm-fingerprint
-async function Wt(input) {
-  Pt("CompressionStream");
+async function deflate(input) {
+  assertGlobal("CompressionStream");
   let cs = new CompressionStream("deflate-raw");
   let writer = cs.writable.getWriter();
   writer.write(input).catch(() => {});
@@ -33,7 +33,7 @@ async function Wt(input) {
 }
 //@ chunk-5h78gfwc.js:31116-31501 esm-fingerprint
 async function decompress(input, maxLength) {
-  Pt("DecompressionStream");
+  assertGlobal("DecompressionStream");
   let ds = new DecompressionStream("deflate-raw");
   let writer = ds.writable.getWriter();
   writer.write(input).catch(() => {});
@@ -47,8 +47,8 @@ async function decompress(input, maxLength) {
     chunks.push(value);
     length += value.byteLength;
     if (maxLength !== 1 / 0 && length > maxLength)
-      throw new JWEInvalid("Decompressed plaintext exceeded the configured limit");
+      throw new JWEInvalid_2("Decompressed plaintext exceeded the configured limit");
   }
   return concat(...chunks);
 }
-export { decompress, Wt };
+export { decompress, deflate };

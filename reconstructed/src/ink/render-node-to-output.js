@@ -5,19 +5,18 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/ink/render-node-to-output.ts
- * pieces: chunk-bzr73sfg.js (47)
- * attribution: fingerprint 11, placement 6, layout 18, file-local 1, sole-consumer 10, shared-adjacent 1
+ * pieces: chunk-bzr73sfg.js (49)
+ * attribution: fingerprint 11, placement 8, layout 18, file-local 1, sole-consumer 10, shared-adjacent 1
  */
 import { walkTabbable } from "./focus.js";
 import { ESC } from "./termio/ansi.js";
-import { applyTextStyles } from "./colorize.js";
+import { applyTextStyles, levelGeneration } from "./colorize.js";
 import { SoftWrapKind } from "./screen.js";
 import { tokenizeAll } from "./termio/tokenize.js";
-import { wrapText } from "./wrap-text.js";
+import { wrapText, truncate } from "./wrap-text.js";
 import { widestLine, recordScrollOut } from "./widest-line.js";
 import { needsTextNormalization, regExp_2 } from "./layout/node.js";
 import { indentString } from "../../vendor/indent-string/index.js";
-import { rewriteRawAnsiBackground, truncateStyledText } from "./render-to-screen-reader.js";
 import { bunStringWidth } from "./stringWidth.js";
 import {
   MAX_TREE_DEPTH,
@@ -35,6 +34,8 @@ import { logForDebugging } from "../utils/debug.js";
 import { hasCursorUpViewportYankBug } from "./terminal.js";
 import { isDegenerateBorderBox, isDOMElement } from "./dom.js";
 import { intersectClip, isClipRedundant } from "./output.js";
+import { applyBackgroundColor } from "../utils/theme.js";
+import { ELLIPSIS } from "./styles.js";
 
 //@ chunk-bzr73sfg.js:182062-182131 fingerprint = wrapWithSoftWrap (0.607)
 /**
@@ -116,12 +117,16 @@ function resetRenderState(state) {
 function hasStaleAbsolutePaint(state, output) {
   let absoluteRectsCur = state.absoluteRectsCur;
   return state.absoluteRectsPrev.some(
-    (m) =>
-      !m.withinParent &&
+    (previousRect) =>
+      !previousRect.withinParent &&
       !absoluteRectsCur.some(
-        (p) => p.x === m.x && p.y === m.y && p.width === m.width && p.height === m.height,
+        (currentRect) =>
+          currentRect.x === previousRect.x &&
+          currentRect.y === previousRect.y &&
+          currentRect.width === previousRect.width &&
+          currentRect.height === previousRect.height,
       ) &&
-      output.blitsOver(m),
+      output.blitsOver(previousRect),
   );
 }
 //@ chunk-bzr73sfg.js:293523-293616 layout
@@ -194,16 +199,16 @@ function wrapWithOsc8Link(text, url) {
  * 为压平的文本段建“字符下标 → 段号”表（复用 state 里的 Uint32Array），折行后据此给每个字符还原样式。
  */
 function buildCharToSegmentIndex(state, segments) {
-  let f = 0;
-  for (let idx = 0; idx < segments.length; idx++) f += segments[idx].text.length;
-  if (state.segmentMapScratch.length < f)
-    state.segmentMapScratch = new Uint32Array(Math.max(f, state.segmentMapScratch.length * 2));
-  let map = state.segmentMapScratch.subarray(0, f);
-  let p = 0;
+  let totalChars = 0;
+  for (let idx = 0; idx < segments.length; idx++) totalChars += segments[idx].text.length;
+  if (state.segmentMapScratch.length < totalChars)
+    state.segmentMapScratch = new Uint32Array(Math.max(totalChars, state.segmentMapScratch.length * 2));
+  let map = state.segmentMapScratch.subarray(0, totalChars);
+  let charIndex = 0;
   for (let idx = 0; idx < segments.length; idx++) {
-    let E = p + segments[idx].text.length;
-    map.fill(idx, p, E);
-    p = E;
+    let runEnd = charIndex + segments[idx].text.length;
+    map.fill(idx, charIndex, runEnd);
+    charIndex = runEnd;
   }
   return map;
 }
@@ -222,7 +227,7 @@ function applyStylesToWrappedText(
   let lines = wrappedPlain.split(`
 `);
   let resultLines = [];
-  let A = originalPlain.includes(ESC) ? mapAnsiSequenceEnds(originalPlain) : undefined;
+  let ansiEnds = originalPlain.includes(ESC) ? mapAnsiSequenceEnds(originalPlain) : undefined;
   let charIndex = 0;
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     let text = lines[lineIdx];
@@ -238,35 +243,36 @@ function applyStylesToWrappedText(
     let styledLine = "";
     let runStart = 0;
     let runSegmentIndex = charToSegment[charIndex] ?? 0;
-    let z = text.includes(ESC) ? mapAnsiSequenceEnds(text) : undefined;
+    let lineAnsiEnds = text.includes(ESC) ? mapAnsiSequenceEnds(text) : undefined;
     for (let idx = 0; idx < text.length; idx++) {
-      let q = z?.get(idx);
-      let Y = 1;
-      if (q !== undefined) {
-        let sliced = text.slice(idx, q);
-        if (trimEnabled) charIndex = skipWhitespaceTo(originalPlain, charIndex, sliced);
-        idx = q - 1;
-        if (!originalPlain.startsWith(sliced, charIndex)) continue;
-        Y = sliced.length;
+      let ansiEnd = lineAnsiEnds?.get(idx);
+      let charStep = 1;
+      if (ansiEnd !== undefined) {
+        let needle = text.slice(idx, ansiEnd);
+        if (trimEnabled) charIndex = skipWhitespaceTo(originalPlain, charIndex, needle);
+        idx = ansiEnd - 1;
+        if (!originalPlain.startsWith(needle, charIndex)) continue;
+        charStep = needle.length;
       } else {
-        for (let V = A?.get(charIndex); V !== undefined; V = A?.get(charIndex)) charIndex = V;
+        for (let skipTo = ansiEnds?.get(charIndex); skipTo !== undefined; skipTo = ansiEnds?.get(charIndex))
+          charIndex = skipTo;
         if (trimEnabled && text[idx] !== originalPlain[charIndex])
           charIndex = skipWhitespaceTo(originalPlain, charIndex, text[idx]);
       }
-      let J = charToSegment[charIndex] ?? runSegmentIndex;
-      if (J !== runSegmentIndex) {
-        let V = idx + 1 - Y;
-        let runText = text.slice(runStart, V);
+      let segmentIndex = charToSegment[charIndex] ?? runSegmentIndex;
+      if (segmentIndex !== runSegmentIndex) {
+        let runEndIndex = idx + 1 - charStep;
+        let runText = text.slice(runStart, runEndIndex);
         let segment = segments[runSegmentIndex];
         if (segment) {
           let styled = applyTextStyles(runText, segment.styles);
           if (segment.hyperlink) styled = wrapWithOsc8Link(styled, segment.hyperlink);
           styledLine += styled;
         } else styledLine += runText;
-        runStart = V;
-        runSegmentIndex = J;
+        runStart = runEndIndex;
+        runSegmentIndex = segmentIndex;
       }
-      charIndex += Y;
+      charIndex += charStep;
     }
     let runText = text.slice(runStart);
     let segment = segments[runSegmentIndex];
@@ -304,20 +310,20 @@ function applyStylesToWrappedText(
 }
 //@ chunk-bzr73sfg.js:295548-295672 layout
 function mapAnsiSequenceEnds(text) {
-  let u = new Map();
-  let f = 0;
-  for (let m of tokenizeAll(text)) {
-    let p = f + m.value.length;
-    if (m.type === "sequence") u.set(f, p);
-    f = p;
+  let ends = new Map();
+  let offset = 0;
+  for (let token of tokenizeAll(text)) {
+    let nextOffset = offset + token.value.length;
+    if (token.type === "sequence") ends.set(offset, nextOffset);
+    offset = nextOffset;
   }
-  return u;
+  return ends;
 }
 //@ chunk-bzr73sfg.js:295672-295766 file-local
-function skipWhitespaceTo(originalPlain, charIndex, f) {
-  let m = charIndex;
-  while (m < originalPlain.length && /\s/.test(originalPlain[m])) m++;
-  return originalPlain.startsWith(f, m) ? m : charIndex;
+function skipWhitespaceTo(originalPlain, charIndex, needle) {
+  let scanIndex = charIndex;
+  while (scanIndex < originalPlain.length && /\s/.test(originalPlain[scanIndex])) scanIndex++;
+  return originalPlain.startsWith(needle, scanIndex) ? scanIndex : charIndex;
 }
 //@ chunk-bzr73sfg.js:295766-296245 layout
 /**
@@ -330,7 +336,7 @@ function wrapWithSoftWrap(text, maxWidth, textWrap) {
       wrapped: wrapText(text, maxWidth, textWrap),
       softWrap: undefined,
     };
-  let p = isStream ? "wrap" : textWrap;
+  let wrapMode = isStream ? "wrap" : textWrap;
   let lines = text.replace(
     /\r\n?/g,
     `
@@ -340,7 +346,7 @@ function wrapWithSoftWrap(text, maxWidth, textWrap) {
   let lines_2 = [];
   let softWrap = [];
   for (let orig of lines) {
-    let pieces = wrapText(orig, maxWidth, p).split(`
+    let pieces = wrapText(orig, maxWidth, wrapMode).split(`
 `);
     for (let i = 0; i < pieces.length; i++) {
       if (i === 0) {
@@ -348,11 +354,13 @@ function wrapWithSoftWrap(text, maxWidth, textWrap) {
         softWrap.push(SoftWrapKind.HardBreak);
         continue;
       }
-      let _ = pieces[i];
-      let U = _.startsWith(" ") ? _.slice(1) : _;
-      let L = widestLine(U) > 0 ? U : _;
-      lines_2.push(L);
-      softWrap.push(L.length < _.length ? SoftWrapKind.ContinuationElidedSep : SoftWrapKind.Continuation);
+      let piece = pieces[i];
+      let trimmedPiece = piece.startsWith(" ") ? piece.slice(1) : piece;
+      let lineText = widestLine(trimmedPiece) > 0 ? trimmedPiece : piece;
+      lines_2.push(lineText);
+      softWrap.push(
+        lineText.length < piece.length ? SoftWrapKind.ContinuationElidedSep : SoftWrapKind.Continuation,
+      );
     }
   }
   if (isStream) {
@@ -370,18 +378,18 @@ function wrapWithSoftWrap(text, maxWidth, textWrap) {
  * 折行；若行数与 yoga 计算的高度不一致，改用测量时实际给出的宽度（getOfferedWidth）重折，保证与布局一致。
  */
 function wrapForYogaNode(text, maxWidth, textWrap, yogaNode) {
-  let p = wrapWithSoftWrap(text, maxWidth, textWrap);
-  if (p.softWrap === undefined || p.softWrap.length === yogaNode.getComputedHeight()) return p;
+  let result = wrapWithSoftWrap(text, maxWidth, textWrap);
+  if (result.softWrap === undefined || result.softWrap.length === yogaNode.getComputedHeight()) return result;
   let maxWidth_2 = yogaNode.getOfferedWidth(maxWidth, yogaNode.getComputedHeight());
-  return maxWidth_2 === maxWidth ? p : wrapWithSoftWrap(text, maxWidth_2, textWrap);
+  return maxWidth_2 === maxWidth ? result : wrapWithSoftWrap(text, maxWidth_2, textWrap);
 }
 //@ chunk-bzr73sfg.js:296431-296572 layout
 function joinSegmentTexts(segments) {
-  let mapped = segments.map((segment) => segment.text);
-  let f = needsTextNormalization(mapped);
-  if (f === undefined) return mapped.join("");
-  for (let [m, p] of segments.entries()) p.text = f[m] ?? "";
-  return f.join("");
+  let texts = segments.map((segment) => segment.text);
+  let normalized = needsTextNormalization(texts);
+  if (normalized === undefined) return texts.join("");
+  for (let [index, segment] of segments.entries()) segment.text = normalized[index] ?? "";
+  return normalized.join("");
 }
 //@ chunk-bzr73sfg.js:296572-296761 fingerprint = applyPaddingToText (0.915)
 /**
@@ -432,7 +440,7 @@ function paintsPastWidth(output, text, x, width) {
 }
 //@ chunk-bzr73sfg.js:297167-297298 layout
 function paintsPastHeight(text, y, height) {
-  let m = text === "" ? 0 : 1;
+  let lineCount = text === "" ? 0 : 1;
   for (
     let index = text.indexOf(`
 `);
@@ -443,8 +451,8 @@ function paintsPastHeight(text, y, height) {
       index + 1,
     )
   )
-    m++;
-  return Math.floor(y) + m > Math.ceil(y + height);
+    lineCount++;
+  return Math.floor(y) + lineCount > Math.ceil(y + height);
 }
 //@ chunk-bzr73sfg.js:297298-304543 fingerprint = renderNodeToOutput (0.712)
 /**
@@ -582,9 +590,9 @@ function renderNodeToOutput(
         let softWrap;
         if (needsWrapping && segments.length === 1) {
           let segment = segments[0];
-          let ce = wrapForYogaNode(plainText, maxWidth, textWrap, yogaNode);
-          softWrap = ce.softWrap;
-          text = ce.wrapped
+          let wrapped = wrapForYogaNode(plainText, maxWidth, textWrap, yogaNode);
+          softWrap = wrapped.softWrap;
+          text = wrapped.wrapped
             .split(
               `
 `,
@@ -607,16 +615,16 @@ function renderNodeToOutput(
             textWrap === "truncate-start" ? "start" : "middle",
           );
         else if (needsWrapping) {
-          let ue = wrapForYogaNode(plainText, maxWidth, textWrap, yogaNode);
-          softWrap = ue.softWrap;
+          let wrapped = wrapForYogaNode(plainText, maxWidth, textWrap, yogaNode);
+          softWrap = wrapped.softWrap;
           let charToSegment = buildCharToSegmentIndex(state, segments);
           text = applyStylesToWrappedText(
-            ue.wrapped,
+            wrapped.wrapped,
             segments,
             charToSegment,
             plainText,
             textWrap === "wrap-trim",
-            ue.softWrap,
+            wrapped.softWrap,
           );
         } else
           text = segments
@@ -642,12 +650,12 @@ function renderNodeToOutput(
       }
       let overflowX = (node.style.overflowY ?? node.style.overflow) === "scroll";
       clip = getOverflowClip(node, yogaNode, x, y);
-      let ae = clip !== undefined;
+      let hasClip = clip !== undefined;
       let y1 = clip?.y1;
       let y2 = clip?.y2;
       if (clip) output.clip(clip);
       let clips_2 = prevScreen ? advanceClips(clips, clip, cached?.clip) : clips;
-      let ye = false;
+      let flagE = false;
       if (overflowX) {
         let computedPadding = yogaNode.getComputedPadding(1);
         let padTop = yogaNode.getComputedPadding(3);
@@ -661,7 +669,7 @@ function renderNodeToOutput(
         node.scrollViewportHeight = innerHeight;
         let viewportTop = (y1 ?? y) + computedPadding;
         node.scrollViewportTop = viewportTop;
-        let scrollTop = resolveScrollTop(
+        let top = resolveScrollTop(
           node,
           state,
           x,
@@ -674,34 +682,40 @@ function renderNodeToOutput(
         );
         if (content && contentYoga) {
           let offsetX = x + contentYoga.getComputedLeft();
-          let offsetY = y + contentYoga.getComputedTop() - scrollTop;
+          let offsetY = y + contentYoga.getComputedTop() - top;
           let cachedLayout = content.cachedLayout;
           let hint = null;
           let floored = Math.floor(viewportTop);
-          let it = false;
+          let isExactScrollDelta = false;
           if (cachedLayout && cachedLayout.y !== offsetY) {
-            let Ie = cachedLayout.y - offsetY;
+            let scrollDelta = cachedLayout.y - offsetY;
             let regionTop = Math.floor(y1 ?? y);
-            let lt = Math.floor(x) <= 0 && Math.floor(x + width) >= output.width;
-            let Ft = innerHeight - scrollViewportHeight;
-            it = cached !== undefined && Ft !== 0 && height - cached.height === Ft && Ie === -Ft;
-            let bottom = floored + (it ? Math.max(innerHeight, scrollViewportHeight) : innerHeight) - 1;
+            let spansFullWidth = Math.floor(x) <= 0 && Math.floor(x + width) >= output.width;
+            let viewportDelta = innerHeight - scrollViewportHeight;
+            isExactScrollDelta =
+              cached !== undefined &&
+              viewportDelta !== 0 &&
+              height - cached.height === viewportDelta &&
+              scrollDelta === -viewportDelta;
+            let bottom =
+              floored + (isExactScrollDelta ? Math.max(innerHeight, scrollViewportHeight) : innerHeight) - 1;
             if (
-              lt &&
+              spansFullWidth &&
               cached?.y === y &&
               cached.x === x &&
               cached.width === width &&
               cachedLayout.x === offsetX &&
               cachedLayout.width === contentYoga.getComputedWidth() &&
-              (cached.height === height || it) &&
+              (cached.height === height || isExactScrollDelta) &&
               innerHeight > 0 &&
-              Math.abs(Ie) < (it ? Math.min(innerHeight, scrollViewportHeight) : innerHeight) &&
+              Math.abs(scrollDelta) <
+                (isExactScrollDelta ? Math.min(innerHeight, scrollViewportHeight) : innerHeight) &&
               padTop === 0
             ) {
               hint = {
                 top: regionTop,
                 bottom,
-                delta: Ie,
+                delta: scrollDelta,
               };
               state.scrollHint = hint;
             } else state.layoutShifted = true;
@@ -709,9 +723,9 @@ function renderNodeToOutput(
           let scrollHeight = contentYoga.getComputedHeight();
           let prevHeight = cachedLayout?.height ?? scrollHeight;
           let heightDelta = scrollHeight - prevHeight;
-          let st = !hint || heightDelta === 0 || (hint.delta > 0 && heightDelta === hint.delta);
-          let any = state.absoluteRectsPrev.some((Ie) => isDescendantOfNode(Ie.node, content));
-          let bn =
+          let heightConsistent = !hint || heightDelta === 0 || (hint.delta > 0 && heightDelta === hint.delta);
+          let any = state.absoluteRectsPrev.some((rect) => isDescendantOfNode(rect.node, content));
+          let hasEscapingPaint =
             hint !== null &&
             content.childNodes.some(
               (childNode) =>
@@ -719,49 +733,49 @@ function renderNodeToOutput(
                 childNode.paintsPastRect === true &&
                 childNode.cachedLayout !== undefined,
             );
-          let Ot =
+          let canShiftBlit =
             prevScreen &&
-            st &&
+            heightConsistent &&
             !state.overlayActive &&
             !any &&
             cached?.background === inheritedBackgroundColor &&
-            !bn &&
+            !hasEscapingPaint &&
             clipsAllowScrollBlit(clips, cached, {
               x,
               y,
               width,
               height,
             });
-          if (hint && !Ot) state.scrollHint = null;
-          if (hint && Ot) {
-            let { top, bottom, delta } = hint;
+          if (hint && !canShiftBlit) state.scrollHint = null;
+          if (hint && canShiftBlit) {
+            let { top: top_2, bottom, delta } = hint;
             let floored_2 = Math.floor(width);
-            let vn = " ".repeat(floored_2);
-            let Xn = state.absoluteRectsCur.length;
-            let ct = 0;
-            if (delta > 0 && floored > top)
+            let blankLine = " ".repeat(floored_2);
+            let absoluteCountBefore = state.absoluteRectsCur.length;
+            let clippedTop = 0;
+            if (delta > 0 && floored > top_2)
               for (let childNode of content.childNodes) {
                 let yogaNode = childNode.yogaNode;
                 if (!yogaNode) continue;
                 let computedTop = yogaNode.getComputedTop();
-                if (computedTop + yogaNode.getComputedHeight() > scrollTop) {
-                  ct = Math.max(0, Math.min(floored - top, scrollTop - computedTop));
+                if (computedTop + yogaNode.getComputedHeight() > top) {
+                  clippedTop = Math.max(0, Math.min(floored - top_2, top - computedTop));
                   break;
                 }
               }
-            let Sn = floored + innerHeight - 1;
-            let Br = it ? floored + scrollViewportHeight - 1 : Sn;
-            let li = floored + Math.max(0, delta) - ct;
-            let min = Math.min(Br, Sn + delta);
-            output.blit(prevScreen, Math.floor(x), li, floored_2, min - li + 1, {
-              unclipped: min > Sn,
+            let screenBottom = floored + innerHeight - 1;
+            let blitBottom = isExactScrollDelta ? floored + scrollViewportHeight - 1 : screenBottom;
+            let blitTop = floored + Math.max(0, delta) - clippedTop;
+            let min = Math.min(blitBottom, screenBottom + delta);
+            output.blit(prevScreen, Math.floor(x), blitTop, floored_2, min - blitTop + 1, {
+              unclipped: min > screenBottom,
             });
-            output.shift(top, bottom, delta);
-            let rn = delta > 0 ? min - delta + 1 : floored;
-            let edgeBottom = delta > 0 ? Sn : floored - delta - 1;
-            let on;
-            let nodes;
-            let Qe = content.dirty ? new Uint8Array(bottom - top + 1) : undefined;
+            output.shift(top_2, bottom, delta);
+            let freshTop = delta > 0 ? min - delta + 1 : floored;
+            let edgeBottom = delta > 0 ? screenBottom : floored - delta - 1;
+            let dirtyChildren;
+            let shiftedNodes;
+            let coveredRows = content.dirty ? new Uint8Array(bottom - top_2 + 1) : undefined;
             for (let childNode of content.childNodes) {
               let node = childNode;
               let cy = node.yogaNode;
@@ -769,46 +783,51 @@ function renderNodeToOutput(
               let cachedLayout = node.cachedLayout;
               let childTop = cy.getComputedTop();
               let childH = cy.getComputedHeight();
-              if (childTop + childH <= scrollTop || childTop >= scrollTop + innerHeight) {
+              if (childTop + childH <= top || childTop >= top + innerHeight) {
                 dropSubtreeCache(node);
                 continue;
               }
               if (cachedLayout) {
-                let Fl =
+                let stillMatches =
                   Math.floor(cachedLayout.y) - delta === Math.floor(offsetY + childTop) &&
                   cachedLayout.height === childH;
                 shiftCachedLayouts(node, -delta);
-                if (Fl && !node.dirty) {
-                  let Ul = Math.floor(cachedLayout.y) - top;
-                  Qe?.fill(1, Math.max(Ul, 0), Math.max(Ul + childH, 0));
+                if (stillMatches && !node.dirty) {
+                  let rowOffsetInParent = Math.floor(cachedLayout.y) - top_2;
+                  coveredRows?.fill(
+                    1,
+                    Math.max(rowOffsetInParent, 0),
+                    Math.max(rowOffsetInParent + childH, 0),
+                  );
                   continue;
                 }
               }
               if (
                 childH > 0 &&
-                Math.max(childTop, scrollTop) >= rn - offsetY &&
-                Math.min(childTop + childH, scrollTop + innerHeight) <= edgeBottom + 1 - offsetY
+                Math.max(childTop, top) >= freshTop - offsetY &&
+                Math.min(childTop + childH, top + innerHeight) <= edgeBottom + 1 - offsetY
               )
                 continue;
-              on = pushOrCreate(on, node);
-              if (!node.dirty) nodes = pushOrCreate(nodes, node);
+              dirtyChildren = pushOrCreate(dirtyChildren, node);
+              if (!node.dirty) shiftedNodes = pushOrCreate(shiftedNodes, node);
             }
-            if (Qe) {
-              for (let idx = 0; idx < Qe.length; idx++)
-                if (Qe[idx] === 0) output.write(Math.floor(x), top + idx, vn, HARD_BREAK_ONLY);
+            if (coveredRows) {
+              for (let idx = 0; idx < coveredRows.length; idx++)
+                if (coveredRows[idx] === 0)
+                  output.write(Math.floor(x), top_2 + idx, blankLine, HARD_BREAK_ONLY);
             }
-            if (rn <= edgeBottom) {
-              let Ue = delta < 0 ? top : rn;
+            if (freshTop <= edgeBottom) {
+              let clearTop = delta < 0 ? top_2 : freshTop;
               output.clear({
                 x: Math.floor(x),
-                y: Ue,
+                y: clearTop,
                 width: floored_2,
-                height: edgeBottom - Ue + 1,
+                height: edgeBottom - clearTop + 1,
               });
               output.clip({
                 x1: undefined,
                 x2: undefined,
-                y1: Ue,
+                y1: clearTop,
                 y2: edgeBottom + 1,
               });
               renderScrolledChildren(
@@ -820,7 +839,7 @@ function renderNodeToOutput(
                 hadPendingClears,
                 undefined,
                 undefined,
-                rn - offsetY,
+                freshTop - offsetY,
                 edgeBottom + 1 - offsetY,
                 boxBackgroundColor,
                 depth + 2,
@@ -828,9 +847,9 @@ function renderNodeToOutput(
               );
               output.unclip();
             }
-            if (on)
-              for (let Ue of on) {
-                let yogaNode = Ue.yogaNode;
+            if (dirtyChildren)
+              for (let child of dirtyChildren) {
+                let yogaNode = child.yogaNode;
                 if (!yogaNode) continue;
                 let computedTop = yogaNode.getComputedTop();
                 let shiftedTop = Math.max(
@@ -840,10 +859,10 @@ function renderNodeToOutput(
                 let screenBottom = Math.min(
                   Math.floor(offsetY + computedTop + yogaNode.getComputedHeight()),
                   Math.floor((y1 ?? y) + computedPadding + innerHeight),
-                  delta > 0 ? rn : 1 / 0,
+                  delta > 0 ? freshTop : 1 / 0,
                 );
                 if (shiftedTop < screenBottom) {
-                  let fill = Array(screenBottom - shiftedTop).fill(vn).join(`
+                  let fill = Array(screenBottom - shiftedTop).fill(blankLine).join(`
 `);
                   output.write(Math.floor(x), shiftedTop, fill, HARD_BREAK_ONLY);
                 }
@@ -853,7 +872,7 @@ function renderNodeToOutput(
                   y1: shiftedTop,
                   y2: Math.max(shiftedTop, screenBottom),
                 });
-                renderNodeToOutput(Ue, output, state, {
+                renderNodeToOutput(child, output, state, {
                   offsetX,
                   offsetY,
                   prevScreen: undefined,
@@ -862,13 +881,13 @@ function renderNodeToOutput(
                 });
                 output.unclip();
               }
-            for (let Ue of state.absoluteRectsPrev) {
-              if (Ue.y >= bottom + 1 || Ue.y + Ue.height <= top) continue;
-              let shiftedTop = Math.max(top, Math.floor(Ue.y) - delta);
-              let shiftedBottom = Math.min(bottom + 1, Math.floor(Ue.y + Ue.height) - delta);
-              if (shiftedTop >= rn && shiftedBottom <= edgeBottom + 1) continue;
+            for (let rect of state.absoluteRectsPrev) {
+              if (rect.y >= bottom + 1 || rect.y + rect.height <= top_2) continue;
+              let shiftedTop = Math.max(top_2, Math.floor(rect.y) - delta);
+              let shiftedBottom = Math.min(bottom + 1, Math.floor(rect.y + rect.height) - delta);
+              if (shiftedTop >= freshTop && shiftedBottom <= edgeBottom + 1) continue;
               if (shiftedTop >= shiftedBottom) continue;
-              let fill = Array(shiftedBottom - shiftedTop).fill(vn).join(`
+              let fill = Array(shiftedBottom - shiftedTop).fill(blankLine).join(`
 `);
               output.write(Math.floor(x), shiftedTop, fill, HARD_BREAK_ONLY);
               output.clip({
@@ -894,9 +913,9 @@ function renderNodeToOutput(
               );
               output.unclip();
             }
-            clearShiftedFlags(nodes);
-            for (let Ue = Xn; Ue < state.absoluteRectsCur.length; Ue++)
-              if (!state.absoluteRectsCur[Ue].withinParent) {
+            clearShiftedFlags(shiftedNodes);
+            for (let index = absoluteCountBefore; index < state.absoluteRectsCur.length; index++)
+              if (!state.absoluteRectsCur[index].withinParent) {
                 state.absolutePaintCut = true;
                 break;
               }
@@ -918,8 +937,8 @@ function renderNodeToOutput(
               hadPendingClears,
               scrolled || layoutMoved ? undefined : prevScreen,
               clips_2,
-              scrollTop,
-              scrollTop + innerHeight,
+              top,
+              top + innerHeight,
               boxBackgroundColor,
               depth + 2,
             );
@@ -937,7 +956,7 @@ function renderNodeToOutput(
         let ownBackgroundColor = node.style.backgroundColor;
         if (ownBackgroundColor || node.style.opaque)
           fillBoxBackground(node, yogaNode, output, x, y, width, height);
-        ye = renderChildren(
+        flagE = renderChildren(
           node,
           output,
           state,
@@ -952,8 +971,8 @@ function renderNodeToOutput(
           depth + 1,
         );
       }
-      if (ae) output.unclip();
-      node.hasEscapingDescendant = ae ? false : ye;
+      if (hasClip) output.unclip();
+      node.hasEscapingDescendant = hasClip ? false : flagE;
       renderBorderAlias(x, y, node, output, inheritedBackgroundColor);
     } else if (node.nodeName === "ink-root")
       node.hasEscapingDescendant = renderChildren(
@@ -1004,20 +1023,20 @@ function resolveScrollTop(
     let yogaNode = node.scrollAnchor.el.yogaNode;
     if (yogaNode) {
       let computedTop = yogaNode.getComputedTop();
-      let ue = computedTop + node.scrollAnchor.offset;
-      let ce = computedTop + yogaNode.getComputedHeight() - viewportHeight;
+      let anchorTop = computedTop + node.scrollAnchor.offset;
+      let anchorBottom = computedTop + yogaNode.getComputedHeight() - viewportHeight;
       switch (node.scrollAnchor.block) {
         case "nearest":
-          node.scrollTop = Math.min(Math.max(node.scrollTop ?? 0, ce), ue);
+          node.scrollTop = Math.min(Math.max(node.scrollTop ?? 0, anchorBottom), anchorTop);
           break;
         case "end":
-          node.scrollTop = Math.max(0, Math.min(ce, ue));
+          node.scrollTop = Math.max(0, Math.min(anchorBottom, anchorTop));
           break;
         case "center":
-          node.scrollTop = Math.max(0, Math.min(Math.floor((ce + ue) / 2), ue));
+          node.scrollTop = Math.max(0, Math.min(Math.floor((anchorBottom + anchorTop) / 2), anchorTop));
           break;
         case "start":
-          node.scrollTop = ue;
+          node.scrollTop = anchorTop;
           break;
       }
       node.pendingScrollDelta = undefined;
@@ -1027,13 +1046,13 @@ function resolveScrollTop(
   let prevScrollTop = node.scrollTop ?? 0;
   let stickyScroll = node.attributes.stickyScroll;
   let sticky = node.stickyScroll ?? Boolean(stickyScroll);
-  let L = sticky ? prevContentHeight : Math.max(node.scrollHeightHwm ?? 0, prevContentHeight);
-  node.scrollHeightHwm = sticky ? undefined : Math.max(L, contentHeight);
-  let max = Math.max(0, L - prevViewportHeight);
-  let z = contentHeight >= prevContentHeight;
-  let G = node.attributes.followGrowth !== false;
+  let previousHeight = sticky ? prevContentHeight : Math.max(node.scrollHeightHwm ?? 0, prevContentHeight);
+  node.scrollHeightHwm = sticky ? undefined : Math.max(previousHeight, contentHeight);
+  let max = Math.max(0, previousHeight - prevViewportHeight);
+  let grew = contentHeight >= prevContentHeight;
+  let followsGrowth = node.attributes.followGrowth !== false;
   if (
-    (sticky || (stickyScroll !== false && G && z && prevScrollTop >= max)) &&
+    (sticky || (stickyScroll !== false && followsGrowth && grew && prevScrollTop >= max)) &&
     (node.pendingScrollDelta ?? 0) >= 0
   ) {
     node.scrollTop = maxScroll;
@@ -1048,32 +1067,33 @@ function resolveScrollTop(
   }
   let scrollTop = node.scrollTop ?? 0;
   let { pendingScrollDelta, scrollClampMin, scrollClampMax } = node;
-  let V = scrollClampMin !== undefined && scrollClampMax !== undefined;
+  let hasClampBounds = scrollClampMin !== undefined && scrollClampMax !== undefined;
   if (pendingScrollDelta !== undefined && pendingScrollDelta !== 0) {
     let innerHeight =
-      V &&
+      hasClampBounds &&
       ((pendingScrollDelta < 0 && scrollTop < scrollClampMin) ||
         (pendingScrollDelta > 0 && scrollTop > scrollClampMax))
         ? Math.min(4, viewportHeight >> 3)
         : viewportHeight;
     let useAdaptiveDrain = hasCursorUpViewportYankBug().useAdaptiveDrain;
-    let ce = useAdaptiveDrain
+    let drained = useAdaptiveDrain
       ? drainAdaptive(node, pendingScrollDelta, innerHeight)
       : drainProportional(node, pendingScrollDelta, innerHeight);
-    scrollTop += ce;
-    recordScrollOut(ce, node.pendingScrollDelta ?? 0, useAdaptiveDrain ? "adaptive" : "proportional");
+    scrollTop += drained;
+    recordScrollOut(drained, node.pendingScrollDelta ?? 0, useAdaptiveDrain ? "adaptive" : "proportional");
   } else if (pendingScrollDelta === 0) node.pendingScrollDelta = undefined;
-  let max_2 = Math.max(0, Math.min(scrollTop, Math.max(maxScroll, L - viewportHeight)));
+  let max_2 = Math.max(0, Math.min(scrollTop, Math.max(maxScroll, previousHeight - viewportHeight)));
   let max_3 = Math.max(0, Math.min(scrollTop, maxScroll));
-  let ne = V && !sticky ? Math.max(scrollClampMin, Math.min(max_3, scrollClampMax)) : max_3;
+  let clampedScroll =
+    hasClampBounds && !sticky ? Math.max(scrollClampMin, Math.min(max_3, scrollClampMax)) : max_3;
   node.scrollTop = max_2;
   if (max_2 !== scrollTop) node.pendingScrollDelta = undefined;
   if (node.pendingScrollDelta !== undefined) state.scrollDrainNode = node;
-  max_3 = ne;
-  let de = max_3 - (node.scrollTopRendered ?? max_3);
-  if (de !== 0)
+  max_3 = clampedScroll;
+  let renderDelta = max_3 - (node.scrollTopRendered ?? max_3);
+  if (renderDelta !== 0)
     state.followScroll = {
-      delta: de,
+      delta: renderDelta,
       viewportLeft: Math.floor(x),
       viewportRight: Math.floor(x + width) - 1,
       viewportTop,
@@ -1099,16 +1119,16 @@ function fillBoxBackground(node, yogaNode, output, x, y, width, height) {
   let computedBorder_2 = yogaNode.getComputedBorder(2);
   let computedBorder_3 = yogaNode.getComputedBorder(1);
   let computedBorder_4 = yogaNode.getComputedBorder(3);
-  let U = Math.floor(width) - computedBorder - computedBorder_2;
-  let L = Math.floor(height) - computedBorder_3 - computedBorder_4;
-  if (U > 0 && L > 0) {
-    let P = " ".repeat(U);
-    let z = backgroundColor
-      ? applyTextStyles(P, {
+  let innerWidth = Math.floor(width) - computedBorder - computedBorder_2;
+  let innerHeight = Math.floor(height) - computedBorder_3 - computedBorder_4;
+  if (innerWidth > 0 && innerHeight > 0) {
+    let blankLine = " ".repeat(innerWidth);
+    let styledLine = backgroundColor
+      ? applyTextStyles(blankLine, {
           backgroundColor,
         })
-      : P;
-    let joined = Array(L).fill(z).join(`
+      : blankLine;
+    let joined = Array(innerHeight).fill(styledLine).join(`
 `);
     output.write(x + computedBorder, y + computedBorder_3, joined);
   }
@@ -1120,19 +1140,19 @@ function fillBoxBackground(node, yogaNode, output, x, y, width, height) {
 function absoluteChildMoved(node, x, y) {
   if (!node.hasAbsoluteDescendant) return false;
   for (let childNode of node.childNodes) {
-    let p = childNode;
-    if (p.style.position !== "absolute") continue;
-    let yogaNode = p.yogaNode;
+    let childNode_2 = childNode;
+    if (childNode_2.style.position !== "absolute") continue;
+    let yogaNode = childNode_2.yogaNode;
     if (!yogaNode) continue;
-    let cachedLayout = p.cachedLayout;
+    let cachedLayout = childNode_2.cachedLayout;
     if (!cachedLayout) continue;
     if (yogaNode.getDisplay() === 1) return true;
-    let T = x + yogaNode.getComputedLeft();
-    let A = y + yogaNode.getComputedTop();
-    if (A < 0) A = 0;
+    let childX = x + yogaNode.getComputedLeft();
+    let childY = y + yogaNode.getComputedTop();
+    if (childY < 0) childY = 0;
     if (
-      cachedLayout.x !== T ||
-      cachedLayout.y !== A ||
+      cachedLayout.x !== childX ||
+      cachedLayout.y !== childY ||
       cachedLayout.width !== yogaNode.getComputedWidth() ||
       cachedLayout.height !== yogaNode.getComputedHeight()
     )
@@ -1148,40 +1168,41 @@ function collectSiblingsUnderEscapingChange(node, x, y) {
   let result;
   let childNodes = node.childNodes;
   for (let idx = 1; idx < childNodes.length; idx++) {
-    let E = childNodes[idx];
-    if (E.hasEscapingDescendant !== true || E.style.position === "absolute") continue;
-    let { yogaNode, cachedLayout } = E;
+    let sibling = childNodes[idx];
+    if (sibling.hasEscapingDescendant !== true || sibling.style.position === "absolute") continue;
+    let { yogaNode, cachedLayout } = sibling;
     if (!yogaNode || cachedLayout === undefined) continue;
-    let D = x + yogaNode.getComputedLeft();
-    let O = y + yogaNode.getComputedTop();
+    let nextX = x + yogaNode.getComputedLeft();
+    let nextY = y + yogaNode.getComputedTop();
     if (
-      !E.dirty &&
-      cachedLayout.x === D &&
-      cachedLayout.y === O &&
+      !sibling.dirty &&
+      cachedLayout.x === nextX &&
+      cachedLayout.y === nextY &&
       cachedLayout.width === yogaNode.getComputedWidth() &&
       cachedLayout.height === yogaNode.getComputedHeight()
     )
       continue;
-    let _ = [[E, D, O]];
-    for (let U = _.pop(); U !== undefined; U = _.pop()) {
-      let [L, P, z] = U;
-      for (let G of L.pendingClears ?? []) result = addOverlappingSiblings(childNodes, idx, G, result);
-      for (let childNode of L.childNodes) {
+    let stack = [[sibling, nextX, nextY]];
+    for (let entry = stack.pop(); entry !== undefined; entry = stack.pop()) {
+      let [current, currentX, currentY] = entry;
+      for (let pendingClear of current.pendingClears ?? [])
+        result = addOverlappingSiblings(childNodes, idx, pendingClear, result);
+      for (let childNode of current.childNodes) {
         if (childNode.nodeName === "#text") continue;
-        let X = childNode;
-        let { cachedLayout, yogaNode } = X;
-        if (X.style.position === "absolute" || cachedLayout === undefined || !yogaNode) continue;
-        let Y = P + yogaNode.getComputedLeft();
-        let J = z + yogaNode.getComputedTop();
+        let childNode_2 = childNode;
+        let { cachedLayout, yogaNode } = childNode_2;
+        if (childNode_2.style.position === "absolute" || cachedLayout === undefined || !yogaNode) continue;
+        let childX = currentX + yogaNode.getComputedLeft();
+        let childY = currentY + yogaNode.getComputedTop();
         if (
-          X.dirty ||
-          cachedLayout.x !== Y ||
-          cachedLayout.y !== J ||
+          childNode_2.dirty ||
+          cachedLayout.x !== childX ||
+          cachedLayout.y !== childY ||
           cachedLayout.width !== yogaNode.getComputedWidth() ||
           cachedLayout.height !== yogaNode.getComputedHeight()
         )
           result = addOverlappingSiblings(childNodes, idx, cachedLayout, result);
-        if (X.hasEscapingDescendant === true) _.push([X, Y, J]);
+        if (childNode_2.hasEscapingDescendant === true) stack.push([childNode_2, childX, childY]);
       }
     }
   }
@@ -1190,18 +1211,18 @@ function collectSiblingsUnderEscapingChange(node, x, y) {
 //@ chunk-bzr73sfg.js:308018-308233 layout
 function addOverlappingSiblings(siblings, beforeIndex, rect, result) {
   for (let idx = 0; idx < beforeIndex; idx++) {
-    let g = siblings[idx];
-    let cachedLayout = g.cachedLayout;
+    let sibling = siblings[idx];
+    let cachedLayout = sibling.cachedLayout;
     if (
       cachedLayout !== undefined &&
-      g.style.position !== "absolute" &&
+      sibling.style.position !== "absolute" &&
       rect.x < cachedLayout.x + cachedLayout.width &&
       cachedLayout.x < rect.x + rect.width &&
       rect.y < cachedLayout.y + cachedLayout.height &&
       cachedLayout.y < rect.y + rect.height
     ) {
       result ??= new Set();
-      result.add(g);
+      result.add(sibling);
     }
   }
   return result;
@@ -1214,97 +1235,106 @@ function renderChildren(
   node,
   output,
   state,
-  m,
-  p,
+  offsetX,
+  offsetY,
   width,
   height,
   pendingClears,
-  A,
+  prevScreen,
   clips,
   inheritedBackgroundColor,
   depth,
 ) {
-  let U = A !== undefined && absoluteChildMoved(node, m, p);
-  let L = A === undefined ? undefined : collectSiblingsUnderEscapingChange(node, m, p);
-  let P =
-    pendingClears === undefined || A === undefined
+  let absoluteMoved = prevScreen !== undefined && absoluteChildMoved(node, offsetX, offsetY);
+  let escapingSiblings =
+    prevScreen === undefined ? undefined : collectSiblingsUnderEscapingChange(node, offsetX, offsetY);
+  let blittableChildren =
+    pendingClears === undefined || prevScreen === undefined
       ? undefined
-      : findBlittableChildren(node, m, p, pendingClears);
-  let z = false;
-  let G = false;
-  let X = false;
-  let K = false;
-  let q = false;
-  let Y = 0;
+      : findBlittableChildren(node, offsetX, offsetY, pendingClears);
+  let sawDirtyChild = false;
+  let sawClippedDirty = false;
+  let hasOverflowChild = false;
+  let childPaintsPastRect = false;
+  let childrenOverlap = false;
+  let paintPastCount = 0;
   let childrenPaintingPastRect = node.childrenPaintingPastRect ?? 0;
-  let V = 1 / 0;
-  let ee = 1 / 0;
-  let ae = -1 / 0;
-  let ne = -1 / 0;
-  let de = m + width;
-  let se = p + height;
+  let minX = 1 / 0;
+  let minY = 1 / 0;
+  let maxX = -1 / 0;
+  let maxY = -1 / 0;
+  let rightEdge = offsetX + width;
+  let bottomEdge = offsetY + height;
   for (let childNode of node.childNodes) {
     let childElem = childNode;
     let wasDirty = childElem.dirty;
-    let pe = childElem.style.position === "absolute";
-    if (wasDirty && !pe && overlapsBounds(childElem, m, p, V, ee, ae, ne)) node.childrenOverlap = true;
+    let isAbsolute = childElem.style.position === "absolute";
+    if (wasDirty && !isAbsolute && overlapsBounds(childElem, offsetX, offsetY, minX, minY, maxX, maxY))
+      node.childrenOverlap = true;
     renderNodeToOutput(childElem, output, state, {
-      offsetX: m,
-      offsetY: p,
+      offsetX,
+      offsetY,
       prevScreen:
-        (P !== undefined && (!P.has(childElem) || overlapsAbsoluteRects(childElem, state))) ||
-        z ||
-        (U && !pe) ||
-        L?.has(childElem) === true ||
-        (G && childElem.hasEscapingDescendant === true)
+        (blittableChildren !== undefined &&
+          (!blittableChildren.has(childElem) || overlapsAbsoluteRects(childElem, state))) ||
+        sawDirtyChild ||
+        (absoluteMoved && !isAbsolute) ||
+        escapingSiblings?.has(childElem) === true ||
+        (sawClippedDirty && childElem.hasEscapingDescendant === true)
           ? undefined
-          : A,
+          : prevScreen,
       clips,
-      skipSelfBlit: G && pe && !childElem.style.opaque && childElem.style.backgroundColor === undefined,
+      skipSelfBlit:
+        sawClippedDirty &&
+        isAbsolute &&
+        !childElem.style.opaque &&
+        childElem.style.backgroundColor === undefined,
       inheritedBackgroundColor,
       depth,
     });
-    if (wasDirty && !z)
-      if (!clipsBothAxes(childElem) || pe) z = true;
-      else G = true;
-    if (!X) {
+    if (wasDirty && !sawDirtyChild)
+      if (!clipsBothAxes(childElem) || isAbsolute) sawDirtyChild = true;
+      else sawClippedDirty = true;
+    if (!hasOverflowChild) {
       let cachedLayout = childElem.cachedLayout;
       if (
         childElem.hasEscapingDescendant ||
         (cachedLayout !== undefined &&
-          !pe &&
-          (cachedLayout.x < m ||
-            cachedLayout.y < p ||
-            cachedLayout.x + cachedLayout.width > de ||
-            cachedLayout.y + cachedLayout.height > se))
+          !isAbsolute &&
+          (cachedLayout.x < offsetX ||
+            cachedLayout.y < offsetY ||
+            cachedLayout.x + cachedLayout.width > rightEdge ||
+            cachedLayout.y + cachedLayout.height > bottomEdge))
       )
-        X = true;
+        hasOverflowChild = true;
     }
-    K ||= childElem.paintsPastRect === true;
+    childPaintsPastRect ||= childElem.paintsPastRect === true;
     let cachedLayout = childElem.cachedLayout;
-    if (!pe && cachedLayout !== undefined) {
+    if (!isAbsolute && cachedLayout !== undefined) {
       if (childElem.paintsPastRect === true) {
-        Y++;
-        node.childrenPaintingPastRect = childrenPaintingPastRect + Y;
+        paintPastCount++;
+        node.childrenPaintingPastRect = childrenPaintingPastRect + paintPastCount;
       }
-      q ||=
-        cachedLayout.x < ae &&
-        V < cachedLayout.x + cachedLayout.width &&
-        cachedLayout.y < ne &&
-        ee < cachedLayout.y + cachedLayout.height;
-      if (q) node.childrenOverlap = true;
+      childrenOverlap ||=
+        cachedLayout.x < maxX &&
+        minX < cachedLayout.x + cachedLayout.width &&
+        cachedLayout.y < maxY &&
+        minY < cachedLayout.y + cachedLayout.height;
+      if (childrenOverlap) node.childrenOverlap = true;
       if (cachedLayout.width > 0 && cachedLayout.height > 0) {
-        V = Math.min(V, cachedLayout.x);
-        ee = Math.min(ee, cachedLayout.y);
-        ae = Math.max(ae, cachedLayout.x + cachedLayout.width);
-        ne = Math.max(ne, cachedLayout.y + cachedLayout.height);
+        minX = Math.min(minX, cachedLayout.x);
+        minY = Math.min(minY, cachedLayout.y);
+        maxX = Math.max(maxX, cachedLayout.x + cachedLayout.width);
+        maxY = Math.max(maxY, cachedLayout.y + cachedLayout.height);
       }
     }
   }
-  node.childrenOverlap = q;
-  node.childrenPaintingPastRect = Y;
-  node.paintsPastRect = (!clipsBothAxes(node) && (X || K)) || isDegenerateBorderBox(node, width, height);
-  return X;
+  node.childrenOverlap = childrenOverlap;
+  node.childrenPaintingPastRect = paintPastCount;
+  node.paintsPastRect =
+    (!clipsBothAxes(node) && (hasOverflowChild || childPaintsPastRect)) ||
+    isDegenerateBorderBox(node, width, height);
+  return hasOverflowChild;
 }
 //@ chunk-bzr73sfg.js:309501-310867 sole-consumer
 /**
@@ -1312,84 +1342,90 @@ function renderChildren(
  */
 function findBlittableChildren(node, x, y, pendingClears) {
   let result = new Set();
-  let g = [];
-  let E = node;
+  let paintingAncestors = [];
+  let child = node;
   for (
     let parentNode = node.parentNode;
     parentNode !== undefined;
-    E = parentNode, parentNode = parentNode.parentNode
+    child = parentNode, parentNode = parentNode.parentNode
   ) {
-    let z = E.style.position !== "absolute" && E.paintsPastRect === true;
-    if (parentNode.childrenOverlap !== false || (parentNode.childrenPaintingPastRect ?? 0) > (z ? 1 : 0))
+    let paintsPast = child.style.position !== "absolute" && child.paintsPastRect === true;
+    if (
+      parentNode.childrenOverlap !== false ||
+      (parentNode.childrenPaintingPastRect ?? 0) > (paintsPast ? 1 : 0)
+    )
       return result;
-    if (z) g.push(E);
+    if (paintsPast) paintingAncestors.push(child);
   }
-  let T = 1 / 0;
-  for (let pendingClear of pendingClears) T = Math.min(T, rowSpan(pendingClear).top);
+  let topmostClear = 1 / 0;
+  for (let pendingClear of pendingClears) topmostClear = Math.min(topmostClear, rowSpan(pendingClear).top);
   let filtered = node.childNodes.filter(isDOMElement);
-  let D = Array(filtered.length);
-  let O = Array(filtered.length);
+  let rowTops = Array(filtered.length);
+  let rowBottoms = Array(filtered.length);
   for (let idx = 0; idx < filtered.length; idx++) {
-    let z = filtered[idx];
-    let { cachedLayout, yogaNode } = z;
-    let K = yogaNode !== undefined && yogaNode.getDisplay() !== 1;
-    let q = K ? y + yogaNode.getComputedTop() : 0;
-    let Y = K
+    let childNode = filtered[idx];
+    let { cachedLayout, yogaNode } = childNode;
+    let isDisplayed = yogaNode !== undefined && yogaNode.getDisplay() !== 1;
+    let childY = isDisplayed ? y + yogaNode.getComputedTop() : 0;
+    let yogaSpan = isDisplayed
       ? rowSpan({
-          y: q,
+          y: childY,
           height: yogaNode.getComputedHeight(),
         })
       : undefined;
     if (
-      z.style.position !== "absolute" &&
-      z.paintsPastRect === true &&
-      (z.dirty ||
+      childNode.style.position !== "absolute" &&
+      childNode.paintsPastRect === true &&
+      (childNode.dirty ||
         cachedLayout === undefined ||
-        !K ||
+        !isDisplayed ||
         cachedLayout.x !== x + yogaNode.getComputedLeft() ||
-        cachedLayout.y !== q ||
+        cachedLayout.y !== childY ||
         cachedLayout.width !== yogaNode.getComputedWidth() ||
         cachedLayout.height !== yogaNode.getComputedHeight())
     )
       return result;
-    let J = 1 / 0;
-    let V = -1 / 0;
-    if (z.style.position !== "absolute") {
-      if (cachedLayout !== undefined) ({ top: J, bottom: V } = rowSpan(cachedLayout));
-      if (Y !== undefined) {
-        J = Math.min(J, Y.top);
-        V = Math.max(V, Y.bottom);
+    let top = 1 / 0;
+    let bottom = -1 / 0;
+    if (childNode.style.position !== "absolute") {
+      if (cachedLayout !== undefined) ({ top, bottom } = rowSpan(cachedLayout));
+      if (yogaSpan !== undefined) {
+        top = Math.min(top, yogaSpan.top);
+        bottom = Math.max(bottom, yogaSpan.bottom);
       }
     }
-    D[idx] = J;
-    O[idx] = V;
+    rowTops[idx] = top;
+    rowBottoms[idx] = bottom;
   }
-  let _ = Array(filtered.length);
-  let U = 1 / 0;
+  let nextTops = Array(filtered.length);
+  let minNextTop = 1 / 0;
   for (let idx = filtered.length - 1; idx >= 0; idx--) {
-    _[idx] = U;
-    U = Math.min(U, D[idx]);
+    nextTops[idx] = minNextTop;
+    minNextTop = Math.min(minNextTop, rowTops[idx]);
   }
-  let L = -1 / 0;
+  let previousBottom = -1 / 0;
   for (let idx = 0; idx < filtered.length; idx++) {
-    let z = filtered[idx];
-    let cachedLayout = z.cachedLayout;
+    let candidate = filtered[idx];
+    let cachedLayout = candidate.cachedLayout;
     if (
-      z.style.position !== "absolute" &&
-      !z.dirty &&
-      z.pendingScrollDelta === undefined &&
+      candidate.style.position !== "absolute" &&
+      !candidate.dirty &&
+      candidate.pendingScrollDelta === undefined &&
       cachedLayout !== undefined &&
       cachedLayout.height > 0 &&
-      z.yogaNode?.getComputedHeight() !== 0 &&
-      z.hasAbsoluteDescendant !== true &&
-      z.paintsPastRect !== true &&
-      O[idx] <= T &&
-      L <= D[idx] &&
-      _[idx] >= O[idx] &&
-      g.every((X) => X.cachedLayout !== undefined && rectContains(cachedLayout, X.cachedLayout))
+      candidate.yogaNode?.getComputedHeight() !== 0 &&
+      candidate.hasAbsoluteDescendant !== true &&
+      candidate.paintsPastRect !== true &&
+      rowBottoms[idx] <= topmostClear &&
+      previousBottom <= rowTops[idx] &&
+      nextTops[idx] >= rowBottoms[idx] &&
+      paintingAncestors.every(
+        (ancestor) =>
+          ancestor.cachedLayout !== undefined && rectContains(cachedLayout, ancestor.cachedLayout),
+      )
     )
-      result.add(z);
-    L = Math.max(L, O[idx]);
+      result.add(candidate);
+    previousBottom = Math.max(previousBottom, rowBottoms[idx]);
   }
   return result;
 }
@@ -1407,12 +1443,17 @@ function rowSpan(rect) {
   };
 }
 //@ chunk-bzr73sfg.js:311083-311290 sole-consumer
-function overlapsBounds(childElem, u, f, m, p, g, E) {
+function overlapsBounds(childElem, offsetX, offsetY, minX, minY, maxX, maxY) {
   let yogaNode = childElem.yogaNode;
   if (yogaNode === undefined || yogaNode.getDisplay() === 1) return false;
-  let A = u + yogaNode.getComputedLeft();
-  let D = f + yogaNode.getComputedTop();
-  return A < g && m < A + yogaNode.getComputedWidth() && D < E && p < D + yogaNode.getComputedHeight();
+  let childX = offsetX + yogaNode.getComputedLeft();
+  let childY = offsetY + yogaNode.getComputedTop();
+  return (
+    childX < maxX &&
+    minX < childX + yogaNode.getComputedWidth() &&
+    childY < maxY &&
+    minY < childY + yogaNode.getComputedHeight()
+  );
 }
 //@ chunk-bzr73sfg.js:311290-311387 sole-consumer = unionRect (1)
 function rectContains(inner, outer) {
@@ -1435,13 +1476,13 @@ function overlapsAbsoluteRects(node, state) {
 //@ chunk-bzr73sfg.js:311507-311681 sole-consumer = unionRect (0.777)
 function anyRectOverlaps(rects, rect) {
   for (let rect_2 of rects) {
-    let m = rect_2.width > 0 && rect_2.height > 0 ? 0 : 1;
+    let slack = rect_2.width > 0 && rect_2.height > 0 ? 0 : 1;
     if (
       rect_2.escapes ||
-      (rect_2.x - m < rect.x + rect.width &&
-        rect.x < rect_2.x + rect_2.width + m &&
-        rect_2.y - m < rect.y + rect.height &&
-        rect.y < rect_2.y + rect_2.height + m)
+      (rect_2.x - slack < rect.x + rect.width &&
+        rect.x < rect_2.x + rect_2.width + slack &&
+        rect_2.y - slack < rect.y + rect.height &&
+        rect.y < rect_2.y + rect_2.height + slack)
     )
       return true;
   }
@@ -1454,14 +1495,14 @@ function anyRectOverlaps(rects, rect) {
 function getOverflowClip(node, yogaNode, x, y) {
   let overflowX = node.style.overflowX ?? node.style.overflow;
   let overflowY = node.style.overflowY ?? node.style.overflow;
-  let E = overflowX === "hidden" || overflowX === "scroll";
-  let T = overflowY === "hidden" || overflowY === "scroll";
-  if (!E && !T) return;
+  let clipsX = overflowX === "hidden" || overflowX === "scroll";
+  let clipsY = overflowY === "hidden" || overflowY === "scroll";
+  if (!clipsX && !clipsY) return;
   return {
-    x1: E ? x + yogaNode.getComputedBorder(0) : undefined,
-    x2: E ? x + yogaNode.getComputedWidth() - yogaNode.getComputedBorder(2) : undefined,
-    y1: T ? y + yogaNode.getComputedBorder(1) : undefined,
-    y2: T ? y + yogaNode.getComputedHeight() - yogaNode.getComputedBorder(3) : undefined,
+    x1: clipsX ? x + yogaNode.getComputedBorder(0) : undefined,
+    x2: clipsX ? x + yogaNode.getComputedWidth() - yogaNode.getComputedBorder(2) : undefined,
+    y1: clipsY ? y + yogaNode.getComputedBorder(1) : undefined,
+    y2: clipsY ? y + yogaNode.getComputedHeight() - yogaNode.getComputedBorder(3) : undefined,
   };
 }
 //@ chunk-bzr73sfg.js:312056-312306 sole-consumer = intersectClip (0.813)
@@ -1470,7 +1511,7 @@ function getOverflowClip(node, yogaNode, x, y) {
  */
 function advanceClips(clips, clip, prevClip) {
   if (!clip && !prevClip) return clips;
-  let m = clip ? intersectClip(clips?.now, clip) : clips?.now;
+  let next = clip ? intersectClip(clips?.now, clip) : clips?.now;
   if (
     clips?.now === clips?.before &&
     clip?.x1 === prevClip?.x1 &&
@@ -1479,15 +1520,15 @@ function advanceClips(clips, clip, prevClip) {
     clip?.y2 === prevClip?.y2
   )
     return {
-      now: m,
-      before: m,
+      now: next,
+      before: next,
       grew: false,
     };
-  let p = prevClip ? intersectClip(clips?.before, prevClip) : clips?.before;
+  let before = prevClip ? intersectClip(clips?.before, prevClip) : clips?.before;
   return {
-    now: m,
-    before: p,
-    grew: !isClipRedundant(m, p),
+    now: next,
+    before,
+    grew: !isClipRedundant(next, before),
   };
 }
 //@ chunk-bzr73sfg.js:312306-312543 sole-consumer
@@ -1507,11 +1548,11 @@ function clipBlocksBlit(node, cachedLayout, clips) {
   );
 }
 //@ chunk-bzr73sfg.js:312543-312644 sole-consumer
-function clipsAllowScrollBlit(clips, cached, f) {
+function clipsAllowScrollBlit(clips, cached, rect) {
   return (
     cached?.unpainted !== true &&
     (clips === undefined ||
-      (isClipRedundant(undefined, clips.before, cached) && isClipRedundant(undefined, clips.now, f)))
+      (isClipRedundant(undefined, clips.before, cached) && isClipRedundant(undefined, clips.now, rect)))
   );
 }
 //@ chunk-bzr73sfg.js:312644-312804 fingerprint = clipsBothAxes (1)
@@ -1519,9 +1560,11 @@ function clipsAllowScrollBlit(clips, cached, f) {
  * 节点在 X、Y 两个方向都裁剪（overflow hidden/scroll）。
  */
 function clipsBothAxes(node) {
-  let u = node.style.overflowX ?? node.style.overflow;
-  let f = node.style.overflowY ?? node.style.overflow;
-  return (u === "hidden" || u === "scroll") && (f === "hidden" || f === "scroll");
+  let overflowX = node.style.overflowX ?? node.style.overflow;
+  let overflowY = node.style.overflowY ?? node.style.overflow;
+  return (
+    (overflowX === "hidden" || overflowX === "scroll") && (overflowY === "hidden" || overflowY === "scroll")
+  );
 }
 //@ chunk-bzr73sfg.js:312804-313103 fingerprint = siblingSharesY (1)
 /**
@@ -1549,47 +1592,47 @@ function siblingSharesY(node, yogaNode) {
 /**
  * 节点整体 blit 后，再把越出它矩形的绝对定位子孙（及越界子孙）也从上一帧拷过来，并登记绝对定位矩形。
  */
-function blitEscapingAbsoluteDescendants(node, output, state, prevScreen, p, g, E, T) {
-  if (!node.hasAbsoluteDescendant && !node.hasEscapingDescendant) return;
-  let A = p + E;
-  let D = g + T;
-  let O = [];
-  let _ = [];
-  let U = (L, P) => {
-    let childNodes = L.childNodes;
+function blitEscapingAbsoluteDescendants(parentNode, output, state, prevScreen, x, y, width, height) {
+  if (!parentNode.hasAbsoluteDescendant && !parentNode.hasEscapingDescendant) return;
+  let right = x + width;
+  let bottom = y + height;
+  let stack = [];
+  let escapingFlags = [];
+  let pushChildren = (parentNode, inheritsEscaping) => {
+    let childNodes = parentNode.childNodes;
     for (let idx = childNodes.length - 1; idx >= 0; idx--) {
-      let X = childNodes[idx];
-      if (X.nodeName !== "#text") {
-        O.push(X);
-        _.push(P);
+      let childNode = childNodes[idx];
+      if (childNode.nodeName !== "#text") {
+        stack.push(childNode);
+        escapingFlags.push(inheritsEscaping);
       }
     }
   };
-  U(node, node.hasEscapingDescendant === true);
-  for (let node = O.pop(); node !== undefined; node = O.pop()) {
-    let P = _.pop();
-    let cachedLayout = node.cachedLayout;
+  pushChildren(parentNode, parentNode.hasEscapingDescendant === true);
+  for (let descendantNode = stack.pop(); descendantNode !== undefined; descendantNode = stack.pop()) {
+    let escapes = escapingFlags.pop();
+    let cachedLayout = descendantNode.cachedLayout;
     if (cachedLayout && !cachedLayout.unpainted) {
-      let X = node.style.position === "absolute";
-      if (X) {
-        let cachedLayout_2 = node.parentNode?.cachedLayout;
+      let isAbsolute = descendantNode.style.position === "absolute";
+      if (isAbsolute) {
+        let cachedLayout_2 = descendantNode.parentNode?.cachedLayout;
         state.absoluteRectsCur.push(
-          makeAbsoluteRect(node, cachedLayout, cachedLayout_2?.x, cachedLayout_2?.y),
+          makeAbsoluteRect(descendantNode, cachedLayout, cachedLayout_2?.x, cachedLayout_2?.y),
         );
       }
-      if (X || P) {
+      if (isAbsolute || escapes) {
         let cx = Math.floor(cachedLayout.x);
         let cy = Math.floor(cachedLayout.y);
         let cw = Math.floor(cachedLayout.width);
         let ch = Math.floor(cachedLayout.height);
-        if (cx < p || cy < g || cx + cw > A || cy + ch > D)
+        if (cx < x || cy < y || cx + cw > right || cy + ch > bottom)
           output.blit(prevScreen, cx, cy, cw, ch, {
-            restoreNoSelect: node.style.opaque,
+            restoreNoSelect: descendantNode.style.opaque,
           });
       }
     }
-    let G = P && node.hasEscapingDescendant === true;
-    if (node.hasAbsoluteDescendant || G) U(node, G);
+    let childEscapes = escapes && descendantNode.hasEscapingDescendant === true;
+    if (descendantNode.hasAbsoluteDescendant || childEscapes) pushChildren(descendantNode, childEscapes);
   }
 }
 //@ chunk-bzr73sfg.js:313827-314142 fingerprint = renderScrolledChildren (0.842)
@@ -1603,13 +1646,13 @@ function renderScrolledChildren(
   offsetX,
   offsetY,
   hadPendingClears,
-  E,
+  prevScreen,
   clips,
-  A,
-  D,
+  top,
+  bottom,
   inheritedBackgroundColor,
   depth,
-  U = false,
+  keepOffscreen = false,
 ) {
   let seenDirtyChild = false;
   for (let childNode of node.childNodes) {
@@ -1617,8 +1660,8 @@ function renderScrolledChildren(
     let cy = childElem.yogaNode;
     if (cy) {
       let computedTop = cy.getComputedTop();
-      if (computedTop + cy.getComputedHeight() <= A || computedTop >= D) {
-        if (!U) dropSubtreeCache(childElem);
+      if (computedTop + cy.getComputedHeight() <= top || computedTop >= bottom) {
+        if (!keepOffscreen) dropSubtreeCache(childElem);
         continue;
       }
     }
@@ -1626,7 +1669,7 @@ function renderScrolledChildren(
     renderNodeToOutput(childElem, output, state, {
       offsetX,
       offsetY,
-      prevScreen: hadPendingClears || seenDirtyChild ? undefined : E,
+      prevScreen: hadPendingClears || seenDirtyChild ? undefined : prevScreen,
       clips,
       inheritedBackgroundColor,
       depth,
@@ -1640,23 +1683,84 @@ function renderScrolledChildren(
  */
 function dropSubtreeCache(node) {
   if (node.cachedLayout === undefined) return;
-  let u = [node];
-  for (let f = u.pop(); f !== undefined; f = u.pop()) {
-    f.cachedLayout = undefined;
-    let childNodes = f.childNodes;
+  let stack = [node];
+  for (let node = stack.pop(); node !== undefined; node = stack.pop()) {
+    node.cachedLayout = undefined;
+    let childNodes = node.childNodes;
     for (let idx = childNodes.length - 1; idx >= 0; idx--) {
-      let g = childNodes[idx];
-      if (g.nodeName !== "#text") u.push(g);
+      let childNode = childNodes[idx];
+      if (childNode.nodeName !== "#text") stack.push(childNode);
     }
   }
+}
+//@ chunk-bzr73sfg.js:315335-315555 placement
+function rewriteRawAnsiBackground(state, node, text, color) {
+  let generation = levelGeneration();
+  let cached = state.rawBgRewriteCache.get(node);
+  if (cached && cached.text === text && cached.color === color && cached.levelGeneration === generation)
+    return cached.out;
+  let rewritten = applyBackgroundColor(text, color);
+  state.rawBgRewriteCache.set(node, {
+    text,
+    color,
+    levelGeneration: generation,
+    out: rewritten,
+  });
+  return rewritten;
+}
+//@ chunk-bzr73sfg.js:315555-316137 placement
+/**
+ * 截断带样式的文本到给定显示宽度（按段落总宽计算保留头尾），只给 daemon 预览/渲染用。
+ */
+function truncateStyledText(text, maxWidth, segments, charSegments, position) {
+  if (maxWidth < 1) return "";
+  let truncation = truncate(text, maxWidth, position);
+  if (truncation === null) return applyStylesToWrappedText(text, segments, charSegments, text);
+  let { head, tail } = truncation;
+  let wrappedPlain = head + ELLIPSIS + tail;
+  if (!text.startsWith(head) || !text.endsWith(tail))
+    return applyStylesToWrappedText(wrappedPlain, segments, charSegments, text);
+  let headLength = head.length;
+  let tailStart = text.length - tail.length;
+  let segmentAt = (index) =>
+    index < headLength
+      ? (charSegments[index] ?? 0)
+      : index === headLength
+        ? (charSegments[Math.max(0, tailStart - 1)] ?? 0)
+        : (charSegments[tailStart + (index - headLength - 1)] ?? 0);
+  let lines = wrappedPlain.split(`
+`);
+  let lineStart = 0;
+  for (let idx = 0; idx < lines.length; idx++) {
+    let line = lines[idx];
+    let styledLine = "";
+    let runStart = 0;
+    let segmentIndex = line.length > 0 ? segmentAt(lineStart) : -1;
+    for (let idx = 1; idx <= line.length; idx++) {
+      let nextSegmentIndex = idx < line.length ? segmentAt(lineStart + idx) : -1;
+      if (nextSegmentIndex !== segmentIndex) {
+        let segment = segments[segmentIndex];
+        let sliced = line.slice(runStart, idx);
+        if (segment) {
+          let styled = applyTextStyles(sliced, segment.styles);
+          if (segment.hyperlink) styled = wrapWithOsc8Link(styled, segment.hyperlink);
+          styledLine += styled;
+        } else styledLine += sliced;
+        runStart = idx;
+        segmentIndex = nextSegmentIndex;
+      }
+    }
+    lines[idx] = styledLine;
+    lineStart += line.length + 1;
+  }
+  return lines.join(`
+`);
 }
 export {
   isSoftWrapMode,
   createRenderState,
   dropSubtreeCache,
   collectTabbable,
-  applyStylesToWrappedText,
-  wrapWithOsc8Link,
   renderNodeToOutput,
   resetRenderState,
   hasStaleAbsolutePaint,

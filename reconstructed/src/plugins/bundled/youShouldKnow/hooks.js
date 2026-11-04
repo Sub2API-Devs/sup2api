@@ -95,173 +95,174 @@ var RECENT_NOTES_LIMIT = 3;
 var readRecentNotes = (checks) =>
   Array.isArray(checks) ? checks.filter(semanticNumber).slice(-RECENT_NOTES_LIMIT) : [];
 //@ chunk-bss4k1z9.js:20387-20421 placement
-var pushRecentNote = (recentNotes, t) => [...recentNotes, t].slice(-RECENT_NOTES_LIMIT);
+var pushRecentNote = (recentNotes, recentNotes_2) =>
+  [...recentNotes, recentNotes_2].slice(-RECENT_NOTES_LIMIT);
 //@ chunk-bss4k1z9.js:74264-84337 placement
 /**
  * youShouldKnow 插件的钩子注册：在会话事件上触发提示挑选、渲染提示卡片并记录展示状态与遥测。
  */
-function register(e) {
-  let t = new Map();
-  let o = new Set();
-  let r = new Map();
-  let n = new Set();
-  let i = new Map();
-  let a = new Set();
-  let l = {
+function register(on) {
+  let inFlightChecks = new Map();
+  let unattendedSessions = new Set();
+  let askedTimers = new Map();
+  let respondInFlight = new Set();
+  let promptCounts = new Map();
+  let endedSessions = new Set();
+  let offState = {
     clearing: new Map(),
     confirmed: new Set(),
   };
-  let u = new Set();
-  let k = new Set();
-  e("prompt.submit", async (s, f, g) => {
-    let kind = f.origin.kind;
+  let bandSurfaces = new Set();
+  let bridgeSessions = new Set();
+  on("prompt.submit", async (ctx, payload, next) => {
+    let kind = payload.origin.kind;
     if (isPersonsPrompt(kind)) {
-      clearOffLine(s, l, {
-        isConfirmed: isOffCommand(f.text),
+      clearOffLine(ctx, offState, {
+        isConfirmed: isOffCommand(payload.text),
       });
       try {
-        if ((await s.session.surfaces()).length > 0) {
-          let y = await s.session.id();
-          let count = (i.get(y)?.count ?? 0) + 1;
-          i.set(y, {
+        if ((await ctx.session.surfaces()).length > 0) {
+          let sessionId = await ctx.session.id();
+          let count = (promptCounts.get(sessionId)?.count ?? 0) + 1;
+          promptCounts.set(sessionId, {
             origin: kind,
             count,
           });
-          if (kind === "bridge") k.add(y);
-          else k.delete(y);
+          if (kind === "bridge") bridgeSessions.add(sessionId);
+          else bridgeSessions.delete(sessionId);
         }
       } catch {}
     }
-    return g(f);
+    return next(payload);
   });
-  e(
+  on(
     "command.run",
     {
       command: "plugin",
     },
-    async (s, f, g) => {
-      if (isPersonsPrompt(f.origin.kind) && isOffCommand(`/${f.command} ${f.args}`))
-        await ranOffCommand(s, l);
-      return g(f);
+    async (ctx, payload, next) => {
+      if (isPersonsPrompt(payload.origin.kind) && isOffCommand(`/${payload.command} ${payload.args}`))
+        await ranOffCommand(ctx, offState);
+      return next(payload);
     },
   );
-  e("turn.step", async function* (s, f, g) {
-    if (f.agentId !== undefined) return yield* g(f);
-    let y = (p) =>
-      send(p, {
-        log: (N) => s.telemetry.log(N),
-        mark: (N) => s.telemetry.mark(N),
+  on("turn.step", async function* (ctx, payload, next) {
+    if (payload.agentId !== undefined) return yield* next(payload);
+    let sendTo = (payload) =>
+      send(payload, {
+        log: (event) => ctx.telemetry.log(event),
+        mark: (mark) => ctx.telemetry.mark(mark),
       });
-    async function d() {
-      return stringLines(await s.store.get("seen"));
+    async function readSeen() {
+      return stringLines(await ctx.store.get("seen"));
     }
-    async function D(p, N) {
-      revive(a, p);
-      let xe = promptedAtTurnStart(i, p, f.index);
-      if (f.index === 0) i.delete(p);
-      let oe = rowOf(await s.store.get("sessions"), p);
-      let view = oe?.view ?? null;
-      async function B(_) {
-        let S = await s.store.get("sessions");
-        let E = withRow(S, {
-          ...(rowOf(S, p) ?? {
-            id: p,
+    async function checkThisTurn(sessionId, surfaces) {
+      revive(endedSessions, sessionId);
+      let promptedAtStart = promptedAtTurnStart(promptCounts, sessionId, payload.index);
+      if (payload.index === 0) promptCounts.delete(sessionId);
+      let row = rowOf(await ctx.store.get("sessions"), sessionId);
+      let view = row?.view ?? null;
+      async function saveView(patch) {
+        let sessions = await ctx.store.get("sessions");
+        let nextSessions = withRow(sessions, {
+          ...(rowOf(sessions, sessionId) ?? {
+            id: sessionId,
           }),
-          ..._,
+          ...patch,
         });
-        await s.store.set("sessions", E);
-        for (let T of openRowsOf(droppedOf(S, E)))
-          y(
+        await ctx.store.set("sessions", nextSessions);
+        for (let droppedRow of openRowsOf(droppedOf(sessions, nextSessions)))
+          sendTo(
             leftOpen(
-              T,
+              droppedRow,
               "pushed_out",
               stringLines(
-                await s.store.get("seen").catch(() => {
+                await ctx.store.get("seen").catch(() => {
                   return;
                 }),
               ).length,
             ),
           );
       }
-      if (isUnattendedInFlight(view, p, o)) {
-        let _ = await s.store.get("sessions");
-        let S = rowOf(_, p);
-        if (isUnattendedInFlight(S?.view, p, o)) {
-          await s.store.set(
+      if (isUnattendedInFlight(view, sessionId, unattendedSessions)) {
+        let sessions = await ctx.store.get("sessions");
+        let row = rowOf(sessions, sessionId);
+        if (isUnattendedInFlight(row?.view, sessionId, unattendedSessions)) {
+          await ctx.store.set(
             "sessions",
-            withRow(_, {
-              ...(S ?? {
-                id: p,
+            withRow(sessions, {
+              ...(row ?? {
+                id: sessionId,
               }),
               view: undefined,
             }),
           );
-          s.ui.invalidate("ui.render");
+          ctx.ui.invalidate("ui.render");
           view = null;
-        } else view = S?.view ?? null;
+        } else view = row?.view ?? null;
       }
-      let Io =
-        !(f.index > 0 && f.index % CHECK_EVERY === 0) ||
-        oe?.offeredTurn === f.turnId ||
+      let skipCheck =
+        !(payload.index > 0 && payload.index % CHECK_EVERY === 0) ||
+        row?.offeredTurn === payload.turnId ||
         view !== null ||
-        !isBandWatched(N, u, k.has(p));
-      if (f.index === 0) {
+        !isBandWatched(surfaces, bandSurfaces, bridgeSessions.has(sessionId));
+      if (payload.index === 0) {
         if (view?.kind === "asked") {
-          r.get(p)?.cancel();
-          r.delete(p);
-          await B({
+          askedTimers.get(sessionId)?.cancel();
+          askedTimers.delete(sessionId);
+          await saveView({
             view: undefined,
           });
-          s.ui.invalidate("ui.render");
+          ctx.ui.invalidate("ui.render");
         }
-        if (isOpenView(view) && xe !== undefined) {
-          let promptsSurvived = storedCount(view.promptsSurvived) + xe.count;
-          let S = await s.store.get("sessions");
-          let E = rowOf(S, p);
-          let view_2 = E?.view;
+        if (isOpenView(view) && promptedAtStart !== undefined) {
+          let promptsSurvived = storedCount(view.promptsSurvived) + promptedAtStart.count;
+          let sessions = await ctx.store.get("sessions");
+          let row = rowOf(sessions, sessionId);
+          let view_2 = row?.view;
           if (!isSameShowing(view_2, view)) return;
-          let M = view_2.kind === "explained" || promptsSurvived < CLEAR_AFTER_PROMPTS;
-          await s.store.set(
+          let keepView = view_2.kind === "explained" || promptsSurvived < CLEAR_AFTER_PROMPTS;
+          await ctx.store.set(
             "sessions",
-            withRow(S, {
-              ...(E ?? {
-                id: p,
+            withRow(sessions, {
+              ...(row ?? {
+                id: sessionId,
               }),
-              view: M ? keptPastPrompt(view_2, promptsSurvived) : undefined,
+              view: keepView ? keptPastPrompt(view_2, promptsSurvived) : undefined,
             }),
           );
-          if (M) {
-            if (view_2.kind === "offer" && view_2.isOffArmed === true) s.ui.invalidate("ui.render");
+          if (keepView) {
+            if (view_2.kind === "offer" && view_2.isOffArmed === true) ctx.ui.invalidate("ui.render");
             return;
           }
-          s.ui.invalidate("ui.render");
-          let F = storedCount(await s.store.get("typedPastInARow")) + 1;
-          await s.store.set("typedPastInARow", F);
-          await s.store.set("looksToSkip", looksToSkipAfter(F));
-          await y(
+          ctx.ui.invalidate("ui.render");
+          let typedCount = storedCount(await ctx.store.get("typedPastInARow")) + 1;
+          await ctx.store.set("typedPastInARow", typedCount);
+          await ctx.store.set("looksToSkip", looksToSkipAfter(typedCount));
+          await sendTo(
             answered({
               answer: "ignored_submit",
               msToAnswer: msSince(view_2.shownAt),
               isTurnInProgress: false,
-              offersShown: (await d()).length,
+              offersShown: (await readSeen()).length,
               line: view_2.line,
-              tag: tagOf(E?.tag ?? ""),
+              tag: tagOf(row?.tag ?? ""),
               iteration: iterationOf(view_2),
-              promptOrigin: xe.origin,
+              promptOrigin: promptedAtStart.origin,
               promptsSurvived,
             }),
           );
         }
         return;
       }
-      if (Io) return;
-      let min = Math.min(LOOKS_TO_SKIP_MAX, storedCount(await s.store.get("looksToSkip")));
-      if (t.has(p)) return;
+      if (skipCheck) return;
+      let min = Math.min(LOOKS_TO_SKIP_MAX, storedCount(await ctx.store.get("looksToSkip")));
+      if (inFlightChecks.has(sessionId)) return;
       if (min > 0) {
-        await s.store.set("looksToSkip", min - 1);
+        await ctx.store.set("looksToSkip", min - 1);
         return;
       }
-      async function re(text, S, E) {
+      async function acceptProposal(text, seen, known) {
         let proposedLine = parseProposedLine(text);
         if (proposedLine.kind !== "line")
           return {
@@ -269,21 +270,21 @@ function register(e) {
             tag: undefined,
           };
         let { tag } = proposedLine;
-        let F = lineKey(proposedLine.line);
-        if ([...S, ...E].some((gt) => lineKey(gt) === F))
+        let key = lineKey(proposedLine.line);
+        if ([...seen, ...known].some((entry) => lineKey(entry) === key))
           return {
             outcome: "deduped",
             tag,
           };
-        let askedTurn = rowOf(await s.store.get("sessions"), p)?.askedTurn;
-        if (!isOfferDue(askedTurn, f.turnId, a.has(p)))
+        let askedTurn = rowOf(await ctx.store.get("sessions"), sessionId)?.askedTurn;
+        if (!isOfferDue(askedTurn, payload.turnId, endedSessions.has(sessionId)))
           return {
             outcome: "stale",
             tag,
           };
-        await s.store.set("seen", [...S, proposedLine.line].slice(-SEEN_MAX));
-        await B({
-          offeredTurn: f.turnId,
+        await ctx.store.set("seen", [...seen, proposedLine.line].slice(-SEEN_MAX));
+        await saveView({
+          offeredTurn: payload.turnId,
           tag,
           view: {
             kind: "offer",
@@ -292,397 +293,398 @@ function register(e) {
             shownAt: Date.now(),
           },
         });
-        forgetPrompts(i, p);
-        s.ui.invalidate("ui.render");
+        forgetPrompts(promptCounts, sessionId);
+        ctx.ui.invalidate("ui.render");
         return {
           outcome: "shown",
           tag,
         };
       }
-      async function ht() {
-        await B({
-          askedTurn: f.turnId,
+      async function runCheck() {
+        await saveView({
+          askedTurn: payload.turnId,
         });
-        let _ = await d();
-        let S = stringLines(await s.store.get("known"));
-        let E = await debugFlagOf(s.env.get("CLAUDE_CODE_YOU_SHOULD_KNOW_DEBUG"));
+        let seen = await readSeen();
+        let known = stringLines(await ctx.store.get("known"));
+        let isDebug = await debugFlagOf(ctx.env.get("CLAUDE_CODE_YOU_SHOULD_KNOW_DEBUG"));
         let now = Date.now();
         let usage = null;
-        let F;
+        let outcome;
         try {
-          let message = await s.model.fork({
-            prompt: proposePrompt(_, S),
+          let message = await ctx.model.fork({
+            prompt: proposePrompt(seen, known),
           });
           usage = getUsageField(message);
-          F = message.isAnswered
-            ? await re(message.text, _, S)
+          outcome = message.isAnswered
+            ? await acceptProposal(message.text, seen, known)
             : {
                 outcome: UNANSWERED_OUTCOMES[message.reason],
                 tag: undefined,
               };
         } catch {
-          F = {
+          outcome = {
             outcome: "error",
             tag: undefined,
           };
         }
         let latencyMs = Date.now() - now;
-        if (E)
+        if (isDebug)
           try {
-            let j = rowOf(await s.store.get("sessions"), p);
-            let Fe = (j?.checked ?? 0) + 1;
-            await B({
-              checked: Fe,
-              checks: pushRecentNote(readRecentNotes(j?.checks), {
-                number: Fe,
-                step: f.index,
-                outcome: F.outcome,
+            let row = rowOf(await ctx.store.get("sessions"), sessionId);
+            let checkCount = (row?.checked ?? 0) + 1;
+            await saveView({
+              checked: checkCount,
+              checks: pushRecentNote(readRecentNotes(row?.checks), {
+                number: checkCount,
+                step: payload.index,
+                outcome: outcome.outcome,
                 latencyMs,
                 at: Date.now(),
               }),
             });
-            s.ui.invalidate("ui.render");
+            ctx.ui.invalidate("ui.render");
           } catch {}
         return proposed({
-          ...F,
-          step: f.index,
+          ...outcome,
+          step: payload.index,
           latencyMs,
           usage,
-          offersShown: (await d()).length,
+          offersShown: (await readSeen()).length,
         });
       }
-      t.set(
-        p,
-        ht()
-          .then(y)
+      inFlightChecks.set(
+        sessionId,
+        runCheck()
+          .then(sendTo)
           .catch(() => {
             return;
           })
-          .finally(() => t.delete(p)),
+          .finally(() => inFlightChecks.delete(sessionId)),
       );
     }
-    s.session
+    ctx.session
       .surfaces()
-      .then(async (p) => {
-        if (p.length === 0) return;
-        if (drawsBand(p, u)) await D(await s.session.id(), p);
+      .then(async (surfaces) => {
+        if (surfaces.length === 0) return;
+        if (drawsBand(surfaces, bandSurfaces)) await checkThisTurn(await ctx.session.id(), surfaces);
       })
       .catch(() => {
         return;
       });
-    return yield* g(f);
+    return yield* next(payload);
   });
-  e(
+  on(
     "ui.render",
     {
       component: "AbovePrompt",
     },
-    async (s, f, g) => {
-      let O = registerEscHotkey(f.surface, s.ui.resolve(f));
-      let y = (m) =>
-        send(m, {
-          log: (c) => s.telemetry.log(c),
-          mark: (c) => s.telemetry.mark(c),
+    async (ctx, payload, next) => {
+      let hotkeys = registerEscHotkey(payload.surface, ctx.ui.resolve(payload));
+      let sendTo = (payload) =>
+        send(payload, {
+          log: (event) => ctx.telemetry.log(event),
+          mark: (mark) => ctx.telemetry.mark(mark),
         });
-      let id = await s.session.id();
-      u.add(f.surface);
-      let D = rowOf(await s.store.get("sessions"), id);
-      let view = D?.view ?? null;
-      let N = tagOf(D?.tag ?? "");
-      let xe = await debugFlagOf(s.env.get("CLAUDE_CODE_YOU_SHOULD_KNOW_DEBUG"));
+      let sessionId = await ctx.session.id();
+      bandSurfaces.add(payload.surface);
+      let row = rowOf(await ctx.store.get("sessions"), sessionId);
+      let view = row?.view ?? null;
+      let tag = tagOf(row?.tag ?? "");
+      let isDebug = await debugFlagOf(ctx.env.get("CLAUDE_CODE_YOU_SHOULD_KNOW_DEBUG"));
       let userType = getUserType_2(
-        await s.env.get("USER_TYPE").catch(() => {
+        await ctx.env.get("USER_TYPE").catch(() => {
           return;
         }),
       );
-      let A = xe ? readRecentNotes(D?.checks) : [];
-      async function B(view) {
-        let c = await s.store.get("sessions");
-        let b = withRow(c, {
-          ...(rowOf(c, id) ?? {
-            id,
+      let recentChecks = isDebug ? readRecentNotes(row?.checks) : [];
+      async function saveView(view) {
+        let sessions = await ctx.store.get("sessions");
+        let nextSessions = withRow(sessions, {
+          ...(rowOf(sessions, sessionId) ?? {
+            id: sessionId,
           }),
           view,
         });
-        await s.store.set("sessions", b);
-        for (let w of openRowsOf(droppedOf(c, b)))
-          y(
+        await ctx.store.set("sessions", nextSessions);
+        for (let droppedRow of openRowsOf(droppedOf(sessions, nextSessions)))
+          sendTo(
             leftOpen(
-              w,
+              droppedRow,
               "pushed_out",
               stringLines(
-                await s.store.get("seen").catch(() => {
+                await ctx.store.get("seen").catch(() => {
                   return;
                 }),
               ).length,
             ),
           );
       }
-      async function Io(m) {
-        let c = stringLines(await s.store.get("known"));
-        if (!c.some((w) => w.toLowerCase() === m.toLowerCase()))
-          await s.store.set("known", [...c, m].slice(-SEEN_MAX));
+      async function rememberKnown(line) {
+        let known = stringLines(await ctx.store.get("known"));
+        if (!known.some((entry) => entry.toLowerCase() === line.toLowerCase()))
+          await ctx.store.set("known", [...known, line].slice(-SEEN_MAX));
       }
-      async function J() {
-        await B(undefined);
-        s.ui.invalidate("ui.render");
+      async function closeView() {
+        await saveView(undefined);
+        ctx.ui.invalidate("ui.render");
       }
-      async function re(line) {
-        await thenAlways(() => Io(line), J);
+      async function acceptLine(line) {
+        await thenAlways(() => rememberKnown(line), closeView);
       }
-      async function ht(m) {
-        await B({
+      async function askAbout(options) {
+        await saveView({
           kind: "asked",
-          ...m,
+          ...options,
           shownAt: Date.now(),
         });
-        s.ui.invalidate("ui.render");
-        r.get(id)?.cancel();
-        r.set(
-          id,
-          s.clock.after(ASKED_MS, () => {
-            _();
+        ctx.ui.invalidate("ui.render");
+        askedTimers.get(sessionId)?.cancel();
+        askedTimers.set(
+          sessionId,
+          ctx.clock.after(ASKED_MS, () => {
+            dismissAsked();
           }),
         );
       }
-      async function _() {
-        r.delete(id);
-        let view = rowOf(await s.store.get("sessions"), id)?.view;
+      async function dismissAsked() {
+        askedTimers.delete(sessionId);
+        let view = rowOf(await ctx.store.get("sessions"), sessionId)?.view;
         if (view?.kind !== "asked") return;
-        await J();
-        await E("ignored_timeout", {
+        await closeView();
+        await recordAnswer("ignored_timeout", {
           line: view.line,
           shownAt: view.shownAt,
           iteration: iterationOf(view),
         });
       }
-      async function S(reason) {
-        await B({
+      async function showFailed(reason) {
+        await saveView({
           kind: "failed",
           reason,
         });
-        s.ui.invalidate("ui.render");
+        ctx.ui.invalidate("ui.render");
       }
-      async function E(m, c, b = {}) {
-        if (m !== "ignored_timeout")
+      async function recordAnswer(answer, info, extra = {}) {
+        if (answer !== "ignored_timeout")
           try {
-            if (storedCount(await s.store.get("typedPastInARow")) > 0) {
-              await s.store.set("typedPastInARow", 0);
-              await s.store.set("looksToSkip", 0);
+            if (storedCount(await ctx.store.get("typedPastInARow")) > 0) {
+              await ctx.store.set("typedPastInARow", 0);
+              await ctx.store.set("looksToSkip", 0);
             }
           } catch {}
-        let w = stringLines(await s.store.get("seen"));
-        await y(
+        let seen = stringLines(await ctx.store.get("seen"));
+        await sendTo(
           answered({
-            answer: m,
-            msToAnswer: msSince(c.shownAt),
-            isTurnInProgress: f.props.isWorking,
-            offersShown: w.length,
-            line: c.line,
-            tag: N,
-            iteration: c.iteration,
-            ...b,
+            answer,
+            msToAnswer: msSince(info.shownAt),
+            isTurnInProgress: payload.props.isWorking,
+            offersShown: seen.length,
+            line: info.line,
+            tag,
+            iteration: info.iteration,
+            ...extra,
           }),
         );
       }
-      async function T(view, c) {
+      async function armOff(secondView, info) {
         try {
-          let b = await s.store.get("sessions");
-          let view_2 = rowOf(b, id)?.view;
-          if (!isSameShowing(view_2, view) || view_2.kind !== "offer") return;
-          if (view_2.isOffArmed === true) {
-            await M(view_2.line, c, "offer");
+          let sessions = await ctx.store.get("sessions");
+          let view = rowOf(sessions, sessionId)?.view;
+          if (!isSameShowing(view, secondView) || view.kind !== "offer") return;
+          if (view.isOffArmed === true) {
+            await turnOff(view.line, info, "offer");
             return;
           }
-          await s.store.set(
+          await ctx.store.set(
             "sessions",
-            withRow(b, {
-              ...(rowOf(b, id) ?? {
-                id,
+            withRow(sessions, {
+              ...(rowOf(sessions, sessionId) ?? {
+                id: sessionId,
               }),
               view: {
-                ...view_2,
+                ...view,
                 isOffArmed: true,
               },
             }),
           );
-          s.ui.invalidate("ui.render");
+          ctx.ui.invalidate("ui.render");
         } catch {}
       }
-      async function M(line, c, offVia) {
-        let w = false;
+      async function turnOff(line, info, offVia) {
+        let isFilled = false;
         try {
           if (
             keepsDraft(
-              s,
-              await s.prompt.read().catch(() => {
+              ctx,
+              await ctx.prompt.read().catch(() => {
                 return;
               }),
               OFF_BOX_BUSY,
             )
           )
             return;
-          await B({
+          await saveView({
             kind: "off",
             line,
             shownAt: Date.now(),
           });
-          s.ui.invalidate("ui.render");
+          ctx.ui.invalidate("ui.render");
           let version = versionMarkOf(
-            await s.session.version().catch(() => {
+            await ctx.session.version().catch(() => {
               return;
             }),
           );
-          E("turn_off", c, {
+          recordAnswer("turn_off", info, {
             version,
             offVia,
           });
-          w = (
-            await s.prompt.fill({
+          isFilled = (
+            await ctx.prompt.fill({
               text: OFF_COMMAND,
               mode: "replace",
             })
           ).isFilled;
         } catch {}
-        if (!w) {
-          E("off_failed", c);
-          await S("turn_off").catch(() => {
+        if (!isFilled) {
+          recordAnswer("off_failed", info);
+          await showFailed("turn_off").catch(() => {
             return;
           });
         }
       }
-      async function F(line, text, iteration) {
-        await B({
+      async function showExplained(line, text, iteration) {
+        await saveView({
           kind: "explained",
           line,
           text,
           iteration,
           shownAt: Date.now(),
         });
-        forgetPrompts(i, id);
-        s.ui.invalidate("ui.render");
+        forgetPrompts(promptCounts, sessionId);
+        ctx.ui.invalidate("ui.render");
       }
-      async function ye(line, c, b) {
-        o.add(id);
+      async function explain(line, previous, iteration) {
+        unattendedSessions.add(sessionId);
         try {
-          await B({
+          await saveView({
             kind: "explaining",
             line,
-            iteration: b,
+            iteration,
           });
-          s.ui.invalidate("ui.render");
+          ctx.ui.invalidate("ui.render");
           let now = Date.now();
-          let message = await s.model
+          let message = await ctx.model
             .fork({
-              prompt: explainPrompt(line, c),
+              prompt: explainPrompt(line, previous),
             })
             .catch(() => {
               return;
             });
-          let we = message?.isAnswered ? message.text.trim() : "";
-          let R = message?.isAnswered === true && parseExplanation(we).length === 0 ? "empty" : "shown";
-          let G = message?.isAnswered ? R : "fork";
-          let K = explained({
-            outcome: G,
-            direction: c?.direction ?? "first",
+          let text = message?.isAnswered ? message.text.trim() : "";
+          let outcomeKind =
+            message?.isAnswered === true && parseExplanation(text).length === 0 ? "empty" : "shown";
+          let outcome = message?.isAnswered ? outcomeKind : "fork";
+          let event = explained({
+            outcome,
+            direction: previous?.direction ?? "first",
             latencyMs: Date.now() - now,
             usage: message === undefined ? null : getUsageField(message),
           });
-          let ke =
-            c !== undefined
+          let previous_2 =
+            previous !== undefined
               ? {
-                  text: c.previous,
-                  iteration: b - 1,
+                  text: previous.previous,
+                  iteration: iteration - 1,
                 }
               : undefined;
-          let Y =
-            G === "shown"
+          let next =
+            outcome === "shown"
               ? {
-                  text: we,
-                  iteration: b,
+                  text,
+                  iteration,
                 }
-              : ke;
-          await (Y === undefined ? S("explain") : F(line, Y.text, Y.iteration));
-          await y(K);
+              : previous_2;
+          await (next === undefined ? showFailed("explain") : showExplained(line, next.text, next.iteration));
+          await sendTo(event);
         } finally {
-          o.delete(id);
+          unattendedSessions.delete(sessionId);
         }
       }
-      if (isUnattendedInFlight(view, id, o)) {
-        let m = await s.store.get("sessions");
-        let c = rowOf(m, id);
-        if (isUnattendedInFlight(c?.view, id, o))
-          await s.store.set(
+      if (isUnattendedInFlight(view, sessionId, unattendedSessions)) {
+        let sessions = await ctx.store.get("sessions");
+        let row = rowOf(sessions, sessionId);
+        if (isUnattendedInFlight(row?.view, sessionId, unattendedSessions))
+          await ctx.store.set(
             "sessions",
-            withRow(m, {
-              ...(c ?? {
-                id,
+            withRow(sessions, {
+              ...(row ?? {
+                id: sessionId,
               }),
               view: undefined,
             }),
           );
-        return g(f);
+        return next(payload);
       }
-      if (f.props.hasSurvey && view?.kind !== "explained") return g(f);
-      let j = view?.kind === "offer" ? await aboutShown(s, id) : undefined;
-      function Fe() {
+      if (payload.props.hasSurvey && view?.kind !== "explained") return next(payload);
+      let aboutShown_2 = view?.kind === "offer" ? await aboutShown(ctx, sessionId) : undefined;
+      function viewRow() {
         if (view === null) return null;
-        if (view.kind === "making") return makingRow(O);
+        if (view.kind === "making") return makingRow(hotkeys);
         if (view.kind === "ready") {
-          let L = false;
-          let R = (G) => () => {
-            if (!L) {
-              L = true;
-              E(G, {
+          let answered = false;
+          let answerHandler = (answer) => () => {
+            if (!answered) {
+              answered = true;
+              recordAnswer(answer, {
                 line: view.line,
                 shownAt: view.shownAt,
               });
-              J();
+              closeView();
             }
           };
-          return readyRow(O, view.url, {
-            helpful: R("page_helpful"),
-            notHelpful: R("page_not_helpful"),
-            unread: R("page_unread"),
+          return readyRow(hotkeys, view.url, {
+            helpful: answerHandler("page_helpful"),
+            notHelpful: answerHandler("page_not_helpful"),
+            unread: answerHandler("page_unread"),
           });
         }
-        if (view.kind === "failed") return failedRow(O, view.reason, () => void J());
-        if (view.kind === "explaining") return explainingRow(O);
+        if (view.kind === "failed") return failedRow(hotkeys, view.reason, () => void closeView());
+        if (view.kind === "explaining") return explainingRow(hotkeys);
         if (view.kind === "asked") {
-          let L = false;
-          let R = (Y) => () => {
-            if (!L) {
-              L = true;
-              r.get(id)?.cancel();
-              r.delete(id);
-              Y();
+          let answered = false;
+          let answerHandler = (action) => () => {
+            if (!answered) {
+              answered = true;
+              askedTimers.get(sessionId)?.cancel();
+              askedTimers.delete(sessionId);
+              action();
             }
           };
-          let G = iterationOf(view);
-          let K = (Y, En = J) =>
-            R(() => {
-              E(Y, {
+          let iteration = iterationOf(view);
+          let answerWith = (answer, after = closeView) =>
+            answerHandler(() => {
+              recordAnswer(answer, {
                 line: view.line,
                 shownAt: view.shownAt,
-                iteration: G,
+                iteration,
               });
-              return En();
+              return after();
             });
-          let xt = () => re(view.line);
-          return G !== undefined
-            ? explainedAskedRow(O, {
-                helpful: K("explained_helpful", xt),
-                notUnderstood: K("explained_not_understood"),
-                dismiss: R(_),
+          let acceptLine_2 = () => acceptLine(view.line);
+          return iteration !== undefined
+            ? explainedAskedRow(hotkeys, {
+                helpful: answerWith("explained_helpful", acceptLine_2),
+                notUnderstood: answerWith("explained_not_understood"),
+                dismiss: answerHandler(dismissAsked),
               })
-            : askedRow(O, {
-                helpful: K("helpful", xt),
-                notRelevant: K("not_relevant"),
-                notUnderstood: K("not_understood"),
-                off: hasOwnComposer(f.surface)
+            : askedRow(hotkeys, {
+                helpful: answerWith("helpful", acceptLine_2),
+                notRelevant: answerWith("not_relevant"),
+                notUnderstood: answerWith("not_understood"),
+                off: hasOwnComposer(payload.surface)
                   ? undefined
-                  : R(() =>
-                      M(
+                  : answerHandler(() =>
+                      turnOff(
                         view.line,
                         {
                           line: view.line,
@@ -691,49 +693,49 @@ function register(e) {
                         "row",
                       ),
                     ),
-                dismiss: R(_),
+                dismiss: answerHandler(dismissAsked),
               });
         }
         if (view.kind === "off") return null;
         let { line, shownAt } = view;
         let iteration = iterationOf(view);
-        let w = false;
-        let I = (L, R) => () => {
-          if (!w) {
-            w = true;
-            E(L, {
+        let answered = false;
+        let answerWith = (answer, after) => () => {
+          if (!answered) {
+            answered = true;
+            recordAnswer(answer, {
               line,
               shownAt,
               iteration,
             });
-            R();
+            after();
           }
         };
         if (view.kind === "explained") {
-          let L = fitCards(parseExplanation(view.text), f.props.bodyColumns);
-          let R = {
+          let cards = fitCards(parseExplanation(view.text), payload.props.bodyColumns);
+          let info = {
             line,
             shownAt,
             iteration,
           };
-          async function G() {
-            if (n.has(id)) return;
-            n.add(id);
+          async function fillDraft() {
+            if (respondInFlight.has(sessionId)) return;
+            respondInFlight.add(sessionId);
             try {
-              let K = respondDraft(line, L, N);
+              let draft = respondDraft(line, cards, tag);
               if (
                 keepsDraft(
-                  s,
-                  await s.prompt.read().catch(() => {
+                  ctx,
+                  await ctx.prompt.read().catch(() => {
                     return;
                   }),
                   RESPOND_BOX_BUSY,
                 )
               )
                 return;
-              let ke = await s.prompt
+              let fillResult = await ctx.prompt
                 .fill({
-                  text: `${K}
+                  text: `${draft}
 
 `,
                   mode: "replace",
@@ -741,132 +743,134 @@ function register(e) {
                 .catch(() => {
                   return;
                 });
-              if (ke?.isFilled === true) {
-                await E("respond", R);
-                await re(line);
+              if (fillResult?.isFilled === true) {
+                await recordAnswer("respond", info);
+                await acceptLine(line);
                 return;
               }
-              if (ke?.refusal !== "no_composer") {
-                let Y = ke?.refusal === "dialog";
-                s.ui.toast(Y ? RESPOND_BLOCKED : RESPOND_NOT_FILLED);
-                s.ui.invalidate("ui.render");
+              if (fillResult?.refusal !== "no_composer") {
+                let isDialog = fillResult?.refusal === "dialog";
+                ctx.ui.toast(isDialog ? RESPOND_BLOCKED : RESPOND_NOT_FILLED);
+                ctx.ui.invalidate("ui.render");
                 return;
               }
-              await E("respond", R);
-              await re(line).catch(() => {
+              await recordAnswer("respond", info);
+              await acceptLine(line).catch(() => {
                 return;
               });
-              await s.prompt
+              await ctx.prompt
                 .submit({
-                  text: K,
+                  text: draft,
                 })
                 .catch(() => {
                   return;
                 });
             } finally {
-              n.delete(id);
+              respondInFlight.delete(sessionId);
             }
           }
           return explainedRow(
-            O,
+            hotkeys,
             noteTopic(line),
-            L,
-            f.props.hasSurvey
+            cards,
+            payload.props.hasSurvey
               ? null
               : {
-                  gotIt: I("got_it", () => re(line)),
+                  gotIt: answerWith("got_it", () => acceptLine(line)),
                   respond: () => {
-                    if (!w) {
-                      w = true;
-                      G();
+                    if (!answered) {
+                      answered = true;
+                      fillDraft();
                     }
                   },
-                  dismiss: I("dismiss", () =>
-                    ht({
+                  dismiss: answerWith("dismiss", () =>
+                    askAbout({
                       line,
                       iteration,
                     }),
                   ),
                 },
-            N,
+            tag,
           );
         }
-        let we = hasOwnComposer(f.surface) || userType;
+        let offerOffAvailable = hasOwnComposer(payload.surface) || userType;
         return offerRow(
-          O,
+          hotkeys,
           line,
           {
-            explain: I("yes_explain", () => {
+            explain: answerWith("yes_explain", () => {
               let explanation = view.explanation;
               return explanation !== undefined && parseExplanation(explanation).length > 0
-                ? F(line, explanation, 1)
-                : ye(line, undefined, 1);
+                ? showExplained(line, explanation, 1)
+                : explain(line, undefined, 1);
             }),
-            knew: I("know_it", () => re(line)),
-            off: we
+            knew: answerWith("know_it", () => acceptLine(line)),
+            off: offerOffAvailable
               ? undefined
               : () => {
-                  if (!w) {
-                    w = true;
-                    T(view, {
+                  if (!answered) {
+                    answered = true;
+                    armOff(view, {
                       line,
                       shownAt,
                       iteration,
                     });
                   }
                 },
-            later: I("not_now", () =>
-              ht({
+            later: answerWith("not_now", () =>
+              askAbout({
                 line,
               }),
             ),
           },
           view.isOffArmed === true,
           {
-            isOpen: j === aboutKeyOf(view),
-            surface: f.surface,
-            ...aboutFrame(hasOwnComposer(f.surface), f.props, userType),
+            isOpen: aboutShown_2 === aboutKeyOf(view),
+            surface: payload.surface,
+            ...aboutFrame(hasOwnComposer(payload.surface), payload.props, userType),
             onPress: () => {
-              toggleAbout(s, {
-                sid: id,
+              toggleAbout(ctx, {
+                sid: sessionId,
                 key: aboutKeyOf(view),
               });
             },
           },
-          N,
+          tag,
         );
       }
-      let gt = Fe();
-      return A.length > 0 && !f.props.hasSurvey ? debugRows(O, A, gt) : (gt ?? g(f));
+      let rowElement = viewRow();
+      return recentChecks.length > 0 && !payload.props.hasSurvey
+        ? debugRows(hotkeys, recentChecks, rowElement)
+        : (rowElement ?? next(payload));
     },
   );
-  e("session.detach", async (s, f, g) => {
-    forgetDetached(u, await s.session.surfaces());
-    return g(f);
+  on("session.detach", async (ctx, payload, next) => {
+    forgetDetached(bandSurfaces, await ctx.session.surfaces());
+    return next(payload);
   });
-  e("session.end", async (s, f, g) => {
-    let O = (y) =>
-      send(y, {
-        log: (d) => s.telemetry.log(d),
-        mark: (d) => s.telemetry.mark(d),
+  on("session.end", async (ctx, payload, next) => {
+    let sendTo = (payload) =>
+      send(payload, {
+        log: (event) => ctx.telemetry.log(event),
+        mark: (mark) => ctx.telemetry.mark(mark),
       });
-    a.add(f.sessionId);
-    k.delete(f.sessionId);
+    endedSessions.add(payload.sessionId);
+    bridgeSessions.delete(payload.sessionId);
     try {
-      let y = await s.store.get("sessions");
-      let d = rowOf(y, f.sessionId);
-      let view = d?.view;
+      let sessions = await ctx.store.get("sessions");
+      let row = rowOf(sessions, payload.sessionId);
+      let view = row?.view;
       if (isOpenView(view)) {
-        await s.store.set("sessions", withViewCleared(y, f.sessionId));
-        await O(
+        await ctx.store.set("sessions", withViewCleared(sessions, payload.sessionId));
+        await sendTo(
           leftOpen(
             {
               view,
-              tag: d?.tag,
+              tag: row?.tag,
             },
             "session_end",
             stringLines(
-              await s.store.get("seen").catch(() => {
+              await ctx.store.get("seen").catch(() => {
                 return;
               }),
             ).length,
@@ -874,22 +878,22 @@ function register(e) {
         );
       }
       if (view?.kind === "off") {
-        await s.store.set("sessions", withViewCleared(y, f.sessionId));
-        await O(
+        await ctx.store.set("sessions", withViewCleared(sessions, payload.sessionId));
+        await sendTo(
           cleared(view, {
             answer: "off_abandoned",
             clearedBy: "session_end",
             offersShown: stringLines(
-              await s.store.get("seen").catch(() => {
+              await ctx.store.get("seen").catch(() => {
                 return;
               }),
             ).length,
-            tag: tagOf(d?.tag ?? ""),
+            tag: tagOf(row?.tag ?? ""),
           }),
         );
       }
     } catch {}
-    return g(f);
+    return next(payload);
   });
 }
 export { RECENT_NOTES_LIMIT, readRecentNotes, pushRecentNote, getUsageField, register };

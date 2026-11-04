@@ -47,17 +47,17 @@ async function probeArtifactForOpen(target, feature, signal, credentials) {
       reason: "public_outside_org",
     };
   let title = typeof boot.data.title === "string" ? boot.data.title : undefined;
-  let o = title !== undefined ? (sanitizeDisplayTitle(title) ?? undefined) : undefined;
-  let n = ownedVerdict({
+  let safeTitle = title !== undefined ? (sanitizeDisplayTitle(title) ?? undefined) : undefined;
+  let owned = ownedVerdict({
     role: deriveShareRole(boot.data.perm?.role),
   });
   return {
     ok: true,
-    ...(o !== undefined && {
-      title: o,
+    ...(safeTitle !== undefined && {
+      title: safeTitle,
     }),
-    ...(n !== undefined && {
-      owned: n,
+    ...(owned !== undefined && {
+      owned,
     }),
   };
 }

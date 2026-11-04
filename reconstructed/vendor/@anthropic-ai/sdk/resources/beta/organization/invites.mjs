@@ -6,7 +6,7 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { Page } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:120284-120666 esm-fingerprint
@@ -18,7 +18,7 @@ class Invites extends APIResource {
     });
   }
   retrieve(inviteID, options) {
-    return this._client.get(I`/v1/organizations/invites/${inviteID}?beta=true`, options);
+    return this._client.get(parseUrl_2`/v1/organizations/invites/${inviteID}?beta=true`, options);
   }
   list(query = {}, options) {
     return this._client.getAPIList("/v1/organizations/invites?beta=true", Page, {
@@ -27,7 +27,7 @@ class Invites extends APIResource {
     });
   }
   delete(inviteID, options) {
-    return this._client.delete(I`/v1/organizations/invites/${inviteID}?beta=true`, options);
+    return this._client.delete(parseUrl_2`/v1/organizations/invites/${inviteID}?beta=true`, options);
   }
 }
 export { Invites };

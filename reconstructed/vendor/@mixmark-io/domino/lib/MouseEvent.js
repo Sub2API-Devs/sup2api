@@ -5,11 +5,11 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_UIEvent } from "./UIEvent.js";
 
 //@ chunk-vwj6ccer.js:1526-2402 cjs-fingerprint
-var require_MouseEvent = x(function (cjsExports, cjsModule) {
+var require_MouseEvent = __commonJS(function (cjsExports, cjsModule) {
   var UIEvent = require_UIEvent();
   cjsModule.exports = MouseEvent;
   function MouseEvent() {

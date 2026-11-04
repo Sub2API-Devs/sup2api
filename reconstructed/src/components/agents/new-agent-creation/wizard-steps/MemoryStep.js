@@ -8,8 +8,8 @@
  * pieces: chunk-y6fv30yg.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../../../../vendor/react/compiler-runtime.js";
-import { Qr, y } from "../../../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
+import { use, useState } from "../../../../../vendor/react/cjs/react.production.js";
 import { useWizard } from "../../../wizard/useWizard.js";
 import {
   MAX_ACCOUNT_OPTIONS,
@@ -35,36 +35,36 @@ import { ErrorText } from "../../../ErrorText.js";
 
 //@ chunk-y6fv30yg.js:11359-14249 callgraph-fingerprint = MemoryStep (0.315)
 function MemoryStep(props) {
-  let $ = w(48);
+  let $ = useMemoCache(48);
   let { projectsPromise } = props;
-  let c = Qr(projectsPromise);
+  let projects = use(projectsPromise);
   let { goBack, goToStep, updateWizardData, wizardData } = useWizard();
-  let f = c.length > MAX_ACCOUNT_OPTIONS;
-  let k;
-  if ($[0] !== c || $[1] !== wizardData.projectId) {
-    k = wizardData.projectId && !c.includes(wizardData.projectId);
-    $[0] = c;
+  let tooManyProjects = projects.length > MAX_ACCOUNT_OPTIONS;
+  let savedProjectMissing;
+  if ($[0] !== projects || $[1] !== wizardData.projectId) {
+    savedProjectMissing = wizardData.projectId && !projects.includes(wizardData.projectId);
+    $[0] = projects;
     $[1] = wizardData.projectId;
-    $[2] = k;
-  } else k = $[2];
-  let g = Boolean(k);
-  let [_, A] = y(c.length === 0 || f || g);
-  let [projectId, setProjectId] = y(wizardData.projectId ?? "");
-  let [x, T] = y(projectId.length);
-  let [C, E] = y(null);
-  const context = _ ? "Settings" : "Confirmation";
-  let b;
+    $[2] = savedProjectMissing;
+  } else savedProjectMissing = $[2];
+  let needsManualEntry = Boolean(savedProjectMissing);
+  let [manualMode, setManualMode] = useState(projects.length === 0 || tooManyProjects || needsManualEntry);
+  let [projectId, setProjectId] = useState(wizardData.projectId ?? "");
+  let [cursorOffset, setCursorOffset] = useState(projectId.length);
+  let [error, setError] = useState(null);
+  const context = manualMode ? "Settings" : "Confirmation";
+  let keybindingsContext;
   if ($[3] !== context) {
-    b = {
+    keybindingsContext = {
       context,
     };
     $[3] = context;
-    $[4] = b;
-  } else b = $[4];
-  useKeybinding("confirm:no", goBack, b);
-  let W;
+    $[4] = keybindingsContext;
+  } else keybindingsContext = $[4];
+  useKeybinding("confirm:no", goBack, keybindingsContext);
+  let commitProject;
   if ($[5] !== goToStep || $[6] !== updateWizardData) {
-    W = (projectId) => {
+    commitProject = (projectId) => {
       updateWizardData({
         projectId,
       });
@@ -72,107 +72,107 @@ function MemoryStep(props) {
     };
     $[5] = goToStep;
     $[6] = updateWizardData;
-    $[7] = W;
-  } else W = $[7];
-  let F = W;
-  if (!_) {
-    const J = c.length;
-    let N;
-    if ($[8] !== c.length) {
-      N = plural(c.length, "project");
-      $[8] = c.length;
-      $[9] = N;
-    } else N = $[9];
-    let G;
-    if ($[10] !== c.length || $[11] !== N) {
-      G = jsxProd_default_2(Text, {
+    $[7] = commitProject;
+  } else commitProject = $[7];
+  let handleProject = commitProject;
+  if (!manualMode) {
+    const projectCount = projects.length;
+    let projectWord;
+    if ($[8] !== projects.length) {
+      projectWord = plural(projects.length, "project");
+      $[8] = projects.length;
+      $[9] = projectWord;
+    } else projectWord = $[9];
+    let foundLine;
+    if ($[10] !== projects.length || $[11] !== projectWord) {
+      foundLine = jsxProd_default_2(Text, {
         dimColor: true,
-        children: ["Found ", J, " ", N, " in your gcloud configurations."],
+        children: ["Found ", projectCount, " ", projectWord, " in your gcloud configurations."],
       });
-      $[10] = c.length;
-      $[11] = N;
-      $[12] = G;
-    } else G = $[12];
-    let B;
-    if ($[13] !== c || $[14] !== wizardData.projectId) {
-      B = c.indexOf(wizardData.projectId ?? "");
-      $[13] = c;
+      $[10] = projects.length;
+      $[11] = projectWord;
+      $[12] = foundLine;
+    } else foundLine = $[12];
+    let defaultIndex;
+    if ($[13] !== projects || $[14] !== wizardData.projectId) {
+      defaultIndex = projects.indexOf(wizardData.projectId ?? "");
+      $[13] = projects;
       $[14] = wizardData.projectId;
-      $[15] = B;
-    } else B = $[15];
-    const defaultFocusIndex = Math.max(0, B);
+      $[15] = defaultIndex;
+    } else defaultIndex = $[15];
+    const defaultFocusIndex = Math.max(0, defaultIndex);
     let onSelect;
-    if ($[16] !== c || $[17] !== F) {
+    if ($[16] !== projects || $[17] !== handleProject) {
       onSelect = (value) => {
-        let it = c[value];
-        if (it === undefined) A(true);
-        else F(it);
+        let project = projects[value];
+        if (project === undefined) setManualMode(true);
+        else handleProject(project);
       };
-      $[16] = c;
-      $[17] = F;
+      $[16] = projects;
+      $[17] = handleProject;
       $[18] = onSelect;
     } else onSelect = $[18];
-    let M;
-    if ($[19] !== c) {
-      M = c.map(listItem);
-      $[19] = c;
-      $[20] = M;
-    } else M = $[20];
-    let X;
+    let projectItems;
+    if ($[19] !== projects) {
+      projectItems = projects.map(listItem);
+      $[19] = projects;
+      $[20] = projectItems;
+    } else projectItems = $[20];
+    let manualItem;
     if ($[21] === MEMO_CACHE_SENTINEL) {
-      X = jsxProd_default(
+      manualItem = jsxProd_default(
         OrderedListWithItem.Item,
         {
           label: "Type a different project\u2026",
         },
         MANUAL_PROJECT_VALUE,
       );
-      $[21] = X;
-    } else X = $[21];
-    let Z;
-    if ($[22] !== onSelect || $[23] !== M || $[24] !== defaultFocusIndex) {
-      Z = jsxProd_default_2(OrderedListWithItem, {
+      $[21] = manualItem;
+    } else manualItem = $[21];
+    let projectList;
+    if ($[22] !== onSelect || $[23] !== projectItems || $[24] !== defaultFocusIndex) {
+      projectList = jsxProd_default_2(OrderedListWithItem, {
         defaultFocusIndex,
         onSelect,
-        children: [M, X],
+        children: [projectItems, manualItem],
       });
       $[22] = onSelect;
-      $[23] = M;
+      $[23] = projectItems;
       $[24] = defaultFocusIndex;
-      $[25] = Z;
-    } else Z = $[25];
-    let nt;
-    if ($[26] !== Z || $[27] !== G) {
-      nt = jsxProd_default(WizardDialogLayout, {
+      $[25] = projectList;
+    } else projectList = $[25];
+    let selectLayout;
+    if ($[26] !== projectList || $[27] !== foundLine) {
+      selectLayout = jsxProd_default(WizardDialogLayout, {
         subtitle: "GCP project",
         children: jsxProd_default_2(Box, {
           flexDirection: "column",
           gap: 1,
-          children: [G, Z],
+          children: [foundLine, projectList],
         }),
       });
-      $[26] = Z;
-      $[27] = G;
-      $[28] = nt;
-    } else nt = $[28];
-    return nt;
+      $[26] = projectList;
+      $[27] = foundLine;
+      $[28] = selectLayout;
+    } else selectLayout = $[28];
+    return selectLayout;
   }
-  let J;
-  if ($[29] !== F || $[30] !== projectId) {
-    J = () => {
+  let handleSubmit;
+  if ($[29] !== handleProject || $[30] !== projectId) {
+    handleSubmit = () => {
       let trimmed = projectId.trim();
       if (!trimmed) {
-        E("Project ID is required");
+        setError("Project ID is required");
         return;
       }
-      E(null);
-      F(trimmed);
+      setError(null);
+      handleProject(trimmed);
     };
-    $[29] = F;
+    $[29] = handleProject;
     $[30] = projectId;
-    $[31] = J;
-  } else J = $[31];
-  let onSubmit = J;
+    $[31] = handleSubmit;
+  } else handleSubmit = $[31];
+  let onSubmit = handleSubmit;
   let footerText;
   if ($[32] === MEMO_CACHE_SENTINEL) {
     footerText = jsxProd_default_2(Byline, {
@@ -191,36 +191,36 @@ function MemoryStep(props) {
     });
     $[32] = footerText;
   } else footerText = $[32];
-  let G;
+  let introText;
   if ($[33] === MEMO_CACHE_SENTINEL) {
-    G = jsxProd_default(Text, {
+    introText = jsxProd_default(Text, {
       children: "The project where Vertex AI is enabled.",
     });
-    $[33] = G;
-  } else G = $[33];
-  let B;
-  if ($[34] !== c.length || $[35] !== f) {
-    B =
-      f &&
+    $[33] = introText;
+  } else introText = $[33];
+  let tooManyLine;
+  if ($[34] !== projects.length || $[35] !== tooManyProjects) {
+    tooManyLine =
+      tooManyProjects &&
       jsxProd_default_2(Text, {
         dimColor: true,
-        children: ["Found ", c.length, " projects \u2014 too many to list."],
+        children: ["Found ", projects.length, " projects \u2014 too many to list."],
       });
-    $[34] = c.length;
-    $[35] = f;
-    $[36] = B;
-  } else B = $[36];
-  let H;
+    $[34] = projects.length;
+    $[35] = tooManyProjects;
+    $[36] = tooManyLine;
+  } else tooManyLine = $[36];
+  let findHint;
   if ($[37] === MEMO_CACHE_SENTINEL) {
-    H = jsxProd_default(Text, {
+    findHint = jsxProd_default(Text, {
       dimColor: true,
       children: "Find it with `gcloud config get-value project` or in the GCP console header.",
     });
-    $[37] = H;
-  } else H = $[37];
-  let z;
-  if ($[38] !== x || $[39] !== onSubmit || $[40] !== projectId) {
-    z = jsxProd_default(Box, {
+    $[37] = findHint;
+  } else findHint = $[37];
+  let inputBox;
+  if ($[38] !== cursorOffset || $[39] !== onSubmit || $[40] !== projectId) {
+    inputBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(TextInput, {
         value: projectId,
@@ -228,45 +228,45 @@ function MemoryStep(props) {
         onSubmit,
         placeholder: "my-gcp-project",
         columns: 60,
-        cursorOffset: x,
-        onChangeCursorOffset: T,
+        cursorOffset,
+        onChangeCursorOffset: setCursorOffset,
         focus: true,
         showCursor: true,
       }),
     });
-    $[38] = x;
+    $[38] = cursorOffset;
     $[39] = onSubmit;
     $[40] = projectId;
-    $[41] = z;
-  } else z = $[41];
-  let M;
-  if ($[42] !== C) {
-    M =
-      C &&
+    $[41] = inputBox;
+  } else inputBox = $[41];
+  let errorBox;
+  if ($[42] !== error) {
+    errorBox =
+      error &&
       jsxProd_default(Box, {
         marginTop: 1,
         children: jsxProd_default(ErrorText, {
-          error: C,
+          error,
         }),
       });
-    $[42] = C;
-    $[43] = M;
-  } else M = $[43];
-  let X;
-  if ($[44] !== z || $[45] !== M || $[46] !== B) {
-    X = jsxProd_default(WizardDialogLayout, {
+    $[42] = error;
+    $[43] = errorBox;
+  } else errorBox = $[43];
+  let layout;
+  if ($[44] !== inputBox || $[45] !== errorBox || $[46] !== tooManyLine) {
+    layout = jsxProd_default(WizardDialogLayout, {
       subtitle: "GCP project ID",
       footerText,
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [G, B, H, z, M],
+        children: [introText, tooManyLine, findHint, inputBox, errorBox],
       }),
     });
-    $[44] = z;
-    $[45] = M;
-    $[46] = B;
-    $[47] = X;
-  } else X = $[47];
-  return X;
+    $[44] = inputBox;
+    $[45] = errorBox;
+    $[46] = tooManyLine;
+    $[47] = layout;
+  } else layout = $[47];
+  return layout;
 }
 export { MemoryStep };

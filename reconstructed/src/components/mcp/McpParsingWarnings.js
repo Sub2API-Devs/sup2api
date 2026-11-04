@@ -9,7 +9,7 @@
  * attribution: sole-consumer 5, affinity 1, fingerprint 5, file-local 2, layout 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -31,80 +31,84 @@ import { TreeConnectors } from "../design-system/TreeConnectors.js";
 import { replaceControlChars } from "../../utils/resultError.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { isRestrictedToPluginOnly } from "../../utils/settings/pluginOnlyPolicy.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-4xzsbgqr.js:609-613 sole-consumer
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4xzsbgqr.js:609", () => {
+  init_react_production();
+});
 //@ chunk-4xzsbgqr.js:613-1011 sole-consumer
 /**
  * 粗体标题、状态图标和可选说明的一行。
  */
 function StatusLine(props) {
-  let a = w(10);
+  let $ = useMemoCache(10);
   let { title, status, detail } = props;
-  let p;
-  if (a[0] !== title) {
-    p = jsxProd_default(Text, {
+  let titleText;
+  if ($[0] !== title) {
+    titleText = jsxProd_default(Text, {
       bold: true,
       children: title,
     });
-    a[0] = title;
-    a[1] = p;
-  } else p = a[1];
-  let i;
-  if (a[2] !== status) {
-    i = jsxProd_default(StatusIcon, {
+    $[0] = title;
+    $[1] = titleText;
+  } else titleText = $[1];
+  let icon;
+  if ($[2] !== status) {
+    icon = jsxProd_default(StatusIcon, {
       status,
     });
-    a[2] = status;
-    a[3] = i;
-  } else i = a[3];
-  let m;
-  if (a[4] !== detail) {
-    m = detail
+    $[2] = status;
+    $[3] = icon;
+  } else icon = $[3];
+  let detailText;
+  if ($[4] !== detail) {
+    detailText = detail
       ? jsxProd_default_2(Text, {
           dimColor: true,
           children: [" \xB7 ", detail],
         })
       : null;
-    a[4] = detail;
-    a[5] = m;
-  } else m = a[5];
-  let g;
-  if (a[6] !== p || a[7] !== i || a[8] !== m) {
-    g = jsxProd_default_2(Text, {
-      children: [p, " ", i, m],
+    $[4] = detail;
+    $[5] = detailText;
+  } else detailText = $[5];
+  let line;
+  if ($[6] !== titleText || $[7] !== icon || $[8] !== detailText) {
+    line = jsxProd_default_2(Text, {
+      children: [titleText, " ", icon, detailText],
     });
-    a[6] = p;
-    a[7] = i;
-    a[8] = m;
-    a[9] = g;
-  } else g = a[9];
-  return g;
+    $[6] = titleText;
+    $[7] = icon;
+    $[8] = detailText;
+    $[9] = line;
+  } else line = $[9];
+  return line;
 }
 //@ chunk-4xzsbgqr.js:1011-1042 sole-consumer
-function warningFile(jr) {
-  return jr.file;
+function warningFile(warning) {
+  return warning.file;
 }
 //@ chunk-4xzsbgqr.js:1042-1076 sole-consumer
-function isNonAgentScope(f) {
-  return !isManagedConfigScope(f.scope);
+function isNonAgentScope(warning) {
+  return !isManagedConfigScope(warning.scope);
 }
 //@ chunk-4xzsbgqr.js:1076-1189 sole-consumer
 /**
  * 某作用域的服务器（含未展开变量的显示版本）。
  */
-function scopeServersSnapshot(y) {
+function scopeServersSnapshot(warning) {
   return {
-    scope: y.scope,
-    servers: y.config.servers,
-    displayServers: getMcpConfigsByScope(y.scope, {
+    scope: warning.scope,
+    servers: warning.config.servers,
+    displayServers: getMcpConfigsByScope(warning.scope, {
       expandVars: false,
     }).servers,
   };
 }
 //@ chunk-4xzsbgqr.js:1189-1231 affinity
-function isApprovedServer(V) {
-  return getEffectiveProjectMcpServerStatus(V) === "approved";
+function isApprovedServer(server) {
+  return getEffectiveProjectMcpServerStatus(server) === "approved";
 }
 //@ chunk-4xzsbgqr.js:1231-1298 fingerprint = _temp3 (1)
 function hasFatalError(t0) {
@@ -136,151 +140,157 @@ function renderScopeErrors(t0) {
 /**
  * 冲突提示节点（消息与建议）。
  */
-function renderConflictNode(D, X) {
+function renderConflictNode(conflict, index) {
   return jsxProd_default_2(
     TreeConnectors.Group,
     {
       children: [
         jsxProd_default(TreeConnectors.Node, {
           color: "warning",
-          children: replaceControlChars(D.message),
+          children: replaceControlChars(conflict.message),
         }),
-        D.suggestion &&
+        conflict.suggestion &&
           jsxProd_default(TreeConnectors.Node, {
             dimColor: true,
-            children: replaceControlChars(D.suggestion),
+            children: replaceControlChars(conflict.suggestion),
           }),
       ],
     },
-    `conflict-${X}`,
+    `conflict-${index}`,
   );
 }
 //@ chunk-4xzsbgqr.js:1677-4246 fingerprint = McpConfigErrorSection (0.412)
 function McpConfigErrorSection(props) {
-  let $ = w(56);
+  let $ = useMemoCache(56);
   let { scope, parsingErrors, warnings } = props;
-  let a = parsingErrors.length > 0;
-  let p = warnings.length > 0;
-  if (!a && !p) {
+  let hasErrors = parsingErrors.length > 0;
+  let hasWarnings = warnings.length > 0;
+  if (!hasErrors && !hasWarnings) {
     return null;
   }
-  let m;
-  let g;
-  let d;
-  let f;
+  let textComponent;
+  let locationBox;
+  let containerBox;
+  let locationPath;
   let dimColor;
   let children;
-  let T;
+  let locationLabel;
   let flexDirection;
   let marginTop;
-  let R;
-  if ($[0] !== a || $[1] !== p || $[2] !== parsingErrors || $[3] !== scope || $[4] !== warnings) {
-    let D = describeMcpConfigFilePath(scope);
-    let X = new Set([...parsingErrors, ...warnings].map(warningFile).filter(Boolean));
-    f = X.size === 1 ? [...X][0] : D;
-    d = Box;
+  let headerRow;
+  if (
+    $[0] !== hasErrors ||
+    $[1] !== hasWarnings ||
+    $[2] !== parsingErrors ||
+    $[3] !== scope ||
+    $[4] !== warnings
+  ) {
+    let defaultPath = describeMcpConfigFilePath(scope);
+    let filePaths = new Set([...parsingErrors, ...warnings].map(warningFile).filter(Boolean));
+    locationPath = filePaths.size === 1 ? [...filePaths][0] : defaultPath;
+    containerBox = Box;
     flexDirection = "column";
     marginTop = 1;
-    let h;
-    if ($[15] !== a || $[16] !== p) {
-      h =
-        (a || p) &&
+    let statusTag;
+    if ($[15] !== hasErrors || $[16] !== hasWarnings) {
+      statusTag =
+        (hasErrors || hasWarnings) &&
         jsxProd_default_2(Text, {
-          color: a ? "error" : "warning",
-          children: ["[", a ? "Failed to parse" : "Contains warnings", "]", " "],
+          color: hasErrors ? "error" : "warning",
+          children: ["[", hasErrors ? "Failed to parse" : "Contains warnings", "]", " "],
         });
-      $[15] = a;
-      $[16] = p;
-      $[17] = h;
-    } else h = $[17];
+      $[15] = hasErrors;
+      $[16] = hasWarnings;
+      $[17] = statusTag;
+    } else statusTag = $[17];
     let children_2;
     if ($[18] !== scope) {
       children_2 = getScopeLabel(scope);
       $[18] = scope;
       $[19] = children_2;
     } else children_2 = $[19];
-    let N;
+    let scopeLabel;
     if ($[20] !== children_2) {
-      N = jsxProd_default(Text, {
+      scopeLabel = jsxProd_default(Text, {
         children: children_2,
       });
       $[20] = children_2;
-      $[21] = N;
-    } else N = $[21];
-    if ($[22] !== h || $[23] !== N) {
-      R = jsxProd_default_2(Box, {
-        children: [h, N],
+      $[21] = scopeLabel;
+    } else scopeLabel = $[21];
+    if ($[22] !== statusTag || $[23] !== scopeLabel) {
+      headerRow = jsxProd_default_2(Box, {
+        children: [statusTag, scopeLabel],
       });
-      $[22] = h;
-      $[23] = N;
-      $[24] = R;
-    } else R = $[24];
-    g = Box;
+      $[22] = statusTag;
+      $[23] = scopeLabel;
+      $[24] = headerRow;
+    } else headerRow = $[24];
+    locationBox = Box;
     if ($[25] === MEMO_CACHE_SENTINEL) {
-      T = jsxProd_default(Text, {
+      locationLabel = jsxProd_default(Text, {
         dimColor: true,
         children: "Location: ",
       });
-      $[25] = T;
-    } else T = $[25];
-    m = Text;
+      $[25] = locationLabel;
+    } else locationLabel = $[25];
+    textComponent = Text;
     dimColor = true;
-    children = replaceControlChars(f);
-    $[0] = a;
-    $[1] = p;
+    children = replaceControlChars(locationPath);
+    $[0] = hasErrors;
+    $[1] = hasWarnings;
     $[2] = parsingErrors;
     $[3] = scope;
     $[4] = warnings;
-    $[5] = m;
-    $[6] = g;
-    $[7] = d;
-    $[8] = f;
+    $[5] = textComponent;
+    $[6] = locationBox;
+    $[7] = containerBox;
+    $[8] = locationPath;
     $[9] = dimColor;
     $[10] = children;
-    $[11] = T;
+    $[11] = locationLabel;
     $[12] = flexDirection;
     $[13] = marginTop;
-    $[14] = R;
+    $[14] = headerRow;
   } else {
-    m = $[5];
-    g = $[6];
-    d = $[7];
-    f = $[8];
+    textComponent = $[5];
+    locationBox = $[6];
+    containerBox = $[7];
+    locationPath = $[8];
     dimColor = $[9];
     children = $[10];
-    T = $[11];
+    locationLabel = $[11];
     flexDirection = $[12];
     marginTop = $[13];
-    R = $[14];
+    headerRow = $[14];
   }
-  let h;
-  if ($[26] !== m || $[27] !== dimColor || $[28] !== children) {
-    h = jsxProd_default(m, {
+  let locationText;
+  if ($[26] !== textComponent || $[27] !== dimColor || $[28] !== children) {
+    locationText = jsxProd_default(textComponent, {
       dimColor,
       children,
     });
-    $[26] = m;
+    $[26] = textComponent;
     $[27] = dimColor;
     $[28] = children;
-    $[29] = h;
-  } else h = $[29];
-  let v;
-  if ($[30] !== g || $[31] !== T || $[32] !== h) {
-    v = jsxProd_default_2(g, {
-      children: [T, h],
+    $[29] = locationText;
+  } else locationText = $[29];
+  let locationRow;
+  if ($[30] !== locationBox || $[31] !== locationLabel || $[32] !== locationText) {
+    locationRow = jsxProd_default_2(locationBox, {
+      children: [locationLabel, locationText],
     });
-    $[30] = g;
-    $[31] = T;
-    $[32] = h;
-    $[33] = v;
-  } else v = $[33];
-  let N;
-  if ($[34] !== f || $[35] !== parsingErrors || $[36] !== scope) {
-    let W;
-    if ($[38] !== f || $[39] !== scope) {
-      W = (E, Lr) => {
-        let serverName = E.mcpErrorMetadata?.serverName;
-        let file = E.file !== f ? E.file : undefined;
+    $[30] = locationBox;
+    $[31] = locationLabel;
+    $[32] = locationText;
+    $[33] = locationRow;
+  } else locationRow = $[33];
+  let errorNodes;
+  if ($[34] !== locationPath || $[35] !== parsingErrors || $[36] !== scope) {
+    let renderError;
+    if ($[38] !== locationPath || $[39] !== scope) {
+      renderError = (warning, index) => {
+        let serverName = warning.mcpErrorMetadata?.serverName;
+        let file = warning.file !== locationPath ? warning.file : undefined;
         return jsxProd_default_2(
           TreeConnectors.Group,
           {
@@ -298,41 +308,41 @@ function McpConfigErrorSection(props) {
                         " ",
                         file && `(${replaceControlChars(file)}) `,
                         serverName && `[${replaceControlChars(serverName)}] `,
-                        E.path && E.path !== "" ? `${replaceControlChars(E.path)}: ` : "",
-                        replaceControlChars(E.message),
+                        warning.path && warning.path !== "" ? `${replaceControlChars(warning.path)}: ` : "",
+                        replaceControlChars(warning.message),
                       ],
                     }),
                   ],
                 }),
               }),
               scope === "enterprise" &&
-                E.suggestion &&
+                warning.suggestion &&
                 jsxProd_default(TreeConnectors.Node, {
                   dimColor: true,
-                  children: replaceControlChars(E.suggestion),
+                  children: replaceControlChars(warning.suggestion),
                 }),
             ],
           },
-          `error-${Lr}`,
+          `error-${index}`,
         );
       };
-      $[38] = f;
+      $[38] = locationPath;
       $[39] = scope;
-      $[40] = W;
-    } else W = $[40];
-    N = parsingErrors.map(W);
-    $[34] = f;
+      $[40] = renderError;
+    } else renderError = $[40];
+    errorNodes = parsingErrors.map(renderError);
+    $[34] = locationPath;
     $[35] = parsingErrors;
     $[36] = scope;
-    $[37] = N;
-  } else N = $[37];
-  let W;
-  if ($[41] !== f || $[42] !== warnings) {
-    let x;
-    if ($[44] !== f) {
-      x = (k, br) => {
-        let serverName = k.mcpErrorMetadata?.serverName;
-        let file = k.file !== f ? k.file : undefined;
+    $[37] = errorNodes;
+  } else errorNodes = $[37];
+  let warningNodes;
+  if ($[41] !== locationPath || $[42] !== warnings) {
+    let renderWarning;
+    if ($[44] !== locationPath) {
+      renderWarning = (warning, index) => {
+        let serverName = warning.mcpErrorMetadata?.serverName;
+        let file = warning.file !== locationPath ? warning.file : undefined;
         return jsxProd_default(
           TreeConnectors.Node,
           {
@@ -348,65 +358,65 @@ function McpConfigErrorSection(props) {
                     " ",
                     file && `(${replaceControlChars(file)}) `,
                     serverName && `[${replaceControlChars(serverName)}] `,
-                    k.path && k.path !== "" ? `${replaceControlChars(k.path)}: ` : "",
-                    replaceControlChars(k.message),
+                    warning.path && warning.path !== "" ? `${replaceControlChars(warning.path)}: ` : "",
+                    replaceControlChars(warning.message),
                   ],
                 }),
               ],
             }),
           },
-          `warning-${br}`,
+          `warning-${index}`,
         );
       };
-      $[44] = f;
-      $[45] = x;
-    } else x = $[45];
-    W = warnings.map(x);
-    $[41] = f;
+      $[44] = locationPath;
+      $[45] = renderWarning;
+    } else renderWarning = $[45];
+    warningNodes = warnings.map(renderWarning);
+    $[41] = locationPath;
     $[42] = warnings;
-    $[43] = W;
-  } else W = $[43];
-  let x;
-  if ($[46] !== W || $[47] !== N) {
-    x = jsxProd_default(Box, {
+    $[43] = warningNodes;
+  } else warningNodes = $[43];
+  let treeBox;
+  if ($[46] !== warningNodes || $[47] !== errorNodes) {
+    treeBox = jsxProd_default(Box, {
       marginLeft: 1,
       children: jsxProd_default_2(TreeConnectors, {
         variant: "tree",
-        children: [N, W],
+        children: [errorNodes, warningNodes],
       }),
     });
-    $[46] = W;
-    $[47] = N;
-    $[48] = x;
-  } else x = $[48];
-  let fr;
+    $[46] = warningNodes;
+    $[47] = errorNodes;
+    $[48] = treeBox;
+  } else treeBox = $[48];
+  let section;
   if (
-    $[49] !== d ||
-    $[50] !== x ||
+    $[49] !== containerBox ||
+    $[50] !== treeBox ||
     $[51] !== flexDirection ||
     $[52] !== marginTop ||
-    $[53] !== R ||
-    $[54] !== v
+    $[53] !== headerRow ||
+    $[54] !== locationRow
   ) {
-    fr = jsxProd_default_2(d, {
+    section = jsxProd_default_2(containerBox, {
       flexDirection,
       marginTop,
-      children: [R, v, x],
+      children: [headerRow, locationRow, treeBox],
     });
-    $[49] = d;
-    $[50] = x;
+    $[49] = containerBox;
+    $[50] = treeBox;
     $[51] = flexDirection;
     $[52] = marginTop;
-    $[53] = R;
-    $[54] = v;
-    $[55] = fr;
-  } else fr = $[55];
-  return fr;
+    $[53] = headerRow;
+    $[54] = locationRow;
+    $[55] = section;
+  } else section = $[55];
+  return section;
 }
 //@ chunk-4xzsbgqr.js:4246-5320 fingerprint = McpParsingWarnings (0.411)
 function McpParsingWarnings() {
-  let $ = w(3);
-  let o;
+  let $ = useMemoCache(3);
+  let diagnostics;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     let warning = [
       {
@@ -431,7 +441,7 @@ function McpParsingWarnings() {
       },
     ];
     let conflicts = getMcpScopeConflicts(warning.filter(isNonAgentScope).map(scopeServersSnapshot));
-    o = {
+    diagnostics = {
       scopes: filterShadowedWarnings(warning, {
         enterpriseActive: doesEnterpriseMcpConfigExist(),
         mcpLocked: isRestrictedToPluginOnly("mcp"),
@@ -439,9 +449,9 @@ function McpParsingWarnings() {
       }),
       conflicts,
     };
-    $[0] = o;
-  } else o = $[0];
-  let { scopes, conflicts } = o;
+    $[0] = diagnostics;
+  } else diagnostics = $[0];
+  let { scopes, conflicts } = diagnostics;
   let hasParsingErrors = scopes.some(hasFatalError);
   let hasWarnings = conflicts.length > 0 || scopes.some(hasWarningError);
   if (!hasParsingErrors && !hasWarnings) {
@@ -508,24 +518,24 @@ function filterErrors(errors, severity) {
  * 去掉会被后面作用域覆盖的服务器警告；企业/锁定时非托管作用域的警告全部隐藏。
  */
 function filterShadowedWarnings(warning, i_0) {
-  let c = (t, a) => {
-    if (!(a in t.config.servers)) return false;
-    if (t.scope === "project") return i_0.isProjectServerApproved(a);
+  let isShadowed = (entry, serverName) => {
+    if (!(serverName in entry.config.servers)) return false;
+    if (entry.scope === "project") return i_0.isProjectServerApproved(serverName);
     return true;
   };
-  return warning.map((t, a) => {
-    let p = !isManagedConfigScope(t.scope) && (i_0.enterpriseActive || i_0.mcpLocked);
-    let sliced = warning.slice(a + 1);
-    let m = (serverName) => sliced.some((d) => c(d, serverName));
+  return warning.map((scopeEntry, scopeIndex) => {
+    let shadowedByPolicy = !isManagedConfigScope(scopeEntry.scope) && (i_0.enterpriseActive || i_0.mcpLocked);
+    let sliced = warning.slice(scopeIndex + 1);
+    let shadowedLater = (serverName) => sliced.some((laterEntry) => isShadowed(laterEntry, serverName));
     return {
-      ...t,
+      ...scopeEntry,
       config: {
-        ...t.config,
-        errors: t.config.errors.filter((error) => {
+        ...scopeEntry.config,
+        errors: scopeEntry.config.errors.filter((error) => {
           if (error.mcpErrorMetadata?.severity !== "warning") return true;
-          if (p) return false;
+          if (shadowedByPolicy) return false;
           let serverName = error.mcpErrorMetadata.serverName;
-          return !serverName || !m(serverName);
+          return !serverName || !shadowedLater(serverName);
         }),
       },
     };

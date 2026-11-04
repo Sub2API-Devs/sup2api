@@ -26,10 +26,10 @@ import { logEvent } from "../analytics/index.js";
 import { lit } from "../analytics/safeMetadata.js";
 
 //@ chunk-077pc1h8.js:12528-13112 placement
-async function ensureDeviceMcpConsent(t) {
-  let n = await deviceMcpConsentAnswer(deviceMcpConsentStore(t));
-  if (n === "accepted") {
-    let deviceMcpSnapshot = await readDeviceMcpSnapshot(createSnapshotStore(t));
+async function ensureDeviceMcpConsent(storageV5) {
+  let consentAnswer = await deviceMcpConsentAnswer(deviceMcpConsentStore(storageV5));
+  if (consentAnswer === "accepted") {
+    let deviceMcpSnapshot = await readDeviceMcpSnapshot(createSnapshotStore(storageV5));
     let withheld = deviceMcpSnapshot === "unreadable" ? {} : deviceMcpSnapshot.withheld;
     if (Object.keys(withheld).length > 0) {
       await loadDeviceMcpSources();
@@ -44,13 +44,13 @@ async function ensureDeviceMcpConsent(t) {
       withheld,
     };
   }
-  if (n !== "unset")
+  if (consentAnswer !== "unset")
     return {
       servers: [],
       withheld: {},
     };
   let deviceBridgeMcpServers = await getDeviceBridgeMcpServers({
-    storageV5: t,
+    storageV5,
   });
   let mapped = Object.entries(deviceBridgeMcpServers)
     .filter(([key, value]) => isForwardableDeviceMcp(key, value))
@@ -61,8 +61,8 @@ async function ensureDeviceMcpConsent(t) {
   if (
     mapped.length > 0 &&
     containsAll(
-      await readDeviceMcpNotNow(deviceMcpNotNowStore(t)),
-      mapped.map((e) => e.name),
+      await readDeviceMcpNotNow(deviceMcpNotNowStore(storageV5)),
+      mapped.map((forwardable) => forwardable.name),
     )
   ) {
     logEvent("tengu_device_mcp_consent_prompt", {
@@ -78,3 +78,4 @@ async function ensureDeviceMcpConsent(t) {
     withheld: {},
   };
 }
+export { ensureDeviceMcpConsent };

@@ -16,7 +16,7 @@ import {
   realCanonicalPath,
   matchesConsentedHash,
 } from "../../components/ManagedSettingsSecurityDialog/utils.js";
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { createSignal } from "../../utils/signal.js";
 import {
   hasManagedOrCoworkSurface,
@@ -48,6 +48,7 @@ import {
 import { jsonStringify } from "../../utils/slowOperations.js";
 import { cacheTrustLabel, trustedPrincipal } from "../../utils/settings/policyCertificates.js";
 import { isRestrictedUnvouchedDocument } from "./unvouchedRestrictions.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-dcmhvw5a.js:392501-392588 placement = SETTINGS_FILENAME (0.646)
 /**
@@ -65,27 +66,30 @@ function getHelperConsentPath() {
 /**
  * 计算设置的风险摘要，只在需要用户同意时返回（否则 undefined）。
  */
-function consentRiskOrUndefined(e) {
-  let n = summarizeManagedSettingsRisk(e);
-  return needsManagedSettingsConsent(n) ? n : undefined;
+function consentRiskOrUndefined(settings) {
+  let risk = summarizeManagedSettingsRisk(settings);
+  return needsManagedSettingsConsent(risk) ? risk : undefined;
 }
 //@ chunk-dcmhvw5a.js:392672-392717 placement
-function helperConsentDigest(e) {
-  let n = consentRiskOrUndefined(e);
-  return n && realCanonicalPath(n);
+function helperConsentDigest(settings) {
+  let risk = consentRiskOrUndefined(settings);
+  return risk && realCanonicalPath(risk);
 }
 //@ chunk-dcmhvw5a.js:392717-392855 placement
-function stripReservedKeys(e) {
-  let n = wi(e, (r, s) => s.startsWith("$") && s !== "$schema");
-  if (Object.keys(n).length !== Object.keys(e).length) weakMap.set(n, e);
-  return n;
+function stripReservedKeys(settings) {
+  let stripped = import_reject(settings, (value, key) => key.startsWith("$") && key !== "$schema");
+  if (Object.keys(stripped).length !== Object.keys(settings).length) weakMap.set(stripped, settings);
+  return stripped;
 }
 //@ chunk-dcmhvw5a.js:392855-392891 placement
-function servedBodyOf(e) {
-  return weakMap.get(e) ?? e;
+function servedBodyOf(settings) {
+  return weakMap.get(settings) ?? settings;
 }
 //@ chunk-dcmhvw5a.js:392891-392910 placement
-var weakMap = new WeakMap();
+var weakMap; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-dcmhvw5a.js:392891", () => {
+  weakMap = new WeakMap();
+});
 //@ chunk-dcmhvw5a.js:392910-396728 placement
 /**
  * 远程托管设置的进程级状态（会话缓存、副本信任、组织固定、加载状态、同意基线、混合登录）。
@@ -135,48 +139,47 @@ class RemoteSettingsState {
   resetEpoch = 0;
   backendView = undefined;
   coworkCloudHolds = {};
-  heldSoFar(e) {
-    let n = Object.keys(this.coworkCloudHolds).length > 0;
-    if (!n && !hasManagedOrCoworkSurface()) return e;
-    if (e !== null) {
-      let r = mergeManagedSettingsPaths(this.coworkCloudHolds, e);
-      this.coworkCloudHolds = extractRestrictionSettings(r);
-      return r;
+  heldSoFar(settings) {
+    let hasHolds = Object.keys(this.coworkCloudHolds).length > 0;
+    if (!hasHolds && !hasManagedOrCoworkSurface()) return settings;
+    if (settings !== null) {
+      let merged = mergeManagedSettingsPaths(this.coworkCloudHolds, settings);
+      this.coworkCloudHolds = extractRestrictionSettings(merged);
+      return merged;
     }
-    return n ? this.coworkCloudHolds : null;
+    return hasHolds ? this.coworkCloudHolds : null;
   }
-  replaceSessionCache(e, n) {
-    let r = n?.verified === true || !hasManagedOrCoworkSurface();
-    if (!r && e !== null && e === this.sessionCache) return;
-    let s = this.heldSoFar(r ? narrowToRestrictions(e) : null);
+  replaceSessionCache(next, options) {
+    let verified = options?.verified === true || !hasManagedOrCoworkSurface();
+    if (!verified && next !== null && next === this.sessionCache) return;
+    let held = this.heldSoFar(verified ? narrowToRestrictions(next) : null);
     this.keepHelperLeaving();
-    this.sessionCache = s;
-    if (n?.verified) {
+    this.sessionCache = held;
+    if (options?.verified) {
       this.seededUnjudged = null;
-      this.verifiedPayload = s;
+      this.verifiedPayload = held;
       this.verifiedByGateway = getGatewayAuth()?.url;
       this.projectedView = null;
       this.projectedParse = null;
-      if (n.consentDeferred) this.deferredPayload = s;
+      if (options.consentDeferred) this.deferredPayload = held;
     }
   }
-  seedFromDisk(e) {
-    let n =
-      Object.keys(this.coworkCloudHolds).length > 0 ? mergeManagedSettingsPaths(this.coworkCloudHolds, e) : e;
-    this.sessionCache = n;
-    this.seedConsentBaseline(n);
+  seedFromDisk(settings) {
+    let merged =
+      Object.keys(this.coworkCloudHolds).length > 0
+        ? mergeManagedSettingsPaths(this.coworkCloudHolds, settings)
+        : settings;
+    this.sessionCache = merged;
+    this.seedConsentBaseline(merged);
   }
-  seedConsentBaseline(e) {
-    let n = consentRiskOrUndefined(e);
-    if (n !== undefined) {
-      let helperConsentAttestation = readHelperConsentAttestation();
-      if (
-        helperConsentAttestation === undefined ||
-        !matchesConsentedHash(helperConsentAttestation, n, e.claudeMd)
-      )
+  seedConsentBaseline(settings) {
+    let risk = consentRiskOrUndefined(settings);
+    if (risk !== undefined) {
+      let consentedHash = readHelperConsentAttestation();
+      if (consentedHash === undefined || !matchesConsentedHash(consentedHash, risk, settings.claudeMd))
         return;
     }
-    this.consentedPayload ??= e;
+    this.consentedPayload ??= settings;
   }
   markConsented(consentedPayload) {
     this.consentedPayload = consentedPayload;
@@ -187,11 +190,11 @@ class RemoteSettingsState {
   markPolicySettingsNotified() {
     this.policySettingsNotified = true;
   }
-  recordEligibility(e, n) {
-    this.eligible = e;
-    if (n.memoize) {
-      this.eligibilityMemo = e;
-      this.ineligibleReason = e ? undefined : n.ineligibleReason;
+  recordEligibility(eligible, options) {
+    this.eligible = eligible;
+    if (options.memoize) {
+      this.eligibilityMemo = eligible;
+      this.ineligibleReason = eligible ? undefined : options.ineligibleReason;
     }
   }
   resetListener = null;
@@ -204,15 +207,15 @@ class RemoteSettingsState {
   }
   keepHelperLeaving() {
     if (this.sessionCache === this.verifiedPayload) {
-      let e = helperTierOf(this.sessionCache);
+      let tier = helperTierOf(this.sessionCache);
       this.droppedHelperTier =
-        e === null
+        tier === null
           ? this.droppedHelperTier
           : {
-              ...e,
+              ...tier,
               env: {
                 ...this.droppedHelperTier?.env,
-                ...e.env,
+                ...tier.env,
               },
             };
     }
@@ -261,9 +264,9 @@ class RemoteSettingsState {
     this.resetEpoch++;
     this.emitLoadStatusChanged(undefined);
   }
-  emitLoadStatusChanged(e) {
+  emitLoadStatusChanged(status) {
     try {
-      this.lastLoadStatusChanged.emit(e);
+      this.lastLoadStatusChanged.emit(status);
     } catch (error) {
       logForDebugging(`Remote settings: load-status listener threw: ${errorMessage(error)}`, {
         level: "error",
@@ -275,7 +278,10 @@ class RemoteSettingsState {
 /**
  * 按 host 隔离的远程托管设置进程状态容器（会话缓存、信任、加载状态、同意基线等）。
  */
-var remoteSettingsStateSlots = new HostScoped(() => new RemoteSettingsState());
+var remoteSettingsStateSlots; // deferred: uses RemoteSettingsState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-dcmhvw5a.js:396728", () => {
+  remoteSettingsStateSlots = new HostScoped(() => new RemoteSettingsState());
+});
 //@ chunk-dcmhvw5a.js:396753-396790 placement
 /**
  * 取当前 host 的远程托管设置状态（本文件及缓存/加载模块的高频入口）。
@@ -292,17 +298,17 @@ function getRemoteManagedSettingsConsentedBaseline() {
   return currentRemoteSettingsState_2().consentedPayload;
 }
 //@ chunk-dcmhvw5a.js:396871-396909 placement
-function markRemoteManagedSettingsConsented(e) {
-  currentRemoteSettingsState_2().markConsented(e);
+function markRemoteManagedSettingsConsented(settings) {
+  currentRemoteSettingsState_2().markConsented(settings);
 }
 //@ chunk-dcmhvw5a.js:396909-396951 placement
 function dropRemoteManagedSettingsConsentDeferral() {
   currentRemoteSettingsState_2().dropConsentDeferral();
 }
 //@ chunk-dcmhvw5a.js:396951-397007 placement
-function setSessionCache(remoteManagedSettingsRawCache, n, r) {
-  currentRemoteSettingsState_2().replaceSessionCache(remoteManagedSettingsRawCache, n);
-  invalidateCommandNames(r);
+function setSessionCache(nextCache, options, extra) {
+  currentRemoteSettingsState_2().replaceSessionCache(nextCache, options);
+  invalidateCommandNames(extra);
 }
 //@ chunk-dcmhvw5a.js:397007-397087 placement
 function isRemoteManagedSettingsVerified() {
@@ -328,9 +334,9 @@ function registerSyncCacheResetListener(deactivateRemoteHelper) {
 }
 //@ chunk-dcmhvw5a.js:397324-397380 placement
 function resetSyncCache() {
-  let e = currentRemoteSettingsState_2();
-  e.reset();
-  e.resetListener?.();
+  let state = currentRemoteSettingsState_2();
+  state.reset();
+  state.resetListener?.();
 }
 //@ chunk-dcmhvw5a.js:397380-397429 placement
 function markPolicySettingsNotified() {
@@ -360,21 +366,21 @@ function setStoredCopyGateInputs({
   mayHideDialog,
   writesForHiddenDialog = mayHideDialog,
 }) {
-  let c = currentRemoteSettingsState_2();
-  c.storedAccountReader = readAccount;
-  c.storedCopyGateCovers = covers;
-  c.storedCopyOrgPin = orgPin;
-  c.mayHideDialog = mayHideDialog;
-  c.writesForHiddenDialog = writesForHiddenDialog;
-  c.storedCopyTrust = "not_asked";
-  c.storedCopyRefusal = null;
+  let state = currentRemoteSettingsState_2();
+  state.storedAccountReader = readAccount;
+  state.storedCopyGateCovers = covers;
+  state.storedCopyOrgPin = orgPin;
+  state.mayHideDialog = mayHideDialog;
+  state.writesForHiddenDialog = writesForHiddenDialog;
+  state.storedCopyTrust = "not_asked";
+  state.storedCopyRefusal = null;
 }
 //@ chunk-dcmhvw5a.js:397882-397991 placement
 function setStoredCopyOrgPin(orgPinState) {
-  let n = currentRemoteSettingsState_2();
-  let storedCopyOrgPin = n.storedCopyOrgPin;
-  n.storedCopyOrgPin = orgPinState;
-  if (jsonStringify(storedCopyOrgPin) !== jsonStringify(orgPinState)) n.storedCopyRefusal = null;
+  let state = currentRemoteSettingsState_2();
+  let storedCopyOrgPin = state.storedCopyOrgPin;
+  state.storedCopyOrgPin = orgPinState;
+  if (jsonStringify(storedCopyOrgPin) !== jsonStringify(orgPinState)) state.storedCopyRefusal = null;
 }
 //@ chunk-dcmhvw5a.js:397991-398070 placement
 function refusedCopyForcesRefresh() {
@@ -393,12 +399,12 @@ function getStoredCopyTrustedPrincipal() {
   return trustedPrincipal(currentRemoteSettingsState_2().storedCopyTrust);
 }
 //@ chunk-dcmhvw5a.js:398192-398277 placement
-function rememberEligibility(e, ineligibleReason) {
-  currentRemoteSettingsState_2().recordEligibility(e, {
+function rememberEligibility(eligible, ineligibleReason) {
+  currentRemoteSettingsState_2().recordEligibility(eligible, {
     memoize: true,
     ineligibleReason,
   });
-  return e;
+  return eligible;
 }
 //@ chunk-dcmhvw5a.js:398277-398319 placement
 function getEligibilityMemo() {
@@ -406,33 +412,33 @@ function getEligibilityMemo() {
 }
 //@ chunk-dcmhvw5a.js:398319-398531 placement
 function resetEligibilityMemo() {
-  let e = currentRemoteSettingsState_2();
-  e.eligible = undefined;
-  e.eligibilityMemo = undefined;
-  e.machinePinsSignInMemo = undefined;
-  e.ineligibleReason = undefined;
-  if (e.lastLoadStatus?.state === "ineligible") {
-    e.lastLoadStatus = undefined;
-    e.loadCycleEnded = false;
+  let state = currentRemoteSettingsState_2();
+  state.eligible = undefined;
+  state.eligibilityMemo = undefined;
+  state.machinePinsSignInMemo = undefined;
+  state.ineligibleReason = undefined;
+  if (state.lastLoadStatus?.state === "ineligible") {
+    state.lastLoadStatus = undefined;
+    state.loadCycleEnded = false;
   }
 }
 //@ chunk-dcmhvw5a.js:398531-398679 placement
 function heldMachinePinsSignIn(machineAdminPinsSignInOrg, hasMdmResult) {
-  let r = currentRemoteSettingsState_2();
-  if (r.machinePinsSignInMemo !== undefined) return r.machinePinsSignInMemo;
-  let s = machineAdminPinsSignInOrg();
-  if (hasMdmResult()) r.machinePinsSignInMemo = s;
-  return s;
+  let state = currentRemoteSettingsState_2();
+  if (state.machinePinsSignInMemo !== undefined) return state.machinePinsSignInMemo;
+  let pinsSignIn = machineAdminPinsSignInOrg();
+  if (hasMdmResult()) state.machinePinsSignInMemo = pinsSignIn;
+  return pinsSignIn;
 }
 //@ chunk-dcmhvw5a.js:398679-398722 placement
 function getIneligibleReason() {
   return currentRemoteSettingsState_2().ineligibleReason;
 }
 //@ chunk-dcmhvw5a.js:398722-398795 placement
-function setLastLoadStatus(e) {
-  let n = currentRemoteSettingsState_2();
-  n.lastLoadStatus = e;
-  n.emitLoadStatusChanged(e);
+function setLastLoadStatus(status) {
+  let state = currentRemoteSettingsState_2();
+  state.lastLoadStatus = status;
+  state.emitLoadStatusChanged(status);
 }
 //@ chunk-dcmhvw5a.js:398795-398836 placement
 function getLastLoadStatus() {
@@ -440,9 +446,9 @@ function getLastLoadStatus() {
 }
 //@ chunk-dcmhvw5a.js:398836-398943 placement
 function markLoadCycleEnded() {
-  let e = currentRemoteSettingsState_2();
-  e.loadCycleEnded = true;
-  if (e.lastLoadStatus === undefined) e.emitLoadStatusChanged(undefined);
+  let state = currentRemoteSettingsState_2();
+  state.loadCycleEnded = true;
+  if (state.lastLoadStatus === undefined) state.emitLoadStatusChanged(undefined);
 }
 //@ chunk-dcmhvw5a.js:398943-398985 placement
 function hasLoadCycleEnded() {
@@ -462,22 +468,22 @@ function markLoadBackstopReleased() {
 }
 //@ chunk-dcmhvw5a.js:399109-399345 placement
 function servedSettingsLoadLeftNoAnswer() {
-  let e = currentRemoteSettingsState_2();
-  let lastLoadStatus = e.lastLoadStatus;
+  let state = currentRemoteSettingsState_2();
+  let lastLoadStatus = state.lastLoadStatus;
   switch (lastLoadStatus?.state) {
     case "failed":
       return true;
     case "stale_cache":
       return lastLoadStatus.transportEnvWithheld;
     case undefined:
-      return e.eligibilityMemo === true && (e.loadCycleEnded || e.loadBackstopReleased);
+      return state.eligibilityMemo === true && (state.loadCycleEnded || state.loadBackstopReleased);
     default:
       return false;
   }
 }
 //@ chunk-dcmhvw5a.js:399345-399408 placement
-function onLastLoadStatusChanged(e) {
-  return currentRemoteSettingsState_2().lastLoadStatusChanged.subscribe(e);
+function onLastLoadStatusChanged(listener) {
+  return currentRemoteSettingsState_2().lastLoadStatusChanged.subscribe(listener);
 }
 //@ chunk-dcmhvw5a.js:399408-399429 placement
 function getRemoteSettingsPathOverride() {
@@ -511,12 +517,12 @@ function setSessionHybridOrganizationUuid(
   hybridProviderFromOrganization,
   hybridOnlyForConnection = false,
 ) {
-  let c = currentRemoteSettingsState_2();
-  c.hybridOrganizationUuid = hybridOrganizationUuid;
-  c.hybridSignInEnded = hybridSignInEnded;
-  c.hybridBlockFilter = hybridBlockFilter;
-  c.hybridProviderFromOrganization = hybridProviderFromOrganization;
-  c.hybridOnlyForConnection = hybridOnlyForConnection;
+  let state = currentRemoteSettingsState_2();
+  state.hybridOrganizationUuid = hybridOrganizationUuid;
+  state.hybridSignInEnded = hybridSignInEnded;
+  state.hybridBlockFilter = hybridBlockFilter;
+  state.hybridProviderFromOrganization = hybridProviderFromOrganization;
+  state.hybridOnlyForConnection = hybridOnlyForConnection;
 }
 //@ chunk-dcmhvw5a.js:399837-399888 placement
 function isHybridOnlyForConnection() {
@@ -526,15 +532,21 @@ function isHybridOnlyForConnection() {
 /**
  * 按 host 保存的混合（网关）连接映射表。
  */
-var hybridConnectionSlots = new HostScoped(() => new Map());
+var hybridConnectionSlots; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-dcmhvw5a.js:399888", () => {
+  hybridConnectionSlots = new HostScoped(() => new Map());
+});
 //@ chunk-dcmhvw5a.js:399914-399960 placement
-function getSessionHybridConnection(e) {
-  return hybridConnectionSlots.of(getRootSession().host).get(e);
+function getSessionHybridConnection(hybridOrganizationUuid) {
+  return hybridConnectionSlots.of(getRootSession().host).get(hybridOrganizationUuid);
 }
 //@ chunk-dcmhvw5a.js:399960-399991 placement
-var verifyAllowedState = new HostScoped(() => ({
-  value: true,
-}));
+var verifyAllowedState; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-dcmhvw5a.js:399960", () => {
+  verifyAllowedState = new HostScoped(() => ({
+    value: true,
+  }));
+});
 //@ chunk-dcmhvw5a.js:399991-400023 placement
 /**
  * 无盘会话或只做策略快照评估时，不依赖磁盘缓存。
@@ -543,11 +555,13 @@ function isSnapshotOnlySession() {
   return isDiskless() || isEvalPolicySnapshotOnly();
 }
 //@ chunk-dcmhvw5a.js:400023-400133 placement
-function isProjectedSnapshot(e) {
+function isProjectedSnapshot(settings) {
   let { projectedView, projectedParse } = currentRemoteSettingsState_2();
   return (
-    e !== null &&
-    (projectedView?.view === e || projectedParse?.view === e || isRestrictedUnvouchedDocument(e))
+    settings !== null &&
+    (projectedView?.view === settings ||
+      projectedParse?.view === settings ||
+      isRestrictedUnvouchedDocument(settings))
   );
 }
 export {
@@ -602,4 +616,6 @@ export {
   heldMachinePinsSignIn,
   hasPolicySettingsNotified,
   registerSyncCacheResetListener,
+  getSessionHybridConnection,
+  isHybridOnlyForConnection,
 };

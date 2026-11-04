@@ -64,42 +64,42 @@ var PROGRESS_BATCH_MAX_BUFFER = 1e4;
 /**
  * 工作流进度批量发送器：进度先缓冲、定时冲刷；REPL 桥接活跃时限制发送频率；每批回调 onBatch，非交互或桥接会话再经 onSdkEmit 发出；支持立即冲刷和取消。
  */
-function createProgressBatcher(e) {
-  let n = [];
-  let r;
-  let h = 0;
-  let T = (y) => {
-    r = undefined;
-    if (n.length === 0) return;
-    if (!y && !getIsNonInteractiveSession() && isReplBridgeActive()) {
-      let L = h + PROGRESS_BATCH_MIN_GAP_MS - Date.now();
-      if (L > 0) {
-        r = setTimeout(T, L);
+function createProgressBatcher(sink) {
+  let pending = [];
+  let timer;
+  let lastFlushMs = 0;
+  let flush = (force) => {
+    timer = undefined;
+    if (pending.length === 0) return;
+    if (!force && !getIsNonInteractiveSession() && isReplBridgeActive()) {
+      let waitMs = lastFlushMs + PROGRESS_BATCH_MIN_GAP_MS - Date.now();
+      if (waitMs > 0) {
+        timer = setTimeout(flush, waitMs);
         return;
       }
-      h = Date.now();
+      lastFlushMs = Date.now();
     }
-    let A = n;
-    n = [];
-    e.onBatch(A);
+    let batch = pending;
+    pending = [];
+    sink.onBatch(batch);
     if (!getIsNonInteractiveSession() && !isReplBridgeActive()) return;
-    e.onSdkEmit(A);
+    sink.onSdkEmit(batch);
   };
   return {
-    onProgress: (y) => {
-      n.push(y);
-      if (!r) r = setTimeout(T, PROGRESS_BATCH_INTERVAL_MS);
+    onProgress: (item) => {
+      pending.push(item);
+      if (!timer) timer = setTimeout(flush, PROGRESS_BATCH_INTERVAL_MS);
     },
     flushNow: () => {
-      if (r) clearTimeout(r);
-      T(true);
+      if (timer) clearTimeout(timer);
+      flush(true);
     },
     cancel: () => {
-      if (r) {
-        clearTimeout(r);
-        r = undefined;
+      if (timer) {
+        clearTimeout(timer);
+        timer = undefined;
       }
-      n = [];
+      pending = [];
     },
   };
 }
@@ -112,8 +112,8 @@ function agentSourceKindForTelemetry(name, scriptIsVerbatimBuiltIn) {
   return isToolDetailsLoggingEnabled() ? name : "custom";
 }
 //@ chunk-41w44bgm.js:101543-101586 placement = _temp1 (1)
-function isBuiltInWithFlag(a_9, n) {
-  return a_9 === "built-in" && n;
+function isBuiltInWithFlag(a_9, hasFlag) {
+  return a_9 === "built-in" && hasFlag;
 }
 //@ chunk-41w44bgm.js:101586-101597 placement
 var MAX_TELEMETRY_LABEL_CHARS = 200;
@@ -121,16 +121,17 @@ var MAX_TELEMETRY_LABEL_CHARS = 200;
 /**
  * 内置代理名按原值上报，否则记为 custom。
  */
-function agentNameForTelemetry(e, n, r) {
-  if (isBuiltInWithFlag(n, r) && e) return fromSanitizer_SANITIZER_OUTPUT_ONLY(e);
+function agentNameForTelemetry(agentName, source, isBuiltIn) {
+  if (isBuiltInWithFlag(source, isBuiltIn) && agentName)
+    return fromSanitizer_SANITIZER_OUTPUT_ONLY(agentName);
   return lit("custom");
 }
 //@ chunk-41w44bgm.js:101664-101740 placement
 /**
  * 内置代理标签截断后上报，否则空串。
  */
-function agentLabelForTelemetry(description, n, r) {
-  if (isBuiltInWithFlag(n, r))
+function agentLabelForTelemetry(description, source, isBuiltIn) {
+  if (isBuiltInWithFlag(source, isBuiltIn))
     return fromSanitizer_SANITIZER_OUTPUT_ONLY((description ?? "").slice(0, MAX_TELEMETRY_LABEL_CHARS));
   return lit("");
 }
@@ -146,17 +147,18 @@ function agentTypeForTelemetry(title, source, scriptIsVerbatimBuiltIn) {
 /**
  * 脚本记录失败时用统一的隐藏错误文案。
  */
-function hideFailedScriptRecord(withholdScriptFromSdkEvents, error) {
-  return withholdScriptFromSdkEvents && error !== HIDDEN_SCRIPT_RECORD_FAILED_TEXT
+function hideFailedScriptRecord(withholdScriptFromSdkEvents, failedText) {
+  return withholdScriptFromSdkEvents && failedText !== HIDDEN_SCRIPT_RECORD_FAILED_TEXT
     ? WITHHELD_ERROR_TEXT
-    : error;
+    : failedText;
 }
 //@ chunk-41w44bgm.js:101844-109680 placement
 /**
  * 启动工作流运行：校验 v2 选项、准备脚本与日志、注册任务并开始执行。
  */
-function launchWorkflowRun(e) {
-  if (e.v2Run && e.withholdScriptFromSdkEvents) throw Error("A workflow v2 run cannot withhold its script");
+function launchWorkflowRun(options) {
+  if (options.v2Run && options.withholdScriptFromSdkEvents)
+    throw Error("A workflow v2 run cannot withhold its script");
   let {
     taskId,
     workflowRunId,
@@ -173,10 +175,10 @@ function launchWorkflowRun(e) {
     isResume,
     invokingRequestId,
     parentPromptId,
-  } = e;
-  let { description, name: s } = meta;
+  } = options;
+  let { description, name: workflowName } = meta;
   if (isResume) {
-    if (!e.v2Run || !e.v2Run.founded) logFeatureOk("task_local_workflow_resume");
+    if (!options.v2Run || !options.v2Run.founded) logFeatureOk("task_local_workflow_resume");
     for (let [key, value] of Object.entries(toolUseContext.taskRegistry.all()))
       if (
         value.type === "local_workflow" &&
@@ -187,12 +189,12 @@ function launchWorkflowRun(e) {
         toolUseContext.taskRegistry.remove(key);
   }
   let visibleSubagentId = resolveVisibleSubagentId(toolUseContext.agentId, toolUseContext.taskRegistry);
-  let w = registerWorkflowTask({
+  let taskState = registerWorkflowTask({
     taskId,
     script,
     scriptPath,
     summary: description,
-    workflowName: s,
+    workflowName,
     title: meta.title,
     phases: meta.phases,
     defaultModel: resolveContextPrimaryModel(toolUseContext.options),
@@ -202,77 +204,85 @@ function launchWorkflowRun(e) {
     spawnerAgentId: toolUseContext.agentId,
     taskRegistry: toolUseContext.taskRegistry,
     toolUseId,
-    startTime: e.startTime,
-    withholdScriptFromSdkEvents: e.withholdScriptFromSdkEvents,
+    startTime: options.startTime,
+    withholdScriptFromSdkEvents: options.withholdScriptFromSdkEvents,
   });
-  if (e.withholdScriptFromSdkEvents)
+  if (options.withholdScriptFromSdkEvents)
     toolUseContext.toolState
       .get(HiddenScriptShaCache)
       .scriptSha256ById.set(workflowRunId, computeContentHash(script));
-  let P = registerTaskLoop(taskId, w.abortController, {
+  let releaseTaskLoop = registerTaskLoop(taskId, taskState.abortController, {
     settleRequiresEmptyAgentAssociations: true,
   });
   if (visibleSubagentId && !getIsNonInteractiveSession())
     addAgentKeepaliveReason(visibleSubagentId, `workflow:${taskId}`, toolUseContext.taskRegistry);
   let context = {
     ...toolUseContext,
-    abortController: w.abortController ?? toolUseContext.abortController,
+    abortController: taskState.abortController ?? toolUseContext.abortController,
   };
-  let v2Run = e.v2Run;
+  let v2Run = options.v2Run;
   if (v2Run)
-    toolUseContext.taskRegistry.update(taskId, (ue) => ({
-      ...ue,
+    toolUseContext.taskRegistry.update(taskId, (workflowTask) => ({
+      ...workflowTask,
       v2Run,
     }));
   let tokenBudget = {
     total: null,
     getTurnSpent: getTotalOutputTokens,
   };
-  let q;
+  let outcome;
   (async () => {
-    let ue = 0;
+    let lastProgressEmitAt = 0;
     let progressBatcher = createProgressBatcher({
-      onBatch: (Se) => updateWorkflowProgressBatch(taskId, Se, toolUseContext.taskRegistry),
-      onSdkEmit: (Se) => {
-        let filtered = Se.filter(isWorkflowLogRow);
+      onBatch: (batch) => updateWorkflowProgressBatch(taskId, batch, toolUseContext.taskRegistry),
+      onSdkEmit: (events) => {
+        let filtered = events.filter(isWorkflowLogRow);
         if (filtered.length === 0) return;
-        let Ie = context.getAppState()?.tasks?.[taskId];
-        if (Ie?.type !== "local_workflow" || Ie.status !== "running") return;
-        let last = filtered.findLast((Kt) => Kt.type === "workflow_agent");
-        let zt = last && e.withholdScriptFromSdkEvents ? redactAgentProgress(last) : last;
-        let all = filtered.every((Kt) => Kt.type === "workflow_agent" && Kt.state === "progress");
+        let task = context.getAppState()?.tasks?.[taskId];
+        if (task?.type !== "local_workflow" || task.status !== "running") return;
+        let progress = filtered.findLast((entry) => entry.type === "workflow_agent");
+        let latestAgent =
+          progress && options.withholdScriptFromSdkEvents ? redactAgentProgress(progress) : progress;
+        let all = filtered.every((entry) => entry.type === "workflow_agent" && entry.state === "progress");
         let now = Date.now();
-        let kn = !all || now - ue >= PROGRESS_BATCH_MAX_BUFFER;
-        if (kn) ue = now;
-        let fn = kn ? Ie.workflowProgress.filter(isWorkflowLogRow) : undefined;
+        let shouldEmit = !all || now - lastProgressEmitAt >= PROGRESS_BATCH_MAX_BUFFER;
+        if (shouldEmit) lastProgressEmitAt = now;
+        let progressSnapshot = shouldEmit ? task.workflowProgress.filter(isWorkflowLogRow) : undefined;
         emitTaskProgress({
           taskId,
           toolUseId,
-          description: zt ? (zt.phaseTitle ? `${zt.phaseTitle}: ${zt.label}` : zt.label) : w.description,
-          startTime: w.startTime,
-          totalTokens: Ie.totalTokens,
-          toolUses: Ie.totalToolCalls,
-          lastToolName: zt?.label,
+          description: latestAgent
+            ? latestAgent.phaseTitle
+              ? `${latestAgent.phaseTitle}: ${latestAgent.label}`
+              : latestAgent.label
+            : taskState.description,
+          startTime: taskState.startTime,
+          totalTokens: task.totalTokens,
+          toolUses: task.totalToolCalls,
+          lastToolName: latestAgent?.label,
           summary: description,
-          workflowProgress: e.withholdScriptFromSdkEvents && fn ? redactWorkflowProgress(fn) : fn,
+          workflowProgress:
+            options.withholdScriptFromSdkEvents && progressSnapshot
+              ? redactWorkflowProgress(progressSnapshot)
+              : progressSnapshot,
         });
       },
     });
-    let onProgress = (Se) => {
-      if (Se.type !== "progress") return;
-      progressBatcher.onProgress(Se.data);
+    let onProgress = (progressEvent) => {
+      if (progressEvent.type !== "progress") return;
+      progressBatcher.onProgress(progressEvent.data);
     };
-    let onAgentController = (Se, Ye) => {
-      if (Ye) {
-        w.agentControllers?.set(Se, Ye);
-        setAgentController(taskId, Se, Ye);
+    let onAgentController = (agentIndex, controller) => {
+      if (controller) {
+        taskState.agentControllers?.set(agentIndex, controller);
+        setAgentController(taskId, agentIndex, controller);
       } else {
-        w.agentControllers?.delete(Se);
-        removeAgentController(taskId, Se);
+        taskState.agentControllers?.delete(agentIndex);
+        removeAgentController(taskId, agentIndex);
       }
     };
-    let onRateLimitWait = (Se) => setWorkflowRateLimitWait(taskId, Se, toolUseContext.taskRegistry);
-    let Wt = e.withholdScriptFromSdkEvents
+    let onRateLimitWait = (wait) => setWorkflowRateLimitWait(taskId, wait, toolUseContext.taskRegistry);
+    let journal = options.withholdScriptFromSdkEvents
       ? await openHiddenScriptJournal({
           runId: workflowRunId,
           storageV5: toolUseContext.storageV5,
@@ -288,15 +298,17 @@ function launchWorkflowRun(e) {
           );
         })
       : createMirroredJournal(workflowRunId, toolUseContext.storageV5);
-    if (!isResume && !e.withholdScriptFromSdkEvents)
-      await Wt.append({
-        type: "launched",
-      }).catch((error) =>
-        logForDebugging(`workflow journal launched-append failed: ${error}`, {
-          level: "warn",
-        }),
-      );
-    let ye = v2Run
+    if (!isResume && !options.withholdScriptFromSdkEvents)
+      await journal
+        .append({
+          type: "launched",
+        })
+        .catch((error) =>
+          logForDebugging(`workflow journal launched-append failed: ${error}`, {
+            level: "warn",
+          }),
+        );
+    let runResult = v2Run
       ? await v2Run.run(
           context,
           canUseTool,
@@ -312,7 +324,7 @@ function launchWorkflowRun(e) {
             workflowName: agentSourceKindForTelemetry(meta.name, telemetry.scriptIsVerbatimBuiltIn),
             invokingRequestId,
             parentPromptId,
-            journal: Wt,
+            journal,
           },
         )
       : await runWorkflowScript(vmScript, context, canUseTool, {
@@ -323,83 +335,87 @@ function launchWorkflowRun(e) {
           args,
           seedPhaseTitles: meta.phases?.map((phase) => phase.title),
           tokenBudget,
-          journal: Wt,
+          journal,
           workflowName: agentSourceKindForTelemetry(meta.name, telemetry.scriptIsVerbatimBuiltIn),
           invokingRequestId,
           parentPromptId,
-          withholdScript: e.withholdScriptFromSdkEvents,
+          withholdScript: options.withholdScriptFromSdkEvents,
         });
-    if (unwrapAbortReason(w.abortController?.signal.reason) === "background") {
-      q = {
+    if (unwrapAbortReason(taskState.abortController?.signal.reason) === "background") {
+      outcome = {
         status: "adopted",
       };
       progressBatcher.cancel();
       return;
     }
     progressBatcher.flushNow();
-    let gt = context.getAppState()?.tasks?.[taskId];
-    let workflowProgress = (gt?.workflowProgress ?? []).filter((Se) => Se.type !== "workflow_log");
-    let totalTokens = gt?.totalTokens ?? 0;
-    let totalToolCalls = gt?.totalToolCalls ?? 0;
-    let kt = w.abortController?.signal.aborted ? "killed" : ye.error ? "failed" : "completed";
-    q =
-      kt === "killed"
+    let task = context.getAppState()?.tasks?.[taskId];
+    let workflowProgress = (task?.workflowProgress ?? []).filter((entry) => entry.type !== "workflow_log");
+    let totalTokens = task?.totalTokens ?? 0;
+    let totalToolCalls = task?.totalToolCalls ?? 0;
+    let status = taskState.abortController?.signal.aborted
+      ? "killed"
+      : runResult.error
+        ? "failed"
+        : "completed";
+    outcome =
+      status === "killed"
         ? {
             status: "killed",
           }
-        : ye.error
+        : runResult.error
           ? {
               status: "failed",
-              error: ye.error,
-              agentCount: ye.agentCount,
-              logs: ye.logs,
-              durationMs: ye.durationMs,
+              error: runResult.error,
+              agentCount: runResult.agentCount,
+              logs: runResult.logs,
+              durationMs: runResult.durationMs,
             }
           : {
               status: "completed",
-              result: ye.result,
-              agentCount: ye.agentCount,
-              logs: ye.logs,
-              failures: ye.failures,
-              durationMs: ye.durationMs,
+              result: runResult.result,
+              agentCount: runResult.agentCount,
+              logs: runResult.logs,
+              failures: runResult.failures,
+              durationMs: runResult.durationMs,
             };
     logEvent("tengu_workflow_completed", {
       workflow_run_id: sanitizeWorkflowRunId(workflowRunId),
       workflow_source: fromEnum(telemetry.source),
       workflow_name: telemetry.name,
       workflow_description: telemetry.description,
-      status: fromEnum(kt),
-      agent_count: ye.agentCount,
+      status: fromEnum(status),
+      agent_count: runResult.agentCount,
       total_tokens: totalTokens,
       total_tool_calls: totalToolCalls,
-      duration_ms: ye.durationMs,
+      duration_ms: runResult.durationMs,
     });
     if (!v2Run) {
-      let Se = {
-        agents: ye.agentCount,
-        duration_ms: ye.durationMs,
+      let fields = {
+        agents: runResult.agentCount,
+        duration_ms: runResult.durationMs,
       };
-      switch (kt) {
+      switch (status) {
         case "completed":
-          logFeatureOk("workflow_run", Se);
+          logFeatureOk("workflow_run", fields);
           break;
         case "failed":
-          logFeatureBad("workflow_run", "failed", Se);
+          logFeatureBad("workflow_run", "failed", fields);
           break;
         case "killed":
-          logFeatureSad("workflow_run", "killed", Se);
+          logFeatureSad("workflow_run", "killed", fields);
           break;
       }
     }
     if (isBuiltInWithFlag(telemetry.source, telemetry.scriptIsVerbatimBuiltIn)) {
-      let Se = new Map();
-      for (let Ye of gt?.workflowProgress ?? []) {
-        if (Ye.type !== "workflow_agent") continue;
-        if (Ye.phaseIndex === undefined || !Ye.phaseTitle) continue;
-        let Ie = Se.get(Ye.phaseIndex);
-        if (!Ie) {
-          Ie = {
-            title: Ye.phaseTitle,
+      let phaseBuckets = new Map();
+      for (let entry of task?.workflowProgress ?? []) {
+        if (entry.type !== "workflow_agent") continue;
+        if (entry.phaseIndex === undefined || !entry.phaseTitle) continue;
+        let bucket = phaseBuckets.get(entry.phaseIndex);
+        if (!bucket) {
+          bucket = {
+            title: entry.phaseTitle,
             tokens: 0,
             toolCalls: 0,
             durationMs: 0,
@@ -407,29 +423,33 @@ function launchWorkflowRun(e) {
             errorCount: 0,
             skipCount: 0,
           };
-          Se.set(Ye.phaseIndex, Ie);
+          phaseBuckets.set(entry.phaseIndex, bucket);
         }
-        Ie.tokens += Ye.tokens ?? 0;
-        Ie.toolCalls += Ye.toolCalls ?? 0;
-        Ie.durationMs += Ye.durationMs ?? 0;
-        Ie.agentCount += 1;
-        if (Ye.state === "error")
-          if (Ye.error === "skipped by user") Ie.skipCount += 1;
-          else Ie.errorCount += 1;
+        bucket.tokens += entry.tokens ?? 0;
+        bucket.toolCalls += entry.toolCalls ?? 0;
+        bucket.durationMs += entry.durationMs ?? 0;
+        bucket.agentCount += 1;
+        if (entry.state === "error")
+          if (entry.error === "skipped by user") bucket.skipCount += 1;
+          else bucket.errorCount += 1;
       }
-      for (let [Ye, Ie] of Se)
+      for (let [phaseIndex, phaseStats] of phaseBuckets)
         logEvent("tengu_workflow_phase_completed", {
           workflow_run_id: sanitizeWorkflowRunId(workflowRunId),
           workflow_source: fromEnum(telemetry.source),
           workflow_name: telemetry.name,
-          phase_index: Ye,
-          phase_title: agentTypeForTelemetry(Ie.title, telemetry.source, telemetry.scriptIsVerbatimBuiltIn),
-          phase_tokens: Ie.tokens,
-          phase_tool_calls: Ie.toolCalls,
-          phase_agent_duration_ms: Ie.durationMs,
-          phase_agent_count: Ie.agentCount,
-          phase_error_count: Ie.errorCount,
-          phase_skip_count: Ie.skipCount,
+          phase_index: phaseIndex,
+          phase_title: agentTypeForTelemetry(
+            phaseStats.title,
+            telemetry.source,
+            telemetry.scriptIsVerbatimBuiltIn,
+          ),
+          phase_tokens: phaseStats.tokens,
+          phase_tool_calls: phaseStats.toolCalls,
+          phase_agent_duration_ms: phaseStats.durationMs,
+          phase_agent_count: phaseStats.agentCount,
+          phase_error_count: phaseStats.errorCount,
+          phase_skip_count: phaseStats.skipCount,
         });
     }
     writeWorkflowSnapshot(
@@ -439,47 +459,54 @@ function launchWorkflowRun(e) {
         script,
         scriptPath,
         args,
-        result: ye.result,
-        agentCount: ye.agentCount,
-        logs: ye.logs,
-        durationMs: ye.durationMs,
-        error: ye.error,
+        result: runResult.result,
+        agentCount: runResult.agentCount,
+        logs: runResult.logs,
+        durationMs: runResult.durationMs,
+        error: runResult.error,
         summary: description,
-        workflowName: s,
+        workflowName,
         title: meta.title,
-        status: kt,
-        startTime: w.startTime,
-        phases: w.phases,
-        defaultModel: w.defaultModel,
+        status,
+        startTime: taskState.startTime,
+        phases: taskState.phases,
+        defaultModel: taskState.defaultModel,
         workflowProgress,
         totalTokens,
         totalToolCalls,
       },
       toolUseContext.storageV5,
     );
-    if (w.abortController?.signal.aborted) return;
+    if (taskState.abortController?.signal.aborted) return;
     let usage = {
       total_tokens: totalTokens,
       tool_uses: totalToolCalls,
-      duration_ms: ye.durationMs,
+      duration_ms: runResult.durationMs,
     };
-    if (ye.error) {
-      let error = hideFailedScriptRecord(e.withholdScriptFromSdkEvents, ye.error);
-      failWorkflowTask(taskId, error, ye.agentCount, ye.logs, toolUseContext.taskRegistry, {
+    if (runResult.error) {
+      let error = hideFailedScriptRecord(options.withholdScriptFromSdkEvents, runResult.error);
+      failWorkflowTask(taskId, error, runResult.agentCount, runResult.logs, toolUseContext.taskRegistry, {
         summary: `Dynamic workflow "${description}" failed: ${error}`,
-        output_file: w.outputFile,
+        output_file: taskState.outputFile,
         usage,
       });
     } else
-      completeWorkflowTask(taskId, ye.result, ye.agentCount, ye.logs, toolUseContext.taskRegistry, {
-        summary: `Dynamic workflow "${description}" completed`,
-        output_file: w.outputFile,
-        usage,
-      });
+      completeWorkflowTask(
+        taskId,
+        runResult.result,
+        runResult.agentCount,
+        runResult.logs,
+        toolUseContext.taskRegistry,
+        {
+          summary: `Dynamic workflow "${description}" completed`,
+          output_file: taskState.outputFile,
+          usage,
+        },
+      );
     if (v2Run && !v2Run.isKilled && v2Run.isActive) v2Run.reopen?.();
-    if (e.suppressCompletionNotification) {
-      toolUseContext.taskRegistry.update(taskId, (Se) => ({
-        ...Se,
+    if (options.suppressCompletionNotification) {
+      toolUseContext.taskRegistry.update(taskId, (task) => ({
+        ...task,
         notified: true,
       }));
       removeKeepaliveReason(visibleSubagentId, `workflow:${taskId}`, toolUseContext.taskRegistry);
@@ -487,20 +514,22 @@ function launchWorkflowRun(e) {
       enqueueWorkflowNotification({
         taskId,
         summary: description,
-        status: ye.error ? "failed" : "completed",
+        status: runResult.error ? "failed" : "completed",
         error:
-          ye.error === undefined
+          runResult.error === undefined
             ? undefined
-            : hideFailedScriptRecord(e.withholdScriptFromSdkEvents, ye.error),
-        result: ye.result,
-        failures: e.withholdScriptFromSdkEvents ? ye.failures.map(() => WITHHELD_ERROR_TEXT) : ye.failures,
-        foreignArtifactContent: ye.foreignArtifactContent,
-        toolsUsed: ye.toolsUsed,
-        usageLimitDenial: ye.usageLimitDenial,
-        agentCount: ye.agentCount,
+            : hideFailedScriptRecord(options.withholdScriptFromSdkEvents, runResult.error),
+        result: runResult.result,
+        failures: options.withholdScriptFromSdkEvents
+          ? runResult.failures.map(() => WITHHELD_ERROR_TEXT)
+          : runResult.failures,
+        foreignArtifactContent: runResult.foreignArtifactContent,
+        toolsUsed: runResult.toolsUsed,
+        usageLimitDenial: runResult.usageLimitDenial,
+        agentCount: runResult.agentCount,
         totalTokens,
         totalToolCalls,
-        durationMs: ye.durationMs,
+        durationMs: runResult.durationMs,
         taskRegistry: toolUseContext.taskRegistry,
         toolUseId,
         transcriptDir,
@@ -512,30 +541,30 @@ function launchWorkflowRun(e) {
   })()
     .catch((error) => {
       logError(error);
-      let Ee = error instanceof Error ? error.message : String(error);
-      let xe = context.getAppState()?.tasks?.[taskId];
-      let agentCount = xe?.agentCount ?? 0;
-      if (xe?.status !== "completed" && q?.status !== "killed")
-        q = {
+      let message = error instanceof Error ? error.message : String(error);
+      let task = context.getAppState()?.tasks?.[taskId];
+      let agentCount = task?.agentCount ?? 0;
+      if (task?.status !== "completed" && outcome?.status !== "killed")
+        outcome = {
           status: "failed",
-          error: Ee,
+          error: message,
           agentCount,
-          logs: xe?.logs ?? [],
-          durationMs: Date.now() - w.startTime,
+          logs: task?.logs ?? [],
+          durationMs: Date.now() - taskState.startTime,
         };
-      let error_2 = hideFailedScriptRecord(e.withholdScriptFromSdkEvents, Ee);
-      failWorkflowTask(taskId, error_2, agentCount, xe?.logs ?? [], toolUseContext.taskRegistry, {
+      let error_2 = hideFailedScriptRecord(options.withholdScriptFromSdkEvents, message);
+      failWorkflowTask(taskId, error_2, agentCount, task?.logs ?? [], toolUseContext.taskRegistry, {
         summary: `Dynamic workflow "${description}" failed: ${error_2}`,
-        output_file: w.outputFile,
+        output_file: taskState.outputFile,
         usage: {
-          total_tokens: xe?.totalTokens ?? 0,
-          tool_uses: xe?.totalToolCalls ?? 0,
-          duration_ms: Date.now() - w.startTime,
+          total_tokens: task?.totalTokens ?? 0,
+          tool_uses: task?.totalToolCalls ?? 0,
+          duration_ms: Date.now() - taskState.startTime,
         },
       });
-      if (e.suppressCompletionNotification) {
-        toolUseContext.taskRegistry.update(taskId, (Wt) => ({
-          ...Wt,
+      if (options.suppressCompletionNotification) {
+        toolUseContext.taskRegistry.update(taskId, (task) => ({
+          ...task,
           notified: true,
         }));
         removeKeepaliveReason(visibleSubagentId, `workflow:${taskId}`, toolUseContext.taskRegistry);
@@ -546,24 +575,24 @@ function launchWorkflowRun(e) {
           status: "failed",
           error: error_2,
           agentCount,
-          totalTokens: xe?.totalTokens ?? 0,
-          totalToolCalls: xe?.totalToolCalls ?? 0,
-          durationMs: Date.now() - w.startTime,
+          totalTokens: task?.totalTokens ?? 0,
+          totalToolCalls: task?.totalToolCalls ?? 0,
+          durationMs: Date.now() - taskState.startTime,
           taskRegistry: toolUseContext.taskRegistry,
           toolUseId,
           transcriptDir,
           scriptPath,
           workflowRunId,
           args,
-          workflowProgress: xe?.workflowProgress,
+          workflowProgress: task?.workflowProgress,
         });
     })
     .finally(() => {
-      P();
-      if (!e.onSettled) return;
+      releaseTaskLoop();
+      if (!options.onSettled) return;
       try {
-        e.onSettled(
-          q ?? {
+        options.onSettled(
+          outcome ?? {
             status: "unknown",
           },
         );
@@ -571,6 +600,6 @@ function launchWorkflowRun(e) {
         logError(error);
       }
     });
-  return w;
+  return taskState;
 }
 export { agentNameForTelemetry, agentLabelForTelemetry, launchWorkflowRun, isBuiltInWithFlag };

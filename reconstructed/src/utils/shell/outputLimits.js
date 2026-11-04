@@ -30,8 +30,8 @@ function getConfiguredBashOutputMaxChars() {
  * Bash 输出最大字符数：settings.bashOutputMaxChars（夹在上下限之间）优先，否则 BASH_MAX_OUTPUT_LENGTH（默认 30000，上限 150000）。
  */
 function getMaxOutputLength() {
-  let e = clampOutputLimit(getInitialSettings_2().bashOutputMaxChars);
-  if (e !== undefined) return e;
+  let configuredLimit = clampOutputLimit(getInitialSettings_2().bashOutputMaxChars);
+  if (configuredLimit !== undefined) return configuredLimit;
   return validateBoundedIntEnvVar(
     "BASH_MAX_OUTPUT_LENGTH",
     process.env.BASH_MAX_OUTPUT_LENGTH,

@@ -12,6 +12,7 @@ import { lazyWritersSlot } from "../../tools/ArtifactTool/actionNames.js";
 import { analyzeTurnTail, isHumanOrigin, isHumanTurn } from "../turnOrigin.js";
 import { consentMustDeny } from "./toolPermissionContext.js";
 import { envSessionKind } from "../sessionShape.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hgrqcyvx.js:342-451 placement
 class LazyReaderSlot {
@@ -25,10 +26,13 @@ class LazyReaderSlot {
   }
 }
 //@ chunk-hgrqcyvx.js:451-465 placement
-var personOnlyRegistry = new LazyReaderSlot();
+var personOnlyRegistry; // deferred: uses LazyReaderSlot of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hgrqcyvx.js:451", () => {
+  personOnlyRegistry = new LazyReaderSlot();
+});
 //@ chunk-hgrqcyvx.js:465-497 placement
-function registerPersonOnlyDecider(s) {
-  personOnlyRegistry.register(s);
+function registerPersonOnlyDecider(decider) {
+  personOnlyRegistry.register(decider);
 }
 //@ chunk-hgrqcyvx.js:497-583 placement
 var PERSON_ONLY_DECISION = {
@@ -41,20 +45,20 @@ var PERSON_ONLY_DECISION = {
 /**
  * 判断本轮权限请求是否必须由人本人决定（定时触发、轮次被替换等情况），返回对应选项。
  */
-function personOnlyDecisionFor(s) {
-  let { decider, scheduledTrigger, replacedTurnStart } = analyzeTurnTail(s.messages);
-  let r = decider === null ? undefined : s.messages[decider.index];
-  let n =
+function personOnlyDecisionFor(request) {
+  let { decider, scheduledTrigger, replacedTurnStart } = analyzeTurnTail(request.messages);
+  let deciderMessage = decider === null ? undefined : request.messages[decider.index];
+  let isPersonDecided =
     decider === null
       ? replacedTurnStart?.bySessionUsersOwnWords === true
-      : r !== undefined && isHumanOrigin(decider.origin) && isHumanTurn(r);
-  return consentMustDeny(s) ||
-    (scheduledTrigger && !n) ||
+      : deciderMessage !== undefined && isHumanOrigin(decider.origin) && isHumanTurn(deciderMessage);
+  return consentMustDeny(request) ||
+    (scheduledTrigger && !isPersonDecided) ||
     decider?.origin?.kind === "channel" ||
     (decider?.origin?.kind === "peer" &&
       decider.origin.senderTaskId === undefined &&
       decider.origin.selfSent !== true) ||
-    (isHumanOrigin(decider?.origin) && !n) ||
+    (isHumanOrigin(decider?.origin) && !isPersonDecided) ||
     (replacedTurnStart?.byHuman === true && !replacedTurnStart.byHumanHere)
     ? {
         behavior: "deny",
@@ -72,8 +76,9 @@ function personOnlyDecisionFor(s) {
 /**
  * 该 tool_use 是否由用户决定：查 toolDecisions 中的来源为 user_temporary/user_permanent；没有记录时用全局判定。
  */
-function isUserDecidedToolUse(s) {
-  let source = s.toolUseId === undefined ? undefined : s.toolDecisions?.get(s.toolUseId)?.source;
+function isUserDecidedToolUse(context) {
+  let source =
+    context.toolUseId === undefined ? undefined : context.toolDecisions?.get(context.toolUseId)?.source;
   return source === undefined ? envSessionKind() : source === "user_temporary" || source === "user_permanent";
 }
 export {

@@ -18,8 +18,8 @@ var REPL_TOOL_NAME_ALIAS = "REPL";
 /**
  * 判断工具名是 REPL 工具名或其别名。
  */
-function isReplToolName(o) {
-  return o === REPL_TOOL_NAME || o === REPL_TOOL_NAME_ALIAS;
+function isReplToolName(toolName) {
+  return toolName === REPL_TOOL_NAME || toolName === REPL_TOOL_NAME_ALIAS;
 }
 //@ chunk-cy6qaqnq.js:254-297 placement
 /**
@@ -33,7 +33,7 @@ function isExactReplToolName(name) {
 /**
  * 原样返回输入（辅助占位）。
  */
-function identity(o) {
-  return o;
+function identity(value) {
+  return value;
 }
 export { isReplToolName, REPL_TOOL_NAME, isExactReplToolName, identity, REPL_TOOL_NAME_ALIAS };

@@ -38,8 +38,8 @@ import { TYPE_FILE_UNREAD_REASONS } from "../../services/artifacts/publishSource
 /**
  * 按 action 名取动作处理器。
  */
-function actionHandlerFor(e) {
-  let action = typeof e?.action === "string" ? e.action : undefined;
+function actionHandlerFor(input) {
+  let action = typeof input?.action === "string" ? input.action : undefined;
   return ACTION_HANDLER_BY_NAME.get(action) ?? null;
 }
 //@ chunk-8wvtd8sr.js:311503-312756 placement
@@ -117,48 +117,50 @@ var RESULT_RENDERERS = [
   ["handler_result", ENDPOINT_RESULT_MAPPERS.handler_result, stripHandlerResult],
   ["script_result", ENDPOINT_RESULT_MAPPERS.script_result, stripScriptResult],
 ];
-var RESULT_RENDERER_BY_KEY = new Map(RESULT_RENDERERS.map(([key, n]) => [key, n]));
+var RESULT_RENDERER_BY_KEY = new Map(RESULT_RENDERERS.map(([key, renderer]) => [key, renderer]));
 //@ chunk-8wvtd8sr.js:312756-312803 placement
 /**
  * 判断结果里是否有任一可渲染键。
  */
-function hasRenderableResultKey(e) {
-  return RESULT_RENDERERS.some(([n]) => n in e);
+function hasRenderableResultKey(result) {
+  return RESULT_RENDERERS.some(([key]) => key in result);
 }
 //@ chunk-8wvtd8sr.js:312803-312868 placement
 /**
  * 按结果里的第一个已知键取渲染器。
  */
-function resultRendererFor(e) {
-  let n = firstResultKey(e);
-  return n === null ? null : (RESULT_RENDERER_BY_KEY.get(n) ?? null);
+function resultRendererFor(result) {
+  let key = firstResultKey(result);
+  return key === null ? null : (RESULT_RENDERER_BY_KEY.get(key) ?? null);
 }
 //@ chunk-8wvtd8sr.js:312868-312931 placement
 /**
  * 取结果里第一个出现的已知结果键。
  */
-function firstResultKey(e) {
-  for (let n of ARTIFACT_RESULT_KEYS) if (n in e) return n;
+function firstResultKey(result) {
+  for (let key of ARTIFACT_RESULT_KEYS) if (key in result) return key;
   return null;
 }
 //@ chunk-8wvtd8sr.js:312931-313045 placement
 /**
  * 根据结果中出现的键，取出保存到记录前需要执行的瘦身函数。
  */
-function resultStorageStrippers(e) {
-  if (e === null || typeof e !== "object") return [];
-  return RESULT_RENDERERS.flatMap(([n, , s]) => (s !== undefined && n in e ? [s] : []));
+function resultStorageStrippers(result) {
+  if (result === null || typeof result !== "object") return [];
+  return RESULT_RENDERERS.flatMap(([key, , stripper]) =>
+    stripper !== undefined && key in result ? [stripper] : [],
+  );
 }
 //@ chunk-8wvtd8sr.js:313045-313179 placement
 /**
  * 登记协调器编辑者：撤销其他 agent 已送达的后续提示，记录编辑者并启动编辑完成监视。
  */
-function registerCoordinatorEditor(slug, n) {
+function registerCoordinatorEditor(slug, editor) {
   let liveState = getLiveState();
   revokeCodeliveredFollowups(slug, "page_rehomed", {
-    exceptAgentId: n.agentId,
+    exceptAgentId: editor.agentId,
   });
-  liveState.coordinatorEditors.set(slug, n);
+  liveState.coordinatorEditors.set(slug, editor);
   liveState.editorSettleWatch ??= watchEditorSettle(liveState);
 }
 //@ chunk-8wvtd8sr.js:313179-313250 placement
@@ -171,11 +173,11 @@ function unregisterCoordinatorEditor(slug) {
 }
 //@ chunk-8wvtd8sr.js:313250-313449 placement
 function watchEditorSettle(liveState) {
-  return getTaskRunState().agentSettled.subscribe((n, s) => {
-    if (s === "completed") return;
+  return getTaskRunState().agentSettled.subscribe((agentId, settled) => {
+    if (settled === "completed") return;
     try {
-      for (let [r, h] of liveState.coordinatorEditors)
-        if (h.agentId === n) liveState.coordinatorEditors.delete(r);
+      for (let [slug, editor] of liveState.coordinatorEditors)
+        if (editor.agentId === agentId) liveState.coordinatorEditors.delete(slug);
     } catch (error) {
       if (!isAbortError(error)) logError(error);
     }

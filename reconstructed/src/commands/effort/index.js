@@ -16,10 +16,10 @@ import { getIsNonInteractiveSession } from "../../bootstrap/state.js";
 /**
  * formatEffortArgumentHint：[low|medium|high|...|auto|ultracode [on|off]]。
  */
-function formatEffortArgumentHint(e, n) {
+function formatEffortArgumentHint(state, args) {
   let mainLoopModel = getMainLoopModel();
-  let s = isUltracodeAvailable(mainLoopModel) ? "|ultracode [on|off]" : "";
-  return `${e}${getAllowedEffortLevels(mainLoopModel).join("|")}|auto${s}${n}`;
+  let ultracodeHint = isUltracodeAvailable(mainLoopModel) ? "|ultracode [on|off]" : "";
+  return `${state}${getAllowedEffortLevels(mainLoopModel).join("|")}|auto${ultracodeHint}${args}`;
 }
 //@ chunk-e6aww6q8.js:2050200-2050636 fingerprint = default (0.602)
 /**
@@ -50,7 +50,7 @@ var effortNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-mtkg11k6.js"),
+  load: () => import("./call_2.lazy.js"),
 };
 var effortCommand = effortCommandDefinition;
 export { effortCommand, effortNonInteractiveCommand };

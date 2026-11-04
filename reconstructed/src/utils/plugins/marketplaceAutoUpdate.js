@@ -14,6 +14,7 @@ import { ownPropertyOrUndefined, logMarketplaceNoticeOnce } from "./marketplaceS
 import { isPluginDirectoryModeOn } from "./pluginGates.js";
 import { jsonStringify } from "../slowOperations.js";
 import { SETTING_SOURCES } from "../settings/constants.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4235057-4235114 placement
 /**
@@ -31,14 +32,14 @@ function getPluginDirectoryAutoUpdate() {
 /**
  * 取已声明市场的 autoUpdate。官方插件目录市场只采用受信设置层（getPluginDirectoryAutoUpdate）的值， 项目/本地/--add-dir 里的不同值被忽略并记一次调试日志。
  */
-function getMarketplaceAutoUpdate(e, declaredMarketplaces) {
-  let autoUpdate = ownPropertyOrUndefined(declaredMarketplaces, e)?.autoUpdate;
-  if (e === OFFICIAL_MARKETPLACE_NAME && isPluginDirectoryModeOn()) {
+function getMarketplaceAutoUpdate(name, declaredMarketplaces) {
+  let autoUpdate = ownPropertyOrUndefined(declaredMarketplaces, name)?.autoUpdate;
+  if (name === OFFICIAL_MARKETPLACE_NAME && isPluginDirectoryModeOn()) {
     let pluginDirectoryAutoUpdate = getPluginDirectoryAutoUpdate();
     if (autoUpdate !== pluginDirectoryAutoUpdate)
       logMarketplaceNoticeOnce(
-        `declared-auto-update:${e}:${pluginDirectoryAutoUpdate}:${autoUpdate}`,
-        `Marketplace ${jsonStringify(e)}: autoUpdate is taken only from ${AUTOUPDATE_SETTING_SOURCES_TEXT}, which ${pluginDirectoryAutoUpdate === undefined ? "do not set it, so the default (on) applies" : `set it to ${pluginDirectoryAutoUpdate}`}. Ignored: ${autoUpdate === undefined ? "an entry in project or local settings that has no autoUpdate and would otherwise replace the entry that sets it" : `autoUpdate ${autoUpdate} in project, local or --add-dir settings`}.`,
+        `declared-auto-update:${name}:${pluginDirectoryAutoUpdate}:${autoUpdate}`,
+        `Marketplace ${jsonStringify(name)}: autoUpdate is taken only from ${AUTOUPDATE_SETTING_SOURCES_TEXT}, which ${pluginDirectoryAutoUpdate === undefined ? "do not set it, so the default (on) applies" : `set it to ${pluginDirectoryAutoUpdate}`}. Ignored: ${autoUpdate === undefined ? "an entry in project or local settings that has no autoUpdate and would otherwise replace the entry that sets it" : `autoUpdate ${autoUpdate} in project, local or --add-dir settings`}.`,
         "debug",
       );
     return pluginDirectoryAutoUpdate;
@@ -75,16 +76,19 @@ var SETTING_SOURCE_AUTHORITY = {
   },
 };
 //@ chunk-e6aww6q8.js:4235888-4235936 placement
-function isOperatorSettingSource(e) {
-  return SETTING_SOURCE_AUTHORITY[e].kind === "operator";
+function isOperatorSettingSource(source) {
+  return SETTING_SOURCE_AUTHORITY[source].kind === "operator";
 }
 //@ chunk-e6aww6q8.js:4235936-4236023 placement
-function settingSourceRank(e) {
-  let n = SETTING_SOURCE_AUTHORITY[e];
-  return n.kind === "operator" ? n.rank : Number.MAX_SAFE_INTEGER;
+function settingSourceRank(source) {
+  let authority = SETTING_SOURCE_AUTHORITY[source];
+  return authority.kind === "operator" ? authority.rank : Number.MAX_SAFE_INTEGER;
 }
 //@ chunk-e6aww6q8.js:4236023-4236073 placement
-var sorted = SETTING_SOURCES.filter(isOperatorSettingSource).sort(
-  (e, n) => settingSourceRank(e) - settingSourceRank(n),
-);
+var sorted; // deferred: uses SETTING_SOURCES (../settings/constants.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4236023", () => {
+  sorted = SETTING_SOURCES.filter(isOperatorSettingSource).sort(
+    (left, right) => settingSourceRank(left) - settingSourceRank(right),
+  );
+});
 export { getMarketplaceAutoUpdate, sorted, hasDirectoryAutoUpdate, AUTOUPDATE_SETTING_SOURCES_TEXT };

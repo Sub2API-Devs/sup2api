@@ -36,22 +36,22 @@ var USR_MERGE_ALIASES = [
   ["/var/lock", "/run/lock"],
 ];
 //@ chunk-gqez588q.js:6071-6157 placement
-function usrMergeAliasesFor(n, e, r) {
-  return n === e || n.startsWith(`${e}/`) ? [`${r}${n.slice(e.length)}`] : [];
+function usrMergeAliasesFor(path, from, to) {
+  return path === from || path.startsWith(`${from}/`) ? [`${to}${path.slice(from.length)}`] : [];
 }
 //@ chunk-gqez588q.js:6157-6224 placement
-function usrMergeAliasSpellings(n) {
-  return USR_MERGE_ALIASES.flatMap(([e, r]) => [
-    ...usrMergeAliasesFor(n, e, r),
-    ...usrMergeAliasesFor(n, r, e),
+function usrMergeAliasSpellings(path) {
+  return USR_MERGE_ALIASES.flatMap(([from, to]) => [
+    ...usrMergeAliasesFor(path, from, to),
+    ...usrMergeAliasesFor(path, to, from),
   ]);
 }
 //@ chunk-gqez588q.js:6224-6387 placement
-function platformPathAliases(n, platform) {
+function platformPathAliases(path, platform) {
   return platform === "darwin"
-    ? [n.replace(/^\/private(?=\/(?:tmp|var|etc)(?:\/|$))/i, "")].filter((r) => r !== n)
+    ? [path.replace(/^\/private(?=\/(?:tmp|var|etc)(?:\/|$))/i, "")].filter((alias) => alias !== path)
     : platform === "linux"
-      ? uniq(usrMergeAliasSpellings(n).flatMap((r) => [r, ...usrMergeAliasSpellings(r)]))
+      ? uniq(usrMergeAliasSpellings(path).flatMap((alias) => [alias, ...usrMergeAliasSpellings(alias)]))
       : [];
 }
 //@ chunk-gqez588q.js:6387-6941 placement
@@ -62,28 +62,30 @@ function remotePathSpellings(path, dirFacts) {
   let unameSR = getUnameSR(dirFacts.platform);
   let remotePath = resolveRemotePath(path, dirFacts);
   if (remotePath === undefined || !unameSR.isAbsolute(remotePath)) return [];
-  let flattened = getCanonicalPathVariants(remotePath, dirFacts, unameSR).flatMap((o) => [
-    o,
-    ...platformPathAliases(o, dirFacts.platform),
+  let flattened = getCanonicalPathVariants(remotePath, dirFacts, unameSR).flatMap((variant) => [
+    variant,
+    ...platformPathAliases(variant, dirFacts.platform),
   ]);
-  let a = pathCaseFolder(dirFacts.platform);
+  let foldCase = pathCaseFolder(dirFacts.platform);
   let normalized = unameSR.normalize(normalizeWin32DrivePath(path.trim(), unameSR));
-  let flattened_2 = flattened.flatMap((o) => abbreviatePathForDisplay(o, dirFacts, unameSR));
+  let flattened_2 = flattened.flatMap((variant) => abbreviatePathForDisplay(variant, dirFacts, unameSR));
   let copyOf = dirFacts.copyOf;
   return uniq([
     ...[...flattened_2, ...(unameSR === win32 ? [] : flattened)]
-      .flatMap((o) =>
-        [o, a(o)].flatMap((l) =>
-          dirFacts.platform === "darwin" ? [l, l.normalize("NFC"), l.normalize("NFD")] : [l],
+      .flatMap((spelling) =>
+        [spelling, foldCase(spelling)].flatMap((folded) =>
+          dirFacts.platform === "darwin"
+            ? [folded, folded.normalize("NFC"), folded.normalize("NFD")]
+            : [folded],
         ),
       )
-      .filter((o) => o !== normalized),
+      .filter((spelling) => spelling !== normalized),
     ...(copyOf === undefined
       ? []
       : flattened
-          .flatMap((o) =>
+          .flatMap((variant) =>
             abbreviatePathForDisplay(
-              o,
+              variant,
               {
                 ...dirFacts,
                 mirroredDir: dirFacts.workingDir,
@@ -92,39 +94,39 @@ function remotePathSpellings(path, dirFacts) {
               unameSR,
             ),
           )
-          .map((o) => getUnameSR(copyOf.platform).join(copyOf.workingDir, o.slice(2)))
-          .flatMap((o) => [o, ...remotePathSpellings(o, copyOf)])),
+          .map((display) => getUnameSR(copyOf.platform).join(copyOf.workingDir, display.slice(2)))
+          .flatMap((joined) => [joined, ...remotePathSpellings(joined, copyOf)])),
   ]);
 }
 //@ chunk-gqez588q.js:6941-7399 placement
 /**
  * 把绝对的 glob 路径拆分为不含通配的根目录和剩余模式（处理 Windows 长路径与 UNC 前缀）。
  */
-function splitGlobRoot(pattern, e) {
-  let unameSR = getUnameSR(e.platform);
-  let i = normalizeWin32DrivePath(pattern.trim(), unameSR);
-  if (!unameSR.isAbsolute(i)) return;
-  let t =
+function splitGlobRoot(pattern, dirFacts) {
+  let unameSR = getUnameSR(dirFacts.platform);
+  let normalized = normalizeWin32DrivePath(pattern.trim(), unameSR);
+  if (!unameSR.isAbsolute(normalized)) return;
+  let stripped =
     unameSR === win32
-      ? i.replace(/^[\\/]{2}[?.][\\/]UNC[\\/]/i, "\\\\").replace(/^[\\/]{2}[?.][\\/](?=[a-z]:)/i, "")
-      : i;
-  let parts = t.split(unameSR === win32 ? /[\\/]/ : "/");
-  let c = unameSR === win32 && /^[\\/]{2}[?.][\\/]/.test(t) ? 3 : 0;
-  let index = parts.slice(c).findIndex((A) => /[*?[{]/.test(A));
-  let s = index === -1 ? -1 : index + c;
-  let l = (s === -1 ? parts : parts.slice(0, s)).join(unameSR.sep) || unameSR.sep;
+      ? normalized.replace(/^[\\/]{2}[?.][\\/]UNC[\\/]/i, "\\\\").replace(/^[\\/]{2}[?.][\\/](?=[a-z]:)/i, "")
+      : normalized;
+  let parts = stripped.split(unameSR === win32 ? /[\\/]/ : "/");
+  let skipParts = unameSR === win32 && /^[\\/]{2}[?.][\\/]/.test(stripped) ? 3 : 0;
+  let index = parts.slice(skipParts).findIndex((part) => /[*?[{]/.test(part));
+  let globIndex = index === -1 ? -1 : index + skipParts;
+  let root = (globIndex === -1 ? parts : parts.slice(0, globIndex)).join(unameSR.sep) || unameSR.sep;
   return {
-    root: unameSR === win32 && /^[a-z]:$/i.test(l) ? `${l}${unameSR.sep}` : l,
-    rest: s === -1 ? "" : parts.slice(s).join("/"),
+    root: unameSR === win32 && /^[a-z]:$/i.test(root) ? `${root}${unameSR.sep}` : root,
+    rest: globIndex === -1 ? "" : parts.slice(globIndex).join("/"),
   };
 }
 //@ chunk-gqez588q.js:7399-7515 placement
 function pathCaseFolder(platform) {
   return platform === "win32"
-    ? (e) => e.toUpperCase().toLowerCase()
+    ? (path) => path.toUpperCase().toLowerCase()
     : platform === "darwin"
-      ? (e) => foldCase_2(e.normalize("NFC"))
-      : (e) => e;
+      ? (path) => foldCase_2(path.normalize("NFC"))
+      : (path) => path;
 }
 //@ chunk-gqez588q.js:7515-7659 placement
 var DEV_FD_PATTERN = /^\/dev\/(?:fd|stdin|stdout|stderr)(?=\/|$)/;
@@ -132,47 +134,54 @@ var PROC_LINK_PATTERN =
   /^\/proc\/(?:self|thread-self|\d+)\/(?:task\/\d+\/)?(?:cwd|root|fd|exe|map_files)(?=\/|$)/;
 //@ chunk-gqez588q.js:7659-8721 placement
 function checkWindowsPathSafety(path, dirFacts) {
-  let remotePath = resolveRemotePath(path, dirFacts);
+  let path_2 = resolveRemotePath(path, dirFacts);
   if (dirFacts.platform !== "win32") {
-    if (remotePath === undefined) return "home_unknown";
-    if (isLongPosixPath(remotePath, posix)) return "too_long";
-    return getCanonicalPathVariants(remotePath, dirFacts, posix).some(
-      (l) => DEV_FD_PATTERN.test(l) || (dirFacts.platform !== "darwin" && PROC_LINK_PATTERN.test(l)),
+    if (path_2 === undefined) return "home_unknown";
+    if (isLongPosixPath(path_2, posix)) return "too_long";
+    return getCanonicalPathVariants(path_2, dirFacts, posix).some(
+      (variant) =>
+        DEV_FD_PATTERN.test(variant) || (dirFacts.platform !== "darwin" && PROC_LINK_PATTERN.test(variant)),
     )
       ? "magic_link"
       : undefined;
   }
-  let i = normalizeWin32DrivePath(path.trim(), win32);
-  let t = driveLetterOf(i);
-  if (!win32.isAbsolute(i) && t !== undefined && t !== driveLetterOf(dirFacts.workingDir))
+  let winPath = normalizeWin32DrivePath(path.trim(), win32);
+  let driveLetter = driveLetterOf(winPath);
+  if (
+    !win32.isAbsolute(winPath) &&
+    driveLetter !== undefined &&
+    driveLetter !== driveLetterOf(dirFacts.workingDir)
+  )
     return "other_drive_relative";
-  if (remotePath === undefined) return "home_unknown";
-  let normalized = win32.normalize(i);
+  if (path_2 === undefined) return "home_unknown";
+  let normalized = win32.normalize(winPath);
   if (/^\\\\[?.]\\(?![a-z]:\\|UNC\\)/i.test(normalized) || hasWin32DevicePrefixSpelling(normalized))
     return "nt_device_namespace";
   let replaced = normalized.replace(/^\\\\[?.]\\UNC\\/i, "\\\\").replace(/^\\\\[?.]\\(?=[a-z]:)/i, "");
-  let d = /^\\\\[^\\]+\\[^\\]+\$(?=\\|$)/.exec(replaced)?.[0];
+  let adminShare = /^\\\\[^\\]+\\[^\\]+\$(?=\\|$)/.exec(replaced)?.[0];
   if (
-    d !== undefined &&
+    adminShare !== undefined &&
     ![dirFacts.workingDir, dirFacts.homeDir].some(
-      (l) =>
-        l !== undefined &&
-        normalizeCaseForComparison(win32.normalize(l)).startsWith(`${normalizeCaseForComparison(d)}\\`),
+      (root) =>
+        root !== undefined &&
+        normalizeCaseForComparison(win32.normalize(root)).startsWith(
+          `${normalizeCaseForComparison(adminShare)}\\`,
+        ),
     )
   )
     return "administrative_share";
   let replaced_2 = replaced.replace(/^\\\\/, "");
   if (replaced_2.includes(":", /^[a-z]:/i.test(replaced_2) ? 2 : 0)) return "colon_past_drive_position";
-  if (replaced_2.split("\\").some((l) => isReservedDeviceName(l) && !/^[^. ]+\./.test(l)))
+  if (replaced_2.split("\\").some((segment) => isReservedDeviceName(segment) && !/^[^. ]+\./.test(segment)))
     return "dos_device_name";
-  let o = classifySuspiciousWindowsPathPattern(replaced_2.replace(/~(?=\d)/g, "-"));
-  return o === undefined ||
-    o === "device_path_prefix" ||
-    o === "unc_or_webdav_form" ||
-    o === "tilde_digit" ||
-    o === "dos_device_suffix"
+  let suspicion = classifySuspiciousWindowsPathPattern(replaced_2.replace(/~(?=\d)/g, "-"));
+  return suspicion === undefined ||
+    suspicion === "device_path_prefix" ||
+    suspicion === "unc_or_webdav_form" ||
+    suspicion === "tilde_digit" ||
+    suspicion === "dos_device_suffix"
     ? undefined
-    : o;
+    : suspicion;
 }
 //@ chunk-gqez588q.js:8721-9403 placement
 /**

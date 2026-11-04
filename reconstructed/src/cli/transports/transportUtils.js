@@ -13,9 +13,9 @@
 /**
  * 把 ws:/wss: 协议改成 http:/https:。
  */
-function getTransportForUrl(e) {
-  if (e.protocol === "wss:") e.protocol = "https:";
-  else if (e.protocol === "ws:") e.protocol = "http:";
-  return e;
+function getTransportForUrl(url) {
+  if (url.protocol === "wss:") url.protocol = "https:";
+  else if (url.protocol === "ws:") url.protocol = "http:";
+  return url;
 }
 export { getTransportForUrl };

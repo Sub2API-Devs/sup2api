@@ -37,3 +37,4 @@ var PLUGIN_DEV_REFERENCE_FILES = {
   "references/mcp-servers.md": referencesMcpServers,
   "references/search-strategies.md": referencesSearchStrategies,
 };
+export { PLUGIN_DEV_REFERENCE_FILES, PLUGIN_DEV_SKILL_MD };

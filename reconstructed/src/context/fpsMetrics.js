@@ -8,7 +8,7 @@
  * pieces: chunk-xe7zq1p4.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { statsContext } from "./stats.js";
 
@@ -17,7 +17,7 @@ import { statsContext } from "./stats.js";
  * 向子树提供 getFpsMetrics。
  */
 function FpsMetricsProvider(props) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let { getFpsMetrics, children } = props;
   let t1;
   if ($[0] !== children || $[1] !== getFpsMetrics) {

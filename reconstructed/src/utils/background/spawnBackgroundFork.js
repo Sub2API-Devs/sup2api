@@ -49,7 +49,7 @@ import {
 } from "../../bootstrap/state.js";
 import { truncateToLength, collapseWhitespace, plural } from "../stringUtils.js";
 import { redactSecrets } from "../../services/teamMemorySync/secretScanner.js";
-import { CIRCLE_MARK_GLYPH } from "../permissions/autoModeRulesPrompt.js";
+import { CIRCLE_MARK_GLYPH } from "../../constants/figures.js";
 import {
   getRelaunchModel,
   sessionAddDirs,
@@ -94,13 +94,18 @@ import {
 import { errorMessage, TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from "../errors.js";
 import { stripWatchArtifactArgs } from "../../cli/watchArtifactArgs.js";
 import { spawnBgSession, stripResumeFlags, formatBgHints } from "../../cli/bg/bgCommands.js";
-import { getJobDir, readJobState, syncJobName, writeStateAtomic } from "../../services/daemon/jobState.js";
+import {
+  getJobDir,
+  readJobState,
+  syncJobName,
+  JOB_PARENT_TRANSCRIPT_FILE,
+  writeStateAtomic,
+} from "../../services/daemon/jobState.js";
 import { logFeatureSad, logFeatureBad, logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 import { generateSessionName } from "../../commands/rename/generateSessionName.js";
 import { messagesSinceCompactBoundary } from "../../services/projects/threadRows.js";
 import { registerCleanup } from "../cleanupRegistry.js";
 import { createContinuedInEntry } from "../backgroundSessionResume.js";
-import { JOB_PARENT_TRANSCRIPT_FILE } from "../../services/analytics/metadata.js";
 import { isValidKeySegment, STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { formatStorageError } from "../storage/storageErrors.js";
 import { jsonStringify } from "../slowOperations.js";
@@ -123,14 +128,14 @@ import {
 import { clearHandoffInProgress } from "../../services/quotaAutoResume/quotaAutoResume.js";
 import { isAgentsFleetEnabled } from "../fleetGates.js";
 import { isAdoptEnabled, backgroundWorkSummary } from "../../tasks/backgroundTaskLabels.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppStoreDirect, useAppStateSession, useAppState } from "../../state/AppState.js";
 import { useSetVoiceState } from "../../context/voice.js";
 import { useTheme_2 } from "../../components/design-system/ThemeProvider.js";
 import { useCommandQueueOrDefault } from "../../context/QueuedMessageContext.js";
-import { R, P, y } from "../../../vendor/react/cjs/react.production.js";
+import { useRef, useEffect, useState } from "../../../vendor/react/cjs/react.production.js";
 import { gracefulShutdown } from "../gracefulShutdown.js";
-import { wi } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_reject } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { getPermissionModeCycle, getAlwaysAllowRules } from "../permissions/permissions.js";
 import { promptProactivityLevel } from "../proactivityLevel.js";
 import { placeholderJobNameScore } from "../../cli/bg/bgDispatch.js";
@@ -145,12 +150,12 @@ import { ConfirmSelect } from "../../components/design-system/ConfirmSelect.js";
 import { Dialog } from "../../components/design-system/Dialog.js";
 
 //@ chunk-18hwfzwa.js:63939-64004 placement
-function selectToolPermissionContextAlwaysDenyRules(Fr) {
-  return Fr.toolPermissionContext.alwaysDenyRules;
+function selectToolPermissionContextAlwaysDenyRules(appState) {
+  return appState.toolPermissionContext.alwaysDenyRules;
 }
 //@ chunk-18hwfzwa.js:64004-64037 placement
-function selectTasks_4(Zn) {
-  return Zn.tasks;
+function selectTasks_4(appState) {
+  return appState.tasks;
 }
 //@ chunk-18hwfzwa.js:64037-64599 placement
 /**
@@ -194,21 +199,34 @@ var COORDINATOR_FORK_REFUSAL = "Forking is not available in coordinator sessions
 /**
  * 派生后台分叉会话：从当前会话（或指定叶节点）复制转录、起名，并在新的后台会话中继续；协调者模式与分叉点丢失时拒绝。
  */
-async function spawnBackgroundFork(h, x, D, L, ee, ke, Re, Be, messages, We) {
-  let ze = We?.keepParent ? [] : (We?.handoffRecord?.revivals ?? pendingResumeNotices(commandQueueManager()));
-  if (We?.keepParent && isCoordinatorMode_2())
+async function spawnBackgroundFork(
+  currentAgent,
+  promptText,
+  effortLevel,
+  permissionMode,
+  addedDirs,
+  allowRules,
+  denyRules,
+  spawnVia,
+  messages,
+  options,
+) {
+  let queuedCommands = options?.keepParent
+    ? []
+    : (options?.handoffRecord?.revivals ?? pendingResumeNotices(commandQueueManager()));
+  if (options?.keepParent && isCoordinatorMode_2())
     return {
       ok: false,
       error: COORDINATOR_FORK_REFUSAL,
       queued: false,
       reason: "coordinator_mode",
     };
-  let resumeAtLeaf = We?.keepParent ? We.resumeAtLeaf : undefined;
-  let rt =
+  let resumeAtLeaf = options?.keepParent ? options.resumeAtLeaf : undefined;
+  let forkPointIndex =
     resumeAtLeaf === undefined || resumeAtLeaf === null
       ? -1
-      : messages.findIndex((cn) => cn.uuid === resumeAtLeaf);
-  if (resumeAtLeaf !== undefined && resumeAtLeaf !== null && rt < 0)
+      : messages.findIndex((message) => message.uuid === resumeAtLeaf);
+  if (resumeAtLeaf !== undefined && resumeAtLeaf !== null && forkPointIndex < 0)
     return {
       ok: false,
       error: "Couldn't fork \u2014 the conversation no longer contains the fork point.",
@@ -216,42 +234,45 @@ async function spawnBackgroundFork(h, x, D, L, ee, ke, Re, Be, messages, We) {
       reason: "fork_point_missing",
     };
   let replConfigArgv = getReplConfigArgv();
-  let At = We?.keepParent ? truncateToLength(redactSecrets(collapseWhitespace(x ?? "")), 60) : "";
-  let It = h.name
-    ? `${h.name} ${CIRCLE_MARK_GLYPH}${At ? ` ${At}` : ""}`
-    : At
-      ? `${CIRCLE_MARK_GLYPH} ${At}`
+  let promptSummary = options?.keepParent
+    ? truncateToLength(redactSecrets(collapseWhitespace(promptText ?? "")), 60)
+    : "";
+  let displayName = currentAgent.name
+    ? `${currentAgent.name} ${CIRCLE_MARK_GLYPH}${promptSummary ? ` ${promptSummary}` : ""}`
+    : promptSummary
+      ? `${CIRCLE_MARK_GLYPH} ${promptSummary}`
       : undefined;
-  let Ot = We?.keepParent
+  let agentInfo = options?.keepParent
     ? {
-        ...h,
-        name: It,
-        nameSource: It ? "auto" : undefined,
+        ...currentAgent,
+        name: displayName,
+        nameSource: displayName ? "auto" : undefined,
       }
-    : h;
+    : currentAgent;
   let relaunchModel = getRelaunchModel();
-  let Dt = effortLevelValue(D);
-  let Lt = sessionAddDirs(ee);
-  let session = ke.session ?? [];
-  let session_2 = Re.session ?? [];
+  let effortValue = effortLevelValue(effortLevel);
+  let sessionDirs = sessionAddDirs(addedDirs);
+  let session = allowRules.session ?? [];
+  let session_2 = denyRules.session ?? [];
   let sessionPermissionRules =
-    session.length > 0 || session_2.length > 0 || Lt.length > 0
+    session.length > 0 || session_2.length > 0 || sessionDirs.length > 0
       ? {
           allow: [...session],
           deny: [...session_2],
-          ...(Lt.length > 0 && {
-            addDirs: Lt,
+          ...(sessionDirs.length > 0 && {
+            addDirs: sessionDirs,
           }),
         }
       : undefined;
-  let filtered = (ke.cliArg ?? []).filter(isCarriableRule);
-  let filtered_2 = (Re.cliArg ?? []).filter(isAcceptableModelArg);
+  let filtered = (allowRules.cliArg ?? []).filter(isCarriableRule);
+  let filtered_2 = (denyRules.cliArg ?? []).filter(isAcceptableModelArg);
   let currentWorktreeSession = getCurrentWorktreeSession();
-  let co = !We?.keepParent && Boolean(currentWorktreeSession && !currentWorktreeSession.enteredExisting);
-  let bo =
-    !We?.keepParent && Boolean(currentWorktreeSession && isOwnedWorktreeSession(currentWorktreeSession));
-  let Ao = (() => {
-    if (!We?.keepParent) return null;
+  let handOffWorktree =
+    !options?.keepParent && Boolean(currentWorktreeSession && !currentWorktreeSession.enteredExisting);
+  let ownsWorktree =
+    !options?.keepParent && Boolean(currentWorktreeSession && isOwnedWorktreeSession(currentWorktreeSession));
+  let relocation = (() => {
+    if (!options?.keepParent) return null;
     if (currentWorktreeSession)
       return {
         to: currentWorktreeSession.originalCwd,
@@ -266,37 +287,45 @@ async function spawnBackgroundFork(h, x, D, L, ee, ke, Re, Be, messages, We) {
         }
       : null;
   })();
-  let to = Ao?.to;
-  let Ro = getInitialSettings_2().worktree?.bgIsolation === "none";
-  let Ho = (() => {
-    if (!We?.keepParent || Ao !== null) return;
+  let to = relocation?.to;
+  let bgIsolationNone = getInitialSettings_2().worktree?.bgIsolation === "none";
+  let editsIn = (() => {
+    if (!options?.keepParent || relocation !== null) return;
     if (findGitRoot(getOriginalCwd()) === null) return;
-    return isLinkedWorktree(getOriginalCwd()) || Ro ? "this-tree" : "own-worktree";
+    return isLinkedWorktree(getOriginalCwd()) || bgIsolationNone ? "this-tree" : "own-worktree";
   })();
   if (messages.length > 0 && getCaps().transcriptSource !== "ccr-api") {
-    let cn = We?.isTurnLive !== true;
-    let Dn =
-      ze.length === 0 || !cn
+    let isTurnLive = options?.isTurnLive !== true;
+    let pendingAttachments =
+      queuedCommands.length === 0 || !isTurnLive
         ? []
-        : (await getQueuedCommandAttachments(ze, imageLimitsForModel(undefined))).map((mr) =>
-            createAttachmentMessage(mr),
+        : (await getQueuedCommandAttachments(queuedCommands, imageLimitsForModel(undefined))).map(
+            (attachment) => createAttachmentMessage(attachment),
           );
-    let wn =
-      We?.keepParent || !cn ? [] : [We?.handoffRecord?.cronCarryNote ?? buildCronCarryAttachment(messages)];
-    await recordTranscript([...messages, ...Dn, ...wn], undefined, undefined, messages, We?.storageV5);
+    let cronCarryMessages =
+      options?.keepParent || !isTurnLive
+        ? []
+        : [options?.handoffRecord?.cronCarryNote ?? buildCronCarryAttachment(messages)];
+    await recordTranscript(
+      [...messages, ...pendingAttachments, ...cronCarryMessages],
+      undefined,
+      undefined,
+      messages,
+      options?.storageV5,
+    );
   }
   let currentSessionFile = getCurrentSessionFile();
   let sessionId = getSessionId();
-  flushAndSaveCosts(undefined, We?.storageV5);
-  let mn = false;
+  flushAndSaveCosts(undefined, options?.storageV5);
+  let flushed = false;
   try {
-    if (We?.keepParent) await saveResumePoint(messages, We.storageV5);
+    if (options?.keepParent) await saveResumePoint(messages, options.storageV5);
     await withTimeout(flushSessionStorage(), 1e4, "flush timeout");
-    mn = true;
+    flushed = true;
   } catch {
-    if (We?.keepParent) {
+    if (options?.keepParent) {
       logEvent("tengu_background_spawn_failed", {
-        via: fromEnum(Be),
+        via: fromEnum(spawnVia),
       });
       return {
         ok: false,
@@ -306,26 +335,26 @@ async function spawnBackgroundFork(h, x, D, L, ee, ke, Re, Be, messages, We) {
       };
     }
   }
-  let Cn =
-    We?.keepParent && Ao
-      ? `This conversation was forked out of ${currentWorktreeSession?.worktreePath ?? getOriginalCwd()}${currentWorktreeSession?.worktreeBranch ? ` (branch ${currentWorktreeSession.worktreeBranch})` : ""}, a linked worktree the original session is still working in \u2014 never edit files, run commands, or enter that worktree with ${ENTER_WORKTREE_TOOL_NAME}. You are in ${Ao.to}${Ro ? "" : `; before making code changes, create a new worktree of your own with ${ENTER_WORKTREE_TOOL_NAME} instead of reusing the original's${currentWorktreeSession?.worktreeBranch ? `, and if the task builds on the original's work, base your new branch on ${currentWorktreeSession.worktreeBranch} rather than checking that branch out (it stays checked out in the original's worktree)` : ""}`}.`
-      : Ho === "own-worktree"
+  let forkBriefing =
+    options?.keepParent && relocation
+      ? `This conversation was forked out of ${currentWorktreeSession?.worktreePath ?? getOriginalCwd()}${currentWorktreeSession?.worktreeBranch ? ` (branch ${currentWorktreeSession.worktreeBranch})` : ""}, a linked worktree the original session is still working in \u2014 never edit files, run commands, or enter that worktree with ${ENTER_WORKTREE_TOOL_NAME}. You are in ${relocation.to}${bgIsolationNone ? "" : `; before making code changes, create a new worktree of your own with ${ENTER_WORKTREE_TOOL_NAME} instead of reusing the original's${currentWorktreeSession?.worktreeBranch ? `, and if the task builds on the original's work, base your new branch on ${currentWorktreeSession.worktreeBranch} rather than checking that branch out (it stays checked out in the original's worktree)` : ""}`}.`
+      : editsIn === "own-worktree"
         ? `This conversation was forked from a session that is still working in this checkout (${getOriginalCwd()}). Before making code changes, create a new worktree of your own with ${ENTER_WORKTREE_TOOL_NAME} so your edits don't land where the original session is editing.`
         : undefined;
-  let No = resumeAtLeaf === undefined ? messages : messages.slice(0, rt + 1);
-  let vo = normalizeUuidOrNull(sessionId);
-  let Yo =
-    resumeAtLeaf !== undefined && vo !== null
+  let forkMessages = resumeAtLeaf === undefined ? messages : messages.slice(0, forkPointIndex + 1);
+  let sessionUuid = normalizeUuidOrNull(sessionId);
+  let forkPointRecord =
+    resumeAtLeaf !== undefined && sessionUuid !== null
       ? {
           type: "last-prompt",
-          sessionId: vo,
+          sessionId: sessionUuid,
           leafUuid: resumeAtLeaf,
           explicit: true,
         }
       : undefined;
-  if (resumeAtLeaf !== undefined && Yo === undefined) {
+  if (resumeAtLeaf !== undefined && forkPointRecord === undefined) {
     logEvent("tengu_background_spawn_failed", {
-      via: fromEnum(Be),
+      via: fromEnum(spawnVia),
     });
     return {
       ok: false,
@@ -334,34 +363,34 @@ async function spawnBackgroundFork(h, x, D, L, ee, ke, Re, Be, messages, We) {
       reason: "session_id_invalid",
     };
   }
-  let last = No.findLast((cn) => isLoggableMessage(cn) && !isReorderedRow(cn.uuid));
-  let Fn =
-    Cn !== undefined && lastResumableMessage(No) !== undefined && last !== undefined
+  let last = forkMessages.findLast((message) => isLoggableMessage(message) && !isReorderedRow(message.uuid));
+  let forkBriefingEntry =
+    forkBriefing !== undefined && lastResumableMessage(forkMessages) !== undefined && last !== undefined
       ? {
           parentUuid: last.uuid,
           isSidechain: false,
           ...createAttachmentMessage({
             type: "fork_briefing",
-            text: Cn,
+            text: forkBriefing,
           }),
           ...transcriptStamp(sessionId),
         }
       : undefined;
-  let bn = currentSessionFile;
-  let providedSessionId = We?.providedSessionId;
-  let hn;
-  if (We?.keepParent && currentSessionFile !== null) {
+  let resumeFile = currentSessionFile;
+  let providedSessionId = options?.providedSessionId;
+  let jobShortId;
+  if (options?.keepParent && currentSessionFile !== null) {
     providedSessionId ??= randomUUID();
-    hn = providedSessionId.slice(0, 8);
+    jobShortId = providedSessionId.slice(0, 8);
     try {
-      bn = await snapshotParentTranscript(currentSessionFile, hn, We.storageV5, {
-        required: Yo ? [Yo] : [],
-        optional: Fn ? [Fn] : [],
+      resumeFile = await snapshotParentTranscript(currentSessionFile, jobShortId, options.storageV5, {
+        required: forkPointRecord ? [forkPointRecord] : [],
+        optional: forkBriefingEntry ? [forkBriefingEntry] : [],
       });
     } catch (error) {
-      await removeSnapshotJobDir(hn, We.storageV5);
+      await removeSnapshotJobDir(jobShortId, options.storageV5);
       logEvent("tengu_background_spawn_failed", {
-        via: fromEnum(Be),
+        via: fromEnum(spawnVia),
       });
       return {
         ok: false,
@@ -371,58 +400,58 @@ async function spawnBackgroundFork(h, x, D, L, ee, ke, Re, Be, messages, We) {
       };
     }
   }
-  let Mn = We?.keepParent ? getForkReplayLaunchConfig() : {};
-  let Xo =
-    Cn !== undefined &&
-    (Fn === undefined || currentSessionFile === null) &&
-    !(Mn.appendSystemPrompt ?? "").includes(Cn)
-      ? Cn
+  let replayLaunchConfig = options?.keepParent ? getForkReplayLaunchConfig() : {};
+  let extraSystemPrompt =
+    forkBriefing !== undefined &&
+    (forkBriefingEntry === undefined || currentSessionFile === null) &&
+    !(replayLaunchConfig.appendSystemPrompt ?? "").includes(forkBriefing)
+      ? forkBriefing
       : undefined;
-  let Sn = [
-    ...(bn !== null ? ["--resume", bn, "--fork-session"] : []),
-    ...(We?.replyOnResume ? ["--reply-on-resume"] : []),
+  let launchArgs = [
+    ...(resumeFile !== null ? ["--resume", resumeFile, "--fork-session"] : []),
+    ...(options?.replyOnResume ? ["--reply-on-resume"] : []),
     ...replaceAddDirArgs(
-      We?.keepParent ? stripChannelsArgs(stripWatchArtifactArgs(replConfigArgv)) : replConfigArgv,
-      ee,
+      options?.keepParent ? stripChannelsArgs(stripWatchArtifactArgs(replConfigArgv)) : replConfigArgv,
+      addedDirs,
     ),
-    ...filtered.flatMap((cn) => ["--allowed-tools", cn]),
-    ...filtered_2.flatMap((cn) => ["--disallowed-tools", cn]),
+    ...filtered.flatMap((rule) => ["--allowed-tools", rule]),
+    ...filtered_2.flatMap((rule) => ["--disallowed-tools", rule]),
     ...(relaunchModel ? ["--model", relaunchModel] : []),
-    ...(Dt !== undefined ? ["--effort", Dt] : []),
+    ...(effortValue !== undefined ? ["--effort", effortValue] : []),
     "--permission-mode",
-    L,
-    ...(We?.proactivityLevel !== undefined ? ["--proactivity", We.proactivityLevel] : []),
-    ...flagArgs("--agent", Mn.agent),
-    ...flagArgs("--agents", Mn.agents),
-    ...flagArgs("--name", We?.keepParent ? undefined : We?.workerName),
+    permissionMode,
+    ...(options?.proactivityLevel !== undefined ? ["--proactivity", options.proactivityLevel] : []),
+    ...flagArgs("--agent", replayLaunchConfig.agent),
+    ...flagArgs("--agents", replayLaunchConfig.agents),
+    ...flagArgs("--name", options?.keepParent ? undefined : options?.workerName),
     ...flagArgs(
       "--append-system-prompt",
-      [Mn.appendSystemPrompt, Xo].filter(Boolean).join(`
+      [replayLaunchConfig.appendSystemPrompt, extraSystemPrompt].filter(Boolean).join(`
 
 `) || undefined,
     ),
-    ...flagArgs("--system-prompt-snapshot", onOffFlagValue(Mn.systemPromptSnapshot)),
-    ...(x ? ["--", x] : []),
+    ...flagArgs("--system-prompt-snapshot", onOffFlagValue(replayLaunchConfig.systemPromptSnapshot)),
+    ...(promptText ? ["--", promptText] : []),
   ];
   let timestamp = messages.at(-1)?.timestamp;
-  let on = await spawnBgSession(
-    Sn,
+  let spawnResult = await spawnBgSession(
+    launchArgs,
     providedSessionId,
     "repl",
     to ?? currentWorktreeSession?.worktreePath ?? getOriginalCwd(),
     {
-      ...Ot,
-      ...(We?.keepParent && {
+      ...agentInfo,
+      ...(options?.keepParent && {
         bgIsolation: "default",
       }),
-      ...(We?.keepParent &&
+      ...(options?.keepParent &&
         timestamp !== undefined && {
           forkSourceAlive: true,
           forkBoundaryAt: timestamp,
           forkSessionId: providedSessionId,
           forkParentSessionId: getSessionId(),
         }),
-      worktree: co
+      worktree: handOffWorktree
         ? {
             path: currentWorktreeSession.worktreePath,
             branch: currentWorktreeSession.worktreeBranch,
@@ -433,43 +462,48 @@ async function spawnBackgroundFork(h, x, D, L, ee, ke, Re, Be, messages, We) {
       sessionPermissionRules,
       memoryToggledOff: getMemoryToggledOff() || undefined,
       autoMemoryOffThisSession: getAutoMemoryOffThisSession() || undefined,
-      inFlight: We?.taskFreeInFlight,
+      inFlight: options?.taskFreeInFlight,
     },
-    We?.extraEnv,
+    options?.extraEnv,
     undefined,
-    We?.storageV5,
+    options?.storageV5,
   ).catch((error) => ({
     ok: false,
-    error: `Couldn't ${We?.keepParent ? "fork" : "background"} \u2014 ${errorMessage(error)}`,
+    error: `Couldn't ${options?.keepParent ? "fork" : "background"} \u2014 ${errorMessage(error)}`,
     reason: undefined,
   }));
-  if (!on.ok) {
+  if (!spawnResult.ok) {
     logEvent("tengu_background_spawn_failed", {
-      via: fromEnum(Be),
+      via: fromEnum(spawnVia),
     });
-    if (hn !== undefined && !on.alive) removeSnapshotJobDir(hn, We?.storageV5);
-    let cn = false;
+    if (jobShortId !== undefined && !spawnResult.alive) removeSnapshotJobDir(jobShortId, options?.storageV5);
+    let queuedRescue = false;
     if (
-      Be === "left_arrow" &&
-      We?.providedSessionId !== undefined &&
+      spawnVia === "left_arrow" &&
+      options?.providedSessionId !== undefined &&
       currentSessionFile !== null &&
-      !on.alive
+      !spawnResult.alive
     ) {
-      let jobDir = getJobDir(We.providedSessionId.slice(0, 8));
-      let jobState = await readJobState(jobDir, We.storageV5);
+      let jobDir = getJobDir(options.providedSessionId.slice(0, 8));
+      let jobState = await readJobState(jobDir, options.storageV5);
       if (jobState)
-        cn = await queueRescueRow({
+        queuedRescue = await queueRescueRow({
           sessionFile: currentSessionFile,
-          forkSessionId: We.providedSessionId,
+          forkSessionId: options.providedSessionId,
           jobDir,
           prev: jobState,
-          forkArgs: Sn,
-          storageV5: We.storageV5,
+          forkArgs: launchArgs,
+          storageV5: options.storageV5,
         });
-      if (cn && mn)
-        await appendContinuedInRecord(currentSessionFile, sessionId, We.providedSessionId, We.storageV5);
-      if (cn && currentWorktreeSession) {
-        if (bo)
+      if (queuedRescue && flushed)
+        await appendContinuedInRecord(
+          currentSessionFile,
+          sessionId,
+          options.providedSessionId,
+          options.storageV5,
+        );
+      if (queuedRescue && currentWorktreeSession) {
+        if (ownsWorktree)
           await releaseOwnWorktreeLock(
             currentWorktreeSession.worktreePath,
             currentWorktreeSession.originalCwd,
@@ -478,67 +512,67 @@ async function spawnBackgroundFork(h, x, D, L, ee, ke, Re, Be, messages, We) {
         clearResumeHintWorktree();
       }
     }
-    if (Be === "left_arrow")
-      if (cn) logFeatureSad("repl_background_fork", "queued_for_later");
+    if (spawnVia === "left_arrow")
+      if (queuedRescue) logFeatureSad("repl_background_fork", "queued_for_later");
       else logFeatureBad("repl_background_fork", "spawn_failed");
     return {
       ok: false,
-      error: on.error,
-      queued: cn,
-      reason: on.reason,
-      alive: on.alive,
+      error: spawnResult.error,
+      queued: queuedRescue,
+      reason: spawnResult.reason,
+      alive: spawnResult.alive,
     };
   }
   logEvent("tengu_background", {
     via_flag: false,
-    via: fromEnum(Be),
+    via: fromEnum(spawnVia),
   });
-  if (Be === "left_arrow") logFeatureOk("repl_background_fork");
-  let sessionId_2 = on.sessionId ?? providedSessionId;
-  if (!We?.keepParent && currentSessionFile !== null && sessionId_2 !== undefined)
-    await appendContinuedInRecord(currentSessionFile, sessionId, sessionId_2, We?.storageV5);
-  if (currentWorktreeSession && !We?.keepParent) {
-    if (bo)
+  if (spawnVia === "left_arrow") logFeatureOk("repl_background_fork");
+  let sessionId_2 = spawnResult.sessionId ?? providedSessionId;
+  if (!options?.keepParent && currentSessionFile !== null && sessionId_2 !== undefined)
+    await appendContinuedInRecord(currentSessionFile, sessionId, sessionId_2, options?.storageV5);
+  if (currentWorktreeSession && !options?.keepParent) {
+    if (ownsWorktree)
       await releaseOwnWorktreeLock(currentWorktreeSession.worktreePath, currentWorktreeSession.originalCwd);
     setCurrentWorktreeSession(null);
     clearResumeHintWorktree();
   }
-  if (Ot.name === undefined && on.sessionId && !We?.keepParent) {
-    let short = on.short;
-    let Dn = generateSessionName(
+  if (agentInfo.name === undefined && spawnResult.sessionId && !options?.keepParent) {
+    let short = spawnResult.short;
+    let nameSync = generateSessionName(
       messagesSinceCompactBoundary([...messages]),
       AbortSignal.timeout(SESSION_NAME_TIMEOUT_MS),
       {
-        credentials: We?.credentials,
+        credentials: options?.credentials,
       },
     )
       .then((sessionName) =>
-        sessionName ? syncJobName(short, sessionName, "auto", We?.storageV5) : undefined,
+        sessionName ? syncJobName(short, sessionName, "auto", options?.storageV5) : undefined,
       )
       .catch(() => {});
-    if (Be === "command") registerCleanup(() => Dn);
+    if (spawnVia === "command") registerCleanup(() => nameSync);
   }
   return {
     ok: true,
-    short: on.short,
-    sessionId: on.sessionId ?? providedSessionId,
-    handedOff: co,
+    short: spawnResult.short,
+    sessionId: spawnResult.sessionId ?? providedSessionId,
+    handedOff: handOffWorktree,
     hadWorktree: currentWorktreeSession !== null,
     relocatedTo: to,
-    relocatedFrom: Ao?.from,
-    name: Ot.name,
-    rosterName: Ot.name || Ot.intent || on.short,
-    editsIn: Ho,
+    relocatedFrom: relocation?.from,
+    name: agentInfo.name,
+    rosterName: agentInfo.name || agentInfo.intent || spawnResult.short,
+    editsIn,
   };
 }
 //@ chunk-18hwfzwa.js:71221-71427 placement
-async function appendContinuedInRecord(currentSessionFile, x, D, storageV5) {
-  let sessionId = normalizeUuidOrNull(x);
-  let continuedInSessionId = normalizeUuidOrNull(D);
-  if (sessionId === null || continuedInSessionId === null) return;
+async function appendContinuedInRecord(currentSessionFile, sessionId, continuedSessionId, storageV5) {
+  let sessionId_2 = normalizeUuidOrNull(sessionId);
+  let continuedInSessionId = normalizeUuidOrNull(continuedSessionId);
+  if (sessionId_2 === null || continuedInSessionId === null) return;
   await appendEntryToFileAsync(
     currentSessionFile,
-    createContinuedInEntry(sessionId, continuedInSessionId),
+    createContinuedInEntry(sessionId_2, continuedInSessionId),
     storageV5,
     {
       onlyIfExists: true,
@@ -552,48 +586,48 @@ async function appendContinuedInRecord(currentSessionFile, x, D, storageV5) {
 //@ chunk-18hwfzwa.js:71427-72536 placement
 async function snapshotParentTranscript(
   currentSessionFile,
-  x,
+  jobShortId,
   storageV5,
-  L = {
+  trailerEntries = {
     required: [],
     optional: [],
   },
 ) {
-  let ee = join(getJobDir(x), ...JOB_PARENT_TRANSCRIPT_FILE);
+  let snapshotPath = join(getJobDir(jobShortId), ...JOB_PARENT_TRANSCRIPT_FILE);
   let transcriptStorageKey = getTranscriptStorageKey(currentSessionFile, storageV5);
-  let Re;
-  if (transcriptStorageKey !== undefined && isValidKeySegment(x)) {
-    let He = STORAGE_SPACES.job(x, [...JOB_PARENT_TRANSCRIPT_FILE]);
-    let We = await transcriptStorageKey.backend.copy(transcriptStorageKey.key, He);
-    if (!We.ok) {
-      let code = We.error.code;
-      let telemetryCode = "telemetryCode" in We.error ? We.error.telemetryCode : undefined;
+  let appendLines;
+  if (transcriptStorageKey !== undefined && isValidKeySegment(jobShortId)) {
+    let storageKey = STORAGE_SPACES.job(jobShortId, [...JOB_PARENT_TRANSCRIPT_FILE]);
+    let copyResult = await transcriptStorageKey.backend.copy(transcriptStorageKey.key, storageKey);
+    if (!copyResult.ok) {
+      let code = copyResult.error.code;
+      let telemetryCode = "telemetryCode" in copyResult.error ? copyResult.error.telemetryCode : undefined;
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `snapshot copy failed: ${code}${telemetryCode === undefined ? "" : ` ${telemetryCode}`}`,
         "snapshot copy failed",
       );
     }
-    Re = async (ze) => {
-      let Xe = await transcriptStorageKey.backend.updateText(He, (rt) =>
-        rt === undefined
+    appendLines = async (suffix) => {
+      let updateResult = await transcriptStorageKey.backend.updateText(storageKey, (current) =>
+        current === undefined
           ? {
               skip: true,
             }
           : {
-              write: rt.value + ze,
+              write: current.value + suffix,
             },
       );
-      if (!Xe.ok) return formatStorageError(Xe.error);
-      return Xe.value.written ? undefined : "snapshot gone";
+      if (!updateResult.ok) return formatStorageError(updateResult.error);
+      return updateResult.value.written ? undefined : "snapshot gone";
     };
   } else {
-    await mkdir(dirname(ee), {
+    await mkdir(dirname(snapshotPath), {
       recursive: true,
       mode: 448,
     });
-    await copyFile(currentSessionFile, ee);
-    Re = (He) =>
-      appendFile(ee, He, {
+    await copyFile(currentSessionFile, snapshotPath);
+    appendLines = (suffix) =>
+      appendFile(snapshotPath, suffix, {
         mode: 384,
       }).then(
         () => {
@@ -602,17 +636,17 @@ async function snapshotParentTranscript(
         (error) => errorMessage(error),
       );
   }
-  let Be = (He) =>
+  let toTrailer = (entries) =>
     `
 ` +
-    He.map((We) => jsonStringify(We)).join(`
+    entries.map((entry) => jsonStringify(entry)).join(`
 `) +
     `
 `;
-  if (L.required.length > 0) {
-    let He = await Re(Be(L.required));
-    if (He !== undefined) {
-      logForDebugging(`[bg] fork point not written to snapshot: ${He}`, {
+  if (trailerEntries.required.length > 0) {
+    let failure = await appendLines(toTrailer(trailerEntries.required));
+    if (failure !== undefined) {
+      logForDebugging(`[bg] fork point not written to snapshot: ${failure}`, {
         level: "error",
       });
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
@@ -621,36 +655,36 @@ async function snapshotParentTranscript(
       );
     }
   }
-  if (L.optional.length > 0) {
-    let He = await Re(Be(L.optional));
-    if (He !== undefined)
-      logForDebugging(`[bg] fork briefing not written to snapshot: ${He}`, {
+  if (trailerEntries.optional.length > 0) {
+    let failure = await appendLines(toTrailer(trailerEntries.optional));
+    if (failure !== undefined)
+      logForDebugging(`[bg] fork briefing not written to snapshot: ${failure}`, {
         level: "warn",
       });
   }
-  return ee;
+  return snapshotPath;
 }
 //@ chunk-18hwfzwa.js:72536-72705 placement
-async function removeSnapshotJobDir(h, storageV5) {
-  if (storageV5 !== undefined && isValidKeySegment(h)) {
+async function removeSnapshotJobDir(jobShortId, storageV5) {
+  if (storageV5 !== undefined && isValidKeySegment(jobShortId)) {
     await storageV5
       .deleteScope({
         namespace: "job",
-        jobId: h,
+        jobId: jobShortId,
       })
       .catch(() => {});
     return;
   }
-  await rm(getJobDir(h), {
+  await rm(getJobDir(jobShortId), {
     recursive: true,
     force: true,
   }).catch(() => {});
 }
 //@ chunk-18hwfzwa.js:72705-73174 placement
-async function queueRescueRow(h) {
-  let { sessionFile, forkSessionId, jobDir, prev, forkArgs, storageV5 } = h;
-  let filePath = join(dirname(sessionFile), `${forkSessionId}.jsonl`);
-  return copyTranscriptForRescue(sessionFile, filePath, storageV5)
+async function queueRescueRow(options) {
+  let { sessionFile, forkSessionId, jobDir, prev, forkArgs, storageV5 } = options;
+  let forkSessionFile = join(dirname(sessionFile), `${forkSessionId}.jsonl`);
+  return copyTranscriptForRescue(sessionFile, forkSessionFile, storageV5)
     .then(() =>
       writeStateAtomic(
         jobDir,
@@ -662,13 +696,13 @@ async function queueRescueRow(h) {
           block: undefined,
           inFlight: undefined,
           detail: "couldn't start in the background \u2014 press Enter to retry",
-          linkScanPath: filePath,
+          linkScanPath: forkSessionFile,
           respawnFlags: splitForwardableArgs(stripResumeFlags(forkArgs)),
           updatedAt: new Date().toISOString(),
         },
         storageV5,
       ).catch(async (error) => {
-        await deleteFileOrStoreEntry(filePath, storageV5);
+        await deleteFileOrStoreEntry(forkSessionFile, storageV5);
         throw error;
       }),
     )
@@ -684,15 +718,18 @@ async function queueRescueRow(h) {
 /**
  * 把会话记录复制到救援会话的存储键下，失败时清理目标。
  */
-async function copyTranscriptForRescue(sessionFile, x, storageV5) {
+async function copyTranscriptForRescue(sessionFile, targetFile, storageV5) {
   let transcriptStorageKey = getTranscriptStorageKey(sessionFile, storageV5);
-  let transcriptStorageKey_2 = getTranscriptStorageKey(x, storageV5);
+  let transcriptStorageKey_2 = getTranscriptStorageKey(targetFile, storageV5);
   if (transcriptStorageKey !== undefined && transcriptStorageKey_2 !== undefined) {
-    let ke = await transcriptStorageKey.backend.copy(transcriptStorageKey.key, transcriptStorageKey_2.key);
-    if (!ke.ok) {
+    let copyResult = await transcriptStorageKey.backend.copy(
+      transcriptStorageKey.key,
+      transcriptStorageKey_2.key,
+    );
+    if (!copyResult.ok) {
       await transcriptStorageKey_2.backend.delete(transcriptStorageKey_2.key).catch(() => {});
-      let code = ke.error.code;
-      let telemetryCode = "telemetryCode" in ke.error ? ke.error.telemetryCode : undefined;
+      let code = copyResult.error.code;
+      let telemetryCode = "telemetryCode" in copyResult.error ? copyResult.error.telemetryCode : undefined;
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
         `rescue copy failed: ${code}${telemetryCode === undefined ? "" : ` ${telemetryCode}`}`,
         "rescue copy failed",
@@ -700,7 +737,7 @@ async function copyTranscriptForRescue(sessionFile, x, storageV5) {
     }
     return;
   }
-  await copyFile(sessionFile, x);
+  await copyFile(sessionFile, targetFile);
 }
 //@ chunk-18hwfzwa.js:73543-73685 placement = getPaneBackendExecutor (0.689)
 /**
@@ -717,10 +754,10 @@ async function deleteFileOrStoreEntry(filePath, storageV5) {
   }).catch(() => {});
 }
 //@ chunk-18hwfzwa.js:73685-73839 placement
-async function writeAdoptHandoff(h, payload, storageV5) {
-  let jobDir = getJobDir(h);
-  let ee = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
-  if (ee === undefined)
+async function writeAdoptHandoff(jobShortId, payload, storageV5) {
+  let jobDir = getJobDir(jobShortId);
+  let storage = isStorageV5Enabled() && storageV5 !== undefined ? storageV5 : undefined;
+  if (storage === undefined)
     await mkdir(jobDir, {
       recursive: true,
       mode: 448,
@@ -731,128 +768,129 @@ async function writeAdoptHandoff(h, payload, storageV5) {
     {
       parent: "create",
     },
-    ee,
+    storage,
   );
 }
 //@ chunk-18hwfzwa.js:73839-74205 placement
 /**
  * 生成 Artifact 评论监视器未能转到后台会话时的提示。
  */
-function frameLiveTransferNote(h) {
-  let x =
-    h.frameLiveLost > 0
+function frameLiveTransferNote(result) {
+  let lostNote =
+    result.frameLiveLost > 0
       ? `
-Couldn't move ${h.frameLiveLost} ${plural(h.frameLiveLost, "Artifact comment monitor")} to the background session, so automatic replies stopped. Publish ${h.frameLiveLost === 1 ? "the Artifact" : "each Artifact"} again to turn them back on.`
+Couldn't move ${result.frameLiveLost} ${plural(result.frameLiveLost, "Artifact comment monitor")} to the background session, so automatic replies stopped. Publish ${result.frameLiveLost === 1 ? "the Artifact" : "each Artifact"} again to turn them back on.`
       : "";
-  let D =
-    h.ok && h.adopted.adopted_frame_live > 0
+  let adoptedNote =
+    result.ok && result.adopted.adopted_frame_live > 0
       ? `
-${artifactRepliesStopNotice(h.adopted.adopted_frame_live)}`
+${artifactRepliesStopNotice(result.adopted.adopted_frame_live)}`
       : "";
-  return x + D;
+  return lostNote + adoptedNote;
 }
 //@ chunk-18hwfzwa.js:74205-75541 placement
-async function forkSessionToBackground(h) {
-  let handoffRecord = takeHandoffRecord(h.messages, h.queue);
-  let D = await serializeAdoptable(h.tasks, h.queue);
-  let L;
-  if (D) {
-    L = randomUUID();
-    let We = false;
+async function forkSessionToBackground(options) {
+  let handoffRecord = takeHandoffRecord(options.messages, options.queue);
+  let adoptable = await serializeAdoptable(options.tasks, options.queue);
+  let jobSessionId;
+  if (adoptable) {
+    jobSessionId = randomUUID();
+    let handoffWritten = false;
     try {
-      await writeAdoptHandoff(L.slice(0, 8), D.payload, h.storageV5);
-      We = true;
-      await D.checkpointAgents(h.taskRegistry);
+      await writeAdoptHandoff(jobSessionId.slice(0, 8), adoptable.payload, options.storageV5);
+      handoffWritten = true;
+      await adoptable.checkpointAgents(options.taskRegistry);
     } catch {
-      L = undefined;
-      if (D.payload.frameLive !== undefined)
+      jobSessionId = undefined;
+      if (adoptable.payload.frameLive !== undefined)
         logFeatureSad(
           "artifact_live_subscribe",
-          We ? "consent_carry_checkpoint_failed" : "consent_carry_write_failed",
+          handoffWritten ? "consent_carry_checkpoint_failed" : "consent_carry_write_failed",
         );
     }
   }
-  let ee = await confirmRelaunch(
-    h.messages,
+  let relaunchConfirmation = await confirmRelaunch(
+    options.messages,
     "background_handoff",
     {
-      responseStreaming: h.responseStreaming ?? h.isMidTurn,
+      responseStreaming: options.responseStreaming ?? options.isMidTurn,
     },
-    h.storageV5,
+    options.storageV5,
   );
-  let ke = await settleSeedName(h.seed, h.storageV5);
-  let workerName = ke.name !== h.seed.name ? ke.name : undefined;
-  let Be = await spawnBackgroundFork(
-    ke,
-    h.prompt,
-    h.sessionEffort,
-    h.permissionMode,
-    h.additionalWorkingDirectories,
-    h.alwaysAllowRules,
-    h.alwaysDenyRules,
+  let seed = await settleSeedName(options.seed, options.storageV5);
+  let workerName = seed.name !== options.seed.name ? seed.name : undefined;
+  let spawnResult = await spawnBackgroundFork(
+    seed,
+    options.prompt,
+    options.sessionEffort,
+    options.permissionMode,
+    options.additionalWorkingDirectories,
+    options.alwaysAllowRules,
+    options.alwaysDenyRules,
     "command",
-    h.messages,
+    options.messages,
     {
-      proactivityLevel: h.proactivityLevel,
-      replyOnResume: h.isMidTurn,
-      providedSessionId: L,
+      proactivityLevel: options.proactivityLevel,
+      replyOnResume: options.isMidTurn,
+      providedSessionId: jobSessionId,
       handoffRecord,
       workerName,
       taskFreeInFlight:
-        D && L && carriesTasks(D.payload)
+        adoptable && jobSessionId && carriesTasks(adoptable.payload)
           ? undefined
           : {
               tasks: 0,
               queued: 0,
               kinds: [],
             },
-      storageV5: h.storageV5,
-      credentials: h.credentials,
+      storageV5: options.storageV5,
+      credentials: options.credentials,
     },
   ).catch((error) => {
     clearHandoffInProgress();
     throw error;
   });
-  if (Be.ok) {
-    if (D && L) D.disown(h.taskRegistry);
+  if (spawnResult.ok) {
+    if (adoptable && jobSessionId) adoptable.disown(options.taskRegistry);
     return {
-      ...Be,
-      adopted: adoptedCounts(L ? D?.payload : null),
-      frameLiveLost: L === undefined ? (D?.payload.frameLive?.length ?? 0) : 0,
+      ...spawnResult,
+      adopted: adoptedCounts(jobSessionId ? adoptable?.payload : null),
+      frameLiveLost: jobSessionId === undefined ? (adoptable?.payload.frameLive?.length ?? 0) : 0,
     };
   }
-  if (L) D?.abandon();
-  let He = D?.payload.frameLive?.length ?? 0;
-  if (h.exitsAfterward && L && He > 0) logFeatureSad("artifact_live_subscribe", "adopt_spawn_failed");
+  if (jobSessionId) adoptable?.abandon();
+  let frameLiveCount = adoptable?.payload.frameLive?.length ?? 0;
+  if (options.exitsAfterward && jobSessionId && frameLiveCount > 0)
+    logFeatureSad("artifact_live_subscribe", "adopt_spawn_failed");
   return {
     ok: false,
-    error: withRelaunchHint(Be.error, ee, {
-      exitsAfterward: h.exitsAfterward,
+    error: withRelaunchHint(spawnResult.error, relaunchConfirmation, {
+      exitsAfterward: options.exitsAfterward,
     }),
-    frameLiveLost: h.exitsAfterward ? He : 0,
+    frameLiveLost: options.exitsAfterward ? frameLiveCount : 0,
   };
 }
 //@ chunk-18hwfzwa.js:75541-75608 placement
-function canBackgroundSession(h) {
+function canBackgroundSession(messages) {
   return (
     isAgentsFleetEnabled() &&
     !isBgSession() &&
     !isTranscriptPersistenceDisabled() &&
     isAdoptEnabled() &&
-    deriveBackgroundSeed(h, "") !== null
+    deriveBackgroundSeed(messages, "") !== null
   );
 }
 //@ chunk-18hwfzwa.js:75608-77358 placement
 function BackgroundAndExit(props) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { messages, isMidTurn, responseStreaming } = props;
   let appStoreDirect = useAppStoreDirect();
   let setVoiceState = useSetVoiceState();
   let { storageV5, credentials } = useTheme_2();
   let commandQueueOrDefault = useCommandQueueOrDefault();
-  let We = R(false);
-  let Xe;
-  let rt;
+  let startedRef = useRef(false);
+  let onEffect;
+  let deps;
   if (
     $[0] !== credentials ||
     $[1] !== isMidTurn ||
@@ -863,11 +901,11 @@ function BackgroundAndExit(props) {
     $[6] !== appStoreDirect ||
     $[7] !== setVoiceState
   ) {
-    Xe = () => {
-      if (We.current) {
+    onEffect = () => {
+      if (startedRef.current) {
         return;
       }
-      We.current = true;
+      startedRef.current = true;
       let backgroundSeed = deriveBackgroundSeed(messages, "");
       if (backgroundSeed === null) {
         logFeatureBad("bg_exit_dialog_background", "no_seed");
@@ -877,63 +915,66 @@ function BackgroundAndExit(props) {
         return;
       }
       (async () => {
-        let state = appStoreDirect.getState();
-        let adoptability = computeAdoptability(state.tasks);
-        let Ot = countLiveWorkflowAgents(state.tasks, adoptability);
-        let Lt = backgroundWorkSummary(
-          wi(state.tasks, (Et) => isAdoptableTask(Et, adoptability) || isCarriedFrameLiveWatch(Et)),
+        let context = appStoreDirect.getState();
+        let adoptability = computeAdoptability(context.tasks);
+        let workflowAgents = countLiveWorkflowAgents(context.tasks, adoptability);
+        let summary = backgroundWorkSummary(
+          import_reject(
+            context.tasks,
+            (task) => isAdoptableTask(task, adoptability) || isCarriedFrameLiveWatch(task),
+          ),
           {
-            cronFilter: (Dt) => !isAdoptableCron(Dt, adoptability),
+            cronFilter: (cronTask) => !isAdoptableCron(cronTask, adoptability),
           },
         );
-        let oo = await forkSessionToBackground({
+        let result = await forkSessionToBackground({
           seed: backgroundSeed,
           prompt: null,
           messages,
           exitsAfterward: true,
           isMidTurn,
           responseStreaming,
-          sessionEffort: state.sessionEffort,
-          permissionMode: getPermissionModeCycle(state),
-          proactivityLevel: promptProactivityLevel(state),
-          additionalWorkingDirectories: state.toolPermissionContext.additionalWorkingDirectories,
-          alwaysAllowRules: state.toolPermissionContext.alwaysAllowRules,
-          alwaysDenyRules: state.toolPermissionContext.alwaysDenyRules,
-          tasks: state.tasks,
+          sessionEffort: context.sessionEffort,
+          permissionMode: getPermissionModeCycle(context),
+          proactivityLevel: promptProactivityLevel(context),
+          additionalWorkingDirectories: context.toolPermissionContext.additionalWorkingDirectories,
+          alwaysAllowRules: context.toolPermissionContext.alwaysAllowRules,
+          alwaysDenyRules: context.toolPermissionContext.alwaysDenyRules,
+          tasks: context.tasks,
           taskRegistry: setVoiceState,
           queue: commandQueueOrDefault,
           storageV5,
           credentials,
         });
-        if (oo.ok) {
+        if (result.ok) {
           logFeatureOk("bg_exit_dialog_background");
-          let Xt =
-            Lt.count > 0
+          let stoppedNote =
+            summary.count > 0
               ? `
-${Lt.summary} couldn't be moved and ${Lt.count === 1 ? "was" : "were"} stopped.`
+${summary.summary} couldn't be moved and ${summary.count === 1 ? "was" : "were"} stopped.`
               : "";
-          let io = describeCarriedTasks(Ot);
+          let carriedNote = describeCarriedTasks(workflowAgents);
           placeholderJobNameScore(storageV5, true);
           await gracefulShutdown(0, "prompt_input_exit", {
             suppressResumeHint: true,
             finalMessage:
-              formatBgHints(oo.short, oo.handedOff ? "(worktree handed off)" : undefined) +
-              Xt +
-              (io
+              formatBgHints(result.short, result.handedOff ? "(worktree handed off)" : undefined) +
+              stoppedNote +
+              (carriedNote
                 ? `
-${io}`
+${carriedNote}`
                 : "") +
-              frameLiveTransferNote(oo),
+              frameLiveTransferNote(result),
           });
         } else {
           logFeatureBad("bg_exit_dialog_background", "spawn_failed");
           await gracefulShutdown(0, "prompt_input_exit", {
-            finalMessage: oo.error + frameLiveTransferNote(oo),
+            finalMessage: result.error + frameLiveTransferNote(result),
           });
         }
       })();
     };
-    rt = [
+    deps = [
       messages,
       isMidTurn,
       responseStreaming,
@@ -951,53 +992,55 @@ ${io}`
     $[5] = storageV5;
     $[6] = appStoreDirect;
     $[7] = setVoiceState;
-    $[8] = Xe;
-    $[9] = rt;
+    $[8] = onEffect;
+    $[9] = deps;
   } else {
-    Xe = $[8];
-    rt = $[9];
+    onEffect = $[8];
+    deps = $[9];
   }
-  P(Xe, rt);
-  let so;
+  useEffect(onEffect, deps);
+  let label;
   if ($[10] === MEMO_CACHE_SENTINEL) {
-    so = jsxProd_default(Text, {
+    label = jsxProd_default(Text, {
       dimColor: true,
       children: "Moving to background\u2026",
     });
-    $[10] = so;
-  } else so = $[10];
-  return so;
+    $[10] = label;
+  } else label = $[10];
+  return label;
 }
 //@ chunk-18hwfzwa.js:77358-78019 placement
-function deriveBackgroundSeed(messages, x, D = "(backgrounded)") {
-  let L = x;
-  let ee = false;
-  let ke;
+function deriveBackgroundSeed(messages, fallbackIntent, defaultIntent = "(backgrounded)") {
+  let intent = fallbackIntent;
+  let sawUserTurn = false;
+  let assistantDetail;
   for (let idx = messages.length - 1; idx >= 0; idx--) {
-    let Xe = messages[idx];
-    if (Xe.type === "assistant" && ke === undefined) {
-      let assistantMessageText = getAssistantMessageText(Xe);
-      if (assistantMessageText) ke = truncateToLength(assistantMessageText.replace(/\s+/g, " ").trim(), 120);
+    let message = messages[idx];
+    if (message.type === "assistant" && assistantDetail === undefined) {
+      let assistantMessageText = getAssistantMessageText(message);
+      if (assistantMessageText)
+        assistantDetail = truncateToLength(assistantMessageText.replace(/\s+/g, " ").trim(), 120);
     }
-    if (Xe.type === "user" && !Xe.isMeta && !isToolResultMessage(Xe)) {
-      let trimmed = getUserMessageText(Xe)?.trim();
+    if (message.type === "user" && !message.isMeta && !isToolResultMessage(message)) {
+      let trimmed = getUserMessageText(message)?.trim();
       if (trimmed && isLocalCommandMarkup(trimmed)) {
-        if (trimmed.startsWith(`<${COMMAND_MESSAGE}>`)) ee = true;
-        if (trimmed.startsWith(`<${BASH_STDOUT}>`) || trimmed.startsWith(`<${BASH_STDERR}>`)) ee = true;
+        if (trimmed.startsWith(`<${COMMAND_MESSAGE}>`)) sawUserTurn = true;
+        if (trimmed.startsWith(`<${BASH_STDOUT}>`) || trimmed.startsWith(`<${BASH_STDERR}>`))
+          sawUserTurn = true;
         continue;
       }
-      ee = true;
-      if (!L && trimmed) L = trimmed;
+      sawUserTurn = true;
+      if (!intent && trimmed) intent = trimmed;
     }
-    if (ee && L && ke !== undefined) break;
+    if (sawUserTurn && intent && assistantDetail !== undefined) break;
   }
-  if (!ee && !x) return null;
+  if (!sawUserTurn && !fallbackIntent) return null;
   let currentSessionTitle = getCurrentSessionTitle(getSessionId());
   let currentSessionAiTitle = getCurrentSessionAiTitle(getSessionId());
   let registeredSessionName = getRegisteredSessionName();
   let currentSessionAgentColor = getCurrentSessionAgentColor();
   return {
-    intent: truncateToLength(L || D, 200),
+    intent: truncateToLength(intent || defaultIntent, 200),
     name: currentSessionTitle ?? currentSessionAiTitle,
     nameSource: currentSessionTitle
       ? registeredSessionName?.source === "collision" && registeredSessionName.name === currentSessionTitle
@@ -1007,7 +1050,7 @@ function deriveBackgroundSeed(messages, x, D = "(backgrounded)") {
         ? "auto"
         : undefined,
     color: isAgentColorName(currentSessionAgentColor) ? currentSessionAgentColor : undefined,
-    detail: ke,
+    detail: assistantDetail,
   };
 }
 //@ chunk-18hwfzwa.js:78019-82204 placement
@@ -1015,7 +1058,7 @@ function deriveBackgroundSeed(messages, x, D = "(backgrounded)") {
  * /background 与退出时“移到后台”的完整流程组件：确认、生成种子名、调用 spawnBackgroundFork 把当前对话 fork 成后台作业，处理拒绝(tengu_background_declined)与失败提示。
  */
 function BackgroundForkFlow(props) {
-  let $ = w(81);
+  let $ = useMemoCache(81);
   let { onDone, prompt, seed, messages, isMidTurn } = props;
   let appStateSession = useAppStateSession();
   let appState = useAppState(selectSessionEffort);
@@ -1024,34 +1067,34 @@ function BackgroundForkFlow(props) {
   let appState_4 = useAppState(allWorkingDirectories_2);
   let appState_5 = useAppState(getAlwaysAllowRules);
   let appState_6 = useAppState(selectToolPermissionContextAlwaysDenyRules);
-  let appState_7 = useAppState(selectTasks_4);
+  let tasks = useAppState(selectTasks_4);
   let setVoiceState = useSetVoiceState();
   let { storageV5, credentials } = useTheme_2();
   let commandQueueOrDefault = useCommandQueueOrDefault();
-  let Lt;
-  if ($[0] !== appState_7) {
-    Lt = backgroundWorkSummary(appState_7);
-    $[0] = appState_7;
-    $[1] = Lt;
-  } else Lt = $[1];
-  let oo = Lt;
+  let summary;
+  if ($[0] !== tasks) {
+    summary = backgroundWorkSummary(tasks);
+    $[0] = tasks;
+    $[1] = summary;
+  } else summary = $[1];
+  let summary_2 = summary;
   let carryOverCount;
   let monitorParkCount;
   let workflowAgents;
   let abandonable;
-  if ($[2] !== appState_7) {
-    let adoptability = computeAdoptability(appState_7);
-    let size = carriedFrameLiveSlugs(appState_7).size;
-    carryOverCount = countAdoptable(appState_7, adoptability) - size;
+  if ($[2] !== tasks) {
+    let adoptability = computeAdoptability(tasks);
+    let size = carriedFrameLiveSlugs(tasks).size;
+    carryOverCount = countAdoptable(tasks, adoptability) - size;
     monitorParkCount = size;
-    workflowAgents = countLiveWorkflowAgents(appState_7, adoptability);
+    workflowAgents = countLiveWorkflowAgents(tasks, adoptability);
     abandonable = backgroundWorkSummary(
-      wi(appState_7, (bo) => isAdoptableTask(bo, adoptability) || isCarriedFrameLiveWatch(bo)),
+      import_reject(tasks, (task) => isAdoptableTask(task, adoptability) || isCarriedFrameLiveWatch(task)),
       {
-        cronFilter: (Ao) => !isAdoptableCron(Ao, adoptability),
+        cronFilter: (cronTask) => !isAdoptableCron(cronTask, adoptability),
       },
     );
-    $[2] = appState_7;
+    $[2] = tasks;
     $[3] = carryOverCount;
     $[4] = monitorParkCount;
     $[5] = workflowAgents;
@@ -1062,14 +1105,14 @@ function BackgroundForkFlow(props) {
     workflowAgents = $[5];
     abandonable = $[6];
   }
-  let Bo;
+  let counts;
   if (
     $[7] !== carryOverCount ||
     $[8] !== monitorParkCount ||
     $[9] !== workflowAgents ||
     $[10] !== abandonable
   ) {
-    Bo = {
+    counts = {
       carryOverCount,
       monitorParkCount,
       workflowAgents,
@@ -1079,17 +1122,17 @@ function BackgroundForkFlow(props) {
     $[8] = monitorParkCount;
     $[9] = workflowAgents;
     $[10] = abandonable;
-    $[11] = Bo;
-  } else Bo = $[11];
+    $[11] = counts;
+  } else counts = $[11];
   let {
     carryOverCount: carryOverCount_2,
     monitorParkCount: monitorParkCount_2,
     workflowAgents: workflowAgents_2,
     abandonable: abandonable_2,
-  } = Bo;
-  let [mn, Cn] = y(abandonable_2.count === 0 && workflowAgents_2.running === 0);
-  let No = R(false);
-  let vo;
+  } = counts;
+  let [confirmed, setConfirmed] = useState(abandonable_2.count === 0 && workflowAgents_2.running === 0);
+  let startedRef = useRef(false);
+  let onEffect;
   if (
     $[12] !== abandonable_2.count ||
     $[13] !== appState_4 ||
@@ -1097,9 +1140,9 @@ function BackgroundForkFlow(props) {
     $[15] !== appState_6 ||
     $[16] !== appStateSession ||
     $[17] !== carryOverCount_2 ||
-    $[18] !== mn ||
+    $[18] !== confirmed ||
     $[19] !== credentials ||
-    $[20] !== oo.count ||
+    $[20] !== summary_2.count ||
     $[21] !== isMidTurn ||
     $[22] !== messages ||
     $[23] !== onDone ||
@@ -1111,16 +1154,16 @@ function BackgroundForkFlow(props) {
     $[29] !== appState ||
     $[30] !== storageV5 ||
     $[31] !== setVoiceState ||
-    $[32] !== appState_7 ||
+    $[32] !== tasks ||
     $[33] !== workflowAgents_2
   ) {
-    vo = () => {
-      if (!mn || No.current) {
+    onEffect = () => {
+      if (!confirmed || startedRef.current) {
         return;
       }
-      No.current = true;
+      startedRef.current = true;
       (async () => {
-        let Yo = await forkSessionToBackground({
+        let result = await forkSessionToBackground({
           seed,
           prompt,
           messages,
@@ -1131,40 +1174,40 @@ function BackgroundForkFlow(props) {
           additionalWorkingDirectories: appState_4,
           alwaysAllowRules: appState_5,
           alwaysDenyRules: appState_6,
-          tasks: appState_7,
+          tasks,
           taskRegistry: setVoiceState,
           queue: commandQueueOrDefault,
           storageV5,
           credentials,
         });
-        if (Yo.ok) {
+        if (result.ok) {
           logEvent("tengu_background_fork", {
             confirmed: abandonable_2.count > 0 || workflowAgents_2.running > 0,
-            inflight_count: oo.count,
+            inflight_count: summary_2.count,
             carryover_count: carryOverCount_2,
             workflow_agent_count: workflowAgents_2.running,
             mid_turn: isMidTurn,
             had_prompt: prompt.length > 0,
-            had_worktree: Yo.hadWorktree,
-            worktree_handed_off: Yo.handedOff,
-            ...Yo.adopted,
+            had_worktree: result.hadWorktree,
+            worktree_handed_off: result.handedOff,
+            ...result.adopted,
           });
           onDone();
           placeholderJobNameScore(storageV5, true);
           await gracefulShutdown(0, "prompt_input_exit", {
             suppressResumeHint: true,
             finalMessage:
-              formatBgHints(Yo.short, Yo.handedOff ? "(worktree handed off)" : undefined) +
-              frameLiveTransferNote(Yo),
+              formatBgHints(result.short, result.handedOff ? "(worktree handed off)" : undefined) +
+              frameLiveTransferNote(result),
           });
         } else
           onDone(
             isBridgeOrTransport(appStateSession)
               ? withResumeFlag(
                   "Couldn't start the background session (detail withheld on this connection).",
-                  Yo.error,
+                  result.error,
                 )
-              : Yo.error,
+              : result.error,
           );
       })();
     };
@@ -1174,9 +1217,9 @@ function BackgroundForkFlow(props) {
     $[15] = appState_6;
     $[16] = appStateSession;
     $[17] = carryOverCount_2;
-    $[18] = mn;
+    $[18] = confirmed;
     $[19] = credentials;
-    $[20] = oo.count;
+    $[20] = summary_2.count;
     $[21] = isMidTurn;
     $[22] = messages;
     $[23] = onDone;
@@ -1188,19 +1231,19 @@ function BackgroundForkFlow(props) {
     $[29] = appState;
     $[30] = storageV5;
     $[31] = setVoiceState;
-    $[32] = appState_7;
+    $[32] = tasks;
     $[33] = workflowAgents_2;
-    $[34] = vo;
-  } else vo = $[34];
-  let kn;
+    $[34] = onEffect;
+  } else onEffect = $[34];
+  let deps;
   if (
     $[35] !== appState_4 ||
     $[36] !== appState_5 ||
     $[37] !== appState_6 ||
     $[38] !== appStateSession ||
-    $[39] !== mn ||
+    $[39] !== confirmed ||
     $[40] !== credentials ||
-    $[41] !== oo.count ||
+    $[41] !== summary_2.count ||
     $[42] !== isMidTurn ||
     $[43] !== messages ||
     $[44] !== onDone ||
@@ -1212,23 +1255,23 @@ function BackgroundForkFlow(props) {
     $[50] !== appState ||
     $[51] !== storageV5 ||
     $[52] !== setVoiceState ||
-    $[53] !== appState_7
+    $[53] !== tasks
   ) {
-    kn = [
-      mn,
+    deps = [
+      confirmed,
       appState,
       appState_2,
       appState_3,
       appState_4,
       appState_5,
       appState_6,
-      oo.count,
+      summary_2.count,
       isMidTurn,
       seed,
       onDone,
       prompt,
       messages,
-      appState_7,
+      tasks,
       setVoiceState,
       storageV5,
       credentials,
@@ -1239,9 +1282,9 @@ function BackgroundForkFlow(props) {
     $[36] = appState_5;
     $[37] = appState_6;
     $[38] = appStateSession;
-    $[39] = mn;
+    $[39] = confirmed;
     $[40] = credentials;
-    $[41] = oo.count;
+    $[41] = summary_2.count;
     $[42] = isMidTurn;
     $[43] = messages;
     $[44] = onDone;
@@ -1253,66 +1296,66 @@ function BackgroundForkFlow(props) {
     $[50] = appState;
     $[51] = storageV5;
     $[52] = setVoiceState;
-    $[53] = appState_7;
-    $[54] = kn;
-  } else kn = $[54];
-  P(vo, kn);
-  if (mn) {
-    let Fn;
+    $[53] = tasks;
+    $[54] = deps;
+  } else deps = $[54];
+  useEffect(onEffect, deps);
+  if (confirmed) {
+    let backgroundingLabel;
     if ($[55] === MEMO_CACHE_SENTINEL) {
-      Fn = jsxProd_default(Text, {
+      backgroundingLabel = jsxProd_default(Text, {
         dimColor: true,
         children: "Backgrounding\u2026",
       });
-      $[55] = Fn;
-    } else Fn = $[55];
-    return Fn;
+      $[55] = backgroundingLabel;
+    } else backgroundingLabel = $[55];
+    return backgroundingLabel;
   }
-  let Fn;
-  if ($[56] !== oo.count || $[57] !== onDone) {
-    Fn = () => {
+  let onCancel;
+  if ($[56] !== summary_2.count || $[57] !== onDone) {
+    onCancel = () => {
       logEvent("tengu_background_declined", {
-        inflight_count: oo.count,
+        inflight_count: summary_2.count,
       });
       onDone();
     };
-    $[56] = oo.count;
+    $[56] = summary_2.count;
     $[57] = onDone;
-    $[58] = Fn;
-  } else Fn = $[58];
-  let onCancel = Fn;
-  const Go = abandonable_2.count > 0 ? `${abandonable_2.summary} will be stopped.` : "";
-  let hn;
+    $[58] = onCancel;
+  } else onCancel = $[58];
+  let onCancel_2 = onCancel;
+  const abandonNote = abandonable_2.count > 0 ? `${abandonable_2.summary} will be stopped.` : "";
+  let monitorNote;
   if ($[59] !== monitorParkCount_2) {
-    hn = artifactRepliesStopNotice(monitorParkCount_2);
+    monitorNote = artifactRepliesStopNotice(monitorParkCount_2);
     $[59] = monitorParkCount_2;
-    $[60] = hn;
-  } else hn = $[60];
-  let Mn;
+    $[60] = monitorNote;
+  } else monitorNote = $[60];
+  let carryNote;
   if ($[61] !== carryOverCount_2) {
-    Mn =
+    carryNote =
       carryOverCount_2 > 0
         ? `${carryOverCount_2} ${plural(carryOverCount_2, "task")} will carry over to the background session.`
         : "";
     $[61] = carryOverCount_2;
-    $[62] = Mn;
-  } else Mn = $[62];
-  let Xo;
+    $[62] = carryNote;
+  } else carryNote = $[62];
+  let workflowNote;
   if ($[63] !== workflowAgents_2) {
-    Xo = describeCarriedTasks(workflowAgents_2);
+    workflowNote = describeCarriedTasks(workflowAgents_2);
     $[63] = workflowAgents_2;
-    $[64] = Xo;
-  } else Xo = $[64];
-  let Sn;
-  if ($[65] !== Go || $[66] !== hn || $[67] !== Mn || $[68] !== Xo) {
-    Sn = [Go, hn, Mn, Xo].filter(Boolean);
-    $[65] = Go;
-    $[66] = hn;
-    $[67] = Mn;
-    $[68] = Xo;
-    $[69] = Sn;
-  } else Sn = $[69];
-  const subtitle = Sn.join(" ");
+    $[64] = workflowNote;
+  } else workflowNote = $[64];
+  let notes;
+  if ($[65] !== abandonNote || $[66] !== monitorNote || $[67] !== carryNote || $[68] !== workflowNote) {
+    notes = [abandonNote, monitorNote, carryNote, workflowNote].filter(Boolean);
+    $[65] = abandonNote;
+    $[66] = monitorNote;
+    $[67] = carryNote;
+    $[68] = workflowNote;
+    $[69] = notes;
+  } else notes = $[69];
+  const subtitle = notes.join(" ");
   let confirmLabel;
   if ($[70] !== abandonable_2.count || $[71] !== workflowAgents_2) {
     confirmLabel =
@@ -1325,49 +1368,51 @@ function BackgroundForkFlow(props) {
   } else confirmLabel = $[72];
   let onConfirm;
   if ($[73] === MEMO_CACHE_SENTINEL) {
-    onConfirm = () => Cn(true);
+    onConfirm = () => setConfirmed(true);
     $[73] = onConfirm;
   } else onConfirm = $[73];
   let children;
-  if ($[74] !== onCancel || $[75] !== confirmLabel) {
+  if ($[74] !== onCancel_2 || $[75] !== confirmLabel) {
     children = jsxProd_default(ConfirmSelect, {
       confirmLabel,
       cancelLabel: "Stay",
       onConfirm,
-      onCancel,
+      onCancel: onCancel_2,
     });
-    $[74] = onCancel;
+    $[74] = onCancel_2;
     $[75] = confirmLabel;
     $[76] = children;
   } else children = $[76];
-  let wn;
-  if ($[77] !== onCancel || $[78] !== subtitle || $[79] !== children) {
-    wn = jsxProd_default(Dialog, {
+  let dialog;
+  if ($[77] !== onCancel_2 || $[78] !== subtitle || $[79] !== children) {
+    dialog = jsxProd_default(Dialog, {
       title: "Background this session?",
       subtitle,
-      onCancel,
+      onCancel: onCancel_2,
       children,
     });
-    $[77] = onCancel;
+    $[77] = onCancel_2;
     $[78] = subtitle;
     $[79] = children;
-    $[80] = wn;
-  } else wn = $[80];
-  return wn;
+    $[80] = dialog;
+  } else dialog = $[80];
+  return dialog;
 }
 //@ chunk-18hwfzwa.js:82204-82267 placement
-function takeHandoffRecord(h, x) {
+function takeHandoffRecord(messages, queue) {
   return {
-    revivals: pendingResumeNotices(x),
-    cronCarryNote: buildCronCarryAttachment(h),
+    revivals: pendingResumeNotices(queue),
+    cronCarryNote: buildCronCarryAttachment(messages),
   };
 }
 //@ chunk-18hwfzwa.js:82267-82354 placement
 /**
  * 取出命令队列里带 userResumeNotice 标记的待恢复项。
  */
-function pendingResumeNotices(h) {
-  return h.getCommandQueue().filter((x) => x.userResumeNotice === true && isPassiveMainAgentCommand(x));
+function pendingResumeNotices(commandQueueManager) {
+  return commandQueueManager
+    .getCommandQueue()
+    .filter((command) => command.userResumeNotice === true && isPassiveMainAgentCommand(command));
 }
 export {
   takeHandoffRecord,
@@ -1376,4 +1421,10 @@ export {
   BackgroundAndExit,
   canBackgroundSession,
   COORDINATOR_FORK_REFUSAL,
+  call,
+  forkSessionToBackground,
+  queueRescueRow,
+  removeSnapshotJobDir,
+  snapshotParentTranscript,
+  writeAdoptHandoff,
 };

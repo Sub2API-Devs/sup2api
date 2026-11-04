@@ -11,11 +11,11 @@
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import {
   looseObject,
-  string,
+  stringSchema,
   _enum,
-  E,
+  numberSchema,
   literal,
-  M,
+  booleanSchema,
   record,
   unknown,
   discriminatedUnion,
@@ -24,87 +24,102 @@ import { MCP_TASK_LABEL_MAX, LABEL_PATTERN } from "./mcpTaskCapability.js";
 import { describeErrorBrief } from "./auth.js";
 import { MCP_TASK_POLL_MS } from "./mcpTaskWorker.js";
 import { sleep } from "../../utils/sleep.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-01rphnc1.js:429-1390 placement
 /**
  * MCP 任务会话元数据的 schema。
  */
-var MCP_NAME_HEADER = "Mcp-Name";
-var MIN_TASK_POLL_MS = 250;
-var MAX_TASK_POLL_MS = 30000;
-var DEFAULT_TASK_POLL_MS = 2000;
-var MAX_TASK_UPDATE_FAILURES = 5;
-var MAX_INPUT_REQUEST_KEYS = 16;
-var taskSchema = DoctorLazy(() =>
-  looseObject({
-    taskId: string().min(1).max(MCP_TASK_LABEL_MAX).regex(LABEL_PATTERN),
-    status: _enum(["working", "input_required", "completed", "failed", "cancelled"]),
-    statusMessage: string()
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-    createdAt: string()
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-    lastUpdatedAt: string()
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-    ttlMs: E()
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-    pollIntervalMs: E()
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-  }),
-);
-var CreateTaskResultSchema = DoctorLazy(() =>
-  taskSchema().extend({
-    resultType: literal("task"),
-  }),
-);
-var AGENT_TASK_META_KEY = "com.anthropic/agent-task";
-var MAX_SESSION_MESSAGE_CHARS = 20000;
-var MAX_TASK_MODEL_CHARS = 64;
-var sessionMetaSchema = DoctorLazy(() =>
-  looseObject({
-    sessionId: string()
-      .max(MCP_TASK_LABEL_MAX)
-      .regex(LABEL_PATTERN)
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-    modelImmediateResponse: string()
-      .max(MAX_SESSION_MESSAGE_CHARS)
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-    taskId: string()
-      .max(MCP_TASK_LABEL_MAX)
-      .regex(LABEL_PATTERN)
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-    merged: M()
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-    kind: string()
-      .max(MAX_TASK_MODEL_CHARS)
-      .regex(LABEL_PATTERN)
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-  }),
-);
+var MCP_NAME_HEADER; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MIN_TASK_POLL_MS;
+var MAX_TASK_POLL_MS;
+var DEFAULT_TASK_POLL_MS;
+var MAX_TASK_UPDATE_FAILURES;
+var MAX_INPUT_REQUEST_KEYS;
+var taskSchema;
+var CreateTaskResultSchema;
+var AGENT_TASK_META_KEY;
+var MAX_SESSION_MESSAGE_CHARS;
+var MAX_TASK_MODEL_CHARS;
+var sessionMetaSchema;
+deferInit("chunk-01rphnc1.js:429", () => {
+  MCP_NAME_HEADER = "Mcp-Name";
+  MIN_TASK_POLL_MS = 250;
+  MAX_TASK_POLL_MS = 30000;
+  DEFAULT_TASK_POLL_MS = 2000;
+  MAX_TASK_UPDATE_FAILURES = 5;
+  MAX_INPUT_REQUEST_KEYS = 16;
+  taskSchema = DoctorLazy(() =>
+    looseObject({
+      taskId: stringSchema().min(1).max(MCP_TASK_LABEL_MAX).regex(LABEL_PATTERN),
+      status: _enum(["working", "input_required", "completed", "failed", "cancelled"]),
+      statusMessage: stringSchema()
+        .nullish()
+        .transform((value) => value ?? undefined)
+        .optional(),
+      createdAt: stringSchema()
+        .nullish()
+        .transform((value) => value ?? undefined)
+        .optional(),
+      lastUpdatedAt: stringSchema()
+        .nullish()
+        .transform((value) => value ?? undefined)
+        .optional(),
+      ttlMs: numberSchema()
+        .nullish()
+        .transform((value) => value ?? undefined)
+        .optional(),
+      pollIntervalMs: numberSchema()
+        .nullish()
+        .transform((value) => value ?? undefined)
+        .optional(),
+    }),
+  );
+  CreateTaskResultSchema = DoctorLazy(() =>
+    taskSchema().extend({
+      resultType: literal("task"),
+    }),
+  );
+  AGENT_TASK_META_KEY = "com.anthropic/agent-task";
+  MAX_SESSION_MESSAGE_CHARS = 20000;
+  MAX_TASK_MODEL_CHARS = 64;
+  sessionMetaSchema = DoctorLazy(() =>
+    looseObject({
+      sessionId: stringSchema()
+        .max(MCP_TASK_LABEL_MAX)
+        .regex(LABEL_PATTERN)
+        .nullish()
+        .transform((value) => value ?? undefined)
+        .optional(),
+      modelImmediateResponse: stringSchema()
+        .max(MAX_SESSION_MESSAGE_CHARS)
+        .nullish()
+        .transform((value) => value ?? undefined)
+        .optional(),
+      taskId: stringSchema()
+        .max(MCP_TASK_LABEL_MAX)
+        .regex(LABEL_PATTERN)
+        .nullish()
+        .transform((value) => value ?? undefined)
+        .optional(),
+      merged: booleanSchema()
+        .nullish()
+        .transform((value) => value ?? undefined)
+        .optional(),
+      kind: stringSchema()
+        .max(MAX_TASK_MODEL_CHARS)
+        .regex(LABEL_PATTERN)
+        .nullish()
+        .transform((value) => value ?? undefined)
+        .optional(),
+    }),
+  );
+});
 //@ chunk-01rphnc1.js:1390-1659 placement
-function sdkAgentTaskMeta(e) {
-  let agentTaskMeta = parseAgentTaskMeta(e);
+function sdkAgentTaskMeta(meta) {
+  let agentTaskMeta = parseAgentTaskMeta(meta);
   if (agentTaskMeta === undefined) return;
-  let a = {
+  let fields = {
     ...(agentTaskMeta.sessionId !== undefined && {
       sessionId: agentTaskMeta.sessionId,
     }),
@@ -118,71 +133,75 @@ function sdkAgentTaskMeta(e) {
       merged: agentTaskMeta.merged,
     }),
   };
-  return Object.keys(a).length > 0
+  return Object.keys(fields).length > 0
     ? {
-        [AGENT_TASK_META_KEY]: a,
+        [AGENT_TASK_META_KEY]: fields,
       }
     : undefined;
 }
 //@ chunk-01rphnc1.js:1659-1803 placement
-function parseAgentTaskMeta(e) {
-  if (typeof e !== "object" || e === null) return;
-  let r = e[AGENT_TASK_META_KEY];
-  if (r === undefined) return;
-  let a = sessionMetaSchema().safeParse(r);
-  return a.success ? a.data : undefined;
+function parseAgentTaskMeta(meta) {
+  if (typeof meta !== "object" || meta === null) return;
+  let raw = meta[AGENT_TASK_META_KEY];
+  if (raw === undefined) return;
+  let parseResult = sessionMetaSchema().safeParse(raw);
+  return parseResult.success ? parseResult.data : undefined;
 }
 //@ chunk-01rphnc1.js:1803-2439 placement
 /**
  * 任务状态回复的联合 schema。
  */
-var taskStatusSchemas = DoctorLazy(() =>
-  looseObject({
-    method: string().min(1).max(MCP_TASK_LABEL_MAX).regex(LABEL_PATTERN),
-    params: record(string(), unknown())
-      .nullish()
-      .transform((e) => e ?? undefined)
-      .optional(),
-  }),
-);
-var taskStatusReplySchema = DoctorLazy(() =>
-  discriminatedUnion("status", [
-    taskSchema().extend({
-      status: literal("working"),
-    }),
-    taskSchema().extend({
-      status: literal("input_required"),
-      inputRequests: record(string().min(1).max(512), taskStatusSchemas())
+var taskStatusSchemas; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var taskStatusReplySchema;
+deferInit("chunk-01rphnc1.js:1803", () => {
+  taskStatusSchemas = DoctorLazy(() =>
+    looseObject({
+      method: stringSchema().min(1).max(MCP_TASK_LABEL_MAX).regex(LABEL_PATTERN),
+      params: record(stringSchema(), unknown())
         .nullish()
-        .transform((e) => e ?? {}),
+        .transform((value) => value ?? undefined)
+        .optional(),
     }),
-    taskSchema().extend({
-      status: literal("completed"),
-      result: record(string(), unknown())
-        .nullish()
-        .transform((e) => e ?? {}),
-    }),
-    taskSchema().extend({
-      status: literal("failed"),
-      error: looseObject({
-        code: E()
+  );
+  taskStatusReplySchema = DoctorLazy(() =>
+    discriminatedUnion("status", [
+      taskSchema().extend({
+        status: literal("working"),
+      }),
+      taskSchema().extend({
+        status: literal("input_required"),
+        inputRequests: record(stringSchema().min(1).max(512), taskStatusSchemas())
           .nullish()
-          .transform((e) => e ?? undefined)
-          .optional(),
-        message: string()
+          .transform((value) => value ?? {}),
+      }),
+      taskSchema().extend({
+        status: literal("completed"),
+        result: record(stringSchema(), unknown())
           .nullish()
-          .transform((e) => e ?? undefined)
-          .optional(),
-        data: unknown().optional(),
-      })
-        .nullish()
-        .transform((e) => e ?? {}),
-    }),
-    taskSchema().extend({
-      status: literal("cancelled"),
-    }),
-  ]),
-);
+          .transform((value) => value ?? {}),
+      }),
+      taskSchema().extend({
+        status: literal("failed"),
+        error: looseObject({
+          code: numberSchema()
+            .nullish()
+            .transform((value) => value ?? undefined)
+            .optional(),
+          message: stringSchema()
+            .nullish()
+            .transform((value) => value ?? undefined)
+            .optional(),
+          data: unknown().optional(),
+        })
+          .nullish()
+          .transform((value) => value ?? {}),
+      }),
+      taskSchema().extend({
+        status: literal("cancelled"),
+      }),
+    ]),
+  );
+});
 //@ chunk-01rphnc1.js:2439-2525 placement
 class TaskInputUnservableError extends Error {
   constructor(message) {
@@ -236,15 +255,18 @@ function isServerErrorCode(code) {
 /**
  * 判断错误码是否为能力缺失类（-32021、-32003）。
  */
-function isCapabilityLossCode(e) {
-  return e === -32021 || e === -32003;
+function isCapabilityLossCode(code) {
+  return code === -32021 || code === -32003;
 }
 //@ chunk-01rphnc1.js:3209-3249 placement
 function isCapabilityLossJsonRpcCode(code) {
   return code === -32601 || isCapabilityLossCode(code);
 }
 //@ chunk-01rphnc1.js:3249-3289 placement
-var TASK_DRIVE_QUIET_STOP = Symbol("TASK_DRIVE_QUIET_STOP");
+var TASK_DRIVE_QUIET_STOP; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-01rphnc1.js:3249", () => {
+  TASK_DRIVE_QUIET_STOP = Symbol("TASK_DRIVE_QUIET_STOP");
+});
 //@ chunk-01rphnc1.js:3289-8000 placement
 /**
  * 驱动一个 MCP 任务（com.anthropic/agent-task）：轮询 working/input_required/completed/failed 状态，处理输入请求，中止时发 tasks/cancel；能力丢失的 JSON-RPC 错误码按不可用处理。
@@ -268,18 +290,18 @@ async function driveMcpTask({
   let headers = {
     [MCP_NAME_HEADER]: taskId,
   };
-  let v = answeredKeys ?? new Set();
-  let C = new Set();
-  let A = new Map();
-  let h = outstandingInputKeys ?? {
+  let answered = answeredKeys ?? new Set();
+  let rejectedKeys = new Set();
+  let resolvedByKey = new Map();
+  let keyBudget = outstandingInputKeys ?? {
     served: new Set(),
     capLogged: false,
   };
-  let z = clampPollInterval(task.pollIntervalMs);
-  let w;
-  let m = 0;
-  let k = 0;
-  let u = () => {
+  let pollIntervalMs = clampPollInterval(task.pollIntervalMs);
+  let nextDelayOverride;
+  let pollFailures = 0;
+  let updateFailures = 0;
+  let cancelTask = () => {
     if (signal.reason === TASK_DRIVE_QUIET_STOP) return;
     request(
       "tasks/cancel",
@@ -295,18 +317,18 @@ async function driveMcpTask({
       (error) => log?.(`task ${taskId}: cancel failed: ${errorText(error)}`),
     );
   };
-  let O = true;
+  let firstIteration = true;
   for (;;) {
-    if (O) O = false;
+    if (firstIteration) firstIteration = false;
     else {
-      let n = w ?? z;
-      w = undefined;
-      await sleep(n, signal, {
+      let delayMs = nextDelayOverride ?? pollIntervalMs;
+      nextDelayOverride = undefined;
+      await sleep(delayMs, signal, {
         unref: holdsProcess === false,
       });
     }
     if (signal.aborted) {
-      u();
+      cancelTask();
       return {
         status: "error",
         error: {
@@ -315,9 +337,9 @@ async function driveMcpTask({
         },
       };
     }
-    let i;
+    let status;
     try {
-      let n = await request(
+      let reply = await request(
         "tasks/get",
         {
           taskId,
@@ -327,22 +349,22 @@ async function driveMcpTask({
           signal,
         },
       );
-      let d = taskStatusReplySchema().safeParse(n);
-      if (!d.success) {
-        u();
+      let parseResult = taskStatusReplySchema().safeParse(reply);
+      if (!parseResult.success) {
+        cancelTask();
         return {
           status: "error",
           error: {
             kind: "malformed",
-            message: `Malformed tasks/get response for task ${taskId}: ${d.error.message}`,
+            message: `Malformed tasks/get response for task ${taskId}: ${parseResult.error.message}`,
           },
         };
       }
-      i = d.data;
-      m = 0;
+      status = parseResult.data;
+      pollFailures = 0;
     } catch (error) {
       if (signal.aborted) {
-        u();
+        cancelTask();
         return {
           status: "error",
           error: {
@@ -361,27 +383,27 @@ async function driveMcpTask({
             data: error.data,
           },
         };
-      let d = error instanceof Error && error.name === "HttpBodyOverflowError";
-      if (d || isAnswerTooLarge?.(error) === true) {
-        u();
+      let isOverflow = error instanceof Error && error.name === "HttpBodyOverflowError";
+      if (isOverflow || isAnswerTooLarge?.(error) === true) {
+        cancelTask();
         return {
           status: "error",
           error: {
             kind: "answer_too_large",
             message:
               "The answer to a status request for the task was too large, so it was not read. The tool may have run: check whether it did before running it again, and when you run it again, ask for less data.",
-            ...(!d && {
+            ...(!isOverflow && {
               connectionClosed: true,
             }),
           },
         };
       }
-      let R = await isSignInRefusal?.(error).catch((error) => {
+      let signInRefused = await isSignInRefusal?.(error).catch((error) => {
         log?.(`task ${taskId}: could not tell whether the server asks for a sign-in: ${errorText(error)}`);
         return false;
       });
       if (signal.aborted) {
-        u();
+        cancelTask();
         return {
           status: "error",
           error: {
@@ -390,7 +412,7 @@ async function driveMcpTask({
           },
         };
       }
-      if (R === true)
+      if (signInRefused === true)
         return {
           status: "error",
           error: {
@@ -399,45 +421,45 @@ async function driveMcpTask({
             signInRefused: true,
           },
         };
-      m += 1;
-      let f = endsAtFirstFailedPoll?.() === true ? 1 : MAX_TASK_UPDATE_FAILURES;
-      log?.(`task ${taskId}: poll failure ${m}/${f}: ${errorText(error)}`);
-      if (m >= f)
+      pollFailures += 1;
+      let failureLimit = endsAtFirstFailedPoll?.() === true ? 1 : MAX_TASK_UPDATE_FAILURES;
+      log?.(`task ${taskId}: poll failure ${pollFailures}/${failureLimit}: ${errorText(error)}`);
+      if (pollFailures >= failureLimit)
         return {
           status: "error",
           error: {
             kind: "poll_failed",
             ...(isRetryableTaskPollError(error)
               ? {
-                  message: `${m} polls of task ${taskId} failed in a row, the last with an error answer: ${errorText(error)}`,
+                  message: `${pollFailures} polls of task ${taskId} failed in a row, the last with an error answer: ${errorText(error)}`,
                   answered: true,
                 }
               : {
-                  message: `Lost contact with task ${taskId} after ${m} failed polls: ${errorText(error)}`,
+                  message: `Lost contact with task ${taskId} after ${pollFailures} failed polls: ${errorText(error)}`,
                 }),
           },
         };
       continue;
     }
-    onStatus?.(i);
-    z = clampPollInterval(i.pollIntervalMs ?? z);
-    if (i.status !== "input_required") k = 0;
-    switch (i.status) {
+    onStatus?.(status);
+    pollIntervalMs = clampPollInterval(status.pollIntervalMs ?? pollIntervalMs);
+    if (status.status !== "input_required") updateFailures = 0;
+    switch (status.status) {
       case "working":
         continue;
       case "completed":
         return {
           status: "completed",
-          result: i.result,
+          result: status.result,
         };
       case "failed":
         return {
           status: "error",
           error: {
             kind: "failed",
-            message: i.error.message ?? i.statusMessage ?? "Task failed",
-            code: i.error.code,
-            data: i.error.data,
+            message: status.error.message ?? status.statusMessage ?? "Task failed",
+            code: status.error.code,
+            data: status.error.data,
           },
         };
       case "cancelled":
@@ -445,49 +467,49 @@ async function driveMcpTask({
           status: "error",
           error: {
             kind: "cancelled",
-            message: i.statusMessage ?? "Task was cancelled by the server",
+            message: status.statusMessage ?? "Task was cancelled by the server",
           },
         };
       case "input_required": {
-        let filtered = Object.entries(i.inputRequests).filter(([key]) => !v.has(key));
+        let filtered = Object.entries(status.inputRequests).filter(([key]) => !answered.has(key));
         if (filtered.length === 0) continue;
-        let filtered_2 = filtered.filter(([t]) => !C.has(t));
+        let filtered_2 = filtered.filter(([key]) => !rejectedKeys.has(key));
         if (filtered_2.length === 0) {
-          u();
+          cancelTask();
           return {
             status: "error",
             error: {
               kind: "unsupported_input",
-              message: `Task ${taskId}: the server rejected the submitted answer to ${filtered.map(([t]) => t).join(", ")} and still requires input`,
+              message: `Task ${taskId}: the server rejected the submitted answer to ${filtered.map(([key]) => key).join(", ")} and still requires input`,
             },
           };
         }
-        let filtered_3 = filtered_2.filter(([t]) => {
-          if (h.served.has(t)) return true;
-          if (h.served.size >= MAX_INPUT_REQUEST_KEYS) {
-            if (!h.capLogged) {
+        let filtered_3 = filtered_2.filter(([key]) => {
+          if (keyBudget.served.has(key)) return true;
+          if (keyBudget.served.size >= MAX_INPUT_REQUEST_KEYS) {
+            if (!keyBudget.capLogged) {
               log?.(
                 `task ${taskId}: reached ${MAX_INPUT_REQUEST_KEYS} distinct input-request keys; ignoring new keys`,
               );
-              h.capLogged = true;
+              keyBudget.capLogged = true;
             }
             return false;
           }
-          h.served.add(t);
+          keyBudget.served.add(key);
           return true;
         });
         if (filtered_3.length === 0) continue;
-        let f = {};
-        for (let [t, b] of filtered_3) {
+        let inputResponses = {};
+        for (let [key, requestSpec] of filtered_3) {
           if (signal.aborted) break;
-          let _;
-          if (A.has(t)) _ = A.get(t);
+          let response;
+          if (resolvedByKey.has(key)) response = resolvedByKey.get(key);
           else {
             try {
-              _ = await resolveInputRequest(t, b);
+              response = await resolveInputRequest(key, requestSpec);
             } catch (error) {
               if (error instanceof TaskInputUnservableError) {
-                u();
+                cancelTask();
                 return {
                   status: "error",
                   error: {
@@ -499,22 +521,22 @@ async function driveMcpTask({
               }
               throw error;
             }
-            if (_ === undefined) {
-              u();
+            if (response === undefined) {
+              cancelTask();
               return {
                 status: "error",
                 error: {
                   kind: "unsupported_input",
-                  message: `Task ${taskId} asked for ${b.method}, which this client cannot serve`,
+                  message: `Task ${taskId} asked for ${requestSpec.method}, which this client cannot serve`,
                 },
               };
             }
-            A.set(t, _);
+            resolvedByKey.set(key, response);
           }
-          f[t] = _;
+          inputResponses[key] = response;
         }
         if (signal.aborted) {
-          u();
+          cancelTask();
           return {
             status: "error",
             error: {
@@ -528,19 +550,19 @@ async function driveMcpTask({
             "tasks/update",
             {
               taskId,
-              inputResponses: f,
+              inputResponses,
             },
             {
               headers,
               signal,
             },
           );
-          k = 0;
-          for (let key of Object.keys(f)) v.add(key);
-          log?.(`task ${taskId}: answered ${Object.keys(f).join(", ")}`);
+          updateFailures = 0;
+          for (let key of Object.keys(inputResponses)) answered.add(key);
+          log?.(`task ${taskId}: answered ${Object.keys(inputResponses).join(", ")}`);
         } catch (error) {
           if (signal.aborted) {
-            u();
+            cancelTask();
             return {
               status: "error",
               error: {
@@ -560,28 +582,30 @@ async function driveMcpTask({
               },
             };
           if (isTransientTransportError(error) && !isServerErrorCode(error.code)) {
-            for (let key of Object.keys(f)) C.add(key);
+            for (let key of Object.keys(inputResponses)) rejectedKeys.add(key);
             log?.(
               `task ${taskId}: tasks/update JSON-RPC error ${error.code} (${error instanceof Error ? error.message : String(error)}); re-polling for real state`,
             );
-            w = MIN_TASK_POLL_MS;
+            nextDelayOverride = MIN_TASK_POLL_MS;
             continue;
           }
-          k += 1;
-          log?.(`task ${taskId}: tasks/update failure ${k}/${MAX_TASK_UPDATE_FAILURES}: ${errorText(error)}`);
-          if (k >= MAX_TASK_UPDATE_FAILURES)
+          updateFailures += 1;
+          log?.(
+            `task ${taskId}: tasks/update failure ${updateFailures}/${MAX_TASK_UPDATE_FAILURES}: ${errorText(error)}`,
+          );
+          if (updateFailures >= MAX_TASK_UPDATE_FAILURES)
             return {
               status: "error",
               error: {
                 kind: "poll_failed",
-                message: `Lost contact with task ${taskId} after ${k} failed tasks/update attempts: ${errorText(error)}`,
+                message: `Lost contact with task ${taskId} after ${updateFailures} failed tasks/update attempts: ${errorText(error)}`,
                 phase: "update",
               },
             };
-          w = MIN_TASK_POLL_MS;
+          nextDelayOverride = MIN_TASK_POLL_MS;
           continue;
         }
-        w = MIN_TASK_POLL_MS;
+        nextDelayOverride = MIN_TASK_POLL_MS;
         continue;
       }
     }
@@ -593,4 +617,9 @@ export {
   MCP_NAME_HEADER,
   driveMcpTask,
   isCapabilityLossJsonRpcCode,
+  AGENT_TASK_META_KEY,
+  CreateTaskResultSchema,
+  TaskInputUnservableError,
+  parseAgentTaskMeta,
+  sdkAgentTaskMeta,
 };

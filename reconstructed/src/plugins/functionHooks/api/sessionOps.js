@@ -25,21 +25,24 @@ var SESSION_APPEND_USAGE =
 /**
  * 校验 $.session.append 参数：message.type 为 user/system 且 content 为对象数组，agentId 可选非空；不合法返回用法说明。
  */
-function checkSessionAppendArgs(e) {
-  let message = isPlainObject(e) ? e.message : undefined;
-  let r =
+function checkSessionAppendArgs(args) {
+  let message = isPlainObject(args) ? args.message : undefined;
+  let hasValidMessage =
     isPlainObject(message) &&
     (message.type === "user" || message.type === "system") &&
     Array.isArray(message.content) &&
     everyIndex(message.content, isPlainObject);
-  let n =
-    isPlainObject(e) && (e.agentId === undefined || (typeof e.agentId === "string" && e.agentId !== ""));
-  return r && n ? undefined : SESSION_APPEND_USAGE;
+  let hasValidAgentId =
+    isPlainObject(args) &&
+    (args.agentId === undefined || (typeof args.agentId === "string" && args.agentId !== ""));
+  return hasValidMessage && hasValidAgentId ? undefined : SESSION_APPEND_USAGE;
 }
 //@ chunk-4121qate.js:282800-282916 placement
-var withArgCheck = (e) => (o) => {
-  let r = e.problemOf(o);
-  return r !== undefined || !isPlainObject(o) ? Promise.reject(new HooksError(`${e.name} ${r}`)) : e.host(o);
+var withArgCheck = (spec) => (args) => {
+  let problem = spec.problemOf(args);
+  return problem !== undefined || !isPlainObject(args)
+    ? Promise.reject(new HooksError(`${spec.name} ${problem}`))
+    : spec.host(args);
 };
 //@ chunk-4121qate.js:282916-282944 placement
 /**
@@ -47,20 +50,20 @@ var withArgCheck = (e) => (o) => {
  */
 var hasValidDecorations = (decorations) => checkDecorations(decorations) === undefined;
 //@ chunk-4121qate.js:282944-283099 placement
-function requireTextArg(e, o, r) {
-  let text = isPlainObject(e) ? e.text : undefined;
+function requireTextArg(args, pluginName, method) {
+  let text = isPlainObject(args) ? args.text : undefined;
   return typeof text === "string"
     ? Promise.resolve(text)
-    : Promise.reject(new HooksError(`${o}: $.${r} takes { text } (a string)`));
+    : Promise.reject(new HooksError(`${pluginName}: $.${method} takes { text } (a string)`));
 }
 //@ chunk-4121qate.js:283099-283507 placement
-var PROMPT_FILL_OP = (e, o) =>
-  requireTextArg(e, o, "prompt.fill").then((text) => {
-    let mode = isPlainObject(e) ? e.mode : undefined;
-    let decorations = isPlainObject(e) ? e.decorations : undefined;
-    let cursor = isPlainObject(e) ? e.cursor : undefined;
-    let p = mode !== undefined && !isPromptSectionMode(mode);
-    return !p && hasValidDecorations(decorations) && checkCursorInteger(cursor) === undefined
+var PROMPT_FILL_OP = (args, pluginName) =>
+  requireTextArg(args, pluginName, "prompt.fill").then((text) => {
+    let mode = isPlainObject(args) ? args.mode : undefined;
+    let decorations = isPlainObject(args) ? args.decorations : undefined;
+    let cursor = isPlainObject(args) ? args.cursor : undefined;
+    let invalidMode = mode !== undefined && !isPromptSectionMode(mode);
+    return !invalidMode && hasValidDecorations(decorations) && checkCursorInteger(cursor) === undefined
       ? {
           text,
           ...(mode !== undefined && {
@@ -75,24 +78,24 @@ var PROMPT_FILL_OP = (e, o) =>
         }
       : Promise.reject(
           new HooksError(
-            `${o}: $.prompt.fill ` +
-              (p
+            `${pluginName}: $.prompt.fill ` +
+              (invalidMode
                 ? `takes { mode } of ${PROMPT_SECTION_MODES.join(", ")}`
                 : (checkDecorations(decorations) ?? checkCursorInteger(cursor) ?? "takes { decorations }")),
           ),
         );
   });
 //@ chunk-4121qate.js:283507-283632 placement
-function pickTranscriptReadOptions(e) {
-  let o = isPlainObject(e) ? e : {};
-  let { agentId } = o;
-  let n = typeof agentId === "string";
-  let s = o.as === "api";
+function pickTranscriptReadOptions(args) {
+  let options = isPlainObject(args) ? args : {};
+  let { agentId } = options;
+  let hasAgentId = typeof agentId === "string";
+  let wantsApi = options.as === "api";
   return {
-    ...(n && {
+    ...(hasAgentId && {
       agentId,
     }),
-    ...(s && {
+    ...(wantsApi && {
       as: "api",
     }),
   };
@@ -101,17 +104,17 @@ function pickTranscriptReadOptions(e) {
 /**
  * 校验读取会话记录的参数：只允许 agentId 与 as 两个键（或不传）。
  */
-function checkTranscriptReadArgs(e) {
-  if (e === undefined) return;
-  if (!isPlainObject(e)) return "takes { agentId, as } or nothing";
-  let filtered = Object.keys(e).filter((key) => key !== "agentId" && key !== "as");
+function checkTranscriptReadArgs(args) {
+  if (args === undefined) return;
+  if (!isPlainObject(args)) return "takes { agentId, as } or nothing";
+  let filtered = Object.keys(args).filter((key) => key !== "agentId" && key !== "as");
   if (filtered.length > 0) return `takes { agentId, as } or nothing (not ${filtered.join(", ")})`;
-  let { agentId } = e;
-  let as = e.as;
-  let s = agentId === undefined || (typeof agentId === "string" && agentId !== "");
-  let i = as === undefined || as === "api";
-  if (!s) return `takes agentId, a non-empty string (got ${String(agentId)})`;
-  return i ? undefined : `takes as "api" or none (got ${String(as)})`;
+  let { agentId } = args;
+  let as = args.as;
+  let validAgentId = agentId === undefined || (typeof agentId === "string" && agentId !== "");
+  let validAs = as === undefined || as === "api";
+  if (!validAgentId) return `takes agentId, a non-empty string (got ${String(agentId)})`;
+  return validAs ? undefined : `takes as "api" or none (got ${String(as)})`;
 }
 //@ chunk-4121qate.js:284070-284295 placement
 /**
@@ -124,15 +127,15 @@ function checkDecorationsArgs(text, decorations) {
     : "takes { text } (a string, the draft the runs were computed for)";
 }
 //@ chunk-4121qate.js:284295-284518 placement
-async function normalizePaintArgs(e, o) {
-  let text = isPlainObject(e) ? e.text : undefined;
-  let decorations = isPlainObject(e) ? e.decorations : undefined;
+async function normalizePaintArgs(args, pluginName) {
+  let text = isPlainObject(args) ? args.text : undefined;
+  let decorations = isPlainObject(args) ? args.decorations : undefined;
   if (!(
     decorations !== undefined &&
     checkDecorationsArgs(text, decorations) === undefined &&
     hasValidDecorations(decorations)
   ))
-    throw new HooksError(`${o}: $.prompt.paint ${checkDecorationsArgs(text, decorations)}`);
+    throw new HooksError(`${pluginName}: $.prompt.paint ${checkDecorationsArgs(text, decorations)}`);
   return {
     ...(typeof text === "string" && {
       text,
@@ -143,11 +146,11 @@ async function normalizePaintArgs(e, o) {
 //@ chunk-4121qate.js:284518-285298 placement
 var PROMPT_SUBMIT_OP = (pluginName, host) =>
   freezeApiObject({
-    submit: (r) =>
-      requireTextArg(r, pluginName, "prompt.submit").then((n) => {
-        let s = n.trim() === "";
-        let asUser = isPlainObject(r) ? r.asUser : undefined;
-        return s
+    submit: (args) =>
+      requireTextArg(args, pluginName, "prompt.submit").then((text) => {
+        let isBlank = text.trim() === "";
+        let asUser = isPlainObject(args) ? args.asUser : undefined;
+        return isBlank
           ? Promise.reject(
               new HooksError(`${pluginName}: $.prompt.submit takes { text } (a non-empty prompt)`),
             )
@@ -157,28 +160,29 @@ var PROMPT_SUBMIT_OP = (pluginName, host) =>
                 "prompt.submit",
                 asUser === true
                   ? {
-                      text: n,
+                      text,
                       asUser: true,
                     }
                   : {
-                      text: n,
+                      text,
                     },
               );
       }),
     read: () => host("prompt.read", {}),
-    media: (r) => host("prompt.media", r),
-    fill: (r) => PROMPT_FILL_OP(r, pluginName).then((n) => host("prompt.fill", n)),
-    paint: (r) => normalizePaintArgs(r, pluginName).then((n) => host("prompt.paint", n)),
-    suggest: (r) =>
-      requireTextArg(r, pluginName, "prompt.suggest").then((text) =>
+    media: (args) => host("prompt.media", args),
+    fill: (args) => PROMPT_FILL_OP(args, pluginName).then((fillArgs) => host("prompt.fill", fillArgs)),
+    paint: (args) =>
+      normalizePaintArgs(args, pluginName).then((paintArgs) => host("prompt.paint", paintArgs)),
+    suggest: (args) =>
+      requireTextArg(args, pluginName, "prompt.suggest").then((text) =>
         host("prompt.suggest", {
           text,
         }),
       ),
-    compose: (r) =>
-      r === undefined || isPlainObject(r)
+    compose: (args) =>
+      args === undefined || isPlainObject(args)
         ? host("prompt.compose", {
-            ...r,
+            ...args,
           })
         : Promise.reject(
             new HooksError(
@@ -187,8 +191,8 @@ var PROMPT_SUBMIT_OP = (pluginName, host) =>
           ),
   });
 //@ chunk-4121qate.js:285298-285453 placement
-function normalizeSendArgs(e) {
-  let { to, text } = e;
+function normalizeSendArgs(args) {
+  let { to, text } = args;
   if (typeof to === "string")
     return {
       to,
@@ -207,9 +211,9 @@ function normalizeSendArgs(e) {
   };
 }
 //@ chunk-4121qate.js:285453-285569 placement
-function pickSendTargetId(e) {
-  return isPlainObject(e) && Object.hasOwn(e, "sessionId") !== Object.hasOwn(e, "agentId")
-    ? (e.sessionId ?? e.agentId)
+function pickSendTargetId(args) {
+  return isPlainObject(args) && Object.hasOwn(args, "sessionId") !== Object.hasOwn(args, "agentId")
+    ? (args.sessionId ?? args.agentId)
     : undefined;
 }
 //@ chunk-4121qate.js:285569-285711 placement
@@ -219,17 +223,17 @@ var SESSION_SEND_USAGE =
 /**
  * 校验 $.session.send 参数：to 为非空字符串或 {sessionId}/{agentId} 之一，text 非空。
  */
-function checkSessionSendArgs(e) {
-  if (!isPlainObject(e)) return SESSION_SEND_USAGE;
-  let { to, text } = e;
-  let n = typeof text === "string" && text.trim() !== "";
-  let s = typeof to === "string" ? to : pickSendTargetId(to);
-  let i = typeof s === "string" && s.trim() !== "";
-  return n && i ? undefined : SESSION_SEND_USAGE;
+function checkSessionSendArgs(args) {
+  if (!isPlainObject(args)) return SESSION_SEND_USAGE;
+  let { to, text } = args;
+  let hasText = typeof text === "string" && text.trim() !== "";
+  let target = typeof to === "string" ? to : pickSendTargetId(to);
+  let hasTarget = typeof target === "string" && target.trim() !== "";
+  return hasText && hasTarget ? undefined : SESSION_SEND_USAGE;
 }
 //@ chunk-4121qate.js:285891-285999 placement
-function pickUsageOptions(e) {
-  let { breakdown, columns } = e;
+function pickUsageOptions(args) {
+  let { breakdown, columns } = args;
   return {
     ...(breakdown !== undefined && {
       breakdown,
@@ -240,21 +244,24 @@ function pickUsageOptions(e) {
   };
 }
 //@ chunk-4121qate.js:285999-286224 placement
-function checkUsageArgs(e) {
-  if (e === undefined) return;
-  let o = isPlainObject(e) ? Object.keys(e).filter((key) => key !== "breakdown" && key !== "columns") : [];
-  return isPlainObject(e) && o.length === 0
+function checkUsageArgs(args) {
+  if (args === undefined) return;
+  let extraKeys = isPlainObject(args)
+    ? Object.keys(args).filter((key) => key !== "breakdown" && key !== "columns")
+    : [];
+  return isPlainObject(args) && extraKeys.length === 0
     ? undefined
-    : "takes { breakdown, columns } or nothing" + (o.length > 0 ? ` (not ${o.join(", ")})` : "");
+    : "takes { breakdown, columns } or nothing" +
+        (extraKeys.length > 0 ? ` (not ${extraKeys.join(", ")})` : "");
 }
 //@ chunk-4121qate.js:286224-287313 placement
 var SESSION_OPS = (pluginName, host) =>
   freezeApiObject({
-    messages: (r) => {
-      let n = checkTranscriptReadArgs(r);
-      return n !== undefined
-        ? Promise.reject(new HooksError(`${pluginName}: $.session.messages ${n}`))
-        : host("session.messages", pickTranscriptReadOptions(r));
+    messages: (args) => {
+      let problem = checkTranscriptReadArgs(args);
+      return problem !== undefined
+        ? Promise.reject(new HooksError(`${pluginName}: $.session.messages ${problem}`))
+        : host("session.messages", pickTranscriptReadOptions(args));
     },
     cwd: () => host("session.cwd", {}),
     root: () => host("session.root", {}),
@@ -266,27 +273,27 @@ var SESSION_OPS = (pluginName, host) =>
     surfaces: () => host("session.surfaces", {}),
     authorize: () => host("session.authorize", {}),
     identity: () => host("session.identity", {}),
-    usage: (r) => {
-      let n = checkUsageArgs(r);
-      return n !== undefined
-        ? Promise.reject(new HooksError(`${pluginName}: $.session.usage ${n}`))
-        : host("session.usage", isPlainObject(r) ? pickUsageOptions(r) : {});
+    usage: (args) => {
+      let problem = checkUsageArgs(args);
+      return problem !== undefined
+        ? Promise.reject(new HooksError(`${pluginName}: $.session.usage ${problem}`))
+        : host("session.usage", isPlainObject(args) ? pickUsageOptions(args) : {});
     },
     version: () => host("session.version", {}),
     send: withArgCheck({
       name: `${pluginName}: $.session.send`,
       problemOf: checkSessionSendArgs,
-      host: (r) => host("session.send", normalizeSendArgs(r)),
+      host: (args) => host("session.send", normalizeSendArgs(args)),
     }),
     append: withArgCheck({
       name: `${pluginName}: $.session.append`,
       problemOf: checkSessionAppendArgs,
-      host: (r) => host("session.append", toSlimTranscriptMessage(r)),
+      host: (args) => host("session.append", toSlimTranscriptMessage(args)),
     }),
-    compact: (r) => {
-      let instructions = isPlainObject(r) ? r.instructions : undefined;
-      return r !== undefined &&
-        (!isPlainObject(r) || (instructions !== undefined && typeof instructions !== "string"))
+    compact: (args) => {
+      let instructions = isPlainObject(args) ? args.instructions : undefined;
+      return args !== undefined &&
+        (!isPlainObject(args) || (instructions !== undefined && typeof instructions !== "string"))
         ? Promise.reject(
             new HooksError(`${pluginName}: $.session.compact takes { instructions } (a string) or nothing`),
           )
@@ -306,17 +313,17 @@ var SESSION_OPS = (pluginName, host) =>
  */
 var SETTINGS_OPS = (pluginName, host) =>
   freezeApiObject({
-    read: (r) => {
-      let { source, key } = isPlainObject(r)
+    read: (args) => {
+      let { source, key } = isPlainObject(args)
         ? {
-            source: r.source,
-            key: r.key,
+            source: args.source,
+            key: args.key,
           }
         : {
             source: undefined,
             key: undefined,
           };
-      return (r !== undefined && !isPlainObject(r)) || (key !== undefined && typeof key !== "string")
+      return (args !== undefined && !isPlainObject(args)) || (key !== undefined && typeof key !== "string")
         ? Promise.reject(
             new HooksError(`${pluginName}: $.settings.read takes { source }, { key } or nothing`),
           )
@@ -327,7 +334,9 @@ var SETTINGS_OPS = (pluginName, host) =>
               : {
                   source,
                 },
-          ).then((p) => (key === undefined ? p : Object.entries(p).find(([key_2]) => key_2 === key)?.[1]));
+          ).then((problem) =>
+            key === undefined ? problem : Object.entries(problem).find(([key_2]) => key_2 === key)?.[1],
+          );
     },
   });
 //@ chunk-4121qate.js:287678-287694 placement
@@ -339,47 +348,47 @@ var MAX_CALL_VALUE_CHARS = 4194304;
 /**
  * 把值序列化为 JSON 再解析回来，确保是 JSON 数据且不超过 4M 字符，否则抛 HooksError。
  */
-function toStoredJson(e, o, r = "store.set") {
-  let n;
+function toStoredJson(value, pluginName, method = "store.set") {
+  let json;
   try {
-    n = JSON.stringify(e);
+    json = JSON.stringify(value);
   } catch (error) {
-    throw new HooksError(`${o}: $.${r}: value is not JSON data (${errorMessage(error)})`);
+    throw new HooksError(`${pluginName}: $.${method}: value is not JSON data (${errorMessage(error)})`);
   }
-  if (typeof n !== "string")
+  if (typeof json !== "string")
     throw new HooksError(
-      `${o}: $.${r}: value is not JSON data (${e === undefined ? "undefined" : `a ${typeof e}`})`,
+      `${pluginName}: $.${method}: value is not JSON data (${value === undefined ? "undefined" : `a ${typeof value}`})`,
     );
-  if (n.length > MAX_CALL_VALUE_CHARS)
+  if (json.length > MAX_CALL_VALUE_CHARS)
     throw new HooksError(
-      `${o}: $.${r}: the value is ${n.length} characters, over the ${MAX_CALL_VALUE_CHARS} limit`,
+      `${pluginName}: $.${method}: the value is ${json.length} characters, over the ${MAX_CALL_VALUE_CHARS} limit`,
     );
-  return JSON.parse(n);
+  return JSON.parse(json);
 }
 //@ chunk-4121qate.js:288073-288430 placement
 /**
  * $.store 命名空间：get/set/delete/keys，键为非空字符串，值须为 JSON 数据。
  */
 function STORE_OPS(pluginName, host) {
-  function r(n, s) {
-    if (typeof n !== "string" || n === "")
-      throw new HooksError(`${pluginName}: $.store.${s} takes a non-empty string key`);
-    return n;
+  function key(value, method) {
+    if (typeof value !== "string" || value === "")
+      throw new HooksError(`${pluginName}: $.store.${method} takes a non-empty string key`);
+    return value;
   }
   return freezeApiObject({
-    get: async (n) =>
+    get: async (secondKey) =>
       host("store.get", {
-        key: r(n, "get"),
+        key: key(secondKey, "get"),
       }),
-    set: async (n, s) => {
+    set: async (thirdKey, value) => {
       await host("store.set", {
-        value: toStoredJson(s, pluginName),
-        key: r(n, "set"),
+        value: toStoredJson(value, pluginName),
+        key: key(thirdKey, "set"),
       });
     },
-    delete: async (n) => {
+    delete: async (fourthKey) => {
       await host("store.delete", {
-        key: r(n, "delete"),
+        key: key(fourthKey, "delete"),
       });
     },
     keys: () => host("store.keys", {}),
@@ -387,17 +396,17 @@ function STORE_OPS(pluginName, host) {
 }
 //@ chunk-4121qate.js:288430-288946 placement
 function STATE_OPS(pluginName, host) {
-  function r(n, s) {
-    let plugin = isPlainObject(n) ? n.plugin : undefined;
-    let key = isPlainObject(n) ? n.key : undefined;
-    let id = isPlainObject(n) ? n.id : undefined;
+  function ref(args, method) {
+    let plugin = isPlainObject(args) ? args.plugin : undefined;
+    let key = isPlainObject(args) ? args.key : undefined;
+    let id = isPlainObject(args) ? args.id : undefined;
     if (!(
       typeof plugin === "string" &&
       typeof key === "string" &&
       (id === undefined || typeof id === "string")
     ))
       throw new HooksError(
-        `${pluginName}: $.state.${s} takes a reference { plugin, key } (and id for a family's member)`,
+        `${pluginName}: $.state.${method} takes a reference { plugin, key } (and id for a family's member)`,
       );
     return id === undefined
       ? {
@@ -411,13 +420,13 @@ function STATE_OPS(pluginName, host) {
         };
   }
   return freezeApiObject({
-    get: async (n) => host("state.get", r(n, "get")),
-    set: async (n, s, i) =>
+    get: async (args) => host("state.get", ref(args, "get")),
+    set: async (args, value, options) =>
       host("state.set", {
-        ...r(n, "set"),
-        value: toStoredJson(s, pluginName, "state.set"),
-        ...(i?.ifVersion !== undefined && {
-          ifVersion: i.ifVersion,
+        ...ref(args, "set"),
+        value: toStoredJson(value, pluginName, "state.set"),
+        ...(options?.ifVersion !== undefined && {
+          ifVersion: options.ifVersion,
         }),
       }),
   });
@@ -426,28 +435,28 @@ function STATE_OPS(pluginName, host) {
 /**
  * 只取存在的字段
  */
-function pickFields(e, o) {
-  let r = {};
-  for (let n of o) {
-    let s = e[n];
-    if (s !== undefined) r[n] = s;
+function pickFields(source, keys) {
+  let picked = {};
+  for (let key of keys) {
+    let value = source[key];
+    if (value !== undefined) picked[key] = value;
   }
-  return r;
+  return picked;
 }
 //@ chunk-4121qate.js:289029-289430 placement
 var TELEMETRY_OPS = (pluginName, host) =>
   freezeApiObject({
-    log: (r) =>
-      isPlainObject(r)
-        ? host("telemetry.log", pickFields(r, ["to", "event", "props", "attributes", "loggedAt", "span"]))
+    log: (args) =>
+      isPlainObject(args)
+        ? host("telemetry.log", pickFields(args, ["to", "event", "props", "attributes", "loggedAt", "span"]))
         : Promise.reject(
             new HooksError(
               `${pluginName}: $.telemetry.log takes an entry ({ to?, event, props? } or a collector record)`,
             ),
           ),
-    mark: (r) =>
-      isPlainObject(r)
-        ? host("telemetry.mark", pickFields(r, ["feature", "kind", "reason", "props"]))
+    mark: (args) =>
+      isPlainObject(args)
+        ? host("telemetry.mark", pickFields(args, ["feature", "kind", "reason", "props"]))
         : Promise.reject(
             new HooksError(
               `${pluginName}: $.telemetry.mark takes an entry ({ feature, kind, reason?, props? })`,

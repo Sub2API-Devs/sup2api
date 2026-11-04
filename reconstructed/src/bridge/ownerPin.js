@@ -28,7 +28,7 @@ import { validateOauthToken } from "../services/oauth/validateOauthToken.js";
 /**
  * 确定守护进程的 owner 账号：优先本地登录账号；否则在开关允许时请服务端识别守护进程凭证，识别不了时警告。
  */
-async function resolveDaemonOwner(d) {
+async function resolveDaemonOwner(getAccessToken) {
   let authenticatedAccountInfo = getAuthenticatedAccountInfo();
   if (authenticatedAccountInfo?.accountUuid)
     return {
@@ -36,16 +36,16 @@ async function resolveDaemonOwner(d) {
       organizationUuid: authenticatedAccountInfo.organizationUuid || undefined,
     };
   if (!isBridgeOwnerPinnedEndEnabled() || isEssentialTrafficOnly()) return;
-  let c = d();
-  let o = c === undefined ? undefined : await attributeTokenOwner(c);
-  if (o === undefined)
+  let token = getAccessToken();
+  let owner = token === undefined ? undefined : await attributeTokenOwner(token);
+  if (owner === undefined)
     logForDebugging(
       "[bridge:owner-pin] daemon owner not declared: no bootstrap stamp, and the daemon credential is absent or was not attributed by the server in time \u2014 spawned sessions run the unverified inbox path",
       {
         level: "warn",
       },
     );
-  return o;
+  return owner;
 }
 //@ chunk-zq2w8cvy.js:871-918 placement
 /**
@@ -61,19 +61,19 @@ var OWNER_ATTRIBUTE_TIMEOUT_MS = 3000;
 /**
  * 判断是否为存储支撑的第一方登录：未覆盖桥接令牌、第一方提供商，且 OAuth 令牌来源为 store。
  */
-async function isStoreBackedFirstPartyLogin(d) {
+async function isStoreBackedFirstPartyLogin(credentials) {
   return (
     getBridgeTokenOverride() === undefined &&
     isBridgeFirstParty() &&
-    (await getClaudeAIOAuthTokenOriginAsync(d)) === "store"
+    (await getClaudeAIOAuthTokenOriginAsync(credentials)) === "store"
   );
 }
 //@ chunk-zq2w8cvy.js:990-1037 placement
 /**
  * 只解析并取回桥接会话所有者绑定的 pin（不返回原因）。
  */
-async function resolveBridgeOwnerPinOnly(d) {
-  return (await resolveBridgeOwnerPin(d)).pin;
+async function resolveBridgeOwnerPinOnly(credentials) {
+  return (await resolveBridgeOwnerPin(credentials)).pin;
 }
 //@ chunk-zq2w8cvy.js:1037-5120 placement
 /**
@@ -97,21 +97,21 @@ async function resolveBridgeOwnerPin({ getAccessToken, storageV5, credentials, p
       reason: "not_store_login",
     };
   let freshOauthAccountFromDisk = await readFreshOauthAccountFromDisk(storageV5);
-  let i;
-  let s = accessToken;
-  let a = false;
+  let owner;
+  let ownerToken = accessToken;
+  let ownerVerified = false;
   if (presetOwner !== undefined) {
-    i = {
+    owner = {
       accountUuid: presetOwner.accountUuid,
       organizationUuid: presetOwner.organizationUuid || undefined,
     };
-    let e = (await A(accessToken)) ? "unknown" : await D(accessToken);
-    if (e === "foreign")
+    let verdict = (await isExpired(accessToken)) ? "unknown" : await classifyToken(accessToken);
+    if (verdict === "foreign")
       return {
         pin: undefined,
         reason: "not_owner",
       };
-    if (e === "unknown" && !u(freshOauthAccountFromDisk))
+    if (verdict === "unknown" && !isSameOwner(freshOauthAccountFromDisk))
       return {
         pin: undefined,
         reason: "unresolved",
@@ -122,13 +122,17 @@ async function resolveBridgeOwnerPin({ getAccessToken, storageV5, credentials, p
         pin: undefined,
         reason: "no_identity",
       };
-    i = {
+    owner = {
       accountUuid: freshOauthAccountFromDisk.accountUuid,
       organizationUuid: freshOauthAccountFromDisk.organizationUuid || undefined,
     };
   }
-  let R = presetOwner === undefined ? getAuthenticatedAccountInfo() : undefined;
-  if (R !== undefined && !v(R) && !(await x())) {
+  let authenticatedAccountInfo = presetOwner === undefined ? getAuthenticatedAccountInfo() : undefined;
+  if (
+    authenticatedAccountInfo !== undefined &&
+    !acceptAuthenticatedInfo(authenticatedAccountInfo) &&
+    !(await adoptAttributedOwner())
+  ) {
     logForDebugging(
       "[bridge:owner-pin] identity sources disagree and the credential could not be validated \u2014 session runs unpinned",
     );
@@ -137,222 +141,233 @@ async function resolveBridgeOwnerPin({ getAccessToken, storageV5, credentials, p
       reason: "unresolved",
     };
   }
-  let f;
-  let l;
-  let P = 0;
-  let O = "unchanged";
-  let g = 0;
-  let w;
-  let p;
-  let h;
-  let E = OWNER_PIN_MAX_ATTEMPTS;
-  function u(e) {
+  let pendingConfirm;
+  let pendingNoteAccepted;
+  let nextConfirmAt = 0;
+  let lastVerdict = "unchanged";
+  let inconclusiveUntil = 0;
+  let onChange;
+  let changeTimer;
+  let recheckTimer;
+  let retriesLeft = OWNER_PIN_MAX_ATTEMPTS;
+  function isSameOwner(account) {
     return (
-      e !== undefined &&
-      Boolean(e.accountUuid) &&
-      e.accountUuid === i.accountUuid &&
-      (!e.organizationUuid || !i.organizationUuid || e.organizationUuid === i.organizationUuid)
+      account !== undefined &&
+      Boolean(account.accountUuid) &&
+      account.accountUuid === owner.accountUuid &&
+      (!account.organizationUuid ||
+        !owner.organizationUuid ||
+        account.organizationUuid === owner.organizationUuid)
     );
   }
-  function v(authenticatedAccountInfo) {
-    if (!u(authenticatedAccountInfo)) return false;
-    i = {
-      accountUuid: i.accountUuid,
-      organizationUuid: i.organizationUuid ?? (authenticatedAccountInfo.organizationUuid || undefined),
+  function acceptAuthenticatedInfo(authenticatedAccountInfo) {
+    if (!isSameOwner(authenticatedAccountInfo)) return false;
+    owner = {
+      accountUuid: owner.accountUuid,
+      organizationUuid: owner.organizationUuid ?? (authenticatedAccountInfo.organizationUuid || undefined),
     };
-    a = true;
+    ownerVerified = true;
     return true;
   }
-  async function x() {
-    let e = await attributeTokenOwner(s);
-    if (e === undefined) return false;
-    i = e;
-    a = true;
+  async function adoptAttributedOwner() {
+    let attributed = await attributeTokenOwner(ownerToken);
+    if (attributed === undefined) return false;
+    owner = attributed;
+    ownerVerified = true;
     return true;
   }
-  async function D(accessToken) {
-    let n = await attributeTokenOwner(accessToken);
-    if (n === undefined) return "unknown";
-    if (!u(n)) return "foreign";
-    i = {
-      accountUuid: i.accountUuid,
-      organizationUuid: i.organizationUuid ?? n.organizationUuid,
+  async function classifyToken(accessToken) {
+    let attributed = await attributeTokenOwner(accessToken);
+    if (attributed === undefined) return "unknown";
+    if (!isSameOwner(attributed)) return "foreign";
+    owner = {
+      accountUuid: owner.accountUuid,
+      organizationUuid: owner.organizationUuid ?? attributed.organizationUuid,
     };
-    s = accessToken;
-    a = true;
+    ownerToken = accessToken;
+    ownerVerified = true;
     return "owner";
   }
-  async function A(accessToken) {
-    let n = await getClaudeAIOAuthTokensAsync(credentials).catch(() => null);
-    return n?.accessToken === accessToken && n.expiresAt !== null && n.expiresAt <= Date.now();
+  async function isExpired(accessToken) {
+    let tokens = await getClaudeAIOAuthTokensAsync(credentials).catch(() => null);
+    return tokens?.accessToken === accessToken && tokens.expiresAt !== null && tokens.expiresAt <= Date.now();
   }
-  function z() {
-    if (!a && presetOwner !== undefined) return true;
-    if (!a) {
+  function identityLooksChanged() {
+    if (!ownerVerified && presetOwner !== undefined) return true;
+    if (!ownerVerified) {
       let authenticatedAccountInfo = getAuthenticatedAccountInfo();
-      if (authenticatedAccountInfo !== undefined && !v(authenticatedAccountInfo)) return true;
+      if (authenticatedAccountInfo !== undefined && !acceptAuthenticatedInfo(authenticatedAccountInfo))
+        return true;
     }
     let oauthAccountInfo = getOauthAccountInfo();
-    return Boolean(oauthAccountInfo?.accountUuid) && !u(oauthAccountInfo);
+    return Boolean(oauthAccountInfo?.accountUuid) && !isSameOwner(oauthAccountInfo);
   }
-  function T(e) {
-    P = Date.now() + e;
-    E = OWNER_PIN_MAX_ATTEMPTS;
-    if (e > 0) {
-      O = "unchanged";
-      g = Date.now() + OWNER_PIN_INCONCLUSIVE_TTL_MS;
+  function noteChecked(ttlMs) {
+    nextConfirmAt = Date.now() + ttlMs;
+    retriesLeft = OWNER_PIN_MAX_ATTEMPTS;
+    if (ttlMs > 0) {
+      lastVerdict = "unchanged";
+      inconclusiveUntil = Date.now() + OWNER_PIN_INCONCLUSIVE_TTL_MS;
     }
   }
-  function m(e) {
-    P = Date.now() + OWNER_PIN_CHANGED_TTL_MS;
-    if (e === "inconclusive") {
-      O = e;
-      g = Date.now() + OWNER_PIN_INCONCLUSIVE_TTL_MS;
+  function noteInconclusive(verdict) {
+    nextConfirmAt = Date.now() + OWNER_PIN_CHANGED_TTL_MS;
+    if (verdict === "inconclusive") {
+      lastVerdict = verdict;
+      inconclusiveUntil = Date.now() + OWNER_PIN_INCONCLUSIVE_TTL_MS;
     }
-    if (w === undefined || h !== undefined || E === 0) return e;
-    E--;
-    h = setTimeout(() => {
-      h = undefined;
+    if (onChange === undefined || recheckTimer !== undefined || retriesLeft === 0) return verdict;
+    retriesLeft--;
+    recheckTimer = setTimeout(() => {
+      recheckTimer = undefined;
       try {
-        if (z()) w?.();
+        if (identityLooksChanged()) onChange?.();
       } catch {}
     }, OWNER_PIN_CHANGED_TTL_MS);
-    return e;
+    return verdict;
   }
-  async function F(e) {
-    if (l !== undefined) await l;
-    let n = undefined;
-    if (!a && presetOwner !== undefined) {
-      n = await readFreshOAuthCredentialSnapshot(storageV5, credentials).catch(() => {
+  async function confirmChanged(fresh) {
+    if (pendingNoteAccepted !== undefined) await pendingNoteAccepted;
+    let snapshot = undefined;
+    if (!ownerVerified && presetOwner !== undefined) {
+      snapshot = await readFreshOAuthCredentialSnapshot(storageV5, credentials).catch(() => {
         return;
       });
-      if (n === undefined) return m("inconclusive");
-      let y = (await A(n.accessToken)) ? "unknown" : await D(n.accessToken);
-      if (y === "foreign") {
-        T(0);
+      if (snapshot === undefined) return noteInconclusive("inconclusive");
+      let verdict = (await isExpired(snapshot.accessToken))
+        ? "unknown"
+        : await classifyToken(snapshot.accessToken);
+      if (verdict === "foreign") {
+        noteChecked(0);
         return "changed";
       }
-      if (y === "unknown") return m(u(n) ? "unchanged" : "inconclusive");
-    } else if (!a) {
+      if (verdict === "unknown")
+        return noteInconclusive(isSameOwner(snapshot) ? "unchanged" : "inconclusive");
+    } else if (!ownerVerified) {
       let authenticatedAccountInfo = getAuthenticatedAccountInfo();
-      if (!(authenticatedAccountInfo !== undefined && v(authenticatedAccountInfo)) && !(await x()))
-        return m("inconclusive");
+      if (
+        !(authenticatedAccountInfo !== undefined && acceptAuthenticatedInfo(authenticatedAccountInfo)) &&
+        !(await adoptAttributedOwner())
+      )
+        return noteInconclusive("inconclusive");
     }
-    n ??= await readFreshOAuthCredentialSnapshot(storageV5, credentials).catch(() => {
+    snapshot ??= await readFreshOAuthCredentialSnapshot(storageV5, credentials).catch(() => {
       return;
     });
-    if (!n?.accountUuid) return m(e ? "inconclusive" : "unchanged");
-    let b = u(n);
-    if (n.accessToken === s) {
-      T(b ? OWNER_PIN_CHANGED_TTL_MS : OWNER_PIN_UNCHANGED_TTL_MS);
+    if (!snapshot?.accountUuid) return noteInconclusive(fresh ? "inconclusive" : "unchanged");
+    let sameOwner = isSameOwner(snapshot);
+    if (snapshot.accessToken === ownerToken) {
+      noteChecked(sameOwner ? OWNER_PIN_CHANGED_TTL_MS : OWNER_PIN_UNCHANGED_TTL_MS);
       return "unchanged";
     }
-    let U = (await A(n.accessToken)) ? undefined : await attributeTokenOwner(n.accessToken);
-    if (U === undefined) return m("inconclusive");
-    if (u(U)) {
+    let attributed = (await isExpired(snapshot.accessToken))
+      ? undefined
+      : await attributeTokenOwner(snapshot.accessToken);
+    if (attributed === undefined) return noteInconclusive("inconclusive");
+    if (isSameOwner(attributed)) {
       logForDebugging(
         "[bridge:owner-pin] the server attributes the rotated credential to the owner \u2014 re-baselining",
       );
-      i = {
-        accountUuid: i.accountUuid,
-        organizationUuid: i.organizationUuid ?? U.organizationUuid,
+      owner = {
+        accountUuid: owner.accountUuid,
+        organizationUuid: owner.organizationUuid ?? attributed.organizationUuid,
       };
-      s = n.accessToken;
-      T(b ? OWNER_PIN_CHANGED_TTL_MS : OWNER_PIN_UNCHANGED_TTL_MS);
+      ownerToken = snapshot.accessToken;
+      noteChecked(sameOwner ? OWNER_PIN_CHANGED_TTL_MS : OWNER_PIN_UNCHANGED_TTL_MS);
       return "unchanged";
     }
-    T(0);
+    noteChecked(0);
     return "changed";
   }
-  function B() {
-    let e = g - Date.now();
-    return e > 0 && e <= OWNER_PIN_INCONCLUSIVE_TTL_MS;
+  function recentlyChecked() {
+    let remainingMs = inconclusiveUntil - Date.now();
+    return remainingMs > 0 && remainingMs <= OWNER_PIN_INCONCLUSIVE_TTL_MS;
   }
-  let S = {
-    identityLooksChanged: z,
-    confirmChanged(e) {
-      if (e?.fresh) {
-        g = 0;
-        let n = f;
-        if (n !== undefined)
-          return n.then(() =>
-            S.confirmChanged({
+  let pin = {
+    identityLooksChanged,
+    confirmChanged(options) {
+      if (options?.fresh) {
+        inconclusiveUntil = 0;
+        let pending = pendingConfirm;
+        if (pending !== undefined)
+          return pending.then(() =>
+            pin.confirmChanged({
               fresh: true,
             }),
           );
-      } else if (f === undefined && B()) return Promise.resolve(O);
-      f ??= F(e?.fresh === true).finally(() => {
-        f = undefined;
+      } else if (pendingConfirm === undefined && recentlyChecked()) return Promise.resolve(lastVerdict);
+      pendingConfirm ??= confirmChanged(options?.fresh === true).finally(() => {
+        pendingConfirm = undefined;
       });
-      return f;
+      return pendingConfirm;
     },
     confirmedUnchangedRecently() {
-      return f === undefined && O === "unchanged" && B();
+      return pendingConfirm === undefined && lastVerdict === "unchanged" && recentlyChecked();
     },
-    noteAcceptedToken(e) {
-      let n = e !== s;
-      s = e;
-      g = 0;
-      if (!n || l !== undefined || !isBridgeOwnerPinnedEndEnabled()) return;
-      l = readFreshOauthAccountFromDisk(storageV5)
+    noteAcceptedToken(token) {
+      let rotated = token !== ownerToken;
+      ownerToken = token;
+      inconclusiveUntil = 0;
+      if (!rotated || pendingNoteAccepted !== undefined || !isBridgeOwnerPinnedEndEnabled()) return;
+      pendingNoteAccepted = readFreshOauthAccountFromDisk(storageV5)
         .then(async (freshOauthAccountFromDisk) => {
-          if (!freshOauthAccountFromDisk?.accountUuid || u(freshOauthAccountFromDisk)) return;
-          let U = await x();
+          if (!freshOauthAccountFromDisk?.accountUuid || isSameOwner(freshOauthAccountFromDisk)) return;
+          let adopted = await adoptAttributedOwner();
           logForDebugging(
-            U
+            adopted
               ? "[bridge:owner-pin] request accepted while the identity file names another account \u2014 re-pinned to the tenant the server attributes the credential to"
               : "[bridge:owner-pin] request accepted while the identity file names another account, but the credential could not be attributed \u2014 keeping the pinned owner",
           );
         })
         .finally(() => {
-          l = undefined;
+          pendingNoteAccepted = undefined;
         });
     },
-    ownerToken: () => s,
-    ownerVerified: () => a,
-    subscribe(e) {
-      w = e;
-      let n = subscribeGlobalConfigInstalled(() => {
+    ownerToken: () => ownerToken,
+    ownerVerified: () => ownerVerified,
+    subscribe(listener) {
+      onChange = listener;
+      let unsubscribeConfig = subscribeGlobalConfigInstalled(() => {
         try {
-          if (Date.now() < P || !z()) return;
+          if (Date.now() < nextConfirmAt || !identityLooksChanged()) return;
         } catch {
           return;
         }
-        clearTimeout(p);
-        p = setTimeout(() => {
-          p = undefined;
-          w?.();
+        clearTimeout(changeTimer);
+        changeTimer = setTimeout(() => {
+          changeTimer = undefined;
+          onChange?.();
         }, OWNER_PIN_MIN_REFRESH_MS);
       });
       return () => {
-        w = undefined;
-        clearTimeout(p);
-        p = undefined;
-        clearTimeout(h);
-        h = undefined;
-        n();
+        onChange = undefined;
+        clearTimeout(changeTimer);
+        changeTimer = undefined;
+        clearTimeout(recheckTimer);
+        recheckTimer = undefined;
+        unsubscribeConfig();
       };
     },
   };
   return {
-    pin: S,
+    pin,
   };
 }
 //@ chunk-zq2w8cvy.js:5120-5291 placement
 /**
  * 带超时调用 validateOauthToken，返回 token 所属 {accountUuid, organizationUuid}。
  */
-async function attributeTokenOwner(d) {
-  let r = await withDeadline(
-    validateOauthToken(d).catch(() => {
+async function attributeTokenOwner(token) {
+  let info = await withDeadline(
+    validateOauthToken(token).catch(() => {
       return;
     }),
     OWNER_ATTRIBUTE_TIMEOUT_MS,
   );
-  return r?.account_uuid
+  return info?.account_uuid
     ? {
-        accountUuid: r.account_uuid,
-        organizationUuid: r.organization_uuid || undefined,
+        accountUuid: info.account_uuid,
+        organizationUuid: info.organization_uuid || undefined,
       }
     : undefined;
 }

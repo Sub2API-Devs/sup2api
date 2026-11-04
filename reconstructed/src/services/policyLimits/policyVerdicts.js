@@ -11,12 +11,12 @@
 import { complianceTaintState } from "./complianceTaints.js";
 
 //@ chunk-1rckdhfn.js:1626-1665 placement
-function registerPolicyVerdict(t) {
-  complianceTaintState().registerVerdict(t);
+function registerPolicyVerdict(verdict) {
+  complianceTaintState().registerVerdict(verdict);
 }
 //@ chunk-1rckdhfn.js:1665-1723 placement
-function isPolicyAllowed(t) {
-  return complianceTaintState().verdict?.isPolicyAllowed(t) ?? false;
+function isPolicyAllowed(policyKey) {
+  return complianceTaintState().verdict?.isPolicyAllowed(policyKey) ?? false;
 }
 //@ chunk-1rckdhfn.js:1723-1793 placement
 function rememberedCoreSkills() {
@@ -38,8 +38,8 @@ function policyDenyKind(policyKey) {
   return verdict.policyDenyKind(policyKey);
 }
 //@ chunk-1rckdhfn.js:1967-2038 placement
-function policyDeniedReason(t, r, i) {
-  return complianceTaintState().verdict?.policyDeniedReason(t, r, i) ?? null;
+function policyDeniedReason(policyKey, featureLabel, verb) {
+  return complianceTaintState().verdict?.policyDeniedReason(policyKey, featureLabel, verb) ?? null;
 }
 //@ chunk-1rckdhfn.js:2038-2103 placement
 function complianceTaintsSettled() {
@@ -96,11 +96,11 @@ function rowPrincipalStamp() {
   }
 }
 //@ chunk-1rckdhfn.js:2661-2772 placement
-function isRowOfAnotherPrincipal(t) {
+function isRowOfAnotherPrincipal(stamp) {
   let verdict = complianceTaintState().verdict;
   if (verdict === undefined) return false;
   try {
-    return verdict.rowOfAnotherPrincipal(t);
+    return verdict.rowOfAnotherPrincipal(stamp);
   } catch {
     return true;
   }

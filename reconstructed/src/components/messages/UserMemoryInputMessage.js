@@ -8,7 +8,7 @@
  * pieces: chunk-ah34pb7m.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { extractTag } from "../../utils/messages.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { sampleAlias } from "../Spinner/spinnerStatus.js";
@@ -21,7 +21,7 @@ import { MessageResponse } from "../MessageResponse.js";
 
 //@ chunk-ah34pb7m.js:112131-112874 fingerprint = UserMemoryInputMessage (0.684)
 function UserMemoryInputMessage(props) {
-  let $ = w(10);
+  let $ = useMemoCache(10);
   let { text, addMargin } = props;
   let t1;
   if ($[0] !== text) {

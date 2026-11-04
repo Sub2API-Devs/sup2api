@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:88643-92608 cjs-fingerprint
-var require_crystal = x(function (cjsExports, cjsModule) {
+var require_crystal = __commonJS(function (cjsExports, cjsModule) {
   function crystal(hljs) {
     let CRYSTAL_KEYWORDS = {
       $pattern: "[a-zA-Z_]\\w*[!?=]?",
@@ -22,7 +22,7 @@ var require_crystal = x(function (cjsExports, cjsModule) {
       end: /\}/,
       keywords: CRYSTAL_KEYWORDS,
     };
-    let c = {
+    let VARIABLE = {
       className: "variable",
       begin: "(\\$\\W)|((\\$|@@?)(\\w+))(?=[^@$?])(?![A-Za-z])(?![@$?'])",
     };
@@ -200,7 +200,7 @@ var require_crystal = x(function (cjsExports, cjsModule) {
       REGEXP2,
       REGEXP,
       ATTRIBUTE,
-      c,
+      VARIABLE,
       hljs.HASH_COMMENT_MODE,
       {
         className: "class",

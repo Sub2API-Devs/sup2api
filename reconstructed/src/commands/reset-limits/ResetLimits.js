@@ -8,8 +8,13 @@
  * pieces: chunk-q8p98373.js (6)
  * attribution: placement 6
  */
-import { init_react_production, y, R, P } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   startResetFlowSafe,
   isResetOfferAvailable,
@@ -33,124 +38,135 @@ import { LIMIT_CATEGORIES } from "../../components/rateLimit/quotaAutoResume.js"
 init_react_production();
 //@ chunk-q8p98373.js:13960-15829 placement
 function ResetLimitsView(props) {
-  let m = w(26);
+  let $ = useMemoCache(26);
   let { onDone, credentials, kind } = props;
-  let [i, Y] = y(null);
-  let [T, Z] = y("idle");
-  let K = R(false);
-  let O = R(false);
-  let v = R(false);
-  let X;
-  let H;
-  if (m[0] !== credentials || m[1] !== kind || m[2] !== onDone) {
-    X = () => {
-      if (K.current) {
+  let [flowState, setFlowState] = useState(null);
+  let [phase, setPhase] = useState("idle");
+  let startedRef = useRef(false);
+  let cancelledRef = useRef(false);
+  let finishedRef = useRef(false);
+  let startFlowEffect;
+  let startFlowDeps;
+  if ($[0] !== credentials || $[1] !== kind || $[2] !== onDone) {
+    startFlowEffect = () => {
+      if (startedRef.current) {
         return;
       }
-      K.current = true;
+      startedRef.current = true;
       startResetFlowSafe("command", credentials, kind)
         .then(async (resetFlow) => {
-          if (O.current) {
+          if (cancelledRef.current) {
             return;
           }
-          v.current = true;
+          finishedRef.current = true;
           if (resetFlow.kind === "confirm" || resetFlow.kind === "choose") {
-            Y(resetFlow);
+            setFlowState(resetFlow);
             return;
           }
-          let C = resetFlow.result;
-          let currentLimits = getCurrentLimits();
+          let resetResult = resetFlow.result;
+          let limits = getCurrentLimits();
           if (!(
             kind === undefined &&
             isLimitResetEnabled() &&
-            !isResetOfferAvailable(currentLimits) &&
+            !isResetOfferAvailable(limits) &&
             !isClaimingReset()
           )) {
-            let ee =
+            let shouldHintUsage =
               kind !== undefined &&
-              C.outcome === "not_offered" &&
+              resetResult.outcome === "not_offered" &&
               isLimitResetEnabled() &&
-              canArmLowPriorityReset(currentLimits);
-            finishWithSystemMessage(onDone, ee ? `${C.text} \xB7 ${RESET_LIMITS_USAGE_HINT}` : C.text);
+              canArmLowPriorityReset(limits);
+            finishWithSystemMessage(
+              onDone,
+              shouldHintUsage ? `${resetResult.text} \xB7 ${RESET_LIMITS_USAGE_HINT}` : resetResult.text,
+            );
             return;
           }
-          Z(canArmLowPriorityReset(currentLimits) ? "claiming" : "asking");
-          let I = await checkUsageCredits("command", credentials);
-          finishWithSystemMessage(onDone, I.outcome === "not_offered" ? C.text : I.text);
+          setPhase(canArmLowPriorityReset(limits) ? "claiming" : "asking");
+          let creditsResult = await checkUsageCredits("command", credentials);
+          finishWithSystemMessage(
+            onDone,
+            creditsResult.outcome === "not_offered" ? resetResult.text : creditsResult.text,
+          );
         })
         .catch(() => {
           finishWithSystemMessage(onDone, RESET_STATUS_MESSAGES);
         });
     };
-    H = [credentials, onDone, kind];
-    m[0] = credentials;
-    m[1] = kind;
-    m[2] = onDone;
-    m[3] = X;
-    m[4] = H;
+    startFlowDeps = [credentials, onDone, kind];
+    $[0] = credentials;
+    $[1] = kind;
+    $[2] = onDone;
+    $[3] = startFlowEffect;
+    $[4] = startFlowDeps;
   } else {
-    X = m[3];
-    H = m[4];
+    startFlowEffect = $[3];
+    startFlowDeps = $[4];
   }
-  P(X, H);
-  if (i?.kind === "choose") {
+  useEffect(startFlowEffect, startFlowDeps);
+  if (flowState?.kind === "choose") {
     let onDone_2;
-    if (m[5] !== onDone) {
-      onDone_2 = (re) => finishWithSystemMessage(onDone, re.text);
-      m[5] = onDone;
-      m[6] = onDone_2;
-    } else onDone_2 = m[6];
-    let d;
-    if (m[7] !== credentials || m[8] !== i.offers || m[9] !== i.unusable || m[10] !== onDone_2) {
-      d = jsxProd_default(ResetLimitsOffers, {
-        offers: i.offers,
-        unusable: i.unusable,
+    if ($[5] !== onDone) {
+      onDone_2 = (offerResult) => finishWithSystemMessage(onDone, offerResult.text);
+      $[5] = onDone;
+      $[6] = onDone_2;
+    } else onDone_2 = $[6];
+    let offersView;
+    if (
+      $[7] !== credentials ||
+      $[8] !== flowState.offers ||
+      $[9] !== flowState.unusable ||
+      $[10] !== onDone_2
+    ) {
+      offersView = jsxProd_default(ResetLimitsOffers, {
+        offers: flowState.offers,
+        unusable: flowState.unusable,
         entry: "command",
         credentials,
         onDone: onDone_2,
       });
-      m[7] = credentials;
-      m[8] = i.offers;
-      m[9] = i.unusable;
-      m[10] = onDone_2;
-      m[11] = d;
-    } else d = m[11];
-    return d;
+      $[7] = credentials;
+      $[8] = flowState.offers;
+      $[9] = flowState.unusable;
+      $[10] = onDone_2;
+      $[11] = offersView;
+    } else offersView = $[11];
+    return offersView;
   }
-  if (i === null || i.kind !== "confirm") {
-    if (T !== "idle") {
+  if (flowState === null || flowState.kind !== "confirm") {
+    if (phase !== "idle") {
       const children =
-        T === "claiming"
+        phase === "claiming"
           ? "Resetting your 5-hour limit\u2026 this usually takes a few seconds"
           : CHECKING_FOR_RESET_LINE;
-      let d;
-      if (m[12] !== children) {
-        d = jsxProd_default(Text, {
+      let phaseText;
+      if ($[12] !== children) {
+        phaseText = jsxProd_default(Text, {
           dimColor: true,
           children,
         });
-        m[12] = children;
-        m[13] = d;
-      } else d = m[13];
-      return d;
+        $[12] = children;
+        $[13] = phaseText;
+      } else phaseText = $[13];
+      return phaseText;
     }
     let onCancel;
-    if (m[14] !== onDone) {
+    if ($[14] !== onDone) {
       onCancel = () => {
-        if (v.current) {
+        if (finishedRef.current) {
           return;
         }
-        O.current = true;
+        cancelledRef.current = true;
         onDone(undefined, {
           display: "skip",
         });
       };
-      m[14] = onDone;
-      m[15] = onCancel;
-    } else onCancel = m[15];
+      $[14] = onDone;
+      $[15] = onCancel;
+    } else onCancel = $[15];
     let inputGuide;
     let children;
-    if (m[16] === MEMO_CACHE_SENTINEL) {
+    if ($[16] === MEMO_CACHE_SENTINEL) {
       inputGuide = jsxProd_default(KeyboardShortcutHint, {
         chord: "escape",
         action: "cancel",
@@ -159,59 +175,59 @@ function ResetLimitsView(props) {
         dimColor: true,
         children: "This takes a moment",
       });
-      m[16] = inputGuide;
-      m[17] = children;
+      $[16] = inputGuide;
+      $[17] = children;
     } else {
-      inputGuide = m[16];
-      children = m[17];
+      inputGuide = $[16];
+      children = $[17];
     }
-    let J;
-    if (m[18] !== onCancel) {
-      J = jsxProd_default(Dialog, {
+    let checkingDialog;
+    if ($[18] !== onCancel) {
+      checkingDialog = jsxProd_default(Dialog, {
         title: CHECKING_FOR_RESET_LINE,
         onCancel,
         color: "suggestion",
         inputGuide,
         children,
       });
-      m[18] = onCancel;
-      m[19] = J;
-    } else J = m[19];
-    return J;
+      $[18] = onCancel;
+      $[19] = checkingDialog;
+    } else checkingDialog = $[19];
+    return checkingDialog;
   }
   let onDone_2;
-  if (m[20] !== onDone) {
-    onDone_2 = (ne) => finishWithSystemMessage(onDone, ne.text);
-    m[20] = onDone;
-    m[21] = onDone_2;
-  } else onDone_2 = m[21];
-  let d;
-  if (m[22] !== credentials || m[23] !== i.offer || m[24] !== onDone_2) {
-    d = jsxProd_default(ResetLimits, {
-      offer: i.offer,
+  if ($[20] !== onDone) {
+    onDone_2 = (confirmResult) => finishWithSystemMessage(onDone, confirmResult.text);
+    $[20] = onDone;
+    $[21] = onDone_2;
+  } else onDone_2 = $[21];
+  let confirmView;
+  if ($[22] !== credentials || $[23] !== flowState.offer || $[24] !== onDone_2) {
+    confirmView = jsxProd_default(ResetLimits, {
+      offer: flowState.offer,
       entry: "command",
       credentials,
       onDone: onDone_2,
     });
-    m[22] = credentials;
-    m[23] = i.offer;
-    m[24] = onDone_2;
-    m[25] = d;
-  } else d = m[25];
-  return d;
+    $[22] = credentials;
+    $[23] = flowState.offer;
+    $[24] = onDone_2;
+    $[25] = confirmView;
+  } else confirmView = $[25];
+  return confirmView;
 }
 //@ chunk-q8p98373.js:15829-15869 placement
-function finishWithSystemMessage(onDone, r) {
-  onDone(r, {
+function finishWithSystemMessage(onDone, text) {
+  onDone(text, {
     display: "system",
   });
 }
 //@ chunk-q8p98373.js:15869-16022 placement
-function parseResetName(a) {
-  let lower = a.trim().toLowerCase();
+function parseResetName(name) {
+  let lower = name.trim().toLowerCase();
   if (lower === "") return;
   if (lower === "5-hour" || lower === "5h" || lower === "five-hour") return "session";
-  return LIMIT_CATEGORIES.find((o) => o === lower) ?? null;
+  return LIMIT_CATEGORIES.find((category) => category === lower) ?? null;
 }
 //@ chunk-q8p98373.js:16022-16222 placement
 var RESET_LIMITS_USAGE_HINT = `or run just /${LIMIT_RESET} to reset your 5-hour limit now (uses your weekly limit)`;
@@ -222,8 +238,8 @@ var INVALID_RESET_NAME_MESSAGE = `That isn't a reset name \xB7 try /${LIMIT_RESE
  */
 async function runResetLimitsCommand(onDone, context, args = "") {
   if (!isCedarEmberEnabled()) {
-    let i = await checkUsageCredits("command", context.credentials);
-    finishWithSystemMessage(onDone, i.text);
+    let creditsResult = await checkUsageCredits("command", context.credentials);
+    finishWithSystemMessage(onDone, creditsResult.text);
     return null;
   }
   let resetName = parseResetName(args);
@@ -237,3 +253,4 @@ async function runResetLimitsCommand(onDone, context, args = "") {
     kind: resetName,
   });
 }
+export { runResetLimitsCommand };

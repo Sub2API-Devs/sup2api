@@ -24,9 +24,9 @@ import { withCliSections } from "../constants/promptSections.js";
 /**
  * 取生效的系统提示词文本，并标记是否使用了默认提示词。
  */
-function effectiveSystemPromptText(e) {
-  let { prompt, servesDefault } = buildEffectiveSystemPrompt(e);
-  if (!servesDefault && !e.analysisOnly) setSharedMemoryServedViaTools(false);
+function effectiveSystemPromptText(options) {
+  let { prompt, servesDefault } = buildEffectiveSystemPrompt(options);
+  if (!servesDefault && !options.analysisOnly) setSharedMemoryServedViaTools(false);
   return prompt;
 }
 //@ chunk-e6aww6q8.js:2371009-2371933 fingerprint = buildEffectiveSystemPrompt (0.583)
@@ -50,8 +50,8 @@ function buildEffectiveSystemPrompt({
   if (isCoordinatorMode_2() && !mainThreadAgentDefinition) {
     let prompt = noPersonalScopeBlock()?.prompt;
     let systemPromptSectionState = getSystemPromptSectionState();
-    let { getCoordinatorSystemPrompt } = require("./chunk-yxywkh50.js");
-    let { hasCommsRoledServer } = require("./chunk-xrrd0gp5.js");
+    let { getCoordinatorSystemPrompt } = require("../coordinator/coordinatorMode.js");
+    let { hasCommsRoledServer } = require("../coordinator/coordinatorMcpServers.js");
     let prompt_2 = asSystemPrompt([
       getCoordinatorSystemPrompt(
         hasCommsRoledServer(toolUseContext.options.mcpClients),
@@ -76,9 +76,9 @@ function buildEffectiveSystemPrompt({
         })
       : mainThreadAgentDefinition.getSystemPrompt()
     : undefined;
-  let L = baseSystemPromptOf(customSystemPrompt, defaultSystemPrompt);
-  let G = L === defaultSystemPrompt;
-  let q = {
+  let basePrompt = baseSystemPromptOf(customSystemPrompt, defaultSystemPrompt);
+  let servesDefault = basePrompt === defaultSystemPrompt;
+  let cliSectionsOptions = {
     tools: toolUseContext.options.tools,
     appendSystemPrompt,
   };
@@ -90,12 +90,14 @@ function buildEffectiveSystemPrompt({
     });
   if (agentSystemPrompt && mainThreadAgentDefinition?.appendSystemPrompt)
     return {
-      prompt: asSystemPrompt(withCliSections([...L, agentSystemPrompt], q)),
-      servesDefault: G,
+      prompt: asSystemPrompt(withCliSections([...basePrompt, agentSystemPrompt], cliSectionsOptions)),
+      servesDefault,
     };
   return {
-    prompt: asSystemPrompt(withCliSections(agentSystemPrompt ? [agentSystemPrompt] : L, q)),
-    servesDefault: !agentSystemPrompt && G,
+    prompt: asSystemPrompt(
+      withCliSections(agentSystemPrompt ? [agentSystemPrompt] : basePrompt, cliSectionsOptions),
+    ),
+    servesDefault: !agentSystemPrompt && servesDefault,
   };
 }
 export { effectiveSystemPromptText };

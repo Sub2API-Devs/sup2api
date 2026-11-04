@@ -9,7 +9,12 @@
  * attribution: placement 5
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, zodStrictObject, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  literal,
+  zodStrictObject,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   safeSerializedPermissionContextSchema,
   exceedsSerializedContextLimit,
@@ -17,6 +22,7 @@ import {
 import { addSessionWorkingDirectories } from "../../utils/permissions/PermissionUpdate.js";
 import { buildNativeDoctorDiagnostics } from "../../screens/Doctor.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-phzhvaxm.js:416-458 placement
 var ANTHROPIC_RENDERUNDERSESSIONRULES = "anthropic/renderUnderSessionRules";
@@ -31,64 +37,70 @@ function rendersUnderSessionRulesCapability() {
   };
 }
 //@ chunk-phzhvaxm.js:506-558 placement
-var sessionRulesContractSchema = DoctorLazy(() =>
-  u({
-    experimental: u({
-      [ANTHROPIC_RENDERUNDERSESSIONRULES]: u({
-        v: literal(1),
+var sessionRulesContractSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-phzhvaxm.js:506", () => {
+  sessionRulesContractSchema = DoctorLazy(() =>
+    objectSchema({
+      experimental: objectSchema({
+        [ANTHROPIC_RENDERUNDERSESSIONRULES]: objectSchema({
+          v: literal(1),
+        }),
       }),
     }),
-  }),
-);
+  );
+});
 //@ chunk-phzhvaxm.js:558-665 placement
-var SESSION_RULES_SCHEMA = DoctorLazy(() =>
-  zodStrictObject({
-    v: literal(1),
-    permissionContext: safeSerializedPermissionContextSchema(),
-    offersHandOff: M(),
-    classifiesEveryCall: M(),
-    grantsApply: M(),
-  }),
-);
+var SESSION_RULES_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-phzhvaxm.js:558", () => {
+  SESSION_RULES_SCHEMA = DoctorLazy(() =>
+    zodStrictObject({
+      v: literal(1),
+      permissionContext: safeSerializedPermissionContextSchema(),
+      offersHandOff: booleanSchema(),
+      classifiesEveryCall: booleanSchema(),
+      grantsApply: booleanSchema(),
+    }),
+  );
+});
 //@ chunk-phzhvaxm.js:665-1254 placement
 /**
  * 远程命令渲染时适用的会话规则（anthropic/renderUnderSessionRules）。
  */
 function applicableSessionRules(sessionRules, launchPermissionContext, repoRules) {
-  let e = exceedsSerializedContextLimit(sessionRules)
+  let rules = exceedsSerializedContextLimit(sessionRules)
     ? undefined
     : SESSION_RULES_SCHEMA().safeParse(sessionRules).data;
-  if (e === undefined || launchPermissionContext === undefined) return;
-  let { mode, ...o } = e.permissionContext;
+  if (rules === undefined || launchPermissionContext === undefined) return;
+  let { mode, ...context } = rules.permissionContext;
   if (
     !(
       mode === "default" ||
       mode === "dontAsk" ||
       mode === "acceptEdits" ||
-      (mode === "auto" && e.offersHandOff)
+      (mode === "auto" && rules.offersHandOff)
     ) ||
-    Object.values(o.alwaysAllowRules).some((alwaysAllowRule) => alwaysAllowRule.length > 0) ||
-    o.strippedDangerousRules !== undefined ||
-    o.additionalWorkingDirectories.$map.length > 0 ||
-    o.trustedNetworkDirectories !== undefined
+    Object.values(context.alwaysAllowRules).some((alwaysAllowRule) => alwaysAllowRule.length > 0) ||
+    context.strippedDangerousRules !== undefined ||
+    context.additionalWorkingDirectories.$map.length > 0 ||
+    context.trustedNetworkDirectories !== undefined
   )
     return;
   return {
-    offersHandOff: e.offersHandOff,
-    classifiesEveryCall: e.classifiesEveryCall,
+    offersHandOff: rules.offersHandOff,
+    classifiesEveryCall: rules.classifiesEveryCall,
     toolPermissionContext: {
       ...addSessionWorkingDirectories(
         buildNativeDoctorDiagnostics(
-          e.permissionContext,
+          rules.permissionContext,
           launchPermissionContext,
           getOriginalCwd(),
           repoRules,
         ),
       ),
-      ...(!e.grantsApply && {
+      ...(!rules.grantsApply && {
         pollEventDeliveryGuard: true,
       }),
     },
   };
 }
-export { applicableSessionRules };
+export { applicableSessionRules, rendersUnderSessionRulesCapability };

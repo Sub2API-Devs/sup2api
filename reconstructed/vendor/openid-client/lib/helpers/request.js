@@ -5,7 +5,7 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../runtime/bun-runtime.js";
 import { require_lru_cache } from "../../../lru-cache/index.js";
 import { require_package } from "../../package.json.js";
 import { require_errors } from "../errors.js";
@@ -14,13 +14,13 @@ import { require_defaults } from "./defaults.js";
 import { require_consts } from "./consts.js";
 
 //@ chunk-1ny7cxrt.js:21000-23683 cjs-fingerprint
-var require_request = x(function (cjsExports, cjsModule) {
+var require_request = __commonJS(function (cjsExports, cjsModule) {
   var assert = importMetaRequire("assert");
   var querystring = importMetaRequire("querystring");
   var http = importMetaRequire("http");
   var https = importMetaRequire("https");
   var { once } = importMetaRequire("events");
-  var { URL: PF } = importMetaRequire("url");
+  var { URL: NodeURL } = importMetaRequire("url");
   var LRU = require_lru_cache();
   var pkg = require_package();
   var { RPError } = require_errors();
@@ -62,7 +62,7 @@ var require_request = x(function (cjsExports, cjsModule) {
   cjsModule.exports = async function (options, { accessToken, mTLS = false, DPoP } = {}) {
     let url;
     try {
-      url = new PF(options.url);
+      url = new NodeURL(options.url);
       delete options.url;
       assert(/^(https?:)$/.test(url.protocol));
     } catch (err) {

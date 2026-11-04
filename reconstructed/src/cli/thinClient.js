@@ -14,12 +14,12 @@ import { logForDebugging } from "../utils/debug.js";
 /**
  * 按 schema 校验 thin-client 回复（不符记 warn 返回 null）。
  */
-function parseThinClientReply(r, n, o) {
-  let e = n.safeParse(o);
-  if (e.success) return e.data;
-  let s = e.error.issues[0];
+function parseThinClientReply(schema, parse, raw) {
+  let parsed = parse.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  let issue = parsed.error.issues[0];
   logForDebugging(
-    `[thin-client] ${r} reply did not match its schema (${e.error.issues.length} issue(s); first: ${s ? `${s.path.join(".") || "<root>"}: ${s.message}` : "unknown"})`,
+    `[thin-client] ${schema} reply did not match its schema (${parsed.error.issues.length} issue(s); first: ${issue ? `${issue.path.join(".") || "<root>"}: ${issue.message}` : "unknown"})`,
     {
       level: "warn",
     },

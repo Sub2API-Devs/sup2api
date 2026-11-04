@@ -23,8 +23,9 @@ import { SignJWT } from "../../../../vendor/jose/dist/webapi/jwt/sign.js";
  * OIDC discovery 返回的 jwks/token/userinfo 端点被 SSRF 规则拦截时抛错。
  */
 function assertAllowedOidcEndpoints(metadata) {
-  for (let t of [metadata.jwks_uri, metadata.token_endpoint, metadata.userinfo_endpoint])
-    if (t && !isAllowedOutboundUrl(t)) throw Error(`OIDC discovery returned a blocked endpoint: ${t}`);
+  for (let endpointUrl of [metadata.jwks_uri, metadata.token_endpoint, metadata.userinfo_endpoint])
+    if (endpointUrl && !isAllowedOutboundUrl(endpointUrl))
+      throw Error(`OIDC discovery returned a blocked endpoint: ${endpointUrl}`);
 }
 //@ chunk-1ny7cxrt.js:1325761-1328131 placement
 /**
@@ -43,7 +44,7 @@ async function createOidcClient(oidc) {
     );
   let proxyUrl = getUsableProxyUrl();
   let useProxy = oidc.use_proxy ?? isEgressBoundaryActive();
-  let r = useProxy ? proxyUrl : undefined;
+  let effectiveProxyUrl = useProxy ? proxyUrl : undefined;
   if (oidc.use_proxy && !proxyUrl)
     gatewayLog(
       "warn",
@@ -54,15 +55,15 @@ async function createOidcClient(oidc) {
       "warn",
       "oidc: a proxy is set (HTTPS_PROXY/HTTP_PROXY) but IdP requests currently go direct; this will follow the proxy by default in a future release \u2014 set oidc.use_proxy: true to adopt now, or false to keep direct and silence this warning",
     );
-  let proxyAgent = r ? getWebSocketTLSOptions_2(r, caCertPem) : undefined;
-  if (r)
+  let proxyAgent = effectiveProxyUrl ? getWebSocketTLSOptions_2(effectiveProxyUrl, caCertPem) : undefined;
+  if (effectiveProxyUrl)
     gatewayLog(
       "info",
-      `oidc: IdP requests use proxy ${new URL(r).host}${oidc.use_proxy ? "; hosts in NO_PROXY go direct" : ""}`,
+      `oidc: IdP requests use proxy ${new URL(effectiveProxyUrl).host}${oidc.use_proxy ? "; hosts in NO_PROXY go direct" : ""}`,
     );
-  let httpOptions = (f, h) => ({
-    ...h,
-    ...(proxyAgent && !shouldBypassProxy(f.href)
+  let httpOptions = (url, baseOptions) => ({
+    ...baseOptions,
+    ...(proxyAgent && !shouldBypassProxy(url.href)
       ? {
           agent: proxyAgent,
         }
@@ -78,7 +79,7 @@ async function createOidcClient(oidc) {
   issuer[custom.http_options] = httpOptions;
   assertAllowedOidcEndpoints(issuer.metadata);
   let tokenEndpointAuthMethodsSupported = issuer.metadata.token_endpoint_auth_methods_supported;
-  let u = new issuer.Client(
+  let client = new issuer.Client(
     {
       client_id: oidc.client_id,
       client_secret: oidc.client_secret,
@@ -102,9 +103,9 @@ async function createOidcClient(oidc) {
         }
       : undefined,
   );
-  u[custom.http_options] = httpOptions;
-  if (oidc.clock_skew_seconds !== undefined) u[custom.clock_tolerance] = oidc.clock_skew_seconds;
-  return u;
+  client[custom.http_options] = httpOptions;
+  if (oidc.clock_skew_seconds !== undefined) client[custom.clock_tolerance] = oidc.clock_skew_seconds;
+  return client;
 }
 //@ chunk-1ny7cxrt.js:1328131-1328155 placement
 /**
@@ -116,43 +117,46 @@ var CERT_WARN_INTERVAL_MS = 24 * CERT_WARN_REPEAT_MS;
 /**
  * private_key_jwt 客户端认证：用证书私钥签发 client_assertion（x5t 指纹，5 分钟有效），并在证书临近过期或无效时周期性警告。
  */
-function createClientAssertionSigner(clientId, clientAssertion, tokenEndpoint, o = Date.now) {
+function createClientAssertionSigner(clientId, clientAssertion, tokenEndpoint, nowFn = Date.now) {
   if (!tokenEndpoint)
     throw Error(
       "oidc: the IdP discovery document has no token_endpoint, which private_key_jwt needs as the assertion audience",
     );
   let privateKey = createPrivateKey(clientAssertion.private_key_pem);
-  let s = new X509Certificate(clientAssertion.certificate_pem);
-  let x5t = createHash("sha1").update(s.raw).digest("base64url");
-  let l = createHash("sha256").update(s.raw).digest("base64url");
+  let certificate = new X509Certificate(clientAssertion.certificate_pem);
+  let x5t = createHash("sha1").update(certificate.raw).digest("base64url");
+  let sha256Thumbprint = createHash("sha256").update(certificate.raw).digest("base64url");
   gatewayLog(
     "info",
-    `oidc: client authentication private_key_jwt; certificate ${(s.subject || "(no subject)").replaceAll(
+    `oidc: client authentication private_key_jwt; certificate ${(
+      certificate.subject || "(no subject)"
+    ).replaceAll(
       `
 `,
       ", ",
-    )}, SHA-1 thumbprint ${s.fingerprint.replaceAll(":", "")}, expires ${s.validTo}`,
+    )}, SHA-1 thumbprint ${certificate.fingerprint.replaceAll(":", "")}, expires ${certificate.validTo}`,
   );
   let NEGATIVE_INFINITY = Number.NEGATIVE_INFINITY;
-  function u() {
-    let f = o();
-    let h = s.validToDate.getTime() - f;
-    let m = h < 0 || f < s.validFromDate.getTime();
-    if (!m && h > 30 * CERT_WARN_INTERVAL_MS) return;
-    let y = f - NEGATIVE_INFINITY;
-    if (y >= 0 && y < (m ? CERT_WARN_REPEAT_MS : CERT_WARN_INTERVAL_MS)) return;
-    NEGATIVE_INFINITY = f;
+  function warnIfCertificateNeedsRotation() {
+    let nowMs = nowFn();
+    let msUntilExpiry = certificate.validToDate.getTime() - nowMs;
+    let notValidNow = msUntilExpiry < 0 || nowMs < certificate.validFromDate.getTime();
+    if (!notValidNow && msUntilExpiry > 30 * CERT_WARN_INTERVAL_MS) return;
+    let sinceLastWarn = nowMs - NEGATIVE_INFINITY;
+    if (sinceLastWarn >= 0 && sinceLastWarn < (notValidNow ? CERT_WARN_REPEAT_MS : CERT_WARN_INTERVAL_MS))
+      return;
+    NEGATIVE_INFINITY = nowMs;
     gatewayLog(
       "warn",
-      m
-        ? `oidc: the client_assertion certificate is not valid now (valid ${s.validFrom} to ${s.validTo}); the IdP will refuse sign-ins and refreshes until it is replaced`
-        : `oidc: the client_assertion certificate (SHA-1 thumbprint ${s.fingerprint.replaceAll(":", "")}) expires ${s.validTo}; after that the IdP will refuse sign-ins and refreshes. To rotate: add a new certificate at the IdP and keep this one, restart every replica with the new key and certificate in oidc.client_assertion, then remove this one at the IdP`,
+      notValidNow
+        ? `oidc: the client_assertion certificate is not valid now (valid ${certificate.validFrom} to ${certificate.validTo}); the IdP will refuse sign-ins and refreshes until it is replaced`
+        : `oidc: the client_assertion certificate (SHA-1 thumbprint ${certificate.fingerprint.replaceAll(":", "")}) expires ${certificate.validTo}; after that the IdP will refuse sign-ins and refreshes. To rotate: add a new certificate at the IdP and keep this one, restart every replica with the new key and certificate in oidc.client_assertion, then remove this one at the IdP`,
     );
   }
-  u();
+  warnIfCertificateNeedsRotation();
   return async () => {
-    u();
-    let floored = Math.floor(o() / 1000);
+    warnIfCertificateNeedsRotation();
+    let floored = Math.floor(nowFn() / 1000);
     return {
       client_assertion_type: "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
       client_assertion: await new SignJWT({})
@@ -160,7 +164,7 @@ function createClientAssertionSigner(clientId, clientAssertion, tokenEndpoint, o
           alg: "RS256",
           typ: "JWT",
           x5t,
-          "x5t#S256": l,
+          "x5t#S256": sha256Thumbprint,
         })
         .setIssuer(clientId)
         .setSubject(clientId)
@@ -177,12 +181,12 @@ function createClientAssertionSigner(clientId, clientAssertion, tokenEndpoint, o
 /**
  * 校验 id_token 的 email 已验证且域名在允许列表中。
  */
-function assertEmailAllowed(e, allowedEmailDomains) {
-  let emailVerified = e.email_verified;
+function assertEmailAllowed(claims, allowedEmailDomains) {
+  let emailVerified = claims.email_verified;
   if (emailVerified !== undefined && emailVerified !== true && emailVerified !== "true")
     throw Error("id_token email is not verified");
   if (!allowedEmailDomains?.length) return;
-  let email = e.email;
+  let email = claims.email;
   if (typeof email !== "string" || !email.includes("@"))
     throw Error(
       "id_token missing email claim \u2014 configure your IdP to include `email` " +
@@ -195,33 +199,34 @@ function assertEmailAllowed(e, allowedEmailDomains) {
 /**
  * 用户不属于任何允许的组时抛错。
  */
-function assertGroupAllowed(e, allowedGroups) {
+function assertGroupAllowed(groups, allowedGroups) {
   if (!allowedGroups?.length) return;
-  let n = new Set(allowedGroups);
-  if (!e?.some((o) => n.has(o))) throw Error("user is not a member of an allowed group");
+  let allowedSet = new Set(allowedGroups);
+  if (!groups?.some((group) => allowedSet.has(group)))
+    throw Error("user is not a member of an allowed group");
 }
 //@ chunk-1ny7cxrt.js:1330337-1330534 placement
 /**
  * 读取声明：普通键或 JSON Pointer（/a/b，支持 ~0 ~1 转义）。
  */
-function readClaim(e, t) {
-  if (!t.startsWith("/")) return e[t];
-  let n = e;
-  for (let o of t.slice(1).split("/")) {
-    if (n === null || typeof n !== "object") return;
-    let replaced = o.replace(/~1/g, "/").replace(/~0/g, "~");
-    n = n[replaced];
+function readClaim(claims, path) {
+  if (!path.startsWith("/")) return claims[path];
+  let current = claims;
+  for (let segment of path.slice(1).split("/")) {
+    if (current === null || typeof current !== "object") return;
+    let replaced = segment.replace(/~1/g, "/").replace(/~0/g, "~");
+    current = current[replaced];
   }
-  return n;
+  return current;
 }
 //@ chunk-1ny7cxrt.js:1330534-1330650 placement
 /**
  * 按候选路径依次读取第一个非空声明。
  */
-function readFirstClaim(e, emailClaim) {
-  let n = Array.isArray(emailClaim) ? emailClaim : [emailClaim];
-  for (let o of n) {
-    let claim = readClaim(e, o);
+function readFirstClaim(claims, emailClaim) {
+  let names = Array.isArray(emailClaim) ? emailClaim : [emailClaim];
+  for (let claimName of names) {
+    let claim = readClaim(claims, claimName);
     if (claim !== undefined && claim !== null) return claim;
   }
   return;

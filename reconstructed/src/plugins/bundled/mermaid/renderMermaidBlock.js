@@ -8,7 +8,7 @@
  * pieces: chunk-yb0ajcmt.js (11)
  * attribution: placement 11
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { splitMermaidStatements, parseSequenceDiagram, drawSequenceDiagram } from "./sequenceDiagram.js";
 import { isAllNarrowSafe } from "../../../ink/graphemeCells.js";
 import { parseFlowchart, renderFlowchartAsList } from "./flowchartRender.js";
@@ -23,8 +23,8 @@ import { logFeatureOk, logFeatureSad } from "../../../services/analytics/feature
 import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugins.js";
 
 //@ chunk-yb0ajcmt.js:3857-3942 placement = timing (0.363)
-var timingManifest = x(function (Xn, Ke) {
-  Ke.exports = {
+var timingManifest = __commonJS(function (requireFn, moduleObject) {
+  moduleObject.exports = {
     scan: {
       hooks: ["ui.render"],
       calls: [],
@@ -42,23 +42,25 @@ var MIN_PLOT_WIDTH = 300;
 /**
  * 解析 mermaid 源（时序图或流程图）并绘制为字符图；过长或失败返回 undefined。
  */
-function renderMermaidSource(e, t, n) {
-  if (e.length > MAX_MERMAID_SOURCE_CHARS) return;
+function renderMermaidSource(source, columns, onThrow) {
+  if (source.length > MAX_MERMAID_SOURCE_CHARS) return;
   try {
-    let o = splitMermaidStatements(e);
-    let i = o?.[0] ?? "";
-    if (o === undefined || !o.every(isAllNarrowSafe)) return;
-    let u = i === "sequenceDiagram" ? parseSequenceDiagram(o) : undefined;
-    let r = u ? undefined : parseFlowchart(o);
-    let s = u ? drawSequenceDiagram(u, t) : r && renderFlowchartAsList(r, t);
-    return s && s.length <= MIN_PLOT_WIDTH
+    let statements = splitMermaidStatements(source);
+    let firstLine = statements?.[0] ?? "";
+    if (statements === undefined || !statements.every(isAllNarrowSafe)) return;
+    let sequence = firstLine === "sequenceDiagram" ? parseSequenceDiagram(statements) : undefined;
+    let flowchart = sequence ? undefined : parseFlowchart(statements);
+    let lines = sequence
+      ? drawSequenceDiagram(sequence, columns)
+      : flowchart && renderFlowchartAsList(flowchart, columns);
+    return lines && lines.length <= MIN_PLOT_WIDTH
       ? {
-          kind: u ? "sequence diagram" : "flowchart",
-          lines: s,
+          kind: sequence ? "sequence diagram" : "flowchart",
+          lines,
         }
       : undefined;
   } catch {
-    n?.();
+    onThrow?.();
     return;
   }
 }
@@ -78,74 +80,75 @@ var MAX_RENDER_MS = 60000;
 function renderMermaidFencesInText(text, columns, record) {
   let lines = text.split(`
 `);
-  let i = [];
-  let u;
-  let r = text.length;
+  let out = [];
+  let open;
+  let totalChars = text.length;
   for (let k = 0; k < lines.length; k++) {
-    let l = lines[k] ?? "";
-    i.push(l);
-    if (!u) {
-      let match = FENCE_OPEN_RE.exec(l);
-      let [, T = "", ee = "", V = ""] = match ?? [];
-      u =
-        match && !(ee.startsWith("`") && V.includes("`"))
+    let line = lines[k] ?? "";
+    out.push(line);
+    if (!open) {
+      let match = FENCE_OPEN_RE.exec(line);
+      let [, indent = "", marker = "", info = ""] = match ?? [];
+      open =
+        match && !(marker.startsWith("`") && info.includes("`"))
           ? {
-              indent: T,
-              marker: ee,
-              info: V.trim(),
+              indent,
+              marker,
+              info: info.trim(),
               line: k,
             }
           : undefined;
       continue;
     }
-    let a = FENCE_CLOSE_RE.exec(l)?.[1] ?? "";
-    if (!(a.startsWith(u.marker.charAt(0)) && a.length >= u.marker.length)) continue;
-    let c = u;
-    u = undefined;
-    if (c.info.toLowerCase() !== "mermaid") continue;
-    let p = false;
-    let y = renderMermaidSource(
+    let closer = FENCE_CLOSE_RE.exec(line)?.[1] ?? "";
+    if (!(closer.startsWith(open.marker.charAt(0)) && closer.length >= open.marker.length)) continue;
+    let fence = open;
+    open = undefined;
+    if (fence.info.toLowerCase() !== "mermaid") continue;
+    let isThrew = false;
+    let rendered = renderMermaidSource(
       lines
-        .slice(c.line + 1, k)
-        .map((line) => (line.startsWith(c.indent) ? line.slice(c.indent.length) : line)).join(`
+        .slice(fence.line + 1, k)
+        .map((line) => (line.startsWith(fence.indent) ? line.slice(fence.indent.length) : line)).join(`
 `),
-      columns - MIN_SOURCE_LINES - c.indent.length,
+      columns - MIN_SOURCE_LINES - fence.indent.length,
       () => {
-        p = true;
+        isThrew = true;
       },
     );
-    if (!y) {
-      record?.(p ? "threw" : "kept");
+    if (!rendered) {
+      record?.(isThrew ? "threw" : "kept");
       continue;
     }
-    let S = 2;
-    for (let line of y.lines) for (let T of line.match(BACKTICKS_RE) ?? []) S = Math.max(S, T.length);
-    let w = "`".repeat(S + 1);
-    let E = [
-      `${c.indent}${w}mermaid \xB7 ${y.kind}`,
-      ...y.lines.map((line) => c.indent + line),
-      c.indent + w,
+    let maxTicks = 2;
+    for (let line of rendered.lines)
+      for (let ticks of line.match(BACKTICKS_RE) ?? []) maxTicks = Math.max(maxTicks, ticks.length);
+    let tickFence = "`".repeat(maxTicks + 1);
+    let newLines = [
+      `${fence.indent}${tickFence}mermaid \xB7 ${rendered.kind}`,
+      ...rendered.lines.map((line) => fence.indent + line),
+      fence.indent + tickFence,
     ];
-    let sliced = i.slice(c.line - k - 1);
-    let I = totalLineChars(E) - totalLineChars(sliced);
-    if (I > 0 && r + I > MAX_RENDER_MS) {
+    let lines_2 = out.slice(fence.line - k - 1);
+    let growth = totalLineChars(newLines) - totalLineChars(lines_2);
+    if (growth > 0 && totalChars + growth > MAX_RENDER_MS) {
       record?.("kept");
       continue;
     }
     record?.("drawn");
-    r += I;
-    i.length -= sliced.length;
-    for (let C of E) i.push(C);
+    totalChars += growth;
+    out.length -= lines_2.length;
+    for (let line of newLines) out.push(line);
   }
-  return i.join(`
+  return out.join(`
 `);
 }
 //@ chunk-yb0ajcmt.js:28410-28464 placement
 /**
  * 行字符总数
  */
-function totalLineChars(e) {
-  return e.reduce((acc, n) => acc + n.length + 1, 0);
+function totalLineChars(lines) {
+  return lines.reduce((acc, line) => acc + line.length + 1, 0);
 }
 //@ chunk-yb0ajcmt.js:28464-28526 placement
 /**
@@ -157,9 +160,9 @@ var MIN_VIEWPORT_WIDTH = 80;
 /**
  * 通过 ui.render 钩子拦截终端里的 AssistantMessage，按视口宽度缓存并替换 mermaid 块。
  */
-function registerMermaidRenderHook(e, t) {
-  let n = new Map();
-  e(
+function registerMermaidRenderHook(on, options) {
+  let cache = new Map();
+  on(
     "ui.render",
     {
       component: "AssistantMessage",
@@ -168,20 +171,21 @@ function registerMermaidRenderHook(e, t) {
         text: MERMAID_FENCE_RE,
       },
     },
-    (o, i, u) => {
-      if (i.component !== "AssistantMessage") return u(i);
-      let columns = i.viewport?.columns ?? MIN_VIEWPORT_WIDTH;
-      let s = `${columns}
-${i.props.text}`;
-      let l = n.get(s) ?? renderMermaidFencesInText(i.props.text, columns, t.record);
-      cacheRenderedDiagram(n, s, l);
-      return l === i.props.text
-        ? u(i)
-        : u({
-            ...i,
+    (ctx, payload, next) => {
+      if (payload.component !== "AssistantMessage") return next(payload);
+      let columns = payload.viewport?.columns ?? MIN_VIEWPORT_WIDTH;
+      let cacheKey = `${columns}
+${payload.props.text}`;
+      let rendered =
+        cache.get(cacheKey) ?? renderMermaidFencesInText(payload.props.text, columns, options.record);
+      cacheRenderedDiagram(cache, cacheKey, rendered);
+      return rendered === payload.props.text
+        ? next(payload)
+        : next({
+            ...payload,
             props: {
-              ...i.props,
-              text: l,
+              ...payload.props,
+              text: rendered,
             },
           });
     },
@@ -191,20 +195,20 @@ ${i.props.text}`;
 /**
  * 注册 mermaid 渲染钩子
  */
-function registerMermaidPlugin(e) {
-  registerMermaidRenderHook(e, {});
+function registerMermaidPlugin(on) {
+  registerMermaidRenderHook(on, {});
 }
 //@ chunk-yb0ajcmt.js:28891-29138 placement
 /**
  * mermaid 插件定义：注册钩子并记录 drawn/kept/threw 遥测（每种只记一次）。
  */
-var createMermaidPlugin = (e) => ({
-  register: (t) => {
-    let n = new Set();
-    e.registerHooks(t, {
-      record: (o) => {
-        if (n.has(o)) return;
-        switch ((n.add(o), o)) {
+var createMermaidPlugin = (host) => ({
+  register: (on) => {
+    let recorded = new Set();
+    host.registerHooks(on, {
+      record: (outcome) => {
+        if (recorded.has(outcome)) return;
+        switch ((recorded.add(outcome), outcome)) {
           case "drawn":
             logFeatureOk("mermaid_render");
             break;

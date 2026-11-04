@@ -20,10 +20,10 @@ var MAX_TRACKED_COMMENT_READS = 256;
 /**
  * 导出函数 `newLaneNoticeId`：参数 e = randomUUID(，返回 e。
  */
-function newLaneNoticeId(handOff = randomUUID(), t) {
-  if (t !== undefined) {
+function newLaneNoticeId(handOff = randomUUID(), reason) {
+  if (reason !== undefined) {
     let laneNoticeSlugs = getLiveState().laneNoticeSlugs;
-    laneNoticeSlugs.set(handOff, t);
+    laneNoticeSlugs.set(handOff, reason);
     evictOldest(laneNoticeSlugs);
   }
   return handOff;
@@ -39,19 +39,19 @@ function laneNoticeSlug(uuid) {
 /**
  * 记录一次评论读取：按工具调用 id 记 slug 与是否只读自己的评论，更新该 slug 最近读取时间（表有上限）；读到他人评论时更新 lastOthersCommentReadAt。
  */
-function recordCommentRead(toolUseId, slug, o) {
+function recordCommentRead(toolUseId, slug, record) {
   let liveState = getLiveState();
   let now = Date.now();
   if (toolUseId !== undefined) {
     liveState.commentReads.set(toolUseId, {
       slug,
-      ownWordsOnly: o,
+      ownWordsOnly: record,
     });
     evictOldest(liveState.commentReads);
   }
   liveState.commentReadAtBySlug.delete(slug);
   liveState.commentReadAtBySlug.set(slug, now);
-  if (evictOldest(liveState.commentReadAtBySlug) || !o) liveState.lastOthersCommentReadAt = now;
+  if (evictOldest(liveState.commentReadAtBySlug) || !record) liveState.lastOthersCommentReadAt = now;
 }
 //@ chunk-bf8g35sz.js:658-706 placement
 /**
@@ -64,9 +64,9 @@ function commentReadFor(id) {
 /**
  * 判断除给定 slug 外，是否有在某时间之后读过评论的 artifact。
  */
-function hasOtherRecentCommentRead(e, t) {
-  for (let [o, n] of getLiveState().commentReadAtBySlug)
-    if (o !== e && !(Number.isFinite(t) && n < t)) return true;
+function hasOtherRecentCommentRead(slug, toolUseId) {
+  for (let [otherSlug, at] of getLiveState().commentReadAtBySlug)
+    if (otherSlug !== slug && !(Number.isFinite(toolUseId) && at < toolUseId)) return true;
   return false;
 }
 //@ chunk-bf8g35sz.js:819-870 placement
@@ -77,10 +77,10 @@ function lastOthersCommentReadAt() {
   return getLiveState().lastOthersCommentReadAt;
 }
 //@ chunk-bf8g35sz.js:870-969 placement
-function evictOldest(e) {
-  if (e.size <= MAX_TRACKED_COMMENT_READS) return false;
-  let t = e.keys().next().value;
-  if (t !== undefined) e.delete(t);
+function evictOldest(map) {
+  if (map.size <= MAX_TRACKED_COMMENT_READS) return false;
+  let oldest = map.keys().next().value;
+  if (oldest !== undefined) map.delete(oldest);
   return true;
 }
 export {

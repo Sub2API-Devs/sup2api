@@ -34,7 +34,7 @@ import { getBetaByName, FIRST_PARTY_ONLY_BETAS, THINKING_CONTEXT_BETAS } from ".
 import { withTimeout } from "../../../utils/sleep.js";
 import { countTokensWithBedrock } from "../../tokenEstimation.js";
 import { truncateToLength, getFirstLine } from "../../../utils/stringUtils.js";
-import { Re } from "../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../runtime/bun-runtime.js";
 import { vertexResidualCredentialPins, suppressVertexAuthRejection } from "../../api/vertexAuth.js";
 import { assertCannedUpstreams } from "../loadTestMode.js";
 
@@ -42,117 +42,120 @@ import { assertCannedUpstreams } from "../loadTestMode.js";
 /**
  * 按上游配置（anthropic/bedrock/vertex/google）构造转发器，剥离客户端认证头并注入上游凭据。
  */
-async function createUpstreamForwarders(upstreams, t) {
-  let n = (r) => {
-    r.delete("authorization");
-    r.delete("x-api-key");
+async function createUpstreamForwarders(upstreams, testFetch) {
+  let clearAuthHeaders = (headers) => {
+    headers.delete("authorization");
+    headers.delete("x-api-key");
   };
   let results = await Promise.all(
-    upstreams.map(async (r) => {
-      switch (r.provider) {
+    upstreams.map(async (upstream) => {
+      switch (upstream.provider) {
         case "anthropic": {
-          if ("api_key" in r.auth) {
-            let apiKey = r.auth.api_key;
+          if ("api_key" in upstream.auth) {
+            let apiKey = upstream.auth.api_key;
             return {
               kind: "raw",
-              name: r.name,
+              name: upstream.name,
               provider: "anthropic",
-              baseUrl: r.base_url,
-              ...(t && {
-                fetch: t,
+              baseUrl: upstream.base_url,
+              ...(testFetch && {
+                fetch: testFetch,
               }),
-              applyAuth: async (f) => {
-                n(f);
-                f.set("x-api-key", apiKey);
+              applyAuth: async (headers) => {
+                clearAuthHeaders(headers);
+                headers.set("x-api-key", apiKey);
               },
-              forwardUserIdentity: r.forward_user_identity === true,
-              headers: r.headers,
+              forwardUserIdentity: upstream.forward_user_identity === true,
+              headers: upstream.headers,
             };
           }
-          if ("oauth_token" in r.auth) {
-            let oauthToken = r.auth.oauth_token;
+          if ("oauth_token" in upstream.auth) {
+            let oauthToken = upstream.auth.oauth_token;
             return {
               kind: "raw",
-              name: r.name,
+              name: upstream.name,
               provider: "anthropic",
-              baseUrl: r.base_url,
-              ...(t && {
-                fetch: t,
+              baseUrl: upstream.base_url,
+              ...(testFetch && {
+                fetch: testFetch,
               }),
-              applyAuth: async (f) => {
-                n(f);
-                f.set("Authorization", `Bearer ${oauthToken}`);
-                f.append("anthropic-beta", OAUTH_BETA_HEADER);
+              applyAuth: async (headers) => {
+                clearAuthHeaders(headers);
+                headers.set("Authorization", `Bearer ${oauthToken}`);
+                headers.append("anthropic-beta", OAUTH_BETA_HEADER);
               },
-              forwardUserIdentity: r.forward_user_identity === true,
-              headers: r.headers,
+              forwardUserIdentity: upstream.forward_user_identity === true,
+              headers: upstream.headers,
             };
           }
-          let { resolveCredentialsFromConfig, TokenCache } = await import("./chunk-7k61ne1e.js");
+          let { resolveCredentialsFromConfig, TokenCache } =
+            await import("../../../../vendor/@anthropic-ai/sdk/lib/credentials/TokenCache.lazy.js");
           let credentialsFromConfig = resolveCredentialsFromConfig(
             {
-              organization_id: r.auth.organization_id,
-              workspace_id: r.auth.workspace_id,
-              base_url: r.base_url,
+              organization_id: upstream.auth.organization_id,
+              workspace_id: upstream.auth.workspace_id,
+              base_url: upstream.base_url,
               authentication: {
                 type: "oidc_federation",
-                federation_rule_id: r.auth.federation_rule_id,
-                service_account_id: r.auth.service_account_id,
+                federation_rule_id: upstream.auth.federation_rule_id,
+                service_account_id: upstream.auth.service_account_id,
                 identity_token: {
                   source: "file",
-                  path: r.auth.identity_token_file,
+                  path: upstream.auth.identity_token_file,
                 },
               },
             },
             {
-              baseURL: r.base_url,
-              fetch: (u, f) =>
-                ssrfSafeFetch(String(u), {
-                  ...f,
+              baseURL: upstream.base_url,
+              fetch: (requestUrl, init) =>
+                ssrfSafeFetch(String(requestUrl), {
+                  ...init,
                   ...getProxyFetchOptions({
-                    url: String(u),
+                    url: String(requestUrl),
                   }),
                   signal: AbortSignal.timeout(1e4),
                 }),
             },
           );
-          let c = new TokenCache(credentialsFromConfig.provider, (u) =>
-            gatewayLog("warn", `WIF advisory refresh (${r.name}): ${errorMessage(u)}`),
+          let tokenCache = new TokenCache(credentialsFromConfig.provider, (error) =>
+            gatewayLog("warn", `WIF advisory refresh (${upstream.name}): ${errorMessage(error)}`),
           );
           return {
             kind: "raw",
-            name: r.name,
+            name: upstream.name,
             provider: "anthropic",
-            baseUrl: r.base_url,
-            ...(t && {
-              fetch: t,
+            baseUrl: upstream.base_url,
+            ...(testFetch && {
+              fetch: testFetch,
             }),
-            applyAuth: async (u) => {
-              n(u);
-              u.set("Authorization", `Bearer ${await c.getToken()}`);
-              for (let [key, value] of Object.entries(credentialsFromConfig.extraHeaders)) u.set(key, value);
-              u.append("anthropic-beta", OAUTH_BETA_HEADER);
+            applyAuth: async (headers) => {
+              clearAuthHeaders(headers);
+              headers.set("Authorization", `Bearer ${await tokenCache.getToken()}`);
+              for (let [key, value] of Object.entries(credentialsFromConfig.extraHeaders))
+                headers.set(key, value);
+              headers.append("anthropic-beta", OAUTH_BETA_HEADER);
             },
-            invalidateAuth: () => c.invalidate(),
-            forwardUserIdentity: r.forward_user_identity === true,
-            headers: r.headers,
+            invalidateAuth: () => tokenCache.invalidate(),
+            forwardUserIdentity: upstream.forward_user_identity === true,
+            headers: upstream.headers,
           };
         }
         case "bedrock": {
-          let { AnthropicBedrock } = await import("./chunk-h87x8cg3.js");
-          let a = {
-            ...(r.guardrail && {
-              "X-Amzn-Bedrock-GuardrailIdentifier": r.guardrail.id,
-              "X-Amzn-Bedrock-GuardrailVersion": r.guardrail.version,
+          let { AnthropicBedrock } =
+            await import("../../../../vendor/@anthropic-ai/bedrock-sdk/AnthropicBedrock.lazy.js");
+          let guardrailHeaders = {
+            ...(upstream.guardrail && {
+              "X-Amzn-Bedrock-GuardrailIdentifier": upstream.guardrail.id,
+              "X-Amzn-Bedrock-GuardrailVersion": upstream.guardrail.version,
             }),
-            ...(r.guardrail_trace && {
+            ...(upstream.guardrail_trace && {
               "X-Amzn-Bedrock-Trace": "ENABLED",
             }),
           };
-          let l = {
-            awsRegion: r.region,
-            ...(r.base_url && {
-              baseURL: r.base_url,
+          let baseClientOptions = {
+            awsRegion: upstream.region,
+            ...(upstream.base_url && {
+              baseURL: upstream.base_url,
             }),
             timeout: ERROR_RETRY_AFTER_MS,
             fetchOptions: {
@@ -162,181 +165,188 @@ async function createUpstreamForwarders(upstreams, t) {
               timeout: false,
             },
             maxRetries: 0,
-            ...(t && {
-              fetch: t,
+            ...(testFetch && {
+              fetch: testFetch,
             }),
           };
           if (
-            !r.auth.aws_access_key_id !== !r.auth.aws_secret_access_key ||
-            (r.auth.aws_session_token && !r.auth.aws_access_key_id)
+            !upstream.auth.aws_access_key_id !== !upstream.auth.aws_secret_access_key ||
+            (upstream.auth.aws_session_token && !upstream.auth.aws_access_key_id)
           )
             throw Error(
               "bedrock upstream: aws_access_key_id and aws_secret_access_key must be set together (and are required with aws_session_token)",
             );
-          if (r.assume_role && r.auth.aws_bearer_token)
+          if (upstream.assume_role && upstream.auth.aws_bearer_token)
             throw Error(
               "bedrock upstream: assume_role needs SigV4 source credentials (access keys or the ambient AWS chain); aws_bearer_token cannot call sts:AssumeRole",
             );
-          let c = !r.auth.aws_bearer_token && !(r.auth.aws_access_key_id && r.auth.aws_secret_access_key);
-          let u = hasCustomApiKeyHeader();
-          let f = {
+          let usesAmbientChain =
+            !upstream.auth.aws_bearer_token &&
+            !(upstream.auth.aws_access_key_id && upstream.auth.aws_secret_access_key);
+          let customApiKeyHeader = hasCustomApiKeyHeader();
+          let sigv4ClientDefaults = {
             authToken: null,
             defaultHeaders: {
-              ...r.headers,
+              ...upstream.headers,
               ...clearAuthorizationHeaders(),
               Authorization: null,
-              ...(!u && {
+              ...(!customApiKeyHeader && {
                 "X-Api-Key": null,
               }),
-              ...a,
+              ...guardrailHeaders,
             },
             ...CLOUD_AUTH_SLOT,
           };
-          let h =
-            r.assume_role &&
+          let assumeRoleProvider =
+            upstream.assume_role &&
             (await createAwsCredentialProvider({
-              upstreamName: r.name,
-              region: r.region,
-              roleArn: r.assume_role.role_arn,
-              externalId: r.assume_role.external_id,
-              sessionNameClaim: r.assume_role.session_name,
+              upstreamName: upstream.name,
+              region: upstream.region,
+              roleArn: upstream.assume_role.role_arn,
+              externalId: upstream.assume_role.external_id,
+              sessionNameClaim: upstream.assume_role.session_name,
               sourceCredentials:
-                r.auth.aws_access_key_id && r.auth.aws_secret_access_key
+                upstream.auth.aws_access_key_id && upstream.auth.aws_secret_access_key
                   ? {
-                      accessKeyId: r.auth.aws_access_key_id,
-                      secretAccessKey: r.auth.aws_secret_access_key,
-                      sessionToken: r.auth.aws_session_token,
+                      accessKeyId: upstream.auth.aws_access_key_id,
+                      secretAccessKey: upstream.auth.aws_secret_access_key,
+                      sessionToken: upstream.auth.aws_session_token,
                     }
                   : undefined,
-              buildClient: (N) =>
+              buildClient: (provider) =>
                 new AnthropicBedrock({
-                  ...l,
-                  ...f,
-                  providerChainResolver: async () => N,
+                  ...baseClientOptions,
+                  ...sigv4ClientDefaults,
+                  providerChainResolver: async () => provider,
                 }),
             }));
-          let client = h
-            ? h.sharedClient
-            : r.auth.aws_bearer_token
+          let client = assumeRoleProvider
+            ? assumeRoleProvider.sharedClient
+            : upstream.auth.aws_bearer_token
               ? new AnthropicBedrock({
-                  ...l,
-                  apiKey: r.auth.aws_bearer_token,
+                  ...baseClientOptions,
+                  apiKey: upstream.auth.aws_bearer_token,
                   defaultHeaders: {
-                    ...r.headers,
+                    ...upstream.headers,
                     ...clearAuthorizationHeaders(),
-                    Authorization: `Bearer ${r.auth.aws_bearer_token}`,
-                    ...(!u && {
+                    Authorization: `Bearer ${upstream.auth.aws_bearer_token}`,
+                    ...(!customApiKeyHeader && {
                       "X-Api-Key": null,
                     }),
-                    ...a,
+                    ...guardrailHeaders,
                   },
                 })
-              : r.auth.aws_access_key_id && r.auth.aws_secret_access_key
+              : upstream.auth.aws_access_key_id && upstream.auth.aws_secret_access_key
                 ? new AnthropicBedrock({
-                    ...l,
-                    ...f,
-                    awsAccessKey: r.auth.aws_access_key_id,
-                    awsSecretKey: r.auth.aws_secret_access_key,
-                    awsSessionToken: r.auth.aws_session_token,
+                    ...baseClientOptions,
+                    ...sigv4ClientDefaults,
+                    awsAccessKey: upstream.auth.aws_access_key_id,
+                    awsSecretKey: upstream.auth.aws_secret_access_key,
+                    awsSessionToken: upstream.auth.aws_session_token,
                   })
                 : new AnthropicBedrock({
-                    ...l,
-                    ...f,
-                    providerChainResolver: defaultAwsProviderChainResolver(r.region, getNativeCaBlocks),
+                    ...baseClientOptions,
+                    ...sigv4ClientDefaults,
+                    providerChainResolver: defaultAwsProviderChainResolver(
+                      upstream.region,
+                      getNativeCaBlocks,
+                    ),
                   });
-          let y;
+          let runtimeClientPromise;
           let requestHandler;
-          let w = new Map();
-          let S = new Set();
-          let j = new Map();
-          let M = () =>
-            (y ??= (async () => {
-              let { BedrockRuntimeClient } = await import("./chunk-nbmkwhd6.js");
-              if (!r.base_url && !/^[a-z0-9-]+$/.test(r.region))
+          let countTokensRetryAt = new Map();
+          let countTokensWorking = new Set();
+          let countTokensInflight = new Map();
+          let getRuntimeClient = () =>
+            (runtimeClientPromise ??= (async () => {
+              let { BedrockRuntimeClient } =
+                await import("../../../../vendor/@aws-sdk/client-bedrock-runtime/dist-cjs/index.js");
+              if (!upstream.base_url && !/^[a-z0-9-]+$/.test(upstream.region))
                 throw Error("region is not a plain AWS region name");
-              let Z = r.base_url || `https://bedrock-runtime.${r.region}.amazonaws.com`;
+              let endpoint = upstream.base_url || `https://bedrock-runtime.${upstream.region}.amazonaws.com`;
               requestHandler ??=
                 (await getAWSProxyRequestHandler({
-                  url: Z,
+                  url: endpoint,
                 })) ??
                 new escapeRegExpModule.NodeHttpHandler({
                   httpsAgent: getMTLSAgent(),
                 });
-              let F = r.auth.aws_bearer_token
+              let authConfig = upstream.auth.aws_bearer_token
                 ? {
                     authSchemePreference: ["httpBearerAuth"],
                     token: {
-                      token: r.auth.aws_bearer_token,
+                      token: upstream.auth.aws_bearer_token,
                     },
                   }
-                : r.auth.aws_access_key_id && r.auth.aws_secret_access_key
+                : upstream.auth.aws_access_key_id && upstream.auth.aws_secret_access_key
                   ? {
                       authSchemePreference: ["sigv4"],
                       credentials: {
-                        accessKeyId: r.auth.aws_access_key_id,
-                        secretAccessKey: r.auth.aws_secret_access_key,
-                        sessionToken: r.auth.aws_session_token,
+                        accessKeyId: upstream.auth.aws_access_key_id,
+                        secretAccessKey: upstream.auth.aws_secret_access_key,
+                        sessionToken: upstream.auth.aws_session_token,
                       },
                     }
                   : {
                       authSchemePreference: ["sigv4"],
                       ...(!env.CLAUDE_CODE_SKIP_AWS_CRED_CACHE && {
-                        credentials: async (X) => (await getDefaultAwsProviderChain(r.region))(X),
+                        credentials: async (request) =>
+                          (await getDefaultAwsProviderChain(upstream.region))(request),
                       }),
                     };
               return new BedrockRuntimeClient({
-                region: r.region,
-                endpoint: Z,
+                region: upstream.region,
+                endpoint,
                 requestHandler,
                 maxAttempts: 1,
-                ...F,
-                ...(h && {
-                  credentials: h.countTokensCredentials(),
+                ...authConfig,
+                ...(assumeRoleProvider && {
+                  credentials: assumeRoleProvider.countTokensCredentials(),
                 }),
               });
             })());
           return {
             kind: "sdk",
-            name: r.name,
+            name: upstream.name,
             provider: "bedrock",
-            region: r.region,
+            region: upstream.region,
             client,
-            ...(r.guardrail && {
+            ...(upstream.guardrail && {
               guardrail: true,
             }),
-            ...(r.guardrail?.input_tagging && {
-              inputTagging: r.guardrail.input_tagging,
+            ...(upstream.guardrail?.input_tagging && {
+              inputTagging: upstream.guardrail.input_tagging,
             }),
-            ...(h && {
-              assumeRole: h,
+            ...(assumeRoleProvider && {
+              assumeRole: assumeRoleProvider,
             }),
-            ...(r.guardrail_trace && {
+            ...(upstream.guardrail_trace && {
               guardrailTrace: true,
             }),
-            ...(c && {
+            ...(usesAmbientChain && {
               invalidateAuth: () => {
-                let N = invalidateDefaultAwsProviderChainDebounced(r.region);
-                if (N) y = undefined;
-                return N;
+                let invalidated = invalidateDefaultAwsProviderChainDebounced(upstream.region);
+                if (invalidated) runtimeClientPromise = undefined;
+                return invalidated;
               },
             }),
-            countTokens: async (N, Z) => {
-              let modelId = bedrockModelFromArnOrName(N);
-              if (!modelId || t) return null;
-              if (Date.now() < (w.get(modelId) ?? 0)) return null;
-              let X = S.has(modelId) ? undefined : j.get(modelId);
-              if (X && (await X) === null) return null;
-              let { tools, anthropic_beta: anthropicBeta, ...ce } = Z;
-              let filtered = (Array.isArray(anthropicBeta) ? anthropicBeta : []).filter((Ue) => {
-                let betaByName = getBetaByName(String(Ue));
+            countTokens: async (modelArnOrName, body) => {
+              let modelId = bedrockModelFromArnOrName(modelArnOrName);
+              if (!modelId || testFetch) return null;
+              if (Date.now() < (countTokensRetryAt.get(modelId) ?? 0)) return null;
+              let pending = countTokensWorking.has(modelId) ? undefined : countTokensInflight.get(modelId);
+              if (pending && (await pending) === null) return null;
+              let { tools, anthropic_beta: anthropicBeta, ...restBody } = body;
+              let filtered = (Array.isArray(anthropicBeta) ? anthropicBeta : []).filter((betaValue) => {
+                let betaByName = getBetaByName(String(betaValue));
                 return (
                   betaByName &&
                   FIRST_PARTY_ONLY_BETAS.has(betaByName) &&
                   !THINKING_CONTEXT_BETAS.has(betaByName)
                 );
               });
-              let be = {
-                ...ce,
+              let countBody = {
+                ...restBody,
                 ...(Array.isArray(tools) &&
                   tools.length > 0 && {
                     tools,
@@ -345,78 +355,82 @@ async function createUpstreamForwarders(upstreams, t) {
                   anthropic_beta: filtered,
                 }),
               };
-              let ve = (async () => {
+              let countPromise = (async () => {
                 let abortController = new AbortController();
                 try {
-                  let kt = await withTimeout(
-                    M().then((je) =>
-                      countTokensWithBedrock(je, modelId, be, {
+                  let count = await withTimeout(
+                    getRuntimeClient().then((runtimeClient) =>
+                      countTokensWithBedrock(runtimeClient, modelId, countBody, {
                         abortSignal: abortController.signal,
                       }),
                     ),
                     1e4,
                     "no answer in 10 s",
                   );
-                  if (kt === null) throw Error("the answer had no inputTokens");
-                  if (Date.now() >= (w.get(modelId) ?? 0)) {
-                    S.add(modelId);
-                    if (w.delete(modelId))
-                      gatewayLog("info", `upstream ${r.name}: AWS CountTokens works again for ${modelId}`);
+                  if (count === null) throw Error("the answer had no inputTokens");
+                  if (Date.now() >= (countTokensRetryAt.get(modelId) ?? 0)) {
+                    countTokensWorking.add(modelId);
+                    if (countTokensRetryAt.delete(modelId))
+                      gatewayLog(
+                        "info",
+                        `upstream ${upstream.name}: AWS CountTokens works again for ${modelId}`,
+                      );
                   }
-                  return kt;
+                  return count;
                 } catch (error) {
                   let httpStatusCode = error.$metadata?.httpStatusCode;
-                  let Ur = error instanceof Error ? error.name : "";
-                  let An =
-                    Ur === "SyntaxError" || Ur === "Unknown"
+                  let errorName = error instanceof Error ? error.name : "";
+                  let detail =
+                    errorName === "SyntaxError" || errorName === "Unknown"
                       ? "the answer was not from AWS"
                       : truncateToLength(getFirstLine(errorMessage(error)).replace(/\.$/, ""), 1000);
-                  let xe = httpStatusCode ? `HTTP ${httpStatusCode}: ${An}` : An;
+                  let message = httpStatusCode ? `HTTP ${httpStatusCode}: ${detail}` : detail;
                   if (
-                    S.has(modelId) &&
-                    ((httpStatusCode === 400 && Ur === "ValidationException") ||
+                    countTokensWorking.has(modelId) &&
+                    ((httpStatusCode === 400 && errorName === "ValidationException") ||
                       httpStatusCode === 413 ||
                       httpStatusCode === 429)
                   ) {
                     gatewayLog(
                       "debug",
-                      `upstream ${r.name}: AWS CountTokens failed for ${modelId} for one request (${xe})`,
+                      `upstream ${upstream.name}: AWS CountTokens failed for ${modelId} for one request (${message})`,
                     );
                     return null;
                   }
                   gatewayLog(
-                    w.has(modelId) ? "debug" : "warn",
-                    `upstream ${r.name}: AWS CountTokens failed for ${modelId} (${xe}). Model requests are not affected. Until a retry works (one every ${UPSTREAM_TIMEOUT_MS / 60000} minutes), token counts for ${modelId} come from the next upstream or a billed one-token request. Check that the identity that signs this upstream's Bedrock calls has bedrock:CountTokens.${r.base_url ? " Check too that the proxy at base_url passes /model/{id}/count-tokens." : ""}`,
+                    countTokensRetryAt.has(modelId) ? "debug" : "warn",
+                    `upstream ${upstream.name}: AWS CountTokens failed for ${modelId} (${message}). Model requests are not affected. Until a retry works (one every ${UPSTREAM_TIMEOUT_MS / 60000} minutes), token counts for ${modelId} come from the next upstream or a billed one-token request. Check that the identity that signs this upstream's Bedrock calls has bedrock:CountTokens.${upstream.base_url ? " Check too that the proxy at base_url passes /model/{id}/count-tokens." : ""}`,
                   );
-                  w.set(modelId, Date.now() + UPSTREAM_TIMEOUT_MS);
-                  S.delete(modelId);
-                  y = undefined;
+                  countTokensRetryAt.set(modelId, Date.now() + UPSTREAM_TIMEOUT_MS);
+                  countTokensWorking.delete(modelId);
+                  runtimeClientPromise = undefined;
                   return null;
                 } finally {
                   abortController.abort();
                 }
               })();
-              if (!X && !S.has(modelId)) {
-                j.set(modelId, ve);
-                ve.then(() => j.delete(modelId));
+              if (!pending && !countTokensWorking.has(modelId)) {
+                countTokensInflight.set(modelId, countPromise);
+                countPromise.then(() => countTokensInflight.delete(modelId));
               }
-              return ve;
+              return countPromise;
             },
           };
         }
         case "mantle": {
-          let { AnthropicBedrockMantle } = await import("./chunk-h87x8cg3.js");
+          let { AnthropicBedrockMantle } =
+            await import("../../../../vendor/@anthropic-ai/bedrock-sdk/AnthropicBedrock.lazy.js");
           if (
-            !r.auth.aws_access_key_id !== !r.auth.aws_secret_access_key ||
-            (r.auth.aws_session_token && !r.auth.aws_access_key_id)
+            !upstream.auth.aws_access_key_id !== !upstream.auth.aws_secret_access_key ||
+            (upstream.auth.aws_session_token && !upstream.auth.aws_access_key_id)
           )
             throw Error(
               "mantle upstream: aws_access_key_id and aws_secret_access_key must be set together (and are required with aws_session_token)",
             );
-          let a = hasCustomApiKeyHeader();
-          let l = {
-            awsRegion: r.region,
-            baseURL: r.base_url ?? `https://bedrock-mantle.${r.region}.api.aws/anthropic`,
+          let customApiKeyHeader = hasCustomApiKeyHeader();
+          let baseClientOptions = {
+            awsRegion: upstream.region,
+            baseURL: upstream.base_url ?? `https://bedrock-mantle.${upstream.region}.api.aws/anthropic`,
             timeout: ERROR_RETRY_AFTER_MS,
             fetchOptions: {
               ...getProxyFetchOptions({
@@ -425,53 +439,53 @@ async function createUpstreamForwarders(upstreams, t) {
               timeout: false,
             },
             maxRetries: 0,
-            ...(t && {
-              fetch: t,
+            ...(testFetch && {
+              fetch: testFetch,
             }),
           };
-          let c = {
+          let sigv4ClientDefaults = {
             authToken: null,
             defaultHeaders: {
-              ...r.headers,
+              ...upstream.headers,
               ...clearAuthorizationHeaders(),
               Authorization: null,
-              ...(!a && {
+              ...(!customApiKeyHeader && {
                 "X-Api-Key": null,
               }),
             },
             ...CLOUD_AUTH_SLOT,
           };
-          let u = !r.auth.aws_bearer_token && !r.auth.aws_access_key_id;
-          let f;
-          if (r.auth.aws_bearer_token)
-            f = new AnthropicBedrockMantle({
-              ...l,
-              apiKey: r.auth.aws_bearer_token,
+          let usesAmbientChain = !upstream.auth.aws_bearer_token && !upstream.auth.aws_access_key_id;
+          let client;
+          if (upstream.auth.aws_bearer_token)
+            client = new AnthropicBedrockMantle({
+              ...baseClientOptions,
+              apiKey: upstream.auth.aws_bearer_token,
               defaultHeaders: {
-                ...r.headers,
+                ...upstream.headers,
                 ...clearAuthorizationHeaders(),
-                Authorization: `Bearer ${r.auth.aws_bearer_token}`,
-                ...(!a && {
+                Authorization: `Bearer ${upstream.auth.aws_bearer_token}`,
+                ...(!customApiKeyHeader && {
                   "X-Api-Key": null,
                 }),
               },
             });
-          else if (r.auth.aws_access_key_id)
-            f = new AnthropicBedrockMantle({
-              ...l,
-              ...c,
-              awsAccessKey: r.auth.aws_access_key_id,
-              awsSecretAccessKey: r.auth.aws_secret_access_key,
-              awsSessionToken: r.auth.aws_session_token,
+          else if (upstream.auth.aws_access_key_id)
+            client = new AnthropicBedrockMantle({
+              ...baseClientOptions,
+              ...sigv4ClientDefaults,
+              awsAccessKey: upstream.auth.aws_access_key_id,
+              awsSecretAccessKey: upstream.auth.aws_secret_access_key,
+              awsSessionToken: upstream.auth.aws_session_token,
             });
           else {
             let AWS_BEARER_TOKEN_BEDROCK = env.AWS_BEARER_TOKEN_BEDROCK;
             env.unset("AWS_BEARER_TOKEN_BEDROCK");
             try {
-              f = new AnthropicBedrockMantle({
-                ...l,
-                ...c,
-                providerChainResolver: defaultAwsProviderChainResolver(r.region, getNativeCaBlocks),
+              client = new AnthropicBedrockMantle({
+                ...baseClientOptions,
+                ...sigv4ClientDefaults,
+                providerChainResolver: defaultAwsProviderChainResolver(upstream.region, getNativeCaBlocks),
               });
             } finally {
               if (AWS_BEARER_TOKEN_BEDROCK !== undefined)
@@ -480,23 +494,24 @@ async function createUpstreamForwarders(upstreams, t) {
           }
           return {
             kind: "sdk",
-            name: r.name,
+            name: upstream.name,
             provider: "mantle",
-            client: f,
-            ...(u && {
-              invalidateAuth: () => invalidateDefaultAwsProviderChainDebounced(r.region),
+            client,
+            ...(usesAmbientChain && {
+              invalidateAuth: () => invalidateDefaultAwsProviderChainDebounced(upstream.region),
             }),
           };
         }
         case "anthropicAws": {
-          let { AnthropicAws } = await import("./chunk-qhhcfyds.js");
-          let a = {
-            awsRegion: r.region,
-            workspaceId: r.workspace_id,
-            baseURL: r.base_url ?? `https://aws-external-anthropic.${r.region}.api.aws`,
+          let { AnthropicAws } =
+            await import("../../../../vendor/@anthropic-ai/bedrock-sdk/AnthropicAws.lazy.js");
+          let clientOptions = {
+            awsRegion: upstream.region,
+            workspaceId: upstream.workspace_id,
+            baseURL: upstream.base_url ?? `https://aws-external-anthropic.${upstream.region}.api.aws`,
             authToken: null,
             defaultHeaders: {
-              ...r.headers,
+              ...upstream.headers,
               ...clearAuthorizationHeaders(),
               Authorization: null,
             },
@@ -509,62 +524,66 @@ async function createUpstreamForwarders(upstreams, t) {
               timeout: false,
             },
             maxRetries: 0,
-            ...(t && {
-              fetch: t,
+            ...(testFetch && {
+              fetch: testFetch,
             }),
           };
-          let l;
-          if (r.auth.api_key)
-            l = new AnthropicAws({
-              ...a,
-              apiKey: r.auth.api_key,
+          let client;
+          if (upstream.auth.api_key)
+            client = new AnthropicAws({
+              ...clientOptions,
+              apiKey: upstream.auth.api_key,
             });
-          else if (r.auth.aws_access_key_id || r.auth.aws_secret_access_key)
-            l = new AnthropicAws({
-              ...a,
-              awsAccessKey: r.auth.aws_access_key_id,
-              awsSecretAccessKey: r.auth.aws_secret_access_key,
-              awsSessionToken: r.auth.aws_session_token,
+          else if (upstream.auth.aws_access_key_id || upstream.auth.aws_secret_access_key)
+            client = new AnthropicAws({
+              ...clientOptions,
+              awsAccessKey: upstream.auth.aws_access_key_id,
+              awsSecretAccessKey: upstream.auth.aws_secret_access_key,
+              awsSessionToken: upstream.auth.aws_session_token,
             });
           else {
             let envAnthropicAwsApiKey = process.env.ANTHROPIC_AWS_API_KEY;
             delete process.env.ANTHROPIC_AWS_API_KEY;
             try {
-              l = new AnthropicAws({
-                ...a,
-                providerChainResolver: defaultAwsProviderChainResolver(r.region, getNativeCaBlocks),
+              client = new AnthropicAws({
+                ...clientOptions,
+                providerChainResolver: defaultAwsProviderChainResolver(upstream.region, getNativeCaBlocks),
               });
             } finally {
               if (envAnthropicAwsApiKey !== undefined)
                 process.env.ANTHROPIC_AWS_API_KEY = envAnthropicAwsApiKey;
             }
           }
-          let c = !r.auth.api_key && !r.auth.aws_access_key_id && !r.auth.aws_secret_access_key;
+          let usesAmbientChain =
+            !upstream.auth.api_key &&
+            !upstream.auth.aws_access_key_id &&
+            !upstream.auth.aws_secret_access_key;
           return {
             kind: "sdk",
-            name: r.name,
+            name: upstream.name,
             provider: "anthropicAws",
-            client: l,
-            ...(c && {
-              invalidateAuth: () => invalidateDefaultAwsProviderChainDebounced(r.region),
+            client,
+            ...(usesAmbientChain && {
+              invalidateAuth: () => invalidateDefaultAwsProviderChainDebounced(upstream.region),
             }),
           };
         }
         case "anthropicGoogleCloud": {
-          let { AnthropicGoogleCloud } = await import("./chunk-e7naa6k8.js");
-          let accessToken = r.auth.access_token;
-          let l = {};
-          for (let [key, value] of Object.entries(r.headers ?? {}))
-            if (key.toLowerCase() !== "authorization") l[key] = value;
-          let c = {
-            project: r.project_id,
-            location: r.location,
-            workspaceId: r.workspace_id,
+          let { AnthropicGoogleCloud } =
+            await import("../../../../vendor/_unknown/anthropic-google-cloud-client.js");
+          let accessToken = upstream.auth.access_token;
+          let filteredHeaders = {};
+          for (let [key, value] of Object.entries(upstream.headers ?? {}))
+            if (key.toLowerCase() !== "authorization") filteredHeaders[key] = value;
+          let clientOptions = {
+            project: upstream.project_id,
+            location: upstream.location,
+            workspaceId: upstream.workspace_id,
             baseURL:
-              r.base_url ??
-              `https://claude.googleapis.com/v1/projects/${r.project_id}/locations/${r.location}/workspaces/${r.workspace_id}/invoke`,
+              upstream.base_url ??
+              `https://claude.googleapis.com/v1/projects/${upstream.project_id}/locations/${upstream.location}/workspaces/${upstream.workspace_id}/invoke`,
             defaultHeaders: {
-              ...l,
+              ...filteredHeaders,
               ...clearAuthorizationHeaders(),
             },
             timeout: ERROR_RETRY_AFTER_MS,
@@ -575,39 +594,41 @@ async function createUpstreamForwarders(upstreams, t) {
               timeout: false,
             },
             maxRetries: 0,
-            ...(t && {
-              fetch: t,
+            ...(testFetch && {
+              fetch: testFetch,
             }),
           };
-          if (accessToken) c.bearerTokenProvider = async () => accessToken;
+          if (accessToken) clientOptions.bearerTokenProvider = async () => accessToken;
           else {
-            let { GoogleAuth } = await import("./chunk-ndb2dret.js").then((m) => Re(m.default, 1));
-            c.googleAuth = new GoogleAuth({
+            let { GoogleAuth } = await import("../../../utils/lazyDefaultExport.js").then((mod) =>
+              __toESM(mod.default, 1),
+            );
+            clientOptions.googleAuth = new GoogleAuth({
               scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-              projectId: r.project_id,
-              ...(r.auth.service_account_json && {
-                keyFilename: r.auth.service_account_json,
+              projectId: upstream.project_id,
+              ...(upstream.auth.service_account_json && {
+                keyFilename: upstream.auth.service_account_json,
               }),
               clientOptions: createCaTransporterOptions(),
             });
           }
           return {
             kind: "sdk",
-            name: r.name,
+            name: upstream.name,
             provider: "anthropicGoogleCloud",
-            client: new AnthropicGoogleCloud(c),
+            client: new AnthropicGoogleCloud(clientOptions),
           };
         }
         case "vertex": {
-          let { AnthropicVertex } = await import("./chunk-xa96axyz.js");
-          let a = {
-            region: r.region,
-            projectId: r.project_id,
-            ...(r.base_url && {
-              baseURL: r.base_url,
+          let { AnthropicVertex } = await import("../../../../vendor/@anthropic-ai/vertex-sdk/client.js");
+          let clientOptions = {
+            region: upstream.region,
+            projectId: upstream.project_id,
+            ...(upstream.base_url && {
+              baseURL: upstream.base_url,
             }),
             defaultHeaders: {
-              ...r.headers,
+              ...upstream.headers,
               ...vertexResidualCredentialPins(),
             },
             ...CLOUD_AUTH_SLOT,
@@ -619,55 +640,57 @@ async function createUpstreamForwarders(upstreams, t) {
               timeout: false,
             },
             maxRetries: 0,
-            ...(t && {
-              fetch: t,
+            ...(testFetch && {
+              fetch: testFetch,
             }),
           };
-          if (r.auth.access_token) {
-            let accessToken = r.auth.access_token;
-            a.authClient = {
-              projectId: r.project_id,
+          if (upstream.auth.access_token) {
+            let accessToken = upstream.auth.access_token;
+            clientOptions.authClient = {
+              projectId: upstream.project_id,
               getRequestHeaders: async () => ({
                 Authorization: `Bearer ${accessToken}`,
               }),
             };
           } else {
-            let { GoogleAuth } = await import("./chunk-ndb2dret.js").then((m) => Re(m.default, 1));
-            a.googleAuth = new GoogleAuth({
+            let { GoogleAuth } = await import("../../../utils/lazyDefaultExport.js").then((mod) =>
+              __toESM(mod.default, 1),
+            );
+            clientOptions.googleAuth = new GoogleAuth({
               scopes: ["https://www.googleapis.com/auth/cloud-platform"],
-              projectId: r.project_id,
-              ...(r.auth.service_account_json && {
-                keyFilename: r.auth.service_account_json,
+              projectId: upstream.project_id,
+              ...(upstream.auth.service_account_json && {
+                keyFilename: upstream.auth.service_account_json,
               }),
               clientOptions: createCaTransporterOptions(),
             });
           }
           return {
             kind: "sdk",
-            name: r.name,
+            name: upstream.name,
             provider: "vertex",
-            client: suppressVertexAuthRejection(new AnthropicVertex(a)),
+            client: suppressVertexAuthRejection(new AnthropicVertex(clientOptions)),
           };
         }
         case "foundry": {
-          let { AnthropicFoundry } = await import("./chunk-q01xm7xp.js");
-          let a = {
-            ...(r.base_url
+          let { AnthropicFoundry } = await import("../../../../vendor/@anthropic-ai/foundry-sdk/client.mjs");
+          let clientOptions = {
+            ...(upstream.base_url
               ? {
-                  baseURL: r.base_url,
+                  baseURL: upstream.base_url,
                 }
               : {
-                  resource: r.resource,
+                  resource: upstream.resource,
                 }),
             defaultHeaders:
-              "api_key" in r.auth
+              "api_key" in upstream.auth
                 ? {
-                    ...r.headers,
+                    ...upstream.headers,
                     ...clearAuthorizationHeaders(),
                     Authorization: null,
                   }
                 : {
-                    ...r.headers,
+                    ...upstream.headers,
                     ...clearAuthorizationHeaders(),
                   },
             ...CLOUD_AUTH_SLOT,
@@ -679,35 +702,36 @@ async function createUpstreamForwarders(upstreams, t) {
               timeout: false,
             },
             maxRetries: 0,
-            ...(t && {
-              fetch: t,
+            ...(testFetch && {
+              fetch: testFetch,
             }),
           };
-          if ("api_key" in r.auth) a.apiKey = r.auth.api_key;
+          if ("api_key" in upstream.auth) clientOptions.apiKey = upstream.auth.api_key;
           else {
-            a.apiKey = null;
-            let { DefaultAzureCredential } = await import("./chunk-mrx6y2r5.js");
-            let c = new DefaultAzureCredential();
-            a.azureADTokenProvider = async () => {
-              let token = await c.getToken("https://cognitiveservices.azure.com/.default");
+            clientOptions.apiKey = null;
+            let { DefaultAzureCredential } =
+              await import("../../../../vendor/@azure/identity/dist/esm/credentials/DefaultAzureCredential.lazy.js");
+            let credential = new DefaultAzureCredential();
+            clientOptions.azureADTokenProvider = async () => {
+              let token = await credential.getToken("https://cognitiveservices.azure.com/.default");
               if (!token) throw Error("Azure AD token unavailable");
               return token.token;
             };
           }
           return {
             kind: "sdk",
-            name: r.name,
+            name: upstream.name,
             provider: "foundry",
-            client: new AnthropicFoundry(a),
+            client: new AnthropicFoundry(clientOptions),
           };
         }
       }
     }),
   );
-  upstreams.forEach((r, s) => {
-    if (r.models) results[s].models = r.models;
+  upstreams.forEach((upstream, index) => {
+    if (upstream.models) results[index].models = upstream.models;
   });
-  if (t) assertCannedUpstreams(results, t);
+  if (testFetch) assertCannedUpstreams(results, testFetch);
   return results;
 }
 export { createUpstreamForwarders };

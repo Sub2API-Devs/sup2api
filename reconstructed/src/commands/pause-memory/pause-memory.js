@@ -18,36 +18,37 @@ import { logEvent } from "../../services/analytics/index.js";
  */
 var callPauseMemoryCommand = async (args, context) => {
   let pausing = !getMemoryToggledOff();
-  let r = false;
+  let failed = false;
   if (!pausing && !isEligibleDecisionSurface())
     return {
       type: "text",
       value: MEMORY_CANNOT_RESUME_MESSAGE,
     };
   setMemoryToggledOff(pausing);
-  let m;
-  let p = {
+  let resume;
+  let unusedState = {
     unavailable: false,
     raiseRefused: undefined,
   };
-  let f;
-  let y = false;
+  let note;
+  let refused = false;
   context.sessionState?.notifyInternalMetadataChanged({
     memory_toggled_off: pausing ? true : null,
   });
   logEvent("tengu_memory_toggled", {
     toggled_off: pausing,
   });
-  let n;
+  let result;
   return {
     type: "text",
     value: pausing
-      ? r
+      ? failed
         ? `Memory paused${false ? "" : " for the rest of this session"} \xB7 Claude will not load your account memory or save new memories in this session, and memory already shown should not be referenced.${""}`
         : `Memory paused for this session \xB7 this conversation will not write or read new memories, and previously-loaded memory content should not be referenced.${""}
 
 ${getResumeMemoryHint()}`
-      : (n ?? "Memory resumed \xB7 memory content may be referenced and new memories can be saved.") + "",
+      : (result ?? "Memory resumed \xB7 memory content may be referenced and new memories can be saved.") +
+        "",
   };
 };
 //@ chunk-8dz40wpq.js:4696-4705 placement
@@ -65,3 +66,4 @@ function getResumeMemoryHint() {
 //@ chunk-8dz40wpq.js:4909-5111 placement
 var MEMORY_CANNOT_RESUME_MESSAGE =
   "Memory stays paused \xB7 it cannot be resumed from a session a tool call started or from a background session. Resume it from a Claude Code session you started yourself, or start a new session.";
+export { callPauseMemoryCommand, resetUnusedFalseFlag };

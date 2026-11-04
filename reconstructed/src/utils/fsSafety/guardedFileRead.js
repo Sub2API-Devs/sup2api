@@ -21,75 +21,75 @@ import { getPlatform } from "../platform.js";
 /**
  * 带校验地读取文件（不跟随链接、nlink、句柄路径核对）。
  */
-async function readFileGuarded(e, n, r) {
-  let o = r?.fromTail === true ? "unreadable" : null;
-  let s;
+async function readFileGuarded(filePath, maxBytes, options) {
+  let refusalFallback = options?.fromTail === true ? "unreadable" : null;
+  let handle;
   try {
-    let a = r?.noFollow ? (constants.O_NOFOLLOW ?? 0) : 0;
-    s = await fsPromisesModule.open(e, getPdfOpenFlags("linux") | a);
-    let stats = await s.stat();
-    if (!stats.isFile()) return o;
-    if (r?.requireNlink1 && stats.nlink !== 1) return o;
-    if (r?.verifyHandlePath) {
-      let E = null;
-      E = await fsPromisesModule.readlink(`/proc/self/fd/${s.fd}`).catch(() => null);
-      if (E !== null && E.endsWith(" (deleted)")) return o;
-      if (E === null) {
-        E = await fsPromisesModule.realpath(e);
-        let stats_2 = await fsPromisesModule.stat(E);
-        if (stats_2.dev !== stats.dev || stats_2.ino !== stats.ino) return o;
+    let noFollowFlag = options?.noFollow ? (constants.O_NOFOLLOW ?? 0) : 0;
+    handle = await fsPromisesModule.open(filePath, getPdfOpenFlags("linux") | noFollowFlag);
+    let stats = await handle.stat();
+    if (!stats.isFile()) return refusalFallback;
+    if (options?.requireNlink1 && stats.nlink !== 1) return refusalFallback;
+    if (options?.verifyHandlePath) {
+      let fdPath = null;
+      fdPath = await fsPromisesModule.readlink(`/proc/self/fd/${handle.fd}`).catch(() => null);
+      if (fdPath !== null && fdPath.endsWith(" (deleted)")) return refusalFallback;
+      if (fdPath === null) {
+        fdPath = await fsPromisesModule.realpath(filePath);
+        let stats_2 = await fsPromisesModule.stat(fdPath);
+        if (stats_2.dev !== stats.dev || stats_2.ino !== stats.ino) return refusalFallback;
       }
-      if (!r.verifyHandlePath(E)) return o;
+      if (!options.verifyHandlePath(fdPath)) return refusalFallback;
     }
-    if (r?.fromTail === true) {
-      let E = stats.size > n ? stats.size - n : 0;
-      let h = Buffer.alloc(stats.size - E);
-      let intoBuffer = await readIntoBuffer(s, h, E);
-      let v = decodeText(h.subarray(0, intoBuffer), r.sniffEncoding);
-      let end = E + intoBuffer;
-      if (E === 0)
+    if (options?.fromTail === true) {
+      let tailStart = stats.size > maxBytes ? stats.size - maxBytes : 0;
+      let tailBuffer = Buffer.alloc(stats.size - tailStart);
+      let intoBuffer = await readIntoBuffer(handle, tailBuffer, tailStart);
+      let tailText = decodeText(tailBuffer.subarray(0, intoBuffer), options.sniffEncoding);
+      let end = tailStart + intoBuffer;
+      if (tailStart === 0)
         return {
-          content: v,
+          content: tailText,
           truncated: false,
           end,
         };
-      let index = v.indexOf(`
+      let index = tailText.indexOf(`
 `);
       return {
-        content: index === -1 ? "" : v.slice(index + 1),
+        content: index === -1 ? "" : tailText.slice(index + 1),
         truncated: true,
         end,
       };
     }
-    let min = Math.min(stats.size, n + 1);
-    let p = Buffer.alloc(min);
-    let intoBuffer = await readIntoBuffer(s, p, 0);
-    if (r?.sniffEncoding === true) {
-      let E = stats.size > n ? Math.min(intoBuffer, n) : intoBuffer;
-      let chunk = p.subarray(0, E);
-      let b = decodeText(chunk, true);
-      let v = stats.size > n;
-      let _ = v
-        ? `${b}
-\u2026[truncated at ${n} bytes of ${stats.size} bytes]`
-        : b;
-      return r.withBytes === true
+    let min = Math.min(stats.size, maxBytes + 1);
+    let headBuffer = Buffer.alloc(min);
+    let intoBuffer = await readIntoBuffer(handle, headBuffer, 0);
+    if (options?.sniffEncoding === true) {
+      let prefixBytes = stats.size > maxBytes ? Math.min(intoBuffer, maxBytes) : intoBuffer;
+      let buffer = headBuffer.subarray(0, prefixBytes);
+      let prefixText = decodeText(buffer, true);
+      let isTruncated = stats.size > maxBytes;
+      let content = isTruncated
+        ? `${prefixText}
+\u2026[truncated at ${maxBytes} bytes of ${stats.size} bytes]`
+        : prefixText;
+      return options.withBytes === true
         ? {
-            content: _,
-            bytes: chunk,
-            truncated: v,
+            content,
+            bytes: buffer,
+            truncated: isTruncated,
           }
-        : _;
+        : content;
     }
-    let w = decodeText(p.subarray(0, intoBuffer), false);
-    return w.length > n
-      ? `${w.slice(0, n)}
-\u2026[truncated at ${n} chars of ${stats.size} bytes]`
-      : w;
+    let decoded = decodeText(headBuffer.subarray(0, intoBuffer), false);
+    return decoded.length > maxBytes
+      ? `${decoded.slice(0, maxBytes)}
+\u2026[truncated at ${maxBytes} chars of ${stats.size} bytes]`
+      : decoded;
   } catch (error) {
-    return isMissingPathError(error) ? null : o;
+    return isMissingPathError(error) ? null : refusalFallback;
   } finally {
-    await s?.close().catch(() => {
+    await handle?.close().catch(() => {
       return;
     });
   }
@@ -106,57 +106,62 @@ function isMissingPathError(realCandidate) {
 /**
  * 从句柄指定位置读满缓冲区，返回实际读取的字节数。
  */
-async function readIntoBuffer(e, n, r) {
-  let o = 0;
-  while (o < n.length) {
-    let { bytesRead } = await e.read(n, o, n.length - o, r + o);
+async function readIntoBuffer(handle, buffer, startOffset) {
+  let totalRead = 0;
+  while (totalRead < buffer.length) {
+    let { bytesRead } = await handle.read(
+      buffer,
+      totalRead,
+      buffer.length - totalRead,
+      startOffset + totalRead,
+    );
     if (bytesRead === 0) break;
-    o += bytesRead;
+    totalRead += bytesRead;
   }
-  return o;
+  return totalRead;
 }
 //@ chunk-t0gq9gyw.js:58709-59039 placement
 /**
  * 按 BOM/编码检测解码文本。
  */
-function decodeText(e, n) {
-  if (n !== true) return e.toString("utf8");
-  let encodingFromBom = detectEncodingFromBom(e);
-  let o = 0;
+function decodeText(buffer, sniffEncoding) {
+  if (sniffEncoding !== true) return buffer.toString("utf8");
+  let encodingFromBom = detectEncodingFromBom(buffer);
+  let byteOffset = 0;
   if (encodingFromBom === "utf8") {
-    let chunk = e.subarray(0, Math.min(e.length, 512));
-    let c = 0;
-    let u = 0;
+    let chunk = buffer.subarray(0, Math.min(buffer.length, 512));
+    let evenNulCount = 0;
+    let oddNulCount = 0;
     for (let j = 0; j < chunk.length; j++)
       if (chunk[j] === 0)
-        if (j % 2 === 0) c++;
-        else u++;
-    if (chunk.length >= 8 && (c + u) * 4 > chunk.length) {
+        if (j % 2 === 0) evenNulCount++;
+        else oddNulCount++;
+    if (chunk.length >= 8 && (evenNulCount + oddNulCount) * 4 > chunk.length) {
       encodingFromBom = "utf16le";
-      o = c > u ? 1 : 0;
+      byteOffset = evenNulCount > oddNulCount ? 1 : 0;
     }
   }
-  let str = e.subarray(o).toString(encodingFromBom);
+  let str = buffer.subarray(byteOffset).toString(encodingFromBom);
   return str.charCodeAt(0) === 65279 ? str.slice(1) : str;
 }
 //@ chunk-t0gq9gyw.js:59262-59360 placement
 /**
  * 安全地注册文件监听（watchFile），回调异常只记录不外抛，返回包装后的回调。
  */
-function watchFileSafe(e, n, r) {
-  let o = (s, a) => {
+function watchFileSafe(filePath, options, listener) {
+  let safeListener = (curr, prev) => {
     try {
-      r(s, a);
+      listener(curr, prev);
     } catch (error) {
       logError(error);
     }
   };
   try {
-    watchFile(e, n, o);
+    watchFile(filePath, options, safeListener);
   } catch (error) {
     logError(error);
   }
-  return o;
+  return safeListener;
 }
 //@ chunk-t0gq9gyw.js:59360-59431 placement
 /**

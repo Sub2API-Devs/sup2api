@@ -60,9 +60,9 @@ function powershellToolUseOptions_2({
     let hasNonPowerShellSuggestions =
       suggestionsRow !== null &&
       suggestionsRow.applies.some(
-        (At) =>
-          At.type === "addDirectories" ||
-          (At.type === "addRules" && At.rules.some((rule) => rule.toolName !== BASH_TOOL_NAME)),
+        (update) =>
+          update.type === "addDirectories" ||
+          (update.type === "addRules" && update.rules.some((rule) => rule.toolName !== BASH_TOOL_NAME)),
       );
     if (
       editablePrefix !== undefined &&
@@ -111,34 +111,35 @@ function powershellToolUseOptions_2({
   return options;
 }
 //@ chunk-18hwfzwa.js:1327111-1327138 layout
-var bashRuleLabelPredicate = (h) => ruleMatchesTool(h, BASH_TOOL_NAME, stripBashRedirections);
+var bashRuleLabelPredicate = (rule) => ruleMatchesTool(rule, BASH_TOOL_NAME, stripBashRedirections);
 //@ chunk-18hwfzwa.js:1327138-1327242 layout
 /**
  * 把 Bash 权限建议解析为同意选项行（只显示特定更新类型，标签按 Bash 规则渲染并去掉重定向）。
  */
-function parseBashConsentSuggestions(h, x) {
-  return parseConsentSuggestions(h, {
+function parseBashConsentSuggestions(suggestions, options) {
+  return parseConsentSuggestions(suggestions, {
     displayedTypes: CONSENT_UPDATE_TYPES,
     labelPredicate: bashRuleLabelPredicate,
-    renderLabel: (D) => parseSuggestionRows(D, BASH_TOOL_NAME, stripBashRedirections, x),
+    renderLabel: (suggestion) =>
+      parseSuggestionRows(suggestion, BASH_TOOL_NAME, stripBashRedirections, options),
   });
 }
 //@ chunk-18hwfzwa.js:1327242-1327894 callgraph-fingerprint = bashToolUseOptions (0.243)
 /**
  * Bash 权限选项：允许一次；"Yes, and don't ask again for <前缀/命令>"（应用建议规则或编辑后的前缀）；可选开启 auto 模式；拒绝（可附反馈）。
  */
-function bashToolUseOptions(h, payload, D, L = {}) {
-  switch (h) {
+function bashToolUseOptions(choice, payload, selectedRow, extra = {}) {
+  switch (choice) {
     case "yes":
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        ...(L.feedback && {
-          feedback: L.feedback,
+        ...(extra.feedback && {
+          feedback: extra.feedback,
         }),
       };
     case "yes-apply-suggestions": {
-      if (D === null || !isConsentRow(D))
+      if (selectedRow === null || !isConsentRow(selectedRow))
         return {
           behavior: "allow",
           updatedInput: payload.input,
@@ -146,11 +147,11 @@ function bashToolUseOptions(h, payload, D, L = {}) {
       return {
         behavior: "allow",
         updatedInput: payload.input,
-        permissionUpdates: D.applies,
+        permissionUpdates: selectedRow.applies,
       };
     }
     case "yes-prefix-edited": {
-      let label = directoryRow(L.editablePrefixSeed, L.editablePrefix, BASH_TOOL_NAME);
+      let label = directoryRow(extra.editablePrefixSeed, extra.editablePrefix, BASH_TOOL_NAME);
       if (label === null)
         return {
           behavior: "allow",
@@ -170,8 +171,8 @@ function bashToolUseOptions(h, payload, D, L = {}) {
     case "no":
       return {
         behavior: "deny",
-        ...(L.feedback && {
-          feedback: L.feedback,
+        ...(extra.feedback && {
+          feedback: extra.feedback,
         }),
       };
   }

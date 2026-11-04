@@ -13,10 +13,14 @@ import {
   parseExpirationTimestamp,
   parseRefreshTimestamp,
 } from "../credentials/managedIdentityCredential/utils.js";
-import { $n, AuthenticationErrorName } from "../../index.js";
+import { AuthenticationError, AuthenticationErrorName } from "../../index.js";
 import { tracingClient } from "../util/tracing.js";
 import { getIdentityTokenEndpointSuffix } from "../util/identityTokenEndpoint.js";
-import { je, rr } from "../../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
+import {
+  isExponentialBackoff,
+  isCustomRetryPolicy,
+} from "../../../../core-rest-pipeline/dist/esm/policies/retryPolicy.js";
+import { runDeferredInits } from "../../../../../../runtime/deferred-init.js";
 
 //@ chunk-mrx6y2r5.js:83557-83582 esm-fingerprint
 var noCorrelationId = "noCorrelationId";
@@ -99,7 +103,7 @@ class IdentityClient extends ServiceClient {
       );
       return token;
     } else {
-      let error = new $n(response.status, response.bodyAsText);
+      let error = new AuthenticationError(response.status, response.bodyAsText);
       logger.warning(
         `IdentityClient: authentication error. HTTP status: ${response.status}, ${error.errorResponse.errorDescription}`,
       );
@@ -122,12 +126,12 @@ class IdentityClient extends ServiceClient {
     return tracingClient.withSpan("IdentityClient.refreshAccessToken", options, async (updatedOptions) => {
       try {
         let urlSuffix = getIdentityTokenEndpointSuffix(tenantId);
-        let request = je({
+        let request = isExponentialBackoff({
           url: `${this.authorityHost}/${tenantId}/${urlSuffix}`,
           method: "POST",
           body: query.toString(),
           abortSignal: options.abortSignal,
-          headers: rr({
+          headers: isCustomRetryPolicy({
             Accept: "application/json",
             "Content-Type": "application/x-www-form-urlencoded",
           }),
@@ -181,12 +185,12 @@ class IdentityClient extends ServiceClient {
     return parameter && parameter.length ? parameter[1] || noCorrelationId : noCorrelationId;
   }
   async sendGetRequestAsync(url, options) {
-    let request = je({
+    let request = isExponentialBackoff({
       url,
       method: "GET",
       body: options === null || options === undefined ? undefined : options.body,
       allowInsecureConnection: this.allowInsecureConnection,
-      headers: rr(options === null || options === undefined ? undefined : options.headers),
+      headers: isCustomRetryPolicy(options === null || options === undefined ? undefined : options.headers),
       abortSignal: this.generateAbortSignal(noCorrelationId),
     });
     let response = await this.sendRequest(request);
@@ -198,11 +202,11 @@ class IdentityClient extends ServiceClient {
     };
   }
   async sendPostRequestAsync(url, options) {
-    let request = je({
+    let request = isExponentialBackoff({
       url,
       method: "POST",
       body: options === null || options === undefined ? undefined : options.body,
-      headers: rr(options === null || options === undefined ? undefined : options.headers),
+      headers: isCustomRetryPolicy(options === null || options === undefined ? undefined : options.headers),
       allowInsecureConnection: this.allowInsecureConnection,
       abortSignal: this.generateAbortSignal(this.getCorrelationId(options)),
     });
@@ -236,4 +240,8 @@ class IdentityClient extends ServiceClient {
     }
   }
 }
+
+// The import cycle this module closes (4 modules) is complete: run the load-time work its statements
+// marked "deferred" waited for, in the official build's order (runtime/deferred-init.js).
+runDeferredInits("vendor/@azure/identity/dist/esm/client/identityClient.js");
 export { IdentityClient };

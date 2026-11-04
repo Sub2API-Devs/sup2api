@@ -7,7 +7,7 @@
  */
 import { APIResource } from "../../core/resource.mjs";
 import { buildHeaders } from "../../internal/headers.mjs";
-import { I } from "../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../internal/utils/path.mjs";
 import { TokenPage } from "../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:48117-49398 esm-fingerprint
@@ -32,7 +32,7 @@ class Dreams extends APIResource {
   }
   retrieve(dreamID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.get(I`/v1/dreams/${dreamID}?beta=true`, {
+    return this._client.get(parseUrl_2`/v1/dreams/${dreamID}?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -67,7 +67,7 @@ class Dreams extends APIResource {
   }
   archive(dreamID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.post(I`/v1/dreams/${dreamID}/archive?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/dreams/${dreamID}/archive?beta=true`, {
       ...options,
       headers: buildHeaders([
         {
@@ -84,7 +84,7 @@ class Dreams extends APIResource {
   }
   cancel(dreamID, params = {}, options) {
     let { betas, workspace_id } = params ?? {};
-    return this._client.post(I`/v1/dreams/${dreamID}/cancel?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/dreams/${dreamID}/cancel?beta=true`, {
       ...options,
       headers: buildHeaders([
         {

@@ -8,7 +8,7 @@
  * pieces: chunk-g8z8w057.js (3)
  * attribution: placement 3
  */
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { alwaysNull } from "./index.js";
 import { registerBundledSkill } from "../bundledSkills.js";
 import { parseFrontmatter } from "../../utils/frontmatterParser.js";
@@ -18,7 +18,7 @@ import { parseFrontmatter } from "../../utils/frontmatterParser.js";
  * 动态加载 run 技能内容模块。
  */
 function loadRunSkillContent() {
-  return import("./chunk-sbfx2p3f.js");
+  return import("./run/RUN_EXAMPLE_FILES.lazy.js");
 }
 //@ chunk-g8z8w057.js:5286-5656 placement
 /**
@@ -31,7 +31,7 @@ var RUN_SKILL_DESCRIPTION =
  * 注册内置 run 技能（启动并操作项目应用以验证改动）：附带示例文件与项目自有 run 技能文件，提示词为 SKILL.md 正文加用户请求。
  */
 function registerRunSkill() {
-  let r = io(alwaysNull);
+  let runSkillRuntime = memoizeAlias(alwaysNull);
   registerBundledSkill({
     name: "run",
     menuDescription: "Launch this project\u2019s app to see your change working",
@@ -39,21 +39,21 @@ function registerRunSkill() {
     userInvocable: true,
     files: async () => ({
       ...(await loadRunSkillContent().then((runSkillContent) => runSkillContent.RUN_EXAMPLE_FILES)),
-      ...(await r())?.files,
+      ...(await runSkillRuntime())?.files,
     }),
-    async getPromptForCommand(t, p, s) {
+    async getPromptForCommand(args, context, includeRuntimeNote) {
       let { SKILL_MD } = await loadRunSkillContent();
-      let e = [parseFrontmatter(SKILL_MD).content.trimStart()];
-      let o = await r();
-      if (o && s) e.push(o.note);
-      if (t)
-        e.push(`## User Request
+      let sections = [parseFrontmatter(SKILL_MD).content.trimStart()];
+      let resolvedRuntime = await runSkillRuntime();
+      if (resolvedRuntime && includeRuntimeNote) sections.push(resolvedRuntime.note);
+      if (args)
+        sections.push(`## User Request
 
-${t}`);
+${args}`);
       return [
         {
           type: "text",
-          text: e.join(`
+          text: sections.join(`
 
 `),
         },
@@ -61,3 +61,4 @@ ${t}`);
     },
   });
 }
+export { registerRunSkill };

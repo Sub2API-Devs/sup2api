@@ -13,6 +13,7 @@ import { axios_default, AxiosHeaders } from "../../../vendor/axios/dist/esm/axio
 import { uniq } from "../../utils/collections.js";
 import { getOauthConfig } from "../../constants/oauth.js";
 import { getBridgeBaseUrlOverride } from "../../bridge/bridgeConfig.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hqdsrzb2.js:338-372 placement
 /**
@@ -20,72 +21,78 @@ import { getBridgeBaseUrlOverride } from "../../bridge/bridgeConfig.js";
  */
 var SESSIONS_TOKEN_RE = /^req_[A-Za-z0-9_-]{1,36}$/;
 //@ chunk-hqdsrzb2.js:372-425 placement
-function isSessionsToken(e) {
-  return typeof e === "string" && SESSIONS_TOKEN_RE.test(e);
+function isSessionsToken(token) {
+  return typeof token === "string" && SESSIONS_TOKEN_RE.test(token);
 }
 //@ chunk-hqdsrzb2.js:446-674 placement
-var sessionsBearerInterceptors = identity(
-  {
-    request: null,
-    response: null,
-    holder: null,
-  },
-  (e) => {
-    if (e.request !== null) {
-      axios_default.interceptors.request.eject(e.request);
-      e.request = null;
-    }
-    if (e.response !== null) {
-      axios_default.interceptors.response.eject(e.response);
-      e.response = null;
-    }
-    e.holder = null;
-  },
-);
+var sessionsBearerInterceptors; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-hqdsrzb2.js:446", () => {
+  sessionsBearerInterceptors = identity(
+    {
+      request: null,
+      response: null,
+      holder: null,
+    },
+    (state) => {
+      if (state.request !== null) {
+        axios_default.interceptors.request.eject(state.request);
+        state.request = null;
+      }
+      if (state.response !== null) {
+        axios_default.interceptors.response.eject(state.response);
+        state.response = null;
+      }
+      state.holder = null;
+    },
+  );
+});
 //@ chunk-hqdsrzb2.js:674-1170 placement
-function installSessionsBearerHooks(recoverHostSessionsBearer, sendableHostSessionsBearer) {
+function installSessionsBearerHooks(recover, sendableBearer) {
   if (sessionsBearerInterceptors.request !== null) return;
   sessionsBearerInterceptors.holder = {
-    report: recoverHostSessionsBearer,
-    sendable: sendableHostSessionsBearer,
+    report: recover,
+    sendable: sendableBearer,
   };
-  sessionsBearerInterceptors.request = axios_default.interceptors.request.use((n) => {
-    let t = decideBearerSend(n.headers.get("Authorization"), sendableHostSessionsBearer, () =>
-      isSessionsApiRequest(n),
+  sessionsBearerInterceptors.request = axios_default.interceptors.request.use((config) => {
+    let decision = decideBearerSend(config.headers.get("Authorization"), sendableBearer, () =>
+      isSessionsApiRequest(config),
     );
-    switch (t.send) {
+    switch (decision.send) {
       case "asItCame":
         break;
       case "held":
-        n.headers.set("Authorization", t.value);
+        config.headers.set("Authorization", decision.value);
         break;
       case "none":
-        n.headers.delete("Authorization");
+        config.headers.delete("Authorization");
         break;
     }
-    return n;
+    return config;
   });
   sessionsBearerInterceptors.response = axios_default.interceptors.response.use(
-    (n) => {
-      reportSessions401(n.status, n.config, recoverHostSessionsBearer);
-      return n;
+    (response) => {
+      reportSessions401(response.status, response.config, recover);
+      return response;
     },
-    (n) => {
-      if (axios_default.isAxiosError(n) && n.response)
-        reportSessions401(n.response.status, n.config, recoverHostSessionsBearer);
-      return Promise.reject(n);
+    (error) => {
+      if (axios_default.isAxiosError(error) && error.response)
+        reportSessions401(error.response.status, error.config, recover);
+      return Promise.reject(error);
     },
   );
 }
 //@ chunk-hqdsrzb2.js:1170-1368 placement
-function decideBearerSend(e, r, n) {
-  for (let t of collectBearerTokens(e)) {
-    let s = r(t);
-    if (s === t) continue;
-    return s !== null && typeof e === "string" && !e.includes(",") && n()
+function decideBearerSend(authorizationHeader, sendableBearer, isSessionsRequest) {
+  for (let token of collectBearerTokens(authorizationHeader)) {
+    let replacement = sendableBearer(token);
+    if (replacement === token) continue;
+    return replacement !== null &&
+      typeof authorizationHeader === "string" &&
+      !authorizationHeader.includes(",") &&
+      isSessionsRequest()
       ? {
           send: "held",
-          value: `Bearer ${s}`,
+          value: `Bearer ${replacement}`,
         }
       : {
           send: "none",
@@ -96,19 +103,22 @@ function decideBearerSend(e, r, n) {
   };
 }
 //@ chunk-hqdsrzb2.js:1368-1636 placement
-function withVettedSessionsBearer(e, url) {
-  let headers = new Headers(e);
+function withVettedSessionsBearer(sourceHeaders, url) {
+  let headers = new Headers(sourceHeaders);
   if (sessionsBearerInterceptors.holder === null) return headers;
-  let t = decideBearerSend(headers.get("Authorization"), sessionsBearerInterceptors.holder.sendable, () =>
-    isSessionsApiRequest({
-      url,
-    }),
+  let decision = decideBearerSend(
+    headers.get("Authorization"),
+    sessionsBearerInterceptors.holder.sendable,
+    () =>
+      isSessionsApiRequest({
+        url,
+      }),
   );
-  switch (t.send) {
+  switch (decision.send) {
     case "asItCame":
       break;
     case "held":
-      headers.set("Authorization", t.value);
+      headers.set("Authorization", decision.value);
       break;
     case "none":
       headers.delete("Authorization");
@@ -117,7 +127,7 @@ function withVettedSessionsBearer(e, url) {
   return headers;
 }
 //@ chunk-hqdsrzb2.js:1636-1738 placement
-function reportSessionsBearerAnswer(status, r, url) {
+function reportSessionsBearerAnswer(status, headers, url) {
   if (sessionsBearerInterceptors.holder !== null)
     reportBearer401(
       status,
@@ -125,35 +135,35 @@ function reportSessionsBearerAnswer(status, r, url) {
         isSessionsApiRequest({
           url,
         }),
-      () => r.get("Authorization"),
+      () => headers.get("Authorization"),
       sessionsBearerInterceptors.holder.report,
     );
 }
 //@ chunk-hqdsrzb2.js:1738-1775 placement
-function bearerOf(e) {
-  return collectBearerTokens(e)[0] ?? null;
+function bearerOf(header) {
+  return collectBearerTokens(header)[0] ?? null;
 }
 //@ chunk-hqdsrzb2.js:1775-2044 placement
-function collectBearerTokens(e) {
-  if (Array.isArray(e)) return e.flatMap(collectBearerTokens);
-  if (typeof e !== "string") return [];
-  let flattened = (e.includes(",") ? [e, ...e.split(",")] : [e]).flatMap((t) => {
-    let match = /^\s*bearer\s+/i.exec(t);
+function collectBearerTokens(value) {
+  if (Array.isArray(value)) return value.flatMap(collectBearerTokens);
+  if (typeof value !== "string") return [];
+  let flattened = (value.includes(",") ? [value, ...value.split(",")] : [value]).flatMap((part) => {
+    let match = /^\s*bearer\s+/i.exec(part);
     if (match === null) return [];
-    let trimmed = t.slice(match[0].length).trim();
+    let trimmed = part.slice(match[0].length).trim();
     return trimmed === "" ? [] : [trimmed];
   });
   return uniq(flattened);
 }
 //@ chunk-hqdsrzb2.js:2044-2197 placement
-function isSessionsApiRequest(e) {
+function isSessionsApiRequest(config) {
   try {
-    if (e === undefined) return false;
-    let r = originOf(axios_default.getUri(e));
+    if (config === undefined) return false;
+    let requestOrigin = originOf(axios_default.getUri(config));
     return (
-      r !== null &&
+      requestOrigin !== null &&
       [getOauthConfig().BASE_API_URL, getBridgeBaseUrlOverride()].some(
-        (n) => n !== undefined && originOf(n) === r,
+        (baseUrl) => baseUrl !== undefined && originOf(baseUrl) === requestOrigin,
       )
     );
   } catch {
@@ -161,29 +171,29 @@ function isSessionsApiRequest(e) {
   }
 }
 //@ chunk-hqdsrzb2.js:2197-2316 placement
-function originOf(e) {
+function originOf(urlString) {
   try {
-    let r = new URL(e);
-    return r.protocol === "https:" || r.protocol === "http:" ? r.origin : null;
+    let parsedUrl = new URL(urlString);
+    return parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:" ? parsedUrl.origin : null;
   } catch {
     return null;
   }
 }
 //@ chunk-hqdsrzb2.js:2316-2419 placement
-function reportSessions401(status, config, n) {
+function reportSessions401(status, config, recover) {
   reportBearer401(
     status,
     () => !config?.skipSessionsBearerReport && isSessionsApiRequest(config),
     () => config?.headers?.get?.("Authorization"),
-    n,
+    recover,
   );
 }
 //@ chunk-hqdsrzb2.js:2419-2521 placement
-function reportBearer401(e, r, n, t) {
+function reportBearer401(status, isSessionsRequest, getBearer, recover) {
   try {
-    if (e !== 401 || !r()) return;
-    let s = bearerOf(n());
-    if (s !== null) t(s).catch(() => {});
+    if (status !== 401 || !isSessionsRequest()) return;
+    let bearer = bearerOf(getBearer());
+    if (bearer !== null) recover(bearer).catch(() => {});
   } catch {}
 }
 //@ chunk-hqdsrzb2.js:2521-2602 placement

@@ -55,20 +55,20 @@ import {
 //@ chunk-18hwfzwa.js:1776018-1776271 placement
 var promptQueueUseCountNoticeSpec = {
   id: "prompt-queue-use-count",
-  deps: (h) => [h.queuedCommandCount, h.storageV5],
+  deps: (ctx) => [ctx.queuedCommandCount, ctx.storageV5],
   setup() {
-    let h = false;
+    let cancelled = false;
     return ({ queuedCommandCount, storageV5 }) => {
       if (queuedCommandCount < 1) {
-        h = false;
+        cancelled = false;
         return;
       }
-      if (h) return;
-      h = true;
+      if (cancelled) return;
+      cancelled = true;
       saveGlobalConfig(
-        (L) => ({
-          ...L,
-          promptQueueUseCount: (L.promptQueueUseCount ?? 0) + 1,
+        (prev) => ({
+          ...prev,
+          promptQueueUseCount: (prev.promptQueueUseCount ?? 0) + 1,
         }),
         storageV5,
       );
@@ -175,25 +175,25 @@ function projectSignInEnvNotice({ addNotification }) {
 //@ chunk-18hwfzwa.js:1777754-1778113 placement = getHooksSources (0.871)
 function getHooksSources() {
   let filtered = getEnabledSettingSources().filter(
-    (x) =>
-      isDangerousEnvVar(x) &&
+    (pair) =>
+      isDangerousEnvVar(pair) &&
       !(
-        x === "projectSettings" &&
+        pair === "projectSettings" &&
         getEnabledSettingSources().includes("userSettings") &&
         projectSettingsAliasesUserSettings()
       ),
   );
-  return OAUTH_ENV_VARS.flatMap((x) => {
-    if (env[x]) return [];
+  return OAUTH_ENV_VARS.flatMap((name) => {
+    if (env[name]) return [];
     let mapped = filtered
       .filter((settings) =>
-        Object.keys(getSettingsForSource(settings)?.env ?? {}).some((key) => key.toUpperCase() === x),
+        Object.keys(getSettingsForSource(settings)?.env ?? {}).some((key) => key.toUpperCase() === name),
       )
-      .map((L) => (L === "localSettings" ? ".claude/settings.local.json" : ".claude/settings.json"));
+      .map((entry) => (entry === "localSettings" ? ".claude/settings.local.json" : ".claude/settings.json"));
     return mapped.length > 0
       ? [
           {
-            name: x,
+            name,
             files: mapped,
           },
         ]
@@ -232,11 +232,11 @@ var PROMO_CHECK_JITTER_MS = 25000;
 var promoCreditCheckSpec = {
   id: "promo-credit-check",
   setup() {
-    let h = false;
+    let cancelled = false;
     return ({ session, storageV5, credentials, clock }) => {
-      if (h) return;
-      h = true;
-      let ke = PROMO_CHECK_MIN_DELAY_MS + Math.floor(Math.random() * PROMO_CHECK_JITTER_MS);
+      if (cancelled) return;
+      cancelled = true;
+      let delayMs = PROMO_CHECK_MIN_DELAY_MS + Math.floor(Math.random() * PROMO_CHECK_JITTER_MS);
       return clock.setTimeout(() => {
         if (
           !isPromoCreditNoticeEligible(session) ||
@@ -247,15 +247,16 @@ var promoCreditCheckSpec = {
         let promoLoginKey = getPromoLoginKey();
         let promoCreditCheck = getGlobalConfig().promoCreditCheck;
         let now = Date.now();
-        let We = promoCreditCheck?.login === promoLoginKey ? now - promoCreditCheck.askedAtMs : -1;
-        if (promoLoginKey === null || (We >= 0 && We < PROMO_CHECK_INTERVAL_MS)) return;
+        let sinceMs = promoCreditCheck?.login === promoLoginKey ? now - promoCreditCheck.askedAtMs : -1;
+        if (promoLoginKey === null || (sinceMs >= 0 && sinceMs < PROMO_CHECK_INTERVAL_MS)) return;
         saveGlobalConfig(
-          (ze) => ({
-            ...ze,
+          (prev) => ({
+            ...prev,
             promoCreditCheck: {
               login: promoLoginKey,
               askedAtMs: now,
-              answer: ze.promoCreditCheck?.login === promoLoginKey ? ze.promoCreditCheck.answer : undefined,
+              answer:
+                prev.promoCreditCheck?.login === promoLoginKey ? prev.promoCreditCheck.answer : undefined,
             },
           }),
           storageV5,
@@ -275,44 +276,44 @@ var promoCreditCheckSpec = {
               endsAt: wattleEmber?.resets_at ?? null,
             };
             saveGlobalConfig(
-              (kt) =>
-                kt.promoCreditCheck?.login === promoLoginKey
+              (prev) =>
+                prev.promoCreditCheck?.login === promoLoginKey
                   ? {
-                      ...kt,
+                      ...prev,
                       promoCreditCheck: {
-                        ...kt.promoCreditCheck,
+                        ...prev.promoCreditCheck,
                         answer,
                       },
                     }
-                  : kt,
+                  : prev,
               storageV5,
             );
           })
           .catch(logError);
-      }, ke);
+      }, delayMs);
     };
   },
 };
 //@ chunk-18hwfzwa.js:1779429-1779933 placement
 var fableUsageCreditsNoticeSpec = {
   id: "fable-usage-credits",
-  deps: (h) => [h.addNotification],
+  deps: (ctx) => [ctx.addNotification],
   setup() {
-    let h = false;
+    let shown = false;
     return ({ addNotification }) =>
-      onOverageInUse((D, L, ee) => {
-        let ke = usageCreditsOnlyFamily(D);
-        if (ke === undefined) return;
-        if (L || ee) return;
+      onOverageInUse((family, inUse, details) => {
+        let creditsFamily = usageCreditsOnlyFamily(family);
+        if (creditsFamily === undefined) return;
+        if (inUse || details) return;
         if (isUsageBasedBilling()) return;
         if (usesPayAsYouGo()) return;
-        if (hasUsageCreditsConsent(ke)) {
-          if (!h) {
-            h = true;
+        if (hasUsageCreditsConsent(creditsFamily)) {
+          if (!shown) {
+            shown = true;
             addNotification({
               kind: "contextual",
               key: "fable-credits-info",
-              text: `${renderUsageCreditsOnlyModelName(D)} is drawing from usage credits`,
+              text: `${renderUsageCreditsOnlyModelName(family)} is drawing from usage credits`,
               priority: "medium",
             });
           }
@@ -321,7 +322,7 @@ var fableUsageCreditsNoticeSpec = {
         addNotification({
           kind: "warning",
           key: "fable-usage-credits",
-          text: `${renderUsageCreditsOnlyModelName(D)} is now using usage credits instead of your plan limits`,
+          text: `${renderUsageCreditsOnlyModelName(family)} is now using usage credits instead of your plan limits`,
           color: "error",
           priority: "immediate",
         });

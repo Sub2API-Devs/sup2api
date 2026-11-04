@@ -5,13 +5,13 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_codegen_2 } from "../compile/codegen/index.js";
 import { require_util_2 } from "../compile/util.js";
 import { require_names } from "../compile/names.js";
 
 //@ chunk-s82q9s4x.js:30715-33752 cjs-fingerprint
-var require_code_2 = x(function (cjsExports) {
+var require_code_2 = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -158,7 +158,7 @@ var require_code_2 = x(function (cjsExports) {
   function validateUnion(cxt) {
     let { gen, schema, keyword, it } = cxt;
     if (!Array.isArray(schema)) throw Error("ajv implementation error");
-    if (schema.some((c) => util_1.alwaysValidSchema(it, c)) && !it.opts.unevaluated) return;
+    if (schema.some((sch) => util_1.alwaysValidSchema(it, sch)) && !it.opts.unevaluated) return;
     let valid = gen.let("valid", false);
     let schValid = gen.name("_valid");
     gen.block(() =>

@@ -64,5 +64,5 @@ ${underline}`);
     }
     return path;
   };
-var I = createPathTagFunction(encodeURIPath);
-export { I };
+var parseUrl_2 = createPathTagFunction(encodeURIPath);
+export { parseUrl_2 };

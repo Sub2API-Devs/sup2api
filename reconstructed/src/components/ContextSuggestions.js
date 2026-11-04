@@ -16,7 +16,7 @@ import { Box, Text } from "../ink/components/Text.js";
 import { StatusIcon } from "./design-system/StatusIcon.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
 import { formatTokens } from "../utils/format.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 
 //@ chunk-10q8r8ck.js:16647-16988 fingerprint = _temp (0.831)
@@ -67,7 +67,7 @@ function renderContextSuggestion(suggestion, i) {
 }
 //@ chunk-10q8r8ck.js:16988-17306 fingerprint = ContextSuggestions (0.431)
 function ContextSuggestions(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { suggestions } = props;
   if (suggestions.length === 0) {
     return null;

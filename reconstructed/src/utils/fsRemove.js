@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-jhrww53q.js (8)
- * attribution: placement 7, layout 1
+ * pieces: chunk-jhrww53q.js (7)
+ * attribution: placement 6, layout 1
  */
 import { unlink, rmdir, lstat, readdir } from "fs/promises";
 import { join } from "path";
@@ -14,24 +14,23 @@ import { getErrnoCode, isENOENT } from "./errors.js";
 import { safeResolvePath_2 } from "./fsOperations.js";
 import { getPlatform } from "./platform.js";
 import { readJunction } from "./fsJunctions.js";
-import { classifyProtectedDir } from "./permissions/protectedDirs.js";
 
 //@ chunk-jhrww53q.js:47118-47434 placement
-async function removePathEntry(o) {
+async function removePathEntry(entryPath) {
   try {
-    await unlink(o);
+    await unlink(entryPath);
     return "removed";
   } catch (error) {
     if (getErrnoCode(error) === "ENOENT") return "absent";
     try {
-      await rmdir(o);
+      await rmdir(entryPath);
       return "removed";
     } catch (error_2) {
       let errnoCode = getErrnoCode(error_2);
       if (errnoCode === "ENOTEMPTY" || errnoCode === "EEXIST") return "directory";
       if (errnoCode === "ENOENT") {
         if (
-          await lstat(o).then(
+          await lstat(entryPath).then(
             () => false,
             (error) => getErrnoCode(error) === "ENOENT",
           )
@@ -44,25 +43,25 @@ async function removePathEntry(o) {
   }
 }
 //@ chunk-jhrww53q.js:47579-48073 placement
-async function classifyDirEntry(o, t) {
-  let _;
-  if (!safeResolvePath_2(t))
-    _ = {
-      isDirectory: t.isDirectory(),
-      isFile: t.isFile(),
-      isSymbolicLink: t.isSymbolicLink(),
+async function classifyDirEntry(dirPath, dirent) {
+  let entryInfo;
+  if (!safeResolvePath_2(dirent))
+    entryInfo = {
+      isDirectory: dirent.isDirectory(),
+      isFile: dirent.isFile(),
+      isSymbolicLink: dirent.isSymbolicLink(),
     };
   else {
-    let E = await lstat(join(o, t.name));
-    _ = {
-      isDirectory: E.isDirectory(),
-      isFile: E.isFile(),
-      isSymbolicLink: E.isSymbolicLink(),
-      size: E.size,
+    let stats = await lstat(join(dirPath, dirent.name));
+    entryInfo = {
+      isDirectory: stats.isDirectory(),
+      isFile: stats.isFile(),
+      isSymbolicLink: stats.isSymbolicLink(),
+      size: stats.size,
     };
   }
-  if (_.isDirectory && getPlatform() === "windows") {
-    let junction = await readJunction(join(o, t.name));
+  if (entryInfo.isDirectory && getPlatform() === "windows") {
+    let junction = await readJunction(join(dirPath, dirent.name));
     switch (junction.kind) {
       case "junction":
         return {
@@ -79,35 +78,35 @@ async function classifyDirEntry(o, t) {
         throw junction.error;
     }
   }
-  return _;
+  return entryInfo;
 }
 //@ chunk-jhrww53q.js:48073-48156 placement
-async function classifyDirEntrySafe(o, t) {
+async function classifyDirEntrySafe(dirPath, dirent) {
   try {
-    return await classifyDirEntry(o, t);
+    return await classifyDirEntry(dirPath, dirent);
   } catch (error) {
     if (isENOENT(error)) return;
     throw error;
   }
 }
 //@ chunk-jhrww53q.js:48156-48343 placement
-async function removeLinkOrDir(o) {
-  let t;
+async function removeLinkOrDir(entryPath) {
+  let stats;
   try {
-    t = await lstat(o);
+    stats = await lstat(entryPath);
   } catch (error) {
     if (getErrnoCode(error) !== "ENOENT") throw error;
     return;
   }
-  if (t.isFile()) {
-    if (t.nlink > 1) await unlink(o);
+  if (stats.isFile()) {
+    if (stats.nlink > 1) await unlink(entryPath);
     return;
   }
-  if (t.isSymbolicLink()) {
-    await unlink(o);
+  if (stats.isSymbolicLink()) {
+    await unlink(entryPath);
     return;
   }
-  await removeDirectoryTreeNoFollow(o);
+  await removeDirectoryTreeNoFollow(entryPath);
 }
 //@ chunk-jhrww53q.js:48343-48352 layout
 var RM_CONCURRENCY = 16;
@@ -117,32 +116,34 @@ var RM_CONCURRENCY = 16;
  */
 async function removeDirectoryTreeNoFollow(source) {
   if ((await removePathEntry(source)) !== "directory") return;
-  let _;
+  let stats;
   try {
-    _ = await lstat(source);
+    stats = await lstat(source);
   } catch (error) {
     if (getErrnoCode(error) === "ENOENT") return;
     throw error;
   }
   if (
-    !_.isDirectory() ||
-    _.isSymbolicLink() ||
+    !stats.isDirectory() ||
+    stats.isSymbolicLink() ||
     (getPlatform() === "windows" && (await isWindowsJunction(source)))
   ) {
     await removePathEntry(source);
     return;
   }
-  let E;
+  let names;
   try {
-    E = await readdir(source);
+    names = await readdir(source);
   } catch (error) {
     let errnoCode = getErrnoCode(error);
     if (errnoCode === "ENOENT" || errnoCode === "ENOTDIR") return;
     throw error;
   }
-  for (let r = 0; r < E.length; r += RM_CONCURRENCY)
+  for (let offset = 0; offset < names.length; offset += RM_CONCURRENCY)
     await Promise.all(
-      E.slice(r, r + RM_CONCURRENCY).map((n) => removeDirectoryTreeNoFollow(join(source, n))),
+      names
+        .slice(offset, offset + RM_CONCURRENCY)
+        .map((childName) => removeDirectoryTreeNoFollow(join(source, childName))),
     );
   if ((await removePathEntry(source)) === "directory")
     throw Object.assign(Error("directory refilled during removal"), {
@@ -158,14 +159,6 @@ async function isWindowsJunction(source) {
   let junction = await readJunction(source);
   if (junction.kind === "error") throw junction.error;
   return junction.kind === "junction";
-}
-//@ chunk-jhrww53q.js:49190-49257 placement
-/**
- * 从目录列表中过滤掉受保护的目录（当前无引用）。
- */
-function filterUnprotectedDirs(o) {
-  let cwd = process.cwd();
-  return o.filter((_) => !classifyProtectedDir(_, cwd));
 }
 export {
   removeDirectoryTreeNoFollow,

@@ -61,8 +61,8 @@ var managedAgentsSkillFilesCache;
  */
 function registerManagedAgentsCommandGuard() {
   if (
-    (getRegisteredHooks()?.PreToolUse ?? []).some((s) =>
-      s.hooks.some((hook) => hook === managedAgentsCommandGuardHook),
+    (getRegisteredHooks()?.PreToolUse ?? []).some((matcher) =>
+      matcher.hooks.some((hook) => hook === managedAgentsCommandGuardHook),
     )
   )
     return;
@@ -79,109 +79,118 @@ function registerManagedAgentsCommandGuard() {
 /**
  * PreToolUse 钩子：检查 Bash 中的 managed agents CLI 命令参数格式，阻止可疑调用。
  */
-async function guardManagedAgentsCommand(r) {
-  if (r.hook_event_name !== "PreToolUse") return {};
-  let toolInput = r.tool_input;
+async function guardManagedAgentsCommand(hookInput) {
+  if (hookInput.hook_event_name !== "PreToolUse") return {};
+  let toolInput = hookInput.tool_input;
   let command =
     typeof toolInput === "object" && toolInput !== null && "command" in toolInput
       ? toolInput.command
       : undefined;
   if (typeof command !== "string") return {};
-  let i = r.tool_name === POWERSHELL_TOOL_NAME ? "powershell" : "bash";
+  let shell = hookInput.tool_name === POWERSHELL_TOOL_NAME ? "powershell" : "bash";
   let replaced = command.replace(QUOTE_CHARS_PATTERN, "");
-  let n = i === "bash" ? await parseForSecurity(command) : undefined;
-  let j =
-    n?.kind !== "simple" ||
+  let parsed = shell === "bash" ? await parseForSecurity(command) : undefined;
+  let isAmbiguous =
+    parsed?.kind !== "simple" ||
     ANT_WORD_PATTERN.test(replaced) ||
-    n.commands.some(({ argv }) => argv.some((arg) => /(?:^|\/)ant(?:\.exe)?$/i.test(arg)));
-  let D = n?.kind === "simple" ? n.commands.flatMap(({ argv }) => argv).join(" ") : "";
-  let mapped = [command, command.replace(/\\\n/g, "")].map((e) => e.replace(QUOTE_CHARS_PATTERN, ""));
-  let y =
-    mapped.some((e) => (e.match(LOCAL_ID_PATTERN) ?? []).length > 0) ||
-    (D.match(LOCAL_ID_PATTERN) ?? []).length > 0;
-  let Z =
-    n?.kind === "simple"
-      ? n.commands.findLastIndex(({ argv }) =>
+    parsed.commands.some(({ argv }) => argv.some((arg) => /(?:^|\/)ant(?:\.exe)?$/i.test(arg)));
+  let joinedArgv = parsed?.kind === "simple" ? parsed.commands.flatMap(({ argv }) => argv).join(" ") : "";
+  let mapped = [command, command.replace(/\\\n/g, "")].map((candidate) =>
+    candidate.replace(QUOTE_CHARS_PATTERN, ""),
+  );
+  let hasLocalId =
+    mapped.some((variant) => (variant.match(LOCAL_ID_PATTERN) ?? []).length > 0) ||
+    (joinedArgv.match(LOCAL_ID_PATTERN) ?? []).length > 0;
+  let idCommandIndex =
+    parsed?.kind === "simple"
+      ? parsed.commands.findLastIndex(({ argv }) =>
           argv.some((arg) => (arg.match(LOCAL_ID_PATTERN) ?? []).length > 0),
         )
       : -1;
-  let O =
-    y &&
-    n?.kind === "simple" &&
+  let localIds =
+    hasLocalId &&
+    parsed?.kind === "simple" &&
     !/\$\(|`|<<|[<>]\(/.test(command) &&
-    checkSemantics(n.commands).ok &&
-    n.bareAssignmentNames.length === 0 &&
-    n.hasLoop === false &&
-    n.tree !== undefined &&
-    !hasLoopNode(n.tree) &&
-    n.commands.every(
-      ({ argv, argvSourceLiteral, envVars, redirects }, d) =>
+    checkSemantics(parsed.commands).ok &&
+    parsed.bareAssignmentNames.length === 0 &&
+    parsed.hasLoop === false &&
+    parsed.tree !== undefined &&
+    !hasLoopNode(parsed.tree) &&
+    parsed.commands.every(
+      ({ argv, argvSourceLiteral, envVars, redirects }, index) =>
         argvSourceLiteral === true &&
         envVars.length === 0 &&
-        (d > Z ||
+        (index > idCommandIndex ||
           (redirects.length === 0 &&
             (BARE_ANT_PATTERN.test(argv[0] ?? "") ||
               (argv.length === 2 &&
                 argv[0] === "cd" &&
                 (argv[1]?.match(LOCAL_ID_PATTERN) ?? []).length === 0)))),
     )
-      ? n.commands.flatMap(({ argv }) => argv.filter((arg) => (arg.match(LOCAL_ID_PATTERN) ?? []).length > 0))
+      ? parsed.commands.flatMap(({ argv }) =>
+          argv.filter((arg) => (arg.match(LOCAL_ID_PATTERN) ?? []).length > 0),
+        )
       : undefined;
-  let L =
-    O !== undefined &&
-    O.every((e) => LOCAL_ID_FULL_FORM.test(e)) &&
-    mapped.every((e) => (e.match(LOCAL_ID_PATTERN) ?? []).length === O.length);
-  let A = mapped.some((e) => STAGED_ID_PATTERN.test(e)) || STAGED_ID_PATTERN.test(D);
+  let allIdsFullForm =
+    localIds !== undefined &&
+    localIds.every((localId) => LOCAL_ID_FULL_FORM.test(localId)) &&
+    mapped.every((variant) => (variant.match(LOCAL_ID_PATTERN) ?? []).length === localIds.length);
+  let hasStagedId =
+    mapped.some((variant) => STAGED_ID_PATTERN.test(variant)) || STAGED_ID_PATTERN.test(joinedArgv);
   if (
-    (A || (y && !L)) &&
-    (j ||
-      (await hasNestedDoLoop(n, {
+    (hasStagedId || (hasLocalId && !allIdsFullForm)) &&
+    (isAmbiguous ||
+      (await hasNestedDoLoop(parsed, {
         left: MAX_NESTED_DO_DEPTH,
       })))
   ) {
     logEvent("tengu_claude_api_ant_command_refused", {
-      shell: fromEnum(i),
-      cause: A ? lit("id_with_second_part") : lit("id_with_local_part"),
+      shell: fromEnum(shell),
+      cause: hasStagedId ? lit("id_with_second_part") : lit("id_with_local_part"),
     });
-    let e =
-      !A &&
+    let matchesSkillTransform =
+      !hasStagedId &&
       (await loadManagedAgentsSkillFiles().catch(() => [])).some(({ transform }) =>
         replaced.includes(transform),
       );
     return PreToolUseHookSpecificOutputSchema_2(
-      A ? STAGED_ID_REFUSED_MESSAGE : e ? MANAGED_AGENTS_SECURE_LOCAL_ID_MESSAGE : LOCAL_ID_FORM_MESSAGE,
+      hasStagedId
+        ? STAGED_ID_REFUSED_MESSAGE
+        : matchesSkillTransform
+          ? MANAGED_AGENTS_SECURE_LOCAL_ID_MESSAGE
+          : LOCAL_ID_FORM_MESSAGE,
     );
   }
   let managedAgentsSkillFiles = await loadManagedAgentsSkillFiles();
-  let l;
-  let R;
-  if (i === "powershell") {
-    l = managedAgentsSkillFiles.find(({ transform }) => replaced.includes(transform))?.words;
-    let replaced_2 = command.replace(LEADING_SET_LOCATION_CHAIN, "");
-    R = /^[ \t\n]*['"]/.test(replaced_2) ? undefined : splitQuotedArgs(replaced_2);
-  } else if (n?.kind !== "simple")
-    l = managedAgentsSkillFiles.find(({ transform }) => replaced.includes(transform))?.words;
+  let skillWords;
+  let argv;
+  if (shell === "powershell") {
+    skillWords = managedAgentsSkillFiles.find(({ transform }) => replaced.includes(transform))?.words;
+    let text = command.replace(LEADING_SET_LOCATION_CHAIN, "");
+    argv = /^[ \t\n]*['"]/.test(text) ? undefined : splitQuotedArgs(text);
+  } else if (parsed?.kind !== "simple")
+    skillWords = managedAgentsSkillFiles.find(({ transform }) => replaced.includes(transform))?.words;
   else {
-    let filtered = n.commands.filter(({ argv }) =>
+    let filtered = parsed.commands.filter(({ argv }) =>
       managedAgentsSkillFiles.some(({ transform }) => argv.includes(transform)),
     );
-    l = (
+    skillWords = (
       managedAgentsSkillFiles.find(({ transform }) =>
         filtered.some(({ argv }) => argv.includes(transform)),
       ) ?? managedAgentsSkillFiles.find(({ transform }) => replaced.includes(transform))
     )?.words;
-    let last = n.commands.at(-1);
-    let sliced = n.commands.slice(0, -1);
-    let m = splitQuotedArgs(command.replace(LEADING_CD_CHAIN_PATTERN, ""));
-    R =
+    let last = parsed.commands.at(-1);
+    let sliced = parsed.commands.slice(0, -1);
+    let strippedArgs = splitQuotedArgs(command.replace(LEADING_CD_CHAIN_PATTERN, ""));
+    argv =
       filtered.length === 1 &&
-      n.bareAssignmentNames.length === 0 &&
-      n.hasLoop === false &&
+      parsed.bareAssignmentNames.length === 0 &&
+      parsed.hasLoop === false &&
       last !== undefined &&
       last === filtered[0] &&
-      m !== undefined &&
-      m.length === last.argv.length &&
-      m.every((d, g) => d === last.argv[g]) &&
+      strippedArgs !== undefined &&
+      strippedArgs.length === last.argv.length &&
+      strippedArgs.every((arg, index) => arg === last.argv[index]) &&
       last.envVars.length === 0 &&
       last.redirects.length === 0 &&
       last.argvSourceLiteral === true &&
@@ -192,42 +201,48 @@ async function guardManagedAgentsCommand(r) {
         ? last.argv
         : undefined;
   }
-  if (l === undefined) return {};
-  let h = R ?? [];
-  let f =
-    l[1] === "beta:agents" && l[2] === "retrieve"
-      ? h.findIndex((e, t) => t > 2 && (e === "--version" || e.startsWith("--version=")))
+  if (skillWords === undefined) return {};
+  let words = argv ?? [];
+  let versionIndex =
+    skillWords[1] === "beta:agents" && skillWords[2] === "retrieve"
+      ? words.findIndex((word, index) => index > 2 && (word === "--version" || word.startsWith("--version=")))
       : -1;
-  let S = h[f]?.startsWith("--version=") === true;
-  let T = S ? h[f]?.slice(10) : h[f + 1];
-  let P =
-    f === -1
-      ? h
-      : T !== undefined && VERSION_ARG_PATTERN.test(T) && !(h[f - 1] ?? "").startsWith("-")
-        ? [...h.slice(0, f), ...h.slice(f + (S ? 1 : 2))]
+  let isInlineVersion = words[versionIndex]?.startsWith("--version=") === true;
+  let versionValue = isInlineVersion ? words[versionIndex]?.slice(10) : words[versionIndex + 1];
+  let argsWithoutVersion =
+    versionIndex === -1
+      ? words
+      : versionValue !== undefined &&
+          VERSION_ARG_PATTERN.test(versionValue) &&
+          !(words[versionIndex - 1] ?? "").startsWith("-")
+        ? [...words.slice(0, versionIndex), ...words.slice(versionIndex + (isInlineVersion ? 1 : 2))]
         : [];
   if (
-    P.length === l.length &&
-    l.every((e, t) => {
-      let _ = MANAGED_AGENTS_FLAG_PATTERNS.get(l[t - 1] ?? "");
-      let m = P[t] ?? "";
-      return _ !== undefined ? _.test(m) : t === 0 ? ANT_COMMAND_PATTERN.test(m) : m === e;
+    argsWithoutVersion.length === skillWords.length &&
+    skillWords.every((expected, index) => {
+      let flagPattern = MANAGED_AGENTS_FLAG_PATTERNS.get(skillWords[index - 1] ?? "");
+      let actual = argsWithoutVersion[index] ?? "";
+      return flagPattern !== undefined
+        ? flagPattern.test(actual)
+        : index === 0
+          ? ANT_COMMAND_PATTERN.test(actual)
+          : actual === expected;
     })
   )
     return {};
-  let C = y && L;
+  let isLocalId = hasLocalId && allIdsFullForm;
   logEvent("tengu_claude_api_ant_command_refused", {
-    shell: fromEnum(i),
-    cause: C ? lit("local_id") : lit("managed_agents_secure_command_changed"),
+    shell: fromEnum(shell),
+    cause: isLocalId ? lit("local_id") : lit("managed_agents_secure_command_changed"),
   });
   return PreToolUseHookSpecificOutputSchema_2(
-    C ? MANAGED_AGENTS_SECURE_LOCAL_ID_MESSAGE : MALFORMED_ANT_COMMAND_MESSAGE,
+    isLocalId ? MANAGED_AGENTS_SECURE_LOCAL_ID_MESSAGE : MALFORMED_ANT_COMMAND_MESSAGE,
   );
 }
 //@ chunk-e5gvqyfh.js:9476-9801 placement
 async function loadManagedAgentsSkillFiles() {
   if (managedAgentsSkillFilesCache === undefined) {
-    let { SKILL_FILES } = await import("./chunk-7wwf2tct.js");
+    let { SKILL_FILES } = await import("../../skills/bundled/SKILL_FILES_2.lazy.js");
     managedAgentsSkillFilesCache = (SKILL_FILES["shared/managed-agents-secure.md"] ?? "")
       .split(
         `
@@ -235,14 +250,14 @@ async function loadManagedAgentsSkillFiles() {
       )
       .filter((line) => line.startsWith("ant beta:"))
       .flatMap((line) => {
-        let o = splitQuotedArgs(line);
-        let i = o?.indexOf("--transform") ?? -1;
-        let u = i === -1 ? undefined : o?.[i + 1];
-        return o !== undefined && u
+        let args = splitQuotedArgs(line);
+        let transformIndex = args?.indexOf("--transform") ?? -1;
+        let transform = transformIndex === -1 ? undefined : args?.[transformIndex + 1];
+        return args !== undefined && transform
           ? [
               {
-                words: o,
-                transform: u,
+                words: args,
+                transform,
               },
             ]
           : [];
@@ -251,27 +266,30 @@ async function loadManagedAgentsSkillFiles() {
   return managedAgentsSkillFilesCache;
 }
 //@ chunk-e5gvqyfh.js:9801-10022 placement
-async function hasNestedDoLoop(r, s) {
-  if (r?.kind !== "simple" || r.laterLoopPassesDiffer === true) return true;
-  for (let o of r.commands.flatMap(({ argv }) => argv))
+async function hasNestedDoLoop(parsed, budget) {
+  if (parsed?.kind !== "simple" || parsed.laterLoopPassesDiffer === true) return true;
+  for (let arg of parsed.commands.flatMap(({ argv }) => argv))
     if (
-      /\bdo\b/.test(o) &&
-      /\s/.test(o) &&
-      (s.left-- <= 0 || (await hasNestedDoLoop(await parseForSecurity(o), s)))
+      /\bdo\b/.test(arg) &&
+      /\s/.test(arg) &&
+      (budget.left-- <= 0 || (await hasNestedDoLoop(await parseForSecurity(arg), budget)))
     )
       return true;
   return false;
 }
 //@ chunk-e5gvqyfh.js:10022-10085 placement
-function hasLoopNode(r) {
-  return LOOP_NODE_TYPES.has(r.type) || r.children.some((child) => hasLoopNode(child));
+function hasLoopNode(node) {
+  return LOOP_NODE_TYPES.has(node.type) || node.children.some((child) => hasLoopNode(child));
 }
 //@ chunk-e5gvqyfh.js:10085-10272 placement
-function splitQuotedArgs(r) {
-  let replaced = r.replace(/^[ \t\n]+|[ \t\n]+$/g, "");
+function splitQuotedArgs(text) {
+  let replaced = text.replace(/^[ \t\n]+|[ \t\n]+$/g, "");
   if (
     !new RegExp(`^(?:${QUOTED_ARG_TOKEN_PATTERN})(?:[ \\t]+(?:${QUOTED_ARG_TOKEN_PATTERN}))*$`).test(replaced)
   )
     return;
-  return [...replaced.matchAll(new RegExp(QUOTED_ARG_TOKEN_PATTERN, "g"))].map((i) => i[1] ?? i[2] ?? "");
+  return [...replaced.matchAll(new RegExp(QUOTED_ARG_TOKEN_PATTERN, "g"))].map(
+    (match) => match[1] ?? match[2] ?? "",
+  );
 }
+export { registerManagedAgentsCommandGuard };

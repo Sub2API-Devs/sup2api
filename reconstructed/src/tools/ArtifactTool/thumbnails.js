@@ -21,7 +21,7 @@ import { latinLetterConfusableClass } from "../../utils/confusables.js";
 import { expandPath } from "../../utils/path.js";
 import { getScratchpadDir, isScratchpadPath } from "../../utils/permissions/filesystem.js";
 import { getDisplayPath } from "../../utils/file.js";
-import { Ph } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
+import { sniffImageMediaType } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { jsonStringify } from "../../utils/slowOperations.js";
 import {
   validateThumbnailHref,
@@ -30,19 +30,30 @@ import {
   readThumbnailFile,
 } from "../../services/artifacts/publishPaths.js";
 import { ArtifactInputError } from "./constants.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-2s0t9kzn.js:781-1066 placement
 /**
  * 混淆词检测用的正则与缓存：非字母、易混边界、分隔符组合与临时目录短语。
  */
-var SCRATCH_FOLDER_PHRASE = "in this session's scratch folder";
-var replaced = SINGLE_QUOTE_RUNS.source.replace(/\{2,\}$/, "");
-var joined = [..."abcdefghijklmnopqrstuvwxyz"].map(latinLetterConfusableClass).join("");
-var NON_LETTER_PATTERN = `[^\\p{L}\\p{N}${joined}]`;
-var CONFUSABLE_BOUNDARY_PATTERN = `(?=[\\p{L}\\p{N}])(?:\\p{Default_Ignorable_Code_Point}|${replaced})`;
-var SEPARATOR_ALTERNATION = `(?:${NON_LETTER_PATTERN}|${CONFUSABLE_BOUNDARY_PATTERN})`;
-var confusableWordPattern = (e) => [...e].map((a) => `[${latinLetterConfusableClass(a)}]`).join("");
+var SCRATCH_FOLDER_PHRASE; // deferred: uses QUOTE_HOMOGLYPHS (./artifactUrls.js) of its import cycle while loading; runs once the cycle is complete
+var replaced;
+var joined;
+var NON_LETTER_PATTERN;
+var CONFUSABLE_BOUNDARY_PATTERN;
+var SEPARATOR_ALTERNATION;
+var confusableWordPattern;
 var scratchFolderPhraseRegexCache;
+deferInit("chunk-2s0t9kzn.js:781", () => {
+  SCRATCH_FOLDER_PHRASE = "in this session's scratch folder";
+  replaced = SINGLE_QUOTE_RUNS.source.replace(/\{2,\}$/, "");
+  joined = [..."abcdefghijklmnopqrstuvwxyz"].map(latinLetterConfusableClass).join("");
+  NON_LETTER_PATTERN = `[^\\p{L}\\p{N}${joined}]`;
+  CONFUSABLE_BOUNDARY_PATTERN = `(?=[\\p{L}\\p{N}])(?:\\p{Default_Ignorable_Code_Point}|${replaced})`;
+  SEPARATOR_ALTERNATION = `(?:${NON_LETTER_PATTERN}|${CONFUSABLE_BOUNDARY_PATTERN})`;
+  confusableWordPattern = (word) =>
+    [...word].map((letter) => `[${latinLetterConfusableClass(letter)}]`).join("");
+});
 //@ chunk-2s0t9kzn.js:1066-1213 placement
 function scratchFolderPhraseRegex() {
   scratchFolderPhraseRegexCache ??= new RegExp(
@@ -52,43 +63,43 @@ function scratchFolderPhraseRegex() {
   return scratchFolderPhraseRegexCache;
 }
 //@ chunk-2s0t9kzn.js:1213-1285 placement
-function maskScratchFolder(e) {
-  return e.replace(scratchFolderPhraseRegex(), "in-this-sessions-scratch-folder");
+function maskScratchFolder(text) {
+  return text.replace(scratchFolderPhraseRegex(), "in-this-sessions-scratch-folder");
 }
 //@ chunk-2s0t9kzn.js:1285-1317 placement
-function describeThumbnailPath(e, a) {
-  return thumbnailPathInScratchpad(e, a);
+function describeThumbnailPath(path, roots) {
+  return thumbnailPathInScratchpad(path, roots);
 }
 //@ chunk-2s0t9kzn.js:1317-1732 placement
-function thumbnailPathInScratchpad(e, a) {
-  if (e === "")
+function thumbnailPathInScratchpad(path, roots) {
+  if (path === "")
     return {
       shown: "",
       inScratchpad: false,
     };
-  let t;
+  let absolutePath;
   try {
-    t = expandPath(e);
+    absolutePath = expandPath(path);
   } catch {
     return {
-      shown: e,
+      shown: path,
       inScratchpad: false,
     };
   }
-  let found = (a ?? [getScratchpadDir()].filter((s) => s !== null && s !== "")).find(
-    (s) => s !== "" && t.startsWith(s + sep),
+  let found = (roots ?? [getScratchpadDir()].filter((root) => root !== null && root !== "")).find(
+    (root) => root !== "" && absolutePath.startsWith(root + sep),
   );
-  let i = a === undefined && isScratchpadPath(t);
-  if (found === undefined && !i) {
-    let displayPath = getDisplayPath(t);
-    let any = e.split(/[\\/]/).some((l) => l === ".." || l === ".");
+  let inScratchpad = roots === undefined && isScratchpadPath(absolutePath);
+  if (found === undefined && !inScratchpad) {
+    let displayPath = getDisplayPath(absolutePath);
+    let any = path.split(/[\\/]/).some((segment) => segment === ".." || segment === ".");
     return {
-      shown: displayPath !== t ? displayPath : any ? t : e,
+      shown: displayPath !== absolutePath ? displayPath : any ? absolutePath : path,
       inScratchpad: false,
     };
   }
   return {
-    shown: found !== undefined ? relative(found, t).split(sep).join("/") : basename(t),
+    shown: found !== undefined ? relative(found, absolutePath).split(sep).join("/") : basename(absolutePath),
     inScratchpad: true,
   };
 }
@@ -96,47 +107,53 @@ function thumbnailPathInScratchpad(e, a) {
 /**
  * 缩略图边长上限与 PNG 文件头。
  */
-var THUMBNAIL_MAX_SIDE = 4096;
-var buffer = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+var THUMBNAIL_MAX_SIDE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var buffer;
+deferInit("chunk-2s0t9kzn.js:1788", () => {
+  THUMBNAIL_MAX_SIDE = 4096;
+  buffer = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+});
 //@ chunk-2s0t9kzn.js:1841-1970 placement
-function thumbnailImageType(e) {
-  let a = Ph(e);
-  if (a === "image/png") return e.length >= 8 && e.subarray(0, 8).equals(buffer) ? a : null;
-  return a === "image/jpeg" ? a : null;
+function thumbnailImageType(bytes) {
+  let detected = sniffImageMediaType(bytes);
+  if (detected === "image/png")
+    return bytes.length >= 8 && bytes.subarray(0, 8).equals(buffer) ? detected : null;
+  return detected === "image/jpeg" ? detected : null;
 }
 //@ chunk-2s0t9kzn.js:1970-2554 placement
-function readImageSize(e, a) {
-  if (a === "image/png") {
-    if (e.length < 24 || e.readUInt32BE(8) !== 13 || e.toString("latin1", 12, 16) !== "IHDR") return null;
+function readImageSize(bytes, mediaType) {
+  if (mediaType === "image/png") {
+    if (bytes.length < 24 || bytes.readUInt32BE(8) !== 13 || bytes.toString("latin1", 12, 16) !== "IHDR")
+      return null;
     return {
-      width: e.readUInt32BE(16),
-      height: e.readUInt32BE(20),
+      width: bytes.readUInt32BE(16),
+      height: bytes.readUInt32BE(20),
     };
   }
-  let t = 2;
-  while (t + 4 <= e.length) {
-    if (e[t] !== 255) return null;
-    let n = e[t + 1];
-    if (n === 255) {
-      t += 1;
+  let offset = 2;
+  while (offset + 4 <= bytes.length) {
+    if (bytes[offset] !== 255) return null;
+    let marker = bytes[offset + 1];
+    if (marker === 255) {
+      offset += 1;
       continue;
     }
-    if (n === 1 || (n >= 208 && n <= 215)) {
-      t += 2;
+    if (marker === 1 || (marker >= 208 && marker <= 215)) {
+      offset += 2;
       continue;
     }
-    if (n === 217 || n === 218) return null;
-    let uInt16BE = e.readUInt16BE(t + 2);
-    if (uInt16BE < 2 || t + 2 + uInt16BE > e.length) return null;
-    if (n >= 192 && n <= 207 && n !== 196 && n !== 200 && n !== 204) {
-      if (n > 194) return "unsupported";
+    if (marker === 217 || marker === 218) return null;
+    let uInt16BE = bytes.readUInt16BE(offset + 2);
+    if (uInt16BE < 2 || offset + 2 + uInt16BE > bytes.length) return null;
+    if (marker >= 192 && marker <= 207 && marker !== 196 && marker !== 200 && marker !== 204) {
+      if (marker > 194) return "unsupported";
       if (uInt16BE < 7) return null;
       return {
-        height: e.readUInt16BE(t + 5),
-        width: e.readUInt16BE(t + 7),
+        height: bytes.readUInt16BE(offset + 5),
+        width: bytes.readUInt16BE(offset + 7),
       };
     }
-    t += 2 + uInt16BE;
+    offset += 2 + uInt16BE;
   }
   return null;
 }
@@ -151,8 +168,8 @@ var MAX_THUMBNAIL_SWEEP_CHARS = 1200;
 /**
  * 清洗并截断缩略图相关文本。
  */
-function sweepThumbnailText(e) {
-  return scrubArtifactEnvelopeTags(sweepResultLineText(e, MAX_THUMBNAIL_SWEEP_CHARS));
+function sweepThumbnailText(text) {
+  return scrubArtifactEnvelopeTags(sweepResultLineText(text, MAX_THUMBNAIL_SWEEP_CHARS));
 }
 //@ chunk-2s0t9kzn.js:2669-3094 placement
 var THUMBNAIL_LINK_HELP =
@@ -161,98 +178,100 @@ var THUMBNAIL_LINK_HELP =
 /**
  * 从页面 HTML 前 8KB 解析 <link rel="artifact-thumbnail">（亮/暗两种），记录被跳过或有问题的标签。
  */
-function collectThumbnailLinks(e, a) {
-  let thumbnailLinks = extractThumbnailLinks(e);
-  let n = {
+function collectThumbnailLinks(html, filePath) {
+  let thumbnailLinks = extractThumbnailLinks(html);
+  let result = {
     skipped: [],
     problems: [],
   };
   if (thumbnailLinks.pastWindow)
-    n.skipped.push(
+    result.skipped.push(
       `A <link rel="artifact-thumbnail"> tag past the first ${TITLE_SCAN_CHARS} characters of the file (or after an <svg>) was ignored; only tags at the top, next to <title>, count.`,
     );
   if (thumbnailLinks.oversizeTag)
-    n.skipped.push(
+    result.skipped.push(
       "A <link> tag naming artifact-thumbnail is longer than 2 kB, so it was not read \u2014 keep the tag to its rel, href and media attributes.",
     );
   if (thumbnailLinks.missingHref)
-    n.problems.push(
+    result.problems.push(
       'a <link rel="artifact-thumbnail"> tag has no href \u2014 name the image file, or remove the tag',
     );
   if (thumbnailLinks.badMedia !== undefined)
-    n.problems.push(
+    result.problems.push(
       `a <link rel="artifact-thumbnail"> tag has media=${jsonStringify(thumbnailLinks.badMedia)}; the only media value allowed is "(prefers-color-scheme: dark)" (for the dark-mode variant) \u2014 remove or fix the attribute`,
     );
   if (thumbnailLinks.dark !== undefined && thumbnailLinks.light === undefined)
-    n.problems.push(
+    result.problems.push(
       `a dark-mode thumbnail (media="(prefers-color-scheme: dark)") needs a default <link rel="artifact-thumbnail"> as well \u2014 add one without a media attribute${thumbnailLinks.pastWindow ? `, within the first ${TITLE_SCAN_CHARS} characters (the one further down does not count)` : ""}${thumbnailLinks.oversizeTag ? " (the over-long tag that was not read does not count)" : ""}`,
     );
-  let r = dirname(a);
-  for (let i of ["light", "dark"]) {
-    let o = thumbnailLinks[i];
-    if (o === undefined) continue;
-    let s = o.startsWith("./") ? o.slice(2) : o;
-    let h = validateThumbnailHref(s);
-    if ("errMsg" in h) {
-      n.problems.push(h.errMsg);
+  let dir = dirname(filePath);
+  for (let theme of ["light", "dark"]) {
+    let href = thumbnailLinks[theme];
+    if (href === undefined) continue;
+    let relativeHref = href.startsWith("./") ? href.slice(2) : href;
+    let checked = validateThumbnailHref(relativeHref);
+    if ("errMsg" in checked) {
+      result.problems.push(checked.errMsg);
       continue;
     }
-    n[i] = {
-      href: o,
-      rel: h.rel,
-      fromAbs: join(r, normalize(s)),
-      dark: i === "dark",
+    result[theme] = {
+      href,
+      rel: checked.rel,
+      fromAbs: join(dir, normalize(relativeHref)),
+      dark: theme === "dark",
     };
   }
-  n.skipped = n.skipped.map(sweepThumbnailText);
-  n.problems = n.problems.map(sweepThumbnailText);
-  return n;
+  result.skipped = result.skipped.map(sweepThumbnailText);
+  result.problems = result.problems.map(sweepThumbnailText);
+  return result;
 }
 //@ chunk-2s0t9kzn.js:4568-4643 placement
 function thumbnailHrefs(thumbnailLinks) {
-  return [thumbnailLinks.light?.href, thumbnailLinks.dark?.href].filter((a) => a !== undefined);
+  return [thumbnailLinks.light?.href, thumbnailLinks.dark?.href].filter((href) => href !== undefined);
 }
 //@ chunk-2s0t9kzn.js:4643-4777 placement
-function thumbnailsInsideFiles(e, a) {
-  if (e.problems.length > 0) return [];
-  return [e.light, e.dark].filter(
-    (t) => t !== undefined && a.some(([n, r]) => isUnderAnchor(t.fromAbs, n, r)),
+function thumbnailsInsideFiles(links, files) {
+  if (links.problems.length > 0) return [];
+  return [links.light, links.dark].filter(
+    (link) =>
+      link !== undefined &&
+      files.some(([publishedPath, sourcePath]) => isUnderAnchor(link.fromAbs, publishedPath, sourcePath)),
   );
 }
 //@ chunk-2s0t9kzn.js:4777-4823 placement
 /**
  * 把字节数格式化成 kB 字符串。
  */
-function formatKbSize(e) {
-  return `${Math.ceil(e / 1000)} kB`;
+function formatKbSize(bytes) {
+  return `${Math.ceil(bytes / 1000)} kB`;
 }
 //@ chunk-2s0t9kzn.js:4823-4888 placement
 /**
  * 构造缩略图校验失败的错误。
  */
-function invalidThumbnailError(e) {
-  return new ArtifactInputError(`${sweepThumbnailText(e)}; ${NOTHING_PUBLISHED}`, "thumbnail_invalid");
+function invalidThumbnailError(message) {
+  return new ArtifactInputError(`${sweepThumbnailText(message)}; ${NOTHING_PUBLISHED}`, "thumbnail_invalid");
 }
 //@ chunk-2s0t9kzn.js:4888-5787 placement
-function validateThumbnailImage(href, a) {
-  let t = jsonStringify(href);
-  let n = thumbnailImageType(a);
-  if (n === null)
+function validateThumbnailImage(href, content) {
+  let shownHref = jsonStringify(href);
+  let mediaType = thumbnailImageType(content);
+  if (mediaType === null)
     throw invalidThumbnailError(
-      `thumbnail ${t} is not a PNG or JPEG image (its bytes match neither format) \u2014 save the image as PNG or JPEG, or remove the <link rel="artifact-thumbnail"> tag`,
+      `thumbnail ${shownHref} is not a PNG or JPEG image (its bytes match neither format) \u2014 save the image as PNG or JPEG, or remove the <link rel="artifact-thumbnail"> tag`,
     );
-  if (a.length > MAX_THUMBNAIL_HREF_CHARS)
+  if (content.length > MAX_THUMBNAIL_HREF_CHARS)
     throw invalidThumbnailError(
-      `thumbnail ${t} is ${formatKbSize(a.length)}, over the 1 MB thumbnail limit \u2014 export a smaller image (about 1200\xD7630)`,
+      `thumbnail ${shownHref} is ${formatKbSize(content.length)}, over the 1 MB thumbnail limit \u2014 export a smaller image (about 1200\xD7630)`,
     );
-  let imageSize = readImageSize(a, n);
+  let imageSize = readImageSize(content, mediaType);
   if (imageSize === "unsupported")
     throw invalidThumbnailError(
-      `thumbnail ${t} uses a JPEG encoding that cannot be read (arithmetic-coded, lossless or hierarchical) \u2014 re-export it as a baseline or progressive JPEG, or as PNG`,
+      `thumbnail ${shownHref} uses a JPEG encoding that cannot be read (arithmetic-coded, lossless or hierarchical) \u2014 re-export it as a baseline or progressive JPEG, or as PNG`,
     );
   if (imageSize === null)
     throw invalidThumbnailError(
-      `thumbnail ${t}: the image's dimensions could not be read (its header is malformed) \u2014 re-export it as PNG or JPEG`,
+      `thumbnail ${shownHref}: the image's dimensions could not be read (its header is malformed) \u2014 re-export it as PNG or JPEG`,
     );
   if (
     imageSize.width < 1 ||
@@ -261,44 +280,46 @@ function validateThumbnailImage(href, a) {
     imageSize.height > THUMBNAIL_MAX_SIDE
   )
     throw invalidThumbnailError(
-      `thumbnail ${t} is ${imageSize.width}\xD7${imageSize.height}; each side must be 1 to ${THUMBNAIL_MAX_SIDE} pixels \u2014 export it at about 1200\xD7630`,
+      `thumbnail ${shownHref} is ${imageSize.width}\xD7${imageSize.height}; each side must be 1 to ${THUMBNAIL_MAX_SIDE} pixels \u2014 export it at about 1200\xD7630`,
     );
-  return a;
+  return content;
 }
 //@ chunk-2s0t9kzn.js:5787-7270 placement
 /**
  * 读取并校验自定义缩略图（PNG/JPEG、≤1MB、边长限制、需在工作区或 scratchpad 内且未被读规则拦截）。
  */
-async function loadThumbnails(thumbnailLinks, a, cwd, n) {
+async function loadThumbnails(thumbnailLinks, files, options, options_2) {
   if (thumbnailLinks.problems.length > 0) throw invalidThumbnailError(thumbnailLinks.problems.join("; "));
-  let r = {
+  let result = {
     skipped: [...thumbnailLinks.skipped],
   };
-  for (let i of ["light", "dark"]) {
-    let o = thumbnailLinks[i];
-    if (o === undefined) continue;
-    let s = jsonStringify(o.href);
-    if (i === "dark" && r.light === undefined) {
-      r.skipped.push(
-        `The dark-mode thumbnail ${s} was not sent because the default one was not; ${THUMBNAIL_FALLBACK_NOTE}.`,
+  for (let theme of ["light", "dark"]) {
+    let link = thumbnailLinks[theme];
+    if (link === undefined) continue;
+    let shownHref = jsonStringify(link.href);
+    if (theme === "dark" && result.light === undefined) {
+      result.skipped.push(
+        `The dark-mode thumbnail ${shownHref} was not sent because the default one was not; ${THUMBNAIL_FALLBACK_NOTE}.`,
       );
       continue;
     }
-    let h = n.declarationCurrent ? a?.find((A) => A.path === o.rel) : undefined;
-    if (h !== undefined) {
-      r[i] = validateThumbnailImage(
-        o.href,
-        typeof h.content === "string" ? Buffer.from(h.content) : h.content,
+    let declaredFile = options_2.declarationCurrent
+      ? files?.find((file) => file.path === link.rel)
+      : undefined;
+    if (declaredFile !== undefined) {
+      result[theme] = validateThumbnailImage(
+        link.href,
+        typeof declaredFile.content === "string" ? Buffer.from(declaredFile.content) : declaredFile.content,
       );
       continue;
     }
-    if (!n.named.includes(o.href)) {
-      r.skipped.push(
-        `The custom thumbnail ${s} was not sent because ${n.unnamedReason ?? `this publish's approval could not name it (the image is outside the working directory${n.scratchpadDir !== undefined ? " and your scratchpad directory" : ""}, a Read rule covers it, or a Read approval was pending for this publish)`}; ${THUMBNAIL_FALLBACK_NOTE}. To use it, keep the image beside the page inside the working directory${n.scratchpadDir !== undefined ? " or your scratchpad directory" : ""} and allow Read for that folder so the approval can name it.`,
+    if (!options_2.named.includes(link.href)) {
+      result.skipped.push(
+        `The custom thumbnail ${shownHref} was not sent because ${options_2.unnamedReason ?? `this publish's approval could not name it (the image is outside the working directory${options_2.scratchpadDir !== undefined ? " and your scratchpad directory" : ""}, a Read rule covers it, or a Read approval was pending for this publish)`}; ${THUMBNAIL_FALLBACK_NOTE}. To use it, keep the image beside the page inside the working directory${options_2.scratchpadDir !== undefined ? " or your scratchpad directory" : ""} and allow Read for that folder so the approval can name it.`,
       );
       continue;
     }
-    let thumbnailFile = await readThumbnailFile(o.href, o.fromAbs, cwd, n);
+    let thumbnailFile = await readThumbnailFile(link.href, link.fromAbs, options, options_2);
     if ("errMsg" in thumbnailFile) {
       if (thumbnailFile.missing)
         throw invalidThumbnailError(
@@ -306,20 +327,21 @@ async function loadThumbnails(thumbnailLinks, a, cwd, n) {
         );
       if (thumbnailFile.tooLarge)
         throw invalidThumbnailError(
-          `thumbnail ${s} is far over the 1 MB thumbnail limit \u2014 export a smaller image (about 1200\xD7630)`,
+          `thumbnail ${shownHref} is far over the 1 MB thumbnail limit \u2014 export a smaller image (about 1200\xD7630)`,
         );
-      r.skipped.push(`${thumbnailFile.errMsg}; ${THUMBNAIL_FALLBACK_NOTE}.`);
+      result.skipped.push(`${thumbnailFile.errMsg}; ${THUMBNAIL_FALLBACK_NOTE}.`);
       continue;
     }
-    r[i] = validateThumbnailImage(o.href, thumbnailFile.content);
+    result[theme] = validateThumbnailImage(link.href, thumbnailFile.content);
   }
-  r.skipped = r.skipped.map(sweepThumbnailText);
-  return r;
+  result.skipped = result.skipped.map(sweepThumbnailText);
+  return result;
 }
 //@ chunk-2s0t9kzn.js:7270-7516 placement
-function thumbnailsSummary(e) {
-  let mapped = e.map(
-    (t) => `"${maskScratchFolder(sweptAskPath(t.href) || "(unprintable path)")}"${t.dark ? " (dark)" : ""}`,
+function thumbnailsSummary(links) {
+  let mapped = links.map(
+    (link) =>
+      `"${maskScratchFolder(sweptAskPath(link.href) || "(unprintable path)")}"${link.dark ? " (dark)" : ""}`,
   );
   if (mapped.length === 0) return "";
   return mapped.length === 1

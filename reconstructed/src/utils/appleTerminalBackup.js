@@ -18,24 +18,24 @@ import { logForDebugging } from "./debug.js";
 import { logError } from "./log.js";
 
 //@ chunk-c63bw38c.js:464-570 fingerprint = markTerminalSetupInProgress (1)
-async function markTerminalSetupInProgress(backupPath, a) {
+async function markTerminalSetupInProgress(backupPath, options) {
   await saveGlobalConfig(
     (current) => ({
       ...current,
       appleTerminalSetupInProgress: true,
       appleTerminalBackupPath: backupPath,
     }),
-    a,
+    options,
   );
 }
 //@ chunk-c63bw38c.js:570-650 fingerprint = markTerminalSetupComplete (1)
-async function markTerminalSetupComplete(e) {
+async function markTerminalSetupComplete(options) {
   await saveGlobalConfig(
     (current) => ({
       ...current,
       appleTerminalSetupInProgress: false,
     }),
-    e,
+    options,
   );
 }
 //@ chunk-c63bw38c.js:650-771 fingerprint = getTerminalRecoveryInfo (1)
@@ -51,7 +51,7 @@ function getTerminalPlistPath() {
   return join(homedir(), "Library", "Preferences", "com.apple.Terminal.plist");
 }
 //@ chunk-c63bw38c.js:851-1202 fingerprint = backupTerminalPreferences (0.859)
-async function backupTerminalPreferences(e) {
+async function backupTerminalPreferences(options) {
   let terminalPlistPath = getTerminalPlistPath();
   let backupPath = `${terminalPlistPath}.bak`;
   try {
@@ -63,7 +63,7 @@ async function backupTerminalPreferences(e) {
       return null;
     }
     await execFileNoThrow("defaults", ["export", "com.apple.Terminal", backupPath]);
-    await markTerminalSetupInProgress(backupPath, e);
+    await markTerminalSetupInProgress(backupPath, options);
     return backupPath;
   } catch (error) {
     if (isFsInaccessible(error)) {
@@ -78,14 +78,14 @@ async function backupTerminalPreferences(e) {
 /**
  * 若上次修改 Apple Terminal 配置时中断，则从 .bak 备份用 defaults import 恢复 com.apple.Terminal 偏好。
  */
-async function checkAndRestoreTerminalBackup(e) {
+async function checkAndRestoreTerminalBackup(options) {
   let { inProgress, backupPath } = getTerminalRecoveryInfo();
   if (!inProgress)
     return {
       status: "no_backup",
     };
   if (!backupPath) {
-    await markTerminalSetupComplete(e);
+    await markTerminalSetupComplete(options);
     return {
       status: "no_backup",
     };
@@ -93,12 +93,12 @@ async function checkAndRestoreTerminalBackup(e) {
   try {
     await stat(backupPath);
   } catch {
-    await markTerminalSetupComplete(e);
+    await markTerminalSetupComplete(options);
     return {
       status: "no_backup",
     };
   }
-  let n = false;
+  let importSucceeded = false;
   try {
     let { code } = await execFileNoThrow("defaults", ["import", "com.apple.Terminal", backupPath]);
     if (code !== 0)
@@ -106,9 +106,9 @@ async function checkAndRestoreTerminalBackup(e) {
         status: "failed",
         backupPath,
       };
-    n = true;
+    importSucceeded = true;
     await execFileNoThrow("killall", ["cfprefsd"]);
-    await markTerminalSetupComplete(e);
+    await markTerminalSetupComplete(options);
     return {
       status: "restored",
     };
@@ -116,8 +116,8 @@ async function checkAndRestoreTerminalBackup(e) {
     if (isFsInaccessible(restoreError))
       logForDebugging(`checkAndRestoreTerminalBackup: fs inaccessible: ${restoreError}`);
     else logError(restoreError);
-    await markTerminalSetupComplete(e);
-    return n
+    await markTerminalSetupComplete(options);
+    return importSucceeded
       ? {
           status: "restored",
         }

@@ -38,35 +38,39 @@ import {
 import { isDiskless } from "../bootstrap/state.js";
 import { identity } from "../utils/identity.js";
 import { listProvidedTabs } from "../utils/claudeInChrome/tabsProvider.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ha3km179.js:115869-116368 placement
 /**
  * 从 auto mode 规则文本中读取"Scheduled-Task Fires"行（缓存）。
  */
-var getScheduledTaskFiresRule = DoctorLazy(() => {
-  let e;
-  try {
-    let sliced = loadBundledText(() => require("./chunk-cgwxv58n.js"))
-      .replace(/<user_allow_rules_to_replace>[\s\S]*?<\/user_allow_rules_to_replace>/, "")
-      .split(/\r?\n/)
-      .find((line) => line.startsWith("- Scheduled-Task Fires:"))
-      ?.slice(2);
-    if (sliced !== undefined)
-      return {
-        rule: sliced,
-      };
-  } catch (error) {
-    e = error;
-  }
-  logError(
-    withTelemetryMessage(
-      toError(e ?? "no such line outside the allow slot"),
-      'Auto mode could not read the "Scheduled-Task Fires" rule from its template, so an allow list that replaces the defaults goes to the platform without it',
-    ),
-  );
-  return {
-    rule: undefined,
-  };
+var getScheduledTaskFiresRule; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-ha3km179.js:115869", () => {
+  getScheduledTaskFiresRule = DoctorLazy(() => {
+    let caughtError;
+    try {
+      let sliced = loadBundledText(() => require("../skills/bundled/default.lazy.js"))
+        .replace(/<user_allow_rules_to_replace>[\s\S]*?<\/user_allow_rules_to_replace>/, "")
+        .split(/\r?\n/)
+        .find((line) => line.startsWith("- Scheduled-Task Fires:"))
+        ?.slice(2);
+      if (sliced !== undefined)
+        return {
+          rule: sliced,
+        };
+    } catch (error) {
+      caughtError = error;
+    }
+    logError(
+      withTelemetryMessage(
+        toError(caughtError ?? "no such line outside the allow slot"),
+        'Auto mode could not read the "Scheduled-Task Fires" rule from its template, so an allow list that replaces the defaults goes to the platform without it',
+      ),
+    );
+    return {
+      rule: undefined,
+    };
+  });
 });
 //@ chunk-ha3km179.js:116368-116399 placement
 /**
@@ -79,29 +83,36 @@ function scheduledTaskRule() {
 /**
  * 取仓库 slug
  */
-function repoSlugOrNull(e) {
-  return sanitizeCacheKey(e) || null;
+function repoSlugOrNull(slug) {
+  return sanitizeCacheKey(slug) || null;
 }
 //@ chunk-ha3km179.js:116434-116655 placement
-async function readGitStatusPair(e, n, abortSignal) {
-  let s = (S) =>
-    runGitReadOnly(e, ["status", "--porcelain", IGNORE_SUBMODULES_DIRTY_FLAG, `--untracked-files=${S}`], {
-      abortSignal,
-      userLocale: true,
-    });
-  let [h, y] = await Promise.all([s("normal"), n ? s("all") : Promise.resolve(null)]);
+async function readGitStatusPair(cwd, includeUntrackedAll, abortSignal) {
+  let readStatus = (untrackedMode) =>
+    runGitReadOnly(
+      cwd,
+      ["status", "--porcelain", IGNORE_SUBMODULES_DIRTY_FLAG, `--untracked-files=${untrackedMode}`],
+      {
+        abortSignal,
+        userLocale: true,
+      },
+    );
+  let [normalResult, allResult] = await Promise.all([
+    readStatus("normal"),
+    includeUntrackedAll ? readStatus("all") : Promise.resolve(null),
+  ]);
   return {
-    normal: h,
-    all: y,
+    normal: normalResult,
+    all: allResult,
   };
 }
 //@ chunk-ha3km179.js:116655-117349 placement
 /**
  * 读取 git 远程配置（url、pushurl、pushdefault、分支远程）。
  */
-async function readGitRemoteConfig(e, abortSignal) {
-  let r = await runGitReadOnly(
-    e,
+async function readGitRemoteConfig(cwd, abortSignal) {
+  let result = await runGitReadOnly(
+    cwd,
     [
       "config",
       "-z",
@@ -112,119 +123,123 @@ async function readGitRemoteConfig(e, abortSignal) {
       abortSignal,
     },
   );
-  let s = {
+  let remoteConfig = {
     remotes: new Map(),
     branchRemotes: new Map(),
     pushDefault: undefined,
   };
-  if (!r.ok) return r.code === 1 && !r.timedOut && !r.overflowed ? s : null;
-  for (let h of r.stdout.split("\x00")) {
-    let index = h.indexOf(`
+  if (!result.ok) return result.code === 1 && !result.timedOut && !result.overflowed ? remoteConfig : null;
+  for (let line of result.stdout.split("\x00")) {
+    let index = line.indexOf(`
 `);
     if (index < 0) continue;
-    let sliced = h.slice(0, index);
-    let sliced_2 = h.slice(index + 1);
+    let sliced = line.slice(0, index);
+    let sliced_2 = line.slice(index + 1);
     if (sliced === "remote.pushdefault") {
-      s.pushDefault = sliced_2;
+      remoteConfig.pushDefault = sliced_2;
       continue;
     }
     let match = sliced.match(/^remote\.(.+)\.(url|pushurl)$/);
     if (match !== null) {
-      let w = match[1];
-      let P = s.remotes.get(w) ?? {
+      let remoteName = match[1];
+      let remoteEntry = remoteConfig.remotes.get(remoteName) ?? {
         url: [],
         pushurl: [],
       };
-      P[match[2]].push(sliced_2);
-      s.remotes.set(w, P);
+      remoteEntry[match[2]].push(sliced_2);
+      remoteConfig.remotes.set(remoteName, remoteEntry);
       continue;
     }
     let match_2 = sliced.match(/^branch\.(.+)\.remote$/);
-    if (match_2 !== null) s.branchRemotes.set(match_2[1], sliced_2);
+    if (match_2 !== null) remoteConfig.branchRemotes.set(match_2[1], sliced_2);
   }
-  return s;
+  return remoteConfig;
 }
 //@ chunk-ha3km179.js:117349-117450 placement
-function pushRemoteForBranch(e, n) {
-  return (n !== null && n !== "HEAD" ? e.branchRemotes.get(n) : undefined) ?? e.pushDefault ?? "origin";
+function pushRemoteForBranch(remoteConfig, branch) {
+  return (
+    (branch !== null && branch !== "HEAD" ? remoteConfig.branchRemotes.get(branch) : undefined) ??
+    remoteConfig.pushDefault ??
+    "origin"
+  );
 }
 //@ chunk-ha3km179.js:117450-117514 placement
 /**
  * unverified 记 unknown
  */
-function visibilityOrUnknown(e) {
-  let n = effectiveVisibility(e);
-  return n === "unverified" ? "unknown" : n;
+function visibilityOrUnknown(visibilityEntry) {
+  let visibility = effectiveVisibility(visibilityEntry);
+  return visibility === "unverified" ? "unknown" : visibility;
 }
 //@ chunk-ha3km179.js:117514-117562 placement
 /**
  * 非空字符串或 null
  */
-function nonEmptyStringOrNull(e) {
-  return sanitizeCacheKey(e) === e && e !== "" ? e : null;
+function nonEmptyStringOrNull(value) {
+  return sanitizeCacheKey(value) === value && value !== "" ? value : null;
 }
 //@ chunk-ha3km179.js:117562-118044 placement
 /**
  * 把远程 URL 解析为 owner/name 列表（去重）。
  */
-function listRemoteRepos(e) {
-  let n = [];
-  for (let [r, s] of e.remotes) {
-    let h = nonEmptyStringOrNull(r);
-    if (h === null) continue;
-    let y = s.pushurl.length > 0 ? s.pushurl : s.url;
-    let S = new Set();
-    for (let M of y) {
-      let gitRemote = parseGitRemote(M);
+function listRemoteRepos(remoteConfig) {
+  let repos = [];
+  for (let [remoteName, remoteUrls] of remoteConfig.remotes) {
+    let name = nonEmptyStringOrNull(remoteName);
+    if (name === null) continue;
+    let pushUrls = remoteUrls.pushurl.length > 0 ? remoteUrls.pushurl : remoteUrls.url;
+    let seenRemotes = new Set();
+    for (let url of pushUrls) {
+      let gitRemote = parseGitRemote(url);
       if (gitRemote === null) continue;
-      let T = `${gitRemote.owner}/${gitRemote.name}`;
-      if (S.has(`${gitRemote.host}/${T}`)) continue;
-      S.add(`${gitRemote.host}/${T}`);
-      n.push({
-        name: h,
+      let slug = `${gitRemote.owner}/${gitRemote.name}`;
+      if (seenRemotes.has(`${gitRemote.host}/${slug}`)) continue;
+      seenRemotes.add(`${gitRemote.host}/${slug}`);
+      repos.push({
+        name,
         host: gitRemote.host,
-        remote: sanitizeCacheKey(T),
+        remote: sanitizeCacheKey(slug),
         visibility: visibilityOrUnknown({
-          slug: T,
+          slug,
           host: gitRemote.host,
-          visibility: repoVisibilityStore.lookup(gitRemote.host, T) ?? "unknown",
+          visibility: repoVisibilityStore.lookup(gitRemote.host, slug) ?? "unknown",
         }),
       });
     }
   }
-  n.sort((r, s) => r.name.localeCompare(s.name) || r.remote.localeCompare(s.remote));
-  return n;
+  repos.sort((left, right) => left.name.localeCompare(right.name) || left.remote.localeCompare(right.remote));
+  return repos;
 }
 //@ chunk-ha3km179.js:118044-118168 placement
 function knownRemoteVisibilities() {
   return repoVisibilityStore
     .entries()
-    .map((e) => ({
-      host: e.host,
-      remote: sanitizeCacheKey(e.slug),
-      visibility: visibilityOrUnknown(e),
+    .map((entry) => ({
+      host: entry.host,
+      remote: sanitizeCacheKey(entry.slug),
+      visibility: visibilityOrUnknown(entry),
     }))
-    .filter((e) => e.remote !== "");
+    .filter((repo) => repo.remote !== "");
 }
 //@ chunk-ha3km179.js:118168-119751 placement
 /**
  * 收集工作目录的 git 状态（根、分支、默认分支、状态、远程可见性）。
  */
-async function collectGitState(cwdOrNull, abortSignal, r) {
-  let s = (() => {
+async function collectGitState(cwdOrNull, abortSignal, visibilityCache) {
+  let visibilityEnabled = (() => {
     try {
       return isRepoVisibilityCheckEnabled();
     } catch {
       return false;
     }
   })();
-  let h = (error) => ({
+  let emptyState = (error) => ({
     cwd: cwdOrNull,
     root: null,
     branch: null,
     default_branch: null,
     status: null,
-    visibility: s
+    visibility: visibilityEnabled
       ? {
           origin: null,
           push_remote: null,
@@ -234,102 +249,110 @@ async function collectGitState(cwdOrNull, abortSignal, r) {
       : null,
     error,
   });
-  if (cwdOrNull === null || isDiskless()) return h("error");
+  if (cwdOrNull === null || isDiskless()) return emptyState("error");
   try {
     let gitRootRecheckingNegative = findGitRootRecheckingNegative(cwdOrNull);
-    if (gitRootRecheckingNegative === null) return h("not_a_repo");
-    let S = {};
-    if (r !== undefined && s) r.visibility = S;
-    let M = autoModeGitStatusSettingValue();
-    let R = autoModeGitStatusUploadsValue();
-    let [T, w, P, Q] = await Promise.all([
-      M || R ? readGitStatusPair(cwdOrNull, R, abortSignal) : null,
+    if (gitRootRecheckingNegative === null) return emptyState("not_a_repo");
+    let cacheSlots = {};
+    if (visibilityCache !== undefined && visibilityEnabled) visibilityCache.visibility = cacheSlots;
+    let countStatus = autoModeGitStatusSettingValue();
+    let includeAllUntracked = autoModeGitStatusUploadsValue();
+    let [statusPair, branchResult, originCheck, remoteConfig] = await Promise.all([
+      countStatus || includeAllUntracked
+        ? readGitStatusPair(cwdOrNull, includeAllUntracked, abortSignal)
+        : null,
       runGitReadOnly(cwdOrNull, ["rev-parse", "--abbrev-ref", "HEAD"], {
         abortSignal,
       }),
-      s ? checkCurrentRepoVisibility(cwdOrNull, S) : null,
-      s ? readGitRemoteConfig(cwdOrNull, abortSignal) : null,
+      visibilityEnabled ? checkCurrentRepoVisibility(cwdOrNull, cacheSlots) : null,
+      visibilityEnabled ? readGitRemoteConfig(cwdOrNull, abortSignal) : null,
     ]);
-    let D = w.ok ? w.stdout.trim() : null;
-    let L = D === null ? null : repoSlugOrNull(D);
-    let z = Q === null ? [] : listRemoteRepos(Q);
-    let G = s ? knownRemoteVisibilities() : [];
-    let ee = z.length > MAX_PERMISSION_MODE_LENGTH || G.length > MAX_PLATFORM_LENGTH || L !== D;
-    let V = {
+    let branchName = branchResult.ok ? branchResult.stdout.trim() : null;
+    let branchSlug = branchName === null ? null : repoSlugOrNull(branchName);
+    let remotes = remoteConfig === null ? [] : listRemoteRepos(remoteConfig);
+    let cachedVisibilities = visibilityEnabled ? knownRemoteVisibilities() : [];
+    let isTruncated =
+      remotes.length > MAX_PERMISSION_MODE_LENGTH ||
+      cachedVisibilities.length > MAX_PLATFORM_LENGTH ||
+      branchSlug !== branchName;
+    let state = {
       cwd: cwdOrNull,
       root: gitRootRecheckingNegative,
-      branch: L,
+      branch: branchSlug,
       default_branch: null,
-      visibility: s
+      visibility: visibilityEnabled
         ? {
             origin:
-              P === null
+              originCheck === null
                 ? null
                 : {
-                    host: P.host,
-                    remote: sanitizeCacheKey(P.slug),
-                    visibility: visibilityOrUnknown(P),
+                    host: originCheck.host,
+                    remote: sanitizeCacheKey(originCheck.slug),
+                    visibility: visibilityOrUnknown(originCheck),
                   },
-            push_remote: Q === null ? null : nonEmptyStringOrNull(pushRemoteForBranch(Q, D)),
-            remotes: z.slice(0, MAX_PERMISSION_MODE_LENGTH),
-            visibility_cache: G.slice(0, MAX_PLATFORM_LENGTH),
+            push_remote:
+              remoteConfig === null
+                ? null
+                : nonEmptyStringOrNull(pushRemoteForBranch(remoteConfig, branchName)),
+            remotes: remotes.slice(0, MAX_PERMISSION_MODE_LENGTH),
+            visibility_cache: cachedVisibilities.slice(0, MAX_PLATFORM_LENGTH),
           }
         : null,
-      ...(ee && {
+      ...(isTruncated && {
         truncated: true,
       }),
     };
-    if (T === null)
+    if (statusPair === null)
       return {
-        ...V,
+        ...state,
         status: null,
       };
-    let { normal, all } = T;
-    let Z = all?.ok ? all : normal.ok ? normal : null;
-    if (Z === null)
+    let { normal, all } = statusPair;
+    let chosenStatus = all?.ok ? all : normal.ok ? normal : null;
+    if (chosenStatus === null)
       return {
-        ...V,
+        ...state,
         status: null,
         error:
           (!normal.ok && normal.timedOut) || (all !== null && !all.ok && all.timedOut) ? "timeout" : "error",
       };
-    let filtered = Z.stdout
+    let filtered = chosenStatus.stdout
       .split(
         `
 `,
       )
       .filter((line) => line.length > 0);
-    let joined = [
-      ...filtered.filter((nt) => nt.startsWith("??")),
-      ...filtered.filter((nt) => !nt.startsWith("??")),
+    let text = [
+      ...filtered.filter((untrackedLine) => untrackedLine.startsWith("??")),
+      ...filtered.filter((trackedLine) => !trackedLine.startsWith("??")),
     ].join(`
 `);
-    let se = autoModeGitStatusLimitValue();
-    let Te = R
+    let charLimit = autoModeGitStatusLimitValue();
+    let porcelain = includeAllUntracked
       ? truncateLinesToChars(
-          joined,
-          se > 0 ? Math.min(se, MAX_AUTO_MODE_LINE_LENGTH) : MAX_AUTO_MODE_LINE_LENGTH,
+          text,
+          charLimit > 0 ? Math.min(charLimit, MAX_AUTO_MODE_LINE_LENGTH) : MAX_AUTO_MODE_LINE_LENGTH,
         )
       : null;
-    let U = countPorcelainStatus(Z.stdout);
+    let counts = countPorcelainStatus(chosenStatus.stdout);
     return {
-      ...V,
+      ...state,
       status: {
         clean: filtered.length === 0,
-        counts: M
+        counts: countStatus
           ? {
-              staged: U.staged,
-              modified: U.modified,
-              untracked: all?.ok ? U.untracked : null,
+              staged: counts.staged,
+              modified: counts.modified,
+              untracked: all?.ok ? counts.untracked : null,
               untracked_normal: normal.ok ? countPorcelainStatus(normal.stdout).untracked : null,
             }
           : null,
-        porcelain: Te,
-        truncated: Te !== null && (Z !== all || Te !== joined),
+        porcelain,
+        truncated: porcelain !== null && (chosenStatus !== all || porcelain !== text),
       },
     };
   } catch {
-    return h("error");
+    return emptyState("error");
   }
 }
 //@ chunk-ha3km179.js:119751-119823 placement
@@ -344,13 +367,13 @@ var MAX_TAB_LIST_WAIT_MS = 300;
 var MAX_GIT_FACTS_BYTES = 2000;
 var TAB_WAIT_MS = 1024;
 //@ chunk-ha3km179.js:119823-119971 placement
-function withTimeoutDefault(e, n, r) {
+function withTimeoutDefault(promise, timeoutMs, timeoutValue) {
   return new Promise((resolve, reject) => {
-    let timer = setTimeout((S, M) => S(M), n, resolve, r);
-    e.then(
-      (S) => {
+    let timer = setTimeout((resolveWith, value) => resolveWith(value), timeoutMs, resolve, timeoutValue);
+    promise.then(
+      (result) => {
         clearTimeout(timer);
-        resolve(S);
+        resolve(result);
       },
       (error) => {
         clearTimeout(timer);
@@ -363,9 +386,12 @@ function withTimeoutDefault(e, n, r) {
 /**
  * git 环境缓存
  */
-var gitEnvCache = identity({}, (e) => {
-  delete e.whole;
-  delete e.rulesUnread;
+var gitEnvCache; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-ha3km179.js:119971", () => {
+  gitEnvCache = identity({}, (envCache) => {
+    delete envCache.whole;
+    delete envCache.rulesUnread;
+  });
 });
 //@ chunk-ha3km179.js:120028-120069 placement
 /**

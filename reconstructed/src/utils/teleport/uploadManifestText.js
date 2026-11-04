@@ -17,13 +17,15 @@ import { MAX_PUBLISH_META_CHARS } from "../../tools/PublishPluginTool/constants.
 /**
  * 上传清单里的一行：路径与大小。
  */
-var fileEntryLine = (t) => `${t.path} (${formatFileSize(t.bytes)})`;
+var fileEntryLine = (entry) => `${entry.path} (${formatFileSize(entry.bytes)})`;
 //@ chunk-bs59k3zm.js:377-464 placement
 /**
  * 「另有 N 个未列出的文件」提示。
  */
-var moreFilesNote = (t, r) =>
-  [t].filter((e) => e > 0).map((e) => `and ${e} more ${plural(e, r)} not named here`);
+var moreFilesNote = (count, kind) =>
+  [count]
+    .filter((positive) => positive > 0)
+    .map((value) => `and ${value} more ${plural(value, kind)} not named here`);
 //@ chunk-bs59k3zm.js:464-512 placement
 /**
  * 保留缩进的清单名称行。
@@ -31,29 +33,29 @@ var moreFilesNote = (t, r) =>
 var indentedPrintableName = (title) =>
   (/^ */.exec(title)?.[0] ?? "") + printableName(title, MAX_PUBLISH_META_CHARS);
 //@ chunk-bs59k3zm.js:512-648 placement
-var staysOnMachineLines = (t) =>
-  [t]
-    .filter((r) => r > 0)
+var staysOnMachineLines = (count) =>
+  [count]
+    .filter((positive) => positive > 0)
     .map(
-      (r) =>
-        `${r} ${plural(r, "entry stays", "entries stay")} on this machine (secrets, links, ignored files)`,
+      (value) =>
+        `${value} ${plural(value, "entry stays", "entries stay")} on this machine (secrets, links, ignored files)`,
     );
 //@ chunk-bs59k3zm.js:648-767 placement
-var manifestWriteLines = (t) =>
-  [t ?? []].flat().flatMap((r) => [
-    `Writes this manifest first, to ${r.path}:`,
-    ...r.text.trimEnd().split(`
+var manifestWriteLines = (manifests) =>
+  [manifests ?? []].flat().flatMap((manifest) => [
+    `Writes this manifest first, to ${manifest.path}:`,
+    ...manifest.text.trimEnd().split(`
 `),
   ]);
 //@ chunk-bs59k3zm.js:767-815 placement
-var staysEntryLine = (t) => `stays here: ${t.path} (${t.words})`;
+var staysEntryLine = (entry) => `stays here: ${entry.path} (${entry.words})`;
 //@ chunk-bs59k3zm.js:815-948 placement
-var manifestEntryLines = (t) =>
+var manifestEntryLines = (manifest) =>
   [
-    ...t.files.map(fileEntryLine),
-    ...moreFilesNote(t.unnamed?.files ?? 0, "file"),
-    ...t.stays.map(staysEntryLine),
-    ...moreFilesNote(t.unnamed?.stays ?? 0, "entry"),
+    ...manifest.files.map(fileEntryLine),
+    ...moreFilesNote(manifest.unnamed?.files ?? 0, "file"),
+    ...manifest.stays.map(staysEntryLine),
+    ...moreFilesNote(manifest.unnamed?.stays ?? 0, "entry"),
   ].map(indentedPrintableName);
 export {
   indentedPrintableName,

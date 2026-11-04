@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (1), chunk-tzghj6zv.js (6)
  * attribution: fingerprint 2, placement 5
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useAppState } from "../../state/AppState.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
@@ -16,7 +16,7 @@ import {
   jsxProd_default,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { BLACK_CIRCLE } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE } from "../../constants/figures.js";
 import { useVoiceLevelIndicator } from "../../hooks/useVoiceAudioLevels.js";
 import { useSettingsState } from "../../hooks/useSettings.js";
 import { isReducedMotion } from "../Spinner/spinnerFlags.js";
@@ -25,8 +25,8 @@ import { isXtermJs } from "../../ink/terminal.js";
 import { roundToStep, toRGBColor, parseRGB } from "../Spinner/utils.js";
 
 //@ chunk-tzghj6zv.js:20376-20429 placement
-function selectVoiceMode(M) {
-  return M.settings.voice?.mode ?? "hold";
+function selectVoiceMode(state) {
+  return state.settings.voice?.mode ?? "hold";
 }
 //@ chunk-tzghj6zv.js:20429-20484 placement = SETTLED_GREY (1)
 var VOICE_DIM_COLOR = {
@@ -45,15 +45,15 @@ var VOICE_BAR_COUNT = 2;
  * 语音状态指示：录音中显示 REC（点按模式附"tap to send"）或"listening…"，处理中显示微光动画，空闲不显示。
  */
 function VoiceStateIndicator(props) {
-  let C = w(3);
+  let $ = useMemoCache(3);
   let { voiceState } = props;
   let appState = useAppState(selectVoiceMode);
   switch (voiceState) {
     case "recording": {
       if (appState === "tap") {
-        let A;
-        if (C[0] === MEMO_CACHE_SENTINEL) {
-          A = jsxProd_default_2(Text, {
+        let recordingText;
+        if ($[0] === MEMO_CACHE_SENTINEL) {
+          recordingText = jsxProd_default_2(Text, {
             children: [
               jsxProd_default_2(Text, {
                 color: "error",
@@ -65,27 +65,27 @@ function VoiceStateIndicator(props) {
               }),
             ],
           });
-          C[0] = A;
-        } else A = C[0];
-        return A;
+          $[0] = recordingText;
+        } else recordingText = $[0];
+        return recordingText;
       }
-      let A;
-      if (C[1] === MEMO_CACHE_SENTINEL) {
-        A = jsxProd_default(Text, {
+      let listeningText;
+      if ($[1] === MEMO_CACHE_SENTINEL) {
+        listeningText = jsxProd_default(Text, {
           dimColor: true,
           children: "listening\u2026",
         });
-        C[1] = A;
-      } else A = C[1];
-      return A;
+        $[1] = listeningText;
+      } else listeningText = $[1];
+      return listeningText;
     }
     case "processing": {
-      let A;
-      if (C[2] === MEMO_CACHE_SENTINEL) {
-        A = jsxProd_default(ProcessingShimmer, {});
-        C[2] = A;
-      } else A = C[2];
-      return A;
+      let children;
+      if ($[2] === MEMO_CACHE_SENTINEL) {
+        children = jsxProd_default(ProcessingShimmer, {});
+        $[2] = children;
+      } else children = $[2];
+      return children;
     }
     case "idle": {
       return null;
@@ -97,40 +97,40 @@ function VoiceStateIndicator(props) {
  * 语音输入的音量字符图标（按当前电平着色）。
  */
 function VoiceLevelGlyph() {
-  let h = w(2);
-  let [, d] = useVoiceLevelIndicator();
-  let x;
-  if (h[0] !== d) {
-    x = d
+  let $ = useMemoCache(2);
+  let [, level] = useVoiceLevelIndicator();
+  let glyphElement;
+  if ($[0] !== level) {
+    glyphElement = level
       ? jsxProd_default(Text, {
-          color: d.hex,
-          children: d.char,
+          color: level.hex,
+          children: level.char,
         })
       : null;
-    h[0] = d;
-    h[1] = x;
-  } else x = h[1];
-  return x;
+    $[0] = level;
+    $[1] = glyphElement;
+  } else glyphElement = $[1];
+  return glyphElement;
 }
 //@ chunk-tzghj6zv.js:21058-21177 placement
 /**
  * 按住说话时显示的"keep holding…"提示。
  */
 function KeepHoldingHint() {
-  let d = w(1);
-  let h;
-  if (d[0] === MEMO_CACHE_SENTINEL) {
-    h = jsxProd_default(Text, {
+  let $ = useMemoCache(1);
+  let hintElement;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    hintElement = jsxProd_default(Text, {
       dimColor: true,
       children: "keep holding\u2026",
     });
-    d[0] = h;
-  } else h = d[0];
-  return h;
+    $[0] = hintElement;
+  } else hintElement = $[0];
+  return hintElement;
 }
 //@ chunk-tzghj6zv.js:21177-21690 fingerprint = ProcessingShimmer (0.589)
 function ProcessingShimmer() {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let settings = useSettingsState();
   let reducedMotion = isReducedMotion(settings.prefersReducedMotion);
   let [ref, time] = useAnimationFrame(reducedMotion ? null : 50);
@@ -149,8 +149,8 @@ function ProcessingShimmer() {
   let opacity = (Math.sin((elapsedSec * Math.PI * 2) / VOICE_BAR_COUNT) + 1) / 2;
   let t0;
   if ($[1] !== opacity) {
-    let V = isXtermJs() ? roundToStep(opacity) : opacity;
-    t0 = toRGBColor(parseRGB(VOICE_DIM_COLOR, VOICE_ACTIVE_COLOR, V));
+    let reducedMotion = isXtermJs() ? roundToStep(opacity) : opacity;
+    t0 = toRGBColor(parseRGB(VOICE_DIM_COLOR, VOICE_ACTIVE_COLOR, reducedMotion));
     $[1] = opacity;
     $[2] = t0;
   } else t0 = $[2];

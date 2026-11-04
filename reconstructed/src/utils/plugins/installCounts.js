@@ -9,11 +9,24 @@
  * attribution: fingerprint 4, placement 3, layout 8, callgraph-fingerprint 1
  */
 import { join, dirname } from "path";
-import { readFile, unlink, open } from "fs/promises";
 import { randomBytes } from "crypto";
+import { open, readFile, unlink } from "fs/promises";
+import {
+  assertPathSafeAsync,
+  retryFsOp,
+  writeFileAtomic as writeFileAtomic_2,
+} from "../atomicPublishWrite.js";
+import { unlinkQuietly } from "../../services/memoryStore/memoryDocumentFs.js";
 import { MAX_PLUGIN_ARCHIVE_BYTES } from "./commandSource.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, E, string, record, array, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  numberSchema,
+  stringSchema,
+  record,
+  array,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { getPluginsDirectory, pluginRegistrySpace } from "./pluginDirectories.js";
 import { isStorageV5Enabled } from "../hoverRest.js";
 import { logForDebugging } from "../debug.js";
@@ -23,71 +36,99 @@ import { readPluginsDirJsonFile } from "./pluginDirectoryBindings.js";
 import { jsonParse, jsonStringify } from "../slowOperations.js";
 import { isENOENT, errorMessage } from "../errors.js";
 import { getFsImplementation } from "../fsOperations.js";
-import {
-  writeFileAtomic as writeFileAtomic_2,
-  assertPathSafeAsync,
-  retryFsOp,
-} from "../atomicPublishWrite.js";
 import { externalHttp } from "../../services/http/externalHttp.js";
 import { logPluginFetch, classifyFetchError } from "./fetchTelemetry.js";
 import { HostScoped } from "../hostScoped.js";
-import { unlinkQuietly } from "../../services/memoryStore/memoryDocumentFs.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-a477qqne.js:22307-22609 fingerprint = saveInstallCountsCache (0.666)
+/**
+ * 原子写文件（临时文件 + rename）。名字配错，见 lead 建议。
+ */
+async function writeFileAtomic(filePath, content, mode) {
+  let tempPath = join(dirname(filePath), `.${randomBytes(6).toString("hex")}.tmp`);
+  await assertPathSafeAsync(tempPath);
+  let handle = await open(tempPath, "wx", mode);
+  try {
+    await handle.writeFile(content, {
+      encoding: "utf8",
+    });
+    if (mode !== undefined) await handle.chmod(mode).catch(() => {});
+    await handle.close();
+    await retryFsOp(tempPath, filePath);
+  } catch (error) {
+    await handle.close().catch(() => {});
+    await unlinkQuietly(tempPath).catch(() => {});
+    throw error;
+  }
+}
 //@ chunk-e6aww6q8.js:4220852-4221633 placement
 /**
- * PLUGIN_CATALOG_STATS_URL：插件统计目录的下载地址；PLUGIN_CATALOG_CACHE_TTL_MS：插件目录缓存时长；MAX_PLUGIN_CATALOG_BYTES：插件目录缓存字节上限（同一声明共 8 个绑定）。
+ * 插件目录缓存的常量组：_ut 是缓存版本 1；k1n 是缓存文件名 plugin-catalog-cache.json；Ire 是插件统计目录下载地址；Ngs 是缓存时长 1 天；Fgs 是缓存体积上限（2 × 平台上限）；b1n/hut/$gs/w1n/Hgs 依次是 token 费用、目录条目、目录、目录文件与缓存文件的 schema。
  */
-var readPluginCatalogCache = 1;
-var PLUGIN_CATALOG_CACHE_JSON = "plugin-catalog-cache.json";
-var PLUGIN_CATALOG_STATS_URL =
-  "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/plugin-stats/plugin-details.json";
-var PLUGIN_CATALOG_CACHE_TTL_MS = 86400000;
-var MAX_PLUGIN_CATALOG_BYTES = 2 * MAX_PLUGIN_ARCHIVE_BYTES;
-var tokenCostSchema = DoctorLazy(() =>
-  u({
-    always_on: E(),
-    on_invoke: E(),
-  }),
-);
-var pluginCatalogEntrySchema = DoctorLazy(() =>
-  u({
-    name: string(),
-    chars: tokenCostSchema().optional(),
-  }).loose(),
-);
-var pluginCatalogSchema = DoctorLazy(() =>
-  u({
-    plugin: string(),
-    tokens: record(string(), tokenCostSchema()),
-    components: u({
-      commands: array(pluginCatalogEntrySchema()),
-      agents: array(pluginCatalogEntrySchema()),
-      skills: array(pluginCatalogEntrySchema()),
-      hooks: array(string()).optional(),
-      mcpServers: array(string()).optional(),
-      lspServers: array(string()).optional(),
+var PLUGIN_CATALOG_CACHE_VERSION; // deferred: uses MAX_SPILL_BYTES (./commandSource.js) of its import cycle while loading; runs once the cycle is complete
+var PLUGIN_CATALOG_CACHE_JSON;
+var PLUGIN_CATALOG_STATS_URL;
+var PLUGIN_CATALOG_CACHE_TTL_MS;
+var MAX_PLUGIN_CATALOG_BYTES;
+var tokenCostSchema;
+var pluginCatalogEntrySchema;
+var pluginCatalogSchema;
+var pluginCatalogFileSchema;
+var pluginCatalogCacheSchema;
+deferInit("chunk-e6aww6q8.js:4220852", () => {
+  PLUGIN_CATALOG_CACHE_VERSION = 1;
+  PLUGIN_CATALOG_CACHE_JSON = "plugin-catalog-cache.json";
+  PLUGIN_CATALOG_STATS_URL =
+    "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/plugin-stats/plugin-details.json";
+  PLUGIN_CATALOG_CACHE_TTL_MS = 86400000;
+  MAX_PLUGIN_CATALOG_BYTES = 2 * MAX_PLUGIN_ARCHIVE_BYTES;
+  tokenCostSchema = DoctorLazy(() =>
+    objectSchema({
+      always_on: numberSchema(),
+      on_invoke: numberSchema(),
+    }),
+  );
+  pluginCatalogEntrySchema = DoctorLazy(() =>
+    objectSchema({
+      name: stringSchema(),
+      chars: tokenCostSchema().optional(),
     }).loose(),
-    unique_installs: E().optional(),
-    last_updated: string().optional(),
-    marketplace_entry: record(string(), unknown()),
-  }).loose(),
-);
-var MAX_PLUGIN_CATALOG_ENTRIES = DoctorLazy(() =>
-  u({
-    generated_at: string(),
-    installs_generated_at: string().optional(),
-    marketplace_sha: string(),
-    models: array(string()),
-    plugins: record(string(), pluginCatalogSchema()),
-  }).loose(),
-);
-var MAX_PLUGIN_CATALOG_NAME_LENGTH = DoctorLazy(() =>
-  u({
-    version: E(),
-    fetchedAt: string(),
-    catalog: MAX_PLUGIN_CATALOG_ENTRIES(),
-  }),
-);
+  );
+  pluginCatalogSchema = DoctorLazy(() =>
+    objectSchema({
+      plugin: stringSchema(),
+      tokens: record(stringSchema(), tokenCostSchema()),
+      components: objectSchema({
+        commands: array(pluginCatalogEntrySchema()),
+        agents: array(pluginCatalogEntrySchema()),
+        skills: array(pluginCatalogEntrySchema()),
+        hooks: array(stringSchema()).optional(),
+        mcpServers: array(stringSchema()).optional(),
+        lspServers: array(stringSchema()).optional(),
+      }).loose(),
+      unique_installs: numberSchema().optional(),
+      last_updated: stringSchema().optional(),
+      marketplace_entry: record(stringSchema(), unknown()),
+    }).loose(),
+  );
+  pluginCatalogFileSchema = DoctorLazy(() =>
+    objectSchema({
+      generated_at: stringSchema(),
+      installs_generated_at: stringSchema().optional(),
+      marketplace_sha: stringSchema(),
+      models: array(stringSchema()),
+      plugins: record(stringSchema(), pluginCatalogSchema()),
+    }).loose(),
+  );
+  pluginCatalogCacheSchema = DoctorLazy(() =>
+    objectSchema({
+      version: numberSchema(),
+      fetchedAt: stringSchema(),
+      catalog: pluginCatalogFileSchema(),
+    }),
+  );
+});
 //@ chunk-e6aww6q8.js:4221633-4221669 placement
 function pluginCatalogCachePath() {
   return join(getPluginsDirectory(), PLUGIN_CATALOG_CACHE_JSON);
@@ -96,21 +137,21 @@ function pluginCatalogCachePath() {
 /**
  * 读取插件目录缓存：v5 存储启用时从存储读；无盘模式返回 null；n 为真时从只读缓存 JSON 读；否则读本地缓存文件。
  */
-async function readPluginCatalogCacheRaw(cachePath, n) {
-  let r = isStorageV5Enabled() && cachePath !== undefined ? pluginRegistrySpace("catalog") : null;
-  if (cachePath && r) {
-    let s = await cachePath.read([r]);
-    if (!s.ok) {
-      logForDebugging(`Failed to load plugin catalog cache: ${formatStorageError(s.error)}`);
+async function readPluginCatalogCacheRaw(cachePath, allowStale) {
+  let space = isStorageV5Enabled() && cachePath !== undefined ? pluginRegistrySpace("catalog") : null;
+  if (cachePath && space) {
+    let readResult = await cachePath.read([space]);
+    if (!readResult.ok) {
+      logForDebugging(`Failed to load plugin catalog cache: ${formatStorageError(readResult.error)}`);
       return null;
     }
-    let h = s.value.items[0];
-    if (!h.found) return null;
-    let y = h.value;
-    return Buffer.from(y.buffer, y.byteOffset, y.byteLength).toString("utf-8");
+    let item = readResult.value.items[0];
+    if (!item.found) return null;
+    let value = item.value;
+    return Buffer.from(value.buffer, value.byteOffset, value.byteLength).toString("utf-8");
   }
   if (isDiskless()) return null;
-  if (n) {
+  if (allowStale) {
     let pluginsDirJsonFile = await readPluginsDirJsonFile(
       PLUGIN_CATALOG_CACHE_JSON,
       MAX_PLUGIN_CATALOG_BYTES,
@@ -130,30 +171,30 @@ async function readPluginCatalogCacheRaw(cachePath, n) {
 /**
  * 读取插件目录缓存文件（校验结构与版本，可允许过期）。
  */
-async function loadInstallCountsCache(cachePath, { allowStale: n = false } = {}) {
+async function loadInstallCountsCache(cachePath, { allowStale = false } = {}) {
   try {
-    let content = await readPluginCatalogCacheRaw(cachePath, n);
+    let content = await readPluginCatalogCacheRaw(cachePath, allowStale);
     if (content === null) return null;
-    let s = MAX_PLUGIN_CATALOG_NAME_LENGTH().safeParse(
+    let parseResult = pluginCatalogCacheSchema().safeParse(
       typeof content === "string" ? jsonParse(content) : content.json,
     );
-    if (!s.success) {
+    if (!parseResult.success) {
       logForDebugging("Plugin catalog cache has invalid structure");
       return null;
     }
-    let h = s.data;
-    if (h.version !== readPluginCatalogCache) {
+    let cache = parseResult.data;
+    if (cache.version !== PLUGIN_CATALOG_CACHE_VERSION) {
       logForDebugging(
-        `Plugin catalog cache version mismatch (got ${h.version}, expected ${readPluginCatalogCache})`,
+        `Plugin catalog cache version mismatch (got ${cache.version}, expected ${PLUGIN_CATALOG_CACHE_VERSION})`,
       );
       return null;
     }
-    let fetchedAt = new Date(h.fetchedAt).getTime();
-    if (!n && (Number.isNaN(fetchedAt) || Date.now() - fetchedAt > PLUGIN_CATALOG_CACHE_TTL_MS)) {
+    let fetchedAt = new Date(cache.fetchedAt).getTime();
+    if (!allowStale && (Number.isNaN(fetchedAt) || Date.now() - fetchedAt > PLUGIN_CATALOG_CACHE_TTL_MS)) {
       logForDebugging("Plugin catalog cache is stale (>24 h old)");
       return null;
     }
-    return h;
+    return cache;
   } catch (error) {
     if (!isENOENT(error)) logForDebugging(`Failed to load plugin catalog cache: ${errorMessage(error)}`);
     return null;
@@ -163,24 +204,24 @@ async function loadInstallCountsCache(cachePath, { allowStale: n = false } = {})
 /**
  * 写插件目录缓存（存储后端或文件）。名字配错，见 lead 建议。
  */
-async function saveInstallCountsCache(e, n) {
+async function saveInstallCountsCache(cache, cachePath) {
   try {
-    let r = isStorageV5Enabled() && n !== undefined ? pluginRegistrySpace("catalog") : null;
-    let s = isDiskless();
-    if (n && r) {
-      let h = await n.write(r, jsonStringify(e));
-      if (!h.ok) {
-        logForDebugging(`Failed to save plugin catalog cache: ${formatStorageError(h.error)}`, {
+    let space = isStorageV5Enabled() && cachePath !== undefined ? pluginRegistrySpace("catalog") : null;
+    let diskless = isDiskless();
+    if (cachePath && space) {
+      let writeResult = await cachePath.write(space, jsonStringify(cache));
+      if (!writeResult.ok) {
+        logForDebugging(`Failed to save plugin catalog cache: ${formatStorageError(writeResult.error)}`, {
           level: "error",
         });
         return;
       }
-    } else if (!s) {
-      let h = pluginCatalogCachePath();
+    } else if (!diskless) {
+      let cachePath = pluginCatalogCachePath();
       await getFsImplementation().mkdir(getPluginsDirectory());
-      await writeFileAtomic_2(h, jsonStringify(e), 384);
+      await writeFileAtomic_2(cachePath, jsonStringify(cache), 384);
     }
-    if (s) return;
+    if (diskless) return;
     await unlink(join(getPluginsDirectory(), "install-counts-cache.json")).catch(() => {});
   } catch (error) {
     logForDebugging(`Failed to save plugin catalog cache: ${errorMessage(error)}`, {
@@ -196,14 +237,14 @@ async function fetchPluginCatalog() {
   logForDebugging(`Fetching plugin catalog from ${PLUGIN_CATALOG_STATS_URL}`);
   let started = performance.now();
   try {
-    let n = await externalHttp.get(PLUGIN_CATALOG_STATS_URL, {
+    let response = await externalHttp.get(PLUGIN_CATALOG_STATS_URL, {
       timeout: 1e4,
       maxContentLength: MAX_PLUGIN_ARCHIVE_BYTES,
     });
-    let r = MAX_PLUGIN_CATALOG_ENTRIES().safeParse(n.data);
-    if (!r.success) throw Error("Invalid response format from plugin catalog");
+    let parseResult = pluginCatalogFileSchema().safeParse(response.data);
+    if (!parseResult.success) throw Error("Invalid response format from plugin catalog");
     logPluginFetch("plugin_catalog", PLUGIN_CATALOG_STATS_URL, "success", performance.now() - started);
-    return r.data;
+    return parseResult.data;
   } catch (error) {
     logPluginFetch(
       "plugin_catalog",
@@ -218,22 +259,25 @@ async function fetchPluginCatalog() {
 //@ chunk-e6aww6q8.js:4223533-4223614 layout
 class OncePromise {
   promise;
-  load(e) {
-    return (this.promise ??= e());
+  load(loader) {
+    return (this.promise ??= loader());
   }
   reset() {
     this.promise = undefined;
   }
 }
 //@ chunk-e6aww6q8.js:4223614-4223641 layout
-var catalogFetchOnce = new HostScoped(() => new OncePromise());
+var catalogFetchOnce; // deferred: uses OncePromise of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:4223614", () => {
+  catalogFetchOnce = new HostScoped(() => new OncePromise());
+});
 //@ chunk-e6aww6q8.js:4223641-4223982 fingerprint = getInstallCounts (0.402)
 /**
  * 取插件目录（安装数等）：优先 24 小时内的本地缓存，过期则联网获取并写缓存。
  */
 function getInstallCounts(cachePath) {
-  let n = catalogFetchOnce.of(getRootSession().host);
-  return n.load(async () => {
+  let once = catalogFetchOnce.of(getRootSession().host);
+  return once.load(async () => {
     let installCountsCache = await loadInstallCountsCache(cachePath);
     if (installCountsCache) {
       logPluginFetch("plugin_catalog", PLUGIN_CATALOG_STATS_URL, "cache_hit", 0);
@@ -243,7 +287,7 @@ function getInstallCounts(cachePath) {
       let cache = await fetchPluginCatalog();
       await saveInstallCountsCache(
         {
-          version: readPluginCatalogCache,
+          version: PLUGIN_CATALOG_CACHE_VERSION,
           fetchedAt: new Date().toISOString(),
           catalog: cache,
         },
@@ -254,7 +298,7 @@ function getInstallCounts(cachePath) {
       logForDebugging(`Failed to fetch plugin catalog: ${errorMessage(error)}`, {
         level: "error",
       });
-      n.reset();
+      once.reset();
       return null;
     }
   });
@@ -266,17 +310,17 @@ function getInstallCounts(cachePath) {
 async function getUniqueInstallCounts(storageV5) {
   let installCounts = await getInstallCounts(storageV5);
   if (!installCounts) return null;
-  let r = new Map();
+  let counts = new Map();
   for (let [key, value] of Object.entries(installCounts.plugins))
-    if (typeof value.unique_installs === "number") r.set(key, value.unique_installs);
-  return r;
+    if (typeof value.unique_installs === "number") counts.set(key, value.unique_installs);
+  return counts;
 }
 //@ chunk-e6aww6q8.js:4224171-4224228 layout
 /**
  * 取插件目录中某插件的条目。
  */
-async function getCatalogEntry(e, n) {
-  return (await getInstallCounts(n))?.plugins[e];
+async function getCatalogEntry(pluginId, storageV5) {
+  return (await getInstallCounts(storageV5))?.plugins[pluginId];
 }
 //@ chunk-e6aww6q8.js:4224228-4224304 layout
 /**
@@ -302,27 +346,27 @@ var MAX_COMPONENT_ESTIMATE_COUNT = 3;
 async function estimatePluginTokenCost(pluginId, canonicalName, storageV5) {
   let catalogEntry = await getCatalogEntry(pluginId, storageV5);
   if (!catalogEntry) return null;
-  let h = catalogEntry.tokens[canonicalName];
-  if (h)
+  let costEntry = catalogEntry.tokens[canonicalName];
+  if (costEntry)
     return {
-      alwaysOn: h.always_on,
-      onInvoke: h.on_invoke,
+      alwaysOn: costEntry.always_on,
+      onInvoke: costEntry.on_invoke,
       isEstimate: false,
     };
-  let y = [
+  let components = [
     ...catalogEntry.components.commands,
     ...catalogEntry.components.agents,
     ...catalogEntry.components.skills,
   ];
-  let S = 0;
-  let w = 0;
-  for (let L of y) {
-    S += L.chars?.always_on ?? 0;
-    w += L.chars?.on_invoke ?? 0;
+  let alwaysOnChars = 0;
+  let onInvokeChars = 0;
+  for (let component of components) {
+    alwaysOnChars += component.chars?.always_on ?? 0;
+    onInvokeChars += component.chars?.on_invoke ?? 0;
   }
   return {
-    alwaysOn: Math.round(S / MAX_COMPONENT_ESTIMATE_COUNT),
-    onInvoke: Math.round(w / MAX_COMPONENT_ESTIMATE_COUNT),
+    alwaysOn: Math.round(alwaysOnChars / MAX_COMPONENT_ESTIMATE_COUNT),
+    onInvoke: Math.round(onInvokeChars / MAX_COMPONENT_ESTIMATE_COUNT),
     isEstimate: true,
   };
 }
@@ -338,27 +382,6 @@ function formatInstallCount(count) {
   }
   let formatted = (count / 1e6).toFixed(1);
   return formatted.endsWith(".0") ? `${formatted.slice(0, -2)}M` : `${formatted}M`;
-}
-//@ chunk-a477qqne.js:22307-22609 fingerprint = saveInstallCountsCache (0.666)
-/**
- * 原子写文件（临时文件 + rename）。名字配错，见 lead 建议。
- */
-async function writeFileAtomic(e, n, r) {
-  let s = join(dirname(e), `.${randomBytes(6).toString("hex")}.tmp`);
-  await assertPathSafeAsync(s);
-  let i = await open(s, "wx", r);
-  try {
-    await i.writeFile(n, {
-      encoding: "utf8",
-    });
-    if (r !== undefined) await i.chmod(r).catch(() => {});
-    await i.close();
-    await retryFsOp(s, e);
-  } catch (error) {
-    await i.close().catch(() => {});
-    await unlinkQuietly(s).catch(() => {});
-    throw error;
-  }
 }
 export {
   writeFileAtomic,

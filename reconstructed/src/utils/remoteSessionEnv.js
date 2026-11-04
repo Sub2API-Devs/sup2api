@@ -9,16 +9,9 @@
  * attribution: placement 2
  */
 import { env } from "./env.js";
-import { isFirstPartyProvider } from "./model/providers.js";
 import { isSelfAddressableSessionId, toCompatSessionId } from "../bridge/sessionIdCompat.js";
+import { isFirstPartyProvider } from "./model/providers.js";
 
-//@ chunk-m00wdbj6.js:262-311 placement
-/**
- * isRemoteFirstPartySession：远程且第一方提供方。
- */
-function isRemoteFirstPartySession() {
-  return env.CLAUDE_CODE_REMOTE && isFirstPartyProvider();
-}
 //@ chunk-pwqvnehp.js:265-384 placement
 /**
  * 远程会话中返回本会话可被寻址的兼容会话 id，非远程或 id 不合法时返回 undefined。
@@ -29,5 +22,12 @@ function ownRemoteSessionId() {
   return isSelfAddressableSessionId(CLAUDE_CODE_REMOTE_SESSION_ID)
     ? toCompatSessionId(CLAUDE_CODE_REMOTE_SESSION_ID)
     : undefined;
+}
+//@ chunk-m00wdbj6.js:262-311 placement
+/**
+ * isRemoteFirstPartySession：远程且第一方提供方。
+ */
+function isRemoteFirstPartySession() {
+  return env.CLAUDE_CODE_REMOTE && isFirstPartyProvider();
 }
 export { ownRemoteSessionId, isRemoteFirstPartySession };

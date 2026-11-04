@@ -5,11 +5,11 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:146112-150274 cjs-fingerprint
-var require_fsharp = x(function (cjsExports, cjsModule) {
-  function cd(value) {
+var require_fsharp = __commonJS(function (cjsExports, cjsModule) {
+  function escapeRegExp(value) {
     return new RegExp(value.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&"), "m");
   }
   function source(re) {
@@ -243,7 +243,7 @@ var require_fsharp = x(function (cjsExports, cjsModule) {
       if (includeEqual) allOperatorChars = "!%&*+-/<=>@^|~?";
       else allOperatorChars = "!%&*+-/<>@^|~?";
       let OPERATOR_CHARS = Array.from(allOperatorChars);
-      let OPERATOR_CHAR_RE = concat("[", ...OPERATOR_CHARS.map(cd), "]");
+      let OPERATOR_CHAR_RE = concat("[", ...OPERATOR_CHARS.map(escapeRegExp), "]");
       let OPERATOR_CHAR_OR_DOT_RE = either(OPERATOR_CHAR_RE, /\./);
       let OPERATOR_FIRST_CHAR_OF_MULTIPLE_RE = concat(
         OPERATOR_CHAR_OR_DOT_RE,

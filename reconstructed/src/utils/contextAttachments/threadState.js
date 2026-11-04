@@ -43,41 +43,41 @@ function reminderFoldSetting() {
   if (!isThreadStateFeatureOn()) return threadStateReminderSetting().value;
   let sessionFeatureValues = getSessionFeatureValues();
   if (sessionFeatureValues.reminderFold !== undefined) return sessionFeatureValues.reminderFold;
-  let { value: n, source } = threadStateReminderSetting();
-  if (source !== "fallback") sessionFeatureValues.reminderFold = n;
-  return n;
+  let { value, source } = threadStateReminderSetting();
+  if (source !== "fallback") sessionFeatureValues.reminderFold = value;
+  return value;
 }
 //@ chunk-e6aww6q8.js:122636-122913 placement
 /**
  * 决定提醒折叠设置：显式值优先，其次会话缓存，再次远程配置（非回退来源时写入缓存）。
  */
-function resolveReminderFold(e) {
-  let n = threadStateReminderSetting();
-  if (e !== undefined)
+function resolveReminderFold(messages) {
+  let setting = threadStateReminderSetting();
+  if (messages !== undefined)
     return {
-      fold: e,
-      cached: n,
+      fold: messages,
+      cached: setting,
     };
   if (!isThreadStateFeatureOn())
     return {
       fold: undefined,
-      cached: n,
+      cached: setting,
     };
   let reminderFold = getSessionFeatureValues().reminderFold;
   if (reminderFold !== undefined)
     return {
       fold: reminderFold,
-      cached: n,
+      cached: setting,
     };
-  if (n.source === "fallback")
+  if (setting.source === "fallback")
     return {
       fold: undefined,
-      cached: n,
+      cached: setting,
     };
-  getSessionFeatureValues().reminderFold = n.value;
+  getSessionFeatureValues().reminderFold = setting.value;
   return {
-    fold: n.value,
-    cached: n,
+    fold: setting.value,
+    cached: setting,
   };
 }
 //@ chunk-e6aww6q8.js:122913-122958 placement
@@ -98,8 +98,8 @@ function threadStateLine(sinceUser, repliesSinceUser) {
     repliesSinceUser < 0
   )
     return;
-  let r = repliesSinceUser === 1 ? "1 reply" : `${repliesSinceUser} replies`;
-  return `Thread state: the user last wrote ${sinceUser}. Claude has sent ${r} since then.`;
+  let replyText = repliesSinceUser === 1 ? "1 reply" : `${repliesSinceUser} replies`;
+  return `Thread state: the user last wrote ${sinceUser}. Claude has sent ${replyText} since then.`;
 }
 export {
   isThreadStateFeatureOn,

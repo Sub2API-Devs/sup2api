@@ -5,12 +5,12 @@
  * pieces: chunk-h6b7mazd.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_browser } from "./browser.js";
 import { require_node } from "./node.js";
 
 //@ chunk-h6b7mazd.js:37209-37343 cjs-fingerprint
-var require_debug_2 = x(function (cjsExports, cjsModule) {
+var require_debug_2 = __commonJS(function (cjsExports, cjsModule) {
   if (typeof process === "undefined" || process.type === "renderer" || false || process.__nwjs)
     cjsModule.exports = require_browser();
   else cjsModule.exports = require_node();

@@ -13,6 +13,7 @@ import { isEnvTruthy } from "../utils/envUtils.js";
 import { normalizeUuidOrNull } from "../utils/agentId.js";
 import { emitLoadError } from "./print.js";
 import { withDeadline } from "../utils/sleep.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-3hsy16d3.js:375-386 placement
 var FLUSH_BEFORE_RESULT_TIMEOUT_MS = 1000;
@@ -25,15 +26,18 @@ function isStartupFailureResultRequested() {
   return isEnvTruthy(process.env.CLAUDE_CODE_STARTUP_FAILURE_RESULTS);
 }
 //@ chunk-3hsy16d3.js:553-625 placement
-var ORG_CONFIG_FAILURE_REASONS = new Set(["org_config_required_unavailable", "org_config_refused"]);
+var ORG_CONFIG_FAILURE_REASONS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3hsy16d3.js:553", () => {
+  ORG_CONFIG_FAILURE_REASONS = new Set(["org_config_required_unavailable", "org_config_refused"]);
+});
 //@ chunk-3hsy16d3.js:625-662 placement
 function needsStartupFailureResult(reason) {
   return ORG_CONFIG_FAILURE_REASONS.has(reason) || isStartupFailureResultRequested();
 }
 //@ chunk-3hsy16d3.js:662-775 placement
 function startupResultSessionId(sessionId, argv = process.argv.slice(2)) {
-  let r = eagerParseCliFlag("--session-id", argv);
-  return (eagerParseCliFlag("--sdk-url", argv) === undefined ? normalizeUuidOrNull(r) : r) || sessionId;
+  let flag = eagerParseCliFlag("--session-id", argv);
+  return (eagerParseCliFlag("--sdk-url", argv) === undefined ? normalizeUuidOrNull(flag) : flag) || sessionId;
 }
 //@ chunk-3hsy16d3.js:775-931 placement
 function buildStartupFailureResult({ sessionId, message, reason, resultIndex = 0 }) {
@@ -48,12 +52,12 @@ function buildStartupFailureResult({ sessionId, message, reason, resultIndex = 0
   };
 }
 //@ chunk-3hsy16d3.js:931-1019 placement
-async function writeStartupFailureResult(e) {
-  if (needsStartupFailureResult(e.reason))
+async function writeStartupFailureResult(failure) {
+  if (needsStartupFailureResult(failure.reason))
     await writeStartupFrames([
       buildStartupFailureResult({
-        ...e,
-        sessionId: startupResultSessionId(e.sessionId),
+        ...failure,
+        sessionId: startupResultSessionId(failure.sessionId),
       }),
     ]);
 }
@@ -61,31 +65,31 @@ async function writeStartupFailureResult(e) {
 /**
  * stream-json 启动失败时写出启动帧与失败结果（org_config_required_unavailable 等）。
  */
-async function writeStartupFrames(e, { goesOn: t = false } = {}) {
+async function writeStartupFrames(frames, { goesOn = false } = {}) {
   let stdout = process.stdout;
   if (!isStreamJsonLaunch() || stdout.writableEnded || stdout.destroyed) return false;
-  let joined = e
+  let joined = frames
     .map(
-      (o) =>
-        JSON.stringify(o) +
+      (frame) =>
+        JSON.stringify(frame) +
         `
 `,
     )
     .join("");
-  let s = (o) => {};
-  let promise = new Promise((resolve) => {
-    s = resolve;
+  let resolve = (err) => {};
+  let promise = new Promise((resolve_2) => {
+    resolve = resolve_2;
   });
-  let i = () => s(false);
-  stdout.once("error", i);
+  let onError = () => resolve(false);
+  stdout.once("error", onError);
   try {
-    stdout.write(joined, (o) => s(!o));
+    stdout.write(joined, (err) => resolve(!err));
   } catch {
     return false;
   }
-  let a = (await withDeadline(promise, FLUSH_BEFORE_RESULT_TIMEOUT_MS)) ?? false;
-  if (t && a) stdout.off("error", i);
-  return a;
+  let ok = (await withDeadline(promise, FLUSH_BEFORE_RESULT_TIMEOUT_MS)) ?? false;
+  if (goesOn && ok) stdout.off("error", onError);
+  return ok;
 }
 export {
   writeStartupFailureResult,

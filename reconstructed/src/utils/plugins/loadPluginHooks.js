@@ -8,6 +8,48 @@
  * pieces: chunk-czx62zen.js (1), chunk-e6aww6q8.js (44), chunk-pd0t5xas.js (5)
  * attribution: fingerprint 2, placement 16, facade-majority 15, layout 17
  */
+import {
+  getVouchedAdminPolicyTier,
+  getSettingsForSource,
+  getAdminAuthoredPolicySettings,
+  getRemotePolicyTierWithKind,
+} from "../settings/settings.js";
+import {
+  policySettings_2,
+  hasPluginDeclarations,
+  hasManagedPlugins,
+  resolveSeatedManagedPlugins,
+  getVouchedPolicyPluginIds,
+  resolveManagedPluginOrder,
+  managedPluginNameSet,
+} from "./managedPlugins.js";
+import { nfcLower, plural } from "../stringUtils.js";
+import { policySettingsUnreadable } from "../hooks/hooksConfigSnapshot.js";
+import { logError } from "../log.js";
+import { toError, errorMessage } from "../errors.js";
+import { isBuiltinPluginId, getBuiltinPlugins } from "../../plugins/builtinPlugins.js";
+import { canonicalPluginId, pluginNamesEqual, pluginNameAliases, marketplaceOf } from "./pluginIdentifier.js";
+import { BUILTIN } from "../telemetry/pluginTelemetry.js";
+import { getHostState } from "../hostEnvironment.js";
+import { getPluginRegistry } from "./pluginLoadState.js";
+import { enabledPluginIds } from "./pluginStartupCheck.js";
+import { hasLink } from "../hasLink.js";
+import {
+  getInlinePlugins,
+  getInlinePluginsNoMcp,
+  getInlinePluginUrls,
+  getSyncedPluginDirs,
+  replaceRegisteredPluginHooks,
+  getRegisteredHooks,
+  getIsNonInteractiveSession,
+} from "../../bootstrap/state.js";
+import {
+  areHooksEnabled,
+  isHookSourceAllowed,
+  refreshModAdmission,
+  MODS_POLICY_UNKNOWN_REASON,
+  notifyModsRejudged,
+} from "../hooks.js";
 import { identity as identity_2 } from "../identity.js";
 import {
   truncateListItem,
@@ -18,7 +60,6 @@ import {
   clearPluginCache,
 } from "./pluginLoader.js";
 import { isPlainObject as isPlainObject_5 } from "../isPlainObject.js";
-import { plural, nfcLower } from "../stringUtils.js";
 import { logForDebugging } from "../debug.js";
 import {
   reportPluginProblem,
@@ -47,12 +88,10 @@ import {
   pruneHooksModules,
   refreshOptions,
 } from "../../plugins/functionHooks/hooksModuleLoader.js";
-import { isBuiltinPluginId, getBuiltinPlugins } from "../../plugins/builtinPlugins.js";
 import { providerRank } from "../../plugins/functionHooks/providerTiers.js";
 import { pluginTier } from "../../plugins/functionHooks/dispatch/chain.js";
 import { getPolicyAllowedSet } from "./pluginPolicy.js";
 import { hookPluginLabel } from "../../plugins/functionHooks/hookDispatch.js";
-import { pluginNameAliases, marketplaceOf, canonicalPluginId, pluginNamesEqual } from "./pluginIdentifier.js";
 import {
   holdForRolloutFlagAtStartup,
   loadLateWhenFlagTurnsOn,
@@ -75,51 +114,22 @@ import {
   watchRolloutSwitchChanges,
   followRolloutSwitchOnce,
 } from "./hooksModulesLoadGate.js";
-import { policySettingsUnreadable } from "../hooks/hooksConfigSnapshot.js";
-import {
-  isHookSourceAllowed,
-  refreshModAdmission,
-  MODS_POLICY_UNKNOWN_REASON,
-  areHooksEnabled,
-  notifyModsRejudged,
-} from "../hooks.js";
-import { getPluginRegistry } from "./pluginLoadState.js";
 import {
   readStablePolicy,
   isDemoOrClaubbet,
   managedHooksPolicyStamp,
 } from "../../plugins/functionHooks/policyGate.js";
-import {
-  replaceRegisteredPluginHooks,
-  getRegisteredHooks,
-  getIsNonInteractiveSession,
-  getInlinePlugins,
-  getInlinePluginsNoMcp,
-  getInlinePluginUrls,
-  getSyncedPluginDirs,
-} from "../../bootstrap/state.js";
 import { isProjectScopeTrustAccepted } from "../config.js";
-import { logError } from "../log.js";
 import {
   installPluginToolsServer,
   writeAllTypeRoots,
 } from "../../plugins/functionHooks/toolRegisterServer.js";
-import {
-  resolveSeatedManagedPlugins,
-  getVouchedPolicyPluginIds,
-  resolveManagedPluginOrder,
-  managedPluginNameSet,
-  hasManagedPlugins,
-  _,
-  hasPluginDeclarations,
-} from "./managedPlugins.js";
 import {
   logHooksModulesDisabled,
   WATCH_CLOCK,
   startPluginDirWatches,
   watchPluginOptionChanges,
 } from "../../plugins/functionHooks/devModsWatch.js";
-import { toError, errorMessage } from "../errors.js";
 import { getPluginNameFromError as getPluginNameFromError_2 } from "../../commands/plugin/PluginSettings.js";
 import { pluginErrorText } from "../../types/plugin.js";
 import { uniq } from "../collections.js";
@@ -128,67 +138,177 @@ import { fromNumber } from "../../services/analytics/safeMetadata.js";
 import { marketplaceSource } from "./pluginOptionsStorage.js";
 import { jsonStringify } from "../slowOperations.js";
 import { settingsChangeDetector } from "../settings/changeDetector.js";
-import { subscribe_2 } from "../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
+import { subscribe_2 as subscribe_2_2 } from "../../components/permissions/AskUserQuestionPermissionRequest/uiRenderHook.js";
 import { NOT_RECORDED, pluginErrorSummary } from "./marketplaceNames.js";
-import { BUILTIN } from "../telemetry/pluginTelemetry.js";
-import { getHostState } from "../hostEnvironment.js";
-import { enabledPluginIds } from "./pluginStartupCheck.js";
-import { hasLink } from "../hasLink.js";
-import {
-  getVouchedAdminPolicyTier,
-  getSettingsForSource,
-  getAdminAuthoredPolicySettings,
-  getRemotePolicyTierWithKind,
-} from "../settings/settings.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-czx62zen.js:13462-14027 fingerprint = getPluginAffectingSettingsSnapshot (0.609)
+/**
+ * 计算影响插件加载的设置指纹（enabledPlugins、extraKnownMarketplaces、策略等），用于判断缓存的插件加载结果是否过期。
+ */
+function getPluginAffectingSettingsSnapshot() {
+  let merged = getVouchedAdminPolicyTier();
+  let tiers = policySettings_2(merged);
+  let hasPluginDecls = hasPluginDeclarations(tiers);
+  let enables = hasPluginDecls ? merged : getSettingsForSource("policySettings");
+  let adminAuthoredPolicySettings = getAdminAuthoredPolicySettings();
+  if (getRemotePolicyTierWithKind().servedSnapshot)
+    return {
+      enables,
+      names: adminAuthoredPolicySettings,
+    };
+  if (hasPluginDecls)
+    return {
+      enables,
+      names: merged,
+    };
+  let mergedMarketplaces = new Map();
+  let seenNames = new Set();
+  for (let tier of tiers) {
+    let filtered = Object.entries(tier.extraKnownMarketplaces ?? {}).filter(
+      ([key]) => !seenNames.has(nfcLower(key)),
+    );
+    for (let [name, declaration] of filtered) mergedMarketplaces.set(name, declaration);
+    for (let [name] of filtered) seenNames.add(nfcLower(name));
+  }
+  let hasStrict = seenNames.size > 0 || tiers.some((tier) => tier.strictKnownMarketplaces !== undefined);
+  return {
+    enables,
+    names: hasStrict
+      ? {
+          extraKnownMarketplaces: Object.fromEntries(mergedMarketplaces),
+          ...(merged?.strictKnownMarketplaces !== undefined && {
+            strictKnownMarketplaces: merged.strictKnownMarketplaces,
+          }),
+        }
+      : adminAuthoredPolicySettings,
+  };
+}
+//@ chunk-pd0t5xas.js:809-868 placement
+function policySettingsUnreadableSafe() {
+  try {
+    return policySettingsUnreadable();
+  } catch (error) {
+    logError(toError(error));
+    return true;
+  }
+}
+//@ chunk-pd0t5xas.js:868-1057 placement
+/**
+ * 内置插件只能由受信设置启用时返回其规范 id。
+ */
+function trustedOnlyBuiltinPluginId(pluginId) {
+  if (!isBuiltinPluginId(pluginId)) return;
+  let sliced = canonicalPluginId(pluginId).slice(0, -`@${BUILTIN}`.length);
+  for (let [name, entry] of getHostState().builtinPlugins)
+    if (pluginNamesEqual(name, sliced))
+      return entry.enabledFromTrustedSettingsOnly === true ? `${name}@${BUILTIN}` : undefined;
+  return;
+}
+//@ chunk-pd0t5xas.js:1057-1085 placement
+/**
+ * hasTrustedOnlyBuiltinPlugin：该插件是否只能由受信设置启用。
+ */
+var hasTrustedOnlyBuiltinPlugin = (pluginId) => trustedOnlyBuiltinPluginId(pluginId) !== undefined;
+//@ chunk-pd0t5xas.js:3923-4164 placement
+/**
+ * 是否存在任何非内置插件（启用、带钩子、已加载模块、托管、内联、同步）。
+ */
+function hasNonBuiltinPluginSurface() {
+  try {
+    let pluginRegistry = getPluginRegistry();
+    return (
+      enabledPluginIds().some((pluginId) => !isBuiltinPluginId(pluginId)) ||
+      [...pluginRegistry.pluginsWithHooks].some((pluginsWithHook) => !isBuiltinPluginId(pluginsWithHook)) ||
+      pluginRegistry.loadedModules.some((loadedModule) => !hasLink(loadedModule)) ||
+      hasManagedPlugins() ||
+      policySettingsUnreadable() ||
+      getInlinePlugins().length > 0 ||
+      getInlinePluginsNoMcp().length > 0 ||
+      getInlinePluginUrls().length > 0 ||
+      getSyncedPluginDirs().length > 0
+    );
+  } catch (error) {
+    logError(toError(error));
+    return true;
+  }
+}
+//@ chunk-pd0t5xas.js:4164-4368 placement
+/**
+ * 函数钩子注册是否还没完成：欠缺、进行中、原因未知、盲跑或托管设置不可读，且开关允许并存在非内置插件；出错保守返回 true。
+ */
+function isHookRegistrationPending() {
+  try {
+    let pluginRegistry = getPluginRegistry();
+    return (
+      (pluginRegistry.hookRegistrationOwed ||
+        pluginRegistry.hookRegistrationInFlight !== undefined ||
+        pluginRegistry.hooksUnknownCause !== undefined ||
+        pluginRegistry.hookRegistrationRanBlind ||
+        policySettingsUnreadableSafe()) &&
+      areHooksEnabled() &&
+      hasNonBuiltinPluginSurface()
+    );
+  } catch (error) {
+    logError(toError(error));
+    return true;
+  }
+}
 //@ chunk-e6aww6q8.js:607082-607217 placement
-var HOOKS_JSON_TOP_KEYS = new Set(["$schema", "description", "hooks", "modules", "surface"]);
-var HOOK_MATCHER_KEYS = new Set(["matcher", "hooks"]);
-var reportedHookKeyWarnings = identity_2(new Set(), (e) => e.clear());
+var HOOKS_JSON_TOP_KEYS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var HOOK_MATCHER_KEYS;
+var reportedHookKeyWarnings;
+deferInit("chunk-e6aww6q8.js:607082", () => {
+  HOOKS_JSON_TOP_KEYS = new Set(["$schema", "description", "hooks", "modules", "surface"]);
+  HOOK_MATCHER_KEYS = new Set(["matcher", "hooks"]);
+  reportedHookKeyWarnings = identity_2(new Set(), (set) => set.clear());
+});
 //@ chunk-e6aww6q8.js:607217-607352 placement
-function unknownMatcherKeys(e, n, r) {
-  let s = `hooks.${truncateListItem(e)}[${r}]`;
-  return (isPlainObject_5(n) ? Object.keys(n) : [])
-    .filter((h) => !HOOK_MATCHER_KEYS.has(h))
-    .map((h) => `${quotedListItem(h)} in ${s}`);
+function unknownMatcherKeys(eventName, matcher, index) {
+  let path = `hooks.${truncateListItem(eventName)}[${index}]`;
+  return (isPlainObject_5(matcher) ? Object.keys(matcher) : [])
+    .filter((key) => !HOOK_MATCHER_KEYS.has(key))
+    .map((key) => `${quotedListItem(key)} in ${path}`);
 }
 //@ chunk-e6aww6q8.js:607352-607462 placement
 var unknownHookEntryKeys = (hooks) =>
-  (isPlainObject_5(hooks) ? Object.entries(hooks) : []).flatMap(([n, r]) =>
-    (Array.isArray(r) ? r : []).flatMap((s, h) => unknownMatcherKeys(n, s, h)),
+  (isPlainObject_5(hooks) ? Object.entries(hooks) : []).flatMap(([eventName, matchers]) =>
+    (Array.isArray(matchers) ? matchers : []).flatMap((matcher, index) =>
+      unknownMatcherKeys(eventName, matcher, index),
+    ),
   );
 //@ chunk-e6aww6q8.js:607462-607773 placement
 /**
  * 检查 hooks.json 顶层和各 matcher 条目的未知键；存在时按（插件, 路径, 消息）去重后记 warn 日志并调用 reportPluginProblem。
  */
-function warnUnknownHooksJsonKeys(pluginName, hooksFilePath, r) {
-  if (!isPlainObject_5(r)) return;
-  let s = [
-    ...Object.keys(r)
+function warnUnknownHooksJsonKeys(pluginName, hooksFilePath, hooksJson) {
+  if (!isPlainObject_5(hooksJson)) return;
+  let problems = [
+    ...Object.keys(hooksJson)
       .filter((key) => !HOOKS_JSON_TOP_KEYS.has(key))
       .map(quotedListItem),
-    ...unknownHookEntryKeys(r.hooks),
+    ...unknownHookEntryKeys(hooksJson.hooks),
   ];
-  if (s.length === 0) return;
-  let h = `hooks.json: unknown ${plural(s.length, "key")} ${formatFailureDetails_2(s)} ignored`;
-  let y = `${pluginName}\x00${hooksFilePath}\x00${h}`;
-  if (reportedHookKeyWarnings.has(y)) return;
-  reportedHookKeyWarnings.add(y);
-  logForDebugging(`Plugin ${pluginName}: ${h} (${hooksFilePath})`, {
+  if (problems.length === 0) return;
+  let message = `hooks.json: unknown ${plural(problems.length, "key")} ${formatFailureDetails_2(problems)} ignored`;
+  let cacheKey = `${pluginName}\x00${hooksFilePath}\x00${message}`;
+  if (reportedHookKeyWarnings.has(cacheKey)) return;
+  reportedHookKeyWarnings.add(cacheKey);
+  logForDebugging(`Plugin ${pluginName}: ${message} (${hooksFilePath})`, {
     level: "warn",
   });
-  reportPluginProblem(pluginName, h);
+  reportPluginProblem(pluginName, message);
 }
 //@ chunk-e6aww6q8.js:4162230-4162375 placement
 /**
  * 排队一次“带 hooks 的设置合并”广播，未在广播中时串到队列尾。
  */
-function queueHookedSettingsMerge(e) {
-  let n = commandSyncNameState();
-  let hookedMerge = n.hookedMerge;
+function queueHookedSettingsMerge(pluginId) {
+  let state = commandSyncNameState();
+  let hookedMerge = state.hookedMerge;
   if (hookedMerge.queuedFor === undefined && !hookedMerge.isAnnouncing) {
-    hookedMerge.queuedFor = e;
-    hookedMerge.pass = hookedMerge.pass.then(() => readMergedSettingsForPlugin(n, e));
+    hookedMerge.queuedFor = pluginId;
+    hookedMerge.pass = hookedMerge.pass.then(() => readMergedSettingsForPlugin(state, pluginId));
   }
   return hookedMerge.pass;
 }
@@ -239,7 +359,7 @@ function convertPluginHooksToMatchers(plugin) {
     MessageDisplay: [],
   };
   if (!plugin.hooksConfig) return pluginMatchers;
-  let r = arePluginHooksHeld(plugin);
+  let held = arePluginHooksHeld(plugin);
   for (let [event, matchers] of Object.entries(plugin.hooksConfig)) {
     let hookEvent = event;
     if (!pluginMatchers[hookEvent]) continue;
@@ -251,7 +371,7 @@ function convertPluginHooksToMatchers(plugin) {
           pluginRoot: plugin.path,
           pluginName: plugin.name,
           pluginId: plugin.source,
-          ...(r && {
+          ...(held && {
             personal: true,
           }),
         });
@@ -259,114 +379,130 @@ function convertPluginHooksToMatchers(plugin) {
   return pluginMatchers;
 }
 //@ chunk-e6aww6q8.js:4163338-4163493 layout
-function orderPluginsManagedFirst(e, n) {
-  let r = (h) => n?.has(h.source) === true;
-  let s = (h) => hasTrustedOnlyBuiltinPlugin(h.source);
-  return [...e.filter(r), ...e.filter((h) => !r(h) && s(h)), ...e.filter((h) => !r(h) && !s(h))];
+function orderPluginsManagedFirst(plugins, managedIds) {
+  let isManaged = (plugin) => managedIds?.has(plugin.source) === true;
+  let isTrustedBuiltin = (plugin) => hasTrustedOnlyBuiltinPlugin(plugin.source);
+  return [
+    ...plugins.filter(isManaged),
+    ...plugins.filter((plugin) => !isManaged(plugin) && isTrustedBuiltin(plugin)),
+    ...plugins.filter((plugin) => !isManaged(plugin) && !isTrustedBuiltin(plugin)),
+  ];
 }
 //@ chunk-e6aww6q8.js:4163493-4163666 layout
-function orderPluginsForHookLoad(e, n, r) {
-  let s = new Set(e.filter((y) => n?.has(y.source) === true || hasTrustedOnlyBuiltinPlugin(y.source)));
-  let filtered = e.filter((y) => !s.has(y));
-  return [...s, ...filtered.filter((y) => r(y)), ...filtered.filter((y) => !r(y))];
+function orderPluginsForHookLoad(plugins, managedIds, isVouched) {
+  let preferred = new Set(
+    plugins.filter(
+      (plugin) => managedIds?.has(plugin.source) === true || hasTrustedOnlyBuiltinPlugin(plugin.source),
+    ),
+  );
+  let filtered = plugins.filter((plugin) => !preferred.has(plugin));
+  return [
+    ...preferred,
+    ...filtered.filter((plugin) => isVouched(plugin)),
+    ...filtered.filter((plugin) => !isVouched(plugin)),
+  ];
 }
 //@ chunk-e6aww6q8.js:4163666-4163751 layout
 function orderedPluginIdsMemoizer() {
-  let e = new Map();
-  return (n) => {
-    let r = e.get(n) ?? isManagedPluginVouched(n);
-    e.set(n, r);
-    return r;
+  let memo = new Map();
+  return (pluginId) => {
+    let vouched = memo.get(pluginId) ?? isManagedPluginVouched(pluginId);
+    memo.set(pluginId, vouched);
+    return vouched;
   };
 }
 //@ chunk-e6aww6q8.js:4163751-4165246 facade-majority
 /**
  * 按托管策略 prependPlugins/appendPlugins 调整插件 hooks 的顺序，并记录被遮蔽的插件。
  */
-function chainOrder(e, n, r) {
-  if (r.seat !== undefined) logForDebugging(r.seat);
-  for (let y of r.append.filter((S) => r.prepend.includes(S)))
+function chainOrder(modules, managedIds, plan) {
+  if (plan.seat !== undefined) logForDebugging(plan.seat);
+  for (let id of plan.append.filter((id) => plan.prepend.includes(id)))
     logForDebugging(
-      `managed plugin ${y} is named in both prependPlugins and appendPlugins; it is prepended`,
+      `managed plugin ${id} is named in both prependPlugins and appendPlugins; it is prepended`,
       {
         level: "warn",
       },
     );
-  for (let y of r.shadowed) {
-    if (inlineProblemsSeen.has(y)) continue;
-    inlineProblemsSeen.add(y);
+  for (let key of plan.shadowed) {
+    if (inlineProblemsSeen.has(key)) continue;
+    inlineProblemsSeen.add(key);
     logForDebugging(
-      r.shadowedBy === "seat"
-        ? `${y} in user settings ignored: your organization's plan seats ${r.outermost.join(", ")} here, so neither tier key is yours to set`
-        : r.shadowedBy === "host"
-          ? `${y} in user settings ignored: in a hosted session only an organization's settings place a mod above the user tier`
-          : `${y} in user settings ignored: set by managed policy (this machine has managed settings, so both tier keys are the policy's)`,
+      plan.shadowedBy === "seat"
+        ? `${key} in user settings ignored: your organization's plan seats ${plan.outermost.join(", ")} here, so neither tier key is yours to set`
+        : plan.shadowedBy === "host"
+          ? `${key} in user settings ignored: in a hosted session only an organization's settings place a mod above the user tier`
+          : `${key} in user settings ignored: set by managed policy (this machine has managed settings, so both tier keys are the policy's)`,
     );
   }
-  let s = {
+  let tiers = {
     prependPlugins: {
-      ids: r.prepend,
-      from: r.from.prepend,
+      ids: plan.prepend,
+      from: plan.from.prepend,
     },
     appendPlugins: {
-      ids: r.append,
-      from: r.from.append,
+      ids: plan.append,
+      from: plan.from.append,
     },
   };
-  for (let [key, { ids: S, from: w }] of Object.entries(s)) {
-    if (w !== "none")
+  for (let [key, { ids, from }] of Object.entries(tiers)) {
+    if (from !== "none")
       logForDebugging(
-        `${key} from ${w === "policy" ? "managed policy" : "user settings"}: ${S.join(", ") || "(none)"}`,
+        `${key} from ${from === "policy" ? "managed policy" : "user settings"}: ${ids.join(", ") || "(none)"}`,
       );
-    let L = new Set([...(n ?? [])].map(nfcLower));
-    for (let G of S) {
-      if (r.outermost.includes(G)) continue;
-      let q = L.has(G);
-      if (w === "user" && q) {
+    let managedSet = new Set([...(managedIds ?? [])].map(nfcLower));
+    for (let id of ids) {
+      if (plan.outermost.includes(id)) continue;
+      let isManaged = managedSet.has(id);
+      if (from === "user" && isManaged) {
         logForDebugging(
-          `${key} in user settings names ${G}, a managed plugin; ignored: a user key seats only the person's own plugins`,
+          `${key} in user settings names ${id}, a managed plugin; ignored: a user key seats only the person's own plugins`,
           {
             level: "warn",
           },
         );
         continue;
       }
-      if (!((w === "user" || q) && !isBuiltinPluginId(G) && e.some((Se) => nfcLower(Se.source) === G)))
+      if (!(
+        (from === "user" || isManaged) &&
+        !isBuiltinPluginId(id) &&
+        modules.some((loadedPlugin) => nfcLower(loadedPlugin.source) === id)
+      ))
         logForDebugging(
-          `${key} names ${G}, which is not an enabled ${w === "user" ? "" : "managed "}plugin with a hooks module; skipped`,
+          `${key} names ${id}, which is not an enabled ${from === "user" ? "" : "managed "}plugin with a hooks module; skipped`,
         );
     }
   }
-  let h = (y) => providerRank(y.source, n, r);
+  let rankOf = (loadedPlugin) => providerRank(loadedPlugin.source, managedIds, plan);
   return orderHooksModules(
-    e.toSorted((y, S) => h(y) - h(S)),
-    (y) => ({
-      rank: h(y),
-      tier: pluginTier(y.source, n, r),
+    modules.toSorted((left, right) => rankOf(left) - rankOf(right)),
+    (loadedPlugin) => ({
+      rank: rankOf(loadedPlugin),
+      tier: pluginTier(loadedPlugin.source, managedIds, plan),
     }),
   );
 }
 //@ chunk-e6aww6q8.js:4165246-4165326 layout
-function firstMappedValue(e, n) {
-  let found = n.find((s) => e.has(s));
-  return found === undefined ? undefined : e.get(found);
+function firstMappedValue(map, keys) {
+  let found = keys.find((key) => map.has(key));
+  return found === undefined ? undefined : map.get(found);
 }
 //@ chunk-e6aww6q8.js:4165326-4166248 layout
 function describeHooksModuleSkip(
-  e,
+  modules,
   { isManaged, hooksDisabled, managedOnly, allDisabled, organization, builtinsOnly, personsHeld },
 ) {
-  let L = [];
-  let G = [];
-  let q = new Map();
-  let Z = personsHeld ? filterManagedHookSources(getPolicyAllowedSet(), e) : null;
-  for (let Se of e) {
-    let ke = pluginHooksRefusalReason(
-      Se.source,
+  let chosen = [];
+  let leftOut = [];
+  let nameOwner = new Map();
+  let allowedSet = personsHeld ? filterManagedHookSources(getPolicyAllowedSet(), modules) : null;
+  for (let loadedPlugin of modules) {
+    let refusal = pluginHooksRefusalReason(
+      loadedPlugin.source,
       {
-        isHeld: arePluginHooksHeld(Se),
-        isManaged: isManaged(Se),
-        isPolicyEnabled: Z?.has(Se.source) === true,
+        isHeld: arePluginHooksHeld(loadedPlugin),
+        isManaged: isManaged(loadedPlugin),
+        isPolicyEnabled: allowedSet?.has(loadedPlugin.source) === true,
       },
       {
         hooksDisabled,
@@ -377,43 +513,44 @@ function describeHooksModuleSkip(
         personsHeld,
       },
     );
-    if (ke !== undefined) {
-      if (Se.modulePath !== undefined) {
-        logForDebugging(`hooks module ${hookPluginLabel(Se)} not loaded: ${ke}`);
-        reportInlinePluginNotice(Se, `hooks module not loaded: ${ke}`);
+    if (refusal !== undefined) {
+      if (loadedPlugin.modulePath !== undefined) {
+        logForDebugging(`hooks module ${hookPluginLabel(loadedPlugin)} not loaded: ${refusal}`);
+        reportInlinePluginNotice(loadedPlugin, `hooks module not loaded: ${refusal}`);
       }
       continue;
     }
-    let we = pluginNameAliases(Se);
-    let Ee = firstMappedValue(q, we);
-    for (let Ae of we) if (!q.has(Ae)) q.set(Ae, Se.source);
-    if (Se.modulePath === undefined) continue;
-    if (Ee !== undefined) {
-      G.push({
+    let aliases = pluginNameAliases(loadedPlugin);
+    let owner = firstMappedValue(nameOwner, aliases);
+    for (let alias of aliases) if (!nameOwner.has(alias)) nameOwner.set(alias, loadedPlugin.source);
+    if (loadedPlugin.modulePath === undefined) continue;
+    if (owner !== undefined) {
+      leftOut.push({
         type: "hooks-module-left-out-by-name",
-        source: Se.source,
-        heldBy: Ee,
+        source: loadedPlugin.source,
+        heldBy: owner,
       });
-      let Ae = "another plugin of that name loads first (a managed one, or an earlier source)";
-      logForDebugging(`hooks module ${hookPluginLabel(Se)} not loaded: ${Ae}`);
-      reportInlinePluginNotice(Se, `hooks module not loaded: ${Ae}`);
-    } else L.push(Se);
+      let reason = "another plugin of that name loads first (a managed one, or an earlier source)";
+      logForDebugging(`hooks module ${hookPluginLabel(loadedPlugin)} not loaded: ${reason}`);
+      reportInlinePluginNotice(loadedPlugin, `hooks module not loaded: ${reason}`);
+    } else chosen.push(loadedPlugin);
   }
   return {
-    chosen: L,
-    leftOut: G,
+    chosen,
+    leftOut,
   };
 }
 //@ chunk-e6aww6q8.js:4166248-4166297 layout
-var isNonBuiltinHooksModule = (e) => e.modulePath !== undefined && !isBuiltinPluginId(e.source);
+var isNonBuiltinHooksModule = (loadedPlugin) =>
+  loadedPlugin.modulePath !== undefined && !isBuiltinPluginId(loadedPlugin.source);
 //@ chunk-e6aww6q8.js:4166297-4166455 layout
-function hasHooksModulesAwaitingFlag(e, n) {
-  let r = filterManagedHookSources(getPolicyAllowedSet(), e);
-  return e.some(
-    (s) =>
-      isNonBuiltinHooksModule(s) &&
-      describeHooksModulesTurnedOff(r?.has(s.source) === true, {
-        ...n,
+function hasHooksModulesAwaitingFlag(modules, policy) {
+  let allowedSet = filterManagedHookSources(getPolicyAllowedSet(), modules);
+  return modules.some(
+    (loadedPlugin) =>
+      isNonBuiltinHooksModule(loadedPlugin) &&
+      describeHooksModulesTurnedOff(allowedSet?.has(loadedPlugin.source) === true, {
+        ...policy,
         builtinsOnly: false,
         personsHeld: false,
         organization: "unasked",
@@ -421,11 +558,11 @@ function hasHooksModulesAwaitingFlag(e, n) {
   );
 }
 //@ chunk-e6aww6q8.js:4166455-4166570 layout
-var hasLoadableOrgHooksModule = (e, n) =>
-  e.some(
-    (r) =>
-      isNonBuiltinHooksModule(r) &&
-      n?.has(r.source) === true &&
+var hasLoadableOrgHooksModule = (modules, allowedSet) =>
+  modules.some(
+    (loadedPlugin) =>
+      isNonBuiltinHooksModule(loadedPlugin) &&
+      allowedSet?.has(loadedPlugin.source) === true &&
       describeHooksModulesTurnedOff(true, {
         ...hookPolicySummaryState(),
         builtinsOnly: false,
@@ -433,15 +570,15 @@ var hasLoadableOrgHooksModule = (e, n) =>
       }) === undefined,
   );
 //@ chunk-e6aww6q8.js:4166570-4166628 layout
-async function loadLateHooksWhenFlagTurnsOn(e, n) {
-  if (hasHooksModulesAwaitingFlag(e, hookPolicySummaryState())) {
+async function loadLateHooksWhenFlagTurnsOn(modules, onLoad) {
+  if (hasHooksModulesAwaitingFlag(modules, hookPolicySummaryState())) {
     await holdForRolloutFlagAtStartup();
-    loadLateWhenFlagTurnsOn(n);
+    loadLateWhenFlagTurnsOn(onLoad);
   }
 }
 //@ chunk-e6aww6q8.js:4166628-4166953 layout
-function areInstalledHooksModulesHeld(e) {
-  if (!areBuiltinOnlyHooksModules(e)) return false;
+function areInstalledHooksModulesHeld(modules) {
+  if (!areBuiltinOnlyHooksModules(modules)) return false;
   if (areHooksModulesAllowed()) {
     logForDebugging(
       `installed plugins' hooks modules not loaded: rollout flag (${PLUGIN_HOOKS_MODULES_GATE}) is not answered yet in this wake; built-in plugins load regardless`,
@@ -459,46 +596,48 @@ function areInstalledHooksModulesHeld(e) {
 /**
  * 计算已安装 hooks 模块是否被挡住，并在注册表 hooksModulesSwitchRead 中记录：开关是否开、询问时间、是否欠载、 组织模块是否待加载、个人模块是否被排除。没有待处理项时清空该记录。
  */
-function recordHooksModulesSwitchRead(pluginRegistry, n, r) {
+function recordHooksModulesSwitchRead(modules, modules_2, allowedSet) {
   if (AUTO_MODE_ENABLED_DEFAULT()) markWakeBoundPassed();
-  let s = areInstalledHooksModulesHeld(pluginRegistry);
-  let h = hasHooksModulesAwaitingFlag(n, hookPolicySummaryState());
-  let y = isAutoModeGateOpen();
-  let S = y && pluginRegistry.hooksModulesWakeBound === "ahead";
-  let hooksModulesSwitchRead = pluginRegistry.hooksModulesSwitchRead;
-  let askedAt = S ? 0 : hooksModulesSwitchRead?.askedAt || Date.now();
-  let G = hooksModulesSwitchRead?.isOn === true;
-  let q = s && areHooksModulesAllowed();
-  let Z = hooksModulesSwitchRead?.isManagedPending === true || (q && hasLoadableOrgHooksModule(n, r));
-  let Se =
-    pluginRegistry.hooksModulesWakeBound !== "ahead" &&
-    y &&
+  let held = areInstalledHooksModulesHeld(modules);
+  let awaitingFlag = hasHooksModulesAwaitingFlag(modules_2, hookPolicySummaryState());
+  let gateOpen = isAutoModeGateOpen();
+  let wakeAhead = gateOpen && modules.hooksModulesWakeBound === "ahead";
+  let hooksModulesSwitchRead = modules.hooksModulesSwitchRead;
+  let askedAt = wakeAhead ? 0 : hooksModulesSwitchRead?.askedAt || Date.now();
+  let wasOn = hooksModulesSwitchRead?.isOn === true;
+  let flagOn = held && areHooksModulesAllowed();
+  let managedPending =
+    hooksModulesSwitchRead?.isManagedPending === true ||
+    (flagOn && hasLoadableOrgHooksModule(modules_2, allowedSet));
+  let personsOut =
+    modules.hooksModulesWakeBound !== "ahead" &&
+    gateOpen &&
     areHooksModulesAllowed() &&
     AUTO_MODE_ENABLED_DEFAULT() &&
     getHookPolicyAnswerState() === "failed";
-  let ke = filterManagedHookSources(getPolicyAllowedSet(), n);
-  let any = n.some(
-    (Ee) =>
-      isNonBuiltinHooksModule(Ee) &&
-      r?.has(Ee.source) !== true &&
-      ke?.has(Ee.source) !== true &&
+  let policyAllowedSet = filterManagedHookSources(getPolicyAllowedSet(), modules_2);
+  let any = modules_2.some(
+    (loadedPlugin) =>
+      isNonBuiltinHooksModule(loadedPlugin) &&
+      allowedSet?.has(loadedPlugin.source) !== true &&
+      policyAllowedSet?.has(loadedPlugin.source) !== true &&
       describeHooksModulesTurnedOff(false, {
         ...hookPolicySummaryState(),
         builtinsOnly: false,
         personsHeld: false,
       }) === undefined,
   );
-  pluginRegistry.hooksModulesSwitchRead =
-    h || Z
+  modules.hooksModulesSwitchRead =
+    awaitingFlag || managedPending
       ? {
-          isOn: !s || G,
+          isOn: !held || wasOn,
           askedAt,
-          isLoadOwed: y,
-          isManagedPending: Z,
-          isPersonsOut: Se && any,
+          isLoadOwed: gateOpen,
+          isManagedPending: managedPending,
+          isPersonsOut: personsOut && any,
         }
       : undefined;
-  return s;
+  return held;
 }
 //@ chunk-e6aww6q8.js:4167518-4167619 layout
 function markHooksModulesSwitchOff(pluginRegistry) {
@@ -510,7 +649,7 @@ function markHooksModulesSwitchOff(pluginRegistry) {
     };
 }
 //@ chunk-e6aww6q8.js:4167619-4168043 layout
-function hooksModulesLeftOutByName(e, n, vouchedPolicyPluginIds, leftOut) {
+function hooksModulesLeftOutByName(modules, enabledModules, managedIds, leftOut) {
   if (!(
     !isSafeMode() &&
     describeHooksModulesTurnedOff(true, {
@@ -520,29 +659,36 @@ function hooksModulesLeftOutByName(e, n, vouchedPolicyPluginIds, leftOut) {
     }) === undefined
   ))
     return [];
-  let y = new Set(n);
-  let S = new Set([...(vouchedPolicyPluginIds ?? [])].map(nfcLower));
-  let w = new Set(
-    leftOut.flatMap((L) =>
-      L.type === "hooks-module-left-out-by-name" && S.has(nfcLower(L.heldBy)) ? [L.source] : [],
+  let enabledSet = new Set(enabledModules);
+  let vouchedSet = new Set([...(managedIds ?? [])].map(nfcLower));
+  let heldOutSources = new Set(
+    leftOut.flatMap((entry) =>
+      entry.type === "hooks-module-left-out-by-name" && vouchedSet.has(nfcLower(entry.heldBy))
+        ? [entry.source]
+        : [],
     ),
   );
-  return [...(vouchedPolicyPluginIds ?? [])]
-    .filter((L) => !isBuiltinPluginId(L))
-    .filter((L) => {
-      let G = nfcLower(L);
-      let filtered = e.filter((Se) => nfcLower(Se.source) === G);
+  return [...(managedIds ?? [])]
+    .filter((id) => !isBuiltinPluginId(id))
+    .filter((id) => {
+      let lowered = nfcLower(id);
+      let filtered = modules.filter((loadedPlugin) => nfcLower(loadedPlugin.source) === lowered);
       return !(
         filtered.length > 0 &&
-        filtered.every((Se) => !isNonBuiltinHooksModule(Se) || y.has(Se) || w.has(Se.source))
+        filtered.every(
+          (loadedPlugin) =>
+            !isNonBuiltinHooksModule(loadedPlugin) ||
+            enabledSet.has(loadedPlugin) ||
+            heldOutSources.has(loadedPlugin.source),
+        )
       );
     });
 }
 //@ chunk-e6aww6q8.js:4168043-4168123 layout
 function isHooksModulesFlagSettled() {
   let hookPolicyAnswerState = getHookPolicyAnswerState();
-  let n = hooksModulesGateFromPayload() || AUTO_MODE_ENABLED_DEFAULT();
-  return hookPolicyAnswerState === "answered" || (hookPolicyAnswerState === "failed" && n);
+  let overridden = hooksModulesGateFromPayload() || AUTO_MODE_ENABLED_DEFAULT();
+  return hookPolicyAnswerState === "answered" || (hookPolicyAnswerState === "failed" && overridden);
 }
 //@ chunk-e6aww6q8.js:4168123-4168169 facade-majority
 /**
@@ -561,13 +707,13 @@ function markHooksModulesLoadOwed(pluginRegistry) {
     };
 }
 //@ chunk-e6aww6q8.js:4168276-4168497 layout
-function isPersonModulesHeldWithLog(pluginRegistry) {
-  let n = shouldHoldPersonalModuleHooks(pluginRegistry);
-  if (n)
+function isPersonModulesHeldWithLog(registry) {
+  let held = shouldHoldPersonalModuleHooks(registry);
+  if (held)
     logForDebugging(
       `a person's installed plugins' hooks modules not loaded: rollout flag (${PLUGIN_HOOKS_MODULES_GATE}) is not answered within this wake's wait; an organization's and built-in plugins load regardless`,
     );
-  return n;
+  return held;
 }
 //@ chunk-e6aww6q8.js:4168497-4168694 layout
 function filterPluginsForSafeMode(enabled) {
@@ -575,14 +721,14 @@ function filterPluginsForSafeMode(enabled) {
   logForDebugging(
     "Safe mode: installed plugins are disabled, none of their hooks or hooks modules load; built-in plugins load regardless",
   );
-  return enabled.filter((n) => isBuiltinPluginId(n.source));
+  return enabled.filter((plugin) => isBuiltinPluginId(plugin.source));
 }
 //@ chunk-e6aww6q8.js:4168694-4169945 fingerprint = loadPluginHooks (0.708)
 /**
  * 汇总所有启用插件的 hooks：按事件把 matcher 合并（托管插件 prependPlugins/appendPlugins 排序），同一插件重复注册跳过，返回 {matchers, hooksLeftOut, loadedWithHooks}。
  */
-function loadPluginHooks_2(e, policyAllowedSet) {
-  let r = {
+function loadPluginHooks_2(plugins, managedIds) {
+  let matchers = {
     PreToolUse: [],
     PostToolUse: [],
     PostToolUseFailure: [],
@@ -617,53 +763,55 @@ function loadPluginHooks_2(e, policyAllowedSet) {
     DirectoryAdded: [],
     MessageDisplay: [],
   };
-  let s = orderPluginsManagedFirst(e, policyAllowedSet);
-  let h = new Map();
-  let y = [];
-  let S = new Set(s.filter((w) => w.modulePath !== undefined).map((w) => nfcLower(w.source)));
-  for (let w of s) {
-    if (!w.hooksConfig) continue;
-    let L = pluginNameAliases(w);
-    let G = firstMappedValue(h, L);
-    if (G !== undefined) {
+  let ordered = orderPluginsManagedFirst(plugins, managedIds);
+  let nameOwner = new Map();
+  let hooksLeftOut = [];
+  let loadedWithHooks = new Set(
+    ordered.filter((plugin) => plugin.modulePath !== undefined).map((plugin) => nfcLower(plugin.source)),
+  );
+  for (let plugin of ordered) {
+    if (!plugin.hooksConfig) continue;
+    let aliases = pluginNameAliases(plugin);
+    let owner = firstMappedValue(nameOwner, aliases);
+    if (owner !== undefined) {
       if (
-        isHookSourceAllowed(w.source) &&
-        !arePluginHooksHeld(w) &&
-        Object.values(convertPluginHooksToMatchers(w)).some((Z) => Z.length > 0)
+        isHookSourceAllowed(plugin.source) &&
+        !arePluginHooksHeld(plugin) &&
+        Object.values(convertPluginHooksToMatchers(plugin)).some((list) => list.length > 0)
       )
-        y.push({
+        hooksLeftOut.push({
           type: "hooks-left-out-by-name",
-          source: w.source,
-          heldBy: G,
+          source: plugin.source,
+          heldBy: owner,
         });
       logForDebugging(
-        `Skipping duplicate hook registration for plugin "${w.name}" from ${w.source} - already registered from another source`,
+        `Skipping duplicate hook registration for plugin "${plugin.name}" from ${plugin.source} - already registered from another source`,
       );
       continue;
     }
-    for (let plugin of L) h.set(plugin, w.source);
-    logForDebugging(`Loading hooks from plugin: ${w.name}`);
-    let pluginMatchers = convertPluginHooksToMatchers(w);
+    for (let plugin_2 of aliases) nameOwner.set(plugin_2, plugin.source);
+    logForDebugging(`Loading hooks from plugin: ${plugin.name}`);
+    let pluginMatchers = convertPluginHooksToMatchers(plugin);
     for (let key of Object.keys(pluginMatchers)) {
-      if (pluginMatchers[key].length > 0) S.add(nfcLower(w.source));
-      r[key].push(...pluginMatchers[key]);
+      if (pluginMatchers[key].length > 0) loadedWithHooks.add(nfcLower(plugin.source));
+      matchers[key].push(...pluginMatchers[key]);
     }
   }
   return {
-    matchers: r,
-    hooksLeftOut: y,
-    loadedWithHooks: S,
+    matchers,
+    hooksLeftOut,
+    loadedWithHooks,
   };
 }
 //@ chunk-e6aww6q8.js:4169945-4170370 facade-majority
 /**
  * 在创建 worktree 前预先注册插件的 WorktreeCreate/WorktreeRemove 钩子（只读缓存加载插件、安全模式过滤），若期间钩子状态已变化或已换过一轮则放弃；正式注册轮会替换它们。
  */
-async function registerPluginWorktreeHooks(e, n) {
+async function registerPluginWorktreeHooks(storageV5, credentials) {
   let pluginRegistry = getPluginRegistry();
   let { enabled } = await readStablePolicy({
-    read: () => loadAllPluginsCacheOnly(e, n),
-    reread: () => rereadPluginsCacheOnly(e),
+    read: () => loadAllPluginsCacheOnly(storageV5, credentials),
+    reread: () => rereadPluginsCacheOnly(storageV5),
   });
   if (getPluginRegistry() !== pluginRegistry || pluginRegistry.hookSwapEpoch > 0) return;
   let { matchers } = loadPluginHooks_2(filterPluginsForSafeMode(enabled), getPolicyAllowedSet());
@@ -679,62 +827,64 @@ async function registerPluginWorktreeHooks(e, n) {
 /**
  * 注册插件 hooks 的主入口：cacheOnly 加载启用插件（安全模式只留内置），loadPluginHooks 汇总 matcher 写入会话的已注册 hooks，加载 hooks 模块（需工作区信任与 tengu_plugin_hooks_modules 开关），收集 hook-load-failed/path 错误。结果 Promise 缓存在全局 hookRegistration。
  */
-async function loadPluginHooks(e, n) {
+async function loadPluginHooks(storageV5, credentials) {
   let pluginRegistry = getPluginRegistry();
   refreshModAdmission();
   if (pluginRegistry.hookModulesAwaitTrust && isProjectScopeTrustAccepted()) clearPluginHookCache();
-  let s = pluginRegistry.hookRegistration === undefined;
-  let h = false;
-  let y = false;
-  let S;
-  let w = false;
-  let L;
+  let isFirst = pluginRegistry.hookRegistration === undefined;
+  let failedOurselves = false;
+  let superseded = false;
+  let unknownCause;
+  let ranBlind = false;
+  let previousRegistration;
   pluginRegistry.hookRegistration ??= (async () => {
-    let G;
-    let q;
-    let Z = ++pluginRegistry.hookRegistrationEpoch;
+    let modulesResult;
+    let registration;
+    let epoch = ++pluginRegistry.hookRegistrationEpoch;
     pluginRegistry.hookRegistrationOwed = false;
-    w = policySettingsUnreadableSafe();
-    let Se = !isProjectScopeTrustAccepted();
-    pluginRegistry.hookModulesAwaitTrust = Se;
-    let ke = Se && isDemoOrClaubbet();
+    ranBlind = policySettingsUnreadableSafe();
+    let trustPending = !isProjectScopeTrustAccepted();
+    pluginRegistry.hookModulesAwaitTrust = trustPending;
+    let demoTolerant = trustPending && isDemoOrClaubbet();
     try {
-      let we = isHooksModulesFlagSettled();
+      let flagSettled = isHooksModulesFlagSettled();
       let stablePolicy = await readStablePolicy({
-        read: () => loadAllPluginsCacheOnly(e, n),
-        reread: () => rereadPluginsCacheOnly(e),
+        read: () => loadAllPluginsCacheOnly(storageV5, credentials),
+        reread: () => rereadPluginsCacheOnly(storageV5),
       });
       let { disabled, errors } = stablePolicy;
-      let Me = filterPluginsForSafeMode(stablePolicy.enabled);
-      q = pluginRegistry.hookRegistration;
-      let We = hooksModulesRefusalReason() !== undefined;
-      if (!We)
-        await loadLateHooksWhenFlagTurnsOn(Me, () => {
-          if (getPluginRegistry() === pluginRegistry && pluginRegistry.hookRegistrationEpoch === Z) {
+      let plugins = filterPluginsForSafeMode(stablePolicy.enabled);
+      registration = pluginRegistry.hookRegistration;
+      let modulesRefused = hooksModulesRefusalReason() !== undefined;
+      if (!modulesRefused)
+        await loadLateHooksWhenFlagTurnsOn(plugins, () => {
+          if (getPluginRegistry() === pluginRegistry && pluginRegistry.hookRegistrationEpoch === epoch) {
             clearPluginHookCache();
-            loadPluginHooks(e, n).catch(logError);
+            loadPluginHooks(storageV5, credentials).catch(logError);
           }
         }).catch(logError);
       if (getPluginRegistry() !== pluginRegistry) return;
       let policyAllowedSet = getPolicyAllowedSet();
-      let { matchers, hooksLeftOut, loadedWithHooks } = loadPluginHooks_2(Me, policyAllowedSet);
-      let pt = new Set(Me.map((Io) => Io.name));
-      let filtered = errors.filter((error) => error.type === "hook-load-failed" && pt.has(error.plugin));
+      let { matchers, hooksLeftOut, loadedWithHooks } = loadPluginHooks_2(plugins, policyAllowedSet);
+      let pluginNames = new Set(plugins.map((plugin) => plugin.name));
+      let filtered = errors.filter(
+        (error) => error.type === "hook-load-failed" && pluginNames.has(error.plugin),
+      );
       let filtered_2 = errors.filter(
         (error) =>
           (error.type === "path-traversal" || error.type === "path-not-found") &&
           error.component === "hooks" &&
           error.plugin !== undefined &&
-          pt.has(error.plugin),
+          pluginNames.has(error.plugin),
       );
-      let gt = new Set([...filtered, ...filtered_2].flatMap(getPluginNameFromError));
-      let At = new Set(Me.map((Io) => nfcLower(Io.source)));
+      let faultyIds = new Set([...filtered, ...filtered_2].flatMap(getPluginNameFromError));
+      let enabledIds = new Set(plugins.map((plugin) => nfcLower(plugin.source)));
       let pluginsWithHooks = pluginRegistry.pluginsWithHooks;
-      for (let Io of At) if (loadedWithHooks.has(Io) || gt.has(Io)) pluginsWithHooks.add(Io);
-      if (pluginRegistry.hookSwapEpoch > Z) {
+      for (let id of enabledIds) if (loadedWithHooks.has(id) || faultyIds.has(id)) pluginsWithHooks.add(id);
+      if (pluginRegistry.hookSwapEpoch > epoch) {
         logForDebugging("Plugin hooks: a newer registration pass already registered; keeping its hooks");
         for (let unlatchedAbsentManagedId of pluginRegistry.unlatchedAbsentManagedIds)
-          if (pluginsWithHooks.has(unlatchedAbsentManagedId) && At.has(unlatchedAbsentManagedId)) {
+          if (pluginsWithHooks.has(unlatchedAbsentManagedId) && enabledIds.has(unlatchedAbsentManagedId)) {
             logForDebugging(
               `Plugin hooks: ${unlatchedAbsentManagedId} was seen with hooks by an earlier load but dropped in the registered one \u2014 hooks unknown`,
               {
@@ -745,75 +895,83 @@ async function loadPluginHooks(e, n) {
             break;
           }
         let hookRegistrationInFlight = pluginRegistry.hookRegistrationInFlight;
-        if (hookRegistrationInFlight !== undefined && hookRegistrationInFlight !== L)
+        if (hookRegistrationInFlight !== undefined && hookRegistrationInFlight !== previousRegistration)
           await hookRegistrationInFlight.catch(() => markHooksModulesLoadOwed(pluginRegistry));
         return;
       }
-      pluginRegistry.hookSwapEpoch = Z;
+      pluginRegistry.hookSwapEpoch = epoch;
       replaceRegisteredPluginHooks(matchers);
-      if (pluginRegistry.hookRegistrationEpoch === Z) {
-        for (let Io of At) if (!loadedWithHooks.has(Io) && !gt.has(Io)) pluginsWithHooks.delete(Io);
+      if (pluginRegistry.hookRegistrationEpoch === epoch) {
+        for (let id of enabledIds)
+          if (!loadedWithHooks.has(id) && !faultyIds.has(id)) pluginsWithHooks.delete(id);
       }
       installPluginToolsServer();
-      resolveSeatedManagedPlugins(Me);
-      let vouchedPolicyPluginIds = getVouchedPolicyPluginIds();
-      let qt = filterManagedHookSources(vouchedPolicyPluginIds, Me);
-      let Zt = getHookPolicyAnswerState() === "failed" && !Me.some(isNonBuiltinHooksModule);
-      let isSetKnown = (we && isHooksModulesFlagSettled()) || Zt;
-      let pn = orderedPluginIdsMemoizer();
-      let no = orderPluginsForHookLoad(orderPluginsManagedFirst(Me, qt), qt, pn);
+      resolveSeatedManagedPlugins(plugins);
+      let managedIds = getVouchedPolicyPluginIds();
+      let managedModules = filterManagedHookSources(managedIds, plugins);
+      let noNonBuiltin = getHookPolicyAnswerState() === "failed" && !plugins.some(isNonBuiltinHooksModule);
+      let isSetKnown = (flagSettled && isHooksModulesFlagSettled()) || noNonBuiltin;
+      let memo = orderedPluginIdsMemoizer();
+      let orderedModules = orderPluginsForHookLoad(
+        orderPluginsManagedFirst(plugins, managedModules),
+        managedModules,
+        memo,
+      );
       let admissionText = pluginRegistry.admissionText;
-      let ho = !We && recordHooksModulesSwitchRead(pluginRegistry, Me, qt);
-      let yn = We
+      let builtinsOnly =
+        !modulesRefused && recordHooksModulesSwitchRead(pluginRegistry, plugins, managedModules);
+      let skipOptions = modulesRefused
         ? undefined
         : {
             ...hookPolicySummaryState(),
-            isManaged: (Io) => qt?.has(Io.source) === true || pn(Io),
-            builtinsOnly: ho,
+            isManaged: (hookModule) => managedModules?.has(hookModule.source) === true || memo(hookModule),
+            builtinsOnly,
             personsHeld: isPersonModulesHeldWithLog(pluginRegistry),
           };
-      let Kn = isAutoModeGateOpen() && areHooksModulesAllowed();
-      let Xn =
-        yn !== undefined && Kn
+      let autoGateOn = isAutoModeGateOpen() && areHooksModulesAllowed();
+      let effectiveOptions =
+        skipOptions !== undefined && autoGateOn
           ? {
-              ...yn,
+              ...skipOptions,
               builtinsOnly: false,
               personsHeld: false,
             }
-          : yn;
+          : skipOptions;
       pluginRegistry.organizationAsk.isHeld =
-        Xn !== undefined &&
-        no.some(
-          (Io) =>
-            isNonBuiltinHooksModule(Io) &&
-            !arePluginHooksHeld(Io) &&
-            describeHooksModulesTurnedOff(Xn.isManaged(Io), Xn) === MODS_POLICY_UNKNOWN_REASON,
+        effectiveOptions !== undefined &&
+        orderedModules.some(
+          (hookModule) =>
+            isNonBuiltinHooksModule(hookModule) &&
+            !arePluginHooksHeld(hookModule) &&
+            describeHooksModulesTurnedOff(effectiveOptions.isManaged(hookModule), effectiveOptions) ===
+              MODS_POLICY_UNKNOWN_REASON,
         );
-      let fo =
-        yn === undefined
+      let skipResult =
+        skipOptions === undefined
           ? {
-              chosen: logHooksModulesDisabled(no),
+              chosen: logHooksModulesDisabled(orderedModules),
               leftOut: [],
             }
-          : describeHooksModuleSkip(no, yn);
-      let chosen = fo.chosen;
-      let bo = [...hooksLeftOut, ...fo.leftOut];
-      if (bo.length > 0 || pluginRegistry.hooksLeftOutByName.length > 0) {
-        pluginRegistry.hooksLeftOutByName = bo;
+          : describeHooksModuleSkip(orderedModules, skipOptions);
+      let chosen = skipResult.chosen;
+      let leftOut = [...hooksLeftOut, ...skipResult.leftOut];
+      if (leftOut.length > 0 || pluginRegistry.hooksLeftOutByName.length > 0) {
+        pluginRegistry.hooksLeftOutByName = leftOut;
         pluginRegistry.hooksLeftOutByNameChanged.emit();
       }
-      let vn = (Io) => !Se || (ke && isBuiltinPluginId(Io.source));
-      let filtered_3 = chosen.filter((Io) => !vn(Io));
+      let isLoadAllowed = (hookModule) =>
+        !trustPending || (demoTolerant && isBuiltinPluginId(hookModule.source));
+      let filtered_3 = chosen.filter((hookModule) => !isLoadAllowed(hookModule));
       if (filtered_3.length > 0)
         logForDebugging(
           "hooks modules not loaded until workspace trust is accepted: " +
-            filtered_3.map((Io) => Io.name).join(", "),
+            filtered_3.map((hookModule) => hookModule.name).join(", "),
         );
-      let filtered_4 = chosen.filter(vn);
+      let filtered_4 = chosen.filter(isLoadAllowed);
       let readAt = WATCH_CLOCK.now();
-      if (!Se || ke) {
-        G = await loadHooksModules(
-          chainOrder(filtered_4, vouchedPolicyPluginIds, resolveManagedPluginOrder()),
+      if (!trustPending || demoTolerant) {
+        modulesResult = await loadHooksModules(
+          chainOrder(filtered_4, managedIds, resolveManagedPluginOrder()),
           admissionText,
         ).then(
           () => {
@@ -826,58 +984,65 @@ async function loadPluginHooks(e, n) {
             };
           },
         );
-        if (ho && G === undefined && pluginRegistry.hookSwapEpoch === Z)
+        if (builtinsOnly && modulesResult === undefined && pluginRegistry.hookSwapEpoch === epoch)
           markHooksModulesSwitchOff(pluginRegistry);
-        if (!We) {
+        if (!modulesRefused) {
           let isLoadFaultless =
-            filtered_3.length === 0 && G === undefined && pluginRegistry.hookSwapEpoch === Z;
-          let rs = {
+            filtered_3.length === 0 && modulesResult === undefined && pluginRegistry.hookSwapEpoch === epoch;
+          let outcome = {
             registry: pluginRegistry,
             isSetKnown,
             isLoadFaultless,
-            unmet: hooksModulesLeftOutByName(Me, filtered_4, vouchedPolicyPluginIds, fo.leftOut),
-            isDecided: hasHooksModulesAwaitingFlag(Me, hookPolicySummaryState()),
+            unmet: hooksModulesLeftOutByName(plugins, filtered_4, managedIds, skipResult.leftOut),
+            isDecided: hasHooksModulesAwaitingFlag(plugins, hookPolicySummaryState()),
           };
-          settleManagedModulesLoad(rs);
-          if (!ho) updateWakeBound(rs);
+          settleManagedModulesLoad(outcome);
+          if (!builtinsOnly) updateWakeBound(outcome);
         }
       }
-      let un = !Se && !isSafeMode();
-      startPluginDirWatches(un ? chosen : [], un ? [...Me, ...disabled] : [], {
+      let watchesAllowed = !trustPending && !isSafeMode();
+      startPluginDirWatches(watchesAllowed ? chosen : [], watchesAllowed ? [...plugins, ...disabled] : [], {
         readAt,
-        isFaulted: G !== undefined,
+        isFaulted: modulesResult !== undefined,
       });
-      if (un) pluginDirsOverride.get()?.();
-      if (pluginRegistry.hookSwapEpoch === Z) await writeAllTypeRoots(filtered_4, [...Me, ...disabled]);
+      if (watchesAllowed) pluginDirsOverride.get()?.();
+      if (pluginRegistry.hookSwapEpoch === epoch)
+        await writeAllTypeRoots(filtered_4, [...plugins, ...disabled]);
       let reduced = Object.values(matchers).reduce(
         (sum, matchers) => sum + matchers.reduce((acc, m) => acc + m.hooks.length, 0),
         0,
       );
-      logForDebugging(`Registered ${reduced} hooks from ${Me.length} plugins`);
-      let $o = managedPluginNameSet();
-      let yo = policyAllowedSet && $o ? new Set([...policyAllowedSet, ...$o]) : (policyAllowedSet ?? $o);
-      let Ho = yo === null ? null : new Set([...yo].map(nfcLower));
-      let rr = yo === null ? null : new Set([...yo].map((Io) => nfcLower(Io.slice(Io.lastIndexOf("@") + 1))));
-      let br = (Io) => Ho !== null && Ho.has(nfcLower(Io));
-      let Hr = (error) => {
-        if (yo === null || rr === null) return false;
-        if ("pluginId" in error && error.pluginId && br(error.pluginId)) return true;
+      logForDebugging(`Registered ${reduced} hooks from ${plugins.length} plugins`);
+      let managedNames = managedPluginNameSet();
+      let managedSet =
+        policyAllowedSet && managedNames
+          ? new Set([...policyAllowedSet, ...managedNames])
+          : (policyAllowedSet ?? managedNames);
+      let loweredManaged = managedSet === null ? null : new Set([...managedSet].map(nfcLower));
+      let marketplaces =
+        managedSet === null
+          ? null
+          : new Set([...managedSet].map((id) => nfcLower(id.slice(id.lastIndexOf("@") + 1))));
+      let isManagedId = (id) => loweredManaged !== null && loweredManaged.has(nfcLower(id));
+      let isManagedError = (error) => {
+        if (managedSet === null || marketplaces === null) return false;
+        if ("pluginId" in error && error.pluginId && isManagedId(error.pluginId)) return true;
         if ("source" in error) {
-          if (br(error.source)) return true;
-          let zo = marketplaceOf(error.source);
-          if (zo !== undefined) {
+          if (isManagedId(error.source)) return true;
+          let marketplace = marketplaceOf(error.source);
+          if (marketplace !== undefined) {
             let plugin = "plugin" in error ? error.plugin : undefined;
-            let Es = plugin ?? ("manifestName" in error ? error.manifestName : undefined);
-            if (Es !== undefined && br(`${Es}@${zo}`)) return true;
+            let pluginName = plugin ?? ("manifestName" in error ? error.manifestName : undefined);
+            if (pluginName !== undefined && isManagedId(`${pluginName}@${marketplace}`)) return true;
             if (plugin === undefined) {
               let attribution = "attribution" in error ? error.attribution : undefined;
               let marketplaceName = attribution?.marketplaceName;
               if (
-                [...(Ho ?? [])].some(
-                  (fs) =>
-                    !At.has(fs) &&
-                    (fs.endsWith(`@${zo}`) ||
-                      (marketplaceName !== undefined && fs.endsWith(`@${nfcLower(marketplaceName)}`))),
+                [...(loweredManaged ?? [])].some(
+                  (managedId) =>
+                    !enabledIds.has(managedId) &&
+                    (managedId.endsWith(`@${marketplace}`) ||
+                      (marketplaceName !== undefined && managedId.endsWith(`@${nfcLower(marketplaceName)}`))),
                 )
               )
                 return true;
@@ -886,56 +1051,56 @@ async function loadPluginHooks(e, n) {
           }
         }
         if (getPluginNameFromError_2(error) !== undefined) return false;
-        if ("marketplace" in error) return rr.has(nfcLower(error.marketplace));
+        if ("marketplace" in error) return marketplaces.has(nfcLower(error.marketplace));
         return true;
       };
-      let filtered_5 = errors.filter((error) => isMarketplaceLevelLoadError(error) && Hr(error));
-      let cs = new Set(
+      let filtered_5 = errors.filter((error) => isMarketplaceLevelLoadError(error) && isManagedError(error));
+      let policyBlocked = new Set(
         errors.flatMap((error) =>
           error.type === "marketplace-blocked-by-policy" && error.sourceUnverifiable !== true
             ? [nfcLower(error.source)]
             : [],
         ),
       );
-      let _r = (Io) => !At.has(Io) && !cs.has(Io);
-      let Cr;
+      let isUnseen = (id) => !enabledIds.has(id) && !policyBlocked.has(id);
+      let staleHookedId;
       for (let pluginsWithHook of pluginsWithHooks)
-        if (br(pluginsWithHook) && _r(pluginsWithHook)) {
-          Cr = pluginsWithHook;
+        if (isManagedId(pluginsWithHook) && isUnseen(pluginsWithHook)) {
+          staleHookedId = pluginsWithHook;
           break;
         }
-      let Vr = filtered.find(Hr) ?? filtered_2.find(Hr);
-      let Oo = Vr ?? filtered_5.find((Io) => !isBenignLoadError(Io));
-      S =
-        Oo !== undefined
-          ? `managed plugin "${getPluginNameFromError_2(Oo) ?? Oo.source}" ${Oo === Vr ? "loaded without its hooks" : "did not load"} (${pluginErrorText(Oo)})`
-          : Cr !== undefined
-            ? formatManagedPluginMissingMessage(Cr)
+      let relevantError = filtered.find(isManagedError) ?? filtered_2.find(isManagedError);
+      let reportedError = relevantError ?? filtered_5.find((error) => !isBenignLoadError(error));
+      unknownCause =
+        reportedError !== undefined
+          ? `managed plugin "${getPluginNameFromError_2(reportedError) ?? reportedError.source}" ${reportedError === relevantError ? "loaded without its hooks" : "did not load"} (${pluginErrorText(reportedError)})`
+          : staleHookedId !== undefined
+            ? formatManagedPluginMissingMessage(staleHookedId)
             : undefined;
-      if (pluginRegistry.hookSwapEpoch === Z) {
-        let Io = new Set();
-        if (S === undefined && Ho !== null) {
-          for (let zo of Ho) if (_r(zo)) Io.add(zo);
+      if (pluginRegistry.hookSwapEpoch === epoch) {
+        let absentIds = new Set();
+        if (unknownCause === undefined && loweredManaged !== null) {
+          for (let id of loweredManaged) if (isUnseen(id)) absentIds.add(id);
         }
-        pluginRegistry.unlatchedAbsentManagedIds = Io;
+        pluginRegistry.unlatchedAbsentManagedIds = absentIds;
       }
       let filtered_6 = filtered_5.filter(isBenignLoadError);
-      let filtered_7 = filtered_5.filter((Io) => !isBenignLoadError(Io));
+      let filtered_7 = filtered_5.filter((error) => !isBenignLoadError(error));
       if (filtered_6.length > 0) {
-        let joined = uniq(filtered_6.map((zo) => zo.type)).join(", ");
+        let joined = uniq(filtered_6.map((error) => error.type)).join(", ");
         logForDebugging(
           `Plugin hooks: ${filtered_6.length} managed plugin(s) not materialized on this machine (${joined}: the marketplace is not registered here, its catalog is not loaded, or the plugin was never fetched) \u2014 any hooks those plugins deliver are absent this session`,
         );
       }
       if (filtered_7.length > 0) {
-        let joined = uniq(filtered_7.map((zo) => zo.type)).join(", ");
+        let joined = uniq(filtered_7.map((error) => error.type)).join(", ");
         logForDebugging(
           `Plugin hooks: ${filtered_7.length} managed plugin load error(s) (${joined}) \u2014 any hooks those plugins deliver are absent this session`,
           {
             level: "warn",
           },
         );
-      } else if (Cr !== undefined)
+      } else if (staleHookedId !== undefined)
         logForDebugging(
           "Plugin hooks: a managed plugin that registered hooks earlier this session did not load \u2014 hooks unknown",
           {
@@ -946,14 +1111,14 @@ async function loadPluginHooks(e, n) {
         logFeatureBad("plugin_load_hooks", "plugin_hooks_file_load_failed", {
           hook_error_count: fromNumber(filtered.length),
           registered_hooks: fromNumber(reduced),
-          plugin_count: fromNumber(Me.length),
+          plugin_count: fromNumber(plugins.length),
         });
       else if (filtered_2.length > 0)
         logFeatureBad("plugin_load_hooks", "plugin_hooks_path_invalid", {
           hook_error_count: fromNumber(filtered_2.length),
           registered_hooks: fromNumber(reduced),
         });
-      else if (filtered_5.length > 0 || Cr !== undefined)
+      else if (filtered_5.length > 0 || staleHookedId !== undefined)
         logFeatureSad("plugin_load_hooks", "managed_plugin_unloaded", {
           hook_error_count: fromNumber(filtered_5.length),
           registered_hooks: fromNumber(reduced),
@@ -963,54 +1128,59 @@ async function loadPluginHooks(e, n) {
       logFeatureBad("plugin_load_hooks", "plugin_hooks_register_failed");
       throw error;
     }
-    if (G !== undefined) {
-      if (L !== undefined && q === L && pluginRegistry.hookRegistration === q) {
+    if (modulesResult !== undefined) {
+      if (
+        previousRegistration !== undefined &&
+        registration === previousRegistration &&
+        pluginRegistry.hookRegistration === registration
+      ) {
         pluginRegistry.hookRegistration = undefined;
-        y = true;
-      } else if (pluginRegistry.hookRegistration === q) pluginRegistry.hookRegistration = undefined;
-      h = true;
-      throw G.error;
+        superseded = true;
+      } else if (pluginRegistry.hookRegistration === registration)
+        pluginRegistry.hookRegistration = undefined;
+      failedOurselves = true;
+      throw modulesResult.error;
     }
   })();
-  if (s) {
+  if (isFirst) {
     let hookRegistration = pluginRegistry.hookRegistration;
-    L = hookRegistration;
+    previousRegistration = hookRegistration;
     pluginRegistry.hookRegistrationInFlight = hookRegistration;
     pluginRegistry.hookRegistrationsInFlight.add(hookRegistration);
-    let q = () => {
+    let onDone = () => {
       pluginRegistry.hookRegistrationsInFlight.delete(hookRegistration);
       pluginRegistry.hookRegistrationEnded.emit();
     };
-    hookRegistration.then(q, q);
+    hookRegistration.then(onDone, onDone);
     pluginRegistry.hookRegistrationArgs = {
-      storageV5: e,
-      credentials: n,
+      storageV5,
+      credentials,
     };
-    let Z = (Se) => {
+    let settleCause = (cause) => {
       if (
         pluginRegistry.hookRegistration === hookRegistration ||
-        (pluginRegistry.hookRegistration === undefined && y)
+        (pluginRegistry.hookRegistration === undefined && superseded)
       ) {
-        let we;
+        let missingCause;
         for (let unlatchedAbsentManagedId of pluginRegistry.unlatchedAbsentManagedIds)
           if (pluginRegistry.pluginsWithHooks.has(unlatchedAbsentManagedId)) {
-            we = formatManagedPluginMissingMessage(unlatchedAbsentManagedId);
+            missingCause = formatManagedPluginMissingMessage(unlatchedAbsentManagedId);
             break;
           }
-        pluginRegistry.hooksUnknownCause = Se ?? we;
-        pluginRegistry.hookRegistrationRanBlind = w || policySettingsUnreadableSafe();
-      } else if (pluginRegistry.hookRegistration === undefined && Se !== undefined)
-        pluginRegistry.hooksUnknownCause = Se;
+        pluginRegistry.hooksUnknownCause = cause ?? missingCause;
+        pluginRegistry.hookRegistrationRanBlind = ranBlind || policySettingsUnreadableSafe();
+      } else if (pluginRegistry.hookRegistration === undefined && cause !== undefined)
+        pluginRegistry.hooksUnknownCause = cause;
     };
     hookRegistration
       .then(
-        () => Z(S),
+        () => settleCause(unknownCause),
         (error) => {
-          if (h) {
-            Z(S);
+          if (failedOurselves) {
+            settleCause(unknownCause);
             return;
           }
-          Z(describePluginLoadFailure(error));
+          settleCause(describePluginLoadFailure(error));
         },
       )
       .finally(() => {
@@ -1024,9 +1194,9 @@ async function loadPluginHooks(e, n) {
 /**
  * 若有被推迟（owed）的插件钩子注册，执行一次 loadPluginHooks，失败只记日志。
  */
-async function startOwedPluginHookRegistration(e, n) {
+async function startOwedPluginHookRegistration(storageV5, credentials) {
   if (!getPluginRegistry().hookRegistrationOwed) return;
-  await loadPluginHooks(e, n).catch((error) => {
+  await loadPluginHooks(storageV5, credentials).catch((error) => {
     logForDebugging(`owed plugin hook registration: ${errorMessage(error)}`);
   });
 }
@@ -1034,11 +1204,11 @@ async function startOwedPluginHookRegistration(e, n) {
 /**
  * hooks 注册结果不确定时重试（可清插件缓存后重新注册）。
  */
-async function pluginHooksUnknownCause(e) {
+async function pluginHooksUnknownCause(retry) {
   let pluginRegistry = getPluginRegistry();
   await pluginRegistry.hookRegistrationInFlight?.catch(() => {});
   if (pluginRegistry.hooksUnknownCause === undefined || !areHooksEnabled()) return;
-  if (e) {
+  if (retry) {
     pluginRegistry.hookRegistration = undefined;
     clearPluginCache("plugin hook registration retry");
     let hookRegistrationArgs = pluginRegistry.hookRegistrationArgs;
@@ -1088,9 +1258,9 @@ function clearPluginHookCache() {
 /**
  * 工作区信任确认后，若有等待信任的钩子模块，重新加载插件钩子。
  */
-function loadHooksModulesHeldForTrust(e, n) {
+function loadHooksModulesHeldForTrust(storageV5, credentials) {
   if (getPluginRegistry().hookModulesAwaitTrust && isProjectScopeTrustAccepted())
-    loadPluginHooks(e, n).catch((error) => {
+    loadPluginHooks(storageV5, credentials).catch((error) => {
       logForDebugging(`plugin hooks after workspace trust: ${errorMessage(error)}`);
     });
 }
@@ -1098,12 +1268,12 @@ function loadHooksModulesHeldForTrust(e, n) {
 /**
  * 插件被移除/禁用后，从已注册 hooks 与已加载 hooks 模块中删掉它们的条目。
  */
-async function pruneRemovedPluginHooks(e, n) {
+async function pruneRemovedPluginHooks(storageV5, credentials) {
   let pluginRegistry = getPluginRegistry();
   if (!getRegisteredHooks() && pluginRegistry.loadedModules.length === 0) return;
-  let { enabled } = await loadAllPluginsCacheOnly(e, n);
+  let { enabled } = await loadAllPluginsCacheOnly(storageV5, credentials);
   if (getPluginRegistry() !== pluginRegistry) return;
-  let enabledRoots = new Set(enabled.map((w) => w.path));
+  let enabledRoots = new Set(enabled.map((plugin) => plugin.path));
   await pruneHooksModules(new Set(enabled.map(marketplaceSource)));
   if (getPluginRegistry() !== pluginRegistry) return;
   let current = getRegisteredHooks();
@@ -1134,116 +1304,118 @@ async function standDownInstalledHooksModules() {
 /**
  * 订阅设置变化：插件相关设置或 hooks 模块开关变化时重置并重新 registerPluginHooks（热加载），仅注册一次。
  */
-function setupPluginHookHotReload(storageV5, n) {
+function setupPluginHookHotReload(storageV5, credentials) {
   watchPluginOptionChanges(refreshOptions);
   let pluginRegistry = getPluginRegistry();
   if (pluginRegistry.hookHotReloadUnsubscribe) return;
   pluginRegistry.hookHotReloadSettingsSnapshot = managedHooksPolicyStamp();
   pluginRegistry.hookHotReloadTierSnapshot = jsonStringify(resolveManagedPluginOrder());
-  let s = () => {
+  let reload = () => {
     clearPluginHookCache();
-    return loadPluginHooks(storageV5, n);
+    return loadPluginHooks(storageV5, credentials);
   };
-  let h = (source) => uiLog("hooks", source);
+  let tell = (source) => uiLog("hooks", source);
   if (!getIsNonInteractiveSession())
     pluginRegistry.hooksModulesSwitchUnwatch = watchRolloutSwitchChanges(
-      () => void followHooksModulesRollout(s, h, standDownInstalledHooksModules),
+      () => void followHooksModulesRollout(reload, tell, standDownInstalledHooksModules),
     );
   (pluginRegistry.hookRegistrationInFlight ?? Promise.resolve())
     .catch(() => {
       return;
     })
-    .then(() => followRolloutSwitchOnce(s, h, standDownInstalledHooksModules))
+    .then(() => followRolloutSwitchOnce(reload, tell, standDownInstalledHooksModules))
     .catch(logError);
-  function y() {
-    loadPluginHooks(storageV5, n)
+  function reloadWithNotice() {
+    loadPluginHooks(storageV5, credentials)
       .catch((error) => {
         logForDebugging(`Plugin hooks: reload failed: ${errorMessage(error)}`, {
           level: "error",
         });
       })
       .then(() => {
-        if (!getIsNonInteractiveSession()) notifyModsRejudged(h);
+        if (!getIsNonInteractiveSession()) notifyModsRejudged(tell);
       })
       .catch(logError);
   }
-  pluginRegistry.hookHotReloadUnsubscribe = settingsChangeDetector.subscribe((G) => {
+  pluginRegistry.hookHotReloadUnsubscribe = settingsChangeDetector.subscribe((source) => {
     queueHookedMergeOnSettingsChange();
-    let q = pluginRegistry.admissionText !== null && refreshModAdmission();
-    let Z = jsonStringify(resolveManagedPluginOrder());
-    let Se = Z !== pluginRegistry.hookHotReloadTierSnapshot;
-    if (q || G === "policySettings" || (G === "userSettings" && Se)) {
+    let admissionRefreshed = pluginRegistry.admissionText !== null && refreshModAdmission();
+    let tierStamp = jsonStringify(resolveManagedPluginOrder());
+    let tierChanged = tierStamp !== pluginRegistry.hookHotReloadTierSnapshot;
+    if (admissionRefreshed || source === "policySettings" || (source === "userSettings" && tierChanged)) {
       let newSnapshot = managedHooksPolicyStamp();
-      if (!q && newSnapshot === pluginRegistry.hookHotReloadSettingsSnapshot) {
+      if (!admissionRefreshed && newSnapshot === pluginRegistry.hookHotReloadSettingsSnapshot) {
         logForDebugging("Plugin hooks: skipping reload, plugin-affecting settings unchanged");
         return;
       }
       pluginRegistry.hookHotReloadSettingsSnapshot = newSnapshot;
-      pluginRegistry.hookHotReloadTierSnapshot = Z;
+      pluginRegistry.hookHotReloadTierSnapshot = tierStamp;
       logForDebugging("Plugin hooks: reloading due to plugin-affecting settings change");
       clearPluginCache("loadPluginHooks: plugin-affecting settings changed");
       clearPluginHookCache();
-      y();
+      reloadWithNotice();
     }
   });
   let hookHotReloadUnsubscribe = pluginRegistry.hookHotReloadUnsubscribe;
-  let w = subscribe_2(() => {
+  let unsubscribe = subscribe_2_2(() => {
     queueHookedSettingsMerge("the loaded plugins changed");
   });
   pluginRegistry.hookHotReloadUnsubscribe = () => {
     hookHotReloadUnsubscribe();
-    w();
+    unsubscribe();
   };
   queueHookedSettingsMerge("the loaded plugins changed");
   if (pluginRegistry.admissionText !== null && refreshModAdmission()) {
     clearPluginHookCache();
-    y();
+    reloadWithNotice();
   }
 }
 //@ chunk-e6aww6q8.js:4179640-4179834 placement
 function describePluginLoadFailure(error) {
-  let n = `plugins could not be loaded (${errorMessage(error)})`;
+  let message = `plugins could not be loaded (${errorMessage(error)})`;
   try {
-    let r = policySettingsUnreadableSafe();
-    return r || getPolicyAllowedSet() !== null || hasManagedPlugins()
-      ? `${n}${r ? ", nor could managed settings be read" : ""}`
+    let unreadable = policySettingsUnreadableSafe();
+    return unreadable || getPolicyAllowedSet() !== null || hasManagedPlugins()
+      ? `${message}${unreadable ? ", nor could managed settings be read" : ""}`
       : undefined;
   } catch (error) {
     logError(toError(error));
-    return n;
+    return message;
   }
 }
 //@ chunk-e6aww6q8.js:4179834-4179959 placement
-function formatManagedPluginMissingMessage(unlatchedAbsentManagedId) {
-  return `managed plugin ${unlatchedAbsentManagedId} registered hooks earlier this session and is missing from the latest plugin load`;
+function formatManagedPluginMissingMessage(pluginId) {
+  return `managed plugin ${pluginId} registered hooks earlier this session and is missing from the latest plugin load`;
 }
 //@ chunk-e6aww6q8.js:4179959-4180181 placement = getPluginNameFromError (0.841)
 function getPluginNameFromError(error) {
-  let n = [];
-  if ("pluginId" in error && error.pluginId) n.push(nfcLower(error.pluginId));
+  let names = [];
+  if ("pluginId" in error && error.pluginId) names.push(nfcLower(error.pluginId));
   if ("source" in error) {
-    n.push(nfcLower(error.source));
-    let r = marketplaceOf(error.source);
-    if ("plugin" in error && error.plugin !== undefined && r !== undefined)
-      n.push(nfcLower(`${error.plugin}@${r}`));
+    names.push(nfcLower(error.source));
+    let marketplace = marketplaceOf(error.source);
+    if ("plugin" in error && error.plugin !== undefined && marketplace !== undefined)
+      names.push(nfcLower(`${error.plugin}@${marketplace}`));
   }
-  return n;
+  return names;
 }
 //@ chunk-e6aww6q8.js:4180181-4180565 placement
 /**
  * 判断插件加载错误是否属于“预期内、无需提示”的类型：市场未找到（非注册表读失败）、被策略阻止、市场加载失败（非目录读失败）、未记录安装路径的缓存未命中。
  */
-function isBenignLoadError(e) {
-  switch (e.type) {
+function isBenignLoadError(error) {
+  switch (error.type) {
     case "marketplace-not-found":
-      return e.registryReadFailed !== true && e.registrationHidden === undefined;
+      return error.registryReadFailed !== true && error.registrationHidden === undefined;
     case "marketplace-blocked-by-policy":
       return true;
     case "marketplace-load-failed":
-      return e.catalogReadFailed !== true && e.untrustedReservedName !== true;
+      return error.catalogReadFailed !== true && error.untrustedReservedName !== true;
     case "plugin-cache-miss":
       return (
-        e.installPath === NOT_RECORDED && e.registryReadFailed !== true && e.seedHasOtherVersion !== true
+        error.installPath === NOT_RECORDED &&
+        error.registryReadFailed !== true &&
+        error.seedHasOtherVersion !== true
       );
     default:
       return false;
@@ -1259,116 +1431,6 @@ function isMarketplaceLevelLoadError(error) {
     error.type === "plugin-not-found" ||
     (error.type === "marketplace-blocked-by-policy" && error.sourceUnverifiable === true)
   );
-}
-//@ chunk-pd0t5xas.js:809-868 placement
-function policySettingsUnreadableSafe() {
-  try {
-    return policySettingsUnreadable();
-  } catch (error) {
-    logError(toError(error));
-    return true;
-  }
-}
-//@ chunk-pd0t5xas.js:868-1057 placement
-/**
- * 内置插件只能由受信设置启用时返回其规范 id。
- */
-function trustedOnlyBuiltinPluginId(e) {
-  if (!isBuiltinPluginId(e)) return;
-  let sliced = canonicalPluginId(e).slice(0, -`@${BUILTIN}`.length);
-  for (let [o, r] of getHostState().builtinPlugins)
-    if (pluginNamesEqual(o, sliced))
-      return r.enabledFromTrustedSettingsOnly === true ? `${o}@${BUILTIN}` : undefined;
-  return;
-}
-//@ chunk-pd0t5xas.js:1057-1085 placement
-/**
- * hasTrustedOnlyBuiltinPlugin：该插件是否只能由受信设置启用。
- */
-var hasTrustedOnlyBuiltinPlugin = (e) => trustedOnlyBuiltinPluginId(e) !== undefined;
-//@ chunk-pd0t5xas.js:3923-4164 placement
-/**
- * 是否存在任何非内置插件（启用、带钩子、已加载模块、托管、内联、同步）。
- */
-function hasNonBuiltinPluginSurface() {
-  try {
-    let pluginRegistry = getPluginRegistry();
-    return (
-      enabledPluginIds().some((o) => !isBuiltinPluginId(o)) ||
-      [...pluginRegistry.pluginsWithHooks].some((pluginsWithHook) => !isBuiltinPluginId(pluginsWithHook)) ||
-      pluginRegistry.loadedModules.some((loadedModule) => !hasLink(loadedModule)) ||
-      hasManagedPlugins() ||
-      policySettingsUnreadable() ||
-      getInlinePlugins().length > 0 ||
-      getInlinePluginsNoMcp().length > 0 ||
-      getInlinePluginUrls().length > 0 ||
-      getSyncedPluginDirs().length > 0
-    );
-  } catch (error) {
-    logError(toError(error));
-    return true;
-  }
-}
-//@ chunk-pd0t5xas.js:4164-4368 placement
-/**
- * 函数钩子注册是否还没完成：欠缺、进行中、原因未知、盲跑或托管设置不可读，且开关允许并存在非内置插件；出错保守返回 true。
- */
-function isHookRegistrationPending() {
-  try {
-    let pluginRegistry = getPluginRegistry();
-    return (
-      (pluginRegistry.hookRegistrationOwed ||
-        pluginRegistry.hookRegistrationInFlight !== undefined ||
-        pluginRegistry.hooksUnknownCause !== undefined ||
-        pluginRegistry.hookRegistrationRanBlind ||
-        policySettingsUnreadableSafe()) &&
-      areHooksEnabled() &&
-      hasNonBuiltinPluginSurface()
-    );
-  } catch (error) {
-    logError(toError(error));
-    return true;
-  }
-}
-//@ chunk-czx62zen.js:13462-14027 fingerprint = getPluginAffectingSettingsSnapshot (0.609)
-/**
- * 计算影响插件加载的设置指纹（enabledPlugins、extraKnownMarketplaces、策略等），用于判断缓存的插件加载结果是否过期。
- */
-function getPluginAffectingSettingsSnapshot() {
-  let merged = getVouchedAdminPolicyTier();
-  let n = _(merged);
-  let o = hasPluginDeclarations(n);
-  let enables = o ? merged : getSettingsForSource("policySettings");
-  let adminAuthoredPolicySettings = getAdminAuthoredPolicySettings();
-  if (getRemotePolicyTierWithKind().servedSnapshot)
-    return {
-      enables,
-      names: adminAuthoredPolicySettings,
-    };
-  if (o)
-    return {
-      enables,
-      names: merged,
-    };
-  let a = new Map();
-  let c = new Set();
-  for (let l of n) {
-    let filtered = Object.entries(l.extraKnownMarketplaces ?? {}).filter(([key]) => !c.has(nfcLower(key)));
-    for (let [i, d] of filtered) a.set(i, d);
-    for (let [i] of filtered) c.add(nfcLower(i));
-  }
-  let u = c.size > 0 || n.some((l) => l.strictKnownMarketplaces !== undefined);
-  return {
-    enables,
-    names: u
-      ? {
-          extraKnownMarketplaces: Object.fromEntries(a),
-          ...(merged?.strictKnownMarketplaces !== undefined && {
-            strictKnownMarketplaces: merged.strictKnownMarketplaces,
-          }),
-        }
-      : adminAuthoredPolicySettings,
-  };
 }
 export {
   isHookRegistrationPending,
@@ -1389,4 +1451,8 @@ export {
   clearPluginHookCache,
   setupPluginHookHotReload,
   isPolicyUnreadPastItsBounds,
+  loadHooksModulesHeldForTrust,
+  registerPluginWorktreeHooks,
+  standDownInstalledHooksModules,
+  startOwedPluginHookRegistration,
 };

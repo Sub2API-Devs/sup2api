@@ -28,23 +28,24 @@ import { MAX_INT32, REMOTE_TOOL_PROTOCOL_VERSION } from "./protocolConstants.js"
 import { MAX_INPUT_SCHEMA_DEPTH } from "./toolDescriptors.js";
 import { resolveSchemaRef, SCHEMA_COMBINATOR_KEYS } from "./inputSchemaFlatten.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, literal, string, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, literal, stringSchema, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { isSupportedResourceMimeType } from "../../../vendor/@anthropic-ai/sdk/helpers/beta/mcp.mjs";
 import { setSkillsSyncVetoed, setAccountSkillsSyncEnabled, getRootSession } from "../../bootstrap/state.js";
 import { HostScoped } from "../../utils/hostScoped.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-g54kbxqw.js:29325-29379 placement
-function envelopeOf(e) {
-  let n = asPlainRecord(e);
-  return n && ANTHROPIC_REMOTETOOLEXECUTION in n ? n : undefined;
+function envelopeOf(value) {
+  let record = asPlainRecord(value);
+  return record && ANTHROPIC_REMOTETOOLEXECUTION in record ? record : undefined;
 }
 //@ chunk-g54kbxqw.js:29379-29500 placement
-function readResultEnvelope(e) {
-  if (!e)
+function readResultEnvelope(value) {
+  if (!value)
     return {
       status: "absent",
     };
-  let resultEnvelope = parseResultEnvelope(e[ANTHROPIC_REMOTETOOLEXECUTION]);
+  let resultEnvelope = parseResultEnvelope(value[ANTHROPIC_REMOTETOOLEXECUTION]);
   return resultEnvelope
     ? {
         status: "present",
@@ -60,31 +61,31 @@ function readResultEnvelope(e) {
  */
 function toRemoteToolContentBlocks(content) {
   if (typeof content === "string") return content;
-  return content.map((n) => {
-    switch (n.type) {
+  return content.map((block) => {
+    switch (block.type) {
       case "text":
         return {
           type: "text",
-          text: n.text,
+          text: block.text,
         };
       case "image":
-        return n.source.type === "base64"
+        return block.source.type === "base64"
           ? {
               type: "image",
               source: {
                 type: "base64",
-                media_type: n.source.media_type,
-                data: n.source.data,
+                media_type: block.source.media_type,
+                data: block.source.data,
               },
             }
           : {
               type: "text",
-              text: jsonStringify(n),
+              text: jsonStringify(block),
             };
       default:
         return {
           type: "text",
-          text: jsonStringify(n),
+          text: jsonStringify(block),
         };
     }
   });
@@ -94,20 +95,20 @@ function toRemoteToolContentBlocks(content) {
  * 由远程工具执行信封构造 MCP CallTool 结果（refused/failed/is_error 时 isError，信封放进 structuredContent/_meta）。
  */
 function buildRemoteToolCallResult({ envelope, content }) {
-  let s =
+  let isError =
     envelope.outcome === "refused" ||
     envelope.outcome === "failed" ||
     (envelope.outcome === "completed" && envelope.is_error);
-  let r = sanitizeRemoteToolEnvelope(envelope);
+  let sanitized = sanitizeRemoteToolEnvelope(envelope);
   return {
     content: toMcpContentBlocks(toRemoteToolContentBlocks(content)),
     structuredContent: {
-      [ANTHROPIC_REMOTETOOLEXECUTION]: r,
+      [ANTHROPIC_REMOTETOOLEXECUTION]: sanitized,
     },
-    isError: s,
-    ...(s && {
+    isError,
+    ...(isError && {
       _meta: {
-        [ANTHROPIC_REMOTETOOLEXECUTION]: r,
+        [ANTHROPIC_REMOTETOOLEXECUTION]: sanitized,
       },
     }),
   };
@@ -118,7 +119,7 @@ function buildRemoteToolCallResult({ envelope, content }) {
  */
 function sanitizeRemoteToolEnvelope(envelope) {
   let target = clipTarget(envelope.target);
-  let s = "notes" in envelope &&
+  let notesField = "notes" in envelope &&
     envelope.notes !== undefined && {
       notes: envelope.notes.slice(0, MAX_ACCEPT_NOTES).map((note) => clipText(note)),
     };
@@ -127,7 +128,7 @@ function sanitizeRemoteToolEnvelope(envelope) {
       return {
         ...envelope,
         target,
-        ...s,
+        ...notesField,
       };
     case "refused":
     case "failed":
@@ -135,12 +136,12 @@ function sanitizeRemoteToolEnvelope(envelope) {
         ...envelope,
         target,
         message: clipText(envelope.message),
-        ...s,
+        ...notesField,
       };
     case "needs_approval": {
-      let { auto_mode: autoMode, ...h } = envelope;
+      let { auto_mode: autoMode, ...rest } = envelope;
       return {
-        ...h,
+        ...rest,
         target,
         tool: clipText(envelope.tool, MAX_TOOL_NAME_CHARS),
         message: clipText(envelope.message),
@@ -186,98 +187,107 @@ function clampToMaxPageSize(deadlineMs) {
 /**
  * 导出函数 `byteLengthOf`：参数 e，返回 Buffer.byteLength(jsonStringify(e), "utf8")。
  */
-function byteLengthOf(e) {
-  return Buffer.byteLength(jsonStringify(e), "utf8");
+function byteLengthOf(value) {
+  return Buffer.byteLength(jsonStringify(value), "utf8");
 }
 //@ chunk-g54kbxqw.js:30924-30989 placement
-function hasDifferentProtocolVersion(e) {
-  let n = asPlainRecord(e)?.v;
-  return typeof n === "number" && n !== REMOTE_TOOL_PROTOCOL_VERSION;
+function hasDifferentProtocolVersion(value) {
+  let version = asPlainRecord(value)?.v;
+  return typeof version === "number" && version !== REMOTE_TOOL_PROTOCOL_VERSION;
 }
 //@ chunk-g54kbxqw.js:30989-31060 placement
-function isPlainRecord(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-g54kbxqw.js:31060-31097 placement
-function asPlainRecord(e) {
-  return isPlainRecord(e) ? e : undefined;
+function asPlainRecord(value) {
+  return isPlainRecord(value) ? value : undefined;
 }
 //@ chunk-g54kbxqw.js:31097-31109 placement
 var MAX_COLLECTED_TOOL_NAMES = 2048;
 //@ chunk-g54kbxqw.js:31109-31631 placement
 function collectToolNames(inputSchema) {
-  let n = new Set();
-  let s = (required) => (Array.isArray(required) ? required.filter((y) => typeof y === "string") : []);
-  let r = (h, y) => {
-    if (n.has(h)) return [];
-    if (y > MAX_INPUT_SCHEMA_DEPTH || n.size >= MAX_COLLECTED_TOOL_NAMES) return;
-    n.add(h);
-    let schemaRef = resolveSchemaRef(h, inputSchema);
-    let flattened = [h.dependentRequired, h.dependentSchemas, h.dependencies]
+  let names = new Set();
+  let requiredNames = (required) =>
+    Array.isArray(required) ? required.filter((name) => typeof name === "string") : [];
+  let walk = (schema, depth) => {
+    if (names.has(schema)) return [];
+    if (depth > MAX_INPUT_SCHEMA_DEPTH || names.size >= MAX_COLLECTED_TOOL_NAMES) return;
+    names.add(schema);
+    let schemaRef = resolveSchemaRef(schema, inputSchema);
+    let flattened = [schema.dependentRequired, schema.dependentSchemas, schema.dependencies]
       .filter(isPlainRecord)
-      .flatMap((w) => Object.values(w));
+      .flatMap((map) => Object.values(map));
     let mapped = [
-      ...(schemaRef !== h ? [schemaRef] : []),
-      ...SCHEMA_COMBINATOR_KEYS.flatMap((w) => {
-        let P = h[w];
-        return Array.isArray(P) ? P : [];
+      ...(schemaRef !== schema ? [schemaRef] : []),
+      ...SCHEMA_COMBINATOR_KEYS.flatMap((key) => {
+        let value = schema[key];
+        return Array.isArray(value) ? value : [];
       }),
-      h.if,
-      h.then,
-      h.else,
+      schema.if,
+      schema.then,
+      schema.else,
       ...flattened,
     ]
       .filter(isPlainRecord)
-      .map((w) => r(w, y + 1));
-    return mapped.some((w) => w === undefined)
+      .map((child) => walk(child, depth + 1));
+    return mapped.some((childNames) => childNames === undefined)
       ? undefined
-      : [...s(h.required), ...flattened.flatMap(s), ...mapped.flatMap((w) => w ?? [])];
+      : [
+          ...requiredNames(schema.required),
+          ...flattened.flatMap(requiredNames),
+          ...mapped.flatMap((childNames) => childNames ?? []),
+        ];
   };
-  return r(inputSchema, 0);
+  return walk(inputSchema, 0);
 }
 //@ chunk-g54kbxqw.js:31631-31695 placement
-function includesWord(note, n) {
-  return note.split(/[^A-Za-z0-9_.-]+/).includes(n);
+function includesWord(note, word) {
+  return note.split(/[^A-Za-z0-9_.-]+/).includes(word);
 }
 //@ chunk-g54kbxqw.js:31695-31793 placement
-var textBlockSchema = DoctorLazy(() =>
-  u({
-    type: literal("text"),
-    text: string(),
-  }),
-);
-var imageBlockSchema = DoctorLazy(() =>
-  u({
-    type: literal("image"),
-    data: string(),
-    mimeType: _enum(isSupportedResourceMimeType),
-  }),
-);
+var textBlockSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var imageBlockSchema;
+deferInit("chunk-g54kbxqw.js:31695", () => {
+  textBlockSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("text"),
+      text: stringSchema(),
+    }),
+  );
+  imageBlockSchema = DoctorLazy(() =>
+    objectSchema({
+      type: literal("image"),
+      data: stringSchema(),
+      mimeType: _enum(isSupportedResourceMimeType),
+    }),
+  );
+});
 //@ chunk-g54kbxqw.js:31793-32218 placement
 function toContentBlocks(content) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return [];
-  return content.map((n) => {
-    let s = textBlockSchema().safeParse(n);
-    if (s.success)
+  return content.map((block) => {
+    let parsedText = textBlockSchema().safeParse(block);
+    if (parsedText.success)
       return {
         type: "text",
-        text: s.data.text,
+        text: parsedText.data.text,
       };
-    let r = imageBlockSchema().safeParse(n);
-    if (r.success)
+    let parsedImage = imageBlockSchema().safeParse(block);
+    if (parsedImage.success)
       return {
         type: "image",
         source: {
           type: "base64",
-          media_type: r.data.mimeType,
-          data: r.data.data,
+          media_type: parsedImage.data.mimeType,
+          data: parsedImage.data.data,
         },
       };
-    let h = asPlainRecord(n)?.type;
+    let blockType = asPlainRecord(block)?.type;
     return {
       type: "text",
-      text: `[${typeof h === "string" ? clipText(sanitizeDeep(h), REMOTE_TOOL_FIELD_LIMITS) : h === undefined ? "unknown" : typeof h} content omitted]`,
+      text: `[${typeof blockType === "string" ? clipText(sanitizeDeep(blockType), REMOTE_TOOL_FIELD_LIMITS) : blockType === undefined ? "unknown" : typeof blockType} content omitted]`,
     };
   });
 }
@@ -290,16 +300,16 @@ function toMcpContentBlocks(remoteToolContentBlocks) {
         text: remoteToolContentBlocks,
       },
     ];
-  return remoteToolContentBlocks.map((n) =>
-    n.type === "text"
+  return remoteToolContentBlocks.map((block) =>
+    block.type === "text"
       ? {
           type: "text",
-          text: n.text,
+          text: block.text,
         }
       : {
           type: "image",
-          data: n.source.data,
-          mimeType: n.source.media_type,
+          data: block.source.data,
+          mimeType: block.source.media_type,
         },
   );
 }
@@ -376,7 +386,10 @@ class RemoteToolsSync {
   }
 }
 //@ chunk-g54kbxqw.js:33987-34012 placement
-var remoteToolsSyncSlot = new HostScoped(() => new RemoteToolsSync());
+var remoteToolsSyncSlot; // deferred: uses RemoteToolsSync of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-g54kbxqw.js:33987", () => {
+  remoteToolsSyncSlot = new HostScoped(() => new RemoteToolsSync());
+});
 //@ chunk-g54kbxqw.js:34012-34049 placement
 function remoteToolsState() {
   return remoteToolsSyncSlot.of(getRootSession().host);

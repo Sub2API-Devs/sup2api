@@ -22,21 +22,21 @@ function isFilesystemCommand(command) {
  * acceptEdits 模式下，mkdir/touch/rm/rmdir/mv/cp/sed 这类文件系统命令自动允许（touch 的参数需是简单路径）。
  */
 function validateCommandForMode(cmd, toolPermissionContext) {
-  let r = stripSafeWrappers(cmd);
-  let [baseCmd] = r.split(/\s+/);
+  let strippedCommand = stripSafeWrappers(cmd);
+  let [baseCmd] = strippedCommand.split(/\s+/);
   if (!baseCmd)
     return {
       behavior: "passthrough",
       message: "Base command not found",
     };
-  let h =
+  let hasTouchArguments =
     baseCmd === "touch" &&
-    (r !== cmd.trim() ||
-      !r
+    (strippedCommand !== cmd.trim() ||
+      !strippedCommand
         .split(/\s+/)
         .slice(1)
-        .every((y) => /^['"]?[\w./~]/.test(y)));
-  if (toolPermissionContext.mode === "acceptEdits" && isFilesystemCommand(baseCmd) && !h)
+        .every((arg) => /^['"]?[\w./~]/.test(arg)));
+  if (toolPermissionContext.mode === "acceptEdits" && isFilesystemCommand(baseCmd) && !hasTouchArguments)
     return {
       behavior: "allow",
       updatedInput: {
@@ -68,7 +68,7 @@ function checkPermissionMode(input, toolPermissionContext) {
       message: "DontAsk mode is handled in main permission flow",
     };
   let commands = splitCommand(input.command);
-  let s = false;
+  let allHandled = false;
   for (let cmd of commands) {
     let result = validateCommandForMode(cmd, toolPermissionContext);
     if (result.behavior === "ask" || result.behavior === "deny") return result;
@@ -77,9 +77,9 @@ function checkPermissionMode(input, toolPermissionContext) {
         behavior: "passthrough",
         message: "No mode-specific validation required",
       };
-    s = true;
+    allHandled = true;
   }
-  if (s)
+  if (allHandled)
     return {
       behavior: "allow",
       updatedInput: input,

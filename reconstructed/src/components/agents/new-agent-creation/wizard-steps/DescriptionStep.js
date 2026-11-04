@@ -8,9 +8,9 @@
  * pieces: chunk-sx9xc5ee.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../../vendor/react/compiler-runtime.js";
 import { useWizard } from "../../../wizard/useWizard.js";
-import { y } from "../../../../../vendor/react/cjs/react.production.js";
+import { useState } from "../../../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../../../runtime/bun-runtime.js";
 import { useKeybinding } from "../../../../keybindings/useKeybinding.js";
 import {
@@ -27,11 +27,11 @@ import { WizardDialogLayout } from "../../../wizard/WizardDialogLayout.js";
 
 //@ chunk-sx9xc5ee.js:19296-20653 callgraph-fingerprint = DescriptionStep (0.579)
 function DescriptionStep() {
-  let $ = w(17);
+  let $ = useMemoCache(17);
   let { goBack, goNext, updateWizardData, wizardData } = useWizard();
-  let [region, setWhenToUse] = y(wizardData.region ?? "us-east-1");
-  let [cursorOffset, setCursorOffset] = y(region.length);
-  let [error, setError] = y(null);
+  let [region, setWhenToUse] = useState(wizardData.region ?? "us-east-1");
+  let [cursorOffset, setCursorOffset] = useState(region.length);
+  let [error, setError] = useState(null);
   let t0;
   if ($[0] === MEMO_CACHE_SENTINEL) {
     t0 = {
@@ -40,9 +40,9 @@ function DescriptionStep() {
     $[0] = t0;
   } else t0 = $[0];
   useKeybinding("confirm:no", goBack, t0);
-  let E;
+  let handleSubmit;
   if ($[1] !== goNext || $[2] !== updateWizardData || $[3] !== region) {
-    E = () => {
+    handleSubmit = () => {
       let trimmedValue = region.trim();
       if (!trimmedValue) {
         setError("Region is required");
@@ -57,9 +57,9 @@ function DescriptionStep() {
     $[1] = goNext;
     $[2] = updateWizardData;
     $[3] = region;
-    $[4] = E;
-  } else E = $[4];
-  let handleSubmit = E;
+    $[4] = handleSubmit;
+  } else handleSubmit = $[4];
+  let handleSubmit_2 = handleSubmit;
   let footerText;
   if ($[5] === MEMO_CACHE_SENTINEL) {
     footerText = jsxProd_default_2(Byline, {
@@ -78,31 +78,31 @@ function DescriptionStep() {
     });
     $[5] = footerText;
   } else footerText = $[5];
-  let v;
-  let T;
+  let introText;
+  let regionNote;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    v = jsxProd_default(Text, {
+    introText = jsxProd_default(Text, {
       children: "Where your Bedrock models are enabled.",
     });
-    T = jsxProd_default(Text, {
+    regionNote = jsxProd_default(Text, {
       dimColor: true,
       children:
         "Claude Code reads this from AWS_REGION, not ~/.aws/config \u2014 set it explicitly even if your profile has a region.",
     });
-    $[6] = v;
-    $[7] = T;
+    $[6] = introText;
+    $[7] = regionNote;
   } else {
-    v = $[6];
-    T = $[7];
+    introText = $[6];
+    regionNote = $[7];
   }
   let t6;
-  if ($[8] !== cursorOffset || $[9] !== handleSubmit || $[10] !== region) {
+  if ($[8] !== cursorOffset || $[9] !== handleSubmit_2 || $[10] !== region) {
     t6 = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(TextInput, {
         value: region,
         onChange: setWhenToUse,
-        onSubmit: handleSubmit,
+        onSubmit: handleSubmit_2,
         placeholder: "us-east-1",
         columns: 40,
         cursorOffset,
@@ -112,13 +112,13 @@ function DescriptionStep() {
       }),
     });
     $[8] = cursorOffset;
-    $[9] = handleSubmit;
+    $[9] = handleSubmit_2;
     $[10] = region;
     $[11] = t6;
   } else t6 = $[11];
-  let D;
+  let errorBox;
   if ($[12] !== error) {
-    D =
+    errorBox =
       error &&
       jsxProd_default(Box, {
         marginTop: 1,
@@ -127,20 +127,20 @@ function DescriptionStep() {
         }),
       });
     $[12] = error;
-    $[13] = D;
-  } else D = $[13];
+    $[13] = errorBox;
+  } else errorBox = $[13];
   let t8;
-  if ($[14] !== t6 || $[15] !== D) {
+  if ($[14] !== t6 || $[15] !== errorBox) {
     t8 = jsxProd_default(WizardDialogLayout, {
       subtitle: "AWS region",
       footerText,
       children: jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [v, T, t6, D],
+        children: [introText, regionNote, t6, errorBox],
       }),
     });
     $[14] = t6;
-    $[15] = D;
+    $[15] = errorBox;
     $[16] = t8;
   } else t8 = $[16];
   return t8;

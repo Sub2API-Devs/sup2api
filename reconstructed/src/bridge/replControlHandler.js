@@ -65,14 +65,14 @@ function assertMcpReconnected(client) {
   throw new WireSafeControlError(`Server status: ${client.type}`);
 }
 //@ chunk-1qpz7qcd.js:7857-7936 placement = getRiskColor (0.785)
-function getRiskColor(request, writeFrame, sessionId, s) {
+function getRiskColor(request, writeFrame, sessionId, responsePromise) {
   sendControlResponseWhenSettled(
     request,
     writeFrame,
     sessionId,
-    s.then((i) => ({
+    responsePromise.then((response) => ({
       subtype: "success",
-      response: i ?? {},
+      response: response ?? {},
     })),
   );
 }
@@ -93,14 +93,14 @@ function wantsLiveReply(request, response) {
 /**
  * 生成 control_response：结果 ok=false 时为 error（错误文本脱敏），否则 success。
  */
-function buildControlResponse(requestId, r) {
-  if (r && r.ok === false)
+function buildControlResponse(requestId, result) {
+  if (result && result.ok === false)
     return {
       type: "control_response",
       response: {
         subtype: "error",
         request_id: requestId,
-        error: sanitizeTelemetryString(r.error),
+        error: sanitizeTelemetryString(result.error),
       },
     };
   return {
@@ -115,7 +115,7 @@ function buildControlResponse(requestId, r) {
 /**
  * REPL Remote Control 桥的 control_request 总分发器：initialize、interrupt、set_model、set_permission_mode、background_tasks、get_context_usage、read_file、rename_session 等，逐个调用回调并回 control_response。
  */
-function handleReplBridgeControlRequest(request, r) {
+function handleReplBridgeControlRequest(request, options) {
   let {
     transport,
     sessionId,
@@ -149,20 +149,20 @@ function handleReplBridgeControlRequest(request, r) {
     hasPendingPrompts,
     onSideQuestion,
     cancellableRequests,
-  } = r;
+  } = options;
   if (!transport) {
     logForDebugging("[bridge:repl] Cannot respond to control_request: transport not configured");
     return;
   }
   let writeFrame =
-    r.writeFrame ??
-    ((l) => {
-      transport.write(l);
+    options.writeFrame ??
+    ((event) => {
+      transport.write(event);
     });
-  let S;
+  let response;
   if (isTerminalShutdown() && !READ_ONLY_CONTROL_SUBTYPES.has(request.request.subtype)) {
     logForDebugging(`[bridge] refusing ${request.request.subtype}: this process is exiting`);
-    S = {
+    response = {
       type: "control_response",
       response: {
         subtype: "error",
@@ -170,15 +170,15 @@ function handleReplBridgeControlRequest(request, r) {
         error: SESSION_SHUTTING_DOWN_MESSAGE,
       },
     };
-    let l = {
-      ...S,
+    let frame = {
+      ...response,
       session_id: sessionId,
     };
-    transport.write(l);
+    transport.write(frame);
     return;
   }
   if (outboundOnly && request.request.subtype !== "initialize") {
-    S = {
+    response = {
       type: "control_response",
       response: {
         subtype: "error",
@@ -186,23 +186,23 @@ function handleReplBridgeControlRequest(request, r) {
         error: OUTBOUND_ONLY_ERROR,
       },
     };
-    let l = {
-      ...S,
+    let frame = {
+      ...response,
       session_id: sessionId,
     };
-    transport.write(l);
+    transport.write(frame);
     logForDebugging(
       `[bridge:repl] Rejected ${request.request.subtype} (outbound-only) request_id=${request.request_id}`,
     );
     return;
   }
-  let responsePromise = r.answerSharedControlRequest?.(request.request);
+  let responsePromise = options.answerSharedControlRequest?.(request.request);
   if (responsePromise instanceof Promise) {
     sendControlResponseWhenSettled(request, writeFrame, sessionId, responsePromise);
     return;
   }
   if (responsePromise !== undefined) {
-    let c = {
+    let frame = {
       ...(responsePromise.subtype === "error"
         ? {
             type: "control_response",
@@ -226,7 +226,7 @@ function handleReplBridgeControlRequest(request, r) {
             }),
       session_id: sessionId,
     };
-    transport.write(c);
+    transport.write(frame);
     logForDebugging(
       `[bridge:repl] Sent control_response for ${request.request.subtype} request_id=${request.request_id} result=${responsePromise.subtype}`,
     );
@@ -235,8 +235,8 @@ function handleReplBridgeControlRequest(request, r) {
   switch (request.request.subtype) {
     case "initialize": {
       try {
-        let R = sanitizeStringList(request.request.supportedDialogKinds);
-        if (R.length > 0) onDialogKindsDeclared?.(R);
+        let dialogKinds = sanitizeStringList(request.request.supportedDialogKinds);
+        if (dialogKinds.length > 0) onDialogKindsDeclared?.(dialogKinds);
       } catch (error) {
         logForDebugging(
           `[bridge:repl] dialog-kind capture failed; acking initialize anyway: ${errorMessage(error)}`,
@@ -252,10 +252,12 @@ function handleReplBridgeControlRequest(request, r) {
             `[bridge:repl] getCommands failed; acking initialize with commands: []: ${errorMessage(error)}`,
           );
         }
-      let c = getPendingPrompts?.() ?? [];
-      let pendingPermissionRequests = c.filter((R) => R.request.subtype === "can_use_tool");
-      let pendingUserDialogRequests = c.filter((R) => R.request.subtype === "request_user_dialog");
-      S = {
+      let pending = getPendingPrompts?.() ?? [];
+      let pendingPermissionRequests = pending.filter((entry) => entry.request.subtype === "can_use_tool");
+      let pendingUserDialogRequests = pending.filter(
+        (entry) => entry.request.subtype === "request_user_dialog",
+      );
+      response = {
         type: "control_response",
         response: {
           subtype: "success",
@@ -294,7 +296,7 @@ function handleReplBridgeControlRequest(request, r) {
       let model = request.request.model;
       if (model != null && typeof model !== "string") {
         logFeatureBad("model_switch", "invalid_model_type");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -307,7 +309,7 @@ function handleReplBridgeControlRequest(request, r) {
       let onlyIfModelIsCurrent = request.request.only_if_model_is_current;
       if (onlyIfModelIsCurrent !== undefined && onlyIfModelIsCurrent !== false) {
         logFeatureBad("model_switch", "only_if_model_is_current_unserved");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -318,28 +320,28 @@ function handleReplBridgeControlRequest(request, r) {
         };
         break;
       }
-      let k = onSetModel?.(request.request.model ?? undefined);
-      if (k && "then" in k) {
+      let result = onSetModel?.(request.request.model ?? undefined);
+      if (result && "then" in result) {
         respondToSetModelVerdict({
-          verdict: k,
-          respond: (h) => {
-            let qe = {
+          verdict: result,
+          respond: (response) => {
+            let frame = {
               ...{
                 type: "control_response",
                 response: {
-                  ...h,
+                  ...response,
                   request_id: request.request_id,
                 },
               },
               session_id: sessionId,
             };
-            writeFrame(qe);
+            writeFrame(frame);
             logForDebugging(
-              `[bridge:repl] Sent control_response for set_model request_id=${request.request_id} result=${h.subtype}`,
+              `[bridge:repl] Sent control_response for set_model request_id=${request.request_id} result=${response.subtype}`,
             );
           },
-          inform: (h) => {
-            for (let content of h)
+          inform: (notices) => {
+            for (let content of notices)
               writeFrame({
                 type: "system",
                 subtype: "informational",
@@ -352,17 +354,17 @@ function handleReplBridgeControlRequest(request, r) {
         });
         return;
       }
-      if (k && !k.ok)
-        S = {
+      if (result && !result.ok)
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
             request_id: request.request_id,
-            error: sanitizeTelemetryString(k.error),
+            error: sanitizeTelemetryString(result.error),
           },
         };
       else
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "success",
@@ -373,7 +375,7 @@ function handleReplBridgeControlRequest(request, r) {
     }
     case "set_max_thinking_tokens": {
       if (!isValidThinkingSettingsRequest(request.request)) {
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -383,38 +385,43 @@ function handleReplBridgeControlRequest(request, r) {
         };
         break;
       }
-      let l = onSetMaxThinkingTokens?.(request.request.max_thinking_tokens, request.request.thinking_display);
-      if (l && "then" in l) {
+      let result = onSetMaxThinkingTokens?.(
+        request.request.max_thinking_tokens,
+        request.request.thinking_display,
+      );
+      if (result && "then" in result) {
         let requestId = request.request_id;
         let subtype = request.request.subtype;
-        l.then(
-          (h) => buildControlResponse(requestId, h),
-          (error) => ({
-            type: "control_response",
-            response: {
-              subtype: "error",
-              request_id: requestId,
-              error: formatOperationFailure(subtype, error),
-            },
-          }),
-        ).then((h) => {
-          let R = {
-            ...h,
-            session_id: sessionId,
-          };
-          writeFrame(R);
-          logForDebugging(
-            `[bridge:repl] Sent control_response for set_max_thinking_tokens request_id=${requestId} result=${h.response.subtype}`,
-          );
-        });
+        result
+          .then(
+            (result) => buildControlResponse(requestId, result),
+            (error) => ({
+              type: "control_response",
+              response: {
+                subtype: "error",
+                request_id: requestId,
+                error: formatOperationFailure(subtype, error),
+              },
+            }),
+          )
+          .then((response) => {
+            let frame = {
+              ...response,
+              session_id: sessionId,
+            };
+            writeFrame(frame);
+            logForDebugging(
+              `[bridge:repl] Sent control_response for set_max_thinking_tokens request_id=${requestId} result=${response.response.subtype}`,
+            );
+          });
         return;
       }
-      S = buildControlResponse(request.request_id, l);
+      response = buildControlResponse(request.request_id, result);
       break;
     }
     case "set_permission_mode": {
       let permissionMode = parsePermissionMode(request.request.mode);
-      let c =
+      let outcome =
         permissionMode === undefined
           ? {
               ok: false,
@@ -425,8 +432,8 @@ function handleReplBridgeControlRequest(request, r) {
               error:
                 "set_permission_mode is not supported in this context (onSetPermissionMode callback not registered)",
             });
-      if (c.ok)
-        S = {
+      if (outcome.ok)
+        response = {
           type: "control_response",
           response: {
             subtype: "success",
@@ -434,19 +441,19 @@ function handleReplBridgeControlRequest(request, r) {
           },
         };
       else
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
             request_id: request.request_id,
-            error: sanitizeTelemetryString(c.error),
+            error: sanitizeTelemetryString(outcome.error),
           },
         };
       break;
     }
     case "rename_session": {
       if (typeof request.request.title !== "string") {
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -456,12 +463,12 @@ function handleReplBridgeControlRequest(request, r) {
         };
         break;
       }
-      let c = onRenameSession?.(request.request.title) ?? {
+      let outcome = onRenameSession?.(request.request.title) ?? {
         ok: false,
         error: "rename_session is not supported in this context (onRenameSession callback not registered)",
       };
-      if (c.ok)
-        S = {
+      if (outcome.ok)
+        response = {
           type: "control_response",
           response: {
             subtype: "success",
@@ -469,23 +476,23 @@ function handleReplBridgeControlRequest(request, r) {
           },
         };
       else
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
             request_id: request.request_id,
-            error: sanitizeTelemetryString(c.error),
+            error: sanitizeTelemetryString(outcome.error),
           },
         };
       break;
     }
     case "set_color": {
-      let l = onSetColor?.(request.request.color) ?? {
+      let outcome = onSetColor?.(request.request.color) ?? {
         ok: false,
         error: "set_color is not supported in this context (onSetColor callback not registered)",
       };
-      if (l.ok)
-        S = {
+      if (outcome.ok)
+        response = {
           type: "control_response",
           response: {
             subtype: "success",
@@ -493,19 +500,19 @@ function handleReplBridgeControlRequest(request, r) {
           },
         };
       else
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
             request_id: request.request_id,
-            error: sanitizeTelemetryString(l.error),
+            error: sanitizeTelemetryString(outcome.error),
           },
         };
       break;
     }
     case "file_suggestions": {
       if (!onFileSuggestions) {
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -528,7 +535,7 @@ function handleReplBridgeControlRequest(request, r) {
     }
     case "read_file": {
       if (!onReadFile) {
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -548,8 +555,8 @@ function handleReplBridgeControlRequest(request, r) {
           request.request.encoding,
           request.request.anchor,
         ).then(
-          ((absPath) => (c) => ({
-            ...c,
+          ((absPath) => (suggestions) => ({
+            ...suggestions,
             absPath,
           }))(request.request.path),
         ),
@@ -558,7 +565,7 @@ function handleReplBridgeControlRequest(request, r) {
     }
     case "get_workspace_diff": {
       if (!onGetWorkspaceDiff) {
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -599,7 +606,7 @@ function handleReplBridgeControlRequest(request, r) {
     }
     case "get_context_usage": {
       if (!onGetContextUsage) {
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -616,16 +623,16 @@ function handleReplBridgeControlRequest(request, r) {
         sessionId,
         onGetContextUsage({
           detail: request.request.detail,
-        }).then((l) => ({
-          ...l,
+        }).then((usage) => ({
+          ...usage,
           memoryFiles: [],
-          ...stripInitializeAgentPaths(l),
+          ...stripInitializeAgentPaths(usage),
         })),
       );
       return;
     }
     case "get_usage":
-      S = {
+      response = {
         type: "control_response",
         response: {
           subtype: "error",
@@ -635,7 +642,7 @@ function handleReplBridgeControlRequest(request, r) {
       };
       break;
     case "mcp_status":
-      S = {
+      response = {
         type: "control_response",
         response: {
           subtype: "success",
@@ -651,14 +658,15 @@ function handleReplBridgeControlRequest(request, r) {
     case "mcp_reconnect": {
       let request_2 = request.request;
       let { subtype, serverName } = request_2;
-      let h =
+      let handler =
         request_2.subtype === "mcp_authenticate"
-          ? onMcpAuthenticate && ((R) => onMcpAuthenticate(R, request_2.redirectUri))
+          ? onMcpAuthenticate && ((serverName) => onMcpAuthenticate(serverName, request_2.redirectUri))
           : request_2.subtype === "mcp_oauth_callback_url"
-            ? onMcpOauthCallbackUrl && ((R) => onMcpOauthCallbackUrl(R, request_2.callbackUrl))
+            ? onMcpOauthCallbackUrl &&
+              ((serverName) => onMcpOauthCallbackUrl(serverName, request_2.callbackUrl))
             : onMcpReconnect;
-      if (!h) {
-        S = {
+      if (!handler) {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -668,12 +676,12 @@ function handleReplBridgeControlRequest(request, r) {
         };
         break;
       }
-      getRiskColor(request, writeFrame, sessionId, h(serverName));
+      getRiskColor(request, writeFrame, sessionId, handler(serverName));
       return;
     }
     case "interrupt":
       onInterrupt?.();
-      S = {
+      response = {
         type: "control_response",
         response: {
           subtype: "success",
@@ -682,20 +690,20 @@ function handleReplBridgeControlRequest(request, r) {
       };
       break;
     case "apply_flag_settings": {
-      let l = applyBridgeFlagSettings(request.request.settings);
-      let c;
-      if (!l.ok) c = l;
+      let validation = applyBridgeFlagSettings(request.request.settings);
+      let outcome;
+      if (!validation.ok) outcome = validation;
       else if (!onApplyFlagSettings) {
         logFeatureBad("bridge_flag_settings", "not_registered");
-        c = {
+        outcome = {
           ok: false,
           error:
             "apply_flag_settings is not supported in this context (onApplyFlagSettings callback not registered)",
         };
-      } else c = onApplyFlagSettings(l.settings, request.request_id);
-      if (c.ok) {
+      } else outcome = onApplyFlagSettings(validation.settings, request.request_id);
+      if (outcome.ok) {
         logFeatureOk("bridge_flag_settings");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "success",
@@ -703,12 +711,12 @@ function handleReplBridgeControlRequest(request, r) {
           },
         };
       } else
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
             request_id: request.request_id,
-            error: c.error,
+            error: outcome.error,
           },
         };
       break;
@@ -716,12 +724,12 @@ function handleReplBridgeControlRequest(request, r) {
     case "mcp_set_servers": {
       let servers = request.request.servers;
       let hint = "hint" in request.request ? request.request.hint : undefined;
-      let k;
+      let outcome;
       if (servers === undefined && typeof hint === "string") {
         logForDebugging(
           "[bridge:repl] mcp_set_servers carried an advisory hint and no servers; acknowledged, nothing to apply",
         );
-        k = {
+        outcome = {
           ok: true,
           added: [],
           removed: [],
@@ -729,37 +737,37 @@ function handleReplBridgeControlRequest(request, r) {
           unknownServerCount: 0,
         };
       } else if (!isPlainObject(servers))
-        k = {
+        outcome = {
           ok: false,
           error: "mcp_set_servers: servers must be an object",
         };
       else if (!onMcpSetServers)
-        k = {
+        outcome = {
           ok: false,
           error: "mcp_set_servers is not supported in this context (onMcpSetServers callback not registered)",
         };
       else
         try {
-          k = onMcpSetServers(servers);
+          outcome = onMcpSetServers(servers);
         } catch (error) {
           logForDebugging(`[bridge:repl] mcp_set_servers handler threw: ${errorMessage(error)}`, {
             level: "error",
           });
-          k = {
+          outcome = {
             ok: false,
             error: "mcp_set_servers failed to apply",
           };
         }
-      S = k.ok
+      response = outcome.ok
         ? {
             type: "control_response",
             response: {
               subtype: "success",
               request_id: request.request_id,
               response: {
-                added: k.added,
-                removed: k.removed,
-                errors: annotateUnadoptedMcpServers(k.errors, k.unknownServerCount),
+                added: outcome.added,
+                removed: outcome.removed,
+                errors: annotateUnadoptedMcpServers(outcome.errors, outcome.unknownServerCount),
               },
             },
           }
@@ -768,7 +776,7 @@ function handleReplBridgeControlRequest(request, r) {
             response: {
               subtype: "error",
               request_id: request.request_id,
-              error: sanitizeTelemetryString(k.error),
+              error: sanitizeTelemetryString(outcome.error),
             },
           };
       break;
@@ -777,7 +785,7 @@ function handleReplBridgeControlRequest(request, r) {
       let taskId = request.request.task_id;
       if (typeof taskId !== "string") {
         logFeatureBad("task_stop_user", "invalid_task_id");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -787,10 +795,10 @@ function handleReplBridgeControlRequest(request, r) {
         };
         break;
       }
-      let c = taskId;
+      let taskIdValue = taskId;
       if (!onStopTask) {
         logFeatureBad("task_stop_user", "not_supported");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -800,14 +808,14 @@ function handleReplBridgeControlRequest(request, r) {
         };
         break;
       }
-      getRiskColor(request, writeFrame, sessionId, onStopTask(c));
+      getRiskColor(request, writeFrame, sessionId, onStopTask(taskIdValue));
       return;
     }
     case "background_tasks": {
       let optionalToolUseId = parseOptionalToolUseId(request.request.tool_use_id);
       if (!optionalToolUseId.valid) {
         logFeatureBad("task_local_shell_background_all", "invalid_tool_use_id");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -820,7 +828,7 @@ function handleReplBridgeControlRequest(request, r) {
       let { toolUseId } = optionalToolUseId;
       if (!onBackgroundTasks) {
         logFeatureBad("task_local_shell_background_all", "not_supported");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -832,7 +840,7 @@ function handleReplBridgeControlRequest(request, r) {
       }
       if (isBackgroundTasksOff()) {
         logFeatureBad("task_local_shell_background_all", "disabled");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -862,7 +870,7 @@ function handleReplBridgeControlRequest(request, r) {
       let messageUuid = request.request.message_uuid;
       if (typeof messageUuid !== "string") {
         logFeatureBad("bridge_cancel_queued_message", "invalid_message_uuid");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -874,7 +882,7 @@ function handleReplBridgeControlRequest(request, r) {
       }
       if (!onCancelAsyncMessage) {
         logFeatureBad("bridge_cancel_queued_message", "not_supported");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -891,11 +899,11 @@ function handleReplBridgeControlRequest(request, r) {
         Promise.resolve()
           .then(() => onCancelAsyncMessage(messageUuid))
           .then(
-            (c) => {
-              if (c) logFeatureOk("bridge_cancel_queued_message");
+            (backgrounded) => {
+              if (backgrounded) logFeatureOk("bridge_cancel_queued_message");
               else logFeatureSad("bridge_cancel_queued_message", "not_queued");
               return {
-                cancelled: c,
+                cancelled: backgrounded,
               };
             },
             (error) => {
@@ -907,10 +915,10 @@ function handleReplBridgeControlRequest(request, r) {
       return;
     }
     case "side_question": {
-      let l = SIDE_QUESTION_REQUEST_SCHEMA().safeParse(request.request);
-      if (!l.success) {
+      let parsed = SIDE_QUESTION_REQUEST_SCHEMA().safeParse(request.request);
+      if (!parsed.success) {
         logFeatureBad("bridge_side_question", "invalid_request");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -923,7 +931,7 @@ function handleReplBridgeControlRequest(request, r) {
       }
       if (!onSideQuestion) {
         logFeatureBad("bridge_side_question", "not_registered");
-        S = {
+        response = {
           type: "control_response",
           response: {
             subtype: "error",
@@ -941,15 +949,15 @@ function handleReplBridgeControlRequest(request, r) {
       }
       let abortController = new AbortController();
       cancellableRequests?.set(request.request_id, abortController);
-      let k = Promise.resolve().then(() =>
-        onSideQuestion(l.data, {
+      let answer = Promise.resolve().then(() =>
+        onSideQuestion(parsed.data, {
           signal: abortController.signal,
-          onProgress: (h) => {
+          onProgress: (progress) => {
             writeFrame({
               type: "system",
               subtype: "control_request_progress",
               request_id: request.request_id,
-              ...h,
+              ...progress,
               uuid: randomUUID(),
               session_id: sessionId,
             });
@@ -960,13 +968,17 @@ function handleReplBridgeControlRequest(request, r) {
         request,
         writeFrame,
         sessionId,
-        withTimeout(k, r.sideQuestionDeadlineMs ?? SIDE_QUESTION_TIMEOUT_MS, SIDE_QUESTION_TIMEOUT_MESSAGE)
+        withTimeout(
+          answer,
+          options.sideQuestionDeadlineMs ?? SIDE_QUESTION_TIMEOUT_MS,
+          SIDE_QUESTION_TIMEOUT_MESSAGE,
+        )
           .then(
-            (h) => {
-              if (h.response === null) logFeatureSad("bridge_side_question", "no_response");
-              else if (h.synthetic !== false) logFeatureSad("bridge_side_question", "synthetic");
+            (response) => {
+              if (response.response === null) logFeatureSad("bridge_side_question", "no_response");
+              else if (response.synthetic !== false) logFeatureSad("bridge_side_question", "synthetic");
               else logFeatureOk("bridge_side_question");
-              return markSyntheticControlResponse(h);
+              return markSyntheticControlResponse(response);
             },
             (error) => {
               if (errorMessage(error) === SIDE_QUESTION_TIMEOUT_MESSAGE) {
@@ -999,23 +1011,23 @@ function handleReplBridgeControlRequest(request, r) {
         );
         return;
       }
-      let response = {
+      let response_2 = {
         forked: false,
         error: "unsupported",
         reason: "requires_remote_control_server",
       };
-      S = {
+      response = {
         type: "control_response",
         response: {
           subtype: "success",
           request_id: request.request_id,
-          response,
+          response: response_2,
         },
       };
       break;
     }
     default:
-      S = {
+      response = {
         type: "control_response",
         response: {
           subtype: "error",
@@ -1024,18 +1036,18 @@ function handleReplBridgeControlRequest(request, r) {
         },
       };
   }
-  let we = {
-    ...S,
+  let frame = {
+    ...response,
     session_id: sessionId,
   };
-  transport.write(we);
+  transport.write(frame);
   logForDebugging(
-    `[bridge:repl] Sent control_response for ${request.request.subtype} request_id=${request.request_id} result=${S.response.subtype}`,
+    `[bridge:repl] Sent control_response for ${request.request.subtype} request_id=${request.request_id} result=${response.response.subtype}`,
   );
 }
 //@ chunk-1qpz7qcd.js:22053-22124 placement
-function isPlainObject(e) {
-  return typeof e === "object" && e !== null && !Array.isArray(e);
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 //@ chunk-1qpz7qcd.js:22124-22155 placement
 var SERVERS_NOT_ADOPTED_KEY = "(servers not adopted)";
@@ -1067,14 +1079,14 @@ function applyBridgeFlagSettings(settings) {
     logFeatureBad("bridge_flag_settings", "unsupported_key");
     let mapped = filtered
       .slice(0, MAX_FLAG_SETTING_CHANGE_KEYS)
-      .map((b) => printableName(b, MAX_FLAG_SETTING_VALUE_CHARS));
-    let i = filtered.length > mapped.length ? ` (+${filtered.length - mapped.length} more)` : "";
+      .map((key) => printableName(key, MAX_FLAG_SETTING_VALUE_CHARS));
+    let moreNote = filtered.length > mapped.length ? ` (+${filtered.length - mapped.length} more)` : "";
     return {
       ok: false,
-      error: `apply_flag_settings: ${mapped.join(", ")}${i} cannot be changed over Remote Control (only effortLevel and ultracode can)`,
+      error: `apply_flag_settings: ${mapped.join(", ")}${moreNote} cannot be changed over Remote Control (only effortLevel and ultracode can)`,
     };
   }
-  let n = {};
+  let acceptedSettings = {};
   if ("effortLevel" in settings) {
     let effortLevel = settings.effortLevel;
     if (effortLevel !== null && typeof effortLevel !== "string") {
@@ -1084,7 +1096,7 @@ function applyBridgeFlagSettings(settings) {
         error: "apply_flag_settings: effortLevel must be a string or null",
       };
     }
-    n.effortLevel = effortLevel;
+    acceptedSettings.effortLevel = effortLevel;
   }
   if ("ultracode" in settings) {
     let ultracode = settings.ultracode;
@@ -1095,9 +1107,9 @@ function applyBridgeFlagSettings(settings) {
         error: "apply_flag_settings: ultracode must be a boolean",
       };
     }
-    n.ultracode = ultracode;
+    acceptedSettings.ultracode = ultracode;
   }
-  if (!("effortLevel" in n) && !("ultracode" in n)) {
+  if (!("effortLevel" in acceptedSettings) && !("ultracode" in acceptedSettings)) {
     logFeatureBad("bridge_flag_settings", "nothing_to_apply");
     return {
       ok: false,
@@ -1107,7 +1119,7 @@ function applyBridgeFlagSettings(settings) {
   }
   return {
     ok: true,
-    settings: n,
+    settings: acceptedSettings,
   };
 }
 //@ chunk-1qpz7qcd.js:23435-23479 placement
@@ -1117,13 +1129,13 @@ function isNotAbortedTerminalReason(outcome) {
 //@ chunk-1qpz7qcd.js:23479-23839 placement
 function resolveTurnTerminalReason({ userMessageUuid, outcome, aborted }) {
   let terminalReason = outcome?.terminal_reason;
-  let i = isAbortedTerminalReason(terminalReason) ? terminalReason : aborted?.guess;
-  let b =
-    i === undefined
+  let guessedReason = isAbortedTerminalReason(terminalReason) ? terminalReason : aborted?.guess;
+  let abortedResult =
+    guessedReason === undefined
       ? undefined
       : {
           userMessageUuid,
-          terminalReason: i,
+          terminalReason: guessedReason,
         };
   if (aborted === undefined)
     return outcome === undefined || isNotAbortedTerminalReason(outcome)
@@ -1131,11 +1143,11 @@ function resolveTurnTerminalReason({ userMessageUuid, outcome, aborted }) {
           userMessageUuid,
           outcome,
         }
-      : b;
+      : abortedResult;
   if (aborted.sendRunsAgain) return;
   switch (aborted.by) {
     case "stop":
-      return b;
+      return abortedResult;
     case "send-now":
       return {
         userMessageUuid,
@@ -1149,12 +1161,12 @@ function resolveTurnTerminalReason({ userMessageUuid, outcome, aborted }) {
 /**
  * 为桥会话合成一条 type=result 的结束消息（用量为空，带 terminal_reason）。
  */
-function buildBridgeResultMessage(sessionId, r) {
-  let outcome = r?.outcome;
-  let s = {
+function buildBridgeResultMessage(sessionId, turn) {
+  let outcome = turn?.outcome;
+  let result = {
     type: "result",
-    ...(r?.userMessageUuid && {
-      user_message_uuid: r.userMessageUuid,
+    ...(turn?.userMessageUuid && {
+      user_message_uuid: turn.userMessageUuid,
     }),
     duration_ms: 0,
     duration_api_ms: 0,
@@ -1169,17 +1181,17 @@ function buildBridgeResultMessage(sessionId, r) {
   };
   if (outcome === undefined)
     return {
-      ...s,
+      ...result,
       subtype: "success",
       is_error: false,
       num_turns: 0,
       result: "",
       stop_reason: null,
-      ...(r?.terminalReason !== undefined && {
-        terminal_reason: r.terminalReason,
+      ...(turn?.terminalReason !== undefined && {
+        terminal_reason: turn.terminalReason,
       }),
     };
-  let i = {
+  let outcomeFields = {
     is_error: outcome.is_error,
     num_turns: outcome.num_turns,
     stop_reason: outcome.stop_reason,
@@ -1189,8 +1201,8 @@ function buildBridgeResultMessage(sessionId, r) {
   };
   if (outcome.subtype === "success")
     return {
-      ...s,
-      ...i,
+      ...result,
+      ...outcomeFields,
       subtype: "success",
       result: outcome.is_error && outcome.structured_output === undefined ? (outcome.result ?? "") : "",
       ...(outcome.api_error_status != null && {
@@ -1207,8 +1219,8 @@ function buildBridgeResultMessage(sessionId, r) {
       }),
     };
   return {
-    ...s,
-    ...i,
+    ...result,
+    ...outcomeFields,
     subtype: outcome.subtype,
     errors: [],
   };

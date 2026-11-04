@@ -114,40 +114,55 @@ import {
   buildSecondarySection,
   DEBUG_DETAILS_SUFFIX,
 } from "../components/Settings/Status.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-06y4szbn.js:65501-65613 fingerprint = buildInstallationHealthDiagnostics (0.329)
+async function buildInstallationHealthDiagnostics(backAfterPublish, extraWarnings) {
+  let result = await backAfterPublish;
+  return result.err === null && extraWarnings.length > 0
+    ? {
+        ...result,
+        warnings: [...(result.warnings ?? []), ...extraWarnings],
+      }
+    : result;
+}
 //@ chunk-j8bb1zkh.js:1796-2024 placement
 /**
  * 把状态项转为显示行，跳过空值或 none。
  */
-function statusValueRows(l) {
-  let t = [];
-  for (let u of l) {
-    let a = typeof u.value === "string" ? u.value : Array.isArray(u.value) ? u.value.join(", ") : null;
-    if (a === null || a === "" || a === "none") continue;
-    t.push(
-      u.label
+function statusValueRows(rows) {
+  let out = [];
+  for (let row of rows) {
+    let text =
+      typeof row.value === "string" ? row.value : Array.isArray(row.value) ? row.value.join(", ") : null;
+    if (text === null || text === "" || text === "none") continue;
+    out.push(
+      row.label
         ? {
-            label: u.label,
-            value: a,
+            label: row.label,
+            value: text,
           }
         : {
-            value: a,
+            value: text,
           },
     );
   }
-  return t;
+  return out;
 }
 //@ chunk-j8bb1zkh.js:2024-2142 placement
 /**
  * 把各组中仅内部的状态项移到最后一组。
  */
-function moveAntOnlyToEnd(l) {
-  let mapped = l.map((u) => u.filter((a) => !a.antOnly));
-  mapped.push(l.flatMap((u) => u.filter((a) => a.antOnly)));
+function moveAntOnlyToEnd(columns) {
+  let mapped = columns.map((column) => column.filter((row) => !row.antOnly));
+  mapped.push(columns.flatMap((column) => column.filter((row) => row.antOnly)));
   return mapped;
 }
 //@ chunk-j8bb1zkh.js:2142-2180 placement
-var legacyStatusModule = require("./chunk-pky8b2sx.js");
+var legacyStatusModule; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-j8bb1zkh.js:2142", () => {
+  legacyStatusModule = require("../services/artifactPreview/browserDiscovery.js");
+});
 //@ chunk-j8bb1zkh.js:2180-2204 placement
 /**
  * buildSecondarySection 里 MCP 分区（外部构建为空）。
@@ -172,8 +187,8 @@ function modelStatusRows() {
 //@ chunk-j8bb1zkh.js:2252-3173 fingerprint = buildIDEProperties (0.875)
 function buildIDEProperties(mcpClients, ideInstallationStatus = null, theme) {
   let ideClient = mcpClients?.find((client) => client.name === "ide");
-  let d = Boolean(ideInstallationStatus?.error) && ideClient?.type === "connected";
-  if (ideInstallationStatus && !d) {
+  let ideErrored = Boolean(ideInstallationStatus?.error) && ideClient?.type === "connected";
+  if (ideInstallationStatus && !ideErrored) {
     let ideName = toIDEDisplayName(ideInstallationStatus.ideType);
     let pluginOrExtension = isJetBrainsIde(ideInstallationStatus.ideType) ? "plugin" : "extension";
     if (ideInstallationStatus.error)
@@ -293,9 +308,9 @@ function buildMcpProperties(clients = [], theme) {
 /**
  * /status 与 doctor 的记忆诊断：CLAUDE.md 过大等警告。
  */
-async function buildMemoryDiagnostics(l, t, u) {
+async function buildMemoryDiagnostics(mcpClients, options, context) {
   if (isClaudeMdLoadingDisabled()) return [];
-  let files = await getMemoryFilesCached(l, false, t, u);
+  let files = await getMemoryFilesCached(mcpClients, false, options, context);
   let largeFiles = getLargeMemoryFiles(files);
   let diagnostics = [];
   let oversizedMemoryWarning = getOversizedMemoryWarning(files);
@@ -310,9 +325,9 @@ async function buildMemoryDiagnostics(l, t, u) {
       `Large ${displayPath} will impact performance (${formatNumber(file.content.length)} chars > ${formatNumber(maxMemoryFileChars)})`,
     );
   });
-  let f = takeShownInstructionFiles(getWithheldInstructionFiles(l));
-  for (let { path, why } of f.shown) {
-    let v = withheldInstructionNotice(why, getDisplayPath(path));
+  let withheld = takeShownInstructionFiles(getWithheldInstructionFiles(mcpClients));
+  for (let { path, why } of withheld.shown) {
+    let notice = withheldInstructionNotice(why, getDisplayPath(path));
     diagnostics.push(
       jsxProd_default_2(
         Box,
@@ -321,7 +336,7 @@ async function buildMemoryDiagnostics(l, t, u) {
           flexShrink: 1,
           children: [
             jsxProd_default(Text, {
-              children: v.lead,
+              children: notice.lead,
             }),
             jsxProd_default_2(Box, {
               flexDirection: "row",
@@ -330,13 +345,13 @@ async function buildMemoryDiagnostics(l, t, u) {
                   flexShrink: 0,
                   marginRight: 1,
                   children: jsxProd_default(Text, {
-                    children: v.mark,
+                    children: notice.mark,
                   }),
                 }),
                 jsxProd_default(Text, {
                   bold: true,
                   wrap: "truncate-start",
-                  children: v.path,
+                  children: notice.path,
                 }),
               ],
             }),
@@ -346,20 +361,20 @@ async function buildMemoryDiagnostics(l, t, u) {
       ),
     );
   }
-  if (f.more > 0) diagnostics.push(moreInstructionFilesText(f));
+  if (withheld.more > 0) diagnostics.push(moreInstructionFilesText(withheld));
   return diagnostics;
 }
 //@ chunk-j8bb1zkh.js:4783-4929 layout
-function formatMergedManagedSettingsLabel(l = "remote") {
+function formatMergedManagedSettingsLabel(remoteLabel = "remote") {
   let mergedPolicySources = getMergedPolicySources();
   if (!mergedPolicySources) return null;
-  return `Enterprise managed settings (${mergedPolicySources.map((mergedPolicySource) => (mergedPolicySource === "remote" ? l : buildSettingSourcesProperties(mergedPolicySource))).join(" + ")}, merged)`;
+  return `Enterprise managed settings (${mergedPolicySources.map((mergedPolicySource) => (mergedPolicySource === "remote" ? remoteLabel : buildSettingSourcesProperties(mergedPolicySource))).join(" + ")}, merged)`;
 }
 //@ chunk-j8bb1zkh.js:4929-6036 layout
 function buildSettingSourcesStatusProperties() {
   let enabledSettingSources = getEnabledSettingSources();
   let armedHelperOutput = getArmedHelperOutput();
-  let d = [
+  let properties = [
     {
       label: "Setting sources",
       value: enabledSettingSources
@@ -371,16 +386,19 @@ function buildSettingSourcesStatusProperties() {
         .map((enabledSettingSource) => {
           if (enabledSettingSource === "policySettings") {
             if (armedHelperOutput.composes !== "none") {
-              let v = armedHelperOutput.composes === "remoteSlot";
-              let S = isServingDefault()
-                ? `${v ? "remote " : ""}default settings payload`
-                : v
+              let isRemoteSlot = armedHelperOutput.composes === "remoteSlot";
+              let sourceLabel = isServingDefault()
+                ? `${isRemoteSlot ? "remote " : ""}default settings payload`
+                : isRemoteSlot
                   ? "remote helper"
                   : "helper";
-              let b = armedHelperOutput.mergedOver
-                ? `${S} merged over ${buildSettingSourcesProperties(armedHelperOutput.mergedOver)}`
-                : S;
-              return (v ? formatMergedManagedSettingsLabel(b) : null) ?? `Enterprise managed settings (${b})`;
+              let mergedOver = armedHelperOutput.mergedOver
+                ? `${sourceLabel} merged over ${buildSettingSourcesProperties(armedHelperOutput.mergedOver)}`
+                : sourceLabel;
+              return (
+                (isRemoteSlot ? formatMergedManagedSettingsLabel(mergedOver) : null) ??
+                `Enterprise managed settings (${mergedOver})`
+              );
             }
             let policySettingsOrigin = getPolicySettingsOrigin();
             if (policySettingsOrigin === null) return null;
@@ -388,48 +406,50 @@ function buildSettingSourcesStatusProperties() {
           }
           return getSettingSourceDisplayNameCapitalized(enabledSettingSource);
         })
-        .filter((p) => p !== null),
+        .filter((label) => label !== null),
     },
   ];
   if (managedSettingsUrl() !== undefined)
-    d.push({
+    properties.push({
       value: MANAGED_SETTINGS_NOTICE,
     });
   let shadowedManagedSources = getShadowedManagedSources();
   if (shadowedManagedSources.length > 0)
-    d.push({
+    properties.push({
       label: "Skipped sources",
       value: shadowedManagedSources.map(formatManagedSettingsLabel),
     });
   if (shouldAllowManagedPermissionRulesOnly()) {
-    let p = [...getIgnoredFrontmatterToolGrants()];
-    d.push({
+    let ignoredGrants = [...getIgnoredFrontmatterToolGrants()];
+    properties.push({
       label: "Permission rules",
       value: [
         "Managed settings only (allowManagedPermissionRulesOnly)",
-        ...(p.length > 0 ? [`allowed-tools ignored this session: ${p.join(", ")}`] : []),
+        ...(ignoredGrants.length > 0
+          ? [`allowed-tools ignored this session: ${ignoredGrants.join(", ")}`]
+          : []),
       ],
     });
   }
   let remoteSettingsLoadState = getRemoteSettingsLoadState();
   if (remoteSettingsLoadState && shouldWarnRemoteSettings_2(remoteSettingsLoadState))
-    d.push({
+    properties.push({
       label: "Managed settings (remote)",
       value: describeRemoteSettingsStatus(remoteSettingsLoadState),
     });
   let policyFetchStatus = getPolicyFetchStatus();
   if (isPolicyFetchProblem(policyFetchStatus))
-    d.push({
+    properties.push({
       label: "Organization policy",
       value: formatPolicyFetchStatus(policyFetchStatus),
     });
-  let f = describeClientDataStatus();
-  if (f !== undefined)
-    d.push({
+  let clientDataStatus = describeClientDataStatus();
+  if (clientDataStatus !== undefined)
+    properties.push({
       label: "Client data",
-      value: f,
+      value: clientDataStatus,
     });
-  return d;
+  return properties;
 }
 //@ chunk-j8bb1zkh.js:6036-6121 fingerprint = buildSandboxProperties (0.534)
 function buildSandboxProperties(isSandboxed) {
@@ -451,12 +471,12 @@ function extraStatusRows() {
 /**
  * /status 的设置来源行：列出启用的来源与托管设置来源（helper/remote/plist/HKLM/file/HKCU）。
  */
-function buildSettingSourcesProperties(l) {
-  switch (l) {
+function buildSettingSourcesProperties(source) {
+  switch (source) {
     case "helper":
     case "remote":
     case "plist":
-      return l;
+      return source;
     case "hklm":
       return "HKLM";
     case "file": {
@@ -471,93 +491,96 @@ function buildSettingSourcesProperties(l) {
   }
 }
 //@ chunk-j8bb1zkh.js:6406-6466 layout
-function formatManagedSettingsLabel(policySettingsOrigin) {
-  return `Enterprise managed settings (${buildSettingSourcesProperties(policySettingsOrigin)})`;
+function formatManagedSettingsLabel(source) {
+  return `Enterprise managed settings (${buildSettingSourcesProperties(source)})`;
 }
 //@ chunk-j8bb1zkh.js:6466-6557 file-local
 async function buildInstallationDiagnostics() {
-  return (await checkInstall()).filter((t) => t.type !== "error").map((warning) => warning.message);
+  return (await checkInstall()).filter((check) => check.type !== "error").map((warning) => warning.message);
 }
 //@ chunk-j8bb1zkh.js:6557-7982 layout
-async function getProcessWrapperStatusNotices(l) {
-  let t = processWrapperRecord();
-  let u = processWrapperError();
-  if (!t && !u) return [];
-  let a = [];
-  if (u) {
-    a.push(
-      `${u} \u2014 nothing will run unwrapped: new background sessions are refused unless a background service that validated an earlier value is still serving them (\`claude daemon status\` shows it)`,
+async function getProcessWrapperStatusNotices(storage) {
+  let wrapperRecord = processWrapperRecord();
+  let wrapperError = processWrapperError();
+  if (!wrapperRecord && !wrapperError) return [];
+  let notices = [];
+  if (wrapperError) {
+    notices.push(
+      `${wrapperError} \u2014 nothing will run unwrapped: new background sessions are refused unless a background service that validated an earlier value is still serving them (\`claude daemon status\` shows it)`,
     );
-    return a;
+    return notices;
   }
   let launchCommand = getLaunchCommand();
-  a.push(
+  notices.push(
     `Self-exec: \`${[launchCommand.cmd, ...launchCommand.prefixArgs].join(" ")}\` (CLAUDE_CODE_PROCESS_WRAPPER)`,
   );
   if (!(await isProcessWrapperUsable()))
-    a.push(
+    notices.push(
       `The launcher \`${launchCommand.cmd}\` cannot run right now (deleted or not executable) \u2014 new background sessions are refused until it is restored; a background service that validated it earlier keeps serving its existing sessions (\`claude daemon status\`)`,
     );
-  let o = await readLiveServerLock(1, l).catch(() => null);
-  if (!o) return a;
-  let [{ controlRequest: c }, { BG_PROTO: g }] = await Promise.all([
-    import("./chunk-58s9qc52.js"),
-    import("./chunk-6cpjz11h.js"),
+  let serverLock = await readLiveServerLock(1, storage).catch(() => null);
+  if (!serverLock) return notices;
+  let [{ controlRequest }, { BG_PROTO: bgProto }] = await Promise.all([
+    import("../services/daemon/controlClient.js"),
+    import("../services/daemon/leaseProtocol.js"),
   ]);
-  let f = await c({
-    proto: g,
+  let nudgeResult = await controlRequest({
+    proto: bgProto,
     op: "nudge",
   }).catch(() => null);
-  let p = f?.ok && f.op === "nudge" ? (f.processWrapper ?? "") : (o.processWrapper ?? "");
-  let m = truncateToLength(collapseWhitespace(stripAnsi(p)), 200);
-  if (o.origin === "service")
-    a.push(
+  let serviceWrapper =
+    nudgeResult?.ok && nudgeResult.op === "nudge"
+      ? (nudgeResult.processWrapper ?? "")
+      : (serverLock.processWrapper ?? "");
+  let shownWrapper = truncateToLength(collapseWhitespace(stripAnsi(serviceWrapper)), 200);
+  if (serverLock.origin === "service")
+    notices.push(
       `The installed background service predates launcher support and runs outside \`${launchCommand.cmd}\`; its sessions are covered, the service process itself is not \u2014 a launcher-aware \`claude daemon install\` will close this`,
     );
-  if (p !== t)
-    a.push(
-      `The running background service launches sessions via \`${m || "(no launcher)"}\`, but this session resolves \`${t}\` \u2014 restart it (and your running claude sessions) to converge`,
+  if (serviceWrapper !== wrapperRecord)
+    notices.push(
+      `The running background service launches sessions via \`${shownWrapper || "(no launcher)"}\`, but this session resolves \`${wrapperRecord}\` \u2014 restart it (and your running claude sessions) to converge`,
     );
-  return a;
+  return notices;
 }
 //@ chunk-j8bb1zkh.js:7982-8678 layout
 /**
  * 设置相关状态提示：无效条目所在文件、托管设置读取问题、转录保留期等。
  */
-async function getSettingsStatusNotices(l) {
+async function getSettingsStatusNotices(storage) {
   let diagnostic = await getDoctorDiagnostic({
-    storageV5: l,
+    storageV5: storage,
   });
-  let u = [];
+  let lines = [];
   let { statusNotices, invalidEntries } = splitStatusNotices(formatInvalidSettingNotice().errors);
   if (invalidEntries.length > 0) {
     let joined = uniq(
       invalidEntries.map((invalidEntry) => invalidEntry.file && cleanForDisplay(invalidEntry.file)),
     ).join(", ");
-    u.push(`Found invalid entries in: ${joined}.`);
-    let g = await retentionCleanupSkipReason(l);
-    if (g === "settings_unknowable" || g === "settings_invalid_key_set")
-      u.push(
+    lines.push(`Found invalid entries in: ${joined}.`);
+    let retentionSkipReason = await retentionCleanupSkipReason(storage);
+    if (retentionSkipReason === "settings_unknowable" || retentionSkipReason === "settings_invalid_key_set")
+      lines.push(
         "Transcript retention cleanup is paused until the settings errors above are fixed (cleanupPeriodDays cannot be determined reliably).",
       );
   }
-  for (let statusNotice of statusNotices) u.push(statusNotice.message);
-  u.push(...(await collectPermissionRuleWarningLines()).map(cleanForDisplay));
-  for (let [o, c] of managedLinkWarningLines())
-    u.push(`${o}
-${c}`);
-  u.push(...managedHelperEnvNotes());
+  for (let statusNotice of statusNotices) lines.push(statusNotice.message);
+  lines.push(...(await collectPermissionRuleWarningLines()).map(cleanForDisplay));
+  for (let [linkPath, warningText] of managedLinkWarningLines())
+    lines.push(`${linkPath}
+${warningText}`);
+  lines.push(...managedHelperEnvNotes());
   diagnostic.warnings.forEach((warning) => {
-    u.push(warning.issue);
+    lines.push(warning.issue);
   });
-  if (diagnostic.hasUpdatePermissions === false) u.push("No write permissions for auto-updates");
-  return u;
+  if (diagnostic.hasUpdatePermissions === false) lines.push("No write permissions for auto-updates");
+  return lines;
 }
 //@ chunk-j8bb1zkh.js:8678-8816 layout
-function probeRefreshTokenDead(credentials) {
-  if (!(isStorageV5Enabled() && credentials !== undefined)) return;
+function probeRefreshTokenDead(storageV5) {
+  if (!(isStorageV5Enabled() && storageV5 !== undefined)) return;
   return (async () => ({
-    refreshKnownDead: isAnthropicAuthEnabled() && (await isOAuthRefreshKnownDeadAsync(credentials)),
+    refreshKnownDead: isAnthropicAuthEnabled() && (await isOAuthRefreshKnownDeadAsync(storageV5)),
   }))().catch(() => ({
     refreshKnownDead: false,
   }));
@@ -566,13 +589,13 @@ function probeRefreshTokenDead(credentials) {
 /**
  * /status 的账号信息：登录方式、组织、邮箱、令牌是否过期。
  */
-function buildAccountProperties(l) {
+function buildAccountProperties(storage) {
   let accountInfo = getAccountInformation();
   if (!accountInfo) return [];
   let properties = [];
   if (
-    l !== undefined && isStorageV5Enabled()
-      ? l.refreshKnownDead
+    storage !== undefined && isStorageV5Enabled()
+      ? storage.refreshKnownDead
       : isAnthropicAuthEnabled() && isOAuthRefreshKnownDead()
   ) {
     properties.push({
@@ -597,7 +620,7 @@ function buildAccountProperties(l) {
       label: "Login method",
       value: `${accountInfo.subscription} account`,
     });
-  let a = " \xB7 not in use";
+  let notInUse = " \xB7 not in use";
   let apiKeySource = accountInfo.apiKeySource ?? "none";
   let requestCredentials = getRequestCredentials(accountInfo.tokenSource ?? "none", apiKeySource);
   if (accountInfo.tokenSource)
@@ -606,12 +629,12 @@ function buildAccountProperties(l) {
       value:
         requestCredentials.tokenSource === accountInfo.tokenSource
           ? accountInfo.tokenSource
-          : `${accountInfo.tokenSource}${a}`,
+          : `${accountInfo.tokenSource}${notInUse}`,
     });
   if (accountInfo.apiKeySource)
     properties.push({
       label: "API key",
-      value: requestCredentials.apiKey ? accountInfo.apiKeySource : `${accountInfo.apiKeySource}${a}`,
+      value: requestCredentials.apiKey ? accountInfo.apiKeySource : `${accountInfo.apiKeySource}${notInUse}`,
     });
   let apiKeyHelperLastFailure = getApiKeyHelperLastFailure();
   if (apiKeyHelperLastFailure && isApiKeyHelperTheActiveCredential())
@@ -621,14 +644,14 @@ function buildAccountProperties(l) {
         ? "Failing"
         : `Failing \u2014 last run ${clippedMessage(apiKeyHelperLastFailure, MAX_CLIP_CHARS)}`,
     });
-  let g = shouldUseWIFAuth();
-  let f = g && getRequestCredentials("profile", apiKeySource).tokenSource === "profile";
-  if (g)
+  let usesProfile = shouldUseWIFAuth();
+  let profileInUse = usesProfile && getRequestCredentials("profile", apiKeySource).tokenSource === "profile";
+  if (usesProfile)
     properties.push({
       label: "Profile",
-      value: `${getWIFStatusLine()}${f ? "" : a}`,
+      value: `${getWIFStatusLine()}${profileInUse ? "" : notInUse}`,
     });
-  if (f) {
+  if (profileInUse) {
     let wifAccountInfo = getWIFAccountInfo();
     if (!env.IS_DEMO) {
       if (wifAccountInfo?.organizationName || wifAccountInfo?.organizationUuid)
@@ -661,23 +684,23 @@ function buildAccountProperties(l) {
 /**
  * URL 含用户名或密码时脱敏后再显示。
  */
-function redactUrlCredentials(l) {
-  let t;
+function redactUrlCredentials(url) {
+  let parsed;
   try {
-    t = new URL(l);
+    parsed = new URL(url);
   } catch {
-    t = undefined;
+    parsed = undefined;
   }
-  if (t?.host) {
-    if (!t.username && !t.password) return l;
-    let d = new URL(t.href);
-    d.username = "***";
-    d.password = "";
-    return d.href;
+  if (parsed?.host) {
+    if (!parsed.username && !parsed.password) return url;
+    let redacted = new URL(parsed.href);
+    redacted.username = "***";
+    redacted.password = "";
+    return redacted.href;
   }
-  let index = l.lastIndexOf("@");
-  if (index < 0) return l;
-  return `${/^[a-z][a-z0-9+.-]*:\/\//i.exec(l)?.[0] ?? ""}***${l.slice(index)}`;
+  let index = url.lastIndexOf("@");
+  if (index < 0) return url;
+  return `${/^[a-z][a-z0-9+.-]*:\/\//i.exec(url)?.[0] ?? ""}***${url.slice(index)}`;
 }
 //@ chunk-j8bb1zkh.js:10462-13570 fingerprint = buildAPIProviderProperties (0.615)
 /**
@@ -805,11 +828,11 @@ function buildAPIProviderProperties() {
         label: "Workspace ID",
         value: ANTHROPIC_GOOGLE_CLOUD_WORKSPACE_ID,
       });
-    let g = env.ANTHROPIC_GOOGLE_CLOUD_PROJECT || env.GOOGLE_CLOUD_PROJECT;
-    if (g)
+    let project = env.ANTHROPIC_GOOGLE_CLOUD_PROJECT || env.GOOGLE_CLOUD_PROJECT;
+    if (project)
       properties.push({
         label: "GCP project",
-        value: g,
+        value: project,
       });
     properties.push({
       label: "GCP location",
@@ -896,33 +919,26 @@ function formatAwsRegionForStatus() {
 }
 //@ chunk-j8bb1zkh.js:13931-14033 placement
 function modelStatusLabel(mainLoopModel) {
-  let t = modelDisplayString(mainLoopModel);
+  let label = modelDisplayString(mainLoopModel);
   let activeModelFallback = getActiveModelFallback();
   if (activeModelFallback !== undefined)
-    return `${t} (${describeAutoSwitchedModel(modelDisplayString(activeModelFallback.previousModel))})`;
-  return t;
-}
-//@ chunk-06y4szbn.js:65501-65613 fingerprint = buildInstallationHealthDiagnostics (0.329)
-async function buildInstallationHealthDiagnostics(backAfterPublish, n) {
-  let r = await backAfterPublish;
-  return r.err === null && n.length > 0
-    ? {
-        ...r,
-        warnings: [...(r.warnings ?? []), ...n],
-      }
-    : r;
+    return `${label} (${describeAutoSwitchedModel(modelDisplayString(activeModelFallback.previousModel))})`;
+  return label;
 }
 //@ chunk-2wrddneh.js:14173-14717 placement
 async function buildStatusSections({ credentials, mainLoopModel, mcp, permissionMode, remoteSessionName }) {
   let cwd = getCwd();
-  let [m, l] = await Promise.all([probeRefreshTokenDead(credentials), noopMachineStatusHook(cwd)]);
-  let [S, c, d] = moveAntOnlyToEnd([
+  let [accountStatus, machineStatus] = await Promise.all([
+    probeRefreshTokenDead(credentials),
+    noopMachineStatusHook(cwd),
+  ]);
+  let [primary, environment, internal] = moveAntOnlyToEnd([
     buildPrimarySection({
       sessionId: getSessionId(),
       remoteSessionName,
       cwd,
-      accountStatus: m,
-      machineStatus: l,
+      accountStatus,
+      machineStatus,
       webSetupStatus: undefined,
     }),
     buildSecondarySection({
@@ -933,25 +949,25 @@ async function buildStatusSections({ credentials, mainLoopModel, mcp, permission
       permissionMode,
     }),
   ]);
-  let t = (e) =>
-    statusValueRows(e ?? []).map((r) => ({
-      ...r,
-      value: stripAnsi(r.value).replace(DEBUG_DETAILS_SUFFIX, ""),
+  let toRows = (rows) =>
+    statusValueRows(rows ?? []).map((row) => ({
+      ...row,
+      value: stripAnsi(row.value).replace(DEBUG_DETAILS_SUFFIX, ""),
     }));
   return [
     {
       title: "Session",
-      rows: t(S),
+      rows: toRows(primary),
     },
     {
       title: "Environment",
-      rows: t(c),
+      rows: toRows(environment),
     },
     {
       title: "Internal",
-      rows: t(d),
+      rows: toRows(internal),
     },
-  ].filter((e) => e.rows.length > 0);
+  ].filter((section) => section.rows.length > 0);
 }
 export {
   buildInstallationHealthDiagnostics,
@@ -973,4 +989,5 @@ export {
   probeRefreshTokenDead,
   moveAntOnlyToEnd,
   statusValueRows,
+  buildStatusSections,
 };

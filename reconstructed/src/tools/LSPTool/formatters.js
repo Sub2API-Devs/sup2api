@@ -122,7 +122,7 @@ ${filePath}:`);
 `);
 }
 //@ chunk-kxyd0g16.js:95978-96168 layout = extractMarkupText (1)
-function extractMarkupText(contents) {
+function flattenTextBlocks(contents) {
   if (Array.isArray(contents))
     return contents.map((item) => {
       if (typeof item === "string") return item;
@@ -141,7 +141,7 @@ function extractMarkupText(contents) {
 function formatHoverResult(result, _cwd) {
   if (!result)
     return "No hover information available. This may occur if the cursor is not on a symbol, or if the LSP server has not fully indexed the file.";
-  let content = extractMarkupText(result.contents);
+  let content = flattenTextBlocks(result.contents);
   if (result.range) {
     let line = result.range.start.line + 1;
     let character = result.range.start.character + 1;

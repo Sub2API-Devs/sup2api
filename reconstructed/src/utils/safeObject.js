@@ -13,19 +13,19 @@
 /**
  * 复制对象并去掉 undefined 值，__proto__ 键以自有属性写入（防原型污染）。
  */
-function compactEnvObject(t) {
-  let e = {};
-  for (let [key, value] of Object.entries(t)) {
+function compactEnvObject(source) {
+  let target = {};
+  for (let [key, value] of Object.entries(source)) {
     if (value === undefined) continue;
     if (key === "__proto__")
-      Object.defineProperty(e, key, {
+      Object.defineProperty(target, key, {
         value,
         writable: true,
         enumerable: true,
         configurable: true,
       });
-    else e[key] = value;
+    else target[key] = value;
   }
-  return e;
+  return target;
 }
 export { compactEnvObject };

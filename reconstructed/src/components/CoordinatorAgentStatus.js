@@ -8,11 +8,31 @@
  * pieces: chunk-18hwfzwa.js (75), chunk-e6aww6q8.js (2)
  * attribution: fingerprint 4, placement 63, layout 9, callgraph-witnessed 1
  */
+import {
+  isMainSessionTask as isMainSessionTask_2,
+  isPanelAgentTask,
+  isCompletedBackgroundAgent,
+} from "../tasks/taskKinds.js";
+import {
+  isTaskFailedOrStopped,
+  exitTeammateView,
+  enterTeammateView,
+  isLocalAgent,
+} from "../state/teammateViewHelpers.js";
+import { findAgentTask } from "../plugins/functionHooks/sessionApi.js";
+import { waitForStoreState, useSetVoiceState } from "../context/voice.js";
+import { VIEW_WAIT_MS } from "../plugins/functionHooks/uiApi.js";
 import { listUncarriedLaunchSettings } from "../services/daemon/relaunchArgs.js";
 import { getForkRestrictedLaunchConfig } from "../bootstrap/state.js";
 import { hasRunningBackgroundTask } from "../tasks/backgroundTaskLabels.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
-import { y, P, init_react_production, Q, ce } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
+import {
+  useState,
+  useEffect,
+  init_react_production,
+  useMemo,
+  useCallback,
+} from "../../vendor/react/cjs/react.production.js";
 import { useStrayClickGuard } from "./CustomSelect/strayClickGuard.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
@@ -43,16 +63,11 @@ import {
 } from "./Spinner/SpinnerAnimationRow.js";
 import { clamp } from "../ink/screen.js";
 import { figures_default } from "../../vendor/@inquirer/figures/dist/esm/index.js";
-import { PAUSE_GLYPH, BLACK_CIRCLE, DOWN_ARROW, UP_ARROW } from "../utils/permissions/autoModeRulesPrompt.js";
+import { PAUSE_GLYPH, BLACK_CIRCLE, DOWN_ARROW, UP_ARROW } from "../constants/figures.js";
 import { ProgressBar } from "./design-system/ProgressBar.js";
 import { isTerminalTaskStatus } from "../Task.js";
 import { isTaskStillActive } from "./tasks/BackgroundTaskStatus.js";
 import { KeyboardShortcutHint, formatShortcutHint } from "./design-system/KeyboardShortcutHint.js";
-import {
-  isPanelAgentTask,
-  isCompletedBackgroundAgent,
-  isMainSessionTask as isMainSessionTask_2,
-} from "../tasks/taskKinds.js";
 import { isInProcessTeammateTask } from "../tasks/InProcessTeammateTask/types.js";
 import { isIdleCompletedSubagent } from "../tasks/LocalMainSessionTask.js";
 import { collapseWhitespace, repeatString } from "../utils/stringUtils.js";
@@ -65,7 +80,6 @@ import { useAppState, useAppStoreDirect, useSetAppState } from "../state/AppStat
 import { useMainLoopModel as useMainLoopModel_3 } from "../hooks/useMainLoopModel.js";
 import { isUltracodeActive } from "../utils/effort.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
-import { useSetVoiceState, waitForStoreState } from "../context/voice.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { pausedUsageParts } from "../utils/usageLimitText.js";
 import { logFeatureOk } from "../services/analytics/featureTelemetry.js";
@@ -76,13 +90,7 @@ import { hasOtherActiveAgents, MCP_TASK_KEEPALIVE_MS } from "../utils/task/frame
 import { useInterval } from "../ink/components/Input.js";
 import { computeScrollWindow } from "./CustomSelect/select.js";
 import { extractTeammateTranscriptsFromTasks_2 } from "../utils/sessionStorage.js";
-import {
-  exitTeammateView,
-  enterTeammateView,
-  isTaskFailedOrStopped,
-  isLocalAgent,
-} from "../state/teammateViewHelpers.js";
-import { _S } from "../../vendor/chart.js/dist/chart.js";
+import { TREE_GLYPHS } from "../../vendor/chart.js/dist/chart.js";
 import { stepTeammateSelection } from "../hooks/useBackgroundTaskNavigation.js";
 import { useShortcutDisplay as useShortcutDisplay_2 } from "../keybindings/useShortcutDisplay.js";
 import { useShortcutDisplay } from "../keybindings/useKeybindingDisplay.js";
@@ -92,10 +100,39 @@ import { Ansi } from "../ink/components/AnsiText.js";
 import { useKeybindingContext } from "../keybindings/KeybindingContext.js";
 import { findShadowedActions } from "../keybindings/match.js";
 import { MessageActionsKeybindings } from "./messageActions.js";
-import { xr } from "../../vendor/lodash-es/_inlinedHelpers.js";
-import { findAgentTask } from "../plugins/functionHooks/sessionApi.js";
-import { VIEW_WAIT_MS } from "../plugins/functionHooks/uiApi.js";
+import { import_mapValues } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:4006927-4007097 placement
+function teammateRowState(agentTask) {
+  if (agentTask.type !== "in_process_teammate") return isMainSessionTask_2(agentTask) ? undefined : "hidden";
+  let failedOrStopped = isTaskFailedOrStopped(agentTask);
+  let notResumable = agentTask.identity.resumableAgentId === undefined;
+  return failedOrStopped ? "ended" : notResumable ? "elsewhere" : undefined;
+}
+//@ chunk-e6aww6q8.js:4007333-4007709 callgraph-witnessed = CoordinatorTaskPanel (0.123)
+async function showAgentTaskView(store, options) {
+  if (options.agentId === undefined) {
+    exitTeammateView((prevState) => store.setState(prevState));
+    return "shown";
+  }
+  let agentTask = findAgentTask(store.getState().tasks, options.agentId);
+  if (agentTask === undefined) return "unknown";
+  let viewingAgentTaskId = teammateRowState(agentTask);
+  if (viewingAgentTaskId !== undefined) return viewingAgentTaskId;
+  enterTeammateView(agentTask.id, (s_0) => store.setState(s_0));
+  await waitForStoreState(
+    store,
+    (s_1) => {
+      let state = s_1.tasks[agentTask.id];
+      return !(isLocalAgent(state) && state.retain && !state.diskLoaded);
+    },
+    {
+      timeoutMs: VIEW_WAIT_MS,
+    },
+  );
+  return store.getState().viewingAgentTaskId === agentTask.id ? "shown" : "moved";
+}
 //@ chunk-18hwfzwa.js:171209-171289 fingerprint = _temp (0.667)
 function hasUncarriedLaunchSettings(s) {
   return (
@@ -108,42 +145,42 @@ function hasUncarriedLaunchSettings(s) {
  * 协调者代理状态行（悬停高亮、防误点）。
  */
 function AgentStatusRow(props) {
-  let rt = w(15);
+  let $ = useMemoCache(15);
   let { row, isWarned, prefixWidth, labelWidth, rowWidth, isSelected, onClick } = props;
-  let [isHovered, setIsHovered] = y(false);
+  let [isHovered, setIsHovered] = useState(false);
   let isStrayClick = useStrayClickGuard();
   let isHighlighted = isSelected || isHovered;
   let handleClick;
-  if (rt[0] !== onClick || rt[1] !== isStrayClick) {
-    handleClick = (At) => {
-      if (isStrayClick(At)) {
+  if ($[0] !== onClick || $[1] !== isStrayClick) {
+    handleClick = (event) => {
+      if (isStrayClick(event)) {
         return;
       }
       onClick();
     };
-    rt[0] = onClick;
-    rt[1] = isStrayClick;
-    rt[2] = handleClick;
-  } else handleClick = rt[2];
+    $[0] = onClick;
+    $[1] = isStrayClick;
+    $[2] = handleClick;
+  } else handleClick = $[2];
   let onMouseEnter;
   let onMouseLeave;
-  if (rt[3] === MEMO_CACHE_SENTINEL) {
+  if ($[3] === MEMO_CACHE_SENTINEL) {
     onMouseEnter = () => setIsHovered(true);
     onMouseLeave = () => setIsHovered(false);
-    rt[3] = onMouseEnter;
-    rt[4] = onMouseLeave;
+    $[3] = onMouseEnter;
+    $[4] = onMouseLeave;
   } else {
-    onMouseEnter = rt[3];
-    onMouseLeave = rt[4];
+    onMouseEnter = $[3];
+    onMouseLeave = $[4];
   }
   let children;
   if (
-    rt[5] !== isHighlighted ||
-    rt[6] !== isWarned ||
-    rt[7] !== labelWidth ||
-    rt[8] !== prefixWidth ||
-    rt[9] !== row ||
-    rt[10] !== rowWidth
+    $[5] !== isHighlighted ||
+    $[6] !== isWarned ||
+    $[7] !== labelWidth ||
+    $[8] !== prefixWidth ||
+    $[9] !== row ||
+    $[10] !== rowWidth
   ) {
     children =
       row.pausedStatuses !== undefined
@@ -164,90 +201,90 @@ function AgentStatusRow(props) {
             rowWidth,
             highlighted: isHighlighted,
           });
-    rt[5] = isHighlighted;
-    rt[6] = isWarned;
-    rt[7] = labelWidth;
-    rt[8] = prefixWidth;
-    rt[9] = row;
-    rt[10] = rowWidth;
-    rt[11] = children;
-  } else children = rt[11];
-  let Dt;
-  if (rt[12] !== handleClick || rt[13] !== children) {
-    Dt = jsxProd_default(Box, {
+    $[5] = isHighlighted;
+    $[6] = isWarned;
+    $[7] = labelWidth;
+    $[8] = prefixWidth;
+    $[9] = row;
+    $[10] = rowWidth;
+    $[11] = children;
+  } else children = $[11];
+  let rowElement;
+  if ($[12] !== handleClick || $[13] !== children) {
+    rowElement = jsxProd_default(Box, {
       onClick: handleClick,
       onMouseEnter,
       onMouseLeave,
       children,
     });
-    rt[12] = handleClick;
-    rt[13] = children;
-    rt[14] = Dt;
-  } else Dt = rt[14];
-  return Dt;
+    $[12] = handleClick;
+    $[13] = children;
+    $[14] = rowElement;
+  } else rowElement = $[14];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:436126-436321 placement
-function AgentStatusRowWithClock(h) {
-  let D = w(5);
-  let x = ElapsedClock(h.row.clock);
+function AgentStatusRowWithClock(props) {
+  let $ = useMemoCache(5);
+  let clockValue = ElapsedClock(props.row.clock);
   let elapsed;
-  if (D[0] !== x) {
-    elapsed = formatBarElapsed(x);
-    D[0] = x;
-    D[1] = elapsed;
-  } else elapsed = D[1];
-  let ee;
-  if (D[2] !== h || D[3] !== elapsed) {
-    ee = jsxProd_default(AgentStatusRowView, {
-      ...h,
+  if ($[0] !== clockValue) {
+    elapsed = formatBarElapsed(clockValue);
+    $[0] = clockValue;
+    $[1] = elapsed;
+  } else elapsed = $[1];
+  let rowElement;
+  if ($[2] !== props || $[3] !== elapsed) {
+    rowElement = jsxProd_default(AgentStatusRowView, {
+      ...props,
       elapsed,
     });
-    D[2] = h;
-    D[3] = elapsed;
-    D[4] = ee;
-  } else ee = D[4];
-  return ee;
+    $[2] = props;
+    $[3] = elapsed;
+    $[4] = rowElement;
+  } else rowElement = $[4];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:436321-439174 placement
 /**
  * 代理状态行视图：进度条、百分比、耗时与标签（屏幕阅读器有简化形式）。
  */
 function AgentStatusRowView(props) {
-  let ze = w(62);
+  let $ = useMemoCache(62);
   let { row, elapsed, isWarned, prefixWidth, labelWidth, rowWidth, highlighted } = props;
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let We = !highlighted;
-  let Xe;
-  if (ze[0] !== row) {
-    Xe = progressBarCells(row, 100);
-    ze[0] = row;
-    ze[1] = Xe;
-  } else Xe = ze[1];
-  let rt = `${Xe}%`;
-  let kt;
-  let At;
-  let It;
+  let isDimmed = !highlighted;
+  let percentComplete;
+  if ($[0] !== row) {
+    percentComplete = progressBarCells(row, 100);
+    $[0] = row;
+    $[1] = percentComplete;
+  } else percentComplete = $[1];
+  let percentText = `${percentComplete}%`;
+  let TextComponent;
+  let BoxComponent;
+  let labelElement;
   let wrap;
-  let Et;
-  let Dt;
-  let Lt;
+  let barElement;
+  let separatorIndent;
+  let segmentElements;
   let flexGrow;
   let width;
   let paddingLeft;
-  let so;
+  let prefixElement;
   if (
-    ze[2] !== We ||
-    ze[3] !== elapsed ||
-    ze[4] !== highlighted ||
-    ze[5] !== isScreenReaderEnabled ||
-    ze[6] !== isWarned ||
-    ze[7] !== labelWidth ||
-    ze[8] !== rt ||
-    ze[9] !== prefixWidth ||
-    ze[10] !== row ||
-    ze[11] !== rowWidth
+    $[2] !== isDimmed ||
+    $[3] !== elapsed ||
+    $[4] !== highlighted ||
+    $[5] !== isScreenReaderEnabled ||
+    $[6] !== isWarned ||
+    $[7] !== labelWidth ||
+    $[8] !== percentText ||
+    $[9] !== prefixWidth ||
+    $[10] !== row ||
+    $[11] !== rowWidth
   ) {
-    let po =
+    let layoutCandidates =
       row.pausedStatuses !== undefined
         ? [
             ...row.pausedStatuses.map(emptyWorkflowBarSummary),
@@ -260,211 +297,219 @@ function AgentStatusRowView(props) {
             row,
             elapsed,
             isWarned,
-            isScreenReaderEnabled ? [bunStringWidth(rt)] : [20, 12, 8],
+            isScreenReaderEnabled ? [bunStringWidth(percentText)] : [20, 12, 8],
           );
-    let ao = rowWidth - prefixWidth - labelWidth - SPINNER_PADDING;
-    let bo = po.find((co) => layoutWidth(co) <= ao) ?? po.at(-1);
-    const Ao = labelWidth + ao - layoutWidth(bo);
+    let availableWidth = rowWidth - prefixWidth - labelWidth - SPINNER_PADDING;
+    let layout =
+      layoutCandidates.find((candidate) => layoutWidth(candidate) <= availableWidth) ??
+      layoutCandidates.at(-1);
+    const labelWidthBudget = labelWidth + availableWidth - layoutWidth(layout);
     const min = Math.min(SPINNER_MAX_LINES, labelWidth);
-    let Ro;
-    if (ze[23] !== labelWidth || ze[24] !== Ao || ze[25] !== min) {
-      Ro = clamp(Ao, min, labelWidth);
-      ze[23] = labelWidth;
-      ze[24] = Ao;
-      ze[25] = min;
-      ze[26] = Ro;
-    } else Ro = ze[26];
-    let width_2 = Ro;
+    let labelWidthFinalCached;
+    if ($[23] !== labelWidth || $[24] !== labelWidthBudget || $[25] !== min) {
+      labelWidthFinalCached = clamp(labelWidthBudget, min, labelWidth);
+      $[23] = labelWidth;
+      $[24] = labelWidthBudget;
+      $[25] = min;
+      $[26] = labelWidthFinalCached;
+    } else labelWidthFinalCached = $[26];
+    let width_2 = labelWidthFinalCached;
     const children = highlighted ? `${figures_default.pointer} ` : "  ";
-    let Wo;
-    if (ze[27] !== We || ze[28] !== children) {
-      Wo = jsxProd_default(Text, {
-        dimColor: We,
+    let pointerElement;
+    if ($[27] !== isDimmed || $[28] !== children) {
+      pointerElement = jsxProd_default(Text, {
+        dimColor: isDimmed,
         children,
       });
-      ze[27] = We;
-      ze[28] = children;
-      ze[29] = Wo;
-    } else Wo = ze[29];
-    const dimColor = !row.bulletColor && We;
-    const Cn = row.pausedStatuses !== undefined ? PAUSE_GLYPH : figures_default.circle;
-    let No;
-    if (ze[30] !== row.bulletColor || ze[31] !== dimColor || ze[32] !== Cn) {
-      No = jsxProd_default_2(Text, {
+      $[27] = isDimmed;
+      $[28] = children;
+      $[29] = pointerElement;
+    } else pointerElement = $[29];
+    const dimColor = !row.bulletColor && isDimmed;
+    const bulletGlyph = row.pausedStatuses !== undefined ? PAUSE_GLYPH : figures_default.circle;
+    let bulletElement;
+    if ($[30] !== row.bulletColor || $[31] !== dimColor || $[32] !== bulletGlyph) {
+      bulletElement = jsxProd_default_2(Text, {
         color: row.bulletColor,
         dimColor,
-        children: [Cn, " "],
+        children: [bulletGlyph, " "],
       });
-      ze[30] = row.bulletColor;
-      ze[31] = dimColor;
-      ze[32] = Cn;
-      ze[33] = No;
-    } else No = ze[33];
-    if (ze[34] !== prefixWidth || ze[35] !== Wo || ze[36] !== No) {
-      so = jsxProd_default_2(Box, {
+      $[30] = row.bulletColor;
+      $[31] = dimColor;
+      $[32] = bulletGlyph;
+      $[33] = bulletElement;
+    } else bulletElement = $[33];
+    if ($[34] !== prefixWidth || $[35] !== pointerElement || $[36] !== bulletElement) {
+      prefixElement = jsxProd_default_2(Box, {
         width: prefixWidth,
         flexShrink: 0,
-        children: [Wo, No],
+        children: [pointerElement, bulletElement],
       });
-      ze[34] = prefixWidth;
-      ze[35] = Wo;
-      ze[36] = No;
-      ze[37] = so;
-    } else so = ze[37];
+      $[34] = prefixWidth;
+      $[35] = pointerElement;
+      $[36] = bulletElement;
+      $[37] = prefixElement;
+    } else prefixElement = $[37];
     let children_2;
-    if (ze[38] !== We || ze[39] !== row.name) {
+    if ($[38] !== isDimmed || $[39] !== row.name) {
       children_2 = jsxProd_default(Text, {
-        dimColor: We,
+        dimColor: isDimmed,
         wrap: "truncate",
         children: row.name,
       });
-      ze[38] = We;
-      ze[39] = row.name;
-      ze[40] = children_2;
-    } else children_2 = ze[40];
-    if (ze[41] !== width_2 || ze[42] !== children_2) {
-      It = jsxProd_default(Box, {
+      $[38] = isDimmed;
+      $[39] = row.name;
+      $[40] = children_2;
+    } else children_2 = $[40];
+    if ($[41] !== width_2 || $[42] !== children_2) {
+      labelElement = jsxProd_default(Box, {
         width: width_2,
         flexShrink: 0,
         children: children_2,
       });
-      ze[41] = width_2;
-      ze[42] = children_2;
-      ze[43] = It;
-    } else It = ze[43];
-    At = Box;
+      $[41] = width_2;
+      $[42] = children_2;
+      $[43] = labelElement;
+    } else labelElement = $[43];
+    BoxComponent = Box;
     flexGrow = 1;
     width = 0;
     paddingLeft = SPINNER_PADDING;
-    kt = Text;
+    TextComponent = Text;
     wrap = "truncate-end";
-    Et =
-      bo.barWidth > 0 &&
+    barElement =
+      layout.barWidth > 0 &&
       jsxProd_default(Decorative, {
         fallback: jsxProd_default(Text, {
-          dimColor: We,
-          children: rt,
+          dimColor: isDimmed,
+          children: percentText,
         }),
         children: jsxProd_default(ProgressBar, {
-          ratio: progressBarCells(row, bo.barWidth) / bo.barWidth,
-          width: bo.barWidth,
+          ratio: progressBarCells(row, layout.barWidth) / layout.barWidth,
+          width: layout.barWidth,
           variant: "pill",
         }),
       });
-    Dt = bo.barWidth > 0 && bo.segments.length > 0 && SPINNER_INDENT;
-    let Yo;
-    if (ze[44] !== We) {
-      Yo = (kn, Fn) =>
+    separatorIndent = layout.barWidth > 0 && layout.segments.length > 0 && SPINNER_INDENT;
+    let renderSegment;
+    if ($[44] !== isDimmed) {
+      renderSegment = (segment, index) =>
         jsxProd_default_2(
           Text,
           {
-            color: kn.isWarning ? "warning" : undefined,
-            dimColor: kn.isWarning ? false : We,
+            color: segment.isWarning ? "warning" : undefined,
+            dimColor: segment.isWarning ? false : isDimmed,
             children: [
-              Fn > 0 &&
+              index > 0 &&
                 jsxProd_default(Text, {
-                  dimColor: We,
+                  dimColor: isDimmed,
                   children: SPINNER_SEPARATOR,
                 }),
-              kn.text,
+              segment.text,
             ],
           },
-          Fn,
+          index,
         );
-      ze[44] = We;
-      ze[45] = Yo;
-    } else Yo = ze[45];
-    Lt = bo.segments.map(Yo);
-    ze[2] = We;
-    ze[3] = elapsed;
-    ze[4] = highlighted;
-    ze[5] = isScreenReaderEnabled;
-    ze[6] = isWarned;
-    ze[7] = labelWidth;
-    ze[8] = rt;
-    ze[9] = prefixWidth;
-    ze[10] = row;
-    ze[11] = rowWidth;
-    ze[12] = kt;
-    ze[13] = At;
-    ze[14] = It;
-    ze[15] = wrap;
-    ze[16] = Et;
-    ze[17] = Dt;
-    ze[18] = Lt;
-    ze[19] = flexGrow;
-    ze[20] = width;
-    ze[21] = paddingLeft;
-    ze[22] = so;
+      $[44] = isDimmed;
+      $[45] = renderSegment;
+    } else renderSegment = $[45];
+    segmentElements = layout.segments.map(renderSegment);
+    $[2] = isDimmed;
+    $[3] = elapsed;
+    $[4] = highlighted;
+    $[5] = isScreenReaderEnabled;
+    $[6] = isWarned;
+    $[7] = labelWidth;
+    $[8] = percentText;
+    $[9] = prefixWidth;
+    $[10] = row;
+    $[11] = rowWidth;
+    $[12] = TextComponent;
+    $[13] = BoxComponent;
+    $[14] = labelElement;
+    $[15] = wrap;
+    $[16] = barElement;
+    $[17] = separatorIndent;
+    $[18] = segmentElements;
+    $[19] = flexGrow;
+    $[20] = width;
+    $[21] = paddingLeft;
+    $[22] = prefixElement;
   } else {
-    kt = ze[12];
-    At = ze[13];
-    It = ze[14];
-    wrap = ze[15];
-    Et = ze[16];
-    Dt = ze[17];
-    Lt = ze[18];
-    flexGrow = ze[19];
-    width = ze[20];
-    paddingLeft = ze[21];
-    so = ze[22];
+    TextComponent = $[12];
+    BoxComponent = $[13];
+    labelElement = $[14];
+    wrap = $[15];
+    barElement = $[16];
+    separatorIndent = $[17];
+    segmentElements = $[18];
+    flexGrow = $[19];
+    width = $[20];
+    paddingLeft = $[21];
+    prefixElement = $[22];
   }
   let children;
-  if (ze[46] !== kt || ze[47] !== wrap || ze[48] !== Et || ze[49] !== Dt || ze[50] !== Lt) {
-    children = jsxProd_default_2(kt, {
-      wrap,
-      children: [Et, Dt, Lt],
-    });
-    ze[46] = kt;
-    ze[47] = wrap;
-    ze[48] = Et;
-    ze[49] = Dt;
-    ze[50] = Lt;
-    ze[51] = children;
-  } else children = ze[51];
-  let Bo;
   if (
-    ze[52] !== At ||
-    ze[53] !== children ||
-    ze[54] !== flexGrow ||
-    ze[55] !== width ||
-    ze[56] !== paddingLeft
+    $[46] !== TextComponent ||
+    $[47] !== wrap ||
+    $[48] !== barElement ||
+    $[49] !== separatorIndent ||
+    $[50] !== segmentElements
   ) {
-    Bo = jsxProd_default(At, {
+    children = jsxProd_default_2(TextComponent, {
+      wrap,
+      children: [barElement, separatorIndent, segmentElements],
+    });
+    $[46] = TextComponent;
+    $[47] = wrap;
+    $[48] = barElement;
+    $[49] = separatorIndent;
+    $[50] = segmentElements;
+    $[51] = children;
+  } else children = $[51];
+  let barColumnElement;
+  if (
+    $[52] !== BoxComponent ||
+    $[53] !== children ||
+    $[54] !== flexGrow ||
+    $[55] !== width ||
+    $[56] !== paddingLeft
+  ) {
+    barColumnElement = jsxProd_default(BoxComponent, {
       flexGrow,
       width,
       paddingLeft,
       children,
     });
-    ze[52] = At;
-    ze[53] = children;
-    ze[54] = flexGrow;
-    ze[55] = width;
-    ze[56] = paddingLeft;
-    ze[57] = Bo;
-  } else Bo = ze[57];
-  let Ro;
-  if (ze[58] !== It || ze[59] !== Bo || ze[60] !== so) {
-    Ro = jsxProd_default_2(Fragment, {
-      children: [so, It, Bo],
+    $[52] = BoxComponent;
+    $[53] = children;
+    $[54] = flexGrow;
+    $[55] = width;
+    $[56] = paddingLeft;
+    $[57] = barColumnElement;
+  } else barColumnElement = $[57];
+  let rowElement;
+  if ($[58] !== labelElement || $[59] !== barColumnElement || $[60] !== prefixElement) {
+    rowElement = jsxProd_default_2(Fragment, {
+      children: [prefixElement, labelElement, barColumnElement],
     });
-    ze[58] = It;
-    ze[59] = Bo;
-    ze[60] = so;
-    ze[61] = Ro;
-  } else Ro = ze[61];
-  return Ro;
+    $[58] = labelElement;
+    $[59] = barColumnElement;
+    $[60] = prefixElement;
+    $[61] = rowElement;
+  } else rowElement = $[61];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:439174-439257 placement
-function progressBarCells(row, x) {
-  return row.totalAgents > 0 ? Math.floor((row.doneAgents * x) / row.totalAgents) : 0;
+function progressBarCells(row, barWidth) {
+  return row.totalAgents > 0 ? Math.floor((row.doneAgents * barWidth) / row.totalAgents) : 0;
 }
 //@ chunk-18hwfzwa.js:439257-439372 placement
-function layoutWidth(h) {
-  let joined = h.segments.map((segment) => segment.text).join(SPINNER_SEPARATOR);
+function layoutWidth(layout) {
+  let joined = layout.segments.map((segment) => segment.text).join(SPINNER_SEPARATOR);
   return (
-    h.barWidth +
-    bunStringWidth(h.barWidth > 0 && joined !== "" ? SPINNER_INDENT : "") +
+    layout.barWidth +
+    bunStringWidth(layout.barWidth > 0 && joined !== "" ? SPINNER_INDENT : "") +
     bunStringWidth(joined)
   );
 }
@@ -472,92 +517,93 @@ function layoutWidth(h) {
 /**
  * 按宽度从宽到窄的进度布局候选（代理数、耗时、token、警告）。
  */
-function progressLayoutCandidates(row, elapsed, isWarned, L) {
-  let ee = row.totalAgents > 0 ? `${row.doneAgents}/${row.totalAgents}` : undefined;
-  let ke = row.totalTokens > 0 ? `${figures_default.arrowDown} ${formatNumber(row.totalTokens)}` : undefined;
-  let Re = ke && `${ke} tokens`;
-  let Be = isWarned ? LARGE_WORKFLOW_STOP_HINT : undefined;
-  let He = isWarned ? LARGE_WORKFLOW_LABEL : undefined;
-  let We = isWarned ? LARGE_WORKFLOW_ICON : undefined;
-  let ze = L[0];
-  let Xe = L.at(-1) ?? ze;
+function progressLayoutCandidates(row, elapsed, isWarned, narrowest) {
+  let progressText = row.totalAgents > 0 ? `${row.doneAgents}/${row.totalAgents}` : undefined;
+  let tokensText =
+    row.totalTokens > 0 ? `${figures_default.arrowDown} ${formatNumber(row.totalTokens)}` : undefined;
+  let tokensLabel = tokensText && `${tokensText} tokens`;
+  let stopHint = isWarned ? LARGE_WORKFLOW_STOP_HINT : undefined;
+  let warnLabel = isWarned ? LARGE_WORKFLOW_LABEL : undefined;
+  let warnIcon = isWarned ? LARGE_WORKFLOW_ICON : undefined;
+  let firstWidth = narrowest[0];
+  let lastWidth = narrowest.at(-1) ?? firstWidth;
   return [
-    progressLayout(ze, [ee, elapsed, Re], Be),
-    progressLayout(ze, [ee, elapsed, Re], He),
-    progressLayout(ze, [elapsed, Re], He),
-    progressLayout(ze, [elapsed, Re], We),
-    progressLayout(ze, [elapsed, ke], We),
-    ...L.map((rt) => progressLayout(rt, [ke], We)),
-    progressLayout(Xe, [], We),
-    progressLayout(Xe, [], undefined),
+    progressLayout(firstWidth, [progressText, elapsed, tokensLabel], stopHint),
+    progressLayout(firstWidth, [progressText, elapsed, tokensLabel], warnLabel),
+    progressLayout(firstWidth, [elapsed, tokensLabel], warnLabel),
+    progressLayout(firstWidth, [elapsed, tokensLabel], warnIcon),
+    progressLayout(firstWidth, [elapsed, tokensText], warnIcon),
+    ...narrowest.map((width) => progressLayout(width, [tokensText], warnIcon)),
+    progressLayout(lastWidth, [], warnIcon),
+    progressLayout(lastWidth, [], undefined),
   ];
 }
 //@ chunk-18hwfzwa.js:439778-439942 placement
-function progressLayout(barWidth, x, D) {
-  let L = [];
-  for (let ee of x)
-    if (ee !== undefined)
-      L.push({
-        text: ee,
+function progressLayout(barWidth, texts, warningText) {
+  let segments = [];
+  for (let text of texts)
+    if (text !== undefined)
+      segments.push({
+        text,
         isWarning: false,
       });
-  if (D !== undefined)
-    L.push({
-      text: D,
+  if (warningText !== undefined)
+    segments.push({
+      text: warningText,
       isWarning: true,
     });
   return {
     barWidth,
-    segments: L,
+    segments,
   };
 }
 //@ chunk-18hwfzwa.js:439942-439975 placement
-function selectTasks(pl) {
-  return pl.tasks;
+function selectTasks(state) {
+  return state.tasks;
 }
 //@ chunk-18hwfzwa.js:439975-440012 placement
-function selectUltracode(Gl) {
-  return Gl.ultracode;
+function selectUltracode(state) {
+  return state.ultracode;
 }
 //@ chunk-18hwfzwa.js:440012-440055 placement
-function selectTaskDecorations(gd) {
-  return gd.taskDecorations;
+function selectTaskDecorations(state) {
+  return state.taskDecorations;
 }
 //@ chunk-18hwfzwa.js:440055-440101 placement = _temp2 (1)
 function selectViewingAgentTaskId(s_0) {
   return s_0.viewingAgentTaskId;
 }
 //@ chunk-18hwfzwa.js:440101-440146 placement
-function selectAgentNameRegistry(bd) {
-  return bd.agentNameRegistry;
+function selectAgentNameRegistry(state) {
+  return state.agentNameRegistry;
 }
 //@ chunk-18hwfzwa.js:440146-440191 placement
-function selectSlackTagConnected(Od) {
-  return Od.slackTagConnected;
+function selectSlackTagConnected(state) {
+  return state.slackTagConnected;
 }
 //@ chunk-18hwfzwa.js:440191-440239 placement
-function selectCoordinatorTaskIndex(pc) {
-  return pc.coordinatorTaskIndex;
+function selectCoordinatorTaskIndex(state) {
+  return state.coordinatorTaskIndex;
 }
 //@ chunk-18hwfzwa.js:440239-440292 placement = getTaskOutputDir (0.766)
-function getTaskOutputDir(Kd) {
-  return Kd.footerSelection === "tasks";
+function getTaskOutputDir(state) {
+  return state.footerSelection === "tasks";
 }
 //@ chunk-18hwfzwa.js:440292-440349 placement
-function selectWorkflowsFooter(ec) {
-  return ec.footerSelection === "workflows";
+function selectWorkflowsFooter(state) {
+  return state.footerSelection === "workflows";
 }
 //@ chunk-18hwfzwa.js:440349-440396 placement
-function selectWorkflowFooterIndex(qu) {
-  return qu.workflowFooterIndex;
+function selectWorkflowFooterIndex(state) {
+  return state.workflowFooterIndex;
 }
 //@ chunk-18hwfzwa.js:440396-440449 placement
-function selectIdleTeammatesExpanded(Ku) {
-  return Ku.idleTeammatesExpanded ?? false;
+function selectIdleTeammatesExpanded(state) {
+  return state.idleTeammatesExpanded ?? false;
 }
 //@ chunk-18hwfzwa.js:440449-440522 placement
-function isLiveTaskRow(iu) {
-  return isPanelOrTeammateTask(iu) && (!isTerminalTaskStatus(iu.status) || iu.evictAfter !== undefined);
+function isLiveTaskRow(task) {
+  return isPanelOrTeammateTask(task) && (!isTerminalTaskStatus(task.status) || task.evictAfter !== undefined);
 }
 //@ chunk-18hwfzwa.js:440522-440552 placement
 function newSet_2() {
@@ -568,60 +614,60 @@ function nowMs() {
   return Date.now();
 }
 //@ chunk-18hwfzwa.js:440585-440629 placement
-function plusCountSuffix(Iu) {
-  return Iu > 0 ? ` (+${Iu})` : "";
+function plusCountSuffix(count) {
+  return count > 0 ? ` (+${count})` : "";
 }
 //@ chunk-18hwfzwa.js:440629-440678 placement
-function rowNameWidth(h) {
-  let { row } = h;
+function rowNameWidth(props) {
+  let { row } = props;
   return bunStringWidth(row.name);
 }
 //@ chunk-18hwfzwa.js:440678-440694 placement
 function noopTaskClickHandler() {}
 //@ chunk-18hwfzwa.js:440694-440727 placement
-function selectTasks_2_2(Wo) {
-  return Wo.tasks;
+function selectTasks_2_2(state) {
+  return state.tasks;
 }
 //@ chunk-18hwfzwa.js:440727-440770 placement
-function selectTaskDecorations_2(mn) {
-  return mn.taskDecorations;
+function selectTaskDecorations_2(state) {
+  return state.taskDecorations;
 }
 //@ chunk-18hwfzwa.js:440770-440816 placement = _temp2 (1)
 function selectViewingAgentTaskId_2(s_0) {
   return s_0.viewingAgentTaskId;
 }
 //@ chunk-18hwfzwa.js:440861-440904 placement
-function selectFooterSelection(vo) {
-  return vo.footerSelection;
+function selectFooterSelection(state) {
+  return state.footerSelection;
 }
 //@ chunk-18hwfzwa.js:440904-440952 placement
-function selectCoordinatorTaskIndex_3(Yo) {
-  return Yo.coordinatorTaskIndex;
+function selectCoordinatorTaskIndex_3(state) {
+  return state.coordinatorTaskIndex;
 }
 //@ chunk-18hwfzwa.js:440952-440999 placement
-function selectWorkflowFooterIndex_2(kn) {
-  return kn.workflowFooterIndex;
+function selectWorkflowFooterIndex_2(state) {
+  return state.workflowFooterIndex;
 }
 //@ chunk-18hwfzwa.js:440999-441052 placement
-function selectIdleTeammatesExpanded_2(Fn) {
-  return Fn.idleTeammatesExpanded ?? false;
+function selectIdleTeammatesExpanded_2(state) {
+  return state.idleTeammatesExpanded ?? false;
 }
 //@ chunk-18hwfzwa.js:441052-441110 placement
-function isEvictableIdleTeammate(bn) {
-  return isPanelOrTeammateTask(bn) && bn.evictAfter !== 0 && isTaskStillActive(bn);
+function isEvictableIdleTeammate(task) {
+  return isPanelOrTeammateTask(task) && task.evictAfter !== 0 && isTaskStillActive(task);
 }
 //@ chunk-18hwfzwa.js:441110-441150 placement
-function isNotStopAllAction(Go) {
-  return Go.action !== STOP_ALL_AGENTS_LABEL;
+function isNotStopAllAction(action) {
+  return action.action !== STOP_ALL_AGENTS_LABEL;
 }
 //@ chunk-18hwfzwa.js:441150-441197 placement
-function renderShortcutHint(hn) {
+function renderShortcutHint(props) {
   return jsxProd_default(
     KeyboardShortcutHint,
     {
-      ...hn,
+      ...props,
     },
-    hn.action,
+    props.action,
   );
 }
 //@ chunk-18hwfzwa.js:441197-441268 placement
@@ -630,16 +676,16 @@ var MAX_VISIBLE_WORKFLOW_ROWS = 5;
 var MAX_INLINE_IDLE_TEAMMATES = 3;
 var IDLE_TEAMMATE_SUMMARY = "idle-teammate-summary";
 //@ chunk-18hwfzwa.js:441268-441314 placement
-function isAgentRowVisible(visibleBackgroundTask) {
-  return visibleBackgroundTask.type === "idle_summary";
+function isAgentRowVisible(agentRow) {
+  return agentRow.type === "idle_summary";
 }
 //@ chunk-18hwfzwa.js:441314-441405 placement
-function isViewingThisAgent(h, x) {
-  return x.viewSelectionMode === "viewing-agent" && h.id === x.viewingAgentTaskId;
+function isViewingThisAgent(task, state) {
+  return state.viewSelectionMode === "viewing-agent" && task.id === state.viewingAgentTaskId;
 }
 //@ chunk-18hwfzwa.js:441405-441440 placement
-function isPanelOrTeammateTask(h) {
-  return isPanelAgentTask(h) || isInProcessTeammateTask(h);
+function isPanelOrTeammateTask(task) {
+  return isPanelAgentTask(task) || isInProcessTeammateTask(task);
 }
 //@ chunk-18hwfzwa.js:441612-441732 placement
 /**
@@ -648,35 +694,40 @@ function isPanelOrTeammateTask(h) {
 function hasEvictableIdleSubagent(tasks, viewingAgentTaskId) {
   let ancestorTaskIds = collectAncestorTaskIds(tasks, viewingAgentTaskId);
   return Object.values(tasks).some(
-    (L) =>
-      isPanelOrTeammateTask(L) &&
-      L.evictAfter !== 0 &&
-      !ancestorTaskIds.has(L.id) &&
-      isIdleCompletedSubagent(L) &&
-      !isCompletedBackgroundAgent(L),
+    (task) =>
+      isPanelOrTeammateTask(task) &&
+      task.evictAfter !== 0 &&
+      !ancestorTaskIds.has(task.id) &&
+      isIdleCompletedSubagent(task) &&
+      !isCompletedBackgroundAgent(task),
   );
 }
 //@ chunk-18hwfzwa.js:441732-441822 placement
-function agentRowLabel(h) {
-  return collapseWhitespace(h.type === "in_process_teammate" ? h.identity.agentName : h.agentType);
+function agentRowLabel(task) {
+  return collapseWhitespace(task.type === "in_process_teammate" ? task.identity.agentName : task.agentType);
 }
 //@ chunk-18hwfzwa.js:441905-441930 placement
-function noopSlackTagHandler(h, slackTagConnected) {
+function noopSlackTagHandler(event, slackTagConnected) {
   return;
 }
 //@ chunk-18hwfzwa.js:441930-442034 placement
-function isEvictingIdleTeammate(h) {
-  return h?.type === "in_process_teammate" && h.isIdle && h.evictAfter !== undefined && h.evictAfter > 0;
+function isEvictingIdleTeammate(task) {
+  return (
+    task?.type === "in_process_teammate" &&
+    task.isIdle &&
+    task.evictAfter !== undefined &&
+    task.evictAfter > 0
+  );
 }
 //@ chunk-18hwfzwa.js:442034-442194 placement
-function isTeammateDueForEviction(h, x, setVoiceState) {
+function isTeammateDueForEviction(task, dueAt, setVoiceState) {
   return (
-    isEvictingIdleTeammate(h) &&
-    h.evictAfter !== undefined &&
-    h.evictAfter <= x &&
-    !isAwaitingInputTeammate(h) &&
-    (h.identity.resumableAgentId === undefined ||
-      !hasRunningBackgroundWorkForAgent(h.identity.resumableAgentId, setVoiceState))
+    isEvictingIdleTeammate(task) &&
+    task.evictAfter !== undefined &&
+    task.evictAfter <= dueAt &&
+    !isAwaitingInputTeammate(task) &&
+    (task.identity.resumableAgentId === undefined ||
+      !hasRunningBackgroundWorkForAgent(task.identity.resumableAgentId, setVoiceState))
   );
 }
 //@ chunk-18hwfzwa.js:442194-442224 placement
@@ -684,171 +735,185 @@ function isAwaitingInputTeammate(task) {
   return isTeammateAwaitingInput(task);
 }
 //@ chunk-18hwfzwa.js:442224-442818 fingerprint = getVisibleAgentTasks (1)
-function getVisibleAgentTasks(h, x) {
-  let D = x ? h[x] : undefined;
-  let agentId = isPanelAgentTask(D) ? D.agentId : undefined;
-  let ancestorTaskIds = collectAncestorTaskIds(h, x);
-  let ke = isPanelAgentTask(D) ? nearestVisibleAncestorId(h, D, ancestorTaskIds) : undefined;
-  let filtered = Object.values(h).filter(
-    (Xe) =>
-      isPanelOrTeammateTask(Xe) &&
-      (Xe.evictAfter !== 0 || ancestorTaskIds.has(Xe.id)) &&
-      (!isIdleCompletedSubagent(Xe) || ancestorTaskIds.has(Xe.id)) &&
-      (nearestVisibleAncestorId(h, Xe, ancestorTaskIds) === agentId ||
-        nearestVisibleAncestorId(h, Xe, ancestorTaskIds) === ke ||
-        ancestorTaskIds.has(Xe.id)),
+function getVisibleAgentTasks(tasks, viewingAgentTaskId) {
+  let viewedTask = viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined;
+  let agentId = isPanelAgentTask(viewedTask) ? viewedTask.agentId : undefined;
+  let ancestorTaskIds = collectAncestorTaskIds(tasks, viewingAgentTaskId);
+  let viewedAgentId = isPanelAgentTask(viewedTask)
+    ? nearestVisibleAncestorId(tasks, viewedTask, ancestorTaskIds)
+    : undefined;
+  let filtered = Object.values(tasks).filter(
+    (task) =>
+      isPanelOrTeammateTask(task) &&
+      (task.evictAfter !== 0 || ancestorTaskIds.has(task.id)) &&
+      (!isIdleCompletedSubagent(task) || ancestorTaskIds.has(task.id)) &&
+      (nearestVisibleAncestorId(tasks, task, ancestorTaskIds) === agentId ||
+        nearestVisibleAncestorId(tasks, task, ancestorTaskIds) === viewedAgentId ||
+        ancestorTaskIds.has(task.id)),
   );
-  let Be = new Set(filtered.map((Xe) => Xe.id));
-  let He = new Map();
-  for (let Xe of filtered) {
-    let rt = nearestVisibleAncestorId(h, Xe, ancestorTaskIds);
-    let kt = rt !== undefined && Be.has(rt) ? rt : undefined;
-    let At = He.get(kt);
-    if (At) At.push(Xe);
-    else He.set(kt, [Xe]);
+  let visibleIds = new Set(filtered.map((task) => task.id));
+  let childrenByParent = new Map();
+  for (let task of filtered) {
+    let ancestorId = nearestVisibleAncestorId(tasks, task, ancestorTaskIds);
+    let parentKey = ancestorId !== undefined && visibleIds.has(ancestorId) ? ancestorId : undefined;
+    let siblings = childrenByParent.get(parentKey);
+    if (siblings) siblings.push(task);
+    else childrenByParent.set(parentKey, [task]);
   }
-  for (let Xe of He.values()) Xe.sort((rt, kt) => rt.startTime - kt.startTime);
-  let We = [];
-  function ze(id) {
-    for (let rt of He.get(id) ?? []) {
-      We.push(rt);
-      ze(rt.id);
+  for (let siblings of childrenByParent.values())
+    siblings.sort((leftTask, rightTask) => leftTask.startTime - rightTask.startTime);
+  let ordered = [];
+  function walk(id) {
+    for (let child of childrenByParent.get(id) ?? []) {
+      ordered.push(child);
+      walk(child.id);
     }
   }
-  ze(undefined);
-  return We;
+  walk(undefined);
+  return ordered;
 }
 //@ chunk-18hwfzwa.js:442818-443034 layout = _temp6 (0.781)
-function nearestVisibleAncestorId(h, x, ancestorTaskIds) {
-  if (x.type === "in_process_teammate") return;
-  let L = new Set();
-  let parentAgentId = x.parentAgentId;
-  while (parentAgentId && !L.has(parentAgentId)) {
-    L.add(parentAgentId);
-    let ke = h[parentAgentId];
-    if (!isMainSessionTask_2(ke)) return;
-    if (!isIdleCompletedSubagent(ke) || ancestorTaskIds.has(parentAgentId)) return parentAgentId;
-    parentAgentId = ke.parentAgentId;
+function nearestVisibleAncestorId(tasks, task, ancestorTaskIds) {
+  if (task.type === "in_process_teammate") return;
+  let seen = new Set();
+  let parentAgentId = task.parentAgentId;
+  while (parentAgentId && !seen.has(parentAgentId)) {
+    seen.add(parentAgentId);
+    let parent = tasks[parentAgentId];
+    if (!isMainSessionTask_2(parent)) return;
+    if (!isIdleCompletedSubagent(parent) || ancestorTaskIds.has(parentAgentId)) return parentAgentId;
+    parentAgentId = parent.parentAgentId;
   }
   return;
 }
 //@ chunk-18hwfzwa.js:443034-443271 layout
-function collectAncestorTaskIds(h, x) {
-  let D = x ? h[x] : undefined;
-  let L = new Set();
-  for (let ee = isPanelOrTeammateTask(D) ? D : undefined; ee && !L.has(ee.id);) {
-    L.add(ee.id);
-    let parentAgentId = ee.type === "local_agent" ? ee.parentAgentId : undefined;
-    let Re = parentAgentId !== undefined ? h[parentAgentId] : undefined;
-    ee = isPanelOrTeammateTask(Re) && Re.evictAfter !== 0 ? Re : undefined;
+function collectAncestorTaskIds(tasks, viewingAgentTaskId) {
+  let viewedTask = viewingAgentTaskId ? tasks[viewingAgentTaskId] : undefined;
+  let ids = new Set();
+  for (
+    let current = isPanelOrTeammateTask(viewedTask) ? viewedTask : undefined;
+    current && !ids.has(current.id);
+  ) {
+    ids.add(current.id);
+    let parentAgentId = current.type === "local_agent" ? current.parentAgentId : undefined;
+    let parentTask = parentAgentId !== undefined ? tasks[parentAgentId] : undefined;
+    current = isPanelOrTeammateTask(parentTask) && parentTask.evictAfter !== 0 ? parentTask : undefined;
   }
-  return L;
+  return ids;
 }
 //@ chunk-18hwfzwa.js:443271-443411 layout
 function ancestorDepth(tasks, visibleBackgroundTask, ancestorTaskIds) {
-  let L = 0;
-  let ee = new Set();
-  let ke = nearestVisibleAncestorId(tasks, visibleBackgroundTask, ancestorTaskIds);
-  while (ke && !ee.has(ke)) {
-    ee.add(ke);
-    L++;
-    let Re = tasks[ke];
-    ke = isPanelAgentTask(Re) ? nearestVisibleAncestorId(tasks, Re, ancestorTaskIds) : undefined;
+  let depth = 0;
+  let seen = new Set();
+  let ancestorId = nearestVisibleAncestorId(tasks, visibleBackgroundTask, ancestorTaskIds);
+  while (ancestorId && !seen.has(ancestorId)) {
+    seen.add(ancestorId);
+    depth++;
+    let ancestorTask = tasks[ancestorId];
+    ancestorId = isPanelAgentTask(ancestorTask)
+      ? nearestVisibleAncestorId(tasks, ancestorTask, ancestorTaskIds)
+      : undefined;
   }
-  return L;
+  return depth;
 }
 //@ chunk-18hwfzwa.js:443411-443635 layout
 function countVisibleDescendants(tasks, teammateTranscriptsFromTasks, ancestorTaskIds) {
-  let L = 0;
-  for (let ee of Object.values(tasks)) {
-    if (!isMainSessionTask_2(ee) || isIdleCompletedSubagent(ee)) continue;
-    let ke = nearestVisibleAncestorId(tasks, ee, ancestorTaskIds);
-    let Re = new Set();
-    while (ke && !Re.has(ke)) {
-      if (ke === teammateTranscriptsFromTasks) {
-        L++;
+  let total = 0;
+  for (let task of Object.values(tasks)) {
+    if (!isMainSessionTask_2(task) || isIdleCompletedSubagent(task)) continue;
+    let ancestorId = nearestVisibleAncestorId(tasks, task, ancestorTaskIds);
+    let seen = new Set();
+    while (ancestorId && !seen.has(ancestorId)) {
+      if (ancestorId === teammateTranscriptsFromTasks) {
+        total++;
         break;
       }
-      Re.add(ke);
-      let Be = tasks[ke];
-      ke = isPanelAgentTask(Be) ? nearestVisibleAncestorId(tasks, Be, ancestorTaskIds) : undefined;
+      seen.add(ancestorId);
+      let ancestorTask = tasks[ancestorId];
+      ancestorId = isPanelAgentTask(ancestorTask)
+        ? nearestVisibleAncestorId(tasks, ancestorTask, ancestorTaskIds)
+        : undefined;
     }
   }
-  return L;
+  return total;
 }
 //@ chunk-18hwfzwa.js:443635-443995 layout
-function getVisibleBackgroundTasks(tasks, taskDecorations, viewingAgentTaskId, L = false) {
+function getVisibleBackgroundTasks(tasks, taskDecorations, viewingAgentTaskId, expandAll = false) {
   if (isCoordinatorPanelActive()) return [];
   let filtered = getVisibleAgentTasks(tasks, viewingAgentTaskId).filter(
-    (ze) => taskDecorations[ze.id]?.content !== "",
+    (task) => taskDecorations[task.id]?.content !== "",
   );
-  if (L) return filtered;
-  let mapped = filtered.filter((ze) => isOtherIdleTeammate(ze, viewingAgentTaskId)).map((ze) => ze.id);
+  if (expandAll) return filtered;
+  let mapped = filtered
+    .filter((task) => isOtherIdleTeammate(task, viewingAgentTaskId))
+    .map((task) => task.id);
   if (mapped.length <= MAX_INLINE_IDLE_TEAMMATES) return filtered;
   let sliced = mapped.slice(MAX_INLINE_IDLE_TEAMMATES);
-  let Be = new Set(sliced);
-  let He = [];
-  let We = false;
-  for (let ze of filtered)
-    if (!Be.has(ze.id)) He.push(ze);
-    else if (!We) {
-      We = true;
-      He.push({
+  let foldedIds = new Set(sliced);
+  let rows = [];
+  let summaryInserted = false;
+  for (let task of filtered)
+    if (!foldedIds.has(task.id)) rows.push(task);
+    else if (!summaryInserted) {
+      summaryInserted = true;
+      rows.push({
         type: "idle_summary",
         id: IDLE_TEAMMATE_SUMMARY,
         taskIds: sliced,
       });
     }
-  return He;
+  return rows;
 }
 //@ chunk-18hwfzwa.js:443995-444095 placement = _temp6 (0.765)
-function isOtherIdleTeammate(h, x) {
+function isOtherIdleTeammate(task, viewingAgentTaskId) {
   return (
-    h.type === "in_process_teammate" &&
-    h.isIdle &&
-    !isTerminalTaskStatus(h.status) &&
-    h.id !== x &&
-    !isAwaitingInputTeammate(h)
+    task.type === "in_process_teammate" &&
+    task.isIdle &&
+    !isTerminalTaskStatus(task.status) &&
+    task.id !== viewingAgentTaskId &&
+    !isAwaitingInputTeammate(task)
   );
 }
 //@ chunk-18hwfzwa.js:444095-444142 placement
-function hasFoldedIdleTeammates(visibleBackgroundTasks, x) {
-  return count(visibleBackgroundTasks, (D) => isOtherIdleTeammate(D, x)) > MAX_INLINE_IDLE_TEAMMATES;
+function hasFoldedIdleTeammates(visibleBackgroundTasks, tasks) {
+  return (
+    count(visibleBackgroundTasks, (task) => isOtherIdleTeammate(task, tasks)) > MAX_INLINE_IDLE_TEAMMATES
+  );
 }
 //@ chunk-18hwfzwa.js:444142-444377 placement
 /**
  * 任务列表变化后重新定位面板选中行：按原选中任务 id 在新列表中的位置返回新下标（1 起），找不到时在分组里找包含它的组，仍找不到返回 0。
  */
-function remapTaskPanelIndex(appState, x, D, L) {
+function remapTaskPanelIndex(appState, rows, nextRows, groupRows) {
   if (appState < 1) return appState;
-  let ee = x[Math.min(appState, x.length) - 1];
-  let ke = ee !== undefined ? D.indexOf(ee) : -1;
-  if (ke !== -1) return ke + 1;
-  if (ee !== undefined && L) {
-    let index = L.findIndex((Be) => isAgentRowVisible(Be) && Be.taskIds.includes(ee));
+  let previousTaskId = rows[Math.min(appState, rows.length) - 1];
+  let rowIndex = previousTaskId !== undefined ? nextRows.indexOf(previousTaskId) : -1;
+  if (rowIndex !== -1) return rowIndex + 1;
+  if (previousTaskId !== undefined && groupRows) {
+    let index = groupRows.findIndex((row) => isAgentRowVisible(row) && row.taskIds.includes(previousTaskId));
     if (index !== -1) return index + 1;
   }
   return 0;
 }
 //@ chunk-18hwfzwa.js:444377-444619 placement
-function selectTaskRowUpdater(h, x) {
-  return (D) => {
-    let L = x(D);
-    if (L.footerSelection !== "tasks" && L.footerSelection !== "workflows") return L;
-    if (L.footerSelection === "tasks" && L.coordinatorTaskIndex === h) return L;
+function selectTaskRowUpdater(taskIndex, updater) {
+  return (state) => {
+    let next = updater(state);
+    if (next.footerSelection !== "tasks" && next.footerSelection !== "workflows") return next;
+    if (next.footerSelection === "tasks" && next.coordinatorTaskIndex === taskIndex) return next;
     return {
-      ...L,
+      ...next,
       footerSelection: "tasks",
-      coordinatorTaskIndex: h,
+      coordinatorTaskIndex: taskIndex,
     };
   };
 }
 //@ chunk-18hwfzwa.js:444619-444699 placement
-function expandIdleTeammates(h) {
-  return h.idleTeammatesExpanded
-    ? h
+function expandIdleTeammates(state) {
+  return state.idleTeammatesExpanded
+    ? state
     : {
-        ...h,
+        ...state,
         idleTeammatesExpanded: true,
       };
 }
@@ -871,71 +936,74 @@ function getStatusColor(status) {
   }
 }
 //@ chunk-18hwfzwa.js:444973-446087 fingerprint = AgentLine (0.401)
-function AgentLine(h, x, turnStartTime, L) {
-  let ee = h.type === "in_process_teammate" ? h.pendingUserMessages.length : h.pendingMessages.length;
-  let queuedText = ee > 0 ? `${ee} queued` : "";
-  let tokenCount = h.progress?.tokenCount;
-  let Be = h.progress?.lastActivity ? figures_default.arrowDown : figures_default.arrowUp;
+function AgentLine(task, now, turnStartTime, idleAsDone) {
+  let queuedCount =
+    task.type === "in_process_teammate" ? task.pendingUserMessages.length : task.pendingMessages.length;
+  let queuedText = queuedCount > 0 ? `${queuedCount} queued` : "";
+  let tokenCount = task.progress?.tokenCount;
+  let arrow = task.progress?.lastActivity ? figures_default.arrowDown : figures_default.arrowUp;
   let tokenText =
-    tokenCount !== undefined && tokenCount > 0 ? `${Be} ${formatNumber(tokenCount)} tokens` : "";
-  if (h.type === "in_process_teammate") {
-    if (h.status === "running" && h.awaitingPlanApproval)
+    tokenCount !== undefined && tokenCount > 0 ? `${arrow} ${formatNumber(tokenCount)} tokens` : "";
+  if (task.type === "in_process_teammate") {
+    if (task.status === "running" && task.awaitingPlanApproval)
       return {
         elapsed: "awaiting approval",
         tokenText: "",
         queuedText,
-        queuedCount: ee,
+        queuedCount,
       };
-    if (h.isIdle)
+    if (task.isIdle)
       return {
         elapsed: "idle",
         tokenText: "",
         queuedText,
-        queuedCount: ee,
+        queuedCount,
       };
-    if (isTerminalTaskStatus(h.status)) {
-      let kt = turnStartTime ?? h.startTime;
-      let endTime = h.endTime ?? x;
+    if (isTerminalTaskStatus(task.status)) {
+      let startedAt = turnStartTime ?? task.startTime;
+      let endTime = task.endTime ?? now;
       return {
-        elapsed: formatDuration(Math.max(0, endTime - kt)),
+        elapsed: formatDuration(Math.max(0, endTime - startedAt)),
         tokenText,
         queuedText,
-        queuedCount: ee,
+        queuedCount,
       };
     }
-    let rt = turnStartTime ?? h.startTime;
+    let startedAt = turnStartTime ?? task.startTime;
     return {
-      elapsed: formatDuration(Math.max(0, x - rt)),
+      elapsed: formatDuration(Math.max(0, now - startedAt)),
       tokenText,
       queuedText,
-      queuedCount: ee,
+      queuedCount,
     };
   }
-  let We = !isTerminalTaskStatus(h.status);
-  if (We && h.isIdle)
+  let isActive = !isTerminalTaskStatus(task.status);
+  if (isActive && task.isIdle)
     return {
       elapsed: "waiting",
       tokenText: "",
       queuedText,
-      queuedCount: ee,
+      queuedCount,
     };
-  if (h.status === "completed" && L && !hasCompletedWithFindings(h))
+  if (task.status === "completed" && idleAsDone && !hasCompletedWithFindings(task))
     return {
       elapsed: "idle",
       tokenText: "",
       queuedText,
-      queuedCount: ee,
+      queuedCount,
     };
-  let totalPausedMs = h.totalPausedMs ?? 0;
+  let totalPausedMs = task.totalPausedMs ?? 0;
   let max = Math.max(
     0,
-    We ? x - h.startTime - totalPausedMs : (h.endTime ?? h.startTime) - h.startTime - totalPausedMs,
+    isActive
+      ? now - task.startTime - totalPausedMs
+      : (task.endTime ?? task.startTime) - task.startTime - totalPausedMs,
   );
   return {
     elapsed: formatDuration(max),
     tokenText,
     queuedText,
-    queuedCount: ee,
+    queuedCount,
   };
 }
 //@ chunk-18hwfzwa.js:446087-452984 layout
@@ -944,28 +1012,28 @@ function AgentLine(h, x, turnStartTime, L) {
  * showWorkflows 为 true 时同时列出运行中的工作流。
  */
 function BackgroundTasksPanel(props) {
-  let $ = w(60);
-  let D;
+  let $ = useMemoCache(60);
+  let resolvedProps;
   if ($[0] !== props) {
-    D = props === undefined ? {} : props;
+    resolvedProps = props === undefined ? {} : props;
     $[0] = props;
-    $[1] = D;
-  } else D = $[1];
-  let { showWorkflows } = D;
+    $[1] = resolvedProps;
+  } else resolvedProps = $[1];
+  let { showWorkflows } = resolvedProps;
   let showWorkflowsFlag = showWorkflows === undefined ? false : showWorkflows;
   let tasks = useAppState(selectTasks);
   let mainLoopModel = useMainLoopModel_3();
   let ultracode = useAppState(selectUltracode);
-  let He;
+  let ultracodeActiveFlag;
   if ($[2] !== mainLoopModel || $[3] !== ultracode) {
-    He = isUltracodeActive(ultracode, mainLoopModel);
+    ultracodeActiveFlag = isUltracodeActive(ultracode, mainLoopModel);
     $[2] = mainLoopModel;
     $[3] = ultracode;
-    $[4] = He;
-  } else He = $[4];
-  let ultracodeActive = He;
+    $[4] = ultracodeActiveFlag;
+  } else ultracodeActiveFlag = $[4];
+  let ultracodeActive = ultracodeActiveFlag;
   let { columns } = useTerminalSize();
-  let Xe = subscribeCoordinatorPanel();
+  let isFooterHidden = subscribeCoordinatorPanel();
   let appStoreDirect = useAppStoreDirect();
   let taskDecorations = useAppState(selectTaskDecorations);
   let viewingAgentTaskId = useAppState(selectViewingAgentTaskId);
@@ -976,7 +1044,7 @@ function BackgroundTasksPanel(props) {
   let appState_2 = useAppState(selectWorkflowsFooter);
   let workflowFooterIndex = useAppState(selectWorkflowFooterIndex);
   let appState_3 = useAppState(selectIdleTeammatesExpanded);
-  let io = appState ? coordinatorTaskIndex : undefined;
+  let selectedIndex = appState ? coordinatorTaskIndex : undefined;
   let setAppState = useSetAppState();
   let setVoiceState = useSetVoiceState();
   useTheme_2();
@@ -987,68 +1055,73 @@ function BackgroundTasksPanel(props) {
     appState_3,
   );
   let any = Object.values(tasks).some(isLiveTaskRow);
-  let bo;
+  let workflowTasksCached;
   if ($[5] !== showWorkflowsFlag || $[6] !== tasks) {
-    bo = showWorkflowsFlag ? runningWorkflowTasks(tasks) : [];
+    workflowTasksCached = showWorkflowsFlag ? runningWorkflowTasks(tasks) : [];
     $[5] = showWorkflowsFlag;
     $[6] = tasks;
-    $[7] = bo;
-  } else bo = $[7];
-  let workflowTasks = bo;
-  let Bo = workflowTasks.length > 0;
+    $[7] = workflowTasksCached;
+  } else workflowTasksCached = $[7];
+  let workflowTasks = workflowTasksCached;
+  let hasWorkflowRows = workflowTasks.length > 0;
   let workflowRows;
   if ($[8] !== workflowTasks || $[9] !== ultracodeActive) {
-    let Ho;
+    let toWorkflowRowCached;
     if ($[11] !== ultracodeActive) {
-      Ho = (Io) => {
-        let Wo = countWorkflowAgents(Io.workflowProgress, Io.agentCount);
-        let rateLimitWait = Io.status === "running" ? Io.rateLimitWait : undefined;
-        let bulletColor = isTerminalTaskStatus(Io.status)
-          ? getStatusColor(Io.status)
+      toWorkflowRowCached = (workflowTask) => {
+        let agentCounts = countWorkflowAgents(workflowTask.workflowProgress, workflowTask.agentCount);
+        let rateLimitWait = workflowTask.status === "running" ? workflowTask.rateLimitWait : undefined;
+        let bulletColor = isTerminalTaskStatus(workflowTask.status)
+          ? getStatusColor(workflowTask.status)
           : rateLimitWait !== undefined
             ? "warning"
-            : Wo.failedCount > 0
+            : agentCounts.failedCount > 0
               ? "error"
               : undefined;
         return {
-          workflow: Io,
+          workflow: workflowTask,
           row: {
-            name: collapseWhitespace(Io.workflowName ?? Io.summary ?? Io.description ?? "Dynamic workflow"),
+            name: collapseWhitespace(
+              workflowTask.workflowName ??
+                workflowTask.summary ??
+                workflowTask.description ??
+                "Dynamic workflow",
+            ),
             bulletColor,
-            doneAgents: Wo.done,
-            totalAgents: Wo.total,
-            totalTokens: Io.totalTokens,
-            clock: Io,
+            doneAgents: agentCounts.done,
+            totalAgents: agentCounts.total,
+            totalTokens: workflowTask.totalTokens,
+            clock: workflowTask,
             pausedStatuses: rateLimitWait && pausedUsageParts(rateLimitWait.resetsAt),
           },
           warning: workflowSizeSummary({
-            scheduledAgents: Wo.total,
-            startedAgents: Wo.started,
-            totalTokens: Io.totalTokens,
+            scheduledAgents: agentCounts.total,
+            startedAgents: agentCounts.started,
+            totalTokens: workflowTask.totalTokens,
             ultracodeActive,
           }),
         };
       };
       $[11] = ultracodeActive;
-      $[12] = Ho;
-    } else Ho = $[12];
-    workflowRows = workflowTasks.map(Ho);
+      $[12] = toWorkflowRowCached;
+    } else toWorkflowRowCached = $[12];
+    workflowRows = workflowTasks.map(toWorkflowRowCached);
     $[8] = workflowTasks;
     $[9] = ultracodeActive;
     $[10] = workflowRows;
   } else workflowRows = $[10];
-  let No = workflowRows;
-  let [vo] = y(newSet_2);
-  let Ho;
-  let Yo;
-  if ($[13] !== tasks || $[14] !== vo || $[15] !== No) {
-    Ho = () => {
-      for (const kn of vo) {
-        if (tasks[kn]?.type !== "local_workflow") vo.delete(kn);
+  let workflowRowItems = workflowRows;
+  let [warnedWorkflowIds] = useState(newSet_2);
+  let warnEffect;
+  let warnEffectDeps;
+  if ($[13] !== tasks || $[14] !== warnedWorkflowIds || $[15] !== workflowRowItems) {
+    warnEffect = () => {
+      for (const workflowId of warnedWorkflowIds) {
+        if (tasks[workflowId]?.type !== "local_workflow") warnedWorkflowIds.delete(workflowId);
       }
-      for (const { workflow, warning } of No) {
-        if (warning && !isTerminalTaskStatus(workflow.status) && !vo.has(workflow.id)) {
-          vo.add(workflow.id);
+      for (const { workflow, warning } of workflowRowItems) {
+        if (warning && !isTerminalTaskStatus(workflow.status) && !warnedWorkflowIds.has(workflow.id)) {
+          warnedWorkflowIds.add(workflow.id);
           logFeatureOk("workflow_size_warning");
           logEvent("tengu_workflow_size_warning_shown", {
             axis: fromEnum(warning.axis),
@@ -1062,32 +1135,32 @@ function BackgroundTasksPanel(props) {
         }
       }
     };
-    Yo = [No, tasks, vo];
+    warnEffectDeps = [workflowRowItems, tasks, warnedWorkflowIds];
     $[13] = tasks;
-    $[14] = vo;
-    $[15] = No;
-    $[16] = Ho;
-    $[17] = Yo;
+    $[14] = warnedWorkflowIds;
+    $[15] = workflowRowItems;
+    $[16] = warnEffect;
+    $[17] = warnEffectDeps;
   } else {
-    Ho = $[16];
-    Yo = $[17];
+    warnEffect = $[16];
+    warnEffectDeps = $[17];
   }
-  P(Ho, Yo);
-  let Mn =
-    Xe &&
-    runningWorkflowTasks(tasks).some((Go) => {
-      if (isTerminalTaskStatus(Go.status)) {
+  useEffect(warnEffect, warnEffectDeps);
+  let hasWorkflowWarning =
+    isFooterHidden &&
+    runningWorkflowTasks(tasks).some((workflowTask) => {
+      if (isTerminalTaskStatus(workflowTask.status)) {
         return false;
       }
-      if (vo.has(Go.id)) {
+      if (warnedWorkflowIds.has(workflowTask.id)) {
         return true;
       }
-      let hn = countWorkflowAgents(Go.workflowProgress, Go.agentCount);
+      let agentCounts = countWorkflowAgents(workflowTask.workflowProgress, workflowTask.agentCount);
       return (
         workflowSizeSummary({
-          scheduledAgents: hn.total,
-          startedAgents: hn.started,
-          totalTokens: Go.totalTokens,
+          scheduledAgents: agentCounts.total,
+          startedAgents: agentCounts.started,
+          totalTokens: workflowTask.totalTokens,
           ultracodeActive,
         }) !== undefined
       );
@@ -1095,139 +1168,148 @@ function BackgroundTasksPanel(props) {
   usePluginInstallationStatus(
     WORKFLOW_SIZE_WARNING,
     "medium",
-    Mn ? LARGE_WORKFLOW_STOP_HINT_PLAIN : null,
+    hasWorkflowWarning ? LARGE_WORKFLOW_STOP_HINT_PLAIN : null,
     identity,
   );
-  let [Xo, Sn] = y(nowMs);
-  let $n;
+  let [now, setNow] = useState(nowMs);
+  let evictSweepCached;
   if (
-    $[18] !== Xe ||
+    $[18] !== isFooterHidden ||
     $[19] !== setAppState ||
     $[20] !== setVoiceState ||
     $[21] !== tasks ||
     $[22] !== viewingAgentTaskId
   ) {
-    $n = () => {
+    evictSweepCached = () => {
       let now = Date.now();
-      let _o = false;
-      let cn = [];
-      let Dn = hasOtherActiveAgents(tasks);
-      let wn = [];
-      let mr = [];
+      let hasActiveAgent = false;
+      let expiredIds = [];
+      let hasOtherActive = hasOtherActiveAgents(tasks);
+      let idleExtendIds = [];
+      let ancestorExtendIds = [];
       let ancestorTaskIds = collectAncestorTaskIds(tasks, viewingAgentTaskId);
-      for (const Wn of Object.values(tasks)) {
-        if (Wn.type === "local_workflow") {
-          if (Wn.status !== "running" && (Wn.evictAfter ?? Infinity) <= now)
-            setVoiceState.evictTerminal(Wn.id);
+      for (const task of Object.values(tasks)) {
+        if (task.type === "local_workflow") {
+          if (task.status !== "running" && (task.evictAfter ?? Infinity) <= now)
+            setVoiceState.evictTerminal(task.id);
           continue;
         }
-        if (!isPanelOrTeammateTask(Wn)) {
+        if (!isPanelOrTeammateTask(task)) {
           continue;
         }
-        let Fr = Wn.type === "in_process_teammate" && Wn.evictAfterHeldBySibling === true;
-        if (isTerminalTaskStatus(Wn.status)) {
+        let isHeldBySibling = task.type === "in_process_teammate" && task.evictAfterHeldBySibling === true;
+        if (isTerminalTaskStatus(task.status)) {
           if (
-            Wn.type === "local_agent" &&
-            ancestorTaskIds.has(Wn.id) &&
-            Wn.evictAfter !== undefined &&
-            Wn.evictAfter > 0 &&
-            Wn.evictAfter <= now + MCP_TASK_KEEPALIVE_MS - 5000
+            task.type === "local_agent" &&
+            ancestorTaskIds.has(task.id) &&
+            task.evictAfter !== undefined &&
+            task.evictAfter > 0 &&
+            task.evictAfter <= now + MCP_TASK_KEEPALIVE_MS - 5000
           )
-            mr.push(Wn.id);
-          else if (Wn.evictAfter !== undefined && Wn.evictAfter <= now) setVoiceState.evictTerminal(Wn.id);
-        } else if ((Dn || Fr) && Wn.isIdle && Wn.evictAfter !== undefined && Wn.evictAfter > 0) {
-          if (Dn !== Fr || Wn.evictAfter - now < MCP_TASK_KEEPALIVE_MS / 2) wn.push(Wn.id);
-        } else if (Wn.evictAfter !== undefined && Wn.evictAfter > 0 && Wn.evictAfter <= now) cn.push(Wn.id);
-        else if (!isTerminalTaskStatus(Wn.status) && !Wn.isIdle) _o = true;
+            ancestorExtendIds.push(task.id);
+          else if (task.evictAfter !== undefined && task.evictAfter <= now)
+            setVoiceState.evictTerminal(task.id);
+        } else if (
+          (hasOtherActive || isHeldBySibling) &&
+          task.isIdle &&
+          task.evictAfter !== undefined &&
+          task.evictAfter > 0
+        ) {
+          if (hasOtherActive !== isHeldBySibling || task.evictAfter - now < MCP_TASK_KEEPALIVE_MS / 2)
+            idleExtendIds.push(task.id);
+        } else if (task.evictAfter !== undefined && task.evictAfter > 0 && task.evictAfter <= now)
+          expiredIds.push(task.id);
+        else if (!isTerminalTaskStatus(task.status) && !task.isIdle) hasActiveAgent = true;
       }
-      if (cn.length > 0 || wn.length > 0 || mr.length > 0)
-        setAppState((Zn) => {
-          let Un;
-          for (const dr of cn) {
-            let or = Zn.tasks[dr];
-            if (isTeammateDueForEviction(or, now, setVoiceState)) {
-              if (Un === undefined)
-                Un = {
-                  ...Zn.tasks,
+      if (expiredIds.length > 0 || idleExtendIds.length > 0 || ancestorExtendIds.length > 0)
+        setAppState((state) => {
+          let nextTasks;
+          for (const taskId of expiredIds) {
+            let task = state.tasks[taskId];
+            if (isTeammateDueForEviction(task, now, setVoiceState)) {
+              if (nextTasks === undefined)
+                nextTasks = {
+                  ...state.tasks,
                 };
-              Un[dr] = {
-                ...or,
+              nextTasks[taskId] = {
+                ...task,
                 evictAfter: 0,
               };
             }
           }
-          for (const pr of wn) {
-            let Qn = Zn.tasks[pr];
-            if (isEvictingIdleTeammate(Qn)) {
-              if (Un === undefined)
-                Un = {
-                  ...Zn.tasks,
+          for (const taskId of idleExtendIds) {
+            let task = state.tasks[taskId];
+            if (isEvictingIdleTeammate(task)) {
+              if (nextTasks === undefined)
+                nextTasks = {
+                  ...state.tasks,
                 };
-              Un[pr] = {
-                ...Qn,
+              nextTasks[taskId] = {
+                ...task,
                 evictAfter: now + MCP_TASK_KEEPALIVE_MS,
-                evictAfterHeldBySibling: Dn ? true : undefined,
+                evictAfterHeldBySibling: hasOtherActive ? true : undefined,
               };
             }
           }
-          for (const ur of mr) {
-            let Ir = Zn.tasks[ur];
+          for (const taskId of ancestorExtendIds) {
+            let task = state.tasks[taskId];
             if (
-              isPanelOrTeammateTask(Ir) &&
-              isTerminalTaskStatus(Ir.status) &&
-              Ir.evictAfter !== undefined &&
-              Ir.evictAfter > 0
+              isPanelOrTeammateTask(task) &&
+              isTerminalTaskStatus(task.status) &&
+              task.evictAfter !== undefined &&
+              task.evictAfter > 0
             ) {
-              if (Un === undefined)
-                Un = {
-                  ...Zn.tasks,
+              if (nextTasks === undefined)
+                nextTasks = {
+                  ...state.tasks,
                 };
-              Un[ur] = {
-                ...Ir,
+              nextTasks[taskId] = {
+                ...task,
                 evictAfter: now + MCP_TASK_KEEPALIVE_MS,
               };
             }
           }
-          return Un
+          return nextTasks
             ? {
-                ...Zn,
-                tasks: Un,
+                ...state,
+                tasks: nextTasks,
               }
-            : Zn;
+            : state;
         });
-      if (_o && !Xe) Sn(now);
+      if (hasActiveAgent && !isFooterHidden) setNow(now);
     };
-    $[18] = Xe;
+    $[18] = isFooterHidden;
     $[19] = setAppState;
     $[20] = setVoiceState;
     $[21] = tasks;
     $[22] = viewingAgentTaskId;
-    $[23] = $n;
-  } else $n = $[23];
-  useInterval($n, any || Bo ? 1000 : null);
-  let Pr;
+    $[23] = evictSweepCached;
+  } else evictSweepCached = $[23];
+  useInterval(evictSweepCached, any || hasWorkflowRows ? 1000 : null);
+  let nameByTaskId;
   if ($[24] !== agentNameRegistry) {
-    Pr = new Map();
-    for (const [ts, Gn] of agentNameRegistry) Pr.set(Gn, collapseWhitespace(ts));
+    nameByTaskId = new Map();
+    for (const [rawName, taskId] of agentNameRegistry) nameByTaskId.set(taskId, collapseWhitespace(rawName));
     $[24] = agentNameRegistry;
-    $[25] = Pr;
-  } else Pr = $[25];
-  let Ur = Pr;
-  let Zr;
+    $[25] = nameByTaskId;
+  } else nameByTaskId = $[25];
+  let displayNames = nameByTaskId;
+  let isViewingAgentCached;
   if ($[26] !== tasks || $[27] !== viewingAgentTaskId) {
-    Zr = viewingAgentTaskId !== undefined && isPanelOrTeammateTask(tasks[viewingAgentTaskId]);
+    isViewingAgentCached =
+      viewingAgentTaskId !== undefined && isPanelOrTeammateTask(tasks[viewingAgentTaskId]);
     $[26] = tasks;
     $[27] = viewingAgentTaskId;
-    $[28] = Zr;
-  } else Zr = $[28];
-  let wr = Zr;
-  if (Xe || (visibleBackgroundTasks.length === 0 && !Bo && !wr)) {
+    $[28] = isViewingAgentCached;
+  } else isViewingAgentCached = $[28];
+  let isViewingAgent = isViewingAgentCached;
+  if (isFooterHidden || (visibleBackgroundTasks.length === 0 && !hasWorkflowRows && !isViewingAgent)) {
     return null;
   }
-  let zr = io ?? 0;
-  let fr = clamp(
-    zr >= 1
-      ? zr - 1
+  let rawSelectedIndex = selectedIndex ?? 0;
+  let focusIndex = clamp(
+    rawSelectedIndex >= 1
+      ? rawSelectedIndex - 1
       : visibleBackgroundTasks.findIndex(
           (visibleBackgroundTask) => visibleBackgroundTask.id === viewingAgentTaskId,
         ),
@@ -1235,7 +1317,7 @@ function BackgroundTasksPanel(props) {
     Math.max(0, visibleBackgroundTasks.length - 1),
   );
   let { windowStart, windowEnd, moreAbove, moreBelow } = computeScrollWindow(
-    fr,
+    focusIndex,
     visibleBackgroundTasks.length,
     MAX_VISIBLE_WORKFLOW_ROWS,
   );
@@ -1254,129 +1336,145 @@ function BackgroundTasksPanel(props) {
       ? 0
       : ancestorDepth(tasks, visibleBackgroundTask, ancestorTaskIds),
   );
-  let Ci = plusCountSuffix;
+  let descendantSuffixer = plusCountSuffix;
   let min = Math.min(
     28,
     Math.max(
       4,
-      ...visibleBackgroundTasks.map((visibleBackgroundTask, Oi) =>
+      ...visibleBackgroundTasks.map((visibleBackgroundTask, rowIndex) =>
         !isAgentRowVisible(visibleBackgroundTask) &&
         taskDecorations[visibleBackgroundTask.id]?.content === undefined
-          ? 2 * mapped_2[Oi] +
-            bunStringWidth(Ur.get(visibleBackgroundTask.id) ?? agentRowLabel(visibleBackgroundTask)) +
-            bunStringWidth(Ci(mapped[Oi]))
+          ? 2 * mapped_2[rowIndex] +
+            bunStringWidth(
+              displayNames.get(visibleBackgroundTask.id) ?? agentRowLabel(visibleBackgroundTask),
+            ) +
+            bunStringWidth(descendantSuffixer(mapped[rowIndex]))
           : 0,
       ),
-      ...No.map(rowNameWidth),
+      ...workflowRowItems.map(rowNameWidth),
     ),
   );
-  let Zi;
-  if ($[29] !== Ur || $[30] !== Xo || $[31] !== appStoreDirect) {
-    Zi = (da) =>
-      isAgentRowVisible(da)
+  let agentLineCached;
+  if ($[29] !== displayNames || $[30] !== now || $[31] !== appStoreDirect) {
+    agentLineCached = (task) =>
+      isAgentRowVisible(task)
         ? undefined
-        : AgentLine(da, Xo, appStoreDirect.getState().transcripts[da.id]?.turnStartTime, Ur.has(da.id));
-    $[29] = Ur;
-    $[30] = Xo;
+        : AgentLine(
+            task,
+            now,
+            appStoreDirect.getState().transcripts[task.id]?.turnStartTime,
+            displayNames.has(task.id),
+          );
+    $[29] = displayNames;
+    $[30] = now;
     $[31] = appStoreDirect;
-    $[32] = Zi;
-  } else Zi = $[32];
-  let mapped_3 = visibleBackgroundTasks.map(Zi);
-  let ls = (ps) =>
+    $[32] = agentLineCached;
+  } else agentLineCached = $[32];
+  let mapped_3 = visibleBackgroundTasks.map(agentLineCached);
+  let statusWidthFor = (links) =>
     Math.max(
       0,
-      ...mapped_3.map((xs, kr) =>
-        xs !== undefined && taskDecorations[visibleBackgroundTasks[kr].id]?.content === undefined
+      ...mapped_3.map((line, rowIndex) =>
+        line !== undefined && taskDecorations[visibleBackgroundTasks[rowIndex].id]?.content === undefined
           ? bunStringWidth(
-              [xs.elapsed, xs.tokenText, xs.queuedText, ps[kr]?.label].filter(Boolean).join(" \xB7 "),
+              [line.elapsed, line.tokenText, line.queuedText, links[rowIndex]?.label]
+                .filter(Boolean)
+                .join(" \xB7 "),
             )
           : 0,
       ),
     );
-  let Ms;
+  let linkCached;
   if ($[33] !== slackTagConnected) {
-    Ms = (qs) => (isAgentRowVisible(qs) ? undefined : noopSlackTagHandler(qs, slackTagConnected));
+    linkCached = (task) =>
+      isAgentRowVisible(task) ? undefined : noopSlackTagHandler(task, slackTagConnected);
     $[33] = slackTagConnected;
-    $[34] = Ms;
-  } else Ms = $[34];
-  let mapped_4 = visibleBackgroundTasks.map(Ms);
-  let es = ls(mapped_4);
-  if (mapped_4.some(Boolean) && agentRowPrefixWidth() + min + 3 + es > columns - AGENT_ROW_WIDTH_RESERVE) {
-    mapped_4 = mapped_4.map(noopTaskClickHandler);
-    es = ls(mapped_4);
+    $[34] = linkCached;
+  } else linkCached = $[34];
+  let links = visibleBackgroundTasks.map(linkCached);
+  let statusWidth = statusWidthFor(links);
+  if (
+    links.some(Boolean) &&
+    agentRowPrefixWidth() + min + 3 + statusWidth > columns - AGENT_ROW_WIDTH_RESERVE
+  ) {
+    links = links.map(noopTaskClickHandler);
+    statusWidth = statusWidthFor(links);
   }
-  const ds = Box;
+  const BoxComponent = Box;
   const flexDirection = "column";
   const marginTop = 1;
   const paddingRight = AGENT_ROW_WIDTH_RESERVE;
-  const ua =
-    (visibleBackgroundTasks.length > 0 || wr) &&
+  const mainLineElement =
+    (visibleBackgroundTasks.length > 0 || isViewingAgent) &&
     jsxProd_default(MainLine, {
-      isSelected: io === 0,
+      isSelected: selectedIndex === 0,
       isViewed: viewingAgentTaskId === undefined,
       labelWidth: min,
       moreAbove,
-      onClick: () => exitTeammateView((ii) => setAppState(selectTaskRowUpdater(0, ii))),
+      onClick: () => exitTeammateView((state) => setAppState(selectTaskRowUpdater(0, state))),
     });
-  const mapped_5 = visibleBackgroundTasks.slice(windowStart, windowEnd).map((visibleBackgroundTask, Xa) => {
-    let dl = windowStart + Xa;
-    if (isAgentRowVisible(visibleBackgroundTask)) {
-      return jsxProd_default(
-        IdleAgentsSummaryRow,
-        {
-          count: visibleBackgroundTask.taskIds.length,
-          isSelected: io === dl + 1,
-          onClick: () => setAppState(selectTaskRowUpdater(dl + 1, expandIdleTeammates)),
-        },
-        visibleBackgroundTask.id,
-      );
-    }
-    let Vl = visibleBackgroundTask;
-    let Hd = mapped_2[dl];
-    let Ss = nearestVisibleAncestorId(tasks, Vl, ancestorTaskIds);
-    let Ws =
-      Ss !== undefined &&
-      visibleBackgroundTasks.findIndex((visibleBackgroundTask) => visibleBackgroundTask.id === Ss) >=
-        windowStart;
-    let treeConnector;
-    if (Hd > 0 && Ws) {
-      let any = visibleBackgroundTasks
-        .slice(dl + 1)
-        .some(
-          (visibleBackgroundTask) =>
-            !isAgentRowVisible(visibleBackgroundTask) &&
-            nearestVisibleAncestorId(tasks, visibleBackgroundTask, ancestorTaskIds) === Ss,
+  const mapped_4 = visibleBackgroundTasks
+    .slice(windowStart, windowEnd)
+    .map((visibleBackgroundTask, offset) => {
+      let rowIndex = windowStart + offset;
+      if (isAgentRowVisible(visibleBackgroundTask)) {
+        return jsxProd_default(
+          IdleAgentsSummaryRow,
+          {
+            count: visibleBackgroundTask.taskIds.length,
+            isSelected: selectedIndex === rowIndex + 1,
+            onClick: () => setAppState(selectTaskRowUpdater(rowIndex + 1, expandIdleTeammates)),
+          },
+          visibleBackgroundTask.id,
         );
-      treeConnector = repeatString("  ", Hd - 1) + (any ? _S.branch : _S.last) + " ";
-    }
-    let as = mapped_4[dl];
-    return jsxProd_default(
-      CoordinatorTaskRow,
-      {
-        task: Vl,
-        name: Ur.get(Vl.id),
-        link: as,
-        decoration: taskDecorations[Vl.id],
-        isSelected: io === dl + 1,
-        isViewed: viewingAgentTaskId === Vl.id,
-        treeConnector,
-        descendantSuffix: Ci(mapped[dl]),
-        labelWidth: min,
-        statusWidth: es,
-        statusParts: mapped_3[dl],
-        onClick: (pi) => {
-          if (as !== undefined && pi.hyperlinkUrl === as.url) {
-            return pi.allowDefault();
-          }
-          enterTeammateView(Vl.id, (qa) => setAppState(selectTaskRowUpdater(dl + 1, qa)));
+      }
+      let task = visibleBackgroundTask;
+      let depth = mapped_2[rowIndex];
+      let ancestorId = nearestVisibleAncestorId(tasks, task, ancestorTaskIds);
+      let ancestorVisible =
+        ancestorId !== undefined &&
+        visibleBackgroundTasks.findIndex(
+          (visibleBackgroundTask) => visibleBackgroundTask.id === ancestorId,
+        ) >= windowStart;
+      let treeConnector;
+      if (depth > 0 && ancestorVisible) {
+        let any = visibleBackgroundTasks
+          .slice(rowIndex + 1)
+          .some(
+            (visibleBackgroundTask) =>
+              !isAgentRowVisible(visibleBackgroundTask) &&
+              nearestVisibleAncestorId(tasks, visibleBackgroundTask, ancestorTaskIds) === ancestorId,
+          );
+        treeConnector = repeatString("  ", depth - 1) + (any ? TREE_GLYPHS.branch : TREE_GLYPHS.last) + " ";
+      }
+      let link = links[rowIndex];
+      return jsxProd_default(
+        CoordinatorTaskRow,
+        {
+          task,
+          name: displayNames.get(task.id),
+          link,
+          decoration: taskDecorations[task.id],
+          isSelected: selectedIndex === rowIndex + 1,
+          isViewed: viewingAgentTaskId === task.id,
+          treeConnector,
+          descendantSuffix: descendantSuffixer(mapped[rowIndex]),
+          labelWidth: min,
+          statusWidth,
+          statusParts: mapped_3[rowIndex],
+          onClick: (event) => {
+            if (link !== undefined && event.hyperlinkUrl === link.url) {
+              return event.allowDefault();
+            }
+            enterTeammateView(task.id, (state) => setAppState(selectTaskRowUpdater(rowIndex + 1, state)));
+          },
         },
-      },
-      Vl.id,
-    );
-  });
-  let $l;
+        task.id,
+      );
+    });
+  let moreBelowElement;
   if ($[35] !== moreBelow || $[36] !== visibleBackgroundTasks.length) {
-    $l =
+    moreBelowElement =
       visibleBackgroundTasks.length > MAX_VISIBLE_WORKFLOW_ROWS &&
       jsxProd_default(Box, {
         justifyContent: "flex-start",
@@ -1387,45 +1485,46 @@ function BackgroundTasksPanel(props) {
       });
     $[35] = moreBelow;
     $[36] = visibleBackgroundTasks.length;
-    $[37] = $l;
-  } else $l = $[37];
-  let Yi;
+    $[37] = moreBelowElement;
+  } else moreBelowElement = $[37];
+  let workflowRowElements;
   if (
     $[38] !== columns ||
     $[39] !== min ||
     $[40] !== setAppState ||
-    $[41] !== vo ||
+    $[41] !== warnedWorkflowIds ||
     $[42] !== workflowFooterIndex ||
-    $[43] !== No ||
+    $[43] !== workflowRowItems ||
     $[44] !== appState_2
   ) {
-    let El;
+    let renderWorkflowRow;
     if (
       $[46] !== columns ||
       $[47] !== min ||
       $[48] !== setAppState ||
-      $[49] !== vo ||
+      $[49] !== warnedWorkflowIds ||
       $[50] !== workflowFooterIndex ||
       $[51] !== appState_2
     ) {
-      El = (Ll, _c) => {
-        let { workflow, row, warning } = Ll;
+      renderWorkflowRow = (workflowRow, index) => {
+        let { workflow, row, warning } = workflowRow;
         return jsxProd_default(
           AgentStatusRow,
           {
             row,
             isWarned:
-              !isTerminalTaskStatus(workflow.status) && (warning !== undefined || vo.has(workflow.id)),
+              !isTerminalTaskStatus(workflow.status) &&
+              (warning !== undefined || warnedWorkflowIds.has(workflow.id)),
             prefixWidth: agentRowPrefixWidth(),
             labelWidth: min,
             rowWidth: columns - AGENT_ROW_WIDTH_RESERVE,
-            isSelected: appState_2 && workflowFooterIndex === _c,
+            isSelected: appState_2 && workflowFooterIndex === index,
             onClick: () =>
-              setAppState((Ka) =>
-                Ka.workflowDetail?.taskId === workflow.id
-                  ? Ka
+              setAppState((state) =>
+                state.workflowDetail?.taskId === workflow.id
+                  ? state
                   : {
-                      ...Ka,
+                      ...state,
                       workflowDetail: {
                         taskId: workflow.id,
                       },
@@ -1438,52 +1537,52 @@ function BackgroundTasksPanel(props) {
       $[46] = columns;
       $[47] = min;
       $[48] = setAppState;
-      $[49] = vo;
+      $[49] = warnedWorkflowIds;
       $[50] = workflowFooterIndex;
       $[51] = appState_2;
-      $[52] = El;
-    } else El = $[52];
-    Yi = No.map(El);
+      $[52] = renderWorkflowRow;
+    } else renderWorkflowRow = $[52];
+    workflowRowElements = workflowRowItems.map(renderWorkflowRow);
     $[38] = columns;
     $[39] = min;
     $[40] = setAppState;
-    $[41] = vo;
+    $[41] = warnedWorkflowIds;
     $[42] = workflowFooterIndex;
-    $[43] = No;
+    $[43] = workflowRowItems;
     $[44] = appState_2;
-    $[45] = Yi;
-  } else Yi = $[45];
-  let El;
+    $[45] = workflowRowElements;
+  } else workflowRowElements = $[45];
+  let panelElement;
   if (
-    $[53] !== ds ||
+    $[53] !== BoxComponent ||
     $[54] !== paddingRight ||
-    $[55] !== ua ||
-    $[56] !== mapped_5 ||
-    $[57] !== $l ||
-    $[58] !== Yi
+    $[55] !== mainLineElement ||
+    $[56] !== mapped_4 ||
+    $[57] !== moreBelowElement ||
+    $[58] !== workflowRowElements
   ) {
-    El = jsxProd_default_2(ds, {
+    panelElement = jsxProd_default_2(BoxComponent, {
       flexDirection,
       marginTop,
       paddingRight,
-      children: [ua, mapped_5, $l, Yi],
+      children: [mainLineElement, mapped_4, moreBelowElement, workflowRowElements],
     });
-    $[53] = ds;
+    $[53] = BoxComponent;
     $[54] = paddingRight;
-    $[55] = ua;
-    $[56] = mapped_5;
-    $[57] = $l;
-    $[58] = Yi;
-    $[59] = El;
-  } else El = $[59];
-  return El;
+    $[55] = mainLineElement;
+    $[56] = mapped_4;
+    $[57] = moreBelowElement;
+    $[58] = workflowRowElements;
+    $[59] = panelElement;
+  } else panelElement = $[59];
+  return panelElement;
 }
 //@ chunk-18hwfzwa.js:452984-455430 layout
 /**
  * 任务面板获得焦点时页脚显示的快捷键提示行：按当前选中项（主会话 / agent / 分组 / 工作流）显示 select、view、stop all 等按键。
  */
 function TaskPanelFooterHints() {
-  let $ = w(39);
+  let $ = useMemoCache(39);
   let tasks = useAppState(selectTasks_2_2);
   let taskDecorations = useAppState(selectTaskDecorations_2);
   let viewingAgentTaskId = useAppState(selectViewingAgentTaskId_2);
@@ -1498,28 +1597,28 @@ function TaskPanelFooterHints() {
   let collapse = useShortcutDisplay("footer:clearSelection", "Footer", TASK_PANEL_KEYS.collapse);
   const shortcutDisplayText = useShortcutDisplayText("footer:up", "Footer", TASK_PANEL_KEYS.select[0]);
   const shortcutDisplayText_2 = useShortcutDisplayText("footer:down", "Footer", TASK_PANEL_KEYS.select[1]);
-  let It;
+  let selectKeys;
   if ($[0] !== shortcutDisplayText || $[1] !== shortcutDisplayText_2) {
-    It = [shortcutDisplayText, shortcutDisplayText_2];
+    selectKeys = [shortcutDisplayText, shortcutDisplayText_2];
     $[0] = shortcutDisplayText;
     $[1] = shortcutDisplayText_2;
-    $[2] = It;
-  } else It = $[2];
-  let Ot = It;
-  let Et;
-  if ($[3] !== Ot) {
-    Et =
-      Ot.some(Boolean) &&
+    $[2] = selectKeys;
+  } else selectKeys = $[2];
+  let selectChord = selectKeys;
+  let selectHint;
+  if ($[3] !== selectChord) {
+    selectHint =
+      selectChord.some(Boolean) &&
       jsxProd_default(KeyboardShortcutHint, {
-        chord: Ot,
+        chord: selectChord,
         action: "select",
       });
-    $[3] = Ot;
-    $[4] = Et;
-  } else Et = $[4];
-  let Dt = Et;
+    $[3] = selectChord;
+    $[4] = selectHint;
+  } else selectHint = $[4];
+  let selectHintNode = selectHint;
   let { columns } = useTerminalSize();
-  let oo;
+  let footerHints;
   if (footerSelection === "tasks" && coordinatorTaskIndex >= 0) {
     if (
       $[5] !== shortcutDisplay_2 ||
@@ -1529,8 +1628,8 @@ function TaskPanelFooterHints() {
       $[9] !== appState ||
       $[10] !== stopAll ||
       $[11] !== shortcutDisplay ||
-      $[12] !== Ot ||
-      $[13] !== Dt ||
+      $[12] !== selectChord ||
+      $[13] !== selectHintNode ||
       $[14] !== taskDecorations ||
       $[15] !== tasks ||
       $[16] !== viewSelectionMode ||
@@ -1542,39 +1641,40 @@ function TaskPanelFooterHints() {
         viewingAgentTaskId,
         appState,
       );
-      let io = coordinatorTaskIndex >= 1 ? visibleBackgroundTasks[coordinatorTaskIndex - 1] : undefined;
+      let selectedTask =
+        coordinatorTaskIndex >= 1 ? visibleBackgroundTasks[coordinatorTaskIndex - 1] : undefined;
       let onViewedRow =
-        io !== undefined &&
-        isViewingThisAgent(io, {
+        selectedTask !== undefined &&
+        isViewingThisAgent(selectedTask, {
           viewSelectionMode,
           viewingAgentTaskId,
         });
-      let po = coordinatorTaskIndex === 0 && viewSelectionMode !== "viewing-agent";
-      if (io === undefined) {
-        let ao;
-        if ($[19] !== po || $[20] !== shortcutDisplay) {
-          ao =
+      let isViewingSelected = coordinatorTaskIndex === 0 && viewSelectionMode !== "viewing-agent";
+      if (selectedTask === undefined) {
+        let viewHint;
+        if ($[19] !== isViewingSelected || $[20] !== shortcutDisplay) {
+          viewHint =
             shortcutDisplay &&
-            !po &&
+            !isViewingSelected &&
             jsxProd_default(KeyboardShortcutHint, {
               chord: shortcutDisplay,
               action: "view",
             });
-          $[19] = po;
+          $[19] = isViewingSelected;
           $[20] = shortcutDisplay;
-          $[21] = ao;
-        } else ao = $[21];
-        let co;
-        if ($[22] !== Dt || $[23] !== ao) {
-          co = jsxProd_default_2(Byline, {
-            children: [Dt, ao],
+          $[21] = viewHint;
+        } else viewHint = $[21];
+        let idleByline;
+        if ($[22] !== selectHintNode || $[23] !== viewHint) {
+          idleByline = jsxProd_default_2(Byline, {
+            children: [selectHintNode, viewHint],
           });
-          $[22] = Dt;
-          $[23] = ao;
-          $[24] = co;
-        } else co = $[24];
-        oo = co;
-      } else if (isAgentRowVisible(io)) {
+          $[22] = selectHintNode;
+          $[23] = viewHint;
+          $[24] = idleByline;
+        } else idleByline = $[24];
+        footerHints = idleByline;
+      } else if (isAgentRowVisible(selectedTask)) {
         let children;
         if ($[25] !== shortcutDisplay) {
           children =
@@ -1586,51 +1686,52 @@ function TaskPanelFooterHints() {
           $[25] = shortcutDisplay;
           $[26] = children;
         } else children = $[26];
-        let co;
+        let expandByline;
         if ($[27] !== children) {
-          co = jsxProd_default(Byline, {
+          expandByline = jsxProd_default(Byline, {
             children,
           });
           $[27] = children;
-          $[28] = co;
-        } else co = $[28];
-        oo = co;
+          $[28] = expandByline;
+        } else expandByline = $[28];
+        footerHints = expandByline;
       } else {
-        const closeAction = isTaskStillActive(io) ? "stop" : "clear";
+        const closeAction = isTaskStillActive(selectedTask) ? "stop" : "clear";
         const showCollapse = appState && hasFoldedIdleTeammates(visibleBackgroundTasks, viewingAgentTaskId);
-        let bo;
+        let evictableCount;
         if ($[29] !== tasks) {
-          bo = count(Object.values(tasks), isEvictableIdleTeammate);
+          evictableCount = count(Object.values(tasks), isEvictableIdleTeammate);
           $[29] = tasks;
-          $[30] = bo;
-        } else bo = $[30];
-        let Ao = {
+          $[30] = evictableCount;
+        } else evictableCount = $[30];
+        let keyOptions = {
           onViewedRow,
           closeAction,
           showCollapse,
-          showStopAll: bo > 1,
+          showStopAll: evictableCount > 1,
         };
-        let Bo = CoordinatorPanelKeys({
-          ...Ao,
+        let actions = CoordinatorPanelKeys({
+          ...keyOptions,
           keys: {
             open: shortcutDisplay,
             close: shortcutDisplay_2,
             collapse,
-            select: Ot,
+            select: selectChord,
             stopAll,
           },
         });
-        let Ro =
-          shortcutHintsWidth(Bo) -
+        let widthDelta =
+          shortcutHintsWidth(actions) -
           shortcutHintsWidth(
             CoordinatorPanelKeys({
-              ...Ao,
+              ...keyOptions,
               keys: TASK_PANEL_KEYS,
             }),
           );
-        let Ho = columns >= 90 + Math.max(0, Ro) ? Bo : Bo.filter(isNotStopAllAction);
-        oo = jsxProd_default(Byline, {
-          children: Ho.map(renderShortcutHint),
+        let visibleActions =
+          columns >= 90 + Math.max(0, widthDelta) ? actions : actions.filter(isNotStopAllAction);
+        footerHints = jsxProd_default(Byline, {
+          children: visibleActions.map(renderShortcutHint),
         });
       }
       $[5] = shortcutDisplay_2;
@@ -1640,25 +1741,25 @@ function TaskPanelFooterHints() {
       $[9] = appState;
       $[10] = stopAll;
       $[11] = shortcutDisplay;
-      $[12] = Ot;
-      $[13] = Dt;
+      $[12] = selectChord;
+      $[13] = selectHintNode;
       $[14] = taskDecorations;
       $[15] = tasks;
       $[16] = viewSelectionMode;
       $[17] = viewingAgentTaskId;
-      $[18] = oo;
-    } else oo = $[18];
+      $[18] = footerHints;
+    } else footerHints = $[18];
   } else if (footerSelection === "workflows") {
-    let ao;
+    let workflowByline;
     if (
       $[31] !== shortcutDisplay_2 ||
       $[32] !== shortcutDisplay ||
-      $[33] !== Dt ||
+      $[33] !== selectHintNode ||
       $[34] !== tasks ||
       $[35] !== workflowFooterIndex
     ) {
-      let Io = runningWorkflowTasks(tasks)[workflowFooterIndex];
-      ao = Io
+      let workflow = runningWorkflowTasks(tasks)[workflowFooterIndex];
+      workflowByline = workflow
         ? jsxProd_default_2(Byline, {
             children: [
               shortcutDisplay &&
@@ -1669,13 +1770,13 @@ function TaskPanelFooterHints() {
               shortcutDisplay_2 &&
                 jsxProd_default(KeyboardShortcutHint, {
                   chord: shortcutDisplay_2,
-                  action: isTerminalTaskStatus(Io.status) ? "clear" : "stop",
+                  action: isTerminalTaskStatus(workflow.status) ? "clear" : "stop",
                 }),
             ],
           })
         : jsxProd_default_2(Byline, {
             children: [
-              Dt,
+              selectHintNode,
               shortcutDisplay &&
                 jsxProd_default(KeyboardShortcutHint, {
                   chord: shortcutDisplay,
@@ -1685,32 +1786,32 @@ function TaskPanelFooterHints() {
           });
       $[31] = shortcutDisplay_2;
       $[32] = shortcutDisplay;
-      $[33] = Dt;
+      $[33] = selectHintNode;
       $[34] = tasks;
       $[35] = workflowFooterIndex;
-      $[36] = ao;
-    } else ao = $[36];
-    oo = ao;
+      $[36] = workflowByline;
+    } else workflowByline = $[36];
+    footerHints = workflowByline;
   }
-  let ao;
-  if ($[37] !== oo) {
-    ao =
-      oo !== undefined
+  let footerNode;
+  if ($[37] !== footerHints) {
+    footerNode =
+      footerHints !== undefined
         ? jsxProd_default(Text, {
             dimColor: true,
             wrap: "truncate",
-            children: oo,
+            children: footerHints,
           })
         : null;
-    $[37] = oo;
-    $[38] = ao;
-  } else ao = $[38];
-  return ao;
+    $[37] = footerHints;
+    $[38] = footerNode;
+  } else footerNode = $[38];
+  return footerNode;
 }
 //@ chunk-18hwfzwa.js:455430-455482 layout
 function useVisibleAgentTaskCount() {
-  let [h] = y(makeVisibleTaskCountSelector);
-  let appState = useAppState(h);
+  let [countSelector] = useState(makeVisibleTaskCountSelector);
+  let appState = useAppState(countSelector);
   return subscribeCoordinatorPanel() ? 0 : appState;
 }
 //@ chunk-18hwfzwa.js:455482-456117 layout
@@ -1738,9 +1839,9 @@ function makeVisibleTaskCountSelector() {
       state.viewingAgentTaskId,
       state.idleTeammatesExpanded ?? false,
     ).length;
-    let ee =
+    let viewingVisible =
       state.viewingAgentTaskId !== undefined && isPanelOrTeammateTask(state.tasks[state.viewingAgentTaskId]);
-    let count = visibleCount > 0 || ee ? visibleCount + 1 : 0;
+    let count = visibleCount > 0 || viewingVisible ? visibleCount + 1 : 0;
     previous = {
       tasks: state.tasks,
       taskDecorations: state.taskDecorations,
@@ -1754,13 +1855,13 @@ function makeVisibleTaskCountSelector() {
 }
 //@ chunk-18hwfzwa.js:456117-457026 fingerprint = MainLine (0.512)
 function MainLine(props) {
-  let $ = w(16);
+  let $ = useMemoCache(16);
   let { isSelected, isViewed, labelWidth, moreAbove, onClick } = props;
-  let [hover, setHover] = y(false);
+  let [hover, setHover] = useState(false);
   let onClick_2 = useStrayClickGuarded(onClick);
   let prefix = isSelected || hover ? figures_default.pointer + " " : "  ";
   let bullet = isViewed ? BLACK_CIRCLE : figures_default.circle;
-  let Xe = moreAbove > 0 ? `${UP_ARROW} ${moreAbove} more` : "";
+  let moreAboveLabel = moreAbove > 0 ? `${UP_ARROW} ${moreAbove} more` : "";
   let onMouseEnter;
   let onMouseLeave;
   if ($[0] === MEMO_CACHE_SENTINEL) {
@@ -1787,53 +1888,53 @@ function MainLine(props) {
     $[5] = dimColor;
     $[6] = children;
   } else children = $[6];
-  let Dt;
+  let mainLabelElement;
   if ($[7] !== width || $[8] !== children) {
-    Dt = jsxProd_default(Box, {
+    mainLabelElement = jsxProd_default(Box, {
       width,
       flexShrink: 0,
       children,
     });
     $[7] = width;
     $[8] = children;
-    $[9] = Dt;
-  } else Dt = $[9];
-  let Lt;
-  if ($[10] !== Xe) {
-    Lt =
-      Xe &&
+    $[9] = mainLabelElement;
+  } else mainLabelElement = $[9];
+  let moreAboveElement;
+  if ($[10] !== moreAboveLabel) {
+    moreAboveElement =
+      moreAboveLabel &&
       jsxProd_default(Text, {
         dimColor: true,
-        children: Xe,
+        children: moreAboveLabel,
       });
-    $[10] = Xe;
-    $[11] = Lt;
-  } else Lt = $[11];
-  let oo;
-  if ($[12] !== onClick_2 || $[13] !== Dt || $[14] !== Lt) {
-    oo = jsxProd_default_2(Box, {
+    $[10] = moreAboveLabel;
+    $[11] = moreAboveElement;
+  } else moreAboveElement = $[11];
+  let rowElement;
+  if ($[12] !== onClick_2 || $[13] !== mainLabelElement || $[14] !== moreAboveElement) {
+    rowElement = jsxProd_default_2(Box, {
       justifyContent: "space-between",
       onClick: onClick_2,
       onMouseEnter,
       onMouseLeave,
-      children: [Dt, Lt],
+      children: [mainLabelElement, moreAboveElement],
     });
     $[12] = onClick_2;
-    $[13] = Dt;
-    $[14] = Lt;
-    $[15] = oo;
-  } else oo = $[15];
-  return oo;
+    $[13] = mainLabelElement;
+    $[14] = moreAboveElement;
+    $[15] = rowElement;
+  } else rowElement = $[15];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:457026-461149 placement
 /**
  * 协调者模式代理状态面板中的单行任务。
  */
 function CoordinatorTaskRow(props) {
-  let $ = w(88);
+  let $ = useMemoCache(88);
   let {
     task,
-    name: D,
+    name: nameProp,
     link,
     decoration,
     labelWidth,
@@ -1845,110 +1946,110 @@ function CoordinatorTaskRow(props) {
     descendantSuffix,
     onClick,
   } = props;
-  let [kt, At] = y(false);
+  let [isHovered, setIsHovered] = useState(false);
   let onClick_2 = useStrayClickGuarded(onClick);
   let { elapsed, tokenText, queuedText, queuedCount } = statusParts;
-  let Xt;
+  let summaryCached;
   if ($[0] !== task.description || $[1] !== task.progress?.summary) {
-    Xt = collapseWhitespace(task.progress?.summary ?? "") || collapseWhitespace(task.description);
+    summaryCached = collapseWhitespace(task.progress?.summary ?? "") || collapseWhitespace(task.description);
     $[0] = task.description;
     $[1] = task.progress?.summary;
-    $[2] = Xt;
-  } else Xt = $[2];
-  let children = Xt;
-  let so = isSelected || kt;
-  let children_2 = so ? figures_default.pointer + " " : "  ";
-  let ao = isViewed ? BLACK_CIRCLE : figures_default.circle;
-  let co;
+    $[2] = summaryCached;
+  } else summaryCached = $[2];
+  let children = summaryCached;
+  let isHighlighted = isSelected || isHovered;
+  let children_2 = isHighlighted ? figures_default.pointer + " " : "  ";
+  let bulletGlyph = isViewed ? BLACK_CIRCLE : figures_default.circle;
+  let statusColorCached;
   if ($[3] !== task) {
-    co = isTaskStillActive(task) ? undefined : getStatusColor(task.status);
+    statusColorCached = isTaskStillActive(task) ? undefined : getStatusColor(task.status);
     $[3] = task;
-    $[4] = co;
-  } else co = $[4];
-  let bo = co;
-  let Ao = !so && !isViewed;
-  let Bo;
-  if ($[5] !== Ao || $[6] !== isViewed || $[7] !== children_2) {
-    Bo = jsxProd_default(Text, {
-      dimColor: Ao,
+    $[4] = statusColorCached;
+  } else statusColorCached = $[4];
+  let statusColor = statusColorCached;
+  let isDimmed = !isHighlighted && !isViewed;
+  let pointerElement;
+  if ($[5] !== isDimmed || $[6] !== isViewed || $[7] !== children_2) {
+    pointerElement = jsxProd_default(Text, {
+      dimColor: isDimmed,
       bold: isViewed,
       children: children_2,
     });
-    $[5] = Ao;
+    $[5] = isDimmed;
     $[6] = isViewed;
     $[7] = children_2;
-    $[8] = Bo;
-  } else Bo = $[8];
-  let Ro;
-  if ($[9] !== Ao || $[10] !== treeConnector) {
-    Ro =
+    $[8] = pointerElement;
+  } else pointerElement = $[8];
+  let connectorElement;
+  if ($[9] !== isDimmed || $[10] !== treeConnector) {
+    connectorElement =
       treeConnector !== undefined &&
       jsxProd_default(Text, {
-        dimColor: Ao,
+        dimColor: isDimmed,
         children: treeConnector,
       });
-    $[9] = Ao;
+    $[9] = isDimmed;
     $[10] = treeConnector;
-    $[11] = Ro;
-  } else Ro = $[11];
-  const dimColor = !bo && Ao;
-  let Io;
-  if ($[12] !== ao || $[13] !== bo || $[14] !== isViewed || $[15] !== dimColor) {
-    Io = jsxProd_default_2(Text, {
-      color: bo,
+    $[11] = connectorElement;
+  } else connectorElement = $[11];
+  const dimColor = !statusColor && isDimmed;
+  let bulletElement;
+  if ($[12] !== bulletGlyph || $[13] !== statusColor || $[14] !== isViewed || $[15] !== dimColor) {
+    bulletElement = jsxProd_default_2(Text, {
+      color: statusColor,
       dimColor,
       bold: isViewed,
-      children: [ao, " "],
+      children: [bulletGlyph, " "],
     });
-    $[12] = ao;
-    $[13] = bo;
+    $[12] = bulletGlyph;
+    $[13] = statusColor;
     $[14] = isViewed;
     $[15] = dimColor;
-    $[16] = Io;
-  } else Io = $[16];
-  let Wo;
-  if ($[17] !== Bo || $[18] !== Ro || $[19] !== Io) {
-    Wo = jsxProd_default_2(Fragment, {
-      children: [Bo, Ro, Io],
+    $[16] = bulletElement;
+  } else bulletElement = $[16];
+  let prefixRow;
+  if ($[17] !== pointerElement || $[18] !== connectorElement || $[19] !== bulletElement) {
+    prefixRow = jsxProd_default_2(Fragment, {
+      children: [pointerElement, connectorElement, bulletElement],
     });
-    $[17] = Bo;
-    $[18] = Ro;
-    $[19] = Io;
-    $[20] = Wo;
-  } else Wo = $[20];
-  let children_3 = Wo;
-  let Cn;
+    $[17] = pointerElement;
+    $[18] = connectorElement;
+    $[19] = bulletElement;
+    $[20] = prefixRow;
+  } else prefixRow = $[20];
+  let children_3 = prefixRow;
+  let connectorWidthCached;
   if ($[21] !== treeConnector) {
-    Cn = treeConnector ? bunStringWidth(treeConnector) : 0;
+    connectorWidthCached = treeConnector ? bunStringWidth(treeConnector) : 0;
     $[21] = treeConnector;
-    $[22] = Cn;
-  } else Cn = $[22];
-  let No = Cn;
-  let width = agentRowPrefixWidth() + No;
-  let width_2 = Math.max(0, labelWidth - No);
+    $[22] = connectorWidthCached;
+  } else connectorWidthCached = $[22];
+  let connectorWidth = connectorWidthCached;
+  let width = agentRowPrefixWidth() + connectorWidth;
+  let width_2 = Math.max(0, labelWidth - connectorWidth);
   if (decoration?.content !== undefined) {
     let onMouseLeave;
     let onMouseEnter;
     if ($[23] === MEMO_CACHE_SENTINEL) {
-      onMouseEnter = () => At(true);
-      onMouseLeave = () => At(false);
+      onMouseEnter = () => setIsHovered(true);
+      onMouseLeave = () => setIsHovered(false);
       $[23] = onMouseLeave;
       $[24] = onMouseEnter;
     } else {
       onMouseLeave = $[23];
       onMouseEnter = $[24];
     }
-    let bn;
+    let prefixBox;
     if ($[25] !== children_3 || $[26] !== width) {
-      bn = jsxProd_default(Box, {
+      prefixBox = jsxProd_default(Box, {
         width,
         flexShrink: 0,
         children: children_3,
       });
       $[25] = children_3;
       $[26] = width;
-      $[27] = bn;
-    } else bn = $[27];
+      $[27] = prefixBox;
+    } else prefixBox = $[27];
     let children;
     if ($[28] !== decoration.content) {
       children = jsxProd_default(Ansi, {
@@ -1957,133 +2058,133 @@ function CoordinatorTaskRow(props) {
       $[28] = decoration.content;
       $[29] = children;
     } else children = $[29];
-    let hn;
-    if ($[30] !== Ao || $[31] !== isViewed || $[32] !== children) {
-      hn = jsxProd_default(Box, {
+    let decorationBox;
+    if ($[30] !== isDimmed || $[31] !== isViewed || $[32] !== children) {
+      decorationBox = jsxProd_default(Box, {
         flexGrow: 1,
         width: 0,
         children: jsxProd_default(Text, {
-          dimColor: Ao,
+          dimColor: isDimmed,
           bold: isViewed,
           wrap: "truncate",
           children,
         }),
       });
-      $[30] = Ao;
+      $[30] = isDimmed;
       $[31] = isViewed;
       $[32] = children;
-      $[33] = hn;
-    } else hn = $[33];
-    let Mn;
-    if ($[34] !== onClick_2 || $[35] !== bn || $[36] !== hn) {
-      Mn = jsxProd_default_2(Box, {
+      $[33] = decorationBox;
+    } else decorationBox = $[33];
+    let decorationRow;
+    if ($[34] !== onClick_2 || $[35] !== prefixBox || $[36] !== decorationBox) {
+      decorationRow = jsxProd_default_2(Box, {
         onClick: onClick_2,
         onMouseEnter,
         onMouseLeave,
-        children: [bn, hn],
+        children: [prefixBox, decorationBox],
       });
       $[34] = onClick_2;
-      $[35] = bn;
-      $[36] = hn;
-      $[37] = Mn;
-    } else Mn = $[37];
-    return Mn;
+      $[35] = prefixBox;
+      $[36] = decorationBox;
+      $[37] = decorationRow;
+    } else decorationRow = $[37];
+    return decorationRow;
   }
   let onMouseLeave;
   let onMouseEnter;
   if ($[38] === MEMO_CACHE_SENTINEL) {
-    onMouseEnter = () => At(true);
-    onMouseLeave = () => At(false);
+    onMouseEnter = () => setIsHovered(true);
+    onMouseLeave = () => setIsHovered(false);
     $[38] = onMouseLeave;
     $[39] = onMouseEnter;
   } else {
     onMouseLeave = $[38];
     onMouseEnter = $[39];
   }
-  let bn;
+  let plainPrefixBox;
   if ($[40] !== children_3 || $[41] !== width) {
-    bn = jsxProd_default(Box, {
+    plainPrefixBox = jsxProd_default(Box, {
       width,
       flexShrink: 0,
       children: children_3,
     });
     $[40] = children_3;
     $[41] = width;
-    $[42] = bn;
-  } else bn = $[42];
-  const dimColor_2 = !D && Ao;
-  let hn;
-  if ($[43] !== D || $[44] !== task) {
-    hn = D ?? agentRowLabel(task);
-    $[43] = D;
+    $[42] = plainPrefixBox;
+  } else plainPrefixBox = $[42];
+  const dimColor_2 = !nameProp && isDimmed;
+  let labelCached;
+  if ($[43] !== nameProp || $[44] !== task) {
+    labelCached = nameProp ?? agentRowLabel(task);
+    $[43] = nameProp;
     $[44] = task;
-    $[45] = hn;
-  } else hn = $[45];
-  let Mn;
+    $[45] = labelCached;
+  } else labelCached = $[45];
+  let suffixElement;
   if ($[46] !== descendantSuffix) {
-    Mn =
+    suffixElement =
       descendantSuffix &&
       jsxProd_default(Text, {
         dimColor: true,
         children: descendantSuffix,
       });
     $[46] = descendantSuffix;
-    $[47] = Mn;
-  } else Mn = $[47];
+    $[47] = suffixElement;
+  } else suffixElement = $[47];
   let children_4;
-  if ($[48] !== isViewed || $[49] !== dimColor_2 || $[50] !== hn || $[51] !== Mn) {
+  if ($[48] !== isViewed || $[49] !== dimColor_2 || $[50] !== labelCached || $[51] !== suffixElement) {
     children_4 = jsxProd_default_2(Text, {
       bold: isViewed,
       dimColor: dimColor_2,
       wrap: "truncate",
-      children: [hn, Mn],
+      children: [labelCached, suffixElement],
     });
     $[48] = isViewed;
     $[49] = dimColor_2;
-    $[50] = hn;
-    $[51] = Mn;
+    $[50] = labelCached;
+    $[51] = suffixElement;
     $[52] = children_4;
   } else children_4 = $[52];
-  let Sn;
+  let labelBox;
   if ($[53] !== width_2 || $[54] !== children_4) {
-    Sn = jsxProd_default(Box, {
+    labelBox = jsxProd_default(Box, {
       width: width_2,
       flexShrink: 0,
       children: children_4,
     });
     $[53] = width_2;
     $[54] = children_4;
-    $[55] = Sn;
-  } else Sn = $[55];
-  let $n;
-  if ($[56] !== Ao || $[57] !== children || $[58] !== isViewed) {
-    $n = jsxProd_default(Box, {
+    $[55] = labelBox;
+  } else labelBox = $[55];
+  let descriptionBox;
+  if ($[56] !== isDimmed || $[57] !== children || $[58] !== isViewed) {
+    descriptionBox = jsxProd_default(Box, {
       flexGrow: 1,
       width: 0,
       paddingLeft: 2,
       children: jsxProd_default(Text, {
-        dimColor: Ao,
+        dimColor: isDimmed,
         bold: isViewed,
         wrap: "truncate",
         children,
       }),
     });
-    $[56] = Ao;
+    $[56] = isDimmed;
     $[57] = children;
     $[58] = isViewed;
-    $[59] = $n;
-  } else $n = $[59];
-  let on;
+    $[59] = descriptionBox;
+  } else descriptionBox = $[59];
+  let statusPartsList;
   if ($[60] !== elapsed || $[61] !== tokenText) {
-    on = [elapsed, tokenText].filter(Boolean);
+    statusPartsList = [elapsed, tokenText].filter(Boolean);
     $[60] = elapsed;
     $[61] = tokenText;
-    $[62] = on;
-  } else on = $[62];
-  const joined = on.join(" \xB7 ");
-  let cn;
+    $[62] = statusPartsList;
+  } else statusPartsList = $[62];
+  const joined = statusPartsList.join(" \xB7 ");
+  let queuedElement;
   if ($[63] !== elapsed || $[64] !== queuedCount || $[65] !== queuedText || $[66] !== tokenText) {
-    cn =
+    queuedElement =
       queuedCount > 0 &&
       jsxProd_default_2(Text, {
         color: "warning",
@@ -2093,11 +2194,11 @@ function CoordinatorTaskRow(props) {
     $[64] = queuedCount;
     $[65] = queuedText;
     $[66] = tokenText;
-    $[67] = cn;
-  } else cn = $[67];
-  let Dn;
+    $[67] = queuedElement;
+  } else queuedElement = $[67];
+  let linkElement;
   if ($[68] !== elapsed || $[69] !== link || $[70] !== queuedCount || $[71] !== tokenText) {
-    Dn =
+    linkElement =
       link &&
       jsxProd_default_2(Fragment, {
         children: [
@@ -2112,25 +2213,31 @@ function CoordinatorTaskRow(props) {
     $[69] = link;
     $[70] = queuedCount;
     $[71] = tokenText;
-    $[72] = Dn;
-  } else Dn = $[72];
+    $[72] = linkElement;
+  } else linkElement = $[72];
   let children_5;
-  if ($[73] !== Ao || $[74] !== isViewed || $[75] !== joined || $[76] !== cn || $[77] !== Dn) {
+  if (
+    $[73] !== isDimmed ||
+    $[74] !== isViewed ||
+    $[75] !== joined ||
+    $[76] !== queuedElement ||
+    $[77] !== linkElement
+  ) {
     children_5 = jsxProd_default_2(Text, {
-      dimColor: Ao,
+      dimColor: isDimmed,
       bold: isViewed,
-      children: [joined, cn, Dn],
+      children: [joined, queuedElement, linkElement],
     });
-    $[73] = Ao;
+    $[73] = isDimmed;
     $[74] = isViewed;
     $[75] = joined;
-    $[76] = cn;
-    $[77] = Dn;
+    $[76] = queuedElement;
+    $[77] = linkElement;
     $[78] = children_5;
   } else children_5 = $[78];
-  let mr;
+  let statusBox;
   if ($[79] !== statusWidth || $[80] !== children_5) {
-    mr = jsxProd_default(Box, {
+    statusBox = jsxProd_default(Box, {
       minWidth: statusWidth,
       flexShrink: 0,
       marginLeft: 1,
@@ -2139,39 +2246,45 @@ function CoordinatorTaskRow(props) {
     });
     $[79] = statusWidth;
     $[80] = children_5;
-    $[81] = mr;
-  } else mr = $[81];
-  let Kn;
-  if ($[82] !== onClick_2 || $[83] !== bn || $[84] !== Sn || $[85] !== $n || $[86] !== mr) {
-    Kn = jsxProd_default_2(Box, {
+    $[81] = statusBox;
+  } else statusBox = $[81];
+  let rowElement;
+  if (
+    $[82] !== onClick_2 ||
+    $[83] !== plainPrefixBox ||
+    $[84] !== labelBox ||
+    $[85] !== descriptionBox ||
+    $[86] !== statusBox
+  ) {
+    rowElement = jsxProd_default_2(Box, {
       onClick: onClick_2,
       onMouseEnter,
       onMouseLeave,
-      children: [bn, Sn, $n, mr],
+      children: [plainPrefixBox, labelBox, descriptionBox, statusBox],
     });
     $[82] = onClick_2;
-    $[83] = bn;
-    $[84] = Sn;
-    $[85] = $n;
-    $[86] = mr;
-    $[87] = Kn;
-  } else Kn = $[87];
-  return Kn;
+    $[83] = plainPrefixBox;
+    $[84] = labelBox;
+    $[85] = descriptionBox;
+    $[86] = statusBox;
+    $[87] = rowElement;
+  } else rowElement = $[87];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:461149-462112 placement
 function IdleAgentsSummaryRow(props) {
-  let $ = w(18);
+  let $ = useMemoCache(18);
   let { count, isSelected, onClick } = props;
-  let [ee, ke] = y(false);
+  let [isHovered, setIsHovered] = useState(false);
   let onClick_2 = useStrayClickGuarded(onClick);
-  let Be = isSelected || ee;
-  let children = Be ? figures_default.pointer + " " : "  ";
-  let dimColor = !Be;
+  let isHighlighted = isSelected || isHovered;
+  let children = isHighlighted ? figures_default.pointer + " " : "  ";
+  let dimColor = !isHighlighted;
   let onMouseEnter;
   let onMouseLeave;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    onMouseEnter = () => ke(true);
-    onMouseLeave = () => ke(false);
+    onMouseEnter = () => setIsHovered(true);
+    onMouseLeave = () => setIsHovered(false);
     $[0] = onMouseEnter;
     $[1] = onMouseLeave;
   } else {
@@ -2183,83 +2296,83 @@ function IdleAgentsSummaryRow(props) {
     width = agentRowPrefixWidth();
     $[2] = width;
   } else width = $[2];
-  let At;
+  let pointerElement;
   if ($[3] !== dimColor || $[4] !== children) {
-    At = jsxProd_default(Text, {
+    pointerElement = jsxProd_default(Text, {
       dimColor,
       children,
     });
     $[3] = dimColor;
     $[4] = children;
-    $[5] = At;
-  } else At = $[5];
-  let It;
+    $[5] = pointerElement;
+  } else pointerElement = $[5];
+  let dotElement;
   if ($[6] !== dimColor) {
-    It = jsxProd_default_2(Text, {
+    dotElement = jsxProd_default_2(Text, {
       dimColor,
       children: [figures_default.circle, " "],
     });
     $[6] = dimColor;
-    $[7] = It;
-  } else It = $[7];
-  let Ot;
-  if ($[8] !== At || $[9] !== It) {
-    Ot = jsxProd_default_2(Box, {
+    $[7] = dotElement;
+  } else dotElement = $[7];
+  let prefixElement;
+  if ($[8] !== pointerElement || $[9] !== dotElement) {
+    prefixElement = jsxProd_default_2(Box, {
       width,
       flexShrink: 0,
-      children: [At, It],
+      children: [pointerElement, dotElement],
     });
-    $[8] = At;
-    $[9] = It;
-    $[10] = Ot;
-  } else Ot = $[10];
+    $[8] = pointerElement;
+    $[9] = dotElement;
+    $[10] = prefixElement;
+  } else prefixElement = $[10];
   const children_2 = count === 1 ? "1 idle agent" : `${count} idle agents`;
-  let Dt;
+  let labelElement;
   if ($[11] !== dimColor || $[12] !== children_2) {
-    Dt = jsxProd_default(Text, {
+    labelElement = jsxProd_default(Text, {
       dimColor,
       wrap: "truncate",
       children: children_2,
     });
     $[11] = dimColor;
     $[12] = children_2;
-    $[13] = Dt;
-  } else Dt = $[13];
-  let Lt;
-  if ($[14] !== onClick_2 || $[15] !== Ot || $[16] !== Dt) {
-    Lt = jsxProd_default_2(Box, {
+    $[13] = labelElement;
+  } else labelElement = $[13];
+  let rowElement;
+  if ($[14] !== onClick_2 || $[15] !== prefixElement || $[16] !== labelElement) {
+    rowElement = jsxProd_default_2(Box, {
       onClick: onClick_2,
       onMouseEnter,
       onMouseLeave,
-      children: [Ot, Dt],
+      children: [prefixElement, labelElement],
     });
     $[14] = onClick_2;
-    $[15] = Ot;
-    $[16] = Dt;
-    $[17] = Lt;
-  } else Lt = $[17];
-  return Lt;
+    $[15] = prefixElement;
+    $[16] = labelElement;
+    $[17] = rowElement;
+  } else rowElement = $[17];
+  return rowElement;
 }
 //@ chunk-18hwfzwa.js:462112-462270 placement
 function useStrayClickGuarded(onClick) {
-  let $ = w(3);
+  let $ = useMemoCache(3);
   let strayClickGuard = useStrayClickGuard();
   if (onClick === undefined) {
     return;
   }
-  let L;
+  let guardedClickCached;
   if ($[0] !== onClick || $[1] !== strayClickGuard) {
-    L = (ee) => {
-      if (strayClickGuard(ee)) {
+    guardedClickCached = (event) => {
+      if (strayClickGuard(event)) {
         return;
       }
-      onClick(ee);
+      onClick(event);
     };
     $[0] = onClick;
     $[1] = strayClickGuard;
-    $[2] = L;
-  } else L = $[2];
-  return L;
+    $[2] = guardedClickCached;
+  } else guardedClickCached = $[2];
+  return guardedClickCached;
 }
 //@ chunk-18hwfzwa.js:462270-462409 placement
 var TASK_PANEL_KEYS = {
@@ -2275,7 +2388,7 @@ var LOWER_KEY_CASE = {
 };
 //@ chunk-18hwfzwa.js:462409-462731 placement
 function CoordinatorPanelKeys({ keys, onViewedRow, closeAction, showCollapse, showStopAll }) {
-  let ke = onViewedRow
+  let hints = onViewedRow
     ? [
         {
           chord: keys.select,
@@ -2293,79 +2406,55 @@ function CoordinatorPanelKeys({ keys, onViewedRow, closeAction, showCollapse, sh
         },
       ];
   if (showCollapse)
-    ke.push({
+    hints.push({
       chord: keys.collapse,
       action: "collapse",
     });
   if (showStopAll)
-    ke.push({
+    hints.push({
       chord: keys.stopAll,
       action: STOP_ALL_AGENTS_LABEL,
       format: LOWER_KEY_CASE,
     });
-  return ke.filter((Re) => formatShortcutHint(Re) !== "");
+  return hints.filter((hint) => formatShortcutHint(hint) !== "");
 }
 //@ chunk-18hwfzwa.js:462731-462782 placement
-function shortcutHintsWidth(h) {
-  return bunStringWidth(h.map(formatShortcutHint).join(" \xB7 "));
+function shortcutHintsWidth(hints) {
+  return bunStringWidth(hints.map(formatShortcutHint).join(" \xB7 "));
 }
 //@ chunk-18hwfzwa.js:462782-462807 placement
-function identity(h) {
-  return h;
+function identity(value) {
+  return value;
 }
 //@ chunk-18hwfzwa.js:462807-462811 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:462807", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:462811-462929 placement
 /**
  * 返回一个按键处理器：只在动作被 Chat 上下文绑定遮蔽的 Footer 动作时调用回调。
  */
-function useShadowedFooterActionHandler(h) {
+function useShadowedFooterActionHandler(handleAction) {
   let bindings = useKeybindingContext()?.bindings;
-  let D = Q(() => (bindings ? findShadowedActions("Footer", "Chat", bindings) : new Set()), [bindings]);
-  return ce((L) => D.has(L) && h(), [D, h]);
+  let shadowedActions = useMemo(
+    () => (bindings ? findShadowedActions("Footer", "Chat", bindings) : new Set()),
+    [bindings],
+  );
+  return useCallback((key) => shadowedActions.has(key) && handleAction(), [shadowedActions, handleAction]);
 }
 //@ chunk-18hwfzwa.js:462929-463038 placement
 /**
  * 注册 Chat 上下文的消息操作快捷键，但按键归 Footer 所有时让给 Footer 处理。
  */
-function useFooterAwareMessageActions(h, { isActive, footerOwnsKeyOf }) {
+function useFooterAwareMessageActions(handlers, { isActive, footerOwnsKeyOf }) {
   MessageActionsKeybindings(
-    xr(h, (L, ee) => () => (footerOwnsKeyOf(ee) ? false : L())),
+    import_mapValues(handlers, (action, keyInput) => () => (footerOwnsKeyOf(keyInput) ? false : action())),
     {
       context: "Chat",
       isActive,
     },
   );
-}
-//@ chunk-e6aww6q8.js:4006927-4007097 placement
-function teammateRowState(agentTask) {
-  if (agentTask.type !== "in_process_teammate") return isMainSessionTask_2(agentTask) ? undefined : "hidden";
-  let n = isTaskFailedOrStopped(agentTask);
-  let r = agentTask.identity.resumableAgentId === undefined;
-  return n ? "ended" : r ? "elsewhere" : undefined;
-}
-//@ chunk-e6aww6q8.js:4007333-4007709 callgraph-witnessed = CoordinatorTaskPanel (0.123)
-async function showAgentTaskView(store, n) {
-  if (n.agentId === undefined) {
-    exitTeammateView((h) => store.setState(h));
-    return "shown";
-  }
-  let agentTask = findAgentTask(store.getState().tasks, n.agentId);
-  if (agentTask === undefined) return "unknown";
-  let viewingAgentTaskId = teammateRowState(agentTask);
-  if (viewingAgentTaskId !== undefined) return viewingAgentTaskId;
-  enterTeammateView(agentTask.id, (s_0) => store.setState(s_0));
-  await waitForStoreState(
-    store,
-    (s_1) => {
-      let y = s_1.tasks[agentTask.id];
-      return !(isLocalAgent(y) && y.retain && !y.diskLoaded);
-    },
-    {
-      timeoutMs: VIEW_WAIT_MS,
-    },
-  );
-  return store.getState().viewingAgentTaskId === agentTask.id ? "shown" : "moved";
 }
 export {
   useVisibleAgentTaskCount,

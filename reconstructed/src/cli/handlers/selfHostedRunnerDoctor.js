@@ -28,8 +28,8 @@ import { exitAfterAnalyticsFlush } from "../exit.js";
 /**
  * 自托管 runner 诊断提示词：指导模型检查 runner 环境（网络、认证、目录、服务状态）并给出修复建议。
  */
-function selfHostedRunnerDoctorPrompt(e) {
-  let host = new URL(e).host;
+function selfHostedRunnerDoctorPrompt(origin) {
+  let host = new URL(origin).host;
   return `You are diagnosing a **self-hosted runner** deployment for Claude Code cloud sessions. Work through the diagnostic categories below, gather evidence with the typed \`self_hosted_runner_*\` read tools (admin-API state, \`/healthz\`, \`/metrics\`, redacted log tail) and Bash for everything else, fix what you can, and escalate cleanly when you can't.
 
 ## Step 0 \u2014 Detect context
@@ -50,7 +50,7 @@ Each row: **signature** (what the operator or logs show) \u2192 **check** \u2192
 
 | Signature | Check | Root cause | Fix |
 |---|---|---|---|
-| \`[runner:fatal] RegisterRunner auth failed \u2014 environment secret invalid or revoked\` | Bash \`curl -sS -H "Authorization: Bearer $(cat <environment-secret-file>)" "${e}/v1/code/runners/self-hosted/runners/register" -X POST -d '{}'\` | environment secret revoked or wrong | Re-issue via **Issue new key** on the environment's Configuration tab (Admin settings \u2192 Cloud environments); remount on the runner |
+| \`[runner:fatal] RegisterRunner auth failed \u2014 environment secret invalid or revoked\` | Bash \`curl -sS -H "Authorization: Bearer $(cat <environment-secret-file>)" "${origin}/v1/code/runners/self-hosted/runners/register" -X POST -d '{}'\` | environment secret revoked or wrong | Re-issue via **Issue new key** on the environment's Configuration tab (Admin settings \u2192 Cloud environments); remount on the runner |
 | \`[runner:fatal] RegisterRunner refused because self-hosted environments are not enabled for this organization\` | Admin settings \u2192 Cloud environments: is **Allow self-hosted environments** on? Is the plan Team or Enterprise? | The organization is not enabled for self-hosted environments. The environment secret is fine \u2014 the server accepted it before refusing. | An organization Owner turns the setting on (or fixes the plan); do **not** rotate the secret. A runner started within a few minutes of the change can still be refused, so wait a few minutes and start it again. If the setting and the plan are both right and the refusal persists after that, contact your Anthropic account team |
 | \`RegisterRunner auth failed\` but secret was just minted | Decode the secret's \`ccr:org_id\` claim: \`sed 's/^sk-ant-[a-z]*-//' <secret-file> \\| cut -d. -f2 \\| tr '_-' '/+' \\| base64 -d 2>/dev/null \\| jq .\` | Secret issued by a *different* org | Use a secret minted from **this** org's environment |
 | \`[runner:fatal] RegisterRunner refused because\` \u2026 \`work order\` already used, superseded or expired, or the session is paused or no longer active | How many pods has the on-demand runner's workload made, and what is their restart count? \`kubectl get pod\`, \`restartPolicy\`, \`backoffLimit\` | The runner presented a work order that can no longer register a runner. A work order is single-use and lives for the orchestrator's \`--expected-spawn-seconds\`. Something started the runner again, or it first started too late, or the server has asked for another runner since, or another runner took the session first, or the session was paused, archived or deleted before it connected. The environment secret is not at fault | Do **not** rotate the secret, and do **not** restart the runner with the same work order: a restarted runner needs a fresh one, which comes only with a new spawn request. Started again (restart count above 0, or more than one pod or start, whatever the line says): if the first run was killed mid-session, ask whether its files matter **before** proposing any delete; then delete the workload that owns it, leave the orchestrator running, and run each on-demand runner so nothing restarts it with the same work order (a Job with \`restartPolicy: Never\` and \`backoffLimit: 0\`). Started once, expired: speed up the start or raise \`--expected-spawn-seconds\`. Started once, superseded: check whether the \`spawn-runner\` hook exited non-zero, ran past \`--hook-timeout\` or was killed after it had submitted the workload, and make it exit 0 as soon as it has submitted. Started once, already used: another runner picked the session up while this one started, or the runner's own retry followed a lost answer (\`RegisterRunner attempt\` lines above): nothing to fix. Started once, session paused or no longer active: nothing to fix |
@@ -66,13 +66,13 @@ Each row: **signature** (what the operator or logs show) \u2192 **check** \u2192
 | Signature | Check | Root cause | Fix |
 |---|---|---|---|
 | \`getaddrinfo ENOTFOUND ${host}\` | \`nslookup ${host}\` | DNS resolution broken | Fix resolver / \`/etc/resolv.conf\` / cluster DNS |
-| \`connect ETIMEDOUT\` / \`ECONNREFUSED\` | \`curl -sI --max-time 5 ${e}/\` | Firewall blocks egress on 443 | Allow egress to \`${host}:443\` |
+| \`connect ETIMEDOUT\` / \`ECONNREFUSED\` | \`curl -sI --max-time 5 ${origin}/\` | Firewall blocks egress on 443 | Allow egress to \`${host}:443\` |
 | \`ECONNRESET\` mid-poll | How long was the connection open before reset? | NAT / proxy idle-connection timeout dropping long-lived polls | Raise NAT/proxy idle timeouts |
 | \`unable to verify the first certificate\` | \`openssl s_client -connect ${host}:443 </dev/null\` | Corporate TLS interception / missing CA | Install CA bundle; set \`NODE_EXTRA_CA_CERTS\` |
 | \`curl\` from the host works but the runner process can't connect | Dump \`HTTPS_PROXY\` / \`HTTP_PROXY\` / \`NO_PROXY\` from the runner's env | Proxy env vars set (or missing) on the runner process only | Match proxy env between host and runner |
-| \`404\` on every API path | \`echo $ANTHROPIC_BASE_URL\` \u2014 compare to expected \`${e}\` | \`ANTHROPIC_BASE_URL\` mis-set | Fix or unset \`ANTHROPIC_BASE_URL\` |
+| \`404\` on every API path | \`echo $ANTHROPIC_BASE_URL\` \u2014 compare to expected \`${origin}\` | \`ANTHROPIC_BASE_URL\` mis-set | Fix or unset \`ANTHROPIC_BASE_URL\` |
 | \`Rate limited (429). Polling too frequently.\` on PollWork | Custom poll interval below 5s? Many replicas sharing one environment? | Backend rate-limiting | Restore default poll interval; reduce replica fan-out |
-| Mid-run \`poll auth failed\` on an otherwise-healthy runner | \`date -u\` vs \`curl -sI ${e}/ \\| grep -i '^date:'\` | Runner clock skew throws off the 80%-TTL refresh schedule | Fix NTP on the host |
+| Mid-run \`poll auth failed\` on an otherwise-healthy runner | \`date -u\` vs \`curl -sI ${origin}/ \\| grep -i '^date:'\` | Runner clock skew throws off the 80%-TTL refresh schedule | Fix NTP on the host |
 
 ### 3. Runner lifecycle
 
@@ -148,11 +148,11 @@ curl -s http://localhost:8080/healthz | jq .
 |---|---|---|---|
 | \`/healthz\` unreachable (\`curl\` connection refused) | Is the orchestrator process up? \`--health-port\` set to something other than 8080, or \`0\`? | Process down, wrong port, or listener disabled | Start it / point at the right port |
 | \`"connected": false\` | \`last_error\` field in the same body | Can't reach \`${host}\` (network/DNS/TLS \u2014 see \xA72) or environment secret rejected (see \xA71) | Fix per the referenced section; the orchestrator exits non-zero on 400/401/403/404/426 so a restart loop here means a permanent config/auth/version problem (400 = invalid request body, usually a flag mismatch) |
-| \`"clock_skew_ms"\` \u2265 60000 (or \u2264 \u221260000) | \`date -u\` on the orchestrator host vs \`curl -sI ${e}/ \\| grep -i '^date:'\` | Host clock drifted; hooks that verify the work-order JWT \`exp\` will mis-fire | Fix NTP on the host |
+| \`"clock_skew_ms"\` \u2265 60000 (or \u2264 \u221260000) | \`date -u\` on the orchestrator host vs \`curl -sI ${origin}/ \\| grep -i '^date:'\` | Host clock drifted; hooks that verify the work-order JWT \`exp\` will mis-fire | Fix NTP on the host |
 | \`"last_poll_at"\` more than ~60s old while \`connected: true\` | Orchestrator log for the last \`dispatching N hint(s)\` line and matching hook completions; \`ps\`/\`kubectl exec\` for stuck \`spawn-runner\` children. (Backoff after poll errors flips \`connected: false\` first, so it appears on row 2 \u2014 not here.) | Poll loop wedged between successful polls on a slow/stuck \`spawn-runner\` hook (D-state on a hung mount, or a hook that doesn't return within \`--hook-timeout\`) | Kill the stuck hook; check \`hooksDir\` mount health; the orchestrator abandons a D-state child after \`--hook-timeout\` + 2\xD75s grace. Restart the orchestrator if the log shows no progress |
 | \`"last_error"\` set (non-null) | Read the string \u2014 it's either \`spawn-runner hook failed: <stderr tail>\` or a poll failure (HTTP status or transport error) | Hook script failing / can't reach \`${host}\` | Fix the hook (run it by hand with a fake \`CLAUDE_RUNNER_ORDER_ID\`); for poll failures see \xA72 |
 | \`"queue_counts.backing_off" > 0\` | \`self_hosted_runner_list_sessions\` \u2192 per-session \`spawn_last_error\` (sanitized hook stderr) | spawn-runner hook is failing intermittently; each session retries with exponential backoff | Fix the hook; sessions self-recover on the next retry |
-| \`"queue_counts.circuit_broken" > 0\` | \`self_hosted_runner_list_sessions\` \u2192 per-session \`spawn_last_error\` | spawn-runner hook failed 5\xD7 (or returned non-retryable) for those sessions; they are **paused** and will not be re-offered | Fix the infra (k8s quota, image pull, hook exit code), then for each paused session: Admin settings \u2192 Cloud environments \u2192 Self-hosted environments \u2192 (environment) \u2192 Activity tab \u2192 Sessions \u2192 **Retry**, or \`curl -X POST -H "Authorization: Bearer $OAUTH" "${e}/v1/code/runners/self-hosted/sessions/<session_id>/retry-spawn" -d '{}'\` |
+| \`"queue_counts.circuit_broken" > 0\` | \`self_hosted_runner_list_sessions\` \u2192 per-session \`spawn_last_error\` | spawn-runner hook failed 5\xD7 (or returned non-retryable) for those sessions; they are **paused** and will not be re-offered | Fix the infra (k8s quota, image pull, hook exit code), then for each paused session: Admin settings \u2192 Cloud environments \u2192 Self-hosted environments \u2192 (environment) \u2192 Activity tab \u2192 Sessions \u2192 **Retry**, or \`curl -X POST -H "Authorization: Bearer $OAUTH" "${origin}/v1/code/runners/self-hosted/sessions/<session_id>/retry-spawn" -d '{}'\` |
 
 When bundling for escalation, also capture \`orchestrator-healthz.json\` alongside the runner's \`healthz.json\`.
 
@@ -214,8 +214,8 @@ var SELF_HOSTED_RUNNER_DOCTOR_PROMPT =
 /**
  * selfHostedRunnerDoctorMain：自托管 runner 诊断命令入口，收集环境信息后用诊断提示词运行模型。
  */
-async function selfHostedRunnerDoctorMain(e, r) {
-  if (e.includes("--help") || e.includes("-h")) {
+async function selfHostedRunnerDoctorMain(argv, runtime) {
+  if (argv.includes("--help") || argv.includes("-h")) {
     console.log(`Usage: claude self-hosted-runner doctor [args...]
 
 Interactive wizard: diagnoses a self-hosted runner deployment. Walks the
@@ -227,60 +227,74 @@ generates a redacted diagnostic bundle for escalation.
 Any extra args are passed to the underlying Claude Code session.`);
     return;
   }
-  await ensureFastPathSettingsLoaded(r);
-  let a = await sessionFactsRestored(r);
-  if (a !== null) exitWithError(a.reason);
+  await ensureFastPathSettingsLoaded(runtime);
+  let sessionProblem = await sessionFactsRestored(runtime);
+  if (sessionProblem !== null) exitWithError(sessionProblem.reason);
   initializeAnalyticsSink();
-  let o = pinStorageV5(r);
-  initialize1PEventLogging(o);
-  if (isStorageV5Enabled() && o !== undefined) {
+  let storage = pinStorageV5(runtime);
+  initialize1PEventLogging(storage);
+  if (isStorageV5Enabled() && storage !== undefined) {
     initDefaultDebugLog({
-      storageV5: o,
+      storageV5: storage,
     });
-    watchGlobalConfigThroughStorage(o);
+    watchGlobalConfigThroughStorage(storage);
     let [
-      { composePolicyLimitsClient: n, primePolicyLimitsCache: c },
-      { credentialsStoreFor: p },
-      { primeFastPathCredentials: f },
+      { composePolicyLimitsClient, primePolicyLimitsCache },
+      { credentialsStoreFor },
+      { primeFastPathCredentials },
     ] = await Promise.all([
-      import("./chunk-qchbrsbw.js"),
-      import("./chunk-y36z1q7c.js"),
-      import("./chunk-ts9rfgqd.js"),
+      import("../../services/policyLimits/DefaultPolicyLimitsClientSlot.lazy.js"),
+      import("../../utils/secureStorage/credentialsFileStore.js"),
+      import("../../utils/primeFastPathCredentials.lazy.js"),
     ]);
-    n({
-      storageV5: o,
+    composePolicyLimitsClient({
+      storageV5: storage,
     });
-    await f(p(o));
-    await c(o);
-    await seedInstallIDs(o);
+    await primeFastPathCredentials(credentialsStoreFor(storage));
+    await primePolicyLimitsCache(storage);
+    await seedInstallIDs(storage);
   }
-  let s = selfHostedRunnerDoctorPrompt(runnerApiBaseUrl());
-  let d = isStandaloneExecutable() ? [] : [process.argv[1]];
-  let u = e.length > 0 && !e[0].startsWith("-") ? [] : [SELF_HOSTED_RUNNER_DOCTOR_PROMPT];
-  let l = [...d, ...u, "--append-system-prompt", s, "--tools", joined, "--permission-mode", "default", ...e];
+  let systemPrompt = selfHostedRunnerDoctorPrompt(runnerApiBaseUrl());
+  let ownScriptArgs = isStandaloneExecutable() ? [] : [process.argv[1]];
+  let promptArgs = argv.length > 0 && !argv[0].startsWith("-") ? [] : [SELF_HOSTED_RUNNER_DOCTOR_PROMPT];
+  let childArgs = [
+    ...ownScriptArgs,
+    ...promptArgs,
+    "--append-system-prompt",
+    systemPrompt,
+    "--tools",
+    joined,
+    "--permission-mode",
+    "default",
+    ...argv,
+  ];
   if (env.DEBUG)
     console.error(
       "[self-hosted-runner:doctor] spawning:",
       jsonStringify({
-        argv: [process.execPath, ...l.map((n) => (n === s ? `<${s.length} chars>` : n))],
+        argv: [
+          process.execPath,
+          ...childArgs.map((arg) => (arg === systemPrompt ? `<${systemPrompt.length} chars>` : arg)),
+        ],
       }),
     );
-  let t = spawnSync(process.execPath, l, {
+  let child = spawnSync(process.execPath, childArgs, {
     stdio: "inherit",
   });
-  if (t.error) {
-    console.error(`[self-hosted-runner:doctor] failed to spawn child: ${t.error.message}`);
+  if (child.error) {
+    console.error(`[self-hosted-runner:doctor] failed to spawn child: ${child.error.message}`);
     await logFeatureBadAsync("cli_self_hosted_doctor", "spawn_failed");
     return exitAfterAnalyticsFlush(1);
   }
-  if ((t.status !== null && t.status !== 0) || t.signal) {
+  if ((child.status !== null && child.status !== 0) || child.signal) {
     console.error(
-      `[self-hosted-runner:doctor] child exited with status ${t.status ?? "(null)"}${t.signal ? `, signal ${t.signal}` : ""}`,
+      `[self-hosted-runner:doctor] child exited with status ${child.status ?? "(null)"}${child.signal ? `, signal ${child.signal}` : ""}`,
     );
-    await logFeatureBadAsync("cli_self_hosted_doctor", t.signal ? "child_signal" : "child_nonzero");
+    await logFeatureBadAsync("cli_self_hosted_doctor", child.signal ? "child_signal" : "child_nonzero");
   } else await logFeatureOkAsync("cli_self_hosted_doctor");
   console.error(
     "[self-hosted-runner:doctor] To continue diagnosis, re-run `claude self-hosted-runner doctor` \u2014 resuming the session with `claude --resume`/`-c` will not re-enable the doctor tools.",
   );
-  return exitAfterAnalyticsFlush(t.status !== null ? t.status : 1);
+  return exitAfterAnalyticsFlush(child.status !== null ? child.status : 1);
 }
+export { selfHostedRunnerDoctorMain };

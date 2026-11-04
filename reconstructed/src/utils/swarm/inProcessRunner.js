@@ -8,6 +8,7 @@
  * pieces: chunk-8xs34hez.js (10), chunk-phrnybk8.js (1)
  * attribution: affinity 1, fingerprint 5, layout 2, sole-consumer 1, facade-exports 1, placement 1
  */
+import { appendBounded, MAX_APPENDED_ENTRIES, appendReplacingUuid } from "../../tasks/taskKinds.js";
 import {
   hasPermissionsToUseToolWithSink,
   withoutGrantsForRemoteScope,
@@ -94,7 +95,6 @@ import { TASK_LIST_TOOL_NAME } from "../../tools/TaskListTool/constants.js";
 import { TASK_UPDATE_TOOL_NAME } from "../../tools/TaskUpdateTool/constants.js";
 import { permissionRuleValueFromString } from "../permissions/permissionRuleParser.js";
 import { removeMemberByAgentId } from "./teamHelpers.js";
-import { MAX_APPENDED_ENTRIES, appendBounded, appendReplacingUuid } from "../../tasks/taskKinds.js";
 import { createContentReplacementState } from "../toolResultStorage.js";
 import { createStickyBetaLatches } from "../../bootstrap/stateSlices.js";
 import { createSignal } from "../signal.js";
@@ -133,6 +133,14 @@ import { evictTaskOutput } from "../task/diskOutput.js";
 import { emitTaskNotification } from "../task/taskNotifications.js";
 import { unregisterPerfettoAgent } from "../telemetry/perfettoTracing.js";
 
+//@ chunk-phrnybk8.js:411-533 placement
+function appendTeammateTranscript(taskId, userMessage, taskRegistry) {
+  if (taskRegistry.get(taskId)?.status !== "running") return;
+  taskRegistry.updateTranscript(taskId, (task) => ({
+    ...task,
+    messages: appendBounded(task.messages, userMessage),
+  }));
+}
 //@ chunk-8xs34hez.js:1900-1918 affinity
 var PERMISSION_POLL_INTERVAL_MS = 500;
 var MAILBOX_POLL_INTERVAL_MS = 500;
@@ -200,7 +208,7 @@ function createInProcessCanUseTool(identity, abortController, onPermissionWait, 
           );
         },
       );
-      let T = await handleCoordinatorPermission({
+      let permissionResult = await handleCoordinatorPermission({
         ctx,
         updatedInput: decision.updatedInput,
         suggestions: decision.suggestions,
@@ -208,7 +216,7 @@ function createInProcessCanUseTool(identity, abortController, onPermissionWait, 
         askSuppressesAlwaysAllowRule: decision.suppressAlwaysAllowRule === true,
         askIsPersonOnly: decision.personOnly === true,
       });
-      if (T) return T;
+      if (permissionResult) return permissionResult;
       if (abortController.signal.aborted)
         return {
           behavior: "ask",
@@ -267,19 +275,19 @@ function createInProcessCanUseTool(identity, abortController, onPermissionWait, 
         inputDigest: stableHashOfJson(request.toolName, effectiveInput),
         onAllow(updatedInput, permissionUpdates, _feedback, contentBlocks) {
           cleanup();
-          let z = normalizePermissionUpdate(
+          let updates = normalizePermissionUpdate(
             permissionUpdates,
             undefined,
             getToolPermissionContext(toolUseContext),
           );
-          let ee =
+          let finalUpdates =
             tool.suppressesAllPermissionUpdates?.(effectiveInput) === true
-              ? withoutGrantsForRemoteScope(z)
+              ? withoutGrantsForRemoteScope(updates)
               : tool.suppressesAlwaysAllowRule?.(effectiveInput) === true ||
                   decision.suppressAlwaysAllowRule === true
-                ? stripWholeToolGrantsForAsk(z, tool, getToolPermissionContext(toolUseContext))
-                : z;
-          persistPermissionUpdates(ee, toolUseContext.storageV5).catch(logError);
+                ? stripWholeToolGrantsForAsk(updates, tool, getToolPermissionContext(toolUseContext))
+                : updates;
+          persistPermissionUpdates(finalUpdates, toolUseContext.storageV5).catch(logError);
           let finalInput =
             updatedInput && Object.keys(updatedInput).length > 0 ? updatedInput : effectiveInput;
           resolve({
@@ -312,8 +320,8 @@ function createInProcessCanUseTool(identity, abortController, onPermissionWait, 
         },
         onUnboundVerdict() {},
       });
-      sendPermissionRequestViaMailbox(request, toolUseContext.storageV5).then((d) => {
-        if (!d) {
+      sendPermissionRequestViaMailbox(request, toolUseContext.storageV5).then((sent) => {
+        if (!sent) {
           cleanup();
           resolve({
             behavior: "ask",
@@ -323,7 +331,7 @@ function createInProcessCanUseTool(identity, abortController, onPermissionWait, 
         }
       });
       let pollInterval = setInterval(
-        async (abortController, cleanup, resolve, identity, request, store, se) => {
+        async (abortController, cleanup, resolve, identity, request, store, getRoster) => {
           if (abortController.signal.aborted) {
             cleanup();
             resolve({
@@ -333,16 +341,16 @@ function createInProcessCanUseTool(identity, abortController, onPermissionWait, 
             return;
           }
           let allMessages = await readMailbox(identity.agentName, identity.teamName, store);
-          let fe = dedupeMailboxMessages(
+          let messagesById = dedupeMailboxMessages(
             allMessages.filter((message) => message && !message.read),
             getInboxPath(identity.agentName, identity.teamName),
             {
-              roster: se(),
+              roster: getRoster(),
               isPaneTeammate: false,
             },
           );
           for (let message of allMessages)
-            if (message && !message.read && fe.get(message) !== "forged") {
+            if (message && !message.read && messagesById.get(message) !== "forged") {
               let parsed = isPermissionResponse(message.text);
               if (parsed && parsed.request_id === request.id) {
                 await markSingleMessageAsRead(identity.agentName, identity.teamName, message, store);
@@ -404,8 +412,8 @@ function createInProcessCanUseTool(identity, abortController, onPermissionWait, 
   };
 }
 //@ chunk-8xs34hez.js:5490-5563 layout = _temp6 (0.826)
-function updateInProcessTeammateTask(taskId, e, taskRegistry) {
-  taskRegistry.update(taskId, (A) => (A.type === "in_process_teammate" ? e(A) : A));
+function updateInProcessTeammateTask(taskId, updater, taskRegistry) {
+  taskRegistry.update(taskId, (task) => (task.type === "in_process_teammate" ? updater(task) : task));
 }
 //@ chunk-8xs34hez.js:5563-5669 fingerprint = sendMessageToLeader (1)
 /**
@@ -427,13 +435,19 @@ async function sendMessageToLeader(fromName, text, color, teamName, storage) {
 //@ chunk-8xs34hez.js:5669-5789 sole-consumer
 async function sendIdleNotificationToLeader(agentName, color, teamName, options, storageV5) {
   let idleNotification = createIdleNotification(agentName, options);
-  let p;
+  let sendResult;
   try {
-    p = await sendMessageToLeader(agentName, jsonStringify(idleNotification), color, teamName, storageV5);
+    sendResult = await sendMessageToLeader(
+      agentName,
+      jsonStringify(idleNotification),
+      color,
+      teamName,
+      storageV5,
+    );
   } finally {
-    logIdleResultDeliveryOutcome(idleNotification, options?.result, p);
+    logIdleResultDeliveryOutcome(idleNotification, options?.result, sendResult);
   }
-  return p !== undefined;
+  return sendResult !== undefined;
 }
 //@ chunk-8xs34hez.js:6128-6522 fingerprint = tryClaimNextTask (1)
 /**
@@ -496,54 +510,55 @@ async function pollTeammateInbox(identity, taskId, taskRegistry, storage, pollSt
     },
   );
   let isForged = (message) => provenance.get(message) === "forged";
-  let D = new Set(messages.filter((message) => message && !message.read).map(messageIdentityKey));
-  for (let o of pollState.consumedUnmarked) if (!D.has(o)) pollState.consumedUnmarked.delete(o);
-  let V = async (o) => {
-    let u = await filterMailboxThroughReceiveHooks(o, {
-      provenanceOf: (T) => provenance.get(T) ?? "unverifiable",
+  let unreadKeys = new Set(messages.filter((message) => message && !message.read).map(messageIdentityKey));
+  for (let consumedKey of pollState.consumedUnmarked)
+    if (!unreadKeys.has(consumedKey)) pollState.consumedUnmarked.delete(consumedKey);
+  let filterThroughHooks = async (batch) => {
+    let delivered = await filterMailboxThroughReceiveHooks(batch, {
+      provenanceOf: (message) => provenance.get(message) ?? "unverifiable",
       agentId: identity.resumableAgentId ?? identity.agentId,
     });
-    let w = new Set(u.map(messageIdentityKey));
-    for (let T of o) {
-      let R = messageIdentityKey(T);
-      if (!w.has(R)) pollState.consumedUnmarked.add(R);
+    let deliveredKeys = new Set(delivered.map(messageIdentityKey));
+    for (let message of batch) {
+      let messageKey = messageIdentityKey(message);
+      if (!deliveredKeys.has(messageKey)) pollState.consumedUnmarked.add(messageKey);
     }
-    return u;
+    return delivered;
   };
   let shutdownIndex = -1;
   let shutdownRequest = null;
   for (let j = 0; j < messages.length; j++) {
-    let u = messages[j];
-    if (u && !u.read && !isForged(u)) {
-      let w = isShutdownRequest(u.text);
-      let R =
-        (provenance.get(u) === "verified" ||
-          u.from === TEAM_LEAD ||
-          findTeammateByName(u.from, roster) !== undefined) &&
-        w?.from === u.from
-          ? w
+    let message = messages[j];
+    if (message && !message.read && !isForged(message)) {
+      let request = isShutdownRequest(message.text);
+      let trustedRequest =
+        (provenance.get(message) === "verified" ||
+          message.from === TEAM_LEAD ||
+          findTeammateByName(message.from, roster) !== undefined) &&
+        request?.from === message.from
+          ? request
           : null;
-      if (R) {
+      if (trustedRequest) {
         shutdownIndex = j;
-        shutdownRequest = R;
+        shutdownRequest = trustedRequest;
         break;
       }
     }
   }
   if (shutdownIndex !== -1) {
     if (pollState.count > 0) {
-      let filtered = messages.filter(
-        (message, R) =>
+      let batch = messages.filter(
+        (message, index) =>
           !message.read &&
-          R !== shutdownIndex &&
+          index !== shutdownIndex &&
           (isForged(message) || !isStructuredProtocolMessage(message.text)) &&
           !pollState.deliveredUnmarked.has(messageIdentityKey(message)) &&
           !pollState.consumedUnmarked.has(messageIdentityKey(message)),
       );
-      if (filtered.length > 0) {
-        for (let d of filtered) pollState.deliveredUnmarked.add(messageIdentityKey(d));
-        let T = await markMessagesAsRead(identity.agentName, identity.teamName, filtered, storage);
-        if (T) {
+      if (batch.length > 0) {
+        for (let message of batch) pollState.deliveredUnmarked.add(messageIdentityKey(message));
+        let marked = await markMessagesAsRead(identity.agentName, identity.teamName, batch, storage);
+        if (marked) {
           pollState.count = 0;
           pollState.reported = false;
           pollState.deliveredUnmarked.clear();
@@ -552,23 +567,23 @@ async function pollTeammateInbox(identity, taskId, taskRegistry, storage, pollSt
           logFeatureSad("swarm_inbox_poll", "worker_mark_read_failed_streak");
         }
         logForDebugging(
-          `[inProcessRunner] ${identity.agentName} delivering ${filtered.length} held message(s) ahead of a shutdown_request${T ? "" : " (mark still not landed)"}`,
+          `[inProcessRunner] ${identity.agentName} delivering ${batch.length} held message(s) ahead of a shutdown_request${marked ? "" : " (mark still not landed)"}`,
           {
-            level: T ? "debug" : "warn",
+            level: marked ? "debug" : "warn",
           },
         );
-        let R = await V(filtered);
-        if (R.length > 0)
+        let heldMessages = await filterThroughHooks(batch);
+        if (heldMessages.length > 0)
           return {
             type: "new_messages",
-            messages: R,
+            messages: heldMessages,
           };
       }
     }
     let targetMessage = messages[shutdownIndex];
-    let u = count(messages.slice(0, shutdownIndex), (w) => !w.read);
+    let unreadCount = count(messages.slice(0, shutdownIndex), (message) => !message.read);
     logForDebugging(
-      `[inProcessRunner] ${identity.agentName} received shutdown request from ${shutdownRequest?.from} (prioritized over ${u} unread messages)`,
+      `[inProcessRunner] ${identity.agentName} received shutdown request from ${shutdownRequest?.from} (prioritized over ${unreadCount} unread messages)`,
     );
     await markSingleMessageAsRead(identity.agentName, identity.teamName, targetMessage, storage);
     return {
@@ -638,10 +653,10 @@ async function pollTeammateInbox(identity, taskId, taskRegistry, storage, pollSt
       pollState.reported = false;
       pollState.deliveredUnmarked.clear();
     } else {
-      let w = ++pollState.count;
-      if (w < MARK_READ_FAILURE_CAP) {
+      let failureCount = ++pollState.count;
+      if (failureCount < MARK_READ_FAILURE_CAP) {
         logForDebugging(
-          `[inProcessRunner] ${identity.agentName} could not mark ${plainMessages.length} message(s) read (${w}/${MARK_READ_FAILURE_CAP}); delivery retried next poll`,
+          `[inProcessRunner] ${identity.agentName} could not mark ${plainMessages.length} message(s) read (${failureCount}/${MARK_READ_FAILURE_CAP}); delivery retried next poll`,
           {
             level: "warn",
           },
@@ -649,7 +664,7 @@ async function pollTeammateInbox(identity, taskId, taskRegistry, storage, pollSt
         return null;
       }
       logForDebugging(
-        `[inProcessRunner] ${identity.agentName} could not mark ${plainMessages.length} message(s) read for ${w} poll(s); delivering the batch unmarked`,
+        `[inProcessRunner] ${identity.agentName} could not mark ${plainMessages.length} message(s) read for ${failureCount} poll(s); delivering the batch unmarked`,
         {
           level: "warn",
         },
@@ -664,11 +679,11 @@ async function pollTeammateInbox(identity, taskId, taskRegistry, storage, pollSt
     logForDebugging(
       `[inProcessRunner] ${identity.agentName} draining ${plainMessages.length} message(s) from ${uniq(plainMessages.map((plainMessage) => plainMessage.from)).join(", ")}`,
     );
-    let u = await V(plainMessages);
-    if (u.length === 0) return null;
+    let filtered = await filterThroughHooks(plainMessages);
+    if (filtered.length === 0) return null;
     return {
       type: "new_messages",
-      messages: u,
+      messages: filtered,
     };
   }
   if (pollState.count > 0) {
@@ -699,15 +714,15 @@ async function waitForNextPromptOrShutdown(
     `[inProcessRunner] ${identity.agentName} starting poll loop (abort=${abortController.signal.aborted})`,
   );
   let idleSince = Date.now();
-  let q = false;
+  let hadBackgroundWork = false;
   let pollCount = 0;
   while (!abortController.signal.aborted) {
     if (pollCount > 0) await sleep(MAILBOX_POLL_INTERVAL_MS);
     pollCount++;
     let appState = getAppState();
-    let C = appState.tasks[taskId];
-    if (C && C.type === "in_process_teammate" && C.pendingUserMessages.length > 0) {
-      let T = C.pendingUserMessages[0];
+    let task = appState.tasks[taskId];
+    if (task && task.type === "in_process_teammate" && task.pendingUserMessages.length > 0) {
+      let pending = task.pendingUserMessages[0];
       updateInProcessTeammateTask(
         taskId,
         (prev) => ({
@@ -721,44 +736,45 @@ async function waitForNextPromptOrShutdown(
       );
       return {
         type: "new_message",
-        message: T.text,
-        origin: T.origin,
+        message: pending.text,
+        origin: pending.origin,
         from: "user",
       };
     }
-    let o =
+    let hasBackgroundWork =
       identity.resumableAgentId !== undefined &&
       hasRunningBackgroundWorkForAgent(identity.resumableAgentId, taskRegistry);
-    let u =
+    let holdTask =
       holdEviction ||
-      (C?.type === "in_process_teammate" && C.awaitingPlanApproval) ||
+      (task?.type === "in_process_teammate" && task.awaitingPlanApproval) ||
       appState.viewingAgentTaskId === taskId ||
       hasOtherActiveAgents(appState.tasks, taskId) ||
-      o;
-    if (u) idleSince = Date.now();
-    if (holdEviction && C?.type === "in_process_teammate" && C.evictAfter !== undefined)
+      hasBackgroundWork;
+    if (holdTask) idleSince = Date.now();
+    if (holdEviction && task?.type === "in_process_teammate" && task.evictAfter !== undefined)
       updateInProcessTeammateTask(
         taskId,
-        (T) => ({
-          ...T,
+        (task) => ({
+          ...task,
           evictAfter: undefined,
         }),
         taskRegistry,
       );
     if (
-      C?.type === "in_process_teammate" &&
-      C.evictAfter !== undefined &&
-      ((o && C.evictAfter <= Date.now() + MAILBOX_POLL_INTERVAL_MS) || (q && !o))
+      task?.type === "in_process_teammate" &&
+      task.evictAfter !== undefined &&
+      ((hasBackgroundWork && task.evictAfter <= Date.now() + MAILBOX_POLL_INTERVAL_MS) ||
+        (hadBackgroundWork && !hasBackgroundWork))
     )
       updateInProcessTeammateTask(
         taskId,
-        (T) => ({
-          ...T,
+        (task) => ({
+          ...task,
           evictAfter: Date.now() + MCP_TASK_KEEPALIVE_MS,
         }),
         taskRegistry,
       );
-    q = o;
+    hadBackgroundWork = hasBackgroundWork;
     if (abortController.signal.aborted) {
       logForDebugging(`[inProcessRunner] ${identity.agentName} aborted while waiting (poll #${pollCount})`);
       return {
@@ -767,7 +783,7 @@ async function waitForNextPromptOrShutdown(
     }
     if (standalone) {
       if (isZincHarborOn()) {
-        if (!u && Date.now() - idleSince >= TASK_EVICTION_GRACE_MS) {
+        if (!holdTask && Date.now() - idleSince >= TASK_EVICTION_GRACE_MS) {
           logForDebugging(
             `[inProcessRunner] ${identity.agentName} idle timeout after ${TASK_EVICTION_GRACE_MS}ms (poll #${pollCount})`,
           );
@@ -780,7 +796,7 @@ async function waitForNextPromptOrShutdown(
     }
     logForDebugging(`[inProcessRunner] ${identity.agentName} poll #${pollCount}: checking mailbox`);
     try {
-      let T = await pollTeammateInbox(
+      let pollResult = await pollTeammateInbox(
         identity,
         taskId,
         taskRegistry,
@@ -788,15 +804,15 @@ async function waitForNextPromptOrShutdown(
         pollState,
         getAppState().teamContext?.teammates,
       );
-      if (T) return T;
+      if (pollResult) return pollResult;
       if (pollState.count > 0 && pollState.readFailures < MARK_READ_FAILURE_CAP) {
         idleSince = Date.now();
-        let R = getAppState().tasks[taskId];
-        if (R?.type === "in_process_teammate" && R.evictAfter !== undefined)
+        let task = getAppState().tasks[taskId];
+        if (task?.type === "in_process_teammate" && task.evictAfter !== undefined)
           updateInProcessTeammateTask(
             taskId,
-            (d) => ({
-              ...d,
+            (task) => ({
+              ...task,
               evictAfter: Date.now() + MCP_TASK_KEEPALIVE_MS,
             }),
             taskRegistry,
@@ -814,7 +830,7 @@ async function waitForNextPromptOrShutdown(
         from: "task-list",
       };
     if (isZincHarborOn()) {
-      if (!u && Date.now() - idleSince >= TASK_EVICTION_GRACE_MS) {
+      if (!holdTask && Date.now() - idleSince >= TASK_EVICTION_GRACE_MS) {
         logForDebugging(
           `[inProcessRunner] ${identity.agentName} idle timeout after ${TASK_EVICTION_GRACE_MS}ms (poll #${pollCount})`,
         );
@@ -888,12 +904,12 @@ async function runInProcessTeammate(config) {
   let systemPrompt_2;
   if (systemPromptMode === "replace" && systemPrompt) systemPrompt_2 = systemPrompt;
   else {
-    let Q = [
+    let promptParts = [
       ...(
         await getSystemPrompt(tools, mainLoopModel, {
           teammate: true,
         })
-      ).filter((Y) => Y !== SYSTEM_PROMPT_DYNAMIC_BOUNDARY),
+      ).filter((block) => block !== SYSTEM_PROMPT_DYNAMIC_BOUNDARY),
       TEAMMATE_SYSTEM_PROMPT_ADDENDUM,
     ];
     if (agentDefinition) {
@@ -902,7 +918,7 @@ async function runInProcessTeammate(config) {
         primedAgentMemory: await readAgentMemoryScope(agentDefinition, toolUseContext.storageV5),
       });
       if (customPrompt)
-        Q.push(`
+        promptParts.push(`
 # Custom Agent Instructions
 ${customPrompt}`);
       if (agentDefinition.memory)
@@ -912,8 +928,8 @@ ${customPrompt}`);
           source: lit("in-process-teammate"),
         });
     }
-    if (systemPromptMode === "append" && systemPrompt) Q.push(systemPrompt);
-    systemPrompt_2 = Q.join(`
+    if (systemPromptMode === "append" && systemPrompt) promptParts.push(systemPrompt);
+    systemPrompt_2 = promptParts.join(`
 `);
   }
   let hasTaskListTools = teammateContext.hasTaskListTools;
@@ -979,15 +995,19 @@ ${customPrompt}`);
   let compactBlocked = false;
   let lastDeliveredResult = resumeMessages ? safeTeammateIdleResult(resumeMessages).result : undefined;
   let workInterrupted = false;
-  let handleWaitResult = async (h) => {
-    switch (((holdEviction = false), h.type)) {
+  let handleWaitResult = async (waitResult) => {
+    switch (((holdEviction = false), waitResult.type)) {
       case "shutdown_request":
         logForDebugging(`[inProcessRunner] ${identity.agentId} received shutdown request - passing to model`);
         nextPrompt = formatTeammateMessage({
-          from: typeof h.entryFrom === "string" && h.entryFrom !== "" ? h.entryFrom : UNKNOWN_SENDER,
+          from:
+            typeof waitResult.entryFrom === "string" && waitResult.entryFrom !== ""
+              ? waitResult.entryFrom
+              : UNKNOWN_SENDER,
           text: withShutdownReplyInstructions(
-            sanitizeReceivedStructuredFrame(h.originalMessage, h.entryFrom) ?? h.originalMessage,
-            h.entryFrom,
+            sanitizeReceivedStructuredFrame(waitResult.originalMessage, waitResult.entryFrom) ??
+              waitResult.originalMessage,
+            waitResult.entryFrom,
           ),
         });
         nextOrigin = undefined;
@@ -1000,16 +1020,16 @@ ${customPrompt}`);
         );
         break;
       case "new_message":
-        logForDebugging(`[inProcessRunner] ${identity.agentId} received new message from ${h.from}`);
-        if (h.from === "user") {
-          nextPrompt = h.message;
-          nextOrigin = h.origin;
+        logForDebugging(`[inProcessRunner] ${identity.agentId} received new message from ${waitResult.from}`);
+        if (waitResult.from === "user") {
+          nextPrompt = waitResult.message;
+          nextOrigin = waitResult.origin;
         } else {
           nextPrompt = formatTeammateMessage({
-            from: h.from,
-            text: h.message,
-            color: h.color,
-            summary: h.summary,
+            from: waitResult.from,
+            text: waitResult.message,
+            color: waitResult.color,
+            summary: waitResult.summary,
           });
           nextOrigin = undefined;
           appendTeammateTranscript(
@@ -1023,9 +1043,9 @@ ${customPrompt}`);
         break;
       case "new_messages":
         logForDebugging(
-          `[inProcessRunner] ${identity.agentId} received ${h.messages.length} drained message(s)`,
+          `[inProcessRunner] ${identity.agentId} received ${waitResult.messages.length} drained message(s)`,
         );
-        nextPrompt = formatTeammateMessages(h.messages, {
+        nextPrompt = formatTeammateMessages(waitResult.messages, {
           recipientIsLead: false,
         });
         nextOrigin = undefined;
@@ -1181,19 +1201,20 @@ ${customPrompt}`);
       lastDeliveredResult = undefined;
       workInterrupted = currentWorkAbortController_2.signal.aborted;
       let tracker = createProgressTracker();
-      let we = taskRegistry.get(taskId);
-      if (we !== undefined && "progress" in we && we.progress !== undefined)
-        tracker.latestInputTokens = we.progress.tokenCount;
+      let task = taskRegistry.get(taskId);
+      if (task !== undefined && "progress" in task && task.progress !== undefined)
+        tracker.latestInputTokens = task.progress.tokenCount;
       let resolveActivity = createActivityDescriptionResolver(tools);
-      let ge = [];
-      let Ae = toolUseContext.getAppState().tasks[taskId];
-      let currentPermissionMode = Ae && Ae.type === "in_process_teammate" ? Ae.permissionMode : "default";
+      let responseMessages = [];
+      let currentTask = toolUseContext.getAppState().tasks[taskId];
+      let currentPermissionMode =
+        currentTask && currentTask.type === "in_process_teammate" ? currentTask.permissionMode : "default";
       let iterationAgentDefinition = {
         ...agentDefinitionForRun,
         permissionMode: currentPermissionMode,
       };
-      let Ue = false;
-      let ne = null;
+      let interrupted = false;
+      let preservedState = null;
       await runWithTeammateContext(teammateContext, async () =>
         runWithCwdOverride(agentContext, async () => {
           updateInProcessTeammateTask(
@@ -1291,11 +1312,11 @@ ${customPrompt}`);
                 message.type === "user" ||
                 (message.type === "attachment" && isLoggableMessage(message))
               ) {
-                ge.push(message);
+                responseMessages.push(message);
                 history.push(message);
-                ne = applyPreservedMessages(history, message, ne);
+                preservedState = applyPreservedMessages(history, message, preservedState);
               }
-              Ue = true;
+              interrupted = true;
               break;
             }
             if (message.type === "spinner_mode") {
@@ -1307,29 +1328,29 @@ ${customPrompt}`);
             if (message.type === "set_in_progress_tool_use_ids") {
               if (message.op.action !== "remove") continue;
               let ids = message.op.ids;
-              taskRegistry.updateTranscript(taskId, (U) => {
-                let te = new Set(U.inProgressToolUseIDs);
-                let oe = false;
-                for (let id of ids) if (te.delete(id)) oe = true;
-                return oe
+              taskRegistry.updateTranscript(taskId, (transcript) => {
+                let pendingToolUseIds = new Set(transcript.inProgressToolUseIDs);
+                let removed = false;
+                for (let id of ids) if (pendingToolUseIds.delete(id)) removed = true;
+                return removed
                   ? {
-                      ...U,
-                      inProgressToolUseIDs: te,
+                      ...transcript,
+                      inProgressToolUseIDs: pendingToolUseIds,
                     }
-                  : U;
+                  : transcript;
               });
               continue;
             }
             if (message.type === "system" && message.subtype === "api_error") continue;
-            ge.push(message);
+            responseMessages.push(message);
             history.push(message);
-            ne = applyPreservedMessages(history, message, ne);
+            preservedState = applyPreservedMessages(history, message, preservedState);
             updateProgressFromMessage(tracker, message, resolveActivity, tools);
             let progress = getProgressUpdate(tracker);
             updateInProcessTeammateTask(
               taskId,
-              (k) => ({
-                ...k,
+              (task) => ({
+                ...task,
                 progress,
               }),
               taskRegistry,
@@ -1345,9 +1366,9 @@ ${customPrompt}`);
                 if (Array.isArray(content)) {
                   for (let block of content)
                     if (typeof block === "object" && "type" in block && block.type === "tool_result") {
-                      let be = new Set(inProgressToolUseIDs);
-                      be.delete(block.tool_use_id);
-                      inProgressToolUseIDs = be;
+                      let remainingToolUseIds = new Set(inProgressToolUseIDs);
+                      remainingToolUseIds.delete(block.tool_use_id);
+                      inProgressToolUseIDs = remainingToolUseIds;
                     }
                 }
               }
@@ -1360,13 +1381,13 @@ ${customPrompt}`);
           }
           return {
             success: true,
-            messages: ge,
+            messages: responseMessages,
           };
         }),
       ).finally(() => {
-        if (ne) {
-          history.push(...ne.preserved);
-          ne = null;
+        if (preservedState) {
+          history.push(...preservedState.preserved);
+          preservedState = null;
         }
       });
       updateInProcessTeammateTask(
@@ -1378,8 +1399,8 @@ ${customPrompt}`);
         taskRegistry,
       );
       if (abortController.signal.aborted) break;
-      let le = Ue || currentWorkAbortController_2.signal.aborted;
-      if (le) {
+      let workInterruptedNow = interrupted || currentWorkAbortController_2.signal.aborted;
+      if (workInterruptedNow) {
         workInterrupted = true;
         logForDebugging(`[inProcessRunner] ${identity.agentId} work interrupted, returning to idle`);
         let interruptMessage = createApiErrorMessage({
@@ -1390,15 +1411,17 @@ ${customPrompt}`);
           messages: appendBounded(task.messages, interruptMessage),
         }));
       }
-      hasProducedOutput ||= ge.some(
-        (r) => (r.type === "assistant" && !r.isApiErrorMessage) || (r.type === "user" && !r.isMeta),
+      hasProducedOutput ||= responseMessages.some(
+        (message) =>
+          (message.type === "assistant" && !message.isApiErrorMessage) ||
+          (message.type === "user" && !message.isMeta),
       );
-      let re = !le ? getTrailingApiErrorInfo(ge) : undefined;
-      holdEviction = re?.isTransient === true && !standalone && hasProducedOutput;
-      if (!standalone && !le) {
-        let r = null;
+      let lastFailure = !workInterruptedNow ? getTrailingApiErrorInfo(responseMessages) : undefined;
+      holdEviction = lastFailure?.isTransient === true && !standalone && hasProducedOutput;
+      if (!standalone && !workInterruptedNow) {
+        let mailboxResult = null;
         try {
-          r = await pollTeammateInbox(
+          mailboxResult = await pollTeammateInbox(
             identity,
             taskId,
             taskRegistry,
@@ -1407,13 +1430,13 @@ ${customPrompt}`);
             toolUseContext.getAppState().teamContext?.teammates,
           );
           while (
-            r === null &&
+            mailboxResult === null &&
             pollState.count > 0 &&
             pollState.readFailures < MARK_READ_FAILURE_CAP &&
             !abortController.signal.aborted
           ) {
             await sleep(MAILBOX_POLL_INTERVAL_MS);
-            r = await pollTeammateInbox(
+            mailboxResult = await pollTeammateInbox(
               identity,
               taskId,
               taskRegistry,
@@ -1425,46 +1448,46 @@ ${customPrompt}`);
         } catch (error) {
           logForDebugging(`[inProcessRunner] ${identity.agentName} turn-end mailbox check failed: ${error}`);
         }
-        if (r) {
+        if (mailboxResult) {
           try {
-            let { result: v, summary } = safeTeammateIdleResult(history, {
+            let { result: idleResult, summary } = safeTeammateIdleResult(history, {
               emitTelemetry: true,
             });
-            if (v !== undefined || re !== undefined) {
+            if (idleResult !== undefined || lastFailure !== undefined) {
               if (
                 (await sendIdleNotificationToLeader(
                   identity.agentName,
                   identity.color,
                   identity.teamName,
                   {
-                    idleReason: re !== undefined ? "failed" : undefined,
+                    idleReason: lastFailure !== undefined ? "failed" : undefined,
                     summary,
-                    failureReason: re?.reason,
-                    result: v,
+                    failureReason: lastFailure?.reason,
+                    result: idleResult,
                     senderReachable: true,
                   },
                   toolUseContext.storageV5,
                 )) &&
-                v !== undefined
+                idleResult !== undefined
               )
-                lastDeliveredResult = v;
+                lastDeliveredResult = idleResult;
             }
           } catch (error) {
             logForDebugging(
               `[inProcessRunner] ${identity.agentName} turn-end result delivery failed: ${error}`,
             );
           }
-          await handleWaitResult(r);
+          await handleWaitResult(mailboxResult);
           continue;
         }
       }
-      if (re?.isTransient)
+      if (lastFailure?.isTransient)
         logEvent("tengu_teammate_transient_turn_failure", {
-          error_kind: fromEnum(re.errorKind ?? "unknown"),
+          error_kind: fromEnum(lastFailure.errorKind ?? "unknown"),
           hold_evict: holdEviction,
         });
-      let qe = toolUseContext.getAppState().tasks[taskId];
-      let We = !(qe?.type === "in_process_teammate" && qe.isIdle) && !standalone;
+      let stateTask = toolUseContext.getAppState().tasks[taskId];
+      let owesNotification = !(stateTask?.type === "in_process_teammate" && stateTask.isIdle) && !standalone;
       updateInProcessTeammateTask(
         taskId,
         (task) => {
@@ -1473,49 +1496,49 @@ ${customPrompt}`);
             ...task,
             isIdle: true,
             idleNotificationOwedToLead:
-              (We && getIsNonInteractiveSession()) || task.idleNotificationOwedToLead,
+              (owesNotification && getIsNonInteractiveSession()) || task.idleNotificationOwedToLead,
             evictAfter: holdEviction ? undefined : Date.now() + MCP_TASK_KEEPALIVE_MS,
             onIdleCallbacks: [],
           };
         },
         taskRegistry,
       );
-      let reason = re?.reason;
-      if (We) {
-        let r = safeTeammateIdleResult(history, {
-          emitTelemetry: !le,
+      let reason = lastFailure?.reason;
+      if (owesNotification) {
+        let idleResult = safeTeammateIdleResult(history, {
+          emitTelemetry: !workInterruptedNow,
         });
-        let v = le ? undefined : r.result;
-        let k = await sendIdleNotificationToLeader(
+        let resultText = workInterruptedNow ? undefined : idleResult.result;
+        let delivered = await sendIdleNotificationToLeader(
           identity.agentName,
           identity.color,
           identity.teamName,
           {
-            idleReason: le ? "interrupted" : reason !== undefined ? "failed" : "available",
-            summary: r.summary,
+            idleReason: workInterruptedNow ? "interrupted" : reason !== undefined ? "failed" : "available",
+            summary: idleResult.summary,
             failureReason: reason,
-            result: v,
+            result: resultText,
             senderReachable: reason === undefined || holdEviction,
           },
           toolUseContext.storageV5,
         );
-        if (v !== undefined && k) lastDeliveredResult = v;
-        if (!k)
+        if (resultText !== undefined && delivered) lastDeliveredResult = resultText;
+        if (!delivered)
           updateInProcessTeammateTask(
             taskId,
-            (U) =>
-              U.idleNotificationOwedToLead
+            (task) =>
+              task.idleNotificationOwedToLead
                 ? {
-                    ...U,
+                    ...task,
                     idleNotificationOwedToLead: undefined,
                   }
-                : U,
+                : task,
             taskRegistry,
           );
       } else
         logForDebugging(`[inProcessRunner] Skipping duplicate idle notification for ${identity.agentName}`);
       logForDebugging(`[inProcessRunner] ${identity.agentId} finished prompt, waiting for next`);
-      let Ve = await waitForNextPromptOrShutdown(
+      let nextResult = await waitForNextPromptOrShutdown(
         identity,
         abortController,
         taskId,
@@ -1528,7 +1551,7 @@ ${customPrompt}`);
         holdEviction,
         toolUseContext.storageV5,
       );
-      await handleWaitResult(Ve);
+      await handleWaitResult(nextResult);
     }
     let alreadyTerminal = false;
     let toolUseId;
@@ -1556,9 +1579,9 @@ ${customPrompt}`);
       taskRegistry,
     );
     if (!alreadyTerminal)
-      taskRegistry.updateTranscript(taskId, (M) => ({
-        ...M,
-        messages: M.messages.length ? [M.messages.at(-1)] : [],
+      taskRegistry.updateTranscript(taskId, (transcript) => ({
+        ...transcript,
+        messages: transcript.messages.length ? [transcript.messages.at(-1)] : [],
         inProgressToolUseIDs: new Set(),
       }));
     evictTaskOutput(taskId);
@@ -1606,9 +1629,9 @@ ${customPrompt}`);
       taskRegistry,
     );
     if (!alreadyTerminal)
-      taskRegistry.updateTranscript(taskId, (x) => ({
-        ...x,
-        messages: x.messages.length ? [x.messages.at(-1)] : [],
+      taskRegistry.updateTranscript(taskId, (transcript) => ({
+        ...transcript,
+        messages: transcript.messages.length ? [transcript.messages.at(-1)] : [],
         inProgressToolUseIDs: new Set(),
       }));
     evictTaskOutput(taskId);
@@ -1619,13 +1642,13 @@ ${customPrompt}`);
         summary: identity.agentId,
       });
     if (!standalone) {
-      let x;
+      let partialResult;
       try {
-        x = workInterrupted ? undefined : teammateIdleResultText(history);
+        partialResult = workInterrupted ? undefined : teammateIdleResultText(history);
       } catch (error) {
         logForDebugging(`[inProcessRunner] ${identity.agentName} failed to extract partial result: ${error}`);
       }
-      if (x !== undefined && x === lastDeliveredResult) x = undefined;
+      if (partialResult !== undefined && partialResult === lastDeliveredResult) partialResult = undefined;
       await sendIdleNotificationToLeader(
         identity.agentName,
         identity.color,
@@ -1634,7 +1657,7 @@ ${customPrompt}`);
           idleReason: "failed",
           completedStatus: "failed",
           failureReason: errorMessage,
-          result: x,
+          result: partialResult,
         },
         toolUseContext.storageV5,
       );
@@ -1657,13 +1680,5 @@ function startInProcessTeammate(config) {
   runInProcessTeammate(config).catch((error) => {
     logForDebugging(`[inProcessRunner] Unhandled error in ${agentId}: ${error}`);
   });
-}
-//@ chunk-phrnybk8.js:411-533 placement
-function appendTeammateTranscript(taskId, userMessage, taskRegistry) {
-  if (taskRegistry.get(taskId)?.status !== "running") return;
-  taskRegistry.updateTranscript(taskId, (n) => ({
-    ...n,
-    messages: appendBounded(n.messages, userMessage),
-  }));
 }
 export { startInProcessTeammate };

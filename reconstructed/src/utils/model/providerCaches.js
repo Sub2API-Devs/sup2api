@@ -12,15 +12,17 @@ import { catalogEntriesByFirstPartyId } from "./modelCatalog.js";
 import { createSignal } from "../signal.js";
 import { SessionRootSlot } from "../../bootstrap/sessionSlices.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-v9tcvh08.js:28064-28227 placement
 /**
  * 按任一提供商的模型 id 查找内置模型配置。
  */
-function findModelConfigById(e) {
-  let lower = e.toLowerCase();
-  for (let a of Object.values(catalogEntriesByFirstPartyId))
-    for (let n of Object.values(a)) if (typeof n === "string" && n.toLowerCase() === lower) return a;
+function findModelConfigById(modelId) {
+  let lower = modelId.toLowerCase();
+  for (let entry of Object.values(catalogEntriesByFirstPartyId))
+    for (let value of Object.values(entry))
+      if (typeof value === "string" && value.toLowerCase() === lower) return entry;
   return null;
 }
 //@ chunk-v9tcvh08.js:28227-28242 placement
@@ -32,8 +34,8 @@ var OVERTURNED_DENY_TTL_MS = 600000;
 function pruneOverturnedEntitlementDenies() {
   let overturnedEntitlementDenies = getProviderState().providerCache.overturnedEntitlementDenies;
   let now = Date.now();
-  for (let [a, n] of overturnedEntitlementDenies)
-    if (now - n >= OVERTURNED_DENY_TTL_MS) overturnedEntitlementDenies.delete(a);
+  for (let [key, at] of overturnedEntitlementDenies)
+    if (now - at >= OVERTURNED_DENY_TTL_MS) overturnedEntitlementDenies.delete(key);
 }
 //@ chunk-v9tcvh08.js:28364-28706 placement
 function createProviderCache() {
@@ -64,10 +66,10 @@ function createModelBetaCaches() {
 /**
  * 删除提供商缓存中满足条件的模型 beta 记录。
  */
-function clearModelBetas(e) {
+function clearModelBetas(predicate) {
   let { betas, betasCompiledOnly } = getProviderState();
-  for (let n of [...Object.values(betas), ...Object.values(betasCompiledOnly)])
-    for (let key of [...n.keys()]) if (e(key)) n.delete(key);
+  for (let map of [...Object.values(betas), ...Object.values(betasCompiledOnly)])
+    for (let key of [...map.keys()]) if (predicate(key)) map.delete(key);
 }
 //@ chunk-v9tcvh08.js:28990-30559 placement
 function createProviderState() {
@@ -135,7 +137,10 @@ function createProviderState() {
   };
 }
 //@ chunk-v9tcvh08.js:30559-30581 placement
-var providerStateSlot = new SessionRootSlot(() => createProviderState());
+var providerStateSlot; // deferred: uses SessionRootSlot (../../bootstrap/sessionSlices.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-v9tcvh08.js:30559", () => {
+  providerStateSlot = new SessionRootSlot(() => createProviderState());
+});
 //@ chunk-v9tcvh08.js:30581-30612 placement
 function getProviderState() {
   return providerStateSlot.of(getRootSession());

@@ -5,7 +5,7 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (62)
+ * pieces: chunk-e6aww6q8.js (61)
  * attribution: placement 62
  */
 import { join, relative, sep, dirname, isAbsolute, resolve as resolve_2, parse } from "path";
@@ -58,28 +58,32 @@ import { getPlatform } from "../../../utils/platform.js";
 import { countCharInString } from "../../../utils/stringUtils.js";
 import { GIT_SAFE_GLOBAL_ARGS, GIT_ALLOW_PROTOCOL_VALUE } from "../../../utils/git/gitSafeEnv.js";
 import { GIT_FILES_REF_BACKEND_ENV } from "../../../utils/git/gitLanes.js";
-import { stopAllWriteObservers } from "../writeObserver.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:4773548-4773795 placement
 /**
  * 会移动工作树的 git 子命令列表（checkout/switch/stash/pull/merge/rebase/reset 等）及匹配"只运行这类 git 命令"的正则。
  */
-var TREE_MOVING_GIT_SUBCOMMANDS = [
-  "checkout",
-  "switch",
-  "stash",
-  "pull",
-  "merge",
-  "rebase",
-  "reset",
-  "restore",
-  "clean",
-  "cherry-pick",
-  "revert",
-];
-var TREE_MOVING_GIT_COMMAND_RE = new RegExp(
-  String.raw`^[ \t]*(?:sudo[ \t]+)?git[ \t]+(?:${TREE_MOVING_GIT_SUBCOMMANDS.join("|")})(?:[ \t]+[A-Za-z0-9._/@~^][A-Za-z0-9._/@~^-]*){0,16}\s*$`,
-);
+var TREE_MOVING_GIT_SUBCOMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var TREE_MOVING_GIT_COMMAND_RE;
+deferInit("chunk-e6aww6q8.js:4773548", () => {
+  TREE_MOVING_GIT_SUBCOMMANDS = [
+    "checkout",
+    "switch",
+    "stash",
+    "pull",
+    "merge",
+    "rebase",
+    "reset",
+    "restore",
+    "clean",
+    "cherry-pick",
+    "revert",
+  ];
+  TREE_MOVING_GIT_COMMAND_RE = new RegExp(
+    String.raw`^[ \t]*(?:sudo[ \t]+)?git[ \t]+(?:${TREE_MOVING_GIT_SUBCOMMANDS.join("|")})(?:[ \t]+[A-Za-z0-9._/@~^][A-Za-z0-9._/@~^-]*){0,16}\s*$`,
+  );
+});
 //@ chunk-e6aww6q8.js:4773795-4773830 placement
 /**
  * 判断命令是否含会移动工作树的 git 子命令（checkout/switch/reset 等），这种命令之后不能复用旧快照。
@@ -93,14 +97,14 @@ function commandMovesWorkTree(command) {
  */
 function commandMovesWorkTree_2(command) {
   try {
-    let n = command.length > SPLIT_MAX_LEN ? null : getParserModule()?.parse(command);
-    let r = n ? parseForSecurityFromAst(command, n) : undefined;
+    let syntaxTree = command.length > SPLIT_MAX_LEN ? null : getParserModule()?.parse(command);
+    let parsed = syntaxTree ? parseForSecurityFromAst(command, syntaxTree) : undefined;
     return (
-      r?.kind === "simple"
-        ? r.commands.map((command) => command.argv)
+      parsed?.kind === "simple"
+        ? parsed.commands.map((command) => command.argv)
         : splitCommand(command).map(getCommandArgv)
-    ).some((h) =>
-      TREE_MOVING_GIT_SUBCOMMANDS.includes(getGitSubcommand(h[0] === "sudo" ? h.slice(1) : h) ?? ""),
+    ).some((argv) =>
+      TREE_MOVING_GIT_SUBCOMMANDS.includes(getGitSubcommand(argv[0] === "sudo" ? argv.slice(1) : argv) ?? ""),
     );
   } catch (error) {
     logForDebugging(`bashEditDiff: command parse failed: ${String(error)}`);
@@ -111,23 +115,36 @@ function commandMovesWorkTree_2(command) {
 /**
  * bashEditDiff 的模块级缓存：按仓库的失败计数、共享快照仓库、各 git 目录的状态（预读、超大变更、对象目录、私有目录身份、期望文件）、串行链、共享读、读间隔、转换文件记录。
  */
-var snapshotFailureCounts = new Map();
-var sharedRepoByRoot = new Map();
-var prefetchedTrees = new Map();
-var oversizedByGitDir = new Map();
-var objectsDirByGitDir = new Map();
-var privateDirIdentity = new Map();
-var expectedFilesByGitDir = new Map();
-var serialChainByRepo = new Map();
-var sharedReadsInFlight = identity_2(new Map(), (e) => e.clear());
-var nextReadAtByRepo = identity_2(new Map(), (e) => e.clear());
-var convertedFilesByGitDir = identity_2(new Map(), (e) => e.clear());
+var snapshotFailureCounts; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var sharedRepoByRoot;
+var prefetchedTrees;
+var oversizedByGitDir;
+var objectsDirByGitDir;
+var privateDirIdentity;
+var expectedFilesByGitDir;
+var serialChainByRepo;
+var sharedReadsInFlight;
+var nextReadAtByRepo;
+var convertedFilesByGitDir;
+deferInit("chunk-e6aww6q8.js:4774111", () => {
+  snapshotFailureCounts = new Map();
+  sharedRepoByRoot = new Map();
+  prefetchedTrees = new Map();
+  oversizedByGitDir = new Map();
+  objectsDirByGitDir = new Map();
+  privateDirIdentity = new Map();
+  expectedFilesByGitDir = new Map();
+  serialChainByRepo = new Map();
+  sharedReadsInFlight = identity_2(new Map(), (map) => map.clear());
+  nextReadAtByRepo = identity_2(new Map(), (map) => map.clear());
+  convertedFilesByGitDir = identity_2(new Map(), (map) => map.clear());
+});
 //@ chunk-e6aww6q8.js:4774298-4774340 placement
 /**
  * 仓库快照失败次数超过上限（MAX_SNAPSHOT_FAILURES）时，该仓库放弃拍快照。
  */
-function isRepoSnapshotGivenUp(e) {
-  return (snapshotFailureCounts.get(e) ?? 0) >= MAX_SNAPSHOT_FAILURES;
+function isRepoSnapshotGivenUp(gitRoot) {
+  return (snapshotFailureCounts.get(gitRoot) ?? 0) >= MAX_SNAPSHOT_FAILURES;
 }
 //@ chunk-e6aww6q8.js:4774340-4774389 placement
 /**
@@ -140,9 +157,9 @@ function isSharedSnapshotEnabled() {
 /**
  * 命令执行前给所在 git 仓库拍工作树快照（共享模式下合并并发读取，否则按仓库串行）；仓库已放弃或无仓库返回 null，失败返回 unavailable。
  */
-async function takeBashSnapshot(e) {
+async function takeBashSnapshot(cwd) {
   try {
-    let gitRootRecheckingNegative = findGitRootRecheckingNegative(e);
+    let gitRootRecheckingNegative = findGitRootRecheckingNegative(cwd);
     if (!gitRootRecheckingNegative || isRepoSnapshotGivenUp(gitRootRecheckingNegative)) return null;
     return await (isSharedSnapshotEnabled()
       ? snapshotRepo(gitRootRecheckingNegative, true)
@@ -156,25 +173,33 @@ async function takeBashSnapshot(e) {
 /**
  * 记录编辑差异等待时长遥测（超过 10 秒/60 秒/300 秒分档，区分共享等待）。
  */
-function logEditDiffWait(e, n) {
-  let r = e >= 300000 ? "wait_over_300s" : e >= 60000 ? "wait_over_60s" : e >= 1e4 ? "wait_over_10s" : null;
-  if (r) logFeatureSad(n ? "bash_edit_diff_shared_wait" : "bash_edit_diff_wait", r);
-  else logFeatureOk(n ? "bash_edit_diff_shared_wait" : "bash_edit_diff_wait");
+function logEditDiffWait(waitMs, isSharedWait) {
+  let waitBucket =
+    waitMs >= 300000
+      ? "wait_over_300s"
+      : waitMs >= 60000
+        ? "wait_over_60s"
+        : waitMs >= 1e4
+          ? "wait_over_10s"
+          : null;
+  if (waitBucket)
+    logFeatureSad(isSharedWait ? "bash_edit_diff_shared_wait" : "bash_edit_diff_wait", waitBucket);
+  else logFeatureOk(isSharedWait ? "bash_edit_diff_shared_wait" : "bash_edit_diff_wait");
 }
 //@ chunk-e6aww6q8.js:4774810-4775041 placement
-async function snapshotRepo(gitRootRecheckingNegative, n) {
-  let sharedSnapshotRepo = await getSharedSnapshotRepo(gitRootRecheckingNegative);
-  if (!sharedSnapshotRepo) return "unavailable";
-  let s = await (n
-    ? readSharedTree(gitRootRecheckingNegative, sharedSnapshotRepo)
-    : readTreeState(gitRootRecheckingNegative, sharedSnapshotRepo, false));
-  return s
+async function snapshotRepo(repoRoot, useSharedReads) {
+  let gitDirectory = await getSharedSnapshotRepo(repoRoot);
+  if (!gitDirectory) return "unavailable";
+  let treeState = await (useSharedReads
+    ? readSharedTree(repoRoot, gitDirectory)
+    : readTreeState(repoRoot, gitDirectory, false));
+  return treeState
     ? {
-        repoRoot: gitRootRecheckingNegative,
-        gitDirectory: s.gitDirectory,
-        tree: s.tree,
-        convertedFound: s.convertedFound,
-        sharesTreeReads: n,
+        repoRoot,
+        gitDirectory: treeState.gitDirectory,
+        tree: treeState.tree,
+        convertedFound: treeState.convertedFound,
+        sharesTreeReads: useSharedReads,
       }
     : "unavailable";
 }
@@ -186,16 +211,16 @@ async function diffAfterCommand(before, onRead, options) {
   try {
     if (!before.sharesTreeReads)
       return await runSerialForRepo(before.repoRoot, async () => {
-        let treeState = await readTreeState(before.repoRoot, before.gitDirectory, true);
-        if (!treeState)
+        let after = await readTreeState(before.repoRoot, before.gitDirectory, true);
+        if (!after)
           return {
             files: [],
             moreFiles: 0,
             unavailable: true,
           };
-        return treeState.tree === before.tree
-          ? oversizedOnlyResult(before.repoRoot, treeState)
-          : diffSnapshotTrees(before, treeState);
+        return after.tree === before.tree
+          ? oversizedOnlyResult(before.repoRoot, after)
+          : diffSnapshotTrees(before, after);
       });
     let after = await readSharedTree(before.repoRoot, before.gitDirectory);
     if (after?.gitDirectory !== before.gitDirectory) {
@@ -211,13 +236,15 @@ async function diffAfterCommand(before, onRead, options) {
     let result;
     if (after.tree === before.tree) result = oversizedOnlyResult(before.repoRoot, after);
     else {
-      let y = `${before.tree} ${before.convertedFound}`;
-      let S = after.diffByBeforeState.get(y);
-      if (!S) {
-        S = runSerialForRepo(diffSerialKey(before.repoRoot), () => diffSnapshotTrees(before, after));
-        after.diffByBeforeState.set(y, S);
+      let beforeKey = `${before.tree} ${before.convertedFound}`;
+      let diffPromise = after.diffByBeforeState.get(beforeKey);
+      if (!diffPromise) {
+        diffPromise = runSerialForRepo(diffSerialKey(before.repoRoot), () =>
+          diffSnapshotTrees(before, after),
+        );
+        after.diffByBeforeState.set(beforeKey, diffPromise);
       }
-      result = await S;
+      result = await diffPromise;
     }
     if (after.callers > 1) await spaceSharedReads(before.repoRoot, options);
     return result;
@@ -239,12 +266,12 @@ async function spaceSharedReads(repoRoot, options) {
   if (max > startTime) await sleep(max - startTime, options.signal);
 }
 //@ chunk-e6aww6q8.js:4775934-4776087 placement
-function oversizedOnlyResult(repoRoot, n) {
-  return n.oversized > 0
+function oversizedOnlyResult(repoRoot, after) {
+  return after.oversized > 0
     ? {
         files: [],
-        moreFiles: n.oversized,
-        changedFiles: n.oversizedPaths
+        moreFiles: after.oversized,
+        changedFiles: after.oversizedPaths
           .slice(0, SHARED_READ_SPACING_MS)
           .map((oversizedPath) => join(repoRoot, oversizedPath)),
         unavailable: true,
@@ -252,34 +279,38 @@ function oversizedOnlyResult(repoRoot, n) {
     : null;
 }
 //@ chunk-e6aww6q8.js:4776087-4776302 placement
-async function isPrivateDirIntact({ gitDirectory, sharesTreeReads }, r) {
+async function isPrivateDirIntact({ gitDirectory, sharesTreeReads }, options) {
   if (!sharesTreeReads) return true;
-  let s = objectsDirByGitDir.get(gitDirectory);
-  if (s && (await verifyPrivateGitDir(gitDirectory, s, r.expectedFiles))) return true;
+  let expectedObjectFiles = objectsDirByGitDir.get(gitDirectory);
+  if (
+    expectedObjectFiles &&
+    (await verifyPrivateGitDir(gitDirectory, expectedObjectFiles, options.expectedFiles))
+  )
+    return true;
   logForDebugging("bashEditDiff: private directory changed or gone; git step skipped");
   return false;
 }
 //@ chunk-e6aww6q8.js:4776302-4776549 placement
-function runDiffTree(e, tree, r, s = []) {
+function runDiffTree(before, tree, extraArgs, paths = []) {
   return runSnapshotGit(
-    e.repoRoot,
-    e.gitDirectory,
+    before.repoRoot,
+    before.gitDirectory,
     [
       "diff-tree",
       "-r",
-      ...r,
+      ...extraArgs,
       "--no-color",
       "--no-renames",
       ...RAW_BLOB_DIFF_FLAGS,
-      e.tree,
+      before.tree,
       tree,
-      ...(s.length > 0 ? ["--", ...s] : []),
+      ...(paths.length > 0 ? ["--", ...paths] : []),
     ],
     {
       timeout: GIT_STEP_TIMEOUT_MS,
-      ...(e.sharesTreeReads && {
+      ...(before.sharesTreeReads && {
         env: {
-          GIT_INDEX_FILE: join(e.gitDirectory, "no-index"),
+          GIT_INDEX_FILE: join(before.gitDirectory, "no-index"),
         },
       }),
     },
@@ -290,35 +321,39 @@ function runDiffTree(e, tree, r, s = []) {
  * 解析 git diff-tree --raw 输出，得到 路径 → 状态（A/D/M…）表，以及新建或删除的空文件集合。
  */
 function parseRawDiffStatus(stdout) {
-  let n = new Map();
-  let r = new Set();
-  for (let s of stdout.matchAll(/^:\d{6} \d{6} (\S+) (\S+) ([A-Z])\t(.+)$/gm)) {
-    let h = s[4];
-    let y = h.startsWith('"') && h.endsWith('"') ? unquoteGitPathBytes(h.slice(1, -1)) : h;
-    if (!isSafeRepoPath(y)) continue;
-    let S = s[3];
-    n.set(y, S);
-    if ((S === "A" && isEmptyBlobId(s[2])) || (S === "D" && isEmptyBlobId(s[1]))) r.add(y);
+  let statusByPath = new Map();
+  let emptyByPath = new Set();
+  for (let match of stdout.matchAll(/^:\d{6} \d{6} (\S+) (\S+) ([A-Z])\t(.+)$/gm)) {
+    let rawPath = match[4];
+    let path =
+      rawPath.startsWith('"') && rawPath.endsWith('"') ? unquoteGitPathBytes(rawPath.slice(1, -1)) : rawPath;
+    if (!isSafeRepoPath(path)) continue;
+    let status = match[3];
+    statusByPath.set(path, status);
+    if ((status === "A" && isEmptyBlobId(match[2])) || (status === "D" && isEmptyBlobId(match[1])))
+      emptyByPath.add(path);
   }
   return {
-    statusByPath: n,
-    emptyByPath: r,
+    statusByPath,
+    emptyByPath,
   };
 }
 //@ chunk-e6aww6q8.js:4776858-4777177 placement
 /**
  * 对比快照时去掉只有 CRLF 行尾差异的文件（git diff --ignore-cr-at-eol 无变化者）。
  */
-async function dropCrlfOnlyChanges(e, n, r, statusByPath, hunks) {
-  for (let y of batchPathsForArgv([...statusByPath.keys()].filter((key) => r.get(key)))) {
-    if (!(await isPrivateDirIntact(e, n))) return;
-    let S = await runDiffTree(e, n.tree, ["-z", "--numstat", "--ignore-cr-at-eol"], y);
-    if (S.code !== 0) return;
-    let w = new Set(S.stdout.split("\x00").map((L) => L.split("\t")[2]));
-    for (let L of y)
-      if (!w.has(L)) {
-        hunks?.delete(L);
-        statusByPath.delete(L);
+async function dropCrlfOnlyChanges(before, after, sameSizeByPath, statusByPath, hunks) {
+  for (let pathBatch of batchPathsForArgv(
+    [...statusByPath.keys()].filter((key) => sameSizeByPath.get(key)),
+  )) {
+    if (!(await isPrivateDirIntact(before, after))) return;
+    let result = await runDiffTree(before, after.tree, ["-z", "--numstat", "--ignore-cr-at-eol"], pathBatch);
+    if (result.code !== 0) return;
+    let changedPaths = new Set(result.stdout.split("\x00").map((line) => line.split("\t")[2]));
+    for (let path of pathBatch)
+      if (!changedPaths.has(path)) {
+        hunks?.delete(path);
+        statusByPath.delete(path);
       }
   }
 }
@@ -326,61 +361,69 @@ async function dropCrlfOnlyChanges(e, n, r, statusByPath, hunks) {
 /**
  * 对比命令前后的快照树，列出改动文件；超时或超出输出上限时只列路径。
  */
-async function diffSnapshotTrees(before, n) {
+async function diffSnapshotTrees(before, after) {
   let { repoRoot, gitDirectory } = before;
-  let h = {
+  let unavailableResult = {
     files: [],
     moreFiles: 0,
     unavailable: true,
   };
-  if (!(await isPrivateDirIntact(before, n))) return h;
-  let { tree, oversized, oversizedPaths } = n;
-  let L = new Map();
+  if (!(await isPrivateDirIntact(before, after))) return unavailableResult;
+  let { tree, oversized, oversizedPaths } = after;
+  let sameSizeByPath = new Map();
   for (let { path, sameSize, changedAgain } of convertedFilesByGitDir
     .get(gitDirectory)
-    ?.slice(before.sharesTreeReads ? before.convertedFound : n.convertedBefore, n.convertedFound) ?? [])
-    if (!changedAgain || L.has(path)) L.set(path, sameSize);
-  let G = await runDiffTree(before, tree, ["--raw", "-p"]);
-  let { stdout, code } = G;
+    ?.slice(before.sharesTreeReads ? before.convertedFound : after.convertedBefore, after.convertedFound) ??
+    [])
+    if (!changedAgain || sameSizeByPath.has(path)) sameSizeByPath.set(path, sameSize);
+  let diffResult = await runDiffTree(before, tree, ["--raw", "-p"]);
+  let { stdout, code } = diffResult;
   if (code !== 0) {
-    if (!before.sharesTreeReads) return h;
-    let Ie = G.timedOut ? "timed out" : G.maxBufferExceeded ? "passed the output cap" : `exit ${code}`;
-    logForDebugging(`bashEditDiff: diff-tree ${Ie}; listing paths only`);
-    if (!(await isPrivateDirIntact(before, n))) return h;
-    let Me = await runDiffTree(before, tree, ["--raw"]);
-    if (Me.code !== 0) {
-      logForDebugging(`bashEditDiff: path listing failed too, exit ${Me.code}`);
-      return oversizedOnlyResult(repoRoot, n) ?? h;
+    if (!before.sharesTreeReads) return unavailableResult;
+    let failureText = diffResult.timedOut
+      ? "timed out"
+      : diffResult.maxBufferExceeded
+        ? "passed the output cap"
+        : `exit ${code}`;
+    logForDebugging(`bashEditDiff: diff-tree ${failureText}; listing paths only`);
+    if (!(await isPrivateDirIntact(before, after))) return unavailableResult;
+    let rawResult = await runDiffTree(before, tree, ["--raw"]);
+    if (rawResult.code !== 0) {
+      logForDebugging(`bashEditDiff: path listing failed too, exit ${rawResult.code}`);
+      return oversizedOnlyResult(repoRoot, after) ?? unavailableResult;
     }
-    let { statusByPath } = parseRawDiffStatus(Me.stdout);
-    await dropCrlfOnlyChanges(before, n, L, statusByPath);
-    if (statusByPath.size === 0) return oversizedOnlyResult(repoRoot, n);
+    let { statusByPath } = parseRawDiffStatus(rawResult.stdout);
+    await dropCrlfOnlyChanges(before, after, sameSizeByPath, statusByPath);
+    if (statusByPath.size === 0) return oversizedOnlyResult(repoRoot, after);
     return {
       files: [],
       moreFiles: statusByPath.size + oversized,
       changedFiles: [...statusByPath.keys(), ...oversizedPaths]
         .slice(0, SHARED_READ_SPACING_MS)
-        .map((ze) => join(repoRoot, ze)),
+        .map((path) => join(repoRoot, path)),
       unavailable: true,
     };
   }
   let { statusByPath, emptyByPath } = parseRawDiffStatus(stdout);
   let { hunks } = parseGitDiff(stdout);
-  await dropCrlfOnlyChanges(before, n, L, statusByPath, hunks);
-  for (let Ie of batchPathsForArgv([...statusByPath.keys()].filter((key) => L.has(key)))) {
-    if (!(await isPrivateDirIntact(before, n))) break;
-    let Me = await runDiffTree(before, tree, ["-p", "--ignore-cr-at-eol"], Ie);
-    if (Me.code === 0) for (let [We, ze] of parseGitDiff(Me.stdout).hunks) hunks.set(We, ze);
+  await dropCrlfOnlyChanges(before, after, sameSizeByPath, statusByPath, hunks);
+  for (let pathBatch of batchPathsForArgv(
+    [...statusByPath.keys()].filter((key) => sameSizeByPath.has(key)),
+  )) {
+    if (!(await isPrivateDirIntact(before, after))) break;
+    let result = await runDiffTree(before, tree, ["-p", "--ignore-cr-at-eol"], pathBatch);
+    if (result.code === 0)
+      for (let [path, fileHunks] of parseGitDiff(result.stdout).hunks) hunks.set(path, fileHunks);
   }
   let size = statusByPath.size;
-  if (size === 0 && hunks.size === 0) return oversizedOnlyResult(repoRoot, n);
-  let Ae = [];
-  for (let Ie of emptyByPath) {
-    if (Ae.length >= MAX_DIFF_FILES) break;
-    Ae.push({
-      filePath: join(repoRoot, Ie),
+  if (size === 0 && hunks.size === 0) return oversizedOnlyResult(repoRoot, after);
+  let files = [];
+  for (let path of emptyByPath) {
+    if (files.length >= MAX_DIFF_FILES) break;
+    files.push({
+      filePath: join(repoRoot, path),
       hunks: [],
-      ...(statusByPath.get(Ie) === "A"
+      ...(statusByPath.get(path) === "A"
         ? {
             created: true,
           }
@@ -389,32 +432,35 @@ async function diffSnapshotTrees(before, n) {
           }),
     });
   }
-  for (let [Ie, Me] of hunks) {
-    if (Ae.length >= MAX_DIFF_FILES) break;
-    if (!isDiffSmallEnough(Me) || Me.reduce((acc, lt) => acc + lt.lines.length, 0) >= MAX_HUNK_LINE_COUNT)
+  for (let [path, fileHunks] of hunks) {
+    if (files.length >= MAX_DIFF_FILES) break;
+    if (
+      !isDiffSmallEnough(fileHunks) ||
+      fileHunks.reduce((acc, hunk) => acc + hunk.lines.length, 0) >= MAX_HUNK_LINE_COUNT
+    )
       continue;
-    let We = statusByPath.get(Ie);
-    if (We === undefined) continue;
-    Ae.push({
-      filePath: join(repoRoot, Ie),
-      hunks: Me.map((ze) => ({
-        ...ze,
-        lines: ze.lines.filter((line) => line !== ""),
+    let status = statusByPath.get(path);
+    if (status === undefined) continue;
+    files.push({
+      filePath: join(repoRoot, path),
+      hunks: fileHunks.map((hunk) => ({
+        ...hunk,
+        lines: hunk.lines.filter((line) => line !== ""),
       })),
-      ...(We === "A" && {
+      ...(status === "A" && {
         created: true,
       }),
-      ...(We === "D" && {
+      ...(status === "D" && {
         deleted: true,
       }),
     });
   }
   return {
-    files: Ae,
-    moreFiles: Math.max(size, hunks.size) - Ae.length + oversized,
+    files,
+    moreFiles: Math.max(size, hunks.size) - files.length + oversized,
     changedFiles: [...statusByPath.keys(), ...oversizedPaths]
       .slice(0, SHARED_READ_SPACING_MS)
-      .map((Ie) => join(repoRoot, Ie)),
+      .map((path) => join(repoRoot, path)),
     ...(oversized > 0 && {
       unavailable: true,
     }),
@@ -424,106 +470,113 @@ async function diffSnapshotTrees(before, n) {
 /**
  * 记录各仓库上正在运行的命令，同一仓库有多个命令时把它们都标记为并发。
  */
-var commandsByRepo = new Map();
-var weakSet_9 = new WeakSet();
+var commandsByRepo; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var weakSet_9;
+deferInit("chunk-e6aww6q8.js:4779054", () => {
+  commandsByRepo = new Map();
+  weakSet_9 = new WeakSet();
+});
 //@ chunk-e6aww6q8.js:4779086-4779209 placement
 /**
  * 登记某仓库上正在运行的命令；同一仓库有多个时把它们都标记为并发。
  */
-function registerConcurrentCommand(e) {
-  let n = {};
-  let r = commandsByRepo.get(e);
-  if (!r) {
-    r = new Set();
-    commandsByRepo.set(e, r);
+function registerConcurrentCommand(repoRoot) {
+  let token = {};
+  let tokens = commandsByRepo.get(repoRoot);
+  if (!tokens) {
+    tokens = new Set();
+    commandsByRepo.set(repoRoot, tokens);
   }
-  r.add(n);
-  if (r.size > 1) for (let s of r) weakSet_9.add(s);
-  return n;
+  tokens.add(token);
+  if (tokens.size > 1) for (let token of tokens) weakSet_9.add(token);
+  return token;
 }
 //@ chunk-e6aww6q8.js:4779209-4779304 placement
 /**
  * 从仓库的命令集合里注销某命令，返回它此前是否被标记为并发。
  */
-function unregisterConcurrentCommand(e, n) {
-  let r = commandsByRepo.get(e);
-  r?.delete(n);
-  if (r?.size === 0) commandsByRepo.delete(e);
-  return weakSet_9.has(n);
+function unregisterConcurrentCommand(repoRoot, token) {
+  let tokens = commandsByRepo.get(repoRoot);
+  tokens?.delete(token);
+  if (tokens?.size === 0) commandsByRepo.delete(repoRoot);
+  return weakSet_9.has(token);
 }
 //@ chunk-e6aww6q8.js:4779304-4779341 placement
 /**
  * 生成仓库的差异串行队列键，让差异计算与快照操作在同仓库不同队列上排队。
  */
-function diffSerialKey(e) {
-  return `${e}\x00diff`;
+function diffSerialKey(repoRoot) {
+  return `${repoRoot}\x00diff`;
 }
 //@ chunk-e6aww6q8.js:4779341-4779449 placement
-function runSerialForRepo(e, n) {
-  let s = (serialChainByRepo.get(e) ?? Promise.resolve()).then(n, n);
+function runSerialForRepo(repoRoot, task) {
+  let chained = (serialChainByRepo.get(repoRoot) ?? Promise.resolve()).then(task, task);
   serialChainByRepo.set(
-    e,
-    s.catch(() => {
+    repoRoot,
+    chained.catch(() => {
       return;
     }),
   );
-  return s;
+  return chained;
 }
 //@ chunk-e6aww6q8.js:4779449-4779706 placement
 /**
  * 共享读取工作树快照：同一 git 目录并发的读取合并为一次，记录调用者数量。
  */
-function readSharedTree(e, n) {
-  let r = sharedReadsInFlight.get(n);
-  if (r) {
-    r.callers++;
-    return r.read;
+function readSharedTree(repoRoot, gitDirectory) {
+  let inFlight = sharedReadsInFlight.get(gitDirectory);
+  if (inFlight) {
+    inFlight.callers++;
+    return inFlight.read;
   }
-  let s = {
+  let sharedRead = {
     callers: 1,
-    read: runSerialForRepo(e, async () => {
-      let { callers } = s;
-      sharedReadsInFlight.delete(n);
-      let y = expectedFilesByGitDir.has(n) || isRepoSnapshotGivenUp(e) ? n : await getSharedSnapshotRepo(e);
-      let S = y ? await readTreeState(e, y, true) : null;
+    read: runSerialForRepo(repoRoot, async () => {
+      let { callers } = sharedRead;
+      sharedReadsInFlight.delete(gitDirectory);
+      let sharedSnapshotRepo =
+        expectedFilesByGitDir.has(gitDirectory) || isRepoSnapshotGivenUp(repoRoot)
+          ? gitDirectory
+          : await getSharedSnapshotRepo(repoRoot);
+      let treeState = sharedSnapshotRepo ? await readTreeState(repoRoot, sharedSnapshotRepo, true) : null;
       return (
-        S && {
-          ...S,
+        treeState && {
+          ...treeState,
           callers,
         }
       );
     }),
   };
-  sharedReadsInFlight.set(n, s);
-  return s.read;
+  sharedReadsInFlight.set(gitDirectory, sharedRead);
+  return sharedRead.read;
 }
 //@ chunk-e6aww6q8.js:4779706-4780015 placement
 /**
  * 为 git 目录生成工作树快照状态：快照树、超大文件统计、期望文件与转换计数。
  */
-async function readTreeState(e, n, r) {
-  let convertedBefore = convertedFilesByGitDir.get(n)?.length ?? 0;
-  let h = await snapshotWorkingTree(e, n, r);
-  if (!h) return null;
-  let y = oversizedByGitDir.get(n);
+async function readTreeState(repoRoot, gitDirectory, useSharedReads) {
+  let convertedBefore = convertedFilesByGitDir.get(gitDirectory)?.length ?? 0;
+  let tree = await snapshotWorkingTree(repoRoot, gitDirectory, useSharedReads);
+  if (!tree) return null;
+  let oversized = oversizedByGitDir.get(gitDirectory);
   return {
     callers: 1,
     convertedBefore,
-    gitDirectory: n,
-    tree: h,
-    oversized: y?.changed ?? 0,
-    oversizedPaths: y?.changedPaths ?? [],
+    gitDirectory,
+    tree,
+    oversized: oversized?.changed ?? 0,
+    oversizedPaths: oversized?.changedPaths ?? [],
     diffByBeforeState: new Map(),
-    expectedFiles: expectedFilesByGitDir.get(n),
-    convertedFound: convertedFilesByGitDir.get(n)?.length ?? 0,
+    expectedFiles: expectedFilesByGitDir.get(gitDirectory),
+    convertedFound: convertedFilesByGitDir.get(gitDirectory)?.length ?? 0,
   };
 }
 //@ chunk-e6aww6q8.js:4780015-4780414 placement
 /**
  * 用 git check-ignore 判断某目录是否被忽略（路径须在仓库内、仓库已被观察且有效）；无法判断返回 null。
  */
-async function isDirectoryIgnored(root, n) {
-  let joined = relative(root, n).split(sep).join("/");
+async function isDirectoryIgnored(root, directory) {
+  let joined = relative(root, directory).split(sep).join("/");
   if (
     joined === "" ||
     joined.startsWith("..") ||
@@ -535,8 +588,9 @@ async function isDirectoryIgnored(root, n) {
   let sharedSnapshotRepo = await getSharedSnapshotRepo(root);
   if (!sharedSnapshotRepo) return null;
   if (!expectedFilesByGitDir.has(sharedSnapshotRepo)) return null;
-  let h = objectsDirByGitDir.get(sharedSnapshotRepo);
-  if (!h || !(await verifyPrivateGitDir(sharedSnapshotRepo, h))) return null;
+  let expectedObjectFiles = objectsDirByGitDir.get(sharedSnapshotRepo);
+  if (!expectedObjectFiles || !(await verifyPrivateGitDir(sharedSnapshotRepo, expectedObjectFiles)))
+    return null;
   let { code } = await runSnapshotGit(
     root,
     sharedSnapshotRepo,
@@ -549,22 +603,22 @@ async function isDirectoryIgnored(root, n) {
   return code === 0 ? true : code === 1 ? false : null;
 }
 //@ chunk-e6aww6q8.js:4780414-4780943 placement
-async function listIgnoredFiles(e) {
-  let n = new Set();
-  if (isRepoSnapshotGivenUp(e)) return n;
-  let sharedSnapshotRepo = await getSharedSnapshotRepo(e);
-  if (!sharedSnapshotRepo) return n;
-  if (isSharedSnapshotEnabled() && !prefetchedTrees.has(sharedSnapshotRepo))
-    await readSharedTree(e, sharedSnapshotRepo).catch(() => null);
-  return runSerialForRepo(e, async () => {
-    let s = objectsDirByGitDir.get(sharedSnapshotRepo);
-    if (!s || !(await verifyPrivateGitDir(sharedSnapshotRepo, s))) {
-      abandonSharedRepo(e, sharedSnapshotRepo, "ignored");
-      return n;
+async function listIgnoredFiles(repoRoot) {
+  let ignoredFiles = new Set();
+  if (isRepoSnapshotGivenUp(repoRoot)) return ignoredFiles;
+  let gitDirectory = await getSharedSnapshotRepo(repoRoot);
+  if (!gitDirectory) return ignoredFiles;
+  if (isSharedSnapshotEnabled() && !prefetchedTrees.has(gitDirectory))
+    await readSharedTree(repoRoot, gitDirectory).catch(() => null);
+  return runSerialForRepo(repoRoot, async () => {
+    let expectedObjectFiles = objectsDirByGitDir.get(gitDirectory);
+    if (!expectedObjectFiles || !(await verifyPrivateGitDir(gitDirectory, expectedObjectFiles))) {
+      abandonSharedRepo(repoRoot, gitDirectory, "ignored");
+      return ignoredFiles;
     }
-    let h = await runSnapshotGitStep(
-      e,
-      sharedSnapshotRepo,
+    let result = await runSnapshotGitStep(
+      repoRoot,
+      gitDirectory,
       [
         "status",
         "--porcelain=v2",
@@ -576,42 +630,42 @@ async function listIgnoredFiles(e) {
       ],
       DIFF_TIMEOUT_MS,
     );
-    if (h.code !== 0) return n;
-    for (let y of h.stdout.split("\x00"))
-      if (y.startsWith("! ") && y.endsWith("/") && isSafeRepoPath(y.slice(2, -1)))
-        n.add(join(e, y.slice(2, -1)));
-    return n;
+    if (result.code !== 0) return ignoredFiles;
+    for (let entry of result.stdout.split("\x00"))
+      if (entry.startsWith("! ") && entry.endsWith("/") && isSafeRepoPath(entry.slice(2, -1)))
+        ignoredFiles.add(join(repoRoot, entry.slice(2, -1)));
+    return ignoredFiles;
   });
 }
 //@ chunk-e6aww6q8.js:4780943-4781127 placement
-function getSharedSnapshotRepo(e) {
+function getSharedSnapshotRepo(repoRoot) {
   if (isCleanupStarted()) return Promise.resolve(null);
-  let n = sharedRepoByRoot.get(e);
-  if (!n) {
-    n = createSharedSnapshotRepo(e).then(
+  let sharedRepo = sharedRepoByRoot.get(repoRoot);
+  if (!sharedRepo) {
+    sharedRepo = createSharedSnapshotRepo(repoRoot).then(
       (sharedSnapshotRepo) => {
         if (!sharedSnapshotRepo) {
-          sharedRepoByRoot.delete(e);
-          recordSnapshotFailure(e);
+          sharedRepoByRoot.delete(repoRoot);
+          recordSnapshotFailure(repoRoot);
         }
         return sharedSnapshotRepo;
       },
       () => {
-        sharedRepoByRoot.delete(e);
-        recordSnapshotFailure(e);
+        sharedRepoByRoot.delete(repoRoot);
+        recordSnapshotFailure(repoRoot);
         return null;
       },
     );
-    sharedRepoByRoot.set(e, n);
+    sharedRepoByRoot.set(repoRoot, sharedRepo);
   }
-  return n;
+  return sharedRepo;
 }
 //@ chunk-e6aww6q8.js:4781127-4781314 placement
-function recordSnapshotFailure(e) {
-  let n = (snapshotFailureCounts.get(e) ?? 0) + 1;
-  snapshotFailureCounts.set(e, n);
-  if (n === MAX_SNAPSHOT_FAILURES) {
-    logForDebugging(`bashEditDiff: giving up on ${e} for this session`);
+function recordSnapshotFailure(repoRoot) {
+  let failureCount = (snapshotFailureCounts.get(repoRoot) ?? 0) + 1;
+  snapshotFailureCounts.set(repoRoot, failureCount);
+  if (failureCount === MAX_SNAPSHOT_FAILURES) {
+    logForDebugging(`bashEditDiff: giving up on ${repoRoot} for this session`);
     logFeatureBad(
       isSharedSnapshotEnabled() ? "bash_edit_diff_shared" : "bash_edit_diff",
       "snapshot_given_up",
@@ -622,109 +676,115 @@ function recordSnapshotFailure(e) {
 /**
  * 为多个命令共享的快照创建私有 git 仓库（支持 sha256 对象格式）。
  */
-async function createSharedSnapshotRepo(e) {
-  let gitDir = await getGitDir(e);
+async function createSharedSnapshotRepo(repoRoot) {
+  let gitDir = await getGitDir(repoRoot);
   if (!gitDir) return null;
-  let throughRoot = resolveThroughRoot(e, join((await getCommonDir(gitDir)) ?? gitDir, "objects"));
-  if (!(await isSafeGitObjectsDir(throughRoot, e))) return null;
+  let objectsDir = resolveThroughRoot(repoRoot, join((await getCommonDir(gitDir)) ?? gitDir, "objects"));
+  if (!(await isSafeGitObjectsDir(objectsDir, repoRoot))) return null;
   let privateTempRoot = await ensurePrivateTempRoot();
   if (privateTempRoot === null) return null;
-  let h = join(
+  let snapshotDir = join(
     privateTempRoot.root,
-    `${bunHashOf(getSessionId())}-${bunHashOf(e)}-${randomBytes(8).toString("hex")}`,
+    `${bunHashOf(getSessionId())}-${bunHashOf(repoRoot)}-${randomBytes(8).toString("hex")}`,
   );
-  await mkdir(h, {
+  await mkdir(snapshotDir, {
     mode: 448,
   });
   logForDebugging(`bashEditDiff: commands share snapshots: ${isSharedSnapshotEnabled()}`);
-  objectsDirByGitDir.set(h, throughRoot);
-  privateDirIdentity.set(h, privateTempRoot.identity);
-  let y = false;
+  objectsDirByGitDir.set(snapshotDir, objectsDir);
+  privateDirIdentity.set(snapshotDir, privateTempRoot.identity);
+  let isComplete = false;
   try {
     registerCleanup(cleanupSnapshotRepos);
-    await mkdir(join(h, "objects", "info"), {
+    await mkdir(join(snapshotDir, "objects", "info"), {
       recursive: true,
       mode: 448,
     });
-    await mkdir(join(h, "refs", "heads"), {
+    await mkdir(join(snapshotDir, "refs", "heads"), {
       recursive: true,
       mode: 448,
     });
-    await mkdir(join(h, "info"), {
+    await mkdir(join(snapshotDir, "info"), {
       mode: 448,
     });
-    let S = await usesSha256Objects(throughRoot, gitDir);
-    let w = {
+    let isSha256 = await usesSha256Objects(objectsDir, gitDir);
+    let files = {
       HEAD: `ref: refs/heads/main
 `,
       config: `[core]
-	repositoryformatversion = ${S ? 1 : 0}
+	repositoryformatversion = ${isSha256 ? 1 : 0}
 	bare = false
 	logallrefupdates = false
 	untrackedCache = true
 ${
-  S
+  isSha256
     ? `[extensions]
 	objectformat = sha256
 `
     : ""
 }`,
-      "objects/info/alternates": `${throughRoot}
+      "objects/info/alternates": `${objectsDir}
 `,
       "info/attributes": `* -filter -working-tree-encoding -text -eol -ident !diff
 `,
       "info/exclude":
-        (await writeFileAtomically(
-          join(dirname(throughRoot), "info", "exclude"),
-          SNAPSHOT_EXCLUDE_CONTENT,
-        )) ?? "",
+        (await writeFileAtomically(join(dirname(objectsDir), "info", "exclude"), SNAPSHOT_EXCLUDE_CONTENT)) ??
+        "",
     };
-    for (let [key, value] of Object.entries(w))
-      await writeFile(join(h, key), value, {
+    for (let [key, value] of Object.entries(files))
+      await writeFile(join(snapshotDir, key), value, {
         flag: "wx",
       });
-    let excludesFile = await readExcludesFile(h);
-    let G =
-      excludesFile !== null && isAbsolute(excludesFile) && !isOnForeignMount(excludesFile, h)
+    let excludesFile = await readExcludesFile(snapshotDir);
+    let configGlobal =
+      excludesFile !== null && isAbsolute(excludesFile) && !isOnForeignMount(excludesFile, snapshotDir)
         ? `[core]
 	excludesFile = ${quoteGitPath(excludesFile)}
 `
         : "";
-    await writeFile(join(h, "config.global"), G, {
+    await writeFile(join(snapshotDir, "config.global"), configGlobal, {
       flag: "wx",
     });
-    expectedFilesByGitDir.set(h, {
-      ...w,
-      "config.global": G,
+    expectedFilesByGitDir.set(snapshotDir, {
+      ...files,
+      "config.global": configGlobal,
     });
-    let q = join(gitDir, "index");
-    let Z = await lstat(q).catch(() => null);
-    if (Z?.isFile() && Z.size <= MAX_INDEX_BYTES) {
-      await copyFileNoFollow(q, join(h, "index"), {
+    let indexPath = join(gitDir, "index");
+    let indexStat = await lstat(indexPath).catch(() => null);
+    if (indexStat?.isFile() && indexStat.size <= MAX_INDEX_BYTES) {
+      await copyFileNoFollow(indexPath, join(snapshotDir, "index"), {
         exclusive: true,
         nonBlocking: true,
       }).catch(() => {
         return;
       });
-      let ke = await runSnapshotGit(e, h, ["ls-files", "-z", "--stage"], {
+      let result = await runSnapshotGit(repoRoot, snapshotDir, ["ls-files", "-z", "--stage"], {
         timeout: GIT_INDEX_TIMEOUT_MS,
         maxBuffer: MAX_INDEX_BYTES * 2,
       });
-      if (!(ke.code === 0 && isStageZeroListing(ke.stdout)))
-        await unlink(join(h, "index")).catch(() => {
+      if (!(result.code === 0 && isStageZeroListing(result.stdout)))
+        await unlink(join(snapshotDir, "index")).catch(() => {
           return;
         });
     }
-    await runSnapshotGitStep(e, h, ["update-index", "--untracked-cache"], GIT_INDEX_TIMEOUT_MS);
-    let Se = await runSnapshotGitStep(e, h, ["write-tree"], GIT_INDEX_TIMEOUT_MS);
-    if (Se.code !== 0 || !(await commitSnapshotTree(e, h, Se.stdout.trim(), GIT_INDEX_TIMEOUT_MS)))
+    await runSnapshotGitStep(
+      repoRoot,
+      snapshotDir,
+      ["update-index", "--untracked-cache"],
+      GIT_INDEX_TIMEOUT_MS,
+    );
+    let result = await runSnapshotGitStep(repoRoot, snapshotDir, ["write-tree"], GIT_INDEX_TIMEOUT_MS);
+    if (
+      result.code !== 0 ||
+      !(await commitSnapshotTree(repoRoot, snapshotDir, result.stdout.trim(), GIT_INDEX_TIMEOUT_MS))
+    )
       return null;
-    y = true;
-    return h;
+    isComplete = true;
+    return snapshotDir;
   } finally {
-    if (!y) {
-      expectedFilesByGitDir.delete(h);
-      await removePrivateGitDir(h);
+    if (!isComplete) {
+      expectedFilesByGitDir.delete(snapshotDir);
+      await removePrivateGitDir(snapshotDir);
     }
   }
 }
@@ -733,24 +793,24 @@ ${
  * 给 git 配置值加双引号并转义反斜杠与引号，用于 core.excludesFile 之类的路径。
  */
 function quoteGitPath(excludesFile) {
-  return `"${excludesFile.replace(/["\\]/g, (n) => `\\${n}`)}"`;
+  return `"${excludesFile.replace(/["\\]/g, (char) => `\\${char}`)}"`;
 }
 //@ chunk-e6aww6q8.js:4783054-4783367 placement
 /**
  * 读取仓库 core.excludesFile 配置（在受控 git 环境中执行），返回路径或 null。
  */
-async function readExcludesFile(e) {
+async function readExcludesFile(snapshotDir) {
   let snapshotGitEnv = await buildSnapshotGitEnv(
     [gitExe(), "config", "--get", "--path", "core.excludesFile"],
     getRemoteHostSessionCount({
-      GIT_DIR: e,
+      GIT_DIR: snapshotDir,
     }),
-    e,
+    snapshotDir,
   );
   if (snapshotGitEnv === null) return null;
   try {
     let { stdout, code } = await execFileNoThrowWithCwd(snapshotGitEnv.file, snapshotGitEnv.args, {
-      cwd: e,
+      cwd: snapshotDir,
       timeout: GIT_STEP_TIMEOUT_MS,
       preserveOutputOnError: false,
       env: snapshotGitEnv.env,
@@ -762,42 +822,45 @@ async function readExcludesFile(e) {
   }
 }
 //@ chunk-e6aww6q8.js:4783367-4783514 placement
-async function usesSha256Objects(throughRoot, gitDir) {
-  let r = await writeFileAtomically(join(throughRoot, "..", "config"), 1e6);
-  let s = await writeFileAtomically(join(gitDir, "config"), 1e6);
-  return /objectformat\s*=\s*sha256/i.test(r ?? s ?? "");
+async function usesSha256Objects(objectsDir, gitDir) {
+  let commonConfig = await writeFileAtomically(join(objectsDir, "..", "config"), 1e6);
+  let repoConfig = await writeFileAtomically(join(gitDir, "config"), 1e6);
+  return /objectformat\s*=\s*sha256/i.test(commonConfig ?? repoConfig ?? "");
 }
 //@ chunk-e6aww6q8.js:4783514-4783689 placement
 /**
  * 把根目录内的路径通过根目录的真实路径解析（根目录不安全或不在其中时原样返回）。
  */
-function resolveThroughRoot(e, n) {
-  let r = resolve_2(e);
-  let s = resolve_2(n);
-  if (s !== r && !s.startsWith(r + sep)) return s;
-  if (rawPointerPathIsUnsafe(r, r)) return s;
-  let h;
+function resolveThroughRoot(repoRoot, targetPath) {
+  let resolvedRoot = resolve_2(repoRoot);
+  let resolvedTarget = resolve_2(targetPath);
+  if (resolvedTarget !== resolvedRoot && !resolvedTarget.startsWith(resolvedRoot + sep))
+    return resolvedTarget;
+  if (rawPointerPathIsUnsafe(resolvedRoot, resolvedRoot)) return resolvedTarget;
+  let realRoot;
   try {
-    h = realpathSync(r);
+    realRoot = realpathSync(resolvedRoot);
   } catch {
-    return s;
+    return resolvedTarget;
   }
-  return isOnForeignMount(h, r) ? s : join(h, s.slice(r.length));
+  return isOnForeignMount(realRoot, resolvedRoot)
+    ? resolvedTarget
+    : join(realRoot, resolvedTarget.slice(resolvedRoot.length));
 }
 //@ chunk-e6aww6q8.js:4783689-4784244 placement = writeRemoteEntriesToLocal (0.346)
-async function isSafeGitObjectsDir(e, n, r = 0, s = new Set()) {
-  if (r > MAX_ALTERNATE_DEPTH || s.has(e)) return false;
-  s.add(e);
+async function isSafeGitObjectsDir(objectsDir, repoRoot, depth = 0, visited = new Set()) {
+  if (depth > MAX_ALTERNATE_DEPTH || visited.has(objectsDir)) return false;
+  visited.add(objectsDir);
   if (
-    !(await isRealDirectoryChain_2(e)) ||
-    !(await isDirFreeOfSymlinks(e)) ||
-    !(await isDirFreeOfSymlinks(join(e, "pack")))
+    !(await isRealDirectoryChain_2(objectsDir)) ||
+    !(await isDirFreeOfSymlinks(objectsDir)) ||
+    !(await isDirFreeOfSymlinks(join(objectsDir, "pack")))
   )
     return false;
-  let h = join(e, "info", "alternates");
-  let y = await writeFileAtomically(h, SNAPSHOT_EXCLUDE_CONTENT);
-  if (y === null)
-    return lstat(h).then(
+  let alternatesPath = join(objectsDir, "info", "alternates");
+  let alternatesContent = await writeFileAtomically(alternatesPath, SNAPSHOT_EXCLUDE_CONTENT);
+  if (alternatesContent === null)
+    return lstat(alternatesPath).then(
       () => false,
       (error) =>
         typeof error === "object" &&
@@ -805,161 +868,173 @@ async function isSafeGitObjectsDir(e, n, r = 0, s = new Set()) {
         "code" in error &&
         (error.code === "ENOENT" || error.code === "ENOTDIR"),
     );
-  for (let S of y
+  for (let line of alternatesContent
     .split(
       `
 `,
     )
     .map((line) => line.trim())) {
-    if (S === "" || S.startsWith("#")) continue;
-    if (isOnForeignMount(S, e)) return false;
-    let root = isAbsolute(S) ? parse(S).root : null;
-    let dirNoLinks = await resolveDirNoLinks(root ?? e, root === null ? S : S.slice(root.length));
-    if (dirNoLinks === null || !(await isSafeGitObjectsDir(dirNoLinks, n, r + 1, s))) return false;
+    if (line === "" || line.startsWith("#")) continue;
+    if (isOnForeignMount(line, objectsDir)) return false;
+    let root = isAbsolute(line) ? parse(line).root : null;
+    let objectsDir_2 = await resolveDirNoLinks(
+      root ?? objectsDir,
+      root === null ? line : line.slice(root.length),
+    );
+    if (objectsDir_2 === null || !(await isSafeGitObjectsDir(objectsDir_2, repoRoot, depth + 1, visited)))
+      return false;
   }
   return true;
 }
 //@ chunk-e6aww6q8.js:4784244-4784577 placement = isErrnoException (0.582)
-async function isDirFreeOfSymlinks(e) {
-  let n;
+async function isDirFreeOfSymlinks(dirPath) {
+  let entries;
   try {
-    n = await readdir(e);
+    entries = await readdir(dirPath);
   } catch (error) {
     let code = typeof error === "object" && error !== null && "code" in error ? error.code : undefined;
     return code === "ENOENT" || code === "ENOTDIR";
   }
-  for (let r of n) {
-    let s = await lstat(join(e, r)).catch((error) =>
+  for (let entry of entries) {
+    let stat = await lstat(join(dirPath, entry)).catch((error) =>
       typeof error === "object" && error !== null && "code" in error && error.code === "ENOENT"
         ? null
         : undefined,
     );
-    if (s === undefined || s?.isSymbolicLink()) return false;
+    if (stat === undefined || stat?.isSymbolicLink()) return false;
   }
   return true;
 }
 //@ chunk-e6aww6q8.js:4784577-4784814 placement
-async function resolveDirNoLinks(e, n) {
-  let r = e;
-  for (let s of n.split(/[\\/]/)) {
-    if (s === "" || s === ".") continue;
-    if (s === "..") {
-      r = dirname(r);
+async function resolveDirNoLinks(rootDir, relativePath) {
+  let currentDir = rootDir;
+  for (let segment of relativePath.split(/[\\/]/)) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      currentDir = dirname(currentDir);
       continue;
     }
-    r = join(r, s);
-    let h = await lstat(r).catch(() => null);
-    if (h === null || h.isSymbolicLink() || !h.isDirectory()) return null;
+    currentDir = join(currentDir, segment);
+    let stat = await lstat(currentDir).catch(() => null);
+    if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) return null;
   }
-  return r;
+  return currentDir;
 }
 //@ chunk-e6aww6q8.js:4784814-4784972 placement
 function isStageZeroListing(stdout) {
-  let n = 0;
-  while (n < stdout.length) {
-    let index = stdout.indexOf("\x00", n);
-    let sliced = stdout.slice(n, index === -1 ? stdout.length : index);
-    if (sliced !== "" && !isStageZeroEntry(sliced)) return false;
+  let pos = 0;
+  while (pos < stdout.length) {
+    let index = stdout.indexOf("\x00", pos);
+    let line = stdout.slice(pos, index === -1 ? stdout.length : index);
+    if (line !== "" && !isStageZeroEntry(line)) return false;
     if (index === -1) break;
-    n = index + 1;
+    pos = index + 1;
   }
   return true;
 }
 //@ chunk-e6aww6q8.js:4784972-4785097 placement
-function isStageZeroEntry(e) {
-  let index = e.indexOf("\t");
-  let r = index === -1 ? "" : e.slice(index + 1);
-  return (index === -1 ? "" : e.slice(0, index).split(" ").at(-1)) === "0" && isSafeRepoPath(r);
+function isStageZeroEntry(line) {
+  let index = line.indexOf("\t");
+  let path = index === -1 ? "" : line.slice(index + 1);
+  return (index === -1 ? "" : line.slice(0, index).split(" ").at(-1)) === "0" && isSafeRepoPath(path);
 }
 //@ chunk-e6aww6q8.js:4785097-4785166 placement
 /**
  * 按平台拆仓库内相对路径：Windows 上 \ 与 / 都是分隔符。
  */
-function splitRepoPath(e) {
-  return getPlatform() === "windows" ? e.split(/[\\/]/) : e.split("/");
+function splitRepoPath(path) {
+  return getPlatform() === "windows" ? path.split(/[\\/]/) : path.split("/");
 }
 //@ chunk-e6aww6q8.js:4785166-4785349 placement
 /**
  * 判断仓库内相对路径安全：非空、非绝对、无控制字符、Windows 下不含冒号，且各段不为空、. 或 ..，也不是保留名。
  */
-function isSafeRepoPath(e) {
+function isSafeRepoPath(path) {
   return (
-    e !== "" &&
-    !e.startsWith("/") &&
-    !/[\0-\x1f\x7f-\x9f\u2028\u2029]/.test(e) &&
-    (getPlatform() !== "windows" || !e.includes(":")) &&
-    !splitRepoPath(e).some((n) => n === "" || n === "." || n === ".." || isReservedGitPathSegment(n))
+    path !== "" &&
+    !path.startsWith("/") &&
+    !/[\0-\x1f\x7f-\x9f\u2028\u2029]/.test(path) &&
+    (getPlatform() !== "windows" || !path.includes(":")) &&
+    !splitRepoPath(path).some(
+      (segment) => segment === "" || segment === "." || segment === ".." || isReservedGitPathSegment(segment),
+    )
   );
 }
 //@ chunk-e6aww6q8.js:4785349-4785447 placement
 /**
  * 判断路径段是否是 git 保留名（.git、git~1 之类）。
  */
-function isReservedGitPathSegment(e) {
-  let replaced = e.toLowerCase().replace(/[. ]+$/, "");
+function isReservedGitPathSegment(segment) {
+  let replaced = segment.toLowerCase().replace(/[. ]+$/, "");
   return replaced === ".git" || /^git~\d+$/.test(replaced);
 }
 //@ chunk-e6aww6q8.js:4785447-4785679 placement
-async function isRealDirectoryChain_2(e) {
-  let n = resolve_2(e);
-  let root = parse(n).root;
-  let filtered = n
+async function isRealDirectoryChain_2(dir) {
+  let resolved = resolve_2(dir);
+  let root = parse(resolved).root;
+  let filtered = resolved
     .slice(root.length)
     .split(sep)
-    .filter((y) => y !== "");
-  let h = root;
-  for (let y of filtered) {
-    h = join(h, y);
-    let S = await lstat(h).catch(() => null);
-    if (S === null || S.isSymbolicLink() || !S.isDirectory()) return false;
+    .filter((segment) => segment !== "");
+  let currentDir = root;
+  for (let segment of filtered) {
+    currentDir = join(currentDir, segment);
+    let stat = await lstat(currentDir).catch(() => null);
+    if (stat === null || stat.isSymbolicLink() || !stat.isDirectory()) return false;
   }
   return true;
 }
 //@ chunk-e6aww6q8.js:4785679-4785900 placement
-async function verifyPrivateGitDir(e, n, expectedFiles = expectedFilesByGitDir.get(e)) {
+async function verifyPrivateGitDir(gitDir, repoRoot, expectedFiles = expectedFilesByGitDir.get(gitDir)) {
   if (!expectedFiles) return false;
   for (let [key, value] of Object.entries(expectedFiles))
-    if ((await writeFileAtomically(join(e, key), SNAPSHOT_EXCLUDE_CONTENT)) !== value) return false;
-  let s = await readdir(e).catch(() => null);
-  if (s === null || s.some((h) => !PRIVATE_GIT_DIR_ENTRIES.has(h))) return false;
-  return isSafeGitObjectsDir(n, e);
+    if ((await writeFileAtomically(join(gitDir, key), SNAPSHOT_EXCLUDE_CONTENT)) !== value) return false;
+  let entries = await readdir(gitDir).catch(() => null);
+  if (entries === null || entries.some((entry) => !PRIVATE_GIT_DIR_ENTRIES.has(entry))) return false;
+  return isSafeGitObjectsDir(repoRoot, gitDir);
 }
 //@ chunk-e6aww6q8.js:4785900-4785996 placement
 /**
  * 私有 git 目录允许出现的顶层条目（HEAD、config、index、objects、refs 等）。
  */
-var PRIVATE_GIT_DIR_ENTRIES = new Set([
-  "HEAD",
-  "config",
-  "config.global",
-  "index",
-  "index.lock",
-  "info",
-  "objects",
-  "refs",
-]);
+var PRIVATE_GIT_DIR_ENTRIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:4785900", () => {
+  PRIVATE_GIT_DIR_ENTRIES = new Set([
+    "HEAD",
+    "config",
+    "config.global",
+    "index",
+    "index.lock",
+    "info",
+    "objects",
+    "refs",
+  ]);
+});
 //@ chunk-e6aww6q8.js:4785996-4786092 placement
 /**
  * 已知仓库的私有对象目录时按其记录校验（.git 未被替换），否则返回 false。
  */
 function verifyKnownPrivateGitDir(base) {
-  let n = objectsDirByGitDir.get(base.gitDirectory);
-  return n ? verifyPrivateGitDir(base.gitDirectory, n) : Promise.resolve(false);
+  let expectedObjectFiles = objectsDirByGitDir.get(base.gitDirectory);
+  return expectedObjectFiles
+    ? verifyPrivateGitDir(base.gitDirectory, expectedObjectFiles)
+    : Promise.resolve(false);
 }
 //@ chunk-e6aww6q8.js:4786092-4788314 placement
 /**
  * 为工作区做快照：用 git status 收集改动与未跟踪文件。
  */
-async function snapshotWorkingTree(e, n, r) {
-  let s = prefetchedTrees.has(n) ? GIT_STEP_TIMEOUT_MS : GIT_INDEX_TIMEOUT_MS;
-  let h = objectsDirByGitDir.get(n);
-  if (!h || !(await verifyPrivateGitDir(n, h))) return abandonSharedRepo(e, n, "alternates");
-  await unlink(join(n, "index.lock")).catch(() => {
+async function snapshotWorkingTree(repoRoot, gitDirectory, findConverted) {
+  let stepTimeout = prefetchedTrees.has(gitDirectory) ? GIT_STEP_TIMEOUT_MS : GIT_INDEX_TIMEOUT_MS;
+  let expectedObjectFiles = objectsDirByGitDir.get(gitDirectory);
+  if (!expectedObjectFiles || !(await verifyPrivateGitDir(gitDirectory, expectedObjectFiles)))
+    return abandonSharedRepo(repoRoot, gitDirectory, "alternates");
+  await unlink(join(gitDirectory, "index.lock")).catch(() => {
     return;
   });
-  let y = await runSnapshotGit(
-    e,
-    n,
+  let statusResult = await runSnapshotGit(
+    repoRoot,
+    gitDirectory,
     [
       "status",
       "--porcelain=v2",
@@ -970,181 +1045,204 @@ async function snapshotWorkingTree(e, n, r) {
       "--ignore-submodules=all",
     ],
     {
-      timeout: s,
+      timeout: stepTimeout,
       env: {
         GIT_OPTIONAL_LOCKS: "1",
       },
     },
   );
-  if (y.code !== 0) return abandonSharedRepo(e, n, `status exit ${y.code}`);
-  let { changed, deleted, untrackedDirectories } = parsePorcelainStatus(y.stdout);
-  let G = prefetchedTrees.get(n);
-  if (changed.length === 0 && deleted.length === 0 && untrackedDirectories.length === 0 && G) {
-    oversizedByGitDir.delete(n);
-    return G;
+  if (statusResult.code !== 0)
+    return abandonSharedRepo(repoRoot, gitDirectory, `status exit ${statusResult.code}`);
+  let { changed, deleted, untrackedDirectories } = parsePorcelainStatus(statusResult.stdout);
+  let prefetchedTree = prefetchedTrees.get(gitDirectory);
+  if (changed.length === 0 && deleted.length === 0 && untrackedDirectories.length === 0 && prefetchedTree) {
+    oversizedByGitDir.delete(gitDirectory);
+    return prefetchedTree;
   }
-  let q = [...untrackedDirectories];
-  let Z = new Map();
-  for (let nt of deleted) {
-    if (!(await parentDirsExist(e, nt, Z))) continue;
-    if ((await lstat(join(e, nt)).catch(() => null))?.isDirectory()) q.push(`${nt}/`);
+  let candidateDirs = [...untrackedDirectories];
+  let parentDirCache = new Map();
+  for (let deletedPath of deleted) {
+    if (!(await parentDirsExist(repoRoot, deletedPath, parentDirCache))) continue;
+    if ((await lstat(join(repoRoot, deletedPath)).catch(() => null))?.isDirectory())
+      candidateDirs.push(`${deletedPath}/`);
   }
-  for (let nt of batchPathsForArgv(q)) {
-    let pt = await runSnapshotGitStep(
-      e,
-      n,
-      ["ls-files", "-z", "--others", "--exclude-standard", "--", ...nt],
-      s,
+  for (let pathBatch of batchPathsForArgv(candidateDirs)) {
+    let result = await runSnapshotGitStep(
+      repoRoot,
+      gitDirectory,
+      ["ls-files", "-z", "--others", "--exclude-standard", "--", ...pathBatch],
+      stepTimeout,
     );
-    if (pt.code !== 0) return abandonSharedRepo(e, n, `ls-files exit ${pt.code}`);
-    changed.push(...pt.stdout.split("\x00").filter((Et) => !Et.endsWith("/") && isSafeRepoPath(Et)));
+    if (result.code !== 0) return abandonSharedRepo(repoRoot, gitDirectory, `ls-files exit ${result.code}`);
+    changed.push(
+      ...result.stdout.split("\x00").filter((path) => !path.endsWith("/") && isSafeRepoPath(path)),
+    );
   }
-  if (q.length > 0 && changed.length === 0 && deleted.length === 0 && G) {
-    oversizedByGitDir.delete(n);
-    return G;
+  if (candidateDirs.length > 0 && changed.length === 0 && deleted.length === 0 && prefetchedTree) {
+    oversizedByGitDir.delete(gitDirectory);
+    return prefetchedTree;
   }
-  let Se = [];
-  let files = oversizedByGitDir.get(n)?.files;
-  let we = new Map();
-  let Ee = 0;
-  let Ae = [];
-  let Ie = new Map();
-  for (let nt of changed) {
-    if (!(await parentDirsExist(e, nt, Z))) continue;
-    let pt = await statNoFollow(join(e, nt));
-    if (pt === "unreadable" || (typeof pt === "object" && pt.size > MAX_SNAPSHOT_FILE_BYTES)) {
-      let Et = typeof pt === "object" ? `${pt.size} ${pt.mtimeMs}` : "unreadable";
-      we.set(nt, Et);
-      if (files?.get(nt) !== Et) {
-        Ee++;
-        Ae.push(nt);
+  let snapshottedPaths = [];
+  let files = oversizedByGitDir.get(gitDirectory)?.files;
+  let oversizedFiles = new Map();
+  let changedOversizedCount = 0;
+  let changedOversizedPaths = [];
+  let sizeByPath = new Map();
+  for (let changedPath of changed) {
+    if (!(await parentDirsExist(repoRoot, changedPath, parentDirCache))) continue;
+    let stat = await statNoFollow(join(repoRoot, changedPath));
+    if (stat === "unreadable" || (typeof stat === "object" && stat.size > MAX_SNAPSHOT_FILE_BYTES)) {
+      let fingerprint = typeof stat === "object" ? `${stat.size} ${stat.mtimeMs}` : "unreadable";
+      oversizedFiles.set(changedPath, fingerprint);
+      if (files?.get(changedPath) !== fingerprint) {
+        changedOversizedCount++;
+        changedOversizedPaths.push(changedPath);
       }
-    } else if (pt !== "other") {
-      Se.push(nt);
-      if (typeof pt === "object") Ie.set(nt, pt.size);
+    } else if (stat !== "other") {
+      snapshottedPaths.push(changedPath);
+      if (typeof stat === "object") sizeByPath.set(changedPath, stat.size);
     }
   }
-  oversizedByGitDir.set(n, {
-    files: we,
-    changed: Ee,
-    changedPaths: Ae,
+  oversizedByGitDir.set(gitDirectory, {
+    files: oversizedFiles,
+    changed: changedOversizedCount,
+    changedPaths: changedOversizedPaths,
   });
-  changed.splice(0, changed.length, ...Se);
-  let Me = r ? await findConvertedFiles(e, n, changed) : new Map();
-  let We = convertedFilesByGitDir.get(n) ?? [];
-  let ze = new Map(We.map((nt) => [nt.path, nt.sameSize]));
-  for (let nt of changed) {
-    let pt = Me.get(nt);
-    if (pt !== undefined)
-      We.push({
-        path: nt,
-        sameSize: Ie.get(nt) === pt,
+  changed.splice(0, changed.length, ...snapshottedPaths);
+  let convertedByPath = findConverted ? await findConvertedFiles(repoRoot, gitDirectory, changed) : new Map();
+  let convertedFiles = convertedFilesByGitDir.get(gitDirectory) ?? [];
+  let sameSizeByPath = new Map(
+    convertedFiles.map((convertedFile) => [convertedFile.path, convertedFile.sameSize]),
+  );
+  for (let changedPath of changed) {
+    let convertedSize = convertedByPath.get(changedPath);
+    if (convertedSize !== undefined)
+      convertedFiles.push({
+        path: changedPath,
+        sameSize: sizeByPath.get(changedPath) === convertedSize,
       });
-    else if (ze.get(nt))
-      We.push({
-        path: nt,
+    else if (sameSizeByPath.get(changedPath))
+      convertedFiles.push({
+        path: changedPath,
         sameSize: false,
         changedAgain: true,
       });
   }
-  convertedFilesByGitDir.set(n, We);
-  for (let [nt, pt] of [
+  convertedFilesByGitDir.set(gitDirectory, convertedFiles);
+  for (let [paths, updateArgs] of [
     [deleted, ["--force-remove"]],
     [changed, ["--add", "--remove"]],
   ]) {
-    if (nt.length === 0) continue;
-    let Et = await runSnapshotGit(e, n, ["update-index", ...pt, "-z", "--stdin"], {
-      timeout: s,
-      input: `${nt.join("\x00")}\x00`,
-    });
-    if (Et.code !== 0) return abandonSharedRepo(e, n, `update-index exit ${Et.code}`);
+    if (paths.length === 0) continue;
+    let result = await runSnapshotGit(
+      repoRoot,
+      gitDirectory,
+      ["update-index", ...updateArgs, "-z", "--stdin"],
+      {
+        timeout: stepTimeout,
+        input: `${paths.join("\x00")}\x00`,
+      },
+    );
+    if (result.code !== 0)
+      return abandonSharedRepo(repoRoot, gitDirectory, `update-index exit ${result.code}`);
   }
-  let lt = await runSnapshotGitStep(e, n, ["write-tree"], s);
-  let trimmed = lt.stdout.trim();
-  if (lt.code !== 0 || !/^[0-9a-f]{40,64}$/.test(trimmed))
-    return abandonSharedRepo(e, n, `write-tree exit ${lt.code}`);
-  if (trimmed !== G && !(await commitSnapshotTree(e, n, trimmed)))
-    return abandonSharedRepo(e, n, "commit-tree");
-  prefetchedTrees.set(n, trimmed);
-  snapshotFailureCounts.delete(e);
-  return trimmed;
+  let result = await runSnapshotGitStep(repoRoot, gitDirectory, ["write-tree"], stepTimeout);
+  let tree = result.stdout.trim();
+  if (result.code !== 0 || !/^[0-9a-f]{40,64}$/.test(tree))
+    return abandonSharedRepo(repoRoot, gitDirectory, `write-tree exit ${result.code}`);
+  if (tree !== prefetchedTree && !(await commitSnapshotTree(repoRoot, gitDirectory, tree)))
+    return abandonSharedRepo(repoRoot, gitDirectory, "commit-tree");
+  prefetchedTrees.set(gitDirectory, tree);
+  snapshotFailureCounts.delete(repoRoot);
+  return tree;
 }
 //@ chunk-e6aww6q8.js:4788314-4789018 placement
 /**
  * 找出索引中经换行/过滤转换后大小与对象大小不同的文件：ls-files --debug 取大小，cat-file --batch-check 对比 blob 大小。
  */
-async function findConvertedFiles(e, n, r) {
-  let s = new Map();
-  let [h = []] = batchPathsForArgv(r);
-  if (h.length === 0) return s;
-  let y = await runSnapshotGitStep(e, n, ["ls-files", "-z", "--stage", "--debug", "--", ...h]);
-  if (y.code !== 0) {
-    logForDebugging(`bashEditDiff: converted-file check: ls-files exit ${y.code}`);
-    return s;
+async function findConvertedFiles(repoRoot, gitDirectory, paths) {
+  let sizeByPath = new Map();
+  let [pathBatch = []] = batchPathsForArgv(paths);
+  if (pathBatch.length === 0) return sizeByPath;
+  let result = await runSnapshotGitStep(repoRoot, gitDirectory, [
+    "ls-files",
+    "-z",
+    "--stage",
+    "--debug",
+    "--",
+    ...pathBatch,
+  ]);
+  if (result.code !== 0) {
+    logForDebugging(`bashEditDiff: converted-file check: ls-files exit ${result.code}`);
+    return sizeByPath;
   }
-  let S = [...y.stdout.matchAll(/^\d{6} ([0-9a-f]{40,64}) 0\t([^\0]+)\0[^]*?\n {2}size: (\d+)\t/gm)];
-  if (S.length === 0) return s;
-  let w = await runSnapshotGit(e, n, ["cat-file", "--batch-check"], {
+  let stageEntries = [
+    ...result.stdout.matchAll(/^\d{6} ([0-9a-f]{40,64}) 0\t([^\0]+)\0[^]*?\n {2}size: (\d+)\t/gm),
+  ];
+  if (stageEntries.length === 0) return sizeByPath;
+  let catFileResult = await runSnapshotGit(repoRoot, gitDirectory, ["cat-file", "--batch-check"], {
     timeout: GIT_STEP_TIMEOUT_MS,
-    input: `${S.map((G) => G[1]).join(`
+    input: `${stageEntries.map((stageEntry) => stageEntry[1]).join(`
 `)}
 `,
   });
-  if (w.code !== 0) {
-    logForDebugging(`bashEditDiff: converted-file check: cat-file exit ${w.code}`);
-    return s;
+  if (catFileResult.code !== 0) {
+    logForDebugging(`bashEditDiff: converted-file check: cat-file exit ${catFileResult.code}`);
+    return sizeByPath;
   }
-  let lines = w.stdout.split(`
+  let lines = catFileResult.stdout.split(`
 `);
-  for (let [G, q] of S.entries()) {
-    let [, Z, Se] = (lines[G] ?? "").split(" ");
-    if (Z === "blob" && q[3] !== "0" && Se !== q[3]) s.set(q[2], Number(q[3]));
+  for (let [idx, stageEntry] of stageEntries.entries()) {
+    let [, objectType, objectSize] = (lines[idx] ?? "").split(" ");
+    if (objectType === "blob" && stageEntry[3] !== "0" && objectSize !== stageEntry[3])
+      sizeByPath.set(stageEntry[2], Number(stageEntry[3]));
   }
-  return s;
+  return sizeByPath;
 }
 //@ chunk-e6aww6q8.js:4789018-4789190 placement
-function* batchPathsForArgv(e) {
-  let n = [];
-  let r = 0;
-  for (let s of e) {
-    let h = Buffer.byteLength(s) + 3 + countCharInString(s, '"') + countCharInString(s, "\\");
-    if (n.length > 0 && r + h > MAX_PATHS_BATCH_CHARS) {
-      yield n;
-      n = [];
-      r = 0;
+function* batchPathsForArgv(paths) {
+  let batch = [];
+  let batchChars = 0;
+  for (let path of paths) {
+    let pathChars =
+      Buffer.byteLength(path) + 3 + countCharInString(path, '"') + countCharInString(path, "\\");
+    if (batch.length > 0 && batchChars + pathChars > MAX_PATHS_BATCH_CHARS) {
+      yield batch;
+      batch = [];
+      batchChars = 0;
     }
-    n.push(s);
-    r += h;
+    batch.push(path);
+    batchChars += pathChars;
   }
-  if (n.length > 0) yield n;
+  if (batch.length > 0) yield batch;
 }
 //@ chunk-e6aww6q8.js:4789190-4789389 placement
-function abandonSharedRepo(e, n, r) {
-  logForDebugging(`bashEditDiff: ${r}`);
-  if (!expectedFilesByGitDir.has(n)) return null;
-  sharedRepoByRoot.delete(e);
-  prefetchedTrees.delete(n);
-  oversizedByGitDir.delete(n);
-  expectedFilesByGitDir.delete(n);
-  recordSnapshotFailure(e);
-  Promise.all([serialChainByRepo.get(e), serialChainByRepo.get(diffSerialKey(e))]).then(() =>
-    removePrivateGitDir(n),
+function abandonSharedRepo(repoRoot, gitDirectory, reason) {
+  logForDebugging(`bashEditDiff: ${reason}`);
+  if (!expectedFilesByGitDir.has(gitDirectory)) return null;
+  sharedRepoByRoot.delete(repoRoot);
+  prefetchedTrees.delete(gitDirectory);
+  oversizedByGitDir.delete(gitDirectory);
+  expectedFilesByGitDir.delete(gitDirectory);
+  recordSnapshotFailure(repoRoot);
+  Promise.all([serialChainByRepo.get(repoRoot), serialChainByRepo.get(diffSerialKey(repoRoot))]).then(() =>
+    removePrivateGitDir(gitDirectory),
   );
   return null;
 }
 //@ chunk-e6aww6q8.js:4789389-4789621 placement
-async function removePrivateGitDir(e) {
+async function removePrivateGitDir(gitDirectory) {
   try {
-    let n = privateDirIdentity.get(e);
-    if (n === undefined) return;
-    if (await getFileIdentity_9(e, n))
-      await rm_2(e, {
+    let identity = privateDirIdentity.get(gitDirectory);
+    if (identity === undefined) return;
+    if (await getFileIdentity_9(gitDirectory, identity))
+      await rm_2(gitDirectory, {
         recursive: true,
         force: true,
       });
-    objectsDirByGitDir.delete(e);
-    privateDirIdentity.delete(e);
-    convertedFilesByGitDir.delete(e);
+    objectsDirByGitDir.delete(gitDirectory);
+    privateDirIdentity.delete(gitDirectory);
+    convertedFilesByGitDir.delete(gitDirectory);
   } catch (error) {
     logForDebugging(`bashEditDiff: private directory not removed: ${String(error)}`);
   }
@@ -1169,11 +1267,11 @@ async function cleanupSnapshotRepos() {
 /**
  * 以 O_NOFOLLOW 打开文件获取大小与 mtime；符号链接、缺失、不可读或非普通文件分别返回对应标记。
  */
-async function statNoFollow(e) {
-  let n;
+async function statNoFollow(path) {
+  let handle;
   try {
-    n = await open(
-      e,
+    handle = await open(
+      path,
       constants.O_RDONLY | (getPlatform() === "windows" ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK),
     );
   } catch (error) {
@@ -1187,7 +1285,7 @@ async function statNoFollow(e) {
           : "other";
   }
   try {
-    let stats = await n.stat();
+    let stats = await handle.stat();
     return stats.isFile()
       ? {
           size: stats.size,
@@ -1197,30 +1295,30 @@ async function statNoFollow(e) {
   } catch {
     return "other";
   } finally {
-    await n.close();
+    await handle.close();
   }
 }
 //@ chunk-e6aww6q8.js:4790168-4790376 placement
-async function parentDirsExist(e, n, r) {
-  let s = splitRepoPath(n);
-  let h = e;
-  for (let y of s.slice(0, -1)) {
-    h = join(h, y);
-    let S = r.get(h);
-    if (S === undefined) {
-      let w = await lstat(h).catch(() => null);
-      S = w !== null && w.isDirectory();
-      r.set(h, S);
+async function parentDirsExist(repoRoot, path, existsCache) {
+  let segments = splitRepoPath(path);
+  let currentDir = repoRoot;
+  for (let segment of segments.slice(0, -1)) {
+    currentDir = join(currentDir, segment);
+    let exists = existsCache.get(currentDir);
+    if (exists === undefined) {
+      let stat = await lstat(currentDir).catch(() => null);
+      exists = stat !== null && stat.isDirectory();
+      existsCache.set(currentDir, exists);
     }
-    if (!S) return false;
+    if (!exists) return false;
   }
   return true;
 }
 //@ chunk-e6aww6q8.js:4790376-4790537 placement
-function isEmptyBlobId(e) {
+function isEmptyBlobId(blobId) {
   return (
-    "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391".startsWith(e) ||
-    "473a0f4c3be8a93681a267e3b1e9a7dcda1185436fe141f7749120a303721813".startsWith(e)
+    "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391".startsWith(blobId) ||
+    "473a0f4c3be8a93681a267e3b1e9a7dcda1185436fe141f7749120a303721813".startsWith(blobId)
   );
 }
 //@ chunk-e6aww6q8.js:4790537-4790958 placement
@@ -1228,31 +1326,31 @@ function isEmptyBlobId(e) {
  * 解析 git status --porcelain=v2 -z 输出：变更/未跟踪文件、已删除文件、未跟踪目录（只保留安全路径）。
  */
 function parsePorcelainStatus(stdout) {
-  let n = [];
-  let r = [];
-  let s = [];
-  for (let h of stdout.split("\x00"))
-    if (h.startsWith("? ")) {
-      let y = h.endsWith("/");
-      let S = y ? h.slice(2, -1) : h.slice(2);
-      if (isSafeRepoPath(S)) (y ? s : n).push(h.slice(2));
-    } else if (h.startsWith("1 ") || h.startsWith("u ")) {
-      let y = h.startsWith("1 ") ? 9 : 11;
-      let S = 0;
-      for (let idx = 0; idx < y - 1; idx++) S = h.indexOf(" ", S) + 1;
-      let sliced = h.slice(S);
-      if (h[3] === "." || !isSafeRepoPath(sliced)) continue;
-      (h[3] === "D" ? r : n).push(sliced);
+  let changed = [];
+  let deleted = [];
+  let untrackedDirectories = [];
+  for (let entry of stdout.split("\x00"))
+    if (entry.startsWith("? ")) {
+      let isDirectory = entry.endsWith("/");
+      let path = isDirectory ? entry.slice(2, -1) : entry.slice(2);
+      if (isSafeRepoPath(path)) (isDirectory ? untrackedDirectories : changed).push(entry.slice(2));
+    } else if (entry.startsWith("1 ") || entry.startsWith("u ")) {
+      let fieldCount = entry.startsWith("1 ") ? 9 : 11;
+      let pathStart = 0;
+      for (let idx = 0; idx < fieldCount - 1; idx++) pathStart = entry.indexOf(" ", pathStart) + 1;
+      let sliced = entry.slice(pathStart);
+      if (entry[3] === "." || !isSafeRepoPath(sliced)) continue;
+      (entry[3] === "D" ? deleted : changed).push(sliced);
     }
   return {
-    changed: n,
-    deleted: r,
-    untrackedDirectories: s,
+    changed,
+    deleted,
+    untrackedDirectories,
   };
 }
 //@ chunk-e6aww6q8.js:4790958-4791546 placement
-async function commitSnapshotTree(e, n, r, timeout = GIT_STEP_TIMEOUT_MS) {
-  let h = await runSnapshotGit(e, n, ["commit-tree", r, "-m", "snapshot"], {
+async function commitSnapshotTree(repoRoot, gitDirectory, tree, timeout = GIT_STEP_TIMEOUT_MS) {
+  let result = await runSnapshotGit(repoRoot, gitDirectory, ["commit-tree", tree, "-m", "snapshot"], {
     timeout,
     env: {
       GIT_AUTHOR_NAME: "bash-edit-diff",
@@ -1263,19 +1361,19 @@ async function commitSnapshotTree(e, n, r, timeout = GIT_STEP_TIMEOUT_MS) {
       GIT_COMMITTER_DATE: "1000000000 +0000",
     },
   });
-  let trimmed = h.stdout.trim();
-  if (h.code !== 0 || !/^[0-9a-f]{40,64}$/.test(trimmed)) return false;
+  let trimmed = result.stdout.trim();
+  if (result.code !== 0 || !/^[0-9a-f]{40,64}$/.test(trimmed)) return false;
   try {
-    let S = await open(
-      join(n, "refs", "heads", "main"),
+    let refHandle = await open(
+      join(gitDirectory, "refs", "heads", "main"),
       constants.O_WRONLY | constants.O_CREAT | constants.O_TRUNC | constants.O_NOFOLLOW,
       384,
     );
     try {
-      await S.writeFile(`${trimmed}
+      await refHandle.writeFile(`${trimmed}
 `);
     } finally {
-      await S.close();
+      await refHandle.close();
     }
     return true;
   } catch {
@@ -1286,8 +1384,8 @@ async function commitSnapshotTree(e, n, r, timeout = GIT_STEP_TIMEOUT_MS) {
 /**
  * 用默认步骤超时在快照私有 git 目录上执行 git 命令的封装。
  */
-function runSnapshotGitStep(e, n, r, timeout = GIT_STEP_TIMEOUT_MS) {
-  return runSnapshotGit(e, n, r, {
+function runSnapshotGitStep(repoRoot, gitDirectory, args, timeout = GIT_STEP_TIMEOUT_MS) {
+  return runSnapshotGit(repoRoot, gitDirectory, args, {
     timeout,
   });
 }
@@ -1300,7 +1398,7 @@ async function runSnapshotGit(repoRoot, gitDir, args, options) {
     [
       gitExe(),
       ...getSnapshotGitArgs().filter(
-        (Z) => options.literalPathspecs !== false || Z !== "--literal-pathspecs",
+        (arg) => options.literalPathspecs !== false || arg !== "--literal-pathspecs",
       ),
       ...args,
     ],
@@ -1315,19 +1413,19 @@ async function runSnapshotGit(repoRoot, gitDir, args, options) {
       stdout: "",
       code: -1,
     };
-  let y = isSharedSnapshotEnabled();
+  let isShared = isSharedSnapshotEnabled();
   let abortController = new AbortController();
-  let w = DIFF_RETRY_COUNT;
-  let L;
-  let G = () => {
-    if (w-- > 0) L = setImmediate(G);
+  let retriesLeft = DIFF_RETRY_COUNT;
+  let retryTimer;
+  let armRetry = () => {
+    if (retriesLeft-- > 0) retryTimer = setImmediate(armRetry);
     else abortController.abort();
   };
-  let q = y ? setTimeout(G, options.timeout) : undefined;
+  let startTimer = isShared ? setTimeout(armRetry, options.timeout) : undefined;
   try {
-    let Z = await execFileNoThrowWithCwd(snapshotGitEnv.file, snapshotGitEnv.args, {
+    let result = await execFileNoThrowWithCwd(snapshotGitEnv.file, snapshotGitEnv.args, {
       cwd: repoRoot,
-      ...(y
+      ...(isShared
         ? {
             abortSignal: abortController.signal,
           }
@@ -1341,17 +1439,17 @@ async function runSnapshotGit(repoRoot, gitDir, args, options) {
       }),
       env: snapshotGitEnv.env,
     });
-    let Se = abortController.signal.aborted && Z.exitCode === undefined;
-    if (Z.maxBufferExceeded) abortController.abort();
-    return Se
+    let isTimedOut = abortController.signal.aborted && result.exitCode === undefined;
+    if (result.maxBufferExceeded) abortController.abort();
+    return isTimedOut
       ? {
-          ...Z,
+          ...result,
           timedOut: true,
         }
-      : Z;
+      : result;
   } finally {
-    clearTimeout(q);
-    clearImmediate(L);
+    clearTimeout(startTimer);
+    clearImmediate(retryTimer);
     cleanupSandboxAfterGit(snapshotGitEnv);
   }
 }
@@ -1375,12 +1473,12 @@ function getSnapshotGitArgs() {
 /**
  * 构建快照用的隔离 git 环境：独立 GIT_DIR/工作树与全局配置，禁用系统配置、懒获取、替换对象、可选锁与终端提示，清除路径规格相关变量。
  */
-function getSnapshotGitEnv(e, repoRoot) {
+function getSnapshotGitEnv(gitDirectory, repoRoot) {
   return {
     ...getRemoteHostSessionCount({
-      GIT_DIR: e,
+      GIT_DIR: gitDirectory,
       GIT_WORK_TREE: repoRoot,
-      GIT_CONFIG_GLOBAL: join(e, "config.global"),
+      GIT_CONFIG_GLOBAL: join(gitDirectory, "config.global"),
       GIT_CONFIG_NOSYSTEM: "1",
       GIT_ATTR_NOSYSTEM: "1",
       GIT_NO_LAZY_FETCH: "1",
@@ -1396,31 +1494,6 @@ function getSnapshotGitEnv(e, repoRoot) {
     GIT_ICASE_PATHSPECS: undefined,
   };
 }
-//@ chunk-e6aww6q8.js:4793271-4793443 placement
-/**
- * 写入观察器常量与模块状态：路径/仓库/忽略检查/外部写入/并发查找/保留文件/监视器数量上限，节流与等待时间，以及监视器表、仓库表、共享 inotify 监视器等。
- */
-var MAX_OBSERVED_PATHS = 5000;
-var MAX_OBSERVED_REPOS = 64;
-var IGNORE_CHECKS_PER_REPO = 256;
-var MAX_OUTSIDE_WRITES = 1000;
-var MAX_CONCURRENT_IGNORE_LOOKUPS = 8;
-var MAX_HELD_FILES = 20000;
-var MAX_WATCHERS = 30000;
-var YIELD_EVERY = 200;
-var SETTLE_WAIT_MS = 250;
-var QUIET_WINDOWS_MS = {
-  grace: 30,
-  quiet: 60,
-};
-var MAX_SETTLE_MS = 300;
-var observersByRoot = identity_2(new Map(), () => {
-  stopAllWriteObservers();
-});
-var observedRepos = new Map();
-var sharedWatcher = null;
-var sharedWatcherReady = null;
-var exitHookInstalled = false;
 export {
   commandMovesWorkTree,
   isRepoSnapshotGivenUp,
@@ -1430,25 +1503,9 @@ export {
   unregisterConcurrentCommand,
   diffAfterCommand,
   logEditDiffWait,
-  observersByRoot,
-  IGNORE_CHECKS_PER_REPO,
   listIgnoredFiles,
-  observedRepos,
-  sharedWatcher,
-  sharedWatcherReady,
-  MAX_OBSERVED_REPOS,
-  MAX_OBSERVED_PATHS,
-  SETTLE_WAIT_MS,
-  QUIET_WINDOWS_MS,
-  MAX_SETTLE_MS,
-  exitHookInstalled,
   resolveThroughRoot,
-  MAX_WATCHERS,
-  YIELD_EVERY,
-  MAX_CONCURRENT_IGNORE_LOOKUPS,
   isDirectoryIgnored,
-  MAX_HELD_FILES,
-  MAX_OUTSIDE_WRITES,
   verifyKnownPrivateGitDir,
   isSafeRepoPath,
   findConvertedFiles,

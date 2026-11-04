@@ -8,7 +8,13 @@
  * pieces: chunk-dz3q485w.js (10)
  * attribution: placement 10
  */
-import { string, zodStrictObject, _enum, array, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  stringSchema,
+  zodStrictObject,
+  _enum,
+  array,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
 import { plural } from "../../utils/stringUtils.js";
 import { isNetworkPath } from "../../utils/fsSafety/networkPathCheck.js";
@@ -112,12 +118,12 @@ var PROJECT_ICONS = [
 var PROJECT_ICONS_HINT =
   "Projects, Folder, Code, Database, HandHeart, Beaker, Wrench, Activity, Chart, Team, Users, Book, Box, Note, File, Lightbulb, Palette, Star, Flag, Home, Sun, Clock, Calendar, Scroll";
 //@ chunk-dz3q485w.js:37532-37658 placement
-function boundedText(e, n = 1) {
-  return string()
-    .min(n)
-    .max(e)
-    .refine((s) => Buffer.byteLength(s, "utf8") <= e, {
-      message: `must be at most ${e} bytes`,
+function boundedText(maxBytes, minLength = 1) {
+  return stringSchema()
+    .min(minLength)
+    .max(maxBytes)
+    .refine((text) => Buffer.byteLength(text, "utf8") <= maxBytes, {
+      message: `must be at most ${maxBytes} bytes`,
     });
 }
 //@ chunk-dz3q485w.js:37658-38370 placement
@@ -148,13 +154,13 @@ var setupProposalSchema = DoctorLazy(() =>
     icon: _enum(PROJECT_ICONS).optional(),
     color: _enum(PROJECT_COLORS).optional(),
     summary: boundedText(MAX_SUMMARY_BYTES, 0).optional(),
-    instructions: string().max(MAX_INSTRUCTIONS_CHARS).optional(),
+    instructions: stringSchema().max(MAX_INSTRUCTIONS_CHARS).optional(),
     routines: array(routineSchema()).max(MAX_ROUTINES).optional(),
     sessions: array(threadSuggestionSchema()).max(MAX_THREADS).optional(),
     evidence: zodStrictObject({
-      sessions_matched: E().int().min(0).max(MAX_SESSIONS_COUNTED).optional(),
-      sessions_considered: E().int().min(0).max(MAX_SESSIONS_COUNTED).optional(),
-      window_days: E().int().min(0).max(MAX_WINDOW_DAYS).optional(),
+      sessions_matched: numberSchema().int().min(0).max(MAX_SESSIONS_COUNTED).optional(),
+      sessions_considered: numberSchema().int().min(0).max(MAX_SESSIONS_COUNTED).optional(),
+      window_days: numberSchema().int().min(0).max(MAX_WINDOW_DAYS).optional(),
     }).optional(),
   }),
 );
@@ -173,16 +179,16 @@ var THREAD_PRODUCES_LABELS = {
  */
 function formatProposalForReview(proposal, opts = {}) {
   let lines = [];
-  let section = (c) => {
+  let section = (heading) => {
     if (lines.length > 0) lines.push("");
-    lines.push(c);
+    lines.push(heading);
   };
   if (proposal.name !== undefined || proposal.icon !== undefined || proposal.color !== undefined) {
     let filtered = [
       proposal.name !== undefined ? `name \u201C${proposal.name}\u201D` : null,
       proposal.icon !== undefined ? `icon ${proposal.icon}` : null,
       proposal.color !== undefined ? `color ${proposal.color}` : null,
-    ].filter((h) => h !== null);
+    ].filter((part) => part !== null);
     lines.push(`Name, icon and color: ${filtered.join(" \xB7 ")}`);
   }
   if (proposal.summary !== undefined && proposal.summary.trim() !== "")
@@ -190,9 +196,9 @@ function formatProposalForReview(proposal, opts = {}) {
   let threads = proposal.sessions ?? [];
   if (threads.length > 0) {
     section(`Threads (${threads.length}):`);
-    threads.forEach((thread, h) => {
+    threads.forEach((thread, threadIndex) => {
       lines.push(
-        `  ${h + 1}. ${thread.title}  [${THREAD_WHO_LABELS[thread.who]} \xB7 ${THREAD_PRODUCES_LABELS[thread.produces]}]`,
+        `  ${threadIndex + 1}. ${thread.title}  [${THREAD_WHO_LABELS[thread.who]} \xB7 ${THREAD_PRODUCES_LABELS[thread.produces]}]`,
         `     ${thread.description}`,
         `     from: ${thread.basis}`,
       );
@@ -218,8 +224,8 @@ function formatProposalForReview(proposal, opts = {}) {
   }
   if (threads.length > 0) {
     section("Thread instructions (what each thread starts with):");
-    threads.forEach((thread, h) => {
-      lines.push(`  ${h + 1}. ${thread.title}`);
+    threads.forEach((thread, threadIndex) => {
+      lines.push(`  ${threadIndex + 1}. ${thread.title}`);
       for (let line of thread.prompt.trim().split(`
 `))
         lines.push(`     ${line}`);
@@ -242,15 +248,15 @@ function formatProposalForReview(proposal, opts = {}) {
 `);
 }
 //@ chunk-dz3q485w.js:40009-40301 placement
-function proposalContentsSummary(e) {
-  let n = [];
-  let s = e.sessions?.length ?? 0;
-  if (s > 0) n.push(`${s} ${plural(s, "thread")}`);
-  let r = e.routines?.length ?? 0;
-  if (r > 0) n.push(`${r} ${plural(r, "routine")}`);
-  if (e.instructions !== undefined && e.instructions.trim() !== "") n.push("instructions");
-  if (n.length === 0) n.push("summary only");
-  return n.join(", ");
+function proposalContentsSummary(proposal) {
+  let parts = [];
+  let threadCount = proposal.sessions?.length ?? 0;
+  if (threadCount > 0) parts.push(`${threadCount} ${plural(threadCount, "thread")}`);
+  let routineCount = proposal.routines?.length ?? 0;
+  if (routineCount > 0) parts.push(`${routineCount} ${plural(routineCount, "routine")}`);
+  if (proposal.instructions !== undefined && proposal.instructions.trim() !== "") parts.push("instructions");
+  if (parts.length === 0) parts.push("summary only");
+  return parts.join(", ");
 }
 //@ chunk-dz3q485w.js:40301-41182 placement
 /**
@@ -324,14 +330,14 @@ var PROPOSED_INSTRUCTIONS_HEADING = "## Proposed instructions";
 var PROPOSAL_ONLY_NOTE =
   "A proposal only. Saving this brief set no instructions on the project: the user applies them from the project\u2019s setup card, where the card offers them.";
 //@ chunk-dz3q485w.js:41405-41507 placement
-function normalizeInlineText(e) {
-  return isNetworkPath(e.normalize("NFKC").replace(/[\s\u2800]+/gu, " "))
+function normalizeInlineText(text) {
+  return isNetworkPath(text.normalize("NFKC").replace(/[\s\u2800]+/gu, " "))
     .replace(/\s+/g, " ")
     .trim();
 }
 //@ chunk-dz3q485w.js:41507-41672 placement
-function normalizeMultilineText(e) {
-  return e
+function normalizeMultilineText(text) {
+  return text
     .replace(
       /\r\n?|[\u2028\u2029]/g,
       `
@@ -364,27 +370,27 @@ function normalizeProposal(proposal) {
   if (summary !== "") result.summary = summary;
   let instructions = proposal.instructions !== undefined ? normalizeMultilineText(proposal.instructions) : "";
   if (instructions !== "") result.instructions = instructions;
-  let routines = (proposal.routines ?? []).map((h) => ({
-    name: normalizeInlineText(h.name),
-    cron_expression: h.cron_expression
+  let routines = (proposal.routines ?? []).map((routine) => ({
+    name: normalizeInlineText(routine.name),
+    cron_expression: routine.cron_expression
       .trim()
       .split(/\s+/)
       .join(" ")
       .replace(/[^0-9*\/,\- ]/g, "?"),
-    prompt: normalizeMultilineText(h.prompt),
-    ...(h.description !== undefined &&
-      normalizeInlineText(h.description) !== "" && {
-        description: normalizeInlineText(h.description),
+    prompt: normalizeMultilineText(routine.prompt),
+    ...(routine.description !== undefined &&
+      normalizeInlineText(routine.description) !== "" && {
+        description: normalizeInlineText(routine.description),
       }),
   }));
   if (routines.length > 0) result.routines = routines;
-  let threads = (proposal.sessions ?? []).map((h) => ({
-    title: normalizeInlineText(h.title),
-    prompt: normalizeMultilineText(h.prompt),
-    description: normalizeInlineText(h.description),
-    basis: normalizeInlineText(h.basis),
-    who: h.who,
-    produces: h.produces,
+  let threads = (proposal.sessions ?? []).map((session) => ({
+    title: normalizeInlineText(session.title),
+    prompt: normalizeMultilineText(session.prompt),
+    description: normalizeInlineText(session.description),
+    basis: normalizeInlineText(session.basis),
+    who: session.who,
+    produces: session.produces,
   }));
   if (threads.length > 0) result.sessions = threads;
   if (proposal.evidence !== undefined && Object.keys(proposal.evidence).length > 0)

@@ -27,14 +27,20 @@ var SESSION_LIST_NOTE_FILE = ".session-list";
 var SESSION_LIST_NOTE_MAX_BYTES = 64;
 //@ chunk-v5nznc39.js:675-745 placement
 function sessionTeamName(sessionId) {
-  let e = normalizeUuidOrNull(sessionId) ? sessionId.slice(0, 8) : (decodeTaggedUuid(sessionId) ?? sessionId);
-  return `${SESSION_TEAM_NAME_PREFIX}-${e}`;
+  let shortId = normalizeUuidOrNull(sessionId)
+    ? sessionId.slice(0, 8)
+    : (decodeTaggedUuid(sessionId) ?? sessionId);
+  return `${SESSION_TEAM_NAME_PREFIX}-${shortId}`;
 }
 //@ chunk-v5nznc39.js:745-872 placement
-function isSessionListId(o) {
-  let e = `${SESSION_TEAM_NAME_PREFIX}-`;
-  let r = o.startsWith(e) ? o.slice(e.length) : undefined;
-  return isValidSessionIdForAdopt(o) || isValidSessionIdForAdopt(r) || /^[0-9a-f]{8}$/i.test(r ?? "");
+function isSessionListId(listId) {
+  let prefix = `${SESSION_TEAM_NAME_PREFIX}-`;
+  let suffix = listId.startsWith(prefix) ? listId.slice(prefix.length) : undefined;
+  return (
+    isValidSessionIdForAdopt(listId) ||
+    isValidSessionIdForAdopt(suffix) ||
+    /^[0-9a-f]{8}$/i.test(suffix ?? "")
+  );
 }
 //@ chunk-v5nznc39.js:872-1350 placement
 /**
@@ -42,16 +48,16 @@ function isSessionListId(o) {
  */
 async function noteSessionTaskListAfterClear() {
   let { leaderTeamName, sessionListId } = swarmHostState().taskList;
-  let r = sessionListId ?? leaderTeamName;
-  if (!r || isDiskless()) return;
+  let listId = sessionListId ?? leaderTeamName;
+  if (!listId || isDiskless()) return;
   try {
     let taskOutputDir = getTaskOutputDir(sessionTeamName(getSessionId()));
-    let s = dirname(taskOutputDir);
-    for (let n of [s, taskOutputDir]) {
-      await mkdir(n).catch((error) => {
+    let parentDir = dirname(taskOutputDir);
+    for (let dir of [parentDir, taskOutputDir]) {
+      await mkdir(dir).catch((error) => {
         if (getErrnoCode(error) !== "EEXIST") throw error;
       });
-      if ((await readPluginFileSafe(dirname(s), n)) !== "ok") {
+      if ((await readPluginFileSafe(dirname(parentDir), dir)) !== "ok") {
         logForDebugging(
           "[sessionTeam] Not noting the task list of the cleared session: its folder is not a plain directory",
           {
@@ -61,7 +67,7 @@ async function noteSessionTaskListAfterClear() {
         return;
       }
     }
-    await writeFileAtomic(join(taskOutputDir, SESSION_LIST_NOTE_FILE), r);
+    await writeFileAtomic(join(taskOutputDir, SESSION_LIST_NOTE_FILE), listId);
   } catch (error) {
     logForDebugging(
       `[sessionTeam] Could not note the task list of the cleared session: ${errorMessage(error)}`,
@@ -77,4 +83,5 @@ export {
   SESSION_LIST_NOTE_FILE,
   SESSION_LIST_NOTE_MAX_BYTES,
   isSessionListId,
+  noteSessionTaskListAfterClear,
 };

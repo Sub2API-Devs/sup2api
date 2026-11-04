@@ -5,14 +5,8 @@
  * pieces: chunk-2tyrgda4.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { Xa } from "../../../../../runtime/bun-runtime.js";
-import { init_content_encryption_2, j, wr } from "../../webapi/lib/content_encryption.js";
+import { __esm } from "../../../../../runtime/bun-runtime.js";
 
-//@ chunk-2tyrgda4.js:3970-3996 esm-layout
-var init_timing_safe_equal = Xa(() => {
-  init_content_encryption_2();
-  j = wr;
-});
 //@ chunk-2tyrgda4.js:3996-4322 esm-fingerprint
 var timingSafeEqual = (a, b) => {
   if (!(a instanceof Uint8Array)) throw TypeError("First argument must be a buffer");
@@ -25,4 +19,8 @@ var timingSafeEqual = (a, b) => {
   return out === 0;
 };
 var timingSafeEqual_default;
-export { timingSafeEqual_default, timingSafeEqual, init_timing_safe_equal };
+//@ chunk-2tyrgda4.js:4322-4345 esm-layout (moved: shares a binding it assigns)
+var init_crypto_key = __esm(() => {
+  timingSafeEqual_default = timingSafeEqual;
+});
+export { timingSafeEqual_default, init_crypto_key };

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:197504-198166 cjs-fingerprint
-var require_inform7 = x(function (cjsExports, cjsModule) {
+var require_inform7 = __commonJS(function (cjsExports, cjsModule) {
   function inform7(hljs) {
     return {
       name: "Inform 7",

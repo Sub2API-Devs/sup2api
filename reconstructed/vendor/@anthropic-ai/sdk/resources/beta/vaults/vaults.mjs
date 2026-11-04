@@ -8,7 +8,7 @@
 import { APIResource } from "../../../core/resource.mjs";
 import { Credentials } from "./credentials.mjs";
 import { buildHeaders } from "../../../internal/headers.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:142965-144643 esm-fingerprint
@@ -38,7 +38,7 @@ var Vaults = (() => {
     }
     retrieve(vaultID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.get(I`/v1/vaults/${vaultID}?beta=true`, {
+      return this._client.get(parseUrl_2`/v1/vaults/${vaultID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -55,7 +55,7 @@ var Vaults = (() => {
     }
     update(vaultID, params, options) {
       let { betas, workspace_id, ...body } = params;
-      return this._client.post(I`/v1/vaults/${vaultID}?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/vaults/${vaultID}?beta=true`, {
         body,
         ...options,
         headers: buildHeaders([
@@ -91,7 +91,7 @@ var Vaults = (() => {
     }
     delete(vaultID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.delete(I`/v1/vaults/${vaultID}?beta=true`, {
+      return this._client.delete(parseUrl_2`/v1/vaults/${vaultID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -108,7 +108,7 @@ var Vaults = (() => {
     }
     archive(vaultID, params = {}, options) {
       let { betas, workspace_id } = params ?? {};
-      return this._client.post(I`/v1/vaults/${vaultID}/archive?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/vaults/${vaultID}/archive?beta=true`, {
         ...options,
         headers: buildHeaders([
           {

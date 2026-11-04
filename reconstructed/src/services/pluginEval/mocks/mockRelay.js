@@ -36,7 +36,7 @@ import { getSettingsForSource } from "../../../utils/settings/settings.js";
 import { MCP_TIMING_ENV_VARS } from "../childEnvironment.js";
 import { buildMcpToolName } from "../../mcp/mcpStringUtils.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, string, record, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, record, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
 import { getPlatform } from "../../../utils/platform.js";
 import { jsonStringify, jsonParse } from "../../../utils/slowOperations.js";
 import {
@@ -77,56 +77,65 @@ var UNENUMERABLE_REASONS = {
   mcpb: "it declares them through an MCPB bundle",
 };
 //@ chunk-qchp9vrd.js:242518-243507 placement
-async function enumerateMockedServersForRun(e, root, evalDirSegments, a, { allowRealServers }) {
+async function enumerateMockedServersForRun(
+  caseContext,
+  pluginDir,
+  suiteSegments,
+  cache,
+  { allowRealServers },
+) {
   let mockServers = await loadMockServers(
-    listAncestorChain(e.caseDir, findMockBaseDir(e.caseDir, root, evalDirSegments)),
-    a.layers,
+    listAncestorChain(caseContext.caseDir, findMockBaseDir(caseContext.caseDir, pluginDir, suiteSegments)),
+    cache.layers,
   );
-  let w = `${allowRealServers ? "tolerant" : "strict"}
-${e.pluginDirs.join(`
+  let cacheKey = `${allowRealServers ? "tolerant" : "strict"}
+${caseContext.pluginDirs.join(`
 `)}`;
-  let b = a.declared.get(w);
-  if (!b) {
-    let T = [];
-    b = {
-      servers: collectPluginMcpServers(e.pluginDirs, allowRealServers ? T : undefined),
-      unenumerable: T,
+  let declaredEntry = cache.declared.get(cacheKey);
+  if (!declaredEntry) {
+    let unenumerableNotes = [];
+    declaredEntry = {
+      servers: collectPluginMcpServers(
+        caseContext.pluginDirs,
+        allowRealServers ? unenumerableNotes : undefined,
+      ),
+      unenumerable: unenumerableNotes,
     };
-    a.declared.set(w, b);
+    cache.declared.set(cacheKey, declaredEntry);
   }
-  let servers = await b.servers;
-  let mapped = b.unenumerable.map(
-    (T) =>
-      `mocks: plugin ${T.dirName}'s MCP servers could not be enumerated here (${UNENUMERABLE_REASONS[T.reason]}); whatever it declares starts for REAL (--allow-real-servers), as you, outside the sandbox that confines shell tools`,
+  let servers = await declaredEntry.servers;
+  let mapped = declaredEntry.unenumerable.map(
+    (unenumerableServer) =>
+      `mocks: plugin ${unenumerableServer.dirName}'s MCP servers could not be enumerated here (${UNENUMERABLE_REASONS[unenumerableServer.reason]}); whatever it declares starts for REAL (--allow-real-servers), as you, outside the sandbox that confines shell tools`,
   );
   if (mockServers.servers.size === 0 && allowRealServers) {
-    let T = [...servers.keys()];
-    let N = [...mockServers.notes, ...mapped];
-    if (T.length > 0)
-      N.push(
-        `mocks: no mocks/ \u2014 the plugin's REAL server ${T.length === 1 ? "process" : "processes"} ${T.map((x) => `"${x}"`).join(", ")} ${T.length === 1 ? "starts" : "start"} (--allow-real-servers), as you, outside the sandbox that confines shell tools`,
+    let realServerNames = [...servers.keys()];
+    let allNotes = [...mockServers.notes, ...mapped];
+    if (realServerNames.length > 0)
+      allNotes.push(
+        `mocks: no mocks/ \u2014 the plugin's REAL server ${realServerNames.length === 1 ? "process" : "processes"} ${realServerNames.map((serverName) => `"${serverName}"`).join(", ")} ${realServerNames.length === 1 ? "starts" : "start"} (--allow-real-servers), as you, outside the sandbox that confines shell tools`,
       );
     return {
       servers: [],
-      notes: N,
+      notes: allNotes,
     };
   }
-  let S = planMockStandIns(mockServers, servers, {
+  let plan = planMockStandIns(mockServers, servers, {
     allowRealServers,
-    unenumerable: b.unenumerable,
+    unenumerable: declaredEntry.unenumerable,
   });
   return {
-    servers: S.servers,
-    notes: [...mapped, ...S.notes],
+    servers: plan.servers,
+    notes: [...mapped, ...plan.notes],
   };
 }
 //@ chunk-qchp9vrd.js:243507-243806 placement
-function describeMockMode(e) {
-  return e
-    .map((n) => {
-      let r = countRecordings(n.loaded);
-      if (n.withheld) return `${n.loaded.dirName}[not started: no mock]`;
-      return `${n.loaded.dirName}${n.kind === "standalone" ? "[standalone]" : ""}(${[...n.loaded.tools].map(([a, s]) => `${a}=${s.kind}`).join(", ")}${r > 0 ? `; replay: ${r} pinned` : ""})`;
+function describeMockMode(servers) {
+  return servers
+    .map((server) => {
+      let pinnedCount = countRecordings(server.loaded);
+      if (server.withheld) return `${server.loaded.dirName}[not started: no mock]`;
+      return `${server.loaded.dirName}${server.kind === "standalone" ? "[standalone]" : ""}(${[...server.loaded.tools].map(([tool, recording]) => `${tool}=${recording.kind}`).join(", ")}${pinnedCount > 0 ? `; replay: ${pinnedCount} pinned` : ""})`;
     })
     .join(", ");
 }
@@ -143,59 +152,59 @@ function callBudgetForTurns(maxTurns) {
   return CALLS_PER_TURN * maxTurns;
 }
 //@ chunk-qchp9vrd.js:243842-244104 placement
-function describeMissingToolsJsonEntry(e) {
-  return listUnlistedTools(e).map(
-    (n) =>
-      `${n.server}: no _tools.json entry for ${n.tools.join(", ")} \u2014 served with a permissive schema and no description; save the server's tools/list response as mocks/${n.server}/_tools.json so the model sees the real tool`,
+function describeMissingToolsJsonEntry(mocks) {
+  return listUnlistedTools(mocks).map(
+    (unlisted) =>
+      `${unlisted.server}: no _tools.json entry for ${unlisted.tools.join(", ")} \u2014 served with a permissive schema and no description; save the server's tools/list response as mocks/${unlisted.server}/_tools.json so the model sees the real tool`,
   );
 }
 //@ chunk-qchp9vrd.js:244104-244634 placement
 class MockManagedEnvError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   names;
-  constructor(e) {
+  constructor(names) {
     super(
-      `mocks: managed settings set ${e.join(", ")} for every session \u2014 the eval child would apply ${plural(e.length, "it", "them")} over the defaults agent mocks are answered under, and each agent-mock run would fail as not served by its mocks. Remove ${plural(e.length, "it", "them")} from managed settings for eval hosts, use fixed (canned) mocks for these tools, or run with --mocks off.`,
+      `mocks: managed settings set ${names.join(", ")} for every session \u2014 the eval child would apply ${plural(names.length, "it", "them")} over the defaults agent mocks are answered under, and each agent-mock run would fail as not served by its mocks. Remove ${plural(names.length, "it", "them")} from managed settings for eval hosts, use fixed (canned) mocks for these tools, or run with --mocks off.`,
       "mocks: managed env pins an MCP knob agent mocks depend on",
     );
-    this.names = e;
+    this.names = names;
     this.name = "MockManagedEnvError";
   }
 }
 //@ chunk-qchp9vrd.js:244634-245095 placement
 class MockPolicyBlockedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   registeredNames;
-  constructor(e) {
-    let n = e.length;
+  constructor(names) {
+    let count = names.length;
     super(
-      `mocks: the managed MCP server policy (allowedMcpServers / deniedMcpServers) blocks the mock ${plural(n, "stand-in")} ${e.map((r) => `"${r}"`).join(", ")} \u2014 the eval child would silently drop ${plural(n, "it", "them")}. Allowlist the stand-in command for eval runs, or run with --mocks off.`,
+      `mocks: the managed MCP server policy (allowedMcpServers / deniedMcpServers) blocks the mock ${plural(count, "stand-in")} ${names.map((name) => `"${name}"`).join(", ")} \u2014 the eval child would silently drop ${plural(count, "it", "them")}. Allowlist the stand-in command for eval runs, or run with --mocks off.`,
       "mocks: stand-in blocked by managed MCP policy",
     );
-    this.registeredNames = e;
+    this.registeredNames = names;
     this.name = "MockPolicyBlockedError";
   }
 }
 //@ chunk-qchp9vrd.js:245095-245751 placement
 class MockWithholdPolicyError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   registeredNames;
-  constructor(e) {
-    let n = e.length;
+  constructor(names) {
+    let count = names.length;
     super(
-      `mocks: the managed MCP server policy (allowedMcpServers / deniedMcpServers) drops the empty ${plural(n, "stand-in")} record mode registers to keep ${e.map((r) => `"${r}"`).join(", ")} from starting, so ${plural(n, "it", "they")} cannot be withheld here. Allowlist the stand-in command for eval runs, or pass --allow-real-servers to let the plugin's real ${plural(n, "server")} run instead (as you, outside the sandbox; the same policy then applies to ${plural(n, "it", "them")} in the child).`,
+      `mocks: the managed MCP server policy (allowedMcpServers / deniedMcpServers) drops the empty ${plural(count, "stand-in")} record mode registers to keep ${names.map((name) => `"${name}"`).join(", ")} from starting, so ${plural(count, "it", "they")} cannot be withheld here. Allowlist the stand-in command for eval runs, or pass --allow-real-servers to let the plugin's real ${plural(count, "server")} run instead (as you, outside the sandbox; the same policy then applies to ${plural(count, "it", "them")} in the child).`,
       "mocks: withheld stand-in blocked by managed MCP policy",
     );
-    this.registeredNames = e;
+    this.registeredNames = names;
     this.name = "MockWithholdPolicyError";
   }
 }
 //@ chunk-qchp9vrd.js:245751-246338 placement
 class MockEnterpriseExclusiveError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
   mockDirs;
-  constructor(e) {
+  constructor(mockDirs) {
     super(
-      `mocks: this machine's managed-mcp.json gives the organization exclusive control of MCP servers, so the eval child cannot register the mock ${plural(e.length, "stand-in")} for ${e.map((n) => `mocks/${n}/`).join(", ")} (nor the plugin's own servers) \u2014 mocks cannot be served here; run the suite on a machine without managed-mcp.json, or with --mocks off (the plugin's servers still will not load under exclusive control)`,
+      `mocks: this machine's managed-mcp.json gives the organization exclusive control of MCP servers, so the eval child cannot register the mock ${plural(mockDirs.length, "stand-in")} for ${mockDirs.map((dirName) => `mocks/${dirName}/`).join(", ")} (nor the plugin's own servers) \u2014 mocks cannot be served here; run the suite on a machine without managed-mcp.json, or with --mocks off (the plugin's servers still will not load under exclusive control)`,
       "mocks: managed-mcp.json exclusive control blocks stand-ins",
     );
-    this.mockDirs = e;
+    this.mockDirs = mockDirs;
     this.name = "MockEnterpriseExclusiveError";
   }
 }
@@ -203,89 +212,98 @@ class MockEnterpriseExclusiveError extends TelemetrySafeError_I_VERIFIED_THIS_IS
 /**
  * 写入本次运行的替身配置；托管 managed-mcp.json 独占时提示无法注册。
  */
-async function writeRunMocks(e, n, evalTempDir, a) {
-  let s = filterForArm(e, n);
-  let h = alwaysTrue() && doesEnterpriseMcpConfigExist();
-  let w = h ? s.filter((R) => !R.withheld) : s;
-  if (h && w.length > 0) throw new MockEnterpriseExclusiveError(w.map((R) => R.loaded.dirName));
-  if (h && s.length > 0)
+async function writeRunMocks(servers, arm, evalTempDir, options) {
+  let armServers = filterForArm(servers, arm);
+  let enterpriseExclusive = alwaysTrue() && doesEnterpriseMcpConfigExist();
+  let registered = enterpriseExclusive ? armServers.filter((server) => !server.withheld) : armServers;
+  if (enterpriseExclusive && registered.length > 0)
+    throw new MockEnterpriseExclusiveError(registered.map((server) => server.loaded.dirName));
+  if (enterpriseExclusive && armServers.length > 0)
     logForDebugging(
-      `eval mocks: managed-mcp.json has exclusive MCP control; ${s.length} withheld stand-in(s) not registered (plugin servers do not load in the child)`,
+      `eval mocks: managed-mcp.json has exclusive MCP control; ${armServers.length} withheld stand-in(s) not registered (plugin servers do not load in the child)`,
     );
-  if (w.length === 0) return null;
-  let b = null;
-  if (usesAgentResponder(w)) {
-    if (a.service === null) throw Error("writeRunMocks: agent responders need the agent service");
-    b = a.service.registerRun({
-      model: a.model,
-      callBudget: callBudgetForTurns(a.maxTurns),
+  if (registered.length === 0) return null;
+  let agentRun = null;
+  if (usesAgentResponder(registered)) {
+    if (options.service === null) throw Error("writeRunMocks: agent responders need the agent service");
+    agentRun = options.service.registerRun({
+      model: options.model,
+      callBudget: callBudgetForTurns(options.maxTurns),
     });
   }
-  let y;
+  let mockFiles;
   try {
-    y = buildRunMockFiles({
-      servers: w,
+    mockFiles = buildRunMockFiles({
+      servers: registered,
       outDir: evalTempDir.outDir,
       selfCommand: getSelfExecArgv(),
       env: {},
-      agent: b?.relay ?? null,
+      agent: agentRun?.relay ?? null,
     });
-    let R = (S) =>
-      isMcpServerBlockedAtConnectTime(S.registeredName, {
-        ...y.stdioConfigs[S.registeredName],
+    let isBlockedAtConnect = (server) =>
+      isMcpServerBlockedAtConnectTime(server.registeredName, {
+        ...mockFiles.stdioConfigs[server.registeredName],
         scope: "dynamic",
       });
     if (alwaysTrue()) {
-      let mapped = w.filter((N) => N.withheld && R(N)).map((N) => N.registeredName);
-      if (mapped.length > 0) throw new MockWithholdPolicyError(mapped);
-      let mapped_2 = w.filter((N) => !N.withheld && R(N)).map((N) => N.registeredName);
-      if (mapped_2.length > 0) throw new MockPolicyBlockedError(mapped_2);
+      let names = registered
+        .filter((server) => server.withheld && isBlockedAtConnect(server))
+        .map((serverName) => serverName.registeredName);
+      if (names.length > 0) throw new MockWithholdPolicyError(names);
+      let names_2 = registered
+        .filter((server) => !server.withheld && isBlockedAtConnect(server))
+        .map((serverName) => serverName.registeredName);
+      if (names_2.length > 0) throw new MockPolicyBlockedError(names_2);
     }
-    b?.attachSpecs(y.specs.map((spec) => spec.spec));
-    if (b !== null && alwaysTrue()) {
+    agentRun?.attachSpecs(mockFiles.specs.map((spec) => spec.spec));
+    if (agentRun !== null && alwaysTrue()) {
       let env = getSettingsForSource("policySettings")?.env ?? {};
-      let filtered = [...MCP_TIMING_ENV_VARS].filter((N) =>
-        Object.keys(env).some((key) => key.toUpperCase() === N),
+      let names = [...MCP_TIMING_ENV_VARS].filter((envName) =>
+        Object.keys(env).some((key) => key.toUpperCase() === envName),
       );
-      if (filtered.length > 0) throw new MockManagedEnvError(filtered);
+      if (names.length > 0) throw new MockManagedEnvError(names);
     }
     await mkdir(path.join(evalTempDir.outDir, "mocks"), {
       recursive: true,
     });
     await Promise.all([
-      writeFile(y.configPath, y.configJson, {
+      writeFile(mockFiles.configPath, mockFiles.configJson, {
         mode: 384,
       }),
-      ...y.specs.map((spec) =>
+      ...mockFiles.specs.map((spec) =>
         writeFile(spec.path, spec.json, {
           mode: 384,
         }),
       ),
     ]);
   } catch (error) {
-    b?.dispose();
+    agentRun?.dispose();
     throw error;
   }
   return {
-    configPath: y.configPath,
-    callLogPath: y.callLogPath,
-    nonce: y.nonce,
-    mockedTools: listMockedToolNames(w),
-    agentRun: b,
-    agentCallBudget: usesAgentResponder(w) ? callBudgetForTurns(a.maxTurns) : 0,
-    servers: w.map((R) => ({
-      dirName: R.loaded.dirName,
-      registeredName: R.registeredName,
-      segment: R.segment,
-      kind: R.kind,
-      withheld: R.withheld === true,
-      tools: [...R.loaded.tools.keys()],
+    configPath: mockFiles.configPath,
+    callLogPath: mockFiles.callLogPath,
+    nonce: mockFiles.nonce,
+    mockedTools: listMockedToolNames(registered),
+    agentRun,
+    agentCallBudget: usesAgentResponder(registered) ? callBudgetForTurns(options.maxTurns) : 0,
+    servers: registered.map((server) => ({
+      dirName: server.loaded.dirName,
+      registeredName: server.registeredName,
+      segment: server.segment,
+      kind: server.kind,
+      withheld: server.withheld === true,
+      tools: [...server.loaded.tools.keys()],
       toolFullNames: Object.fromEntries(
-        [...R.loaded.tools.keys()].map((key) => [key, buildMcpToolName(R.registeredName, key)]),
+        [...server.loaded.tools.keys()].map((key) => [key, buildMcpToolName(server.registeredName, key)]),
       ),
-      responderKinds: Object.fromEntries([...R.loaded.tools].map(([S, T]) => [S, T.kind])),
-      replayPinned: countRecordings(R.loaded),
-      expects: Object.fromEntries([...R.loaded.tools].map(([S, T]) => [S, T.expect])),
+      responderKinds: Object.fromEntries(
+        [...server.loaded.tools].map(([toolName, responderInfo]) => [toolName, responderInfo.kind]),
+      ),
+      replayPinned: countRecordings(server.loaded),
+      expects: Object.fromEntries(
+        [...server.loaded.tools].map(([toolName, responderInfo]) => [toolName, responderInfo.expect]),
+      ),
     })),
   };
 }
@@ -305,11 +323,11 @@ function countRecordings(loaded) {
 }
 //@ chunk-qchp9vrd.js:248514-248625 placement
 var mockRelayRequestSchema = DoctorLazy(() =>
-  u({
-    token: string(),
-    registeredName: string(),
-    tool: string(),
-    input: record(string(), unknown()),
+  objectSchema({
+    token: stringSchema(),
+    registeredName: stringSchema(),
+    tool: stringSchema(),
+    input: record(stringSchema(), unknown()),
   }),
 );
 var MAX_MOCK_MESSAGE_BYTES = 1048576;
@@ -321,34 +339,37 @@ var MAX_MOCK_LINE_BYTES = 16384;
  * 创建 cc-eval-agent- 命名管道/套接字。
  */
 async function createMockRelayPipe({ credentials }) {
-  let n = new Map();
-  let r = getPlatform() === "windows" ? null : await mkdtemp(path.join(tmpdir(), "cc-eval-agent-"));
-  let a = r === null ? `\\\\?\\pipe\\cc-eval-agent-${randomBytes(8).toString("hex")}` : path.join(r, "s");
-  let s = new Set();
-  let server = createServer((w) => {
-    s.add(w);
-    w.once("close", () => s.delete(w));
-    readMockRelayRequest(w, n);
+  let runsByToken = new Map();
+  let tempDir = getPlatform() === "windows" ? null : await mkdtemp(path.join(tmpdir(), "cc-eval-agent-"));
+  let socketPath =
+    tempDir === null
+      ? `\\\\?\\pipe\\cc-eval-agent-${randomBytes(8).toString("hex")}`
+      : path.join(tempDir, "s");
+  let sockets = new Set();
+  let server = createServer((socket) => {
+    sockets.add(socket);
+    socket.once("close", () => sockets.delete(socket));
+    readMockRelayRequest(socket, runsByToken);
   });
   try {
     await new Promise((resolve, reject) => {
       server.once("error", reject);
-      server.listen(a, () => {
+      server.listen(socketPath, () => {
         server.off("error", reject);
         resolve();
       });
     });
   } catch (error) {
     await closeStream(server).catch(() => {});
-    if (r !== null)
-      await rm_2(r, {
+    if (tempDir !== null)
+      await rm_2(tempDir, {
         recursive: true,
         force: true,
       }).catch(() => {});
     throw error;
   }
-  server.on("error", (w) =>
-    logForDebugging(`plugin eval: agent service error: ${errorMessage(w)}`, {
+  server.on("error", (error) =>
+    logForDebugging(`plugin eval: agent service error: ${errorMessage(error)}`, {
       level: "warn",
     }),
   );
@@ -356,7 +377,7 @@ async function createMockRelayPipe({ credentials }) {
   return {
     registerRun({ model, callBudget }) {
       let str = randomBytes(16).toString("hex");
-      let R = {
+      let run = {
         specs: new Map(),
         model,
         credentials,
@@ -377,62 +398,62 @@ async function createMockRelayPipe({ credentials }) {
         unreplayableServers: new Set(),
         queue: Promise.resolve(),
       };
-      n.set(str, R);
+      runsByToken.set(str, run);
       return {
         relay: {
-          socketPath: a,
+          socketPath,
           token: str,
         },
-        attachSpecs(S) {
-          for (let T of S) R.specs.set(T.registeredName, T);
+        attachSpecs(specs) {
+          for (let spec of specs) run.specs.set(spec.registeredName, spec);
         },
         state: {
           get aborted() {
-            return R.aborted;
+            return run.aborted;
           },
           get costUsd() {
-            return R.costUsd;
+            return run.costUsd;
           },
           get agentCalls() {
-            return R.agentCalls;
+            return run.agentCalls;
           },
           get answered() {
-            return R.answers.length;
+            return run.answers.length;
           },
           get answers() {
-            return R.answers;
+            return run.answers;
           },
-          relaysReceived(S, T) {
-            return R.received.get(`${S}/${T}`) ?? 0;
+          relaysReceived(server, tool) {
+            return run.received.get(`${server}/${tool}`) ?? 0;
           },
           get recordings() {
-            return R.recordings;
+            return run.recordings;
           },
           get replay() {
-            return R.replay;
+            return run.replay;
           },
           get inFlight() {
-            return R.inFlight;
+            return run.inFlight;
           },
         },
         async settled() {
-          await R.queue;
+          await run.queue;
         },
         dispose() {
-          R.abort.abort();
-          n.delete(str);
+          run.abort.abort();
+          runsByToken.delete(str);
         },
       };
     },
     async close() {
-      for (let w of n.values()) w.abort.abort();
-      n.clear();
-      for (let w of s) w.destroy();
-      s.clear();
+      for (let run of runsByToken.values()) run.abort.abort();
+      runsByToken.clear();
+      for (let socket of sockets) socket.destroy();
+      sockets.clear();
       try {
         await closeStream(server);
-        if (r !== null)
-          await rm_2(r, {
+        if (tempDir !== null)
+          await rm_2(tempDir, {
             recursive: true,
             force: true,
           });
@@ -452,39 +473,39 @@ function closeStream(server) {
   return new Promise((resolve) => server.close(() => resolve()));
 }
 //@ chunk-qchp9vrd.js:250334-250961 placement
-function readMockRelayRequest(e, n) {
-  let r = Buffer.alloc(0);
-  let a = false;
-  let s = (w) => {
-    if (a) return;
-    a = true;
-    e.end(`${jsonStringify(w)}
+function readMockRelayRequest(socket, runsByToken) {
+  let buffer = Buffer.alloc(0);
+  let replied = false;
+  let reply = (response) => {
+    if (replied) return;
+    replied = true;
+    socket.end(`${jsonStringify(response)}
 `);
   };
-  e.on("error", () => e.destroy());
-  e.setTimeout(MOCK_RELAY_TIMEOUT_MS, () => e.destroy());
-  let h = false;
-  e.on("data", (w) => {
-    if (a || h) return;
-    r = Buffer.concat([r, w]);
-    if (r.length > MAX_MOCK_MESSAGE_BYTES) {
-      h = true;
-      s({
+  socket.on("error", () => socket.destroy());
+  socket.setTimeout(MOCK_RELAY_TIMEOUT_MS, () => socket.destroy());
+  let handled = false;
+  socket.on("data", (chunk) => {
+    if (replied || handled) return;
+    buffer = Buffer.concat([buffer, chunk]);
+    if (buffer.length > MAX_MOCK_MESSAGE_BYTES) {
+      handled = true;
+      reply({
         verdict: "abort",
         text: "mock relay request too large (a hook that rewrites this tool's input may have inflated it)",
       });
       return;
     }
-    let index = r.indexOf(10);
+    let index = buffer.indexOf(10);
     if (index === -1) return;
-    h = true;
-    let str = r.subarray(0, index).toString("utf8");
-    e.setTimeout(0);
-    handleMockRelayRequest(str, n).then(s, (error) => {
+    handled = true;
+    let raw = buffer.subarray(0, index).toString("utf8");
+    socket.setTimeout(0);
+    handleMockRelayRequest(raw, runsByToken).then(reply, (error) => {
       logForDebugging(`plugin eval: mock relay failed: ${errorMessage(error)}`, {
         level: "warn",
       });
-      s({
+      reply({
         verdict: "abort",
         text: `${MOCK_RESPONDER_FAILED_TEXT} (relay_internal) \u2014 see the eval debug log`,
       });
@@ -492,209 +513,218 @@ function readMockRelayRequest(e, n) {
   });
 }
 //@ chunk-qchp9vrd.js:250961-251679 placement
-async function handleMockRelayRequest(e, n) {
-  let r;
+async function handleMockRelayRequest(raw, runsByToken) {
+  let request;
   try {
-    r = mockRelayRequestSchema().parse(jsonParse(e));
+    request = mockRelayRequestSchema().parse(jsonParse(raw));
   } catch {
     return {
       verdict: "tool_error",
       text: "malformed mock relay request",
     };
   }
-  let tokenEntry = findTokenEntry(n, r.token);
+  let tokenEntry = findTokenEntry(runsByToken, request.token);
   if (tokenEntry === undefined)
     return {
       verdict: "tool_error",
       text: "mock relay: no such run",
     };
-  let s = tokenEntry.specs.get(r.registeredName);
-  let h =
-    s !== undefined && Object.hasOwn(s.responders, r.tool) && s.responders[r.tool]?.kind === "agent"
-      ? `${s.server}/${r.tool}`
+  let spec = tokenEntry.specs.get(request.registeredName);
+  let agentCallKey =
+    spec !== undefined &&
+    Object.hasOwn(spec.responders, request.tool) &&
+    spec.responders[request.tool]?.kind === "agent"
+      ? `${spec.server}/${request.tool}`
       : null;
-  if (h !== null) {
-    tokenEntry.received.set(h, (tokenEntry.received.get(h) ?? 0) + 1);
+  if (agentCallKey !== null) {
+    tokenEntry.received.set(agentCallKey, (tokenEntry.received.get(agentCallKey) ?? 0) + 1);
     tokenEntry.inFlight++;
   }
-  let w = tokenEntry.queue
-    .then(() => answerMockCall(tokenEntry, r))
+  let answerPromise = tokenEntry.queue
+    .then(() => answerMockCall(tokenEntry, request))
     .catch((error) => {
       if (tokenEntry.aborted === null)
         tokenEntry.aborted = {
-          server: s?.server ?? "(no mocked server)",
-          tool: truncateToLength(r.tool, MAX_TOOL_NAME_CHARS),
+          server: spec?.server ?? "(no mocked server)",
+          tool: truncateToLength(request.tool, MAX_TOOL_NAME_CHARS),
           reason: `${MOCK_RESPONDER_FAILED_TEXT} (relay_internal) \u2014 see the eval debug log`,
         };
       throw error;
     })
     .finally(() => {
-      if (h !== null) tokenEntry.inFlight--;
+      if (agentCallKey !== null) tokenEntry.inFlight--;
     });
-  tokenEntry.queue = w.catch(() => {});
-  return w;
+  tokenEntry.queue = answerPromise.catch(() => {});
+  return answerPromise;
 }
 //@ chunk-qchp9vrd.js:251679-251740 placement
 /**
  * 按 token 查找条目（恒定时间比较）。
  */
-function findTokenEntry(e, token) {
-  for (let [r, a] of e) if (timingSafeEqualStrings(token, r)) return a;
+function findTokenEntry(entries, token) {
+  for (let [candidateToken, value] of entries)
+    if (timingSafeEqualStrings(token, candidateToken)) return value;
   return;
 }
 //@ chunk-qchp9vrd.js:251740-252749 placement
-async function answerMockCall(tokenEntry, n) {
-  if (tokenEntry.aborted !== null)
+async function answerMockCall(run, call) {
+  if (run.aborted !== null)
     return {
       verdict: "abort",
-      text: tokenEntry.aborted.reason,
+      text: run.aborted.reason,
     };
-  if (tokenEntry.abort.signal.aborted)
+  if (run.abort.signal.aborted)
     return {
       verdict: "abort",
       text: "run ended",
     };
-  let r = tokenEntry.specs.get(n.registeredName);
-  tokenEntry.agentCalls++;
-  if (tokenEntry.agentCalls > tokenEntry.callBudget) {
-    let w = describeMockBudgetExceeded(tokenEntry);
-    tokenEntry.aborted = {
-      server: r?.server ?? "(no mocked server)",
-      tool: truncateToLength(n.tool, MAX_TOOL_NAME_CHARS),
-      reason: w,
+  let spec = run.specs.get(call.registeredName);
+  run.agentCalls++;
+  if (run.agentCalls > run.callBudget) {
+    let reason = describeMockBudgetExceeded(run);
+    run.aborted = {
+      server: spec?.server ?? "(no mocked server)",
+      tool: truncateToLength(call.tool, MAX_TOOL_NAME_CHARS),
+      reason,
     };
     return {
       verdict: "abort",
-      text: w,
+      text: reason,
     };
   }
-  let a = r !== undefined && Object.hasOwn(r.responders, n.tool) ? r.responders[n.tool] : undefined;
-  if (r === undefined || a === undefined || a.kind !== "agent")
+  let responder =
+    spec !== undefined && Object.hasOwn(spec.responders, call.tool) ? spec.responders[call.tool] : undefined;
+  if (spec === undefined || responder === undefined || responder.kind !== "agent")
     return {
       verdict: "tool_error",
-      text: `no agent mock for ${n.registeredName}/${n.tool}`,
+      text: `no agent mock for ${call.registeredName}/${call.tool}`,
     };
-  let s = await answerMockCallWithReplay(tokenEntry, r, a, n);
-  tokenEntry.answers.push({
-    server: r.server,
-    tool: n.tool,
-    inputKey: canonicalHash(n.input),
-    verdict: s.verdict,
-    outputKey: outputKey(unforgeable(s.text), s.verdict),
+  let answer = await answerMockCallWithReplay(run, spec, responder, call);
+  run.answers.push({
+    server: spec.server,
+    tool: call.tool,
+    inputKey: canonicalHash(call.input),
+    verdict: answer.verdict,
+    outputKey: outputKey(unforgeable(answer.text), answer.verdict),
   });
-  if (s.verdict === "abort" && tokenEntry.aborted === null)
-    tokenEntry.aborted = {
-      server: r.server,
-      tool: n.tool,
-      reason: s.text,
+  if (answer.verdict === "abort" && run.aborted === null)
+    run.aborted = {
+      server: spec.server,
+      tool: call.tool,
+      reason: answer.text,
     };
-  let h = tokenEntry.history.get(r.server) ?? [];
-  h.push({
-    server: r.server,
-    tool: n.tool,
-    input: truncateInput(n.input),
-    verdict: s.verdict,
-    output: truncateLine(s.text),
+  let entries = run.history.get(spec.server) ?? [];
+  entries.push({
+    server: spec.server,
+    tool: call.tool,
+    input: truncateInput(call.input),
+    verdict: answer.verdict,
+    output: truncateLine(answer.text),
   });
-  if (h.length > MAX_MOCK_SERVERS) h.splice(0, h.length - MAX_MOCK_SERVERS);
-  tokenEntry.history.set(r.server, h);
-  return s;
+  if (entries.length > MAX_MOCK_SERVERS) entries.splice(0, entries.length - MAX_MOCK_SERVERS);
+  run.history.set(spec.server, entries);
+  return answer;
 }
 //@ chunk-qchp9vrd.js:252749-254085 placement
 /**
  * 按回放录制、固定回答或代理应答者回答一次调用，检查 expect 输入约束。
  */
-async function answerMockCallWithReplay(e, n, r, a) {
-  if (r.expect !== null) {
-    let S = checkExpectGuards(a.input, r.expect);
-    if (S !== null)
+async function answerMockCallWithReplay(run, spec, responder, call) {
+  if (responder.expect !== null) {
+    let violation = checkExpectGuards(call.input, responder.expect);
+    if (violation !== null)
       return {
         verdict: "abort",
-        text: `input violates expect: ${S}`,
+        text: `input violates expect: ${violation}`,
       };
   }
-  let s = await substituteAgentInput(
-    r.prompt,
-    a.input,
-    r.baseDir,
+  let substituted = await substituteAgentInput(
+    responder.prompt,
+    call.input,
+    responder.baseDir,
     readFixture,
     MAX_AGENT_INPUT_SUBSTITUTION_CHARS,
   );
-  if (!s.ok) {
-    e.unreplayableServers.add(n.server);
-    e.replay.misses++;
+  if (!substituted.ok) {
+    run.unreplayableServers.add(spec.server);
+    run.replay.misses++;
     return {
       verdict: "tool_error",
-      text: s.reason,
+      text: substituted.reason,
       replay: "miss",
     };
   }
-  let history = e.history.get(n.server) ?? [];
-  let w = hashMockCallArgs({
-    server: n.server,
-    tool: a.tool,
-    input: a.input,
-    mockHash: r.replay.mockHash,
-    prompt: s.text,
+  let history = run.history.get(spec.server) ?? [];
+  let inputHash = hashMockCallArgs({
+    server: spec.server,
+    tool: call.tool,
+    input: call.input,
+    mockHash: responder.replay.mockHash,
+    prompt: substituted.text,
     history,
   });
-  let mockRecording = await readMockRecording(r.replay.replayDir, a.tool, w, r.replay.pinned);
+  let mockRecording = await readMockRecording(
+    responder.replay.replayDir,
+    call.tool,
+    inputHash,
+    responder.replay.pinned,
+  );
   if (mockRecording !== null) {
-    e.replay.hits++;
+    run.replay.hits++;
     return {
       ...mockRecording,
       replay: "hit",
     };
   }
-  let y = await runMockResponderQuery({
-    server: n.server,
-    tool: a.tool,
-    responder: r,
-    prompt: s.text,
-    input: a.input,
+  let reply = await runMockResponderQuery({
+    server: spec.server,
+    tool: call.tool,
+    responder,
+    prompt: substituted.text,
+    input: call.input,
     history,
-    model: e.model,
-    credentials: e.credentials,
-    signal: e.abort.signal,
+    model: run.model,
+    credentials: run.credentials,
+    signal: run.abort.signal,
   });
-  if (Number.isFinite(y.costUsd) && y.costUsd > 0) e.costUsd += y.costUsd;
-  let R = false;
+  if (Number.isFinite(reply.costUsd) && reply.costUsd > 0) run.costUsd += reply.costUsd;
+  let recorded = false;
   if (
-    !y.text.startsWith(MOCK_RESPONDER_FAILED_TEXT) &&
-    !e.unreplayableServers.has(n.server) &&
-    y.text.length <= MOCK_OUTPUT_MAX_CHARS &&
-    e.recordings.length < MAX_RECORDINGS_PER_CALL
+    !reply.text.startsWith(MOCK_RESPONDER_FAILED_TEXT) &&
+    !run.unreplayableServers.has(spec.server) &&
+    reply.text.length <= MOCK_OUTPUT_MAX_CHARS &&
+    run.recordings.length < MAX_RECORDINGS_PER_CALL
   ) {
-    let S = {
-      input: a.input,
-      output: y.text,
-      verdict: y.verdict,
+    let recordable = {
+      input: call.input,
+      output: reply.text,
+      verdict: reply.verdict,
       recordedAt: new Date().toISOString(),
-      model: e.model,
+      model: run.model,
     };
-    let T = `${jsonStringify(S, null, 2)}
+    let recordJson = `${jsonStringify(recordable, null, 2)}
 `;
-    if (Buffer.byteLength(T) <= MAX_MOCK_RECORDING_BYTES) {
-      e.recordings.push({
-        server: n.server,
-        file: mockRecordingFileName(a.tool, w),
-        json: T,
+    if (Buffer.byteLength(recordJson) <= MAX_MOCK_RECORDING_BYTES) {
+      run.recordings.push({
+        server: spec.server,
+        file: mockRecordingFileName(call.tool, inputHash),
+        json: recordJson,
         answerHash: createHash("sha256")
           .update(
-            `${y.verdict}
-${y.text}`,
+            `${reply.verdict}
+${reply.text}`,
           )
           .digest("hex"),
-        adoptDir: r.replay.replayDir,
+        adoptDir: responder.replay.replayDir,
       });
-      R = true;
+      recorded = true;
     }
   }
-  if (!R) e.unreplayableServers.add(n.server);
-  e.replay.misses++;
+  if (!recorded) run.unreplayableServers.add(spec.server);
+  run.replay.misses++;
   return {
-    verdict: y.verdict,
-    text: y.text,
+    verdict: reply.verdict,
+    text: reply.text,
     replay: "miss",
   };
 }
@@ -705,38 +735,38 @@ ${y.text}`,
 var MAX_TOOL_NAME_CHARS = 80;
 var MAX_RECORDINGS_PER_CALL = 200;
 //@ chunk-qchp9vrd.js:254102-254199 placement
-function describeMockBudgetExceeded(e) {
-  return `mock call budget exceeded (${e.callBudget} agent-answered calls this run)`;
+function describeMockBudgetExceeded(run) {
+  return `mock call budget exceeded (${run.callBudget} agent-answered calls this run)`;
 }
 //@ chunk-qchp9vrd.js:254199-254255 placement
 /**
  * 行内容超长时截断。
  */
-function truncateLine(e) {
-  return e.length > MAX_MOCK_LINE_BYTES ? `${truncateToLength(e, MAX_MOCK_LINE_BYTES)}\u2026` : e;
+function truncateLine(text) {
+  return text.length > MAX_MOCK_LINE_BYTES ? `${truncateToLength(text, MAX_MOCK_LINE_BYTES)}\u2026` : text;
 }
 //@ chunk-qchp9vrd.js:254255-254316 placement
 /**
  * 输入 JSON 超长时截断。
  */
-function truncateInput(e) {
-  let n = jsonStringify(e) ?? "null";
-  return n.length > MAX_MOCK_LINE_BYTES ? truncateLine(n) : e;
+function truncateInput(input) {
+  let json = jsonStringify(input) ?? "null";
+  return json.length > MAX_MOCK_LINE_BYTES ? truncateLine(json) : input;
 }
 //@ chunk-qchp9vrd.js:254316-254380 placement
 /**
  * 生成输出键（tool_error 时中间截断）。
  */
-function outputKey(e, verdict) {
-  let trimmed = e.trim();
+function outputKey(text, verdict) {
+  let trimmed = text.trim();
   return verdict === "tool_error" ? truncateMiddle_2(trimmed) : trimmed;
 }
 //@ chunk-qchp9vrd.js:254380-254443 placement
 /**
  * 计算值的规范 JSON 哈希。
  */
-function canonicalHash(e) {
-  return createHash("sha256").update(canonicalJsonStringify(e)).digest("hex");
+function canonicalHash(value) {
+  return createHash("sha256").update(canonicalJsonStringify(value)).digest("hex");
 }
 export {
   emptyMockState,

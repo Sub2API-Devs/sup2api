@@ -14,7 +14,7 @@ import {
   EXTERNAL_RESPONSE_HINT,
   EXTERNAL_MESSAGE_PREFIX,
 } from "../../utils/contextAttachments/externalMessages.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { EARLY_RETURN_SENTINEL, MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -26,7 +26,7 @@ import { unescapeBasicHtmlEntities } from "../../utils/confusables.js";
 import { clipTeammateText } from "../../utils/swarm/teammateIds.js";
 import { BriefTimestampNamespace } from "../../utils/formatBriefTimestamp.js";
 import { truncateToWidth } from "../../utils/format.js";
-import { BACK_ARROW_GLYPH } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BACK_ARROW_GLYPH } from "../../constants/figures.js";
 
 //@ chunk-e67761vs.js:13716-13898 placement
 var regExp = new RegExp(`^<${CHANNEL}\\s+source="([^"]*)"([^>]*)>\\n?`);
@@ -49,31 +49,31 @@ ${externalSourceWarning(true)}${EXTERNAL_RESPONSE_HINT}`,
 ${externalSourceWarning(true)}`,
 ];
 //@ chunk-e67761vs.js:13898-13966 placement
-function senderAfterColon(u) {
-  let index = u.lastIndexOf(":");
-  return index === -1 ? u : u.slice(index + 1);
+function senderAfterColon(text) {
+  let index = text.lastIndexOf(":");
+  return index === -1 ? text : text.slice(index + 1);
 }
 //@ chunk-e67761vs.js:13966-14213 placement
 function parseChannelMessage(text) {
   let lead = "";
-  let l = text;
-  if (l.startsWith(EXTERNAL_MESSAGE_PREFIX)) {
-    let index = l.indexOf(`
+  let rest = text;
+  if (rest.startsWith(EXTERNAL_MESSAGE_PREFIX)) {
+    let index = rest.indexOf(`
 `);
-    if (index !== -1 && l.startsWith(CHANNEL_SOURCE_OPEN, index + 1)) {
-      lead = l.slice(0, index);
-      l = l.slice(index + 1);
+    if (index !== -1 && rest.startsWith(CHANNEL_SOURCE_OPEN, index + 1)) {
+      lead = rest.slice(0, index);
+      rest = rest.slice(index + 1);
     }
   }
-  let match = regExp.exec(l);
+  let match = regExp.exec(rest);
   if (!match) return null;
-  let [b, i = "", c] = match;
+  let [openTag, source = "", restText] = match;
   return {
     lead,
-    rest: l,
-    open: b,
-    source: i,
-    user: USER_ATTR_RE.exec(c ?? "")?.[1],
+    rest,
+    open: openTag,
+    source,
+    user: USER_ATTR_RE.exec(restText ?? "")?.[1],
   };
 }
 //@ chunk-e67761vs.js:14213-14222 placement
@@ -83,21 +83,21 @@ var MAX_INBOUND_TEXT = 60;
  * 工作中收到的外部消息（频道/同伴）在对话中的显示。
  */
 function InboundWhileWorkingMessage(props) {
-  let g = w(18);
+  let $ = useMemoCache(18);
   let { addMargin, param, messageId, origin, isExpanded, followsSpeakerLabel } = props;
   let { text } = param;
-  let t = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
-  let p;
-  let d;
+  let followsLabel = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
+  let joinedText;
+  let notes;
   let serverName;
-  let N;
-  let E;
-  if (g[0] !== addMargin || g[1] !== t || g[2] !== text) {
-    E = EARLY_RETURN_SENTINEL;
+  let sender;
+  let rowElement;
+  if ($[0] !== addMargin || $[1] !== followsLabel || $[2] !== text) {
+    rowElement = EARLY_RETURN_SENTINEL;
     U: {
       let channelMessage = parseChannelMessage(text);
       if (!channelMessage) {
-        E = t
+        rowElement = followsLabel
           ? jsxProd_default(CollapsibleText, {
               text: text.trim(),
             })
@@ -111,114 +111,115 @@ function InboundWhileWorkingMessage(props) {
       }
       let { open, source, user } = channelMessage;
       let { lead, rest } = channelMessage;
-      d = lead;
-      let D = rest.lastIndexOf(INBOUND_MESSAGE_CLOSE_TAG) + INBOUND_MESSAGE_CLOSE_TAG.length;
-      if (D > INBOUND_MESSAGE_CLOSE_TAG.length - 1) {
-        let sliced = rest.slice(D);
-        if (INBOUND_MARKER_VARIANTS.includes(sliced)) rest = rest.slice(0, D);
+      notes = lead;
+      let iconElement = rest.lastIndexOf(INBOUND_MESSAGE_CLOSE_TAG) + INBOUND_MESSAGE_CLOSE_TAG.length;
+      if (iconElement > INBOUND_MESSAGE_CLOSE_TAG.length - 1) {
+        let sliced = rest.slice(iconElement);
+        if (INBOUND_MARKER_VARIANTS.includes(sliced)) rest = rest.slice(0, iconElement);
       }
-      let F = unescapeBasicHtmlEntities(source);
+      let contentElement = unescapeBasicHtmlEntities(source);
       if (
-        d === `${EXTERNAL_MESSAGE_PREFIX}${F} while you were working:` ||
-        d === `${EXTERNAL_MESSAGE_PREFIX}${F}:`
+        notes === `${EXTERNAL_MESSAGE_PREFIX}${contentElement} while you were working:` ||
+        notes === `${EXTERNAL_MESSAGE_PREFIX}${contentElement}:`
       )
-        d = "";
-      p = rest.slice(open.length);
-      let ne = p.trimEnd();
-      if (ne.endsWith(INBOUND_CLOSE_WITH_SPACE)) p = ne.slice(0, -INBOUND_CLOSE_WITH_SPACE.length);
-      serverName = senderAfterColon(F);
-      N = user ? unescapeBasicHtmlEntities(user) : undefined;
+        notes = "";
+      joinedText = rest.slice(open.length);
+      let containerElement = joinedText.trimEnd();
+      if (containerElement.endsWith(INBOUND_CLOSE_WITH_SPACE))
+        joinedText = containerElement.slice(0, -INBOUND_CLOSE_WITH_SPACE.length);
+      serverName = senderAfterColon(contentElement);
+      sender = user ? unescapeBasicHtmlEntities(user) : undefined;
     }
-    g[0] = addMargin;
-    g[1] = t;
-    g[2] = text;
-    g[3] = p;
-    g[4] = d;
-    g[5] = serverName;
-    g[6] = N;
-    g[7] = E;
+    $[0] = addMargin;
+    $[1] = followsLabel;
+    $[2] = text;
+    $[3] = joinedText;
+    $[4] = notes;
+    $[5] = serverName;
+    $[6] = sender;
+    $[7] = rowElement;
   } else {
-    p = g[3];
-    d = g[4];
-    serverName = g[5];
-    N = g[6];
-    E = g[7];
+    joinedText = $[3];
+    notes = $[4];
+    serverName = $[5];
+    sender = $[6];
+    rowElement = $[7];
   }
-  if (E !== EARLY_RETURN_SENTINEL) return E;
-  let userName = N;
-  let M;
+  if (rowElement !== EARLY_RETURN_SENTINEL) return rowElement;
+  let userName = sender;
+  let inboundMessageBodyElement;
   if (
-    g[8] !== addMargin ||
-    g[9] !== p ||
-    g[10] !== t ||
-    g[11] !== isExpanded ||
-    g[12] !== d ||
-    g[13] !== messageId ||
-    g[14] !== origin ||
-    g[15] !== serverName ||
-    g[16] !== userName
+    $[8] !== addMargin ||
+    $[9] !== joinedText ||
+    $[10] !== followsLabel ||
+    $[11] !== isExpanded ||
+    $[12] !== notes ||
+    $[13] !== messageId ||
+    $[14] !== origin ||
+    $[15] !== serverName ||
+    $[16] !== userName
   ) {
-    M = jsxProd_default(InboundMessageBody, {
+    inboundMessageBodyElement = jsxProd_default(InboundMessageBody, {
       addMargin,
       messageId,
       origin,
       isExpanded,
-      followsSpeakerLabel: t,
-      lead: d,
-      content: p,
+      followsSpeakerLabel: followsLabel,
+      lead: notes,
+      content: joinedText,
       serverName,
       userName,
     });
-    g[8] = addMargin;
-    g[9] = p;
-    g[10] = t;
-    g[11] = isExpanded;
-    g[12] = d;
-    g[13] = messageId;
-    g[14] = origin;
-    g[15] = serverName;
-    g[16] = userName;
-    g[17] = M;
-  } else M = g[17];
-  return M;
+    $[8] = addMargin;
+    $[9] = joinedText;
+    $[10] = followsLabel;
+    $[11] = isExpanded;
+    $[12] = notes;
+    $[13] = messageId;
+    $[14] = origin;
+    $[15] = serverName;
+    $[16] = userName;
+    $[17] = inboundMessageBodyElement;
+  } else inboundMessageBodyElement = $[17];
+  return inboundMessageBodyElement;
 }
 //@ chunk-e67761vs.js:15302-16095 placement
 function InboundMessageBody(props) {
-  let d = w(19);
+  let $ = useMemoCache(19);
   let { addMargin, messageId, origin, isExpanded, followsSpeakerLabel, lead, content, serverName, userName } =
     props;
-  const p = `${
+  const joined = `${
     lead
       ? `${lead}
 `
       : ""
   }${content}`;
-  let f;
-  if (d[0] !== p) {
-    f = p.trim();
-    d[0] = p;
-    d[1] = f;
-  } else f = d[1];
-  let text = f;
-  let E;
-  if (d[2] !== serverName || d[3] !== userName) {
-    E = clipTeammateText(userName ?? serverName) || serverName;
-    d[2] = serverName;
-    d[3] = userName;
-    d[4] = E;
-  } else E = d[4];
-  let name = E;
+  let trimmed;
+  if ($[0] !== joined) {
+    trimmed = joined.trim();
+    $[0] = joined;
+    $[1] = trimmed;
+  } else trimmed = $[1];
+  let text = trimmed;
+  let senderLabel;
+  if ($[2] !== serverName || $[3] !== userName) {
+    senderLabel = clipTeammateText(userName ?? serverName) || serverName;
+    $[2] = serverName;
+    $[3] = userName;
+    $[4] = senderLabel;
+  } else senderLabel = $[4];
+  let name = senderLabel;
   const isExpanded_2 = isExpanded || followsSpeakerLabel;
   let sender;
-  if (d[5] !== name) {
+  if ($[5] !== name) {
     sender = {
       name,
     };
-    d[5] = name;
-    d[6] = sender;
-  } else sender = d[6];
+    $[5] = name;
+    $[6] = sender;
+  } else sender = $[6];
   let draw;
-  if (d[7] !== addMargin || d[8] !== followsSpeakerLabel || d[9] !== serverName || d[10] !== userName) {
+  if ($[7] !== addMargin || $[8] !== followsSpeakerLabel || $[9] !== serverName || $[10] !== userName) {
     draw = (body) =>
       jsxProd_default(ChannelMessageHeader, {
         addMargin,
@@ -227,22 +228,22 @@ function InboundMessageBody(props) {
         userName,
         body,
       });
-    d[7] = addMargin;
-    d[8] = followsSpeakerLabel;
-    d[9] = serverName;
-    d[10] = userName;
-    d[11] = draw;
-  } else draw = d[11];
-  let M;
+    $[7] = addMargin;
+    $[8] = followsSpeakerLabel;
+    $[9] = serverName;
+    $[10] = userName;
+    $[11] = draw;
+  } else draw = $[11];
+  let bodyElement;
   if (
-    d[12] !== text ||
-    d[13] !== messageId ||
-    d[14] !== origin ||
-    d[15] !== isExpanded_2 ||
-    d[16] !== sender ||
-    d[17] !== draw
+    $[12] !== text ||
+    $[13] !== messageId ||
+    $[14] !== origin ||
+    $[15] !== isExpanded_2 ||
+    $[16] !== sender ||
+    $[17] !== draw
   ) {
-    M = {
+    bodyElement = {
       messageId,
       stored: origin,
       text,
@@ -250,77 +251,78 @@ function InboundMessageBody(props) {
       sender,
       draw,
     };
-    d[12] = text;
-    d[13] = messageId;
-    d[14] = origin;
-    d[15] = isExpanded_2;
-    d[16] = sender;
-    d[17] = draw;
-    d[18] = M;
-  } else M = d[18];
-  return BriefTimestampNamespace.useUserMessageSite(M);
+    $[12] = text;
+    $[13] = messageId;
+    $[14] = origin;
+    $[15] = isExpanded_2;
+    $[16] = sender;
+    $[17] = draw;
+    $[18] = bodyElement;
+  } else bodyElement = $[18];
+  return BriefTimestampNamespace.useUserMessageSite(bodyElement);
 }
 //@ chunk-e67761vs.js:16095-16796 placement
 function ChannelMessageHeader(props) {
-  let c = w(14);
+  let $ = useMemoCache(14);
   let { addMargin, followsSpeakerLabel, serverName, userName, body } = props;
   if (followsSpeakerLabel) {
-    let o;
-    if (c[0] !== body) {
-      o = jsxProd_default(CollapsibleText, {
+    let collapsibleTextElement;
+    if ($[0] !== body) {
+      collapsibleTextElement = jsxProd_default(CollapsibleText, {
         text: body,
       });
-      c[0] = body;
-      c[1] = o;
-    } else o = c[1];
-    return o;
+      $[0] = body;
+      $[1] = collapsibleTextElement;
+    } else collapsibleTextElement = $[1];
+    return collapsibleTextElement;
   }
-  let o;
-  if (c[2] !== body) {
-    o = truncateToWidth(body.replace(/\s+/g, " "), MAX_INBOUND_TEXT);
-    c[2] = body;
-    c[3] = o;
-  } else o = c[3];
-  let t = o;
-  const marginTop = addMargin ? 1 : 0;
-  let p;
-  if (c[4] === MEMO_CACHE_SENTINEL) {
-    p = jsxProd_default(Text, {
+  let bodyText;
+  if ($[2] !== body) {
+    bodyText = truncateToWidth(body.replace(/\s+/g, " "), MAX_INBOUND_TEXT);
+    $[2] = body;
+    $[3] = bodyText;
+  } else bodyText = $[3];
+  let marginTop = bodyText;
+  const marginTop_2 = addMargin ? 1 : 0;
+  let bodyElement;
+  if ($[4] === MEMO_CACHE_SENTINEL) {
+    bodyElement = jsxProd_default(Text, {
       "aria-label": "inbound:",
       color: "suggestion",
       children: BACK_ARROW_GLYPH,
     });
-    c[4] = p;
-  } else p = c[4];
-  const d = userName ? ` \xB7 ${userName}` : "";
-  let f;
-  if (c[5] !== serverName || c[6] !== d) {
-    f = jsxProd_default_2(Text, {
+    $[4] = bodyElement;
+  } else bodyElement = $[4];
+  const headerElement = userName ? ` \xB7 ${userName}` : "";
+  let rowElement;
+  if ($[5] !== serverName || $[6] !== headerElement) {
+    rowElement = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [serverName, d, ":"],
+      children: [serverName, headerElement, ":"],
     });
-    c[5] = serverName;
-    c[6] = d;
-    c[7] = f;
-  } else f = c[7];
+    $[5] = serverName;
+    $[6] = headerElement;
+    $[7] = rowElement;
+  } else rowElement = $[7];
   let children;
-  if (c[8] !== f || c[9] !== t) {
+  if ($[8] !== rowElement || $[9] !== marginTop) {
     children = jsxProd_default_2(Text, {
-      children: [p, " ", f, " ", t],
+      children: [bodyElement, " ", rowElement, " ", marginTop],
     });
-    c[8] = f;
-    c[9] = t;
-    c[10] = children;
-  } else children = c[10];
-  let E;
-  if (c[11] !== marginTop || c[12] !== children) {
-    E = jsxProd_default(Box, {
-      marginTop,
+    $[8] = rowElement;
+    $[9] = marginTop;
+    $[10] = children;
+  } else children = $[10];
+  let boxElement;
+  if ($[11] !== marginTop_2 || $[12] !== children) {
+    boxElement = jsxProd_default(Box, {
+      marginTop: marginTop_2,
       children,
     });
-    c[11] = marginTop;
-    c[12] = children;
-    c[13] = E;
-  } else E = c[13];
-  return E;
+    $[11] = marginTop_2;
+    $[12] = children;
+    $[13] = boxElement;
+  } else boxElement = $[13];
+  return boxElement;
 }
+export { InboundWhileWorkingMessage };

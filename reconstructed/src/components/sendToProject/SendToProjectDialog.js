@@ -8,7 +8,14 @@
  * pieces: chunk-6d9n2xk3.js (28)
  * attribution: placement 28
  */
-import { init_react_production, y, P, R, Q, ce } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "../../../vendor/react/cjs/react.production.js";
 import { BLANK_LOOKALIKE_RE, INVISIBLE_SYMBOL_RE } from "../../utils/emojiPatterns.js";
 import {
   wrapTextToWidth,
@@ -54,7 +61,7 @@ import {
   MESSAGE_DISCLOSURE,
   releaseTypedMessage,
 } from "../../tools/ContinueInProjectsTool/ContinueInProjectsTool.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -123,13 +130,13 @@ var TAILSCALE_KIND_LABELS = {
   self_hosted_pool: "self-hosted",
 };
 //@ chunk-6d9n2xk3.js:15669-18263 placement
-function projectSummaryLines(o) {
-  let { width, existing } = o;
+function projectSummaryLines(args) {
+  let { width, existing } = args;
   let project = existing === null ? undefined : existing.project;
   if (project === null) {
     let mapped = wrapTextToWidth(LOOKUP_ERROR_TEXT[existing?.failure ?? "transient"], Math.max(1, width)).map(
-      (text, x) => ({
-        key: `lead-${x}`,
+      (text, index) => ({
+        key: `lead-${index}`,
         text,
       }),
     );
@@ -142,7 +149,7 @@ function projectSummaryLines(o) {
       rowsAtMost: mapped.length,
     };
   }
-  if (o.oneMessage && existing !== null)
+  if (args.oneMessage && existing !== null)
     return {
       rows: [],
       whole: {
@@ -151,34 +158,36 @@ function projectSummaryLines(o) {
       },
       rowsAtMost: project === undefined ? HEADER_RESERVED_ROWS : 0,
     };
-  let p = o.proposal.sessions?.length ?? 0;
-  let h =
-    o.attach &&
-    o.detection?.repo.kind === "github" &&
-    (!isRepoAccessUnverified(o.detection.repo) || o.monorepoEnvironment);
-  let c = o.environment != null ? sanitizeDialogText(o.environment.name) : "";
-  let E =
-    existing === null ? ["instructions", "icon", "color"].filter((f) => (o.proposal[f] ?? "") !== "") : [];
-  let m = [
+  let sessionCount = args.proposal.sessions?.length ?? 0;
+  let repoUnverified =
+    args.attach &&
+    args.detection?.repo.kind === "github" &&
+    (!isRepoAccessUnverified(args.detection.repo) || args.monorepoEnvironment);
+  let envName = args.environment != null ? sanitizeDialogText(args.environment.name) : "";
+  let presentationFields =
+    existing === null
+      ? ["instructions", "icon", "color"].filter((field) => (args.proposal[field] ?? "") !== "")
+      : [];
+  let specs = [
     ...(existing === null
       ? [
           {
             key: "env",
             label: "Cloud environment",
-            value: environmentStatusText(o).slice(c.length),
+            value: environmentStatusText(args).slice(envName.length),
             maxRows: MESSAGE_MAX_LINES,
-            ...(o.environment != null && {
-              bound: c,
+            ...(args.environment != null && {
+              bound: envName,
             }),
           },
           {
             key: "repository",
             label: "Repository",
-            value: h ? "" : detectionStatusText(o),
-            maxRows: h ? CHOICE_INDENT : HEADER_RESERVED_ROWS,
-            underBullet: h,
-            ...(h && {
-              bound: detectionStatusText(o),
+            value: repoUnverified ? "" : detectionStatusText(args),
+            maxRows: repoUnverified ? CHOICE_INDENT : HEADER_RESERVED_ROWS,
+            underBullet: repoUnverified,
+            ...(repoUnverified && {
+              bound: detectionStatusText(args),
             }),
           },
         ]
@@ -187,28 +196,28 @@ function projectSummaryLines(o) {
       key: "brief",
       label: "Brief",
       value: isProposalEmpty(
-        stripPresentationFields(o.proposal, existing === null ? "new" : "existing", "pane"),
+        stripPresentationFields(args.proposal, existing === null ? "new" : "existing", "pane"),
       )
         ? "saved to project memory. No setup card is posted."
         : "saved to project memory and posted as the setup card",
       maxRows: 2,
     },
-    ...(E.length > 0
+    ...(presentationFields.length > 0
       ? [
           {
             key: "settings",
             label: "Project settings",
-            value: `${joinWithAnd_2(E)} from the brief`,
+            value: `${joinWithAnd_2(presentationFields)} from the brief`,
             maxRows: 2,
           },
         ]
       : []),
-    ...(p > 0
+    ...(sessionCount > 0
       ? [
           {
             key: "threads",
             label: "Threads",
-            value: `${p} on the setup card. You start ${p === 1 ? "it" : "them"} there.`,
+            value: `${sessionCount} on the setup card. You start ${sessionCount === 1 ? "it" : "them"} there.`,
             maxRows: 2,
           },
         ]
@@ -220,49 +229,55 @@ function projectSummaryLines(o) {
       maxRows: 2,
     },
   ];
-  let mapped = (o.oneMessage ? m.filter(({ key }) => key === "env" || key === "repository") : m).map(
-    ({ key, label, value: x, maxRows, underBullet, bound }) => {
-      let F =
-        bound === undefined
-          ? labeledLine(label, x, width, maxRows)
-          : labeledWrappedLines(label, bound, x, width, maxRows, underBullet);
-      let B =
-        bound === undefined
-          ? labeledLine(label, x, width, Number.MAX_SAFE_INTEGER)
-          : labeledWrappedLines(label, bound, "", width, Number.MAX_SAFE_INTEGER, underBullet);
-      return {
-        key,
-        rows: F,
-        whole:
-          B.length <= maxRows &&
-          (bound === undefined || B.every((I, U) => F[U]?.startsWith(I.trimEnd()) === true)),
-        rowsAtMost:
-          (key === "env" && o.environment === undefined) ||
-          (key === "repository" && o.detection === null && !o.detectFailed)
-            ? key === "env"
-              ? MESSAGE_MAX_LINES
-              : CHOICE_INDENT
-            : 0,
-      };
-    },
-  );
-  let flattened = mapped.flatMap((f) =>
-    f.rows.map((text, x) => ({
-      key: `${f.key}-${x}`,
+  let mapped = (
+    args.oneMessage ? specs.filter(({ key }) => key === "env" || key === "repository") : specs
+  ).map(({ key, label, value, maxRows, underBullet, bound }) => {
+    let rows =
+      bound === undefined
+        ? labeledLine(label, value, width, maxRows)
+        : labeledWrappedLines(label, bound, value, width, maxRows, underBullet);
+    let wholeRows =
+      bound === undefined
+        ? labeledLine(label, value, width, Number.MAX_SAFE_INTEGER)
+        : labeledWrappedLines(label, bound, "", width, Number.MAX_SAFE_INTEGER, underBullet);
+    return {
+      key,
+      rows,
+      whole:
+        wholeRows.length <= maxRows &&
+        (bound === undefined ||
+          wholeRows.every((wholeLine, index) => rows[index]?.startsWith(wholeLine.trimEnd()) === true)),
+      rowsAtMost:
+        (key === "env" && args.environment === undefined) ||
+        (key === "repository" && args.detection === null && !args.detectFailed)
+          ? key === "env"
+            ? MESSAGE_MAX_LINES
+            : CHOICE_INDENT
+          : 0,
+    };
+  });
+  let flattened = mapped.flatMap((spec) =>
+    spec.rows.map((text, index) => ({
+      key: `${spec.key}-${index}`,
       text,
     })),
   );
-  let k =
+  let leadLines =
     existing === null
-      ? o.oneMessage
-        ? wrapToMaxLines("New personal project with this setup:", width).map((text, g) => ({
-            key: `lead-${g}`,
+      ? args.oneMessage
+        ? wrapToMaxLines("New personal project with this setup:", width).map((text, index) => ({
+            key: `lead-${index}`,
             text,
           }))
-        : quotedPreviewLines("Create personal project ", o.projectName, " with the following setup:", width)
+        : quotedPreviewLines(
+            "Create personal project ",
+            args.projectName,
+            " with the following setup:",
+            width,
+          )
       : project === undefined
-        ? wrapToMaxLines(LOOKUP_COPY_TEXT, width).map((text, g) => ({
-            key: `lead-${g}`,
+        ? wrapToMaxLines(LOOKUP_COPY_TEXT, width).map((text, index) => ({
+            key: `lead-${index}`,
             text,
           }))
         : quotedPreviewLines(
@@ -273,15 +288,15 @@ function projectSummaryLines(o) {
             wrapToMaxLines(LOOKUP_COPY_TEXT, width).length,
           );
   return {
-    rows: [...k, ...flattened],
+    rows: [...leadLines, ...flattened],
     whole: {
-      environment: mapped.every((f) => f.key !== "env" || f.whole),
-      repository: mapped.every((f) => f.key !== "repository" || f.whole),
+      environment: mapped.every((spec) => spec.key !== "env" || spec.whole),
+      repository: mapped.every((spec) => spec.key !== "repository" || spec.whole),
     },
     rowsAtMost:
       (existing !== null && project === undefined
         ? Math.max(
-            k.length,
+            leadLines.length,
             quotedPreviewLines(
               "Send to personal project ",
               EMPTY_REPO_PLACEHOLDER,
@@ -289,164 +304,191 @@ function projectSummaryLines(o) {
               width,
             ).length,
           )
-        : k.length) + mapped.reduce((acc, g) => acc + Math.max(g.rows.length, g.rowsAtMost), 0),
+        : leadLines.length) +
+      mapped.reduce((acc, spec) => acc + Math.max(spec.rows.length, spec.rowsAtMost), 0),
   };
 }
 //@ chunk-6d9n2xk3.js:18263-18297 placement
 var filtered = Object.keys(LOOKUP_ERROR_TEXT).filter(isKnownErrorCode);
 //@ chunk-6d9n2xk3.js:18297-18339 placement
-function isKnownErrorCode(o) {
-  return Object.hasOwn(LOOKUP_ERROR_TEXT, o);
+function isKnownErrorCode(code) {
+  return Object.hasOwn(LOOKUP_ERROR_TEXT, code);
 }
 //@ chunk-6d9n2xk3.js:18339-18378 placement
-function replaceControlChars(o) {
-  return o.replace(regExp_2, BLANK_GLYPH);
+function replaceControlChars(text) {
+  return text.replace(regExp_2, BLANK_GLYPH);
 }
 //@ chunk-6d9n2xk3.js:18378-18648 placement
-function wrapGraphemes(o, i, l = i) {
-  let u = [];
-  let p = "";
-  let h = 0;
-  let max = Math.max(1, l);
-  for (let { segment } of getGraphemeSegmenter().segment(replaceControlChars(o))) {
-    let m = bunStringWidth(segment);
-    if (p !== "" && h + m > max) {
-      max = Math.max(1, i);
-      let C = p.trimEnd();
-      let sliced = p.slice(C.length);
-      let A = C !== "" && sliced !== "" && bunStringWidth(sliced) + m <= max;
-      u.push(A ? C : p);
-      p = A ? sliced : "";
-      h = A ? bunStringWidth(sliced) : 0;
+function wrapGraphemes(text, width, maxWidth = width) {
+  let lines = [];
+  let currentLine = "";
+  let currentWidth = 0;
+  let max = Math.max(1, maxWidth);
+  for (let { segment } of getGraphemeSegmenter().segment(replaceControlChars(text))) {
+    let segmentWidth = bunStringWidth(segment);
+    if (currentLine !== "" && currentWidth + segmentWidth > max) {
+      max = Math.max(1, width);
+      let trimmedLine = currentLine.trimEnd();
+      let sliced = currentLine.slice(trimmedLine.length);
+      let canKeepPrefix = trimmedLine !== "" && sliced !== "" && bunStringWidth(sliced) + segmentWidth <= max;
+      lines.push(canKeepPrefix ? trimmedLine : currentLine);
+      currentLine = canKeepPrefix ? sliced : "";
+      currentWidth = canKeepPrefix ? bunStringWidth(sliced) : 0;
     }
-    p += segment;
-    h += m;
+    currentLine += segment;
+    currentWidth += segmentWidth;
   }
-  return [...u, p];
+  return [...lines, currentLine];
 }
 //@ chunk-6d9n2xk3.js:18648-18900 placement
-function labeledLine(label, i, width, u) {
-  let p = `${SEND_TO_PROJECT_TEXT}${label}: `;
-  let h = bunStringWidth(p) <= width / 2;
-  let c = bunStringWidth(h ? p : SEND_TO_PROJECT_TEXT);
-  let E = wrapTextToWidth(h ? i : `${label}: ${i}`, Math.max(1, width - c));
-  let mapped = E.slice(0, u).map((S, A) => (A === 0 ? (h ? p : SEND_TO_PROJECT_TEXT) : " ".repeat(c)) + S);
+function labeledLine(label, value, width, maxLines) {
+  let prefix = `${SEND_TO_PROJECT_TEXT}${label}: `;
+  let prefixFits = bunStringWidth(prefix) <= width / 2;
+  let prefixWidth = bunStringWidth(prefixFits ? prefix : SEND_TO_PROJECT_TEXT);
+  let wrappedLines = wrapTextToWidth(
+    prefixFits ? value : `${label}: ${value}`,
+    Math.max(1, width - prefixWidth),
+  );
+  let mapped = wrappedLines
+    .slice(0, maxLines)
+    .map(
+      (line, index) =>
+        (index === 0 ? (prefixFits ? prefix : SEND_TO_PROJECT_TEXT) : " ".repeat(prefixWidth)) + line,
+    );
   let last = mapped.at(-1);
-  if (E.length > u && last !== undefined)
+  if (wrappedLines.length > maxLines && last !== undefined)
     mapped[mapped.length - 1] = truncateToWidth(`${last}\u2026`, Math.max(1, width));
   return mapped;
 }
 //@ chunk-6d9n2xk3.js:18900-19674 placement
-function labeledWrappedLines(label, bound, l, width, p, underBullet = false) {
+function labeledWrappedLines(label, text, value, width, maxRows, underBullet = false) {
   let max = Math.max(2, width);
-  let E = `${SEND_TO_PROJECT_TEXT}${label}: `;
-  let m = bunStringWidth(SEND_TO_PROJECT_TEXT);
-  let C = bunStringWidth(E) <= max / 2 && !underBullet ? bunStringWidth(E) : m;
-  let mapped = wrapTextToWidth(`${label}:`, max - m).map(
-    (T, F) => (F === 0 ? SEND_TO_PROJECT_TEXT : " ".repeat(m)) + T,
+  let inlineLabel = `${SEND_TO_PROJECT_TEXT}${label}: `;
+  let prefixWidth = bunStringWidth(SEND_TO_PROJECT_TEXT);
+  let prefixIndent =
+    bunStringWidth(inlineLabel) <= max / 2 && !underBullet ? bunStringWidth(inlineLabel) : prefixWidth;
+  let mapped = wrapTextToWidth(`${label}:`, max - prefixWidth).map(
+    (line, index) => (index === 0 ? SEND_TO_PROJECT_TEXT : " ".repeat(prefixWidth)) + line,
   );
-  let A = `${mapped.at(-1) ?? ""} `;
-  let k = max - bunStringWidth(A) >= 2;
-  let f = l.trim() === "" ? [] : l.trim().split(" ");
-  let g = [
-    ...mapped.slice(0, k ? -1 : undefined),
-    ...wrapGraphemes(bound, max - C, k ? max - bunStringWidth(A) : max - C).map(
-      (T, F) => (k && F === 0 ? A : " ".repeat(C)) + T,
+  let trailingPrefix = `${mapped.at(-1) ?? ""} `;
+  let canAppendTrailing = max - bunStringWidth(trailingPrefix) >= 2;
+  let words = value.trim() === "" ? [] : value.trim().split(" ");
+  let lines = [
+    ...mapped.slice(0, canAppendTrailing ? -1 : undefined),
+    ...wrapGraphemes(
+      text,
+      max - prefixIndent,
+      canAppendTrailing ? max - bunStringWidth(trailingPrefix) : max - prefixIndent,
+    ).map(
+      (wrapped, index) =>
+        (canAppendTrailing && index === 0 ? trailingPrefix : " ".repeat(prefixIndent)) + wrapped,
     ),
   ];
-  let x = 0;
-  for (let T = f[x]; T !== undefined && bunStringWidth(`${g.at(-1)} ${T}`) <= max; T = f[x]) {
-    g[g.length - 1] = `${g.at(-1)} ${T}`;
-    x += 1;
+  let wordIndex = 0;
+  for (
+    let word = words[wordIndex];
+    word !== undefined && bunStringWidth(`${lines.at(-1)} ${word}`) <= max;
+    word = words[wordIndex]
+  ) {
+    lines[lines.length - 1] = `${lines.at(-1)} ${word}`;
+    wordIndex += 1;
   }
-  if (x < f.length) {
-    let T = x === 0 ? (g.at(-1) ?? "") : "";
-    let sliced = T.slice(T.trimEnd().length);
-    if (sliced !== "" && bunStringWidth(T.trimEnd()) > C) g[g.length - 1] = T.trimEnd();
-    let B = T !== g.at(-1) ? sliced : "";
-    g.push(
-      ...wrapTextToWidth(f.slice(x).join(" "), Math.max(1, max - C - bunStringWidth(B))).map(
-        (I, U) => " ".repeat(C) + (U === 0 ? B : "") + I,
-      ),
+  if (wordIndex < words.length) {
+    let lastLine = wordIndex === 0 ? (lines.at(-1) ?? "") : "";
+    let sliced = lastLine.slice(lastLine.trimEnd().length);
+    if (sliced !== "" && bunStringWidth(lastLine.trimEnd()) > prefixIndent)
+      lines[lines.length - 1] = lastLine.trimEnd();
+    let leadingSpaces = lastLine !== lines.at(-1) ? sliced : "";
+    lines.push(
+      ...wrapTextToWidth(
+        words.slice(wordIndex).join(" "),
+        Math.max(1, max - prefixIndent - bunStringWidth(leadingSpaces)),
+      ).map((line, index) => " ".repeat(prefixIndent) + (index === 0 ? leadingSpaces : "") + line),
     );
   }
-  let sliced = g.slice(0, p);
+  let sliced = lines.slice(0, maxRows);
   let last = sliced.at(-1);
-  if (g.length > p && last !== undefined) sliced[sliced.length - 1] = truncateToWidth(`${last}\u2026`, max);
+  if (lines.length > maxRows && last !== undefined)
+    sliced[sliced.length - 1] = truncateToWidth(`${last}\u2026`, max);
   return sliced;
 }
 //@ chunk-6d9n2xk3.js:19674-19822 placement
-function wrapToMaxLines(o, width) {
-  let l = wrapTextToWidth(o, Math.max(1, width));
-  let sliced = l.slice(0, HEADER_RESERVED_ROWS);
+function wrapToMaxLines(text, width) {
+  let lines = wrapTextToWidth(text, Math.max(1, width));
+  let sliced = lines.slice(0, HEADER_RESERVED_ROWS);
   let last = sliced.at(-1);
-  if (l.length > HEADER_RESERVED_ROWS && last !== undefined)
+  if (lines.length > HEADER_RESERVED_ROWS && last !== undefined)
     sliced[sliced.length - 1] = truncateToWidth(`${last}\u2026`, Math.max(1, width));
   return sliced;
 }
 //@ chunk-6d9n2xk3.js:19822-20307 placement
-function quotedPreviewLines(o, i, l, width, p = 1) {
-  let h = replaceControlChars(sanitizeDialogText(i));
-  let c = `\u201C${h}\u201D`;
+function quotedPreviewLines(leadText, name, tailText, width, maxLines = 1) {
+  let sanitizedName = replaceControlChars(sanitizeDialogText(name));
+  let quotedName = `\u201C${sanitizedName}\u201D`;
   let max = Math.max(2, width);
-  let m = wrapTextToWidth(o.trimEnd(), max);
-  let C = wrapTextToWidth(l.trimStart(), max);
-  let S = `${m.at(-1) ?? ""} `;
-  let A = max - bunStringWidth(S);
-  let k = wrapGraphemes(c, max, A);
-  let f =
-    (bunStringWidth(c) <= A || (bunStringWidth(c) > max && A >= 2)) &&
-    m.length - 1 + k.length + C.length >= p;
+  let leadLines = wrapTextToWidth(leadText.trimEnd(), max);
+  let tailLines = wrapTextToWidth(tailText.trimStart(), max);
+  let lastLeadPrefix = `${leadLines.at(-1) ?? ""} `;
+  let availableWidth = max - bunStringWidth(lastLeadPrefix);
+  let nameLines = wrapGraphemes(quotedName, max, availableWidth);
+  let canInlineName =
+    (bunStringWidth(quotedName) <= availableWidth ||
+      (bunStringWidth(quotedName) > max && availableWidth >= 2)) &&
+    leadLines.length - 1 + nameLines.length + tailLines.length >= maxLines;
   return (
-    p <= 1 && bunStringWidth(`${o}${c}${l}`) <= width
-      ? [`${o}${c}${l}`]
+    maxLines <= 1 && bunStringWidth(`${leadText}${quotedName}${tailText}`) <= width
+      ? [`${leadText}${quotedName}${tailText}`]
       : [
-          ...m.slice(0, f ? -1 : undefined),
-          ...(f ? k.map((g, x) => (x === 0 ? S + g : g)) : wrapGraphemes(c, max)),
-          ...C,
+          ...leadLines.slice(0, canInlineName ? -1 : undefined),
+          ...(canInlineName
+            ? nameLines.map((wrappedLine, index) =>
+                index === 0 ? lastLeadPrefix + wrappedLine : wrappedLine,
+              )
+            : wrapGraphemes(quotedName, max)),
+          ...tailLines,
         ]
-  ).map((g, x) => {
-    let index = g.indexOf(c);
+  ).map((previewLine, index) => {
+    let index_2 = previewLine.indexOf(quotedName);
     return {
-      key: `lead-${x}`,
-      text: g,
-      ...(index >= 0 && {
+      key: `lead-${index}`,
+      text: previewLine,
+      ...(index_2 >= 0 && {
         named: {
-          before: g.slice(0, index),
-          name: h,
-          after: g.slice(index + c.length),
+          before: previewLine.slice(0, index_2),
+          name: sanitizedName,
+          after: previewLine.slice(index_2 + quotedName.length),
         },
       }),
     };
   });
 }
 //@ chunk-6d9n2xk3.js:20307-20856 placement
-function environmentStatusText(o) {
-  let { environment } = o;
+function environmentStatusText(state) {
+  let { environment } = state;
   if (environment === undefined) return "looking it up\u2026";
   if (environment === null)
-    return o.environmentLookupFailed
+    return state.environmentLookupFailed
       ? "your organization\u2019s default (yours could not be looked up)"
       : "your organization\u2019s default";
-  let l = `(${TAILSCALE_KIND_LABELS[environment.kind] ?? "cloud"})`;
-  let u =
-    o.monorepoEnvironment &&
-    o.attach &&
-    o.detection?.repo.kind === "github" &&
-    isRepoAccessUnverified(o.detection.repo)
+  let kindLabel = `(${TAILSCALE_KIND_LABELS[environment.kind] ?? "cloud"})`;
+  let statusText =
+    state.monorepoEnvironment &&
+    state.attach &&
+    state.detection?.repo.kind === "github" &&
+    isRepoAccessUnverified(state.detection.repo)
       ? "If the server refuses it, your organization\u2019s default is used and no repository is added."
       : "If the server refuses it, your organization\u2019s default is used.";
-  return `${sanitizeDialogText(environment.name)} ${l}. ${u}`;
+  return `${sanitizeDialogText(environment.name)} ${kindLabel}. ${statusText}`;
 }
 //@ chunk-6d9n2xk3.js:20856-21412 placement
-function detectionStatusText(o) {
-  let { detection } = o;
+function detectionStatusText(state) {
+  let { detection } = state;
   if (detection === null)
-    return o.detectFailed
+    return state.detectFailed
       ? "couldn\u2019t read this folder\u2019s git state. Close and run /send-to-project again."
       : "reading this folder\u2019s git remote\u2026";
   let repo = detection.repo;
-  if (!o.attach) return "none";
+  if (!state.attach) return "none";
   switch (repo.kind) {
     case "github":
       return `github.com/${repo.owner}/${repo.name}`;
@@ -488,46 +530,57 @@ var DIALOG_HELP_LINES = [
   'Invalid selection "12". Enter a number between 1 and 2.',
 ];
 //@ chunk-6d9n2xk3.js:22133-22708 placement
-function dialogRowBudget(o) {
-  let i =
-    o.titleRows +
-    o.previewHeadRows +
-    o.warningRows +
-    o.noticeRows +
-    (o.oneMessage ? BODY_GAP : LABEL_GAP) +
-    o.feedbackExtraRows;
-  let l = o.oneMessage ? 0 : MAX_MESSAGE_LINES;
-  let u = i + o.localRows + Math.max(l, o.blockRows);
-  let p = i + Math.max(o.localRows, o.localRowsAtMost) + Math.max(l, o.blockRows, o.blockRowsAtMost);
-  let h = o.terminalRows - Math.max(p + DIALOG_LAYOUT + CHOICE_HEIGHT, o.screenReader ? p + o.widgetRows : 0);
-  let c = u + DIALOG_LAYOUT + CHOICE_HEIGHT + CHOICE_MIN_HEIGHT - o.terminalRows;
+function dialogRowBudget(layout) {
+  let fixedRows =
+    layout.titleRows +
+    layout.previewHeadRows +
+    layout.warningRows +
+    layout.noticeRows +
+    (layout.oneMessage ? BODY_GAP : LABEL_GAP) +
+    layout.feedbackExtraRows;
+  let maxBlockLines = layout.oneMessage ? 0 : MAX_MESSAGE_LINES;
+  let baseRows = fixedRows + layout.localRows + Math.max(maxBlockLines, layout.blockRows);
+  let reservedRows =
+    fixedRows +
+    Math.max(layout.localRows, layout.localRowsAtMost) +
+    Math.max(maxBlockLines, layout.blockRows, layout.blockRowsAtMost);
+  let availableRows =
+    layout.terminalRows -
+    Math.max(
+      reservedRows + DIALOG_LAYOUT + CHOICE_HEIGHT,
+      layout.screenReader ? reservedRows + layout.widgetRows : 0,
+    );
+  let overflowRows = baseRows + DIALOG_LAYOUT + CHOICE_HEIGHT + CHOICE_MIN_HEIGHT - layout.terminalRows;
   return {
-    preview: o.oneMessage || o.terminalColumns >= MAX_REPO_WIDTH ? h : Math.min(MAX_VISIBLE_ITEMS - 1, h),
-    gapsDropped: Math.min(CHOICE_HEIGHT, Math.max(0, c)),
+    preview:
+      layout.oneMessage || layout.terminalColumns >= MAX_REPO_WIDTH
+        ? availableRows
+        : Math.min(MAX_VISIBLE_ITEMS - 1, availableRows),
+    gapsDropped: Math.min(CHOICE_HEIGHT, Math.max(0, overflowRows)),
     tooShort:
-      o.optionsWrap ||
-      o.terminalColumns - LIST_OVERHEAD_ROWS < MAX_LIST_ROWS ||
-      c > CHOICE_HEIGHT ||
-      (o.screenReader && u + o.widgetRows + CHOICE_MIN_HEIGHT > o.terminalRows),
+      layout.optionsWrap ||
+      layout.terminalColumns - LIST_OVERHEAD_ROWS < MAX_LIST_ROWS ||
+      overflowRows > CHOICE_HEIGHT ||
+      (layout.screenReader && baseRows + layout.widgetRows + CHOICE_MIN_HEIGHT > layout.terminalRows),
   };
 }
 //@ chunk-6d9n2xk3.js:22708-23166 placement
-function requesterLabel(o) {
-  switch (o?.type) {
+function requesterLabel(source) {
+  switch (source?.type) {
     case "workflow-agent": {
-      let approvalLabel = toApprovalLabel(o.workflowName);
+      let approvalLabel = toApprovalLabel(source.workflowName);
       return approvalLabel === null
         ? "\xB7 from a workflow"
         : `\xB7 from the "${String(approvalLabel)}" workflow`;
     }
     case "subagent": {
-      let approvalLabel = toApprovalLabel(o.agentName);
+      let approvalLabel = toApprovalLabel(source.agentName);
       return approvalLabel === null ? "\xB7 from a subagent" : `\xB7 from the ${String(approvalLabel)} agent`;
     }
     case "remote-agent":
       return "\xB7 from a remote cloud agent";
     case "plugin": {
-      let approvalLabel = toApprovalLabel(o.pluginName);
+      let approvalLabel = toApprovalLabel(source.pluginName);
       return approvalLabel === null ? "\xB7 from a plugin" : `\xB7 from the ${String(approvalLabel)} plugin`;
     }
     default:
@@ -535,58 +588,63 @@ function requesterLabel(o) {
   }
 }
 //@ chunk-6d9n2xk3.js:23166-23513 placement
-function dialogTitleLine(o, requestSource, columns, u, isScreenReaderEnabled, askPositionLabel) {
-  let c = isScreenReaderEnabled ? `Permission Required: ${o}` : o;
+function dialogTitleLine(title, source, columns, wrapWidth, isScreenReaderEnabled, askPositionLabel) {
+  let displayTitle = isScreenReaderEnabled ? `Permission Required: ${title}` : title;
   let max = Math.max(1, isScreenReaderEnabled ? columns : columns - 2);
-  let m = requesterLabel(requestSource);
-  let C = m !== null && bunStringWidth(c) + 1 + bunStringWidth(m) <= max;
-  let S = m === null || C ? [] : wrapTextToWidth(m, u);
-  let A =
+  let requester = requesterLabel(source);
+  let fitsBeside = requester !== null && bunStringWidth(displayTitle) + 1 + bunStringWidth(requester) <= max;
+  let requesterRows = requester === null || fitsBeside ? [] : wrapTextToWidth(requester, wrapWidth);
+  let fitsWithPosition =
     askPositionLabel !== null &&
-    bunStringWidth(o) +
-      (C && m !== null ? 1 + bunStringWidth(m) : 0) +
+    bunStringWidth(title) +
+      (fitsBeside && requester !== null ? 1 + bunStringWidth(requester) : 0) +
       1 +
       bunStringWidth(askPositionLabel) <=
       columns - 2;
   let joined = [
-    c,
-    ...(C && m !== null ? [m] : []),
-    ...(A && askPositionLabel !== null ? [askPositionLabel] : []),
+    displayTitle,
+    ...(fitsBeside && requester !== null ? [requester] : []),
+    ...(fitsWithPosition && askPositionLabel !== null ? [askPositionLabel] : []),
   ].join(" ");
   return {
     rows:
       (isScreenReaderEnabled
         ? wrapTextToWidth(joined, max, true).length
-        : C
+        : fitsBeside
           ? 1
-          : wrapTextToWidth(c, max).length) + S.length,
-    beside: C,
-    sourceRows: S,
+          : wrapTextToWidth(displayTitle, max).length) + requesterRows.length,
+    beside: fitsBeside,
+    sourceRows: requesterRows,
   };
 }
 //@ chunk-6d9n2xk3.js:23513-23875 placement
-function parseSendToProjectInput(o) {
-  let { project_name: projectName, project_id: projectId, proposal, attach_git_remote: attachGitRemote } = o;
+function parseSendToProjectInput(input) {
+  let {
+    project_name: projectName,
+    project_id: projectId,
+    proposal,
+    attach_git_remote: attachGitRemote,
+  } = input;
   if (
     typeof projectName !== "string" ||
     (projectId !== undefined && (typeof projectId !== "string" || !CHANNEL_ID_REGEX.test(projectId))) ||
     typeof attachGitRemote !== "boolean"
   )
     return null;
-  let h = setupProposalSchema().safeParse(proposal);
-  if (!h.success) return null;
+  let parsedProposal = setupProposalSchema().safeParse(proposal);
+  if (!parsedProposal.success) return null;
   return {
     projectName: oneLineSummary(projectName),
     projectId: typeof projectId === "string" ? projectId : null,
-    proposal: normalizeProposal(h.data),
+    proposal: normalizeProposal(parsedProposal.data),
     attach: attachGitRemote,
-    messageFrom: drawnMessageFrom(o[MESSAGE_KEY], h.data),
+    messageFrom: drawnMessageFrom(input[MESSAGE_KEY], parsedProposal.data),
   };
 }
 //@ chunk-6d9n2xk3.js:23875-24196 placement
-function sendToProjectAnswer(o, payload, appStateSession, u, p, toolsUsed, c) {
-  let E = withEditedMessage(payload.input, u, p);
-  switch (o) {
+function sendToProjectAnswer(choice, payload, session, originKey, environmentKey, toolsUsed, extra) {
+  let input = withEditedMessage(payload.input, originKey, environmentKey);
+  switch (choice) {
     case "yes": {
       let sendToProjectInput = parseSendToProjectInput(payload.input);
       return sendToProjectInput === null
@@ -596,8 +654,8 @@ function sendToProjectAnswer(o, payload, appStateSession, u, p, toolsUsed, c) {
         : {
             behavior: "allow",
             updatedInput: {
-              ...E,
-              [PANE_CONSENT_TOKEN_KEY]: mintPaneConsent(appStateSession, payload.requestId, E, {
+              ...input,
+              [PANE_CONSENT_TOKEN_KEY]: mintPaneConsent(session, payload.requestId, input, {
                 toolsUsed,
                 messageFrom: sendToProjectInput.messageFrom,
               }),
@@ -605,45 +663,45 @@ function sendToProjectAnswer(o, payload, appStateSession, u, p, toolsUsed, c) {
           };
     }
     case "no": {
-      let m = c?.trim() ?? "";
-      return m === ""
+      let feedbackText = extra?.trim() ?? "";
+      return feedbackText === ""
         ? {
             behavior: "deny",
           }
         : {
             behavior: "deny",
-            feedback: m,
+            feedback: feedbackText,
           };
     }
   }
 }
 //@ chunk-6d9n2xk3.js:24196-24272 placement
-function withEditedMessage(o, i, l) {
+function withEditedMessage(input, originKey, environmentKey) {
   return {
-    ...o,
-    [PANE_APPROVED_ORIGIN_KEY]: i,
-    [PANE_APPROVED_ENVIRONMENT_KEY]: l ?? "",
-    ...(l === null && {
+    ...input,
+    [PANE_APPROVED_ORIGIN_KEY]: originKey,
+    [PANE_APPROVED_ENVIRONMENT_KEY]: environmentKey ?? "",
+    ...(environmentKey === null && {
       [ENVIRONMENT_LOOKUP_FAILED_KEY]: true,
     }),
   };
 }
 //@ chunk-6d9n2xk3.js:24272-24322 placement
-function repoLabel(o, id) {
-  return o === null ? "" : repoSlugOrEmpty(o.repo, id);
+function repoLabel(repo, repoText) {
+  return repo === null ? "" : repoSlugOrEmpty(repo.repo, repoText);
 }
 //@ chunk-6d9n2xk3.js:24322-24632 placement
-function sendToProjectOptions(projectId, i, initialValue, onChange, p) {
+function sendToProjectOptions(projectId, canSend, initialValue, onChange, messageText) {
   return [
-    ...(i
+    ...(canSend
       ? [
           {
-            label: sendConfirmLabel(projectId, p),
+            label: sendConfirmLabel(projectId, messageText),
             value: "yes",
           },
         ]
       : []),
-    p
+    messageText
       ? {
           type: "input",
           label: EDIT_MESSAGE_ACTION,
@@ -662,7 +720,7 @@ function sendToProjectOptions(projectId, i, initialValue, onChange, p) {
           onChange,
           allowEmptySubmitToCancel: true,
         },
-    ...(p
+    ...(messageText
       ? [
           {
             label: "No",
@@ -675,12 +733,12 @@ function sendToProjectOptions(projectId, i, initialValue, onChange, p) {
 //@ chunk-6d9n2xk3.js:24632-24658 placement
 var EDIT_MESSAGE_ACTION = "Edit the message";
 //@ chunk-6d9n2xk3.js:24658-24783 placement
-function sendConfirmLabel(o, i) {
-  return i
-    ? o !== null
+function sendConfirmLabel(projectId, isExisting) {
+  return isExisting
+    ? projectId !== null
       ? "Send"
       : "Create and send"
-    : o !== null
+    : projectId !== null
       ? "Yes, send it to the project"
       : "Yes, create the project";
 }
@@ -690,39 +748,39 @@ var LIST_OVERHEAD_ROWS = 8;
 var CHOICE_TIMEOUT_MS = 500;
 //@ chunk-6d9n2xk3.js:24805-25261 placement
 function PreviewRow(props) {
-  let l = w(8);
+  let $ = useMemoCache(8);
   let { row } = props;
   if (row.named === undefined) {
-    let u;
-    if (l[0] !== row.text) {
-      u = jsxProd_default(Text, {
+    let textElement;
+    if ($[0] !== row.text) {
+      textElement = jsxProd_default(Text, {
         children: row.text,
       });
-      l[0] = row.text;
-      l[1] = u;
-    } else u = l[1];
-    return u;
+      $[0] = row.text;
+      $[1] = textElement;
+    } else textElement = $[1];
+    return textElement;
   }
-  let u;
-  if (l[2] !== row.named.name) {
-    u = jsxProd_default(Text, {
+  let labelElement;
+  if ($[2] !== row.named.name) {
+    labelElement = jsxProd_default(Text, {
       bold: true,
       children: row.named.name,
     });
-    l[2] = row.named.name;
-    l[3] = u;
-  } else u = l[3];
-  let p;
-  if (l[4] !== row.named.after || l[5] !== row.named.before || l[6] !== u) {
-    p = jsxProd_default_2(Text, {
-      children: [row.named.before, "\u201C", u, "\u201D", row.named.after],
+    $[2] = row.named.name;
+    $[3] = labelElement;
+  } else labelElement = $[3];
+  let rowElement;
+  if ($[4] !== row.named.after || $[5] !== row.named.before || $[6] !== labelElement) {
+    rowElement = jsxProd_default_2(Text, {
+      children: [row.named.before, "\u201C", labelElement, "\u201D", row.named.after],
     });
-    l[4] = row.named.after;
-    l[5] = row.named.before;
-    l[6] = u;
-    l[7] = p;
-  } else p = l[7];
-  return p;
+    $[4] = row.named.after;
+    $[5] = row.named.before;
+    $[6] = labelElement;
+    $[7] = rowElement;
+  } else rowElement = $[7];
+  return rowElement;
 }
 //@ chunk-6d9n2xk3.js:25261-31759 placement
 /**
@@ -732,7 +790,7 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
   let inputClock = useInputClock();
   let inputRefusalWindow = useInputRefusalWindow();
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  function m() {
+  function refuseInput() {
     if (inputRefusalWindow() || refusedWithin()) {
       noteRefused();
       return true;
@@ -740,63 +798,64 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
     return false;
   }
   let openedAt = useMountTime();
-  let S = settleKey(epoch);
+  let settle = settleKey(epoch);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let [f, g] = y(false);
-  let [remountKey, setRemountKey] = y(S.remountKey);
-  P(() => {
-    if (!(isScreenReaderEnabled && f)) setRemountKey(S.remountKey);
-  }, [S.remountKey, isScreenReaderEnabled, f]);
+  let [isFlipped, setFlipped] = useState(false);
+  let [remountKey, setRemountKey] = useState(settle.remountKey);
+  useEffect(() => {
+    if (!(isScreenReaderEnabled && isFlipped)) setRemountKey(settle.remountKey);
+  }, [settle.remountKey, isScreenReaderEnabled, isFlipped]);
   let { columns, rows } = useTerminalSize();
   let askPositionLabel = useAskPositionLabel();
   let shortcutDisplay = useShortcutDisplay("app:toggleTranscript", "Global", "ctrl+o");
   let max = Math.max(MAX_LIST_ROWS, columns - LIST_OVERHEAD_ROWS);
-  let [U, _o] = y("");
-  let we = R("");
-  let [jo, No] = y(true);
-  let N = Q(() => parseSendToProjectInput(payload.input), [payload.input]);
-  let v = N !== null && N.messageFrom !== null;
-  let z = v ? "edit" : "no";
+  let [feedbackText, setFeedbackText] = useState("");
+  let feedbackRef = useRef("");
+  let [canEdit, setCanEdit] = useState(true);
+  let parsedInput = useMemo(() => parseSendToProjectInput(payload.input), [payload.input]);
+  let hasMessageFrom = parsedInput !== null && parsedInput.messageFrom !== null;
+  let editValue = hasMessageFrom ? "edit" : "no";
   let feedbackExtraRows =
-    U === "" && (!jo || isScreenReaderEnabled)
+    feedbackText === "" && (!canEdit || isScreenReaderEnabled)
       ? 0
       : wrapTextToWidth(
-          `${v ? EDIT_MESSAGE_ACTION : "No"}, ${U === "" ? EDIT_MESSAGE_PLACEHOLDER : U}`,
+          `${hasMessageFrom ? EDIT_MESSAGE_ACTION : "No"}, ${feedbackText === "" ? EDIT_MESSAGE_PLACEHOLDER : feedbackText}`,
           Math.max(1, columns - 14),
           true,
         ).length - 1;
   let { storageV5, credentials } = useTheme_2();
   let appStateSession = useAppStateSession();
-  let projectId = N?.projectId ?? null;
-  let De = v
-    ? messageTitle(N.projectName, projectId === null)
+  let projectId = parsedInput?.projectId ?? null;
+  let title = hasMessageFrom
+    ? messageTitle(parsedInput.projectName, projectId === null)
     : projectId !== null
       ? "Send this session to a Claude Project?"
       : "Create a Claude Project from this session?";
-  let Re = R(false);
-  let onChange = ce((a) => {
-    we.current = a;
-    Re.current = true;
-    g(true);
-    _o(a);
+  let hasFocusChange = useRef(false);
+  let onChange = useCallback((text) => {
+    feedbackRef.current = text;
+    hasFocusChange.current = true;
+    setFlipped(true);
+    setFeedbackText(text);
   }, []);
-  let [context, xo] = y(null);
-  let Y = toolsUsedSessionSlot.peek(appStateSession)?.current ?? null;
-  let tools = Y !== null && context !== null && Y.cwd === context.cwd ? Y.tools : null;
-  let We =
-    Y !== null && (context === null || Y.cwd === context.cwd)
-      ? toolsUsedDialogLine(Y.tools, "this computer")
+  let [detection, setDetection] = useState(null);
+  let toolsUsed = toolsUsedSessionSlot.peek(appStateSession)?.current ?? null;
+  let tools =
+    toolsUsed !== null && detection !== null && toolsUsed.cwd === detection.cwd ? toolsUsed.tools : null;
+  let toolsLine =
+    toolsUsed !== null && (detection === null || toolsUsed.cwd === detection.cwd)
+      ? toolsUsedDialogLine(toolsUsed.tools, "this computer")
       : null;
-  let [le, Mo] = y(false);
-  let [Ee, Be] = y(undefined);
-  let [Ao, vo] = y(null);
-  P(() => {
+  let [detectFailed, setDetectFailed] = useState(false);
+  let [existingProject, setExistingProject] = useState(undefined);
+  let [projectError, setProjectError] = useState(null);
+  useEffect(() => {
     if (projectId === null) return;
     let abortController = new AbortController();
     getOwnerProjectChannel(projectId, abortController.signal, credentials).then(
       (ownerProjectChannel) => {
         if (!abortController.signal.aborted) {
-          Be({
+          setExistingProject({
             name: ownerProjectChannel.name,
           });
           noteRefused();
@@ -805,44 +864,44 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
       (error) => {
         if (!abortController.signal.aborted) {
           logForDebugging(`send-to-project: project lookup failed: ${errorMessage(error)}`);
-          vo(
+          setProjectError(
             error instanceof ChannelApiError && !isRetryableChannelError(error)
               ? error.telemetryCode
               : "transient",
           );
-          Be(null);
+          setExistingProject(null);
         }
       },
     );
     return () => abortController.abort();
   }, [projectId, credentials, noteRefused]);
-  let [G, Ge] = y(undefined);
-  let [ye, Io] = y(false);
-  P(() => {
+  let [environment, setEnvironment] = useState(undefined);
+  let [envLookupFailed, setEnvLookupFailed] = useState(false);
+  useEffect(() => {
     if (projectId !== null) return;
-    let a = true;
+    let isMounted = true;
     defaultCloudEnvironment(storageV5, credentials).then(
-      (b) => {
-        if (a) {
-          Ge(b);
+      (environment) => {
+        if (isMounted) {
+          setEnvironment(environment);
           noteRefused();
         }
       },
       (error) => {
         logForDebugging(`send-to-project: environment lookup failed: ${errorMessage(error)}`);
-        if (a) {
-          Io(true);
-          Ge(null);
+        if (isMounted) {
+          setEnvLookupFailed(true);
+          setEnvironment(null);
           noteRefused();
         }
       },
     );
     return () => {
-      a = false;
+      isMounted = false;
     };
   }, [projectId, storageV5, credentials, noteRefused]);
-  let Ue = isAnthropicRepoText(G?.id);
-  P(() => {
+  let isAnthropicRepo = isAnthropicRepoText(environment?.id);
+  useEffect(() => {
     let abortController = new AbortController();
     scanFolderContext(
       {
@@ -852,116 +911,128 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
       abortController.signal,
       storageV5,
     ).then(
-      (b) => {
+      (detection) => {
         if (!abortController.signal.aborted) {
-          xo(b);
+          setDetection(detection);
           noteRefused();
         }
       },
       (error) => {
         logForDebugging(`send-to-project: pane detection failed: ${errorMessage(error)}`);
-        if (!abortController.signal.aborted) Mo(true);
+        if (!abortController.signal.aborted) setDetectFailed(true);
       },
     );
     return () => abortController.abort();
   }, [storageV5, noteRefused]);
-  let ae =
-    N !== null
+  let summary =
+    parsedInput !== null
       ? projectSummaryLines({
           width: max - 2,
-          projectName: N.projectName,
-          proposal: N.proposal,
+          projectName: parsedInput.projectName,
+          proposal: parsedInput.proposal,
           existing:
             projectId !== null
               ? {
-                  project: Ee,
-                  failure: Ao,
+                  project: existingProject,
+                  failure: projectError,
                 }
               : null,
-          environment: G,
-          environmentLookupFailed: ye,
-          detection: context,
-          detectFailed: le,
-          attach: N.attach,
-          monorepoEnvironment: Ue,
-          oneMessage: v,
+          environment,
+          environmentLookupFailed: envLookupFailed,
+          detection,
+          detectFailed,
+          attach: parsedInput.attach,
+          monorepoEnvironment: isAnthropicRepo,
+          oneMessage: hasMessageFrom,
         })
       : null;
-  let rows_2 = ae?.rows ?? [];
-  let Ke = G != null && N !== null && projectId === null && ae?.whole.environment === false;
-  let pe = dialogTitleLine(
-    De,
+  let rows_2 = summary?.rows ?? [];
+  let envTooNarrow =
+    environment != null && parsedInput !== null && projectId === null && summary?.whole.environment === false;
+  let titleLine = dialogTitleLine(
+    title,
     payload.requestSource,
     columns,
     max - 2,
     isScreenReaderEnabled,
     askPositionLabel,
   );
-  let de = v
-    ? MESSAGE_DISCLOSURE.flatMap((a) => wrapToMaxLines(a, max - 2))
+  let localRows = hasMessageFrom
+    ? MESSAGE_DISCLOSURE.flatMap((line) => wrapToMaxLines(line, max - 2))
     : projectId !== null
       ? wrapToMaxLines(NOTHING_ELSE_SENT_NOTICE, max - 2)
-      : context !== null && N !== null
+      : detection !== null && parsedInput !== null
         ? wrapToMaxLines(
             notSentLine(
-              context,
-              N.attach && context.repo.kind === "github" && (!isRepoAccessUnverified(context.repo) || Ue),
+              detection,
+              parsedInput.attach &&
+                detection.repo.kind === "github" &&
+                (!isRepoAccessUnverified(detection.repo) || isAnthropicRepo),
             ),
             max - 2,
           )
         : [];
-  let Ye = wrapTextToWidth(v ? MESSAGE_REVEAL_NOTICE : CONFIRM_YES_AGAIN_TEXT, max - 2);
-  let Ve =
-    context !== null &&
-    context.repo.kind === "github" &&
-    N !== null &&
-    N.attach &&
+  let noticeLines = wrapTextToWidth(hasMessageFrom ? MESSAGE_REVEAL_NOTICE : CONFIRM_YES_AGAIN_TEXT, max - 2);
+  let repoTooNarrow =
+    detection !== null &&
+    detection.repo.kind === "github" &&
+    parsedInput !== null &&
+    parsedInput.attach &&
     projectId === null &&
-    repoLabel(context, G?.id) !== "" &&
-    ae?.whole.repository === false;
-  let qe = Ve || Ke;
+    repoLabel(detection, environment?.id) !== "" &&
+    summary?.whole.repository === false;
+  let hasWarning = repoTooNarrow || envTooNarrow;
   let flattened = [
-    ...(projectId !== null && le ? [GIT_STATE_UNREADABLE_TEXT] : []),
-    ...(Ve ? [REPO_TOO_NARROW_TEXT] : []),
-    ...(Ke ? [CLOUD_ENV_TOO_NARROW_TEXT] : []),
-  ].flatMap((a) => wrapTextToWidth(a, max - 2));
-  let Xe = N !== null ? Buffer.byteLength(jsonStringify(N.proposal), "utf8") : 0;
-  let ze = {
+    ...(projectId !== null && detectFailed ? [GIT_STATE_UNREADABLE_TEXT] : []),
+    ...(repoTooNarrow ? [REPO_TOO_NARROW_TEXT] : []),
+    ...(envTooNarrow ? [CLOUD_ENV_TOO_NARROW_TEXT] : []),
+  ].flatMap((line) => wrapTextToWidth(line, max - 2));
+  let proposalBytes =
+    parsedInput !== null ? Buffer.byteLength(jsonStringify(parsedInput.proposal), "utf8") : 0;
+  let budgetInput = {
     terminalRows: rows,
     terminalColumns: columns,
     screenReader: isScreenReaderEnabled,
-    titleRows: pe.rows,
-    previewHeadRows: v
+    titleRows: titleLine.rows,
+    previewHeadRows: hasMessageFrom
       ? 1 +
-        (N.messageFrom === "drafted"
+        (parsedInput.messageFrom === "drafted"
           ? wrapTextToWidth(DRAFTED_BY_CLAUDE_TEXT, isScreenReaderEnabled ? columns : max - 5).length
           : 0)
-      : isScreenReaderEnabled && N !== null
-        ? measureInstructionsRows(N.proposal, Xe, shortcutDisplay, columns)
+      : isScreenReaderEnabled && parsedInput !== null
+        ? measureInstructionsRows(parsedInput.proposal, proposalBytes, shortcutDisplay, columns)
         : CHOICE_GAP,
     warningRows: flattened.length,
-    localRows: de.length,
-    localRowsAtMost: !v && projectId === null && context === null && !le ? HEADER_RESERVED_ROWS : de.length,
+    localRows: localRows.length,
+    localRowsAtMost:
+      !hasMessageFrom && projectId === null && detection === null && !detectFailed
+        ? HEADER_RESERVED_ROWS
+        : localRows.length,
     optionsWrap:
-      FOOTER_GAP + bunStringWidth(v ? EDIT_MESSAGE_ACTION : sendConfirmLabel(projectId, false)) > columns - 4,
+      FOOTER_GAP + bunStringWidth(hasMessageFrom ? EDIT_MESSAGE_ACTION : sendConfirmLabel(projectId, false)) >
+      columns - 4,
     blockRows: rows_2.length,
-    blockRowsAtMost: ae?.rowsAtMost ?? 0,
+    blockRowsAtMost: summary?.rowsAtMost ?? 0,
     feedbackExtraRows,
-    noticeRows: Ye.length,
+    noticeRows: noticeLines.length,
     widgetRows: isScreenReaderEnabled
-      ? DIALOG_HELP_LINES.reduce((acc, b) => acc + wrapTextToWidth(b, Math.max(1, columns)).length, 0)
+      ? DIALOG_HELP_LINES.reduce(
+          (acc, helpLine) => acc + wrapTextToWidth(helpLine, Math.max(1, columns)).length,
+          0,
+        )
       : 0,
-    oneMessage: v,
+    oneMessage: hasMessageFrom,
   };
-  let Se = dialogRowBudget(ze);
-  let W = context !== null && (projectId !== null ? Ee !== undefined : G !== undefined);
+  let budget = dialogRowBudget(budgetInput);
+  let isReady =
+    detection !== null && (projectId !== null ? existingProject !== undefined : environment !== undefined);
   let max_2 = Math.max(
     0,
     Math.floor(
-      (W
-        ? Se.preview
+      (isReady
+        ? budget.preview
         : dialogRowBudget({
-            ...ze,
+            ...budgetInput,
             localRows: 0,
             localRowsAtMost: 0,
             blockRows: 0,
@@ -969,75 +1040,87 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
           }).preview) / 2,
     ),
   );
-  let Ze = We !== null ? labeledLine("MCP tools used", We, max - 2, max_2 + 1) : [];
-  let me = Ze.length <= max_2 ? Ze : [];
-  let { gapsDropped, tooShort } = Se;
-  let oo = tooShort ? wrapTextToWidth(REQUEST_TOO_SMALL_TEXT, max - 2) : [];
-  let max_3 = Math.max(CHOICE_MIN_HEIGHT, Se.preview - me.length - oo.length);
-  let ge = max_3 - CHOICE_ROW_WIDTH > CHOICE_MIN_HEIGHT ? 1 : 0;
-  let no = !W && max_3 === CHOICE_ROW_WIDTH + CHOICE_MIN_HEIGHT ? max_3 - 1 : max_3 - CHOICE_ROW_WIDTH * ge;
-  let to = Q(() => (v ? wrapCardText(N.proposal.summary ?? "", max - 2) : []), [v, N, max]);
-  let ro = countItemsFittingRows(to, no, isScreenReaderEnabled ? columns : null) < to.length;
-  let V = isScreenReaderEnabled || W;
-  let J = `${remountKey}:${V ? "both" : "no-only"}`;
-  let [Ce, Oo] = y(() => ({
-    key: J,
-    options: sendToProjectOptions(projectId, V, "", onChange, v),
+  let toolsLines = toolsLine !== null ? labeledLine("MCP tools used", toolsLine, max - 2, max_2 + 1) : [];
+  let toolsLines_2 = toolsLines.length <= max_2 ? toolsLines : [];
+  let { gapsDropped, tooShort } = budget;
+  let tooShortLines = tooShort ? wrapTextToWidth(REQUEST_TOO_SMALL_TEXT, max - 2) : [];
+  let max_3 = Math.max(CHOICE_MIN_HEIGHT, budget.preview - toolsLines_2.length - tooShortLines.length);
+  let choiceGap = max_3 - CHOICE_ROW_WIDTH > CHOICE_MIN_HEIGHT ? 1 : 0;
+  let cardRows =
+    !isReady && max_3 === CHOICE_ROW_WIDTH + CHOICE_MIN_HEIGHT
+      ? max_3 - 1
+      : max_3 - CHOICE_ROW_WIDTH * choiceGap;
+  let summaryLines = useMemo(
+    () => (hasMessageFrom ? wrapCardText(parsedInput.proposal.summary ?? "", max - 2) : []),
+    [hasMessageFrom, parsedInput, max],
+  );
+  let summaryTruncated =
+    countItemsFittingRows(summaryLines, cardRows, isScreenReaderEnabled ? columns : null) <
+    summaryLines.length;
+  let showBothOptions = isScreenReaderEnabled || isReady;
+  let optionsKey = `${remountKey}:${showBothOptions ? "both" : "no-only"}`;
+  let [cachedOptions, setCachedOptions] = useState(() => ({
+    key: optionsKey,
+    options: sendToProjectOptions(projectId, showBothOptions, "", onChange, hasMessageFrom),
   }));
-  let options = Ce.key === J ? Ce.options : sendToProjectOptions(projectId, V, we.current, onChange, v);
-  if (Ce.key !== J)
-    Oo({
-      key: J,
+  let options =
+    cachedOptions.key === optionsKey
+      ? cachedOptions.options
+      : sendToProjectOptions(projectId, showBothOptions, feedbackRef.current, onChange, hasMessageFrom);
+  if (cachedOptions.key !== optionsKey)
+    setCachedOptions({
+      key: optionsKey,
       options,
     });
-  let io = R("yes");
-  let ke = R(null);
-  let [$o, lo] = y(false);
-  let [Lo, Do] = y(false);
-  P(() => {
-    if (W) {
-      ke.current = Date.now();
-      lo(false);
+  let lastFocused = useRef("yes");
+  let yesPressedAt = useRef(null);
+  let [needsPreparing, setNeedsPreparing] = useState(false);
+  let [showNotice, setShowNotice] = useState(false);
+  useEffect(() => {
+    if (isReady) {
+      yesPressedAt.current = Date.now();
+      setNeedsPreparing(false);
     }
-  }, [W]);
-  let q = ce(
-    (a, b) => {
+  }, [isReady]);
+  let onChoice = useCallback(
+    (choice, typedMessage) => {
       if (inputRefusalWindow() || refusedWithin()) {
         noteRefused();
         return false;
       }
       if (!wouldTakeAnswer()) return false;
-      if (a === "yes" && !W) {
-        lo(true);
+      if (choice === "yes" && !isReady) {
+        setNeedsPreparing(true);
         noteRefused();
         return false;
       }
-      if (a === "yes" && (qe || tooShort || ro)) {
+      if (choice === "yes" && (hasWarning || tooShort || summaryTruncated)) {
         noteRefused();
         return false;
       }
       if (
-        a === "yes" &&
-        (ke.current === null || isWithinRecentInput(inputClock, ke.current, CHOICE_TIMEOUT_MS))
+        choice === "yes" &&
+        (yesPressedAt.current === null ||
+          isWithinRecentInput(inputClock, yesPressedAt.current, CHOICE_TIMEOUT_MS))
       ) {
-        Do(true);
+        setShowNotice(true);
         noteRefused();
         return false;
       }
       if (
         answer(
           sendToProjectAnswer(
-            a,
+            choice,
             payload,
             appStateSession,
-            repoLabel(context, G?.id),
-            ye ? null : (G?.id ?? ""),
-            me.length > 0 ? tools : null,
-            b,
+            repoLabel(detection, environment?.id),
+            envLookupFailed ? null : (environment?.id ?? ""),
+            toolsLines_2.length > 0 ? tools : null,
+            typedMessage,
           ),
         ) !== false &&
-        a === "no" &&
-        (b?.trim() ?? "") !== ""
+        choice === "no" &&
+        (typedMessage?.trim() ?? "") !== ""
       )
         releaseTypedMessage(appStateSession);
       return true;
@@ -1047,22 +1130,22 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
       wouldTakeAnswer,
       payload,
       appStateSession,
-      context,
-      W,
-      qe,
+      detection,
+      isReady,
+      hasWarning,
       tooShort,
-      ro,
-      G,
-      ye,
+      summaryTruncated,
+      environment,
+      envLookupFailed,
       tools,
-      me.length,
+      toolsLines_2.length,
       inputRefusalWindow,
       refusedWithin,
       noteRefused,
       inputClock,
     ],
   );
-  if (N === null)
+  if (parsedInput === null)
     return jsxProd_default(PermissionDialog_2, {
       title: "Create a Claude Project from this session?",
       requestSource: payload.requestSource,
@@ -1081,36 +1164,36 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
             children: jsxProd_default(
               ConfirmSelect,
               {
-                refuseInput: m,
+                refuseInput,
                 openedAt,
                 hideIndexes: true,
                 focus: "cancel",
                 confirmLabel: "Dismiss",
                 cancelLabel: "Dismiss",
-                onConfirm: () => q("no"),
-                onCancel: () => q("no"),
+                onConfirm: () => onChoice("no"),
+                onCancel: () => onChoice("no"),
               },
-              S.remountKey,
+              settle.remountKey,
             ),
           }),
         ],
       }),
     });
   return jsxProd_default_2(PermissionDialog_2, {
-    title: De,
-    requestSource: pe.beside ? payload.requestSource : undefined,
+    title,
+    requestSource: titleLine.beside ? payload.requestSource : undefined,
     children: [
-      pe.sourceRows.length > 0
+      titleLine.sourceRows.length > 0
         ? jsxProd_default(Box, {
             flexDirection: "column",
             paddingX: 1,
-            children: pe.sourceRows.map((children, b) =>
+            children: titleLine.sourceRows.map((children, index) =>
               jsxProd_default(
                 Text,
                 {
                   children,
                 },
-                `source-${b}`,
+                `source-${index}`,
               ),
             ),
           })
@@ -1120,76 +1203,76 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
         marginTop: gapsDropped < CHOICE_HEIGHT ? 1 : 0,
         paddingX: 1,
         children: [
-          v
+          hasMessageFrom
             ? null
-            : rows_2.map((a) =>
+            : rows_2.map((row) =>
                 jsxProd_default(
                   PreviewRow,
                   {
-                    row: a,
+                    row,
                   },
-                  a.key,
+                  row.key,
                 ),
               ),
-          tools !== null && W
-            ? me.map((children, b) =>
+          tools !== null && isReady
+            ? toolsLines_2.map((children, index) =>
                 jsxProd_default(
                   Text,
                   {
                     children,
                   },
-                  `tools-${b}`,
+                  `tools-${index}`,
                 ),
               )
             : null,
-          [...flattened, ...oo].map((children, b) =>
+          [...flattened, ...tooShortLines].map((children, index) =>
             jsxProd_default(
               Text,
               {
                 color: "warning",
                 children,
               },
-              `warning-${b}`,
+              `warning-${index}`,
             ),
           ),
           jsxProd_default(ProjectProposalCard, {
-            proposal: N.proposal,
-            proposalBytes: Xe,
+            proposal: parsedInput.proposal,
+            proposalBytes,
             existingProject: projectId !== null,
             width: max - 2,
-            maxRows: no,
-            marginTop: v ? 0 : ge,
+            maxRows: cardRows,
+            marginTop: hasMessageFrom ? 0 : choiceGap,
             transcriptChord: shortcutDisplay,
             screenReaderColumns: isScreenReaderEnabled ? columns : null,
-            messageFrom: N.messageFrom,
+            messageFrom: parsedInput.messageFrom,
           }),
-          v && rows_2.length > 0
+          hasMessageFrom && rows_2.length > 0
             ? jsxProd_default(Box, {
                 flexDirection: "column",
-                marginTop: ge,
-                children: rows_2.map((a) =>
+                marginTop: choiceGap,
+                children: rows_2.map((row) =>
                   jsxProd_default(
                     PreviewRow,
                     {
-                      row: a,
+                      row,
                     },
-                    a.key,
+                    row.key,
                   ),
                 ),
               })
             : null,
-          de.length > 0
+          localRows.length > 0
             ? jsxProd_default(Box, {
                 flexDirection: "column",
-                marginTop: ge,
-                children: de.map((children, b) =>
+                marginTop: choiceGap,
+                children: localRows.map((children, index) =>
                   jsxProd_default(
                     Text,
                     {
                       dimColor: true,
                       children,
                     },
-                    `local-${b}`,
+                    `local-${index}`,
                   ),
                 ),
               })
@@ -1198,69 +1281,74 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
             marginTop: gapsDropped > 0 ? 0 : 1,
             flexDirection: "column",
             children:
-              le || (projectId !== null && Ee === null)
+              detectFailed || (projectId !== null && existingProject === null)
                 ? jsxProd_default(
                     ConfirmSelect,
                     {
-                      refuseInput: m,
+                      refuseInput,
                       openedAt,
                       hideIndexes: true,
                       focus: "cancel",
                       confirmLabel: "Close",
                       cancelLabel: "Close",
-                      onConfirm: () => q("no"),
-                      onCancel: () => q("no"),
+                      onConfirm: () => onChoice("no"),
+                      onCancel: () => onChoice("no"),
                     },
-                    S.remountKey,
+                    settle.remountKey,
                   )
                 : jsxProd_default_2(Fragment, {
                     children: [
-                      !W
+                      !isReady
                         ? jsxProd_default_2(Text, {
                             dimColor: true,
                             children: [
                               "Preparing\u2026",
-                              $o
-                                ? ` Still reading the lines above. Choose ${v ? "Send" : "Yes"} again in a moment.`
+                              needsPreparing
+                                ? ` Still reading the lines above. Choose ${hasMessageFrom ? "Send" : "Yes"} again in a moment.`
                                 : "",
                             ],
                           })
-                        : Lo
-                          ? Ye.map((children, b) =>
+                        : showNotice
+                          ? noticeLines.map((children, index) =>
                               jsxProd_default(
                                 Text,
                                 {
                                   dimColor: true,
                                   children,
                                 },
-                                `notice-${b}`,
+                                `notice-${index}`,
                               ),
                             )
                           : null,
                       jsxProd_default(
                         ModelSelector,
                         {
-                          refuseInput: m,
+                          refuseInput,
                           selectedValue: NO_COMMITTED_ROW,
-                          hideIndexes: !V,
+                          hideIndexes: !showBothOptions,
                           inlineDescriptions: true,
-                          defaultFocusValue: V && !Re.current ? io.current : z,
+                          defaultFocusValue:
+                            showBothOptions && !hasFocusChange.current ? lastFocused.current : editValue,
                           inputChromeWidth: 4,
                           options,
-                          onChange: (a) => q(a === "yes" ? "yes" : "no", a === z ? we.current : undefined),
-                          onFocus: (a) => {
-                            No(a === z);
-                            if (V && (a !== "yes" || S.settled)) {
-                              io.current = a;
-                              if (a !== z) Re.current = false;
+                          onChange: (optionValue) =>
+                            onChoice(
+                              optionValue === "yes" ? "yes" : "no",
+                              optionValue === editValue ? feedbackRef.current : undefined,
+                            ),
+                          onFocus: (focusedValue) => {
+                            setCanEdit(focusedValue === editValue);
+                            if (showBothOptions && (focusedValue !== "yes" || settle.settled)) {
+                              lastFocused.current = focusedValue;
+                              if (focusedValue !== editValue) hasFocusChange.current = false;
                             }
-                            if (a !== z) g(false);
+                            if (focusedValue !== editValue) setFlipped(false);
                           },
                           onCancel: () => {
-                            q("no");
+                            onChoice("no");
                           },
                         },
-                        J,
+                        optionsKey,
                       ),
                     ],
                   }),
@@ -1270,3 +1358,4 @@ function SendToProjectDialog({ payload, answer, wouldTakeAnswer }) {
     ],
   });
 }
+export { SendToProjectDialog };

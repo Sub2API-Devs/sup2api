@@ -8,60 +8,69 @@
  * pieces: chunk-3bfra2hw.js (3)
  * attribution: placement 3
  */
-import { init_react_production, y, R, P } from "../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+} from "../../vendor/react/cjs/react.production.js";
 import { setSecurityDialogRequester } from "../services/remoteManagedSettings/securityCheck.js";
 import { logError } from "../utils/log.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { useInputClock } from "../ink/components/Input.js";
 import { isWithinRecentInput, RECENT_INPUT_GUARD_MS } from "../hooks/useRecentInputGuard.js";
 import { ManagedSettingsSecurityDialogHost } from "./ManagedSettingsSecurityDialog/ManagedSettingsSecurityDialog.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-3bfra2hw.js:451-455 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3bfra2hw.js:451", () => {
+  init_react_production();
+});
 //@ chunk-3bfra2hw.js:455-1150 placement
 function OrgConfigConsentHost({ children }) {
-  let [t, u] = y(null);
-  let [i, c] = y(false);
-  let r = R({
+  let [dialog, setDialog] = useState(null);
+  let [isVisible, setIsVisible] = useState(false);
+  let gateRef = useRef({
     current: 0,
     revealedAt: null,
   });
-  P(() => {
-    let s = null;
+  useEffect(() => {
+    let resolve = null;
     setSecurityDialogRequester(
-      (settings, baseline, v) =>
-        new Promise((resolve) => {
-          s = resolve;
-          r.current = {
+      (settings, baseline, value) =>
+        new Promise((resolve_2) => {
+          resolve = resolve_2;
+          gateRef.current = {
             current: 0,
             revealedAt: null,
           };
-          function p(o, m) {
-            if (s !== resolve || m !== r.current.current) return false;
-            s = null;
-            u(null);
-            c(o === "rejected");
-            resolve(o);
+          function handleAnswer(answer, version) {
+            if (resolve !== resolve_2 || version !== gateRef.current.current) return false;
+            resolve = null;
+            setDialog(null);
+            setIsVisible(answer === "rejected");
+            resolve_2(answer);
             return true;
           }
-          u({
+          setDialog({
             settings,
             baseline,
             version: 0,
-            answer: p,
+            answer: handleAnswer,
           });
           (async () => {
-            for await (let o of v) {
-              if (s !== resolve) return;
-              r.current = {
-                current: r.current.current + 1,
+            for await (let next of value) {
+              if (resolve !== resolve_2) return;
+              gateRef.current = {
+                current: gateRef.current.current + 1,
                 revealedAt: null,
               };
-              u({
-                settings: o.settings,
-                baseline: o.baseline,
-                version: r.current.current,
-                answer: p,
+              setDialog({
+                settings: next.settings,
+                baseline: next.baseline,
+                version: gateRef.current.current,
+                answer: handleAnswer,
               });
             }
           })().catch((error) => logError(error));
@@ -69,45 +78,45 @@ function OrgConfigConsentHost({ children }) {
     );
     return () => {
       setSecurityDialogRequester(null);
-      let f = s;
-      s = null;
-      f?.("deferred_no_consent_surface");
+      let resolveDialog = resolve;
+      resolve = null;
+      resolveDialog?.("deferred_no_consent_surface");
     };
   }, []);
-  if (i) return null;
-  if (t === null) return children;
+  if (isVisible) return null;
+  if (dialog === null) return children;
   return jsxProd_default(OrgConfigConsentHost_2, {
-    review: t,
-    gate: r.current,
+    review: dialog,
+    gate: gateRef.current,
   });
 }
 //@ chunk-3bfra2hw.js:1150-1633 placement
 function OrgConfigConsentHost_2({ review, gate }) {
   let inputClock = useInputClock();
-  P(() => {
+  useEffect(() => {
     if (gate.current === review.version) gate.revealedAt = Date.now();
   }, [gate, review.version, review.settings, review.baseline]);
-  function i() {
+  function isGateHeld() {
     return (
       gate.current === review.version &&
       gate.revealedAt !== null &&
       !isWithinRecentInput(inputClock, gate.revealedAt, RECENT_INPUT_GUARD_MS)
     );
   }
-  function c(r) {
-    if (!i()) {
+  function answer(choice) {
+    if (!isGateHeld()) {
       if (gate.revealedAt !== null) gate.revealedAt = Date.now();
       return false;
     }
-    return review.answer(r, review.version);
+    return review.answer(choice, review.version);
   }
   return jsxProd_default(ManagedSettingsSecurityDialogHost, {
     settings: review.settings,
     baseline: review.baseline,
     reveal: "org_config_hold",
-    wouldTakeAnswer: i,
-    onAccept: () => c("approved"),
-    onReject: () => c("rejected"),
+    wouldTakeAnswer: isGateHeld,
+    onAccept: () => answer("approved"),
+    onReject: () => answer("rejected"),
   });
 }
 export { OrgConfigConsentHost };

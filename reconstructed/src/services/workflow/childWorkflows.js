@@ -33,7 +33,7 @@ import {
 import {
   removeCaptureStackTrace,
   createVmRealm,
-  vUe,
+  NO_IMPORT_OPTIONS,
   createVmHostFnWrapper,
   createVmErrorDescriber,
   awaitAsNullProto,
@@ -49,37 +49,43 @@ import { summarizeError, truncateMiddle } from "../../memdir/memoryTool.js";
 /**
  * 解析 workflow() 的参数：名称则查找已注册的工作流并解析脚本，{scriptPath} 则加载脚本文件（CLAUDE_WORKFLOW_NAME_ONLY 时禁止）；返回 {childName, scriptBody, scriptPath?}。
  */
-async function resolveChildWorkflow(e, n) {
-  let r = e.intakeClone(n);
-  if (typeof r === "string") {
-    let workflow = await e.resolveWorkflow(r, getCwd());
+async function resolveChildWorkflow(runtime, target) {
+  let resolved = runtime.intakeClone(target);
+  if (typeof resolved === "string") {
+    let workflow = await runtime.resolveWorkflow(resolved, getCwd());
     if (!workflow) {
-      let joined = (await e.getAllWorkflows(getCwd())).map((A) => A.name).join(", ");
-      throw Error(`workflow('${r}'): no workflow with that name. Available: ${joined || "(none)"}`);
+      let joined = (await runtime.getAllWorkflows(getCwd())).map((workflow) => workflow.name).join(", ");
+      throw Error(`workflow('${resolved}'): no workflow with that name. Available: ${joined || "(none)"}`);
     }
     let workflowScript = parseWorkflowScript(workflow.script);
-    if ("error" in workflowScript) throw Error(`workflow('${r}'): ${workflowScript.error}`);
+    if ("error" in workflowScript) throw Error(`workflow('${resolved}'): ${workflowScript.error}`);
     return {
       childName: workflow.name,
       scriptBody: workflowScript.scriptBody,
     };
   }
-  if (r && typeof r === "object" && "scriptPath" in r && typeof r.scriptPath === "string") {
+  if (
+    resolved &&
+    typeof resolved === "object" &&
+    "scriptPath" in resolved &&
+    typeof resolved.scriptPath === "string"
+  ) {
     if (workflowNameOnlyEnv())
       throw Error(
         "workflow({scriptPath}): this session restricts workflows to " +
           "named bundled workflows (CLAUDE_WORKFLOW_NAME_ONLY is set) \u2014 " +
           "nest with workflow('<name>') instead.",
       );
-    let scriptPath = await e.loadScriptPath(r.scriptPath);
-    if ("error" in scriptPath) throw Error(`workflow({scriptPath: '${r.scriptPath}'}): ${scriptPath.error}`);
+    let scriptPath = await runtime.loadScriptPath(resolved.scriptPath);
+    if ("error" in scriptPath)
+      throw Error(`workflow({scriptPath: '${resolved.scriptPath}'}): ${scriptPath.error}`);
     let workflowScript = parseWorkflowScript(scriptPath.script);
     if ("error" in workflowScript)
-      throw Error(`workflow({scriptPath: '${r.scriptPath}'}): ${workflowScript.error}`);
+      throw Error(`workflow({scriptPath: '${resolved.scriptPath}'}): ${workflowScript.error}`);
     return {
       childName: workflowScript.meta.name,
       scriptBody: workflowScript.scriptBody,
-      scriptPath: r.scriptPath,
+      scriptPath: resolved.scriptPath,
     };
   }
   throw TypeError("workflow() expects a workflow name (string) or {scriptPath: string}");
@@ -89,21 +95,22 @@ async function resolveChildWorkflow(e, n) {
  * 为子工作流建立独立 VM 上下文：带名称前缀的 log/console、共享预算与定时器、字符串桥与克隆/调用辅助；agent 调用会缓存并恢复 schema 对象。
  */
 function createChildVmContext(parent, childName, phase, timers = parent.timers) {
-  let T = `[${childName}] `;
-  let y = {
-    sanitize: (P) => (P === null || (typeof P !== "object" && typeof P !== "function") ? P : {}),
-    toStr: (P) => describeBoundaryValue(P),
+  let logPrefix = `[${childName}] `;
+  let bridges = {
+    sanitize: (value) =>
+      value === null || (typeof value !== "object" && typeof value !== "function") ? value : {},
+    toStr: (value) => describeBoundaryValue(value),
   };
-  let A = {
+  let globals = {
     __proto__: null,
     budget: parent.budget,
     setTimeout: timers.setTimeout,
     clearTimeout: timers.clearTimeout,
-    phase: sanitizeAndLogError((P) => {}),
-    log: sanitizeAndLogError((P) => parent.hooks.log(T + describeBoundaryValue(P))),
-    console: createVmConsole((P) => parent.hooks.log(T + P), y),
+    phase: sanitizeAndLogError((value) => {}),
+    log: sanitizeAndLogError((value) => parent.hooks.log(logPrefix + describeBoundaryValue(value))),
+    console: createVmConsole((text) => parent.hooks.log(logPrefix + text), bridges),
   };
-  let context = SubAgentContext(A, {
+  let context = SubAgentContext(globals, {
     codeGeneration: {
       strings: false,
       wasm: false,
@@ -111,40 +118,40 @@ function createChildVmContext(parent, childName, phase, timers = parent.timers) 
   });
   installDeterminismShim(context);
   removeCaptureStackTrace(context);
-  createVmRealm(context, vUe);
+  createVmRealm(context, NO_IMPORT_OPTIONS);
   defineVmPromiseResolve(context);
-  let wrapCallable = parent.sealSyncHooksInVM ? createVmHostFnWrapper(context) : (P) => P;
+  let wrapCallable = parent.sealSyncHooksInVM ? createVmHostFnWrapper(context) : (fn) => fn;
   if (parent.sealSyncHooksInVM) sealSyncGlobalsInVM(context, wrapCallable);
   let errorInfo = createVmErrorDescriber(context);
   let settle = awaitAsNullProto(context);
   let vmInboundCopier = createVmInboundCopier(context);
   let call = callWithArgs(context);
-  let vmSideCopier = createVmSideCopier(context, vUe);
+  let vmSideCopier = createVmSideCopier(context, NO_IMPORT_OPTIONS);
   let { vmToStr, vmOwnString, vmStringify } = VM_STRING_BRIDGE_SOURCE(context);
-  y.sanitize = vmSideCopier.sanitize;
-  y.toStr = vmToStr;
-  let s = vmModule_2.runInContext(
+  bridges.sanitize = vmSideCopier.sanitize;
+  bridges.toStr = vmToStr;
+  let schemaOf = vmModule_2.runInContext(
     '(o => { try { const s = o && typeof o === "object" ? o.schema : undefined; return s && typeof s === "object" ? s : undefined } catch { return undefined } })',
     context,
   );
   let weakMap = new WeakMap();
-  let agent = (P, V, N, se, q) => {
-    let ue = vmInboundCopier(V);
-    let Ee = s(V);
-    if (ue && typeof ue === "object" && Ee) {
-      let xe = weakMap.get(Ee);
-      if (xe !== undefined) ue.schema = xe;
-      else if (ue.schema !== undefined) weakMap.set(Ee, ue.schema);
+  let agent = (prompt, options, arg3, arg4, arg5) => {
+    let copiedOptions = vmInboundCopier(options);
+    let schema = schemaOf(options);
+    if (copiedOptions && typeof copiedOptions === "object" && schema) {
+      let knownSchema = weakMap.get(schema);
+      if (knownSchema !== undefined) copiedOptions.schema = knownSchema;
+      else if (copiedOptions.schema !== undefined) weakMap.set(schema, copiedOptions.schema);
     }
     return parent.hooks.agent(
-      P,
+      prompt,
       {
-        ...ue,
+        ...copiedOptions,
         phase,
       },
-      N,
-      se,
-      q,
+      arg3,
+      arg4,
+      arg5,
     );
   };
   return {
@@ -178,39 +185,39 @@ function rejectNestedWorkflow() {
  * 生成子工作流阶段名：同名阶段第二次起加 #序号。
  */
 function makeChildPhaseNamer() {
-  let e = new Map();
-  return (n) => {
-    let r = (e.get(n) ?? 0) + 1;
-    e.set(n, r);
-    return `${SMALL_TRIANGLE_RIGHT} ${n}${r > 1 ? ` #${r}` : ""}`;
+  let counts = new Map();
+  return (childName) => {
+    let count = (counts.get(childName) ?? 0) + 1;
+    counts.set(childName, count);
+    return `${SMALL_TRIANGLE_RIGHT} ${childName}${count > 1 ? ` #${count}` : ""}`;
   };
 }
 //@ chunk-41w44bgm.js:26840-28059 placement
 /**
  * 构造脚本中的 workflow() 函数：解析并编译子工作流，在子 VM 中运行（只允许一层嵌套），记录阶段与日志，失败时记 failure 并抛出摘要错误。
  */
-function createWorkflowCall(parent) {
+function createWorkflowCall(childHooks) {
   let childPhaseNamer = makeChildPhaseNamer();
-  return sealPrototype(async function (h, T) {
-    if (parent.abortSignal?.aborted) return new Promise(() => {});
-    let y = parent.childSpawnMemo?.();
-    let { childName, scriptBody } = await resolveChildWorkflow(parent, h);
-    let j = compileWorkflowScript(scriptBody);
-    if (!j.ok) throw Error(`workflow('${childName}'): ${j.error}`);
+  return sealPrototype(async function (target, args) {
+    if (childHooks.abortSignal?.aborted) return new Promise(() => {});
+    let spawnMemo = childHooks.childSpawnMemo?.();
+    let { childName, scriptBody } = await resolveChildWorkflow(childHooks, target);
+    let compiled = compileWorkflowScript(scriptBody);
+    if (!compiled.ok) throw Error(`workflow('${childName}'): ${compiled.error}`);
     let phase = childPhaseNamer(childName);
-    parent.hooks.reservePhase(phase, "child");
-    parent.hooks.log(`${SMALL_TRIANGLE_RIGHT} running dynamic workflow ${childName}`);
-    let ke;
+    childHooks.hooks.reservePhase(phase, "child");
+    childHooks.hooks.log(`${SMALL_TRIANGLE_RIGHT} running dynamic workflow ${childName}`);
+    let errorInfo;
     try {
-      let childVmContext = createChildVmContext(parent, childName, phase);
-      ke = childVmContext.errorInfo;
-      let me = {
-        agent: (ce, E) => childVmContext.agent(ce, E, undefined, y),
-        parallel: parent.hooks.parallel,
-        pipeline: parent.hooks.pipeline,
+      let childVmContext = createChildVmContext(childHooks, childName, phase);
+      errorInfo = childVmContext.errorInfo;
+      let childHooks_2 = {
+        agent: (prompt, options) => childVmContext.agent(prompt, options, undefined, spawnMemo),
+        parallel: childHooks.hooks.parallel,
+        pipeline: childHooks.hooks.pipeline,
         workflow: rejectNestedWorkflow,
       };
-      for (let [key, value] of Object.entries(me))
+      for (let [key, value] of Object.entries(childHooks_2))
         Object.defineProperty(childVmContext.childCtx, key, {
           value: childVmContext.asyncWrap(wrapHostFnForVm(value)),
           writable: true,
@@ -218,35 +225,35 @@ function createWorkflowCall(parent) {
           configurable: true,
         });
       Object.defineProperty(childVmContext.childCtx, "args", {
-        value: T === undefined ? undefined : childVmContext.clone(T),
+        value: args === undefined ? undefined : childVmContext.clone(args),
         writable: true,
         enumerable: true,
         configurable: true,
       });
-      let We = await childVmContext.settle(
-        j.vmScript.runInContext(childVmContext.childCtx, timeoutOption(VM_ABORT_TIMEOUT_MS)),
+      let settled = await childVmContext.settle(
+        compiled.vmScript.runInContext(childVmContext.childCtx, timeoutOption(VM_ABORT_TIMEOUT_MS)),
       );
-      let G = childVmContext.clone(We.v);
-      parent.hooks.log(`${SMALL_TRIANGLE_RIGHT} ${childName} done`);
-      return G;
+      let result = childVmContext.clone(settled.v);
+      childHooks.hooks.log(`${SMALL_TRIANGLE_RIGHT} ${childName} done`);
+      return result;
     } catch (error) {
-      let me;
-      let We;
-      let G;
-      if (ke) ({ name: me, message: We, stack: G } = ke(error));
+      let errorName;
+      let errorMessage;
+      let errorStack;
+      if (errorInfo) ({ name: errorName, message: errorMessage, stack: errorStack } = errorInfo(error));
       else {
-        me = error instanceof Error ? error.name : "Error";
-        We = error instanceof Error ? error.message : "";
-        G = error instanceof Error ? error.stack : undefined;
+        errorName = error instanceof Error ? error.name : "Error";
+        errorMessage = error instanceof Error ? error.message : "";
+        errorStack = error instanceof Error ? error.stack : undefined;
       }
-      let ce = summarizeError({
-        name: me,
-        message: We,
-        stack: G,
+      let summary = summarizeError({
+        name: errorName,
+        message: errorMessage,
+        stack: errorStack,
       });
-      parent.hooks.recordFailure(`${phase}: ${ce}`);
-      parent.hooks.log(`${SMALL_TRIANGLE_RIGHT} ${childName} failed: ${ce}`);
-      throw createSealedError(truncateMiddle(We), me, ce);
+      childHooks.hooks.recordFailure(`${phase}: ${summary}`);
+      childHooks.hooks.log(`${SMALL_TRIANGLE_RIGHT} ${childName} failed: ${summary}`);
+      throw createSealedError(truncateMiddle(errorMessage), errorName, summary);
     }
   });
 }

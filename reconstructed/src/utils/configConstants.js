@@ -8,9 +8,13 @@
  * pieces: chunk-q6rfp6n3.js (1), chunk-tzghj6zv.js (1)
  * attribution: fingerprint 2
  */
-import { resolveAutoNotificationChannel, sendToChannel } from "../services/notifier.js";
 import { resolveSetting } from "./settings/userIntentSettings.js";
+import { resolveAutoNotificationChannel, sendToChannel } from "../services/notifier.js";
 
+//@ chunk-tzghj6zv.js:5760-5821 fingerprint = EDITOR_MODES (0.782)
+function EDITOR_MODES() {
+  return resolveSetting("editorMode", "normal").value === "vim";
+}
 //@ chunk-q6rfp6n3.js:2370-2659 fingerprint = NOTIFICATION_CHANNELS (0.954)
 async function NOTIFICATION_CHANNELS(preferredChannel, opts, terminal) {
   if (preferredChannel === "auto") {
@@ -39,9 +43,5 @@ async function NOTIFICATION_CHANNELS(preferredChannel, opts, terminal) {
   } catch {
     return "error";
   }
-}
-//@ chunk-tzghj6zv.js:5760-5821 fingerprint = EDITOR_MODES (0.782)
-function EDITOR_MODES() {
-  return resolveSetting("editorMode", "normal").value === "vim";
 }
 export { EDITOR_MODES, NOTIFICATION_CHANNELS };

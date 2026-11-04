@@ -5,10 +5,10 @@
  * pieces: chunk-1ny7cxrt.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-1ny7cxrt.js:10006-10077 cjs-require-graph
-var require_unix_timestamp = x(function (cjsExports, cjsModule) {
+var require_unix_timestamp = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = () => Math.floor(Date.now() / 1000);
 });
 export { require_unix_timestamp };

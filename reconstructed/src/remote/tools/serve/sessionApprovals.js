@@ -8,8 +8,14 @@
  * pieces: chunk-5ghnps9r.js (1), chunk-ad2e1aj6.js (9)
  * attribution: placement 10
  */
+import { singlePrefixRuleFor } from "../../../tools/PowerShellTool/PowerShellTool.js";
+import {
+  isWindowsSandboxPolicyViolation,
+  MAX_SESSION_APPROVALS,
+  MAX_SESSION_APPROVAL_BATCH,
+} from "./servingState.js";
 import { stableHashWithSalt } from "../../../utils/stableHash.js";
-import { Uo } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { omitAlias } from "../../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
 import { HOST_TOOL_INPUT_FIELD, DEVICE_2 } from "../../../bridge/deviceRegistration.js";
 import { clipText, autoModeRulesForWire, ANTHROPIC_REMOTETOOLEXECUTION } from "../protocolSchemas.js";
 import { REMOTE_CALL_SESSION_ANSWER } from "./servedPermissionDecision.js";
@@ -20,24 +26,31 @@ import {
 } from "../../../utils/permissions/PermissionUpdate.js";
 import { permissionUpdateSchema } from "../../../utils/hooks/hookSpecificOutput.js";
 import { SANDBOX_MAX_PATH_LENGTH } from "../../../utils/sandbox/sandboxDefaultPolicy.js";
-import {
-  MAX_SESSION_APPROVALS,
-  MAX_SESSION_APPROVAL_BATCH,
-  isWindowsSandboxPolicyViolation,
-} from "./servingState.js";
 import { logRemoteTools } from "../../../services/remoteTools/remoteToolsDebug.js";
 import { isRepoTierFreezeHeld, getAutoModeConfig } from "../../../utils/settings/settings.js";
 import { REMOTE_TOOL_PROTOCOL_VERSION } from "../protocolConstants.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, E } from "../../../../vendor/zod/v4/classic/schemas.js";
-import { singlePrefixRuleFor } from "../../../tools/PowerShellTool/PowerShellTool.js";
+import { objectSchema, numberSchema } from "../../../../vendor/zod/v4/classic/schemas.js";
 
-//@ chunk-ad2e1aj6.js:6505-6593 placement
-function matchesApprovedCall(e, toolName, s) {
+//@ chunk-5ghnps9r.js:1078-1209 placement
+/**
+ * （切分错误，权限 UI）规则是否就是当前提供的常驻规则。
+ */
+function matchesOfferedWindowsSandboxRule(rule, offer) {
+  let offeredRule = singlePrefixRuleFor(offer.offered, offer.toolName);
   return (
-    toolName === e.toolName &&
-    stableHashWithSalt(toolName, Uo(s, [HOST_TOOL_INPUT_FIELD, DEVICE_2])) ===
-      stableHashWithSalt(toolName, e.evaluatedInput)
+    isWindowsSandboxPolicyViolation() &&
+    offeredRule !== undefined &&
+    rule.toolName === offeredRule.toolName &&
+    rule.ruleContent === offeredRule.ruleContent
+  );
+}
+//@ chunk-ad2e1aj6.js:6505-6593 placement
+function matchesApprovedCall(approved, toolName, input) {
+  return (
+    toolName === approved.toolName &&
+    stableHashWithSalt(toolName, omitAlias(input, [HOST_TOOL_INPUT_FIELD, DEVICE_2])) ===
+      stableHashWithSalt(toolName, approved.evaluatedInput)
   );
 }
 //@ chunk-ad2e1aj6.js:6593-6809 placement
@@ -56,77 +69,86 @@ function sessionDeclineDenial(feedback) {
   };
 }
 //@ chunk-ad2e1aj6.js:6809-8223 placement
-async function keepStandingApprovals(e, permissionUpdates, facts, h) {
+async function keepStandingApprovals(session, permissionUpdates, facts, options) {
   if (permissionUpdates === undefined || permissionUpdates.length === 0 || !shouldShowAlwaysAllowOptions())
     return;
-  let r = sanitizePermissionUpdates(
-    permissionUpdates.flatMap((C) => {
-      let P = permissionUpdateSchema().safeParse(C);
-      let [x, ...Y] =
-        P.success && P.data.type === "addRules" && P.data.behavior === "allow" ? P.data.rules : [];
-      return x !== undefined &&
-        Y.length === 0 &&
-        (x.ruleContent?.length ?? 0) <= SANDBOX_MAX_PATH_LENGTH &&
-        matchesOfferedWindowsSandboxRule(x, h)
+  let standingUpdates = sanitizePermissionUpdates(
+    permissionUpdates.flatMap((update) => {
+      let parsed = permissionUpdateSchema().safeParse(update);
+      let [firstRule, ...extraRules] =
+        parsed.success && parsed.data.type === "addRules" && parsed.data.behavior === "allow"
+          ? parsed.data.rules
+          : [];
+      return firstRule !== undefined &&
+        extraRules.length === 0 &&
+        (firstRule.ruleContent?.length ?? 0) <= SANDBOX_MAX_PATH_LENGTH &&
+        matchesOfferedWindowsSandboxRule(firstRule, options)
         ? [
             {
               type: "addRules",
               behavior: "allow",
               destination: "session",
-              rules: [x],
+              rules: [firstRule],
             },
           ]
         : [];
     }),
   );
-  if (r.length > 0) {
-    e.offeredStandingUpdates = [...e.offeredStandingUpdates, ...r].slice(-MAX_SESSION_APPROVALS);
+  if (standingUpdates.length > 0) {
+    session.offeredStandingUpdates = [...session.offeredStandingUpdates, ...standingUpdates].slice(
+      -MAX_SESSION_APPROVALS,
+    );
     logRemoteTools(facts.callId, "offered standing rule held", {
-      rules: r.length,
+      rules: standingUpdates.length,
     });
   }
-  let flattened = permissionUpdates.flatMap((C) => {
-    let P = permissionUpdateSchema().safeParse(C);
-    return P.success &&
-      P.data.type === "addRules" &&
-      P.data.behavior === "allow" &&
-      P.data.rules.length > 0 &&
-      P.data.rules.length <= MAX_SESSION_APPROVAL_BATCH &&
-      P.data.rules.every(
+  let flattened = permissionUpdates.flatMap((update) => {
+    let parsed = permissionUpdateSchema().safeParse(update);
+    return parsed.success &&
+      parsed.data.type === "addRules" &&
+      parsed.data.behavior === "allow" &&
+      parsed.data.rules.length > 0 &&
+      parsed.data.rules.length <= MAX_SESSION_APPROVAL_BATCH &&
+      parsed.data.rules.every(
         (rule) =>
           rule.toolName.length <= SANDBOX_MAX_PATH_LENGTH &&
           (rule.ruleContent?.length ?? 0) <= SANDBOX_MAX_PATH_LENGTH &&
-          isExactCommandRule(rule, h),
+          isExactCommandRule(rule, options),
       )
-      ? [P.data]
+      ? [parsed.data]
       : [];
   });
-  let y = sanitizePermissionUpdates(
-    flattened.map((C) =>
-      C.destination === "session" || C.destination === "localSettings"
-        ? C
+  let sessionUpdates = sanitizePermissionUpdates(
+    flattened.map((update) =>
+      update.destination === "session" || update.destination === "localSettings"
+        ? update
         : {
-            ...C,
+            ...update,
             destination: "session",
           },
     ),
   );
-  let filtered = y.filter((C) => C.destination === "session");
-  let filtered_2 = y.filter((C) => C.destination === "localSettings");
-  if (y.length > 0 && flattened.some((C) => C.destination !== "session" && C.destination !== "localSettings"))
+  let filtered = sessionUpdates.filter((update) => update.destination === "session");
+  let filtered_2 = sessionUpdates.filter((update) => update.destination === "localSettings");
+  if (
+    sessionUpdates.length > 0 &&
+    flattened.some((update) => update.destination !== "session" && update.destination !== "localSettings")
+  )
     facts.destinationDowngraded = true;
-  let w = isRepoTierFreezeHeld()
-    ? filtered_2.map((C) => ({
-        ...C,
+  let heldUpdates = isRepoTierFreezeHeld()
+    ? filtered_2.map((update) => ({
+        ...update,
         destination: "session",
       }))
     : [];
-  if (filtered.length + w.length > 0)
-    e.sessionPermissionUpdates = [...e.sessionPermissionUpdates, ...filtered, ...w].slice(
-      -MAX_SESSION_APPROVALS,
-    );
+  if (filtered.length + heldUpdates.length > 0)
+    session.sessionPermissionUpdates = [
+      ...session.sessionPermissionUpdates,
+      ...filtered,
+      ...heldUpdates,
+    ].slice(-MAX_SESSION_APPROVALS);
   if (filtered_2.length > 0) await persistPermissionUpdates(filtered_2);
-  if (y.length > 0)
+  if (sessionUpdates.length > 0)
     logRemoteTools(facts.callId, "standing approval kept", {
       session_rules: filtered.length,
       local_settings_rules: filtered_2.length,
@@ -134,10 +156,10 @@ async function keepStandingApprovals(e, permissionUpdates, facts, h) {
     });
 }
 //@ chunk-ad2e1aj6.js:8223-8394 placement
-function isExactCommandRule(rule, n) {
-  let command = n.input.command;
+function isExactCommandRule(rule, options) {
+  let command = options.input.command;
   return (
-    rule.toolName === n.toolName &&
+    rule.toolName === options.toolName &&
     typeof command === "string" &&
     rule.ruleContent !== undefined &&
     rule.ruleContent === command.trim() &&
@@ -147,19 +169,19 @@ function isExactCommandRule(rule, n) {
 //@ chunk-ad2e1aj6.js:8394-8552 placement
 function autoModeRulesField(hostRules) {
   if (hostRules === "none") return;
-  let n = asIs(getAutoModeConfig());
-  let s = autoModeRulesForWire(
+  let config = asIs(getAutoModeConfig());
+  let wireRules = autoModeRulesForWire(
     hostRules === "full"
-      ? n
+      ? config
       : {
-          soft_deny: n?.soft_deny,
-          hard_deny: n?.hard_deny,
+          soft_deny: config?.soft_deny,
+          hard_deny: config?.hard_deny,
         },
   );
-  return s === undefined
+  return wireRules === undefined
     ? undefined
     : {
-        auto_mode: s,
+        auto_mode: wireRules,
       };
 }
 //@ chunk-ad2e1aj6.js:8552-8576 placement
@@ -167,42 +189,42 @@ function asIs(autoModeConfig) {
   return autoModeConfig;
 }
 //@ chunk-ad2e1aj6.js:8576-9732 placement
-function needsApprovalEnvelope(e) {
-  let n = clipText(e.ask.message);
+function needsApprovalEnvelope(params) {
+  let message = clipText(params.ask.message);
   return {
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
       outcome: "needs_approval",
-      ...(e.facts.envelope && {
-        call_id: e.facts.envelope.call_id,
+      ...(params.facts.envelope && {
+        call_id: params.facts.envelope.call_id,
       }),
-      target: e.target,
-      ask_id: e.askId,
-      tool: e.toolName,
-      input: e.ask.input,
-      message: n,
-      ...(e.ask.decisionReason !== undefined && {
-        decision_reason: e.ask.decisionReason,
+      target: params.target,
+      ask_id: params.askId,
+      tool: params.toolName,
+      input: params.ask.input,
+      message,
+      ...(params.ask.decisionReason !== undefined && {
+        decision_reason: params.ask.decisionReason,
       }),
-      ...(e.ask.suggestions.length > 0 && {
-        suggestions: [...e.ask.suggestions],
+      ...(params.ask.suggestions.length > 0 && {
+        suggestions: [...params.ask.suggestions],
       }),
-      classifier_eligible: e.ask.classifierEligible,
-      prior_answer_ok: e.ask.priorAnswerOk,
-      ...(e.notes.length > 0 && {
-        notes: [...e.notes],
+      classifier_eligible: params.ask.classifierEligible,
+      prior_answer_ok: params.ask.priorAnswerOk,
+      ...(params.notes.length > 0 && {
+        notes: [...params.notes],
       }),
-      ...(e.ask.classifierEligible && autoModeRulesField(e.hostRules)),
+      ...(params.ask.classifierEligible && autoModeRulesField(params.hostRules)),
       elicitation: {
         mode: "form",
-        message: n,
+        message,
         requestedSchema: {
           type: "object",
           properties: {
             decision: {
               type: "string",
               enum: ["allow", "deny"],
-              description: `Whether ${e.toolName} may run this call on ${e.target.name}`,
+              description: `Whether ${params.toolName} may run this call on ${params.target.name}`,
             },
             feedback: {
               type: "string",
@@ -213,13 +235,13 @@ function needsApprovalEnvelope(e) {
         },
         _meta: {
           [ANTHROPIC_REMOTETOOLEXECUTION]: {
-            ask_id: e.askId,
-            ...(e.facts.envelope && {
-              call_id: e.facts.envelope.call_id,
+            ask_id: params.askId,
+            ...(params.facts.envelope && {
+              call_id: params.facts.envelope.call_id,
             }),
-            input_fingerprint: e.inputFingerprint,
-            classifier_eligible: e.ask.classifierEligible,
-            prior_answer_ok: e.ask.priorAnswerOk,
+            input_fingerprint: params.inputFingerprint,
+            classifier_eligible: params.ask.classifierEligible,
+            prior_answer_ok: params.ask.priorAnswerOk,
           },
         },
       },
@@ -227,13 +249,13 @@ function needsApprovalEnvelope(e) {
     content: [
       {
         type: "text",
-        text: `${e.toolName} on ${e.target.name} needs approval in this session before it runs: ${n}`,
+        text: `${params.toolName} on ${params.target.name} needs approval in this session before it runs: ${message}`,
       },
     ],
   };
 }
 //@ chunk-ad2e1aj6.js:9732-9949 placement
-function acknowledgedEnvelope(e, facts, askId) {
+function acknowledgedEnvelope(target, facts, askId) {
   return {
     envelope: {
       v: REMOTE_TOOL_PROTOCOL_VERSION,
@@ -241,36 +263,23 @@ function acknowledgedEnvelope(e, facts, askId) {
       ...(facts.envelope && {
         call_id: facts.envelope.call_id,
       }),
-      target: e,
+      target,
       ask_id: askId,
     },
     content: [
       {
         type: "text",
-        text: `The refusal was recorded on ${e.name} \u2014 nothing ran.`,
+        text: `The refusal was recorded on ${target.name} \u2014 nothing ran.`,
       },
     ],
   };
 }
 //@ chunk-ad2e1aj6.js:9949-9982 placement
 var ASK_WAIT_SCHEMA = DoctorLazy(() =>
-  u({
-    askWaitMs: E(),
+  objectSchema({
+    askWaitMs: numberSchema(),
   }),
 );
-//@ chunk-5ghnps9r.js:1078-1209 placement
-/**
- * （切分错误，权限 UI）规则是否就是当前提供的常驻规则。
- */
-function matchesOfferedWindowsSandboxRule(e, o) {
-  let t = singlePrefixRuleFor(o.offered, o.toolName);
-  return (
-    isWindowsSandboxPolicyViolation() &&
-    t !== undefined &&
-    e.toolName === t.toolName &&
-    e.ruleContent === t.ruleContent
-  );
-}
 export {
   sessionDeclineDenial,
   acknowledgedEnvelope,

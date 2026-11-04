@@ -9,7 +9,13 @@
  * attribution: placement 14
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { looseObject, string, E, array, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  looseObject,
+  stringSchema,
+  numberSchema,
+  array,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   memoryIdSchema,
   MemoryUnavailableError,
@@ -22,24 +28,25 @@ import { getSessionIngressAuthToken } from "../../utils/sessionIngressAuth.js";
 import { AbortError } from "../../utils/errors.js";
 import { apiClient } from "../routines/routinesApi.js";
 import { logForDebugging } from "../../utils/debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-82kqcve8.js:64788-64930 placement
 function parseContextStopHeader(headers) {
-  let n = headers?.["x-memory-context-stop"];
-  let r = typeof n === "string" ? n.trim().toLowerCase() : "";
-  return r === "org" || r === "credential" ? r : undefined;
+  let headerValue = headers?.["x-memory-context-stop"];
+  let normalized = typeof headerValue === "string" ? headerValue.trim().toLowerCase() : "";
+  return normalized === "org" || normalized === "credential" ? normalized : undefined;
 }
 //@ chunk-82kqcve8.js:64930-65145 placement = getRetryAfter (0.889)
 /**
  * 从普通头对象解析 retry-after（秒或 HTTP 日期）为毫秒，非正数忽略，上限 1 小时。旧版名 getRetryAfter 为同名族错配（另一个 getRetryAfter 是 #GQe）。疑似归错文件（chunk-82kqcve8 属其他 HTTP 客户端）。
  */
 function parseRetryAfterHeaderMs(error) {
-  let n = error["retry-after"];
-  if (typeof n !== "string" || n.trim() === "") return;
-  let resetUnixSec = Number(n);
-  let s = Number.isFinite(resetUnixSec) ? resetUnixSec * 1000 : Date.parse(n) - Date.now();
-  if (!Number.isFinite(s) || s <= 0) return;
-  return Math.min(s, 3600000);
+  let headerValue = error["retry-after"];
+  if (typeof headerValue !== "string" || headerValue.trim() === "") return;
+  let resetUnixSec = Number(headerValue);
+  let delayMs = Number.isFinite(resetUnixSec) ? resetUnixSec * 1000 : Date.parse(headerValue) - Date.now();
+  if (!Number.isFinite(delayMs) || delayMs <= 0) return;
+  return Math.min(delayMs, 3600000);
 }
 //@ chunk-82kqcve8.js:65145-65180 placement
 /**
@@ -52,48 +59,60 @@ function getRetryAfterMsOrDefault(error) {
 /**
  * 记忆库 HTTP API 的超时、分页与上限，路径，以及条目、列表页、带内容条目与错误体的 schema。
  */
-var STORE_API_TIMEOUT_MS = 30000;
-var LIST_PAGE_SIZE = 100;
-var MAX_STORE_ENTRIES = 200000;
-var MEMORIES_PATH = "/memories";
-var MEMORIES_EXPORT_PATH = "/memories/export";
-var memoryEntrySchema = DoctorLazy(() =>
-  looseObject({
-    id: memoryIdSchema(),
-    path: string(),
-    content_sha256: string(),
-    content_size_bytes: E().int().nonnegative().optional(),
-    size_bytes: E().int().nonnegative().optional(),
-    updated_at: string().optional().catch(undefined),
-  }),
-);
-var memoryListPageSchema = DoctorLazy(() =>
-  looseObject({
-    data: array(
-      looseObject({
-        type: string(),
-      }),
-    ),
-    prefixes: array(unknown()).nullish().catch(undefined),
-    next_page: string().nullish(),
-  }),
-);
-var memoryWithContentSchema = DoctorLazy(() =>
-  memoryEntrySchema().extend({
-    content: string(),
-    updated_at: string(),
-  }),
-);
-var memoryMetaSchema = memoryEntrySchema;
-var memoryErrorSchema = DoctorLazy(() =>
-  looseObject({
-    error: looseObject({
-      type: string().optional(),
-      conflicting_path: string().optional(),
-      conflicting_memory_id: memoryIdSchema().optional(),
-    }).optional(),
-  }),
-);
+var STORE_API_TIMEOUT_MS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var LIST_PAGE_SIZE;
+var MAX_STORE_ENTRIES;
+var MEMORIES_PATH;
+var MEMORIES_EXPORT_PATH;
+var memoryEntrySchema;
+var memoryListPageSchema;
+var memoryWithContentSchema;
+var memoryMetaSchema;
+var memoryErrorSchema;
+deferInit("chunk-82kqcve8.js:65180", () => {
+  STORE_API_TIMEOUT_MS = 30000;
+  LIST_PAGE_SIZE = 100;
+  MAX_STORE_ENTRIES = 200000;
+  MEMORIES_PATH = "/memories";
+  MEMORIES_EXPORT_PATH = "/memories/export";
+  memoryEntrySchema = DoctorLazy(() =>
+    looseObject({
+      id: memoryIdSchema(),
+      path: stringSchema(),
+      content_sha256: stringSchema(),
+      content_size_bytes: numberSchema().int().nonnegative().optional(),
+      size_bytes: numberSchema().int().nonnegative().optional(),
+      updated_at: stringSchema().optional().catch(undefined),
+    }),
+  );
+  memoryListPageSchema = DoctorLazy(() =>
+    looseObject({
+      data: array(
+        looseObject({
+          type: stringSchema(),
+        }),
+      ),
+      prefixes: array(unknown()).nullish().catch(undefined),
+      next_page: stringSchema().nullish(),
+    }),
+  );
+  memoryWithContentSchema = DoctorLazy(() =>
+    memoryEntrySchema().extend({
+      content: stringSchema(),
+      updated_at: stringSchema(),
+    }),
+  );
+  memoryMetaSchema = memoryEntrySchema;
+  memoryErrorSchema = DoctorLazy(() =>
+    looseObject({
+      error: looseObject({
+        type: stringSchema().optional(),
+        conflicting_path: stringSchema().optional(),
+        conflicting_memory_id: memoryIdSchema().optional(),
+      }).optional(),
+    }),
+  );
+});
 //@ chunk-82kqcve8.js:65733-65805 placement
 /**
  * 规范路径前缀（补前导斜杠、合并重复斜杠）。
@@ -102,8 +121,8 @@ function normalizePathPrefix(path) {
   return (path.startsWith("/") ? path : "/" + path).replace(/\/{2,}/g, "/");
 }
 //@ chunk-82kqcve8.js:65805-65953 placement
-function buildQueryString(e) {
-  let mapped = Object.entries(e).map(
+function buildQueryString(query) {
+  let mapped = Object.entries(query).map(
     ([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`,
   );
   return mapped.length ? "?" + mapped.join("&") : "";
@@ -112,81 +131,92 @@ function buildQueryString(e) {
 /**
  * 判断值是否为异步可迭代（流）。
  */
-function isAsyncIterable(e) {
-  return typeof e === "object" && e !== null && Symbol.asyncIterator in e;
+function isAsyncIterable(value) {
+  return typeof value === "object" && value !== null && Symbol.asyncIterator in value;
 }
 //@ chunk-82kqcve8.js:66032-66138 placement
-function destroyStream(e) {
-  if (typeof e === "object" && e !== null && "destroy" in e && typeof e.destroy === "function") e.destroy();
+function destroyStream(stream) {
+  if (
+    typeof stream === "object" &&
+    stream !== null &&
+    "destroy" in stream &&
+    typeof stream.destroy === "function"
+  )
+    stream.destroy();
 }
 //@ chunk-82kqcve8.js:66138-67027 placement
 /**
  * 表示存储已归档的错误文本前缀。
  */
-var MEMORY_STORE_LIMIT_ERRORS = DoctorLazy(() =>
-  looseObject({
-    message: string().optional(),
-    error: looseObject({
-      type: string().optional(),
-      message: string().optional(),
-    }).optional(),
-  }),
-);
-var SERVER_ERROR_TO_REASON = new Map([
-  ["memory store has reached its memory limit", "store_full"],
-  ["memory store has reached its size limit", "store_full"],
-  ["content must be at most 102400 bytes", "content_too_large"],
-  ["MEMORY.md content exceeds the prompt-index cap", "index_too_large"],
-  ["content rejected by safety check", "content_screened"],
-  [
-    "memory content appears to contain a credential or API key; remove it before writing. If the credential is real, rotate it.",
-    "content_secret",
-  ],
-  ["path must be at most 1024 bytes", "invalid_path"],
-  ["path must be at most 20 segments deep", "invalid_path"],
-  ["path must not contain . or .. segments", "invalid_path"],
-  ["path must not contain control or format characters", "invalid_path"],
-  ["path must be NFC-normalized", "invalid_path"],
-]);
-var ARCHIVED_PREFIX = "cannot modify archived resource";
+var MEMORY_STORE_LIMIT_ERRORS; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var SERVER_ERROR_TO_REASON;
+var ARCHIVED_PREFIX;
+deferInit("chunk-82kqcve8.js:66138", () => {
+  MEMORY_STORE_LIMIT_ERRORS = DoctorLazy(() =>
+    looseObject({
+      message: stringSchema().optional(),
+      error: looseObject({
+        type: stringSchema().optional(),
+        message: stringSchema().optional(),
+      }).optional(),
+    }),
+  );
+  SERVER_ERROR_TO_REASON = new Map([
+    ["memory store has reached its memory limit", "store_full"],
+    ["memory store has reached its size limit", "store_full"],
+    ["content must be at most 102400 bytes", "content_too_large"],
+    ["MEMORY.md content exceeds the prompt-index cap", "index_too_large"],
+    ["content rejected by safety check", "content_screened"],
+    [
+      "memory content appears to contain a credential or API key; remove it before writing. If the credential is real, rotate it.",
+      "content_secret",
+    ],
+    ["path must be at most 1024 bytes", "invalid_path"],
+    ["path must be at most 20 segments deep", "invalid_path"],
+    ["path must not contain . or .. segments", "invalid_path"],
+    ["path must not contain control or format characters", "invalid_path"],
+    ["path must be NFC-normalized", "invalid_path"],
+  ]);
+  ARCHIVED_PREFIX = "cannot modify archived resource";
+});
 //@ chunk-82kqcve8.js:67027-67518 placement
-function parseStoreHttpError(status, n, r, headers) {
+function parseStoreHttpError(status, message, body, headers) {
   if (status === 429 || status >= 500) {
-    let O = status === 429 || status === 503 || typeof headers["retry-after"] === "string";
+    let retryable = status === 429 || status === 503 || typeof headers["retry-after"] === "string";
     throw new MemoryUnavailableError(
-      `${n}: HTTP ${status}`,
+      `${message}: HTTP ${status}`,
       undefined,
-      O ? getRetryAfterMsOrDefault(headers) : undefined,
+      retryable ? getRetryAfterMsOrDefault(headers) : undefined,
     );
   }
-  let h = MEMORY_STORE_LIMIT_ERRORS().safeParse(r);
-  let y = h.success ? h.data : undefined;
-  let error = y?.error;
-  let message = error?.message ?? y?.message;
-  if (status === 400 && error?.type === "invalid_request_error" && message !== undefined) {
-    let O =
-      SERVER_ERROR_TO_REASON.get(message) ??
-      (message.startsWith(ARCHIVED_PREFIX) ? "store_archived" : undefined);
-    if (O !== undefined) throw new MemoryPermanentError(O, `${n}: HTTP 400 (${message})`);
+  let parsed = MEMORY_STORE_LIMIT_ERRORS().safeParse(body);
+  let payload = parsed.success ? parsed.data : undefined;
+  let error = payload?.error;
+  let message_2 = error?.message ?? payload?.message;
+  if (status === 400 && error?.type === "invalid_request_error" && message_2 !== undefined) {
+    let reason =
+      SERVER_ERROR_TO_REASON.get(message_2) ??
+      (message_2.startsWith(ARCHIVED_PREFIX) ? "store_archived" : undefined);
+    if (reason !== undefined) throw new MemoryPermanentError(reason, `${message}: HTTP 400 (${message_2})`);
   }
-  let R = message !== undefined ? ` (${message})` : "";
-  throw new MemoryPermanentError(`http_${status}`, `${n}: HTTP ${status}${R}`);
+  let messageSuffix = message_2 !== undefined ? ` (${message_2})` : "";
+  throw new MemoryPermanentError(`http_${status}`, `${message}: HTTP ${status}${messageSuffix}`);
 }
 //@ chunk-82kqcve8.js:67518-67707 placement
-function getStopError(e, n) {
-  if (e.status !== 204 && e.status !== 401 && e.status !== 403) return;
-  let contextStopHeader = parseContextStopHeader(e.response.headers);
+function getStopError(error, what) {
+  if (error.status !== 204 && error.status !== 401 && error.status !== 403) return;
+  let contextStopHeader = parseContextStopHeader(error.response.headers);
   return contextStopHeader === undefined
     ? undefined
     : new MemoryPermanentError(
         `stopped_${contextStopHeader}`,
-        `${n}: HTTP ${e.status} (stop: ${contextStopHeader})`,
+        `${what}: HTTP ${error.status} (stop: ${contextStopHeader})`,
       );
 }
 //@ chunk-82kqcve8.js:67707-67827 placement = isPermanentFailure (0.566)
-function throwForSkippedRequest(e, n) {
-  if (e.reason === "no-auth") throw new MemoryPermanentError("no_oauth", `${n}: ${e.detail}`);
-  throw new MemoryUnavailableError(`${n}: ${e.reason}`);
+function throwForSkippedRequest(skip, what) {
+  if (skip.reason === "no-auth") throw new MemoryPermanentError("no_oauth", `${what}: ${skip.detail}`);
+  throw new MemoryUnavailableError(`${what}: ${skip.reason}`);
 }
 //@ chunk-82kqcve8.js:67827-74424 placement
 /**
@@ -201,84 +231,87 @@ class MemoryStoreClient {
   reqOpts;
   credentialProvider;
   knownIds;
-  constructor(e, credentialProvider, knownIds) {
-    this.mode = e.mode;
-    this.label = e.mount;
+  constructor(store, credentialProvider, knownIds) {
+    this.mode = store.mode;
+    this.label = store.mount;
     this.credentialProvider = credentialProvider;
     this.knownIds = knownIds;
-    let replaced = e.path.replace(/\/+$/, "");
+    let replaced = store.path.replace(/\/+$/, "");
     this.partitionId = replaced;
     this.listBase = replaced + MEMORIES_PATH;
     this.exportBase = replaced + MEMORIES_EXPORT_PATH;
-    let h = memoryApiTarget();
+    let target = memoryApiTarget();
     this.reqOpts = {
       host: "memory",
       timeout: STORE_API_TIMEOUT_MS,
       validateStatus: () => true,
-      auth: h.auth === "none" ? "none" : getSessionIngressAuthToken() ? "session-jwt" : undefined,
-      refreshOAuth: h.refreshOAuth,
+      auth: target.auth === "none" ? "none" : getSessionIngressAuthToken() ? "session-jwt" : undefined,
+      refreshOAuth: target.refreshOAuth,
     };
   }
-  async send(e, n) {
-    let r = n
+  async send(request, signal) {
+    let options = signal
       ? {
           ...this.reqOpts,
-          signal: n,
+          signal,
         }
       : this.reqOpts;
-    if (!this.credentialProvider) return e(r);
-    let s = {
-      ...r,
+    if (!this.credentialProvider) return request(options);
+    let authorized = {
+      ...options,
       auth: "none",
       headers: {
         Authorization: await this.credentialProvider.getAuthorization(),
       },
     };
-    let h = await e(s);
-    if (!h.ok || h.status !== 401) return h;
-    if (isAsyncIterable(h.data)) destroyStream(h.data);
-    return e({
-      ...s,
+    let response = await request(authorized);
+    if (!response.ok || response.status !== 401) return response;
+    if (isAsyncIterable(response.data)) destroyStream(response.data);
+    return request({
+      ...authorized,
       headers: {
         Authorization: await this.credentialProvider.getAuthorization({
           forceRefresh: true,
-          failedAuthorization: s.headers.Authorization,
+          failedAuthorization: authorized.headers.Authorization,
         }),
       },
     });
   }
-  entryPath(e) {
-    return `${this.listBase}/${encodeURIComponent(e)}`;
+  entryPath(path) {
+    return `${this.listBase}/${encodeURIComponent(path)}`;
   }
-  assertWritable(e) {
+  assertWritable(operation) {
     if (this.mode === "ro")
       throw new MemoryPermanentError(
         "not_writable",
-        `MemoryServiceBackend[${this.label}]: ${e} refused on read-only mount`,
+        `MemoryServiceBackend[${this.label}]: ${operation} refused on read-only mount`,
       );
   }
-  async list(e, n) {
-    let r = [];
-    let s = 0;
-    let h;
+  async list(prefix, options) {
+    let entries = [];
+    let seenCount = 0;
+    let cursor;
     for (let idx = 0; ; idx++) {
-      if (n?.signal?.aborted) throw new AbortError();
-      let w = {
+      if (options?.signal?.aborted) throw new AbortError();
+      let query = {
         limit: LIST_PAGE_SIZE,
       };
-      if (e !== undefined) w.path_prefix = normalizePathPrefix(e);
-      if (n?.depthOne) {
-        w.depth = 1;
-        w.order_by = "path";
-        w.order = "asc";
+      if (prefix !== undefined) query.path_prefix = normalizePathPrefix(prefix);
+      if (options?.depthOne) {
+        query.depth = 1;
+        query.order_by = "path";
+        query.order = "asc";
       }
-      if (h) w.page = h;
-      let S = await this.send((j) => apiClient.get(`${this.listBase}${buildQueryString(w)}`, j), n?.signal);
-      if (!S.ok) throwForSkippedRequest(S, `list ${this.label}`);
-      let stopError = getStopError(S, `list ${this.label}`);
+      if (cursor) query.page = cursor;
+      let response = await this.send(
+        (options) => apiClient.get(`${this.listBase}${buildQueryString(query)}`, options),
+        options?.signal,
+      );
+      if (!response.ok) throwForSkippedRequest(response, `list ${this.label}`);
+      let stopError = getStopError(response, `list ${this.label}`);
       if (stopError !== undefined) throw stopError;
-      if (S.status === 404) {
-        if (h === undefined) {
+      if (response.status === 404) {
+        if (cursor === undefined) {
           logForDebugging(`memory-backend[${this.label}]: list 404 (store not provisioned)`, {
             level: "debug",
           });
@@ -288,252 +321,272 @@ class MemoryStoreClient {
           `list ${this.label}: 404 on page ${idx} (cursor expired or store deleted mid-walk)`,
         );
       }
-      if (S.status >= 400) parseStoreHttpError(S.status, `list ${this.label}`, S.data, S.response.headers);
-      let O = memoryListPageSchema().safeParse(S.data);
-      if (!O.success)
+      if (response.status >= 400)
+        parseStoreHttpError(response.status, `list ${this.label}`, response.data, response.response.headers);
+      let page = memoryListPageSchema().safeParse(response.data);
+      if (!page.success)
         throw new MemoryPermanentError(
           "malformed_response",
-          `list ${this.label}: malformed response: ${O.error.message}`,
+          `list ${this.label}: malformed response: ${page.error.message}`,
         );
-      for (let j of O.data.data) {
-        if (j.type !== "memory" && j.type !== "memory_metadata") continue;
-        let G = memoryEntrySchema().safeParse(j);
-        if (!G.success)
+      for (let item of page.data.data) {
+        if (item.type !== "memory" && item.type !== "memory_metadata") continue;
+        let parsed = memoryEntrySchema().safeParse(item);
+        if (!parsed.success)
           throw new MemoryPermanentError(
             "malformed_response",
-            `list ${this.label}: malformed memory item: ${G.error.message}`,
+            `list ${this.label}: malformed memory item: ${parsed.error.message}`,
           );
-        let Z = normalizePathPrefix(G.data.path);
-        r.push({
-          id: G.data.id,
-          path: Z,
-          sha256: G.data.content_sha256,
-          sizeBytes: G.data.content_size_bytes ?? G.data.size_bytes,
-          updatedAt: G.data.updated_at,
+        let path = normalizePathPrefix(parsed.data.path);
+        entries.push({
+          id: parsed.data.id,
+          path,
+          sha256: parsed.data.content_sha256,
+          sizeBytes: parsed.data.content_size_bytes ?? parsed.data.size_bytes,
+          updatedAt: parsed.data.updated_at,
         });
-        if (Z === n?.stopAtPath) return r;
+        if (path === options?.stopAtPath) return entries;
       }
-      let P = O.data.data.length + (O.data.prefixes?.length ?? 0);
-      s += P;
-      let nextPage = O.data.next_page ?? undefined;
+      let pageSize = page.data.data.length + (page.data.prefixes?.length ?? 0);
+      seenCount += pageSize;
+      let nextPage = page.data.next_page ?? undefined;
       if (!nextPage) break;
-      if (nextPage === h)
+      if (nextPage === cursor)
         throw new MemoryPermanentError(
           "list_page_limit",
-          `list ${this.label}: next_page cursor did not advance after ${s} entries`,
+          `list ${this.label}: next_page cursor did not advance after ${seenCount} entries`,
         );
-      if (P === 0)
+      if (pageSize === 0)
         throw new MemoryPermanentError(
           "list_page_limit",
-          `list ${this.label}: page carried a next_page cursor but no countable rows after ${s} entries`,
+          `list ${this.label}: page carried a next_page cursor but no countable rows after ${seenCount} entries`,
         );
-      if (s > MAX_STORE_ENTRIES)
+      if (seenCount > MAX_STORE_ENTRIES)
         throw new MemoryPermanentError(
           "list_page_limit",
           `list ${this.label}: exceeded ${MAX_STORE_ENTRIES} entries (runaway cursor?)`,
         );
-      h = nextPage;
+      cursor = nextPage;
     }
-    return r;
+    return entries;
   }
-  async readByPath(e, n) {
-    let r = normalizePathPrefix(e);
-    let s = `${this.partitionId} ${r}`;
-    let h = this.knownIds?.get(s);
-    if (h !== undefined) {
-      let O = false;
+  async readByPath(path, options) {
+    let normalized = normalizePathPrefix(path);
+    let cacheKey = `${this.partitionId} ${normalized}`;
+    let knownId = this.knownIds?.get(cacheKey);
+    if (knownId !== undefined) {
+      let matched = false;
       try {
-        let P = await this.readWithPath(h, n);
-        O = P.path === r;
-        if (O) return P.content;
+        let found = await this.readWithPath(knownId, options);
+        matched = found.path === normalized;
+        if (matched) return found.content;
       } catch (error) {
         if (!(error instanceof MemoryNotFoundError)) throw error;
       } finally {
-        if (!O && this.knownIds?.get(s) === h) this.knownIds?.delete(s);
+        if (!matched && this.knownIds?.get(cacheKey) === knownId) this.knownIds?.delete(cacheKey);
       }
       logForDebugging(
-        `memory-backend[${this.label}]: id ${h} no longer returns ${r}; looking the file up by path`,
+        `memory-backend[${this.label}]: id ${knownId} no longer returns ${normalized}; looking the file up by path`,
         {
           level: "debug",
         },
       );
     }
-    let sliced = r.slice(0, r.lastIndexOf("/") + 1);
-    let w;
+    let sliced = normalized.slice(0, normalized.lastIndexOf("/") + 1);
+    let entries;
     try {
-      w = await this.list(sliced, {
+      entries = await this.list(sliced, {
         depthOne: true,
-        signal: n?.signal,
-        stopAtPath: r,
+        signal: options?.signal,
+        stopAtPath: normalized,
       });
     } catch (error) {
       if (error instanceof MemoryNotFoundError) return null;
       throw error;
     }
-    let found = w.find((O) => O.path === r);
+    let found = entries.find((entry) => entry.path === normalized);
     if (!found) return null;
-    let R = await this.readWithPath(found.id, n);
-    if (R.path === r) this.knownIds?.set(s, found.id);
-    return R.content;
+    let byId = await this.readWithPath(found.id, options);
+    if (byId.path === normalized) this.knownIds?.set(cacheKey, found.id);
+    return byId.content;
   }
-  async exportAll(e) {
-    return this.openExport(`export ${this.label}`, this.exportBase, e?.signal);
+  async exportAll(options) {
+    return this.openExport(`export ${this.label}`, this.exportBase, options?.signal);
   }
-  async exportMetadata(e) {
-    return this.openExport(`export-metadata ${this.label}`, `${this.exportBase}?view=basic`, e?.signal);
+  async exportMetadata(options) {
+    return this.openExport(`export-metadata ${this.label}`, `${this.exportBase}?view=basic`, options?.signal);
   }
-  async openExport(e, n, r) {
-    if (r?.aborted) throw new AbortError();
-    let s = await this.send(
-      (S) =>
-        apiClient.get(n, {
-          ...S,
+  async openExport(operation, url, signal) {
+    if (signal?.aborted) throw new AbortError();
+    let response = await this.send(
+      (options) =>
+        apiClient.get(url, {
+          ...options,
           responseType: "stream",
         }),
-      r,
+      signal,
     );
-    if (!s.ok) throwForSkippedRequest(s, e);
-    let stopError = getStopError(s, e);
-    if (stopError !== undefined || s.status >= 400) {
-      destroyStream(s.data);
+    if (!response.ok) throwForSkippedRequest(response, operation);
+    let stopError = getStopError(response, operation);
+    if (stopError !== undefined || response.status >= 400) {
+      destroyStream(response.data);
       if (stopError !== undefined) throw stopError;
-      if (s.status === 404) throw new MemoryNotFoundError(this.label, "store");
-      parseStoreHttpError(s.status, e, undefined, s.response.headers);
+      if (response.status === 404) throw new MemoryNotFoundError(this.label, "store");
+      parseStoreHttpError(response.status, operation, undefined, response.response.headers);
     }
-    if (!isAsyncIterable(s.data))
-      throw new MemoryPermanentError("malformed_response", `${e}: response is not a stream`);
-    let y = s.data;
-    if (r?.aborted) {
-      destroyStream(y);
+    if (!isAsyncIterable(response.data))
+      throw new MemoryPermanentError("malformed_response", `${operation}: response is not a stream`);
+    let stream = response.data;
+    if (signal?.aborted) {
+      destroyStream(stream);
       throw new AbortError();
     }
-    let w = () => destroyStream(y);
-    r?.addEventListener("abort", w, {
+    let onAbort = () => destroyStream(stream);
+    signal?.addEventListener("abort", onAbort, {
       once: true,
     });
     return {
-      stream: y,
+      stream,
       destroy: () => {
-        r?.removeEventListener("abort", w);
-        destroyStream(y);
+        signal?.removeEventListener("abort", onAbort);
+        destroyStream(stream);
       },
     };
   }
-  async read(e, n) {
-    return (await this.readWithPath(e, n)).content;
+  async read(id, options) {
+    return (await this.readWithPath(id, options)).content;
   }
-  async readWithPath(e, n) {
-    if (n?.signal?.aborted) throw new AbortError();
-    let r = `read ${this.label}:${e}`;
-    let s = await this.send((w) => apiClient.get(this.entryPath(e), w), n?.signal);
-    if (!s.ok) throwForSkippedRequest(s, r);
-    let stopError = getStopError(s, r);
+  async readWithPath(id, options) {
+    if (options?.signal?.aborted) throw new AbortError();
+    let operation = `read ${this.label}:${id}`;
+    let response = await this.send((options) => apiClient.get(this.entryPath(id), options), options?.signal);
+    if (!response.ok) throwForSkippedRequest(response, operation);
+    let stopError = getStopError(response, operation);
     if (stopError !== undefined) throw stopError;
-    if (s.status === 404) throw new MemoryNotFoundError(e);
-    if (s.status >= 400) parseStoreHttpError(s.status, r, s.data, s.response.headers);
-    let y = memoryWithContentSchema().safeParse(s.data);
-    if (!y.success)
-      throw new MemoryPermanentError("malformed_response", `${r}: malformed response: ${y.error.message}`);
+    if (response.status === 404) throw new MemoryNotFoundError(id);
+    if (response.status >= 400)
+      parseStoreHttpError(response.status, operation, response.data, response.response.headers);
+    let parsed = memoryWithContentSchema().safeParse(response.data);
+    if (!parsed.success)
+      throw new MemoryPermanentError(
+        "malformed_response",
+        `${operation}: malformed response: ${parsed.error.message}`,
+      );
     return {
-      path: normalizePathPrefix(y.data.path),
+      path: normalizePathPrefix(parsed.data.path),
       content: {
-        content: y.data.content,
-        sha256: y.data.content_sha256,
-        updatedAt: y.data.updated_at,
+        content: parsed.data.content,
+        sha256: parsed.data.content_sha256,
+        updatedAt: parsed.data.updated_at,
       },
     };
   }
-  async create(e, content, r) {
+  async create(path, content, options) {
     this.assertWritable("create");
-    let s = normalizePathPrefix(e);
-    let h = `create ${this.label}:${s}`;
-    let y =
-      r?.precondition === "not_exists"
+    let normalized = normalizePathPrefix(path);
+    let operation = `create ${this.label}:${normalized}`;
+    let body =
+      options?.precondition === "not_exists"
         ? {
-            path: s,
+            path: normalized,
             content,
             precondition: {
               type: "not_exists",
             },
           }
         : {
-            path: s,
+            path: normalized,
             content,
           };
-    let w = await this.send((R) => apiClient.post(this.listBase, y, R), r?.signal);
-    if (!w.ok) throwForSkippedRequest(w, h);
-    if (w.status === 409) {
-      let R = memoryErrorSchema().safeParse(w.data);
-      let error = R.success ? R.data.error : undefined;
+    let response = await this.send(
+      (options) => apiClient.post(this.listBase, body, options),
+      options?.signal,
+    );
+    if (!response.ok) throwForSkippedRequest(response, operation);
+    if (response.status === 409) {
+      let parsedError = memoryErrorSchema().safeParse(response.data);
+      let error = parsedError.success ? parsedError.data.error : undefined;
       let conflictingMemoryId =
         error?.conflicting_memory_id &&
         error.conflicting_path !== undefined &&
-        normalizePathPrefix(error.conflicting_path) === s
+        normalizePathPrefix(error.conflicting_path) === normalized
           ? error.conflicting_memory_id
           : undefined;
       throw new MemoryConflictError(
-        s,
+        normalized,
         null,
         undefined,
         conflictingMemoryId,
         error?.conflicting_path === undefined ? undefined : normalizePathPrefix(error.conflicting_path),
       );
     }
-    if (w.status >= 400) parseStoreHttpError(w.status, h, w.data, w.response.headers);
-    let S = memoryMetaSchema().safeParse(w.data);
-    if (!S.success)
-      throw new MemoryPermanentError("malformed_response", `${h}: malformed response: ${S.error.message}`);
+    if (response.status >= 400)
+      parseStoreHttpError(response.status, operation, response.data, response.response.headers);
+    let parsed = memoryMetaSchema().safeParse(response.data);
+    if (!parsed.success)
+      throw new MemoryPermanentError(
+        "malformed_response",
+        `${operation}: malformed response: ${parsed.error.message}`,
+      );
     return {
-      id: S.data.id,
-      sha256: S.data.content_sha256,
+      id: parsed.data.id,
+      sha256: parsed.data.content_sha256,
     };
   }
-  async update(e, content, r, s) {
+  async update(id, content, expectedSha256, options) {
     this.assertWritable("update");
-    let h = `update ${this.label}:${e}`;
-    let y = {
+    let operation = `update ${this.label}:${id}`;
+    let body = {
       content,
     };
-    if (r !== null)
-      y.precondition = {
+    if (expectedSha256 !== null)
+      body.precondition = {
         type: "content_sha256",
-        content_sha256: r,
+        content_sha256: expectedSha256,
       };
-    let w = await this.send((R) => apiClient.post(this.entryPath(e), y, R), s?.signal);
-    if (!w.ok) throwForSkippedRequest(w, h);
-    if (w.status === 404) throw new MemoryNotFoundError(e);
-    if (w.status === 409) throw new MemoryConflictError(e, r, undefined);
-    if (w.status >= 400) parseStoreHttpError(w.status, h, w.data, w.response.headers);
-    let S = memoryMetaSchema().safeParse(w.data);
-    if (!S.success)
-      throw new MemoryPermanentError("malformed_response", `${h}: malformed response: ${S.error.message}`);
+    let response = await this.send(
+      (options) => apiClient.post(this.entryPath(id), body, options),
+      options?.signal,
+    );
+    if (!response.ok) throwForSkippedRequest(response, operation);
+    if (response.status === 404) throw new MemoryNotFoundError(id);
+    if (response.status === 409) throw new MemoryConflictError(id, expectedSha256, undefined);
+    if (response.status >= 400)
+      parseStoreHttpError(response.status, operation, response.data, response.response.headers);
+    let parsed = memoryMetaSchema().safeParse(response.data);
+    if (!parsed.success)
+      throw new MemoryPermanentError(
+        "malformed_response",
+        `${operation}: malformed response: ${parsed.error.message}`,
+      );
     return {
-      id: S.data.id,
-      sha256: S.data.content_sha256,
+      id: parsed.data.id,
+      sha256: parsed.data.content_sha256,
     };
   }
-  async delete(e, n) {
+  async delete(id, expectedSha256) {
     this.assertWritable("delete");
-    let r = `delete ${this.label}:${e}`;
-    let s = {};
-    if (n !== null) s.expected_content_sha256 = n;
-    let h = await this.send((y) =>
-      apiClient.delete(`${this.entryPath(e)}${buildQueryString(s)}`, undefined, y),
+    let operation = `delete ${this.label}:${id}`;
+    let query = {};
+    if (expectedSha256 !== null) query.expected_content_sha256 = expectedSha256;
+    let response = await this.send((options) =>
+      apiClient.delete(`${this.entryPath(id)}${buildQueryString(query)}`, undefined, options),
     );
-    if (!h.ok) throwForSkippedRequest(h, r);
-    if (h.status === 404) {
-      if (n !== null) throw new MemoryNotFoundError(e);
+    if (!response.ok) throwForSkippedRequest(response, operation);
+    if (response.status === 404) {
+      if (expectedSha256 !== null) throw new MemoryNotFoundError(id);
       return;
     }
-    if (h.status === 409) throw new MemoryConflictError(e, n, undefined);
-    if (h.status >= 400) parseStoreHttpError(h.status, r, h.data, h.response.headers);
+    if (response.status === 409) throw new MemoryConflictError(id, expectedSha256, undefined);
+    if (response.status >= 400)
+      parseStoreHttpError(response.status, operation, response.data, response.response.headers);
   }
 }
 //@ chunk-82kqcve8.js:74424-74473 placement
 /**
  * 批量创建记忆库客户端。
  */
-function createStoreClients(e, credentialProvider) {
-  return e.map((r) => new MemoryStoreClient(r, credentialProvider));
+function createStoreClients(stores, credentialProvider) {
+  return stores.map((store) => new MemoryStoreClient(store, credentialProvider));
 }
 export { MemoryStoreClient, normalizePathPrefix, MAX_STORE_ENTRIES, createStoreClients };

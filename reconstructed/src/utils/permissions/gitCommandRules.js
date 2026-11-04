@@ -13,15 +13,15 @@
 /**
  * 为命令模式生成 Bash/PowerShell 规则。
  */
-function bashAndPowerShellRules(e) {
-  return e.flatMap((n) => [`Bash(${n})`, `PowerShell(${n})`]);
+function bashAndPowerShellRules(patterns) {
+  return patterns.flatMap((pattern) => [`Bash(${pattern})`, `PowerShell(${pattern})`]);
 }
 //@ chunk-t0gq9gyw.js:62038-62111 placement
 /**
  * stripCheckoutBaseRule：去掉 PowerShell(git checkout -b *) 规则。
  */
-function stripCheckoutBaseRule(e) {
-  return e.filter((n) => n !== "PowerShell(git checkout -b *)");
+function stripCheckoutBaseRule(rules) {
+  return rules.filter((rule) => rule !== "PowerShell(git checkout -b *)");
 }
 //@ chunk-t0gq9gyw.js:62111-66193 placement
 /**
@@ -105,22 +105,25 @@ var GIT_OUTPUT_RULE_REASON = `${SKILL_ACTIVE_PREFIX} refuses \`--output\` on git
 var GIT_CHECKOUT_FORCE_REASON = `${SKILL_ACTIVE_PREFIX} refuses \`git checkout\` with \`--force\`/\`-f\` (tokens starting \`--f\` or \` -f\`): create the branch with a plain \`git checkout -b\`. The match is on the raw command text, so a branch name containing \`--f\` trips it too. ${NO_SUBSTITUTE_ADVICE}`;
 var GIT_ADD_FORCE_REASON = `${SKILL_ACTIVE_PREFIX} refuses \`git add\` with \`--force\`/\`-f\` (it stages ignored files such as \`.env\`) or \`--chmod\` (tokens starting \`--f\`, \`-f\`, \`--c\`): stage the paths by name without the option. ${RAW_MATCH_CAVEAT} ${NO_SUBSTITUTE_ADVICE}`;
 //@ chunk-t0gq9gyw.js:66193-66240 placement
-function pairBashAndPowerShellRules(e, n) {
-  return bashAndPowerShellRules(e).map((r) => [r, n]);
+function pairBashAndPowerShellRules(patterns, reason) {
+  return bashAndPowerShellRules(patterns).map((rule) => [rule, reason]);
 }
 //@ chunk-t0gq9gyw.js:66240-66409 placement
-var ZIi = Object.fromEntries([
+var ruleReasons = Object.fromEntries([
   ...pairBashAndPowerShellRules(GIT_COMMIT_FILE_ARG_RULES, GIT_COMMIT_RULE_REASON),
   ...pairBashAndPowerShellRules(GIT_PUSH_RESTRICTED_RULES, GIT_PUSH_RULE_REASON),
   ...pairBashAndPowerShellRules(GH_PR_CREATE_RESTRICTED_RULES, GH_PR_CREATE_RULE_REASON),
-  ...GH_PR_CREATE_BASE_RULES.map((e) => [`PowerShell(${e})`, GH_PR_CREATE_BASE_POWERSHELL_REASON]),
+  ...GH_PR_CREATE_BASE_RULES.map((baseRule) => [
+    `PowerShell(${baseRule})`,
+    GH_PR_CREATE_BASE_POWERSHELL_REASON,
+  ]),
   ...pairBashAndPowerShellRules(GH_PR_EDIT_RESTRICTED_RULES, GH_PR_EDIT_RULE_REASON),
   ...pairBashAndPowerShellRules(GIT_OUTPUT_RESTRICTED_RULES, GIT_OUTPUT_RULE_REASON),
   ...pairBashAndPowerShellRules(GIT_CHECKOUT_FORCE_RULES, GIT_CHECKOUT_FORCE_REASON),
   ...pairBashAndPowerShellRules(GIT_ADD_FORCE_RULES, GIT_ADD_FORCE_REASON),
 ]);
 export {
-  ZIi,
+  ruleReasons,
   stripCheckoutBaseRule,
   bashAndPowerShellRules,
   GIT_ADD_FORCE_RULES,

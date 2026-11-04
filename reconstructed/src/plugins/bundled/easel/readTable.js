@@ -44,16 +44,17 @@ import {
   truncateMiddle,
   elideList,
 } from "./chartSchema.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-3s7ydtfd.js:22902-23118 placement = saveTag (0.566)
 function saveTag(scope) {
-  let t = typeof scope === "string" ? scope.split(",") : [];
-  let r = t.length <= MAX_SERIES_PAIRS ? t.map((p) => METRIC_KEY_RE.exec(p)?.[1]) : [];
-  return r.length > 0 && !r.includes(undefined) && uniqueValues(r).length === r.length
+  let parts = typeof scope === "string" ? scope.split(",") : [];
+  let keys = parts.length <= MAX_SERIES_PAIRS ? parts.map((part) => METRIC_KEY_RE.exec(part)?.[1]) : [];
+  return keys.length > 0 && !keys.includes(undefined) && uniqueValues(keys).length === keys.length
     ? Object.fromEntries(
         returnValue(
-          r.map((p) => `${p} tag`),
-          t,
+          keys.map((key) => `${key} tag`),
+          parts,
         ),
       )
     : scope;
@@ -62,47 +63,50 @@ function saveTag(scope) {
 /**
  * Datadog 指标对象（expression/scope/pointlist）
  */
-var datadogPointlist = (e, pointlist) => ({
-  metric: selectPath(e, "expression")[0],
-  scope: selectPath(e, "scope")[0],
+var datadogPointlist = (series, pointlist) => ({
+  metric: selectPath(series, "expression")[0],
+  scope: selectPath(series, "scope")[0],
   pointlist,
 });
 //@ chunk-3s7ydtfd.js:23198-23229 placement
 /**
  * 起始时间 + 间隔算第 n 个点的时刻
  */
-var fixedIntervalPoint = (ms, t) => (o, r) => [ms + r * t, o];
+var fixedIntervalPoint = (ms, intervalMs) => (value, index) => [ms + index * intervalMs, value];
 //@ chunk-3s7ydtfd.js:23229-23413 placement
 /**
  * 读起始时间 + 间隔的数值序列（start_time/interval_ms/values）。
  */
-function readFixedIntervalValues(e) {
-  let timeCell = parseTimeCell(String(selectPath(e, "start_time")[0]));
+function readFixedIntervalValues(series) {
+  let timeCell = parseTimeCell(String(selectPath(series, "start_time")[0]));
   return timeCell.kind === "time" && timeCell.isZoned
-    ? selectPath(e, "values")
-        .flatMap((r) => String(r).split(","))
-        .map(fixedIntervalPoint(timeCell.ms, Number(selectPath(e, "interval_ms")[0])))
+    ? selectPath(series, "values")
+        .flatMap((values) => String(values).split(","))
+        .map(fixedIntervalPoint(timeCell.ms, Number(selectPath(series, "interval_ms")[0])))
     : [];
 }
 //@ chunk-3s7ydtfd.js:23413-23509 placement
 /**
  * 合并定间隔数值与分箱点
  */
-var datadogSeriesPoints = (e) =>
-  datadogPointlist(e, [
-    ...readFixedIntervalValues(e),
-    ...selectPath(e, "binned.[]").map((t) => [selectPath(t, "start_time")[0], selectPath(t, "avg")[0]]),
+var datadogSeriesPoints = (series) =>
+  datadogPointlist(series, [
+    ...readFixedIntervalValues(series),
+    ...selectPath(series, "binned.[]").map((bin) => [
+      selectPath(bin, "start_time")[0],
+      selectPath(bin, "avg")[0],
+    ]),
   ]);
 //@ chunk-3s7ydtfd.js:23509-23598 placement
 /**
  * 把 Datadog 指标数组展开成 series
  */
-function expandDatadogSeries(e) {
-  return selectPath(e, "[].expression").length > 0
+function expandDatadogSeries(value) {
+  return selectPath(value, "[].expression").length > 0
     ? {
-        series: selectPath(e, "[]").map((o) => datadogSeriesPoints(o)),
+        series: selectPath(value, "[]").map((series) => datadogSeriesPoints(series)),
       }
-    : e;
+    : value;
 }
 //@ chunk-3s7ydtfd.js:23598-23689 placement
 /**
@@ -117,13 +121,13 @@ function cellKind(name) {
 /**
  * 列信息：按单元格类型分组，判断是否只有一种类型。
  */
-function describeColumn(name, t) {
-  let o = groupIndexBy(t, cellKind);
-  let filtered = [...o.keys()].filter((key) => key !== "empty");
+function describeColumn(name, cells) {
+  let byKind = groupIndexBy(cells, cellKind);
+  let filtered = [...byKind.keys()].filter((key) => key !== "empty");
   return {
     name,
-    cells: t,
-    cellsByKind: o,
+    cells,
+    cellsByKind: byKind,
     soleKind: filtered.length === 1 ? filtered[0] : undefined,
   };
 }
@@ -132,32 +136,33 @@ function describeColumn(name, t) {
  * 按列推断角色
  */
 var describeTableColumns = (table) =>
-  table.columns.map((column, o) =>
+  table.columns.map((column, index) =>
     describeColumn(
       column,
-      table.rows.map((r) => r[o] ?? null),
+      table.rows.map((row) => row[index] ?? null),
     ),
   );
 //@ chunk-3s7ydtfd.js:23900-24022 placement
 /**
  * 不区分大小写匹配唯一的列名，否则原样返回。
  */
-function matchColumnName(e, t) {
-  let [o, ...r] = e.columns.filter((column) => column.toLowerCase() === t.toLowerCase());
-  return o !== undefined && r.length === 0 ? o : t;
+function matchColumnName(table, name) {
+  let [match, ...others] = table.columns.filter((column) => column.toLowerCase() === name.toLowerCase());
+  return match !== undefined && others.length === 0 ? match : name;
 }
 //@ chunk-3s7ydtfd.js:24022-24126 placement
 /**
  * 表头像文本行（不是数据）。
  */
-var hasTextHeader = (e) =>
-  e.every((t) => cellKind(t.name) === "text") ||
-  e.some((t) => t.name !== "" && !t.cellsByKind.has(cellKind(t.name)));
+var hasTextHeader = (columns) =>
+  columns.every((column) => cellKind(column.name) === "text") ||
+  columns.some((column) => column.name !== "" && !column.cellsByKind.has(cellKind(column.name)));
 //@ chunk-3s7ydtfd.js:24126-24201 placement
 /**
  * 全是时间且可解析
  */
-var isAllTimeColumn = (e) => e.soleKind === "text" && (e.cellsByKind.get("text") ?? []).every(isTimeCell);
+var isAllTimeColumn = (column) =>
+  column.soleKind === "text" && (column.cellsByKind.get("text") ?? []).every(isTimeCell);
 //@ chunk-3s7ydtfd.js:24201-24215 placement
 /**
  * 262144
@@ -177,7 +182,7 @@ var UNNAMED_COLUMN_LIMIT = 3;
 /**
  * 行数或总格数超限
  */
-var isTableTooLarge = (e, t) => e > MAX_TABLE_ROWS_READ || e * t > MAX_TABLE_CELLS;
+var isTableTooLarge = (rows, columns) => rows > MAX_TABLE_ROWS_READ || rows * columns > MAX_TABLE_CELLS;
 //@ chunk-3s7ydtfd.js:24262-24340 placement
 /**
  * 图形式到渲染种类
@@ -193,26 +198,26 @@ var FORM_TO_RENDER_KIND = {
 /**
  * 列名匹配器
  */
-var isColumnName = (e) => (t) => matchColumnName(e, t);
+var isColumnName = (table) => (name) => matchColumnName(table, name);
 //@ chunk-3s7ydtfd.js:24365-24401 placement
 /**
  * 拼出 {form,x,y,...}
  */
-var chartRequest = (form, t, o) => ({
+var chartRequest = (form, x, rest) => ({
   form,
-  x: t,
-  ...o,
+  x,
+  ...rest,
 });
 //@ chunk-3s7ydtfd.js:24401-24434 placement
 /**
  * 含数字
  */
-var hasDigit = (e) => /\d/.test(String(e));
+var hasDigit = (value) => /\d/.test(String(value));
 //@ chunk-3s7ydtfd.js:24434-24457 placement
 /**
  * 不等于给定值
  */
-var isDifferentFrom = (e) => (t) => t !== e;
+var isDifferentFrom = (value) => (candidate) => candidate !== value;
 //@ chunk-3s7ydtfd.js:24457-24549 placement
 /**
  * 按指标格式读入的说明
@@ -223,21 +228,21 @@ var METRICS_COLUMNS_NOTE =
 /**
  * 缺列错误
  */
-var noSuchColumnError = (e, t) => ({
+var noSuchColumnError = (names, request) => ({
   code: "no_such_column",
-  why: `it has no column ${e.join(", ")}` + (t.roles ? METRICS_COLUMNS_NOTE : ""),
+  why: `it has no column ${names.join(", ")}` + (request.roles ? METRICS_COLUMNS_NOTE : ""),
 });
 //@ chunk-3s7ydtfd.js:24644-24723 placement
 /**
  * 单列且值有重复
  */
-var isSingleColumnSeries = (e, t) =>
-  e.length === 0 || (e.length === 1 && new Set(t.cells).size < t.cells.length);
+var isSingleColumnSeries = (names, column) =>
+  names.length === 0 || (names.length === 1 && new Set(column.cells).size < column.cells.length);
 //@ chunk-3s7ydtfd.js:24723-24773 placement
 /**
  * bars 要单列，其他至少一列
  */
-var hasEnoughYColumns = (e, t) => (t === "bars" ? e.length === 1 : e.length >= 1);
+var hasEnoughYColumns = (names, form) => (form === "bars" ? names.length === 1 : names.length >= 1);
 //@ chunk-3s7ydtfd.js:24773-24840 placement
 /**
  * 单元格时间戳
@@ -250,37 +255,39 @@ function timeMsOfCell(cell = null) {
 /**
  * 任一格时间不同
  */
-var differsByTime = (e, t) => e.cells.some((cell, r) => timeMsOfCell(cell) !== timeMsOfCell(t.cells[r]));
+var differsByTime = (column, otherColumn) =>
+  column.cells.some((cell, index) => timeMsOfCell(cell) !== timeMsOfCell(otherColumn.cells[index]));
 //@ chunk-3s7ydtfd.js:24898-24917 placement
 /**
  * 列名
  */
-var columnName = (e) => e.name;
+var columnName = (column) => column.name;
 //@ chunk-3s7ydtfd.js:24917-25428 placement
-function inferColumnRoles(e, t) {
-  let filtered = e.filter((d) => d.name !== "");
-  let filtered_2 = filtered.filter((d) => d.soleKind === "text");
-  let filtered_3 = filtered.filter((d) => d.soleKind === "number");
+function inferColumnRoles(columns, form) {
+  let filtered = columns.filter((column) => column.name !== "");
+  let filtered_2 = filtered.filter((column) => column.soleKind === "text");
+  let filtered_3 = filtered.filter((column) => column.soleKind === "number");
   let filtered_4 = filtered.filter(
-    (d) =>
-      d.cellsByKind.get("time")?.length === d.cells.length && new Set(d.cells).size >= UNNAMED_COLUMN_LIMIT,
+    (column) =>
+      column.cellsByKind.get("time")?.length === column.cells.length &&
+      new Set(column.cells).size >= UNNAMED_COLUMN_LIMIT,
   );
-  let m = filtered_4.length > 0;
-  let [n, ...a] = m ? filtered_4 : filtered_2;
-  if (!(n !== undefined && a.length === 0)) return;
-  let i = m ? filtered_3.filter((d) => differsByTime(d, n)) : filtered_3;
-  let filtered_5 = filtered_2.filter((d) => d !== n);
-  let l = t ?? (m ? "line" : "bars");
-  return 1 + filtered_5.length + filtered_3.length === filtered.length &&
-    isSingleColumnSeries(filtered_5, n) &&
-    (m || l === "bars") &&
-    (t !== undefined || !isAllTimeColumn(n)) &&
-    hasEnoughYColumns(i, l)
+  let isTimeBased = filtered_4.length > 0;
+  let [xColumn, ...otherCandidates] = isTimeBased ? filtered_4 : filtered_2;
+  if (!(xColumn !== undefined && otherCandidates.length === 0)) return;
+  let yColumns = isTimeBased ? filtered_3.filter((column) => differsByTime(column, xColumn)) : filtered_3;
+  let names = filtered_2.filter((column) => column !== xColumn);
+  let resolvedForm = form ?? (isTimeBased ? "line" : "bars");
+  return 1 + names.length + filtered_3.length === filtered.length &&
+    isSingleColumnSeries(names, xColumn) &&
+    (isTimeBased || resolvedForm === "bars") &&
+    (form !== undefined || !isAllTimeColumn(xColumn)) &&
+    hasEnoughYColumns(yColumns, resolvedForm)
     ? {
-        form: l,
-        x: n.name,
-        y: i.map(columnName),
-        by: filtered_5.map(columnName),
+        form: resolvedForm,
+        x: xColumn.name,
+        y: yColumns.map(columnName),
+        by: names.map(columnName),
       }
     : undefined;
 }
@@ -288,56 +295,62 @@ function inferColumnRoles(e, t) {
 /**
  * 文本列且非全时间
  */
-function isTextBarsColumn(e, t) {
-  let found = e.find((r) => r.name === t);
-  return found?.soleKind === "text" && !isAllTimeColumn(found);
+function isTextBarsColumn(columns, name) {
+  let column = columns.find((column) => column.name === name);
+  return column?.soleKind === "text" && !isAllTimeColumn(column);
 }
 //@ chunk-3s7ydtfd.js:25511-25547 placement
 /**
  * 文本列用 bars，否则 line
  */
-var defaultFormForColumn = (e, t) => (isTextBarsColumn(e, t) ? "bars" : "line");
+var defaultFormForColumn = (columns, xName) => (isTextBarsColumn(columns, xName) ? "bars" : "line");
 //@ chunk-3s7ydtfd.js:25547-27038 placement
 /**
  * 根据请求（form/x/y）从表中取出序列，报告缺列、无行、重名等问题。
  */
-function readChartData(e, t) {
-  let o = t.form === undefined ? undefined : FORM_TO_RENDER_KIND[t.form];
-  let roles = o === "bars" ? undefined : e.roles;
-  let s = roles ? [] : describeTableColumns(e);
-  let p = roles ?? inferColumnRoles(s, o);
-  let m = t.x === undefined ? p?.x : matchColumnName(e, t.x);
-  let n = isColumnName(e);
-  let filtered = uniqueValues(t.y?.map(n) ?? p?.y ?? []).filter(isDifferentFrom(m));
-  let filtered_2 = (t.by?.map(n) ?? (t.combine === undefined ? p?.by : undefined) ?? []).filter(
-    isDifferentFrom(m),
+function readChartData(table, request) {
+  let renderKind = request.form === undefined ? undefined : FORM_TO_RENDER_KIND[request.form];
+  let roles = renderKind === "bars" ? undefined : table.roles;
+  let describedColumns = roles ? [] : describeTableColumns(table);
+  let inferredRoles = roles ?? inferColumnRoles(describedColumns, renderKind);
+  let xName = request.x === undefined ? inferredRoles?.x : matchColumnName(table, request.x);
+  let asColumnName = isColumnName(table);
+  let filtered = uniqueValues(request.y?.map(asColumnName) ?? inferredRoles?.y ?? []).filter(
+    isDifferentFrom(xName),
   );
-  if (e.rows.length === 0)
+  let filtered_2 = (
+    request.by?.map(asColumnName) ??
+    (request.combine === undefined ? inferredRoles?.by : undefined) ??
+    []
+  ).filter(isDifferentFrom(xName));
+  if (table.rows.length === 0)
     return {
       code: "no_rows",
       why: "it has no rows",
     };
-  if (new Set(e.columns).size < e.columns.length)
+  if (new Set(table.columns).size < table.columns.length)
     return {
       code: "names_repeat",
       why: "two of its columns share a name, so a name does not pick one. Pass the rows as data, each column under a name of its own",
     };
-  if (m === undefined) {
-    let found = s.find(isAllTimeColumn);
+  if (xName === undefined) {
+    let found = describedColumns.find(isAllTimeColumn);
     if (found)
       return {
         code: "dates_unread",
         why: `${found.name} looks like dates, in a spelling that is not read (${found.cells[0]}). ${TIME_FORMATS_HINT}`,
       };
-    let filtered_2 = s.filter((w) => w.soleKind === "time");
-    let c = filtered_2[0];
-    let size = new Set(c?.cells).size;
-    if (c && filtered_2.length === 1 && size < UNNAMED_COLUMN_LIMIT)
+    let filtered_2 = describedColumns.filter((column) => column.soleKind === "time");
+    let onlyTimeColumn = filtered_2[0];
+    let size = new Set(onlyTimeColumn?.cells).size;
+    if (onlyTimeColumn && filtered_2.length === 1 && size < UNNAMED_COLUMN_LIMIT)
       return {
         code: "few_times",
-        why: `${c.name} holds ${formatCount(size, "time")}, too few to find the time axis unasked (that takes ${UNNAMED_COLUMN_LIMIT}). Name x and y`,
+        why: `${onlyTimeColumn.name} holds ${formatCount(size, "time")}, too few to find the time axis unasked (that takes ${UNNAMED_COLUMN_LIMIT}). Name x and y`,
       };
-    if (!((e.listColumns ?? []).length > 0 || s.some((w) => w.cells.some(hasDigit))))
+    if (!(
+      (table.listColumns ?? []).length > 0 || describedColumns.some((column) => column.cells.some(hasDigit))
+    ))
       return {
         code: "no_numbers",
         why: "no column holds a number, so there is nothing to draw. Rows are not counted: pass the counts as data",
@@ -350,194 +363,215 @@ function readChartData(e, t) {
   if (filtered.length === 0)
     return {
       code: "no_y",
-      why: `say which columns are y, the values to draw. Rows are not counted: for how many rows share a ${m}, pass the counts as data`,
+      why: `say which columns are y, the values to draw. Rows are not counted: for how many rows share a ${xName}, pass the counts as data`,
     };
-  let filtered_3 = [m, ...filtered, ...filtered_2].filter((u) => !e.columns.includes(u));
-  return filtered_3.length > 0
-    ? noSuchColumnError(filtered_3, e)
-    : chartRequest(o ?? p?.form ?? defaultFormForColumn(s, m), m, {
-        y: filtered,
-        by: filtered_2,
-      });
+  let names = [xName, ...filtered, ...filtered_2].filter((name) => !table.columns.includes(name));
+  return names.length > 0
+    ? noSuchColumnError(names, table)
+    : chartRequest(
+        renderKind ?? inferredRoles?.form ?? defaultFormForColumn(describedColumns, xName),
+        xName,
+        {
+          y: filtered,
+          by: filtered_2,
+        },
+      );
 }
 //@ chunk-3s7ydtfd.js:27038-27067 placement
 /**
  * 表来源（path 或 source）
  */
-var tableSource = (e) => e.path ?? e.source;
+var tableSource = (table) => table.path ?? table.source;
 //@ chunk-3s7ydtfd.js:27067-27297 placement
-var TABLE_SHAPES = (e, t, o) => ({
-  source: e.name,
-  y: uniqueValues(t.flatMap((r) => r.y)),
-  points: o.flatMap((r) =>
-    rangeIndices(r.pointCount).map((s) =>
-      Object.fromEntries([...r.labels, ...r.cellsByKey.map(([p, m]) => [p, m[s]])]),
+var TABLE_SHAPES = (series, points, shapes) => ({
+  source: series.name,
+  y: uniqueValues(points.flatMap((point) => point.y)),
+  points: shapes.flatMap((shape) =>
+    rangeIndices(shape.pointCount).map((index) =>
+      Object.fromEntries([...shape.labels, ...shape.cellsByKey.map(([key, cells]) => [key, cells[index]])]),
     ),
   ),
   isSeries: true,
-  isReadAtInstants: e.isReadAtInstants,
+  isReadAtInstants: series.isReadAtInstants,
 });
 //@ chunk-3s7ydtfd.js:27297-27437 placement
 /**
  * 按指标格式生成表（行过多时不保留）。
  */
-function finishMetricsTable(e, t) {
-  let o = isTableTooLarge(
-    Math.max(0, ...t.map((r) => r.labels.length + r.cellsByKey.length)),
-    stableSum(t.map((r) => r.pointCount)),
+function finishMetricsTable(series, shapes) {
+  let isTooLarge = isTableTooLarge(
+    Math.max(0, ...shapes.map((shape) => shape.labels.length + shape.cellsByKey.length)),
+    stableSum(shapes.map((shape) => shape.pointCount)),
   );
-  return TABLE_SHAPES(e, t, o ? [] : t);
+  return TABLE_SHAPES(series, shapes, isTooLarge ? [] : shapes);
 }
 //@ chunk-3s7ydtfd.js:27437-27684 placement
-var GRAFANA_FIELDS = (e) =>
-  selectPath(e, "schema.fields.[]").map((t, o) => ({
-    name: String(selectPath(t, "name")[0]),
-    displayName: selectPath(t, "config.displayNameFromDS")[0],
-    type: selectPath(t, "type")[0],
-    labels: selectPath(t, "labels")[0],
-    unit: cleanCellText(String(selectPath(t, "config.unit")[0] ?? "")),
-    cells: selectPath(e, `data.values.${o}.[]`),
+var GRAFANA_FIELDS = (response) =>
+  selectPath(response, "schema.fields.[]").map((field, index) => ({
+    name: String(selectPath(field, "name")[0]),
+    displayName: selectPath(field, "config.displayNameFromDS")[0],
+    type: selectPath(field, "type")[0],
+    labels: selectPath(field, "labels")[0],
+    unit: cleanCellText(String(selectPath(field, "config.unit")[0] ?? "")),
+    cells: selectPath(response, `data.values.${index}.[]`),
   }));
 //@ chunk-3s7ydtfd.js:27684-27769 placement
 /**
  * 数值加单位后缀
  */
-function withUnitLabel(e, t) {
-  return t !== "" && parseNumberWithUnit(`1 ${t}`).kind === "number" && e !== null ? `${e} ${t}` : e;
+function withUnitLabel(label, unit) {
+  return unit !== "" && parseNumberWithUnit(`1 ${unit}`).kind === "number" && label !== null
+    ? `${label} ${unit}`
+    : label;
 }
 //@ chunk-3s7ydtfd.js:27769-27965 placement
 /**
  * 给 Grafana 字段起显示名并按单位换算单元格。
  */
-var renameGrafanaField = (e, t, o) => (r) => {
-  let s = r.displayName ?? selectPath(e, "schema.name")[0];
-  let m = o && Boolean(s) ? String(s) : `${r.name} ${selectPath(e, "schema.refId")[0]}`;
+var renameGrafanaField = (response, useAlias, isSingleField) => (field) => {
+  let alias = field.displayName ?? selectPath(response, "schema.name")[0];
+  let name =
+    isSingleField && Boolean(alias)
+      ? String(alias)
+      : `${field.name} ${selectPath(response, "schema.refId")[0]}`;
   return {
-    ...r,
-    name: t ? r.name : m,
-    cells: r.cells.map((cell) => withUnitLabel(cell, r.unit)),
+    ...field,
+    name: useAlias ? field.name : name,
+    cells: field.cells.map((cell) => withUnitLabel(cell, field.unit)),
   };
 };
 //@ chunk-3s7ydtfd.js:27965-28338 placement
-function inferCellType(e, t, o) {
-  let r = GRAFANA_FIELDS(e);
-  let filtered = r.filter((n) => n.type === "number");
-  let filtered_2 = r.filter((n) => n.type === "string");
-  let cells = r.find((n) => n.type === "time")?.cells ?? [];
+function inferCellType(response, preferName, useAlias) {
+  let fields = GRAFANA_FIELDS(response);
+  let filtered = fields.filter((field) => field.type === "number");
+  let filtered_2 = fields.filter((field) => field.type === "string");
+  let cells = fields.find((field) => field.type === "time")?.cells ?? [];
   return [
-    ...groupIndexBy(filtered.map(renameGrafanaField(e, o, t && filtered.length === 1)), (n) =>
-      JSON.stringify(n.labels),
+    ...groupIndexBy(
+      filtered.map(renameGrafanaField(response, useAlias, preferName && filtered.length === 1)),
+      (field) => JSON.stringify(field.labels),
     ).values(),
-  ].map((n) => ({
-    labels: labelEntries(n[0], "labels"),
-    y: n.map((a) => a.name),
+  ].map((group) => ({
+    labels: labelEntries(group[0], "labels"),
+    y: group.map((field) => field.name),
     pointCount: cells.length,
-    cellsByKey: [...[...filtered_2, ...n].map((a) => [a.name, a.cells]), ["time", cells]],
+    cellsByKey: [...[...filtered_2, ...group].map((field) => [field.name, field.cells]), ["time", cells]],
   }));
 }
 //@ chunk-3s7ydtfd.js:28338-28700 placement
-function readGrafanaFrames(e) {
-  let path = selectPath(e, "results.*");
-  let mapped = (path.length > 0 ? path : selectPath(e, "data")).map((r) => selectPath(r, "frames.[]"));
+function readGrafanaFrames(response) {
+  let path = selectPath(response, "results.*");
+  let mapped = (path.length > 0 ? path : selectPath(response, "data")).map((result) =>
+    selectPath(result, "frames.[]"),
+  );
   return {
     ...finishMetricsTable(
       {
         name: GRAFANA,
         isReadAtInstants: mapped
           .flat()
-          .every((r) => selectPath(r, "schema.meta.custom.resultType")[0] === "matrix"),
+          .every((frame) => selectPath(frame, "schema.meta.custom.resultType")[0] === "matrix"),
       },
-      mapped.flatMap((r) => r.flatMap((s) => inferCellType(s, r.length === 1, mapped.length === 1))),
+      mapped.flatMap((frames) =>
+        frames.flatMap((frame) => inferCellType(frame, frames.length === 1, mapped.length === 1)),
+      ),
     ),
     isSeries: mapped
       .flat()
-      .every((r) => String(selectPath(r, "schema.meta.type")[0]).startsWith("timeseries")),
+      .every((frame) => String(selectPath(frame, "schema.meta.type")[0]).startsWith("timeseries")),
   };
 }
 //@ chunk-3s7ydtfd.js:28700-29052 placement
-function readInfluxSeries(e) {
-  let [t] = selectPath(e, "scope");
-  if (!(isPlainObject(e) && typeof t === "string")) return e;
-  let [r, s, p, m] = METRIC_SELECTOR_RE.exec(String(e.metric)) ?? [];
-  let n = r !== undefined;
-  let a = new Set(n ? t.split(",") : selectPath(e, "tag_set.[]").map(String));
-  a.delete(WILDCARD);
+function readInfluxSeries(value) {
+  let [scope] = selectPath(value, "scope");
+  if (!(isPlainObject(value) && typeof scope === "string")) return value;
+  let [wholeMatch, metric, tags, functions] = METRIC_SELECTOR_RE.exec(String(value.metric)) ?? [];
+  let isMetricSelector = wholeMatch !== undefined;
+  let keptTags = new Set(isMetricSelector ? scope.split(",") : selectPath(value, "tag_set.[]").map(String));
+  keptTags.delete(WILDCARD);
   return {
-    ...e,
-    metric: n ? s : e.metric,
+    ...value,
+    metric: isMetricSelector ? metric : value.metric,
     scope:
-      (n ? (p ?? "") : t)
+      (isMetricSelector ? (tags ?? "") : scope)
         .split(",")
-        .filter((f) => !a.has(f))
+        .filter((tag) => !keptTags.has(tag))
         .join(",") || WILDCARD,
-    group: [...a].join(",") || undefined,
-    functions: m || undefined,
+    group: [...keptTags].join(",") || undefined,
+    functions: functions || undefined,
   };
 }
 //@ chunk-3s7ydtfd.js:29052-29328 placement
-function readDatadogSeries(e) {
-  if (!(isPlainObject(e) && selectPath(e, "series.[].pointlist").length > 0)) return e;
-  let mapped = selectPath(e, "series.[]").map(readInfluxSeries);
-  let mapped_2 = mapped.map((m) =>
-    isPlainObject(m)
+function readDatadogSeries(response) {
+  if (!(isPlainObject(response) && selectPath(response, "series.[].pointlist").length > 0)) return response;
+  let mapped = selectPath(response, "series.[]").map(readInfluxSeries);
+  let mapped_2 = mapped.map((series) =>
+    isPlainObject(series)
       ? {
-          ...m,
-          scope: saveTag(m.scope),
+          ...series,
+          scope: saveTag(series.scope),
         }
-      : m,
+      : series,
   );
   let path = selectPath(mapped_2, "[].scope");
-  let p =
-    path.every((m) => m === WILDCARD || isPlainObject(m)) &&
-    uniqueValues(path.flatMap((m) => (isPlainObject(m) ? Object.keys(m) : []))).length <= MAX_SERIES_PAIRS;
+  let canSaveTags =
+    path.every((scope) => scope === WILDCARD || isPlainObject(scope)) &&
+    uniqueValues(path.flatMap((scope) => (isPlainObject(scope) ? Object.keys(scope) : []))).length <=
+      MAX_SERIES_PAIRS;
   return {
-    ...e,
-    series: p ? mapped_2 : mapped,
+    ...response,
+    series: canSaveTags ? mapped_2 : mapped,
   };
 }
 //@ chunk-3s7ydtfd.js:29328-29353 placement
 /**
  * 按字段单位换算
  */
-var fieldUnitConverter = (e) => (t) => withUnitLabel(t, e);
+var fieldUnitConverter = (unit) => (cell) => withUnitLabel(cell, unit);
 //@ chunk-3s7ydtfd.js:29353-29425 placement
 /**
  * 取字段单位标签
  */
-function fieldUnitOf(e, t) {
-  let unit = t.unit;
-  return unit !== undefined ? cleanCellText(selectPath(e, unit).join("/")) : "";
+function fieldUnitOf(response, field) {
+  let unit = field.unit;
+  return unit !== undefined ? cleanCellText(selectPath(response, unit).join("/")) : "";
 }
 //@ chunk-3s7ydtfd.js:29425-29551 placement
 /**
  * 单个指标系列转为 time/value 表。
  */
-var metricsSeriesTable = (e, t, o) => ({
-  labels: t.labels.flatMap((label) => labelEntries(e, label)),
+var metricsSeriesTable = (series, shape, values) => ({
+  labels: shape.labels.flatMap((label) => labelEntries(series, label)),
   y: [VALUE],
-  pointCount: o.length,
+  pointCount: values.length,
   cellsByKey: [
-    ["time", selectPath(e, t.time)],
-    [VALUE, o],
+    ["time", selectPath(series, shape.time)],
+    [VALUE, values],
   ],
 });
 //@ chunk-3s7ydtfd.js:29551-29627 placement
 /**
  * 指标字段转表
  */
-var metricsFieldTables = (e, t) =>
-  selectPath(e, t.series).map((o) =>
-    metricsSeriesTable(o, t, selectPath(o, t.value).map(fieldUnitConverter(fieldUnitOf(o, t)))),
+var metricsFieldTables = (response, format) =>
+  selectPath(response, format.series).map((series) =>
+    metricsSeriesTable(
+      series,
+      format,
+      selectPath(series, format.value).map(fieldUnitConverter(fieldUnitOf(series, format))),
+    ),
   );
 //@ chunk-3s7ydtfd.js:29627-29769 placement
 /**
  * 按标签组合统计不同系列数。
  */
-var countDistinctSeries = (e, t) =>
+var countDistinctSeries = (response, format) =>
   uniqueValues(
-    selectPath(e, t.series).map((o) =>
+    selectPath(response, format.series).map((series) =>
       JSON.stringify(
-        Object.entries(Object.fromEntries(t.labels.flatMap((label) => labelEntries(o, label)))).toSorted(),
+        Object.entries(
+          Object.fromEntries(format.labels.flatMap((label) => labelEntries(series, label))),
+        ).toSorted(),
       ),
     ),
   ).length;
@@ -545,17 +579,21 @@ var countDistinctSeries = (e, t) =>
 /**
  * 依次尝试 Grafana、Datadog 与其他指标格式读出表。
  */
-function readMetricsTable(e) {
-  let grafanaFrames = readGrafanaFrames(e);
+function readMetricsTable(response) {
+  let grafanaFrames = readGrafanaFrames(response);
   if (grafanaFrames.points.length > 0) return grafanaFrames;
-  let r = expandDatadogSeries(e);
-  let datadogSeries = readDatadogSeries(r);
-  let p = datadogSeries === r ? [r] : [datadogSeries, r];
-  for (let m of METRICS_FORMATS)
-    for (let n of p) {
-      let a = metricsFieldTables(n, m);
-      let f = finishMetricsTable(m, hasUniformPointCounts(a) ? a : []);
-      if (f.points.length > 0 && countDistinctSeries(n, m) >= countDistinctSeries(r, m)) return f;
+  let expanded = expandDatadogSeries(response);
+  let datadogSeries = readDatadogSeries(expanded);
+  let candidates = datadogSeries === expanded ? [expanded] : [datadogSeries, expanded];
+  for (let format of METRICS_FORMATS)
+    for (let candidate of candidates) {
+      let tables = metricsFieldTables(candidate, format);
+      let table = finishMetricsTable(format, hasUniformPointCounts(tables) ? tables : []);
+      if (
+        table.points.length > 0 &&
+        countDistinctSeries(candidate, format) >= countDistinctSeries(expanded, format)
+      )
+        return table;
     }
   return;
 }
@@ -608,15 +646,18 @@ var XML_ROWS_LABEL = "XML rows";
 /**
  * 全部可识别的表来源名
  */
-var TABLE_SOURCE_LABELS = [
-  ...DELIMITED_FORMATS.map((e) => e.source),
-  ALIGNED_COLUMNS_LABEL,
-  COLUMNS_ROWS_LABEL,
-  JSON_LABEL,
-  JSON_LINES_LABEL,
-  XML_ROWS_LABEL,
-  ...METRICS_FORMAT_NAMES,
-];
+var TABLE_SOURCE_LABELS; // deferred: uses DELIMITED_FORMATS (./parseValues.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3s7ydtfd.js:30166", () => {
+  TABLE_SOURCE_LABELS = [
+    ...DELIMITED_FORMATS.map((format) => format.source),
+    ALIGNED_COLUMNS_LABEL,
+    COLUMNS_ROWS_LABEL,
+    JSON_LABEL,
+    JSON_LINES_LABEL,
+    XML_ROWS_LABEL,
+    ...METRICS_FORMAT_NAMES,
+  ];
+});
 //@ chunk-3s7ydtfd.js:30221-30230 placement
 /**
  * 2
@@ -722,20 +763,20 @@ var ROWS_COUNTER_RE = /[\u2502|] *[\d,]+ rows \([\d,]+ shown\).*/;
 /**
  * 无表头时用 “column N” 作为列名的表。
  */
-var unnamedColumnsTable = (e, t) => ({
-  source: `${t}${NO_HEADER_LABEL}`,
+var unnamedColumnsTable = (rows, source) => ({
+  source: `${source}${NO_HEADER_LABEL}`,
   hasMadeUpNames: true,
   isCut: false,
-  columns: [...(e[0] ?? []).keys()].map((key) => `column ${key + 1}`),
-  rows: e,
+  columns: [...(rows[0] ?? []).keys()].map((key) => `column ${key + 1}`),
+  rows,
 });
 //@ chunk-3s7ydtfd.js:31059-31135 placement
 /**
  * 有表头则用，否则造 column N
  */
-function tableWithOrWithoutHeader(e, t) {
-  let table = makeTable(t, e[0] ?? [], e.slice(1));
-  return hasTextHeader(describeTableColumns(table)) ? table : unnamedColumnsTable(e, t);
+function tableWithOrWithoutHeader(rows, source) {
+  let table = makeTable(source, rows[0] ?? [], rows.slice(1));
+  return hasTextHeader(describeTableColumns(table)) ? table : unnamedColumnsTable(rows, source);
 }
 //@ chunk-3s7ydtfd.js:31135-31216 placement
 /**
@@ -752,64 +793,70 @@ var CUT_TEXT_TABLE = () => ({
 /**
  * 同键的普通对象数组
  */
-var isUniformObjectArray = (e) =>
-  e.length > 1 && e.every(isPlainObject) && uniqueValues(e.map((t) => Object.keys(t).join())).length === 1;
+var isUniformObjectArray = (values) =>
+  values.length > 1 &&
+  values.every(isPlainObject) &&
+  uniqueValues(values.map((value) => Object.keys(value).join())).length === 1;
 //@ chunk-3s7ydtfd.js:31300-31411 placement
 /**
  * 截取第一行 JSON 开始到最后一行 JSON 结束的行。
  */
 function trimToJsonBlock(lines) {
-  let index = lines.findIndex((r) => JSON_OPEN_ONLY_RE.test(r));
-  return index >= 0 ? lines.slice(index, lines.findLastIndex((r) => JSON_CLOSE_ONLY_RE.test(r)) + 1) : [];
+  let index = lines.findIndex((line) => JSON_OPEN_ONLY_RE.test(line));
+  return index >= 0
+    ? lines.slice(index, lines.findLastIndex((line) => JSON_CLOSE_ONLY_RE.test(line)) + 1)
+    : [];
 }
 //@ chunk-3s7ydtfd.js:31411-31546 placement
 /**
  * 值在指定深度下是否还有子值。
  */
-function hasNestedValues(e, t) {
-  let o = [e];
-  for (let r = 0; r <= t; r += 1)
-    o = o.flatMap((s) => (typeof s === "object" && s !== null ? Object.values(s) : []));
-  return o.length > 0;
+function hasNestedValues(value, maxDepth) {
+  let level = [value];
+  for (let depth = 0; depth <= maxDepth; depth += 1)
+    level = level.flatMap((value) =>
+      typeof value === "object" && value !== null ? Object.values(value) : [],
+    );
+  return level.length > 0;
 }
 //@ chunk-3s7ydtfd.js:31546-31624 placement
 /**
  * 解析 JSON，嵌套过深则放弃
  */
-function tryParseJson(e) {
+function tryParseJson(text) {
   try {
-    let parsed = JSON.parse(e);
+    let parsed = JSON.parse(text);
     return hasNestedValues(parsed, MAX_NESTED_DEPTH) ? undefined : parsed;
   } catch {
     return;
   }
 }
 //@ chunk-3s7ydtfd.js:31624-31940 placement
-function flattenObjectRows(e) {
-  let t = tryParseJson(e);
-  if (t !== undefined)
+function flattenObjectRows(text) {
+  let parsed = tryParseJson(text);
+  if (parsed !== undefined)
     return {
-      values: [t],
+      values: [parsed],
       unparsedLines: 0,
     };
-  let lines = e.split(`
+  let lines = text.split(`
 `);
-  let r = tryParseJson(
+  let blockParsed = tryParseJson(
     trimToJsonBlock(lines).join(`
 `),
   );
-  if (r !== undefined)
+  if (blockParsed !== undefined)
     return {
-      values: [r],
+      values: [blockParsed],
       unparsedLines: 0,
     };
   let filtered = lines.filter((line) => JSON_OPEN_WITH_MORE_RE.test(line));
-  let mapped = filtered.map((m) => tryParseJson(m));
+  let mapped = filtered.map((line) => tryParseJson(line));
   return {
-    values: mapped.filter((m) => m !== undefined),
+    values: mapped.filter((value) => value !== undefined),
     unparsedLines: countWhere(
       returnValue(filtered, mapped),
-      ([m, n]) => n === undefined && JSON_OBJECT_LINE_RE.test(m),
+      ([line, value]) => value === undefined && JSON_OBJECT_LINE_RE.test(line),
     ),
   };
 }
@@ -817,7 +864,8 @@ function flattenObjectRows(e) {
 /**
  * 定长且无对象的数组
  */
-var isFlatTupleOf = (e) => (t) => Array.isArray(t) && t.length === e && !t.some(isPlainObject);
+var isFlatTupleOf = (length) => (value) =>
+  Array.isArray(value) && value.length === length && !value.some(isPlainObject);
 //@ chunk-3s7ydtfd.js:32000-32081 placement
 /**
  * 构造 JSON 来源的表
@@ -834,8 +882,8 @@ var jsonTable = (path, columns, rows) => ({
 /**
  * 按列名取单元格
  */
-var rowCellsForColumns = (e) => (t) =>
-  (isPlainObject(t) ? e.map((r) => t[r]) : selectPath(t, "[]")).map(toCellValue);
+var rowCellsForColumns = (columns) => (value) =>
+  (isPlainObject(value) ? columns.map((column) => value[column]) : selectPath(value, "[]")).map(toCellValue);
 //@ chunk-3s7ydtfd.js:32140-32184 placement
 /**
  * 单格描述
@@ -858,11 +906,11 @@ var emptyListCell = (column) => ({
 /**
  * 把对象展平为 “a.b” 列（数组中有对象时作为列表列）。
  */
-var flattenObject = (e, t) =>
-  Object.entries(e).flatMap(([key, value]) => {
-    let column = `${t}${key}`;
+var flattenObject = (value, prefix) =>
+  Object.entries(value).flatMap(([key, value]) => {
+    let column = `${prefix}${key}`;
     if (typeof value !== "object" || value === null) return [singleCell(column, toCellValue(value))];
-    return Array.isArray(value) && value.some((m) => typeof m === "object" && m !== null)
+    return Array.isArray(value) && value.some((item) => typeof item === "object" && item !== null)
       ? [emptyListCell(column)]
       : flattenObject(value, `${column}.`);
   });
@@ -870,25 +918,27 @@ var flattenObject = (e, t) =>
 /**
  * 对象数组展平为表（列过多时放弃）。
  */
-function readObjectRows(e, source, path) {
-  let r = [];
-  let s = 0;
-  for (let i of e) {
-    let x = flattenObject(i, "");
-    r.push(x);
-    s += x.length;
-    if (isTableTooLarge(1, s)) return [];
+function readObjectRows(values, source, path) {
+  let entries = [];
+  let cellCount = 0;
+  for (let value of values) {
+    let cells = flattenObject(value, "");
+    entries.push(cells);
+    cellCount += cells.length;
+    if (isTableTooLarge(1, cellCount)) return [];
   }
-  let p = r.flat();
-  let m = uniqueValues(p.map((i) => i.column));
-  if (isTableTooLarge(m.length, e.length)) return [];
-  let rows = r.map((i) => mapKeysToValues(m, new Map(i.map((x) => [x.column, x.cell]))));
-  let listColumns = uniqueValues(p.filter((i) => i.isList).map((i) => i.column));
+  let cells = entries.flat();
+  let columns = uniqueValues(cells.map((cell) => cell.column));
+  if (isTableTooLarge(columns.length, values.length)) return [];
+  let rows = entries.map((entry) =>
+    mapKeysToValues(columns, new Map(entry.map((cell) => [cell.column, cell.cell]))),
+  );
+  let listColumns = uniqueValues(cells.filter((cell) => cell.isList).map((cell) => cell.column));
   return [
     {
       source,
       path,
-      columns: m,
+      columns,
       rows,
       listColumns,
       hasMadeUpNames: false,
@@ -900,18 +950,19 @@ function readObjectRows(e, source, path) {
 /**
  * 对象按列展开
  */
-var objectToRowCells = (e) => (t) => rangeIndices(e).map((o) => toCellValue(t[o]));
+var objectToRowCells = (length) => (tuple) => rangeIndices(length).map((index) => toCellValue(tuple[index]));
 //@ chunk-3s7ydtfd.js:32858-32932 placement
 /**
  * 无对象的数组
  */
-var isScalarArray = (e) => Array.isArray(e) && !e.some((t) => typeof t === "object" && t !== null);
+var isScalarArray = (value) =>
+  Array.isArray(value) && !value.some((item) => typeof item === "object" && item !== null);
 //@ chunk-3s7ydtfd.js:32932-33169 placement
 /**
  * 二维数组（首行为表头）读为表。
  */
 function readArrayRows(path, path_2) {
-  let reduced = path.reduce((acc, f) => Math.max(acc, selectPath(f, "[]").length), 0);
+  let reduced = path.reduce((acc, array) => Math.max(acc, selectPath(array, "[]").length), 0);
   if (!(
     path.length >= MIN_TABLE_COLUMNS &&
     reduced >= MIN_TABLE_ROWS &&
@@ -919,11 +970,11 @@ function readArrayRows(path, path_2) {
     path.every(isScalarArray)
   ))
     return [];
-  let [s = [], ...p] = path.map(objectToRowCells(reduced));
+  let [header = [], ...rows] = path.map(objectToRowCells(reduced));
   let table = makeTable(
     JSON_LABEL,
-    s.map((a) => String(a ?? "")),
-    p,
+    header.map((cell) => String(cell ?? "")),
+    rows,
   );
   return hasTextHeader(describeTableColumns(table))
     ? [
@@ -938,25 +989,25 @@ function readArrayRows(path, path_2) {
 /**
  * 补上 time 形式的请求
  */
-var zeroTimeForm = (e, by) => ({
+var zeroTimeForm = (shape, by) => ({
   form: "line",
   x: "time",
-  y: e.y,
+  y: shape.y,
   by,
 });
 //@ chunk-3s7ydtfd.js:33219-33382 placement
 /**
  * 为表补上系列/时刻与列角色。
  */
-function withColumnRoles(metricsTable) {
-  let t = ["time", ...metricsTable.y];
-  return (o) => ({
-    ...o,
-    isSeries: metricsTable.isSeries,
-    isReadAtInstants: metricsTable.isReadAtInstants,
+function withColumnRoles(shape) {
+  let reservedColumns = ["time", ...shape.y];
+  return (table) => ({
+    ...table,
+    isSeries: shape.isSeries,
+    isReadAtInstants: shape.isReadAtInstants,
     roles: zeroTimeForm(
-      metricsTable,
-      o.columns.filter((column) => !t.includes(column)),
+      shape,
+      table.columns.filter((column) => !reservedColumns.includes(column)),
     ),
   });
 }
@@ -964,35 +1015,36 @@ function withColumnRoles(metricsTable) {
 /**
  * 从 JSON 结果中找到最像表格的数组并读出列。
  */
-function readJsonTable(e, readTablesFromText, o = {}) {
-  let { path, source = JSON_LABEL } = o;
-  if (typeof e === "string") return readTablesFromText(e);
-  if (typeof e !== "object" || e === null) return [];
-  let metricsTable = readMetricsTable(e);
+function readJsonTable(value, readTablesFromText, options = {}) {
+  let { path, source = JSON_LABEL } = options;
+  if (typeof value === "string") return readTablesFromText(value);
+  if (typeof value !== "object" || value === null) return [];
+  let metricsTable = readMetricsTable(value);
   if (metricsTable) {
     let objectRows = readObjectRows(metricsTable.points, metricsTable.source);
     return uniqueValues(metricsTable.points.map((point) => point.time)).length < UNNAMED_COLUMN_LIMIT
       ? objectRows
       : objectRows.map(withColumnRoles(metricsTable));
   }
-  let mapped = selectPath(e, "columns.[]").map((u) => String(selectPath(u, "name")[0] ?? u));
-  let path_2 = selectPath(e, "rows.[]");
-  if (mapped.length > 0 && !isTableTooLarge(mapped.length, path_2.length))
-    return [makeTable(COLUMNS_ROWS_LABEL, mapped, path_2.map(rowCellsForColumns(mapped)))];
-  if (typeof selectPath(e, "range")[0] === "string" && selectPath(e, "majorDimension")[0] === "ROWS")
-    return readArrayRows(selectPath(e, "values.[]"), path === undefined ? "values" : `${path}.values`);
-  if (Array.isArray(e)) return e.length > 0 && e.every(isPlainObject) ? readObjectRows(e, source, path) : [];
-  let values = Object.values(e);
-  let x = selectPath(values[0], "[]").length;
-  return values.length >= MIN_TABLE_ROWS && values.every(isFlatTupleOf(x))
+  let columns = selectPath(value, "columns.[]").map((entry) => String(selectPath(entry, "name")[0] ?? entry));
+  let path_2 = selectPath(value, "rows.[]");
+  if (columns.length > 0 && !isTableTooLarge(columns.length, path_2.length))
+    return [makeTable(COLUMNS_ROWS_LABEL, columns, path_2.map(rowCellsForColumns(columns)))];
+  if (typeof selectPath(value, "range")[0] === "string" && selectPath(value, "majorDimension")[0] === "ROWS")
+    return readArrayRows(selectPath(value, "values.[]"), path === undefined ? "values" : `${path}.values`);
+  if (Array.isArray(value))
+    return value.length > 0 && value.every(isPlainObject) ? readObjectRows(value, source, path) : [];
+  let values = Object.values(value);
+  let width = selectPath(values[0], "[]").length;
+  return values.length >= MIN_TABLE_ROWS && values.every(isFlatTupleOf(width))
     ? [
         jsonTable(
           path,
-          Object.keys(e),
-          rangeIndices(x).map((u) => values.map((d) => toCellValue(d[u]))),
+          Object.keys(value),
+          rangeIndices(width).map((index) => values.map((column) => toCellValue(column[index]))),
         ),
       ]
-    : Object.entries(e).flatMap(([key, value]) =>
+    : Object.entries(value).flatMap(([key, value]) =>
         readJsonTable(value, readTablesFromText, {
           path: path === undefined ? key : `${path}.${key}`,
         }),
@@ -1002,93 +1054,109 @@ function readJsonTable(e, readTablesFromText, o = {}) {
 /**
  * 按区间截取每行
  */
-var columnSlice = (e) => (t) => e.map((o) => t.slice(o.from, o.until).trim());
+var columnSlice = (slices) => (line) => slices.map((slice) => line.slice(slice.from, slice.until).trim());
 //@ chunk-3s7ydtfd.js:34233-34306 placement
 /**
  * 按列宽补齐
  */
-var padColumns = (e, t) => e.map((o) => o.slice(t.from, t.until).padEnd(t.until - t.from));
+var padColumns = (cells, slice) =>
+  cells.map((cell) => cell.slice(slice.from, slice.until).padEnd(slice.until - slice.from));
 //@ chunk-3s7ydtfd.js:34306-34460 placement
 /**
  * 等宽文本表中相邻列能否合并。
  */
-var isAlignedSplit = (e, t) =>
-  !t.some((o) => o.trim().includes(" ")) &&
-  !e.some((o) => o.trim().includes("  ")) &&
-  (!e.some((o) => /^ +\S/.test(o)) || !e.some((o) => /\S +$/.test(o)));
+var isAlignedSplit = (lines, firstRow) =>
+  !firstRow.some((cell) => cell.trim().includes(" ")) &&
+  !lines.some((line) => line.trim().includes("  ")) &&
+  (!lines.some((line) => /^ +\S/.test(line)) || !lines.some((line) => /\S +$/.test(line)));
 //@ chunk-3s7ydtfd.js:34460-34564 placement
 /**
  * 两个相邻列区间能否合并。
  */
-var canMergeColumns = (e, t) => (o, r) => {
-  let s = {
-    from: o.from,
-    until: r.until,
+var canMergeColumns = (firstRow, body) => (left, right) => {
+  let range = {
+    from: left.from,
+    until: right.until,
   };
-  return o.until === r.from - 1 && isAlignedSplit(padColumns(e, s), padColumns(t, s));
+  return (
+    left.until === right.from - 1 && isAlignedSplit(padColumns(firstRow, range), padColumns(body, range))
+  );
 };
 //@ chunk-3s7ydtfd.js:34564-34616 placement
 /**
  * 表头各段都可读
  */
-var areAllReadableCells = (e) => (e[0] ?? "").trim().split(/ +/).every(isUnreadableCell);
+var areAllReadableCells = (lines) => (lines[0] ?? "").trim().split(/ +/).every(isUnreadableCell);
 //@ chunk-3s7ydtfd.js:34616-34659 placement
 /**
  * 正文里有读不出的格
  */
-var bodyHasUnreadable = (e) => (t) => padColumns(e, t).slice(1).some(isUnreadableCell);
+var bodyHasUnreadable = (body) => (range) => padColumns(body, range).slice(1).some(isUnreadableCell);
 //@ chunk-3s7ydtfd.js:34659-34778 placement
 /**
  * 列区间内是否有内容。
  */
-var hasColumnContent = (e, t, o) => (r) => {
-  let [s = "", ...p] = padColumns(e, r);
-  return (s.trim() !== "" || !(o && r.from !== t[0]?.from)) && p.join("").trim() !== "";
+var hasColumnContent = (body, ranges, skipFirst) => (range) => {
+  let [head = "", ...rest] = padColumns(body, range);
+  return (
+    (head.trim() !== "" || !(skipFirst && range.from !== ranges[0]?.from)) && rest.join("").trim() !== ""
+  );
 };
 //@ chunk-3s7ydtfd.js:34778-35054 placement
 /**
  * 合并等宽文本表中应属同一列的区间。
  */
-function mergeColumnRanges(e, t, o) {
-  let r = bodyHasUnreadable(t);
-  let s = hasColumnContent(t, e, areAllReadableCells(t));
-  let p = canMergeColumns(t, o);
-  let filtered = returnValue(e, e.slice(1)).filter(([f, i]) => f.until === i.from - 1);
-  let n = filtered.length < e.length - 1 && filtered.every(([f, i]) => p(f, i));
-  let a = [];
-  for (let f of e) {
-    let last = a.at(-1);
-    if (last && p(last, f) && (n || !s(last) || !s(f) || (r(last) && r(f)))) last.until = f.until;
+function mergeColumnRanges(ranges, body, ruleLines) {
+  let bodyUnreadable = bodyHasUnreadable(body);
+  let hasContent = hasColumnContent(body, ranges, areAllReadableCells(body));
+  let canMerge = canMergeColumns(body, ruleLines);
+  let filtered = returnValue(ranges, ranges.slice(1)).filter(
+    ([left, right]) => left.until === right.from - 1,
+  );
+  let onlyAdjacentPairs =
+    filtered.length < ranges.length - 1 && filtered.every(([left, right]) => canMerge(left, right));
+  let merged = [];
+  for (let range of ranges) {
+    let last = merged.at(-1);
+    if (
+      last &&
+      canMerge(last, range) &&
+      (onlyAdjacentPairs ||
+        !hasContent(last) ||
+        !hasContent(range) ||
+        (bodyUnreadable(last) && bodyUnreadable(range)))
+    )
+      last.until = range.until;
     else
-      a.push({
-        ...f,
+      merged.push({
+        ...range,
       });
   }
-  return a;
+  return merged;
 }
 //@ chunk-3s7ydtfd.js:35054-35381 placement
 /**
  * 按空白列切分等宽文本表。
  */
-function readAlignedTable(e) {
-  let t = [];
-  for (let m of e) for (let i = 0; i < m.length; i++) t[i] ||= m[i] !== " ";
-  let filtered = [...t.keys()].filter((key) => t[key]);
-  let mapped = returnValue(
-    filtered.filter((m) => !t[m - 1]),
-    filtered.filter((m) => !t[m + 1]),
-  ).map(([m, n]) => ({
-    from: m,
-    until: n + 1,
+function readAlignedTable(lines) {
+  let usedColumns = [];
+  for (let line of lines) for (let i = 0; i < line.length; i++) usedColumns[i] ||= line[i] !== " ";
+  let filtered = [...usedColumns.keys()].filter((key) => usedColumns[key]);
+  let ranges = returnValue(
+    filtered.filter((index) => !usedColumns[index - 1]),
+    filtered.filter((index) => !usedColumns[index + 1]),
+  ).map(([from, until]) => ({
+    from,
+    until: until + 1,
   }));
-  if (isTableTooLarge(mapped.length, e.length)) return [];
-  let filtered_2 = e.filter((m) => !TABLE_RULE_CHARS_RE.test(m));
-  return filtered_2.map(
+  if (isTableTooLarge(ranges.length, lines.length)) return [];
+  let body = lines.filter((line) => !TABLE_RULE_CHARS_RE.test(line));
+  return body.map(
     columnSlice(
       mergeColumnRanges(
-        mapped,
-        filtered_2,
-        e.filter((m) => TABLE_RULE_CHARS_RE.test(m)),
+        ranges,
+        body,
+        lines.filter((line) => TABLE_RULE_CHARS_RE.test(line)),
       ),
     ),
   );
@@ -1097,25 +1165,28 @@ function readAlignedTable(e) {
 /**
  * 表是否有一列全为数字。
  */
-var hasNumericColumn = ([e = [], ...t]) =>
-  t.length > 0 &&
-  e.length >= MIN_TABLE_ROWS &&
-  [...e.keys()].some((key) => t.every((r) => parseNumberWithUnit(r[key] ?? "").kind === "number"));
+var hasNumericColumn = ([header = [], ...rows]) =>
+  rows.length > 0 &&
+  header.length >= MIN_TABLE_ROWS &&
+  [...header.keys()].some((key) =>
+    rows.every((row) => parseNumberWithUnit(row[key] ?? "").kind === "number"),
+  );
 //@ chunk-3s7ydtfd.js:35497-35555 placement
 /**
  * 非空且不是纯分隔线
  */
-var isUsableHeaderCell = (e) => e !== "" && (!TABLE_RULE_CHARS_RE.test(e) || e.trim().includes(" "));
+var isUsableHeaderCell = (cell) =>
+  cell !== "" && (!TABLE_RULE_CHARS_RE.test(cell) || cell.trim().includes(" "));
 //@ chunk-3s7ydtfd.js:35555-35699 placement
 /**
  * 从文本中读出所有等宽表。
  */
-function readAlignedTables(e) {
-  let filtered = e
+function readAlignedTables(text) {
+  let filtered = text
     .split(BLANK_LINE_RUN_RE)
-    .map((o) =>
+    .map((block) =>
       readAlignedTable(
-        o
+        block
           .split(
             `
 `,
@@ -1126,54 +1197,55 @@ function readAlignedTables(e) {
     .filter(hasNumericColumn);
   return {
     lineCount: filtered.flat().length,
-    tables: filtered.map((o) => tableWithOrWithoutHeader(o, ALIGNED_COLUMNS_LABEL)),
+    tables: filtered.map((rows) => tableWithOrWithoutHeader(rows, ALIGNED_COLUMNS_LABEL)),
   };
 }
 //@ chunk-3s7ydtfd.js:35699-35968 placement
 /**
  * 把列数一致的连续行分组为表。
  */
-function groupConsistentRows(e) {
-  let t = [];
-  let o = [];
-  for (let [r, s] of e.entries()) {
-    let p = s.length >= MIN_TABLE_ROWS && s.length <= MAX_TABLE_ROWS_READ && s.some((f) => f !== "");
-    let m = o[0]?.length ?? s.length;
-    if (p && s.length === m) {
-      o.push(s);
+function groupConsistentRows(rows) {
+  let groups = [];
+  let current = [];
+  for (let [index, row] of rows.entries()) {
+    let isUsable =
+      row.length >= MIN_TABLE_ROWS && row.length <= MAX_TABLE_ROWS_READ && row.some((cell) => cell !== "");
+    let width = current[0]?.length ?? row.length;
+    if (isUsable && row.length === width) {
+      current.push(row);
       continue;
     }
-    if (!(p && e[r + 1]?.length === m)) {
-      t.push(o);
-      o = p ? [s] : [];
+    if (!(isUsable && rows[index + 1]?.length === width)) {
+      groups.push(current);
+      current = isUsable ? [row] : [];
     }
   }
-  t.push(o);
-  return t.filter((r) => r.length >= MIN_TABLE_COLUMNS);
+  groups.push(current);
+  return groups.filter((group) => group.length >= MIN_TABLE_COLUMNS);
 }
 //@ chunk-3s7ydtfd.js:35968-36372 placement
-function parseCsvCell(e, t) {
+function parseCsvCell(text, format) {
   let regExp = new RegExp(
-    `[ ]*(?:"(?<quoted>(?:[^"]|"")*)"[ ]*|(?<plain>[^\\n]*?))(?<end>${t.pattern.source}|\\n)`,
+    `[ ]*(?:"(?<quoted>(?:[^"]|"")*)"[ ]*|(?<plain>[^\\n]*?))(?<end>${format.pattern.source}|\\n)`,
     "gy",
   );
-  let r = [];
-  let s = [];
-  for (let { groups = {} } of `${e}
+  let rows = [];
+  let row = [];
+  for (let { groups = {} } of `${text}
 `.matchAll(regExp)) {
-    s.push(groups.quoted?.replaceAll('""', '"') ?? groups.plain ?? "");
+    row.push(groups.quoted?.replaceAll('""', '"') ?? groups.plain ?? "");
     if (
       groups.end ===
       `
 `
     ) {
-      r.push(s);
-      s = [];
+      rows.push(row);
+      row = [];
     }
   }
-  return [...r, s].map((p) =>
-    (t.pattern.test("|") && p[0] === "" && p.at(-1) === "" ? p.slice(1, -1) : p).map((n) =>
-      n.trim().replace(MARKDOWN_EMPHASIS_RE, "").replace(MARKDOWN_LINK_RE, "$1"),
+  return [...rows, row].map((row) =>
+    (format.pattern.test("|") && row[0] === "" && row.at(-1) === "" ? row.slice(1, -1) : row).map((cell) =>
+      cell.trim().replace(MARKDOWN_EMPHASIS_RE, "").replace(MARKDOWN_LINK_RE, "$1"),
     ),
   );
 }
@@ -1181,56 +1253,58 @@ function parseCsvCell(e, t) {
 /**
  * 附上未解析行
  */
-var withUnparsedLines = (unparsedLines) => (t) => ({
-  ...t,
+var withUnparsedLines = (unparsedLines) => (table) => ({
+  ...table,
   unparsedLines,
 });
 //@ chunk-3s7ydtfd.js:36414-36637 placement
 /**
  * 按分隔符读表。
  */
-function readDelimitedTables(e, t) {
-  let filtered = parseCsvCell(e, t).filter((p) => !TABLE_RULE_CHARS_RE.test(p.join("")));
-  let r = groupConsistentRows(filtered);
-  let s = r.flat();
+function readDelimitedTables(text, format) {
+  let rows = parseCsvCell(text, format).filter((row) => !TABLE_RULE_CHARS_RE.test(row.join("")));
+  let groups = groupConsistentRows(rows);
+  let rows_2 = groups.flat();
   return {
-    lineCount: s.flatMap((p) =>
-      p.join("").split(`
+    lineCount: rows_2.flatMap((row) =>
+      row.join("").split(`
 `),
     ).length,
-    tables: r
-      .map((p) => tableWithOrWithoutHeader(p, t.source))
-      .map(withUnparsedLines(countWhere(filtered, (p) => p.length >= MIN_TABLE_ROWS) - s.length)),
+    tables: groups
+      .map((rows) => tableWithOrWithoutHeader(rows, format.source))
+      .map(withUnparsedLines(countWhere(rows, (row) => row.length >= MIN_TABLE_ROWS) - rows_2.length)),
   };
 }
 //@ chunk-3s7ydtfd.js:36637-36670 placement
 /**
  * 覆盖了全部行
  */
-var coversLineCount = (e) => (t) => t.lineCount === e;
+var coversLineCount = (count) => (result) => result.lineCount === count;
 //@ chunk-3s7ydtfd.js:36670-36822 placement
 /**
  * 尝试各种文本表格式，取覆盖行数最多的结果。
  */
-function readTextTables(e) {
-  let t = [
-    ...DELIMITED_FORMATS.filter((o) => o.pattern.test(e)).map((o) => readDelimitedTables(e, o)),
-    readAlignedTables(e),
+function readTextTables(text) {
+  let results = [
+    ...DELIMITED_FORMATS.filter((format) => format.pattern.test(text)).map((format) =>
+      readDelimitedTables(text, format),
+    ),
+    readAlignedTables(text),
   ];
-  return t.find(coversLineCount(Math.max(...t.map((o) => o.lineCount))))?.tables ?? [];
+  return results.find(coversLineCount(Math.max(...results.map((result) => result.lineCount))))?.tables ?? [];
 }
 //@ chunk-3s7ydtfd.js:36822-36882 placement
 /**
  * 是 XML 行片段
  */
-var isXmlRows = (e) =>
-  RESULTS_TRUNCATED_RE.test(e) || e.lastIndexOf(XML_ROW_OPEN) > e.lastIndexOf(XML_ROW_CLOSE);
+var isXmlRows = (text) =>
+  RESULTS_TRUNCATED_RE.test(text) || text.lastIndexOf(XML_ROW_OPEN) > text.lastIndexOf(XML_ROW_CLOSE);
 //@ chunk-3s7ydtfd.js:36882-37132 placement
-var HTML_ENTITIES = (e) =>
-  e
-    .replace(XML_ENTITY_RE, (t, o, r) => {
-      let s = o === undefined ? Number(r) : Number.parseInt(o, 16);
-      return s <= 1114111 ? String.fromCodePoint(s) : t;
+var HTML_ENTITIES = (text) =>
+  text
+    .replace(XML_ENTITY_RE, (entity, hex, decimal) => {
+      let codePoint = hex === undefined ? Number(decimal) : Number.parseInt(hex, 16);
+      return codePoint <= 1114111 ? String.fromCodePoint(codePoint) : entity;
     })
     .replaceAll("&lt;", "<")
     .replaceAll("&gt;", ">")
@@ -1241,8 +1315,8 @@ var HTML_ENTITIES = (e) =>
 /**
  * 解析一个 HTML 单元格（名称与文本）。
  */
-function readHtmlCell(e) {
-  let groups = XML_FIELD_RE.exec(e)?.groups;
+function readHtmlCell(text) {
+  let groups = XML_FIELD_RE.exec(text)?.groups;
   return groups !== undefined
     ? [
         [
@@ -1256,30 +1330,30 @@ function readHtmlCell(e) {
 /**
  * 读 XML 片段里的行
  */
-function readXmlRows(e) {
-  let sliced = e.slice(e.lastIndexOf(XML_ROW_OPEN));
+function readXmlRows(text) {
+  let sliced = text.slice(text.lastIndexOf(XML_ROW_OPEN));
   return new Map(sliced.split(XML_FIELD_OPEN).slice(1).flatMap(readHtmlCell));
 }
 //@ chunk-3s7ydtfd.js:37355-37615 placement
 /**
  * 从 HTML/XML 片段读表。
  */
-function readHtmlTable(e) {
-  if (!e.trimStart().startsWith("<")) return [];
-  let mapped = e
+function readHtmlTable(text) {
+  if (!text.trimStart().startsWith("<")) return [];
+  let mapped = text
     .split(XML_ROW_CLOSE)
     .slice(0, -1)
-    .filter((p) => p.includes(XML_ROW_OPEN))
+    .filter((rowText) => rowText.includes(XML_ROW_OPEN))
     .map(readXmlRows);
-  let r = uniqueValues(mapped.flatMap((p) => [...p.keys()]));
-  if (!(r.length > 0 && !isTableTooLarge(r.length, mapped.length))) return [];
-  return isXmlRows(e)
+  let columns = uniqueValues(mapped.flatMap((row) => [...row.keys()]));
+  if (!(columns.length > 0 && !isTableTooLarge(columns.length, mapped.length))) return [];
+  return isXmlRows(text)
     ? [CUT_TEXT_TABLE()]
     : [
         makeTable(
           XML_ROWS_LABEL,
-          r,
-          mapped.map((p) => mapKeysToValues(r, p)),
+          columns,
+          mapped.map((row) => mapKeysToValues(columns, row)),
         ),
       ];
 }
@@ -1297,34 +1371,37 @@ var TRUNCATION_MARKERS = [
   /Error: result \(.* exceeds maximum allowed tokens.*/,
 ];
 //@ chunk-3s7ydtfd.js:37777-37844 placement
-var regExp_5 = new RegExp(`^(?:${TRUNCATION_MARKERS.map((e) => e.source).join("|")})$`, "im");
+var regExp_5; // deferred: uses TRUNCATION_MARKERS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3s7ydtfd.js:37777", () => {
+  regExp_5 = new RegExp(`^(?:${TRUNCATION_MARKERS.map((marker) => marker.source).join("|")})$`, "im");
+});
 //@ chunk-3s7ydtfd.js:37844-37886 placement
 /**
  * 未解析行放前面
  */
-var withUnparsedLinesFirst = (unparsedLines) => (t) => ({
+var withUnparsedLinesFirst = (unparsedLines) => (table) => ({
   unparsedLines,
-  ...t,
+  ...table,
 });
 //@ chunk-3s7ydtfd.js:37886-38165 placement
 /**
  * 从工具结果文本读表：截断检测、HTML、JSON 行、文本表，并清洗字符串。
  */
-function readTablesFromText(e) {
-  let replaced = e.replace(BOM_OR_SGR_RE, "").replaceAll(
+function readTablesFromText(text) {
+  let text_2 = text.replace(BOM_OR_SGR_RE, "").replaceAll(
     `\r
 `,
     `
 `,
   );
-  if (regExp_5.test(replaced)) return [CUT_TEXT_TABLE()];
-  let htmlTable = readHtmlTable(replaced);
+  if (regExp_5.test(text_2)) return [CUT_TEXT_TABLE()];
+  let htmlTable = readHtmlTable(text_2);
   if (htmlTable.length > 0) return cleanAllStrings(htmlTable);
-  let { values, unparsedLines } = flattenObjectRows(replaced);
-  if (values.length === 0) return cleanAllStrings(readTextTables(replaced));
-  let m = isUniformObjectArray(values);
+  let { values, unparsedLines } = flattenObjectRows(text_2);
+  if (values.length === 0) return cleanAllStrings(readTextTables(text_2));
+  let isJsonLines = isUniformObjectArray(values);
   return cleanAllStrings(
-    (m
+    (isJsonLines
       ? readJsonTable(values, readTablesFromText, {
           source: JSON_LINES_LABEL,
         })
@@ -1336,7 +1413,7 @@ function readTablesFromText(e) {
 /**
  * 小写并把空格换成下划线
  */
-var toSnakeLabel = (e) => e.toLowerCase().replaceAll(" ", "_");
+var toSnakeLabel = (word) => word.toLowerCase().replaceAll(" ", "_");
 //@ chunk-3s7ydtfd.js:38213-38232 placement
 var JSON_PATH = "json_path";
 //@ chunk-3s7ydtfd.js:38232-38248 placement
@@ -1345,19 +1422,22 @@ var UNREAD = "unread";
 /**
  * 表来源的展示键
  */
-function formatLabel(e) {
-  return e.path !== undefined ? JSON_PATH : toSnakeLabel(e.source.replace(NO_HEADER_LABEL, ""));
+function formatLabel(table) {
+  return table.path !== undefined ? JSON_PATH : toSnakeLabel(table.source.replace(NO_HEADER_LABEL, ""));
 }
 //@ chunk-3s7ydtfd.js:38317-38346 placement
 /**
  * 可接受的来源键集合
  */
-var TABLE_SOURCE_KEYS = [...TABLE_SOURCE_LABELS.map(toSnakeLabel), JSON_PATH, UNREAD];
+var TABLE_SOURCE_KEYS; // deferred: uses TABLE_SOURCE_LABELS of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-3s7ydtfd.js:38317", () => {
+  TABLE_SOURCE_KEYS = [...TABLE_SOURCE_LABELS.map(toSnakeLabel), JSON_PATH, UNREAD];
+});
 //@ chunk-3s7ydtfd.js:38346-38392 placement
 /**
  * 向下取 2 的幂
  */
-var floorPow2 = (e) => (e < 1 ? 0 : 2 ** Math.floor(Math.log2(e)));
+var floorPow2 = (value) => (value < 1 ? 0 : 2 ** Math.floor(Math.log2(value)));
 //@ chunk-3s7ydtfd.js:38392-38809 placement
 /**
  * 图表结果代码（drawn 以外的 bad_call、no_result、data_not_found、too_long 等）。
@@ -1404,49 +1484,49 @@ var AUTO_CHART_MODES = ["off", "skips_servers"];
  */
 var DATA_SOURCE_KINDS = ["last_result", "result_id", "text", "rows", "none"];
 //@ chunk-3s7ydtfd.js:38896-39432 placement
-var buildEaselTelemetryEvent = (e, t) => ({
+var buildEaselTelemetryEvent = (usage, info) => ({
   event: "easel_chart",
   props: {
     outcome: {
-      value: e.outcome,
+      value: usage.outcome,
       of: ["drawn", ...CHART_OUTCOME_CODES],
     },
     form: {
-      value: e.form,
+      value: usage.form,
       of: [...Object.keys(CHART_FORMS), "unnamed"],
     },
     format: {
-      value: e.format,
+      value: usage.format,
       of: TABLE_SOURCE_KEYS,
     },
     data_from: {
-      value: e.dataFrom,
+      value: usage.dataFrom,
       of: DATA_SOURCE_KINDS,
     },
-    series_bucket: floorPow2(e.seriesCount),
-    point_bucket: floorPow2(e.pointCount),
-    elapsed_ms_bucket: floorPow2(t.elapsedMs),
-    is_form_named: e.isFormNamed,
-    has_left_out: e.hasLeftOut,
-    is_form_replaced: e.isFormReplaced,
-    is_asked: t.isAsked,
-    is_in_subagent: t.isInSubagent,
-    is_on_terminal: t.surfaces.includes("terminal"),
-    is_on_app: t.surfaces.some((surface) => surface !== "terminal"),
+    series_bucket: floorPow2(usage.seriesCount),
+    point_bucket: floorPow2(usage.pointCount),
+    elapsed_ms_bucket: floorPow2(info.elapsedMs),
+    is_form_named: usage.isFormNamed,
+    has_left_out: usage.hasLeftOut,
+    is_form_replaced: usage.isFormReplaced,
+    is_asked: info.isAsked,
+    is_in_subagent: info.isInSubagent,
+    is_on_terminal: info.surfaces.includes("terminal"),
+    is_on_app: info.surfaces.some((surface) => surface !== "terminal"),
   },
 });
 //@ chunk-3s7ydtfd.js:39432-39609 placement
 /**
  * 图表结果的特性遥测（省略数据或换了形式记为 sad）。
  */
-function chartOutcomeTelemetry(feature, t) {
-  if (t.hasLeftOut)
+function chartOutcomeTelemetry(feature, usage) {
+  if (usage.hasLeftOut)
     return {
       feature,
       kind: "sad",
       reason: "data_left_out",
     };
-  return t.isFormReplaced
+  return usage.isFormReplaced
     ? {
         feature,
         kind: "sad",
@@ -1461,18 +1541,18 @@ function chartOutcomeTelemetry(feature, t) {
 /**
  * 失败的用量事件
  */
-var badUsageEvent = (feature, t) => ({
+var badUsageEvent = (feature, usage) => ({
   feature,
   kind: "bad",
-  reason: t.outcome,
+  reason: usage.outcome,
 });
 //@ chunk-3s7ydtfd.js:39665-39760 placement
 /**
  * 按 chart/auto 与结果生成用量事件
  */
-function usageEventFor(e, isAsked) {
+function usageEventFor(usage, isAsked) {
   let feature = isAsked ? "easel_chart" : "easel_auto";
-  return e.outcome === "drawn" ? chartOutcomeTelemetry(feature, e) : badUsageEvent(feature, e);
+  return usage.outcome === "drawn" ? chartOutcomeTelemetry(feature, usage) : badUsageEvent(feature, usage);
 }
 //@ chunk-3s7ydtfd.js:39760-39901 placement
 /**
@@ -1506,23 +1586,23 @@ var easelSettingsEvent = (value) => ({
 /**
  * 失败用量带形式与来源
  */
-var failedUsageWithForm = (e, dataFrom) => ({
+var failedUsageWithForm = (request, dataFrom) => ({
   ...FAILED_USAGE,
-  form: e.form ?? "unnamed",
-  isFormNamed: e.form !== undefined,
+  form: request.form ?? "unnamed",
+  isFormNamed: request.form !== undefined,
   dataFrom,
 });
 //@ chunk-3s7ydtfd.js:40062-40269 placement
-function describeNamesReadAsBars(chartRequestData, chartRequestData_2, o) {
-  if (chartRequestData_2.kind === "data")
-    return chartRequestData_2.series.length <= (o.top ?? CHART_FORMS.bars.defaultCount)
-      ? chartRequestData_2
-      : chartRequestData;
+function describeNamesReadAsBars(fallbackLabel, chartRequestData, request) {
+  if (chartRequestData.kind === "data")
+    return chartRequestData.series.length <= (request.top ?? CHART_FORMS.bars.defaultCount)
+      ? chartRequestData
+      : fallbackLabel;
   return {
-    ...chartRequestData_2,
+    ...chartRequestData,
     problem: {
-      ...chartRequestData_2.problem,
-      why: `${o.x ?? "x"} holds names, not times, so bars were read. ` + chartRequestData_2.problem.why,
+      ...chartRequestData.problem,
+      why: `${request.x ?? "x"} holds names, not times, so bars were read. ` + chartRequestData.problem.why,
     },
   };
 }
@@ -1542,62 +1622,68 @@ var MAX_COLUMN_DESCRIPTION_CHARS = 32;
  */
 var TABLE_DESC_SLACK = 3;
 //@ chunk-3s7ydtfd.js:40298-40342 placement
-var formatCountPart = (e, t, o = "") => (e > 0 ? [`${formatCount(e, t)}${o}`] : []);
+var formatCountPart = (count, unit, suffix = "") =>
+  count > 0 ? [`${formatCount(count, unit)}${suffix}`] : [];
 //@ chunk-3s7ydtfd.js:40342-40352 placement
 /**
  * true
  */
 var ALLOW_MODEL_ONLY_NOTES = true;
 //@ chunk-3s7ydtfd.js:40352-40403 placement
-var areAllNumbers = (e) => e.every((t) => parseNumberWithUnit(t, ALLOW_MODEL_ONLY_NOTES).kind === "number");
+var areAllNumbers = (values) =>
+  values.every((value) => parseNumberWithUnit(value, ALLOW_MODEL_ONLY_NOTES).kind === "number");
 //@ chunk-3s7ydtfd.js:40403-40458 placement
-var numberAxisHint = (e) => (areAllNumbers(e) ? ", read as numbers if named as y" : "");
+var numberAxisHint = (values) => (areAllNumbers(values) ? ", read as numbers if named as y" : "");
 //@ chunk-3s7ydtfd.js:40458-40510 placement
-var previewColumnValues = (e) =>
-  e.slice(0, TABLE_DESC_SLACK).map((t) => truncateMiddle(String(t), MAX_COLUMN_DESCRIPTION_CHARS));
+var previewColumnValues = (cells) =>
+  cells.slice(0, TABLE_DESC_SLACK).map((cell) => truncateMiddle(String(cell), MAX_COLUMN_DESCRIPTION_CHARS));
 //@ chunk-3s7ydtfd.js:40510-40555 placement
-var formatColumnValuePreview = (e) => ` (${previewColumnValues(e).join(", ")})${numberAxisHint(e)}`;
+var formatColumnValuePreview = (cells) =>
+  ` (${previewColumnValues(cells).join(", ")})${numberAxisHint(cells)}`;
 //@ chunk-3s7ydtfd.js:40555-40624 placement
-var areAllZonedTimes = (e) => e.map((t) => parseTimeCell(t)).every((t) => t.kind === "time" && t.isZoned);
+var areAllZonedTimes = (cells) =>
+  cells.map((cell) => parseTimeCell(cell)).every((parsed) => parsed.kind === "time" && parsed.isZoned);
 //@ chunk-3s7ydtfd.js:40624-40677 placement
-var timeAxisHint = (e) => (areAllZonedTimes(e) ? ", read as times if named as x" : "");
+var timeAxisHint = (cells) => (areAllZonedTimes(cells) ? ", read as times if named as x" : "");
 //@ chunk-3s7ydtfd.js:40677-40884 placement
 /**
  * 列的类型计数摘要（数字/时间/文本）。
  */
-function columnKindSummary(e) {
-  let t = uniqueValues(e.cellsByKind.get("text") ?? []);
-  let o = e.cellsByKind.get("number") ?? [];
+function columnKindSummary(column) {
+  let texts = uniqueValues(column.cellsByKind.get("text") ?? []);
+  let numbers = column.cellsByKind.get("number") ?? [];
   return [
-    ...formatCountPart(o.length, "number", timeAxisHint(o)),
-    ...formatCountPart(e.cellsByKind.get("time")?.length ?? 0, "time"),
-    ...formatCountPart(t.length, "text", formatColumnValuePreview(t)),
+    ...formatCountPart(numbers.length, "number", timeAxisHint(numbers)),
+    ...formatCountPart(column.cellsByKind.get("time")?.length ?? 0, "time"),
+    ...formatCountPart(texts.length, "text", formatColumnValuePreview(texts)),
   ];
 }
 //@ chunk-3s7ydtfd.js:40884-41012 placement
-var describeNonScalarColumn = (e) =>
-  e
+var describeNonScalarColumn = (isList) =>
+  isList
     ? "lists, which are not read. Pass one row for each item as data, with the fields beside the list repeated"
     : "empty";
 //@ chunk-3s7ydtfd.js:41012-41086 placement
 /**
  * 单表列结构描述
  */
-var describeTableColumn = (e, listColumns = []) =>
-  `${e.name}: ` + (columnKindSummary(e).join(", ") || describeNonScalarColumn(listColumns.includes(e.name)));
+var describeTableColumn = (column, listColumns = []) =>
+  `${column.name}: ` +
+  (columnKindSummary(column).join(", ") || describeNonScalarColumn(listColumns.includes(column.name)));
 //@ chunk-3s7ydtfd.js:41086-41137 placement = renderToolUseRejectedMessage (0.792)
-var renderToolUseRejectedMessage = (e) => `${tableSource(e)}, ${formatCount(e.rows.length, "row")}:`;
+var renderToolUseRejectedMessage = (table) =>
+  `${tableSource(table)}, ${formatCount(table.rows.length, "row")}:`;
 //@ chunk-3s7ydtfd.js:41137-41244 placement
 /**
  * 生成表各列的摘要行（多表时加表头）。
  */
-var describeTableColumns_2 = (e, t) => (o) => {
-  let r = elideList(
-    describeTableColumns(o).map((s) => describeTableColumn(s, o.listColumns)),
-    e,
+var describeTableColumns_2 = (limit, withHeader) => (table) => {
+  let lines = elideList(
+    describeTableColumns(table).map((column) => describeTableColumn(column, table.listColumns)),
+    limit,
     "more column",
   );
-  return t ? [renderToolUseRejectedMessage(o), ...r] : r;
+  return withHeader ? [renderToolUseRejectedMessage(table), ...lines] : lines;
 };
 //@ chunk-3s7ydtfd.js:41244-41306 placement
 /**

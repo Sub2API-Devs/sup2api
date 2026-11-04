@@ -102,10 +102,10 @@ function isPathInSandboxWriteAllowlist(path, pathsToCheck) {
   let pathsToCheck_2 = pathsToCheck ?? getPathsForPermissionCheck(path);
   let resolvedAllow = allowOnly.flatMap(getSandboxConfigPathSpellings);
   let resolvedDeny = denyWithinAllow.flatMap(getSandboxConfigPathSpellings);
-  return pathsToCheck_2.every((S) => {
-    for (let denyPath of resolvedDeny) if (pathInWorkingPath(S, denyPath)) return false;
+  return pathsToCheck_2.every((spelling) => {
+    for (let denyPath of resolvedDeny) if (pathInWorkingPath(spelling, denyPath)) return false;
     return resolvedAllow.some((allowPath) =>
-      pathInWorkingPath(S, allowPath, {
+      pathInWorkingPath(spelling, allowPath, {
         caseFold: true,
         uncShapeParity: true,
       }),
@@ -113,12 +113,12 @@ function isPathInSandboxWriteAllowlist(path, pathsToCheck) {
   });
 }
 //@ chunk-fq0cr76a.js:1064720-1064840 layout
-function getSandboxConfigPathSpellings(e) {
+function getSandboxConfigPathSpellings(configPath) {
   let { resolvedSandboxConfigPaths } = getSessionPathsCache();
-  let r = resolvedSandboxConfigPaths.get(e);
-  if (r !== undefined) return r;
-  let pathsForPermissionCheck = getPathsForPermissionCheck(e);
-  resolvedSandboxConfigPaths.set(e, pathsForPermissionCheck);
+  let cached = resolvedSandboxConfigPaths.get(configPath);
+  if (cached !== undefined) return cached;
+  let pathsForPermissionCheck = getPathsForPermissionCheck(configPath);
+  resolvedSandboxConfigPaths.set(configPath, pathsForPermissionCheck);
   return pathsForPermissionCheck;
 }
 //@ chunk-fq0cr76a.js:1064840-1064922 facade-exports
@@ -145,26 +145,29 @@ function hostPersonOnlyTag(decisionReason) {
 /**
  * 把内部路径硬拒绝转换为 Shell 命令的 safetyCheck 询问原因：附加符号链接说明；restricted 模式下标 restrictedMode 并在 also 中记 internalHardDeny；宿主专属时沿用其熔断；否则标 internalHardDeny，是否允许分类器批准取决于是否必须由人确认。
  */
-function internalDenyShellAskReason(e, restricted, r) {
-  let s = internalPathDenyWords(e.decisionReason) ?? e.message;
-  let h = hostPersonOnlyTag(e.decisionReason);
+function internalDenyShellAskReason(denial, restricted, redirect) {
+  let reasonText = internalPathDenyWords(denial.decisionReason) ?? denial.message;
+  let personOnlyTag = hostPersonOnlyTag(denial.decisionReason);
   return {
     type: "safetyCheck",
-    reason: r === undefined ? s : `${s.endsWith(".") ? s : `${s}.`} ${r.sentence}.`,
+    reason:
+      redirect === undefined
+        ? reasonText
+        : `${reasonText.endsWith(".") ? reasonText : `${reasonText}.`} ${redirect.sentence}.`,
     ...(restricted
       ? {
           classifierApprovable: false,
           circuitBreaker: "restrictedMode",
-          also: ["internalHardDeny", ...(h !== undefined ? [h] : [])],
+          also: ["internalHardDeny", ...(personOnlyTag !== undefined ? [personOnlyTag] : [])],
         }
-      : h !== undefined
+      : personOnlyTag !== undefined
         ? {
             classifierApprovable: false,
-            circuitBreaker: h,
+            circuitBreaker: personOnlyTag,
             also: ["internalHardDeny"],
           }
         : {
-            classifierApprovable: r?.personOnly !== true,
+            classifierApprovable: redirect?.personOnly !== true,
             circuitBreaker: "internalHardDeny",
           }),
   };
@@ -173,22 +176,25 @@ function internalDenyShellAskReason(e, restricted, r) {
 /**
  * 判断路径检查结果是否“仅因在工作目录外而被默认拒绝”（没有具体原因），这类可以给出 addDirectories 建议。
  */
-function isOnlyOutsideWorkingFoldersRefusal(e) {
+function isOnlyOutsideWorkingFoldersRefusal(result) {
   return (
-    !e.allowed && e.refusedByDefault === true && e.decisionReason === undefined && e.isInWorkingDir === false
+    !result.allowed &&
+    result.refusedByDefault === true &&
+    result.decisionReason === undefined &&
+    result.isInWorkingDir === false
   );
 }
 //@ chunk-fq0cr76a.js:1065577-1068271 facade-exports = isPathAllowed (0.56)
 /**
  * （文件系统权限）判断路径是否允许：先查各种拼写的 deny 规则；路径无法解析时按读封锁返回安全检查；再判断是否在工作目录/允许规则内。被 Bash、PowerShell 与文件工具共用。
  */
-function isPathAllowed(path, toolPermissionContext, r, s, h) {
-  let permissionType = r === "read" ? "read" : "edit";
-  let pathsToCheck = s ?? walkPermissionCheckPaths(path);
-  let spellings = pathsToCheck.spellings;
-  let w = h ? new Set([...spellings, ...h]) : spellings;
-  for (let L of w) {
-    let denyRule = matchingRuleForInput(L, toolPermissionContext, permissionType, "deny");
+function isPathAllowed(path, toolPermissionContext, operationType, pathsToCheck, extraPaths) {
+  let permissionType = operationType === "read" ? "read" : "edit";
+  let pathsToCheck_2 = pathsToCheck ?? walkPermissionCheckPaths(path);
+  let spellings = pathsToCheck_2.spellings;
+  let judgedSpellings = extraPaths ? new Set([...spellings, ...extraPaths]) : spellings;
+  for (let spelling of judgedSpellings) {
+    let denyRule = matchingRuleForInput(spelling, toolPermissionContext, permissionType, "deny");
     if (denyRule !== null)
       return {
         allowed: false,
@@ -198,9 +204,9 @@ function isPathAllowed(path, toolPermissionContext, r, s, h) {
         },
       };
   }
-  if (pathsToCheck.unresolved) {
+  if (pathsToCheck_2.unresolved) {
     let reason = unresolvablePathMessage(path);
-    if (r === "read" && !toolPermissionContext.restricted)
+    if (operationType === "read" && !toolPermissionContext.restricted)
       return toolPermissionContext.blockReadsOutsideWorkingDirectories === true
         ? {
             allowed: false,
@@ -230,7 +236,7 @@ function isPathAllowed(path, toolPermissionContext, r, s, h) {
       },
     };
   }
-  if (r === "read" && outsideReadBlocked(path, toolPermissionContext, spellings))
+  if (operationType === "read" && outsideReadBlocked(path, toolPermissionContext, spellings))
     return {
       allowed: false,
       decisionReason: {
@@ -240,53 +246,68 @@ function isPathAllowed(path, toolPermissionContext, r, s, h) {
         circuitBreaker: "outsideReadsBlocked",
       },
     };
-  let R;
-  if (r !== "read") {
-    let L = checkEditableInternalPath(path, {}, spellings, {
+  let internalDenial;
+  if (operationType !== "read") {
+    let internalEdit = checkEditableInternalPath(path, {}, spellings, {
       restricted: toolPermissionContext.restricted,
     });
-    if (L.behavior === "deny") R = L;
-    if (L.behavior === "allow" && internalPathDecisionStands(L, toolPermissionContext))
+    if (internalEdit.behavior === "deny") internalDenial = internalEdit;
+    if (internalEdit.behavior === "allow" && internalPathDecisionStands(internalEdit, toolPermissionContext))
       return {
         allowed: true,
-        decisionReason: L.decisionReason,
+        decisionReason: internalEdit.decisionReason,
       };
   }
-  if (r !== "read") {
-    let L = checkPathSafetyForAutoEdit(
+  if (operationType !== "read") {
+    let safety = checkPathSafetyForAutoEdit(
       path,
       spellings,
       undefined,
       remoteConfigEditExemptionApplies(toolPermissionContext),
       toolPermissionContext.trustedNetworkDirectories,
     );
-    if (!L.safe) {
-      let V = sensitiveWriteRedirect(pathsToCheck.requested, pathsToCheck, toolPermissionContext);
-      let K = internalPathDenyWords(R?.decisionReason) ?? L.message;
-      let q = hostPersonOnlyTag(R?.decisionReason);
-      let Z =
-        R !== undefined && V !== null && !hardDeniedAsSpelled(pathsToCheck.requested, toolPermissionContext);
-      let J = toolPermissionContext.restricted ? "restrictedMode" : (L.circuitBreaker ?? q);
+    if (!safety.safe) {
+      let sensitiveRedirect = sensitiveWriteRedirect(
+        pathsToCheck_2.requested,
+        pathsToCheck_2,
+        toolPermissionContext,
+      );
+      let denyWords = internalPathDenyWords(internalDenial?.decisionReason) ?? safety.message;
+      let personOnly = hostPersonOnlyTag(internalDenial?.decisionReason);
+      let isHardDeniedAsSpelled =
+        internalDenial !== undefined &&
+        sensitiveRedirect !== null &&
+        !hardDeniedAsSpelled(pathsToCheck_2.requested, toolPermissionContext);
+      let breaker = toolPermissionContext.restricted
+        ? "restrictedMode"
+        : (safety.circuitBreaker ?? personOnly);
       let filtered = [
-        ...(L.circuitBreaker !== undefined ? [L.circuitBreaker] : []),
-        ...(L.also ?? []),
-        ...(R !== undefined ? ["internalHardDeny"] : []),
-        ...(q !== undefined ? [q] : []),
-      ].filter((ae, Se, ue) => ae !== J && ue.indexOf(ae) === Se);
+        ...(safety.circuitBreaker !== undefined ? [safety.circuitBreaker] : []),
+        ...(safety.also ?? []),
+        ...(internalDenial !== undefined ? ["internalHardDeny"] : []),
+        ...(personOnly !== undefined ? [personOnly] : []),
+      ].filter((reasonKey, index, reasons) => reasonKey !== breaker && reasons.indexOf(reasonKey) === index);
       return {
         allowed: false,
         decisionReason: {
           type: "safetyCheck",
-          reason: V === null ? K : `${K.endsWith(".") ? K : `${K}.`} ${V.sentence}.`,
+          reason:
+            sensitiveRedirect === null
+              ? denyWords
+              : `${denyWords.endsWith(".") ? denyWords : `${denyWords}.`} ${sensitiveRedirect.sentence}.`,
           ...(toolPermissionContext.restricted
             ? {
                 classifierApprovable: false,
                 circuitBreaker: "restrictedMode",
               }
             : {
-                classifierApprovable: L.classifierApprovable && !V?.personOnly && !Z && q === undefined,
-                ...(J !== undefined && {
-                  circuitBreaker: J,
+                classifierApprovable:
+                  safety.classifierApprovable &&
+                  !sensitiveRedirect?.personOnly &&
+                  !isHardDeniedAsSpelled &&
+                  personOnly === undefined,
+                ...(breaker !== undefined && {
+                  circuitBreaker: breaker,
                 }),
               }),
           ...(filtered.length > 0 && {
@@ -296,49 +317,49 @@ function isPathAllowed(path, toolPermissionContext, r, s, h) {
       };
     }
   }
-  if (R !== undefined) {
-    let internalEditResult = symlinkRedirect(pathsToCheck, toolPermissionContext);
+  if (internalDenial !== undefined) {
+    let internalEditResult = symlinkRedirect(pathsToCheck_2, toolPermissionContext);
     return {
       allowed: false,
       decisionReason: internalDenyShellAskReason(
-        R,
+        internalDenial,
         toolPermissionContext.restricted,
         internalEditResult === null
           ? undefined
           : {
-              sentence: symlinkRedirectSentence(pathsToCheck.requested, internalEditResult),
+              sentence: symlinkRedirectSentence(pathsToCheck_2.requested, internalEditResult),
               personOnly:
                 internalEditResult.carriedOut ||
-                !hardDeniedAsSpelled(pathsToCheck.requested, toolPermissionContext),
+                !hardDeniedAsSpelled(pathsToCheck_2.requested, toolPermissionContext),
             },
       ),
     };
   }
-  let D = pathInAllowedWorkingPath(path, toolPermissionContext, spellings);
-  if (D) {
-    if (r === "read" || toolPermissionContext.mode === "acceptEdits")
+  let inWorkingDir = pathInAllowedWorkingPath(path, toolPermissionContext, spellings);
+  if (inWorkingDir) {
+    if (operationType === "read" || toolPermissionContext.mode === "acceptEdits")
       return {
         allowed: true,
       };
   }
-  if (r === "read") {
-    let L = checkReadableInternalPath(path, {}, spellings, {
+  if (operationType === "read") {
+    let internalRead = checkReadableInternalPath(path, {}, spellings, {
       restricted: toolPermissionContext.restricted,
     });
-    if (L.behavior === "deny")
+    if (internalRead.behavior === "deny")
       return {
         allowed: false,
-        decisionReason: untypeDenyReasonForAskPropagation(L.decisionReason),
+        decisionReason: untypeDenyReasonForAskPropagation(internalRead.decisionReason),
       };
-    if (L.behavior === "allow" && internalPathDecisionStands(L, toolPermissionContext))
+    if (internalRead.behavior === "allow" && internalPathDecisionStands(internalRead, toolPermissionContext))
       return {
         allowed: true,
-        decisionReason: L.decisionReason,
+        decisionReason: internalRead.decisionReason,
       };
   }
   if (
-    r !== "read" &&
-    !D &&
+    operationType !== "read" &&
+    !inWorkingDir &&
     !isHttpMcpServeInvocation() &&
     toolPermissionContext.servedCall !== true &&
     !SandboxManager.isOnButNotRunning() &&
@@ -360,39 +381,41 @@ function isPathAllowed(path, toolPermissionContext, r, s, h) {
         rule: allowRule,
       },
     };
-  if (r !== "read") {
-    let internalReadResult = symlinkRedirect(pathsToCheck, toolPermissionContext);
+  if (operationType !== "read") {
+    let internalReadResult = symlinkRedirect(pathsToCheck_2, toolPermissionContext);
     if (internalReadResult?.carriedOut)
       return {
         allowed: false,
-        isInWorkingDir: D,
+        isInWorkingDir: inWorkingDir,
         decisionReason: {
           type: "safetyCheck",
-          reason: symlinkRedirectSentence(pathsToCheck.requested, internalReadResult),
+          reason: symlinkRedirectSentence(pathsToCheck_2.requested, internalReadResult),
           classifierApprovable: false,
         },
       };
   }
   return {
     allowed: false,
-    isInWorkingDir: D,
+    isInWorkingDir: inWorkingDir,
     refusedByDefault: true,
   };
 }
 //@ chunk-fq0cr76a.js:1068271-1068354 layout
-function hasAnyDenyRules(e) {
-  return Object.values(e.alwaysDenyRules).some((alwaysDenyRule) => (alwaysDenyRule?.length ?? 0) > 0);
+function hasAnyDenyRules(toolPermissionContext) {
+  return Object.values(toolPermissionContext.alwaysDenyRules).some(
+    (alwaysDenyRule) => (alwaysDenyRule?.length ?? 0) > 0,
+  );
 }
 //@ chunk-fq0cr76a.js:1068354-1068603 layout
 function checkGlobWriteAllowed(filePath, cwd, toolPermissionContext, operationType) {
   let fsImplementation = getFsImplementation();
   let globBaseDirectory = getGlobBaseDirectory(filePath);
-  let b = isAbsolute(globBaseDirectory) ? globBaseDirectory : resolve(cwd, globBaseDirectory);
-  let S = isAbsolute(filePath) ? filePath : resolve(cwd, filePath);
+  let globBaseDir = isAbsolute(globBaseDirectory) ? globBaseDirectory : resolve(cwd, globBaseDirectory);
+  let currentPath = isAbsolute(filePath) ? filePath : resolve(cwd, filePath);
   for (;;) {
-    let { resolvedPath, isSymlink, isCanonical } = safeResolvePath(fsImplementation, S);
-    let O = dirname(S);
-    if (isCanonical || S === b || O === S)
+    let { resolvedPath, isSymlink, isCanonical } = safeResolvePath(fsImplementation, currentPath);
+    let parentDir = dirname(currentPath);
+    if (isCanonical || currentPath === globBaseDir || parentDir === currentPath)
       return {
         ...isPathAllowed(
           resolvedPath,
@@ -400,87 +423,89 @@ function checkGlobWriteAllowed(filePath, cwd, toolPermissionContext, operationTy
           operationType,
           isCanonical ? resolvedSpellingWalk(resolvedPath) : undefined,
           isCanonical && isSymlink && hasAnyDenyRules(toolPermissionContext)
-            ? getPathsForPermissionCheck(S)
+            ? getPathsForPermissionCheck(currentPath)
             : undefined,
         ),
         resolvedPath,
       };
-    S = O;
+    currentPath = parentDir;
   }
 }
 //@ chunk-fq0cr76a.js:1068603-1068856 layout
 var WINDOWS_DRIVE_ROOT = /^[A-Za-z]:\/?$/;
-var WINDOWS_DRIVE_TOP_DIR = /^[A-Za-z]:\/[^/]+$/;
-var WINDOWS_DRIVE_PREFIX = /^[A-Za-z]:\//;
+var WINDOWS_DRIVE_TOP_DIR_RE = /^[A-Za-z]:\/[^/]+$/;
+var WINDOWS_DRIVE_PREFIX_RE = /^[A-Za-z]:\//;
 var UNC_ADMIN_SHARE = /^\\\\([^\\]+)\\([a-z])\$(?=$|\\)/;
-var MACOS_VOL_FILE_PATH = /^\/\.(?:vol|file)(?:\/|$)/i;
-var WINDOWS_ABSOLUTE_PREFIX = /^(?:[A-Za-z]:[\\/]|[\\/]{2}|[\\/]\?\?[\\/])/;
-var WINDOWS_DEVICE_OR_ADMIN_PATH = /^[\\/]{2}(?:[?.][\\/]|;|[^\\/]+[\\/]admin\$(?=$|[\\/]))/i;
+var MACOS_VOL_FILE_PATH_RE = /^\/\.(?:vol|file)(?:\/|$)/i;
+var WINDOWS_ABSOLUTE_PREFIX_RE = /^(?:[A-Za-z]:[\\/]|[\\/]{2}|[\\/]\?\?[\\/])/;
+var WINDOWS_DEVICE_OR_ADMIN_PATH_RE = /^[\\/]{2}(?:[?.][\\/]|;|[^\\/]+[\\/]admin\$(?=$|[\\/]))/i;
 //@ chunk-fq0cr76a.js:1068856-1069027 facade-exports = getReservedShortcuts (1)
 /**
  * 判断路径（含各种拼写）是否为受保护系统路径：Windows 设备或管理路径、macOS /.vol 等内核重定向路径、其他系统根。旧版名 getReservedShortcuts 误配。
  */
 function isDangerousRemovalPath(resolvedPath) {
-  return isDangerousRemovalPath_2(resolvedPath).some((n) => {
-    let r = normalizePathForRules(n);
-    if (WINDOWS_DEVICE_OR_ADMIN_PATH.test(r) || isSuspiciousUncHost(r)) return true;
-    let replaced = r.replace(/[\\/]+/g, "/");
-    if (getPlatform() === "macos" && MACOS_VOL_FILE_PATH.test(replaced)) return true;
-    return isBroadSandboxWritePath(replaced);
+  return isDangerousRemovalPath_2(resolvedPath).some((path) => {
+    let normalizedPath = normalizePathForRules(path);
+    if (WINDOWS_DEVICE_OR_ADMIN_PATH_RE.test(normalizedPath) || isSuspiciousUncHost(normalizedPath))
+      return true;
+    let inputPath = normalizedPath.replace(/[\\/]+/g, "/");
+    if (getPlatform() === "macos" && MACOS_VOL_FILE_PATH_RE.test(inputPath)) return true;
+    return isBroadSandboxWritePath(inputPath);
   });
 }
 //@ chunk-fq0cr76a.js:1069027-1069309 file-local
 function isDangerousRemovalPath_2(resolvedPath) {
-  let n = [
+  let variants = [
     resolvedPath,
     resolvedPath
       .split("/")
-      .filter((r, s) => r !== "." || s === 0)
+      .filter((segment, index) => segment !== "." || index === 0)
       .join("/") || (resolvedPath.startsWith("/") ? "/" : ""),
   ];
-  if (WINDOWS_ABSOLUTE_PREFIX.test(resolvedPath) || getPlatform() === "windows")
-    for (let r of uniq([resolvedPath, normalizeWindowsDevicePath(resolvedPath)]))
-      n.push(
-        ...expandAdminSharePath(normalizeWindowsPathForCompare(r)),
+  if (WINDOWS_ABSOLUTE_PREFIX_RE.test(resolvedPath) || getPlatform() === "windows")
+    for (let spelling of uniq([resolvedPath, normalizeWindowsDevicePath(resolvedPath)]))
+      variants.push(
+        ...expandAdminSharePath(normalizeWindowsPathForCompare(spelling)),
         ...expandAdminSharePath(
           normalizeWindowsPathForCompare(
-            r.replace(/[^\\/]+/g, (s) => {
-              let parentDir = stripTrailingDotsSpaces(s);
-              return parentDir === "." || parentDir === ".." ? parentDir : s;
+            spelling.replace(/[^\\/]+/g, (segment) => {
+              let parentDir = stripTrailingDotsSpaces(segment);
+              return parentDir === "." || parentDir === ".." ? parentDir : segment;
             }),
           ),
         ),
       );
-  return uniq(n);
+  return uniq(variants);
 }
 //@ chunk-fq0cr76a.js:1069309-1069428 layout
-function expandAdminSharePath(e) {
-  let match = UNC_ADMIN_SHARE.exec(e);
+function expandAdminSharePath(sharePath) {
+  let match = UNC_ADMIN_SHARE.exec(sharePath);
   return match !== null && classifyUncHost(match[1]) === "own_host"
-    ? [e, `${match[2]}:${e.slice(match[0].length) || "\\"}`]
-    : [e];
+    ? [sharePath, `${match[2]}:${sharePath.slice(match[0].length) || "\\"}`]
+    : [sharePath];
 }
 //@ chunk-fq0cr76a.js:1069428-1069468 layout
-function classifyUncHost(e) {
-  return classifyUncPath(`\\\\${e}\\`);
+function classifyUncHost(host) {
+  return classifyUncPath(`\\\\${host}\\`);
 }
 //@ chunk-fq0cr76a.js:1069468-1069608 layout
-function isSuspiciousUncHost(e) {
-  if (!/^[\\/]{2}/.test(e)) return false;
-  let match = UNC_ADMIN_SHARE.exec(normalizeWindowsPathForCompare(e));
-  let r = match === null ? undefined : classifyUncHost(match[1]);
-  return r === "numeric_host" || r === "odd_host";
+function isSuspiciousUncHost(path) {
+  if (!/^[\\/]{2}/.test(path)) return false;
+  let match = UNC_ADMIN_SHARE.exec(normalizeWindowsPathForCompare(path));
+  let hostKind = match === null ? undefined : classifyUncHost(match[1]);
+  return hostKind === "numeric_host" || hostKind === "odd_host";
 }
 //@ chunk-fq0cr76a.js:1069608-1070312 layout
 /**
  * 沙箱写允许路径是否过于宽泛：通配、根目录、盘符根、主目录（含真实路径与管理共享形式）及其祖先、根下一级目录。
  */
-function isBroadSandboxWritePath(e) {
-  if (e === "*" || e.endsWith("/*")) return true;
+function isBroadSandboxWritePath(inputPath) {
+  if (inputPath === "*" || inputPath.endsWith("/*")) return true;
   let isMacos = getPlatform() === "macos";
-  let stripPrivatePrefix = (R) => (isMacos ? R.replace(/^\/private\/(etc|var|tmp|home)(\/|$)/i, "/$1$2") : R);
-  let s = stripPrivatePrefix(e);
-  let normalized = s === "/" ? s : s.replace(/\/$/, "");
+  let stripPrivatePrefix = (path) =>
+    isMacos ? path.replace(/^\/private\/(etc|var|tmp|home)(\/|$)/i, "/$1$2") : path;
+  let strippedPath = stripPrivatePrefix(inputPath);
+  let normalized = strippedPath === "/" ? strippedPath : strippedPath.replace(/\/$/, "");
   if (normalized === "/") return true;
   if (WINDOWS_DRIVE_ROOT.test(normalized)) return true;
   let replaced = stripPrivatePrefix(normalizePathForRules(homedir()).replace(/[\\/]+/g, "/")).replace(
@@ -493,8 +518,8 @@ function isBroadSandboxWritePath(e) {
     replaced,
     canonicalHome,
     ...(/^[\\/]{2}/.test(homedir())
-      ? expandAdminSharePath(normalizeWindowsPathForCompare(normalizeWindowsDevicePath(homedir()))).map((R) =>
-          R.replace(/[\\/]+/g, "/").replace(/\/$/, ""),
+      ? expandAdminSharePath(normalizeWindowsPathForCompare(normalizeWindowsDevicePath(homedir()))).map(
+          (sharePath) => sharePath.replace(/[\\/]+/g, "/").replace(/\/$/, ""),
         )
       : []),
   ]);
@@ -507,57 +532,59 @@ function isBroadSandboxWritePath(e) {
   )
     return true;
   for (let homeSpelling of homeSpellings) {
-    let D = WINDOWS_DRIVE_PREFIX.exec(homeSpelling)?.[0];
+    let drivePrefix = WINDOWS_DRIVE_PREFIX_RE.exec(homeSpelling)?.[0];
     if (
-      D !== undefined &&
-      normalizeCaseForComparison_2(normalized.slice(0, D.length)) === normalizeCaseForComparison_2(D) &&
-      profileRelativeRemainders(homeSpelling.slice(D.length), normalized.slice(D.length)).some(
-        (O) => O.length === 0,
-      )
+      drivePrefix !== undefined &&
+      normalizeCaseForComparison_2(normalized.slice(0, drivePrefix.length)) ===
+        normalizeCaseForComparison_2(drivePrefix) &&
+      profileRelativeRemainders(
+        homeSpelling.slice(drivePrefix.length),
+        normalized.slice(drivePrefix.length),
+      ).some((remainder) => remainder.length === 0)
     )
       return true;
   }
   if (dirname(normalized) === "/") return true;
-  if (WINDOWS_DRIVE_TOP_DIR.test(normalized)) return true;
+  if (WINDOWS_DRIVE_TOP_DIR_RE.test(normalized)) return true;
   return false;
 }
 //@ chunk-fq0cr76a.js:1070312-1070370 layout
-function normalizePathForRules(e) {
+function normalizePathForRules(inputPath) {
   return normalizeDosDevicePath(
-    uncAdminShareToDrive(normalizeWindowsDevicePath(e).replace(WSL_MNT_UNC_RE, "$1:")),
+    uncAdminShareToDrive(normalizeWindowsDevicePath(inputPath).replace(WSL_MNT_UNC_RE, "$1:")),
   );
 }
 //@ chunk-fq0cr76a.js:1070370-1070550 layout
-function getCanonicalHomedir(e) {
+function getCanonicalHomedir(homeDir) {
   let { canonicalHomedirByHome } = getSessionPathsCache();
-  let r = canonicalHomedirByHome.get(e);
-  if (r !== undefined) return r;
-  let replaced = normalizePathForRules(safeResolvePath(getFsImplementation(), e).resolvedPath)
+  let cached = canonicalHomedirByHome.get(homeDir);
+  if (cached !== undefined) return cached;
+  let replaced = normalizePathForRules(safeResolvePath(getFsImplementation(), homeDir).resolvedPath)
     .replace(/[\\/]+/g, "/")
     .replace(/\/$/, "");
-  canonicalHomedirByHome.set(e, replaced);
+  canonicalHomedirByHome.set(homeDir, replaced);
   return replaced;
 }
 //@ chunk-fq0cr76a.js:1070550-1070640 facade-exports
 /**
  * 按 / 切分路径段；Windows 上同时按 \ 和 / 切分并合并两种结果。
  */
-function shellPathSegments(e) {
-  let parts = e.split(/\/+/);
-  return getPlatform() === "windows" ? [...e.split(/[\\/]+/), ...parts] : parts;
+function shellPathSegments(inputPath) {
+  let parts = inputPath.split(/\/+/);
+  return getPlatform() === "windows" ? [...inputPath.split(/[\\/]+/), ...parts] : parts;
 }
 //@ chunk-fq0cr76a.js:1070640-1070794 facade-exports
 /**
  * 路径中是否有出现在普通段之后的 ..（向上逃逸），开头的 .. 不算。
  */
-function hasInteriorDotDot(e) {
-  let parts = e.split(getPlatform() === "windows" ? /[\\/]/ : "/");
-  let r = false;
-  for (let s of parts) {
-    if (s === "" || s === ".") continue;
-    if (s === "..") {
-      if (r) return true;
-    } else r = true;
+function hasInteriorDotDot(inputPath) {
+  let parts = inputPath.split(getPlatform() === "windows" ? /[\\/]/ : "/");
+  let sawNamedSegment = false;
+  for (let segment of parts) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      if (sawNamedSegment) return true;
+    } else sawNamedSegment = true;
   }
   return false;
 }
@@ -565,16 +592,16 @@ function hasInteriorDotDot(e) {
 /**
  * 是否在 glob 字符（或未闭合的 [）之后出现 ..，这种路径无法静态确定落点，需人工确认。
  */
-function globBeforeInteriorDotDot(e) {
-  let parts = e.split(/[\\/]+/);
-  return parts.some((r, s) => {
-    if (r !== "..") return false;
-    let joined = parts.slice(0, s).join("/");
+function globBeforeInteriorDotDot(inputPath) {
+  let parts = inputPath.split(/[\\/]+/);
+  return parts.some((segment, index) => {
+    if (segment !== "..") return false;
+    let joined = parts.slice(0, index).join("/");
     return (
       firstGlobCharIndex(joined) !== -1 ||
       (joined.includes("[") &&
         parts
-          .slice(s + 1)
+          .slice(index + 1)
           .join("/")
           .includes("]"))
     );
@@ -583,7 +610,9 @@ function globBeforeInteriorDotDot(e) {
 //@ chunk-fq0cr76a.js:1070981-1071093 layout
 function hasReadDenyRule(toolPermissionContext) {
   return Object.values(toolPermissionContext.alwaysDenyRules).some((alwaysDenyRule) =>
-    alwaysDenyRule?.some((r) => r === FILE_READ_TOOL_NAME || r.startsWith(`${FILE_READ_TOOL_NAME}(`)),
+    alwaysDenyRule?.some(
+      (ruleString) => ruleString === FILE_READ_TOOL_NAME || ruleString.startsWith(`${FILE_READ_TOOL_NAME}(`),
+    ),
   );
 }
 //@ chunk-fq0cr76a.js:1071093-1071666 callgraph-fingerprint = isPathAllowed (0.429)
@@ -615,47 +644,52 @@ function checkTraversalPath(path, cwd, toolPermissionContext, operationType) {
 //@ chunk-fq0cr76a.js:1071666-1072315 layout
 function resolveTraversalAndCheck(path, cwd, toolPermissionContext, operationType) {
   let fsImplementation = getFsImplementation();
-  let y = isAbsolute(path) ? path : `${cwd}/${path}`;
-  let b = "/";
-  let S = [];
-  for (let L of y.split("/")) {
-    if (L === "" || L === ".") continue;
-    if (L !== "..") {
-      S.push(L);
+  let absoluteInput = isAbsolute(path) ? path : `${cwd}/${path}`;
+  let base = "/";
+  let pending = [];
+  for (let segment of absoluteInput.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment !== "..") {
+      pending.push(segment);
       continue;
     }
-    if (S.length > 0) {
-      let V = safeResolvePath(fsImplementation, resolve(b, ...S));
-      if (!V.isCanonical) return;
-      b = V.resolvedPath;
-      S = [];
+    if (pending.length > 0) {
+      let resolved = safeResolvePath(fsImplementation, resolve(base, ...pending));
+      if (!resolved.isCanonical) return;
+      base = resolved.resolvedPath;
+      pending = [];
     }
-    b = dirname(b);
+    base = dirname(base);
   }
-  let w = resolve(b, ...S);
+  let targetPath = resolve(base, ...pending);
   if (operationType !== "read") {
-    let L = {
-      ...walkPermissionCheckPaths(w),
-      requested: y,
+    let walk = {
+      ...walkPermissionCheckPaths(targetPath),
+      requested: absoluteInput,
     };
-    let V = isPathAllowed(L.unresolved ? w : L.landing, toolPermissionContext, operationType, L);
-    if (V.allowed || (V.isInWorkingDir === true && V.decisionReason === undefined)) return;
-    let K = symlinkRedirect(L, toolPermissionContext);
+    let verdict = isPathAllowed(
+      walk.unresolved ? targetPath : walk.landing,
+      toolPermissionContext,
+      operationType,
+      walk,
+    );
+    if (verdict.allowed || (verdict.isInWorkingDir === true && verdict.decisionReason === undefined)) return;
+    let redirect = symlinkRedirect(walk, toolPermissionContext);
     return {
-      ...V,
-      resolvedPath: K?.carriedOut ? K.landing : w,
+      ...verdict,
+      resolvedPath: redirect?.carriedOut ? redirect.landing : targetPath,
     };
   }
-  let { resolvedPath, isCanonical } = safeResolvePath(fsImplementation, w);
-  let O = isPathAllowed(
+  let { resolvedPath, isCanonical } = safeResolvePath(fsImplementation, targetPath);
+  let verdict = isPathAllowed(
     resolvedPath,
     toolPermissionContext,
     operationType,
     isCanonical ? resolvedSpellingWalk(resolvedPath) : undefined,
   );
-  if (O.allowed || (O.isInWorkingDir === true && O.decisionReason === undefined)) return;
+  if (verdict.allowed || (verdict.isInWorkingDir === true && verdict.decisionReason === undefined)) return;
   return {
-    ...O,
+    ...verdict,
     resolvedPath,
   };
 }
@@ -738,18 +772,18 @@ function validatePath(path, cwd, toolPermissionContext, operationType) {
 /**
  * 对一个已展开的 Shell 路径参数做许可判定：写操作按符号链接落点检查并在被拒时给出实际落点；读操作先解析真实路径，必要时连同原拼写一起交给 isPathAllowed。
  */
-function validateResolvedOperand(e, toolPermissionContext, operationType) {
+function validateResolvedOperand(inputPath, toolPermissionContext, operationType) {
   if (operationType !== "read") {
-    let S = walkPermissionCheckPaths(e);
-    let w = S.unresolved ? e : S.landing;
-    let R = isPathAllowed(w, toolPermissionContext, operationType, S);
-    let D = R.allowed ? null : symlinkRedirect(S, toolPermissionContext);
+    let walk = walkPermissionCheckPaths(inputPath);
+    let targetPath = walk.unresolved ? inputPath : walk.landing;
+    let verdict = isPathAllowed(targetPath, toolPermissionContext, operationType, walk);
+    let redirect = verdict.allowed ? null : symlinkRedirect(walk, toolPermissionContext);
     return {
-      ...R,
-      resolvedPath: D?.carriedOut ? D.landing : e,
+      ...verdict,
+      resolvedPath: redirect?.carriedOut ? redirect.landing : inputPath,
     };
   }
-  let { resolvedPath, isSymlink, isCanonical } = safeResolvePath(getFsImplementation(), e);
+  let { resolvedPath, isSymlink, isCanonical } = safeResolvePath(getFsImplementation(), inputPath);
   return {
     ...isPathAllowed(
       resolvedPath,
@@ -757,7 +791,7 @@ function validateResolvedOperand(e, toolPermissionContext, operationType) {
       operationType,
       isCanonical ? resolvedSpellingWalk(resolvedPath) : undefined,
       isCanonical && isSymlink && hasAnyDenyRules(toolPermissionContext)
-        ? getPathsForPermissionCheck(e)
+        ? getPathsForPermissionCheck(inputPath)
         : undefined,
     ),
     resolvedPath,
@@ -798,4 +832,5 @@ export {
   isDangerousRemovalPath,
   validateResolvedOperand,
   isOnlyOutsideWorkingFoldersRefusal,
+  getGlobBaseDirectory,
 };

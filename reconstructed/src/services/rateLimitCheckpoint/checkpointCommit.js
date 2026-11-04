@@ -52,8 +52,11 @@ var MAX_CHECKPOINT_FILES = 25000;
 var MAX_CHECKPOINT_BYTES = 2147483648;
 var MAX_CHECKPOINT_LINE_CHARS = 500;
 //@ chunk-89f54s6c.js:6443-6595 placement
-function sanitizeCheckpointLine(i) {
-  let replaced = i.replace(/[\x00-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]+/g, " ");
+function sanitizeCheckpointLine(line) {
+  let replaced = line.replace(
+    /[\x00-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028-\u202e\u2066-\u2069\ufeff]+/g,
+    " ",
+  );
   return replaced.length > MAX_CHECKPOINT_LINE_CHARS
     ? `${truncateToLength(replaced, MAX_CHECKPOINT_LINE_CHARS)}\u2026`
     : replaced;
@@ -67,58 +70,58 @@ var CHECKPOINT_INDEX_MAX_AGE_SECONDS = 1209600;
 /**
  * 同一时间只运行一次：无 todo 时从任务列表读取，然后提交 git 检查点；成功记 ok 与 tengu_rl_checkpoint_a1_shown，否则按跳过原因记 sad。
  */
-async function commitCheckpointOnce(i) {
+async function commitCheckpointOnce(request) {
   let continueInFlight = getContinueInFlight();
   if (continueInFlight !== null) return continueInFlight;
   publishContinueResult(null);
   let inFlight = (async () => {
-    let todos = i.todos;
+    let todos = request.todos;
     if (todos.length === 0 && isTaskToolsEnabled())
       try {
-        todos = (await listTasks(getTaskListId())).map((h) => ({
-          content: h.subject,
-          status: h.status,
-          activeForm: h.activeForm ?? h.subject,
+        todos = (await listTasks(getTaskListId())).map((task) => ({
+          content: task.subject,
+          status: task.status,
+          activeForm: task.activeForm ?? task.subject,
         }));
       } catch {}
     return commitRateLimitCheckpoint({
       todos,
-      trigger: i.trigger,
+      trigger: request.trigger,
     });
   })();
   setContinueInFlight(inFlight);
-  let s;
+  let result;
   try {
-    s = await inFlight;
+    result = await inFlight;
   } finally {
     setContinueInFlight(null);
   }
-  publishContinueResult(s);
-  if (s.committed) {
+  publishContinueResult(result);
+  if (result.committed) {
     logFeatureOk("usage_limit_checkpoint_commit", {
-      trigger: fromEnum(i.trigger),
+      trigger: fromEnum(request.trigger),
     });
     logEvent("tengu_rl_checkpoint_a1_shown", {});
   } else
-    logFeatureSad("usage_limit_checkpoint_commit", s.skipReason, {
-      trigger: fromEnum(i.trigger),
+    logFeatureSad("usage_limit_checkpoint_commit", result.skipReason, {
+      trigger: fromEnum(request.trigger),
     });
-  return s;
+  return result;
 }
 //@ chunk-89f54s6c.js:7209-7300 placement
 /**
  * 路径包含判断：child 等于 parent 或位于 parent 之下且不是绝对路径逃逸。
  */
-function isPathInside(i, o) {
-  if (i === o) return true;
-  let r = relative(o, i);
-  return r !== "" && !r.startsWith("..") && !isAbsolute(r);
+function isPathInside(child, parent) {
+  if (child === parent) return true;
+  let relativePath = relative(parent, child);
+  return relativePath !== "" && !relativePath.startsWith("..") && !isAbsolute(relativePath);
 }
 //@ chunk-89f54s6c.js:7300-13743 placement
 /**
  * 达到限流时把工作区提交为检查点（排除非交互/远程工作区等情况）。
  */
-async function commitRateLimitCheckpoint(i) {
+async function commitRateLimitCheckpoint(request) {
   if (getIsNonInteractiveSession())
     return {
       committed: false,
@@ -134,8 +137,8 @@ async function commitRateLimitCheckpoint(i) {
       committed: false,
       skipReason: "policy",
     };
-  let gitRoot = findGitRoot(getCwd());
-  if (gitRoot === null)
+  let baseDir = findGitRoot(getCwd());
+  if (baseDir === null)
     return {
       committed: false,
       skipReason: "not_git",
@@ -145,34 +148,34 @@ async function commitRateLimitCheckpoint(i) {
       committed: false,
       skipReason: "bare_repo",
     };
-  let r = nativeRealpathLong(gitRoot);
-  let s = nativeRealpathLong(homedir());
-  if (r === null || s === null || isPathInside(s, r))
+  let rootReal = nativeRealpathLong(baseDir);
+  let homeReal = nativeRealpathLong(homedir());
+  if (rootReal === null || homeReal === null || isPathInside(homeReal, rootReal))
     return {
       committed: false,
       skipReason: "gitroot_uncontained",
     };
   let sessionId = getSessionId();
   let sliced = sessionId.slice(0, 8);
-  let h = `${REFS_CLAUDE_CHECKPOINT}${sliced}`;
-  let n = [...GIT_SAFE_GLOBAL_ARGS];
-  let R;
-  let _;
+  let refName = `${REFS_CLAUDE_CHECKPOINT}${sliced}`;
+  let safeArgs = [...GIT_SAFE_GLOBAL_ARGS];
+  let indexFile;
+  let tempDir;
   try {
-    let gitDir = await getGitDir(gitRoot);
-    if (gitDir === null)
+    let commonDir = await getGitDir(baseDir);
+    if (commonDir === null)
       return {
         committed: false,
         skipReason: "not_git",
       };
-    let C = nativeRealpathLong(gitDir);
-    if (C === null || !isPathInside(C, r))
+    let gitDirReal = nativeRealpathLong(commonDir);
+    if (gitDirReal === null || !isPathInside(gitDirReal, rootReal))
       return {
         committed: false,
         skipReason: "gitdir_uncontained",
       };
     if (
-      (await lstat(join(gitDir, "commondir")).catch((error) => {
+      (await lstat(join(commonDir, "commondir")).catch((error) => {
         if (error.code === "ENOENT") return null;
         throw error;
       })) !== null
@@ -181,7 +184,7 @@ async function commitRateLimitCheckpoint(i) {
         committed: false,
         skipReason: "gitdir_uncontained",
       };
-    for (let e of [
+    for (let gitEntry of [
       "objects",
       "refs",
       join("refs", "claude"),
@@ -191,128 +194,131 @@ async function commitRateLimitCheckpoint(i) {
       "packed-refs",
       "reftable",
     ]) {
-      let E = await lstat(join(gitDir, e)).catch((error) => {
+      let stats = await lstat(join(commonDir, gitEntry)).catch((error) => {
         if (error.code === "ENOENT") return null;
         throw error;
       });
-      if (E !== null && E.isSymbolicLink())
+      if (stats !== null && stats.isSymbolicLink())
         return {
           committed: false,
           skipReason: "gitdir_uncontained",
         };
     }
-    let le = await readdir(join(gitDir, "objects"), {
+    let objectEntries = await readdir(join(commonDir, "objects"), {
       withFileTypes: true,
     }).catch((error) => {
       if (error.code === "ENOENT") return [];
       throw error;
     });
-    for (let e of le)
-      if (e.isSymbolicLink())
+    for (let entry of objectEntries)
+      if (entry.isSymbolicLink())
         return {
           committed: false,
           skipReason: "gitdir_uncontained",
         };
     let remoteHostSessionCount = getRemoteHostSessionCount({
-      GIT_COMMON_DIR: gitDir,
-      GIT_WORK_TREE: gitRoot,
+      GIT_COMMON_DIR: commonDir,
+      GIT_WORK_TREE: baseDir,
       GIT_ALLOW_PROTOCOL: GIT_ALLOW_PROTOCOL_VALUE,
       GIT_NO_LAZY_FETCH: "1",
       GIT_NO_REPLACE_OBJECTS: "1",
       GIT_TERMINAL_PROMPT: "0",
     });
     if (
-      (await lstat(join(gitDir, "info", "sparse-checkout")).catch((error) => {
+      (await lstat(join(commonDir, "info", "sparse-checkout")).catch((error) => {
         if (error.code === "ENOENT") return null;
         throw error;
       })) !== null
     ) {
-      let e = await execFileNoThrowWithCwd(
+      let configResult = await execFileNoThrowWithCwd(
         gitExe(),
-        [...n, "config", "--type=bool", "--get", "core.sparseCheckout"],
+        [...safeArgs, "config", "--type=bool", "--get", "core.sparseCheckout"],
         {
-          cwd: gitRoot,
+          cwd: baseDir,
           env: remoteHostSessionCount,
           timeout: GIT_COMMAND_TIMEOUT_MS,
         },
       );
-      if (e.code === 0 && e.stdout.trim() === "true")
+      if (configResult.code === 0 && configResult.stdout.trim() === "true")
         return {
           committed: false,
           skipReason: "sparse_checkout",
         };
     }
-    let ue = await lstat(join(gitDir, "lfs")).catch((error) => {
+    let lfsStats = await lstat(join(commonDir, "lfs")).catch((error) => {
       if (error.code === "ENOENT") return null;
       throw error;
     });
-    let W = join(gitRoot, ".gitattributes");
-    let P = await lstat(W).catch((error) => {
+    let gitattributesPath = join(baseDir, ".gitattributes");
+    let gitattributesStats = await lstat(gitattributesPath).catch((error) => {
       if (error.code === "ENOENT") return null;
       throw error;
     });
-    let me = P !== null && P.isFile() && P.size <= 65536 ? await readFile(W, "utf-8").catch(() => "") : "";
-    if (ue !== null || /\bfilter\s*=\s*lfs\b/.test(me))
+    let gitattributesText =
+      gitattributesStats !== null && gitattributesStats.isFile() && gitattributesStats.size <= 65536
+        ? await readFile(gitattributesPath, "utf-8").catch(() => "")
+        : "";
+    if (lfsStats !== null || /\bfilter\s*=\s*lfs\b/.test(gitattributesText))
       return {
         committed: false,
         skipReason: "content_filters",
       };
-    let j = await isGitTransientState(
-      gitDir,
-      async (e) =>
+    let transientState = await isGitTransientState(
+      commonDir,
+      async (args) =>
         (
-          await execFileNoThrowWithCwd(gitExe(), [...n, ...e], {
-            cwd: gitRoot,
+          await execFileNoThrowWithCwd(gitExe(), [...safeArgs, ...args], {
+            cwd: baseDir,
             env: remoteHostSessionCount,
             timeout: GIT_COMMAND_TIMEOUT_MS,
           })
         ).exitCode,
     );
-    if (j === null)
+    if (transientState === null)
       return {
         committed: false,
         skipReason: "git_error",
       };
-    if (j)
+    if (transientState)
       return {
         committed: false,
         skipReason: "sequencer_in_progress",
       };
-    let U = await execFileNoThrowWithCwd(gitExe(), [...n, "rev-parse", "--verify", "HEAD"], {
-      cwd: gitRoot,
+    let headResult = await execFileNoThrowWithCwd(gitExe(), [...safeArgs, "rev-parse", "--verify", "HEAD"], {
+      cwd: baseDir,
       env: remoteHostSessionCount,
       timeout: GIT_COMMAND_TIMEOUT_MS,
     });
-    if (U.code !== 0)
+    if (headResult.code !== 0)
       return {
         committed: false,
         skipReason: "no_head",
       };
-    let trimmed = U.stdout.trim();
-    let pe = (e, E) =>
-      execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...e], {
-        cwd: E.cwd,
+    let trimmed = headResult.stdout.trim();
+    let git = (args, options) =>
+      execFileNoThrowWithCwd(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...args], {
+        cwd: options.cwd,
         env: remoteHostSessionCount,
-        input: E.input,
+        input: options.input,
         timeout: GIT_COMMAND_TIMEOUT_MS,
       });
     let flagWithOverride = readFlagWithOverride(TENGU_VIRTUAL_PINE, {
       safe: true,
     });
     if (flagWithOverride) {
-      _ = await mkdtemp(join(resolveTempDir(), `${CLAUDE_CHECKPOINT_INDEX}${process.pid}-`));
-      R = join(_, "index");
-    } else R = join(gitDir, `claude-checkpoint-index.${process.pid}`);
+      tempDir = await mkdtemp(join(resolveTempDir(), `${CLAUDE_CHECKPOINT_INDEX}${process.pid}-`));
+      indexFile = join(tempDir, "index");
+    } else indexFile = join(commonDir, `claude-checkpoint-index.${process.pid}`);
     let env = {
       ...remoteHostSessionCount,
-      GIT_INDEX_FILE: R,
+      GIT_INDEX_FILE: indexFile,
     };
-    let I = flagWithOverride ? ["-c", "core.splitIndex=false"] : [];
-    let he = flagWithOverride ? ["--exclude", `${CLAUDE_CHECKPOINT_INDEX}[0-9]*-??????/`] : [];
+    let splitIndexArgs = flagWithOverride ? ["-c", "core.splitIndex=false"] : [];
+    let excludeArgs = flagWithOverride ? ["--exclude", `${CLAUDE_CHECKPOINT_INDEX}[0-9]*-??????/`] : [];
     if (
       (
-        await execFileNoThrowWithCwd(gitExe(), [...n, ...I, "read-tree", trimmed], {
-          cwd: gitRoot,
+        await execFileNoThrowWithCwd(gitExe(), [...safeArgs, ...splitIndexArgs, "read-tree", trimmed], {
+          cwd: baseDir,
           env,
           timeout: GIT_COMMAND_TIMEOUT_MS,
         })
@@ -322,85 +328,92 @@ async function commitRateLimitCheckpoint(i) {
         committed: false,
         skipReason: "git_error",
       };
-    let [J, X] = await Promise.all([
-      execFileNoThrowWithCwd(gitExe(), [...n, ...I, "ls-files", "-z", "--cached"], {
-        cwd: gitRoot,
+    let [trackedResult, untrackedResult] = await Promise.all([
+      execFileNoThrowWithCwd(gitExe(), [...safeArgs, ...splitIndexArgs, "ls-files", "-z", "--cached"], {
+        cwd: baseDir,
         env,
         maxBuffer: 33554432,
         timeout: GIT_COMMAND_TIMEOUT_MS,
       }),
-      execFileNoThrowWithCwd(gitExe(), [...n, ...I, "ls-files", "-z", "-o", "--exclude-standard", ...he], {
-        cwd: gitRoot,
-        env,
-        maxBuffer: 33554432,
-        timeout: GIT_COMMAND_TIMEOUT_MS,
-      }),
+      execFileNoThrowWithCwd(
+        gitExe(),
+        [...safeArgs, ...splitIndexArgs, "ls-files", "-z", "-o", "--exclude-standard", ...excludeArgs],
+        {
+          cwd: baseDir,
+          env,
+          maxBuffer: 33554432,
+          timeout: GIT_COMMAND_TIMEOUT_MS,
+        },
+      ),
     ]);
-    if (J.code !== 0 || X.code !== 0)
+    if (trackedResult.code !== 0 || untrackedResult.code !== 0)
       return {
         committed: false,
         skipReason: "git_error",
       };
-    let filtered = J.stdout.split("\x00").filter((e) => e.length > 0);
-    let filtered_2 = X.stdout.split("\x00").filter((e) => e.length > 0);
+    let filtered = trackedResult.stdout.split("\x00").filter((path) => path.length > 0);
+    let filtered_2 = untrackedResult.stdout.split("\x00").filter((path) => path.length > 0);
     if (filtered.length + filtered_2.length > MAX_CHECKPOINT_FILES)
       return {
         committed: false,
         skipReason: "too_large",
       };
-    let O = [];
-    let N = [];
-    let V = 0;
-    let Z = async (e, E) => {
+    let removedPaths = [];
+    let indexEntries = [];
+    let totalBytes = 0;
+    let collectEntry = async (relativePath, mayBeRemoved) => {
       if (
-        e.includes(`
+        relativePath.includes(`
 `) ||
-        e.includes("\r") ||
-        e.includes('"') ||
-        e.includes("\\")
+        relativePath.includes("\r") ||
+        relativePath.includes('"') ||
+        relativePath.includes("\\")
       )
         return;
-      if (e.split("/").some((S) => S === "." || S === "..")) return;
-      let x;
+      if (relativePath.split("/").some((segment) => segment === "." || segment === "..")) return;
+      let stats;
       try {
-        x = await lstat(join(gitRoot, e));
+        stats = await lstat(join(baseDir, relativePath));
       } catch (error) {
-        if (E && isENOENT(error)) O.push(e);
+        if (mayBeRemoved && isENOENT(error)) removedPaths.push(relativePath);
         return;
       }
-      if (!x.isFile()) return;
-      let se = nativeRealpathLong(join(gitRoot, e));
-      if (se === null || !isPathInside(se, r)) return;
-      V += x.size;
-      let mode = (x.mode & 64) !== 0 ? "100755" : "100644";
-      N.push({
-        path: e,
+      if (!stats.isFile()) return;
+      let realPath = nativeRealpathLong(join(baseDir, relativePath));
+      if (realPath === null || !isPathInside(realPath, rootReal)) return;
+      totalBytes += stats.size;
+      let mode = (stats.mode & 64) !== 0 ? "100755" : "100644";
+      indexEntries.push({
+        path: relativePath,
         mode,
       });
     };
-    await Promise.all([...filtered.map((e) => Z(e, true)), ...filtered_2.map((e) => Z(e, false))]);
-    if (V > MAX_CHECKPOINT_BYTES)
+    await Promise.all([
+      ...filtered.map((path) => collectEntry(path, true)),
+      ...filtered_2.map((path) => collectEntry(path, false)),
+    ]);
+    if (totalBytes > MAX_CHECKPOINT_BYTES)
       return {
         committed: false,
         skipReason: "too_large",
       };
-    let A = join(gitRoot, ".claude");
-    let F = !isPathConfigDir(A);
+    let claudeDir = join(baseDir, ".claude");
+    let mustCheckChain = !isPathConfigDir(claudeDir);
     let checkpointNote = buildCheckpointNote({
       sessionId,
-      ref: h,
-      trigger: i.trigger,
-      todos: i.todos,
+      ref: refName,
+      trigger: request.trigger,
+      todos: request.todos,
     });
     try {
-      if (F) await assertDirChainReal(gitRoot, A);
-      await mkdir(A, {
+      if (mustCheckChain) await assertDirChainReal(baseDir, claudeDir);
+      await mkdir(claudeDir, {
         recursive: true,
       });
-      await writeFileAtomic(join(gitRoot, ".claude", "RESUME.md"), checkpointNote, {
+      await writeFileAtomic(join(baseDir, ".claude", "RESUME.md"), checkpointNote, {
         encoding: "utf-8",
-        allowSymlink: !F,
-        checkParentDir: F,
+        allowSymlink: !mustCheckChain,
+        checkParentDir: mustCheckChain,
       });
     } catch {
       return {
@@ -408,28 +421,28 @@ async function commitRateLimitCheckpoint(i) {
         skipReason: "resume_write_refused",
       };
     }
-    let ee = await execFileNoThrowWithCwd(gitExe(), [...n, "hash-object", "-w", "--stdin"], {
-      cwd: gitRoot,
+    let hashResult = await execFileNoThrowWithCwd(gitExe(), [...safeArgs, "hash-object", "-w", "--stdin"], {
+      cwd: baseDir,
       env: remoteHostSessionCount,
       input: checkpointNote,
       timeout: GIT_COMMAND_TIMEOUT_MS,
     });
-    if (ee.code !== 0)
+    if (hashResult.code !== 0)
       return {
         committed: false,
         skipReason: "git_error",
       };
-    let trimmed_2 = ee.stdout.trim();
-    let G = [];
-    if (N.length > 0) {
-      let e = await execFileNoThrowWithCwd(
+    let trimmed_2 = hashResult.stdout.trim();
+    let hashes = [];
+    if (indexEntries.length > 0) {
+      let hashFilesResult = await execFileNoThrowWithCwd(
         gitExe(),
-        [...n, "hash-object", "-w", "--no-filters", "--stdin-paths"],
+        [...safeArgs, "hash-object", "-w", "--no-filters", "--stdin-paths"],
         {
-          cwd: gitRoot,
+          cwd: baseDir,
           env: remoteHostSessionCount,
           input:
-            N.map((E) => E.path).join(`
+            indexEntries.map((entry) => entry.path).join(`
 `) +
             `
 `,
@@ -437,53 +450,59 @@ async function commitRateLimitCheckpoint(i) {
           timeout: 4 * GIT_COMMAND_TIMEOUT_MS,
         },
       );
-      if (e.code !== 0)
+      if (hashFilesResult.code !== 0)
         return {
           committed: false,
           skipReason: "git_error",
         };
-      G = e.stdout
+      hashes = hashFilesResult.stdout
         .split(
           `
 `,
         )
         .filter((line) => line.length > 0);
-      if (G.length !== N.length)
+      if (hashes.length !== indexEntries.length)
         return {
           committed: false,
           skipReason: "git_error",
         };
     }
-    let joined = [...N.map((e, E) => `${e.mode} ${G[E]}	${e.path}`), `100644 ${trimmed_2}	${RESUME_FILE_PATH}`]
-      .join(`
+    let joined = [
+      ...indexEntries.map((entry, entryIndex) => `${entry.mode} ${hashes[entryIndex]}	${entry.path}`),
+      `100644 ${trimmed_2}	${RESUME_FILE_PATH}`,
+    ].join(`
 `);
     if (
       (
-        await execFileNoThrowWithCwd(gitExe(), [...n, ...I, "update-index", "--add", "--index-info"], {
-          cwd: gitRoot,
-          env,
-          input:
-            joined +
-            `
+        await execFileNoThrowWithCwd(
+          gitExe(),
+          [...safeArgs, ...splitIndexArgs, "update-index", "--add", "--index-info"],
+          {
+            cwd: baseDir,
+            env,
+            input:
+              joined +
+              `
 `,
-          timeout: GIT_COMMAND_TIMEOUT_MS,
-        })
+            timeout: GIT_COMMAND_TIMEOUT_MS,
+          },
+        )
       ).code !== 0
     )
       return {
         committed: false,
         skipReason: "git_error",
       };
-    if (O.length > 0) {
+    if (removedPaths.length > 0) {
       if (
         (
           await execFileNoThrowWithCwd(
             gitExe(),
-            [...n, ...I, "update-index", "--force-remove", "-z", "--stdin"],
+            [...safeArgs, ...splitIndexArgs, "update-index", "--force-remove", "-z", "--stdin"],
             {
-              cwd: gitRoot,
+              cwd: baseDir,
               env,
-              input: O.join("\x00"),
+              input: removedPaths.join("\x00"),
               timeout: GIT_COMMAND_TIMEOUT_MS,
             },
           )
@@ -494,21 +513,21 @@ async function commitRateLimitCheckpoint(i) {
           skipReason: "git_error",
         };
     }
-    let te = await execFileNoThrowWithCwd(gitExe(), [...n, ...I, "write-tree"], {
-      cwd: gitRoot,
+    let treeResult = await execFileNoThrowWithCwd(gitExe(), [...safeArgs, ...splitIndexArgs, "write-tree"], {
+      cwd: baseDir,
       env,
       timeout: GIT_COMMAND_TIMEOUT_MS,
     });
-    if (te.code !== 0)
+    if (treeResult.code !== 0)
       return {
         committed: false,
         skipReason: "git_error",
       };
-    let trimmed_3 = te.stdout.trim();
-    let oe = await execFileNoThrowWithCwd(
+    let trimmed_3 = treeResult.stdout.trim();
+    let commitResult = await execFileNoThrowWithCwd(
       gitExe(),
       [
-        ...n,
+        ...safeArgs,
         "-c",
         "user.name=Claude Code",
         "-c",
@@ -523,19 +542,19 @@ async function commitRateLimitCheckpoint(i) {
         `WIP: Claude Code rate-limit checkpoint (${sliced})`,
       ],
       {
-        cwd: gitRoot,
+        cwd: baseDir,
         env: remoteHostSessionCount,
         timeout: GIT_COMMAND_TIMEOUT_MS,
       },
     );
-    if (oe.code !== 0)
+    if (commitResult.code !== 0)
       return {
         committed: false,
         skipReason: "git_error",
       };
-    let trimmed_4 = oe.stdout.trim();
+    let trimmed_4 = commitResult.stdout.trim();
     if (
-      (await lstat(join(gitDir, "commondir")).catch((error) => {
+      (await lstat(join(commonDir, "commondir")).catch((error) => {
         if (error.code === "ENOENT") return null;
         throw error;
       })) !== null
@@ -548,9 +567,9 @@ async function commitRateLimitCheckpoint(i) {
       (
         await execFileNoThrowWithCwd(
           gitExe(),
-          [...n, "-c", "core.logAllRefUpdates=false", "update-ref", "--no-deref", h, trimmed_4],
+          [...safeArgs, "-c", "core.logAllRefUpdates=false", "update-ref", "--no-deref", refName, trimmed_4],
           {
-            cwd: gitRoot,
+            cwd: baseDir,
             env: remoteHostSessionCount,
             timeout: GIT_COMMAND_TIMEOUT_MS,
           },
@@ -561,14 +580,14 @@ async function commitRateLimitCheckpoint(i) {
         committed: false,
         skipReason: "git_error",
       };
-    let re = `/${RESUME_FILE_PATH}`;
-    await appendGitExclude(gitDir, (e) =>
-      e.toString("utf-8").split(/\r?\n/).includes(re)
+    let resumeIgnorePath = `/${RESUME_FILE_PATH}`;
+    await appendGitExclude(commonDir, (text) =>
+      text.toString("utf-8").split(/\r?\n/).includes(resumeIgnorePath)
         ? null
-        : `${re}
+        : `${resumeIgnorePath}
 `,
     ).catch(() => {});
-    await pruneOldCheckpointRefs(gitRoot, C, h, pe, remoteHostSessionCount).catch((error) => {
+    await pruneOldCheckpointRefs(baseDir, gitDirReal, refName, git, remoteHostSessionCount).catch((error) => {
       logForDebugging(
         `[rateLimitCheckpoint] stopped deleting old checkpoint refs; the next checkpoint retries: ${errorMessage(error)}`,
         {
@@ -579,7 +598,7 @@ async function commitRateLimitCheckpoint(i) {
     });
     return {
       committed: true,
-      ref: h,
+      ref: refName,
       resumePath: RESUME_FILE_PATH,
       commitSha: trimmed_4,
     };
@@ -589,13 +608,13 @@ async function commitRateLimitCheckpoint(i) {
       skipReason: "git_error",
     };
   } finally {
-    if (_ !== undefined)
-      await rm(_, {
+    if (tempDir !== undefined)
+      await rm(tempDir, {
         recursive: true,
         force: true,
       }).catch(() => {});
-    else if (R !== undefined)
-      await rm(R, {
+    else if (indexFile !== undefined)
+      await rm(indexFile, {
         force: true,
       }).catch(() => {});
   }
@@ -606,4 +625,5 @@ export {
   CHECKPOINT_INDEX_MAX_AGE_SECONDS,
   TENGU_COPPER_SLUICE,
   sanitizeCheckpointLine,
+  commitCheckpointOnce,
 };

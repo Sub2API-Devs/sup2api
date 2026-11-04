@@ -42,12 +42,12 @@ function hasWildcards(pattern) {
 /**
  * Shell 规则是否以未转义的 * 结尾（统计结尾 * 之前反斜杠个数的奇偶）。
  */
-function endsWithUnescapedStar(e) {
-  let n = e.trimEnd();
-  if (!n.endsWith("*")) return false;
+function endsWithUnescapedStar(pattern) {
+  let trimmed = pattern.trimEnd();
+  if (!trimmed.endsWith("*")) return false;
   let backslashCount = 0;
-  let j = n.length - 2;
-  while (j >= 0 && n[j] === "\\") {
+  let j = trimmed.length - 2;
+  while (j >= 0 && trimmed[j] === "\\") {
     backslashCount++;
     j--;
   }
@@ -61,7 +61,7 @@ function matchWildcardPattern(pattern, command, caseInsensitive = false, collaps
   if (pattern.includes("\x00")) return false;
   let trimmedPattern = pattern.trim();
   let trimmedPattern_2 = collapseWhitespace ? trimmedPattern.replace(/[ \t]+/g, " ") : trimmedPattern;
-  let g = collapseWhitespace ? command.replace(/[ \t]+/g, " ") : command;
+  let input = collapseWhitespace ? command.replace(/[ \t]+/g, " ") : command;
   let processed = "";
   let i = 0;
   while (i < trimmedPattern_2.length) {
@@ -92,6 +92,6 @@ function matchWildcardPattern(pattern, command, caseInsensitive = false, collaps
   if (regexPattern.endsWith(" .*") && unescapedStarCount === 1)
     regexPattern = regexPattern.slice(0, -3) + "( .*)?";
   let flags = "s" + (caseInsensitive ? "i" : "");
-  return new RegExp(`^${regexPattern}$`, flags).test(g);
+  return new RegExp(`^${regexPattern}$`, flags).test(input);
 }
 export { hasWildcards, matchWildcardPattern, permissionRuleExtractPrefix, endsWithUnescapedStar };

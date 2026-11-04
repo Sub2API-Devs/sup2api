@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../../../../runtime/bun-runtime.js";
 
 //@ chunk-pwh5dx3n.js:44332-52023 cjs-fingerprint
 var Qc = x(function (cjsExports) {
@@ -152,19 +152,19 @@ var Qc = x(function (cjsExports) {
     R(t_2, e) {
       let s = this.C;
       while (t_2) {
-        let i = this.A(t_2.u, e);
-        if (i < 0) t_2 = t_2.h;
-        else if (i > 0) {
+        let compareResult = this.A(t_2.u, e);
+        if (compareResult < 0) t_2 = t_2.h;
+        else if (compareResult > 0) {
           s = t_2;
           t_2 = t_2.i;
         } else return t_2;
       }
       return s;
     }
-    K(t_2, t) {
+    K(t_2, key) {
       let s = this.C;
       while (t_2)
-        if (this.A(t_2.u, t) <= 0) t_2 = t_2.h;
+        if (this.A(t_2.u, key) <= 0) t_2 = t_2.h;
         else {
           s = t_2;
           t_2 = t_2.i;
@@ -174,19 +174,19 @@ var Qc = x(function (cjsExports) {
     L(t_2, e) {
       let s = this.C;
       while (t_2) {
-        let i = this.A(t_2.u, e);
-        if (i < 0) {
+        let compareResult = this.A(t_2.u, e);
+        if (compareResult < 0) {
           s = t_2;
           t_2 = t_2.h;
-        } else if (i > 0) t_2 = t_2.i;
+        } else if (compareResult > 0) t_2 = t_2.i;
         else return t_2;
       }
       return s;
     }
-    k(t_2, t) {
+    k(t_2, key) {
       let s = this.C;
       while (t_2)
-        if (this.A(t_2.u, t) < 0) {
+        if (this.A(t_2.u, key) < 0) {
           s = t_2;
           t_2 = t_2.h;
         } else t_2 = t_2.i;
@@ -283,23 +283,23 @@ var Qc = x(function (cjsExports) {
     U(t_2) {
       let e = typeof t_2 === "number" ? t_2 : undefined;
       let s_2 = typeof t_2 === "function" ? t_2 : undefined;
-      let i = typeof t_2 === "undefined" ? [] : undefined;
+      let resultNodes = typeof t_2 === "undefined" ? [] : undefined;
       let r = 0;
-      let n = this.v;
+      let currentNode = this.v;
       let h = [];
-      while (h.length || n)
-        if (n) {
-          h.push(n);
-          n = n.i;
+      while (h.length || currentNode)
+        if (currentNode) {
+          h.push(currentNode);
+          currentNode = currentNode.i;
         } else {
-          n = h.pop();
-          if (r === e) return n;
-          if (i) i.push(n);
-          if (s_2) s_2(n, r, this);
+          currentNode = h.pop();
+          if (r === e) return currentNode;
+          if (resultNodes) resultNodes.push(currentNode);
+          if (s_2) s_2(currentNode, r, this);
           r += 1;
-          n = n.h;
+          currentNode = currentNode.h;
         }
-      return i;
+      return resultNodes;
     }
     j(t_2) {
       while (true) {
@@ -307,9 +307,9 @@ var Qc = x(function (cjsExports) {
         if (e.p === 0) return;
         let s_2 = e.o;
         if (e === s_2.i) {
-          let i = s_2.h;
-          if (i && i.p === 1) {
-            i.p = e.p = 0;
+          let rightUncleNode = s_2.h;
+          if (rightUncleNode && rightUncleNode.p === 1) {
+            rightUncleNode.p = e.p = 0;
             if (s_2 === this.v) return;
             s_2.p = 1;
             t_2 = s_2;
@@ -342,9 +342,9 @@ var Qc = x(function (cjsExports) {
             return;
           }
         } else {
-          let i = s_2.i;
-          if (i && i.p === 1) {
-            i.p = e.p = 0;
+          let leftUncleNode = s_2.i;
+          if (leftUncleNode && leftUncleNode.p === 1) {
+            leftUncleNode.p = e.p = 0;
             if (s_2 === this.v) return;
             s_2.p = 1;
             t_2 = s_2;
@@ -393,17 +393,17 @@ var Qc = x(function (cjsExports) {
         this.C.o = this.C.i = this.C.h = this.v;
         return this.m;
       }
-      let i;
+      let newNode;
       let r = this.C.i;
-      let n = this.A(r.u, t_2);
-      if (n === 0) {
+      let compareResult = this.A(r.u, t_2);
+      if (compareResult === 0) {
         r.l = e;
         return this.m;
-      } else if (n > 0) {
+      } else if (compareResult > 0) {
         r.i = new this.N(t_2, e);
         r.i.o = r;
-        i = r.i;
-        this.C.i = i;
+        newNode = r.i;
+        this.C.i = newNode;
       } else {
         let r = this.C.h;
         let n = this.A(r.u, t_2);
@@ -413,8 +413,8 @@ var Qc = x(function (cjsExports) {
         } else if (n < 0) {
           r.h = new this.N(t_2, e);
           r.h.o = r;
-          i = r.h;
-          this.C.h = i;
+          newNode = r.h;
+          this.C.h = newNode;
         } else {
           if (s_2 !== undefined) {
             let r = s_2.T;
@@ -430,40 +430,40 @@ var Qc = x(function (cjsExports) {
                   s.l = e;
                   return this.m;
                 } else if (n < 0) {
-                  i = new this.N(t_2, e);
+                  newNode = new this.N(t_2, e);
                   if (s.h === undefined) {
-                    s.h = i;
-                    i.o = s;
+                    s.h = newNode;
+                    newNode.o = s;
                   } else {
-                    r.i = i;
-                    i.o = r;
+                    r.i = newNode;
+                    newNode.o = r;
                   }
                 }
               }
             }
           }
-          if (i === undefined) {
-            i = this.v;
+          if (newNode === undefined) {
+            newNode = this.v;
             while (true) {
-              let s = this.A(i.u, t_2);
+              let s = this.A(newNode.u, t_2);
               if (s > 0) {
-                if (i.i === undefined) {
-                  i.i = new this.N(t_2, e);
-                  i.i.o = i;
-                  i = i.i;
+                if (newNode.i === undefined) {
+                  newNode.i = new this.N(t_2, e);
+                  newNode.i.o = newNode;
+                  newNode = newNode.i;
                   break;
                 }
-                i = i.i;
+                newNode = newNode.i;
               } else if (s < 0) {
-                if (i.h === undefined) {
-                  i.h = new this.N(t_2, e);
-                  i.h.o = i;
-                  i = i.h;
+                if (newNode.h === undefined) {
+                  newNode.h = new this.N(t_2, e);
+                  newNode.h.o = newNode;
+                  newNode = newNode.h;
                   break;
                 }
-                i = i.h;
+                newNode = newNode.h;
               } else {
-                i.l = e;
+                newNode.l = e;
                 return this.m;
               }
             }
@@ -471,13 +471,13 @@ var Qc = x(function (cjsExports) {
         }
       }
       if (this.enableIndex) {
-        let t = i.o;
+        let t = newNode.o;
         while (t !== this.C) {
           t.M += 1;
           t = t.o;
         }
       }
-      this.j(i);
+      this.j(newNode);
       this.m += 1;
       return this.m;
     }
@@ -503,9 +503,9 @@ var Qc = x(function (cjsExports) {
         s_2.u = e;
         return true;
       }
-      let i = s_2.B().u;
+      let nextKey = s_2.B().u;
       if (s_2 === this.C.i) {
-        if (this.A(i, e) > 0) {
+        if (this.A(nextKey, e) > 0) {
           s_2.u = e;
           return true;
         }
@@ -519,7 +519,7 @@ var Qc = x(function (cjsExports) {
         }
         return false;
       }
-      if (this.A(r, e) >= 0 || this.A(i, e) <= 0) return false;
+      if (this.A(r, e) >= 0 || this.A(nextKey, e) <= 0) return false;
       s_2.u = e;
       return true;
     }
@@ -548,9 +548,9 @@ var Qc = x(function (cjsExports) {
     }
     getHeight() {
       if (this.m === 0) return 0;
-      function traversal(t) {
-        if (!t) return 0;
-        return Math.max(traversal(t.i), traversal(t.h)) + 1;
+      function traversal(node) {
+        if (!node) return 0;
+        return Math.max(traversal(node.i), traversal(node.h)) + 1;
       }
       return traversal(this.v);
     }
@@ -608,8 +608,8 @@ var Qc = x(function (cjsExports) {
     }
   }
   class OrderedMapIterator extends TreeIterator {
-    constructor(t_2, e, s, i) {
-      super(t_2, e, i);
+    constructor(t_2, e, s, iteratorType) {
+      super(t_2, e, iteratorType);
       this.container = s;
     }
     get pointer() {
@@ -623,9 +623,9 @@ var Qc = x(function (cjsExports) {
           e[1] = t_2.T.l;
           return e[s];
         },
-        set(e, s, i) {
+        set(e, s, newValue) {
           if (s !== "1") throw TypeError("prop must be 1");
-          t_2.T.l = i;
+          t_2.T.l = newValue;
           return true;
         },
       });
@@ -637,9 +637,9 @@ var Qc = x(function (cjsExports) {
   class OrderedMap extends TreeContainer {
     constructor(t_2 = [], e, s) {
       super(e, s);
-      let i = this;
+      let selfRef = this;
       t_2.forEach(function (t) {
-        i.setElement(t[0], t[1]);
+        selfRef.setElement(t[0], t[1]);
       });
     }
     begin() {
@@ -681,8 +681,8 @@ var Qc = x(function (cjsExports) {
       return new OrderedMapIterator(e, this.C, this);
     }
     forEach(t_2) {
-      this.U(function (e, s, i) {
-        t_2([e.u, e.l], s, i);
+      this.U(function (e, s, treeContainer) {
+        t_2([e.u, e.l], s, treeContainer);
       });
     }
     setElement(t_2, e, s) {
@@ -697,8 +697,8 @@ var Qc = x(function (cjsExports) {
       let e = this.H(this.v, t_2);
       return new OrderedMapIterator(e, this.C, this);
     }
-    getElementByKey(e) {
-      return this.H(this.v, e).l;
+    getElementByKey(key) {
+      return this.H(this.v, key).l;
     }
     union(t_2) {
       let e = this;

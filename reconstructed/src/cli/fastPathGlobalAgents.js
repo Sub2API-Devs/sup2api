@@ -23,3 +23,4 @@ function configureGlobalAgentsWithProxyCheck() {
     exitWithError(describeInvalidProxyUrl(proxyUrlWithSource.source, proxyUrlWithSource.value));
   configureGlobalAgents();
 }
+export { configureGlobalAgentsWithProxyCheck };

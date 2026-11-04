@@ -93,3 +93,4 @@ async function call(onDone, context) {
     location: "settings",
   });
 }
+export { call };

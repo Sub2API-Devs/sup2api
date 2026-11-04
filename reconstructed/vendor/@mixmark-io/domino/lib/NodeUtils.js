@@ -5,11 +5,11 @@
  * pieces: chunk-vwj6ccer.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-vwj6ccer.js:12056-14225 cjs-fingerprint
-var require_NodeUtils = x(function (cjsExports, cjsModule) {
+var require_NodeUtils = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
     serializeOne,
     ɵescapeMatchingClosingTag: escapeMatchingClosingTag,
@@ -50,7 +50,7 @@ var require_NodeUtils = x(function (cjsExports, cjsModule) {
   var extraNewLine = {};
   var ESCAPE_REGEXP = /[&<>\u00A0]/g;
   var ESCAPE_ATTR_REGEXP = /[&"<>\u00A0]/g;
-  function sl(s) {
+  function serializeText(s) {
     if (!ESCAPE_REGEXP.test(s)) return s;
     return s.replace(ESCAPE_REGEXP, (c) => {
       switch (c) {
@@ -145,7 +145,7 @@ var require_NodeUtils = x(function (cjsExports, cjsModule) {
         else parenttag = "";
         if (hasRawContent[parenttag] || (parenttag === "NOSCRIPT" && parent.ownerDocument._scripting_enabled))
           s_2 += kid.data;
-        else s_2 += sl(kid.data);
+        else s_2 += serializeText(kid.data);
         break;
       case 8:
         s_2 += "<!--" + escapeClosingCommentTag(kid.data) + "-->";

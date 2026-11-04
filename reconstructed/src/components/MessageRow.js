@@ -14,7 +14,7 @@ import {
   isMessageBreakPoint,
   getDisplayMessageFromCollapsed,
 } from "../utils/collapseReadSearch.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { hasAnyToolUseId, collectToolUseIds } from "./messageActions.js";
 import {
   getProgressMessagesFromLookup,
@@ -33,14 +33,20 @@ import { agentProgressSelector } from "../tools/AgentTool/UI.js";
 import { FreezeWhenOffscreen } from "./FreezeWhenOffscreen.js";
 import { MessageModel } from "./MessageModel.js";
 import { Box } from "../ink/components/Text.js";
-import { Rh } from "../../vendor/react/cjs/react.production.js";
+import { memo } from "../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-ag5x7vhf.js:138979-139092 placement
-function shouldShowModelLabel(m, h) {
-  return h && m.type === "assistant" && !!m.message.model && m.message.content.some((x) => x.type === "text");
+function shouldShowModelLabel(message, isBrief) {
+  return (
+    isBrief &&
+    message.type === "assistant" &&
+    !!message.message.model &&
+    message.message.content.some((state) => state.type === "text")
+  );
 }
 //@ chunk-ag5x7vhf.js:141082-141728 fingerprint = hasContentAfterIndex (0.897)
-function hasContentAfterIndex(messages, tools, x) {
+function hasContentAfterIndex(messages, tools, excludedIds) {
   for (let i = messages.length - 1; i >= 0; i--) {
     let msg = messages[i];
     if (msg?.type === "assistant") {
@@ -51,7 +57,7 @@ function hasContentAfterIndex(messages, tools, x) {
       }
       if (content?.type === "tool_use") {
         if (getToolSearchOrReadInfo(content.name, content.input, tools).isCollapsible) continue;
-        if (x.has(content.id)) continue;
+        if (excludedIds.has(content.id)) continue;
       }
       return i;
     }
@@ -73,7 +79,7 @@ function hasContentAfterIndex(messages, tools, x) {
  * 消息列表单行：决定是否显示时间戳/模型、是否仍在流式（isMessageStreaming）、工具是否全部完成，渲染 Message；transcript 屏与折叠分组有特殊处理。
  */
 function MessageRowImpl(props) {
-  let $ = w(80);
+  let $ = useMemoCache(80);
   let {
     message: msg,
     isUserContinuation,
@@ -97,29 +103,31 @@ function MessageRowImpl(props) {
     isLoading,
     lookups,
   } = props;
-  let showAssistant = screen === "transcript";
-  let te = msg.type === "grouped_tool_use";
-  let me = msg.type === "collapsed_read_search";
+  let onTranscriptScreen = screen === "transcript";
+  let isGrouped = msg.type === "grouped_tool_use";
+  let isCollapsedReadSearch = msg.type === "collapsed_read_search";
   let t1;
   if (
     $[0] !== hasContentAfter ||
     $[1] !== inProgressToolUseIDs ||
-    $[2] !== me ||
+    $[2] !== isCollapsedReadSearch ||
     $[3] !== isLoading ||
     $[4] !== msg
   ) {
-    t1 = me && (hasAnyToolUseId(msg, inProgressToolUseIDs) || (isLoading && !hasContentAfter));
+    t1 =
+      isCollapsedReadSearch &&
+      (hasAnyToolUseId(msg, inProgressToolUseIDs) || (isLoading && !hasContentAfter));
     $[0] = hasContentAfter;
     $[1] = inProgressToolUseIDs;
-    $[2] = me;
+    $[2] = isCollapsedReadSearch;
     $[3] = isLoading;
     $[4] = msg;
     $[5] = t1;
   } else t1 = $[5];
   let isActiveCollapsedGroup = t1;
-  let ve;
+  let rowElement;
   if ($[6] !== msg) {
-    ve =
+    rowElement =
       msg.type === "grouped_tool_use"
         ? msg.displayMessage
         : msg.type === "collapsed_read_search"
@@ -128,15 +136,18 @@ function MessageRowImpl(props) {
             ? null
             : msg;
     $[6] = msg;
-    $[7] = ve;
-  } else ve = $[7];
-  let message = ve;
+    $[7] = rowElement;
+  } else rowElement = $[7];
+  let message = rowElement;
   let t3;
-  if ($[8] !== message || $[9] !== me || $[10] !== te || $[11] !== lookups) {
-    t3 = message === null || te || me ? [] : getProgressMessagesFromLookup(message, lookups);
+  if ($[8] !== message || $[9] !== isCollapsedReadSearch || $[10] !== isGrouped || $[11] !== lookups) {
+    t3 =
+      message === null || isGrouped || isCollapsedReadSearch
+        ? []
+        : getProgressMessagesFromLookup(message, lookups);
     $[8] = message;
-    $[9] = me;
-    $[10] = te;
+    $[9] = isCollapsedReadSearch;
+    $[10] = isGrouped;
     $[11] = lookups;
     $[12] = t3;
   } else t3 = $[12];
@@ -145,15 +156,17 @@ function MessageRowImpl(props) {
   if (
     $[13] !== message ||
     $[14] !== inProgressToolUseIDs ||
-    $[15] !== me ||
-    $[16] !== te ||
+    $[15] !== isCollapsedReadSearch ||
+    $[16] !== isGrouped ||
     $[17] !== lookups ||
     $[18] !== msg ||
     $[19] !== screen ||
     $[20] !== streamingToolUseIDs
   ) {
     let siblingToolUseIDs =
-      message === null || te || me ? EMPTY_STRING_SET : getSiblingToolUseIDsFromLookup(message, lookups);
+      message === null || isGrouped || isCollapsedReadSearch
+        ? EMPTY_STRING_SET
+        : getSiblingToolUseIDsFromLookup(message, lookups);
     t4 = shouldRenderStatically(
       msg,
       streamingToolUseIDs,
@@ -164,8 +177,8 @@ function MessageRowImpl(props) {
     );
     $[13] = message;
     $[14] = inProgressToolUseIDs;
-    $[15] = me;
-    $[16] = te;
+    $[15] = isCollapsedReadSearch;
+    $[16] = isGrouped;
     $[17] = lookups;
     $[18] = msg;
     $[19] = screen;
@@ -173,7 +186,7 @@ function MessageRowImpl(props) {
     $[21] = t4;
   } else t4 = $[21];
   let isStatic = t4;
-  let tt = false;
+  let shouldAnimate = false;
   if (canAnimate) {
     if (msg.type === "grouped_tool_use") {
       let t5;
@@ -192,7 +205,7 @@ function MessageRowImpl(props) {
         $[23] = msg.messages;
         $[24] = t5;
       } else t5 = $[24];
-      tt = t5;
+      shouldAnimate = t5;
     } else if (msg.type === "collapsed_read_search") {
       let t5;
       if ($[27] !== inProgressToolUseIDs || $[28] !== msg) {
@@ -201,9 +214,9 @@ function MessageRowImpl(props) {
         $[28] = msg;
         $[29] = t5;
       } else t5 = $[29];
-      tt = t5;
-    } else if (msg.type === "work_segment") tt = msg.isLive;
-    else if (msg.type === "speaker_label" || msg.type === "recap_fold") tt = false;
+      shouldAnimate = t5;
+    } else if (msg.type === "work_segment") shouldAnimate = msg.isLive;
+    else if (msg.type === "speaker_label" || msg.type === "recap_fold") shouldAnimate = false;
     else {
       let t5;
       if ($[30] !== inProgressToolUseIDs || $[31] !== msg) {
@@ -213,47 +226,52 @@ function MessageRowImpl(props) {
         $[31] = msg;
         $[32] = t5;
       } else t5 = $[32];
-      tt = t5;
+      shouldAnimate = t5;
     }
   }
-  let ct;
+  let hasMetadataHeader;
   if (
     $[33] !== continuesLabelledReply ||
     $[34] !== message ||
     $[35] !== followsSpeakerLabel ||
     $[36] !== isSplitUserContinuation ||
-    $[37] !== showAssistant ||
+    $[37] !== onTranscriptScreen ||
     $[38] !== showMessageTimestamps
   ) {
-    ct =
+    hasMetadataHeader =
       message !== null &&
       !followsSpeakerLabel &&
       !continuesLabelledReply &&
-      (shouldShowMessageTimestamp(message, showAssistant, showMessageTimestamps, isSplitUserContinuation) ||
-        shouldShowModelLabel(message, showAssistant));
+      (shouldShowMessageTimestamp(
+        message,
+        onTranscriptScreen,
+        showMessageTimestamps,
+        isSplitUserContinuation,
+      ) ||
+        shouldShowModelLabel(message, onTranscriptScreen));
     $[33] = continuesLabelledReply;
     $[34] = message;
     $[35] = followsSpeakerLabel;
     $[36] = isSplitUserContinuation;
-    $[37] = showAssistant;
+    $[37] = onTranscriptScreen;
     $[38] = showMessageTimestamps;
-    $[39] = ct;
-  } else ct = $[39];
-  let Ze = ct;
-  const addMargin = !Ze;
-  const containerWidth = Ze ? undefined : columns;
+    $[39] = hasMetadataHeader;
+  } else hasMetadataHeader = $[39];
+  let metadataHeader = hasMetadataHeader;
+  const addMargin = !metadataHeader;
+  const containerWidth = metadataHeader ? undefined : columns;
   const shouldShowDot = !followsSpeakerLabel && !continuesLabelledReply;
   let t8;
   if (
     $[40] !== commands ||
     $[41] !== followsInboundLabel ||
     $[42] !== followsSpeakerLabel ||
-    $[43] !== Ze ||
+    $[43] !== metadataHeader ||
     $[44] !== inProgressToolUseIDs ||
     $[45] !== isActiveCollapsedGroup ||
     $[46] !== isSplitUserContinuation ||
     $[47] !== isStatic ||
-    $[48] !== showAssistant ||
+    $[48] !== onTranscriptScreen ||
     $[49] !== isUserContinuation ||
     $[50] !== latestBashOutputUUID ||
     $[51] !== lookups ||
@@ -261,7 +279,7 @@ function MessageRowImpl(props) {
     $[53] !== onOpenRateLimitOptions ||
     $[54] !== onRateLimitAutoQueueContinue ||
     $[55] !== progressMessagesForMessage ||
-    $[56] !== tt ||
+    $[56] !== shouldAnimate ||
     $[57] !== addMargin ||
     $[58] !== containerWidth ||
     $[59] !== shouldShowDot ||
@@ -278,9 +296,9 @@ function MessageRowImpl(props) {
       verbose,
       inProgressToolUseIDs,
       progressMessagesForMessage,
-      shouldAnimate: tt,
+      shouldAnimate,
       shouldShowDot,
-      isTranscriptMode: showAssistant,
+      isTranscriptMode: onTranscriptScreen,
       isStatic,
       onOpenRateLimitOptions,
       onRateLimitAutoQueueContinue,
@@ -289,18 +307,18 @@ function MessageRowImpl(props) {
       isSplitUserContinuation,
       followsSpeakerLabel,
       followsInboundLabel,
-      hasMetadataHeader: Ze,
+      hasMetadataHeader: metadataHeader,
       latestBashOutputUUID,
     });
     $[40] = commands;
     $[41] = followsInboundLabel;
     $[42] = followsSpeakerLabel;
-    $[43] = Ze;
+    $[43] = metadataHeader;
     $[44] = inProgressToolUseIDs;
     $[45] = isActiveCollapsedGroup;
     $[46] = isSplitUserContinuation;
     $[47] = isStatic;
-    $[48] = showAssistant;
+    $[48] = onTranscriptScreen;
     $[49] = isUserContinuation;
     $[50] = latestBashOutputUUID;
     $[51] = lookups;
@@ -308,7 +326,7 @@ function MessageRowImpl(props) {
     $[53] = onOpenRateLimitOptions;
     $[54] = onRateLimitAutoQueueContinue;
     $[55] = progressMessagesForMessage;
-    $[56] = tt;
+    $[56] = shouldAnimate;
     $[57] = addMargin;
     $[58] = containerWidth;
     $[59] = shouldShowDot;
@@ -317,7 +335,7 @@ function MessageRowImpl(props) {
     $[62] = t8;
   } else t8 = $[62];
   let messageEl = t8;
-  if (!Ze || message === null) {
+  if (!metadataHeader || message === null) {
     let t9;
     if ($[63] !== messageEl) {
       t9 = jsxProd_default(FreezeWhenOffscreen, {
@@ -328,60 +346,60 @@ function MessageRowImpl(props) {
     } else t9 = $[64];
     return t9;
   }
-  let St;
+  let messageTimestampElement;
   if (
     $[65] !== message ||
     $[66] !== isSplitUserContinuation ||
-    $[67] !== showAssistant ||
+    $[67] !== onTranscriptScreen ||
     $[68] !== showMessageTimestamps
   ) {
-    St = jsxProd_default(MessageTimestamp, {
+    messageTimestampElement = jsxProd_default(MessageTimestamp, {
       message,
-      isTranscriptMode: showAssistant,
+      isTranscriptMode: onTranscriptScreen,
       showMessageTimestamps,
       isSplitUserContinuation,
     });
     $[65] = message;
     $[66] = isSplitUserContinuation;
-    $[67] = showAssistant;
+    $[67] = onTranscriptScreen;
     $[68] = showMessageTimestamps;
-    $[69] = St;
-  } else St = $[69];
-  let dt;
-  if ($[70] !== message || $[71] !== showAssistant) {
-    dt = jsxProd_default(MessageModel, {
+    $[69] = messageTimestampElement;
+  } else messageTimestampElement = $[69];
+  let messageModelElement;
+  if ($[70] !== message || $[71] !== onTranscriptScreen) {
+    messageModelElement = jsxProd_default(MessageModel, {
       message,
-      isTranscriptMode: showAssistant,
+      isTranscriptMode: onTranscriptScreen,
     });
     $[70] = message;
-    $[71] = showAssistant;
-    $[72] = dt;
-  } else dt = $[72];
-  let Pt;
-  if ($[73] !== St || $[74] !== dt) {
-    Pt = jsxProd_default_2(Box, {
+    $[71] = onTranscriptScreen;
+    $[72] = messageModelElement;
+  } else messageModelElement = $[72];
+  let boxElement;
+  if ($[73] !== messageTimestampElement || $[74] !== messageModelElement) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "row",
       justifyContent: "flex-end",
       gap: 1,
       marginTop: 1,
-      children: [St, dt],
+      children: [messageTimestampElement, messageModelElement],
     });
-    $[73] = St;
-    $[74] = dt;
-    $[75] = Pt;
-  } else Pt = $[75];
+    $[73] = messageTimestampElement;
+    $[74] = messageModelElement;
+    $[75] = boxElement;
+  } else boxElement = $[75];
   let t10;
-  if ($[76] !== columns || $[77] !== messageEl || $[78] !== Pt) {
+  if ($[76] !== columns || $[77] !== messageEl || $[78] !== boxElement) {
     t10 = jsxProd_default(FreezeWhenOffscreen, {
       children: jsxProd_default_2(Box, {
         width: columns,
         flexDirection: "column",
-        children: [Pt, messageEl],
+        children: [boxElement, messageEl],
       }),
     });
     $[76] = columns;
     $[77] = messageEl;
-    $[78] = Pt;
+    $[78] = boxElement;
     $[79] = t10;
   } else t10 = $[79];
   return t10;
@@ -432,7 +450,10 @@ function areMessageRowPropsEqual(prev, next) {
 /**
  * MessageRow = React.memo(MessageRowImpl, areMessageRowPropsEqual)。
  */
-var MessageRow = Rh(MessageRowImpl, areMessageRowPropsEqual);
+var MessageRow; // deferred: uses MessageRowImpl of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ag5x7vhf.js:147355", () => {
+  MessageRow = memo(MessageRowImpl, areMessageRowPropsEqual);
+});
 //@ chunk-ag5x7vhf.js:172936-173244 fingerprint = isMessageStreaming (0.863)
 /**
  * 判断消息是否仍在流式输出：与当前流式工具 ID 比较，按 assistant/user/grouped_tool_use/collapsed_read_search 分类检查。

@@ -14,15 +14,15 @@ import { checkLineOf } from "./telemetry.js";
 //@ chunk-bss4k1z9.js:20421-20452 placement
 var DEBUG_ON_WORDS = ["1", "true", "yes", "on"];
 //@ chunk-bss4k1z9.js:20452-20512 placement
-var isDebugOn = (e) => e !== undefined && DEBUG_ON_WORDS.includes(e.trim().toLowerCase());
+var isDebugOn = (value) => value !== undefined && DEBUG_ON_WORDS.includes(value.trim().toLowerCase());
 //@ chunk-bss4k1z9.js:20512-20549 placement
-var debugFlagOf = (e) => e.then(isDebugOn).catch(() => false);
+var debugFlagOf = (value) => value.then(isDebugOn).catch(() => false);
 //@ chunk-bss4k1z9.js:20549-20605 placement
-async function thenAlways(e, t) {
+async function thenAlways(work, cleanup) {
   try {
-    await e();
+    await work();
   } finally {
-    await t();
+    await cleanup();
   }
 }
 //@ chunk-bss4k1z9.js:20605-20658 placement
@@ -45,15 +45,15 @@ var ansiSequence = () =>
     "g",
   );
 //@ chunk-bss4k1z9.js:20955-21041 placement
-var cleanOneLine = (e) =>
-  e
+var cleanOneLine = (text) =>
+  text
     .replace(/[\x00-\x08\x0E-\x1F\x7F-\x9F]/g, "")
     .replace(/\s+/g, " ")
     .trim();
 //@ chunk-bss4k1z9.js:21041-21140 placement
-function sliceCodePointsHead(e, t) {
-  if (t <= 0) return "";
-  return e.length <= t ? e : e.slice(0, t).replace(/[\uD800-\uDBFF]$/, "");
+function sliceCodePointsHead(text, maxLength) {
+  if (maxLength <= 0) return "";
+  return text.length <= maxLength ? text : text.slice(0, maxLength).replace(/[\uD800-\uDBFF]$/, "");
 }
 //@ chunk-bss4k1z9.js:21140-21237 placement
 var stripControlSequences = (line) =>
@@ -62,22 +62,22 @@ var stripControlSequences = (line) =>
     .replace(ansiSequence(), "")
     .replace(/[\p{Cc}\p{Cf}\u2028\u2029]/gu, "");
 //@ chunk-bss4k1z9.js:21237-21394 placement
-function truncateAtWordBoundary(e, t) {
-  if (e.length <= t) return e;
-  let o = sliceCodePointsHead(e, t - 1);
-  let r = o.search(/\s\S*$/);
-  let i = r !== -1 ? o.slice(0, r).trimEnd() : "";
-  return `${i.length > t / 2 ? i : o.trimEnd()}\u2026`;
+function truncateAtWordBoundary(text, maxLength) {
+  if (text.length <= maxLength) return text;
+  let head = sliceCodePointsHead(text, maxLength - 1);
+  let lastSpace = head.search(/\s\S*$/);
+  let cut = lastSpace !== -1 ? head.slice(0, lastSpace).trimEnd() : "";
+  return `${cut.length > maxLength / 2 ? cut : head.trimEnd()}\u2026`;
 }
 //@ chunk-bss4k1z9.js:21394-21465 placement
-var proseOf = (e) =>
-  e
+var proseOf = (text) =>
+  text
     .split(
       `
 `,
     )
     .map((line) => cleanOneLine(line))
-    .filter((t) => t !== "").join(`
+    .filter((line) => line !== "").join(`
 `);
 //@ chunk-bss4k1z9.js:21465-21506 placement
 var TITLE_LINE = /^(?:\*\*([^*]+)\*\*|#+\s*(.+))$/;
@@ -98,9 +98,9 @@ var MAX_TITLE_WIDTH = 120;
 //@ chunk-bss4k1z9.js:21577-21601 placement
 var LEARN_LABEL = /^learn\s*:\s*/i;
 //@ chunk-bss4k1z9.js:21601-21661 placement
-var isDeclined = (e) => e === "" || /^none\s*(?:[.!?()[\]:;,-]|$)/i.test(e);
+var isDeclined = (text) => text === "" || /^none\s*(?:[.!?()[\]:;,-]|$)/i.test(text);
 //@ chunk-bss4k1z9.js:21661-21694 placement
-var withoutTrailingPeriod = (e) => e.replace(/\.+$/, "");
+var withoutTrailingPeriod = (text) => text.replace(/\.+$/, "");
 //@ chunk-bss4k1z9.js:21694-21773 placement
 var WRAPPING_QUOTES = [
   ['"', '"'],
@@ -110,15 +110,18 @@ var WRAPPING_QUOTES = [
   ["`", "`"],
 ];
 //@ chunk-bss4k1z9.js:21773-21930 placement
-function unquoted(e) {
-  let t = withoutTrailingPeriod(e.trim());
-  return t.length >= 2 &&
-    WRAPPING_QUOTES.some(([r, n]) => t.startsWith(r) && t.endsWith(n) && !t.slice(1, -1).includes(n))
-    ? withoutTrailingPeriod(t.slice(1, -1).trim())
-    : t;
+function unquoted(text) {
+  let trimmed = withoutTrailingPeriod(text.trim());
+  return trimmed.length >= 2 &&
+    WRAPPING_QUOTES.some(
+      ([open, close]) =>
+        trimmed.startsWith(open) && trimmed.endsWith(close) && !trimmed.slice(1, -1).includes(close),
+    )
+    ? withoutTrailingPeriod(trimmed.slice(1, -1).trim())
+    : trimmed;
 }
 //@ chunk-bss4k1z9.js:21930-21964 placement
-var CLOSERS = WRAPPING_QUOTES.map(([, e]) => e).join("");
+var CLOSERS = WRAPPING_QUOTES.map(([, closer]) => closer).join("");
 //@ chunk-bss4k1z9.js:21964-22010 placement
 var ENDS_A_SENTENCE = new RegExp(`[.!?\u2026][${CLOSERS})\\]]*$`);
 //@ chunk-bss4k1z9.js:22010-22044 placement
@@ -128,48 +131,48 @@ var EXPLAIN_LABEL = /^explain:\s*/i;
 //@ chunk-bss4k1z9.js:22067-22156 placement
 var INLINE_TAG = /[.\s\u2014\u2013-]*\s\**tag\**\s*:\s*\**\s*(heads[\s-]*up|you should know)\W*$/i;
 //@ chunk-bss4k1z9.js:22156-22191 placement
-var openingOf = (e) => unquoted(unquoted(e).replace(INLINE_TAG, ""));
+var openingOf = (text) => unquoted(unquoted(text).replace(INLINE_TAG, ""));
 //@ chunk-bss4k1z9.js:22191-22202 placement
 var MAX_LINE_WIDTH = 240;
 //@ chunk-bss4k1z9.js:22202-22727 placement
-function parseExplanation(e) {
-  let t = [];
-  let o = emptyCard();
-  let r = false;
-  let n = false;
-  function i() {
-    o.lead = truncateAtWordBoundary(proseOf(o.lead), MAX_CAPTION_LENGTH);
-    o.caption = truncateAtWordBoundary(proseOf(o.caption), MAX_CAPTION_LENGTH);
-    if (o.title || o.lead || o.sketch.length > 0 || o.caption) t.push(o);
-    o = emptyCard();
+function parseExplanation(text) {
+  let cards = [];
+  let card = emptyCard();
+  let inFence = false;
+  let seenContent = false;
+  function flushCard() {
+    card.lead = truncateAtWordBoundary(proseOf(card.lead), MAX_CAPTION_LENGTH);
+    card.caption = truncateAtWordBoundary(proseOf(card.caption), MAX_CAPTION_LENGTH);
+    if (card.title || card.lead || card.sketch.length > 0 || card.caption) cards.push(card);
+    card = emptyCard();
   }
-  for (let line of e.split(`
+  for (let line of text.split(`
 `)) {
     let replaced = stripControlSequences(line).replace(/\s+$/, "");
     if (FENCE_LINE.test(replaced.trim())) {
-      if (!r && n) i();
-      r = !r;
-      n = true;
+      if (!inFence && seenContent) flushCard();
+      inFence = !inFence;
+      seenContent = true;
       continue;
     }
-    if (r) {
-      if (o.sketch.length < MAX_SKETCH_LINES)
-        o.sketch = [...o.sketch, sliceCodePointsHead(replaced, MAX_SKETCH_WIDTH)];
+    if (inFence) {
+      if (card.sketch.length < MAX_SKETCH_LINES)
+        card.sketch = [...card.sketch, sliceCodePointsHead(replaced, MAX_SKETCH_WIDTH)];
       continue;
     }
     let match = TITLE_LINE.exec(replaced.trim());
     if (match) {
-      i();
-      n = false;
-      o.title = sliceCodePointsHead(cleanOneLine(match[1] ?? match[2] ?? ""), MAX_TITLE_WIDTH);
+      flushCard();
+      seenContent = false;
+      card.title = sliceCodePointsHead(cleanOneLine(match[1] ?? match[2] ?? ""), MAX_TITLE_WIDTH);
       continue;
     }
-    let s = o.sketch.length === 0 && !n ? "lead" : "caption";
-    o[s] += `
+    let targetField = card.sketch.length === 0 && !seenContent ? "lead" : "caption";
+    card[targetField] += `
 ${replaced}`;
   }
-  i();
-  return t.slice(0, MAX_CARDS);
+  flushCard();
+  return cards.slice(0, MAX_CARDS);
 }
 //@ chunk-bss4k1z9.js:22727-22752 placement
 var DEFAULT_TAG = "You should know";
@@ -185,48 +188,52 @@ var TAG_LABEL = new RegExp(
   "i",
 );
 //@ chunk-bss4k1z9.js:22958-22994 placement
-var tagOf = (e) => (HEADS_UP.test(e) ? "Heads up" : DEFAULT_TAG);
+var tagOf = (text) => (HEADS_UP.test(text) ? "Heads up" : DEFAULT_TAG);
 //@ chunk-bss4k1z9.js:22994-23811 placement
-function parseProposedLine(e) {
-  let lines = e.split(`
+function parseProposedLine(text) {
+  let lines = text.split(`
 `);
   let mapped = lines.map((line) => stripControlSequences(line).trimStart());
-  let index = mapped.findIndex((g) => LEARN_LABEL.test(g.replace(/^[-*\u2022]\s+/, "")));
-  let index_2 = mapped.slice(index + 1).findIndex((g) => EXPLAIN_LABEL.test(g));
-  let i = index !== -1 && index_2 !== -1;
-  let a = i ? index + 1 + index_2 : -1;
-  let trimmed = [(mapped[a] ?? "").replace(EXPLAIN_LABEL, ""), ...lines.slice(a + 1)]
+  let index = mapped.findIndex((line) => LEARN_LABEL.test(line.replace(/^[-*\u2022]\s+/, "")));
+  let index_2 = mapped.slice(index + 1).findIndex((line) => EXPLAIN_LABEL.test(line));
+  let hasLabels = index !== -1 && index_2 !== -1;
+  let explainLineIndex = hasLabels ? index + 1 + index_2 : -1;
+  let trimmed = [
+    (mapped[explainLineIndex] ?? "").replace(EXPLAIN_LABEL, ""),
+    ...lines.slice(explainLineIndex + 1),
+  ]
     .join(
       `
 `,
     )
     .trim();
-  let explanation = i ? trimmed || undefined : undefined;
-  let mapped_2 = (i ? lines.slice(0, a) : lines).map((g) =>
-    cleanOneLine(stripControlSequences(g)).replace(/^[-*\u2022]\s+/, ""),
+  let explanation = hasLabels ? trimmed || undefined : undefined;
+  let mapped_2 = (hasLabels ? lines.slice(0, explainLineIndex) : lines).map((line) =>
+    cleanOneLine(stripControlSequences(line)).replace(/^[-*\u2022]\s+/, ""),
   );
-  let s = mapped_2.find((g) => TAG_LABEL.test(g)) ?? "";
-  let f = tagOf(s.replace(TAG_LABEL, ""));
-  for (let [g, O] of mapped_2.entries()) {
-    if (!LEARN_LABEL.test(O)) continue;
-    let trimmed = O.replace(LEARN_LABEL, "").trim();
-    if (isDeclined(openingOf(trimmed)))
+  let tagLine = mapped_2.find((line) => TAG_LABEL.test(line)) ?? "";
+  let lineTag = tagOf(tagLine.replace(TAG_LABEL, ""));
+  for (let [lineIndex, line] of mapped_2.entries()) {
+    if (!LEARN_LABEL.test(line)) continue;
+    let text = line.replace(LEARN_LABEL, "").trim();
+    if (isDeclined(openingOf(text)))
       return {
         kind: "none",
       };
-    for (let A of mapped_2.slice(g + 1)) {
-      if (A === "" || LEARN_LABEL.test(A) || TAG_LABEL.test(A) || ENDS_WITH_QUESTION.test(trimmed)) break;
-      trimmed += ` ${A}`;
+    for (let line of mapped_2.slice(lineIndex + 1)) {
+      if (line === "" || LEARN_LABEL.test(line) || TAG_LABEL.test(line) || ENDS_WITH_QUESTION.test(text))
+        break;
+      text += ` ${line}`;
     }
-    let d = unquoted(trimmed);
-    let match = INLINE_TAG.exec(d);
-    let p = match === null ? d : unquoted(d.slice(0, match.index));
-    let N = ENDS_A_SENTENCE.test(p) ? p : `${p}.`;
-    let tag = s === "" && match !== null ? tagOf(match?.[1] ?? "") : f;
-    if (N.length <= MAX_LINE_WIDTH)
+    let unquotedText = unquoted(text);
+    let match = INLINE_TAG.exec(unquotedText);
+    let sentence = match === null ? unquotedText : unquoted(unquotedText.slice(0, match.index));
+    let finalLine = ENDS_A_SENTENCE.test(sentence) ? sentence : `${sentence}.`;
+    let tag = tagLine === "" && match !== null ? tagOf(match?.[1] ?? "") : lineTag;
+    if (finalLine.length <= MAX_LINE_WIDTH)
       return {
         kind: "line",
-        line: N,
+        line: finalLine,
         tag,
         explanation,
       };
@@ -238,7 +245,8 @@ function parseProposedLine(e) {
 //@ chunk-bss4k1z9.js:23811-23821 placement
 var SEEN_MAX = 50;
 //@ chunk-bss4k1z9.js:23821-23873 placement
-var drawsBand = (e, t) => e.some((o) => o === "terminal" || t.has(o));
+var drawsBand = (surfaces, activeSurfaces) =>
+  surfaces.some((surface) => surface === "terminal" || activeSurfaces.has(surface));
 //@ chunk-bss4k1z9.js:23873-23925 placement
 var OWN_COMPOSER = {
   terminal: false,
@@ -251,13 +259,14 @@ var hasOwnComposer = (surface) => !Object.hasOwn(OWN_COMPOSER, surface) || OWN_C
 //@ chunk-bss4k1z9.js:23965-24017 placement
 var isOpenView = (view) => view?.kind === "offer" || view?.kind === "explained";
 //@ chunk-bss4k1z9.js:24017-24076 placement
-var isSameShowing = (view, t) => isOpenView(view) && view.kind === t.kind && view.shownAt === t.shownAt;
+var isSameShowing = (view, secondView) =>
+  isOpenView(view) && view.kind === secondView.kind && view.shownAt === secondView.shownAt;
 //@ chunk-bss4k1z9.js:24076-24152 placement
-function storedCount(e) {
-  return typeof e === "number" && Number.isSafeInteger(e) && e >= 0 ? e : 0;
+function storedCount(value) {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? value : 0;
 }
 //@ chunk-bss4k1z9.js:24152-24218 placement
-var stringLines = (e) => (Array.isArray(e) ? e.filter((t) => typeof t === "string") : []);
+var stringLines = (value) => (Array.isArray(value) ? value.filter((item) => typeof item === "string") : []);
 //@ chunk-bss4k1z9.js:24218-24368 placement
 function iterationOf(view) {
   switch (view.kind) {
@@ -308,16 +317,16 @@ var LEAD_INK = {
   vscode: ACCENT_LEAD_INK,
 };
 //@ chunk-bss4k1z9.js:24630-24656 placement
-var leadInkOf = (e) => e.leadInk ?? ACCENT_LEAD_INK;
+var leadInkOf = (card) => card.leadInk ?? ACCENT_LEAD_INK;
 //@ chunk-bss4k1z9.js:24656-24707 placement
-function leadInkOn(e) {
-  return Object.hasOwn(LEAD_INK, e) ? LEAD_INK[e] : ACCENT_LEAD_INK;
+function leadInkOn(name) {
+  return Object.hasOwn(LEAD_INK, name) ? LEAD_INK[name] : ACCENT_LEAD_INK;
 }
 //@ chunk-bss4k1z9.js:24707-24720 placement
 var ASKED_MS = 20000;
 //@ chunk-bss4k1z9.js:24720-24885 placement
-function choice(e, { hotkey, label, onPress, isDim, role }) {
-  let { Box, Button } = e;
+function choice(ui, { hotkey, label, onPress, isDim, role }) {
+  let { Box, Button } = ui;
   return h(
     Box,
     {
@@ -337,36 +346,36 @@ function choice(e, { hotkey, label, onPress, isDim, role }) {
   );
 }
 //@ chunk-bss4k1z9.js:24885-25012 placement
-function lead(e, t) {
-  let { Text } = e;
-  let r = leadInkOf(e);
+function lead(ui, tag) {
+  let { Text } = ui;
+  let ink = leadInkOf(ui);
   return h(
     Text,
     null,
     h(
       Text,
       {
-        ...r.star,
+        ...ink.star,
       },
       "\u2726",
     ),
-    t === undefined
+    tag === undefined
       ? " "
       : h(
           Text,
           {
-            ...r.tag,
+            ...ink.tag,
           },
           " ",
-          t,
+          tag,
           " \xB7 ",
         ),
   );
 }
 //@ chunk-bss4k1z9.js:25012-25172 placement
-function starColumn(e, t) {
-  let { Box, Text } = e;
-  let n = leadInkOf(e);
+function starColumn(ui, content) {
+  let { Box, Text } = ui;
+  let ink = leadInkOf(ui);
   return h(
     Box,
     {
@@ -382,37 +391,37 @@ function starColumn(e, t) {
       h(
         Text,
         {
-          ...n.star,
+          ...ink.star,
         },
         "\u2726",
       ),
     ),
-    t,
+    content,
   );
 }
 //@ chunk-bss4k1z9.js:25172-25336 placement
-function starred(e, t, o) {
-  let { Text } = e;
-  let n = leadInkOf(e);
-  return (e.hasStarColumn ?? true)
+function starred(ui, tag, text) {
+  let { Text } = ui;
+  let ink = leadInkOf(ui);
+  return (ui.hasStarColumn ?? true)
     ? starColumn(
-        e,
+        ui,
         h(
           Text,
           {
             wrap: "wrap",
           },
-          t === undefined
+          tag === undefined
             ? ""
             : h(
                 Text,
                 {
-                  ...n.tag,
+                  ...ink.tag,
                 },
-                t,
+                tag,
                 " \xB7 ",
               ),
-          o,
+          text,
         ),
       )
     : h(
@@ -420,23 +429,23 @@ function starred(e, t, o) {
         {
           wrap: "wrap",
         },
-        lead(e, t),
-        o,
+        lead(ui, tag),
+        text,
       );
 }
 //@ chunk-bss4k1z9.js:25336-25757 placement
-function dismissedLine(e, t, onPress) {
-  let { Box, Text } = e;
-  let hasStarColumn = e.hasStarColumn ?? true;
+function dismissedLine(ui, choices, onPress) {
+  let { Box, Text } = ui;
+  let hasStarColumn = ui.hasStarColumn ?? true;
   let mapped = [
-    ...t,
+    ...choices,
     {
       hotkey: "0",
       label: "Dismiss",
       onPress,
       role: "dismiss",
     },
-  ].map((u) => choice(e, u));
+  ].map((choiceSpec) => choice(ui, choiceSpec));
   return hasStarColumn
     ? h(
         Box,
@@ -445,7 +454,7 @@ function dismissedLine(e, t, onPress) {
           marginTop: 1,
         },
         starColumn(
-          e,
+          ui,
           h(
             Box,
             {
@@ -485,7 +494,7 @@ function dismissedLine(e, t, onPress) {
             {
               wrap: "truncate-end",
             },
-            lead(e),
+            lead(ui),
             h(
               Text,
               {
@@ -499,9 +508,9 @@ function dismissedLine(e, t, onPress) {
       );
 }
 //@ chunk-bss4k1z9.js:25757-26068 placement
-function askedRow(e, t) {
-  let off = t.off;
-  let n =
+function askedRow(ui, actions) {
+  let off = actions.off;
+  let turnOffChoices =
     off !== undefined
       ? [
           {
@@ -512,61 +521,61 @@ function askedRow(e, t) {
         ]
       : [];
   return dismissedLine(
-    e,
+    ui,
     [
       {
         hotkey: "1",
         label: "That was helpful",
-        onPress: t.helpful,
+        onPress: actions.helpful,
       },
       {
         hotkey: "2",
         label: "Not relevant",
-        onPress: t.notRelevant,
+        onPress: actions.notRelevant,
       },
       {
         hotkey: "3",
         label: "Couldn\u2019t understand",
-        onPress: t.notUnderstood,
+        onPress: actions.notUnderstood,
       },
-      ...n,
+      ...turnOffChoices,
     ],
-    t.dismiss,
+    actions.dismiss,
   );
 }
 //@ chunk-bss4k1z9.js:26068-26224 placement
-var explainedAskedRow = (e, t) =>
+var explainedAskedRow = (ui, actions) =>
   dismissedLine(
-    e,
+    ui,
     [
       {
         hotkey: "1",
         label: "That was helpful",
-        onPress: t.helpful,
+        onPress: actions.helpful,
       },
       {
         hotkey: "2",
         label: "Didn\u2019t understand",
-        onPress: t.notUnderstood,
+        onPress: actions.notUnderstood,
       },
     ],
-    t.dismiss,
+    actions.dismiss,
   );
 //@ chunk-bss4k1z9.js:26224-26317 placement
-function choicesRow(e, t) {
-  let { Box } = e;
+function choicesRow(ui, choices) {
+  let { Box } = ui;
   return h(
     Box,
     {
       marginLeft: 2,
       flexWrap: "wrap",
     },
-    t.map((r) => choice(e, r)),
+    choices.map((spec) => choice(ui, spec)),
   );
 }
 //@ chunk-bss4k1z9.js:26317-26542 placement
-function debugRows(e, t, o) {
-  let { Box, Text } = e;
+function debugRows(ui, checkLines, footer) {
+  let { Box, Text } = ui;
   return h(
     Box,
     {
@@ -578,14 +587,14 @@ function debugRows(e, t, o) {
         flexDirection: "column",
         marginTop: 1,
       },
-      t.map((i) =>
+      checkLines.map((checkLine) =>
         h(
           Box,
           null,
           h(
             Text,
             {
-              ...leadInkOf(e).star,
+              ...leadInkOf(ui).star,
             },
             "\u2726",
           ),
@@ -596,12 +605,12 @@ function debugRows(e, t, o) {
               dimColor: true,
             },
             " ",
-            checkLineOf(i),
+            checkLineOf(checkLine),
           ),
         ),
       ),
     ),
-    o ?? "",
+    footer ?? "",
   );
 }
 //@ chunk-bss4k1z9.js:26542-26555 placement
@@ -616,90 +625,90 @@ var MARKUP = /\*\*([^*\n]+?)\*\*|`([^`\n]+)`|[\\`*_{}[<>#+\-=|~^$&:@]|(?<=[wW]{3
 //@ chunk-bss4k1z9.js:26707-26757 placement
 var STRUCTURAL = /[\\`*_{}[<>#+\-=|~^$&:@]|(?<=[wW]{3})\./g;
 //@ chunk-bss4k1z9.js:26757-26919 placement
-var literal = (e) =>
-  e
+var literal = (text) =>
+  text
     .trimStart()
-    .replace(MARKUP, (t, o, r) => {
-      let n = r !== undefined;
-      let i = o !== undefined;
-      let a = `**${(o ?? "").replace(STRUCTURAL, "\\$&")}**`;
-      return n ? t : i ? a : `\\${t}`;
+    .replace(MARKUP, (match, boldText, escapeText) => {
+      let hasEscape = escapeText !== undefined;
+      let hasBold = boldText !== undefined;
+      let bold = `**${(boldText ?? "").replace(STRUCTURAL, "\\$&")}**`;
+      return hasEscape ? match : hasBold ? bold : `\\${match}`;
     })
     .replace(LEADING_NUMBER, "$1\\$2");
 //@ chunk-bss4k1z9.js:26919-27319 placement
-function lineShape(e, ordinal) {
-  let o = e.trimStart();
-  let match = LIST_MARKER.exec(o);
-  let n = literal(o.slice(match?.[0].length ?? 0));
-  let i = match?.[1];
-  let a = Number(i);
-  let l = `${(ordinal ?? a - 1) + 1}.` === `${i}${match?.[2]}`;
+function lineShape(line, ordinal) {
+  let trimmed = line.trimStart();
+  let match = LIST_MARKER.exec(trimmed);
+  let text = literal(trimmed.slice(match?.[0].length ?? 0));
+  let numberText = match?.[1];
+  let number = Number(numberText);
+  let isSequential = `${(ordinal ?? number - 1) + 1}.` === `${numberText}${match?.[2]}`;
   if (match === null)
     return {
       kind: "plain",
-      text: n,
+      text,
       canOpenInPlace: false,
     };
-  if (i === undefined)
+  if (numberText === undefined)
     return {
       kind: "bullet",
-      text: `- ${n}`,
+      text: `- ${text}`,
       canOpenInPlace: true,
     };
-  return l
+  return isSequential
     ? {
         kind: "ordered",
-        text: `${a}. ${n}`,
-        canOpenInPlace: a === 1,
-        ordinal: a,
+        text: `${number}. ${text}`,
+        canOpenInPlace: number === 1,
+        ordinal: number,
       }
     : {
         kind: "plain",
-        text: `${i}\\${match[2]} ${n}`,
+        text: `${numberText}\\${match[2]} ${text}`,
         canOpenInPlace: false,
       };
 }
 //@ chunk-bss4k1z9.js:27319-27517 placement
-function drawnLine(line, t) {
-  let o = lineShape(line, t?.ordinal);
-  let r = o.kind === "plain";
-  let n = r && t?.kind === "plain";
-  let i = (!r && o.kind === t?.kind) || o.canOpenInPlace;
-  let a = n
+function drawnLine(line, prevLine) {
+  let shape = lineShape(line, prevLine?.ordinal);
+  let isPlain = shape.kind === "plain";
+  let prevIsPlain = isPlain && prevLine?.kind === "plain";
+  let continuesList = (!isPlain && shape.kind === prevLine?.kind) || shape.canOpenInPlace;
+  let separator = prevIsPlain
     ? HARD_BREAK
-    : i
+    : continuesList
       ? `
 `
       : `
 
 `;
-  if (t === undefined) return o;
+  if (prevLine === undefined) return shape;
   return {
-    ...o,
-    text: `${a}${o.text}`,
+    ...shape,
+    text: `${separator}${shape.text}`,
   };
 }
 //@ chunk-bss4k1z9.js:27517-27760 placement
-function proseMarkdown(e, t) {
-  let o = t === "" ? "" : `**${t.replace(STRUCTURAL, "\\$&")}**`;
-  let n =
-    o !== ""
+function proseMarkdown(text, title) {
+  let titleLine = title === "" ? "" : `**${title.replace(STRUCTURAL, "\\$&")}**`;
+  let leadLines =
+    titleLine !== ""
       ? [
           {
             kind: "plain",
-            text: o,
+            text: titleLine,
             canOpenInPlace: false,
           },
         ]
       : [];
-  let joined = e
+  let joined = text
     .split(
       `
 `,
     )
     .filter((line) => line !== "")
-    .reduce((acc, line) => [...acc, drawnLine(line, acc.at(-1))], n)
-    .map((a) => a.text)
+    .reduce((acc, line) => [...acc, drawnLine(line, acc.at(-1))], leadLines)
+    .map((entry) => entry.text)
     .join("");
   return joined === ""
     ? ""
@@ -708,18 +717,18 @@ function proseMarkdown(e, t) {
 `;
 }
 //@ chunk-bss4k1z9.js:27760-27838 placement
-function prose(e, t, o) {
-  let { Markdown } = e;
-  let n = proseMarkdown(t, o);
-  return n === ""
+function prose(ui, lead, title) {
+  let { Markdown } = ui;
+  let text = proseMarkdown(lead, title);
+  return text === ""
     ? ""
     : h(Markdown, {
-        text: n,
+        text,
       });
 }
 //@ chunk-bss4k1z9.js:27838-28423 placement
-function explainedRow(e, ...[t, o, r, n = DEFAULT_TAG]) {
-  let { Box, Code } = e;
+function explainedRow(ui, ...[line, cards, actions, tag = DEFAULT_TAG]) {
+  let { Box, Code } = ui;
   return h(
     Box,
     {
@@ -732,10 +741,10 @@ function explainedRow(e, ...[t, o, r, n = DEFAULT_TAG]) {
         flexDirection: "column",
         marginBottom: 1,
       },
-      starred(e, n, t),
+      starred(ui, tag, line),
     ),
-    o.map((l) => {
-      let u = l.sketch.length > 0;
+    cards.map((card) => {
+      let hasSketch = card.sketch.length > 0;
       return h(
         Box,
         {
@@ -743,43 +752,43 @@ function explainedRow(e, ...[t, o, r, n = DEFAULT_TAG]) {
           marginBottom: 1,
           marginLeft: 2,
         },
-        prose(e, l.lead, l.title),
-        u
+        prose(ui, card.lead, card.title),
+        hasSketch
           ? h(Code, {
-              source: l.sketch.map((k) => (k === "" ? " " : k)).join(`
+              source: card.sketch.map((sketchLine) => (sketchLine === "" ? " " : sketchLine)).join(`
 `),
               language: "text",
               wrap: "truncate-end",
             })
           : "",
-        prose(e, l.caption, ""),
+        prose(ui, card.caption, ""),
       );
     }),
-    r === null
+    actions === null
       ? ""
-      : choicesRow(e, [
+      : choicesRow(ui, [
           {
             hotkey: "1",
             label: "Understood",
-            onPress: r.gotIt,
+            onPress: actions.gotIt,
           },
           {
             hotkey: "2",
             label: "Chat in main session",
-            onPress: r.respond,
+            onPress: actions.respond,
           },
           {
             hotkey: "0",
             label: "Dismiss",
-            onPress: r.dismiss,
+            onPress: actions.dismiss,
             role: "dismiss",
           },
         ]),
   );
 }
 //@ chunk-bss4k1z9.js:28423-28561 placement
-function stillRow(e, t) {
-  let { Box, Text } = e;
+function stillRow(ui, text) {
+  let { Box, Text } = ui;
   return h(
     Box,
     {
@@ -788,7 +797,7 @@ function stillRow(e, t) {
     h(
       Text,
       {
-        ...leadInkOf(e).star,
+        ...leadInkOf(ui).star,
       },
       "\u2726",
     ),
@@ -799,19 +808,19 @@ function stillRow(e, t) {
         dimColor: true,
       },
       " ",
-      t,
+      text,
     ),
   );
 }
 //@ chunk-bss4k1z9.js:28561-28598 placement
-var explainingRow = (e) => stillRow(e, "One moment\u2026");
+var explainingRow = (ui) => stillRow(ui, "One moment\u2026");
 //@ chunk-bss4k1z9.js:28598-29053 placement
-function failedRow(e, reason, onPress) {
-  let { Box, Text } = e;
-  let i = reason === "publish";
-  let a = reason === "blocked";
-  let l = reason === "explain";
-  let u = reason === "turn_off";
+function failedRow(ui, reason, onPress) {
+  let { Box, Text } = ui;
+  let isPublish = reason === "publish";
+  let isBlocked = reason === "blocked";
+  let isExplain = reason === "explain";
+  let isTurnOff = reason === "turn_off";
   return h(
     Box,
     {
@@ -822,14 +831,14 @@ function failedRow(e, reason, onPress) {
       {
         wrap: "truncate-end",
       },
-      lead(e),
-      i
+      lead(ui),
+      isPublish
         ? "Couldn\u2019t publish that page"
-        : a
+        : isBlocked
           ? "Not published (blocked by a permission setting)"
-          : l
+          : isExplain
             ? "Couldn\u2019t write that explanation"
-            : u
+            : isTurnOff
               ? "Couldn\u2019t turn suggestions off here. Use /plugin."
               : "Couldn\u2019t write that page",
       " ",
@@ -842,7 +851,7 @@ function failedRow(e, reason, onPress) {
       ),
       " ",
     ),
-    choice(e, {
+    choice(ui, {
       hotkey: "0",
       label: "OK",
       onPress,
@@ -874,121 +883,121 @@ var NARROW_BOUNDS = {
   },
 };
 //@ chunk-bss4k1z9.js:29235-29434 placement
-function glyphCellsAtMost(e) {
+function glyphCellsAtMost(codePoint) {
   let { hangulJamo, punctuation, arrows, shapes, mediumSmallSquares } = NARROW_BOUNDS;
-  return e < hangulJamo ||
-    (e >= punctuation.first && e <= punctuation.last) ||
-    (e >= arrows.first && e <= arrows.last) ||
-    (e >= shapes.first &&
-      e <= shapes.last &&
-      e !== mediumSmallSquares.white &&
-      e !== mediumSmallSquares.black)
+  return codePoint < hangulJamo ||
+    (codePoint >= punctuation.first && codePoint <= punctuation.last) ||
+    (codePoint >= arrows.first && codePoint <= arrows.last) ||
+    (codePoint >= shapes.first &&
+      codePoint <= shapes.last &&
+      codePoint !== mediumSmallSquares.white &&
+      codePoint !== mediumSmallSquares.black)
     ? 1
     : 2;
 }
 //@ chunk-bss4k1z9.js:29434-29508 placement
-function lineCellsAtMost(e) {
-  let t = 0;
-  for (let o of e) t += glyphCellsAtMost(o.codePointAt(0) ?? 0);
-  return t;
+function lineCellsAtMost(text) {
+  let cells = 0;
+  for (let char of text) cells += glyphCellsAtMost(char.codePointAt(0) ?? 0);
+  return cells;
 }
 //@ chunk-bss4k1z9.js:29508-29626 placement
-function fitLine(e, t) {
-  if (lineCellsAtMost(e) <= t) return e;
-  let o = 0;
-  let r = "";
-  for (let n of e) {
-    o += lineCellsAtMost(n);
-    if (o > t - 1) return `${r}\u2026`;
-    r += n;
+function fitLine(text, maxCells) {
+  if (lineCellsAtMost(text) <= maxCells) return text;
+  let used = 0;
+  let out = "";
+  for (let char of text) {
+    used += lineCellsAtMost(char);
+    if (used > maxCells - 1) return `${out}\u2026`;
+    out += char;
   }
-  return r;
+  return out;
 }
 //@ chunk-bss4k1z9.js:29626-29785 placement
 function fitCards(explanation, bodyColumns) {
-  let o = Number.isFinite(bodyColumns) ? bodyColumns : FALLBACK_COLUMNS;
-  return explanation.map((r) => ({
-    ...r,
-    title: fitLine(r.title, Math.max(o - CARD_INSET, 1)),
-    sketch: r.sketch.map((n) => fitLine(n, Math.max(o - CARD_INSET, 1))),
+  let columns = Number.isFinite(bodyColumns) ? bodyColumns : FALLBACK_COLUMNS;
+  return explanation.map((card) => ({
+    ...card,
+    title: fitLine(card.title, Math.max(columns - CARD_INSET, 1)),
+    sketch: card.sketch.map((sketchLine) => fitLine(sketchLine, Math.max(columns - CARD_INSET, 1))),
   }));
 }
 //@ chunk-bss4k1z9.js:29785-29872 placement
-var makingRow = (e) => stillRow(e, "Making your page (a minute or two) \xB7 Claude keeps working\u2026");
+var makingRow = (ui) => stillRow(ui, "Making your page (a minute or two) \xB7 Claude keeps working\u2026");
 //@ chunk-bss4k1z9.js:29872-29977 placement
-var wayOutChoices = (e, t) =>
-  e === undefined
+var wayOutChoices = (onDisable, isConfirming) =>
+  onDisable === undefined
     ? []
     : [
         {
           hotkey: "4",
-          label: t ? "Press again to disable" : "Disable",
-          onPress: e,
+          label: isConfirming ? "Press again to disable" : "Disable",
+          onPress: onDisable,
           isDim: true,
         },
       ];
 //@ chunk-bss4k1z9.js:29977-30498 placement
-function offerRow(e, ...[t, o, r, n = ABOUT_CLOSED, i = DEFAULT_TAG]) {
-  let { Box } = e;
-  let l = [
+function offerRow(ui, ...[line, actions, isConfirming, about = ABOUT_CLOSED, tag = DEFAULT_TAG]) {
+  let { Box } = ui;
+  let learnChoices = [
     {
       hotkey: "1",
       label: "Learn more",
-      onPress: o.explain,
+      onPress: actions.explain,
     },
     {
       hotkey: "2",
       label: "Knew this already",
-      onPress: o.knew,
+      onPress: actions.knew,
     },
   ];
-  let u = [
-    ...wayOutChoices(o.off, r),
+  let restChoices = [
+    ...wayOutChoices(actions.off, isConfirming),
     {
       hotkey: "0",
       label: "Dismiss",
-      onPress: o.later,
+      onPress: actions.later,
       role: "dismiss",
     },
   ];
-  let k = aboutFit(n, {
-    tag: i,
-    line: t,
-    before: l,
-    after: u,
+  let fit = aboutFit(about, {
+    tag,
+    line,
+    before: learnChoices,
+    after: restChoices,
   });
-  let f =
-    k.note.length > 0
+  let head =
+    fit.note.length > 0
       ? {
           tag: undefined,
-          body: renderNoteRuns(e, k.note, {
+          body: renderNoteRuns(ui, fit.note, {
             dimColor: true,
           }),
         }
       : {
-          tag: i,
-          body: t,
+          tag,
+          body: line,
         };
-  let g = n.surface === "terminal";
+  let isTerminal = about.surface === "terminal";
   return h(
     Box,
     {
       flexDirection: "column",
       marginTop: 1,
     },
-    g
-      ? starred(e, f.tag, f.body)
-      : offerHead(e, {
-          lead: lead(e, f.tag),
-          body: f.body,
-          ...n,
+    isTerminal
+      ? starred(ui, head.tag, head.body)
+      : offerHead(ui, {
+          lead: lead(ui, head.tag),
+          body: head.body,
+          ...about,
         }),
-    choicesRow(e, [...l, ...k.choices, ...u]),
+    choicesRow(ui, [...learnChoices, ...fit.choices, ...restChoices]),
   );
 }
 //@ chunk-bss4k1z9.js:30498-30857 placement
-function readyRow(e, url, o) {
-  let { Box, Text } = e;
+function readyRow(ui, url, actions) {
+  let { Box, Text } = ui;
   return h(
     Box,
     {
@@ -1000,7 +1009,7 @@ function readyRow(e, url, o) {
       {
         wrap: "truncate-end",
       },
-      lead(e),
+      lead(ui),
       "Learning page ready",
     ),
     h(
@@ -1017,21 +1026,21 @@ function readyRow(e, url, o) {
         url,
       ),
     ),
-    choicesRow(e, [
+    choicesRow(ui, [
       {
         hotkey: "1",
         label: "Helpful",
-        onPress: o.helpful,
+        onPress: actions.helpful,
       },
       {
         hotkey: "2",
         label: "Not helpful",
-        onPress: o.notHelpful,
+        onPress: actions.notHelpful,
       },
       {
         hotkey: "3",
         label: "Didn\u2019t read",
-        onPress: o.unread,
+        onPress: actions.unread,
       },
     ]),
   );
@@ -1040,18 +1049,18 @@ function readyRow(e, url, o) {
 /**
  * （匹配存疑）按条件去掉按钮的 hotkey/plain 属性并设置 leadInk/hasStarColumn，属于 UI 主题，不是 ESC 热键注册。
  */
-function registerEscHotkey(surface, t) {
-  let o = hasOwnComposer(surface);
-  let leadInk = leadInkOn(surface);
-  return o
+function registerEscHotkey(name, ui) {
+  let hasComposer = hasOwnComposer(name);
+  let leadInk = leadInkOn(name);
+  return hasComposer
     ? {
-        ...t,
-        Button: ({ hotkey, plain, ...a }) => t.Button(a),
+        ...ui,
+        Button: ({ hotkey, plain, ...props }) => ui.Button(props),
         leadInk,
         hasStarColumn: false,
       }
     : {
-        ...t,
+        ...ui,
         leadInk,
         hasStarColumn: true,
       };

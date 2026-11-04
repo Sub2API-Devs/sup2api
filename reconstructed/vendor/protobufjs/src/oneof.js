@@ -5,7 +5,7 @@
  * pieces: chunk-pwh5dx3n.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS as x } from "../../../runtime/bun-runtime.js";
 import { Kt } from "./object.js";
 import { Yt } from "./field.js";
 import { de } from "./util.js";
@@ -70,12 +70,12 @@ var Sr = x(function (cjsExports, cjsModule) {
   };
   OneOf.prototype.onAdd = function (parent) {
     ReflectionObject.prototype.onAdd.call(this, parent);
-    var r = this;
-    for (var i = 0; i < this.oneof.length; ++i) {
-      var field = parent.get(this.oneof[i]);
+    var owner = this;
+    for (var idx = 0; idx < this.oneof.length; ++idx) {
+      var field = parent.get(this.oneof[idx]);
       if (field && !field.partOf) {
-        field.partOf = r;
-        r.fieldsArray.push(field);
+        field.partOf = owner;
+        owner.fieldsArray.push(field);
       }
     }
     addFieldsToParent(this);

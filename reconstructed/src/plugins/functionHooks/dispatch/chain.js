@@ -50,29 +50,30 @@ import { scrubLine } from "../ui/textScrub.js";
 import { streamChainSlot, describeStreamHookOverrun, DEFAULT_HOOK_TIMEOUT_MS } from "./streamChain.js";
 import { matchesEventPattern } from "../eventPatterns.js";
 import { uniq } from "../../../utils/collections.js";
-import { pu } from "../../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
+import { subscribe } from "../../../../vendor/@growthbook/growthbook/dist/bundles/esm.js";
 import { isUntrustedObject } from "../../../utils/untrustedValues.js";
 import { identity } from "../../../utils/identity.js";
 import { createValueSlot } from "../../../utils/valueSlot.js";
+import { deferInit } from "../../../../runtime/deferred-init.js";
 
 //@ chunk-4121qate.js:71251-71293 placement
 /**
  * surface:component
  */
-var uiElementKey = (e) => `${e.surface}:${e.component}`;
+var uiElementKey = (site) => `${site.surface}:${site.component}`;
 //@ chunk-4121qate.js:71293-71521 placement
 /**
  * 生成警告器：ui.resolve 钩子扣留某 UI 元素时，每种元素只警告一次。
  */
-function createWithheldElementWarner(e) {
-  let o = new Set();
-  return (r) => {
-    let n = r === undefined ? ALL_ELEMENT_TYPES : UI_ELEMENT_TYPES[r];
-    return (s) => {
-      if (!n.includes(s) || o.has(s)) return;
-      o.add(s);
+function createWithheldElementWarner(name) {
+  let warned = new Set();
+  return (kind) => {
+    let types = kind === undefined ? ALL_ELEMENT_TYPES : UI_ELEMENT_TYPES[kind];
+    return (element) => {
+      if (!types.includes(element) || warned.has(element)) return;
+      warned.add(element);
       matcherLog().log(
-        `${e}: $.ui.resolve: <${s}> was withheld by a ui.resolve hook; it draws a fragment`,
+        `${name}: $.ui.resolve: <${element}> was withheld by a ui.resolve hook; it draws a fragment`,
         "warn",
       );
     };
@@ -83,17 +84,17 @@ function createWithheldElementWarner(e) {
  * 钩子处理器所在层：core 为 core，托管为 prepend，其余取 tier（默认 user）。
  */
 function handlerTier(handler) {
-  let o = handler.isCore === true;
-  let r = o ? "core" : "prepend";
-  return o || handler.isManaged === true ? r : (handler.tier ?? "user");
+  let isCore = handler.isCore === true;
+  let tier = isCore ? "core" : "prepend";
+  return isCore || handler.isManaged === true ? tier : (handler.tier ?? "user");
 }
 //@ chunk-4121qate.js:71622-71669 placement
 /**
  * 尝试执行，抛错返回 undefined
  */
-function attempt(e, o) {
+function attempt(fn, secondFn) {
   try {
-    return o(e);
+    return secondFn(fn);
   } catch {
     return;
   }
@@ -102,8 +103,12 @@ function attempt(e, o) {
 /**
  * 是否因给定信号中止而抛错
  */
-var isAbortOf = (error, o) =>
-  o.aborted && attempt(error, (r) => isAbortError(r) || errorMessage(r) === abortReasonText(o)) === true;
+var isAbortOf = (error, signal) =>
+  signal.aborted &&
+  attempt(
+    error,
+    (secondError) => isAbortError(secondError) || errorMessage(secondError) === abortReasonText(signal),
+  ) === true;
 //@ chunk-4121qate.js:71732-71776 placement
 /**
  * 核心或托管步骤
@@ -113,15 +118,15 @@ var isCoreOrManaged = (handler) => handler.isCore === true || handler.isManaged 
 /**
  * 在 next.to 链上追加一步（冻结），to 取链中最远的目标。
  */
-function appendNextToStep(e, o) {
+function appendNextToStep(steps, entry) {
   return Object.freeze([
-    ...e,
+    ...steps,
     Object.freeze({
-      ...o,
-      ...(o.to === "user" && {
+      ...entry,
+      ...(entry.to === "user" && {
         isPastPeers: true,
       }),
-      to: e.reduce((acc, n) => (tierIndex(n.to) > tierIndex(acc) ? n.to : acc), o.to),
+      to: steps.reduce((acc, step) => (tierIndex(step.to) > tierIndex(acc) ? step.to : acc), entry.to),
     }),
   ]);
 }
@@ -129,47 +134,52 @@ function appendNextToStep(e, o) {
 /**
  * 把层级名格式化成 next.to:<tier> 标签，作为分发链里「下一层」的键。
  */
-var nextToLabel = (e) => `next.to:${e}`;
+var nextToLabel = (entry) => `next.to:${entry}`;
 //@ chunk-4121qate.js:76542-76568 placement
-var Y6t = Object.freeze([]);
+var NO_FLOORS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:76542", () => {
+  NO_FLOORS = Object.freeze([]);
+});
 //@ chunk-4121qate.js:76568-76818 placement
 /**
  * 判断插件属于哪一层：内置插件为 builtin（列在最外层时为 prepend），其他按 prepend/append 配置与是否同名市场决定。
  */
-function pluginTier(e, o, managedPluginOrder) {
-  let n = nfcLower(e);
-  if (isBuiltinPluginId(e)) return managedPluginOrder.outermost.includes(n) ? "prepend" : "builtin";
-  let s = hasSimilarMarketplaceName(e, o);
-  let i = (a) => managedPluginOrder[a].includes(n) && (managedPluginOrder.from[a] === "user" ? !s : s);
-  let p = s ? "prepend" : "user";
-  let f = i("prepend") ? "prepend" : "append";
-  return i("prepend") || i("append") ? f : p;
+function pluginTier(pluginId, managedPluginOrder, tierLists) {
+  let folded = nfcLower(pluginId);
+  if (isBuiltinPluginId(pluginId)) return tierLists.outermost.includes(folded) ? "prepend" : "builtin";
+  let isOutermost = hasSimilarMarketplaceName(pluginId, managedPluginOrder);
+  let isManaged = (isUnknown) =>
+    tierLists[isUnknown].includes(folded) &&
+    (tierLists.from[isUnknown] === "user" ? !isOutermost : isOutermost);
+  let tier = isOutermost ? "prepend" : "user";
+  let index = isManaged("prepend") ? "prepend" : "append";
+  return isManaged("prepend") || isManaged("append") ? index : tier;
 }
 //@ chunk-4121qate.js:76818-77456 placement
 /**
  * 解析 next.to() 指向的层（user/append…），只允许托管插件使用
  */
-function resolveNextTier(floors, o, r) {
-  if (o.length === 0) throw new HooksError(`${r.plugin}: next.to() names no tier`);
-  let n = tiersBeneath(r.tier);
-  return o.toReversed().reduce((acc, i) => {
-    if (!isAbovePrepend(i))
+function resolveNextTier(floors, to, run) {
+  if (to.length === 0) throw new HooksError(`${run.plugin}: next.to() names no tier`);
+  let allowed = tiersBeneath(run.tier);
+  return to.toReversed().reduce((acc, tier) => {
+    if (!isAbovePrepend(tier))
       throw new HooksError(
-        `${r.plugin}: next.to names "${String(i)}", which is not a tier a dispatch continues at (user, append, builtin, core)`,
+        `${run.plugin}: next.to names "${String(tier)}", which is not a tier a dispatch continues at (user, append, builtin, core)`,
       );
-    if (n.length === 0)
+    if (allowed.length === 0)
       throw new HooksError(
-        `${r.plugin}: next.to is available to managed plugins (prependPlugins / appendPlugins) only, not to a ${r.tier} hook`,
+        `${run.plugin}: next.to is available to managed plugins (prependPlugins / appendPlugins) only, not to a ${run.tier} hook`,
       );
-    if (!n.includes(i))
+    if (!allowed.includes(tier))
       throw new HooksError(
-        `${r.plugin}: next.to("${i}") skips nothing from ${r.tier}; a ${r.tier} hook may continue at ` +
-          tiersBeneath(r.tier).join(", "),
+        `${run.plugin}: next.to("${tier}") skips nothing from ${run.tier}; a ${run.tier} hook may continue at ` +
+          tiersBeneath(run.tier).join(", "),
       );
     return appendNextToStep(acc, {
-      from: r.tier,
-      to: i,
-      plugin: r.plugin,
+      from: run.tier,
+      to: tier,
+      plugin: run.plugin,
     });
   }, floors);
 }
@@ -177,10 +187,10 @@ function resolveNextTier(floors, o, r) {
 /**
  * 毫秒或秒
  */
-function formatDuration(e) {
-  return e >= SLOW_HOOK_REPORT_INTERVAL_MS_2 && e % SLOW_HOOK_REPORT_INTERVAL_MS_2 === 0
-    ? `${e / SLOW_HOOK_REPORT_INTERVAL_MS_2}s`
-    : `${e}ms`;
+function formatDuration(ms) {
+  return ms >= SLOW_HOOK_REPORT_INTERVAL_MS_2 && ms % SLOW_HOOK_REPORT_INTERVAL_MS_2 === 0
+    ? `${ms / SLOW_HOOK_REPORT_INTERVAL_MS_2}s`
+    : `${ms}ms`;
 }
 //@ chunk-4121qate.js:77514-77553 placement
 /**
@@ -201,16 +211,16 @@ var NO_TEXT_VALUE = "a value with no text";
 /**
  * 错误文本
  */
-var errorTextOf = (error) => attempt(error, (o) => String(errorMessage(o))) ?? NO_TEXT_VALUE;
+var errorTextOf = (error) => attempt(error, (error) => String(errorMessage(error))) ?? NO_TEXT_VALUE;
 //@ chunk-4121qate.js:77668-77801 placement
-function errorKindOf(e) {
-  let r =
-    e instanceof HooksError && e.thrownName !== undefined
+function errorKindOf(error) {
+  let kind =
+    error instanceof HooksError && error.thrownName !== undefined
       ? {
-          name: e.thrownName,
+          name: error.thrownName,
         }
-      : e;
-  return e instanceof Error ? (sanitizeErrorName(r) ?? "Error") : "unknown";
+      : error;
+  return error instanceof Error ? (sanitizeErrorName(kind) ?? "Error") : "unknown";
 }
 //@ chunk-4121qate.js:77801-77875 placement
 /**
@@ -222,21 +232,22 @@ var errorSummary = (error) =>
 /**
  * 钩子以 .catch 兜底的失败说明
  */
-function failedClosedText(name, o, event) {
-  return `hook failed closed: ${name}: ${errorSummary(o)} (${event}; its .catch answered)`;
+function failedClosedText(name, error, event) {
+  return `hook failed closed: ${name}: ${errorSummary(error)} (${event}; its .catch answered)`;
 }
 //@ chunk-4121qate.js:77965-78027 placement
 /**
  * 钩子失败说明
  */
-function hookFailedText(name, error, r) {
-  return `hook failed: ${name}: ${errorSummary(error)} (${r})`;
+function hookFailedText(name, error, site) {
+  return `hook failed: ${name}: ${errorSummary(error)} (${site})`;
 }
 //@ chunk-4121qate.js:78027-78089 placement
 /**
  * 加钩子名前缀
  */
-var withHookPrefix = (handler, o) => (o.startsWith(`${handler.name}: `) ? o : `${handler.name}: ${o}`);
+var withHookPrefix = (handler, text) =>
+  text.startsWith(`${handler.name}: `) ? text : `${handler.name}: ${text}`;
 //@ chunk-4121qate.js:78089-78158 placement
 /**
  * 中断导致未执行
@@ -261,11 +272,11 @@ var LEFT_MID_STREAM = "left mid-stream; what it yielded stands, the rest came fr
  */
 var RESULT_WITHHELD = "what ran beneath it stands; its result withheld";
 //@ chunk-4121qate.js:79046-79171 placement
-function errorNamePrefix(e) {
-  let o = e instanceof HooksError;
-  let r = !o && e instanceof Error;
-  let n = o ? e.thrownName : r ? e.name : undefined;
-  return n === undefined ? "" : `${n}: `;
+function errorNamePrefix(error) {
+  let isHooksError = error instanceof HooksError;
+  let isError = !isHooksError && error instanceof Error;
+  let name = isHooksError ? error.thrownName : isError ? error.name : undefined;
+  return name === undefined ? "" : `${name}: `;
 }
 //@ chunk-4121qate.js:79171-79214 placement
 /**
@@ -275,8 +286,8 @@ var scrubErrorText = (error) => scrubLine(`${attempt(error, errorNamePrefix) ?? 
 //@ chunk-4121qate.js:79214-79698 placement
 function describeHookOverrun(error, cause) {
   let { expiredMs, lingeredMs, shape, refusedSubject, caught } = cause;
-  let f = caught === undefined ? "" : `; ${caught}`;
-  let a =
+  let secondExpiredMs = caught === undefined ? "" : `; ${caught}`;
+  let secondLingeredMs =
     refusedSubject === undefined
       ? {}
       : {
@@ -285,14 +296,14 @@ function describeHookOverrun(error, cause) {
   if (expiredMs !== undefined)
     return {
       kind: "budget",
-      why: `ran past its ${formatDuration(expiredMs)} budget${f}`,
-      ...a,
+      why: `ran past its ${formatDuration(expiredMs)} budget${secondExpiredMs}`,
+      ...secondLingeredMs,
     };
   if (lingeredMs !== undefined)
     return {
       kind: "lingered",
       why: `did not stop within ${formatDuration(lingeredMs)} of the turn being interrupted`,
-      ...a,
+      ...secondLingeredMs,
     };
   return shape !== undefined
     ? {
@@ -301,12 +312,12 @@ function describeHookOverrun(error, cause) {
         ...(refusedSubject !== undefined && {
           refusedSubject,
         }),
-        ...a,
+        ...secondLingeredMs,
       }
     : {
         kind: "threw",
-        why: `threw ${scrubErrorText(error)}${f}`,
-        ...a,
+        why: `threw ${scrubErrorText(error)}${secondExpiredMs}`,
+        ...secondLingeredMs,
       };
 }
 //@ chunk-4121qate.js:79698-80101 placement
@@ -314,43 +325,46 @@ function describeHookOverrun(error, cause) {
  * 记录钩子处理器失败（日志 + hookFailed 事件，含效果分类）；返回带插件名的原因文本。
  */
 function reportHandlerFailure({ error, handler, site, effect, cause }) {
-  let i = withHookPrefix(handler, errorTextOf(error));
+  let text = withHookPrefix(handler, errorTextOf(error));
   matcherLog().log(hookFailedText(handler.name, error, `${site.event}; ${effect}`), "error");
   if (!isCoreOrManaged(handler)) {
-    let p = handler.isHop === true;
-    let f = effect === INTERRUPTED_LEFT_OUT;
-    let a = effect === REFUSED_IN_PLACE;
-    let m = effect === RESULT_WITHHELD;
+    let report = handler.isHop === true;
+    let dedupe = effect === INTERRUPTED_LEFT_OUT;
+    let secondReport = effect === REFUSED_IN_PLACE;
+    let message = effect === RESULT_WITHHELD;
     matcherLog().hookFailed({
       plugin: handler.name,
       environmentId: handler.environmentId,
       event: site.event,
-      reason: i,
+      reason: text,
       effect,
       hasOverrun: false,
-      skip: p
+      skip: report
         ? undefined
         : {
             ...describeHookOverrun(error, cause),
-            ...(f && {
-              isCallRejected: f,
+            ...(dedupe && {
+              isCallRejected: dedupe,
             }),
-            ...(a && {
-              isCallRefused: a,
+            ...(secondReport && {
+              isCallRefused: secondReport,
             }),
-            ...(m && {
-              isResultWithheld: m,
+            ...(message && {
+              isResultWithheld: message,
             }),
           },
     });
   }
-  return i;
+  return text;
 }
 //@ chunk-4121qate.js:80101-80132 placement
 /**
  * 其答案仍生效
  */
-var unappliedAnswerStands = createUnappliedReporter("its answer stands");
+var unappliedAnswerStands; // deferred: uses createUnappliedReporter (./valueSizing.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:80101", () => {
+  unappliedAnswerStands = createUnappliedReporter("its answer stands");
+});
 //@ chunk-4121qate.js:80132-80184 placement
 /**
  * 跳过，下层代替
@@ -365,24 +379,24 @@ var SKIPPED_LAST_NEXT = "skipped; its last next() run's result stands";
 /**
  * 钩子超出预算后仍在运行一段时间则记录"失控"错误与事件。
  */
-function watchOverrun(e, handler, site) {
-  let n = false;
-  let s = () => {
-    n = true;
+function watchOverrun(budget, handler, site) {
+  let finished = false;
+  let finish = () => {
+    finished = true;
   };
-  e.then(s, s);
+  budget.then(finish, finish);
   let lingerMs = streamChainSlot.get()?.lingerMs ?? LINGER_GRACE_MS;
   setTimeout(() => {
-    if (n || isCoreOrManaged(handler)) return;
-    let f = withHookPrefix(
+    if (finished || isCoreOrManaged(handler)) return;
+    let timer = withHookPrefix(
       handler,
       `still running ${lingerMs}ms after its budget ran out; ignores its signal`,
     );
-    matcherLog().log(`hook overran: ${f} (${site.event})`, "error");
+    matcherLog().log(`hook overran: ${timer} (${site.event})`, "error");
     matcherLog().hookFailed({
       plugin: handler.name,
       event: site.event,
-      reason: f,
+      reason: timer,
       effect: "counted toward a runaway",
       hasOverrun: true,
     });
@@ -400,124 +414,135 @@ var emptyEntryState = () => ({
 /**
  * 冻结链节点
  */
-function freezeEntry(run, o) {
-  run.entry = Object.freeze(o);
+function freezeEntry(run, entry) {
+  run.entry = Object.freeze(entry);
 }
 //@ chunk-4121qate.js:80691-80780 placement
 /**
  * 取错误与是否调用过
  */
-function pickErrorState(e) {
-  let { error } = e;
+function pickErrorState(state) {
+  let { error } = state;
   if (error === undefined) return;
   return {
     error,
-    called: e.called === true,
+    called: state.called === true,
   };
 }
 //@ chunk-4121qate.js:80780-80797 placement
 var CLIENT = "client";
 //@ chunk-4121qate.js:80797-80823 placement
-var Hbi = Object.freeze([]);
+var EMPTY_TRACE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:80797", () => {
+  EMPTY_TRACE = Object.freeze([]);
+});
 //@ chunk-4121qate.js:80823-80840 placement
 var ENGINE = "engine";
 //@ chunk-4121qate.js:80840-80888 placement
-var N5e = Object.freeze({
-  plugin: ENGINE,
-  tier: "core",
+var ENGINE_ORIGIN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:80840", () => {
+  ENGINE_ORIGIN = Object.freeze({
+    plugin: ENGINE,
+    tier: "core",
+  });
 });
 //@ chunk-4121qate.js:80888-81042 placement
 /**
  * 冻结 $ 接口对象：函数成员与对象本身的原型置为 null 后 Object.freeze。被函数钩子各处广泛使用。
  */
-function freezeApiObject(e) {
-  for (let o of Object.values(e)) if (typeof o === "function") Object.setPrototypeOf(o, null);
-  Object.setPrototypeOf(e, null);
-  return Object.freeze(e);
+function freezeApiObject(object) {
+  for (let value of Object.values(object))
+    if (typeof value === "function") Object.setPrototypeOf(value, null);
+  Object.setPrototypeOf(object, null);
+  return Object.freeze(object);
 }
 //@ chunk-4121qate.js:81042-81096 placement
 /**
  * 原型为 null 的函数
  */
-function nullPrototypeFunction(e) {
-  Object.setPrototypeOf(e, null);
-  return e;
+function nullPrototypeFunction(fn) {
+  Object.setPrototypeOf(fn, null);
+  return fn;
 }
 //@ chunk-4121qate.js:81096-81127 placement
 /**
  * 生成事件匹配器
  */
-var eventPatternMatcher = (event) => nullPrototypeFunction((o, r) => matchesEventPattern(o, event));
+var eventPatternMatcher = (event) => nullPrototypeFunction((args, ctx) => matchesEventPattern(args, event));
 //@ chunk-4121qate.js:81127-81193 placement
-var UNLIMITED_BUDGET = Object.freeze({
-  ms: 0,
-  remainingMs: Number.POSITIVE_INFINITY,
+var UNLIMITED_BUDGET; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:81127", () => {
+  UNLIMITED_BUDGET = Object.freeze({
+    ms: 0,
+    remainingMs: Number.POSITIVE_INFINITY,
+  });
 });
 //@ chunk-4121qate.js:81193-81526 placement = CONSOLE_STDERR_METHODS (0.333)
-function freezeHookCall(e) {
-  let { call: o, signal, event, origin } = e;
-  let i = nullPrototypeFunction(o);
-  i.to = nullPrototypeFunction(e.to);
-  i.signal = signal;
-  i.is = e.is;
-  i.event = event;
-  i.origin = origin;
-  if (e.caught !== undefined) Object.assign(i, e.caught);
-  Object.defineProperty(i, "trace", {
-    get: nullPrototypeFunction(e.trace),
+function freezeHookCall(options) {
+  let { call, signal, event, origin } = options;
+  let fn = nullPrototypeFunction(call);
+  fn.to = nullPrototypeFunction(options.to);
+  fn.signal = signal;
+  fn.is = options.is;
+  fn.event = event;
+  fn.origin = origin;
+  if (options.caught !== undefined) Object.assign(fn, options.caught);
+  Object.defineProperty(fn, "trace", {
+    get: nullPrototypeFunction(options.trace),
     enumerable: true,
   });
-  Object.defineProperty(i, "budget", {
-    get: nullPrototypeFunction(e.budget ?? (() => UNLIMITED_BUDGET)),
+  Object.defineProperty(fn, "budget", {
+    get: nullPrototypeFunction(options.budget ?? (() => UNLIMITED_BUDGET)),
     enumerable: true,
   });
-  return Object.freeze(i);
+  return Object.freeze(fn);
 }
 //@ chunk-4121qate.js:81526-81546 placement
-var makeHookCall = (e) => freezeHookCall(e);
+var makeHookCall = (options) => freezeHookCall(options);
 //@ chunk-4121qate.js:81546-81576 placement
 /**
  * 转发 next
  */
-var forwardNext = (e, o, r) => o.to(e, ...r);
+var forwardNext = (value, hookCall, rest) => hookCall.to(value, ...rest);
 //@ chunk-4121qate.js:81576-81606 placement
 /**
  * 带参数调用 next
  */
-var callNextWith = (e, o, r) => o.to(e, ...r);
+var callNextWith = (value, hookCall, rest) => hookCall.to(value, ...rest);
 //@ chunk-4121qate.js:81606-81729 placement
 /**
  * 从 hook call 中复制上下文字段（signal、is、event、origin、trace、budget、caught）。
  */
-var hookCallContext = (e) => ({
-  signal: e.signal,
-  is: e.is,
-  event: e.event,
-  origin: e.origin,
-  trace: () => e.trace,
-  budget: () => e.budget,
-  caught: pickErrorState(e),
+var hookCallContext = (hookCall) => ({
+  signal: hookCall.signal,
+  is: hookCall.is,
+  event: hookCall.event,
+  origin: hookCall.origin,
+  trace: () => hookCall.trace,
+  budget: () => hookCall.budget,
+  caught: pickErrorState(hookCall),
 });
 //@ chunk-4121qate.js:81729-81865 placement
 /**
  * 沿 beneath 链收集运行轨迹条目，冻结返回。
  */
 function traceOfRun(beneath) {
-  let o = [];
-  for (let r = beneath; r !== undefined; r = r.beneath) if (r.entry !== undefined) o.push(r.entry);
-  return o.length === 0 ? Hbi : Object.freeze(o);
+  let entries = [];
+  for (let run = beneath; run !== undefined; run = run.beneath)
+    if (run.entry !== undefined) entries.push(run.entry);
+  return entries.length === 0 ? EMPTY_TRACE : Object.freeze(entries);
 }
 //@ chunk-4121qate.js:81865-82126 placement
 var createBottomStep =
   ({ bottom, index, event }) =>
-  async (n, s, { run, floors }) => {
+  async (e, ctx, { run, floors }) => {
     let startTime = performance.now();
     let outcome = "rejected";
-    let m;
+    let secondE;
     try {
-      m = await bottom(n, s, floors);
+      secondE = await bottom(e, ctx, floors);
       outcome = "returned";
-      return m;
+      return secondE;
     } finally {
       freezeEntry(run, {
         index,
@@ -526,8 +551,8 @@ var createBottomStep =
         event,
         outcome,
         ms: performance.now() - startTime,
-        received: n,
-        returned: m,
+        received: e,
+        returned: secondE,
       });
     }
   };
@@ -551,38 +576,27 @@ function forwardAbort(sourceSignal, targetController) {
 /**
  * 插件调用链里"向下调用"助手（runBelow/call/to/replay），带预算暂停与中止转发。与 bridge 无关。
  */
-function createBelowCaller({
-  handler,
-  below,
-  site,
-  e: n,
-  budget,
-  downstreamSignal,
-  state,
-  run,
-  floors,
-  tier,
-}) {
-  async function c(y, g, floors_2 = floors) {
-    let T = site.raiseArgument?.(y) ?? y;
+function createBelowCaller({ handler, below, site, e, budget, downstreamSignal, state, run, floors, tier }) {
+  async function runBelow(value, ctx, floors_2 = floors) {
+    let raised = site.raiseArgument?.(value) ?? value;
     if (state.pendingDownstream++ === 0) {
       budget.pause();
       state.beneathSince = performance.now();
     }
     let abortController = new AbortController();
-    let v = forwardAbort(downstreamSignal, abortController);
-    let R = forwardAbort(g, abortController);
-    let I = emptyEntryState();
-    if (!downstreamSignal.aborted) run.beneath = I;
-    let V = below(T, abortController.signal, {
-      run: I,
+    let offDownstream = forwardAbort(downstreamSignal, abortController);
+    let offCtx = forwardAbort(ctx, abortController);
+    let beneathRun = emptyEntryState();
+    if (!downstreamSignal.aborted) run.beneath = beneathRun;
+    let pending = below(raised, abortController.signal, {
+      run: beneathRun,
       floors: floors_2,
     }).then(
-      (Q) => {
-        let S = site.carry === undefined ? Q : site.carry(Q, T, n);
+      (value) => {
+        let carried = site.carry === undefined ? value : site.carry(value, raised, e);
         state.belowRejected = undefined;
-        state.fromBelow = [...state.fromBelow, S];
-        return S;
+        state.fromBelow = [...state.fromBelow, carried];
+        return carried;
       },
       (error) => {
         state.belowRejected = {
@@ -591,63 +605,63 @@ function createBelowCaller({
         throw error;
       },
     );
-    state.inFlight = V;
+    state.inFlight = pending;
     try {
-      return await V;
+      return await pending;
     } finally {
-      v();
-      R();
+      offDownstream();
+      offCtx();
       endDownstreamWait(state, budget);
     }
   }
-  function u(y) {
-    let g = normalizeNextArgument(
+  function normalizeArg(value) {
+    let normalized = normalizeNextArgument(
       {
         handler,
         site,
-        e: n,
+        e,
       },
-      y,
+      value,
     );
     if (state.settled) throw nextAfterSettledError(handler.name);
-    return g;
+    return normalized;
   }
-  let l = (y) =>
-    resolveNextTier(floors, y, {
+  let tierFloors = (to) =>
+    resolveNextTier(floors, to, {
       plugin: handler.name,
       tier,
     });
   return {
-    runBelow: c,
-    call: async (y, g, x) => c(u(y), g, x),
-    to: async (y, g) => c(u(y), undefined, l(g)),
-    replay: async (y, g, x) =>
+    runBelow,
+    call: async (value, ctx, secondFloors) => runBelow(normalizeArg(value), ctx, secondFloors),
+    to: async (value, to) => runBelow(normalizeArg(value), undefined, tierFloors(to)),
+    replay: async (value, ctx, thirdFloors) =>
       state.inFlight ??
-      c(
+      runBelow(
         normalizeNextArgument(
           {
             handler,
             site,
-            e: n,
+            e,
           },
-          y,
+          value,
         ),
-        g,
-        x,
+        ctx,
+        thirdFloors,
       ),
-    replayTo: async (y, g) =>
+    replayTo: async (value, to) =>
       state.inFlight ??
-      c(
+      runBelow(
         normalizeNextArgument(
           {
             handler,
             site,
-            e: n,
+            e,
           },
-          y,
+          value,
         ),
         undefined,
-        l(g),
+        tierFloors(to),
       ),
   };
 }
@@ -662,17 +676,17 @@ var missingImplementation = (site) => Promise.reject(new HooksError(`no implemen
  */
 var forwardAbortWith = (signal, abortController) =>
   forwardAbort(signal, {
-    abort: (r) => abortController.abort(attempt(r, unwrapPlainDataError) ?? r),
+    abort: (reason) => abortController.abort(attempt(reason, unwrapPlainDataError) ?? reason),
   });
 //@ chunk-4121qate.js:83375-83723 layout
 /**
  * 把同一跳的多个插件处理器合并为一个链节点（名字相连、层级与插件列表）。
  */
-var createHopHandler = (e, members) => ({
-  name: members.map((r) => r.name).join("+"),
+var createHopHandler = (handler, members) => ({
+  name: members.map((handler) => handler.name).join("+"),
   tier: members[0]?.tier,
   tiers: uniq(members.map(handlerTier)),
-  plugins: members.map((r) => r.name),
+  plugins: members.map((tier) => tier.name),
   ...(members.at(-1)?.answersForEngine && {
     answersForEngine: true,
   }),
@@ -681,34 +695,34 @@ var createHopHandler = (e, members) => ({
   ...(members[0]?.withheld && {
     withheld: members[0].withheld,
   }),
-  run: (r, n, { call: s, floors, cutAt }) =>
-    e.run({
+  run: (hop, secondMembers, { call: secondSecondMembers, floors, cutAt }) =>
+    handler.run({
       members,
-      e: r,
-      call: s,
-      signal: n.signal,
-      origin: n.origin,
+      e: hop,
+      call: secondSecondMembers,
+      signal: secondMembers.signal,
+      origin: secondMembers.origin,
       floors,
       cutAt,
     }),
 });
 //@ chunk-4121qate.js:83723-83906 placement = generateUniqueTeammateName (0.611)
-var groupByHop = (e) =>
-  e.reduce((acc, r) => {
+var groupByHop = (handlers) =>
+  handlers.reduce((acc, handler) => {
     let last = acc.at(-1);
-    return r.hop !== undefined && last?.hop?.key === r.hop.key
+    return handler.hop !== undefined && last?.hop?.key === handler.hop.key
       ? [
           ...acc.slice(0, -1),
           {
             hop: last.hop,
-            members: [...last.members, r],
+            members: [...last.members, handler],
           },
         ]
       : [
           ...acc,
           {
-            hop: r.hop,
-            members: [r],
+            hop: handler.hop,
+            members: [handler],
           },
         ];
   }, []);
@@ -718,14 +732,14 @@ var groupByHop = (e) =>
  */
 var groupIntoHops = (handlers, isUnfolded = false) =>
   (isUnfolded
-    ? handlers.map((r) => ({
-        hop: r.hop,
-        members: [r],
+    ? handlers.map((handler) => ({
+        hop: handler.hop,
+        members: [handler],
       }))
     : groupByHop(handlers)
-  ).map((r) => {
-    let hop = r.hop;
-    return hop === undefined ? r.members[0] : createHopHandler(hop, r.members);
+  ).map((group) => {
+    let hop = group.hop;
+    return hop === undefined ? group.members[0] : createHopHandler(hop, group.members);
   });
 //@ chunk-4121qate.js:84042-84053 placement
 /**
@@ -736,33 +750,39 @@ var SLOW_HOOK_REPORT_INTERVAL_MS = 1e4;
 /**
  * 慢钩子上报表
  */
-var slowHookReports = createSlowHookReportMap();
+var slowHookReports; // deferred: uses createSlowHookReportMap (./slowHookReports.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-4121qate.js:84053", () => {
+  slowHookReports = createSlowHookReportMap();
+});
 //@ chunk-4121qate.js:84065-84078 placement
 /**
  * 钩子作用域存储
  */
-var hookScopeStore = pu();
+var hookScopeStore; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:84065", () => {
+  hookScopeStore = subscribe();
+});
 //@ chunk-4121qate.js:84078-84217 placement
-function recordPassedBy(e) {
+function recordPassedBy(passedBy) {
   try {
-    hookScopeStore.get()?.(e);
+    hookScopeStore.get()?.(passedBy);
   } catch (error) {
     matcherLog().log(
-      `passed-by: a sighting of ${e.link} on ${e.event} was not recorded: ${errorMessage(error)}`,
+      `passed-by: a sighting of ${passedBy.link} on ${passedBy.event} was not recorded: ${errorMessage(error)}`,
       "error",
     );
   }
 }
 //@ chunk-4121qate.js:84217-84356 placement
-function flushBypassCount(e, o, r) {
-  let count = slowHookReports.get(e)?.count ?? 0;
-  slowHookReports.delete(e);
+function flushBypassCount(key, message, req) {
+  let count = slowHookReports.get(key)?.count ?? 0;
+  slowHookReports.delete(key);
   if (count > 0) {
     matcherLog().log(
-      `${o} ${count} more times in the last ${SLOW_HOOK_REPORT_INTERVAL_MS / SLOW_HOOK_REPORT_INTERVAL_MS_2}s`,
+      `${message} ${count} more times in the last ${SLOW_HOOK_REPORT_INTERVAL_MS / SLOW_HOOK_REPORT_INTERVAL_MS_2}s`,
     );
     recordPassedBy({
-      ...r,
+      ...req,
       count,
     });
   }
@@ -776,30 +796,33 @@ var MAX_TRACKED_SKIP_KEYS = 256;
 /**
  * 记录被跳过的插件钩子（按事件/插件/原因计数，有上限），返回首次出现的插件列表。
  */
-function recordSkipNotices(e, o) {
-  let { plugins, event, by, count } = o;
-  let p = [];
-  if (e === undefined) return p;
+function recordSkipNotices(seen, notice) {
+  let { plugins, event, by, count } = notice;
+  let fresh = [];
+  if (seen === undefined) return fresh;
   for (let plugin of plugins) {
-    let a = `${event} ${plugin} ${by}`;
-    let m = e.get(a);
-    let c = m !== undefined || e.size < MAX_TRACKED_SKIP_KEYS;
-    if (c)
-      e.set(a, {
+    let key = `${event} ${plugin} ${by}`;
+    let existing = seen.get(key);
+    let shouldTrack = existing !== undefined || seen.size < MAX_TRACKED_SKIP_KEYS;
+    if (shouldTrack)
+      seen.set(key, {
         plugin,
         event,
         by,
-        count: (m?.count ?? 0) + count,
+        count: (existing?.count ?? 0) + count,
       });
-    if (c && m === undefined) p.push(plugin);
+    if (shouldTrack && existing === undefined) fresh.push(plugin);
   }
-  return p;
+  return fresh;
 }
 //@ chunk-4121qate.js:84623-84636 placement
 /**
  * 跳过钩子的上报器
  */
-var skippedHookReporter = pu();
+var skippedHookReporter; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:84623", () => {
+  skippedHookReporter = subscribe();
+});
 //@ chunk-4121qate.js:84636-84695 placement
 /**
  * 取跳过报告
@@ -812,20 +835,20 @@ function skippedHookReport() {
   }
 }
 //@ chunk-4121qate.js:84695-84976 placement
-function noteBypass(e) {
-  let { link, tier, event, by, session } = e;
-  let p = `${session} ${event} ${link} ${by}`;
-  let f = slowHookReports.get(p);
-  if (f !== undefined) {
-    f.count += 1;
+function noteBypass(bypass) {
+  let { link, tier, event, by, session } = bypass;
+  let key = `${session} ${event} ${link} ${by}`;
+  let report = slowHookReports.get(key);
+  if (report !== undefined) {
+    report.count += 1;
     return;
   }
-  let a = `${link}: ${event} bypassed by ${by} (tier ${tier})`;
-  matcherLog().log(`${a}; beneath runs`);
-  recordPassedBy(e);
-  let timer = setTimeout(flushBypassCount, SLOW_HOOK_REPORT_INTERVAL_MS, p, a, e);
+  let message = `${link}: ${event} bypassed by ${by} (tier ${tier})`;
+  matcherLog().log(`${message}; beneath runs`);
+  recordPassedBy(bypass);
+  let timer = setTimeout(flushBypassCount, SLOW_HOOK_REPORT_INTERVAL_MS, key, message, bypass);
   timer.unref();
-  slowHookReports.set(p, {
+  slowHookReports.set(key, {
     count: 0,
     timer,
   });
@@ -834,20 +857,20 @@ function noteBypass(e) {
 /**
  * 若该层已被更高层的 next.to 越过，记录"被绕过"并返回新的下降状态，否则 undefined。
  */
-function maybeBypassHandler({ handler, tier, index, site, e: s, descent }) {
+function maybeBypassHandler({ handler, tier, index, site, e, descent }) {
   let { run, floors } = descent;
   if (floors.length === 0 || isCoreOrManaged(handler)) return;
-  let mapped = (handler.isHop === true ? (handler.tiers ?? []) : [tier]).map((g) =>
-    findBypassingFloor(floors, g, handler.name),
+  let mapped = (handler.isHop === true ? (handler.tiers ?? []) : [tier]).map((tier) =>
+    findBypassingFloor(floors, tier, handler.name),
   );
-  let l = mapped.length > 0 && mapped.every((g) => g !== undefined) ? mapped[0] : undefined;
-  if (l === undefined) return;
+  let byFloor = mapped.length > 0 && mapped.every((floor) => floor !== undefined) ? mapped[0] : undefined;
+  if (byFloor === undefined) return;
   noteBypass({
     link: handler.name,
     plugins: handler.plugins ?? [handler.name],
     tier,
     event: site.event,
-    by: l,
+    by: byFloor,
     count: 1,
     session: skippedHookReport(),
   });
@@ -857,15 +880,15 @@ function maybeBypassHandler({ handler, tier, index, site, e: s, descent }) {
     tier,
     event: site.event,
     outcome: "skipped",
-    reason: `bypassed by ${l}`,
+    reason: `bypassed by ${byFloor}`,
     ms: 0,
-    received: s,
+    received: e,
     returned: undefined,
   });
-  let y = emptyEntryState();
-  run.beneath = y;
+  let by = emptyEntryState();
+  run.beneath = by;
   return {
-    run: y,
+    run: by,
     floors,
   };
 }
@@ -873,15 +896,15 @@ function maybeBypassHandler({ handler, tier, index, site, e: s, descent }) {
 /**
  * 未冻结则冻结
  */
-function freezeUnlessFrozen(e) {
-  if (!isUntrustedObject(e)) Object.freeze(e);
-  return e;
+function freezeUnlessFrozen(value) {
+  if (!isUntrustedObject(value)) Object.freeze(value);
+  return value;
 }
 //@ chunk-4121qate.js:85542-85741 placement
-var createChainHookCall = ({ call: e, to, signal, event, origin, run, budget, caught }) =>
+var createChainHookCall = ({ call, to, signal, event, origin, run, budget, caught }) =>
   freezeHookCall({
-    call: e,
-    to: (a, ...m) => to(a, m),
+    call,
+    to: (value, ...rest) => to(value, rest),
     signal,
     is: eventPatternMatcher(event),
     event,
@@ -904,12 +927,14 @@ var createChainState = () => ({
 /**
  * 为被中止的钩子调用生成 AbortError：优先使用现成的中止错误，否则包装中止原因（遥测里不带插件细节）。
  */
-function abortErrorFor(e, error) {
+function abortErrorFor(signal, error) {
   return (
-    [error, e.reason].find((r) => attempt(r, (n) => n instanceof Error && isAbortError(n)) === true) ??
-    attempt(e, (r) =>
+    [error, signal.reason].find(
+      (candidate) => attempt(candidate, (value) => value instanceof Error && isAbortError(value)) === true,
+    ) ??
+    attempt(signal, (thirdSignal) =>
       withTelemetryMessage(
-        new AbortError(abortReasonText(r)),
+        new AbortError(abortReasonText(thirdSignal)),
         "function hooks call aborted (reason not reported: it may contain plugin details)",
       ),
     ) ??
@@ -920,13 +945,13 @@ function abortErrorFor(e, error) {
 /**
  * 应用站点的 keptResult 规则：结果被部分保留时记录原因，出错时写入插件日志。
  */
-function applyKeptResult({ handler, site, e: r, fromBelow }, s) {
-  let i = s;
+function applyKeptResult({ handler, site, e, fromBelow }, answer) {
+  let kept = answer;
   try {
-    let p = site.keptResult?.(s, r, fromBelow);
-    if (p !== undefined) {
-      i = p.kept;
-      unappliedAnswerStands(handler, site.event, p.why);
+    let keptResult = site.keptResult?.(answer, e, fromBelow);
+    if (keptResult !== undefined) {
+      kept = keptResult.kept;
+      unappliedAnswerStands(handler, site.event, keptResult.why);
     }
   } catch (error) {
     try {
@@ -935,10 +960,10 @@ function applyKeptResult({ handler, site, e: r, fromBelow }, s) {
         "error",
       );
     } catch {
-      return i;
+      return kept;
     }
   }
-  return i;
+  return kept;
 }
 //@ chunk-4121qate.js:86388-86452 placement
 /**
@@ -949,14 +974,14 @@ function catchReturnedText(problem, problem_2) {
 }
 //@ chunk-4121qate.js:86452-86561 placement
 function catchFailureText({ kind, error, rejection }) {
-  let n = kind === "throw";
-  let s = rejection === undefined ? undefined : errorTextOf(rejection.error);
-  return n ? errorTextOf(error) : s;
+  let isThrow = kind === "throw";
+  let rejectionText = rejection === undefined ? undefined : errorTextOf(rejection.error);
+  return isThrow ? errorTextOf(error) : rejectionText;
 }
 //@ chunk-4121qate.js:86561-87600 placement
-async function runHookCatch({ handler, e: o, signal, state, handle, site, origin, run, cutAt, kind, error }) {
-  let u = handler.catch;
-  if (u === undefined)
+async function runHookCatch({ handler, e, signal, state, handle, site, origin, run, cutAt, kind, error }) {
+  let catchHook = handler.catch;
+  if (catchHook === undefined)
     return {
       answer: undefined,
       problem: undefined,
@@ -965,61 +990,66 @@ async function runHookCatch({ handler, e: o, signal, state, handle, site, origin
   await state.inFlight?.then(undefined, () => {
     return;
   });
-  let y = catchFailureText({
+  let failureText = catchFailureText({
     kind,
     error,
     rejection: state.belowRejected,
   });
   let abortController = new AbortController();
-  let x = forwardAbort(signal, abortController);
-  let T = false;
-  let h = `${handler.name}: next() after its .catch settled`;
-  let v = (Q) => (T ? Promise.reject(new HooksError(h)) : outsideBudget(Q));
-  let R = describeStreamHookOverrun(VALUE_NODE_SLACK, signal, cutAt);
+  let offAbort = forwardAbort(signal, abortController);
+  let isSettled = false;
+  let settledError = `${handler.name}: next() after its .catch settled`;
+  let guard = (fn) => (isSettled ? Promise.reject(new HooksError(settledError)) : outsideBudget(fn));
+  let grace = describeStreamHookOverrun(VALUE_NODE_SLACK, signal, cutAt);
   let chainHookCall = createChainHookCall({
-    call: (Q, S, L) => v(() => handle.replay(Q, S, L)),
-    to: (Q, S) => v(() => handle.replayTo(Q, S)),
+    call: (value, ctx, floors) => guard(() => handle.replay(value, ctx, floors)),
+    to: (value, to) => guard(() => handle.replayTo(value, to)),
     signal: abortController.signal,
     event: site.event,
     origin,
     run,
-    budget: R,
+    budget: grace,
     caught: {
       error: Object.freeze({
         kind,
-        ...(y === undefined
+        ...(failureText === undefined
           ? {}
           : {
-              message: y,
+              message: failureText,
             }),
         budget: VALUE_NODE_SLACK,
       }),
       called,
     },
   });
-  let V;
+  let answerPromise;
   try {
-    V = budgetPauseStorage.run(R, () => u(o, chainHookCall));
+    answerPromise = budgetPauseStorage.run(grace, () => catchHook(e, chainHookCall));
     return {
-      answer: R.expired === undefined ? await V : await Promise.race([V, R.expired]),
+      answer:
+        grace.expired === undefined
+          ? await answerPromise
+          : await Promise.race([answerPromise, grace.expired]),
       problem: undefined,
     };
   } catch (error) {
     if (isAbortOf(error, signal)) throw abortErrorFor(signal, error);
-    let S = formatDuration(VALUE_NODE_SLACK);
-    let L = R.isExpired();
-    let B = L ? `its .catch ran past its ${S} grace` : `its .catch threw ${scrubErrorText(error)}`;
-    abortController.abort(new HooksError(`${handler.name}: ${B}`));
-    if (L && V !== undefined) watchOverrun(V, handler, site);
+    let graceText = formatDuration(VALUE_NODE_SLACK);
+    let isExpired = grace.isExpired();
+    let problem = isExpired
+      ? `its .catch ran past its ${graceText} grace`
+      : `its .catch threw ${scrubErrorText(error)}`;
+    abortController.abort(new HooksError(`${handler.name}: ${problem}`));
+    if (isExpired && answerPromise !== undefined) watchOverrun(answerPromise, handler, site);
     return {
       answer: undefined,
-      problem: B,
+      problem,
       thrown: error,
     };
   } finally {
-    T = true;
-    R.clear();
-    x();
+    isSettled = true;
+    grace.clear();
+    offAbort();
   }
 }
 //@ chunk-4121qate.js:87600-91403 placement
@@ -1028,160 +1058,166 @@ async function runHookCatch({ handler, e: o, signal, state, handle, site, origin
  */
 var runHookChain =
   ({ handler, index, below, site, budgetMs, cutAt, origin, nothingBelow, answersForEngine }) =>
-  async (m, c, u) => {
-    let { run, floors } = u;
+  async (e, ctx, descent) => {
+    let { run, floors } = descent;
     let tier = handlerTier(handler);
-    let x = maybeBypassHandler({
+    let skipped = maybeBypassHandler({
       handler,
       tier,
       index,
       site,
-      e: m,
-      descent: u,
+      e,
+      descent,
     });
-    if (x !== undefined) return below(m, c, x);
+    if (skipped !== undefined) return below(e, ctx, skipped);
     let startTime = performance.now();
     let chainState = createChainState();
     let abortController = new AbortController();
-    let R = forwardAbort(c, abortController);
+    let offDownstream = forwardAbort(ctx, abortController);
     let abortController_2 = new AbortController();
-    let V = forwardAbort(c, abortController_2);
+    let offCtx = forwardAbort(ctx, abortController_2);
     let budgetMs_2 = handler.budgetMs ?? budgetMs;
-    let S = describeStreamHookOverrun(budgetMs_2, c, cutAt);
-    let L = freezeUnlessFrozen(m);
+    let budget = describeStreamHookOverrun(budgetMs_2, ctx, cutAt);
+    let frozen = freezeUnlessFrozen(e);
     let belowCaller = createBelowCaller({
       handler,
       below,
       site,
-      e: m,
-      budget: S,
+      e,
+      budget,
       downstreamSignal: abortController.signal,
       state: chainState,
       run,
       floors,
       tier,
     });
-    let { call: j, to, runBelow } = belowCaller;
+    let { call, to, runBelow } = belowCaller;
     let chainHookCall = createChainHookCall({
-      call: j,
+      call,
       to,
       signal: abortController_2.signal,
       event: site.event,
       origin,
       run,
-      budget: S,
+      budget,
     });
-    function Ne(error) {
+    function warnBelowRejected(error) {
       matcherLog().log(
         `${handler.name}: its next() rejected below it (${site.event}); the rejection passes up`,
       );
       return error;
     }
-    function Ve(ee) {
+    function settleAnswer(answer) {
       let settle = site.settle;
-      let de = isCoreOrManaged(handler) || settle === undefined;
+      let isPlainSite = isCoreOrManaged(handler) || settle === undefined;
       try {
-        let pe = de ? ee : settle(ee);
-        let fe = isCoreOrManaged(handler)
-          ? pe
-          : (site.restoreResult?.(pe, chainState.fromBelow, m, handler) ?? pe);
-        let ke =
+        let settled = isPlainSite ? answer : settle(answer);
+        let restored = isCoreOrManaged(handler)
+          ? settled
+          : (site.restoreResult?.(settled, chainState.fromBelow, e, handler) ?? settled);
+        let stripped =
           isCoreOrManaged(handler) || answersForEngine
-            ? fe
-            : (site.stripResult?.(fe, chainState.fromBelow, handler) ?? fe);
-        let Pe = handler.isHop === true && site.checkHop !== undefined;
-        let Oe = isCoreOrManaged(handler)
+            ? restored
+            : (site.stripResult?.(restored, chainState.fromBelow, handler) ?? restored);
+        let isHopSite = handler.isHop === true && site.checkHop !== undefined;
+        let problem = isCoreOrManaged(handler)
           ? undefined
-          : Pe
-            ? site.checkHop?.(ke, m)
-            : site.check?.(ke, m, chainState.fromBelow);
-        let be = Oe === undefined && !isCoreOrManaged(handler) && handler.isHop !== true;
-        if (be)
-          warnOversizedPluginText(handler.name, site.event, site.measure?.(ke, m, chainState.fromBelow));
-        if (be && site.isLateRefusal?.(ke, chainState.fromBelow) === true)
+          : isHopSite
+            ? site.checkHop?.(stripped, e)
+            : site.check?.(stripped, e, chainState.fromBelow);
+        let isPluginAnswer = problem === undefined && !isCoreOrManaged(handler) && handler.isHop !== true;
+        if (isPluginAnswer)
+          warnOversizedPluginText(
+            handler.name,
+            site.event,
+            site.measure?.(stripped, e, chainState.fromBelow),
+          );
+        if (isPluginAnswer && site.isLateRefusal?.(stripped, chainState.fromBelow) === true)
           matcherLog().log(
             `${handler.name}: ${site.event} hook refused after its next() was answered: what ran beneath it is not undone`,
             "warn",
           );
         return {
-          settled: be
+          settled: isPluginAnswer
             ? applyKeptResult(
                 {
                   handler,
                   site,
-                  e: m,
+                  e,
                   fromBelow: chainState.fromBelow,
                 },
-                ke,
+                stripped,
               )
-            : ke,
-          problem: Oe,
+            : stripped,
+          problem,
         };
       } catch (error) {
         let problem = `a result the site cannot read (${errorTextOf(error)})`;
         return {
-          settled: ee,
+          settled: answer,
           problem,
         };
       }
     }
-    function Me(ee) {
-      let weakTag = readWeakTag(ee);
-      let de = chainState.inFlight !== undefined;
-      let pe = de ? weakTag?.afterNext : weakTag?.answer;
-      let fe = pe === undefined ? undefined : Ve(pe);
-      let Ee = de && weakTag?.isWithholding === true;
+    function fromError(error) {
+      let weakTag = readWeakTag(error);
+      let hasNext = chainState.inFlight !== undefined;
+      let tagAnswer = hasNext ? weakTag?.afterNext : weakTag?.answer;
+      let secondSettled = tagAnswer === undefined ? undefined : settleAnswer(tagAnswer);
+      let isWithholding = hasNext && weakTag?.isWithholding === true;
       if (weakTag?.isNoted === true) handler.withheld?.();
-      return fe?.problem === undefined && fe !== undefined
+      return secondSettled?.problem === undefined && secondSettled !== undefined
         ? {
-            settled: fe.settled,
-            effect: Ee ? RESULT_WITHHELD : REFUSED_IN_PLACE,
+            settled: secondSettled.settled,
+            effect: isWithholding ? RESULT_WITHHELD : REFUSED_IN_PLACE,
           }
         : undefined;
     }
-    let E;
-    let Z;
-    let z = "rejected";
-    let Ke = false;
-    let ce;
-    let Te;
+    let value;
+    let returned;
+    let outcome = "rejected";
+    let noNext = false;
+    let runPromise;
+    let shape;
     try {
-      ce = budgetPauseStorage.run(S, () =>
-        handler.run(L, chainHookCall, {
-          call: j,
+      runPromise = budgetPauseStorage.run(budget, () =>
+        handler.run(frozen, chainHookCall, {
+          call,
           floors,
           cutAt,
         }),
       );
-      let Y = S.expired === undefined ? await ce : await Promise.race([ce, S.expired]);
-      if (Y === undefined) {
-        Te = "no result";
+      let result =
+        budget.expired === undefined ? await runPromise : await Promise.race([runPromise, budget.expired]);
+      if (result === undefined) {
+        shape = "no result";
         throw new HooksError("returned no result");
       }
-      let { settled, problem } = Ve(Y);
+      let { settled, problem } = settleAnswer(result);
       if (problem !== undefined) {
-        Te = problem;
+        shape = problem;
         throw new HooksError(`returned ${problem}`);
       }
-      E = settled;
-      Z = settled;
-      z = Y === chainState.fromBelow.at(-1) ? "passed" : "returned";
-      Ke = chainState.inFlight === undefined && !isCoreOrManaged(handler) && handler.isHop !== true;
+      value = settled;
+      returned = settled;
+      outcome = result === chainState.fromBelow.at(-1) ? "passed" : "returned";
+      noNext = chainState.inFlight === undefined && !isCoreOrManaged(handler) && handler.isHop !== true;
     } catch (error) {
-      if (isAbortOf(error, c)) throw abortErrorFor(c, error);
-      let Y = S.isExpired();
-      let belowRejected = Y ? undefined : chainState.belowRejected;
-      if (belowRejected !== undefined && handler.catch === undefined) throw Ne(belowRejected.error);
-      let pe = withHookPrefix(handler, errorTextOf(error));
+      if (isAbortOf(error, ctx)) throw abortErrorFor(ctx, error);
+      let isExpired = budget.isExpired();
+      let belowRejected = isExpired ? undefined : chainState.belowRejected;
+      if (belowRejected !== undefined && handler.catch === undefined)
+        throw warnBelowRejected(belowRejected.error);
+      let prefix = withHookPrefix(handler, errorTextOf(error));
       chainState.settled = true;
-      if (Y && ce !== undefined) {
-        abortController_2.abort(new HooksError(pe));
-        watchOverrun(ce, handler, site);
+      if (isExpired && runPromise !== undefined) {
+        abortController_2.abort(new HooksError(prefix));
+        watchOverrun(runPromise, handler, site);
       }
-      let fe = chainState.inFlight !== undefined;
-      let Ee = Y ? undefined : Me(error);
-      let Pe =
-        c.aborted || Ee !== undefined
+      let secondHasNext = chainState.inFlight !== undefined;
+      let secondFromError = isExpired ? undefined : fromError(error);
+      let caught =
+        ctx.aborted || secondFromError !== undefined
           ? {
               answer: undefined,
               problem: undefined,
@@ -1189,74 +1225,78 @@ var runHookChain =
             }
           : await runHookCatch({
               handler,
-              e: L,
-              signal: c,
+              e: frozen,
+              signal: ctx,
               state: chainState,
               handle: belowCaller,
               site,
               origin,
               run,
               cutAt,
-              kind: Y ? "timeout" : "throw",
+              kind: isExpired ? "timeout" : "throw",
               error,
             });
-      let Oe = Pe.answer === undefined ? undefined : Ve(Pe.answer);
-      let be = Oe !== undefined && Oe.problem === undefined;
-      let De = Ee ?? (be ? undefined : Me(Pe.thrown));
-      if (De !== undefined) {
+      let settledAnswer = caught.answer === undefined ? undefined : settleAnswer(caught.answer);
+      let caughtOk = settledAnswer !== undefined && settledAnswer.problem === undefined;
+      let held = secondFromError ?? (caughtOk ? undefined : fromError(caught.thrown));
+      if (held !== undefined) {
         reportHandlerFailure({
           error,
           handler,
           site,
-          effect: De.effect,
+          effect: held.effect,
           cause: {
             expiredMs: undefined,
             lingeredMs: undefined,
-            shape: Te,
-            caught: catchReturnedText(Pe.problem, Oe?.problem),
+            shape,
+            caught: catchReturnedText(caught.problem, settledAnswer?.problem),
           },
         });
-        E = De.settled;
-        Z = De.settled;
-      } else if (be) {
+        value = held.settled;
+        returned = held.settled;
+      } else if (caughtOk) {
         matcherLog().log(failedClosedText(handler.name, error, site.event), "warn");
         matcherLog().hookFailed({
           plugin: handler.name,
           environmentId: handler.environmentId,
           event: site.event,
-          reason: pe,
+          reason: prefix,
           effect: FAILED_CLOSED,
           hasOverrun: false,
         });
-        E = Oe.settled;
-        Z = Oe.settled;
-        z = "caught";
+        value = settledAnswer.settled;
+        returned = settledAnswer.settled;
+        outcome = "caught";
       } else if (belowRejected === undefined) {
-        let ft = fe && c.aborted && attempt(c, isPlainDataError) !== true;
+        let isInterrupted = secondHasNext && ctx.aborted && attempt(ctx, isPlainDataError) !== true;
         reportHandlerFailure({
           error,
           handler,
           site,
-          effect: ft ? INTERRUPTED_LEFT_OUT : fe ? SKIPPED_LAST_NEXT : SKIPPED_BELOW_RAN,
+          effect: isInterrupted
+            ? INTERRUPTED_LEFT_OUT
+            : secondHasNext
+              ? SKIPPED_LAST_NEXT
+              : SKIPPED_BELOW_RAN,
           cause: {
-            expiredMs: Y ? budgetMs_2 : undefined,
-            lingeredMs: S.hasGraceExpired() ? LINGER_GRACE_MS : undefined,
-            shape: Te,
-            refusedSubject: site.refusedSubject?.(m),
-            caught: catchReturnedText(Pe.problem, Oe?.problem),
+            expiredMs: isExpired ? budgetMs_2 : undefined,
+            lingeredMs: budget.hasGraceExpired() ? LINGER_GRACE_MS : undefined,
+            shape,
+            refusedSubject: site.refusedSubject?.(e),
+            caught: catchReturnedText(caught.problem, settledAnswer?.problem),
           },
         });
-        if (ft) throw abortErrorFor(c);
+        if (isInterrupted) throw abortErrorFor(ctx);
         if (chainState.inFlight === undefined && nothingBelow) throw error;
-        E = await (chainState.inFlight ?? runBelow(m));
-        Z = fe ? E : undefined;
-        z = Y ? "expired" : fe ? "kept" : "skipped";
-      } else throw Ne(belowRejected.error);
+        value = await (chainState.inFlight ?? runBelow(e));
+        returned = secondHasNext ? value : undefined;
+        outcome = isExpired ? "expired" : secondHasNext ? "kept" : "skipped";
+      } else throw warnBelowRejected(belowRejected.error);
     } finally {
       chainState.settled = true;
-      S.clear();
-      V();
-      R();
+      budget.clear();
+      offCtx();
+      offDownstream();
       let startTime_2 = performance.now();
       let ms =
         startTime_2 -
@@ -1268,12 +1308,12 @@ var runHookChain =
         plugin: handler.isCore === true ? ENGINE : handler.name,
         tier,
         event: site.event,
-        outcome: z,
+        outcome,
         ms,
-        received: m,
-        returned: Z,
+        received: e,
+        returned,
       });
-      if (Ke)
+      if (noNext)
         reportPluginHookWithoutNext({
           plugin: handler.name,
           tier,
@@ -1283,31 +1323,34 @@ var runHookChain =
       if (chainState.pendingDownstream > 0)
         abortController.abort(new PlainDataError(`${handler.name} settled the call`));
     }
-    return E;
+    return value;
   };
 //@ chunk-4121qate.js:91403-91578 placement
 /**
  * 记录钩子链各步的输入与产出：keep 追加，of/last/all/ran 查询。
  */
 function createStepRecorder() {
-  let e = [];
+  let entries = [];
   return {
     keep: (input, made) =>
-      e.push({
+      entries.push({
         input,
         made,
       }),
-    of: (o) => (o === undefined ? undefined : e[o - 1]),
-    last: (o) => (o === undefined ? e.at(-1) : e.findLast(o)),
-    all: () => e,
-    ran: () => e.length > 0,
+    of: (input) => (input === undefined ? undefined : entries[input - 1]),
+    last: (made) => (made === undefined ? entries.at(-1) : entries.findLast(made)),
+    all: () => entries,
+    ran: () => entries.length > 0,
   };
 }
 //@ chunk-4121qate.js:91578-91614 placement
 /**
  * 当前分发槽
  */
-var currentDispatchSlot = identity(createValueSlot(), (e) => e.set(undefined));
+var currentDispatchSlot; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-4121qate.js:91578", () => {
+  currentDispatchSlot = identity(createValueSlot(), (slot) => slot.set(undefined));
+});
 //@ chunk-4121qate.js:91614-91636 placement
 /**
  * 取当前分发
@@ -1320,7 +1363,7 @@ var currentDispatch = () => currentDispatchSlot.get();
 var hasCurrentDispatch = () => currentDispatch() !== undefined;
 //@ chunk-4121qate.js:91663-92357 placement
 async function reportChainFailure({
-  e,
+  e: eventInput,
   handlers,
   site,
   signal = new AbortController().signal,
@@ -1329,47 +1372,47 @@ async function reportChainFailure({
   cutAt,
   budgetMs = site.budgetMs ?? streamChainSlot.get()?.ms ?? DEFAULT_HOOK_TIMEOUT_MS,
   bottom,
-  origin = N5e,
-  floors = Y6t,
+  origin = ENGINE_ORIGIN,
+  floors = NO_FLOORS,
   trace,
 }) {
-  let l = groupIntoHops(handlers, isUnfolded);
+  let hops = groupIntoHops(handlers, isUnfolded);
   let bottomStep = createBottomStep({
     bottom: bottom ?? (() => missingImplementation(site)),
-    index: l.length,
+    index: hops.length,
     event: site.event,
   });
-  let g = emptyEntryState();
-  let x = hasCurrentDispatch();
+  let runState = emptyEntryState();
+  let isDispatching = hasCurrentDispatch();
   let abortController = new AbortController();
-  let h = isHopFold === true ? undefined : forwardAbortWith(signal, abortController);
-  return l
-    .reduceRight((below, R, I) => {
-      let V = I === l.length - 1;
+  let offAbort = isHopFold === true ? undefined : forwardAbortWith(signal, abortController);
+  return hops
+    .reduceRight((below, handler, hopIndex) => {
+      let isLast = hopIndex === hops.length - 1;
       return runHookChain({
-        handler: R,
-        index: I,
+        handler,
+        index: hopIndex,
         below,
         site,
         budgetMs,
         cutAt,
         origin,
-        nothingBelow: bottom === undefined && V,
-        answersForEngine: x && V && R.answersForEngine === true,
+        nothingBelow: bottom === undefined && isLast,
+        answersForEngine: isDispatching && isLast && handler.answersForEngine === true,
       });
-    }, bottomStep)(e, isHopFold === true ? signal : abortController.signal, {
-      run: g,
+    }, bottomStep)(eventInput, isHopFold === true ? signal : abortController.signal, {
+      run: runState,
       floors,
     })
-    .then((v) => {
-      trace?.(traceOfRun(g));
-      return v;
+    .then((value) => {
+      trace?.(traceOfRun(runState));
+      return value;
     })
     .catch((error) => {
       if (!isAbortOf(error, signal)) matcherLog().log(`hooks chain failed: ${errorSummary(error)}`, "error");
       throw error;
     })
-    .finally(h);
+    .finally(offAbort);
 }
 export {
   ENGINE,
@@ -1386,7 +1429,7 @@ export {
   makeHookCall,
   hookCallContext,
   forwardNext,
-  Y6t,
+  NO_FLOORS,
   isCoreOrManaged,
   UNLIMITED_BUDGET,
   forwardAbort,
@@ -1413,7 +1456,7 @@ export {
   SKIPPED_BELOW_RAN,
   reportHandlerFailure,
   freezeEntry,
-  N5e,
+  ENGINE_ORIGIN,
   forwardAbortWith,
   errorSummary,
   uiElementKey,
@@ -1421,7 +1464,7 @@ export {
   hasCurrentDispatch,
   pluginTier,
   currentDispatch,
-  Hbi,
+  EMPTY_TRACE,
   skippedHookReporter,
   hookScopeStore,
   recordSkipNotices,

@@ -18,6 +18,7 @@ import { logForDebugging } from "../../utils/debug.js";
 import { hasModuleHookingSite } from "../hooksModules/loadedModuleFilters.js";
 import { joinTextBlocks } from "./sessionReceive.js";
 import { NO_CORE_AT_CHAIN_BOTTOM } from "./eventCatalog.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:76168-76221 placement
 /**
@@ -31,26 +32,26 @@ var skillProblemResult = (frontmatterProblem) => ({
 /**
  * 技能来源：插件命令为 plugin，同步技能为 syncedSkills，内置/打包为 built-in，否则取 source。
  */
-function skillSourceOf(e) {
-  if (e.type !== "prompt") return "plugin";
-  if (e.loadedFrom === "syncedSkills") return "syncedSkills";
-  switch (e.source) {
+function skillSourceOf(command) {
+  if (command.type !== "prompt") return "plugin";
+  if (command.loadedFrom === "syncedSkills") return "syncedSkills";
+  switch (command.source) {
     case "builtin":
     case "bundled":
       return "built-in";
     default:
-      return e.source;
+      return command.source;
   }
 }
 //@ chunk-e6aww6q8.js:76414-76620 placement
-function skillProvenance(e) {
-  let n = e?.type === "prompt" ? e : undefined;
-  let r = n?.pluginInfo?.pluginManifest.name;
-  let path = n?.skillFile?.path;
+function skillProvenance(command) {
+  let prompt = command?.type === "prompt" ? command : undefined;
+  let pluginName = prompt?.pluginInfo?.pluginManifest.name;
+  let path = prompt?.skillFile?.path;
   return {
-    source: e === undefined ? "built-in" : skillSourceOf(e),
-    ...(r !== undefined && {
-      pluginName: r,
+    source: command === undefined ? "built-in" : skillSourceOf(command),
+    ...(pluginName !== undefined && {
+      pluginName,
     }),
     ...(path !== undefined && {
       path,
@@ -61,22 +62,25 @@ function skillProvenance(e) {
 /**
  * skill.prompt 事件
  */
-var SKILL_PROMPT_EVENT = textPassthroughEvent("skill.prompt");
+var SKILL_PROMPT_EVENT; // deferred: uses textPassthroughEvent (./coreHandlers.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:76620", () => {
+  SKILL_PROMPT_EVENT = textPassthroughEvent("skill.prompt");
+});
 //@ chunk-e6aww6q8.js:76647-77155 placement
 /**
  * 为 skill.prompt 准备技能 frontmatter 的纯数据副本；无法复制或有问题时给空对象并说明原因。
  */
-function skillFrontmatterFor(e, n) {
-  let skillFile = n?.type === "prompt" ? n.skillFile : undefined;
+function skillFrontmatterFor(skillName, command) {
+  let skillFile = command?.type === "prompt" ? command.skillFile : undefined;
   if (skillFile === undefined) return withFrontmatter({});
   let frontmatterProblem = skillFile.frontmatterProblem;
   if (frontmatterProblem === undefined)
     try {
-      let h = new Set();
-      let frontmatter = isPlainDataValue(skillFile.frontmatterAsWritten, new Map(), h);
-      let S = checkPlainData(frontmatter);
-      if (S === undefined && isPlainDataObject(frontmatter)) {
-        let mapped = [...h].sort().map((L) => `a key ${L}`);
+      let droppedKeys = new Set();
+      let frontmatter = isPlainDataValue(skillFile.frontmatterAsWritten, new Map(), droppedKeys);
+      let problem = checkPlainData(frontmatter);
+      if (problem === undefined && isPlainDataObject(frontmatter)) {
+        let mapped = [...droppedKeys].sort().map((key) => `a key ${key}`);
         return mapped.length === 0
           ? withFrontmatter(frontmatter)
           : {
@@ -84,11 +88,11 @@ function skillFrontmatterFor(e, n) {
               frontmatterProblem: `left out ${mapped.join(" and ")}`,
             };
       }
-      frontmatterProblem = S ?? "is no table";
+      frontmatterProblem = problem ?? "is no table";
     } catch (error) {
       frontmatterProblem = `could not be copied (${errorMessage(error)})`;
     }
-  logForDebugging(`skill.prompt: ${e}'s frontmatter is handed as {} (${frontmatterProblem})`, {
+  logForDebugging(`skill.prompt: ${skillName}'s frontmatter is handed as {} (${frontmatterProblem})`, {
     level: "warn",
   });
   return skillProblemResult(frontmatterProblem);
@@ -97,35 +101,35 @@ function skillFrontmatterFor(e, n) {
 /**
  * 有 skill.prompt 钩子时让钩子改写技能提示文本（保留非文本块），否则原样返回。
  */
-async function applySkillPromptHooks(e, promptForCommand, r) {
+async function applySkillPromptHooks(skillName, promptForCommand, command) {
   if (
     !hasModuleHookingSite("skill.prompt", {
-      skill: e,
+      skill: skillName,
     })
   )
     return [...promptForCommand];
-  let s = joinTextBlocks(
+  let text = joinTextBlocks(
     promptForCommand,
     `
 `,
   );
-  let h = await NO_CORE_AT_CHAIN_BOTTOM(
+  let answer = await NO_CORE_AT_CHAIN_BOTTOM(
     "skill.prompt",
     {},
   )({
-    skill: e,
-    text: s,
-    ...skillFrontmatterFor(e, r),
-    ...skillProvenance(r),
+    skill: skillName,
+    text,
+    ...skillFrontmatterFor(skillName, command),
+    ...skillProvenance(command),
   });
-  return h.text === s
+  return answer.text === text
     ? [...promptForCommand]
     : [
         {
           type: "text",
-          text: h.text,
+          text: answer.text,
         },
-        ...promptForCommand.filter((S) => S.type !== "text"),
+        ...promptForCommand.filter((block) => block.type !== "text"),
       ];
 }
 //@ chunk-e6aww6q8.js:77401-77479 placement
@@ -140,5 +144,5 @@ function safeDate(loggedAt) {
 /**
  * Array.from 包装
  */
-var toArrayLike = (e) => Array.from(Object(e));
+var toArrayLike = (value) => Array.from(Object(value));
 export { applySkillPromptHooks, toArrayLike, safeDate, SKILL_PROMPT_EVENT, skillSourceOf };

@@ -8,7 +8,7 @@
 import { readFile, mkdir, stat } from "fs/promises";
 import { join } from "path";
 import { readEnv } from "../internal/utils/env.mjs";
-import { jur } from "../internal/detect-platform.mjs";
+import { getPlatform } from "../internal/detect-platform.mjs";
 import { getWIFPrecedenceSource } from "../../../../src/utils/wifProfile.js";
 import { isDiskless } from "../../../../src/bootstrap/state.js";
 import { logForDebugging } from "../../../../src/utils/debug.js";
@@ -17,8 +17,8 @@ import { federationCacheDir } from "../../../../src/utils/subprocessEnv.js";
 import { computeContentHash } from "../../../../src/utils/commitAttribution.js";
 
 //@ chunk-3wydcdvj.js:4720-4767 esm-fingerprint
-var Sbi = "1.0";
-var gAn = "1.0";
+var CONFIG_FILE_VERSION = "1.0";
+var CREDENTIALS_FILE_VERSION = "1.0";
 var PROFILE_NAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 //@ chunk-3wydcdvj.js:4767-5123 esm-fingerprint
 function validateProfileName(name) {
@@ -36,12 +36,12 @@ var loadConfig = async (profile) => (await loadConfigWithSource(profile))?.confi
 var loadConfigWithSource = async (profile) => {
   var _a;
   var _b;
-  let rootConfigPath = await getRootConfigPath();
+  let rootConfigPath = await getRootConfigPath_2();
   if (rootConfigPath === null) return null;
   let profileName = profile ?? (await getActiveProfileName());
   if (profileName === null) return null;
   validateProfileName(profileName);
-  let { fs, path } = await import("./chunk-a60jm9e8.js");
+  let { fs, path } = await import("../../../../src/child_process.lazy.js");
   let configPath = path.join(rootConfigPath, "configs", `${profileName}.json`);
   let configRaw;
   try {
@@ -111,22 +111,22 @@ var loadConfigWithSource = async (profile) => {
   };
 };
 //@ chunk-3wydcdvj.js:6947-8059 esm-fingerprint
-var S = async (config, profile) => {
+var getRootConfigPath = async (config, profile) => {
   if (config?.authentication.credentials_path) return config.authentication.credentials_path;
-  let rootConfigPath = await getRootConfigPath();
+  let rootConfigPath = await getRootConfigPath_2();
   if (!rootConfigPath) return null;
   let profileName = profile ?? (await getActiveProfileName());
   if (!profileName) return null;
   validateProfileName(profileName);
-  let { path } = await import("./chunk-a60jm9e8.js");
+  let { path } = await import("../../../../src/child_process.lazy.js");
   return path.join(rootConfigPath, "credentials", `${profileName}.json`);
 };
-var getRootConfigPath = async () => {
+var getRootConfigPath_2 = async () => {
   if (!supportsLocalConfigFiles()) return null;
-  let { path } = await import("./chunk-a60jm9e8.js");
+  let { path } = await import("../../../../src/child_process.lazy.js");
   let configDir = readEnv("ANTHROPIC_CONFIG_DIR");
   if (configDir) return configDir;
-  if (jur()["X-Stainless-OS"] === "Windows") {
+  if (getPlatform()["X-Stainless-OS"] === "Windows") {
     let appData = readEnv("APPDATA");
     if (appData) return path.join(appData, "Anthropic");
     let userProfile = readEnv("USERPROFILE");
@@ -140,15 +140,15 @@ var getRootConfigPath = async () => {
   return null;
 };
 var supportsLocalConfigFiles = () => {
-  let runtime = jur()["X-Stainless-Runtime"];
+  let runtime = getPlatform()["X-Stainless-Runtime"];
   return runtime === "node" || runtime === "deno";
 };
 var getActiveProfileName = async () => {
-  let rootConfigPath = await getRootConfigPath();
+  let rootConfigPath = await getRootConfigPath_2();
   if (!rootConfigPath) return null;
   let profileName = readEnv("ANTHROPIC_PROFILE");
   if (profileName) return profileName;
-  let { fs, path } = await import("./chunk-a60jm9e8.js");
+  let { fs, path } = await import("../../../../src/child_process.lazy.js");
   let filePath = path.join(rootConfigPath, "active_config");
   try {
     return (await fs.promises.readFile(filePath, "utf-8")).trim() || "default";
@@ -158,30 +158,30 @@ var getActiveProfileName = async () => {
   }
 };
 //@ chunk-3wydcdvj.js:21071-21113 affinity
-var I = (e) => process.env[e]?.trim() || undefined;
+var readEnvVar = (name) => process.env[name]?.trim() || undefined;
 //@ chunk-3wydcdvj.js:21113-21619 esm-fingerprint
-async function Te() {
+async function loadEnvQuadConfig() {
   if (getWIFPrecedenceSource() === "env-quad") {
-    let e = I("ANTHROPIC_FEDERATION_RULE_ID");
-    let n = I("ANTHROPIC_ORGANIZATION_ID");
-    if (e && n) {
-      let r = I("ANTHROPIC_IDENTITY_TOKEN_FILE");
-      if (r && isDiskless()) return null;
+    let federationRuleId = readEnvVar("ANTHROPIC_FEDERATION_RULE_ID");
+    let organizationId = readEnvVar("ANTHROPIC_ORGANIZATION_ID");
+    if (federationRuleId && organizationId) {
+      let identityTokenFile = readEnvVar("ANTHROPIC_IDENTITY_TOKEN_FILE");
+      if (identityTokenFile && isDiskless()) return null;
       return {
-        organization_id: n,
-        workspace_id: I("ANTHROPIC_WORKSPACE_ID"),
-        base_url: I("ANTHROPIC_BASE_URL"),
+        organization_id: organizationId,
+        workspace_id: readEnvVar("ANTHROPIC_WORKSPACE_ID"),
+        base_url: readEnvVar("ANTHROPIC_BASE_URL"),
         authentication: {
           type: "oidc_federation",
-          federation_rule_id: e,
-          service_account_id: I("ANTHROPIC_SERVICE_ACCOUNT_ID"),
-          identity_token: r
+          federation_rule_id: federationRuleId,
+          service_account_id: readEnvVar("ANTHROPIC_SERVICE_ACCOUNT_ID"),
+          identity_token: identityTokenFile
             ? {
                 source: "file",
-                path: r,
+                path: identityTokenFile,
               }
             : undefined,
-          scope: I("ANTHROPIC_SCOPE"),
+          scope: readEnvVar("ANTHROPIC_SCOPE"),
         },
       };
     }
@@ -190,64 +190,75 @@ async function Te() {
   return loadConfig();
 }
 //@ chunk-3wydcdvj.js:21619-22799 esm-layout
-async function ge(e, n) {
-  if (e.authentication.type !== "oidc_federation") return null;
-  let path = e.authentication.identity_token?.path;
-  let s;
+async function buildWifTokenCache(config, log) {
+  if (config.authentication.type !== "oidc_federation") return null;
+  let path = config.authentication.identity_token?.path;
+  let identityToken;
   if (path)
     try {
-      s = (await readFile(path, "utf-8")).trim();
+      identityToken = (await readFile(path, "utf-8")).trim();
     } catch (error) {
       logForDebugging(
         `wif: cannot read identity token at ${path} (${errorMessage(error)}); federation token cache disabled`,
       );
       return null;
     }
-  else s = I("ANTHROPIC_IDENTITY_TOKEN");
-  if (!s) {
+  else identityToken = readEnvVar("ANTHROPIC_IDENTITY_TOKEN");
+  if (!identityToken) {
     logForDebugging("wif: no identity token; federation token cache disabled");
     return null;
   }
-  let o = federationCacheDir();
-  if (o === null) {
+  let cacheDir = federationCacheDir();
+  if (cacheDir === null) {
     logForDebugging("wif: no config directory, or a diskless session; federation token cache disabled");
     return null;
   }
   try {
-    await mkdir(o, {
+    await mkdir(cacheDir, {
       recursive: true,
       mode: 448,
     });
     {
-      let f = await stat(o);
-      let h = f.mode & 511;
-      if (h & 63) {
+      let dirStats = await stat(cacheDir);
+      let modeBits = dirStats.mode & 511;
+      if (modeBits & 63) {
         logForDebugging(
-          `wif: ${o} is mode 0o${h.toString(8)} (filesystem ignores modes, or directory pre-existed shared); federation token cache disabled`,
+          `wif: ${cacheDir} is mode 0o${modeBits.toString(8)} (filesystem ignores modes, or directory pre-existed shared); federation token cache disabled`,
         );
         return null;
       }
-      let _ = process.getuid?.();
-      if (_ !== undefined && f.uid !== _) {
-        logForDebugging(`wif: ${o} is owned by uid ${f.uid}, not ${_}; federation token cache disabled`);
+      let uid = process.getuid?.();
+      if (uid !== undefined && dirStats.uid !== uid) {
+        logForDebugging(
+          `wif: ${cacheDir} is owned by uid ${dirStats.uid}, not ${uid}; federation token cache disabled`,
+        );
         return null;
       }
     }
   } catch (error) {
-    logForDebugging(`wif: cannot prepare ${o} (${errorMessage(error)}); federation token cache disabled`);
+    logForDebugging(
+      `wif: cannot prepare ${cacheDir} (${errorMessage(error)}); federation token cache disabled`,
+    );
     return null;
   }
   let contentHash = computeContentHash(
     JSON.stringify([
-      e.authentication.federation_rule_id,
-      e.organization_id,
-      e.workspace_id ?? "",
-      e.authentication.service_account_id ?? "",
-      e.authentication.scope ?? "",
-      n,
-      computeContentHash(s),
+      config.authentication.federation_rule_id,
+      config.organization_id,
+      config.workspace_id ?? "",
+      config.authentication.service_account_id ?? "",
+      config.authentication.scope ?? "",
+      log,
+      computeContentHash(identityToken),
     ]),
   );
-  return join(o, `${contentHash}.json`);
+  return join(cacheDir, `${contentHash}.json`);
 }
-export { gAn, loadConfigWithSource, S, Te, ge, Sbi };
+export {
+  CREDENTIALS_FILE_VERSION,
+  loadConfigWithSource,
+  getRootConfigPath,
+  loadEnvQuadConfig,
+  buildWifTokenCache,
+  CONFIG_FILE_VERSION,
+};

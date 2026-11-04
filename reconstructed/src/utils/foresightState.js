@@ -17,9 +17,9 @@ var foresightState = identity(
     open: false,
     foresee: undefined,
   },
-  (e) => {
-    e.settled = undefined;
-    e.open = false;
-    e.foresee = undefined;
+  (state) => {
+    state.settled = undefined;
+    state.open = false;
+    state.foresee = undefined;
   },
 );

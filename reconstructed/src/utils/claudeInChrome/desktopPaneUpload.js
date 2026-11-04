@@ -45,10 +45,15 @@ async function preparePaneUpload(input, context, requestMeta, hostAsksPerFile, a
   };
 }
 //@ chunk-v64arqfj.js:6438-6639 placement
-function isSingleRequestedPath(n, r) {
-  let t = Array.isArray(n?.paths) ? n.paths[0] : undefined;
-  let e = Array.isArray(r.files) ? r.files[0] : undefined;
+function isSingleRequestedPath(args, other) {
+  let path = Array.isArray(args?.paths) ? args.paths[0] : undefined;
+  let file = Array.isArray(other.files) ? other.files[0] : undefined;
   return (
-    typeof t === "string" && typeof e === "object" && e !== null && "sourcePath" in e && t === e.sourcePath
+    typeof path === "string" &&
+    typeof file === "object" &&
+    file !== null &&
+    "sourcePath" in file &&
+    path === file.sourcePath
   );
 }
+export { preparePaneUpload };

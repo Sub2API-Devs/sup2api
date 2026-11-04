@@ -25,100 +25,106 @@ var MAX_TOOL_RESULT_BYTES = 15728640;
 /**
  * 把工具结果内容转为 MCP 内容块：文本、base64 图片、文档转为 resource（tool-result:attachment/N），其余 JSON 字符串化。
  */
-function appendToolResultContent(r, content) {
+function appendToolResultContent(blocks, content) {
   if (content === undefined) return;
   if (typeof content === "string") {
-    r.push({
+    blocks.push({
       type: "text",
       text: content,
     });
     return;
   }
-  for (let e of content)
-    if (e.type === "text")
-      r.push({
+  for (let item of content)
+    if (item.type === "text")
+      blocks.push({
         type: "text",
-        text: e.text,
+        text: item.text,
       });
-    else if (e.type === "image" && e.source.type === "base64")
-      r.push({
+    else if (item.type === "image" && item.source.type === "base64")
+      blocks.push({
         type: "image",
-        data: e.source.data,
-        mimeType: e.source.media_type,
+        data: item.source.data,
+        mimeType: item.source.media_type,
       });
-    else if (e.type === "document" && (e.source.type === "base64" || e.source.type === "text")) {
-      let uri = `tool-result:attachment/${r.length}`;
-      r.push({
+    else if (item.type === "document" && (item.source.type === "base64" || item.source.type === "text")) {
+      let uri = `tool-result:attachment/${blocks.length}`;
+      blocks.push({
         type: "resource",
         resource:
-          e.source.type === "base64"
+          item.source.type === "base64"
             ? {
                 uri,
-                mimeType: e.source.media_type,
-                blob: e.source.data,
+                mimeType: item.source.media_type,
+                blob: item.source.data,
               }
             : {
                 uri,
-                mimeType: e.source.media_type,
-                text: e.source.data,
+                mimeType: item.source.media_type,
+                text: item.source.data,
               },
       });
     } else
-      r.push({
+      blocks.push({
         type: "text",
-        text: jsonStringify(e),
+        text: jsonStringify(item),
       });
 }
 //@ chunk-nyz8dmpm.js:12535-13237 placement
-async function renderToolResultForMCP(r, o, e) {
-  let a = `toolu_serve_${randomBytes(12).toString("hex")}`;
-  let p = r.mapToolResultToToolResultBlockParam(o.data, a);
-  if (p === undefined)
+async function renderToolResultForMCP(tool, result, context) {
+  let toolUseId = `toolu_serve_${randomBytes(12).toString("hex")}`;
+  let blockParam = tool.mapToolResultToToolResultBlockParam(result.data, toolUseId);
+  if (blockParam === undefined)
     return {
       content: [
         {
           type: "text",
-          text: `[serve-mode] ${r.name} has no rendered form for this result; raw output follows.
-${jsonStringify(o.data)}`,
+          text: `[serve-mode] ${tool.name} has no rendered form for this result; raw output follows.
+${jsonStringify(result.data)}`,
         },
       ],
     };
-  let l = await processToolResultBlock(p, r, getOriginalCwd(e.session), e.storageV5);
-  let i = [];
-  appendToolResultContent(i, l.content);
-  let n = [];
-  if (o.data && typeof o.data === "object") {
-    let cachedReadingLimit = getCachedReadingLimit(o.data);
+  let processed = await processToolResultBlock(
+    blockParam,
+    tool,
+    getOriginalCwd(context.session),
+    context.storageV5,
+  );
+  let content = [];
+  appendToolResultContent(content, processed.content);
+  let attachments = [];
+  if (result.data && typeof result.data === "object") {
+    let cachedReadingLimit = getCachedReadingLimit(result.data);
     if (cachedReadingLimit !== undefined)
-      n.push(
+      attachments.push(
         ...normalizeAttachmentOrEmpty({
           type: "read_truncation_notice",
           banner: cachedReadingLimit,
-          toolUseID: a,
+          toolUseID: toolUseId,
         }),
       );
   }
-  for (let s of o.newMessages ?? [])
-    if (s.type === "user" && !s.isVirtual) n.push(s);
-    else if (s.type === "attachment") n.push(...normalizeAttachmentOrEmpty(s.attachment));
-  for (let s of n) appendToolResultContent(i, s.message.content);
+  for (let newMessage of result.newMessages ?? [])
+    if (newMessage.type === "user" && !newMessage.isVirtual) attachments.push(newMessage);
+    else if (newMessage.type === "attachment")
+      attachments.push(...normalizeAttachmentOrEmpty(newMessage.attachment));
+  for (let attachment of attachments) appendToolResultContent(content, attachment.message.content);
   return {
-    content: i,
-    ...(l.is_error === true && {
+    content,
+    ...(processed.is_error === true && {
       isError: true,
     }),
   };
 }
 //@ chunk-nyz8dmpm.js:13237-13592 placement
-function withinAnswerLimit(r, o) {
-  let e = Buffer.byteLength(jsonStringify(o), "utf8");
-  if (e <= MAX_TOOL_RESULT_BYTES)
+function withinAnswerLimit(tool, answer) {
+  let byteLength = Buffer.byteLength(jsonStringify(answer), "utf8");
+  if (byteLength <= MAX_TOOL_RESULT_BYTES)
     return {
-      answer: o,
+      answer,
       tooLarge: false,
     };
-  let a = `${r.name} ran, but its result (${formatFileSize(e)}) is too large to send back. Ask for less of it: for a PDF, fewer pages at a time with the pages parameter.`;
-  logForDebugging(`MCP server: ${a}`, {
+  let notice = `${tool.name} ran, but its result (${formatFileSize(byteLength)}) is too large to send back. Ask for less of it: for a PDF, fewer pages at a time with the pages parameter.`;
+  logForDebugging(`MCP server: ${notice}`, {
     level: "error",
   });
   return {
@@ -126,7 +132,7 @@ function withinAnswerLimit(r, o) {
       content: [
         {
           type: "text",
-          text: a,
+          text: notice,
         },
       ],
       isError: true,
@@ -134,3 +140,4 @@ function withinAnswerLimit(r, o) {
     tooLarge: true,
   };
 }
+export { renderToolResultForMCP, withinAnswerLimit };

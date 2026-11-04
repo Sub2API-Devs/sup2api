@@ -27,18 +27,18 @@ import { checkHasTrustDialogAccepted } from "../config.js";
  * 从设置配置 proxyAuthHelper（项目/本地设置来源受限）。
  */
 function configureProxyAuthHelperFromSettings() {
-  let e = warnPinnedHelper("proxyAuthHelper", (getSettings_DEPRECATED() || {}).proxyAuthHelper);
-  let r = getConfiguredProxyAuthHelper() !== e;
+  let helper = warnPinnedHelper("proxyAuthHelper", (getSettings_DEPRECATED() || {}).proxyAuthHelper);
+  let changed = getConfiguredProxyAuthHelper() !== helper;
   _setProxyAuthHelperConfig({
-    helper: e,
+    helper,
     fromProjectOrLocal:
-      getSettingsForSourceTightenOnly("projectSettings")?.proxyAuthHelper === e ||
-      getSettingsForSourceTightenOnly("localSettings")?.proxyAuthHelper === e ||
+      getSettingsForSourceTightenOnly("projectSettings")?.proxyAuthHelper === helper ||
+      getSettingsForSourceTightenOnly("localSettings")?.proxyAuthHelper === helper ||
       isHookedMergeAnswer("proxyAuthHelper"),
     trustAccepted: checkHasTrustDialogAccepted,
     startHelper: runManagedHelperWithoutProjectEnv,
     readAsHelperStarts: managedHelperSettingsGate,
   });
-  if (r) clearProxyAuthHelperCache();
+  if (changed) clearProxyAuthHelperCache();
 }
 export { configureProxyAuthHelperFromSettings };

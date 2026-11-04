@@ -5,12 +5,12 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:260823-272707 cjs-fingerprint
-var require_lsl = x(function (cjsExports, cjsModule) {
+var require_lsl = __commonJS(function (cjsExports, cjsModule) {
   function lsl(hljs) {
-    let n = {
+    let LSL_STRING_ESCAPE_CHARS = {
       className: "string",
       begin: '"',
       end: '"',
@@ -60,7 +60,7 @@ var require_lsl = x(function (cjsExports, cjsModule) {
       name: "LSL (Linden Scripting Language)",
       illegal: ":",
       contains: [
-        n,
+        LSL_STRING_ESCAPE_CHARS,
         {
           className: "comment",
           variants: [hljs.COMMENT("//", "$"), hljs.COMMENT("/\\*", "\\*/")],

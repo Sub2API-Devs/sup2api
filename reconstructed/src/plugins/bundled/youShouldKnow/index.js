@@ -8,7 +8,7 @@
  * pieces: chunk-bss4k1z9.js (10)
  * attribution: placement 10
  */
-import { x, Ar } from "../../../../runtime/bun-runtime.js";
+import { __commonJS, __export } from "../../../../runtime/bun-runtime.js";
 import {
   ABOUT_CLOSED,
   ABOUT_THIS,
@@ -160,7 +160,7 @@ import {
 import {
   ASKED_WAYS,
   EXPLANATION_LENGTHS,
-  FIRST_EXPLANATION_LENGTH,
+  FIRST_EXPLANATION_GUIDE,
   LOOKS_TO_SKIP_MAX,
   OFF_BOX_BUSY,
   PAGE_FONTS,
@@ -252,8 +252,8 @@ import { registerBuiltinPlugin, builtinHooksModuleRef } from "../../builtinPlugi
 /**
  * youShouldKnow 插件扫描清单。
  */
-var YOU_SHOULD_KNOW_MANIFEST = x(function (aO, ss) {
-  ss.exports = {
+var YOU_SHOULD_KNOW_MANIFEST = __commonJS(function (pluginModule, pluginExports) {
+  pluginExports.exports = {
     scan: {
       hooks: ["prompt.submit", "command.run", "turn.step", "ui.render", "session.detach", "session.end"],
       calls: [
@@ -302,7 +302,7 @@ var YOU_SHOULD_KNOW_MANIFEST = x(function (aO, ss) {
 //@ chunk-bss4k1z9.js:4211-4221 placement
 var indexNamespace = {};
 //@ chunk-bss4k1z9.js:4221-8684 placement
-Ar(indexNamespace, {
+__export(indexNamespace, {
   ABOUT_CLOSED: () => ABOUT_CLOSED,
   ABOUT_THIS: () => ABOUT_THIS,
   ACCENT_LEAD_INK: () => ACCENT_LEAD_INK,
@@ -330,7 +330,7 @@ Ar(indexNamespace, {
   EXPLANATION_LENGTHS: () => EXPLANATION_LENGTHS,
   FALLBACK_COLUMNS: () => FALLBACK_COLUMNS,
   FENCE_LINE: () => FENCE_LINE,
-  FIRST_EXPLANATION_LENGTH: () => FIRST_EXPLANATION_LENGTH,
+  FIRST_EXPLANATION_LENGTH: () => FIRST_EXPLANATION_GUIDE,
   HARD_BREAK: () => HARD_BREAK,
   HEADS_UP: () => HEADS_UP,
   INLINE_TAG: () => INLINE_TAG,
@@ -539,7 +539,7 @@ Ar(indexNamespace, {
 //@ chunk-bss4k1z9.js:8684-8694 placement
 var indexNamespace2 = {};
 //@ chunk-bss4k1z9.js:8694-13009 placement
-Ar(indexNamespace2, {
+__export(indexNamespace2, {
   ABOUT_CLOSED: () => ABOUT_CLOSED,
   ABOUT_THIS: () => ABOUT_THIS,
   ACCENT_LEAD_INK: () => ACCENT_LEAD_INK,
@@ -567,7 +567,7 @@ Ar(indexNamespace2, {
   EXPLANATION_LENGTHS: () => EXPLANATION_LENGTHS,
   FALLBACK_COLUMNS: () => FALLBACK_COLUMNS,
   FENCE_LINE: () => FENCE_LINE,
-  FIRST_EXPLANATION_LENGTH: () => FIRST_EXPLANATION_LENGTH,
+  FIRST_EXPLANATION_LENGTH: () => FIRST_EXPLANATION_GUIDE,
   HARD_BREAK: () => HARD_BREAK,
   HEADS_UP: () => HEADS_UP,
   INLINE_TAG: () => INLINE_TAG,
@@ -791,3 +791,4 @@ var registerPlugin = () =>
     defaultEnabled: false,
     hooksModule: builtinHooksModuleRef(import.meta.dir, indexNamespace2, () => YOU_SHOULD_KNOW_MANIFEST()),
   });
+export { PLUGIN_LISTING, availabilityFlag, indexNamespace, isAvailable, isOnByDefault, registerPlugin };

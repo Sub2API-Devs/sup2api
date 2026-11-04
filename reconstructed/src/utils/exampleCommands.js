@@ -31,7 +31,7 @@ var NON_CORE_FILE_PATTERNS = [
 ];
 //@ chunk-3wek6r2k.js:69784-69830 file-local
 function isCoreFile(path) {
-  return !NON_CORE_FILE_PATTERNS.some((o) => o.test(path));
+  return !NON_CORE_FILE_PATTERNS.some((pattern) => pattern.test(path));
 }
 //@ chunk-3wek6r2k.js:69830-70192 callgraph-fingerprint = pickDiverseCoreFiles (1)
 function pickDiverseCoreFiles(sortedPaths, want) {
@@ -84,8 +84,8 @@ async function getFrequentlyModifiedFiles() {
       tallyInto(stdout);
     }
     let sorted = Array.from(counts.entries())
-      .sort((p, h) => h[1] - p[1])
-      .map(([p]) => p);
+      .sort((leftEntry, rightEntry) => rightEntry[1] - leftEntry[1])
+      .map(([filePath]) => filePath);
     return pickDiverseCoreFiles(sorted, 5);
   } catch (err) {
     logForDebugging(`Failed to collect frequently-modified files from git history: ${err}`, {
@@ -101,9 +101,9 @@ var ONE_WEEK_MS = 604800000;
  * 从缓存的常改文件中挑一个，生成示例命令文本（如“fix lint errors in <file>”）。
  */
 function getExampleCommandFromCache(sessionId) {
-  let o = Math.abs(hashString31(sessionId));
+  let hash = Math.abs(hashString31(sessionId));
   let exampleFiles = getCurrentProjectConfig().exampleFiles ?? [];
-  let frequentFile = exampleFiles[o % exampleFiles.length] ?? "<filepath>";
+  let frequentFile = exampleFiles[hash % exampleFiles.length] ?? "<filepath>";
   let commands = [
     "fix lint errors",
     "fix typecheck errors",
@@ -114,10 +114,10 @@ function getExampleCommandFromCache(sessionId) {
     `write a test for ${frequentFile}`,
     "create a util logging.py that...",
   ];
-  return `Try "${commands[(o >>> 8) % commands.length]}"`;
+  return `Try "${commands[(hash >>> 8) % commands.length]}"`;
 }
 //@ chunk-3wek6r2k.js:71114-71354 fingerprint = refreshExampleCommands (1)
-async function refreshExampleCommands(e) {
+async function refreshExampleCommands(frequentFiles) {
   let projectConfig = getCurrentProjectConfig();
   let lastGenerated = projectConfig.exampleFilesGeneratedAt ?? 0;
   if (Date.now() - lastGenerated > ONE_WEEK_MS || !projectConfig.exampleFiles?.length)
@@ -129,12 +129,12 @@ async function refreshExampleCommands(e) {
           exampleFiles: files,
           exampleFilesGeneratedAt: Date.now(),
         }),
-        e,
+        frequentFiles,
       );
     });
 }
 //@ chunk-awy329vy.js:4723-4790 fingerprint = countAndSortItems (0.712)
-function countAndSortItems(n) {
-  return n.toString(16).toUpperCase().padStart(4, "0");
+function countAndSortItems(items) {
+  return items.toString(16).toUpperCase().padStart(4, "0");
 }
 export { refreshExampleCommands, getExampleCommandFromCache, countAndSortItems };

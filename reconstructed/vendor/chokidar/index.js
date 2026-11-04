@@ -10,38 +10,38 @@ import * as pathModule_2 from "path";
 import { readdir, stat as stat_2 } from "fs/promises";
 import { EventEmitter } from "events";
 import { stat } from "fs";
-import { I, it, m, H, nt, F, CLOSE, END } from "./runtime.js";
-import { X } from "../readdirp/esm/index.js";
+import { noop, isIBMi, EV, NodeFsHandler, setPollingInterval, isWindows, CLOSE, END } from "./runtime.js";
+import { readdirp } from "../readdirp/esm/index.js";
 
 //@ chunk-3gvas51j.js:13133-13249 placement
-var j = "/";
-var Bt = "//";
-var ft = ".";
-var $t = "..";
+var SLASH = "/";
+var SLASH_SLASH = "//";
+var DOT = ".";
+var DOT_DOT = "..";
 var STRING = "string";
-var Jt = /\\/g;
-var ot = /\/\//;
-var Qt = /\..*\.(sw[px])$|~$|\.subl.*\.tmp/;
-var Xt = /^\.[/\\]/;
+var BACKSLASH_GLOBAL_RE = /\\/g;
+var DOUBLE_SLASH_RE = /\/\//;
+var DOT_RE = /\..*\.(sw[px])$|~$|\.subl.*\.tmp/;
+var DOT_PATH_RE = /^\.[/\\]/;
 //@ chunk-3gvas51j.js:13249-13293 placement
 function arrify(item) {
   return Array.isArray(item) ? item : [item];
 }
 //@ chunk-3gvas51j.js:13293-13358 placement
-var Y = (t) => typeof t === "object" && t !== null && !(t instanceof RegExp);
+var isPlainObject = (value) => typeof value === "object" && value !== null && !(value instanceof RegExp);
 //@ chunk-3gvas51j.js:13358-13684 placement
 /**
  * anymatch 匹配器
  */
-function createMatcher(t) {
-  if (typeof t === "function") return t;
-  if (typeof t === "string") return (e) => t === e;
-  if (t instanceof RegExp) return (e) => t.test(e);
-  if (typeof t === "object" && t !== null)
-    return (e) => {
-      if (t.path === e) return true;
-      if (t.recursive) {
-        let relativePath = pathModule_2.relative(t.path, e);
+function createMatcher(matcher) {
+  if (typeof matcher === "function") return matcher;
+  if (typeof matcher === "string") return (path) => matcher === path;
+  if (matcher instanceof RegExp) return (path) => matcher.test(path);
+  if (typeof matcher === "object" && matcher !== null)
+    return (path) => {
+      if (matcher.path === path) return true;
+      if (matcher.recursive) {
+        let relativePath = pathModule_2.relative(matcher.path, path);
         if (!relativePath) return false;
         return !relativePath.startsWith("..") && !pathModule_2.isAbsolute(relativePath);
       }
@@ -53,23 +53,23 @@ function createMatcher(t) {
 /**
  * 规范化路径
  */
-function normalizePath(t) {
-  if (typeof t !== "string") throw Error("string expected");
-  t = pathModule_2.normalize(t);
-  t = t.replace(/\\/g, "/");
-  let e = false;
-  if (t.startsWith("//")) e = true;
-  let i = /\/\//;
-  while (t.match(i)) t = t.replace(i, "/");
-  if (e) t = "/" + t;
-  return t;
+function normalizePath(path) {
+  if (typeof path !== "string") throw Error("string expected");
+  path = pathModule_2.normalize(path);
+  path = path.replace(/\\/g, "/");
+  let unc = false;
+  if (path.startsWith("//")) unc = true;
+  let DOUBLE_SLASH_RE = /\/\//;
+  while (path.match(DOUBLE_SLASH_RE)) path = path.replace(DOUBLE_SLASH_RE, "/");
+  if (unc) path = "/" + path;
+  return path;
 }
 //@ chunk-3gvas51j.js:13900-13998 placement
-function at(t, e, i) {
-  let s = normalizePath(e);
-  for (let idx = 0; idx < t.length; idx++) {
-    let a = t[idx];
-    if (a(s, i)) return true;
+function matchesAny(matchers, inputPath, stats) {
+  let normalized = normalizePath(inputPath);
+  for (let idx = 0; idx < matchers.length; idx++) {
+    let matcher = matchers[idx];
+    if (matcher(normalized, stats)) return true;
   }
   return false;
 }
@@ -77,11 +77,11 @@ function at(t, e, i) {
 /**
  * anymatch
  */
-function anymatch(t, e) {
-  if (t == null) throw TypeError("anymatch: specify first argument");
-  let mapped = arrify(t).map((r) => createMatcher(r));
-  if (e == null) return (r, a) => at(mapped, r, a);
-  return at(mapped, e);
+function anymatch(matchers, testString) {
+  if (matchers == null) throw TypeError("anymatch: specify first argument");
+  let matchers_2 = arrify(matchers).map((matcher) => createMatcher(matcher));
+  if (testString == null) return (path, stats) => matchesAny(matchers_2, path, stats);
+  return matchesAny(matchers_2, testString);
 }
 //@ chunk-3gvas51j.js:14154-14624 placement
 /**
@@ -91,28 +91,29 @@ var unifyPaths = (paths_) => {
   let paths = arrify(paths_).flat();
   if (!paths.every((path) => typeof path === STRING))
     throw TypeError(`Non-string provided as watch path: ${paths}`);
-  return paths.map(dt);
+  return paths.map(normalizePathDouble);
 };
-var ct = (t) => {
-  let replaced = t.replace(Jt, j);
-  let i = false;
-  if (replaced.startsWith(Bt)) i = true;
-  while (replaced.match(ot)) replaced = replaced.replace(ot, j);
-  if (i) replaced = j + replaced;
+var normalizePathOnce = (path) => {
+  let replaced = path.replace(BACKSLASH_GLOBAL_RE, SLASH);
+  let isUNC = false;
+  if (replaced.startsWith(SLASH_SLASH)) isUNC = true;
+  while (replaced.match(DOUBLE_SLASH_RE)) replaced = replaced.replace(DOUBLE_SLASH_RE, SLASH);
+  if (isUNC) replaced = SLASH + replaced;
   return replaced;
 };
-var dt = (t) => ct(pathModule_2.normalize(ct(t)));
-var lt =
+var normalizePathDouble = (path) => normalizePathOnce(pathModule_2.normalize(normalizePathOnce(path)));
+var normalizeMatcherPath =
   (cwd = "") =>
-  (e) => {
-    if (typeof e === "string") return dt(pathModule_2.isAbsolute(e) ? e : pathModule_2.join(cwd, e));
-    else return e;
+  (path) => {
+    if (typeof path === "string")
+      return normalizePathDouble(pathModule_2.isAbsolute(path) ? path : pathModule_2.join(cwd, path));
+    else return path;
   };
-var getAbsolutePath = (t, cwd) => {
-  if (pathModule_2.isAbsolute(t)) return t;
-  return pathModule_2.join(cwd, t);
+var getAbsolutePath = (path, cwd) => {
+  if (pathModule_2.isAbsolute(path)) return path;
+  return pathModule_2.join(cwd, path);
 };
-var ie = Object.freeze(new Set());
+var EMPTY_SET = Object.freeze(new Set());
 //@ chunk-3gvas51j.js:14624-15181 placement
 /**
  * chokidar DirEntry
@@ -123,15 +124,15 @@ class DirEntry {
     this._removeWatcher = _removeWatcher;
     this.items = new Set();
   }
-  add(t) {
+  add(child) {
     let { items } = this;
     if (!items) return;
-    if (t !== ft && t !== $t) items.add(t);
+    if (child !== DOT && child !== DOT_DOT) items.add(child);
   }
-  async remove(t) {
+  async remove(child) {
     let { items } = this;
     if (!items) return;
-    items.delete(t);
+    items.delete(child);
     if (items.size > 0) return;
     let path = this.path;
     try {
@@ -140,10 +141,10 @@ class DirEntry {
       if (this._removeWatcher) this._removeWatcher(pathModule_2.dirname(path), pathModule_2.basename(path));
     }
   }
-  has(t) {
+  has(child) {
     let { items } = this;
     if (!items) return;
-    return items.has(t);
+    return items.has(child);
   }
   getChildren() {
     let { items } = this;
@@ -153,8 +154,8 @@ class DirEntry {
   dispose() {
     this.items.clear();
     this.path = "";
-    this._removeWatcher = I;
-    this.items = ie;
+    this._removeWatcher = noop;
+    this.items = EMPTY_SET;
     Object.freeze(this);
   }
 }
@@ -166,12 +167,12 @@ var LSTAT = "lstat";
  * chokidar WatchHelper
  */
 class WatchHelper {
-  constructor(t, followSymlinks, fsw) {
+  constructor(path, followSymlinks, fsw) {
     this.fsw = fsw;
-    let s = t;
-    this.path = t = t.replace(Xt, "");
-    this.watchPath = s;
-    this.fullWatchPath = pathModule_2.resolve(s);
+    let watchPath = path;
+    this.path = path = path.replace(DOT_PATH_RE, "");
+    this.watchPath = watchPath;
+    this.fullWatchPath = pathModule_2.resolve(watchPath);
     this.dirParts = [];
     this.dirParts.forEach((dirPart) => {
       if (dirPart.length > 1) dirPart.pop();
@@ -179,17 +180,17 @@ class WatchHelper {
     this.followSymlinks = followSymlinks;
     this.statMethod = followSymlinks ? STAT : LSTAT;
   }
-  entryPath(t) {
-    return pathModule_2.join(this.watchPath, pathModule_2.relative(this.watchPath, t.fullPath));
+  entryPath(entry) {
+    return pathModule_2.join(this.watchPath, pathModule_2.relative(this.watchPath, entry.fullPath));
   }
-  filterPath(t) {
-    let { stats } = t;
-    if (stats && stats.isSymbolicLink()) return this.filterDir(t);
-    let i = this.entryPath(t);
-    return this.fsw._isntIgnored(i, stats) && this.fsw._hasReadPermissions(stats);
+  filterPath(entry) {
+    let { stats } = entry;
+    if (stats && stats.isSymbolicLink()) return this.filterDir(entry);
+    let entryPath = this.entryPath(entry);
+    return this.fsw._isntIgnored(entryPath, stats) && this.fsw._hasReadPermissions(stats);
   }
-  filterDir(t) {
-    return this.fsw._isntIgnored(this.entryPath(t), t.stats);
+  filterDir(entry) {
+    return this.fsw._isntIgnored(this.entryPath(entry), entry.stats);
   }
 }
 //@ chunk-3gvas51j.js:15767-23630 placement
@@ -211,11 +212,11 @@ class FSWatcher extends EventEmitter {
     this._readyCount = 0;
     this._readyEmitted = false;
     let awaitWriteFinish = options.awaitWriteFinish;
-    let i = {
+    let DEF_AWF = {
       stabilityThreshold: 2000,
       pollInterval: 100,
     };
-    let s = {
+    let opts = {
       persistent: true,
       ignoreInitial: false,
       ignorePermissionErrors: false,
@@ -228,94 +229,100 @@ class FSWatcher extends EventEmitter {
       ignored: options.ignored ? arrify(options.ignored) : arrify([]),
       awaitWriteFinish:
         awaitWriteFinish === true
-          ? i
+          ? DEF_AWF
           : typeof awaitWriteFinish === "object"
             ? {
-                ...i,
+                ...DEF_AWF,
                 ...awaitWriteFinish,
               }
             : false,
     };
-    if (it) s.usePolling = true;
-    if (s.atomic === undefined) s.atomic = !s.usePolling;
+    if (isIBMi) opts.usePolling = true;
+    if (opts.atomic === undefined) opts.atomic = !opts.usePolling;
     let envChokidarUsepolling = process.env.CHOKIDAR_USEPOLLING;
     if (envChokidarUsepolling !== undefined) {
       let lower = envChokidarUsepolling.toLowerCase();
-      if (lower === "false" || lower === "0") s.usePolling = false;
-      else if (lower === "true" || lower === "1") s.usePolling = true;
-      else s.usePolling = !!lower;
+      if (lower === "false" || lower === "0") opts.usePolling = false;
+      else if (lower === "true" || lower === "1") opts.usePolling = true;
+      else opts.usePolling = !!lower;
     }
     let envChokidarInterval = process.env.CHOKIDAR_INTERVAL;
-    if (envChokidarInterval) s.interval = Number.parseInt(envChokidarInterval, 10);
-    let o = 0;
+    if (envChokidarInterval) opts.interval = Number.parseInt(envChokidarInterval, 10);
+    let readyCount = 0;
     this._emitReady = () => {
-      o++;
-      if (o >= this._readyCount) {
-        this._emitReady = I;
+      readyCount++;
+      if (readyCount >= this._readyCount) {
+        this._emitReady = noop;
         this._readyEmitted = true;
-        process.nextTick(() => this.emit(m.READY));
+        process.nextTick(() => this.emit(EV.READY));
       }
     };
-    this._emitRaw = (...n) => this.emit(m.RAW, ...n);
+    this._emitRaw = (...args) => this.emit(EV.RAW, ...args);
     this._boundRemove = this._remove.bind(this);
-    this.options = s;
-    this._nodeFsHandler = new H(this);
-    Object.freeze(s);
+    this.options = opts;
+    this._nodeFsHandler = new NodeFsHandler(this);
+    Object.freeze(opts);
   }
-  _addIgnoredPath(t) {
-    if (Y(t)) {
+  _addIgnoredPath(ignoredPath) {
+    if (isPlainObject(ignoredPath)) {
       for (let _ignoredPath of this._ignoredPaths)
-        if (Y(_ignoredPath) && _ignoredPath.path === t.path && _ignoredPath.recursive === t.recursive) return;
+        if (
+          isPlainObject(_ignoredPath) &&
+          _ignoredPath.path === ignoredPath.path &&
+          _ignoredPath.recursive === ignoredPath.recursive
+        )
+          return;
     }
-    this._ignoredPaths.add(t);
+    this._ignoredPaths.add(ignoredPath);
   }
-  _removeIgnoredPath(t) {
-    this._ignoredPaths.delete(t);
-    if (typeof t === "string") {
+  _removeIgnoredPath(ignoredPath) {
+    this._ignoredPaths.delete(ignoredPath);
+    if (typeof ignoredPath === "string") {
       for (let _ignoredPath of this._ignoredPaths)
-        if (Y(_ignoredPath) && _ignoredPath.path === t) this._ignoredPaths.delete(_ignoredPath);
+        if (isPlainObject(_ignoredPath) && _ignoredPath.path === ignoredPath)
+          this._ignoredPaths.delete(_ignoredPath);
     }
   }
-  add(paths_, e, i) {
+  add(paths_, origAdd, internal) {
     let { cwd } = this.options;
     this.closed = false;
     this._closePromise = undefined;
-    let r = unifyPaths(paths_);
-    if (cwd) r = r.map((a) => getAbsolutePath(a, cwd));
-    r.forEach((a) => {
-      this._removeIgnoredPath(a);
+    let paths = unifyPaths(paths_);
+    if (cwd) paths = paths.map((path) => getAbsolutePath(path, cwd));
+    paths.forEach((path) => {
+      this._removeIgnoredPath(path);
     });
     this._userIgnored = undefined;
     if (!this._readyCount) this._readyCount = 0;
-    this._readyCount += r.length;
+    this._readyCount += paths.length;
     Promise.all(
-      r.map(async (a) => {
-        let o = await this._nodeFsHandler._addToNodeFs(a, !i, undefined, 0, e);
-        if (o) this._emitReady();
-        return o;
+      paths.map(async (path) => {
+        let addedPath = await this._nodeFsHandler._addToNodeFs(path, !internal, undefined, 0, origAdd);
+        if (addedPath) this._emitReady();
+        return addedPath;
       }),
-    ).then((a) => {
+    ).then((addResults) => {
       if (this.closed) return;
-      a.forEach((o) => {
-        if (o) this.add(pathModule_2.dirname(o), pathModule_2.basename(e || o));
+      addResults.forEach((addedPath) => {
+        if (addedPath) this.add(pathModule_2.dirname(addedPath), pathModule_2.basename(origAdd || addedPath));
       });
     });
     return this;
   }
   unwatch(paths_) {
     if (this.closed) return this;
-    let e = unifyPaths(paths_);
+    let paths = unifyPaths(paths_);
     let { cwd } = this.options;
-    e.forEach((s) => {
-      if (!pathModule_2.isAbsolute(s) && !this._closers.has(s)) {
-        if (cwd) s = pathModule_2.join(cwd, s);
-        s = pathModule_2.resolve(s);
+    paths.forEach((path) => {
+      if (!pathModule_2.isAbsolute(path) && !this._closers.has(path)) {
+        if (cwd) path = pathModule_2.join(cwd, path);
+        path = pathModule_2.resolve(path);
       }
-      this._closePath(s);
-      this._addIgnoredPath(s);
-      if (this._watched.has(s))
+      this._closePath(path);
+      this._addIgnoredPath(path);
+      if (this._watched.has(path))
         this._addIgnoredPath({
-          path: s,
+          path,
           recursive: true,
         });
       this._userIgnored = undefined;
@@ -326,224 +333,229 @@ class FSWatcher extends EventEmitter {
     if (this._closePromise) return this._closePromise;
     this.closed = true;
     this.removeAllListeners();
-    let t = [];
+    let pendingPromises = [];
     this._closers.forEach((_closer) =>
-      _closer.forEach((i) => {
-        let s = i();
-        if (s instanceof Promise) t.push(s);
+      _closer.forEach((closer) => {
+        let closerResult = closer();
+        if (closerResult instanceof Promise) pendingPromises.push(closerResult);
       }),
     );
     this._streams.forEach((_stream) => _stream.destroy());
     this._userIgnored = undefined;
     this._readyCount = 0;
     this._readyEmitted = false;
-    this._watched.forEach((e) => e.dispose());
+    this._watched.forEach((dirEntry) => dirEntry.dispose());
     this._closers.clear();
     this._watched.clear();
     this._streams.clear();
     this._symlinkPaths.clear();
     this._throttled.clear();
-    this._closePromise = t.length
-      ? Promise.all(t).then(() => {
+    this._closePromise = pendingPromises.length
+      ? Promise.all(pendingPromises).then(() => {
           return;
         })
       : Promise.resolve();
     return this._closePromise;
   }
   getWatched() {
-    let t = {};
-    this._watched.forEach((e, i) => {
-      let r = (this.options.cwd ? pathModule_2.relative(this.options.cwd, i) : i) || ft;
-      t[r] = e.getChildren().sort();
+    let watched = {};
+    this._watched.forEach((dirEntry, path) => {
+      let relativePath = (this.options.cwd ? pathModule_2.relative(this.options.cwd, path) : path) || DOT;
+      watched[relativePath] = dirEntry.getChildren().sort();
     });
-    return t;
+    return watched;
   }
-  setPollInterval(t) {
+  setPollInterval(interval) {
     this.options = Object.freeze({
       ...this.options,
-      interval: t,
-      binaryInterval: t,
+      interval,
+      binaryInterval: interval,
     });
-    if (this.options.usePolling) nt(this._emitRaw, t);
+    if (this.options.usePolling) setPollingInterval(this._emitRaw, interval);
   }
-  emitWithAll(t, e) {
-    this.emit(t, ...e);
-    if (t !== m.ERROR) this.emit(m.ALL, t, ...e);
+  emitWithAll(eventName, args) {
+    this.emit(eventName, ...args);
+    if (eventName !== EV.ERROR) this.emit(EV.ALL, eventName, ...args);
   }
-  async _emit(t, e, i) {
+  async _emit(event, path, stats) {
     if (this.closed) return;
     let options = this.options;
-    if (F) e = pathModule_2.normalize(e);
-    if (options.cwd) e = pathModule_2.relative(options.cwd, e);
-    let r = [e];
-    if (i != null) r.push(i);
+    if (isWindows) path = pathModule_2.normalize(path);
+    if (options.cwd) path = pathModule_2.relative(options.cwd, path);
+    let args = [path];
+    if (stats != null) args.push(stats);
     let awaitWriteFinish = options.awaitWriteFinish;
-    let o;
-    if (awaitWriteFinish && (o = this._pendingWrites.get(e))) {
-      o.lastChange = new Date();
+    let pendingWrite;
+    if (awaitWriteFinish && (pendingWrite = this._pendingWrites.get(path))) {
+      pendingWrite.lastChange = new Date();
       return this;
     }
     if (options.atomic) {
-      if (t === m.UNLINK) {
-        this._pendingUnlinks.set(e, [t, ...r]);
+      if (event === EV.UNLINK) {
+        this._pendingUnlinks.set(path, [event, ...args]);
         setTimeout(
           () => {
-            this._pendingUnlinks.forEach((_pendingUnlink, l) => {
+            this._pendingUnlinks.forEach((_pendingUnlink, pendingPath) => {
               this.emit(..._pendingUnlink);
-              this.emit(m.ALL, ..._pendingUnlink);
-              this._pendingUnlinks.delete(l);
+              this.emit(EV.ALL, ..._pendingUnlink);
+              this._pendingUnlinks.delete(pendingPath);
             });
           },
           typeof options.atomic === "number" ? options.atomic : 100,
         );
         return this;
       }
-      if (t === m.ADD && this._pendingUnlinks.has(e)) {
-        t = m.CHANGE;
-        this._pendingUnlinks.delete(e);
+      if (event === EV.ADD && this._pendingUnlinks.has(path)) {
+        event = EV.CHANGE;
+        this._pendingUnlinks.delete(path);
       }
     }
-    if (awaitWriteFinish && (t === m.ADD || t === m.CHANGE) && this._readyEmitted) {
-      let n = (l, h) => {
+    if (awaitWriteFinish && (event === EV.ADD || event === EV.CHANGE) && this._readyEmitted) {
+      let listener = (error, stats) => {
         if (this.closed) return;
-        if (l) {
-          if (this.listenerCount(m.ERROR) === 0) {
-            this._pendingWrites.delete(e);
+        if (error) {
+          if (this.listenerCount(EV.ERROR) === 0) {
+            this._pendingWrites.delete(path);
             return;
           }
-          t = m.ERROR;
-          r[0] = l;
-          this.emitWithAll(t, r);
-        } else if (h) {
-          if (r.length > 1) r[1] = h;
-          else r.push(h);
-          this.emitWithAll(t, r);
+          event = EV.ERROR;
+          args[0] = error;
+          this.emitWithAll(event, args);
+        } else if (stats) {
+          if (args.length > 1) args[1] = stats;
+          else args.push(stats);
+          this.emitWithAll(event, args);
         }
       };
-      this._awaitWriteFinish(e, awaitWriteFinish.stabilityThreshold, t, n);
+      this._awaitWriteFinish(path, awaitWriteFinish.stabilityThreshold, event, listener);
       return this;
     }
-    if (t === m.CHANGE) {
-      if (!this._throttle(m.CHANGE, e, 50)) return this;
+    if (event === EV.CHANGE) {
+      if (!this._throttle(EV.CHANGE, path, 50)) return this;
     }
-    if (options.alwaysStat && i === undefined && (t === m.ADD || t === m.ADD_DIR || t === m.CHANGE)) {
-      let n = options.cwd ? pathModule_2.join(options.cwd, e) : e;
-      let l;
+    if (
+      options.alwaysStat &&
+      stats === undefined &&
+      (event === EV.ADD || event === EV.ADD_DIR || event === EV.CHANGE)
+    ) {
+      let fullPath = options.cwd ? pathModule_2.join(options.cwd, path) : path;
+      let statsResult;
       try {
-        l = await stat_2(n);
+        statsResult = await stat_2(fullPath);
       } catch (error) {}
-      if (!l || this.closed) return;
-      r.push(l);
+      if (!statsResult || this.closed) return;
+      args.push(statsResult);
     }
-    this.emitWithAll(t, r);
+    this.emitWithAll(event, args);
     return this;
   }
-  _handleError(t) {
-    let code = t && t.code;
+  _handleError(error) {
+    let code = error && error.code;
     if (
-      t &&
+      error &&
       !this.closed &&
-      this.listenerCount(m.ERROR) > 0 &&
+      this.listenerCount(EV.ERROR) > 0 &&
       code !== "ENOENT" &&
       code !== "ENOTDIR" &&
       (!this.options.ignorePermissionErrors || (code !== "EPERM" && code !== "EACCES"))
     )
-      this.emit(m.ERROR, t);
-    return t || this.closed;
+      this.emit(EV.ERROR, error);
+    return error || this.closed;
   }
-  _throttle(t, e, i) {
-    if (!this._throttled.has(t)) this._throttled.set(t, new Map());
-    let s = this._throttled.get(t);
-    if (!s) throw Error("invalid throttle");
-    let r = s.get(e);
-    if (r) {
-      r.count++;
+  _throttle(action, path, timeout) {
+    if (!this._throttled.has(action)) this._throttled.set(action, new Map());
+    let pathMap = this._throttled.get(action);
+    if (!pathMap) throw Error("invalid throttle");
+    let throttled = pathMap.get(path);
+    if (throttled) {
+      throttled.count++;
       return false;
     }
-    let a;
-    let o = () => {
-      let l = s.get(e);
-      let count = l ? l.count : 0;
-      s.delete(e);
-      clearTimeout(a);
-      if (l) clearTimeout(l.timeoutObject);
+    let timeoutObject;
+    let clear = () => {
+      let throttled = pathMap.get(path);
+      let count = throttled ? throttled.count : 0;
+      pathMap.delete(path);
+      clearTimeout(timeoutObject);
+      if (throttled) clearTimeout(throttled.timeoutObject);
       return count;
     };
-    a = setTimeout(o, i);
-    let n = {
-      timeoutObject: a,
-      clear: o,
+    timeoutObject = setTimeout(clear, timeout);
+    let throttledEntry = {
+      timeoutObject,
+      clear,
       count: 0,
     };
-    s.set(e, n);
-    return n;
+    pathMap.set(path, throttledEntry);
+    return throttledEntry;
   }
   _incrReadyCount() {
     return this._readyCount++;
   }
-  _awaitWriteFinish(t, e, i, s) {
+  _awaitWriteFinish(path, threshold, event, callback) {
     let awaitWriteFinish = this.options.awaitWriteFinish;
     if (typeof awaitWriteFinish !== "object") return;
     let pollInterval = awaitWriteFinish.pollInterval;
-    let o;
-    let n = t;
-    if (this.options.cwd && !pathModule_2.isAbsolute(t)) n = pathModule_2.join(this.options.cwd, t);
+    let timer;
+    let fullPath = path;
+    if (this.options.cwd && !pathModule_2.isAbsolute(path))
+      fullPath = pathModule_2.join(this.options.cwd, path);
     let lastChange = new Date();
     let _pendingWrites = this._pendingWrites;
-    function f(c) {
-      stat(n, (u, w) => {
-        if (u || !_pendingWrites.has(t)) {
-          if (u && u.code !== "ENOENT") s(u);
+    function checkStability(prevStats) {
+      stat(fullPath, (error, stats) => {
+        if (error || !_pendingWrites.has(path)) {
+          if (error && error.code !== "ENOENT") callback(error);
           return;
         }
-        let E = Number(new Date());
-        if (c && w.size !== c.size) _pendingWrites.get(t).lastChange = E;
-        let R = _pendingWrites.get(t);
-        if (E - R.lastChange >= e) {
-          _pendingWrites.delete(t);
-          s(undefined, w);
-        } else o = setTimeout(f, pollInterval, w);
+        let now = Number(new Date());
+        if (prevStats && stats.size !== prevStats.size) _pendingWrites.get(path).lastChange = now;
+        let pendingWrite = _pendingWrites.get(path);
+        if (now - pendingWrite.lastChange >= threshold) {
+          _pendingWrites.delete(path);
+          callback(undefined, stats);
+        } else timer = setTimeout(checkStability, pollInterval, stats);
       });
     }
-    if (!_pendingWrites.has(t)) {
-      _pendingWrites.set(t, {
+    if (!_pendingWrites.has(path)) {
+      _pendingWrites.set(path, {
         lastChange,
         cancelWait: () => {
-          _pendingWrites.delete(t);
-          clearTimeout(o);
-          return i;
+          _pendingWrites.delete(path);
+          clearTimeout(timer);
+          return event;
         },
       });
-      o = setTimeout(f, pollInterval);
+      timer = setTimeout(checkStability, pollInterval);
     }
   }
-  _isIgnored(t, e) {
-    if (this.options.atomic && Qt.test(t)) return true;
+  _isIgnored(path, stats) {
+    if (this.options.atomic && DOT_RE.test(path)) return true;
     if (!this._userIgnored) {
       let { cwd } = this.options;
-      let mapped = (this.options.ignored || []).map(lt(cwd));
-      let o = [...[...this._ignoredPaths].map(lt(cwd)), ...mapped];
-      this._userIgnored = anymatch(o, undefined);
+      let mapped = (this.options.ignored || []).map(normalizeMatcherPath(cwd));
+      let ignoredPaths = [...[...this._ignoredPaths].map(normalizeMatcherPath(cwd)), ...mapped];
+      this._userIgnored = anymatch(ignoredPaths, undefined);
     }
-    return this._userIgnored(t, e);
+    return this._userIgnored(path, stats);
   }
-  _isntIgnored(t, e) {
-    return !this._isIgnored(t, e);
+  _isntIgnored(path, stats) {
+    return !this._isIgnored(path, stats);
   }
-  _getWatchHelpers(t) {
-    return new WatchHelper(t, this.options.followSymlinks, this);
+  _getWatchHelpers(path) {
+    return new WatchHelper(path, this.options.followSymlinks, this);
   }
-  _getWatchedDir(t) {
-    let path = pathModule_2.resolve(t);
-    if (!this._watched.has(path)) this._watched.set(path, new DirEntry(path, this._boundRemove));
-    return this._watched.get(path);
+  _getWatchedDir(path) {
+    let path_2 = pathModule_2.resolve(path);
+    if (!this._watched.has(path_2)) this._watched.set(path_2, new DirEntry(path_2, this._boundRemove));
+    return this._watched.get(path_2);
   }
-  _hasReadPermissions(t) {
+  _hasReadPermissions(stats) {
     if (this.options.ignorePermissionErrors) return true;
-    return Boolean(Number(t.mode) & 256);
+    return Boolean(Number(stats.mode) & 256);
   }
   _remove(directory, item, isDirectory) {
-    let s = [
+    let stack = [
       {
         directory,
         item,
@@ -553,24 +565,26 @@ class FSWatcher extends EventEmitter {
         expanded: false,
       },
     ];
-    while (s.length > 0) {
-      let r = s[s.length - 1];
-      if (!r.expanded) {
-        r.expanded = true;
-        let joined = pathModule_2.join(r.directory, r.item);
+    while (stack.length > 0) {
+      let entry = stack[stack.length - 1];
+      if (!entry.expanded) {
+        entry.expanded = true;
+        let joined = pathModule_2.join(entry.directory, entry.item);
         let resolved = pathModule_2.resolve(joined);
-        r.path = joined;
-        r.fullPath = resolved;
-        r.isDirectory =
-          r.isDirectory != null ? r.isDirectory : this._watched.has(joined) || this._watched.has(resolved);
+        entry.path = joined;
+        entry.fullPath = resolved;
+        entry.isDirectory =
+          entry.isDirectory != null
+            ? entry.isDirectory
+            : this._watched.has(joined) || this._watched.has(resolved);
         if (!this._throttle("remove", joined, 100)) {
-          s.pop();
+          stack.pop();
           continue;
         }
-        if (!r.isDirectory && this._watched.size === 1) this.add(r.directory, r.item, true);
+        if (!entry.isDirectory && this._watched.size === 1) this.add(entry.directory, entry.item, true);
         let children = this._getWatchedDir(joined).getChildren();
         for (let idx = children.length - 1; idx >= 0; idx--)
-          s.push({
+          stack.push({
             directory: joined,
             item: children[idx],
             isDirectory: undefined,
@@ -580,65 +594,65 @@ class FSWatcher extends EventEmitter {
           });
         continue;
       }
-      s.pop();
-      let { path, fullPath } = r;
-      let n = this._getWatchedDir(r.directory);
-      let l = n.has(r.item);
-      n.remove(r.item);
+      stack.pop();
+      let { path, fullPath } = entry;
+      let dirEntry = this._getWatchedDir(entry.directory);
+      let hadItem = dirEntry.has(entry.item);
+      dirEntry.remove(entry.item);
       if (this._symlinkPaths.has(fullPath)) this._symlinkPaths.delete(fullPath);
-      let h = path;
-      if (this.options.cwd) h = pathModule_2.relative(this.options.cwd, path);
-      if (this.options.awaitWriteFinish && this._pendingWrites.has(h)) {
-        if (this._pendingWrites.get(h).cancelWait() === m.ADD) continue;
+      let relativePath = path;
+      if (this.options.cwd) relativePath = pathModule_2.relative(this.options.cwd, path);
+      if (this.options.awaitWriteFinish && this._pendingWrites.has(relativePath)) {
+        if (this._pendingWrites.get(relativePath).cancelWait() === EV.ADD) continue;
       }
       this._watched.delete(path);
       this._watched.delete(fullPath);
-      let f = r.isDirectory ? m.UNLINK_DIR : m.UNLINK;
-      if (l && !this._isIgnored(path)) this._emit(f, path);
+      let event = entry.isDirectory ? EV.UNLINK_DIR : EV.UNLINK;
+      if (hadItem && !this._isIgnored(path)) this._emit(event, path);
       this._closePath(path);
     }
   }
-  _closePath(t) {
-    this._closeFile(t);
-    let dir = pathModule_2.dirname(t);
-    this._getWatchedDir(dir).remove(pathModule_2.basename(t));
+  _closePath(path) {
+    this._closeFile(path);
+    let dir = pathModule_2.dirname(path);
+    this._getWatchedDir(dir).remove(pathModule_2.basename(path));
   }
-  _closeFile(t) {
-    let e = this._closers.get(t);
-    if (!e) return;
-    e.forEach((i) => i());
-    this._closers.delete(t);
+  _closeFile(path) {
+    let closers = this._closers.get(path);
+    if (!closers) return;
+    closers.forEach((closer) => closer());
+    this._closers.delete(path);
   }
-  _addPathCloser(t, e) {
-    if (!e) return;
-    let i = this._closers.get(t);
-    if (!i) {
-      i = [];
-      this._closers.set(t, i);
+  _addPathCloser(path, closer) {
+    if (!closer) return;
+    let closers = this._closers.get(path);
+    if (!closers) {
+      closers = [];
+      this._closers.set(path, closers);
     }
-    i.push(e);
+    closers.push(closer);
   }
-  _readdirp(root, e) {
+  _readdirp(root, options) {
     if (this.closed) return;
-    let options = {
-      type: m.ALL,
+    let options_2 = {
+      type: EV.ALL,
       alwaysStat: true,
       lstat: true,
-      ...e,
+      ...options,
       depth: 0,
     };
-    let s = X(root, options);
-    this._streams.add(s);
-    s.once(CLOSE, () => {
-      s = undefined;
+    let stream = readdirp(root, options_2);
+    this._streams.add(stream);
+    stream.once(CLOSE, () => {
+      stream = undefined;
     });
-    s.once(END, () => {
-      if (s) {
-        this._streams.delete(s);
-        s = undefined;
+    stream.once(END, () => {
+      if (stream) {
+        this._streams.delete(stream);
+        stream = undefined;
       }
     });
-    return s;
+    return stream;
   }
 }
 //@ chunk-3gvas51j.js:23630-23683 placement

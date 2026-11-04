@@ -29,80 +29,85 @@ import { jsonStringify } from "../../utils/slowOperations.js";
 import { logFeatureOk } from "../../services/analytics/featureTelemetry.js";
 
 //@ chunk-p7xejzdb.js:12860-14282 placement
-async function listAgentsJson(i, s, n) {
-  let d = i ? await canonicalizePath(resolve(i), getRealPathOptions(n)) : undefined;
-  function c(t) {
-    if (!d) return true;
-    let e = relative(d, t);
-    return e.split(/[/\\]/, 1)[0] !== ".." && !isAbsolute(e);
+async function listAgentsJson(cwd, all, storage) {
+  let realCwd = cwd ? await canonicalizePath(resolve(cwd), getRealPathOptions(storage)) : undefined;
+  function isUnderCwd(path) {
+    if (!realCwd) return true;
+    let rel = relative(realCwd, path);
+    return rel.split(/[/\\]/, 1)[0] !== ".." && !isAbsolute(rel);
   }
-  let [u, b, w] = await Promise.all([listAllLiveSessions(n), listJobs(undefined, n), listAliveDaemonJobs(n)]);
-  let a = new Map();
-  for (let t of u) if (t.kind === "bg" && t.jobId) a.set(t.jobId, t);
-  let f = new Set(w.shorts);
-  for (let key of a.keys()) f.add(key);
-  let o = [];
-  let l = new Set();
-  for (let t of markCrashed(b, f)) {
-    let e = a.get(t.id);
-    if (e) l.add(e.pid);
-    if (!c(spawnOrigin(t.state))) continue;
-    let r = agentJsonStatus(t.state, e?.status);
-    if (!s && !e && r !== "working" && r !== "blocked") continue;
-    let m = redactSecrets(
-      collapseWhitespace(e?.name ?? t.state.name ?? t.state.displayIntent ?? t.state.intent),
+  let [liveSessions, jobs, daemonJobs] = await Promise.all([
+    listAllLiveSessions(storage),
+    listJobs(undefined, storage),
+    listAliveDaemonJobs(storage),
+  ]);
+  let liveByJobId = new Map();
+  for (let session of liveSessions)
+    if (session.kind === "bg" && session.jobId) liveByJobId.set(session.jobId, session);
+  let aliveShorts = new Set(daemonJobs.shorts);
+  for (let key of liveByJobId.keys()) aliveShorts.add(key);
+  let entries = [];
+  let coveredPids = new Set();
+  for (let job of markCrashed(jobs, aliveShorts)) {
+    let live = liveByJobId.get(job.id);
+    if (live) coveredPids.add(live.pid);
+    if (!isUnderCwd(spawnOrigin(job.state))) continue;
+    let state = agentJsonStatus(job.state, live?.status);
+    if (!all && !live && state !== "working" && state !== "blocked") continue;
+    let name = redactSecrets(
+      collapseWhitespace(live?.name ?? job.state.name ?? job.state.displayIntent ?? job.state.intent),
     );
-    o.push({
-      ...(e && {
-        pid: e.pid,
+    entries.push({
+      ...(live && {
+        pid: live.pid,
       }),
-      id: t.id,
-      cwd: e?.cwd ?? t.state.cwd,
+      id: job.id,
+      cwd: live?.cwd ?? job.state.cwd,
       kind: "background",
-      startedAt: e?.startedAt ?? Date.parse(t.state.createdAt),
-      sessionId: e?.sessionId ?? t.state.sessionId,
-      ...(m && {
-        name: m,
+      startedAt: live?.startedAt ?? Date.parse(job.state.createdAt),
+      sessionId: live?.sessionId ?? job.state.sessionId,
+      ...(name && {
+        name,
       }),
-      ...(e?.status && {
-        status: getAgentStatuses(e.status),
+      ...(live?.status && {
+        status: getAgentStatuses(live.status),
       }),
-      ...(e?.status === "waiting" &&
-        e.waitingFor && {
-          waitingFor: e.waitingFor,
+      ...(live?.status === "waiting" &&
+        live.waitingFor && {
+          waitingFor: live.waitingFor,
         }),
-      state: r,
+      state,
     });
   }
-  for (let t of u) {
-    if ((t.kind !== "interactive" && t.kind !== "bg") || l.has(t.pid)) continue;
-    if (t.kind === "bg" && t.jobId) continue;
-    if (t.parkedJobId !== undefined) continue;
-    if (!c(t.cwd)) continue;
-    let e = t.name && redactSecrets(collapseWhitespace(t.name));
-    o.push({
-      pid: t.pid,
-      cwd: t.cwd,
-      kind: t.kind === "bg" ? "background" : "interactive",
-      startedAt: t.startedAt,
-      ...(t.sessionId && {
-        sessionId: t.sessionId,
+  for (let session of liveSessions) {
+    if ((session.kind !== "interactive" && session.kind !== "bg") || coveredPids.has(session.pid)) continue;
+    if (session.kind === "bg" && session.jobId) continue;
+    if (session.parkedJobId !== undefined) continue;
+    if (!isUnderCwd(session.cwd)) continue;
+    let name = session.name && redactSecrets(collapseWhitespace(session.name));
+    entries.push({
+      pid: session.pid,
+      cwd: session.cwd,
+      kind: session.kind === "bg" ? "background" : "interactive",
+      startedAt: session.startedAt,
+      ...(session.sessionId && {
+        sessionId: session.sessionId,
       }),
-      ...(e && {
-        name: e,
+      ...(name && {
+        name,
       }),
-      ...(t.status && {
-        status: getAgentStatuses(t.status),
+      ...(session.status && {
+        status: getAgentStatuses(session.status),
       }),
-      ...(t.status === "waiting" &&
-        t.waitingFor && {
-          waitingFor: t.waitingFor,
+      ...(session.status === "waiting" &&
+        session.waitingFor && {
+          waitingFor: session.waitingFor,
         }),
     });
   }
-  o.sort((t, e) => t.startedAt - e.startedAt);
+  entries.sort((a, b) => a.startedAt - b.startedAt);
   await writeStdoutAndDrain(
-    jsonStringify(o, null, 2) +
+    jsonStringify(entries, null, 2) +
       `
 `,
   );
@@ -111,9 +116,10 @@ async function listAgentsJson(i, s, n) {
 //@ chunk-p7xejzdb.js:14352-14581 placement
 function agentJsonStatus(agent, activity) {
   if (activity === "busy") return "working";
-  let n = terminalOutcome(agent.state);
-  if (isSettled(agent) && !(n === "success" && isSelfDriving(agent)))
-    return n === "success" ? "done" : n === "failure" ? "failed" : "stopped";
+  let outcome = terminalOutcome(agent.state);
+  if (isSettled(agent) && !(outcome === "success" && isSelfDriving(agent)))
+    return outcome === "success" ? "done" : outcome === "failure" ? "failed" : "stopped";
   if (agent.tempo === "blocked" || activity === "waiting") return "blocked";
   return "working";
 }
+export { listAgentsJson };

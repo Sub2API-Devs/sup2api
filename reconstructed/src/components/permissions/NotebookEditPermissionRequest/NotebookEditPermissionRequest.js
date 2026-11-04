@@ -21,7 +21,7 @@ import {
   markBrokenSequences,
   needsGutter,
 } from "../../../utils/permissions/approvalPayloadSerialization.js";
-import { xr } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_mapValues } from "../../../../vendor/lodash-es/_inlinedHelpers.js";
 import { stripInvisibleChars as stripInvisibleChars_3 } from "../../../utils/invisibleChars.js";
 import { renderToolUseByName } from "../../messages/toolUseRenderers.js";
 import { logError } from "../../../utils/log.js";
@@ -85,10 +85,10 @@ function NotebookEditPermissionRequest(payload, theme, languageName, paddingX) {
       }
       if (renderedToolUseMessage == null)
         try {
-          let Re = xr(payload.input, (Be) =>
-            typeof Be === "string" ? markBrokenSequences(stripInvisibleChars_3(Be)) : Be,
+          let sanitizedInput = import_mapValues(payload.input, (value) =>
+            typeof value === "string" ? markBrokenSequences(stripInvisibleChars_3(value)) : value,
           );
-          renderedToolUseMessage = renderToolUseByName(payload.toolName, Re, {
+          renderedToolUseMessage = renderToolUseByName(payload.toolName, sanitizedInput, {
             theme,
             verbose: true,
           });

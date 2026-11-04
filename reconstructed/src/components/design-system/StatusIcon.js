@@ -9,9 +9,9 @@
  * attribution: fingerprint 2, placement 7
  */
 import { figures_default } from "../../../vendor/@inquirer/figures/dist/esm/index.js";
-import { BLACK_CIRCLE, BULLET } from "../../utils/permissions/autoModeRulesPrompt.js";
+import { BLACK_CIRCLE, BULLET } from "../../constants/figures.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -27,92 +27,99 @@ import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js"
 import { fullRepaintInterval, useAnimationFrame } from "../../ink/components/Input.js";
 import { SCROLL_JUMP_LINES } from "../../ink/scrollConstants.js";
 import { getTaskIcon } from "../TaskListV2.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-mkatyybr.js:651-1441 fingerprint = STATUS_CONFIG (0.341)
 /**
  * 状态图标闪光动画的调色板长度与每步时间。
  */
-var STATUS_CONFIG = {
-  success: {
-    icon: figures_default.tick,
-    color: "success",
-    ariaLabel: "done:",
-  },
-  error: {
-    icon: figures_default.cross,
-    color: "error",
-    ariaLabel: "failed:",
-  },
-  warning: {
-    icon: figures_default.warning,
-    color: "warning",
-    ariaLabel: "warning:",
-  },
-  info: {
-    icon: figures_default.info,
-    color: "suggestion",
-    ariaLabel: "note:",
-  },
-  pending: {
-    icon: figures_default.circle,
-    color: undefined,
-    ariaLabel: "pending:",
-  },
-  loading: {
-    icon: "\u2026",
-    color: undefined,
-    ariaLabel: "loading:",
-  },
-  running: {
-    icon: BLACK_CIRCLE,
-    color: undefined,
-    ariaLabel: "running:",
-  },
-  on: {
-    icon: figures_default.tick,
-    color: "success",
-    ariaLabel: "on:",
-  },
-  off: {
-    icon: figures_default.circle,
-    color: undefined,
-    ariaLabel: "off:",
-  },
-  working: {
-    icon: BULLET,
-    color: undefined,
-    ariaLabel: "working:",
-  },
-  needsYou: {
-    icon: BULLET,
-    color: "warning",
-    ariaLabel: "needs you:",
-  },
-  idle: {
-    icon: BULLET,
-    color: undefined,
-    ariaLabel: "idle:",
-  },
-  failed: {
-    icon: BULLET,
-    color: "error",
-    ariaLabel: "error:",
-  },
-};
-var AGENT_STATUS_GLYPHS = {
-  working: BULLET,
-  needsYou: "!",
-  idle: "\u25E6",
-  failed: "\xD7",
-};
-var SHIMMER_PALETTE_LENGTH = 8;
-var SHIMMER_STEP_MS = 200;
+var STATUS_CONFIG; // deferred: uses BLACK_CIRCLE (../../constants/figures.js) of its import cycle while loading; runs once the cycle is complete
+var AGENT_STATUS_GLYPHS;
+var SHIMMER_PALETTE_LENGTH;
+var SHIMMER_STEP_MS;
+deferInit("chunk-mkatyybr.js:651", () => {
+  STATUS_CONFIG = {
+    success: {
+      icon: figures_default.tick,
+      color: "success",
+      ariaLabel: "done:",
+    },
+    error: {
+      icon: figures_default.cross,
+      color: "error",
+      ariaLabel: "failed:",
+    },
+    warning: {
+      icon: figures_default.warning,
+      color: "warning",
+      ariaLabel: "warning:",
+    },
+    info: {
+      icon: figures_default.info,
+      color: "suggestion",
+      ariaLabel: "note:",
+    },
+    pending: {
+      icon: figures_default.circle,
+      color: undefined,
+      ariaLabel: "pending:",
+    },
+    loading: {
+      icon: "\u2026",
+      color: undefined,
+      ariaLabel: "loading:",
+    },
+    running: {
+      icon: BLACK_CIRCLE,
+      color: undefined,
+      ariaLabel: "running:",
+    },
+    on: {
+      icon: figures_default.tick,
+      color: "success",
+      ariaLabel: "on:",
+    },
+    off: {
+      icon: figures_default.circle,
+      color: undefined,
+      ariaLabel: "off:",
+    },
+    working: {
+      icon: BULLET,
+      color: undefined,
+      ariaLabel: "working:",
+    },
+    needsYou: {
+      icon: BULLET,
+      color: "warning",
+      ariaLabel: "needs you:",
+    },
+    idle: {
+      icon: BULLET,
+      color: undefined,
+      ariaLabel: "idle:",
+    },
+    failed: {
+      icon: BULLET,
+      color: "error",
+      ariaLabel: "error:",
+    },
+  };
+  AGENT_STATUS_GLYPHS = {
+    working: BULLET,
+    needsYou: "!",
+    idle: "\u25E6",
+    failed: "\xD7",
+  };
+  SHIMMER_PALETTE_LENGTH = 8;
+  SHIMMER_STEP_MS = 200;
+});
 //@ chunk-mkatyybr.js:1441-1516 placement
 /**
  * 所有状态图标里最宽的显示宽度（按显示宽度计算）。
  */
 function maxStatusIconWidth() {
-  return Math.max(...Object.values(STATUS_CONFIG).map((l) => bunStringWidth(l.icon)));
+  return Math.max(...Object.values(STATUS_CONFIG).map((config) => bunStringWidth(config.icon)));
 }
 //@ chunk-mkatyybr.js:1516-1546 placement
 /**
@@ -126,85 +133,86 @@ function statusIconSlotWidth() {
  * 状态图标（成功/失败/运行中等），带无障碍标签与占位空格。
  */
 function StatusIcon(props) {
-  let a = w(20);
-  let { status, "aria-label": s, withSpace, slot } = props;
-  let c = withSpace === undefined ? false : withSpace;
+  let $ = useMemoCache(20);
+  let { status, "aria-label": ariaLabel, withSpace, slot } = props;
+  let addSpace = withSpace === undefined ? false : withSpace;
   if (status === undefined) {
-    let p;
-    if (a[0] !== slot) {
-      p =
+    let slotText;
+    if ($[0] !== slot) {
+      slotText =
         slot &&
         jsxProd_default(Text, {
           children: " ".repeat(statusIconSlotWidth()),
         });
-      a[0] = slot;
-      a[1] = p;
-    } else p = a[1];
-    return p;
+      $[0] = slot;
+      $[1] = slotText;
+    } else slotText = $[1];
+    return slotText;
   }
-  let t = STATUS_CONFIG[status];
-  let p;
-  if (a[2] !== s || a[3] !== t || a[4] !== slot) {
-    p = s ?? (slot === "trailing" ? stripSuffix(t.ariaLabel, ":") : t.ariaLabel);
-    a[2] = s;
-    a[3] = t;
-    a[4] = slot;
-    a[5] = p;
-  } else p = a[5];
-  let d = p;
+  let config = STATUS_CONFIG[status];
+  let spoken;
+  if ($[2] !== ariaLabel || $[3] !== config || $[4] !== slot) {
+    spoken = ariaLabel ?? (slot === "trailing" ? stripSuffix(config.ariaLabel, ":") : config.ariaLabel);
+    $[2] = ariaLabel;
+    $[3] = config;
+    $[4] = slot;
+    $[5] = spoken;
+  } else spoken = $[5];
+  let label = spoken;
   if (isAgentStatusGlyph(status)) {
-    let f;
-    if (a[6] !== slot || a[7] !== d || a[8] !== status || a[9] !== c) {
-      f = jsxProd_default(StatusGlyph, {
+    let glyph;
+    if ($[6] !== slot || $[7] !== label || $[8] !== status || $[9] !== addSpace) {
+      glyph = jsxProd_default(StatusGlyph, {
         status,
-        spoken: d,
+        spoken: label,
         slot,
-        withSpace: c,
+        withSpace: addSpace,
       });
-      a[6] = slot;
-      a[7] = d;
-      a[8] = status;
-      a[9] = c;
-      a[10] = f;
-    } else f = a[10];
-    return f;
+      $[6] = slot;
+      $[7] = label;
+      $[8] = status;
+      $[9] = addSpace;
+      $[10] = glyph;
+    } else glyph = $[10];
+    return glyph;
   }
-  const color = t.color;
-  const dimColor = !t.color;
+  const color = config.color;
+  const dimColor = !config.color;
   let children;
-  if (a[11] !== t.icon || a[12] !== slot || a[13] !== d || a[14] !== c) {
-    children = renderStatusGlyph(t.icon, d, slot, c);
-    a[11] = t.icon;
-    a[12] = slot;
-    a[13] = d;
-    a[14] = c;
-    a[15] = children;
-  } else children = a[15];
-  let k;
-  if (a[16] !== t.color || a[17] !== dimColor || a[18] !== children) {
-    k = jsxProd_default(Text, {
+  if ($[11] !== config.icon || $[12] !== slot || $[13] !== label || $[14] !== addSpace) {
+    children = renderStatusGlyph(config.icon, label, slot, addSpace);
+    $[11] = config.icon;
+    $[12] = slot;
+    $[13] = label;
+    $[14] = addSpace;
+    $[15] = children;
+  } else children = $[15];
+  let iconText;
+  if ($[16] !== config.color || $[17] !== dimColor || $[18] !== children) {
+    iconText = jsxProd_default(Text, {
       color,
       dimColor,
       children,
     });
-    a[16] = t.color;
-    a[17] = dimColor;
-    a[18] = children;
-    a[19] = k;
-  } else k = a[19];
-  return k;
+    $[16] = config.color;
+    $[17] = dimColor;
+    $[18] = children;
+    $[19] = iconText;
+  } else iconText = $[19];
+  return iconText;
 }
 //@ chunk-mkatyybr.js:2361-2519 placement
-function renderStatusGlyph(l, i, slot, u) {
-  let o = slot === undefined ? u && " " : repeatString(" ", statusIconSlotWidth() - bunStringWidth(l));
+function renderStatusGlyph(glyph, spoken, slot, withSpace) {
+  let pad =
+    slot === undefined ? withSpace && " " : repeatString(" ", statusIconSlotWidth() - bunStringWidth(glyph));
   return jsxProd_default_2(Fragment, {
     children: [
-      slot === "trailing" && o,
+      slot === "trailing" && pad,
       jsxProd_default(Text, {
-        "aria-label": i,
-        children: l,
+        "aria-label": spoken,
+        children: glyph,
       }),
-      slot !== "trailing" && o,
+      slot !== "trailing" && pad,
     ],
   });
 }
@@ -217,107 +225,107 @@ function isAgentStatusGlyph(status) {
  * 按状态取颜色与字形绘制图标，支持朗读文本。
  */
 function StatusGlyph(props) {
-  let a = w(17);
+  let $ = useMemoCache(17);
   let { status, spoken, slot, withSpace } = props;
   let resolvedTheme = useResolvedTheme();
-  let p;
-  if (a[0] !== resolvedTheme.subtle) {
-    p = interpolateColor(resolvedTheme.subtle);
-    a[0] = resolvedTheme.subtle;
-    a[1] = p;
-  } else p = a[1];
-  let t = p;
-  let d;
-  if (a[2] !== resolvedTheme.inactive) {
-    d = interpolateColor(resolvedTheme.inactive);
-    a[2] = resolvedTheme.inactive;
-    a[3] = d;
-  } else d = a[3];
-  let f = d;
+  let subtleColor;
+  if ($[0] !== resolvedTheme.subtle) {
+    subtleColor = interpolateColor(resolvedTheme.subtle);
+    $[0] = resolvedTheme.subtle;
+    $[1] = subtleColor;
+  } else subtleColor = $[1];
+  let subtle = subtleColor;
+  let inactiveColor;
+  if ($[2] !== resolvedTheme.inactive) {
+    inactiveColor = interpolateColor(resolvedTheme.inactive);
+    $[2] = resolvedTheme.inactive;
+    $[3] = inactiveColor;
+  } else inactiveColor = $[3];
+  let inactive = inactiveColor;
   let { color } = STATUS_CONFIG[status];
-  let g = sequential.level >= 2 && t !== null && f !== null;
-  const k = g ? BULLET : AGENT_STATUS_GLYPHS[status];
-  let K;
-  if (a[4] !== slot || a[5] !== spoken || a[6] !== k || a[7] !== withSpace) {
-    K = renderStatusGlyph(k, spoken, slot, withSpace);
-    a[4] = slot;
-    a[5] = spoken;
-    a[6] = k;
-    a[7] = withSpace;
-    a[8] = K;
-  } else K = a[8];
-  let children = K;
-  if (g && status === "working") {
-    let S;
-    if (a[9] !== f || a[10] !== t || a[11] !== children) {
-      S = jsxProd_default(ShimmerDim, {
-        dimmer: t,
-        dim: f,
+  let shimmering = sequential.level >= 2 && subtle !== null && inactive !== null;
+  const glyph = shimmering ? BULLET : AGENT_STATUS_GLYPHS[status];
+  let glyphNode;
+  if ($[4] !== slot || $[5] !== spoken || $[6] !== glyph || $[7] !== withSpace) {
+    glyphNode = renderStatusGlyph(glyph, spoken, slot, withSpace);
+    $[4] = slot;
+    $[5] = spoken;
+    $[6] = glyph;
+    $[7] = withSpace;
+    $[8] = glyphNode;
+  } else glyphNode = $[8];
+  let children = glyphNode;
+  if (shimmering && status === "working") {
+    let shimmer;
+    if ($[9] !== inactive || $[10] !== subtle || $[11] !== children) {
+      shimmer = jsxProd_default(ShimmerDim, {
+        dimmer: subtle,
+        dim: inactive,
         children,
       });
-      a[9] = f;
-      a[10] = t;
-      a[11] = children;
-      a[12] = S;
-    } else S = a[12];
-    return S;
+      $[9] = inactive;
+      $[10] = subtle;
+      $[11] = children;
+      $[12] = shimmer;
+    } else shimmer = $[12];
+    return shimmer;
   }
   const dimColor = !color;
-  let Q;
-  if (a[13] !== color || a[14] !== children || a[15] !== dimColor) {
-    Q = jsxProd_default(Text, {
+  let textNode;
+  if ($[13] !== color || $[14] !== children || $[15] !== dimColor) {
+    textNode = jsxProd_default(Text, {
       color,
       dimColor,
       children,
     });
-    a[13] = color;
-    a[14] = children;
-    a[15] = dimColor;
-    a[16] = Q;
-  } else Q = a[16];
-  return Q;
+    $[13] = color;
+    $[14] = children;
+    $[15] = dimColor;
+    $[16] = textNode;
+  } else textNode = $[16];
+  return textNode;
 }
 //@ chunk-mkatyybr.js:3261-3624 placement
 /**
  * 运行中状态的明暗闪烁包装（减弱动画模式下静态）。
  */
 function ShimmerDim(props) {
-  let d = w(8);
+  let $ = useMemoCache(8);
   let { dimmer, dim, children } = props;
   let prefersReducedMotion = usePrefersReducedMotion();
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  let a = prefersReducedMotion || isScreenReaderEnabled;
-  let p = Math.ceil(fullRepaintInterval(SHIMMER_STEP_MS) / SCROLL_JUMP_LINES) * SCROLL_JUMP_LINES;
-  let [, t] = useAnimationFrame(a ? null : p);
-  let f;
-  if (d[0] !== dim || d[1] !== dimmer || d[2] !== a || d[3] !== t) {
-    f = a
+  let isStatic = prefersReducedMotion || isScreenReaderEnabled;
+  let frameInterval = Math.ceil(fullRepaintInterval(SHIMMER_STEP_MS) / SCROLL_JUMP_LINES) * SCROLL_JUMP_LINES;
+  let [, frame] = useAnimationFrame(isStatic ? null : frameInterval);
+  let color;
+  if ($[0] !== dim || $[1] !== dimmer || $[2] !== isStatic || $[3] !== frame) {
+    color = isStatic
       ? "subtle"
       : toRGBColor(
           parseRGB(
             dimmer,
             dim,
-            cosineEase(Math.floor(t / p) % SHIMMER_PALETTE_LENGTH, SHIMMER_PALETTE_LENGTH),
+            cosineEase(Math.floor(frame / frameInterval) % SHIMMER_PALETTE_LENGTH, SHIMMER_PALETTE_LENGTH),
           ),
         );
-    d[0] = dim;
-    d[1] = dimmer;
-    d[2] = a;
-    d[3] = t;
-    d[4] = f;
-  } else f = d[4];
-  let color = f;
-  let g;
-  if (d[5] !== children || d[6] !== color) {
-    g = jsxProd_default(Text, {
-      color,
+    $[0] = dim;
+    $[1] = dimmer;
+    $[2] = isStatic;
+    $[3] = frame;
+    $[4] = color;
+  } else color = $[4];
+  let color_2 = color;
+  let textNode;
+  if ($[5] !== children || $[6] !== color_2) {
+    textNode = jsxProd_default(Text, {
+      color: color_2,
       children,
     });
-    d[5] = children;
-    d[6] = color;
-    d[7] = g;
-  } else g = d[7];
-  return g;
+    $[5] = children;
+    $[6] = color_2;
+    $[7] = textNode;
+  } else textNode = $[7];
+  return textNode;
 }
 //@ chunk-axsvbsqv.js:14472-14537 fingerprint = StatusIcon (0.661)
 function StatusIcon_2(t0) {

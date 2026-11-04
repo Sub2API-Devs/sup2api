@@ -9,11 +9,11 @@ import { agentPolicy } from "../../../../@typespec/ts-http-runtime/dist/esm/poli
 import { tlsPolicy } from "../../../core-rest-pipeline/dist/esm/policies/tlsPolicy.js";
 
 //@ chunk-mrx6y2r5.js:57552-57580 esm-layout
-function ad(agent) {
+function setSpanContext(agent) {
   return agentPolicy(agent);
 }
 //@ chunk-mrx6y2r5.js:57580-57608 esm-layout
-function cd(tlsSettings) {
+function getSpanContext(tlsSettings) {
   return tlsPolicy(tlsSettings);
 }
 //@ chunk-mrx6y2r5.js:57608-57715 esm-fingerprint
@@ -48,4 +48,4 @@ class AzureTracingContext {
     return newContext;
   }
 }
-export { createTracingContext, AZURE_TRACING_SYMBOLS, ad, cd };
+export { createTracingContext, AZURE_TRACING_SYMBOLS, setSpanContext, getSpanContext };

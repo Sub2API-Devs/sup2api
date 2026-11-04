@@ -155,9 +155,9 @@ import { rewriteContractionError } from "../../selfHostedRunner/git/fetchErrors.
 /**
  * claude self-hosted-runner 入口：解析参数、检查 base-dir、捕获宿主配置、注册 runner 并进入运行循环（约 52 KB，含 --help 文本）。
  */
-async function selfHostedRunnerMain(e) {
+async function selfHostedRunnerMain(argv) {
   let now = Date.now();
-  if (e.includes("--help") || e.includes("-h")) {
+  if (argv.includes("--help") || argv.includes("-h")) {
     console.log(`Usage: claude self-hosted-runner [options]
 
 Connection:
@@ -498,41 +498,44 @@ Debug:
     return;
   }
   configureGlobalAgents();
-  let r = () => new Date().toISOString();
-  let s;
+  let timestamp = () => new Date().toISOString();
+  let logStream;
   let stdioWriter = openStdioWriter({
-    stamp: (P) => `${r()} [self-hosted-runner] ${redactSecretsInText(P)}`,
-    onOwnLine: (P) =>
-      s?.write(
-        P +
+    stamp: (message) => `${timestamp()} [self-hosted-runner] ${redactSecretsInText(message)}`,
+    onOwnLine: (line) =>
+      logStream?.write(
+        line +
           `
 `,
       ),
   });
-  let o;
-  let l;
-  let u;
-  let h;
+  let options;
+  let poolSecret;
+  let proxyAuthConfig;
+  let agentProxyUrl;
   try {
-    o = parseRunnerOptions(e);
-    u = proxyAuthorizationConfig({
-      command: o.proxyAuthorizationCommand,
-      file: o.proxyAuthorizationFile,
+    options = parseRunnerOptions(argv);
+    proxyAuthConfig = proxyAuthorizationConfig({
+      command: options.proxyAuthorizationCommand,
+      file: options.proxyAuthorizationFile,
     });
-    let P = o.envSetByFlag.has("SELF_HOSTED_RUNNER_AGENT_PROXY_URL")
+    let agentProxyFlagName = options.envSetByFlag.has("SELF_HOSTED_RUNNER_AGENT_PROXY_URL")
       ? "--agent-proxy-url"
       : "SELF_HOSTED_RUNNER_AGENT_PROXY_URL";
-    h = checkRunnerAgentProxyStandaloneUrl(env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL, P);
-    if (h !== undefined && u !== undefined)
+    agentProxyUrl = checkRunnerAgentProxyStandaloneUrl(
+      env.SELF_HOSTED_RUNNER_AGENT_PROXY_URL,
+      agentProxyFlagName,
+    );
+    if (agentProxyUrl !== undefined && proxyAuthConfig !== undefined)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `${P} cannot be combined with --proxy-authorization-command / --proxy-authorization-file: sessions would reach that proxy without the egress listener. Remove one of the two.`,
+        `${agentProxyFlagName} cannot be combined with --proxy-authorization-command / --proxy-authorization-file: sessions would reach that proxy without the egress listener. Remove one of the two.`,
         "runner agent proxy URL paired with a --proxy-authorization-* egress listener",
       );
     if (process.env.SELF_HOSTED_RUNNER_HOOKS_DIR) assertLifecycleHooksSupported("--hooks-dir");
-    requireBaseDirOnWindows(o.baseDirSource);
+    requireBaseDirOnWindows(options.baseDirSource);
     lockCurrentVersion();
-    l = await readEnvironmentSecretFile(o, (Z) => stdioWriter.write("stderr", Z));
-    await checkBaseDirWritable(o.baseDir, undefined, (Z) => stdioWriter.write("stderr", Z));
+    poolSecret = await readEnvironmentSecretFile(options, (message) => stdioWriter.write("stderr", message));
+    await checkBaseDirWritable(options.baseDir, undefined, (message) => stdioWriter.write("stderr", message));
   } catch (error) {
     stdioWriter.write(
       "stderr",
@@ -541,437 +544,450 @@ Run 'claude self-hosted-runner --help' for usage.`,
     );
     process.exit(2);
   }
-  let p = o.logLevel === "debug";
-  if (o.logFile) {
-    s = createWriteStream(o.logFile, {
+  let isDebug = options.logLevel === "debug";
+  if (options.logFile) {
+    logStream = createWriteStream(options.logFile, {
       flags: "a",
       mode: 384,
     });
-    s.on("open", (P) => {
-      fchmod(P, 384, () => {});
+    logStream.on("open", (fd) => {
+      fchmod(fd, 384, () => {});
     });
-    s.on("error", (P) => {
+    logStream.on("error", (error) => {
       stdioWriter.write(
         "stderr",
-        `${r()} [runner:warn] log-file write failed (${errorMessage(P)}); continuing stdout-only`,
+        `${timestamp()} [runner:warn] log-file write failed (${errorMessage(error)}); continuing stdout-only`,
       );
-      s = undefined;
+      logStream = undefined;
     });
   }
-  let S = (P) => {
-    s?.write(
-      P +
+  let writeToLogFile = (line) => {
+    logStream?.write(
+      line +
         `
 `,
     );
   };
-  let T = async () => {
-    if (!s) return;
-    let P = s;
-    s = undefined;
+  let flushLogFile = async () => {
+    if (!logStream) return;
+    let stream = logStream;
+    logStream = undefined;
     await withBoundedTimeout(
-      new Promise((resolve) => P.end(resolve)),
+      new Promise((resolve) => stream.end(resolve)),
       500,
       "[runner:exit] log-file flush",
     ).catch(() => {});
   };
-  let y = (P) => {
-    if (p) {
-      let Z = `${r()} [DEBUG] ${redactSecretsInText(P)}`;
-      stdioWriter.write("stderr", Z);
-      S(Z);
+  let logDebug = (message) => {
+    if (isDebug) {
+      let line = `${timestamp()} [DEBUG] ${redactSecretsInText(message)}`;
+      stdioWriter.write("stderr", line);
+      writeToLogFile(line);
     }
   };
-  let v = (P) => {
-    let Z = `${r()} [self-hosted-runner] ${redactSecretsInText(P)}`;
-    stdioWriter.write("stdout", Z);
-    S(Z);
+  let logInfo = (message) => {
+    let line = `${timestamp()} [self-hosted-runner] ${redactSecretsInText(message)}`;
+    stdioWriter.write("stdout", line);
+    writeToLogFile(line);
   };
-  y(`[runner:log] ${stdioWriter.describe()}`);
+  logDebug(`[runner:log] ${stdioWriter.describe()}`);
   if (process.env.SELF_HOSTED_RUNNER_SIGKILL_TIMEOUT_MS !== undefined) {
-    v(
+    logInfo(
       "[runner:fatal] SELF_HOSTED_RUNNER_SIGKILL_TIMEOUT_MS was renamed to SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS. It controls how long to wait for the Claude process to exit cleanly after a session ends, before force-killing it. The post-session hook runs after this.",
     );
-    await T();
+    await flushLogFile();
     process.exit(1);
   }
-  for (let P of [
+  for (let envName of [
     "RUNNER_RELEASE_IDLE_SESSION_MIN",
     "SELF_HOSTED_RUNNER_RELEASE_IDLE_SESSION_MIN",
     "SELF_HOSTED_RUNNER_SESSION_IDLE_MIN",
     "SELF_HOSTED_RUNNER_SESSION_IDLE_SEC",
   ])
-    if (process.env[P] !== undefined)
-      v(
-        `[runner:warn] ${P} is set but is not a setting this runner ` +
+    if (process.env[envName] !== undefined)
+      logInfo(
+        `[runner:warn] ${envName} is set but is not a setting this runner ` +
           "reads \u2014 it is being IGNORED. The session idle-release window " +
           "is configured with --release-idle-session-min <minutes> (or env SELF_HOSTED_RUNNER_SESSION_IDLE_MS, in milliseconds).",
       );
-  let w = graceSeconds(
+  let shutdownBudgetSeconds = graceSeconds(
     envPositiveMs("SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS") || SIGKILL_TIMEOUT_DEFAULT_MS,
     envPositiveMs("SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS") || POST_SESSION_HOOK_TIMEOUT_MS,
     getDrainWaitMs(),
-    o.pushOutcomeOnRelease ? PUSH_ON_RELEASE_TIMEOUT_MS : 0,
+    options.pushOutcomeOnRelease ? PUSH_ON_RELEASE_TIMEOUT_MS : 0,
     noHybridToken(),
   );
-  let E = `[runner] This runner needs up to ${w}s to stop the Claude process and run the post-session hook on shutdown, and force-exits after ${w}s (a session release already in flight when shutdown begins can add up to ${RELEASE_IN_FLIGHT_WAIT_MS / 1000}s, normally well under 1s, before the runner deregisters). Configure your process supervisor's stop timeout to at least ${w}s (e.g. terminationGracePeriodSeconds on Kubernetes, stop_grace_period on Docker Compose, TimeoutStopSec on systemd, or your platform's equivalent).`;
-  v(E);
-  let A = envPositiveMs("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS");
-  let G = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
-  let K = Math.max(getDrainWaitMs(), DEFAULT_POST_SESSION_ALLOWANCE_MS) + SIGKILL_GRACE_BASE_MS;
-  let L =
-    A > 0
-      ? `[runner] --defer-shutdown-max-min is set (${formatDuration(A, {
+  let shutdownBudgetMessage = `[runner] This runner needs up to ${shutdownBudgetSeconds}s to stop the Claude process and run the post-session hook on shutdown, and force-exits after ${shutdownBudgetSeconds}s (a session release already in flight when shutdown begins can add up to ${RELEASE_IN_FLIGHT_WAIT_MS / 1000}s, normally well under 1s, before the runner deregisters). Configure your process supervisor's stop timeout to at least ${shutdownBudgetSeconds}s (e.g. terminationGracePeriodSeconds on Kubernetes, stop_grace_period on Docker Compose, TimeoutStopSec on systemd, or your platform's equivalent).`;
+  logInfo(shutdownBudgetMessage);
+  let deferShutdownMaxMs = envPositiveMs("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS");
+  let sessionIdleMs = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
+  let postCeilingGraceMs =
+    Math.max(getDrainWaitMs(), DEFAULT_POST_SESSION_ALLOWANCE_MS) + SIGKILL_GRACE_BASE_MS;
+  let deferShutdownExplanation =
+    deferShutdownMaxMs > 0
+      ? `[runner] --defer-shutdown-max-min is set (${formatDuration(deferShutdownMaxMs, {
           hideTrailingZeros: true,
-        })}): the FIRST shutdown signal does not start that ${w}s budget \u2014 the runner stops ` +
+        })}): the FIRST shutdown signal does not start that ${shutdownBudgetSeconds}s budget \u2014 the runner stops ` +
         "taking work but keeps serving the attached sessions; " +
-        (G > 0
-          ? `each is released (parked, resumable) once its user has been idle ${formatDuration(G, {
-              hideTrailingZeros: true,
-            })} (--release-idle-session-min)`
+        (sessionIdleMs > 0
+          ? `each is released (parked, resumable) once its user has been idle ${formatDuration(
+              sessionIdleMs,
+              {
+                hideTrailingZeros: true,
+              },
+            )} (--release-idle-session-min)`
           : "none is released early (--release-idle-session-min is not set)") +
-        `, and the runner exits as soon as it holds no session; ${formatDuration(A, {
+        `, and the runner exits as soon as it holds no session; ${formatDuration(deferShutdownMaxMs, {
           hideTrailingZeros: true,
         })} after the signal every remaining session is released at once and anything still attached ${formatDuration(
-          K,
+          postCeilingGraceMs,
           {
             hideTrailingZeros: true,
           },
-        )} later is drained. If your supervisor's stop timeout ends first, every still-attached session is killed WITHOUT its post-session hook or deregister and is requeued to another runner about a minute later. Size the stop timeout to at least ${Math.ceil((A + K) / 1000) + w}s (M + post-ceiling grace + the budget above). A second signal drains immediately.`
+        )} later is drained. If your supervisor's stop timeout ends first, every still-attached session is killed WITHOUT its post-session hook or deregister and is requeued to another runner about a minute later. Size the stop timeout to at least ${Math.ceil((deferShutdownMaxMs + postCeilingGraceMs) / 1000) + shutdownBudgetSeconds}s (M + post-ceiling grace + the budget above). A second signal drains immediately.`
       : undefined;
-  if (L !== undefined) v(L);
-  let D = (P, Z, re, be = false) => {
-    let ee = process.env[P];
-    if (ee === undefined || ee === "")
-      return re !== undefined && re > 0
-        ? `${formatDuration(re, {
+  if (deferShutdownExplanation !== undefined) logInfo(deferShutdownExplanation);
+  let describeEnvSetting = (envName, flagName, defaultMs, unlessZero = false) => {
+    let rawValue = process.env[envName];
+    if (rawValue === undefined || rawValue === "")
+      return defaultMs !== undefined && defaultMs > 0
+        ? `${formatDuration(defaultMs, {
             hideTrailingZeros: true,
           })} (default)`
         : "disabled (not configured)";
-    let Re = o.envSetByFlag.has(P) ? Z : `env ${P}`;
-    let Ue = envPositiveMs(P);
-    if (Ue > 0)
-      return `${formatDuration(Ue, {
+    let source = options.envSetByFlag.has(envName) ? flagName : `env ${envName}`;
+    let parsedMs = envPositiveMs(envName);
+    if (parsedMs > 0)
+      return `${formatDuration(parsedMs, {
         hideTrailingZeros: true,
-      })} (from ${Re})`;
-    let ht = Number(ee) === 0 && (be !== "unless-zero" || ee.trim() !== "");
-    if ((be === true || (be === "unless-zero" && !ht)) && re !== undefined && re > 0) {
-      let wn = ht ? "0 is not accepted" : "not a usable ms duration";
+      })} (from ${source})`;
+    let isExplicitZero = Number(rawValue) === 0 && (unlessZero !== "unless-zero" || rawValue.trim() !== "");
+    if (
+      (unlessZero === true || (unlessZero === "unless-zero" && !isExplicitZero)) &&
+      defaultMs !== undefined &&
+      defaultMs > 0
+    ) {
+      let ignoredReason = isExplicitZero ? "0 is not accepted" : "not a usable ms duration";
       return (
-        `${formatDuration(re, {
+        `${formatDuration(defaultMs, {
           hideTrailingZeros: true,
-        })} ` + `(default \u2014 ${Re} ignored: ${wn})`
+        })} ` + `(default \u2014 ${source} ignored: ${ignoredReason})`
       );
     }
-    return ht
-      ? `disabled (from ${Re})`
-      : `disabled (from ${Re} \u2014 not a usable ms duration, treated as 0)`;
+    return isExplicitZero
+      ? `disabled (from ${source})`
+      : `disabled (from ${source} \u2014 not a usable ms duration, treated as 0)`;
   };
-  let oe = () => {
-    let P = holdIdleFile();
-    if (P === undefined) return "off (--hold-idle-file not set)";
+  let describeLeftoverHold = () => {
+    let holdPath = holdIdleFile();
+    if (holdPath === undefined) return "off (--hold-idle-file not set)";
     let envSelfHostedRunnerMaxHoldMs = process.env.SELF_HOSTED_RUNNER_MAX_HOLD_MS;
-    let re =
+    let source =
       envSelfHostedRunnerMaxHoldMs === undefined || envSelfHostedRunnerMaxHoldMs.trim() === ""
         ? "default"
-        : o.envSetByFlag.has("SELF_HOSTED_RUNNER_MAX_HOLD_MS")
+        : options.envSetByFlag.has("SELF_HOSTED_RUNNER_MAX_HOLD_MS")
           ? "from --max-hold-min"
           : "from env SELF_HOSTED_RUNNER_MAX_HOLD_MS";
     let maxHoldMs = getMaxHoldMs();
     if (maxHoldMs === 0)
-      return re === "from --max-hold-min"
+      return source === "from --max-hold-min"
         ? "off (--max-hold-min is 0)"
         : "off (env SELF_HOSTED_RUNNER_MAX_HOLD_MS is 0 or not a usable ms duration)";
-    let ee = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
-    let Re =
-      ee === 0
+    let idleReleaseMs = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
+    let holdCaveat =
+      idleReleaseMs === 0
         ? ", but holds nothing while --release-idle-session-min is off"
-        : maxHoldMs <= ee
+        : maxHoldMs <= idleReleaseMs
           ? ", but holds nothing: the cap is not longer than --release-idle-session-min"
           : "";
-    return `${P}, cap ${formatDuration(maxHoldMs, {
+    return `${holdPath}, cap ${formatDuration(maxHoldMs, {
       hideTrailingZeros: true,
-    })} (${re})${Re}`;
+    })} (${source})${holdCaveat}`;
   };
-  v(
-    `[runner] watchdog config: idle-release=${D("SELF_HOSTED_RUNNER_SESSION_IDLE_MS", "--release-idle-session-min")}; startup-timeout=${D("SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS", "--startup-timeout-min", DEFAULT_STARTUP_TIMEOUT_MS)}; kill-session-after=${D("SELF_HOSTED_RUNNER_MAX_LIFETIME_MS", "--kill-session-after-min")}; exit-if-unused=${D("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS", "--exit-if-unused-min")}; defer-shutdown-max=${D("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS", "--defer-shutdown-max-min")}; checkout-hook-timeout=${D("SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS", "--checkout-hook-timeout-min", CHECKOUT_HOOK_TIMEOUT_MS, "unless-zero")}; bg-result-grace=${D("SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", "SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", BG_RESULT_GRACE_MS, true)}; post-turn-settle=${D("SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", "SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", POST_TURN_SETTLE_MS, true)}; leftover-hold=${oe()}; drain-marker-file=${process.env.SELF_HOSTED_RUNNER_DRAIN_MARKER_FILE || "unset"}`,
+  logInfo(
+    `[runner] watchdog config: idle-release=${describeEnvSetting("SELF_HOSTED_RUNNER_SESSION_IDLE_MS", "--release-idle-session-min")}; startup-timeout=${describeEnvSetting("SELF_HOSTED_RUNNER_STARTUP_TIMEOUT_MS", "--startup-timeout-min", DEFAULT_STARTUP_TIMEOUT_MS)}; kill-session-after=${describeEnvSetting("SELF_HOSTED_RUNNER_MAX_LIFETIME_MS", "--kill-session-after-min")}; exit-if-unused=${describeEnvSetting("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS", "--exit-if-unused-min")}; defer-shutdown-max=${describeEnvSetting("SELF_HOSTED_RUNNER_DEFER_SHUTDOWN_MAX_MS", "--defer-shutdown-max-min")}; checkout-hook-timeout=${describeEnvSetting("SELF_HOSTED_RUNNER_CHECKOUT_HOOK_TIMEOUT_MS", "--checkout-hook-timeout-min", CHECKOUT_HOOK_TIMEOUT_MS, "unless-zero")}; bg-result-grace=${describeEnvSetting("SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", "SELF_HOSTED_RUNNER_BG_RESULT_GRACE_MS", BG_RESULT_GRACE_MS, true)}; post-turn-settle=${describeEnvSetting("SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", "SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS", POST_TURN_SETTLE_MS, true)}; leftover-hold=${describeLeftoverHold()}; drain-marker-file=${process.env.SELF_HOSTED_RUNNER_DRAIN_MARKER_FILE || "unset"}`,
   );
-  let ge =
-    o.removeSessionState === REMOVE_SESSION_STATE_DEFAULT
+  let removeSessionStateSource =
+    options.removeSessionState === REMOVE_SESSION_STATE_DEFAULT
       ? "default"
       : "--remove-session-state / SELF_HOSTED_RUNNER_REMOVE_SESSION_STATE";
-  v(
-    o.removeSessionState
-      ? `[runner] per-session state: REMOVED at session end (${ge}) \u2014 each session's _sessions/<id>.claude-config, .tool-server-config, .uploads, .gitconfig and <id>/ are deleted when it ends, best-effort`
-      : `[runner] per-session state: KEPT at session end (${ge}) \u2014 each session's _sessions/<id>.claude-config, .tool-server-config, .uploads, .gitconfig and <id>/ stay under ${o.baseDir} until the disk is recycled`,
+  logInfo(
+    options.removeSessionState
+      ? `[runner] per-session state: REMOVED at session end (${removeSessionStateSource}) \u2014 each session's _sessions/<id>.claude-config, .tool-server-config, .uploads, .gitconfig and <id>/ are deleted when it ends, best-effort`
+      : `[runner] per-session state: KEPT at session end (${removeSessionStateSource}) \u2014 each session's _sessions/<id>.claude-config, .tool-server-config, .uploads, .gitconfig and <id>/ stay under ${options.baseDir} until the disk is recycled`,
   );
-  let Ne =
-    o.diffFindsNestedRepository === DIFF_FINDS_NESTED_REPO_DEFAULT
+  let diffFindsNestedSource =
+    options.diffFindsNestedRepository === DIFF_FINDS_NESTED_REPO_DEFAULT
       ? "the default"
       : "--diff-finds-nested-repository / SELF_HOSTED_RUNNER_DIFF_FINDS_NESTED_REPOSITORY";
-  v(
-    o.diffFindsNestedRepository
-      ? `[runner] changes in a repository cloned into a sub-folder: SHOWN (${Ne}) \u2014 for a session started with no repository, the web session's Changes pane may show one repository under the session's working folder, only while the session's tool sandbox is off; while a repository is in that folder itself or in a folder above it the pane stays empty, sandbox on or off; a refusal is reported, with the session's id and the reason, in a "[changes pane] repository not shown" line in this log`
-      : `[runner] changes in a repository cloned into a sub-folder: NOT SHOWN (${Ne}) \u2014 for a session started with no repository, the web session's Changes pane may show only a repository in the session's working folder itself or in a folder above it; --diff-finds-nested-repository shows one in a sub-folder instead; its --help entry says what that costs`,
+  logInfo(
+    options.diffFindsNestedRepository
+      ? `[runner] changes in a repository cloned into a sub-folder: SHOWN (${diffFindsNestedSource}) \u2014 for a session started with no repository, the web session's Changes pane may show one repository under the session's working folder, only while the session's tool sandbox is off; while a repository is in that folder itself or in a folder above it the pane stays empty, sandbox on or off; a refusal is reported, with the session's id and the reason, in a "[changes pane] repository not shown" line in this log`
+      : `[runner] changes in a repository cloned into a sub-folder: NOT SHOWN (${diffFindsNestedSource}) \u2014 for a session started with no repository, the web session's Changes pane may show only a repository in the session's working folder itself or in a folder above it; --diff-finds-nested-repository shows one in a sub-folder instead; its --help entry says what that costs`,
   );
   let envSelfHostedRunnerHooksDir = process.env.SELF_HOSTED_RUNNER_HOOKS_DIR;
-  let execPath = o.execPath;
+  let execPath = options.execPath;
   if (!execPath) {
     let hook = await findHook(envSelfHostedRunnerHooksDir, "command");
     if (hook) {
       execPath = hook;
-      v(`[runner:hook] using command hook ${hook}`);
+      logInfo(`[runner:hook] using command hook ${hook}`);
     }
   }
   let { execPath: execPath_2, execArgs } = runnerExecPath(execPath);
-  let ae = warnDiffFindsNestedRepository(o.diffFindsNestedRepository, execPath);
-  if (ae) v(ae);
+  let diffFindsWarning = warnDiffFindsNestedRepository(options.diffFindsNestedRepository, execPath);
+  if (diffFindsWarning) logInfo(diffFindsWarning);
   let freshMachinePerSession = false;
-  v(
-    `Connecting to ${o.apiUrl} (capacity=${o.capacity}, baseDir=${o.baseDir}, execPath=${[execPath_2, ...execArgs].join(" ")})`,
+  logInfo(
+    `Connecting to ${options.apiUrl} (capacity=${options.capacity}, baseDir=${options.baseDir}, execPath=${[execPath_2, ...execArgs].join(" ")})`,
   );
-  let $e = warnCapacityOnSessionBoundRunner(l, o.capacity);
-  if ($e !== null) v($e);
-  if (h !== undefined)
-    v(
-      `[runner:warn] Every session on this runner goes through the agent proxy at ${h.protocol}//${h.host}. Anthropic-managed git (governed git) sessions go through it too, except on Windows and when the server sends no git setup for them, which are refused. This runner refuses sessions that the environment's relay mode sends through Anthropic's relay. Run refused sessions on a runner started without a proxy URL (--agent-proxy-url / SELF_HOSTED_RUNNER_AGENT_PROXY_URL).` +
+  let capacityWarning = warnCapacityOnSessionBoundRunner(poolSecret, options.capacity);
+  if (capacityWarning !== null) logInfo(capacityWarning);
+  if (agentProxyUrl !== undefined)
+    logInfo(
+      `[runner:warn] Every session on this runner goes through the agent proxy at ${agentProxyUrl.protocol}//${agentProxyUrl.host}. Anthropic-managed git (governed git) sessions go through it too, except on Windows and when the server sends no git setup for them, which are refused. This runner refuses sessions that the environment's relay mode sends through Anthropic's relay. Run refused sessions on a runner started without a proxy URL (--agent-proxy-url / SELF_HOSTED_RUNNER_AGENT_PROXY_URL).` +
         (execPath
           ? " Sessions start through --exec-path or a command hook: the claude it runs must be this version or newer, so keep it updated, and receive SELF_HOSTED_RUNNER_AGENT_PROXY_URL and CCR_AGENT_PROXY_RELAY_MODE, or its sessions connect directly instead. With an older claude, Anthropic-managed git does not run: git and gh fail if its traffic goes through the proxy, or else use this machine's own network access and credentials."
           : ""),
     );
-  if (o.debugTokenDir)
-    await mkdir(o.debugTokenDir, {
+  if (options.debugTokenDir)
+    await mkdir(options.debugTokenDir, {
       recursive: true,
       mode: 448,
     })
       .then(() => {
-        v(`[runner:debug] debug token dir ready: ${o.debugTokenDir}`);
+        logInfo(`[runner:debug] debug token dir ready: ${options.debugTokenDir}`);
       })
       .catch((error) => {
-        v(`[runner:debug] failed to create debug token dir (best-effort): ${error}`);
+        logInfo(`[runner:debug] failed to create debug token dir (best-effort): ${error}`);
       });
-  let Ve;
-  if (u)
+  let egressProxy;
+  if (proxyAuthConfig)
     try {
-      Ve = await startRunnerEgressProxy(u, {
-        onStatus: v,
-        onDebug: y,
+      egressProxy = await startRunnerEgressProxy(proxyAuthConfig, {
+        onStatus: logInfo,
+        onDebug: logDebug,
       });
       logFeatureOk("self_hosted_egress_proxy_auth");
     } catch (error) {
       logFeatureBad("self_hosted_egress_proxy_auth", "listener_start_failed");
-      v(`[runner:fatal] could not start the proxy-authorization listener: ${errorMessage(error)}`);
-      await T();
+      logInfo(`[runner:fatal] could not start the proxy-authorization listener: ${errorMessage(error)}`);
+      await flushLogFile();
       process.exit(1);
     }
-  let Be = o.capacity === 1 && o.debugTokenDir === undefined && !execPath ? [CODE_REVIEW_TOKEN_HANDOFF] : [];
-  y(`[runner] capabilities reported to the server: ${Be.join(", ") || "none"}`);
+  let capabilities =
+    options.capacity === 1 && options.debugTokenDir === undefined && !execPath
+      ? [CODE_REVIEW_TOKEN_HANDOFF]
+      : [];
+  logDebug(`[runner] capabilities reported to the server: ${capabilities.join(", ") || "none"}`);
   let defaultEnvironment = createDefaultEnvironment({
-    baseUrl: o.apiUrl,
-    poolSecret: l,
-    onDebug: y,
-    capabilities: Be,
+    baseUrl: options.apiUrl,
+    poolSecret,
+    onDebug: logDebug,
+    capabilities,
   });
-  let clientLabel = o.clientLabel ?? hostname();
-  if (o.lockToAccountId) v(`Registering locked to account: ${o.lockToAccountId}`);
-  if (o.useAnthropicGitProxy)
-    v("Registering as opted in to Anthropic-managed git (--use-anthropic-git-proxy)");
-  if (o.serverAutoModeLists !== NO_ALLOW)
-    v(
-      `Registering with --server-auto-mode-lists ${o.serverAutoModeLists}: ${SERVER_AUTO_MODE_LISTS_DESCRIPTIONS[o.serverAutoModeLists]}`,
+  let clientLabel = options.clientLabel ?? hostname();
+  if (options.lockToAccountId) logInfo(`Registering locked to account: ${options.lockToAccountId}`);
+  if (options.useAnthropicGitProxy)
+    logInfo("Registering as opted in to Anthropic-managed git (--use-anthropic-git-proxy)");
+  if (options.serverAutoModeLists !== NO_ALLOW)
+    logInfo(
+      `Registering with --server-auto-mode-lists ${options.serverAutoModeLists}: ${SERVER_AUTO_MODE_LISTS_DESCRIPTIONS[options.serverAutoModeLists]}`,
     );
-  let Ae;
-  let Ht;
-  let Mt;
+  let runnerId;
+  let runnerToken;
+  let registration;
   try {
-    Mt = await retryWithBackoff(
+    registration = await retryWithBackoff(
       () =>
         defaultEnvironment.registerRunner({
           clientLabel,
-          lockToAccountId: o.lockToAccountId,
-          useAnthropicGitProxy: o.useAnthropicGitProxy,
-          serverAutoModeLists: o.serverAutoModeLists,
+          lockToAccountId: options.lockToAccountId,
+          useAnthropicGitProxy: options.useAnthropicGitProxy,
+          serverAutoModeLists: options.serverAutoModeLists,
         }),
       {
         initialDelayMs: 1000,
         maxDelayMs: 16000,
         maxAttempts: 5,
         shouldRetry: isRetryableRunnerError,
-        onRetry: (Z, re) => {
-          v(
-            `RegisterRunner attempt ${Z} transient failure (${re instanceof Error ? re.message : re}) \u2014 retrying`,
+        onRetry: (attemptNumber, retryError) => {
+          logInfo(
+            `RegisterRunner attempt ${attemptNumber} transient failure (${retryError instanceof Error ? retryError.message : retryError}) \u2014 retrying`,
           );
         },
       },
     );
-    Ae = Mt.runner_id;
-    Ht = Mt.runner_token;
+    runnerId = registration.runner_id;
+    runnerToken = registration.runner_token;
     logFeatureOk("self_hosted_register");
   } catch (error) {
-    let Z = error instanceof Error ? error.message : String(error);
-    let re = describeServerAuthRejection(error, l);
-    if (re !== null) {
+    let errorText = error instanceof Error ? error.message : String(error);
+    let authRejectionMessage = describeServerAuthRejection(error, poolSecret);
+    if (authRejectionMessage !== null) {
       logFeatureBad("self_hosted_register", "self_hosted_register_work_order_refused");
-      v(`[runner:fatal] ${re}`);
+      logInfo(`[runner:fatal] ${authRejectionMessage}`);
     } else if (
       error instanceof Error &&
       "isSelfHostedDisabledByOrg" in error &&
       error.isSelfHostedDisabledByOrg === true
     ) {
       logFeatureBad("self_hosted_register", "self_hosted_register_disabled_by_org");
-      v(
-        `[runner:fatal] RegisterRunner refused because self-hosted environments are not enabled for this organization. Usually the 'Allow self-hosted environments' setting on the Cloud environments admin page (claude.ai/admin-settings/cloud-environments) is off, and an organization Owner can turn it on. Self-hosted environments also need a Team or Enterprise plan, and the setting usually applies within a few minutes. If this message still appears after that, contact your Anthropic account team. The environment secret was accepted, so do not rotate it. (${Z})`,
+      logInfo(
+        `[runner:fatal] RegisterRunner refused because self-hosted environments are not enabled for this organization. Usually the 'Allow self-hosted environments' setting on the Cloud environments admin page (claude.ai/admin-settings/cloud-environments) is off, and an organization Owner can turn it on. Self-hosted environments also need a Team or Enterprise plan, and the setting usually applies within a few minutes. If this message still appears after that, contact your Anthropic account team. The environment secret was accepted, so do not rotate it. (${errorText})`,
       );
     } else if (isAuthFailure(error)) {
       logFeatureBad("self_hosted_register", "self_hosted_register_auth_failed");
-      v(
-        `[runner:fatal] RegisterRunner auth failed \u2014 environment secret invalid or revoked. Check --environment-secret-file or SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET. (${Z})`,
+      logInfo(
+        `[runner:fatal] RegisterRunner auth failed \u2014 environment secret invalid or revoked. Check --environment-secret-file or SELF_HOSTED_RUNNER_ENVIRONMENT_SECRET. (${errorText})`,
       );
     } else {
       logFeatureBad("self_hosted_register", "self_hosted_register_failed");
-      let be = validateLockToAccount(Z);
-      v(`[runner:fatal] RegisterRunner failed: ${Z}${be}`);
+      let lockToAccountHint = validateLockToAccount(errorText);
+      logInfo(`[runner:fatal] RegisterRunner failed: ${errorText}${lockToAccountHint}`);
     }
-    await T();
+    await flushLogFile();
     process.exit(1);
   }
-  v(`Registered: runner_id=${Ae}`);
+  logInfo(`Registered: runner_id=${runnerId}`);
   let startCommandPhases = undefined;
   let abortController = new AbortController();
-  let sr = undefined;
-  let Gn = defaultEnvironment;
-  let apiClient = Gn;
+  let unusedStartPhases = undefined;
+  let environment = defaultEnvironment;
+  let apiClient = environment;
   let abortController_2 = new AbortController();
-  let an = "running";
-  let or = true;
-  let br = {};
-  let Tn = {};
-  let On = (P) => {
-    let Z = br.current;
-    let re =
-      Z === undefined
+  let shutdownState = "running";
+  let isDeferWindowOpen = true;
+  let healthStateRef = {};
+  let stateHolder = {};
+  let describeUptime = (context) => {
+    let sessionCounts = healthStateRef.current;
+    let countsText =
+      sessionCounts === undefined
         ? "session counts not yet initialized (startup in progress)"
-        : `${Z.sessionIdle.size} active session(s), ${count([...Z.sessionIdle.values()], (be) => be !== null)} of them idle`;
-    return `(${P}; uptime ${formatDuration(process.uptime() * 1000)}; ${re})`;
+        : `${sessionCounts.sessionIdle.size} active session(s), ${count([...sessionCounts.sessionIdle.values()], (idleAt) => idleAt !== null)} of them idle`;
+    return `(${context}; uptime ${formatDuration(process.uptime() * 1000)}; ${countsText})`;
   };
-  let dn = (P) => {
-    if (an === "running" && A > 0 && or) {
-      an = "deferring";
-      v(
+  let onShutdownSignal = (signalName) => {
+    if (shutdownState === "running" && deferShutdownMaxMs > 0 && isDeferWindowOpen) {
+      shutdownState = "deferring";
+      logInfo(
         `Received shutdown signal, deferring drain: refusing new work, serving the attached sessions until they are released or ${formatDuration(
-          A,
+          deferShutdownMaxMs,
           {
             hideTrailingZeros: true,
           },
-        )} passes; a second signal drains immediately ${On(P)}`,
+        )} passes; a second signal drains immediately ${describeUptime(signalName)}`,
       );
-      v(E);
-      if (L !== undefined) v(L);
+      logInfo(shutdownBudgetMessage);
+      if (deferShutdownExplanation !== undefined) logInfo(deferShutdownExplanation);
       abortController_2.abort(Date.now());
       return;
     }
-    An(P);
+    beginDrain(signalName);
   };
-  let An = (P, Z = "signal") => {
-    if (an === "draining") {
-      let be = postSessionHooksRunning();
-      if (be > 0)
-        v(
-          `[runner] Forced shutdown with ${be} post-session hook(s) still running \u2014 they continue in their own process group, but their output is no longer captured and the runner's timeout budget no longer applies.`,
+  let beginDrain = (reason, source = "signal") => {
+    if (shutdownState === "draining") {
+      let hookCount = postSessionHooksRunning();
+      if (hookCount > 0)
+        logInfo(
+          `[runner] Forced shutdown with ${hookCount} post-session hook(s) still running \u2014 they continue in their own process group, but their output is no longer captured and the runner's timeout budget no longer applies.`,
         );
-      else v("Forced shutdown");
-      T().finally(() => process.exit(1));
+      else logInfo("Forced shutdown");
+      flushLogFile().finally(() => process.exit(1));
       return;
     }
-    an = "draining";
-    v(
-      Z === "signal"
-        ? "Received shutdown signal, draining active sessions... " + On(P)
-        : `[runner:shutdown] ${P} \u2014 draining active sessions... ` + On("no new signal"),
+    shutdownState = "draining";
+    logInfo(
+      source === "signal"
+        ? "Received shutdown signal, draining active sessions... " + describeUptime(reason)
+        : `[runner:shutdown] ${reason} \u2014 draining active sessions... ` + describeUptime("no new signal"),
     );
-    v(E);
-    let re = postSessionHooksRunning();
-    if (re > 0)
-      v(
-        `[runner] ${re} post-session hook(s) still running \u2014 waiting for them within the budget above. Another SIGTERM force-exits the runner immediately; make sure your supervisor's stop timeout covers the full budget so hooks are not cut short.`,
+    logInfo(shutdownBudgetMessage);
+    let hookCount = postSessionHooksRunning();
+    if (hookCount > 0)
+      logInfo(
+        `[runner] ${hookCount} post-session hook(s) still running \u2014 waiting for them within the budget above. Another SIGTERM force-exits the runner immediately; make sure your supervisor's stop timeout covers the full budget so hooks are not cut short.`,
       );
     abortController.abort();
   };
-  let Bt = () => dn("SIGTERM");
-  let kt = () => dn("SIGINT");
-  process.on("SIGTERM", Bt);
-  process.on("SIGINT", kt);
-  let Cn = {
-    runnerToken: Ht,
+  let onSigterm = () => onShutdownSignal("SIGTERM");
+  let onSigint = () => onShutdownSignal("SIGINT");
+  process.on("SIGTERM", onSigterm);
+  process.on("SIGINT", onSigint);
+  let tokenState = {
+    runnerToken,
   };
-  if (o.debugTokenDir) await writeRunnerFileBestEffort(o.debugTokenDir, "runner_token.jwt", Ht, v);
-  let Fr = (P) => {
-    if (o.debugTokenDir) writeRunnerFileBestEffort(o.debugTokenDir, "runner_token.jwt", P, v);
-    Cn.runnerToken = P;
-    y("[runner:main] runner_token refreshed");
+  if (options.debugTokenDir)
+    await writeRunnerFileBestEffort(options.debugTokenDir, "runner_token.jwt", runnerToken, logInfo);
+  let adoptRefreshedToken = (token) => {
+    if (options.debugTokenDir)
+      writeRunnerFileBestEffort(options.debugTokenDir, "runner_token.jwt", token, logInfo);
+    tokenState.runnerToken = token;
+    logDebug("[runner:main] runner_token refreshed");
   };
   let jwtExpiry = getJwtExpiry({
     getAccessToken: async () => {
-      let { token } = await Gn.refreshToken(Cn.runnerToken);
+      let { token } = await environment.refreshToken(tokenState.runnerToken);
       return token;
     },
-    onRefresh: (P, Z) => Fr(Z),
+    onRefresh: (reason, token) => adoptRefreshedToken(token),
     label: "self-hosted-runner",
   });
-  jwtExpiry.schedule(RUNNER_KIND, Ht);
-  let Nn = undefined;
-  Tn.current = Nn;
-  let zn;
-  if (o.useAnthropicGitProxy) {
-    if (o.capacity > 1) {
-      v(
+  jwtExpiry.schedule(RUNNER_KIND, runnerToken);
+  let holderValue = undefined;
+  stateHolder.current = holderValue;
+  let globalGitConfigPath;
+  if (options.useAnthropicGitProxy) {
+    if (options.capacity > 1) {
+      logInfo(
         "[runner:fatal] --use-anthropic-git-proxy requires --capacity 1 (the proxy URL is per-session and linked worktrees share origin). Omit --use-anthropic-git-proxy or set --capacity 1.",
       );
-      await T();
+      await flushLogFile();
       process.exit(1);
     }
     if (
       antEnv.CLAUDE_RUNNER_TRUST_CANONICAL_PREWARM &&
       envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_GRACE_MS") > 0
     ) {
-      v(
+      logInfo(
         "[runner:fatal] CLAUDE_RUNNER_TRUST_CANONICAL_PREWARM requires --drain-grace-sec 0 (one-shot). With drain-grace > 0 a second session could reuse this VM after the first's child wrote to the canonical .git/, and the skip would bypass the cross-session-isolation sanitize for an untrusted canonical. Unset the env var or set --drain-grace-sec 0.",
       );
-      await T();
+      await flushLogFile();
       process.exit(1);
     }
-    let { parseGitVersion, readGitVersion } = await import("./chunk-nxsqxhv4.js");
+    let { parseGitVersion, readGitVersion } = await import("./configureGit.js");
     let gitVersion = await readGitVersion();
     let gitVersion_2 = parseGitVersion(gitVersion);
     if (!gitVersion_2 || gitVersion_2[0] < 2 || (gitVersion_2[0] === 2 && gitVersion_2[1] < 32)) {
-      v(
+      logInfo(
         `[runner:fatal] --use-anthropic-git-proxy requires git >= 2.32 (found ${gitVersion.trim() || "<none>"}). Older git silently ignores GIT_CONFIG_GLOBAL, which this mode relies on for cross-session isolation.`,
       );
-      await T();
+      await flushLogFile();
       process.exit(1);
     }
-    zn = process.env.GIT_CONFIG_GLOBAL || join(homedir(), ".gitconfig");
-    let ee = zn;
-    let Re = await lstat(ee).catch(() => {
+    globalGitConfigPath = process.env.GIT_CONFIG_GLOBAL || join(homedir(), ".gitconfig");
+    let gitConfigPath = globalGitConfigPath;
+    let gitConfigStats = await lstat(gitConfigPath).catch(() => {
       return;
     });
-    if (Re && (Re.isCharacterDevice() || Re.isBlockDevice())) {
-      v(
-        `[runner:fatal] --use-anthropic-git-proxy requires a writable global git config, but GIT_CONFIG_GLOBAL resolves to ${ee} which is not a regular file. The proxy flag writes its credential helper there and restores it at each session start. Unset GIT_CONFIG_GLOBAL or point it at a regular file path.`,
+    if (gitConfigStats && (gitConfigStats.isCharacterDevice() || gitConfigStats.isBlockDevice())) {
+      logInfo(
+        `[runner:fatal] --use-anthropic-git-proxy requires a writable global git config, but GIT_CONFIG_GLOBAL resolves to ${gitConfigPath} which is not a regular file. The proxy flag writes its credential helper there and restores it at each session start. Unset GIT_CONFIG_GLOBAL or point it at a regular file path.`,
       );
-      await T();
+      await flushLogFile();
       process.exit(1);
     }
-    let Ue = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
-    let ht = gitSearchDirs(Ue, homedir());
-    v(
-      `[runner:git] --use-anthropic-git-proxy: wiping HOME-level git config (${ee}, ${ht.join(", ")}, ${join(o.baseDir, ".runner")}) for cross-session isolation. Operator-provisioned git config must live in system config (/etc/gitconfig) or via --configure-git; see "Git authentication" in the self-hosted runners guide.`,
+    let xdgConfigHome = process.env.XDG_CONFIG_HOME || join(homedir(), ".config");
+    let xdgGitDirs = gitSearchDirs(xdgConfigHome, homedir());
+    logInfo(
+      `[runner:git] --use-anthropic-git-proxy: wiping HOME-level git config (${gitConfigPath}, ${xdgGitDirs.join(", ")}, ${join(options.baseDir, ".runner")}) for cross-session isolation. Operator-provisioned git config must live in system config (/etc/gitconfig) or via --configure-git; see "Git authentication" in the self-hosted runners guide.`,
     );
     await resetRunnerHome({
-      globalCfgPath: ee,
+      globalCfgPath: gitConfigPath,
       homeGitconfigPath: join(homedir(), ".gitconfig"),
-      xdgGitDirs: ht,
-      runnerDir: join(o.baseDir, ".runner"),
+      xdgGitDirs,
+      runnerDir: join(options.baseDir, ".runner"),
     });
   }
   let {
@@ -981,13 +997,13 @@ Run 'claude self-hosted-runner --help' for usage.`,
     resolveHookGitPrograms,
     parseGitVersion,
     readGitVersion,
-  } = await import("./chunk-nxsqxhv4.js");
+  } = await import("./configureGit.js");
   let operatorGitSnapshot = await readOperatorGitSnapshot({
-    baseDir: o.baseDir,
+    baseDir: options.baseDir,
     lifecycleHooks: Boolean(envSelfHostedRunnerHooksDir),
   });
   let hookGitPrograms = await resolveHookGitPrograms({
-    baseDir: o.baseDir,
+    baseDir: options.baseDir,
   });
   let hookGitLegacyParams = false;
   if (envSelfHostedRunnerHooksDir) {
@@ -997,115 +1013,116 @@ Run 'claude self-hosted-runner --help' for usage.`,
       operatorGitConfigPairStatus,
       withLifecycleHookGitEnv,
       LIFECYCLE_HOOK_GIT_ENV,
-    } = await import("./chunk-1k90kvy4.js");
+    } = await import("../../selfHostedRunner/lifecycleHooks.js");
     let GIT_ALLOW_PROTOCOL = LIFECYCLE_HOOK_GIT_ENV.GIT_ALLOW_PROTOCOL;
-    let Ue = envHasGitConfigKey("core.hooksPath");
-    let ht = withLifecycleHookGitEnv();
-    let wn = ht.GIT_ALLOW_PROTOCOL !== GIT_ALLOW_PROTOCOL;
-    for (let St of operatorGitSnapshotWarnings(operatorGitSnapshot, {
+    let hasEnvHooksPath = envHasGitConfigKey("core.hooksPath");
+    let hookGitEnv = withLifecycleHookGitEnv();
+    let allowProtocolOverridden = hookGitEnv.GIT_ALLOW_PROTOCOL !== GIT_ALLOW_PROTOCOL;
+    for (let warning of operatorGitSnapshotWarnings(operatorGitSnapshot, {
       isRoot: process.getuid?.() === 0,
-      operatorSshInEnv: ht.GIT_SSH_COMMAND !== LIFECYCLE_HOOK_GIT_ENV.GIT_SSH_COMMAND,
+      operatorSshInEnv: hookGitEnv.GIT_SSH_COMMAND !== LIFECYCLE_HOOK_GIT_ENV.GIT_SSH_COMMAND,
       askpassSource: lifecycleHookAskpassSource(),
       postSessionHook:
         operatorGitSnapshot.lfsFilterScopes !== undefined &&
         (await findHook(envSelfHostedRunnerHooksDir, "post-session")) !== null,
-      envHooksPath: Ue,
+      envHooksPath: hasEnvHooksPath,
     }))
-      v(St);
-    let et = operatorGitConfigPairStatus();
-    if (et.discarded !== undefined)
-      v(
-        `[runner:warn] GIT_CONFIG_COUNT=${et.announced} in the runner environment is ${et.discarded === "sparse" ? "not backed by that many GIT_CONFIG_KEY_n pairs" : "above the supported maximum"}; the lifecycle hooks' git will NOT receive those operator pairs (only the runner's pins). Fix the count/pairs to have them applied.`,
+      logInfo(warning);
+    let configPairStatus = operatorGitConfigPairStatus();
+    if (configPairStatus.discarded !== undefined)
+      logInfo(
+        `[runner:warn] GIT_CONFIG_COUNT=${configPairStatus.announced} in the runner environment is ${configPairStatus.discarded === "sparse" ? "not backed by that many GIT_CONFIG_KEY_n pairs" : "above the supported maximum"}; the lifecycle hooks' git will NOT receive those operator pairs (only the runner's pins). Fix the count/pairs to have them applied.`,
       );
-    v(
+    logInfo(
       "[runner:git] lifecycle hooks: core.hooksPath " +
-        (Ue
+        (hasEnvHooksPath
           ? "taken from the GIT_CONFIG_KEY_n pair in the runner's environment"
           : `pinned to ${quoteConfigValueForLog(operatorGitSnapshot.hooksPath ?? "/dev/null")}${operatorGitSnapshot.hooksPath ? " (system git config)" : " (no repository or global hooks run inside lifecycle-hook git)"}`) +
-        `; fsmonitor/askpass/templates off${ht.GIT_ASKPASS !== undefined && ht.GIT_ASKPASS === ht.SSH_ASKPASS ? " (GIT_ASKPASS set from the runner environment's SSH_ASKPASS)" : ""}; GIT_ALLOW_PROTOCOL=${ht.GIT_ALLOW_PROTOCOL ?? "(unset)"} for hook git${wn ? " (from the runner environment)" : " (runner default \u2014 local-path/file://, git://, bundle and external-helper remotes refused)"}; gpg programs ${hookGitPrograms.gpg}/${hookGitPrograms.gpgsm}${hookGitPrograms.skipped.length ? ` (skipped session-writable ${hookGitPrograms.skipped.length} PATH entries)` : ""}; ` +
-        (o.configureGit
+        `; fsmonitor/askpass/templates off${hookGitEnv.GIT_ASKPASS !== undefined && hookGitEnv.GIT_ASKPASS === hookGitEnv.SSH_ASKPASS ? " (GIT_ASKPASS set from the runner environment's SSH_ASKPASS)" : ""}; GIT_ALLOW_PROTOCOL=${hookGitEnv.GIT_ALLOW_PROTOCOL ?? "(unset)"} for hook git${allowProtocolOverridden ? " (from the runner environment)" : " (runner default \u2014 local-path/file://, git://, bundle and external-helper remotes refused)"}; gpg programs ${hookGitPrograms.gpg}/${hookGitPrograms.gpgsm}${hookGitPrograms.skipped.length ? ` (skipped session-writable ${hookGitPrograms.skipped.length} PATH entries)` : ""}; ` +
+        (options.configureGit
           ? "hook-made commits signed per session (--configure-git), not co-authored"
           : "commit/tag signing off for hook-made commits (no --configure-git)"),
     );
     let gitVersion = parseGitVersion(await readGitVersion());
     if (gitVersion !== null && (gitVersion[0] < 2 || (gitVersion[0] === 2 && gitVersion[1] < 31))) {
       hookGitLegacyParams = true;
-      v(
+      logInfo(
         `[runner:warn] git ${gitVersion[0]}.${gitVersion[1]} ignores GIT_CONFIG_COUNT; exporting the lifecycle-hook git configuration pins (and any GIT_CONFIG_KEY_n pairs from the runner environment, after them) via GIT_CONFIG_PARAMETERS instead (upgrade to git >= 2.31 for the documented behaviour).`,
       );
     }
   }
-  if (o.configureGit)
+  if (options.configureGit)
     try {
-      let { configureGitForSigning } = await import("./chunk-nxsqxhv4.js");
+      let { configureGitForSigning } = await import("./configureGit.js");
       await configureGitForSigning({
-        baseDir: o.baseDir,
+        baseDir: options.baseDir,
         execPath: process.execPath,
-        onStatus: v,
+        onStatus: logInfo,
       });
     } catch (error) {
-      v(
+      logInfo(
         `[runner:fatal] --configure-git failed: ${errorMessage(error)}. Check git is on PATH and ~/.gitconfig is writable.`,
       );
-      await T();
+      await flushLogFile();
       process.exit(1);
     }
-  if (o.pushOutcomeOnRelease)
+  if (options.pushOutcomeOnRelease)
     try {
-      let { parseGitVersion } = await import("./chunk-nxsqxhv4.js");
-      let Z = await execFileNoThrow("git", ["--version"], {
+      let { parseGitVersion } = await import("./configureGit.js");
+      let gitVersionResult = await execFileNoThrow("git", ["--version"], {
         timeout: 5000,
         useCwd: false,
         stdin: "ignore",
         stderr: "pipe",
         maxBuffer: 1048576,
       });
-      if (Z.stderr.trim() !== "") stdioWriter.write("stderr", redactSecretsInText(Z.stderr.trimEnd()));
-      let re = Z.code === 0 ? parseGitVersion(Z.stdout) : null;
-      if (re !== null && (re[0] < 2 || (re[0] === 2 && re[1] < 29)))
-        v(
-          `[runner:warn] --push-outcome-on-release: git ${re[0]}.${re[1]} detected. The drain-push works on any version, but resuming from the preserved branch requires git >= 2.29 (--no-write-fetch-head). Upgrade git for full behavior.`,
+      if (gitVersionResult.stderr.trim() !== "")
+        stdioWriter.write("stderr", redactSecretsInText(gitVersionResult.stderr.trimEnd()));
+      let gitVersion = gitVersionResult.code === 0 ? parseGitVersion(gitVersionResult.stdout) : null;
+      if (gitVersion !== null && (gitVersion[0] < 2 || (gitVersion[0] === 2 && gitVersion[1] < 29)))
+        logInfo(
+          `[runner:warn] --push-outcome-on-release: git ${gitVersion[0]}.${gitVersion[1]} detected. The drain-push works on any version, but resuming from the preserved branch requires git >= 2.29 (--no-write-fetch-head). Upgrade git for full behavior.`,
         );
     } catch {}
   let configureGitHookStubs;
   let configureGitSigningArtifacts;
-  if (o.configureGit) {
-    let { coauthorHookStubs, codeSignArtifacts } = await import("./chunk-nxsqxhv4.js");
-    configureGitHookStubs = coauthorHookStubs(o.baseDir);
-    configureGitSigningArtifacts = codeSignArtifacts(o.baseDir, process.execPath);
+  if (options.configureGit) {
+    let { coauthorHookStubs, codeSignArtifacts } = await import("./configureGit.js");
+    configureGitHookStubs = coauthorHookStubs(options.baseDir);
+    configureGitSigningArtifacts = codeSignArtifacts(options.baseDir, process.execPath);
   }
   let gitProxyGlobalConfigSnapshot;
   let gitProxyCredHelper;
-  if (o.useAnthropicGitProxy)
+  if (options.useAnthropicGitProxy)
     try {
       let { configureGitProxyCredential, GIT_PROXY_CRED_HELPER_CONTENT, gitProxyCredHelperPath } =
-        await import("./chunk-nxsqxhv4.js");
+        await import("./configureGit.js");
       await configureGitProxyCredential({
-        baseDir: o.baseDir,
-        apiBaseUrl: o.apiUrl,
-        onStatus: v,
+        baseDir: options.baseDir,
+        apiBaseUrl: options.apiUrl,
+        onStatus: logInfo,
       });
-      gitProxyGlobalConfigSnapshot = await readFile(zn, "utf-8").catch(() => "");
+      gitProxyGlobalConfigSnapshot = await readFile(globalGitConfigPath, "utf-8").catch(() => "");
       gitProxyCredHelper = {
-        path: gitProxyCredHelperPath(o.baseDir),
+        path: gitProxyCredHelperPath(options.baseDir),
         content: GIT_PROXY_CRED_HELPER_CONTENT,
       };
     } catch (error) {
-      v(
+      logInfo(
         `[runner:fatal] --use-anthropic-git-proxy failed: ${errorMessage(error)}. Check git is on PATH and ~/.gitconfig is writable.`,
       );
-      await T();
+      await flushLogFile();
       process.exit(1);
     }
   let config = {
-    apiUrl: o.apiUrl,
-    capacity: o.capacity,
-    baseDir: o.baseDir,
-    logLevel: o.logLevel,
-    gitSshRewriteHosts: o.gitSshRewriteHosts,
-    gitHostRewrites: o.gitHostRewrites,
-    useAnthropicGitProxy: o.useAnthropicGitProxy ? o.apiUrl : undefined,
-    gitProxyGlobalConfigPath: zn,
+    apiUrl: options.apiUrl,
+    capacity: options.capacity,
+    baseDir: options.baseDir,
+    logLevel: options.logLevel,
+    gitSshRewriteHosts: options.gitSshRewriteHosts,
+    gitHostRewrites: options.gitHostRewrites,
+    useAnthropicGitProxy: options.useAnthropicGitProxy ? options.apiUrl : undefined,
+    gitProxyGlobalConfigPath: globalGitConfigPath,
     gitProxyGlobalConfigSnapshot,
     gitProxyCredHelper,
     configureGitHookStubs,
@@ -1113,17 +1130,17 @@ Run 'claude self-hosted-runner --help' for usage.`,
     operatorGitSnapshot,
     hookGitPrograms,
     hookGitLegacyParams,
-    configureGit: o.configureGit,
-    pushOutcomeOnRelease: o.pushOutcomeOnRelease,
-    trustWorkspace: o.trustWorkspace,
-    removeSessionState: o.removeSessionState,
-    diffFindsNestedRepository: o.diffFindsNestedRepository,
+    configureGit: options.configureGit,
+    pushOutcomeOnRelease: options.pushOutcomeOnRelease,
+    trustWorkspace: options.trustWorkspace,
+    removeSessionState: options.removeSessionState,
+    diffFindsNestedRepository: options.diffFindsNestedRepository,
     freshMachinePerSession,
-    confineRepoSettings: o.confineRepoSettings,
-    serverAutoModeLists: o.serverAutoModeLists,
+    confineRepoSettings: options.confineRepoSettings,
+    serverAutoModeLists: options.serverAutoModeLists,
   };
-  let Pe = {
-    runnerId: Ae,
+  let healthState = {
+    runnerId,
     activeSessions: 0,
     sessionsStarted: new Map([[UNKNOWN, 0]]),
     sessionsCompleted: new Map([[UNKNOWN, 0]]),
@@ -1143,7 +1160,7 @@ Run 'claude self-hosted-runner --help' for usage.`,
       DD_SOURCEMAP_GROUP: "default",
     }.VERSION,
     clientLabel,
-    capacity: o.capacity,
+    capacity: options.capacity,
     claimVisibility: new Map(),
     lockedAccountEmail: null,
     initializingSessions: 0,
@@ -1153,74 +1170,77 @@ Run 'claude self-hosted-runner --help' for usage.`,
     pollErrors: emptyErrorCategoryCounts(),
     sessionIdle: new Map(),
   };
-  br.current = Pe;
+  healthStateRef.current = healthState;
   let clockSkewMonitor = startClockSkewMonitor({
     clock: systemClock,
-    onStatus: v,
+    onStatus: logInfo,
   });
-  let ft =
-    o.healthPort > 0
+  let tokenRefresher =
+    options.healthPort > 0
       ? startRunnerTokenRefresher({
-          baseUrl: o.apiUrl,
-          getRunnerToken: () => Cn.runnerToken,
+          baseUrl: options.apiUrl,
+          getRunnerToken: () => tokenState.runnerToken,
           renewRunnerToken: () =>
             notAvailableInThisBuild({
-              tokenState: Cn,
-              refreshToken: (P) => defaultEnvironment.refreshToken(P),
-              adopt: Fr,
+              tokenState,
+              refreshToken: (token) => defaultEnvironment.refreshToken(token),
+              adopt: adoptRefreshedToken,
             }),
           renewSessionTokens: () => clockSkewMonitor?.renewSessionTokens() ?? Promise.resolve(),
           isThawing: () => false,
           getRetireAtMs: () => runnerRetireAtMs(),
-          isStopping: () => an !== "running" || !or,
+          isStopping: () => shutdownState !== "running" || !isDeferWindowOpen,
           isHeldOff: () => clockSkewMonitor?.isHeldOff() ?? false,
-          onGranted: (P) => clockSkewMonitor?.onGranted(P),
+          onGranted: (grant) => clockSkewMonitor?.onGranted(grant),
           clock: systemClock,
-          onStatus: v,
-          onDebug: y,
+          onStatus: logInfo,
+          onDebug: logDebug,
         })
       : undefined;
-  let he = o.healthPort > 0 ? startHealthServer(o.healthPort, Pe, v, ft, undefined) : undefined;
-  let De = await captureHostConfigSnapshot(v, {
+  let healthServer =
+    options.healthPort > 0
+      ? startHealthServer(options.healthPort, healthState, logInfo, tokenRefresher, undefined)
+      : undefined;
+  let hostConfig = await captureHostConfigSnapshot(logInfo, {
     storage:
-      o.hostConfigSnapshot === "disk"
+      options.hostConfigSnapshot === "disk"
         ? {
             mode: "disk",
-            baseDir: o.baseDir,
+            baseDir: options.baseDir,
           }
         : {
             mode: "memory",
           },
   });
-  let governedGitConfigSeed = await snapshotOperatorGitConfig(y);
+  let governedGitConfigSeed = await snapshotOperatorGitConfig(logDebug);
   try {
     await runRunnerLoop(
       {
         apiClient,
-        runnerId: Ae,
-        tokenState: Cn,
+        runnerId,
+        tokenState,
         config,
         execPath: execPath_2,
         execArgs,
-        startedFromWorkOrder: isPoolSpawnJwt(l),
-        onDebug: y,
-        onStatus: v,
-        flushLogSink: T,
-        healthState: Pe,
-        hostConfig: De,
+        startedFromWorkOrder: isPoolSpawnJwt(poolSecret),
+        onDebug: logDebug,
+        onStatus: logInfo,
+        flushLogSink: flushLogFile,
+        healthState,
+        hostConfig,
         governedGitConfigSeed,
-        debugTokenDir: o.debugTokenDir,
+        debugTokenDir: options.debugTokenDir,
         startCommandPhases,
         moveWatch: clockSkewMonitor,
         ...false,
         deferShutdown: {
           signal: abortController_2.signal,
-          maxMs: A,
-          requestDrain: (P) => {
-            if (an !== "draining") An(P, "loop");
+          maxMs: deferShutdownMaxMs,
+          requestDrain: (reason) => {
+            if (shutdownState !== "draining") beginDrain(reason, "loop");
           },
           onClosed: () => {
-            or = false;
+            isDeferWindowOpen = false;
           },
         },
       },
@@ -1228,10 +1248,10 @@ Run 'claude self-hosted-runner --help' for usage.`,
     );
   } finally {
     jwtExpiry.cancelAll();
-    he?.close();
+    healthServer?.close();
     clockSkewMonitor?.stop();
-    if (De?.snapshot?.storage.mode === "disk") {
-      let snapshotDir = De.snapshot.storage.snapshotDir;
+    if (hostConfig?.snapshot?.storage.mode === "disk") {
+      let snapshotDir = hostConfig.snapshot.storage.snapshotDir;
       await withBoundedTimeout(
         rm(snapshotDir, {
           recursive: true,
@@ -1241,10 +1261,11 @@ Run 'claude self-hosted-runner --help' for usage.`,
         `[runner:exit] remove host config snapshot ${snapshotDir}`,
       ).catch(() => {});
     }
-    if (Ve) await withBoundedTimeout(Ve.close(), 2000, "[runner:exit] egress proxy close").catch(() => {});
-    process.removeListener("SIGTERM", Bt);
-    process.removeListener("SIGINT", kt);
-    await T();
+    if (egressProxy)
+      await withBoundedTimeout(egressProxy.close(), 2000, "[runner:exit] egress proxy close").catch(() => {});
+    process.removeListener("SIGTERM", onSigterm);
+    process.removeListener("SIGINT", onSigint);
+    await flushLogFile();
   }
 }
 //@ chunk-hm0ce8vc.js:288822-288906 placement
@@ -1255,18 +1276,18 @@ function isAuthFailure(error) {
 /**
  * 校验 --lock-to-account：必须是组织成员的 user_<id> 或邮箱。
  */
-function validateLockToAccount(e) {
-  if (!e.includes("lock_to_account_id")) return "";
-  let n = "lock_to_account_id is the value of --lock-to-account / SELF_HOSTED_RUNNER_LOCK_TO_ACCOUNT";
-  if (e.includes("is not a member") || e.includes("must be a user_"))
-    return ` (${n}; it must be the user_<id> or email address of a member of the organization that owns this environment)`;
-  return ` (${n})`;
+function validateLockToAccount(message) {
+  if (!message.includes("lock_to_account_id")) return "";
+  let flagHint = "lock_to_account_id is the value of --lock-to-account / SELF_HOSTED_RUNNER_LOCK_TO_ACCOUNT";
+  if (message.includes("is not a member") || message.includes("must be a user_"))
+    return ` (${flagHint}; it must be the user_<id> or email address of a member of the organization that owns this environment)`;
+  return ` (${flagHint})`;
 }
 //@ chunk-hm0ce8vc.js:289263-320208 placement
 /**
  * runner 主循环：轮询/兑现工单、跑会话、处理 401/epoch 失配、排空与重启（约 31 KB）。
  */
-async function runRunnerLoop(e, signal) {
+async function runRunnerLoop(options, signal) {
   let {
     apiClient,
     tokenState,
@@ -1277,45 +1298,51 @@ async function runRunnerLoop(e, signal) {
     onDebug,
     onStatus,
     healthState,
-  } = e;
-  let runnerId = e.runnerId;
-  let y = e.retireAtMsOverride ?? runnerRetireAtMs();
-  let v = startedFromWorkOrder
+  } = options;
+  let runnerId = options.runnerId;
+  let retireAtMs = options.retireAtMsOverride ?? runnerRetireAtMs();
+  let drainMessage = startedFromWorkOrder
     ? `Draining and exiting. ${WORK_ORDER_SINGLE_USE_TEXT}`
     : "Draining and exiting for clean restart.";
-  let w = startedFromWorkOrder ? WORK_ORDER_SINGLE_USE_TEXT : "Orchestrator will restart.";
-  let E = new Map();
-  let A = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS") || SIGKILL_TIMEOUT_DEFAULT_MS;
-  let G = envPositiveMs("SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS") || POST_SESSION_HOOK_TIMEOUT_MS;
+  let restartHint = startedFromWorkOrder ? WORK_ORDER_SINGLE_USE_TEXT : "Orchestrator will restart.";
+  let activeSessions = new Map();
+  let sessionStopGraceMs =
+    envPositiveMs("SELF_HOSTED_RUNNER_SESSION_STOP_GRACE_MS") || SIGKILL_TIMEOUT_DEFAULT_MS;
+  let postSessionHookTimeoutMs =
+    envPositiveMs("SELF_HOSTED_RUNNER_POST_SESSION_HOOK_TIMEOUT_MS") || POST_SESSION_HOOK_TIMEOUT_MS;
   let checkoutHookTimeoutMs = getCheckoutHookTimeoutMs();
   let drainWaitMs = getDrainWaitMs();
-  let D = drainMarkerFile();
-  let oe = false;
-  let ge = false;
-  let readDrainMarkerOverride = e.readDrainMarkerOverride ?? readRegularFileSafe;
-  let drainMarkerReadTimeoutMs = e.drainMarkerReadTimeoutMs ?? DRAIN_MARKER_READ_TIMEOUT_MS;
+  let drainMarkerPath = drainMarkerFile();
+  let drainRequested = false;
+  let fatalExit = false;
+  let readDrainMarkerOverride = options.readDrainMarkerOverride ?? readRegularFileSafe;
+  let drainMarkerReadTimeoutMs = options.drainMarkerReadTimeoutMs ?? DRAIN_MARKER_READ_TIMEOUT_MS;
   let resolved = Promise.resolve(undefined);
-  let Ye = false;
-  let He = () => {
-    if (Ye || D === undefined) return;
-    Ye = true;
-    resolved = withBoundedTimeout(readDrainMarkerOverride(D), drainMarkerReadTimeoutMs, "drain-marker read")
+  let drainMarkerReadStarted = false;
+  let readDrainMarker = () => {
+    if (drainMarkerReadStarted || drainMarkerPath === undefined) return;
+    drainMarkerReadStarted = true;
+    resolved = withBoundedTimeout(
+      readDrainMarkerOverride(drainMarkerPath),
+      drainMarkerReadTimeoutMs,
+      "drain-marker read",
+    )
       .then(
-        (se) => {
-          if (se.present)
+        (markerState) => {
+          if (markerState.present)
             onStatus(
-              `[runner] drain: host-drain marker ${D} present` +
-                (se.unreadable !== undefined
-                  ? ` but unreadable (${se.unreadable}) \u2014 reporting a host drain with no deadline`
-                  : se.deadlineMs !== undefined
-                    ? ` (host deadline ${new Date(se.deadlineMs).toISOString()})`
+              `[runner] drain: host-drain marker ${drainMarkerPath} present` +
+                (markerState.unreadable !== undefined
+                  ? ` but unreadable (${markerState.unreadable}) \u2014 reporting a host drain with no deadline`
+                  : markerState.deadlineMs !== undefined
+                    ? ` (host deadline ${new Date(markerState.deadlineMs).toISOString()})`
                     : " (no deadline on its first line)"),
             );
-          return se;
+          return markerState;
         },
         (error) => {
           onStatus(
-            `[runner] drain: host-drain marker ${D} could not be read (${errorMessage(error)}) \u2014 reporting a plain shutdown signal`,
+            `[runner] drain: host-drain marker ${drainMarkerPath} could not be read (${errorMessage(error)}) \u2014 reporting a plain shutdown signal`,
           );
           return;
         },
@@ -1324,148 +1351,161 @@ async function runRunnerLoop(e, signal) {
         return;
       });
   };
-  if (signal.aborted) He();
+  if (signal.aborted) readDrainMarker();
   else
-    signal.addEventListener("abort", He, {
+    signal.addEventListener("abort", readDrainMarker, {
       once: true,
     });
-  let ae;
-  let fe = new Set();
-  let $e = new Map();
-  let Ve = new Set();
-  let Be = 0;
-  let Fe = 0;
-  let ve;
-  let Ae;
-  let Ht = new Set();
+  let wakeEpochTimer;
+  let stuckSessions = new Set();
+  let clientPlatforms = new Map();
+  let badPlatformSessions = new Set();
+  let notFoundCount = 0;
+  let transportFailureCount = 0;
+  let leaseExpiresAt;
+  let suggestedPollMs;
+  let failureReportInFlight = new Set();
   let canonicalLocks = new Map();
   let spawnedSessionIds = new Set();
-  let Sn = 0;
+  let unannouncedSkipCount = 0;
   let now = Date.now();
-  let Gn = false;
-  let kn = true;
-  let Er = 0;
+  let pollOkNotLogged = false;
+  let pollFailNotLogged = true;
+  let pickedUpCount = 0;
   let now_2 = Date.now();
-  let startCommandPhases = e.startCommandPhases;
+  let startCommandPhases = options.startCommandPhases;
   let takeStartCommandPhases = () => {
-    let se = startCommandPhases;
+    let phases = startCommandPhases;
     startCommandPhases = undefined;
-    return se;
+    return phases;
   };
-  let Tn = false;
-  let On = null;
-  let dn = envPositiveMs("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS");
-  let An = envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_GRACE_MS");
-  let Bt = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
-  let kt = holdIdleFile();
+  let workloadDrained = false;
+  let idleSince = null;
+  let idleShutdownMs = envPositiveMs("SELF_HOSTED_RUNNER_IDLE_SHUTDOWN_MS");
+  let drainGraceMs = envPositiveMs("SELF_HOSTED_RUNNER_DRAIN_GRACE_MS");
+  let sessionIdleMs = envPositiveMs("SELF_HOSTED_RUNNER_SESSION_IDLE_MS");
+  let holdIdlePath = holdIdleFile();
   let maxHoldMs = getMaxHoldMs();
-  let leftoverHoldLookOverride = e.leftoverHoldLookOverride ?? checkPathNotOnNetworkLocation;
-  let leftoverHoldRecheckMsOverride = e.leftoverHoldRecheckMsOverride ?? LEFTOVER_HOLD_LOOK_TIMEOUT_MS;
-  let leftoverHoldLookTimeoutMsOverride = e.leftoverHoldLookTimeoutMsOverride ?? RETIRE_RELEASE_RETRY_MS;
+  let leftoverHoldLookOverride = options.leftoverHoldLookOverride ?? checkPathNotOnNetworkLocation;
+  let leftoverHoldRecheckMsOverride = options.leftoverHoldRecheckMsOverride ?? LEFTOVER_HOLD_LOOK_TIMEOUT_MS;
+  let leftoverHoldLookTimeoutMsOverride =
+    options.leftoverHoldLookTimeoutMsOverride ?? RETIRE_RELEASE_RETRY_MS;
   let startupTimeoutMs = getStartupTimeoutMs();
-  let retireReleaseRetryMsOverride = e.retireReleaseRetryMsOverride ?? ENV_SECRET_READ_TIMEOUT_MS_2;
-  let retireDeferredGraceMsOverride = e.retireDeferredGraceMsOverride ?? DEFAULT_POST_SESSION_ALLOWANCE_MS;
-  let Pt = false;
-  let Wt;
-  let $n;
-  let deferShutdown = e.deferShutdown;
-  let Kt = deferShutdown !== undefined && deferShutdown.maxMs > 0;
-  let Mn = deferShutdown?.ceilingGraceMsOverride ?? Math.max(drainWaitMs, retireDeferredGraceMsOverride);
-  let ir =
+  let retireReleaseRetryMsOverride = options.retireReleaseRetryMsOverride ?? ENV_SECRET_READ_TIMEOUT_MS_2;
+  let retireDeferredGraceMsOverride =
+    options.retireDeferredGraceMsOverride ?? DEFAULT_POST_SESSION_ALLOWANCE_MS;
+  let retiring = false;
+  let retireTimer;
+  let retireReason;
+  let deferShutdown = options.deferShutdown;
+  let deferShutdownEnabled = deferShutdown !== undefined && deferShutdown.maxMs > 0;
+  let ceilingWaitMs =
+    deferShutdown?.ceilingGraceMsOverride ?? Math.max(drainWaitMs, retireDeferredGraceMsOverride);
+  let ceilingPollStepMs =
     deferShutdown?.ceilingGraceMsOverride !== undefined
       ? Math.max(10, Math.floor(deferShutdown.ceilingGraceMsOverride / 10))
       : 1000;
   let ceilingGraceMsOverride = deferShutdown?.ceilingGraceMsOverride ?? SIGKILL_GRACE_BASE_MS;
-  let de;
-  let Yt;
-  let qn = false;
-  let q = () => count([...E.entries()], ([se, ke]) => !ke.controller.signal.aborted && !ft.has(se));
-  let Pe = () =>
-    count([...E.entries()], ([se, ke]) => !ke.controller.signal.aborted && ft.has(se) && !De.has(se));
-  let En = () =>
-    $n === "shutdown"
+  let deferCeilingTimer;
+  let postCeilingPollTimer;
+  let deferCeilingPassed = false;
+  let liveSessionCount = () =>
+    count(
+      [...activeSessions.entries()],
+      ([sessionId, entry]) => !entry.controller.signal.aborted && !releaseInFlight.has(sessionId),
+    );
+  let releaseInFlightCount = () =>
+    count(
+      [...activeSessions.entries()],
+      ([sessionId, entry]) =>
+        !entry.controller.signal.aborted && releaseInFlight.has(sessionId) && !releaseTasks.has(sessionId),
+    );
+  let exitReasonText = () =>
+    retireReason === "shutdown"
       ? "[runner:exit] shutdown requested and every attached session has been released \u2014 exiting."
       : "[runner:exit] retire time passed and no active sessions \u2014 exiting before the host kills this runner.";
-  let ft = new Set();
-  let he = new Map();
-  let De = new Map();
+  let releaseInFlight = new Set();
+  let releaseFailures = new Map();
+  let releaseTasks = new Map();
   let abortController = new AbortController();
-  let P = new Set();
-  let Z = new Map();
-  let re = new Set();
-  let be = undefined;
-  let ee;
-  let Re = () => {
-    let size = E.size;
-    for (let key of De.keys()) if (!E.has(key)) size++;
-    for (let ke of P) if (!E.has(ke) && !De.has(ke)) size++;
+  let declinedSessions = new Set();
+  let idleSinceBySession = new Map();
+  let releaseRetryPending = new Set();
+  let childUpdateBin = undefined;
+  let pendingRestart;
+  let attachedCount = () => {
+    let size = activeSessions.size;
+    for (let key of releaseTasks.keys()) if (!activeSessions.has(key)) size++;
+    for (let sessionId of declinedSessions)
+      if (!activeSessions.has(sessionId) && !releaseTasks.has(sessionId)) size++;
     return size;
   };
-  let Ue = new Set();
-  let ht = 10;
-  let wn = e.sseHintsEnabledOverride ?? isEnvTruthy(process.env.CCR_SHR_SSE_HINTS);
-  let et = new PollWaker();
-  let Ct = e.moveWatch?.moved.subscribe(() => et.wake("LOCAL"));
-  let openWorkHintsStream = e.openWorkHintsStream ?? streamWorkHints;
-  let Or;
+  let refusedNotified = new Set();
+  let hintsRetries = 10;
+  let sseHintsEnabled = options.sseHintsEnabledOverride ?? isEnvTruthy(process.env.CCR_SHR_SSE_HINTS);
+  let pollWaker = new PollWaker();
+  let moveWatchSub = options.moveWatch?.moved.subscribe(() => pollWaker.wake("LOCAL"));
+  let openWorkHintsStream = options.openWorkHintsStream ?? streamWorkHints;
+  let hintsStream;
   (() => {
-    if (wn) {
+    if (sseHintsEnabled) {
       onDebug("[runner:hints] CCR_SHR_SSE_HINTS enabled \u2014 opening stream");
-      Or = openWorkHintsStream({
+      hintsStream = openWorkHintsStream({
         baseUrl: config.apiUrl,
         runnerId,
         tokenState,
-        onWake: () => et.wake("SSE"),
+        onWake: () => pollWaker.wake("SSE"),
         onDebug,
         signal,
       });
     }
   })();
-  let Gr = false;
-  let pr = false;
-  let Bn = () => {
-    Wt = undefined;
-    let se = y - Date.now();
-    if (se > 0) {
-      Wt = setTimeout(Bn, Math.min(se, 2147483647));
+  let retireExitHandled = false;
+  let retireExitPending = false;
+  let scheduleRetire = () => {
+    retireTimer = undefined;
+    let remainingMs = retireAtMs - Date.now();
+    if (remainingMs > 0) {
+      retireTimer = setTimeout(scheduleRetire, Math.min(remainingMs, 2147483647));
       return;
     }
-    Pt = true;
-    $n = "retire";
-    let size = P.size;
-    P.clear();
+    retiring = true;
+    retireReason = "retire";
+    let size = declinedSessions.size;
+    declinedSessions.clear();
     logFeatureOk("self_hosted_retire");
     onStatus(
-      `[runner:retire] retire time reached \u2014 releasing ${E.size} active session(s), refusing new work; exiting once the slots are empty`,
+      `[runner:retire] retire time reached \u2014 releasing ${activeSessions.size} active session(s), refusing new work; exiting once the slots are empty`,
     );
     if (size > 0)
       onStatus(
         `[runner:retire] ${size} declined session(s) held for re-spawn dropped at the retire deadline \u2014 requeued at exit instead`,
       );
-    for (let jt of E.values()) jt.releaseForRetire();
-    et.wake("LOCAL");
+    for (let session of activeSessions.values()) session.releaseForRetire();
+    pollWaker.wake("LOCAL");
   };
-  let un = () => {
-    if (!Kt || deferShutdown === undefined) return;
-    He();
-    let se = typeof deferShutdown.signal.reason === "number" ? deferShutdown.signal.reason : Date.now();
-    if (de === undefined) {
-      let ke = se + deferShutdown.maxMs - Date.now();
-      de = setTimeout(We, Math.min(Math.max(0, ke), 2147483647));
+  let onShutdownSignal = () => {
+    if (!deferShutdownEnabled || deferShutdown === undefined) return;
+    readDrainMarker();
+    let requestedAt =
+      typeof deferShutdown.signal.reason === "number" ? deferShutdown.signal.reason : Date.now();
+    if (deferCeilingTimer === undefined) {
+      let remainingMs = requestedAt + deferShutdown.maxMs - Date.now();
+      deferCeilingTimer = setTimeout(onDeferCeiling, Math.min(Math.max(0, remainingMs), 2147483647));
     }
     logFeatureOk("self_hosted_defer_shutdown");
-    if (Pt) {
+    if (retiring) {
       onStatus(
         "[runner:shutdown] shutdown requested while already retiring \u2014 sessions are already being released",
       );
       return;
     }
-    Pt = true;
-    $n = "shutdown";
+    retiring = true;
+    retireReason = "shutdown";
     onStatus(
-      `[runner:shutdown] shutdown requested \u2014 deferring drain: ${E.size} active session(s), refusing new work; ` +
-        (Bt > 0
-          ? `each is released once its user has been idle ${formatDuration(Bt, {
+      `[runner:shutdown] shutdown requested \u2014 deferring drain: ${activeSessions.size} active session(s), refusing new work; ` +
+        (sessionIdleMs > 0
+          ? `each is released once its user has been idle ${formatDuration(sessionIdleMs, {
               hideTrailingZeros: true,
             })} (--release-idle-session-min) or when it ends`
           : "none is released early (--release-idle-session-min is not set)") +
@@ -1473,26 +1513,26 @@ async function runRunnerLoop(e, signal) {
           hideTrailingZeros: true,
         })} after the signal every session still attached is released at once; exiting as soon as the slots are empty`,
     );
-    et.wake("LOCAL");
+    pollWaker.wake("LOCAL");
   };
-  let We = () => {
-    de = undefined;
+  let onDeferCeiling = () => {
+    deferCeilingTimer = undefined;
     if (deferShutdown === undefined || signal.aborted) return;
-    qn = true;
-    let size = P.size;
+    deferCeilingPassed = true;
+    let size = declinedSessions.size;
     if (size > 0) {
-      P.clear();
-      et.wake("LOCAL");
+      declinedSessions.clear();
+      pollWaker.wake("LOCAL");
     }
-    let ke = q();
-    let jt = () => {
+    let liveCount = liveSessionCount();
+    let reportDropped = () => {
       if (size > 0)
         onStatus(
           `[runner:shutdown] ${size} declined session(s) held for re-spawn dropped at the ceiling \u2014 requeued at exit instead`,
         );
     };
-    if (ke === 0 && Pe() === 0) {
-      jt();
+    if (liveCount === 0 && releaseInFlightCount() === 0) {
+      reportDropped();
       return;
     }
     logFeatureOk("self_hosted_defer_ceiling");
@@ -1500,480 +1540,529 @@ async function runRunnerLoop(e, signal) {
       `[runner:shutdown] defer ceiling reached (${formatDuration(deferShutdown.maxMs, {
         hideTrailingZeros: true,
       })}) \u2014 ` +
-        (ke > 0
-          ? `releasing the remaining ${ke} session(s) now`
-          : `waiting on ${Pe()} in-flight release(s)`) +
-        `; any still attached after ${formatDuration(Mn + ceilingGraceMsOverride, {
+        (liveCount > 0
+          ? `releasing the remaining ${liveCount} session(s) now`
+          : `waiting on ${releaseInFlightCount()} in-flight release(s)`) +
+        `; any still attached after ${formatDuration(ceilingWaitMs + ceilingGraceMsOverride, {
           hideTrailingZeros: true,
         })} will be drained`,
     );
-    jt();
-    for (let Jt of E.values()) Jt.releaseForShutdown();
-    let cn = ceilingGraceMsOverride;
-    let Pn = () => {
-      Yt = undefined;
+    reportDropped();
+    for (let session of activeSessions.values()) session.releaseForShutdown();
+    let graceLeftMs = ceilingGraceMsOverride;
+    let pollPostCeilingGrace = () => {
+      postCeilingPollTimer = undefined;
       if (signal.aborted) return;
-      let Jt = q();
-      let In = Pe();
-      if (Jt === 0 && In === 0) return;
-      if (cn > 0) {
-        cn -= ir;
-        Yt = setTimeout(Pn, ir);
+      let attachedNow = liveSessionCount();
+      let inFlightNow = releaseInFlightCount();
+      if (attachedNow === 0 && inFlightNow === 0) return;
+      if (graceLeftMs > 0) {
+        graceLeftMs -= ceilingPollStepMs;
+        postCeilingPollTimer = setTimeout(pollPostCeilingGrace, ceilingPollStepMs);
         return;
       }
       onStatus(
-        `[runner:shutdown] ${Jt + In} session(s) still attached after the post-ceiling grace \u2014 falling back to a drain`,
+        `[runner:shutdown] ${attachedNow + inFlightNow} session(s) still attached after the post-ceiling grace \u2014 falling back to a drain`,
       );
       deferShutdown.requestDrain("post-ceiling grace expired with sessions still attached");
     };
-    Yt = setTimeout(Pn, Mn);
+    postCeilingPollTimer = setTimeout(pollPostCeilingGrace, ceilingWaitMs);
   };
-  if (y > 0) {
-    let se = y - Date.now();
+  if (retireAtMs > 0) {
+    let untilRetireMs = retireAtMs - Date.now();
     onStatus(
-      se > 0
-        ? `[runner:retire] retire time set for ${new Date(y).toISOString()} (in ${formatDuration(se)}) \u2014 sessions will be released and the runner will exit then`
-        : `[runner:retire] retire time ${new Date(y).toISOString()} is already in the past \u2014 refusing work and exiting`,
+      untilRetireMs > 0
+        ? `[runner:retire] retire time set for ${new Date(retireAtMs).toISOString()} (in ${formatDuration(untilRetireMs)}) \u2014 sessions will be released and the runner will exit then`
+        : `[runner:retire] retire time ${new Date(retireAtMs).toISOString()} is already in the past \u2014 refusing work and exiting`,
     );
-    Bn();
+    scheduleRetire();
   }
-  if (Kt && deferShutdown !== undefined)
-    if (deferShutdown.signal.aborted) un();
+  if (deferShutdownEnabled && deferShutdown !== undefined)
+    if (deferShutdown.signal.aborted) onShutdownSignal();
     else
-      deferShutdown.signal.addEventListener("abort", un, {
+      deferShutdown.signal.addEventListener("abort", onShutdownSignal, {
         once: true,
       });
   try {
     while (!signal.aborted) {
-      if (Pt && Re() === 0) {
-        onStatus(En());
+      if (retiring && attachedCount() === 0) {
+        onStatus(exitReasonText());
         return;
       }
-      if (An === 0 && Tn && Re() === 0) {
-        onStatus(`[runner:exit] account workload drained \u2014 exiting (grace=0, no re-poll). ${w}`);
+      if (drainGraceMs === 0 && workloadDrained && attachedCount() === 0) {
+        onStatus(
+          `[runner:exit] account workload drained \u2014 exiting (grace=0, no re-poll). ${restartHint}`,
+        );
         return;
       }
-      let se = Pt ? 0 : Math.max(0, config.capacity - Re());
-      let ke = et.consume();
-      if (ke === "SSE") {
+      let freeSlots = retiring ? 0 : Math.max(0, config.capacity - attachedCount());
+      let wakeSource = pollWaker.consume();
+      if (wakeSource === "SSE") {
         await sleep(Math.floor(Math.random() * MAX_SERVER_MESSAGE_CHARS), signal);
         if (signal.aborted) break;
       }
-      let jt = now;
-      let cn;
+      let pollStartedAt = now;
+      let assignmentIds;
       try {
-        let R = await apiClient.pollWork(
+        let pollResult = await apiClient.pollWork(
           tokenState.runnerToken,
           runnerId,
-          se,
+          freeSlots,
           signal,
-          wn ? POLL_WAKE_SOURCES[ke] : undefined,
+          sseHintsEnabled ? POLL_WAKE_SOURCES[wakeSource] : undefined,
         );
-        cn = R.assignment_ids;
-        $e.clear();
-        for (let pe of R.session_assignments ?? []) {
-          if (!pe || typeof pe.session_id !== "string" || !pe.session_id) continue;
+        assignmentIds = pollResult.assignment_ids;
+        clientPlatforms.clear();
+        for (let assignment of pollResult.session_assignments ?? []) {
+          if (!assignment || typeof assignment.session_id !== "string" || !assignment.session_id) continue;
           if (
-            typeof pe.client_platform === "string" &&
-            pe.client_platform &&
-            METRIC_NAME_RE.test(pe.client_platform)
+            typeof assignment.client_platform === "string" &&
+            assignment.client_platform &&
+            METRIC_NAME_RE.test(assignment.client_platform)
           )
-            $e.set(pe.session_id, pe.client_platform);
-          else if (typeof pe.client_platform === "string" && pe.client_platform && !Ve.has(pe.session_id)) {
-            if (Ve.size > 256) Ve.clear();
-            Ve.add(pe.session_id);
+            clientPlatforms.set(assignment.session_id, assignment.client_platform);
+          else if (
+            typeof assignment.client_platform === "string" &&
+            assignment.client_platform &&
+            !badPlatformSessions.has(assignment.session_id)
+          ) {
+            if (badPlatformSessions.size > 256) badPlatformSessions.clear();
+            badPlatformSessions.add(assignment.session_id);
             onDebug(
-              `[runner:session] assignment client_platform rejected by the charset gate (label falls back to "unknown"): "${escapeMetricValue(pe.client_platform)}" (len=${pe.client_platform.length}, session=${escapeMetricValue(pe.session_id)})`,
+              `[runner:session] assignment client_platform rejected by the charset gate (label falls back to "unknown"): "${escapeMetricValue(assignment.client_platform)}" (len=${assignment.client_platform.length}, session=${escapeMetricValue(assignment.session_id)})`,
             );
           }
         }
-        ve = R.lease_expires_at;
-        Ae = R.suggested_poll_interval;
+        leaseExpiresAt = pollResult.lease_expires_at;
+        suggestedPollMs = pollResult.suggested_poll_interval;
         now = Date.now();
-        Be = 0;
-        Fe = 0;
-        if (kn || Gn) {
+        notFoundCount = 0;
+        transportFailureCount = 0;
+        if (pollFailNotLogged || pollOkNotLogged) {
           logFeatureOk("self_hosted_poll");
-          kn = false;
-          Gn = false;
+          pollFailNotLogged = false;
+          pollOkNotLogged = false;
         }
         if (healthState) {
           healthState.lastPollAt = now;
-          healthState.activeSessions = E.size;
+          healthState.activeSessions = activeSessions.size;
         }
       } catch (error) {
         if (signal.aborted) break;
-        let pe = classifyRunnerError(error);
-        if (healthState) healthState.pollErrors[pe]++;
-        let It = error instanceof Error ? error.message : String(error);
+        let errorClass = classifyRunnerError(error);
+        if (healthState) healthState.pollErrors[errorClass]++;
+        let errorText = error instanceof Error ? error.message : String(error);
         if (isAuthFailure(error)) {
           logFeatureBad("self_hosted_poll", "self_hosted_poll_auth_failed");
-          onStatus(`[runner:fatal] poll auth failed \u2014 token expired or revoked. ${v}`);
-          ge = true;
+          onStatus(`[runner:fatal] poll auth failed \u2014 token expired or revoked. ${drainMessage}`);
+          fatalExit = true;
           break;
         }
         if (isNotFoundError(error)) {
-          Be++;
-          if (Be >= 3) {
+          notFoundCount++;
+          if (notFoundCount >= 3) {
             logFeatureBad("self_hosted_poll", "self_hosted_poll_runner_not_found");
             onStatus(
-              `[runner:fatal] poll returned 404 ${Be}\xD7 \u2014 runner record gone server-side. ${v}`,
+              `[runner:fatal] poll returned 404 ${notFoundCount}\xD7 \u2014 runner record gone server-side. ${drainMessage}`,
             );
-            ge = true;
+            fatalExit = true;
             break;
           }
-          let min = Math.min(MAX_HEALTH_PROBE_BACKOFF_MS, HEALTH_PROBE_INTERVAL_MS * 2 ** (Be - 1));
+          let min = Math.min(
+            MAX_HEALTH_PROBE_BACKOFF_MS,
+            HEALTH_PROBE_INTERVAL_MS * 2 ** (notFoundCount - 1),
+          );
           let floored = Math.floor(Math.random() * min);
           onStatus(
-            `Poll failed: ${It} \u2014 confirming 404 (${Be}/3), retrying in ${(floored / 1000).toFixed(1)}s`,
+            `Poll failed: ${errorText} \u2014 confirming 404 (${notFoundCount}/3), retrying in ${(floored / 1000).toFixed(1)}s`,
           );
-          await sleep(e.pollIntervalOverrideMs ?? floored, signal);
+          await sleep(options.pollIntervalOverrideMs ?? floored, signal);
           continue;
         }
-        Be = 0;
-        if (kn || !Gn) {
+        notFoundCount = 0;
+        if (pollFailNotLogged || !pollOkNotLogged) {
           logFeatureSad("self_hosted_poll", "self_hosted_poll_failed");
-          kn = false;
-          Gn = true;
+          pollFailNotLogged = false;
+          pollOkNotLogged = true;
         }
-        let Ie;
-        if (pe === "timeout" || pe === "transport") {
-          Fe++;
-          Ie = backoffDelayMs(Fe, ve, Ae);
-        } else if (pe === "5xx")
-          Ie = clampToLeaseExpiry(DEFAULT_POLL_INTERVAL_MS, ve, LEASE_5XX_RETRY_DELAY_MS, Ae);
-        else Ie = DEFAULT_POLL_INTERVAL_MS;
-        onStatus(`Poll failed: ${It} \u2014 retrying in ${(Ie / 1000).toFixed(1)}s`);
-        await sleep(e.pollIntervalOverrideMs ?? Ie, signal);
+        let retryDelayMs;
+        if (errorClass === "timeout" || errorClass === "transport") {
+          transportFailureCount++;
+          retryDelayMs = backoffDelayMs(transportFailureCount, leaseExpiresAt, suggestedPollMs);
+        } else if (errorClass === "5xx")
+          retryDelayMs = clampToLeaseExpiry(
+            DEFAULT_POLL_INTERVAL_MS,
+            leaseExpiresAt,
+            LEASE_5XX_RETRY_DELAY_MS,
+            suggestedPollMs,
+          );
+        else retryDelayMs = DEFAULT_POLL_INTERVAL_MS;
+        onStatus(`Poll failed: ${errorText} \u2014 retrying in ${(retryDelayMs / 1000).toFixed(1)}s`);
+        await sleep(options.pollIntervalOverrideMs ?? retryDelayMs, signal);
         continue;
       }
-      let filtered = cn.filter((R) => !fe.has(R));
-      if (filtered.length === 0 && Re() === 0) {
-        On ??= Date.now();
-        let R = Date.now() - On;
-        if (Tn) {
-          if (R >= An) {
+      let filtered = assignmentIds.filter((sessionId) => !stuckSessions.has(sessionId));
+      if (filtered.length === 0 && attachedCount() === 0) {
+        idleSince ??= Date.now();
+        let idleForMs = Date.now() - idleSince;
+        if (workloadDrained) {
+          if (idleForMs >= drainGraceMs) {
             onStatus(
-              Pt
-                ? En()
-                : An > 0
-                  ? `[runner:exit] account workload drained ${Math.round(R / 1000)}s ago (grace ${Math.round(An / 1000)}s) \u2014 exiting for fresh disk. ${w}`
-                  : `[runner:exit] account workload drained \u2014 exiting for fresh disk. ${w}`,
+              retiring
+                ? exitReasonText()
+                : drainGraceMs > 0
+                  ? `[runner:exit] account workload drained ${Math.round(idleForMs / 1000)}s ago (grace ${Math.round(drainGraceMs / 1000)}s) \u2014 exiting for fresh disk. ${restartHint}`
+                  : `[runner:exit] account workload drained \u2014 exiting for fresh disk. ${restartHint}`,
             );
             return;
           }
-        } else if (dn > 0 && R >= dn) {
+        } else if (idleShutdownMs > 0 && idleForMs >= idleShutdownMs) {
           onStatus(
-            `[runner:exit] idle ${Math.round(R / 60000)}min with no work \u2014 exiting for autoscaler scale-down`,
+            `[runner:exit] idle ${Math.round(idleForMs / 60000)}min with no work \u2014 exiting for autoscaler scale-down`,
           );
           return;
         }
-      } else On = null;
-      let In = An === 0 && Tn && Re() === 0;
-      if (filtered.length > 0) Tn = true;
-      let nn = new Set(cn);
-      for (let [R, pe] of E)
-        if (!nn.has(R)) {
+      } else idleSince = null;
+      let drainNow = drainGraceMs === 0 && workloadDrained && attachedCount() === 0;
+      if (filtered.length > 0) workloadDrained = true;
+      let assignedNow = new Set(assignmentIds);
+      for (let [sessionId, entry] of activeSessions)
+        if (!assignedNow.has(sessionId)) {
           onStatus(
-            `[runner:session] ${R} deassigned by server (deleted/archived/requeued) \u2014 aborting child`,
+            `[runner:session] ${sessionId} deassigned by server (deleted/archived/requeued) \u2014 aborting child`,
           );
-          pe.controller.abort(ft.has(R) ? "idle-release" : "deassign");
+          entry.controller.abort(releaseInFlight.has(sessionId) ? "idle-release" : "deassign");
         }
-      for (let R of ft) if (!nn.has(R)) ft.delete(R);
-      for (let key of he.keys()) if (!nn.has(key)) he.delete(key);
-      for (let R of P) if (!nn.has(R) || fe.has(R)) P.delete(R);
-      for (let R of re) if (!nn.has(R)) re.delete(R);
-      for (let key of Z.keys()) if (!E.has(key) && !P.has(key) && !De.has(key) && !re.has(key)) Z.delete(key);
-      for (let R of filtered) {
-        if (E.has(R)) {
-          onDebug(`[runner:main] Ignoring duplicate assignment for ${R}`);
+      for (let sessionId of releaseInFlight)
+        if (!assignedNow.has(sessionId)) releaseInFlight.delete(sessionId);
+      for (let key of releaseFailures.keys()) if (!assignedNow.has(key)) releaseFailures.delete(key);
+      for (let sessionId of declinedSessions)
+        if (!assignedNow.has(sessionId) || stuckSessions.has(sessionId)) declinedSessions.delete(sessionId);
+      for (let sessionId of releaseRetryPending)
+        if (!assignedNow.has(sessionId)) releaseRetryPending.delete(sessionId);
+      for (let key of idleSinceBySession.keys())
+        if (
+          !activeSessions.has(key) &&
+          !declinedSessions.has(key) &&
+          !releaseTasks.has(key) &&
+          !releaseRetryPending.has(key)
+        )
+          idleSinceBySession.delete(key);
+      for (let sessionId of filtered) {
+        if (activeSessions.has(sessionId)) {
+          onDebug(`[runner:main] Ignoring duplicate assignment for ${sessionId}`);
           continue;
         }
-        if (fe.has(R)) {
-          P.delete(R);
-          onDebug(`[runner:main] Ignoring stuck session ${R} \u2014 already failed, not re-spawning`);
+        if (stuckSessions.has(sessionId)) {
+          declinedSessions.delete(sessionId);
+          onDebug(`[runner:main] Ignoring stuck session ${sessionId} \u2014 already failed, not re-spawning`);
           continue;
         }
-        if (Ht.has(R)) {
-          onDebug(`[runner:main] Ignoring session ${R} \u2014 failure report in-flight`);
+        if (failureReportInFlight.has(sessionId)) {
+          onDebug(`[runner:main] Ignoring session ${sessionId} \u2014 failure report in-flight`);
           continue;
         }
-        if (ft.has(R) || De.has(R)) {
+        if (releaseInFlight.has(sessionId) || releaseTasks.has(sessionId)) {
           onDebug(
-            `[runner:main] Ignoring released session ${R} \u2014 awaiting server deassign (or its in-flight release to settle)`,
+            `[runner:main] Ignoring released session ${sessionId} \u2014 awaiting server deassign (or its in-flight release to settle)`,
           );
           continue;
         }
-        let pe = Pt && $n === "shutdown" && !qn;
-        if (Pt && !pe) {
-          let N =
-            $n === "shutdown"
-              ? `[runner:shutdown] not starting session ${R} \u2014 shutdown requested and the defer ceiling has passed; it will be requeued when this runner exits`
-              : `[runner:retire] not starting session ${R} \u2014 retire time has passed; it will be requeued when this runner exits`;
-          if (Ue.has(R)) onDebug(N);
+        let serveDuringShutdown = retiring && retireReason === "shutdown" && !deferCeilingPassed;
+        if (retiring && !serveDuringShutdown) {
+          let skipMessage =
+            retireReason === "shutdown"
+              ? `[runner:shutdown] not starting session ${sessionId} \u2014 shutdown requested and the defer ceiling has passed; it will be requeued when this runner exits`
+              : `[runner:retire] not starting session ${sessionId} \u2014 retire time has passed; it will be requeued when this runner exits`;
+          if (refusedNotified.has(sessionId)) onDebug(skipMessage);
           else {
-            Ue.add(R);
-            onStatus(N);
+            refusedNotified.add(sessionId);
+            onStatus(skipMessage);
           }
-          P.delete(R);
+          declinedSessions.delete(sessionId);
           continue;
         }
-        if (pe)
+        if (serveDuringShutdown)
           onStatus(
-            P.has(R)
-              ? `[runner:shutdown] ${R} re-spawning after its declined release to serve the pending user event; it is released again like the others (its idle clock, or the ceiling)`
-              : `[runner:shutdown] ${R} was assigned after the shutdown signal \u2014 serving it; it is released like the others (its idle clock, or the ceiling)`,
+            declinedSessions.has(sessionId)
+              ? `[runner:shutdown] ${sessionId} re-spawning after its declined release to serve the pending user event; it is released again like the others (its idle clock, or the ceiling)`
+              : `[runner:shutdown] ${sessionId} was assigned after the shutdown signal \u2014 serving it; it is released like the others (its idle clock, or the ceiling)`,
           );
-        let It = P.delete(R);
-        if (!re.delete(R) && !It) Z.delete(R);
-        Er++;
-        onStatus(`Picked up session ${R} (${E.size + 1}/${config.capacity} active)`);
+        let respawnedDeclined = declinedSessions.delete(sessionId);
+        if (!releaseRetryPending.delete(sessionId) && !respawnedDeclined)
+          idleSinceBySession.delete(sessionId);
+        pickedUpCount++;
+        onStatus(`Picked up session ${sessionId} (${activeSessions.size + 1}/${config.capacity} active)`);
         let abortController_2 = new AbortController();
-        let replaced = R.replace(/^cse_/, "session_");
-        let Xe = $e.get(R) ?? UNKNOWN;
-        healthState?.sessionIdle.set(replaced, null);
-        healthState?.sessionClientPlatform.set(replaced, Xe);
+        let sessionId_2 = sessionId.replace(/^cse_/, "session_");
+        let platform = clientPlatforms.get(sessionId) ?? UNKNOWN;
+        healthState?.sessionIdle.set(sessionId_2, null);
+        healthState?.sessionClientPlatform.set(sessionId_2, platform);
         let now = Date.now();
-        healthState?.claimVisibility?.set(replaced, {
+        healthState?.claimVisibility?.set(sessionId_2, {
           pickedUpAt: now,
         });
-        let standbyIdleMs = E.size === 0 ? now - now_2 : undefined;
+        let standbyIdleMs = activeSessions.size === 0 ? now - now_2 : undefined;
         if (healthState) {
-          for (let N of [
+          for (let counter of [
             healthState.sessionsStarted,
             healthState.sessionsCompleted,
             healthState.sessionsFailed,
             healthState.sessionsInterrupted,
           ])
-            if (!N.has(Xe)) N.set(Xe, 0);
+            if (!counter.has(platform)) counter.set(platform, 0);
         }
-        let Je;
-        let fn = false;
-        let Wn = Z.get(R);
-        let Dn;
-        let Zt = false;
-        let hn = false;
-        let Ln = false;
-        let Dt = false;
-        let Cr = (N) => {
-          Dt = N;
-          let x = E.get(R);
-          if (x !== undefined) x.turnInFlight = N;
-          ae?.();
+        let idleTimer;
+        let loggedStartupRestart = false;
+        let idleSinceAt = idleSinceBySession.get(sessionId);
+        let holdLookToken;
+        let holdAnnounced = false;
+        let holdReleasedAnnounced = false;
+        let sessionEnding = false;
+        let turnInFlight = false;
+        let setTurnInFlight = (inFlight) => {
+          turnInFlight = inFlight;
+          let entry = activeSessions.get(sessionId);
+          if (entry !== undefined) entry.turnInFlight = inFlight;
+          wakeEpochTimer?.();
         };
-        let pt = false;
-        let Lt;
-        let Ke = false;
-        let Ut = "retire";
-        let V = () =>
-          Ut === "shutdown"
+        let turnDeferred = false;
+        let lastActivityKind;
+        let releaseRequested = false;
+        let releaseReason = "retire";
+        let reasonPhrase = () =>
+          releaseReason === "shutdown"
             ? "defer ceiling passed"
-            : Ut === "max-age"
+            : releaseReason === "max-age"
               ? "max session age reached"
               : "retire time passed";
-        let ue = () =>
-          Ut === "shutdown"
+        let whilePhrase = () =>
+          releaseReason === "shutdown"
             ? "while shutting down"
-            : Ut === "max-age"
+            : releaseReason === "max-age"
               ? "while at max session age"
               : "while retiring";
-        let U = () =>
-          Ut === "shutdown" ? "shutdown grace" : Ut === "max-age" ? "max-session-age grace" : "retire grace";
-        let nt = 0;
-        let Tt = 0;
-        let xn;
-        let Kn = () => {
-          if (xn !== undefined) {
-            clearTimeout(xn);
-            xn = undefined;
+        let gracePhrase = () =>
+          releaseReason === "shutdown"
+            ? "shutdown grace"
+            : releaseReason === "max-age"
+              ? "max-session-age grace"
+              : "retire grace";
+        let releaseAttempts = 0;
+        let releaseFailureStreak = 0;
+        let bgDrainTimer;
+        let stopBgDrainTimer = () => {
+          if (bgDrainTimer !== undefined) {
+            clearTimeout(bgDrainTimer);
+            bgDrainTimer = undefined;
           }
         };
-        let wr = false;
-        let Jn = () => Ln || abortController_2.signal.aborted || wr;
-        let es = false;
-        let ts = () => {};
-        let yo = (N) => {};
-        let Hr;
-        let vs = [1800000, 7200000, 28800000];
-        let Br = () => {
-          if (Hr !== undefined) {
-            clearTimeout(Hr);
-            Hr = undefined;
+        let childTerminating = false;
+        let sessionEnded = () => sessionEnding || abortController_2.signal.aborted || childTerminating;
+        let settleHoldArmed = false;
+        let onTurnSettled = () => {};
+        let onTurnSettledWith = (ledger) => {};
+        let idleDeferTimer;
+        let idleDeferSteps = [1800000, 7200000, 28800000];
+        let stopIdleDefer = () => {
+          if (idleDeferTimer !== undefined) {
+            clearTimeout(idleDeferTimer);
+            idleDeferTimer = undefined;
           }
         };
-        let Nr = (N, x) => {
-          let liveTasks = N?.liveTasks ?? 0;
-          let joined = (N?.liveTaskIds ?? []).slice(0, 5).join(",");
-          let Yn =
-            N?.wakeupInMs !== undefined ? `wakeup pending in ${formatDuration(N.wakeupInMs)}` : undefined;
-          let Zn = N?.bgResultAwaitingFollowup
+        let deferIdleClock = (ledger, step) => {
+          let liveTasks = ledger?.liveTasks ?? 0;
+          let joined = (ledger?.liveTaskIds ?? []).slice(0, 5).join(",");
+          let wakeupNote =
+            ledger?.wakeupInMs !== undefined
+              ? `wakeup pending in ${formatDuration(ledger.wakeupInMs)}`
+              : undefined;
+          let followupNote = ledger?.bgResultAwaitingFollowup
             ? "finished background task awaiting the follow-up turn"
             : undefined;
           let filtered = [
             liveTasks > 0
               ? `${liveTasks} background task(s) live [${joined}${liveTasks > 5 ? ",\u2026" : ""}]`
               : undefined,
-            Yn,
-            Zn,
+            wakeupNote,
+            followupNote,
           ].filter(Boolean);
-          let ne = filtered.length > 0 ? filtered.join(" / ") : "planned resumption";
-          let mt = x > 0 ? " still" : "";
-          onStatus(`[runner:session] ${R} turn ended with ${ne} \u2014 idle clock${mt} deferred`);
-          if (x < vs.length) Hr = setTimeout(Nr, vs[x], N, x + 1);
+          let reasonText = filtered.length > 0 ? filtered.join(" / ") : "planned resumption";
+          let stillText = step > 0 ? " still" : "";
+          onStatus(
+            `[runner:session] ${sessionId} turn ended with ${reasonText} \u2014 idle clock${stillText} deferred`,
+          );
+          if (step < idleDeferSteps.length)
+            idleDeferTimer = setTimeout(deferIdleClock, idleDeferSteps[step], ledger, step + 1);
         };
-        let pn = (N, x) => {
-          if (N === "startup" && x?.childAlive === true && Lt !== "startup") {
+        let onActivity = (kind, details) => {
+          if (kind === "startup" && details?.childAlive === true && lastActivityKind !== "startup") {
             onDebug(
-              `[runner:session] ${R} ignoring child output as a startup-clock restart: the startup phase is over`,
+              `[runner:session] ${sessionId} ignoring child output as a startup-clock restart: the startup phase is over`,
             );
             return;
           }
-          let xe = N === "startup" && x?.childSilent === true;
-          if (xe && ft.has(R)) {
+          let childSilent = kind === "startup" && details?.childSilent === true;
+          if (childSilent && releaseInFlight.has(sessionId)) {
             onDebug(
-              `[runner:session] ${R} no child output for ${formatDuration(startupTimeoutMs)}, but a release is already in flight: leaving it to that one`,
+              `[runner:session] ${sessionId} no child output for ${formatDuration(startupTimeoutMs)}, but a release is already in flight: leaving it to that one`,
             );
             return;
           }
-          if (Je !== undefined) {
-            clearTimeout(Je);
-            Je = undefined;
+          if (idleTimer !== undefined) {
+            clearTimeout(idleTimer);
+            idleTimer = undefined;
           }
-          Dn = undefined;
-          if (!Ln && healthState)
-            if (N === "turn-end" || (N === "awaiting-action" && !pt)) {
-              if (healthState.sessionIdle.get(replaced) === null)
-                healthState.sessionIdle.set(replaced, Date.now());
-            } else healthState.sessionIdle.set(replaced, null);
-          if (N === "init-observed") {
-            if (Ke && Lt !== undefined) pn(Lt);
+          holdLookToken = undefined;
+          if (!sessionEnding && healthState)
+            if (kind === "turn-end" || (kind === "awaiting-action" && !turnDeferred)) {
+              if (healthState.sessionIdle.get(sessionId_2) === null)
+                healthState.sessionIdle.set(sessionId_2, Date.now());
+            } else healthState.sessionIdle.set(sessionId_2, null);
+          if (kind === "init-observed") {
+            if (releaseRequested && lastActivityKind !== undefined) onActivity(lastActivityKind);
             return;
           }
-          if (N === "activity") {
-            if (Lt !== "startup") {
-              Wn = undefined;
-              Z.delete(R);
-              Zt = false;
-              hn = false;
+          if (kind === "activity") {
+            if (lastActivityKind !== "startup") {
+              idleSinceAt = undefined;
+              idleSinceBySession.delete(sessionId);
+              holdAnnounced = false;
+              holdReleasedAnnounced = false;
             }
-            Cr(true);
-            pt = false;
-            Lt = undefined;
-            nt = 0;
-            Br();
-            Kn();
-            he.delete(R);
+            setTurnInFlight(true);
+            turnDeferred = false;
+            lastActivityKind = undefined;
+            releaseAttempts = 0;
+            stopIdleDefer();
+            stopBgDrainTimer();
+            releaseFailures.delete(sessionId);
             return;
           }
-          if (N === "turn-end-deferred") {
-            Cr(false);
-            pt = true;
-            Lt = undefined;
-            Br();
-            ts();
-            if (Jn()) return;
-            if (Bt > 0) Nr(x, 0);
-            if (Ke) ns();
+          if (kind === "turn-end-deferred") {
+            setTurnInFlight(false);
+            turnDeferred = true;
+            lastActivityKind = undefined;
+            stopIdleDefer();
+            onTurnSettled();
+            if (sessionEnded()) return;
+            if (sessionIdleMs > 0) deferIdleClock(details, 0);
+            if (releaseRequested) releaseDeferredTurn();
             return;
           }
-          if (N === "awaiting-action" && pt) {
-            Lt = undefined;
+          if (kind === "awaiting-action" && turnDeferred) {
+            lastActivityKind = undefined;
             return;
           }
-          Br();
-          Kn();
-          Cr(false);
-          pt = false;
-          Lt = N;
-          ts();
-          if (Jn()) return;
-          let xt = xe
+          stopIdleDefer();
+          stopBgDrainTimer();
+          setTurnInFlight(false);
+          turnDeferred = false;
+          lastActivityKind = kind;
+          onTurnSettled();
+          if (sessionEnded()) return;
+          let idleTimeoutMs = childSilent
             ? 0
-            : Ke
-              ? nt === 0
+            : releaseRequested
+              ? releaseAttempts === 0
                 ? 0
                 : retireReleaseRetryMsOverride
-              : N === "startup"
+              : kind === "startup"
                 ? startupTimeoutMs
-                : Bt;
-          let Yn = Ke ? retireReleaseRetryMsOverride : xt;
-          let Zn = () =>
-            Ke
-              ? nt === 0
+                : sessionIdleMs;
+          let effectiveMs = releaseRequested ? retireReleaseRetryMsOverride : idleTimeoutMs;
+          let whenText = () =>
+            releaseRequested
+              ? releaseAttempts === 0
                 ? "now"
                 : `in ${formatDuration(retireReleaseRetryMsOverride)}`
-              : `in ${formatDuration(Yn)}`;
-          let yn = Ke
-            ? V()
-            : N === "startup"
+              : `in ${formatDuration(effectiveMs)}`;
+          let clockReason = releaseRequested
+            ? reasonPhrase()
+            : kind === "startup"
               ? `no child output for ${formatDuration(startupTimeoutMs)}`
-              : N === "awaiting-action"
-                ? `awaiting user action ${formatDuration(xt)}`
-                : `user idle ${formatDuration(xt)}`;
-          if (!Ke && !xe && xt <= 0) return;
-          if (Jn()) return;
+              : kind === "awaiting-action"
+                ? `awaiting user action ${formatDuration(idleTimeoutMs)}`
+                : `user idle ${formatDuration(idleTimeoutMs)}`;
+          if (!releaseRequested && !childSilent && idleTimeoutMs <= 0) return;
+          if (sessionEnded()) return;
           if (
-            N === "awaiting-action" &&
-            x !== undefined &&
-            (x.liveTasks > 0 || x.wakeupInMs !== undefined || x.bgResultAwaitingFollowup === true)
+            kind === "awaiting-action" &&
+            details !== undefined &&
+            (details.liveTasks > 0 ||
+              details.wakeupInMs !== undefined ||
+              details.bgResultAwaitingFollowup === true)
           ) {
-            let joined = x.liveTaskIds.slice(0, 5).join(",");
+            let joined = details.liveTaskIds.slice(0, 5).join(",");
             let filtered = [
-              x.liveTasks > 0
-                ? `${x.liveTasks} background task(s) live [${joined}${x.liveTasks > 5 ? ",\u2026" : ""}]`
+              details.liveTasks > 0
+                ? `${details.liveTasks} background task(s) live [${joined}${details.liveTasks > 5 ? ",\u2026" : ""}]`
                 : undefined,
-              x.wakeupInMs !== undefined ? `wakeup pending in ${formatDuration(x.wakeupInMs)}` : undefined,
-              x.bgResultAwaitingFollowup === true
+              details.wakeupInMs !== undefined
+                ? `wakeup pending in ${formatDuration(details.wakeupInMs)}`
+                : undefined,
+              details.bgResultAwaitingFollowup === true
                 ? "finished background task awaiting the follow-up turn"
                 : undefined,
             ].filter(Boolean);
             onStatus(
-              `[runner:session] ${R} awaiting user action overrides deferral (${filtered.join(" / ")}) \u2014 idle clock armed`,
+              `[runner:session] ${sessionId} awaiting user action overrides deferral (${filtered.join(" / ")}) \u2014 idle clock armed`,
             );
           }
-          if (!Ke && !xe) {
-            let mt = N === "startup" && x?.childAlive === true;
-            let rn = `[runner:session] ${R} idle clock armed (${mt ? "startup, restarted by child output" : N}): releases in ${formatDuration(
-              xt,
+          if (!releaseRequested && !childSilent) {
+            let startupRestart = kind === "startup" && details?.childAlive === true;
+            let clockMessage = `[runner:session] ${sessionId} idle clock armed (${startupRestart ? "startup, restarted by child output" : kind}): releases in ${formatDuration(
+              idleTimeoutMs,
               {
                 hideTrailingZeros: true,
               },
-            )} at ${new Date(Date.now() + xt).toISOString()} unless new activity arrives`;
-            if (!mt) onStatus(rn);
-            else if (fn) onDebug(rn);
+            )} at ${new Date(Date.now() + idleTimeoutMs).toISOString()} unless new activity arrives`;
+            if (!startupRestart) onStatus(clockMessage);
+            else if (loggedStartupRestart) onDebug(clockMessage);
             else {
-              fn = true;
-              onStatus(`${rn} (later restarts are logged at debug)`);
+              loggedStartupRestart = true;
+              onStatus(`${clockMessage} (later restarts are logged at debug)`);
             }
           }
-          if (Ke && nt === 0 && E.get(R)?.postTurnSettling === true) {
+          if (
+            releaseRequested &&
+            releaseAttempts === 0 &&
+            activeSessions.get(sessionId)?.postTurnSettling === true
+          ) {
             onStatus(
-              `[runner:session] ${R} ${V()} \u2014 release held until the finished turn has been reported to the server (at most SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS, default ${POST_TURN_SETTLE_MS / 1000}s)`,
+              `[runner:session] ${sessionId} ${reasonPhrase()} \u2014 release held until the finished turn has been reported to the server (at most SELF_HOSTED_RUNNER_POST_TURN_SETTLE_MS, default ${POST_TURN_SETTLE_MS / 1000}s)`,
             );
             return;
           }
-          if (!Ke && N !== "startup") {
-            Wn ??= Date.now();
-            Z.set(R, Wn);
+          if (!releaseRequested && kind !== "startup") {
+            idleSinceAt ??= Date.now();
+            idleSinceBySession.set(sessionId, idleSinceAt);
           }
-          let ne = (mt = false) => {
-            Je = undefined;
-            if (Jn()) return;
-            if (ft.has(R)) return;
-            if (Dt) {
+          let fireIdleRelease = (skipHold = false) => {
+            idleTimer = undefined;
+            if (sessionEnded()) return;
+            if (releaseInFlight.has(sessionId)) return;
+            if (turnInFlight) {
               onStatus(
-                `[runner:session] ${R} idle timer fired mid-turn \u2014 skipping release (stdout-tee likely broken)`,
+                `[runner:session] ${sessionId} idle timer fired mid-turn \u2014 skipping release (stdout-tee likely broken)`,
               );
               return;
             }
-            if (!mt && kt !== undefined && maxHoldMs > 0 && !Ke && N !== "startup" && Wn !== undefined) {
-              let _t = kt;
-              let bt = Wn + maxHoldMs;
-              if (Date.now() < bt) {
-                let en = {};
-                Dn = en;
+            if (
+              !skipHold &&
+              holdIdlePath !== undefined &&
+              maxHoldMs > 0 &&
+              !releaseRequested &&
+              kind !== "startup" &&
+              idleSinceAt !== undefined
+            ) {
+              let holdPath = holdIdlePath;
+              let maxHoldDeadline = idleSinceAt + maxHoldMs;
+              if (Date.now() < maxHoldDeadline) {
+                let holdToken = {};
+                holdLookToken = holdToken;
                 withBoundedTimeout(
-                  leftoverHoldLookOverride(_t, Date.now()),
+                  leftoverHoldLookOverride(holdPath, Date.now()),
                   leftoverHoldLookTimeoutMsOverride,
                   "hold-idle-file look",
                 )
@@ -1984,337 +2073,369 @@ async function runRunnerLoop(e, signal) {
                           failed: error instanceof Error ? error.message : String(error),
                         },
                   )
-                  .then((Me) => {
-                    if (Dn !== en || Je !== undefined || Jn() || Dt || pt || Ke) return;
-                    Dn = undefined;
-                    let max = Math.max(0, Math.min(leftoverHoldRecheckMsOverride, bt - Date.now()));
-                    if (Me === true) {
-                      hn = false;
-                      if (!Zt) {
-                        Zt = true;
+                  .then((lookResult) => {
+                    if (
+                      holdLookToken !== holdToken ||
+                      idleTimer !== undefined ||
+                      sessionEnded() ||
+                      turnInFlight ||
+                      turnDeferred ||
+                      releaseRequested
+                    )
+                      return;
+                    holdLookToken = undefined;
+                    let max = Math.max(
+                      0,
+                      Math.min(leftoverHoldRecheckMsOverride, maxHoldDeadline - Date.now()),
+                    );
+                    if (lookResult === true) {
+                      holdReleasedAnnounced = false;
+                      if (!holdAnnounced) {
+                        holdAnnounced = true;
                         onStatus(
-                          `[runner:session] ${R} idle release held: ${_t} says a process the session left running still lives \u2014 looking again every ${formatDuration(
+                          `[runner:session] ${sessionId} idle release held: ${holdPath} says a process the session left running still lives \u2014 looking again every ${formatDuration(
                             leftoverHoldRecheckMsOverride,
                             {
                               hideTrailingZeros: true,
                             },
-                          )}, until ${new Date(bt).toISOString()} at most (--max-hold-min)`,
+                          )}, until ${new Date(maxHoldDeadline).toISOString()} at most (--max-hold-min)`,
                         );
                       }
-                      Je = setTimeout(ne, max, false);
+                      idleTimer = setTimeout(fireIdleRelease, max, false);
                       return;
                     }
-                    let er =
-                      Me === "timed out"
-                        ? `looking at ${_t} took longer than ${formatDuration(
+                    let lookFailureText =
+                      lookResult === "timed out"
+                        ? `looking at ${holdPath} took longer than ${formatDuration(
                             leftoverHoldLookTimeoutMsOverride,
                             {
                               hideTrailingZeros: true,
                             },
                           )}`
-                        : typeof Me === "object"
-                          ? `the look at ${_t} failed (${Me.failed})`
-                          : `${_t} is gone, not a regular file, or has not changed in ${formatDuration(
+                        : typeof lookResult === "object"
+                          ? `the look at ${holdPath} failed (${lookResult.failed})`
+                          : `${holdPath} is gone, not a regular file, or has not changed in ${formatDuration(
                               HOLD_IDLE_MTIME_FRESH_MS,
                               {
                                 hideTrailingZeros: true,
                               },
                             )}`;
-                    if (Zt && !hn) {
-                      hn = true;
+                    if (holdAnnounced && !holdReleasedAnnounced) {
+                      holdReleasedAnnounced = true;
                       onStatus(
-                        `[runner:session] ${R} idle release still held: ${er} \u2014 looking once more before releasing`,
+                        `[runner:session] ${sessionId} idle release still held: ${lookFailureText} \u2014 looking once more before releasing`,
                       );
-                      Je = setTimeout(ne, max, false);
+                      idleTimer = setTimeout(fireIdleRelease, max, false);
                       return;
                     }
-                    if (Zt) onStatus(`[runner:session] ${R} idle release no longer held: ${er}`);
-                    else if (Me !== false)
-                      onStatus(`[runner:session] ${R} idle release not held: ${er} \u2014 releasing`);
-                    Zt = false;
-                    hn = false;
-                    ne(true);
+                    if (holdAnnounced)
+                      onStatus(
+                        `[runner:session] ${sessionId} idle release no longer held: ${lookFailureText}`,
+                      );
+                    else if (lookResult !== false)
+                      onStatus(
+                        `[runner:session] ${sessionId} idle release not held: ${lookFailureText} \u2014 releasing`,
+                      );
+                    holdAnnounced = false;
+                    holdReleasedAnnounced = false;
+                    fireIdleRelease(true);
                   })
                   .catch((error) => {
                     onStatus(
-                      `[runner:session] ${R} idle release after a look at ${_t} failed: ${error instanceof Error ? error.message : String(error)}; the release may not have gone out, and the next turn end or a forced release tries again`,
+                      `[runner:session] ${sessionId} idle release after a look at ${holdPath} failed: ${error instanceof Error ? error.message : String(error)}; the release may not have gone out, and the next turn end or a forced release tries again`,
                     );
                   });
                 return;
               }
-              if (Zt) {
-                Zt = false;
+              if (holdAnnounced) {
+                holdAnnounced = false;
                 onStatus(
-                  `[runner:session] ${R} idle release no longer held: ${formatDuration(maxHoldMs, {
+                  `[runner:session] ${sessionId} idle release no longer held: ${formatDuration(maxHoldMs, {
                     hideTrailingZeros: true,
                   })} have passed since the session went idle (--max-hold-min)`,
                 );
               }
             }
-            if (Ke) nt++;
-            onStatus(`[runner:session] ${R} ${yn} \u2014 releasing`);
-            ft.add(R);
-            if (N !== "awaiting-action") {
-              let liveBgTasks = E.get(R)?.liveBgTasks ?? 0;
-              let en = (E.get(R)?.task ?? Promise.resolve())
+            if (releaseRequested) releaseAttempts++;
+            onStatus(`[runner:session] ${sessionId} ${clockReason} \u2014 releasing`);
+            releaseInFlight.add(sessionId);
+            if (kind !== "awaiting-action") {
+              let liveBgTasks = activeSessions.get(sessionId)?.liveBgTasks ?? 0;
+              let orderedRelease = (activeSessions.get(sessionId)?.task ?? Promise.resolve())
                 .then(() =>
                   retryReleaseSession({
-                    release: () => apiClient.releaseSession(tokenState.runnerToken, R),
-                    sessionId: R,
+                    release: () => apiClient.releaseSession(tokenState.runnerToken, sessionId),
+                    sessionId,
                     onStatus,
                     stop: abortController.signal,
                   }),
                 )
                 .then(({ released }) => {
-                  De.delete(R);
-                  ft.delete(R);
-                  he.delete(R);
-                  Z.delete(R);
-                  if (Pt) et.wake("LOCAL");
+                  releaseTasks.delete(sessionId);
+                  releaseInFlight.delete(sessionId);
+                  releaseFailures.delete(sessionId);
+                  idleSinceBySession.delete(sessionId);
+                  if (retiring) pollWaker.wake("LOCAL");
                   if (released) {
                     onStatus(
-                      `[runner:session] ${R} released after post-session hook \u2014 parked server-side`,
+                      `[runner:session] ${sessionId} released after post-session hook \u2014 parked server-side`,
                     );
-                    if (xe) logFeatureSad("self_hosted_release_session", "released_true_child_silent");
-                    else if (Dt || pt || liveBgTasks > 0)
+                    if (childSilent)
+                      logFeatureSad("self_hosted_release_session", "released_true_child_silent");
+                    else if (turnInFlight || turnDeferred || liveBgTasks > 0)
                       logFeatureSad("self_hosted_release_session", "released_true_mid_work");
                     else logFeatureOk("self_hosted_release_session");
                     return;
                   }
-                  if ($n === "shutdown") {
-                    let er = !qn;
-                    if (er) P.add(R);
+                  if (retireReason === "shutdown") {
+                    let keepForShutdown = !deferCeilingPassed;
+                    if (keepForShutdown) declinedSessions.add(sessionId);
                     onStatus(
-                      er
-                        ? `[runner:session] ${R} released=false after post-session hook (pending user event) while shutting down \u2014 the next poll re-spawns it to serve that event (its --release-idle-session-min window, if set, starts over; otherwise it stays until the ceiling)`
-                        : `[runner:session] ${R} released=false after post-session hook (pending user event) after the defer ceiling \u2014 not re-spawned; it is requeued, snapshot complete, when this runner exits`,
+                      keepForShutdown
+                        ? `[runner:session] ${sessionId} released=false after post-session hook (pending user event) while shutting down \u2014 the next poll re-spawns it to serve that event (its --release-idle-session-min window, if set, starts over; otherwise it stays until the ceiling)`
+                        : `[runner:session] ${sessionId} released=false after post-session hook (pending user event) after the defer ceiling \u2014 not re-spawned; it is requeued, snapshot complete, when this runner exits`,
                     );
                     logFeatureSad("self_hosted_release_session", "released_false_shutting_down");
                     return;
                   }
-                  let gr = Ke && Ut === "max-age";
+                  let atMaxAge = releaseRequested && releaseReason === "max-age";
                   onStatus(
-                    Pt
-                      ? `[runner:session] ${R} released=false after post-session hook (pending user event) while retiring \u2014 not re-spawned; it is requeued, snapshot complete, when this runner exits`
-                      : `[runner:session] ${R} released=false after post-session hook (pending user event)${gr ? " at max session age" : ""} \u2014 respawns on the next poll, or is requeued by this runner's exit if it is draining (grace=0) or retiring`,
+                    retiring
+                      ? `[runner:session] ${sessionId} released=false after post-session hook (pending user event) while retiring \u2014 not re-spawned; it is requeued, snapshot complete, when this runner exits`
+                      : `[runner:session] ${sessionId} released=false after post-session hook (pending user event)${atMaxAge ? " at max session age" : ""} \u2014 respawns on the next poll, or is requeued by this runner's exit if it is draining (grace=0) or retiring`,
                   );
                   logFeatureSad(
                     "self_hosted_release_session",
-                    Pt
+                    retiring
                       ? "released_false_retiring"
-                      : gr
+                      : atMaxAge
                         ? "released_false_max_age"
-                        : xe
+                        : childSilent
                           ? "released_false_child_silent"
                           : "released_false",
                   );
                 })
                 .catch((error) => {
-                  De.delete(R);
-                  ft.delete(R);
-                  re.add(R);
-                  if ($n === "shutdown" && !qn) P.add(R);
-                  if (Pt) et.wake("LOCAL");
-                  let gr = error instanceof Error ? error.message : String(error);
+                  releaseTasks.delete(sessionId);
+                  releaseInFlight.delete(sessionId);
+                  releaseRetryPending.add(sessionId);
+                  if (retireReason === "shutdown" && !deferCeilingPassed) declinedSessions.add(sessionId);
+                  if (retiring) pollWaker.wake("LOCAL");
+                  let message = error instanceof Error ? error.message : String(error);
                   onStatus(
-                    `[runner:session] ${R} ordered release failed after the post-session hook: ${gr} \u2014 keeping session; respawns on the next poll, or is requeued by this runner's exit if it is draining (grace=0) or retiring`,
+                    `[runner:session] ${sessionId} ordered release failed after the post-session hook: ${message} \u2014 keeping session; respawns on the next poll, or is requeued by this runner's exit if it is draining (grace=0) or retiring`,
                   );
                   logFeatureBad("self_hosted_release_session", "rpc_failed");
                 });
-              De.set(R, en);
+              releaseTasks.set(sessionId, orderedRelease);
               abortController_2.abort("idle-release");
               return;
             }
-            let rn = (_t, bt) => {
-              let en = Jn();
-              let Me = !en && !Dt && !pt;
+            let settleRelease = (reason, retryNote) => {
+              let ending = sessionEnded();
+              let canRetry = !ending && !turnInFlight && !turnDeferred;
               onStatus(
-                `[runner:session] ${R} ${_t} \u2014 ${en ? "not retried, the session is ending on this runner" : `keeping session${Me ? `, ${bt}` : ""}`}`,
+                `[runner:session] ${sessionId} ${reason} \u2014 ${ending ? "not retried, the session is ending on this runner" : `keeping session${canRetry ? `, ${retryNote}` : ""}`}`,
               );
-              if (Me) pn(N);
+              if (canRetry) onActivity(kind);
             };
             apiClient
-              .releaseSession(tokenState.runnerToken, R)
+              .releaseSession(tokenState.runnerToken, sessionId)
               .then(({ released }) => {
-                Tt = 0;
+                releaseFailureStreak = 0;
                 if (released) {
-                  if (Ln || abortController_2.signal.aborted) return;
-                  he.delete(R);
-                  onStatus(`[runner:session] ${R} released \u2014 aborting child`);
-                  let liveBgTasks = E.get(R)?.liveBgTasks ?? 0;
+                  if (sessionEnding || abortController_2.signal.aborted) return;
+                  releaseFailures.delete(sessionId);
+                  onStatus(`[runner:session] ${sessionId} released \u2014 aborting child`);
+                  let liveBgTasks = activeSessions.get(sessionId)?.liveBgTasks ?? 0;
                   abortController_2.abort("idle-release");
-                  if (Dt || pt || liveBgTasks > 0)
+                  if (turnInFlight || turnDeferred || liveBgTasks > 0)
                     logFeatureSad("self_hosted_release_session", "released_true_mid_work");
                   else logFeatureOk("self_hosted_release_session");
                   return;
                 }
-                if (Ln || abortController_2.signal.aborted) return;
-                ft.delete(R);
-                if (Ke) {
-                  let en =
-                    N === "awaiting-action" ? "queued event behind the parked prompt" : "pending user event";
+                if (sessionEnding || abortController_2.signal.aborted) return;
+                releaseInFlight.delete(sessionId);
+                if (releaseRequested) {
+                  let declineReason =
+                    kind === "awaiting-action"
+                      ? "queued event behind the parked prompt"
+                      : "pending user event";
                   logFeatureSad(
                     "self_hosted_release_session",
-                    Ut === "shutdown"
-                      ? N === "awaiting-action"
+                    releaseReason === "shutdown"
+                      ? kind === "awaiting-action"
                         ? "released_false_shutting_down_parked"
                         : "released_false_shutting_down"
-                      : Ut === "max-age"
-                        ? N === "awaiting-action"
+                      : releaseReason === "max-age"
+                        ? kind === "awaiting-action"
                           ? "released_false_max_age_parked"
                           : "released_false_max_age"
-                        : N === "awaiting-action"
+                        : kind === "awaiting-action"
                           ? "released_false_retiring_parked"
                           : "released_false_retiring",
                   );
-                  rn(`release declined (${en}) ${ue()}`, `retrying ${Zn()}`);
+                  settleRelease(
+                    `release declined (${declineReason}) ${whilePhrase()}`,
+                    `retrying ${whenText()}`,
+                  );
                   return;
                 }
-                if (N === "awaiting-action") {
+                if (kind === "awaiting-action") {
                   logFeatureSad("self_hosted_release_session", "released_false_parked");
-                  rn("released=false while parked at prompt (queued event behind prompt)", "re-arming");
+                  settleRelease(
+                    "released=false while parked at prompt (queued event behind prompt)",
+                    "re-arming",
+                  );
                   return;
                 }
-                let bt = (he.get(R) ?? 0) + 1;
-                he.set(R, bt);
-                if (bt >= 3) {
-                  he.delete(R);
-                  onStatus(`[runner:session] ${R} released=false ${bt}x \u2014 aborting as backstop`);
+                let declineStreak = (releaseFailures.get(sessionId) ?? 0) + 1;
+                releaseFailures.set(sessionId, declineStreak);
+                if (declineStreak >= 3) {
+                  releaseFailures.delete(sessionId);
+                  onStatus(
+                    `[runner:session] ${sessionId} released=false ${declineStreak}x \u2014 aborting as backstop`,
+                  );
                   abortController_2.abort();
                   logFeatureBad("self_hosted_release_session", "released_false_backstop");
                   return;
                 }
                 onStatus(
-                  `[runner:session] ${R} released=false (pending user event) \u2014 keeping session${Dt || pt ? "" : ", re-arming"}`,
+                  `[runner:session] ${sessionId} released=false (pending user event) \u2014 keeping session${turnInFlight || turnDeferred ? "" : ", re-arming"}`,
                 );
                 logFeatureSad("self_hosted_release_session", "released_false");
-                if (!Dt && !pt) pn?.(N);
+                if (!turnInFlight && !turnDeferred) onActivity?.(kind);
               })
               .catch((error) => {
-                ft.delete(R);
-                Tt++;
-                let bt = error instanceof Error ? error.message : String(error);
+                releaseInFlight.delete(sessionId);
+                releaseFailureStreak++;
+                let message = error instanceof Error ? error.message : String(error);
                 logFeatureBad("self_hosted_release_session", "rpc_failed");
-                rn(
-                  `releaseSession failed: ${bt}${Tt > 1 ? ` (${Tt} failures in a row)` : ""}`,
-                  `retrying ${Zn()}`,
+                settleRelease(
+                  `releaseSession failed: ${message}${releaseFailureStreak > 1 ? ` (${releaseFailureStreak} failures in a row)` : ""}`,
+                  `retrying ${whenText()}`,
                 );
               });
           };
-          Je = setTimeout(ne, xt, false);
+          idleTimer = setTimeout(fireIdleRelease, idleTimeoutMs, false);
         };
-        let ns = () => {
-          if (Jn() || !pt) return;
-          let liveBgTasks = E.get(R)?.liveBgTasks ?? 0;
-          if (liveBgTasks === 0 && E.get(R)?.bgResultPendingFollowup === true) {
+        let releaseDeferredTurn = () => {
+          if (sessionEnded() || !turnDeferred) return;
+          let liveBgTasks = activeSessions.get(sessionId)?.liveBgTasks ?? 0;
+          if (liveBgTasks === 0 && activeSessions.get(sessionId)?.bgResultPendingFollowup === true) {
             onStatus(
-              `[runner:session] ${R} ${V()} while a finished background task's follow-up turn is pending \u2014 waiting for it before releasing`,
+              `[runner:session] ${sessionId} ${reasonPhrase()} while a finished background task's follow-up turn is pending \u2014 waiting for it before releasing`,
             );
             return;
           }
           if (liveBgTasks === 0) {
             onStatus(
-              `[runner:session] ${R} ${V()} with only perpetual monitor task(s) / a scheduled wakeup holding the turn \u2014 releasing now`,
+              `[runner:session] ${sessionId} ${reasonPhrase()} with only perpetual monitor task(s) / a scheduled wakeup holding the turn \u2014 releasing now`,
             );
-            pt = false;
-            Kn();
-            pn("turn-end");
+            turnDeferred = false;
+            stopBgDrainTimer();
+            onActivity("turn-end");
             return;
           }
-          if (xn !== undefined) return;
+          if (bgDrainTimer !== undefined) return;
           onStatus(
-            `[runner:session] ${R} ${V()} with ${liveBgTasks} background task(s) live \u2014 allowing ${formatDuration(retireDeferredGraceMsOverride)} to finish before releasing`,
+            `[runner:session] ${sessionId} ${reasonPhrase()} with ${liveBgTasks} background task(s) live \u2014 allowing ${formatDuration(retireDeferredGraceMsOverride)} to finish before releasing`,
           );
-          xn = setTimeout(() => {
-            xn = undefined;
-            if (Jn() || !pt) return;
-            let liveBgTasks = E.get(R)?.liveBgTasks ?? 0;
-            let xe = E.get(R)?.bgResultPendingFollowup === true;
-            if (liveBgTasks === 0 && xe) {
+          bgDrainTimer = setTimeout(() => {
+            bgDrainTimer = undefined;
+            if (sessionEnded() || !turnDeferred) return;
+            let liveBgTasks = activeSessions.get(sessionId)?.liveBgTasks ?? 0;
+            let followupPending = activeSessions.get(sessionId)?.bgResultPendingFollowup === true;
+            if (liveBgTasks === 0 && followupPending) {
               onStatus(
-                `[runner:session] ${R} ${U()} elapsed but a finished background task's follow-up turn is pending \u2014 waiting for it before releasing`,
+                `[runner:session] ${sessionId} ${gracePhrase()} elapsed but a finished background task's follow-up turn is pending \u2014 waiting for it before releasing`,
               );
               return;
             }
             onStatus(
               liveBgTasks === 0
-                ? `[runner:session] ${R} background work finished during the ${U()}; only perpetual monitor task(s) / a scheduled wakeup still hold the turn \u2014 releasing now`
-                : `[runner:session] ${R} ${liveBgTasks} background task(s) still live after the ${U()} \u2014 releasing anyway (a parked session beats a lost worker)`,
+                ? `[runner:session] ${sessionId} background work finished during the ${gracePhrase()}; only perpetual monitor task(s) / a scheduled wakeup still hold the turn \u2014 releasing now`
+                : `[runner:session] ${sessionId} ${liveBgTasks} background task(s) still live after the ${gracePhrase()} \u2014 releasing anyway (a parked session beats a lost worker)`,
             );
-            pt = false;
-            pn("turn-end");
+            turnDeferred = false;
+            onActivity("turn-end");
           }, retireDeferredGraceMsOverride);
         };
-        let rs = (N) => {
-          if (Ln || abortController_2.signal.aborted) return;
-          if (wr) {
+        let requestRelease = (reason) => {
+          if (sessionEnding || abortController_2.signal.aborted) return;
+          if (childTerminating) {
             onDebug(
-              `[runner:session] ${R} ${N} release request while the child is being terminated \u2014 ignored`,
+              `[runner:session] ${sessionId} ${reason} release request while the child is being terminated \u2014 ignored`,
             );
             return;
           }
-          if (Ke) {
+          if (releaseRequested) {
             onDebug(
-              `[runner:session] ${R} ${N} release request adds nothing to the standing ${Ut} request \u2014 ignored`,
+              `[runner:session] ${sessionId} ${reason} release request adds nothing to the standing ${releaseReason} request \u2014 ignored`,
             );
             return;
           }
-          Ke = true;
-          Ut = N;
-          if (Lt === undefined) {
-            if (pt && !Dt) {
-              ns();
+          releaseRequested = true;
+          releaseReason = reason;
+          if (lastActivityKind === undefined) {
+            if (turnDeferred && !turnInFlight) {
+              releaseDeferredTurn();
               return;
             }
-            let x = Dt
+            let whenText = turnInFlight
               ? "mid-turn \u2014 releasing as soon as the current turn finishes"
               : "before the child reported an idle state \u2014 releasing on its first idle transition";
-            onStatus(`[runner:session] ${R} ${V()} ${x}`);
+            onStatus(`[runner:session] ${sessionId} ${reasonPhrase()} ${whenText}`);
             return;
           }
-          onStatus(`[runner:session] ${R} ${V()} while idle \u2014 releasing now`);
-          pn(Lt);
+          onStatus(`[runner:session] ${sessionId} ${reasonPhrase()} while idle \u2014 releasing now`);
+          onActivity(lastActivityKind);
         };
-        let releaseForRetire = () => rs("retire");
-        let releaseForShutdown = () => rs("shutdown");
+        let releaseForRetire = () => requestRelease("retire");
+        let releaseForShutdown = () => requestRelease("shutdown");
         let onMaxLifetime = () => {
-          if (Ln || abortController_2.signal.aborted) return "kill";
-          let N = Lt !== undefined || (pt && !Dt) ? "release" : "wait";
+          if (sessionEnding || abortController_2.signal.aborted) return "kill";
+          let decision =
+            lastActivityKind !== undefined || (turnDeferred && !turnInFlight) ? "release" : "wait";
           logFeatureOk("self_hosted_max_lifetime", {
-            decision: fromEnum(N),
+            decision: fromEnum(decision),
           });
-          rs("max-age");
-          return N;
+          requestRelease("max-age");
+          return decision;
         };
         let onChildTerminating = () => {
-          if (wr) return;
-          wr = true;
-          let N = Je !== undefined || xn !== undefined;
-          if (Je !== undefined) {
-            clearTimeout(Je);
-            Je = undefined;
+          if (childTerminating) return;
+          childTerminating = true;
+          let hadTimer = idleTimer !== undefined || bgDrainTimer !== undefined;
+          if (idleTimer !== undefined) {
+            clearTimeout(idleTimer);
+            idleTimer = undefined;
           }
-          Kn();
-          if (N || Ke)
-            onDebug(`[runner:session] ${R} child is being terminated \u2014 release clock stood down`);
+          stopBgDrainTimer();
+          if (hadTimer || releaseRequested)
+            onDebug(
+              `[runner:session] ${sessionId} child is being terminated \u2014 release clock stood down`,
+            );
         };
-        let $r = It && ee?.id === R;
-        let ar = $r && ee?.onUpdateBuild === true ? be : undefined;
-        ee = undefined;
-        let task = (e.handleSession ?? handleSelfHostedSession)(
-          R,
+        let restartedHere = respawnedDeclined && pendingRestart?.id === sessionId;
+        let effectiveExecPath =
+          restartedHere && pendingRestart?.onUpdateBuild === true ? childUpdateBin : undefined;
+        pendingRestart = undefined;
+        let task = (options.handleSession ?? handleSelfHostedSession)(
+          sessionId,
           {
             apiClient,
             getRunnerToken: () => tokenState.runnerToken,
             baseDir: config.baseDir,
-            execPath: ar !== undefined && execPath === process.execPath ? ar : execPath,
-            execArgs: ar !== undefined ? [] : execArgs,
-            updatedChildBin: ar,
-            restartedHere: $r,
-            childUpdateBin: be,
+            execPath:
+              effectiveExecPath !== undefined && execPath === process.execPath ? effectiveExecPath : execPath,
+            execArgs: effectiveExecPath !== undefined ? [] : execArgs,
+            updatedChildBin: effectiveExecPath,
+            restartedHere,
+            childUpdateBin,
             onChildUpdateReady: () => {
-              es = true;
-              ts();
+              settleHoldArmed = true;
+              onTurnSettled();
             },
             capacity: config.capacity,
             healthPort: healthState?.listeningOn,
@@ -2329,40 +2450,40 @@ async function runRunnerLoop(e, signal) {
             operatorGitSnapshot: config.operatorGitSnapshot,
             hookGitPrograms: config.hookGitPrograms,
             hookGitLegacyParams: config.hookGitLegacyParams,
-            hostConfig: e.hostConfig,
-            governedGitConfigSeed: e.governedGitConfigSeed,
+            hostConfig: options.hostConfig,
+            governedGitConfigSeed: options.governedGitConfigSeed,
             onDebug,
             onStatus,
-            onSessionActivity: pn,
+            onSessionActivity: onActivity,
             onMaxLifetime,
             onChildTerminating,
-            clientPlatform: Xe,
+            clientPlatform: platform,
             onChildLifecycle: healthState
-              ? (N) => {
-                  let x =
-                    N === "spawned"
+              ? (lifecycleKind) => {
+                  let counter =
+                    lifecycleKind === "spawned"
                       ? healthState.sessionsStarted
-                      : N === "completed"
+                      : lifecycleKind === "completed"
                         ? healthState.sessionsCompleted
-                        : N === "failed"
+                        : lifecycleKind === "failed"
                           ? healthState.sessionsFailed
                           : healthState.sessionsInterrupted;
-                  x.set(Xe, (x.get(Xe) ?? 0) + 1);
+                  counter.set(platform, (counter.get(platform) ?? 0) + 1);
                 }
               : undefined,
             onInitPhase: healthState
-              ? (N) => {
-                  switch (N.kind) {
+              ? (phase) => {
+                  switch (phase.kind) {
                     case "start":
                       healthState.initializingSessions++;
                       break;
                     case "end":
                       healthState.initializingSessions--;
-                      observeHistogram(healthState.sessionInitDurations, N.durationSec);
+                      observeHistogram(healthState.sessionInitDurations, phase.durationSec);
                       break;
                     case "exit-before-init":
                       healthState.initializingSessions--;
-                      if (N.failed) healthState.sessionInitErrors++;
+                      if (phase.failed) healthState.sessionInitErrors++;
                       break;
                     default:
                   }
@@ -2375,18 +2496,18 @@ async function runRunnerLoop(e, signal) {
               : undefined,
             standbyIdleMs,
             takeStartCommandPhases,
-            getHealthzClaimVisibleMs: () => healthState?.claimVisibility?.get(replaced)?.visibleMs,
-            moveWatch: e.moveWatch,
+            getHealthzClaimVisibleMs: () => healthState?.claimVisibility?.get(sessionId_2)?.visibleMs,
+            moveWatch: options.moveWatch,
             ...false,
-            onSessionTokenIssued: (N) => {
+            onSessionTokenIssued: (jwt) => {
               if (healthState && healthState.lockedAccountEmail === null) {
-                let sessionIdFromJwt = getSessionIdFromJwt(N);
+                let sessionIdFromJwt = getSessionIdFromJwt(jwt);
                 if (sessionIdFromJwt !== null) healthState.lockedAccountEmail = sessionIdFromJwt;
               }
             },
             canonicalLocks,
             spawnedSessionIds,
-            postSessionHookTimeoutMs: G,
+            postSessionHookTimeoutMs,
             checkoutHookTimeoutMs,
             pushOutcomeOnRelease: config.pushOutcomeOnRelease,
             trustWorkspace: config.trustWorkspace,
@@ -2396,106 +2517,121 @@ async function runRunnerLoop(e, signal) {
             confineRepoSettings: config.confineRepoSettings,
             serverAutoModeLists: config.serverAutoModeLists,
             onBgTaskLedger: (liveBgTasks) => {
-              let x = E.get(R);
-              if (x) x.liveBgTasks = liveBgTasks;
-              ae?.();
+              let entry = activeSessions.get(sessionId);
+              if (entry) entry.liveBgTasks = liveBgTasks;
+              wakeEpochTimer?.();
             },
-            onBgFollowupPending: (N, x) => {
-              let xe = E.get(R);
-              if (xe) xe.bgResultPendingFollowup = N;
-              ae?.();
-              if (!N && !x && Ke && pt) ns();
+            onBgFollowupPending: (hasPendingFollowup, isSettled) => {
+              let entry = activeSessions.get(sessionId);
+              if (entry) entry.bgResultPendingFollowup = hasPendingFollowup;
+              wakeEpochTimer?.();
+              if (!hasPendingFollowup && !isSettled && releaseRequested && turnDeferred)
+                releaseDeferredTurn();
             },
-            onPostTurnSettle: (N, x) => {
-              let xe = E.get(R);
-              if (xe) xe.postTurnSettling = N;
-              ae?.();
-              if (!N && !x) ts();
-              if (!N && !x && Ke && nt === 0 && Lt !== undefined) pn(Lt);
+            onPostTurnSettle: (isSettling, isSettled) => {
+              let entry = activeSessions.get(sessionId);
+              if (entry) entry.postTurnSettling = isSettling;
+              wakeEpochTimer?.();
+              if (!isSettling && !isSettled) onTurnSettled();
+              if (
+                !isSettling &&
+                !isSettled &&
+                releaseRequested &&
+                releaseAttempts === 0 &&
+                lastActivityKind !== undefined
+              )
+                onActivity(lastActivityKind);
             },
-            debugTokenDir: e.debugTokenDir,
+            debugTokenDir: options.debugTokenDir,
           },
           abortController_2.signal,
         )
-          .then((N) => {
-            let { result: x, failureReason, setupFailureKind, failureKind } = N;
-            if (failureReason) onStatus(`Session ${R} finished: ${x} \u2014 reason: ${failureReason}`);
-            else onStatus(`Session ${R} finished: ${x}`);
-            let Zn = x === "failed" || (x === "interrupted" && !abortController_2.signal.aborted);
-            if (Zn && N.failedOnUpdateBuild === true) {
-              yo("build_failed");
+          .then((outcome) => {
+            let { result, failureReason, setupFailureKind, failureKind } = outcome;
+            if (failureReason)
+              onStatus(`Session ${sessionId} finished: ${result} \u2014 reason: ${failureReason}`);
+            else onStatus(`Session ${sessionId} finished: ${result}`);
+            let isFailure =
+              result === "failed" || (result === "interrupted" && !abortController_2.signal.aborted);
+            if (isFailure && outcome.failedOnUpdateBuild === true) {
+              onTurnSettledWith("build_failed");
               return;
             }
-            if (Zn) {
-              Ht.add(R);
-              let yn = failureReason ?? "failed (no reason captured)";
+            if (isFailure) {
+              failureReportInFlight.add(sessionId);
+              let reasonText = failureReason ?? "failed (no reason captured)";
               apiClient
                 .reportSessionFailure(
                   tokenState.runnerToken,
-                  R,
+                  sessionId,
                   setupFailureKind === "SETUP_FAILURE_KIND_SOURCE_REF_NOT_FOUND"
-                    ? yn
-                    : rewriteContractionError(yn),
+                    ? reasonText
+                    : rewriteContractionError(reasonText),
                   setupFailureKind,
                   failureKind,
                 )
-                .then((ne) => {
+                .then((reportResult) => {
                   onStatus(
-                    `[runner:session] ${R} failure reported \xB7 excluded_count=${ne.excluded_count} stuck=${ne.stuck}`,
+                    `[runner:session] ${sessionId} failure reported \xB7 excluded_count=${reportResult.excluded_count} stuck=${reportResult.stuck}`,
                   );
-                  if (ne.stuck) {
-                    fe.add(R);
-                    onStatus(`[runner:session] ${R} marked stuck \u2014 will not re-spawn on future polls`);
+                  if (reportResult.stuck) {
+                    stuckSessions.add(sessionId);
+                    onStatus(
+                      `[runner:session] ${sessionId} marked stuck \u2014 will not re-spawn on future polls`,
+                    );
                   }
                   logFeatureOk("self_hosted_failure_report");
                 })
                 .catch((error) => {
-                  let mt = error instanceof Error ? error.message : String(error);
+                  let message = error instanceof Error ? error.message : String(error);
                   onStatus(
-                    `[runner:session] ${R} reportSessionFailure failed: ${mt} \u2014 marking stuck to bound respawn`,
+                    `[runner:session] ${sessionId} reportSessionFailure failed: ${message} \u2014 marking stuck to bound respawn`,
                   );
-                  fe.add(R);
+                  stuckSessions.add(sessionId);
                   logFeatureSad("self_hosted_failure_report", "rpc_failed");
                 })
                 .finally(() => {
-                  Ht.delete(R);
+                  failureReportInFlight.delete(sessionId);
                 });
             }
           })
           .catch((error) => {
-            let x = error instanceof Error ? error.message : String(error);
-            onStatus(`Session ${R} handler threw: ${x}`);
+            let message = error instanceof Error ? error.message : String(error);
+            onStatus(`Session ${sessionId} handler threw: ${message}`);
           })
           .finally(() => {
-            Ln = true;
-            if (Je !== undefined) {
-              clearTimeout(Je);
-              Je = undefined;
+            sessionEnding = true;
+            if (idleTimer !== undefined) {
+              clearTimeout(idleTimer);
+              idleTimer = undefined;
             }
-            Br();
-            Kn();
-            if (!De.has(R)) ft.delete(R);
-            he.delete(R);
-            if (!P.has(R) && !De.has(R)) Z.delete(R);
+            stopIdleDefer();
+            stopBgDrainTimer();
+            if (!releaseTasks.has(sessionId)) releaseInFlight.delete(sessionId);
+            releaseFailures.delete(sessionId);
+            if (!declinedSessions.has(sessionId) && !releaseTasks.has(sessionId))
+              idleSinceBySession.delete(sessionId);
             if (healthState) {
-              healthState.sessionIdle.delete(replaced);
-              healthState.sessionClientPlatform.delete(replaced);
-              healthState.claimVisibility?.delete(replaced);
-              dropSessionMetrics(healthState, replaced);
+              healthState.sessionIdle.delete(sessionId_2);
+              healthState.sessionClientPlatform.delete(sessionId_2);
+              healthState.claimVisibility?.delete(sessionId_2);
+              dropSessionMetrics(healthState, sessionId_2);
             }
-            let N = E.size >= config.capacity;
-            oe =
-              abortController_2.signal.aborted && abortController_2.signal.reason === "idle-release" && !Ke;
-            E.delete(R);
-            ae?.();
-            if (healthState) healthState.activeSessions = E.size;
-            if (E.size === 0) {
+            let wasAtCapacity = activeSessions.size >= config.capacity;
+            drainRequested =
+              abortController_2.signal.aborted &&
+              abortController_2.signal.reason === "idle-release" &&
+              !releaseRequested;
+            activeSessions.delete(sessionId);
+            wakeEpochTimer?.();
+            if (healthState) healthState.activeSessions = activeSessions.size;
+            if (activeSessions.size === 0) {
               now_2 = Date.now();
-              if (Pt) et.wake("LOCAL");
+              if (retiring) pollWaker.wake("LOCAL");
             }
-            if (wn && N) et.wake("LOCAL");
+            if (sseHintsEnabled && wasAtCapacity) pollWaker.wake("LOCAL");
           });
-        E.set(R, {
+        activeSessions.set(sessionId, {
           task,
           controller: abortController_2,
           liveBgTasks: 0,
@@ -2505,60 +2641,65 @@ async function runRunnerLoop(e, signal) {
           releaseForRetire,
           releaseForShutdown,
         });
-        if (healthState) healthState.activeSessions = E.size;
+        if (healthState) healthState.activeSessions = activeSessions.size;
       }
-      let tt = e.pollIntervalOverrideMs ?? nextPollDelayMs(ve, Ae);
-      Sn++;
-      if (Sn % ht === 0) {
-        let size = E.size;
-        let pe = decodeSessionJwt(tokenState.runnerToken);
+      let pollDelayMs = options.pollIntervalOverrideMs ?? nextPollDelayMs(leaseExpiresAt, suggestedPollMs);
+      unannouncedSkipCount++;
+      if (unannouncedSkipCount % hintsRetries === 0) {
+        let size = activeSessions.size;
+        let jwtExpirySeconds = decodeSessionJwt(tokenState.runnerToken);
         let now = Date.now();
-        let Ie = now - jt;
-        let ye = pe !== null ? pe * 1000 - now : null;
-        let Xe =
-          ye !== null
-            ? `${ye < 0 ? "-" : ""}${formatDuration(Math.abs(ye), {
+        let pollAgeMs = now - pollStartedAt;
+        let tokenExpiresInMs = jwtExpirySeconds !== null ? jwtExpirySeconds * 1000 - now : null;
+        let tokenExpiryText =
+          tokenExpiresInMs !== null
+            ? `${tokenExpiresInMs < 0 ? "-" : ""}${formatDuration(Math.abs(tokenExpiresInMs), {
                 mostSignificantOnly: true,
               })}`
             : "unknown";
-        let qe = healthState?.lockedAccountEmail ?? (Tn ? "yes" : "no");
+        let lockedAccountText = healthState?.lockedAccountEmail ?? (workloadDrained ? "yes" : "no");
         onStatus(
-          `[runner:health] polling ok \xB7 ${size}/${config.capacity} slots \xB7 last_poll=${Ie}ms ago \xB7 locked_account=${qe} \xB7 runner_token expires in ${Xe} \xB7 ${Er} sessions handled`,
+          `[runner:health] polling ok \xB7 ${size}/${config.capacity} slots \xB7 last_poll=${pollAgeMs}ms ago \xB7 locked_account=${lockedAccountText} \xB7 runner_token expires in ${tokenExpiryText} \xB7 ${pickedUpCount} sessions handled`,
         );
       }
-      if (wn) et.atCapacity = Pt || E.size >= config.capacity;
-      await et.wait(tt, signal);
+      if (sseHintsEnabled) pollWaker.atCapacity = retiring || activeSessions.size >= config.capacity;
+      await pollWaker.wait(pollDelayMs, signal);
     }
   } finally {
-    pr = true;
-    if (Wt !== undefined) {
-      clearTimeout(Wt);
-      Wt = undefined;
+    retireExitPending = true;
+    if (retireTimer !== undefined) {
+      clearTimeout(retireTimer);
+      retireTimer = undefined;
     }
-    if (de !== undefined) {
-      clearTimeout(de);
-      de = undefined;
+    if (deferCeilingTimer !== undefined) {
+      clearTimeout(deferCeilingTimer);
+      deferCeilingTimer = undefined;
     }
-    if (Yt !== undefined) {
-      clearTimeout(Yt);
-      Yt = undefined;
+    if (postCeilingPollTimer !== undefined) {
+      clearTimeout(postCeilingPollTimer);
+      postCeilingPollTimer = undefined;
     }
-    deferShutdown?.signal.removeEventListener("abort", un);
-    signal.removeEventListener("abort", He);
+    deferShutdown?.signal.removeEventListener("abort", onShutdownSignal);
+    signal.removeEventListener("abort", readDrainMarker);
     deferShutdown?.onClosed?.();
-    Or?.close();
-    Ct?.();
+    hintsStream?.close();
+    moveWatchSub?.();
     let aborted = signal.aborted;
-    if ($n === "shutdown") He();
-    let ke;
-    let jt =
-      e.drainTimeoutMs ??
-      graceSeconds(A, G, 0, config.pushOutcomeOnRelease ? PUSH_ON_RELEASE_TIMEOUT_MS : 0, noHybridToken()) *
-        1000;
-    let cn = false;
+    if (retireReason === "shutdown") readDrainMarker();
+    let drainHold;
+    let drainTimeoutMs =
+      options.drainTimeoutMs ??
+      graceSeconds(
+        sessionStopGraceMs,
+        postSessionHookTimeoutMs,
+        0,
+        config.pushOutcomeOnRelease ? PUSH_ON_RELEASE_TIMEOUT_MS : 0,
+        noHybridToken(),
+      ) * 1000;
+    let isHeartbeatInFlight = false;
     let interval = setInterval(() => {
-      if (cn) return;
-      cn = true;
+      if (isHeartbeatInFlight) return;
+      isHeartbeatInFlight = true;
       apiClient
         .pollWork(tokenState.runnerToken, runnerId, 0)
         .then(() => {
@@ -2569,73 +2710,88 @@ async function runRunnerLoop(e, signal) {
           onDebug(`[runner] shutdown: lease heartbeat failed (best-effort): ${error}`);
         })
         .finally(() => {
-          cn = false;
+          isHeartbeatInFlight = false;
         });
-    }, e.shutdownLeaseHeartbeatMs ?? SHUTDOWN_LEASE_HEARTBEAT_MS);
+    }, options.shutdownLeaseHeartbeatMs ?? SHUTDOWN_LEASE_HEARTBEAT_MS);
     try {
       if (drainWaitMs > 0 && aborted) {
-        let tt = () => [...E.values()].reduce((acc, Nt) => acc + Nt.liveBgTasks, 0);
-        let R = () => [...E.values()].reduce((acc, Nt) => acc + (Nt.turnInFlight ? 1 : 0), 0);
-        let pe = () => [...E.values()].reduce((acc, Nt) => acc + (Nt.bgResultPendingFollowup ? 1 : 0), 0);
-        let It = () => [...E.values()].reduce((acc, Nt) => acc + (Nt.postTurnSettling ? 1 : 0), 0);
-        let Ie = () =>
-          (pe() > 0 ? `, ${pe()} finished background task(s) awaiting the follow-up turn` : "") +
-          (It() > 0 ? `, ${It()} finished turn(s) still being reported to the server` : "");
-        let ye = () =>
-          [...E.entries()]
-            .filter(([, qe]) => qe.turnInFlight || qe.liveBgTasks > 0 || qe.bgResultPendingFollowup)
-            .map(([qe]) => qe);
-        let Xe = () => ye().length > 0 || It() > 0;
-        ke = {
+        let liveBgTaskCount = () =>
+          [...activeSessions.values()].reduce((acc, entry) => acc + entry.liveBgTasks, 0);
+        let turnInFlightCount = () =>
+          [...activeSessions.values()].reduce((acc, entry) => acc + (entry.turnInFlight ? 1 : 0), 0);
+        let followupPendingCount = () =>
+          [...activeSessions.values()].reduce(
+            (acc, entry) => acc + (entry.bgResultPendingFollowup ? 1 : 0),
+            0,
+          );
+        let postTurnSettlingCount = () =>
+          [...activeSessions.values()].reduce((acc, entry) => acc + (entry.postTurnSettling ? 1 : 0), 0);
+        let pendingWorkSuffix = () =>
+          (followupPendingCount() > 0
+            ? `, ${followupPendingCount()} finished background task(s) awaiting the follow-up turn`
+            : "") +
+          (postTurnSettlingCount() > 0
+            ? `, ${postTurnSettlingCount()} finished turn(s) still being reported to the server`
+            : "");
+        let busySessionIds = () =>
+          [...activeSessions.entries()]
+            .filter(
+              ([, entry]) => entry.turnInFlight || entry.liveBgTasks > 0 || entry.bgResultPendingFollowup,
+            )
+            .map(([sessionId]) => sessionId);
+        let hasBusyWork = () => busySessionIds().length > 0 || postTurnSettlingCount() > 0;
+        drainHold = {
           outcome: "RUNNER_DRAIN_HOLD_OUTCOME_NOT_NEEDED",
           cap_ms: Math.round(drainWaitMs),
           held_ms: 0,
           busy_session_ids_at_release: [],
         };
-        if (Xe()) {
+        if (hasBusyWork()) {
           let now = Date.now();
-          let Nt = false;
+          let didCapExpire = false;
           onStatus(
-            `[runner] drain-wait: ${R()} turn(s) in flight, ${tt()} background task(s) live${Ie()} across ${E.size} session(s) \u2014 waiting up to ` +
+            `[runner] drain-wait: ${turnInFlightCount()} turn(s) in flight, ${liveBgTaskCount()} background task(s) live${pendingWorkSuffix()} across ${activeSessions.size} session(s) \u2014 waiting up to ` +
               `${drainWaitMs / 1000}s before stopping session(s)`,
           );
           await new Promise((resolve) => {
-            let Wn = () => {
-              ae = undefined;
+            let wake = () => {
+              wakeEpochTimer = undefined;
               resolve();
             };
             let timer = setTimeout(() => {
-              Nt = true;
-              Wn();
+              didCapExpire = true;
+              wake();
             }, drainWaitMs);
-            ae = () => {
-              if (!Xe()) {
+            wakeEpochTimer = () => {
+              if (!hasBusyWork()) {
                 clearTimeout(timer);
-                Wn();
+                wake();
               }
             };
           });
-          let Je = ye();
-          ke = {
-            ...ke,
-            outcome: Nt ? "RUNNER_DRAIN_HOLD_OUTCOME_CAP_EXPIRED" : "RUNNER_DRAIN_HOLD_OUTCOME_FINISHED",
+          let busyIds = busySessionIds();
+          drainHold = {
+            ...drainHold,
+            outcome: didCapExpire
+              ? "RUNNER_DRAIN_HOLD_OUTCOME_CAP_EXPIRED"
+              : "RUNNER_DRAIN_HOLD_OUTCOME_FINISHED",
             held_ms: Date.now() - now,
-            busy_session_ids_at_release: Je.slice(0, MAX_LISTED_SESSION_IDS),
+            busy_session_ids_at_release: busyIds.slice(0, MAX_LISTED_SESSION_IDS),
           };
           onStatus(
-            !Nt
+            !didCapExpire
               ? "[runner] drain-wait: in-flight work finished \u2014 stopping session(s)"
-              : `[runner] drain-wait: timed out with ${R()} turn(s) in flight, ${tt()} task(s) still live${Ie()} \u2014 stopping session(s)`,
+              : `[runner] drain-wait: timed out with ${turnInFlightCount()} turn(s) in flight, ${liveBgTaskCount()} task(s) still live${pendingWorkSuffix()} \u2014 stopping session(s)`,
           );
         }
       }
-      for (let { controller } of E.values()) controller.abort();
-      if (E.size > 0) {
-        onStatus(`Draining ${E.size} active session(s)...`);
+      for (let { controller } of activeSessions.values()) controller.abort();
+      if (activeSessions.size > 0) {
+        onStatus(`Draining ${activeSessions.size} active session(s)...`);
         try {
           await withBoundedTimeout(
-            Promise.allSettled([...E.values()].map((tt) => tt.task)),
-            jt,
+            Promise.allSettled([...activeSessions.values()].map((entry) => entry.task)),
+            drainTimeoutMs,
             "[runner:stuck] drain",
           );
           onStatus("Drain complete");
@@ -2643,26 +2799,26 @@ async function runRunnerLoop(e, signal) {
         } catch {
           logFeatureBad("self_hosted_drain", "shutdown_budget_exceeded");
           onStatus(
-            `[runner] shutdown exceeded ${jt}ms (session-stop-grace + post-session-hook-timeout` +
+            `[runner] shutdown exceeded ${drainTimeoutMs}ms (session-stop-grace + post-session-hook-timeout` +
               (config.pushOutcomeOnRelease ? " + push-on-release window" : "") +
-              ` + ${SIGKILL_GRACE_BASE_MS / 1000}s); force-exiting. The post-session hook had its full budget; post-hook cleanup may have been cut short. ${E.size} session(s) still active.`,
+              ` + ${SIGKILL_GRACE_BASE_MS / 1000}s); force-exiting. The post-session hook had its full budget; post-hook cleanup may have been cut short. ${activeSessions.size} session(s) still active.`,
           );
-          await e.flushLogSink?.();
+          await options.flushLogSink?.();
           process.exit(1);
         }
       }
-      if (De.size > 0) {
+      if (releaseTasks.size > 0) {
         onStatus(
-          `[runner] shutdown: waiting for ${De.size} in-flight session release(s) to settle before deregistering`,
+          `[runner] shutdown: waiting for ${releaseTasks.size} in-flight session release(s) to settle before deregistering`,
         );
         await withBoundedTimeout(
-          Promise.allSettled([...De.values()]),
+          Promise.allSettled([...releaseTasks.values()]),
           RELEASE_IN_FLIGHT_WAIT_MS,
           "[runner:exit] release settle",
         ).catch(() => {
           abortController.abort();
           onStatus(
-            `[runner] shutdown: ${De.size} session release(s) did not settle within ${RELEASE_IN_FLIGHT_WAIT_MS / 1000}s \u2014 deregistering anyway (those sessions are requeued rather than parked)`,
+            `[runner] shutdown: ${releaseTasks.size} session release(s) did not settle within ${RELEASE_IN_FLIGHT_WAIT_MS / 1000}s \u2014 deregistering anyway (those sessions are requeued rather than parked)`,
           );
         });
       }
@@ -2670,37 +2826,37 @@ async function runRunnerLoop(e, signal) {
     } finally {
       clearInterval(interval);
     }
-    let Jt = false;
-    let In = await resolved;
+    let didLogDeregister = false;
+    let drainMarkerState = await resolved;
     let reason =
-      aborted || $n === "shutdown"
-        ? In?.present
+      aborted || retireReason === "shutdown"
+        ? drainMarkerState?.present
           ? "host_drain"
           : "shutdown_signal"
-        : Pt
+        : retiring
           ? "retire_at"
-          : oe && !ge
+          : drainRequested && !fatalExit
             ? "idle_release"
             : "";
-    if (ke !== undefined && In?.deadlineMs !== undefined)
-      ke.host_deadline_unix_s = Math.round(In.deadlineMs / 1000);
+    if (drainHold !== undefined && drainMarkerState?.deadlineMs !== undefined)
+      drainHold.host_deadline_unix_s = Math.round(drainMarkerState.deadlineMs / 1000);
     await withBoundedTimeout(
       apiClient
         .deregisterRunner(tokenState.runnerToken, {
           reason,
-          drain_hold: ke,
+          drain_hold: drainHold,
         })
         .then(() => {
           onStatus("[runner:exit] Deregistered");
-          if (!Jt) {
-            Jt = true;
+          if (!didLogDeregister) {
+            didLogDeregister = true;
             logFeatureOk("self_hosted_deregister");
           }
         })
         .catch((error) => {
           onDebug(`[runner:exit] deregisterRunner failed (best-effort): ${error}`);
-          if (!Jt) {
-            Jt = true;
+          if (!didLogDeregister) {
+            didLogDeregister = true;
             logFeatureSad("self_hosted_deregister", "rpc_failed");
           }
         }),
@@ -2708,54 +2864,61 @@ async function runRunnerLoop(e, signal) {
       "[runner:exit] deregister",
     ).catch(() => {
       onDebug("[runner:exit] deregisterRunner timed out (best-effort) \u2014 lease expiry will requeue");
-      if (!Jt) {
-        Jt = true;
+      if (!didLogDeregister) {
+        didLogDeregister = true;
         logFeatureSad("self_hosted_deregister", "timeout");
       }
     });
   }
 }
 //@ chunk-hm0ce8vc.js:320208-320369 placement
-function nextPollDelayMs(e, n) {
-  let r = e ? Date.parse(e) : NaN;
-  let s = Number.isNaN(r)
+function nextPollDelayMs(leaseExpiresAt, suggestedPollInterval) {
+  let leaseExpiresMs = leaseExpiresAt ? Date.parse(leaseExpiresAt) : NaN;
+  let leaseBasedMs = Number.isNaN(leaseExpiresMs)
     ? DEFAULT_POLL_INTERVAL_MS
-    : Math.max(MIN_POLL_INTERVAL_MS, Math.min(MAX_POLL_INTERVAL_MS, Math.floor((r - Date.now()) / 3)));
-  let durationSeconds = parseDurationSeconds(n);
-  return durationSeconds === undefined ? s : Math.min(s, durationSeconds);
+    : Math.max(
+        MIN_POLL_INTERVAL_MS,
+        Math.min(MAX_POLL_INTERVAL_MS, Math.floor((leaseExpiresMs - Date.now()) / 3)),
+      );
+  let durationSeconds = parseDurationSeconds(suggestedPollInterval);
+  return durationSeconds === undefined ? leaseBasedMs : Math.min(leaseBasedMs, durationSeconds);
 }
 //@ chunk-hm0ce8vc.js:320369-320570 placement
-function parseDurationSeconds(e) {
-  let n = e === undefined ? null : /^(\d{1,15})(?:\.(\d{1,9}))?s$/.exec(e);
-  if (!n) return;
-  let r = n[2] ? Number(n[2].padEnd(9, "0")) : 0;
-  let s = Number(n[1]) * 1000 + Math.floor(r / 1e6);
-  return s > 0 ? Math.max(MIN_BACKOFF_MS, s) : undefined;
+function parseDurationSeconds(text) {
+  let match = text === undefined ? null : /^(\d{1,15})(?:\.(\d{1,9}))?s$/.exec(text);
+  if (!match) return;
+  let fractionNanos = match[2] ? Number(match[2].padEnd(9, "0")) : 0;
+  let durationMs = Number(match[1]) * 1000 + Math.floor(fractionNanos / 1e6);
+  return durationMs > 0 ? Math.max(MIN_BACKOFF_MS, durationMs) : undefined;
 }
 //@ chunk-hm0ce8vc.js:320570-320688 placement
-function backoffDelayMs(e, n, r) {
-  let min = Math.min(MAX_POLL_DELAY_MS, HEALTH_PROBE_BACKOFF_BASE_MS * 2 ** Math.max(0, e - 1));
+function backoffDelayMs(attempt, leaseExpiresAt, suggestedPollInterval) {
+  let min = Math.min(MAX_POLL_DELAY_MS, HEALTH_PROBE_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt - 1));
   let floored = Math.floor(min / 2 + Math.random() * (min / 2));
-  return clampToLeaseExpiry(floored, n, HEALTH_PROBE_BACKOFF_BASE_MS, r);
+  return clampToLeaseExpiry(floored, leaseExpiresAt, HEALTH_PROBE_BACKOFF_BASE_MS, suggestedPollInterval);
 }
 //@ chunk-hm0ce8vc.js:320688-320839 placement
-function clampToLeaseExpiry(e, n, r, s) {
-  let a = n === undefined ? NaN : Date.parse(n) - Date.now();
-  if (!(a > 0)) return e;
-  let min = Math.min(a - LEASE_EXPIRY_POLL_MARGIN_MS, parseDurationSeconds(s) ?? 1 / 0);
-  return Math.min(e, Math.max(r, min));
+function clampToLeaseExpiry(delayMs, leaseExpiresAt, minDelayMs, suggestedPollInterval) {
+  let leaseLeftMs = leaseExpiresAt === undefined ? NaN : Date.parse(leaseExpiresAt) - Date.now();
+  if (!(leaseLeftMs > 0)) return delayMs;
+  let min = Math.min(
+    leaseLeftMs - LEASE_EXPIRY_POLL_MARGIN_MS,
+    parseDurationSeconds(suggestedPollInterval) ?? 1 / 0,
+  );
+  return Math.min(delayMs, Math.max(minDelayMs, min));
 }
 //@ chunk-hm0ce8vc.js:320839-321020 placement
-async function writeRunnerFileBestEffort(debugTokenDir, n, r, s) {
+async function writeRunnerFileBestEffort(debugTokenDir, fileName, contents, onStatus) {
   try {
     await mkdir(debugTokenDir, {
       recursive: true,
       mode: 448,
     });
-    await writeFile(`${debugTokenDir}/${n}`, r, {
+    await writeFile(`${debugTokenDir}/${fileName}`, contents, {
       mode: 384,
     });
   } catch (error) {
-    s(`[runner:debug] failed to write ${n} to ${debugTokenDir} (best-effort): ${error}`);
+    onStatus(`[runner:debug] failed to write ${fileName} to ${debugTokenDir} (best-effort): ${error}`);
   }
 }
+export { selfHostedRunnerMain };

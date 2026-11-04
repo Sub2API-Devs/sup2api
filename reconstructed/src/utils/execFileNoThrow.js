@@ -29,7 +29,7 @@ import { execa } from "../../vendor/execa/index.js";
 import { cgroupSpawnOptions } from "./toolCgroup.js";
 import { onExit } from "../../vendor/signal-exit/dist/mjs/index.js";
 import { gitExe } from "./git.js";
-import { BMt, GIT_CONFIG_PARAMETERS_LIMIT } from "./git/gitSafeEnv.js";
+import { SAFE_GIT_REPO_ARGS, GIT_CONFIG_PARAMETERS_LIMIT } from "./git/gitSafeEnv.js";
 
 //@ chunk-sycgf9xs.js:13305-13323 affinity
 var MS_PER_SECOND = 1000;
@@ -41,25 +41,25 @@ var SECONDS_PER_MINUTE_2 = 60;
 function execSyncWithDefaults_BLOCKS_EVENT_LOOP_WILL_FREEZE_UI_MAKE_SURE_YOU_KNOW_WHAT_YOU_ARE_DOING(
   command,
   {
-    abortSignal: n,
-    timeout: r = 10 * SECONDS_PER_MINUTE_2 * MS_PER_SECOND,
+    abortSignal,
+    timeout: timeoutMs = 10 * SECONDS_PER_MINUTE_2 * MS_PER_SECOND,
     input,
     stdio = ["ignore", "pipe", "pipe"],
-    useToolMemoryCgroup: u,
+    useToolMemoryCgroup,
   } = {},
 ) {
-  n?.throwIfAborted();
-  using c = slowLogging`exec: ${command.slice(0, 200)}`;
+  abortSignal?.throwIfAborted();
+  using guard = slowLogging`exec: ${command.slice(0, 200)}`;
   try {
     let result = safeExecShellSync(command, {
       env: process.env,
       maxBuffer: 1e6,
-      timeout: r,
+      timeout: timeoutMs,
       cwd: getCwdIfAvailable(),
       stdio,
       reject: false,
       input,
-      useToolMemoryCgroup: u,
+      useToolMemoryCgroup,
     });
     if (!result.stdout) return null;
     return result.stdout.trim() || null;
@@ -76,42 +76,42 @@ var INHERITED_FD_PATH = "/proc/self/fd/3";
  * execFileNoThrow：执行外部程序且从不抛错，返回 {stdout, stderr, code, error}。默认超时 10 分钟、保留出错输出、cwd 取当前会话目录（Tv() 为真时不设）；其余选项（abortSignal、env、stdin、cgroup、inheritFd、git 钩子/终端提示开关等）原样转给 execFileNoThrowWithCwd。
  */
 function execFileNoThrow(
-  e,
-  n,
-  r = {
+  command,
+  args,
+  options = {
     timeout: 10 * SECONDS_PER_MINUTE * SECONDS_PER_MS,
     preserveOutputOnError: true,
     useCwd: true,
   },
 ) {
   return catchExecError(() =>
-    execFileNoThrowWithCwd(e, n, {
-      allowRepoGitHooks: r.allowRepoGitHooks,
-      allowGitTerminalPrompt: r.allowGitTerminalPrompt,
-      abortSignal: r.abortSignal,
-      timeout: r.timeout,
-      preserveOutputOnError: r.preserveOutputOnError,
-      cwd: r.cwd ?? (r.useCwd && !isDisklessSession() ? getCwdIfAvailable() : undefined),
-      env: r.env,
-      extendEnv: r.extendEnv,
-      stdin: r.stdin,
-      input: r.input,
-      stdout: r.stdout,
-      stderr: r.stderr,
-      maxBuffer: r.maxBuffer,
-      stripFinalNewline: r.stripFinalNewline,
-      useToolMemoryCgroup: r.useToolMemoryCgroup,
-      toolCgroupClass: r.toolCgroupClass,
-      waitForExitAfterKill: r.waitForExitAfterKill,
-      inheritFd: r.inheritFd,
-      gitStartsIn: r.gitStartsIn,
+    execFileNoThrowWithCwd(command, args, {
+      allowRepoGitHooks: options.allowRepoGitHooks,
+      allowGitTerminalPrompt: options.allowGitTerminalPrompt,
+      abortSignal: options.abortSignal,
+      timeout: options.timeout,
+      preserveOutputOnError: options.preserveOutputOnError,
+      cwd: options.cwd ?? (options.useCwd && !isDisklessSession() ? getCwdIfAvailable() : undefined),
+      env: options.env,
+      extendEnv: options.extendEnv,
+      stdin: options.stdin,
+      input: options.input,
+      stdout: options.stdout,
+      stderr: options.stderr,
+      maxBuffer: options.maxBuffer,
+      stripFinalNewline: options.stripFinalNewline,
+      useToolMemoryCgroup: options.useToolMemoryCgroup,
+      toolCgroupClass: options.toolCgroupClass,
+      waitForExitAfterKill: options.waitForExitAfterKill,
+      inheritFd: options.inheritFd,
+      gitStartsIn: options.gitStartsIn,
     }),
   );
 }
 //@ chunk-sycgf9xs.js:14358-14470 layout
-async function catchExecError(e) {
+async function catchExecError(error) {
   try {
-    return await e();
+    return await error();
   } catch (error) {
     logError(error);
     return {
@@ -126,8 +126,10 @@ async function catchExecError(e) {
 /**
  * execFileNoThrowWithCwd：execFileNoThrow 的底层，按是否给出选项调用实际的 spawn 实现，并包一层同步异常转结果。
  */
-function execFileNoThrowWithCwd(file, n, r) {
-  return catchExecError(() => (r === undefined ? execFileCore(file, n) : execFileCore(file, n, r)));
+function execFileNoThrowWithCwd(file, args, options) {
+  return catchExecError(() =>
+    options === undefined ? execFileCore(file, args) : execFileCore(file, args, options),
+  );
 }
 //@ chunk-sycgf9xs.js:14533-14602 affinity = stopRecording (0.781)
 /**
@@ -146,27 +148,27 @@ var PIPE_DESTROY_DELAY_MS = 2000;
 /**
  * 监听 abort：触发时杀掉子进程所在进程组，并在一段时间后销毁 stdout/stderr 管道，防止孙进程持有管道导致挂起。返回解除监听的函数。
  */
-function killProcessGroupOnAbort(e, pid, abortSignal) {
-  let o;
-  let s = () => {
+function killProcessGroupOnAbort(timeoutMs, pid, abortSignal) {
+  let timer;
+  let onAbort = () => {
     killProcessGroup(pid);
-    o = setTimeout(
+    timer = setTimeout(
       ({ stdout, stderr }) => {
         stdout?.destroy();
         stderr?.destroy();
       },
       PIPE_DESTROY_DELAY_MS,
-      e,
+      timeoutMs,
     );
   };
-  if (abortSignal.aborted) s();
+  if (abortSignal.aborted) onAbort();
   else
-    abortSignal.addEventListener("abort", s, {
+    abortSignal.addEventListener("abort", onAbort, {
       once: true,
     });
   return () => {
-    abortSignal.removeEventListener("abort", s);
-    clearTimeout(o);
+    abortSignal.removeEventListener("abort", onAbort);
+    clearTimeout(timer);
   };
 }
 //@ chunk-sycgf9xs.js:14854-14866 sole-consumer
@@ -175,61 +177,61 @@ var ABORT_GRACEFUL_MS = 5000;
 /**
  * 监听 abort：触发时先调用回调尝试优雅停止；回调返回 false 则立即 abort 内部控制器，返回 true 则给 5 秒宽限再 abort 并销毁 stdio。返回清理函数。
  */
-function scheduleGracefulAbort(e, pid, abortSignal, o, s) {
-  let u;
-  let c = false;
-  let d = () => {
-    if (e.exitCode !== null || e.signalCode !== null) return;
+function scheduleGracefulAbort(child, pid, abortSignal, tellBeforeKill, controller) {
+  let timer;
+  let finished = false;
+  let onAbort = () => {
+    if (child.exitCode !== null || child.signalCode !== null) return;
     Promise.resolve()
-      .then(() => o(pid))
+      .then(() => tellBeforeKill(pid))
       .catch(() => false)
-      .then((g) => {
-        if (c) return;
-        if (!g) {
-          s.abort(abortSignal.reason);
+      .then((told) => {
+        if (finished) return;
+        if (!told) {
+          controller.abort(abortSignal.reason);
           return;
         }
-        u = setTimeout(
-          (f, m, { stdout, stderr }) => {
-            f.abort(m);
+        timer = setTimeout(
+          (childToKill, reason, { stdout, stderr }) => {
+            childToKill.abort(reason);
             stdout?.destroy();
             stderr?.destroy();
           },
           ABORT_GRACEFUL_MS,
-          s,
+          controller,
           abortSignal.reason,
-          e,
+          child,
         );
       });
   };
-  if (abortSignal.aborted) d();
+  if (abortSignal.aborted) onAbort();
   else
-    abortSignal.addEventListener("abort", d, {
+    abortSignal.addEventListener("abort", onAbort, {
       once: true,
     });
   return () => {
-    c = true;
-    abortSignal.removeEventListener("abort", d);
-    clearTimeout(u);
+    finished = true;
+    abortSignal.removeEventListener("abort", onAbort);
+    clearTimeout(timer);
   };
 }
 //@ chunk-sycgf9xs.js:15285-15426 sole-consumer
 /**
  * 子进程仍在运行（有 pid、无 exitCode/signalCode）时等待 exit 事件，带超时；kill 后等待退出用。
  */
-async function waitForChildExit(e, n) {
-  if (e.pid === undefined || e.exitCode !== null || e.signalCode !== null) return;
-  await withDeadline(new Promise((resolve) => e.once("exit", () => resolve())), n);
+async function waitForChildExit(child, deadlineMs) {
+  if (child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
+  await withDeadline(new Promise((resolve) => child.once("exit", () => resolve())), deadlineMs);
 }
 //@ chunk-sycgf9xs.js:15426-15540 sole-consumer
 /**
  * 判断错误是否为子进程输出超出 maxBuffer（ERR_CHILD_PROCESS_STDIO_MAXBUFFER、isMaxBuffer 或 MaxBufferError）。
  */
-function isMaxBufferError(e) {
+function isMaxBufferError(error) {
   return (
-    getErrnoCode(e) === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" ||
-    e?.isMaxBuffer === true ||
-    e?.name === "MaxBufferError"
+    getErrnoCode(error) === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER" ||
+    error?.isMaxBuffer === true ||
+    error?.name === "MaxBufferError"
   );
 }
 //@ chunk-sycgf9xs.js:15540-15858 sole-consumer
@@ -247,89 +249,91 @@ var NULL_BYTE_SPAWN_MESSAGES = {
 /**
  * spawn 被运行时拒绝时找原因：依次检查 cwd、可执行文件路径、某个 argv、环境变量名、环境变量值中是否含空字节，返回 {telemetry 类别, local 给人看的说明}；都没有时返回 undefined。
  */
-function describeNullByteSpawnError(e, n, cwd, o, s, env) {
-  let c = `the runtime rejected ${escapeForDisplay(basename(e))} because`;
+function describeNullByteSpawnError(command, argv, cwd, envOverrides, env, env_2) {
+  let prefix = `the runtime rejected ${escapeForDisplay(basename(command))} because`;
   if (typeof cwd === "string" && cwd.includes("\x00"))
     return {
       telemetry: NULL_BYTE_SPAWN_MESSAGES.cwd,
-      local: `${c} the working directory contains a null byte (\\0)`,
+      local: `${prefix} the working directory contains a null byte (\\0)`,
     };
-  if (e.includes("\x00"))
+  if (command.includes("\x00"))
     return {
       telemetry: NULL_BYTE_SPAWN_MESSAGES.file,
-      local: `${c} the executable path contains a null byte (\\0)`,
+      local: `${prefix} the executable path contains a null byte (\\0)`,
     };
-  let index = n.findIndex((h) => typeof h === "string" && h.includes("\x00"));
+  let index = argv.findIndex((arg) => typeof arg === "string" && arg.includes("\x00"));
   if (index !== -1)
     return {
       telemetry: NULL_BYTE_SPAWN_MESSAGES.argv,
-      local: `${c} the argument at index ${index} (zero-based) contains a null byte (\\0)`,
+      local: `${prefix} the argument at index ${index} (zero-based) contains a null byte (\\0)`,
     };
   let filtered = Object.entries({
-    ...s,
-    ...o,
+    ...env,
+    ...envOverrides,
   }).filter(([, value]) => value !== undefined);
-  let found = filtered.find(([h]) => h.includes("\x00"));
+  let found = filtered.find(([key]) => key.includes("\x00"));
   if (found !== undefined)
     return {
       telemetry: NULL_BYTE_SPAWN_MESSAGES.envName,
-      local: `${c} the name of environment variable ${describeEnvEntry(found[0])} contains a null byte (\\0)${envNullByteScopeText(found, env)}`,
+      local: `${prefix} the name of environment variable ${describeEnvEntry(found[0])} contains a null byte (\\0)${envNullByteScopeText(found, env_2)}`,
     };
-  let found_2 = filtered.find(([, h]) => typeof h === "string" && h.includes("\x00"));
+  let found_2 = filtered.find(([, value]) => typeof value === "string" && value.includes("\x00"));
   return (
     found_2 && {
       telemetry: NULL_BYTE_SPAWN_MESSAGES.envValue,
-      local: `${c} the value of environment variable ${describeEnvEntry(found_2[0])} contains a null byte (\\0)${envNullByteScopeText(found_2, env)}`,
+      local: `${prefix} the value of environment variable ${describeEnvEntry(found_2[0])} contains a null byte (\\0)${envNullByteScopeText(found_2, env_2)}`,
     }
   );
 }
 //@ chunk-sycgf9xs.js:16772-16962 sole-consumer
-function envNullByteScopeText([e, n], r) {
-  return r[e] === n
+function envNullByteScopeText([key, value], env) {
+  return env[key] === value
     ? "; every program this process starts will fail the same way until that variable is removed from its environment"
     : " (in the env passed for this command)";
 }
 //@ chunk-sycgf9xs.js:16962-16973 sole-consumer
 var MAX_QUOTED_CHARS = 200;
 //@ chunk-sycgf9xs.js:16973-17033 sole-consumer
-function describeCharCount(e) {
-  return e === 1 ? "1 character" : `${e} characters`;
+function describeCharCount(count) {
+  return count === 1 ? "1 character" : `${count} characters`;
 }
 //@ chunk-sycgf9xs.js:17033-17156 sole-consumer
-function escapeForDisplay(e) {
-  return jsonStringifyRaw(e)
+function escapeForDisplay(text) {
+  return jsonStringifyRaw(text)
     .slice(1, -1)
-    .replace(/[^\x20-\x7e]/g, (n) => `\\u${n.charCodeAt(0).toString(16).padStart(4, "0")}`);
+    .replace(/[^\x20-\x7e]/g, (char) => `\\u${char.charCodeAt(0).toString(16).padStart(4, "0")}`);
 }
 //@ chunk-sycgf9xs.js:17156-17346 sole-consumer
-function describeEnvEntry(e) {
-  let index = e.indexOf("=");
-  let r = index === -1 ? e : e.slice(0, index);
-  let o = r.length > MAX_QUOTED_CHARS;
-  let s = `"${escapeForDisplay(o ? r.slice(0, MAX_QUOTED_CHARS) : r)}"${o ? "\u2026" : ""}`;
-  return index === -1 ? s : `${s} (then '=' and ${describeCharCount(e.length - index - 1)}, not shown)`;
+function describeEnvEntry(entry) {
+  let index = entry.indexOf("=");
+  let name = index === -1 ? entry : entry.slice(0, index);
+  let isTruncated = name.length > MAX_QUOTED_CHARS;
+  let quoted = `"${escapeForDisplay(isTruncated ? name.slice(0, MAX_QUOTED_CHARS) : name)}"${isTruncated ? "\u2026" : ""}`;
+  return index === -1
+    ? quoted
+    : `${quoted} (then '=' and ${describeCharCount(entry.length - index - 1)}, not shown)`;
 }
 //@ chunk-sycgf9xs.js:17402-17601 sole-consumer
 /**
  * 接管子进程 stdin 的 error 事件：错误码不在可忽略集合时记录 truncatedBy 并 kill 子进程；返回记录对象供结果报告输入被截断。
  */
-function watchStdinErrors(e) {
-  let n = {};
-  let r;
+function watchStdinErrors(child) {
+  let state = {};
+  let stdin;
   try {
-    r = e.stdin;
+    stdin = child.stdin;
   } catch {
-    return n;
+    return state;
   }
-  if (!r) return n;
-  r.removeAllListeners("error");
-  r.on("error", (o) => {
-    let s = getErrnoCode(o) ?? "unknown";
-    if (STALE_CONNECTION_ERROR_CODES.has(s)) return;
-    n.truncatedBy ??= s;
-    e.kill();
+  if (!stdin) return state;
+  stdin.removeAllListeners("error");
+  stdin.on("error", (error) => {
+    let code = getErrnoCode(error) ?? "unknown";
+    if (STALE_CONNECTION_ERROR_CODES.has(code)) return;
+    state.truncatedBy ??= code;
+    child.kill();
   });
-  return n;
+  return state;
 }
 //@ chunk-sycgf9xs.js:17601-17721 fingerprint = getErrorMessage (1)
 /**
@@ -341,30 +345,35 @@ function getErrorMessage(result, errorCode) {
   return String(errorCode);
 }
 //@ chunk-sycgf9xs.js:17721-17960 sole-consumer
-function spawnFailureMessage(e, n) {
+function spawnFailureMessage(child, error) {
   if (
-    !isSyscallError(n) ||
-    n.code === undefined ||
-    typeof n.syscall !== "string" ||
-    !n.syscall.startsWith("spawn") ||
-    e.exitCode !== undefined ||
-    e.timedOut ||
-    e.isCanceled ||
-    getErrnoCode(e) === n.code
+    !isSyscallError(error) ||
+    error.code === undefined ||
+    typeof error.syscall !== "string" ||
+    !error.syscall.startsWith("spawn") ||
+    child.exitCode !== undefined ||
+    child.timedOut ||
+    child.isCanceled ||
+    getErrnoCode(child) === error.code
   )
     return;
-  return `Command failed with ${n.code}: ${e.command}
-${n.message}`;
+  return `Command failed with ${error.code}: ${child.command}
+${error.message}`;
 }
 //@ chunk-sycgf9xs.js:17960-17976 sole-consumer
 var MAX_BOM_SLICE = 3;
 var MAX_UTF8_SLICE = 1e8;
 //@ chunk-sycgf9xs.js:17976-18272 sole-consumer
-function decodeOutput(e, encoding) {
-  if (e instanceof Uint8Array && encoding === "utf8-keep-bom")
-    return Buffer.from(e.buffer, e.byteOffset, e.byteLength).toString("utf8");
-  let r = e instanceof Uint8Array ? Buffer.from(e).toString("latin1") : typeof e === "string" ? e : "";
-  return encoding === "utf8-keep-bom" ? Buffer.from(r, "latin1").toString("utf8") : r;
+function decodeOutput(buffer, encoding) {
+  if (buffer instanceof Uint8Array && encoding === "utf8-keep-bom")
+    return Buffer.from(buffer.buffer, buffer.byteOffset, buffer.byteLength).toString("utf8");
+  let text =
+    buffer instanceof Uint8Array
+      ? Buffer.from(buffer).toString("latin1")
+      : typeof buffer === "string"
+        ? buffer
+        : "";
+  return encoding === "utf8-keep-bom" ? Buffer.from(text, "latin1").toString("utf8") : text;
 }
 //@ chunk-sycgf9xs.js:18272-22243 sole-consumer
 /**
@@ -397,8 +406,8 @@ async function execFileCore(
     onStdoutData,
     inheritFd,
     withoutControllingTerminal = false,
-    tellBeforeKill: D,
-    abortEndsProcessGroup: ze = false,
+    tellBeforeKill,
+    abortEndsProcessGroup = false,
   } = {
     timeout: 10 * SECONDS_PER_MINUTE * SECONDS_PER_MS,
     preserveOutputOnError: true,
@@ -412,10 +421,10 @@ async function execFileCore(
       code: 126,
       error: DISKLESS_PROGRAM_REFUSAL,
     };
-  let b = file;
+  let command = file;
   let env_2 = process.env;
   let safeGitInvocation = buildSafeGitInvocation(
-    b,
+    command,
     args,
     envOverrides === undefined
       ? env_2
@@ -431,68 +440,69 @@ async function execFileCore(
       allowGitTerminalPrompt,
     },
   );
-  if (safeGitInvocation !== null && isGitMissingMessageSupported(b, safeGitInvocation.env))
+  if (safeGitInvocation !== null && isGitMissingMessageSupported(command, safeGitInvocation.env))
     return {
       stdout: "",
       stderr: GIT_MISSING_MAC_MESSAGE,
       code: 127,
       error: GIT_MISSING_MAC_MESSAGE,
     };
-  let w =
+  let safeGitInvocation_2 =
     safeGitInvocation !== null && gitStartsIn instanceof GitStartFolderError && cwd !== undefined
       ? buildGitInvocation(gitStartsIn, cwd, safeGitInvocation.args, safeGitInvocation.env)
       : null;
   if (
     safeGitInvocation !== null &&
     envOverrides?.[CLAUDE_CODE_FOUND_REPOSITORY_GIT] !== undefined &&
-    w === null
+    safeGitInvocation_2 === null
   ) {
-    let a = `${basename(file)} was not started: a found repository's git must start outside the repository's folder`;
-    logForDebugging(a, {
+    let errorText = `${basename(file)} was not started: a found repository's git must start outside the repository's folder`;
+    logForDebugging(errorText, {
       level: "error",
     });
     return {
       stdout: "",
-      stderr: a,
+      stderr: errorText,
       code: 1,
-      error: a,
+      error: errorText,
     };
   }
-  let qe = w?.args ?? safeGitInvocation?.args ?? args;
-  let cwd_2 = w?.cwd ?? cwd;
-  let B = w?.env ?? safeGitInvocation?.env ?? envOverrides;
-  let U = withoutControllingTerminal && getPlatform() !== "windows";
-  if (U && isCleanupStarted()) {
-    let a = `${basename(file)} was not started because Claude Code was exiting; try again after it restarts`;
+  let finalArgs = safeGitInvocation_2?.args ?? safeGitInvocation?.args ?? args;
+  let cwd_2 = safeGitInvocation_2?.cwd ?? cwd;
+  let finalEnv = safeGitInvocation_2?.env ?? safeGitInvocation?.env ?? envOverrides;
+  let detachProcess = withoutControllingTerminal && getPlatform() !== "windows";
+  if (detachProcess && isCleanupStarted()) {
+    let errorText = `${basename(file)} was not started because Claude Code was exiting; try again after it restarts`;
     return {
       stdout: "",
-      stderr: a,
+      stderr: errorText,
       code: 1,
-      error: a,
+      error: errorText,
     };
   }
-  let result;
+  let childProcess;
   let pid;
-  let se;
-  let ue;
-  let ce;
-  let H = D !== undefined && abortSignal !== undefined ? new AbortController() : undefined;
-  let W;
-  let de =
+  let killGroupCleanup;
+  let cancelGracefulAbort;
+  let cancelGroupKill;
+  let internalController =
+    tellBeforeKill !== undefined && abortSignal !== undefined ? new AbortController() : undefined;
+  let stdinState;
+  let detachOptions =
     getPlatform() === "linux"
       ? {
           noChildLeft: true,
         }
       : {};
-  let F = de;
-  let ae;
-  let T = encoding === "utf8-keep-bom" ? (maxBuffer ?? MAX_UTF8_SLICE) : undefined;
+  let processGroupFlags = detachOptions;
+  let spawnError;
+  let utf8MaxBytes = encoding === "utf8-keep-bom" ? (maxBuffer ?? MAX_UTF8_SLICE) : undefined;
   try {
-    let a = execa(b, qe, {
-      signal: H?.signal ?? abortSignal,
+    let child = execa(command, finalArgs, {
+      signal: internalController?.signal ?? abortSignal,
       timeout: timeoutMs,
       cwd: cwd_2,
-      env: B,
+      env: finalEnv,
       shell,
       ...(inheritFd === undefined
         ? {
@@ -511,9 +521,9 @@ async function execFileCore(
         : {
             stdio: [stdin, stdout, stderr, inheritFd],
           }),
-      ...(T !== undefined
+      ...(utf8MaxBytes !== undefined
         ? {
-            maxBuffer: Math.min(T * MAX_BOM_SLICE, constants.MAX_STRING_LENGTH),
+            maxBuffer: Math.min(utf8MaxBytes * MAX_BOM_SLICE, constants.MAX_STRING_LENGTH),
           }
         : maxBuffer === undefined
           ? {}
@@ -529,7 +539,7 @@ async function execFileCore(
         encoding !== "utf8" && {
           encoding: "latin1",
         }),
-      ...(w !== null
+      ...(safeGitInvocation_2 !== null
         ? {
             extendEnv: false,
           }
@@ -539,66 +549,78 @@ async function execFileCore(
               extendEnv,
             }),
       ...(useToolMemoryCgroup ? cgroupSpawnOptions(toolCgroupClass) : {}),
-      ...(U && {
+      ...(detachProcess && {
         detached: true,
       }),
       reject: false,
     });
-    F = a.pid === undefined ? de : {};
-    if (D !== undefined && abortSignal !== undefined && H !== undefined && a.pid !== undefined)
-      ue = scheduleGracefulAbort(a, a.pid, abortSignal, D, H);
-    pid = U ? a.pid : undefined;
+    processGroupFlags = child.pid === undefined ? detachOptions : {};
+    if (
+      tellBeforeKill !== undefined &&
+      abortSignal !== undefined &&
+      internalController !== undefined &&
+      child.pid !== undefined
+    )
+      cancelGracefulAbort = scheduleGracefulAbort(
+        child,
+        child.pid,
+        abortSignal,
+        tellBeforeKill,
+        internalController,
+      );
+    pid = detachProcess ? child.pid : undefined;
     if (pid !== undefined) {
       let pid_2 = pid;
-      if (ze && abortSignal !== undefined) ce = killProcessGroupOnAbort(a, pid_2, abortSignal);
-      let O = () => killProcessGroup(pid_2);
-      let V = registerCleanup(O);
-      let P = onExit(O, {
+      if (abortEndsProcessGroup && abortSignal !== undefined)
+        cancelGroupKill = killProcessGroupOnAbort(child, pid_2, abortSignal);
+      let killOnExit = () => killProcessGroup(pid_2);
+      let unregisterCleanup = registerCleanup(killOnExit);
+      let unregisterExit = onExit(killOnExit, {
         alwaysLast: true,
       });
-      se = () => {
-        V();
-        P();
+      killGroupCleanup = () => {
+        unregisterCleanup();
+        unregisterExit();
       };
     }
-    a.once("error", (E) => {
-      ae = E;
+    child.once("error", (error) => {
+      spawnError = error;
     });
-    W = input === undefined ? undefined : watchStdinErrors(a);
-    if (input !== undefined && a.pid !== undefined) a.stdin?.end(input);
-    if (onStdoutData && a.pid !== undefined)
-      a.stdout?.on("data", (E) => {
+    stdinState = input === undefined ? undefined : watchStdinErrors(child);
+    if (input !== undefined && child.pid !== undefined) child.stdin?.end(input);
+    if (onStdoutData && child.pid !== undefined)
+      child.stdout?.on("data", (chunk) => {
         try {
-          onStdoutData(E.toString());
+          onStdoutData(chunk.toString());
         } catch (error) {
           logError(error);
         }
       });
-    result = await a;
+    childProcess = await child;
     if (
       waitForExitAfterKill &&
-      result.exitCode === undefined &&
-      (abortSignal?.aborted === true || result.timedOut)
+      childProcess.exitCode === undefined &&
+      (abortSignal?.aborted === true || childProcess.timedOut)
     )
-      await waitForChildExit(a, ABORT_KILL_GRACE_MS);
+      await waitForChildExit(child, ABORT_KILL_GRACE_MS);
   } catch (error) {
     let { message, shortMessage, originalMessage } = error;
-    let P =
+    let errorMessage =
       shortMessage === undefined
         ? message
         : (originalMessage ?? "the spawn threw a value that is not an Error");
     if (isSyscallError(error)) {
-      logForDebugging(`execFileNoThrow spawn failed: ${getErrnoCode(error)} ${P}`, {
+      logForDebugging(`execFileNoThrow spawn failed: ${getErrnoCode(error)} ${errorMessage}`, {
         level: "error",
       });
       return {
         stdout: "",
         stderr: "",
         code: 1,
-        ...F,
+        ...processGroupFlags,
       };
     } else if (isMaxBufferError(error)) {
-      logForDebugging(`execFileNoThrow maxBuffer exceeded: ${P}`, {
+      logForDebugging(`execFileNoThrow maxBuffer exceeded: ${errorMessage}`, {
         level: "error",
       });
       return {
@@ -609,28 +631,28 @@ async function execFileCore(
       };
     } else {
       let env = process.env;
-      let A =
+      let rejection =
         getErrnoCode(error) === "ERR_INVALID_ARG_VALUE"
           ? describeNullByteSpawnError(
-              b,
+              command,
               args,
               cwd,
-              B,
-              extendEnv === false && B !== undefined ? undefined : env,
+              finalEnv,
+              extendEnv === false && finalEnv !== undefined ? undefined : env,
               env,
             )
           : undefined;
-      if (A)
-        logForDebugging(`execFileNoThrow spawn refused: ${A.local}`, {
+      if (rejection)
+        logForDebugging(`execFileNoThrow spawn refused: ${rejection.local}`, {
           level: "error",
         });
       let error_2 = toError(error);
       logError(
         withTelemetryMessage(
-          A === undefined && shortMessage === undefined
+          rejection === undefined && shortMessage === undefined
             ? error_2
-            : shortErrorStack(error_2, A?.telemetry ?? P),
-          A?.telemetry ?? "execFileNoThrow unexpected rejection",
+            : shortErrorStack(error_2, rejection?.telemetry ?? errorMessage),
+          rejection?.telemetry ?? "execFileNoThrow unexpected rejection",
         ),
       );
     }
@@ -640,32 +662,33 @@ async function execFileCore(
       code: 1,
     };
   } finally {
-    ue?.();
-    ce?.();
-    se?.();
-    if (pid !== undefined && (result === undefined || result.exitCode === undefined)) killProcessGroup(pid);
+    cancelGracefulAbort?.();
+    cancelGroupKill?.();
+    killGroupCleanup?.();
+    if (pid !== undefined && (childProcess === undefined || childProcess.exitCode === undefined))
+      killProcessGroup(pid);
   }
-  if (W?.truncatedBy !== undefined) {
-    let a = `stdin write failed: ${W.truncatedBy}`;
-    logForDebugging(`execFileNoThrow ${a}`, {
+  if (stdinState?.truncatedBy !== undefined) {
+    let message = `stdin write failed: ${stdinState.truncatedBy}`;
+    logForDebugging(`execFileNoThrow ${message}`, {
       level: "error",
     });
     return {
       stdout: "",
       stderr: "",
       code: 1,
-      error: a,
+      error: message,
     };
   }
-  let G = decodeOutput(result.stdout, encoding);
-  let L = decodeOutput(result.stderr, encoding);
-  if (T !== undefined && (G.length > T || L.length > T))
+  let stdoutText = decodeOutput(childProcess.stdout, encoding);
+  let stderrText = decodeOutput(childProcess.stderr, encoding);
+  if (utf8MaxBytes !== undefined && (stdoutText.length > utf8MaxBytes || stderrText.length > utf8MaxBytes))
     return preserveOutputOnError
       ? {
-          stdout: G.slice(0, T),
-          stderr: L.slice(0, T),
+          stdout: stdoutText.slice(0, utf8MaxBytes),
+          stderr: stderrText.slice(0, utf8MaxBytes),
           code: 1,
-          error: `Command failed: ${result.command}
+          error: `Command failed: ${childProcess.command}
 maxBuffer exceeded`,
           maxBufferExceeded: true,
         }
@@ -675,19 +698,19 @@ maxBuffer exceeded`,
           code: 1,
           maxBufferExceeded: true,
         };
-  if (!result.failed)
+  if (!childProcess.failed)
     return {
-      stdout: G,
-      stderr: L,
+      stdout: stdoutText,
+      stderr: stderrText,
       code: 0,
       exitCode: 0,
     };
-  let le = isMaxBufferError(result)
+  let maxBufferFlag = isMaxBufferError(childProcess)
     ? {
         maxBufferExceeded: true,
       }
     : {};
-  let fe = result.timedOut
+  let timedOutFlag = childProcess.timedOut
     ? {
         timedOut: true,
       }
@@ -696,22 +719,22 @@ maxBuffer exceeded`,
     return {
       stdout: "",
       stderr: "",
-      code: result.exitCode ?? 1,
-      exitCode: result.exitCode,
-      ...le,
-      ...fe,
-      ...F,
+      code: childProcess.exitCode ?? 1,
+      exitCode: childProcess.exitCode,
+      ...maxBufferFlag,
+      ...timedOutFlag,
+      ...processGroupFlags,
     };
-  let exitCode = result.exitCode ?? 1;
+  let exitCode = childProcess.exitCode ?? 1;
   return {
-    stdout: G,
-    stderr: L,
+    stdout: stdoutText,
+    stderr: stderrText,
     code: exitCode,
-    error: spawnFailureMessage(result, ae) ?? getErrorMessage(result, exitCode),
-    exitCode: result.exitCode,
-    ...le,
-    ...fe,
-    ...F,
+    error: spawnFailureMessage(childProcess, spawnError) ?? getErrorMessage(childProcess, exitCode),
+    exitCode: childProcess.exitCode,
+    ...maxBufferFlag,
+    ...timedOutFlag,
+    ...processGroupFlags,
   };
 }
 //@ chunk-s61vbvea.js:531652-531881 fingerprint = execFileNoThrowWithCwd (0.521)
@@ -720,7 +743,7 @@ maxBuffer exceeded`,
  */
 async function execGitNoThrow(file, args, abortSignal) {
   try {
-    let { stdout, code } = await execFileNoThrowWithCwd(gitExe(), [...BMt, ...args], {
+    let { stdout, code } = await execFileNoThrowWithCwd(gitExe(), [...SAFE_GIT_REPO_ARGS, ...args], {
       cwd: file,
       timeout: GIT_CONFIG_PARAMETERS_LIMIT,
       maxBuffer: 1e5,

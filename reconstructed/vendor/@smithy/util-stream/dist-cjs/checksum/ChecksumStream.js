@@ -5,11 +5,11 @@
  * pieces: chunk-wjd9n4jx.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS, importMetaRequire } from "../../../../../runtime/bun-runtime.js";
 import { base64Module } from "../../../../@aws-sdk/credential-provider-web-identity/dist-cjs/index.js";
 
 //@ chunk-wjd9n4jx.js:425-1456 cjs-fingerprint
-var require_ChecksumStream = x(function (cjsExports) {
+var require_ChecksumStream = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

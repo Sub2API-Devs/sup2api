@@ -27,16 +27,17 @@ import {
   getLastApiCompletionTimestamp,
 } from "../../bootstrap/state.js";
 import { findStreamNoResponseError, retryWindowFor } from "./streamErrors.js";
+import { logError } from "../../utils/log.js";
 import { HostScoped } from "../../utils/hostScoped.js";
 import { isSessionActive } from "../../utils/sessionActivity.js";
 import { isSessionsToken } from "../oauth/sessionsBearerHooks.js";
 import { SERVER_ERROR_TYPES, POLICY_AUTH_DENIAL_CODES } from "../policyLimits/complianceTaints.js";
-import { logError } from "../../utils/log.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-gr2vfhah.js:3506-3601 placement = TeamMemoryTooManyEntriesSchema (0.459)
-function getApiErrorCode(e) {
-  if (!(e instanceof APIError) || !hasNestedError(e)) return;
-  return e.error?.error?.details?.error_code;
+function getApiErrorCode(error) {
+  if (!(error instanceof APIError) || !hasNestedError(error)) return;
+  return error.error?.error?.details?.error_code;
 }
 //@ chunk-gr2vfhah.js:3601-3632 placement
 var API_ERROR_CODE_RE = /^[a-z][a-z0-9_]{0,63}$/;
@@ -44,75 +45,83 @@ var API_ERROR_CODE_RE = /^[a-z][a-z0-9_]{0,63}$/;
 /**
  * 导出函数 `apiErrorCode`：参数 e，返回 typeof t === "string" && A.test(t) ? t : void 0。
  */
-function apiErrorCode(e) {
-  let apiErrorCode = getApiErrorCode(e);
+function apiErrorCode(error) {
+  let apiErrorCode = getApiErrorCode(error);
   return typeof apiErrorCode === "string" && API_ERROR_CODE_RE.test(apiErrorCode) ? apiErrorCode : undefined;
 }
 //@ chunk-gr2vfhah.js:3708-3816 placement
 /**
  * 取错误的有效状态码：自带的状态码，否则 529 过载或 429 限流。
  */
-function effectiveErrorStatus(e) {
-  if (typeof e.status === "number") return e.status;
-  if (is529Error(e)) return 529;
-  if (isRateLimitError(e)) return 429;
+function effectiveErrorStatus(error) {
+  if (typeof error.status === "number") return error.status;
+  if (is529Error(error)) return 529;
+  if (isRateLimitError(error)) return 429;
   return;
 }
 //@ chunk-gr2vfhah.js:3816-4837 placement
 /**
  * 网络/SSL 错误码分组：证书相关错误、含 TLS 握手的全部 SSL 错误、不可达（拒绝/DNS/网络）与 socket 关闭、可重试的瞬态 socket 错误。
  */
-var SSL_CERT_ERROR_CODES = new Set([
-  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
-  "UNABLE_TO_GET_ISSUER_CERT",
-  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
-  "CERT_SIGNATURE_FAILURE",
-  "CERT_NOT_YET_VALID",
-  "CERT_HAS_EXPIRED",
-  "CERT_REVOKED",
-  "CERT_REJECTED",
-  "CERT_UNTRUSTED",
-  "DEPTH_ZERO_SELF_SIGNED_CERT",
-  "SELF_SIGNED_CERT_IN_CHAIN",
-  "CERT_CHAIN_TOO_LONG",
-  "PATH_LENGTH_EXCEEDED",
-  "ERR_TLS_CERT_ALTNAME_INVALID",
-  "HOSTNAME_MISMATCH",
-]);
-var STRICT_SSL_ERROR_CODES = new Set([
-  "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
-  "UNABLE_TO_GET_ISSUER_CERT",
-  "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
-  "DEPTH_ZERO_SELF_SIGNED_CERT",
-  "SELF_SIGNED_CERT_IN_CHAIN",
-]);
-var ALL_SSL_ERROR_CODES = new Set([
-  ...SSL_CERT_ERROR_CODES,
-  "ERR_TLS_HANDSHAKE_TIMEOUT",
-  "ERR_SSL_WRONG_VERSION_NUMBER",
-  "ERR_SSL_DECRYPTION_FAILED_OR_BAD_RECORD_MAC",
-]);
-var UNREACHABLE_ERROR_CODES = new Set([
-  "ECONNREFUSED",
-  "ConnectionRefused",
-  "ENOTFOUND",
-  "ENETUNREACH",
-  "ENETDOWN",
-  "EHOSTUNREACH",
-  "EHOSTDOWN",
-  "EAI_AGAIN",
-  "FailedToOpenSocket",
-  "ERR_PROXY_TUNNEL",
-]);
-var SOCKET_CLOSED_CODES = new Set(["ECONNRESET", "EPIPE", "ConnectionClosed", "ERR_SOCKET_CLOSED"]);
-var TRANSIENT_SOCKET_CODES = new Set([
-  ...SOCKET_CLOSED_CODES,
-  "UND_ERR_SOCKET",
-  "ETIMEDOUT",
-  "ECONNABORTED",
-  "StreamSuspended",
-  "StreamTruncated",
-]);
+var SSL_CERT_ERROR_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STRICT_SSL_ERROR_CODES;
+var ALL_SSL_ERROR_CODES;
+var UNREACHABLE_ERROR_CODES;
+var SOCKET_CLOSED_CODES;
+var TRANSIENT_SOCKET_CODES;
+deferInit("chunk-gr2vfhah.js:3816", () => {
+  SSL_CERT_ERROR_CODES = new Set([
+    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    "UNABLE_TO_GET_ISSUER_CERT",
+    "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+    "CERT_SIGNATURE_FAILURE",
+    "CERT_NOT_YET_VALID",
+    "CERT_HAS_EXPIRED",
+    "CERT_REVOKED",
+    "CERT_REJECTED",
+    "CERT_UNTRUSTED",
+    "DEPTH_ZERO_SELF_SIGNED_CERT",
+    "SELF_SIGNED_CERT_IN_CHAIN",
+    "CERT_CHAIN_TOO_LONG",
+    "PATH_LENGTH_EXCEEDED",
+    "ERR_TLS_CERT_ALTNAME_INVALID",
+    "HOSTNAME_MISMATCH",
+  ]);
+  STRICT_SSL_ERROR_CODES = new Set([
+    "UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+    "UNABLE_TO_GET_ISSUER_CERT",
+    "UNABLE_TO_GET_ISSUER_CERT_LOCALLY",
+    "DEPTH_ZERO_SELF_SIGNED_CERT",
+    "SELF_SIGNED_CERT_IN_CHAIN",
+  ]);
+  ALL_SSL_ERROR_CODES = new Set([
+    ...SSL_CERT_ERROR_CODES,
+    "ERR_TLS_HANDSHAKE_TIMEOUT",
+    "ERR_SSL_WRONG_VERSION_NUMBER",
+    "ERR_SSL_DECRYPTION_FAILED_OR_BAD_RECORD_MAC",
+  ]);
+  UNREACHABLE_ERROR_CODES = new Set([
+    "ECONNREFUSED",
+    "ConnectionRefused",
+    "ENOTFOUND",
+    "ENETUNREACH",
+    "ENETDOWN",
+    "EHOSTUNREACH",
+    "EHOSTDOWN",
+    "EAI_AGAIN",
+    "FailedToOpenSocket",
+    "ERR_PROXY_TUNNEL",
+  ]);
+  SOCKET_CLOSED_CODES = new Set(["ECONNRESET", "EPIPE", "ConnectionClosed", "ERR_SOCKET_CLOSED"]);
+  TRANSIENT_SOCKET_CODES = new Set([
+    ...SOCKET_CLOSED_CODES,
+    "UND_ERR_SOCKET",
+    "ETIMEDOUT",
+    "ECONNABORTED",
+    "StreamSuspended",
+    "StreamTruncated",
+  ]);
+});
 //@ chunk-gr2vfhah.js:4837-4898 placement
 /**
  * 导出函数 `reducibleErrorCode`：参数 e，返回 LK.has(e) || PU.has(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : lit("other")。
@@ -126,16 +135,18 @@ function reducibleErrorCode(code) {
 /**
  * 导出函数 `sanitizableErrorCode`：参数 e，返回 PU.has(e) || LK.has(e) || SSL_CERT_ERROR_CODES.has(e) ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e) : void 0。
  */
-function sanitizableErrorCode(e) {
-  return UNREACHABLE_ERROR_CODES.has(e) || TRANSIENT_SOCKET_CODES.has(e) || SSL_CERT_ERROR_CODES.has(e)
-    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(e)
+function sanitizableErrorCode(code) {
+  return UNREACHABLE_ERROR_CODES.has(code) ||
+    TRANSIENT_SOCKET_CODES.has(code) ||
+    SSL_CERT_ERROR_CODES.has(code)
+    ? fromSanitizer_SANITIZER_OUTPUT_ONLY(code)
     : undefined;
 }
 //@ chunk-gr2vfhah.js:4967-5109 placement
-function formatApiErrorType(e, status) {
-  let r = /^[a-z][a-z0-9_]{0,63}$/.test(e) ? e : "unknown";
+function formatApiErrorType(type, status) {
+  let safeType = /^[a-z][a-z0-9_]{0,63}$/.test(type) ? type : "unknown";
   return fromSanitizer_SANITIZER_OUTPUT_ONLY(
-    `API error: type=${r} status=${typeof status === "number" ? status : "none"}`,
+    `API error: type=${safeType} status=${typeof status === "number" ? status : "none"}`,
   );
 }
 //@ chunk-gr2vfhah.js:5109-5237 placement
@@ -190,33 +201,36 @@ function isNetworkUnreachableError(error) {
 /**
  * 网络不可达类错误码（ENOTFOUND/EAI_AGAIN/ENETUNREACH/…/ConnectionRefused）。
  */
-var NETWORK_DOWN_CODES = new Set([
-  "ENOTFOUND",
-  "EAI_AGAIN",
-  "ENETUNREACH",
-  "ENETDOWN",
-  "EHOSTUNREACH",
-  "EHOSTDOWN",
-  "FailedToOpenSocket",
-  "ECONNREFUSED",
-  "ConnectionRefused",
-]);
+var NETWORK_DOWN_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-gr2vfhah.js:5691", () => {
+  NETWORK_DOWN_CODES = new Set([
+    "ENOTFOUND",
+    "EAI_AGAIN",
+    "ENETUNREACH",
+    "ENETDOWN",
+    "EHOSTUNREACH",
+    "EHOSTDOWN",
+    "FailedToOpenSocket",
+    "ECONNREFUSED",
+    "ConnectionRefused",
+  ]);
+});
 //@ chunk-gr2vfhah.js:5840-5900 layout
 /**
  * cause 链中的 ERR_PROXY_TUNNEL 错误。
  */
-function findProxyTunnelError(e) {
-  return findInCauseChain(e, (t) => getErrnoCode(t) === "ERR_PROXY_TUNNEL");
+function findProxyTunnelError(error) {
+  return findInCauseChain(error, (cause) => getErrnoCode(cause) === "ERR_PROXY_TUNNEL");
 }
 //@ chunk-gr2vfhah.js:5900-6099 layout
 /**
  * 连接错误为网络不可达（代理隧道 502/503 也算）：可按重连预算多重试。
  */
-function isNetworkDownError(e) {
-  if (!(e instanceof APIConnectionError)) return false;
-  let code = extractConnectionErrorDetails(e)?.code;
+function isNetworkDownError(error) {
+  if (!(error instanceof APIConnectionError)) return false;
+  let code = extractConnectionErrorDetails(error)?.code;
   if (code !== "ERR_PROXY_TUNNEL") return code !== undefined && NETWORK_DOWN_CODES.has(code);
-  let proxyTunnelError = findProxyTunnelError(e);
+  let proxyTunnelError = findProxyTunnelError(error);
   let status =
     proxyTunnelError !== undefined && "status" in proxyTunnelError ? proxyTunnelError.status : undefined;
   return status === 502 || status === 503;
@@ -254,8 +268,8 @@ function getSSLErrorHint(error) {
 /**
  * bd() 为真取第二个，否则第一个。
  */
-function pickByEntrypoint(e, t) {
-  return isHostEntrypoint() ? t : e;
+function pickByEntrypoint(hostValue, managedValue) {
+  return isHostEntrypoint() ? managedValue : hostValue;
 }
 //@ chunk-gr2vfhah.js:6582-6724 layout
 /**
@@ -333,15 +347,15 @@ function formatAPIError(error) {
         ? "Request timed out"
         : "Request timed out. Check your internet connection and proxy settings";
     if (isSSLError) {
-      let i = pickByEntrypoint(
+      let hint = pickByEntrypoint(
         "set NODE_EXTRA_CA_CERTS to that CA bundle, or add it to the system certificate store \xB7 see https://code.claude.com/docs/en/network-config",
         "ask your IT team to add that CA to this computer's certificate store or to the CA file that your organization configured.",
       );
-      let l = `(${code}). The certificate comes from an authority Claude Code doesn't trust, usually a TLS-inspecting corporate proxy or a gateway signed by a private CA: ${i}`;
+      let detail = `(${code}). The certificate comes from an authority Claude Code doesn't trust, usually a TLS-inspecting corporate proxy or a gateway signed by a private CA: ${hint}`;
       switch (code) {
         case "UNABLE_TO_VERIFY_LEAF_SIGNATURE":
         case "UNABLE_TO_GET_ISSUER_CERT_LOCALLY":
-          return `Unable to connect to API: SSL certificate verification failed (${code}). The certificates the server sent don't lead to a trusted authority. If the server leaves out an intermediate certificate, which browsers fetch by themselves, whoever runs it must have it send its full chain. If it is a TLS-inspecting corporate proxy or a gateway signed by a private CA, ${i}`;
+          return `Unable to connect to API: SSL certificate verification failed (${code}). The certificates the server sent don't lead to a trusted authority. If the server leaves out an intermediate certificate, which browsers fetch by themselves, whoever runs it must have it send its full chain. If it is a TLS-inspecting corporate proxy or a gateway signed by a private CA, ${hint}`;
         case "UNABLE_TO_GET_ISSUER_CERT":
           return `Unable to connect to API: SSL certificate verification failed (${code}). The certificates this computer trusts include a CA certificate whose own issuer is missing, often a leftover from a renewal: ${pickByEntrypoint("remove it from the system certificate store or the NODE_EXTRA_CA_CERTS file, or add its issuer there.", "ask your IT team to remove it from this computer's certificate store or the CA file that your organization configured, or to add its issuer there.")}`;
         case "CERT_HAS_EXPIRED":
@@ -350,7 +364,7 @@ function formatAPIError(error) {
           return "Unable to connect to API: SSL certificate has been revoked";
         case "DEPTH_ZERO_SELF_SIGNED_CERT":
         case "SELF_SIGNED_CERT_IN_CHAIN":
-          return `Unable to connect to API: Self-signed certificate detected ${l}`;
+          return `Unable to connect to API: Self-signed certificate detected ${detail}`;
         case "ERR_TLS_CERT_ALTNAME_INVALID":
         case "HOSTNAME_MISMATCH":
           return "Unable to connect to API: SSL certificate hostname mismatch";
@@ -364,10 +378,10 @@ function formatAPIError(error) {
   if (error.message === CREDENTIAL_PROVIDER_ERRORS || error.message === GOOGLE_CREDENTIAL_ERROR_TEXT) {
     let inCauseChain = findInCauseChain(
       error.cause,
-      (o) =>
-        o.message.trim().length > 0 &&
-        o.message !== CREDENTIAL_PROVIDER_ERRORS &&
-        o.message !== GOOGLE_CREDENTIAL_ERROR_TEXT,
+      (cause) =>
+        cause.message.trim().length > 0 &&
+        cause.message !== CREDENTIAL_PROVIDER_ERRORS &&
+        cause.message !== GOOGLE_CREDENTIAL_ERROR_TEXT,
     );
     if (inCauseChain) {
       let sanitizedMessage = stripHtmlToTitle(inCauseChain.message.trim());
@@ -412,16 +426,18 @@ function formatAPIError(error) {
     if (nestedErrorMessage)
       return error.status ? `${error.status} ${nestedErrorMessage}` : nestedErrorMessage;
   }
-  let r = sanitizeAPIError(error);
+  let sanitized = sanitizeAPIError(error);
   let matches = /^(\d+ )?\s*</.test(error.message);
-  if (r.length === 0 && matches) {
+  if (sanitized.length === 0 && matches) {
     if (!error.status) return "API error (status unknown)";
-    let n = STATUS_CODES[error.status];
-    return n ? `${error.status} ${n}` : String(error.status);
+    let statusText = STATUS_CODES[error.status];
+    return statusText ? `${error.status} ${statusText}` : String(error.status);
   }
-  if (r !== error.message && r.length > 0) {
-    let n = error.status ? String(error.status) : undefined;
-    return n && !r.match(/\d+/g)?.includes(n) ? `${n} ${r}` : r;
+  if (sanitized !== error.message && sanitized.length > 0) {
+    let statusPrefix = error.status ? String(error.status) : undefined;
+    return statusPrefix && !sanitized.match(/\d+/g)?.includes(statusPrefix)
+      ? `${statusPrefix} ${sanitized}`
+      : sanitized;
   }
   return error.message.trimEnd();
 }
@@ -430,10 +446,10 @@ function formatAPIError(error) {
  * API 错误的展示摘要：message/status/requestId/formatted、连接错误、是否断网、限额头（representative-claim、reset）、无响应等待。
  */
 function summarizeApiError(error) {
-  let t = (i) => error.headers?.get?.(i) ?? undefined;
-  let r = t("anthropic-ratelimit-unified-representative-claim");
-  let s = t("anthropic-ratelimit-unified-reset");
-  let n = t("anthropic-ratelimit-unified-overage-status");
+  let headerGetter = (headerName) => error.headers?.get?.(headerName) ?? undefined;
+  let rateLimitType = headerGetter("anthropic-ratelimit-unified-representative-claim");
+  let resetsAtRaw = headerGetter("anthropic-ratelimit-unified-reset");
+  let overageStatus = headerGetter("anthropic-ratelimit-unified-overage-status");
   let streamNoResponseError = findStreamNoResponseError(error);
   return {
     message: error.message,
@@ -443,13 +459,13 @@ function summarizeApiError(error) {
     connection: extractConnectionErrorDetails(error),
     isNetworkDown: isNetworkUnreachableError(error),
     rateLimits:
-      r || n
+      rateLimitType || overageStatus
         ? {
-            ...(r && {
-              rateLimitType: r,
+            ...(rateLimitType && {
+              rateLimitType,
             }),
-            ...(s && {
-              resetsAt: Math.round(Number(s)),
+            ...(resetsAtRaw && {
+              resetsAt: Math.round(Number(resetsAtRaw)),
             }),
           }
         : null,
@@ -461,12 +477,30 @@ function summarizeApiError(error) {
       : null,
   };
 }
+//@ chunk-s61vbvea.js:456221-456247 placement
+var X_AMZN_REQUESTID = "x-amzn-requestid";
+//@ chunk-s61vbvea.js:456247-456337 placement
+/**
+ * 导出函数 `amazonRequestId`：参数 e, n，返回 e; try { return n?.get(X_AMZN_REQUESTID) || null; } catch (error) { return (logError(toError(error)), null); }…。
+ */
+function amazonRequestId(requestId, headers) {
+  if (requestId) return requestId;
+  try {
+    return headers?.get(X_AMZN_REQUESTID) || null;
+  } catch (error) {
+    logError(toError(error));
+    return null;
+  }
+}
 //@ chunk-7t4fmt2f.js:1953-1971 placement
 class IdleTaskState {
   run = null;
 }
 //@ chunk-7t4fmt2f.js:1971-1996 placement
-var idleTaskSlot = new HostScoped(() => new IdleTaskState());
+var idleTaskSlot; // deferred: uses IdleTaskState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-7t4fmt2f.js:1971", () => {
+  idleTaskSlot = new HostScoped(() => new IdleTaskState());
+});
 //@ chunk-7t4fmt2f.js:1996-2033 placement
 function idleTask() {
   return idleTaskSlot.of(getRootSession().host);
@@ -480,19 +514,19 @@ async function runIdleTask() {
 }
 //@ chunk-7t4fmt2f.js:2073-2144 placement
 function setIdleTask(refetchAfterRegimeRefusal) {
-  let r = idleTask();
-  r.run = refetchAfterRegimeRefusal;
+  let idle = idleTask();
+  idle.run = refetchAfterRegimeRefusal;
   return () => {
-    if (r.run === refetchAfterRegimeRefusal) r.run = null;
+    if (idle.run === refetchAfterRegimeRefusal) idle.run = null;
   };
 }
 //@ chunk-7t4fmt2f.js:2704-2778 placement
 /**
  * 导出函数 `isIdleLongerThan`：参数 e，返回 !isSessionActive() && Date.now() - max > e。
  */
-function isIdleLongerThan(e) {
+function isIdleLongerThan(idleMs) {
   let max = Math.max(getLastInteractionTime(), getLastApiCompletionTimestamp() ?? 0);
-  return !isSessionActive() && Date.now() - max > e;
+  return !isSessionActive() && Date.now() - max > idleMs;
 }
 //@ chunk-7t4fmt2f.js:3115-3211 placement
 /**
@@ -507,7 +541,7 @@ var CONTENT_TYPE_PATTERNS = [
 //@ chunk-7t4fmt2f.js:3211-3299 placement
 function contentKindOf(contentType) {
   let lower = contentType.toLowerCase();
-  return CONTENT_TYPE_PATTERNS.find(([n]) => lower.includes(n))?.[1] ?? "other";
+  return CONTENT_TYPE_PATTERNS.find(([needle]) => lower.includes(needle))?.[1] ?? "other";
 }
 //@ chunk-7t4fmt2f.js:3299-3378 placement
 /**
@@ -523,10 +557,10 @@ function hasSessionsTokenRequestId(headers) {
  */
 function responseHeaderFacts(headers) {
   if (!headers || typeof headers !== "object") return {};
-  let r = headers;
+  let headerMap = headers;
   return {
-    requestIdPresent: hasSessionsTokenRequestId(r),
-    responseContentType: contentKindOf(String(r["content-type"] ?? "")),
+    requestIdPresent: hasSessionsTokenRequestId(headerMap),
+    responseContentType: contentKindOf(String(headerMap["content-type"] ?? "")),
   };
 }
 //@ chunk-7t4fmt2f.js:3524-3616 placement
@@ -543,9 +577,9 @@ function extractServerErrorFields(error) {
   let response = error?.response;
   let error_2 = response?.data?.error;
   if (!error_2 || typeof error_2 !== "object") return {};
-  let o = typeof error_2.type === "string" ? error_2.type : undefined;
+  let errorType = typeof error_2.type === "string" ? error_2.type : undefined;
   let errorCode = error_2.details?.error_code;
-  let p =
+  let code =
     typeof errorCode === "string"
       ? errorCode
       : typeof error_2.error_code === "string"
@@ -554,15 +588,19 @@ function extractServerErrorFields(error) {
           ? error_2.code
           : undefined;
   let message = typeof error_2.message === "string" ? error_2.message : undefined;
-  let y =
-    p === undefined && message !== undefined && (o === "authentication_error" || o === "permission_error")
+  let authDenial =
+    code === undefined &&
+    message !== undefined &&
+    (errorType === "authentication_error" || errorType === "permission_error")
       ? classifyRevokedAccess(message)
       : undefined;
   return {
-    serverErrorType: o === undefined ? undefined : SERVER_ERROR_TYPES.includes(o) ? o : "other",
-    serverErrorCode: p === undefined ? undefined : POLICY_AUTH_DENIAL_CODES.includes(p) ? p : "other",
-    ...(y !== undefined && {
-      serverAuthDenial: y,
+    serverErrorType:
+      errorType === undefined ? undefined : SERVER_ERROR_TYPES.includes(errorType) ? errorType : "other",
+    serverErrorCode:
+      code === undefined ? undefined : POLICY_AUTH_DENIAL_CODES.includes(code) ? code : "other",
+    ...(authDenial !== undefined && {
+      serverAuthDenial: authDenial,
     }),
     ...(hasSessionsTokenRequestId(response?.headers) && {
       serverErrorStamped: true,
@@ -573,8 +611,10 @@ function extractServerErrorFields(error) {
 /**
  * 返回服务器明确标注的错误类型（非 other 时）。
  */
-function stampedServerErrorType(e) {
-  return e.serverErrorStamped === true && e.serverErrorType !== "other" ? e.serverErrorType : undefined;
+function stampedServerErrorType(facts) {
+  return facts.serverErrorStamped === true && facts.serverErrorType !== "other"
+    ? facts.serverErrorType
+    : undefined;
 }
 //@ chunk-7t4fmt2f.js:4329-5202 placement
 function classifyRevokedAccess(message) {
@@ -591,21 +631,6 @@ function classifyRevokedAccess(message) {
   if (message.startsWith("Credential is invalid")) return "credential_invalid";
   return "other";
 }
-//@ chunk-s61vbvea.js:456221-456247 placement
-var X_AMZN_REQUESTID = "x-amzn-requestid";
-//@ chunk-s61vbvea.js:456247-456337 placement
-/**
- * 导出函数 `amazonRequestId`：参数 e, n，返回 e; try { return n?.get(X_AMZN_REQUESTID) || null; } catch (error) { return (logError(toError(error)), null); }…。
- */
-function amazonRequestId(e, headers) {
-  if (e) return e;
-  try {
-    return headers?.get(X_AMZN_REQUESTID) || null;
-  } catch (error) {
-    logError(toError(error));
-    return null;
-  }
-}
 export {
   UNREACHABLE_ERROR_CODES,
   getSSLErrorHint,
@@ -614,8 +639,8 @@ export {
   contentKindOf,
   extractServerErrorFields,
   responseHeaderFactsOf,
-  TRANSIENT_SOCKET_CODES,
   extractConnectionErrorDetails,
+  TRANSIENT_SOCKET_CODES,
   amazonRequestId,
   extractNestedErrorMessage,
   apiErrorCode,
@@ -630,12 +655,12 @@ export {
   SOCKET_CLOSED_CODES,
   isIdleLongerThan,
   setIdleTask,
+  hasNestedError,
   effectiveErrorStatus,
   formatAPIError,
   sanitizeAPIError,
   STRICT_SSL_ERROR_CODES,
   CONNECTION_DROPPED_MESSAGE,
-  hasNestedError,
   GOOGLE_CREDENTIAL_ERROR_TEXT,
   findProxyTunnelError,
   isNetworkDownError,

@@ -16,27 +16,27 @@ import { BASH_TOOL_NAME } from "../../tools/BashTool/toolName.js";
 /**
  * 查工具名的父工具映射（如 MCP 子工具归到父工具）。
  */
-function splitToolParentOf(e) {
-  return Object.hasOwn(SPLIT_TOOL_PARENT, e) ? SPLIT_TOOL_PARENT[e] : undefined;
+function splitToolParentOf(toolName) {
+  return Object.hasOwn(SPLIT_TOOL_PARENT, toolName) ? SPLIT_TOOL_PARENT[toolName] : undefined;
 }
 //@ chunk-e6aww6q8.js:823418-823552 placement
 /**
  * 按 action 把工具名映射到具体动作工具。
  */
-function splitToolByAction(e, n) {
-  if (!Object.hasOwn(SPLIT_TOOL_BY_ACTION, e)) return;
-  let action = n?.action;
-  let s = SPLIT_TOOL_BY_ACTION[e];
-  return typeof action === "string" && Object.hasOwn(s, action) ? s[action] : undefined;
+function splitToolByAction(toolName, input) {
+  if (!Object.hasOwn(SPLIT_TOOL_BY_ACTION, toolName)) return;
+  let action = input?.action;
+  let byAction = SPLIT_TOOL_BY_ACTION[toolName];
+  return typeof action === "string" && Object.hasOwn(byAction, action) ? byAction[action] : undefined;
 }
 //@ chunk-e6aww6q8.js:823552-823682 placement
-function getCommandField(e) {
-  return typeof e === "object" &&
-    e !== null &&
-    "command" in e &&
-    typeof e.command === "string" &&
-    e.command !== ""
-    ? e.command
+function getCommandField(input) {
+  return typeof input === "object" &&
+    input !== null &&
+    "command" in input &&
+    typeof input.command === "string" &&
+    input.command !== ""
+    ? input.command
     : undefined;
 }
 //@ chunk-e6aww6q8.js:823682-823871 placement
@@ -59,8 +59,8 @@ function getCommandAndDescription(toolInput) {
 /**
  * Monitor 工具带命令字段时视为 Bash 工具名。
  */
-function monitorCommandAsBash(e, hookToolInput) {
-  return e === MONITOR && getCommandField(hookToolInput) !== undefined ? BASH_TOOL_NAME : undefined;
+function monitorCommandAsBash(toolName, hookToolInput) {
+  return toolName === MONITOR && getCommandField(hookToolInput) !== undefined ? BASH_TOOL_NAME : undefined;
 }
 export {
   splitToolParentOf,

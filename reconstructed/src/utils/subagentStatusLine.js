@@ -43,193 +43,204 @@ import { subscribeCoordinatorPanel } from "./transcriptDiagnostics.js";
 import { release } from "../state/teammateViewHelpers.js";
 import { useTerminalSize } from "../hooks/useTerminalSize.js";
 import { useClock } from "../ink/components/ClockContext.js";
-import { R, P, init_react_production, yt } from "../../vendor/react/cjs/react.production.js";
+import {
+  useRef,
+  useEffect,
+  init_react_production,
+  useSyncExternalStore,
+} from "../../vendor/react/cjs/react.production.js";
 import { trackReceivedMessageUuid } from "../cli/print.js";
 import { agentRowPrefixWidth, AGENT_ROW_WIDTH_RESERVE } from "../components/CoordinatorAgentStatus.js";
 import { subscribeGlobalConfigInstalled } from "./config.js";
 import { EDITOR_MODES } from "./configConstants.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:810409-810547 placement
 function subagentStatusLineCommand() {
-  let h = isStatusLineManagedOnly()
+  let setting = isStatusLineManagedOnly()
     ? getSettingsForSource("policySettings")?.subagentStatusLine
     : getSettingsAfterPluginLoad("subagentStatusLine");
-  return h?.type === "command" ? h.command : undefined;
+  return setting?.type === "command" ? setting.command : undefined;
 }
 //@ chunk-18hwfzwa.js:810547-812078 placement
-async function runSubagentStatusLine(h, columns, D, L) {
+async function runSubagentStatusLine(tasks, columns, names, tokenSamples) {
   if (shouldDisableAllHooksIncludingManaged() || isCustomizationDisabled("statusLine")) return {};
   if (shouldSkipHookDueToTrust()) {
     logForDebugging("Skipping subagentStatusLine execution - workspace trust not accepted");
     return {};
   }
-  let cmd = subagentStatusLineCommand();
-  if (cmd === undefined || h.length === 0) return {};
+  let command = subagentStatusLineCommand();
+  if (command === undefined || tasks.length === 0) return {};
   let cwd = getCwd();
-  let Re = {
+  let sessionInput = {
     id: getSessionId(),
     project: {
       originalCwd: getOriginalCwd(),
       projectRoot: getProjectRoot(),
     },
   };
-  let Be = {
-    ...createBaseHookInput(Re, cwd),
+  let hookInput = {
+    ...createBaseHookInput(sessionInput, cwd),
     columns,
-    tasks: h.map((Ot) => ({
-      id: Ot.id,
-      name: D.get(Ot.id),
-      type: Ot.type,
-      agentType: Ot.agentType,
-      status: Ot.status,
-      description: Ot.description,
-      label: getAgentProgressLabel(Ot) || Ot.description,
-      startTime: Ot.startTime,
-      model: Ot.model,
-      effort: Ot.effort,
-      contextWindowSize: Ot.model ? getContextWindow(Ot.model, getSdkBetas()) : undefined,
-      tokenCount: Ot.progress?.tokenCount ?? 0,
-      tokenSamples: L.get(Ot.id) ?? [],
-      cwd: Ot.cwd ?? cwd,
+    tasks: tasks.map((task) => ({
+      id: task.id,
+      name: names.get(task.id),
+      type: task.type,
+      agentType: task.agentType,
+      status: task.status,
+      description: task.description,
+      label: getAgentProgressLabel(task) || task.description,
+      startTime: task.startTime,
+      model: task.model,
+      effort: task.effort,
+      contextWindowSize: task.model ? getContextWindow(task.model, getSdkBetas()) : undefined,
+      tokenCount: task.progress?.tokenCount ?? 0,
+      tokenSamples: tokenSamples.get(task.id) ?? [],
+      cwd: task.cwd ?? cwd,
     })),
   };
-  let He = getPlatform() === "windows";
-  let We = He ? getGitBashPathCached() : null;
-  let ze = He && !We ? await getCachedPowerShellPath() : null;
-  let Xe = He && We ? (Ot) => Ot.replaceAll("\\", "/") : (Ot) => Ot;
-  let rt = {
+  let isWindows = getPlatform() === "windows";
+  let gitBashPath = isWindows ? getGitBashPathCached() : null;
+  let powerShellPath = isWindows && !gitBashPath ? await getCachedPowerShellPath() : null;
+  let toPosixPath = isWindows && gitBashPath ? (path) => path.replaceAll("\\", "/") : (path) => path;
+  let env = {
     ...subprocessEnv(),
-    ...claudeSubprocessEnv(claudeEnvContextFrom(Be)),
-    CLAUDE_PROJECT_DIR: Xe(getProjectConfigRoot() ?? getSessionProject(Re).projectRoot),
+    ...claudeSubprocessEnv(claudeEnvContextFrom(hookInput)),
+    CLAUDE_PROJECT_DIR: toPosixPath(getProjectConfigRoot() ?? getSessionProject(sessionInput).projectRoot),
   };
-  if (We) prependDirToPathEnv(rt, We);
-  let kt = {
+  if (gitBashPath) prependDirToPathEnv(env, gitBashPath);
+  let execOptions = {
     cwd: getProjectConfigRoot() ?? cwd,
-    env: rt,
+    env,
     extendEnv: false,
     timeout: SIDE_QUESTION_HINT_MS,
-    input: jsonStringify(Be),
+    input: jsonStringify(hookInput),
     preserveOutputOnError: true,
     toolCgroupClass: "plugin",
   };
-  let At = ze
-    ? await execFileNoThrowWithCwd(ze, buildPowerShellCommandArgs(cmd), {
-        ...kt,
+  let result = powerShellPath
+    ? await execFileNoThrowWithCwd(powerShellPath, buildPowerShellCommandArgs(command), {
+        ...execOptions,
       })
-    : await execFileNoThrowWithCwd(We ? stripShellQuotes(cmd) : cmd, [], {
-        shell: He ? (We ?? true) : true,
-        ...kt,
+    : await execFileNoThrowWithCwd(gitBashPath ? stripShellQuotes(command) : command, [], {
+        shell: isWindows ? (gitBashPath ?? true) : true,
+        ...execOptions,
       });
-  if (At.code !== 0) {
-    logForDebugging(`subagentStatusLine exited ${At.code}: ${At.error ?? At.stderr}`, {
+  if (result.code !== 0) {
+    logForDebugging(`subagentStatusLine exited ${result.code}: ${result.error ?? result.stderr}`, {
       level: "error",
     });
     return {};
   }
-  let It = {};
-  for (let line of At.stdout.split(`
+  let decorations = {};
+  for (let line of result.stdout.split(`
 `)) {
     if (!line.trim()) continue;
-    let Et;
+    let parsed;
     try {
-      Et = jsonParse(line);
+      parsed = jsonParse(line);
     } catch {
       logForDebugging(`subagentStatusLine emitted non-JSON line: ${line}`, {
         level: "error",
       });
       continue;
     }
-    let Dt = sideQuestionAgentsSchema().safeParse(Et);
-    if (!Dt.success) {
-      logForDebugging(`subagentStatusLine emitted invalid schema: ${Dt.error.message}`, {
+    let validated = sideQuestionAgentsSchema().safeParse(parsed);
+    if (!validated.success) {
+      logForDebugging(`subagentStatusLine emitted invalid schema: ${validated.error.message}`, {
         level: "error",
       });
       continue;
     }
-    It[Dt.data.id] = {
-      content: Dt.data.content,
+    decorations[validated.data.id] = {
+      content: validated.data.content,
     };
   }
-  return It;
+  return decorations;
 }
 //@ chunk-18hwfzwa.js:812078-812099 placement
 var TICK_DEBOUNCE_MS = 300;
 var TICK_INTERVAL_MS = 5000;
 //@ chunk-18hwfzwa.js:812099-812256 placement
-function sameStatusLineContents(taskDecorations, x) {
+function sameStatusLineContents(taskDecorations, other) {
   let keys = Object.keys(taskDecorations);
-  let keys_2 = Object.keys(x);
+  let keys_2 = Object.keys(other);
   if (keys.length !== keys_2.length) return false;
-  for (let ee of keys) if (taskDecorations[ee]?.content !== x[ee]?.content) return false;
+  for (let key of keys) if (taskDecorations[key]?.content !== other[key]?.content) return false;
   return true;
 }
 //@ chunk-18hwfzwa.js:812465-813789 placement
 function useSubagentStatusLineTick() {
   let appStoreDirect = useAppStoreDirect();
   let setAppState = useSetAppState();
-  let D = useAppState((ze) => ze.settings?.subagentStatusLine?.command !== undefined);
-  let L = subscribeCoordinatorPanel();
-  let ee = D && !L && (!shouldAllowManagedHooksOnly() || subagentStatusLineCommand() !== undefined);
-  let ke = useAppState((ze) => (ee ? release(ze.tasks, ze.viewingAgentTaskId).length : 0));
+  let commandConfigured = useAppState((state) => state.settings?.subagentStatusLine?.command !== undefined);
+  let coordinatorPanelOpen = subscribeCoordinatorPanel();
+  let enabled =
+    commandConfigured &&
+    !coordinatorPanelOpen &&
+    (!shouldAllowManagedHooksOnly() || subagentStatusLineCommand() !== undefined);
+  let taskCount = useAppState((state) =>
+    enabled ? release(state.tasks, state.viewingAgentTaskId).length : 0,
+  );
   let { columns } = useTerminalSize();
   let clock = useClock();
-  let He = R(false);
-  let We = R(new Map());
-  P(() => {
-    if (!ee) {
-      setAppState((At) =>
-        Object.keys(At.taskDecorations).length === 0
-          ? At
+  let inFlightRef = useRef(false);
+  let tokenSamplesRef = useRef(new Map());
+  useEffect(() => {
+    if (!enabled) {
+      setAppState((state) =>
+        Object.keys(state.taskDecorations).length === 0
+          ? state
           : {
-              ...At,
+              ...state,
               taskDecorations: {},
             },
       );
       return;
     }
-    let ze = false;
-    let Xe = () => {
-      if (He.current) return;
+    let cancelled = false;
+    let refresh = () => {
+      if (inFlightRef.current) return;
       let state = appStoreDirect.getState();
-      let It = release(state.tasks, state.viewingAgentTaskId);
+      let tasks = release(state.tasks, state.viewingAgentTaskId);
       trackReceivedMessageUuid(
-        We.current,
-        It.map((Et) => ({
-          id: Et.id,
-          tokenCount: Et.progress?.tokenCount ?? 0,
+        tokenSamplesRef.current,
+        tasks.map((task) => ({
+          id: task.id,
+          tokenCount: task.progress?.tokenCount ?? 0,
         })),
       );
-      if (It.length === 0) {
-        setAppState((Et) =>
-          Object.keys(Et.taskDecorations).length === 0
-            ? Et
+      if (tasks.length === 0) {
+        setAppState((state) =>
+          Object.keys(state.taskDecorations).length === 0
+            ? state
             : {
-                ...Et,
+                ...state,
                 taskDecorations: {},
               },
         );
         return;
       }
-      He.current = true;
-      let Ot = new Map();
-      for (let [Et, Dt] of state.agentNameRegistry) Ot.set(Dt, Et);
+      inFlightRef.current = true;
+      let nameByAgentId = new Map();
+      for (let [agentId, name] of state.agentNameRegistry) nameByAgentId.set(name, agentId);
       runSubagentStatusLine(
-        It,
+        tasks,
         Math.max(0, columns - agentRowPrefixWidth() - AGENT_ROW_WIDTH_RESERVE),
-        Ot,
-        We.current,
+        nameByAgentId,
+        tokenSamplesRef.current,
       )
-        .then((Et) => {
-          if (ze) return;
-          setAppState((Dt) => {
-            let Lt = new Set(It.map((Xt) => Xt.id));
-            let oo = {};
-            for (let [key, value] of Object.entries(Et)) if (Lt.has(key)) oo[key] = value;
-            return sameStatusLineContents(Dt.taskDecorations, oo)
-              ? Dt
+        .then((result) => {
+          if (cancelled) return;
+          setAppState((state) => {
+            let liveIds = new Set(tasks.map((task) => task.id));
+            let decorations = {};
+            for (let [key, value] of Object.entries(result)) if (liveIds.has(key)) decorations[key] = value;
+            return sameStatusLineContents(state.taskDecorations, decorations)
+              ? state
               : {
-                  ...Dt,
-                  taskDecorations: oo,
+                  ...state,
+                  taskDecorations: decorations,
                 };
           });
         })
@@ -239,38 +250,41 @@ function useSubagentStatusLineTick() {
           });
         })
         .finally(() => {
-          He.current = false;
+          inFlightRef.current = false;
           if (
             release(appStoreDirect.getState().tasks, appStoreDirect.getState().viewingAgentTaskId).length ===
             0
           )
-            Xe();
+            refresh();
         });
     };
-    if (ke === 0) {
-      Xe();
+    if (taskCount === 0) {
+      refresh();
       return;
     }
-    let rt = clock.setTimeout(Xe, TICK_DEBOUNCE_MS);
-    let kt = clock.setTimeout(function At() {
+    let cancelDebounce = clock.setTimeout(refresh, TICK_DEBOUNCE_MS);
+    let cancelInterval = clock.setTimeout(function tick() {
       try {
-        Xe();
+        refresh();
       } finally {
-        kt = clock.setTimeout(At, TICK_INTERVAL_MS);
+        cancelInterval = clock.setTimeout(tick, TICK_INTERVAL_MS);
       }
     }, TICK_INTERVAL_MS);
     return () => {
-      ze = true;
-      rt();
-      kt();
+      cancelled = true;
+      cancelDebounce();
+      cancelInterval();
     };
-  }, [ee, ke, columns, appStoreDirect, setAppState, clock]);
+  }, [enabled, taskCount, columns, appStoreDirect, setAppState, clock]);
 }
 //@ chunk-18hwfzwa.js:813789-813793 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:813789", () => {
+  init_react_production();
+});
 //@ chunk-18hwfzwa.js:813793-813854 placement
 function useEditorMode() {
-  useAppState((h) => h.settings.editorMode);
-  return yt(subscribeGlobalConfigInstalled, EDITOR_MODES);
+  useAppState((state) => state.settings.editorMode);
+  return useSyncExternalStore(subscribeGlobalConfigInstalled, EDITOR_MODES);
 }
 export { useEditorMode, useSubagentStatusLineTick };

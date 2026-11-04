@@ -37,8 +37,8 @@ function isRemoteSessionLaunch({
 /**
  * e 为真返回 null，否则返回 n；语义不确定的占位辅助。
  */
-function nullIfTruthy(e, initialMessage) {
-  return e ? null : initialMessage;
+function nullIfTruthy(isSet, initialMessage) {
+  return isSet ? null : initialMessage;
 }
 //@ chunk-c5gdqf78.js:505-545 placement
 var SESSION_ID_PATTERN = /^(?:session|cse)_[A-Za-z0-9_]+$/;
@@ -46,10 +46,10 @@ var SESSION_ID_PATTERN = /^(?:session|cse)_[A-Za-z0-9_]+$/;
 /**
  * 从参数（可能是 URL/路径）里抽出合法的仓库名片段。
  */
-function extractRepoSlug(e) {
-  if (SESSION_ID_PATTERN.test(e)) return e;
-  if (e.includes("/") && !/\s/.test(e)) {
-    for (let n of e.split(/[/?#]/)) if (SESSION_ID_PATTERN.test(n)) return n;
+function extractRepoSlug(value) {
+  if (SESSION_ID_PATTERN.test(value)) return value;
+  if (value.includes("/") && !/\s/.test(value)) {
+    for (let part of value.split(/[/?#]/)) if (SESSION_ID_PATTERN.test(part)) return part;
   }
   return null;
 }

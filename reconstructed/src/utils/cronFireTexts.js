@@ -14,6 +14,7 @@ import { logFeatureOk, logFeatureSad } from "../services/analytics/featureTeleme
 import { identity as identity_2 } from "./identity.js";
 import { count } from "./collections.js";
 import { logError } from "./log.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2515646-2515829 placement
 /**
@@ -21,13 +22,13 @@ import { logError } from "./log.js";
  */
 function markCronWakeupMessages(messages, wakeupSource) {
   if (wakeupSource === undefined) return;
-  let r = isSnugWallOn();
-  for (let s of messages)
-    if (s.type === "user") {
-      s.wakeupSource = wakeupSource;
-      if (r) s.textNotTyped = true;
-    } else if (isSystemLocalCommandMessage(s)) s.wakeupSource = wakeupSource;
-  if (r) logFeatureOk("cron_fire_texts");
+  let isSnugWall = isSnugWallOn();
+  for (let message of messages)
+    if (message.type === "user") {
+      message.wakeupSource = wakeupSource;
+      if (isSnugWall) message.textNotTyped = true;
+    } else if (isSystemLocalCommandMessage(message)) message.wakeupSource = wakeupSource;
+  if (isSnugWall) logFeatureOk("cron_fire_texts");
 }
 //@ chunk-e6aww6q8.js:2515829-2515920 placement
 /**
@@ -44,26 +45,29 @@ function wakeupSourceField(message) {
 /**
  * 已上报过的 cron 文本键集合。
  */
-var loggedCronFireTextKeys = identity_2(new Set(), (e) => e.clear());
+var loggedCronFireTextKeys; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2515920", () => {
+  loggedCronFireTextKeys = identity_2(new Set(), (keys) => keys.clear());
+});
 //@ chunk-e6aww6q8.js:2515955-2516020 placement
 /**
  * 记录一次 cron 插入文本被列表更新丢弃。
  */
-function logCronTextDropped(e) {
-  if (!loggedCronFireTextKeys.has(e)) {
-    loggedCronFireTextKeys.add(e);
-    logFeatureSad("cron_fire_texts", e);
+function logCronTextDropped(key) {
+  if (!loggedCronFireTextKeys.has(key)) {
+    loggedCronFireTextKeys.add(key);
+    logFeatureSad("cron_fire_texts", key);
   }
 }
 //@ chunk-e6aww6q8.js:2516020-2516165 placement
 /**
  * 检查插入文本条目是否在列表更新中被丢弃，是则记录 list_shed。
  */
-function checkInsertedTextShed(e, n) {
+function checkInsertedTextShed(nextRows, prevRows) {
   try {
     if (
-      count(n, (r) => r.provenance === "inserted_text_at") <
-      count(e, (r) => r.provenance === "inserted_text_at")
+      count(prevRows, (row) => row.provenance === "inserted_text_at") <
+      count(nextRows, (row) => row.provenance === "inserted_text_at")
     )
       logCronTextDropped("list_shed");
   } catch (error) {

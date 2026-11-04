@@ -5,34 +5,34 @@
  * pieces: chunk-h6b7mazd.js (2)
  * attribution: cjs-layout 1, cjs-fingerprint 1
  */
-import { x } from "../../runtime/bun-runtime.js";
+import { __commonJS } from "../../runtime/bun-runtime.js";
 import { require_defer } from "./lib/defer.js";
-import { require_state_3 } from "./lib/state.js";
+import { require_state_2 } from "./lib/state.js";
 import { require_serial } from "./serial.js";
 import { require_serialOrdered } from "./serialOrdered.js";
 
 //@ chunk-h6b7mazd.js:5492-5653 cjs-layout
-var require_asynckit = x(function (cjsExports, cjsModule) {
-  var Cn = require_defer();
-  cjsModule.exports = Ta;
-  function Ta(e) {
-    var t = false;
-    Cn(function () {
-      t = true;
+var require_asynckit = __commonJS(function (cjsExports, cjsModule) {
+  var deferModule = require_defer();
+  cjsModule.exports = asyncify;
+  function asyncify(callback) {
+    var isAsync = false;
+    deferModule(function () {
+      isAsync = true;
     });
-    return function (n, o) {
-      if (t) e(n, o);
+    return function (err, result) {
+      if (isAsync) callback(err, result);
       else
-        Cn(function () {
-          e(n, o);
+        deferModule(function () {
+          callback(err, result);
         });
     };
   }
 });
 //@ chunk-h6b7mazd.js:7348-7433 cjs-fingerprint
-var require_asynckit_2 = x(function (cjsExports, cjsModule) {
+var require_asynckit_2 = __commonJS(function (cjsExports, cjsModule) {
   cjsModule.exports = {
-    parallel: require_state_3(),
+    parallel: require_state_2(),
     serial: require_serial(),
     serialOrdered: require_serialOrdered(),
   };

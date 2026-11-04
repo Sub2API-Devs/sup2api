@@ -13,6 +13,7 @@ import { getInitialCapabilities } from "./terminal.js";
 import { env } from "../utils/env.js";
 import { HostScoped } from "../utils/hostScoped.js";
 import { getRootSession } from "../bootstrap/state.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-brd2890s.js:372-1033 placement
 /**
@@ -77,91 +78,95 @@ class CapabilityReading {
 /**
  * 终端能力默认值（扩展键、同步输出、kitty 键盘、kitty 图像、iTerm 图像、鼠标像素、程序状态）及其键名列表。
  */
-var DEFAULT_TERMINAL_CAPABILITIES = {
-  extendedKeys: false,
-  synchronizedOutput: false,
-  kittyKeyboard: true,
-  kittyGraphics: false,
-  itermImages: false,
-  mousePixels: false,
-  programStatus: false,
-};
-var keys = Object.keys(DEFAULT_TERMINAL_CAPABILITIES);
+var DEFAULT_TERMINAL_CAPABILITIES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var keys;
+deferInit("chunk-brd2890s.js:1033", () => {
+  DEFAULT_TERMINAL_CAPABILITIES = {
+    extendedKeys: false,
+    synchronizedOutput: false,
+    kittyKeyboard: true,
+    kittyGraphics: false,
+    itermImages: false,
+    mousePixels: false,
+    programStatus: false,
+  };
+  keys = Object.keys(DEFAULT_TERMINAL_CAPABILITIES);
+});
 //@ chunk-brd2890s.js:1179-2222 placement
 class TerminalCapabilityReadings {
   readings = new Map();
   answeredYes = new Set();
   listeners = new Map();
   constructor(initialCapabilities) {
-    for (let t of keys) {
-      let n = initialCapabilities[t];
+    for (let capability of keys) {
+      let initial = initialCapabilities[capability];
       this.readings.set(
-        t,
-        "settled" in n
+        capability,
+        "settled" in initial
           ? {
               state: "settled",
-              value: n.settled,
-              source: n.source,
+              value: initial.settled,
+              source: initial.source,
             }
           : {
               state: "pending",
-              likely: n.likely,
-              source: n.source,
+              likely: initial.likely,
+              source: initial.source,
             },
       );
     }
   }
-  get(e) {
-    return this.readings.get(e);
+  get(capability) {
+    return this.readings.get(capability);
   }
-  now(e) {
-    let t = this.get(e);
-    return t.state === "settled" ? t.value : DEFAULT_TERMINAL_CAPABILITIES[e];
+  now(capability) {
+    let reading = this.get(capability);
+    return reading.state === "settled" ? reading.value : DEFAULT_TERMINAL_CAPABILITIES[capability];
   }
-  confirmed(e) {
-    return this.answeredYes.has(e);
+  confirmed(capability) {
+    return this.answeredYes.has(capability);
   }
   pending() {
-    return keys.filter((e) => this.get(e).state === "pending");
+    return keys.filter((capability) => this.get(capability).state === "pending");
   }
-  answer(e, t, n) {
-    let a = this.get(e);
-    if (a.state === "settled") {
-      if (t && a.value) this.answeredYes.add(e);
+  answer(capability, value, source) {
+    let reading = this.get(capability);
+    if (reading.state === "settled") {
+      if (value && reading.value) this.answeredYes.add(capability);
       return false;
     }
-    if (t) this.answeredYes.add(e);
-    this.settle(e, t, n);
+    if (value) this.answeredYes.add(capability);
+    this.settle(capability, value, source);
     return true;
   }
   deadline() {
-    for (let e of this.pending()) {
-      let t = this.get(e);
-      this.settle(e, t.likely, `${t.source}, no answer`);
+    for (let capability of this.pending()) {
+      let reading = this.get(capability);
+      this.settle(capability, reading.likely, `${reading.source}, no answer`);
     }
   }
-  onSettle(e, t) {
-    let n = this.get(e);
-    if (n.state === "settled") {
-      t(n.value);
+  onSettle(capability, listener) {
+    let reading = this.get(capability);
+    if (reading.state === "settled") {
+      listener(reading.value);
       return () => {};
     }
-    let a = this.listeners.get(e) ?? new Set();
-    this.listeners.set(e, a);
-    a.add(t);
+    let listeners = this.listeners.get(capability) ?? new Set();
+    this.listeners.set(capability, listeners);
+    listeners.add(listener);
     return () => {
-      a.delete(t);
+      listeners.delete(listener);
     };
   }
-  settle(e, t, source) {
-    this.readings.set(e, {
+  settle(capability, value, source) {
+    this.readings.set(capability, {
       state: "settled",
-      value: t,
+      value,
       source,
     });
-    let a = this.listeners.get(e);
-    this.listeners.delete(e);
-    for (let r of a ?? []) r(t);
+    let listeners = this.listeners.get(capability);
+    this.listeners.delete(capability);
+    for (let listener of listeners ?? []) listener(value);
   }
 }
 //@ chunk-brd2890s.js:2222-2841 placement
@@ -209,7 +214,10 @@ class TerminalProbeState {
 /**
  * HostScoped 的终端探测状态
  */
-var terminalProbeStateSlot = new HostScoped(() => new TerminalProbeState());
+var terminalProbeStateSlot; // deferred: uses TerminalProbeState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-brd2890s.js:2841", () => {
+  terminalProbeStateSlot = new HostScoped(() => new TerminalProbeState());
+});
 //@ chunk-brd2890s.js:2864-2900 placement
 /**
  * 取当前宿主的终端能力探测状态（能力表、图像文件支持、XTVERSION 名称）。
@@ -247,14 +255,14 @@ function terminalImageProtocol() {
 /**
  * 订阅图像协议能力确定的事件，确定后回调当前协议；返回取消订阅函数。
  */
-function onImageProtocolSettled(e) {
+function onImageProtocolSettled(onSettled) {
   let terminalCapabilities = getTerminalCapabilities();
-  let n = () => e(terminalImageProtocol());
-  let a = [
-    terminalCapabilities.onSettle("kittyGraphics", n),
-    terminalCapabilities.onSettle("itermImages", n),
+  let notify = () => onSettled(terminalImageProtocol());
+  let unsubscribers = [
+    terminalCapabilities.onSettle("kittyGraphics", notify),
+    terminalCapabilities.onSettle("itermImages", notify),
   ];
-  return () => a.forEach((r) => r());
+  return () => unsubscribers.forEach((unsubscribe) => unsubscribe());
 }
 //@ chunk-brd2890s.js:3221-3259 placement
 /**

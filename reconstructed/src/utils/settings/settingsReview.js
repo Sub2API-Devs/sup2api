@@ -14,7 +14,15 @@ import { randomBytes } from "crypto";
 import { lstat, unlink, open, stat, readdir, realpath } from "fs/promises";
 import { constants } from "fs";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, _enum, literal, array, record, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  _enum,
+  literal,
+  array,
+  record,
+  unknown,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   normalizeCaseForComparison,
   isClaudeSettingsPath,
@@ -67,6 +75,7 @@ import { logEvent } from "../../services/analytics/index.js";
 import { fromEnum } from "../../services/analytics/safeMetadata.js";
 import { scanForContext } from "../readEditContext.js";
 import { isNonWslUncPath, isNetworkOrSpecialPath } from "../networkPaths.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-6zvepy0r.js:6076-6157 placement
 /**
@@ -84,41 +93,52 @@ function stripBomAndCarriageReturns(text) {
 /**
  * 设置审阅暂存的常量与结构：存储版本、条目上限、提议内容大小上限、临时提议文件名、过期时间、来源遥测名，以及条目与存储的 schema。
  */
-var REVIEW_STORE_VERSION = 1;
-var MAX_REVIEW_ENTRIES = 64;
-var MAX_PROPOSED_BYTES = 1048576;
-var PROPOSED_FILE_INFIX = ".proposed-";
-var PROPOSED_SUFFIX_PATTERN = /^[0-9a-f]{8}$/;
-var STALE_PROPOSAL_MS = 900000;
-var SOURCE_TELEMETRY_NAMES = {
-  userSettings: "user_settings",
-  projectSettings: "project_settings",
-  localSettings: "local_settings",
-  flagSettings: "policy_settings",
-  policySettings: "policy_settings",
-};
-var REVIEW_ENTRY_SCHEMA = DoctorLazy(() =>
-  u({
-    id: string().min(1),
-    path: string().min(1),
-    resolvedPath: string().min(1),
-    baseSha256: string().nullable(),
-    proposedSha256: string(),
-    proposedContent: string(),
-    stagedAt: string(),
-    by: u({
-      tool: _enum(["Write", "Edit"]),
-      origin: _enum(["local", "served"]),
-      sessionId: string(),
+var REVIEW_STORE_VERSION; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var MAX_REVIEW_ENTRIES;
+var MAX_PROPOSED_BYTES;
+var PROPOSED_FILE_INFIX;
+var PROPOSED_SUFFIX_PATTERN;
+var STALE_PROPOSAL_MS;
+var SOURCE_TELEMETRY_NAMES;
+var REVIEW_ENTRY_SCHEMA;
+var REVIEW_STORE_SCHEMA;
+deferInit("chunk-6zvepy0r.js:6157", () => {
+  REVIEW_STORE_VERSION = 1;
+  MAX_REVIEW_ENTRIES = 64;
+  MAX_PROPOSED_BYTES = 1048576;
+  PROPOSED_FILE_INFIX = ".proposed-";
+  PROPOSED_SUFFIX_PATTERN = /^[0-9a-f]{8}$/;
+  STALE_PROPOSAL_MS = 900000;
+  SOURCE_TELEMETRY_NAMES = {
+    userSettings: "user_settings",
+    projectSettings: "project_settings",
+    localSettings: "local_settings",
+    flagSettings: "policy_settings",
+    policySettings: "policy_settings",
+  };
+  REVIEW_ENTRY_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      id: stringSchema().min(1),
+      path: stringSchema().min(1),
+      resolvedPath: stringSchema().min(1),
+      baseSha256: stringSchema().nullable(),
+      proposedSha256: stringSchema(),
+      proposedContent: stringSchema(),
+      stagedAt: stringSchema(),
+      by: objectSchema({
+        tool: _enum(["Write", "Edit"]),
+        origin: _enum(["local", "served"]),
+        sessionId: stringSchema(),
+      }),
     }),
-  }),
-);
-var REVIEW_STORE_SCHEMA = DoctorLazy(() =>
-  u({
-    version: literal(REVIEW_STORE_VERSION),
-    entries: array(REVIEW_ENTRY_SCHEMA()),
-  }),
-);
+  );
+  REVIEW_STORE_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      version: literal(REVIEW_STORE_VERSION),
+      entries: array(REVIEW_ENTRY_SCHEMA()),
+    }),
+  );
+});
 //@ chunk-6zvepy0r.js:6663-6733 placement
 function settingsReviewStorePath() {
   return join(homedir(), ".claude", "state", "settings-review.json");
@@ -127,52 +147,56 @@ function settingsReviewStorePath() {
 /**
  * settingsSourceForPathByPriority：按优先级找路径对应的设置源。
  */
-function settingsSourceForPathByPriority(e) {
-  let n = normalizeCaseForComparison(e);
-  return SETTING_SOURCES_BY_PRIORITY.find((r) => {
-    let settingsFilePathForSource = getSettingsFilePathForSource(r);
+function settingsSourceForPathByPriority(settingsPath) {
+  let normalizedPath = normalizeCaseForComparison(settingsPath);
+  return SETTING_SOURCES_BY_PRIORITY.find((source) => {
+    let settingsFilePathForSource = getSettingsFilePathForSource(source);
     return (
-      settingsFilePathForSource !== undefined && normalizeCaseForComparison(settingsFilePathForSource) === n
+      settingsFilePathForSource !== undefined &&
+      normalizeCaseForComparison(settingsFilePathForSource) === normalizedPath
     );
   });
 }
 //@ chunk-6zvepy0r.js:6870-6947 placement
-async function resolveSettingsSourceForPath(e) {
-  let n;
+async function resolveSettingsSourceForPath(settingsPath) {
+  let writeTarget;
   try {
-    n = await resolveSettingsWriteTarget(e);
+    writeTarget = await resolveSettingsWriteTarget(settingsPath);
   } catch {
-    return settingsSourceForPathByPriority(e);
+    return settingsSourceForPathByPriority(settingsPath);
   }
-  return settingsSourceForPath(e, n);
+  return settingsSourceForPath(settingsPath, writeTarget);
 }
 //@ chunk-6zvepy0r.js:6947-7118 placement
-async function settingsSourceForPath(e, n) {
-  let r = settingsSourceForPathByPriority(e);
-  if (r !== undefined) return r;
-  let i = normalizeCaseForComparison(n);
-  for (let s of SETTING_SOURCES_BY_PRIORITY) {
-    let settingsFilePathForSource = getSettingsFilePathForSource(s);
+async function settingsSourceForPath(settingsPath, writeTarget) {
+  let byPriority = settingsSourceForPathByPriority(settingsPath);
+  if (byPriority !== undefined) return byPriority;
+  let normalizedTarget = normalizeCaseForComparison(writeTarget);
+  for (let source of SETTING_SOURCES_BY_PRIORITY) {
+    let settingsFilePathForSource = getSettingsFilePathForSource(source);
     if (settingsFilePathForSource === undefined) continue;
     try {
-      if (normalizeCaseForComparison(await resolveSettingsWriteTarget(settingsFilePathForSource)) === i)
-        return s;
+      if (
+        normalizeCaseForComparison(await resolveSettingsWriteTarget(settingsFilePathForSource)) ===
+        normalizedTarget
+      )
+        return source;
     } catch {}
   }
   return;
 }
 //@ chunk-6zvepy0r.js:7118-7266 placement
-function decodedFileText(e) {
-  let n = e.content.startsWith("\uFEFF");
+function decodedFileText(decoded) {
+  let hasBom = decoded.content.startsWith("\uFEFF");
   return {
-    text: n ? e.content.slice(1) : e.content,
-    encoding: e.encoding,
-    bom: n,
-    lineEndings: e.lineEndings,
+    text: hasBom ? decoded.content.slice(1) : decoded.content,
+    encoding: decoded.encoding,
+    bom: hasBom,
+    lineEndings: decoded.lineEndings,
   };
 }
 //@ chunk-6zvepy0r.js:7266-9588 placement
-function settingsReviewStore(e) {
+function settingsReviewStore(options) {
   return {
     readStore: async () => {
       try {
@@ -182,10 +206,10 @@ function settingsReviewStore(e) {
         throw error;
       }
     },
-    writeStore: async (n) => {
-      let r = settingsReviewStorePath();
-      await getFileReader().mkdir(dirname(r), 448);
-      await getFileReader().atomicWrite(r, n, 384);
+    writeStore: async (content) => {
+      let storePath = settingsReviewStorePath();
+      await getFileReader().mkdir(dirname(storePath), 448);
+      await getFileReader().atomicWrite(storePath, content, 384);
     },
     deleteStore: async () => {
       try {
@@ -205,65 +229,77 @@ function settingsReviewStore(e) {
       }
     },
     writeTarget: async ({ path, resolvedPath, baseSha256, content, blockedOnceWritten }) => {
-      let h;
+      let target;
       try {
-        h = await pinWriteTarget(resolvedPath, [resolvedPath], {
+        target = await pinWriteTarget(resolvedPath, [resolvedPath], {
           createParents: true,
         });
       } catch (error) {
         if (error instanceof SymlinkWriteRefusedError) return "redirected";
         throw error;
       }
-      let S = basename(resolvedPath);
-      let w = `${PROPOSED_FILE_INFIX}${randomBytes(4).toString("hex")}`;
-      let y = join(dirname(resolvedPath), ATOMIC_WRITE_DIRNAME);
-      let b = join(dirname(h.ioPath), `${S}${w}`);
-      let P = false;
+      let baseName = basename(resolvedPath);
+      let siblingSuffix = `${PROPOSED_FILE_INFIX}${randomBytes(4).toString("hex")}`;
+      let stagingDir = join(dirname(resolvedPath), ATOMIC_WRITE_DIRNAME);
+      let stagedPath = join(dirname(target.ioPath), `${baseName}${siblingSuffix}`);
+      let stagedWritten = false;
       try {
-        b = stagingPathFor(y, h.ioPath, w, false);
-        let x = dirname(b) !== dirname(h.ioPath);
-        await cleanupStaleProposals(dirname(b), S);
-        let v = async () => {
-          let H;
+        stagedPath = stagingPathFor(stagingDir, target.ioPath, siblingSuffix, false);
+        let stagedAwayFromTarget = dirname(stagedPath) !== dirname(target.ioPath);
+        await cleanupStaleProposals(dirname(stagedPath), baseName);
+        let readCurrent = async () => {
+          let decoded;
           try {
-            H = await h.readExisting(MAX_SETTINGS_JSON_BYTES);
+            decoded = await target.readExisting(MAX_SETTINGS_JSON_BYTES);
           } catch (error) {
             if (isFileTooLargeError(error)) return "changed";
             throw error;
           }
-          let B = H === null ? null : decodedFileText(H);
-          return (B === null ? null : computeContentHash(B.text)) === baseSha256 ? B : "changed";
+          let current = decoded === null ? null : decodedFileText(decoded);
+          return (current === null ? null : computeContentHash(current.text)) === baseSha256
+            ? current
+            : "changed";
         };
-        let E = await v();
-        if (E === "changed") return "changed";
-        let encoding = E?.encoding ?? "utf8";
-        let D = (E?.bom ? "\uFEFF" : "") + detectLineEndingsForString(content, E?.lineEndings ?? "LF");
-        let buffer = Buffer.from(D, encoding);
-        await writeNewFile(b, buffer, 384);
-        P = true;
-        let L = x ? b : join(dirname(resolvedPath), `${S}${w}`);
-        if (await blockedOnceWritten(L)) return "blocked";
-        if ((await v()) === "changed") return "changed";
-        let R = await verifyStagedFile(b, L, buffer);
-        if (R === null) return "tampered";
-        await h.recheckBeforeWrite();
-        let N = await lstat(b).catch(() => null);
-        if (N === null || N.isSymbolicLink() || N.ino !== R.ino || N.dev !== R.dev) return "tampered";
-        if (x) verifyStagingDir(y);
+        let currentAtWrite = await readCurrent();
+        if (currentAtWrite === "changed") return "changed";
+        let encoding = currentAtWrite?.encoding ?? "utf8";
+        let textToWrite =
+          (currentAtWrite?.bom ? "\uFEFF" : "") +
+          detectLineEndingsForString(content, currentAtWrite?.lineEndings ?? "LF");
+        let buffer = Buffer.from(textToWrite, encoding);
+        await writeNewFile(stagedPath, buffer, 384);
+        stagedWritten = true;
+        let finalStagedPath = stagedAwayFromTarget
+          ? stagedPath
+          : join(dirname(resolvedPath), `${baseName}${siblingSuffix}`);
+        if (await blockedOnceWritten(finalStagedPath)) return "blocked";
+        if ((await readCurrent()) === "changed") return "changed";
+        let verified = await verifyStagedFile(stagedPath, finalStagedPath, buffer);
+        if (verified === null) return "tampered";
+        await target.recheckBeforeWrite();
+        let stagedStat = await lstat(stagedPath).catch(() => null);
+        if (
+          stagedStat === null ||
+          stagedStat.isSymbolicLink() ||
+          stagedStat.ino !== verified.ino ||
+          stagedStat.dev !== verified.dev
+        )
+          return "tampered";
+        if (stagedAwayFromTarget) verifyStagingDir(stagingDir);
         try {
-          await retryFsOp(b, h.ioPath);
-          P = false;
+          await retryFsOp(stagedPath, target.ioPath);
+          stagedWritten = false;
         } catch (error) {
           if (!ATOMIC_WRITE_ERRNOS.has(getErrnoCode(error) ?? "")) throw error;
-          await writeFileAtomic(h.ioPath, D, {
+          await writeFileAtomic(target.ioPath, textToWrite, {
             encoding,
-            stagingDir: y,
+            stagingDir,
             refuseHardLinkedInPlace: true,
           });
         }
-        let W = await settingsSourceForPath(path, resolvedPath);
-        let G = W === undefined ? undefined : getSettingsFilePathForSource(W);
-        if (G !== undefined) markInternalWrite(G);
+        let source = await settingsSourceForPath(path, resolvedPath);
+        let sourcePath = source === undefined ? undefined : getSettingsFilePathForSource(source);
+        if (sourcePath !== undefined) markInternalWrite(sourcePath);
         return "written";
       } catch (error) {
         if (error instanceof HardLinkWriteRefusedError) return "hard_linked";
@@ -271,8 +307,8 @@ function settingsReviewStore(e) {
         if (error instanceof StagingDirTamperedError) return "tampered";
         throw error;
       } finally {
-        if (P)
-          await unlink(b).catch((error) => {
+        if (stagedWritten)
+          await unlink(stagedPath).catch((error) => {
             logForDebugging(
               `settings review store: could not remove the proposal sibling (${errorMessage(error)}); the next accept of this file sweeps it`,
               {
@@ -280,25 +316,25 @@ function settingsReviewStore(e) {
               },
             );
           });
-        await h.close();
+        await target.close();
       }
     },
     locate: resolveSettingsWriteTarget,
-    isSettingsFile: async (n) =>
-      isClaudeSettingsPath(n) ||
-      (isJsonSpelling(n) && isManagedSettingsDropInPath(n, await managedDropInSpellings())),
-    configChangeBlocked: async (n, r, i) => {
-      let s = await settingsSourceForPath(n, r);
-      if (s === undefined) return false;
-      if (e?.configChangeHookGate === undefined) {
+    isSettingsFile: async (path) =>
+      isClaudeSettingsPath(path) ||
+      (isJsonSpelling(path) && isManagedSettingsDropInPath(path, await managedDropInSpellings())),
+    configChangeBlocked: async (settingsPath, resolvedPath, context) => {
+      let source = await settingsSourceForPath(settingsPath, resolvedPath);
+      if (source === undefined) return false;
+      if (options?.configChangeHookGate === undefined) {
         logError(Error("settings review store: ConfigChange hook gate not wired"));
         return true;
       }
-      return e.configChangeHookGate(SOURCE_TELEMETRY_NAMES[s], i);
+      return options.configChangeHookGate(SOURCE_TELEMETRY_NAMES[source], context);
     },
-    afterApplied: async (n, r) => {
-      let i = await settingsSourceForPath(n, r);
-      if (i !== undefined) settingsChangeDetector.notifyChange(i);
+    afterApplied: async (settingsPath, resolvedPath) => {
+      let source = await settingsSourceForPath(settingsPath, resolvedPath);
+      if (source !== undefined) settingsChangeDetector.notifyChange(source);
     },
     now: () => new Date(),
   };
@@ -307,43 +343,44 @@ function settingsReviewStore(e) {
 /**
  * 校验暂存的提议文件：不是链接、普通文件且只有一个硬链接、内容哈希与提议一致、与目标路径是同一 inode，通过时返回 dev/ino。
  */
-async function verifyStagedFile(e, n, r) {
+async function verifyStagedFile(stagedPath, targetPath, expectedContent) {
   try {
-    let i = getPlatform() === "windows";
-    if (i && (await lstat(e)).isSymbolicLink()) return null;
-    let s = await open(e, constants.O_RDONLY | (i ? 0 : constants.O_NOFOLLOW));
+    let isWindows = getPlatform() === "windows";
+    if (isWindows && (await lstat(stagedPath)).isSymbolicLink()) return null;
+    let fileHandle = await open(stagedPath, constants.O_RDONLY | (isWindows ? 0 : constants.O_NOFOLLOW));
     try {
-      let stats = await s.stat();
+      let stats = await fileHandle.stat();
       if (!stats.isFile() || stats.nlink !== 1) return null;
-      if (computeContentHash(await s.readFile()) !== computeContentHash(r)) return null;
-      let h = await stat(n);
-      return h.dev === stats.dev && h.ino === stats.ino
+      if (computeContentHash(await fileHandle.readFile()) !== computeContentHash(expectedContent))
+        return null;
+      let targetStat = await stat(targetPath);
+      return targetStat.dev === stats.dev && targetStat.ino === stats.ino
         ? {
             dev: stats.dev,
             ino: stats.ino,
           }
         : null;
     } finally {
-      await s.close();
+      await fileHandle.close();
     }
   } catch {
     return null;
   }
 }
 //@ chunk-6zvepy0r.js:9974-10205 placement
-async function cleanupStaleProposals(e, n) {
-  let r;
+async function cleanupStaleProposals(dir, baseName) {
+  let names;
   try {
-    r = await readdir(e);
+    names = await readdir(dir);
   } catch {
     return;
   }
-  let i = `${n}${PROPOSED_FILE_INFIX}`;
-  let s = Date.now() - STALE_PROPOSAL_MS;
-  for (let f of r) {
-    if (!f.startsWith(i) || !PROPOSED_SUFFIX_PATTERN.test(f.slice(i.length))) continue;
+  let prefix = `${baseName}${PROPOSED_FILE_INFIX}`;
+  let staleBefore = Date.now() - STALE_PROPOSAL_MS;
+  for (let name of names) {
+    if (!name.startsWith(prefix) || !PROPOSED_SUFFIX_PATTERN.test(name.slice(prefix.length))) continue;
     try {
-      if ((await lstat(join(e, f))).mtimeMs < s) await unlink(join(e, f));
+      if ((await lstat(join(dir, name))).mtimeMs < staleBefore) await unlink(join(dir, name));
     } catch {}
   }
 }
@@ -352,12 +389,12 @@ async function resolveSettingsWriteTarget(key) {
   return realpathAllowMissing(await resolveSettingsWritePath(key));
 }
 //@ chunk-6zvepy0r.js:10378-10490 placement
-async function realpathAllowMissing(e) {
+async function realpathAllowMissing(path) {
   try {
-    return await realpath(e);
+    return await realpath(path);
   } catch (error) {
-    if (!isENOENT(error) || dirname(e) === e) throw error;
-    return join(await realpathAllowMissing(dirname(e)), basename(e));
+    if (!isENOENT(error) || dirname(path) === path) throw error;
+    return join(await realpathAllowMissing(dirname(path)), basename(path));
   }
 }
 //@ chunk-6zvepy0r.js:10490-10525 placement
@@ -365,18 +402,18 @@ async function managedDropInSpellings() {
   return managedDropInDirSpellingsAsync(realpathAllowMissing);
 }
 //@ chunk-6zvepy0r.js:10525-10700 placement
-async function readReviewEntries(e) {
-  let n = await e.readStore();
-  if (n === undefined) return [];
-  let r;
+async function readReviewEntries(deps) {
+  let raw = await deps.readStore();
+  if (raw === undefined) return [];
+  let parsed;
   try {
-    r = jsonParse(n);
+    parsed = jsonParse(raw);
   } catch {
-    r = undefined;
+    parsed = undefined;
   }
-  let i = REVIEW_STORE_SCHEMA().safeParse(r);
-  if (!i.success) throw new ReviewStoreMalformedError();
-  return i.data.entries;
+  let result = REVIEW_STORE_SCHEMA().safeParse(parsed);
+  if (!result.success) throw new ReviewStoreMalformedError();
+  return result.data.entries;
 }
 //@ chunk-6zvepy0r.js:10700-10805 placement
 class ReviewStoreMalformedError extends Error {
@@ -385,20 +422,20 @@ class ReviewStoreMalformedError extends Error {
   }
 }
 //@ chunk-6zvepy0r.js:10805-10906 placement
-async function isSettingsEntry(e, n) {
-  return (await n.isSettingsFile(e.path)) || (await n.isSettingsFile(e.resolvedPath));
+async function isSettingsEntry(entry, deps) {
+  return (await deps.isSettingsFile(entry.path)) || (await deps.isSettingsFile(entry.resolvedPath));
 }
 //@ chunk-6zvepy0r.js:10906-11033 placement
-async function writeReviewEntries(e, n) {
-  if (e.length === 0) {
-    await n.deleteStore();
+async function writeReviewEntries(entries, deps) {
+  if (entries.length === 0) {
+    await deps.deleteStore();
     return;
   }
-  await n.writeStore(
+  await deps.writeStore(
     jsonStringify(
       {
         version: REVIEW_STORE_VERSION,
-        entries: e,
+        entries,
       },
       null,
       2,
@@ -408,64 +445,67 @@ async function writeReviewEntries(e, n) {
   );
 }
 //@ chunk-6zvepy0r.js:11033-11734 placement
-async function stageSettingsProposal(e, n = settingsReviewStore()) {
-  let reviewEntries = await readReviewEntries(n);
-  let target = await n.readTarget(e.path);
-  let s = stripBomAndCarriageReturns(e.proposedContent);
-  let f = {
+async function stageSettingsProposal(change, deps = settingsReviewStore()) {
+  let reviewEntries = await readReviewEntries(deps);
+  let target = await deps.readTarget(change.path);
+  let proposedContent = stripBomAndCarriageReturns(change.proposedContent);
+  let entry = {
     id: randomBytes(6).toString("hex"),
-    path: e.path,
-    resolvedPath: await n.locate(e.path),
+    path: change.path,
+    resolvedPath: await deps.locate(change.path),
     baseSha256: target === null ? null : computeContentHash(target),
-    proposedSha256: computeContentHash(s),
-    proposedContent: s,
-    stagedAt: n.now().toISOString(),
-    by: e.by,
+    proposedSha256: computeContentHash(proposedContent),
+    proposedContent,
+    stagedAt: deps.now().toISOString(),
+    by: change.by,
   };
-  let h = normalizeCaseForComparison(f.path);
-  let S = normalizeCaseForComparison(f.resolvedPath);
-  let w = [
+  let normalizedPath = normalizeCaseForComparison(entry.path);
+  let normalizedResolvedPath = normalizeCaseForComparison(entry.resolvedPath);
+  let nextEntries = [
     ...reviewEntries.filter(
       (reviewEntry) =>
-        normalizeCaseForComparison(reviewEntry.path) !== h &&
-        normalizeCaseForComparison(reviewEntry.resolvedPath) !== S,
+        normalizeCaseForComparison(reviewEntry.path) !== normalizedPath &&
+        normalizeCaseForComparison(reviewEntry.resolvedPath) !== normalizedResolvedPath,
     ),
-    f,
+    entry,
   ];
-  let y = 0;
-  while (w.length > MAX_REVIEW_ENTRIES || jsonStringify(w).length > MAX_PROPOSED_BYTES) {
-    let index = w.findIndex((P) => P !== f && P.by.sessionId === f.by.sessionId);
+  let droppedCount = 0;
+  while (nextEntries.length > MAX_REVIEW_ENTRIES || jsonStringify(nextEntries).length > MAX_PROPOSED_BYTES) {
+    let index = nextEntries.findIndex(
+      (otherEntry) => otherEntry !== entry && otherEntry.by.sessionId === entry.by.sessionId,
+    );
     if (index === -1) throw Error("settings review store: no room, proposal not staged");
-    w.splice(index, 1);
-    y++;
+    nextEntries.splice(index, 1);
+    droppedCount++;
   }
-  if (y > 0)
-    logForDebugging(`settings review store: full, dropped the ${y} oldest pending proposal(s)`, {
+  if (droppedCount > 0)
+    logForDebugging(`settings review store: full, dropped the ${droppedCount} oldest pending proposal(s)`, {
       level: "warn",
     });
-  await writeReviewEntries(w, n);
-  return f;
+  await writeReviewEntries(nextEntries, deps);
+  return entry;
 }
 //@ chunk-6zvepy0r.js:11734-12739 placement
 async function acceptSettingsProposal(change, deps = settingsReviewStore()) {
-  let found = (await readReviewEntries(deps)).find((S) => S.id === change.id);
-  if (found === undefined || !(await isSettingsEntry(found, deps))) return "gone";
+  let entry = (await readReviewEntries(deps)).find((entry) => entry.id === change.id);
+  if (entry === undefined || !(await isSettingsEntry(entry, deps))) return "gone";
   if (
-    jsonStringify(found) !== jsonStringify(change) ||
-    computeContentHash(found.proposedContent) !== found.proposedSha256
+    jsonStringify(entry) !== jsonStringify(change) ||
+    computeContentHash(entry.proposedContent) !== entry.proposedSha256
   )
     return "stale";
-  if ((await deps.locate(found.path)) !== found.resolvedPath) return "redirected";
-  let target = await deps.readTarget(found.resolvedPath);
-  if ((target === null ? null : computeContentHash(target)) !== found.baseSha256) return "conflict";
-  let h;
+  if ((await deps.locate(entry.path)) !== entry.resolvedPath) return "redirected";
+  let target = await deps.readTarget(entry.resolvedPath);
+  if ((target === null ? null : computeContentHash(target)) !== entry.baseSha256) return "conflict";
+  let result;
   try {
-    h = await deps.writeTarget({
-      path: found.path,
-      resolvedPath: found.resolvedPath,
-      baseSha256: found.baseSha256,
-      content: found.proposedContent,
-      blockedOnceWritten: (S) => deps.configChangeBlocked(found.path, found.resolvedPath, S),
+    result = await deps.writeTarget({
+      path: entry.path,
+      resolvedPath: entry.resolvedPath,
+      baseSha256: entry.baseSha256,
+      content: entry.proposedContent,
+      blockedOnceWritten: (writtenPath) =>
+        deps.configChangeBlocked(entry.path, entry.resolvedPath, writtenPath),
     });
   } catch (error) {
     let errnoCode = getErrnoCode(error);
@@ -473,22 +513,22 @@ async function acceptSettingsProposal(change, deps = settingsReviewStore()) {
       return "not_writable";
     throw error;
   }
-  switch (h) {
+  switch (result) {
     case "changed":
       return "conflict";
     case "redirected":
     case "hard_linked":
     case "blocked":
     case "tampered":
-      return h;
+      return result;
     case "written":
       break;
   }
-  await deps.afterApplied(found.path, found.resolvedPath);
+  await deps.afterApplied(entry.path, entry.resolvedPath);
   try {
     let reviewEntries = await readReviewEntries(deps);
     await writeReviewEntries(
-      reviewEntries.filter((reviewEntry) => reviewEntry.id !== found.id),
+      reviewEntries.filter((reviewEntry) => reviewEntry.id !== entry.id),
       deps,
     );
   } catch (error) {
@@ -516,41 +556,44 @@ async function discardSettingsProposal(id, deps = settingsReviewStore()) {
 /**
  * 只保留在给定时间之后暂存的设置提议，返回删除的条数。
  */
-async function pruneReviewEntriesBefore(cutoffDate, n = settingsReviewStore()) {
-  let reviewEntries = await readReviewEntries(n);
-  let time = n.now().getTime();
+async function pruneReviewEntriesBefore(cutoffDate, deps = settingsReviewStore()) {
+  let reviewEntries = await readReviewEntries(deps);
+  let time = deps.now().getTime();
   let filtered = reviewEntries.filter((reviewEntry) => {
     let timestamp = Date.parse(reviewEntry.stagedAt);
     return Number.isFinite(timestamp) && timestamp >= cutoffDate.getTime() && timestamp <= time;
   });
   if (filtered.length !== reviewEntries.length || reviewEntries.length === 0)
-    await writeReviewEntries(filtered, n);
+    await writeReviewEntries(filtered, deps);
   return reviewEntries.length - filtered.length;
 }
 //@ chunk-6zvepy0r.js:13105-13564 placement
 /**
  * 比较设置文件新旧内容的顶层键，列出新增、删除、修改的键；新内容非 JSON 或替换了非 JSON 文件时给出相应说明。
  */
-function describeSettingsChange(e, proposedContent) {
-  let r = (h) => {
-    if (h === null) return {};
+function describeSettingsChange(currentContent, content) {
+  let parseSettings = (content) => {
+    if (content === null) return {};
     try {
-      let S = record(string(), unknown()).safeParse(jsonParse(stripBomAndCarriageReturns(h)));
-      return S.success ? S.data : undefined;
+      let parsed = record(stringSchema(), unknown()).safeParse(
+        jsonParse(stripBomAndCarriageReturns(content)),
+      );
+      return parsed.success ? parsed.data : undefined;
     } catch {
       return;
     }
   };
-  let i = r(e);
-  let s = r(proposedContent);
-  if (s === undefined) return ["not valid JSON"];
-  if (i === undefined) return ["replaces a file that was not valid JSON"];
-  let f = [];
-  for (let h of new Set([...Object.keys(i), ...Object.keys(s)]))
-    if (!(h in i)) f.push(`adds ${h}`);
-    else if (!(h in s)) f.push(`removes ${h}`);
-    else if (jsonStringify(i[h]) !== jsonStringify(s[h])) f.push(`changes ${h}`);
-  return f;
+  let currentSettings = parseSettings(currentContent);
+  let proposedSettings = parseSettings(content);
+  if (proposedSettings === undefined) return ["not valid JSON"];
+  if (currentSettings === undefined) return ["replaces a file that was not valid JSON"];
+  let changes = [];
+  for (let key of new Set([...Object.keys(currentSettings), ...Object.keys(proposedSettings)]))
+    if (!(key in currentSettings)) changes.push(`adds ${key}`);
+    else if (!(key in proposedSettings)) changes.push(`removes ${key}`);
+    else if (jsonStringify(currentSettings[key]) !== jsonStringify(proposedSettings[key]))
+      changes.push(`changes ${key}`);
+  return changes;
 }
 //@ chunk-6zvepy0r.js:13564-13622 placement
 function shouldStageSettingsWrite({ session, served }) {
@@ -572,8 +615,8 @@ function settingsWriteRoute({ session, served, cause }) {
   return !served && isHeadlessHostSession() ? "cloud" : "review";
 }
 //@ chunk-6zvepy0r.js:13768-15740 placement
-function settingsNotAppliedMessage(filePath, n) {
-  switch (n) {
+function settingsNotAppliedMessage(filePath, cause) {
+  switch (cause) {
     case "card":
       return `Not applied: ${filePath} was NOT modified. In the Claude desktop app, a change to a Claude Code settings file applies only when the user approves that edit on its permission card. Tell the user what you meant to change. Do not retry the edit or try to make the same change another way.`;
     case "cloud":
@@ -590,14 +633,19 @@ function settingsNotAppliedMessage(filePath, n) {
 /**
  * 托管设置目录无法解析时拒绝写设置文件的错误，提示模型不要重试或换方式修改。
  */
-class ManagedDirUnresolvedError extends TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS {
-  constructor(absolutePath) {
-    super(
-      `Not written: ${absolutePath} was NOT modified. Claude Code could not resolve where its managed settings folder is, so it cannot rule out that this path is a managed settings file, and it does not write the file. Tell the user what you meant to change. Do not retry the edit or try to make the same change another way.`,
-      "settings write refused: a managed drop-in directory did not resolve",
-    );
-  }
-}
+let ManagedDirUnresolvedError; // deferred: uses TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS (../errors.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-6zvepy0r.js:15740", () => {
+  ManagedDirUnresolvedError = class ManagedDirUnresolvedError extends (
+    TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+  ) {
+    constructor(absolutePath) {
+      super(
+        `Not written: ${absolutePath} was NOT modified. Claude Code could not resolve where its managed settings folder is, so it cannot rule out that this path is a managed settings file, and it does not write the file. Tell the user what you meant to change. Do not retry the edit or try to make the same change another way.`,
+        "settings write refused: a managed drop-in directory did not resolve",
+      );
+    }
+  };
+});
 //@ chunk-6zvepy0r.js:16161-16392 placement
 var STAGED_FOR_REVIEW_TEXT =
   "Staged for your review \xB7 not applied until you accept it in /settings-review";
@@ -624,10 +672,10 @@ async function checkSettingsWrite(context, spellings, file) {
     return;
   if (isServed) {
     let { settingsSpellings, unclassified } = await classifySettingsPaths(spellings);
-    let [P] = settingsSpellings;
-    if (P !== undefined)
+    let [settingsPath] = settingsSpellings;
+    if (settingsPath !== undefined)
       return {
-        path: P,
+        path: settingsPath,
         cause: "unapproved",
       };
     if (unclassified !== undefined) throw new ManagedDirUnresolvedError(file.absolutePath);
@@ -635,75 +683,78 @@ async function checkSettingsWrite(context, spellings, file) {
   }
   if (context.permissionSurface !== undefined) return;
   let { settingsSpellings, unclassified, dropIns } = await classifySettingsPaths(spellings);
-  let [S] = settingsSpellings;
-  if (S === undefined) {
+  let [settingsPath] = settingsSpellings;
+  if (settingsPath === undefined) {
     if (unclassified !== undefined) throw new ManagedDirUnresolvedError(file.absolutePath);
     return;
   }
   if (!isHostAttestedWrite(context.session, context.toolUseId, file))
     return {
-      path: S,
+      path: settingsPath,
       cause: "unapproved",
     };
-  let w = await settingsWriteCoverage(
+  let coverage = await settingsWriteCoverage(
     file.absolutePath,
     spellings,
     settingsSpellings,
     dropIns ?? (await managedDropInSpellings()),
   );
-  return w === "covered"
+  return coverage === "covered"
     ? undefined
     : {
-        path: S,
-        cause: w,
+        path: settingsPath,
+        cause: coverage,
       };
 }
 //@ chunk-6zvepy0r.js:17009-17204 placement
 async function classifySettingsPaths(spellings) {
-  let n = spellings.some(isJsonSpelling) ? await managedDropInSpellings() : undefined;
+  let dropIns = spellings.some(isJsonSpelling) ? await managedDropInSpellings() : undefined;
   return {
     settingsSpellings: spellings.filter(
-      (r) => isClaudeSettingsPath(r) || (n !== undefined && isManagedSettingsDropInPath(r, n)),
+      (spelling) =>
+        isClaudeSettingsPath(spelling) ||
+        (dropIns !== undefined && isManagedSettingsDropInPath(spelling, dropIns)),
     ),
-    unclassified: n === undefined || n.allResolved ? undefined : spellings.find(isJsonSpelling),
-    dropIns: n,
+    unclassified: dropIns === undefined || dropIns.allResolved ? undefined : spellings.find(isJsonSpelling),
+    dropIns,
   };
 }
 //@ chunk-6zvepy0r.js:17204-17483 placement
-async function settingsWriteCoverage(absolutePath, spellings, settingsSpellings, i) {
+async function settingsWriteCoverage(absolutePath, spellings, settingsSpellings, dropIns) {
   if (!settingsSpellings.includes(absolutePath)) return "linked";
-  let filtered = spellings.filter((h) => h !== absolutePath);
-  if (await touchesManagedSettings(spellings, i)) return filtered.length === 0 ? "policy" : "linked";
+  let filtered = spellings.filter((spelling) => spelling !== absolutePath);
+  if (await touchesManagedSettings(spellings, dropIns)) return filtered.length === 0 ? "policy" : "linked";
   if (filtered.length === 0) return "covered";
-  let f = settingsSourceForPathByPriority(absolutePath);
-  if (f === undefined) return "linked";
-  for (let h of filtered) if ((await resolveSettingsSourceForPath(h)) !== f) return "linked";
+  let primarySource = settingsSourceForPathByPriority(absolutePath);
+  if (primarySource === undefined) return "linked";
+  for (let spelling of filtered)
+    if ((await resolveSettingsSourceForPath(spelling)) !== primarySource) return "linked";
   return "covered";
 }
 //@ chunk-6zvepy0r.js:17483-17762 placement
-async function touchesManagedSettings(e, n) {
-  if (!n.allResolved || !n.allLocated) return true;
-  let r = new Set();
-  for (let i of managedSettingsFiles()) {
-    r.add(foldPathSegments(i));
+async function touchesManagedSettings(spellings, dropIns) {
+  if (!dropIns.allResolved || !dropIns.allLocated) return true;
+  let managedPaths = new Set();
+  for (let managedPath of managedSettingsFiles()) {
+    managedPaths.add(foldPathSegments(managedPath));
     try {
-      r.add(foldPathSegments(await resolveSettingsWriteTarget(i)));
+      managedPaths.add(foldPathSegments(await resolveSettingsWriteTarget(managedPath)));
     } catch {
       return true;
     }
   }
-  for (let i of e) {
-    let s;
+  for (let spelling of spellings) {
+    let resolvedPath;
     try {
-      s = await resolveSettingsWriteTarget(i);
+      resolvedPath = await resolveSettingsWriteTarget(spelling);
     } catch {
       return true;
     }
     if (
-      isManagedSettingsDropInPath(i, n) ||
-      isManagedSettingsDropInPath(s, n) ||
-      r.has(foldPathSegments(expandPath(i))) ||
-      r.has(foldPathSegments(s))
+      isManagedSettingsDropInPath(spelling, dropIns) ||
+      isManagedSettingsDropInPath(resolvedPath, dropIns) ||
+      managedPaths.has(foldPathSegments(expandPath(spelling))) ||
+      managedPaths.has(foldPathSegments(resolvedPath))
     )
       return true;
   }
@@ -713,22 +764,24 @@ async function touchesManagedSettings(e, n) {
 function managedSettingsFiles() {
   let settingsFilePathForSource = getSettingsFilePathForSource("flagSettings");
   return [
-    ...managedFileSettingsDirs(wslInheritsSettings()).map((n) => join(n, "managed-settings.json")),
+    ...managedFileSettingsDirs(wslInheritsSettings()).map((settingsDir) =>
+      join(settingsDir, "managed-settings.json"),
+    ),
     ...(settingsFilePathForSource === undefined ? [] : [settingsFilePathForSource]),
   ];
 }
 //@ chunk-6zvepy0r.js:17884-18536 placement
-async function stageSettingsWrite(e) {
-  let n = e.writeCtx.remoteCall === undefined ? "local" : "served";
-  let r;
+async function stageSettingsWrite(request) {
+  let origin = request.writeCtx.remoteCall === undefined ? "local" : "served";
+  let entry;
   try {
-    r = await stageSettingsProposal({
-      path: e.absolutePath,
-      proposedContent: e.proposedContent,
+    entry = await stageSettingsProposal({
+      path: request.absolutePath,
+      proposedContent: request.proposedContent,
       by: {
-        tool: e.tool,
-        origin: n,
-        sessionId: e.writeCtx.remoteCall?.origin.callerSessionId ?? getSessionId(),
+        tool: request.tool,
+        origin,
+        sessionId: request.writeCtx.remoteCall?.origin.callerSessionId ?? getSessionId(),
       },
     });
   } catch (error) {
@@ -739,13 +792,13 @@ async function stageSettingsWrite(e) {
     );
   }
   logEvent("tengu_settings_change_staged", {
-    origin: fromEnum(n),
-    tool: fromEnum(e.tool),
-    source_kind: fromEnum(settingsSourceForPathByPriority(e.absolutePath) ?? "other"),
-    key_count: describeSettingsChange(e.currentContent, e.proposedContent).length,
+    origin: fromEnum(origin),
+    tool: fromEnum(request.tool),
+    source_kind: fromEnum(settingsSourceForPathByPriority(request.absolutePath) ?? "other"),
+    key_count: describeSettingsChange(request.currentContent, request.proposedContent).length,
   });
   logFeatureOk("settings_quarantine");
-  return r;
+  return entry;
 }
 //@ chunk-6zvepy0r.js:18572-18609 placement
 /**
@@ -759,8 +812,8 @@ var DIFF_CONTEXT_LINES_AFTER = 13;
 /**
  * 打开文件并读取指定行附近的上下文，用于拒绝时显示 diff。
  */
-async function readRejectionContext(filePath, needle, contextLines = 3) {
-  let handle = await openForDiff(filePath);
+async function readRejectionContext(path, needle, contextLines = 3) {
+  let handle = await openForDiff(path);
   if (handle === null) return null;
   try {
     return await scanForContext(handle, needle, contextLines);
@@ -772,11 +825,11 @@ async function readRejectionContext(filePath, needle, contextLines = 3) {
 /**
  * 为显示 diff 打开文件（跳过特殊路径与含空字节的路径，不存在返回 null）。
  */
-async function openForDiff(e) {
-  if (isNonWslUncPath(e) || isNetworkOrSpecialPath(e)) return null;
-  if (e.includes("\x00")) return null;
+async function openForDiff(path) {
+  if (isNonWslUncPath(path) || isNetworkOrSpecialPath(path)) return null;
+  if (path.includes("\x00")) return null;
   try {
-    return await open(e, "r");
+    return await open(path, "r");
   } catch (error) {
     if (isENOENT(error)) return null;
     throw error;

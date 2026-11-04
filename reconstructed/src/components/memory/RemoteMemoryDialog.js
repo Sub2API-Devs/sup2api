@@ -8,7 +8,12 @@
  * pieces: chunk-c55mbvfz.js (11)
  * attribution: placement 10, sole-consumer 1
  */
-import { init_react_production, y, fo, Qr } from "../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  suspenseTypeExport,
+  use,
+} from "../../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -16,12 +21,18 @@ import {
 import { Text, Box } from "../../ink/components/Text.js";
 import { stripInvisibleChars } from "../../utils/invisibleChars.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, array, string, E, M } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  array,
+  stringSchema,
+  numberSchema,
+  booleanSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { parseThinClientReply } from "../../cli/thinClient.js";
 import { errorMessage } from "../../utils/errors.js";
 import { shortHostname } from "../../utils/hooks/deviceHookId.js";
 import { SYNC_KEYS } from "../../services/settingsSync/types.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { KeyboardShortcutHint } from "../design-system/KeyboardShortcutHint.js";
 import { WorkerBadge } from "../permissions/WorkerBadge.js";
@@ -58,12 +69,12 @@ function renderPathLine(line, i_1) {
 //@ chunk-c55mbvfz.js:15853-16049 placement
 var REMOTE_MEMORY_MAX_BYTES = 65536;
 var remoteContextUsageSchema = DoctorLazy(() =>
-  u({
+  objectSchema({
     memoryFiles: array(
-      u({
-        path: string(),
-        type: string().catch(""),
-        tokens: E().catch(0),
+      objectSchema({
+        path: stringSchema(),
+        type: stringSchema().catch(""),
+        tokens: numberSchema().catch(0),
       })
         .nullable()
         .catch(null),
@@ -71,9 +82,9 @@ var remoteContextUsageSchema = DoctorLazy(() =>
   }),
 );
 var remoteFileReadSchema = DoctorLazy(() =>
-  u({
-    contents: string(),
-    truncated: M().optional().catch(undefined),
+  objectSchema({
+    contents: stringSchema(),
+    truncated: booleanSchema().optional().catch(undefined),
   }),
 );
 //@ chunk-c55mbvfz.js:16049-16509 placement
@@ -148,12 +159,12 @@ async function readRemoteFile(remote, path, signal) {
           reason: "the cloud session sent a reply this version can't display",
         };
   } catch (error) {
-    let T = errorMessage(error);
+    let message = errorMessage(error);
     return {
       kind: "unreadable",
-      reason: T.startsWith("read denied")
+      reason: message.startsWith("read denied")
         ? "the cloud session only shows a terminal the files inside its workspace, and this one isn't"
-        : stripInvisibleChars(T),
+        : stripInvisibleChars(message),
     };
   }
 }
@@ -161,9 +172,9 @@ async function readRemoteFile(remote, path, signal) {
 /**
  * 远程 /memory 对话框中记忆文件的说明：从本机启动时发送的用户文件应在本机编辑，云会话自身的文件无法从这里打开。
  */
-function remoteMemoryFileNote(userMemoryOrigin, shownPath) {
+function remoteMemoryFileNote(userMemoryOrigin, filePath) {
   return userMemoryOrigin === "sentFromHere"
-    ? `User files were sent from ${shortHostname()} at launch \u2014 edit ${shownPath === undefined ? "them under ~/.claude" : SYNC_KEYS(shownPath)} there; changes apply to the next cloud session, or when this machine re-attaches.`
+    ? `User files were sent from ${shortHostname()} at launch \u2014 edit ${filePath === undefined ? "them under ~/.claude" : SYNC_KEYS(filePath)} there; changes apply to the next cloud session, or when this machine re-attaches.`
     : "This file is in the cloud session's own ~/.claude (not from this machine) and can't be opened from here.";
 }
 //@ chunk-c55mbvfz.js:17445-19637 placement
@@ -171,74 +182,74 @@ function remoteMemoryFileNote(userMemoryOrigin, shownPath) {
  * 远程（云会话/Remote Control）连接下的 /memory 只读对话框：列出并查看云端会话读到的记忆文件。
  */
 function RemoteMemoryDialog(props) {
-  let I = w(31);
+  let $ = useMemoCache(31);
   let { onExit, remote, filesRead, signal, userMemoryOrigin, pointsToCloudMemory } = props;
   if (pointsToCloudMemory === undefined) false;
   else pointsToCloudMemory;
-  let [N, B] = y(null);
-  let L;
-  if (I[0] !== onExit) {
-    L = () =>
+  let [selectedFile, setSelectedFile] = useState(null);
+  let onDismiss;
+  if ($[0] !== onExit) {
+    onDismiss = () =>
       onExit("Memory dialog dismissed", {
         display: "system",
       });
-    I[0] = onExit;
-    I[1] = L;
-  } else L = I[1];
-  let onCancel = L;
-  if (N !== null) {
-    const subtitle = `${N.file.type} memory \xB7 read-only`;
+    $[0] = onExit;
+    $[1] = onDismiss;
+  } else onDismiss = $[1];
+  let onCancel = onDismiss;
+  if (selectedFile !== null) {
+    const subtitle = `${selectedFile.file.type} memory \xB7 read-only`;
     let onCancel;
-    if (I[2] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => B(null);
-      I[2] = onCancel;
-    } else onCancel = I[2];
+    if ($[2] === MEMO_CACHE_SENTINEL) {
+      onCancel = () => setSelectedFile(null);
+      $[2] = onCancel;
+    } else onCancel = $[2];
     let inputGuide;
-    if (I[3] === MEMO_CACHE_SENTINEL) {
+    if ($[3] === MEMO_CACHE_SENTINEL) {
       inputGuide = jsxProd_default(KeyboardShortcutHint, {
         chord: "escape",
         action: "go back",
       });
-      I[3] = inputGuide;
-    } else inputGuide = I[3];
+      $[3] = inputGuide;
+    } else inputGuide = $[3];
     let fallback;
-    if (I[4] === MEMO_CACHE_SENTINEL) {
+    if ($[4] === MEMO_CACHE_SENTINEL) {
       fallback = jsxProd_default(WorkerBadge, {
         message: "Reading\u2026",
         dimColor: true,
       });
-      I[4] = fallback;
-    } else fallback = I[4];
+      $[4] = fallback;
+    } else fallback = $[4];
     let children;
-    if (I[5] !== N.read) {
-      children = jsxProd_default(fo, {
+    if ($[5] !== selectedFile.read) {
+      children = jsxProd_default(suspenseTypeExport, {
         fallback,
         children: jsxProd_default(RemoteMemoryFileView, {
-          read: N.read,
+          read: selectedFile.read,
         }),
       });
-      I[5] = N.read;
-      I[6] = children;
-    } else children = I[6];
-    let H;
-    if (I[7] !== N.file.shownPath || I[8] !== subtitle || I[9] !== children) {
-      H = jsxProd_default(Dialog, {
-        title: N.file.shownPath,
+      $[5] = selectedFile.read;
+      $[6] = children;
+    } else children = $[6];
+    let detailDialog;
+    if ($[7] !== selectedFile.file.shownPath || $[8] !== subtitle || $[9] !== children) {
+      detailDialog = jsxProd_default(Dialog, {
+        title: selectedFile.file.shownPath,
         subtitle,
         onCancel,
         color: "remember",
         inputGuide,
         children,
       });
-      I[7] = N.file.shownPath;
-      I[8] = subtitle;
-      I[9] = children;
-      I[10] = H;
-    } else H = I[10];
-    return H;
+      $[7] = selectedFile.file.shownPath;
+      $[8] = subtitle;
+      $[9] = children;
+      $[10] = detailDialog;
+    } else detailDialog = $[10];
+    return detailDialog;
   }
   let inputGuide;
-  if (I[11] === MEMO_CACHE_SENTINEL) {
+  if ($[11] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default_2(Byline, {
       children: [
         jsxProd_default(KeyboardShortcutHint, {
@@ -251,36 +262,36 @@ function RemoteMemoryDialog(props) {
         }),
       ],
     });
-    I[11] = inputGuide;
-  } else inputGuide = I[11];
+    $[11] = inputGuide;
+  } else inputGuide = $[11];
   let fallback;
-  if (I[12] === MEMO_CACHE_SENTINEL) {
+  if ($[12] === MEMO_CACHE_SENTINEL) {
     fallback = jsxProd_default(WorkerBadge, {
       message: "Asking the cloud session for its memory files\u2026",
       dimColor: true,
     });
-    I[12] = fallback;
-  } else fallback = I[12];
+    $[12] = fallback;
+  } else fallback = $[12];
   let onPick;
-  if (I[13] !== remote || I[14] !== signal || I[15] !== userMemoryOrigin) {
-    onPick = (ae) =>
-      B({
-        file: ae,
-        read: ae.userScope
+  if ($[13] !== remote || $[14] !== signal || $[15] !== userMemoryOrigin) {
+    onPick = (file) =>
+      setSelectedFile({
+        file,
+        read: file.userScope
           ? Promise.resolve({
               kind: "userScope",
-              hint: remoteMemoryFileNote(userMemoryOrigin, ae.shownPath),
+              hint: remoteMemoryFileNote(userMemoryOrigin, file.shownPath),
             })
-          : readRemoteFile(remote, ae.path, signal),
+          : readRemoteFile(remote, file.path, signal),
       });
-    I[13] = remote;
-    I[14] = signal;
-    I[15] = userMemoryOrigin;
-    I[16] = onPick;
-  } else onPick = I[16];
-  let K;
-  if (I[17] !== onCancel || I[18] !== filesRead || I[19] !== onPick || I[20] !== userMemoryOrigin) {
-    K = jsxProd_default(fo, {
+    $[13] = remote;
+    $[14] = signal;
+    $[15] = userMemoryOrigin;
+    $[16] = onPick;
+  } else onPick = $[16];
+  let fileList;
+  if ($[17] !== onCancel || $[18] !== filesRead || $[19] !== onPick || $[20] !== userMemoryOrigin) {
+    fileList = jsxProd_default(suspenseTypeExport, {
       fallback,
       children: jsxProd_default(RemoteMemoryFileList, {
         filesRead,
@@ -289,221 +300,226 @@ function RemoteMemoryDialog(props) {
         userMemoryOrigin,
       }),
     });
-    I[17] = onCancel;
-    I[18] = filesRead;
-    I[19] = onPick;
-    I[20] = userMemoryOrigin;
-    I[21] = K;
-  } else K = I[21];
-  let X;
-  if (I[22] === MEMO_CACHE_SENTINEL) {
-    X = jsxProd_default(Text, {
+    $[17] = onCancel;
+    $[18] = filesRead;
+    $[19] = onPick;
+    $[20] = userMemoryOrigin;
+    $[21] = fileList;
+  } else fileList = $[21];
+  let localMemoryNote;
+  if ($[22] === MEMO_CACHE_SENTINEL) {
+    localMemoryNote = jsxProd_default(Text, {
       dimColor: true,
       wrap: "wrap-trim",
       children:
         "Workspace files are read-only here: the session takes no edits from a terminal \u2014 ask Claude to edit one, or edit and commit it in the repo.",
     });
-    I[22] = X;
-  } else X = I[22];
-  let H;
-  if (I[23] !== userMemoryOrigin) {
-    H =
+    $[22] = localMemoryNote;
+  } else localMemoryNote = $[22];
+  let localMemorySection;
+  if ($[23] !== userMemoryOrigin) {
+    localMemorySection =
       userMemoryOrigin === "sentFromHere" &&
       jsxProd_default(Text, {
         dimColor: true,
         wrap: "wrap-trim",
         children: remoteMemoryFileNote("sentFromHere"),
       });
-    I[23] = userMemoryOrigin;
-    I[24] = H;
-  } else H = I[24];
-  let ve;
-  if (I[25] !== H) {
-    ve = jsxProd_default_2(Box, {
+    $[23] = userMemoryOrigin;
+    $[24] = localMemorySection;
+  } else localMemorySection = $[24];
+  let bodyColumn;
+  if ($[25] !== localMemorySection) {
+    bodyColumn = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [X, H, false],
+      children: [localMemoryNote, localMemorySection, false],
     });
-    I[25] = H;
-    I[26] = ve;
-  } else ve = I[26];
-  let oo;
-  if (I[27] !== onCancel || I[28] !== K || I[29] !== ve) {
-    oo = jsxProd_default_2(Dialog, {
+    $[25] = localMemorySection;
+    $[26] = bodyColumn;
+  } else bodyColumn = $[26];
+  let mainDialog;
+  if ($[27] !== onCancel || $[28] !== fileList || $[29] !== bodyColumn) {
+    mainDialog = jsxProd_default_2(Dialog, {
       title: "Memory",
       subtitle: "Loaded in the cloud session",
       onCancel,
       color: "remember",
       inputGuide,
-      children: [K, ve],
+      children: [fileList, bodyColumn],
     });
-    I[27] = onCancel;
-    I[28] = K;
-    I[29] = ve;
-    I[30] = oo;
-  } else oo = I[30];
-  return oo;
+    $[27] = onCancel;
+    $[28] = fileList;
+    $[29] = bodyColumn;
+    $[30] = mainDialog;
+  } else mainDialog = $[30];
+  return mainDialog;
 }
 //@ chunk-c55mbvfz.js:19637-20667 placement
 function RemoteMemoryFileList(props) {
-  let x = w(14);
+  let $ = useMemoCache(14);
   let { filesRead, onPick, userMemoryOrigin } = props;
-  let T = Qr(filesRead);
-  if (T.kind === "unreadable") {
-    let D;
-    if (x[0] !== T.reason) {
-      D = jsxProd_default_2(Text, {
+  let filesReadResult = use(filesRead);
+  if (filesReadResult.kind === "unreadable") {
+    let errorText;
+    if ($[0] !== filesReadResult.reason) {
+      errorText = jsxProd_default_2(Text, {
         color: "error",
-        children: ["Couldn't list the cloud session's memory files: ", T.reason],
+        children: ["Couldn't list the cloud session's memory files: ", filesReadResult.reason],
       });
-      x[0] = T.reason;
-      x[1] = D;
-    } else D = x[1];
-    return D;
+      $[0] = filesReadResult.reason;
+      $[1] = errorText;
+    } else errorText = $[1];
+    return errorText;
   }
-  if (T.files.length === 0) {
-    let D;
-    if (x[2] === MEMO_CACHE_SENTINEL) {
-      D = jsxProd_default(HintText, {
+  if (filesReadResult.files.length === 0) {
+    let emptyHint;
+    if ($[2] === MEMO_CACHE_SENTINEL) {
+      emptyHint = jsxProd_default(HintText, {
         hint: "Add a CLAUDE.md to the repo, or ask Claude to write one",
         children: "No memory files loaded in the cloud session",
       });
-      x[2] = D;
-    } else D = x[2];
-    return D;
+      $[2] = emptyHint;
+    } else emptyHint = $[2];
+    return emptyHint;
   }
   let onSelect;
-  if (x[3] !== onPick || x[4] !== T.files) {
-    onSelect = (N) => {
-      let B = T.files[N];
-      if (B) onPick(B);
+  if ($[3] !== onPick || $[4] !== filesReadResult.files) {
+    onSelect = (selectedIndex) => {
+      let file = filesReadResult.files[selectedIndex];
+      if (file) onPick(file);
     };
-    x[3] = onPick;
-    x[4] = T.files;
-    x[5] = onSelect;
-  } else onSelect = x[5];
+    $[3] = onPick;
+    $[4] = filesReadResult.files;
+    $[5] = onSelect;
+  } else onSelect = $[5];
   let children;
-  if (x[6] !== T.files || x[7] !== userMemoryOrigin) {
-    let L;
-    if (x[9] !== userMemoryOrigin) {
-      L = (U, V) =>
+  if ($[6] !== filesReadResult.files || $[7] !== userMemoryOrigin) {
+    let renderRow;
+    if ($[9] !== userMemoryOrigin) {
+      renderRow = (file, index) =>
         jsxProd_default(
           OrderedListWithItem.Item,
           {
-            label: U.shownPath,
-            meta: [U.type, `${formatTokens(U.tokens)} tokens`],
-            description: !U.userScope
+            label: file.shownPath,
+            meta: [file.type, `${formatTokens(file.tokens)} tokens`],
+            description: !file.userScope
               ? undefined
               : userMemoryOrigin === "sentFromHere"
                 ? `sent from ${shortHostname()} at launch`
                 : "the session's own ~/.claude, not sent from here",
           },
-          V,
+          index,
         );
-      x[9] = userMemoryOrigin;
-      x[10] = L;
-    } else L = x[10];
-    children = T.files.map(L);
-    x[6] = T.files;
-    x[7] = userMemoryOrigin;
-    x[8] = children;
-  } else children = x[8];
-  let L;
-  if (x[11] !== onSelect || x[12] !== children) {
-    L = jsxProd_default(OrderedListWithItem, {
+      $[9] = userMemoryOrigin;
+      $[10] = renderRow;
+    } else renderRow = $[10];
+    children = filesReadResult.files.map(renderRow);
+    $[6] = filesReadResult.files;
+    $[7] = userMemoryOrigin;
+    $[8] = children;
+  } else children = $[8];
+  let listElement;
+  if ($[11] !== onSelect || $[12] !== children) {
+    listElement = jsxProd_default(OrderedListWithItem, {
       onSelect,
       children,
     });
-    x[11] = onSelect;
-    x[12] = children;
-    x[13] = L;
-  } else L = x[13];
-  return L;
+    $[11] = onSelect;
+    $[12] = children;
+    $[13] = listElement;
+  } else listElement = $[13];
+  return listElement;
 }
 //@ chunk-c55mbvfz.js:20667-21749 placement
 function RemoteMemoryFileView(props) {
-  let T = w(18);
+  let $ = useMemoCache(18);
   let { read } = props;
-  let C = Qr(read);
+  let readResult = use(read);
   let { rows } = useTerminalSize();
-  if (C.kind === "userScope") {
-    let x;
-    if (T[0] !== C.hint) {
-      x = jsxProd_default(Text, {
+  if (readResult.kind === "userScope") {
+    let hintElement;
+    if ($[0] !== readResult.hint) {
+      hintElement = jsxProd_default(Text, {
         dimColor: true,
         wrap: "wrap-trim",
-        children: C.hint,
+        children: readResult.hint,
       });
-      T[0] = C.hint;
-      T[1] = x;
-    } else x = T[1];
-    return x;
+      $[0] = readResult.hint;
+      $[1] = hintElement;
+    } else hintElement = $[1];
+    return hintElement;
   }
-  if (C.kind === "unreadable") {
-    let x;
-    if (T[2] !== C.reason) {
-      x = jsxProd_default_2(Text, {
+  if (readResult.kind === "unreadable") {
+    let errorElement;
+    if ($[2] !== readResult.reason) {
+      errorElement = jsxProd_default_2(Text, {
         color: "error",
-        children: ["Couldn't read it: ", C.reason],
+        children: ["Couldn't read it: ", readResult.reason],
       });
-      T[2] = C.reason;
-      T[3] = x;
-    } else x = T[3];
-    return x;
+      $[2] = readResult.reason;
+      $[3] = errorElement;
+    } else errorElement = $[3];
+    return errorElement;
   }
-  let D;
-  let N;
+  let containerComponent;
+  let hiddenLineCount;
   let flexDirection;
-  let B;
-  if (T[4] !== C.contents || T[5] !== rows) {
-    let lines = C.contents.replaceAll("\t", "    ").split(/\r?\n/);
+  let lineElements;
+  if ($[4] !== readResult.contents || $[5] !== rows) {
+    let lines = readResult.contents.replaceAll("\t", "    ").split(/\r?\n/);
     let max = Math.max(5, rows - 12);
     let sliced = lines.slice(0, max);
-    N = lines.length - sliced.length;
-    D = Box;
+    hiddenLineCount = lines.length - sliced.length;
+    containerComponent = Box;
     flexDirection = "column";
-    B = sliced.map(renderPathLine);
-    T[4] = C.contents;
-    T[5] = rows;
-    T[6] = D;
-    T[7] = N;
-    T[8] = flexDirection;
-    T[9] = B;
+    lineElements = sliced.map(renderPathLine);
+    $[4] = readResult.contents;
+    $[5] = rows;
+    $[6] = containerComponent;
+    $[7] = hiddenLineCount;
+    $[8] = flexDirection;
+    $[9] = lineElements;
   } else {
-    D = T[6];
-    N = T[7];
-    flexDirection = T[8];
-    B = T[9];
+    containerComponent = $[6];
+    hiddenLineCount = $[7];
+    flexDirection = $[8];
+    lineElements = $[9];
   }
-  let V;
-  if (T[10] !== N || T[11] !== C.truncated) {
-    V =
-      (N > 0 || C.truncated) &&
+  let moreIndicator;
+  if ($[10] !== hiddenLineCount || $[11] !== readResult.truncated) {
+    moreIndicator =
+      (hiddenLineCount > 0 || readResult.truncated) &&
       jsxProd_default_2(Text, {
         dimColor: true,
         children: [
           "\u2026 ",
-          N > 0 ? `${N} more ${plural(N, "line")}` : "more",
-          C.truncated ? " (the session sent only the beginning)" : "",
+          hiddenLineCount > 0 ? `${hiddenLineCount} more ${plural(hiddenLineCount, "line")}` : "more",
+          readResult.truncated ? " (the session sent only the beginning)" : "",
           " \u2014 ask Claude to show or change the rest",
         ],
       });
-    T[10] = N;
-    T[11] = C.truncated;
-    T[12] = V;
-  } else V = T[12];
-  let ee;
-  if (T[13] !== D || T[14] !== flexDirection || T[15] !== B || T[16] !== V) {
-    ee = jsxProd_default_2(D, {
+    $[10] = hiddenLineCount;
+    $[11] = readResult.truncated;
+    $[12] = moreIndicator;
+  } else moreIndicator = $[12];
+  let bodyElement;
+  if (
+    $[13] !== containerComponent ||
+    $[14] !== flexDirection ||
+    $[15] !== lineElements ||
+    $[16] !== moreIndicator
+  ) {
+    bodyElement = jsxProd_default_2(containerComponent, {
       flexDirection,
-      children: [B, V],
+      children: [lineElements, moreIndicator],
     });
-    T[13] = D;
-    T[14] = flexDirection;
-    T[15] = B;
-    T[16] = V;
-    T[17] = ee;
-  } else ee = T[17];
-  return ee;
+    $[13] = containerComponent;
+    $[14] = flexDirection;
+    $[15] = lineElements;
+    $[16] = moreIndicator;
+    $[17] = bodyElement;
+  } else bodyElement = $[17];
+  return bodyElement;
 }
 //@ chunk-c55mbvfz.js:43674-44206 placement
 /**
@@ -539,3 +555,4 @@ var runRemoteMemoryCommand = async (onDone, context) => {
     onDone,
   });
 };
+export { runRemoteMemoryCommand };

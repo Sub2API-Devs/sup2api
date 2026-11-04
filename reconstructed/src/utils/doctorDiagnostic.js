@@ -11,7 +11,7 @@
 import { win32, posix, join, delimiter } from "path";
 import { realpath, lstat } from "fs/promises";
 import { homedir } from "os";
-import { getOsRelease } from "./nativeInstaller/packageManagers.js";
+import { osReleaseClientPerHost } from "./nativeInstaller/packageManagers.js";
 import { getRootSession } from "../bootstrap/state.js";
 import { getPlatform } from "./platform.js";
 import { isStandaloneExecutable } from "./slowOperations.js";
@@ -40,13 +40,14 @@ import { getTeammateCommand } from "../tools/shared/spawnMultiAgent.js";
 import { checkGlobalInstallPermissions } from "./autoUpdater.js";
 import { getRipgrepStatus_2 } from "./ripgrep.js";
 import { readUpdateResult } from "./nativeInstaller/updateResult.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-hntsfzas.js:4993-5029 placement
 /**
  * 取当前宿主的发行版探测对象。
  */
 function osReleaseProbe() {
-  return getOsRelease.of(getRootSession().host);
+  return osReleaseClientPerHost.of(getRootSession().host);
 }
 //@ chunk-hntsfzas.js:5029-5068 placement
 /**
@@ -133,11 +134,12 @@ function getNormalizedPaths() {
  * 判断当前安装类型：npm-local/npm-global/native/package-manager/development/unknown。
  */
 async function getCurrentInstallationType() {
-  let [invokedPath, n] = getNormalizedPaths();
+  let [invokedPath, normalizedPath] = getNormalizedPaths();
   if (isStandaloneExecutable()) {
-    let l = getClaudeConfigDir().replace(/\\/g, "/").replace(/\/+$/, "") + "/local/node_modules/";
-    if (n.startsWith(l)) return "npm-local";
-    if (n.includes("/node_modules/@anthropic-ai/")) return "npm-global";
+    let localNodeModules =
+      getClaudeConfigDir().replace(/\\/g, "/").replace(/\/+$/, "") + "/local/node_modules/";
+    if (normalizedPath.startsWith(localNodeModules)) return "npm-local";
+    if (normalizedPath.includes("/node_modules/@anthropic-ai/")) return "npm-global";
     if (
       detectHomebrew() ||
       detectWinget() ||
@@ -176,7 +178,10 @@ class InstallTypeProbeState {
   attempted = false;
 }
 //@ chunk-hntsfzas.js:6373-6396 layout
-var installTypeProbeSlot = new HostScoped(() => new InstallTypeProbeState());
+var installTypeProbeSlot; // deferred: uses InstallTypeProbeState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-hntsfzas.js:6373", () => {
+  installTypeProbeSlot = new HostScoped(() => new InstallTypeProbeState());
+});
 //@ chunk-hntsfzas.js:6396-6443 layout
 /**
  * 本进程是否已探测过安装类型。
@@ -281,16 +286,18 @@ async function detectMultipleInstallations() {
           isCurrentHomebrewInstallation = detectHomebrew();
       } catch {}
       if (!isCurrentHomebrewInstallation) {
-        let g = false;
-        for (let w of packagesToCheck) {
-          let P = isWindows ? join(npmPrefix, "node_modules", w) : join(npmPrefix, "lib", "node_modules", w);
+        let found = false;
+        for (let packageName of packagesToCheck) {
+          let packagePath = isWindows
+            ? join(npmPrefix, "node_modules", packageName)
+            : join(npmPrefix, "lib", "node_modules", packageName);
           try {
-            await fs.stat(P);
-            g = true;
+            await fs.stat(packagePath);
+            found = true;
             break;
           } catch {}
         }
-        if (g)
+        if (found)
           installations.push({
             type: "npm-global",
             path: globalBinPath,
@@ -333,15 +340,17 @@ async function detectMultipleInstallations() {
 }
 //@ chunk-hntsfzas.js:9456-9735 layout
 function isPathInList(pathDirectories, localBinPath) {
-  let a = getPlatform() === "windows";
-  let o = localBinPath;
-  if (a) o = localBinPath.split(win32.sep).join(posix.sep).toLowerCase();
+  let isWindows = getPlatform() === "windows";
+  let normalizedBin = localBinPath;
+  if (isWindows) normalizedBin = localBinPath.split(win32.sep).join(posix.sep).toLowerCase();
   return pathDirectories.some((dir) => {
     let normalizedDir = dir;
-    if (a) normalizedDir = dir.split(win32.sep).join(posix.sep).toLowerCase();
+    if (isWindows) normalizedDir = dir.split(win32.sep).join(posix.sep).toLowerCase();
     let trimmedDir = normalizedDir.replace(/\/+$/, "");
     let trimmedRawDir = dir.replace(/[/\\]+$/, "");
-    return trimmedDir === o || trimmedRawDir === "~/.local/bin" || trimmedRawDir === "$HOME/.local/bin";
+    return (
+      trimmedDir === normalizedBin || trimmedRawDir === "~/.local/bin" || trimmedRawDir === "$HOME/.local/bin"
+    );
   });
 }
 //@ chunk-hntsfzas.js:9735-12337 fingerprint = detectConfigurationIssues (0.792)
@@ -362,11 +371,14 @@ async function detectConfigurationIssues(type) {
     let path = (env.PATH || "").split(delimiter);
     let homeDir = homedir();
     let localBinPath = join(homeDir, ".local", "bin");
-    let m = join(getUserBinDir(), "claude");
-    if (!(await isInstallLinkOrMissing(m)) && !(await isNpmSymlink(m).catch(() => false)))
+    let launcherPath = join(getUserBinDir(), "claude");
+    if (
+      !(await isInstallLinkOrMissing(launcherPath)) &&
+      !(await isNpmSymlink(launcherPath).catch(() => false))
+    )
       warnings.push({
-        issue: `${m} was not created by the native installer (it is not a symlink into the versions/ directory), so auto-update leaves it untouched.`,
-        fix: `If you put a launcher wrapper there on purpose, this is expected \u2014 new versions still install under $XDG_DATA_HOME/claude/versions, your launcher decides what runs, and automatic version cleanup is disabled on this machine (the installer cannot tell which version your launcher needs, so it keeps them all). To let Claude Code manage the launcher again, remove ${m} and run \`claude update\`.`,
+        issue: `${launcherPath} was not created by the native installer (it is not a symlink into the versions/ directory), so auto-update leaves it untouched.`,
+        fix: `If you put a launcher wrapper there on purpose, this is expected \u2014 new versions still install under $XDG_DATA_HOME/claude/versions, your launcher decides what runs, and automatic version cleanup is disabled on this machine (the installer cannot tell which version your launcher needs, so it keeps them all). To let Claude Code manage the launcher again, remove ${launcherPath} and run \`claude update\`.`,
       });
     if (!isPathInList(path, localBinPath))
       if (getPlatform() === "windows") {
@@ -429,19 +441,19 @@ function getMaskCredentialWarnings() {
   if (SandboxManager.canMaskCredentialWarningFire()) SandboxManager.checkDependencies();
   let maskCredentialWarning = SandboxManager.getMaskCredentialWarning();
   if (!maskCredentialWarning) return [];
-  return maskCredentialWarning.split(" \xB7 ").map((n) => {
-    if (n.includes("have an empty injectHosts"))
+  return maskCredentialWarning.split(" \xB7 ").map((warningText) => {
+    if (warningText.includes("have an empty injectHosts"))
       return {
-        issue: n.replace(/\.\s*If the adapter forced this.*$/, ""),
+        issue: warningText.replace(/\.\s*If the adapter forced this.*$/, ""),
         fix: "If the adapter forced this (a filesystem.allowRead entry re-opened a denied credential path), remove the conflicting allowRead entry or the deny; if a parent/managed settings tier supplied this mask, sentinel-only is its intended posture (that channel cannot grant injection, so an injectHosts set there is stripped on load) and the entry can only be removed in the parent settings; otherwise set injectHosts or remove the entry",
       };
-    if (n.includes("degrade to deny on macOS"))
+    if (warningText.includes("degrade to deny on macOS"))
       return {
-        issue: n.replace(/\.\s*Note that switching them.*$/, ""),
+        issue: warningText.replace(/\.\s*Note that switching them.*$/, ""),
         fix: "Set sandbox.filesystem.disabled: false in user or managed settings (overrides the GrowthBook policy; ignored if managed settings pin the filesystem layer), or remove the mask entries \u2014 a deny provides no protection while the relaxed filesystem policy is active",
       };
     return {
-      issue: n.replace(/\s*Enable sandbox\.network\.tlsTerminate.*$/, ""),
+      issue: warningText.replace(/\s*Enable sandbox\.network\.tlsTerminate.*$/, ""),
       fix: isScrubOnlySandboxMode()
         ? "Set sandbox.enabled: true plus sandbox.network.tlsTerminate, or remove the mask entries \u2014 TLS termination is never enabled in scrub-only mode"
         : "Enable sandbox.network.tlsTerminate (or remove the mask entries)",
@@ -454,10 +466,10 @@ function detectLinuxGlobPatternWarnings() {
   let warnings = [];
   let globPatterns = SandboxManager.getLinuxGlobPatternWarnings();
   if (globPatterns.length > 0) {
-    let a = summarizeList(globPatterns);
+    let summary = summarizeList(globPatterns);
     warnings.push({
       issue: "Glob patterns in sandbox permission rules are not fully supported on Linux",
-      fix: `Found ${globPatterns.length} pattern(s): ${a}. On Linux, glob patterns in Edit/Read rules will be ignored.`,
+      fix: `Found ${globPatterns.length} pattern(s): ${summary}. On Linux, glob patterns in Edit/Read rules will be ignored.`,
     });
   }
   return warnings;
@@ -471,20 +483,20 @@ async function findLeftoverSandboxMasks() {
   if (config === undefined || config.filesystem.disabled) return [];
   let { denyWithinAllow } = SandboxManager.getFsWriteConfig();
   let results = await Promise.all(
-    denyWithinAllow.map(async (l) => {
+    denyWithinAllow.map(async (maskPath) => {
       try {
-        let c = await lstat(l);
-        return c.isFile() && c.size === 0 && (c.mode & 146) === 0 && c.nlink === 1;
+        let stats = await lstat(maskPath);
+        return stats.isFile() && stats.size === 0 && (stats.mode & 146) === 0 && stats.nlink === 1;
       } catch {
         return false;
       }
     }),
   );
-  let r = new Set(denyWithinAllow.filter((l, c) => results[c]));
-  if (r.size === 0) return [];
+  let leftovers = new Set(denyWithinAllow.filter((maskPath, index) => results[index]));
+  if (leftovers.size === 0) return [];
   return [
     {
-      issue: `Sandbox mask files left behind at write-deny paths: ${summarizeList([...r])}`,
+      issue: `Sandbox mask files left behind at write-deny paths: ${summarizeList([...leftovers])}`,
       fix: 'A session leaves one where it was killed, or where it exited while a sandboxed command was still running. Remove each with `rm <path>` while no other Claude Code session is running in that project \u2014 a 0-byte read-only file where a settings file belongs makes "Yes, and don\'t ask again" fail to save, and the sandbox binds it read-only again on every start',
     },
   ];
@@ -576,25 +588,25 @@ async function getDoctorDiagnostic({ probeKeychain = false, storageV5 } = {}) {
   let invokedBinary = getTeammateCommand();
   let multipleInstallations = await detectMultipleInstallations();
   let warnings = await detectConfigurationIssues(installationType);
-  let { checkInstall } = await import("./chunk-vgwfkbv7.js");
-  for (let h of await checkInstall())
-    if (h.type === "error")
+  let { checkInstall } = await import("./nativeInstaller/installer.js");
+  for (let warning of await checkInstall())
+    if (warning.type === "error")
       warnings.push({
-        issue: h.message,
+        issue: warning.message,
         fix: "Run claude install to repair the installation.",
       });
   warnings.push(...detectLinuxGlobPatternWarnings());
   warnings.push(...getUnbracketedIpv6DomainIssues());
   if (SandboxManager.isSandboxingEnabled()) await SandboxManager.checkDependenciesAsync();
-  let m = describeDeniesOnAnotherHost();
-  if (m) warnings.push(m);
+  let foreignHostWarning = describeDeniesOnAnotherHost();
+  if (foreignHostWarning) warnings.push(foreignHostWarning);
   warnings.push(...getUnbracketedIpv6InjectHostIssues());
   warnings.push(...getMaskCredentialWarnings());
   warnings.push(...(await findLeftoverSandboxMasks()));
   warnings.push(...(await getWindowsSandboxStartupIssue()));
   if (probeKeychain) {
-    let h = await noopNull();
-    if (h) warnings.push(h);
+    let extraWarning = await noopNull();
+    if (extraWarning) warnings.push(extraWarning);
   }
   if (installationType === "native") {
     let npmInstalls = multipleInstallations.filter(

@@ -42,9 +42,9 @@ function isSleepCompactionEnabled() {
 /**
  * 把环境变量给出的等待时间夹在 [b, E] 之间，缺省用 A。
  */
-function resolveAfterTurnMs(e) {
-  if (e === undefined) return DEFAULT_AFTER_TURN_MS;
-  return Math.min(MAX_AFTER_TURN_MS, Math.max(MIN_AFTER_TURN_MS, e));
+function resolveAfterTurnMs(ms) {
+  if (ms === undefined) return DEFAULT_AFTER_TURN_MS;
+  return Math.min(MAX_AFTER_TURN_MS, Math.max(MIN_AFTER_TURN_MS, ms));
 }
 //@ chunk-bbwtdypr.js:4868-5101 placement
 /**
@@ -59,10 +59,10 @@ function computeSleepCompactAt({
   exitDelayMs,
   fireAtFraction,
 }) {
-  let u = cacheActivityAt + (cacheExpiresAt - cacheActivityAt) * fireAtFraction;
+  let fireAt = cacheActivityAt + (cacheExpiresAt - cacheActivityAt) * fireAtFraction;
   if (exitDelayMs === undefined || exitDelayMs <= 0)
-    return afterTurnMs === undefined ? u : Math.min(u, turnEndedAt + afterTurnMs);
-  return Math.min(u, lastRequestAt + Math.max(0, exitDelayMs - EXIT_DELAY_GUARD_MS));
+    return afterTurnMs === undefined ? fireAt : Math.min(fireAt, turnEndedAt + afterTurnMs);
+  return Math.min(fireAt, lastRequestAt + Math.max(0, exitDelayMs - EXIT_DELAY_GUARD_MS));
 }
 //@ chunk-bbwtdypr.js:5101-6548 placement
 class SleepCompaction {
@@ -110,7 +110,7 @@ class SleepCompaction {
         fireAtFraction: _,
       });
       this.#e = setTimeout(
-        (n) => this.#a(n),
+        (requestAt) => this.#a(requestAt),
         Math.max(0, sleepCompactAt - Date.now()),
         lastMainThreadRequestAt,
       );
@@ -126,22 +126,23 @@ class SleepCompaction {
       this.#e = null;
     }
   }
-  #a(e) {
+  #a(requestAt) {
     this.#e = null;
     try {
       let max = Math.max(
         MIN_IDLE_COMPACT_TOKENS,
         env.CLAUDE_CODE_IDLE_COMPACT_MIN_TOKENS ?? IDLE_COMPACT_MIN_TOKENS,
       );
-      let r = getLastMainThreadContextTokens() ?? 0;
-      let n = this.#m(max, e, r);
+      let contextTokens = getLastMainThreadContextTokens() ?? 0;
+      let outcome = this.#m(max, requestAt, contextTokens);
       logEvent("tengu_sleep_compact_fired", {
-        outcome: fromEnum(n),
-        contextTokens: r,
+        outcome: fromEnum(outcome),
+        contextTokens,
         minTokens: max,
       });
-      if (n !== "busy" && n !== "permission_pending" && n !== "newer_request") this.#n = e;
-      if (n === "started") {
+      if (outcome !== "busy" && outcome !== "permission_pending" && outcome !== "newer_request")
+        this.#n = requestAt;
+      if (outcome === "started") {
         this.#s();
         logFeatureOk("compact_sleep");
       }
@@ -150,15 +151,15 @@ class SleepCompaction {
       logError(error);
     }
   }
-  #m(e, t, r) {
+  #m(minTokens, requestAt, contextTokens) {
     if (!isAutoCompactEnabled()) return "compaction_off";
     if (!isIdleCompactionEnabled()) return "idle_compaction_off";
     if (this.#o()) return "stopping";
     if (this.#i()) return "permission_pending";
     if (!this.#r()) return "busy";
-    if ((getLastMainThreadRequestAt() ?? 0) > t) return "newer_request";
+    if ((getLastMainThreadRequestAt() ?? 0) > requestAt) return "newer_request";
     if (!getPromptCacheSummary().warm) return "lapsed";
-    if (r < e) return "small";
+    if (contextTokens < minTokens) return "small";
     if (getCurrentLimits().status !== "allowed") return "near_limit";
     return "started";
   }
@@ -167,16 +168,17 @@ class SleepCompaction {
 /**
  * 给控制器附加计时器的 start/stop。
  */
-function withSleepTimer(e, t) {
-  if (t === null) return e;
+function withSleepTimer(timer, sleepTimer) {
+  if (sleepTimer === null) return timer;
   return {
     start() {
-      e.start();
-      t.arm();
+      timer.start();
+      sleepTimer.arm();
     },
     stop() {
-      t.cancel();
-      e.stop();
+      sleepTimer.cancel();
+      timer.stop();
     },
   };
 }
+export { SleepCompaction, isSleepCompactionEnabled, withSleepTimer };

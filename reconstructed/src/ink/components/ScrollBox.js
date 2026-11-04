@@ -8,27 +8,36 @@
  * pieces: chunk-01xdq6fy.js (4)
  * attribution: placement 2, layout 1, fingerprint 1
  */
-import { init_react_production, R, y, vxe } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  useRef,
+  useState,
+  useImperativeHandle,
+} from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { markScrollActivity } from "../../bootstrap/state.js";
 import { markDirty, markScrollCommitStart, scheduleRenderFrom } from "../dom.js";
 import { clampScrollTop } from "../events/event-handlers.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { BaseBox } from "./Box.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-01xdq6fy.js:460-464 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-01xdq6fy.js:460", () => {
+  init_react_production();
+});
 //@ chunk-01xdq6fy.js:464-492 layout
-function increment(De) {
-  return De + 1;
+function increment(count) {
+  return count + 1;
 }
 //@ chunk-01xdq6fy.js:492-3446 fingerprint = ScrollBox (0.89)
 /**
  * <ScrollBox>：overflow 为 scroll 的 ink-box（默认作为选区范围 selectionScope），内容放在一列子 Box 中。通过 ref 暴露命令式 API：scrollTo / scrollToElement（锚定到元素，start/center/end/nearest）/ scrollBy（累积到 pendingScrollDelta，由渲染时逐帧排水）/ scrollToBottom（重新开启粘底）、读 scrollTop/高度/视口、isSticky、subscribe、setClampBounds；滚动只标脏并在微任务里触发重绘，不走 React 状态。stickyScroll 让内容增长时自动跟到底，followGrowth=false 关闭位置跟随。
  */
 function ScrollBox(props) {
-  let $ = w(28);
+  let $ = useMemoCache(28);
   let children;
   let followGrowth;
   let ref;
@@ -49,30 +58,30 @@ function ScrollBox(props) {
     stickyScroll = $[4];
     style = $[5];
   }
-  let domRef = R(null);
-  let [, forceUpdate] = y(0);
-  let U;
+  let domRef = useRef(null);
+  let [, forceUpdate] = useState(0);
+  let subscribers;
   if ($[6] === MEMO_CACHE_SENTINEL) {
-    U = new Set();
-    $[6] = U;
-  } else U = $[6];
-  let subscribersRef = R(U);
-  let renderQueuedRef = R(false);
-  let Z;
+    subscribers = new Set();
+    $[6] = subscribers;
+  } else subscribers = $[6];
+  let subscribersRef = useRef(subscribers);
+  let renderQueuedRef = useRef(false);
+  let notifySubscribers;
   if ($[7] === MEMO_CACHE_SENTINEL) {
-    Z = () => {
-      for (const be of subscribersRef.current) be();
+    notifySubscribers = () => {
+      for (const listener of subscribersRef.current) listener();
     };
-    $[7] = Z;
-  } else Z = $[7];
-  let notifySubscribers = Z;
-  let ee;
+    $[7] = notifySubscribers;
+  } else notifySubscribers = $[7];
+  let notifySubscribers_2 = notifySubscribers;
+  let scheduleScrollRender;
   if ($[8] === MEMO_CACHE_SENTINEL) {
-    ee = function scheduleScrollRender(el) {
+    scheduleScrollRender = function scheduleScrollRender(el) {
       markScrollActivity();
       markDirty(el);
       markScrollCommitStart(el);
-      notifySubscribers();
+      notifySubscribers_2();
       if (renderQueuedRef.current) {
         return;
       }
@@ -82,27 +91,27 @@ function ScrollBox(props) {
         scheduleRenderFrom(el);
       });
     };
-    $[8] = ee;
-  } else ee = $[8];
-  let b = ee;
-  let le;
-  let re;
+    $[8] = scheduleScrollRender;
+  } else scheduleScrollRender = $[8];
+  let requestRender = scheduleScrollRender;
+  let handle;
+  let handleDeps;
   if ($[9] !== stickyScroll) {
-    le = () => ({
-      scrollTo(y, Re) {
+    handle = () => ({
+      scrollTo(y, options) {
         let el = domRef.current;
         if (!el) {
           return;
         }
         el.stickyScroll = false;
-        if (!Re?.preserveHwm) el.scrollHeightHwm = undefined;
+        if (!options?.preserveHwm) el.scrollHeightHwm = undefined;
         el.pendingScrollDelta = undefined;
         el.scrollAnchor = undefined;
         el.scrollTop = Math.max(0, Math.floor(y));
-        b(el);
+        requestRender(el);
       },
-      scrollToElement(el, p, He) {
-        let offset = p === undefined ? 0 : p;
+      scrollToElement(el, offset, options) {
+        let offset_2 = offset === undefined ? 0 : offset;
         let box = domRef.current;
         if (!box) {
           return;
@@ -112,12 +121,12 @@ function ScrollBox(props) {
         box.pendingScrollDelta = undefined;
         box.scrollAnchor = {
           el,
-          offset,
-          block: He?.block ?? "start",
+          offset: offset_2,
+          block: options?.block ?? "start",
         };
-        b(box);
+        requestRender(box);
       },
-      scrollBy(Me) {
+      scrollBy(delta) {
         let el = domRef.current;
         if (!el) {
           return;
@@ -126,8 +135,8 @@ function ScrollBox(props) {
         el.scrollHeightHwm = undefined;
         el.scrollTop = clampScrollTop(el);
         el.scrollAnchor = undefined;
-        el.pendingScrollDelta = (el.pendingScrollDelta ?? 0) + Math.floor(Me);
-        b(el);
+        el.pendingScrollDelta = (el.pendingScrollDelta ?? 0) + Math.floor(delta);
+        requestRender(el);
       },
       scrollToBottom() {
         let el = domRef.current;
@@ -138,12 +147,12 @@ function ScrollBox(props) {
         if (stickyScroll === false) {
           el.scrollAnchor = undefined;
           el.scrollTop = Math.max(0, (el.scrollHeight ?? 0) - (el.scrollViewportHeight ?? 0));
-          b(el);
+          requestRender(el);
           return;
         }
         el.stickyScroll = true;
         markDirty(el);
-        notifySubscribers();
+        notifySubscribers_2();
         forceUpdate(increment);
       },
       getScrollTop() {
@@ -193,15 +202,15 @@ function ScrollBox(props) {
         return domRef.current;
       },
     });
-    re = [stickyScroll];
+    handleDeps = [stickyScroll];
     $[9] = stickyScroll;
-    $[10] = le;
-    $[11] = re;
+    $[10] = handle;
+    $[11] = handleDeps;
   } else {
-    le = $[10];
-    re = $[11];
+    handle = $[10];
+    handleDeps = $[11];
   }
-  vxe(ref, le, re);
+  useImperativeHandle(ref, handle, handleDeps);
   const flexDirection = style.flexDirection ?? "row";
   const flexGrow = style.flexGrow ?? 0;
   const flexShrink = style.flexShrink ?? 1;
@@ -223,22 +232,22 @@ function ScrollBox(props) {
     $[15] = flexShrink;
     $[16] = style_2;
   } else style_2 = $[16];
-  let T;
+  let stickyProps;
   if ($[17] !== stickyScroll) {
-    T = stickyScroll !== undefined && {
+    stickyProps = stickyScroll !== undefined && {
       stickyScroll,
     };
     $[17] = stickyScroll;
-    $[18] = T;
-  } else T = $[18];
-  let B;
+    $[18] = stickyProps;
+  } else stickyProps = $[18];
+  let followProps;
   if ($[19] !== followGrowth) {
-    B = followGrowth !== undefined && {
+    followProps = followGrowth !== undefined && {
       followGrowth,
     };
     $[19] = followGrowth;
-    $[20] = B;
-  } else B = $[20];
+    $[20] = followProps;
+  } else followProps = $[20];
   let children_2;
   if ($[21] !== children) {
     children_2 = jsxProd_default(BaseBox, {
@@ -251,22 +260,22 @@ function ScrollBox(props) {
     $[21] = children;
     $[22] = children_2;
   } else children_2 = $[22];
-  let ce;
-  if ($[23] !== T || $[24] !== B || $[25] !== children_2 || $[26] !== style_2) {
-    ce = jsxProd_default("ink-box", {
+  let element;
+  if ($[23] !== stickyProps || $[24] !== followProps || $[25] !== children_2 || $[26] !== style_2) {
+    element = jsxProd_default("ink-box", {
       ref: domRef,
       style: style_2,
-      ...T,
-      ...B,
+      ...stickyProps,
+      ...followProps,
       children: children_2,
     });
-    $[23] = T;
-    $[24] = B;
+    $[23] = stickyProps;
+    $[24] = followProps;
     $[25] = children_2;
     $[26] = style_2;
-    $[27] = ce;
-  } else ce = $[27];
-  return ce;
+    $[27] = element;
+  } else element = $[27];
+  return element;
 }
 //@ chunk-01xdq6fy.js:3446-3455 placement
 /**

@@ -54,28 +54,28 @@ import {
 /**
  * 结束阶段文案：“Writing the report…” 或 “Checking the page…”。
  */
-function finishingPhaseLabel(e, n) {
-  let r = e.startedAtMs === null ? null : e.startedAtMs + e.doneAtS * 1000;
-  return e.hasLog || (r !== null && n - r >= RUN_STALE_MS)
+function finishingPhaseLabel(run, now) {
+  let expectedDoneAt = run.startedAtMs === null ? null : run.startedAtMs + run.doneAtS * 1000;
+  return run.hasLog || (expectedDoneAt !== null && now - expectedDoneAt >= RUN_STALE_MS)
     ? "Writing the report\u2026"
     : "Checking the page\u2026";
 }
 //@ chunk-ae5g0zb5.js:52543-53280 placement
-function formatResultCounts(e) {
-  let earlier = e.earlier;
+function formatResultCounts(state) {
+  let earlier = state.earlier;
   if (earlier === null || earlier === undefined || !earlier.finished) return null;
-  let r =
-    e.run ??
-    (e.proposed.length === 0
+  let currentRun =
+    state.run ??
+    (state.proposed.length === 0
       ? null
       : {
-          rows: orderProposedRows(e.proposed).map((i) => ({
-            stem: i.stem,
-            name: i.name ?? displayNameForStem(i.stem),
-            area: i.area,
+          rows: orderProposedRows(state.proposed).map((row) => ({
+            stem: row.stem,
+            name: row.name ?? displayNameForStem(row.stem),
+            area: row.area,
             verdict: null,
             seconds: null,
-            addsData: i.addsData,
+            addsData: row.addsData,
           })),
           app: null,
           started: false,
@@ -86,26 +86,26 @@ function formatResultCounts(e) {
           startedAtMs: null,
           doneAtS: 0,
         });
-  if (r === null) return null;
-  let o = new Set(r.rows.map((i) => i.stem));
-  let s = e.isFixRerun === true ? (e.fixedStems ?? []) : [];
+  if (currentRun === null) return null;
+  let currentStems = new Set(currentRun.rows.map((row) => row.stem));
+  let fixedStems = state.isFixRerun === true ? (state.fixedStems ?? []) : [];
   let mapped = earlier.rows
-    .filter((i) => i.verdict !== null && !o.has(i.stem))
-    .map((i) =>
-      i.verdict !== "PASS" && s.includes(i.stem)
+    .filter((row) => row.verdict !== null && !currentStems.has(row.stem))
+    .map((row) =>
+      row.verdict !== "PASS" && fixedStems.includes(row.stem)
         ? {
-            ...i,
+            ...row,
             isNotReRun: true,
           }
-        : i,
+        : row,
     );
   return mapped.length === 0
     ? null
     : {
         run: {
-          ...adjustSkippedCount(r, earlier),
-          rows: [...mapped, ...r.rows],
-          app: r.app ?? earlier.app,
+          ...adjustSkippedCount(currentRun, earlier),
+          rows: [...mapped, ...currentRun.rows],
+          app: currentRun.app ?? earlier.app,
         },
         earlierS: earlier.doneAtS,
         earlierClockS: runElapsedSeconds(earlier, earlier.rows.length, 0),
@@ -116,15 +116,15 @@ function formatResultCounts(e) {
 /**
  * 按已显示的行修正 skipped 计数。
  */
-function adjustSkippedCount(e, earlier) {
-  let { skipped, ...o } = e;
-  let s = new Set(earlier.rows.map((c) => c.stem));
-  let reduced = e.rows.reduce((acc, _) => acc + (s.has(_.stem) ? 0 : 1), 0);
-  let i = earlier.skipped === undefined ? 0 : Math.max(0, earlier.skipped - reduced);
+function adjustSkippedCount(run, earlier) {
+  let { skipped, ...rest } = run;
+  let earlierStems = new Set(earlier.rows.map((row) => row.stem));
+  let reduced = run.rows.reduce((acc, row) => acc + (earlierStems.has(row.stem) ? 0 : 1), 0);
+  let skippedCount = earlier.skipped === undefined ? 0 : Math.max(0, earlier.skipped - reduced);
   return {
-    ...o,
-    ...(i >= 1 && {
-      skipped: i,
+    ...rest,
+    ...(skippedCount >= 1 && {
+      skipped: skippedCount,
     }),
   };
 }
@@ -132,13 +132,13 @@ function adjustSkippedCount(e, earlier) {
 /**
  * 应用宕机/失败/忙或页面为空时为 true。
  */
-function isAppUnusable(e) {
+function isAppUnusable(state) {
   return (
-    e.app?.state === "down" ||
-    e.app?.state === "failed" ||
-    e.app?.state === "busy" ||
-    e.look?.kind === "empty" ||
-    e.look?.kind === "nothing"
+    state.app?.state === "down" ||
+    state.app?.state === "failed" ||
+    state.app?.state === "busy" ||
+    state.look?.kind === "empty" ||
+    state.look?.kind === "nothing"
   );
 }
 //@ chunk-ae5g0zb5.js:53625-53770 placement
@@ -152,8 +152,8 @@ function formatLookIssues(errors, failed) {
   ];
 }
 //@ chunk-ae5g0zb5.js:53770-54228 placement
-function describeAppState(e) {
-  let note = e.note ?? REPORT_STATE_TEXT;
+function describeAppState(facts) {
+  let note = facts.note ?? REPORT_STATE_TEXT;
   let look = note.look;
   if (
     note.app?.state === "down" ||
@@ -162,12 +162,16 @@ function describeAppState(e) {
     note.app?.state === "stopped"
   )
     return false;
-  if (e.run === null && note.app === null && look === null && !e.hasLook) {
-    let app = e.early?.app ?? null;
-    if (app?.kind === "busy" || app?.kind === "down" || (!e.hasRunFolder && app?.kind !== "up")) return false;
+  if (facts.run === null && note.app === null && look === null && !facts.hasLook) {
+    let app = facts.early?.app ?? null;
+    if (app?.kind === "busy" || app?.kind === "down" || (!facts.hasRunFolder && app?.kind !== "up"))
+      return false;
   }
-  if (e.run !== null || e.isLaterRun === true) return look === null || look.kind === "loads";
-  return (look === null ? e.hasLook : look.kind === "loads") && (e.hasReadCode || e.proposed.length > 0);
+  if (facts.run !== null || facts.isLaterRun === true) return look === null || look.kind === "loads";
+  return (
+    (look === null ? facts.hasLook : look.kind === "loads") &&
+    (facts.hasReadCode || facts.proposed.length > 0)
+  );
 }
 //@ chunk-ae5g0zb5.js:54228-54424 placement
 /**
@@ -182,7 +186,7 @@ function formatAppDetails(note) {
     ...(framework === null ? [] : [framework]),
     ...(look === null ? [] : formatLookIssues(look.errors, look.failed)),
   ]
-    .map((s) => ` \xB7 ${s}`)
+    .map((part) => ` \xB7 ${part}`)
     .join("");
 }
 //@ chunk-ae5g0zb5.js:54424-54513 placement
@@ -203,16 +207,16 @@ function appFactSummary(note) {
 /**
  * 步骤行构造：完成（✓）、失败（✗）、待办（◻）、进行中（带标记）。
  */
-var doneStep = (words, n) => ({
+var doneStep = (words, details) => ({
   mark: {
     text: "\u2713",
     tone: "success",
   },
   words,
-  ...(n === undefined
+  ...(details === undefined
     ? {}
     : {
-        details: n,
+        details,
       }),
   isNow: false,
 });
@@ -244,33 +248,33 @@ var activeStep = (text, words) => ({
 /**
  * 把步骤渲染成一行（进行中的 claude 色调步骤登记以便替换）。
  */
-function renderStepRow(e, n, r = false) {
+function renderStepRow(ctx, step, isWide = false) {
   let row = buildRow(
-    e,
-    spacedItem(n.mark, ""),
+    ctx,
+    spacedItem(step.mark, ""),
     [
-      !n.isNow
+      !step.isNow
         ? {
-            text: n.words,
+            text: step.words,
             tone: "dim",
           }
-        : n.mark.tone === "claude"
+        : step.mark.tone === "claude"
           ? {
-              text: n.words,
+              text: step.words,
               tone: "title",
             }
           : {
-              text: n.words,
+              text: step.words,
             },
       {
-        text: n.details ?? "",
+        text: step.details ?? "",
         tone: "dim",
       },
     ],
     null,
-    r,
+    isWide,
   );
-  if (n.mark.tone === "claude") weakSet.add(row);
+  if (step.mark.tone === "claude") weakSet.add(row);
   return row;
 }
 //@ chunk-ae5g0zb5.js:55035-55054 placement
@@ -279,21 +283,21 @@ var weakSet = new WeakSet();
 /**
  * 等待用户时把进行中的步骤替换为等待提示。
  */
-function replaceActiveStepWithWaiting(e, n) {
-  let index = e.findIndex((o) => weakSet.has(o));
+function replaceActiveStepWithWaiting(rows, ctx) {
+  let index = rows.findIndex((row) => weakSet.has(row));
   return index === -1
-    ? e
+    ? rows
     : [
-        ...e.slice(0, index),
-        renderStepRow(n, pendingStep(WAITING_IN_CHAT_TEXT, true), true),
-        ...e.slice(index + 1),
+        ...rows.slice(0, index),
+        renderStepRow(ctx, pendingStep(WAITING_IN_CHAT_TEXT, true), true),
+        ...rows.slice(index + 1),
       ];
 }
 //@ chunk-ae5g0zb5.js:55174-55447 placement
 /**
  * 测试浏览器安装进度步骤。
  */
-function browserInstallStep(install, n) {
+function browserInstallStep(install, mark) {
   if (install.state === "failed")
     return {
       ...failedStep("Couldn't install the test browser"),
@@ -301,7 +305,7 @@ function browserInstallStep(install, n) {
     };
   if (install.state === "done") return doneStep("Test browser installed");
   return activeStep(
-    n,
+    mark,
     install.percent === null
       ? "Installing the test browser\u2026"
       : `Installing the test browser\u2026 ${install.percent}%`,
@@ -311,18 +315,20 @@ function browserInstallStep(install, n) {
 /**
  * 安装步骤行
  */
-function installStepRows(e, n, r) {
-  return e.install === undefined || e.install === null
+function installStepRows(facts, mark, ctx) {
+  return facts.install === undefined || facts.install === null
     ? []
-    : [renderStepRow(r, browserInstallStep(e.install, n))];
+    : [renderStepRow(ctx, browserInstallStep(facts.install, mark))];
 }
 //@ chunk-ae5g0zb5.js:55537-55616 placement
 /**
  * 停止原因，修复中则显示“Fixing…”
  */
-function haltStepOrFixing(e, n) {
-  let r = describeRunHalt(e, n);
-  return e.isFixing === true && r.words === APP_STARTING_TEXT ? activeStep(n, FIXING_TEXT) : r;
+function haltStepOrFixing(facts, mark) {
+  let haltStep = describeRunHalt(facts, mark);
+  return facts.isFixing === true && haltStep.words === APP_STARTING_TEXT
+    ? activeStep(mark, FIXING_TEXT)
+    : haltStep;
 }
 //@ chunk-ae5g0zb5.js:55616-55671 placement
 /**
@@ -331,32 +337,32 @@ function haltStepOrFixing(e, n) {
 var WAITING_IN_CHAT_TEXT = "Waiting for you in the chat";
 var FIXING_TEXT = "Fixing\u2026";
 //@ chunk-ae5g0zb5.js:55671-56671 placement
-function describeRunHalt(e, n) {
-  let note = e.note ?? REPORT_STATE_TEXT;
+function describeRunHalt(facts, mark) {
+  let note = facts.note ?? REPORT_STATE_TEXT;
   let { app, look } = note;
-  let a = formatAppDetails(note);
+  let appDetails = formatAppDetails(note);
   if (app?.state === "stopped") return pendingStep(APP_STOPPED_TEXT);
   if (look?.kind === "nothing") return failedStep("Nothing loaded");
-  if (look?.kind === "empty") return failedStep(`Your app's first page stayed empty${a}`);
+  if (look?.kind === "empty") return failedStep(`Your app's first page stayed empty${appDetails}`);
   if (
-    e.isStartingApp === true &&
-    e.halt === undefined &&
+    facts.isStartingApp === true &&
+    facts.halt === undefined &&
     (app === null || app === undefined || app.state === "down")
   )
-    return activeStep(n, APP_STARTING_TEXT);
+    return activeStep(mark, APP_STARTING_TEXT);
   if (app?.state === "down") return pendingStep(APP_NOT_RUNNING_TEXT, true);
   if (app?.state === "failed") return failedStep(`App didn't start \xB7 ${describePortInUse(app.failure)}`);
   if (app?.state === "busy") return portInUseStep(app.port);
   if (app?.state === "started")
-    return doneStep(app.command === null ? "App started" : `App started (${app.command})`, a);
-  if (app?.state === "running") return doneStep("App ready", a);
-  if (look?.kind === "loads" || e.hasLook) return doneStep("Your app loads", a);
-  let app_2 = e.early?.app ?? null;
-  if (e.hasRunFolder && app_2?.kind !== "busy" && app_2?.kind !== "down")
-    return activeStep(n, "Opening your app\u2026");
+    return doneStep(app.command === null ? "App started" : `App started (${app.command})`, appDetails);
+  if (app?.state === "running") return doneStep("App ready", appDetails);
+  if (look?.kind === "loads" || facts.hasLook) return doneStep("Your app loads", appDetails);
+  let app_2 = facts.early?.app ?? null;
+  if (facts.hasRunFolder && app_2?.kind !== "busy" && app_2?.kind !== "down")
+    return activeStep(mark, "Opening your app\u2026");
   switch (app_2?.kind) {
     case "checking":
-      return activeStep(n, "Checking your app\u2026");
+      return activeStep(mark, "Checking your app\u2026");
     case "up":
       return doneStep("App ready");
     case "down":
@@ -364,7 +370,7 @@ function describeRunHalt(e, n) {
     case "busy":
       return portInUseStep(app_2.port);
     default:
-      return activeStep(n, "Getting ready\u2026");
+      return activeStep(mark, "Getting ready\u2026");
   }
 }
 //@ chunk-ae5g0zb5.js:56671-56744 placement
@@ -385,19 +391,26 @@ function portInUseStep(port) {
 /**
  * 运行停止的原因（declined/halted/blocked 或备注里的原因）。
  */
-function resolveStopReason(e) {
-  if (e.isAddressDeclined === true && e.run === null) return "declined";
-  let n = e.halt === "stopped" ? "halted" : e.halt === "blocked" ? "blocked" : (e.note?.stopped ?? null);
-  return n === null || e.run !== null || e.isReadingCode || e.isWritingTests === true ? null : n;
+function resolveStopReason(facts) {
+  if (facts.isAddressDeclined === true && facts.run === null) return "declined";
+  let reason =
+    facts.halt === "stopped"
+      ? "halted"
+      : facts.halt === "blocked"
+        ? "blocked"
+        : (facts.note?.stopped ?? null);
+  return reason === null || facts.run !== null || facts.isReadingCode || facts.isWritingTests === true
+    ? null
+    : reason;
 }
 //@ chunk-ae5g0zb5.js:57072-57217 placement
 /**
  * 停止原因行（必要时附“见聊天”）。
  */
-function renderStopRow(e, stopReason) {
+function renderStopRow(ctx, stopReason) {
   let { mark, words } = BLOCKED_STATES[stopReason];
   return buildRow(
-    e,
+    ctx,
     spacedItem(mark, ""),
     stopReason === "signin" || stopReason === "declined"
       ? [
@@ -422,59 +435,59 @@ function renderStopRow(e, stopReason) {
 /**
  * 当前进行或成功完成的步骤
  */
-function isNowStep(e) {
-  return e.mark.tone !== "claude" && (e.isNow || e.mark.tone === "success");
+function isNowStep(step) {
+  return step.mark.tone !== "claude" && (step.isNow || step.mark.tone === "success");
 }
 //@ chunk-ae5g0zb5.js:57298-57954 placement
-function formatReadingCodeStep(e, n, r, stopReason = null) {
-  let note = e.note ?? REPORT_STATE_TEXT;
-  let a = e.proposed.length;
-  let i = appFactSummary(note);
-  let c =
-    e.hasReadCode || a > 0
+function formatReadingCodeStep(facts, mark, ctx, stopReason = null) {
+  let note = facts.note ?? REPORT_STATE_TEXT;
+  let proposedCount = facts.proposed.length;
+  let appSummary = appFactSummary(note);
+  let readStep =
+    facts.hasReadCode || proposedCount > 0
       ? doneStep("Read your code")
-      : e.isReadingCode || e.readingFolder !== null
+      : facts.isReadingCode || facts.readingFolder !== null
         ? activeStep(
-            n,
-            e.readingFolder === null
+            mark,
+            facts.readingFolder === null
               ? "Reading your code\u2026"
-              : `Reading your code: ${e.readingFolder}\u2026`,
+              : `Reading your code: ${facts.readingFolder}\u2026`,
           )
         : pendingStep("Read your code");
-  let _ =
-    e.isWritingTests === true
-      ? activeStep(n, "Writing the tests\u2026")
-      : a > 0
-        ? doneStep(`${a} ${a === 1 ? "test" : "tests"} written`)
+  let writeStep =
+    facts.isWritingTests === true
+      ? activeStep(mark, "Writing the tests\u2026")
+      : proposedCount > 0
+        ? doneStep(`${proposedCount} ${proposedCount === 1 ? "test" : "tests"} written`)
         : pendingStep("Write the tests");
-  let S = haltStepOrFixing(e, n);
-  let w = i.length === 0 ? [] : [buildItemsBlock(r, 2, i, "dim")];
+  let haltStep = haltStepOrFixing(facts, mark);
+  let summaryRows = appSummary.length === 0 ? [] : [buildItemsBlock(ctx, 2, appSummary, "dim")];
   if (stopReason !== null) {
-    let f = stopReason === "declined" ? [] : [c, _];
+    let candidateSteps = stopReason === "declined" ? [] : [readStep, writeStep];
     return [
-      ...installStepRows(e, n, r),
-      ...(isNowStep(S) ? [renderStepRow(r, S, true)] : []),
-      ...w,
-      ...f.filter(isNowStep).map((b) => renderStepRow(r, b)),
-      renderStopRow(r, stopReason),
+      ...installStepRows(facts, mark, ctx),
+      ...(isNowStep(haltStep) ? [renderStepRow(ctx, haltStep, true)] : []),
+      ...summaryRows,
+      ...candidateSteps.filter(isNowStep).map((step) => renderStepRow(ctx, step)),
+      renderStopRow(ctx, stopReason),
     ];
   }
   return [
-    ...installStepRows(e, n, r),
-    renderStepRow(r, S, true),
-    ...w,
-    renderStepRow(r, c),
-    renderStepRow(r, _),
-    renderStepRow(r, pendingStep("Run them")),
+    ...installStepRows(facts, mark, ctx),
+    renderStepRow(ctx, haltStep, true),
+    ...summaryRows,
+    renderStepRow(ctx, readStep),
+    renderStepRow(ctx, writeStep),
+    renderStepRow(ctx, pendingStep("Run them")),
   ];
 }
 //@ chunk-ae5g0zb5.js:57954-58084 placement
 /**
  * “App ready” 行及应用细节。
  */
-function renderAppReadyRow(e, n) {
+function renderAppReadyRow(facts, ctx) {
   return buildRow(
-    n,
+    ctx,
     spacedItem(
       {
         text: "\u2713",
@@ -487,7 +500,7 @@ function renderAppReadyRow(e, n) {
         text: "App ready",
       },
       {
-        text: formatAppDetails(e.note ?? REPORT_STATE_TEXT),
+        text: formatAppDetails(facts.note ?? REPORT_STATE_TEXT),
         tone: "dim",
       },
     ],
@@ -499,9 +512,9 @@ function renderAppReadyRow(e, n) {
 /**
  * 面板标题行 “Claude Test · 项目” 与右侧说明。
  */
-function renderPanelTitle(e, n, r) {
+function renderPanelTitle(ctx, subtitle, right) {
   return buildRow(
-    e,
+    ctx,
     [
       {
         text: "Claude Test",
@@ -510,14 +523,14 @@ function renderPanelTitle(e, n, r) {
     ],
     [
       {
-        text: n === null ? "" : ` \xB7 ${n}`,
+        text: subtitle === null ? "" : ` \xB7 ${subtitle}`,
         tone: "dim",
       },
     ],
-    r === null
+    right === null
       ? null
       : {
-          text: r,
+          text: right,
           tone: "dim",
         },
   );
@@ -528,35 +541,35 @@ var OTHER = "other";
 /**
  * 取分组键，缺省为 OTHER
  */
-function groupKeyOf(e) {
-  return (n) => e(n) ?? OTHER;
+function groupKeyOf(keyOf) {
+  return (row) => keyOf(row) ?? OTHER;
 }
 //@ chunk-ae5g0zb5.js:58281-58334 placement
 /**
  * 是否有多个分组
  */
-function hasMultipleGroups(e, n) {
-  return new Set(e.map(groupKeyOf(n))).size > 1;
+function hasMultipleGroups(rows, keyOf) {
+  return new Set(rows.map(groupKeyOf(keyOf))).size > 1;
 }
 //@ chunk-ae5g0zb5.js:58334-58497 placement
 /**
  * 按分组键给行插入分组标题。
  */
-function groupRowsWithHeadings(e, n, r, o) {
-  let s = hasMultipleGroups(n, r);
-  let a = groupKeyOf(r);
-  let i = [];
-  n.forEach((c, _) => {
-    if (s && (_ === 0 || a(n[_ - 1]) !== a(c)))
-      i.push(
-        textBlock(e, {
-          text: humanizeSlug(a(c)),
+function groupRowsWithHeadings(ctx, rows, keyOf, renderRow) {
+  let hasGroups = hasMultipleGroups(rows, keyOf);
+  let keyOfRow = groupKeyOf(keyOf);
+  let out = [];
+  rows.forEach((row, index) => {
+    if (hasGroups && (index === 0 || keyOfRow(rows[index - 1]) !== keyOfRow(row)))
+      out.push(
+        textBlock(ctx, {
+          text: humanizeSlug(keyOfRow(row)),
           tone: "dim",
         }),
       );
-    i.push(o(c));
+    out.push(renderRow(row));
   });
-  return i;
+  return out;
 }
 //@ chunk-ae5g0zb5.js:58497-58572 placement
 /**
@@ -574,108 +587,108 @@ var NOT_RE_RUN_MARK = {
 /**
  * 按分组聚合行（OTHER 组放最后）。
  */
-function orderRowsByGroup(e, n) {
-  let r = groupKeyOf(n);
-  return e
-    .map(r)
-    .filter((s, a, i) => i.indexOf(s) === a)
-    .sort((s, a) => Number(s === OTHER) - Number(a === OTHER))
-    .flatMap((s) => e.filter((a) => r(a) === s));
+function orderRowsByGroup(rows, keyOf) {
+  let keyOfRow = groupKeyOf(keyOf);
+  return rows
+    .map(keyOfRow)
+    .filter((key, index, keys) => keys.indexOf(key) === index)
+    .sort((keyA, keyB) => Number(keyA === OTHER) - Number(keyB === OTHER))
+    .flatMap((key) => rows.filter((row) => keyOfRow(row) === key));
 }
 //@ chunk-ae5g0zb5.js:58732-58772 placement
 /**
  * 按 area 分组排序
  */
-function orderProposedRows(proposed) {
-  return orderRowsByGroup(proposed, (n) => n.area);
+function orderProposedRows(rows) {
+  return orderRowsByGroup(rows, (row) => row.area);
 }
 //@ chunk-ae5g0zb5.js:58772-58878 placement
 /**
  * 结果行色调：未重跑为暗色，有结论按 PASS/FAIL/BLOCKED，运行中为 claude。
  */
-function rowTone(e, n) {
-  return n.isNotReRun === true
+function rowTone(state, row) {
+  return row.isNotReRun === true
     ? "dim"
-    : n.verdict !== null
-      ? VERDICT_TONES[n.verdict]
-      : isLaneRunning(e, n.stem)
+    : row.verdict !== null
+      ? VERDICT_TONES[row.verdict]
+      : isLaneRunning(state, row.stem)
         ? "claude"
         : null;
 }
 //@ chunk-ae5g0zb5.js:58878-59437 placement
-function buildPanelHeader(e, n, r) {
-  let mapped = e.rows.map((_) => rowTone(e, _));
-  let mapped_2 = e.rows.map((_) => _.verdict !== null);
-  let min = Math.min(DEFAULT_PANE_WIDTH, Math.max(MIN_PANE_WIDTH, r));
-  let i =
+function buildPanelHeader(state, icons, columns) {
+  let mapped = state.rows.map((row) => rowTone(state, row));
+  let mapped_2 = state.rows.map((row) => row.verdict !== null);
+  let min = Math.min(DEFAULT_PANE_WIDTH, Math.max(MIN_PANE_WIDTH, columns));
+  let cells =
     mapped.length <= min
-      ? mapped.map((tone, S) => ({
+      ? mapped.map((tone, index) => ({
           tone,
-          isFull: mapped_2[S],
+          isFull: mapped_2[index],
         }))
       : Array.from(
           {
             length: min,
           },
-          (_, S) => {
-            let floored = Math.floor((S * mapped.length) / min);
-            let floored_2 = Math.floor(((S + 1) * mapped.length) / min);
+          (unused, cellIndex) => {
+            let floored = Math.floor((cellIndex * mapped.length) / min);
+            let floored_2 = Math.floor(((cellIndex + 1) * mapped.length) / min);
             let sliced = mapped.slice(floored, floored_2);
             return {
-              tone: ["error", "warning", "claude", "success"].find((P) => sliced.includes(P)) ?? null,
+              tone: ["error", "warning", "claude", "success"].find((tone) => sliced.includes(tone)) ?? null,
               isFull: mapped_2.slice(floored, floored_2).every(Boolean),
             };
           },
         );
-  let c = [];
-  for (let { tone, isFull } of i) {
-    let w = tone === null || !isFull ? n.empty : n.fill;
-    let f = tone ?? "dim";
-    let last = c.at(-1);
-    if (last !== undefined && last.tone === f) last.text += w;
+  let segments = [];
+  for (let { tone, isFull } of cells) {
+    let text = tone === null || !isFull ? icons.empty : icons.fill;
+    let cellTone = tone ?? "dim";
+    let last = segments.at(-1);
+    if (last !== undefined && last.tone === cellTone) last.text += text;
     else
-      c.push({
-        text: w,
-        tone: f,
+      segments.push({
+        text,
+        tone: cellTone,
       });
   }
-  return c;
+  return segments;
 }
 //@ chunk-ae5g0zb5.js:59437-59757 placement
 /**
  * 结果行排序：运行结束后按组内最早顺序排列。
  */
-function orderResultRows(e) {
-  let n = orderRowsByGroup(e.rows, areaOf);
-  if (!e.finished) return n;
-  let r = groupKeyOf(areaOf);
-  let o = [];
-  for (let s of n) {
-    let found = o.find((i) => r(i[0]) === r(s));
-    if (found === undefined) o.push([s]);
-    else found.push(s);
+function orderResultRows(results) {
+  let rows = orderRowsByGroup(results.rows, areaOf);
+  if (!results.finished) return rows;
+  let keyOf = groupKeyOf(areaOf);
+  let groups = [];
+  for (let row of rows) {
+    let found = groups.find((group) => keyOf(group[0]) === keyOf(row));
+    if (found === undefined) groups.push([row]);
+    else found.push(row);
   }
-  return o
+  return groups
     .sort(
-      (s, a) =>
-        Math.min(...s.map(verdictRank)) - Math.min(...a.map(verdictRank)) ||
-        Number(r(s[0]) === OTHER) - Number(r(a[0]) === OTHER),
+      (groupA, groupB) =>
+        Math.min(...groupA.map(verdictRank)) - Math.min(...groupB.map(verdictRank)) ||
+        Number(keyOf(groupA[0]) === OTHER) - Number(keyOf(groupB[0]) === OTHER),
     )
-    .flatMap((s) => s.sort((a, i) => verdictRank(a) - verdictRank(i)));
+    .flatMap((group) => group.sort((rowA, rowB) => verdictRank(rowA) - verdictRank(rowB)));
 }
 //@ chunk-ae5g0zb5.js:59757-59786 placement
 /**
  * 取行的 area
  */
-function areaOf(e) {
-  return e.area;
+function areaOf(row) {
+  return row.area;
 }
 //@ chunk-ae5g0zb5.js:59786-59875 placement
 /**
  * FAIL<BLOCKED<PASS<未重跑 的排序权重
  */
-function verdictRank(e) {
-  return e.isNotReRun === true ? 3 : e.verdict === "FAIL" ? 0 : e.verdict === "BLOCKED" ? 1 : 2;
+function verdictRank(row) {
+  return row.isNotReRun === true ? 3 : row.verdict === "FAIL" ? 0 : row.verdict === "BLOCKED" ? 1 : 2;
 }
 //@ chunk-ae5g0zb5.js:59875-59921 placement
 /**
@@ -686,31 +699,33 @@ var STOP_AGENTS_HINT = "ctrl+x ctrl+k twice stops all agents";
 /**
  * 生成暗色文本块
  */
-function dimLine(e, ...n) {
-  return textBlock(e, ...n);
+function dimLine(ctx, ...rest) {
+  return textBlock(ctx, ...rest);
 }
 //@ chunk-ae5g0zb5.js:59959-60139 placement
 /**
  * 带前缀的条目列表，放不下时前缀单独一行。
  */
-function renderLabeledItems(e, n) {
-  return n.every((o) => REPORT_PREFIX.length + o.length <= e)
-    ? n.map((o, s) => buildLabeledRow(e, o, s === 0 ? REPORT_PREFIX : " ".repeat(REPORT_PREFIX.length)))
+function renderLabeledItems(width, items) {
+  return items.every((item) => REPORT_PREFIX.length + item.length <= width)
+    ? items.map((item, index) =>
+        buildLabeledRow(width, item, index === 0 ? REPORT_PREFIX : " ".repeat(REPORT_PREFIX.length)),
+      )
     : [
-        textBlock(e, {
+        textBlock(width, {
           text: REPORT_PREFIX.trimEnd(),
           tone: "dim",
         }),
-        ...n.map((o) => buildLabeledRow(e, o, "  ")),
+        ...items.map((item) => buildLabeledRow(width, item, "  ")),
       ];
 }
 //@ chunk-ae5g0zb5.js:60139-60220 placement
 /**
  * 生成“标签 + 值”的行
  */
-function buildLabeledRow(e, text, text_2) {
+function buildLabeledRow(ctx, text, text_2) {
   return buildRow(
-    e,
+    ctx,
     [
       {
         text: text_2,
@@ -737,10 +752,10 @@ var PANE_DEFAULT_WIDTH = 30;
 /**
  * 生成计数行
  */
-function countRow(e, n, text) {
+function countRow(ctx, item, text) {
   return buildRow(
-    e,
-    spacedItem(n),
+    ctx,
+    spacedItem(item),
     [
       {
         text,
@@ -751,45 +766,49 @@ function countRow(e, n, text) {
   );
 }
 //@ chunk-ae5g0zb5.js:60305-61168 placement
-function formatResultSummary(e, n, r, o) {
-  let s = orderResultRows(e);
-  let a = groupRowsWithHeadings(n, s, (P) => P.area, o);
-  if ((e.finished || s.length <= MAX_DETAIL_ROWS) && totalLines(a) <= r) return a;
-  if (e.finished) {
-    let filtered = s.filter((j) => j.verdict !== "PASS");
-    let filtered_2 = s.filter((j) => j.verdict === "PASS");
-    let O = filtered_2.length;
-    while (O > 0 && filtered.length + O + (filtered_2.length > O ? 1 : 0) > r) O -= 1;
+function formatResultSummary(state, ctx, maxRows, renderRow) {
+  let rows = orderResultRows(state);
+  let withHeadings = groupRowsWithHeadings(ctx, rows, (row) => row.area, renderRow);
+  if ((state.finished || rows.length <= MAX_DETAIL_ROWS) && totalLines(withHeadings) <= maxRows)
+    return withHeadings;
+  if (state.finished) {
+    let filtered = rows.filter((row) => row.verdict !== "PASS");
+    let filtered_2 = rows.filter((row) => row.verdict === "PASS");
+    let passShown = filtered_2.length;
+    while (passShown > 0 && filtered.length + passShown + (filtered_2.length > passShown ? 1 : 0) > maxRows)
+      passShown -= 1;
     return [
-      ...filtered.map(o),
-      ...filtered_2.slice(0, O).map(o),
-      ...(filtered_2.length > O
+      ...filtered.map(renderRow),
+      ...filtered_2.slice(0, passShown).map(renderRow),
+      ...(filtered_2.length > passShown
         ? [
             countRow(
-              n,
+              ctx,
               {
                 text: "\u2713",
                 tone: "success",
               },
-              `${filtered_2.length - O} more`,
+              `${filtered_2.length - passShown} more`,
             ),
           ]
         : []),
     ];
   }
-  let reduced = s.reduce((acc, F) => acc + (F.verdict === "PASS" ? 1 : 0), 0);
-  let filtered = s.filter((P) => P.verdict === "FAIL" || P.verdict === "BLOCKED" || isLaneRunning(e, P.stem));
-  let filtered_2 = e.rows.filter((P) => P.verdict === null && !isLaneRunning(e, P.stem));
-  let S = filtered.length + (reduced > 0 ? 1 : 0);
+  let reduced = rows.reduce((acc, row) => acc + (row.verdict === "PASS" ? 1 : 0), 0);
+  let filtered = rows.filter(
+    (row) => row.verdict === "FAIL" || row.verdict === "BLOCKED" || isLaneRunning(state, row.stem),
+  );
+  let filtered_2 = state.rows.filter((row) => row.verdict === null && !isLaneRunning(state, row.stem));
+  let nonPassLines = filtered.length + (reduced > 0 ? 1 : 0);
   let min = Math.min(MIN_PASS_ROWS, filtered_2.length);
-  if (filtered_2.length === min + 1 && S + min + 1 <= r) min += 1;
-  while (min > 0 && S + min + (filtered_2.length > min ? 1 : 0) > r) min -= 1;
-  let f =
+  if (filtered_2.length === min + 1 && nonPassLines + min + 1 <= maxRows) min += 1;
+  while (min > 0 && nonPassLines + min + (filtered_2.length > min ? 1 : 0) > maxRows) min -= 1;
+  let passRows =
     reduced === 0
       ? []
       : [
           countRow(
-            n,
+            ctx,
             {
               text: "\u2713",
               tone: "success",
@@ -797,11 +816,11 @@ function formatResultSummary(e, n, r, o) {
             `${reduced} passed`,
           ),
         ];
-  let b =
+  let moreRows =
     filtered_2.length > min
       ? [
           countRow(
-            n,
+            ctx,
             {
               text: "\u25FB",
               tone: "dim",
@@ -810,130 +829,147 @@ function formatResultSummary(e, n, r, o) {
           ),
         ]
       : [];
-  return [...f, ...filtered.map(o), ...filtered_2.slice(0, min).map(o), ...b];
+  return [...passRows, ...filtered.map(renderRow), ...filtered_2.slice(0, min).map(renderRow), ...moreRows];
 }
 //@ chunk-ae5g0zb5.js:61168-61295 placement
 /**
  * 渲染面板；等待用户时把进行中的步骤换成等待提示。
  */
 function renderClaudeTestPane(
-  e,
-  n,
-  r = 60,
+  state,
+  now,
+  width = 60,
   glyphs = INLINE_IMAGE_SUPPORT,
-  s = PANE_DEFAULT_WIDTH,
-  a = false,
+  maxRows = PANE_DEFAULT_WIDTH,
+  showRunIds = false,
 ) {
-  let i = renderClaudeTestPanel(e, n, r, glyphs, s, a);
-  return e.isWaitingForPerson === true ? replaceActiveStepWithWaiting(i, Math.max(20, Math.floor(r))) : i;
+  let lines = renderClaudeTestPanel(state, now, width, glyphs, maxRows, showRunIds);
+  return state.isWaitingForPerson === true
+    ? replaceActiveStepWithWaiting(lines, Math.max(20, Math.floor(width)))
+    : lines;
 }
 //@ chunk-ae5g0zb5.js:61295-61403 placement
 /**
  * 待运行规格行。
  */
-function renderPendingSpecRow(e, n) {
+function renderPendingSpecRow(ctx, row) {
   return buildRow(
-    e,
+    ctx,
     spacedItem({
       text: "\u25FB",
       tone: "dim",
     }),
     [
       {
-        text: n.name ?? displayNameForStem(n.stem),
+        text: row.name ?? displayNameForStem(row.stem),
       },
     ],
-    n.addsData ? ADDS_DATA_MARK : null,
+    row.addsData ? ADDS_DATA_MARK : null,
   );
 }
 //@ chunk-ae5g0zb5.js:61403-61492 placement
 /**
  * 统计某结论的行数
  */
-function countVerdict(e, n) {
-  return e.rows.reduce((acc, o) => acc + (o.verdict === n && o.isNotReRun !== true ? 1 : 0), 0);
+function countVerdict(run, verdict) {
+  return run.rows.reduce((acc, row) => acc + (row.verdict === verdict && row.isNotReRun !== true ? 1 : 0), 0);
 }
 //@ chunk-ae5g0zb5.js:61492-61769 placement
 /**
  * 结果行的耗时文本（完成用总秒数，运行中按开始时间推算）。
  */
-function rowElapsedLabel(e, n, readAt, o) {
-  if (n.verdict === "BLOCKED") return null;
-  if (n.verdict !== null) return n.seconds === null ? null : formatElapsed(n.seconds * 1000);
-  if (e.lanesRunning !== undefined) {
-    let s = isLaneRunning(e, n.stem) ? laneElapsedSeconds(e, n.stem, readAt) : null;
-    return s !== null ? formatElapsed(s * 1000) : null;
+function rowElapsedLabel(run, row, readAt, runningSeconds) {
+  if (row.verdict === "BLOCKED") return null;
+  if (row.verdict !== null) return row.seconds === null ? null : formatElapsed(row.seconds * 1000);
+  if (run.lanesRunning !== undefined) {
+    let seconds = isLaneRunning(run, row.stem) ? laneElapsedSeconds(run, row.stem, readAt) : null;
+    return seconds !== null ? formatElapsed(seconds * 1000) : null;
   }
-  return n.stem === e.running && o !== null ? formatElapsed(o * 1000) : null;
+  return row.stem === run.running && runningSeconds !== null ? formatElapsed(runningSeconds * 1000) : null;
 }
 //@ chunk-ae5g0zb5.js:61769-66493 placement
 /**
  * 生成 Claude Test 面板内容：登录、开始测试、审批规格、结果与修复建议（约 4.7 KB）。
  */
-function renderClaudeTestPanel(e, n, r, o, s, a) {
-  let max = Math.max(20, Math.floor(r));
-  let c = withCheckingAppState(e, n);
-  let _ = formatResultCounts(c);
-  let S =
-    _?.run ?? (c.run !== null && c.earlier?.finished === true ? adjustSkippedCount(c.run, c.earlier) : c.run);
-  let w = c.halt !== undefined && S !== null && !S.finished;
-  let f =
-    S !== null && w
+function renderClaudeTestPanel(facts, now, width, glyphs, maxRows, showRunIds) {
+  let max = Math.max(20, Math.floor(width));
+  let view = withCheckingAppState(facts, now);
+  let counts = formatResultCounts(view);
+  let run =
+    counts?.run ??
+    (view.run !== null && view.earlier?.finished === true
+      ? adjustSkippedCount(view.run, view.earlier)
+      : view.run);
+  let isHalted = view.halt !== undefined && run !== null && !run.finished;
+  let shownRun =
+    run !== null && isHalted
       ? {
-          ...S,
+          ...run,
           running: null,
           lanesRunning: undefined,
         }
-      : S;
-  let b = spinnerGlyph(n, o);
-  let P = f?.app ?? c.note?.name ?? c.early?.name ?? null;
-  if (f === null) {
-    let C = c.isStartingRun === true && c.isLaterRun !== true;
-    let L = C
+      : run;
+  let spinner = spinnerGlyph(now, glyphs);
+  let appName = shownRun?.app ?? view.note?.name ?? view.early?.name ?? null;
+  if (shownRun === null) {
+    let isStartingRun = view.isStartingRun === true && view.isLaterRun !== true;
+    let viewForBody = isStartingRun
       ? {
-          ...c,
+          ...view,
           isReadingCode: false,
           hasReadCode: true,
           isWritingTests: false,
         }
-      : c;
-    let stopReason = resolveStopReason(L);
-    let de = C && stopReason === null;
-    let q = L.proposed.length;
-    if (!(stopReason !== "signin" && (de || (q > 0 && (L.isWritingTests !== true || L.hasOutline === true)))))
+      : view;
+    let stopReason = resolveStopReason(viewForBody);
+    let isStarting = isStartingRun && stopReason === null;
+    let proposedCount = viewForBody.proposed.length;
+    if (!(
+      stopReason !== "signin" &&
+      (isStarting ||
+        (proposedCount > 0 && (viewForBody.isWritingTests !== true || viewForBody.hasOutline === true)))
+    ))
       return [
-        renderPanelTitle(max, P, null),
-        ...(L.isLaterRun === true || L.isOpening === true
+        renderPanelTitle(max, appName, null),
+        ...(viewForBody.isLaterRun === true || viewForBody.isOpening === true
           ? [
-              ...installStepRows(L, b, max),
-              describeAppState(L)
-                ? renderAppReadyRow(L, max)
-                : renderStepRow(max, haltStepOrFixing(L, b), true),
+              ...installStepRows(viewForBody, spinner, max),
+              describeAppState(viewForBody)
+                ? renderAppReadyRow(viewForBody, max)
+                : renderStepRow(max, haltStepOrFixing(viewForBody, spinner), true),
               ...(stopReason === null ? [] : [renderStopRow(max, stopReason)]),
             ]
-          : formatReadingCodeStep(L, b, max, stopReason)),
+          : formatReadingCodeStep(viewForBody, spinner, max, stopReason)),
       ];
-    let gt = L.isLaterRun === true;
-    let nn = !gt && !de && (L.startsAtOutline !== true || L.proposed.some((Ue) => Ue.addsData));
-    let D = !gt && !nn && stopReason === null && (de || L.startsAtOutline === true) && describeAppState(L);
-    let Q = appFactSummary(L.note ?? REPORT_STATE_TEXT);
-    let Re = [
-      renderPanelTitle(max, P, null),
-      ...(describeAppState(L)
+    let isLaterRun = viewForBody.isLaterRun === true;
+    let awaitingApproval =
+      !isLaterRun &&
+      !isStarting &&
+      (viewForBody.startsAtOutline !== true || viewForBody.proposed.some((row) => row.addsData));
+    let showStartStep =
+      !isLaterRun &&
+      !awaitingApproval &&
+      stopReason === null &&
+      (isStarting || viewForBody.startsAtOutline === true) &&
+      describeAppState(viewForBody);
+    let appSummary = appFactSummary(viewForBody.note ?? REPORT_STATE_TEXT);
+    let headerLines = [
+      renderPanelTitle(max, appName, null),
+      ...(describeAppState(viewForBody)
         ? [
-            renderAppReadyRow(L, max),
-            ...(Q.length === 0 ? [] : [buildItemsBlock(max, 2, Q, "dim")]),
-            ...(D ? [renderStepRow(max, activeStep(b, "Starting the tests\u2026"))] : []),
+            renderAppReadyRow(viewForBody, max),
+            ...(appSummary.length === 0 ? [] : [buildItemsBlock(max, 2, appSummary, "dim")]),
+            ...(showStartStep ? [renderStepRow(max, activeStep(spinner, "Starting the tests\u2026"))] : []),
           ]
-        : L.isLaterRun === true
-          ? [renderStepRow(max, haltStepOrFixing(L, b), true)]
-          : formatReadingCodeStep(L, b, max)),
+        : viewForBody.isLaterRun === true
+          ? [renderStepRow(max, haltStepOrFixing(viewForBody, spinner), true)]
+          : formatReadingCodeStep(viewForBody, spinner, max)),
       EMPTY_TEXT_SPAN,
     ];
-    let rn =
+    let footerLines =
       stopReason !== null
         ? [EMPTY_TEXT_SPAN, renderStopRow(max, stopReason)]
-        : nn
+        : awaitingApproval
           ? [
               EMPTY_TEXT_SPAN,
               dimLine(max, {
@@ -942,74 +978,80 @@ function renderClaudeTestPanel(e, n, r, o, s, a) {
               }),
             ]
           : [];
-    let max_2 = Math.max(3, s - totalLines(Re) - totalLines(rn));
-    let Zn = orderProposedRows(L.proposed);
-    let es = groupRowsWithHeadings(
+    let max_2 = Math.max(3, maxRows - totalLines(headerLines) - totalLines(footerLines));
+    let orderedProposed = orderProposedRows(viewForBody.proposed);
+    let proposedLines = groupRowsWithHeadings(
       max,
-      Zn,
-      (Ue) => Ue.area,
-      (Ue) => renderPendingSpecRow(max, Ue),
+      orderedProposed,
+      (row) => row.area,
+      (row) => renderPendingSpecRow(max, row),
     );
     return [
-      ...Re,
-      ...(totalLines(es) <= max_2
-        ? es
+      ...headerLines,
+      ...(totalLines(proposedLines) <= max_2
+        ? proposedLines
         : [
-            ...Zn.slice(0, max_2 - 1).map((Ue) => renderPendingSpecRow(max, Ue)),
+            ...orderedProposed.slice(0, max_2 - 1).map((row) => renderPendingSpecRow(max, row)),
             countRow(
               max,
               {
                 text: "\u25FB",
                 tone: "dim",
               },
-              `${Zn.length - (max_2 - 1)} more`,
+              `${orderedProposed.length - (max_2 - 1)} more`,
             ),
           ]),
-      ...rn,
+      ...footerLines,
     ];
   }
-  let reduced = f.rows.reduce((acc, L) => acc + (L.isNotReRun === true ? 1 : 0), 0);
-  let O = f.rows.length - countVerdict(f, null);
-  let readAt = c.readAt ?? n;
-  let se = secondsSinceLastDone(f, readAt);
-  let J = c.isFixRerun === true;
-  let ne = J ? 0 : (_?.earlierS ?? 0);
-  let ce = J ? (_?.earlierRows ?? 0) : 0;
-  let pe = !f.started;
-  let ie = w ? f.doneAtS : runElapsedSeconds(f, O, readAt);
-  let he = pe ? null : formatElapsed(((J ? 0 : (_?.earlierClockS ?? 0)) + ie) * 1000);
-  let R = [
-    renderPanelTitle(max, P, he),
-    ...(_ === null
-      ? [describeAppState(c) ? renderAppReadyRow(c, max) : renderStepRow(max, haltStepOrFixing(c, b), true)]
-      : isAppUnusable(c.note ?? REPORT_STATE_TEXT)
-        ? [renderStepRow(max, haltStepOrFixing(c, b), true)]
+  let reduced = shownRun.rows.reduce((acc, row) => acc + (row.isNotReRun === true ? 1 : 0), 0);
+  let rowsDone = shownRun.rows.length - countVerdict(shownRun, null);
+  let readAt = view.readAt ?? now;
+  let lastDoneSeconds = secondsSinceLastDone(shownRun, readAt);
+  let isFixRerun = view.isFixRerun === true;
+  let earlierSeconds = isFixRerun ? 0 : (counts?.earlierS ?? 0);
+  let earlierRows = isFixRerun ? (counts?.earlierRows ?? 0) : 0;
+  let isNotStarted = !shownRun.started;
+  let elapsedSeconds = isHalted ? shownRun.doneAtS : runElapsedSeconds(shownRun, rowsDone, readAt);
+  let elapsedLabel = isNotStarted
+    ? null
+    : formatElapsed(((isFixRerun ? 0 : (counts?.earlierClockS ?? 0)) + elapsedSeconds) * 1000);
+  let lines = [
+    renderPanelTitle(max, appName, elapsedLabel),
+    ...(counts === null
+      ? [
+          describeAppState(view)
+            ? renderAppReadyRow(view, max)
+            : renderStepRow(max, haltStepOrFixing(view, spinner), true),
+        ]
+      : isAppUnusable(view.note ?? REPORT_STATE_TEXT)
+        ? [renderStepRow(max, haltStepOrFixing(view, spinner), true)]
         : []),
   ];
-  if (f.finished) {
-    let C = countVerdict(f, "FAIL");
-    let L = countVerdict(f, "BLOCKED");
+  if (shownRun.finished) {
+    let failCount = countVerdict(shownRun, "FAIL");
+    let blockedCount = countVerdict(shownRun, "BLOCKED");
     let mapped = [
-      [C, "failed"],
-      [L, "blocked"],
-      [countVerdict(f, "PASS"), "passed"],
+      [failCount, "failed"],
+      [blockedCount, "blocked"],
+      [countVerdict(shownRun, "PASS"), "passed"],
       [reduced, "not re-run yet"],
     ]
-      .filter(([q]) => q > 0)
-      .map(([q, be]) => ({
-        text: `${q} ${be}`,
+      .filter(([count]) => count > 0)
+      .map(([count, label]) => ({
+        text: `${count} ${label}`,
         tone: "title",
       }));
-    R.push(
+    lines.push(
       buildRow(
         max,
         spacedItem(
-          C > 0
+          failCount > 0
             ? {
                 text: "\u2717",
                 tone: "error",
               }
-            : L > 0
+            : blockedCount > 0
               ? {
                   text: "\u26A0",
                   tone: "warning",
@@ -1027,22 +1069,22 @@ function renderClaudeTestPanel(e, n, r, o, s, a) {
               },
             ]
           : [
-              ...mapped.flatMap((q, be) =>
-                be === 0
-                  ? [q]
+              ...mapped.flatMap((span, index) =>
+                index === 0
+                  ? [span]
                   : [
                       {
                         text: " \xB7 ",
                         tone: "dim",
                       },
-                      q,
+                      span,
                     ],
               ),
-              ...(f.skipped === undefined
+              ...(shownRun.skipped === undefined
                 ? []
                 : [
                     {
-                      text: ` \xB7 ${f.skipped} skipped`,
+                      text: ` \xB7 ${shownRun.skipped} skipped`,
                       tone: "dim",
                     },
                   ]),
@@ -1050,72 +1092,96 @@ function renderClaudeTestPanel(e, n, r, o, s, a) {
         null,
       ),
     );
-  } else if (w && f.started) {
-    let C = [
-      [countVerdict(f, "FAIL"), "failed"],
-      [countVerdict(f, "BLOCKED"), "blocked"],
-      [countVerdict(f, "PASS"), "passed"],
-      [countVerdict(f, null), "not run"],
+  } else if (isHalted && shownRun.started) {
+    let counts = [
+      [countVerdict(shownRun, "FAIL"), "failed"],
+      [countVerdict(shownRun, "BLOCKED"), "blocked"],
+      [countVerdict(shownRun, "PASS"), "passed"],
+      [countVerdict(shownRun, null), "not run"],
     ];
-    R.push(
+    lines.push(
       buildRow(
         max,
         spacedItem(BLOCKED_STATES.halted.mark, ""),
         [
           {
-            text: c.halt === "blocked" ? "Blocked" : "Stopped",
+            text: view.halt === "blocked" ? "Blocked" : "Stopped",
             tone: "title",
           },
-          ...C.filter(([L]) => L > 0).map(([L, Y]) => ({
-            text: ` \xB7 ${L} ${Y}`,
-          })),
+          ...counts
+            .filter(([count]) => count > 0)
+            .map(([count, label]) => ({
+              text: ` \xB7 ${count} ${label}`,
+            })),
         ],
         null,
         true,
       ),
     );
-  } else if (w) R.push(renderStopRow(max, c.halt === "blocked" ? "blocked" : "halted"));
+  } else if (isHalted) lines.push(renderStopRow(max, view.halt === "blocked" ? "blocked" : "halted"));
   else {
-    let C = f.rows.length > 0 && O === f.rows.length;
-    let L =
-      C || pe ? null : estimateRemainingSeconds(ne + f.doneAtS, O - ce, f.rows.length - ce, ie - f.doneAtS);
-    let Y = [
+    let allDone = shownRun.rows.length > 0 && rowsDone === shownRun.rows.length;
+    let remainingSeconds =
+      allDone || isNotStarted
+        ? null
+        : estimateRemainingSeconds(
+            earlierSeconds + shownRun.doneAtS,
+            rowsDone - earlierRows,
+            shownRun.rows.length - earlierRows,
+            elapsedSeconds - shownRun.doneAtS,
+          );
+    let progressSpans = [
       {
-        text: `  ${O} of ${f.rows.length} done`,
+        text: `  ${rowsDone} of ${shownRun.rows.length} done`,
       },
       {
-        text: L === null ? "" : L === 0 ? " \xB7 almost done" : ` \xB7 about ${formatElapsed(L * 1000)} left`,
+        text:
+          remainingSeconds === null
+            ? ""
+            : remainingSeconds === 0
+              ? " \xB7 almost done"
+              : ` \xB7 about ${formatElapsed(remainingSeconds * 1000)} left`,
         tone: "dim",
       },
     ];
-    R.push(buildRow(max, buildPanelHeader(f, o, max - joinSpans(Y).length), Y, null));
-    if (C) R.push(renderStepRow(max, activeStep(b, finishingPhaseLabel(f, n))));
-    if (pe) {
-      let stopReason = resolveStopReason(c);
-      let q = f.rows.length - O;
-      R.push(
+    lines.push(
+      buildRow(
+        max,
+        buildPanelHeader(shownRun, glyphs, max - joinSpans(progressSpans).length),
+        progressSpans,
+        null,
+      ),
+    );
+    if (allDone) lines.push(renderStepRow(max, activeStep(spinner, finishingPhaseLabel(shownRun, now))));
+    if (isNotStarted) {
+      let stopReason = resolveStopReason(view);
+      let remainingTests = shownRun.rows.length - rowsDone;
+      lines.push(
         stopReason === null
           ? renderStepRow(
               max,
               activeStep(
-                b,
-                c.isFixRerun === true
-                  ? `Re-running ${q} ${q === 1 ? "test" : "tests"}\u2026`
-                  : `Starting ${q} more ${q === 1 ? "test" : "tests"}\u2026`,
+                spinner,
+                view.isFixRerun === true
+                  ? `Re-running ${remainingTests} ${remainingTests === 1 ? "test" : "tests"}\u2026`
+                  : `Starting ${remainingTests} more ${remainingTests === 1 ? "test" : "tests"}\u2026`,
               ),
             )
           : renderStopRow(max, stopReason),
       );
     }
   }
-  if (f.rows.length === 0) return R;
-  R.push(EMPTY_TEXT_SPAN);
-  let max_2 = Math.max(MAX_THREAD_ROWS, ...f.rows.map((C) => rowElapsedLabel(f, C, readAt, se)?.length ?? 0));
-  let Z = countVerdict(f, "FAIL");
-  let ye = countVerdict(f, "BLOCKED");
-  let Qe = f.finished && c.isMoreDeclined !== true ? (c.note?.more ?? []) : [];
-  let We =
-    Qe.length === 0
+  if (shownRun.rows.length === 0) return lines;
+  lines.push(EMPTY_TEXT_SPAN);
+  let max_2 = Math.max(
+    MAX_THREAD_ROWS,
+    ...shownRun.rows.map((row) => rowElapsedLabel(shownRun, row, readAt, lastDoneSeconds)?.length ?? 0),
+  );
+  let failCount = countVerdict(shownRun, "FAIL");
+  let blockedCount = countVerdict(shownRun, "BLOCKED");
+  let moreTests = shownRun.finished && view.isMoreDeclined !== true ? (view.note?.more ?? []) : [];
+  let moreTestLines =
+    moreTests.length === 0
       ? []
       : [
           EMPTY_TEXT_SPAN,
@@ -1123,7 +1189,7 @@ function renderClaudeTestPanel(e, n, r, o, s, a) {
             text: "More tests ready",
             tone: "dim",
           }),
-          ...Qe.map((C) =>
+          ...moreTests.map((stem) =>
             buildRow(
               max,
               spacedItem({
@@ -1132,23 +1198,23 @@ function renderClaudeTestPanel(e, n, r, o, s, a) {
               }),
               [
                 {
-                  text: c.proposed.find((L) => L.stem === C)?.name ?? displayNameForStem(C),
+                  text: view.proposed.find((row) => row.stem === stem)?.name ?? displayNameForStem(stem),
                 },
               ],
               null,
             ),
           ),
         ];
-  let Ge = _ === null ? null : (c.note?.from ?? null);
-  let en = isValidSpecPath(c.appFolder) ? `${c.appFolder}/${RUNS_DIR}` : RUNS_DIR;
-  let tn =
-    f.finished && a && typeof c.runId === "string" && RUN_ID_RE.test(c.runId)
+  let earlierRunId = counts === null ? null : (view.note?.from ?? null);
+  let runsDir = isValidSpecPath(view.appFolder) ? `${view.appFolder}/${RUNS_DIR}` : RUNS_DIR;
+  let runIdLines =
+    shownRun.finished && showRunIds && typeof view.runId === "string" && RUN_ID_RE.test(view.runId)
       ? renderLabeledItems(max, [
-          `${en}/${c.runId}/`,
-          ...(Ge !== null && RUN_ID_RE.test(Ge) ? [`${en}/${Ge}/`] : []),
+          `${runsDir}/${view.runId}/`,
+          ...(earlierRunId !== null && RUN_ID_RE.test(earlierRunId) ? [`${runsDir}/${earlierRunId}/`] : []),
         ])
       : [];
-  let et = w
+  let footerHintLines = isHalted
     ? [
         EMPTY_TEXT_SPAN,
         dimLine(
@@ -1167,11 +1233,11 @@ function renderClaudeTestPanel(e, n, r, o, s, a) {
           },
         ),
       ]
-    : !f.finished
+    : !shownRun.finished
       ? []
       : [
           EMPTY_TEXT_SPAN,
-          (Z > 0 || reduced > 0) && c.note?.noFix !== true
+          (failCount > 0 || reduced > 0) && view.note?.noFix !== true
             ? dimLine(
                 max,
                 {
@@ -1183,7 +1249,7 @@ function renderClaudeTestPanel(e, n, r, o, s, a) {
                   tone: "title",
                 },
               )
-            : ye > 0 || Z > 0
+            : blockedCount > 0 || failCount > 0
               ? dimLine(max, {
                   text: "Details in the chat",
                   tone: "dim",
@@ -1203,78 +1269,83 @@ function renderClaudeTestPanel(e, n, r, o, s, a) {
                     tone: "dim",
                   },
                 ),
-          ...tn,
+          ...runIdLines,
         ];
-  R.push(
-    ...formatResultSummary(f, max, Math.max(3, s - totalLines(R) - totalLines(We) - totalLines(et)), (C) => {
-      let L = isLaneRunning(f, C.stem);
-      if (C.isNotReRun === true)
-        return buildRow(
-          max,
-          spacedItem({
-            text: "\u2013",
-            tone: "dim",
-          }),
-          [
-            {
-              text: C.name,
+  lines.push(
+    ...formatResultSummary(
+      shownRun,
+      max,
+      Math.max(3, maxRows - totalLines(lines) - totalLines(moreTestLines) - totalLines(footerHintLines)),
+      (row) => {
+        let isRunning = isLaneRunning(shownRun, row.stem);
+        if (row.isNotReRun === true)
+          return buildRow(
+            max,
+            spacedItem({
+              text: "\u2013",
               tone: "dim",
-            },
-          ],
-          NOT_RE_RUN_MARK,
-        );
-      let Y = rowElapsedLabel(f, C, readAt, se);
-      let de =
-        C.verdict !== null
-          ? {
-              text: VERDICT_MARKS[C.verdict],
-              tone: VERDICT_TONES[C.verdict],
-            }
-          : L
+            }),
+            [
+              {
+                text: row.name,
+                tone: "dim",
+              },
+            ],
+            NOT_RE_RUN_MARK,
+          );
+        let elapsed = rowElapsedLabel(shownRun, row, readAt, lastDoneSeconds);
+        let mark =
+          row.verdict !== null
             ? {
-                text: b,
-                tone: "claude",
+                text: VERDICT_MARKS[row.verdict],
+                tone: VERDICT_TONES[row.verdict],
               }
-            : {
-                text: "\u25FB",
-                tone: "dim",
-              };
-      let q =
-        C.verdict === null && !L && C.addsData
-          ? ADDS_DATA_MARK
-          : Y === null
-            ? null
-            : {
-                text: Y.padStart(max_2),
-                tone: "dim",
-              };
-      let be =
-        C.verdict !== null
-          ? {
-              text: C.name,
-            }
-          : L
+            : isRunning
+              ? {
+                  text: spinner,
+                  tone: "claude",
+                }
+              : {
+                  text: "\u25FB",
+                  tone: "dim",
+                };
+        let right =
+          row.verdict === null && !isRunning && row.addsData
+            ? ADDS_DATA_MARK
+            : elapsed === null
+              ? null
+              : {
+                  text: elapsed.padStart(max_2),
+                  tone: "dim",
+                };
+        let nameSpan =
+          row.verdict !== null
             ? {
-                text: C.name,
-                tone: "title",
+                text: row.name,
               }
-            : {
-                text: C.name,
-                tone: "dim",
-              };
-      return buildRow(max, spacedItem(de), [be], q);
-    }),
-    ...We,
-    ...et,
+            : isRunning
+              ? {
+                  text: row.name,
+                  tone: "title",
+                }
+              : {
+                  text: row.name,
+                  tone: "dim",
+                };
+        return buildRow(max, spacedItem(mark), [nameSpan], right);
+      },
+    ),
+    ...moreTestLines,
+    ...footerHintLines,
   );
-  if (f.started && !f.finished && !w && totalLines(R) + 1 <= s)
-    R.push(
+  if (shownRun.started && !shownRun.finished && !isHalted && totalLines(lines) + 1 <= maxRows)
+    lines.push(
       dimLine(max, {
         text: STOP_AGENTS_HINT,
         tone: "dim",
       }),
     );
-  return R;
+  return lines;
 }
 //@ chunk-ae5g0zb5.js:66493-66549 placement
 /**
@@ -1288,7 +1359,7 @@ function displayNameForStem(stem) {
  * 统计文本行数
  */
 function lineCount(text) {
-  let n = 1;
+  let lineCount = 1;
   for (
     let index = text.indexOf(`
 `);
@@ -1299,15 +1370,15 @@ function lineCount(text) {
       index + 1,
     )
   )
-    n += 1;
-  return n;
+    lineCount += 1;
+  return lineCount;
 }
 //@ chunk-ae5g0zb5.js:66639-66693 placement
 /**
  * 所有行合计行数
  */
-function totalLines(e) {
-  return e.reduce((acc, r) => acc + lineCount(r.text), 0);
+function totalLines(lines) {
+  return lines.reduce((acc, line) => acc + lineCount(line.text), 0);
 }
 //@ chunk-ae5g0zb5.js:66693-66716 placement
 /**

@@ -5,11 +5,11 @@
  * pieces: chunk-spjgqa4y.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 import { require_utils } from "./utils.js";
 
 //@ chunk-spjgqa4y.js:2536-2981 cjs-fingerprint
-var require_alignment_pattern = x(function (cjsExports) {
+var require_alignment_pattern = __commonJS(function (cjsExports) {
   var getSymbolSize = require_utils().getSymbolSize;
   cjsExports.getRowColCoords = function (version) {
     if (version === 1) return [];

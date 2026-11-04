@@ -5,10 +5,10 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
 
 //@ chunk-fq0cr76a.js:360236-361489 cjs-require-graph
-var require_base64_encoding = x(function (cjsExports) {
+var require_base64_encoding = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });
@@ -22,11 +22,11 @@ var require_base64_encoding = x(function (cjsExports) {
     let bytes = new Uint8Array(es);
     let bytePos = 0;
     let groupPos = 0;
-    let b;
+    let index;
     let p = 0;
     for (let i = 0; i < base64Str.length; i++) {
-      b = table[base64Str.charCodeAt(i)];
-      if (b === undefined)
+      index = table[base64Str.charCodeAt(i)];
+      if (index === undefined)
         switch (base64Str[i]) {
           case "=":
             groupPos = 0;
@@ -41,21 +41,21 @@ var require_base64_encoding = x(function (cjsExports) {
         }
       switch (groupPos) {
         case 0:
-          p = b;
+          p = index;
           groupPos = 1;
           break;
         case 1:
-          bytes[bytePos++] = (p << 2) | ((b & 48) >> 4);
-          p = b;
+          bytes[bytePos++] = (p << 2) | ((index & 48) >> 4);
+          p = index;
           groupPos = 2;
           break;
         case 2:
-          bytes[bytePos++] = ((p & 15) << 4) | ((b & 60) >> 2);
-          p = b;
+          bytes[bytePos++] = ((p & 15) << 4) | ((index & 60) >> 2);
+          p = index;
           groupPos = 3;
           break;
         case 3:
-          bytes[bytePos++] = ((p & 3) << 6) | b;
+          bytes[bytePos++] = ((p & 3) << 6) | index;
           groupPos = 0;
           break;
       }
@@ -68,23 +68,23 @@ var require_base64_encoding = x(function (cjsExports) {
     let pad = encoding == "std";
     let base64 = "";
     let groupPos = 0;
-    let b;
+    let index;
     let p = 0;
     for (let i = 0; i < bytes.length; i++)
-      switch (((b = bytes[i]), groupPos)) {
+      switch (((index = bytes[i]), groupPos)) {
         case 0:
-          base64 += table[b >> 2];
-          p = (b & 3) << 4;
+          base64 += table[index >> 2];
+          p = (index & 3) << 4;
           groupPos = 1;
           break;
         case 1:
-          base64 += table[p | (b >> 4)];
-          p = (b & 15) << 2;
+          base64 += table[p | (index >> 4)];
+          p = (index & 15) << 2;
           groupPos = 2;
           break;
         case 2:
-          base64 += table[p | (b >> 6)];
-          base64 += table[b & 63];
+          base64 += table[p | (index >> 6)];
+          base64 += table[index & 63];
           groupPos = 0;
           break;
       }

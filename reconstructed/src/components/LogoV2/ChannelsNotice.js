@@ -22,8 +22,8 @@ import {
   jsxProd_default,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text, Box } from "../../ink/components/Text.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { y } from "../../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useState } from "../../../vendor/react/cjs/react.production.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
 import { getMcpConfigsByScope } from "../../services/mcp/config.js";
 import { getInstalledPlugins } from "../../utils/plugins/installedPluginsManager.js";
@@ -50,11 +50,11 @@ function getChannelsNoticeState() {
   let sub = getSettingsForSource("policySettings");
   let allowlist = getEffectiveChannelAllowlist(sub?.allowedChannelPlugins);
   let sub_2 = isChannelsOffForSession();
-  let fe = sub_2 || isChannelsEnabled() ? null : policyDenyKind("allow_channels");
+  let verdict = sub_2 || isChannelsEnabled() ? null : policyDenyKind("allow_channels");
   return {
     channels: ch,
     disabled: sub_2,
-    verdictPending: fe === "cache_miss" || fe === "route_missing" ? fe : null,
+    verdictPending: verdict === "cache_miss" || verdict === "route_missing" ? verdict : null,
     is3P: getAPIProvider() !== "firstParty",
     policyBlocked: isChannelsPolicyBlocked(sub),
     list,
@@ -62,8 +62,8 @@ function getChannelsNoticeState() {
   };
 }
 //@ chunk-ag5x7vhf.js:71065-71095 layout
-function hasNonDevChannel(Fe) {
-  return !Fe.dev;
+function hasNonDevChannel(channel) {
+  return !channel.dev;
 }
 //@ chunk-ag5x7vhf.js:71095-71209 callgraph-fingerprint = _temp3 (0.662)
 function renderChannelWarningRow(u) {
@@ -77,20 +77,20 @@ function renderChannelWarningRow(u) {
   );
 }
 //@ chunk-ag5x7vhf.js:71209-71323 layout
-function renderChannelWarningRowAlt(me) {
+function renderChannelWarningRowAlt(entry) {
   return jsxProd_default_2(
     Text,
     {
       color: "warning",
-      children: [formatChannelEntry(me.entry), " \xB7 ", me.why],
+      children: [formatChannelEntry(entry.entry), " \xB7 ", entry.why],
     },
-    `${formatChannelEntry(me.entry)}:${me.why}`,
+    `${formatChannelEntry(entry.entry)}:${entry.why}`,
   );
 }
 //@ chunk-ag5x7vhf.js:71323-73721 fingerprint = ChannelsNotice (0.375)
 function ChannelsNotice() {
-  let $ = w(38);
-  let [t0] = y(getChannelsNoticeState);
+  let $ = useMemoCache(38);
+  let [t0] = useState(getChannelsNoticeState);
   let { channels, disabled, verdictPending, is3P, policyBlocked, list, unmatched } = t0;
   if (channels.length === 0) {
     return null;
@@ -209,44 +209,44 @@ function ChannelsNotice() {
     return t5;
   }
   if (verdictPending) {
-    let W;
+    let title;
     if ($[22] !== flag || $[23] !== list) {
-      W = jsxProd_default_2(Text, {
+      title = jsxProd_default_2(Text, {
         color: "warning",
         children: [flag, " waiting for your organization's policy (", list, ")"],
       });
       $[22] = flag;
       $[23] = list;
-      $[24] = W;
-    } else W = $[24];
+      $[24] = title;
+    } else title = $[24];
     const children =
       verdictPending === "route_missing"
         ? "This network does not serve it, so messages are dropped this session"
         : "Messages are dropped until it loads";
-    let K;
+    let note;
     if ($[25] !== children) {
-      K = jsxProd_default(Text, {
+      note = jsxProd_default(Text, {
         dimColor: true,
         children,
       });
       $[25] = children;
-      $[26] = K;
-    } else K = $[26];
-    let q;
-    if ($[27] !== W || $[28] !== K) {
-      q = jsxProd_default_2(Box, {
+      $[26] = note;
+    } else note = $[26];
+    let pendingBox;
+    if ($[27] !== title || $[28] !== note) {
+      pendingBox = jsxProd_default_2(Box, {
         flexDirection: "column",
-        children: [W, K],
+        children: [title, note],
       });
-      $[27] = W;
-      $[28] = K;
-      $[29] = q;
-    } else q = $[29];
-    return q;
+      $[27] = title;
+      $[28] = note;
+      $[29] = pendingBox;
+    } else pendingBox = $[29];
+    return pendingBox;
   }
-  let W;
+  let activeText;
   if ($[30] !== flag || $[31] !== list) {
-    W = jsxProd_default_2(Text, {
+    activeText = jsxProd_default_2(Text, {
       dimColor: true,
       children: [
         "Channels (experimental) messages from ",
@@ -258,25 +258,25 @@ function ChannelsNotice() {
     });
     $[30] = flag;
     $[31] = list;
-    $[32] = W;
-  } else W = $[32];
-  let z;
+    $[32] = activeText;
+  } else activeText = $[32];
+  let warnings;
   if ($[33] !== unmatched) {
-    z = unmatched.map(renderChannelWarningRowAlt);
+    warnings = unmatched.map(renderChannelWarningRowAlt);
     $[33] = unmatched;
-    $[34] = z;
-  } else z = $[34];
-  let K;
-  if ($[35] !== W || $[36] !== z) {
-    K = jsxProd_default_2(Box, {
+    $[34] = warnings;
+  } else warnings = $[34];
+  let activeBox;
+  if ($[35] !== activeText || $[36] !== warnings) {
+    activeBox = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [W, z],
+      children: [activeText, warnings],
     });
-    $[35] = W;
-    $[36] = z;
-    $[37] = K;
-  } else K = $[37];
-  return K;
+    $[35] = activeText;
+    $[36] = warnings;
+    $[37] = activeBox;
+  } else activeBox = $[37];
+  return activeBox;
 }
 //@ chunk-ag5x7vhf.js:73721-73816 placement = _temp2 (1)
 function formatChannelEntry(c) {
@@ -311,13 +311,13 @@ function findUnmatched(entries, allowlist) {
         entry,
         why: "plugin not installed",
       });
-    let V = pluginName
+    let parsed = pluginName
       ? parsePluginIdentifier_2(pluginName)
       : {
           name: entry.name,
           marketplace: entry.marketplace,
         };
-    if (!entry.dev && !allowed.some((e) => e.plugin === V.name && e.marketplace === V.marketplace))
+    if (!entry.dev && !allowed.some((e) => e.plugin === parsed.name && e.marketplace === parsed.marketplace))
       out.push({
         entry,
         why:

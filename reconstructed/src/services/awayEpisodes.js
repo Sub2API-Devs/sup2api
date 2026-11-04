@@ -17,49 +17,51 @@ class AwayEpisodeTracker {
   #t = new Map();
   #e = new Map();
   #s = false;
-  told(t, s, e) {
-    t.noteModelToldAway(e);
-    if (t.awayEpisode(e) === undefined) return;
-    this.#n(t);
-    let i = s ?? "";
-    let n = this.#e.get(i);
-    if (n !== undefined) {
-      n.add(e);
+  told(session, projectKey, episodeId) {
+    session.noteModelToldAway(episodeId);
+    if (session.awayEpisode(episodeId) === undefined) return;
+    this.#n(session);
+    let storedProjectKey = projectKey ?? "";
+    let knownEpisodes = this.#e.get(storedProjectKey);
+    if (knownEpisodes !== undefined) {
+      knownEpisodes.add(episodeId);
       return;
     }
     let found = [...this.#e.keys()].find((key) => key !== "");
     if (this.#e.size >= 64 && found !== undefined) this.#e.delete(found);
-    this.#e.set(i, new Set([e]));
+    this.#e.set(storedProjectKey, new Set([episodeId]));
   }
-  takeReturn(t, s, e) {
-    let i = s ?? "";
-    let n = this.#e.get(i);
-    if (n?.has(e) !== true || t.awayEpisode(e) !== undefined) return;
-    let d = t.takeBackNote(e);
-    if (d?.toldModel === true) {
-      let r = this.#t.keys().next().value;
-      if (!this.#t.has(e) && this.#t.size >= 256 && r !== undefined) this.#t.delete(r);
-      this.#t.set(e, d);
+  takeReturn(session, projectKey, episodeId) {
+    let storedProjectKey = projectKey ?? "";
+    let knownEpisodes = this.#e.get(storedProjectKey);
+    if (knownEpisodes?.has(episodeId) !== true || session.awayEpisode(episodeId) !== undefined) return;
+    let note = session.takeBackNote(episodeId);
+    if (note?.toldModel === true) {
+      let oldestEpisodeId = this.#t.keys().next().value;
+      if (!this.#t.has(episodeId) && this.#t.size >= 256 && oldestEpisodeId !== undefined)
+        this.#t.delete(oldestEpisodeId);
+      this.#t.set(episodeId, note);
     }
-    let o = this.#t.get(e);
-    if (o === undefined) return;
-    this.#i(i, n, e);
-    return o.sinceHeardMs;
+    let storedNote = this.#t.get(episodeId);
+    if (storedNote === undefined) return;
+    this.#i(storedProjectKey, knownEpisodes, episodeId);
+    return storedNote.sinceHeardMs;
   }
   clear() {
     this.#t.clear();
     this.#e.clear();
   }
-  #i(t, s, e) {
-    s.delete(e);
-    if (s.size === 0) this.#e.delete(t);
+  #i(projectKey, knownEpisodes, episodeId) {
+    knownEpisodes.delete(episodeId);
+    if (knownEpisodes.size === 0) this.#e.delete(projectKey);
   }
-  #n(t) {
+  #n(session) {
     if (this.#s) return;
     this.#s = true;
-    t.onAwayEpisodeDropped((s) => {
-      this.#t.delete(s);
-      for (let [e, i] of [...this.#e]) this.#i(e, i, s);
+    session.onAwayEpisodeDropped((droppedEpisodeId) => {
+      this.#t.delete(droppedEpisodeId);
+      for (let [projectKey, knownEpisodes] of [...this.#e])
+        this.#i(projectKey, knownEpisodes, droppedEpisodeId);
     });
   }
 }

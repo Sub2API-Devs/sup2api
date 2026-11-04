@@ -14,33 +14,40 @@ import { getMaxSubagentSpawnDepth } from "../../tools/AgentTool/spawnDepth.js";
 import { toolMatchesName } from "../../Tool.js";
 import { AGENT } from "../../tools/AgentTool/constants.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { array, u, string, union, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import {
+  array,
+  objectSchema,
+  stringSchema,
+  union,
+  numberSchema,
+} from "../../../vendor/zod/v4/classic/schemas.js";
 import { getPrintOutputFormat } from "../../bootstrap/state.js";
 import { safeParseJSON } from "../../utils/json.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hantmvxa.js:49051-49274 placement
-function extractFlags(e, n) {
-  let trimmed = e.trim();
+function extractFlags(input, flagNames) {
+  let trimmed = input.trim();
   let rawFirstToken = trimmed.split(/\s+/, 1)[0] ?? "";
-  let h = new Set();
-  let y = trimmed;
-  for (let w of n) {
-    let replaced = y.replace(new RegExp(`(?:^|\\s)--${urlPatternToRegex(w)}(?=\\s|$)`, "g"), "");
-    if (replaced !== y) {
-      h.add(w);
-      y = replaced.trim();
+  let flags = new Set();
+  let rest = trimmed;
+  for (let flagName of flagNames) {
+    let replaced = rest.replace(new RegExp(`(?:^|\\s)--${urlPatternToRegex(flagName)}(?=\\s|$)`, "g"), "");
+    if (replaced !== rest) {
+      flags.add(flagName);
+      rest = replaced.trim();
     }
   }
   return {
     rawFirstToken,
-    flags: h,
-    rest: y,
+    flags,
+    rest,
   };
 }
 //@ chunk-hantmvxa.js:49274-49409 placement
-function canSpawnReviewAgents(e) {
-  if (e.agentContext && getAgentDepth(e.agentContext) >= getMaxSubagentSpawnDepth()) return false;
-  let tools = e.options?.tools;
+function canSpawnReviewAgents(context) {
+  if (context.agentContext && getAgentDepth(context.agentContext) >= getMaxSubagentSpawnDepth()) return false;
+  let tools = context.options?.tools;
   if (!tools) return true;
   return tools.some((tool) => toolMatchesName(tool, AGENT));
 }
@@ -92,48 +99,52 @@ general change to the underlying mechanism over adding special cases, and name
 that change.
 `;
 //@ chunk-hantmvxa.js:51848-52000 placement
-var ReviewFindingsSchema = DoctorLazy(() =>
-  array(
-    u({
-      file: string(),
-      line: union([E(), string()]).nullish(),
-      summary: string(),
-      failure_scenario: string().nullish(),
-    }),
-  ),
-);
-var JSON_FENCE_RE = /^```json[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/gim;
+var ReviewFindingsSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var JSON_FENCE_RE;
+deferInit("chunk-hantmvxa.js:51848", () => {
+  ReviewFindingsSchema = DoctorLazy(() =>
+    array(
+      objectSchema({
+        file: stringSchema(),
+        line: union([numberSchema(), stringSchema()]).nullish(),
+        summary: stringSchema(),
+        failure_scenario: stringSchema().nullish(),
+      }),
+    ),
+  );
+  JSON_FENCE_RE = /^```json[ \t]*\r?\n([\s\S]*?)^```[ \t]*$/gim;
+});
 //@ chunk-hantmvxa.js:52000-52144 placement
-function formatReviewOutput(e) {
+function formatReviewOutput(text) {
   let printOutputFormat = getPrintOutputFormat();
-  if (printOutputFormat === "text" || printOutputFormat === "json") return e;
+  if (printOutputFormat === "text" || printOutputFormat === "json") return text;
   return (
-    (e.trimStart().startsWith("[") ? formatReviewFindings(e) : undefined) ??
-    e.replace(JSON_FENCE_RE, (r, h) => formatReviewFindings(h) ?? r)
+    (text.trimStart().startsWith("[") ? formatReviewFindings(text) : undefined) ??
+    text.replace(JSON_FENCE_RE, (wholeMatch, fenceBody) => formatReviewFindings(fenceBody) ?? wholeMatch)
   );
 }
 //@ chunk-hantmvxa.js:52144-52613 placement
-function formatReviewFindings(e) {
-  let n = ReviewFindingsSchema().safeParse(safeParseJSON(e.trim(), false));
-  if (!n.success) return;
-  let s = n.data;
-  if (s.length === 0) return "No findings.";
-  let mapped = s.map((y, w) => {
-    let b = y.line ? `${y.file}:${y.line}` : y.file;
-    let k = y.failure_scenario
+function formatReviewFindings(text) {
+  let parsed = ReviewFindingsSchema().safeParse(safeParseJSON(text.trim(), false));
+  if (!parsed.success) return;
+  let findings = parsed.data;
+  if (findings.length === 0) return "No findings.";
+  let mapped = findings.map((finding, index) => {
+    let location = finding.line ? `${finding.file}:${finding.line}` : finding.file;
+    let scenarioSuffix = finding.failure_scenario
       ? `
 
-Failure scenario: ${y.failure_scenario}`
+Failure scenario: ${finding.failure_scenario}`
       : "";
-    let C = `${w + 1}. `;
-    return escapeControlChars(`${C}\`${b}\`: ${y.summary}${k}`).replace(
+    let prefix = `${index + 1}. `;
+    return escapeControlChars(`${prefix}\`${location}\`: ${finding.summary}${scenarioSuffix}`).replace(
       /\n(?=[^\n])/g,
       `
-${" ".repeat(C.length)}`,
+${" ".repeat(prefix.length)}`,
     );
   });
-  let h = s.length > 1 ? ", most severe first" : "";
-  return `${s.length} ${plural(s.length, "finding")}${h}:
+  let severityNote = findings.length > 1 ? ", most severe first" : "";
+  return `${findings.length} ${plural(findings.length, "finding")}${severityNote}:
 
 ${mapped.join(`
 
@@ -143,7 +154,24 @@ ${mapped.join(`
 /**
  * 代码评审的 bug 类角度文本：逐行扫描、删除行为审计、跨文件追踪、语言陷阱、包装/代理正确性，以及 verify 阶段与 gap sweep 的提示词。
  */
-var REVIEW_ANGLE_LINE_SCAN = `### Angle A \u2014 line-by-line diff scan
+var REVIEW_ANGLE_LINE_SCAN; // deferred: uses AGENT (../../tools/AgentTool/constants.js) of its import cycle while loading; runs once the cycle is complete
+var REVIEW_ANGLE_B_REMOVED_BEHAVIOR;
+var REVIEW_ANGLE_C_CROSS_FILE;
+var REVIEW_ANGLE_D_LANGUAGE_PITFALLS;
+var REVIEW_ANGLE_E_WRAPPER_PROXY;
+var REPORT_FINDINGS_FALLBACK_NOTE;
+var REVIEW_BUG_ANGLES_A_TO_C;
+var REVIEW_BUG_ANGLES_A_TO_E;
+var REVIEW_ANGLE_REUSE;
+var REVIEW_CLEANUP_OUTPUT_FIELDS;
+var CONFIRMED_CRITERIA_TEXT;
+var PLAUSIBLE_DEFAULT_TEXT;
+var REVIEW_PHASE2_VERIFY_THREE_STATE;
+var REVIEW_PHASE2_VERIFY_RECALL_BIASED;
+var REVIEW_ANGLE_DROPPED_GUARD_HINT;
+var REVIEW_PHASE3_GAP_SWEEP;
+deferInit("chunk-hantmvxa.js:52613", () => {
+  REVIEW_ANGLE_LINE_SCAN = `### Angle A \u2014 line-by-line diff scan
 
 Read every hunk in the diff, line by line. Then Read the enclosing function for
 each hunk \u2014 bugs in unchanged lines of a touched function are in scope (the PR
@@ -152,28 +180,28 @@ or platform makes this line wrong? Look for inverted/wrong conditions,
 off-by-one, null/undefined deref, missing \`await\`, falsy-zero checks,
 wrong-variable copy-paste, error swallowed in catch, unescaped regex metachars.
 `;
-var REVIEW_ANGLE_B_REMOVED_BEHAVIOR = `### Angle B \u2014 removed-behavior auditor
+  REVIEW_ANGLE_B_REMOVED_BEHAVIOR = `### Angle B \u2014 removed-behavior auditor
 
 For every line the diff DELETES or replaces, name the invariant or behavior it
 enforced, then search the new code for where that invariant is re-established.
 If you can't find it, that's a candidate: a removed guard, a dropped error
 path, a narrowed validation, a deleted test that was covering a real case.
 `;
-var REVIEW_ANGLE_C_CROSS_FILE = `### Angle C \u2014 cross-file tracer
+  REVIEW_ANGLE_C_CROSS_FILE = `### Angle C \u2014 cross-file tracer
 
 For each function the diff changes, find its callers (Grep for the symbol) and
 check whether the change breaks any call site: a new precondition, a changed
 return shape, a new exception, a timing/ordering dependency. Also check callees:
 does a parallel change in the same PR make a call unsafe?
 `;
-var REVIEW_ANGLE_D_LANGUAGE_PITFALLS = `### Angle D \u2014 language-pitfall specialist
+  REVIEW_ANGLE_D_LANGUAGE_PITFALLS = `### Angle D \u2014 language-pitfall specialist
 
 Scan for the classic pitfalls of the diff's language/framework \u2014 for example:
 JS falsy-zero, \`==\` coercion, closure-captured loop var; Python mutable default
 args, late-binding closures; Go nil-map write, range-var capture; SQL injection;
 timezone/DST drift; float equality. Flag any instance the diff introduces.
 `;
-var REVIEW_ANGLE_E_WRAPPER_PROXY = `### Angle E \u2014 wrapper/proxy correctness
+  REVIEW_ANGLE_E_WRAPPER_PROXY = `### Angle E \u2014 wrapper/proxy correctness
 
 When the PR adds or modifies a type that wraps another (cache, proxy, decorator,
 adapter): check that every method routes to the wrapped instance and not back
@@ -182,26 +210,26 @@ through a registry/session/global \u2014 e.g. a caching provider holding a
 \`delegate.get(...)\` will re-enter the cache or recurse. Also check that the
 wrapper forwards all the methods the callers actually use.
 `;
-var REPORT_FINDINGS_FALLBACK_NOTE = `If the ${AGENT} tool is not available in your current tool set, do not error \u2014 perform each angle (and each verification) yourself, sequentially, in this context.`;
-var REVIEW_BUG_ANGLES_A_TO_C = `${REVIEW_ANGLE_LINE_SCAN}
+  REPORT_FINDINGS_FALLBACK_NOTE = `If the ${AGENT} tool is not available in your current tool set, do not error \u2014 perform each angle (and each verification) yourself, sequentially, in this context.`;
+  REVIEW_BUG_ANGLES_A_TO_C = `${REVIEW_ANGLE_LINE_SCAN}
 ${REVIEW_ANGLE_B_REMOVED_BEHAVIOR}
 ${REVIEW_ANGLE_C_CROSS_FILE}`;
-var REVIEW_BUG_ANGLES_A_TO_E = `${REVIEW_BUG_ANGLES_A_TO_C}
+  REVIEW_BUG_ANGLES_A_TO_E = `${REVIEW_BUG_ANGLES_A_TO_C}
 ${REVIEW_ANGLE_D_LANGUAGE_PITFALLS}
 ${REVIEW_ANGLE_E_WRAPPER_PROXY}`;
-var REVIEW_ANGLE_REUSE = `### Reuse
+  REVIEW_ANGLE_REUSE = `### Reuse
 
 The angles above hunt for bugs; this one and the next two hunt for cleanup in
 the changed code. ${REVIEW_ANGLE_DONT_REIMPLEMENT}`;
-var REVIEW_CLEANUP_OUTPUT_FIELDS =
-  "Cleanup, altitude, and conventions candidates use the same\n`file`/`line`/`summary` shape; in `failure_scenario`, state the concrete\ncost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule\nis broken) instead of a crash. Correctness bugs always outrank cleanup,\naltitude, and conventions findings when the output cap forces a cut.\n";
-var CONFIRMED_CRITERIA_TEXT = `- **CONFIRMED** \u2014 can name the inputs/state that trigger it and the wrong
+  REVIEW_CLEANUP_OUTPUT_FIELDS =
+    "Cleanup, altitude, and conventions candidates use the same\n`file`/`line`/`summary` shape; in `failure_scenario`, state the concrete\ncost (what is duplicated, wasted, harder to maintain, or which CLAUDE.md rule\nis broken) instead of a crash. Correctness bugs always outrank cleanup,\naltitude, and conventions findings when the output cap forces a cut.\n";
+  CONFIRMED_CRITERIA_TEXT = `- **CONFIRMED** \u2014 can name the inputs/state that trigger it and the wrong
   output or crash. Quote the line.
 - **PLAUSIBLE** \u2014 mechanism is real, trigger is uncertain (timing, env,
   config). State what would confirm it.
 - **REFUTED** \u2014 factually wrong (code doesn't say that) or guarded elsewhere.
   Quote the line that proves it.`;
-var PLAUSIBLE_DEFAULT_TEXT = `**PLAUSIBLE by default** \u2014 do not refute a candidate for being "speculative" or
+  PLAUSIBLE_DEFAULT_TEXT = `**PLAUSIBLE by default** \u2014 do not refute a candidate for being "speculative" or
 "depends on runtime state" when the state is realistic: concurrency races,
 nil/undefined on a rare-but-reachable path (error handler, cold cache, missing
 optional field), falsy-zero treated as missing, off-by-one on a boundary the
@@ -211,7 +239,7 @@ lost an anchor. These are PLAUSIBLE.
 **REFUTED** only when constructible from the code: factually wrong (quote the
 actual line); provably impossible (type/constant/invariant \u2014 show it); already
 handled in this diff (cite the guard); or pure style with no observable effect.`;
-var REVIEW_PHASE2_VERIFY_THREE_STATE = `## Phase 2 \u2014 Verify (1-vote, 3-state)
+  REVIEW_PHASE2_VERIFY_THREE_STATE = `## Phase 2 \u2014 Verify (1-vote, 3-state)
 
 Dedup candidates that point at the same line/mechanism, keeping the one with
 the most concrete failure scenario. For each remaining candidate, run **one
@@ -222,7 +250,7 @@ ${CONFIRMED_CRITERIA_TEXT}
 
 Keep candidates where the vote is CONFIRMED or PLAUSIBLE.
 `;
-var REVIEW_PHASE2_VERIFY_RECALL_BIASED = `## Phase 2 \u2014 Verify (1-vote, recall-biased)
+  REVIEW_PHASE2_VERIFY_RECALL_BIASED = `## Phase 2 \u2014 Verify (1-vote, recall-biased)
 
 Dedup near-duplicates (same defect, same location, same reason \u2192 keep one). For
 each remaining candidate, run **one verifier** via the ${AGENT} tool:
@@ -233,11 +261,11 @@ ${PLAUSIBLE_DEFAULT_TEXT}
 
 Keep **CONFIRMED and PLAUSIBLE**. Drop REFUTED.
 `;
-var REVIEW_ANGLE_DROPPED_GUARD_HINT = `moved/extracted code that dropped a guard
+  REVIEW_ANGLE_DROPPED_GUARD_HINT = `moved/extracted code that dropped a guard
 or anchor; second-tier footguns (dataclass default evaluated once, \`hash()\`
 non-determinism, lock-scope shrink, predicate methods with side effects);
 setup/teardown asymmetry in tests; config defaults flipped.`;
-var REVIEW_PHASE3_GAP_SWEEP = `## Phase 3 \u2014 Sweep for gaps
+  REVIEW_PHASE3_GAP_SWEEP = `## Phase 3 \u2014 Sweep for gaps
 
 Run **one more finder** as a fresh reviewer who has the verified list. Re-read
 the diff and enclosing functions looking ONLY for defects not already listed.
@@ -247,6 +275,7 @@ on what the first pass tends to miss: ${REVIEW_ANGLE_DROPPED_GUARD_HINT}
 Surface **up to 8 additional candidates**, each naming a defect not already on
 the list. If nothing new, return an empty sweep \u2014 do not pad.
 `;
+});
 export {
   REVIEW_BUG_ANGLES_A_TO_C,
   REVIEW_ANGLE_REUSE,

@@ -17,26 +17,26 @@ import { bindAsyncResource } from "../utils/asyncResourceBind.js";
 function createStore(initialState, onChange) {
   let state = initialState;
   let listeners = new Set();
-  let a = onChange && bindAsyncResource(onChange);
-  let s = () => state;
+  let boundOnChange = onChange && bindAsyncResource(onChange);
+  let getState = () => state;
   return {
-    getSnapshot: s,
-    getState: s,
+    getSnapshot: getState,
+    getState,
     setState: (updater) => {
       let prev = state;
       let next = updater(prev);
       if (Object.is(next, prev)) return;
       state = next;
-      a?.({
+      boundOnChange?.({
         newState: next,
         oldState: prev,
       });
       for (let listener of listeners) listener();
     },
     subscribe: (listener) => {
-      let o = bindAsyncResource(listener);
-      listeners.add(o);
-      return () => listeners.delete(o);
+      let boundListener = bindAsyncResource(listener);
+      listeners.add(boundListener);
+      return () => listeners.delete(boundListener);
     },
   };
 }

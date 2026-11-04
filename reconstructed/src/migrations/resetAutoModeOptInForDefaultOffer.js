@@ -19,7 +19,7 @@ import { logError } from "../utils/log.js";
 /**
  * 迁移：自动模式默认提供时，重置旧的 skipAutoPermissionPrompt（只做一次）。
  */
-async function resetAutoModeOptInForDefaultOffer(e) {
+async function resetAutoModeOptInForDefaultOffer(context) {
   if (getGlobalConfig().hasResetAutoModeOptInForDefaultOffer) return true;
   if (getAutoModeEnabledState() !== "enabled") return true;
   try {
@@ -31,19 +31,19 @@ async function resetAutoModeOptInForDefaultOffer(e) {
           skipAutoPermissionPrompt: undefined,
         },
         undefined,
-        e,
+        context,
       );
       if (error) throw error;
       logEvent("tengu_migrate_reset_auto_opt_in_for_default_offer", {});
       logFeatureOk("migration_reset_auto_mode_opt_in");
     }
-    saveGlobalConfig((s) => {
-      if (s.hasResetAutoModeOptInForDefaultOffer) return s;
+    saveGlobalConfig((current) => {
+      if (current.hasResetAutoModeOptInForDefaultOffer) return current;
       return {
-        ...s,
+        ...current,
         hasResetAutoModeOptInForDefaultOffer: true,
       };
-    }, e);
+    }, context);
   } catch (error) {
     logError(Error(`Failed to reset auto mode opt-in: ${error}`));
     logFeatureBad("migration_reset_auto_mode_opt_in", "migration_reset_auto_mode_write_failed");

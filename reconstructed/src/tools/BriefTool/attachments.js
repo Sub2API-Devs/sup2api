@@ -52,9 +52,9 @@ var MAX_CONCURRENT_ATTACHMENTS = 32;
 /**
  * 决定附件上传通道：CLAUDE_CODE_ATTACHMENTS_BY_PATH 时不上传；REPL bridge；CLAUDE_CODE_BRIEF_UPLOAD；CCR 环境；BYOC 远程；SDK 托管（tengu_async_goblet 控制）；否则 none。
  */
-function getAttachmentUploadLane(n) {
+function getAttachmentUploadLane(options) {
   if (env.CLAUDE_CODE_ATTACHMENTS_BY_PATH) return "none";
-  if (n.replBridgeEnabled) return "repl";
+  if (options.replBridgeEnabled) return "repl";
   if (env.CLAUDE_CODE_BRIEF_UPLOAD) return "env_brief_upload";
   if (env.CLAUDE_CODE_REMOTE_ENVIRONMENT_TYPE) return "env_ccr";
   if (env.CLAUDE_CODE_REMOTE) return "env_byoc";
@@ -116,66 +116,66 @@ var ATTACHMENT_MIME_BY_EXT = {
 /**
  * 按扩展名取附件 MIME 类型。
  */
-function getAttachmentMimeType(n) {
-  return ATTACHMENT_MIME_BY_EXT[extname(n).toLowerCase()];
+function getAttachmentMimeType(path) {
+  return ATTACHMENT_MIME_BY_EXT[extname(path).toLowerCase()];
 }
 //@ chunk-qq39x404.js:2548-2701 layout
 /**
  * 判断已校验附件的上传副本（png/jpeg）是否与原扩展名类型不同（即使用了预览副本）。
  */
-function hasMismatchedImageType(n) {
+function hasMismatchedImageType(attachment) {
   return (
-    n.pathValidated === true &&
-    n.file_uuid !== undefined &&
-    (n.media_type === "image/png" || n.media_type === "image/jpeg") &&
-    n.media_type !== getAttachmentMimeType(n.path)
+    attachment.pathValidated === true &&
+    attachment.file_uuid !== undefined &&
+    (attachment.media_type === "image/png" || attachment.media_type === "image/jpeg") &&
+    attachment.media_type !== getAttachmentMimeType(attachment.path)
   );
 }
 //@ chunk-qq39x404.js:2701-2742 layout
 /**
  * 附件项是否为已上传的对象（非字符串路径）。
  */
-function isPreUploadedAttachment(n) {
-  return typeof n !== "string";
+function isPreUploadedAttachment(attachment) {
+  return typeof attachment !== "string";
 }
 //@ chunk-qq39x404.js:2742-2957 layout
-async function suggestAttachmentPath(rawPath, e, cwd) {
-  let o = await normalizePathForComparison(e);
-  if (o) return o;
+async function suggestAttachmentPath(rawPath, resolvedPath, cwd) {
+  let normalizedPath = await normalizePathForComparison(resolvedPath);
+  if (normalizedPath) return normalizedPath;
   if (!isAbsolute(rawPath)) {
-    let [a, ...d] = rawPath.split(/[\\/]+/);
-    if (a === basename(cwd) && d.length > 0) {
-      let p = join(cwd, ...d);
+    let [firstSegment, ...restSegments] = rawPath.split(/[\\/]+/);
+    if (firstSegment === basename(cwd) && restSegments.length > 0) {
+      let candidatePath = join(cwd, ...restSegments);
       try {
-        if ((await stat(p)).isFile()) return d.join("/");
+        if ((await stat(candidatePath)).isFile()) return restSegments.join("/");
       } catch {}
     }
   }
-  return await findSimilarFile(e);
+  return await findSimilarFile(resolvedPath);
 }
 //@ chunk-qq39x404.js:2957-3662 layout
 /**
  * 拒绝看起来是 URL、UNC 路径或位于会触发网络挂载目录下的附件路径。
  */
-function checkAttachmentPathShape(n) {
-  let e = escapeForTag(n);
-  if (/^[a-z][a-z0-9+.-]+:\/\//i.test(n))
+function checkAttachmentPathShape(rawPath) {
+  let escapedPath = escapeForTag(rawPath);
+  if (/^[a-z][a-z0-9+.-]+:\/\//i.test(rawPath))
     return {
       result: false,
-      message: `Attachment "${e}" looks like a URL, not a local file path. This tool can only send files that exist on the local filesystem \u2014 download or write the content to a local file first, then pass that path.`,
+      message: `Attachment "${escapedPath}" looks like a URL, not a local file path. This tool can only send files that exist on the local filesystem \u2014 download or write the content to a local file first, then pass that path.`,
       errorCode: 1,
     };
-  let code = expandPath(n);
+  let code = expandPath(rawPath);
   if (isUncOrDevicePath(code))
     return {
       result: false,
-      message: `Attachment "${e}" is a UNC network path, which is not supported.`,
+      message: `Attachment "${escapedPath}" is a UNC network path, which is not supported.`,
       errorCode: 1,
     };
   if (isNetworkOrSpecialPath(code))
     return {
       result: false,
-      message: `Attachment "${e}" is under /net, /Network, /.vol, /.file, /.nofollow or /.resolve, which could trigger a network mount, so it is not supported. Copy the file to an ordinary local path and pass that path instead.`,
+      message: `Attachment "${escapedPath}" is under /net, /Network, /.vol, /.file, /.nofollow or /.resolve, which could trigger a network mount, so it is not supported. Copy the file to an ordinary local path and pass that path instead.`,
       errorCode: 1,
     };
   return;
@@ -190,23 +190,23 @@ var CANNOT_ATTACH_PATH_MESSAGE =
 /**
  * validateInput 用的附件校验入口。
  */
-function validateAttachments(n, e) {
-  return validateAttachmentPaths(n, e, undefined);
+function validateAttachments(attachments, context) {
+  return validateAttachmentPaths(attachments, context, undefined);
 }
 //@ chunk-qq39x404.js:3791-4046 layout
 /**
  * call 时的附件校验：受限场景下同时收集被判定路径与文件身份，供上传时防止文件被替换。
  */
-async function validateAttachmentsForCall(n, e) {
-  if (!e.restricted && e.blockReadsOutsideWorkingDirectories !== true)
+async function validateAttachmentsForCall(attachments, context) {
+  if (!context.restricted && context.blockReadsOutsideWorkingDirectories !== true)
     return {
-      verdict: await validateAttachmentPaths(n, e, undefined),
+      verdict: await validateAttachmentPaths(attachments, context, undefined),
       judged: undefined,
     };
   let paths = [];
   let identities = new Map();
   return {
-    verdict: await validateAttachmentPaths(n, e, {
+    verdict: await validateAttachmentPaths(attachments, context, {
       paths,
       identities,
     }),
@@ -221,8 +221,8 @@ async function validateAttachmentsForCall(n, e) {
 /**
  * 逐个校验附件路径（已上传对象跳过）：diskless 会话不允许路径；拒绝 URL/UNC/网络挂载路径；--restricted 只能发工作目录内文件；permissions.blockReadsOutsideWorkingDirectories 时拒绝外部路径；必须是存在的普通文件（不存在时给出猜测路径）。
  */
-async function validateAttachmentPaths(n, e, t) {
-  for (let rawPath of n) {
+async function validateAttachmentPaths(attachments, context, judge) {
+  for (let rawPath of attachments) {
     if (isPreUploadedAttachment(rawPath)) continue;
     if (isDiskless())
       return {
@@ -232,56 +232,56 @@ async function validateAttachmentPaths(n, e, t) {
       };
     let fullPath = checkAttachmentPathShape(rawPath);
     if (fullPath !== undefined) return fullPath;
-    let d = escapeForTag(rawPath);
-    let p = expandPath(rawPath);
-    let h =
-      t !== undefined || e.restricted || e.blockReadsOutsideWorkingDirectories === true
-        ? getPathsForPermissionCheck(p)
+    let escapedPath = escapeForTag(rawPath);
+    let expandedPath = expandPath(rawPath);
+    let permissionPaths =
+      judge !== undefined || context.restricted || context.blockReadsOutsideWorkingDirectories === true
+        ? getPathsForPermissionCheck(expandedPath)
         : undefined;
-    if (e.restricted && !pathInAllowedWorkingPath(p, e, h))
+    if (context.restricted && !pathInAllowedWorkingPath(expandedPath, context, permissionPaths))
       return {
         result: false,
-        message: `Attachment "${d}" is outside the working directory; --restricted only sends files from inside it.`,
+        message: `Attachment "${escapedPath}" is outside the working directory; --restricted only sends files from inside it.`,
         errorCode: 1,
       };
-    if (outsideReadBlocked(p, e, h))
+    if (outsideReadBlocked(expandedPath, context, permissionPaths))
       return {
         result: false,
-        message: `Attachment "${d}" is outside the working directories; reads outside them are blocked (permissions.blockReadsOutsideWorkingDirectories).`,
+        message: `Attachment "${escapedPath}" is outside the working directories; reads outside them are blocked (permissions.blockReadsOutsideWorkingDirectories).`,
         errorCode: 1,
       };
     try {
-      if (!(await stat(p)).isFile())
+      if (!(await stat(expandedPath)).isFile())
         return {
           result: false,
-          message: `Attachment "${d}" is not a regular file.`,
+          message: `Attachment "${escapedPath}" is not a regular file.`,
           errorCode: 1,
         };
     } catch (e) {
       let code = getErrnoCode(e);
       if (code === "ENOENT") {
         let cwd = getCwd();
-        let y = await suggestAttachmentPath(rawPath, p, cwd);
-        let b = escapeForTag(y);
+        let suggestion = await suggestAttachmentPath(rawPath, expandedPath, cwd);
+        let escapedSuggestion = escapeForTag(suggestion);
         return {
           result: false,
           message:
-            `Attachment "${d}" does not exist. Current working directory: ${escapeForTag(cwd)}.` +
-            (y && b === y ? ` Did you mean "${b}"?` : ""),
+            `Attachment "${escapedPath}" does not exist. Current working directory: ${escapeForTag(cwd)}.` +
+            (suggestion && escapedSuggestion === suggestion ? ` Did you mean "${escapedSuggestion}"?` : ""),
           errorCode: 1,
         };
       }
       if (isSyscallError(e))
         return {
           result: false,
-          message: `Attachment "${d}" is not accessible (${code}).`,
+          message: `Attachment "${escapedPath}" is not accessible (${code}).`,
           errorCode: 1,
         };
       throw e;
     }
-    if (t !== undefined && h !== undefined) {
-      t.paths.push(...h);
-      t.identities.set(p, await lastExistingIdentity(h));
+    if (judge !== undefined && permissionPaths !== undefined) {
+      judge.paths.push(...permissionPaths);
+      judge.identities.set(expandedPath, await lastExistingIdentity(permissionPaths));
     }
   }
   return {
@@ -293,11 +293,11 @@ async function validateAttachmentPaths(n, e, t) {
  * 处理 Brief/SendUserFile 的附件：预上传的直接记录；本地路径展开并检查（非网络路径、存在）；按通道把文件写入项目文件夹和/或上传到聊天（限并发、可缩放图片），汇总每个附件的 uuid、项目路径、缩放信息与错误。
  */
 async function resolveBriefAttachments(attachments, options) {
-  let t = [];
-  let o = [];
+  let resolved = [];
+  let localIndexes = [];
   for (let attachment of attachments) {
     if (isPreUploadedAttachment(attachment)) {
-      t.push({
+      resolved.push({
         path: attachment.file_name,
         size: attachment.size,
         isImage: attachment.is_image,
@@ -312,49 +312,50 @@ async function resolveBriefAttachments(attachments, options) {
         CANNOT_ATTACH_PATH_MESSAGE,
         "attachment path refused in a diskless session",
       );
-    let u = expandPath(attachment);
-    if (isUntouchableSpelling(u))
+    let expandedPath = expandPath(attachment);
+    if (isUntouchableSpelling(expandedPath))
       throw Error(
         `Attachment "${escapeForTag(attachment)}" is a network path (UNC or /net autofs), which is not supported.`,
       );
-    let m = await stat(u).catch((error) => {
+    let stats = await stat(expandedPath).catch((error) => {
       if (error instanceof Error) error.message = escapeForTag(error.message);
       throw error;
     });
-    o.push(t.length);
-    t.push({
-      path: u,
-      size: m.size,
-      isImage: IMAGE_FILE_EXT_RE.test(u),
-      media_type: getAttachmentMimeType(u),
+    localIndexes.push(resolved.length);
+    resolved.push({
+      path: expandedPath,
+      size: stats.size,
+      isImage: IMAGE_FILE_EXT_RE.test(expandedPath),
+      media_type: getAttachmentMimeType(expandedPath),
       pathValidated: true,
     });
   }
   let { lane } = options;
-  let d = bridgeHostState().projectFilesDoor?.() ?? null;
-  let p = d !== null && d.channelId === options.projectFilesChannel ? d : null;
-  let h = lane !== "none" && lane !== "sdk_hosted_disabled";
-  if (o.length === 0 || (p === null && !h)) {
-    for (let r of o) {
-      let u = approvedResolvedPath(t[r].path, options.judged?.paths);
-      if (typeof u !== "string")
-        t[r] = {
-          ...t[r],
-          upload_error: u.error,
+  let door = bridgeHostState().projectFilesDoor?.() ?? null;
+  let projectChannel = door !== null && door.channelId === options.projectFilesChannel ? door : null;
+  let canUpload = lane !== "none" && lane !== "sdk_hosted_disabled";
+  if (localIndexes.length === 0 || (projectChannel === null && !canUpload)) {
+    for (let idx of localIndexes) {
+      let approvedPath = approvedResolvedPath(resolved[idx].path, options.judged?.paths);
+      if (typeof approvedPath !== "string")
+        resolved[idx] = {
+          ...resolved[idx],
+          upload_error: approvedPath.error,
         };
     }
     if (isTopLevelBridgeSession())
-      for (let r of o)
-        t[r] = {
-          ...t[r],
+      for (let idx of localIndexes)
+        resolved[idx] = {
+          ...resolved[idx],
           upload_error:
-            d === null
+            door === null
               ? "not delivered: this session is not on a project thread, so it has nowhere to place a file"
               : "not delivered: the project folder is not written in plan mode until the plan is approved",
         };
-    return t;
+    return resolved;
   }
-  let { uploadBriefAttachment, writeAttachmentToProjectFolder } = await import("./chunk-7kpfrhzn.js");
+  let { uploadBriefAttachment, writeAttachmentToProjectFolder } =
+    await import("./uploadBriefAttachment.lazy.js");
   let copyLock = createMutex();
   let telemetry = {
     upload_lane: fromEnum(lane),
@@ -364,34 +365,34 @@ async function resolveBriefAttachments(attachments, options) {
   let maxPosts = getFeatureValue_CACHED_MAY_BE_STALE("tengu_zany_flask", 2);
   let resendMaxMiB = getFeatureValue_CACHED_MAY_BE_STALE("tengu_shimmying_willow", 30);
   let semaphore = createSemaphore(MAX_CONCURRENT_FOLDER_WRITES);
-  let R = () => {};
+  let resolveAbort = () => {};
   let promise = new Promise((resolve) => {
-    R = resolve;
+    resolveAbort = resolve;
   });
-  options.signal?.addEventListener("abort", R, {
+  options.signal?.addEventListener("abort", resolveAbort, {
     once: true,
   });
-  let V = limitConcurrency(MAX_CONCURRENT_ATTACHMENTS, async (r) => {
-    let { path, size } = t[r];
-    let s = approvedResolvedPath(path, options.judged?.paths);
-    if (typeof s !== "string")
+  let processAttachment = limitConcurrency(MAX_CONCURRENT_ATTACHMENTS, async (attachmentIdx) => {
+    let { path, size } = resolved[attachmentIdx];
+    let approvedPath = approvedResolvedPath(path, options.judged?.paths);
+    if (typeof approvedPath !== "string")
       return {
         folder: {
-          error: s.error,
+          error: approvedPath.error,
         },
         chat: undefined,
       };
     let filename = basename(path);
     let identities = options.judged?.identities;
     let identity = identities === undefined || identities.has(path) ? identities?.get(path) : null;
-    let f;
+    let lockPromise;
     let waitForTurn = async () => {
-      await Promise.race([(f ??= semaphore.acquire()), promise]);
+      await Promise.race([(lockPromise ??= semaphore.acquire()), promise]);
     };
     try {
-      let [A, j] = await Promise.allSettled([
-        p
-          ? writeAttachmentToProjectFolder(s, size, p, {
+      let [folderResult, chatResult] = await Promise.allSettled([
+        projectChannel
+          ? writeAttachmentToProjectFolder(approvedPath, size, projectChannel, {
               filename,
               identity,
               signal: options.signal,
@@ -399,8 +400,8 @@ async function resolveBriefAttachments(attachments, options) {
               waitForTurn,
             })
           : undefined,
-        h
-          ? uploadBriefAttachment(s, size, {
+        canUpload
+          ? uploadBriefAttachment(approvedPath, size, {
               lane,
               filename,
               identity,
@@ -416,48 +417,49 @@ async function resolveBriefAttachments(attachments, options) {
             })
           : undefined,
       ]);
-      if (A.status === "rejected") throw A.reason;
-      if (j.status === "rejected") throw j.reason;
+      if (folderResult.status === "rejected") throw folderResult.reason;
+      if (chatResult.status === "rejected") throw chatResult.reason;
       return {
-        folder: A.value,
-        chat: j.value,
+        folder: folderResult.value,
+        chat: chatResult.value,
       };
     } finally {
-      f?.then((A) => A());
+      lockPromise?.then((release) => release());
     }
   });
-  let mapped = o.map(V);
-  Promise.allSettled(mapped).then(() => options.signal?.removeEventListener("abort", R));
+  let mapped = localIndexes.map(processAttachment);
+  Promise.allSettled(mapped).then(() => options.signal?.removeEventListener("abort", resolveAbort));
   let results = await Promise.all(mapped);
-  o.forEach((r, u) => {
-    let { folder, chat } = results[u];
-    let l = {
-      ...t[r],
+  localIndexes.forEach((attachmentIdx, resultIdx) => {
+    let { folder, chat } = results[resultIdx];
+    let attachment = {
+      ...resolved[attachmentIdx],
     };
-    if (typeof folder === "string") l.project_path = folder;
+    if (typeof folder === "string") attachment.project_path = folder;
     if (chat !== undefined && !("error" in chat)) {
-      l.file_uuid = chat.file_uuid;
+      attachment.file_uuid = chat.file_uuid;
       if (chat.copy !== undefined) {
-        l.isImage = chat.copy.isImage;
-        l.media_type = chat.copy.mediaType;
+        attachment.isImage = chat.copy.isImage;
+        attachment.media_type = chat.copy.mediaType;
       }
-      if (chat.scaled !== undefined) l.scaled = chat.scaled;
+      if (chat.scaled !== undefined) attachment.scaled = chat.scaled;
     }
-    let _ = folder !== undefined && typeof folder !== "string";
-    let w = chat !== undefined && "error" in chat;
-    if (l.project_path === undefined && l.file_uuid === undefined) {
-      let f = _ ? folder : w ? chat : undefined;
-      if (f !== undefined) {
-        l.upload_error = f.error;
-        if (f.errorCode !== undefined) l.upload_error_code = f.errorCode;
-        if (f.suspectedLimitBytes !== undefined) l.upload_suspected_limit_bytes = f.suspectedLimitBytes;
+    let folderFailed = folder !== undefined && typeof folder !== "string";
+    let chatFailed = chat !== undefined && "error" in chat;
+    if (attachment.project_path === undefined && attachment.file_uuid === undefined) {
+      let failure = folderFailed ? folder : chatFailed ? chat : undefined;
+      if (failure !== undefined) {
+        attachment.upload_error = failure.error;
+        if (failure.errorCode !== undefined) attachment.upload_error_code = failure.errorCode;
+        if (failure.suspectedLimitBytes !== undefined)
+          attachment.upload_suspected_limit_bytes = failure.suspectedLimitBytes;
       }
-    } else if (_) l.partial_error = `not placed in the project folder (${folder.error})`;
-    else if (w)
-      l.partial_error = `not sent to the chat viewers (${explainUploadError(chat.error, chat.errorCode, true)})`;
-    t[r] = l;
+    } else if (folderFailed) attachment.partial_error = `not placed in the project folder (${folder.error})`;
+    else if (chatFailed)
+      attachment.partial_error = `not sent to the chat viewers (${explainUploadError(chat.error, chat.errorCode, true)})`;
+    resolved[attachmentIdx] = attachment;
   });
-  return t;
+  return resolved;
 }
 //@ chunk-qq39x404.js:8249-8403 placement
 function approvedResolvedPath(path, paths) {
@@ -473,8 +475,8 @@ function approvedResolvedPath(path, paths) {
 /**
  * 生成图片以缩小副本发送到聊天的说明：每张的发送尺寸与原尺寸，以及原图在项目文件夹还是本地。
  */
-function scaledImagesNote(n) {
-  let flattened = n.flatMap(({ path, scaled, project_path: projectPath }) =>
+function scaledImagesNote(attachments) {
+  let flattened = attachments.flatMap(({ path, scaled, project_path: projectPath }) =>
     scaled === undefined
       ? []
       : [
@@ -497,7 +499,7 @@ function scaledImagesNote(n) {
 `) +
     `
 Tell the user they are seeing ${plural(count, "a scaled-down copy", "scaled-down copies")}; ` +
-    (flattened.every((o) => o.inFolder)
+    (flattened.every((scaledImage) => scaledImage.inFolder)
       ? `the project folder has ${plural(count, "the full-size original", "the full-size originals")}.`
       : `if they need ${plural(count, "the full-size original", "a full-size original")}, offer to send it inside a .zip.`)
   );

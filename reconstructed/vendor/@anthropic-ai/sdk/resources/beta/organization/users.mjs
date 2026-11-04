@@ -6,16 +6,16 @@
  * attribution: esm-fingerprint 1
  */
 import { APIResource } from "../../../core/resource.mjs";
-import { I } from "../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../internal/utils/path.mjs";
 import { Page } from "../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:120791-121173 esm-fingerprint
 class Users extends APIResource {
   retrieve(userID, options) {
-    return this._client.get(I`/v1/organizations/users/${userID}?beta=true`, options);
+    return this._client.get(parseUrl_2`/v1/organizations/users/${userID}?beta=true`, options);
   }
   update(userID, body, options) {
-    return this._client.post(I`/v1/organizations/users/${userID}?beta=true`, {
+    return this._client.post(parseUrl_2`/v1/organizations/users/${userID}?beta=true`, {
       body,
       ...options,
     });
@@ -27,7 +27,7 @@ class Users extends APIResource {
     });
   }
   remove(userID, options) {
-    return this._client.delete(I`/v1/organizations/users/${userID}?beta=true`, options);
+    return this._client.delete(parseUrl_2`/v1/organizations/users/${userID}?beta=true`, options);
   }
 }
 export { Users };

@@ -8,7 +8,7 @@
  * pieces: chunk-18hwfzwa.js (14)
  * attribution: placement 14
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useStoreSelector } from "../../hooks/useStoreSelector.js";
 import { useAppState } from "../../state/AppState.js";
 import {
@@ -21,44 +21,45 @@ import { createAgentsKilledMessage } from "../../utils/messages.js";
 import { CancelRequestHandler } from "../../hooks/useCancelRequest.js";
 import { PaneDockNamespace } from "../../components/pluginUi/PaneDock.js";
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:473910-473953 placement
-function selectAbortController3(co) {
-  return co.abortController;
+function selectAbortController3(state) {
+  return state.abortController;
 }
 //@ chunk-18hwfzwa.js:473953-473994 placement
-function selectBashesDialogPromptArea(bo) {
-  return !!bo.bashesDialog;
+function selectBashesDialogPromptArea(state) {
+  return !!state.bashesDialog;
 }
 //@ chunk-18hwfzwa.js:473994-474042 placement
-function selectIsInputOverlayActive(Ao) {
-  return Ao.isInputOverlayActive;
+function selectIsInputOverlayActive(state) {
+  return state.isInputOverlayActive;
 }
 //@ chunk-18hwfzwa.js:474042-474082 placement
-function selectIsVimEditing(Bo) {
-  return Bo.isVimEditing;
+function selectIsVimEditing(state) {
+  return state.isVimEditing;
 }
 //@ chunk-18hwfzwa.js:474082-474114 placement
-function selectMode(Ro) {
-  return Ro.mode;
+function selectMode(state) {
+  return state.mode;
 }
 //@ chunk-18hwfzwa.js:474114-474152 placement
-function selectDraftEmpty(Ho) {
-  return Ho.value === "";
+function selectDraftEmpty(draft) {
+  return draft.value === "";
 }
 //@ chunk-18hwfzwa.js:474152-474205 placement
-function selectHasDetachHandler(Io) {
-  return Io.onDetachToCaller !== undefined;
+function selectHasDetachHandler(props) {
+  return props.onDetachToCaller !== undefined;
 }
 //@ chunk-18hwfzwa.js:474205-474258 placement
-function selectCloudMessageHeld(Wo) {
-  return Wo.cloudMessageHeld !== undefined;
+function selectCloudMessageHeld(state) {
+  return state.cloudMessageHeld !== undefined;
 }
 //@ chunk-18hwfzwa.js:474258-474270 placement
 var PROMPT_ACCESSORY_COMPONENT = null;
 //@ chunk-18hwfzwa.js:474270-475900 placement
 function PromptArea(props) {
-  let $ = w(29);
+  let $ = useMemoCache(29);
   let {
     turn,
     transcript,
@@ -78,24 +79,24 @@ function PromptArea(props) {
   let isInputEmpty = useStoreSelector(draft, selectDraftEmpty);
   let exitDetachesToCaller = useStoreSelector(chrome, selectHasDetachHandler);
   let isCloudMessageHeld = useAppState(selectCloudMessageHeld);
-  let Lt;
+  let accessory;
   if ($[0] !== draft) {
-    Lt =
+    accessory =
       PROMPT_ACCESSORY_COMPONENT &&
       jsxProd_default(PROMPT_ACCESSORY_COMPONENT, {
         draft,
       });
     $[0] = draft;
-    $[1] = Lt;
-  } else Lt = $[1];
-  let oo;
+    $[1] = accessory;
+  } else accessory = $[1];
+  let keybindingHandlers;
   if ($[2] !== submitController.submit) {
-    oo = jsxProd_default(CommandKeybindingHandlers, {
+    keybindingHandlers = jsxProd_default(CommandKeybindingHandlers, {
       onSubmit: submitController.submit,
     });
     $[2] = submitController.submit;
-    $[3] = oo;
-  } else oo = $[3];
+    $[3] = keybindingHandlers;
+  } else keybindingHandlers = $[3];
   let getInFlightMessageId;
   if ($[4] !== turn.stream.inFlightMessageId) {
     getInFlightMessageId = () => turn.stream.inFlightMessageId;
@@ -113,7 +114,7 @@ function PromptArea(props) {
     $[7] = onAgentsKilled;
   } else onAgentsKilled = $[7];
   const abortSignal = storeSelector?.signal;
-  let po;
+  let cancelHandler;
   if (
     $[8] !== isBackgroundTasksDialogVisible ||
     $[9] !== exitDetachesToCaller ||
@@ -132,7 +133,7 @@ function PromptArea(props) {
     $[22] !== abortSignal ||
     $[23] !== turn.cancel
   ) {
-    po = jsxProd_default(CancelRequestHandler, {
+    cancelHandler = jsxProd_default(CancelRequestHandler, {
       onCancel: turn.cancel,
       getInFlightMessageId,
       onAgentsKilled,
@@ -166,37 +167,37 @@ function PromptArea(props) {
     $[21] = onAgentsKilled;
     $[22] = abortSignal;
     $[23] = turn.cancel;
-    $[24] = po;
-  } else po = $[24];
-  let ao;
-  if ($[25] !== Lt || $[26] !== oo || $[27] !== po) {
-    ao = jsxProd_default_2(Fragment, {
-      children: [Lt, oo, po],
+    $[24] = cancelHandler;
+  } else cancelHandler = $[24];
+  let composerSlot;
+  if ($[25] !== accessory || $[26] !== keybindingHandlers || $[27] !== cancelHandler) {
+    composerSlot = jsxProd_default_2(Fragment, {
+      children: [accessory, keybindingHandlers, cancelHandler],
     });
-    $[25] = Lt;
-    $[26] = oo;
-    $[27] = po;
-    $[28] = ao;
-  } else ao = $[28];
-  return ao;
+    $[25] = accessory;
+    $[26] = keybindingHandlers;
+    $[27] = cancelHandler;
+    $[28] = composerSlot;
+  } else composerSlot = $[28];
+  return composerSlot;
 }
 //@ chunk-18hwfzwa.js:514080-514117 placement
-function selectIsLoading(We) {
-  return We.isLoading;
+function selectIsLoading(turn) {
+  return turn.isLoading;
 }
 //@ chunk-18hwfzwa.js:514117-514160 placement
-function selectInputOwnsEscape(ze) {
-  return ze.inputOwnsEscape;
+function selectInputOwnsEscape(draft) {
+  return draft.inputOwnsEscape;
 }
 //@ chunk-18hwfzwa.js:514160-514445 placement
 function PromptDock(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { turn, draft, isOffered, width } = props;
   let working = useStoreSelector(turn, selectIsLoading);
   let promptOwnsEscape = useStoreSelector(draft, selectInputOwnsEscape);
-  let He;
+  let dock;
   if ($[0] !== working || $[1] !== isOffered || $[2] !== promptOwnsEscape || $[3] !== width) {
-    He = jsxProd_default(PaneDockNamespace.PaneDock, {
+    dock = jsxProd_default(PaneDockNamespace.PaneDock, {
       isOffered,
       width,
       working,
@@ -206,10 +207,13 @@ function PromptDock(props) {
     $[1] = isOffered;
     $[2] = promptOwnsEscape;
     $[3] = width;
-    $[4] = He;
-  } else He = $[4];
-  return He;
+    $[4] = dock;
+  } else dock = $[4];
+  return dock;
 }
 //@ chunk-18hwfzwa.js:514445-514449 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:514445", () => {
+  init_react_production();
+});
 export { PromptArea, PromptDock };

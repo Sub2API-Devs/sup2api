@@ -16,7 +16,7 @@ import {
 } from "./protocolConstants.js";
 import { createSignal } from "../../utils/signal.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { safeParseJSON } from "../../utils/json.js";
 import { stringArray } from "../../utils/collections.js";
 import { logForDebugging } from "../../utils/debug.js";
@@ -25,34 +25,38 @@ import { currentMcpClients } from "../../services/compact/idleToolResultClearing
 import { logError } from "../../utils/log.js";
 import { toError } from "../../utils/errors.js";
 import { REMOTE_TOOLS_CONSENT_TEXT } from "./consentText.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s61vbvea.js:590791-590937 placement
-var regExp_15 = new RegExp(
-  `^(?:<tool_use_error>)?\\s*(${REQUEST_COMPUTER_FOLDER}|${LIST_COMPUTER_FOLDERS}): \\[(?:repository_trust_(required|declined|unavailable)|session_(not_elevated))\\]`,
-);
+var regExp_15; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:590791", () => {
+  regExp_15 = new RegExp(
+    `^(?:<tool_use_error>)?\\s*(${REQUEST_COMPUTER_FOLDER}|${LIST_COMPUTER_FOLDERS}): \\[(?:repository_trust_(required|declined|unavailable)|session_(not_elevated))\\]`,
+  );
+});
 //@ chunk-s61vbvea.js:590937-591029 placement
-function isAttestationState(e) {
-  return e === "required" || e === "declined" || e === "unavailable" || e === "not_elevated";
+function isAttestationState(state) {
+  return state === "required" || state === "declined" || state === "unavailable" || state === "not_elevated";
 }
 //@ chunk-s61vbvea.js:591029-591317 placement
-function readComputerFolderReplyTarget(e, n) {
-  let r = isRequestComputerFolderTool(e)
+function readComputerFolderReplyTarget(toolName, input) {
+  let template = isRequestComputerFolderTool(toolName)
     ? REQUEST_COMPUTER_FOLDER
-    : isListComputerFoldersTool(e)
+    : isListComputerFoldersTool(toolName)
       ? LIST_COMPUTER_FOLDERS
       : undefined;
-  if (r === undefined) return;
-  let s = Array.isArray(n) ? n[0] : n;
-  let h =
-    typeof s === "string"
-      ? s
-      : typeof s === "object" && s !== null && "text" in s && typeof s.text === "string"
-        ? s.text
+  if (template === undefined) return;
+  let first = Array.isArray(input) ? input[0] : input;
+  let target =
+    typeof first === "string"
+      ? first
+      : typeof first === "object" && first !== null && "text" in first && typeof first.text === "string"
+        ? first.text
         : "";
-  let match = regExp_15.exec(h);
-  if (match === null || match[1] !== r) return;
-  let S = match[2] ?? match[3];
-  return isAttestationState(S) ? S : undefined;
+  let match = regExp_15.exec(target);
+  if (match === null || match[1] !== template) return;
+  let state = match[2] ?? match[3];
+  return isAttestationState(state) ? state : undefined;
 }
 //@ chunk-s61vbvea.js:591317-591405 placement
 /**
@@ -66,90 +70,97 @@ var REFRESH_THROTTLE_MS = 30000;
  * 创建可刷新的异步值：read 的结果缓存并在变化时通知订阅者，refresh 在节流间隔内直接返回缓存，并发刷新复用进行中的 Promise，force 时排队再读一次。
  */
 function createRefreshableValue({ read, initial, now = Date.now }) {
-  let s;
-  let h;
-  let y;
-  let S;
+  let value;
+  let readAt;
+  let inflight;
+  let error;
   let signal = createSignal();
-  let R = (P) => {
-    let j = P.then(
-      (G) => {
-        h = now();
-        if (G !== s) {
-          s = G;
-          signal.emit();
-        }
-      },
-      () => {
-        h = now();
-      },
-    )
+  let refresh = (readPromise) => {
+    let wrapped = readPromise
+      .then(
+        (next) => {
+          readAt = now();
+          if (next !== value) {
+            value = next;
+            signal.emit();
+          }
+        },
+        () => {
+          readAt = now();
+        },
+      )
       .catch(() => {})
       .then(() => {
-        if (y === j) y = undefined;
-        return s;
+        if (inflight === wrapped) inflight = undefined;
+        return value;
       });
-    y = j;
-    return j;
+    inflight = wrapped;
+    return wrapped;
   };
-  let x = () => R(Promise.resolve().then(read));
-  if (initial !== undefined) R(initial);
+  let reload = () => refresh(Promise.resolve().then(read));
+  if (initial !== undefined) refresh(initial);
   return {
-    current: () => s,
-    refresh: (P) => {
-      if (y !== undefined) {
-        if (P?.force !== true) return y;
-        S ??= y.then(() => {
-          S = undefined;
-          return x();
+    current: () => value,
+    refresh: (reason) => {
+      if (inflight !== undefined) {
+        if (reason?.force !== true) return inflight;
+        error ??= inflight.then(() => {
+          error = undefined;
+          return reload();
         });
-        return S;
+        return error;
       }
-      if (P?.force !== true && h !== undefined && now() - h < REFRESH_THROTTLE_MS) return Promise.resolve(s);
-      return x();
+      if (reason?.force !== true && readAt !== undefined && now() - readAt < REFRESH_THROTTLE_MS)
+        return Promise.resolve(value);
+      return reload();
     },
-    onChanged: (P) => signal.subscribe(P),
+    onChanged: (listener) => signal.subscribe(listener),
   };
 }
 //@ chunk-s61vbvea.js:591886-591916 placement
 /**
  * 导出函数 `attachStateSchema`。
  */
-var attachStateSchema = DoctorLazy(() =>
-  u({
-    state: string(),
-  }),
-);
+var attachStateSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s61vbvea.js:591886", () => {
+  attachStateSchema = DoctorLazy(() =>
+    objectSchema({
+      state: stringSchema(),
+    }),
+  );
+});
 //@ chunk-s61vbvea.js:591916-592644 placement
 /**
  * （归属疑误：bridge/远程设备）在最近一轮工具结果中找远程设备 attach 成功（state=attached）的 tool_use_id。
  */
-function buildToolHostsNotice(e) {
-  let n = [];
-  let r = e.length - 1;
-  for (; r >= 0; r--) {
-    let h = e[r];
-    if (h === undefined || h.type === "assistant") break;
-    if (h.type === "user" && Array.isArray(h.message.content)) {
-      for (let y of h.message.content) if (y.type === "tool_result" && y.is_error !== true) n.push(y);
+function buildToolHostsNotice(messages) {
+  let results = [];
+  let index = messages.length - 1;
+  for (; index >= 0; index--) {
+    let message = messages[index];
+    if (message === undefined || message.type === "assistant") break;
+    if (message.type === "user" && Array.isArray(message.message.content)) {
+      for (let block of message.message.content)
+        if (block.type === "tool_result" && block.is_error !== true) results.push(block);
     }
   }
-  if (n.length === 0) return;
-  let s = new Map();
-  for (; r >= 0; r--) {
-    let h = e[r];
-    if (h === undefined || h.type === "user") break;
-    if (h.type === "assistant") {
-      for (let y of h.message.content) if (y.type === "tool_use") s.set(y.id, y.name);
+  if (results.length === 0) return;
+  let callsById = new Map();
+  for (; index >= 0; index--) {
+    let message = messages[index];
+    if (message === undefined || message.type === "user") break;
+    if (message.type === "assistant") {
+      for (let block of message.message.content)
+        if (block.type === "tool_use") callsById.set(block.id, block.name);
     }
   }
-  for (let h of n) {
-    let y = s.get(h.tool_use_id);
-    if (y === undefined || !isRequestComputerFolderTool(y)) continue;
-    let S = typeof h.content === "string" ? h.content : h.content?.[0];
-    let w = typeof S === "string" ? S : S?.type === "text" ? S.text : undefined;
-    let R = attachStateSchema().safeParse(safeParseJSON(w, false));
-    if (R.success && R.data.state === "attached") return h.tool_use_id;
+  for (let result of results) {
+    let call = callsById.get(result.tool_use_id);
+    if (call === undefined || !isRequestComputerFolderTool(call)) continue;
+    let content = typeof result.content === "string" ? result.content : result.content?.[0];
+    let text = typeof content === "string" ? content : content?.type === "text" ? content.text : undefined;
+    let parsed = attachStateSchema().safeParse(safeParseJSON(text, false));
+    if (parsed.success && parsed.data.state === "attached") return result.tool_use_id;
   }
   return;
 }
@@ -157,8 +168,10 @@ function buildToolHostsNotice(e) {
 /**
  * （归属疑误：bridge/远程设备）取消息中最后一个 tool_hosts_notice 附件的 lines/away。
  */
-function getLastToolHostsNotice(e) {
-  let last = e.findLast((r) => r.type === "attachment" && r.attachment.type === "tool_hosts_notice");
+function getLastToolHostsNotice(messages) {
+  let last = messages.findLast(
+    (message) => message.type === "attachment" && message.attachment.type === "tool_hosts_notice",
+  );
   return last?.type === "attachment" && last.attachment.type === "tool_hosts_notice"
     ? {
         lines: stringArray(last.attachment.lines),
@@ -175,21 +188,21 @@ var MAX_TRACKED_HOSTS = 32;
 class ToolHostsForwardingState {
   #e = new Map();
   #t;
-  attached(e) {
-    this.#t = e;
+  attached(reason) {
+    this.#t = reason;
   }
-  refused(e, n) {
+  refused(host, reason) {
     this.#t = undefined;
-    this.#e.delete(e);
-    this.#e.set(e, n);
+    this.#e.delete(host);
+    this.#e.set(host, reason);
     for (let key of this.#e.keys()) {
       if (this.#e.size <= MAX_TRACKED_HOSTS) break;
       this.#e.delete(key);
     }
   }
-  withdrew(e) {
+  withdrew(host) {
     this.#t = undefined;
-    this.#e.delete(e);
+    this.#e.delete(host);
   }
   clear() {
     this.#t = undefined;
@@ -200,24 +213,30 @@ class ToolHostsForwardingState {
   }
 }
 //@ chunk-s61vbvea.js:593213-593264 placement
-var SKIPPED_DEVICE_TOOLS = new Set(["get_device_info", "list_devices"]);
+var SKIPPED_DEVICE_TOOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s61vbvea.js:593213", () => {
+  SKIPPED_DEVICE_TOOLS = new Set(["get_device_info", "list_devices"]);
+});
 //@ chunk-s61vbvea.js:593264-593355 placement = getToolNameForPermissionCheck (1)
 function getToolNameForPermissionCheck(tool) {
   return tool.some(
-    (n) => n.mcpInfo?.serverName === REMOTE_DEVICES && !SKIPPED_DEVICE_TOOLS.has(n.mcpInfo.toolName),
+    (tool) => tool.mcpInfo?.serverName === REMOTE_DEVICES && !SKIPPED_DEVICE_TOOLS.has(tool.mcpInfo.toolName),
   );
 }
 //@ chunk-s61vbvea.js:593355-593426 placement
-function isRemoteDevicesPending(e) {
-  return currentMcpClients(e).some((n) => n.name === REMOTE_DEVICES && n.type === "pending");
+function isRemoteDevicesPending(context) {
+  return currentMcpClients(context).some(
+    (client) => client.name === REMOTE_DEVICES && client.type === "pending",
+  );
 }
 //@ chunk-s61vbvea.js:593426-593489 placement
 var FORWARDING_OFF_REASONS = ["disabled_switch_off", "disabled_flag_off", "not_ready"];
 //@ chunk-s61vbvea.js:593489-593592 placement
-function shouldConsiderToolHostsNotice(toolState, n) {
+function shouldConsiderToolHostsNotice(toolState, messages) {
   try {
     return (
-      toolState.get(ToolHostsForwardingState).reason() !== undefined || buildToolHostsNotice(n) !== undefined
+      toolState.get(ToolHostsForwardingState).reason() !== undefined ||
+      buildToolHostsNotice(messages) !== undefined
     );
   } catch (error) {
     logError(toError(error));
@@ -225,12 +244,12 @@ function shouldConsiderToolHostsNotice(toolState, n) {
   }
 }
 //@ chunk-s61vbvea.js:593592-593720 placement
-function forwardingOffNoticeLines(e) {
-  let n = REMOTE_TOOLS_CONSENT_TEXT[`forwarding_off.reason.${e}`];
+function forwardingOffNoticeLines(reason) {
+  let detail = REMOTE_TOOLS_CONSENT_TEXT[`forwarding_off.reason.${reason}`];
   return [
-    e === "not_ready"
-      ? REMOTE_TOOLS_CONSENT_TEXT.forwarding_off_for_now(n)
-      : REMOTE_TOOLS_CONSENT_TEXT.forwarding_off(n),
+    reason === "not_ready"
+      ? REMOTE_TOOLS_CONSENT_TEXT.forwarding_off_for_now(detail)
+      : REMOTE_TOOLS_CONSENT_TEXT.forwarding_off(detail),
   ];
 }
 //@ chunk-s61vbvea.js:593720-593773 placement
@@ -239,26 +258,33 @@ function retractedForwardingLines() {
 }
 //@ chunk-s61vbvea.js:593773-593821 placement
 function isForwardingOffNotice(lines) {
-  return FORWARDING_OFF_REASONS.some((n) => isSameLines(lines, forwardingOffNoticeLines(n)));
+  return FORWARDING_OFF_REASONS.some((reason) => isSameLines(lines, forwardingOffNoticeLines(reason)));
 }
 //@ chunk-s61vbvea.js:593821-593891 placement
-function isSameLines(e, n) {
-  return e.length === n.length && e.every((r, s) => r === n[s]);
+function isSameLines(lines, other) {
+  return lines.length === other.length && lines.every((line, otherLine) => line === other[otherLine]);
 }
 //@ chunk-s61vbvea.js:593891-594290 placement
 /**
  * 生成 tool_hosts_notice 附件：在主线程、远程工具转发关闭（或尚未就绪）时，把关闭原因转成提示行；与上次已发的提示相同时不重复发送。
  */
-function buildToolHostsNoticeAttachments(e, n, isForwardingOffNoticeOn, forwardingOffReasonNow) {
-  let h = e.toolState.get(ToolHostsForwardingState);
-  let y =
-    h.reason() === undefined && buildToolHostsNotice(n) !== undefined ? forwardingOffReasonNow() : undefined;
-  if (y !== undefined) h.attached(y);
-  let S = h.reason() === "not_ready" ? forwardingOffReasonNow() : h.reason();
-  if (S === undefined || e.agentId !== undefined || isRemoteDevicesPending(e) || !isForwardingOffNoticeOn())
+function buildToolHostsNoticeAttachments(context, messages, isForwardingOffNoticeOn, forwardingOffReasonNow) {
+  let forwarding = context.toolState.get(ToolHostsForwardingState);
+  let offReason =
+    forwarding.reason() === undefined && buildToolHostsNotice(messages) !== undefined
+      ? forwardingOffReasonNow()
+      : undefined;
+  if (offReason !== undefined) forwarding.attached(offReason);
+  let offReason_2 = forwarding.reason() === "not_ready" ? forwardingOffReasonNow() : forwarding.reason();
+  if (
+    offReason_2 === undefined ||
+    context.agentId !== undefined ||
+    isRemoteDevicesPending(context) ||
+    !isForwardingOffNoticeOn()
+  )
     return [];
-  let lines = getLastToolHostsNotice(n)?.lines ?? [];
-  if (getToolNameForPermissionCheck(e.options.tools))
+  let lines = getLastToolHostsNotice(messages)?.lines ?? [];
+  if (getToolNameForPermissionCheck(context.options.tools))
     return isForwardingOffNotice(lines)
       ? [
           {
@@ -267,13 +293,13 @@ function buildToolHostsNoticeAttachments(e, n, isForwardingOffNoticeOn, forwardi
           },
         ]
       : [];
-  let R = forwardingOffNoticeLines(S);
-  return isSameLines(lines, R)
+  let noticeLines = forwardingOffNoticeLines(offReason_2);
+  return isSameLines(lines, noticeLines)
     ? []
     : [
         {
           type: "tool_hosts_notice",
-          lines: R,
+          lines: noticeLines,
         },
       ];
 }

@@ -11,7 +11,7 @@
 import { randomBytes } from "crypto";
 import { mkdirSync, openSync, constants, writeSync, closeSync } from "fs";
 import { dirname } from "path";
-import { w } from "../../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../../vendor/react/compiler-runtime.js";
 import {
   displayField,
   replaceLineBreaks,
@@ -60,7 +60,13 @@ import { truncateToLength } from "../../../utils/stringUtils.js";
 import { getShortEditorName, resolveEditorCommand } from "../../../utils/editor.js";
 import { ConfirmSelect } from "../../design-system/ConfirmSelect.js";
 import { Byline } from "../../design-system/Byline.js";
-import { init_react_production, y, R, P, zt } from "../../../../vendor/react/cjs/react.production.js";
+import {
+  init_react_production,
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+} from "../../../../vendor/react/cjs/react.production.js";
 import { AUTO_MODE_ENV_EDIT } from "../../../utils/teleport/autoModeDumps.js";
 import { editFileInEditor } from "../../../utils/promptEditor.js";
 import { Dialog } from "../../design-system/Dialog.js";
@@ -117,114 +123,114 @@ import { Pane } from "../../design-system/Pane.js";
  * auto 模式规则详情头：规则文本（引用块）+ 分类标签（按分类着色）+ "rule/section header for auto mode · From 来源"。
  */
 function AutoModeRuleSummary(props) {
-  let m = w(25);
+  let $ = useMemoCache(25);
   let { entry } = props;
-  let a;
-  if (m[0] !== entry.text) {
-    a = displayField(entry.text);
-    m[0] = entry.text;
-    m[1] = a;
-  } else a = m[1];
-  let f = a;
+  let field;
+  if ($[0] !== entry.text) {
+    field = displayField(entry.text);
+    $[0] = entry.text;
+    $[1] = field;
+  } else field = $[1];
+  let ruleField = field;
   let children;
-  if (m[2] !== f.text) {
+  if ($[2] !== ruleField.text) {
     children = jsxProd_default(Text, {
       bold: true,
       wrap: "wrap-trim",
-      children: f.text,
+      children: ruleField.text,
     });
-    m[2] = f.text;
-    m[3] = children;
-  } else children = m[3];
-  let v;
-  if (m[4] !== f.needsGutter || m[5] !== children) {
-    v = jsxProd_default(Blockquote, {
-      multiline: f.needsGutter,
+    $[2] = ruleField.text;
+    $[3] = children;
+  } else children = $[3];
+  let blockquoteElement;
+  if ($[4] !== ruleField.needsGutter || $[5] !== children) {
+    blockquoteElement = jsxProd_default(Blockquote, {
+      multiline: ruleField.needsGutter,
       children,
     });
-    m[4] = f.needsGutter;
-    m[5] = children;
-    m[6] = v;
-  } else v = m[6];
+    $[4] = ruleField.needsGutter;
+    $[5] = children;
+    $[6] = blockquoteElement;
+  } else blockquoteElement = $[6];
   let color;
-  if (m[7] !== entry.section) {
+  if ($[7] !== entry.section) {
     color = getAutoModeSectionColor(entry.section);
-    m[7] = entry.section;
-    m[8] = color;
-  } else color = m[8];
+    $[7] = entry.section;
+    $[8] = color;
+  } else color = $[8];
   let children_2;
-  if (m[9] !== entry.section) {
+  if ($[9] !== entry.section) {
     children_2 = getAutoModeRuleCategoryLabel(entry.section);
-    m[9] = entry.section;
-    m[10] = children_2;
-  } else children_2 = m[10];
-  let c;
-  if (m[11] !== color || m[12] !== children_2) {
-    c = jsxProd_default(Text, {
+    $[9] = entry.section;
+    $[10] = children_2;
+  } else children_2 = $[10];
+  let ruleElement;
+  if ($[11] !== color || $[12] !== children_2) {
+    ruleElement = jsxProd_default(Text, {
       color,
       children: children_2,
     });
-    m[11] = color;
-    m[12] = children_2;
-    m[13] = c;
-  } else c = m[13];
-  const M = entry.structure ? "section header" : "rule";
-  let b;
-  if (m[14] !== entry.source) {
-    b = describeRuleSource(entry.source);
-    m[14] = entry.source;
-    m[15] = b;
-  } else b = m[15];
-  let T;
-  if (m[16] !== M || m[17] !== b) {
-    T = jsxProd_default_2(Text, {
+    $[11] = color;
+    $[12] = children_2;
+    $[13] = ruleElement;
+  } else ruleElement = $[13];
+  const entryKind = entry.structure ? "section header" : "rule";
+  let sourceLabel;
+  if ($[14] !== entry.source) {
+    sourceLabel = describeRuleSource(entry.source);
+    $[14] = entry.source;
+    $[15] = sourceLabel;
+  } else sourceLabel = $[15];
+  let sourceLine;
+  if ($[16] !== entryKind || $[17] !== sourceLabel) {
+    sourceLine = jsxProd_default_2(Text, {
       dimColor: true,
-      children: [" ", M, " for auto mode \xB7 From", " ", b],
+      children: [" ", entryKind, " for auto mode \xB7 From", " ", sourceLabel],
     });
-    m[16] = M;
-    m[17] = b;
-    m[18] = T;
-  } else T = m[18];
-  let E;
-  if (m[19] !== c || m[20] !== T) {
-    E = jsxProd_default_2(Text, {
-      children: [c, T],
+    $[16] = entryKind;
+    $[17] = sourceLabel;
+    $[18] = sourceLine;
+  } else sourceLine = $[18];
+  let rowElement;
+  if ($[19] !== ruleElement || $[20] !== sourceLine) {
+    rowElement = jsxProd_default_2(Text, {
+      children: [ruleElement, sourceLine],
     });
-    m[19] = c;
-    m[20] = T;
-    m[21] = E;
-  } else E = m[21];
-  let D;
-  if (m[22] !== E || m[23] !== v) {
-    D = jsxProd_default_2(Box, {
+    $[19] = ruleElement;
+    $[20] = sourceLine;
+    $[21] = rowElement;
+  } else rowElement = $[21];
+  let boxElement;
+  if ($[22] !== rowElement || $[23] !== blockquoteElement) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginX: 2,
-      children: [v, E],
+      children: [blockquoteElement, rowElement],
     });
-    m[22] = E;
-    m[23] = v;
-    m[24] = D;
-  } else D = m[24];
-  return D;
+    $[22] = rowElement;
+    $[23] = blockquoteElement;
+    $[24] = boxElement;
+  } else boxElement = $[24];
+  return boxElement;
 }
 //@ chunk-p2qwpk2k.js:52517-57241 sole-consumer
 /**
  * auto 模式规则详情页：旧版 autoMode.deny、环境分节标题、托管设置、--settings 来源等只读情况给出说明，用户规则提供编辑/删除。
  */
 function AutoModeRuleDetails(props) {
-  let g = w(78);
+  let $ = useMemoCache(78);
   let { entry, onEdit, onDelete, onCancel } = props;
-  let v;
-  if (g[0] === MEMO_CACHE_SENTINEL) {
-    v = {
+  let keyOptions;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    keyOptions = {
       context: "Confirmation",
     };
-    g[0] = v;
-  } else v = g[0];
-  useKeybinding("confirm:no", onCancel, v);
-  let x;
-  if (g[1] === MEMO_CACHE_SENTINEL) {
-    x = jsxProd_default(Box, {
+    $[0] = keyOptions;
+  } else keyOptions = $[0];
+  useKeybinding("confirm:no", onCancel, keyOptions);
+  let escHintBox;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    escHintBox = jsxProd_default(Box, {
       marginLeft: 3,
       children: jsxProd_default(AgentNavigationFooter, {
         children: jsxProd_default(KeyboardShortcutHint, {
@@ -233,139 +239,139 @@ function AutoModeRuleDetails(props) {
         }),
       }),
     });
-    g[1] = x;
-  } else x = g[1];
-  let C = x;
+    $[1] = escHintBox;
+  } else escHintBox = $[1];
+  let escHint = escHintBox;
   if (entry.legacy) {
-    let c;
-    if (g[2] !== entry) {
-      c = jsxProd_default(AutoModeRuleSummary, {
+    let summary;
+    if ($[2] !== entry) {
+      summary = jsxProd_default(AutoModeRuleSummary, {
         entry,
       });
-      g[2] = entry;
-      g[3] = c;
-    } else c = g[3];
-    const M =
+      $[2] = entry;
+      $[3] = summary;
+    } else summary = $[3];
+    const reason =
       entry.source === "userSettings"
         ? "This editor writes only the modern keys \u2014 move the rule to autoMode.soft_deny in your settings file to manage it here."
         : "It is delivered by " + describeRuleSource(entry.source) + " and cannot be modified here.";
-    let b;
-    if (g[4] !== M) {
-      b = jsxProd_default_2(Text, {
+    let reasonText;
+    if ($[4] !== reason) {
+      reasonText = jsxProd_default_2(Text, {
         italic: true,
         children: [
           "",
           "This rule comes from the legacy autoMode.deny key, which auto mode still enforces as a soft deny.",
           " ",
-          M,
+          reason,
         ],
       });
-      g[4] = M;
-      g[5] = b;
-    } else b = g[5];
-    let T;
-    if (g[6] !== entry || g[7] !== onCancel) {
-      T = jsxProd_default(UltrareviewOverageDialog, {
+      $[4] = reason;
+      $[5] = reasonText;
+    } else reasonText = $[5];
+    let actions;
+    if ($[6] !== entry || $[7] !== onCancel) {
+      actions = jsxProd_default(UltrareviewOverageDialog, {
         entry,
         onCancel,
       });
-      g[6] = entry;
-      g[7] = onCancel;
-      g[8] = T;
-    } else T = g[8];
-    let E;
-    if (g[9] !== c || g[10] !== b || g[11] !== T) {
-      E = jsxProd_default_2(Fragment, {
+      $[6] = entry;
+      $[7] = onCancel;
+      $[8] = actions;
+    } else actions = $[8];
+    let content;
+    if ($[9] !== summary || $[10] !== reasonText || $[11] !== actions) {
+      content = jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default_2(ShutdownRequestDisplay, {
             color: "permission",
             title: "Rule details",
-            children: [c, b, T],
+            children: [summary, reasonText, actions],
           }),
-          C,
+          escHint,
         ],
       });
-      g[9] = c;
-      g[10] = b;
-      g[11] = T;
-      g[12] = E;
-    } else E = g[12];
-    return E;
+      $[9] = summary;
+      $[10] = reasonText;
+      $[11] = actions;
+      $[12] = content;
+    } else content = $[12];
+    return content;
   }
   if (entry.structure) {
-    let c;
-    if (g[13] !== entry) {
-      c = jsxProd_default(AutoModeRuleSummary, {
+    let summary;
+    if ($[13] !== entry) {
+      summary = jsxProd_default(AutoModeRuleSummary, {
         entry,
       });
-      g[13] = entry;
-      g[14] = c;
-    } else c = g[14];
-    let M;
-    if (g[15] !== entry.source) {
-      M =
+      $[13] = entry;
+      $[14] = summary;
+    } else summary = $[14];
+    let reason;
+    if ($[15] !== entry.source) {
+      reason =
         entry.source !== "userSettings"
           ? `It is delivered by ${describeRuleSource(entry.source)} and cannot be modified here.`
           : isAutoModeSetupNotOverridden()
             ? "Re-run /auto-mode-setup to restructure, or edit your settings file directly."
             : "Edit your settings file directly to restructure.";
-      g[15] = entry.source;
-      g[16] = M;
-    } else M = g[16];
-    let b;
-    if (g[17] !== M) {
-      b = jsxProd_default_2(Text, {
+      $[15] = entry.source;
+      $[16] = reason;
+    } else reason = $[16];
+    let reasonText;
+    if ($[17] !== reason) {
+      reasonText = jsxProd_default_2(Text, {
         italic: true,
         children: [
           "A section header that organizes the environment entries below it; auto mode reads it as written.",
           " ",
-          M,
+          reason,
         ],
       });
-      g[17] = M;
-      g[18] = b;
-    } else b = g[18];
-    let T;
-    if (g[19] !== entry || g[20] !== onCancel) {
-      T = jsxProd_default(UltrareviewOverageDialog, {
+      $[17] = reason;
+      $[18] = reasonText;
+    } else reasonText = $[18];
+    let actions;
+    if ($[19] !== entry || $[20] !== onCancel) {
+      actions = jsxProd_default(UltrareviewOverageDialog, {
         entry,
         onCancel,
       });
-      g[19] = entry;
-      g[20] = onCancel;
-      g[21] = T;
-    } else T = g[21];
-    let E;
-    if (g[22] !== c || g[23] !== b || g[24] !== T) {
-      E = jsxProd_default_2(Fragment, {
+      $[19] = entry;
+      $[20] = onCancel;
+      $[21] = actions;
+    } else actions = $[21];
+    let content;
+    if ($[22] !== summary || $[23] !== reasonText || $[24] !== actions) {
+      content = jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default_2(ShutdownRequestDisplay, {
             color: "permission",
             title: "Rule details",
-            children: [c, b, T],
+            children: [summary, reasonText, actions],
           }),
-          C,
+          escHint,
         ],
       });
-      g[22] = c;
-      g[23] = b;
-      g[24] = T;
-      g[25] = E;
-    } else E = g[25];
-    return E;
+      $[22] = summary;
+      $[23] = reasonText;
+      $[24] = actions;
+      $[25] = content;
+    } else content = $[25];
+    return content;
   }
   if (entry.source === "policySettings") {
-    let c;
-    if (g[26] !== entry) {
-      c = jsxProd_default(AutoModeRuleSummary, {
+    let summary;
+    if ($[26] !== entry) {
+      summary = jsxProd_default(AutoModeRuleSummary, {
         entry,
       });
-      g[26] = entry;
-      g[27] = c;
-    } else c = g[27];
-    let M;
-    if (g[28] === MEMO_CACHE_SENTINEL) {
-      M = jsxProd_default_2(Text, {
+      $[26] = entry;
+      $[27] = summary;
+    } else summary = $[27];
+    let reasonText;
+    if ($[28] === MEMO_CACHE_SENTINEL) {
+      reasonText = jsxProd_default_2(Text, {
         italic: true,
         children: [
           "This rule is configured by managed settings and cannot be modified.",
@@ -374,116 +380,116 @@ function AutoModeRuleDetails(props) {
           "Contact your system administrator for more information.",
         ],
       });
-      g[28] = M;
-    } else M = g[28];
-    let b;
-    if (g[29] !== entry || g[30] !== onCancel) {
-      b = jsxProd_default(UltrareviewOverageDialog, {
+      $[28] = reasonText;
+    } else reasonText = $[28];
+    let actions;
+    if ($[29] !== entry || $[30] !== onCancel) {
+      actions = jsxProd_default(UltrareviewOverageDialog, {
         entry,
         onCancel,
       });
-      g[29] = entry;
-      g[30] = onCancel;
-      g[31] = b;
-    } else b = g[31];
-    let T;
-    if (g[32] !== c || g[33] !== b) {
-      T = jsxProd_default_2(Fragment, {
+      $[29] = entry;
+      $[30] = onCancel;
+      $[31] = actions;
+    } else actions = $[31];
+    let content;
+    if ($[32] !== summary || $[33] !== actions) {
+      content = jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default_2(ShutdownRequestDisplay, {
             color: "permission",
             title: "Rule details",
-            children: [c, M, b],
+            children: [summary, reasonText, actions],
           }),
-          C,
+          escHint,
         ],
       });
-      g[32] = c;
-      g[33] = b;
-      g[34] = T;
-    } else T = g[34];
-    return T;
+      $[32] = summary;
+      $[33] = actions;
+      $[34] = content;
+    } else content = $[34];
+    return content;
   }
   if (entry.source === "flagSettings") {
-    let c;
-    if (g[35] !== entry) {
-      c = jsxProd_default(AutoModeRuleSummary, {
+    let summary;
+    if ($[35] !== entry) {
+      summary = jsxProd_default(AutoModeRuleSummary, {
         entry,
       });
-      g[35] = entry;
-      g[36] = c;
-    } else c = g[36];
-    let M;
-    if (g[37] === MEMO_CACHE_SENTINEL) {
-      M = jsxProd_default(Text, {
+      $[35] = entry;
+      $[36] = summary;
+    } else summary = $[36];
+    let reasonText;
+    if ($[37] === MEMO_CACHE_SENTINEL) {
+      reasonText = jsxProd_default(Text, {
         italic: true,
         children:
           "This rule comes from a read-only source (the --settings flag) and cannot be modified here.",
       });
-      g[37] = M;
-    } else M = g[37];
-    let b;
-    if (g[38] !== entry || g[39] !== onCancel) {
-      b = jsxProd_default(UltrareviewOverageDialog, {
+      $[37] = reasonText;
+    } else reasonText = $[37];
+    let actions;
+    if ($[38] !== entry || $[39] !== onCancel) {
+      actions = jsxProd_default(UltrareviewOverageDialog, {
         entry,
         onCancel,
       });
-      g[38] = entry;
-      g[39] = onCancel;
-      g[40] = b;
-    } else b = g[40];
-    let T;
-    if (g[41] !== c || g[42] !== b) {
-      T = jsxProd_default_2(Fragment, {
+      $[38] = entry;
+      $[39] = onCancel;
+      $[40] = actions;
+    } else actions = $[40];
+    let content;
+    if ($[41] !== summary || $[42] !== actions) {
+      content = jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default_2(ShutdownRequestDisplay, {
             color: "permission",
             title: "Rule details",
-            children: [c, M, b],
+            children: [summary, reasonText, actions],
           }),
-          C,
+          escHint,
         ],
       });
-      g[41] = c;
-      g[42] = b;
-      g[43] = T;
-    } else T = g[43];
-    return T;
+      $[41] = summary;
+      $[42] = actions;
+      $[43] = content;
+    } else content = $[43];
+    return content;
   }
-  let c;
-  if (g[44] !== entry.section || g[45] !== entry.text) {
-    c = validateRuleText(entry.section, entry.text);
-    g[44] = entry.section;
-    g[45] = entry.text;
-    g[46] = c;
-  } else c = g[46];
-  let D = c;
-  if (D !== null) {
-    let M;
-    if (g[47] !== entry) {
-      M = jsxProd_default(AutoModeRuleSummary, {
+  let validationError;
+  if ($[44] !== entry.section || $[45] !== entry.text) {
+    validationError = validateRuleText(entry.section, entry.text);
+    $[44] = entry.section;
+    $[45] = entry.text;
+    $[46] = validationError;
+  } else validationError = $[46];
+  let validationError_2 = validationError;
+  if (validationError_2 !== null) {
+    let summary;
+    if ($[47] !== entry) {
+      summary = jsxProd_default(AutoModeRuleSummary, {
         entry,
       });
-      g[47] = entry;
-      g[48] = M;
-    } else M = g[48];
-    let b;
-    if (g[49] !== D) {
-      b = jsxProd_default_2(Text, {
+      $[47] = entry;
+      $[48] = summary;
+    } else summary = $[48];
+    let reasonText;
+    if ($[49] !== validationError_2) {
+      reasonText = jsxProd_default_2(Text, {
         italic: true,
         children: [
           "This rule cannot be edited here: ",
-          D,
+          validationError_2,
           `
 `,
           "Edit it in your settings file, or delete it here.",
         ],
       });
-      g[49] = D;
-      g[50] = b;
-    } else b = g[50];
+      $[49] = validationError_2;
+      $[50] = reasonText;
+    } else reasonText = $[50];
     let options;
-    if (g[51] === MEMO_CACHE_SENTINEL) {
+    if ($[51] === MEMO_CACHE_SENTINEL) {
       options = [
         {
           label: "Delete",
@@ -494,59 +500,59 @@ function AutoModeRuleDetails(props) {
           value: "cancel",
         },
       ];
-      g[51] = options;
-    } else options = g[51];
+      $[51] = options;
+    } else options = $[51];
     let onChange;
-    if (g[52] !== onCancel || g[53] !== onDelete) {
-      onChange = (k) => {
-        if (k === "delete") onDelete();
+    if ($[52] !== onCancel || $[53] !== onDelete) {
+      onChange = (value) => {
+        if (value === "delete") onDelete();
         else onCancel();
       };
-      g[52] = onCancel;
-      g[53] = onDelete;
-      g[54] = onChange;
-    } else onChange = g[54];
-    let V;
-    if (g[55] !== onCancel || g[56] !== onChange) {
-      V = jsxProd_default(ModelSelector, {
+      $[52] = onCancel;
+      $[53] = onDelete;
+      $[54] = onChange;
+    } else onChange = $[54];
+    let selector;
+    if ($[55] !== onCancel || $[56] !== onChange) {
+      selector = jsxProd_default(ModelSelector, {
         options,
         onChange,
         onCancel,
       });
-      g[55] = onCancel;
-      g[56] = onChange;
-      g[57] = V;
-    } else V = g[57];
-    let L;
-    if (g[58] !== M || g[59] !== b || g[60] !== V) {
-      L = jsxProd_default_2(Fragment, {
+      $[55] = onCancel;
+      $[56] = onChange;
+      $[57] = selector;
+    } else selector = $[57];
+    let content;
+    if ($[58] !== summary || $[59] !== reasonText || $[60] !== selector) {
+      content = jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default_2(ShutdownRequestDisplay, {
             color: "permission",
             title: "Rule details",
-            children: [M, b, V],
+            children: [summary, reasonText, selector],
           }),
-          C,
+          escHint,
         ],
       });
-      g[58] = M;
-      g[59] = b;
-      g[60] = V;
-      g[61] = L;
-    } else L = g[61];
-    return L;
+      $[58] = summary;
+      $[59] = reasonText;
+      $[60] = selector;
+      $[61] = content;
+    } else content = $[61];
+    return content;
   }
-  let M;
-  if (g[62] !== entry) {
-    M = jsxProd_default(AutoModeRuleSummary, {
+  let summary;
+  if ($[62] !== entry) {
+    summary = jsxProd_default(AutoModeRuleSummary, {
       entry,
     });
-    g[62] = entry;
-    g[63] = M;
-  } else M = g[63];
-  let b;
-  if (g[64] !== entry.section) {
-    b =
+    $[62] = entry;
+    $[63] = summary;
+  } else summary = $[63];
+  let environmentNote;
+  if ($[64] !== entry.section) {
+    environmentNote =
       entry.section === "environment" &&
       jsxProd_default_2(Text, {
         italic: true,
@@ -555,11 +561,11 @@ function AutoModeRuleDetails(props) {
           isAutoModeSetupNotOverridden() ? " Re-run /auto-mode-setup to rebuild them from scratch." : "",
         ],
       });
-    g[64] = entry.section;
-    g[65] = b;
-  } else b = g[65];
+    $[64] = entry.section;
+    $[65] = environmentNote;
+  } else environmentNote = $[65];
   let options;
-  if (g[66] === MEMO_CACHE_SENTINEL) {
+  if ($[66] === MEMO_CACHE_SENTINEL) {
     options = [
       {
         label: "Edit",
@@ -574,49 +580,49 @@ function AutoModeRuleDetails(props) {
         value: "cancel",
       },
     ];
-    g[66] = options;
-  } else options = g[66];
+    $[66] = options;
+  } else options = $[66];
   let onChange;
-  if (g[67] !== onCancel || g[68] !== onDelete || g[69] !== onEdit) {
-    onChange = (B) => {
-      if (B === "edit") onEdit();
-      else if (B === "delete") onDelete();
+  if ($[67] !== onCancel || $[68] !== onDelete || $[69] !== onEdit) {
+    onChange = (value) => {
+      if (value === "edit") onEdit();
+      else if (value === "delete") onDelete();
       else onCancel();
     };
-    g[67] = onCancel;
-    g[68] = onDelete;
-    g[69] = onEdit;
-    g[70] = onChange;
-  } else onChange = g[70];
-  let V;
-  if (g[71] !== onCancel || g[72] !== onChange) {
-    V = jsxProd_default(ModelSelector, {
+    $[67] = onCancel;
+    $[68] = onDelete;
+    $[69] = onEdit;
+    $[70] = onChange;
+  } else onChange = $[70];
+  let selector;
+  if ($[71] !== onCancel || $[72] !== onChange) {
+    selector = jsxProd_default(ModelSelector, {
       options,
       onChange,
       onCancel,
     });
-    g[71] = onCancel;
-    g[72] = onChange;
-    g[73] = V;
-  } else V = g[73];
-  let L;
-  if (g[74] !== M || g[75] !== b || g[76] !== V) {
-    L = jsxProd_default_2(Fragment, {
+    $[71] = onCancel;
+    $[72] = onChange;
+    $[73] = selector;
+  } else selector = $[73];
+  let content;
+  if ($[74] !== summary || $[75] !== environmentNote || $[76] !== selector) {
+    content = jsxProd_default_2(Fragment, {
       children: [
         jsxProd_default_2(ShutdownRequestDisplay, {
           color: "permission",
           title: "Rule details",
-          children: [M, b, V],
+          children: [summary, environmentNote, selector],
         }),
-        C,
+        escHint,
       ],
     });
-    g[74] = M;
-    g[75] = b;
-    g[76] = V;
-    g[77] = L;
-  } else L = g[77];
-  return L;
+    $[74] = summary;
+    $[75] = environmentNote;
+    $[76] = selector;
+    $[77] = content;
+  } else content = $[77];
+  return content;
 }
 //@ chunk-p2qwpk2k.js:57241-57253 sole-consumer
 var DEFAULT_LIST_HEIGHT = 3200;
@@ -629,224 +635,224 @@ function listHeight(isFullscreen) {
  * 显示某分类的内置 auto 模式规则（按终端高度截取，单条超长截断）、是否生效、是否可切换，以及在编辑器中查看全文。
  */
 function BuiltinRulesSection(props) {
-  let v = w(83);
+  let $ = useMemoCache(83);
   let { section, state, onToggle, onCancel } = props;
   let isFullscreen = useIsFullscreen();
-  let x;
-  if (v[0] === MEMO_CACHE_SENTINEL) {
-    x = {
+  let keyOptions;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    keyOptions = {
       context: "Settings",
     };
-    v[0] = x;
-  } else x = v[0];
-  useKeybinding("confirm:no", onCancel, x);
-  let [C, c] = openRulesInEditor(section);
-  let M;
-  let b;
-  let T;
-  let E;
-  let D;
-  let k;
+    $[0] = keyOptions;
+  } else keyOptions = $[0];
+  useKeybinding("confirm:no", onCancel, keyOptions);
+  let [editorNotice, openInEditor] = openRulesInEditor(section);
+  let BoxComponent;
+  let DialogComponent;
+  let isUserControlled;
+  let footerHint;
+  let defaultRules;
+  let shownRules;
   let flexDirection;
   let marginX;
   let marginY;
   let gap;
   let color;
   let title;
-  let le;
-  if (v[1] !== isFullscreen || v[2] !== section || v[3] !== state.control || v[4] !== state.enabled) {
-    D = getDefaultExternalAutoModeRules()[section] ?? [];
-    let J;
-    if (v[18] === MEMO_CACHE_SENTINEL) {
-      J = jsxProd_default(AgentNavigationFooter, {
+  let titleText;
+  if ($[1] !== isFullscreen || $[2] !== section || $[3] !== state.control || $[4] !== state.enabled) {
+    defaultRules = getDefaultExternalAutoModeRules()[section] ?? [];
+    let escHint;
+    if ($[18] === MEMO_CACHE_SENTINEL) {
+      escHint = jsxProd_default(AgentNavigationFooter, {
         children: jsxProd_default(KeyboardShortcutHint, {
           chord: "esc",
           action: "cancel",
         }),
       });
-      v[18] = J;
-    } else J = v[18];
-    E = J;
-    T = state.control === "user";
-    b = ShutdownRequestDisplay;
+      $[18] = escHint;
+    } else escHint = $[18];
+    footerHint = escHint;
+    isUserControlled = state.control === "user";
+    DialogComponent = ShutdownRequestDisplay;
     color = "permission";
     title = "Built-in rules";
     let color_2;
-    if (v[19] !== section) {
+    if ($[19] !== section) {
       color_2 = getAutoModeSectionColor(section);
-      v[19] = section;
-      v[20] = color_2;
-    } else color_2 = v[20];
+      $[19] = section;
+      $[20] = color_2;
+    } else color_2 = $[20];
     let children;
-    if (v[21] !== section) {
+    if ($[21] !== section) {
       children = getAutoModeRuleCategoryLabel(section);
-      v[21] = section;
-      v[22] = children;
-    } else children = v[22];
-    let ue;
-    if (v[23] !== color_2 || v[24] !== children) {
-      ue = jsxProd_default(Text, {
+      $[21] = section;
+      $[22] = children;
+    } else children = $[22];
+    let labelText;
+    if ($[23] !== color_2 || $[24] !== children) {
+      labelText = jsxProd_default(Text, {
         color: color_2,
         children,
       });
-      v[23] = color_2;
-      v[24] = children;
-      v[25] = ue;
-    } else ue = v[25];
-    const ee = `${D.length} built-in ${D.length === 1 ? "rule" : "rules"} \xB7 ${state.enabled ? "in effect" : "switched off"}`;
-    let ce;
-    if (v[26] !== ee) {
-      ce = jsxProd_default_2(Text, {
+      $[23] = color_2;
+      $[24] = children;
+      $[25] = labelText;
+    } else labelText = $[25];
+    const summaryText = `${defaultRules.length} built-in ${defaultRules.length === 1 ? "rule" : "rules"} \xB7 ${state.enabled ? "in effect" : "switched off"}`;
+    let summarySuffix;
+    if ($[26] !== summaryText) {
+      summarySuffix = jsxProd_default_2(Text, {
         dimColor: true,
-        children: [" ", "\xB7", " ", ee],
+        children: [" ", "\xB7", " ", summaryText],
       });
-      v[26] = ee;
-      v[27] = ce;
-    } else ce = v[27];
-    if (v[28] !== ue || v[29] !== ce) {
-      le = jsxProd_default_2(Text, {
-        children: [ue, ce],
+      $[26] = summaryText;
+      $[27] = summarySuffix;
+    } else summarySuffix = $[27];
+    if ($[28] !== labelText || $[29] !== summarySuffix) {
+      titleText = jsxProd_default_2(Text, {
+        children: [labelText, summarySuffix],
       });
-      v[28] = ue;
-      v[29] = ce;
-      v[30] = le;
-    } else le = v[30];
-    M = Box;
+      $[28] = labelText;
+      $[29] = summarySuffix;
+      $[30] = titleText;
+    } else titleText = $[30];
+    BoxComponent = Box;
     flexDirection = "column";
     marginX = 2;
     marginY = 1;
     gap = 1;
-    let te = listHeight(isFullscreen);
-    k = [];
-    let Se = 0;
-    for (const de of D) {
-      if (Se + de.length > te && k.length > 0) {
+    let maxChars = listHeight(isFullscreen);
+    shownRules = [];
+    let usedChars = 0;
+    for (const ruleText of defaultRules) {
+      if (usedChars + ruleText.length > maxChars && shownRules.length > 0) {
         break;
       }
-      k.push(de);
-      Se = Se + de.length;
+      shownRules.push(ruleText);
+      usedChars = usedChars + ruleText.length;
     }
-    if (k.length === 1 && k[0].length > te) {
-      let X = k[0].length - te;
-      k[0] = `${truncateToLength(k[0], te)}\u2026 +${X} more characters \u2014 View in editor for the full text.`;
+    if (shownRules.length === 1 && shownRules[0].length > maxChars) {
+      let excessChars = shownRules[0].length - maxChars;
+      shownRules[0] = `${truncateToLength(shownRules[0], maxChars)}\u2026 +${excessChars} more characters \u2014 View in editor for the full text.`;
     }
-    v[1] = isFullscreen;
-    v[2] = section;
-    v[3] = state.control;
-    v[4] = state.enabled;
-    v[5] = M;
-    v[6] = b;
-    v[7] = T;
-    v[8] = E;
-    v[9] = D;
-    v[10] = k;
-    v[11] = flexDirection;
-    v[12] = marginX;
-    v[13] = marginY;
-    v[14] = gap;
-    v[15] = color;
-    v[16] = title;
-    v[17] = le;
+    $[1] = isFullscreen;
+    $[2] = section;
+    $[3] = state.control;
+    $[4] = state.enabled;
+    $[5] = BoxComponent;
+    $[6] = DialogComponent;
+    $[7] = isUserControlled;
+    $[8] = footerHint;
+    $[9] = defaultRules;
+    $[10] = shownRules;
+    $[11] = flexDirection;
+    $[12] = marginX;
+    $[13] = marginY;
+    $[14] = gap;
+    $[15] = color;
+    $[16] = title;
+    $[17] = titleText;
   } else {
-    M = v[5];
-    b = v[6];
-    T = v[7];
-    E = v[8];
-    D = v[9];
-    k = v[10];
-    flexDirection = v[11];
-    marginX = v[12];
-    marginY = v[13];
-    gap = v[14];
-    color = v[15];
-    title = v[16];
-    le = v[17];
+    BoxComponent = $[5];
+    DialogComponent = $[6];
+    isUserControlled = $[7];
+    footerHint = $[8];
+    defaultRules = $[9];
+    shownRules = $[10];
+    flexDirection = $[11];
+    marginX = $[12];
+    marginY = $[13];
+    gap = $[14];
+    color = $[15];
+    title = $[16];
+    titleText = $[17];
   }
-  let Ve = D.length - k.length;
-  let J;
-  if (v[31] !== k || v[32] !== state.enabled) {
-    J = k.map((Le, vt) =>
+  let hiddenRuleCount = defaultRules.length - shownRules.length;
+  let ruleElements;
+  if ($[31] !== shownRules || $[32] !== state.enabled) {
+    ruleElements = shownRules.map((ruleText, index) =>
       jsxProd_default_2(
         Text,
         {
           dimColor: true,
           strikethrough: !state.enabled,
           wrap: "wrap-trim",
-          children: ["- ", Le],
+          children: ["- ", ruleText],
         },
-        vt,
+        index,
       ),
     );
-    v[31] = k;
-    v[32] = state.enabled;
-    v[33] = J;
-  } else J = v[33];
-  let K;
-  if (v[34] !== Ve) {
-    K =
-      Ve > 0 &&
+    $[31] = shownRules;
+    $[32] = state.enabled;
+    $[33] = ruleElements;
+  } else ruleElements = $[33];
+  let moreRules;
+  if ($[34] !== hiddenRuleCount) {
+    moreRules =
+      hiddenRuleCount > 0 &&
       jsxProd_default_2(Text, {
         dimColor: true,
         italic: true,
         children: [
           "\u2026 +",
-          Ve,
+          hiddenRuleCount,
           " more ",
-          Ve === 1 ? "rule" : "rules",
+          hiddenRuleCount === 1 ? "rule" : "rules",
           " \u2014 run `claude auto-mode defaults` to print the full set.",
         ],
       });
-    v[34] = Ve;
-    v[35] = K;
-  } else K = v[35];
-  let ye;
-  if (v[36] !== K || v[37] !== J) {
-    ye = jsxProd_default_2(Fragment, {
-      children: [J, K],
+    $[34] = hiddenRuleCount;
+    $[35] = moreRules;
+  } else moreRules = $[35];
+  let ruleLines;
+  if ($[36] !== moreRules || $[37] !== ruleElements) {
+    ruleLines = jsxProd_default_2(Fragment, {
+      children: [ruleElements, moreRules],
     });
-    v[36] = K;
-    v[37] = J;
-    v[38] = ye;
-  } else ye = v[38];
-  const children = ye;
-  let ee;
+    $[36] = moreRules;
+    $[37] = ruleElements;
+    $[38] = ruleLines;
+  } else ruleLines = $[38];
+  const children = ruleLines;
+  let rulesBox;
   if (
-    v[39] !== M ||
-    v[40] !== children ||
-    v[41] !== flexDirection ||
-    v[42] !== marginX ||
-    v[43] !== marginY ||
-    v[44] !== gap
+    $[39] !== BoxComponent ||
+    $[40] !== children ||
+    $[41] !== flexDirection ||
+    $[42] !== marginX ||
+    $[43] !== marginY ||
+    $[44] !== gap
   ) {
-    ee = jsxProd_default(M, {
+    rulesBox = jsxProd_default(BoxComponent, {
       flexDirection,
       marginX,
       marginY,
       gap,
       children,
     });
-    v[39] = M;
-    v[40] = children;
-    v[41] = flexDirection;
-    v[42] = marginX;
-    v[43] = marginY;
-    v[44] = gap;
-    v[45] = ee;
-  } else ee = v[45];
-  let ce;
-  if (v[46] !== state.control) {
-    ce =
+    $[39] = BoxComponent;
+    $[40] = children;
+    $[41] = flexDirection;
+    $[42] = marginX;
+    $[43] = marginY;
+    $[44] = gap;
+    $[45] = rulesBox;
+  } else rulesBox = $[45];
+  let emptyNote;
+  if ($[46] !== state.control) {
+    emptyNote =
       state.control === "empty" &&
       jsxProd_default(Text, {
         italic: true,
         children: "This section has no configured rules, so the built-ins apply. Add a rule to customize it.",
       });
-    v[46] = state.control;
-    v[47] = ce;
-  } else ce = v[47];
-  let $e;
-  if (v[48] !== state.control || v[49] !== state.enabled || v[50] !== state.source) {
-    $e =
+    $[46] = state.control;
+    $[47] = emptyNote;
+  } else emptyNote = $[47];
+  let otherSourceNote;
+  if ($[48] !== state.control || $[49] !== state.enabled || $[50] !== state.source) {
+    otherSourceNote =
       state.control === "otherSource" &&
       jsxProd_default(Text, {
         italic: true,
@@ -854,14 +860,14 @@ function BuiltinRulesSection(props) {
           ? `Kept on by ${describeRuleSource(state.source ?? "policySettings")} \u2014 it cannot be switched off here.`
           : `Replaced by rules from ${describeRuleSource(state.source ?? "policySettings")}. This control follows that configuration; add your own rules to customize the section.`,
       });
-    v[48] = state.control;
-    v[49] = state.enabled;
-    v[50] = state.source;
-    v[51] = $e;
-  } else $e = v[51];
-  let ze;
-  if (v[52] !== T || v[53] !== state.enabled) {
-    ze = T
+    $[48] = state.control;
+    $[49] = state.enabled;
+    $[50] = state.source;
+    $[51] = otherSourceNote;
+  } else otherSourceNote = $[51];
+  let toggleOptions;
+  if ($[52] !== isUserControlled || $[53] !== state.enabled) {
+    toggleOptions = isUserControlled
       ? [
           {
             label: state.enabled
@@ -871,197 +877,197 @@ function BuiltinRulesSection(props) {
           },
         ]
       : [];
-    v[52] = T;
-    v[53] = state.enabled;
-    v[54] = ze;
-  } else ze = v[54];
-  let Ge;
-  let ot;
-  if (v[55] === MEMO_CACHE_SENTINEL) {
-    Ge = {
+    $[52] = isUserControlled;
+    $[53] = state.enabled;
+    $[54] = toggleOptions;
+  } else toggleOptions = $[54];
+  let editorOption;
+  let cancelOption;
+  if ($[55] === MEMO_CACHE_SENTINEL) {
+    editorOption = {
       label: `View in editor${getShortEditorName() ? ` (${getShortEditorName()})` : ""}`,
       value: "editor",
     };
-    ot = {
+    cancelOption = {
       label: "Cancel",
       value: "cancel",
     };
-    v[55] = Ge;
-    v[56] = ot;
+    $[55] = editorOption;
+    $[56] = cancelOption;
   } else {
-    Ge = v[55];
-    ot = v[56];
+    editorOption = $[55];
+    cancelOption = $[56];
   }
   let options;
-  if (v[57] !== ze) {
-    options = [...ze, Ge, ot];
-    v[57] = ze;
-    v[58] = options;
-  } else options = v[58];
+  if ($[57] !== toggleOptions) {
+    options = [...toggleOptions, editorOption, cancelOption];
+    $[57] = toggleOptions;
+    $[58] = options;
+  } else options = $[58];
   let onChange;
-  if (v[59] !== c || v[60] !== onCancel || v[61] !== onToggle || v[62] !== D) {
-    onChange = (je) => {
-      if (je === "toggle") onToggle();
-      else if (je === "editor")
-        c(
-          D.map(toBulletLine).join(`
+  if ($[59] !== openInEditor || $[60] !== onCancel || $[61] !== onToggle || $[62] !== defaultRules) {
+    onChange = (value) => {
+      if (value === "toggle") onToggle();
+      else if (value === "editor")
+        openInEditor(
+          defaultRules.map(toBulletLine).join(`
 
 `),
         );
       else onCancel();
     };
-    v[59] = c;
-    v[60] = onCancel;
-    v[61] = onToggle;
-    v[62] = D;
-    v[63] = onChange;
-  } else onChange = v[63];
-  let bt;
-  if (v[64] !== onCancel || v[65] !== options || v[66] !== onChange) {
-    bt = jsxProd_default(ModelSelector, {
+    $[59] = openInEditor;
+    $[60] = onCancel;
+    $[61] = onToggle;
+    $[62] = defaultRules;
+    $[63] = onChange;
+  } else onChange = $[63];
+  let selector;
+  if ($[64] !== onCancel || $[65] !== options || $[66] !== onChange) {
+    selector = jsxProd_default(ModelSelector, {
       options,
       onChange,
       onCancel,
     });
-    v[64] = onCancel;
-    v[65] = options;
-    v[66] = onChange;
-    v[67] = bt;
-  } else bt = v[67];
-  let Te;
-  if (v[68] !== C) {
-    Te =
-      C !== null &&
+    $[64] = onCancel;
+    $[65] = options;
+    $[66] = onChange;
+    $[67] = selector;
+  } else selector = $[67];
+  let editorError;
+  if ($[68] !== editorNotice) {
+    editorError =
+      editorNotice !== null &&
       jsxProd_default(Text, {
         dimColor: true,
         wrap: "wrap-trim",
-        children: C,
+        children: editorNotice,
       });
-    v[68] = C;
-    v[69] = Te;
-  } else Te = v[69];
-  let et;
+    $[68] = editorNotice;
+    $[69] = editorError;
+  } else editorError = $[69];
+  let dialog;
   if (
-    v[70] !== b ||
-    v[71] !== ee ||
-    v[72] !== ce ||
-    v[73] !== $e ||
-    v[74] !== bt ||
-    v[75] !== Te ||
-    v[76] !== color ||
-    v[77] !== title ||
-    v[78] !== le
+    $[70] !== DialogComponent ||
+    $[71] !== rulesBox ||
+    $[72] !== emptyNote ||
+    $[73] !== otherSourceNote ||
+    $[74] !== selector ||
+    $[75] !== editorError ||
+    $[76] !== color ||
+    $[77] !== title ||
+    $[78] !== titleText
   ) {
-    et = jsxProd_default_2(b, {
+    dialog = jsxProd_default_2(DialogComponent, {
       color,
       title,
-      children: [le, ee, ce, $e, bt, Te],
+      children: [titleText, rulesBox, emptyNote, otherSourceNote, selector, editorError],
     });
-    v[70] = b;
-    v[71] = ee;
-    v[72] = ce;
-    v[73] = $e;
-    v[74] = bt;
-    v[75] = Te;
-    v[76] = color;
-    v[77] = title;
-    v[78] = le;
-    v[79] = et;
-  } else et = v[79];
-  let rt;
-  if (v[80] !== E || v[81] !== et) {
-    rt = jsxProd_default_2(Fragment, {
-      children: [et, E],
+    $[70] = DialogComponent;
+    $[71] = rulesBox;
+    $[72] = emptyNote;
+    $[73] = otherSourceNote;
+    $[74] = selector;
+    $[75] = editorError;
+    $[76] = color;
+    $[77] = title;
+    $[78] = titleText;
+    $[79] = dialog;
+  } else dialog = $[79];
+  let content;
+  if ($[80] !== footerHint || $[81] !== dialog) {
+    content = jsxProd_default_2(Fragment, {
+      children: [dialog, footerHint],
     });
-    v[80] = E;
-    v[81] = et;
-    v[82] = rt;
-  } else rt = v[82];
-  return rt;
+    $[80] = footerHint;
+    $[81] = dialog;
+    $[82] = content;
+  } else content = $[82];
+  return content;
 }
 //@ chunk-p2qwpk2k.js:61446-62726 sole-consumer
 /**
  * 删除 auto 模式规则的确认框；删除的是该分类最后一条用户规则时提示将只剩内置规则。
  */
 function DeleteAutoModeRuleConfirm(props) {
-  let g = w(19);
+  let $ = useMemoCache(19);
   let { entry, isLastInSection, onConfirm, onCancel } = props;
-  let v;
-  if (g[0] === MEMO_CACHE_SENTINEL) {
-    v = {
+  let keybindingOptions;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    keybindingOptions = {
       context: "Confirmation",
     };
-    g[0] = v;
-  } else v = g[0];
-  useKeybinding("confirm:no", onCancel, v);
-  let x;
-  if (g[1] === MEMO_CACHE_SENTINEL) {
-    x = jsxProd_default(Text, {
+    $[0] = keybindingOptions;
+  } else keybindingOptions = $[0];
+  useKeybinding("confirm:no", onCancel, keybindingOptions);
+  let titleText;
+  if ($[1] === MEMO_CACHE_SENTINEL) {
+    titleText = jsxProd_default(Text, {
       bold: true,
       color: "error",
       children: "Delete auto mode rule?",
     });
-    g[1] = x;
-  } else x = g[1];
-  let C;
-  if (g[2] !== entry) {
-    C = jsxProd_default(AutoModeRuleSummary, {
+    $[1] = titleText;
+  } else titleText = $[1];
+  let autoModeRuleSummaryElement;
+  if ($[2] !== entry) {
+    autoModeRuleSummaryElement = jsxProd_default(AutoModeRuleSummary, {
       entry,
     });
-    g[2] = entry;
-    g[3] = C;
-  } else C = g[3];
-  let c;
-  if (g[4] !== entry || g[5] !== isLastInSection) {
-    c =
+    $[2] = entry;
+    $[3] = autoModeRuleSummaryElement;
+  } else autoModeRuleSummaryElement = $[3];
+  let lastSectionNote;
+  if ($[4] !== entry || $[5] !== isLastInSection) {
+    lastSectionNote =
       isLastInSection &&
       ` This is your last ${getAutoModeRuleCategoryLabel(entry.section).toLowerCase()} rule \u2014 without it, only the built-in rules apply for this section.`;
-    g[4] = entry;
-    g[5] = isLastInSection;
-    g[6] = c;
-  } else c = g[6];
-  let M;
-  if (g[7] !== c) {
-    M = jsxProd_default_2(Text, {
+    $[4] = entry;
+    $[5] = isLastInSection;
+    $[6] = lastSectionNote;
+  } else lastSectionNote = $[6];
+  let questionText;
+  if ($[7] !== lastSectionNote) {
+    questionText = jsxProd_default_2(Text, {
       children: [
         "Are you sure you want to delete this rule? Auto mode stops applying it on your next request.",
-        c,
+        lastSectionNote,
       ],
     });
-    g[7] = c;
-    g[8] = M;
-  } else M = g[8];
-  let b;
-  if (g[9] !== onCancel || g[10] !== onConfirm) {
-    b = jsxProd_default(ConfirmSelect, {
+    $[7] = lastSectionNote;
+    $[8] = questionText;
+  } else questionText = $[8];
+  let confirmSelectElement;
+  if ($[9] !== onCancel || $[10] !== onConfirm) {
+    confirmSelectElement = jsxProd_default(ConfirmSelect, {
       focus: "cancel",
       hideIndexes: true,
       onConfirm,
       onCancel,
     });
-    g[9] = onCancel;
-    g[10] = onConfirm;
-    g[11] = b;
-  } else b = g[11];
-  let T;
-  if (g[12] !== C || g[13] !== M || g[14] !== b) {
-    T = jsxProd_default_2(Box, {
+    $[9] = onCancel;
+    $[10] = onConfirm;
+    $[11] = confirmSelectElement;
+  } else confirmSelectElement = $[11];
+  let confirmBox;
+  if ($[12] !== autoModeRuleSummaryElement || $[13] !== questionText || $[14] !== confirmSelectElement) {
+    confirmBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       borderStyle: "round",
       paddingLeft: 1,
       paddingRight: 1,
       borderColor: "error",
-      children: [x, C, M, b],
+      children: [titleText, autoModeRuleSummaryElement, questionText, confirmSelectElement],
     });
-    g[12] = C;
-    g[13] = M;
-    g[14] = b;
-    g[15] = T;
-  } else T = g[15];
-  let E;
-  if (g[16] === MEMO_CACHE_SENTINEL) {
-    E = jsxProd_default(Box, {
+    $[12] = autoModeRuleSummaryElement;
+    $[13] = questionText;
+    $[14] = confirmSelectElement;
+    $[15] = confirmBox;
+  } else confirmBox = $[15];
+  let footerBoxElement;
+  if ($[16] === MEMO_CACHE_SENTINEL) {
+    footerBoxElement = jsxProd_default(Box, {
       marginLeft: 3,
       children: jsxProd_default(AgentNavigationFooter, {
         children: jsxProd_default_2(Byline, {
@@ -1078,32 +1084,32 @@ function DeleteAutoModeRuleConfirm(props) {
         }),
       }),
     });
-    g[16] = E;
-  } else E = g[16];
-  let D;
-  if (g[17] !== T) {
-    D = jsxProd_default_2(Fragment, {
-      children: [T, E],
+    $[16] = footerBoxElement;
+  } else footerBoxElement = $[16];
+  let fragmentElement;
+  if ($[17] !== confirmBox) {
+    fragmentElement = jsxProd_default_2(Fragment, {
+      children: [confirmBox, footerBoxElement],
     });
-    g[17] = T;
-    g[18] = D;
-  } else D = g[18];
-  return D;
+    $[17] = confirmBox;
+    $[18] = fragmentElement;
+  } else fragmentElement = $[18];
+  return fragmentElement;
 }
 //@ chunk-p2qwpk2k.js:62726-62730 sole-consumer
 init_react_production();
 //@ chunk-p2qwpk2k.js:62895-62974 sole-consumer
-function toRuleListOption(C) {
+function toRuleListOption(section) {
   return {
-    label: getAutoModeRuleCategoryLabel(C),
-    value: C,
-    description: getAutoModeSectionDescription(C),
+    label: getAutoModeRuleCategoryLabel(section),
+    value: section,
+    description: getAutoModeSectionDescription(section),
     dimDescription: true,
   };
 }
 //@ chunk-p2qwpk2k.js:62974-63040 sole-consumer
-function normalizeCrlf($e) {
-  return $e
+function normalizeCrlf(text) {
+  return text
     .replace(
       /\r\n/g,
       `
@@ -1119,8 +1125,8 @@ function normalizeCrlf($e) {
 /**
  * 返回 auto 模式规则分类（allow/soft_deny/hard_deny/environment）的说明文字。
  */
-function getAutoModeSectionDescription(h) {
-  switch (h) {
+function getAutoModeSectionDescription(section) {
+  switch (section) {
     case "allow":
       return "Actions auto mode lets run without blocking";
     case "soft_deny":
@@ -1135,33 +1141,33 @@ function getAutoModeSectionDescription(h) {
 /**
  * 把环境条目写入临时文件（O_EXCL|O_NOFOLLOW，0600）并用编辑器打开，返回编辑后的内容（统一换行）或问题描述。
  */
-function editEnvironmentInEditor(h) {
-  let i = sessionSidecarFilePath(`${AUTO_MODE_ENV_EDIT}${randomBytes(8).toString("hex")}.md`);
-  if (i === null)
+function editEnvironmentInEditor(env) {
+  let filePath = sessionSidecarFilePath(`${AUTO_MODE_ENV_EDIT}${randomBytes(8).toString("hex")}.md`);
+  if (filePath === null)
     return {
       content: null,
       problem: null,
     };
   try {
-    mkdirSync(dirname(i), {
+    mkdirSync(dirname(filePath), {
       recursive: true,
       mode: 448,
     });
-    let a = openSync(
-      i,
+    let entries = openSync(
+      filePath,
       constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW,
       384,
     );
     try {
       writeSync(
-        a,
-        h.join(`
+        entries,
+        env.join(`
 `),
         null,
         "utf8",
       );
     } finally {
-      closeSync(a);
+      closeSync(entries);
     }
   } catch (error) {
     return {
@@ -1169,22 +1175,22 @@ function editEnvironmentInEditor(h) {
       problem: `could not write the file: ${error instanceof Error ? error.message : String(error)}`,
     };
   }
-  let m = editFileInEditor(i);
-  if (m.error !== undefined)
+  let edited = editFileInEditor(filePath);
+  if (edited.error !== undefined)
     return {
       content: null,
-      problem: m.error,
+      problem: edited.error,
     };
-  if (m.content === null)
+  if (edited.content === null)
     return {
       content: null,
       problem: "the editor returned no content \u2014 reopen to try again.",
     };
   return {
     content:
-      m.content === null
+      edited.content === null
         ? null
-        : m.content
+        : edited.content
             .replace(
               /\r\n/g,
               `
@@ -1203,114 +1209,114 @@ function editEnvironmentInEditor(h) {
  * "这是哪类规则？"选择对话框：列出规则分区选项，选择后回调 onPick，取消时回调 onCancel。
  */
 function PickRuleSectionDialog(props) {
-  let a = w(8);
+  let $ = useMemoCache(8);
   let { onCancel, onPick } = props;
-  let f;
-  if (a[0] === MEMO_CACHE_SENTINEL) {
-    f = jsxProd_default(Box, {
+  let boxElement;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    boxElement = jsxProd_default(Box, {
       flexDirection: "column",
       marginBottom: 1,
       children: jsxProd_default(Text, {
         children: "What kind of rule is this?",
       }),
     });
-    a[0] = f;
-  } else f = a[0];
+    $[0] = boxElement;
+  } else boxElement = $[0];
   let options;
-  if (a[1] === MEMO_CACHE_SENTINEL) {
+  if ($[1] === MEMO_CACHE_SENTINEL) {
     options = AUTO_MODE_RULE_SECTIONS.map(toRuleListOption);
-    a[1] = options;
-  } else options = a[1];
-  let v;
-  if (a[2] !== onCancel || a[3] !== onPick) {
-    v = jsxProd_default(ModelSelector, {
+    $[1] = options;
+  } else options = $[1];
+  let modelSelectorElement;
+  if ($[2] !== onCancel || $[3] !== onPick) {
+    modelSelectorElement = jsxProd_default(ModelSelector, {
       options,
       onChange: onPick,
       onCancel,
     });
-    a[2] = onCancel;
-    a[3] = onPick;
-    a[4] = v;
-  } else v = a[4];
-  let x;
-  if (a[5] !== onCancel || a[6] !== v) {
-    x = jsxProd_default_2(Dialog, {
+    $[2] = onCancel;
+    $[3] = onPick;
+    $[4] = modelSelectorElement;
+  } else modelSelectorElement = $[4];
+  let dialogElement;
+  if ($[5] !== onCancel || $[6] !== modelSelectorElement) {
+    dialogElement = jsxProd_default_2(Dialog, {
       title: "Add auto mode rule",
       onCancel,
       color: "permission",
-      children: [f, v],
+      children: [boxElement, modelSelectorElement],
     });
-    a[5] = onCancel;
-    a[6] = v;
-    a[7] = x;
-  } else x = a[7];
-  return x;
+    $[5] = onCancel;
+    $[6] = modelSelectorElement;
+    $[7] = dialogElement;
+  } else dialogElement = $[7];
+  return dialogElement;
 }
 //@ chunk-p2qwpk2k.js:64569-66742 sole-consumer
 /**
  * 添加/编辑 auto 模式规则的输入对话框：多行输入、校验失败显示错误、提示保存到用户设置。
  */
 function AutoModeRuleInput(props) {
-  let b = w(28);
+  let $ = useMemoCache(28);
   let { section, initialValue, onCancel, onSubmit } = props;
-  let [g, v] = y(initialValue ?? "");
-  let [x, C] = y(initialValue ? initialValue.length : 0);
-  let [c, M] = y(null);
-  let T;
-  if (b[0] === MEMO_CACHE_SENTINEL) {
-    T = {
+  let [value, setValue] = useState(initialValue ?? "");
+  let [cursorOffset, setCursorOffset] = useState(initialValue ? initialValue.length : 0);
+  let [validationError, setValidationError] = useState(null);
+  let keyOptions;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    keyOptions = {
       context: "Settings",
     };
-    b[0] = T;
-  } else T = b[0];
-  useKeybinding("confirm:no", onCancel, T);
+    $[0] = keyOptions;
+  } else keyOptions = $[0];
+  useKeybinding("confirm:no", onCancel, keyOptions);
   let { columns } = useTerminalSize();
   let columns_2 = columns - 6;
-  let k;
-  if (b[1] !== onSubmit || b[2] !== section) {
-    k = (V) => {
-      let trimmed = V.trim();
-      if (trimmed.length === 0) {
+  let onSubmitValue;
+  if ($[1] !== onSubmit || $[2] !== section) {
+    onSubmitValue = (rawText) => {
+      let ruleText = rawText.trim();
+      if (ruleText.length === 0) {
         return;
       }
-      let B = validateRuleText(section, trimmed);
-      if (B !== null) {
-        M(B);
+      let error = validateRuleText(section, ruleText);
+      if (error !== null) {
+        setValidationError(error);
         return;
       }
-      onSubmit(trimmed);
+      onSubmit(ruleText);
     };
-    b[1] = onSubmit;
-    b[2] = section;
-    b[3] = k;
-  } else k = b[3];
-  let onSubmit_2 = k;
-  let se = initialValue !== undefined;
+    $[1] = onSubmit;
+    $[2] = section;
+    $[3] = onSubmitValue;
+  } else onSubmitValue = $[3];
+  let onSubmit_2 = onSubmitValue;
+  let isEditing = initialValue !== undefined;
   let children =
     section === "environment"
       ? "Deploys from this machine only reach the staging cluster."
       : "Database Writes: UPDATE statements against the local dev database.";
-  let le;
-  if (b[4] !== section) {
-    le = getAutoModeRuleCategoryLabel(section).toLowerCase();
-    b[4] = section;
-    b[5] = le;
-  } else le = b[5];
-  const title = `${se ? "Edit" : "Add"} ${le} rule`;
-  let K;
-  if (b[6] === MEMO_CACHE_SENTINEL) {
-    K = jsxProd_default(KeyboardShortcutHint, {
+  let sectionLabel;
+  if ($[4] !== section) {
+    sectionLabel = getAutoModeRuleCategoryLabel(section).toLowerCase();
+    $[4] = section;
+    $[5] = sectionLabel;
+  } else sectionLabel = $[5];
+  const title = `${isEditing ? "Edit" : "Add"} ${sectionLabel} rule`;
+  let saveHint;
+  if ($[6] === MEMO_CACHE_SENTINEL) {
+    saveHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "enter",
       action: "save",
     });
-    b[6] = K;
-  } else K = b[6];
+    $[6] = saveHint;
+  } else saveHint = $[6];
   const chord = supportsShiftEnter() ? "shift+enter" : "ctrl+j";
   let inputGuide;
-  if (b[7] === MEMO_CACHE_SENTINEL) {
+  if ($[7] === MEMO_CACHE_SENTINEL) {
     inputGuide = jsxProd_default_2(Byline, {
       children: [
-        K,
+        saveHint,
         jsxProd_default(KeyboardShortcutHint, {
           chord,
           action: "new line",
@@ -1321,39 +1327,39 @@ function AutoModeRuleInput(props) {
         }),
       ],
     });
-    b[7] = inputGuide;
-  } else inputGuide = b[7];
-  let ee;
-  if (b[8] === MEMO_CACHE_SENTINEL) {
-    ee = jsxProd_default(Newline, {});
-    b[8] = ee;
-  } else ee = b[8];
-  let ce;
-  if (b[9] !== children) {
-    ce = jsxProd_default_2(Text, {
+    $[7] = inputGuide;
+  } else inputGuide = $[7];
+  let newlineHint;
+  if ($[8] === MEMO_CACHE_SENTINEL) {
+    newlineHint = jsxProd_default(Newline, {});
+    $[8] = newlineHint;
+  } else newlineHint = $[8];
+  let helpText;
+  if ($[9] !== children) {
+    helpText = jsxProd_default_2(Text, {
       children: [
         "Write the rule as a plain sentence. A short label up front helps, e.g.,",
-        ee,
+        newlineHint,
         jsxProd_default(Text, {
           bold: true,
           children,
         }),
       ],
     });
-    b[9] = children;
-    b[10] = ce;
-  } else ce = b[10];
+    $[9] = children;
+    $[10] = helpText;
+  } else helpText = $[10];
   let onChange;
-  if (b[11] === MEMO_CACHE_SENTINEL) {
-    onChange = (Se) => {
-      M(null);
-      v(Se);
+  if ($[11] === MEMO_CACHE_SENTINEL) {
+    onChange = (nextValue) => {
+      setValidationError(null);
+      setValue(nextValue);
     };
-    b[11] = onChange;
-  } else onChange = b[11];
-  let de;
-  if (b[12] !== x || b[13] !== onSubmit_2 || b[14] !== g || b[15] !== columns_2) {
-    de = jsxProd_default(Box, {
+    $[11] = onChange;
+  } else onChange = $[11];
+  let inputBox;
+  if ($[12] !== cursorOffset || $[13] !== onSubmit_2 || $[14] !== value || $[15] !== columns_2) {
+    inputBox = jsxProd_default(Box, {
       borderDimColor: true,
       borderStyle: "round",
       marginY: 1,
@@ -1365,55 +1371,55 @@ function AutoModeRuleInput(props) {
         disableBackslashReturn: true,
         maxVisibleLines: 8,
         inputFilter: normalizeCrlf,
-        value: g,
+        value,
         onChange,
         onSubmit: onSubmit_2,
         placeholder: `Enter rule${figures_default.ellipsis}`,
         columns: columns_2,
-        cursorOffset: x,
-        onChangeCursorOffset: C,
+        cursorOffset,
+        onChangeCursorOffset: setCursorOffset,
       }),
     });
-    b[12] = x;
-    b[13] = onSubmit_2;
-    b[14] = g;
-    b[15] = columns_2;
-    b[16] = de;
-  } else de = b[16];
-  let X;
-  if (b[17] !== c) {
-    X =
-      c !== null &&
+    $[12] = cursorOffset;
+    $[13] = onSubmit_2;
+    $[14] = value;
+    $[15] = columns_2;
+    $[16] = inputBox;
+  } else inputBox = $[16];
+  let errorText;
+  if ($[17] !== validationError) {
+    errorText =
+      validationError !== null &&
       jsxProd_default(Text, {
         color: "error",
         wrap: "wrap-trim",
-        children: c,
+        children: validationError,
       });
-    b[17] = c;
-    b[18] = X;
-  } else X = b[18];
-  let Ve;
-  if (b[19] === MEMO_CACHE_SENTINEL) {
-    Ve = jsxProd_default(Text, {
+    $[17] = validationError;
+    $[18] = errorText;
+  } else errorText = $[18];
+  let savedHint;
+  if ($[19] === MEMO_CACHE_SENTINEL) {
+    savedHint = jsxProd_default(Text, {
       dimColor: true,
       children: "Saved to your user settings file",
     });
-    b[19] = Ve;
-  } else Ve = b[19];
+    $[19] = savedHint;
+  } else savedHint = $[19];
   let children_2;
-  if (b[20] !== de || b[21] !== X || b[22] !== ce) {
+  if ($[20] !== inputBox || $[21] !== errorText || $[22] !== helpText) {
     children_2 = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [ce, de, X, Ve],
+      children: [helpText, inputBox, errorText, savedHint],
     });
-    b[20] = de;
-    b[21] = X;
-    b[22] = ce;
-    b[23] = children_2;
-  } else children_2 = b[23];
-  let vt;
-  if (b[24] !== onCancel || b[25] !== children_2 || b[26] !== title) {
-    vt = jsxProd_default(Dialog, {
+    $[20] = inputBox;
+    $[21] = errorText;
+    $[22] = helpText;
+    $[23] = children_2;
+  } else children_2 = $[23];
+  let dialog;
+  if ($[24] !== onCancel || $[25] !== children_2 || $[26] !== title) {
+    dialog = jsxProd_default(Dialog, {
       title,
       onCancel,
       color: "permission",
@@ -1421,12 +1427,12 @@ function AutoModeRuleInput(props) {
       inputGuide,
       children: children_2,
     });
-    b[24] = onCancel;
-    b[25] = children_2;
-    b[26] = title;
-    b[27] = vt;
-  } else vt = b[27];
-  return vt;
+    $[24] = onCancel;
+    $[25] = children_2;
+    $[26] = title;
+    $[27] = dialog;
+  } else dialog = $[27];
+  return dialog;
 }
 //@ chunk-p2qwpk2k.js:66742-66790 file-local
 function selectToolPermissionContext(s) {
@@ -1441,24 +1447,24 @@ function selectWorkspaceDirs() {
   return collectAutoModeRuleEntries();
 }
 //@ chunk-p2qwpk2k.js:66842-66875 layout
-function ruleStringPair(Ju) {
-  return [jsonStringify(Ju), Ju];
+function ruleStringPair(rule) {
+  return [jsonStringify(rule), rule];
 }
 //@ chunk-p2qwpk2k.js:66875-66918 layout
-function rulesBySourceMap(Fy) {
-  return new Map(Fy.map(ruleStringPair));
+function rulesBySourceMap(rules) {
+  return new Map(rules.map(ruleStringPair));
 }
 //@ chunk-p2qwpk2k.js:66918-66955 layout
-function ruleStringOf($y) {
-  return $y.ruleString;
+function ruleStringOf(rule) {
+  return rule.ruleString;
 }
 //@ chunk-p2qwpk2k.js:66955-66985 layout
-function describeRule(By) {
-  return consentRowLabel(By);
+function describeRule(rule) {
+  return consentRowLabel(rule);
 }
 //@ chunk-p2qwpk2k.js:66985-67020 layout
-function isDefined(_y) {
-  return _y !== undefined;
+function isDefined(value) {
+  return value !== undefined;
 }
 //@ chunk-p2qwpk2k.js:67020-67069 fingerprint = _temp5 (1)
 function isNotAddNewRule(opt) {
@@ -1469,16 +1475,16 @@ function optionValue(opt) {
   return opt.value;
 }
 //@ chunk-p2qwpk2k.js:67101-67146 layout
-function trimTrailingNewlines(Iy) {
-  return Iy.replace(/\n+$/, "");
+function trimTrailingNewlines(text) {
+  return text.replace(/\n+$/, "");
 }
 //@ chunk-p2qwpk2k.js:67146-67196 layout
-function isNotEnvSection(Ny) {
-  return Ny.section !== "environment";
+function isNotEnvSection(rule) {
+  return rule.section !== "environment";
 }
 //@ chunk-p2qwpk2k.js:67196-67408 fingerprint = RuleSourceText (1)
 function RuleSourceText(props) {
-  let $ = w(4);
+  let $ = useMemoCache(4);
   let { rule } = props;
   let t1;
   if ($[0] !== rule.source) {
@@ -1501,44 +1507,44 @@ function RuleSourceText(props) {
 //@ chunk-p2qwpk2k.js:67408-67469 layout
 var INVISIBLE_CHAR_RE = /(?! )[\p{C}\p{Z}\p{Default_Ignorable_Code_Point}]/gu;
 //@ chunk-p2qwpk2k.js:67469-67590 layout
-function escapeAsUnicode(h) {
+function escapeAsUnicode(text) {
   return Array.from(
     {
-      length: h.length,
+      length: text.length,
     },
-    (i, m) => `\\u${h.charCodeAt(m).toString(16).padStart(4, "0")}`,
+    (unused, index) => `\\u${text.charCodeAt(index).toString(16).padStart(4, "0")}`,
   ).join("");
 }
 //@ chunk-p2qwpk2k.js:67590-68151 layout
 /**
  * 生成"只批准这些精确命令/调用"的消息，列出 JSON 字符串化的命令，并说明不覆盖其他调用或附加选项（关沙箱、网络、后台）。
  */
-function buildExactRetryGrantMessage(h, i) {
-  let mapped = h.map((v) =>
-    jsonStringify(v.command ?? v.rawInput ?? quotedReason(v, i).text).replace(
+function buildExactRetryGrantMessage(rows, index) {
+  let mapped = rows.map((row) =>
+    jsonStringify(row.command ?? row.rawInput ?? quotedReason(row, index).text).replace(
       INVISIBLE_CHAR_RE,
       escapeAsUnicode,
     ),
   );
-  let a = h.every((v) => v.command !== undefined) ? "command" : "call";
-  let f = h.length === 1;
-  let g = f ? `this exact ${a}` : `these exact ${a}s`;
-  return `Permission granted for ${g} only, ${f ? "as one whole string" : "each as one whole string"}: ${mapped.join(", ")}. This does not approve any other ${a}, any part of ${f ? "this one" : "these"}, or running ${f ? "it" : "them"} with added options such as turning off the sandbox, extra network access, or running in the background. You may now retry ${g} if you would like.`;
+  let targetWord = rows.every((state) => state.command !== undefined) ? "command" : "call";
+  let label = rows.length === 1;
+  let targetPhrase = label ? `this exact ${targetWord}` : `these exact ${targetWord}s`;
+  return `Permission granted for ${targetPhrase} only, ${label ? "as one whole string" : "each as one whole string"}: ${mapped.join(", ")}. This does not approve any other ${targetWord}, any part of ${label ? "this one" : "these"}, or running ${label ? "it" : "them"} with added options such as turning off the sandbox, extra network access, or running in the background. You may now retry ${targetPhrase} if you would like.`;
 }
 //@ chunk-p2qwpk2k.js:68151-68162 layout
 var MAX_COMMAND_TEXT = 200;
 //@ chunk-p2qwpk2k.js:68162-68257 layout
-function ruleCommandTexts(h, i) {
-  return h.map((m) =>
+function ruleCommandTexts(rows, source) {
+  return rows.map((row) =>
     truncateToWidth(
-      replaceLineBreaks(displayField(m.command?.trim() ?? quotedReason(m, i).text.trim()).text),
+      replaceLineBreaks(displayField(row.command?.trim() ?? quotedReason(row, source).text.trim()).text),
       MAX_COMMAND_TEXT,
     ),
   );
 }
 //@ chunk-p2qwpk2k.js:68257-68321 layout
-function quoteRuleIfBracketed(h) {
-  return /[[\]]/.test(h) && !h.startsWith('"') ? jsonStringify(h) : h;
+function quoteRuleIfBracketed(ruleText) {
+  return /[[\]]/.test(ruleText) && !ruleText.startsWith('"') ? jsonStringify(ruleText) : ruleText;
 }
 //@ chunk-p2qwpk2k.js:68321-68423 fingerprint = getRuleBehaviorLabel (1)
 function getRuleBehaviorLabel(ruleBehavior) {
@@ -1553,16 +1559,16 @@ function getRuleBehaviorLabel(ruleBehavior) {
 }
 //@ chunk-p2qwpk2k.js:68423-70911 fingerprint = RuleDetails (0.466)
 function RuleDetails(props) {
-  let $ = w(37);
+  let $ = useMemoCache(37);
   let { rule, onDelete, onCancel } = props;
-  let g;
+  let keybindingOptions;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    g = {
+    keybindingOptions = {
       context: "Confirmation",
     };
-    $[0] = g;
-  } else g = $[0];
-  useKeybinding("confirm:no", onCancel, g);
+    $[0] = keybindingOptions;
+  } else keybindingOptions = $[0];
+  useKeybinding("confirm:no", onCancel, keybindingOptions);
   let children;
   if ($[1] !== rule.ruleValue) {
     children = consentRowLabel(formatPermissionRule(rule.ruleValue));
@@ -1606,10 +1612,10 @@ function RuleDetails(props) {
     $[11] = t5;
     $[12] = t6;
   } else t6 = $[12];
-  let b = t6;
-  let T;
+  let ruleTextElement = t6;
+  let infoBox;
   if ($[13] === MEMO_CACHE_SENTINEL) {
-    T = jsxProd_default(Box, {
+    infoBox = jsxProd_default(Box, {
       marginLeft: 3,
       children: jsxProd_default(AgentNavigationFooter, {
         children: jsxProd_default(KeyboardShortcutHint, {
@@ -1618,13 +1624,13 @@ function RuleDetails(props) {
         }),
       }),
     });
-    $[13] = T;
-  } else T = $[13];
-  let E = T;
+    $[13] = infoBox;
+  } else infoBox = $[13];
+  let infoBoxValue = infoBox;
   if (rule.source === "policySettings") {
-    let D;
+    let policyNote;
     if ($[14] === MEMO_CACHE_SENTINEL) {
-      D = jsxProd_default_2(Text, {
+      policyNote = jsxProd_default_2(Text, {
         italic: true,
         children: [
           "This rule is configured by managed settings and cannot be modified.",
@@ -1633,50 +1639,54 @@ function RuleDetails(props) {
           "Contact your system administrator for more information.",
         ],
       });
-      $[14] = D;
-    } else D = $[14];
-    let k;
-    if ($[15] !== b) {
-      k = jsxProd_default_2(Fragment, {
+      $[14] = policyNote;
+    } else policyNote = $[14];
+    let policyView;
+    if ($[15] !== ruleTextElement) {
+      policyView = jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default_2(ShutdownRequestDisplay, {
             color: "permission",
             title: "Rule details",
-            children: [b, D],
+            children: [ruleTextElement, policyNote],
           }),
-          E,
+          infoBoxValue,
         ],
       });
-      $[15] = b;
-      $[16] = k;
-    } else k = $[16];
-    return k;
+      $[15] = ruleTextElement;
+      $[16] = policyView;
+    } else policyView = $[16];
+    return policyView;
   }
   if (rule.source === "flagSettings" || rule.source === "command") {
-    const D = rule.source === "flagSettings" ? "the --settings flag" : "a slash command";
-    let k;
-    if ($[17] !== D) {
-      k = jsxProd_default_2(Text, {
+    const readOnlySource = rule.source === "flagSettings" ? "the --settings flag" : "a slash command";
+    let readOnlyNote;
+    if ($[17] !== readOnlySource) {
+      readOnlyNote = jsxProd_default_2(Text, {
         italic: true,
-        children: ["This rule comes from a read-only source (", D, ") and cannot be modified here."],
+        children: [
+          "This rule comes from a read-only source (",
+          readOnlySource,
+          ") and cannot be modified here.",
+        ],
       });
-      $[17] = D;
-      $[18] = k;
-    } else k = $[18];
+      $[17] = readOnlySource;
+      $[18] = readOnlyNote;
+    } else readOnlyNote = $[18];
     let t11;
-    if ($[19] !== b || $[20] !== k) {
+    if ($[19] !== ruleTextElement || $[20] !== readOnlyNote) {
       t11 = jsxProd_default_2(Fragment, {
         children: [
           jsxProd_default_2(ShutdownRequestDisplay, {
             color: "permission",
             title: "Rule details",
-            children: [b, k],
+            children: [ruleTextElement, readOnlyNote],
           }),
-          E,
+          infoBoxValue,
         ],
       });
-      $[19] = b;
-      $[20] = k;
+      $[19] = ruleTextElement;
+      $[20] = readOnlyNote;
       $[21] = t11;
     } else t11 = $[21];
     return t11;
@@ -1704,9 +1714,9 @@ function RuleDetails(props) {
     });
     $[26] = t10;
   } else t10 = $[26];
-  let L;
+  let confirmSelectElement;
   if ($[27] !== onCancel || $[28] !== onDelete) {
-    L = jsxProd_default(ConfirmSelect, {
+    confirmSelectElement = jsxProd_default(ConfirmSelect, {
       focus: "cancel",
       hideIndexes: true,
       onConfirm: onDelete,
@@ -1714,27 +1724,27 @@ function RuleDetails(props) {
     });
     $[27] = onCancel;
     $[28] = onDelete;
-    $[29] = L;
-  } else L = $[29];
-  let B;
-  if ($[30] !== b || $[31] !== L || $[32] !== t9) {
-    B = jsxProd_default_2(Box, {
+    $[29] = confirmSelectElement;
+  } else confirmSelectElement = $[29];
+  let deleteBox;
+  if ($[30] !== ruleTextElement || $[31] !== confirmSelectElement || $[32] !== t9) {
+    deleteBox = jsxProd_default_2(Box, {
       flexDirection: "column",
       gap: 1,
       borderStyle: "round",
       paddingLeft: 1,
       paddingRight: 1,
       borderColor: "error",
-      children: [t9, b, t10, L],
+      children: [t9, ruleTextElement, t10, confirmSelectElement],
     });
-    $[30] = b;
-    $[31] = L;
+    $[30] = ruleTextElement;
+    $[31] = confirmSelectElement;
     $[32] = t9;
-    $[33] = B;
-  } else B = $[33];
-  let Y;
+    $[33] = deleteBox;
+  } else deleteBox = $[33];
+  let marginBox;
   if ($[34] === MEMO_CACHE_SENTINEL) {
-    Y = jsxProd_default(Box, {
+    marginBox = jsxProd_default(Box, {
       marginLeft: 3,
       children: jsxProd_default(AgentNavigationFooter, {
         children: jsxProd_default_2(Byline, {
@@ -1751,21 +1761,21 @@ function RuleDetails(props) {
         }),
       }),
     });
-    $[34] = Y;
-  } else Y = $[34];
-  let se;
-  if ($[35] !== B) {
-    se = jsxProd_default_2(Fragment, {
-      children: [B, Y],
+    $[34] = marginBox;
+  } else marginBox = $[34];
+  let result;
+  if ($[35] !== deleteBox) {
+    result = jsxProd_default_2(Fragment, {
+      children: [deleteBox, marginBox],
     });
-    $[35] = B;
-    $[36] = se;
-  } else se = $[36];
-  return se;
+    $[35] = deleteBox;
+    $[36] = result;
+  } else result = $[36];
+  return result;
 }
 //@ chunk-p2qwpk2k.js:70911-72535 fingerprint = RulesTabContent (0.883)
 function RulesTabContent(props) {
-  let $ = w(37);
+  let $ = useMemoCache(37);
   let {
     options,
     searchQuery,
@@ -1779,12 +1789,12 @@ function RulesTabContent(props) {
   } = props;
   let tabWidth = useTabsWidth();
   let { headerFocused, focusHeader, blurHeader } = useTabHeaderFocus();
-  let D = R(null);
+  let headerRef = useRef(null);
   let t0;
   let t1;
   if ($[0] !== blurHeader || $[1] !== headerFocused || $[2] !== isSearchMode) {
     t0 = () => {
-      if (isSearchMode && headerFocused) blurHeader(D.current);
+      if (isSearchMode && headerFocused) blurHeader(headerRef.current);
     };
     t1 = [isSearchMode, headerFocused, blurHeader];
     $[0] = blurHeader;
@@ -1796,35 +1806,35 @@ function RulesTabContent(props) {
     t0 = $[3];
     t1 = $[4];
   }
-  P(t0, t1);
-  useFocusOnMount(D, isSearchMode);
-  let B = headerFocused && !isSearchMode;
-  let Y;
+  useEffect(t0, t1);
+  useFocusOnMount(headerRef, isSearchMode);
+  let effect = headerFocused && !isSearchMode;
+  let effectDeps;
   let t3;
-  if ($[5] !== B || $[6] !== onHeaderFocusChange) {
-    Y = () => {
-      onHeaderFocusChange(B);
+  if ($[5] !== effect || $[6] !== onHeaderFocusChange) {
+    effectDeps = () => {
+      onHeaderFocusChange(effect);
     };
-    t3 = [B, onHeaderFocusChange];
-    $[5] = B;
+    t3 = [effect, onHeaderFocusChange];
+    $[5] = effect;
     $[6] = onHeaderFocusChange;
-    $[7] = Y;
+    $[7] = effectDeps;
     $[8] = t3;
   } else {
-    Y = $[7];
+    effectDeps = $[7];
     t3 = $[8];
   }
-  P(Y, t3);
+  useEffect(effectDeps, t3);
   const tabIndex = isSearchMode ? 0 : undefined;
   let onFocus;
   if ($[9] !== blurHeader || $[10] !== isSearchMode) {
-    onFocus = isSearchMode ? () => blurHeader(D.current) : undefined;
+    onFocus = isSearchMode ? () => blurHeader(headerRef.current) : undefined;
     $[9] = blurHeader;
     $[10] = isSearchMode;
     $[11] = onFocus;
   } else onFocus = $[11];
   const isFocused_2 = isSearchMode && !headerFocused;
-  let K;
+  let boxElement;
   if (
     $[12] !== cursorOffset ||
     $[13] !== isFocused ||
@@ -1832,7 +1842,7 @@ function RulesTabContent(props) {
     $[15] !== isFocused_2 ||
     $[16] !== tabWidth
   ) {
-    K = jsxProd_default(Box, {
+    boxElement = jsxProd_default(Box, {
       marginBottom: 1,
       flexDirection: "column",
       children: jsxProd_default(SearchBox, {
@@ -1848,8 +1858,8 @@ function RulesTabContent(props) {
     $[14] = searchQuery;
     $[15] = isFocused_2;
     $[16] = tabWidth;
-    $[17] = K;
-  } else K = $[17];
+    $[17] = boxElement;
+  } else boxElement = $[17];
   let onChange;
   if (
     $[18] !== blurHeader ||
@@ -1857,12 +1867,12 @@ function RulesTabContent(props) {
     $[20] !== onHeaderFocusChange ||
     $[21] !== onSelect
   ) {
-    onChange = (ue) => {
+    onChange = (listElement) => {
       if (headerFocused) {
         blurHeader();
         onHeaderFocusChange(false);
       }
-      onSelect(ue);
+      onSelect(listElement);
     };
     $[18] = blurHeader;
     $[19] = headerFocused;
@@ -1873,7 +1883,7 @@ function RulesTabContent(props) {
   const visibleOptionCount = Math.min(10, options.length);
   const isDisabled = isSearchMode || headerFocused;
   const pointerWhileDisabled = !isSearchMode;
-  let Se;
+  let modelSelectorElement;
   if (
     $[23] !== focusHeader ||
     $[24] !== lastFocusedRuleKey ||
@@ -1884,7 +1894,7 @@ function RulesTabContent(props) {
     $[29] !== onChange ||
     $[30] !== visibleOptionCount
   ) {
-    Se = jsxProd_default(ModelSelector, {
+    modelSelectorElement = jsxProd_default(ModelSelector, {
       options,
       onChange,
       onCancel,
@@ -1903,46 +1913,46 @@ function RulesTabContent(props) {
     $[28] = pointerWhileDisabled;
     $[29] = onChange;
     $[30] = visibleOptionCount;
-    $[31] = Se;
-  } else Se = $[31];
+    $[31] = modelSelectorElement;
+  } else modelSelectorElement = $[31];
   let t9;
-  if ($[32] !== Se || $[33] !== tabIndex || $[34] !== onFocus || $[35] !== K) {
+  if ($[32] !== modelSelectorElement || $[33] !== tabIndex || $[34] !== onFocus || $[35] !== boxElement) {
     t9 = jsxProd_default_2(Box, {
-      ref: D,
+      ref: headerRef,
       flexDirection: "column",
       tabIndex,
       onFocus,
-      children: [K, Se],
+      children: [boxElement, modelSelectorElement],
     });
-    $[32] = Se;
+    $[32] = modelSelectorElement;
     $[33] = tabIndex;
     $[34] = onFocus;
-    $[35] = K;
+    $[35] = boxElement;
     $[36] = t9;
   } else t9 = $[36];
   return t9;
 }
 //@ chunk-p2qwpk2k.js:72535-73563 fingerprint = PermissionRulesTab (0.911)
 function PermissionRulesTab(t0) {
-  let $ = w(23);
-  let m;
-  let a;
-  let f;
-  let g;
+  let $ = useMemoCache(23);
+  let header;
+  let rows;
+  let footer;
+  let activeTab;
   if ($[0] !== t0) {
-    ({ tab: g, getRulesOptions: m, handleToolSelect: a, ...f } = t0);
+    ({ tab: activeTab, getRulesOptions: header, handleToolSelect: rows, ...footer } = t0);
     $[0] = t0;
-    $[1] = m;
-    $[2] = a;
-    $[3] = f;
-    $[4] = g;
+    $[1] = header;
+    $[2] = rows;
+    $[3] = footer;
+    $[4] = activeTab;
   } else {
-    m = $[1];
-    a = $[2];
-    f = $[3];
-    g = $[4];
+    header = $[1];
+    rows = $[2];
+    footer = $[3];
+    activeTab = $[4];
   }
-  const flexShrink = g === "allow" ? 0 : undefined;
+  const flexShrink = activeTab === "allow" ? 0 : undefined;
   let t8;
   if ($[5] === MEMO_CACHE_SENTINEL) {
     t8 = {
@@ -1952,52 +1962,52 @@ function PermissionRulesTab(t0) {
     };
     $[5] = t8;
   } else t8 = $[5];
-  const children = t8[g];
-  let c;
+  const children = t8[activeTab];
+  let textElement;
   if ($[6] !== children) {
-    c = jsxProd_default(Text, {
+    textElement = jsxProd_default(Text, {
       children,
     });
     $[6] = children;
-    $[7] = c;
-  } else c = $[7];
-  let M;
-  if ($[8] !== m || $[9] !== f.searchQuery || $[10] !== g) {
-    M = m(g, f.searchQuery);
-    $[8] = m;
-    $[9] = f.searchQuery;
-    $[10] = g;
-    $[11] = M;
-  } else M = $[11];
+    $[7] = textElement;
+  } else textElement = $[7];
+  let headerText;
+  if ($[8] !== header || $[9] !== footer.searchQuery || $[10] !== activeTab) {
+    headerText = header(activeTab, footer.searchQuery);
+    $[8] = header;
+    $[9] = footer.searchQuery;
+    $[10] = activeTab;
+    $[11] = headerText;
+  } else headerText = $[11];
   let onSelect;
-  if ($[12] !== a || $[13] !== g) {
-    onSelect = (v) => a(v, g);
-    $[12] = a;
-    $[13] = g;
+  if ($[12] !== rows || $[13] !== activeTab) {
+    onSelect = (v) => rows(v, activeTab);
+    $[12] = rows;
+    $[13] = activeTab;
     $[14] = onSelect;
   } else onSelect = $[14];
-  let E;
-  if ($[15] !== f || $[16] !== M.options || $[17] !== onSelect) {
-    E = jsxProd_default(RulesTabContent, {
-      options: M.options,
+  let rulesTabContentElement;
+  if ($[15] !== footer || $[16] !== headerText.options || $[17] !== onSelect) {
+    rulesTabContentElement = jsxProd_default(RulesTabContent, {
+      options: headerText.options,
       onSelect,
-      ...f,
+      ...footer,
     });
-    $[15] = f;
-    $[16] = M.options;
+    $[15] = footer;
+    $[16] = headerText.options;
     $[17] = onSelect;
-    $[18] = E;
-  } else E = $[18];
+    $[18] = rulesTabContentElement;
+  } else rulesTabContentElement = $[18];
   let t7;
-  if ($[19] !== flexShrink || $[20] !== c || $[21] !== E) {
+  if ($[19] !== flexShrink || $[20] !== textElement || $[21] !== rulesTabContentElement) {
     t7 = jsxProd_default_2(Box, {
       flexDirection: "column",
       flexShrink,
-      children: [c, E],
+      children: [textElement, rulesTabContentElement],
     });
     $[19] = flexShrink;
-    $[20] = c;
-    $[21] = E;
+    $[20] = textElement;
+    $[21] = rulesTabContentElement;
     $[22] = t7;
   } else t7 = $[22];
   return t7;
@@ -2007,49 +2017,49 @@ function PermissionRulesTab(t0) {
  * /permissions 界面：Recent（auto 模式拦截）/Allow/Ask/Deny/Workspace 标签，规则按来源显示，可查看详情、删除（policySettings 不可删）、新增规则与目录。
  */
 function PermissionRuleList(props) {
-  let $ = w(241);
+  let $ = useMemoCache(241);
   let { onExit, initialTab, onRetryDenials, isMidTurn } = props;
   let { storageV5 } = useTheme_2();
   let { getDenials, removeDenial } = statusSnapshot();
-  let C = statusRowTexts();
-  let M;
+  let rowTexts = statusRowTexts();
+  let denials;
   if ($[0] !== getDenials) {
-    M = getDenials();
+    denials = getDenials();
     $[0] = getDenials;
-    $[1] = M;
-  } else M = $[1];
-  let b = M.length > 0;
-  let T = initialTab ?? (b ? "recent" : "allow");
-  let [E, D] = y(T);
-  let k;
+    $[1] = denials;
+  } else denials = $[1];
+  let hasDenials = denials.length > 0;
+  let initialTab_2 = initialTab ?? (hasDenials ? "recent" : "allow");
+  let [activeTab, setActiveTab] = useState(initialTab_2);
+  let emptyList;
   if ($[2] === MEMO_CACHE_SENTINEL) {
-    k = [];
-    $[2] = k;
-  } else k = $[2];
-  let [V, L] = y(k);
+    emptyList = [];
+    $[2] = emptyList;
+  } else emptyList = $[2];
+  let [messages, pushMessage] = useState(emptyList);
   let toolPermissionContext = useAppState(selectToolPermissionContext);
   let setAppState = useSetAppState();
   let isTerminalFocused = useTerminalFocus();
-  let [Re] = useTheme();
-  let le = R(false);
-  let J;
+  let [themeColor] = useTheme();
+  let exitingRef = useRef(false);
+  let initialDenialState;
   if ($[3] === MEMO_CACHE_SENTINEL) {
-    J = {
+    initialDenialState = {
       approved: new Set(),
       retry: new Set(),
       denials: [],
       canMark: true,
     };
-    $[3] = J;
-  } else J = $[3];
-  let denialStateRef = R(J);
-  let [ye, ue] = y();
-  let [ee, ce] = y(true);
-  let te;
+    $[3] = initialDenialState;
+  } else initialDenialState = $[3];
+  let denialStateRef = useRef(initialDenialState);
+  let [escapeHint, setEscapeHint] = useState();
+  let [canMark, setCanMark] = useState(true);
+  let onDenialStateChange;
   if ($[4] !== isMidTurn) {
-    te = (s_0) => {
+    onDenialStateChange = (s_0) => {
       denialStateRef.current = s_0;
-      ue(
+      setEscapeHint(
         s_0.retry.size > 0
           ? isMidTurn
             ? "Esc to tell Claude next prompt"
@@ -2058,89 +2068,94 @@ function PermissionRuleList(props) {
             ? `Esc to approve ${s_0.approved.size} blocked`
             : undefined,
       );
-      ce(s_0.canMark);
+      setCanMark(s_0.canMark);
     };
     $[4] = isMidTurn;
-    $[5] = te;
-  } else te = $[5];
-  let de = te;
-  let [X, Ve] = y();
-  let [lastFocusedRuleKey, setLastFocusedRuleKey] = y();
-  let [addingRuleToTab, setAddingRuleToTab] = y(null);
-  let [validatedRule, setValidatedRule] = y(null);
-  let [isAddingWorkspaceDirectory, setIsAddingWorkspaceDirectory] = y(false);
-  let [removingDirectory, setRemovingDirectory] = y(null);
-  let [isSearchMode, setIsSearchMode] = y(false);
+    $[5] = onDenialStateChange;
+  } else onDenialStateChange = $[5];
+  let onDenialStateChangeStable = onDenialStateChange;
+  let [selectedRule, setSelectedRule] = useState();
+  let [lastFocusedRuleKey, setLastFocusedRuleKey] = useState();
+  let [addingRuleToTab, setAddingRuleToTab] = useState(null);
+  let [validatedRule, setValidatedRule] = useState(null);
+  let [isAddingWorkspaceDirectory, setIsAddingWorkspaceDirectory] = useState(false);
+  let [removingDirectory, setRemovingDirectory] = useState(null);
+  let [isSearchMode, setIsSearchMode] = useState(false);
   let isScreenReaderEnabled = useIsScreenReaderEnabled();
   let { rows, columns } = useScrollViewportSize(useTerminalSize());
-  let no;
+  let currentSize;
   if ($[6] !== columns || $[7] !== rows) {
-    no = {
+    currentSize = {
       rows,
       columns,
     };
     $[6] = columns;
     $[7] = rows;
-    $[8] = no;
-  } else no = $[8];
-  let Ht = R(no);
-  let ko;
-  if ($[9] !== columns || $[10] !== de || $[11] !== isScreenReaderEnabled || $[12] !== rows) {
-    ko = () => {
-      let fr = rows < Ht.current.rows || columns < Ht.current.columns;
-      Ht.current = {
+    $[8] = currentSize;
+  } else currentSize = $[8];
+  let sizeRef = useRef(currentSize);
+  let shrinkEffect;
+  if (
+    $[9] !== columns ||
+    $[10] !== onDenialStateChangeStable ||
+    $[11] !== isScreenReaderEnabled ||
+    $[12] !== rows
+  ) {
+    shrinkEffect = () => {
+      let didShrink = rows < sizeRef.current.rows || columns < sizeRef.current.columns;
+      sizeRef.current = {
         rows,
         columns,
       };
-      if (fr && !isScreenReaderEnabled)
-        de({
+      if (didShrink && !isScreenReaderEnabled)
+        onDenialStateChangeStable({
           ...denialStateRef.current,
           approved: new Set(),
           retry: new Set(),
         });
     };
     $[9] = columns;
-    $[10] = de;
+    $[10] = onDenialStateChangeStable;
     $[11] = isScreenReaderEnabled;
     $[12] = rows;
-    $[13] = ko;
-  } else ko = $[13];
-  zt(ko);
-  let [Do, Ut] = y();
-  let [W, N] = y(selectMode);
-  let [ae, ge] = y(selectWorkspaceDirs);
-  let [ke, me] = y(null);
-  let [Wt, yr] = y(!b);
-  let gr;
+    $[13] = shrinkEffect;
+  } else shrinkEffect = $[13];
+  useLayoutEffect(shrinkEffect);
+  let [autoModeFocusKey, setAutoModeFocusKey] = useState();
+  let [builtinRulesState, setBuiltinRulesState] = useState(selectMode);
+  let [autoModeEntries, setAutoModeEntries] = useState(selectWorkspaceDirs);
+  let [dialogState, setDialogState] = useState(null);
+  let [headerFocused, setHeaderFocused] = useState(!hasDenials);
+  let handleHeaderFocusChange;
   if ($[14] === MEMO_CACHE_SENTINEL) {
-    gr = (focused) => {
-      yr(focused);
+    handleHeaderFocusChange = (focused) => {
+      setHeaderFocused(focused);
     };
-    $[14] = gr;
-  } else gr = $[14];
-  let handleHeaderFocusChange = gr;
-  let rn = rulesBySourceMap;
+    $[14] = handleHeaderFocusChange;
+  } else handleHeaderFocusChange = $[14];
+  let handleHeaderFocusChange_2 = handleHeaderFocusChange;
+  let groupRules = rulesBySourceMap;
   let allow;
   if ($[15] !== toolPermissionContext) {
-    allow = rn(getAllowRules(toolPermissionContext));
+    allow = groupRules(getAllowRules(toolPermissionContext));
     $[15] = toolPermissionContext;
     $[16] = allow;
   } else allow = $[16];
   let deny;
   if ($[17] !== toolPermissionContext) {
-    deny = rn(getDenyRules(toolPermissionContext));
+    deny = groupRules(getDenyRules(toolPermissionContext));
     $[17] = toolPermissionContext;
     $[18] = deny;
   } else deny = $[18];
   let ask;
   if ($[19] !== toolPermissionContext) {
-    ask = rn(getAskRules(toolPermissionContext));
+    ask = groupRules(getAskRules(toolPermissionContext));
     $[19] = toolPermissionContext;
     $[20] = ask;
   } else ask = $[20];
-  let br;
+  let rulesByTab;
   if ($[21] !== ask || $[22] !== allow || $[23] !== deny) {
-    br = {
+    rulesByTab = {
       allow,
       deny,
       ask,
@@ -2148,23 +2163,23 @@ function PermissionRuleList(props) {
     $[21] = ask;
     $[22] = allow;
     $[23] = deny;
-    $[24] = br;
-  } else br = $[24];
-  let Cr = br;
-  let wr;
-  if ($[25] !== Cr) {
-    wr = (tab, t7) => {
+    $[24] = rulesByTab;
+  } else rulesByTab = $[24];
+  let rulesByTab_2 = rulesByTab;
+  let getRulesOptions;
+  if ($[25] !== rulesByTab_2) {
+    getRulesOptions = (tab, t7) => {
       let query = t7 === undefined ? "" : t7;
-      let rulesByKey = tab === "allow" || tab === "deny" || tab === "ask" ? Cr[tab] : new Map();
+      let rulesByKey = tab === "allow" || tab === "deny" || tab === "ask" ? rulesByTab_2[tab] : new Map();
       let options = [];
       if (tab !== "workspace" && tab !== "recent" && tab !== "automode" && !query)
         options.push({
           label: `Add a new rule${figures_default.ellipsis}`,
           value: "add-new-rule",
         });
-      let sortedRuleKeys = Array.from(rulesByKey.keys()).sort((Su, ln) => {
-        let ruleA = rulesByKey.get(Su);
-        let ruleB = rulesByKey.get(ln);
+      let sortedRuleKeys = Array.from(rulesByKey.keys()).sort((keyA, keyB) => {
+        let ruleA = rulesByKey.get(keyA);
+        let ruleB = rulesByKey.get(keyB);
         if (ruleA && ruleB) {
           let ruleAString = formatPermissionRule(ruleA.ruleValue).toLowerCase();
           let ruleBString = formatPermissionRule(ruleB.ruleValue).toLowerCase();
@@ -2173,7 +2188,7 @@ function PermissionRuleList(props) {
         return 0;
       });
       let lowerQuery = query.toLowerCase();
-      let lo = [];
+      let matchedRules = [];
       for (const ruleKey of sortedRuleKeys) {
         let rule = rulesByKey.get(ruleKey);
         if (rule) {
@@ -2181,30 +2196,35 @@ function PermissionRuleList(props) {
           if (query && !ruleString.toLowerCase().includes(lowerQuery)) {
             continue;
           }
-          lo.push({
+          matchedRules.push({
             ruleKey,
             ruleString,
           });
         }
       }
-      let xr = uniqueLabels(lo.map(ruleStringOf), describeRule);
-      for (const [Ar, Mr] of lo.entries())
+      let labels = uniqueLabels(matchedRules.map(ruleStringOf), describeRule);
+      for (const [index, entry] of matchedRules.entries())
         options.push({
-          label: xr[Ar],
-          value: Mr.ruleKey,
+          label: labels[index],
+          value: entry.ruleKey,
         });
       return {
         options,
         rulesByKey,
       };
     };
-    $[25] = Cr;
-    $[26] = wr;
-  } else wr = $[26];
-  let st = wr;
-  let Bt =
-    !X && !addingRuleToTab && !validatedRule && !isAddingWorkspaceDirectory && !removingDirectory && !ke;
-  const isActive = Bt && isSearchMode;
+    $[25] = rulesByTab_2;
+    $[26] = getRulesOptions;
+  } else getRulesOptions = $[26];
+  let getRulesOptionsStable = getRulesOptions;
+  let canInteract =
+    !selectedRule &&
+    !addingRuleToTab &&
+    !validatedRule &&
+    !isAddingWorkspaceDirectory &&
+    !removingDirectory &&
+    !dialogState;
+  const isActive = canInteract && isSearchMode;
   let onExit_2;
   if ($[27] === MEMO_CACHE_SENTINEL) {
     onExit_2 = () => {
@@ -2212,32 +2232,32 @@ function PermissionRuleList(props) {
     };
     $[27] = onExit_2;
   } else onExit_2 = $[27];
-  let Er;
+  let searchOptions;
   if ($[28] !== isActive) {
-    Er = {
+    searchOptions = {
       isActive,
       onExit: onExit_2,
     };
     $[28] = isActive;
-    $[29] = Er;
-  } else Er = $[29];
+    $[29] = searchOptions;
+  } else searchOptions = $[29];
   let {
     query: searchQuery,
     setQuery: setSearchQuery,
     cursorOffset: searchCursorOffset,
     handleKeyDown,
     handlePaste,
-  } = useSearchInput(Er);
-  let Bi;
+  } = useSearchInput(searchOptions);
+  let onKeyDown;
   if (
     $[30] !== isSearchMode ||
-    $[31] !== Bt ||
+    $[31] !== canInteract ||
     $[32] !== handleKeyDown ||
-    $[33] !== E ||
+    $[33] !== activeTab ||
     $[34] !== setSearchQuery
   ) {
-    Bi = (e) => {
-      if (!Bt) {
+    onKeyDown = (e) => {
+      if (!canInteract) {
         return;
       }
       if (isSearchMode) {
@@ -2247,7 +2267,7 @@ function PermissionRuleList(props) {
       if (e.ctrl || e.meta) {
         return;
       }
-      if (E === "recent" || E === "workspace") {
+      if (activeTab === "recent" || activeTab === "workspace") {
         return;
       }
       if (e.key === "/") {
@@ -2270,104 +2290,110 @@ function PermissionRuleList(props) {
       }
     };
     $[30] = isSearchMode;
-    $[31] = Bt;
+    $[31] = canInteract;
     $[32] = handleKeyDown;
-    $[33] = E;
+    $[33] = activeTab;
     $[34] = setSearchQuery;
-    $[35] = Bi;
-  } else Bi = $[35];
-  let onKeyDown = Bi;
-  let mo;
-  if ($[36] !== st) {
-    mo = (selectedValue, tab) => {
-      let { rulesByKey } = st(tab);
+    $[35] = onKeyDown;
+  } else onKeyDown = $[35];
+  let onKeyDown_2 = onKeyDown;
+  let handleToolSelect;
+  if ($[36] !== getRulesOptionsStable) {
+    handleToolSelect = (selectedValue, tab) => {
+      let { rulesByKey } = getRulesOptionsStable(tab);
       if (selectedValue === "add-new-rule") {
         setAddingRuleToTab(tab);
         return;
       } else {
-        Ve(rulesByKey.get(selectedValue));
+        setSelectedRule(rulesByKey.get(selectedValue));
         return;
       }
     };
-    $[36] = st;
-    $[37] = mo;
-  } else mo = $[37];
-  let handleToolSelect = mo;
-  let Vi;
+    $[36] = getRulesOptionsStable;
+    $[37] = handleToolSelect;
+  } else handleToolSelect = $[37];
+  let handleToolSelect_2 = handleToolSelect;
+  let onCancelAddRule;
   if ($[38] === MEMO_CACHE_SENTINEL) {
-    Vi = () => {
+    onCancelAddRule = () => {
       setAddingRuleToTab(null);
     };
-    $[38] = Vi;
-  } else Vi = $[38];
-  let onCancel = Vi;
-  let Mu;
+    $[38] = onCancelAddRule;
+  } else onCancelAddRule = $[38];
+  let onCancel = onCancelAddRule;
+  let onSubmitRule;
   if ($[39] === MEMO_CACHE_SENTINEL) {
-    Mu = (ruleValue, ruleBehavior) => {
+    onSubmitRule = (ruleValue, ruleBehavior) => {
       setValidatedRule({
         ruleValue,
         ruleBehavior,
       });
       setAddingRuleToTab(null);
     };
-    $[39] = Mu;
-  } else Mu = $[39];
-  let onSubmit = Mu;
-  let Eu;
-  if ($[40] !== Re) {
-    Eu = (rules, unreachable) => {
+    $[39] = onSubmitRule;
+  } else onSubmitRule = $[39];
+  let onSubmit = onSubmitRule;
+  let onAddRules;
+  if ($[40] !== themeColor) {
+    onAddRules = (rules, unreachable) => {
       setValidatedRule(null);
       for (const rule of rules)
-        L((prev) => [
+        pushMessage((prev) => [
           ...prev,
           `Added ${rule.ruleBehavior} rule ${sequential.bold(consentRowLabel(formatPermissionRule(rule.ruleValue)))}`,
         ]);
-      for (const Or of unreachable) {
-        let severity = Or.shadowType === "deny" ? "blocked" : "shadowed";
-        L((prev) => [
+      for (const shadow of unreachable) {
+        let severity = shadow.shadowType === "deny" ? "blocked" : "shadowed";
+        pushMessage((prev) => [
           ...prev,
           color(
             "warning",
-            Re,
+            themeColor,
           )(
-            `${figures_default.warning} Warning: ${consentRowLabel(formatPermissionRule(Or.rule.ruleValue))} is ${severity}`,
+            `${figures_default.warning} Warning: ${consentRowLabel(formatPermissionRule(shadow.rule.ruleValue))} is ${severity}`,
           ),
-          sequential.dim(`  ${Or.reason}`),
-          sequential.dim(`  Fix: ${Or.fix}`),
+          sequential.dim(`  ${shadow.reason}`),
+          sequential.dim(`  Fix: ${shadow.fix}`),
         ]);
       }
     };
-    $[40] = Re;
-    $[41] = Eu;
-  } else Eu = $[41];
-  let onAddRules = Eu;
-  let ku;
+    $[40] = themeColor;
+    $[41] = onAddRules;
+  } else onAddRules = $[41];
+  let onAddRules_2 = onAddRules;
+  let onCancelValidated;
   if ($[42] === MEMO_CACHE_SENTINEL) {
-    ku = () => {
+    onCancelValidated = () => {
       setValidatedRule(null);
     };
-    $[42] = ku;
-  } else ku = $[42];
-  let onCancel_2 = ku;
-  let Du;
+    $[42] = onCancelValidated;
+  } else onCancelValidated = $[42];
+  let onCancel_2 = onCancelValidated;
+  let onRequestAddDirectory;
   if ($[43] === MEMO_CACHE_SENTINEL) {
-    Du = () => setIsAddingWorkspaceDirectory(true);
-    $[43] = Du;
-  } else Du = $[43];
-  let onRequestAddDirectory = Du;
-  let Pu;
+    onRequestAddDirectory = () => setIsAddingWorkspaceDirectory(true);
+    $[43] = onRequestAddDirectory;
+  } else onRequestAddDirectory = $[43];
+  let onRequestAddDirectory_2 = onRequestAddDirectory;
+  let onRequestRemoveDirectory;
   if ($[44] === MEMO_CACHE_SENTINEL) {
-    Pu = (path) => setRemovingDirectory(path);
-    $[44] = Pu;
-  } else Pu = $[44];
-  let onRequestRemoveDirectory = Pu;
-  let Ou;
-  if ($[45] !== V || $[46] !== onExit || $[47] !== onRetryDenials || $[48] !== removeDenial || $[49] !== C) {
-    Ou = () => {
-      if (le.current) {
+    onRequestRemoveDirectory = (path) => setRemovingDirectory(path);
+    $[44] = onRequestRemoveDirectory;
+  } else onRequestRemoveDirectory = $[44];
+  let onRequestRemoveDirectory_2 = onRequestRemoveDirectory;
+  let onExitHandler;
+  if (
+    $[45] !== messages ||
+    $[46] !== onExit ||
+    $[47] !== onRetryDenials ||
+    $[48] !== removeDenial ||
+    $[49] !== rowTexts
+  ) {
+    onExitHandler = () => {
+      if (exitingRef.current) {
         return;
       }
-      le.current = true;
+      exitingRef.current = true;
       let s_1 = denialStateRef.current;
       let denialsFor = (set) =>
         Array.from(set)
@@ -2375,10 +2401,10 @@ function PermissionRuleList(props) {
           .filter(isDefined);
       let retryDenials = denialsFor(s_1.retry);
       if (retryDenials.length > 0) {
-        onRetryDenials(ruleCommandTexts(retryDenials, C), V);
+        onRetryDenials(ruleCommandTexts(retryDenials, rowTexts), messages);
         onExit(undefined, {
           shouldQuery: true,
-          metaMessages: [buildExactRetryGrantMessage(retryDenials, C)],
+          metaMessages: [buildExactRetryGrantMessage(retryDenials, rowTexts)],
           metaMessagesOrigin: {
             kind: "auto-continuation",
           },
@@ -2386,15 +2412,15 @@ function PermissionRuleList(props) {
         return;
       }
       let approvedDenials = denialsFor(s_1.approved);
-      if (approvedDenials.length > 0 || V.length > 0) {
+      if (approvedDenials.length > 0 || messages.length > 0) {
         for (const approvedDenial of approvedDenials) removeDenial(approvedDenial);
-        if (approvedDenials.length > 0) onRetryDenials(ruleCommandTexts(approvedDenials, C), []);
+        if (approvedDenials.length > 0) onRetryDenials(ruleCommandTexts(approvedDenials, rowTexts), []);
         onExit(
-          V.join(`
+          messages.join(`
 `),
           approvedDenials.length > 0
             ? {
-                metaMessages: [buildExactRetryGrantMessage(approvedDenials, C)],
+                metaMessages: [buildExactRetryGrantMessage(approvedDenials, rowTexts)],
                 metaMessagesOrigin: {
                   kind: "auto-continuation",
                 },
@@ -2406,35 +2432,35 @@ function PermissionRuleList(props) {
           display: "system",
         });
     };
-    $[45] = V;
+    $[45] = messages;
     $[46] = onExit;
     $[47] = onRetryDenials;
     $[48] = removeDenial;
-    $[49] = C;
-    $[50] = Ou;
-  } else Ou = $[50];
-  let Ct = Ou;
-  const isActive_2 = Bt && !isSearchMode;
-  let $u;
+    $[49] = rowTexts;
+    $[50] = onExitHandler;
+  } else onExitHandler = $[50];
+  let exitHandler = onExitHandler;
+  const isActive_2 = canInteract && !isSearchMode;
+  let exitKeyOptions;
   if ($[51] !== isActive_2) {
-    $u = {
+    exitKeyOptions = {
       context: "Settings",
       isActive: isActive_2,
     };
     $[51] = isActive_2;
-    $[52] = $u;
-  } else $u = $[52];
-  useKeybinding("confirm:no", Ct, $u);
-  let Bu;
-  if ($[53] !== V || $[54] !== onExit) {
-    Bu = () => {
-      if (le.current) {
+    $[52] = exitKeyOptions;
+  } else exitKeyOptions = $[52];
+  useKeybinding("confirm:no", exitHandler, exitKeyOptions);
+  let globalExitHandler;
+  if ($[53] !== messages || $[54] !== onExit) {
+    globalExitHandler = () => {
+      if (exitingRef.current) {
         return;
       }
-      le.current = true;
-      if (V.length > 0) {
+      exitingRef.current = true;
+      if (messages.length > 0) {
         onExit(
-          V.join(`
+          messages.join(`
 `),
         );
         return;
@@ -2443,25 +2469,25 @@ function PermissionRuleList(props) {
         display: "system",
       });
     };
-    $[53] = V;
+    $[53] = messages;
     $[54] = onExit;
-    $[55] = Bu;
-  } else Bu = $[55];
-  let globalExitKeybindings = useGlobalExitKeybindings(Bu, undefined, Bt);
-  let _u;
+    $[55] = globalExitHandler;
+  } else globalExitHandler = $[55];
+  let globalExitKeybindings = useGlobalExitKeybindings(globalExitHandler, undefined, canInteract);
+  let onDelete;
   if (
-    $[56] !== st ||
-    $[57] !== X ||
+    $[56] !== getRulesOptionsStable ||
+    $[57] !== selectedRule ||
     $[58] !== setAppState ||
     $[59] !== storageV5 ||
     $[60] !== toolPermissionContext
   ) {
-    _u = () => {
-      if (!X) {
+    onDelete = () => {
+      if (!selectedRule) {
         return;
       }
-      let { options } = st(X.ruleBehavior);
-      let selectedKey = jsonStringify(X);
+      let { options } = getRulesOptionsStable(selectedRule.ruleBehavior);
+      let selectedKey = jsonStringify(selectedRule);
       let ruleKeys = options.filter(isNotAddNewRule).map(optionValue);
       let currentIndex = ruleKeys.indexOf(selectedKey);
       let nextFocusKey;
@@ -2470,11 +2496,11 @@ function PermissionRuleList(props) {
         else if (currentIndex > 0) nextFocusKey = ruleKeys[currentIndex - 1];
       }
       setLastFocusedRuleKey(nextFocusKey);
-      let ji = consentRowLabel(formatPermissionRule(X.ruleValue));
-      let ruleBehavior = X.ruleBehavior;
-      let Lu = quoteRuleIfBracketed(ji);
+      let ruleLabel = consentRowLabel(formatPermissionRule(selectedRule.ruleValue));
+      let ruleBehavior = selectedRule.ruleBehavior;
+      let quotedLabel = quoteRuleIfBracketed(ruleLabel);
       deletePermissionRule({
-        rule: X,
+        rule: selectedRule,
         initialContext: toolPermissionContext,
         setToolPermissionContext(toolPermissionContext) {
           setAppState((prev) => ({
@@ -2485,102 +2511,105 @@ function PermissionRuleList(props) {
         storageV5,
       })
         .then(() => {
-          L((prev) => [...prev, `Deleted ${ruleBehavior} rule ${sequential.bold(ji)}`]);
-          announce(`[Deleted ${ruleBehavior} rule ${Lu}]`);
+          pushMessage((prev) => [...prev, `Deleted ${ruleBehavior} rule ${sequential.bold(ruleLabel)}`]);
+          announce(`[Deleted ${ruleBehavior} rule ${quotedLabel}]`);
         })
         .catch((error) => {
           logError(error);
-          L((prev) => [...prev, `Could not delete ${sequential.bold(ji)} \u2014 the rule is unchanged`]);
-          announce(`[Could not delete ${Lu} \u2014 the rule is unchanged]`);
+          pushMessage((prev) => [
+            ...prev,
+            `Could not delete ${sequential.bold(ruleLabel)} \u2014 the rule is unchanged`,
+          ]);
+          announce(`[Could not delete ${quotedLabel} \u2014 the rule is unchanged]`);
         });
-      Ve(undefined);
+      setSelectedRule(undefined);
     };
-    $[56] = st;
-    $[57] = X;
+    $[56] = getRulesOptionsStable;
+    $[57] = selectedRule;
     $[58] = setAppState;
     $[59] = storageV5;
     $[60] = toolPermissionContext;
-    $[61] = _u;
-  } else _u = $[61];
-  let onDelete = _u;
-  let Nu;
+    $[61] = onDelete;
+  } else onDelete = $[61];
+  let onDelete_2 = onDelete;
+  let editEnvironment;
   if ($[62] !== storageV5) {
-    Nu = (Lo, po) => {
+    editEnvironment = (draftLines, expected) => {
       if (resolveEditorCommand() === undefined) {
-        me({
+        setDialogState({
           mode: "env-problem",
           problem:
             "No editor is configured \u2014 set $VISUAL or $EDITOR, then reopen /permissions to edit the environment.",
-          draftLines: Lo,
-          expected: po,
+          draftLines,
+          expected,
           canReopen: false,
         });
         return;
       }
-      let ho = editEnvironmentInEditor(Lo);
-      if (ho.problem !== null) {
-        me({
+      let editResult = editEnvironmentInEditor(draftLines);
+      if (editResult.problem !== null) {
+        setDialogState({
           mode: "env-problem",
-          problem: ho.problem,
-          draftLines: Lo,
-          expected: po,
+          problem: editResult.problem,
+          draftLines,
+          expected,
           canReopen: true,
         });
         return;
       }
-      if (ho.content === null) {
-        me({
+      if (editResult.content === null) {
+        setDialogState({
           mode: "env-problem",
           problem:
             "The environment could not be opened for editing: this session has no session directory to hold the working file. Edit autoMode.environment in your settings file directly.",
-          draftLines: Lo,
-          expected: po,
+          draftLines,
+          expected,
           canReopen: false,
         });
         return;
       }
-      let Hu = trimTrailingNewlines;
+      let trimTrailing = trimTrailingNewlines;
       if (
-        Hu(ho.content) ===
-        Hu(
-          Lo.join(`
+        trimTrailing(editResult.content) ===
+        trimTrailing(
+          draftLines.join(`
 `),
         )
       ) {
-        me({
+        setDialogState({
           mode: "env-problem",
           problem:
             'No changes detected \u2014 nothing was saved. If your editor opened in a separate window without waiting, configure it to wait (for example "code --wait"), then reopen.',
-          draftLines: Lo,
-          expected: po,
+          draftLines,
+          expected,
           canReopen: true,
         });
         return;
       }
-      let Uu = ruleTextProblem(ho.content);
-      if (Uu !== null) {
-        me({
+      let ruleProblem = ruleTextProblem(editResult.content);
+      if (ruleProblem !== null) {
+        setDialogState({
           mode: "env-problem",
-          problem: Uu,
-          draftLines: ho.content.split(`
+          problem: ruleProblem,
+          draftLines: editResult.content.split(`
 `),
-          expected: po,
+          expected,
           canReopen: true,
         });
         return;
       }
       saveEnvironmentDocument(
-        ho.content.split(`
+        editResult.content.split(`
 `),
-        po,
+        expected,
         storageV5,
       )
         .then(() => {
-          ge(collectAutoModeRuleEntries());
-          N(classifyAutoModeRuleSource());
-          L((dy) => [
-            ...dy,
-            po.length === 0
+          setAutoModeEntries(collectAutoModeRuleEntries());
+          setBuiltinRulesState(classifyAutoModeRuleSource());
+          pushMessage((messages) => [
+            ...messages,
+            expected.length === 0
               ? "Replaced the built-in auto mode environment with your own document"
               : "Saved your auto mode environment document",
           ]);
@@ -2589,94 +2618,94 @@ function PermissionRuleList(props) {
           logForDebugging(`auto mode env save failed: ${String(error)}`, {
             level: "error",
           });
-          ge(collectAutoModeRuleEntries());
-          N(classifyAutoModeRuleSource());
-          L((cy) => [
-            ...cy,
+          setAutoModeEntries(collectAutoModeRuleEntries());
+          setBuiltinRulesState(classifyAutoModeRuleSource());
+          pushMessage((messages) => [
+            ...messages,
             `Could not save the environment \u2014 ${error instanceof Error ? error.message : "nothing was changed"}`,
           ]);
         });
-      me(null);
+      setDialogState(null);
     };
     $[62] = storageV5;
-    $[63] = Nu;
-  } else Nu = $[63];
-  let _t = Nu;
-  let Wu;
-  if ($[64] !== _t) {
-    Wu = () => {
+    $[63] = editEnvironment;
+  } else editEnvironment = $[63];
+  let editEnvironmentStable = editEnvironment;
+  let onEditEnvironment;
+  if ($[64] !== editEnvironmentStable) {
+    onEditEnvironment = () => {
       let userEnvironmentEntries = readUserEnvironmentEntries();
       if (userEnvironmentEntries.length === 0 && classifyAutoModeRuleSource().environment.enabled)
-        me({
+        setDialogState({
           mode: "env-first-confirm",
         });
-      else _t(userEnvironmentEntries, userEnvironmentEntries);
+      else editEnvironmentStable(userEnvironmentEntries, userEnvironmentEntries);
     };
-    $[64] = _t;
-    $[65] = Wu;
-  } else Wu = $[65];
-  let Io = Wu;
-  if (ke?.mode === "pick-section") {
+    $[64] = editEnvironmentStable;
+    $[65] = onEditEnvironment;
+  } else onEditEnvironment = $[65];
+  let startEditEnvironment = onEditEnvironment;
+  if (dialogState?.mode === "pick-section") {
     let onCancel;
     if ($[66] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => me(null);
+      onCancel = () => setDialogState(null);
       $[66] = onCancel;
     } else onCancel = $[66];
-    let U;
-    if ($[67] !== Io) {
-      U = jsxProd_default(PickRuleSectionDialog, {
+    let pickSectionDialog;
+    if ($[67] !== startEditEnvironment) {
+      pickSectionDialog = jsxProd_default(PickRuleSectionDialog, {
         onCancel,
-        onPick: (Ku) => {
-          if (Ku === "environment" && alwaysTrueFlag()) {
-            Io();
+        onPick: (section) => {
+          if (section === "environment" && alwaysTrueFlag()) {
+            startEditEnvironment();
             return;
           }
-          me({
+          setDialogState({
             mode: "input",
-            section: Ku,
+            section,
           });
         },
       });
-      $[67] = Io;
-      $[68] = U;
-    } else U = $[68];
-    return U;
+      $[67] = startEditEnvironment;
+      $[68] = pickSectionDialog;
+    } else pickSectionDialog = $[68];
+    return pickSectionDialog;
   }
-  if (ke?.mode === "env-first-confirm") {
+  if (dialogState?.mode === "env-first-confirm") {
     let onCancel;
-    let U;
+    let replaceWarning;
     if ($[69] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => me(null);
-      U = jsxProd_default(Text, {
+      onCancel = () => setDialogState(null);
+      replaceWarning = jsxProd_default(Text, {
         wrap: "wrap-trim",
         children:
           "Writing your own environment replaces the built-in default document \u2014 the auto mode context that defines trusted hosts, sensitive targets, and repository scope. The editor starts from the full default text so you can edit rather than rewrite; deleting all your environment entries later restores the default.",
       });
       $[69] = onCancel;
-      $[70] = U;
+      $[70] = replaceWarning;
     } else {
       onCancel = $[69];
-      U = $[70];
+      replaceWarning = $[70];
     }
     let onConfirm;
-    if ($[71] !== _t) {
-      onConfirm = () => _t(getDefaultExternalAutoModeRules().environment ?? [], []);
-      $[71] = _t;
+    if ($[71] !== editEnvironmentStable) {
+      onConfirm = () => editEnvironmentStable(getDefaultExternalAutoModeRules().environment ?? [], []);
+      $[71] = editEnvironmentStable;
       $[72] = onConfirm;
     } else onConfirm = $[72];
     let onCancel_2;
     if ($[73] === MEMO_CACHE_SENTINEL) {
-      onCancel_2 = () => me(null);
+      onCancel_2 = () => setDialogState(null);
       $[73] = onCancel_2;
     } else onCancel_2 = $[73];
-    let Oe;
+    let replaceDialog;
     if ($[74] !== onConfirm) {
-      Oe = jsxProd_default_2(Dialog, {
+      replaceDialog = jsxProd_default_2(Dialog, {
         title: "Replace the built-in environment?",
         color: "permission",
         onCancel,
         children: [
-          U,
+          replaceWarning,
           jsxProd_default(ConfirmSelect, {
             focus: "cancel",
             hideIndexes: true,
@@ -2686,30 +2715,30 @@ function PermissionRuleList(props) {
         ],
       });
       $[74] = onConfirm;
-      $[75] = Oe;
-    } else Oe = $[75];
-    return Oe;
+      $[75] = replaceDialog;
+    } else replaceDialog = $[75];
+    return replaceDialog;
   }
-  if (ke?.mode === "env-problem") {
-    let { problem, draftLines, expected, canReopen } = ke;
+  if (dialogState?.mode === "env-problem") {
+    let { problem, draftLines, expected, canReopen } = dialogState;
     let onCancel;
     if ($[76] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => me(null);
+      onCancel = () => setDialogState(null);
       $[76] = onCancel;
     } else onCancel = $[76];
-    let U;
+    let problemText;
     if ($[77] !== problem) {
-      U = jsxProd_default(Text, {
+      problemText = jsxProd_default(Text, {
         color: "error",
         wrap: "wrap-trim",
         children: problem,
       });
       $[77] = problem;
-      $[78] = U;
-    } else U = $[78];
-    let z;
+      $[78] = problemText;
+    } else problemText = $[78];
+    let reopenOptions;
     if ($[79] !== canReopen) {
-      z = canReopen
+      reopenOptions = canReopen
         ? [
             {
               label: `Reopen in ${getShortEditorName() ?? "your editor"}`,
@@ -2718,77 +2747,77 @@ function PermissionRuleList(props) {
           ]
         : [];
       $[79] = canReopen;
-      $[80] = z;
-    } else z = $[80];
-    let ve;
+      $[80] = reopenOptions;
+    } else reopenOptions = $[80];
+    let cancelOption;
     if ($[81] === MEMO_CACHE_SENTINEL) {
-      ve = {
+      cancelOption = {
         label: "Cancel",
         value: "cancel",
       };
-      $[81] = ve;
-    } else ve = $[81];
+      $[81] = cancelOption;
+    } else cancelOption = $[81];
     let options;
-    if ($[82] !== z) {
-      options = [...z, ve];
-      $[82] = z;
+    if ($[82] !== reopenOptions) {
+      options = [...reopenOptions, cancelOption];
+      $[82] = reopenOptions;
       $[83] = options;
     } else options = $[83];
     let onChange;
-    if ($[84] !== draftLines || $[85] !== expected || $[86] !== _t) {
+    if ($[84] !== draftLines || $[85] !== expected || $[86] !== editEnvironmentStable) {
       onChange = (toolPermissionContext_1) => {
-        if (toolPermissionContext_1 === "reopen") _t(draftLines, expected);
-        else me(null);
+        if (toolPermissionContext_1 === "reopen") editEnvironmentStable(draftLines, expected);
+        else setDialogState(null);
       };
       $[84] = draftLines;
       $[85] = expected;
-      $[86] = _t;
+      $[86] = editEnvironmentStable;
       $[87] = onChange;
     } else onChange = $[87];
     let onCancel_2;
     if ($[88] === MEMO_CACHE_SENTINEL) {
-      onCancel_2 = () => me(null);
+      onCancel_2 = () => setDialogState(null);
       $[88] = onCancel_2;
     } else onCancel_2 = $[88];
-    let go;
+    let problemSelector;
     if ($[89] !== options || $[90] !== onChange) {
-      go = jsxProd_default(ModelSelector, {
+      problemSelector = jsxProd_default(ModelSelector, {
         options,
         onChange,
         onCancel: onCancel_2,
       });
       $[89] = options;
       $[90] = onChange;
-      $[91] = go;
-    } else go = $[91];
-    let vo;
-    if ($[92] !== U || $[93] !== go) {
-      vo = jsxProd_default_2(Dialog, {
+      $[91] = problemSelector;
+    } else problemSelector = $[91];
+    let problemDialog;
+    if ($[92] !== problemText || $[93] !== problemSelector) {
+      problemDialog = jsxProd_default_2(Dialog, {
         title: "Edit environment",
         color: "permission",
         onCancel,
-        children: [U, go],
+        children: [problemText, problemSelector],
       });
-      $[92] = U;
-      $[93] = go;
-      $[94] = vo;
-    } else vo = $[94];
-    return vo;
+      $[92] = problemText;
+      $[93] = problemSelector;
+      $[94] = problemDialog;
+    } else problemDialog = $[94];
+    return problemDialog;
   }
-  if (ke?.mode === "input") {
-    let { section, editing } = ke;
-    let I;
+  if (dialogState?.mode === "input") {
+    let { section, editing } = dialogState;
+    let sectionLabel;
     if ($[95] !== section) {
-      I = getAutoModeRuleCategoryLabel(section).toLowerCase();
+      sectionLabel = getAutoModeRuleCategoryLabel(section).toLowerCase();
       $[95] = section;
-      $[96] = I;
-    } else I = $[96];
-    let $r = I;
+      $[96] = sectionLabel;
+    } else sectionLabel = $[96];
+    let sectionLabel_2 = sectionLabel;
     const initialValue = editing?.text;
     let onCancel;
     if ($[97] !== editing) {
       onCancel = () =>
-        me(
+        setDialogState(
           editing
             ? {
                 mode: "details",
@@ -2800,66 +2829,66 @@ function PermissionRuleList(props) {
       $[98] = onCancel;
     } else onCancel = $[98];
     let onSubmit;
-    if ($[99] !== editing || $[100] !== $r || $[101] !== section || $[102] !== storageV5) {
+    if ($[99] !== editing || $[100] !== sectionLabel_2 || $[101] !== section || $[102] !== storageV5) {
       onSubmit = (prev_3) => {
-        let No = normalizeRuleText(prev_3);
-        if (editing && No === editing.text) {
-          me(null);
+        let normalizedText = normalizeRuleText(prev_3);
+        if (editing && normalizedText === editing.text) {
+          setDialogState(null);
           return;
         }
         if (editing)
-          updateAutoModeRule(section, editing.index, editing.text, No, storageV5)
+          updateAutoModeRule(section, editing.index, editing.text, normalizedText, storageV5)
             .then(() => {
-              ge(collectAutoModeRuleEntries());
-              N(classifyAutoModeRuleSource());
-              L((fy) => [
-                ...fy,
-                `Updated auto mode ${$r} rule ${sequential.bold(replaceLineBreaks(displayField(No).text))}`,
+              setAutoModeEntries(collectAutoModeRuleEntries());
+              setBuiltinRulesState(classifyAutoModeRuleSource());
+              pushMessage((messages) => [
+                ...messages,
+                `Updated auto mode ${sectionLabel_2} rule ${sequential.bold(replaceLineBreaks(displayField(normalizedText).text))}`,
               ]);
             })
             .catch((error) => {
               logForDebugging(`auto mode rule update failed: ${String(error)}`, {
                 level: "error",
               });
-              ge(collectAutoModeRuleEntries());
-              N(classifyAutoModeRuleSource());
-              L((hy) => [
-                ...hy,
+              setAutoModeEntries(collectAutoModeRuleEntries());
+              setBuiltinRulesState(classifyAutoModeRuleSource());
+              pushMessage((messages) => [
+                ...messages,
                 `Could not update ${sequential.bold(replaceLineBreaks(displayField(editing.text).text))} \u2014 ${error instanceof Error ? error.message : "the rule is unchanged"}`,
               ]);
             });
         else
-          addAutoModeRule(section, No, storageV5)
+          addAutoModeRule(section, normalizedText, storageV5)
             .then(() => {
-              ge(collectAutoModeRuleEntries());
-              N(classifyAutoModeRuleSource());
-              L((yy) => [
-                ...yy,
-                `Added auto mode ${$r} rule ${sequential.bold(replaceLineBreaks(displayField(No).text))}`,
+              setAutoModeEntries(collectAutoModeRuleEntries());
+              setBuiltinRulesState(classifyAutoModeRuleSource());
+              pushMessage((messages) => [
+                ...messages,
+                `Added auto mode ${sectionLabel_2} rule ${sequential.bold(replaceLineBreaks(displayField(normalizedText).text))}`,
               ]);
             })
             .catch((error) => {
               logForDebugging(`auto mode rule add failed: ${String(error)}`, {
                 level: "error",
               });
-              ge(collectAutoModeRuleEntries());
-              N(classifyAutoModeRuleSource());
-              L((gy) => [
-                ...gy,
-                `Could not add ${sequential.bold(replaceLineBreaks(displayField(No).text))} \u2014 ${error instanceof Error ? error.message : "nothing was saved"}`,
+              setAutoModeEntries(collectAutoModeRuleEntries());
+              setBuiltinRulesState(classifyAutoModeRuleSource());
+              pushMessage((messages) => [
+                ...messages,
+                `Could not add ${sequential.bold(replaceLineBreaks(displayField(normalizedText).text))} \u2014 ${error instanceof Error ? error.message : "nothing was saved"}`,
               ]);
             });
-        me(null);
+        setDialogState(null);
       };
       $[99] = editing;
-      $[100] = $r;
+      $[100] = sectionLabel_2;
       $[101] = section;
       $[102] = storageV5;
       $[103] = onSubmit;
     } else onSubmit = $[103];
-    let Oe;
+    let ruleInput;
     if ($[104] !== section || $[105] !== initialValue || $[106] !== onCancel || $[107] !== onSubmit) {
-      Oe = jsxProd_default(AutoModeRuleInput, {
+      ruleInput = jsxProd_default(AutoModeRuleInput, {
         section,
         initialValue,
         onCancel,
@@ -2869,78 +2898,78 @@ function PermissionRuleList(props) {
       $[105] = initialValue;
       $[106] = onCancel;
       $[107] = onSubmit;
-      $[108] = Oe;
-    } else Oe = $[108];
-    return Oe;
+      $[108] = ruleInput;
+    } else ruleInput = $[108];
+    return ruleInput;
   }
-  if (ke?.mode === "builtins") {
-    let section = ke.section;
-    let Ho = W[section];
+  if (dialogState?.mode === "builtins") {
+    let section = dialogState.section;
+    let builtinState = builtinRulesState[section];
     let onToggle;
-    if ($[109] !== section || $[110] !== Ho.enabled || $[111] !== storageV5) {
+    if ($[109] !== section || $[110] !== builtinState.enabled || $[111] !== storageV5) {
       onToggle = () => {
-        let ol = !Ho.enabled;
-        AUTO_MODE_RULE_EDIT_ERRORS(section, ol, storageV5)
+        let nextEnabled = !builtinState.enabled;
+        AUTO_MODE_RULE_EDIT_ERRORS(section, nextEnabled, storageV5)
           .then(() => {
-            ge(collectAutoModeRuleEntries());
-            N(classifyAutoModeRuleSource());
-            L((vy) => [
-              ...vy,
-              `${ol ? "Enabled" : "Disabled"} the built-in auto mode ${getAutoModeRuleCategoryLabel(section).toLowerCase()} rules`,
+            setAutoModeEntries(collectAutoModeRuleEntries());
+            setBuiltinRulesState(classifyAutoModeRuleSource());
+            pushMessage((messages) => [
+              ...messages,
+              `${nextEnabled ? "Enabled" : "Disabled"} the built-in auto mode ${getAutoModeRuleCategoryLabel(section).toLowerCase()} rules`,
             ]);
           })
           .catch((error) => {
             logForDebugging(`auto mode builtins toggle failed: ${String(error)}`, {
               level: "error",
             });
-            ge(collectAutoModeRuleEntries());
-            N(classifyAutoModeRuleSource());
-            L((by) => [
-              ...by,
-              `Could not ${ol ? "enable" : "disable"} the built-in ${getAutoModeRuleCategoryLabel(section).toLowerCase()} rules \u2014 ${error instanceof Error ? error.message : "nothing was changed"}`,
+            setAutoModeEntries(collectAutoModeRuleEntries());
+            setBuiltinRulesState(classifyAutoModeRuleSource());
+            pushMessage((messages) => [
+              ...messages,
+              `Could not ${nextEnabled ? "enable" : "disable"} the built-in ${getAutoModeRuleCategoryLabel(section).toLowerCase()} rules \u2014 ${error instanceof Error ? error.message : "nothing was changed"}`,
             ]);
           });
-        me(null);
+        setDialogState(null);
       };
       $[109] = section;
-      $[110] = Ho.enabled;
+      $[110] = builtinState.enabled;
       $[111] = storageV5;
       $[112] = onToggle;
     } else onToggle = $[112];
     let onCancel;
     if ($[113] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => me(null);
+      onCancel = () => setDialogState(null);
       $[113] = onCancel;
     } else onCancel = $[113];
-    let z;
-    if ($[114] !== section || $[115] !== Ho || $[116] !== onToggle) {
-      z = jsxProd_default(BuiltinRulesSection, {
+    let builtinSection;
+    if ($[114] !== section || $[115] !== builtinState || $[116] !== onToggle) {
+      builtinSection = jsxProd_default(BuiltinRulesSection, {
         section,
-        state: Ho,
+        state: builtinState,
         onToggle,
         onCancel,
       });
       $[114] = section;
-      $[115] = Ho;
+      $[115] = builtinState;
       $[116] = onToggle;
-      $[117] = z;
-    } else z = $[117];
-    return z;
+      $[117] = builtinSection;
+    } else builtinSection = $[117];
+    return builtinSection;
   }
-  if (ke?.mode === "details") {
-    let { entry } = ke;
+  if (dialogState?.mode === "details") {
+    let { entry } = dialogState;
     let onEdit;
     let onDelete;
     if ($[118] !== entry) {
       onEdit = () => {
-        me({
+        setDialogState({
           mode: "input",
           section: entry.section,
           editing: entry,
         });
       };
       onDelete = () =>
-        me({
+        setDialogState({
           mode: "delete",
           entry,
         });
@@ -2953,12 +2982,12 @@ function PermissionRuleList(props) {
     }
     let onCancel;
     if ($[121] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => me(null);
+      onCancel = () => setDialogState(null);
       $[121] = onCancel;
     } else onCancel = $[121];
-    let ve;
+    let detailsDialog;
     if ($[122] !== entry || $[123] !== onEdit || $[124] !== onDelete) {
-      ve = jsxProd_default(AutoModeRuleDetails, {
+      detailsDialog = jsxProd_default(AutoModeRuleDetails, {
         entry,
         onEdit,
         onDelete,
@@ -2967,41 +2996,44 @@ function PermissionRuleList(props) {
       $[122] = entry;
       $[123] = onEdit;
       $[124] = onDelete;
-      $[125] = ve;
-    } else ve = $[125];
-    return ve;
+      $[125] = detailsDialog;
+    } else detailsDialog = $[125];
+    return detailsDialog;
   }
-  if (ke?.mode === "delete") {
-    let { entry } = ke;
-    let I;
+  if (dialogState?.mode === "delete") {
+    let { entry } = dialogState;
+    let isInSection;
     if ($[126] !== entry.section) {
-      I = (rl) => rl.section === entry.section && !(rl.structure && rl.source === "userSettings");
+      isInSection = (candidate) =>
+        candidate.section === entry.section && !(candidate.structure && candidate.source === "userSettings");
       $[126] = entry.section;
-      $[127] = I;
-    } else I = $[127];
-    let U;
-    if ($[128] !== ae || $[129] !== I) {
-      U = count(ae, I);
-      $[128] = ae;
-      $[129] = I;
-      $[130] = U;
-    } else U = $[130];
-    const isLastInSection = U === 1;
+      $[127] = isInSection;
+    } else isInSection = $[127];
+    let sectionCount;
+    if ($[128] !== autoModeEntries || $[129] !== isInSection) {
+      sectionCount = count(autoModeEntries, isInSection);
+      $[128] = autoModeEntries;
+      $[129] = isInSection;
+      $[130] = sectionCount;
+    } else sectionCount = $[130];
+    const isLastInSection = sectionCount === 1;
     let onConfirm;
-    if ($[131] !== ae || $[132] !== entry || $[133] !== storageV5) {
+    if ($[131] !== autoModeEntries || $[132] !== entry || $[133] !== storageV5) {
       onConfirm = () => {
-        let index = sortRuleEntries(ae).indexOf(entry);
+        let index = sortRuleEntries(autoModeEntries).indexOf(entry);
         deleteAutoModeRule(entry.section, entry.index, entry.text, storageV5)
           .then(() => {
             let autoModeRuleEntries = collectAutoModeRuleEntries();
-            ge(autoModeRuleEntries);
-            N(classifyAutoModeRuleSource());
-            let wy = alwaysTrueFlag() ? autoModeRuleEntries.filter(isNotEnvSection) : autoModeRuleEntries;
-            let zu = sortRuleEntries(wy);
-            let ju = zu[Math.min(Math.max(index, 0), zu.length - 1)];
-            Ut(ju ? ruleKey(ju) : undefined);
-            L((Ry) => [
-              ...Ry,
+            setAutoModeEntries(autoModeRuleEntries);
+            setBuiltinRulesState(classifyAutoModeRuleSource());
+            let visibleEntries = alwaysTrueFlag()
+              ? autoModeRuleEntries.filter(isNotEnvSection)
+              : autoModeRuleEntries;
+            let sortedEntries = sortRuleEntries(visibleEntries);
+            let nextEntry = sortedEntries[Math.min(Math.max(index, 0), sortedEntries.length - 1)];
+            setAutoModeFocusKey(nextEntry ? ruleKey(nextEntry) : undefined);
+            pushMessage((messages) => [
+              ...messages,
               `Deleted auto mode ${getAutoModeRuleCategoryLabel(entry.section).toLowerCase()} rule ${sequential.bold(replaceLineBreaks(displayField(entry.text).text))}`,
             ]);
           })
@@ -3009,16 +3041,16 @@ function PermissionRuleList(props) {
             logForDebugging(`auto mode rule delete failed: ${String(error)}`, {
               level: "error",
             });
-            ge(collectAutoModeRuleEntries());
-            N(classifyAutoModeRuleSource());
-            L((Sy) => [
-              ...Sy,
+            setAutoModeEntries(collectAutoModeRuleEntries());
+            setBuiltinRulesState(classifyAutoModeRuleSource());
+            pushMessage((messages) => [
+              ...messages,
               `Could not delete ${sequential.bold(replaceLineBreaks(displayField(entry.text).text))} \u2014 ${error instanceof Error ? error.message : "the rule is unchanged"}`,
             ]);
           });
-        me(null);
+        setDialogState(null);
       };
-      $[131] = ae;
+      $[131] = autoModeEntries;
       $[132] = entry;
       $[133] = storageV5;
       $[134] = onConfirm;
@@ -3026,16 +3058,16 @@ function PermissionRuleList(props) {
     let onCancel;
     if ($[135] !== entry) {
       onCancel = () =>
-        me({
+        setDialogState({
           mode: "details",
           entry,
         });
       $[135] = entry;
       $[136] = onCancel;
     } else onCancel = $[136];
-    let mt;
+    let deleteDialog;
     if ($[137] !== entry || $[138] !== isLastInSection || $[139] !== onConfirm || $[140] !== onCancel) {
-      mt = jsxProd_default(DeleteAutoModeRuleConfirm, {
+      deleteDialog = jsxProd_default(DeleteAutoModeRuleConfirm, {
         entry,
         isLastInSection,
         onConfirm,
@@ -3045,28 +3077,28 @@ function PermissionRuleList(props) {
       $[138] = isLastInSection;
       $[139] = onConfirm;
       $[140] = onCancel;
-      $[141] = mt;
-    } else mt = $[141];
-    return mt;
+      $[141] = deleteDialog;
+    } else deleteDialog = $[141];
+    return deleteDialog;
   }
-  if (X) {
+  if (selectedRule) {
     let onCancel;
     if ($[142] === MEMO_CACHE_SENTINEL) {
-      onCancel = () => Ve(undefined);
+      onCancel = () => setSelectedRule(undefined);
       $[142] = onCancel;
     } else onCancel = $[142];
-    let U;
-    if ($[143] !== onDelete || $[144] !== X) {
-      U = jsxProd_default(RuleDetails, {
-        rule: X,
-        onDelete,
+    let ruleDetails;
+    if ($[143] !== onDelete_2 || $[144] !== selectedRule) {
+      ruleDetails = jsxProd_default(RuleDetails, {
+        rule: selectedRule,
+        onDelete: onDelete_2,
         onCancel,
       });
-      $[143] = onDelete;
-      $[144] = X;
-      $[145] = U;
-    } else U = $[145];
-    return U;
+      $[143] = onDelete_2;
+      $[144] = selectedRule;
+      $[145] = ruleDetails;
+    } else ruleDetails = $[145];
+    return ruleDetails;
   }
   if (
     addingRuleToTab &&
@@ -3074,17 +3106,17 @@ function PermissionRuleList(props) {
     addingRuleToTab !== "recent" &&
     addingRuleToTab !== "automode"
   ) {
-    let I;
+    let ruleInput_2;
     if ($[146] !== addingRuleToTab) {
-      I = jsxProd_default(PermissionRuleInput, {
+      ruleInput_2 = jsxProd_default(PermissionRuleInput, {
         onCancel,
         onSubmit,
         ruleBehavior: addingRuleToTab,
       });
       $[146] = addingRuleToTab;
-      $[147] = I;
-    } else I = $[147];
-    return I;
+      $[147] = ruleInput_2;
+    } else ruleInput_2 = $[147];
+    return ruleInput_2;
   }
   if (validatedRule) {
     let ruleValues;
@@ -3104,30 +3136,30 @@ function PermissionRuleList(props) {
       $[150] = setAppState;
       $[151] = setToolPermissionContext;
     } else setToolPermissionContext = $[151];
-    let z;
+    let addRulesDialog;
     if (
-      $[152] !== onAddRules ||
+      $[152] !== onAddRules_2 ||
       $[153] !== ruleValues ||
       $[154] !== setToolPermissionContext ||
       $[155] !== toolPermissionContext ||
       $[156] !== validatedRule.ruleBehavior
     ) {
-      z = jsxProd_default(AddPermissionRules, {
-        onAddRules,
+      addRulesDialog = jsxProd_default(AddPermissionRules, {
+        onAddRules: onAddRules_2,
         onCancel: onCancel_2,
         ruleValues,
         ruleBehavior: validatedRule.ruleBehavior,
         initialContext: toolPermissionContext,
         setToolPermissionContext,
       });
-      $[152] = onAddRules;
+      $[152] = onAddRules_2;
       $[153] = ruleValues;
       $[154] = setToolPermissionContext;
       $[155] = toolPermissionContext;
       $[156] = validatedRule.ruleBehavior;
-      $[157] = z;
-    } else z = $[157];
-    return z;
+      $[157] = addRulesDialog;
+    } else addRulesDialog = $[157];
+    return addRulesDialog;
   }
   if (isAddingWorkspaceDirectory) {
     let onAddDirectory;
@@ -3144,7 +3176,7 @@ function PermissionRuleList(props) {
           toolPermissionContext: updatedContext,
         }));
         if (remember) persistValidatedPermissionUpdate(permissionUpdate, storageV5).catch(logError);
-        L((prev) => [
+        pushMessage((prev) => [
           ...prev,
           `Added directory ${sequential.bold(stripInvisibleChars(path))} to workspace${remember ? " and saved to local settings" : " for this session"}`,
         ]);
@@ -3160,24 +3192,27 @@ function PermissionRuleList(props) {
       onCancel = () => setIsAddingWorkspaceDirectory(false);
       $[162] = onCancel;
     } else onCancel = $[162];
-    let z;
+    let addDirectoryDialog;
     if ($[163] !== onAddDirectory || $[164] !== toolPermissionContext) {
-      z = jsxProd_default(AddWorkspaceDirectory, {
+      addDirectoryDialog = jsxProd_default(AddWorkspaceDirectory, {
         onAddDirectory,
         onCancel,
         permissionContext: toolPermissionContext,
       });
       $[163] = onAddDirectory;
       $[164] = toolPermissionContext;
-      $[165] = z;
-    } else z = $[165];
-    return z;
+      $[165] = addDirectoryDialog;
+    } else addDirectoryDialog = $[165];
+    return addDirectoryDialog;
   }
   if (removingDirectory) {
     let onRemove;
     if ($[166] !== removingDirectory) {
       onRemove = () => {
-        L((prev) => [...prev, `Removed directory ${sequential.bold(removingDirectory)} from workspace`]);
+        pushMessage((prev) => [
+          ...prev,
+          `Removed directory ${sequential.bold(removingDirectory)} from workspace`,
+        ]);
         setRemovingDirectory(null);
       };
       $[166] = removingDirectory;
@@ -3199,14 +3234,14 @@ function PermissionRuleList(props) {
       $[169] = setAppState;
       $[170] = setPermissionContext;
     } else setPermissionContext = $[170];
-    let ve;
+    let removeDirectoryDialog;
     if (
       $[171] !== removingDirectory ||
       $[172] !== onRemove ||
       $[173] !== setPermissionContext ||
       $[174] !== toolPermissionContext
     ) {
-      ve = jsxProd_default(RemoveWorkspaceDirectory, {
+      removeDirectoryDialog = jsxProd_default(RemoveWorkspaceDirectory, {
         directoryPath: removingDirectory,
         onRemove,
         onCancel,
@@ -3217,130 +3252,130 @@ function PermissionRuleList(props) {
       $[172] = onRemove;
       $[173] = setPermissionContext;
       $[174] = toolPermissionContext;
-      $[175] = ve;
-    } else ve = $[175];
-    return ve;
+      $[175] = removeDirectoryDialog;
+    } else removeDirectoryDialog = $[175];
+    return removeDirectoryDialog;
   }
-  let I;
+  let sharedRulesProps;
   if (
-    $[176] !== st ||
-    $[177] !== Ct ||
-    $[178] !== handleToolSelect ||
+    $[176] !== getRulesOptionsStable ||
+    $[177] !== exitHandler ||
+    $[178] !== handleToolSelect_2 ||
     $[179] !== isSearchMode ||
     $[180] !== isTerminalFocused ||
     $[181] !== lastFocusedRuleKey ||
     $[182] !== searchCursorOffset ||
     $[183] !== searchQuery
   ) {
-    I = {
+    sharedRulesProps = {
       searchQuery,
       isSearchMode,
       isFocused: isTerminalFocused,
-      onCancel: Ct,
+      onCancel: exitHandler,
       lastFocusedRuleKey,
       cursorOffset: searchCursorOffset,
-      getRulesOptions: st,
-      handleToolSelect,
-      onHeaderFocusChange: handleHeaderFocusChange,
+      getRulesOptions: getRulesOptionsStable,
+      handleToolSelect: handleToolSelect_2,
+      onHeaderFocusChange: handleHeaderFocusChange_2,
     };
-    $[176] = st;
-    $[177] = Ct;
-    $[178] = handleToolSelect;
+    $[176] = getRulesOptionsStable;
+    $[177] = exitHandler;
+    $[178] = handleToolSelect_2;
     $[179] = isSearchMode;
     $[180] = isTerminalFocused;
     $[181] = lastFocusedRuleKey;
     $[182] = searchCursorOffset;
     $[183] = searchQuery;
-    $[184] = I;
-  } else I = $[184];
-  let sharedRulesProps = I;
-  let hidden = !Bt;
-  let ul = E === "recent" && b;
+    $[184] = sharedRulesProps;
+  } else sharedRulesProps = $[184];
+  let sharedRulesProps_2 = sharedRulesProps;
+  let hidden = !canInteract;
+  let isRecentTab = activeTab === "recent" && hasDenials;
   const navFromContent = !isSearchMode;
-  let z;
-  if ($[185] !== de || $[186] !== isMidTurn) {
-    z = jsxProd_default(
+  let recentTab;
+  if ($[185] !== onDenialStateChangeStable || $[186] !== isMidTurn) {
+    recentTab = jsxProd_default(
       Tab,
       {
         id: "recent",
         title: "Recently blocked",
         children: jsxProd_default(RecentDenialsTab, {
-          onHeaderFocusChange: handleHeaderFocusChange,
-          onStateChange: de,
+          onHeaderFocusChange: handleHeaderFocusChange_2,
+          onStateChange: onDenialStateChangeStable,
           isMidTurn,
         }),
       },
       "recent",
     );
-    $[185] = de;
+    $[185] = onDenialStateChangeStable;
     $[186] = isMidTurn;
-    $[187] = z;
-  } else z = $[187];
-  let ve;
-  if ($[188] !== sharedRulesProps) {
-    ve = jsxProd_default(
+    $[187] = recentTab;
+  } else recentTab = $[187];
+  let allowTab;
+  if ($[188] !== sharedRulesProps_2) {
+    allowTab = jsxProd_default(
       Tab,
       {
         id: "allow",
         title: "Allow",
         children: jsxProd_default(PermissionRulesTab, {
           tab: "allow",
-          ...sharedRulesProps,
+          ...sharedRulesProps_2,
         }),
       },
       "allow",
     );
-    $[188] = sharedRulesProps;
-    $[189] = ve;
-  } else ve = $[189];
-  let Oe;
-  if ($[190] !== sharedRulesProps) {
-    Oe = jsxProd_default(
+    $[188] = sharedRulesProps_2;
+    $[189] = allowTab;
+  } else allowTab = $[189];
+  let askTab;
+  if ($[190] !== sharedRulesProps_2) {
+    askTab = jsxProd_default(
       Tab,
       {
         id: "ask",
         title: "Ask",
         children: jsxProd_default(PermissionRulesTab, {
           tab: "ask",
-          ...sharedRulesProps,
+          ...sharedRulesProps_2,
         }),
       },
       "ask",
     );
-    $[190] = sharedRulesProps;
-    $[191] = Oe;
-  } else Oe = $[191];
-  let mt;
-  if ($[192] !== sharedRulesProps) {
-    mt = jsxProd_default(
+    $[190] = sharedRulesProps_2;
+    $[191] = askTab;
+  } else askTab = $[191];
+  let denyTab;
+  if ($[192] !== sharedRulesProps_2) {
+    denyTab = jsxProd_default(
       Tab,
       {
         id: "deny",
         title: "Deny",
         children: jsxProd_default(PermissionRulesTab, {
           tab: "deny",
-          ...sharedRulesProps,
+          ...sharedRulesProps_2,
         }),
       },
       "deny",
     );
-    $[192] = sharedRulesProps;
-    $[193] = mt;
-  } else mt = $[193];
-  let yo;
+    $[192] = sharedRulesProps_2;
+    $[193] = denyTab;
+  } else denyTab = $[193];
+  let autoModeTabs;
   if (
-    $[194] !== W ||
-    $[195] !== ae ||
-    $[196] !== Ct ||
+    $[194] !== builtinRulesState ||
+    $[195] !== autoModeEntries ||
+    $[196] !== exitHandler ||
     $[197] !== isSearchMode ||
     $[198] !== isTerminalFocused ||
-    $[199] !== Do ||
+    $[199] !== autoModeFocusKey ||
     $[200] !== searchCursorOffset ||
     $[201] !== searchQuery ||
-    $[202] !== Io ||
+    $[202] !== startEditEnvironment ||
     $[203] !== toolPermissionContext.isAutoModeAvailable
   ) {
-    yo =
+    autoModeTabs =
       toolPermissionContext.isAutoModeAvailable !== false
         ? [
             jsxProd_default(
@@ -3349,66 +3384,66 @@ function PermissionRuleList(props) {
                 id: "automode",
                 title: "Auto mode",
                 children: jsxProd_default(AgentsMenu, {
-                  entries: ae,
+                  entries: autoModeEntries,
                   searchQuery,
                   isSearchMode,
                   isFocused: isTerminalFocused,
                   cursorOffset: searchCursorOffset,
-                  defaultFocusValue: Do,
-                  builtinsState: W,
-                  onSelectBuiltins: (Xu) => {
-                    Ut(`builtins:${Xu}`);
-                    me({
+                  defaultFocusValue: autoModeFocusKey,
+                  builtinsState: builtinRulesState,
+                  onSelectBuiltins: (section) => {
+                    setAutoModeFocusKey(`builtins:${section}`);
+                    setDialogState({
                       mode: "builtins",
-                      section: Xu,
+                      section,
                     });
                   },
                   onAddNew: () =>
-                    me({
+                    setDialogState({
                       mode: "pick-section",
                     }),
-                  onSelectEntry: (Yu) => {
-                    Ut(ruleKey(Yu));
-                    me({
+                  onSelectEntry: (entry) => {
+                    setAutoModeFocusKey(ruleKey(entry));
+                    setDialogState({
                       mode: "details",
-                      entry: Yu,
+                      entry,
                     });
                   },
                   onSelectEnvironment: () => {
-                    Ut("environment-document");
-                    Io();
+                    setAutoModeFocusKey("environment-document");
+                    startEditEnvironment();
                   },
-                  onCancel: Ct,
-                  onHeaderFocusChange: handleHeaderFocusChange,
+                  onCancel: exitHandler,
+                  onHeaderFocusChange: handleHeaderFocusChange_2,
                 }),
               },
               "automode",
             ),
           ]
         : [];
-    $[194] = W;
-    $[195] = ae;
-    $[196] = Ct;
+    $[194] = builtinRulesState;
+    $[195] = autoModeEntries;
+    $[196] = exitHandler;
     $[197] = isSearchMode;
     $[198] = isTerminalFocused;
-    $[199] = Do;
+    $[199] = autoModeFocusKey;
     $[200] = searchCursorOffset;
     $[201] = searchQuery;
-    $[202] = Io;
+    $[202] = startEditEnvironment;
     $[203] = toolPermissionContext.isAutoModeAvailable;
-    $[204] = yo;
-  } else yo = $[204];
-  let go;
+    $[204] = autoModeTabs;
+  } else autoModeTabs = $[204];
+  let workspaceNote;
   if ($[205] === MEMO_CACHE_SENTINEL) {
-    go = jsxProd_default(Text, {
+    workspaceNote = jsxProd_default(Text, {
       wrap: "wrap-trim",
       children: "Claude Code can read files in the workspace, and make edits when auto-accept edits is on.",
     });
-    $[205] = go;
-  } else go = $[205];
-  let vo;
-  if ($[206] !== Ct || $[207] !== toolPermissionContext) {
-    vo = jsxProd_default(
+    $[205] = workspaceNote;
+  } else workspaceNote = $[205];
+  let workspaceTab;
+  if ($[206] !== exitHandler || $[207] !== toolPermissionContext) {
+    workspaceTab = jsxProd_default(
       Tab,
       {
         id: "workspace",
@@ -3416,110 +3451,118 @@ function PermissionRuleList(props) {
         children: jsxProd_default_2(Box, {
           flexDirection: "column",
           children: [
-            go,
+            workspaceNote,
             jsxProd_default(WorkspaceTab, {
-              onCancel: Ct,
+              onCancel: exitHandler,
               toolPermissionContext,
-              onRequestAddDirectory,
-              onRequestRemoveDirectory,
-              onHeaderFocusChange: handleHeaderFocusChange,
+              onRequestAddDirectory: onRequestAddDirectory_2,
+              onRequestRemoveDirectory: onRequestRemoveDirectory_2,
+              onHeaderFocusChange: handleHeaderFocusChange_2,
             }),
           ],
         }),
       },
       "workspace",
     );
-    $[206] = Ct;
+    $[206] = exitHandler;
     $[207] = toolPermissionContext;
-    $[208] = vo;
-  } else vo = $[208];
+    $[208] = workspaceTab;
+  } else workspaceTab = $[208];
   let children;
-  if ($[209] !== z || $[210] !== ve || $[211] !== Oe || $[212] !== mt || $[213] !== yo || $[214] !== vo) {
-    children = [z, ve, Oe, mt, ...yo, vo];
-    $[209] = z;
-    $[210] = ve;
-    $[211] = Oe;
-    $[212] = mt;
-    $[213] = yo;
-    $[214] = vo;
+  if (
+    $[209] !== recentTab ||
+    $[210] !== allowTab ||
+    $[211] !== askTab ||
+    $[212] !== denyTab ||
+    $[213] !== autoModeTabs ||
+    $[214] !== workspaceTab
+  ) {
+    children = [recentTab, allowTab, askTab, denyTab, ...autoModeTabs, workspaceTab];
+    $[209] = recentTab;
+    $[210] = allowTab;
+    $[211] = askTab;
+    $[212] = denyTab;
+    $[213] = autoModeTabs;
+    $[214] = workspaceTab;
     $[215] = children;
   } else children = $[215];
-  let _r;
+  let tabsElement;
   if (
-    $[216] !== T ||
-    $[217] !== Wt ||
+    $[216] !== initialTab_2 ||
+    $[217] !== headerFocused ||
     $[218] !== hidden ||
-    $[219] !== E ||
+    $[219] !== activeTab ||
     $[220] !== navFromContent ||
     $[221] !== children
   ) {
-    _r = jsxProd_default(Tabs, {
+    tabsElement = jsxProd_default(Tabs, {
       title: "Permissions",
       color: "permission",
-      defaultTab: T,
-      selectedTab: E,
-      onTabChange: D,
+      defaultTab: initialTab_2,
+      selectedTab: activeTab,
+      onTabChange: setActiveTab,
       hidden,
-      initialHeaderFocused: Wt,
+      initialHeaderFocused: headerFocused,
       navFromContent,
       children,
     });
-    $[216] = T;
-    $[217] = Wt;
+    $[216] = initialTab_2;
+    $[217] = headerFocused;
     $[218] = hidden;
-    $[219] = E;
+    $[219] = activeTab;
     $[220] = navFromContent;
     $[221] = children;
-    $[222] = _r;
-  } else _r = $[222];
+    $[222] = tabsElement;
+  } else tabsElement = $[222];
   let children_2;
   if (
-    $[223] !== ee ||
+    $[223] !== canMark ||
     $[224] !== globalExitKeybindings.keyName ||
     $[225] !== globalExitKeybindings.pending ||
-    $[226] !== Wt ||
-    $[227] !== ul ||
+    $[226] !== headerFocused ||
+    $[227] !== isRecentTab ||
     $[228] !== isScreenReaderEnabled ||
     $[229] !== isSearchMode ||
-    $[230] !== ye
+    $[230] !== escapeHint
   ) {
     children_2 = globalExitKeybindings.pending
       ? `Press ${globalExitKeybindings.keyName} again to cancel`
-      : Wt
+      : headerFocused
         ? jsxProd_default_2(Fragment, {
-            children: ["\u2190/\u2192 to switch \xB7 \u2193 to select \xB7 ", ye ?? "Esc to cancel"],
+            children: ["\u2190/\u2192 to switch \xB7 \u2193 to select \xB7 ", escapeHint ?? "Esc to cancel"],
           })
         : isSearchMode
           ? jsxProd_default(Fragment, {
               children: "Type to filter \xB7 Enter/\u2193 to select \xB7 \u2191 to tabs \xB7 Esc to clear",
             })
-          : ul
+          : isRecentTab
             ? jsxProd_default_2(Fragment, {
                 children: [
-                  ee && "Enter to approve \xB7 r to retry \xB7 ",
-                  ye ?? `${isScreenReaderEnabled ? "" : "\u2191/\u2193 to navigate \xB7 "}Esc to close`,
+                  canMark && "Enter to approve \xB7 r to retry \xB7 ",
+                  escapeHint ??
+                    `${isScreenReaderEnabled ? "" : "\u2191/\u2193 to navigate \xB7 "}Esc to close`,
                 ],
               })
             : jsxProd_default_2(Fragment, {
                 children: [
                   isScreenReaderEnabled ? "" : "\u2191/\u2193 to navigate \xB7 Enter to select \xB7 ",
                   "\u2190/\u2192 to switch \xB7 ",
-                  ye ?? "Esc to cancel",
+                  escapeHint ?? "Esc to cancel",
                 ],
               });
-    $[223] = ee;
+    $[223] = canMark;
     $[224] = globalExitKeybindings.keyName;
     $[225] = globalExitKeybindings.pending;
-    $[226] = Wt;
-    $[227] = ul;
+    $[226] = headerFocused;
+    $[227] = isRecentTab;
     $[228] = isScreenReaderEnabled;
     $[229] = isSearchMode;
-    $[230] = ye;
+    $[230] = escapeHint;
     $[231] = children_2;
   } else children_2 = $[231];
-  let Lr;
+  let hintBox;
   if ($[232] !== children_2) {
-    Lr = jsxProd_default(Box, {
+    hintBox = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
@@ -3527,31 +3570,31 @@ function PermissionRuleList(props) {
       }),
     });
     $[232] = children_2;
-    $[233] = Lr;
-  } else Lr = $[233];
+    $[233] = hintBox;
+  } else hintBox = $[233];
   let children_3;
-  if ($[234] !== _r || $[235] !== Lr) {
+  if ($[234] !== tabsElement || $[235] !== hintBox) {
     children_3 = jsxProd_default_2(Pane, {
       color: "permission",
-      children: [_r, Lr],
+      children: [tabsElement, hintBox],
     });
-    $[234] = _r;
-    $[235] = Lr;
+    $[234] = tabsElement;
+    $[235] = hintBox;
     $[236] = children_3;
   } else children_3 = $[236];
-  let Gu;
-  if ($[237] !== onKeyDown || $[238] !== handlePaste || $[239] !== children_3) {
-    Gu = jsxProd_default(Box, {
+  let content;
+  if ($[237] !== onKeyDown_2 || $[238] !== handlePaste || $[239] !== children_3) {
+    content = jsxProd_default(Box, {
       flexDirection: "column",
-      onKeyDown,
+      onKeyDown: onKeyDown_2,
       onPaste: handlePaste,
       children: children_3,
     });
-    $[237] = onKeyDown;
+    $[237] = onKeyDown_2;
     $[238] = handlePaste;
     $[239] = children_3;
-    $[240] = Gu;
-  } else Gu = $[240];
-  return Gu;
+    $[240] = content;
+  } else content = $[240];
+  return content;
 }
 export { PermissionRuleList };

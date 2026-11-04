@@ -35,23 +35,24 @@ import { getFsImplementation } from "../../fsOperations.js";
 /**
  * 不可用时的空回调（把原因交给 onUnavailable）。
  */
-function onUnavailableNoop(e, n) {
-  e.onUnavailable(n);
+function onUnavailableNoop(request, reason) {
+  request.onUnavailable(reason);
   return;
 }
 //@ chunk-e6aww6q8.js:918453-918735 placement
-function hostPathDeps(launchDir, n) {
+function hostPathDeps(launchDir, hostFiles) {
   return {
     childEnv: subprocessEnv,
-    realpath: async (r) => {
-      let s = await realpathViaHostFiles(r, n);
-      return isAbsolute(s) ? s : r;
+    realpath: async (filePath) => {
+      let realPath = await realpathViaHostFiles(filePath, hostFiles);
+      return isAbsolute(realPath) ? realPath : filePath;
     },
     gitRoot: findGitRootUncached,
     canonicalGitRoot: findCanonicalGitRootUncached,
-    scopeSettingsFile: (r) => getSettingsFilePathForSource(r) ?? null,
-    scopeWriteEntries: (r) => collectSettingsWriteRoots(r, launchDir),
-    scopeRoots: (r, s) => settingsReachRootsForSource(launchDir, r, s),
+    scopeSettingsFile: (settingSource) => getSettingsFilePathForSource(settingSource) ?? null,
+    scopeWriteEntries: (settingSource) => collectSettingsWriteRoots(settingSource, launchDir),
+    scopeRoots: (settingSource, readableDirs) =>
+      settingsReachRootsForSource(launchDir, settingSource, readableDirs),
     commonRoots: () => collectBaseReachRoots(launchDir),
     deviceHooksMemory: deviceHooksProcessMemories.of(getRootSession().host),
   };
@@ -60,30 +61,32 @@ function hostPathDeps(launchDir, n) {
 /**
  * 计算设备钩子的可达范围：收集启动目录、项目目录、git 根、各设置源的可写条目与公共根，解析真实路径，返回供判定"命令/路径是否在云会话可写范围内"的状态。
  */
-function createHostPathReach({ launchDir, projectDir, originalCwd }, s = hostPathDeps(launchDir)) {
+function createHostPathReach({ launchDir, projectDir, originalCwd }, deps = hostPathDeps(launchDir)) {
   let stickyRoots = new Set();
   let pinnedScopes = new Set();
   let pinnedRoots = new Map();
-  let reachBaseline = new Map(SETTING_SOURCES.map((Ae) => [Ae, s.scopeWriteEntries(Ae)]));
-  let L = s.commonRoots();
-  let G = new Set();
-  let filtered = [launchDir, projectDir, originalCwd === launchDir ? undefined : originalCwd].filter(
-    (Ae) => Ae !== undefined,
+  let reachBaseline = new Map(
+    SETTING_SOURCES.map((settingSource) => [settingSource, deps.scopeWriteEntries(settingSource)]),
   );
-  let Z = (Ae) =>
-    s.realpath(Ae).catch((error) => {
-      if (error instanceof HostPathRefused) G.add(POSIX_SEP_2);
+  let commonRoots = deps.commonRoots();
+  let knownRoots = new Set();
+  let filtered = [launchDir, projectDir, originalCwd === launchDir ? undefined : originalCwd].filter(
+    (root) => root !== undefined,
+  );
+  let canonicalizeOrTrack = (rootPath) =>
+    deps.realpath(rootPath).catch((error) => {
+      if (error instanceof HostPathRefused) knownRoots.add(POSIX_SEP_2);
       throw error;
     });
-  let Se = async () => {
-    let mapped = [s.gitRoot(launchDir), s.canonicalGitRoot(launchDir)]
-      .filter((Ie) => Ie !== null)
-      .map((Ie) => (getPlatform() === "windows" ? Ie.replace(/\//g, "\\") : Ie));
-    for (let Ie of [...filtered, ...mapped]) {
-      G.add(Ie);
-      await Z(Ie).then(
-        (Me) => {
-          if (isAbsolute(Me)) G.add(Me);
+  let presetRoots = async () => {
+    let mapped = [deps.gitRoot(launchDir), deps.canonicalGitRoot(launchDir)]
+      .filter((gitRoot) => gitRoot !== null)
+      .map((gitRoot) => (getPlatform() === "windows" ? gitRoot.replace(/\//g, "\\") : gitRoot));
+    for (let rootPath of [...filtered, ...mapped]) {
+      knownRoots.add(rootPath);
+      await canonicalizeOrTrack(rootPath).then(
+        (realPath) => {
+          if (isAbsolute(realPath)) knownRoots.add(realPath);
         },
         () => {},
       );
@@ -91,13 +94,13 @@ function createHostPathReach({ launchDir, projectDir, originalCwd }, s = hostPat
     return stickyRootsFor({
       launchDir,
       launchDirReal: launchDir,
-      extra: [...G],
+      extra: [...knownRoots],
     });
   };
   let envAtAttach = {
-    ...s.childEnv(),
+    ...deps.childEnv(),
   };
-  let legacyEnvAtAttach = latchLegacyPin(s.deviceHooksMemory, getAppliedGlobalConfigEnv());
+  let legacyEnvAtAttach = latchLegacyPin(deps.deviceHooksMemory, getAppliedGlobalConfigEnv());
   let projectHookPinsState = createProjectHookPinsState({
     projectDir,
     launchDir,
@@ -113,20 +116,20 @@ function createHostPathReach({ launchDir, projectDir, originalCwd }, s = hostPat
       projectHooks: projectHookPinsState,
     }),
     async current() {
-      let Ae = async () =>
+      let collectRoots = async () =>
         collectStickyRoots({
           stickyRoots,
           pinnedScopes,
           pinnedRoots,
-          baseRoots: await Se(),
+          baseRoots: await presetRoots(),
           reachBaseline,
-          scopeSettingsFile: s.scopeSettingsFile,
-          realpath: Z,
-          commonRoots: () => L,
-          scopeRoots: s.scopeRoots,
+          scopeSettingsFile: deps.scopeSettingsFile,
+          realpath: canonicalizeOrTrack,
+          commonRoots: () => commonRoots,
+          scopeRoots: deps.scopeRoots,
         });
-      let Ie = await Ae();
-      return G.has(POSIX_SEP_2) && !Ie.includes(POSIX_SEP_2) ? Ae() : Ie;
+      let roots = await collectRoots();
+      return knownRoots.has(POSIX_SEP_2) && !roots.includes(POSIX_SEP_2) ? collectRoots() : roots;
     },
   };
 }
@@ -134,39 +137,41 @@ function createHostPathReach({ launchDir, projectDir, originalCwd }, s = hostPat
 /**
  * 经宿主文件接口求真实路径（存储 V5 时），否则走本地实现。
  */
-async function realpathViaHostFiles(e, n) {
-  if (isStorageV5Enabled() && n !== undefined) {
-    let r = hostPathSpace(e);
-    if (r !== "store") {
-      let s = await n.hostFiles.realPath(
-        PathSpace[r](isAbsolute(e) ? e : joinKeepingTrailingSep(getFsImplementation().cwd(), e)),
+async function realpathViaHostFiles(filePath, hostFiles) {
+  if (isStorageV5Enabled() && hostFiles !== undefined) {
+    let space = hostPathSpace(filePath);
+    if (space !== "store") {
+      let result = await hostFiles.hostFiles.realPath(
+        PathSpace[space](
+          isAbsolute(filePath) ? filePath : joinKeepingTrailingSep(getFsImplementation().cwd(), filePath),
+        ),
         {
           native: true,
         },
       );
-      if (s.ok && s.value.found) return s.value.path;
-      if (s.ok)
+      if (result.ok && result.value.found) return result.value.path;
+      if (result.ok)
         throw Object.assign(Error("ENOENT: no such file or directory"), {
           code: "ENOENT",
         });
-      if (!isHostFileError(s.error)) throw new HostPathRefused();
-      throw unwrapHostFileError(s.error);
+      if (!isHostFileError(result.error)) throw new HostPathRefused();
+      throw unwrapHostFileError(result.error);
     }
   }
-  return realpath(e);
+  return realpath(filePath);
 }
 //@ chunk-e6aww6q8.js:920173-920226 placement
 /**
  * 拼接路径时保留已存在的尾部分隔符。
  */
-function joinKeepingTrailingSep(e, n) {
-  return e.endsWith(sep) ? e + n : e + sep + n;
+function joinKeepingTrailingSep(dirPath, name) {
+  return dirPath.endsWith(sep) ? dirPath + name : dirPath + sep + name;
 }
 //@ chunk-e6aww6q8.js:920226-920326 placement
-function hostPathSpace(e) {
-  return e === getSettingsFilePathForSource("userSettings")
+function hostPathSpace(filePath) {
+  return filePath === getSettingsFilePathForSource("userSettings")
     ? "store"
-    : e === getSettingsFilePathForSource("policySettings")
+    : filePath === getSettingsFilePathForSource("policySettings")
       ? "system"
       : "workspace";
 }

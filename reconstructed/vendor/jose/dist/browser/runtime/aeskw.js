@@ -5,11 +5,11 @@
  * pieces: chunk-2tyrgda4.js (3)
  * attribution: esm-fingerprint 3
  */
-import { g, p } from "../../webapi/lib/buffer_utils.js";
+import { isCryptoKey, cryptoModule } from "../../webapi/lib/buffer_utils.js";
 import { checkEncCryptoKey } from "../../node/esm/lib/crypto_key.js";
-import { A } from "../../node/esm/lib/invalid_key_input.js";
-import { m } from "./is_key_like.js";
-import { ee } from "../../webapi/lib/content_encryption.js";
+import { keyMustBeTypeError } from "../../node/esm/lib/invalid_key_input.js";
+import { keyObjectTypes } from "./is_key_like.js";
+import { hmacSubmitAlgorithm } from "../../webapi/lib/content_encryption.js";
 
 //@ chunk-2tyrgda4.js:9952-10069 esm-fingerprint
 function checkKeySize(key, alg) {
@@ -18,24 +18,30 @@ function checkKeySize(key, alg) {
 }
 //@ chunk-2tyrgda4.js:10069-10232 esm-fingerprint
 function getCryptoKey(key, alg, usage) {
-  if (g(key)) {
+  if (isCryptoKey(key)) {
     checkEncCryptoKey(key, alg, usage);
     return key;
   }
-  if (key instanceof Uint8Array) return p.subtle.importKey("raw", key, "AES-KW", true, [usage]);
-  throw TypeError(A(key, ...m, "Uint8Array"));
+  if (key instanceof Uint8Array) return cryptoModule.subtle.importKey("raw", key, "AES-KW", true, [usage]);
+  throw TypeError(keyMustBeTypeError(key, ...keyObjectTypes, "Uint8Array"));
 }
 //@ chunk-2tyrgda4.js:10232-10578 esm-fingerprint
 var wrap = async (alg, key, cek) => {
   let cryptoKey = await getCryptoKey(key, alg, "wrapKey");
   checkKeySize(cryptoKey, alg);
-  let cryptoKeyCek = await p.subtle.importKey("raw", cek, ...ee);
-  return new Uint8Array(await p.subtle.wrapKey("raw", cryptoKeyCek, cryptoKey, "AES-KW"));
+  let cryptoKeyCek = await cryptoModule.subtle.importKey("raw", cek, ...hmacSubmitAlgorithm);
+  return new Uint8Array(await cryptoModule.subtle.wrapKey("raw", cryptoKeyCek, cryptoKey, "AES-KW"));
 };
 var unwrap = async (alg, key, encryptedKey) => {
   let cryptoKey = await getCryptoKey(key, alg, "unwrapKey");
   checkKeySize(cryptoKey, alg);
-  let cryptoKeyCek = await p.subtle.unwrapKey("raw", encryptedKey, cryptoKey, "AES-KW", ...ee);
-  return new Uint8Array(await p.subtle.exportKey("raw", cryptoKeyCek));
+  let cryptoKeyCek = await cryptoModule.subtle.unwrapKey(
+    "raw",
+    encryptedKey,
+    cryptoKey,
+    "AES-KW",
+    ...hmacSubmitAlgorithm,
+  );
+  return new Uint8Array(await cryptoModule.subtle.exportKey("raw", cryptoKeyCek));
 };
 export { wrap, unwrap };

@@ -32,118 +32,124 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from "../../services/analytics/gr
 /**
  * 取 $.env 参数里的名字
  */
-function envApiName(e) {
-  let n = isPlainObject_5(e) ? e.name : undefined;
-  return typeof n === "string" ? n : undefined;
+function envApiName(args) {
+  let name = isPlainObject_5(args) ? args.name : undefined;
+  return typeof name === "string" ? name : undefined;
 }
 //@ chunk-e6aww6q8.js:3721625-3722167 placement
-function envGetForPlugin(scan, n, r) {
-  if (!isEnvApiCall(n)) return;
-  let s = envApiName(r);
-  let h = n === "env.get";
-  if (s === undefined) return `it carries no variable name a $.${n}("<name>") call passes`;
-  let y = isPlainObject_5(r) ? r.value : undefined;
-  if (!h && isHostOnlyEnvKey(s, typeof y === "string" ? y : undefined))
-    return `only the environment Claude Code starts with, or Claude Code itself, sets ${s} (host rule)`;
-  let S = (h ? scan.env?.reads : scan.env?.writes) ?? [];
-  return S.includes(s)
+function envGetForPlugin(scan, op, args) {
+  if (!isEnvApiCall(op)) return;
+  let name = envApiName(args);
+  let isGet = op === "env.get";
+  if (name === undefined) return `it carries no variable name a $.${op}("<name>") call passes`;
+  let value = isPlainObject_5(args) ? args.value : undefined;
+  if (!isGet && isHostOnlyEnvKey(name, typeof value === "string" ? value : undefined))
+    return `only the environment Claude Code starts with, or Claude Code itself, sets ${name} (host rule)`;
+  let problem = (isGet ? scan.env?.reads : scan.env?.writes) ?? [];
+  return problem.includes(name)
     ? undefined
-    : `its hooks module does not name ${s} in a $.${n}("<name>") call (host rule; the scan lists ${h ? "reads" : "writes"} of ${S.length === 0 ? "nothing" : S.join(", ")})`;
+    : `its hooks module does not name ${name} in a $.${op}("<name>") call (host rule; the scan lists ${isGet ? "reads" : "writes"} of ${problem.length === 0 ? "nothing" : problem.join(", ")})`;
 }
 //@ chunk-e6aww6q8.js:3722167-3722293 placement
 /**
  * $.env.get 核心：读取进程环境变量（USER_TYPE 固定为 external）。
  */
-function envGetCore(e) {
-  let r = e.name === "USER_TYPE" ? "external" : process.env[e.name];
-  return Promise.resolve(r === undefined ? undefined : String(r));
+function envGetCore(args) {
+  let value = args.name === "USER_TYPE" ? "external" : process.env[args.name];
+  return Promise.resolve(value === undefined ? undefined : String(value));
 }
 //@ chunk-e6aww6q8.js:3722293-3722702 placement
 /**
  * 校验 $.env.set 参数：变量名非空且不含 = 或 NUL，值为字符串或 undefined（不含 NUL）。
  */
-function checkEnvSetArgs(e) {
-  let n = envApiName(e);
-  if (!(n !== undefined && n !== "" && !n.includes("=") && !n.includes("\x00")))
-    return `takes a variable name on a plain object (got ${n === undefined ? typeof e?.name : JSON.stringify(n)})`;
-  let s = isPlainObject_5(e) ? e.value : undefined;
-  if (s !== undefined && typeof s !== "string")
-    return `takes a string value, or undefined to unset (got ${typeof s})`;
-  return s !== undefined && s.includes("\x00") ? "takes a value with no NUL byte in it" : undefined;
+function checkEnvSetArgs(args) {
+  let name = envApiName(args);
+  if (!(name !== undefined && name !== "" && !name.includes("=") && !name.includes("\x00")))
+    return `takes a variable name on a plain object (got ${name === undefined ? typeof args?.name : JSON.stringify(name)})`;
+  let problem = isPlainObject_5(args) ? args.value : undefined;
+  if (problem !== undefined && typeof problem !== "string")
+    return `takes a string value, or undefined to unset (got ${typeof problem})`;
+  return problem !== undefined && problem.includes("\x00")
+    ? "takes a value with no NUL byte in it"
+    : undefined;
 }
 //@ chunk-e6aww6q8.js:3722702-3722871 placement
-function applyEnvSet(e, n, writer) {
-  let s = n ? forgetEnvWriteRestorer(e.name) : snapshotHostEnvVar(e.name, writer);
-  if (e.value === undefined) delete process.env[e.name];
-  else process.env[e.name] = e.value;
-  s();
+function applyEnvSet(request, wasSet, writer) {
+  let restore = wasSet ? forgetEnvWriteRestorer(request.name) : snapshotHostEnvVar(request.name, writer);
+  if (request.value === undefined) delete process.env[request.name];
+  else process.env[request.name] = request.value;
+  restore();
   exitIfServeHelperMisconfigured();
   return Promise.resolve();
 }
 //@ chunk-e6aww6q8.js:3722871-3723043 placement
-var envCallChainArgs = (e, n) => [
-  admittedArgs(e, n),
-  ...(n.callers ?? []).map((r) => e.environmentArgs.get(r)),
-  ...n.origin
+var envCallChainArgs = (ctx, caller) => [
+  admittedArgs(ctx, caller),
+  ...(caller.callers ?? []).map((callerId) => ctx.environmentArgs.get(callerId)),
+  ...caller.origin
     .map(originPlugin)
-    .filter((r) => r !== n.plugin)
-    .map((r) => (r === undefined ? undefined : e.knownArgs.get(r))),
+    .filter((plugin) => plugin !== caller.plugin)
+    .map((secondPlugin) => (secondPlugin === undefined ? undefined : ctx.knownArgs.get(secondPlugin))),
 ];
 //@ chunk-e6aww6q8.js:3723043-3723122 placement
 /**
  * 链里有非官方插件
  */
-function hasUntrustedEnvCaller(e, n) {
-  return envCallChainArgs(e, n).some((r) => r === undefined || !isOfficialMarketplaceRef(r.pluginStorageId));
+function hasUntrustedEnvCaller(ctx, caller) {
+  return envCallChainArgs(ctx, caller).some(
+    (args) => args === undefined || !isOfficialMarketplaceRef(args.pluginStorageId),
+  );
 }
 //@ chunk-e6aww6q8.js:3723122-3723265 placement
-function isEnvValueRewrittenByThirdParty(e, n) {
+function isEnvValueRewrittenByThirdParty(request, caller) {
   try {
     return (
-      n !== undefined &&
-      n.sent.value !== e.value &&
-      n.hooked().some((r) => r === undefined || !isOfficialMarketplaceRef(r.args.pluginStorageId))
+      caller !== undefined &&
+      caller.sent.value !== request.value &&
+      caller
+        .hooked()
+        .some((hook) => hook === undefined || !isOfficialMarketplaceRef(hook.args.pluginStorageId))
     );
   } catch {
     return true;
   }
 }
 //@ chunk-e6aww6q8.js:3723265-3723390 placement
-function isEnvChainTrusted(e, n) {
+function isEnvChainTrusted(ctx, caller) {
   try {
-    return envCallChainArgs(e, n).every(
-      (r) =>
-        r !== undefined &&
-        (isOfficialMarketplaceRef(r.pluginStorageId) || isVouchedPolicyPluginId(r.pluginStorageId)),
+    return envCallChainArgs(ctx, caller).every(
+      (args) =>
+        args !== undefined &&
+        (isOfficialMarketplaceRef(args.pluginStorageId) || isVouchedPolicyPluginId(args.pluginStorageId)),
     );
   } catch {
     return false;
   }
 }
 //@ chunk-e6aww6q8.js:3723390-3723543 placement
-function soleEnvCallerId(e, n) {
+function soleEnvCallerId(ctx, caller) {
   try {
-    let [r, ...s] = envCallChainArgs(e, n);
-    return r !== undefined && s.every((h) => h?.pluginStorageId === r.pluginStorageId)
-      ? r.pluginStorageId
+    let [first, ...rest] = envCallChainArgs(ctx, caller);
+    return first !== undefined && rest.every((args) => args?.pluginStorageId === first.pluginStorageId)
+      ? first.pluginStorageId
       : undefined;
   } catch {
     return;
   }
 }
 //@ chunk-e6aww6q8.js:3723543-3723801 placement
-var ENV_UNTRUSTED_CALLER_TEXT = (e) =>
-  `${e} is unchanged: a plugin that is not built in, or one with no load on record, stands behind this call, and in a session that takes its settings from its organization such a call can set only the variables a person's own settings file could`;
+var ENV_UNTRUSTED_CALLER_TEXT = (name) =>
+  `${name} is unchanged: a plugin that is not built in, or one with no load on record, stands behind this call, and in a session that takes its settings from its organization such a call can set only the variables a person's own settings file could`;
 //@ chunk-e6aww6q8.js:3723801-3723877 placement
 /**
  * 拒绝并记录
  */
-function denyEnvSet(plugin, n) {
-  logForDebugging(`${plugin}: $.env.set: ${n}`, {
+function denyEnvSet(plugin, reason) {
+  logForDebugging(`${plugin}: $.env.set: ${reason}`, {
     level: "warn",
   });
   return {
-    deny: n,
+    deny: reason,
   };
 }
 //@ chunk-e6aww6q8.js:3723877-3724015 placement
@@ -153,62 +159,72 @@ var ENV_HOST_ONLY_TEXT = (name) =>
 /**
  * 记录并应用环境变量
  */
-async function applyEnvSetWithRecord(e, n, r, s) {
-  if (n) recordPersonsEnvValue(e.name, e.value);
-  await applyEnvSet(e, r, s);
+async function applyEnvSetWithRecord(request, recordPerson, wasSet, writer) {
+  if (recordPerson) recordPersonsEnvValue(request.name, request.value);
+  await applyEnvSet(request, wasSet, writer);
   return {};
 }
 //@ chunk-e6aww6q8.js:3724095-3724403 placement
 /**
  * 环境变量值未生效的说明：钩子改写了值，而链中有非内置或无加载记录的插件。
  */
-var ENV_REWRITTEN_BY_UNTRUSTED_TEXT = (e) =>
-  `${e} is unchanged: a hook changed the value on its way and a plugin that is not built in, or one with no load on record, is among the hooks of this call, and in a session that takes its settings from its organization such a plugin can set only the variables a person's own settings file could`;
+var ENV_REWRITTEN_BY_UNTRUSTED_TEXT = (name) =>
+  `${name} is unchanged: a hook changed the value on its way and a plugin that is not built in, or one with no load on record, is among the hooks of this call, and in a session that takes its settings from its organization such a plugin can set only the variables a person's own settings file could`;
 //@ chunk-e6aww6q8.js:3724403-3724661 placement
 /**
  * $.env.set 表项：宿主专有变量拒绝；组织托管设置下，非内置或无加载记录的插件（或其改写的值）只能设置个人设置文件允许的变量。
  */
-var ENV_SET_API = (e) => ({
+var ENV_SET_API = (runtime) => ({
   check: checkEnvSetArgs,
-  run: async (n, r, s) => {
-    if (isHostOnlyEnvKey(n.name, n.value)) return denyEnvSet(r.plugin, ENV_HOST_ONLY_TEXT(n.name));
-    let h = managedMarketplaceAnswerFlag();
-    let y = isEnvValueRewrittenByThirdParty(n, s);
-    let S = h && y;
-    let w = S || (h && hasUntrustedEnvCaller(e, r));
-    return w && !personsSettingsEnvKeeps(n.name, n.value ?? "")
-      ? denyEnvSet(r.plugin, (S ? ENV_REWRITTEN_BY_UNTRUSTED_TEXT : ENV_UNTRUSTED_CALLER_TEXT)(n.name))
-      : applyEnvSetWithRecord(n, w, !y && isEnvChainTrusted(e, r), y ? undefined : soleEnvCallerId(e, r));
+  run: async (request, ctx, caller) => {
+    if (isHostOnlyEnvKey(request.name, request.value))
+      return denyEnvSet(ctx.plugin, ENV_HOST_ONLY_TEXT(request.name));
+    let answerFlag = managedMarketplaceAnswerFlag();
+    let rewrittenByThirdParty = isEnvValueRewrittenByThirdParty(request, caller);
+    let isDenied = answerFlag && rewrittenByThirdParty;
+    let denial = isDenied || (answerFlag && hasUntrustedEnvCaller(runtime, ctx));
+    return denial && !personsSettingsEnvKeeps(request.name, request.value ?? "")
+      ? denyEnvSet(
+          ctx.plugin,
+          (isDenied ? ENV_REWRITTEN_BY_UNTRUSTED_TEXT : ENV_UNTRUSTED_CALLER_TEXT)(request.name),
+        )
+      : applyEnvSetWithRecord(
+          request,
+          denial,
+          !rewrittenByThirdParty && isEnvChainTrusted(runtime, ctx),
+          rewrittenByThirdParty ? undefined : soleEnvCallerId(runtime, ctx),
+        );
   },
 });
 //@ chunk-e6aww6q8.js:3724661-3724957 placement
 /**
  * 取发起调用的 hooks 模块环境参数；模块已重载或移除时拒绝并记遥测。
  */
-function requireCallingEnvironment(e, n, { op, feature }) {
-  let h = n.environmentId === undefined ? undefined : e.environmentArgs.get(n.environmentId);
-  if (h === undefined) {
+function requireCallingEnvironment(runtime, caller, { op, feature }) {
+  let callerArgs =
+    caller.environmentId === undefined ? undefined : runtime.environmentArgs.get(caller.environmentId);
+  if (callerArgs === undefined) {
     logFeatureBad(feature, "module_no_longer_loaded");
     throw new HooksError(
-      `${n.plugin}: $.${op} refused: the hooks module that made the call is no longer loaded (it was reloaded or removed)`,
+      `${caller.plugin}: $.${op} refused: the hooks module that made the call is no longer loaded (it was reloaded or removed)`,
     );
   }
-  return h;
+  return callerArgs;
 }
 //@ chunk-e6aww6q8.js:3724957-3725095 placement
 /**
  * $.flag.value 表项：读取特性开关值（构建无开关表时拒绝）。
  */
 var FLAG_VALUE_API = {
-  check: (e) =>
-    alwaysFalse() ? checkFlagValueArgs(e) : "reads a feature flag, which this build has no table of",
-  run: (e) => Promise.resolve(getFeatureValue_CACHED_MAY_BE_STALE(e.name, e.fallback)),
+  check: (args) =>
+    alwaysFalse() ? checkFlagValueArgs(args) : "reads a feature flag, which this build has no table of",
+  run: (args) => Promise.resolve(getFeatureValue_CACHED_MAY_BE_STALE(args.name, args.fallback)),
 };
 //@ chunk-e6aww6q8.js:3725095-3725125 placement
 /**
  * 冻结对象
  */
-var freezeObject = (e) => Object.freeze(e);
+var freezeObject = (object) => Object.freeze(object);
 export {
   freezeObject,
   FLAG_VALUE_API,

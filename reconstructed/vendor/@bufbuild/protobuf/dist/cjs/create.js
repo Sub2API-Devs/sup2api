@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-require-graph 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_is_message } from "./is-message.js";
 import { require_descriptors } from "./descriptors.js";
 import { require_scalar } from "../commonjs/reflect/scalar.js";
@@ -14,7 +14,7 @@ import { require_unsafe } from "./reflect/unsafe.js";
 import { require_wrappers } from "./wkt/wrappers.js";
 
 //@ chunk-fq0cr76a.js:343319-345921 cjs-require-graph
-var require_create = x(function (cjsExports) {
+var require_create = __commonJS(function (cjsExports) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

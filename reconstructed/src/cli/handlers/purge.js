@@ -24,36 +24,37 @@ var PURGE_DESCRIPTION =
  */
 function registerPurgeCommands(program, withStorageV5) {
   registerPurgeCommand(program, withStorageV5, false);
-  let S = program
+  let projectCommand = program
     .command("project", {
       hidden: true,
     })
     .description(PROJECT_PURGE_RENAMED_NOTICE)
     .configureHelp(createHelpConfig());
-  registerPurgeCommand(S, withStorageV5, true);
-  return S;
+  registerPurgeCommand(projectCommand, withStorageV5, true);
+  return projectCommand;
 }
 //@ chunk-shkzs7rp.js:23765-24422 placement
-function registerPurgeCommand(n, e, S) {
-  n.command("purge [path]", {
-    hidden: S,
-  })
-    .description(S ? `${PROJECT_PURGE_RENAMED_NOTICE}. ${PURGE_DESCRIPTION}` : PURGE_DESCRIPTION)
-    .allowExcessArguments(S)
+function registerPurgeCommand(program, withStorageV5, isAlias) {
+  program
+    .command("purge [path]", {
+      hidden: isAlias,
+    })
+    .description(isAlias ? `${PROJECT_PURGE_RENAMED_NOTICE}. ${PURGE_DESCRIPTION}` : PURGE_DESCRIPTION)
+    .allowExcessArguments(isAlias)
     .option("--dry-run", "List what would be deleted without deleting anything")
     .option("-y, --yes", "Skip confirmation prompt")
     .option("-i, --interactive", "Prompt for each item before deleting")
     .option("--all", "Purge state for every project (mutually exclusive with [path])")
     .action(
-      e(async (A, r, s) => {
-        if (S) {
+      withStorageV5(async (pathArg, options, commandOptions) => {
+        if (isAlias) {
           cliWarn(`${PROJECT_PURGE_RENAMED_NOTICE}. The old name still works for now.`);
           await logEventAsync("tengu_dead_probe_project_purge_alias", {
-            yes: s.yes === true,
+            yes: commandOptions.yes === true,
           }).catch((error) => logError(toError(error)));
         }
-        let { purgeProjectHandler, purgeStoppedByError } = await import("./chunk-5f8vf2zr.js");
-        await purgeProjectHandler(r, s, A).catch(purgeStoppedByError);
+        let { purgeProjectHandler, purgeStoppedByError } = await import("./purgeProjectHandler.lazy.js");
+        await purgeProjectHandler(options, commandOptions, pathArg).catch(purgeStoppedByError);
       }),
     );
 }

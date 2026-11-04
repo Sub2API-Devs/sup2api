@@ -24,13 +24,14 @@ import {
 } from "./imageResizer.js";
 import { getCanonicalName } from "./model/canonicalModelName.js";
 import { getCatalogEntry } from "./model/modelCatalog.js";
-import { IMAGE_LIMITS, MAX_MEDIA_BASE64_BYTES } from "./truncateGraphemes.js";
+import { IMAGE_LIMITS, MAX_MEDIA_BASE64_BYTES } from "./mediaLimits.js";
 import { onceExport } from "../../vendor/lodash-es/once.js";
 import { identity } from "./identity.js";
 import { isPlainObject } from "./isPlainObject.js";
 import { describeImageAttachment } from "../tools/BashTool/utils.js";
 import { isObjectBlock } from "./toolResultStorage.js";
 import { isNonEmptyImageAttachment } from "./messages/messagePredicates.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-qz53w8v8.js:1837-1907 placement
 /**
@@ -49,7 +50,7 @@ function imageLimitsForModel(model) {
   let maxBase64Size = maxBase64SizeForProvider();
   let canonicalName = model ? getCanonicalName(model) : undefined;
   let catalogLimits = canonicalName ? getCatalogEntry(canonicalName)?.image_limits : undefined;
-  let a = undefined;
+  let unusedLimit = undefined;
   let maxDimension = maxImageDimensionForModel(model);
   let capDimension = maxDimension;
   let rejectMaxWidth = Math.min(catalogLimits?.maxWidth ?? IMAGE_LIMITS.maxWidth, maxDimension);
@@ -79,8 +80,8 @@ function imageLimitsForModel(model) {
 /**
  * 未指定时用默认值，且不低于最小图片尺寸。
  */
-function atLeastMinImageDimension(e, t) {
-  return e === undefined ? t : Math.max(MIN_IMAGE_DIMENSION, e);
+function atLeastMinImageDimension(value, fallback) {
+  return value === undefined ? fallback : Math.max(MIN_IMAGE_DIMENSION, value);
 }
 //@ chunk-qz53w8v8.js:2473-2580 placement
 function maxBase64SizeForProvider() {
@@ -108,87 +109,96 @@ var MAX_IMAGE_BYTES_ALIAS = MAX_IMAGE_BYTES;
  */
 var IMAGE_SIZE_ALIGNMENT = 3;
 //@ chunk-qz53w8v8.js:2652-2938 placement
-function mediaSlice(e, t) {
-  if (e.bytes === undefined) return e;
-  let o = e.bytes.length;
-  let min = Math.min(t + MAX_IMAGE_BYTES_ALIAS, o);
-  let a = min < o ? min - ((min - t) % IMAGE_SIZE_ALIGNMENT) : min;
-  return t > 0 && t >= o
+function mediaSlice(item, offset) {
+  if (item.bytes === undefined) return item;
+  let totalBytes = item.bytes.length;
+  let min = Math.min(offset + MAX_IMAGE_BYTES_ALIAS, totalBytes);
+  let end = min < totalBytes ? min - ((min - offset) % IMAGE_SIZE_ALIGNMENT) : min;
+  return offset > 0 && offset >= totalBytes
     ? {
-        deny: `offset ${t} is at or past the item's ${o} bytes`,
+        deny: `offset ${offset} is at or past the item's ${totalBytes} bytes`,
       }
     : {
-        type: e.type,
-        mediaType: e.mediaType,
-        base64: e.bytes.subarray(t, a).toString("base64"),
-        size: o,
-        ...(a < o && {
-          next: a,
+        type: item.type,
+        mediaType: item.mediaType,
+        base64: item.bytes.subarray(offset, end).toString("base64"),
+        size: totalBytes,
+        ...(end < totalBytes && {
+          next: end,
         }),
       };
 }
 //@ chunk-qz53w8v8.js:2938-3033 placement
-var aYr = Object.freeze({
-  deny: "no prompt.submit in flight carries an attachment under that id",
+var NO_INFLIGHT_ATTACHMENT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qz53w8v8.js:2938", () => {
+  NO_INFLIGHT_ATTACHMENT = Object.freeze({
+    deny: "no prompt.submit in flight carries an attachment under that id",
+  });
 });
 //@ chunk-qz53w8v8.js:3033-3356 placement
 /**
  * 创建会话内的媒体暂存：hold 为附件分配 id 并延迟读取，read 按偏移分片返回 base64，release/clear 释放。
  */
 function createMediaStore() {
-  let e = new Map();
+  let items = new Map();
   return {
-    hold: (t, o) =>
-      t.map((r) => {
-        let a = `media_${randomUUID().replace(/-/g, "")}`;
-        e.set(
-          a,
-          onceExport(() => r.read(o)),
+    hold: (entries, options) =>
+      entries.map((entry) => {
+        let id = `media_${randomUUID().replace(/-/g, "")}`;
+        items.set(
+          id,
+          onceExport(() => entry.read(options)),
         );
         return {
-          ...r.attachment,
-          id: a,
+          ...entry.attachment,
+          id,
         };
       }),
-    release: (t) => t.forEach((o) => e.delete(o.id ?? "")),
+    release: (entries) => entries.forEach((entry) => items.delete(entry.id ?? "")),
     read: async ({ id, offset }) => {
-      let r = await e.get(id)?.();
-      return r === undefined || !e.has(id) ? aYr : mediaSlice(r, offset ?? 0);
+      let item = await items.get(id)?.();
+      return item === undefined || !items.has(id) ? NO_INFLIGHT_ATTACHMENT : mediaSlice(item, offset ?? 0);
     },
-    clear: () => e.clear(),
+    clear: () => items.clear(),
   };
 }
 //@ chunk-qz53w8v8.js:3356-3389 placement
 /**
  * 回调执行期间暂存提示媒体附件的存储。
  */
-var mediaHoldStore = identity(createMediaStore(), (e) => {
-  e.clear();
+var mediaHoldStore; // deferred: uses createMediaStore of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-qz53w8v8.js:3356", () => {
+  mediaHoldStore = identity(createMediaStore(), (store) => {
+    store.clear();
+  });
 });
 //@ chunk-qz53w8v8.js:3389-3492 placement
 /**
  * 在回调执行期间暂存提示中的媒体附件，结束后释放。
  */
-function withHeldMedia(e, mainLoopModel, o) {
-  let r = mediaHoldStore.hold(e, mainLoopModel);
+function withHeldMedia(entries, mainLoopModel, run) {
+  let held = mediaHoldStore.hold(entries, mainLoopModel);
   return new Promise((resolve) => {
-    resolve(o(r));
-  }).finally(() => mediaHoldStore.release(r));
+    resolve(run(held));
+  }).finally(() => mediaHoldStore.release(held));
 }
 //@ chunk-qz53w8v8.js:3492-3584 sole-consumer
-var IMAGE_NOT_INLINE_DENIAL = Object.freeze({
-  deny: "the image is not held inline: its block names a URL or a file",
+var IMAGE_NOT_INLINE_DENIAL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qz53w8v8.js:3492", () => {
+  IMAGE_NOT_INLINE_DENIAL = Object.freeze({
+    deny: "the image is not held inline: its block names a URL or a file",
+  });
 });
 //@ chunk-qz53w8v8.js:3584-3777 sole-consumer = buildImageToolResult (0.792)
 /**
  * （切分错误）从 image 块读出 base64 图片字节；URL/文件来源的图片返回拒绝说明。
  */
-function readInlineImageBytes(e) {
-  if (e.block.type === "text")
+function readInlineImageBytes(entry) {
+  if (entry.block.type === "text")
     return {
-      unreadable: e.block.text,
+      unreadable: entry.block.text,
     };
-  let { source } = e.block;
+  let { source } = entry.block;
   return source.type === "base64"
     ? {
         type: "image",
@@ -198,21 +208,24 @@ function readInlineImageBytes(e) {
     : IMAGE_NOT_INLINE_DENIAL;
 }
 //@ chunk-qz53w8v8.js:3777-3904 sole-consumer
-var DOCUMENT_NOT_INLINE_DENIAL = Object.freeze({
-  deny: "the document is not held as inline bytes: its block names a URL or a file, or nests other blocks",
+var DOCUMENT_NOT_INLINE_DENIAL; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qz53w8v8.js:3777", () => {
+  DOCUMENT_NOT_INLINE_DENIAL = Object.freeze({
+    deny: "the document is not held as inline bytes: its block names a URL or a file, or nests other blocks",
+  });
 });
 //@ chunk-qz53w8v8.js:3904-3937 sole-consumer
 var APPLICATION_OCTET_STREAM = "application/octet-stream";
 //@ chunk-qz53w8v8.js:3937-4153 sole-consumer
 function readInlineDocumentBytes(source) {
-  let t = isPlainObject(source) ? source : {};
-  let { data: o, media_type: mediaType } = t;
-  let a = t.type === "base64";
-  return typeof o === "string" && (a || t.type === "text")
+  let sourceObject = isPlainObject(source) ? source : {};
+  let { data, media_type: mediaType } = sourceObject;
+  let isBase64 = sourceObject.type === "base64";
+  return typeof data === "string" && (isBase64 || sourceObject.type === "text")
     ? {
         type: "document",
         mediaType: typeof mediaType === "string" ? mediaType : APPLICATION_OCTET_STREAM,
-        bytes: Buffer.from(o, a ? "base64" : "utf8"),
+        bytes: Buffer.from(data, isBase64 ? "base64" : "utf8"),
       }
     : DOCUMENT_NOT_INLINE_DENIAL;
 }
@@ -232,7 +245,7 @@ var makeDocumentAttachmentReader = (block) => ({
  */
 var makeImageAttachmentReader = (block) => ({
   attachment: describeImageAttachment(block),
-  read: async (t) => readInlineImageBytes(await checkImageBlockSource(block, imageLimitsForModel(t))),
+  read: async (model) => readInlineImageBytes(await checkImageBlockSource(block, imageLimitsForModel(model))),
 });
 //@ chunk-qz53w8v8.js:4436-4530 sole-consumer = isMedia (1)
 function isMedia(block) {
@@ -244,35 +257,38 @@ function isMedia(block) {
       : [];
 }
 //@ chunk-qz53w8v8.js:4530-4592 placement
-var S = Object.freeze({
-  unreadable: "the pasted image is empty",
+var EMPTY_IMAGE_PASTE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-qz53w8v8.js:4530", () => {
+  EMPTY_IMAGE_PASTE = Object.freeze({
+    unreadable: "the pasted image is empty",
+  });
 });
 //@ chunk-qz53w8v8.js:4592-4764 placement
-var imageAttachmentSource = (e) => ({
+var imageAttachmentSource = (attachment) => ({
   attachment: {
     type: "image",
-    mediaType: e.mediaType,
-    filename: e.filename,
+    mediaType: attachment.mediaType,
+    filename: attachment.filename,
   },
-  read: async (t) =>
-    isNonEmptyImageAttachment(e)
+  read: async (model) =>
+    isNonEmptyImageAttachment(attachment)
       ? readInlineImageBytes(
           await maybeResizeAndDownsampleImageBlock({
-            data: e.content,
-            mediaType: e.mediaType,
-            limits: imageLimitsForModel(t),
+            data: attachment.content,
+            mediaType: attachment.mediaType,
+            limits: imageLimitsForModel(model),
           }),
         )
-      : S,
+      : EMPTY_IMAGE_PASTE,
 });
 //@ chunk-qz53w8v8.js:4764-4881 placement = _temp (1)
 /**
  * 收集提示中的媒体来源：提示内容里的媒体块与粘贴内容中的图片。
  */
-var promptMediaSources = (e, pastedContents) => [
-  ...(typeof e === "string" ? [] : e.flatMap(isMedia)),
+var promptMediaSources = (content, pastedContents) => [
+  ...(typeof content === "string" ? [] : content.flatMap(isMedia)),
   ...Object.values(pastedContents ?? {})
-    .filter((o) => o.type === "image")
+    .filter((pastedContent) => pastedContent.type === "image")
     .map(imageAttachmentSource),
 ];
 export {
@@ -280,7 +296,7 @@ export {
   promptMediaSources,
   withHeldMedia,
   mediaHoldStore,
-  aYr,
+  NO_INFLIGHT_ATTACHMENT,
   MAX_IMAGE_BYTES_ALIAS,
   MAX_IMAGE_BYTES,
 };

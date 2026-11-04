@@ -27,9 +27,13 @@ import { logEvent } from "../analytics/index.js";
 import { telemetrySafeModelName } from "../../utils/model/telemetryModelName.js";
 import { fromEnum } from "../analytics/safeMetadata.js";
 import { logFeatureOk } from "../analytics/featureTelemetry.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:2592973-2593012 placement
-var thinkingRelayModuleKept = require("./chunk-1cnesc1e.js");
+var thinkingRelayModuleKept; // deferred: loads other modules while loading; runs once its import cycle is complete
+deferInit("chunk-e6aww6q8.js:2592973", () => {
+  thinkingRelayModuleKept = require("../teleport/relayState.js");
+});
 //@ chunk-e6aww6q8.js:2593012-2593228 placement
 function isTetherLive() {
   if (!canSendFirstPartyBetas()) return false;
@@ -70,22 +74,29 @@ function keptReminderScope(model, recorded) {
       scope: recorded ? "all" : "off",
       source: "recorded",
     };
-  let s = getCachedClientData()?.[TENGU_SLEEPY_SNOWFLAKE];
-  let h = s !== undefined && s !== null && typeof s === "object" && !Array.isArray(s);
-  let y = h ? findModelKeyedEntry(s, model)?.[1] : undefined;
-  if (y === "threads" || y === "all")
+  let clientValue = getCachedClientData()?.[TENGU_SLEEPY_SNOWFLAKE];
+  let isList =
+    clientValue !== undefined &&
+    clientValue !== null &&
+    typeof clientValue === "object" &&
+    !Array.isArray(clientValue);
+  let entry = isList ? findModelKeyedEntry(clientValue, model)?.[1] : undefined;
+  if (entry === "threads" || entry === "all")
     return {
-      scope: y,
+      scope: entry,
       source: "clientData",
     };
-  if ((s !== undefined && s !== null && !h) || (y !== undefined && y !== "off"))
+  if (
+    (clientValue !== undefined && clientValue !== null && !isList) ||
+    (entry !== undefined && entry !== "off")
+  )
     logForDebugging(
-      `[reminders] ignoring client_data ${TENGU_SLEEPY_SNOWFLAKE} for ${model}: got ${h ? `the value ${JSON.stringify(y)}` : "a value that is not a map"}; expected a map from model pattern to "off", "threads" or "all"`,
+      `[reminders] ignoring client_data ${TENGU_SLEEPY_SNOWFLAKE} for ${model}: got ${isList ? `the value ${JSON.stringify(entry)}` : "a value that is not a map"}; expected a map from model pattern to "off", "threads" or "all"`,
       {
         level: "warn",
       },
     );
-  if (y !== undefined)
+  if (entry !== undefined)
     return {
       scope: "off",
       source: "clientData",
@@ -100,8 +111,8 @@ function keptReminderScope(model, recorded) {
   };
 }
 //@ chunk-e6aww6q8.js:2594176-2594218 placement
-function isKeptReminderModeNotOff(e, n) {
-  return keptReminderModeSafe(e, n) !== "off";
+function isKeptReminderModeNotOff(model, querySource) {
+  return keptReminderModeSafe(model, querySource) !== "off";
 }
 //@ chunk-e6aww6q8.js:2594218-2594368 placement
 function keptReminderModeSafe(model, seed) {
@@ -134,48 +145,49 @@ function keptReminderDelivery(sessionId) {
  */
 function keptReminderMode(model, seed) {
   let sessionFeatureValues = getSessionFeatureValues();
-  let h =
+  let result =
     (tetherEnvAccessor.CLAUDE_CODE_TETHER_LIVE === true && sessionFeatureValues.tetherLiveGate !== false) ||
     isCcsTenant();
   if (
     !canSendFirstPartyBetas() ||
     getAPIProvider() !== "firstParty" ||
-    (!h && !isActualFirstPartyAnthropicBaseUrl())
+    (!result && !isActualFirstPartyAnthropicBaseUrl())
   )
     return "off";
   if (sessionFeatureValues.keptReminderRetired) return "off";
-  let y = keptReminderDelivery(getSessionId());
-  let { byModel } = y;
+  let delivery = keptReminderDelivery(getSessionId());
+  let { byModel } = delivery;
   let lower = strip1mSuffix(model).toLowerCase();
-  let L = byModel.get(lower);
+  let byModelEntry = byModel.get(lower);
   let recorded;
-  if (seed !== undefined && !y.seedTaken) {
-    y.seedTaken = true;
+  if (seed !== undefined && !delivery.seedTaken) {
+    delivery.seedTaken = true;
     recorded = isFoamySpringEnabled() ? seed.recorded : undefined;
   }
-  if (L !== undefined && (recorded === undefined || !y.served.has(lower))) return L;
-  if (L === undefined && !h && !isFirstPartyBaseUrl()) {
+  if (byModelEntry !== undefined && (recorded === undefined || !delivery.served.has(lower)))
+    return byModelEntry;
+  if (byModelEntry === undefined && !result && !isFirstPartyBaseUrl()) {
     byModel.set(lower, "off");
     return "off";
   }
   let { scope, source } = keptReminderScope(model, recorded);
-  let Se = scope === "threads" && !isTetherLive() ? "off" : scope;
-  byModel.set(lower, Se);
-  if (source === "clientData" || source === "growthbook") y.served.add(lower);
-  else y.served.delete(lower);
+  let effectiveScope = scope === "threads" && !isTetherLive() ? "off" : scope;
+  byModel.set(lower, effectiveScope);
+  if (source === "clientData" || source === "growthbook") delivery.served.add(lower);
+  else delivery.served.delete(lower);
   if (source === "recorded")
     logEvent("tengu_kept_reminder_seeded", {
       model: telemetrySafeModelName(model),
-      recorded: Se !== "off",
-      replaced: L !== undefined,
+      recorded: effectiveScope !== "off",
+      replaced: byModelEntry !== undefined,
     });
-  if (Se !== "off" && (L === undefined || L === "off"))
+  if (effectiveScope !== "off" && (byModelEntry === undefined || byModelEntry === "off"))
     logEvent("tengu_sleepy_snowflake_applied", {
       model: telemetrySafeModelName(model),
       source: fromEnum(source),
-      value: fromEnum(Se),
+      value: fromEnum(effectiveScope),
     });
-  return Se;
+  return effectiveScope;
 }
 //@ chunk-e6aww6q8.js:2595348-2595391 placement
 function retireKeptReminder() {

@@ -21,10 +21,23 @@ import { buildSubagentLookups } from "../../utils/messages.js";
 import { SubAgentProvider, OverflowHint } from "../../components/CtrlOToExpand.js";
 import { hasAutoModeBlockedToolResult } from "../../components/messages/teamMemCollapsed.js";
 
+//@ chunk-a5k9jscj.js:3304-3587 fingerprint = renderToolUseMessage (0.607)
+/**
+ * Skill 调用的单行显示：skill 名（旧 commands 目录来源加 /），有队友作者时附 "· by 作者"。
+ */
+function renderToolUseMessage({ skill }, { commands, teammateAuthorOf }) {
+  if (!skill) return null;
+  let trimmed = skill.trim();
+  let skillName = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
+  let command = commands?.find((command) => command.name === skillName);
+  let displayName = command?.loadedFrom === "commands_DEPRECATED" ? `/${skillName}` : skillName;
+  let author = teammateAuthorOf?.(command?.type === "prompt" ? command.source : undefined, skillName) ?? null;
+  return author ? `${displayName} \xB7 by ${author}` : displayName;
+}
 //@ chunk-8ndmcarc.js:16633-16740 affinity = countToolCallsSince (1)
-function countToolCallsSince(o) {
-  let t = o.data.message.message.content[0];
-  return t?.type === "tool_use" || t?.type === "tool_result";
+function countToolCallsSince(result) {
+  let firstBlock = result.data.message.message.content[0];
+  return firstBlock?.type === "tool_use" || firstBlock?.type === "tool_result";
 }
 //@ chunk-8ndmcarc.js:16740-17181 fingerprint = renderToolResultMessage (0.915)
 /**
@@ -111,17 +124,4 @@ function renderToolUseProgressMessage_3(progressMessages, { tools, verbose }) {
     }),
   });
 }
-//@ chunk-a5k9jscj.js:3304-3587 fingerprint = renderToolUseMessage (0.607)
-/**
- * Skill 调用的单行显示：skill 名（旧 commands 目录来源加 /），有队友作者时附 "· by 作者"。
- */
-function renderToolUseMessage({ skill }, { commands, teammateAuthorOf }) {
-  if (!skill) return null;
-  let trimmed = skill.trim();
-  let d = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
-  let command = commands?.find((command) => command.name === d);
-  let displayName = command?.loadedFrom === "commands_DEPRECATED" ? `/${d}` : d;
-  let r = teammateAuthorOf?.(command?.type === "prompt" ? command.source : undefined, d) ?? null;
-  return r ? `${displayName} \xB7 by ${r}` : displayName;
-}
-export { renderToolUseProgressMessage_3, renderToolUseMessage };
+export { renderToolUseProgressMessage_3, renderToolUseMessage, renderToolResultMessage };

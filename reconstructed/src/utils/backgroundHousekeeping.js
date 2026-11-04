@@ -41,12 +41,12 @@ var TRANSCRIPT_HEARTBEAT_INTERVAL_MS = 3600000;
 //@ chunk-0nv5pv9r.js:11984-12206 facade-majority
 async function isLastCleanupSentinelFresh(storageV5) {
   if (isStorageV5Enabled() && storageV5 !== undefined) {
-    let o = await storageV5.statMeta(STORAGE_SPACES.state("last-cleanup"));
-    return o.ok && Date.now() - o.value.mtimeMs < STALE_CLEANUP_AGE_MS;
+    let statResult = await storageV5.statMeta(STORAGE_SPACES.state("last-cleanup"));
+    return statResult.ok && Date.now() - statResult.value.mtimeMs < STALE_CLEANUP_AGE_MS;
   }
   try {
-    let o = await stat(join(getClaudeConfigDir(), ".last-cleanup"));
-    return Date.now() - o.mtimeMs < STALE_CLEANUP_AGE_MS;
+    let stats = await stat(join(getClaudeConfigDir(), ".last-cleanup"));
+    return Date.now() - stats.mtimeMs < STALE_CLEANUP_AGE_MS;
   } catch {
     return false;
   }
@@ -66,34 +66,39 @@ async function startBackgroundHousekeeping(host, storageV5) {
     touchSessionTranscript(storageV5);
     setInterval(touchSessionTranscript, TRANSCRIPT_HEARTBEAT_INTERVAL_MS, storageV5).unref();
   }
-  let m = "sentinel-unchecked";
-  async function r() {
+  let cleanupPhase = "sentinel-unchecked";
+  async function runHousekeeping() {
     if (getIsInteractive() && getLastInteractionTime() > Date.now() - 60000) {
       setTimeout(runVerySlowOps, DELAY_VERY_SLOW_OPERATIONS_THAT_HAPPEN_EVERY_SESSION).unref();
       return;
     }
-    if (m !== "done") {
-      if (m === "sentinel-unchecked") {
-        m = "sweep-due";
+    if (cleanupPhase !== "done") {
+      if (cleanupPhase === "sentinel-unchecked") {
+        cleanupPhase = "sweep-due";
         if (await isLastCleanupSentinelFresh(storageV5)) {
           setTimeout(runVerySlowOps, DELAY_VERY_SLOW_OPERATIONS_THAT_HAPPEN_EVERY_SESSION).unref();
           return;
         }
       }
-      m = "done";
-      let i = (await cleanupOldMessageFilesInBackground(storageV5)) !== "remote_settings_unknowable";
+      cleanupPhase = "done";
+      let cleanupFinished =
+        (await cleanupOldMessageFilesInBackground(storageV5)) !== "remote_settings_unknowable";
       if (isStorageV5Enabled() && storageV5 !== undefined)
         await reapStaleHousekeepingStagingFiles(getClaudeConfigDir(), host.backgroundHousekeeping);
-      if (i && isStorageV5Enabled() && storageV5 !== undefined) {
+      if (cleanupFinished && isStorageV5Enabled() && storageV5 !== undefined) {
         await healRefusedSentinelLeaf(storageV5);
-        let u = await storageV5.write(STORAGE_SPACES.state("last-cleanup"), new Date().toISOString(), {
-          publishDiscipline: "inPlace",
-        });
-        if (!u.ok)
-          logForDebugging(`.last-cleanup write failed: ${u.error.code}`, {
+        let writeResult = await storageV5.write(
+          STORAGE_SPACES.state("last-cleanup"),
+          new Date().toISOString(),
+          {
+            publishDiscipline: "inPlace",
+          },
+        );
+        if (!writeResult.ok)
+          logForDebugging(`.last-cleanup write failed: ${writeResult.error.code}`, {
             level: "error",
           });
-      } else if (i)
+      } else if (cleanupFinished)
         await writeFile(join(getClaudeConfigDir(), ".last-cleanup"), new Date().toISOString()).catch(
           (error) =>
             isSyscallError(error)
@@ -110,7 +115,7 @@ async function startBackgroundHousekeeping(host, storageV5) {
     await cleanupOldVersions();
   }
   function runVerySlowOps() {
-    return r().catch((error) =>
+    return runHousekeeping().catch((error) =>
       isCleanupQuietFsErrno(error)
         ? logForDebugging(`background housekeeping failed: ${error.message}`, {
             level: "error",
@@ -120,4 +125,10 @@ async function startBackgroundHousekeeping(host, storageV5) {
   }
   setTimeout(runVerySlowOps, STALE_CLEANUP_CATCHUP_DELAY_MS).unref();
 }
-export { startBackgroundHousekeeping };
+export {
+  startBackgroundHousekeeping,
+  DELAY_VERY_SLOW_OPERATIONS_THAT_HAPPEN_EVERY_SESSION,
+  STALE_CLEANUP_CATCHUP_DELAY_MS,
+  TRANSCRIPT_HEARTBEAT_INTERVAL_MS,
+  isLastCleanupSentinelFresh,
+};

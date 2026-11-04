@@ -28,71 +28,72 @@ function agentsTrustDecision() {
 /**
  * Agents 视图启动时处理工作区信任（跳过/已信任/询问后重新发现项目技能插件）。
  */
-async function ensureAgentsWorkspaceTrust(s, n, o) {
-  switch (n) {
+async function ensureAgentsWorkspaceTrust(ui, mode, storageV5) {
+  switch (mode) {
     case "skip":
       if (!env.CLAUBBIT && checkHasTrustDialogAccepted()) {
         setSessionTrustAccepted(true);
-        let { primePlanSlugCollisions } = await import("./chunk-p2nht1vg.js");
-        primePlanSlugCollisions(o);
+        let { primePlanSlugCollisions } = await import("./plans.js");
+        primePlanSlugCollisions(storageV5);
       }
       {
-        let { capturePolicySnapshot } = await import("./chunk-mav6jbkz.js");
+        let { capturePolicySnapshot } = await import("./settings/policySnapshot.js");
         capturePolicySnapshot();
       }
       return;
     case "trusted": {
       setSessionTrustAccepted(true);
-      let [{ primePlanSlugCollisions: t }, { capturePolicySnapshot: r }] = await Promise.all([
-        import("./chunk-p2nht1vg.js"),
-        import("./chunk-mav6jbkz.js"),
+      let [{ primePlanSlugCollisions }, { capturePolicySnapshot }] = await Promise.all([
+        import("./plans.js"),
+        import("./settings/policySnapshot.js"),
       ]);
-      t(o);
-      r();
+      primePlanSlugCollisions(storageV5);
+      capturePolicySnapshot();
       return;
     }
     case "ask": {
-      let [{ runSteps: t }, { TrustDialog: r }, { getCommands: a }] = await Promise.all([
-        import("./chunk-8pefyxsz.js"),
-        import("./chunk-8rmevhsy.js"),
-        import("./chunk-aeccp9b6.js"),
+      let [{ runSteps }, { TrustDialog }, { getCommands }] = await Promise.all([
+        import("./runSteps.js"),
+        import("../components/TrustDialog/TrustDialog.js"),
+        import("../commands.js"),
       ]);
-      let commands = await a(getCwd(), o).catch(() => []);
-      await t(
-        s,
+      let commands = await getCommands(getCwd(), storageV5).catch(() => []);
+      await runSteps(
+        ui,
         [
-          (k) =>
-            jsxProd_default(r, {
+          (resolveDone) =>
+            jsxProd_default(TrustDialog, {
               commands,
-              onDone: () => k(),
+              onDone: () => resolveDone(),
             }),
         ],
         {
           session: getRootSession(),
-          storageV5: o,
+          storageV5,
         },
       );
       setSessionTrustAccepted(true);
-      let { clearPluginCache } = await import("./chunk-w27ej3rn.js");
+      let { clearPluginCache } = await import("./plugins/pluginLoader.js");
       clearPluginCache("post-trust: re-discover project @skills-dir plugins");
       let [
-        { resetGrowthBook: m, initializeGrowthBook: u },
-        { primePlanSlugCollisions: l },
-        { logError: d },
-        { capturePolicySnapshot: g },
+        { resetGrowthBook, initializeGrowthBook },
+        { primePlanSlugCollisions },
+        { logError },
+        { capturePolicySnapshot },
       ] = await Promise.all([
-        import("./chunk-6df1d6re.js"),
-        import("./chunk-p2nht1vg.js"),
-        import("./chunk-ytv7p2hj.js"),
-        import("./chunk-mav6jbkz.js"),
+        import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+        import("./plans.js"),
+        import("./log.js"),
+        import("./settings/policySnapshot.js"),
       ]);
-      m({
+      resetGrowthBook({
         preservePendingExposures: true,
       });
-      u().catch(d);
-      l(o);
-      g();
+      initializeGrowthBook().catch(logError);
+      primePlanSlugCollisions(storageV5);
+      capturePolicySnapshot();
       return;
     }
   }
 }
+export { agentsTrustDecision, ensureAgentsWorkspaceTrust };

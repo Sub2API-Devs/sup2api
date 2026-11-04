@@ -8,7 +8,7 @@
  * pieces: chunk-4v9zy7gn.js (5)
  * attribution: placement 2, file-local 1, fingerprint 2
  */
-import { init_react_production, y } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState } from "../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default_2,
   jsxProd_default,
@@ -16,7 +16,7 @@ import {
 import { Byline } from "./design-system/Byline.js";
 import { KeyboardShortcutHint } from "./design-system/KeyboardShortcutHint.js";
 import { ConfigurableShortcutHint } from "./ConfigurableShortcutHint.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { Text, Box, Link } from "../ink/components/Text.js";
 import { SelectMultiAccessible } from "./CustomSelect/SelectMulti.js";
@@ -74,9 +74,9 @@ var WORKFLOW_SELECT_HINTS = jsxProd_default_2(Byline, {
  * GitHub Actions 工作流多选：为每个选中的工作流在仓库中创建文件。
  */
 function WorkflowMultiselectDialog(props) {
-  let $ = w(15);
+  let $ = useMemoCache(15);
   let { onSubmit, defaultSelections } = props;
-  let [showError, setShowError] = y(false);
+  let [showError, setShowError] = useState(false);
   let t1;
   if ($[0] !== onSubmit) {
     t1 = (selectedValues) => {
@@ -107,20 +107,20 @@ function WorkflowMultiselectDialog(props) {
     $[3] = t3;
   } else t3 = $[3];
   let handleCancel = t3;
-  let x;
+  let introElement;
   if ($[4] === MEMO_CACHE_SENTINEL) {
-    x = jsxProd_default(Text, {
+    introElement = jsxProd_default(Text, {
       dimColor: true,
       children: "We'll create a workflow file in your repository for each one you select.",
     });
-    $[4] = x;
-  } else x = $[4];
-  let T;
+    $[4] = introElement;
+  } else introElement = $[4];
+  let examplesElement;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    T = jsxProd_default_2(Box, {
+    examplesElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       children: [
-        x,
+        introElement,
         jsxProd_default_2(Text, {
           dimColor: true,
           children: [
@@ -134,8 +134,8 @@ function WorkflowMultiselectDialog(props) {
         }),
       ],
     });
-    $[5] = T;
-  } else T = $[5];
+    $[5] = examplesElement;
+  } else examplesElement = $[5];
   let options;
   if ($[6] === MEMO_CACHE_SENTINEL) {
     options = GITHUB_WORKFLOW_OPTIONS.map(toMultiselectOption);
@@ -176,7 +176,7 @@ function WorkflowMultiselectDialog(props) {
       onCancel: handleCancel,
       exitOnCtrlCD: true,
       inputGuide: WORKFLOW_SELECT_HINTS,
-      children: [T, t6, t7],
+      children: [examplesElement, t6, t7],
     });
     $[12] = t6;
     $[13] = t7;

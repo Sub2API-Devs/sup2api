@@ -9,11 +9,12 @@
  * attribution: placement 29
  */
 import { logForDebugging } from "../debug.js";
-import { string } from "../../../vendor/zod/v4/classic/schemas.js";
+import { stringSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { env } from "../env.js";
 import { errorMessage } from "../errors.js";
 import { HostScoped } from "../hostScoped.js";
 import { getRootSession } from "../../bootstrap/state.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bwbq4xvm.js:170430-171570 placement
 /**
@@ -53,8 +54,8 @@ class AutoModeState {
   get autoStartWithheldForHipaaTaint() {
     return this.#i;
   }
-  setAutoStartWithheldForHipaaTaint(e) {
-    this.#i = e;
+  setAutoStartWithheldForHipaaTaint(value) {
+    this.#i = value;
   }
   get envOnboardingEligible() {
     return this.#l;
@@ -65,44 +66,44 @@ class AutoModeState {
   get accountSetMode() {
     return this.#c;
   }
-  setActive(e) {
-    this.#e = e;
+  setActive(value) {
+    this.#e = value;
   }
-  setFlagCli(e) {
-    this.#t = e;
+  setFlagCli(value) {
+    this.#t = value;
   }
-  setCircuitBroken(e) {
-    this.#s = e;
+  setCircuitBroken(value) {
+    this.#s = value;
   }
-  setFastModeBreakerReason(e) {
-    this.#n = e;
+  setFastModeBreakerReason(value) {
+    this.#n = value;
   }
-  setPlanOffAtLaunch(e) {
-    this.#o = e;
+  setPlanOffAtLaunch(value) {
+    this.#o = value;
   }
   get planOffAtLaunch() {
     return this.#o;
   }
-  setFromFallback(e) {
-    this.#r = e;
+  setFromFallback(value) {
+    this.#r = value;
   }
-  setProvisionalStartupMode(e) {
-    this.#a = e;
+  setProvisionalStartupMode(value) {
+    this.#a = value;
   }
-  setEnvOnboardingEligible(e) {
-    this.#l = e;
+  setEnvOnboardingEligible(value) {
+    this.#l = value;
   }
-  setEnvOnboardingShownLogged(e) {
-    this.#d = e;
+  setEnvOnboardingShownLogged(value) {
+    this.#d = value;
   }
-  setAccountSetMode(e) {
-    this.#c = e;
+  setAccountSetMode(value) {
+    this.#c = value;
   }
-  noteRefusedMcpSkip(e) {
-    this.#h.add(e);
+  noteRefusedMcpSkip(serverName) {
+    this.#h.add(serverName);
   }
-  hadRefusedMcpSkip(e) {
-    return this.#h.has(e);
+  hadRefusedMcpSkip(serverName) {
+    return this.#h.has(serverName);
   }
   reset() {
     this.#e = false;
@@ -120,14 +121,17 @@ class AutoModeState {
   }
 }
 //@ chunk-bwbq4xvm.js:171570-171597 placement
-var autoModeStates = new HostScoped(() => new AutoModeState());
+var autoModeStates; // deferred: uses AutoModeState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bwbq4xvm.js:171570", () => {
+  autoModeStates = new HostScoped(() => new AutoModeState());
+});
 //@ chunk-bwbq4xvm.js:171597-171635 placement
 function getAutoModeState() {
   return autoModeStates.of(getRootSession().host);
 }
 //@ chunk-bwbq4xvm.js:171635-171668 placement
-function setAutoModeActive(e) {
-  getAutoModeState().setActive(e);
+function setAutoModeActive(value) {
+  getAutoModeState().setActive(value);
 }
 //@ chunk-bwbq4xvm.js:171668-171701 placement
 function isAutoModeActive() {
@@ -155,36 +159,36 @@ function noteRefusedMcpSkip(name) {
   getAutoModeState().noteRefusedMcpSkip(name);
 }
 //@ chunk-bwbq4xvm.js:171922-171971 placement
-function hadRefusedMcpSkip(e) {
-  return getAutoModeState().hadRefusedMcpSkip(e);
+function hadRefusedMcpSkip(serverName) {
+  return getAutoModeState().hadRefusedMcpSkip(serverName);
 }
 //@ chunk-bwbq4xvm.js:171971-172014 placement
-function setPlanAutoModeOffAtLaunch(e) {
-  getAutoModeState().setPlanOffAtLaunch(e);
+function setPlanAutoModeOffAtLaunch(value) {
+  getAutoModeState().setPlanOffAtLaunch(value);
 }
 //@ chunk-bwbq4xvm.js:172014-172057 placement
 function isPlanAutoModeOffAtLaunch() {
   return getAutoModeState().planOffAtLaunch;
 }
 //@ chunk-bwbq4xvm.js:172057-172092 placement
-function setAutoModeFlagCli(e) {
-  getAutoModeState().setFlagCli(e);
+function setAutoModeFlagCli(value) {
+  getAutoModeState().setFlagCli(value);
 }
 //@ chunk-bwbq4xvm.js:172092-172127 placement
 function getAutoModeFlagCli() {
   return getAutoModeState().flagCli;
 }
 //@ chunk-bwbq4xvm.js:172127-172168 placement
-function setAutoModeCircuitBroken(e) {
-  getAutoModeState().setCircuitBroken(e);
+function setAutoModeCircuitBroken(value) {
+  getAutoModeState().setCircuitBroken(value);
 }
 //@ chunk-bwbq4xvm.js:172168-172209 placement
 function isAutoModeCircuitBroken() {
   return getAutoModeState().circuitBroken;
 }
 //@ chunk-bwbq4xvm.js:172209-172258 placement
-function setAutoModeFastModeBreakerReason(e) {
-  getAutoModeState().setFastModeBreakerReason(e);
+function setAutoModeFastModeBreakerReason(value) {
+  getAutoModeState().setFastModeBreakerReason(value);
 }
 //@ chunk-bwbq4xvm.js:172258-172307 placement
 function getAutoModeFastModeBreakerReason() {
@@ -199,8 +203,8 @@ function isAutoModeFromFallback() {
   return getAutoModeState().fromFallback;
 }
 //@ chunk-bwbq4xvm.js:172386-172436 placement
-function setProvisionalStartupMode(e) {
-  getAutoModeState().setProvisionalStartupMode(e);
+function setProvisionalStartupMode(value) {
+  getAutoModeState().setProvisionalStartupMode(value);
 }
 //@ chunk-bwbq4xvm.js:172436-172494 placement
 function isAutoStartWithheldForHipaaTaint() {
@@ -219,8 +223,8 @@ function getAutoModeEnvOnboardingEligible() {
   return getAutoModeState().envOnboardingEligible;
 }
 //@ chunk-bwbq4xvm.js:172651-172700 placement
-function setAutoModeEnvOnboardingEligible(e) {
-  getAutoModeState().setEnvOnboardingEligible(e);
+function setAutoModeEnvOnboardingEligible(value) {
+  getAutoModeState().setEnvOnboardingEligible(value);
 }
 //@ chunk-bwbq4xvm.js:172700-172752 placement
 function getAutoModeEnvOnboardingShownLogged() {
@@ -235,8 +239,8 @@ function setAccountSetPermissionMode(mode) {
   getAutoModeState().setAccountSetMode(mode);
 }
 //@ chunk-bwbq4xvm.js:172836-172888 placement
-function setAutoModeEnvOnboardingShownLogged(e) {
-  getAutoModeState().setEnvOnboardingShownLogged(e);
+function setAutoModeEnvOnboardingShownLogged(value) {
+  getAutoModeState().setEnvOnboardingShownLogged(value);
 }
 export {
   isAutoClassifierActive,
@@ -264,4 +268,8 @@ export {
   getAutoModeFastModeBreakerReason,
   setAccountSetPermissionMode,
   hadRefusedMcpSkip,
+  AutoModeState,
+  autoModeStates,
+  getAutoModeState,
+  isAutoStartWithheldForHipaaTaint,
 };

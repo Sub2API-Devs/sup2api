@@ -20,15 +20,15 @@ import { isHumanAuthoredTurn } from "../messagePredicates.js";
 /**
  * 把消息帧归类为 person（人类/中继人类/摘要/以用户身份的插件）、machine（其他非用户来源）或 unseen（不可见，Projects 中继除外视为 person）。
  */
-function classifyMessageSource(e) {
-  let r = classifyMessageFrame(e);
-  switch (r.frame) {
+function classifyMessageSource(message) {
+  let frame = classifyMessageFrame(message);
+  switch (frame.frame) {
     case "non-user":
-      return r.kind === "unclassified" || (r.origin.kind === "plugin" && r.origin.asUser === true)
+      return frame.kind === "unclassified" || (frame.origin.kind === "plugin" && frame.origin.asUser === true)
         ? "person"
         : "machine";
     case "invisible":
-      return r.reason === "projects-relay" ? "person" : "unseen";
+      return frame.reason === "projects-relay" ? "person" : "unseen";
     case "human":
     case "relay-human":
     case "summary":
@@ -47,25 +47,25 @@ function isAuthoritativeProvenance(provenance) {
   }
 }
 //@ chunk-651cmq7s.js:775-830 placement
-function tryOrFallback(e, r) {
+function tryOrFallback(fn, fallback) {
   try {
-    return e();
+    return fn();
   } catch (error) {
     logError(error);
-    return r;
+    return fallback;
   }
 }
 //@ chunk-651cmq7s.js:830-931 placement
 /**
  * 判断队列输入是否来自人类（poll 事件来源可信或消息归类为 person），出错时视为是。
  */
-function isPersonQueuedInput(e) {
+function isPersonQueuedInput(command) {
   return tryOrFallback(
     () =>
-      isAuthoritativeProvenance(e.pollEvent?.provenance) ||
+      isAuthoritativeProvenance(command.pollEvent?.provenance) ||
       classifyMessageSource({
-        ...e,
-        commandMode: e.mode,
+        ...command,
+        commandMode: command.mode,
       }) === "person",
     true,
   );
@@ -74,12 +74,12 @@ function isPersonQueuedInput(e) {
 /**
  * 判断消息是否是来源可信的 poll 事件附件，出错时视为是。
  */
-function hasAuthoritativePollEvents(e) {
+function hasAuthoritativePollEvents(message) {
   return tryOrFallback(
     () =>
-      e.type === "attachment" &&
-      e.attachment.type === "poll_events" &&
-      (e.attachment.provenance?.some(isAuthoritativeProvenance) ?? true),
+      message.type === "attachment" &&
+      message.attachment.type === "poll_events" &&
+      (message.attachment.provenance?.some(isAuthoritativeProvenance) ?? true),
     true,
   );
 }
@@ -87,27 +87,28 @@ function hasAuthoritativePollEvents(e) {
 /**
  * 判断工具名是否为提问类工具（AskUserQuestion 等），异常时按是处理。
  */
-function isQuestionTool({ name: e }) {
-  return tryOrFallback(() => e === ASKUSERQUESTION || HEARTH_READ_TOOLS.has(e), true);
+function isQuestionTool({ name: toolName }) {
+  return tryOrFallback(() => toolName === ASKUSERQUESTION || HEARTH_READ_TOOLS.has(toolName), true);
 }
 //@ chunk-651cmq7s.js:1120-1418 placement
 /**
  * 判断一段消息里所有用户回合都不是人类输入（或只是关机中断），且没有特定工具调用；出错时返回 false。
  */
-function isMachineOnlyTurnRange(e) {
+function isMachineOnlyTurnRange(messages) {
   return tryOrFallback(
     () =>
-      !e.some(
-        (r) =>
-          r.type === "assistant" && r.message.content.some((n) => n.type === "tool_use" && isQuestionTool(n)),
+      !messages.some(
+        (message) =>
+          message.type === "assistant" &&
+          message.message.content.some((block) => block.type === "tool_use" && isQuestionTool(block)),
       ) &&
-      allUserTurnsSatisfy(e, (r, n) =>
-        n.type === "user"
-          ? classifyMessageSource(n) !== "person" ||
-            (n.interruptedByShutdown === true && isInterruptionOnlyMessage(n))
-          : n.type === "attachment" &&
-            n.attachment.type === "queued_command" &&
-            classifyMessageSource(n.attachment) !== "person",
+      allUserTurnsSatisfy(messages, (block, message) =>
+        message.type === "user"
+          ? classifyMessageSource(message) !== "person" ||
+            (message.interruptedByShutdown === true && isInterruptionOnlyMessage(message))
+          : message.type === "attachment" &&
+            message.attachment.type === "queued_command" &&
+            classifyMessageSource(message.attachment) !== "person",
       ),
     false,
   );
@@ -119,11 +120,11 @@ function isMachineOnlyTurnRange(e) {
 function endsWithMachineTurn(messages) {
   return tryOrFallback(() => {
     let lastIndex = messages.findLastIndex(
-      (n) =>
-        n.type === "user" &&
-        n.turnOrigin !== undefined &&
-        isHumanAuthoredTurn(n) &&
-        classifyMessageSource(n) === "machine",
+      (message) =>
+        message.type === "user" &&
+        message.turnOrigin !== undefined &&
+        isHumanAuthoredTurn(message) &&
+        classifyMessageSource(message) === "machine",
     );
     return lastIndex !== -1 && isMachineOnlyTurnRange(messages.slice(lastIndex));
   }, false);
@@ -132,18 +133,18 @@ function endsWithMachineTurn(messages) {
 function classifyMessageSource_2(messages) {
   return tryOrFallback(() => {
     let lastIndex = messages.findLastIndex(
-      (s) =>
-        s.type === "user" &&
-        s.turnOrigin !== undefined &&
-        isHumanAuthoredTurn(s) &&
-        (s.wakeupSource !== undefined || classifyMessageSource(s) !== "unseen"),
+      (message) =>
+        message.type === "user" &&
+        message.turnOrigin !== undefined &&
+        isHumanAuthoredTurn(message) &&
+        (message.wakeupSource !== undefined || classifyMessageSource(message) !== "unseen"),
     );
-    let n = messages[lastIndex];
-    if (n?.type !== "user") return false;
+    let lastMessage = messages[lastIndex];
+    if (lastMessage?.type !== "user") return false;
     return (
-      (n.wakeupSource !== undefined ||
-        (classifyMessageSource(n) === "machine" &&
-          (n.origin?.kind !== "peer" || isPeerOrObserver(n.origin)))) &&
+      (lastMessage.wakeupSource !== undefined ||
+        (classifyMessageSource(lastMessage) === "machine" &&
+          (lastMessage.origin?.kind !== "peer" || isPeerOrObserver(lastMessage.origin)))) &&
       isMachineOnlyTurnRange(messages.slice(lastIndex))
     );
   }, false);

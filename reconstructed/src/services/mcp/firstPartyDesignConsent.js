@@ -20,9 +20,9 @@ var scaffoldResolver = null;
  * 替换脚手架解析函数并返回旧的。
  */
 function swapScaffoldResolver(designUnavailableReason) {
-  let n = scaffoldResolver;
+  let previous = scaffoldResolver;
   scaffoldResolver = designUnavailableReason;
-  return n;
+  return previous;
 }
 //@ chunk-bz1hrmy7.js:275-299 placement
 /**
@@ -40,10 +40,10 @@ var consentChecker = null;
 /**
  * 替换同意检查函数并返回旧的。
  */
-function swapConsentChecker(e) {
-  let n = consentChecker;
-  consentChecker = e;
-  return n;
+function swapConsentChecker(checker) {
+  let previous = consentChecker;
+  consentChecker = checker;
+  return previous;
 }
 //@ chunk-bz1hrmy7.js:347-393 placement
 /**
@@ -70,10 +70,10 @@ var noticeHolder = null;
 /**
  * 替换提示持有者并返回旧的。
  */
-function swapNoticeHolder(e) {
-  let n = noticeHolder;
-  noticeHolder = e;
-  return n;
+function swapNoticeHolder(holder) {
+  let previous = noticeHolder;
+  noticeHolder = holder;
+  return previous;
 }
 //@ chunk-bz1hrmy7.js:606-630 placement
 /**
@@ -107,9 +107,9 @@ function takeScopeExpansionNotice() {
  * 把待显示的授权扩展提示写到 stderr。
  */
 function printScopeExpansionNotice() {
-  let e = takeScopeExpansionNotice();
-  if (e)
-    process.stderr.write(`${e}
+  let notice = takeScopeExpansionNotice();
+  if (notice)
+    process.stderr.write(`${notice}
 `);
 }
 export {

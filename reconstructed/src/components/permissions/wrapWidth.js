@@ -18,25 +18,25 @@ var MAX_VISIBLE_ITEMS = 8;
 /**
  * 按显示宽度把字符序列切分成多行。
  */
-function wrapByWidth(o, u) {
-  let e = [];
-  let n = "";
-  let t = 0;
-  for (let r of o) {
-    let s = charWidth(r);
-    if (t + s > u && n !== "") {
-      e.push(n);
-      n = "";
-      t = 0;
+function wrapByWidth(text, width) {
+  let lines = [];
+  let current = "";
+  let currentWidth = 0;
+  for (let char of text) {
+    let charWidth = charWidth_2(char);
+    if (currentWidth + charWidth > width && current !== "") {
+      lines.push(current);
+      current = "";
+      currentWidth = 0;
     }
-    n += r;
-    t += s;
+    current += char;
+    currentWidth += charWidth;
   }
-  e.push(n);
-  return e;
+  lines.push(current);
+  return lines;
 }
 //@ chunk-y6209p35.js:329-377 placement
-function charWidth(o) {
-  return o.length === 1 && o < "\x80" ? 1 : 2;
+function charWidth_2(char) {
+  return char.length === 1 && char < "\x80" ? 1 : 2;
 }
 export { MAX_VISIBLE_ITEMS, wrapByWidth };

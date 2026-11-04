@@ -17,43 +17,49 @@ import { parseMemoryCgroup } from "./toolCgroup.js";
 import { collectDirectoryNames } from "../hooks/fileSuggestions.js";
 import { logForDebugging } from "./debug.js";
 import { getErrnoCode } from "./errors.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:3294343-3294437 placement
 /**
  * 机器状态缓存时长、初始空状态与刷新中标记。
  */
-var MACHINE_STATUS_TTL_MS = 2000;
-var EMPTY_MACHINE_STATUS = {
-  memory: undefined,
-  load: undefined,
-  disk: undefined,
-};
-var machineStatusRefreshingState = identity_2(
-  {
-    value: false,
-  },
-  (e) => {
-    e.value = false;
-  },
-);
+var MACHINE_STATUS_TTL_MS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var EMPTY_MACHINE_STATUS;
+var machineStatusRefreshingState;
+deferInit("chunk-e6aww6q8.js:3294343", () => {
+  MACHINE_STATUS_TTL_MS = 2000;
+  EMPTY_MACHINE_STATUS = {
+    memory: undefined,
+    load: undefined,
+    disk: undefined,
+  };
+  machineStatusRefreshingState = identity_2(
+    {
+      value: false,
+    },
+    (state) => {
+      state.value = false;
+    },
+  );
+});
 //@ chunk-e6aww6q8.js:3294437-3294514 placement
 function machineStatusDeps() {
   return {
     platform: getPlatform(),
     totalmem,
-    readText: (e) => readFile(e, "utf8"),
+    readText: (path) => readFile(path, "utf8"),
   };
 }
 //@ chunk-e6aww6q8.js:3294514-3294812 placement
-async function getMachineMemoryStatus(e = machineStatusDeps()) {
-  if (e.platform !== "linux" && e.platform !== "wsl") return;
-  let { available, container, hostOomKills } = await readMemoryStats(e);
-  let h = container === undefined ? available : availableQuota(container, available);
-  return h === undefined
+async function getMachineMemoryStatus(deps = machineStatusDeps()) {
+  if (deps.platform !== "linux" && deps.platform !== "wsl") return;
+  let { available, container, hostOomKills } = await readMemoryStats(deps);
+  let availableBytes = container === undefined ? available : availableQuota(container, available);
+  return availableBytes === undefined
     ? undefined
     : {
-        availableBytes: h,
-        totalBytes: container?.limit ?? e.totalmem(),
+        availableBytes,
+        totalBytes: container?.limit ?? deps.totalmem(),
         limitedByCgroup: container !== undefined,
         oomKills: container === undefined ? hostOomKills : container.oomKills,
       };
@@ -76,9 +82,9 @@ async function readMemoryStats(host) {
     readProcFile(host, "/proc/vmstat"),
     readCgroupMemory(host),
   ]);
-  let h = matchNumber(/^MemAvailable:\s+(\d+) kB$/m, procFile);
+  let availableKb = matchNumber(/^MemAvailable:\s+(\d+) kB$/m, procFile);
   return {
-    available: h === undefined ? undefined : h * 1024,
+    available: availableKb === undefined ? undefined : availableKb * 1024,
     hostOomKills: matchNumber(/^oom_kill (\d+)$/m, procFile_2),
     container: cgroupMemory,
   };
@@ -104,11 +110,16 @@ async function readCgroupMemory(host) {
         inactiveFile: /^total_inactive_file (\d+)$/m,
         oomKills: "memory.oom_control",
       };
-  let h = host.totalmem();
+  let totalBytes = host.totalmem();
   let tightest;
   for (let dir of collectDirectoryNames(cgroup.mountRoot, cgroup.path)) {
     let limit = matchNumber(/^(\d+)$/m, await readTextQuiet(host, posix.join(dir, files.limit)));
-    if (limit !== undefined && limit > 0 && limit < h && (tightest === undefined || limit < tightest.limit))
+    if (
+      limit !== undefined &&
+      limit > 0 &&
+      limit < totalBytes &&
+      (tightest === undefined || limit < tightest.limit)
+    )
       tightest = {
         dir,
         limit,
@@ -130,26 +141,26 @@ async function readCgroupMemory(host) {
   };
 }
 //@ chunk-e6aww6q8.js:3296114-3296216 affinity
-function matchNumber(e, n) {
-  if (n === undefined) return;
-  let r = Number(e.exec(n)?.[1]);
-  return Number.isFinite(r) ? r : undefined;
+function matchNumber(pattern, text) {
+  if (text === undefined) return;
+  let value = Number(pattern.exec(text)?.[1]);
+  return Number.isFinite(value) ? value : undefined;
 }
 //@ chunk-e6aww6q8.js:3296216-3296372 placement
-async function readProcFile(host, n) {
+async function readProcFile(host, path) {
   try {
-    return await host.readText(n);
+    return await host.readText(path);
   } catch (error) {
     logForDebugging(
-      `machine status: ${n} not read (${getErrnoCode(error) ?? "unreadable"}); its figures are left out`,
+      `machine status: ${path} not read (${getErrnoCode(error) ?? "unreadable"}); its figures are left out`,
     );
     return;
   }
 }
 //@ chunk-e6aww6q8.js:3296372-3296441 placement
-async function readTextQuiet(host, n) {
+async function readTextQuiet(host, path) {
   try {
-    return await host.readText(n);
+    return await host.readText(path);
   } catch {
     return;
   }

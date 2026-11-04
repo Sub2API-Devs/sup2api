@@ -21,21 +21,21 @@ import { safeParseJSON } from "../json.js";
 /**
  * 等待下一次宿主通告、中止或超时。
  */
-function waitForAnnounce(e, n, r) {
+function waitForAnnounce(announcer, signal, timeoutMs) {
   return new Promise((resolve) => {
-    let h = (L) => {
+    let settle = (outcome) => {
       clearTimeout(timer);
-      S();
-      n.removeEventListener("abort", y);
-      resolve(L);
+      unsubscribe();
+      signal.removeEventListener("abort", onAbort);
+      resolve(outcome);
     };
-    let y = () => h("aborted");
-    let S = e.onNextAnnounce(() => h("announced"));
-    let timer = setTimeout((L) => L("slice"), r, h);
-    n.addEventListener("abort", y, {
+    let onAbort = () => settle("aborted");
+    let unsubscribe = announcer.onNextAnnounce(() => settle("announced"));
+    let timer = setTimeout((fireTimeout) => fireTimeout("slice"), timeoutMs, settle);
+    signal.addEventListener("abort", onAbort, {
       once: true,
     });
-    if (n.aborted) h("aborted");
+    if (signal.aborted) settle("aborted");
   });
 }
 //@ chunk-e6aww6q8.js:3753982-3753995 placement
@@ -52,20 +52,20 @@ async function waitForFolderAttached({ toolState, fullToolName, content, signal 
     )
       return;
     let now = Date.now();
-    let y = await waitForAnnounce(
+    let outcome = await waitForAnnounce(
       toolState.get(RemoteBackgroundCommands),
       signal,
       MAX_REMOTE_COMMAND_LISTING_MS,
     );
-    let S = Date.now() - now;
+    let waitedMs = Date.now() - now;
     logForDebugging(
-      `[remote-tools] held the folder request's "attached" result ${S} ms for the computer's announcement: ${y === "announced" ? "it arrived" : y === "aborted" ? "the call was aborted first" : "none arrived in time"}`,
+      `[remote-tools] held the folder request's "attached" result ${waitedMs} ms for the computer's announcement: ${outcome === "announced" ? "it arrived" : outcome === "aborted" ? "the call was aborted first" : "none arrived in time"}`,
     );
     logEvent("tengu_remote_tool_targets", {
       event: lit_2("attach_result_announce_wait"),
       source: lit_2("session"),
-      announce_arrived: y === "announced",
-      waited_ms: S,
+      announce_arrived: outcome === "announced",
+      waited_ms: waitedMs,
     });
   } catch (error) {
     logForDebugging(
@@ -94,20 +94,20 @@ function hasAttachedState(content) {
     typeof content === "string"
       ? [content]
       : Array.isArray(content)
-        ? content.flatMap((r) =>
-            typeof r === "object" &&
-            r !== null &&
-            "type" in r &&
-            r.type === "text" &&
-            "text" in r &&
-            typeof r.text === "string"
-              ? [r.text]
+        ? content.flatMap((block) =>
+            typeof block === "object" &&
+            block !== null &&
+            "type" in block &&
+            block.type === "text" &&
+            "text" in block &&
+            typeof block.text === "string"
+              ? [block.text]
               : [],
           )
         : []
-  ).some((r) => {
-    let s = attachStateSchema().safeParse(safeParseJSON(r, false));
-    return s.success && s.data.state === "attached";
+  ).some((text) => {
+    let parsed = attachStateSchema().safeParse(safeParseJSON(text, false));
+    return parsed.success && parsed.data.state === "attached";
   });
 }
 export { waitForAnnounce, waitForFolderAttached };

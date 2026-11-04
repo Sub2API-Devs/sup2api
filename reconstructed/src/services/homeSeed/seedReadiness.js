@@ -46,68 +46,68 @@ async function awaitSeedReadiness({
   )
     return "skipped";
   let abortController = new AbortController();
-  let U = () => abortController.abort();
-  signal?.addEventListener("abort", U, {
+  let onAbort = () => abortController.abort();
+  signal?.addEventListener("abort", onAbort, {
     once: true,
   });
   try {
-    let D;
-    let P = (await withDeadline(
+    let lastRead;
+    let verdict = (await withDeadline(
       pollSeedStatus({
         client,
         pack,
         generation,
         uploaded: uploaded.outcome,
         signal: abortController.signal,
-        onRead: (H) => {
-          D = H;
+        onRead: (read) => {
+          lastRead = read;
         },
       }),
       deadlineMs,
     )) ??
-      D ?? {
+      lastRead ?? {
         verdict: "unreadable",
         heal: "none",
         got: "deadline",
         ready: null,
       };
-    if (isAborted(signal) || P.got === "aborted") return "skipped";
-    let N = isPartialWithRestrictiveRules(P.ready, generation, pack);
+    if (isAborted(signal) || verdict.got === "aborted") return "skipped";
+    let rulesMissing = isPartialWithRestrictiveRules(verdict.ready, generation, pack);
     logEvent("tengu_home_seed_ready_seen", {
-      outcome: fromEnum(P.verdict),
-      got: fromEnum(P.got),
-      heal: fromEnum(P.heal),
-      ready_outcome: fromEnum(P.ready?.outcome ?? "none"),
-      deny_or_ask_rules_missing: N,
+      outcome: fromEnum(verdict.verdict),
+      got: fromEnum(verdict.got),
+      heal: fromEnum(verdict.heal),
+      ready_outcome: fromEnum(verdict.ready?.outcome ?? "none"),
+      deny_or_ask_rules_missing: rulesMissing,
       generation,
     });
-    let E =
-      P.verdict === "applied_before_first_ask" || P.verdict === "applied_late"
+    let reported =
+      verdict.verdict === "applied_before_first_ask" || verdict.verdict === "applied_late"
         ? {
-            verdict: P.verdict,
-            left: getPartialApplyKind(P.ready, packHasSettings(pack), N),
+            verdict: verdict.verdict,
+            left: getPartialApplyKind(verdict.ready, packHasSettings(pack), rulesMissing),
           }
         : {
-            verdict: P.verdict,
+            verdict: verdict.verdict,
             left: null,
           };
-    onReadBack?.(E);
-    let v = seedReadinessNotice(
-      P.verdict,
+    onReadBack?.(reported);
+    let notice = seedReadinessNotice(
+      verdict.verdict,
       uploaded.outcome,
-      E.left,
+      reported.left,
       uploaded.settingsRefused !== undefined,
-      N,
+      rulesMissing,
     );
-    if (v !== null) status.publish(v.text, v.level);
-    return P.verdict;
+    if (notice !== null) status.publish(notice.text, notice.level);
+    return verdict.verdict;
   } catch (error) {
     if (isAbortError(error) || isAborted(signal)) return "skipped";
     logError(error);
     return "unreadable";
   } finally {
     abortController.abort();
-    signal?.removeEventListener("abort", U);
+    signal?.removeEventListener("abort", onAbort);
   }
 }
 //@ chunk-mxpjbr4y.js:11346-12169 placement
@@ -213,14 +213,18 @@ function parseSeedStatus(storeRow) {
  * 解出的包里是否带 settings。
  */
 function packHasSettings(pack) {
-  let n = decodeHomePack(pack);
-  return n.ok && n.pack.settings !== null;
+  let decoded = decodeHomePack(pack);
+  return decoded.ok && decoded.pack.settings !== null;
 }
 //@ chunk-mxpjbr4y.js:12536-12705 placement
 function isPartialWithRestrictiveRules(ready, generation, pack) {
   if (ready?.generation !== generation || ready.outcome !== "partial" || ready.settingsWritten) return false;
-  let i = decodeHomePack(pack);
-  return i.ok && i.pack.settings !== null && extractRestrictivePermissions(i.pack.settings) !== null;
+  let readyGeneration = decodeHomePack(pack);
+  return (
+    readyGeneration.ok &&
+    readyGeneration.pack.settings !== null &&
+    extractRestrictivePermissions(readyGeneration.pack.settings) !== null
+  );
 }
 //@ chunk-mxpjbr4y.js:12705-12789 placement
 /**
@@ -248,39 +252,43 @@ function isSendOutcomeSettled(outcome) {
   }
 }
 //@ chunk-mxpjbr4y.js:13021-13162 placement
-function getPartialApplyKind(ready, n, r) {
+function getPartialApplyKind(ready, generation, readyState) {
   if (ready === null || ready.outcome !== "partial") return null;
-  return !r && ready.filesRefused > 0 ? "files" : n && !ready.settingsWritten ? "settings" : "part";
+  return !readyState && ready.filesRefused > 0
+    ? "files"
+    : generation && !ready.settingsWritten
+      ? "settings"
+      : "part";
 }
 //@ chunk-mxpjbr4y.js:13162-14382 placement
-function seedReadinessNotice(verdict, outcome, r, i, _) {
-  let s = i ? "the rest of your settings" : "your settings";
-  let h = r === null ? "" : ` (${HOME_SEED_PARTIAL_REASONS[r]})`;
-  let S = outcome === "deadline" || _;
+function seedReadinessNotice(verdict, outcome, partialKind, onlyRest, rulesMissing) {
+  let subject = onlyRest ? "the rest of your settings" : "your settings";
+  let reasonSuffix = partialKind === null ? "" : ` (${HOME_SEED_PARTIAL_REASONS[partialKind]})`;
+  let notable = outcome === "deadline" || rulesMissing;
   switch (verdict) {
     case "applied_before_first_ask":
       return {
-        text: `The cloud session applied ${s} before its first reply${h}`,
-        level: S ? "info" : "debug",
+        text: `The cloud session applied ${subject} before its first reply${reasonSuffix}`,
+        level: notable ? "info" : "debug",
       };
     case "applied_late":
       return {
-        text: `${capitalize(s)} reached the cloud session after its first reply${h}; they apply from the next turn (no /clear needed)`,
-        level: r === null || S ? "info" : "debug",
+        text: `${capitalize(subject)} reached the cloud session after its first reply${reasonSuffix}; they apply from the next turn (no /clear needed)`,
+        level: partialKind === null || notable ? "info" : "debug",
       };
     case "not_applied":
       return {
-        text: `The cloud session could not apply ${s} (everything it was sent was skipped there)`,
-        level: S ? "warning" : "debug",
+        text: `The cloud session could not apply ${subject} (everything it was sent was skipped there)`,
+        level: notable ? "warning" : "debug",
       };
     case "not_seen":
       return outcome === "deadline"
         ? {
-            text: `The cloud session has not confirmed ${s} (the upload may not have reached it in time)`,
+            text: `The cloud session has not confirmed ${subject} (the upload may not have reached it in time)`,
             level: "warning",
           }
         : {
-            text: `The cloud session has not confirmed ${s} and may be running without them`,
+            text: `The cloud session has not confirmed ${subject} and may be running without them`,
             level: "info",
           };
     case "behind":
@@ -290,12 +298,12 @@ function seedReadinessNotice(verdict, outcome, r, i, _) {
       };
     case "stale":
       return {
-        text: `The cloud session confirmed a different copy of ${s} than the one just sent`,
+        text: `The cloud session confirmed a different copy of ${subject} than the one just sent`,
         level: "warning",
       };
     case "unreadable":
       return {
-        text: `The cloud session's answer about ${s} could not be read`,
+        text: `The cloud session's answer about ${subject} could not be read`,
         level: "warning",
       };
   }

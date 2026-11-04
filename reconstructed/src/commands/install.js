@@ -10,7 +10,7 @@
  */
 import { homedir } from "os";
 import { join } from "path";
-import { init_react_production, y, P } from "../../vendor/react/cjs/react.production.js";
+import { init_react_production, useState, useEffect } from "../../vendor/react/cjs/react.production.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -18,7 +18,7 @@ import {
 import { BulletRow } from "../components/design-system/BulletRow.js";
 import { Text, Box } from "../ink/components/Text.js";
 import { env } from "../utils/env.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { StatusIcon } from "../components/design-system/StatusIcon.js";
 import { useClock } from "../ink/components/ClockContext.js";
@@ -60,7 +60,7 @@ function getInstallationPath() {
 }
 //@ chunk-na8jp6ng.js:13368-13807 fingerprint = SetupNotes (0.431)
 function SetupNotes(props) {
-  let $ = w(5);
+  let $ = useMemoCache(5);
   let { messages } = props;
   if (messages.length === 0) {
     return null;
@@ -109,11 +109,11 @@ function SetupNotes(props) {
 }
 //@ chunk-na8jp6ng.js:13807-18584 fingerprint = Install (0.73)
 function Install({ onDone, force, target, storageV5 }) {
-  let [state, setState] = y({
+  let [state, setState] = useState({
     type: "checking",
   });
   let clock = useClock();
-  P(() => {
+  useEffect(() => {
     async function run() {
       try {
         logForDebugging(`Install: Starting installation process (force=${force}, target=${target})`);
@@ -137,24 +137,24 @@ function Install({ onDone, force, target, storageV5 }) {
           logForDebugging("Install: Failed to retrieve version information during install", {
             level: "error",
           });
-        let I = false;
+        let alreadyInstalled = false;
         if (target === "latest" || target === "stable" || target === "rc") {
-          let u = target === "rc" ? "stable" : target;
+          let channel = target === "rc" ? "stable" : target;
           let { error } = await updateSettingsForSource(
             "userSettings",
             {
-              autoUpdatesChannel: u,
+              autoUpdatesChannel: channel,
             },
             undefined,
             storageV5,
           );
-          I = error === null;
+          alreadyInstalled = error === null;
           logForDebugging(
-            I
-              ? `Install: Saved autoUpdatesChannel=${u} to user settings`
-              : `Install: Could not save autoUpdatesChannel=${u}: ${errorMessage(error)}`,
+            alreadyInstalled
+              ? `Install: Saved autoUpdatesChannel=${channel} to user settings`
+              : `Install: Could not save autoUpdatesChannel=${channel}: ${errorMessage(error)}`,
             {
-              level: I ? "debug" : "warn",
+              level: alreadyInstalled ? "debug" : "warn",
             },
           );
         }
@@ -174,7 +174,7 @@ function Install({ onDone, force, target, storageV5 }) {
                   import.meta.dir + "/./src/plugins/functionHooks/hooks-worker/hooks-worker.js",
                 DD_SOURCEMAP_GROUP: "default",
               }.VERSION
-            }) will not switch to it automatically.${I ? " Channel preference saved." : ""} Run \`claude install ${result.latestVersion}\` to install that exact version.`,
+            }) will not switch to it automatically.${alreadyInstalled ? " Channel preference saved." : ""} Run \`claude install ${result.latestVersion}\` to install that exact version.`,
           });
           return;
         }
@@ -396,7 +396,7 @@ var installCommand = {
   name: "install",
   description: "Install Claude Code native build",
   argumentHint: "[options]",
-  async call(onDone, c, args) {
+  async call(onDone, context, args) {
     let force = args.includes("--force");
     let target = args.filter((arg) => !arg.startsWith("--"))[0];
     let { unmount } = await render(
@@ -407,8 +407,9 @@ var installCommand = {
         },
         force,
         target,
-        storageV5: c?.storageV5,
+        storageV5: context?.storageV5,
       }),
     );
   },
 };
+export { installCommand };

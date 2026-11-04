@@ -9,7 +9,7 @@
  * attribution: placement 7
  */
 import {
-  la,
+  MAX_CACHEABLE_LIST_ITEMS,
   PROTOCOL_VERSION_META_KEY,
   CACHEABLE_LIST_METHODS,
 } from "../../../vendor/@modelcontextprotocol/client/dist/src-CeKsbNLO.mjs";
@@ -23,43 +23,43 @@ import { logFeatureSad, logFeatureOk } from "../analytics/featureTelemetry.js";
 /**
  * installModernResultBackfill：modern 协议下包装 transport，若 tools/list 等结果缺 resultType/ttlMs/cacheScope，补默认值（complete/0/private）并对每种方法告警一次。
  */
-function installModernResultBackfill(e, name) {
-  let r = new Map();
-  let s = new Set();
-  let h = e.send.bind(e);
-  e.send = (S, w) => {
-    if ("method" in S && "id" in S && hasProtocolVersionMeta(S)) {
-      if (r.size >= la) {
-        let P = r.keys().next();
-        if (!P.done) r.delete(P.value);
+function installModernResultBackfill(transport, name) {
+  let pendingMethods = new Map();
+  let loggedMethods = new Set();
+  let originalSend = transport.send.bind(transport);
+  transport.send = (message, requestOptions) => {
+    if ("method" in message && "id" in message && hasProtocolVersionMeta(message)) {
+      if (pendingMethods.size >= MAX_CACHEABLE_LIST_ITEMS) {
+        let oldest = pendingMethods.keys().next();
+        if (!oldest.done) pendingMethods.delete(oldest.value);
       }
-      r.set(String(S.id), S.method);
+      pendingMethods.set(String(message.id), message.method);
     }
-    return h(S, w);
+    return originalSend(message, requestOptions);
   };
-  let onmessage = e.onmessage;
-  e.onmessage = (S, w) => {
-    onmessage?.(S, w);
-    if ("method" in S || !("id" in S) || S.id === undefined) return;
-    let P = r.get(String(S.id));
-    if (P === undefined) return;
-    r.delete(String(S.id));
-    if (!("result" in S)) return;
-    let M = S.result;
-    if (typeof M !== "object" || M === null || Array.isArray(M)) return;
-    let j = backfillModernResult(P, S.result);
-    if (j.length > 0 && !s.has(P)) {
-      s.add(P);
+  let onmessage = transport.onmessage;
+  transport.onmessage = (message, rest) => {
+    onmessage?.(message, rest);
+    if ("method" in message || !("id" in message) || message.id === undefined) return;
+    let method = pendingMethods.get(String(message.id));
+    if (method === undefined) return;
+    pendingMethods.delete(String(message.id));
+    if (!("result" in message)) return;
+    let result = message.result;
+    if (typeof result !== "object" || result === null || Array.isArray(result)) return;
+    let filled = backfillModernResult(method, message.result);
+    if (filled.length > 0 && !loggedMethods.has(method)) {
+      loggedMethods.add(method);
       logMCPDebug(
         name,
-        `${P} result omits required fields although the server negotiated ${MCP_PROTOCOL_NEXT}; filled in ${j.join(", ")} instead of rejecting it (not logged again for ${P} on this connection)`,
+        `${method} result omits required fields although the server negotiated ${MCP_PROTOCOL_NEXT}; filled in ${filled.join(", ")} instead of rejecting it (not logged again for ${method} on this connection)`,
       );
     }
   };
 }
 //@ chunk-8t8n4kdh.js:26695-26803 placement
-function hasProtocolVersionMeta(e) {
-  let _meta = e.params?._meta;
+function hasProtocolVersionMeta(message) {
+  let _meta = message.params?._meta;
   return (
     typeof _meta === "object" &&
     _meta !== null &&
@@ -68,23 +68,23 @@ function hasProtocolVersionMeta(e) {
   );
 }
 //@ chunk-8t8n4kdh.js:26803-27087 placement
-function backfillModernResult(e, result) {
-  let r = [];
+function backfillModernResult(method, result) {
+  let filled = [];
   if (result.resultType === undefined) {
     result.resultType = "complete";
-    r.push('resultType="complete"');
+    filled.push('resultType="complete"');
   }
-  if (result.resultType === "complete" && CACHEABLE_LIST_METHODS.has(e)) {
+  if (result.resultType === "complete" && CACHEABLE_LIST_METHODS.has(method)) {
     if (result.ttlMs === undefined) {
       result.ttlMs = 0;
-      r.push("ttlMs=0");
+      filled.push("ttlMs=0");
     }
     if (result.cacheScope === undefined) {
       result.cacheScope = "private";
-      r.push('cacheScope="private"');
+      filled.push('cacheScope="private"');
     }
   }
-  return r;
+  return filled;
 }
 //@ chunk-8t8n4kdh.js:27087-27101 placement
 /**
@@ -121,8 +121,8 @@ function installQuestionPause(watchdog, { inFlight, timeoutMs, armTimeout, timed
   let pausedAt = 0;
   let paused = false;
   let skipped;
-  let R = (ce) => {
-    if (inFlight?.has(watchdog)) armTimeout(startTime + ce - performance.now(), ce);
+  let rearm = (timeoutMs) => {
+    if (inFlight?.has(watchdog)) armTimeout(startTime + timeoutMs - performance.now(), timeoutMs);
   };
   watchdog.questionOpened = () => {
     if (skipped === undefined) {
@@ -133,13 +133,13 @@ function installQuestionPause(watchdog, { inFlight, timeoutMs, armTimeout, timed
     paused = true;
     if (openQuestions++ === 0) {
       pausedAt = performance.now();
-      R(MAX_QUESTION_PAUSE_MS);
+      rearm(MAX_QUESTION_PAUSE_MS);
     }
   };
   watchdog.questionClosed = () => {
     if (!skipped && --openQuestions === 0) {
       remainingMs = Math.min(remainingMs + performance.now() - pausedAt, MAX_QUESTION_PAUSE_MS);
-      R(remainingMs);
+      rearm(remainingMs);
     }
   };
   watchdog.returned = () => {

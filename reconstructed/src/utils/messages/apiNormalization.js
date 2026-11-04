@@ -69,68 +69,72 @@ import { normalizeDeliveredPeers } from "../pollEvents.js";
 import { SYNTHETIC_MODEL } from "../../constants/messages.js";
 import { listsHumanReplies } from "../permissions/serverClassifier/fallbackNotice.js";
 import { isNarrationThinking } from "../../services/api/narrationClassifier.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:144825-145817 placement
 function describeForwardedTurns(messages, messagesForAPI) {
-  let r = new Map();
-  let s = new Set();
-  let h = new Map();
-  for (let w of messages) {
-    if (w.type !== "attachment" || w.attachment.type !== "queued_command") continue;
-    let { attachment } = w;
+  let descriptions = new Map();
+  let seenReminderIds = new Set();
+  let reminderByTurn = new Map();
+  for (let message of messages) {
+    if (message.type !== "attachment" || message.attachment.type !== "queued_command") continue;
+    let { attachment } = message;
     let reminderId = attachment.reminderId;
-    if (isValidReminderId(reminderId)) s.add(reminderId);
-    let forwardedQueuedCommand = parseForwardedQueuedCommand(attachment);
-    if (forwardedQueuedCommand !== undefined) {
-      let Se = turnKey(forwardedQueuedCommand);
-      r.delete(h.get(Se) ?? "");
-      h.set(Se, isValidReminderId(reminderId) ? reminderId : "");
+    if (isValidReminderId(reminderId)) seenReminderIds.add(reminderId);
+    let turn = parseForwardedQueuedCommand(attachment);
+    if (turn !== undefined) {
+      let turn_2 = turnKey(turn);
+      descriptions.delete(reminderByTurn.get(turn_2) ?? "");
+      reminderByTurn.set(turn_2, isValidReminderId(reminderId) ? reminderId : "");
     }
-    if (!isValidReminderId(reminderId) || r.has(reminderId) || attachment.renderedByBatchHead) continue;
+    if (!isValidReminderId(reminderId) || descriptions.has(reminderId) || attachment.renderedByBatchHead)
+      continue;
     let forwardedTurnKind = getForwardedTurnKind(attachment);
     if (forwardedTurnKind === undefined) continue;
     if (forwardedTurnKind === "forwarded_turn") {
-      if (forwardedQueuedCommand === undefined) continue;
+      if (turn === undefined) continue;
       let timestamp =
-        forwardedQueuedCommand.source === "owner" &&
-        forwardedQueuedCommand.timestamp !== undefined &&
-        forwardedQueuedCommand.timestamp.length <= MAX_ID_LIST_LENGTH &&
-        ISO_TIMESTAMP_RE.test(forwardedQueuedCommand.timestamp)
-          ? forwardedQueuedCommand.timestamp
+        turn.source === "owner" &&
+        turn.timestamp !== undefined &&
+        turn.timestamp.length <= MAX_ID_LIST_LENGTH &&
+        ISO_TIMESTAMP_RE.test(turn.timestamp)
+          ? turn.timestamp
           : undefined;
-      r.set(reminderId, {
+      descriptions.set(reminderId, {
         provenance: forwardedTurnKind,
-        author: getSourceAttributionLabel(forwardedQueuedCommand.source),
+        author: getSourceAttributionLabel(turn.source),
         ...(timestamp !== undefined && {
           written: timestamp,
         }),
       });
     } else
-      r.set(reminderId, {
+      descriptions.set(reminderId, {
         provenance: forwardedTurnKind,
       });
   }
-  if (r.size === 0) return [];
-  let y = [];
-  let S = new Set();
-  for (let w of messagesForAPI) {
-    if (w.type !== "user") continue;
-    let content = w.message.content;
-    let G =
-      typeof content === "string" ? [content] : content.flatMap((q) => (q.type === "text" ? [q.text] : []));
-    for (let q of G) {
-      let reminderHeader = parseReminderHeader(q);
-      if (reminderHeader === undefined || S.has(reminderHeader)) continue;
-      let Se = r.get(reminderHeader);
-      if (Se === undefined) continue;
-      S.add(reminderHeader);
-      y.push({
+  if (descriptions.size === 0) return [];
+  let result = [];
+  let handledIds = new Set();
+  for (let message of messagesForAPI) {
+    if (message.type !== "user") continue;
+    let content = message.message.content;
+    let texts =
+      typeof content === "string"
+        ? [content]
+        : content.flatMap((block) => (block.type === "text" ? [block.text] : []));
+    for (let text of texts) {
+      let reminderHeader = parseReminderHeader(text);
+      if (reminderHeader === undefined || handledIds.has(reminderHeader)) continue;
+      let description = descriptions.get(reminderHeader);
+      if (description === undefined) continue;
+      handledIds.add(reminderHeader);
+      result.push({
         id: reminderHeader,
-        ...Se,
+        ...description,
       });
     }
   }
-  return y.length > MAX_MCP_RULE_LENGTH ? y.slice(y.length - MAX_MCP_RULE_LENGTH) : y;
+  return result.length > MAX_MCP_RULE_LENGTH ? result.slice(result.length - MAX_MCP_RULE_LENGTH) : result;
 }
 //@ chunk-e6aww6q8.js:145817-146020 placement
 /**
@@ -140,11 +144,11 @@ function parseClassifierRequest(serverClassifierContext) {
   if (typeof serverClassifierContext !== "object" || serverClassifierContext === null) return;
   let { request, context } = serverClassifierContext;
   if (typeof request !== "string" || request.length === 0) return;
-  let s = classifierExtraContextSchema().safeParse(context);
-  return s.success
+  let parsedContext = classifierExtraContextSchema().safeParse(context);
+  return parsedContext.success
     ? {
         request,
-        context: s.data,
+        context: parsedContext.data,
       }
     : undefined;
 }
@@ -152,41 +156,48 @@ function parseClassifierRequest(serverClassifierContext) {
 /**
  * 精简（bare）模式下丢弃除队列命令与 poll 事件外的所有附件。
  */
-function isBareModeAttachmentDropped(e) {
+function isBareModeAttachmentDropped(message) {
   if (!isBareMode()) return false;
-  let { type: n } = e.attachment;
-  return n !== "queued_command" && n !== "poll_events";
+  let { type: attachmentType } = message.attachment;
+  return attachmentType !== "queued_command" && attachmentType !== "poll_events";
 }
 //@ chunk-e6aww6q8.js:146169-146554 placement
 /**
  * 从某位置往前看，最近一条有意义的消息是否是人类亲自输入的用户消息（遇到助手、工具结果、压缩摘要、中断或非白名单元消息则为否）。
  */
-function isAfterHumanTurn(e, n = e.length) {
-  for (let idx = Math.min(n, e.length) - 1; idx >= 0; idx--) {
-    let s = e[idx];
-    if (s === undefined) continue;
-    if (s.type === "assistant") return false;
-    if (s.type !== "user") continue;
-    if (s.toolUseResult !== undefined || s.isCompactSummary === true || isInterruptionOnlyMessage(s))
+function isAfterHumanTurn(messages, endIndex = messages.length) {
+  for (let idx = Math.min(endIndex, messages.length) - 1; idx >= 0; idx--) {
+    let message = messages[idx];
+    if (message === undefined) continue;
+    if (message.type === "assistant") return false;
+    if (message.type !== "user") continue;
+    if (
+      message.toolUseResult !== undefined ||
+      message.isCompactSummary === true ||
+      isInterruptionOnlyMessage(message)
+    )
       return false;
-    if (s.isVisibleInTranscriptOnly === true) continue;
-    if (s.isMeta === true) {
-      if (isHarmlessMetaMessage(s)) continue;
+    if (message.isVisibleInTranscriptOnly === true) continue;
+    if (message.isMeta === true) {
+      if (isHarmlessMetaMessage(message)) continue;
       return false;
     }
-    return isHumanOrigin(s.origin) && s.verifiedSlackHumanTurn !== true;
+    return isHumanOrigin(message.origin) && message.verifiedSlackHumanTurn !== true;
   }
   return false;
 }
 //@ chunk-e6aww6q8.js:146554-146744 placement
-function isHarmlessMetaMessage(e) {
-  let content = e.message.content;
+function isHarmlessMetaMessage(message) {
+  let content = message.message.content;
   return (
-    e.origin === undefined &&
-    e.promptSource === undefined &&
+    message.origin === undefined &&
+    message.promptSource === undefined &&
     Array.isArray(content) &&
     content.length > 0 &&
-    content.every((r) => r.type === "text" && typeof r.text === "string" && isTaskNotificationText(r.text))
+    content.every(
+      (block) =>
+        block.type === "text" && typeof block.text === "string" && isTaskNotificationText(block.text),
+    )
   );
 }
 //@ chunk-e6aww6q8.js:146744-146840 placement
@@ -202,26 +213,29 @@ function isTaskNotificationText(text) {
 /**
  * 收集紧跟在人类回合之后的任务通知类队列命令附件 uuid（排除定时触发与 Projects 中继）。
  */
-function collectTaskNotificationsAfterHuman(e) {
-  let n;
-  for (let idx = 0; idx < e.length; idx++) {
-    let s = e[idx];
-    if (s.type !== "attachment" || s.attachment.type !== "queued_command") continue;
-    let origin = s.attachment.origin;
+function collectTaskNotificationsAfterHuman(messages) {
+  let uuids;
+  for (let idx = 0; idx < messages.length; idx++) {
+    let message = messages[idx];
+    if (message.type !== "attachment" || message.attachment.type !== "queued_command") continue;
+    let origin = message.attachment.origin;
     if (
       (origin != null
         ? origin.kind === "task-notification" &&
           origin.subkind !== "scheduled-trigger" &&
           !isProjectsRelay(origin)
-        : s.attachment.commandMode === "task-notification") &&
-      isAfterHumanTurn(e, idx)
+        : message.attachment.commandMode === "task-notification") &&
+      isAfterHumanTurn(messages, idx)
     )
-      (n ??= new Set()).add(s.uuid);
+      (uuids ??= new Set()).add(message.uuid);
   }
-  return n ?? NO_NOTIFICATION_UUIDS;
+  return uuids ?? NO_NOTIFICATION_UUIDS;
 }
 //@ chunk-e6aww6q8.js:147179-147195 placement
-var NO_NOTIFICATION_UUIDS = new Set();
+var NO_NOTIFICATION_UUIDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:147179", () => {
+  NO_NOTIFICATION_UUIDS = new Set();
+});
 //@ chunk-e6aww6q8.js:147195-147254 placement
 var TENGU_VELVETY_RIPPLE = "tengu_velvety_ripple";
 var TENGU_LEXICAL_CRYSTAL = "tengu_lexical_crystal";
@@ -240,10 +254,12 @@ function isLexicalCrystalOn() {
   return getFeatureValue_CACHED_MAY_BE_STALE(TENGU_LEXICAL_CRYSTAL, true);
 }
 //@ chunk-e6aww6q8.js:2516581-2516709 placement
-function hashInsertedText(e, message) {
-  let r = normalizeFullWidthSpace(e);
+function hashInsertedText(text, message) {
+  let normalized = normalizeFullWidthSpace(text);
   return createHash("sha256")
-    .update(`${Buffer.byteLength(r)}:${r}${normalizeFullWidthSpace(stripTrailingMessageIdTag(message))}`)
+    .update(
+      `${Buffer.byteLength(normalized)}:${normalized}${normalizeFullWidthSpace(stripTrailingMessageIdTag(message))}`,
+    )
     .digest("hex")
     .slice(0, 32);
 }
@@ -254,21 +270,26 @@ function hashInsertedText(e, message) {
 function getTextBlocks(content) {
   if (typeof content === "string") return [content];
   return Array.isArray(content)
-    ? content.flatMap((n) => (n?.type === "text" && typeof n.text === "string" ? [n.text] : []))
+    ? content.flatMap((block) =>
+        block?.type === "text" && typeof block.text === "string" ? [block.text] : [],
+      )
     : [];
 }
 //@ chunk-e6aww6q8.js:2516856-2516953 placement
-function isSystemReminderText(e) {
-  let n = e.charAt(16);
-  return e.startsWith("<system-reminder") && (n === ">" || TRAILING_WHITESPACE_CHARS.has(n));
+function isSystemReminderText(text) {
+  let charAfterTag = text.charAt(16);
+  return (
+    text.startsWith("<system-reminder") &&
+    (charAfterTag === ">" || TRAILING_WHITESPACE_CHARS.has(charAfterTag))
+  );
 }
 //@ chunk-e6aww6q8.js:2516953-2517202 placement
 function classifyInsertedTextKind(localMessage) {
   if (localMessage.wakeupSource !== undefined) return "timer";
   if (localMessage.type !== "user") return "asTyped";
-  let n = classifyMessageFrame(localMessage);
-  if (n.frame === "human" || n.frame === "relay-human") return "asTyped";
-  return n.frame === "invisible" && n.reason === "meta-without-provenance" ? "hidden" : undefined;
+  let frame = classifyMessageFrame(localMessage);
+  if (frame.frame === "human" || frame.frame === "relay-human") return "asTyped";
+  return frame.frame === "invisible" && frame.reason === "meta-without-provenance" ? "hidden" : undefined;
 }
 //@ chunk-e6aww6q8.js:2517202-2517239 placement
 var COMMAND_TEXT_RANK = {
@@ -280,31 +301,31 @@ var COMMAND_TEXT_RANK = {
 /**
  * 有命令文本时给消息附上命令文本块计数（本条与全部）。
  */
-function withCommandTextBlocks(userMessage, n, r) {
-  return getTextBlocks(n).length > 0
+function withCommandTextBlocks(userMessage, commandContent, ownContent) {
+  return getTextBlocks(commandContent).length > 0
     ? {
         ...userMessage,
         commandTextBlocks: {
-          own: getTextBlocks(r).length,
+          own: getTextBlocks(ownContent).length,
           all: getTextBlocks(userMessage.message.content).length,
         },
       }
     : userMessage;
 }
 //@ chunk-e6aww6q8.js:2517363-2517528 placement
-function countHiddenCommandBlocks(localMessage, n) {
+function countHiddenCommandBlocks(localMessage, allTextBlocks) {
   let commandTextBlocks = localMessage.commandTextBlocks;
   if (commandTextBlocks === undefined) return 0;
-  return commandTextBlocks?.all === n.length &&
+  return commandTextBlocks?.all === allTextBlocks.length &&
     Number.isSafeInteger(commandTextBlocks.own) &&
     commandTextBlocks.own >= 0 &&
     commandTextBlocks.own < commandTextBlocks.all
     ? commandTextBlocks.all - commandTextBlocks.own
-    : n.length;
+    : allTextBlocks.length;
 }
 //@ chunk-e6aww6q8.js:2517528-2517585 placement
-function takeLast(e, n) {
-  return e.slice(Math.max(0, e.length - n));
+function takeLast(items, count) {
+  return items.slice(Math.max(0, items.length - count));
 }
 //@ chunk-e6aww6q8.js:2517585-2517698 placement = countToolCallsSince (1)
 function countToolCallsSince_8(content) {
@@ -321,94 +342,101 @@ function countToolCallsSince_8(content) {
 function markInsertedTextProvenance(provenance, localMessages, wireMessages) {
   try {
     if (!isSnugWallOn()) return provenance;
-    let s = new Set(
+    let wireToolIds = new Set(
       wireMessages.flatMap((wireMessage) =>
         wireMessage.type === "assistant" ? countToolCallsSince_8(wireMessage.message.content) : [],
       ),
     );
     let kindByHash = new Map();
-    let y = [];
-    let S = new Set();
-    let w = "";
+    let timerHashes = [];
+    let seenToolIds = new Set();
+    let localToolId = "";
     for (let localMessage of localMessages) {
       if (isVirtualConversationMessage(localMessage)) continue;
       if (localMessage.type === "assistant") {
-        for (let We of countToolCallsSince_8(localMessage.message?.content))
-          if (s.has(We)) {
-            w = We;
-            S.add(We);
+        for (let toolUseId of countToolCallsSince_8(localMessage.message?.content))
+          if (wireToolIds.has(toolUseId)) {
+            localToolId = toolUseId;
+            seenToolIds.add(toolUseId);
           }
       } else if (localMessage.type === "user" || isSystemLocalCommandMessage(localMessage)) {
-        let We = classifyInsertedTextKind(localMessage);
-        if (We === undefined) continue;
+        let kind = classifyInsertedTextKind(localMessage);
+        if (kind === undefined) continue;
         let textBlocks = getTextBlocks(
           localMessage.type === "user" ? localMessage.message?.content : localMessage.content,
         );
-        let lt =
+        let texts =
           localMessage.type === "user" && isLegacyHearthRelayMessage(localMessage)
             ? [formatCoordinatorRelayMessages(textBlocks)]
             : textBlocks;
-        let Je =
-          We === "hidden" && localMessage.type === "user" ? countHiddenCommandBlocks(localMessage, lt) : 0;
-        for (let [nt, pt] of lt.entries()) {
-          let Et = nt < Je ? "asTyped" : We;
-          let message = localMessage.type === "user" ? escapeBareReminderOpen(pt) : pt;
+        let hiddenCount =
+          kind === "hidden" && localMessage.type === "user"
+            ? countHiddenCommandBlocks(localMessage, texts)
+            : 0;
+        for (let [blockIndex, blockText] of texts.entries()) {
+          let textKind = blockIndex < hiddenCount ? "asTyped" : kind;
+          let message = localMessage.type === "user" ? escapeBareReminderOpen(blockText) : blockText;
           if (INTERRUPT_TEXTS.has(stripTrailingMessageIdTag(message)) || isSystemReminderText(message))
             continue;
-          let gt = [
-            hashInsertedText(w, message),
+          let hashes = [
+            hashInsertedText(localToolId, message),
             hashInsertedText(
-              w,
+              localToolId,
               `${message}
 [id:0]`,
             ),
           ];
-          for (let At of gt) {
-            let It = kindByHash.get(At);
-            if (It === undefined || COMMAND_TEXT_RANK[It] < COMMAND_TEXT_RANK[Et]) kindByHash.set(At, Et);
+          for (let hash of hashes) {
+            let existingKind = kindByHash.get(hash);
+            if (existingKind === undefined || COMMAND_TEXT_RANK[existingKind] < COMMAND_TEXT_RANK[textKind])
+              kindByHash.set(hash, textKind);
           }
-          if (Et === "timer") y.push(gt);
+          if (textKind === "timer") timerHashes.push(hashes);
         }
       }
     }
-    if (![...kindByHash.values()].some((Me) => Me !== "asTyped")) return provenance;
-    let L = new Set();
+    if (![...kindByHash.values()].some((kind) => kind !== "asTyped")) return provenance;
+    let matchedHashes = new Set();
     let matched = {
       hidden: new Set(),
       timer: new Set(),
     };
-    let q = "";
-    let Z = "";
+    let lastSharedToolId = "";
+    let wireToolId = "";
     for (let wireMessage of wireMessages)
       if (wireMessage.type === "assistant") {
-        for (let We of countToolCallsSince_8(wireMessage.message.content)) {
-          Z = We;
-          if (S.has(We)) q = We;
+        for (let toolUseId of countToolCallsSince_8(wireMessage.message.content)) {
+          wireToolId = toolUseId;
+          if (seenToolIds.has(toolUseId)) lastSharedToolId = toolUseId;
         }
       } else if (wireMessage.type === "user")
-        for (let We of getTextBlocks(wireMessage.message.content)) {
-          if (isSystemReminderText(We)) continue;
-          let ze = hashInsertedText(q, We);
-          let lt = kindByHash.get(ze);
-          if (lt === "timer" || lt === "hidden") {
-            L.add(ze);
-            let Je = Z === q ? ze : hashInsertedText(Z, We);
-            matched[lt].delete(Je);
-            matched[lt].add(Je);
+        for (let blockText of getTextBlocks(wireMessage.message.content)) {
+          if (isSystemReminderText(blockText)) continue;
+          let hash = hashInsertedText(lastSharedToolId, blockText);
+          let kind = kindByHash.get(hash);
+          if (kind === "timer" || kind === "hidden") {
+            matchedHashes.add(hash);
+            let matchedHash =
+              wireToolId === lastSharedToolId ? hash : hashInsertedText(wireToolId, blockText);
+            matched[kind].delete(matchedHash);
+            matched[kind].add(matchedHash);
           }
         }
-    if (y.some((Me) => !L.has(Me[0]) && !L.has(Me[1]))) logCronTextDropped("text_not_sent");
-    let Se = [...matched.hidden, ...matched.timer];
-    if (Se.length === 0) return provenance;
-    let filtered = provenance.filter((Me) => !matched.hidden.has(Me.id) && !matched.timer.has(Me.id));
-    if (Se.length + filtered.length > MAX_MCP_RULE_LENGTH) logCronTextDropped("list_capped");
-    let we = takeLast([...matched.timer], MAX_MCP_RULE_LENGTH);
-    let Ee = MAX_MCP_RULE_LENGTH - we.length;
+    if (timerHashes.some((timerPair) => !matchedHashes.has(timerPair[0]) && !matchedHashes.has(timerPair[1])))
+      logCronTextDropped("text_not_sent");
+    let matchedIds = [...matched.hidden, ...matched.timer];
+    if (matchedIds.length === 0) return provenance;
+    let filtered = provenance.filter(
+      (entry) => !matched.hidden.has(entry.id) && !matched.timer.has(entry.id),
+    );
+    if (matchedIds.length + filtered.length > MAX_MCP_RULE_LENGTH) logCronTextDropped("list_capped");
+    let timerIds = takeLast([...matched.timer], MAX_MCP_RULE_LENGTH);
+    let remainingSlots = MAX_MCP_RULE_LENGTH - timerIds.length;
     let min = Math.min(filtered.length, MAX_MCP_RULE_LENGTH / 2);
-    let Ie = takeLast([...matched.hidden], Ee - min);
+    let hiddenIds = takeLast([...matched.hidden], remainingSlots - min);
     return [
-      ...takeLast(filtered, Ee - Ie.length),
-      ...[...Ie, ...we].map((id) => ({
+      ...takeLast(filtered, remainingSlots - hiddenIds.length),
+      ...[...hiddenIds, ...timerIds].map((id) => ({
         id,
         provenance: "inserted_text_at",
       })),
@@ -434,37 +462,42 @@ function parseCommandMessage(text) {
     regExp.lastIndex = pos;
     tagRe.lastIndex = pos;
     let match = regExp.exec(text);
-    let Z = match ? null : tagRe.exec(text);
-    let Se = match ? COMMAND_ARGS : Z?.[1];
-    let ke = match ? match[1] : Z?.[2];
-    if (Se === undefined || ke === undefined || !COMMAND_MESSAGE_TAGS.includes(Se) || tags.has(Se))
+    let tagMatch = match ? null : tagRe.exec(text);
+    let tagName = match ? COMMAND_ARGS : tagMatch?.[1];
+    let tagContent = match ? match[1] : tagMatch?.[2];
+    if (
+      tagName === undefined ||
+      tagContent === undefined ||
+      !COMMAND_MESSAGE_TAGS.includes(tagName) ||
+      tags.has(tagName)
+    )
       return null;
-    tags.set(Se, ke);
+    tags.set(tagName, tagContent);
     pos = skipWhitespace(text, match ? text.length : tagRe.lastIndex);
   }
   let trimmed = tags.get(COMMAND_NAME)?.trim();
-  let S = tags.get(SKILL_FORMAT);
-  if (!trimmed || (S ?? "true") !== "true") return null;
-  let w = tags.get(COMMAND_ARGS)?.trim() ?? "";
+  let skillFormat = tags.get(SKILL_FORMAT);
+  if (!trimmed || (skillFormat ?? "true") !== "true") return null;
+  let args = tags.get(COMMAND_ARGS)?.trim() ?? "";
   let trimmed_2 = tags.get(COMMAND_MESSAGE)?.trim();
   let trimmed_3 = tags.get(COMMAND_CONTENTS)?.trim();
   return {
     name: trimmed,
-    args: w,
-    line: `${trimmed} ${w}`.trim(),
+    args,
+    line: `${trimmed} ${args}`.trim(),
     ...(trimmed_2 !== undefined && {
       message: trimmed_2,
     }),
     ...(trimmed_3 !== undefined && {
       contents: trimmed_3,
     }),
-    isSkillFormat: S !== undefined,
+    isSkillFormat: skillFormat !== undefined,
   };
 }
 //@ chunk-e6aww6q8.js:2520070-2520156 placement
-function messageRedundantWithName(e) {
-  let { message, name: r } = e;
-  return message !== undefined && message !== "" && message !== r && `/${message}` !== r;
+function messageRedundantWithName(command) {
+  let { message, name } = command;
+  return message !== undefined && message !== "" && message !== name && `/${message}` !== name;
 }
 //@ chunk-e6aww6q8.js:2520156-2520209 placement
 /**
@@ -478,12 +511,12 @@ function lastCommandMessageParsed(text) {
 /**
  * 判断解析出的命令消息是否可用（有 message、与 name 不同、非技能参数）。
  */
-function isUsableCommandMessage(commandMessage) {
+function isUsableCommandMessage(command) {
   return (
-    !!commandMessage.message &&
-    !messageRedundantWithName(commandMessage) &&
-    commandMessage.contents === undefined &&
-    !(commandMessage.isSkillFormat && commandMessage.args !== "")
+    !!command.message &&
+    !messageRedundantWithName(command) &&
+    command.contents === undefined &&
+    !(command.isSkillFormat && command.args !== "")
   );
 }
 //@ chunk-e6aww6q8.js:2520306-2520408 placement
@@ -502,41 +535,47 @@ function findLastCommandMessage(content) {
 /**
  * 判断文本（跳过前导空白后）是否以命令标签开头。
  */
-function startsWithCommandTag(e) {
-  let n = skipWhitespace(e, 0);
-  return COMMAND_MESSAGE_TAGS.some((r) => e.startsWith(`<${r}>`, n));
+function startsWithCommandTag(text) {
+  let start = skipWhitespace(text, 0);
+  return COMMAND_MESSAGE_TAGS.some((tag) => text.startsWith(`<${tag}>`, start));
 }
 //@ chunk-e6aww6q8.js:2520486-2520669 placement
 /**
  * 若最后一条文本是 <bash-input> 包裹的内容，取出其中的命令，否则返回 null。
  */
-function extractBashInput(e) {
-  let n = `<${BASH_INPUT}>`;
-  let r = `</${BASH_INPUT}>`;
-  let s = getContentTexts(e).at(-1)?.trim() ?? "";
-  return s.length >= n.length + r.length && s.startsWith(n) && s.endsWith(r)
-    ? s.slice(n.length, s.length - r.length)
+function extractBashInput(message) {
+  let openTag = `<${BASH_INPUT}>`;
+  let closeTag = `</${BASH_INPUT}>`;
+  let text = getContentTexts(message).at(-1)?.trim() ?? "";
+  return text.length >= openTag.length + closeTag.length &&
+    text.startsWith(openTag) &&
+    text.endsWith(closeTag)
+    ? text.slice(openTag.length, text.length - closeTag.length)
     : null;
 }
 //@ chunk-e6aww6q8.js:2520669-2520734 placement
-function skipWhitespace(text, n) {
-  while (n < text.length && /\s/.test(text[n])) n++;
-  return n;
+function skipWhitespace(text, start) {
+  while (start < text.length && /\s/.test(text[start])) start++;
+  return start;
 }
 //@ chunk-e6aww6q8.js:2520734-2520880 placement
-function getContentTexts(e) {
-  if (typeof e === "string") return [e];
-  return !Array.isArray(e)
+function getContentTexts(content) {
+  if (typeof content === "string") return [content];
+  return !Array.isArray(content)
     ? []
-    : e.flatMap((n) => (n.type === "text" && typeof n.text === "string" ? [n.text] : []));
+    : content.flatMap((block) =>
+        block.type === "text" && typeof block.text === "string" ? [block.text] : [],
+      );
 }
 //@ chunk-e6aww6q8.js:2520880-2520893 placement
 var MAX_COMMAND_TEXT_CHARS = 1024;
 //@ chunk-e6aww6q8.js:2520893-2521045 placement
-function hashVouchedText(lastSentCall, earlier, r, sent) {
-  let h = normalizeFullWidthSpace(lastSentCall);
+function hashVouchedText(lastSentCall, earlier, earlierCount, sent) {
+  let normalizedSent = normalizeFullWidthSpace(lastSentCall);
   return createHash("sha256")
-    .update(`vouched_text:${Buffer.byteLength(h)}:${h}#${earlier}/${r}:${normalizeFullWidthSpace(sent)}`)
+    .update(
+      `vouched_text:${Buffer.byteLength(normalizedSent)}:${normalizedSent}#${earlier}/${earlierCount}:${normalizeFullWidthSpace(sent)}`,
+    )
     .digest("hex")
     .slice(0, 32);
 }
@@ -567,192 +606,210 @@ function buildContextSectionsMessage(messages, messagesForAPI, attachmentToMessa
       return {
         unknown: "nested",
       };
-    let h = isTeammate();
-    let y = new Map();
-    let S = true;
-    for (let nt of messages) {
-      if (nt.type !== "attachment") continue;
+    let isTeammateSession = isTeammate();
+    let instructionTexts = new Map();
+    let instructionsTrusted = true;
+    for (let message of messages) {
+      if (message.type !== "attachment") continue;
       if (
-        nt.attachment.type === "context_sections" &&
+        message.attachment.type === "context_sections" &&
         contextSectionsSchema()
-          .safeParse(nt.attachment)
+          .safeParse(message.attachment)
           .data?.sections.some((section) => section.name === "claudeMd")
       )
-        S = false;
-      if (nt.attachment.type === "instructions") {
-        let flattened = attachmentToMessages(nt).messages.flatMap((message) =>
+        instructionsTrusted = false;
+      if (message.attachment.type === "instructions") {
+        let flattened = attachmentToMessages(message).messages.flatMap((message) =>
           getTextBlocks(message.message.content),
         );
-        if (!arraysEqual_2(nt[MESSAGE_MARK_SYMBOLS]?.texts, flattened)) {
-          S = false;
+        if (!arraysEqual_2(message[MESSAGE_MARK_SYMBOLS]?.texts, flattened)) {
+          instructionsTrusted = false;
           continue;
         }
-        if ((answerOf(nt.uuid)?.kind ?? "engine") !== "engine") S = false;
-        y.set(nt, flattened);
+        if ((answerOf(message.uuid)?.kind ?? "engine") !== "engine") instructionsTrusted = false;
+        instructionTexts.set(message, flattened);
       }
     }
-    let w = messages[0];
-    if (w?.type === "user" && w.userContextReminder === true) S = false;
-    let L = new Set([...y.values()].flat().map((nt) => nt.trimEnd()));
-    let G = new Map();
-    for (let nt of messagesForAPI) {
-      let pt = nt.type === "assistant" ? countToolCallsSince_8(nt.message.content) : [];
-      for (let Et of pt) G.set(Et, pt[0]);
+    let firstMessage = messages[0];
+    if (firstMessage?.type === "user" && firstMessage.userContextReminder === true)
+      instructionsTrusted = false;
+    let instructionTextSet = new Set([...instructionTexts.values()].flat().map((text) => text.trimEnd()));
+    let groupByToolId = new Map();
+    for (let wireMessage of messagesForAPI) {
+      let toolUseIds =
+        wireMessage.type === "assistant" ? countToolCallsSince_8(wireMessage.message.content) : [];
+      for (let toolUseId of toolUseIds) groupByToolId.set(toolUseId, toolUseIds[0]);
     }
-    let q = new Set();
-    let Z = new Map();
-    let Se = new Set();
-    let ke = 0;
-    let we = 0;
-    let Ee = "";
-    for (let nt of messages) {
-      if (isVirtualConversationMessage(nt)) continue;
-      let pt = [];
-      let Et;
-      let yt;
-      let gt = y.get(nt);
-      if (gt !== undefined) {
-        pt = gt;
-        Et = "instructions";
-      } else if (nt.type === "assistant")
-        for (let At of countToolCallsSince_8(nt.message?.content)) {
-          let It = G.get(At);
-          if (It !== undefined) {
-            Ee = It;
-            q.add(It);
+    let sentToolIds = new Set();
+    let kindsByHash = new Map();
+    let instructionHashes = new Set();
+    let typedCandidateCount = 0;
+    let typedOrCommandCount = 0;
+    let lastSentToolId = "";
+    for (let message of messages) {
+      if (isVirtualConversationMessage(message)) continue;
+      let texts = [];
+      let kind;
+      let markTexts;
+      let instructionTextList = instructionTexts.get(message);
+      if (instructionTextList !== undefined) {
+        texts = instructionTextList;
+        kind = "instructions";
+      } else if (message.type === "assistant")
+        for (let toolUseId of countToolCallsSince_8(message.message?.content)) {
+          let groupToolId = groupByToolId.get(toolUseId);
+          if (groupToolId !== undefined) {
+            lastSentToolId = groupToolId;
+            sentToolIds.add(groupToolId);
           }
         }
-      else if (isSystemLocalCommandMessage(nt)) pt = getTextBlocks(nt.content);
-      else if (nt.type === "user") {
-        let At = classifyMessageFrame(nt);
-        if (At.frame === "relay-human")
+      else if (isSystemLocalCommandMessage(message)) texts = getTextBlocks(message.content);
+      else if (message.type === "user") {
+        let frame = classifyMessageFrame(message);
+        if (frame.frame === "relay-human")
           return {
             unknown: "relay",
           };
-        if (nt.origin?.kind !== "task-notification")
-          pt = getTextBlocks(nt.message?.content).map(escapeBareReminderOpen);
-        let It = nt[MESSAGE_MARK_SYMBOLS];
-        yt = It?.texts.map(escapeBareReminderOpen);
-        if (At.frame !== "human" || h || nt.wakeupSource !== undefined || nt.promptRewritten === true)
-          Et = undefined;
-        else if (isHumanOrigin(nt.origin) && nt.emailSenderTurn === undefined && !isNonTypedInput(nt))
-          Et =
-            It?.as !== "prompt"
+        if (message.origin?.kind !== "task-notification")
+          texts = getTextBlocks(message.message?.content).map(escapeBareReminderOpen);
+        let marks = message[MESSAGE_MARK_SYMBOLS];
+        markTexts = marks?.texts.map(escapeBareReminderOpen);
+        if (
+          frame.frame !== "human" ||
+          isTeammateSession ||
+          message.wakeupSource !== undefined ||
+          message.promptRewritten === true
+        )
+          kind = undefined;
+        else if (
+          isHumanOrigin(message.origin) &&
+          message.emailSenderTurn === undefined &&
+          !isNonTypedInput(message)
+        )
+          kind =
+            marks?.as !== "prompt"
               ? undefined
-              : nt.promptSource === "typed" || nt.promptSource === "queued"
+              : message.promptSource === "typed" || message.promptSource === "queued"
                 ? "typed"
-                : nt.promptSource === undefined
+                : message.promptSource === undefined
                   ? "commands"
                   : undefined;
         else if (
-          It?.as === "plan" &&
-          nt.origin?.kind === "auto-continuation" &&
-          nt.planContent !== undefined &&
-          nt.isMeta !== true &&
-          nt.textNotTyped !== true &&
-          nt.handedOff !== true &&
-          nt.queueTranscriptOnly !== true
+          marks?.as === "plan" &&
+          message.origin?.kind === "auto-continuation" &&
+          message.planContent !== undefined &&
+          message.isMeta !== true &&
+          message.textNotTyped !== true &&
+          message.handedOff !== true &&
+          message.queueTranscriptOnly !== true
         )
-          Et = "accepted";
-        else if (It?.as === "feedback" && !isNonTypedInput(nt)) Et = "typed";
+          kind = "accepted";
+        else if (marks?.as === "feedback" && !isNonTypedInput(message)) kind = "typed";
       }
-      for (let At of pt) {
-        if (At.trim() === "" || (isSystemReminderText(At) && !L.has(At.trimEnd()))) continue;
-        let It = hashInsertedText(Ee, At);
-        let Yt =
-          Et === undefined ||
-          (yt !== undefined && !yt.includes(At)) ||
-          (Et !== "instructions" && isSystemReminderText(At)) ||
-          It !==
+      for (let text of texts) {
+        if (text.trim() === "" || (isSystemReminderText(text) && !instructionTextSet.has(text.trimEnd())))
+          continue;
+        let hash = hashInsertedText(lastSentToolId, text);
+        let provenanceKind =
+          kind === undefined ||
+          (markTexts !== undefined && !markTexts.includes(text)) ||
+          (kind !== "instructions" && isSystemReminderText(text)) ||
+          hash !==
             hashInsertedText(
-              Ee,
-              `${At}
+              lastSentToolId,
+              `${text}
 [id:0]`,
             ) ||
-          (Et === "commands" && parseCommandMessage(At) === null)
+          (kind === "commands" && parseCommandMessage(text) === null)
             ? undefined
-            : Et;
-        let qt = Z.get(It) ?? [];
-        qt.push(Yt);
-        Z.set(It, qt);
-        if (Yt === "instructions") Se.add(It);
-        ke += Yt === undefined || Yt === "instructions" ? 0 : 1;
-        we += Yt === "typed" || Yt === "commands" ? 1 : 0;
+            : kind;
+        let kinds = kindsByHash.get(hash) ?? [];
+        kinds.push(provenanceKind);
+        kindsByHash.set(hash, kinds);
+        if (provenanceKind === "instructions") instructionHashes.add(hash);
+        typedCandidateCount += provenanceKind === undefined || provenanceKind === "instructions" ? 0 : 1;
+        typedOrCommandCount += provenanceKind === "typed" || provenanceKind === "commands" ? 1 : 0;
       }
     }
-    if (ke === 0 && L.size === 0)
+    if (typedCandidateCount === 0 && instructionTextSet.size === 0)
       return {
         typed: [],
-        ...(S && {
+        ...(instructionsTrusted && {
           instructions: [],
         }),
       };
-    let Ae = [];
-    let Ie = new Map();
-    let Me = new Map();
-    let We = "";
+    let entries = [];
+    let seenCounts = new Map();
+    let sameTextCounts = new Map();
     let lastSentCall = "";
-    for (let nt of messagesForAPI)
-      if (nt.type === "assistant")
-        for (let pt of countToolCallsSince_8(nt.message.content)) {
-          lastSentCall = pt;
-          Me = new Map();
-          let Et = G.get(pt);
-          if (Et !== undefined && q.has(Et)) We = Et;
+    let lastSentCall_2 = "";
+    for (let wireMessage of messagesForAPI)
+      if (wireMessage.type === "assistant")
+        for (let toolUseId of countToolCallsSince_8(wireMessage.message.content)) {
+          lastSentCall_2 = toolUseId;
+          sameTextCounts = new Map();
+          let groupToolId = groupByToolId.get(toolUseId);
+          if (groupToolId !== undefined && sentToolIds.has(groupToolId)) lastSentCall = groupToolId;
         }
-      else if (nt.type === "user")
-        for (let pt of getTextBlocks(nt.message.content)) {
-          if (pt.trim() === "" || (isSystemReminderText(pt) && !L.has(pt.trimEnd()))) continue;
-          let Et = hashInsertedText(We, pt);
-          let yt = Ie.get(Et) ?? 0;
-          Ie.set(Et, yt + 1);
-          let gt = normalizeFullWidthSpace(pt);
-          let At = Me.get(gt) ?? 0;
-          Me.set(gt, At + 1);
-          let It = Z.get(Et);
-          let Yt = Se.has(Et) ? "instructions" : It?.[yt];
-          if (Yt !== undefined)
-            Ae.push({
-              key: Et,
-              list: Yt,
-              lastSentCall,
-              earlier: At,
-              sameTexts: Me,
-              sent: gt,
+      else if (wireMessage.type === "user")
+        for (let text of getTextBlocks(wireMessage.message.content)) {
+          if (text.trim() === "" || (isSystemReminderText(text) && !instructionTextSet.has(text.trimEnd())))
+            continue;
+          let hash = hashInsertedText(lastSentCall, text);
+          let seenCount = seenCounts.get(hash) ?? 0;
+          seenCounts.set(hash, seenCount + 1);
+          let normalizedText = normalizeFullWidthSpace(text);
+          let sameTextCount = sameTextCounts.get(normalizedText) ?? 0;
+          sameTextCounts.set(normalizedText, sameTextCount + 1);
+          let kinds = kindsByHash.get(hash);
+          let kind = instructionHashes.has(hash) ? "instructions" : kinds?.[seenCount];
+          if (kind !== undefined)
+            entries.push({
+              key: hash,
+              list: kind,
+              lastSentCall: lastSentCall_2,
+              earlier: sameTextCount,
+              sameTexts: sameTextCounts,
+              sent: normalizedText,
             });
         }
-    let lt = {
+    let lists = {
       typed: [],
       commands: [],
       accepted: [],
       instructions: [],
     };
-    for (let nt of Ae)
-      if (Ie.get(nt.key) === Z.get(nt.key)?.length || nt.list === "instructions")
-        lt[nt.list].push(
-          hashVouchedText(nt.lastSentCall, nt.earlier, nt.sameTexts.get(nt.sent) ?? 0, nt.sent),
+    for (let entry of entries)
+      if (seenCounts.get(entry.key) === kindsByHash.get(entry.key)?.length || entry.list === "instructions")
+        lists[entry.list].push(
+          hashVouchedText(
+            entry.lastSentCall,
+            entry.earlier,
+            entry.sameTexts.get(entry.sent) ?? 0,
+            entry.sent,
+          ),
         );
-    let Je = lt.typed.length + lt.commands.length;
-    if (Je + lt.accepted.length + lt.instructions.length > MAX_COMMAND_TEXT_CHARS) {
+    let typedTotal = lists.typed.length + lists.commands.length;
+    if (typedTotal + lists.accepted.length + lists.instructions.length > MAX_COMMAND_TEXT_CHARS) {
       noteTypedMark("list_capped");
       return {
         unknown: "cap",
       };
     }
     return {
-      typed: lt.typed,
-      ...(lt.commands.length > 0 && {
-        commands: lt.commands,
+      typed: lists.typed,
+      ...(lists.commands.length > 0 && {
+        commands: lists.commands,
       }),
-      ...(lt.accepted.length > 0 && {
-        accepted: lt.accepted,
+      ...(lists.accepted.length > 0 && {
+        accepted: lists.accepted,
       }),
-      ...(we > Je && {
-        unpaired: we - Je,
+      ...(typedOrCommandCount > typedTotal && {
+        unpaired: typedOrCommandCount - typedTotal,
       }),
-      ...(S &&
-        (lt.instructions.length > 0 || L.size === 0) && {
-          instructions: lt.instructions,
+      ...(instructionsTrusted &&
+        (lists.instructions.length > 0 || instructionTextSet.size === 0) && {
+          instructions: lists.instructions,
         }),
     };
   } catch (error) {
@@ -764,26 +821,29 @@ function buildContextSectionsMessage(messages, messagesForAPI, attachmentToMessa
   }
 }
 //@ chunk-e6aww6q8.js:2524731-2524766 placement
-var loggedTypedMarks = identity_2(new Set(), (e) => e.clear());
+var loggedTypedMarks; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:2524731", () => {
+  loggedTypedMarks = identity_2(new Set(), (set) => set.clear());
+});
 //@ chunk-e6aww6q8.js:2524766-2524827 placement
-function noteTypedMark(e) {
-  if (!loggedTypedMarks.has(e)) {
-    loggedTypedMarks.add(e);
-    logFeatureSad("typed_marks", e);
+function noteTypedMark(reason) {
+  if (!loggedTypedMarks.has(reason)) {
+    loggedTypedMarks.add(reason);
+    logFeatureSad("typed_marks", reason);
   }
 }
 //@ chunk-e6aww6q8.js:2524903-2525066 placement
 /**
  * 把用户消息标记为已验证的人类回合（可附 Projects 用户回合与邮件发送者回合标记）。
  */
-function markVerifiedHumanTurn(e, turnId, { projectsUserTurn: r = false, emailSenderTurn: s } = {}) {
-  attachRelayTurnFlags(e, turnId, {
+function markVerifiedHumanTurn(message, turnId, { projectsUserTurn = false, emailSenderTurn } = {}) {
+  attachRelayTurnFlags(message, turnId, {
     verifiedSlackHumanTurn: true,
-    ...(r && {
+    ...(projectsUserTurn && {
       projectsUserTurn: true,
     }),
-    ...(s !== undefined && {
-      emailSenderTurn: s,
+    ...(emailSenderTurn !== undefined && {
+      emailSenderTurn,
     }),
   });
 }
@@ -791,24 +851,31 @@ function markVerifiedHumanTurn(e, turnId, { projectsUserTurn: r = false, emailSe
 /**
  * 为已验证的人类回合补一个 id（必要时生成）。
  */
-function ensureTurnId(uuid, n) {
-  return uuid || (n ? randomUUID() : undefined);
+function ensureTurnId(uuid, mintIfMissing) {
+  return uuid || (mintIfMissing ? randomUUID() : undefined);
 }
 //@ chunk-e6aww6q8.js:2525111-2525314 placement
 /**
  * 已验证人类回合摘录的预算常量（字符数、条数、引用字符、轮询事件人类字符），以及表示"有回合被省略"的占位系统消息。
  */
-var MAX_HUMAN_TURN_CHARS = 12000;
-var MAX_HUMAN_TURNS = 16;
-var MAX_REFERENT_CHARS = 6000;
-var POLL_EVENT_HUMAN_CHARS = 3000;
-var OMITTED_TURNS_MARKER = Object.freeze({
-  type: "system",
-  subtype: "informational",
-  content: "",
-  level: "info",
-  uuid: "00000000-0000-0000-0000-000000000000",
-  timestamp: "1970-01-01T00:00:00.000Z",
+var MAX_HUMAN_TURN_CHARS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MAX_HUMAN_TURNS;
+var MAX_REFERENT_CHARS;
+var POLL_EVENT_HUMAN_CHARS;
+var OMITTED_TURNS_MARKER;
+deferInit("chunk-e6aww6q8.js:2525111", () => {
+  MAX_HUMAN_TURN_CHARS = 12000;
+  MAX_HUMAN_TURNS = 16;
+  MAX_REFERENT_CHARS = 6000;
+  POLL_EVENT_HUMAN_CHARS = 3000;
+  OMITTED_TURNS_MARKER = Object.freeze({
+    type: "system",
+    subtype: "informational",
+    content: "",
+    level: "info",
+    uuid: "00000000-0000-0000-0000-000000000000",
+    timestamp: "1970-01-01T00:00:00.000Z",
+  });
 });
 //@ chunk-e6aww6q8.js:2525314-2525851 placement
 /**
@@ -816,9 +883,9 @@ var OMITTED_TURNS_MARKER = Object.freeze({
  */
 function buildVerifiedHumanTurns({ messages, inheritedVerifiedHumanTurns: inheritedTurns, agentId }) {
   if (!isChatHostEntrypoint()) return;
-  let s = splitInheritedTurns(inheritedTurns ?? []);
+  let inherited = splitInheritedTurns(inheritedTurns ?? []);
   let [first, ...rest] = [
-    ...s.turns,
+    ...inherited.turns,
     ...(isModelDrivenSession(agentId)
       ? messages.flatMap((message) => {
           let turn = keepPrincipalOrVerifiedHumanMessage(message);
@@ -828,64 +895,70 @@ function buildVerifiedHumanTurns({ messages, inheritedVerifiedHumanTurns: inheri
   ];
   if (!first) return;
   let startIndex = rest.length;
-  let w = 0;
-  while (startIndex > 0 && w < MAX_HUMAN_TURN_CHARS && rest.length - startIndex < MAX_HUMAN_TURNS) {
+  let charCount = 0;
+  while (startIndex > 0 && charCount < MAX_HUMAN_TURN_CHARS && rest.length - startIndex < MAX_HUMAN_TURNS) {
     startIndex--;
-    w += countTurnChars(rest[startIndex].turn);
+    charCount += countTurnChars(rest[startIndex].turn);
   }
   let sliced = rest.slice(startIndex);
-  let G = assistantTailLength(first.referent);
-  let q = 0;
+  let referentChars = assistantTailLength(first.referent);
+  let referentCut = 0;
   for (let idx = sliced.length - 1; idx >= 0; idx--) {
-    let ke = assistantTailLength(sliced[idx].referent);
-    if (G + ke > MAX_REFERENT_CHARS) {
-      q = idx + 1;
+    let tailLength = assistantTailLength(sliced[idx].referent);
+    if (referentChars + tailLength > MAX_REFERENT_CHARS) {
+      referentCut = idx + 1;
       break;
     }
-    G += ke;
+    referentChars += tailLength;
   }
-  let Z = budgetPollEventProvenance([first, ...sliced]);
+  let budgeted = budgetPollEventProvenance([first, ...sliced]);
   return [
-    ...flattenTurnEntry(Z[0]),
-    ...(s.omitted || startIndex > 0 ? [OMITTED_TURNS_MARKER] : []),
-    ...Z.slice(1).flatMap((Se, ke) => (ke < q ? [Se.turn] : flattenTurnEntry(Se))),
+    ...flattenTurnEntry(budgeted[0]),
+    ...(inherited.omitted || startIndex > 0 ? [OMITTED_TURNS_MARKER] : []),
+    ...budgeted
+      .slice(1)
+      .flatMap((entry, entryIndex) => (entryIndex < referentCut ? [entry.turn] : flattenTurnEntry(entry))),
   ];
 }
 //@ chunk-e6aww6q8.js:2525851-2526312 placement
 /**
  * 为多条 poll 事件分配来源文本的字符预算：从最新的开始依次分配上限，超出总预算的部分截断。
  */
-function budgetPollEventProvenance(e) {
-  let flattened = e.flatMap((S, w) =>
-    S.turn.type === "attachment" && S.turn.attachment.type === "poll_events"
+function budgetPollEventProvenance(entries) {
+  let flattened = entries.flatMap((entry, entryIndex) =>
+    entry.turn.type === "attachment" && entry.turn.attachment.type === "poll_events"
       ? [
           {
-            i: w,
-            provenance: S.turn.attachment.provenance,
+            i: entryIndex,
+            provenance: entry.turn.attachment.provenance,
           },
         ]
       : [],
   );
   flattened.reverse();
-  let r = POLL_EVENT_HUMAN_CHARS;
+  let humanBudget = POLL_EVENT_HUMAN_CHARS;
   let mapped = flattened.map(({ provenance }) => {
-    let min = Math.min(MAX_PROVENANCE_CHARS, r);
-    r -= budgetProvenanceEntries(provenance, min, 0).humanChars;
+    let min = Math.min(MAX_PROVENANCE_CHARS, humanBudget);
+    humanBudget -= budgetProvenanceEntries(provenance, min, 0).humanChars;
     return min;
   });
-  let h = r;
-  let y = [...e];
-  flattened.forEach(({ i: S, provenance }, L) => {
-    let humanBudget = mapped[L];
+  let restBudget = humanBudget;
+  let result = [...entries];
+  flattened.forEach(({ i: entryIndex, provenance }, pollIndex) => {
+    let humanBudget = mapped[pollIndex];
     let humanChars = budgetProvenanceEntries(provenance, humanBudget, 0).humanChars;
-    let Z = budgetProvenanceEntries(provenance, humanBudget, Math.min(MAX_PROVENANCE_CHARS - humanChars, h));
-    h = Math.max(0, h - Z.restChars);
-    y[S] = {
-      ...y[S],
-      turn: withPollProvenance(y[S].turn, Z.entries),
+    let budgeted = budgetProvenanceEntries(
+      provenance,
+      humanBudget,
+      Math.min(MAX_PROVENANCE_CHARS - humanChars, restBudget),
+    );
+    restBudget = Math.max(0, restBudget - budgeted.restChars);
+    result[entryIndex] = {
+      ...result[entryIndex],
+      turn: withPollProvenance(result[entryIndex].turn, budgeted.entries),
     };
   });
-  return y;
+  return result;
 }
 //@ chunk-e6aww6q8.js:2526312-2526551 placement
 function withPollProvenance(turn, entries) {
@@ -893,7 +966,7 @@ function withPollProvenance(turn, entries) {
   let provenance = turn.attachment.provenance;
   return Array.isArray(provenance) &&
     provenance.length === entries.length &&
-    entries.every((s, h) => s === provenance[h])
+    entries.every((entry, index) => entry === provenance[index])
     ? turn
     : {
         ...turn,
@@ -915,50 +988,50 @@ function flattenTurnEntry({ referent, turn }) {
   return referent ? [referent, turn] : [turn];
 }
 //@ chunk-e6aww6q8.js:2526651-2526839 placement
-function splitInheritedTurns(e) {
-  let n = [];
+function splitInheritedTurns(messages) {
+  let turns = [];
   let omitted = false;
-  let s;
-  for (let h of e) {
-    if (h.type === "assistant") {
-      s = h;
+  let referent;
+  for (let message of messages) {
+    if (message.type === "assistant") {
+      referent = message;
       continue;
     }
-    if (h === OMITTED_TURNS_MARKER) omitted = true;
+    if (message === OMITTED_TURNS_MARKER) omitted = true;
     else {
-      let y = keepPrincipalOrVerifiedHumanMessage(h);
-      if (y)
-        n.push({
-          referent: s,
-          turn: y,
+      let turn = keepPrincipalOrVerifiedHumanMessage(message);
+      if (turn)
+        turns.push({
+          referent,
+          turn,
         });
     }
-    s = undefined;
+    referent = undefined;
   }
   return {
-    turns: n,
+    turns,
     omitted,
   };
 }
 //@ chunk-e6aww6q8.js:2526839-2526960 placement
 function collectHumanTurns(messages) {
-  let n = [];
-  messages.forEach((r, s) => {
-    let h = keepPrincipalOrVerifiedHumanMessage(r);
-    if (h)
-      n.push({
-        referent: isHumanTurnMessage(r) ? findReferentAssistant(messages, s) : undefined,
-        turn: h,
+  let turns = [];
+  messages.forEach((message, index) => {
+    let turn = keepPrincipalOrVerifiedHumanMessage(message);
+    if (turn)
+      turns.push({
+        referent: isHumanTurnMessage(message) ? findReferentAssistant(messages, index) : undefined,
+        turn,
       });
   });
-  return n;
+  return turns;
 }
 //@ chunk-e6aww6q8.js:2526960-2527079 placement
-function findReferentAssistant(e, n) {
-  for (let idx = n - 1; idx >= 0; idx--) {
-    let s = e[idx];
-    if (s.type === "assistant" && getAssistantTextIfReal(s)) return s;
-    if (!isTransparentBetweenTurns(s)) return;
+function findReferentAssistant(messages, beforeIndex) {
+  for (let idx = beforeIndex - 1; idx >= 0; idx--) {
+    let candidate = messages[idx];
+    if (candidate.type === "assistant" && getAssistantTextIfReal(candidate)) return candidate;
+    if (!isTransparentBetweenTurns(candidate)) return;
   }
   return;
 }
@@ -982,22 +1055,22 @@ function isVerifiedRelayHumanMessage(message) {
  */
 function keepPrincipalOrVerifiedHumanMessage(message) {
   if (message.type === "attachment" && message.attachment.type === "poll_events")
-    return normalizeDeliveredPeers(message.attachment.provenance).some((n) => n.kind === "principal")
+    return normalizeDeliveredPeers(message.attachment.provenance).some((peer) => peer.kind === "principal")
       ? message
       : undefined;
   return isVerifiedRelayHumanMessage(message) && countTurnChars(message) > 0 ? message : undefined;
 }
 //@ chunk-e6aww6q8.js:2527419-2527688 placement
-function isHumanTurnMessage(e) {
-  switch (e.type) {
+function isHumanTurnMessage(message) {
+  switch (message.type) {
     case "user":
-      return isHumanOrigin(e.origin);
+      return isHumanOrigin(message.origin);
     case "attachment":
-      switch (e.attachment.type) {
+      switch (message.attachment.type) {
         case "queued_command":
-          return isHumanOrigin(e.attachment.origin);
+          return isHumanOrigin(message.attachment.origin);
         case "poll_events":
-          return normalizeDeliveredPeers(e.attachment.provenance)[0]?.kind === "principal";
+          return normalizeDeliveredPeers(message.attachment.provenance)[0]?.kind === "principal";
         default:
           return false;
       }
@@ -1006,27 +1079,27 @@ function isHumanTurnMessage(e) {
   }
 }
 //@ chunk-e6aww6q8.js:2527688-2527950 placement
-function isTransparentBetweenTurns(e) {
-  switch (e.type) {
+function isTransparentBetweenTurns(message) {
+  switch (message.type) {
     case "assistant":
-      return !getAssistantTextIfReal(e);
+      return !getAssistantTextIfReal(message);
     case "user":
-      return e.isMeta === true && isUnclassifiedProvenance(e.origin);
+      return message.isMeta === true && isUnclassifiedProvenance(message.origin);
     case "attachment":
       return (
-        e.attachment.type !== "queued_command" &&
-        e.attachment.type !== "poll_events" &&
-        e.attachment.type !== "teammate_mailbox"
+        message.attachment.type !== "queued_command" &&
+        message.attachment.type !== "poll_events" &&
+        message.attachment.type !== "teammate_mailbox"
       );
     default:
       return true;
   }
 }
 //@ chunk-e6aww6q8.js:2527950-2528083 placement
-function getAssistantTextIfReal(e) {
-  if (e.isApiErrorMessage || e.isVirtual || e.message.model === SYNTHETIC_MODEL) return "";
-  let n = contentText(e.message.content);
-  return n.trim() ? n : "";
+function getAssistantTextIfReal(message) {
+  if (message.isApiErrorMessage || message.isVirtual || message.message.model === SYNTHETIC_MODEL) return "";
+  let text = contentText(message.message.content);
+  return text.trim() ? text : "";
 }
 //@ chunk-e6aww6q8.js:2528083-2528096 placement
 var MAX_ASSISTANT_TAIL_CHARS = 2000;
@@ -1034,8 +1107,8 @@ var MAX_ASSISTANT_TAIL_CHARS = 2000;
 /**
  * 取助手消息末尾文本（截断到预算）。
  */
-function assistantTail(e) {
-  return takeLastChars(getAssistantTextIfReal(e), MAX_ASSISTANT_TAIL_CHARS);
+function assistantTail(message) {
+  return takeLastChars(getAssistantTextIfReal(message), MAX_ASSISTANT_TAIL_CHARS);
 }
 //@ chunk-e6aww6q8.js:2528134-2528189 placement
 function assistantTailLength(referent) {
@@ -1046,9 +1119,9 @@ var MAX_PROVENANCE_ENTRY_CHARS = 280;
 var TRUNCATED_SUFFIX = " [truncated]";
 //@ chunk-e6aww6q8.js:2528220-2528330 placement
 function truncateSenderText(text) {
-  let n = text.endsWith(TRUNCATED_SUFFIX) ? text.slice(0, -TRUNCATED_SUFFIX.length) : text;
-  if (n.length <= MAX_PROVENANCE_ENTRY_CHARS) return text;
-  return truncateToLength(n, MAX_PROVENANCE_ENTRY_CHARS) + TRUNCATED_SUFFIX;
+  let withoutSuffix = text.endsWith(TRUNCATED_SUFFIX) ? text.slice(0, -TRUNCATED_SUFFIX.length) : text;
+  if (withoutSuffix.length <= MAX_PROVENANCE_ENTRY_CHARS) return text;
+  return truncateToLength(withoutSuffix, MAX_PROVENANCE_ENTRY_CHARS) + TRUNCATED_SUFFIX;
 }
 //@ chunk-e6aww6q8.js:2528330-2528372 placement
 var MAX_PROVENANCE_CHARS = 1000;
@@ -1065,36 +1138,39 @@ var OMITTED_ENTRIES_RE = /^\[(\d{1,3}) more entries omitted\]$/;
  * 在字符预算内挑选轮询事件出处条目：委托人条目全部保留，其他人类与其余条目各在预算内按序保留，超出的合并为一条"省略 N 条"的条目；返回条目与已用字符数。
  */
 function budgetProvenanceEntries(provenance, humanBudget, restBudget) {
-  let candidates = normalizeDeliveredPeers(provenance).flatMap((Se) => {
-    if (Se.kind === "skipped") return [];
-    if (Se.kind === "principal")
+  let candidates = normalizeDeliveredPeers(provenance).flatMap((peer) => {
+    if (peer.kind === "skipped") return [];
+    if (peer.kind === "principal")
       return [
         {
-          entry: Se.entry,
-          text: Se.text,
+          entry: peer.entry,
+          text: peer.text,
           group: "principal",
         },
       ];
-    let authority = Se.entry.authority;
+    let authority = peer.entry.authority;
     return [
       {
-        entry: Se.entry,
-        text: authority === HARNESS_OMITTED ? Se.text : truncateSenderText(Se.text),
+        entry: peer.entry,
+        text: authority === HARNESS_OMITTED ? peer.text : truncateSenderText(peer.text),
         group: authority === HARNESS_OMITTED ? "omitted" : authority === "human-other" ? "human" : "rest",
       },
     ];
   });
   let kept = new Set(candidates.filter((candidate) => candidate.group === "principal"));
-  let takeGroup = (Se, ke, we) => {
-    let filtered = candidates.filter((candidate) => candidate.group === Se);
-    let Ie = filtered.reduce((acc, ze) => acc + ze.text.length, 0) <= ke ? ke : Math.max(0, ke - we);
-    let Me = 0;
-    for (let We of filtered)
-      if (Me + We.text.length <= Ie) {
-        kept.add(We);
-        Me += We.text.length;
+  let takeGroup = (group, budget, reserved) => {
+    let filtered = candidates.filter((candidate) => candidate.group === group);
+    let allowedChars =
+      filtered.reduce((acc, candidate) => acc + candidate.text.length, 0) <= budget
+        ? budget
+        : Math.max(0, budget - reserved);
+    let usedChars = 0;
+    for (let candidate of filtered)
+      if (usedChars + candidate.text.length <= allowedChars) {
+        kept.add(candidate);
+        usedChars += candidate.text.length;
       }
-    return Me;
+    return usedChars;
   };
   let humanChars = takeGroup("human", humanBudget, 0);
   let restChars = takeGroup("rest", restBudget, MAX_REST_ENTRIES);
@@ -1115,21 +1191,21 @@ function budgetProvenanceEntries(provenance, humanBudget, restBudget) {
       continue;
     }
     if (dropped.push(candidate) === 1) omittedIndex = entries.length;
-    let ke = candidate.group === "omitted" ? OMITTED_ENTRIES_RE.exec(candidate.text) : null;
-    omittedCount += ke ? Number(ke[1]) : 1;
+    let omittedMatch = candidate.group === "omitted" ? OMITTED_ENTRIES_RE.exec(candidate.text) : null;
+    omittedCount += omittedMatch ? Number(omittedMatch[1]) : 1;
   }
   if (omittedCount > 0) {
-    let Se = omittedEntriesNotice(omittedCount);
-    restChars += Se.length;
-    let ke = dropped.length === 1 ? dropped[0] : undefined;
+    let notice = omittedEntriesNotice(omittedCount);
+    restChars += notice.length;
+    let singleDropped = dropped.length === 1 ? dropped[0] : undefined;
     entries.splice(
       omittedIndex,
       0,
-      ke?.group === "omitted" && ke.entry.senderText === Se
-        ? ke.entry
+      singleDropped?.group === "omitted" && singleDropped.entry.senderText === notice
+        ? singleDropped.entry
         : {
             authority: HARNESS_OMITTED,
-            senderText: Se,
+            senderText: notice,
           },
     );
   }
@@ -1143,17 +1219,17 @@ function budgetProvenanceEntries(provenance, humanBudget, restBudget) {
 /**
  * 统计一个回合的人类输入字符数：用户消息与队列命令按文本长度，poll 事件只计主体（principal）文本。
  */
-function countTurnChars(e) {
-  switch (e.type) {
+function countTurnChars(turn) {
+  switch (turn.type) {
     case "user":
-      return contentText(e.message.content).length;
+      return contentText(turn.message.content).length;
     case "attachment":
-      switch (e.attachment.type) {
+      switch (turn.attachment.type) {
         case "queued_command":
-          return contentText(e.attachment.prompt).length;
+          return contentText(turn.attachment.prompt).length;
         case "poll_events":
-          return normalizeDeliveredPeers(e.attachment.provenance).reduce(
-            (acc, r) => acc + (r.kind === "principal" ? r.text.length : 0),
+          return normalizeDeliveredPeers(turn.attachment.provenance).reduce(
+            (acc, peer) => acc + (peer.kind === "principal" ? peer.text.length : 0),
             0,
           );
         default:
@@ -1164,20 +1240,22 @@ function countTurnChars(e) {
   }
 }
 //@ chunk-e6aww6q8.js:2529852-2529996 placement
-function contentText(e) {
-  if (typeof e === "string") return e;
-  if (!Array.isArray(e)) return "";
-  return e.flatMap((n) => (n?.type === "text" ? [n.text ?? ""] : [])).join(`
+function contentText(content) {
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return "";
+  return content.flatMap((block) => (block?.type === "text" ? [block.text ?? ""] : [])).join(`
 `);
 }
 //@ chunk-e6aww6q8.js:2529996-2530198 placement
-function hashHumanReply(e, n, text) {
-  let s = text
+function hashHumanReply(lastSentCall, assistantTailText, text) {
+  let normalized = text
     .trimEnd()
     .replace(/\[id:[a-z0-9]{1,8}\]$/, "")
     .trimEnd();
   return createHash("sha256")
-    .update(`${Buffer.byteLength(e)}:${e}${Buffer.byteLength(n)}:${n}${s}`)
+    .update(
+      `${Buffer.byteLength(lastSentCall)}:${lastSentCall}${Buffer.byteLength(assistantTailText)}:${assistantTailText}${normalized}`,
+    )
     .digest("hex")
     .slice(0, 32);
 }
@@ -1193,35 +1271,38 @@ function markHumanReplyProvenance(entries, transcript, apiMessages, sessionConte
     let humanSaidCounts = new Map();
     let transcriptToolUseIds = new Set();
     let lastToolUseId = "";
-    for (let [Ae, Ie] of transcript.entries()) {
-      if (isVirtualConversationMessage(Ie)) continue;
-      let content = Ie.type === "user" || Ie.type === "assistant" ? Ie.message.content : undefined;
-      let We = Array.isArray(content) ? content : [];
-      if (Ie.type === "assistant") {
-        for (let Je of We)
-          if (Je?.type === "tool_use") {
-            lastToolUseId = Je.id;
-            transcriptToolUseIds.add(Je.id);
+    for (let [index, message] of transcript.entries()) {
+      if (isVirtualConversationMessage(message)) continue;
+      let content =
+        message.type === "user" || message.type === "assistant" ? message.message.content : undefined;
+      let contentBlocks = Array.isArray(content) ? content : [];
+      if (message.type === "assistant") {
+        for (let block of contentBlocks)
+          if (block?.type === "tool_use") {
+            lastToolUseId = block.id;
+            transcriptToolUseIds.add(block.id);
           }
       }
       if (
-        Ie.type !== "user" ||
-        !isHumanOrigin(Ie.origin) ||
-        Ie.emailSenderTurn !== undefined ||
-        isNonTypedInput(Ie) ||
-        classifyMessageFrame(Ie).frame !== "human"
+        message.type !== "user" ||
+        !isHumanOrigin(message.origin) ||
+        message.emailSenderTurn !== undefined ||
+        isNonTypedInput(message) ||
+        classifyMessageFrame(message).frame !== "human"
       )
         continue;
-      let ze =
-        typeof content === "string" ? [content] : We.flatMap((Je) => (Je?.type === "text" ? [Je.text] : []));
-      for (let Je of ze) {
-        let nt = hashHumanReply(lastToolUseId, "", Je);
-        humanSaidCounts.set(nt, (humanSaidCounts.get(nt) ?? 0) + 1);
+      let texts =
+        typeof content === "string"
+          ? [content]
+          : contentBlocks.flatMap((block) => (block?.type === "text" ? [block.text] : []));
+      for (let text of texts) {
+        let saidHash = hashHumanReply(lastToolUseId, "", text);
+        humanSaidCounts.set(saidHash, (humanSaidCounts.get(saidHash) ?? 0) + 1);
       }
-      let referentAssistant = findReferentAssistant(transcript, Ae);
-      if (ze[0] !== undefined && referentAssistant !== undefined) {
-        let Je = hashHumanReply(lastToolUseId, assistantTail(referentAssistant), ze[0]);
-        humanPairCounts.set(Je, (humanPairCounts.get(Je) ?? 0) + 1);
+      let message_2 = findReferentAssistant(transcript, index);
+      if (texts[0] !== undefined && message_2 !== undefined) {
+        let pairHash = hashHumanReply(lastToolUseId, assistantTail(message_2), texts[0]);
+        humanPairCounts.set(pairHash, (humanPairCounts.get(pairHash) ?? 0) + 1);
       }
     }
     if (humanPairCounts.size === 0) return entries;
@@ -1234,7 +1315,7 @@ function markHumanReplyProvenance(entries, transcript, apiMessages, sessionConte
     for (let apiMessage of apiMessages) {
       if (apiMessage.type === "api_system") continue;
       let content = apiMessage.message.content;
-      for (let Me of typeof content === "string"
+      for (let block of typeof content === "string"
         ? [
             {
               type: "text",
@@ -1243,23 +1324,23 @@ function markHumanReplyProvenance(entries, transcript, apiMessages, sessionConte
           ]
         : content) {
         if (apiMessage.type === "assistant") {
-          if (Me.type === "tool_use") {
-            lastApiToolUseId = Me.id;
-            matchedToolUseId = transcriptToolUseIds.has(Me.id) ? Me.id : matchedToolUseId;
-          } else if (Me.type === "text" && Me.text.trim())
-            lastAssistantTail = takeLastChars(Me.text, MAX_ASSISTANT_TAIL_CHARS);
+          if (block.type === "tool_use") {
+            lastApiToolUseId = block.id;
+            matchedToolUseId = transcriptToolUseIds.has(block.id) ? block.id : matchedToolUseId;
+          } else if (block.type === "text" && block.text.trim())
+            lastAssistantTail = takeLastChars(block.text, MAX_ASSISTANT_TAIL_CHARS);
           continue;
         }
-        if (Me.type !== "text" || Me.text.startsWith("<system-reminder")) continue;
-        let We = hashHumanReply(matchedToolUseId, "", Me.text);
-        saidCounts.set(We, (saidCounts.get(We) ?? 0) + 1);
+        if (block.type !== "text" || block.text.startsWith("<system-reminder")) continue;
+        let saidHash = hashHumanReply(matchedToolUseId, "", block.text);
+        saidCounts.set(saidHash, (saidCounts.get(saidHash) ?? 0) + 1);
         if (lastAssistantTail !== undefined) {
-          let ze = hashHumanReply(matchedToolUseId, lastAssistantTail, Me.text);
-          pairCounts.set(ze, (pairCounts.get(ze) ?? 0) + 1);
+          let pairHash = hashHumanReply(matchedToolUseId, lastAssistantTail, block.text);
+          pairCounts.set(pairHash, (pairCounts.get(pairHash) ?? 0) + 1);
           candidates.push({
-            pair: ze,
-            said: We,
-            id: hashHumanReply(lastApiToolUseId, lastAssistantTail, Me.text),
+            pair: pairHash,
+            said: saidHash,
+            id: hashHumanReply(lastApiToolUseId, lastAssistantTail, block.text),
           });
         }
         lastAssistantTail = undefined;
@@ -1302,12 +1383,12 @@ function hasNarrationThinking(block) {
 /**
  * 列出各条消息中可作叙述的思考块下标。
  */
-function narrationThinkingIndexes(e) {
-  let n = [];
-  e.forEach((r, s) => {
-    if (isNarrationThinking(r)) n.push(s);
+function narrationThinkingIndexes(messages) {
+  let indexes = [];
+  messages.forEach((message, index) => {
+    if (isNarrationThinking(message)) indexes.push(index);
   });
-  return n;
+  return indexes;
 }
 export {
   collectTaskNotificationsAfterHuman,

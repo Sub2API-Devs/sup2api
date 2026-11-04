@@ -5,13 +5,13 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_forge } from "./forge.js";
 import { require_util } from "./util.js";
 import { require_oids } from "./oids.js";
 
 //@ chunk-fq0cr76a.js:52411-64596 cjs-fingerprint
-var require_asn1 = x(function (cjsExports, cjsModule) {
+var require_asn1 = __commonJS(function (cjsExports, cjsModule) {
   var forge = require_forge();
   require_util();
   require_oids();
@@ -318,17 +318,17 @@ var require_asn1 = x(function (cjsExports, cjsModule) {
     var last;
     var valueBytes;
     var value;
-    var b;
+    var base128Byte;
     for (var i = 2; i < values.length; ++i) {
       last = true;
       valueBytes = [];
       value = parseInt(values[i], 10);
       if (value > 4294967295) throw Error("OID value too large; max is 32-bits.");
       do {
-        b = value & 127;
+        base128Byte = value & 127;
         value = value >>> 7;
-        if (!last) b |= 128;
-        valueBytes.push(b);
+        if (!last) base128Byte |= 128;
+        valueBytes.push(base128Byte);
         last = false;
       } while (value > 0);
       for (var n = valueBytes.length - 1; n >= 0; --n) bytes.putByte(valueBytes[n]);
@@ -464,9 +464,9 @@ var require_asn1 = x(function (cjsExports, cjsModule) {
   };
   asn1.derToInteger = function (bytes) {
     if (typeof bytes === "string") bytes = forge.util.createBuffer(bytes);
-    var n = bytes.length() * 8;
-    if (n > 32) throw Error("Integer too large; max is 32-bits.");
-    return bytes.getSignedInt(n);
+    var bitLength = bytes.length() * 8;
+    if (bitLength > 32) throw Error("Integer too large; max is 32-bits.");
+    return bytes.getSignedInt(bitLength);
   };
   asn1.validate = function (obj, v, capture, errors) {
     var rval = false;

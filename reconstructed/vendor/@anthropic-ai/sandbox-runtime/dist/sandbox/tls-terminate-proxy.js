@@ -12,7 +12,7 @@ import { Agent as Agent_2, request as request_2 } from "https";
 import {
   runsOnBun,
   gateSocketOnBufferedBody,
-  rT,
+  markEndsGracefully,
   writeHeadsAsLatin1,
   keepFlushedHeaderBatches,
   endRequestAfterResponse,
@@ -34,7 +34,7 @@ import {
   removeHeadersFolded,
 } from "./request-filter.js";
 import {
-  RTt,
+  formatAuthority,
   directRequestOptions,
   stripHopByHop,
   relayResponseHead,
@@ -43,6 +43,7 @@ import {
 import { secureContextFor } from "./mitm-leaf.js";
 import { prepareBodySubstitution } from "./body-substitution.js";
 import { sha256Hex } from "./aws-sigv4.js";
+import { deferInit } from "../../../../../runtime/deferred-init.js";
 
 //@ chunk-fq0cr76a.js:670166-670182 esm-layout
 var MAX_SIGV4_RESIGN_BODY_BYTES = 67108864;
@@ -162,17 +163,25 @@ function serverTlsOn(socket, head, options, onClosed) {
   };
 }
 //@ chunk-fq0cr76a.js:671361-671503 esm-layout
-var outboundOf = new WeakMap();
-var budgetOf = new WeakMap();
-var MAX_QUEUED_FOR_CLIENT = 1048576;
-var MAX_BUFFERED_REQUEST_BODY = 4194304;
-var TUNNEL_TIMEOUTS = {
-  firstRequestMs: 1e4,
-  keepAliveMs: 5000,
-  keepAliveMarginMs: 1000,
-  stalledMs: 300000,
-};
-var LOOKS = 5;
+var outboundOf; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var budgetOf;
+var MAX_QUEUED_FOR_CLIENT;
+var MAX_BUFFERED_REQUEST_BODY;
+var TUNNEL_TIMEOUTS;
+var LOOKS;
+deferInit("chunk-fq0cr76a.js:671361", () => {
+  outboundOf = new WeakMap();
+  budgetOf = new WeakMap();
+  MAX_QUEUED_FOR_CLIENT = 1048576;
+  MAX_BUFFERED_REQUEST_BODY = 4194304;
+  TUNNEL_TIMEOUTS = {
+    firstRequestMs: 1e4,
+    keepAliveMs: 5000,
+    keepAliveMarginMs: 1000,
+    stalledMs: 300000,
+  };
+  LOOKS = 5;
+});
 //@ chunk-fq0cr76a.js:671503-674301 esm-fingerprint
 function terminateAndForward(
   ca,
@@ -259,7 +268,7 @@ function terminateAndForward(
     if (refused === undefined) return;
     target.onFilterRequestDeny?.(
       refused.method,
-      `https://${RTt(target.hostname, target.port, 443)}${refused.target}`,
+      `https://${formatAuthority(target.hostname, target.port, 443)}${refused.target}`,
       refused.reason,
     );
   });
@@ -302,7 +311,7 @@ function terminateAndForward(
     );
     outboundOf.set(tls, outbound);
     if (target.byteBudget) budgetOf.set(tls, target.byteBudget);
-    rT(tls);
+    markEndsGracefully(tls);
     let established = false;
     let onEstablished = () => {
       if (established) return;
@@ -500,7 +509,8 @@ function hostNameEntry(body) {
       kind: "unreadable",
     };
   let name = body.toString("latin1", 5).toLowerCase();
-  return name.length <= 253 && name.split(".").every((y) => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(y))
+  return name.length <= 253 &&
+    name.split(".").every((label) => /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/.test(label))
     ? {
         kind: "name",
         name,
@@ -636,7 +646,7 @@ async function forwardUpstream(
           value: code,
         }
       : undefined;
-  let authority = RTt(target.hostname, target.port, 443);
+  let authority = formatAuthority(target.hostname, target.port, 443);
   let read =
     filterRequest && !target.requestTargetAsSpelled
       ? readRequestTarget(req.url ?? "/", req.method, target.ambiguousRequestTarget)
@@ -923,7 +933,10 @@ function originFormPath(reqUrl) {
   }
 }
 //@ chunk-fq0cr76a.js:682624-682647 esm-fingerprint
-var EMPTY_CHUNK = Buffer.alloc(0);
+var EMPTY_CHUNK; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-fq0cr76a.js:682624", () => {
+  EMPTY_CHUNK = Buffer.alloc(0);
+});
 //@ chunk-fq0cr76a.js:682647-682727 esm-fingerprint
 function isTlsHandshakeDone(tls) {
   return Boolean(tls.getPeerFinished?.()) || tls._secureEstablished === true;

@@ -37,83 +37,93 @@ import { canonicalMcpConfigKey } from "./client.js";
 class StartupMcpHeaders {
   #t;
   #e;
-  constructor(hostOwnedConfigs, r) {
-    let n = Object.create(null);
+  constructor(hostOwnedConfigs, asWritten) {
+    let held = Object.create(null);
     for (let [key, value] of Object.entries(hostOwnedConfigs)) {
-      let y = value.type === "http" ? headerSnapshotsFor(key, value) : [];
-      if (value.type !== "http" || y.length === 0) continue;
-      let P = getOwn(r, key);
-      if (isSdkHttpMessage(P) && P.url === value.url && permissionsWithinStartup(value, P)) {
-        let A = new Set(y.map((M) => M.text));
-        for (let M of headerSnapshotsFor(key, P))
-          if (!A.has(M.text)) {
-            A.add(M.text);
-            y.push(M);
+      let forms = value.type === "http" ? headerSnapshotsFor(key, value) : [];
+      if (value.type !== "http" || forms.length === 0) continue;
+      let asWrittenEntry = getOwn(asWritten, key);
+      if (
+        isSdkHttpMessage(asWrittenEntry) &&
+        asWrittenEntry.url === value.url &&
+        permissionsWithinStartup(value, asWrittenEntry)
+      ) {
+        let seenForms = new Set(forms.map((form) => form.text));
+        for (let entryForm of headerSnapshotsFor(key, asWrittenEntry))
+          if (!seenForms.has(entryForm.text)) {
+            seenForms.add(entryForm.text);
+            forms.push(entryForm);
           }
       }
-      let E = Object.create(null);
+      let originHeaders = Object.create(null);
       for (let [key, value_2] of Object.entries(value.headers ?? {})) {
-        let h = {
+        let singleHeader = {
           [key]: value_2,
         };
         if (
-          headerValues(h, X_MCP_SERVER_ORIGIN).length > 0 ||
-          headerValues(h, X_CCR_OWNER_SLACK_USER_ID).length > 0
+          headerValues(singleHeader, X_MCP_SERVER_ORIGIN).length > 0 ||
+          headerValues(singleHeader, X_CCR_OWNER_SLACK_USER_ID).length > 0
         )
-          E[key] = value_2;
+          originHeaders[key] = value_2;
       }
-      n[key] = {
-        forms: y,
-        headers: Object.freeze(E),
+      held[key] = {
+        forms,
+        headers: Object.freeze(originHeaders),
       };
     }
-    this.#t = n;
-    this.#e = new Set(Object.keys(n));
+    this.#t = held;
+    this.#e = new Set(Object.keys(held));
   }
-  headersOf(e, r) {
-    let n = this.#e.has(e) ? getOwn(this.#t, e) : undefined;
-    return n?.forms.some((form) => form.url === r) ? n.headers : undefined;
+  headersOf(serverName, url) {
+    let entry = this.#e.has(serverName) ? getOwn(this.#t, serverName) : undefined;
+    return entry?.forms.some((form) => form.url === url) ? entry.headers : undefined;
   }
-  isHeldEntry(e, r) {
-    if (!this.#e.has(e) || r.type !== "http") return false;
-    let n = entryFingerprintText(r);
-    return n !== undefined && getOwn(this.#t, e)?.forms.some((form) => form.text === n) === true;
+  isHeldEntry(serverName, config) {
+    if (!this.#e.has(serverName) || config.type !== "http") return false;
+    let fingerprint = entryFingerprintText(config);
+    return (
+      fingerprint !== undefined &&
+      getOwn(this.#t, serverName)?.forms.some((form) => form.text === fingerprint) === true
+    );
   }
-  narrowTo(e, r) {
+  narrowTo(configs, keepNames) {
     try {
-      let n = new Set(this.#e);
-      let s = [];
-      for (let y of r ?? this.#e) {
-        if (!this.#e.has(y)) continue;
-        let P = getOwn(e, y);
-        let E = P === undefined ? undefined : entryFingerprintText(P);
-        let A = getOwn(this.#t, y);
-        if (E === undefined || A?.forms.some((form) => form.text === E) !== true) {
-          n.delete(y);
-          s.push([A, P === undefined ? "removed" : E === undefined ? "unreadable" : "changed"]);
+      let keptNames = new Set(this.#e);
+      let ended = [];
+      for (let serverName of keepNames ?? this.#e) {
+        if (!this.#e.has(serverName)) continue;
+        let config = getOwn(configs, serverName);
+        let fingerprint = config === undefined ? undefined : entryFingerprintText(config);
+        let entry = getOwn(this.#t, serverName);
+        if (fingerprint === undefined || entry?.forms.some((form) => form.text === fingerprint) !== true) {
+          keptNames.delete(serverName);
+          ended.push([
+            entry,
+            config === undefined ? "removed" : fingerprint === undefined ? "unreadable" : "changed",
+          ]);
         }
       }
-      let S = this.#e.size - n.size;
-      this.#e = n;
+      let removedCount = this.#e.size - keptNames.size;
+      this.#e = keptNames;
       try {
-        for (let [y, P] of s) {
-          let found = FILE_REFERENCE_ROWS.find((A) => {
-            let M = `${A.connectorOrigin}${A.connectorPath}`;
-            return y?.forms.some((form) => {
+        for (let [entry, reason] of ended) {
+          let found = FILE_REFERENCE_ROWS.find((row) => {
+            let expectedUrl = `${row.connectorOrigin}${row.connectorPath}`;
+            return entry?.forms.some((form) => {
               let upstreamUrl = ccrSessionIdFromMcpUrl(form.url)?.upstreamUrl;
-              return upstreamUrl === M || upstreamUrl === `${M}/`;
+              return upstreamUrl === expectedUrl || upstreamUrl === `${expectedUrl}/`;
             });
           });
           if (found !== undefined)
             getFileReferenceOffer().note(found, {
               state: "hold_ended",
-              reason: P,
+              reason,
             });
         }
       } catch {}
-      if (S > 0)
+      if (removedCount > 0)
         logForDebugging(
-          `[MCP] ${S} MCP server(s) this process started with were removed, changed or could not be read; if one was Google Drive, uploads of local files by path to it stay off until a new worker process starts`,
+          `[MCP] ${removedCount} MCP server(s) this process started with were removed, changed or could not be read; if one was Google Drive, uploads of local files by path to it stay off until a new worker process starts`,
         );
     } catch (error) {
       this.#e = new Set();
@@ -122,24 +132,24 @@ class StartupMcpHeaders {
   }
 }
 //@ chunk-cjydagjy.js:18705-18998 placement
-function installStartupMcpHeaders(session, regularMcpConfigs, mcpConfigOwnership, asWrittenMcpEntries = {}) {
+function installStartupMcpHeaders(session, regularMcpConfigs, ownership, asWritten = {}) {
   if (!isRemoteOrFalse() || isCcsTenant()) return;
   try {
-    let S = new StartupMcpHeaders(
+    let startupHeaders = new StartupMcpHeaders(
       partitionOperatorServers(
         Object.entries(regularMcpConfigs).map(([key, value]) => ({
           name: key,
           type: "pending",
           config: value,
         })),
-        mcpConfigOwnership,
+        ownership,
       ).hostOwnedConfigs,
-      asWrittenMcpEntries,
+      asWritten,
     );
-    let y = serverCapabilityCache.of(session);
-    y.read = (P, E) => S.headersOf(P, E);
-    y.isStartupEntry = (P, E) => S.isHeldEntry(P, E);
-    y.narrowTo = (P, E) => S.narrowTo(P, E);
+    let capabilityCache = serverCapabilityCache.of(session);
+    capabilityCache.read = (serverName, url) => startupHeaders.headersOf(serverName, url);
+    capabilityCache.isStartupEntry = (serverName, config) => startupHeaders.isHeldEntry(serverName, config);
+    capabilityCache.narrowTo = (configs, keepNames) => startupHeaders.narrowTo(configs, keepNames);
   } catch (error) {
     logError(error);
   }
@@ -148,41 +158,46 @@ function installStartupMcpHeaders(session, regularMcpConfigs, mcpConfigOwnership
 /**
  * 校验对象是否为 SDK 的 http 消息结构。
  */
-function isSdkHttpMessage(e) {
-  return SDKHttpMessageSchema().safeParse(e).success;
+function isSdkHttpMessage(value) {
+  return SDKHttpMessageSchema().safeParse(value).success;
 }
 //@ chunk-cjydagjy.js:19047-19246 placement
-function headerSnapshotsFor(e, r) {
-  let n = entryFingerprintText(r);
-  if (n === undefined || containsEnvRef(n) || getOwn(r, "headersHelper") !== undefined) return [];
-  let s = rewriteCcrSessionMcpUrl(e, r);
-  let S = s && entryFingerprintText(s);
-  return s && S !== undefined
+function headerSnapshotsFor(serverName, config) {
+  let fingerprint = entryFingerprintText(config);
+  if (
+    fingerprint === undefined ||
+    containsEnvRef(fingerprint) ||
+    getOwn(config, "headersHelper") !== undefined
+  )
+    return [];
+  let rewritten = rewriteCcrSessionMcpUrl(serverName, config);
+  let rewrittenFingerprint = rewritten && entryFingerprintText(rewritten);
+  return rewritten && rewrittenFingerprint !== undefined
     ? [
         {
-          url: r.url,
-          text: n,
+          url: config.url,
+          text: fingerprint,
         },
         {
-          url: s.url,
-          text: S,
+          url: rewritten.url,
+          text: rewrittenFingerprint,
         },
       ]
     : [
         {
-          url: r.url,
-          text: n,
+          url: config.url,
+          text: fingerprint,
         },
       ];
 }
 //@ chunk-cjydagjy.js:19246-19474 placement
-function permissionsWithinStartup(e, r) {
-  let caps = mcpEntryFingerprint(r)?.caps;
+function permissionsWithinStartup(config, asWritten) {
+  let caps = mcpEntryFingerprint(asWritten)?.caps;
   if (caps === undefined) return false;
-  if (!("toolPermissions" in e) || e.toolPermissions === undefined) return true;
+  if (!("toolPermissions" in config) || config.toolPermissions === undefined) return true;
   return (
-    isPlainObject(e.toolPermissions) &&
-    Object.entries(e.toolPermissions).every(
+    isPlainObject(config.toolPermissions) &&
+    Object.entries(config.toolPermissions).every(
       ([key, value]) => value === "allow" || getOwn(caps, key) === value,
     )
   );
@@ -191,18 +206,18 @@ function permissionsWithinStartup(e, r) {
 /**
  * 取服务器条目的指纹文本。
  */
-function entryFingerprintText(e) {
-  return mcpEntryFingerprint(e)?.text;
+function entryFingerprintText(entry) {
+  return mcpEntryFingerprint(entry)?.text;
 }
 //@ chunk-cjydagjy.js:19508-19844 placement
 /**
  * MCP 服务器条目的比较文本与工具权限。
  */
-function mcpEntryFingerprint(e) {
+function mcpEntryFingerprint(entry) {
   try {
     let config = withoutAllowPermissions(
       toDynamicServerConfig({
-        ...e,
+        ...entry,
       }),
     );
     return {
@@ -225,14 +240,14 @@ function withoutAllowPermissions(dynamicServerConfig) {
   if (!("toolPermissions" in dynamicServerConfig) || !isPlainObject(dynamicServerConfig.toolPermissions))
     return dynamicServerConfig;
   let entries = Object.entries(dynamicServerConfig.toolPermissions);
-  let filtered = entries.filter(([, y]) => y !== "allow");
+  let filtered = entries.filter(([, value]) => value !== "allow");
   if (filtered.length === entries.length) return dynamicServerConfig;
   if (filtered.length > 0)
     return {
       ...dynamicServerConfig,
       toolPermissions: Object.fromEntries(filtered),
     };
-  let { toolPermissions, ...S } = dynamicServerConfig;
-  return S;
+  let { toolPermissions, ...rest } = dynamicServerConfig;
+  return rest;
 }
 export { installStartupMcpHeaders };

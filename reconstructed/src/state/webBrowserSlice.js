@@ -24,19 +24,19 @@ function getDefaultWebBrowserState() {
  * AppState 的 webBrowser 片段。
  */
 function makeSetWebBrowserSlice(setAppState) {
-  return (o) =>
-    setAppState((e) => {
-      let r = {
-        webBrowser: e.webBrowser,
-        bagelActive: e.bagelActive,
-        bagelUrl: e.bagelUrl,
-        bagelPanelVisible: e.bagelPanelVisible,
+  return (updater) =>
+    setAppState((state) => {
+      let slice = {
+        webBrowser: state.webBrowser,
+        bagelActive: state.bagelActive,
+        bagelUrl: state.bagelUrl,
+        bagelPanelVisible: state.bagelPanelVisible,
       };
-      let t = o(r);
-      if (t === r) return e;
+      let nextSlice = updater(slice);
+      if (nextSlice === slice) return state;
       return {
-        ...e,
-        ...t,
+        ...state,
+        ...nextSlice,
       };
     });
 }

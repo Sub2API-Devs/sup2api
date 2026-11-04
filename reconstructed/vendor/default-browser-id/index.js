@@ -10,33 +10,33 @@ import { execFile } from "child_process";
 import { default as E } from "process";
 
 //@ chunk-20ppca50.js:1739-1943 esm-layout
-function m(apps, r, o) {
-  let n = (value) =>
-    Object.defineProperty(apps, r, {
+function defineLazyProperty(apps, key, getter) {
+  let setValue = (value) =>
+    Object.defineProperty(apps, key, {
       value,
       enumerable: true,
       writable: true,
     });
-  Object.defineProperty(apps, r, {
+  Object.defineProperty(apps, key, {
     configurable: true,
     enumerable: true,
     get() {
-      let t = o();
-      n(t);
-      return t;
+      let value = getter();
+      setValue(value);
+      return value;
     },
-    set(t) {
-      n(t);
+    set(newValue) {
+      setValue(newValue);
     },
   });
   return apps;
 }
 //@ chunk-20ppca50.js:2141-2154 esm-layout
-var oe = promisify(execFile);
+var execFileAsync = promisify(execFile);
 //@ chunk-20ppca50.js:2154-2469 esm-fingerprint
 async function defaultBrowserId() {
   if (E.platform !== "darwin") throw Error("macOS only");
-  let { stdout } = await oe("defaults", [
+  let { stdout } = await execFileAsync("defaults", [
     "read",
     "com.apple.LaunchServices/com.apple.launchservices.secure",
     "LSHandlers",
@@ -46,4 +46,4 @@ async function defaultBrowserId() {
       .id ?? "com.apple.Safari"
   );
 }
-export { defaultBrowserId, m };
+export { defaultBrowserId, defineLazyProperty };

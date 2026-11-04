@@ -30,93 +30,96 @@ import {
   hooksImportResolver,
 } from "./moduleLoader.js";
 import { HooksError } from "./hooksErrors.js";
-import { io } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
-import { rt } from "../../../vendor/lodash-es/_inlinedHelpers.js";
+import { memoizeAlias } from "../../../vendor/@mermaid-js/parser/dist/chunks/mermaid-parser.esm.min/chunk-L2OVAXIS.mjs";
+import { import_sortedLastIndex } from "../../../vendor/lodash-es/_inlinedHelpers.js";
 import { uniq } from "../../utils/collections.js";
 import { truncateToLength } from "../../utils/stringUtils.js";
 import { yieldToEventLoop } from "../../native-ts/file-index/index.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bfnfj4kx.js:13278-13806 placement
 /**
  * AST 节点类型 → 是否声明某标识符的判定表。
  */
 var DECLARES_IDENTIFIER = {
-  VariableDeclarator: (e, o) => e.id === o,
+  VariableDeclarator: (node, identifier) => node.id === identifier,
   FunctionDeclaration: isSameModuleId,
   FunctionExpression: isSameModuleId,
-  ArrowFunctionExpression: (e, o) => e.params.includes(o),
-  ClassDeclaration: (e, o) => e.id === o,
-  ClassExpression: (e, o) => e.id === o,
-  CatchClause: (e, o) => e.param === o,
-  AssignmentPattern: (e, o) => e.left === o,
-  RestElement: (e, o) => e.argument === o,
-  ArrayPattern: (e, o) => e.elements.includes(o),
-  Property: (e, o, t) => e.value === o && t?.type === "ObjectPattern",
-  ImportSpecifier: (e, o) => e.local === o,
-  ImportDefaultSpecifier: (e, o) => e.local === o,
-  ImportNamespaceSpecifier: (e, o) => e.local === o,
+  ArrowFunctionExpression: (node, identifier) => node.params.includes(identifier),
+  ClassDeclaration: (node, identifier) => node.id === identifier,
+  ClassExpression: (node, identifier) => node.id === identifier,
+  CatchClause: (node, identifier) => node.param === identifier,
+  AssignmentPattern: (node, identifier) => node.left === identifier,
+  RestElement: (node, identifier) => node.argument === identifier,
+  ArrayPattern: (node, identifier) => node.elements.includes(identifier),
+  Property: (node, identifier, parent) => node.value === identifier && parent?.type === "ObjectPattern",
+  ImportSpecifier: (node, identifier) => node.local === identifier,
+  ImportDefaultSpecifier: (node, identifier) => node.local === identifier,
+  ImportNamespaceSpecifier: (node, identifier) => node.local === identifier,
 };
 //@ chunk-bfnfj4kx.js:13806-13829 placement
 /**
  * 节点是否声明标识符
  */
-var declaresIdentifier = (e) => DECLARES_IDENTIFIER[e.type];
+var declaresIdentifier = (node) => DECLARES_IDENTIFIER[node.type];
 //@ chunk-bfnfj4kx.js:13829-13952 placement
-var isPropertyKey = (e, o) =>
-  (o?.type === "Property" || o?.type === "PropertyDefinition" || o?.type === "MethodDefinition") &&
-  o.key === e &&
-  !o.computed;
+var isPropertyKey = (node, parent) =>
+  (parent?.type === "Property" ||
+    parent?.type === "PropertyDefinition" ||
+    parent?.type === "MethodDefinition") &&
+  parent.key === node &&
+  !parent.computed;
 //@ chunk-bfnfj4kx.js:13952-14020 placement
 /**
  * 像 AST 节点
  */
-var isAstNode = (e) => typeof e === "object" && e !== null && typeof e.type === "string";
+var isAstNode = (value) => typeof value === "object" && value !== null && typeof value.type === "string";
 //@ chunk-bfnfj4kx.js:14020-14135 placement
 function memoizeByObject(collectTopConsts) {
   let weakMap = new WeakMap();
-  return (t) => {
-    let r = weakMap.get(t);
-    if (r !== undefined) return r;
-    let n = collectTopConsts(t);
-    weakMap.set(t, n);
-    return n;
+  return (program) => {
+    let memoized = weakMap.get(program);
+    if (memoized !== undefined) return memoized;
+    let collected = collectTopConsts(program);
+    weakMap.set(program, collected);
+    return collected;
   };
 }
 //@ chunk-bfnfj4kx.js:14135-14620 placement
 /**
  * 迭代式遍历 AST（附父、祖父节点），可剪枝。
  */
-function walkAst(node, o, t) {
-  let r = [
+function walkAst(node, visit, prune) {
+  let stack = [
     {
       node,
       parent: undefined,
       grandparent: undefined,
     },
   ];
-  for (let n = r.pop(); n !== undefined; n = r.pop()) {
-    o(n);
-    if (t?.(n.node)) continue;
-    let keys = Object.keys(n.node);
-    for (let p = keys.length - 1; p >= 0; p -= 1) {
-      let i = keys[p];
-      if (i === undefined || i === "loc" || i === "type" || i === "start" || i === "end") continue;
-      let f = n.node[i];
-      if (Array.isArray(f))
-        for (let u = f.length - 1; u >= 0; u -= 1) {
-          let x = f[u];
-          if (isAstNode(x))
-            r.push({
-              node: x,
-              parent: n.node,
-              grandparent: n.parent,
+  for (let frame = stack.pop(); frame !== undefined; frame = stack.pop()) {
+    visit(frame);
+    if (prune?.(frame.node)) continue;
+    let keys = Object.keys(frame.node);
+    for (let keyIndex = keys.length - 1; keyIndex >= 0; keyIndex -= 1) {
+      let key = keys[keyIndex];
+      if (key === undefined || key === "loc" || key === "type" || key === "start" || key === "end") continue;
+      let child = frame.node[key];
+      if (Array.isArray(child))
+        for (let childIndex = child.length - 1; childIndex >= 0; childIndex -= 1) {
+          let childNode = child[childIndex];
+          if (isAstNode(childNode))
+            stack.push({
+              node: childNode,
+              parent: frame.node,
+              grandparent: frame.parent,
             });
         }
-      else if (isAstNode(f))
-        r.push({
-          node: f,
-          parent: n.node,
-          grandparent: n.parent,
+      else if (isAstNode(child))
+        stack.push({
+          node: child,
+          parent: frame.node,
+          grandparent: frame.parent,
         });
     }
   }
@@ -125,25 +128,26 @@ function walkAst(node, o, t) {
 /**
  * 建立父节点表
  */
-function buildParentMap(e) {
-  let o = new Map();
-  walkAst(e, ({ node, parent }) => {
-    if (parent !== undefined) o.set(node, parent);
+function buildParentMap(program) {
+  let parents = new Map();
+  walkAst(program, ({ node, parent }) => {
+    if (parent !== undefined) parents.set(node, parent);
   });
-  return o;
+  return parents;
 }
 //@ chunk-bfnfj4kx.js:14712-14994 placement
 /**
  * hooks 模块不允许 import()：找到最早的动态导入并生成扫描拒绝。
  */
-function refuseDynamicImport(e) {
-  let o;
-  walkAst(e.program, ({ node }) => {
-    if (node.type === "ImportExpression" && (o === undefined || node.start < o.start)) o = node;
+function refuseDynamicImport(program) {
+  let firstImport;
+  walkAst(program.program, ({ node }) => {
+    if (node.type === "ImportExpression" && (firstImport === undefined || node.start < firstImport.start))
+      firstImport = node;
   });
-  if (o === undefined) return;
-  return e.refuse(
-    o,
+  if (firstImport === undefined) return;
+  return program.refuse(
+    firstImport,
     'a dynamic import(); a hooks module imports its own files with an import declaration, as in import { name } from "./file.js"',
   );
 }
@@ -151,35 +155,35 @@ function refuseDynamicImport(e) {
 /**
  * 收集模块的导入映射。
  */
-function collectImports(e) {
-  let o = new Map();
-  for (let t of e.body) {
-    if (t.type !== "ImportDeclaration") continue;
-    let specifier = String(t.source.value);
-    for (let specifier_2 of t.specifiers) {
-      let s;
+function collectImports(program) {
+  let imports = new Map();
+  for (let statement of program.body) {
+    if (statement.type !== "ImportDeclaration") continue;
+    let specifier = String(statement.source.value);
+    for (let specifier_2 of statement.specifiers) {
+      let importedName;
       if (specifier_2.type === "ImportSpecifier") {
         let imported = specifier_2.imported;
-        s = imported.type === "Identifier" ? imported.name : String(imported.value);
-      } else s = specifier_2.type === "ImportDefaultSpecifier" ? "default" : undefined;
-      o.set(specifier_2.local.name, {
+        importedName = imported.type === "Identifier" ? imported.name : String(imported.value);
+      } else importedName = specifier_2.type === "ImportDefaultSpecifier" ? "default" : undefined;
+      imports.set(specifier_2.local.name, {
         specifier,
-        imported: s,
+        imported: importedName,
       });
     }
   }
-  return o;
+  return imports;
 }
 //@ chunk-bfnfj4kx.js:15355-15592 placement
-function importSpecifiers(e) {
-  let o = new Set();
-  for (let t of e.body) {
-    let r = t.type === "ImportDeclaration" || t.type === "ExportAllDeclaration";
-    let n = t.type === "ExportNamedDeclaration";
-    let s = r ? t.source : n ? (t.source ?? null) : null;
-    if (s !== null) o.add(String(s.value));
+function importSpecifiers(program) {
+  let specifiers = new Set();
+  for (let statement of program.body) {
+    let isReexport = statement.type === "ImportDeclaration" || statement.type === "ExportAllDeclaration";
+    let isNamedExport = statement.type === "ExportNamedDeclaration";
+    let sourceNode = isReexport ? statement.source : isNamedExport ? (statement.source ?? null) : null;
+    if (sourceNode !== null) specifiers.add(String(sourceNode.value));
   }
-  return [...o];
+  return [...specifiers];
 }
 //@ chunk-bfnfj4kx.js:15592-15604 placement
 /**
@@ -190,38 +194,41 @@ var MAX_EXCERPT_CHARS = 2000;
 /**
  * hooks 模块静态扫描拒绝错误（插件、文件、行、摘录、原因）。
  */
-class ScanRefusal extends HooksError {
-  name = "ScanRefusal";
-  plugin;
-  file;
-  line;
-  excerpt;
-  construct;
-  constructor({ plugin, file, line, excerpt, construct }) {
-    super(
-      `${plugin}: ${file}${line === undefined ? "" : excerpt === undefined ? `:${line}` : `, compiled line ${line} \`${excerpt}\``}: ${construct}; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")`,
-    );
-    this.plugin = plugin;
-    this.file = file;
-    this.line = line;
-    this.excerpt = excerpt;
-    this.construct = construct;
-  }
-}
+let ScanRefusal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bfnfj4kx.js:15604", () => {
+  ScanRefusal = class ScanRefusal extends HooksError {
+    name = "ScanRefusal";
+    plugin;
+    file;
+    line;
+    excerpt;
+    construct;
+    constructor({ plugin, file, line, excerpt, construct }) {
+      super(
+        `${plugin}: ${file}${line === undefined ? "" : excerpt === undefined ? `:${line}` : `, compiled line ${line} \`${excerpt}\``}: ${construct}; $ is always spelled $.noun.event(...) at the call site, on is always on("<event>", hook), and next.to always next.to(e, "<tier>")`,
+      );
+      this.plugin = plugin;
+      this.file = file;
+      this.line = line;
+      this.excerpt = excerpt;
+      this.construct = construct;
+    }
+  };
+});
 //@ chunk-bfnfj4kx.js:16033-16329 placement
-function passesValueThrough(e, o) {
-  switch (e.type) {
+function passesValueThrough(node, valueNode) {
+  switch (node.type) {
     case "SequenceExpression":
     case "ChainExpression":
     case "ParenthesizedExpression":
     case "AwaitExpression":
       return true;
     case "LogicalExpression":
-      return e.right === o;
+      return node.right === valueNode;
     case "ConditionalExpression":
-      return e.test !== o;
+      return node.test !== valueNode;
     case "UnaryExpression":
-      return e.operator === "void";
+      return node.operator === "void";
     default:
       return false;
   }
@@ -233,44 +240,44 @@ function passesValueThrough(e, o) {
 function propertyKeyName(property) {
   if (property.type !== "Property") return;
   let { key } = property;
-  let t = !property.computed && key.type === "Identifier";
-  let r = !property.computed && key.type === "Literal";
-  return t ? key.name : r ? String(key.value) : undefined;
+  let isIdentifierKey = !property.computed && key.type === "Identifier";
+  let isLiteralKey = !property.computed && key.type === "Literal";
+  return isIdentifierKey ? key.name : isLiteralKey ? String(key.value) : undefined;
 }
 //@ chunk-bfnfj4kx.js:16498-16606 placement
-var hasNonPlainProperties = (e) =>
-  e.properties.some(
+var hasNonPlainProperties = (objectNode) =>
+  objectNode.properties.some(
     (property) =>
       property.type === "Property" &&
       (property.kind !== "init" || (!property.shorthand && propertyKeyName(property) === "__proto__")),
   );
 //@ chunk-bfnfj4kx.js:16606-16718 placement
-var isFunctionNode = (e) =>
-  e?.type === "FunctionDeclaration" ||
-  e?.type === "FunctionExpression" ||
-  e?.type === "ArrowFunctionExpression";
+var isFunctionNode = (node) =>
+  node?.type === "FunctionDeclaration" ||
+  node?.type === "FunctionExpression" ||
+  node?.type === "ArrowFunctionExpression";
 //@ chunk-bfnfj4kx.js:16718-16792 placement
 /**
  * 函数或实例属性值
  */
-var isFunctionOrPropertyValue = (e, o) =>
-  isFunctionNode(e) || (e.type === "PropertyDefinition" && !e.static && e.value === o);
+var isFunctionOrPropertyValue = (node, valueNode) =>
+  isFunctionNode(node) || (node.type === "PropertyDefinition" && !node.static && node.value === valueNode);
 //@ chunk-bfnfj4kx.js:16792-16966 placement
-function isContainerSlot(e, o, t) {
-  switch (e.type) {
+function isContainerSlot(node, parentNode, isNonPlain) {
+  switch (node.type) {
     case "ArrayExpression":
       return true;
     case "Property":
-      return e.value === o;
+      return node.value === parentNode;
     case "ObjectExpression":
-      return o.type === "Property" && !t(e);
+      return parentNode.type === "Property" && !isNonPlain(node);
     default:
       return false;
   }
 }
 //@ chunk-bfnfj4kx.js:16966-17240 placement
-function isBlockScopeNode(e) {
-  switch (e.type) {
+function isBlockScopeNode(node) {
+  switch (node.type) {
     case "Program":
     case "FunctionDeclaration":
     case "FunctionExpression":
@@ -287,8 +294,8 @@ function isBlockScopeNode(e) {
   }
 }
 //@ chunk-bfnfj4kx.js:17240-17393 placement
-function isPatternNode(e) {
-  switch (e.type) {
+function isPatternNode(node) {
+  switch (node.type) {
     case "Property":
     case "ObjectPattern":
     case "ArrayPattern":
@@ -300,62 +307,77 @@ function isPatternNode(e) {
   }
 }
 //@ chunk-bfnfj4kx.js:17393-17520 placement
-function isVarScopeNode(e, o) {
-  switch (e.type) {
+function isVarScopeNode(node, parent) {
+  switch (node.type) {
     case "Program":
     case "StaticBlock":
       return true;
     case "BlockStatement":
-      return isFunctionNode(o);
+      return isFunctionNode(parent);
     default:
-      return isFunctionNode(e);
+      return isFunctionNode(node);
   }
 }
 //@ chunk-bfnfj4kx.js:17520-17805 placement
-function createAncestorFinder(e, o) {
-  let t = new Map();
-  return (r) => {
-    let n = t.get(r);
-    if (n !== undefined) return n ?? undefined;
-    let s = r;
-    let p = e(r);
-    let i = p === undefined ? null : (o(p, s) ?? t.get(p));
-    while (p !== undefined && i === undefined) {
-      s = p;
-      p = e(p);
-      i = p === undefined ? null : (o(p, s) ?? t.get(p));
+function createAncestorFinder(parentOf, matchOf) {
+  let cache = new Map();
+  return (startNode) => {
+    let cached = cache.get(startNode);
+    if (cached !== undefined) return cached ?? undefined;
+    let child = startNode;
+    let ancestor = parentOf(startNode);
+    let match = ancestor === undefined ? null : (matchOf(ancestor, child) ?? cache.get(ancestor));
+    while (ancestor !== undefined && match === undefined) {
+      child = ancestor;
+      ancestor = parentOf(ancestor);
+      match = ancestor === undefined ? null : (matchOf(ancestor, child) ?? cache.get(ancestor));
     }
-    for (let a = r; a !== undefined && a !== p; a = e(a)) t.set(a, i ?? null);
-    return i ?? undefined;
+    for (
+      let nodeOnPath = startNode;
+      nodeOnPath !== undefined && nodeOnPath !== ancestor;
+      nodeOnPath = parentOf(nodeOnPath)
+    )
+      cache.set(nodeOnPath, match ?? null);
+    return match ?? undefined;
   };
 }
 //@ chunk-bfnfj4kx.js:17805-18150 placement
 /**
  * 构造作用域查询函数组（父节点、所在函数、词法/var 作用域等）。
  */
-function makeScopeClimbs(e) {
-  let o = io(hasNonPlainProperties);
+function makeScopeClimbs(parentOf) {
+  let isNonPlain = memoizeAlias(hasNonPlainProperties);
   return {
-    parentOf: e,
-    functionOf: createAncestorFinder(e, (t) => (isFunctionNode(t) ? t : undefined)),
-    lexicalScopeOf: createAncestorFinder(e, (t) => (isBlockScopeNode(t) ? t : undefined)),
-    varScopeOf: createAncestorFinder(e, (t) => (isVarScopeNode(t, e(t)) ? t : undefined)),
-    declarerOf: createAncestorFinder(e, (t) => (isPatternNode(t) ? undefined : t)),
-    deferrerOf: createAncestorFinder(e, (t, r) => (isFunctionOrPropertyValue(t, r) ? t : undefined)),
-    endOf: createAncestorFinder(e, (t, r) =>
-      passesValueThrough(t, r)
+    parentOf,
+    functionOf: createAncestorFinder(parentOf, (ancestor) =>
+      isFunctionNode(ancestor) ? ancestor : undefined,
+    ),
+    lexicalScopeOf: createAncestorFinder(parentOf, (ancestor) =>
+      isBlockScopeNode(ancestor) ? ancestor : undefined,
+    ),
+    varScopeOf: createAncestorFinder(parentOf, (ancestor) =>
+      isVarScopeNode(ancestor, parentOf(ancestor)) ? ancestor : undefined,
+    ),
+    declarerOf: createAncestorFinder(parentOf, (ancestor) =>
+      isPatternNode(ancestor) ? undefined : ancestor,
+    ),
+    deferrerOf: createAncestorFinder(parentOf, (ancestor, child) =>
+      isFunctionOrPropertyValue(ancestor, child) ? ancestor : undefined,
+    ),
+    endOf: createAncestorFinder(parentOf, (ancestor, child) =>
+      passesValueThrough(ancestor, child)
         ? undefined
         : {
-            value: r,
-            parent: t,
+            value: child,
+            parent: ancestor,
           },
     ),
-    heldAt: createAncestorFinder(e, (t, r) =>
-      isContainerSlot(t, r, o)
+    heldAt: createAncestorFinder(parentOf, (ancestor, child) =>
+      isContainerSlot(ancestor, child, isNonPlain)
         ? undefined
         : {
-            value: r,
-            parent: t,
+            value: child,
+            parent: ancestor,
           },
     ),
   };
@@ -364,8 +386,8 @@ function makeScopeClimbs(e) {
 /**
  * 节点是否开启作用域。
  */
-function isScopeNode(e) {
-  switch (e.type) {
+function isScopeNode(node) {
+  switch (node.type) {
     case "Program":
     case "FunctionDeclaration":
     case "FunctionExpression":
@@ -385,99 +407,110 @@ function isScopeNode(e) {
   }
 }
 //@ chunk-bfnfj4kx.js:18487-18666 placement
-function splitShadowedUses(e, o) {
-  let mapped = e.map((use, at) => ({
+function splitShadowedUses(uses, names) {
+  let mapped = uses.map((use, at) => ({
     use,
     at,
   }));
   return {
-    owned: Map.groupBy(mapped, (r) => o.writtenShadowOf(r.use)),
-    doubted: mapped.filter((r) => o.writtenShadowOf(r.use) !== o.shadowOf(r.use)),
+    owned: Map.groupBy(mapped, (use) => names.writtenShadowOf(use.use)),
+    doubted: mapped.filter((use) => names.writtenShadowOf(use.use) !== names.shadowOf(use.use)),
   };
 }
 //@ chunk-bfnfj4kx.js:18666-18768 placement
-function statementList(e) {
-  return e.type === "Program" || e.type === "BlockStatement" || e.type === "StaticBlock" ? e.body : [];
+function statementList(node) {
+  return node.type === "Program" || node.type === "BlockStatement" || node.type === "StaticBlock"
+    ? node.body
+    : [];
 }
 //@ chunk-bfnfj4kx.js:18768-19132 placement
 /**
  * 收集顶层 const 声明。
  */
-function collectTopConsts(e) {
-  let o = new Map();
-  for (let t of statementList(e)) {
-    let r = t.type === "ExportNamedDeclaration";
-    let n = r ? t.declaration : t;
-    let s = n?.type === "VariableDeclaration" && n.kind === "var" && e.type === "Program" && !r;
-    if (!(n?.type === "VariableDeclaration" && (n.kind === "const" || s))) continue;
-    for (let { id, init } of n.declarations)
+function collectTopConsts(program) {
+  let consts = new Map();
+  for (let statement of statementList(program)) {
+    let isReexport = statement.type === "ExportNamedDeclaration";
+    let declaration = isReexport ? statement.declaration : statement;
+    let isTopVar =
+      declaration?.type === "VariableDeclaration" &&
+      declaration.kind === "var" &&
+      program.type === "Program" &&
+      !isReexport;
+    if (!(declaration?.type === "VariableDeclaration" && (declaration.kind === "const" || isTopVar)))
+      continue;
+    for (let { id, init } of declaration.declarations)
       if (id.type === "Identifier" && init)
-        o.set(id.name, {
+        consts.set(id.name, {
           id,
           init,
-          isVar: s,
+          isVar: isTopVar,
         });
   }
-  return o;
+  return consts;
 }
 //@ chunk-bfnfj4kx.js:19132-19214 placement
 /**
  * 写入未被遮蔽
  */
-var hasUnshadowedWrite = (e, names) =>
-  names.writtenShadowOf(e) === undefined || names.writtenShadowOf(e) !== names.shadowOf(e);
+var hasUnshadowedWrite = (use, names) =>
+  names.writtenShadowOf(use) === undefined || names.writtenShadowOf(use) !== names.shadowOf(use);
 //@ chunk-bfnfj4kx.js:19214-19261 placement
 /**
  * 原因与位置
  */
-var causeAt = (cause, o) =>
-  o === undefined
+var causeAt = (cause, location) =>
+  location === undefined
     ? undefined
     : {
-        at: o,
+        at: location,
         cause,
       };
 //@ chunk-bfnfj4kx.js:19261-19989 placement
 /**
  * 扫描问题的说明文字表。
  */
-var SCAN_PROBLEM_TEXT = Object.freeze({
-  declared: "is declared here too, so the value it names cannot be listed. Declare it once",
-  assigned:
-    "is assigned here, so the value it names cannot be listed. Leave it unassigned, or write the reference at the call",
-  doubted:
-    "may be assigned here, where the engine can bind the name apart from the text, so the value it names cannot be listed. Rename one of the two",
-  looped:
-    "is spelled in a loop's head here, and the engine can write such a target past a nearer name of that spelling, so the value it names cannot be listed. Rename one of the two",
-  early:
-    "is read here as the file loads, above its declaration, where it is still undefined, so the value it names cannot be listed. Declare it above this read",
+var SCAN_PROBLEM_TEXT; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-bfnfj4kx.js:19261", () => {
+  SCAN_PROBLEM_TEXT = Object.freeze({
+    declared: "is declared here too, so the value it names cannot be listed. Declare it once",
+    assigned:
+      "is assigned here, so the value it names cannot be listed. Leave it unassigned, or write the reference at the call",
+    doubted:
+      "may be assigned here, where the engine can bind the name apart from the text, so the value it names cannot be listed. Rename one of the two",
+    looped:
+      "is spelled in a loop's head here, and the engine can write such a target past a nearer name of that spelling, so the value it names cannot be listed. Rename one of the two",
+    early:
+      "is read here as the file loads, above its declaration, where it is still undefined, so the value it names cannot be listed. Declare it above this read",
+  });
 });
 //@ chunk-bfnfj4kx.js:19989-20607 placement
 /**
  * 求声明所在作用域。
  */
-function declaringScopeOf(e, { parentOf, declarerOf, lexicalScopeOf, varScopeOf }) {
-  let s = declarerOf(e);
-  switch (s?.type) {
+function declaringScopeOf(identifier, { parentOf, declarerOf, lexicalScopeOf, varScopeOf }) {
+  let declarer = declarerOf(identifier);
+  switch (declarer?.type) {
     case "VariableDeclarator": {
-      let p = parentOf(s);
+      let declaration = parentOf(declarer);
       return (
-        (p?.type === "VariableDeclaration" && p.kind !== "var" ? lexicalScopeOf(s) : varScopeOf(s)) ??
-        "unplaced"
+        (declaration?.type === "VariableDeclaration" && declaration.kind !== "var"
+          ? lexicalScopeOf(declarer)
+          : varScopeOf(declarer)) ?? "unplaced"
       );
     }
     case "FunctionDeclaration":
     case "ClassDeclaration":
-      return s.id === e ? (lexicalScopeOf(s) ?? "unplaced") : s;
+      return declarer.id === identifier ? (lexicalScopeOf(declarer) ?? "unplaced") : declarer;
     case "FunctionExpression":
     case "ArrowFunctionExpression":
     case "ClassExpression":
     case "CatchClause":
-      return s;
+      return declarer;
     case "ImportSpecifier":
     case "ImportDefaultSpecifier":
     case "ImportNamespaceSpecifier":
-      return varScopeOf(s) ?? "unplaced";
+      return varScopeOf(declarer) ?? "unplaced";
     case "AssignmentExpression":
     case "ForInStatement":
     case "ForOfStatement":
@@ -490,46 +523,49 @@ function declaringScopeOf(e, { parentOf, declarerOf, lexicalScopeOf, varScopeOf 
 /**
  * 检查名字只在顶层声明一次且未被赋值。
  */
-function checkSingleTopDeclaration(e, { names, climbs }) {
-  let { name: r } = e;
-  let filtered = (names.declared.get(r) ?? []).filter((p) => {
-    let i = declaringScopeOf(p, climbs);
-    return typeof i !== "string" && i.type === "Program";
+function checkSingleTopDeclaration(declarator, { names, climbs }) {
+  let { name } = declarator;
+  let filtered = (names.declared.get(name) ?? []).filter((declaration) => {
+    let scope = declaringScopeOf(declaration, climbs);
+    return typeof scope !== "string" && scope.type === "Program";
   });
-  let filtered_2 = (names.assignedAt.get(r) ?? []).filter((p) => hasUnshadowedWrite(p, names));
+  let filtered_2 = (names.assignedAt.get(name) ?? []).filter((write) => hasUnshadowedWrite(write, names));
   return (
-    causeAt("declared", filtered.includes(e) ? filtered[1] : e) ??
+    causeAt("declared", filtered.includes(declarator) ? filtered[1] : declarator) ??
     causeAt(
       "assigned",
-      filtered_2.find((p) => names.writtenShadowOf(p) === undefined),
+      filtered_2.find((write) => names.writtenShadowOf(write) === undefined),
     ) ??
     causeAt("doubted", filtered_2[0]) ??
-    causeAt("looped", names.loopAssigned.get(r)?.[0]) ??
+    causeAt("looped", names.loopAssigned.get(name)?.[0]) ??
     causeAt(
       "early",
       names.read
-        .get(r)
+        .get(name)
         ?.find(
-          (p) => p.start < e.start && climbs.deferrerOf(p) === undefined && hasUnshadowedWrite(p, names),
+          (read) =>
+            read.start < declarator.start &&
+            climbs.deferrerOf(read) === undefined &&
+            hasUnshadowedWrite(read, names),
         ),
     )
   );
 }
 //@ chunk-bfnfj4kx.js:21059-21349 placement
-function patternIdentifiers(e) {
-  switch (e?.type) {
+function patternIdentifiers(pattern) {
+  switch (pattern?.type) {
     case "Identifier":
-      return [e];
+      return [pattern];
     case "ArrayPattern":
-      return e.elements.flatMap(patternIdentifiers);
+      return pattern.elements.flatMap(patternIdentifiers);
     case "ObjectPattern":
-      return e.properties.flatMap((property) =>
+      return pattern.properties.flatMap((property) =>
         patternIdentifiers(property.type === "Property" ? property.value : property),
       );
     case "AssignmentPattern":
-      return patternIdentifiers(e.left);
+      return patternIdentifiers(pattern.left);
     case "RestElement":
-      return patternIdentifiers(e.argument);
+      return patternIdentifiers(pattern.argument);
     default:
       return [];
   }
@@ -538,56 +574,57 @@ function patternIdentifiers(e) {
 /**
  * 收集被赋值/更新的名字。
  */
-function collectAssignedNames(e) {
-  let o = [];
-  let t = [];
-  walkAst(e, ({ node }) => {
+function collectAssignedNames(program) {
+  let assigned = [];
+  let loopHeadAssigned = [];
+  walkAst(program, ({ node }) => {
     switch (node.type) {
       case "AssignmentExpression":
-        o.push(...patternIdentifiers(node.left));
+        assigned.push(...patternIdentifiers(node.left));
         break;
       case "UpdateExpression":
-        o.push(...patternIdentifiers(node.argument));
+        assigned.push(...patternIdentifiers(node.argument));
         break;
       case "ForInStatement":
       case "ForOfStatement":
-        o.push(...patternIdentifiers(node.left));
-        t.push(...patternIdentifiers(node.left));
+        assigned.push(...patternIdentifiers(node.left));
+        loopHeadAssigned.push(...patternIdentifiers(node.left));
         break;
       default:
         break;
     }
   });
   return {
-    byName: Map.groupBy(o, (r) => r.name),
-    inLoopHeads: Map.groupBy(t, (r) => r.name),
+    byName: Map.groupBy(assigned, (identifier) => identifier.name),
+    inLoopHeads: Map.groupBy(loopHeadAssigned, (identifier) => identifier.name),
   };
 }
 //@ chunk-bfnfj4kx.js:21708-21757 placement
 /**
  * 是否在该处声明
  */
-var declaresIn = (node, parent, grandparent) =>
-  parent !== undefined && (declaresIdentifier(parent)?.(parent, node, grandparent) ?? false);
+var declaresIn = (node, node_2, grandparent) =>
+  node_2 !== undefined && (declaresIdentifier(node_2)?.(node_2, node, grandparent) ?? false);
 //@ chunk-bfnfj4kx.js:21757-21893 placement
 /**
  * 在 AST 中找出声明为名字 o 的标识符节点。
  */
-function findDeclaredIdentifiers(e, o) {
-  let t = [];
-  walkAst(e, ({ node, parent, grandparent }) => {
-    if (node.type === "Identifier" && node.name === o && declaresIn(node, parent, grandparent)) t.push(node);
+function findDeclaredIdentifiers(program, name) {
+  let declared = [];
+  walkAst(program, ({ node, parent, grandparent }) => {
+    if (node.type === "Identifier" && node.name === name && declaresIn(node, parent, grandparent))
+      declared.push(node);
   });
-  return t;
+  return declared;
 }
 //@ chunk-bfnfj4kx.js:21893-21995 placement
 /**
  * 导出说明符的名字文本（标识符名或字符串字面量）。
  */
-function exportNameText(e) {
-  let o = e.type === "Identifier";
-  let t = e.type === "Literal";
-  return o ? e.name : t ? String(e.value) : "";
+function exportNameText(node) {
+  let isIdentifier = node.type === "Identifier";
+  let isLiteral = node.type === "Literal";
+  return isIdentifier ? node.name : isLiteral ? String(node.value) : "";
 }
 //@ chunk-bfnfj4kx.js:21995-22404 placement
 /**
@@ -611,116 +648,125 @@ var isReferenceIdentifier = (node, parent, grandparent) =>
 /**
  * 收集顶层函数与 const 绑定。
  */
-function collectFunctionsAndConsts(e) {
-  let o = new Map();
-  function t(r) {
-    let n = r.type === "VariableDeclaration" && r.kind === "const";
-    if (r.type === "FunctionDeclaration" && r.id !== null) o.set(r.id.name, r);
-    else if (n)
-      for (let declaration of r.declarations) {
+function collectFunctionsAndConsts(program) {
+  let functionsById = new Map();
+  function collectStatement(statement) {
+    let isConstDecl = statement.type === "VariableDeclaration" && statement.kind === "const";
+    if (statement.type === "FunctionDeclaration" && statement.id !== null)
+      functionsById.set(statement.id.name, statement);
+    else if (isConstDecl)
+      for (let declaration of statement.declarations) {
         let { id, init } = declaration;
         if (
           id.type === "Identifier" &&
           (init?.type === "FunctionExpression" || init?.type === "ArrowFunctionExpression")
         )
-          o.set(id.name, init);
+          functionsById.set(id.name, init);
       }
   }
-  for (let r of e.body) {
-    t(r);
-    if (r.type === "ExportNamedDeclaration" || r.type === "ExportDefaultDeclaration") {
-      let declaration = r.declaration;
-      if (declaration !== null && declaration !== undefined) t(declaration);
+  for (let statement of program.body) {
+    collectStatement(statement);
+    if (statement.type === "ExportNamedDeclaration" || statement.type === "ExportDefaultDeclaration") {
+      let declaration = statement.declaration;
+      if (declaration !== null && declaration !== undefined) collectStatement(declaration);
     }
   }
-  return o;
+  return functionsById;
 }
 //@ chunk-bfnfj4kx.js:22897-23129 placement
 /**
  * 遍历 AST，把标识符按名字分为声明与读取两组。
  */
-function collectIdentifierUses(e) {
-  let o = [];
-  let t = [];
-  walkAst(e, ({ node, parent, grandparent }) => {
+function collectIdentifierUses(program) {
+  let declared = [];
+  let read = [];
+  walkAst(program, ({ node, parent, grandparent }) => {
     if (node.type !== "Identifier") return;
-    if (declaresIn(node, parent, grandparent)) o.push(node);
-    else if (isReferenceIdentifier(node, parent, grandparent)) t.push(node);
+    if (declaresIn(node, parent, grandparent)) declared.push(node);
+    else if (isReferenceIdentifier(node, parent, grandparent)) read.push(node);
   });
   return {
-    declared: Map.groupBy(o, (r) => r.name),
-    read: Map.groupBy(t, (r) => r.name),
+    declared: Map.groupBy(declared, (identifier) => identifier.name),
+    read: Map.groupBy(read, (identifier) => identifier.name),
   };
 }
 //@ chunk-bfnfj4kx.js:23129-23531 placement
 /**
  * 把区间排序成嵌套结构。
  */
-function nestSpans(e) {
-  let o = [];
-  let t = [];
-  let r = [];
-  e.filter((n) => n.start < n.end)
-    .flatMap((n) => [
+function nestSpans(spans) {
+  let openSpans = [];
+  let places = [];
+  let declarations = [];
+  spans
+    .filter((span) => span.start < span.end)
+    .flatMap((span) => [
       {
-        place: n.start,
-        span: n,
+        place: span.start,
+        span,
         isStart: true,
-        rank: -n.end,
+        rank: -span.end,
       },
       {
-        place: n.end,
-        span: n,
+        place: span.end,
+        span,
         isStart: false,
-        rank: -n.start,
+        rank: -span.start,
       },
     ])
-    .toSorted((n, s) => n.place - s.place || Number(n.isStart) - Number(s.isStart) || n.rank - s.rank)
-    .forEach((n) => {
-      if (n.isStart) o.push(n.span);
-      else o.splice(o.lastIndexOf(n.span), 1);
-      t.push(n.place);
-      r.push(o.at(-1)?.declaration);
+    .toSorted(
+      (edgeA, edgeB) =>
+        edgeA.place - edgeB.place || Number(edgeA.isStart) - Number(edgeB.isStart) || edgeA.rank - edgeB.rank,
+    )
+    .forEach((edge) => {
+      if (edge.isStart) openSpans.push(edge.span);
+      else openSpans.splice(openSpans.lastIndexOf(edge.span), 1);
+      places.push(edge.place);
+      declarations.push(openSpans.at(-1)?.declaration);
     });
-  return (n) => r[rt(t, n) - 1];
+  return (position) => declarations[import_sortedLastIndex(places, position) - 1];
 }
 //@ chunk-bfnfj4kx.js:23531-23583 placement
 /**
  * 作用域标签
  */
-var scopeLabel = (e) => (typeof e === "string" || isScopeNode(e) ? e : "unplaced");
+var scopeLabel = (scope) => (typeof scope === "string" || isScopeNode(scope) ? scope : "unplaced");
 //@ chunk-bfnfj4kx.js:23583-23942 placement
 /**
  * 生成作用域的源码区间。
  */
-function scopeSpans(e, parentOf, t) {
-  return [...e].flatMap(([r, n]) => {
-    if (typeof r === "string") return [];
-    if (r.type === "SwitchStatement") {
-      let { discriminant } = r;
+function scopeSpans(byScope, parentOf, mode) {
+  return [...byScope].flatMap(([scopeNode, declaration]) => {
+    if (typeof scopeNode === "string") return [];
+    if (scopeNode.type === "SwitchStatement") {
+      let { discriminant } = scopeNode;
       return [
         {
-          start: r.start,
+          start: scopeNode.start,
           end: discriminant.start,
-          declaration: n,
+          declaration,
         },
         {
           start: discriminant.end,
-          end: r.end,
-          declaration: n,
+          end: scopeNode.end,
+          declaration,
         },
       ];
     }
-    let s = parentOf(r);
-    let i =
-      t === "engine" && r.type === "BlockStatement" && s !== undefined && isFunctionNode(s) && !e.has(s)
-        ? s
-        : r;
+    let parent = parentOf(scopeNode);
+    let spanNode =
+      mode === "engine" &&
+      scopeNode.type === "BlockStatement" &&
+      parent !== undefined &&
+      isFunctionNode(parent) &&
+      !byScope.has(parent)
+        ? parent
+        : scopeNode;
     return [
       {
-        start: i.start,
-        end: i.end,
-        declaration: n,
+        start: spanNode.start,
+        end: spanNode.end,
+        declaration,
       },
     ];
   });
@@ -729,60 +775,64 @@ function scopeSpans(e, parentOf, t) {
 /**
  * 构造按位置解析遮蔽绑定的函数。
  */
-function makeShadowResolver(declared, o, t) {
-  let r = new Map();
-  let n = new Map();
-  let s = new Map();
-  let { parentOf } = o;
-  return (i) => {
-    let a = s.get(i);
-    if (a !== undefined) return a ?? undefined;
-    let f =
-      r.get(i.name) ??
+function makeShadowResolver(declared, climbs, mode) {
+  let byNameScopes = new Map();
+  let byNameSpans = new Map();
+  let byIdentifier = new Map();
+  let { parentOf } = climbs;
+  return (identifier) => {
+    let cached = byIdentifier.get(identifier);
+    if (cached !== undefined) return cached ?? undefined;
+    let scopes =
+      byNameScopes.get(identifier.name) ??
       new Map(
-        (declared.get(i.name) ?? [])
-          .map((c) => [scopeLabel(declaringScopeOf(c, o)), c])
-          .filter(([c]) => c !== "nothing" && (typeof c === "string" || c.type !== "Program")),
+        (declared.get(identifier.name) ?? [])
+          .map((declaration) => [scopeLabel(declaringScopeOf(declaration, climbs)), declaration])
+          .filter(
+            ([label]) => label !== "nothing" && (typeof label === "string" || label.type !== "Program"),
+          ),
       );
-    r.set(i.name, f);
-    if (parentOf(i) === undefined) return i;
-    if (f.size === 0) return;
-    let u = f.get("unplaced");
-    if (u !== undefined) return u;
-    let x = n.get(i.name) ?? nestSpans(scopeSpans(f, parentOf, t));
-    n.set(i.name, x);
-    let y = x(i.start);
-    s.set(i, y ?? null);
-    return y;
+    byNameScopes.set(identifier.name, scopes);
+    if (parentOf(identifier) === undefined) return identifier;
+    if (scopes.size === 0) return;
+    let unplaced = scopes.get("unplaced");
+    if (unplaced !== undefined) return unplaced;
+    let spanFinder = byNameSpans.get(identifier.name) ?? nestSpans(scopeSpans(scopes, parentOf, mode));
+    byNameSpans.set(identifier.name, spanFinder);
+    let resolved = spanFinder(identifier.start);
+    byIdentifier.set(identifier, resolved ?? null);
+    return resolved;
   };
 }
 //@ chunk-bfnfj4kx.js:24421-24658 placement
-function buildNameTables(e, scopeClimbs) {
-  let { declared, read } = collectIdentifierUses(e);
-  let assignedNames = collectAssignedNames(e);
+function buildNameTables(program, climbs) {
+  let { declared, read } = collectIdentifierUses(program);
+  let assignedNames = collectAssignedNames(program);
   return {
-    functions: collectFunctionsAndConsts(e),
+    functions: collectFunctionsAndConsts(program),
     assigned: new Set(assignedNames.byName.keys()),
     assignedAt: assignedNames.byName,
     loopAssigned: assignedNames.inLoopHeads,
     declared,
     read,
-    shadowOf: makeShadowResolver(declared, scopeClimbs, "engine"),
-    writtenShadowOf: makeShadowResolver(declared, scopeClimbs, "written"),
+    shadowOf: makeShadowResolver(declared, climbs, "engine"),
+    writtenShadowOf: makeShadowResolver(declared, climbs, "written"),
   };
 }
 //@ chunk-bfnfj4kx.js:24658-24912 placement
 /**
  * 在模块顶层的 export ... from 中找导出名为 o 的说明符及其来源。
  */
-function findReExportSpecifier(e, o) {
-  for (let t of e.scanned.program.body) {
-    let r = t.type === "ExportNamedDeclaration";
-    let source = r ? t.source : null;
-    let s = r ? t.specifiers.find((specifier) => exportNameText(specifier.exported) === o) : undefined;
-    if (source !== null && source !== undefined && s !== undefined)
+function findReExportSpecifier(scan, exportedName) {
+  for (let statement of scan.scanned.program.body) {
+    let isNamedExport = statement.type === "ExportNamedDeclaration";
+    let source = isNamedExport ? statement.source : null;
+    let specifier = isNamedExport
+      ? statement.specifiers.find((specifier) => exportNameText(specifier.exported) === exportedName)
+      : undefined;
+    if (source !== null && source !== undefined && specifier !== undefined)
       return {
-        specifier: s,
+        specifier,
         spelled: String(source.value),
       };
   }
@@ -792,45 +842,52 @@ function findReExportSpecifier(e, o) {
 /**
  * 在 AST 中找出名字 o 的全部引用（"own" 模式不进入内层函数）。
  */
-function findReferences(e, o, t = "all") {
-  let r = [];
+function findReferences(program, name, scope = "all") {
+  let references = [];
   walkAst(
-    e,
+    program,
     ({ node, parent, grandparent }) => {
-      if (node.type === "Identifier" && node.name === o && isReferenceIdentifier(node, parent, grandparent))
-        r.push(node);
+      if (
+        node.type === "Identifier" &&
+        node.name === name &&
+        isReferenceIdentifier(node, parent, grandparent)
+      )
+        references.push(node);
     },
-    t === "own"
-      ? (s) => s !== e && (s.type === "FunctionExpression" || s.type === "FunctionDeclaration")
+    scope === "own"
+      ? (node) =>
+          node !== program && (node.type === "FunctionExpression" || node.type === "FunctionDeclaration")
       : undefined,
   );
-  return r;
+  return references;
 }
 //@ chunk-bfnfj4kx.js:25150-25224 placement
 /**
  * 指定名字的标识符
  */
-function isIdentifierOrBinding(id, o) {
-  return id.type === "Identifier" ? id.name === o : findDeclaredIdentifiers(id, o).length > 0;
+function isIdentifierOrBinding(program, name) {
+  return program.type === "Identifier"
+    ? program.name === name
+    : findDeclaredIdentifiers(program, name).length > 0;
 }
 //@ chunk-bfnfj4kx.js:25224-25555 placement
 /**
  * 取解构模式中的所有名字。
  */
-function patternNames(e) {
-  switch (e.type) {
+function patternNames(pattern) {
+  switch (pattern.type) {
     case "Identifier":
-      return [e.name];
+      return [pattern.name];
     case "ObjectPattern":
-      return e.properties.flatMap((property) =>
+      return pattern.properties.flatMap((property) =>
         patternNames(property.type === "RestElement" ? property.argument : property.value),
       );
     case "ArrayPattern":
-      return e.elements.flatMap((element) => (element === null ? [] : patternNames(element)));
+      return pattern.elements.flatMap((element) => (element === null ? [] : patternNames(element)));
     case "AssignmentPattern":
-      return patternNames(e.left);
+      return patternNames(pattern.left);
     case "RestElement":
-      return patternNames(e.argument);
+      return patternNames(pattern.argument);
     default:
       return [];
   }
@@ -841,13 +898,13 @@ function patternNames(e) {
  */
 var MAX_DESTRUCTURE_NAMES = 4;
 //@ chunk-bfnfj4kx.js:25564-25831 placement
-function findTopConstInit(e, name) {
-  for (let t of e.program.body) {
-    let n = t.type === "ExportNamedDeclaration" ? t.declaration : t;
-    if (!(n?.type === "VariableDeclaration" && n.kind === "const")) continue;
-    for (let declaration of n.declarations)
-      if (declaration.id.type === "Identifier" && declaration.id.name === name && declaration.init)
-        return declaration.init;
+function findTopConstInit(scan, name) {
+  for (let statement of scan.program.body) {
+    let declaration = statement.type === "ExportNamedDeclaration" ? statement.declaration : statement;
+    if (!(declaration?.type === "VariableDeclaration" && declaration.kind === "const")) continue;
+    for (let declaration_2 of declaration.declarations)
+      if (declaration_2.id.type === "Identifier" && declaration_2.id.name === name && declaration_2.init)
+        return declaration_2.init;
   }
   return;
 }
@@ -856,10 +913,10 @@ function findTopConstInit(e, name) {
  * 变量/函数/类声明引入的名字列表。
  */
 function declaredNames(declaration) {
-  let o = declaration === null || declaration === undefined;
+  let isMissing = declaration === null || declaration === undefined;
   return declaration?.type === "VariableDeclaration"
     ? declaration.declarations.flatMap((declaration) => patternNames(declaration.id))
-    : o
+    : isMissing
       ? []
       : [declaration.id.name];
 }
@@ -867,21 +924,21 @@ function declaredNames(declaration) {
 /**
  * 语句是否声明了某名字。
  */
-function declaresName(declaration, o) {
-  switch (declaration.type) {
+function declaresName(astNode, name) {
+  switch (astNode.type) {
     case "VariableDeclaration":
-      return declaration.declarations.some((declaration) => isIdentifierOrBinding(declaration.id, o));
+      return astNode.declarations.some((declaration) => isIdentifierOrBinding(declaration.id, name));
     case "FunctionDeclaration":
     case "ClassDeclaration":
-      return declaration.id?.name === o;
+      return astNode.id?.name === name;
     case "ImportDeclaration":
-      return declaration.specifiers.some((specifier) => specifier.local.name === o);
+      return astNode.specifiers.some((specifier) => specifier.local.name === name);
     case "ExportNamedDeclaration":
     case "ExportDefaultDeclaration":
       return (
-        declaration.declaration !== null &&
-        declaration.declaration !== undefined &&
-        declaresName(declaration.declaration, o)
+        astNode.declaration !== null &&
+        astNode.declaration !== undefined &&
+        declaresName(astNode.declaration, name)
       );
     default:
       return false;
@@ -903,22 +960,22 @@ var MAX_STATE_KEY_PARTS = 16;
  */
 var MAX_EXCERPT_LEN = 120;
 //@ chunk-bfnfj4kx.js:26464-26736 placement
-function quoteExcerpt(e) {
-  let sliced = e.slice(0, MAX_EXCERPT_LEN);
-  let t = e.length - sliced.length;
+function quoteExcerpt(text) {
+  let sliced = text.slice(0, MAX_EXCERPT_LEN);
+  let droppedChars = text.length - sliced.length;
   let replaced = JSON.stringify(sliced)
-    .replace(/[^\x20-\x7e]/g, (n) =>
-      "\\u".concat(n.charCodeAt(0).toString(MAX_STATE_KEY_PARTS).padStart(MAX_DESTRUCTURE_NAMES, "0")),
+    .replace(/[^\x20-\x7e]/g, (char) =>
+      "\\u".concat(char.charCodeAt(0).toString(MAX_STATE_KEY_PARTS).padStart(MAX_DESTRUCTURE_NAMES, "0")),
     )
-    .replace(/ {2,}/g, (n) => " ".concat(n.slice(1).replaceAll(" ", "\\u0020")));
-  return t === 0 ? replaced : `${replaced}[+${t} chars]`;
+    .replace(/ {2,}/g, (spaceRun) => " ".concat(spaceRun.slice(1).replaceAll(" ", "\\u0020")));
+  return droppedChars === 0 ? replaced : `${replaced}[+${droppedChars} chars]`;
 }
 //@ chunk-bfnfj4kx.js:26736-26790 placement
 /**
  * 摘录或加引号
  */
-function excerptOrQuoted(e) {
-  return e.length <= MAX_EXCERPT_LEN && SAFE_EXCERPT_RE.test(e) ? e : quoteExcerpt(e);
+function excerptOrQuoted(text) {
+  return text.length <= MAX_EXCERPT_LEN && SAFE_EXCERPT_RE.test(text) ? text : quoteExcerpt(text);
 }
 //@ chunk-bfnfj4kx.js:26790-26800 placement
 /**
@@ -929,19 +986,21 @@ var UNKNOWN_PLACEHOLDER = "?";
 /**
  * 描述对象字面量的形状（用于状态键）。
  */
-function describeObjectShape(e, o, t) {
-  let mapped = e.properties.map((property) => propertyKeyName(property));
+function describeObjectShape(objectNode, context, seen) {
+  let mapped = objectNode.properties.map((property) => propertyKeyName(property));
   let index = mapped.lastIndexOf(undefined);
-  return e.properties
-    .flatMap((property, p) => {
-      let i = mapped[p];
-      let a = property.type !== "Property";
-      let f = i !== undefined && mapped.includes(i, p + 1);
-      let u = i !== undefined && p < index;
-      let x = i === undefined ? UNKNOWN_PLACEHOLDER : excerptOrQuoted(i);
-      let y = `${x}=${UNKNOWN_PLACEHOLDER}`;
-      let c = a ? `...${UNKNOWN_PLACEHOLDER}` : `${x}${literalOrObjectPath(property.value, o, t)}`;
-      return f ? [] : [u ? y : c];
+  return objectNode.properties
+    .flatMap((property, position) => {
+      let keyName = mapped[position];
+      let isSpread = property.type !== "Property";
+      let isRedefinedLater = keyName !== undefined && mapped.includes(keyName, position + 1);
+      let isBeforeUnknown = keyName !== undefined && position < index;
+      let label = keyName === undefined ? UNKNOWN_PLACEHOLDER : excerptOrQuoted(keyName);
+      let opaqueEntry = `${label}=${UNKNOWN_PLACEHOLDER}`;
+      let entryText = isSpread
+        ? `...${UNKNOWN_PLACEHOLDER}`
+        : `${label}${literalOrObjectPath(property.value, context, seen)}`;
+      return isRedefinedLater ? [] : [isBeforeUnknown ? opaqueEntry : entryText];
     })
     .join(", ");
 }
@@ -949,96 +1008,103 @@ function describeObjectShape(e, o, t) {
 /**
  * 判断标识符是自由变量还是 const 绑定。
  */
-function classifyBinding(e, o) {
-  let t = e.shadowOf(o);
-  if (t === undefined)
+function classifyBinding(scanner, identifier) {
+  let declaration = scanner.shadowOf(identifier);
+  if (declaration === undefined)
     return {
       kind: "free",
     };
-  let r = e.parentOf(t);
-  let n = r && e.parentOf(r);
-  let s = n && e.parentOf(n);
-  return r?.type === "VariableDeclarator" &&
-    r.id === t &&
-    n?.type === "VariableDeclaration" &&
-    n.kind === "const" &&
-    n.declarations.length === 1 &&
-    s?.type === "ForOfStatement" &&
-    s.left === n &&
-    o.start >= s.body.start &&
-    o.start < s.body.end
+  let declarator = scanner.parentOf(declaration);
+  let variableDeclaration = declarator && scanner.parentOf(declarator);
+  let loopStatement = variableDeclaration && scanner.parentOf(variableDeclaration);
+  return declarator?.type === "VariableDeclarator" &&
+    declarator.id === declaration &&
+    variableDeclaration?.type === "VariableDeclaration" &&
+    variableDeclaration.kind === "const" &&
+    variableDeclaration.declarations.length === 1 &&
+    loopStatement?.type === "ForOfStatement" &&
+    loopStatement.left === variableDeclaration &&
+    identifier.start >= loopStatement.body.start &&
+    identifier.start < loopStatement.body.end
     ? {
         kind: "loop",
-        loop: s,
+        loop: loopStatement,
       }
     : {
         kind: "shadowed",
       };
 }
 //@ chunk-bfnfj4kx.js:27479-27704 placement
-function resolveLiteralConst(e, o) {
-  let r = classifyBinding(e, o).kind === "free" ? findTopConstInit(e, o.name) : undefined;
-  return (r?.type === "Literal" && r.regex === undefined && typeof r.value !== "bigint") ||
-    (r?.type === "TemplateLiteral" && r.expressions.length === 0) ||
-    r?.type === "Identifier"
-    ? r
+function resolveLiteralConst(scanner, identifier) {
+  let init =
+    classifyBinding(scanner, identifier).kind === "free"
+      ? findTopConstInit(scanner, identifier.name)
+      : undefined;
+  return (init?.type === "Literal" && init.regex === undefined && typeof init.value !== "bigint") ||
+    (init?.type === "TemplateLiteral" && init.expressions.length === 0) ||
+    init?.type === "Identifier"
+    ? init
     : undefined;
 }
 //@ chunk-bfnfj4kx.js:27704-27903 placement
-function resolveSealedConst(e, o) {
-  let r = classifyBinding(e, o).kind === "free" ? findTopConstInit(e, o.name) : undefined;
-  return (r?.type === "ObjectExpression" ||
-    r?.type === "ArrayExpression" ||
-    (r?.type === "Literal" && r.regex !== undefined)) &&
-    e.isSealed(o.name)
-    ? r
+function resolveSealedConst(scanner, identifier) {
+  let init =
+    classifyBinding(scanner, identifier).kind === "free"
+      ? findTopConstInit(scanner, identifier.name)
+      : undefined;
+  return (init?.type === "ObjectExpression" ||
+    init?.type === "ArrayExpression" ||
+    (init?.type === "Literal" && init.regex !== undefined)) &&
+    scanner.isSealed(identifier.name)
+    ? init
     : undefined;
 }
 //@ chunk-bfnfj4kx.js:27903-27934 placement
 /**
  * 解析常量字面量
  */
-var resolveConstValue = (e, o) => resolveLiteralConst(e, o) ?? resolveSealedConst(e, o);
+var resolveConstValue = (scanner, identifier) =>
+  resolveLiteralConst(scanner, identifier) ?? resolveSealedConst(scanner, identifier);
 //@ chunk-bfnfj4kx.js:27934-28164 placement
-function followObjectConst(e, o, t) {
-  let r = e;
-  let n = t;
-  while (r.type === "Identifier" && !n.has(r.name)) {
-    let constValue = resolveConstValue(o, r);
+function followObjectConst(node, scanner, seen) {
+  let current = node;
+  let seenNames = seen;
+  while (current.type === "Identifier" && !seenNames.has(current.name)) {
+    let constValue = resolveConstValue(scanner, current);
     if (constValue === undefined) break;
-    n = new Set([...n, r.name]);
-    r = constValue;
+    seenNames = new Set([...seenNames, current.name]);
+    current = constValue;
   }
-  let s = r.type === "ObjectExpression" ? r : undefined;
-  return s !== undefined && !hasNonPlainProperties(s)
+  let objectNode = current.type === "ObjectExpression" ? current : undefined;
+  return objectNode !== undefined && !hasNonPlainProperties(objectNode)
     ? {
-        node: s,
-        seen: n,
+        node: objectNode,
+        seen: seenNames,
       }
     : undefined;
 }
 //@ chunk-bfnfj4kx.js:28164-28379 placement
-function describeObjectPath(e, o) {
-  let [t, ...r] = e.node.properties;
-  let n = r.length === 0 && t?.type === "Property";
-  let s = n ? propertyKeyName(t) : undefined;
-  let p = n ? followObjectConst(t.value, o, e.seen) : undefined;
-  return s !== undefined && p !== undefined
-    ? `.${excerptOrQuoted(s)}${describeObjectPath(p, o)}`
-    : ` has {${describeObjectShape(e.node, o, e.seen)}}`;
+function describeObjectPath(resolved, context) {
+  let [firstProperty, ...restProperties] = resolved.node.properties;
+  let isSingleProperty = restProperties.length === 0 && firstProperty?.type === "Property";
+  let keyName = isSingleProperty ? propertyKeyName(firstProperty) : undefined;
+  let nested = isSingleProperty ? followObjectConst(firstProperty.value, context, resolved.seen) : undefined;
+  return keyName !== undefined && nested !== undefined
+    ? `.${excerptOrQuoted(keyName)}${describeObjectPath(nested, context)}`
+    : ` has {${describeObjectShape(resolved.node, context, resolved.seen)}}`;
 }
 //@ chunk-bfnfj4kx.js:28379-28761 placement
 /**
  * 把字面量数组转成文本。
  */
-function literalArrayText(e) {
-  let o = [];
-  for (let element of e.elements) {
+function literalArrayText(arrayNode) {
+  let items = [];
+  for (let element of arrayNode.elements) {
     if (element === null) return;
     if (element.type === "Literal") {
-      let { value: s } = element;
-      if (!(typeof s === "string" || typeof s === "number" || typeof s === "boolean")) return;
-      o.push(typeof s === "string" ? excerptOrQuoted(s) : String(s));
+      let { value } = element;
+      if (!(typeof value === "string" || typeof value === "number" || typeof value === "boolean")) return;
+      items.push(typeof value === "string" ? excerptOrQuoted(value) : String(value));
       continue;
     }
     let cooked =
@@ -1046,59 +1112,65 @@ function literalArrayText(e) {
         ? element.quasis[0]?.value.cooked
         : undefined;
     if (cooked === undefined || cooked === null) return;
-    o.push(excerptOrQuoted(cooked));
+    items.push(excerptOrQuoted(cooked));
   }
-  return uniq(o);
+  return uniq(items);
 }
 //@ chunk-bfnfj4kx.js:28761-28919 placement
-function loopArrayText(e, loop, name) {
+function loopArrayText(scan, loop, name) {
   let { right } = loop;
   return right.type === "ArrayExpression" &&
-    !e.program.body.some((s) => s.type === "ImportDeclaration" && declaresName(s, name))
+    !scan.program.body.some(
+      (statement) => statement.type === "ImportDeclaration" && declaresName(statement, name),
+    )
     ? literalArrayText(right)?.join("|")
     : undefined;
 }
 //@ chunk-bfnfj4kx.js:28919-29118 placement
-function identifierLiteralText(e, o, t) {
-  if (t.has(e.name)) return UNKNOWN_PLACEHOLDER;
-  let r = classifyBinding(o, e);
-  let n = r.kind === "loop";
-  let s = n ? loopArrayText(o, r.loop, e.name) : undefined;
-  if (n) return s ?? UNKNOWN_PLACEHOLDER;
-  let constValue = resolveConstValue(o, e);
+function identifierLiteralText(identifier, scanner, seen) {
+  if (seen.has(identifier.name)) return UNKNOWN_PLACEHOLDER;
+  let binding = classifyBinding(scanner, identifier);
+  let isLoopBinding = binding.kind === "loop";
+  let loopText = isLoopBinding ? loopArrayText(scanner, binding.loop, identifier.name) : undefined;
+  if (isLoopBinding) return loopText ?? UNKNOWN_PLACEHOLDER;
+  let constValue = resolveConstValue(scanner, identifier);
   if (constValue === undefined) return UNKNOWN_PLACEHOLDER;
-  return literalText(constValue, o, new Set([...t, e.name]));
+  return literalText(constValue, scanner, new Set([...seen, identifier.name]));
 }
 //@ chunk-bfnfj4kx.js:29118-29149 placement
 /**
  * /…/o 形式
  */
-var regexSourceText = (pattern, flags) => `/${quoteExcerpt(pattern)}/${flags}`;
+var regexSourceText = (text, flags) => `/${quoteExcerpt(text)}/${flags}`;
 //@ chunk-bfnfj4kx.js:29149-29631 placement
 /**
  * 把字面量/模板转成规范文本。
  */
-function literalText(e, o, t = new Set()) {
-  switch (e.type) {
+function literalText(node, scanner, seen = new Set()) {
+  switch (node.type) {
     case "Literal": {
-      let { regex, value: n } = e;
-      let s = typeof n === "string";
-      let p = typeof n === "bigint";
-      let i = s ? excerptOrQuoted(n) : String(n);
-      return regex ? regexSourceText(regex.pattern, regex.flags) : p ? UNKNOWN_PLACEHOLDER : i;
+      let { regex, value } = node;
+      let isString = typeof value === "string";
+      let isBigInt = typeof value === "bigint";
+      let text = isString ? excerptOrQuoted(value) : String(value);
+      return regex ? regexSourceText(regex.pattern, regex.flags) : isBigInt ? UNKNOWN_PLACEHOLDER : text;
     }
     case "TemplateLiteral": {
-      let cooked = e.quasis[0]?.value.cooked;
-      return e.expressions.length === 0 && cooked !== undefined && cooked !== null
+      let cooked = node.quasis[0]?.value.cooked;
+      return node.expressions.length === 0 && cooked !== undefined && cooked !== null
         ? excerptOrQuoted(cooked)
         : UNKNOWN_PLACEHOLDER;
     }
     case "ArrayExpression":
-      return e.elements.map((element) => (element === null ? "" : literalText(element, o, t))).join("|");
+      return node.elements
+        .map((element) => (element === null ? "" : literalText(element, scanner, seen)))
+        .join("|");
     case "ObjectExpression":
-      return hasNonPlainProperties(e) ? UNKNOWN_PLACEHOLDER : `{${describeObjectShape(e, o, t)}}`;
+      return hasNonPlainProperties(node)
+        ? UNKNOWN_PLACEHOLDER
+        : `{${describeObjectShape(node, scanner, seen)}}`;
     case "Identifier":
-      return identifierLiteralText(e, o, t);
+      return identifierLiteralText(node, scanner, seen);
     default:
       return UNKNOWN_PLACEHOLDER;
   }
@@ -1107,127 +1179,146 @@ function literalText(e, o, t = new Set()) {
 /**
  * 字面量或对象路径
  */
-function literalOrObjectPath(e, o, t) {
-  let r = followObjectConst(e, o, t);
-  if (r === undefined) return `=${literalText(e, o, t)}`;
-  return describeObjectPath(r, o);
+function literalOrObjectPath(node, scanner, seen) {
+  let resolved = followObjectConst(node, scanner, seen);
+  if (resolved === undefined) return `=${literalText(node, scanner, seen)}`;
+  return describeObjectPath(resolved, scanner);
 }
 //@ chunk-bfnfj4kx.js:29716-29762 placement
 /**
  * 拼接字面量
  */
-var appendLiteral = (event, matcher, t) =>
-  matcher === undefined ? event : `${event}${literalText(matcher, t)}`;
+var appendLiteral = (event, matcher, scanner) =>
+  matcher === undefined ? event : `${event}${literalText(matcher, scanner)}`;
 //@ chunk-bfnfj4kx.js:29762-30312 placement
 /**
  * 静态求值字面量表达式。
  */
-function evaluateLiteral(e, o, t = new Set()) {
-  if (e.type === "Literal") return e.regex ? (e.value ?? new RegExp("")) : e.value;
-  if (e.type === "ArrayExpression")
-    return e.elements.map((element) => (element ? evaluateLiteral(element, o, t) : new RegExp("")));
-  if (e.type === "ObjectExpression") {
-    if (hasNonPlainProperties(e)) return new RegExp("");
-    let n = [];
-    for (let property of e.properties) {
-      let p = propertyKeyName(property);
-      if (property.type !== "Property" || p === undefined) return new RegExp("");
-      n.push([p, evaluateLiteral(property.value, o, t)]);
+function evaluateLiteral(node, scanner, seen = new Set()) {
+  if (node.type === "Literal") return node.regex ? (node.value ?? new RegExp("")) : node.value;
+  if (node.type === "ArrayExpression")
+    return node.elements.map((element) =>
+      element ? evaluateLiteral(element, scanner, seen) : new RegExp(""),
+    );
+  if (node.type === "ObjectExpression") {
+    if (hasNonPlainProperties(node)) return new RegExp("");
+    let entries = [];
+    for (let property of node.properties) {
+      let keyName = propertyKeyName(property);
+      if (property.type !== "Property" || keyName === undefined) return new RegExp("");
+      entries.push([keyName, evaluateLiteral(property.value, scanner, seen)]);
     }
-    return Object.fromEntries(n);
+    return Object.fromEntries(entries);
   }
-  if (e.type !== "Identifier" || t.has(e.name)) return new RegExp("");
-  let constValue = resolveConstValue(o, e);
+  if (node.type !== "Identifier" || seen.has(node.name)) return new RegExp("");
+  let constValue = resolveConstValue(scanner, node);
   if (!constValue) return new RegExp("");
-  return evaluateLiteral(constValue, o, new Set([...t, e.name]));
+  return evaluateLiteral(constValue, scanner, new Set([...seen, node.name]));
 }
 //@ chunk-bfnfj4kx.js:30312-30620 placement
 /**
  * 语句是否导出某名字。
  */
-function exportsName(e, o) {
-  if (e.type === "ExportDefaultDeclaration") {
-    let { declaration } = e;
-    return declaration.type === "Identifier" && declaration.name === o;
+function exportsName(statement, name) {
+  if (statement.type === "ExportDefaultDeclaration") {
+    let { declaration } = statement;
+    return declaration.type === "Identifier" && declaration.name === name;
   }
-  if (e.type !== "ExportNamedDeclaration") return false;
-  let { declaration, source, specifiers } = e;
-  let s = declaration !== null && declaration !== undefined && declaresName(declaration, o);
-  let p =
+  if (statement.type !== "ExportNamedDeclaration") return false;
+  let { declaration, source, specifiers } = statement;
+  let exportsDeclared = declaration !== null && declaration !== undefined && declaresName(declaration, name);
+  let exportsLocal =
     (source === null || source === undefined) &&
-    specifiers.some((specifier) => exportNameText(specifier.local) === o);
-  return s || p;
+    specifiers.some((specifier) => exportNameText(specifier.local) === name);
+  return exportsDeclared || exportsLocal;
 }
 //@ chunk-bfnfj4kx.js:30620-30661 placement
 /**
  * 是否导出该名
  */
-var exportsName_2 = (program, o) => program.body.some((t) => exportsName(t, o));
+var exportsName_2 = (program, name) => program.body.some((statement) => exportsName(statement, name));
 //@ chunk-bfnfj4kx.js:30661-31061 placement
 /**
  * 收集导出的声明。
  */
-function collectExportedDeclarations(e) {
-  let o = new Map();
-  for (let t of e.body) {
-    let r = t.type === "ExportDefaultDeclaration";
-    let n = t.type === "ExportNamedDeclaration";
-    let declaration = n ? t.declaration : undefined;
-    let p = declaration?.type === "VariableDeclaration";
-    let i = [
-      ...(r ? [t.declaration] : []),
-      ...(p
+function collectExportedDeclarations(program) {
+  let byName = new Map();
+  for (let statement of program.body) {
+    let isDefaultExport = statement.type === "ExportDefaultDeclaration";
+    let isNamedExport = statement.type === "ExportNamedDeclaration";
+    let declaration = isNamedExport ? statement.declaration : undefined;
+    let isVariableDeclaration = declaration?.type === "VariableDeclaration";
+    let exportedIdentifiers = [
+      ...(isDefaultExport ? [statement.declaration] : []),
+      ...(isVariableDeclaration
         ? declaration.declarations.flatMap((declaration) => patternIdentifiers(declaration.id))
         : [declaration?.id]),
-      ...(n ? t.specifiers.map((specifier) => specifier.local) : []),
+      ...(isNamedExport ? statement.specifiers.map((specifier) => specifier.local) : []),
     ];
-    for (let a of i)
-      if (a?.type === "Identifier" && !o.has(a.name) && exportsName(t, a.name)) o.set(a.name, t);
+    for (let identifier of exportedIdentifiers)
+      if (
+        identifier?.type === "Identifier" &&
+        !byName.has(identifier.name) &&
+        exportsName(statement, identifier.name)
+      )
+        byName.set(identifier.name, statement);
   }
-  return o;
+  return byName;
 }
 //@ chunk-bfnfj4kx.js:31061-31463 placement
 /**
  * 节点是否作为状态 API（read/update/atom）的参数。
  */
-function isStateArgument(e, parentOf, t) {
-  let r = parentOf(e);
-  if (r?.type === "CallExpression") {
-    let n = t.library.get(r);
-    let s = n === "read" || n === "update";
-    let p = n === "atom" || n === "memberOf" || t.state.has(r);
-    return r.arguments[s ? 1 : 0] === e && (s || p);
+function isStateArgument(node, parentOf, stateFacts) {
+  let parent = parentOf(node);
+  if (parent?.type === "CallExpression") {
+    let libraryName = stateFacts.library.get(parent);
+    let isReadOrUpdate = libraryName === "read" || libraryName === "update";
+    let isStateCall = libraryName === "atom" || libraryName === "memberOf" || stateFacts.state.has(parent);
+    return parent.arguments[isReadOrUpdate ? 1 : 0] === node && (isReadOrUpdate || isStateCall);
   }
-  if (r?.type === "ArrayExpression") {
-    let n = parentOf(r);
-    return n?.type === "CallExpression" && t.library.get(n) === "derive" && n.arguments[0] === r;
+  if (parent?.type === "ArrayExpression") {
+    let grandparent = parentOf(parent);
+    return (
+      grandparent?.type === "CallExpression" &&
+      stateFacts.library.get(grandparent) === "derive" &&
+      grandparent.arguments[0] === parent
+    );
   }
-  return r?.type === "SpreadElement" && r.argument === e && parentOf(r)?.type === "ObjectExpression";
+  return (
+    parent?.type === "SpreadElement" &&
+    parent.argument === node &&
+    parentOf(parent)?.type === "ObjectExpression"
+  );
 }
 //@ chunk-bfnfj4kx.js:31463-31575 placement
-function sortUsesByStart(e) {
-  let o = e.toSorted((t, r) => t.use.start - r.use.start);
+function sortUsesByStart(uses) {
+  let placed = uses.toSorted((useA, useB) => useA.use.start - useB.use.start);
   return {
-    placed: o,
-    starts: o.map((t) => t.use.start),
+    placed,
+    starts: placed.map((use) => use.use.start),
   };
 }
 //@ chunk-bfnfj4kx.js:31575-31800 placement
-function createScanCaches(e, nameTables, scopeClimbs) {
-  let r = io((n) => splitShadowedUses(nameTables.read.get(n) ?? [], nameTables));
+function createScanCaches(program, names, scopeClimbs) {
+  let splitUses = memoizeAlias((name) => splitShadowedUses(names.read.get(name) ?? [], names));
   return {
     inits: memoizeByObject(collectTopConsts),
-    exporting: collectExportedDeclarations(e),
-    rebound: io((n) =>
-      checkSingleTopDeclaration(n, {
-        names: nameTables,
+    exporting: collectExportedDeclarations(program),
+    rebound: memoizeAlias((name) =>
+      checkSingleTopDeclaration(name, {
+        names,
         climbs: scopeClimbs,
       }),
     ),
-    counted: r,
-    apart: io((n) =>
-      io((s) =>
-        sortUsesByStart(r(n).doubted.filter((p) => !isStateArgument(p.use, scopeClimbs.parentOf, s))),
+    counted: splitUses,
+    apart: memoizeAlias((name) =>
+      memoizeAlias((stateFacts) =>
+        sortUsesByStart(
+          splitUses(name).doubted.filter(
+            (use) => !isStateArgument(use.use, scopeClimbs.parentOf, stateFacts),
+          ),
+        ),
       ),
     ),
   };
@@ -1236,42 +1327,43 @@ function createScanCaches(e, nameTables, scopeClimbs) {
 /**
  * 生成解析器插件：作用域嵌套超过上限时抛出（防止过深嵌套的源码）。
  */
-var limitScopeDepth = (e, o) => (t) =>
-  class extends t {
-    enterScope = (r) => {
-      t.prototype.enterScope.call(this, r);
-      if (this.scopeStack.length > e + 1) throw o(this.lastTokStartLoc.line);
+var limitScopeDepth = (maxDepth, refuseAtLine) => (BaseParser) =>
+  class extends BaseParser {
+    enterScope = (scope) => {
+      BaseParser.prototype.enterScope.call(this, scope);
+      if (this.scopeStack.length > maxDepth + 1) throw refuseAtLine(this.lastTokStartLoc.line);
     };
   };
 //@ chunk-bfnfj4kx.js:31955-32749 placement
 /**
  * 扫描单个 hooks 文件（嵌套深度上限、拒绝信息带摘录）。
  */
-function scanHooksFile(e, o, t) {
-  let r = isJsSource(e, o);
-  function n(u, construct) {
-    let y = typeof u === "number" ? u : u?.loc?.start.line;
-    let g = r === undefined || y === undefined ? undefined : (r[y - 1]?.trim() ?? "");
-    let h = g !== undefined && g.length > MAX_IMPORT_DEPTH;
+function scanHooksFile(file, source, pluginName) {
+  let sourceLines = isJsSource(file, source);
+  function refuseAt(where, construct) {
+    let line = typeof where === "number" ? where : where?.loc?.start.line;
+    let excerpt =
+      sourceLines === undefined || line === undefined ? undefined : (sourceLines[line - 1]?.trim() ?? "");
+    let isTruncated = excerpt !== undefined && excerpt.length > MAX_IMPORT_DEPTH;
     return new ScanRefusal({
-      plugin: t,
-      file: e,
-      line: y,
-      excerpt: h ? `${truncateToLength(g, MAX_IMPORT_DEPTH)}...` : g,
+      plugin: pluginName,
+      file,
+      line,
+      excerpt: isTruncated ? `${truncateToLength(excerpt, MAX_IMPORT_DEPTH)}...` : excerpt,
       construct,
     });
   }
   let { Parser } = acornParser();
-  let p;
+  let program;
   try {
-    p = Parser.extend(
-      limitScopeDepth(MAX_EXCERPT_CHARS, (u) =>
-        n(
-          u,
+    program = Parser.extend(
+      limitScopeDepth(MAX_EXCERPT_CHARS, (scopeLine) =>
+        refuseAt(
+          scopeLine,
           `code nested too deep to scan: more than ${MAX_EXCERPT_CHARS} scopes (functions, blocks, loops) open inside one another`,
         ),
       ),
-    ).parse(o, {
+    ).parse(source, {
       ecmaVersion: "latest",
       sourceType: "module",
       locations: true,
@@ -1279,22 +1371,22 @@ function scanHooksFile(e, o, t) {
   } catch (error) {
     if (error instanceof ScanRefusal) throw error;
     throw error instanceof RangeError
-      ? n(undefined, `code nested too deep to scan (the parser stopped: ${error.message})`)
-      : parseModuleError(t, e, error);
+      ? refuseAt(undefined, `code nested too deep to scan (the parser stopped: ${error.message})`)
+      : parseModuleError(pluginName, file, error);
   }
-  let parentMap = buildParentMap(p);
-  let scopeClimbs = makeScopeClimbs((u) => parentMap.get(u));
-  let nameTables = buildNameTables(p, scopeClimbs);
+  let parentMap = buildParentMap(program);
+  let scopeClimbs = makeScopeClimbs((node) => parentMap.get(node));
+  let nameTables = buildNameTables(program, scopeClimbs);
   return {
-    file: e,
-    program: p,
+    file,
+    program,
     names: nameTables,
-    consts: createScanCaches(p, nameTables, scopeClimbs),
+    consts: createScanCaches(program, nameTables, scopeClimbs),
     parentOf: scopeClimbs.parentOf,
     climbs: scopeClimbs,
-    refuse: n,
-    imports: collectImports(p),
-    specifiers: importSpecifiers(p),
+    refuse: refuseAt,
+    imports: collectImports(program),
+    specifiers: importSpecifiers(program),
   };
 }
 //@ chunk-bfnfj4kx.js:32749-33042 placement
@@ -1302,149 +1394,151 @@ function scanHooksFile(e, o, t) {
  * 在函数体之外找第一个 await/for await/await using 节点（hooks 模块不允许顶层 await）。
  */
 function findTopLevelAwait(program) {
-  let o;
+  let found;
   walkAst(
     program,
     ({ node }) => {
       if (
-        o === undefined &&
+        found === undefined &&
         (node.type === "AwaitExpression" ||
           (node.type === "ForOfStatement" && node.await) ||
           (node.type === "VariableDeclaration" && node.kind === "await using"))
       )
-        o = node;
+        found = node;
     },
-    (t) =>
-      t.type === "FunctionDeclaration" ||
-      t.type === "FunctionExpression" ||
-      t.type === "ArrowFunctionExpression",
+    (node) =>
+      node.type === "FunctionDeclaration" ||
+      node.type === "FunctionExpression" ||
+      node.type === "ArrowFunctionExpression",
   );
-  return o;
+  return found;
 }
 //@ chunk-bfnfj4kx.js:33042-34380 placement
 /**
  * 构建 hooks 模块的导入图（大小上限、禁止顶层 await）。
  */
-async function buildModuleGraph(e, o, t) {
-  let r = new Map();
-  let n = new Map([[e.file, e.source]]);
-  let s = new Map(e.real === undefined ? [] : [[e.real, e.file]]);
-  let p = {
-    known: n,
-    reals: s,
+async function buildModuleGraph(entry, pluginName, resolveImport) {
+  let files = new Map();
+  let knownSources = new Map([[entry.file, entry.source]]);
+  let reals = new Map(entry.real === undefined ? [] : [[entry.real, entry.file]]);
+  let importState = {
+    known: knownSources,
+    reals,
   };
-  let i = Buffer.byteLength(e.source, "utf8");
-  let a = [e];
-  while (a.length > 0) {
-    let f = [];
-    let u = 0;
-    for (let { file, source } of a) {
-      if (r.has(file)) continue;
-      if (u > 0 && u % MAX_PLUGIN_NAME_CHARS === 0) await yieldToEventLoop();
-      u += 1;
-      if (Buffer.byteLength(source, "utf8") > MAX_MODULE_BYTES) throw oversizedModuleError(o, file);
-      let k = transpileModule(file, source, o);
-      let E = scanHooksFile(file, k, o);
-      let j = refuseDynamicImport(E);
-      if (j !== undefined) throw j;
-      let topLevelAwait = findTopLevelAwait(E.program);
-      if (file !== e.file && topLevelAwait !== undefined)
-        throw E.refuse(
+  let totalBytes = Buffer.byteLength(entry.source, "utf8");
+  let level = [entry];
+  while (level.length > 0) {
+    let pendingImports = [];
+    let fileIndex = 0;
+    for (let { file, source } of level) {
+      if (files.has(file)) continue;
+      if (fileIndex > 0 && fileIndex % MAX_PLUGIN_NAME_CHARS === 0) await yieldToEventLoop();
+      fileIndex += 1;
+      if (Buffer.byteLength(source, "utf8") > MAX_MODULE_BYTES) throw oversizedModuleError(pluginName, file);
+      let transpiled = transpileModule(file, source, pluginName);
+      let scanned = scanHooksFile(file, transpiled, pluginName);
+      let dynamicImportRefusal = refuseDynamicImport(scanned);
+      if (dynamicImportRefusal !== undefined) throw dynamicImportRefusal;
+      let topLevelAwait = findTopLevelAwait(scanned.program);
+      if (file !== entry.file && topLevelAwait !== undefined)
+        throw scanned.refuse(
           topLevelAwait,
           "a top-level await in a file the entry imports; the environment links the entry alone as an async module",
         );
       let links = new Map();
-      for (let specifier of E.specifiers) {
+      for (let specifier of scanned.specifiers) {
         if (specifier === CLAUDE_CODE) continue;
         if (!isDotRelativePath(specifier))
-          throw bareImportError(o, specifier, relative(e.root, file) || file);
-        f.push({
+          throw bareImportError(pluginName, specifier, relative(entry.root, file) || file);
+        pendingImports.push({
           importer: file,
           specifier,
           links,
         });
       }
-      r.set(file, {
+      files.set(file, {
         source,
-        compiled: k,
-        scanned: E,
+        compiled: transpiled,
+        scanned,
         links,
       });
     }
-    let x = [];
-    for (let y = 0; y < f.length; y += MAX_PLUGIN_NAME_CHARS) {
+    let nextLevel = [];
+    for (let batchStart = 0; batchStart < pendingImports.length; batchStart += MAX_PLUGIN_NAME_CHARS) {
       let settled = await Promise.allSettled(
-        f.slice(y, y + MAX_PLUGIN_NAME_CHARS).map(async (g) => ({
-          pending: g,
-          answer: await t(g.specifier, g.importer, p),
+        pendingImports.slice(batchStart, batchStart + MAX_PLUGIN_NAME_CHARS).map(async (request) => ({
+          pending: request,
+          answer: await resolveImport(request.specifier, request.importer, importState),
         })),
       );
-      for (let g of settled) {
-        if (g.status === "rejected") throw g.reason;
-        let { pending, answer } = g.value;
+      for (let settledEntry of settled) {
+        if (settledEntry.status === "rejected") throw settledEntry.reason;
+        let { pending, answer } = settledEntry.value;
         let { real } = answer;
-        let w = real === undefined ? undefined : s.get(real);
-        let b =
-          w === undefined
+        let knownFile = real === undefined ? undefined : reals.get(real);
+        let resolvedImport =
+          knownFile === undefined
             ? answer
             : {
-                file: w,
-                source: n.get(w) ?? answer.source,
+                file: knownFile,
+                source: knownSources.get(knownFile) ?? answer.source,
               };
-        if (!n.has(b.file)) {
-          i += Buffer.byteLength(b.source, "utf8");
-          if (i > MAX_MODULE_TOTAL_BYTES) throw totalOversizedError(o, b.file);
-          n.set(b.file, b.source);
-          if (real !== undefined) s.set(real, b.file);
+        if (!knownSources.has(resolvedImport.file)) {
+          totalBytes += Buffer.byteLength(resolvedImport.source, "utf8");
+          if (totalBytes > MAX_MODULE_TOTAL_BYTES) throw totalOversizedError(pluginName, resolvedImport.file);
+          knownSources.set(resolvedImport.file, resolvedImport.source);
+          if (real !== undefined) reals.set(real, resolvedImport.file);
         }
-        pending.links.set(pending.specifier, b.file);
-        x.push(b);
+        pending.links.set(pending.specifier, resolvedImport.file);
+        nextLevel.push(resolvedImport);
       }
     }
-    a = x;
+    level = nextLevel;
   }
   return {
-    entry: e.file,
-    root: e.root,
-    files: r,
+    entry: entry.file,
+    root: entry.root,
+    files,
   };
 }
 //@ chunk-bfnfj4kx.js:34380-34512 placement
-var singleTextImportRefusal = (e) => (o, t) =>
+var singleTextImportRefusal = (pluginName) => (specifier, importer) =>
   Promise.reject(
-    new HooksError(`${e}: cannot import "${o}" (from ${t}): the module is one text with no files beside it`),
+    new HooksError(
+      `${pluginName}: cannot import "${specifier}" (from ${importer}): the module is one text with no files beside it`,
+    ),
   );
 //@ chunk-bfnfj4kx.js:34512-34752 placement
 /**
  * 读取（内置或磁盘上的）hooks 模块源码并构建导入图。
  */
-async function loadHooksModuleGraph(e, root, pluginName) {
-  let r = builtinSourceRegistry.source(e);
-  if (r !== undefined)
+async function loadHooksModuleGraph(file, pluginRoot, pluginName) {
+  let builtinSource = builtinSourceRegistry.source(file);
+  if (builtinSource !== undefined)
     return {
-      source: r,
+      source: builtinSource,
       graph: await buildModuleGraph(
         {
-          file: e,
-          source: r,
-          root,
+          file,
+          source: builtinSource,
+          root: pluginRoot,
         },
         pluginName,
         singleTextImportRefusal(pluginName),
       ),
     };
-  let { real, source } = await loadModuleWithChecks(e, root, pluginName);
+  let { real, source } = await loadModuleWithChecks(file, pluginRoot, pluginName);
   return {
     source,
     graph: await buildModuleGraph(
       {
-        file: e,
+        file,
         source,
-        root,
+        root: pluginRoot,
         real,
       },
       pluginName,
-      hooksImportResolver(root, pluginName),
+      hooksImportResolver(pluginRoot, pluginName),
     ),
   };
 }
@@ -1452,18 +1546,19 @@ async function loadHooksModuleGraph(e, root, pluginName) {
 /**
  * 长度+内容（图摘要用）
  */
-var lengthPrefixed = (e) => `${e.length}:${e}`;
+var lengthPrefixed = (text) => `${text.length}:${text}`;
 //@ chunk-bfnfj4kx.js:34820-35000 placement
 /**
  * 计算模块图的 sha256 摘要（根目录、各文件编译结果与链接）。
  */
-function moduleGraphDigest(e) {
-  let o = createHash("sha256").update(lengthPrefixed(e.root));
-  for (let [t, { compiled: r, links: n }] of e.files) {
-    o.update(lengthPrefixed(t) + lengthPrefixed(r));
-    for (let [s, p] of n) o.update(lengthPrefixed(s) + lengthPrefixed(p));
+function moduleGraphDigest(graph) {
+  let hash = createHash("sha256").update(lengthPrefixed(graph.root));
+  for (let [file, { compiled, links }] of graph.files) {
+    hash.update(lengthPrefixed(file) + lengthPrefixed(compiled));
+    for (let [specifier, targetPath] of links)
+      hash.update(lengthPrefixed(specifier) + lengthPrefixed(targetPath));
   }
-  return o.digest("hex");
+  return hash.digest("hex");
 }
 export {
   refuseDynamicImport,

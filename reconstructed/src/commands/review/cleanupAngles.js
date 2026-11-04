@@ -20,21 +20,32 @@ import {
   REVIEW_ANGLE_EFFICIENCY,
   REVIEW_CLEANUP_OUTPUT_FIELDS,
 } from "./reviewAngles.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-hantmvxa.js:68578-76198 placement
 /**
  * 代码评审的清理类角度（Reuse、removed-behavior、cross-file 等）与最小化评审提示词。
  */
-var REVIEW_REUSE_ANGLE = `### Reuse
+var REVIEW_REUSE_ANGLE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var REVIEW_REUSE_ANGLE_LOW_EFFORT;
+var REVIEW_REMOVED_BEHAVIOR_ANGLE;
+var REVIEW_CROSS_FILE_ANGLE;
+var REVIEW_ANGLE_D;
+var REVIEW_ANGLE_E;
+var REVIEW_MINIMAL_PROMPT;
+var REVIEW_ANGLE_H;
+var REVIEW_ANGLE_I;
+deferInit("chunk-hantmvxa.js:68578", () => {
+  REVIEW_REUSE_ANGLE = `### Reuse
 
 The angles above hunt for bugs; this one and the next two hunt for cleanup in
 the changed code. Flag new code that re-implements something the codebase
 already has \u2014 Grep shared/utility modules and files adjacent to the change,
 and name the existing helper to call instead.
 `;
-var REVIEW_REUSE_ANGLE_LOW_EFFORT = (e, n = 8) => {
-  let s = n === "all" ? 4 : Math.min(4, n);
-  return `\`low effort \u2192 1 diff pass \u2192 no verify \u2192 ${STAGES(n)}\`
+  REVIEW_REUSE_ANGLE_LOW_EFFORT = (reporterToolAvailable, findingCap = 8) => {
+    let targetCount = findingCap === "all" ? 4 : Math.min(4, findingCap);
+    return `\`low effort \u2192 1 diff pass \u2192 no verify \u2192 ${STAGES(findingCap)}\`
 
 ## Turn 1 \u2014 read
 
@@ -55,33 +66,33 @@ Do **not** flag style, naming, perf, missing tests, or anything outside the
 hunk.
 
 ${
-  e
-    ? `Report ${findingCapPhrase(n)}, most-severe first, in one
+  reporterToolAvailable
+    ? `Report ${findingCapPhrase(findingCap)}, most-severe first, in one
 ${REPORTFINDINGS} call with \`{level, findings}\` \u2014 each entry has
 \`file\`, \`line\`, \`summary\`, \`short_summary\` (\u226460 characters), and
 \`failure_scenario\`.
-Target at least min(files_changed, ${s}) findings \u2014 if you see fewer, widen to other hunks in the same diff before stopping. If fewer than ${s} genuine findings exist, report what you have. Do not also print the findings as text.
+Target at least min(files_changed, ${targetCount}) findings \u2014 if you see fewer, widen to other hunks in the same diff before stopping. If fewer than ${targetCount} genuine findings exist, report what you have. Do not also print the findings as text.
 `
-    : `Output ${findingCapPhrase(n)}, most-severe first, one line each:
+    : `Output ${findingCapPhrase(findingCap)}, most-severe first, one line each:
 \`path/to/file.ext:123 \u2014 what's wrong and the concrete failure\`.
-Target at least min(files_changed, ${s}) findings \u2014 if you see fewer, widen to other hunks in the same diff before stopping. If fewer than ${s} genuine findings exist, emit what you have.
+Target at least min(files_changed, ${targetCount}) findings \u2014 if you see fewer, widen to other hunks in the same diff before stopping. If fewer than ${targetCount} genuine findings exist, emit what you have.
 `
 }`;
-};
-var REVIEW_REMOVED_BEHAVIOR_ANGLE = (e, n) => (s) => {
-  let max = Math.max(1, Math.floor((s === "all" ? n : Math.min(s, n)) / 2));
-  return e(s)
-    .replace(
-      `## Output
+  };
+  REVIEW_REMOVED_BEHAVIOR_ANGLE = (promptBuilder, findingCap) => (effort) => {
+    let max = Math.max(1, Math.floor((effort === "all" ? findingCap : Math.min(effort, findingCap)) / 2));
+    return promptBuilder(effort)
+      .replace(
+        `## Output
 `,
-      `## Output
+        `## Output
 
 Target **at least ${max} ${plural(max, "finding")}**. If fewer genuine findings exist, emit what you have \u2014 do not invent to hit the floor.
 `,
-    )
-    .replace(/nothing survives verification/g, "nothing survives");
-};
-var REVIEW_CROSS_FILE_ANGLE = `### Angle A \u2014 line-by-line diff scan
+      )
+      .replace(/nothing survives verification/g, "nothing survives");
+  };
+  REVIEW_CROSS_FILE_ANGLE = `### Angle A \u2014 line-by-line diff scan
 
 Read every hunk in the diff, line by line. Then Read the enclosing function for
 each hunk \u2014 bugs in unchanged lines of a touched function are in scope (the PR
@@ -104,11 +115,11 @@ check whether the change breaks any call site: a new precondition, a changed
 return shape, a new exception, a timing/ordering dependency. Also check callees:
 does a parallel change in the same PR make a call unsafe?
 `;
-var REVIEW_ANGLE_D =
-  (e, n, s) =>
-  (r, h = s) => `\`${e} \u2192 ${STAGES(h)}\`
+  REVIEW_ANGLE_D =
+    (levelLabel, roleIntro, findingCap) =>
+    (promptBuilder, overrideCap = findingCap) => `\`${levelLabel} \u2192 ${STAGES(overrideCap)}\`
 
-${n}
+${roleIntro}
 
 ${REVIEW_PHASE0_GATHER_DIFF}
 ## Phase 1 \u2014 Find candidates (3 correctness angles + 3 cleanup angles + 1 altitude angle + 1 conventions angle, up to 6 each)
@@ -131,25 +142,25 @@ silently drop half-believed candidates are the dominant cause of misses.
 
 Pool all candidates. Dedup near-duplicates only (same defect, same location, same reason \u2192 keep one). Do NOT run verifiers; do NOT re-judge. Sort by severity.
 
-${REVIEW_REMOVED_BEHAVIOR_ANGLE(r, s)(h)}`;
-var REVIEW_ANGLE_E = REVIEW_ANGLE_D(
-  "medium effort \u2192 8 inline angles \u2192 dedup (no verify)",
-  `You are reviewing for **correctness bugs**: surface every plausible bug. At this
+${REVIEW_REMOVED_BEHAVIOR_ANGLE(promptBuilder, findingCap)(overrideCap)}`;
+  REVIEW_ANGLE_E = REVIEW_ANGLE_D(
+    "medium effort \u2192 8 inline angles \u2192 dedup (no verify)",
+    `You are reviewing for **correctness bugs**: surface every plausible bug. At this
 level, catching real bugs matters more than avoiding false positives \u2014 err on
 the side of surfacing.`,
-  8,
-);
-var REVIEW_MINIMAL_PROMPT = REVIEW_ANGLE_D(
-  "high effort \u2192 8 inline angles \u2192 dedup (no verify)",
-  `You are reviewing for **recall** at high effort: catch every real bug a careful
+    8,
+  );
+  REVIEW_MINIMAL_PROMPT = REVIEW_ANGLE_D(
+    "high effort \u2192 8 inline angles \u2192 dedup (no verify)",
+    `You are reviewing for **recall** at high effort: catch every real bug a careful
 reviewer would catch in one sitting. At this level, catching real bugs matters
 more than avoiding false positives. Err on the side of surfacing.`,
-  10,
-);
-var REVIEW_ANGLE_H = (
-  e,
-  n = 15,
-) => `\`xhigh effort \u2192 10 inline angles \u2192 dedup (no verify) \u2192 sweep \u2192 ${STAGES(n)}\`
+    10,
+  );
+  REVIEW_ANGLE_H = (
+    promptBuilder,
+    findingCap = 15,
+  ) => `\`xhigh effort \u2192 10 inline angles \u2192 dedup (no verify) \u2192 sweep \u2192 ${STAGES(findingCap)}\`
 
 You are reviewing for **recall** at extra-high effort: catch every real bug. At
 this level, catching real bugs matters more than avoiding false positives \u2014 a
@@ -203,15 +214,19 @@ setup/teardown asymmetry in tests; config defaults flipped.
 Surface **up to 8 additional candidates**, each naming a defect not already on
 the list. If nothing new, return nothing from this phase \u2014 do not pad.
 
-${REVIEW_REMOVED_BEHAVIOR_ANGLE(e, 15)(n)}`;
-var REVIEW_ANGLE_I = REVIEW_ANGLE_H;
+${REVIEW_REMOVED_BEHAVIOR_ANGLE(promptBuilder, 15)(findingCap)}`;
+  REVIEW_ANGLE_I = REVIEW_ANGLE_H;
+});
 //@ chunk-hantmvxa.js:76198-77878 placement
 /**
  * 代码评审的最小提示词：单次 diff 审阅 + 指定阶段数，用于小改动快速评审。
  */
-var buildMinimalReviewPrompt = (
-  e = 15,
-) => `\`minimal prompt \u2192 single careful diff pass \u2192 ${STAGES(e)}\`
+var buildMinimalReviewPrompt; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var MINIMAL_REVIEW_PROMPT;
+deferInit("chunk-hantmvxa.js:76198", () => {
+  buildMinimalReviewPrompt = (
+    findingCap = 15,
+  ) => `\`minimal prompt \u2192 single careful diff pass \u2192 ${STAGES(findingCap)}\`
 
 You are reviewing a pull request for real bugs. Run \`git diff @{upstream}...HEAD\` (or \`git diff main...HEAD\` / \`git diff HEAD~1\`
 if there's no upstream) to get the unified diff under review. If there are
@@ -222,11 +237,12 @@ review that target instead. Treat this diff as the review scope.
 
 Review the diff as a careful senior engineer would: read every hunk, open the surrounding files for context as needed (Read, Grep, git log/blame/show), and hunt for correctness issues \u2014 wrong or inverted conditions, off-by-one, null/undefined dereference, missing \`await\`, dropped error handling, removed guards or validations, broken callers of changed functions, races. Prefer real failure modes over style; every finding needs a concrete scenario in which the code misbehaves.
 
-When you are done, submit ${e === "all" ? "every finding" : `at most ${e} ${plural(e, "finding")}`} via the ${REPORTFINDINGS} tool, filling its fields as defined \u2014 for each: the file path and start line, a severity, and a comment that states the issue and the concrete scenario in which the code misbehaves. Quality over quantity: include everything you genuinely believe is a real issue, and nothing you don't.
+When you are done, submit ${findingCap === "all" ? "every finding" : `at most ${findingCap} ${plural(findingCap, "finding")}`} via the ${REPORTFINDINGS} tool, filling its fields as defined \u2014 for each: the file path and start line, a severity, and a comment that states the issue and the concrete scenario in which the code misbehaves. Quality over quantity: include everything you genuinely believe is a real issue, and nothing you don't.
 
 After the tool call, also restate the findings in your final reply \u2014 one line each, \`file:line \u2014 summary\` \u2014 so they stay visible in sessions that do not render tool output.
 `;
-var MINIMAL_REVIEW_PROMPT = buildMinimalReviewPrompt();
+  MINIMAL_REVIEW_PROMPT = buildMinimalReviewPrompt();
+});
 export {
   REVIEW_REUSE_ANGLE_LOW_EFFORT,
   REVIEW_ANGLE_E,

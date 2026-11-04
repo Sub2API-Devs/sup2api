@@ -38,27 +38,27 @@ var PLUGIN_LOAD_PROBLEMS = [
  * 计算加权得分：通过项权重之和除以总权重（跳过 with_only 项）。
  */
 function computeWeightedScore(results) {
-  let t = 0;
-  let n = 0;
-  for (let s of results) {
-    if (s.with_only) continue;
-    n += s.weight;
-    if (s.passed) t += s.weight;
+  let weightedScore = 0;
+  let totalWeight = 0;
+  for (let result of results) {
+    if (result.with_only) continue;
+    totalWeight += result.weight;
+    if (result.passed) weightedScore += result.weight;
   }
-  return n > 0 ? t / n : 0;
+  return totalWeight > 0 ? weightedScore / totalWeight : 0;
 }
 //@ chunk-qv1jytq6.js:660-822 placement
 /**
  * 汇总多次运行的平均得分与通过率。
  */
-function aggregateRunScores(e) {
-  if (e.length === 0)
+function aggregateRunScores(scores) {
+  if (scores.length === 0)
     return {
       score: 0,
       passRate: 0,
     };
-  let score = e.reduce((acc, a) => acc + a.score, 0) / e.length;
-  let passRate = count(e, (s) => s.score >= 1) / e.length;
+  let score = scores.reduce((acc, run) => acc + run.score, 0) / scores.length;
+  let passRate = count(scores, (run) => run.score >= 1) / scores.length;
   return {
     score,
     passRate,
@@ -69,15 +69,15 @@ function aggregateRunScores(e) {
  * 生成 with/without 插件对比的用例结果表。
  */
 function formatEvalReportTable(report) {
-  let t = [];
-  let mapped = report.cases.map((r) => ({
-    ...r,
-    name: replaceControlChars(r.name),
+  let lines = [];
+  let mapped = report.cases.map((caseReport) => ({
+    ...caseReport,
+    name: replaceControlChars(caseReport.name),
   }));
-  let max = Math.max(4, ...mapped.map((r) => bunStringWidth(r.name)));
-  let any = report.cases.some((r) => r.runs_without !== undefined);
+  let max = Math.max(4, ...mapped.map((caseReport) => bunStringWidth(caseReport.name)));
+  let any = report.cases.some((caseReport) => caseReport.runs_without !== undefined);
   if (any)
-    t.push(
+    lines.push(
       padColumn("CASE", max) +
         "  " +
         padColumn("WITH", 6) +
@@ -88,7 +88,7 @@ function formatEvalReportTable(report) {
         "NOTES",
     );
   else
-    t.push(
+    lines.push(
       padColumn("CASE", max) +
         "  " +
         padColumn("SCORE", 6) +
@@ -97,96 +97,100 @@ function formatEvalReportTable(report) {
         padColumn("COST", 8) +
         "NOTES",
     );
-  for (let r of mapped) {
-    let c = r.runs.length + (r.runs_without?.length ?? 0);
-    let g =
-      r.runs.reduce((acc, run) => acc + run.cost_usd, 0) +
-      (r.runs_without?.reduce((acc, u) => acc + u.cost_usd, 0) ?? 0);
-    let p = summarizeCaseFailure(r);
+  for (let caseReport of mapped) {
+    let runCount = caseReport.runs.length + (caseReport.runs_without?.length ?? 0);
+    let totalCostUsd =
+      caseReport.runs.reduce((acc, run) => acc + run.cost_usd, 0) +
+      (caseReport.runs_without?.reduce((acc, run) => acc + run.cost_usd, 0) ?? 0);
+    let failureNote = summarizeCaseFailure(caseReport);
     if (any) {
-      let { score_without: scoreWithout, delta } = r;
-      t.push(
-        padColumn(r.name, max) +
+      let { score_without: scoreWithout, delta } = caseReport;
+      lines.push(
+        padColumn(caseReport.name, max) +
           "  " +
-          padColumn(r.score.toFixed(2), 6) +
+          padColumn(caseReport.score.toFixed(2), 6) +
           padColumn(scoreWithout !== undefined ? scoreWithout.toFixed(2) : "\u2014", 6) +
           padColumn(delta !== undefined ? _(delta) : "\u2014", 7) +
-          padColumn(String(c), 5) +
-          padColumn(`$${g.toFixed(2)}`, 8) +
-          (p ?? ""),
+          padColumn(String(runCount), 5) +
+          padColumn(`$${totalCostUsd.toFixed(2)}`, 8) +
+          (failureNote ?? ""),
       );
     } else
-      t.push(
-        padColumn(r.name, max) +
+      lines.push(
+        padColumn(caseReport.name, max) +
           "  " +
-          padColumn(r.score.toFixed(2), 6) +
-          padColumn(`${Math.round(r.pass_rate * 100)}%`, 6) +
-          padColumn(String(r.runs.length), 5) +
-          padColumn(`$${g.toFixed(2)}`, 8) +
-          (p ?? ""),
+          padColumn(caseReport.score.toFixed(2), 6) +
+          padColumn(`${Math.round(caseReport.pass_rate * 100)}%`, 6) +
+          padColumn(String(caseReport.runs.length), 5) +
+          padColumn(`$${totalCostUsd.toFixed(2)}`, 8) +
+          (failureNote ?? ""),
       );
   }
-  t.push("");
-  let l = report.partial
+  lines.push("");
+  let partialNote = report.partial
     ? ` \xB7 \u26A0 partial (${PARTIAL_REASON_LABELS[report.partial_reason ?? "interrupted"]})`
     : "";
   if (any) {
-    let filtered = report.cases.filter((c) => c.delta !== undefined);
+    let filtered = report.cases.filter((caseReport) => caseReport.delta !== undefined);
     if (filtered.length > 0) {
-      let c = filtered.reduce((acc, p) => acc + (p.delta ?? 0), 0) / filtered.length;
-      t.push(
-        `${report.cases.length} case(s) \xB7 mean \u0394 ${_(c)} \xB7 ${report.duration_seconds}s \xB7 $${report.cost_usd.toFixed(2)}${l}`,
+      let meanDelta =
+        filtered.reduce((acc, caseReport) => acc + (caseReport.delta ?? 0), 0) / filtered.length;
+      lines.push(
+        `${report.cases.length} case(s) \xB7 mean \u0394 ${_(meanDelta)} \xB7 ${report.duration_seconds}s \xB7 $${report.cost_usd.toFixed(2)}${partialNote}`,
       );
-      return t.join(`
+      return lines.join(`
 `);
     }
   }
-  t.push(
-    `${report.cases.length} case(s) \xB7 ${report.duration_seconds}s \xB7 $${report.cost_usd.toFixed(2)}${l}`,
+  lines.push(
+    `${report.cases.length} case(s) \xB7 ${report.duration_seconds}s \xB7 $${report.cost_usd.toFixed(2)}${partialNote}`,
   );
-  return t.join(`
+  return lines.join(`
 `);
 }
 //@ chunk-qv1jytq6.js:2149-2200 placement
-function _(e) {
-  return `${e > 0 ? "+" : ""}${e.toFixed(2)}`;
+function _(delta) {
+  return `${delta > 0 ? "+" : ""}${delta.toFixed(2)}`;
 }
 //@ chunk-qv1jytq6.js:2200-2553 placement
 /**
  * 给出用例失败的一行原因：运行出错取错误；否则取权重最高的未通过评分器（若所有运行都未通过且有提示则用提示）。
  */
-function summarizeCaseFailure(e) {
-  let t = null;
-  for (let run of e.runs) {
-    for (let grader of run.graders) if (!grader.passed && (!t || grader.weight > t.weight)) t = grader;
+function summarizeCaseFailure(caseReport) {
+  let worstGrader = null;
+  for (let run of caseReport.runs) {
+    for (let grader of run.graders)
+      if (!grader.passed && (!worstGrader || grader.weight > worstGrader.weight)) worstGrader = grader;
     if (run.error) return replaceControlChars(run.error);
   }
-  if (t !== null) {
-    let n = t.name;
-    let found = e.advisories?.find((advisory) => advisory.grader === n);
-    let any = e.runs.some((run) => run.graders.some((grader) => grader.name === n && grader.passed));
+  if (worstGrader !== null) {
+    let worstName = worstGrader.name;
+    let found = caseReport.advisories?.find((advisory) => advisory.grader === worstName);
+    let any = caseReport.runs.some((run) =>
+      run.graders.some((grader) => grader.name === worstName && grader.passed),
+    );
     if (found !== undefined && !any) return replaceControlChars(found.text);
   }
-  return t ? replaceControlChars(`${t.name}: ${t.explanation}`) : null;
+  return worstGrader ? replaceControlChars(`${worstGrader.name}: ${worstGrader.explanation}`) : null;
 }
 //@ chunk-qv1jytq6.js:2553-2614 placement
 /**
  * 把文本补齐到指定显示宽度（超出时加一个空格）。
  */
-function padColumn(e, t) {
-  let n = bunStringWidth(e);
-  return n > t ? `${e} ` : e + repeatString(" ", t - n);
+function padColumn(text, width) {
+  let textWidth = bunStringWidth(text);
+  return textWidth > width ? `${text} ` : text + repeatString(" ", width - textWidth);
 }
 //@ chunk-qv1jytq6.js:2614-2994 placement
 /**
  * 组装套件报告 JSON：schema 版本、Claude 版本、起始时间与时长、总花费（含 without 组）、是否部分完成、并发、插件与各用例报告。
  */
-function buildSuiteReport(e, date, n, claudeVersion, plugins, concurrency) {
-  let costUsd = e.reduce(
+function buildSuiteReport(results, date, partialReason, claudeVersion, plugins, concurrency) {
+  let costUsd = results.reduce(
     (acc, { report }) =>
       acc +
       report.runs.reduce((acc, run) => acc + run.cost_usd, 0) +
-      (report.runs_without?.reduce((acc, i) => acc + i.cost_usd, 0) ?? 0),
+      (report.runs_without?.reduce((acc, run) => acc + run.cost_usd, 0) ?? 0),
     0,
   );
   return {
@@ -195,11 +199,11 @@ function buildSuiteReport(e, date, n, claudeVersion, plugins, concurrency) {
     started_at: date.toISOString(),
     duration_seconds: Math.round((Date.now() - date.getTime()) / 1000),
     cost_usd: costUsd,
-    partial: n !== undefined,
-    partial_reason: n,
+    partial: partialReason !== undefined,
+    partial_reason: partialReason,
     concurrency,
     plugins,
-    cases: e.map((c) => c.report),
+    cases: results.map((result) => result.report),
   };
 }
 //@ chunk-qv1jytq6.js:2994-3105 placement
@@ -447,32 +451,32 @@ var EVAL_RESULT_KEYS = [
   "withheld",
   "without",
 ];
-var runStopSchema = ["config"];
+var RUN_STOP_KEYS = ["config"];
 var CONFIG_ONLY_KEYS = normalizeKeyIndex(EVAL_RESULT_KEYS);
-var CONFIG_ONLY_KEY_SET = new Set(runStopSchema);
+var CONFIG_ONLY_KEY_SET = new Set(RUN_STOP_KEYS);
 //@ chunk-qv1jytq6.js:6014-6542 placement
 /**
  * 把一次运行结果从 snake_case 转为报告结构：分数、轮次、费用、时长、错误、trace 路径、中止与模拟信息、各评分器结果。
  */
-function toRunReport(e) {
+function toRunReport(runReport) {
   return {
-    score: e.score,
-    passed: e.score >= 1,
-    turns: e.turns,
-    costUsd: e.cost_usd,
-    judgeCostUsd: e.judge_cost_usd,
-    durationSeconds: e.duration_seconds,
-    startedAt: e.started_at,
-    error: e.error,
-    tracePath: e.trace_path,
-    skippedPaidGraders: e.skipped_paid_graders ?? false,
-    ...(e.aborted && {
-      aborted: e.aborted,
+    score: runReport.score,
+    passed: runReport.score >= 1,
+    turns: runReport.turns,
+    costUsd: runReport.cost_usd,
+    judgeCostUsd: runReport.judge_cost_usd,
+    durationSeconds: runReport.duration_seconds,
+    startedAt: runReport.started_at,
+    error: runReport.error,
+    tracePath: runReport.trace_path,
+    skippedPaidGraders: runReport.skipped_paid_graders ?? false,
+    ...(runReport.aborted && {
+      aborted: runReport.aborted,
     }),
-    ...(e.mocks && {
-      mocks: e.mocks,
+    ...(runReport.mocks && {
+      mocks: runReport.mocks,
     }),
-    graders: e.graders.map((grader) => ({
+    graders: runReport.graders.map((grader) => ({
       name: grader.name,
       passed: grader.passed,
       weight: grader.weight,
@@ -496,13 +500,13 @@ function formatBaselineLine(case_, report) {
     timeoutSeconds: case_.execution.timeout_seconds,
     maxTurns: case_.execution.max_turns,
     graders: case_.graders.map((grader) => {
-      let { name: s, type: a, weight, ...r } = grader;
+      let { name, type, weight, ...rest } = grader;
       return {
-        name: s,
-        type: a,
+        name,
+        type,
         weight,
         graderMarkdown: grader.type === "llm" || grader.type === "baseline" ? grader.criteria : undefined,
-        config: r,
+        config: rest,
       };
     }),
     arms: {
@@ -522,7 +526,7 @@ function formatBaselineLine(case_, report) {
   };
 }
 //@ chunk-qv1jytq6.js:7177-8088 placement
-function formatEvalSummary(e) {
+function formatEvalSummary(summaryInput) {
   let {
     aggregate,
     resolvedCases,
@@ -534,9 +538,9 @@ function formatEvalSummary(e) {
     caseFilter,
     tagFilters,
     threshold,
-  } = e;
+  } = summaryInput;
   let mapped = resolvedCases.map(({ case_, report }) => formatBaselineLine(case_, report));
-  let filtered = mapped.map((d) => d.aggregates.delta).filter((d) => d !== undefined);
+  let filtered = mapped.map((caseLine) => caseLine.aggregates.delta).filter((delta) => delta !== undefined);
   return {
     schemaVersion: REPORT_SCHEMA_VERSION,
     claudeVersion: aggregate.claude_version,
@@ -555,8 +559,8 @@ function formatEvalSummary(e) {
       tagFilters,
       threshold,
       concurrency: aggregate.concurrency,
-      plugins: aggregate.plugins.map(({ name: d, version, path, problem }) => ({
-        name: d,
+      plugins: aggregate.plugins.map(({ name: pluginName, version, path, problem }) => ({
+        name: pluginName,
         ...(version !== undefined && {
           version,
         }),
@@ -569,9 +573,9 @@ function formatEvalSummary(e) {
     cases: mapped,
     aggregates: {
       casesTotal: mapped.length,
-      casesPassed: count(mapped, (d) => d.aggregates.score >= threshold),
-      overallScore: mean(mapped.map((d) => d.aggregates.score)),
-      overallPassRate: mean(mapped.map((d) => d.aggregates.passRate)),
+      casesPassed: count(mapped, (caseLine) => caseLine.aggregates.score >= threshold),
+      overallScore: mean(mapped.map((caseLine) => caseLine.aggregates.score)),
+      overallPassRate: mean(mapped.map((caseLine) => caseLine.aggregates.passRate)),
       meanDelta: filtered.length > 0 ? mean(filtered) : undefined,
     },
   };
@@ -580,8 +584,8 @@ function formatEvalSummary(e) {
 /**
  * 求平均值（空数组为 0）。
  */
-function mean(e) {
-  return e.length === 0 ? 0 : e.reduce((acc, n) => acc + n, 0) / e.length;
+function mean(values) {
+  return values.length === 0 ? 0 : values.reduce((acc, value) => acc + value, 0) / values.length;
 }
 export {
   mean,

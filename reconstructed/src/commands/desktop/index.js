@@ -8,10 +8,14 @@
  * pieces: chunk-9d1pf3s4.js (1), chunk-e6aww6q8.js (3)
  * attribution: fingerprint 2, placement 2
  */
-import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 import { muslTargetTriple } from "../../utils/envDynamic.js";
 import { getPlatform } from "../../utils/platform.js";
+import { isRemoteSessionAvailable } from "../../remote/remoteMode.js";
 
+//@ chunk-9d1pf3s4.js:765-800 fingerprint = isSupportedPlatform (0.437)
+function isSupportedPlatform() {
+  return muslTargetTriple(getPlatform(), "x64");
+}
 //@ chunk-e6aww6q8.js:1687845-1687869 placement
 /**
  * isDesktopHandoffBuilt：构建期常量 false。
@@ -42,8 +46,4 @@ var desktopCommandDefinition = {
   },
 };
 var desktopCommand = desktopCommandDefinition;
-//@ chunk-9d1pf3s4.js:765-800 fingerprint = isSupportedPlatform (0.437)
-function isSupportedPlatform() {
-  return muslTargetTriple(getPlatform(), "x64");
-}
 export { isDesktopCommandEnabled, desktopCommand, isSupportedPlatform };

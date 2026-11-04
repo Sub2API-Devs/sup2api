@@ -27,3 +27,4 @@ async function runVertexSetup(onDone, context) {
     context,
   });
 }
+export { runVertexSetup };

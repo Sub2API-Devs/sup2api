@@ -56,38 +56,48 @@ import {
 } from "./git/repoCheckouts.js";
 import { getCachedRepository } from "./detectRepository.js";
 import { isFileWithinSizeBound } from "./file.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-6vnxsn99.js:44679-44798 fingerprint = fetchGitDiffHunks (0.599)
 /**
  * git diff 的固定参数与限制常量：单次超时 5000ms、按文件统计上限 50 个、超过 500 个文件只给总计、单文件 1MB 等。
  */
-var GIT_DIFF_BASE_ARGS = [
-  "--no-optional-locks",
-  "-c",
-  "diff.relative=false",
-  "diff",
-  ...PLAIN_PATCH_FLAGS,
-  IGNORE_SUBMODULES_DIRTY_FLAG,
-];
-var GIT_DIFF_TIMEOUT_MS = 5000;
-var MAX_DIFF_FILES = 50;
-var MAX_TOTAL_FILES_FOR_PER_FILE_STATS = 500;
-var MAX_SINGLE_FILE_DIFF_BYTES = 1e6;
-var MAX_HUNK_LINE_COUNT = 400;
-var MAX_FILES_FOR_STATS = 500;
+var GIT_DIFF_BASE_ARGS; // deferred: uses RAW_BLOB_DIFF_FLAGS (./git.js) of its import cycle while loading; runs once the cycle is complete
+var GIT_DIFF_TIMEOUT_MS;
+var MAX_DIFF_FILES;
+var MAX_TOTAL_FILES_FOR_PER_FILE_STATS;
+var MAX_SINGLE_FILE_DIFF_BYTES;
+var MAX_HUNK_LINE_COUNT;
+var MAX_FILES_FOR_STATS;
+deferInit("chunk-6vnxsn99.js:44679", () => {
+  GIT_DIFF_BASE_ARGS = [
+    "--no-optional-locks",
+    "-c",
+    "diff.relative=false",
+    "diff",
+    ...PLAIN_PATCH_FLAGS,
+    IGNORE_SUBMODULES_DIRTY_FLAG,
+  ];
+  GIT_DIFF_TIMEOUT_MS = 5000;
+  MAX_DIFF_FILES = 50;
+  MAX_TOTAL_FILES_FOR_PER_FILE_STATS = 500;
+  MAX_SINGLE_FILE_DIFF_BYTES = 1e6;
+  MAX_HUNK_LINE_COUNT = 400;
+  MAX_FILES_FOR_STATS = 500;
+});
 //@ chunk-6vnxsn99.js:44798-45605 layout
 /**
  * 按模式（auto/branch）计算 diff：working-tree 对 HEAD，或分支相对默认分支 merge-base 的变更；无 HEAD 时走新仓库路径。
  */
-async function fetchGitDiff(e, abortSignal, r = "auto", o, s) {
-  if (o === undefined && !isDiffCwdInRepoCached()) return null;
-  if (await isInTransientGitOperation(abortSignal, o, s)) return null;
-  if (r === "branch") {
-    let branchDiff = await fetchBranchDiff(e, abortSignal, true, o, undefined, s);
+async function fetchGitDiff(cwd, abortSignal, ref = "auto", repoDir, diffOptions) {
+  if (repoDir === undefined && !isDiffCwdInRepoCached()) return null;
+  if (await isInTransientGitOperation(abortSignal, repoDir, diffOptions)) return null;
+  if (ref === "branch") {
+    let branchDiff = await fetchBranchDiff(cwd, abortSignal, true, repoDir, undefined, diffOptions);
     return branchDiff === "base-stats-failed" ? null : branchDiff;
   }
-  let diffStats = await fetchDiffStats("HEAD", abortSignal, o, s);
-  if (diffStats === null) return fetchDiffWithoutHead(abortSignal, o, s);
+  let diffStats = await fetchDiffStats("HEAD", abortSignal, repoDir, diffOptions);
+  if (diffStats === null) return fetchDiffWithoutHead(abortSignal, repoDir, diffOptions);
   if (diffStats.stats.filesCount > MAX_FILES_FOR_STATS)
     return {
       ...diffStats,
@@ -96,10 +106,10 @@ async function fetchGitDiff(e, abortSignal, r = "auto", o, s) {
         kind: "working-tree",
       },
     };
-  if (r === "session") {
+  if (ref === "session") {
     await Promise.all([
-      markPreSessionFiles(diffStats, o),
-      appendUntrackedToDiffStats(diffStats, abortSignal, o, undefined, true, s),
+      markPreSessionFiles(diffStats, repoDir),
+      appendUntrackedToDiffStats(diffStats, abortSignal, repoDir, undefined, true, diffOptions),
     ]);
     return {
       ...diffStats,
@@ -109,9 +119,16 @@ async function fetchGitDiff(e, abortSignal, r = "auto", o, s) {
       },
     };
   }
-  let u = await appendUntrackedToDiffStats(diffStats, abortSignal, o, undefined, false, s);
-  if (r === "branch-point") return fetchDiffAgainstBase(e, abortSignal, diffStats, o, s);
-  if (r === "uncommitted" || diffStats.stats.filesCount > 0)
+  let untracked = await appendUntrackedToDiffStats(
+    diffStats,
+    abortSignal,
+    repoDir,
+    undefined,
+    false,
+    diffOptions,
+  );
+  if (ref === "branch-point") return fetchDiffAgainstBase(cwd, abortSignal, diffStats, repoDir, diffOptions);
+  if (ref === "uncommitted" || diffStats.stats.filesCount > 0)
     return {
       ...diffStats,
       hunks: new Map(),
@@ -119,32 +136,33 @@ async function fetchGitDiff(e, abortSignal, r = "auto", o, s) {
         kind: "working-tree",
       },
     };
-  let branchDiff = await fetchBranchDiff(e, abortSignal, false, o, u, s);
-  let p = {
+  let branchDiff = await fetchBranchDiff(cwd, abortSignal, false, repoDir, untracked, diffOptions);
+  let workingTreeDiff = {
     ...diffStats,
     hunks: new Map(),
     source: {
       kind: "working-tree",
     },
   };
-  if (branchDiff === "base-stats-failed") return nonEmptyDiffOrNull(p, o);
-  if (branchDiff === null || branchDiff.stats.filesCount === 0) return p;
+  if (branchDiff === "base-stats-failed") return nonEmptyDiffOrNull(workingTreeDiff, repoDir);
+  if (branchDiff === null || branchDiff.stats.filesCount === 0) return workingTreeDiff;
   return branchDiff;
 }
 //@ chunk-6vnxsn99.js:45605-45669 layout
-function nonEmptyDiffOrNull(e, n) {
-  return n === undefined || e.stats.filesCount > 0 ? e : null;
+function nonEmptyDiffOrNull(diffStats, repoDir) {
+  return repoDir === undefined || diffStats.stats.filesCount > 0 ? diffStats : null;
 }
 //@ chunk-6vnxsn99.js:45669-46207 layout
-async function fetchBranchDiff(e, n, r, o, s, a) {
-  let diffBaseLogged = await resolveDiffBaseLogged(e, n, o, undefined, a);
-  if (diffBaseLogged.kind === "error") return r ? fetchDiffWithoutHead(n, o, a) : null;
-  let h;
-  let p;
+async function fetchBranchDiff(cwd, abortSignal, allowHeadFallback, repoDir, untracked, diffOptions) {
+  let diffBaseLogged = await resolveDiffBaseLogged(cwd, abortSignal, repoDir, undefined, diffOptions);
+  if (diffBaseLogged.kind === "error")
+    return allowHeadFallback ? fetchDiffWithoutHead(abortSignal, repoDir, diffOptions) : null;
+  let stats;
+  let source;
   if (diffBaseLogged.kind !== "merge-base") {
-    if (!r) return null;
-    h = await fetchDiffStats("HEAD", n, o, a);
-    p =
+    if (!allowHeadFallback) return null;
+    stats = await fetchDiffStats("HEAD", abortSignal, repoDir, diffOptions);
+    source =
       diffBaseLogged.kind === "head-is-base"
         ? {
             kind: "branch",
@@ -155,63 +173,72 @@ async function fetchBranchDiff(e, n, r, o, s, a) {
             kind: "working-tree",
           };
   } else {
-    h = await fetchDiffStats(diffBaseLogged.mergeBase, n, o, a);
-    p = {
+    stats = await fetchDiffStats(diffBaseLogged.mergeBase, abortSignal, repoDir, diffOptions);
+    source = {
       kind: "branch",
       baseBranch: diffBaseLogged.baseBranch,
       baseRef: diffBaseLogged.mergeBase,
     };
   }
-  if (h === null)
-    return diffBaseLogged.kind === "merge-base" ? "base-stats-failed" : fetchDiffWithoutHead(n, o, a);
-  if (h.stats.filesCount <= MAX_FILES_FOR_STATS) await appendUntrackedToDiffStats(h, n, o, s, false, a);
+  if (stats === null)
+    return diffBaseLogged.kind === "merge-base"
+      ? "base-stats-failed"
+      : fetchDiffWithoutHead(abortSignal, repoDir, diffOptions);
+  if (stats.stats.filesCount <= MAX_FILES_FOR_STATS)
+    await appendUntrackedToDiffStats(stats, abortSignal, repoDir, untracked, false, diffOptions);
   return {
-    ...h,
+    ...stats,
     hunks: new Map(),
-    source: p,
+    source,
   };
 }
 //@ chunk-6vnxsn99.js:46207-46962 layout
-async function fetchDiffAgainstBase(e, n, diffStats, o, s) {
-  let a = {
+async function fetchDiffAgainstBase(cwd, abortSignal, diffStats, repoDir, diffOptions) {
+  let workingTreeDiff = {
     ...diffStats,
     hunks: new Map(),
     source: {
       kind: "working-tree",
     },
   };
-  let diffBaseRef = getDiffBaseRef(o ?? getDiffRepoRoot());
-  if (diffBaseRef === null) return a;
-  let diffBaseLogged = await resolveDiffBaseLogged(e, n, o, diffBaseRef, s);
-  if (diffBaseLogged.kind !== "merge-base") return a;
-  let diffStats_2 = await fetchDiffStats(diffBaseLogged.mergeBase, n, o, s, MAX_FILES_FOR_STATS);
-  if (diffStats_2 === null) return nonEmptyDiffOrNull(a, o);
-  if (diffStats_2.stats.filesCount === 0) return a;
-  let S = {
+  let repoDir_2 = getDiffBaseRef(repoDir ?? getDiffRepoRoot());
+  if (repoDir_2 === null) return workingTreeDiff;
+  let diffBaseLogged = await resolveDiffBaseLogged(cwd, abortSignal, repoDir, repoDir_2, diffOptions);
+  if (diffBaseLogged.kind !== "merge-base") return workingTreeDiff;
+  let diffStats_2 = await fetchDiffStats(
+    diffBaseLogged.mergeBase,
+    abortSignal,
+    repoDir,
+    diffOptions,
+    MAX_FILES_FOR_STATS,
+  );
+  if (diffStats_2 === null) return nonEmptyDiffOrNull(workingTreeDiff, repoDir);
+  if (diffStats_2.stats.filesCount === 0) return workingTreeDiff;
+  let stats = {
     ...diffStats_2.stats,
   };
-  let y = new Map();
-  for (let [T, b] of diffStats.perFileStats) {
-    let w = diffStats_2.perFileStats.get(T);
-    if (!b.isUntracked) {
-      let { previousPath, newPath, ...x } = b;
-      y.set(T, w ?? (b.previousPath === undefined ? b : x));
+  let perFileStats = new Map();
+  for (let [path, entry] of diffStats.perFileStats) {
+    let baseEntry = diffStats_2.perFileStats.get(path);
+    if (!entry.isUntracked) {
+      let { previousPath, newPath, ...rest } = entry;
+      perFileStats.set(path, baseEntry ?? (entry.previousPath === undefined ? entry : rest));
       continue;
     }
-    y.set(T, b);
-    if (w === undefined) S.filesCount += 1;
+    perFileStats.set(path, entry);
+    if (baseEntry === undefined) stats.filesCount += 1;
     else {
-      S.linesAdded -= w.added;
-      S.linesRemoved -= w.removed;
+      stats.linesAdded -= baseEntry.added;
+      stats.linesRemoved -= baseEntry.removed;
     }
   }
-  for (let [T, b] of diffStats_2.perFileStats) {
-    if (y.size >= MAX_DIFF_FILES) break;
-    if (!y.has(T)) y.set(T, b);
+  for (let [path, entry] of diffStats_2.perFileStats) {
+    if (perFileStats.size >= MAX_DIFF_FILES) break;
+    if (!perFileStats.has(path)) perFileStats.set(path, entry);
   }
   return {
-    stats: S,
-    perFileStats: y,
+    stats,
+    perFileStats,
     hunks: new Map(),
     source: {
       kind: "branch",
@@ -224,47 +251,57 @@ async function fetchDiffAgainstBase(e, n, diffStats, o, s) {
 /**
  * 把 mtime/ctime 早于会话开始的文件标记为 preSession（会话前就有的改动）。
  */
-async function markPreSessionFiles(diffStats, n) {
+async function markPreSessionFiles(diffStats, repoDir) {
   if (diffStats.perFileStats.size === 0) return;
-  let r = n ?? getDiffRepoRoot();
+  let repoDir_2 = repoDir ?? getDiffRepoRoot();
   let sessionStartTime = getSessionStartTime();
   await Promise.all(
-    Array.from(diffStats.perFileStats, async ([s, a]) => {
+    Array.from(diffStats.perFileStats, async ([path, entry]) => {
       try {
-        let u = await lstat(join(r, s));
-        if (Math.max(u.mtimeMs, u.ctimeMs) < sessionStartTime) a.preSession = true;
+        let stats = await lstat(join(repoDir_2, path));
+        if (Math.max(stats.mtimeMs, stats.ctimeMs) < sessionStartTime) entry.preSession = true;
       } catch {}
     }),
   );
 }
 //@ chunk-6vnxsn99.js:47191-47425 layout
-async function appendUntrackedToDiffStats(diffStats, abortSignal, r, o, s = false, a) {
+async function appendUntrackedToDiffStats(
+  diffStats,
+  abortSignal,
+  repoDir,
+  knownUntracked,
+  includePreSession = false,
+  diffOptions,
+) {
   let maxFiles = MAX_DIFF_FILES - diffStats.perFileStats.size;
   if (maxFiles <= 0) return null;
-  let h = o !== undefined ? o : await fetchUntrackedFiles(maxFiles, abortSignal, r, s, a);
-  if (h)
-    for (let [p, S] of h) {
-      if (diffStats.perFileStats.has(p)) continue;
-      diffStats.perFileStats.set(p, S);
+  let untracked =
+    knownUntracked !== undefined
+      ? knownUntracked
+      : await fetchUntrackedFiles(maxFiles, abortSignal, repoDir, includePreSession, diffOptions);
+  if (untracked)
+    for (let [path, entry] of untracked) {
+      if (diffStats.perFileStats.has(path)) continue;
+      diffStats.perFileStats.set(path, entry);
       diffStats.stats.filesCount += 1;
     }
-  return h;
+  return untracked;
 }
 //@ chunk-6vnxsn99.js:47425-47963 layout
-async function fetchDiffWithoutHead(e, n, r) {
+async function fetchDiffWithoutHead(abortSignal, repoDir, diffOptions) {
   if (
     (
       await execFileNoThrow(gitExe(), ["--no-optional-locks", "rev-parse", "--verify", "--quiet", "HEAD"], {
         timeout: GIT_DIFF_TIMEOUT_MS,
         preserveOutputOnError: false,
-        abortSignal: e,
-        ...resolveGitEnv(n, r),
-        cwd: n,
+        abortSignal,
+        ...resolveGitEnv(repoDir, diffOptions),
+        cwd: repoDir,
       })
     ).exitCode !== 1
   )
     return null;
-  let s = {
+  let diff = {
     stats: {
       filesCount: 0,
       linesAdded: 0,
@@ -277,49 +314,49 @@ async function fetchDiffWithoutHead(e, n, r) {
     },
     noCommits: true,
   };
-  let diffStats = await fetchDiffStats("--cached", e, n, r);
+  let diffStats = await fetchDiffStats("--cached", abortSignal, repoDir, diffOptions);
   if (diffStats !== null) {
-    s.stats = diffStats.stats;
-    s.perFileStats = diffStats.perFileStats;
-    if (diffStats.stats.filesCount > MAX_FILES_FOR_STATS) return s;
-    if (diffStats.stats.filesCount > 0) await parseGitNumstat(s, e, n, r);
+    diff.stats = diffStats.stats;
+    diff.perFileStats = diffStats.perFileStats;
+    if (diffStats.stats.filesCount > MAX_FILES_FOR_STATS) return diff;
+    if (diffStats.stats.filesCount > 0) await parseGitNumstat(diff, abortSignal, repoDir, diffOptions);
   }
-  await appendUntrackedToDiffStats(s, e, n, undefined, false, r);
-  return s;
+  await appendUntrackedToDiffStats(diff, abortSignal, repoDir, undefined, false, diffOptions);
+  return diff;
 }
 //@ chunk-6vnxsn99.js:47963-48319 fingerprint = parseGitNumstat (0.756)
 /**
  * 解析 git diff --numstat 输出为 {path: {added, removed, isBinary}}。
  */
-async function parseGitNumstat(e, n, r, o) {
-  let workingTreeNumstat = await fetchWorkingTreeNumstat(n, r, o);
+async function parseGitNumstat(diffStats, abortSignal, repoDir, diffOptions) {
+  let workingTreeNumstat = await fetchWorkingTreeNumstat(abortSignal, repoDir, diffOptions);
   if (workingTreeNumstat === null) return;
-  for (let [a, u] of workingTreeNumstat.perFileStats) {
-    let h = e.perFileStats.get(a);
-    if (h === undefined) continue;
-    let isBinary = h.isBinary || u.isBinary;
-    let S = isBinary ? 0 : Math.max(0, h.added + u.added - u.removed);
-    e.stats.linesAdded += S - h.added;
-    e.perFileStats.set(a, {
-      ...h,
-      added: S,
+  for (let [path, workingEntry] of workingTreeNumstat.perFileStats) {
+    let stagedEntry = diffStats.perFileStats.get(path);
+    if (stagedEntry === undefined) continue;
+    let isBinary = stagedEntry.isBinary || workingEntry.isBinary;
+    let added = isBinary ? 0 : Math.max(0, stagedEntry.added + workingEntry.added - workingEntry.removed);
+    diffStats.stats.linesAdded += added - stagedEntry.added;
+    diffStats.perFileStats.set(path, {
+      ...stagedEntry,
+      added,
       removed: 0,
       isBinary,
-      ...(u.status === "removed" && {
+      ...(workingEntry.status === "removed" && {
         status: "removed",
       }),
     });
   }
 }
 //@ chunk-6vnxsn99.js:48319-48731 layout
-async function fetchWorkingTreeNumstat(signal, repoDir, r) {
-  if (isStorageDiffMode(r)) {
-    let s =
+async function fetchWorkingTreeNumstat(signal, repoDir, diffOptions) {
+  if (isStorageDiffMode(diffOptions)) {
+    let raw =
       repoDir === undefined
         ? null
         : await readWorkTreeDiffViaIndex(
             repoDir,
-            r,
+            diffOptions,
             {
               from: "index",
               to: "work-tree",
@@ -327,31 +364,35 @@ async function fetchWorkingTreeNumstat(signal, repoDir, r) {
             GIT_DIFF_TIMEOUT_MS,
             signal,
           );
-    return s === null ? null : parseRawNumstat(s, Number.POSITIVE_INFINITY, "within-root");
+    return raw === null ? null : parseRawNumstat(raw, Number.POSITIVE_INFINITY, "within-root");
   }
-  let o = await execFileNoThrow(gitExe(), [...GIT_DIFF_BASE_ARGS, "--raw", "--numstat"], {
+  let result = await execFileNoThrow(gitExe(), [...GIT_DIFF_BASE_ARGS, "--raw", "--numstat"], {
     timeout: GIT_DIFF_TIMEOUT_MS,
     preserveOutputOnError: false,
     abortSignal: signal,
-    ...resolveGitEnv(repoDir, r, {
+    ...resolveGitEnv(repoDir, diffOptions, {
       userLocale: true,
     }),
     cwd: repoDir,
   });
-  if (o.code !== 0) return null;
-  return parseRawNumstat(o.stdout, Number.POSITIVE_INFINITY, r === undefined ? "all" : "within-root");
+  if (result.code !== 0) return null;
+  return parseRawNumstat(
+    result.stdout,
+    Number.POSITIVE_INFINITY,
+    diffOptions === undefined ? "all" : "within-root",
+  );
 }
 //@ chunk-6vnxsn99.js:48731-48771 layout
-function isStorageDiffMode(e) {
-  return e !== undefined && hasRunnerDeclaredNestedRepoDiff();
+function isStorageDiffMode(diffOptions) {
+  return diffOptions !== undefined && hasRunnerDeclaredNestedRepoDiff();
 }
 //@ chunk-6vnxsn99.js:48771-49351 layout
 /**
  * 对指定基准运行 git diff --shortstat/--numstat，返回总计与逐文件统计（文件过多时只给总计）。
  */
-async function fetchDiffStats(e, signal, repoDir, o, s = MAX_DIFF_FILES) {
-  if (o === undefined) {
-    let { stdout, code } = await execGitDiffNoThrow([e, "--shortstat"], signal, repoDir, o);
+async function fetchDiffStats(rev, abortSignal, repoDir, diffOptions, maxFiles = MAX_DIFF_FILES) {
+  if (diffOptions === undefined) {
+    let { stdout, code } = await execGitDiffNoThrow([rev, "--shortstat"], abortSignal, repoDir, diffOptions);
     if (code === 0) {
       let shortstat = parseShortstat(stdout);
       if (shortstat && shortstat.filesCount > MAX_FILES_FOR_STATS)
@@ -361,36 +402,41 @@ async function fetchDiffStats(e, signal, repoDir, o, s = MAX_DIFF_FILES) {
         };
     }
   }
-  let a;
-  if (isStorageDiffMode(o)) {
-    let h =
+  let raw;
+  if (isStorageDiffMode(diffOptions)) {
+    let raw_2 =
       repoDir === undefined
         ? null
         : await readWorkTreeDiffViaIndex(
             repoDir,
-            o,
-            e === "--cached"
+            diffOptions,
+            rev === "--cached"
               ? {
                   from: "nothing",
                   to: "index",
                 }
               : {
                   from: "commit",
-                  revision: e,
+                  revision: rev,
                   to: "work-tree",
                 },
             GIT_DIFF_TIMEOUT_MS,
-            signal,
+            abortSignal,
           );
-    if (h === null) return null;
-    a = h;
+    if (raw_2 === null) return null;
+    raw = raw_2;
   } else {
-    let { stdout, code } = await execGitDiffNoThrow([e, "--raw", "--numstat"], signal, repoDir, o);
+    let { stdout, code } = await execGitDiffNoThrow(
+      [rev, "--raw", "--numstat"],
+      abortSignal,
+      repoDir,
+      diffOptions,
+    );
     if (code !== 0) return null;
-    a = stdout;
+    raw = stdout;
   }
-  let rawNumstat = parseRawNumstat(a, s, o === undefined ? "all" : "within-root");
-  if (o !== undefined && rawNumstat.stats.filesCount > MAX_FILES_FOR_STATS)
+  let rawNumstat = parseRawNumstat(raw, maxFiles, diffOptions === undefined ? "all" : "within-root");
+  if (diffOptions !== undefined && rawNumstat.stats.filesCount > MAX_FILES_FOR_STATS)
     return {
       stats: rawNumstat.stats,
       perFileStats: new Map(),
@@ -401,38 +447,38 @@ async function fetchDiffStats(e, signal, repoDir, o, s = MAX_DIFF_FILES) {
 /**
  * 运行 git diff 系列命令（不抛异常），给定 cwd 时附带额外环境。切分上属 utils/gitDiff。
  */
-function execGitDiffNoThrow(e, abortSignal, r, o) {
-  let s = [...GIT_DIFF_BASE_ARGS, ...e];
-  let a = {
+function execGitDiffNoThrow(args, abortSignal, repoDir, diffOptions) {
+  let fullArgs = [...GIT_DIFF_BASE_ARGS, ...args];
+  let execOptions = {
     timeout: GIT_DIFF_TIMEOUT_MS,
     preserveOutputOnError: false,
     abortSignal,
   };
-  if (r !== undefined)
-    return execFileNoThrow(gitExe(), s, {
-      ...a,
-      ...resolveGitEnv(r, o),
-      cwd: r,
+  if (repoDir !== undefined)
+    return execFileNoThrow(gitExe(), fullArgs, {
+      ...execOptions,
+      ...resolveGitEnv(repoDir, diffOptions),
+      cwd: repoDir,
       stdin: "ignore",
     });
-  return gitReadInOwnWorkTree(getFsImplementation().cwd(), s, {}, a);
+  return gitReadInOwnWorkTree(getFsImplementation().cwd(), fullArgs, {}, execOptions);
 }
 //@ chunk-6vnxsn99.js:49547-49651 placement
-function standardRepoLayout(e) {
-  let gitDirs = resolveGitDirs(e);
+function standardRepoLayout(repoRoot) {
+  let gitDirs = resolveGitDirs(repoRoot);
   return gitDirs !== null && gitDirs.workTree !== null && gitDirs.gitDir === join(gitDirs.workTree, ".git")
     ? gitDirs
     : null;
 }
 //@ chunk-6vnxsn99.js:49651-49841 placement
-function getRepoGitEnv(e) {
+function getRepoGitEnv(repoRoot) {
   return {
     env: {
       ...getRemoteHostSessionCount(GIT_FILES_REF_BACKEND_ENV, {
         base: subprocessEnv(),
-        repository: standardRepoLayout(e) ?? {
+        repository: standardRepoLayout(repoRoot) ?? {
           gitDir: NOT_A_GIT_REPO_PATH,
-          workTree: e,
+          workTree: repoRoot,
           commonDir: NOT_A_GIT_REPO_PATH,
         },
       }),
@@ -464,14 +510,14 @@ function getNonRepoGitEnv(workTree) {
   };
 }
 //@ chunk-6vnxsn99.js:50003-50106 placement
-function resolveGitEnv(workTree, n, { userLocale: r } = {}) {
-  if (workTree === undefined)
+function resolveGitEnv(repoDir, userLocale, { userLocale: userLocale_2 } = {}) {
+  if (repoDir === undefined)
     return {
       env: getRemoteHostSessionCount(undefined, {
-        userLocale: r,
+        userLocale: userLocale_2,
       }),
     };
-  return n ?? getNonRepoGitEnv(workTree);
+  return userLocale ?? getNonRepoGitEnv(repoDir);
 }
 //@ chunk-6vnxsn99.js:50106-50210 placement
 function diffBaseRef(result) {
@@ -482,11 +528,11 @@ function diffBaseRef(result) {
 /**
  * /diff 等用的工作区 diff 统计入口：合并/变基中返回 null；先 --shortstat 判断规模（超过 500 文件只给总数），再 --numstat 取最多 50 个文件的增删行，并补充未跟踪文件。
  */
-async function fetchGitDiff_2(abortSignal, n = "HEAD") {
+async function fetchGitDiff_2(abortSignal, rev = "HEAD") {
   if (!isDiffCwdInRepoCached()) return null;
   if (await isInTransientGitOperation(abortSignal, undefined, undefined)) return null;
   let { stdout: shortstatOut, code: shortstatCode } = await execGitDiffNoThrow(
-    [n, "--shortstat"],
+    [rev, "--shortstat"],
     abortSignal,
     undefined,
     undefined,
@@ -500,14 +546,14 @@ async function fetchGitDiff_2(abortSignal, n = "HEAD") {
       };
   }
   let { stdout: numstatOut, code: numstatCode } = await execGitDiffNoThrow(
-    [...RAW_BLOB_DIFF_FLAGS, n],
+    [...RAW_BLOB_DIFF_FLAGS, rev],
     abortSignal,
     undefined,
     undefined,
   );
   if (numstatCode !== 0) return null;
   let quickStats = parseGitDiff(numstatOut);
-  if (n === "--cached" && quickStats.hunks.size > 0) {
+  if (rev === "--cached" && quickStats.hunks.size > 0) {
     let untrackedStats = await fetchWorkingTreeNumstat(abortSignal, undefined, undefined);
     if (untrackedStats === null) return null;
     for (let key of untrackedStats.perFileStats.keys()) quickStats.hunks.delete(key);
@@ -522,11 +568,11 @@ function getDiffCwd() {
 function isDiffCwdInRepoCached() {
   let diffCwd = getDiffCwd();
   let diffCheckoutIsRepo = getGitRepoCache().diffCheckoutIsRepo;
-  let r = diffCheckoutIsRepo.get(diffCwd);
-  if (r !== undefined) return r;
-  let o = findGitRootRecheckingNegative(diffCwd) !== null;
-  diffCheckoutIsRepo.set(diffCwd, o);
-  return o;
+  let cached = diffCheckoutIsRepo.get(diffCwd);
+  if (cached !== undefined) return cached;
+  let isRepo = findGitRootRecheckingNegative(diffCwd) !== null;
+  diffCheckoutIsRepo.set(diffCwd, isRepo);
+  return isRepo;
 }
 //@ chunk-6vnxsn99.js:50860-50903 layout
 function getDiffRepoRoot() {
@@ -534,7 +580,7 @@ function getDiffRepoRoot() {
   return findGitRoot(diffCwd) ?? diffCwd;
 }
 //@ chunk-6vnxsn99.js:50903-51159 layout
-async function getRepoTopLevel(abortSignal, n) {
+async function getRepoTopLevel(abortSignal, repoDir) {
   let { stdout, code } = await execFileNoThrow(
     gitExe(),
     ["--no-optional-locks", "rev-parse", "--show-toplevel"],
@@ -542,12 +588,12 @@ async function getRepoTopLevel(abortSignal, n) {
       timeout: GIT_DIFF_TIMEOUT_MS,
       preserveOutputOnError: false,
       abortSignal,
-      ...(n === undefined
+      ...(repoDir === undefined
         ? {
             env: getRemoteHostSessionCount(),
           }
-        : getRepoGitEnv(n)),
-      cwd: n,
+        : getRepoGitEnv(repoDir)),
+      cwd: repoDir,
     },
   );
   if (code !== 0 || stdout.trim() === "") return null;
@@ -557,91 +603,97 @@ async function getRepoTopLevel(abortSignal, n) {
 /**
  * 解析 git diff --raw --numstat 组合输出：raw 行给状态与路径（含重命名），numstat 行给行数。
  */
-function parseRawNumstat(stdout, n = MAX_DIFF_FILES, r = "all") {
+function parseRawNumstat(stdout, maxFiles = MAX_DIFF_FILES, pathMode = "all") {
   let filtered = stdout
     .split(
       `
 `,
     )
     .filter(Boolean);
-  let filtered_2 = filtered.filter((w) => w.startsWith(":"));
-  let filtered_3 = filtered.filter((w) => !w.startsWith(":") && countCharInString(w, "\t") + 1 >= 3);
-  let u = filtered_2.length === filtered_3.length;
-  let h = new Map();
-  if (!u)
-    for (let [w, E] of filtered_2.entries()) {
-      let [, A = "", x] = E.split("\t");
-      let O = x === undefined ? A : formatRenamePath(A, x);
-      let R = h.get(O);
-      if (R === undefined)
-        h.set(O, {
-          indices: [w],
+  let filtered_2 = filtered.filter((line) => line.startsWith(":"));
+  let filtered_3 = filtered.filter((line) => !line.startsWith(":") && countCharInString(line, "\t") + 1 >= 3);
+  let isAligned = filtered_2.length === filtered_3.length;
+  let rawLineIndex = new Map();
+  if (!isAligned)
+    for (let [lineIndex, line] of filtered_2.entries()) {
+      let [, oldPath = "", newPath] = line.split("\t");
+      let path = newPath === undefined ? oldPath : formatRenamePath(oldPath, newPath);
+      let queue = rawLineIndex.get(path);
+      if (queue === undefined)
+        rawLineIndex.set(path, {
+          indices: [lineIndex],
           next: 0,
         });
-      else R.indices.push(w);
+      else queue.indices.push(lineIndex);
     }
-  let p = 0;
+  let rawCursor = 0;
   let linesAdded = 0;
   let linesRemoved = 0;
-  let T = 0;
-  let b = new Map();
-  for (let [w, E] of filtered_3.entries()) {
-    let parts = E.split("\t");
-    let joined = parts.slice(2).join("\t");
-    let O = u ? filtered_2[w] : undefined;
-    let R = h.get(joined);
-    if (R !== undefined) {
-      while (R.next < R.indices.length && R.indices[R.next] < p) R.next++;
-      let B = R.indices[R.next];
-      if (B !== undefined) {
-        R.next++;
-        p = B + 1;
-        O = filtered_2[B];
+  let filesCount = 0;
+  let perFileStats = new Map();
+  for (let [lineIndex, line] of filtered_3.entries()) {
+    let parts = line.split("\t");
+    let pathText = parts.slice(2).join("\t");
+    let rawLine = isAligned ? filtered_2[lineIndex] : undefined;
+    let queueEntry = rawLineIndex.get(pathText);
+    if (queueEntry !== undefined) {
+      while (queueEntry.next < queueEntry.indices.length && queueEntry.indices[queueEntry.next] < rawCursor)
+        queueEntry.next++;
+      let rawIndex = queueEntry.indices[queueEntry.next];
+      if (rawIndex !== undefined) {
+        queueEntry.next++;
+        rawCursor = rawIndex + 1;
+        rawLine = filtered_2[rawIndex];
       }
     }
-    if (r === "within-root" && !isSafeRelativeDiffPath(joined)) continue;
-    T++;
-    let F = parts[0];
-    let P = parts[1];
-    let D = F === "-" || P === "-";
-    let fileAdded = D ? 0 : parseInt(F ?? "0", 10) || 0;
-    let fileRemoved = D ? 0 : parseInt(P ?? "0", 10) || 0;
+    if (pathMode === "within-root" && !isSafeRelativeDiffPath(pathText)) continue;
+    filesCount++;
+    let added = parts[0];
+    let removed = parts[1];
+    let isBinary = added === "-" || removed === "-";
+    let fileAdded = isBinary ? 0 : parseInt(added ?? "0", 10) || 0;
+    let fileRemoved = isBinary ? 0 : parseInt(removed ?? "0", 10) || 0;
     linesAdded += fileAdded;
     linesRemoved += fileRemoved;
-    if (b.size < n) {
-      let B = b.has(joined);
-      b.set(joined, {
+    if (perFileStats.size < maxFiles) {
+      let hasKey = perFileStats.has(pathText);
+      perFileStats.set(pathText, {
         added: fileAdded,
         removed: fileRemoved,
-        isBinary: D,
+        isBinary,
         isUntracked: false,
-        ...(O !== undefined && parseRawDiffLine(O, B)),
+        ...(rawLine !== undefined && parseRawDiffLine(rawLine, hasKey)),
       });
     }
   }
   return {
     stats: {
-      filesCount: T,
+      filesCount,
       linesAdded,
       linesRemoved,
     },
-    perFileStats: b,
+    perFileStats,
   };
 }
 //@ chunk-6vnxsn99.js:52096-52545 layout
-function formatRenamePath(e, n) {
-  if (e.startsWith('"') || n.startsWith('"')) return `${e} => ${n}`;
-  let r = 0;
-  for (let j = 0; j < e.length && j < n.length && e[j] === n[j]; j++) if (e[j] === "/") r = j + 1;
-  let o = r === 0 ? 0 : r - 1;
-  let s = 0;
-  for (let S = e.length - 1, y = n.length - 1; S >= o && y >= o && e[S] === n[y]; S--, y--)
-    if (e[S] === "/") s = e.length - S;
-  if (r + s === 0) return `${e} => ${n}`;
-  let sliced = e.slice(0, r);
-  let sliced_2 = e.slice(e.length - s);
-  let sliced_3 = e.slice(r, Math.max(r, e.length - s));
-  let sliced_4 = n.slice(r, Math.max(r, n.length - s));
+function formatRenamePath(oldPath, newPath) {
+  if (oldPath.startsWith('"') || newPath.startsWith('"')) return `${oldPath} => ${newPath}`;
+  let commonPrefix = 0;
+  for (let j = 0; j < oldPath.length && j < newPath.length && oldPath[j] === newPath[j]; j++)
+    if (oldPath[j] === "/") commonPrefix = j + 1;
+  let compareFrom = commonPrefix === 0 ? 0 : commonPrefix - 1;
+  let commonSuffix = 0;
+  for (
+    let oldIndex = oldPath.length - 1, newIndex = newPath.length - 1;
+    oldIndex >= compareFrom && newIndex >= compareFrom && oldPath[oldIndex] === newPath[newIndex];
+    oldIndex--, newIndex--
+  )
+    if (oldPath[oldIndex] === "/") commonSuffix = oldPath.length - oldIndex;
+  if (commonPrefix + commonSuffix === 0) return `${oldPath} => ${newPath}`;
+  let sliced = oldPath.slice(0, commonPrefix);
+  let sliced_2 = oldPath.slice(oldPath.length - commonSuffix);
+  let sliced_3 = oldPath.slice(commonPrefix, Math.max(commonPrefix, oldPath.length - commonSuffix));
+  let sliced_4 = newPath.slice(commonPrefix, Math.max(commonPrefix, newPath.length - commonSuffix));
   return `${sliced}{${sliced_3} => ${sliced_4}}${sliced_2}`;
 }
 //@ chunk-6vnxsn99.js:52545-52599 layout
@@ -652,128 +704,133 @@ var DIFF_STATUS_NAMES = {
   C: "copied",
 };
 //@ chunk-6vnxsn99.js:52599-52889 layout
-function parseRawDiffLine(e, n) {
-  let [r, o, s] = e.split("\t");
-  let a = r.slice(r.lastIndexOf(" ") + 1)[0];
-  let status = DIFF_STATUS_NAMES[a] ?? "modified";
-  let h = sanitizeDiffPath(s ?? o);
-  if (n || h === undefined)
+function parseRawDiffLine(line, keepStatusOnly) {
+  let [meta, oldPath, newPath] = line.split("\t");
+  let statusLetter = meta.slice(meta.lastIndexOf(" ") + 1)[0];
+  let status = DIFF_STATUS_NAMES[statusLetter] ?? "modified";
+  let safeNewPath = sanitizeDiffPath(newPath ?? oldPath);
+  if (keepStatusOnly || safeNewPath === undefined)
     return {
       status,
     };
-  if (s === undefined)
-    return o.startsWith('"')
+  if (newPath === undefined)
+    return oldPath.startsWith('"')
       ? {
           status,
-          newPath: h,
+          newPath: safeNewPath,
         }
       : {
           status,
         };
-  let p = sanitizeDiffPath(o);
-  return p === undefined
+  let safeOldPath = sanitizeDiffPath(oldPath);
+  return safeOldPath === undefined
     ? {
         status,
       }
     : {
         status,
-        previousPath: p,
-        newPath: h,
+        previousPath: safeOldPath,
+        newPath: safeNewPath,
       };
 }
 //@ chunk-6vnxsn99.js:52889-53064 layout
-function sanitizeDiffPath(e) {
-  let n = e.startsWith('"') ? unquoteGitPathBytes(e.slice(1, -1)) : e;
-  return !hasUnsafePathGlyphsOrSurrogate(n) &&
-    !UNSAFE_PATH_CHAR_PATTERN.test(n) &&
-    !/\\|^[A-Za-z]:| => /.test(n) &&
-    !isAbsolute(n) &&
-    n.split("/").every((o) => stripTrailingDotsSpaces(o) !== "..")
-    ? n
+function sanitizeDiffPath(rawPath) {
+  let path = rawPath.startsWith('"') ? unquoteGitPathBytes(rawPath.slice(1, -1)) : rawPath;
+  return !hasUnsafePathGlyphsOrSurrogate(path) &&
+    !UNSAFE_PATH_CHAR_PATTERN.test(path) &&
+    !/\\|^[A-Za-z]:| => /.test(path) &&
+    !isAbsolute(path) &&
+    path.split("/").every((part) => stripTrailingDotsSpaces(part) !== "..")
+    ? path
     : undefined;
 }
 //@ chunk-6vnxsn99.js:53064-53217 layout
-function isSafeRelativeDiffPath(e) {
-  let diffPathPair = parseDiffPathPair(e);
+function isSafeRelativeDiffPath(pathText) {
+  let diffPathPair = parseDiffPathPair(pathText);
   return (
     diffPathPair !== null &&
     diffPathPair.every(
-      (r) =>
-        !isAbsolute(r) &&
-        !win32.isAbsolute(r) &&
-        !/^[A-Za-z]:/.test(r) &&
-        r.split(/[/\\{}]/).every((o) => stripTrailingDotsSpaces(o) !== ".."),
+      (path) =>
+        !isAbsolute(path) &&
+        !win32.isAbsolute(path) &&
+        !/^[A-Za-z]:/.test(path) &&
+        path.split(/[/\\{}]/).every((part) => stripTrailingDotsSpaces(part) !== ".."),
     )
   );
 }
 //@ chunk-6vnxsn99.js:53217-54055 layout
-function parseDiffPathPair(e) {
-  if (e.startsWith('"')) {
-    let closingQuote = findClosingQuote(e);
+function parseDiffPathPair(value) {
+  if (value.startsWith('"')) {
+    let closingQuote = findClosingQuote(value);
     if (closingQuote === -1) return null;
-    let p = unquoteGitPathBytes(e.slice(1, closingQuote));
-    let sliced = e.slice(closingQuote + 1);
-    if (sliced === "") return [p];
-    let y = sliced.startsWith(" => ") ? sliced.slice(4) : null;
-    if (y === null) return null;
-    if (!y.startsWith('"')) return y.includes('"') || y.includes(" => ") ? null : [p, y];
-    return findClosingQuote(y) === y.length - 1 ? [p, unquoteGitPathBytes(y.slice(1, -1))] : null;
-  }
-  let index = e.indexOf(" => ");
-  if (index === -1) return e.includes('"') ? null : [e];
-  if (e.indexOf(" => ", index + 1) !== -1) return null;
-  let sliced = e.slice(0, index);
-  let sliced_2 = e.slice(index + 4);
-  if (sliced.includes('"')) return null;
-  if (sliced_2.startsWith('"'))
-    return findClosingQuote(sliced_2) === sliced_2.length - 1
-      ? [sliced, unquoteGitPathBytes(sliced_2.slice(1, -1))]
+    let firstPath = unquoteGitPathBytes(value.slice(1, closingQuote));
+    let sliced = value.slice(closingQuote + 1);
+    if (sliced === "") return [firstPath];
+    let rest = sliced.startsWith(" => ") ? sliced.slice(4) : null;
+    if (rest === null) return null;
+    if (!rest.startsWith('"')) return rest.includes('"') || rest.includes(" => ") ? null : [firstPath, rest];
+    return findClosingQuote(rest) === rest.length - 1
+      ? [firstPath, unquoteGitPathBytes(rest.slice(1, -1))]
       : null;
-  if (sliced_2.includes('"')) return null;
-  let s = [sliced, sliced_2];
+  }
+  let index = value.indexOf(" => ");
+  if (index === -1) return value.includes('"') ? null : [value];
+  if (value.indexOf(" => ", index + 1) !== -1) return null;
+  let sliced = value.slice(0, index);
+  let text = value.slice(index + 4);
+  if (sliced.includes('"')) return null;
+  if (text.startsWith('"'))
+    return findClosingQuote(text) === text.length - 1
+      ? [sliced, unquoteGitPathBytes(text.slice(1, -1))]
+      : null;
+  if (text.includes('"')) return null;
+  let paths = [sliced, text];
   let index_2 = sliced.indexOf("{");
-  let index_3 = sliced_2.indexOf("}");
-  if (sliced.indexOf("{", index_2 + 1) !== -1 || sliced_2.indexOf("}", index_3 + 1) !== -1) return null;
+  let index_3 = text.indexOf("}");
+  if (sliced.indexOf("{", index_2 + 1) !== -1 || text.indexOf("}", index_3 + 1) !== -1) return null;
   if (index_2 !== -1 && index_3 !== -1) {
-    let sliced_3 = sliced.slice(0, index_2);
-    let sliced_4 = sliced_2.slice(index_3 + 1);
-    s.push(
-      `${sliced_3}${sliced.slice(index_2 + 1)}${sliced_4}`,
-      `${sliced_3}${sliced_2.slice(0, index_3)}${sliced_4}`,
+    let sliced_2 = sliced.slice(0, index_2);
+    let sliced_3 = text.slice(index_3 + 1);
+    paths.push(
+      `${sliced_2}${sliced.slice(index_2 + 1)}${sliced_3}`,
+      `${sliced_2}${text.slice(0, index_3)}${sliced_3}`,
     );
   }
-  return s;
+  return paths;
 }
 //@ chunk-6vnxsn99.js:54055-54153 layout
-function findClosingQuote(e) {
-  for (let j = 1; j < e.length; j++)
-    if (e[j] === "\\") j++;
-    else if (e[j] === '"') return j;
+function findClosingQuote(text) {
+  for (let j = 1; j < text.length; j++)
+    if (text[j] === "\\") j++;
+    else if (text[j] === '"') return j;
   return -1;
 }
 //@ chunk-6vnxsn99.js:54153-54194 layout
-var UNSAFE_PATH_CHAR_PATTERN = new RegExp(`[${INVISIBLE_CHAR_CLASS_SOURCE}\\uFFFD]`, "u");
+var UNSAFE_PATH_CHAR_PATTERN; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-6vnxsn99.js:54153", () => {
+  UNSAFE_PATH_CHAR_PATTERN = new RegExp(`[${INVISIBLE_CHAR_CLASS_SOURCE}\\uFFFD]`, "u");
+});
 //@ chunk-6vnxsn99.js:54194-54582 layout
 /**
  * 还原 git 带引号路径中的反斜杠转义（八进制字节、\t 等）为 UTF-8 字符串。
  */
-function unquoteGitPathBytes(e) {
-  let n = [];
-  let list = Array.from(e);
+function unquoteGitPathBytes(text) {
+  let bytes = [];
+  let list = Array.from(text);
   for (let j = 0; j < list.length; j++) {
-    let s = list[j];
-    if (s !== "\\") {
-      n.push(...Buffer.from(s, "utf8"));
+    let char = list[j];
+    if (char !== "\\") {
+      bytes.push(...Buffer.from(char, "utf8"));
       continue;
     }
-    let a = list[j + 1] ?? "";
+    let nextChar = list[j + 1] ?? "";
     let joined = list.slice(j + 1, j + 4).join("");
     if (/^[0-3][0-7]{2}$/.test(joined)) {
-      n.push(parseInt(joined, 8));
+      bytes.push(parseInt(joined, 8));
       j += 3;
       continue;
     }
-    let p = {
+    let code = {
       n: 10,
       t: 9,
       r: 13,
@@ -783,13 +840,13 @@ function unquoteGitPathBytes(e) {
       v: 11,
       '"': 34,
       "\\": 92,
-    }[a];
-    if (p !== undefined) {
-      n.push(p);
+    }[nextChar];
+    if (code !== undefined) {
+      bytes.push(code);
       j += 1;
-    } else n.push(92);
+    } else bytes.push(92);
   }
-  return Buffer.from(n).toString("utf8");
+  return Buffer.from(bytes).toString("utf8");
 }
 //@ chunk-6vnxsn99.js:54582-55767 fingerprint = parseGitDiff (0.959)
 /**
@@ -797,28 +854,29 @@ function unquoteGitPathBytes(e) {
  */
 function parseGitDiff(stdout) {
   let result = new Map();
-  let r = new Set();
+  let skippedLarge = new Set();
   if (!stdout.trim())
     return {
       hunks: result,
-      skippedLarge: r,
+      skippedLarge,
     };
   let fileDiffs = stdout.split(/^diff --git /m).filter(Boolean);
   for (let fileDiff of fileDiffs) {
-    if (result.size + r.size >= MAX_DIFF_FILES) break;
+    if (result.size + skippedLarge.size >= MAX_DIFF_FILES) break;
     let index = fileDiff.indexOf(`
 `);
-    let u = index === -1 ? fileDiff : fileDiff.slice(0, index);
-    let match = u.match(/^a\/(.+) b\/\1$/);
-    let p = match ?? u.match(/^(?:"a\/((?:[^"\\]|\\.)*)"|a\/(.+?)) (?:"b\/((?:[^"\\]|\\.)*)"|b\/(.+))$/);
-    if (!p) continue;
+    let header = index === -1 ? fileDiff : fileDiff.slice(0, index);
+    let match = header.match(/^a\/(.+) b\/\1$/);
+    let match_2 =
+      match ?? header.match(/^(?:"a\/((?:[^"\\]|\\.)*)"|a\/(.+?)) (?:"b\/((?:[^"\\]|\\.)*)"|b\/(.+))$/);
+    if (!match_2) continue;
     let filePath = match
       ? match[1]
-      : p[3] !== undefined
-        ? unquoteGitPathBytes(p[3])
-        : (p[4] ?? (p[1] !== undefined ? unquoteGitPathBytes(p[1]) : (p[2] ?? "")));
+      : match_2[3] !== undefined
+        ? unquoteGitPathBytes(match_2[3])
+        : (match_2[4] ?? (match_2[1] !== undefined ? unquoteGitPathBytes(match_2[1]) : (match_2[2] ?? "")));
     if (fileDiff.length > MAX_SINGLE_FILE_DIFF_BYTES) {
-      r.add(filePath);
+      skippedLarge.add(filePath);
       continue;
     }
     let lines = fileDiff.split(`
@@ -866,15 +924,15 @@ function parseGitDiff(stdout) {
   }
   return {
     hunks: result,
-    skippedLarge: r,
+    skippedLarge,
   };
 }
 //@ chunk-6vnxsn99.js:55767-56289 layout
 /**
  * git 是否处于临时操作中（MERGE_HEAD、REBASE_HEAD、CHERRY_PICK_HEAD、REVERT_HEAD、rebase-merge 等存在），此时跳过 diff。
  */
-async function isInTransientGitOperation(abortSignal, n, r) {
-  let gitDir = await getGitDir(n ?? getDiffCwd());
+async function isInTransientGitOperation(abortSignal, repoDir, diffOptions) {
+  let gitDir = await getGitDir(repoDir ?? getDiffCwd());
   if (!gitDir) return false;
   let transientFiles = [
     "MERGE_HEAD",
@@ -884,27 +942,27 @@ async function isInTransientGitOperation(abortSignal, n, r) {
     "rebase-merge",
     join("rebase-apply", "rebasing"),
   ];
-  let [a, u, h, p, S, y] = await Promise.all(
+  let [merge, rebaseHead, cherryPick, revert, rebaseMerge, rebaseApply] = await Promise.all(
     transientFiles.map((file) =>
       access(join(gitDir, file))
         .then(() => true)
         .catch(() => false),
     ),
   );
-  let T = S || y;
-  if (a || h || p || (u && T)) return true;
-  if (isStorageDiffMode(r)) return false;
+  let inSequencerOperation = rebaseMerge || rebaseApply;
+  if (merge || cherryPick || revert || (rebaseHead && inSequencerOperation)) return true;
+  if (isStorageDiffMode(diffOptions)) return false;
   let existingRefs = await findExistingRefs(
     gitDir,
-    T ? [...SEQUENCER_STATE_FILES, "REBASE_HEAD"] : SEQUENCER_STATE_FILES,
-    async (w) =>
+    inSequencerOperation ? [...SEQUENCER_STATE_FILES, "REBASE_HEAD"] : SEQUENCER_STATE_FILES,
+    async (args) =>
       (
-        await execFileNoThrow(gitExe(), ["--no-optional-locks", ...w], {
+        await execFileNoThrow(gitExe(), ["--no-optional-locks", ...args], {
           timeout: GIT_DIFF_TIMEOUT_MS,
           preserveOutputOnError: false,
           abortSignal,
-          ...resolveGitEnv(n, r),
-          cwd: n,
+          ...resolveGitEnv(repoDir, diffOptions),
+          cwd: repoDir,
         })
       ).exitCode,
   );
@@ -928,18 +986,21 @@ class DiffBaseLogState {
   }
 }
 //@ chunk-6vnxsn99.js:56469-56494 layout
-var diffBaseLogRegistry = new HostScoped(() => new DiffBaseLogState());
+var diffBaseLogRegistry; // deferred: uses DiffBaseLogState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-6vnxsn99.js:56469", () => {
+  diffBaseLogRegistry = new HostScoped(() => new DiffBaseLogState());
+});
 //@ chunk-6vnxsn99.js:56494-56778 layout
-async function resolveDiffBaseLogged(e, abortSignal, r, o, s) {
-  let a = diffBaseLogRegistry.of(e);
-  let diffBase = await resolveDiffBase(abortSignal, r, o, s);
+async function resolveDiffBaseLogged(cwd, abortSignal, abortSignal_2, repoDir, baseRef) {
+  let logState = diffBaseLogRegistry.of(cwd);
+  let diffBase = await resolveDiffBase(abortSignal, abortSignal_2, repoDir, baseRef);
   if (diffBase.kind === "error") {
-    if (!a.baseResolveSadLogged) {
-      a.markBaseResolveSadLogged();
+    if (!logState.baseResolveSadLogged) {
+      logState.markBaseResolveSadLogged();
       logFeatureSad("diff_base_resolve", diffBase.reason);
     }
-  } else if (!a.baseResolveOkLogged) {
-    a.markBaseResolveOkLogged();
+  } else if (!logState.baseResolveOkLogged) {
+    logState.markBaseResolveOkLogged();
     logFeatureOk("diff_base_resolve", {
       outcome: fromEnum(diffBase.kind),
     });
@@ -950,62 +1011,66 @@ async function resolveDiffBaseLogged(e, abortSignal, r, o, s) {
 /**
  * 解析 diff 基准：当前分支与默认分支（或 CLAUDE_CODE_BASE_REF）的 merge-base；ref 名含危险字符时返回 none。
  */
-async function resolveDiffBase(abortSignal, n, r, o) {
-  let s = {
+async function resolveDiffBase(abortSignal, repoDir, baseRef, diffOptions) {
+  let execOptions = {
     timeout: GIT_DIFF_TIMEOUT_MS,
     abortSignal,
-    ...resolveGitEnv(n, o),
+    ...resolveGitEnv(repoDir, diffOptions),
   };
-  let [branch, defaultBranch] = await Promise.all([getBranch(n, s), getDefaultBranch(n, s)]);
+  let [branch, defaultBranch] = await Promise.all([
+    getBranch(repoDir, execOptions),
+    getDefaultBranch(repoDir, execOptions),
+  ]);
   if (!branch || branch === "HEAD")
     return {
       kind: "none",
     };
-  let baseBranch = r ?? defaultBranch;
+  let baseBranch = baseRef ?? defaultBranch;
   if (
     baseBranch.startsWith("-") ||
     UNSAFE_PATH_CHAR_PATTERN.test(baseBranch) ||
-    (r === undefined && /\.\.|[\s~^:?*[\\]|@\{/.test(baseBranch))
+    (baseRef === undefined && /\.\.|[\s~^:?*[\\]|@\{/.test(baseBranch))
   )
     return {
       kind: "none",
     };
-  let p = {
-    ...s,
+  let runOptions = {
+    ...execOptions,
     preserveOutputOnError: false,
-    cwd: n,
+    cwd: repoDir,
   };
-  if (o !== undefined && hasRunnerDeclaredNestedRepoDiff()) {
-    let T = await execFileNoThrow(
+  if (diffOptions !== undefined && hasRunnerDeclaredNestedRepoDiff()) {
+    let result = await execFileNoThrow(
       gitExe(),
       ["--no-optional-locks", "merge-base", "HEAD", `refs/remotes/origin/${baseBranch}`],
-      p,
+      runOptions,
     );
-    if (T.code === 0 && T.stdout.trim()) return classifyMergeBase(T.stdout.trim(), baseBranch, p);
+    if (result.code === 0 && result.stdout.trim())
+      return classifyMergeBase(result.stdout.trim(), baseBranch, runOptions);
   }
   if (branch === baseBranch)
     return {
       kind: "head-is-base",
       baseBranch,
     };
-  let S = false;
-  let mergeBase = await findMergeBase(baseBranch, async (T) => {
-    let b = await execFileNoThrow(gitExe(), T, p);
-    if (b.exitCode === 1) S = true;
-    return b;
+  let sawFailure = false;
+  let mergeBase = await findMergeBase(baseBranch, async (args) => {
+    let result = await execFileNoThrow(gitExe(), args, runOptions);
+    if (result.exitCode === 1) sawFailure = true;
+    return result;
   });
   if (!mergeBase) {
-    if (S)
+    if (sawFailure)
       return {
         kind: "none",
       };
-    for (let T of [`refs/remotes/origin/${baseBranch}`, `refs/heads/${baseBranch}`]) {
-      let b = await execFileNoThrow(
+    for (let refName of [`refs/remotes/origin/${baseBranch}`, `refs/heads/${baseBranch}`]) {
+      let result = await execFileNoThrow(
         gitExe(),
-        ["--no-optional-locks", "show-ref", "--verify", "--quiet", T],
-        p,
+        ["--no-optional-locks", "show-ref", "--verify", "--quiet", refName],
+        runOptions,
       );
-      if (b.exitCode === 0 || b.exitCode === undefined)
+      if (result.exitCode === 0 || result.exitCode === undefined)
         return {
           kind: "error",
           reason: "merge_base_failed",
@@ -1015,24 +1080,24 @@ async function resolveDiffBase(abortSignal, n, r, o) {
       kind: "none",
     };
   }
-  return classifyMergeBase(mergeBase, baseBranch, p);
+  return classifyMergeBase(mergeBase, baseBranch, runOptions);
 }
 //@ chunk-6vnxsn99.js:57702-57974 layout
-async function classifyMergeBase(e, baseBranch, r) {
-  let o = await execFileNoThrow(gitExe(), ["--no-optional-locks", "rev-parse", "HEAD"], r);
-  if (o.code !== 0)
+async function classifyMergeBase(mergeBase, baseBranch, runOptions) {
+  let headResult = await execFileNoThrow(gitExe(), ["--no-optional-locks", "rev-parse", "HEAD"], runOptions);
+  if (headResult.code !== 0)
     return {
       kind: "error",
       reason: "head_rev_parse_failed",
     };
-  if (o.stdout.trim() === e)
+  if (headResult.stdout.trim() === mergeBase)
     return {
       kind: "head-is-base",
       baseBranch,
     };
   return {
     kind: "merge-base",
-    mergeBase: e,
+    mergeBase,
     baseBranch,
   };
 }
@@ -1040,7 +1105,7 @@ async function classifyMergeBase(e, baseBranch, r) {
 /**
  * 列出未跟踪文件并估算行数，补进 diff 统计。
  */
-async function fetchUntrackedFiles(maxFiles, abortSignal, r, o = false, s) {
+async function fetchUntrackedFiles(maxFiles, abortSignal, repoDir, includePreSession = false, diffOptions) {
   let { stdout, code } = await execFileNoThrow(
     gitExe(),
     ["--no-optional-locks", "ls-files", "--others", "--exclude-standard", "--full-name"],
@@ -1048,8 +1113,8 @@ async function fetchUntrackedFiles(maxFiles, abortSignal, r, o = false, s) {
       timeout: GIT_DIFF_TIMEOUT_MS,
       preserveOutputOnError: false,
       abortSignal,
-      ...resolveGitEnv(r, s),
-      cwd: r,
+      ...resolveGitEnv(repoDir, diffOptions),
+      cwd: repoDir,
     },
   );
   if (code !== 0) return null;
@@ -1058,17 +1123,17 @@ async function fetchUntrackedFiles(maxFiles, abortSignal, r, o = false, s) {
       `
 `,
     )
-    .filter((line) => line !== "" && (s === undefined || isSafeRelativeDiffPath(line)));
+    .filter((line) => line !== "" && (diffOptions === undefined || isSafeRelativeDiffPath(line)));
   if (untrackedPaths.length === 0) return null;
-  let p = r ?? getDiffRepoRoot();
+  let repoRoot = repoDir ?? getDiffRepoRoot();
   let sessionStartTime = getSessionStartTime();
   let results = await Promise.all(
     untrackedPaths.slice(0, MAX_TOTAL_FILES_FOR_PER_FILE_STATS).map(async (untrackedPath) => {
       try {
-        let E = await lstat(join(p, untrackedPath));
+        let stats = await lstat(join(repoRoot, untrackedPath));
         return {
           filePath: untrackedPath,
-          preSession: Math.max(E.mtimeMs, E.ctimeMs) < sessionStartTime,
+          preSession: Math.max(stats.mtimeMs, stats.ctimeMs) < sessionStartTime,
         };
       } catch {
         return {
@@ -1078,20 +1143,20 @@ async function fetchUntrackedFiles(maxFiles, abortSignal, r, o = false, s) {
       }
     }),
   );
-  let filtered = results.filter((w) => !w.preSession);
-  if (o) filtered.push(...results.filter((w) => w.preSession));
+  let filtered = results.filter((recentResult) => !recentResult.preSession);
+  if (includePreSession) filtered.push(...results.filter((preSessionResult) => preSessionResult.preSession));
   if (filtered.length === 0) return null;
   let perFileStats = new Map();
   for (let { filePath, preSession } of filtered.slice(0, maxFiles)) {
-    let A = filePath.startsWith('"') ? sanitizeDiffPath(filePath) : undefined;
+    let safePath = filePath.startsWith('"') ? sanitizeDiffPath(filePath) : undefined;
     perFileStats.set(filePath, {
       added: 0,
       removed: 0,
       isBinary: false,
       isUntracked: true,
       status: "added",
-      ...(A !== undefined && {
-        newPath: A,
+      ...(safePath !== undefined && {
+        newPath: safePath,
       }),
       ...(preSession && {
         preSession,
@@ -1139,33 +1204,37 @@ function isPatchWithinSizeLimit(singleFileGitDiff) {
 async function fetchSingleFileGitDiff(absoluteFilePath) {
   let gitRoot = findGitRoot(dirname(absoluteFilePath));
   if (!gitRoot) return null;
-  let r = await realpath(gitRoot).catch(() => null);
-  if (r === null) return null;
-  let cwd = await realpathGitDir(r);
+  let realRoot = await realpath(gitRoot).catch(() => null);
+  if (realRoot === null) return null;
+  let cwd = await realpathGitDir(realRoot);
   if (cwd === null) return null;
   let worktreeMainRepoPath = detectWorktreeMainRepoPath(cwd);
-  let a = [getOriginalCwd(), ...(env.CLAUDE_CODE_REPO_CHECKOUTS ? getRepoCheckouts().values() : [])];
-  let u = null;
-  for (let b of a) {
-    let checkoutPath = resolveCheckoutPath(b);
-    if (checkoutPath === null) continue;
-    let cwd_2 = await realpathGitDir(checkoutPath);
+  let checkoutPaths = [
+    getOriginalCwd(),
+    ...(env.CLAUDE_CODE_REPO_CHECKOUTS ? getRepoCheckouts().values() : []),
+  ];
+  let matchedGitDir = null;
+  for (let checkoutPath of checkoutPaths) {
+    let startPath = resolveCheckoutPath(checkoutPath);
+    if (startPath === null) continue;
+    let cwd_2 = await realpathGitDir(startPath);
     if (cwd_2 === null) continue;
     if (cwd_2 === cwd) {
-      u = cwd_2;
+      matchedGitDir = cwd_2;
       break;
     }
     let worktreeMainRepoPath_2 = detectWorktreeMainRepoPath(cwd_2);
-    if (u === null && worktreeMainRepoPath_2 === worktreeMainRepoPath) u = worktreeMainRepoPath_2;
+    if (matchedGitDir === null && worktreeMainRepoPath_2 === worktreeMainRepoPath)
+      matchedGitDir = worktreeMainRepoPath_2;
   }
-  if (u === null) return null;
-  let h = {
-    gitDir: u,
-    workTree: r,
+  if (matchedGitDir === null) return null;
+  let dirs = {
+    gitDir: matchedGitDir,
+    workTree: realRoot,
   };
   let gitPath = relative(gitRoot, absoluteFilePath).split(sep).join("/");
   let repository = getCachedRepository();
-  let { code: lsFilesCode } = await runGitWithExplicitDirs(h, [
+  let { code: lsFilesCode } = await runGitWithExplicitDirs(dirs, [
     "--no-optional-locks",
     "ls-files",
     "--error-unmatch",
@@ -1173,9 +1242,9 @@ async function fetchSingleFileGitDiff(absoluteFilePath) {
     gitPath,
   ]);
   if (lsFilesCode === 0) {
-    let diffRef = await getDiffRef(h, gitRoot);
+    let diffRef = await getDiffRef(dirs, gitRoot);
     let { stdout, code } = await runGitWithExplicitDirs(
-      h,
+      dirs,
       [...GIT_DIFF_BASE_ARGS, ...RAW_BLOB_DIFF_FLAGS, diffRef, "--", gitPath],
       {
         userLocale: true,
@@ -1222,21 +1291,27 @@ function parseRawDiffToToolUseDiff(filename, rawDiff, status) {
   };
 }
 //@ chunk-6vnxsn99.js:60430-60751 layout
-async function findMergeBase(e, n) {
-  let r = [];
-  for (let u of [`origin/${e}`, e]) {
-    let { stdout, code } = await n(["--no-optional-locks", "merge-base", "HEAD", u]);
-    if (code === 0 && stdout.trim()) r.push(stdout.trim());
+async function findMergeBase(baseBranch, runGit) {
+  let candidates = [];
+  for (let refName of [`origin/${baseBranch}`, baseBranch]) {
+    let { stdout, code } = await runGit(["--no-optional-locks", "merge-base", "HEAD", refName]);
+    if (code === 0 && stdout.trim()) candidates.push(stdout.trim());
   }
-  let [o, s] = r;
-  if (!o) return null;
-  if (!s || o === s) return o;
-  let { code } = await n(["--no-optional-locks", "merge-base", "--is-ancestor", o, s]);
-  return code === 0 ? s : o;
+  let [originMergeBase, localMergeBase] = candidates;
+  if (!originMergeBase) return null;
+  if (!localMergeBase || originMergeBase === localMergeBase) return originMergeBase;
+  let { code } = await runGit([
+    "--no-optional-locks",
+    "merge-base",
+    "--is-ancestor",
+    originMergeBase,
+    localMergeBase,
+  ]);
+  return code === 0 ? localMergeBase : originMergeBase;
 }
 //@ chunk-6vnxsn99.js:60751-60833 layout
-async function realpathGitDir(e) {
-  let gitDir = await getGitDir(e);
+async function realpathGitDir(startPath) {
+  let gitDir = await getGitDir(startPath);
   return gitDir === null ? null : realpath(gitDir).catch(() => null);
 }
 //@ chunk-6vnxsn99.js:60833-60939 placement = detectWorktreeMainRepoPath (0.742)
@@ -1244,39 +1319,45 @@ async function realpathGitDir(e) {
  * 若 cwd 是 <repo>.git/worktrees/<name> 形式则返回主仓库 .git 路径，否则原样返回（切分上属 utils/gitDiff 一带）。
  */
 function detectWorktreeMainRepoPath(cwd) {
-  let n = dirname(cwd);
-  let r = dirname(n);
-  return basename(cwd) !== ".git" && basename(n) === "worktrees" && basename(r).endsWith(".git") ? r : cwd;
+  let worktreesDir = dirname(cwd);
+  let gitDirName = dirname(worktreesDir);
+  return basename(cwd) !== ".git" &&
+    basename(worktreesDir) === "worktrees" &&
+    basename(gitDirName).endsWith(".git")
+    ? gitDirName
+    : cwd;
 }
 //@ chunk-6vnxsn99.js:60939-61102 layout
-function runGitWithExplicitDirs({ gitDir, workTree }, r, { userLocale: o } = {}) {
-  return execFileNoThrowWithCwd(gitExe(), [`--git-dir=${gitDir}`, `--work-tree=${workTree}`, ...r], {
+function runGitWithExplicitDirs({ gitDir, workTree }, args, { userLocale } = {}) {
+  return execFileNoThrowWithCwd(gitExe(), [`--git-dir=${gitDir}`, `--work-tree=${workTree}`, ...args], {
     cwd: workTree,
     timeout: GIT_EXPLICIT_DIR_TIMEOUT_MS,
     env: getRemoteHostSessionCount(undefined, {
-      userLocale: o,
+      userLocale,
     }),
   });
 }
 //@ chunk-6vnxsn99.js:61102-61233 layout
-function getDiffBaseRef(e) {
-  let n = checkoutNameForPath(e);
-  let r = (n !== undefined ? getRepoBaseRefs().get(n) : undefined) || env.CLAUDE_CODE_BASE_REF;
-  if (!r) return;
-  return r.startsWith("-") ? null : r;
+function getDiffBaseRef(checkoutPath) {
+  let checkoutName = checkoutNameForPath(checkoutPath);
+  let baseRef =
+    (checkoutName !== undefined ? getRepoBaseRefs().get(checkoutName) : undefined) ||
+    env.CLAUDE_CODE_BASE_REF;
+  if (!baseRef) return;
+  return baseRef.startsWith("-") ? null : baseRef;
 }
 //@ chunk-6vnxsn99.js:61233-61524 fingerprint = getDiffRef (0.888)
-async function getDiffRef(e, gitRoot) {
-  let diffBaseRef = getDiffBaseRef(gitRoot);
-  function o(u) {
-    return runGitWithExplicitDirs(e, u);
+async function getDiffRef(dirs, checkoutPath) {
+  let diffBaseRef = getDiffBaseRef(checkoutPath);
+  function runGit(args) {
+    return runGitWithExplicitDirs(dirs, args);
   }
   if (diffBaseRef === undefined) {
-    let defaultBranch = await getDefaultBranch();
-    if (defaultBranch.startsWith("-")) return "HEAD";
-    return (await findMergeBase(defaultBranch, o)) ?? "HEAD";
+    let baseBranch = await getDefaultBranch();
+    if (baseBranch.startsWith("-")) return "HEAD";
+    return (await findMergeBase(baseBranch, runGit)) ?? "HEAD";
   }
-  let { stdout, code } = await o(["--no-optional-locks", "merge-base", "HEAD", diffBaseRef ?? "HEAD"]);
+  let { stdout, code } = await runGit(["--no-optional-locks", "merge-base", "HEAD", diffBaseRef ?? "HEAD"]);
   if (code === 0 && stdout.trim()) return stdout.trim();
   return "HEAD";
 }

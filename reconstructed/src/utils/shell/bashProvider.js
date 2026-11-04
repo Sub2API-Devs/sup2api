@@ -5,8 +5,8 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * 2.1.88 counterpart: references/claude-code-analysis/src/utils/shell/bashProvider.ts
- * pieces: chunk-e6aww6q8.js (29)
- * attribution: placement 18, layout 9, fingerprint 2
+ * pieces: chunk-e6aww6q8.js (21)
+ * attribution: placement 10, layout 9, fingerprint 2
  */
 import { basename, join } from "path";
 import { basename as basename_44, isAbsolute as isAbsolute_41 } from "path/win32";
@@ -39,20 +39,22 @@ import {
 } from "../bash/shellQuoting.js";
 import { getSessionEnvironmentScript } from "../sessionEnvironment.js";
 import { buildGitGrepShim } from "./gitGrepShim.js";
+import { getSnapshotOverrideStub } from "../sandbox/sandboxRuntimeStubs.js";
 import { buildEnvScrubScript } from "../settings/policyHelper/helperEnv.js";
 import { getCpuacctJoinCommand } from "./cpuReport.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:824194-824358 placement = getGlobBaseDirectory (1)
 /**
  * （旧版名配错）为 shell 的 source 命令拼接单引号转义的参数。
  */
-function getGlobBaseDirectory(e, n) {
-  let index = e.lastIndexOf(" -");
+function getGlobBaseDirectory(commandText, baseDir) {
+  let index = commandText.lastIndexOf(" -");
   if (index > 0) {
-    let beforeGlob = e.substring(0, index);
-    let h = e.substring(index + 1);
-    return `${shellQuoteArgs([beforeGlob])} ${h} ${shellQuoteArgs([n])}`;
-  } else return `${shellQuoteArgs([e])} ${shellQuoteArgs([n])}`;
+    let beforeGlob = commandText.substring(0, index);
+    let globPart = commandText.substring(index + 1);
+    return `${shellQuoteArgs([beforeGlob])} ${globPart} ${shellQuoteArgs([baseDir])}`;
+  } else return `${shellQuoteArgs([commandText])} ${shellQuoteArgs([baseDir])}`;
 }
 //@ chunk-e6aww6q8.js:3064610-3065136 placement
 /**
@@ -92,33 +94,6 @@ async function probeSpawnEnv(shellPath) {
     setProbedEnvKeys(null);
   }
 }
-//@ chunk-e6aww6q8.js:3066031-3066093 placement
-var SANDBOX_RUNTIME_DEFAULTS = {
-  enabled: false,
-  enforce: false,
-  everywhere: false,
-  python_leg: "on",
-};
-//@ chunk-e6aww6q8.js:3066093-3066119 placement
-function getSandboxRuntimeDefaults() {
-  return SANDBOX_RUNTIME_DEFAULTS;
-}
-//@ chunk-e6aww6q8.js:3066119-3066143 placement
-function isSandboxEnforcedStub() {
-  return false;
-}
-//@ chunk-e6aww6q8.js:3066143-3066167 placement
-function isContainersLegStub() {
-  return false;
-}
-//@ chunk-e6aww6q8.js:3066167-3066194 placement
-function getSandboxInnerShellStub() {
-  return null;
-}
-//@ chunk-e6aww6q8.js:3066194-3066273 placement
-function isPythonLegEnabled(e) {
-  return e.python_leg === "on" || (e.python_leg === "containers" && isContainersLegStub());
-}
 //@ chunk-e6aww6q8.js:3066273-3066290 placement
 var sandboxRuntimeConfig = null;
 var sandboxRuntimeConfigInit;
@@ -130,31 +105,30 @@ function noopAsync() {
 function noop() {
   return;
 }
-//@ chunk-e6aww6q8.js:3066352-3066379 placement
-function getSnapshotOverrideStub() {
-  return null;
-}
 //@ chunk-e6aww6q8.js:3066379-3066463 placement
-function slugifyIdentifier(e) {
-  return (e ?? "")
+function slugifyIdentifier(identifier) {
+  return (identifier ?? "")
     .toLowerCase()
     .replace(/[^a-z0-9_-]/g, "_")
     .slice(0, 63);
-}
-//@ chunk-e6aww6q8.js:3066463-3066490 placement
-function getSandboxExtraArgsStub() {
-  return null;
 }
 //@ chunk-e6aww6q8.js:3066524-3066854 placement
 /**
  * 通过环境变量传递命令文本的相关常量：变量名、引用串及其正则、变量被提前删除时的提示，以及走环境变量传递的命令字节上限。
  */
-var COMMAND_TEXT_VAR = "__CLAUDE_CC_COMMAND_TEXT";
-var COMMAND_TEXT_REF = `${COMMAND_TEXT_VAR}?`;
-var COMMAND_TEXT_REF_RE = new RegExp(`^${COMMAND_TEXT_VAR}\\?$`, "m");
-var COMMAND_TEXT_MISSING_MESSAGE =
-  "Claude Code did not run this command: something that the shell runs first (a hook's environment file, say) removed the variable that held the command's text. Run it again: commands are now passed on the shell's command line instead.";
-var MAX_ENV_COMMAND_BYTES = 122880;
+var COMMAND_TEXT_VAR; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var COMMAND_TEXT_REF;
+var COMMAND_TEXT_REF_RE;
+var COMMAND_TEXT_MISSING_MESSAGE;
+var MAX_ENV_COMMAND_BYTES;
+deferInit("chunk-e6aww6q8.js:3066524", () => {
+  COMMAND_TEXT_VAR = "__CLAUDE_CC_COMMAND_TEXT";
+  COMMAND_TEXT_REF = `${COMMAND_TEXT_VAR}?`;
+  COMMAND_TEXT_REF_RE = new RegExp(`^${COMMAND_TEXT_VAR}\\?$`, "m");
+  COMMAND_TEXT_MISSING_MESSAGE =
+    "Claude Code did not run this command: something that the shell runs first (a hook's environment file, say) removed the variable that held the command's text. Run it again: commands are now passed on the shell's command line instead.";
+  MAX_ENV_COMMAND_BYTES = 122880;
+});
 //@ chunk-e6aww6q8.js:3066854-3067036 placement
 function shouldGuardPkill(quotedCommand, shellPath) {
   return (
@@ -199,30 +173,38 @@ var UNSHADOWED_COMMANDS = ["unsetenv", "which"];
 /**
  * 生成 `unalias`+`unset -f` 指定命令名的片段，防止用户 rc 里的别名/函数劫持。
  */
-function buildUnshadowCommand(e) {
-  return `{ \\builtin unalias -- '${e}'; \\builtin unset -f -- '${e}'; } >/dev/null 2>&1 || true`;
+function buildUnshadowCommand(commandName) {
+  return `{ \\builtin unalias -- '${commandName}'; \\builtin unset -f -- '${commandName}'; } >/dev/null 2>&1 || true`;
 }
 //@ chunk-e6aww6q8.js:3067785-3067820 layout
 function buildUnshadowWhichCommand() {
   return buildUnshadowCommand("which");
 }
 //@ chunk-e6aww6q8.js:3067820-3067944 layout
-var TENGU_SWIRLING_KOALA = "tengu_swirling_koala";
-var EXPORTED_FUNCTION_ENV_NAMES = new Set(
-  UNSHADOWED_COMMANDS.flatMap((e) => [`BASH_FUNC_${e}%%`, `BASH_FUNC_${e}()`, `__BASH_FUNC<${e}>()`]),
-);
+var TENGU_SWIRLING_KOALA; // deferred: uses BUN_OPTIONS_CARRIER_VAR of its import cycle while loading; runs once the cycle is complete
+var EXPORTED_FUNCTION_ENV_NAMES;
+deferInit("chunk-e6aww6q8.js:3067820", () => {
+  TENGU_SWIRLING_KOALA = "tengu_swirling_koala";
+  EXPORTED_FUNCTION_ENV_NAMES = new Set(
+    UNSHADOWED_COMMANDS.flatMap((commandName) => [
+      `BASH_FUNC_${commandName}%%`,
+      `BASH_FUNC_${commandName}()`,
+      `__BASH_FUNC<${commandName}>()`,
+    ]),
+  );
+});
 //@ chunk-e6aww6q8.js:3067944-3068033 layout
 /**
  * tengu_swirling_koala 打开时，返回环境里存在的 BASH_FUNC_which%%/unsetenv 之类导出函数变量名，供 spawn 时 unset。
  */
-function getExportedShellFunctionEnvVars(e) {
+function getExportedShellFunctionEnvVars(env) {
   if (
     !readFlagWithOverride(TENGU_SWIRLING_KOALA, {
       safe: true,
     })
   )
     return [];
-  return [...EXPORTED_FUNCTION_ENV_NAMES].filter((n) => e[n] !== undefined);
+  return [...EXPORTED_FUNCTION_ENV_NAMES].filter((envName) => env[envName] !== undefined);
 }
 //@ chunk-e6aww6q8.js:3068033-3068071 layout
 function buildUnshadowUnsetenvCommand() {
@@ -310,10 +292,10 @@ async function createBashShellProvider(shellPath, options) {
       let isWindows = getPlatform() === "windows";
       let shellTmpdir = isWindows ? windowsPathToPosixPath(tmpdir_2) : tmpdir_2;
       let useSandboxTmp = execOpts.useSandbox && execOpts.sandboxTmpDir;
-      let Ae =
+      let sandboxTmpPosix =
         useSandboxTmp && isWindows ? windowsPathToPosixPath(execOpts.sandboxTmpDir) : execOpts.sandboxTmpDir;
       let cwdFileShellPath = useSandboxTmp
-        ? join_39(Ae, `cwd-${execOpts.id}`)
+        ? join_39(sandboxTmpPosix, `cwd-${execOpts.id}`)
         : join_39(shellTmpdir, `claude-${execOpts.id}-cwd`);
       let cwdFilePath = useSandboxTmp
         ? (isWindows ? join : join_39)(execOpts.sandboxTmpDir, `cwd-${execOpts.id}`)
@@ -337,18 +319,20 @@ async function createBashShellProvider(shellPath, options) {
         prefixParts.push(`source ${shellQuoteArgs([finalPath])} 2>/dev/null || true`);
       }
       if (isWindows) {
-        let Zt = useSandboxTmp ? execOpts.sandboxTmpDir : tmpdir_2;
-        let rn = useSandboxTmp ? ` TMPDIR=${shellQuoteArgs([Ae])}` : "";
-        let pn = `export TEMP=${shellQuoteArgs([Zt])} TMP=${shellQuoteArgs([Zt])}${rn}`;
-        prefixParts.push(pn);
+        let nativeTmpDir = useSandboxTmp ? execOpts.sandboxTmpDir : tmpdir_2;
+        let tmpdirExport = useSandboxTmp ? ` TMPDIR=${shellQuoteArgs([sandboxTmpPosix])}` : "";
+        let tempExport = `export TEMP=${shellQuoteArgs([nativeTmpDir])} TMP=${shellQuoteArgs([nativeTmpDir])}${tmpdirExport}`;
+        prefixParts.push(tempExport);
         if (useSandboxTmp)
           prefixParts.push(
-            `{ [ -z "\${BASH_VERSION:-}" ] || [ -z "\${LOCALAPPDATA:-}" ] || { TMP=\${LOCALAPPDATA#*:} && TMP=\${TMP%"\${TMP#?}"} && TEMP=$LOCALAPPDATA\${TMP}Temp && TMPDIR=\${TEMP//"$TMP"//} && TMPDIR=/\${TMPDIR%%:*}\${TMPDIR#*:} && case $TMPDIR in *[![:alnum:][:blank:]/._-]*) false;; esac && [ -d "$TMPDIR" ] && TMP=$TEMP || ${pn}; }; }`,
+            `{ [ -z "\${BASH_VERSION:-}" ] || [ -z "\${LOCALAPPDATA:-}" ] || { TMP=\${LOCALAPPDATA#*:} && TMP=\${TMP%"\${TMP#?}"} && TEMP=$LOCALAPPDATA\${TMP}Temp && TMPDIR=\${TEMP//"$TMP"//} && TMPDIR=/\${TMPDIR%%:*}\${TMPDIR#*:} && case $TMPDIR in *[![:alnum:][:blank:]/._-]*) false;; esac && [ -d "$TMPDIR" ] && TMP=$TEMP || ${tempExport}; }; }`,
           );
       } else if (useSandboxTmp) prefixParts.push(`export TMPDIR=${shellQuoteArgs([execOpts.sandboxTmpDir])}`);
       if (execOpts.tmpDirBackstop !== undefined) {
-        let Zt = isWindows ? windowsPathToPosixPath(execOpts.tmpDirBackstop) : execOpts.tmpDirBackstop;
-        prefixParts.push(`{ [ -n "\${TMPDIR:-}" ] || export TMPDIR=${shellQuoteArgs([Zt])}; }`);
+        let backstopPosix = isWindows
+          ? windowsPathToPosixPath(execOpts.tmpDirBackstop)
+          : execOpts.tmpDirBackstop;
+        prefixParts.push(`{ [ -n "\${TMPDIR:-}" ] || export TMPDIR=${shellQuoteArgs([backstopPosix])}; }`);
       }
       let sessionEnvScript = execOpts.scrubCredentialEnv
         ? null
@@ -356,8 +340,9 @@ async function createBashShellProvider(shellPath, options) {
       if (sessionEnvScript)
         prefixParts.push(`${sessionEnvScript}
 :`);
-      let Et = ghStandinDir();
-      if (Et !== undefined) prefixParts.push(`export PATH="\${PATH:+$PATH:}"${shellQuoteArgs([Et])}`);
+      let standinDir = ghStandinDir();
+      if (standinDir !== undefined)
+        prefixParts.push(`export PATH="\${PATH:+$PATH:}"${shellQuoteArgs([standinDir])}`);
       if (execOpts.bunOptions !== undefined)
         prefixParts.push(
           `{ \\builtin test -n "\${${BUN_OPTIONS_CARRIER_VAR}-}" && \\builtin export BUN_OPTIONS="$${BUN_OPTIONS_CARRIER_VAR}" && \\builtin unset -v ${BUN_OPTIONS_CARRIER_VAR} || { \\builtin printf '%s\\n' 'Claude Code did not run this command: it could not set BUN_OPTIONS, which turns off automatic package installs in Bun. A read-only BUN_OPTIONS, or a CLAUDE_CODE_SHELL_PREFIX that drops the environment, can cause this.' >&2; \\builtin exit 126; }; }`,
@@ -377,16 +362,16 @@ async function createBashShellProvider(shellPath, options) {
       prefixParts.push(buildUnshadowUnsetenvCommand());
       let gitGrepShim = await buildGitGrepShim(normalizedCommand);
       if (gitGrepShim !== null) prefixParts.push(gitGrepShim);
-      let At = getSnapshotOverrideStub() ?? getSnapshotOverride();
-      if (At !== null) prefixParts.push(At);
+      let overrideStub = getSnapshotOverrideStub() ?? getSnapshotOverride();
+      if (overrideStub !== null) prefixParts.push(overrideStub);
       if (execOpts.scrubCredentialEnv)
         prefixParts.push(
           buildEnvScrubScript({
             sandboxMasked: execOpts.sandboxMaskedEnv,
           }),
         );
-      let It = execOpts.shellToolCommand ? getCpuacctJoinCommand() : undefined;
-      if (It !== undefined) prefixParts.push(It);
+      let cpuacctCommand = execOpts.shellToolCommand ? getCpuacctJoinCommand() : undefined;
+      if (cpuacctCommand !== undefined) prefixParts.push(cpuacctCommand);
       prefixParts.push(useCommandTextCarrier ? buildCommandTextCarrierEval() : `eval ${quotedCommand}`);
       prefixParts.push(`pwd -P >| ${shellQuoteArgs([cwdFileShellPath])}`);
       let commandString = prefixParts.join(" && ");
@@ -396,7 +381,7 @@ async function createBashShellProvider(shellPath, options) {
       return {
         commandString,
         cwdFilePath,
-        ...(It !== undefined && {
+        ...(cpuacctCommand !== undefined && {
           cpuAccountJoin: execOpts.useSandbox || CLAUDE_CODE_SHELL_PREFIX ? "uncertain" : "certain",
         }),
         ...(useCommandTextCarrier && {
@@ -422,12 +407,12 @@ async function createBashShellProvider(shellPath, options) {
         return false;
       }
     },
-    async getEnvironmentOverrides(G, q, Z) {
+    async getEnvironmentOverrides(commandString, cwdFilePath, envEntries) {
       let claudeTmuxEnv = null;
       let env = {};
       env[CLAUDE_CODE_EXECPATH] = process.execPath;
       if (claudeTmuxEnv) env.TMUX = claudeTmuxEnv;
-      if (Z) for (let [we, Ee] of Z) env[we] = Ee;
+      if (envEntries) for (let [name, value] of envEntries) env[name] = value;
       if (sandboxTmpDir) {
         let posixTmpDir = sandboxTmpDir;
         if (getPlatform() === "windows") posixTmpDir = windowsPathToPosixPath(posixTmpDir);
@@ -448,11 +433,11 @@ var GIT_CREDENTIAL_HELPER_KEY_RE = /^credential\.[a-z]+:\/\/.+\.helper$/;
  */
 function buildGitConfigExport(extraGitConfig) {
   return `export GIT_CONFIG_PARAMETERS="\${GIT_CONFIG_PARAMETERS:+\${GIT_CONFIG_PARAMETERS} }${extraGitConfig
-    .map(([r, s]) => {
-      let h = s === "" && GIT_CREDENTIAL_HELPER_KEY_RE.test(r);
-      if (!GIT_CONFIG_TOKEN_RE.test(r) || !(h || GIT_CONFIG_TOKEN_RE.test(s)))
+    .map(([key, value]) => {
+      let isHelperKey = value === "" && GIT_CREDENTIAL_HELPER_KEY_RE.test(key);
+      if (!GIT_CONFIG_TOKEN_RE.test(key) || !(isHelperKey || GIT_CONFIG_TOKEN_RE.test(value)))
         throw Error("refusing to export a git config entry with shell-active characters");
-      return `'${r}=${s}'`;
+      return `'${key}=${value}'`;
     })
     .join(" ")}"`;
 }

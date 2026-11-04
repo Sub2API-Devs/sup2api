@@ -26,7 +26,7 @@ var modelNonInteractiveCommand = {
   get isHidden() {
     return !getIsNonInteractiveSession();
   },
-  load: () => import("./chunk-0pmcg6nh.js"),
+  load: () => import("./call.lazy.js"),
 };
 var modelCommand = {
   type: "local-jsx",

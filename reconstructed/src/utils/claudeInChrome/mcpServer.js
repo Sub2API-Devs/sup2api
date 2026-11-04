@@ -72,7 +72,7 @@ function SAFE_BRIDGE_STRING_KEYS(safeKey, value) {
     case "error_type":
       return sanitizedMachineReasonForTelemetry(value);
     case "tool_name":
-      return BROWSER_TOOLS.some((n) => `browser:${n.name}` === value)
+      return BROWSER_TOOLS.some((browserTool) => `browser:${browserTool.name}` === value)
         ? fromSanitizer_SANITIZER_OUTPUT_ONLY(value)
         : lit("browser:other");
     case "tool_use_id":
@@ -122,8 +122,8 @@ function isLocalBridge() {
 /**
  * 构造 Chrome MCP 服务器上下文：日志器、socket 路径（本地原生宿主）、bridgeConfig（云端桥 URL、按 OAuth 令牌解析账户 UUID 并检测与持久化登录不一致、取 OAuth 令牌前经 bearerGate 校验组织策略、代理/TLS 选项）、CLAUDE_CHROME_PERMISSION_MODE/CLAUDE_CHROME_PAIRED_DEVICE_ID/CLAUDE_CHROME_TAB_GROUP_KEY 解析、断连时给模型的详细提示、配对成功写入全局配置 chromeExtension、遥测事件过滤。
  */
-function createChromeContext(env_2, e) {
-  let { availabilityFunnel = false, storageV5, credentials, bearerGate } = e;
+function createChromeContext(env_2, options) {
+  let { availabilityFunnel = false, storageV5, credentials, bearerGate } = options;
   let logger = new DebugLogger();
   let CLAUDE_CODE_REMOTE_SESSION_ID =
     env_2?.CLAUDE_CODE_REMOTE_SESSION_ID ?? env.CLAUDE_CODE_REMOTE_SESSION_ID;
@@ -162,7 +162,7 @@ function createChromeContext(env_2, e) {
     case "unset":
       break;
   }
-  let V = claudeInChromeSession();
+  let session = claudeInChromeSession();
   return {
     serverName: "Claude in Chrome",
     logger,
@@ -178,17 +178,17 @@ function createChromeContext(env_2, e) {
       if (availabilityFunnel) logToolCallDisconnected(accountMismatch);
       if (accountMismatch)
         return `Browser extension is not connected: the OAuth token Claude Code is using belongs to a different claude.ai account than the one Claude Code is logged in as. If CLAUDE_CODE_OAUTH_TOKEN is set in your shell or CI profile, unset it (or re-mint it for this account), then run /logout and /login in Claude Code and make sure the browser extension is signed into the same claude.ai account. If you continue to experience issues, please report a bug: ${BUG_REPORT_URL}`;
-      let o = phoneChromeAnswer();
-      if (o !== undefined) return o;
+      let phoneAnswer = phoneChromeAnswer();
+      if (phoneAnswer !== undefined) return phoneAnswer;
       if (Boolean(pairedDeviceId) && !getGlobalConfig().chromeExtension?.pairedDeviceId)
         return `Browser extension is not connected. The browser chosen for this session could not be reached: the computer running it may be closed or asleep, Chrome may not be running there, or this session may not be able to connect to Chrome. Ask the user to make sure that computer is awake and Chrome is open there, then retry. If it still fails, ask the user to check that the Claude extension in that Chrome is signed in to the same claude.ai account they use here.${MULTI_ORG_HINT} ${ALTERNATIVES_HINT}`;
       if (isRemoteManagedEnvironment()) {
-        let l = `Browser extension is not connected. Chrome on the user's computer could not be reached from this session: that computer may be closed or asleep, Chrome may not be running there, the Claude extension may not be installed there (${HTTPS_CLAUDE_AI_CHROME}), or this session may not be able to connect to Chrome. Ask the user to make sure that computer is awake and Chrome is open there with the Claude extension, then retry. If it still fails, ask the user to check that the extension is signed in to the same claude.ai account they use here.${MULTI_ORG_HINT}`;
-        return isClaudeAiChatCowork() ? `${l} ${ALTERNATIVES_HINT}` : l;
+        let notConnectedMessage = `Browser extension is not connected. Chrome on the user's computer could not be reached from this session: that computer may be closed or asleep, Chrome may not be running there, the Claude extension may not be installed there (${HTTPS_CLAUDE_AI_CHROME}), or this session may not be able to connect to Chrome. Ask the user to make sure that computer is awake and Chrome is open there with the Claude extension, then retry. If it still fails, ask the user to check that the extension is signed in to the same claude.ai account they use here.${MULTI_ORG_HINT}`;
+        return isClaudeAiChatCowork() ? `${notConnectedMessage} ${ALTERNATIVES_HINT}` : notConnectedMessage;
       }
       return `Browser extension is not connected. Please ensure the Claude browser extension is installed and running (${HTTPS_CLAUDE_AI_CHROME}), and that you are logged into claude.ai with the same account as Claude Code. If this is your first time connecting to Chrome, you may need to restart Chrome for the installation to take effect. If you continue to experience issues, please report a bug: ${BUG_REPORT_URL}`;
     }),
-    onPeerRosterChanged: () => bumpBrowserRoster(V),
+    onPeerRosterChanged: () => bumpBrowserRoster(session),
     onExtensionPaired: (deviceId, name) => {
       if (availabilityFunnel) logExtensionConnected();
       supersedeHintedPreferredDeviceId(deviceId);
@@ -362,11 +362,11 @@ function getPolicyShortCircuit() {
 /**
  * 用指定 bearer 拉取 policy limits，判断是否允许 allow_claude_browser_extension；拉取失败为 policy_unverified。
  */
-async function checkPolicyForToken(bearer, { timeoutMs: e } = {}) {
+async function checkPolicyForToken(bearer, { timeoutMs } = {}) {
   let shortCircuit = getPolicyShortCircuit();
   if (shortCircuit) return shortCircuit;
   let limits = await fetchPolicyLimitsForBearer(bearer, {
-    timeoutMs: e,
+    timeoutMs,
   });
   if (!limits)
     return {
@@ -458,7 +458,7 @@ async function runClaudeInChromeMcpServer(options) {
         storageV5,
       });
       watchGlobalConfigThroughStorage(storageV5);
-      let { primeFastPathCredentials } = await import("./chunk-ts9rfgqd.js");
+      let { primeFastPathCredentials } = await import("../primeFastPathCredentials.lazy.js");
       await primeFastPathCredentials(credentials);
       await seedInstallIDs(storageV5);
     }
@@ -485,8 +485,9 @@ async function runClaudeInChromeMcpServer(options) {
       credentials,
       bearerGate: createBearerGate(policyVerdict.verified),
     });
-    let { createClaudeForChromeMcpServer } = await import("./chunk-3ewc7v9f.js");
-    let { StdioServerTransport } = await import("./chunk-afnhvnmd.js");
+    let { createClaudeForChromeMcpServer } = await import("./BROWSER_TOOLS.lazy.js");
+    let { StdioServerTransport } =
+      await import("../../../vendor/@modelcontextprotocol/sdk/dist/esm/server/stdio.js");
     let server = createClaudeForChromeMcpServer(chromeContext);
     let transport = new StdioServerTransport();
     let isShuttingDown = false;
@@ -535,3 +536,4 @@ class DebugLogger {
     });
   }
 }
+export { createChromeContext, runClaudeInChromeMcpServer };

@@ -59,6 +59,7 @@ import { normalizeGitHost, isSuspiciousUrl } from "../fsBoundRead.js";
 import { parseScpLikeUrl } from "../gitHosts.js";
 import { isIpv4MappedOrTranslatedIpv6 } from "../network/privateHostCheck.js";
 import { logForDebugging } from "../debug.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-f3qhjfah.js:45056-45090 placement
 var PLUGIN_DIRECTORY_SOURCE = {
@@ -68,9 +69,11 @@ var PLUGIN_DIRECTORY_SOURCE = {
 /**
  * 插件是否被托管策略显式禁用（policySettings.enabledPlugins 中为 false，含别名）。
  */
-function isPluginBlockedByPolicy(e) {
+function isPluginBlockedByPolicy(pluginId) {
   let enabledPlugins = getSettingsForSource("policySettings")?.enabledPlugins;
-  return [e, officialPluginId(e) ?? e].some((r) => lookupByPluginAliases(enabledPlugins, r) === false);
+  return [pluginId, officialPluginId(pluginId) ?? pluginId].some(
+    (candidateId) => lookupByPluginAliases(enabledPlugins, candidateId) === false,
+  );
 }
 //@ chunk-f3qhjfah.js:45192-45309 placement = getStrictKnownMarketplaces (1)
 /**
@@ -86,7 +89,7 @@ function getStrictKnownMarketplaces() {
  * ~/.claude/skills/ 自动加载为 @skills-dir 插件是否被允许：blockedMarketplaces 含 {source:"skills-dir"} 则否；有 strictKnownMarketplaces 时需显式列出 skills-dir。
  */
 function areLocalPluginDirsAllowedByPolicy() {
-  if (getBlockedMarketplaces()?.some((n) => n.source === "skills-dir")) return false;
+  if (getBlockedMarketplaces()?.some((entry) => entry.source === "skills-dir")) return false;
   let strictKnownMarketplaces = getStrictKnownMarketplaces();
   return (
     strictKnownMarketplaces === null ||
@@ -97,8 +100,8 @@ function areLocalPluginDirsAllowedByPolicy() {
 /**
  * skills-dir 插件被策略阻止时的提示（如何在 strictKnownMarketplaces 中放行）。
  */
-function localPluginDirsBlockedMessage(e) {
-  return `Plugins from ${e}/ are blocked by your organization's managed settings (strictKnownMarketplaces or blockedMarketplaces). Ask your administrator to add {"source":"skills-dir"} to strictKnownMarketplaces, or remove it from blockedMarketplaces.`;
+function localPluginDirsBlockedMessage(dir) {
+  return `Plugins from ${dir}/ are blocked by your organization's managed settings (strictKnownMarketplaces or blockedMarketplaces). Ask your administrator to add {"source":"skills-dir"} to strictKnownMarketplaces, or remove it from blockedMarketplaces.`;
 }
 //@ chunk-f3qhjfah.js:45707-45776 placement
 /**
@@ -129,7 +132,7 @@ function commandPluginSourcesDisabledBySettings() {
     parsedParentManagedSettings?.disableAllHooks === true &&
     parsedParentManagedSettings.allowManagedHooksOnly !== true &&
     !parentTierWithOrganizationLocksHooks() &&
-    !getAdminPolicyTierSettings().some((r) => r.allowManagedHooksOnly === true)
+    !getAdminPolicyTierSettings().some((tier) => tier.allowManagedHooksOnly === true)
   );
 }
 //@ chunk-f3qhjfah.js:46135-46237 placement
@@ -152,8 +155,8 @@ function pluginDirectoryPolicyBlock() {
     if (isPluginDirectoryDisabledByPolicy()) return "managed_setting";
     if (isSourceInBlocklist(PLUGIN_DIRECTORY_SOURCE)) return "blocklist";
     if (!isSourceAllowedByPolicy(PLUGIN_DIRECTORY_SOURCE)) return "allowlist";
-    let e = policyDenyKind("allow_plugin_directory_search");
-    return e === "org_denied" || e === "latched" ? "policy_limit" : null;
+    let kind = policyDenyKind("allow_plugin_directory_search");
+    return kind === "org_denied" || kind === "latched" ? "policy_limit" : null;
   }
   return null;
 }
@@ -162,49 +165,45 @@ function pluginDirectoryPolicyBlock() {
  * 插件目录不可用原因对应的一句提示文本（可用时为空串）。
  */
 function pluginDirectoryPolicyBlockHint() {
-  let e = pluginDirectoryPolicyBlock();
-  return e === null ? "" : policyBlockReason(e);
+  let block = pluginDirectoryPolicyBlock();
+  return block === null ? "" : policyBlockReason(block);
 }
 //@ chunk-f3qhjfah.js:46506-46892 placement
 /**
  * git URL 是否被 hostPattern 类托管策略限制（blockedMarketplaces/strictKnownMarketplaces 中有 hostPattern 时，按主机匹配判断）。
  */
-function isListingRepositoryBlockedByHostPolicy(e) {
+function isListingRepositoryBlockedByHostPolicy(url) {
   let filtered = (getBlockedMarketplaces() ?? []).filter(isHostPatternEntry);
   let filtered_2 = (getStrictKnownMarketplaces() ?? []).filter(isHostPatternEntry);
   if (filtered.length === 0 && filtered_2.length === 0) return false;
-  if (e === undefined) return true;
-  let s = {
+  if (url === undefined) return true;
+  let source = {
     source: "git",
-    url: e,
+    url,
   };
-  let policyHostOfSource = getPolicyHostOfSource(s);
+  let host = getPolicyHostOfSource(source);
   if (
-    isUnsafeGitUrl(e) ||
-    isUnsafeRemoteUrl(e) ||
-    isSuspiciousMarketplaceUrl(e) ||
-    policyHostOfSource === null ||
-    policyHostOfSource === ""
+    isUnsafeGitUrl(url) ||
+    isUnsafeRemoteUrl(url) ||
+    isSuspiciousMarketplaceUrl(url) ||
+    host === null ||
+    host === ""
   )
     return true;
   if (
     filtered.some(
-      (l) =>
-        !isValidPolicyRegex(l.hostPattern) ||
-        doesSourceMatchHostPattern(s, l, {
+      (entry) =>
+        !isValidPolicyRegex(entry.hostPattern) ||
+        doesSourceMatchHostPattern(source, entry, {
           blocklistDirection: true,
         }),
     )
   )
     return true;
-  let matches = /^https:\/\//i.test(e);
+  let matches = /^https:\/\//i.test(url);
   return (
     filtered_2.length > 0 &&
-    !(
-      matches &&
-      policyHostOfSource !== "" &&
-      filtered_2.some((l) => fullMatchesRegex(policyHostOfSource, l.hostPattern))
-    )
+    !(matches && host !== "" && filtered_2.some((entry) => fullMatchesRegex(host, entry.hostPattern)))
   );
 }
 //@ chunk-f3qhjfah.js:46892-46937 placement
@@ -225,37 +224,43 @@ var REMOTE_POLICY_NOT_APPROVED_MESSAGE =
 /**
  * 市场在托管锁定下不能更新的原因：组织设置未读到 → organization_unanswered；command 来源禁用时，不在 policySettings.extraKnownMarketplaces 中声明的市场 → lockdown；远程策略未同意 → remote_policy_unconsented。
  */
-function headersHelperPolicyRefusal(e, n) {
+function headersHelperPolicyRefusal(source, marketplaceName) {
   if (marketplaceNameAnswerState() === "unanswered") return "organization_unanswered";
   if (!areCommandPluginSourcesDisabledByPolicy()) return null;
-  if (e === undefined || !canPolicyDeclarationExemptHelper()) return "lockdown";
+  if (source === undefined || !canPolicyDeclarationExemptHelper()) return "lockdown";
   if (!policyTierCommandsMayRun()) return "remote_policy_unconsented";
   let extraKnownMarketplaces = getSettingsForSource("policySettings")?.extraKnownMarketplaces ?? {};
-  if (e.source === "settings" && n !== undefined)
-    return (Object.hasOwn(extraKnownMarketplaces, n) ? extraKnownMarketplaces[n] : undefined)?.source
-      .source !== "settings"
+  if (source.source === "settings" && marketplaceName !== undefined)
+    return (Object.hasOwn(extraKnownMarketplaces, marketplaceName)
+      ? extraKnownMarketplaces[marketplaceName]
+      : undefined
+    )?.source.source !== "settings"
       ? "lockdown"
       : null;
-  return Object.values(extraKnownMarketplaces).some((s) => areSourcesEqual(e, s.source)) ? null : "lockdown";
+  return Object.values(extraKnownMarketplaces).some((declaredSource) =>
+    areSourcesEqual(source, declaredSource.source),
+  )
+    ? null
+    : "lockdown";
 }
 //@ chunk-f3qhjfah.js:47698-47739 placement
 /**
  * 市场是否处于托管锁定（getMarketplaceLockdownReason 非空）。
  */
-function isHeadersHelperDisabledByPolicy(e, n) {
-  return headersHelperPolicyRefusal(e, n) !== null;
+function isHeadersHelperDisabledByPolicy(source, marketplaceName) {
+  return headersHelperPolicyRefusal(source, marketplaceName) !== null;
 }
 //@ chunk-f3qhjfah.js:47739-47980 placement
 /**
  * 生成“N 个市场未更新（托管策略/等待组织设置）”的提示文本。
  */
-function marketplacesRefusedByPolicyClause(e, n = []) {
-  let r = n.length > 0 ? `: ${n.map((a) => printablePluginName(a)).join(", ")}` : "";
-  let s =
+function marketplacesRefusedByPolicyClause(count, names = []) {
+  let namesText = names.length > 0 ? `: ${names.map((name) => printablePluginName(name)).join(", ")}` : "";
+  let reason =
     marketplaceNameAnswerState() === "unanswered"
       ? "(waiting for your organization's settings)"
       : "(managed policy) \u2014 ask your admin";
-  return `${e} ${plural(e, "marketplace")} not updated ${s}${r}`;
+  return `${count} ${plural(count, "marketplace")} not updated ${reason}${namesText}`;
 }
 //@ chunk-f3qhjfah.js:47980-48190 placement
 var COMMAND_SOURCES_DISABLED_MESSAGE =
@@ -264,11 +269,11 @@ var COMMAND_SOURCES_DISABLED_MESSAGE =
 /**
  * 组织设置未读到时，在全局 organizationAsk 中记下有 command 来源插件/市场被暂缓，供之后提示。
  */
-function noteHeldForTheAnswer(e) {
+function noteHeldForTheAnswer(kind) {
   if (marketplaceNameAnswerState() === "unanswered") {
     let organizationAsk = getPluginRegistry().organizationAsk;
     organizationAsk.isCommandHeld = true;
-    organizationAsk.isMarketplaceHeld ||= e === "marketplace";
+    organizationAsk.isMarketplaceHeld ||= kind === "marketplace";
   }
 }
 //@ chunk-f3qhjfah.js:48317-48658 placement
@@ -286,8 +291,8 @@ var SIDELOAD_FLAGS_BLOCKED_PHRASE = "disabled by your organization's managed set
 /**
  * --plugin-dir 等会话侧载参数被 disableSideloadFlags 禁用时的错误文本。
  */
-function sideloadFlagsBlockedMessage(e) {
-  return `${e.join(", ")} ${e.length === 1 ? "is" : "are"} ${SIDELOAD_FLAGS_BLOCKED_PHRASE}. Plugins, custom agents, and MCP servers can only be loaded from sources your administrator has approved. Ask your administrator to remove disableSideloadFlags from managed settings, or use an approved marketplace / settings file instead.`;
+function sideloadFlagsBlockedMessage(flags) {
+  return `${flags.join(", ")} ${flags.length === 1 ? "is" : "are"} ${SIDELOAD_FLAGS_BLOCKED_PHRASE}. Plugins, custom agents, and MCP servers can only be loaded from sources your administrator has approved. Ask your administrator to remove disableSideloadFlags from managed settings, or use an approved marketplace / settings file instead.`;
 }
 //@ chunk-f3qhjfah.js:49161-49283 placement
 /**
@@ -323,40 +328,44 @@ function getPluginSuggestionMarketplaces() {
   return getSettingsForSource("policySettings")?.pluginSuggestionMarketplaces ?? [];
 }
 //@ chunk-f3qhjfah.js:49469-49625 placement
-function isMarketplaceSourceDeclaredByPolicy(e, source) {
+function isMarketplaceSourceDeclaredByPolicy(name, source) {
   let adminAuthoredPolicySettings = getAdminAuthoredPolicySettings();
-  let source_2 = adminAuthoredPolicySettings?.extraKnownMarketplaces?.[e]?.source;
+  let source_2 = adminAuthoredPolicySettings?.extraKnownMarketplaces?.[name]?.source;
   if (source_2 && areSourcesEqual(source, source_2)) return true;
   return (
-    allowListEntriesThatVouch(adminAuthoredPolicySettings?.strictKnownMarketplaces)?.some((a) =>
-      matchesStrictMarketplaceEntry(source, a),
+    allowListEntriesThatVouch(adminAuthoredPolicySettings?.strictKnownMarketplaces)?.some((entry) =>
+      matchesStrictMarketplaceEntry(source, entry),
     ) ?? false
   );
 }
 //@ chunk-f3qhjfah.js:49625-49726 placement
-function isMarketplaceNameDeclaredByPolicy(e, n) {
-  let r = nfcLower(e);
-  return Object.keys(n?.extraKnownMarketplaces ?? {}).some((key) => nfcLower(key) === r);
+function isMarketplaceNameDeclaredByPolicy(name, settings) {
+  let lowerName = nfcLower(name);
+  return Object.keys(settings?.extraKnownMarketplaces ?? {}).some((key) => nfcLower(key) === lowerName);
 }
 //@ chunk-f3qhjfah.js:49726-50820 placement
-function isMarketplaceSourceVouchedByPolicy(marketplaceSource, n, r) {
+function isMarketplaceSourceVouchedByPolicy(marketplaceSource, home, options) {
   if (marketplaceSource.source === "claudeai") {
-    let g = currentOrgUuid();
+    let orgUuid = currentOrgUuid();
     return (
-      g !== null &&
-      marketplaceSource.organizationUuid.toLowerCase() === g.toLowerCase() &&
+      orgUuid !== null &&
+      marketplaceSource.organizationUuid.toLowerCase() === orgUuid.toLowerCase() &&
       (marketplaceSource.scope === "org" || marketplaceSource.scope === "default")
     );
   }
-  let s = r ? r.policySettings : getAdminAuthoredPolicySettings();
-  let declaredUnder = r?.declaredUnder;
-  let extraKnownMarketplaces = s?.extraKnownMarketplaces;
-  let l = redactMarketplaceSource(marketplaceSource);
-  if (l === null) return false;
-  if (l.source === "npm" && (l.registry === undefined || !isValidNpmPackageName(l.package))) return false;
+  let policySettings = options ? options.policySettings : getAdminAuthoredPolicySettings();
+  let declaredUnder = options?.declaredUnder;
+  let extraKnownMarketplaces = policySettings?.extraKnownMarketplaces;
+  let redacted = redactMarketplaceSource(marketplaceSource);
+  if (redacted === null) return false;
   if (
-    l.source === "settings" &&
-    l.plugins.some((plugin) => {
+    redacted.source === "npm" &&
+    (redacted.registry === undefined || !isValidNpmPackageName(redacted.package))
+  )
+    return false;
+  if (
+    redacted.source === "settings" &&
+    redacted.plugins.some((plugin) => {
       if (typeof plugin.source !== "object") return true;
       switch (plugin.source.source) {
         case "npm":
@@ -376,108 +385,128 @@ function isMarketplaceSourceVouchedByPolicy(marketplaceSource, n, r) {
     extraKnownMarketplaces !== undefined &&
     Object.entries(extraKnownMarketplaces).some(([key, value]) => {
       if (declaredUnder !== undefined && nfcLower(key) !== nfcLower(declaredUnder)) return false;
-      let m = normalizeLocalMarketplaceSource(value.source, n);
-      let h = redactMarketplaceSource(m);
-      return h !== null && areSourcesEqual(l, h) && installVersion(l, h);
+      let normalized = normalizeLocalMarketplaceSource(value.source, home);
+      let redactedEntry = redactMarketplaceSource(normalized);
+      return (
+        redactedEntry !== null &&
+        areSourcesEqual(redacted, redactedEntry) &&
+        installVersion(redacted, redactedEntry)
+      );
     })
   )
     return true;
   if (declaredUnder !== undefined) return false;
   return (
-    allowListEntriesThatVouch(s?.strictKnownMarketplaces)?.some((g) => {
-      if (g.source === "hostPattern" || g.source === "pathPattern" || g.source === "pluginDirectory")
+    allowListEntriesThatVouch(policySettings?.strictKnownMarketplaces)?.some((entry) => {
+      if (
+        entry.source === "hostPattern" ||
+        entry.source === "pathPattern" ||
+        entry.source === "pluginDirectory"
+      )
         return false;
-      if (l.source === "github" && g.source === "github" && (g.path || undefined) !== (l.path || undefined))
+      if (
+        redacted.source === "github" &&
+        entry.source === "github" &&
+        (entry.path || undefined) !== (redacted.path || undefined)
+      )
         return false;
-      let f = normalizeLocalMarketplaceSource(g, n);
-      let m = redactMarketplaceSource(f);
-      return m !== null && matchesStrictMarketplaceEntry(l, m) && installVersion(l, m);
+      let normalized = normalizeLocalMarketplaceSource(entry, home);
+      let redactedEntry = redactMarketplaceSource(normalized);
+      return (
+        redactedEntry !== null &&
+        matchesStrictMarketplaceEntry(redacted, redactedEntry) &&
+        installVersion(redacted, redactedEntry)
+      );
     }) ?? false
   );
 }
 //@ chunk-f3qhjfah.js:50820-50998 placement = installVersion (0.793)
-function installVersion(e, n) {
-  if (e.source !== "npm") return true;
-  if (n.source !== "npm" || e.registry === undefined || n.registry === undefined) return false;
-  let r = normalizeBaseUrl(e.registry);
-  let s = normalizeBaseUrl(n.registry);
-  return r !== null && r === s;
+function installVersion(candidate, declared) {
+  if (candidate.source !== "npm") return true;
+  if (declared.source !== "npm" || candidate.registry === undefined || declared.registry === undefined)
+    return false;
+  let left = normalizeBaseUrl(candidate.registry);
+  let right = normalizeBaseUrl(declared.registry);
+  return left !== null && left === right;
 }
 //@ chunk-f3qhjfah.js:50998-51158 placement = isPreapprovedUrl (1)
 /**
  * 规范化基础 URL：主机名规范化、路径补尾部 /（安装器使用）。
  */
 function normalizeBaseUrl(url) {
-  let n;
+  let parsed;
   try {
-    n = new URL(url);
+    parsed = new URL(url);
   } catch {
     return null;
   }
-  n.hostname = normalizeGitHost(n.hostname);
-  if (!n.pathname.endsWith("/")) n.pathname = `${n.pathname}/`;
-  return n.toString();
+  parsed.hostname = normalizeGitHost(parsed.hostname);
+  if (!parsed.pathname.endsWith("/")) parsed.pathname = `${parsed.pathname}/`;
+  return parsed.toString();
 }
 //@ chunk-f3qhjfah.js:51158-51404 placement
 function isNpmResolutionVouchedByPolicy(npmResolution) {
-  let n = allowListEntriesThatVouch(getAdminAuthoredPolicySettings()?.strictKnownMarketplaces);
-  if (!n) return false;
-  let r;
+  let entries = allowListEntriesThatVouch(getAdminAuthoredPolicySettings()?.strictKnownMarketplaces);
+  if (!entries) return false;
+  let tarballUrl;
   try {
-    r = new URL(npmResolution.tarballUrl);
+    tarballUrl = new URL(npmResolution.tarballUrl);
   } catch {
     return false;
   }
-  let s = decodeSafeUrlPath(r);
-  if (s === null) return false;
-  return n.some(
-    (a) =>
-      a.source === "npm" &&
-      a.registry !== undefined &&
-      matchesNpmPolicyEntry(a, npmResolution.packageName, r, s, "allow"),
+  let pathname = decodeSafeUrlPath(tarballUrl);
+  if (pathname === null) return false;
+  return entries.some(
+    (entry) =>
+      entry.source === "npm" &&
+      entry.registry !== undefined &&
+      matchesNpmPolicyEntry(entry, npmResolution.packageName, tarballUrl, pathname, "allow"),
   );
 }
 //@ chunk-f3qhjfah.js:51404-51701 placement
-function isOfficialMarketplaceSourceVouched(e) {
-  if (e.source !== "github" && e.source !== "git") return false;
-  if (e.source === "git") {
-    if (e.url.includes("://")) {
-      let n;
+function isOfficialMarketplaceSourceVouched(source) {
+  if (source.source !== "github" && source.source !== "git") return false;
+  if (source.source === "git") {
+    if (source.url.includes("://")) {
+      let protocol;
       try {
-        n = new URL(e.url).protocol;
+        protocol = new URL(source.url).protocol;
       } catch {
-        n = null;
+        protocol = null;
       }
-      if (n === null || !GIT_SOURCE_PROTOCOLS.has(n)) return false;
-    } else if (parseScpLikeUrl(e.url) === null) return false;
+      if (protocol === null || !GIT_SOURCE_PROTOCOLS.has(protocol)) return false;
+    } else if (parseScpLikeUrl(source.url) === null) return false;
   }
   return (
-    isAnthropicsMarketplaceSource(e) &&
-    (e.ref || undefined) === undefined &&
-    (e.path || undefined) === undefined
+    isAnthropicsMarketplaceSource(source) &&
+    (source.ref || undefined) === undefined &&
+    (source.path || undefined) === undefined
   );
 }
 //@ chunk-f3qhjfah.js:51701-51759 placement
-var GIT_SOURCE_PROTOCOLS = new Set(["https:", "ssh:", "git+https:", "git+ssh:"]);
+var GIT_SOURCE_PROTOCOLS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-f3qhjfah.js:51701", () => {
+  GIT_SOURCE_PROTOCOLS = new Set(["https:", "ssh:", "git+https:", "git+ssh:"]);
+});
 //@ chunk-f3qhjfah.js:52373-52429 placement
 /**
  * 从市场来源取规范化主机名（IP 字面量返回 null）。
  */
-function extractHostFromSource(e) {
-  let nonIpHostFromSource = getNonIpHostFromSource(e);
+function extractHostFromSource(source) {
+  let nonIpHostFromSource = getNonIpHostFromSource(source);
   return nonIpHostFromSource === null ? null : normalizeGitHost(nonIpHostFromSource);
 }
 //@ chunk-f3qhjfah.js:52429-52486 placement
 function getNonIpHostFromSource(source) {
-  let hostFromSource = extractHostFromSource_2(source);
-  return hostFromSource !== null && isBracketedIpv6Host(hostFromSource) ? null : hostFromSource;
+  let host = extractHostFromSource_2(source);
+  return host !== null && isBracketedIpv6Host(host) ? null : host;
 }
 //@ chunk-f3qhjfah.js:52486-52563 placement
 /**
  * 主机是否为 [IPv6] 字面量。
  */
-function isBracketedIpv6Host(e) {
-  return e.startsWith("[") && e.endsWith("]") && isIpv4MappedOrTranslatedIpv6(e.slice(1, -1));
+function isBracketedIpv6Host(host) {
+  return host.startsWith("[") && host.endsWith("]") && isIpv4MappedOrTranslatedIpv6(host.slice(1, -1));
 }
 //@ chunk-f3qhjfah.js:52563-52590 placement
 /**
@@ -501,9 +530,9 @@ function getHostPatternsFromAllowlist() {
  */
 function canonicalFetchSourceUrl(url) {
   try {
-    let n = new URL(url);
-    n.hostname = normalizeGitHost(n.hostname);
-    return n.toString();
+    let parsed = new URL(url);
+    parsed.hostname = normalizeGitHost(parsed.hostname);
+    return parsed.toString();
   } catch {
     return url;
   }
@@ -515,30 +544,41 @@ function canonicalFetchSourceUrl(url) {
 function isRepoUnderOwner(repo, githubOwnerWildcard) {
   let parts = repo.split("/");
   if (parts.length !== 2) return false;
-  let [s, a] = parts;
-  if (s === undefined || a === undefined || !isValidGithubOwner(s) || !isValidGithubOwner(a)) return false;
-  return s === githubOwnerWildcard;
+  let [owner, repoName] = parts;
+  if (
+    owner === undefined ||
+    repoName === undefined ||
+    !isValidGithubOwner(owner) ||
+    !isValidGithubOwner(repoName)
+  )
+    return false;
+  return owner === githubOwnerWildcard;
 }
 //@ chunk-f3qhjfah.js:54362-54786 placement
-function doesRepoMatchBlocklistEntry(e, n) {
-  let r = normalizeRepoPath(n);
-  let githubOwnerWildcard = parseGithubOwnerWildcard(e);
+function doesRepoMatchBlocklistEntry(repoPath, candidate) {
+  let normalized = normalizeRepoPath(candidate);
+  let githubOwnerWildcard = parseGithubOwnerWildcard(repoPath);
   if (githubOwnerWildcard === null) {
-    if (e.includes("*"))
+    if (repoPath.includes("*"))
       logForDebugging(
-        `Invalid owner-wildcard repo in policy settings blockedMarketplaces: ${e} (only "<owner>/*" is supported); entry only matches a literally identical repo string`,
+        `Invalid owner-wildcard repo in policy settings blockedMarketplaces: ${repoPath} (only "<owner>/*" is supported); entry only matches a literally identical repo string`,
         {
           level: "error",
         },
       );
-    return r === e || n === e;
+    return normalized === repoPath || candidate === repoPath;
   }
-  let parts = r.split("/");
+  let parts = normalized.split("/");
   if (parts.length !== 2) return false;
-  let [c, l] = parts;
-  if (c === undefined || l === undefined || !isValidGithubOwner(c) || !GITHUB_NAME_SEGMENT_RE.test(l))
+  let [owner, repoName] = parts;
+  if (
+    owner === undefined ||
+    repoName === undefined ||
+    !isValidGithubOwner(owner) ||
+    !GITHUB_NAME_SEGMENT_RE.test(repoName)
+  )
     return false;
-  return c.toLowerCase() === githubOwnerWildcard.toLowerCase();
+  return owner.toLowerCase() === githubOwnerWildcard.toLowerCase();
 }
 //@ chunk-f3qhjfah.js:55910-56104 placement = isSourceAllowedByPolicy (0.876)
 /**
@@ -564,13 +604,8 @@ function isSourceAllowedByPolicy(source) {
     isMarketplaceRestrictionPolicyActive()
   )
     return false;
-  let hostFromSource = extractHostFromSource_2(source);
-  if (
-    hostFromSource !== null &&
-    isBracketedIpv6Host(hostFromSource) &&
-    isMarketplaceRestrictionPolicyActive()
-  )
-    return false;
+  let host = extractHostFromSource_2(source);
+  if (host !== null && isBracketedIpv6Host(host) && isMarketplaceRestrictionPolicyActive()) return false;
   if (source.source === "pluginDirectory" && isPluginDirectoryDisabledByPolicy()) return false;
   if (isSourceInBlocklist(source)) return false;
   let strictKnownMarketplaces = getStrictKnownMarketplaces();
@@ -580,96 +615,98 @@ function isSourceAllowedByPolicy(source) {
   );
 }
 //@ chunk-f3qhjfah.js:56353-57846 placement
-function npmResolutionPolicyRefusal(e) {
+function npmResolutionPolicyRefusal(resolution) {
   let blockedMarketplaces = getBlockedMarketplaces();
   let strictKnownMarketplaces = getStrictKnownMarketplaces();
   if (blockedMarketplaces === null && strictKnownMarketplaces === null) return null;
-  let s;
+  let tarballUrl;
   try {
-    s = new URL(e.tarballUrl);
+    tarballUrl = new URL(resolution.tarballUrl);
   } catch {
-    s = null;
+    tarballUrl = null;
   }
-  let a = printablePluginName(e.packageName);
-  if (s === null)
-    return `${a} cannot be used: the registry answered with a download URL that could not be parsed, and your organization restricts plugin sources`;
-  let c = normalizeGitHost(s.hostname);
-  let l = s.port ? `${c}:${s.port}` : c;
-  let g = decodeSafeUrlPath(s);
-  if (g === null)
-    return `${a} cannot be used: the registry answered with a download URL whose path climbs or cannot be decoded, and your organization restricts plugin sources`;
-  if (isBracketedIpv6Host(s.hostname) && isMarketplaceRestrictionPolicyActive())
-    return `${a} cannot be used: it downloads from ${l}, an IPv6 spelling of an IPv4 address, which your organization's plugin source rules cannot check. Ask whoever runs the registry to serve it from a hostname or an IPv4 address.`;
-  let f = (m) => (h) => {
-    switch (h.source) {
+  let packageLabel = printablePluginName(resolution.packageName);
+  if (tarballUrl === null)
+    return `${packageLabel} cannot be used: the registry answered with a download URL that could not be parsed, and your organization restricts plugin sources`;
+  let host = normalizeGitHost(tarballUrl.hostname);
+  let hostWithPort = tarballUrl.port ? `${host}:${tarballUrl.port}` : host;
+  let pathname = decodeSafeUrlPath(tarballUrl);
+  if (pathname === null)
+    return `${packageLabel} cannot be used: the registry answered with a download URL whose path climbs or cannot be decoded, and your organization restricts plugin sources`;
+  if (isBracketedIpv6Host(tarballUrl.hostname) && isMarketplaceRestrictionPolicyActive())
+    return `${packageLabel} cannot be used: it downloads from ${hostWithPort}, an IPv6 spelling of an IPv4 address, which your organization's plugin source rules cannot check. Ask whoever runs the registry to serve it from a hostname or an IPv4 address.`;
+  let matcher = (mode) => (entry) => {
+    switch (entry.source) {
       case "npm":
-        return matchesNpmPolicyEntry(h, e.packageName, s, g, m);
+        return matchesNpmPolicyEntry(entry, resolution.packageName, tarballUrl, pathname, mode);
       case "hostPattern":
         try {
-          return m === "block"
-            ? new RegExp(h.hostPattern).test(c)
-            : fullMatchesRegex(c, h.hostPattern) && s.protocol === "https:";
+          return mode === "block"
+            ? new RegExp(entry.hostPattern).test(host)
+            : fullMatchesRegex(host, entry.hostPattern) && tarballUrl.protocol === "https:";
         } catch {
-          logForDebugging(`Invalid hostPattern regex in policy settings: ${h.hostPattern}`, {
+          logForDebugging(`Invalid hostPattern regex in policy settings: ${entry.hostPattern}`, {
             level: "error",
           });
-          return m === "block";
+          return mode === "block";
         }
       default:
         return false;
     }
   };
-  if (blockedMarketplaces?.some(f("block")))
-    return `${a} cannot be used: it resolves to ${l}, which your organization's managed settings block (blockedMarketplaces)`;
-  if (strictKnownMarketplaces !== null && !strictKnownMarketplaces.some(f("allow")))
-    return `${a} cannot be used: it resolves to ${l}, which is not among the plugin sources your organization allows (strictKnownMarketplaces). Ask your administrator to add an npm or hostPattern entry for it.`;
+  if (blockedMarketplaces?.some(matcher("block")))
+    return `${packageLabel} cannot be used: it resolves to ${hostWithPort}, which your organization's managed settings block (blockedMarketplaces)`;
+  if (strictKnownMarketplaces !== null && !strictKnownMarketplaces.some(matcher("allow")))
+    return `${packageLabel} cannot be used: it resolves to ${hostWithPort}, which is not among the plugin sources your organization allows (strictKnownMarketplaces). Ask your administrator to add an npm or hostPattern entry for it.`;
   return null;
 }
 //@ chunk-f3qhjfah.js:57846-57950 placement
-function matchesNpmPolicyEntry(e, packageName, r, s, a) {
+function matchesNpmPolicyEntry(entry, packageName, tarballUrl, pathname, mode) {
   return (
-    matchesNpmPackagePattern(e.package, packageName) &&
-    (e.registry === undefined || (isUnderRegistryUrl(r, s, e.registry) ?? a === "block"))
+    matchesNpmPackagePattern(entry.package, packageName) &&
+    (entry.registry === undefined ||
+      (isUnderRegistryUrl(tarballUrl, pathname, entry.registry) ?? mode === "block"))
   );
 }
 //@ chunk-f3qhjfah.js:57950-58054 placement
-function matchesNpmPackagePattern(e, n) {
-  if (e.endsWith("/*") && e.startsWith("@")) return n.startsWith(e.slice(0, -1));
-  return e === n;
+function matchesNpmPackagePattern(pattern, packageName) {
+  if (pattern.endsWith("/*") && pattern.startsWith("@")) return packageName.startsWith(pattern.slice(0, -1));
+  return pattern === packageName;
 }
 //@ chunk-f3qhjfah.js:58054-58200 placement
-function decodeSafeUrlPath(e) {
-  let n;
+function decodeSafeUrlPath(url) {
+  let pathname;
   try {
-    n = decodeURIComponent(e.pathname);
+    pathname = decodeURIComponent(url.pathname);
   } catch {
     return null;
   }
-  if (n.includes("\\") || /(^|\/)\.\.?(\/|$)/.test(n)) return null;
-  return n;
+  if (pathname.includes("\\") || /(^|\/)\.\.?(\/|$)/.test(pathname)) return null;
+  return pathname;
 }
 //@ chunk-f3qhjfah.js:58200-58498 placement
-function isUnderRegistryUrl(e, n, registry) {
-  let s;
+function isUnderRegistryUrl(tarballUrl, pathname, registry) {
+  let registryUrl;
   try {
-    s = new URL(registry);
+    registryUrl = new URL(registry);
   } catch {
     return null;
   }
   if (
-    e.protocol !== s.protocol ||
-    normalizeGitHost(e.hostname) !== normalizeGitHost(s.hostname) ||
-    (e.port || defaultPortForScheme(e.protocol)) !== (s.port || defaultPortForScheme(s.protocol))
+    tarballUrl.protocol !== registryUrl.protocol ||
+    normalizeGitHost(tarballUrl.hostname) !== normalizeGitHost(registryUrl.hostname) ||
+    (tarballUrl.port || defaultPortForScheme(tarballUrl.protocol)) !==
+      (registryUrl.port || defaultPortForScheme(registryUrl.protocol))
   )
     return false;
-  let a;
+  let registryPath;
   try {
-    a = decodeURIComponent(s.pathname);
+    registryPath = decodeURIComponent(registryUrl.pathname);
   } catch {
     return null;
   }
-  if (!a.endsWith("/")) a = `${a}/`;
-  return n.startsWith(a);
+  if (!registryPath.endsWith("/")) registryPath = `${registryPath}/`;
+  return pathname.startsWith(registryPath);
 }
 //@ chunk-f3qhjfah.js:58498-58559 placement
 function defaultPortForScheme(protocol) {

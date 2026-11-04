@@ -16,15 +16,15 @@
 class HostScoped {
   #o;
   #r = new WeakMap();
-  constructor(o) {
-    this.#o = o;
+  constructor(create) {
+    this.#o = create;
   }
-  of(o) {
-    let e = this.#r.get(o);
-    if (e !== undefined) return e;
-    let s = this.#o();
-    this.#r.set(o, s);
-    return s;
+  of(host) {
+    let existing = this.#r.get(host);
+    if (existing !== undefined) return existing;
+    let value = this.#o();
+    this.#r.set(host, value);
+    return value;
   }
 }
 //@ chunk-x7vma94a.js:335-405 placement
@@ -37,8 +37,8 @@ var disklessHooks = {
 /**
  * 安装无盘模式的钩子实现。
  */
-function setDisklessHooks(o) {
-  disklessHooks = o;
+function setDisklessHooks(hooks) {
+  disklessHooks = hooks;
 }
 //@ chunk-x7vma94a.js:425-462 placement
 /**
@@ -62,9 +62,11 @@ var processScopedEmptyValues = new HostScoped(() => ({}));
 //@ chunk-x7vma94a.js:530-556 placement
 var NOCONFIGHOMEERROR = "NoConfigHomeError";
 //@ chunk-x7vma94a.js:556-653 placement = mergeClients (1)
-function mergeClients(o) {
+function mergeClients(client) {
   try {
-    return typeof o === "object" && o !== null && "name" in o && o.name === NOCONFIGHOMEERROR;
+    return (
+      typeof client === "object" && client !== null && "name" in client && client.name === NOCONFIGHOMEERROR
+    );
   } catch {
     return false;
   }

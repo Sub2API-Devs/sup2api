@@ -12,42 +12,48 @@ import { hitTest } from "./hit-test.js";
 import { isKeybindingContext } from "../keybindings/schema.js";
 import { KeybindingActionEvent } from "../keybindings/KeybindingProviderSetup.js";
 import { dispatcher } from "./reconciler.js";
-import { init_react_production, qt, R, Se } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import {
+  init_react_production,
+  createContext,
+  useRef,
+  useContext,
+} from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import { jsxProd_default } from "../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-xe7zq1p4.js:10469-10518 placement
 /**
  * 带 attributes 的节点
  */
-function isLayoutNodeLike(n) {
-  return n !== null && "attributes" in n;
+function isLayoutNodeLike(value) {
+  return value !== null && "attributes" in value;
 }
 //@ chunk-xe7zq1p4.js:10518-10555 placement
 /**
  * 节点或 undefined
  */
-function asLayoutNode(n) {
-  return isLayoutNodeLike(n) ? n : undefined;
+function asLayoutNode(value) {
+  return isLayoutNodeLike(value) ? value : undefined;
 }
 //@ chunk-xe7zq1p4.js:10555-10759 placement
 /**
  * 判断从某节点到祖先节点之间是否有处理滚轮事件的元素（可按坐标命中检测）。
  */
 function hasWheelHandlerBetween(target, currentTarget, col, row) {
-  let a = asLayoutNode(target);
-  let c = asLayoutNode(currentTarget);
-  while (a && a !== c) {
+  let node = asLayoutNode(target);
+  let stopNode = asLayoutNode(currentTarget);
+  while (node && node !== stopNode) {
     if (
-      a._eventHandlers?.onWheel &&
+      node._eventHandlers?.onWheel &&
       (col === undefined ||
         row === undefined ||
-        typeof a.attributes.tabIndex === "number" ||
-        hitTest(a, col, row) !== null)
+        typeof node.attributes.tabIndex === "number" ||
+        hitTest(node, col, row) !== null)
     )
       return true;
-    a = a.parentNode;
+    node = node.parentNode;
   }
   return false;
 }
@@ -56,84 +62,100 @@ function hasWheelHandlerBetween(target, currentTarget, col, row) {
  * 从节点向上收集各级的快捷键作用域。
  */
 function getKeybindingScopes(target) {
-  let r = [];
-  let i = asLayoutNode(target);
-  while (i) {
-    let keybindingScope = i.attributes.keybindingScope;
-    if (typeof keybindingScope === "string" && isKeybindingContext(keybindingScope)) r.push(keybindingScope);
-    i = i.parentNode;
+  let scopes = [];
+  let node = asLayoutNode(target);
+  while (node) {
+    let keybindingScope = node.attributes.keybindingScope;
+    if (typeof keybindingScope === "string" && isKeybindingContext(keybindingScope))
+      scopes.push(keybindingScope);
+    node = node.parentNode;
   }
-  return r;
+  return scopes;
 }
 //@ chunk-xe7zq1p4.js:10900-11020 placement
 /**
  * 派发快捷键事件并返回是否被消费。
  */
-function dispatchKeybindingEvent(n, sourceEvent, action, isChordCompletion, origin) {
-  let c = new KeybindingActionEvent(action, {
+function dispatchKeybindingEvent(target, sourceEvent, action, isChordCompletion, origin) {
+  let event = new KeybindingActionEvent(action, {
     sourceEvent,
     isChordCompletion,
     origin,
   });
-  dispatcher.dispatch(n, c);
-  return c.consumed;
+  dispatcher.dispatch(target, event);
+  return event.consumed;
 }
 //@ chunk-xe7zq1p4.js:11020-11024 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:11020", () => {
+  init_react_production();
+});
 //@ chunk-xe7zq1p4.js:11024-11028 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:11024", () => {
+  init_react_production();
+});
 //@ chunk-xe7zq1p4.js:11028-11032 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:11028", () => {
+  init_react_production();
+});
 //@ chunk-xe7zq1p4.js:11032-11048 placement
 /**
  * 输入选择桥接上下文
  */
-var InputSelectionContext = qt(null);
+var InputSelectionContext; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:11032", () => {
+  InputSelectionContext = createContext(null);
+});
 //@ chunk-xe7zq1p4.js:11048-11294 placement
 /**
  * 提供输入选择桥接上下文（保存当前处理器）的 Provider 组件。
  */
 function InputSelectionBridgeProvider(props) {
-  let o = w(3);
+  let $ = useMemoCache(3);
   let { children } = props;
-  let i = R(null);
-  let a;
-  if (o[0] === MEMO_CACHE_SENTINEL) {
-    a = {
-      setHandler: (c) => {
-        i.current = c;
+  let handlerRef = useRef(null);
+  let contextValue;
+  if ($[0] === MEMO_CACHE_SENTINEL) {
+    contextValue = {
+      setHandler: (handler) => {
+        handlerRef.current = handler;
       },
-      tryDelete: (b) => i.current?.(b) ?? false,
+      tryDelete: (key) => handlerRef.current?.(key) ?? false,
     };
-    o[0] = a;
-  } else a = o[0];
-  let value = a;
-  let T;
-  if (o[1] !== children) {
-    T = jsxProd_default(InputSelectionContext.Provider, {
+    $[0] = contextValue;
+  } else contextValue = $[0];
+  let value = contextValue;
+  let providerElement;
+  if ($[1] !== children) {
+    providerElement = jsxProd_default(InputSelectionContext.Provider, {
       value,
       children,
     });
-    o[1] = children;
-    o[2] = T;
-  } else T = o[2];
-  return T;
+    $[1] = children;
+    $[2] = providerElement;
+  } else providerElement = $[2];
+  return providerElement;
 }
 //@ chunk-xe7zq1p4.js:11294-11484 placement
 /**
  * 读取输入选择桥接上下文，不在 Provider 内时抛错。
  */
 function useInputSelectionBridge() {
-  let n = Se(InputSelectionContext);
-  if (!n) {
+  let contextValue = useContext(InputSelectionContext);
+  if (!contextValue) {
     throw ReferenceError(
       "useInputSelectionBridge cannot be called outside of an <InputSelectionBridgeProvider /> (mounted by <AppStateProvider />)",
     );
   }
-  return n;
+  return contextValue;
 }
 //@ chunk-xe7zq1p4.js:11484-11488 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-xe7zq1p4.js:11484", () => {
+  init_react_production();
+});
 export {
   useInputSelectionBridge,
   InputSelectionBridgeProvider,

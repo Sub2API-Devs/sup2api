@@ -38,6 +38,7 @@ import {
   swapNoticeHolder,
 } from "../mcp/firstPartyDesignConsent.js";
 import { getOAuthHeaders } from "../../utils/teleport/api.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-ty8q6r2q.js:597-629 placement
 /**
@@ -52,8 +53,8 @@ function isDesignConsentName(consent) {
   return typeof consent === "string" && DESIGN_CONSENT_NAMES.includes(consent);
 }
 //@ chunk-ty8q6r2q.js:687-906 placement
-function DESIGN_CONSENT_PROMPT(e) {
-  switch (e) {
+function DESIGN_CONSENT_PROMPT(key) {
+  switch (key) {
     case "agent_design_projects":
       return "Connect to Claude Design? Claude can read and edit your Design projects from this tool. Change anytime at claude.ai/design/settings or with /design revoke.";
   }
@@ -62,10 +63,10 @@ function DESIGN_CONSENT_PROMPT(e) {
 /**
  * 清空 Design 同意状态的缓存与在途请求。
  */
-function invalidateDesignConsentCache(e) {
-  e.consentCache = null;
-  e.consentFetch = null;
-  e.consentCacheGeneration++;
+function invalidateDesignConsentCache(state) {
+  state.consentCache = null;
+  state.consentFetch = null;
+  state.consentCacheGeneration++;
 }
 //@ chunk-ty8q6r2q.js:989-1301 placement
 /**
@@ -75,13 +76,15 @@ async function designAuthOptions(credentials) {
   await checkAndRefreshOAuthTokenIfNeeded({
     credentials,
   });
-  let n;
-  if (isStorageV5Enabled() && credentials !== undefined) n = await getClaudeAIOAuthTokensAsync(credentials);
-  else n = getClaudeAIOAuthTokens();
-  let accessToken = n?.refreshToken && n.scopes?.includes("user:design:read") ? n.accessToken : null;
+  let tokens;
+  if (isStorageV5Enabled() && credentials !== undefined)
+    tokens = await getClaudeAIOAuthTokensAsync(credentials);
+  else tokens = getClaudeAIOAuthTokens();
+  let accessToken =
+    tokens?.refreshToken && tokens.scopes?.includes("user:design:read") ? tokens.accessToken : null;
   if (!accessToken) {
     let designAccessToken = await getDesignAccessToken(credentials);
-    accessToken = designAccessToken.ok ? designAccessToken.accessToken : (n?.accessToken ?? null);
+    accessToken = designAccessToken.ok ? designAccessToken.accessToken : (tokens?.accessToken ?? null);
   }
   return {
     auth: "none",
@@ -98,17 +101,17 @@ async function designAuthOptions(credentials) {
  */
 async function fetchDesignConsent(credentials) {
   try {
-    let n = await apiClient.get("/v1/design/consent", {
+    let response = await apiClient.get("/v1/design/consent", {
       ...(await designAuthOptions(credentials)),
-      validateStatus: (r) => r < 500,
+      validateStatus: (status) => status < 500,
     });
-    if (!n.ok || n.status !== 200) return {};
-    let s = {};
-    for (let r of DESIGN_CONSENT_NAMES) {
-      let o = n.data?.[r];
-      if (typeof o === "boolean") s[r] = o;
+    if (!response.ok || response.status !== 200) return {};
+    let consent = {};
+    for (let name of DESIGN_CONSENT_NAMES) {
+      let value = response.data?.[name];
+      if (typeof value === "boolean") consent[name] = value;
     }
-    return s;
+    return consent;
   } catch (error) {
     logForDebugging(
       `Design consent pre-flight GET failed (${errorMessage(error)}); falling back to 403-seeded cache.`,
@@ -135,11 +138,11 @@ function setDesignConsent(state, key, value) {
 /**
  * 是否已存有 Design 的 OAuth 访问令牌。
  */
-async function hasDesignOAuthToken(e) {
-  return !!(await readDesignOAuth(e))?.accessToken;
+async function hasDesignOAuthToken(credentials) {
+  return !!(await readDesignOAuth(credentials))?.accessToken;
 }
 //@ chunk-ty8q6r2q.js:1815-2430 placement
-async function designUnavailableReason(e) {
+async function designUnavailableReason(credentials) {
   if (!isFirstPartyProvider())
     return {
       ok: false,
@@ -151,29 +154,30 @@ async function designUnavailableReason(e) {
       reason: "essential_traffic_only",
     };
   await checkAndRefreshOAuthTokenIfNeeded({
-    credentials: e,
+    credentials,
   });
-  let n;
-  if (isStorageV5Enabled() && e !== undefined) n = await getClaudeAIOAuthTokensAsync(e);
-  else n = getClaudeAIOAuthTokens();
-  if (n?.accessToken && n.refreshToken && n.scopes?.includes("user:design:read"))
+  let tokens;
+  if (isStorageV5Enabled() && credentials !== undefined)
+    tokens = await getClaudeAIOAuthTokensAsync(credentials);
+  else tokens = getClaudeAIOAuthTokens();
+  if (tokens?.accessToken && tokens.refreshToken && tokens.scopes?.includes("user:design:read"))
     return {
       ok: true,
-      accessToken: n.accessToken,
+      accessToken: tokens.accessToken,
       bearer: "design_scoped_login",
     };
-  let designAccessToken = await getDesignAccessToken(e);
+  let designAccessToken = await getDesignAccessToken(credentials);
   if (designAccessToken.ok)
     return {
       ok: true,
       accessToken: designAccessToken.accessToken,
       bearer: "design_credential",
     };
-  if (n?.accessToken)
+  if (tokens?.accessToken)
     return {
       ok: true,
-      accessToken: n.accessToken,
-      bearer: n.scopes?.includes("user:design:read") ? "design_scoped_login" : "login",
+      accessToken: tokens.accessToken,
+      bearer: tokens.scopes?.includes("user:design:read") ? "design_scoped_login" : "login",
     };
   return {
     ok: false,
@@ -185,8 +189,8 @@ async function designUnavailableReason(e) {
 /**
  * 取首次使用时被拒的 design 同意键（未拒绝返回 null）。
  */
-async function getDesignConsentKey(e) {
-  return designUnavailableReason(e);
+async function getDesignConsentKey(credentials) {
+  return designUnavailableReason(credentials);
 }
 //@ chunk-ty8q6r2q.js:2464-2864 placement
 /**
@@ -195,17 +199,17 @@ async function getDesignConsentKey(e) {
 async function checkDesignConsent(state, credentials) {
   if (!isFirstPartyProvider() || isEssentialTrafficOnly()) return null;
   if (state.consentCache === null) {
-    let s = (state.consentFetch ??= fetchDesignConsent(credentials));
+    let pending = (state.consentFetch ??= fetchDesignConsent(credentials));
     let consentCacheGeneration = state.consentCacheGeneration;
-    let o = await s;
+    let generation = await pending;
     if (state.consentCache === null && state.consentCacheGeneration === consentCacheGeneration) {
       state.consentCache = {};
-      for (let a of DESIGN_CONSENT_NAMES) {
-        let i = o[a];
-        if (typeof i === "boolean") setDesignConsent(state, a, i);
+      for (let name of DESIGN_CONSENT_NAMES) {
+        let granted = generation[name];
+        if (typeof granted === "boolean") setDesignConsent(state, name, granted);
       }
     }
-    if (state.consentFetch === s) state.consentFetch = null;
+    if (state.consentFetch === pending) state.consentFetch = null;
   }
   return state.consentCache?.agent_design_projects === false ? "agent_design_projects" : null;
 }
@@ -213,89 +217,90 @@ async function checkDesignConsent(state, credentials) {
 /**
  * 判断是否需要先登录 Claude Design（第一方提供方、无 claude.ai 令牌且无 Design 令牌）。
  */
-async function needsDesignLogin(e) {
+async function needsDesignLogin(credentials) {
   if (!isFirstPartyProvider() || isEssentialTrafficOnly()) return false;
-  let n;
-  if (isStorageV5Enabled() && e !== undefined) n = (await getClaudeAIOAuthTokensAsync(e))?.accessToken;
-  else n = getClaudeAIOAuthTokens()?.accessToken;
-  if (n) return false;
-  return !(await readDesignOAuth(e))?.accessToken;
+  let accessToken;
+  if (isStorageV5Enabled() && credentials !== undefined)
+    accessToken = (await getClaudeAIOAuthTokensAsync(credentials))?.accessToken;
+  else accessToken = getClaudeAIOAuthTokens()?.accessToken;
+  if (accessToken) return false;
+  return !(await readDesignOAuth(credentials))?.accessToken;
 }
 //@ chunk-ty8q6r2q.js:3038-3392 placement
-async function recordDesignConsent(e, n, credentials) {
+async function recordDesignConsent(scope, consent, credentials) {
   try {
-    let r = await apiClient.post(
+    let response = await apiClient.post(
       "/v1/design/consent",
       {
-        consent: n,
+        consent,
       },
       {
         ...(await designAuthOptions(credentials)),
-        validateStatus: (o) => o < 300,
+        validateStatus: (status) => status < 300,
       },
     );
-    if (!r.ok)
+    if (!response.ok)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Couldn't record Design consent (${r.reason === "no-auth" ? r.detail : r.reason}).`,
+        `Couldn't record Design consent (${response.reason === "no-auth" ? response.detail : response.reason}).`,
         "design consent POST blocked by policy gate",
       );
   } catch (error) {
     logFeatureBad("design_consent", "post_failed");
     throw error;
   }
-  setDesignConsent(e, n, true);
+  setDesignConsent(scope, consent, true);
   logFeatureOk("design_consent");
 }
 //@ chunk-ty8q6r2q.js:3392-3761 placement
-async function revokeDesignConsent(e, n, credentials) {
+async function revokeDesignConsent(scope, consent, credentials) {
   try {
-    let r = await apiClient.delete(
+    let response = await apiClient.delete(
       "/v1/design/consent",
       {
-        consent: n,
+        consent,
       },
       {
         ...(await designAuthOptions(credentials)),
-        validateStatus: (o) => o < 300 || o === 404,
+        validateStatus: (status) => status < 300 || status === 404,
       },
     );
-    if (!r.ok)
+    if (!response.ok)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Couldn't revoke Design consent (${r.reason === "no-auth" ? r.detail : r.reason}).`,
+        `Couldn't revoke Design consent (${response.reason === "no-auth" ? response.detail : response.reason}).`,
         "design consent DELETE blocked by policy gate",
       );
   } catch (error) {
     logFeatureBad("design_consent", "delete_failed");
     throw error;
   }
-  setDesignConsent(e, n, false);
+  setDesignConsent(scope, consent, false);
   logFeatureOk("design_consent");
 }
 //@ chunk-ty8q6r2q.js:3761-4366 placement
-async function probeDesignGrants(e) {
+async function probeDesignGrants(credentials) {
   try {
-    let n = await apiClient.get("/v1/design/grants", {
-      ...(await designAuthOptions(e)),
-      validateStatus: (o) => o < 500,
+    let response = await apiClient.get("/v1/design/grants", {
+      ...(await designAuthOptions(credentials)),
+      validateStatus: (status) => status < 500,
     });
-    if (!n.ok || n.status !== 200) {
-      let status = n.ok ? n.status : 0;
+    if (!response.ok || response.status !== 200) {
+      let status = response.ok ? response.status : 0;
       logFeatureSad("design_project_grant", status === 404 ? "probe_404_old_server" : "probe_http_error", {
         status,
       });
       return null;
     }
-    let grants = n.data?.grants;
+    let grants = response.data?.grants;
     if (!Array.isArray(grants)) {
       logFeatureSad("design_project_grant", "probe_shape");
       return null;
     }
-    let r = new Set();
+    let ids = new Set();
     for (let grant of grants) {
       let projectId = grant?.project_id;
-      if (typeof projectId === "string" && projectId.length > 0) r.add(projectId);
+      if (typeof projectId === "string" && projectId.length > 0) ids.add(projectId);
     }
-    return r;
+    return ids;
   } catch (error) {
     logForDebugging(
       `Design project-grant probe failed (${errorMessage(error)}); falling back to the per-batch plan flow.`,
@@ -308,76 +313,76 @@ async function probeDesignGrants(e) {
 /**
  * 检查 Design 项目授权：合并并发探测，返回已授权、未授权或不可用。
  */
-async function checkDesignGrant(e, projectId, credentials) {
-  let r = (e.grantsFetch ??= probeDesignGrants(credentials));
+async function checkDesignGrant(state, projectId, credentials) {
+  let grants = (state.grantsFetch ??= probeDesignGrants(credentials));
   try {
-    let o = await r;
-    if (o === null) return "unavailable";
-    return o.has(projectId) ? "granted" : "notGranted";
+    let grantSet = await grants;
+    if (grantSet === null) return "unavailable";
+    return grantSet.has(projectId) ? "granted" : "notGranted";
   } finally {
-    if (e.grantsFetch === r) e.grantsFetch = null;
+    if (state.grantsFetch === grants) state.grantsFetch = null;
   }
 }
 //@ chunk-ty8q6r2q.js:4557-5335 placement
-async function recordDesignProjectGrant(e, projectId, credentials) {
-  let r;
+async function recordDesignProjectGrant(state, projectId, credentials) {
+  let response;
   try {
-    let o = await apiClient.post(
+    let request = await apiClient.post(
       "/v1/design/grants",
       {
         project_id: projectId,
       },
       {
         ...(await designAuthOptions(credentials)),
-        validateStatus: (a) => a < 300 || a === 404,
+        validateStatus: (status) => status < 300 || status === 404,
       },
     );
-    if (!o.ok)
+    if (!request.ok)
       throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-        `Couldn't record the Design project write grant (${o.reason === "no-auth" ? o.detail : o.reason}).`,
+        `Couldn't record the Design project write grant (${request.reason === "no-auth" ? request.detail : request.reason}).`,
         "design project grant POST blocked by policy gate",
       );
-    r = o.status;
+    response = request.status;
   } catch (error) {
     logFeatureBad("design_project_grant", "post_failed");
     throw error;
   }
-  if (r === 404) {
-    markGrantIneligibleProject(e, projectId);
+  if (response === 404) {
+    markGrantIneligibleProject(state, projectId);
     logFeatureBad("design_project_grant", "mint_refused_404");
     throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
       "This project cannot hold a durable write grant for this account (it may be shared from another organization, or not viewable) \u2014 use finalize_plan with writes/deletes and pass the returned plan_token for writes to this project.",
       "design project grant mint refused for this project",
     );
   }
-  markProjectGrantVerified(e, projectId);
+  markProjectGrantVerified(state, projectId);
   logFeatureOk("design_project_grant");
 }
 //@ chunk-ty8q6r2q.js:5335-6111 placement
-function pollDesignGrantApproval(e, projectId, s) {
-  let r = null;
-  async function o() {
-    let a;
+function pollDesignGrantApproval(credentials, projectId, signal) {
+  let baseline = null;
+  async function fetchGrant() {
+    let grants;
     try {
-      let i = await apiClient.get("/v1/design/grants", {
-        ...(await designAuthOptions(s)),
-        validateStatus: (c) => c < 500,
+      let response = await apiClient.get("/v1/design/grants", {
+        ...(await designAuthOptions(signal)),
+        validateStatus: (status) => status < 500,
       });
-      if (!i.ok || i.status !== 200) return null;
-      a = i.data?.grants;
+      if (!response.ok || response.status !== 200) return null;
+      grants = response.data?.grants;
     } catch (error) {
       logForDebugging(`Server-approval watcher poll failed (${errorMessage(error)}); will poll again.`);
       return null;
     }
-    if (!Array.isArray(a)) return null;
-    for (let i of a) {
-      let c = i;
-      if (c?.project_id !== projectId) continue;
-      let p = typeof c.created_at === "string" ? Date.parse(c.created_at) : NaN;
-      if (Number.isNaN(p)) return null;
+    if (!Array.isArray(grants)) return null;
+    for (let entry of grants) {
+      let grant = entry;
+      if (grant?.project_id !== projectId) continue;
+      let createdAtMs = typeof grant.created_at === "string" ? Date.parse(grant.created_at) : NaN;
+      if (Number.isNaN(createdAtMs)) return null;
       return {
         present: true,
-        createdAtMs: p,
+        createdAtMs,
       };
     }
     return {
@@ -386,33 +391,42 @@ function pollDesignGrantApproval(e, projectId, s) {
   }
   return {
     async poll() {
-      let a = await o();
-      if (a === null) return false;
-      if (r === null) {
-        r = {
-          createdAtMs: a.present ? a.createdAtMs : null,
+      let state = await fetchGrant();
+      if (state === null) return false;
+      if (baseline === null) {
+        baseline = {
+          createdAtMs: state.present ? state.createdAtMs : null,
         };
         return false;
       }
-      if (!a.present) return false;
-      if (!(r.createdAtMs === null || a.createdAtMs > r.createdAtMs)) return false;
-      if (isRecardProject(e, projectId)) return false;
-      markProjectGrantVerified(e, projectId);
+      if (!state.present) return false;
+      if (!(baseline.createdAtMs === null || state.createdAtMs > baseline.createdAtMs)) return false;
+      if (isRecardProject(credentials, projectId)) return false;
+      markProjectGrantVerified(credentials, projectId);
       return true;
     },
   };
 }
 //@ chunk-ty8q6r2q.js:6111-6118 placement
-swapScaffoldResolver(designUnavailableReason);
+// deferred: uses swapScaffoldResolver (../mcp/firstPartyDesignConsent.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ty8q6r2q.js:6111", () => {
+  swapScaffoldResolver(designUnavailableReason);
+});
 //@ chunk-ty8q6r2q.js:6118-6148 placement
-swapConsentChecker(async (e) => !!(await readDesignOAuth(e)));
+// deferred: uses swapConsentChecker (../mcp/firstPartyDesignConsent.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ty8q6r2q.js:6118", () => {
+  swapConsentChecker(async (credentials) => !!(await readDesignOAuth(credentials)));
+});
 //@ chunk-ty8q6r2q.js:6148-6267 placement
-swapNoticeHolder({
-  wouldNeedDesignConsent: checkDesignConsent,
-  consentPromptFor: DESIGN_CONSENT_PROMPT,
-  postDesignConsent: recordDesignConsent,
-  seedDesignConsentBit: setDesignConsent,
-  isConsentBit: isDesignConsentName,
+// deferred: uses swapNoticeHolder (../mcp/firstPartyDesignConsent.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-ty8q6r2q.js:6148", () => {
+  swapNoticeHolder({
+    wouldNeedDesignConsent: checkDesignConsent,
+    consentPromptFor: DESIGN_CONSENT_PROMPT,
+    postDesignConsent: recordDesignConsent,
+    seedDesignConsentBit: setDesignConsent,
+    isConsentBit: isDesignConsentName,
+  });
 });
 //@ chunk-98n6ge4d.js:6335-6391 placement
 /**
@@ -424,7 +438,7 @@ var OMELETTE_SERVICE_NAME = "anthropic.omelette.api.v1alpha.OmeletteService";
  * 调 Claude Design 同步 RPC（POST /<前缀>/<方法>）：401/403 抛 DesignAuthError，其他非 2xx 抛 DesignRpcError，返回响应数据。
  */
 async function designRpc(method, token, body, signal) {
-  let i = await apiClient.post(`/${OMELETTE_SERVICE_NAME}/${method}`, body, {
+  let response = await apiClient.post(`/${OMELETTE_SERVICE_NAME}/${method}`, body, {
     auth: "none",
     headers: {
       ...getOAuthHeaders(token),
@@ -435,52 +449,54 @@ async function designRpc(method, token, body, signal) {
     validateStatus: () => true,
     signal,
   });
-  if (!i.ok)
+  if (!response.ok)
     throw new DesignRpcError(method, 0, {
-      error: i.reason,
+      error: response.reason,
     });
-  if (i.status === 401 || i.status === 403) throw new DesignAuthError(method, i.status, i.data);
-  if (i.status < 200 || i.status >= 300) throw new DesignRpcError(method, i.status, i.data);
-  return i.data;
+  if (response.status === 401 || response.status === 403)
+    throw new DesignAuthError(method, response.status, response.data);
+  if (response.status < 200 || response.status >= 300)
+    throw new DesignRpcError(method, response.status, response.data);
+  return response.data;
 }
 //@ chunk-98n6ge4d.js:6786-6821 placement
 var PROJECT_TYPE_DESIGN_SYSTEM = "PROJECT_TYPE_DESIGN_SYSTEM";
 //@ chunk-98n6ge4d.js:6821-6990 placement
-async function listOrgProjects(e, n = {}, s) {
-  let r = await designRpc(
+async function listOrgProjects(token, options = {}, signal) {
+  let result = await designRpc(
     "ListOrgProjects",
-    e,
+    token,
     {
-      ...(n.type && {
-        type: n.type,
+      ...(options.type && {
+        type: options.type,
       }),
-      ...(n.cursor && {
-        cursor: n.cursor,
+      ...(options.cursor && {
+        cursor: options.cursor,
       }),
     },
-    s,
+    signal,
   );
   return {
-    items: r.items ?? [],
-    cursor: r.cursor ?? "",
+    items: result.items ?? [],
+    cursor: result.cursor ?? "",
   };
 }
 //@ chunk-98n6ge4d.js:6990-7172 placement
-async function writeDesignFiles(e, projectId, files, r = {}, i) {
+async function writeDesignFiles(token, projectId, files, options = {}, signal) {
   return (
     (
       await designRpc(
         "WriteFiles",
-        e,
+        token,
         {
           projectId,
           files,
-          deduplicate: r.deduplicate ?? false,
-          ...(r.deletePaths?.length && {
-            deletePaths: r.deletePaths,
+          deduplicate: options.deduplicate ?? false,
+          ...(options.deletePaths?.length && {
+            deletePaths: options.deletePaths,
           }),
         },
-        i,
+        signal,
       )
     ).files ?? []
   );
@@ -489,163 +505,163 @@ async function writeDesignFiles(e, projectId, files, r = {}, i) {
 /**
  * 调 GetProject RPC 取项目信息。
  */
-async function getDesignProject(e, projectId, s) {
+async function getDesignProject(token, projectId, signal) {
   return designRpc(
     "GetProject",
-    e,
+    token,
     {
       projectId,
     },
-    s,
+    signal,
   );
 }
 //@ chunk-98n6ge4d.js:7238-7554 placement
 /**
  * 分页列出 Design 项目全部文件路径（最多 50 页）。
  */
-async function listDesignFiles(e, projectId, s) {
-  let r = [];
-  let i = 0;
+async function listDesignFiles(credentials, projectId, signal) {
+  let paths = [];
+  let offset = 0;
   for (let j = 0; j < 50; j++) {
-    let c = await designRpc(
+    let page = await designRpc(
       "ListFiles",
-      e,
+      credentials,
       {
         projectId,
         depth: -1,
-        ...(i > 0 && {
-          offset: i,
+        ...(offset > 0 && {
+          offset,
         }),
       },
-      s,
+      signal,
     );
-    let entries = c.entries ?? [];
-    for (let entry of entries) r.push(entry.path);
-    if (!c.truncated || entries.length === 0) return r;
-    i += entries.length;
+    let entries = page.entries ?? [];
+    for (let entry of entries) paths.push(entry.path);
+    if (!page.truncated || entries.length === 0) return paths;
+    offset += entries.length;
   }
   throw new DesignRpcError("ListFiles", 0, {
-    error: `pagination exceeded 50 pages (${r.length} paths)`,
+    error: `pagination exceeded 50 pages (${paths.length} paths)`,
   });
 }
 //@ chunk-98n6ge4d.js:7554-7899 placement
 /**
  * 读取 Design 项目文件内容，按上限截断，返回内容类型与是否截断。
  */
-async function getDesignFile(e, projectId, path, r = 262144, i) {
-  let a = await designRpc(
+async function getDesignFile(credentials, projectId, path, maxBytes = 262144, signal) {
+  let result = await designRpc(
     "GetFile",
-    e,
+    credentials,
     {
       projectId,
       path,
       raw: true,
     },
-    i,
+    signal,
   );
-  let content = a.content ?? "";
-  let isBase64 = a.isBase64 ?? false;
-  let h;
-  let g = false;
+  let content = result.content ?? "";
+  let isBase64 = result.isBase64 ?? false;
+  let text;
+  let truncated = false;
   if (isBase64) {
-    h = content;
-    if (h.length > r) {
-      h = h.slice(0, r);
-      g = true;
+    text = content;
+    if (text.length > maxBytes) {
+      text = text.slice(0, maxBytes);
+      truncated = true;
     }
   } else {
     let buffer = Buffer.from(content, "base64");
-    if (buffer.byteLength > r) {
-      buffer = buffer.subarray(0, r);
-      g = true;
+    if (buffer.byteLength > maxBytes) {
+      buffer = buffer.subarray(0, maxBytes);
+      truncated = true;
     }
-    h = buffer.toString("utf8");
+    text = buffer.toString("utf8");
   }
   return {
-    content: h,
-    contentType: a.contentType ?? "",
+    content: text,
+    contentType: result.contentType ?? "",
     isBase64,
-    truncated: g,
+    truncated,
   };
 }
 //@ chunk-98n6ge4d.js:7899-8019 placement
-async function deleteDesignFiles(e, projectId, s, r) {
-  if (s.length === 0) return 0;
+async function deleteDesignFiles(token, projectId, paths, signal) {
+  if (paths.length === 0) return 0;
   return (
     (
       await designRpc(
         "DeleteFiles",
-        e,
+        token,
         {
           projectId,
-          paths: s,
+          paths,
         },
-        r,
+        signal,
       )
     ).deleted ?? 0
   );
 }
 //@ chunk-98n6ge4d.js:8019-8183 placement
-async function createDesignProject(e, name, s) {
-  let r = await designRpc(
+async function createDesignProject(token, name, signal) {
+  let result = await designRpc(
     "CreateProject",
-    e,
+    token,
     {
       name,
       type: PROJECT_TYPE_DESIGN_SYSTEM,
     },
-    s,
+    signal,
   );
-  if (!r.projectId) throw new DesignRpcError("CreateProject", 200, r);
+  if (!result.projectId) throw new DesignRpcError("CreateProject", 200, result);
   return {
-    projectId: r.projectId,
+    projectId: result.projectId,
     name,
   };
 }
 //@ chunk-98n6ge4d.js:8183-8379 placement
-async function recordDesignAsset(e, projectId, s, r) {
+async function recordDesignAsset(token, projectId, asset, signal) {
   await designRpc(
     "RecordAsset",
-    e,
+    token,
     {
       projectId,
-      name: s.name,
-      path: s.path,
-      ...(s.subtitle && {
-        subtitle: s.subtitle,
+      name: asset.name,
+      path: asset.path,
+      ...(asset.subtitle && {
+        subtitle: asset.subtitle,
       }),
-      ...(s.viewport && {
-        viewport: s.viewport,
+      ...(asset.viewport && {
+        viewport: asset.viewport,
       }),
-      ...(s.group && {
-        section: s.group,
+      ...(asset.group && {
+        section: asset.group,
       }),
     },
-    r,
+    signal,
   );
 }
 //@ chunk-98n6ge4d.js:8379-8454 placement
 /**
  * 调 DeleteAsset RPC 删除项目文件。
  */
-async function deleteDesignAsset(e, projectId, path, r) {
+async function deleteDesignAsset(token, projectId, path, signal) {
   await designRpc(
     "DeleteAsset",
-    e,
+    token,
     {
       projectId,
       path,
     },
-    r,
+    signal,
   );
 }
 //@ chunk-98n6ge4d.js:8454-8535 placement
 /**
  * 把字符串里的 OAuth 令牌替换成 [redacted-oauth-token]。
  */
-function redactOAuthToken(e, n) {
-  if (!n) return e;
-  return e.split(n).join("[redacted-oauth-token]");
+function redactOAuthToken(text, token) {
+  if (!token) return text;
+  return text.split(token).join("[redacted-oauth-token]");
 }
 //@ chunk-98n6ge4d.js:8535-8790 placement
 class DesignRpcError extends Error {
@@ -653,30 +669,33 @@ class DesignRpcError extends Error {
   status;
   body;
   telemetryMessage;
-  constructor(method, n, s) {
-    super(`Design API ${method} failed: HTTP ${n} ${truncateErrorBody(s)}`);
+  constructor(method, status, body) {
+    super(`Design API ${method} failed: HTTP ${status} ${truncateErrorBody(body)}`);
     this.method = method;
-    this.status = n;
-    this.body = s;
+    this.status = status;
+    this.body = body;
     this.name = "DesignRpcError";
-    this.telemetryMessage = `Design API ${method} failed: HTTP ${n}`;
+    this.telemetryMessage = `Design API ${method} failed: HTTP ${status}`;
   }
 }
 //@ chunk-98n6ge4d.js:8790-8869 placement
-class DesignAuthError extends DesignRpcError {
-  constructor(message, status, s) {
-    super(message, status, s);
-    this.name = "DesignAuthError";
-  }
-}
+let DesignAuthError; // deferred: uses DesignRpcError of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-98n6ge4d.js:8790", () => {
+  DesignAuthError = class DesignAuthError extends DesignRpcError {
+    constructor(message, status, body) {
+      super(message, status, body);
+      this.name = "DesignAuthError";
+    }
+  };
+});
 //@ chunk-98n6ge4d.js:8869-9028 placement
-function truncateErrorBody(e) {
-  if (e == null) return "";
-  if (typeof e === "string") return e.slice(0, 200);
+function truncateErrorBody(body) {
+  if (body == null) return "";
+  if (typeof body === "string") return body.slice(0, 200);
   try {
-    return JSON.stringify(e).slice(0, 200);
+    return JSON.stringify(body).slice(0, 200);
   } catch {
-    return String(e).slice(0, 200);
+    return String(body).slice(0, 200);
   }
 }
 export {

@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:451391-468103 cjs-fingerprint
-var require_stata = x(function (cjsExports, cjsModule) {
+var require_stata = __commonJS(function (cjsExports, cjsModule) {
   function stata(hljs) {
     return {
       name: "Stata",

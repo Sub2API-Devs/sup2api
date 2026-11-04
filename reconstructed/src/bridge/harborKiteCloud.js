@@ -39,3 +39,4 @@ function hasOrganizationContext() {
     hasProfileScope()
   );
 }
+export { isHarborKiteCloudEnabled };

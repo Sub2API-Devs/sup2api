@@ -11,7 +11,7 @@
 import { unescapeHtmlEntities } from "../../utils/confusables.js";
 import { extractTag } from "../../utils/messages.js";
 import { PASTED_CONTENT_TAG, flattenPastedBlocks } from "../../utils/pastedContent.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
@@ -34,30 +34,32 @@ var PERSISTED_OUTPUT_CLOSING_TAG = "</persisted-output>";
 /**
  * 从 bash-stdout/bash-stderr 标签包装的文本中拆出 stdout/stderr（处理 persisted-output 包装并反转义）。旧版名 BASH_STDERR_TAG 是常量名，这里是函数。
  */
-function splitBashOutputTags(m) {
-  let { stdoutBody, afterStdout } = splitBashStdoutTag(m);
-  let g = flattenPastedContentText(stdoutBody);
+function splitBashOutputTags(content) {
+  let { stdoutBody, afterStdout } = splitBashStdoutTag(content);
+  let stdoutText = flattenPastedContentText(stdoutBody);
   return {
-    stdout: g.startsWith(PERSISTED_OUTPUT_TAG) ? stripPersistedOutputTags(g) : unescapeHtmlEntities(g),
+    stdout: stdoutText.startsWith(PERSISTED_OUTPUT_TAG)
+      ? stripPersistedOutputTags(stdoutText)
+      : unescapeHtmlEntities(stdoutText),
     stderr: unescapeHtmlEntities(flattenPastedContentText(extractTag(afterStdout, "bash-stderr") ?? "")),
   };
 }
 //@ chunk-ah34pb7m.js:105335-105512 placement
-function splitBashStdoutTag(m) {
-  let index = m.lastIndexOf(BASH_STDOUT_CLOSE_TAG);
-  if (!m.startsWith(BASH_STDOUT_OPEN_TAG) || index === -1)
+function splitBashStdoutTag(content) {
+  let index = content.lastIndexOf(BASH_STDOUT_CLOSE_TAG);
+  if (!content.startsWith(BASH_STDOUT_OPEN_TAG) || index === -1)
     return {
       stdoutBody: "",
-      afterStdout: m,
+      afterStdout: content,
     };
   return {
-    stdoutBody: m.slice(BASH_STDOUT_OPEN_TAG.length, index),
-    afterStdout: m.slice(index + BASH_STDOUT_CLOSE_TAG.length),
+    stdoutBody: content.slice(BASH_STDOUT_OPEN_TAG.length, index),
+    afterStdout: content.slice(index + BASH_STDOUT_CLOSE_TAG.length),
   };
 }
 //@ chunk-ah34pb7m.js:105512-105622 placement
-function stripPersistedOutputTags(m) {
-  let sliced = m.slice(PERSISTED_OUTPUT_TAG.length);
+function stripPersistedOutputTags(content) {
+  let sliced = content.slice(PERSISTED_OUTPUT_TAG.length);
   let index = sliced.lastIndexOf(PERSISTED_OUTPUT_CLOSING_TAG);
   return index === -1
     ? sliced
@@ -73,70 +75,70 @@ function flattenPastedContentText(stdoutBody) {
 /**
  * 函数 splitBashOutputCached（按消息缓存 bash 输出拆分结果）；位于「用户斜杠命令/技能调用回显（"/命令 参数" 或 Skill(name)）」模块。
  */
-function splitBashOutputCached(m, d) {
-  let c = m.get(d);
-  if (!c) {
-    c = splitBashOutputTags(d.text);
-    m.set(d, c);
+function splitBashOutputCached(cache, command) {
+  let split = cache.get(command);
+  if (!split) {
+    split = splitBashOutputTags(command.text);
+    cache.set(command, split);
   }
-  return c;
+  return split;
 }
 //@ chunk-ah34pb7m.js:105788-105999 placement
 /**
  * 把带 bash-stdout 等标签的用户文本拆开后交给 BashToolResultMessage 显示。
  */
 function BashOutputBlock(props) {
-  let g = w(5);
+  let $ = useMemoCache(5);
   let { content, verbose } = props;
   let content_2;
-  if (g[0] !== content) {
+  if ($[0] !== content) {
     content_2 = splitBashOutputTags(content);
-    g[0] = content;
-    g[1] = content_2;
-  } else content_2 = g[1];
+    $[0] = content;
+    $[1] = content_2;
+  } else content_2 = $[1];
   const verbose_2 = !!verbose;
-  let M;
-  if (g[2] !== content_2 || g[3] !== verbose_2) {
-    M = jsxProd_default(BashToolResultMessage, {
+  let resultElement;
+  if ($[2] !== content_2 || $[3] !== verbose_2) {
+    resultElement = jsxProd_default(BashToolResultMessage, {
       content: content_2,
       verbose: verbose_2,
     });
-    g[2] = content_2;
-    g[3] = verbose_2;
-    g[4] = M;
-  } else M = g[4];
-  return M;
+    $[2] = content_2;
+    $[3] = verbose_2;
+    $[4] = resultElement;
+  } else resultElement = $[4];
+  return resultElement;
 }
 //@ chunk-ah34pb7m.js:105999-106929 fingerprint = UserCommandMessage (0.39)
 function UserCommandMessage(props) {
-  let $ = w(14);
+  let $ = useMemoCache(14);
   let { addMargin, param, followsSpeakerLabel } = props;
   let { text } = param;
-  let h = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
+  let followsLabel = followsSpeakerLabel === undefined ? false : followsSpeakerLabel;
   let t2;
   if ($[0] !== text) {
     t2 = lastCommandMessageParsed(text);
     $[0] = text;
     $[1] = t2;
   } else t2 = $[1];
-  let x = t2;
-  if (!x?.message) {
+  let parsed = t2;
+  if (!parsed?.message) {
     return null;
   }
-  let { message, args, isSkillFormat } = x;
-  let B;
+  let { message, args, isSkillFormat } = parsed;
+  let label;
   if ($[2] !== args || $[3] !== message || $[4] !== isSkillFormat) {
-    B = isSkillFormat ? `Skill(${message})` : `/${[message, args].filter(Boolean).join(" ")}`;
+    label = isSkillFormat ? `Skill(${message})` : `/${[message, args].filter(Boolean).join(" ")}`;
     $[2] = args;
     $[3] = message;
     $[4] = isSkillFormat;
-    $[5] = B;
-  } else B = $[5];
-  let children = B;
-  if (h) {
-    let N;
+    $[5] = label;
+  } else label = $[5];
+  let children = label;
+  if (followsLabel) {
+    let boxElement;
     if ($[6] !== children) {
-      N = jsxProd_default(Box, {
+      boxElement = jsxProd_default(Box, {
         flexGrow: 1,
         backgroundColor: "userMessageBackground",
         children: jsxProd_default(Text, {
@@ -145,9 +147,9 @@ function UserCommandMessage(props) {
         }),
       });
       $[6] = children;
-      $[7] = N;
-    } else N = $[7];
-    return N;
+      $[7] = boxElement;
+    } else boxElement = $[7];
+    return boxElement;
   }
   const marginTop = addMargin ? 1 : 0;
   let t6;

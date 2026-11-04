@@ -25,6 +25,7 @@ import { getTeammateAgentId } from "../../bootstrap/state.js";
 import { isTerminalShutdown, latchTerminalShutdown } from "../terminalShutdown.js";
 import { emitExitMessage, gracefulShutdown } from "../gracefulShutdown.js";
 import { recordManagedSettingsRefusal } from "../../cli/managedConfigRefusal.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-cjydagjy.js:36599-36765 placement
 function shouldWaitForRemotePolicy() {
@@ -44,11 +45,11 @@ var HELPER_GATE_TIMEOUT_MS = 120000;
 var HELPER_GATE_HOOK_GRACE_MS = 60000;
 //@ chunk-cjydagjy.js:36788-36854 placement
 function helperGateDeadline() {
-  let e = 0;
+  let hookTimeout = 0;
   try {
-    e = getSessionEndHookTimeoutMs();
+    hookTimeout = getSessionEndHookTimeoutMs();
   } catch {}
-  return Math.max(HELPER_GATE_TIMEOUT_MS, e + HELPER_GATE_HOOK_GRACE_MS);
+  return Math.max(HELPER_GATE_TIMEOUT_MS, hookTimeout + HELPER_GATE_HOOK_GRACE_MS);
 }
 //@ chunk-cjydagjy.js:36854-36873 placement
 function exitCliWithError() {
@@ -65,27 +66,31 @@ function armHelperGateExit() {
 /**
  * 策略 helper 宿主回调（读取、拒绝）。
  */
-var POLICY_HELPER_HOST_2 = {
-  readBase: () => ({
-    settings: getBasePolicySettings(),
-    origin: getBasePolicySettingsOrigin(),
-    loadErrors: getPolicyHelperSourceLoadErrors(),
-  }),
-  baseSettled: () => !isRemoteManagedSettingsColdStartPending(),
-  isUnwatchedRepl: () => isUnattendedBgSession() || getTeammateAgentId() !== undefined,
-  refuse: (e) => {
-    let r = isTerminalShutdown();
-    latchTerminalShutdown();
-    emitExitMessage(e);
-    recordManagedSettingsRefusal("helper_failed");
-    if (r) {
-      armHelperGateExit();
-      return;
-    }
-    gracefulShutdown(1, "other", {
-      suppressResumeHint: true,
-    }).then(exitCliWithError, exitCliWithError);
-  },
-};
-var POLICY_HELPER_HOST = new Set(["install", "update", "rollback", "forward-home-settings"]);
-export { POLICY_HELPER_HOST, shouldWaitForRemotePolicy, POLICY_HELPER_HOST_2, armHelperGateExit };
+var POLICY_HELPER_HOST; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var POLICY_HELPER_SUBCOMMANDS;
+deferInit("chunk-cjydagjy.js:36916", () => {
+  POLICY_HELPER_HOST = {
+    readBase: () => ({
+      settings: getBasePolicySettings(),
+      origin: getBasePolicySettingsOrigin(),
+      loadErrors: getPolicyHelperSourceLoadErrors(),
+    }),
+    baseSettled: () => !isRemoteManagedSettingsColdStartPending(),
+    isUnwatchedRepl: () => isUnattendedBgSession() || getTeammateAgentId() !== undefined,
+    refuse: (message) => {
+      let shuttingDown = isTerminalShutdown();
+      latchTerminalShutdown();
+      emitExitMessage(message);
+      recordManagedSettingsRefusal("helper_failed");
+      if (shuttingDown) {
+        armHelperGateExit();
+        return;
+      }
+      gracefulShutdown(1, "other", {
+        suppressResumeHint: true,
+      }).then(exitCliWithError, exitCliWithError);
+    },
+  };
+  POLICY_HELPER_SUBCOMMANDS = new Set(["install", "update", "rollback", "forward-home-settings"]);
+});
+export { POLICY_HELPER_SUBCOMMANDS, shouldWaitForRemotePolicy, POLICY_HELPER_HOST, armHelperGateExit };

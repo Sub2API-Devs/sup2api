@@ -8,12 +8,15 @@
  * pieces: chunk-5bdzenzx.js (6), chunk-e6aww6q8.js (1)
  * attribution: placement 2, fingerprint 4, callgraph-fingerprint 1
  */
-import { init_react_production, R } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { env } from "../utils/env.js";
+import { isBareMode } from "../utils/envUtils.js";
+import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
+import { isSupportedTerminal } from "../utils/ide.js";
+import { init_react_production, useRef } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { useInputRefusalWindow, useRefusalTracker, settleKey } from "./CustomSelect/selectTypeahead.js";
 import { RECENT_INPUT_GUARD_MS } from "../hooks/useRecentInputGuard.js";
-import { saveGlobalConfig, getGlobalConfig } from "../utils/config.js";
 import { MEMO_CACHE_SENTINEL } from "../../runtime/bun-runtime.js";
 import {
   jsxProd_default,
@@ -23,15 +26,31 @@ import { ModelSelector } from "./agents/ModelSelector.js";
 import { NO_COMMITTED_ROW } from "./CustomSelect/select.js";
 import { Text } from "../ink/components/Text.js";
 import { Dialog } from "./design-system/Dialog.js";
-import { isSupportedTerminal } from "../utils/ide.js";
 import { ConfirmSelect } from "./design-system/ConfirmSelect.js";
-import { env } from "../utils/env.js";
-import { isBareMode } from "../utils/envUtils.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-e6aww6q8.js:3236461-3236660 callgraph-fingerprint = shouldShowDisableAutoConnectDialog (0.47)
+function shouldShowDisableAutoConnectDialog(force = false) {
+  if (env.CLAUDE_CODE_AUTO_CONNECT_IDE === false) return false;
+  if (isBareMode()) return force;
+  return Boolean(
+    getGlobalConfig().autoConnectIde ||
+    force ||
+    isSupportedTerminal() ||
+    env.CLAUDE_CODE_SSE_PORT !== undefined ||
+    env.CLAUDE_CODE_AUTO_CONNECT_IDE === true,
+  );
+}
 //@ chunk-5bdzenzx.js:14079-14083 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5bdzenzx.js:14079", () => {
+  init_react_production();
+});
 //@ chunk-5bdzenzx.js:14107-14111 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-5bdzenzx.js:14107", () => {
+  init_react_production();
+});
 //@ chunk-5bdzenzx.js:14111-14157 fingerprint = _temp (1)
 function withAutoConnectOff(current) {
   return {
@@ -41,16 +60,16 @@ function withAutoConnectOff(current) {
 }
 //@ chunk-5bdzenzx.js:14157-15420 fingerprint = IdeAutoConnectDialog (0.623)
 function IdeAutoConnectDialog(props) {
-  let $ = w(20);
+  let $ = useMemoCache(20);
   let { onComplete } = props;
   let { storageV5 } = useTheme_2();
   let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS);
   let { refusedWithin, noteRefused, epoch } = useRefusalTracker();
-  let I = settleKey(epoch, RECENT_INPUT_GUARD_MS);
-  let p = R(false);
-  let D;
+  let settle = settleKey(epoch, RECENT_INPUT_GUARD_MS);
+  let submittedRef = useRef(false);
+  let shouldRefuse;
   if ($[0] !== inputRefusalWindow || $[1] !== noteRefused || $[2] !== refusedWithin) {
-    D = () => {
+    shouldRefuse = () => {
       if (inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS)) {
         noteRefused();
         return true;
@@ -60,19 +79,19 @@ function IdeAutoConnectDialog(props) {
     $[0] = inputRefusalWindow;
     $[1] = noteRefused;
     $[2] = refusedWithin;
-    $[3] = D;
-  } else D = $[3];
-  let d = D;
-  let C;
-  if ($[4] !== onComplete || $[5] !== d || $[6] !== storageV5) {
-    C = async (value) => {
-      if (d()) {
+    $[3] = shouldRefuse;
+  } else shouldRefuse = $[3];
+  let shouldRefuse_2 = shouldRefuse;
+  let onChange;
+  if ($[4] !== onComplete || $[5] !== shouldRefuse_2 || $[6] !== storageV5) {
+    onChange = async (value) => {
+      if (shouldRefuse_2()) {
         return;
       }
-      if (p.current) {
+      if (submittedRef.current) {
         return;
       }
-      p.current = true;
+      submittedRef.current = true;
       let autoConnect = value === "yes";
       await saveGlobalConfig(
         (current) => ({
@@ -85,30 +104,30 @@ function IdeAutoConnectDialog(props) {
       onComplete();
     };
     $[4] = onComplete;
-    $[5] = d;
+    $[5] = shouldRefuse_2;
     $[6] = storageV5;
-    $[7] = C;
-  } else C = $[7];
-  let onChange = C;
-  let v;
-  if ($[8] !== onComplete || $[9] !== d) {
-    v = () => {
-      if (d()) {
+    $[7] = onChange;
+  } else onChange = $[7];
+  let onChange_2 = onChange;
+  let onCancel;
+  if ($[8] !== onComplete || $[9] !== shouldRefuse_2) {
+    onCancel = () => {
+      if (shouldRefuse_2()) {
         return;
       }
-      if (p.current) {
+      if (submittedRef.current) {
         return;
       }
       onComplete();
     };
     $[8] = onComplete;
-    $[9] = d;
-    $[10] = v;
-  } else v = $[10];
-  let onCancel = v;
-  let V;
+    $[9] = shouldRefuse_2;
+    $[10] = onCancel;
+  } else onCancel = $[10];
+  let onCancel_2 = onCancel;
+  let options;
   if ($[11] === MEMO_CACHE_SENTINEL) {
-    V = [
+    options = [
       {
         label: "Yes",
         value: "yes",
@@ -118,50 +137,50 @@ function IdeAutoConnectDialog(props) {
         value: "no",
       },
     ];
-    $[11] = V;
-  } else V = $[11];
-  let options = V;
-  let A;
-  if ($[12] !== onChange || $[13] !== I.remountKey || $[14] !== d) {
-    A = jsxProd_default(
+    $[11] = options;
+  } else options = $[11];
+  let options_2 = options;
+  let selector;
+  if ($[12] !== onChange_2 || $[13] !== settle.remountKey || $[14] !== shouldRefuse_2) {
+    selector = jsxProd_default(
       ModelSelector,
       {
         hideIndexes: true,
-        refuseInput: d,
-        options,
-        onChange,
+        refuseInput: shouldRefuse_2,
+        options: options_2,
+        onChange: onChange_2,
         defaultFocusValue: "no",
         selectedValue: NO_COMMITTED_ROW,
       },
-      I.remountKey,
+      settle.remountKey,
     );
-    $[12] = onChange;
-    $[13] = I.remountKey;
-    $[14] = d;
-    $[15] = A;
-  } else A = $[15];
-  let F;
+    $[12] = onChange_2;
+    $[13] = settle.remountKey;
+    $[14] = shouldRefuse_2;
+    $[15] = selector;
+  } else selector = $[15];
+  let configHint;
   if ($[16] === MEMO_CACHE_SENTINEL) {
-    F = jsxProd_default(Text, {
+    configHint = jsxProd_default(Text, {
       dimColor: true,
       children: "You can also configure this in /config or with the --ide flag",
     });
-    $[16] = F;
-  } else F = $[16];
-  let b;
-  if ($[17] !== onCancel || $[18] !== A) {
-    b = jsxProd_default_2(Dialog, {
+    $[16] = configHint;
+  } else configHint = $[16];
+  let dialog;
+  if ($[17] !== onCancel_2 || $[18] !== selector) {
+    dialog = jsxProd_default_2(Dialog, {
       title: "Do you wish to enable auto-connect to IDE?",
       color: "ide",
-      onCancel,
+      onCancel: onCancel_2,
       exitOnCtrlCD: true,
-      children: [A, F],
+      children: [selector, configHint],
     });
-    $[17] = onCancel;
-    $[18] = A;
-    $[19] = b;
-  } else b = $[19];
-  return b;
+    $[17] = onCancel_2;
+    $[18] = selector;
+    $[19] = dialog;
+  } else dialog = $[19];
+  return dialog;
 }
 //@ chunk-5bdzenzx.js:15420-15521 fingerprint = shouldShowAutoConnectDialog (1)
 function shouldShowAutoConnectDialog() {
@@ -174,7 +193,7 @@ function shouldShowAutoConnectDialog() {
 }
 //@ chunk-5bdzenzx.js:15521-16087 fingerprint = IdeDisableAutoConnectDialog (0.582)
 function IdeDisableAutoConnectDialog(props) {
-  let $ = w(11);
+  let $ = useMemoCache(11);
   let { onComplete } = props;
   let { storageV5 } = useTheme_2();
   let t1;
@@ -188,15 +207,15 @@ function IdeDisableAutoConnectDialog(props) {
     $[2] = t1;
   } else t1 = $[2];
   let onConfirm = t1;
-  let t;
+  let onConfirm_2;
   if ($[3] !== onComplete) {
-    t = () => {
+    onConfirm_2 = () => {
       onComplete(false);
     };
     $[3] = onComplete;
-    $[4] = t;
-  } else t = $[4];
-  let onCancel = t;
+    $[4] = onConfirm_2;
+  } else onConfirm_2 = $[4];
+  let onCancel = onConfirm_2;
   let children;
   if ($[5] !== onCancel || $[6] !== onConfirm) {
     children = jsxProd_default(ConfirmSelect, {
@@ -224,18 +243,6 @@ function IdeDisableAutoConnectDialog(props) {
     $[10] = t5;
   } else t5 = $[10];
   return t5;
-}
-//@ chunk-e6aww6q8.js:3236461-3236660 callgraph-fingerprint = shouldShowDisableAutoConnectDialog (0.47)
-function shouldShowDisableAutoConnectDialog(e = false) {
-  if (env.CLAUDE_CODE_AUTO_CONNECT_IDE === false) return false;
-  if (isBareMode()) return e;
-  return Boolean(
-    getGlobalConfig().autoConnectIde ||
-    e ||
-    isSupportedTerminal() ||
-    env.CLAUDE_CODE_SSE_PORT !== undefined ||
-    env.CLAUDE_CODE_AUTO_CONNECT_IDE === true,
-  );
 }
 export {
   shouldShowDisableAutoConnectDialog,

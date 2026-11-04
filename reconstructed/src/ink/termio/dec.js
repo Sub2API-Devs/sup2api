@@ -65,8 +65,8 @@ var DISABLE_MOUSE_PIXELS = decreset(DEC.MOUSE_SGR_PIXELS) + decset(DEC.MOUSE_SGR
 /**
  * 按 full/scroll/off 返回开启完整鼠标跟踪、仅点击或空的序列。
  */
-function mouseTrackingSequence(E) {
-  switch (E) {
+function mouseTrackingSequence(mode) {
+  switch (mode) {
     case "full":
       return ENABLE_MOUSE_TRACKING;
     case "scroll":

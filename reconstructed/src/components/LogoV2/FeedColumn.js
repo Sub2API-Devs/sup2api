@@ -8,22 +8,22 @@
  * pieces: chunk-9h8dr0qb.js (1)
  * attribution: fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { UsageAttributionView } from "../Settings/Usage.js";
 
 //@ chunk-9h8dr0qb.js:46092-46203 fingerprint = FeedColumn (0.552)
 function FeedColumn(props) {
-  let $ = w(2);
+  let $ = useMemoCache(2);
   let { maxWidth } = props;
-  let h;
+  let column;
   if ($[0] !== maxWidth) {
-    h = jsxProd_default(UsageAttributionView, {
+    column = jsxProd_default(UsageAttributionView, {
       maxWidth,
     });
     $[0] = maxWidth;
-    $[1] = h;
-  } else h = $[1];
-  return h;
+    $[1] = column;
+  } else column = $[1];
+  return column;
 }
 export { FeedColumn };

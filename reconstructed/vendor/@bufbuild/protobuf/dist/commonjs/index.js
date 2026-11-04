@@ -5,7 +5,7 @@
  * pieces: chunk-fq0cr76a.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../../runtime/bun-runtime.js";
 import { require_types } from "./types.js";
 import { require_is_message } from "../cjs/is-message.js";
 import { require_create } from "../cjs/create.js";
@@ -23,7 +23,7 @@ import { require_extensions } from "./extensions.js";
 import { require_proto_int64 } from "./proto-int64.js";
 
 //@ chunk-fq0cr76a.js:466118-467800 cjs-fingerprint
-var require_protobuf = x(function (cjsExports) {
+var require_protobuf = __commonJS(function (cjsExports) {
   var __createBinding =
     (cjsExports && cjsExports.__createBinding) ||
     (Object.create
@@ -45,9 +45,10 @@ var require_protobuf = x(function (cjsExports) {
         });
   var __exportStar =
     (cjsExports && cjsExports.__exportStar) ||
-    function (m, n) {
+    function (m, exportTarget) {
       for (var p in m)
-        if (p !== "default" && !Object.prototype.hasOwnProperty.call(n, p)) __createBinding(n, m, p);
+        if (p !== "default" && !Object.prototype.hasOwnProperty.call(exportTarget, p))
+          __createBinding(exportTarget, m, p);
     };
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,

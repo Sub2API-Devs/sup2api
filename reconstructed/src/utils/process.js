@@ -14,13 +14,18 @@ import { identity } from "./identity.js";
 import { isDisklessProcess } from "./hostScoped.js";
 import { setBgExitCause } from "./bgExitSidecars.js";
 import { GhApiResponseError } from "./github/ghApi.js";
+import { jsonStringify } from "./slowOperations.js";
 import { getErrorCodeString } from "./errors.js";
 import { recordSlowestWrite } from "../ink/terminal.js";
-import { jsonStringify } from "./slowOperations.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-j3nx1xyn.js:1084-1179 placement
-var STREAM_GONE_CODES = new Set(["EPIPE", "EIO", "ENXIO", "EBADF"]);
-var _ = new Set(["EISDIR", "ENOTCONN", "ECONNRESET"]);
+var STREAM_GONE_CODES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var _;
+deferInit("chunk-j3nx1xyn.js:1084", () => {
+  STREAM_GONE_CODES = new Set(["EPIPE", "EIO", "ENXIO", "EBADF"]);
+  _ = new Set(["EISDIR", "ENOTCONN", "ECONNRESET"]);
+});
 //@ chunk-j3nx1xyn.js:1179-1325 placement = isConnectionError (1)
 /**
  * 错误码是否属于可重试的瞬时网络/文件错误。
@@ -36,13 +41,13 @@ function isStdinUnusableError(err) {
 /**
  * stdout/stderr 管道断开（EPIPE 等）时销毁流并回调，不让进程崩溃。
  */
-function handleStreamGoneErrors(e, t) {
-  e.on("error", (r) => {
-    if (r.code !== undefined && STREAM_GONE_CODES.has(r.code)) {
+function handleStreamGoneErrors(stream, onGone) {
+  stream.on("error", (error) => {
+    if (error.code !== undefined && STREAM_GONE_CODES.has(error.code)) {
       try {
-        e.destroy?.();
+        stream.destroy?.();
       } catch {}
-      t?.(r.code);
+      onGone?.(error.code);
     }
   });
 }
@@ -50,9 +55,9 @@ function handleStreamGoneErrors(e, t) {
 /**
  * 为 stdin/stdout/stderr 注册断流处理。
  */
-function registerProcessIOErrorHandlers(e) {
-  handleStreamGoneErrors(process.stdin, (t) => e("stdin", t));
-  handleStreamGoneErrors(process.stdout, (t) => e("stdout", t));
+function registerProcessIOErrorHandlers(onStreamError) {
+  handleStreamGoneErrors(process.stdin, (code) => onStreamError("stdin", code));
+  handleStreamGoneErrors(process.stdout, (code) => onStreamError("stdout", code));
   process.stdout.on("error", () => {
     stdoutDrain.markErrored();
   });
@@ -65,9 +70,9 @@ function registerProcessIOErrorHandlers(e) {
 /**
  * 写流并返回 accepted/backed-up/dropped。
  */
-function writeOut(stream, data, r) {
+function writeOut(stream, data, callback) {
   if (stream.destroyed || stream.writableEnded) return "dropped";
-  return stream.write(data, r) === false ? "backed-up" : "accepted";
+  return stream.write(data, callback) === false ? "backed-up" : "accepted";
 }
 //@ chunk-j3nx1xyn.js:1771-3294 placement
 class StdoutDrainState {
@@ -85,11 +90,11 @@ class StdoutDrainState {
   markEverWritten() {
     this.everWritten = true;
   }
-  recordQueued(e) {
-    this.bytesQueued += e;
+  recordQueued(bytes) {
+    this.bytesQueued += bytes;
   }
-  recordFlushed(e) {
-    this.bytesFlushed += e;
+  recordFlushed(bytes) {
+    this.bytesFlushed += bytes;
     this.notifyFlushProgress?.();
   }
   markErrored() {
@@ -110,16 +115,16 @@ class StdoutDrainState {
   fullyFlushed() {
     if (this.flushConfirmedPromise === undefined)
       this.flushConfirmedPromise = new Promise((resolve) => {
-        let t = () => {
+        let onDrained = () => {
           if (this.outstandingBytes() <= 0) {
             this.notifyFlushProgress = undefined;
             resolve();
           }
         };
-        this.notifyFlushProgress = t;
-        this.flushCloseListener = t;
-        process.stdout.once("close", t);
-        t();
+        this.notifyFlushProgress = onDrained;
+        this.flushCloseListener = onDrained;
+        process.stdout.once("close", onDrained);
+        onDrained();
       });
     return this.flushConfirmedPromise;
   }
@@ -144,32 +149,35 @@ class StdoutDrainState {
   }
 }
 //@ chunk-j3nx1xyn.js:3294-3306 placement
-var stdoutDrain = new StdoutDrainState();
+var stdoutDrain; // deferred: uses StdoutDrainState of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-j3nx1xyn.js:3294", () => {
+  stdoutDrain = new StdoutDrainState();
+});
 //@ chunk-j3nx1xyn.js:3306-3448 placement
 /**
  * writeToStdout：写 stdout 并记录排队/已刷字节（退出前排空用）。
  */
-function writeToStdout(e) {
+function writeToStdout(text) {
   stdoutDrain.markEverWritten();
-  let t = Buffer.byteLength(e);
+  let byteLength = Buffer.byteLength(text);
   if (
-    writeOut(process.stdout, e, () => {
-      stdoutDrain.recordFlushed(t);
+    writeOut(process.stdout, text, () => {
+      stdoutDrain.recordFlushed(byteLength);
     }) !== "dropped"
   )
-    stdoutDrain.recordQueued(t);
+    stdoutDrain.recordQueued(byteLength);
 }
 //@ chunk-j3nx1xyn.js:3448-3681 placement
 /**
  * drainStdoutBeforeExit：结束 stdout 并等待刷完，超时按积压字节放宽（上限 30 s）。
  */
-async function drainStdoutBeforeExit(e = 2000, { scaleBudgetToQueue = true } = {}) {
-  let r = stdoutDrain.endStdoutOnce();
-  if (r === undefined) return;
-  let results = Promise.all([r, stdoutDrain.fullyFlushed()]);
+async function drainStdoutBeforeExit(budgetMs = 2000, { scaleBudgetToQueue = true } = {}) {
+  let endPromise = stdoutDrain.endStdoutOnce();
+  if (endPromise === undefined) return;
+  let results = Promise.all([endPromise, stdoutDrain.fullyFlushed()]);
   await withTimeout(
-    scaleBudgetToQueue ? Promise.race([results, waitExternallyClocked(e)]) : results,
-    scaleBudgetToQueue ? getStdoutDrainBudgetMs(e) : e,
+    scaleBudgetToQueue ? Promise.race([results, waitExternallyClocked(budgetMs)]) : results,
+    scaleBudgetToQueue ? getStdoutDrainBudgetMs(budgetMs) : budgetMs,
     "stdout drain timeout (exit)",
   ).catch(() => {});
 }
@@ -188,8 +196,8 @@ function isExitExternallyClocked() {
   return stdoutDrain.isExternallyClocked();
 }
 //@ chunk-j3nx1xyn.js:3768-3839 placement
-function waitExternallyClocked(e) {
-  return stdoutDrain.ensureExternallyClockedPromise().then(() => sleep(e));
+function waitExternallyClocked(delayMs) {
+  return stdoutDrain.ensureExternallyClockedPromise().then(() => sleep(delayMs));
 }
 //@ chunk-j3nx1xyn.js:3839-3860 placement
 var STDOUT_DRAIN_BYTES_PER_SEC = 262144;
@@ -205,16 +213,21 @@ function outstandingStdoutBytes() {
 /**
  * 按积压字节估算 stdout 排空预算（2 s 起，最多 30 s）。
  */
-function getStdoutDrainBudgetMs(e = 2000) {
+function getStdoutDrainBudgetMs(budgetMs = 2000) {
   return Math.min(
     MAX_STDOUT_DRAIN_MS,
-    Math.max(e, Math.ceil((outstandingStdoutBytes() * 1000) / STDOUT_DRAIN_BYTES_PER_SEC)),
+    Math.max(budgetMs, Math.ceil((outstandingStdoutBytes() * 1000) / STDOUT_DRAIN_BYTES_PER_SEC)),
   );
 }
 //@ chunk-j3nx1xyn.js:3979-4014 placement
-var STDERR_BACKLOG_BYTES = 1048576;
-var STDERR_BACKLOG_MS = 1e4;
-var stderrScheduler = bindAsyncResource((e) => e());
+var STDERR_BACKLOG_BYTES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var STDERR_BACKLOG_MS;
+var stderrScheduler;
+deferInit("chunk-j3nx1xyn.js:3979", () => {
+  STDERR_BACKLOG_BYTES = 1048576;
+  STDERR_BACKLOG_MS = 1e4;
+  stderrScheduler = bindAsyncResource((task) => task());
+});
 //@ chunk-j3nx1xyn.js:4014-4872 placement
 class StderrWriter {
   unflushed = {
@@ -223,10 +236,10 @@ class StderrWriter {
   };
   droppedCount = 0;
   droppedTotal = 0;
-  write(e, t) {
+  write(chunk, mayDrop) {
     let unflushed = this.unflushed;
     if (
-      t &&
+      mayDrop &&
       unflushed.length >= STDERR_BACKLOG_BYTES &&
       (this.droppedCount > 0 || Date.now() - unflushed.since >= STDERR_BACKLOG_MS)
     ) {
@@ -234,19 +247,22 @@ class StderrWriter {
       this.droppedTotal++;
       return;
     }
-    let n = "writing";
-    let o = () => {
-      let d = n === "unflushed";
-      n = "flushed";
-      if (d) {
-        unflushed.length -= e.length;
+    let state = "writing";
+    let onWritten = () => {
+      let wasUnflushed = state === "unflushed";
+      state = "flushed";
+      if (wasUnflushed) {
+        unflushed.length -= chunk.length;
         this.reportDropped();
       }
     };
-    if (stderrScheduler(() => writeOut(process.stderr, e, o)) === "backed-up" && n === "writing") {
-      n = "unflushed";
+    if (
+      stderrScheduler(() => writeOut(process.stderr, chunk, onWritten)) === "backed-up" &&
+      state === "writing"
+    ) {
+      state = "unflushed";
       if (unflushed.length === 0) unflushed.since = Date.now();
-      unflushed.length += e.length;
+      unflushed.length += chunk.length;
     }
   }
   giveUpOnUnflushed() {
@@ -275,13 +291,16 @@ class StderrWriter {
   }
 }
 //@ chunk-j3nx1xyn.js:4872-4903 placement
-var stderrWriter = identity(new StderrWriter(), (e) => e.reset());
+var stderrWriter; // deferred: uses StderrWriter of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-j3nx1xyn.js:4872", () => {
+  stderrWriter = identity(new StderrWriter(), (writer) => writer.reset());
+});
 //@ chunk-j3nx1xyn.js:4903-4949 placement
 /**
  * writeToStderr：积压超过 10 s 且 1 MiB 时可丢弃消息并在下一行注明。
  */
-function writeToStderr(e, { mayDrop = false } = {}) {
-  stderrWriter.write(e, mayDrop);
+function writeToStderr(text, { mayDrop = false } = {}) {
+  stderrWriter.write(text, mayDrop);
 }
 //@ chunk-j3nx1xyn.js:4949-4991 placement
 /**
@@ -304,8 +323,8 @@ function exitWithError(message) {
  * peekForStdinData：在超时内探测 stdin 是否有数据或已结束。
  */
 function peekForStdinData(stream, ms) {
-  let r = stream;
-  if (r.readableEnded || r.destroyed) return Promise.resolve(false);
+  let readable = stream;
+  if (readable.readableEnded || readable.destroyed) return Promise.resolve(false);
   return new Promise((resolve) => {
     let done = (timedOut) => {
       clearTimeout(peek);
@@ -317,7 +336,7 @@ function peekForStdinData(stream, ms) {
     let onEnd = () => done(false);
     let onFirstData = () => {
       clearTimeout(peek);
-      if (r.readableEnded || r.destroyed) done(false);
+      if (readable.readableEnded || readable.destroyed) done(false);
     };
     let peek = setTimeout(done, ms, true);
     stream.once("end", onEnd);
@@ -328,71 +347,49 @@ function peekForStdinData(stream, ms) {
 //@ chunk-j3nx1xyn.js:5412-5801 placement
 async function* iterateStreamUntilClose(stdin) {
   if (stdin.readableEnded || stdin.destroyed) return;
-  let t = Symbol("stream-closed");
-  let r = false;
-  let n = null;
-  let o = () => {
-    r = true;
-    n?.();
+  let closedSentinel = Symbol("stream-closed");
+  let closed = false;
+  let onClosed = null;
+  let handleClose = () => {
+    closed = true;
+    onClosed?.();
   };
-  stdin.once("close", o);
-  let s = stdin[Symbol.asyncIterator]();
+  stdin.once("close", handleClose);
+  let iterator = stdin[Symbol.asyncIterator]();
   try {
-    while (!r) {
-      let d = s.next();
-      d.catch(() => {});
+    while (!closed) {
+      let nextResult = iterator.next();
+      nextResult.catch(() => {});
       let promise = new Promise((resolve) => {
-        n = () => resolve(t);
+        onClosed = () => resolve(closedSentinel);
       });
-      let winner = await Promise.race([d, promise]);
-      n = null;
-      if (winner === t || winner.done) return;
+      let winner = await Promise.race([nextResult, promise]);
+      onClosed = null;
+      if (winner === closedSentinel || winner.done) return;
       yield String(winner.value);
     }
   } finally {
-    stdin.off("close", o);
-    s.return?.().catch(() => {});
+    stdin.off("close", handleClose);
+    iterator.return?.().catch(() => {});
   }
 }
 //@ chunk-fy5kn7m3.js:27151-27228 placement = NEWLINE (1)
-async function writeStdStreamOrThrow(e, t) {
-  if (!(await writeStream(process[e], t)) && e === "stdout") throw new GhApiResponseError();
+async function writeStdStreamOrThrow(streamName, data) {
+  if (!(await writeStream(process[streamName], data)) && streamName === "stdout")
+    throw new GhApiResponseError();
 }
 //@ chunk-fy5kn7m3.js:27228-27481 placement
-function writeStream(e, t) {
-  if (e.destroyed || e.writableEnded) return Promise.resolve(false);
+function writeStream(stream, data) {
+  if (stream.destroyed || stream.writableEnded) return Promise.resolve(false);
   let { promise, resolve } = Promise.withResolvers();
-  let n = () => resolve(false);
-  e.once("error", n);
-  e.once("close", n);
-  e.write(t, (a) => resolve(!a));
+  let fail = () => resolve(false);
+  stream.once("error", fail);
+  stream.once("close", fail);
+  stream.write(data, (writeError) => resolve(!writeError));
   return promise.finally(() => {
-    e.off("error", n);
-    e.off("close", n);
+    stream.off("error", fail);
+    stream.off("close", fail);
   });
-}
-//@ chunk-24t3dkzb.js:4009-4238 fingerprint = handleEPIPE (0.407)
-/**
- * 写 stdout，容忍死管道（EIO/EPIPE）时标记 stdoutDead。
- */
-function handleEPIPE(terminal, n) {
-  if (terminal.stdoutDead) return;
-  let startTime = performance.now();
-  let bytes = Buffer.byteLength(n);
-  try {
-    terminal.stdout.write(n);
-  } catch (error) {
-    if (
-      terminal.tolerateDeadStdout &&
-      (getErrorCodeString(error) === "EIO" || getErrorCodeString(error) === "EPIPE")
-    ) {
-      terminal.stdoutDead = true;
-      recordSlowestWrite(terminal, startTime, bytes);
-      return;
-    }
-    throw error;
-  }
-  recordSlowestWrite(terminal, startTime, bytes);
 }
 //@ chunk-ksvdmrg0.js:32581-32635 fingerprint = writeOut (1)
 function writeOut_2(stream, data) {
@@ -403,12 +400,35 @@ function writeOut_2(stream, data) {
 `,
   );
 }
+//@ chunk-24t3dkzb.js:4009-4238 fingerprint = handleEPIPE (0.407)
+/**
+ * 写 stdout，容忍死管道（EIO/EPIPE）时标记 stdoutDead。
+ */
+function handleEPIPE(stats, text) {
+  if (stats.stdoutDead) return;
+  let startTime = performance.now();
+  let bytes = Buffer.byteLength(text);
+  try {
+    stats.stdout.write(text);
+  } catch (error) {
+    if (
+      stats.tolerateDeadStdout &&
+      (getErrorCodeString(error) === "EIO" || getErrorCodeString(error) === "EPIPE")
+    ) {
+      stats.stdoutDead = true;
+      recordSlowestWrite(stats, startTime, bytes);
+      return;
+    }
+    throw error;
+  }
+  recordSlowestWrite(stats, startTime, bytes);
+}
 export {
   writeToStdout,
   iterateStreamUntilClose,
   isStdinUnusableError,
-  writeOut,
   peekForStdinData,
+  writeOut,
   writeToStderr,
   markStdoutDrainExternallyClocked,
   outstandingStdoutBytes,

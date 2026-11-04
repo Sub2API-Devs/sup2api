@@ -8,6 +8,9 @@
  * pieces: chunk-0h4e7gnq.js (6), chunk-aepeg2w5.js (9), chunk-w5ndchqs.js (75)
  * attribution: fingerprint 10, affinity 3, placement 60, sole-consumer 1, layout 13, file-local 2, callgraph-witnessed 1
  */
+import { HostScoped } from "../utils/hostScoped.js";
+import { MockRateLimitState } from "./mockRateLimits.js";
+import { getRootSession, getIsNonInteractiveSession, setUsageCreditsRequired } from "../bootstrap/state.js";
 import {
   OVERAGE_STATUS_HEADER,
   OVERAGE_IN_USE_HEADER,
@@ -30,13 +33,12 @@ import { isLowPriorityActive, handleLowPriorityResponseHeaders } from "./lowPrio
 import { getGlobalConfig, saveGlobalConfig } from "../utils/config.js";
 import { WRAP_UP_UTILIZATION_THRESHOLD } from "./usageLimitGrace.js";
 import { createSignal } from "../utils/signal.js";
-import { En } from "../../vendor/lodash-es/_inlinedHelpers.js";
+import { import_sortedIndex_2 } from "../../vendor/lodash-es/_inlinedHelpers.js";
 import { logError } from "../utils/log.js";
 import { logEvent } from "./analytics/index.js";
 import { fromEnum, fromEnumOpt } from "./analytics/safeMetadata.js";
 import { isEssentialTrafficOnly } from "../utils/privacyLevel.js";
 import { isClaudeAISubscriber, getRateLimitTier, getSubscriptionType } from "../utils/auth.js";
-import { getIsNonInteractiveSession, setUsageCreditsRequired, getRootSession } from "../bootstrap/state.js";
 import { APIError } from "../../vendor/@anthropic-ai/sdk/core/error.mjs";
 import { logFeatureOk } from "./analytics/featureTelemetry.js";
 import { toSDKRateLimitInfo } from "../utils/messages/mappers.js";
@@ -49,53 +51,127 @@ import {
 } from "../utils/planTiers.js";
 import { isExtraUsageOutOfCredits } from "./api/errors.js";
 import { getBareCheckModel } from "../utils/model/smallFastModel.js";
-import { HostScoped } from "../utils/hostScoped.js";
-import { MockRateLimitState } from "./mockRateLimits.js";
 import { pickByHelper } from "../utils/git/gitSafeEnv.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
+//@ chunk-aepeg2w5.js:279315-279407 placement
+/**
+ * 付费计划“额外用量”帮助文章链接。
+ */
+var EXTRA_USAGE_HELP_URL =
+  "https://support.claude.com/en/articles/12429409-extra-usage-for-paid-claude-plans";
+//@ chunk-aepeg2w5.js:279407-279574 placement
+/**
+ * 支持文章（12429409）链接常量。
+ */
+var USAGE_SETTINGS_URL = "https://claude.ai/settings/usage?from=cc_cli_limit_message";
+var HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE = "https://claude.ai/admin-settings/usage";
+var EXTRA_USAGE_SUPPORT_URL = "https://support.claude.com/en/articles/12429409";
+//@ chunk-aepeg2w5.js:279574-279587 placement
+var MAX = "max";
+//@ chunk-aepeg2w5.js:288283-288308 sole-consumer
+/**
+ * 按 host 存放的 MockRateLimitState 单例槽。
+ */
+var mockRateLimitStateSlot; // deferred: uses MockRateLimitState (./mockRateLimits.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:288283", () => {
+  mockRateLimitStateSlot = new HostScoped(() => new MockRateLimitState());
+});
+//@ chunk-aepeg2w5.js:288308-288345 placement
+/**
+ * 取当前宿主的限速模拟状态槽（mockRateLimitStateSlot）。
+ */
+function getMockRateLimitState() {
+  return mockRateLimitStateSlot.of(getRootSession().host);
+}
+//@ chunk-aepeg2w5.js:288345-288372 placement
+/**
+ * 限速模拟关闭时的占位实现，永远返回 null。
+ */
+function getDisabledMockRateLimitState() {
+  return null;
+}
+//@ chunk-aepeg2w5.js:288372-288437 placement
+function checkQuotaStatus() {
+  let mockRateLimitState = getMockRateLimitState();
+  mockRateLimitState.enabled;
+  return null;
+  return mockRateLimitState.headers;
+}
+//@ chunk-aepeg2w5.js:288437-288684 placement
+/**
+ * 用模拟的配额状态覆盖响应头中的统一限额字段（无模拟状态时原样返回）。
+ */
+function applyMockQuotaHeaders(init) {
+  let quotaOverride = checkQuotaStatus();
+  if (!quotaOverride) return init;
+  let headers = new globalThis.Headers(init);
+  headers.delete("anthropic-ratelimit-unified-5h-status");
+  headers.delete("anthropic-ratelimit-unified-7d-status");
+  Object.entries(quotaOverride).forEach(([key, value]) => {
+    if (value !== undefined) headers.set(key, value);
+  });
+  return headers;
+}
+//@ chunk-aepeg2w5.js:288684-288708 placement
+/**
+ * 限额模拟（外部构建恒为 false）。
+ */
+function isRateLimitMockingEnabled() {
+  return false;
+}
 //@ chunk-w5ndchqs.js:6185-6282 placement
 /**
  * 从响应头读使用率：转数字、夹到 0–1，非法值按 0。
  */
-function readUtilizationHeader(e, n) {
-  let r = Number(e.get(n) ?? 0);
-  return Number.isFinite(r) ? Math.max(0, Math.min(1, r)) : 0;
+function readUtilizationHeader(headers, name) {
+  let value = Number(headers.get(name) ?? 0);
+  return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : 0;
 }
 //@ chunk-w5ndchqs.js:6282-6386 placement
-function futureResetHeader(e, n, r) {
-  let s = Number(e.get(n) ?? NaN);
-  return Number.isFinite(s) && s * 1000 > r ? Math.round(s) : undefined;
+function futureResetHeader(headers, name, nowMs) {
+  let seconds = Number(headers.get(name) ?? NaN);
+  return Number.isFinite(seconds) && seconds * 1000 > nowMs ? Math.round(seconds) : undefined;
 }
 //@ chunk-w5ndchqs.js:6386-7016 placement
 /**
  * 解析 anthropic-ratelimit-unified-* 响应头（status、5h/7d 利用率与重置时间、grace 窗口），得到限额快照。
  */
-function parseUnifiedRateLimitHeaders(e, n) {
-  if (e.get("anthropic-ratelimit-unified-status") === null)
+function parseUnifiedRateLimitHeaders(headers, nowMs) {
+  if (headers.get("anthropic-ratelimit-unified-status") === null)
     return {
       limiterRan: false,
     };
-  let utilizationHeader = readUtilizationHeader(e, "anthropic-ratelimit-unified-grace-5h-utilization");
-  let utilizationHeader_2 = readUtilizationHeader(e, "anthropic-ratelimit-unified-grace-7d-utilization");
+  let utilizationHeader = readUtilizationHeader(headers, "anthropic-ratelimit-unified-grace-5h-utilization");
+  let utilizationHeader_2 = readUtilizationHeader(
+    headers,
+    "anthropic-ratelimit-unified-grace-7d-utilization",
+  );
   if (utilizationHeader === 0 && utilizationHeader_2 === 0)
     return {
       limiterRan: true,
       zone: null,
     };
-  let d = futureResetHeader(e, "anthropic-ratelimit-unified-5h-reset", n);
-  let m = futureResetHeader(e, "anthropic-ratelimit-unified-7d-reset", n);
-  let h = utilizationHeader > 0 && d !== undefined && (m === undefined || d > m);
-  let y = utilizationHeader_2 > 0 && !h ? "seven_day" : "five_hour";
-  let w = e.get(OVERAGE_STATUS_HEADER);
-  let L = w === "allowed" || w === "allowed_warning" ? w : undefined;
+  let fiveHourResetAt = futureResetHeader(headers, "anthropic-ratelimit-unified-5h-reset", nowMs);
+  let sevenDayResetAt = futureResetHeader(headers, "anthropic-ratelimit-unified-7d-reset", nowMs);
+  let preferFiveHour =
+    utilizationHeader > 0 &&
+    fiveHourResetAt !== undefined &&
+    (sevenDayResetAt === undefined || fiveHourResetAt > sevenDayResetAt);
+  let activeRateLimitType = utilizationHeader_2 > 0 && !preferFiveHour ? "seven_day" : "five_hour";
+  let overageStatusHeader = headers.get(OVERAGE_STATUS_HEADER);
+  let extraUsageStatus =
+    overageStatusHeader === "allowed" || overageStatusHeader === "allowed_warning"
+      ? overageStatusHeader
+      : undefined;
   return {
     limiterRan: true,
     zone: {
-      rateLimitType: y,
-      resetsAt: y === "seven_day" ? m : d,
-      extraUsageStatus: L,
+      rateLimitType: activeRateLimitType,
+      resetsAt: activeRateLimitType === "seven_day" ? sevenDayResetAt : fiveHourResetAt,
+      extraUsageStatus,
     },
-    covered: L !== undefined || e.get(OVERAGE_IN_USE_HEADER) === "true",
+    covered: extraUsageStatus !== undefined || headers.get(OVERAGE_IN_USE_HEADER) === "true",
   };
 }
 //@ chunk-w5ndchqs.js:7016-8336 placement
@@ -107,23 +183,23 @@ class WrapUpState {
   covered = false;
   turnNote = "none";
   fenceMs = 0;
-  getZone(e = Date.now()) {
+  getZone(nowMs = Date.now()) {
     let zone = this.zone;
-    return zone !== null && zone.resetsAt !== undefined && e / 1000 >= zone.resetsAt ? null : zone;
+    return zone !== null && zone.resetsAt !== undefined && nowMs / 1000 >= zone.resetsAt ? null : zone;
   }
-  applyResponse(e, n) {
-    let unifiedRateLimitHeaders = parseUnifiedRateLimitHeaders(e, n);
-    if (!unifiedRateLimitHeaders.limiterRan || n < this.fenceMs) return;
-    this.fenceMs = n;
+  applyResponse(headers, nowMs) {
+    let unifiedRateLimitHeaders = parseUnifiedRateLimitHeaders(headers, nowMs);
+    if (!unifiedRateLimitHeaders.limiterRan || nowMs < this.fenceMs) return;
+    this.fenceMs = nowMs;
     if (unifiedRateLimitHeaders.zone === null || unifiedRateLimitHeaders.zone.resetsAt !== undefined)
-      this.dropEndedZone(n);
+      this.dropEndedZone(nowMs);
     this.zone = unifiedRateLimitHeaders.zone;
     this.covered = unifiedRateLimitHeaders.zone !== null && unifiedRateLimitHeaders.covered;
     if (unifiedRateLimitHeaders.zone === null || unifiedRateLimitHeaders.covered) this.turnNote = "none";
     else if (this.turnNote === "none") this.turnNote = "owed";
   }
-  dropEndedZone(e) {
-    if (this.zone !== null && this.getZone(e) === null) {
+  dropEndedZone(nowMs) {
+    if (this.zone !== null && this.getZone(nowMs) === null) {
       this.zone = null;
       this.covered = false;
       this.turnNote = "none";
@@ -137,17 +213,17 @@ class WrapUpState {
       };
     this.covered = false;
   }
-  leave(e = Date.now()) {
+  leave(nowMs = Date.now()) {
     this.zone = null;
     this.covered = false;
     this.turnNote = "none";
-    this.fenceMs = Math.max(this.fenceMs, e);
+    this.fenceMs = Math.max(this.fenceMs, nowMs);
   }
   onMainTurnStart() {
     this.turnNote = "none";
   }
-  takeTurnNote(e = Date.now()) {
-    this.dropEndedZone(e);
+  takeTurnNote(nowMs = Date.now()) {
+    this.dropEndedZone(nowMs);
     if (this.turnNote !== "owed") return false;
     this.turnNote = "taken";
     return true;
@@ -155,8 +231,8 @@ class WrapUpState {
   markStartNotePlaced() {
     if (this.turnNote === "taken") this.turnNote = "placed";
   }
-  continueAfterWrapUpAt(e = Date.now()) {
-    let zone = this.getZone(e);
+  continueAfterWrapUpAt(nowMs = Date.now()) {
+    let zone = this.getZone(nowMs);
     return this.turnNote === "placed" && zone !== null && !this.covered && zone.resetsAt !== undefined
       ? {
           resetsAt: zone.resetsAt,
@@ -164,8 +240,8 @@ class WrapUpState {
         }
       : null;
   }
-  subagentNoteDue(e = Date.now()) {
-    return this.getZone(e) !== null && !this.covered;
+  subagentNoteDue(nowMs = Date.now()) {
+    return this.getZone(nowMs) !== null && !this.covered;
   }
 }
 //@ chunk-w5ndchqs.js:8336-8384 placement
@@ -177,8 +253,8 @@ function maybeMockRateLimitHeaders(headers) {
 /**
  * 是否应展示限额相关界面：Claude.ai 订阅、网关提供方或限速模拟开启时成立。
  */
-function isLimitsDisplayEnabled(e) {
-  return e || getAPIProvider() === "gateway" || isRateLimitMockingEnabled();
+function isLimitsDisplayEnabled(flag) {
+  return flag || getAPIProvider() === "gateway" || isRateLimitMockingEnabled();
 }
 //@ chunk-w5ndchqs.js:20162-20352 fingerprint = RATE_LIMIT_DISPLAY_NAMES (0.705)
 /**
@@ -248,36 +324,36 @@ function computeTimeProgress(resetsAt, windowSeconds) {
  * 从 429 响应头构造被拒额度状态（rateLimitType、overage 状态/重置、禁用原因、范围、低优先级提议）。
  */
 function extractQuotaStatusFromErrorHeaders(error) {
-  let n = error.headers?.get?.(REPRESENTATIVE_CLAIM_HEADER);
-  let r = error.headers?.get?.(OVERAGE_STATUS_HEADER);
-  if (!n && !r) return null;
-  let s = {
+  let claim = error.headers?.get?.(REPRESENTATIVE_CLAIM_HEADER);
+  let overageStatus = error.headers?.get?.(OVERAGE_STATUS_HEADER);
+  if (!claim && !overageStatus) return null;
+  let limits = {
     status: "rejected",
     unifiedRateLimitFallbackAvailable: false,
     isUsingOverage: false,
   };
-  let d = error.headers?.get?.("anthropic-ratelimit-unified-reset");
-  if (d) s.resetsAt = Math.round(Number(d));
-  if (n) s.rateLimitType = n;
-  if (r) s.overageStatus = r;
-  let m = error.headers?.get?.("anthropic-ratelimit-unified-overage-reset");
-  if (m) s.overageResetsAt = Math.round(Number(m));
-  let h = error.headers?.get?.(OVERAGE_DISABLED_REASON_HEADER);
-  if (h) s.overageDisabledReason = h;
-  let y = overageScopeHeader(error.headers);
-  if (y) s.overageScope = y;
-  Object.assign(s, parseLowPriorityOffer(error.headers));
-  return s;
+  let resetHeader = error.headers?.get?.("anthropic-ratelimit-unified-reset");
+  if (resetHeader) limits.resetsAt = Math.round(Number(resetHeader));
+  if (claim) limits.rateLimitType = claim;
+  if (overageStatus) limits.overageStatus = overageStatus;
+  let overageResetHeader = error.headers?.get?.("anthropic-ratelimit-unified-overage-reset");
+  if (overageResetHeader) limits.overageResetsAt = Math.round(Number(overageResetHeader));
+  let disabledReason = error.headers?.get?.(OVERAGE_DISABLED_REASON_HEADER);
+  if (disabledReason) limits.overageDisabledReason = disabledReason;
+  let scope = overageScopeHeader(error.headers);
+  if (scope) limits.overageScope = scope;
+  Object.assign(limits, parseLowPriorityOffer(error.headers));
+  return limits;
 }
 //@ chunk-w5ndchqs.js:28821-29006 layout
 /**
  * 低优先级（等待额度恢复）提议头：offer、retry-after 秒、最大等待秒。
  */
-function parseLowPriorityOffer(e) {
-  let slowOfferArm = getSlowOfferArm(e);
+function parseLowPriorityOffer(headers) {
+  let slowOfferArm = getSlowOfferArm(headers);
   if (!slowOfferArm) return {};
-  let slowRetryAfter = getSlowRetryAfter(e);
-  let slowMaxWait = getSlowMaxWait(e);
+  let slowRetryAfter = getSlowRetryAfter(headers);
+  let slowMaxWait = getSlowMaxWait(headers);
   return {
     lowPriorityOffer: slowOfferArm,
     ...(slowRetryAfter !== undefined && {
@@ -317,33 +393,36 @@ function isValiantFinchEnabled() {
 /**
  * 头值转数字（空/非数返回 undefined）。
  */
-function parseHeaderNumber(e) {
-  if (e === null || e === "") return;
-  let n = Number(e);
-  return Number.isFinite(n) ? n : undefined;
+function parseHeaderNumber(raw) {
+  if (raw === null || raw === "") return;
+  let value = Number(raw);
+  return Number.isFinite(value) ? value : undefined;
 }
 //@ chunk-w5ndchqs.js:29318-29851 fingerprint = getHeaderBasedEarlyWarning (0.678)
 /**
  * 解析各窗口 anthropic-ratelimit-unified-{5h,7d,7d_oi,overage}-{utilization,reset,surpassed-threshold,status} 头为读数表。
  */
 function getHeaderBasedEarlyWarning(headers) {
-  let n = {};
-  for (let [r, s] of UNIFIED_WINDOW_HEADER_KEYS) {
-    let headerNumber = parseHeaderNumber(headers.get(`anthropic-ratelimit-unified-${s}-utilization`));
-    let headerNumber_2 = parseHeaderNumber(headers.get(`anthropic-ratelimit-unified-${s}-reset`));
+  let readings = {};
+  for (let [key, suffix] of UNIFIED_WINDOW_HEADER_KEYS) {
+    let headerNumber = parseHeaderNumber(headers.get(`anthropic-ratelimit-unified-${suffix}-utilization`));
+    let headerNumber_2 = parseHeaderNumber(headers.get(`anthropic-ratelimit-unified-${suffix}-reset`));
     let headerNumber_3 = parseHeaderNumber(
-      headers.get(`anthropic-ratelimit-unified-${s}-surpassed-threshold`),
+      headers.get(`anthropic-ratelimit-unified-${suffix}-surpassed-threshold`),
     );
-    let surpassedThreshold = headers.get(`anthropic-ratelimit-unified-${s}-status`);
-    let w = r === "overage" ? undefined : UNIFIED_STATUS_VALUES.find((L) => L === surpassedThreshold);
+    let surpassedThreshold = headers.get(`anthropic-ratelimit-unified-${suffix}-status`);
+    let statusValue =
+      key === "overage"
+        ? undefined
+        : UNIFIED_STATUS_VALUES.find((statusCandidate) => statusCandidate === surpassedThreshold);
     if (
       headerNumber === undefined &&
       headerNumber_2 === undefined &&
       headerNumber_3 === undefined &&
-      w === undefined
+      statusValue === undefined
     )
       continue;
-    n[r] = {
+    readings[key] = {
       ...(headerNumber !== undefined && {
         utilization: headerNumber,
       }),
@@ -353,12 +432,12 @@ function getHeaderBasedEarlyWarning(headers) {
       ...(headerNumber_3 !== undefined && {
         surpassedThreshold: headerNumber_3,
       }),
-      ...(w !== undefined && {
-        status: w,
+      ...(statusValue !== undefined && {
+        status: statusValue,
       }),
     };
   }
-  return n;
+  return readings;
 }
 //@ chunk-w5ndchqs.js:29851-29899 layout
 /**
@@ -369,14 +448,14 @@ var UNIFIED_STATUS_VALUES = ["allowed", "allowed_warning", "rejected"];
 /**
  * 只保留有 utilization 与 resets_at 的窗口读数。
  */
-function pickWindowReadings(e) {
+function pickWindowReadings(readings) {
   let result = {};
-  for (let [r] of UNIFIED_WINDOW_HEADER_KEYS) {
-    let s = e[r];
-    if (s?.utilization !== undefined && s.resets_at !== undefined)
-      result[r] = {
-        utilization: s.utilization,
-        resets_at: s.resets_at,
+  for (let [key] of UNIFIED_WINDOW_HEADER_KEYS) {
+    let entry = readings[key];
+    if (entry?.utilization !== undefined && entry.resets_at !== undefined)
+      result[key] = {
+        utilization: entry.utilization,
+        resets_at: entry.resets_at,
       };
   }
   return result;
@@ -385,31 +464,34 @@ function pickWindowReadings(e) {
 /**
  * 读数指纹 "利用率@重置:状态:阈值"，用于去重。
  */
-function readingFingerprint(e, n) {
-  return `${Math.round(e.utilization * 100)}@${e.resets_at}:${n?.status}:${n?.surpassedThreshold}`;
+function readingFingerprint(reading, limits) {
+  return `${Math.round(reading.utilization * 100)}@${reading.resets_at}:${limits?.status}:${limits?.surpassedThreshold}`;
 }
 //@ chunk-w5ndchqs.js:30173-30269 layout
 /**
  * 读数的 utilization 与 resets_at 都是有限数。
  */
-function isValidUtilization(e) {
-  return e !== undefined && Number.isFinite(e.utilization) && Number.isFinite(e.resets_at);
+function isValidUtilization(reading) {
+  return reading !== undefined && Number.isFinite(reading.utilization) && Number.isFinite(reading.resets_at);
 }
 //@ chunk-w5ndchqs.js:30269-30367 layout
 /**
  * 读数有阈值或完整利用率信息。
  */
-function hasReadingSignal(e) {
-  return e.surpassedThreshold !== undefined || (e.utilization !== undefined && e.resets_at !== undefined);
+function hasReadingSignal(reading) {
+  return (
+    reading.surpassedThreshold !== undefined ||
+    (reading.utilization !== undefined && reading.resets_at !== undefined)
+  );
 }
 //@ chunk-w5ndchqs.js:30367-30645 fingerprint = makeTestQuery (0.93)
 /**
  * 配额探测：发一次 max_tokens=1 的 "quota" 请求以获取限额响应头。
  */
-async function makeTestQuery(e, credentials, signal) {
+async function makeTestQuery(model, credentials, signal) {
   let anthropic = await getAnthropicClient({
     maxRetries: 0,
-    model: e,
+    model,
     source: "quota_check",
     agentContext: mainAgentContext(),
     credentials,
@@ -420,11 +502,11 @@ async function makeTestQuery(e, credentials, signal) {
       content: "quota",
     },
   ];
-  let betas = getModelBetas(e);
+  let betas = getModelBetas(model);
   return anthropic.beta.messages
     .create(
       {
-        model: toProviderWireModelId(e),
+        model: toProviderWireModelId(model),
         max_tokens: 1,
         messages,
         metadata: getAPIMetadata(),
@@ -440,26 +522,26 @@ async function makeTestQuery(e, credentials, signal) {
 /**
  * 执行一次配额探测请求。
  */
-async function runQuotaProbe(e, credentials, signal) {
-  await makeTestQuery(e, credentials, signal);
+async function runQuotaProbe(model, credentials, signal) {
+  await makeTestQuery(model, credentials, signal);
 }
 //@ chunk-w5ndchqs.js:30687-31000 file-local
 /**
  * 响应头里有 surpassed-threshold 的窗口直接作为预警（allowed_warning）。
  */
-function extractRawUtilization(headers, unifiedRateLimitFallbackAvailable, r) {
-  for (let [s] of UNIFIED_WINDOW_HEADER_KEYS) {
-    if (r && s === "five_hour") continue;
-    let d = headers[s];
-    if (d?.surpassedThreshold !== undefined)
+function extractRawUtilization(headers, unifiedRateLimitFallbackAvailable, skipFiveHour) {
+  for (let [key] of UNIFIED_WINDOW_HEADER_KEYS) {
+    if (skipFiveHour && key === "five_hour") continue;
+    let entry = headers[key];
+    if (entry?.surpassedThreshold !== undefined)
       return {
         status: "allowed_warning",
-        resetsAt: d.resets_at,
-        rateLimitType: s,
-        utilization: d.utilization,
+        resetsAt: entry.resets_at,
+        rateLimitType: key,
+        utilization: entry.utilization,
         unifiedRateLimitFallbackAvailable,
         isUsingOverage: false,
-        surpassedThreshold: d.surpassedThreshold,
+        surpassedThreshold: entry.surpassedThreshold,
       };
   }
   return null;
@@ -470,9 +552,9 @@ function extractRawUtilization(headers, unifiedRateLimitFallbackAvailable, r) {
  */
 function getTimeRelativeEarlyWarning(headers, config, unifiedRateLimitFallbackAvailable) {
   let { rateLimitType, windowSeconds, thresholds } = config;
-  let h = headers[rateLimitType];
-  if (h?.utilization === undefined || h.resets_at === undefined) return null;
-  let { utilization, resets_at: resetsAt } = h;
+  let reading = headers[rateLimitType];
+  if (reading?.utilization === undefined || reading.resets_at === undefined) return null;
+  let { utilization, resets_at: resetsAt } = reading;
   let timeProgress = computeTimeProgress(resetsAt, windowSeconds);
   if (!thresholds.some((t) => utilization >= t.utilization && timeProgress <= t.timePct)) return null;
   return {
@@ -489,11 +571,11 @@ function getTimeRelativeEarlyWarning(headers, config, unifiedRateLimitFallbackAv
  * 早期预警：先看服务器阈值头，再按时间相对配置（Fable 场景跳过 5 小时窗口）。
  */
 function getEarlyWarningFromHeaders(headers, unifiedRateLimitFallbackAvailable) {
-  let r = isLowPriorityActive();
-  let rawUtilization = extractRawUtilization(headers, unifiedRateLimitFallbackAvailable, r);
+  let lowPriorityActive = isLowPriorityActive();
+  let rawUtilization = extractRawUtilization(headers, unifiedRateLimitFallbackAvailable, lowPriorityActive);
   if (rawUtilization) return rawUtilization;
   for (let config of EARLY_WARNING_CONFIGS) {
-    if (r && config.rateLimitType === "five_hour") continue;
+    if (lowPriorityActive && config.rateLimitType === "five_hour") continue;
     let timeRelativeWarning = getTimeRelativeEarlyWarning(headers, config, unifiedRateLimitFallbackAvailable);
     if (timeRelativeWarning) return timeRelativeWarning;
   }
@@ -503,8 +585,8 @@ function getEarlyWarningFromHeaders(headers, unifiedRateLimitFallbackAvailable) 
 /**
  * 从 anthropic-ratelimit-unified-* 头计算额度：status、reset、fallback、representative-claim、overage-status/reset/disabled-reason/scope、upgrade-paths、月度/频道利用率、宽限；附带早期预警与各窗口读数。
  */
-function computeNewLimitsFromHeaders(headers, n) {
-  let r = headers.get("anthropic-ratelimit-unified-status") || "allowed";
+function computeNewLimitsFromHeaders(headers, graceActive) {
+  let unifiedStatus = headers.get("anthropic-ratelimit-unified-status") || "allowed";
   let resetsAtHeader = headers.get("anthropic-ratelimit-unified-reset");
   let resetsAt = resetsAtHeader ? Math.round(Number(resetsAtHeader)) : undefined;
   let unifiedRateLimitFallbackAvailable = headers.get("anthropic-ratelimit-unified-fallback") === "available";
@@ -513,27 +595,33 @@ function computeNewLimitsFromHeaders(headers, n) {
   let overageResetsAtHeader = headers.get("anthropic-ratelimit-unified-overage-reset");
   let overageResetsAt = overageResetsAtHeader ? Math.round(Number(overageResetsAtHeader)) : undefined;
   let overageDisabledReason = headers.get("anthropic-ratelimit-unified-overage-disabled-reason");
-  let R = overageScopeHeader(headers);
-  let U = headers.get(OVERAGE_IN_USE_HEADER) === "true";
+  let overageScope = overageScopeHeader(headers);
+  let overageInUse = headers.get(OVERAGE_IN_USE_HEADER) === "true";
   let lowPriorityOffer = parseLowPriorityOffer(headers);
-  let E = headers.get("anthropic-ratelimit-unified-upgrade-paths");
-  let C = E ? E.split(",").map((lt) => lt.trim()) : undefined;
-  let P = headers.get("anthropic-ratelimit-unified-overage-period-monthly-utilization");
-  let O = P ? Number(P) : NaN;
-  let I = Number.isFinite(O)
+  let upgradePathsHeader = headers.get("anthropic-ratelimit-unified-upgrade-paths");
+  let upgradePaths = upgradePathsHeader
+    ? upgradePathsHeader.split(",").map((upgradePath) => upgradePath.trim())
+    : undefined;
+  let monthlyUtilizationHeader = headers.get(
+    "anthropic-ratelimit-unified-overage-period-monthly-utilization",
+  );
+  let monthlyUtilization = monthlyUtilizationHeader ? Number(monthlyUtilizationHeader) : NaN;
+  let overagePeriodMonthly = Number.isFinite(monthlyUtilization)
     ? {
-        utilization: O,
+        utilization: monthlyUtilization,
       }
     : undefined;
-  let z = headers.get("anthropic-ratelimit-unified-overage-period-channel-utilization");
-  let k = z ? Number(z) : NaN;
-  let Q = Number.isFinite(k)
+  let channelUtilizationHeader = headers.get(
+    "anthropic-ratelimit-unified-overage-period-channel-utilization",
+  );
+  let channelUtilization = channelUtilizationHeader ? Number(channelUtilizationHeader) : NaN;
+  let overagePeriodChannel = Number.isFinite(channelUtilization)
     ? {
-        utilization: k,
+        utilization: channelUtilization,
       }
     : undefined;
-  let Ee = {
-    status: r === "allowed_warning" ? "allowed" : r,
+  let parsedLimits = {
+    status: unifiedStatus === "allowed_warning" ? "allowed" : unifiedStatus,
     resetsAt,
     unifiedRateLimitFallbackAvailable,
     ...(rateLimitType && {
@@ -548,31 +636,32 @@ function computeNewLimitsFromHeaders(headers, n) {
     ...(overageDisabledReason && {
       overageDisabledReason,
     }),
-    ...(R && {
-      overageScope: R,
+    ...(overageScope && {
+      overageScope,
     }),
-    ...(C && {
-      upgradePaths: C,
+    ...(upgradePaths && {
+      upgradePaths,
     }),
-    isUsingOverage: r === "rejected" && (overageStatus === "allowed" || overageStatus === "allowed_warning"),
-    ...(U && {
-      overageInUse: U,
+    isUsingOverage:
+      unifiedStatus === "rejected" && (overageStatus === "allowed" || overageStatus === "allowed_warning"),
+    ...(overageInUse && {
+      overageInUse,
     }),
-    ...(I && {
-      overagePeriodMonthly: I,
+    ...(overagePeriodMonthly && {
+      overagePeriodMonthly,
     }),
-    ...(Q && {
-      overagePeriodChannel: Q,
+    ...(overagePeriodChannel && {
+      overagePeriodChannel,
     }),
-    ...(n && {
+    ...(graceActive && {
       rateLimitGraceActive: true,
     }),
     ...lowPriorityOffer,
   };
   let headerBasedEarlyWarning = getHeaderBasedEarlyWarning(headers);
   return {
-    base: Ee,
-    own: withEarlyWarning(Ee, headerBasedEarlyWarning),
+    base: parsedLimits,
+    own: withEarlyWarning(parsedLimits, headerBasedEarlyWarning),
     readings: headerBasedEarlyWarning,
   };
 }
@@ -589,8 +678,8 @@ function withEarlyWarning(previous, headers) {
 /**
  * 用响应头重算限额并写回“自有”部分（宽限期结束前后合并超额字段）。
  */
-function refreshLimitsFromHeaders(e, n) {
-  return computeNewLimitsFromHeaders(e, n).own;
+function refreshLimitsFromHeaders(headers, model) {
+  return computeNewLimitsFromHeaders(headers, model).own;
 }
 //@ chunk-w5ndchqs.js:33073-33580 placement
 /**
@@ -629,15 +718,15 @@ function carryOverageFields(limits, upgradePaths, previous) {
 }
 //@ chunk-w5ndchqs.js:33674-33808 placement
 function toAllowedLimits(currentLimits) {
-  let { resetsAt, rateLimitType, utilization, surpassedThreshold, upgradePaths, ...h } = currentLimits;
+  let { resetsAt, rateLimitType, utilization, surpassedThreshold, upgradePaths, ...rest } = currentLimits;
   return {
-    ...h,
+    ...rest,
     status: "allowed",
   };
 }
 //@ chunk-w5ndchqs.js:33808-34257 placement
-function creditsRequiredDetails(e) {
-  let details = e.error?.error?.details;
+function creditsRequiredDetails(error) {
+  let details = error.error?.error?.details;
   if (details?.error_code !== "credits_required") return {};
   return {
     errorCode: "credits_required",
@@ -653,23 +742,26 @@ function creditsRequiredDetails(e) {
   };
 }
 //@ chunk-w5ndchqs.js:34257-34371 placement
-function cacheExtraUsageDisabledReason(e, storage) {
-  if (getGlobalConfig().cachedExtraUsageDisabledReason !== e)
+function cacheExtraUsageDisabledReason(reason, storageV5) {
+  if (getGlobalConfig().cachedExtraUsageDisabledReason !== reason)
     saveGlobalConfig(
-      (r) => ({
-        ...r,
-        cachedExtraUsageDisabledReason: e,
+      (config) => ({
+        ...config,
+        cachedExtraUsageDisabledReason: reason,
       }),
-      storage,
+      storageV5,
     );
 }
 //@ chunk-w5ndchqs.js:34371-34489 fingerprint = cacheExtraUsageDisabledReason (0.61)
 /**
  * 缓存 overage-disabled-reason（网关模式除外）。
  */
-function cacheExtraUsageDisabledReason_2(e, n) {
+function cacheExtraUsageDisabledReason_2(headers, storage) {
   if (getAPIProvider() === "gateway") return;
-  cacheExtraUsageDisabledReason(e.get("anthropic-ratelimit-unified-overage-disabled-reason") ?? null, n);
+  cacheExtraUsageDisabledReason(
+    headers.get("anthropic-ratelimit-unified-overage-disabled-reason") ?? null,
+    storage,
+  );
 }
 //@ chunk-w5ndchqs.js:37636-37763 placement
 function earlyWarningThresholdFor(rateLimitTier) {
@@ -710,30 +802,30 @@ class ClaudeAiLimitsTracker {
   wrapUp = new WrapUpState();
   pendingNearLimitWrapUpHint = false;
   nearLimitWrapUpWindowKey = null;
-  isFromPreviousAccount(e) {
-    return e !== undefined && e !== this.accountEpoch;
+  isFromPreviousAccount(epoch) {
+    return epoch !== undefined && epoch !== this.accountEpoch;
   }
-  isStaleObservation(e) {
-    if (e < this.lastAppliedObservationAtMs) return true;
-    this.lastAppliedObservationAtMs = e;
+  isStaleObservation(observedAtMs) {
+    if (observedAtMs < this.lastAppliedObservationAtMs) return true;
+    this.lastAppliedObservationAtMs = observedAtMs;
     this.limitsObserved = true;
     return false;
   }
-  applyWindowReadings(e, n, r, s) {
-    let { overageDisabledReason } = n;
+  applyWindowReadings(readings, base, observedAtMs, stale) {
+    let { overageDisabledReason } = base;
     if (
       overageDisabledReason !== undefined &&
       overageDisabledReason !== "fetch_error" &&
       overageDisabledReason !== "unknown"
     )
-      this.retireWindows(["overage"], r);
-    if (!s) {
-      this.rawUtilization = pickWindowReadings(e);
+      this.retireWindows(["overage"], observedAtMs);
+    if (!stale) {
+      this.rawUtilization = pickWindowReadings(readings);
       this.rawWindowLevels = {};
-      for (let [m] of UNIFIED_WINDOW_HEADER_KEYS) {
-        let { status, surpassedThreshold } = e[m] ?? {};
+      for (let [key] of UNIFIED_WINDOW_HEADER_KEYS) {
+        let { status, surpassedThreshold } = readings[key] ?? {};
         if (status !== undefined || surpassedThreshold !== undefined)
-          this.rawWindowLevels[m] = {
+          this.rawWindowLevels[key] = {
             ...(status !== undefined && {
               status,
             }),
@@ -743,19 +835,19 @@ class ClaudeAiLimitsTracker {
           };
       }
     }
-    this.recordSeenWindows(e, n, r);
+    this.recordSeenWindows(readings, base, observedAtMs);
   }
-  recordSeenWindows(e, { upgradePaths, unifiedRateLimitFallbackAvailable }, s) {
-    let d = pickWindowReadings(e);
-    for (let [m] of UNIFIED_WINDOW_HEADER_KEYS) {
-      if (this.isRetiredReading(m, s)) continue;
-      let h = d[m];
-      let y = this.lastSeenWindows[m];
-      if (isValidUtilization(h) && (y === undefined || s >= y.observedAtMs)) {
-        let surpassedThreshold = e[m]?.surpassedThreshold;
-        this.lastSeenWindows[m] = {
-          ...h,
-          observedAtMs: s,
+  recordSeenWindows(readings, { upgradePaths, unifiedRateLimitFallbackAvailable }, observedAtMs) {
+    let picked = pickWindowReadings(readings);
+    for (let [key] of UNIFIED_WINDOW_HEADER_KEYS) {
+      if (this.isRetiredReading(key, observedAtMs)) continue;
+      let reading = picked[key];
+      let seen = this.lastSeenWindows[key];
+      if (isValidUtilization(reading) && (seen === undefined || observedAtMs >= seen.observedAtMs)) {
+        let surpassedThreshold = readings[key]?.surpassedThreshold;
+        this.lastSeenWindows[key] = {
+          ...reading,
+          observedAtMs,
           ...(surpassedThreshold !== undefined && {
             surpassedThreshold,
           }),
@@ -767,46 +859,51 @@ class ClaudeAiLimitsTracker {
       }
     }
   }
-  currentWindows(e) {
-    let n = this.lastAppliedObservationAtMs - EARLY_WARNING_COOLDOWN_MS;
-    let r = {};
-    for (let [s] of UNIFIED_WINDOW_HEADER_KEYS) {
-      let d = this.lastSeenWindows[s];
-      if (d !== undefined && d.observedAtMs >= n && isUtilizationEntryUsable(d, e)) r[s] = d;
+  currentWindows(now) {
+    let cutoff = this.lastAppliedObservationAtMs - EARLY_WARNING_COOLDOWN_MS;
+    let out = {};
+    for (let [key] of UNIFIED_WINDOW_HEADER_KEYS) {
+      let seen = this.lastSeenWindows[key];
+      if (seen !== undefined && seen.observedAtMs >= cutoff && isUtilizationEntryUsable(seen, now))
+        out[key] = seen;
     }
-    return r;
+    return out;
   }
-  deriveTrackedLimits(previous, n, r, s) {
+  deriveTrackedLimits(previous, readings, observedAtMs, now) {
     if (previous.status !== "allowed") return previous;
-    let d = isShardedQuotaEnabled();
-    let m = d ? this.currentWindows(s) : {};
-    let h = {};
+    let sharded = isShardedQuotaEnabled();
+    let current = sharded ? this.currentWindows(now) : {};
+    let merged = {};
     let headers = {};
-    for (let [L] of UNIFIED_WINDOW_HEADER_KEYS) {
-      let x = m[L];
+    for (let [key] of UNIFIED_WINDOW_HEADER_KEYS) {
+      let windowReading = current[key];
       if (
-        x !== undefined &&
-        x.utilization < 1 &&
-        (x.surpassedThreshold === undefined || x.surpassedThreshold < 1)
+        windowReading !== undefined &&
+        windowReading.utilization < 1 &&
+        (windowReading.surpassedThreshold === undefined || windowReading.surpassedThreshold < 1)
       )
-        headers[L] = x;
-      let R = n[L];
-      if (R !== undefined && hasReadingSignal(R) && !(d && this.isRetiredReading(L, r))) {
-        h[L] = R;
-        headers[L] = R;
+        headers[key] = windowReading;
+      let reading = readings[key];
+      if (
+        reading !== undefined &&
+        hasReadingSignal(reading) &&
+        !(sharded && this.isRetiredReading(key, observedAtMs))
+      ) {
+        merged[key] = reading;
+        headers[key] = reading;
       }
     }
     let limits = getEarlyWarningFromHeaders(headers, previous.unifiedRateLimitFallbackAvailable);
     if (!limits) return previous;
-    for (let [L] of UNIFIED_WINDOW_HEADER_KEYS) {
-      let x = m[L];
-      if (L === limits.rateLimitType && h[L] === undefined && x !== undefined)
+    for (let [key] of UNIFIED_WINDOW_HEADER_KEYS) {
+      let windowReading = current[key];
+      if (key === limits.rateLimitType && merged[key] === undefined && windowReading !== undefined)
         return carryOverageFields(
           {
             ...limits,
-            unifiedRateLimitFallbackAvailable: x.unifiedRateLimitFallbackAvailable,
+            unifiedRateLimitFallbackAvailable: windowReading.unifiedRateLimitFallbackAvailable,
           },
-          x.upgradePaths,
+          windowReading.upgradePaths,
           previous,
         );
     }
@@ -828,43 +925,43 @@ class ClaudeAiLimitsTracker {
     this.retireWindows(undefined, this.lastAppliedObservationAtMs);
     this.limitsObserved = false;
   }
-  forgetHeldWindows(e) {
+  forgetHeldWindows(windows) {
     let now = Date.now();
-    this.retireWindows(e, now);
-    for (let [d] of UNIFIED_WINDOW_HEADER_KEYS)
-      if (e === undefined || e.includes(d)) delete this.rawWindowLevels[d];
+    this.retireWindows(windows, now);
+    for (let [key] of UNIFIED_WINDOW_HEADER_KEYS)
+      if (windows === undefined || windows.includes(key)) delete this.rawWindowLevels[key];
     let { status, rateLimitType } = this.currentLimits;
     if (
       isShardedQuotaEnabled() &&
       status === "allowed_warning" &&
       rateLimitType !== undefined &&
-      (e === undefined || e.includes(rateLimitType))
+      (windows === undefined || windows.includes(rateLimitType))
     ) {
-      let d = this.deriveTrackedLimits(toAllowedLimits(this.currentLimits), {}, now, now);
-      if (!En(this.currentLimits, d))
+      let next = this.deriveTrackedLimits(toAllowedLimits(this.currentLimits), {}, now, now);
+      if (!import_sortedIndex_2(this.currentLimits, next))
         try {
-          this.emitStatusChange(d);
+          this.emitStatusChange(next);
         } catch (error) {
           logError(error);
         }
     }
   }
-  isRetiredReading(e, n) {
-    let r = this.retiredAtMs[e];
-    return r !== undefined && n <= r;
+  isRetiredReading(name, observedAtMs) {
+    let retiredAt = this.retiredAtMs[name];
+    return retiredAt !== undefined && observedAtMs <= retiredAt;
   }
-  retireWindows(e, n) {
-    for (let [r] of UNIFIED_WINDOW_HEADER_KEYS) {
-      if (e !== undefined && !e.includes(r)) continue;
-      let s = this.retiredAtMs[r];
-      if (s === undefined || n > s) this.retiredAtMs[r] = n;
-      let d = this.lastSeenWindows[r];
-      if (d !== undefined && d.observedAtMs <= n) delete this.lastSeenWindows[r];
+  retireWindows(windows, retiredAtMs) {
+    for (let [name] of UNIFIED_WINDOW_HEADER_KEYS) {
+      if (windows !== undefined && !windows.includes(name)) continue;
+      let previous = this.retiredAtMs[name];
+      if (previous === undefined || retiredAtMs > previous) this.retiredAtMs[name] = retiredAtMs;
+      let seen = this.lastSeenWindows[name];
+      if (seen !== undefined && seen.observedAtMs <= retiredAtMs) delete this.lastSeenWindows[name];
     }
   }
-  emitStatusChange(e) {
+  emitStatusChange(limits) {
     let currentLimits = this.currentLimits;
-    this.currentLimits = e;
+    this.currentLimits = limits;
     this.limitsObserved = true;
     if (isValidUtilization(this.rawUtilization.five_hour))
       this.lastEmittedWindowParts.five_hour = readingFingerprint(
@@ -882,46 +979,62 @@ class ClaudeAiLimitsTracker {
         this.rawWindowLevels.seven_day_overage_included,
       );
     this.lastEmittedGraceExtraUsageStatus = this.wrapUp.getZone()?.extraUsageStatus;
-    this.statusChanged.emit(e);
-    if (currentLimits.status === e.status && currentLimits.isUsingOverage === e.isUsingOverage) return;
-    let hoursTillReset = Math.round(((e.resetsAt ? e.resetsAt - Date.now() / 1000 : 0) / 3600) * 10) / 10;
+    this.statusChanged.emit(limits);
+    if (currentLimits.status === limits.status && currentLimits.isUsingOverage === limits.isUsingOverage)
+      return;
+    let hoursTillReset =
+      Math.round(((limits.resetsAt ? limits.resetsAt - Date.now() / 1000 : 0) / 3600) * 10) / 10;
     logEvent("tengu_claudeai_limits_status_changed", {
-      status: fromEnum(e.status),
+      status: fromEnum(limits.status),
       previousStatus: fromEnum(currentLimits.status),
-      rateLimitType: fromEnumOpt(e.rateLimitType),
-      isUsingOverage: e.isUsingOverage,
-      unifiedRateLimitFallbackAvailable: e.unifiedRateLimitFallbackAvailable,
+      rateLimitType: fromEnumOpt(limits.rateLimitType),
+      isUsingOverage: limits.isUsingOverage,
+      unifiedRateLimitFallbackAvailable: limits.unifiedRateLimitFallbackAvailable,
       hoursTillReset,
     });
   }
-  restoreLimits(e, limitsObserved) {
-    this.currentLimits = e;
+  restoreLimits(limits, limitsObserved) {
+    this.currentLimits = limits;
     this.limitsObserved = limitsObserved;
-    this.statusChanged.emit(e);
+    this.statusChanged.emit(limits);
   }
-  async probeQuotaStatus(e, credentials, r) {
+  async probeQuotaStatus(model, credentials, storageV5) {
     if (isEssentialTrafficOnly()) return null;
     if (!isLimitsDisplayEnabled(isClaudeAISubscriber())) return null;
     if (getIsNonInteractiveSession()) return null;
     let accountEpoch = this.accountEpoch;
     try {
-      let testQuery = await makeTestQuery(e, credentials);
-      let m = this.extractQuotaStatusFromHeaders(testQuery.headers, e, false, Date.now(), accountEpoch, r);
+      let testQuery = await makeTestQuery(model, credentials);
+      let status = this.extractQuotaStatusFromHeaders(
+        testQuery.headers,
+        model,
+        false,
+        Date.now(),
+        accountEpoch,
+        storageV5,
+      );
       if (this.isFromPreviousAccount(accountEpoch)) return null;
       return (
-        m ??
+        status ??
         refreshLimitsFromHeaders(maybeMockRateLimitHeaders(testQuery.headers), this.wrapUp.getZone() !== null)
       );
     } catch (error) {
       if (error instanceof APIError)
-        this.extractQuotaStatusFromError(error, "other", Date.now(), accountEpoch, r);
+        this.extractQuotaStatusFromError(error, "other", Date.now(), accountEpoch, storageV5);
       return null;
     }
   }
-  extractQuotaStatusFromHeaders(e, n, r = false, s = Date.now(), d, m) {
-    if (this.isFromPreviousAccount(d)) return null;
-    let h = isClaudeAISubscriber();
-    if (!isLimitsDisplayEnabled(h)) {
+  extractQuotaStatusFromHeaders(
+    headers,
+    model,
+    longContext1m = false,
+    observedAtMs = Date.now(),
+    epoch,
+    storageV5,
+  ) {
+    if (this.isFromPreviousAccount(epoch)) return null;
+    let isSubscriber = isClaudeAISubscriber();
+    if (!isLimitsDisplayEnabled(isSubscriber)) {
       this.rawUtilization = {};
       this.rawWindowLevels = {};
       this.lastSeenWindows = {};
@@ -930,27 +1043,27 @@ class ClaudeAiLimitsTracker {
         this.currentLimits.resetsAt ||
         this.currentLimits.rateLimitGraceActive
       ) {
-        let S = {
+        let allowed = {
           status: "allowed",
           unifiedRateLimitFallbackAvailable: false,
           isUsingOverage: false,
         };
-        this.emitStatusChange(S);
+        this.emitStatusChange(allowed);
       }
       return null;
     }
-    let y = maybeMockRateLimitHeaders(e);
+    let mockedHeaders = maybeMockRateLimitHeaders(headers);
     let zone = this.wrapUp.getZone();
-    let { base, own, readings } = computeNewLimitsFromHeaders(y, zone !== null);
-    cacheExtraUsageDisabledReason_2(y, m);
-    handleLowPriorityResponseHeaders(y, s);
-    if (r && !this.longContext1mOkLogged) {
+    let { base, own, readings } = computeNewLimitsFromHeaders(mockedHeaders, zone !== null);
+    cacheExtraUsageDisabledReason_2(mockedHeaders, storageV5);
+    handleLowPriorityResponseHeaders(mockedHeaders, observedAtMs);
+    if (longContext1m && !this.longContext1mOkLogged) {
       this.longContext1mOkLogged = true;
       logFeatureOk("context_1m_entitlement");
     }
-    let U = this.isStaleObservation(s);
-    this.applyWindowReadings(readings, base, s, U);
-    if (!U) {
+    let stale = this.isStaleObservation(observedAtMs);
+    this.applyWindowReadings(readings, base, observedAtMs, stale);
+    if (!stale) {
       if (this.nearLimitWrapUpWindowKey !== null && Date.now() / 1000 > this.nearLimitWrapUpWindowKey) {
         this.pendingNearLimitWrapUpHint = false;
         this.nearLimitWrapUpWindowKey = null;
@@ -962,8 +1075,8 @@ class ClaudeAiLimitsTracker {
         Number.isFinite(fiveHour.utilization) &&
         fiveHour.resets_at * 1000 > Date.now()
       ) {
-        let C = earlyWarningThresholdFor(getRateLimitTier());
-        if (fiveHour.utilization >= C && !isLowPriorityActive()) {
+        let threshold = earlyWarningThresholdFor(getRateLimitTier());
+        if (fiveHour.utilization >= threshold && !isLowPriorityActive()) {
           if (base.overageStatus === "allowed" || base.overageStatus === "allowed_warning")
             this.pendingNearLimitWrapUpHint = false;
           else if (this.nearLimitWrapUpWindowKey !== fiveHour.resets_at) {
@@ -972,8 +1085,8 @@ class ClaudeAiLimitsTracker {
           }
         }
       }
-      let E = this.deriveTrackedLimits(base, readings, s, Date.now());
-      if (!En(this.currentLimits, E)) this.emitStatusChange(E);
+      let next = this.deriveTrackedLimits(base, readings, observedAtMs, Date.now());
+      if (!import_sortedIndex_2(this.currentLimits, next)) this.emitStatusChange(next);
       else {
         let fiveHour = isValidUtilization(this.rawUtilization.five_hour)
           ? this.rawUtilization.five_hour
@@ -997,33 +1110,36 @@ class ClaudeAiLimitsTracker {
               this.lastEmittedWindowParts.seven_day_overage_included) ||
           zone?.extraUsageStatus !== this.lastEmittedGraceExtraUsageStatus
         )
-          this.emitStatusChange(E);
+          this.emitStatusChange(next);
       }
     } else {
       let { rateLimitGraceActive, ...limits } = this.currentLimits;
-      let C = {
+      let withGrace = {
         ...(zone !== null && limits.status === "allowed_warning" ? toSDKRateLimitInfo(limits) : limits),
         ...(zone !== null && {
           rateLimitGraceActive: true,
         }),
       };
-      if (!En(this.currentLimits, C) || zone?.extraUsageStatus !== this.lastEmittedGraceExtraUsageStatus)
-        this.emitStatusChange(C);
+      if (
+        !import_sortedIndex_2(this.currentLimits, withGrace) ||
+        zone?.extraUsageStatus !== this.lastEmittedGraceExtraUsageStatus
+      )
+        this.emitStatusChange(withGrace);
     }
     if (own.overageInUse === true) {
-      let S = own.isUsingOverage === true && own.rateLimitType !== "seven_day_overage_included";
-      let E = usageCreditsOnlyFamily(n);
+      let ignoreOverage = own.isUsingOverage === true && own.rateLimitType !== "seven_day_overage_included";
+      let family = usageCreditsOnlyFamily(model);
       if (
-        !S &&
-        !r &&
+        !ignoreOverage &&
+        !longContext1m &&
         !isUsageBasedBilling() &&
-        E !== undefined &&
+        family !== undefined &&
         !usesPayAsYouGo() &&
         !isEnterpriseSubscriber() &&
-        !hasUsageCreditsConsent(E)
+        !hasUsageCreditsConsent(family)
       )
         setUsageCreditsRequired(true);
-      this.overageInUse.emit(n, own.isUsingOverage === true, r);
+      this.overageInUse.emit(model, own.isUsingOverage === true, longContext1m);
     }
     return own;
   }
@@ -1034,19 +1150,19 @@ class ClaudeAiLimitsTracker {
     this.pendingNearLimitWrapUpHint = false;
     this.nearLimitWrapUpWindowKey = null;
   }
-  extractGraceStatusFromHeaders(e, n, r = Date.now(), s) {
-    if (n && !this.isFromPreviousAccount(s)) this.wrapUp.applyResponse(e, r);
+  extractGraceStatusFromHeaders(headers, active, now = Date.now(), epoch) {
+    if (active && !this.isFromPreviousAccount(epoch)) this.wrapUp.applyResponse(headers, now);
   }
   consumePendingNearLimitWrapUpHint() {
     if (!this.pendingNearLimitWrapUpHint) return false;
     this.pendingNearLimitWrapUpHint = false;
     return !isLowPriorityActive();
   }
-  beginUsageLimitWait(e) {
-    this.usageLimitWaits.add(e);
+  beginUsageLimitWait(wait) {
+    this.usageLimitWaits.add(wait);
     this.emitUsageLimitWaitsChanged();
     return () => {
-      if (this.usageLimitWaits.delete(e)) this.emitUsageLimitWaitsChanged();
+      if (this.usageLimitWaits.delete(wait)) this.emitUsageLimitWaitsChanged();
     };
   }
   emitUsageLimitWaitsChanged() {
@@ -1056,39 +1172,40 @@ class ClaudeAiLimitsTracker {
       logError(error);
     }
   }
-  extractQuotaStatusFromError(e, n, r = Date.now(), s, d) {
-    let m = e.status === undefined && isExtraUsageOutOfCredits(e) && isValiantFinchEnabled();
+  extractQuotaStatusFromError(error, kind, now = Date.now(), epoch, storageV5) {
+    let outOfCredits =
+      error.status === undefined && isExtraUsageOutOfCredits(error) && isValiantFinchEnabled();
     if (
-      this.isFromPreviousAccount(s) ||
+      this.isFromPreviousAccount(epoch) ||
       !isLimitsDisplayEnabled(isClaudeAISubscriber()) ||
-      (e.status !== 429 && !m)
+      (error.status !== 429 && !outOfCredits)
     )
       return;
-    if (getAPIProvider() === "gateway" && !e.headers?.get?.("anthropic-ratelimit-unified-status")) return;
+    if (getAPIProvider() === "gateway" && !error.headers?.get?.("anthropic-ratelimit-unified-status")) return;
     try {
-      let h = this.isStaleObservation(r);
+      let stale = this.isStaleObservation(now);
       let status = this.currentLimits.status;
       let isUsingOverage = this.currentLimits.isUsingOverage;
       let utilization = this.rawUtilization.five_hour?.utilization;
       let utilization_2 = this.rawUtilization.seven_day?.utilization;
       let utilization_3 = this.rawUtilization.overage?.utilization;
-      let U = {
+      let next = {
         ...this.currentLimits,
       };
-      if (e.headers) {
-        let E = maybeMockRateLimitHeaders(e.headers);
-        let newLimitsFromHeaders = computeNewLimitsFromHeaders(E, this.wrapUp.getZone() !== null);
-        U = newLimitsFromHeaders.own;
-        this.applyWindowReadings(newLimitsFromHeaders.readings, newLimitsFromHeaders.base, r, h);
-        if (!m) cacheExtraUsageDisabledReason_2(E, d);
-        else if (getAPIProvider() !== "gateway") cacheExtraUsageDisabledReason("out_of_credits", d);
-        if (E.get("anthropic-ratelimit-unified-status") !== null) this.wrapUp.onRefused();
+      if (error.headers) {
+        let mockedHeaders = maybeMockRateLimitHeaders(error.headers);
+        let newLimitsFromHeaders = computeNewLimitsFromHeaders(mockedHeaders, this.wrapUp.getZone() !== null);
+        next = newLimitsFromHeaders.own;
+        this.applyWindowReadings(newLimitsFromHeaders.readings, newLimitsFromHeaders.base, now, stale);
+        if (!outOfCredits) cacheExtraUsageDisabledReason_2(mockedHeaders, storageV5);
+        else if (getAPIProvider() !== "gateway") cacheExtraUsageDisabledReason("out_of_credits", storageV5);
+        if (mockedHeaders.get("anthropic-ratelimit-unified-status") !== null) this.wrapUp.onRefused();
       }
-      U = buildRejectedLimits(U, e);
-      if (m) {
-        let { overageInUse, ...C } = U;
-        U = {
-          ...C,
+      next = buildRejectedLimits(next, error);
+      if (outOfCredits) {
+        let { overageInUse, ...rest } = next;
+        next = {
+          ...rest,
           overageStatus: "rejected",
           overageDisabledReason: "out_of_credits",
           isUsingOverage: false,
@@ -1103,43 +1220,46 @@ class ClaudeAiLimitsTracker {
           utilization_2 === undefined &&
           utilization_3 === undefined
         ) &&
-        !m
+        !outOfCredits
       ) {
-        let E =
-          U.rateLimitType === "five_hour"
+        let priorUtilization =
+          next.rateLimitType === "five_hour"
             ? utilization
-            : U.rateLimitType?.startsWith("seven_day")
+            : next.rateLimitType?.startsWith("seven_day")
               ? utilization_2
-              : U.rateLimitType === "overage"
+              : next.rateLimitType === "overage"
                 ? utilization_3
                 : Math.max(utilization ?? 0, utilization_2 ?? 0, utilization_3 ?? 0);
-        if (E === undefined || E < 0.8)
+        if (priorUtilization === undefined || priorUtilization < 0.8)
           logEvent("tengu_quota_mismatch", {
             priorStatus: fromEnum(status),
             priorIsUsingOverage: isUsingOverage,
             priorFiveHourUtilization: utilization,
             priorSevenDayUtilization: utilization_2,
             priorOverageUtilization: utilization_3,
-            rateLimitType: fromEnumOpt(U.rateLimitType) ?? undefined,
+            rateLimitType: fromEnumOpt(next.rateLimitType) ?? undefined,
             subscriptionType: fromEnumOpt(getSubscriptionType()) ?? undefined,
             hadPriorUtilizationData:
               utilization !== undefined || utilization_2 !== undefined || utilization_3 !== undefined,
           });
       }
-      if (!h)
+      if (!stale)
         try {
-          this.quotaRejected.emit(U, n);
+          this.quotaRejected.emit(next, kind);
         } catch (error) {
           logError(error);
         }
-      if (!h && !En(this.currentLimits, U)) this.emitStatusChange(U);
+      if (!stale && !import_sortedIndex_2(this.currentLimits, next)) this.emitStatusChange(next);
     } catch (error) {
       logError(error);
     }
   }
 }
 //@ chunk-w5ndchqs.js:47376-47389 placement
-var claudeAiLimits = new ClaudeAiLimitsTracker();
+var claudeAiLimits; // deferred: uses ClaudeAiLimitsTracker of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-w5ndchqs.js:47376", () => {
+  claudeAiLimits = new ClaudeAiLimitsTracker();
+});
 //@ chunk-w5ndchqs.js:47389-47426 placement
 function getCurrentLimits() {
   return claudeAiLimits.currentLimits;
@@ -1153,10 +1273,10 @@ function getRawWindowLevels() {
   return claudeAiLimits.rawWindowLevels;
 }
 //@ chunk-w5ndchqs.js:47508-47625 placement
-function hasSurpassedThreshold(e) {
+function hasSurpassedThreshold(rateLimitType) {
   return (
-    claudeAiLimits.rawWindowLevels[e]?.surpassedThreshold ??
-    claudeAiLimits.currentWindows(Date.now())[e]?.surpassedThreshold
+    claudeAiLimits.rawWindowLevels[rateLimitType]?.surpassedThreshold ??
+    claudeAiLimits.currentWindows(Date.now())[rateLimitType]?.surpassedThreshold
   );
 }
 //@ chunk-w5ndchqs.js:47625-47776 placement
@@ -1164,36 +1284,36 @@ function hasSurpassedThreshold(e) {
  * 取当前各统一限额窗口的使用率与重置时间。
  */
 function currentUsageWindows() {
-  let e = claudeAiLimits.currentWindows(Date.now());
-  let n = {};
-  for (let [r] of UNIFIED_WINDOW_HEADER_KEYS) {
-    let s = e[r];
-    if (s)
-      n[r] = {
-        utilization: s.utilization,
-        resets_at: s.resets_at,
+  let windows = claudeAiLimits.currentWindows(Date.now());
+  let live = {};
+  for (let [key] of UNIFIED_WINDOW_HEADER_KEYS) {
+    let entry = windows[key];
+    if (entry)
+      live[key] = {
+        utilization: entry.utilization,
+        resets_at: entry.resets_at,
       };
   }
-  return n;
+  return live;
 }
 //@ chunk-w5ndchqs.js:47776-47879 placement
 function liveWindowsOf(rawUtilization) {
   let now = Date.now();
-  let r = {};
-  for (let [s] of UNIFIED_WINDOW_HEADER_KEYS) {
-    let d = rawUtilization[s];
-    if (d !== undefined && isUtilizationEntryUsable(d, now)) r[s] = d;
+  let live = {};
+  for (let [key] of UNIFIED_WINDOW_HEADER_KEYS) {
+    let entry = rawUtilization[key];
+    if (entry !== undefined && isUtilizationEntryUsable(entry, now)) live[key] = entry;
   }
-  return r;
+  return live;
 }
 //@ chunk-w5ndchqs.js:47879-47966 placement
 /**
  * 判断一条使用率观测是否可用于当前窗口：resets_at 在 now 之后一年内。
  */
-function isUtilizationEntryUsable(e, n) {
-  let r = n / 1000;
-  let s = r + 31536000;
-  return isValidUtilization(e) && e.resets_at > r && e.resets_at < s;
+function isUtilizationEntryUsable(entry, nowMs) {
+  let nowSeconds = nowMs / 1000;
+  let maxSeconds = nowSeconds + 31536000;
+  return isValidUtilization(entry) && entry.resets_at > nowSeconds && entry.resets_at < maxSeconds;
 }
 //@ chunk-w5ndchqs.js:47966-48002 placement
 function getLimitsAccountEpoch() {
@@ -1208,77 +1328,90 @@ function lastLimitsObservationAt() {
   return claudeAiLimits.lastAppliedObservationAtMs;
 }
 //@ chunk-w5ndchqs.js:48092-48144 placement
-function onLimitsStatusChanged(e) {
-  return claudeAiLimits.statusChanged.subscribe(e);
+function onLimitsStatusChanged(listener) {
+  return claudeAiLimits.statusChanged.subscribe(listener);
 }
 //@ chunk-w5ndchqs.js:48144-48195 placement
-function onOverageInUse(e) {
-  return claudeAiLimits.overageInUse.subscribe(e);
+function onOverageInUse(listener) {
+  return claudeAiLimits.overageInUse.subscribe(listener);
 }
 //@ chunk-w5ndchqs.js:48195-48247 placement
-function onQuotaRejected(e) {
-  return claudeAiLimits.quotaRejected.subscribe(e);
+function onQuotaRejected(listener) {
+  return claudeAiLimits.quotaRejected.subscribe(listener);
 }
 //@ chunk-w5ndchqs.js:48247-48295 placement
-function beginUsageLimitWait(e) {
-  return claudeAiLimits.beginUsageLimitWait(e);
+function beginUsageLimitWait(wait) {
+  return claudeAiLimits.beginUsageLimitWait(wait);
 }
 //@ chunk-w5ndchqs.js:48295-48339 placement
 function usageLimitWaits() {
   return [...claudeAiLimits.usageLimitWaits];
 }
 //@ chunk-w5ndchqs.js:48339-48400 placement
-function onUsageLimitWaitsChanged(e) {
-  return claudeAiLimits.usageLimitWaitsChanged.subscribe(e);
+function onUsageLimitWaitsChanged(listener) {
+  return claudeAiLimits.usageLimitWaitsChanged.subscribe(listener);
 }
 //@ chunk-w5ndchqs.js:48400-48438 placement
 function resetCurrentLimits() {
   claudeAiLimits.resetCurrentLimits();
 }
 //@ chunk-w5ndchqs.js:48438-48477 placement
-function forgetHeldWindows(e) {
-  claudeAiLimits.forgetHeldWindows(e);
+function forgetHeldWindows(windowKey) {
+  claudeAiLimits.forgetHeldWindows(windowKey);
 }
 //@ chunk-w5ndchqs.js:48477-48515 placement
-function emitLimitsStatusChange(e) {
-  claudeAiLimits.emitStatusChange(e);
+function emitLimitsStatusChange(limits) {
+  claudeAiLimits.emitStatusChange(limits);
 }
 //@ chunk-w5ndchqs.js:48515-48554 placement
 function restoreLimits(limits, limitsObserved) {
   claudeAiLimits.restoreLimits(limits, limitsObserved);
 }
 //@ chunk-w5ndchqs.js:48554-48614 placement
-async function probeQuotaStatusAtStart(e, n) {
-  await claudeAiLimits.probeQuotaStatus(getBareCheckModel(), e, n);
+async function probeQuotaStatusAtStart(credentials, signal) {
+  await claudeAiLimits.probeQuotaStatus(getBareCheckModel(), credentials, signal);
 }
 //@ chunk-w5ndchqs.js:48614-48667 placement
-function probeQuotaStatus(mainLoopModel, n, storageV5) {
-  return claudeAiLimits.probeQuotaStatus(mainLoopModel, n, storageV5);
+function probeQuotaStatus(mainLoopModel, credentials, storageV5) {
+  return claudeAiLimits.probeQuotaStatus(mainLoopModel, credentials, storageV5);
 }
 //@ chunk-w5ndchqs.js:48667-48759 placement
 function extractQuotaStatusFromHeaders(
   headers,
   model,
-  r = false,
-  s = Date.now(),
+  unifiedFallback = false,
+  nowMs = Date.now(),
+  accountEpoch,
+  storageV5,
+) {
+  return claudeAiLimits.extractQuotaStatusFromHeaders(
+    headers,
+    model,
+    unifiedFallback,
+    nowMs,
+    accountEpoch,
+    storageV5,
+  );
+}
+//@ chunk-w5ndchqs.js:48759-48835 placement
+function extractQuotaStatusFromError(
+  error,
+  requestRouteKind,
+  nowMs = Date.now(),
   limitsAccountEpoch,
   storageV5,
 ) {
-  return claudeAiLimits.extractQuotaStatusFromHeaders(headers, model, r, s, limitsAccountEpoch, storageV5);
-}
-//@ chunk-w5ndchqs.js:48759-48835 placement
-function extractQuotaStatusFromError(e, requestRouteKind, r = Date.now(), s, storageV5) {
-  claudeAiLimits.extractQuotaStatusFromError(e, requestRouteKind, r, s, storageV5);
+  claudeAiLimits.extractQuotaStatusFromError(error, requestRouteKind, nowMs, limitsAccountEpoch, storageV5);
 }
 //@ chunk-w5ndchqs.js:48918-48976 affinity = extractQuotaStatusFromError (1)
 /**
  * 构造 rejected 额度状态（合并错误里的字段）。旧版名错配。
  */
-function buildRejectedLimits(e, n) {
+function buildRejectedLimits(limits, error) {
   return {
-    ...e,
+    ...limits,
     status: "rejected",
-    ...creditsRequiredDetails(n),
+    ...creditsRequiredDetails(error),
   };
 }
 //@ chunk-w5ndchqs.js:48976-49011 placement
@@ -1290,8 +1423,8 @@ function resetNearLimitWrapUpState() {
   claudeAiLimits.resetNearLimitWrapUpState();
 }
 //@ chunk-w5ndchqs.js:49056-49130 placement
-function extractGraceStatusFromHeaders(headers, n, r = Date.now(), limitsAccountEpoch) {
-  claudeAiLimits.extractGraceStatusFromHeaders(headers, n, r, limitsAccountEpoch);
+function extractGraceStatusFromHeaders(headers, model, nowMs = Date.now(), accountEpoch) {
+  claudeAiLimits.extractGraceStatusFromHeaders(headers, model, nowMs, accountEpoch);
 }
 //@ chunk-w5ndchqs.js:49130-49172 placement
 function wrapUpOnMainTurnStart() {
@@ -1314,13 +1447,13 @@ function shouldContinueAfterWrapUp(limits = Date.now()) {
 }
 //@ chunk-w5ndchqs.js:49331-49498 placement
 function emitStatusChange(limits = Date.now()) {
-  let n = shouldContinueAfterWrapUp(limits);
-  return n === null
+  let wrapUpLimit = shouldContinueAfterWrapUp(limits);
+  return wrapUpLimit === null
     ? null
     : {
         status: "rejected",
-        resetsAt: n.resetsAt,
-        rateLimitType: n.rateLimitType,
+        resetsAt: wrapUpLimit.resetsAt,
+        rateLimitType: wrapUpLimit.rateLimitType,
         unifiedRateLimitFallbackAvailable: false,
       };
 }
@@ -1337,73 +1470,11 @@ function consumeNearLimitWrapUpHint() {
   return claudeAiLimits.consumePendingNearLimitWrapUpHint();
 }
 //@ chunk-w5ndchqs.js:49648-49769 placement
-function overageScopeHeader(e) {
-  let n = e?.get?.(OVERAGE_SCOPE_HEADER);
-  if (n === "service" || n === "channel" || n === "group_pool" || n === "organization") return n;
+function overageScopeHeader(headers) {
+  let scope = headers?.get?.(OVERAGE_SCOPE_HEADER);
+  if (scope === "service" || scope === "channel" || scope === "group_pool" || scope === "organization")
+    return scope;
   return;
-}
-//@ chunk-aepeg2w5.js:279315-279407 placement
-/**
- * 付费计划“额外用量”帮助文章链接。
- */
-var EXTRA_USAGE_HELP_URL =
-  "https://support.claude.com/en/articles/12429409-extra-usage-for-paid-claude-plans";
-//@ chunk-aepeg2w5.js:279407-279574 placement
-/**
- * 支持文章（12429409）链接常量。
- */
-var USAGE_SETTINGS_URL = "https://claude.ai/settings/usage?from=cc_cli_limit_message";
-var HTTPS_CLAUDE_AI_ADMIN_SETTINGS_USAGE = "https://claude.ai/admin-settings/usage";
-var EXTRA_USAGE_SUPPORT_URL = "https://support.claude.com/en/articles/12429409";
-//@ chunk-aepeg2w5.js:279574-279587 placement
-var MAX = "max";
-//@ chunk-aepeg2w5.js:288283-288308 sole-consumer
-/**
- * 按 host 存放的 MockRateLimitState 单例槽。
- */
-var mockRateLimitStateSlot = new HostScoped(() => new MockRateLimitState());
-//@ chunk-aepeg2w5.js:288308-288345 placement
-/**
- * 取当前宿主的限速模拟状态槽（mockRateLimitStateSlot）。
- */
-function getMockRateLimitState() {
-  return mockRateLimitStateSlot.of(getRootSession().host);
-}
-//@ chunk-aepeg2w5.js:288345-288372 placement
-/**
- * 限速模拟关闭时的占位实现，永远返回 null。
- */
-function getDisabledMockRateLimitState() {
-  return null;
-}
-//@ chunk-aepeg2w5.js:288372-288437 placement
-function checkQuotaStatus() {
-  let mockRateLimitState = getMockRateLimitState();
-  mockRateLimitState.enabled;
-  return null;
-  return mockRateLimitState.headers;
-}
-//@ chunk-aepeg2w5.js:288437-288684 placement
-/**
- * 用模拟的配额状态覆盖响应头中的统一限额字段（无模拟状态时原样返回）。
- */
-function applyMockQuotaHeaders(e) {
-  let n = checkQuotaStatus();
-  if (!n) return e;
-  let r = new globalThis.Headers(e);
-  r.delete("anthropic-ratelimit-unified-5h-status");
-  r.delete("anthropic-ratelimit-unified-7d-status");
-  Object.entries(n).forEach(([key, value]) => {
-    if (value !== undefined) r.set(key, value);
-  });
-  return r;
-}
-//@ chunk-aepeg2w5.js:288684-288708 placement
-/**
- * 限额模拟（外部构建恒为 false）。
- */
-function isRateLimitMockingEnabled() {
-  return false;
 }
 //@ chunk-0h4e7gnq.js:48384-48429 fingerprint = currentLimits (0.823)
 /**
@@ -1430,33 +1501,34 @@ function extractQuotaStatusFromHeaders_2(headers) {
 /**
  * 额度状态的重置时间已过则清回默认（clear），overage 重置时间已过则剥离 overage 字段（overage_strip）。
  */
-function expireStaleLimits(e, n = Date.now() / 1000) {
-  let s = dropExpiredWindows(e, n);
-  let y = e.resetsAt !== undefined && e.resetsAt <= n;
-  let r = e.overageResetsAt !== undefined && e.overageResetsAt <= n;
-  let S = e.status === "rejected" && e.overageStatus === "rejected" && r;
-  if (y || S)
+function expireStaleLimits(limits, nowSeconds = Date.now() / 1000) {
+  let pruned = dropExpiredWindows(limits, nowSeconds);
+  let mainExpired = limits.resetsAt !== undefined && limits.resetsAt <= nowSeconds;
+  let overageExpired = limits.overageResetsAt !== undefined && limits.overageResetsAt <= nowSeconds;
+  let fullyRejected = limits.status === "rejected" && limits.overageStatus === "rejected" && overageExpired;
+  if (mainExpired || fullyRejected)
     return {
       info: {
         ...currentLimits,
-        ...(s.unifiedWindows !== undefined && {
-          unifiedWindows: s.unifiedWindows,
+        ...(pruned.unifiedWindows !== undefined && {
+          unifiedWindows: pruned.unifiedWindows,
         }),
       },
       degradation: "clear",
     };
-  if (r) {
-    let { overageStatus, overageResetsAt, overageDisabledReason, limitScope, adminRequestOffer, ...I } = s;
+  if (overageExpired) {
+    let { overageStatus, overageResetsAt, overageDisabledReason, limitScope, adminRequestOffer, ...rest } =
+      pruned;
     return {
       info: {
-        ...I,
-        isUsingOverage: I.isUsingOverage ?? false,
+        ...rest,
+        isUsingOverage: rest.isUsingOverage ?? false,
       },
       degradation: "overage_strip",
     };
   }
   return {
-    info: s,
+    info: pruned,
     degradation: "none",
   };
 }
@@ -1464,29 +1536,32 @@ function expireStaleLimits(e, n = Date.now() / 1000) {
 /**
  * 取限额窗口列表最后一项的当前状态（Sd）。
  */
-function getLatestLimitStatus(e, n = Date.now() / 1000) {
-  let last = e.at(-1);
-  return last === undefined ? undefined : expireStaleLimits(last, n);
+function getLatestLimitStatus(limitsList, nowSeconds = Date.now() / 1000) {
+  let limits = limitsList.at(-1);
+  return limits === undefined ? undefined : expireStaleLimits(limits, nowSeconds);
 }
 //@ chunk-0h4e7gnq.js:49444-49499 placement
 /**
  * 对象非空时原样返回，空对象返回 undefined。
  */
-function nonEmptyObjectOrUndefined(e) {
-  return Object.keys(e).length > 0 ? e : undefined;
+function nonEmptyObjectOrUndefined(obj) {
+  return Object.keys(obj).length > 0 ? obj : undefined;
 }
 //@ chunk-0h4e7gnq.js:49499-49711 placement
-function dropExpiredWindows(e, n) {
-  let { unifiedWindows, ...y } = e;
-  if (unifiedWindows === undefined) return e;
-  let r = pickByHelper(unifiedWindows, (h) => h !== undefined && h.resetsAt > n);
-  let S = Object.keys(r).length;
-  if (S === 0) return y;
-  return S === Object.keys(unifiedWindows).length
-    ? e
+function dropExpiredWindows(limits, nowSeconds) {
+  let { unifiedWindows, ...rest } = limits;
+  if (unifiedWindows === undefined) return limits;
+  let kept = pickByHelper(
+    unifiedWindows,
+    (unifiedWindow) => unifiedWindow !== undefined && unifiedWindow.resetsAt > nowSeconds,
+  );
+  let keptCount = Object.keys(kept).length;
+  if (keptCount === 0) return rest;
+  return keptCount === Object.keys(unifiedWindows).length
+    ? limits
     : {
-        ...y,
-        unifiedWindows: r,
+        ...rest,
+        unifiedWindows: kept,
       };
 }
 export {

@@ -8,8 +8,8 @@
  * pieces: chunk-xs5f70ym.js (6)
  * attribution: placement 6
  */
-import { init_react_production, y, R } from "../../vendor/react/cjs/react.production.js";
-import { w } from "../../vendor/react/compiler-runtime.js";
+import { init_react_production, useState, useRef } from "../../vendor/react/cjs/react.production.js";
+import { useMemoCache } from "../../vendor/react/compiler-runtime.js";
 import { useTheme_2 } from "./design-system/ThemeProvider.js";
 import { discardFeedbackDraft } from "../services/feedback/feedbackDraft.js";
 import {
@@ -42,107 +42,113 @@ init_react_production();
 function noopExitNudge() {}
 //@ chunk-xs5f70ym.js:16757-18245 placement
 function ExitFeedbackNudge(props) {
-  let i = w(26);
+  let $ = useMemoCache(26);
   let { sessionDrafts, messages, renderExitFlow, onExit } = props;
   let { storageV5 } = useTheme_2();
-  let [f, x] = y("nudge");
-  let [u, V] = y(null);
-  let G = R(false);
-  let L;
-  if (i[0] !== sessionDrafts || i[1] !== storageV5) {
-    L = async function E() {
+  let [view, setView] = useState("nudge");
+  let [panelElement, setPanelElement] = useState(null);
+  let exitingRef = useRef(false);
+  let discardAllCached;
+  if ($[0] !== sessionDrafts || $[1] !== storageV5) {
+    discardAllCached = async function discardAllDrafts() {
       for (const sessionDraft of sessionDrafts)
         await discardFeedbackDraft(sessionDraft, "exit_nudge", storageV5).catch(noopExitNudge);
     };
-    i[0] = sessionDrafts;
-    i[1] = storageV5;
-    i[2] = L;
-  } else L = i[2];
-  let E = L;
-  let W;
-  if (i[3] !== onExit || i[4] !== renderExitFlow) {
-    W = function v() {
-      if (renderExitFlow) V(renderExitFlow());
+    $[0] = sessionDrafts;
+    $[1] = storageV5;
+    $[2] = discardAllCached;
+  } else discardAllCached = $[2];
+  let discardDrafts = discardAllCached;
+  let finishCached;
+  if ($[3] !== onExit || $[4] !== renderExitFlow) {
+    finishCached = function finishExit() {
+      if (renderExitFlow) setPanelElement(renderExitFlow());
       else onExit();
     };
-    i[3] = onExit;
-    i[4] = renderExitFlow;
-    i[5] = W;
-  } else W = i[5];
-  let v = W;
-  let _;
-  if (i[6] !== E || i[7] !== u || i[8] !== onExit || i[9] !== renderExitFlow || i[10] !== f) {
-    _ = function F(event) {
-      if (f !== "nudge" || u || event.ctrl || event.meta) {
+    $[3] = onExit;
+    $[4] = renderExitFlow;
+    $[5] = finishCached;
+  } else finishCached = $[5];
+  let finishExitStable = finishCached;
+  let keyHandlerCached;
+  if (
+    $[6] !== discardDrafts ||
+    $[7] !== panelElement ||
+    $[8] !== onExit ||
+    $[9] !== renderExitFlow ||
+    $[10] !== view
+  ) {
+    keyHandlerCached = function handleKeyDown(event) {
+      if (view !== "nudge" || panelElement || event.ctrl || event.meta) {
         return;
       }
-      if (G.current) {
+      if (exitingRef.current) {
         event.preventDefault();
         return;
       }
       if (event.key === "return") {
         event.preventDefault();
-        x("panel");
+        setView("panel");
       } else if (event.key === "escape") {
         event.preventDefault();
-        G.current = true;
-        if (renderExitFlow) V(renderExitFlow(E));
+        exitingRef.current = true;
+        if (renderExitFlow) setPanelElement(renderExitFlow(discardDrafts));
         else
           (async () => {
-            await E();
+            await discardDrafts();
             onExit();
           })();
       }
     };
-    i[6] = E;
-    i[7] = u;
-    i[8] = onExit;
-    i[9] = renderExitFlow;
-    i[10] = f;
-    i[11] = _;
-  } else _ = i[11];
-  let onKeyDown = _;
-  if (u) {
-    return u;
+    $[6] = discardDrafts;
+    $[7] = panelElement;
+    $[8] = onExit;
+    $[9] = renderExitFlow;
+    $[10] = view;
+    $[11] = keyHandlerCached;
+  } else keyHandlerCached = $[11];
+  let onKeyDown = keyHandlerCached;
+  if (panelElement) {
+    return panelElement;
   }
-  if (f === "panel") {
+  if (view === "panel") {
     let onDone;
-    if (i[12] !== v) {
-      onDone = () => v();
-      i[12] = v;
-      i[13] = onDone;
-    } else onDone = i[13];
-    let p;
-    if (i[14] !== messages || i[15] !== onDone) {
-      p = jsxProd_default(FeedbackQueue, {
+    if ($[12] !== finishExitStable) {
+      onDone = () => finishExitStable();
+      $[12] = finishExitStable;
+      $[13] = onDone;
+    } else onDone = $[13];
+    let queueElement;
+    if ($[14] !== messages || $[15] !== onDone) {
+      queueElement = jsxProd_default(FeedbackQueue, {
         messages,
         onDone,
       });
-      i[14] = messages;
-      i[15] = onDone;
-      i[16] = p;
-    } else p = i[16];
-    return p;
+      $[14] = messages;
+      $[15] = onDone;
+      $[16] = queueElement;
+    } else queueElement = $[16];
+    return queueElement;
   }
-  const c = sessionDrafts.length;
-  let p;
-  if (i[17] !== sessionDrafts.length) {
-    p = plural(sessionDrafts.length, "feedback draft");
-    i[17] = sessionDrafts.length;
-    i[18] = p;
-  } else p = i[18];
-  let D;
-  if (i[19] !== sessionDrafts.length || i[20] !== p) {
-    D = jsxProd_default_2(Text, {
-      children: ["You have ", c, " unsent", " ", p],
+  const draftCount = sessionDrafts.length;
+  let draftNoun;
+  if ($[17] !== sessionDrafts.length) {
+    draftNoun = plural(sessionDrafts.length, "feedback draft");
+    $[17] = sessionDrafts.length;
+    $[18] = draftNoun;
+  } else draftNoun = $[18];
+  let messageElement;
+  if ($[19] !== sessionDrafts.length || $[20] !== draftNoun) {
+    messageElement = jsxProd_default_2(Text, {
+      children: ["You have ", draftCount, " unsent", " ", draftNoun],
     });
-    i[19] = sessionDrafts.length;
-    i[20] = p;
-    i[21] = D;
-  } else D = i[21];
-  let A;
-  if (i[22] === MEMO_CACHE_SENTINEL) {
-    A = jsxProd_default(Text, {
+    $[19] = sessionDrafts.length;
+    $[20] = draftNoun;
+    $[21] = messageElement;
+  } else messageElement = $[21];
+  let hintElement;
+  if ($[22] === MEMO_CACHE_SENTINEL) {
+    hintElement = jsxProd_default(Text, {
       dimColor: true,
       children: jsxProd_default_2(Byline, {
         children: [
@@ -157,19 +163,19 @@ function ExitFeedbackNudge(props) {
         ],
       }),
     });
-    i[22] = A;
-  } else A = i[22];
-  let J;
-  if (i[23] !== onKeyDown || i[24] !== D) {
-    J = jsxProd_default_2(FocusColumn, {
+    $[22] = hintElement;
+  } else hintElement = $[22];
+  let nudgeElement;
+  if ($[23] !== onKeyDown || $[24] !== messageElement) {
+    nudgeElement = jsxProd_default_2(FocusColumn, {
       onKeyDown,
-      children: [D, A],
+      children: [messageElement, hintElement],
     });
-    i[23] = onKeyDown;
-    i[24] = D;
-    i[25] = J;
-  } else J = i[25];
-  return J;
+    $[23] = onKeyDown;
+    $[24] = messageElement;
+    $[25] = nudgeElement;
+  } else nudgeElement = $[25];
+  return nudgeElement;
 }
 //@ chunk-xs5f70ym.js:18245-18301 placement = GOODBYE_MESSAGES (1)
 var GOODBYE_MESSAGES = ["Goodbye!", "See ya!", "Bye!", "Catch you later!"];
@@ -188,14 +194,14 @@ async function runExitWithFeedback(onDone, context) {
     sendDetachRequest();
     return null;
   }
-  let g = getCurrentWorktreeSession() !== null;
-  let o = backgroundTaskDescription(context.taskRegistry?.all(), context.options?.mcpClients);
-  let t =
-    g || o.length > 0
+  let inWorktree = getCurrentWorktreeSession() !== null;
+  let backgroundItems = backgroundTaskDescription(context.taskRegistry?.all(), context.options?.mcpClients);
+  let renderExitFlow =
+    inWorktree || backgroundItems.length > 0
       ? (onBeforeExit) =>
           jsxProd_default(useExitFlow, {
-            showWorktree: g,
-            backgroundItems: o,
+            showWorktree: inWorktree,
+            backgroundItems,
             messages: context.messages,
             isMidTurn: context.isMidTurn,
             getMessages: context.getMessages,
@@ -215,12 +221,12 @@ async function runExitWithFeedback(onDone, context) {
       queued: [],
       expired: [],
     }));
-    let filtered = queued.filter((x) => x.source_session_id === getSessionId());
+    let filtered = queued.filter((draft) => draft.source_session_id === getSessionId());
     if (filtered.length > 0)
       return jsxProd_default(ExitFeedbackNudge, {
         sessionDrafts: filtered,
         messages: [...context.messages],
-        renderExitFlow: t,
+        renderExitFlow,
         onExit: () => {
           onDone(getRandomGoodbyeMessage());
           ExitFlow(
@@ -233,7 +239,7 @@ async function runExitWithFeedback(onDone, context) {
         },
       });
   }
-  if (t) return t();
+  if (renderExitFlow) return renderExitFlow();
   onDone(getRandomGoodbyeMessage());
   await ExitFlow(
     submittedMessages(context),
@@ -244,3 +250,4 @@ async function runExitWithFeedback(onDone, context) {
   );
   return null;
 }
+export { runExitWithFeedback };

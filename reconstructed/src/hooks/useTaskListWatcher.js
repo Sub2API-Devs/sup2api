@@ -9,6 +9,12 @@
  * attribution: fingerprint 3
  */
 
+//@ chunk-ag5x7vhf.js:149008-149162 fingerprint = useTaskListWatcher (0.386)
+function useTaskListWatcher({ enabled, isLoading, hasToolsInProgress, hasPendingBackgroundWork }) {
+  if (!enabled) return null;
+  if (isLoading || hasToolsInProgress || hasPendingBackgroundWork) return "indeterminate";
+  return "completed";
+}
 //@ chunk-8xs34hez.js:5789-5988 fingerprint = findAvailableTask (1)
 function findAvailableTask(tasks) {
   let unresolvedTaskIds = new Set(tasks.filter((t) => t.status !== "completed").map((t) => t.id));
@@ -28,11 +34,5 @@ function formatTaskAsPrompt(task) {
 
 ${task.description}`;
   return prompt;
-}
-//@ chunk-ag5x7vhf.js:149008-149162 fingerprint = useTaskListWatcher (0.386)
-function useTaskListWatcher({ enabled, isLoading, hasToolsInProgress, hasPendingBackgroundWork }) {
-  if (!enabled) return null;
-  if (isLoading || hasToolsInProgress || hasPendingBackgroundWork) return "indeterminate";
-  return "completed";
 }
 export { useTaskListWatcher, findAvailableTask, formatTaskAsPrompt };

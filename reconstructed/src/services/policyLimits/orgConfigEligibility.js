@@ -28,40 +28,45 @@ import { policyRefusalReason } from "./orgConfigGate.js";
 import { POLICY_AUTH_DENIAL_CODES, POLICY_TOKEN_DENIAL_CODES } from "./complianceTaints.js";
 
 //@ chunk-c18v4hz4.js:1116-1385 placement
-function tierEligibility(e, n) {
-  let r = keepIfFreshOrgConfig(n.tier, n.tierVerifiedAtMs, e.graceTtlHours, n.nowMs ?? Date.now());
-  if (r !== null || n.tier === null)
+function tierEligibility(flag, inputs) {
+  let freshTier = keepIfFreshOrgConfig(
+    inputs.tier,
+    inputs.tierVerifiedAtMs,
+    flag.graceTtlHours,
+    inputs.nowMs ?? Date.now(),
+  );
+  if (freshTier !== null || inputs.tier === null)
     return {
-      tier: r,
-      credentialShape: n.credentialShape,
+      tier: freshTier,
+      credentialShape: inputs.credentialShape,
     };
   return {
     tier: null,
-    credentialShape: n.credentialShape === "stored_login" ? "untiered_login" : n.credentialShape,
+    credentialShape: inputs.credentialShape === "stored_login" ? "untiered_login" : inputs.credentialShape,
   };
 }
 //@ chunk-c18v4hz4.js:1385-2286 placement
 /**
  * 判断当前会话是否需要组织配置门控（提供方、第一方地址、凭证形态、套餐等），返回是否候选与排除原因。
  */
-function orgConfigCandidacy(flag, n) {
-  if (n.provider !== "firstParty")
+function orgConfigCandidacy(flag, inputs) {
+  if (inputs.provider !== "firstParty")
     return {
       candidate: false,
       exclusion: "provider",
     };
-  if (!n.firstPartyBaseUrl)
+  if (!inputs.firstPartyBaseUrl)
     return {
       candidate: false,
       exclusion: "base_url",
     };
-  if (n.authRecoveryCommand)
+  if (inputs.authRecoveryCommand)
     return {
       candidate: false,
       exclusion: "auth_command",
     };
-  let r = tierEligibility(flag, n);
-  switch (r.credentialShape) {
+  let eligibility = tierEligibility(flag, inputs);
+  switch (eligibility.credentialShape) {
     case "stored_login":
     case "untiered_login":
       break;
@@ -74,11 +79,13 @@ function orgConfigCandidacy(flag, n) {
         exclusion: "credential_shape",
       };
   }
-  let o =
-    isOrgConfigPlan(r.tier) || r.credentialShape !== "untiered_login" || n.storedLoginOrigin !== true
-      ? r.tier
+  let tier =
+    isOrgConfigPlan(eligibility.tier) ||
+    eligibility.credentialShape !== "untiered_login" ||
+    inputs.storedLoginOrigin !== true
+      ? eligibility.tier
       : (flag.plans[0] ?? "team");
-  if (!isOrgConfigPlan(o))
+  if (!isOrgConfigPlan(tier))
     return {
       candidate: false,
       exclusion: "tier_unknown",
@@ -88,24 +95,24 @@ function orgConfigCandidacy(flag, n) {
       candidate: false,
       exclusion: "flag_off",
     };
-  if (!flag.plans.includes(o))
+  if (!flag.plans.includes(tier))
     return {
       candidate: false,
       exclusion: "tier_not_in_plans",
     };
-  if (n.hostToken === true && !flag.hostTokens)
+  if (inputs.hostToken === true && !flag.hostTokens)
     return {
       candidate: false,
       exclusion: "host_token",
     };
-  if (!inOrgConfigGateRollout(flag, n.bucket))
+  if (!inOrgConfigGateRollout(flag, inputs.bucket))
     return {
       candidate: false,
       exclusion: "rollout_percent",
     };
   return {
     candidate: true,
-    tier: o,
+    tier,
   };
 }
 //@ chunk-c18v4hz4.js:2286-2300 placement
@@ -116,81 +123,84 @@ function isExemptReason(flag, reason) {
   return reason === "refused_not_entitled" && !flag.refuseNotEntitled;
 }
 //@ chunk-c18v4hz4.js:2414-2624 placement
-function admittedCacheState(e, graceTtlHours) {
-  if (classifyManagedConfigOutcome(e.reason) === "fetched") return "fetched";
-  if (!e.hasAdmittedCache) return "no";
-  if (e.admittedCacheAgeMs === undefined || e.admittedCacheAgeMs < 0) return "no";
-  return e.admittedCacheAgeMs <= graceTtlHours * ORG_CONFIG_CACHE_FRESH_MS ? "cached" : "no";
+function admittedCacheState(outcome, graceTtlHours) {
+  if (classifyManagedConfigOutcome(outcome.reason) === "fetched") return "fetched";
+  if (!outcome.hasAdmittedCache) return "no";
+  if (outcome.admittedCacheAgeMs === undefined || outcome.admittedCacheAgeMs < 0) return "no";
+  return outcome.admittedCacheAgeMs <= graceTtlHours * ORG_CONFIG_CACHE_FRESH_MS ? "cached" : "no";
 }
 //@ chunk-c18v4hz4.js:2624-3400 placement
 /**
  * 综合开关、候选资格与策略/设置结果，算出组织配置门控的结论（通过/缓存通过/阻止/拒绝）。
  */
-function orgConfigGateDecision(e) {
-  let { flag, candidacy, surface } = e;
-  let blockedMs = e.blockedMs ?? 0;
+function orgConfigGateDecision(input) {
+  let { flag, candidacy, surface } = input;
+  let blockedMs = input.blockedMs ?? 0;
   if (!flag.enabled || !candidacy.candidate)
     return {
       verdict: "pass",
       blockedMs,
       surface,
     };
-  let d = [
-    ["policy", e.policy],
-    ["settings", e.settings],
+  let resources = [
+    ["policy", input.policy],
+    ["settings", input.settings],
   ];
-  let u = false;
-  for (let [f, m] of d) {
-    if (classifyManagedConfigOutcome(m.reason) !== "refused") continue;
-    if (isExemptReason(flag, m.reason)) {
-      u = true;
+  let exemptSeen = false;
+  for (let [resourceName, outcome] of resources) {
+    if (classifyManagedConfigOutcome(outcome.reason) !== "refused") continue;
+    if (isExemptReason(flag, outcome.reason)) {
+      exemptSeen = true;
       continue;
     }
     return {
       verdict: "refused",
-      reason: m.reason,
-      resource: f,
+      reason: outcome.reason,
+      resource: resourceName,
       blockedMs,
       surface,
     };
   }
-  let s = false;
-  let g;
-  for (let [f, m] of d) {
-    let _ = admittedCacheState(m, flag.graceTtlHours);
-    if (_ === "fetched") continue;
-    if (_ === "cached") {
-      s = true;
+  let sawCached = false;
+  let worst;
+  for (let [resourceName, outcome] of resources) {
+    let cacheState = admittedCacheState(outcome, flag.graceTtlHours);
+    if (cacheState === "fetched") continue;
+    if (cacheState === "cached") {
+      sawCached = true;
       continue;
     }
-    if (isExemptReason(flag, m.reason)) {
-      u = true;
+    if (isExemptReason(flag, outcome.reason)) {
+      exemptSeen = true;
       continue;
     }
-    if (g === undefined || (g[1].reason === "unavailable_pending" && m.reason !== "unavailable_pending"))
-      g = [f, m];
+    if (
+      worst === undefined ||
+      (worst[1].reason === "unavailable_pending" && outcome.reason !== "unavailable_pending")
+    )
+      worst = [resourceName, outcome];
   }
-  if (g !== undefined)
+  if (worst !== undefined)
     return {
       verdict: "blocked",
-      reason: g[1].reason,
-      resource: g[0],
+      reason: worst[1].reason,
+      resource: worst[0],
       blockedMs,
       surface,
     };
   return {
-    verdict: u ? "pass_exempt" : s ? "pass_cached" : "pass",
+    verdict: exemptSeen ? "pass_exempt" : sawCached ? "pass_cached" : "pass",
     blockedMs,
     surface,
   };
 }
 //@ chunk-c18v4hz4.js:3400-3636 placement
-function credentialShape(e) {
-  if (e.hasOAuthToken && e.oauthEffective)
-    return e.subscriptionType === null ? "untiered_login" : "stored_login";
-  if (e.apiKeyEnv) return "api_key";
-  if (e.envToken) return "env_token_only";
-  if (e.keyHelper) return "key_helper_only";
+function credentialShape(inputs) {
+  if (inputs.hasOAuthToken && inputs.oauthEffective)
+    return inputs.subscriptionType === null ? "untiered_login" : "stored_login";
+  if (inputs.apiKeyEnv) return "api_key";
+  if (inputs.envToken) return "env_token_only";
+  if (inputs.keyHelper) return "key_helper_only";
   return "none";
 }
 //@ chunk-c18v4hz4.js:3636-3826 placement
@@ -222,10 +232,10 @@ function isAnthropicAuthEnabledSafe() {
 }
 //@ chunk-c18v4hz4.js:3872-4049 placement
 function credentialShapeInputs() {
-  let e = hasStoredOAuthToken();
+  let hasToken = hasStoredOAuthToken();
   return credentialShape({
-    hasOAuthToken: e,
-    oauthEffective: e && isAnthropicAuthEnabledSafe(),
+    hasOAuthToken: hasToken,
+    oauthEffective: hasToken && isAnthropicAuthEnabledSafe(),
     subscriptionType: getStoredOAuthSubscriptionType(),
     apiKeyEnv: !!env.ANTHROPIC_API_KEY,
     envToken: effectiveAuthTokenEnv() !== undefined,
@@ -233,17 +243,17 @@ function credentialShapeInputs() {
   });
 }
 //@ chunk-c18v4hz4.js:4049-4307 placement
-function orgConfigInputs(e) {
-  let n = credentialShapeInputs();
-  let r = isOAuthEffective();
+function orgConfigInputs(options) {
+  let shape = credentialShapeInputs();
+  let oauthEffective = isOAuthEffective();
   return {
     provider: getAPIProvider(),
     firstPartyBaseUrl: isActualFirstPartyAnthropicBaseUrl(),
-    authRecoveryCommand: e.authRecoveryCommand,
+    authRecoveryCommand: options.authRecoveryCommand,
     tier: getStoredOAuthSubscriptionType(),
-    credentialShape: n,
-    storedLoginOrigin: r,
-    hostToken: n === "stored_login" && !r,
+    credentialShape: shape,
+    storedLoginOrigin: oauthEffective,
+    hostToken: shape === "stored_login" && !oauthEffective,
     tierVerifiedAtMs: getStoredOAuthTierVerifiedAt(),
     nowMs: Date.now(),
     bucket: orgConfigGateBucket(getOrCreateUserID()),
@@ -253,73 +263,81 @@ function orgConfigInputs(e) {
 /**
  * 取对象上的字符串字段，非字符串返回 undefined。
  */
-function stringFieldOf(e, n) {
-  let r = e?.[n];
-  return typeof r === "string" ? r : undefined;
+function stringFieldOf(object, field) {
+  let value = object?.[field];
+  return typeof value === "string" ? value : undefined;
 }
 //@ chunk-c18v4hz4.js:4372-4437 placement
 /**
  * 取对象上的数字字段，非数字返回 undefined。
  */
-function numberFieldOf(e, n) {
-  let r = e?.[n];
-  return typeof r === "number" ? r : undefined;
+function numberFieldOf(object, field) {
+  let value = object?.[field];
+  return typeof value === "number" ? value : undefined;
 }
 //@ chunk-c18v4hz4.js:4437-5244 placement
 function policyOutcomeSummary(policy, policyGateFields) {
-  let r = numberFieldOf(policyGateFields, "policy_cache_age_ms");
-  let o = policy?.hadCache === true || policy?.source === "cache";
-  let a = {
-    hasAdmittedCache: o,
-    admittedCacheAgeMs: o ? r : undefined,
+  let cacheAgeMs = numberFieldOf(policyGateFields, "policy_cache_age_ms");
+  let hadCache = policy?.hadCache === true || policy?.source === "cache";
+  let cacheFacts = {
+    hasAdmittedCache: hadCache,
+    admittedCacheAgeMs: hadCache ? cacheAgeMs : undefined,
   };
   if (
     stringFieldOf(policyGateFields, "policy_ineligible_reason") !== undefined ||
     policy?.source === "ineligible"
   )
     return {
-      ...a,
+      ...cacheFacts,
       reason: "not_attempted",
     };
-  let d = stringFieldOf(policyGateFields, "policy_load_state");
-  if (d === "succeeded" || policyGateFields?.policy_live_verdict === true || policy?.source === "fetch")
+  let loadState = stringFieldOf(policyGateFields, "policy_load_state");
+  if (
+    loadState === "succeeded" ||
+    policyGateFields?.policy_live_verdict === true ||
+    policy?.source === "fetch"
+  )
     return {
-      ...a,
+      ...cacheFacts,
       reason: "ok",
     };
   if (policy?.source === "none")
     return {
-      ...a,
+      ...cacheFacts,
       reason: "none_configured",
     };
-  if (d === "in_flight" || d === "not_started" || (d === undefined && policy === undefined))
+  if (
+    loadState === "in_flight" ||
+    loadState === "not_started" ||
+    (loadState === undefined && policy === undefined)
+  )
     return {
-      ...a,
+      ...cacheFacts,
       reason: "unavailable_pending",
     };
-  let u = stringFieldOf(policyGateFields, "policy_server_error_code");
-  let s = stringFieldOf(policyGateFields, "policy_server_auth_denial");
-  let g = numberFieldOf(policyGateFields, "policy_http_status");
+  let serverErrorCode = stringFieldOf(policyGateFields, "policy_server_error_code");
+  let serverAuthDenial = stringFieldOf(policyGateFields, "policy_server_auth_denial");
+  let httpStatus = numberFieldOf(policyGateFields, "policy_http_status");
   return {
-    ...a,
+    ...cacheFacts,
     reason: policyRefusalReason(
       stringFieldOf(policyGateFields, "policy_error_code"),
       stringFieldOf(policyGateFields, "policy_credential_state"),
-      g,
+      httpStatus,
       stringFieldOf(policyGateFields, "policy_server_error_type"),
-      POLICY_AUTH_DENIAL_CODES.find((f) => f === u),
-      POLICY_TOKEN_DENIAL_CODES.find((f) => f === s),
+      POLICY_AUTH_DENIAL_CODES.find((denialCode) => denialCode === serverErrorCode),
+      POLICY_TOKEN_DENIAL_CODES.find((denialCode) => denialCode === serverAuthDenial),
     ),
-    httpStatus: g,
+    httpStatus,
   };
 }
 //@ chunk-c18v4hz4.js:5244-5302 placement
-function isRetryableHttpStatus(e) {
-  return e === 429 || e === 408 || e === 409 || e === 425;
+function isRetryableHttpStatus(status) {
+  return status === 429 || status === 408 || status === 409 || status === 425;
 }
 //@ chunk-c18v4hz4.js:5302-5344 placement
-function knownOrUndefined(e) {
-  return e === "other" ? undefined : e;
+function knownOrUndefined(errorType) {
+  return errorType === "other" ? undefined : errorType;
 }
 export {
   knownOrUndefined,

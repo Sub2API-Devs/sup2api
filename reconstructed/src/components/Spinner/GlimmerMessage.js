@@ -9,7 +9,7 @@
  * attribution: placement 3, layout 1, fingerprint 1
  */
 import { init_react_production } from "../../../vendor/react/cjs/react.production.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useResolvedTheme } from "../design-system/ThemeProvider.js";
 import { getGraphemeSegmenter } from "../../utils/intl.js";
 import { bunStringWidth } from "../../ink/stringWidth.js";
@@ -21,13 +21,23 @@ import {
   Fragment,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
 import { Text } from "../../ink/components/Text.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-3mec1atf.js:1871-1875 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3mec1atf.js:1871", () => {
+  init_react_production();
+});
 //@ chunk-3mec1atf.js:1875-1879 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3mec1atf.js:1875", () => {
+  init_react_production();
+});
 //@ chunk-3mec1atf.js:1879-1883 placement
-init_react_production();
+// deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-3mec1atf.js:1879", () => {
+  init_react_production();
+});
 //@ chunk-3mec1atf.js:1883-1908 layout = SETTLED_GREY (1)
 var SETTLED_GREY = {
   r: 171,
@@ -36,7 +46,7 @@ var SETTLED_GREY = {
 };
 //@ chunk-3mec1atf.js:1908-5903 fingerprint = GlimmerMessage (0.805)
 function GlimmerMessage(props) {
-  let $ = w(97);
+  let $ = useMemoCache(97);
   let {
     message,
     mode,
@@ -48,7 +58,7 @@ function GlimmerMessage(props) {
     thinkingIntensity,
   } = props;
   let stalledIntensity_2 = stalledIntensity === undefined ? 0 : stalledIntensity;
-  let E = thinkingIntensity === undefined ? 0 : thinkingIntensity;
+  let thinking = thinkingIntensity === undefined ? 0 : thinkingIntensity;
   let resolvedTheme = useResolvedTheme();
   let segs;
   if ($[0] !== message) {
@@ -82,53 +92,53 @@ function GlimmerMessage(props) {
     return null;
   }
   if (stalledIntensity_2 > 0) {
-    let O = resolvedTheme[messageColor];
-    let g;
-    if ($[7] !== O || $[8] !== message || $[9] !== stalledIntensity_2) {
-      g = EARLY_RETURN_SENTINEL;
+    let rgb = resolvedTheme[messageColor];
+    let earlyReturn;
+    if ($[7] !== rgb || $[8] !== message || $[9] !== stalledIntensity_2) {
+      earlyReturn = EARLY_RETURN_SENTINEL;
       tt: {
-        let J = O ? interpolateColor(O) : null;
-        if (J) {
-          let interpolated = parseRGB(J, SETTLED_GREY, roundToStep(stalledIntensity_2));
-          let theme = toRGBColor(interpolated);
-          let p;
+        let interpolated = rgb ? interpolateColor(rgb) : null;
+        if (interpolated) {
+          let interpolated_2 = parseRGB(interpolated, SETTLED_GREY, roundToStep(stalledIntensity_2));
+          let theme = toRGBColor(interpolated_2);
+          let textNode;
           if ($[11] !== theme || $[12] !== message) {
-            p = jsxProd_default(Text, {
+            textNode = jsxProd_default(Text, {
               color: theme,
               children: message,
             });
             $[11] = theme;
             $[12] = message;
-            $[13] = p;
-          } else p = $[13];
-          let d;
+            $[13] = textNode;
+          } else textNode = $[13];
+          let spaceNode;
           if ($[14] !== theme) {
-            d = jsxProd_default(Text, {
+            spaceNode = jsxProd_default(Text, {
               color: theme,
               children: " ",
             });
             $[14] = theme;
-            $[15] = d;
-          } else d = $[15];
-          let x;
-          if ($[16] !== p || $[17] !== d) {
-            x = jsxProd_default_2(Fragment, {
-              children: [p, d],
+            $[15] = spaceNode;
+          } else spaceNode = $[15];
+          let fragment;
+          if ($[16] !== textNode || $[17] !== spaceNode) {
+            fragment = jsxProd_default_2(Fragment, {
+              children: [textNode, spaceNode],
             });
-            $[16] = p;
-            $[17] = d;
-            $[18] = x;
-          } else x = $[18];
-          g = x;
+            $[16] = textNode;
+            $[17] = spaceNode;
+            $[18] = fragment;
+          } else fragment = $[18];
+          earlyReturn = fragment;
           break tt;
         }
       }
-      $[7] = O;
+      $[7] = rgb;
       $[8] = message;
       $[9] = stalledIntensity_2;
-      $[10] = g;
-    } else g = $[10];
-    if (g !== EARLY_RETURN_SENTINEL) return g;
+      $[10] = earlyReturn;
+    } else earlyReturn = $[10];
+    if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
     let color = stalledIntensity_2 > 0.5 ? "error" : messageColor;
     let t5;
     if ($[19] !== color || $[20] !== message) {
@@ -149,117 +159,117 @@ function GlimmerMessage(props) {
       $[22] = color;
       $[23] = t6;
     } else t6 = $[23];
-    let x;
+    let fragment;
     if ($[24] !== t5 || $[25] !== t6) {
-      x = jsxProd_default_2(Fragment, {
+      fragment = jsxProd_default_2(Fragment, {
         children: [t5, t6],
       });
       $[24] = t5;
       $[25] = t6;
-      $[26] = x;
-    } else x = $[26];
-    return x;
+      $[26] = fragment;
+    } else fragment = $[26];
+    return fragment;
   }
-  if (E > 0) {
-    let Rt = resolvedTheme[messageColor];
-    let g;
-    if ($[27] !== Rt || $[28] !== message || $[29] !== resolvedTheme.warning || $[30] !== E) {
-      g = EARLY_RETURN_SENTINEL;
+  if (thinking > 0) {
+    let rgb = resolvedTheme[messageColor];
+    let earlyReturn;
+    if ($[27] !== rgb || $[28] !== message || $[29] !== resolvedTheme.warning || $[30] !== thinking) {
+      earlyReturn = EARLY_RETURN_SENTINEL;
       X: {
-        let ht = Rt ? interpolateColor(Rt) : null;
-        let wt = interpolateColor(resolvedTheme.warning);
-        if (ht && wt) {
-          let interpolated = parseRGB(ht, wt, roundToStep(E));
-          let color = toRGBColor(interpolated);
-          let p;
+        let interpolated = rgb ? interpolateColor(rgb) : null;
+        let warningRGB = interpolateColor(resolvedTheme.warning);
+        if (interpolated && warningRGB) {
+          let interpolated_2 = parseRGB(interpolated, warningRGB, roundToStep(thinking));
+          let color = toRGBColor(interpolated_2);
+          let textNode;
           if ($[32] !== color || $[33] !== message) {
-            p = jsxProd_default(Text, {
+            textNode = jsxProd_default(Text, {
               color,
               children: message,
             });
             $[32] = color;
             $[33] = message;
-            $[34] = p;
-          } else p = $[34];
-          let d;
+            $[34] = textNode;
+          } else textNode = $[34];
+          let spaceNode;
           if ($[35] !== color) {
-            d = jsxProd_default(Text, {
+            spaceNode = jsxProd_default(Text, {
               color,
               children: " ",
             });
             $[35] = color;
-            $[36] = d;
-          } else d = $[36];
-          let x;
-          if ($[37] !== p || $[38] !== d) {
-            x = jsxProd_default_2(Fragment, {
-              children: [p, d],
+            $[36] = spaceNode;
+          } else spaceNode = $[36];
+          let fragment;
+          if ($[37] !== textNode || $[38] !== spaceNode) {
+            fragment = jsxProd_default_2(Fragment, {
+              children: [textNode, spaceNode],
             });
-            $[37] = p;
-            $[38] = d;
-            $[39] = x;
-          } else x = $[39];
-          g = x;
+            $[37] = textNode;
+            $[38] = spaceNode;
+            $[39] = fragment;
+          } else fragment = $[39];
+          earlyReturn = fragment;
           break X;
         }
       }
-      $[27] = Rt;
+      $[27] = rgb;
       $[28] = message;
       $[29] = resolvedTheme.warning;
-      $[30] = E;
-      $[31] = g;
-    } else g = $[31];
-    if (g !== EARLY_RETURN_SENTINEL) return g;
-    let color = E > 0.5 ? "warning" : messageColor;
-    let p;
+      $[30] = thinking;
+      $[31] = earlyReturn;
+    } else earlyReturn = $[31];
+    if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
+    let color = thinking > 0.5 ? "warning" : messageColor;
+    let textNode;
     if ($[40] !== color || $[41] !== message) {
-      p = jsxProd_default(Text, {
+      textNode = jsxProd_default(Text, {
         color,
         children: message,
       });
       $[40] = color;
       $[41] = message;
-      $[42] = p;
-    } else p = $[42];
-    let d;
+      $[42] = textNode;
+    } else textNode = $[42];
+    let spaceNode;
     if ($[43] !== color) {
-      d = jsxProd_default(Text, {
+      spaceNode = jsxProd_default(Text, {
         color,
         children: " ",
       });
       $[43] = color;
-      $[44] = d;
-    } else d = $[44];
-    let x;
-    if ($[45] !== p || $[46] !== d) {
-      x = jsxProd_default_2(Fragment, {
-        children: [p, d],
+      $[44] = spaceNode;
+    } else spaceNode = $[44];
+    let fragment;
+    if ($[45] !== textNode || $[46] !== spaceNode) {
+      fragment = jsxProd_default_2(Fragment, {
+        children: [textNode, spaceNode],
       });
-      $[45] = p;
-      $[46] = d;
-      $[47] = x;
-    } else x = $[47];
-    return x;
+      $[45] = textNode;
+      $[46] = spaceNode;
+      $[47] = fragment;
+    } else fragment = $[47];
+    return fragment;
   }
   if (mode === "tool-use") {
-    let mt = resolvedTheme[messageColor];
+    let rgb = resolvedTheme[messageColor];
     let shimmerColorStr = resolvedTheme[shimmerColor];
-    let g;
+    let earlyReturn;
     if (
-      $[48] !== mt ||
+      $[48] !== rgb ||
       $[49] !== flashOpacity ||
       $[50] !== message ||
       $[51] !== messageColor ||
       $[52] !== shimmerColorStr
     ) {
-      g = EARLY_RETURN_SENTINEL;
+      earlyReturn = EARLY_RETURN_SENTINEL;
       At: {
-        let it = mt ? interpolateColor(mt) : null;
+        let interpolated = rgb ? interpolateColor(rgb) : null;
         let shimmerRGB = shimmerColorStr ? interpolateColor(shimmerColorStr) : null;
-        if (it && shimmerRGB) {
-          let interpolated = parseRGB(it, shimmerRGB, roundToStep(flashOpacity));
+        if (interpolated && shimmerRGB) {
+          let interpolated_2 = parseRGB(interpolated, shimmerRGB, roundToStep(flashOpacity));
           const t5 = jsxProd_default(Text, {
-            color: toRGBColor(interpolated),
+            color: toRGBColor(interpolated_2),
             children: message,
           });
           let t6;
@@ -280,18 +290,18 @@ function GlimmerMessage(props) {
             $[57] = t6;
             $[58] = t7;
           } else t7 = $[58];
-          g = t7;
+          earlyReturn = t7;
           break At;
         }
       }
-      $[48] = mt;
+      $[48] = rgb;
       $[49] = flashOpacity;
       $[50] = message;
       $[51] = messageColor;
       $[52] = shimmerColorStr;
-      $[53] = g;
-    } else g = $[53];
-    if (g !== EARLY_RETURN_SENTINEL) return g;
+      $[53] = earlyReturn;
+    } else earlyReturn = $[53];
+    if (earlyReturn !== EARLY_RETURN_SENTINEL) return earlyReturn;
     let color = flashOpacity > 0.5 ? shimmerColor : messageColor;
     let t5;
     if ($[59] !== color || $[60] !== message) {
@@ -312,20 +322,20 @@ function GlimmerMessage(props) {
       $[62] = messageColor;
       $[63] = t6;
     } else t6 = $[63];
-    let x;
+    let fragment;
     if ($[64] !== t5 || $[65] !== t6) {
-      x = jsxProd_default_2(Fragment, {
+      fragment = jsxProd_default_2(Fragment, {
         children: [t5, t6],
       });
       $[64] = t5;
       $[65] = t6;
-      $[66] = x;
-    } else x = $[66];
-    return x;
+      $[66] = fragment;
+    } else fragment = $[66];
+    return fragment;
   }
   let shimmerStart = glimmerIndex - 1;
-  let z = glimmerIndex + 1;
-  if (shimmerStart >= messageWidth_2 || z < 0) {
+  let shimmerEnd = glimmerIndex + 1;
+  if (shimmerStart >= messageWidth_2 || shimmerEnd < 0) {
     let t3;
     if ($[67] !== message || $[68] !== messageColor) {
       t3 = jsxProd_default(Text, {
@@ -357,40 +367,40 @@ function GlimmerMessage(props) {
     return t5;
   }
   let clampedStart = Math.max(0, shimmerStart);
-  let ct;
-  let ft;
+  let after;
+  let before;
   let shim;
-  if ($[75] !== clampedStart || $[76] !== segments || $[77] !== z) {
+  if ($[75] !== clampedStart || $[76] !== segments || $[77] !== shimmerEnd) {
     let colPos = 0;
-    ft = "";
+    before = "";
     shim = "";
-    ct = "";
+    after = "";
     for (const { segment, width } of segments) {
-      if (colPos + width <= clampedStart) ft = ft + segment;
-      else if (colPos > z) ct = ct + segment;
+      if (colPos + width <= clampedStart) before = before + segment;
+      else if (colPos > shimmerEnd) after = after + segment;
       else shim = shim + segment;
       colPos = colPos + width;
     }
     $[75] = clampedStart;
     $[76] = segments;
-    $[77] = z;
-    $[78] = ct;
-    $[79] = ft;
+    $[77] = shimmerEnd;
+    $[78] = after;
+    $[79] = before;
     $[80] = shim;
   } else {
-    ct = $[78];
-    ft = $[79];
+    after = $[78];
+    before = $[79];
     shim = $[80];
   }
   let t3;
-  if ($[81] !== ft || $[82] !== messageColor) {
+  if ($[81] !== before || $[82] !== messageColor) {
     t3 =
-      ft &&
+      before &&
       jsxProd_default(Text, {
         color: messageColor,
-        children: ft,
+        children: before,
       });
-    $[81] = ft;
+    $[81] = before;
     $[82] = messageColor;
     $[83] = t3;
   } else t3 = $[83];
@@ -405,14 +415,14 @@ function GlimmerMessage(props) {
     $[86] = t4_2;
   } else t4_2 = $[86];
   let t5;
-  if ($[87] !== ct || $[88] !== messageColor) {
+  if ($[87] !== after || $[88] !== messageColor) {
     t5 =
-      ct &&
+      after &&
       jsxProd_default(Text, {
         color: messageColor,
-        children: ct,
+        children: after,
       });
-    $[87] = ct;
+    $[87] = after;
     $[88] = messageColor;
     $[89] = t5;
   } else t5 = $[89];

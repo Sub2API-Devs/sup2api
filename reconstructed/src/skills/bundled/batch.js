@@ -36,7 +36,7 @@ var WORKER_INSTRUCTIONS = `After you finish implementing the change:
 /**
  * /batch 的主提示词：研究、拆分单元、并行派发 worktree 代理、汇总 PR 的流程说明。
  */
-function buildPrompt(instruction, n) {
+function buildPrompt(instruction, footer) {
   return `# Batch: Parallel Work Orchestration
 
 You are orchestrating a large, parallelizable change across this codebase.
@@ -92,7 +92,7 @@ ${WORKER_INSTRUCTIONS}
 \`\`\`
 
 Use \`subagent_type: "general-purpose"\` unless a more specific agent type fits.
-${n}
+${footer}
 ## Phase 3: Track Progress
 
 After launching all workers, render an initial status table:

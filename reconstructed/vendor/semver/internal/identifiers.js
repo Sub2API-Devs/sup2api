@@ -5,10 +5,10 @@
  * pieces: chunk-bwbq4xvm.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 
 //@ chunk-bwbq4xvm.js:5536-5826 cjs-fingerprint
-var require_identifiers = x(function (cjsExports, cjsModule) {
+var require_identifiers = __commonJS(function (cjsExports, cjsModule) {
   var numeric = /^[0-9]+$/;
   var compareIdentifiers = (a, b) => {
     if (typeof a === "number" && typeof b === "number") return a === b ? 0 : a < b ? -1 : 1;

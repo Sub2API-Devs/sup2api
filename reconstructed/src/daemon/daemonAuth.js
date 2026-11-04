@@ -24,7 +24,14 @@ import {
 import { getFileReader } from "../utils/fileStore.js";
 import { jsonStringify } from "../utils/slowOperations.js";
 import { DoctorLazy } from "../cli/handlers/util.js";
-import { u, string, _enum, E, preprocess, M } from "../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  _enum,
+  numberSchema,
+  preprocess,
+  booleanSchema,
+} from "../../vendor/zod/v4/classic/schemas.js";
 import { normalizePermissionModeAlias, EXTERNAL_PERMISSION_MODES } from "../types/permissions.js";
 import { SANDBOX_SETTING_HINT, BRIDGE_LOGIN_ERROR } from "../bridge/types.js";
 import { EXIT_CONFIG_ERROR } from "../utils/exitCodes.js";
@@ -35,19 +42,20 @@ import { sleep } from "../utils/sleep.js";
 import { logError } from "../utils/log.js";
 import { updateDaemonConfig, normalizeDirEntries } from "./scheduledWorker.js";
 import { pickByHelper } from "../utils/git/gitSafeEnv.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e3de30et.js:1144-1263 placement
-function isDaemonAuthMessage(r) {
+function isDaemonAuthMessage(message) {
   return (
-    typeof r === "object" &&
-    r !== null &&
-    "type" in r &&
-    (r.type === "token_update" || r.type === "auth_401_result")
+    typeof message === "object" &&
+    message !== null &&
+    "type" in message &&
+    (message.type === "token_update" || message.type === "auth_401_result")
   );
 }
 //@ chunk-e3de30et.js:1263-1348 placement
-function isAuth401Result(r) {
-  return typeof r === "object" && r !== null && "type" in r && r.type === "auth_401";
+function isAuth401Result(message) {
+  return typeof message === "object" && message !== null && "type" in message && message.type === "auth_401";
 }
 //@ chunk-e3de30et.js:1348-1403 placement
 var AUTH_COOLDOWN_MS = 300000;
@@ -67,287 +75,302 @@ function readAuthStatus() {
 /**
  * daemon 认证管理：令牌更新广播、401 处理、冷却、组织查询。
  */
-function createDaemonAuthManager(r, n, a, s, h, w = () => false) {
-  let m = () => ({
-    usesLoginOffFirstParty: a(),
+function createDaemonAuthManager(
+  signal,
+  log,
+  isLoginOff3P,
+  storageV5,
+  credentials,
+  isWorkerUsingToken = () => false,
+) {
+  let loginOffOptions = () => ({
+    usesLoginOffFirstParty: isLoginOff3P(),
   });
-  let k;
-  let T = false;
-  let y = null;
-  let v = new Set();
-  let b = null;
-  let x = null;
-  function W() {
-    return (x ??= import("./chunk-7v0gj88m.js"));
+  let authState;
+  let is3POnly = false;
+  let refreshTimer = null;
+  let workerChannels = new Set();
+  let keychainRetryTimer = null;
+  let oauthModulePromise = null;
+  function loadOauthModule() {
+    return (oauthModulePromise ??= import("../utils/auth.js"));
   }
-  function L(accessToken) {
-    let i = {
+  function broadcastToken(accessToken) {
+    let message = {
       type: "token_update",
       accessToken,
     };
-    for (let S of v)
+    for (let channel of workerChannels)
       try {
-        S.send(i);
+        channel.send(message);
       } catch {}
   }
-  let F;
-  async function re(accessToken, i = false) {
-    if (F === accessToken || getPlatform() !== "macos" || !(i || w()) || isEssentialTrafficOnly()) return;
-    F = accessToken;
+  let lastOrgLookupToken;
+  async function lookupOrganization(token, force = false) {
+    if (
+      lastOrgLookupToken === token ||
+      getPlatform() !== "macos" ||
+      !(force || isWorkerUsingToken()) ||
+      isEssentialTrafficOnly()
+    )
+      return;
+    lastOrgLookupToken = token;
     try {
-      let S = await W();
-      if (S.isUsing3PServices() && !m().usesLoginOffFirstParty) {
-        X(accessToken);
+      let oauthModule = await loadOauthModule();
+      if (oauthModule.isUsing3PServices() && !loginOffOptions().usesLoginOffFirstParty) {
+        clearOrgLookupToken(token);
         return;
       }
-      if ((await S.getClaudeAIOAuthTokenOriginAsync(h)) !== "store") return;
-      let { validateOauthTokenWithOutcome, isTransientValidateFailure } = await import("./chunk-qvg9yd32.js");
-      let R = await validateOauthTokenWithOutcome(accessToken);
-      if (!R.ok) {
-        let de = isTransientValidateFailure(R);
-        if (de) X(accessToken);
-        logFeatureSad("daemon_snapshot_org_lookup", R.reason, {
-          transient: de,
+      if ((await oauthModule.getClaudeAIOAuthTokenOriginAsync(credentials)) !== "store") return;
+      let { validateOauthTokenWithOutcome, isTransientValidateFailure } =
+        await import("../services/oauth/getOauthProfileFromApiKey.lazy.js");
+      let outcome = await validateOauthTokenWithOutcome(token);
+      if (!outcome.ok) {
+        let isTransient = isTransientValidateFailure(outcome);
+        if (isTransient) clearOrgLookupToken(token);
+        logFeatureSad("daemon_snapshot_org_lookup", outcome.reason, {
+          transient: isTransient,
         });
-        n(`auth: token organization lookup: no answer (${R.reason})`);
+        log(`auth: token organization lookup: no answer (${outcome.reason})`);
         return;
       }
-      let organizationUuid = R.data?.organization_uuid;
-      let O = typeof organizationUuid === "string" && organizationUuid ? organizationUuid : null;
+      let organizationUuid = outcome.data?.organization_uuid;
+      let organizationUuid_2 =
+        typeof organizationUuid === "string" && organizationUuid ? organizationUuid : null;
       logFeatureOk("daemon_snapshot_org_lookup", {
-        named: O !== null,
+        named: organizationUuid_2 !== null,
       });
-      if (k?.accessToken === accessToken)
-        k = {
-          ...k,
-          organizationUuid: O,
+      if (authState?.accessToken === token)
+        authState = {
+          ...authState,
+          organizationUuid: organizationUuid_2,
         };
     } catch {
-      X(accessToken);
-      n("auth: token organization lookup failed");
+      clearOrgLookupToken(token);
+      log("auth: token organization lookup failed");
     }
   }
-  function X(e) {
-    if (F === e) F = undefined;
+  function clearOrgLookupToken(token) {
+    if (lastOrgLookupToken === token) lastOrgLookupToken = undefined;
   }
-  function D(e) {
-    k = {
-      accessToken: e.accessToken,
-      scopes: e.scopes,
-      subscriptionType: e.subscriptionType ?? null,
-      rateLimitTier: e.rateLimitTier ?? null,
+  function setAuthState(tokens) {
+    authState = {
+      accessToken: tokens.accessToken,
+      scopes: tokens.scopes,
+      subscriptionType: tokens.subscriptionType ?? null,
+      rateLimitTier: tokens.rateLimitTier ?? null,
       organizationUuid: null,
     };
-    re(e.accessToken);
+    lookupOrganization(tokens.accessToken);
   }
-  async function H() {
-    let claudeAIOAuthTokensAsync = await (await W()).getClaudeAIOAuthTokensAsync(h);
-    if (claudeAIOAuthTokensAsync?.accessToken && claudeAIOAuthTokensAsync.accessToken !== k?.accessToken) {
-      D(claudeAIOAuthTokensAsync);
-      L(claudeAIOAuthTokensAsync.accessToken);
+  async function reloadTokens() {
+    let tokens = await (await loadOauthModule()).getClaudeAIOAuthTokensAsync(credentials);
+    if (tokens?.accessToken && tokens.accessToken !== authState?.accessToken) {
+      setAuthState(tokens);
+      broadcastToken(tokens.accessToken);
     }
-    G(claudeAIOAuthTokensAsync?.expiresAt ?? null);
+    scheduleRefresh(tokens?.expiresAt ?? null);
   }
-  let V;
-  let Z = false;
-  function j(e) {
-    V = e;
-    if (b || r.aborted) return;
-    if (y) {
-      clearTimeout(y);
-      y = null;
+  let lastSeenToken;
+  let lastSkipsKeychain = false;
+  function startKeychainRetry(token) {
+    lastSeenToken = token;
+    if (keychainRetryTimer || signal.aborted) return;
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
     }
-    n("auth: no token found, will re-check keychain every 30s");
-    b = setInterval(function () {
-      W()
-        .then(async (S) => {
-          let A = S.isUsing3PServices() && !a() && !w();
-          if (A !== Z) {
-            Z = A;
-            n(
-              A
+    log("auth: no token found, will re-check keychain every 30s");
+    keychainRetryTimer = setInterval(function () {
+      loadOauthModule()
+        .then(async (oauthModule) => {
+          let skipsKeychain = oauthModule.isUsing3PServices() && !isLoginOff3P() && !isWorkerUsingToken();
+          if (skipsKeychain !== lastSkipsKeychain) {
+            lastSkipsKeychain = skipsKeychain;
+            log(
+              skipsKeychain
                 ? "auth: re-check skips the keychain (3P provider, no worker uses the token)"
                 : "auth: re-check reads the keychain again",
             );
           }
-          if (A) return;
-          S.clearOAuthTokenCache();
-          let claudeAIOAuthTokensAsync = await S.getClaudeAIOAuthTokensAsync(h);
-          let R;
+          if (skipsKeychain) return;
+          oauthModule.clearOAuthTokenCache();
+          let claudeAIOAuthTokensAsync = await oauthModule.getClaudeAIOAuthTokensAsync(credentials);
+          let reason;
           if (
             claudeAIOAuthTokensAsync?.accessToken &&
-            claudeAIOAuthTokensAsync.accessToken !== V &&
+            claudeAIOAuthTokensAsync.accessToken !== lastSeenToken &&
             claudeAIOAuthTokensAsync.expiresAt &&
             claudeAIOAuthTokensAsync.expiresAt > Date.now()
           )
-            R = "auth: token found via keychain re-check";
+            reason = "auth: token found via keychain re-check";
           else if (
             claudeAIOAuthTokensAsync?.refreshToken &&
-            (await S.checkAndRefreshOAuthTokenIfNeeded({
-              credentials: h,
-              storageV5: s,
-              ...m(),
+            (await oauthModule.checkAndRefreshOAuthTokenIfNeeded({
+              credentials,
+              storageV5,
+              ...loginOffOptions(),
             }))
           )
-            R = "auth: token refreshed via keychain re-check retry";
-          if (R) {
-            await H();
-            if (k && b) {
-              clearInterval(b);
-              b = null;
-              n(R);
+            reason = "auth: token refreshed via keychain re-check retry";
+          if (reason) {
+            await reloadTokens();
+            if (authState && keychainRetryTimer) {
+              clearInterval(keychainRetryTimer);
+              keychainRetryTimer = null;
+              log(reason);
             }
           }
         })
-        .catch((error) => n(`auth: keychain re-check error: ${error}`));
+        .catch((error) => log(`auth: keychain re-check error: ${error}`));
     }, AUTH_RETRY_MS);
-    b.unref();
+    keychainRetryTimer.unref();
   }
-  function G(e) {
-    if (y) {
-      clearTimeout(y);
-      y = null;
+  function scheduleRefresh(expiresAt) {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
     }
-    if (!e || r.aborted) return;
-    let min = Math.min(Math.max(e - Date.now() - AUTH_RECHECK_MS, 5000), AUTH_STATUS_MAX_AGE_MS);
-    n(`auth: scheduling proactive refresh in ${Math.round(min / 1000)}s`);
-    y = setTimeout(ce, min);
-    y.unref();
+    if (!expiresAt || signal.aborted) return;
+    let min = Math.min(Math.max(expiresAt - Date.now() - AUTH_RECHECK_MS, 5000), AUTH_STATUS_MAX_AGE_MS);
+    log(`auth: scheduling proactive refresh in ${Math.round(min / 1000)}s`);
+    refreshTimer = setTimeout(refreshNow, min);
+    refreshTimer.unref();
   }
-  async function ce() {
-    if (r.aborted) return;
+  async function refreshNow() {
+    if (signal.aborted) return;
     try {
-      n("auth: proactive refresh starting");
-      let e = await W();
-      let accessToken = k?.accessToken;
-      let S = await e.checkAndRefreshOAuthTokenIfNeeded({
-        credentials: h,
-        storageV5: s,
-        ...m(),
+      log("auth: proactive refresh starting");
+      let oauthModule = await loadOauthModule();
+      let accessToken = authState?.accessToken;
+      let refreshed = await oauthModule.checkAndRefreshOAuthTokenIfNeeded({
+        credentials,
+        storageV5,
+        ...loginOffOptions(),
       });
-      e.clearOAuthTokenCache();
-      let claudeAIOAuthTokensAsync = await e.getClaudeAIOAuthTokensAsync(h);
+      oauthModule.clearOAuthTokenCache();
+      let claudeAIOAuthTokensAsync = await oauthModule.getClaudeAIOAuthTokensAsync(credentials);
       let expiresAt = claudeAIOAuthTokensAsync?.expiresAt ?? null;
-      let R = expiresAt === null || expiresAt > Date.now() + AUTH_COOLDOWN_MS;
+      let hasFreshToken = expiresAt === null || expiresAt > Date.now() + AUTH_COOLDOWN_MS;
       if (
         claudeAIOAuthTokensAsync?.accessToken &&
-        (S || claudeAIOAuthTokensAsync.accessToken !== accessToken || R) &&
+        (refreshed || claudeAIOAuthTokensAsync.accessToken !== accessToken || hasFreshToken) &&
         (expiresAt === null || expiresAt > Date.now() + AUTH_RECHECK_MS)
       ) {
-        await H();
-        n(
-          S
+        await reloadTokens();
+        log(
+          refreshed
             ? "auth: proactive refresh succeeded"
             : "auth: token still valid (cross-process refresh or not yet due)",
         );
         return;
       }
       if (claudeAIOAuthTokensAsync?.accessToken && expiresAt !== null && expiresAt > Date.now()) {
-        n("auth: proactive refresh failed, retrying in ~60s (token still valid)");
-        G(Date.now() + 60000 + AUTH_RECHECK_MS);
+        log("auth: proactive refresh failed, retrying in ~60s (token still valid)");
+        scheduleRefresh(Date.now() + 60000 + AUTH_RECHECK_MS);
         return;
       }
-      n("auth: proactive refresh failed, signalling re-auth required");
+      log("auth: proactive refresh failed, signalling re-auth required");
       let accessToken_2 = claudeAIOAuthTokensAsync?.accessToken ?? accessToken;
-      k = undefined;
-      await ie();
-      j(accessToken_2);
+      authState = undefined;
+      await signalReauth();
+      startKeychainRetry(accessToken_2);
     } catch (error) {
-      n(`auth: proactive refresh error: ${error}`);
-      G(Date.now() + 60000 + AUTH_RECHECK_MS);
+      log(`auth: proactive refresh error: ${error}`);
+      scheduleRefresh(Date.now() + 60000 + AUTH_RECHECK_MS);
     }
   }
-  async function ne(failedToken) {
-    if (T) {
-      n("auth: 401 ignored (3P provider active, no OAuth)");
+  async function handle401(token) {
+    if (is3POnly) {
+      log("auth: 401 ignored (3P provider active, no OAuth)");
       return false;
     }
-    n("auth: handling 401");
-    let i = await W();
-    if (await i.handleOAuth401Error(failedToken, h, s, m())) {
-      i.clearOAuthTokenCache();
-      await H();
-      n("auth: 401 recovery succeeded");
+    log("auth: handling 401");
+    let oauthModule = await loadOauthModule();
+    if (await oauthModule.handleOAuth401Error(token, credentials, storageV5, loginOffOptions())) {
+      oauthModule.clearOAuthTokenCache();
+      await reloadTokens();
+      log("auth: 401 recovery succeeded");
       return true;
     }
-    n("auth: 401 recovery failed, signalling re-auth required");
-    k = undefined;
-    await ie();
-    i.clearOAuthTokenCache();
-    let claudeAIOAuthTokensAsync = await i.getClaudeAIOAuthTokensAsync(h);
+    log("auth: 401 recovery failed, signalling re-auth required");
+    authState = undefined;
+    await signalReauth();
+    oauthModule.clearOAuthTokenCache();
+    let claudeAIOAuthTokensAsync = await oauthModule.getClaudeAIOAuthTokensAsync(credentials);
     if (
       claudeAIOAuthTokensAsync?.accessToken !== undefined &&
-      claudeAIOAuthTokensAsync.accessToken !== failedToken
+      claudeAIOAuthTokensAsync.accessToken !== token
     ) {
-      await H();
+      await reloadTokens();
       return true;
     }
-    j(failedToken);
+    startKeychainRetry(token);
     return false;
   }
-  let B = null;
-  function ie() {
-    if (B) return B;
-    B = se().finally(() => {
-      B = null;
+  let reauthInFlight = null;
+  function signalReauth() {
+    if (reauthInFlight) return reauthInFlight;
+    reauthInFlight = writeReauthFiles().finally(() => {
+      reauthInFlight = null;
     });
-    return B;
+    return reauthInFlight;
   }
-  async function se() {
-    let e = await W();
-    if (e.getAnthropicApiKey()) {
-      n("auth: browser login skipped (API key auth available)");
+  async function writeReauthFiles() {
+    let oauthModule = await loadOauthModule();
+    if (oauthModule.getAnthropicApiKey()) {
+      log("auth: browser login skipped (API key auth available)");
       return;
     }
-    if (e.isUsing3PServices() && !a()) {
-      n("auth: browser login skipped (3P provider, no OAuth-consuming worker)");
+    if (oauthModule.isUsing3PServices() && !isLoginOff3P()) {
+      log("auth: browser login skipped (3P provider, no OAuth-consuming worker)");
       return;
     }
     let claudeConfigDir = getClaudeConfigDir();
-    let S = join(claudeConfigDir, "daemon-auth-cooldown");
-    let A = join(claudeConfigDir, "daemon-auth-status.json");
+    let cooldownPath = join(claudeConfigDir, "daemon-auth-cooldown");
+    let statusPath = join(claudeConfigDir, "daemon-auth-status.json");
     try {
-      let c;
-      if (isStorageV5Enabled() && s !== undefined) {
-        let P = await s.read([readAuthCooldown()]);
-        if (!P.ok)
+      let cooldownText;
+      if (isStorageV5Enabled() && storageV5 !== undefined) {
+        let readResult = await storageV5.read([readAuthCooldown()]);
+        if (!readResult.ok)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `v5 cooldown read failed: ${P.error.code}${"telemetryCode" in P.error && P.error.telemetryCode ? ` (${P.error.telemetryCode})` : ""}`,
+            `v5 cooldown read failed: ${readResult.error.code}${"telemetryCode" in readResult.error && readResult.error.telemetryCode ? ` (${readResult.error.telemetryCode})` : ""}`,
             "daemon-auth v5 cooldown read failed",
           );
-        let O = P.value.items[0];
-        c = O.found ? Buffer.from(O.value).toString("utf8") : null;
-      } else c = await getFileReader().read(S);
-      let R = c === null ? NaN : parseInt(c, 10);
-      if (!Number.isNaN(R) && Date.now() - R < AUTH_STATUS_TTL_MS) {
-        n("auth: browser login skipped (cooldown)");
+        let cooldownItem = readResult.value.items[0];
+        cooldownText = cooldownItem.found ? Buffer.from(cooldownItem.value).toString("utf8") : null;
+      } else cooldownText = await getFileReader().read(cooldownPath);
+      let cooldownTs = cooldownText === null ? NaN : parseInt(cooldownText, 10);
+      if (!Number.isNaN(cooldownTs) && Date.now() - cooldownTs < AUTH_STATUS_TTL_MS) {
+        log("auth: browser login skipped (cooldown)");
         return;
       }
     } catch (error) {
-      if (!isENOENT(error)) n(`auth: cooldown read error: ${error}`);
+      if (!isENOENT(error)) log(`auth: cooldown read error: ${error}`);
     }
     try {
       await getFileReader().mkdir(claudeConfigDir);
-      if (isStorageV5Enabled() && s !== undefined) {
-        let c = await s.write(readAuthCooldown(), String(Date.now()), {
+      if (isStorageV5Enabled() && storageV5 !== undefined) {
+        let writeResult = await storageV5.write(readAuthCooldown(), String(Date.now()), {
           publishDiscipline: "inPlace",
         });
-        if (!c.ok)
+        if (!writeResult.ok)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `v5 cooldown write failed: ${c.error.code}${"telemetryCode" in c.error && c.error.telemetryCode ? ` (${c.error.telemetryCode})` : ""}`,
+            `v5 cooldown write failed: ${writeResult.error.code}${"telemetryCode" in writeResult.error && writeResult.error.telemetryCode ? ` (${writeResult.error.telemetryCode})` : ""}`,
             "daemon-auth v5 cooldown write failed",
           );
-      } else await getFileReader().write(S, String(Date.now()));
+      } else await getFileReader().write(cooldownPath, String(Date.now()));
     } catch (error) {
-      n(`auth: cooldown write error: ${error}`);
+      log(`auth: cooldown write error: ${error}`);
     }
     try {
-      let { execFileNoThrow } = await import("./chunk-xgggdgp8.js");
+      let { execFileNoThrow } = await import("../utils/execFileNoThrow.js");
       execFileNoThrow("notify-send", ["Claude", "Your Claude assistant needs re-authentication"]);
     } catch {}
     try {
-      if (isStorageV5Enabled() && s !== undefined) {
-        let c = await s.write(
+      if (isStorageV5Enabled() && storageV5 !== undefined) {
+        let statusResult = await storageV5.write(
           readAuthStatus(),
           jsonStringify({
             status: "auth_required",
@@ -357,105 +380,105 @@ function createDaemonAuthManager(r, n, a, s, h, w = () => false) {
             publishDiscipline: "inPlace",
           },
         );
-        if (!c.ok)
+        if (!statusResult.ok)
           throw new TelemetrySafeError_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS(
-            `v5 status write failed: ${c.error.code}${"telemetryCode" in c.error && c.error.telemetryCode ? ` (${c.error.telemetryCode})` : ""}`,
+            `v5 status write failed: ${statusResult.error.code}${"telemetryCode" in statusResult.error && statusResult.error.telemetryCode ? ` (${statusResult.error.telemetryCode})` : ""}`,
             "daemon-auth v5 status write failed",
           );
       } else
         await getFileReader().write(
-          A,
+          statusPath,
           jsonStringify({
             status: "auth_required",
             since: Date.now(),
           }),
         );
     } catch (error) {
-      n(`auth: status write error: ${error}`);
+      log(`auth: status write error: ${error}`);
     }
-    n("auth: headless daemon cannot complete OAuth \u2014 run `claude auth login` to refresh");
+    log("auth: headless daemon cannot complete OAuth \u2014 run `claude auth login` to refresh");
   }
-  function Q(e) {
-    if (!isAuth401Result(e)) return;
-    ne(e.failedToken)
+  function onWorkerMessage(message) {
+    if (!isAuth401Result(message)) return;
+    handle401(message.failedToken)
       .then((refreshed) => {
-        for (let S of v)
+        for (let channel of workerChannels)
           try {
-            let A = {
+            let reply = {
               type: "auth_401_result",
               refreshed,
-              requestId: e.requestId,
+              requestId: message.requestId,
             };
-            S.send(A);
+            channel.send(reply);
           } catch {}
       })
       .catch((error) => {
-        n(`auth: 401 handler error: ${error}`);
-        for (let S of v)
+        log(`auth: 401 handler error: ${error}`);
+        for (let channel of workerChannels)
           try {
-            let A = {
+            let reply = {
               type: "auth_401_result",
               refreshed: false,
-              requestId: e.requestId,
+              requestId: message.requestId,
             };
-            S.send(A);
+            channel.send(reply);
           } catch {}
       });
   }
-  function K(e) {
-    v.add(e);
-    e.on("message", Q);
-    if (k)
+  function attachWorker(channel) {
+    workerChannels.add(channel);
+    channel.on("message", onWorkerMessage);
+    if (authState)
       try {
-        let i = {
+        let message = {
           type: "token_update",
-          accessToken: k.accessToken,
+          accessToken: authState.accessToken,
         };
-        e.send(i);
+        channel.send(message);
       } catch {}
   }
-  function ae(e) {
-    e.removeListener("message", Q);
-    v.delete(e);
+  function detachWorker(channel) {
+    channel.removeListener("message", onWorkerMessage);
+    workerChannels.delete(channel);
   }
-  let q = (async () => {
-    if (r.aborted) return;
+  let ready = (async () => {
+    if (signal.aborted) return;
     try {
-      let e = await W();
-      let claudeAIOAuthTokensAsync = await e.getClaudeAIOAuthTokensAsync(h);
-      if (!claudeAIOAuthTokensAsync?.accessToken && e.isUsing3PServices()) {
-        T = true;
-        n("auth: 3P provider active, skipping OAuth refresh loop");
+      let oauthModule = await loadOauthModule();
+      let tokens = await oauthModule.getClaudeAIOAuthTokensAsync(credentials);
+      if (!tokens?.accessToken && oauthModule.isUsing3PServices()) {
+        is3POnly = true;
+        log("auth: 3P provider active, skipping OAuth refresh loop");
         return;
       }
-      if (claudeAIOAuthTokensAsync?.accessToken) {
-        D(claudeAIOAuthTokensAsync);
-        G(claudeAIOAuthTokensAsync.expiresAt ?? null);
+      if (tokens?.accessToken) {
+        setAuthState(tokens);
+        scheduleRefresh(tokens.expiresAt ?? null);
       }
-      await e.checkAndRefreshOAuthTokenIfNeeded({
-        credentials: h,
-        storageV5: s,
-        ...m(),
+      await oauthModule.checkAndRefreshOAuthTokenIfNeeded({
+        credentials,
+        storageV5,
+        ...loginOffOptions(),
       });
-      await H();
+      await reloadTokens();
     } catch (error) {
-      n(`auth: init error: ${error}`);
+      log(`auth: init error: ${error}`);
     }
   })();
-  q.then(() => {
-    if (r.aborted || k || T) return;
-    j();
+  ready.then(() => {
+    if (signal.aborted || authState || is3POnly) return;
+    startKeychainRetry();
   });
-  r.addEventListener(
+  signal.addEventListener(
     "abort",
     () => {
-      if (y) {
-        clearTimeout(y);
-        y = null;
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+        refreshTimer = null;
       }
-      if (b) {
-        clearInterval(b);
-        b = null;
+      if (keychainRetryTimer) {
+        clearInterval(keychainRetryTimer);
+        keychainRetryTimer = null;
       }
     },
     {
@@ -463,412 +486,426 @@ function createDaemonAuthManager(r, n, a, s, h, w = () => false) {
     },
   );
   return {
-    ready: q,
+    ready,
     getAccessToken() {
-      return k?.accessToken;
+      return authState?.accessToken;
     },
     getAuthSnapshot() {
-      if (k && !k.organizationUuid) re(k.accessToken, true);
-      return k;
+      if (authState && !authState.organizationUuid) lookupOrganization(authState.accessToken, true);
+      return authState;
     },
-    attachWorker: K,
-    detachWorker: ae,
-    dispose: ee,
-    [Symbol.dispose]: ee,
+    attachWorker,
+    detachWorker,
+    dispose,
+    [Symbol.dispose]: dispose,
   };
-  function ee() {
-    if (y) {
-      clearTimeout(y);
-      y = null;
+  function dispose() {
+    if (refreshTimer) {
+      clearTimeout(refreshTimer);
+      refreshTimer = null;
     }
-    if (b) {
-      clearInterval(b);
-      b = null;
+    if (keychainRetryTimer) {
+      clearInterval(keychainRetryTimer);
+      keychainRetryTimer = null;
     }
-    for (let e of v) e.removeListener("message", Q);
-    v.clear();
+    for (let channel of workerChannels) channel.removeListener("message", onWorkerMessage);
+    workerChannels.clear();
   }
 }
 //@ chunk-e3de30et.js:8583-9560 placement
 /**
  * worker 侧认证客户端：通过 IPC 接收令牌更新、请求刷新。
  */
-function createWorkerAuthClient(initialAccessToken, n, a) {
+function createWorkerAuthClient(initialAccessToken, credentials, storageV5) {
   if (typeof process.send === "function") {
-    let k = function (T) {
-      let y = m.get(T);
-      if (y) {
-        m.delete(T);
-        y.resolve(false);
+    let timeoutRequest = function (requestId) {
+      let request = pendingRequests.get(requestId);
+      if (request) {
+        pendingRequests.delete(requestId);
+        request.resolve(false);
       }
     };
-    let w = initialAccessToken;
-    process.on("message", (T) => {
-      if (!isDaemonAuthMessage(T)) return;
-      if (T.type === "token_update") w = T.accessToken;
+    let currentToken = initialAccessToken;
+    process.on("message", (message) => {
+      if (!isDaemonAuthMessage(message)) return;
+      if (message.type === "token_update") currentToken = message.accessToken;
     });
-    let m = new Map();
-    process.on("message", (T) => {
-      if (typeof T === "object" && T !== null && "type" in T && T.type === "auth_401_result") {
-        let y = T;
-        let v = m.get(y.requestId);
-        if (v) {
-          clearTimeout(v.timer);
-          m.delete(y.requestId);
-          v.resolve(y.refreshed);
+    let pendingRequests = new Map();
+    process.on("message", (message) => {
+      if (
+        typeof message === "object" &&
+        message !== null &&
+        "type" in message &&
+        message.type === "auth_401_result"
+      ) {
+        let result = message;
+        let request = pendingRequests.get(result.requestId);
+        if (request) {
+          clearTimeout(request.timer);
+          pendingRequests.delete(result.requestId);
+          request.resolve(result.refreshed);
         }
       }
     });
     process.channel?.unref();
     return {
       getAccessToken() {
-        return w;
+        return currentToken;
       },
       reportAuth401(failedToken) {
-        let y = randomUUID();
-        let v = {
+        let requestId = randomUUID();
+        let message = {
           type: "auth_401",
           failedToken,
-          requestId: y,
+          requestId,
         };
         return new Promise((resolve) => {
-          let timer = setTimeout(k, 30000, y);
+          let timer = setTimeout(timeoutRequest, 30000, requestId);
           timer.unref();
-          m.set(y, {
+          pendingRequests.set(requestId, {
             resolve,
             timer,
           });
           try {
-            process.send(v);
+            process.send(message);
           } catch {
             clearTimeout(timer);
-            m.delete(y);
+            pendingRequests.delete(requestId);
             resolve(false);
           }
         });
       },
     };
   }
-  let s = null;
-  async function h() {
-    return (s ??= await import("./chunk-7v0gj88m.js"));
+  let oauthModule = null;
+  async function loadOauthModule() {
+    return (oauthModule ??= await import("../utils/auth.js"));
   }
-  h();
+  loadOauthModule();
   return {
     getAccessToken() {
-      return s?.getClaudeAIOAuthTokens()?.accessToken;
+      return oauthModule?.getClaudeAIOAuthTokens()?.accessToken;
     },
-    async reportAuth401(w) {
-      return (await h()).handleOAuth401Error(w, n, a, {
+    async reportAuth401(failedToken) {
+      return (await loadOauthModule()).handleOAuth401Error(failedToken, credentials, storageV5, {
         usesLoginOffFirstParty: true,
       });
     },
   };
 }
 //@ chunk-e3de30et.js:9560-9645 placement
-function isShutdownResult(r) {
-  return typeof r === "object" && r !== null && "type" in r && r.type === "shutdown";
+function isShutdownResult(message) {
+  return typeof message === "object" && message !== null && "type" in message && message.type === "shutdown";
 }
 //@ chunk-e3de30et.js:9645-9805 placement
-function getRestartCause(r) {
-  if (!isShutdownResult(r) || typeof r !== "object" || r === null || !("cause" in r)) return;
-  return r.cause === "upgrade" || r.cause === "reload" || r.cause === "yield" ? r.cause : undefined;
+function getRestartCause(message) {
+  if (!isShutdownResult(message) || typeof message !== "object" || message === null || !("cause" in message))
+    return;
+  return message.cause === "upgrade" || message.cause === "reload" || message.cause === "yield"
+    ? message.cause
+    : undefined;
 }
 //@ chunk-e3de30et.js:9805-13196 placement
 /**
  * daemon 配置 schema（目录、名称、spawnMode、容量、权限模式等）。
  */
-var DaemonConfigSchema = DoctorLazy(() =>
-  u({
-    dir: string(),
-    name: string().optional(),
-    spawnMode: _enum(["same-dir", "worktree"]).default("same-dir"),
-    capacity: E().int().positive().default(32),
-    permissionMode: preprocess(normalizePermissionModeAlias, _enum(EXTERNAL_PERMISSION_MODES)).optional(),
-    sandbox: M().optional(),
-    sessionTimeoutSeconds: E().int().positive().optional(),
-    createSessionOnStart: M().default(false),
-  }).strict(),
-);
-var DAEMON_RESTART_WAIT_MS = 60000;
-var DAEMON_POLL_MS = 500;
-var handleRemoteControlInput = async (r, n, a, s, h, w) => {
-  let m = DaemonConfigSchema().parse(r);
-  if (m.sandbox) {
-    a(`The sandbox key is not supported for Remote Control. Remove it. ${SANDBOX_SETTING_HINT}`);
-    process.exit(EXIT_CONFIG_ERROR);
-  }
-  let { initializeErrorLogSink } = await import("./chunk-nynswhsz.js");
-  let { initializeAnalyticsSink } = await import("./chunk-dn8vrmng.js");
-  initializeErrorLogSink();
-  initializeAnalyticsSink();
-  let y = () => getBridgeTokenOverride() ?? s.getAccessToken();
-  if (!y()) {
-    a(BRIDGE_LOGIN_ERROR);
-    process.exit(1);
-  }
-  let [
-    { initialize1PEventLogging: v },
-    { initializeGrowthBook: b, getFeatureValue_CACHED_MAY_BE_STALE: x, getUserAttributes: W },
-    { flushAnalyticsSinks: L },
-    { populateOAuthAccountInfoIfNeeded: F },
-  ] = await Promise.all([
-    import("./chunk-3x77zjqp.js"),
-    import("./chunk-6df1d6re.js"),
-    import("./chunk-af5wdhtv.js"),
-    import("./chunk-appaeyg7.js"),
-  ]);
-  v(h);
-  await F(w, h).catch((error) => {
-    logForDebugging(
-      `[daemon:remoteControl] oauthAccount backfill failed (${error instanceof Error ? error.name : typeof error})`,
-    );
-  });
-  if (!W().organizationUUID)
-    logForDebugging(
-      "[daemon:remoteControl] no org identity; GrowthBook not initialized, gates serve cached/default values",
-    );
-  else
-    b().catch((error) => {
+var DaemonConfigSchema; // deferred: uses DoctorLazy (../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var DAEMON_RESTART_WAIT_MS;
+var DAEMON_POLL_MS;
+var handleRemoteControlInput;
+deferInit("chunk-e3de30et.js:9805", () => {
+  DaemonConfigSchema = DoctorLazy(() =>
+    objectSchema({
+      dir: stringSchema(),
+      name: stringSchema().optional(),
+      spawnMode: _enum(["same-dir", "worktree"]).default("same-dir"),
+      capacity: numberSchema().int().positive().default(32),
+      permissionMode: preprocess(normalizePermissionModeAlias, _enum(EXTERNAL_PERMISSION_MODES)).optional(),
+      sandbox: booleanSchema().optional(),
+      sessionTimeoutSeconds: numberSchema().int().positive().optional(),
+      createSessionOnStart: booleanSchema().default(false),
+    }).strict(),
+  );
+  DAEMON_RESTART_WAIT_MS = 60000;
+  DAEMON_POLL_MS = 500;
+  handleRemoteControlInput = async (rawConfig, signal, log, authClient, storageV5, credentials) => {
+    let config = DaemonConfigSchema().parse(rawConfig);
+    if (config.sandbox) {
+      log(`The sandbox key is not supported for Remote Control. Remove it. ${SANDBOX_SETTING_HINT}`);
+      process.exit(EXIT_CONFIG_ERROR);
+    }
+    let { initializeErrorLogSink } = await import("../utils/errorLogSink.js");
+    let { initializeAnalyticsSink } = await import("../services/analytics/sink.js");
+    initializeErrorLogSink();
+    initializeAnalyticsSink();
+    let getAccessToken = () => getBridgeTokenOverride() ?? authClient.getAccessToken();
+    if (!getAccessToken()) {
+      log(BRIDGE_LOGIN_ERROR);
+      process.exit(1);
+    }
+    let [
+      { initialize1PEventLogging },
+      { initializeGrowthBook, getFeatureValue_CACHED_MAY_BE_STALE: getFeatureValue, getUserAttributes },
+      { flushAnalyticsSinks },
+      { populateOAuthAccountInfoIfNeeded },
+    ] = await Promise.all([
+      import("../services/analytics/firstPartyEventLogger.js"),
+      import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+      import("../services/analytics/flushSinks.js"),
+      import("../services/oauth/client.js"),
+    ]);
+    initialize1PEventLogging(storageV5);
+    await populateOAuthAccountInfoIfNeeded(credentials, storageV5).catch((error) => {
       logForDebugging(
-        `[daemon:remoteControl] GrowthBook init failed (${error instanceof Error ? error.name : typeof error}); feature gates keep serving the disk cache`,
-        {
-          level: "error",
-        },
+        `[daemon:remoteControl] oauthAccount backfill failed (${error instanceof Error ? error.name : typeof error})`,
       );
     });
-  if (!isDaemonWorkerRegistryEnabled()) {
-    let e = await checkRemoteControlWorkerEligibility();
-    if (e !== undefined) {
-      a(e.reason);
-      await L();
-      process.exit(e.retry ? 1 : EXIT_CONFIG_ERROR);
-    }
-  }
-  let { runBridgeHeadless, BridgeHeadlessPermanentError } = await import("./chunk-wbbfk060.js");
-  let D = null;
-  let H = false;
-  let V = (e) => {
-    if (typeof process.send !== "function") return;
-    try {
-      process.send(e);
-    } catch {}
-  };
-  let Z = (busy) =>
-    V({
-      type: "rc_busy",
-      busy,
-    });
-  let j = () => {
-    if (D !== null) {
-      clearInterval(D);
-      D = null;
-    }
-  };
-  let onBusyChange = (e) => {
-    let busy = e > 0;
-    if (busy !== H) {
-      H = busy;
-      Z(busy);
-    }
-    if (busy) {
-      if (D === null) {
-        D = setInterval((S) => S(true), DAEMON_RESTART_WAIT_MS, Z);
-        D.unref?.();
-      }
-    } else j();
-  };
-  let persistActiveSessionsOnShutdown = x("tengu_daemon_upgrade_defer_busy", true);
-  let ne = null;
-  let B = () => {};
-  let promise = new Promise((resolve) => {
-    B = resolve;
-  });
-  let se = (e) => {
-    if (isShutdownResult(e)) {
-      ne = getRestartCause(e) ?? null;
-      B();
-    }
-  };
-  process.on("message", se);
-  let awaitShutdownCause = async () => {
-    await Promise.race([promise, sleep(DAEMON_POLL_MS)]);
-    return ne;
-  };
-  let K;
-  let createToolHostHandler;
-  let q;
-  try {
-    let e = await import("./chunk-svk9hz69.js");
-    let checks = e.liveToolHostChecks(m.dir, w);
-    let switches = e.liveToolHostSwitches({
-      dir: m.dir,
-      checks,
-      isOfferingFolder: () => K?.getToolHostAdvert().kind === "advertise",
-      hasAccessToken: () => Boolean(y()),
-    });
-    let A;
-    let c = false;
-    K = await e.watchToolHostAdvert({
-      dir: m.dir,
-      log: a,
-      checks,
-      refuse: e.helperRefusal,
-      onVerdict: (P) => {
-        if (A !== undefined && e.isSwitchedOffRemotely(P))
-          A.sweep("gate_off").catch((error) => logError(toError(error)));
-      },
-    });
-    createToolHostHandler = (P) => {
-      try {
-        A = e.buildToolHostWorkHandler(
+    if (!getUserAttributes().organizationUUID)
+      logForDebugging(
+        "[daemon:remoteControl] no org identity; GrowthBook not initialized, gates serve cached/default values",
+      );
+    else
+      initializeGrowthBook().catch((error) => {
+        logForDebugging(
+          `[daemon:remoteControl] GrowthBook init failed (${error instanceof Error ? error.name : typeof error}); feature gates keep serving the disk cache`,
           {
-            folder: m.dir,
-            switches,
-            ...P,
-            onLiveCountChange: (count) =>
-              V({
-                type: "rc_serving_tools",
-                count,
-              }),
-          },
-          {
-            unattendedGrant: undefined,
-            withoutShellSecrets: false,
+            level: "error",
           },
         );
-      } catch (error) {
-        logError(toError(error));
+      });
+    if (!isDaemonWorkerRegistryEnabled()) {
+      let eligibilityError = await checkRemoteControlWorkerEligibility();
+      if (eligibilityError !== undefined) {
+        log(eligibilityError.reason);
+        await flushAnalyticsSinks();
+        process.exit(eligibilityError.retry ? 1 : EXIT_CONFIG_ERROR);
       }
-      return A;
+    }
+    let { runBridgeHeadless, BridgeHeadlessPermanentError } = await import("../bridge/bridgeMain.js");
+    let busyPingTimer = null;
+    let wasBusy = false;
+    let sendToParent = (message) => {
+      if (typeof process.send !== "function") return;
+      try {
+        process.send(message);
+      } catch {}
     };
-    let R;
-    q = async () => {
-      if (A !== undefined) R ??= e.sweepToolHostForShutdown(A);
-      await R;
+    let sendBusy = (busy) =>
+      sendToParent({
+        type: "rc_busy",
+        busy,
+      });
+    let stopBusyPing = () => {
+      if (busyPingTimer !== null) {
+        clearInterval(busyPingTimer);
+        busyPingTimer = null;
+      }
     };
-    n.addEventListener("abort", () => void q?.(), {
-      once: true,
+    let onBusyChange = (busyCount) => {
+      let busy = busyCount > 0;
+      if (busy !== wasBusy) {
+        wasBusy = busy;
+        sendBusy(busy);
+      }
+      if (busy) {
+        if (busyPingTimer === null) {
+          busyPingTimer = setInterval((ping) => ping(true), DAEMON_RESTART_WAIT_MS, sendBusy);
+          busyPingTimer.unref?.();
+        }
+      } else stopBusyPing();
+    };
+    let persistActiveSessionsOnShutdown = getFeatureValue("tengu_daemon_upgrade_defer_busy", true);
+    let shutdownCause = null;
+    let resolveShutdown = () => {};
+    let promise = new Promise((resolve) => {
+      resolveShutdown = resolve;
     });
-  } catch (error) {
-    logError(toError(error));
-  }
-  let ee = false;
-  try {
-    await runBridgeHeadless(
-      {
-        dir: m.dir,
-        name: m.name,
-        spawnMode: m.spawnMode,
-        capacity: m.capacity,
-        permissionMode: m.permissionMode,
-        createSessionOnStart: m.createSessionOnStart,
-        getAccessToken: y,
-        onAuth401: s.reportAuth401,
-        log: a,
-        storageV5: h,
-        credentials: w,
-        onBusyChange,
-        persistActiveSessionsOnShutdown,
-        awaitShutdownCause,
-        getToolHostAdvert: K?.getToolHostAdvert,
-        createToolHostHandler,
-      },
-      n,
-    );
-  } catch (error) {
-    if (!(error instanceof BridgeHeadlessPermanentError)) throw error;
-    a(error.message);
-    ee = true;
-  } finally {
-    await q?.();
-    j();
-    K?.stop();
-    process.off("message", se);
-    await L();
-  }
-  if (ee) process.exit(EXIT_CONFIG_ERROR);
-};
+    let onParentMessage = (message) => {
+      if (isShutdownResult(message)) {
+        shutdownCause = getRestartCause(message) ?? null;
+        resolveShutdown();
+      }
+    };
+    process.on("message", onParentMessage);
+    let awaitShutdownCause = async () => {
+      await Promise.race([promise, sleep(DAEMON_POLL_MS)]);
+      return shutdownCause;
+    };
+    let toolHostWatcher;
+    let createToolHostHandler;
+    let sweepToolHost;
+    try {
+      let toolHostModule = await import("../remote/tools/toolHostAdvert.js");
+      let checks = toolHostModule.liveToolHostChecks(config.dir, credentials);
+      let switches = toolHostModule.liveToolHostSwitches({
+        dir: config.dir,
+        checks,
+        isOfferingFolder: () => toolHostWatcher?.getToolHostAdvert().kind === "advertise",
+        hasAccessToken: () => Boolean(getAccessToken()),
+      });
+      let toolHostHandler;
+      let isPermanentError = false;
+      toolHostWatcher = await toolHostModule.watchToolHostAdvert({
+        dir: config.dir,
+        log,
+        checks,
+        refuse: toolHostModule.helperRefusal,
+        onVerdict: (verdict) => {
+          if (toolHostHandler !== undefined && toolHostModule.isSwitchedOffRemotely(verdict))
+            toolHostHandler.sweep("gate_off").catch((error) => logError(toError(error)));
+        },
+      });
+      createToolHostHandler = (handlerArgs) => {
+        try {
+          toolHostHandler = toolHostModule.buildToolHostWorkHandler(
+            {
+              folder: config.dir,
+              switches,
+              ...handlerArgs,
+              onLiveCountChange: (count) =>
+                sendToParent({
+                  type: "rc_serving_tools",
+                  count,
+                }),
+            },
+            {
+              unattendedGrant: undefined,
+              withoutShellSecrets: false,
+            },
+          );
+        } catch (error) {
+          logError(toError(error));
+        }
+        return toolHostHandler;
+      };
+      let sweepPromise;
+      sweepToolHost = async () => {
+        if (toolHostHandler !== undefined)
+          sweepPromise ??= toolHostModule.sweepToolHostForShutdown(toolHostHandler);
+        await sweepPromise;
+      };
+      signal.addEventListener("abort", () => void sweepToolHost?.(), {
+        once: true,
+      });
+    } catch (error) {
+      logError(toError(error));
+    }
+    let isPermanentFailure = false;
+    try {
+      await runBridgeHeadless(
+        {
+          dir: config.dir,
+          name: config.name,
+          spawnMode: config.spawnMode,
+          capacity: config.capacity,
+          permissionMode: config.permissionMode,
+          createSessionOnStart: config.createSessionOnStart,
+          getAccessToken,
+          onAuth401: authClient.reportAuth401,
+          log,
+          storageV5,
+          credentials,
+          onBusyChange,
+          persistActiveSessionsOnShutdown,
+          awaitShutdownCause,
+          getToolHostAdvert: toolHostWatcher?.getToolHostAdvert,
+          createToolHostHandler,
+        },
+        signal,
+      );
+    } catch (error) {
+      if (!(error instanceof BridgeHeadlessPermanentError)) throw error;
+      log(error.message);
+      isPermanentFailure = true;
+    } finally {
+      await sweepToolHost?.();
+      stopBusyPing();
+      toolHostWatcher?.stop();
+      process.off("message", onParentMessage);
+      await flushAnalyticsSinks();
+    }
+    if (isPermanentFailure) process.exit(EXIT_CONFIG_ERROR);
+  };
+});
 //@ chunk-e3de30et.js:13196-13634 placement
 /**
  * 检查 Remote Control worker 的资格（桥接阻断码、最低版本、组织）。
  */
 async function checkRemoteControlWorkerEligibility() {
-  let [{ getBridgeBlockedCode: r }, { checkBridgeMinVersion: n }, { getUserAttributes: a }] =
-    await Promise.all([
-      import("./chunk-zke21f1q.js"),
-      import("./chunk-9z591zgb.js"),
-      import("./chunk-6df1d6re.js"),
-    ]);
-  if (!a().organizationUUID)
+  let [{ getBridgeBlockedCode }, { checkBridgeMinVersion }, { getUserAttributes }] = await Promise.all([
+    import("../bridge/applyRemoteControlToAppState.lazy.js"),
+    import("../bridge/bridgeEnabled.js"),
+    import("../services/analytics/ATIS_REQUEST_HEADER.lazy.js"),
+  ]);
+  if (!getUserAttributes().organizationUUID)
     return {
       reason: remoteControlStartError("token_scope_limited"),
       retry: false,
     };
-  let s = await r();
-  if (s !== null)
+  let blockedCode = await getBridgeBlockedCode();
+  if (blockedCode !== null)
     return {
-      reason: remoteControlStartError(s),
-      retry: s === "flags_unreachable" || s === "not_signed_in",
+      reason: remoteControlStartError(blockedCode),
+      retry: blockedCode === "flags_unreachable" || blockedCode === "not_signed_in",
     };
-  let h = n();
-  return h === null
+  let versionError = checkBridgeMinVersion();
+  return versionError === null
     ? undefined
     : {
-        reason: h,
+        reason: versionError,
         retry: false,
       };
 }
 //@ chunk-e3de30et.js:13634-13749 placement
-function remoteControlStartError(r) {
-  return `Remote Control cannot start (${r}). Run \`claude remote-control\` in a terminal to see why.`;
+function remoteControlStartError(code) {
+  return `Remote Control cannot start (${code}). Run \`claude remote-control\` in a terminal to see why.`;
 }
 //@ chunk-e3de30et.js:13749-14031 placement
 /**
  * 在 daemon 配置中添加或更新某目录的远程控制项，返回 added/updated。
  */
-async function upsertRemoteControlDir(r, n, a) {
+async function upsertRemoteControlDir(entry, storageV5, credentials) {
   return withFeatureTelemetry("daemon_rc_add", async () => {
-    let s = "added";
+    let outcome = "added";
     await updateDaemonConfig(
-      (h) => {
-        let w = normalizeDirEntries(h.remoteControl);
-        let index = w.findIndex((k) => k.dir === r.dir);
+      (config) => {
+        let entries = normalizeDirEntries(config.remoteControl);
+        let index = entries.findIndex((existing) => existing.dir === entry.dir);
         if (index >= 0) {
-          let k = pickByHelper(r, (T) => T !== undefined);
-          w[index] = {
-            ...w[index],
-            ...k,
+          let definedFields = pickByHelper(entry, (value) => value !== undefined);
+          entries[index] = {
+            ...entries[index],
+            ...definedFields,
           };
-          s = "updated";
+          outcome = "updated";
         } else {
-          w.push(r);
-          s = "added";
+          entries.push(entry);
+          outcome = "added";
         }
-        h.remoteControl = w;
+        config.remoteControl = entries;
       },
-      n,
-      a,
+      storageV5,
+      credentials,
     );
-    return s;
+    return outcome;
   });
 }
 //@ chunk-e3de30et.js:14031-14268 placement
 /**
  * 从 daemon 配置中移除某目录的远程控制项，空时删除该字段。
  */
-async function removeRemoteControlDir(r, n, a) {
+async function removeRemoteControlDir(entry, storageV5, credentials) {
   return withFeatureTelemetry("daemon_rc_remove", async () => {
     await updateDaemonConfig(
-      (s) => {
-        let h = normalizeDirEntries(s.remoteControl);
-        let filtered = h.filter((m) => m.dir !== r);
-        if (filtered.length === h.length) return false;
-        if (filtered.length === 0) delete s.remoteControl;
-        else s.remoteControl = filtered;
+      (config) => {
+        let entries = normalizeDirEntries(config.remoteControl);
+        let filtered = entries.filter((existing) => existing.dir !== entry);
+        if (filtered.length === entries.length) return false;
+        if (filtered.length === 0) delete config.remoteControl;
+        else config.remoteControl = filtered;
       },
-      n,
-      a,
+      storageV5,
+      credentials,
     );
   });
 }

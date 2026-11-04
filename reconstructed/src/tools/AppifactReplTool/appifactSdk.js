@@ -18,3 +18,4 @@ var appifactSdkPath = __cc_resource_0;
  * Appifact REPL 使用的 SDK 资源文本。
  */
 var appifactSdk = readEmbeddedTextSync(appifactSdkPath, import.meta.dirname);
+export { appifactSdk };

@@ -34,133 +34,158 @@ import { applyValidatedPermissionUpdate } from "./PermissionUpdate.js";
 import { expandPath } from "../path.js";
 
 //@ chunk-pc1rmcr2.js:1784-1813 placement
-function whenPolicyNotified(e) {
-  if (hasPolicySettingsNotified()) e();
+function whenPolicyNotified(callback) {
+  if (hasPolicySettingsNotified()) callback();
 }
 //@ chunk-pc1rmcr2.js:1813-2173 placement
-function refreshPermissionContext(e, r) {
-  let currentContext = e;
-  if (currentContext.isBypassPermissionsModeAvailable && isBypassPermissionsModeDisabled())
-    currentContext = createDisabledBypassPermissionsContext(currentContext);
-  if (currentContext.strippedDangerousRules !== undefined) {
-    let u = new Set(SETTING_SOURCES);
-    let c = !shouldAllowManagedPermissionRulesOnly();
-    let f = {};
-    for (let [key, value] of Object.entries(currentContext.strippedDangerousRules))
-      if (value && (c || key === "command") && !u.has(key)) f[key] = [...value];
-    currentContext = {
-      ...currentContext,
-      strippedDangerousRules: f,
+function refreshPermissionContext(toolPermissionContext, settings) {
+  let nextContext = toolPermissionContext;
+  if (nextContext.isBypassPermissionsModeAvailable && isBypassPermissionsModeDisabled())
+    nextContext = createDisabledBypassPermissionsContext(nextContext);
+  if (nextContext.strippedDangerousRules !== undefined) {
+    let configSources = new Set(SETTING_SOURCES);
+    let allowManagedOnly = !shouldAllowManagedPermissionRulesOnly();
+    let stripped = {};
+    for (let [key, value] of Object.entries(nextContext.strippedDangerousRules))
+      if (value && (allowManagedOnly || key === "command") && !configSources.has(key))
+        stripped[key] = [...value];
+    nextContext = {
+      ...nextContext,
+      strippedDangerousRules: stripped,
     };
   }
-  let d = isAutoModeInUse(currentContext) && isAutoModeDisabledByPolicySettings();
-  if (d) currentContext = createDisabledAutoModeContext(currentContext);
+  let autoModeDisabled = isAutoModeInUse(nextContext) && isAutoModeDisabledByPolicySettings();
+  if (autoModeDisabled) nextContext = createDisabledAutoModeContext(nextContext);
   return {
-    context: transitionPlanAutoMode(currentContext),
-    exitedAutoMode: d,
+    context: transitionPlanAutoMode(nextContext),
+    exitedAutoMode: autoModeDisabled,
   };
 }
 //@ chunk-pc1rmcr2.js:2173-3602 placement
 /**
  * 根据当前设置重建附加工作目录：新增、移除、保留来自磁盘信任的目录。
  */
-function rebuildAdditionalDirectories(e, r, trustedAdditionalDirectoriesFromDisk, d, u = false, c, f) {
-  let a = new Set((r ?? []).flatMap((i) => safeNormalizedDirectories(i, c)));
-  let m = new Set((trustedAdditionalDirectoriesFromDisk ?? []).flatMap((i) => safeNormalizedDirectories(i)));
-  let additionalWorkingDirectories = e.additionalWorkingDirectories;
-  let filtered = [...a].filter(
-    (i) => !m.has(i) && !isSessionScopedRuleSource(additionalWorkingDirectories.get(i)?.source),
+function rebuildAdditionalDirectories(
+  toolPermissionContext,
+  directories,
+  trustedAdditionalDirectoriesFromDisk,
+  source,
+  replaceAll = false,
+  baseDir,
+  provenance,
+) {
+  let declaredDirs = new Set(
+    (directories ?? []).flatMap((directory) => safeNormalizedDirectories(directory, baseDir)),
   );
-  let filtered_2 = [...m].filter(
-    (i) =>
-      (!a.has(i) || (u && !additionalWorkingDirectories.has(i))) &&
-      !isSessionScopedRuleSource(additionalWorkingDirectories.get(i)?.source),
+  let diskDirs = new Set(
+    (trustedAdditionalDirectoriesFromDisk ?? []).flatMap((directory) => safeNormalizedDirectories(directory)),
+  );
+  let additionalWorkingDirectories = toolPermissionContext.additionalWorkingDirectories;
+  let filtered = [...declaredDirs].filter(
+    (directory) =>
+      !diskDirs.has(directory) &&
+      !isSessionScopedRuleSource(additionalWorkingDirectories.get(directory)?.source),
+  );
+  let filtered_2 = [...diskDirs].filter(
+    (directory) =>
+      (!declaredDirs.has(directory) || (replaceAll && !additionalWorkingDirectories.has(directory))) &&
+      !isSessionScopedRuleSource(additionalWorkingDirectories.get(directory)?.source),
   );
   let originalCwdOrNull = getOriginalCwdOrNull();
   let { declared, repoOnly } = additionalDirectoryProvenance(
-    (i) => [
-      ...(originalCwdOrNull === null ? [] : safeNormalizedDirectories(i, originalCwdOrNull)),
-      ...safeNormalizedDirectories(i),
+    (directory) => [
+      ...(originalCwdOrNull === null ? [] : safeNormalizedDirectories(directory, originalCwdOrNull)),
+      ...safeNormalizedDirectories(directory),
     ],
-    f,
+    provenance,
   );
-  let D = (i) => (repoOnly.has(i) ? "projectSettings" : "localSettings");
+  let sourceFor = (directory) => (repoOnly.has(directory) ? "projectSettings" : "localSettings");
   let filtered_3 = [...additionalWorkingDirectories.entries()].filter(
-    ([i, p]) =>
-      !isSessionScopedRuleSource(p.source) && !filtered.includes(i) && declared.has(i) && p.source !== D(i),
+    ([directory, entry]) =>
+      !isSessionScopedRuleSource(entry.source) &&
+      !filtered.includes(directory) &&
+      declared.has(directory) &&
+      entry.source !== sourceFor(directory),
   );
-  if (filtered.length === 0 && filtered_2.length === 0 && filtered_3.length === 0 && d !== "flagSettings")
-    return e;
-  let y = e;
+  if (
+    filtered.length === 0 &&
+    filtered_2.length === 0 &&
+    filtered_3.length === 0 &&
+    source !== "flagSettings"
+  )
+    return toolPermissionContext;
+  let nextContext = toolPermissionContext;
   if (filtered_3.length > 0) {
-    let i = new Map(additionalWorkingDirectories);
-    for (let [p, x] of filtered_3)
-      i.set(p, {
-        ...x,
-        source: D(p),
+    let nextDirs = new Map(additionalWorkingDirectories);
+    for (let [directory, entry] of filtered_3)
+      nextDirs.set(directory, {
+        ...entry,
+        source: sourceFor(directory),
       });
-    y = {
-      ...y,
-      additionalWorkingDirectories: i,
+    nextContext = {
+      ...nextContext,
+      additionalWorkingDirectories: nextDirs,
     };
   }
-  if (d === "flagSettings") {
-    let i = new Set(
-      (getSettingsForSource("flagSettings")?.permissions?.additionalDirectories ?? []).flatMap((S) =>
-        safeNormalizedDirectories(S),
+  if (source === "flagSettings") {
+    let flagDirs = new Set(
+      (getSettingsForSource("flagSettings")?.permissions?.additionalDirectories ?? []).flatMap((directory) =>
+        safeNormalizedDirectories(directory),
       ),
     );
-    let p = new Map(y.trustedNetworkDirectories ?? []);
-    let x = false;
-    for (let key of [...p.keys()])
-      if (!i.has(key) && additionalWorkingDirectories.get(key)?.source !== "cliArg") {
-        for (let C of p.get(key) ?? []) if (C !== key) filtered.push(C);
-        p.delete(key);
-        x = true;
+    let nextTrusted = new Map(nextContext.trustedNetworkDirectories ?? []);
+    let changed = false;
+    for (let key of [...nextTrusted.keys()])
+      if (!flagDirs.has(key) && additionalWorkingDirectories.get(key)?.source !== "cliArg") {
+        for (let spelling of nextTrusted.get(key) ?? []) if (spelling !== key) filtered.push(spelling);
+        nextTrusted.delete(key);
+        changed = true;
       }
     if (addDirsAreLauncherNamed()) {
-      for (let S of i)
-        if (!p.has(S)) {
-          if (hasUntouchableRecordSpellingStrict(S)) continue;
-          let C = mappedDriveSpellings(S);
-          if (C.length > 0) {
-            p.set(S, C);
-            for (let A of C) if (A !== S) filtered_2.push(A);
-            x = true;
+      for (let directory of flagDirs)
+        if (!nextTrusted.has(directory)) {
+          if (hasUntouchableRecordSpellingStrict(directory)) continue;
+          let mappedSpellings = mappedDriveSpellings(directory);
+          if (mappedSpellings.length > 0) {
+            nextTrusted.set(directory, mappedSpellings);
+            for (let spelling of mappedSpellings) if (spelling !== directory) filtered_2.push(spelling);
+            changed = true;
           }
         }
     }
-    if (x)
-      y = {
-        ...y,
-        trustedNetworkDirectories: p,
+    if (changed)
+      nextContext = {
+        ...nextContext,
+        trustedNetworkDirectories: nextTrusted,
       };
   }
   if (filtered.length > 0)
-    y = applyValidatedPermissionUpdate(y, {
+    nextContext = applyValidatedPermissionUpdate(nextContext, {
       type: "removeDirectories",
       directories: filtered,
       destination: "localSettings",
     });
   if (filtered_2.length > 0)
-    for (let i of ["projectSettings", "localSettings"]) {
-      let filtered = filtered_2.filter((x) => D(x) === i);
+    for (let destination of ["projectSettings", "localSettings"]) {
+      let filtered = filtered_2.filter((directory) => sourceFor(directory) === destination);
       if (filtered.length > 0)
-        y = applyValidatedPermissionUpdate(y, {
+        nextContext = applyValidatedPermissionUpdate(nextContext, {
           type: "addDirectories",
           directories: filtered,
-          destination: i,
+          destination,
         });
     }
-  return y;
+  return nextContext;
 }
 //@ chunk-pc1rmcr2.js:3602-3877 placement
-function mergeTrustedDirectories(toolPermissionContext, r) {
-  let o = new Set(loadTrustedAdditionalDirectoriesFromDisk().flatMap((c) => safeNormalizedDirectories(c)));
+function mergeTrustedDirectories(toolPermissionContext, directories) {
+  let diskDirs = new Set(
+    loadTrustedAdditionalDirectoriesFromDisk().flatMap((directory) => safeNormalizedDirectories(directory)),
+  );
   let additionalWorkingDirectories = toolPermissionContext.additionalWorkingDirectories;
-  let filtered = r.filter((c) => {
-    let f = additionalWorkingDirectories.get(c);
-    return f !== undefined && !o.has(c) && !isSessionScopedRuleSource(f.source);
+  let filtered = directories.filter((directory) => {
+    let entry = additionalWorkingDirectories.get(directory);
+    return entry !== undefined && !diskDirs.has(directory) && !isSessionScopedRuleSource(entry.source);
   });
   if (filtered.length === 0) return toolPermissionContext;
   return applyValidatedPermissionUpdate(toolPermissionContext, {
@@ -170,13 +195,13 @@ function mergeTrustedDirectories(toolPermissionContext, r) {
   });
 }
 //@ chunk-pc1rmcr2.js:3941-3975 placement
-function normalizeDirectoryPath(e, r) {
-  return resolve(expandPath(e, r));
+function normalizeDirectoryPath(directory, baseDir) {
+  return resolve(expandPath(directory, baseDir));
 }
 //@ chunk-pc1rmcr2.js:3975-4026 placement
-function safeNormalizedDirectories(e, r) {
+function safeNormalizedDirectories(directory, baseDir) {
   try {
-    return [normalizeDirectoryPath(e, r)];
+    return [normalizeDirectoryPath(directory, baseDir)];
   } catch {
     return [];
   }

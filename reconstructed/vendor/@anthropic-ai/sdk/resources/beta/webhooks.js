@@ -5,12 +5,12 @@
  * pieces: chunk-hwmsct5x.js (2)
  * attribution: esm-layout 1, esm-fingerprint 1
  */
-import { Re } from "../../../../../runtime/bun-runtime.js";
+import { __toESM } from "../../../../../runtime/bun-runtime.js";
 import { require_standardwebhooks } from "../../../../standardwebhooks/dist/index.js";
 import { APIResource } from "../../core/resource.mjs";
 
 //@ chunk-hwmsct5x.js:53298-53316 esm-layout
-var import_standardwebhooks = Re(require_standardwebhooks(), 1);
+var import_standardwebhooks = __toESM(require_standardwebhooks(), 1);
 //@ chunk-hwmsct5x.js:53316-53673 esm-fingerprint
 class Webhooks extends APIResource {
   parseUnverified(body) {

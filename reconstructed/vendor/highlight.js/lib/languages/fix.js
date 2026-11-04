@@ -5,10 +5,10 @@
  * pieces: chunk-egr0twnb.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../../runtime/bun-runtime.js";
 
 //@ chunk-egr0twnb.js:139327-139720 cjs-fingerprint
-var require_fix = x(function (cjsExports, cjsModule) {
+var require_fix = __commonJS(function (cjsExports, cjsModule) {
   function fix(hljs) {
     return {
       name: "FIX",

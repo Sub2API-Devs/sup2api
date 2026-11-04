@@ -8,10 +8,10 @@
  * pieces: chunk-18hwfzwa.js (17)
  * attribution: placement 17
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useInputClock } from "../../ink/components/Input.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { R, y } from "../../../vendor/react/cjs/react.production.js";
+import { useRef, useState } from "../../../vendor/react/cjs/react.production.js";
 import {
   isWithinRecentInput,
   RECENT_INPUT_GUARD_MS as RECENT_INPUT_GUARD_MS_3,
@@ -42,34 +42,35 @@ import { TextInput } from "../TextInput.js";
 import { BulletRow } from "../design-system/BulletRow.js";
 import { StatusRow } from "../Settings/Status.js";
 import { ConfirmSelect } from "../design-system/ConfirmSelect.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-18hwfzwa.js:1057801-1057834 placement
 function getSurveyOpenedAtMs() {
   return Date.now();
 }
 //@ chunk-18hwfzwa.js:1057834-1057868 placement
-function isNotNull(Go) {
-  return Go !== null;
+function isNotNull(value) {
+  return value !== null;
 }
 //@ chunk-18hwfzwa.js:1057868-1057923 placement
-function toSingleSelectOption(hn) {
+function toSingleSelectOption(option) {
   return {
-    label: hn.label,
-    value: hn.value,
+    label: option.label,
+    value: option.value,
   };
 }
 //@ chunk-18hwfzwa.js:1057923-1057978 placement
-function toMultiSelectOption(Mn) {
+function toMultiSelectOption(option) {
   return {
-    label: Mn.label,
-    value: Mn.value,
+    label: option.label,
+    value: option.value,
   };
 }
 //@ chunk-18hwfzwa.js:1057978-1057994 placement
 function noopCancel() {}
 //@ chunk-18hwfzwa.js:1057994-1058023 placement
-function incrementByOne(Io) {
-  return Io + 1;
+function incrementByOne(value) {
+  return value + 1;
 }
 //@ chunk-18hwfzwa.js:1058023-1058051 placement
 var RECENT_INPUT_GUARD_MS = 400;
@@ -79,393 +80,399 @@ var CARET_GUARD_MS = 100;
 /**
  * 组织问卷的误触保护：记录打开/最近按键时间，返回判断"是否仍在近期输入窗口内"的函数。
  */
-function useRecentInputGuard(h) {
-  let $ = w(4);
+function useRecentInputGuard(windowMs) {
+  let $ = useMemoCache(4);
   let inputClock = useInputClock();
-  let L;
+  let now;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    L = Date.now();
-    $[0] = L;
-  } else L = $[0];
-  let ee = R(L);
-  let ke = R(Number.NEGATIVE_INFINITY);
-  let Re;
-  if ($[1] !== inputClock || $[2] !== h) {
-    Re = () => {
-      let Be = inputClock();
-      if (Be - ke.current < CARET_GUARD_MS) ee.current = Math.max(Be, ee.current);
-      ke.current = Math.max(Be, ke.current);
-      return isWithinRecentInput(inputClock, ee.current, h);
+    now = Date.now();
+    $[0] = now;
+  } else now = $[0];
+  let lastInputAtRef = useRef(now);
+  let lastEventAtRef = useRef(Number.NEGATIVE_INFINITY);
+  let check;
+  if ($[1] !== inputClock || $[2] !== windowMs) {
+    check = () => {
+      let now = inputClock();
+      if (now - lastEventAtRef.current < CARET_GUARD_MS)
+        lastInputAtRef.current = Math.max(now, lastInputAtRef.current);
+      lastEventAtRef.current = Math.max(now, lastEventAtRef.current);
+      return isWithinRecentInput(inputClock, lastInputAtRef.current, windowMs);
     };
     $[1] = inputClock;
-    $[2] = h;
-    $[3] = Re;
-  } else Re = $[3];
-  return Re;
+    $[2] = windowMs;
+    $[3] = check;
+  } else check = $[3];
+  return check;
 }
 //@ chunk-18hwfzwa.js:1058380-1058448 placement
-var LIST_FORMATTER = new Intl.ListFormat("en", {
-  style: "long",
-  type: "conjunction",
+var LIST_FORMATTER; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-18hwfzwa.js:1058380", () => {
+  LIST_FORMATTER = new Intl.ListFormat("en", {
+    style: "long",
+    type: "conjunction",
+  });
 });
 //@ chunk-18hwfzwa.js:1058448-1061293 placement
 /**
  * OrgSurveyDialog：组织调查问卷对话框。
  */
 function OrgSurveyDialog(props) {
-  let $ = w(54);
+  let $ = useMemoCache(54);
   let { survey, initialDraft, onDraftChange, onSubmit, onClose } = props;
   let inputClock = useInputClock();
-  let [Be] = y(getSurveyOpenedAtMs);
-  let [He, We] = y(initialDraft);
-  let [ze, Xe] = y(0);
-  let [rt, kt] = y(false);
-  let At = R(false);
-  let [It, Ot] = y(false);
+  let [openedAt] = useState(getSurveyOpenedAtMs);
+  let [draft, setDraft] = useState(initialDraft);
+  let [currentIndex, setCurrentIndex] = useState(0);
+  let [isSending, setIsSending] = useState(false);
+  let submittingRef = useRef(false);
+  let [submitFailed, setSubmitFailed] = useState(false);
   let questions = survey.questions;
-  let Dt = questions.length;
-  let Lt = ze < Dt ? questions[ze] : undefined;
-  let Xt;
-  if ($[0] !== inputClock || $[1] !== Be) {
-    Xt = () => isWithinRecentInput(inputClock, Be, RECENT_INPUT_GUARD_MS);
+  let questionCount = questions.length;
+  let currentQuestion = currentIndex < questionCount ? questions[currentIndex] : undefined;
+  let inOpenGraceCached;
+  if ($[0] !== inputClock || $[1] !== openedAt) {
+    inOpenGraceCached = () => isWithinRecentInput(inputClock, openedAt, RECENT_INPUT_GUARD_MS);
     $[0] = inputClock;
-    $[1] = Be;
-    $[2] = Xt;
-  } else Xt = $[2];
-  let io = Xt;
-  let so;
-  if ($[3] !== He || $[4] !== onDraftChange) {
-    so = function bo(po, ao) {
-      let co = {
-        ...He,
-        [po]: ao,
+    $[1] = openedAt;
+    $[2] = inOpenGraceCached;
+  } else inOpenGraceCached = $[2];
+  let inOpenGrace = inOpenGraceCached;
+  let setAnswerCached;
+  if ($[3] !== draft || $[4] !== onDraftChange) {
+    setAnswerCached = function setAnswer(questionId, value) {
+      let nextDraft = {
+        ...draft,
+        [questionId]: value,
       };
-      We(co);
-      onDraftChange(co);
+      setDraft(nextDraft);
+      onDraftChange(nextDraft);
     };
-    $[3] = He;
+    $[3] = draft;
     $[4] = onDraftChange;
-    $[5] = so;
-  } else so = $[5];
-  let bo = so;
-  let Ao;
-  if ($[6] !== Dt) {
-    Ao = function Ho(Bo) {
-      Xe((Ro) => Math.min(Math.max(Ro + Bo, 0), Dt));
+    $[5] = setAnswerCached;
+  } else setAnswerCached = $[5];
+  let answerQuestion = setAnswerCached;
+  let moveCached;
+  if ($[6] !== questionCount) {
+    moveCached = function moveBy(delta) {
+      setCurrentIndex((previous) => Math.min(Math.max(previous + delta, 0), questionCount));
     };
-    $[6] = Dt;
-    $[7] = Ao;
-  } else Ao = $[7];
-  let Ho = Ao;
-  let Io;
-  if ($[8] !== Ho) {
-    Io = {
-      "tabs:previous": () => Ho(-1),
-      "tabs:next": () => Ho(1),
+    $[6] = questionCount;
+    $[7] = moveCached;
+  } else moveCached = $[7];
+  let moveQuestion = moveCached;
+  let tabBindings;
+  if ($[8] !== moveQuestion) {
+    tabBindings = {
+      "tabs:previous": () => moveQuestion(-1),
+      "tabs:next": () => moveQuestion(1),
     };
-    $[8] = Ho;
-    $[9] = Io;
-  } else Io = $[9];
-  const isActive = !rt && Lt?.kind !== "text";
-  let mn;
+    $[8] = moveQuestion;
+    $[9] = tabBindings;
+  } else tabBindings = $[9];
+  const isActive = !isSending && currentQuestion?.kind !== "text";
+  let tabKeybindingOptions;
   if ($[10] !== isActive) {
-    mn = {
+    tabKeybindingOptions = {
       context: "Tabs",
       isActive,
     };
     $[10] = isActive;
-    $[11] = mn;
-  } else mn = $[11];
-  MessageActionsKeybindings(Io, mn);
-  let Cn;
-  if ($[12] !== Ho) {
-    Cn = (No, vo) => {
-      if (!vo.tab) {
+    $[11] = tabKeybindingOptions;
+  } else tabKeybindingOptions = $[11];
+  MessageActionsKeybindings(tabBindings, tabKeybindingOptions);
+  let tabKeyHandlerCached;
+  if ($[12] !== moveQuestion) {
+    tabKeyHandlerCached = (input, key) => {
+      if (!key.tab) {
         return;
       }
-      Ho(vo.shift ? -1 : 1);
+      moveQuestion(key.shift ? -1 : 1);
       return true;
     };
-    $[12] = Ho;
-    $[13] = Cn;
-  } else Cn = $[13];
-  const isActive_2 = !rt && Lt?.kind === "text";
-  let kn;
+    $[12] = moveQuestion;
+    $[13] = tabKeyHandlerCached;
+  } else tabKeyHandlerCached = $[13];
+  const isActive_2 = !isSending && currentQuestion?.kind === "text";
+  let textKeyOptions;
   if ($[14] !== isActive_2) {
-    kn = {
+    textKeyOptions = {
       isActive: isActive_2,
     };
     $[14] = isActive_2;
-    $[15] = kn;
-  } else kn = $[15];
-  usePreDispatchKeyHandler(Cn, kn);
-  let Fn;
-  if ($[16] !== io || $[17] !== onClose) {
-    Fn = (input, key) => {
-      if (!key.escape || io()) {
+    $[15] = textKeyOptions;
+  } else textKeyOptions = $[15];
+  usePreDispatchKeyHandler(tabKeyHandlerCached, textKeyOptions);
+  let escapeHandlerCached;
+  if ($[16] !== inOpenGrace || $[17] !== onClose) {
+    escapeHandlerCached = (input, key) => {
+      if (!key.escape || inOpenGrace()) {
         return;
       }
       onClose();
       return true;
     };
-    $[16] = io;
+    $[16] = inOpenGrace;
     $[17] = onClose;
-    $[18] = Fn;
-  } else Fn = $[18];
-  const isActive_3 = !rt;
-  let Mn;
+    $[18] = escapeHandlerCached;
+  } else escapeHandlerCached = $[18];
+  const isActive_3 = !isSending;
+  let escapeKeyOptions;
   if ($[19] !== isActive_3) {
-    Mn = {
+    escapeKeyOptions = {
       isActive: isActive_3,
     };
     $[19] = isActive_3;
-    $[20] = Mn;
-  } else Mn = $[20];
-  usePreDispatchKeyHandler(Fn, Mn);
-  let Xo;
-  if ($[21] !== He || $[22] !== questions) {
-    let Sn;
-    if ($[24] !== He) {
-      Sn = ($n) => $n.required && !hasAnswer(ownValue(He, $n.id));
-      $[24] = He;
-      $[25] = Sn;
-    } else Sn = $[25];
-    Xo = questions.filter(Sn);
-    $[21] = He;
+    $[20] = escapeKeyOptions;
+  } else escapeKeyOptions = $[20];
+  usePreDispatchKeyHandler(escapeHandlerCached, escapeKeyOptions);
+  let missingRequiredCached;
+  if ($[21] !== draft || $[22] !== questions) {
+    let isUnanswered;
+    if ($[24] !== draft) {
+      isUnanswered = (question) => question.required && !hasAnswer(ownValue(draft, question.id));
+      $[24] = draft;
+      $[25] = isUnanswered;
+    } else isUnanswered = $[25];
+    missingRequiredCached = questions.filter(isUnanswered);
+    $[21] = draft;
     $[22] = questions;
-    $[23] = Xo;
-  } else Xo = $[23];
-  let on = Xo;
-  let Sn;
-  if ($[26] !== He || $[27] !== on || $[28] !== onSubmit || $[29] !== questions) {
-    Sn = async function _o() {
-      if (At.current) {
+    $[23] = missingRequiredCached;
+  } else missingRequiredCached = $[23];
+  let missingRequired = missingRequiredCached;
+  let submitCached;
+  if ($[26] !== draft || $[27] !== missingRequired || $[28] !== onSubmit || $[29] !== questions) {
+    submitCached = async function handleSubmit() {
+      if (submittingRef.current) {
         return;
       }
-      if (on.length > 0) {
-        Xe(questions.indexOf(on[0]));
+      if (missingRequired.length > 0) {
+        setCurrentIndex(questions.indexOf(missingRequired[0]));
         return;
       }
-      At.current = true;
-      kt(true);
-      Ot(false);
-      if ((await onSubmit(collectQuestionAnswers(questions, He))) === "failed") {
-        At.current = false;
-        kt(false);
-        Ot(true);
+      submittingRef.current = true;
+      setIsSending(true);
+      setSubmitFailed(false);
+      if ((await onSubmit(collectQuestionAnswers(questions, draft))) === "failed") {
+        submittingRef.current = false;
+        setIsSending(false);
+        setSubmitFailed(true);
       }
     };
-    $[26] = He;
-    $[27] = on;
+    $[26] = draft;
+    $[27] = missingRequired;
     $[28] = onSubmit;
     $[29] = questions;
-    $[30] = Sn;
-  } else Sn = $[30];
-  let _o = Sn;
-  let cn;
+    $[30] = submitCached;
+  } else submitCached = $[30];
+  let submitSurvey = submitCached;
+  let dividerElement;
   if ($[31] === MEMO_CACHE_SENTINEL) {
-    cn = jsxProd_default(Divider, {
+    dividerElement = jsxProd_default(Divider, {
       color: "inactive",
     });
-    $[31] = cn;
-  } else cn = $[31];
-  let Dn;
-  if ($[32] !== He || $[33] !== ze || $[34] !== questions) {
-    Dn = jsxProd_default(OrgSurveyTabs, {
+    $[31] = dividerElement;
+  } else dividerElement = $[31];
+  let tabsElement;
+  if ($[32] !== draft || $[33] !== currentIndex || $[34] !== questions) {
+    tabsElement = jsxProd_default(OrgSurveyTabs, {
       questions,
-      draft: He,
-      currentIndex: ze,
+      draft,
+      currentIndex,
     });
-    $[32] = He;
-    $[33] = ze;
+    $[32] = draft;
+    $[33] = currentIndex;
     $[34] = questions;
-    $[35] = Dn;
-  } else Dn = $[35];
-  let wn;
+    $[35] = tabsElement;
+  } else tabsElement = $[35];
+  let bodyElement;
   if (
-    $[36] !== He ||
-    $[37] !== io ||
-    $[38] !== ze ||
-    $[39] !== on ||
-    $[40] !== Ho ||
+    $[36] !== draft ||
+    $[37] !== inOpenGrace ||
+    $[38] !== currentIndex ||
+    $[39] !== missingRequired ||
+    $[40] !== moveQuestion ||
     $[41] !== onClose ||
-    $[42] !== Lt ||
+    $[42] !== currentQuestion ||
     $[43] !== questions ||
-    $[44] !== Dt ||
-    $[45] !== rt ||
-    $[46] !== _o ||
-    $[47] !== It ||
+    $[44] !== questionCount ||
+    $[45] !== isSending ||
+    $[46] !== submitSurvey ||
+    $[47] !== submitFailed ||
     $[48] !== survey.orgName ||
-    $[49] !== bo
+    $[49] !== answerQuestion
   ) {
-    wn = Lt
+    bodyElement = currentQuestion
       ? jsxProd_default(
           OrgSurveyQuestion,
           {
-            question: Lt,
+            question: currentQuestion,
             orgName: survey.orgName,
-            isLast: ze === Dt - 1,
-            value: ownValue(He, Lt.id),
-            inOpenGrace: io,
-            onChange: (mr) => bo(Lt.id, mr),
-            onNext: () => Ho(1),
+            isLast: currentIndex === questionCount - 1,
+            value: ownValue(draft, currentQuestion.id),
+            inOpenGrace,
+            onChange: (value) => answerQuestion(currentQuestion.id, value),
+            onNext: () => moveQuestion(1),
           },
-          Lt.id,
+          currentQuestion.id,
         )
       : jsxProd_default(OrgSurveyReview, {
           questions,
-          draft: He,
+          draft,
           orgName: survey.orgName,
-          missingRequired: on,
-          sending: rt,
-          submitFailed: It,
-          onSubmit: () => void _o(),
+          missingRequired,
+          sending: isSending,
+          submitFailed,
+          onSubmit: () => void submitSurvey(),
           onCancel: onClose,
         });
-    $[36] = He;
-    $[37] = io;
-    $[38] = ze;
-    $[39] = on;
-    $[40] = Ho;
+    $[36] = draft;
+    $[37] = inOpenGrace;
+    $[38] = currentIndex;
+    $[39] = missingRequired;
+    $[40] = moveQuestion;
     $[41] = onClose;
-    $[42] = Lt;
+    $[42] = currentQuestion;
     $[43] = questions;
-    $[44] = Dt;
-    $[45] = rt;
-    $[46] = _o;
-    $[47] = It;
+    $[44] = questionCount;
+    $[45] = isSending;
+    $[46] = submitSurvey;
+    $[47] = submitFailed;
     $[48] = survey.orgName;
-    $[49] = bo;
-    $[50] = wn;
-  } else wn = $[50];
-  let Kn;
-  if ($[51] !== Dn || $[52] !== wn) {
-    Kn = jsxProd_default_2(Box, {
+    $[49] = answerQuestion;
+    $[50] = bodyElement;
+  } else bodyElement = $[50];
+  let dialogBody;
+  if ($[51] !== tabsElement || $[52] !== bodyElement) {
+    dialogBody = jsxProd_default_2(Box, {
       flexDirection: "column",
       tabIndex: 0,
       autoFocus: true,
-      children: [cn, Dn, wn],
+      children: [dividerElement, tabsElement, bodyElement],
     });
-    $[51] = Dn;
-    $[52] = wn;
-    $[53] = Kn;
-  } else Kn = $[53];
-  return Kn;
+    $[51] = tabsElement;
+    $[52] = bodyElement;
+    $[53] = dialogBody;
+  } else dialogBody = $[53];
+  return dialogBody;
 }
 //@ chunk-18hwfzwa.js:1061293-1062376 placement
 function OrgSurveyTabs(props) {
-  let $ = w(19);
+  let $ = useMemoCache(19);
   let { questions, draft, currentIndex } = props;
-  let ee = questions.length;
+  let questionCount = questions.length;
   const color = currentIndex === 0 ? "inactive" : undefined;
-  let Be;
+  let backArrow;
   if ($[0] !== color) {
-    Be = jsxProd_default(Text, {
+    backArrow = jsxProd_default(Text, {
       color,
       children: "\u2190 ",
     });
     $[0] = color;
-    $[1] = Be;
-  } else Be = $[1];
-  let He;
+    $[1] = backArrow;
+  } else backArrow = $[1];
+  let questionTabs;
   if ($[2] !== currentIndex || $[3] !== draft || $[4] !== questions) {
-    let We;
+    let renderTab;
     if ($[6] !== currentIndex || $[7] !== draft) {
-      We = (ze, Xe) =>
+      renderTab = (question, index) =>
         jsxProd_default(
           Box,
           {
             children: jsxProd_default_2(TagTabs, {
-              color: Xe === currentIndex ? "permission" : undefined,
+              color: index === currentIndex ? "permission" : undefined,
               padded: true,
               children: [
-                hasAnswer(ownValue(draft, ze.id)) ? figures_default.checkboxOn : figures_default.checkboxOff,
+                hasAnswer(ownValue(draft, question.id))
+                  ? figures_default.checkboxOn
+                  : figures_default.checkboxOff,
                 " ",
-                Xe + 1,
+                index + 1,
               ],
             }),
           },
-          ze.id,
+          question.id,
         );
       $[6] = currentIndex;
       $[7] = draft;
-      $[8] = We;
-    } else We = $[8];
-    He = questions.map(We);
+      $[8] = renderTab;
+    } else renderTab = $[8];
+    questionTabs = questions.map(renderTab);
     $[2] = currentIndex;
     $[3] = draft;
     $[4] = questions;
-    $[5] = He;
-  } else He = $[5];
-  const color_2 = currentIndex === ee ? "permission" : undefined;
-  let rt;
+    $[5] = questionTabs;
+  } else questionTabs = $[5];
+  const color_2 = currentIndex === questionCount ? "permission" : undefined;
+  let checkIcon;
   if ($[9] === MEMO_CACHE_SENTINEL) {
-    rt = jsxProd_default(StatusIcon, {
+    checkIcon = jsxProd_default(StatusIcon, {
       status: "success",
     });
-    $[9] = rt;
-  } else rt = $[9];
-  let kt;
+    $[9] = checkIcon;
+  } else checkIcon = $[9];
+  let submitTab;
   if ($[10] !== color_2) {
-    kt = jsxProd_default_2(TagTabs, {
+    submitTab = jsxProd_default_2(TagTabs, {
       color: color_2,
       padded: true,
-      children: [rt, " Submit"],
+      children: [checkIcon, " Submit"],
     });
     $[10] = color_2;
-    $[11] = kt;
-  } else kt = $[11];
-  const color_3 = currentIndex === ee ? "inactive" : undefined;
-  let It;
+    $[11] = submitTab;
+  } else submitTab = $[11];
+  const color_3 = currentIndex === questionCount ? "inactive" : undefined;
+  let forwardArrow;
   if ($[12] !== color_3) {
-    It = jsxProd_default_2(Text, {
+    forwardArrow = jsxProd_default_2(Text, {
       color: color_3,
       children: [" ", "\u2192"],
     });
     $[12] = color_3;
-    $[13] = It;
-  } else It = $[13];
-  let Ot;
-  if ($[14] !== Be || $[15] !== He || $[16] !== kt || $[17] !== It) {
-    Ot = jsxProd_default_2(Box, {
+    $[13] = forwardArrow;
+  } else forwardArrow = $[13];
+  let tabsRow;
+  if ($[14] !== backArrow || $[15] !== questionTabs || $[16] !== submitTab || $[17] !== forwardArrow) {
+    tabsRow = jsxProd_default_2(Box, {
       flexDirection: "row",
       marginBottom: 1,
-      children: [Be, He, kt, It],
+      children: [backArrow, questionTabs, submitTab, forwardArrow],
     });
-    $[14] = Be;
-    $[15] = He;
-    $[16] = kt;
-    $[17] = It;
-    $[18] = Ot;
-  } else Ot = $[18];
-  return Ot;
+    $[14] = backArrow;
+    $[15] = questionTabs;
+    $[16] = submitTab;
+    $[17] = forwardArrow;
+    $[18] = tabsRow;
+  } else tabsRow = $[18];
+  return tabsRow;
 }
 //@ chunk-18hwfzwa.js:1062376-1065714 placement
 /**
  * 组织调查中的单个问题。
  */
 function OrgSurveyQuestion(props) {
-  let $ = w(62);
-  let { question, orgName, isLast, value: ee, inOpenGrace, onChange, onNext } = props;
+  let $ = useMemoCache(62);
+  let { question, orgName, isLast, value, inOpenGrace, onChange, onNext } = props;
   let recentInputGuard = useRecentInputGuard(RECENT_INPUT_GUARD_MS_3);
-  let ze;
+  let shouldRefuseCached;
   if ($[0] !== inOpenGrace || $[1] !== recentInputGuard) {
-    ze = () => {
-      let Xe = inOpenGrace();
-      let rt = recentInputGuard();
-      return Xe || rt;
+    shouldRefuseCached = () => {
+      let inGrace = inOpenGrace();
+      let recentInput = recentInputGuard();
+      return inGrace || recentInput;
     };
     $[0] = inOpenGrace;
     $[1] = recentInputGuard;
-    $[2] = ze;
-  } else ze = $[2];
-  let kt = ze;
-  let It = useIsScreenReaderEnabled() ? true : false;
+    $[2] = shouldRefuseCached;
+  } else shouldRefuseCached = $[2];
+  let shouldRefuse = shouldRefuseCached;
+  let isScreenReader = useIsScreenReaderEnabled() ? true : false;
   let inputRefusalWindow = useInputRefusalWindow(RECENT_INPUT_GUARD_MS_3);
   let { refusedWithin, noteRefused } = useRefusalTracker();
-  let Lt;
+  let refuseInput;
   if ($[3] !== inOpenGrace || $[4] !== inputRefusalWindow || $[5] !== noteRefused || $[6] !== refusedWithin) {
-    Lt = () => {
+    refuseInput = () => {
       if (inOpenGrace() || inputRefusalWindow() || refusedWithin(RECENT_INPUT_GUARD_MS_3)) {
         noteRefused();
         return true;
@@ -476,31 +483,31 @@ function OrgSurveyQuestion(props) {
     $[4] = inputRefusalWindow;
     $[5] = noteRefused;
     $[6] = refusedWithin;
-    $[7] = Lt;
-  } else Lt = $[7];
-  let refuseInput = Lt;
-  const Xt = question.kind === "multi_select" ? "(Select all that apply)" : null;
-  const io = question.required ? null : "(optional)";
-  let so;
-  if ($[8] !== Xt || $[9] !== io) {
-    so = [Xt, io].filter(isNotNull);
-    $[8] = Xt;
-    $[9] = io;
-    $[10] = so;
-  } else so = $[10];
-  let joined = so.join(" ");
-  let ao;
+    $[7] = refuseInput;
+  } else refuseInput = $[7];
+  let refuseInput_2 = refuseInput;
+  const multiSelectHint = question.kind === "multi_select" ? "(Select all that apply)" : null;
+  const optionalHint = question.required ? null : "(optional)";
+  let hintParts;
+  if ($[8] !== multiSelectHint || $[9] !== optionalHint) {
+    hintParts = [multiSelectHint, optionalHint].filter(isNotNull);
+    $[8] = multiSelectHint;
+    $[9] = optionalHint;
+    $[10] = hintParts;
+  } else hintParts = $[10];
+  let joined = hintParts.join(" ");
+  let orgLine;
   if ($[11] !== orgName) {
-    ao = jsxProd_default_2(Text, {
+    orgLine = jsxProd_default_2(Text, {
       dimColor: true,
       children: ["Survey from ", orgName],
     });
     $[11] = orgName;
-    $[12] = ao;
-  } else ao = $[12];
-  let co;
+    $[12] = orgLine;
+  } else orgLine = $[12];
+  let hintText;
   if ($[13] !== joined) {
-    co = joined
+    hintText = joined
       ? jsxProd_default(Text, {
           bold: false,
           dimColor: true,
@@ -508,22 +515,22 @@ function OrgSurveyQuestion(props) {
         })
       : null;
     $[13] = joined;
-    $[14] = co;
-  } else co = $[14];
-  let bo;
-  if ($[15] !== question.text || $[16] !== co) {
-    bo = jsxProd_default_2(Text, {
+    $[14] = hintText;
+  } else hintText = $[14];
+  let questionLine;
+  if ($[15] !== question.text || $[16] !== hintText) {
+    questionLine = jsxProd_default_2(Text, {
       bold: true,
       wrap: "wrap",
-      children: [question.text, co],
+      children: [question.text, hintText],
     });
     $[15] = question.text;
-    $[16] = co;
-    $[17] = bo;
-  } else bo = $[17];
-  let Ao;
+    $[16] = hintText;
+    $[17] = questionLine;
+  } else questionLine = $[17];
+  let helperLine;
   if ($[18] !== question.helperText) {
-    Ao =
+    helperLine =
       question.helperText !== null &&
       jsxProd_default(Text, {
         dimColor: true,
@@ -531,209 +538,222 @@ function OrgSurveyQuestion(props) {
         children: question.helperText,
       });
     $[18] = question.helperText;
-    $[19] = Ao;
-  } else Ao = $[19];
-  let Bo;
+    $[19] = helperLine;
+  } else helperLine = $[19];
+  let singleSelectElement;
   if (
-    $[20] !== kt ||
+    $[20] !== shouldRefuse ||
     $[21] !== onChange ||
     $[22] !== onNext ||
     $[23] !== question.kind ||
     $[24] !== question.options ||
-    $[25] !== refuseInput ||
-    $[26] !== ee
+    $[25] !== refuseInput_2 ||
+    $[26] !== value
   ) {
-    Bo =
+    singleSelectElement =
       question.kind === "single_select" &&
       jsxProd_default(ModelSelector, {
         options: question.options.map(toSingleSelectOption),
-        selectedValue: typeof ee === "string" ? ee : NO_COMMITTED_ROW,
+        selectedValue: typeof value === "string" ? value : NO_COMMITTED_ROW,
         visibleOptionCount: 8,
         layout: "compact-vertical",
-        refuseInput,
-        onChange: (Ro) => {
-          if (kt()) {
+        refuseInput: refuseInput_2,
+        onChange: (nextValue) => {
+          if (shouldRefuse()) {
             return false;
           }
-          onChange(Ro);
+          onChange(nextValue);
           onNext();
         },
       });
-    $[20] = kt;
+    $[20] = shouldRefuse;
     $[21] = onChange;
     $[22] = onNext;
     $[23] = question.kind;
     $[24] = question.options;
-    $[25] = refuseInput;
-    $[26] = ee;
-    $[27] = Bo;
-  } else Bo = $[27];
-  let Ho;
+    $[25] = refuseInput_2;
+    $[26] = value;
+    $[27] = singleSelectElement;
+  } else singleSelectElement = $[27];
+  let multiSelectElement;
   if (
-    $[28] !== It ||
-    $[29] !== kt ||
+    $[28] !== isScreenReader ||
+    $[29] !== shouldRefuse ||
     $[30] !== isLast ||
     $[31] !== onChange ||
     $[32] !== onNext ||
     $[33] !== question.kind ||
     $[34] !== question.options ||
-    $[35] !== refuseInput ||
-    $[36] !== ee
+    $[35] !== refuseInput_2 ||
+    $[36] !== value
   ) {
-    Ho =
+    multiSelectElement =
       question.kind === "multi_select" &&
       jsxProd_default(SelectMultiAccessible, {
         options: question.options.map(toMultiSelectOption),
-        defaultValue: Array.isArray(ee) ? [...ee] : [],
+        defaultValue: Array.isArray(value) ? [...value] : [],
         visibleOptionCount: 8,
         submitButtonText: isLast ? "Review" : "Next",
-        refuseInput,
-        onChange: (Io) => {
-          if (kt()) {
+        refuseInput: refuseInput_2,
+        onChange: (nextValues) => {
+          if (shouldRefuse()) {
             return false;
           }
-          onChange(Io);
+          onChange(nextValues);
         },
         onSubmit: () => {
-          if (It || !kt()) onNext();
+          if (isScreenReader || !shouldRefuse()) onNext();
         },
         onCancel: noopCancel,
       });
-    $[28] = It;
-    $[29] = kt;
+    $[28] = isScreenReader;
+    $[29] = shouldRefuse;
     $[30] = isLast;
     $[31] = onChange;
     $[32] = onNext;
     $[33] = question.kind;
     $[34] = question.options;
-    $[35] = refuseInput;
-    $[36] = ee;
-    $[37] = Ho;
-  } else Ho = $[37];
-  let Wo;
-  if ($[38] !== kt || $[39] !== onChange || $[40] !== onNext || $[41] !== question.kind || $[42] !== ee) {
-    Wo =
+    $[35] = refuseInput_2;
+    $[36] = value;
+    $[37] = multiSelectElement;
+  } else multiSelectElement = $[37];
+  let textInputElement;
+  if (
+    $[38] !== shouldRefuse ||
+    $[39] !== onChange ||
+    $[40] !== onNext ||
+    $[41] !== question.kind ||
+    $[42] !== value
+  ) {
+    textInputElement =
       question.kind === "text" &&
       jsxProd_default(OrgSurveyTextInput, {
-        value: typeof ee === "string" ? ee : "",
-        inGrace: kt,
+        value: typeof value === "string" ? value : "",
+        inGrace: shouldRefuse,
         onChange,
         onSubmit: onNext,
       });
-    $[38] = kt;
+    $[38] = shouldRefuse;
     $[39] = onChange;
     $[40] = onNext;
     $[41] = question.kind;
-    $[42] = ee;
-    $[43] = Wo;
-  } else Wo = $[43];
-  let mn;
-  if ($[44] !== Bo || $[45] !== Ho || $[46] !== Wo) {
-    mn = jsxProd_default_2(Box, {
+    $[42] = value;
+    $[43] = textInputElement;
+  } else textInputElement = $[43];
+  let answerElement;
+  if ($[44] !== singleSelectElement || $[45] !== multiSelectElement || $[46] !== textInputElement) {
+    answerElement = jsxProd_default_2(Box, {
       marginTop: 1,
       flexDirection: "column",
-      children: [Bo, Ho, Wo],
+      children: [singleSelectElement, multiSelectElement, textInputElement],
     });
-    $[44] = Bo;
-    $[45] = Ho;
-    $[46] = Wo;
-    $[47] = mn;
-  } else mn = $[47];
+    $[44] = singleSelectElement;
+    $[45] = multiSelectElement;
+    $[46] = textInputElement;
+    $[47] = answerElement;
+  } else answerElement = $[47];
   const action = question.kind === "text" ? "continue" : "select";
-  let No;
+  let enterHint;
   if ($[48] !== action) {
-    No = jsxProd_default(KeyboardShortcutHint, {
+    enterHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "enter",
       action,
     });
     $[48] = action;
-    $[49] = No;
-  } else No = $[49];
-  const vo = question.kind === "text" ? "Tab" : "Tab/Arrow keys";
-  let Yo;
-  if ($[50] !== vo) {
-    Yo = jsxProd_default_2(Text, {
-      children: [vo, " to navigate"],
+    $[49] = enterHint;
+  } else enterHint = $[49];
+  const tabHintText = question.kind === "text" ? "Tab" : "Tab/Arrow keys";
+  let tabHint;
+  if ($[50] !== tabHintText) {
+    tabHint = jsxProd_default_2(Text, {
+      children: [tabHintText, " to navigate"],
     });
-    $[50] = vo;
-    $[51] = Yo;
-  } else Yo = $[51];
-  let kn;
+    $[50] = tabHintText;
+    $[51] = tabHint;
+  } else tabHint = $[51];
+  let escapeHint;
   if ($[52] === MEMO_CACHE_SENTINEL) {
-    kn = jsxProd_default(KeyboardShortcutHint, {
+    escapeHint = jsxProd_default(KeyboardShortcutHint, {
       chord: "escape",
       action: "close",
     });
-    $[52] = kn;
-  } else kn = $[52];
-  let Fn;
-  if ($[53] !== No || $[54] !== Yo) {
-    Fn = jsxProd_default(Box, {
+    $[52] = escapeHint;
+  } else escapeHint = $[52];
+  let hintsRow;
+  if ($[53] !== enterHint || $[54] !== tabHint) {
+    hintsRow = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default(Text, {
         dimColor: true,
         children: jsxProd_default_2(Byline, {
-          children: [No, Yo, kn],
+          children: [enterHint, tabHint, escapeHint],
         }),
       }),
     });
-    $[53] = No;
-    $[54] = Yo;
-    $[55] = Fn;
-  } else Fn = $[55];
-  let bn;
-  if ($[56] !== mn || $[57] !== Fn || $[58] !== ao || $[59] !== bo || $[60] !== Ao) {
-    bn = jsxProd_default_2(Box, {
+    $[53] = enterHint;
+    $[54] = tabHint;
+    $[55] = hintsRow;
+  } else hintsRow = $[55];
+  let questionElement;
+  if (
+    $[56] !== answerElement ||
+    $[57] !== hintsRow ||
+    $[58] !== orgLine ||
+    $[59] !== questionLine ||
+    $[60] !== helperLine
+  ) {
+    questionElement = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [ao, bo, Ao, mn, Fn],
+      children: [orgLine, questionLine, helperLine, answerElement, hintsRow],
     });
-    $[56] = mn;
-    $[57] = Fn;
-    $[58] = ao;
-    $[59] = bo;
-    $[60] = Ao;
-    $[61] = bn;
-  } else bn = $[61];
-  return bn;
+    $[56] = answerElement;
+    $[57] = hintsRow;
+    $[58] = orgLine;
+    $[59] = questionLine;
+    $[60] = helperLine;
+    $[61] = questionElement;
+  } else questionElement = $[61];
+  return questionElement;
 }
 //@ chunk-18hwfzwa.js:1065714-1067346 placement
 function OrgSurveyTextInput(props) {
-  let $ = w(26);
-  let { value: x, inGrace, onChange, onSubmit } = props;
+  let $ = useMemoCache(26);
+  let { value, inGrace, onChange, onSubmit } = props;
   let { columns } = useTerminalSize();
-  let [Re, Be] = y(x.length);
-  let He = R(Re);
-  let We = R(null);
-  let [, ze] = y(0);
-  let rt;
-  if ($[0] !== onChange || $[1] !== x) {
-    rt = function Ot(kt) {
-      let At = collapseToSingleLine(kt);
-      let It = clampTextEdit(x, At, DEFAULT_HEADLINE_DELAY_MS);
-      We.current = It.caret === "pass" ? null : It.caret === "keep" ? He.current : It.caret;
-      if (It.caret !== "pass" || At !== kt) ze(incrementByOne);
-      onChange(It.text);
+  let [cursorOffset, setCursorOffset] = useState(value.length);
+  let cursorOffsetRef = useRef(cursorOffset);
+  let pendingCaretRef = useRef(null);
+  let [, setTextVersion] = useState(0);
+  let changeCached;
+  if ($[0] !== onChange || $[1] !== value) {
+    changeCached = function handleChange(nextText) {
+      let singleLine = collapseToSingleLine(nextText);
+      let edit = clampTextEdit(value, singleLine, DEFAULT_HEADLINE_DELAY_MS);
+      pendingCaretRef.current =
+        edit.caret === "pass" ? null : edit.caret === "keep" ? cursorOffsetRef.current : edit.caret;
+      if (edit.caret !== "pass" || singleLine !== nextText) setTextVersion(incrementByOne);
+      onChange(edit.text);
     };
     $[0] = onChange;
-    $[1] = x;
-    $[2] = rt;
-  } else rt = $[2];
-  let onChange_2 = rt;
-  let Et;
-  if ($[3] !== x) {
-    Et = Array.from(x);
-    $[3] = x;
-    $[4] = Et;
-  } else Et = $[4];
-  let Dt = Et.length;
-  let Lt;
+    $[1] = value;
+    $[2] = changeCached;
+  } else changeCached = $[2];
+  let onChange_2 = changeCached;
+  let chars;
+  if ($[3] !== value) {
+    chars = Array.from(value);
+    $[3] = value;
+    $[4] = chars;
+  } else chars = $[4];
+  let charCount = chars.length;
+  let iconElement;
   if ($[5] === MEMO_CACHE_SENTINEL) {
-    Lt = jsxProd_default_2(Text, {
+    iconElement = jsxProd_default_2(Text, {
       color: "suggestion",
       children: [figures_default.pointer, " "],
     });
-    $[5] = Lt;
-  } else Lt = $[5];
+    $[5] = iconElement;
+  } else iconElement = $[5];
   let onSubmit_2;
   if ($[6] !== inGrace || $[7] !== onSubmit) {
     onSubmit_2 = () => {
@@ -746,25 +766,31 @@ function OrgSurveyTextInput(props) {
   const columns_2 = Math.min(Math.max(columns - 4, 20), 120);
   let onChangeCursorOffset;
   if ($[9] === MEMO_CACHE_SENTINEL) {
-    onChangeCursorOffset = (so) => {
-      let po = We.current ?? so;
-      We.current = null;
-      He.current = po;
-      Be(po);
+    onChangeCursorOffset = (nextOffset) => {
+      let caretOffset = pendingCaretRef.current ?? nextOffset;
+      pendingCaretRef.current = null;
+      cursorOffsetRef.current = caretOffset;
+      setCursorOffset(caretOffset);
     };
     $[9] = onChangeCursorOffset;
   } else onChangeCursorOffset = $[9];
-  let ao;
-  if ($[10] !== Re || $[11] !== onChange_2 || $[12] !== onSubmit_2 || $[13] !== columns_2 || $[14] !== x) {
-    ao = jsxProd_default_2(Box, {
+  let inputElement;
+  if (
+    $[10] !== cursorOffset ||
+    $[11] !== onChange_2 ||
+    $[12] !== onSubmit_2 ||
+    $[13] !== columns_2 ||
+    $[14] !== value
+  ) {
+    inputElement = jsxProd_default_2(Box, {
       children: [
-        Lt,
+        iconElement,
         jsxProd_default(TextInput, {
-          value: x,
+          value,
           onChange: onChange_2,
           onSubmit: onSubmit_2,
           columns: columns_2,
-          cursorOffset: Re,
+          cursorOffset,
           onChangeCursorOffset,
           focus: true,
           showCursor: true,
@@ -773,117 +799,121 @@ function OrgSurveyTextInput(props) {
         }),
       ],
     });
-    $[10] = Re;
+    $[10] = cursorOffset;
     $[11] = onChange_2;
     $[12] = onSubmit_2;
     $[13] = columns_2;
-    $[14] = x;
-    $[15] = ao;
-  } else ao = $[15];
-  const dimColor = Dt < DEFAULT_HEADLINE_DELAY_MS;
-  const color = Dt >= DEFAULT_HEADLINE_DELAY_MS ? "warning" : undefined;
-  let Ao;
-  if ($[16] !== Dt) {
-    Ao = Dt.toLocaleString("en-US");
-    $[16] = Dt;
-    $[17] = Ao;
-  } else Ao = $[17];
-  let Bo;
+    $[14] = value;
+    $[15] = inputElement;
+  } else inputElement = $[15];
+  const dimColor = charCount < DEFAULT_HEADLINE_DELAY_MS;
+  const color = charCount >= DEFAULT_HEADLINE_DELAY_MS ? "warning" : undefined;
+  let countText;
+  if ($[16] !== charCount) {
+    countText = charCount.toLocaleString("en-US");
+    $[16] = charCount;
+    $[17] = countText;
+  } else countText = $[17];
+  let limitText;
   if ($[18] === MEMO_CACHE_SENTINEL) {
-    Bo = DEFAULT_HEADLINE_DELAY_MS.toLocaleString("en-US");
-    $[18] = Bo;
-  } else Bo = $[18];
-  let Ro;
-  if ($[19] !== Ao || $[20] !== dimColor || $[21] !== color) {
-    Ro = jsxProd_default_2(Text, {
+    limitText = DEFAULT_HEADLINE_DELAY_MS.toLocaleString("en-US");
+    $[18] = limitText;
+  } else limitText = $[18];
+  let counterElement;
+  if ($[19] !== countText || $[20] !== dimColor || $[21] !== color) {
+    counterElement = jsxProd_default_2(Text, {
       dimColor,
       color,
-      children: [Ao, "/", Bo],
+      children: [countText, "/", limitText],
     });
-    $[19] = Ao;
+    $[19] = countText;
     $[20] = dimColor;
     $[21] = color;
-    $[22] = Ro;
-  } else Ro = $[22];
-  let Ho;
-  if ($[23] !== Ro || $[24] !== ao) {
-    Ho = jsxProd_default_2(Box, {
+    $[22] = counterElement;
+  } else counterElement = $[22];
+  let fieldElement;
+  if ($[23] !== counterElement || $[24] !== inputElement) {
+    fieldElement = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [ao, Ro],
+      children: [inputElement, counterElement],
     });
-    $[23] = Ro;
-    $[24] = ao;
-    $[25] = Ho;
-  } else Ho = $[25];
-  return Ho;
+    $[23] = counterElement;
+    $[24] = inputElement;
+    $[25] = fieldElement;
+  } else fieldElement = $[25];
+  return fieldElement;
 }
 //@ chunk-18hwfzwa.js:1067346-1069363 placement
 function OrgSurveyReview(props) {
-  let $ = w(28);
+  let $ = useMemoCache(28);
   let { questions, draft, orgName, missingRequired, sending, submitFailed, onSubmit, onCancel } = props;
   let recentInputGuard = useRecentInputGuard(SURVEY_INPUT_GUARD_MS);
-  let Xe;
+  let titleText;
   if ($[0] === MEMO_CACHE_SENTINEL) {
-    Xe = jsxProd_default(Text, {
+    titleText = jsxProd_default(Text, {
       bold: true,
       children: "Review your answers",
     });
-    $[0] = Xe;
-  } else Xe = $[0];
+    $[0] = titleText;
+  } else titleText = $[0];
   let children;
   if ($[1] !== draft || $[2] !== questions) {
-    let kt;
+    let hasAnswerFilter;
     if ($[4] !== draft) {
-      kt = (At) => hasAnswer(ownValue(draft, At.id));
+      hasAnswerFilter = (question) => hasAnswer(ownValue(draft, question.id));
       $[4] = draft;
-      $[5] = kt;
-    } else kt = $[5];
-    const filtered = questions.filter(kt);
-    let Ot;
+      $[5] = hasAnswerFilter;
+    } else hasAnswerFilter = $[5];
+    const filtered = questions.filter(hasAnswerFilter);
+    let renderAnswerRow;
     if ($[6] !== draft) {
-      Ot = (Et) =>
+      renderAnswerRow = (question) =>
         jsxProd_default_2(
           Box,
           {
             flexDirection: "column",
             children: [
               jsxProd_default(BulletRow, {
-                children: Et.text,
+                children: question.text,
               }),
               jsxProd_default(Box, {
                 marginLeft: 2,
                 children: jsxProd_default_2(Text, {
                   color: "success",
                   wrap: "wrap",
-                  children: [figures_default.arrowRight, " ", formatSurveyAnswer(Et, ownValue(draft, Et.id))],
+                  children: [
+                    figures_default.arrowRight,
+                    " ",
+                    formatSurveyAnswer(question, ownValue(draft, question.id)),
+                  ],
                 }),
               }),
             ],
           },
-          Et.id,
+          question.id,
         );
       $[6] = draft;
-      $[7] = Ot;
-    } else Ot = $[7];
-    children = filtered.map(Ot);
+      $[7] = renderAnswerRow;
+    } else renderAnswerRow = $[7];
+    children = filtered.map(renderAnswerRow);
     $[1] = draft;
     $[2] = questions;
     $[3] = children;
   } else children = $[3];
-  let kt;
+  let answersElement;
   if ($[8] !== children) {
-    kt = jsxProd_default(Box, {
+    answersElement = jsxProd_default(Box, {
       flexDirection: "column",
       marginTop: 1,
       marginLeft: 1,
       children,
     });
     $[8] = children;
-    $[9] = kt;
-  } else kt = $[9];
-  let It;
+    $[9] = answersElement;
+  } else answersElement = $[9];
+  let missingWarning;
   if ($[10] !== missingRequired || $[11] !== questions) {
-    It =
+    missingWarning =
       missingRequired.length > 0 &&
       jsxProd_default(Box, {
         marginTop: 1,
@@ -893,7 +923,7 @@ function OrgSurveyReview(props) {
             "Answer ",
             missingRequired.length === 1 ? "question" : "questions",
             " ",
-            LIST_FORMATTER.format(missingRequired.map((Dt) => String(questions.indexOf(Dt) + 1))),
+            LIST_FORMATTER.format(missingRequired.map((question) => String(questions.indexOf(question) + 1))),
             " ",
             "to submit.",
           ],
@@ -901,11 +931,11 @@ function OrgSurveyReview(props) {
       });
     $[10] = missingRequired;
     $[11] = questions;
-    $[12] = It;
-  } else It = $[12];
-  let Ot;
+    $[12] = missingWarning;
+  } else missingWarning = $[12];
+  let disclaimerElement;
   if ($[13] !== orgName) {
-    Ot = jsxProd_default(Box, {
+    disclaimerElement = jsxProd_default(Box, {
       marginTop: 1,
       children: jsxProd_default_2(Text, {
         dimColor: true,
@@ -922,11 +952,11 @@ function OrgSurveyReview(props) {
       }),
     });
     $[13] = orgName;
-    $[14] = Ot;
-  } else Ot = $[14];
-  let Lt;
+    $[14] = disclaimerElement;
+  } else disclaimerElement = $[14];
+  let failedElement;
   if ($[15] !== submitFailed) {
-    Lt =
+    failedElement =
       submitFailed &&
       jsxProd_default(Box, {
         marginTop: 1,
@@ -936,11 +966,11 @@ function OrgSurveyReview(props) {
         }),
       });
     $[15] = submitFailed;
-    $[16] = Lt;
-  } else Lt = $[16];
-  let oo;
+    $[16] = failedElement;
+  } else failedElement = $[16];
+  let actionsElement;
   if ($[17] !== recentInputGuard || $[18] !== onCancel || $[19] !== onSubmit || $[20] !== sending) {
-    oo = jsxProd_default(Box, {
+    actionsElement = jsxProd_default(Box, {
       marginTop: 1,
       children: sending
         ? jsxProd_default_2(Text, {
@@ -960,38 +990,44 @@ function OrgSurveyReview(props) {
     $[18] = onCancel;
     $[19] = onSubmit;
     $[20] = sending;
-    $[21] = oo;
-  } else oo = $[21];
-  let Xt;
-  if ($[22] !== kt || $[23] !== It || $[24] !== Ot || $[25] !== Lt || $[26] !== oo) {
-    Xt = jsxProd_default_2(Box, {
+    $[21] = actionsElement;
+  } else actionsElement = $[21];
+  let reviewElement;
+  if (
+    $[22] !== answersElement ||
+    $[23] !== missingWarning ||
+    $[24] !== disclaimerElement ||
+    $[25] !== failedElement ||
+    $[26] !== actionsElement
+  ) {
+    reviewElement = jsxProd_default_2(Box, {
       flexDirection: "column",
-      children: [Xe, kt, It, Ot, Lt, oo],
+      children: [titleText, answersElement, missingWarning, disclaimerElement, failedElement, actionsElement],
     });
-    $[22] = kt;
-    $[23] = It;
-    $[24] = Ot;
-    $[25] = Lt;
-    $[26] = oo;
-    $[27] = Xt;
-  } else Xt = $[27];
-  return Xt;
+    $[22] = answersElement;
+    $[23] = missingWarning;
+    $[24] = disclaimerElement;
+    $[25] = failedElement;
+    $[26] = actionsElement;
+    $[27] = reviewElement;
+  } else reviewElement = $[27];
+  return reviewElement;
 }
 //@ chunk-18hwfzwa.js:1069363-1069418 placement
 function ownValue(draft, id) {
   return Object.hasOwn(draft, id) ? draft[id] : undefined;
 }
 //@ chunk-18hwfzwa.js:1069418-1069508 placement
-function hasAnswer(h) {
-  if (h === undefined) return false;
-  return typeof h === "string" ? h.trim() !== "" : h.length > 0;
+function hasAnswer(answer) {
+  if (answer === undefined) return false;
+  return typeof answer === "string" ? answer.trim() !== "" : answer.length > 0;
 }
 //@ chunk-18hwfzwa.js:1069508-1069699 placement
-function formatSurveyAnswer(h, x) {
-  if (h.kind === "text") return typeof x === "string" ? x.trim() : "";
-  let D = typeof x === "string" ? [x] : (x ?? []);
-  return h.options
-    .filter((option) => D.includes(option.value))
+function formatSurveyAnswer(question, answer) {
+  if (question.kind === "text") return typeof answer === "string" ? answer.trim() : "";
+  let values = typeof answer === "string" ? [answer] : (answer ?? []);
+  return question.options
+    .filter((option) => values.includes(option.value))
     .map((option) => option.label)
     .join(", ");
 }

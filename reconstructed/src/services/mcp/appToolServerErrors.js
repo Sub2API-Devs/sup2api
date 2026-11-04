@@ -15,8 +15,8 @@ import { env } from "../../utils/env.js";
 /**
  * 判断是否为需要隐藏名字的 hearthbot 回复服务器。
  */
-function isHiddenReplyServer(e) {
-  return e === HEARTHBOT && env.CLAUDE_CODE_HIDE_REPLY_SERVER_NAME;
+function isHiddenReplyServer(serverName) {
+  return serverName === HEARTHBOT && env.CLAUDE_CODE_HIDE_REPLY_SERVER_NAME;
 }
 //@ chunk-fhwx1wqz.js:329-2994 placement
 /**
@@ -46,13 +46,13 @@ var APP_TOOL_ACCESS_FAILED_TEXT =
 /**
  * 应用自身工具服务器需要认证或断开时附加到工具错误后的说明。
  */
-function appToolServerErrorSuffix(availability, o) {
+function appToolServerErrorSuffix(availability, hiddenReply) {
   if (
     (availability.kind !== "needs_auth" && availability.kind !== "disconnected") ||
     !isHiddenReplyServer(availability.serverName)
   )
     return;
-  return o
+  return hiddenReply
     ? ". The app's own tool server is not available in this context. Continue without this tool."
     : `. ${appToolServerUnavailableText(availability.kind)}`;
 }

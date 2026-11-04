@@ -8,7 +8,7 @@
  * pieces: chunk-ey2qag4x.js (1)
  * attribution: callgraph-fingerprint 1
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
 import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 import { NO_COMMITTED_ROW, Select_2 } from "../CustomSelect/select.js";
 import { jsxProd_default } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
@@ -19,11 +19,11 @@ import { Select } from "../CustomSelect/selectTypeahead.js";
  * 通用选择组件（Select 封装），被 115 处使用——旧版名 ModelSelector 可能是错配。
  */
 function ModelSelector(t0) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   if (useIsScreenReaderEnabled()) {
     const defaultValue =
       t0.selectedValue === NO_COMMITTED_ROW ? t0.defaultValue : (t0.selectedValue ?? t0.defaultValue);
-    let l;
+    let accessibleSelect;
     if (
       $[0] !== t0.disableSelection ||
       $[1] !== t0.hidePromptWhileDisabled ||
@@ -35,7 +35,7 @@ function ModelSelector(t0) {
       $[7] !== t0.refuseInput ||
       $[8] !== defaultValue
     ) {
-      l = jsxProd_default(Select, {
+      accessibleSelect = jsxProd_default(Select, {
         options: t0.options,
         onChange: t0.onChange,
         onFocus: t0.onFocus,
@@ -55,18 +55,18 @@ function ModelSelector(t0) {
       $[6] = t0.options;
       $[7] = t0.refuseInput;
       $[8] = defaultValue;
-      $[9] = l;
-    } else l = $[9];
-    return l;
+      $[9] = accessibleSelect;
+    } else accessibleSelect = $[9];
+    return accessibleSelect;
   }
-  let i;
+  let inlineSelect;
   if ($[10] !== t0) {
-    i = jsxProd_default(Select_2, {
+    inlineSelect = jsxProd_default(Select_2, {
       ...t0,
     });
     $[10] = t0;
-    $[11] = i;
-  } else i = $[11];
-  return i;
+    $[11] = inlineSelect;
+  } else inlineSelect = $[11];
+  return inlineSelect;
 }
 export { ModelSelector };

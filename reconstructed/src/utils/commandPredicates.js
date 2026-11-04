@@ -31,7 +31,7 @@ import {
   addCommandSpellings,
   filterCommandAliases,
 } from "../commands.js";
-import { Ji } from "../../vendor/lodash-es/uniqBy.js";
+import { uniqByExport } from "../../vendor/lodash-es/uniqBy.js";
 import { HOST_SKILLS_MOUNT, PUBLIC } from "../skills/hostSkillMounts.js";
 import { usesReservedSkillNamespace, reservedNamespaceOf } from "../skills/reservedSkillNames.js";
 import { getFeatureValue_CACHED_MAY_BE_STALE } from "../services/analytics/growthbook.js";
@@ -40,6 +40,7 @@ import { logError } from "./log.js";
 import { logForDebugging } from "./debug.js";
 import { formatCommandDescription } from "../tools/SkillTool/prompt.js";
 import { memorySkillCommands } from "../services/memorySync/memorySkills.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-e6aww6q8.js:950488-950584 placement
 /**
@@ -56,8 +57,8 @@ var POLICY_SETTING_SOURCES = ["policySettings", "flagSettings"];
 /**
  * 安全地读取对象的自有属性（任一为空返回 undefined）。
  */
-function ownLookup(e, n) {
-  return e == null || n == null ? undefined : getOwn(e, n);
+function ownLookup(object, key) {
+  return object == null || key == null ? undefined : getOwn(object, key);
 }
 //@ chunk-e6aww6q8.js:950640-950679 placement
 /**
@@ -67,20 +68,20 @@ function isNotProtoKey(name) {
   return name !== "__proto__";
 }
 //@ chunk-e6aww6q8.js:950679-950795 placement
-function skillOverrideFromSettings(e) {
-  for (let n of [getInitialSettings_2().skillOverrides, skillOverrides()])
-    for (let r of e) {
-      let s = ownLookup(n, r);
-      if (s !== undefined) return s;
+function skillOverrideFromSettings(names) {
+  for (let overrides of [getInitialSettings_2().skillOverrides, skillOverrides()])
+    for (let name of names) {
+      let override = ownLookup(overrides, name);
+      if (override !== undefined) return override;
     }
   return;
 }
 //@ chunk-e6aww6q8.js:950795-950908 placement
-function skillOverrideFromAdminSources(e) {
-  for (let n of e)
-    for (let r of POLICY_SETTING_SOURCES) {
-      let s = ownLookup(getSettingsForSource(r)?.skillOverrides, n);
-      if (s !== undefined) return s;
+function skillOverrideFromAdminSources(names) {
+  for (let name of names)
+    for (let source of POLICY_SETTING_SOURCES) {
+      let override = ownLookup(getSettingsForSource(source)?.skillOverrides, name);
+      if (override !== undefined) return override;
     }
   return;
 }
@@ -88,190 +89,213 @@ function skillOverrideFromAdminSources(e) {
 /**
  * 取技能的无前缀名（同步技能的裸名被保留时不可用）。
  */
-function bareSkillName(e) {
-  let unqualifiedName = e.unqualifiedName;
+function bareSkillName(name) {
+  let unqualifiedName = name.unqualifiedName;
   if (unqualifiedName == null) return;
-  if (e.loadedFrom !== "syncedSkills") return unqualifiedName;
-  return e.bareNameReserved ? undefined : unqualifiedName;
+  if (name.loadedFrom !== "syncedSkills") return unqualifiedName;
+  return name.bareNameReserved ? undefined : unqualifiedName;
 }
 //@ chunk-e6aww6q8.js:951043-951199 placement
-function skillOverrideNames(e) {
-  let reservedLabels = e.reservedLabels ?? [];
+function skillOverrideNames(cmd) {
+  let reservedLabels = cmd.reservedLabels ?? [];
   return [
-    ...(e.aliases ?? []),
-    ...(e.unqualifiedName != null ? [e.unqualifiedName] : []),
-    ...denyMatchNamesWithColon(e).filter((r) => !reservedLabels.includes(r)),
+    ...(cmd.aliases ?? []),
+    ...(cmd.unqualifiedName != null ? [cmd.unqualifiedName] : []),
+    ...denyMatchNamesWithColon(cmd).filter((name) => !reservedLabels.includes(name)),
   ];
 }
 //@ chunk-e6aww6q8.js:951199-951288 placement
 /**
  * 保留标签上的覆盖值（on 视为没有覆盖）。
  */
-function reservedLabelOverride(skillOverrides, n) {
-  let r = strongestOverride_2(skillOverrides, n.reservedLabels ?? []);
-  return r === undefined || r === "on" ? undefined : r;
+function reservedLabelOverride(skillOverrides, cmd) {
+  let override = strongestOverride_2(skillOverrides, cmd.reservedLabels ?? []);
+  return override === undefined || override === "on" ? undefined : override;
 }
 //@ chunk-e6aww6q8.js:951288-951353 placement
 /**
  * 两个覆盖值里取更严格的一个。
  */
-function strongestOverride(e, n) {
-  return e === undefined ? n : n !== undefined && SKILL_OVERRIDE_RANK[n] > SKILL_OVERRIDE_RANK[e] ? n : e;
+function strongestOverride(skillOverrides, names) {
+  return skillOverrides === undefined
+    ? names
+    : names !== undefined && SKILL_OVERRIDE_RANK[names] > SKILL_OVERRIDE_RANK[skillOverrides]
+      ? names
+      : skillOverrides;
 }
 //@ chunk-e6aww6q8.js:951353-951461 placement
 /**
  * 在多个名字的覆盖值中取级别最高的一个。
  */
-function strongestOverride_2(skillOverrides, n) {
-  let r;
-  for (let s of n) {
-    let h = ownLookup(skillOverrides, s);
-    if (h !== undefined && (r === undefined || SKILL_OVERRIDE_RANK[h] > SKILL_OVERRIDE_RANK[r])) r = h;
+function strongestOverride_2(skillOverrides, names) {
+  let chosen;
+  for (let name of names) {
+    let override = ownLookup(skillOverrides, name);
+    if (
+      override !== undefined &&
+      (chosen === undefined || SKILL_OVERRIDE_RANK[override] > SKILL_OVERRIDE_RANK[chosen])
+    )
+      chosen = override;
   }
-  return r;
+  return chosen;
 }
 //@ chunk-e6aww6q8.js:951461-951601 placement
 /**
  * 列出技能可被 skillOverrides 引用的名字：无前缀名，MCP 技能再加上未被保留的限定名。
  */
-function qualifiedOverrideNames(e) {
-  let n = bareSkillName(e);
-  let reservedLabels = e.reservedLabels ?? [];
+function qualifiedOverrideNames(cmd) {
+  let bareName = bareSkillName(cmd);
+  let reservedLabels = cmd.reservedLabels ?? [];
   return [
-    ...(n != null ? [n] : []),
-    ...(e.loadedFrom === "mcp" ? denyMatchNamesWithColon(e).filter((s) => !reservedLabels.includes(s)) : []),
+    ...(bareName != null ? [bareName] : []),
+    ...(cmd.loadedFrom === "mcp"
+      ? denyMatchNamesWithColon(cmd).filter((name) => !reservedLabels.includes(name))
+      : []),
   ];
 }
 //@ chunk-e6aww6q8.js:951601-951879 placement
-function mcpSkillOverride(e, n) {
-  let r = [e.name, ...n];
-  let s;
-  let h;
-  for (let y of POLICY_SETTING_SOURCES) {
-    let skillOverrides = getSettingsForSource(y)?.skillOverrides;
-    s = strongestOverride(s, strongestOverride_2(skillOverrides, r));
-    h = strongestOverride(h, reservedLabelOverride(skillOverrides, e));
+function mcpSkillOverride(cmd, names) {
+  let lookupNames = [cmd.name, ...names];
+  let override;
+  let source;
+  for (let sourceName of POLICY_SETTING_SOURCES) {
+    let skillOverrides = getSettingsForSource(sourceName)?.skillOverrides;
+    override = strongestOverride(override, strongestOverride_2(skillOverrides, lookupNames));
+    source = strongestOverride(source, reservedLabelOverride(skillOverrides, cmd));
   }
-  if (s !== undefined) return strongestOverride(s, h);
-  for (let y of SOURCES) {
-    if (!isSettingSourceEnabled(y)) continue;
-    let S = strongestOverride_2(getSettingsForSource(y)?.skillOverrides, r);
-    if (S !== undefined) return strongestOverride(S, h);
+  if (override !== undefined) return strongestOverride(override, source);
+  for (let sourceName of SOURCES) {
+    if (!isSettingSourceEnabled(sourceName)) continue;
+    let candidate = strongestOverride_2(getSettingsForSource(sourceName)?.skillOverrides, lookupNames);
+    if (candidate !== undefined) return strongestOverride(candidate, source);
   }
-  return strongestOverride(strongestOverride_2(skillOverrides(), r), h);
+  return strongestOverride(strongestOverride_2(skillOverrides(), lookupNames), source);
 }
 //@ chunk-e6aww6q8.js:951879-951915 placement
 /**
  * 用全部名称与来源解析某技能的覆盖状态。
  */
-function resolveSkillOverrideAll(e) {
-  return resolveSkillOverride(e, "all");
+function resolveSkillOverrideAll(cmd) {
+  return resolveSkillOverride(cmd, "all");
 }
 //@ chunk-e6aww6q8.js:951915-952243 placement
 /**
  * 计算某个命令/技能的 skillOverrides 取值：MCP 技能按来源合并最强值；其他按名称与别名在各设置来源查找，取限制最强者。
  */
-function resolveSkillOverride(e, n) {
-  let r = qualifiedOverrideNames(e);
-  if (e.loadedFrom === "mcp") return mcpSkillOverride(e, r);
-  let s = (n === "all" ? skillOverrideFromSettings : skillOverrideFromAdminSources)([e.name, ...r]);
-  let h = skillOverrideNames(e);
-  if (!h.length) return s;
-  for (let y of POLICY_SETTING_SOURCES) {
-    let skillOverrides = getSettingsForSource(y)?.skillOverrides;
-    if (ownLookup(skillOverrides, e.name) !== undefined) break;
-    let w = strongestOverride_2(skillOverrides, h);
-    if (w !== undefined && (s === undefined || SKILL_OVERRIDE_RANK[w] > SKILL_OVERRIDE_RANK[s])) s = w;
-    if (r.some((L) => ownLookup(skillOverrides, L) !== undefined)) break;
+function resolveSkillOverride(cmd, scope) {
+  let qualifiedNames = qualifiedOverrideNames(cmd);
+  if (cmd.loadedFrom === "mcp") return mcpSkillOverride(cmd, qualifiedNames);
+  let fromSettings = (scope === "all" ? skillOverrideFromSettings : skillOverrideFromAdminSources)([
+    cmd.name,
+    ...qualifiedNames,
+  ]);
+  let names = skillOverrideNames(cmd);
+  if (!names.length) return fromSettings;
+  for (let sourceName of POLICY_SETTING_SOURCES) {
+    let skillOverrides = getSettingsForSource(sourceName)?.skillOverrides;
+    if (ownLookup(skillOverrides, cmd.name) !== undefined) break;
+    let override = strongestOverride_2(skillOverrides, names);
+    if (
+      override !== undefined &&
+      (fromSettings === undefined || SKILL_OVERRIDE_RANK[override] > SKILL_OVERRIDE_RANK[fromSettings])
+    )
+      fromSettings = override;
+    if (qualifiedNames.some((name) => ownLookup(skillOverrides, name) !== undefined)) break;
   }
-  return s;
+  return fromSettings;
 }
 //@ chunk-e6aww6q8.js:952243-952533 placement
 /**
  * 返回命令的 skillOverrides 取值及其设置来源；插件技能改按其同步技能别名（administrator 范围）取最强者。
  */
-function skillOverrideWithSource(e) {
-  if (e.source !== "plugin") return lookupSkillOverride(e, "all");
-  let n;
-  for (let r of syncedSkillAliases(e)) {
-    let s = stripSyncedSkillPrefix(r);
-    let h = {
-      name: r,
-      unqualifiedName: s,
+function skillOverrideWithSource(cmd) {
+  if (cmd.source !== "plugin") return lookupSkillOverride(cmd, "all");
+  let result;
+  for (let alias of syncedSkillAliases(cmd)) {
+    let bareName = stripSyncedSkillPrefix(alias);
+    let lookup = {
+      name: alias,
+      unqualifiedName: bareName,
       loadedFrom: "syncedSkills",
-      bareNameReserved: !(e.aliases ?? []).includes(s),
+      bareNameReserved: !(cmd.aliases ?? []).includes(bareName),
     };
-    let skillOverride = lookupSkillOverride(h, "administrator");
+    let skillOverride = lookupSkillOverride(lookup, "administrator");
     if (
       skillOverride !== undefined &&
-      (n === undefined || SKILL_OVERRIDE_RANK[skillOverride.value] > SKILL_OVERRIDE_RANK[n.value])
+      (result === undefined || SKILL_OVERRIDE_RANK[skillOverride.value] > SKILL_OVERRIDE_RANK[result.value])
     )
-      n = skillOverride;
+      result = skillOverride;
   }
-  return n;
+  return result;
 }
 //@ chunk-e6aww6q8.js:952533-952731 placement
-function syncedSkillAliases(e) {
-  if (!areSkillsConvertedAsPlugins() && e.pluginInfo?.followsSyncedSkillState !== true) return [];
-  let n = e.pluginInfo === undefined ? undefined : marketplaceSuffix(e.pluginInfo.repository);
-  if (n !== undefined && n !== SYNCED) return [];
-  return pluginSkillAliases(e).filter(hasSyncedSkillPrefix);
+function syncedSkillAliases(cmd) {
+  if (!areSkillsConvertedAsPlugins() && cmd.pluginInfo?.followsSyncedSkillState !== true) return [];
+  let aliases = cmd.pluginInfo === undefined ? undefined : marketplaceSuffix(cmd.pluginInfo.repository);
+  if (aliases !== undefined && aliases !== SYNCED) return [];
+  return pluginSkillAliases(cmd).filter(hasSyncedSkillPrefix);
 }
 //@ chunk-e6aww6q8.js:952731-952930 placement
 function syncedSkillOverride(cmd) {
-  let n = cmd.pluginInfo?.followsSyncedSkillState === true;
-  let r;
-  for (let s of syncedSkillAliases(cmd)) {
-    let h = stripSyncedSkillPrefix(s);
-    let y = skillOverrideFromSettings(n || (cmd.aliases ?? []).includes(h) ? [s, h] : [s]);
-    if (n || y === "user-invocable-only") r = strongestOverride(r, y);
+  let followsSyncedState = cmd.pluginInfo?.followsSyncedSkillState === true;
+  let override;
+  for (let alias of syncedSkillAliases(cmd)) {
+    let bareName = stripSyncedSkillPrefix(alias);
+    let candidate = skillOverrideFromSettings(
+      followsSyncedState || (cmd.aliases ?? []).includes(bareName) ? [alias, bareName] : [alias],
+    );
+    if (followsSyncedState || candidate === "user-invocable-only")
+      override = strongestOverride(override, candidate);
   }
-  return r;
+  return override;
 }
 //@ chunk-e6aww6q8.js:952930-953295 placement
 /**
  * 按设置来源优先级查找技能的 skillOverrides 覆盖值：本地技能取第一个命中的来源；MCP 技能取各来源中级别最高的；结果可被特定规则再改写。
  */
-function lookupSkillOverride(e, n) {
-  let r = skillOverrideNames(e);
-  let s;
-  for (let h of POLICY_SETTING_SOURCES) {
-    let skillOverrides = getSettingsForSource(h)?.skillOverrides;
-    let S =
-      e.loadedFrom === "mcp"
+function lookupSkillOverride(cmd, scope) {
+  let names = skillOverrideNames(cmd);
+  let chosen;
+  for (let sourceName of POLICY_SETTING_SOURCES) {
+    let skillOverrides = getSettingsForSource(sourceName)?.skillOverrides;
+    let override =
+      cmd.loadedFrom === "mcp"
         ? strongestOverride(
-            strongestOverride_2(skillOverrides, [e.name, ...r]),
-            reservedLabelOverride(skillOverrides, e),
+            strongestOverride_2(skillOverrides, [cmd.name, ...names]),
+            reservedLabelOverride(skillOverrides, cmd),
           )
-        : (ownLookup(skillOverrides, e.name) ??
-          strongestOverride_2(skillOverrides, r) ??
-          reservedLabelOverride(skillOverrides, e));
-    if (S === undefined) continue;
-    if (e.loadedFrom !== "mcp") {
-      s = {
-        value: S,
-        source: h,
+        : (ownLookup(skillOverrides, cmd.name) ??
+          strongestOverride_2(skillOverrides, names) ??
+          reservedLabelOverride(skillOverrides, cmd));
+    if (override === undefined) continue;
+    if (cmd.loadedFrom !== "mcp") {
+      chosen = {
+        value: override,
+        source: sourceName,
       };
       break;
     }
-    if (s === undefined || SKILL_OVERRIDE_RANK[S] > SKILL_OVERRIDE_RANK[s.value])
-      s = {
-        value: S,
-        source: h,
+    if (chosen === undefined || SKILL_OVERRIDE_RANK[override] > SKILL_OVERRIDE_RANK[chosen.value])
+      chosen = {
+        value: override,
+        source: sourceName,
       };
   }
-  return s === undefined
+  return chosen === undefined
     ? undefined
     : {
-        value: resolveSkillOverride(e, n) ?? s.value,
-        source: s.source,
+        value: resolveSkillOverride(cmd, scope) ?? chosen.value,
+        source: chosen.source,
       };
 }
 //@ chunk-e6aww6q8.js:953295-953332 placement
 /**
  * OVERRIDABLE_LOCAL_COMMANDS：new Set(["auto-mode-setup"])：可用 skillOverrides 关掉的 local 命令。
  */
-var OVERRIDABLE_LOCAL_COMMANDS = new Set(["auto-mode-setup"]);
+var OVERRIDABLE_LOCAL_COMMANDS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-e6aww6q8.js:953295", () => {
+  OVERRIDABLE_LOCAL_COMMANDS = new Set(["auto-mode-setup"]);
+});
 //@ chunk-e6aww6q8.js:953332-953715 placement
 /**
  * getSkillOverrideState：返回 on/off/user-invocable-only（skillOverrides、插件隐藏）。
@@ -292,8 +316,8 @@ function getSkillOverrideState(cmd) {
 /**
  * isHiddenFromModel：override 为 user-invocable-only 或 off。
  */
-function isHiddenFromModel(e) {
-  let skillOverrideState = getSkillOverrideState(e);
+function isHiddenFromModel(cmd) {
+  let skillOverrideState = getSkillOverrideState(cmd);
   return skillOverrideState === "user-invocable-only" || skillOverrideState === "off";
 }
 //@ chunk-e6aww6q8.js:955649-955886 placement
@@ -371,19 +395,19 @@ function supportsNonInteractive(cmd) {
 /**
  * 判断命令是否用户可调用且未被关闭。
  */
-function isUserInvocableSkill(e) {
-  return e.userInvocable !== false && !isSkillOff(e);
+function isUserInvocableSkill(cmd) {
+  return cmd.userInvocable !== false && !isSkillOff(cmd);
 }
 //@ chunk-e6aww6q8.js:956496-956544 placement = mergeClients (1)
-function mergeClients(e) {
-  return Ji(e, "name").filter(isUserInvocableSkill);
+function mergeClients(cmd) {
+  return uniqByExport(cmd, "name").filter(isUserInvocableSkill);
 }
 //@ chunk-e6aww6q8.js:956544-956633 placement
 /**
  * isFallbackSkill：prompt 且 fallback=true 且非 syncedSkills。
  */
-function isFallbackSkill(e) {
-  return e.type === "prompt" && e.fallback === true && e.loadedFrom !== "syncedSkills";
+function isFallbackSkill(cmd) {
+  return cmd.type === "prompt" && cmd.fallback === true && cmd.loadedFrom !== "syncedSkills";
 }
 //@ chunk-e6aww6q8.js:956633-956657 placement
 /**
@@ -404,22 +428,22 @@ function hostSkillsEntry(skills) {
 /**
  * isHostCatalogSkill：prompt 且 fromHostCatalog=true。
  */
-function isHostCatalogSkill(e) {
-  return e.type === "prompt" && e.fromHostCatalog === true;
+function isHostCatalogSkill(cmd) {
+  return cmd.type === "prompt" && cmd.fromHostCatalog === true;
 }
 //@ chunk-e6aww6q8.js:956771-956831 placement
 /**
  * isSyncedSkill：loadedFrom=syncedSkills 且非宿主目录技能。
  */
-function isSyncedSkill(e) {
-  return e.loadedFrom === "syncedSkills" && !isHostCatalogSkill(e);
+function isSyncedSkill(cmd) {
+  return cmd.loadedFrom === "syncedSkills" && !isHostCatalogSkill(cmd);
 }
 //@ chunk-e6aww6q8.js:956831-956875 placement
 /**
  * isKilledHostCatalogSkill：宿主目录技能且被内建技能开关关掉。
  */
-function isKilledHostCatalogSkill(e) {
-  return isHostCatalogSkill(e) && isSkillOutsideCorePolicy(stripSyncedSkillPrefix(e.name));
+function isKilledHostCatalogSkill(cmd) {
+  return isHostCatalogSkill(cmd) && isSkillOutsideCorePolicy(stripSyncedSkillPrefix(cmd.name));
 }
 //@ chunk-e6aww6q8.js:958749-958820 placement
 /**
@@ -442,24 +466,24 @@ function getCommandId(cmd) {
 /**
  * 判断命令是否为同步技能或受管插件提供的技能。
  */
-function isSyncedOrManagedSkill(e) {
+function isSyncedOrManagedSkill(cmd) {
   return (
-    e.loadedFrom === "syncedSkills" ||
-    (e.type === "prompt" &&
-      e.source === "plugin" &&
-      e.pluginInfo !== undefined &&
-      isAccountSkillsWrapperPlugin(e.pluginInfo))
+    cmd.loadedFrom === "syncedSkills" ||
+    (cmd.type === "prompt" &&
+      cmd.source === "plugin" &&
+      cmd.pluginInfo !== undefined &&
+      isAccountSkillsWrapperPlugin(cmd.pluginInfo))
   );
 }
 //@ chunk-e6aww6q8.js:959100-959195 placement
 /**
  * 判断命令名是否被同步/受管技能或保留名覆盖。
  */
-function isShadowedSkillName(e) {
-  if (isSyncedOrManagedSkill(e)) return false;
-  if (usesReservedSkillNamespace(e.name)) return true;
-  let commandName = getCommandName_2(e);
-  return commandName !== e.name && usesReservedSkillNamespace(commandName);
+function isShadowedSkillName(name) {
+  if (isSyncedOrManagedSkill(name)) return false;
+  if (usesReservedSkillNamespace(name.name)) return true;
+  let commandName = getCommandName_2(name);
+  return commandName !== name.name && usesReservedSkillNamespace(commandName);
 }
 //@ chunk-e6aww6q8.js:959195-959224 placement
 var TENGU_PLAID_HARBOR = "tengu_plaid_harbor";
@@ -474,15 +498,15 @@ function isPlaidHarborOn() {
 /**
  * 隐藏被同步/受管技能同名覆盖的命令，以及名字被保留的命令。
  */
-function hideShadowedCommands(e, commands) {
-  let r = new Set(commands.filter(isSyncedOrManagedSkill).map((s) => foldName_2(s.name)));
-  return e.filter(
-    (s) =>
-      isSyncedOrManagedSkill(s) ||
+function hideShadowedCommands(commands, commands_2) {
+  let managedNames = new Set(commands_2.filter(isSyncedOrManagedSkill).map((cmd) => foldName_2(cmd.name)));
+  return commands.filter(
+    (cmd) =>
+      isSyncedOrManagedSkill(cmd) ||
       !(
-        r.has(foldName_2(s.name)) ||
-        [s.name, getCommandName_2(s)].some(
-          (h) => reservedNamespaceOf(h) === undefined && usesReservedSkillNamespace(h),
+        managedNames.has(foldName_2(cmd.name)) ||
+        [cmd.name, getCommandName_2(cmd)].some(
+          (cmd) => reservedNamespaceOf(cmd) === undefined && usesReservedSkillNamespace(cmd),
         )
       ),
   );
@@ -491,52 +515,56 @@ function hideShadowedCommands(e, commands) {
 /**
  * 有同步技能时，去掉与非同步命令名冲突的同步技能。
  */
-function dropSyncedNameClashes(e, n) {
-  if (n.length === 0 || !e.some((s) => s.loadedFrom === "syncedSkills")) return [...e];
-  let r = new Set();
-  addNonSyncedSpellings(r, n);
-  return admitSyncedSkills(e, r);
+function dropSyncedNameClashes(commands, syncedNames) {
+  if (syncedNames.length === 0 || !commands.some((cmd) => cmd.loadedFrom === "syncedSkills"))
+    return [...commands];
+  let dropped = new Set();
+  addNonSyncedSpellings(dropped, syncedNames);
+  return admitSyncedSkills(commands, dropped);
 }
 //@ chunk-e6aww6q8.js:959841-959917 placement
 /**
  * addNameAndAliases：规范化 name 与 aliases 加入集合。
  */
-function addNameAndAliases(e, n) {
-  e.add(foldName_2(n.name));
-  for (let r of n.aliases ?? []) e.add(foldName_2(r));
+function addNameAndAliases(reserved, cmd) {
+  reserved.add(foldName_2(cmd.name));
+  for (let alias of cmd.aliases ?? []) reserved.add(foldName_2(alias));
 }
 //@ chunk-e6aww6q8.js:959917-959990 placement
 /**
  * addNonSyncedSpellings：对非 syncedSkills 命令调用 addCommandSpellings。
  */
-function addNonSyncedSpellings(reserved, n) {
-  for (let r of n) if (r.loadedFrom !== "syncedSkills") addCommandSpellings(reserved, r);
+function addNonSyncedSpellings(reserved, reserved_2) {
+  for (let cmd of reserved_2) if (cmd.loadedFrom !== "syncedSkills") addCommandSpellings(reserved, cmd);
 }
 //@ chunk-e6aww6q8.js:959990-960077 placement
 /**
  * isSyncedSkillNameTaken：同步技能名为空或已被占用。
  */
-function isSyncedSkillNameTaken(e, n) {
+function isSyncedSkillNameTaken(cmd, reserved) {
   return (
-    foldName_2(stripSyncedSkillPrefix(e.name)) === "" ||
-    n.has(foldName_2(e.name)) ||
-    n.has(foldName_2(withSyncedSkillPrefix(getCommandName_2(e))))
+    foldName_2(stripSyncedSkillPrefix(cmd.name)) === "" ||
+    reserved.has(foldName_2(cmd.name)) ||
+    reserved.has(foldName_2(withSyncedSkillPrefix(getCommandName_2(cmd))))
   );
 }
 //@ chunk-e6aww6q8.js:960077-960089 placement
 /**
  * MCP 命令名、展示名或别名的最大长度。
  */
-var MAX_MCP_NAME_CHARS = MAX_FOLDABLE_NAME_LENGTH;
+var MAX_MCP_NAME_CHARS; // deferred: uses PRINTABLE_NAME_RE (./plugins/syncedItems.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-e6aww6q8.js:960077", () => {
+  MAX_MCP_NAME_CHARS = MAX_FOLDABLE_NAME_LENGTH;
+});
 //@ chunk-e6aww6q8.js:960089-960816 placement
 function checkCommandListable(commands, onRefused) {
   let listed = [];
   for (let cmd of commands) {
     let displayName = getCommandName_2(cmd);
     if (typeof cmd.name !== "string" || typeof displayName !== "string") {
-      let mapped = [cmd.name, displayName].map((w) => (Array.isArray(w) ? "array" : typeof w));
+      let mapped = [cmd.name, displayName].map((name) => (Array.isArray(name) ? "array" : typeof name));
       let mapped_2 = [cmd.type, cmd.type === "prompt" ? cmd.source : undefined, cmd.loadedFrom, cmd.kind].map(
-        (w) => (typeof w === "string" && /^[\w-]{1,24}$/.test(w) ? w : typeof w),
+        (name) => (typeof name === "string" && /^[\w-]{1,24}$/.test(name) ? name : typeof name),
       );
       logError(
         Error(
@@ -547,7 +575,7 @@ function checkCommandListable(commands, onRefused) {
     }
     if (
       cmd.isMcp === true &&
-      [cmd.name, displayName, ...(cmd.aliases ?? [])].some((y) => y.length > MAX_MCP_NAME_CHARS)
+      [cmd.name, displayName, ...(cmd.aliases ?? [])].some((name) => name.length > MAX_MCP_NAME_CHARS)
     ) {
       logForDebugging(
         `MCP command not listed: its name, display name or an alias has over ${MAX_MCP_NAME_CHARS} characters`,
@@ -577,43 +605,43 @@ function dropReservedAliases(cmd, isReserved) {
   };
 }
 //@ chunk-e6aww6q8.js:960963-961037 placement = getMcpPrefix (1)
-function isQualifiedToolReference(e, n) {
-  return e.includes(":") || e.startsWith("mcp__") || n.has(e);
+function isQualifiedToolReference(name, serverName) {
+  return name.includes(":") || name.startsWith("mcp__") || serverName.has(name);
 }
 //@ chunk-e6aww6q8.js:961037-961073 placement
 /**
  * 准入某命令的全部别名。
  */
-function admitAllAliases(e) {
-  return filterCommandAliases(e, () => true);
+function admitAllAliases(cmd) {
+  return filterCommandAliases(cmd, () => true);
 }
 //@ chunk-e6aww6q8.js:961073-961188 placement
 /**
  * 准入一个同步技能：名字已被占用返回 null，否则去掉与已有工具引用冲突的别名。
  */
-function admitSyncedSkill(e, n) {
-  if (e.loadedFrom !== "syncedSkills") return e;
-  if (isSyncedSkillNameTaken(e, n)) return null;
-  return filterCommandAliases(e, (r) => isQualifiedToolReference(foldName_2(r), n));
+function admitSyncedSkill(cmd, reserved) {
+  if (cmd.loadedFrom !== "syncedSkills") return cmd;
+  if (isSyncedSkillNameTaken(cmd, reserved)) return null;
+  return filterCommandAliases(cmd, (alias) => isQualifiedToolReference(foldName_2(alias), reserved));
 }
 //@ chunk-e6aww6q8.js:961361-961529 placement
 /**
  * syncedSkills 来源的 prompt 命令，若 unqualifiedName 在 aliases 中则返回它，否则 undefined。
  */
-function getSyncedSkillUnqualifiedAlias(e) {
-  return e.type === "prompt" &&
-    e.loadedFrom === "syncedSkills" &&
-    e.unqualifiedName != null &&
-    (e.aliases?.includes(e.unqualifiedName) ?? false)
-    ? e.unqualifiedName
+function getSyncedSkillUnqualifiedAlias(cmd) {
+  return cmd.type === "prompt" &&
+    cmd.loadedFrom === "syncedSkills" &&
+    cmd.unqualifiedName != null &&
+    (cmd.aliases?.includes(cmd.unqualifiedName) ?? false)
+    ? cmd.unqualifiedName
     : undefined;
 }
 //@ chunk-e6aww6q8.js:961529-961593 placement
 /**
  * 同步技能的安全未限定别名（不安全时 undefined）。
  */
-function syncedSkillUnqualifiedAlias(e) {
-  let syncedSkillUnqualifiedAlias = getSyncedSkillUnqualifiedAlias(e);
+function syncedSkillUnqualifiedAlias(cmd) {
+  let syncedSkillUnqualifiedAlias = getSyncedSkillUnqualifiedAlias(cmd);
   return syncedSkillUnqualifiedAlias !== undefined && isSafeSkillName(syncedSkillUnqualifiedAlias)
     ? syncedSkillUnqualifiedAlias
     : undefined;
@@ -622,27 +650,27 @@ function syncedSkillUnqualifiedAlias(e) {
 /**
  * 逐个准入命令中的同步技能，被拒的回调通知，已准入的名字与别名加入占用集合。
  */
-function admitSyncedSkills(e, reserved, r) {
-  let s = [];
-  for (let h of e) {
-    let y = admitSyncedSkill(h, reserved);
-    if (y === null) {
-      r?.(h);
+function admitSyncedSkills(commands, reserved, blockedAliases) {
+  let admitted = [];
+  for (let cmd of commands) {
+    let filtered = admitSyncedSkill(cmd, reserved);
+    if (filtered === null) {
+      blockedAliases?.(cmd);
       continue;
     }
-    if (y.loadedFrom === "syncedSkills") addNameAndAliases(reserved, y);
-    s.push(y);
+    if (filtered.loadedFrom === "syncedSkills") addNameAndAliases(reserved, filtered);
+    admitted.push(filtered);
   }
-  return s;
+  return admitted;
 }
 //@ chunk-e6aww6q8.js:961742-961865 placement
 /**
  * 隐藏与同步技能同名的宿主目录技能。
  */
-function hideDuplicateCatalogSkills(e, n) {
-  let r = new Set();
-  for (let s of n) if (isSyncedSkill(s)) r.add(foldName_2(s.name));
-  return e.filter((s) => !isHostCatalogSkill(s) || !r.has(foldName_2(s.name)));
+function hideDuplicateCatalogSkills(commands, syncedCommands) {
+  let syncedNames = new Set();
+  for (let cmd of syncedCommands) if (isSyncedSkill(cmd)) syncedNames.add(foldName_2(cmd.name));
+  return commands.filter((cmd) => !isHostCatalogSkill(cmd) || !syncedNames.has(foldName_2(cmd.name)));
 }
 //@ chunk-e6aww6q8.js:961865-961959 placement = filterMcpPromptsByServer (0.897)
 function filterMcpPromptCommands(commands) {
@@ -661,29 +689,29 @@ function mcpPromptCommandsWithReserved(commands) {
 /**
  * 去掉与同步技能重名的命令。
  */
-function dropSyncedClashes(e, n) {
-  return dropSyncedNameClashes(e, mcpPromptCommandsWithReserved(n));
+function dropSyncedClashes(commands, syncedNames) {
+  return dropSyncedNameClashes(commands, mcpPromptCommandsWithReserved(syncedNames));
 }
 //@ chunk-e6aww6q8.js:962038-962118 placement
 /**
  * 通知安装向导已粘贴（当前无实现，返回已解决的 Promise）。
  */
-function notifySetupGuidePasted(...e) {
-  return null?.notifySetupGuidePasted(...e) ?? Promise.resolve();
+function notifySetupGuidePasted(...args) {
+  return null?.notifySetupGuidePasted(...args) ?? Promise.resolve();
 }
 //@ chunk-e6aww6q8.js:962118-962198 placement
 /**
  * 通知安装向导已加载（当前无实现）。
  */
-function notifySetupGuideLoaded(...e) {
-  return null?.notifySetupGuideLoaded(...e) ?? Promise.resolve();
+function notifySetupGuideLoaded(...args) {
+  return null?.notifySetupGuideLoaded(...args) ?? Promise.resolve();
 }
 //@ chunk-e6aww6q8.js:962198-962283 placement
 /**
  * 拉取关联的安装向导（当前无实现）。
  */
-function fetchLinkedSetupGuide(...e) {
-  return null?.fetchLinkedSetupGuide(...e) ?? Promise.resolve(undefined);
+function fetchLinkedSetupGuide(...args) {
+  return null?.fetchLinkedSetupGuide(...args) ?? Promise.resolve(undefined);
 }
 //@ chunk-e6aww6q8.js:962283-962336 placement
 /**
@@ -696,15 +724,15 @@ function loadedSetupGuideNotice() {
 /**
  * 判断输入是否为安装向导粘贴（当前无实现，恒 false）。
  */
-function isSetupGuidePaste(e) {
-  return null?.isSetupGuidePaste(e) ?? false;
+function isSetupGuidePaste(text) {
+  return null?.isSetupGuidePaste(text) ?? false;
 }
 //@ chunk-e6aww6q8.js:962390-962443 placement
 /**
  * 判断输入是否为安装向导链接（当前无实现，恒 false）。
  */
-function isSetupGuideLink(e) {
-  return null?.isSetupGuideLink(e) ?? false;
+function isSetupGuideLink(text) {
+  return null?.isSetupGuideLink(text) ?? false;
 }
 //@ chunk-e6aww6q8.js:962443-962504 placement
 /**

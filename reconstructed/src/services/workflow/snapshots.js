@@ -21,8 +21,8 @@ import { logForDebugging } from "../../utils/debug.js";
 /**
  * 工作流快照文件路径。
  */
-function workflowSnapshotPath(r) {
-  return join(sessionWorkflowsDir(), `${r}.json`);
+function workflowSnapshotPath(workflowRunId) {
+  return join(sessionWorkflowsDir(), `${workflowRunId}.json`);
 }
 //@ chunk-3w426tt0.js:552-604 placement
 /**
@@ -36,9 +36,9 @@ function sessionWorkflowsDir() {
 /**
  * 子代理工作流目录。
  */
-function subagentWorkflowDir(r) {
+function subagentWorkflowDir(runId) {
   let sessionProjectDir = resolveSessionProjectDir();
-  return join(sessionProjectDir, getSessionId(), "subagents", "workflows", r);
+  return join(sessionProjectDir, getSessionId(), "subagents", "workflows", runId);
 }
 //@ chunk-3w426tt0.js:672-729 placement
 /**
@@ -52,33 +52,43 @@ function sessionProjectKey() {
 /**
  * 工作流快照的存储键。
  */
-function workflowSidecarKey(r, sessionId, n) {
-  return STORAGE_SPACES.sidecar(r, sessionId, ["workflows", `${n}.json`]);
+function workflowSidecarKey(projectKey, sessionId, runId) {
+  return STORAGE_SPACES.sidecar(projectKey, sessionId, ["workflows", `${runId}.json`]);
 }
 //@ chunk-3w426tt0.js:796-1278 placement
-async function writeWorkflowSnapshot(workflowRunId, a, storageV5) {
+async function writeWorkflowSnapshot(workflowRunId, fields, storageV5) {
   try {
-    let i = {
+    let snapshot = {
       runId: workflowRunId,
       timestamp: new Date().toISOString(),
-      ...a,
+      ...fields,
     };
-    let l = workflowSnapshotPath(workflowRunId);
-    let s = isStorageV5Enabled() && storageV5 ? sessionProjectKey() : undefined;
+    let filePath = workflowSnapshotPath(workflowRunId);
+    let projectKey = isStorageV5Enabled() && storageV5 ? sessionProjectKey() : undefined;
     let sessionId = getSessionId();
-    await mkdir(dirname(l), {
+    await mkdir(dirname(filePath), {
       recursive: true,
       mode: 448,
     });
-    if (isStorageV5Enabled() && storageV5 && s !== undefined && isValidKeySegment(`${workflowRunId}.json`)) {
-      let e = await storageV5.write(workflowSidecarKey(s, sessionId, workflowRunId), jsonStringify(i), {
-        publishDiscipline: "inPlace",
-        mode: 384,
-      });
-      if (!e.ok) logForDebugging(`Failed to write workflow snapshot ${workflowRunId}: ${e.error.code}`);
+    if (
+      isStorageV5Enabled() &&
+      storageV5 &&
+      projectKey !== undefined &&
+      isValidKeySegment(`${workflowRunId}.json`)
+    ) {
+      let writeResult = await storageV5.write(
+        workflowSidecarKey(projectKey, sessionId, workflowRunId),
+        jsonStringify(snapshot),
+        {
+          publishDiscipline: "inPlace",
+          mode: 384,
+        },
+      );
+      if (!writeResult.ok)
+        logForDebugging(`Failed to write workflow snapshot ${workflowRunId}: ${writeResult.error.code}`);
       return;
     }
-    await writeFile(l, jsonStringify(i), {
+    await writeFile(filePath, jsonStringify(snapshot), {
       encoding: "utf8",
       mode: 384,
     });
@@ -119,93 +129,93 @@ function normalizeWorkflowSnapshot(record, fallbackRunId) {
   };
 }
 //@ chunk-3w426tt0.js:1938-2383 placement
-async function readWorkflowSnapshot(storageV5) {
-  let projectKey = storageV5 ? sessionProjectKey() : undefined;
-  if (storageV5 && projectKey !== undefined) return listWorkflowSnapshots(storageV5, projectKey);
-  let n = sessionWorkflowsDir();
-  let i;
+async function readWorkflowSnapshot(storage) {
+  let projectKey = storage ? sessionProjectKey() : undefined;
+  if (storage && projectKey !== undefined) return listWorkflowSnapshots(storage, projectKey);
+  let dir = sessionWorkflowsDir();
+  let entries;
   try {
-    i = await readdir(n);
+    entries = await readdir(dir);
   } catch {
     return [];
   }
   let filtered = (
     await Promise.all(
-      i
-        .filter((s) => s.endsWith(".json"))
-        .map(async (s) => {
+      entries
+        .filter((fileName) => fileName.endsWith(".json"))
+        .map(async (fileName) => {
           try {
-            let file = await readFile(join(n, s), "utf8");
+            let file = await readFile(join(dir, fileName), "utf8");
             let record = jsonParse(file);
-            return normalizeWorkflowSnapshot(record, s.replace(/\.json$/, ""));
+            return normalizeWorkflowSnapshot(record, fileName.replace(/\.json$/, ""));
           } catch (error) {
             logForDebugging(
-              `Failed to parse workflow snapshot ${s}: ${error instanceof Error ? error.message : error}`,
+              `Failed to parse workflow snapshot ${fileName}: ${error instanceof Error ? error.message : error}`,
             );
             return null;
           }
         }),
     )
-  ).filter((s) => s !== null);
-  filtered.sort((s, o) => o.startTime - s.startTime);
+  ).filter((snapshot) => snapshot !== null);
+  filtered.sort((left, right) => right.startTime - left.startTime);
   return filtered;
 }
 //@ chunk-3w426tt0.js:2383-3367 placement
-async function listWorkflowSnapshots(r, projectKey) {
-  let n = {
+async function listWorkflowSnapshots(storage, projectKey) {
+  let scope = {
     namespace: "sidecar",
     projectKey,
     sessionId: getSessionId(),
     relPath: ["workflows"],
   };
-  let i = [];
-  let l;
+  let keys = [];
+  let cursor;
   do {
-    let o = await r.listEntries(
-      n,
-      l === undefined
+    let page = await storage.listEntries(
+      scope,
+      cursor === undefined
         ? undefined
         : {
-            cursor: l,
+            cursor,
           },
     );
-    if (!o.ok) {
-      logForDebugging(`Failed to list workflow snapshots: ${o.error.code}`);
+    if (!page.ok) {
+      logForDebugging(`Failed to list workflow snapshots: ${page.error.code}`);
       return [];
     }
-    for (let item of o.value.items) {
+    for (let item of page.value.items) {
       if (item.kind !== "key" || item.key.namespace !== "sidecar") continue;
-      if ((item.key.relPath.at(-1) ?? "").endsWith(".json")) i.push(item.key);
+      if ((item.key.relPath.at(-1) ?? "").endsWith(".json")) keys.push(item.key);
     }
-    l = o.value.cursor;
-  } while (l !== undefined);
+    cursor = page.value.cursor;
+  } while (cursor !== undefined);
   let filtered = (
     await Promise.all(
-      i.map(async (o) => {
-        let e = o.relPath.at(-1) ?? "";
+      keys.map(async (key) => {
+        let fileName = key.relPath.at(-1) ?? "";
         try {
-          let f = await r.read([o]);
-          if (!f.ok) {
-            logForDebugging(`Failed to parse workflow snapshot ${e}: ${f.error.code}`);
+          let readResult = await storage.read([key]);
+          if (!readResult.ok) {
+            logForDebugging(`Failed to parse workflow snapshot ${fileName}: ${readResult.error.code}`);
             return null;
           }
-          let c = f.value.items[0];
-          if (!c?.found) {
-            logForDebugging(`Failed to parse workflow snapshot ${e}: deleted between list and read`);
+          let item = readResult.value.items[0];
+          if (!item?.found) {
+            logForDebugging(`Failed to parse workflow snapshot ${fileName}: deleted between list and read`);
             return null;
           }
-          let record = jsonParse(Buffer.from(c.value).toString("utf8"));
-          return normalizeWorkflowSnapshot(record, e.replace(/\.json$/, ""));
+          let record = jsonParse(Buffer.from(item.value).toString("utf8"));
+          return normalizeWorkflowSnapshot(record, fileName.replace(/\.json$/, ""));
         } catch (error) {
           logForDebugging(
-            `Failed to parse workflow snapshot ${e}: ${error instanceof Error ? error.message : error}`,
+            `Failed to parse workflow snapshot ${fileName}: ${error instanceof Error ? error.message : error}`,
           );
           return null;
         }
       }),
     )
-  ).filter((o) => o !== null);
-  filtered.sort((o, e) => e.startTime - o.startTime);
+  ).filter((snapshot) => snapshot !== null);
+  filtered.sort((left, right) => right.startTime - left.startTime);
   return filtered;
 }
 export { subagentWorkflowDir, sessionProjectKey, writeWorkflowSnapshot, readWorkflowSnapshot };

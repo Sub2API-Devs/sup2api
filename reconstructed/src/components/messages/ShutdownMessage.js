@@ -8,7 +8,13 @@
  * pieces: chunk-ah34pb7m.js (3), chunk-bwbq4xvm.js (1), chunk-kf9b436m.js (1)
  * attribution: placement 3, fingerprint 2
  */
-import { w } from "../../../vendor/react/compiler-runtime.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
+import {
+  jsxProd_default,
+  jsxProd_default_2,
+} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
+import { Text, Box } from "../../ink/components/Text.js";
 import {
   UNKNOWN_SENDER,
   capFrameBodyForDisplay,
@@ -20,100 +26,150 @@ import {
   ShutdownApprovedMessageSchema,
   ShutdownRejectedMessageSchema,
 } from "../../utils/teammateMailbox.js";
-import {
-  jsxProd_default_2,
-  jsxProd_default,
-} from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Text, Box } from "../../ink/components/Text.js";
 import { DiffFrame } from "../FileEditToolDiff.js";
 import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { useIsScreenReaderEnabled } from "../../ink/components/ErrorBoundary.js";
 
+//@ chunk-bwbq4xvm.js:760324-760384 fingerprint = tryRenderShutdownMessage (0.663)
+function tryRenderShutdownMessage(request, originator, response) {
+  return {
+    request,
+    originator,
+    response,
+  };
+}
+//@ chunk-kf9b436m.js:303-739 fingerprint = ShutdownRequestDisplay (0.704)
+function ShutdownRequestDisplay(props) {
+  let $ = useMemoCache(10);
+  let { children, color, title } = props;
+  let isScreenReaderEnabled = useIsScreenReaderEnabled();
+  const borderStyle = isScreenReaderEnabled ? undefined : "round";
+  const paddingX = isScreenReaderEnabled ? 0 : 1;
+  const gap = title ? 1 : 0;
+  let titleElement;
+  if ($[0] !== color || $[1] !== title) {
+    titleElement =
+      title &&
+      jsxProd_default(Text, {
+        bold: true,
+        color,
+        children: title,
+      });
+    $[0] = color;
+    $[1] = title;
+    $[2] = titleElement;
+  } else titleElement = $[2];
+  let dialogBox;
+  if (
+    $[3] !== children ||
+    $[4] !== color ||
+    $[5] !== borderStyle ||
+    $[6] !== paddingX ||
+    $[7] !== gap ||
+    $[8] !== titleElement
+  ) {
+    dialogBox = jsxProd_default_2(Box, {
+      borderStyle,
+      borderColor: color,
+      flexDirection: "column",
+      paddingX,
+      gap,
+      children: [titleElement, children],
+    });
+    $[3] = children;
+    $[4] = color;
+    $[5] = borderStyle;
+    $[6] = paddingX;
+    $[7] = gap;
+    $[8] = titleElement;
+    $[9] = dialogBox;
+  } else dialogBox = $[9];
+  return dialogBox;
+}
 //@ chunk-ah34pb7m.js:81968-82563 placement
 /**
  * 队友关闭请求消息（发送方、原因、回复说明）。
  */
 function ShutdownRequestMessage(content) {
-  let $ = w(12);
+  let $ = useMemoCache(12);
   let { request, senderName, replyInstructions } = content;
-  let f = senderName || UNKNOWN_SENDER;
-  let M;
+  let sender = senderName || UNKNOWN_SENDER;
+  let reasonText;
   if ($[0] !== request.reason) {
-    M = capFrameBodyForDisplay(request.reason, IDLE_SUMMARY_RECEIVE_BOUND);
+    reasonText = capFrameBodyForDisplay(request.reason, IDLE_SUMMARY_RECEIVE_BOUND);
     $[0] = request.reason;
-    $[1] = M;
-  } else M = $[1];
-  let T = M;
-  const title = `Shutdown request from ${f}`;
+    $[1] = reasonText;
+  } else reasonText = $[1];
+  let cappedReason = reasonText;
+  const title = `Shutdown request from ${sender}`;
   let children;
-  if ($[2] !== T) {
+  if ($[2] !== cappedReason) {
     children =
-      T &&
+      cappedReason &&
       jsxProd_default_2(Text, {
-        children: ["Reason: ", T],
+        children: ["Reason: ", cappedReason],
       });
-    $[2] = T;
+    $[2] = cappedReason;
     $[3] = children;
   } else children = $[3];
-  let b;
+  let shutdownRequestDisplayElement;
   if ($[4] !== title || $[5] !== children) {
-    b = jsxProd_default(ShutdownRequestDisplay, {
+    shutdownRequestDisplayElement = jsxProd_default(ShutdownRequestDisplay, {
       color: "warning",
       title,
       children,
     });
     $[4] = title;
     $[5] = children;
-    $[6] = b;
-  } else b = $[6];
-  let E;
+    $[6] = shutdownRequestDisplayElement;
+  } else shutdownRequestDisplayElement = $[6];
+  let replyElement;
   if ($[7] !== replyInstructions) {
-    E =
+    replyElement =
       replyInstructions &&
       jsxProd_default(Text, {
         dimColor: true,
         children: replyInstructions,
       });
     $[7] = replyInstructions;
-    $[8] = E;
-  } else E = $[8];
-  let B;
-  if ($[9] !== b || $[10] !== E) {
-    B = jsxProd_default_2(Box, {
+    $[8] = replyElement;
+  } else replyElement = $[8];
+  let boxElement;
+  if ($[9] !== shutdownRequestDisplayElement || $[10] !== replyElement) {
+    boxElement = jsxProd_default_2(Box, {
       flexDirection: "column",
       marginY: 1,
-      children: [b, E],
+      children: [shutdownRequestDisplayElement, replyElement],
     });
-    $[9] = b;
-    $[10] = E;
-    $[11] = B;
-  } else B = $[11];
-  return B;
+    $[9] = shutdownRequestDisplayElement;
+    $[10] = replyElement;
+    $[11] = boxElement;
+  } else boxElement = $[11];
+  return boxElement;
 }
 //@ chunk-ah34pb7m.js:82563-83141 placement
 /**
  * 队友拒绝关闭的消息。
  */
 function ShutdownRejectedMessage(props) {
-  let $ = w(8);
+  let $ = useMemoCache(8);
   let { response, senderName } = props;
-  let g = senderName || UNKNOWN_SENDER;
-  let h;
+  let sender = senderName || UNKNOWN_SENDER;
+  let reasonText;
   if ($[0] !== response.reason) {
-    h = capFrameBodyForDisplay(response.reason, IDLE_SUMMARY_RECEIVE_BOUND);
+    reasonText = capFrameBodyForDisplay(response.reason, IDLE_SUMMARY_RECEIVE_BOUND);
     $[0] = response.reason;
-    $[1] = h;
-  } else h = $[1];
-  let M = h;
-  const title = `Shutdown rejected by ${g}`;
+    $[1] = reasonText;
+  } else reasonText = $[1];
+  let cappedRejectReason = reasonText;
+  const title = `Shutdown rejected by ${sender}`;
   let t2;
-  if ($[2] !== M) {
+  if ($[2] !== cappedRejectReason) {
     t2 = jsxProd_default(DiffFrame, {
       children: jsxProd_default_2(Text, {
-        children: ["Reason: ", M],
+        children: ["Reason: ", cappedRejectReason],
       }),
     });
-    $[2] = M;
+    $[2] = cappedRejectReason;
     $[3] = t2;
   } else t2 = $[3];
   let t3;
@@ -149,17 +205,17 @@ function renderShutdownMessage(content, senderName) {
   let index = content.indexOf(`
 
 `);
-  let g = index === -1 ? content : content.slice(0, index);
-  let frameForDisplay = parseFrameForDisplay(ShutdownRequestMessageSchema(), g);
-  if (frameForDisplay && g === content)
+  let body = index === -1 ? content : content.slice(0, index);
+  let frameForDisplay = parseFrameForDisplay(ShutdownRequestMessageSchema(), body);
+  if (frameForDisplay && body === content)
     return jsxProd_default(ShutdownRequestMessage, {
       request: frameForDisplay,
       senderName,
     });
   if (
     frameForDisplay &&
-    capRawFrameTextForDisplay(g, senderName) === g &&
-    withShutdownReplyInstructions(g, senderName) === content
+    capRawFrameTextForDisplay(body, senderName) === body &&
+    withShutdownReplyInstructions(body, senderName) === content
   )
     return jsxProd_default(ShutdownRequestMessage, {
       request: frameForDisplay,
@@ -174,61 +230,5 @@ function renderShutdownMessage(content, senderName) {
       senderName,
     });
   return null;
-}
-//@ chunk-bwbq4xvm.js:760324-760384 fingerprint = tryRenderShutdownMessage (0.663)
-function tryRenderShutdownMessage(request, originator, response) {
-  return {
-    request,
-    originator,
-    response,
-  };
-}
-//@ chunk-kf9b436m.js:303-739 fingerprint = ShutdownRequestDisplay (0.704)
-function ShutdownRequestDisplay(props) {
-  let $ = w(10);
-  let { children, color, title } = props;
-  let isScreenReaderEnabled = useIsScreenReaderEnabled();
-  const borderStyle = isScreenReaderEnabled ? undefined : "round";
-  const paddingX = isScreenReaderEnabled ? 0 : 1;
-  const gap = title ? 1 : 0;
-  let c;
-  if ($[0] !== color || $[1] !== title) {
-    c =
-      title &&
-      jsxProd_default(Text, {
-        bold: true,
-        color,
-        children: title,
-      });
-    $[0] = color;
-    $[1] = title;
-    $[2] = c;
-  } else c = $[2];
-  let y;
-  if (
-    $[3] !== children ||
-    $[4] !== color ||
-    $[5] !== borderStyle ||
-    $[6] !== paddingX ||
-    $[7] !== gap ||
-    $[8] !== c
-  ) {
-    y = jsxProd_default_2(Box, {
-      borderStyle,
-      borderColor: color,
-      flexDirection: "column",
-      paddingX,
-      gap,
-      children: [c, children],
-    });
-    $[3] = children;
-    $[4] = color;
-    $[5] = borderStyle;
-    $[6] = paddingX;
-    $[7] = gap;
-    $[8] = c;
-    $[9] = y;
-  } else y = $[9];
-  return y;
 }
 export { tryRenderShutdownMessage, ShutdownRequestDisplay, renderShutdownMessage };

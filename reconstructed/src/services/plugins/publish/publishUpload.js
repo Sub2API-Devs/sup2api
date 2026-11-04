@@ -17,15 +17,20 @@ import {
   authUnavailableReasonByMode,
 } from "../../../utils/auth/authUnavailableReason.js";
 import { DoctorLazy } from "../../../cli/handlers/util.js";
-import { u, string, M, unknown } from "../../../../vendor/zod/v4/classic/schemas.js";
+import {
+  objectSchema,
+  stringSchema,
+  booleanSchema,
+  unknown,
+} from "../../../../vendor/zod/v4/classic/schemas.js";
 import { organizationSubPath, buildOrgGetRequest } from "./orgRequests.js";
 import {
   archiveFileName,
   publishRequestWithRetry,
-  Dt,
+  UPLOAD_CLASSES,
   publishRequestOnce,
   MAX_SCAN_POLLS,
-  extractMarkupText,
+  requestPublishOutcome,
   ensureUploadsMarketplace,
 } from "./publishStatus.js";
 import {
@@ -77,54 +82,54 @@ var multipartHeaders = (publishMultipart) => ({
   "Content-Type": `multipart/form-data; boundary=${publishMultipart.boundary}`,
 });
 //@ chunk-9cjx5pnm.js:21634-21690 placement
-var withArchive = (archive, r, s) => ({
-  ...s,
+var withArchive = (archive, plan, request) => ({
+  ...request,
   archive,
-  manifest: r.manifest,
+  manifest: plan.manifest,
 });
 //@ chunk-9cjx5pnm.js:21690-21738 placement
-var xa = Object.freeze(["pass", "warn", "unknown"]);
+var SEVERITIES_APPLIED = Object.freeze(["pass", "warn", "unknown"]);
 //@ chunk-9cjx5pnm.js:21738-22110 placement
-function scanStateOf(e, r, s) {
-  let n = s ? e.content_scan === null : e.content_scan == null;
-  let a = r === false && n;
-  let m = Boolean(e.pending_version) && e.served !== true;
-  let included = xa.includes(e.content_scan?.combined_assessment ?? "");
+function scanStateOf(plugin, requested, prior) {
+  let scanAbsent = prior ? plugin.content_scan === null : plugin.content_scan == null;
+  let scanNone = requested === false && scanAbsent;
+  let hasPendingVersion = Boolean(plugin.pending_version) && plugin.served !== true;
+  let included = SEVERITIES_APPLIED.includes(plugin.content_scan?.combined_assessment ?? "");
   return (
     firstTruthy([
-      e.content_scan?.status === "errored" && "failed",
-      !a && e.content_scan?.status !== "completed" && "processing",
-      e.served === false && "processing",
-      m && "processing",
-      a && "none",
+      plugin.content_scan?.status === "errored" && "failed",
+      !scanNone && plugin.content_scan?.status !== "completed" && "processing",
+      plugin.served === false && "processing",
+      hasPendingVersion && "processing",
+      scanNone && "none",
       !included && "failed",
     ]) ?? "passed"
   );
 }
 //@ chunk-9cjx5pnm.js:22110-22407 placement
-var toPublishedPlugin = (id, r, s) => ({
+var toPublishedPlugin = (id, plugin, prior) => ({
   id,
-  name: r.name,
-  version: r.version,
-  scan: scanStateOf(r, r.scan_requested ?? s?.isScanAsked, s !== undefined),
-  isScanAsked: r.scan_requested ?? s?.isScanAsked,
-  verdict: r.content_scan?.combined_assessment ?? r.content_scan?.status,
-  isAwaitingCurrent: r.awaiting_make_current === true || s?.isAwaitingCurrent === true,
+  name: plugin.name,
+  version: plugin.version,
+  scan: scanStateOf(plugin, plugin.scan_requested ?? prior?.isScanAsked, prior !== undefined),
+  isScanAsked: plugin.scan_requested ?? prior?.isScanAsked,
+  verdict: plugin.content_scan?.combined_assessment ?? plugin.content_scan?.status,
+  isAwaitingCurrent: plugin.awaiting_make_current === true || prior?.isAwaitingCurrent === true,
 });
 //@ chunk-9cjx5pnm.js:22407-22727 placement
 var publishResponseSchema = DoctorLazy(() =>
-  u({
-    id: string().min(1).optional(),
-    name: string().optional(),
-    version: string().optional(),
-    marketplace_id: string().optional(),
-    served: M().optional(),
-    pending_version: string().nullish(),
-    scan_requested: M().nullish(),
+  objectSchema({
+    id: stringSchema().min(1).optional(),
+    name: stringSchema().optional(),
+    version: stringSchema().optional(),
+    marketplace_id: stringSchema().optional(),
+    served: booleanSchema().optional(),
+    pending_version: stringSchema().nullish(),
+    scan_requested: booleanSchema().nullish(),
     awaiting_make_current: unknown().optional(),
-    content_scan: u({
-      status: string().optional(),
-      combined_assessment: string().nullish(),
+    content_scan: objectSchema({
+      status: stringSchema().optional(),
+      combined_assessment: stringSchema().nullish(),
     }).nullish(),
   }),
 );
@@ -132,75 +137,75 @@ var publishResponseSchema = DoctorLazy(() =>
 /**
  * 从响应里取出已发布的插件信息。
  */
-function publishedFromResponse(e, r) {
-  let s = publishResponseSchema().safeParse(e).data ?? {};
-  let id = r?.id ?? s.id;
-  return id !== undefined ? toPublishedPlugin(id, s, r) : undefined;
+function publishedFromResponse(body, prior) {
+  let parsed = publishResponseSchema().safeParse(body).data ?? {};
+  let id = prior?.id ?? parsed.id;
+  return id !== undefined ? toPublishedPlugin(id, parsed, prior) : undefined;
 }
 //@ chunk-9cjx5pnm.js:22826-22934 placement
-var accountUploadPath = (e, r, s) =>
-  `${organizationSubPath(r, ["marketplaces", e, "plugins", "account-upload"])}?overwrite=${String(s === "replace")}`;
+var accountUploadPath = (marketplaceId, organization, mode) =>
+  `${organizationSubPath(organization, ["marketplaces", marketplaceId, "plugins", "account-upload"])}?overwrite=${String(mode === "replace")}`;
 //@ chunk-9cjx5pnm.js:22971-23092 placement
-function newNameFormPart(e, r) {
-  let s = archiveFileName(r);
-  return s !== r.name
+function newNameFormPart(boundary, manifest) {
+  let fileName = archiveFileName(manifest);
+  return fileName !== manifest.name
     ? `\r
---${e}\r
+--${boundary}\r
 Content-Disposition: form-data; name="new_name"\r
 \r
-` + s
+` + fileName
     : "";
 }
 //@ chunk-9cjx5pnm.js:23092-23359 placement
 function buildPublishMultipart(archive, manifest) {
-  let s = `----PluginPublish${randomUUID()}`;
-  let n = archiveFileName(manifest);
+  let boundary = `----PluginPublish${randomUUID()}`;
+  let archiveName = archiveFileName(manifest);
   return {
-    boundary: s,
+    boundary,
     body: Buffer.concat([
-      Buffer.from(`--${s}\r
-Content-Disposition: form-data; name="file"; filename="${n}.zip"\r
+      Buffer.from(`--${boundary}\r
+Content-Disposition: form-data; name="file"; filename="${archiveName}.zip"\r
 Content-Type: application/zip\r
 \r
 `),
       archive,
       Buffer.from(
-        newNameFormPart(s, manifest) +
+        newNameFormPart(boundary, manifest) +
           `\r
---${s}--\r
+--${boundary}--\r
 `,
       ),
     ]),
   };
 }
 //@ chunk-9cjx5pnm.js:23359-23505 placement
-function buildUploadRequest(e, r, s) {
-  let publishMultipart = buildPublishMultipart(r.archive, r.manifest);
+function buildUploadRequest(organization, plan, mode) {
+  let publishMultipart = buildPublishMultipart(plan.archive, plan.manifest);
   return {
     method: "post",
-    path: accountUploadPath(e, r, s),
+    path: accountUploadPath(organization, plan, mode),
     body: publishMultipart.body,
     headers: multipartHeaders(publishMultipart),
     bound: "progress",
-    signal: r.signal,
+    signal: plan.signal,
   };
 }
 //@ chunk-9cjx5pnm.js:23505-23693 placement
-async function uploadPluginArchive(e, r, s) {
-  let n = await publishRequestWithRetry(buildUploadRequest(e, r, s));
-  if ("kind" in n) return n;
-  if (parsePublishApiError(n).code === "plugin_upload_already_exists") return "exists";
-  return isClientErrorStatus(n)
-    ? (publishedFromResponse(n.data, undefined) ?? refusalResult("other"))
-    : publishApiOutcome(n, Dt);
+async function uploadPluginArchive(organization, plan, mode) {
+  let response = await publishRequestWithRetry(buildUploadRequest(organization, plan, mode));
+  if ("kind" in response) return response;
+  if (parsePublishApiError(response).code === "plugin_upload_already_exists") return "exists";
+  return isClientErrorStatus(response)
+    ? (publishedFromResponse(response.data, undefined) ?? refusalResult("other"))
+    : publishApiOutcome(response, UPLOAD_CLASSES);
 }
 //@ chunk-9cjx5pnm.js:23693-23779 placement
 /**
  * 替换已存在的归档（已存在则返回 busy）。
  */
-async function replaceArchive(e, r) {
-  let s = await uploadPluginArchive(e, r, "replace");
-  return s === "exists" ? refusalResult("busy") : s;
+async function replaceArchive(organization, plan) {
+  let result = await uploadPluginArchive(organization, plan, "replace");
+  return result === "exists" ? refusalResult("busy") : result;
 }
 //@ chunk-9cjx5pnm.js:23779-23791 placement
 /**
@@ -208,9 +213,13 @@ async function replaceArchive(e, r) {
  */
 var POLL_DELAY_MS = 5000;
 //@ chunk-9cjx5pnm.js:23791-23912 placement
-async function refreshScanStatus(e, r) {
-  let s = await publishRequestOnce(buildOrgGetRequest(e, ["plugins", r.id, "scan-status"]));
-  return "status" in s && isClientErrorStatus(s) ? (publishedFromResponse(s.data, r) ?? r) : r;
+async function refreshScanStatus(request, published) {
+  let response = await publishRequestOnce(
+    buildOrgGetRequest(request, ["plugins", published.id, "scan-status"]),
+  );
+  return "status" in response && isClientErrorStatus(response)
+    ? (publishedFromResponse(response.data, published) ?? published)
+    : published;
 }
 //@ chunk-9cjx5pnm.js:23912-23926 placement
 /**
@@ -222,96 +231,101 @@ var MAX_SCAN_WAIT_MS = 300000;
  * 轮询插件内容扫描状态，直到完成、超时或被中止。
  */
 async function waitForContentScan(
-  e,
-  r,
-  s = {
+  request,
+  published,
+  budget = {
     left: MAX_SCAN_POLLS,
     until: Date.now() + MAX_SCAN_WAIT_MS,
   },
 ) {
   if (!(
-    r.scan === "processing" &&
-    !r.isAwaitingCurrent &&
-    !e.signal.aborted &&
-    s.left > 0 &&
-    Date.now() < s.until
+    published.scan === "processing" &&
+    !published.isAwaitingCurrent &&
+    !request.signal.aborted &&
+    budget.left > 0 &&
+    Date.now() < budget.until
   ))
-    return r;
-  await sleep(POLL_DELAY_MS, e.signal);
-  return waitForContentScan(e, await refreshScanStatus(e, r), {
-    left: s.left - 1,
-    until: s.until,
+    return published;
+  await sleep(POLL_DELAY_MS, request.signal);
+  return waitForContentScan(request, await refreshScanStatus(request, published), {
+    left: budget.left - 1,
+    until: budget.until,
   });
 }
 //@ chunk-9cjx5pnm.js:24169-24246 placement
-var listAccountMarketplaces = (e) =>
-  extractMarkupText(buildOrgGetRequest(e, ["marketplaces", "list-account-marketplaces"]), () =>
-    ensureUploadsMarketplace(e),
+var listAccountMarketplaces = (request) =>
+  requestPublishOutcome(buildOrgGetRequest(request, ["marketplaces", "list-account-marketplaces"]), () =>
+    ensureUploadsMarketplace(request),
   );
 //@ chunk-9cjx5pnm.js:24246-24368 placement
-async function uploadOrReplace(e, r) {
-  let s = await uploadPluginArchive(e, r, "new");
-  if (s !== "exists") return s;
-  return r.mode === "replace" ? replaceArchive(e, r) : refusalResult("exists");
+async function uploadOrReplace(organization, plan) {
+  let result = await uploadPluginArchive(organization, plan, "new");
+  if (result !== "exists") return result;
+  return plan.mode === "replace" ? replaceArchive(organization, plan) : refusalResult("exists");
 }
 //@ chunk-9cjx5pnm.js:24368-24549 placement
 async function currentOrganization() {
-  let e = normalizeUuidOrNull(
+  let organizationUuid = normalizeUuidOrNull(
     isDesktopSessionWithOwnToken() ? env.CLAUDE_CODE_ORGANIZATION_UUID : await getOrganizationUUID(),
   );
   let storedOauthAccountInfo = getStoredOauthAccountInfo();
-  let s = storedOauthAccountInfo?.organizationUuid === e;
-  if (e === null) return;
+  let sameOrganization = storedOauthAccountInfo?.organizationUuid === organizationUuid;
+  if (organizationUuid === null) return;
   return {
-    id: e,
-    name: (s && storedOauthAccountInfo?.organizationName) || undefined,
+    id: organizationUuid,
+    name: (sameOrganization && storedOauthAccountInfo?.organizationName) || undefined,
   };
 }
 //@ chunk-9cjx5pnm.js:24549-24601 placement
-async function ensureOrganization(e) {
-  return e !== undefined ? undefined : currentOrganization();
+async function ensureOrganization(organization) {
+  return organization !== undefined ? undefined : currentOrganization();
 }
 //@ chunk-9cjx5pnm.js:24601-24643 placement
 var organizationAvailability = () =>
   isDesktopSessionWithOwnToken() ? "no-organization" : authUnavailableReasonByMode();
 //@ chunk-9cjx5pnm.js:24643-24828 placement
-var publishRequestHash = (e) =>
+var publishRequestHash = (request) =>
   computeContentHash(
     jsonStringify([
-      e.plan.root,
-      e.wanted.destination,
-      e.organization.id,
-      pluginNameLine(e.plan.manifest),
-      e.wanted.mode,
-      e.plan.listing.files.map((file) => [file.path, file.bytes, file.mode, e.plan.hashes[file.path]]),
+      request.plan.root,
+      request.wanted.destination,
+      request.organization.id,
+      pluginNameLine(request.plan.manifest),
+      request.wanted.mode,
+      request.plan.listing.files.map((file) => [
+        file.path,
+        file.bytes,
+        file.mode,
+        request.plan.hashes[file.path],
+      ]),
     ]),
   );
 //@ chunk-9cjx5pnm.js:24828-24948 placement
-function explainUnreadable(e, r) {
-  return e.refusal.kind === "unreadable" && hasReadDenyRuleInForce(r.permissions())
+function explainUnreadable(result, context) {
+  return result.refusal.kind === "unreadable" && hasReadDenyRuleInForce(context.permissions())
     ? {
-        ...e,
+        ...result,
         refusal: {
-          ...e.refusal,
+          ...result.refusal,
           details: [],
         },
       }
-    : e;
+    : result;
 }
 //@ chunk-9cjx5pnm.js:24977-25086 placement
-var readDeniedFiles = (e, r, s) =>
-  r.files
+var readDeniedFiles = (roots, listing, context) =>
+  listing.files
     .map((file) => file.path)
-    .filter((n) =>
+    .filter((path) =>
       hasReadDenyRuleForPath(
-        join(e[0] ?? "", n),
-        s.permissions(),
-        e.map((a) => join(a, n)),
+        join(roots[0] ?? "", path),
+        context.permissions(),
+        roots.map((root) => join(root, path)),
       ),
     );
 //@ chunk-9cjx5pnm.js:25086-25159 placement
-function readDeniedOutcome(e, r, s) {
-  return readDeniedFiles(e, r, s).length === 0 ? undefined : refusalResult("read-denied");
+function readDeniedOutcome(roots, listing, context) {
+  return readDeniedFiles(roots, listing, context).length === 0 ? undefined : refusalResult("read-denied");
 }
 //@ chunk-9cjx5pnm.js:25231-25264 placement
 /**
@@ -322,74 +336,75 @@ var DENY_LAYERS = ["bare-deny", "path-deny"];
 /**
  * 判断路径读取是否被规则拒绝。
  */
-var isReadDeniedByRule = (e, r) =>
+var isReadDeniedByRule = (path, context) =>
   DENY_LAYERS.includes(
-    layeredReadVerdictForPaths([e], r.permissions(), {
+    layeredReadVerdictForPaths([path], context.permissions(), {
       refuseAutomounterShapes: true,
     }).layer,
   );
 //@ chunk-9cjx5pnm.js:25351-25549 placement
-async function checkPublishReadRules(e, r) {
-  let s = resolve(getCwd(), e.path);
-  if (isReadDeniedByRule(s, r)) return refusalResult("read-denied");
-  if (!hasReadDenyRuleInForce(r.permissions())) return;
-  let n = await realpath(s).catch(() => s);
-  let a = await unreadableOnError(scanPublishFolder(n));
-  return "kind" in a ? a : readDeniedOutcome([s, n], a, r);
+async function checkPublishReadRules(input, context) {
+  let absPath = resolve(getCwd(), input.path);
+  if (isReadDeniedByRule(absPath, context)) return refusalResult("read-denied");
+  if (!hasReadDenyRuleInForce(context.permissions())) return;
+  let realPath = await realpath(absPath).catch(() => absPath);
+  let listing = await unreadableOnError(scanPublishFolder(realPath));
+  return "kind" in listing ? listing : readDeniedOutcome([absPath, realPath], listing, context);
 }
 //@ chunk-9cjx5pnm.js:25581-25643 placement
 /**
  * 判断读取路径是否会经过网络路径。
  */
-var isNetworkPathRead = (path, r, s) =>
+var isNetworkPathRead = (path, paths, context) =>
   checkReadNetworkPathSafety(
-    s.tool,
+    context.tool,
     {
       path,
     },
-    s.permissions(),
-    r,
+    context.permissions(),
+    paths,
   ) !== null;
 //@ chunk-9cjx5pnm.js:25643-25803 placement
-function publishPathScreenState(e, r) {
-  if (isNetworkPathRead(e.path, [e.path], r)) return "network-path";
-  let path = resolve(getCwd(), e.path);
+function publishPathScreenState(input, context) {
+  if (isNetworkPathRead(input.path, [input.path], context)) return "network-path";
+  let path = resolve(getCwd(), input.path);
   let pathsForNetworkScreen = getPathsForNetworkScreen(path);
-  return isNetworkPathRead(path, pathsForNetworkScreen.paths, r)
+  return isNetworkPathRead(path, pathsForNetworkScreen.paths, context)
     ? "network-path"
     : pathsForNetworkScreen.vetted
       ? undefined
       : "unreadable";
 }
 //@ chunk-9cjx5pnm.js:25803-25843 placement
-var publishFlagState = (e, r) => (isPluginPublishAllowed() ? publishPathScreenState(e, r) : "flag-off");
+var publishFlagState = (input, context) =>
+  isPluginPublishAllowed() ? publishPathScreenState(input, context) : "flag-off";
 //@ chunk-9cjx5pnm.js:25843-25869 placement
 var hashCanonical = (shown) => computeContentHash(jsonStringify(sortKeysDeep(shown)));
 //@ chunk-9cjx5pnm.js:25869-25914 placement
 var hashPublishInput = (question) =>
   hashCanonical(PUBLISH_QUESTION_SCHEMA().safeParse(question).data ?? question);
 //@ chunk-9cjx5pnm.js:25914-26049 placement
-var normalizePublishInput = (e) => ({
-  folder: e.path,
-  destination: e.destination ?? "organization",
-  description: e.description,
-  mode: e.replace === true ? "replace" : "new",
+var normalizePublishInput = (input) => ({
+  folder: input.path,
+  destination: input.destination ?? "organization",
+  description: input.description,
+  mode: input.replace === true ? "replace" : "new",
 });
 //@ chunk-9cjx5pnm.js:26078-26153 placement
 /**
  * 判断 manifest 的写入是否被拒绝。
  */
-var isManifestWriteDenied = (e, r) =>
+var isManifestWriteDenied = (filePath, permissions) =>
   checkWritePermissionForTool(
     FileWriteTool,
     {
-      file_path: e,
+      file_path: filePath,
       content: "",
     },
-    r,
-  ).behavior === "deny" || hasReadDenyRuleForPath(e, r);
+    permissions,
+  ).behavior === "deny" || hasReadDenyRuleForPath(filePath, permissions);
 //@ chunk-9cjx5pnm.js:26153-26323 placement
-var ep = Object.freeze(
+var PATCH_TOOL_CAPS = Object.freeze(
   [FILE_WRITE_TOOL_NAME, FILE_EDIT_TOOL_NAME].map((name) =>
     Object.freeze({
       name,
@@ -401,12 +416,12 @@ var ep = Object.freeze(
   ),
 );
 //@ chunk-9cjx5pnm.js:26323-26478 placement
-function hasPublishDenyRule(e, r) {
-  let s = r.permissions();
-  let filtered = getDenyRules(s).filter((a) => !NARROWING_RULE_SOURCES.includes(a.source));
+function hasPublishDenyRule(roots, context) {
+  let permissions = context.permissions();
+  let filtered = getDenyRules(permissions).filter((rule) => !NARROWING_RULE_SOURCES.includes(rule.source));
   return (
-    ep.some((a) => getDenyRuleForTool(s, a, filtered) !== null) ||
-    uniq(e).some((a) => isManifestWriteDenied(join(a, PLUGIN_MANIFEST_PATH), s))
+    PATCH_TOOL_CAPS.some((toolName) => getDenyRuleForTool(permissions, toolName, filtered) !== null) ||
+    uniq(roots).some((root) => isManifestWriteDenied(join(root, PLUGIN_MANIFEST_PATH), permissions))
   );
 }
 export {

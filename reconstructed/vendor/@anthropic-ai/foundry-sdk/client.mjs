@@ -102,3 +102,4 @@ function makeBetaResource(client) {
   delete resource.messages.batches;
   return resource;
 }
+export { AnthropicFoundry };

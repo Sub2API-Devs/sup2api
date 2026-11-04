@@ -14,21 +14,21 @@ import { BASE64_BODY_RE } from "../../entrypoints/sdk/controlSchemas.js";
 
 //@ chunk-6vmp3d2t.js:385-1294 placement
 function createHookTemplateStore(
-  d = {
+  deps = {
     byId: getHookTemplate,
   },
 ) {
-  let t = new Map();
+  let store = new Map();
   return {
     accept({ template, digest, contentBase64 }) {
-      let o = d.byId(template);
-      if (o === undefined)
+      let template_2 = deps.byId(template);
+      if (template_2 === undefined)
         return {
           ok: false,
           kind: "refused",
           error: "template_refused: unknown_template",
         };
-      if (!o.digests.some((digest_2) => digest_2.sha256 === digest))
+      if (!template_2.digests.some((digest_2) => digest_2.sha256 === digest))
         return {
           ok: false,
           kind: "refused",
@@ -41,7 +41,7 @@ function createHookTemplateStore(
           error: "invalid_upload: bad_base64",
         };
       let buffer = Buffer.from(contentBase64, "base64");
-      if (buffer.length > o.maxBytes)
+      if (buffer.length > template_2.maxBytes)
         return {
           ok: false,
           kind: "refused",
@@ -53,27 +53,28 @@ function createHookTemplateStore(
           kind: "refused",
           error: "template_refused: digest_mismatch",
         };
-      if (t.has(digest))
+      if (store.has(digest))
         return {
           ok: true,
           status: "already_stored",
-          template: o,
+          template: template_2,
           bytes: buffer.length,
         };
-      t.set(digest, buffer);
+      store.set(digest, buffer);
       return {
         ok: true,
         status: "stored",
-        template: o,
+        template: template_2,
         bytes: buffer.length,
       };
     },
-    bytesFor: (r) => {
-      let e = t.get(r);
-      return e === undefined ? undefined : Buffer.from(e);
+    bytesFor: (digest) => {
+      let stored = store.get(digest);
+      return stored === undefined ? undefined : Buffer.from(stored);
     },
-    template: (r) => d.byId(r),
-    size: () => t.size,
-    clear: () => t.clear(),
+    template: (templateId) => deps.byId(templateId),
+    size: () => store.size,
+    clear: () => store.clear(),
   };
 }
+export { createHookTemplateStore };

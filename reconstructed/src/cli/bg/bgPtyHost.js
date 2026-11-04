@@ -30,9 +30,8 @@ import { killChildWithSignal } from "../../services/voice.js";
 import { parseNumberWithSeparators } from "../../utils/envUtils.js";
 import { setBgExitCause } from "../../utils/bgExitSidecars.js";
 import { sleep } from "../../utils/sleep.js";
-import { getExecExitPath } from "../../services/daemon/paths.js";
+import { getExecExitPath, ptyLateFile, ptyErrFile } from "../../services/daemon/paths.js";
 import { writeAndPublishSync } from "../../utils/atomicPublishWrite.js";
-import { ptyLateFile, ptyErrFile } from "../../utils/sandbox/userNamespace.js";
 
 //@ chunk-jx4rgw65.js:1337-1360 placement
 var MAX_PTY_WRITE_BUFFER_BYTES = 1048576;
@@ -41,21 +40,25 @@ var DEFAULT_SILENT_PEER_TIMEOUT_MS = 5000;
 /**
  * 后台 PTY 宿主主函数：解析 argv、启动子进程、转发 resize/信号、处理连接（约 6 KB）。
  */
-async function runBgPtyHost(o) {
-  let index = o.indexOf("--");
-  let included = o.includes("--bg-spare", index + 1);
+async function runBgPtyHost(argv) {
+  let index = argv.indexOf("--");
+  let included = argv.includes("--bg-spare", index + 1);
   if (!included) await detectHomebrew();
   env.unset("CLAUDE_PTY_HOST_NO_STABLE_PATH");
-  if (index < 3 || index === o.length - 1)
+  if (index < 3 || index === argv.length - 1)
     return failPtyHost(undefined, "bad argv: --bg-pty-host <sock> <cols> <rows> -- <file> [args...]");
-  let s = o[0];
-  process.on("uncaughtException", (e) => failPtyHost(s, `uncaught: ${e?.stack ?? String(e)}`));
-  process.on("unhandledRejection", (e) => failPtyHost(s, `unhandledRejection: ${e?.stack ?? String(e)}`));
-  let d = Number(o[1]) || 200;
-  let S = Number(o[2]) || 50;
-  let h = o[index + 1];
-  let sliced = o.slice(index + 2);
-  let a = process.env.CLAUDE_PTY_HOST_EXEC === "1";
+  let sockPath = argv[0];
+  process.on("uncaughtException", (error) =>
+    failPtyHost(sockPath, `uncaught: ${error?.stack ?? String(error)}`),
+  );
+  process.on("unhandledRejection", (reason) =>
+    failPtyHost(sockPath, `unhandledRejection: ${reason?.stack ?? String(reason)}`),
+  );
+  let cols = Number(argv[1]) || 200;
+  let rows = Number(argv[2]) || 50;
+  let execPath = argv[index + 1];
+  let sliced = argv.slice(index + 2);
+  let isExecMode = process.env.CLAUDE_PTY_HOST_EXEC === "1";
   delete process.env.CLAUDE_PTY_HOST_EXEC;
   let envClaudeBgPtyAuth = process.env.CLAUDE_BG_PTY_AUTH;
   delete process.env.CLAUDE_BG_PTY_AUTH;
@@ -63,15 +66,16 @@ async function runBgPtyHost(o) {
   if (envClaudeBgSocketTokensPath) {
     let sessionAuthFile = await readSessionAuthFile(envClaudeBgSocketTokensPath);
     if (sessionAuthFile?.ptyAuth) envClaudeBgPtyAuth = sessionAuthFile.ptyAuth;
-    else if (!envClaudeBgPtyAuth) await appendPtyHostLog(s, "tokens-file unreadable; DATA gate fail-open");
-    if (a) {
+    else if (!envClaudeBgPtyAuth)
+      await appendPtyHostLog(sockPath, "tokens-file unreadable; DATA gate fail-open");
+    if (isExecMode) {
       delete process.env.CLAUDE_BG_SOCKET_TOKENS_PATH;
       await unlink(envClaudeBgSocketTokensPath).catch(() => {});
     }
   }
-  let X = env.CLAUDE_BG_SOCK_ADMIT_SILENT_PEERS === "1";
-  if (a) env.unset("CLAUDE_BG_SOCK_ADMIT_SILENT_PEERS");
-  let V = X || (!envClaudeBgPtyAuth && !envClaudeBgSocketTokensPath);
+  let admitSilentPeers = env.CLAUDE_BG_SOCK_ADMIT_SILENT_PEERS === "1";
+  if (isExecMode) env.unset("CLAUDE_BG_SOCK_ADMIT_SILENT_PEERS");
+  let allowsSilentPeer = admitSilentPeers || (!envClaudeBgPtyAuth && !envClaudeBgSocketTokensPath);
   let CLAUDE_BG_SILENT_PEER_TIMEOUT_MS =
     env.CLAUDE_BG_SILENT_PEER_TIMEOUT_MS || DEFAULT_SILENT_PEER_TIMEOUT_MS;
   if (getPlatform() !== "windows")
@@ -79,47 +83,47 @@ async function runBgPtyHost(o) {
       setPriority(0, Math.min(getPriority(0) + 5, 19));
     } catch {}
   let outputBuffer = createOutputBuffer(MAX_CONTROL_FRAME_BYTES);
-  let u = new Set();
+  let clients = new Set();
   let weakMap = new WeakMap();
   let weakSet = new WeakSet();
   let weakSet_2 = new WeakSet();
-  let m = false;
-  let O;
-  let P = false;
-  let U = false;
+  let isExiting = false;
+  let resolveLateExit;
+  let didSignalChild = false;
+  let sawOutput = false;
   let ppid = process.ppid;
-  let M = 0;
-  let v = null;
-  let W = appendPtyLog(process.env.CLAUDE_PTY_RECORD, d, S);
-  function Y(e) {
-    for (let r of u) {
-      if (r.destroyed) {
-        u.delete(r);
+  let orphanMisses = 0;
+  let forwardedSignal = null;
+  let recorder = appendPtyLog(process.env.CLAUDE_PTY_RECORD, cols, rows);
+  function broadcast(chunk) {
+    for (let socket of clients) {
+      if (socket.destroyed) {
+        clients.delete(socket);
         continue;
       }
-      if (r.writableLength > MAX_PTY_WRITE_BUFFER_BYTES) {
-        r.destroy();
-        u.delete(r);
+      if (socket.writableLength > MAX_PTY_WRITE_BUFFER_BYTES) {
+        socket.destroy();
+        clients.delete(socket);
         continue;
       }
-      r.write(e);
+      socket.write(chunk);
     }
   }
   let handle;
   let child;
   try {
     handle = new Bun.Terminal({
-      cols: d,
-      rows: S,
-      data(e, r) {
-        U = true;
-        let buffer = Buffer.from(r);
+      cols,
+      rows,
+      data(terminal, data) {
+        sawOutput = true;
+        let buffer = Buffer.from(data);
         outputBuffer.push(buffer);
-        W?.write(buffer);
-        if (u.size) Y(encodeDataFrame(buffer));
+        recorder?.write(buffer);
+        if (clients.size) broadcast(encodeDataFrame(buffer));
       },
     });
-    child = Bun.spawn([h, ...sliced], {
+    child = Bun.spawn([execPath, ...sliced], {
       cwd: process.cwd(),
       env: {
         ...process.env,
@@ -133,18 +137,25 @@ async function runBgPtyHost(o) {
       }),
     });
   } catch (error) {
-    failPtyHost(s, `spawn failed: ${String(error)}`);
+    failPtyHost(sockPath, `spawn failed: ${String(error)}`);
   }
-  function w(e, r) {
-    if (!e.destroyed) e.write(r);
+  function writeUnlessClosed(stream, frame) {
+    if (!stream.destroyed) stream.write(frame);
   }
-  function q(ctrl) {
+  function applyControl(ctrl) {
     switch (ctrl.t) {
       case "resize": {
-        let r = Number(ctrl.cols);
-        let c = Number(ctrl.rows);
-        if (r > 0 && r <= SOCKET_IDLE_TIMEOUT_MS && c > 0 && c <= SOCKET_IDLE_TIMEOUT_MS && !m && !P) {
-          handle.resize(r, c);
+        let width = Number(ctrl.cols);
+        let height = Number(ctrl.rows);
+        if (
+          width > 0 &&
+          width <= SOCKET_IDLE_TIMEOUT_MS &&
+          height > 0 &&
+          height <= SOCKET_IDLE_TIMEOUT_MS &&
+          !isExiting &&
+          !didSignalChild
+        ) {
+          handle.resize(width, height);
           if (getPlatform() !== "windows") {
             try {
               process.kill(-process.pid, "SIGWINCH");
@@ -159,11 +170,11 @@ async function runBgPtyHost(o) {
       case "kill": {
         let signal = ctrl.sig === "SIGKILL" ? "SIGKILL" : "SIGTERM";
         try {
-          P = killChildWithSignal(signal, child, handle) || P;
+          didSignalChild = killChildWithSignal(signal, child, handle) || didSignalChild;
         } catch {}
         if (signal === "SIGTERM")
           setTimeout(() => {
-            if (!m)
+            if (!isExiting)
               try {
                 child.kill("SIGKILL");
               } catch {}
@@ -174,19 +185,19 @@ async function runBgPtyHost(o) {
         return;
     }
   }
-  await unlink(s).catch(() => {});
-  let server = createServer((e) => {
-    e.on("error", () => e.destroy());
-    e.once("close", () => u.delete(e));
-    let r = false;
-    let c = false;
-    function E() {
-      if (r || e.destroyed) return;
-      r = true;
-      c = m;
-      e.setTimeout(0);
-      w(
-        e,
+  await unlink(sockPath).catch(() => {});
+  let server = createServer((socket) => {
+    socket.on("error", () => socket.destroy());
+    socket.once("close", () => clients.delete(socket));
+    let isHellod = false;
+    let isSnapshotted = false;
+    function sendHello() {
+      if (isHellod || socket.destroyed) return;
+      isHellod = true;
+      isSnapshotted = isExiting;
+      socket.setTimeout(0);
+      writeUnlessClosed(
+        socket,
         encodeControlFrame({
           t: "hello",
           replPid: child.pid,
@@ -217,52 +228,52 @@ async function runBgPtyHost(o) {
               : undefined,
         }),
       );
-      for (let chunk of outputBuffer.chunks) w(e, encodeDataFrame(chunk));
-      w(
-        e,
+      for (let chunk of outputBuffer.chunks) writeUnlessClosed(socket, encodeDataFrame(chunk));
+      writeUnlessClosed(
+        socket,
         encodeControlFrame({
           t: "live",
         }),
       );
-      u.add(e);
-      M = 0;
-      weakMap.set(e, {
+      clients.add(socket);
+      orphanMisses = 0;
+      weakMap.set(socket, {
         armed: false,
         missed: 0,
       });
-      w(
-        e,
+      writeUnlessClosed(
+        socket,
         encodeControlFrame({
           t: "ping",
         }),
       );
-      if (m) {
-        w(
-          e,
+      if (isExiting) {
+        writeUnlessClosed(
+          socket,
           encodeControlFrame({
             t: "exit",
-            code: R,
+            code: exitCode,
             signal,
           }),
         );
-        e.end();
-        O?.();
+        socket.end();
+        resolveLateExit?.();
       }
     }
-    if (V) {
-      E();
-      if (m) return;
-    } else e.setTimeout(CLAUDE_BG_SILENT_PEER_TIMEOUT_MS, () => e.destroy());
+    if (allowsSilentPeer) {
+      sendHello();
+      if (isExiting) return;
+    } else socket.setTimeout(CLAUDE_BG_SILENT_PEER_TIMEOUT_MS, () => socket.destroy());
     let frameDecoder = createFrameDecoder(
-      (l) => {
-        if (!r) E();
-        if (c) return;
-        if (l.kind === DATA_FRAME_KIND) {
-          if (envClaudeBgPtyAuth && !weakSet.has(e)) {
-            if (!weakSet_2.has(e)) {
-              weakSet_2.add(e);
-              w(
-                e,
+      (frame) => {
+        if (!isHellod) sendHello();
+        if (isSnapshotted) return;
+        if (frame.kind === DATA_FRAME_KIND) {
+          if (envClaudeBgPtyAuth && !weakSet.has(socket)) {
+            if (!weakSet_2.has(socket)) {
+              weakSet_2.add(socket);
+              writeUnlessClosed(
+                socket,
                 encodeControlFrame({
                   t: "auth-required",
                 }),
@@ -270,276 +281,284 @@ async function runBgPtyHost(o) {
             }
             return;
           }
-          if (!m && !P) {
-            handle.write(l.payload);
-            if (a && getPlatform() !== "windows") {
-              let T = l.payload.includes(3) ? "SIGINT" : l.payload.includes(28) ? "SIGQUIT" : null;
-              if (T) {
-                v = T;
+          if (!isExiting && !didSignalChild) {
+            handle.write(frame.payload);
+            if (isExecMode && getPlatform() !== "windows") {
+              let forwarded = frame.payload.includes(3)
+                ? "SIGINT"
+                : frame.payload.includes(28)
+                  ? "SIGQUIT"
+                  : null;
+              if (forwarded) {
+                forwardedSignal = forwarded;
                 try {
-                  process.kill(-process.pid, T);
+                  process.kill(-process.pid, forwarded);
                 } catch {}
                 setImmediate(() => {
-                  v = null;
+                  forwardedSignal = null;
                 });
               }
             }
           }
-        } else if (l.kind === CONTROL_FRAME_KIND)
-          if (l.ctrl.t === "pong") {
-            let T = weakMap.get(e);
-            if (T) {
-              T.armed = true;
-              T.missed = 0;
+        } else if (frame.kind === CONTROL_FRAME_KIND)
+          if (frame.ctrl.t === "pong") {
+            let state = weakMap.get(socket);
+            if (state) {
+              state.armed = true;
+              state.missed = 0;
             }
-          } else if (l.ctrl.t === "auth") {
-            if (timingSafeEqualStrings(l.ctrl.token, envClaudeBgPtyAuth)) weakSet.add(e);
-          } else q(l.ctrl);
+          } else if (frame.ctrl.t === "auth") {
+            if (timingSafeEqualStrings(frame.ctrl.token, envClaudeBgPtyAuth)) weakSet.add(socket);
+          } else applyControl(frame.ctrl);
       },
-      () => e.destroy(),
+      () => socket.destroy(),
     );
-    e.on("data", frameDecoder);
+    socket.on("data", frameDecoder);
   });
-  server.on("error", (e) => {
+  server.on("error", (error) => {
     try {
       child.kill("SIGTERM");
     } catch {}
-    failPtyHost(s, `server error: ${String(e)}`);
+    failPtyHost(sockPath, `server error: ${String(error)}`);
   });
-  server.listen(s);
+  server.listen(sockPath);
   server.unref();
-  let A;
-  let C;
+  let orphanWatchdog;
+  let heartbeat;
   if (getPlatform() !== "windows") {
-    let e = parseNumberWithSeparators(process.env.CLAUDE_PTY_HEARTBEAT_MS) || 60000;
-    let r = 3;
-    C = setInterval(() => {
-      if (m) return;
-      for (let y of u) {
-        let l = weakMap.get(y);
-        if (!l?.armed) continue;
-        l.missed++;
-        if (l.missed >= 3) {
-          y.destroy();
-          u.delete(y);
+    let heartbeatMs = parseNumberWithSeparators(process.env.CLAUDE_PTY_HEARTBEAT_MS) || 60000;
+    let maxMissed = 3;
+    heartbeat = setInterval(() => {
+      if (isExiting) return;
+      for (let client of clients) {
+        let state = weakMap.get(client);
+        if (!state?.armed) continue;
+        state.missed++;
+        if (state.missed >= 3) {
+          client.destroy();
+          clients.delete(client);
         } else
-          w(
-            y,
+          writeUnlessClosed(
+            client,
             encodeControlFrame({
               t: "ping",
             }),
           );
       }
-    }, e);
-    C.unref();
-    let c = parseNumberWithSeparators(process.env.CLAUDE_PTY_ORPHAN_CHECK_MS) || 2000;
-    let E = 30;
-    A = setInterval(() => {
-      if (m) return;
-      if (process.ppid === ppid || u.size > 0) {
-        M = 0;
+    }, heartbeatMs);
+    heartbeat.unref();
+    let orphanCheckMs = parseNumberWithSeparators(process.env.CLAUDE_PTY_ORPHAN_CHECK_MS) || 2000;
+    let orphanLimit = 30;
+    orphanWatchdog = setInterval(() => {
+      if (isExiting) return;
+      if (process.ppid === ppid || clients.size > 0) {
+        orphanMisses = 0;
         return;
       }
-      if (++M < E) return;
-      clearInterval(A);
-      clearInterval(C);
-      appendPtyHostLog(s, `orphan watchdog: ppid ${ppid}\u2192${process.ppid}, no client for ${E * c}ms`);
+      if (++orphanMisses < orphanLimit) return;
+      clearInterval(orphanWatchdog);
+      clearInterval(heartbeat);
+      appendPtyHostLog(
+        sockPath,
+        `orphan watchdog: ppid ${ppid}\u2192${process.ppid}, no client for ${orphanLimit * orphanCheckMs}ms`,
+      );
       setBgExitCause("ptyhost_orphan_watchdog");
       try {
         child.kill("SIGTERM");
       } catch {}
       setTimeout(() => {
-        if (!m)
+        if (!isExiting)
           try {
             child.kill("SIGKILL");
           } catch {}
       }, 5000).unref();
-    }, c);
-    A.unref();
+    }, orphanCheckMs);
+    orphanWatchdog.unref();
   }
-  for (let e of ["SIGTERM", "SIGINT", "SIGHUP"])
-    process.on(e, () => {
-      if (v === e) return;
+  for (let signalName of ["SIGTERM", "SIGINT", "SIGHUP"])
+    process.on(signalName, () => {
+      if (forwardedSignal === signalName) return;
       try {
-        child.kill(e === "SIGHUP" ? "SIGTERM" : e);
+        child.kill(signalName === "SIGHUP" ? "SIGTERM" : signalName);
       } catch {}
     });
-  if (a && getPlatform() !== "windows")
+  if (isExecMode && getPlatform() !== "windows")
     process.on("SIGQUIT", () => {
-      if (v === "SIGQUIT") return;
+      if (forwardedSignal === "SIGQUIT") return;
       try {
         child.kill("SIGQUIT");
       } catch {}
     });
-  let R = 0;
-  R = await child.exited;
-  let F = 0;
+  let exitCode = 0;
+  exitCode = await child.exited;
+  let quietTicks = 0;
   for (let idx = 0; idx < 20; idx++) {
-    U = false;
+    sawOutput = false;
     await sleep(5);
-    if (U) F = 0;
-    else if (++F >= 2) break;
+    if (sawOutput) quietTicks = 0;
+    else if (++quietTicks >= 2) break;
   }
   let signal = child.signalCode ?? undefined;
-  m = true;
-  if (a)
+  isExiting = true;
+  if (isExecMode)
     try {
-      let execExitPath = getExecExitPath(s);
+      let execExitPath = getExecExitPath(sockPath);
       let chunk = Buffer.concat(outputBuffer.chunks).subarray(-4096);
-      let c = 0;
-      while (c < 3 && c < chunk.length && (chunk[c] & 192) === 128) c++;
-      let tail = chunk.subarray(c).toString("utf8");
+      let trimmed = 0;
+      while (trimmed < 3 && trimmed < chunk.length && (chunk[trimmed] & 192) === 128) trimmed++;
+      let tail = chunk.subarray(trimmed).toString("utf8");
       writeAndPublishSync(
         execExitPath,
         JSON.stringify({
-          code: R,
+          code: exitCode,
           signal,
           tail,
         }),
         384,
       );
     } catch {}
-  if (A) clearInterval(A);
-  if (C) clearInterval(C);
-  if (!P) handle.close();
-  W?.close();
-  if (a && getPlatform() !== "windows") {
-    v = "SIGHUP";
+  if (orphanWatchdog) clearInterval(orphanWatchdog);
+  if (heartbeat) clearInterval(heartbeat);
+  if (!didSignalChild) handle.close();
+  recorder?.close();
+  if (isExecMode && getPlatform() !== "windows") {
+    forwardedSignal = "SIGHUP";
     try {
       process.kill(-process.pid, "SIGHUP");
     } catch {}
   }
-  Y(
+  broadcast(
     encodeControlFrame({
       t: "exit",
-      code: R,
+      code: exitCode,
       signal,
     }),
   );
-  if (u.size === 0) {
+  if (clients.size === 0) {
     let promise = new Promise((resolve) => {
-      O = resolve;
+      resolveLateExit = resolve;
     });
     await waitWithGrace(
       promise,
-      a ? () => writeFile(ptyLateFile(s), Buffer.concat(outputBuffer.chunks)) : undefined,
+      isExecMode ? () => writeFile(ptyLateFile(sockPath), Buffer.concat(outputBuffer.chunks)) : undefined,
     );
   }
-  for (let e of u) e.end();
+  for (let client of clients) client.end();
   await Promise.race([
     new Promise((resolve) => server.close(() => resolve())),
     sleep(2000, undefined, {
       unref: true,
     }),
   ]);
-  if (getPlatform() !== "windows") await unlink(s).catch(() => {});
-  process.exit(R);
+  if (getPlatform() !== "windows") await unlink(sockPath).catch(() => {});
+  process.exit(exitCode);
 }
 //@ chunk-jx4rgw65.js:7291-7408 placement
-async function waitWithGrace(promise, t, n = 5000) {
-  let s = (t ? t().catch(() => {}) : Promise.resolve()).then(() => sleep(n));
-  await Promise.race([promise, s]);
+async function waitWithGrace(promise, grace, graceMs = 5000) {
+  let graceDelay = (grace ? grace().catch(() => {}) : Promise.resolve()).then(() => sleep(graceMs));
+  await Promise.race([promise, graceDelay]);
 }
 //@ chunk-jx4rgw65.js:7501-7858 placement
-function createOutputBuffer(o) {
-  let t = [];
-  let n = 0;
-  let s = 0;
-  function d() {
-    if (n > 0) {
-      t = t.slice(n);
-      n = 0;
+function createOutputBuffer(maxBytes) {
+  let chunks = [];
+  let dropFrom = 0;
+  let totalBytes = 0;
+  function compact() {
+    if (dropFrom > 0) {
+      chunks = chunks.slice(dropFrom);
+      dropFrom = 0;
     }
   }
   return {
     get chunks() {
-      d();
-      return t;
+      compact();
+      return chunks;
     },
-    push(S) {
-      t.push(S);
-      s += S.length;
-      while (s > o && t.length - n > 1) {
-        s -= t[n++].length;
-        for (let h = 0; h < 3;) {
-          let p = t[n];
-          let a = 0;
-          while (h + a < 3 && a < p.length && (p[a] & 192) === 128) a++;
-          if (a > 0) {
-            t[n] = p.subarray(a);
-            s -= a;
-            h += a;
+    push(chunk) {
+      chunks.push(chunk);
+      totalBytes += chunk.length;
+      while (totalBytes > maxBytes && chunks.length - dropFrom > 1) {
+        totalBytes -= chunks[dropFrom++].length;
+        for (let trimmed = 0; trimmed < 3;) {
+          let head = chunks[dropFrom];
+          let skip = 0;
+          while (trimmed + skip < 3 && skip < head.length && (head[skip] & 192) === 128) skip++;
+          if (skip > 0) {
+            chunks[dropFrom] = head.subarray(skip);
+            totalBytes -= skip;
+            trimmed += skip;
           }
-          if (t[n].length > 0 || t.length - n === 1) break;
-          n++;
+          if (chunks[dropFrom].length > 0 || chunks.length - dropFrom === 1) break;
+          dropFrom++;
         }
       }
-      if (n >= t.length - n) d();
+      if (dropFrom >= chunks.length - dropFrom) compact();
     },
   };
 }
 //@ chunk-jx4rgw65.js:7858-8289 placement
-function appendPtyLog(o, t, n) {
-  if (!o) return;
-  let s = process.hrtime.bigint();
-  let d;
+function appendPtyLog(logPath, cols, rows) {
+  if (!logPath) return;
+  let startNs = process.hrtime.bigint();
+  let stream;
   try {
-    d = createWriteStream(o, {
+    stream = createWriteStream(logPath, {
       flags: "w",
     });
   } catch {
     return;
   }
-  d.on("error", () => {
-    d?.destroy();
-    d = undefined;
+  stream.on("error", () => {
+    stream?.destroy();
+    stream = undefined;
   });
-  let S = Buffer.allocUnsafe(8);
-  S.writeUInt32BE(t, 0);
-  S.writeUInt32BE(n, 4);
-  d.write(S);
+  let header = Buffer.allocUnsafe(8);
+  header.writeUInt32BE(cols, 0);
+  header.writeUInt32BE(rows, 4);
+  stream.write(header);
   return {
-    write(h) {
-      if (!d) return;
-      let p = Buffer.allocUnsafe(8 + h.length);
-      let a = Number((process.hrtime.bigint() - s) / 1000n);
-      p.writeUInt32BE(a >>> 0, 0);
-      p.writeUInt32BE(h.length, 4);
-      h.copy(p, 8);
-      d.write(p);
+    write(chunk) {
+      if (!stream) return;
+      let frame = Buffer.allocUnsafe(8 + chunk.length);
+      let elapsedUs = Number((process.hrtime.bigint() - startNs) / 1000n);
+      frame.writeUInt32BE(elapsedUs >>> 0, 0);
+      frame.writeUInt32BE(chunk.length, 4);
+      chunk.copy(frame, 8);
+      stream.write(frame);
     },
     close() {
-      d?.end();
+      stream?.end();
     },
   };
 }
 //@ chunk-jx4rgw65.js:8289-8413 placement
-async function appendPtyHostLog(o, t) {
+async function appendPtyHostLog(sessionId, message) {
   try {
-    let n = ptyErrFile(o);
-    await mkdir(dirname(n), {
+    let path = ptyErrFile(sessionId);
+    await mkdir(dirname(path), {
       recursive: true,
     });
     await appendFile(
-      n,
-      `${new Date().toISOString()} ${t}
+      path,
+      `${new Date().toISOString()} ${message}
 `,
     );
   } catch {}
 }
 //@ chunk-jx4rgw65.js:8413-8538 placement
-function failPtyHost(o, t) {
-  if (o)
+function failPtyHost(sessionId, message) {
+  if (sessionId)
     try {
-      let n = ptyErrFile(o);
-      mkdirSync(dirname(n), {
+      let path = ptyErrFile(sessionId);
+      mkdirSync(dirname(path), {
         recursive: true,
       });
       appendFileSync(
-        n,
-        `${new Date().toISOString()} ${t}
+        path,
+        `${new Date().toISOString()} ${message}
 `,
       );
     } catch {}
   process.exit(1);
 }
+export { runBgPtyHost };

@@ -5,13 +5,13 @@
  * pieces: chunk-5h78gfwc.js (1)
  * attribution: esm-fingerprint 1
  */
-import { Oe } from "../flattened/sign.js";
+import { FlattenedSign } from "../flattened/sign.js";
 
 //@ chunk-5h78gfwc.js:46644-46950 esm-fingerprint
-class Me {
+class CompactSign {
   #e;
   constructor(payload) {
-    this.#e = new Oe(payload);
+    this.#e = new FlattenedSign(payload);
   }
   setProtectedHeader(protectedHeader) {
     this.#e.setProtectedHeader(protectedHeader);
@@ -24,4 +24,4 @@ class Me {
     return `${jws.protected}.${jws.payload}.${jws.signature}`;
   }
 }
-export { Me };
+export { CompactSign };

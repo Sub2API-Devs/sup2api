@@ -12,28 +12,46 @@ import { isMainAgentCommand } from "../../utils/messageQueueManager.js";
 import { env } from "../../utils/env.js";
 import { MAX_MCP_RESOURCE_JSON_CHARS } from "./mcpControlRequests.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-tyg7f3ek.js:622484-622802 placement
 /**
  * 按需 require 的打印侧模块句柄：会话导出、分类器摘要、协调者模式、收件箱指针、cron 调度/抖动/工具、自治循环；另有 MCP 调用结果过大文案与打印阶段计时参数。
  */
-var lazyPrintModules = () => require("./chunk-2wrddneh.js");
-var lazyConversationExporter = () => require("./chunk-kr06rpgd.js");
-var lazyPostTurnSummary = require("./chunk-e321p3vc.js");
-var lazyCoordinatorMode = require("./chunk-yxywkh50.js");
-var lazySessionInboxPointers = require("./chunk-dm6d31md.js");
-var lazyCronScheduler = require("./chunk-68szcwjr.js");
-var lazyCronJitterConfig = require("./chunk-n7djsch1.js");
-var lazyCronTools = require("./chunk-xd621t7b.js");
-var lazyAutonomousLoop = require("./chunk-w6rm7nhv.js");
+var lazyPrintModules; // deferred: loads other modules while loading; runs once its import cycle is complete
+var lazyConversationExporter;
+var lazyPostTurnSummary;
+var lazyCoordinatorMode;
+var lazySessionInboxPointers;
+var lazyCronScheduler;
+var lazyCronJitterConfig;
+var lazyCronTools;
+var lazyAutonomousLoop;
+deferInit("chunk-tyg7f3ek.js:622484", () => {
+  lazyPrintModules = () => require("../../utils/status.js");
+  lazyConversationExporter = () => require("../../commands/export/exportConversation.lazy.js");
+  lazyPostTurnSummary = require("../../services/classifierSummary.js");
+  lazyCoordinatorMode = require("../../coordinator/coordinatorMode.js");
+  lazySessionInboxPointers = require("../../bridge/sessionInboxPointers.js");
+  lazyCronScheduler = require("../../utils/cronScheduler.js");
+  lazyCronJitterConfig = require("../../utils/cronJitterConfig.js");
+  lazyCronTools = require("../../tools/ScheduleCronTool/prompt.js");
+  lazyAutonomousLoop = require("../../utils/loop/LOOP_FILE_DYNAMIC_SENTINEL.lazy.js");
+});
 //@ chunk-tyg7f3ek.js:622802-622942 placement
-var lazyPrintModules2 = require("./chunk-aghtagt4.js");
-var lazyTeleportRelayMarker = require("./chunk-qwf564hq.js");
-var lazyTeleportRelayEnv = require("./chunk-1d5behve.js");
-var lazyHandoffMarkerRelay = require("./chunk-z6qazjbc.js");
+var lazyPrintModules2; // deferred: loads other modules while loading; runs once its import cycle is complete
+var lazyTeleportRelayMarker;
+var lazyTeleportRelayEnv;
+var lazyHandoffMarkerRelay;
+deferInit("chunk-tyg7f3ek.js:622802", () => {
+  lazyPrintModules2 = require("../../services/extractMemories/extractMemories.js");
+  lazyTeleportRelayMarker = require("../../services/teleport/armRelay.js");
+  lazyTeleportRelayEnv = require("../../utils/teleport/relayEnv.js");
+  lazyHandoffMarkerRelay = require("../../utils/teleport/handoffRelay.js");
+});
 //@ chunk-tyg7f3ek.js:622942-622994 placement
 function mcpModuleFacade() {
-  return require("./chunk-asne9cp8.js");
+  return require("../../services/mcp/emitTripwireEvent.lazy.js");
 }
 //@ chunk-tyg7f3ek.js:622994-623038 placement
 function getMcpClientModule() {
@@ -62,8 +80,8 @@ The user cannot receive your response until the team is completely shut down.
 
 Shut down your team and prepare your final response for the user.`;
 //@ chunk-tyg7f3ek.js:623716-623758 placement
-function isTeamShutdownReminder(e) {
-  return isMainAgentCommand(e) && e.value === TEAM_SHUTDOWN_REMINDER;
+function isTeamShutdownReminder(command) {
+  return isMainAgentCommand(command) && command.value === TEAM_SHUTDOWN_REMINDER;
 }
 //@ chunk-tyg7f3ek.js:623758-623828 placement
 function teamTeardownParkTimeoutMs() {
@@ -73,8 +91,11 @@ function teamTeardownParkTimeoutMs() {
 var MCP_CALL_RESULT_LIMITS = 30000;
 var MCP_CALL_RESULT_TOO_LARGE_TEXT = `The tool ran, but its result is over the ${MAX_MCP_RESOURCE_JSON_CHARS}-character limit of an mcp_call sent with result_not_for_model, so this mcp_call got no result. Check whether the call took effect before retrying mcp_call, and ask the tool for a smaller result if you retry.`;
 //@ chunk-tyg7f3ek.js:624102-624178 placement
-function isMcpCallResultTooLarge(e) {
-  return jsonStringify([e.content, e.structuredContent, e._meta]).length > MAX_MCP_RESOURCE_JSON_CHARS;
+function isMcpCallResultTooLarge(result) {
+  return (
+    jsonStringify([result.content, result.structuredContent, result._meta]).length >
+    MAX_MCP_RESOURCE_JSON_CHARS
+  );
 }
 //@ chunk-tyg7f3ek.js:624178-624262 placement
 var PRINT_TIMING_CONSTANTS = 5;

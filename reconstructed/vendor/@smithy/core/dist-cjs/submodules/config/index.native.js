@@ -5,30 +5,42 @@
  * pieces: chunk-a3vzsfpr.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../../../../runtime/bun-runtime.js";
-import { v } from "../../../../../unresolved-cjs/index.js";
+import { __commonJS } from "../../../../../../runtime/bun-runtime.js";
+import { configResolverModule } from "../../../../../unresolved-cjs/index.js";
 import { require_util_middleware } from "../../../../util-middleware/dist-cjs/index.js";
 import { require_index_browser } from "../endpoints/index.browser.js";
 
 //@ chunk-a3vzsfpr.js:7701-11897 cjs-fingerprint
-var require_index_native = x(function (cjsExports) {
-  var f = v();
+var require_index_native = __commonJS(function (cjsExports) {
+  var configResolver = configResolverModule();
   var normalizeProvider = require_util_middleware();
   var isValidHostLabel = require_index_browser();
-  var W = "AWS_USE_DUALSTACK_ENDPOINT";
-  var K = "use_dualstack_endpoint";
+  var ENV_USE_DUALSTACK_ENDPOINT = "AWS_USE_DUALSTACK_ENDPOINT";
+  var CONFIG_USE_DUALSTACK_ENDPOINT = "use_dualstack_endpoint";
   var DEFAULT_USE_DUALSTACK_ENDPOINT = false;
   var NODE_USE_DUALSTACK_ENDPOINT_CONFIG_OPTIONS = {
-    environmentVariableSelector: (e) => f.booleanSelector(e, W, f.SelectorType.ENV),
-    configFileSelector: (e) => f.booleanSelector(e, K, f.SelectorType.CONFIG),
+    environmentVariableSelector: (env) =>
+      configResolver.booleanSelector(env, ENV_USE_DUALSTACK_ENDPOINT, configResolver.SelectorType.ENV),
+    configFileSelector: (configFile) =>
+      configResolver.booleanSelector(
+        configFile,
+        CONFIG_USE_DUALSTACK_ENDPOINT,
+        configResolver.SelectorType.CONFIG,
+      ),
     default: false,
   };
-  var j = "AWS_USE_FIPS_ENDPOINT";
-  var M = "use_fips_endpoint";
+  var ENV_USE_FIPS_ENDPOINT = "AWS_USE_FIPS_ENDPOINT";
+  var CONFIG_USE_FIPS_ENDPOINT = "use_fips_endpoint";
   var DEFAULT_USE_FIPS_ENDPOINT = false;
   var NODE_USE_FIPS_ENDPOINT_CONFIG_OPTIONS = {
-    environmentVariableSelector: (e) => f.booleanSelector(e, j, f.SelectorType.ENV),
-    configFileSelector: (e) => f.booleanSelector(e, M, f.SelectorType.CONFIG),
+    environmentVariableSelector: (env) =>
+      configResolver.booleanSelector(env, ENV_USE_FIPS_ENDPOINT, configResolver.SelectorType.ENV),
+    configFileSelector: (configFile) =>
+      configResolver.booleanSelector(
+        configFile,
+        CONFIG_USE_FIPS_ENDPOINT,
+        configResolver.SelectorType.CONFIG,
+      ),
     default: false,
   };
   var resolveDefaultsModeConfig = (input) => {
@@ -74,11 +86,11 @@ var require_index_native = x(function (cjsExports) {
       useDualstackEndpoint,
     });
   };
-  var H = "AWS_REGION";
-  var Z = "region";
+  var REGION_ENV_NAME = "AWS_REGION";
+  var REGION_INI_NAME = "region";
   var NODE_REGION_CONFIG_OPTIONS = {
-    environmentVariableSelector: (e) => e[H],
-    configFileSelector: (e) => e[Z],
+    environmentVariableSelector: (env) => env[REGION_ENV_NAME],
+    configFileSelector: (configFile) => configFile[REGION_INI_NAME],
     default: () => {
       throw Error("Region is missing");
     },
@@ -185,18 +197,18 @@ var require_index_native = x(function (cjsExports) {
       }),
     };
   };
-  cjsExports.CONFIG_USE_DUALSTACK_ENDPOINT = K;
-  cjsExports.CONFIG_USE_FIPS_ENDPOINT = M;
+  cjsExports.CONFIG_USE_DUALSTACK_ENDPOINT = CONFIG_USE_DUALSTACK_ENDPOINT;
+  cjsExports.CONFIG_USE_FIPS_ENDPOINT = CONFIG_USE_FIPS_ENDPOINT;
   cjsExports.DEFAULT_USE_DUALSTACK_ENDPOINT = DEFAULT_USE_DUALSTACK_ENDPOINT;
   cjsExports.DEFAULT_USE_FIPS_ENDPOINT = DEFAULT_USE_FIPS_ENDPOINT;
-  cjsExports.ENV_USE_DUALSTACK_ENDPOINT = W;
-  cjsExports.ENV_USE_FIPS_ENDPOINT = j;
+  cjsExports.ENV_USE_DUALSTACK_ENDPOINT = ENV_USE_DUALSTACK_ENDPOINT;
+  cjsExports.ENV_USE_FIPS_ENDPOINT = ENV_USE_FIPS_ENDPOINT;
   cjsExports.NODE_REGION_CONFIG_FILE_OPTIONS = NODE_REGION_CONFIG_FILE_OPTIONS;
   cjsExports.NODE_REGION_CONFIG_OPTIONS = NODE_REGION_CONFIG_OPTIONS;
   cjsExports.NODE_USE_DUALSTACK_ENDPOINT_CONFIG_OPTIONS = NODE_USE_DUALSTACK_ENDPOINT_CONFIG_OPTIONS;
   cjsExports.NODE_USE_FIPS_ENDPOINT_CONFIG_OPTIONS = NODE_USE_FIPS_ENDPOINT_CONFIG_OPTIONS;
-  cjsExports.REGION_ENV_NAME = H;
-  cjsExports.REGION_INI_NAME = Z;
+  cjsExports.REGION_ENV_NAME = REGION_ENV_NAME;
+  cjsExports.REGION_INI_NAME = REGION_INI_NAME;
   cjsExports.getRegionInfo = getRegionInfo;
   cjsExports.resolveCustomEndpointsConfig = resolveDefaultsModeConfig;
   cjsExports.resolveEndpointsConfig = resolveEndpointsConfig;

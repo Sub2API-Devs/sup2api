@@ -8,22 +8,55 @@
  * pieces: chunk-ah34pb7m.js (4), chunk-e6aww6q8.js (1), chunk-nc07tp5s.js (1)
  * attribution: placement 2, fingerprint 3, callgraph-witnessed 1
  */
-import { GET_TASK_REPEAT_TEXT } from "../../remote/tools/nativeToolErrors.js";
+import { getDisplayPath, FILE_NOT_FOUND_CWD_NOTE } from "../../utils/file.js";
 import {
   jsxProd_default,
   jsxProd_default_2,
 } from "../../../vendor/react/cjs/react-jsx-dev-runtime.react-server.production.js";
-import { Text, Box } from "../../ink/components/Text.js";
-import { parseTaskResultOrNull } from "../../tasks/LocalShellTask/backgroundNotices.js";
 import { MessageResponse } from "../../components/MessageResponse.js";
-import { formatNumber } from "../../utils/format.js";
-import { w } from "../../../vendor/react/compiler-runtime.js";
-import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
-import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
-import { getDisplayPath, FILE_NOT_FOUND_CWD_NOTE } from "../../utils/file.js";
+import { Text, Box } from "../../ink/components/Text.js";
 import { extractTag } from "../../utils/messages.js";
 import { FallbackToolUseErrorMessage } from "../../components/FallbackToolUseErrorMessage.js";
+import { GET_TASK_REPEAT_TEXT } from "../../remote/tools/nativeToolErrors.js";
+import { parseTaskResultOrNull } from "../../tasks/LocalShellTask/backgroundNotices.js";
+import { formatNumber } from "../../utils/format.js";
+import { useMemoCache } from "../../../vendor/react/compiler-runtime.js";
+import { MEMO_CACHE_SENTINEL } from "../../../runtime/bun-runtime.js";
+import { CtrlOToExpand } from "../../components/CtrlOToExpand.js";
 
+//@ chunk-e6aww6q8.js:1439687-1439832 fingerprint = renderToolUseMessage (1)
+/**
+ * Glob/Grep 调用渲染：pattern 与 path（非 verbose 时显示相对路径）。
+ */
+function renderToolUseMessage({ pattern, path }, { verbose }) {
+  if (!pattern) return null;
+  let parts = [`pattern: "${pattern}"`];
+  if (path) parts.push(`path: "${verbose ? path : getDisplayPath(path)}"`);
+  return parts.join(", ");
+}
+//@ chunk-nc07tp5s.js:8904-9222 callgraph-witnessed = renderToolUseErrorMessage (0.42)
+function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
+  if (!verbose && toolDenialKind !== "permission-rule" && typeof result === "string") {
+    if (result.includes(FILE_NOT_FOUND_CWD_NOTE))
+      return jsxProd_default(MessageResponse, {
+        children: jsxProd_default(Text, {
+          color: "error",
+          children: "File not found",
+        }),
+      });
+    if (extractTag(result, "tool_use_error"))
+      return jsxProd_default(MessageResponse, {
+        children: jsxProd_default(Text, {
+          color: "error",
+          children: "Error reading file",
+        }),
+      });
+  }
+  return jsxProd_default(FallbackToolUseErrorMessage, {
+    result,
+    verbose,
+  });
+}
 //@ chunk-ah34pb7m.js:16266-16347 placement = renderToolUseErrorMessage (0.767)
 /**
  * 特定错误结果在非 verbose 非转录模式下的简化渲染。
@@ -35,8 +68,8 @@ function renderToolUseErrorMessage_4(result, { verbose, isTranscriptMode }) {
 /**
  * 渲染后台任务输出结果（仍在运行等）。
  */
-function renderTaskOutputResult(m, d, { verbose, isTranscriptMode }) {
-  let taskResultOrNull = parseTaskResultOrNull(m);
+function renderTaskOutputResult(result, progressMessages, { verbose, isTranscriptMode }) {
+  let taskResultOrNull = parseTaskResultOrNull(result);
   if (!taskResultOrNull) return null;
   if (taskResultOrNull.status === "working")
     return verbose || isTranscriptMode
@@ -48,15 +81,15 @@ function renderTaskOutputResult(m, d, { verbose, isTranscriptMode }) {
           }),
         })
       : null;
-  let h =
+  let outputChars =
     taskResultOrNull.status === "completed"
-      ? taskResultOrNull.result.content.reduce((acc, x) => acc + x.text.length, 0)
+      ? taskResultOrNull.result.content.reduce((acc, contentBlock) => acc + contentBlock.text.length, 0)
       : 0;
   let children = [
     taskResultOrNull.status === "completed" && taskResultOrNull.result.isError
       ? "completed with errors"
       : taskResultOrNull.status,
-    ...(h > 0 ? [`${formatNumber(h)} chars of output`] : []),
+    ...(outputChars > 0 ? [`${formatNumber(outputChars)} chars of output`] : []),
   ].join(" \xB7 ");
   return jsxProd_default(MessageResponse, {
     height: 1,
@@ -68,7 +101,7 @@ function renderTaskOutputResult(m, d, { verbose, isTranscriptMode }) {
 }
 //@ chunk-ah34pb7m.js:16813-18026 fingerprint = SearchResultSummary (0.639)
 function SearchResultSummary(props) {
-  let $ = w(26);
+  let $ = useMemoCache(26);
   let { count, countLabel, secondaryCount, secondaryLabel, content, verbose } = props;
   let t1;
   if ($[0] !== count) {
@@ -216,42 +249,10 @@ function renderToolResultMessage_3(
     verbose,
   });
 }
-//@ chunk-e6aww6q8.js:1439687-1439832 fingerprint = renderToolUseMessage (1)
-/**
- * Glob/Grep 调用渲染：pattern 与 path（非 verbose 时显示相对路径）。
- */
-function renderToolUseMessage({ pattern, path }, { verbose }) {
-  if (!pattern) return null;
-  let parts = [`pattern: "${pattern}"`];
-  if (path) parts.push(`path: "${verbose ? path : getDisplayPath(path)}"`);
-  return parts.join(", ");
-}
-//@ chunk-nc07tp5s.js:8904-9222 callgraph-witnessed = renderToolUseErrorMessage (0.42)
-function renderToolUseErrorMessage(result, { verbose, toolDenialKind }) {
-  if (!verbose && toolDenialKind !== "permission-rule" && typeof result === "string") {
-    if (result.includes(FILE_NOT_FOUND_CWD_NOTE))
-      return jsxProd_default(MessageResponse, {
-        children: jsxProd_default(Text, {
-          color: "error",
-          children: "File not found",
-        }),
-      });
-    if (extractTag(result, "tool_use_error"))
-      return jsxProd_default(MessageResponse, {
-        children: jsxProd_default(Text, {
-          color: "error",
-          children: "Error reading file",
-        }),
-      });
-  }
-  return jsxProd_default(FallbackToolUseErrorMessage, {
-    result,
-    verbose,
-  });
-}
 export {
   renderToolResultMessage_3,
   renderTaskOutputResult,
   renderToolUseErrorMessage_4,
   renderToolUseMessage,
+  renderToolUseErrorMessage,
 };

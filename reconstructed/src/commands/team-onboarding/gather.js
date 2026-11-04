@@ -5,28 +5,12 @@
  *
  * Reconstructed from the official Claude Code 2.1.316 build (linux-x64).
  * new in 2.1.316 (2.1.88 has no file at this path)
- * pieces: chunk-e6aww6q8.js (5)
- * attribution: placement 5
+ * pieces: chunk-e6aww6q8.js (6)
+ * attribution: placement 6
  */
 import { readdir, stat, readFile } from "fs/promises";
 import { extname, join, basename } from "path";
 import { isFsInaccessible, isENOENT } from "../../utils/errors.js";
-import {
-  MAX_METADATA_SCAN_BYTES,
-  COMMAND_NAME_CONTENT_MARKER,
-  COMMAND_MESSAGE_CONTENT_MARKER,
-  COMMAND_NAME_RE,
-  TOOL_USE_TYPE_MARKER,
-  MCP_TOOL_USE_NAME_RE,
-  CUSTOM_TITLE_TYPE_MARKER,
-  CUSTOM_TITLE_RE,
-  PR_LINK_TYPE_MARKER,
-  PR_NUMBER_RE,
-  USER_ROLE_MARKER,
-  USER_CONTENT_RE,
-  MAX_FIRST_MESSAGE_CHARS,
-  MAX_SESSION_DESCRIPTORS,
-} from "../../utils/sessionStorage.js";
 import { jsonParse, jsonStringify } from "../../utils/slowOperations.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { getOriginalCwd } from "../../bootstrap/state.js";
@@ -34,79 +18,102 @@ import { getProjectDir } from "../../utils/sessionStoragePortable.js";
 import { execFileNoThrowWithCwd } from "../../utils/execFileNoThrow.js";
 import { normalizeGitRemoteUrl } from "../../utils/git.js";
 
+//@ chunk-e6aww6q8.js:1737819-1738199 placement = METADATA_TYPE_MARKERS (0.44)
+/**
+ * MAX_FIRST_MESSAGE_CHARS：首条消息截断长度（200）；MAX_SESSION_DESCRIPTORS：会话描述条数上限（60）；COMMAND_NAME_RE：transcript 里的斜杠命令名（同一声明共 13 个绑定）。
+ */
+var MAX_METADATA_SCAN_BYTES = 52428800;
+var MAX_FIRST_MESSAGE_CHARS = 200;
+var MAX_SESSION_DESCRIPTORS = 60;
+var COMMAND_NAME_RE = /<command-name>\/([\w:-]+)<\/command-name>/g;
+var MCP_TOOL_USE_NAME_RE = /"name":"mcp__([^"]+?)__([^"]+)"/g;
+var COMMAND_NAME_CONTENT_MARKER = '"content":"<command-name>/';
+var COMMAND_MESSAGE_CONTENT_MARKER = '"content":"<command-message>';
+var TOOL_USE_TYPE_MARKER = '"type":"tool_use"';
+var CUSTOM_TITLE_TYPE_MARKER = '"type":"custom-title"';
+var PR_LINK_TYPE_MARKER = '"type":"pr-link"';
+var USER_ROLE_MARKER = '"role":"user"';
+var CUSTOM_TITLE_RE = /"customTitle":"([^"]+)"/;
+var PR_NUMBER_RE = /"prNumber":(\d+)/;
+var USER_CONTENT_RE = /"role":"user"[^}]*"content":"([^"]+)"/;
 //@ chunk-e6aww6q8.js:1738199-1739826 placement
 /**
  * scanSessionUsage：扫描会话 JSONL：斜杠命令次数、MCP 调用次数、会话描述。
  */
-async function scanSessionUsage(projectDir, n) {
-  let r = {
+async function scanSessionUsage(projectDir, windowDays) {
+  let summary = {
     slashCommandCounts: new Map(),
     mcpServerCounts: new Map(),
     sessionDescriptors: [],
     sessionFileCount: 0,
   };
-  let s = Date.now() - n * 24 * 60 * 60 * 1000;
-  let h;
+  let cutoffTime = Date.now() - windowDays * 24 * 60 * 60 * 1000;
+  let entries;
   try {
-    h = await readdir(projectDir);
+    entries = await readdir(projectDir);
   } catch (error) {
-    if (isFsInaccessible(error)) return r;
+    if (isFsInaccessible(error)) return summary;
     throw error;
   }
-  let filtered = h.filter((w) => extname(w) === ".jsonl");
+  let filtered = entries.filter((entryName) => extname(entryName) === ".jsonl");
   let filtered_2 = (
     await Promise.all(
-      filtered.map(async (w) => {
-        let L = join(projectDir, w);
+      filtered.map(async (entryName) => {
+        let filePath = join(projectDir, entryName);
         try {
-          let G = await stat(L);
-          if (!G.isFile() || G.mtimeMs < s || G.size > MAX_METADATA_SCAN_BYTES) return null;
-          return L;
+          let fileStats = await stat(filePath);
+          if (
+            !fileStats.isFile() ||
+            fileStats.mtimeMs < cutoffTime ||
+            fileStats.size > MAX_METADATA_SCAN_BYTES
+          )
+            return null;
+          return filePath;
         } catch (error) {
           if (isFsInaccessible(error)) return null;
           throw error;
         }
       }),
     )
-  ).filter((w) => w !== null);
-  for (let w of filtered_2) {
-    let L;
+  ).filter((filePath) => filePath !== null);
+  for (let filePath of filtered_2) {
+    let fileText;
     try {
-      L = await readFile(w, "utf-8");
+      fileText = await readFile(filePath, "utf-8");
     } catch (error) {
       if (isFsInaccessible(error)) continue;
       throw error;
     }
-    r.sessionFileCount++;
-    let G = {
+    summary.sessionFileCount++;
+    let descriptor = {
       prNumbers: [],
     };
-    for (let line of L.split(`
+    for (let line of fileText.split(`
 `)) {
       if (line.length < 10) continue;
       if (line.includes(COMMAND_NAME_CONTENT_MARKER) || line.includes(COMMAND_MESSAGE_CONTENT_MARKER))
-        for (let Z of line.matchAll(COMMAND_NAME_RE)) {
-          let Se = Z[1];
-          r.slashCommandCounts.set(Se, (r.slashCommandCounts.get(Se) ?? 0) + 1);
+        for (let match of line.matchAll(COMMAND_NAME_RE)) {
+          let commandName = match[1];
+          summary.slashCommandCounts.set(commandName, (summary.slashCommandCounts.get(commandName) ?? 0) + 1);
         }
       if (line.includes(TOOL_USE_TYPE_MARKER) && line.includes('"name":"mcp__'))
-        for (let Z of line.matchAll(MCP_TOOL_USE_NAME_RE)) {
-          let Se = Z[1];
-          r.mcpServerCounts.set(Se, (r.mcpServerCounts.get(Se) ?? 0) + 1);
+        for (let match of line.matchAll(MCP_TOOL_USE_NAME_RE)) {
+          let serverName = match[1];
+          summary.mcpServerCounts.set(serverName, (summary.mcpServerCounts.get(serverName) ?? 0) + 1);
         }
       if (line.includes(CUSTOM_TITLE_TYPE_MARKER)) {
         let match = CUSTOM_TITLE_RE.exec(line);
-        if (match) G.title = match[1];
+        if (match) descriptor.title = match[1];
       }
       if (line.includes(PR_LINK_TYPE_MARKER)) {
         let match = PR_NUMBER_RE.exec(line);
         if (match) {
-          let Se = Number(match[1]);
-          if (!G.prNumbers.includes(Se)) G.prNumbers.push(Se);
+          let prNumber = Number(match[1]);
+          if (!descriptor.prNumbers.includes(prNumber)) descriptor.prNumbers.push(prNumber);
         }
       }
       if (
-        !G.firstMessage &&
+        !descriptor.firstMessage &&
         line.includes(USER_ROLE_MARKER) &&
         !line.includes(COMMAND_NAME_CONTENT_MARKER) &&
         !line.includes('"content":[')
@@ -115,20 +122,21 @@ async function scanSessionUsage(projectDir, n) {
         if (match) {
           let replaced = match[1].replace(/\\n/g, " ").replace(/\\"/g, '"');
           if (replaced.length > 3 && !replaced.startsWith("<"))
-            G.firstMessage = replaced.slice(0, MAX_FIRST_MESSAGE_CHARS);
+            descriptor.firstMessage = replaced.slice(0, MAX_FIRST_MESSAGE_CHARS);
         }
       }
     }
-    if (G.title || G.prNumbers.length > 0 || G.firstMessage) r.sessionDescriptors.push(G);
+    if (descriptor.title || descriptor.prNumbers.length > 0 || descriptor.firstMessage)
+      summary.sessionDescriptors.push(descriptor);
   }
-  if (r.sessionDescriptors.length > MAX_SESSION_DESCRIPTORS) {
-    r.sessionDescriptors.sort((w, L) => {
-      let G = (w.title ? 2 : 0) + (w.prNumbers.length > 0 ? 1 : 0);
-      return (L.title ? 2 : 0) + (L.prNumbers.length > 0 ? 1 : 0) - G;
+  if (summary.sessionDescriptors.length > MAX_SESSION_DESCRIPTORS) {
+    summary.sessionDescriptors.sort((descriptorA, descriptorB) => {
+      let scoreA = (descriptorA.title ? 2 : 0) + (descriptorA.prNumbers.length > 0 ? 1 : 0);
+      return (descriptorB.title ? 2 : 0) + (descriptorB.prNumbers.length > 0 ? 1 : 0) - scoreA;
     });
-    r.sessionDescriptors = r.sessionDescriptors.slice(0, MAX_SESSION_DESCRIPTORS);
+    summary.sessionDescriptors = summary.sessionDescriptors.slice(0, MAX_SESSION_DESCRIPTORS);
   }
-  return r;
+  return summary;
 }
 //@ chunk-e6aww6q8.js:1739826-1739837 placement
 /**
@@ -150,9 +158,15 @@ function urlOriginOrUndefined(url) {
 async function readProjectMcpServers(originalCwd) {
   try {
     let file = await readFile(join(originalCwd, ".mcp.json"), "utf8");
-    let r = jsonParse(file);
-    if (r && typeof r === "object" && "mcpServers" in r && r.mcpServers && typeof r.mcpServers === "object")
-      return r.mcpServers;
+    let config = jsonParse(file);
+    if (
+      config &&
+      typeof config === "object" &&
+      "mcpServers" in config &&
+      config.mcpServers &&
+      typeof config.mcpServers === "object"
+    )
+      return config.mcpServers;
   } catch (error) {
     if (!isENOENT(error))
       logForDebugging(
@@ -168,25 +182,25 @@ async function readProjectMcpServers(originalCwd) {
 /**
  * collectTeamOnboardingUsage：组装 /team-onboarding 的 usageData。
  */
-async function collectTeamOnboardingUsage(e) {
+async function collectTeamOnboardingUsage(windowDays) {
   let originalCwd = getOriginalCwd();
   let projectDir = getProjectDir(originalCwd);
-  let s = await scanSessionUsage(projectDir, e);
-  let slashCommands = [...s.slashCommandCounts.entries()]
-    .sort((q, Z) => Z[1] - q[1])
-    .map(([q, Z]) => ({
-      name: `/${q}`,
-      count: Z,
+  let scanResult = await scanSessionUsage(projectDir, windowDays);
+  let slashCommands = [...scanResult.slashCommandCounts.entries()]
+    .sort((entryA, entryB) => entryB[1] - entryA[1])
+    .map(([commandName, count]) => ({
+      name: `/${commandName}`,
+      count,
     }));
   let projectMcpServers = await readProjectMcpServers(originalCwd);
-  let mcpServers = [...s.mcpServerCounts.entries()]
-    .sort((q, Z) => Z[1] - q[1])
-    .map(([q, Z]) => {
-      let Se = projectMcpServers[q];
+  let mcpServers = [...scanResult.mcpServerCounts.entries()]
+    .sort((entryA, entryB) => entryB[1] - entryA[1])
+    .map(([serverName, callCount]) => {
+      let serverConfig = projectMcpServers[serverName];
       return {
-        name: q,
-        callCount: Z,
-        urlOrigin: typeof Se?.url === "string" ? urlOriginOrUndefined(Se.url) : undefined,
+        name: serverName,
+        callCount,
+        urlOrigin: typeof serverConfig?.url === "string" ? urlOriginOrUndefined(serverConfig.url) : undefined,
       };
     });
   let trimmed = (
@@ -204,18 +218,18 @@ async function collectTeamOnboardingUsage(e) {
       {
         generatedBy: trimmed || undefined,
         currentRepo: normalizeGitRemoteUrl(trimmed_2) ?? basename(originalCwd),
-        windowDays: e,
-        sessionCount: s.sessionFileCount,
+        windowDays,
+        sessionCount: scanResult.sessionFileCount,
         slashCommands,
         mcpServers,
-        sessionDescriptors: s.sessionDescriptors,
+        sessionDescriptors: scanResult.sessionDescriptors,
       },
       null,
       2,
     ),
-    sessionCount: s.sessionFileCount,
-    slashCommandCount: s.slashCommandCounts.size,
-    mcpServerCount: s.mcpServerCounts.size,
+    sessionCount: scanResult.sessionFileCount,
+    slashCommandCount: scanResult.slashCommandCounts.size,
+    mcpServerCount: scanResult.mcpServerCounts.size,
   };
 }
 export { TEAM_ONBOARDING_DEFAULT_WINDOW_DAYS, collectTeamOnboardingUsage };

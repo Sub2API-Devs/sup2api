@@ -9,7 +9,7 @@
  * attribution: placement 9
  */
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, unknown } from "../../../vendor/zod/v4/classic/schemas.js";
 import {
   LOCAL_COMMAND_STDOUT,
   LOCAL_COMMAND_STDERR,
@@ -21,30 +21,36 @@ import {
   COMMAND_NAME,
   LOCAL_COMMAND_CAVEAT,
 } from "../../constants/xml.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-bwbq4xvm.js:172888-172949 placement
-var ForwardedIntentSchema = DoctorLazy(() =>
-  u({
-    lineage: string().min(1),
-    source: unknown().optional(),
-  }),
-);
+var ForwardedIntentSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-bwbq4xvm.js:172888", () => {
+  ForwardedIntentSchema = DoctorLazy(() =>
+    objectSchema({
+      lineage: stringSchema().min(1),
+      source: unknown().optional(),
+    }),
+  );
+});
 //@ chunk-bwbq4xvm.js:172949-173121 placement
 /**
  * 解析 queued_command 上的 forwardedIntent：{lineage, source}，source 只认 typed/relay/owner，其余记为 unattributed。
  */
 function parseForwardedIntent(forwardedIntent) {
-  let s = ForwardedIntentSchema().safeParse(forwardedIntent);
-  if (!s.success) return;
-  let { lineage, source } = s.data;
+  let parsed = ForwardedIntentSchema().safeParse(forwardedIntent);
+  if (!parsed.success) return;
+  let { lineage, source } = parsed.data;
   return {
     lineage,
     source: source === "typed" || source === "relay" || source === "owner" ? source : "unattributed",
   };
 }
 //@ chunk-bwbq4xvm.js:173121-173203 placement
-function isForwardedQueuedCommand(e) {
-  return e.type === "queued_command" && parseForwardedIntent(e.forwardedIntent) !== undefined;
+function isForwardedQueuedCommand(attachment) {
+  return (
+    attachment.type === "queued_command" && parseForwardedIntent(attachment.forwardedIntent) !== undefined
+  );
 }
 //@ chunk-bwbq4xvm.js:173203-173382 placement
 /**
@@ -62,8 +68,8 @@ function isLocalCommandMarkup(content) {
   );
 }
 //@ chunk-bwbq4xvm.js:173382-173453 placement
-function isLocalCommandRecordTag(e) {
-  return e.startsWith(`<${COMMAND_MESSAGE}>`) || e.startsWith(`<${COMMAND_NAME}>`);
+function isLocalCommandRecordTag(text) {
+  return text.startsWith(`<${COMMAND_MESSAGE}>`) || text.startsWith(`<${COMMAND_NAME}>`);
 }
 //@ chunk-bwbq4xvm.js:173453-173546 placement
 var LOCAL_COMMAND_TAG_KINDS = [
@@ -76,31 +82,31 @@ var LOCAL_COMMAND_TAG_KINDS = [
 /**
  * 取消息最后一段文本，按开头标签判断它是 record/output/caveat 哪类本地命令包装。
  */
-function localCommandTagKindOf(e) {
-  let content = e.message?.content;
-  let n = Array.isArray(content)
-    ? content.findLast((r) => r?.type === "text")?.text
+function localCommandTagKindOf(message) {
+  let content = message.message?.content;
+  let text = Array.isArray(content)
+    ? content.findLast((block) => block?.type === "text")?.text
     : typeof content === "string"
       ? content
       : undefined;
-  if (typeof n !== "string") return;
-  return LOCAL_COMMAND_TAG_KINDS.find(([r]) => n.startsWith(r))?.[1];
+  if (typeof text !== "string") return;
+  return LOCAL_COMMAND_TAG_KINDS.find(([prefix]) => text.startsWith(prefix))?.[1];
 }
 //@ chunk-bwbq4xvm.js:173749-173788 placement
 function isLocalCommandMessage(message) {
   return localCommandTagKindOf(message) !== undefined;
 }
 //@ chunk-bwbq4xvm.js:173788-174061 placement
-function bashCommandTagKindOf(e) {
-  let content = e.message?.content;
-  let n = Array.isArray(content)
-    ? content.findLast((r) => r?.type === "text")?.text
+function bashCommandTagKindOf(message) {
+  let content = message.message?.content;
+  let text = Array.isArray(content)
+    ? content.findLast((block) => block?.type === "text")?.text
     : typeof content === "string"
       ? content
       : undefined;
-  if (typeof n !== "string") return;
-  if (n.startsWith(`<${BASH_INPUT}>`)) return "input";
-  return n.startsWith(`<${BASH_STDOUT}>`) || n.startsWith(`<${BASH_STDERR}>`) ? "output" : undefined;
+  if (typeof text !== "string") return;
+  if (text.startsWith(`<${BASH_INPUT}>`)) return "input";
+  return text.startsWith(`<${BASH_STDOUT}>`) || text.startsWith(`<${BASH_STDERR}>`) ? "output" : undefined;
 }
 export {
   isForwardedQueuedCommand,

@@ -5,9 +5,9 @@
  * pieces: chunk-7vp249v4.js (4)
  * attribution: esm-fingerprint 3, esm-layout 1
  */
-import { Fr } from "./core.js";
+import { $constructor } from "./core.js";
 import {
-  EIi,
+  nullish,
   floatSafeRemainder,
   NUMBER_FORMAT_RANGES,
   codePointLength,
@@ -17,7 +17,7 @@ import {
 import { lowercase, uppercase } from "./regexes.js";
 
 //@ chunk-7vp249v4.js:8628-8736 esm-fingerprint
-var $ZodCheck = Fr("$ZodCheck", (inst, def) => {
+var $ZodCheck = $constructor("$ZodCheck", (inst, def) => {
   var _a;
   inst._zod ?? (inst._zod = {});
   inst._zod.def = def;
@@ -26,14 +26,14 @@ var $ZodCheck = Fr("$ZodCheck", (inst, def) => {
 //@ chunk-7vp249v4.js:8736-10853 esm-layout
 var _whenHasLength = (payload) => {
   let val = payload.value;
-  return !EIi(val) && val.length !== undefined;
+  return !nullish(val) && val.length !== undefined;
 };
 var numericOriginMap = {
   number: "number",
   bigint: "bigint",
   object: "date",
 };
-var $ZodCheckLessThan = Fr("$ZodCheckLessThan", (inst, def) => {
+var $ZodCheckLessThan = $constructor("$ZodCheckLessThan", (inst, def) => {
   $ZodCheck.init(inst, def);
   let origin = numericOriginMap[typeof def.value];
   inst._zod.check = (payload) => {
@@ -49,7 +49,7 @@ var $ZodCheckLessThan = Fr("$ZodCheckLessThan", (inst, def) => {
     });
   };
 });
-var $ZodCheckGreaterThan = Fr("$ZodCheckGreaterThan", (inst, def) => {
+var $ZodCheckGreaterThan = $constructor("$ZodCheckGreaterThan", (inst, def) => {
   $ZodCheck.init(inst, def);
   let origin = numericOriginMap[typeof def.value];
   inst._zod.check = (payload) => {
@@ -65,7 +65,7 @@ var $ZodCheckGreaterThan = Fr("$ZodCheckGreaterThan", (inst, def) => {
     });
   };
 });
-var $ZodCheckMultipleOf = Fr("$ZodCheckMultipleOf", (inst, def) => {
+var $ZodCheckMultipleOf = $constructor("$ZodCheckMultipleOf", (inst, def) => {
   $ZodCheck.init(inst, def);
   inst._zod.check = (payload) => {
     if (typeof payload.value !== typeof def.value)
@@ -86,7 +86,7 @@ var $ZodCheckMultipleOf = Fr("$ZodCheckMultipleOf", (inst, def) => {
     });
   };
 });
-var $ZodCheckNumberFormat = Fr("$ZodCheckNumberFormat", (inst, def) => {
+var $ZodCheckNumberFormat = $constructor("$ZodCheckNumberFormat", (inst, def) => {
   $ZodCheck.init(inst, def);
   def.format = def.format || "float64";
   let isInt = def.format?.includes("int");
@@ -155,7 +155,7 @@ var $ZodCheckNumberFormat = Fr("$ZodCheckNumberFormat", (inst, def) => {
   };
 });
 //@ chunk-7vp249v4.js:10853-13646 esm-fingerprint
-var Ur = Fr("$ZodCheckMaxLength", (inst, def) => {
+var $ZodCheckMaxLength = $constructor("$ZodCheckMaxLength", (inst, def) => {
   var _a;
   $ZodCheck.init(inst, def);
   (_a = inst._zod.def).when ?? (_a.when = _whenHasLength);
@@ -176,7 +176,7 @@ var Ur = Fr("$ZodCheckMaxLength", (inst, def) => {
     });
   };
 });
-var $ZodCheckMinLength = Fr("$ZodCheckMinLength", (inst, def) => {
+var $ZodCheckMinLength = $constructor("$ZodCheckMinLength", (inst, def) => {
   var _a;
   $ZodCheck.init(inst, def);
   (_a = inst._zod.def).when ?? (_a.when = _whenHasLength);
@@ -201,7 +201,7 @@ var $ZodCheckMinLength = Fr("$ZodCheckMinLength", (inst, def) => {
     });
   };
 });
-var $ZodCheckLengthEquals = Fr("$ZodCheckLengthEquals", (inst, def) => {
+var $ZodCheckLengthEquals = $constructor("$ZodCheckLengthEquals", (inst, def) => {
   var _a;
   $ZodCheck.init(inst, def);
   (_a = inst._zod.def).when ?? (_a.when = _whenHasLength);
@@ -234,7 +234,7 @@ var $ZodCheckLengthEquals = Fr("$ZodCheckLengthEquals", (inst, def) => {
     });
   };
 });
-var $ZodCheckStringFormat = Fr("$ZodCheckStringFormat", (inst, def) => {
+var $ZodCheckStringFormat = $constructor("$ZodCheckStringFormat", (inst, def) => {
   var _a;
   var _b;
   $ZodCheck.init(inst, def);
@@ -259,7 +259,7 @@ var $ZodCheckStringFormat = Fr("$ZodCheckStringFormat", (inst, def) => {
       });
   else (_b = inst._zod).check ?? (_b.check = () => {});
 });
-var $ZodCheckRegex = Fr("$ZodCheckRegex", (inst, def) => {
+var $ZodCheckRegex = $constructor("$ZodCheckRegex", (inst, def) => {
   $ZodCheckStringFormat.init(inst, def);
   inst._zod.check = (payload) => {
     def.pattern.lastIndex = 0;
@@ -275,15 +275,15 @@ var $ZodCheckRegex = Fr("$ZodCheckRegex", (inst, def) => {
     });
   };
 });
-var $ZodCheckLowerCase = Fr("$ZodCheckLowerCase", (inst, def) => {
+var $ZodCheckLowerCase = $constructor("$ZodCheckLowerCase", (inst, def) => {
   def.pattern ?? (def.pattern = lowercase);
   $ZodCheckStringFormat.init(inst, def);
 });
-var $ZodCheckUpperCase = Fr("$ZodCheckUpperCase", (inst, def) => {
+var $ZodCheckUpperCase = $constructor("$ZodCheckUpperCase", (inst, def) => {
   def.pattern ?? (def.pattern = uppercase);
   $ZodCheckStringFormat.init(inst, def);
 });
-var $ZodCheckIncludes = Fr("$ZodCheckIncludes", (inst, def) => {
+var $ZodCheckIncludes = $constructor("$ZodCheckIncludes", (inst, def) => {
   $ZodCheck.init(inst, def);
   let escapedRegex = escapeRegex(def.includes);
   let pattern = new RegExp(
@@ -303,7 +303,7 @@ var $ZodCheckIncludes = Fr("$ZodCheckIncludes", (inst, def) => {
     });
   };
 });
-var $ZodCheckStartsWith = Fr("$ZodCheckStartsWith", (inst, def) => {
+var $ZodCheckStartsWith = $constructor("$ZodCheckStartsWith", (inst, def) => {
   $ZodCheck.init(inst, def);
   let pattern = new RegExp(`^${escapeRegex(def.prefix)}.*`);
   def.pattern ?? (def.pattern = pattern);
@@ -320,7 +320,7 @@ var $ZodCheckStartsWith = Fr("$ZodCheckStartsWith", (inst, def) => {
     });
   };
 });
-var $ZodCheckEndsWith = Fr("$ZodCheckEndsWith", (inst, def) => {
+var $ZodCheckEndsWith = $constructor("$ZodCheckEndsWith", (inst, def) => {
   $ZodCheck.init(inst, def);
   let pattern = new RegExp(`.*${escapeRegex(def.suffix)}$`);
   def.pattern ?? (def.pattern = pattern);
@@ -338,7 +338,7 @@ var $ZodCheckEndsWith = Fr("$ZodCheckEndsWith", (inst, def) => {
   };
 });
 //@ chunk-7vp249v4.js:13646-13742 esm-fingerprint
-var Xr = Fr("$ZodCheckOverwrite", (inst, def) => {
+var $ZodCheckOverwrite = $constructor("$ZodCheckOverwrite", (inst, def) => {
   $ZodCheck.init(inst, def);
   inst._zod.check = (payload) => {
     payload.value = def.tx(payload.value);
@@ -351,7 +351,7 @@ export {
   $ZodCheckLessThan,
   $ZodCheckGreaterThan,
   $ZodCheckMultipleOf,
-  Ur,
+  $ZodCheckMaxLength,
   $ZodCheckMinLength,
   $ZodCheckLengthEquals,
   $ZodCheckRegex,
@@ -360,5 +360,5 @@ export {
   $ZodCheckIncludes,
   $ZodCheckStartsWith,
   $ZodCheckEndsWith,
-  Xr,
+  $ZodCheckOverwrite,
 };

@@ -86,40 +86,47 @@ import { STORAGE_SPACES } from "../storage/storageSpaces.js";
 import { udsEnv } from "../env.js";
 
 //@ chunk-66jn0ssz.js:11282-11323 placement
-function creditPacerForHeldSend(e) {
-  withOutboundPacer(e, (n, r) => n.credit(r));
+function creditPacerForHeldSend(a) {
+  withOutboundPacer(a, (b, c) => b.credit(c));
 }
 //@ chunk-66jn0ssz.js:11323-11363 placement
-function debitPacerForReleasedSend(e) {
-  withOutboundPacer(e, (n, r) => n.debit(r));
+function debitPacerForReleasedSend(a) {
+  withOutboundPacer(a, (b, c) => b.debit(c));
 }
 //@ chunk-66jn0ssz.js:11363-11482 placement
-function withOutboundPacer(e, n) {
+function withOutboundPacer(messageId, handle) {
   let pacer = swarmHostState().outbound.pacer;
   if (!pacer) return;
-  let { scheme, target } = parseAddress(e);
+  let { scheme, target } = parseAddress(messageId);
   if (scheme !== "uds") return;
-  n(pacer, canonicalSocketPath(target) ?? target);
+  handle(pacer, canonicalSocketPath(target) ?? target);
 }
 //@ chunk-66jn0ssz.js:11482-12398 placement
 async function sendToUdsSocket(
   sock,
-  n,
-  r,
-  s,
-  d,
-  m,
-  g,
-  { trackReceipts: l = true, expectPeerPid: a, expectPeerProcStart: o, fromPlugin: c, recipientName: R } = {},
+  body,
+  storageV5,
+  fromName,
+  attachments,
+  hopChain,
+  fromMode,
+  { trackReceipts = true, expectPeerPid, expectPeerProcStart, fromPlugin, recipientName } = {},
 ) {
-  let w = ownMessagingSocket();
-  let S = w ? udsAddressFromPath(w) : undefined;
-  let P = getFeatureValue_CACHED_MAY_BE_STALE("tengu_tidy_fern", true)
+  let ownSocket = ownMessagingSocket();
+  let ownAddress = ownSocket ? udsAddressFromPath(ownSocket) : undefined;
+  let desktopHostSessionId = getFeatureValue_CACHED_MAY_BE_STALE("tengu_tidy_fern", true)
     ? ownDesktopHostSessionId()
     : undefined;
-  let content = wrapPeerMessage(S, s, n, P, extendHopChain(m, S ? hmacRandomId(S) : undefined), g);
+  let content = wrapPeerMessage(
+    ownAddress,
+    fromName,
+    body,
+    desktopHostSessionId,
+    extendHopChain(hopChain, ownAddress ? hmacRandomId(ownAddress) : undefined),
+    fromMode,
+  );
   let messageEnvelope = createMessageEnvelope();
-  let y = {
+  let payload = {
     ...messageEnvelope,
     type: "user",
     message: {
@@ -127,42 +134,42 @@ async function sendToUdsSocket(
       content,
     },
     priority: "next",
-    from: S,
-    ...(c !== undefined && {
-      from_plugin: c,
+    from: ownAddress,
+    ...(fromPlugin !== undefined && {
+      from_plugin: fromPlugin,
     }),
-    ...((d?.length ?? 0) > 0 && {
-      file_attachments: d,
+    ...((attachments?.length ?? 0) > 0 && {
+      file_attachments: attachments,
     }),
   };
-  let preflightedJson = serializePeerPayload(y);
-  let L =
-    (S !== undefined || getPlatform() !== "windows") && isPacingEnabled()
+  let preflightedJson = serializePeerPayload(payload);
+  let reservation =
+    (ownAddress !== undefined || getPlatform() !== "windows") && isPacingEnabled()
       ? outboundPacer().reserve(canonicalSocketPath(sock) ?? sock)
       : PACER_PASSED;
-  if (!L.ok) {
+  if (!reservation.ok) {
     logForDebugging(
-      `[uds-client] paced: not sending to ${fragmentForLog(sock)} \u2014 ${L.sentInBurst} sent this burst; its inbox rate limit would drop more`,
+      `[uds-client] paced: not sending to ${fragmentForLog(sock)} \u2014 ${reservation.sentInBurst} sent this burst; its inbox rate limit would drop more`,
     );
-    throw describeSenderPaced(L.sentInBurst);
+    throw describeSenderPaced(reservation.sentInBurst);
   }
-  logForDebugging(`[uds-client] Sending ${n.length} chars to ${fragmentForLog(sock)}`);
-  if (l) trackOutstandingSend(messageEnvelope.msg_id, udsAddressFromPath(sock), R);
+  logForDebugging(`[uds-client] Sending ${body.length} chars to ${fragmentForLog(sock)}`);
+  if (trackReceipts) trackOutstandingSend(messageEnvelope.msg_id, udsAddressFromPath(sock), recipientName);
   try {
-    await connectToInbox(sock, y, r, {
+    await connectToInbox(sock, payload, storageV5, {
       noFollowSymlink: true,
       preflightedJson,
-      ...(a !== undefined && {
-        expectPeerPid: a,
+      ...(expectPeerPid !== undefined && {
+        expectPeerPid,
       }),
-      ...(o !== undefined && {
-        expectPeerProcStart: o,
+      ...(expectPeerProcStart !== undefined && {
+        expectPeerProcStart,
       }),
     });
   } catch (error) {
     if (isExpectedSendError(error)) {
-      L.refund();
-      if (l) untrackOutstandingSend(messageEnvelope.msg_id);
+      reservation.refund();
+      if (trackReceipts) untrackOutstandingSend(messageEnvelope.msg_id);
     }
     throw error;
   }
@@ -173,13 +180,13 @@ async function sendToUdsSocket(
 //@ chunk-66jn0ssz.js:12398-12409 placement
 var MAX_OUTSTANDING_SENDS = 200;
 //@ chunk-66jn0ssz.js:12409-12544 placement
-function trackOutstandingSend(msgId, to, r) {
+function trackOutstandingSend(msgId, to, options) {
   let outstandingSends = swarmHostState().receipts.outstandingSends;
   if (outstandingSends.length >= MAX_OUTSTANDING_SENDS) outstandingSends.shift();
   outstandingSends.push({
     msgId,
     to,
-    handle: sanitizeTeammateLabel(r ?? "", 1 / 0) || undefined,
+    handle: sanitizeTeammateLabel(options ?? "", 1 / 0) || undefined,
   });
 }
 //@ chunk-66jn0ssz.js:12544-12652 placement
@@ -194,23 +201,23 @@ function admitReceiptForOutstandingSend(origMsgId, status) {
   let { outstandingSends, awaitingTerminal } = swarmHostState().receipts;
   let index = outstandingSends.findIndex((outstandingSend) => outstandingSend.msgId === origMsgId);
   if (index !== -1) {
-    let [g] = outstandingSends.splice(index, 1);
-    if (!g) return;
+    let [outstandingSend] = outstandingSends.splice(index, 1);
+    if (!outstandingSend) return;
     if (status === "held") {
       if (awaitingTerminal.length >= MAX_OUTSTANDING_SENDS) awaitingTerminal.shift();
-      awaitingTerminal.push(g);
+      awaitingTerminal.push(outstandingSend);
     }
     return {
-      sent: g,
+      sent: outstandingSend,
       wasHeld: false,
     };
   }
-  let index_2 = awaitingTerminal.findIndex((g) => g.msgId === origMsgId);
+  let index_2 = awaitingTerminal.findIndex((awaitingSend) => awaitingSend.msgId === origMsgId);
   if (index_2 !== -1 && status !== "held") {
-    let [g] = awaitingTerminal.splice(index_2, 1);
-    return g
+    let [awaitingSend] = awaitingTerminal.splice(index_2, 1);
+    return awaitingSend
       ? {
-          sent: g,
+          sent: awaitingSend,
           wasHeld: true,
         }
       : undefined;
@@ -218,128 +225,128 @@ function admitReceiptForOutstandingSend(origMsgId, status) {
   return;
 }
 //@ chunk-66jn0ssz.js:13034-13371 placement
-function admitDroppedIdsByDestination(e) {
-  let n = new Map();
-  if (e.length === 0) return n;
-  let r = new Set(e);
+function admitDroppedIdsByDestination(entries) {
+  let byDest = new Map();
+  if (entries.length === 0) return byDest;
+  let remainingIds = new Set(entries);
   let { outstandingSends, awaitingTerminal } = swarmHostState().receipts;
-  for (let m of [outstandingSends, awaitingTerminal]) {
-    let g = m === awaitingTerminal;
-    for (let l = 0; l < m.length;) {
-      let a = m[l];
-      if (r.delete(a.msgId)) {
-        m.splice(l, 1);
-        let o = n.get(a.to) ?? {
+  for (let queue of [outstandingSends, awaitingTerminal]) {
+    let isAwaitingTerminal = queue === awaitingTerminal;
+    for (let index = 0; index < queue.length;) {
+      let send = queue[index];
+      if (remainingIds.delete(send.msgId)) {
+        queue.splice(index, 1);
+        let destinationEntry = byDest.get(send.to) ?? {
           sends: [],
           wereHeld: 0,
         };
-        o.sends.push(a);
-        if (g) o.wereHeld++;
-        n.set(a.to, o);
-      } else l++;
+        destinationEntry.sends.push(send);
+        if (isAwaitingTerminal) destinationEntry.wereHeld++;
+        byDest.set(send.to, destinationEntry);
+      } else index++;
     }
   }
-  return n;
+  return byDest;
 }
 //@ chunk-66jn0ssz.js:13371-13430 placement
-function sendControlToUdsSocket(e, n, r = {}) {
-  return sendStampedControlToUdsSocket(e, n, createMessageEnvelope(), r).then(() => {});
+function sendControlToUdsSocket(a, b, options = {}) {
+  return sendStampedControlToUdsSocket(a, b, createMessageEnvelope(), options).then(() => {});
 }
 //@ chunk-66jn0ssz.js:13430-13732 placement
 async function sendStampedControlToUdsSocket(
-  e,
-  n,
-  r = createMessageEnvelope(),
-  { expectPeerPid: s, expectPeerProcStart: d, storageV5: m } = {},
+  a,
+  b,
+  envelope = createMessageEnvelope(),
+  { expectPeerPid, expectPeerProcStart, storageV5 } = {},
 ) {
-  logForDebugging(`[uds-client] Sending control:${n.action} to ${fragmentForLog(e)}`);
+  logForDebugging(`[uds-client] Sending control:${b.action} to ${fragmentForLog(a)}`);
   await connectToInbox(
-    e,
+    a,
     {
       type: "control",
-      ...n,
-      ...r,
+      ...b,
+      ...envelope,
     },
-    m,
+    storageV5,
     {
       noFollowSymlink: true,
-      ...(s !== undefined && {
-        expectPeerPid: s,
+      ...(expectPeerPid !== undefined && {
+        expectPeerPid,
       }),
-      ...(d !== undefined && {
-        expectPeerProcStart: d,
+      ...(expectPeerProcStart !== undefined && {
+        expectPeerProcStart,
       }),
     },
   );
   return {
-    msgId: r.msg_id,
+    msgId: envelope.msg_id,
   };
 }
 //@ chunk-66jn0ssz.js:13732-13743 placement
 var CONNECT_CONCURRENCY = 150;
 //@ chunk-66jn0ssz.js:13743-13980 placement
-async function registeredLivePeerForSocket(e) {
-  let n = canonicalSocketPath(e);
-  if (n === undefined) return;
-  for (let r of await listSessionRecords()) {
-    if (!r.sock || canonicalSocketPath(r.sock) !== n) continue;
-    if (await isSameLiveProcess(r))
+async function registeredLivePeerForSocket(sock) {
+  let path = canonicalSocketPath(sock);
+  if (path === undefined) return;
+  for (let record of await listSessionRecords()) {
+    if (!record.sock || canonicalSocketPath(record.sock) !== path) continue;
+    if (await isSameLiveProcess(record))
       return {
-        pid: r.pid,
-        features: r.peerFeatures,
-        sessionId: r.sessionId,
-        procStart: r.procStartFt ?? r.procStart,
+        pid: record.pid,
+        features: record.peerFeatures,
+        sessionId: record.sessionId,
+        procStart: record.procStartFt ?? record.procStart,
       };
   }
   return;
 }
 //@ chunk-66jn0ssz.js:13980-14254 placement
-async function registeredInboxesOfPids(e) {
-  let n = uniq(e);
-  let r = new Map();
-  if (n.length === 0) return r;
+async function registeredInboxesOfPids(pids) {
+  let uniquePids = uniq(pids);
+  let inboxByPid = new Map();
+  if (uniquePids.length === 0) return inboxByPid;
   let sessionsDir = getSessionsDir();
-  let filtered = (await Promise.all(n.map((l) => readSessionRecord(sessionsDir, `${l}.json`)))).filter(
-    (l) => l !== null && Boolean(l.sock),
-  );
-  let results = await Promise.all(filtered.map((l) => isSameLiveProcess(l)));
-  filtered.forEach((l, a) => {
-    if (results[a] && l.sock) r.set(l.pid, l.sock);
+  let filtered = (
+    await Promise.all(uniquePids.map((pid) => readSessionRecord(sessionsDir, `${pid}.json`)))
+  ).filter((record) => record !== null && Boolean(record.sock));
+  let results = await Promise.all(filtered.map((record) => isSameLiveProcess(record)));
+  filtered.forEach((record, index) => {
+    if (results[index] && record.sock) inboxByPid.set(record.pid, record.sock);
   });
-  return r;
+  return inboxByPid;
 }
 //@ chunk-66jn0ssz.js:14254-14373 placement
-async function liveStatusOfJob(e, n) {
-  let sessionRecord = await readSessionRecord(getSessionsDir(), `${e}.json`, {
+async function liveStatusOfJob(jobId, expectedJobId) {
+  let sessionRecord = await readSessionRecord(getSessionsDir(), `${jobId}.json`, {
     rejectTornLiveRecord: true,
   });
-  return sessionRecord?.jobId === n ? sessionRecord.status : undefined;
+  return sessionRecord?.jobId === expectedJobId ? sessionRecord.status : undefined;
 }
 //@ chunk-66jn0ssz.js:14373-14490 placement
-async function isSameLiveProcess(e) {
-  let n = e.procStartFt ?? e.procStart;
-  if (n === undefined || isProcessProvablyGone(e.pid)) return false;
-  return (await provenSameProcessAsync(e.pid, n)) === true;
+async function isSameLiveProcess(record) {
+  let procStart = record.procStartFt ?? record.procStart;
+  if (procStart === undefined || isProcessProvablyGone(record.pid)) return false;
+  return (await provenSameProcessAsync(record.pid, procStart)) === true;
 }
 //@ chunk-66jn0ssz.js:14490-14567 placement
-function serializePeerPayload(e) {
-  let n = jsonStringify(e);
-  let r = AUTH_HANDSHAKE_LENGTH + n.length + 1;
-  if (r > MAX_PEER_MESSAGE_BYTES) throw describeMessageTooLarge(r, MAX_PEER_MESSAGE_BYTES);
-  return n;
+function serializePeerPayload(payload) {
+  let json = jsonStringify(payload);
+  let totalBytes = AUTH_HANDSHAKE_LENGTH + json.length + 1;
+  if (totalBytes > MAX_PEER_MESSAGE_BYTES) throw describeMessageTooLarge(totalBytes, MAX_PEER_MESSAGE_BYTES);
+  return json;
 }
 //@ chunk-66jn0ssz.js:14567-14810 placement
-async function isSocketOwnerAlive(e) {
-  let n = canonicalSocketPath(e);
-  if (n === undefined) return false;
-  for (let r of await listSessionRecords()) {
-    if (!r.sock || canonicalSocketPath(r.sock) !== n) continue;
-    if (isProcessProvablyGone(r.pid)) continue;
-    if ((r.procStartFt ?? r.procStart) !== undefined) {
-      if (await isSameLiveProcess(r)) return true;
+async function isSocketOwnerAlive(sock) {
+  let path = canonicalSocketPath(sock);
+  if (path === undefined) return false;
+  for (let record of await listSessionRecords()) {
+    if (!record.sock || canonicalSocketPath(record.sock) !== path) continue;
+    if (isProcessProvablyGone(record.pid)) continue;
+    if ((record.procStartFt ?? record.procStart) !== undefined) {
+      if (await isSameLiveProcess(record)) return true;
       continue;
     }
-    if (isProcessRunning(r.pid)) return true;
+    if (isProcessRunning(record.pid)) return true;
   }
   return false;
 }
@@ -348,67 +355,67 @@ async function isSocketOwnerAlive(e) {
  * 连接对端收件箱：拒绝非本机 IPC 路径、未登记/不可审查的回复目标与符号链接（约 2.4 KB）。
  */
 async function connectToInbox(
-  e,
-  n,
-  r,
-  { noFollowSymlink: s = false, expectPeerPid: d, expectPeerProcStart: m, preflightedJson: g } = {},
+  sock,
+  payload,
+  storageV5,
+  { noFollowSymlink = false, expectPeerPid, expectPeerProcStart, preflightedJson } = {},
 ) {
-  let l = g ?? serializePeerPayload(n);
-  if (!isValidPipeOrPath(e))
+  let json = preflightedJson ?? serializePeerPayload(payload);
+  if (!isValidPipeOrPath(sock))
     throw new UdsSendRefusedError(
       "non-local",
-      `Refusing to connect: not a usable local IPC path (remote/UNC host, or a pipe name with extra segments or a trailing dot/space): ${e}`,
+      `Refusing to connect: not a usable local IPC path (remote/UNC host, or a pipe name with extra segments or a trailing dot/space): ${sock}`,
     );
-  let a = isWindowsPlatform();
-  let o = await classifySessionAddress(e, r, {
-    requireLiveOwner: a,
+  let isWindows = isWindowsPlatform();
+  let address = await classifySessionAddress(sock, storageV5, {
+    requireLiveOwner: isWindows,
   });
-  let token = o.kind === "token" ? o.token : undefined;
-  if (a && o.kind !== "token") {
-    if (!(o.kind === "no-key" && (await isSocketOwnerAlive(e))))
+  let token = address.kind === "token" ? address.token : undefined;
+  if (isWindows && address.kind !== "token") {
+    if (!(address.kind === "no-key" && (await isSocketOwnerAlive(sock))))
       throw new NoLiveInboxError(
-        o.kind,
-        `No running session has registered an inbox at ${e} (${ENOINBOX}: ${o.kind}) \u2014 refusing to send to an unvouched pipe`,
+        address.kind,
+        `No running session has registered an inbox at ${sock} (${ENOINBOX}: ${address.kind}) \u2014 refusing to send to an unvouched pipe`,
       );
     token = undefined;
   }
-  let R = token !== undefined ? authHandshakeJson(token) : "";
-  if (s && !(getPlatform() === "windows" && parseNamedPipeName(e) !== undefined)) {
-    let S;
+  let authLine = token !== undefined ? authHandshakeJson(token) : "";
+  if (noFollowSymlink && !(getPlatform() === "windows" && parseNamedPipeName(sock) !== undefined)) {
+    let isSymlink;
     try {
-      S = (await lstat(e)).isSymbolicLink();
+      isSymlink = (await lstat(sock)).isSymbolicLink();
     } catch (error) {
       if (isENOENT(error)) throw error;
       logForDebugging(`[uds-client] reply target unvettable: ${getErrnoCode(error) ?? "lstat failed"}`);
       throw new UdsSendRefusedError("unvettable", "Refusing to send: cannot vet reply target");
     }
-    if (S) throw new UdsSendRefusedError("symlink", "Refusing to send: reply target is a symlink");
+    if (isSymlink) throw new UdsSendRefusedError("symlink", "Refusing to send: reply target is a symlink");
   }
-  let w =
-    R +
-    l +
+  let payload_2 =
+    authLine +
+    json +
     `
 `;
   return new Promise((resolve, reject) => {
-    let b = connect({
-      path: e,
+    let connection = connect({
+      path: sock,
     });
-    let h = false;
-    b.setTimeout(5000, () => {
-      h = true;
-      b.destroy();
-      reject(Error(`Timed out sending to ${e}`));
+    let settled = false;
+    connection.setTimeout(5000, () => {
+      settled = true;
+      connection.destroy();
+      reject(Error(`Timed out sending to ${sock}`));
     });
-    b.on("error", (y) => {
-      h = true;
-      reject(y);
+    connection.on("error", (error) => {
+      settled = true;
+      reject(error);
     });
-    b.on("connect", () => {
-      if (d !== undefined && getPlatform() !== "windows") {
-        let peerPid = getPeerPid(b);
+    connection.on("connect", () => {
+      if (expectPeerPid !== undefined && getPlatform() !== "windows") {
+        let peerPid = getPeerPid(connection);
         if (peerPid === undefined) {
-          h = true;
-          b.destroy();
+          settled = true;
+          connection.destroy();
           reject(
             new UdsSendRefusedError(
               "endpoint-unverifiable",
@@ -417,11 +424,11 @@ async function connectToInbox(
           );
           return;
         }
-        if (peerPid !== d) {
-          h = true;
-          b.destroy();
+        if (peerPid !== expectPeerPid) {
+          settled = true;
+          connection.destroy();
           logForDebugging(
-            `[uds-client] connected endpoint is pid ${peerPid}, expected ${d} \u2014 refusing to write`,
+            `[uds-client] connected endpoint is pid ${peerPid}, expected ${expectPeerPid} \u2014 refusing to write`,
           );
           reject(
             new UdsSendRefusedError(
@@ -431,11 +438,11 @@ async function connectToInbox(
           );
           return;
         }
-        let x = process.getuid?.();
-        let peerUid = getPeerUid(b);
-        if (x !== undefined && peerUid === null) {
-          h = true;
-          b.destroy();
+        let ownUid = process.getuid?.();
+        let peerUid = getPeerUid(connection);
+        if (ownUid !== undefined && peerUid === null) {
+          settled = true;
+          connection.destroy();
           reject(
             new UdsSendRefusedError(
               "endpoint-unverifiable",
@@ -444,9 +451,9 @@ async function connectToInbox(
           );
           return;
         }
-        if (x !== undefined && peerUid !== x) {
-          h = true;
-          b.destroy();
+        if (ownUid !== undefined && peerUid !== ownUid) {
+          settled = true;
+          connection.destroy();
           logForDebugging(
             `[uds-client] connected endpoint is owned by uid ${peerUid}, not ours \u2014 refusing to write`,
           );
@@ -458,9 +465,12 @@ async function connectToInbox(
           );
           return;
         }
-        if (m !== undefined && getProcessStartTokenLinuxSync(peerPid) !== m) {
-          h = true;
-          b.destroy();
+        if (
+          expectPeerProcStart !== undefined &&
+          getProcessStartTokenLinuxSync(peerPid) !== expectPeerProcStart
+        ) {
+          settled = true;
+          connection.destroy();
           logForDebugging(
             `[uds-client] connected endpoint pid ${peerPid} is not the process that wrote to us (start token differs \u2014 recycled pid) \u2014 refusing to write`,
           );
@@ -473,19 +483,19 @@ async function connectToInbox(
           return;
         }
       }
-      b.write(w);
+      connection.write(payload_2);
       if (getPlatform() === "macos")
         setTimeout(
-          (y) => {
-            if (!y.destroyed) y.end();
+          (socket) => {
+            if (!socket.destroyed) socket.end();
           },
           CONNECT_CONCURRENCY,
-          b,
+          connection,
         );
-      else b.end();
+      else connection.end();
     });
-    b.on("close", () => {
-      if (!h) logForDebugging(`[uds-client] Sent to ${fragmentForLog(e)}`);
+    connection.on("close", () => {
+      if (!settled) logForDebugging(`[uds-client] Sent to ${fragmentForLog(sock)}`);
       resolve();
     });
   });
@@ -497,16 +507,16 @@ function probeSocket(sock) {
       resolve(false);
       return;
     }
-    let r = connect({
+    let connection = connect({
       path: sock,
     });
-    let s = (d) => {
-      r.destroy();
-      resolve(d);
+    let finish = (isLive) => {
+      connection.destroy();
+      resolve(isLive);
     };
-    r.on("connect", () => s(true));
-    r.on("error", (d) => s(getErrnoCode(d) === "EBUSY"));
-    r.setTimeout(250, () => s(false));
+    connection.on("connect", () => finish(true));
+    connection.on("error", (error) => finish(getErrnoCode(error) === "EBUSY"));
+    connection.setTimeout(250, () => finish(false));
   });
 }
 //@ chunk-66jn0ssz.js:17437-17582 placement
@@ -519,141 +529,144 @@ class SessionRecordsUnreadableError extends Error {
   }
 }
 //@ chunk-66jn0ssz.js:17582-17868 placement
-async function listSessionRecords(e) {
+async function listSessionRecords(options) {
   if (isDiskless()) return [];
   let sessionsDir = getSessionsDir();
-  let r;
+  let fileNames;
   try {
-    r = await readdir(sessionsDir);
+    fileNames = await readdir(sessionsDir);
   } catch (error) {
-    if (e?.rejectUnreadable && !isENOENT(error)) throw new SessionRecordsUnreadableError(getErrnoCode(error));
+    if (options?.rejectUnreadable && !isENOENT(error))
+      throw new SessionRecordsUnreadableError(getErrnoCode(error));
     return [];
   }
   return (
     await Promise.all(
-      r
-        .filter((d) => /^\d+\.json$/.test(d))
-        .map((d) =>
-          readSessionRecord(sessionsDir, d, {
-            rejectTornLiveRecord: e?.rejectTornLiveRecord,
+      fileNames
+        .filter((fileName) => /^\d+\.json$/.test(fileName))
+        .map((fileName) =>
+          readSessionRecord(sessionsDir, fileName, {
+            rejectTornLiveRecord: options?.rejectTornLiveRecord,
           }),
         ),
     )
-  ).filter((d) => d !== null);
+  ).filter((record) => record !== null);
 }
 //@ chunk-66jn0ssz.js:17868-20091 placement
 /**
  * 读取并校验一个会话记录（规范路径、pid 存活、令牌），不合格时清理。
  */
-async function readSessionRecord(sessionsDir, n, r) {
-  let s = false;
-  let d;
-  let m = join(sessionsDir, n);
+async function readSessionRecord(sessionsDir, fileName, options) {
+  let readJson = false;
+  let recordPid;
+  let recordPath = join(sessionsDir, fileName);
   try {
-    let sessionRecordName = parseSessionRecordName(n);
+    let sessionRecordName = parseSessionRecordName(fileName);
     if (sessionRecordName === null) return null;
     let { pid } = sessionRecordName;
     if (!sessionRecordName.canonical) {
-      unlink(m).catch(() => {});
+      unlink(recordPath).catch(() => {});
       return null;
     }
-    d = pid;
-    let smallFileOrNull = await readSmallFileOrNull(m, MAX_SESSION_RECORD_BYTES);
+    recordPid = pid;
+    let smallFileOrNull = await readSmallFileOrNull(recordPath, MAX_SESSION_RECORD_BYTES);
     if (smallFileOrNull === null) return null;
-    s = true;
-    let o = jsonParse(smallFileOrNull);
-    let c = normalizeSessionRecord(o);
+    readJson = true;
+    let raw = jsonParse(smallFileOrNull);
+    let normalized = normalizeSessionRecord(raw);
     return {
-      sock: typeof o.messagingSocketPath === "string" ? o.messagingSocketPath : "",
-      cwd: c.cwd,
-      startedAt: c.startedAt,
-      ...(saneEpochMsOrUndefined(o.nameSince) !== undefined && {
-        nameSince: saneEpochMsOrUndefined(o.nameSince),
+      sock: typeof raw.messagingSocketPath === "string" ? raw.messagingSocketPath : "",
+      cwd: normalized.cwd,
+      startedAt: normalized.startedAt,
+      ...(saneEpochMsOrUndefined(raw.nameSince) !== undefined && {
+        nameSince: saneEpochMsOrUndefined(raw.nameSince),
       }),
-      procStart: c.procStart,
-      ...(c.procStartFt !== undefined && {
-        procStartFt: c.procStartFt,
+      procStart: normalized.procStart,
+      ...(normalized.procStartFt !== undefined && {
+        procStartFt: normalized.procStartFt,
       }),
-      name: typeof o.name === "string" ? o.name : undefined,
+      name: typeof raw.name === "string" ? raw.name : undefined,
       nameSource:
-        o.nameSource === "user" ||
-        o.nameSource === "peer" ||
-        o.nameSource === "derived" ||
-        o.nameSource === "collision" ||
-        o.nameSource === "auto" ||
-        o.nameSource === "hook"
-          ? o.nameSource
+        raw.nameSource === "user" ||
+        raw.nameSource === "peer" ||
+        raw.nameSource === "derived" ||
+        raw.nameSource === "collision" ||
+        raw.nameSource === "auto" ||
+        raw.nameSource === "hook"
+          ? raw.nameSource
           : undefined,
-      formerNames: sanitizeFormerNames(o.formerNames),
-      kind: c.kind,
-      sessionId: c.sessionId,
-      jobId: typeof o.jobId === "string" ? o.jobId : undefined,
-      parkedJobId: typeof o.parkedJobId === "string" ? o.parkedJobId : undefined,
-      spare: o.spare === true,
-      bridgeSessionId: typeof o.bridgeSessionId === "string" ? o.bridgeSessionId : undefined,
-      logPath: typeof o.logPath === "string" ? o.logPath : undefined,
-      status: c.status,
-      waitingFor: typeof o.waitingFor === "string" ? o.waitingFor : undefined,
+      formerNames: sanitizeFormerNames(raw.formerNames),
+      kind: normalized.kind,
+      sessionId: normalized.sessionId,
+      jobId: typeof raw.jobId === "string" ? raw.jobId : undefined,
+      parkedJobId: typeof raw.parkedJobId === "string" ? raw.parkedJobId : undefined,
+      spare: raw.spare === true,
+      bridgeSessionId: typeof raw.bridgeSessionId === "string" ? raw.bridgeSessionId : undefined,
+      logPath: typeof raw.logPath === "string" ? raw.logPath : undefined,
+      status: normalized.status,
+      waitingFor: typeof raw.waitingFor === "string" ? raw.waitingFor : undefined,
       ...{},
-      updatedAt: saneEpochMsOrUndefined(o.updatedAt),
-      statusUpdatedAt: saneEpochMsOrUndefined(o.statusUpdatedAt),
-      entrypoint: c.entrypoint,
-      ...(isValidLocalTaskId(o.hostSessionId) !== undefined && {
-        hostSessionId: isValidLocalTaskId(o.hostSessionId),
+      updatedAt: saneEpochMsOrUndefined(raw.updatedAt),
+      statusUpdatedAt: saneEpochMsOrUndefined(raw.statusUpdatedAt),
+      entrypoint: normalized.entrypoint,
+      ...(isValidLocalTaskId(raw.hostSessionId) !== undefined && {
+        hostSessionId: isValidLocalTaskId(raw.hostSessionId),
       }),
-      ...(c.pidDomain !== undefined && {
-        pidDomain: c.pidDomain,
+      ...(normalized.pidDomain !== undefined && {
+        pidDomain: normalized.pidDomain,
       }),
-      agent: typeof o.agent === "string" ? o.agent : undefined,
-      state: typeof o.state === "string" ? o.state : undefined,
-      detail: typeof o.detail === "string" ? o.detail : undefined,
-      tempo: o.tempo === "active" || o.tempo === "idle" || o.tempo === "blocked" ? o.tempo : undefined,
-      needs: typeof o.needs === "string" ? o.needs : undefined,
-      peerProtocol: typeof o.peerProtocol === "number" ? o.peerProtocol : undefined,
-      ...(Array.isArray(o.peerFeatures) && {
-        peerFeatures: sanitizePeerFeatures(o.peerFeatures),
+      agent: typeof raw.agent === "string" ? raw.agent : undefined,
+      state: typeof raw.state === "string" ? raw.state : undefined,
+      detail: typeof raw.detail === "string" ? raw.detail : undefined,
+      tempo:
+        raw.tempo === "active" || raw.tempo === "idle" || raw.tempo === "blocked" ? raw.tempo : undefined,
+      needs: typeof raw.needs === "string" ? raw.needs : undefined,
+      peerProtocol: typeof raw.peerProtocol === "number" ? raw.peerProtocol : undefined,
+      ...(Array.isArray(raw.peerFeatures) && {
+        peerFeatures: sanitizePeerFeatures(raw.peerFeatures),
       }),
       ...{},
-      ...((typeof o.asksForConvertedSkills === "boolean" || o.asksForConvertedSkills === null) && {
-        asksForConvertedSkills: o.asksForConvertedSkills,
+      ...((typeof raw.asksForConvertedSkills === "boolean" || raw.asksForConvertedSkills === null) && {
+        asksForConvertedSkills: raw.asksForConvertedSkills,
       }),
-      tmux: typeof o.tmux === "string" ? o.tmux : undefined,
+      tmux: typeof raw.tmux === "string" ? raw.tmux : undefined,
       pid,
-      file: m,
+      file: recordPath,
     };
   } catch {
-    if (r?.rejectTornLiveRecord && s && d !== undefined && isProcessRunning(d)) {
-      if (!r.isReread) {
+    if (options?.rejectTornLiveRecord && readJson && recordPid !== undefined && isProcessRunning(recordPid)) {
+      if (!options.isReread) {
         await sleep(MAX_PEER_NOTICE_LENGTH);
-        return readSessionRecord(sessionsDir, n, {
-          ...r,
+        return readSessionRecord(sessionsDir, fileName, {
+          ...options,
           isReread: true,
         });
       }
-      let [g, processCreationTimeMs] = await Promise.all([
-        stat(m).then(
-          (a) => a.mtimeMs,
+      let [mtimeMs, processCreationTimeMs] = await Promise.all([
+        stat(recordPath).then(
+          (record) => record.mtimeMs,
           () => {
             return;
           },
         ),
-        getProcessCreationTimeMsAsync(d),
+        getProcessCreationTimeMsAsync(recordPid),
       ]);
-      if (g !== undefined && processCreationTimeMs !== null && processCreationTimeMs > g + 2000) return null;
-      if (processCreationTimeMs === null && !isProcessRunning(d)) return null;
+      if (mtimeMs !== undefined && processCreationTimeMs !== null && processCreationTimeMs > mtimeMs + 2000)
+        return null;
+      if (processCreationTimeMs === null && !isProcessRunning(recordPid)) return null;
       throw new SessionRecordsUnreadableError("EBADRECORD");
     }
     return null;
   }
 }
 //@ chunk-66jn0ssz.js:20091-20152 placement
-function isOtherPidDomain(e, n) {
-  return e.pidDomain !== undefined && e.pidDomain !== n;
+function isOtherPidDomain(record, pidDomain) {
+  return record.pidDomain !== undefined && record.pidDomain !== pidDomain;
 }
 //@ chunk-66jn0ssz.js:20152-20237 placement
-async function isHeldInAnotherPidDomain(e, n) {
-  let r = await ownPidDomain();
-  return e.some((s) => s.sessionId === n && isOtherPidDomain(s, r));
+async function isHeldInAnotherPidDomain(records, sessionId) {
+  let domain = await ownPidDomain();
+  return records.some((record) => record.sessionId === sessionId && isOtherPidDomain(record, domain));
 }
 //@ chunk-66jn0ssz.js:20237-20321 placement
 async function listRegisteredSessionRecords() {
@@ -661,58 +674,72 @@ async function listRegisteredSessionRecords() {
     await listSessionRecords({
       rejectUnreadable: true,
     })
-  ).map(({ file, ...n }) => n);
+  ).map(({ file, ...record }) => record);
 }
 //@ chunk-66jn0ssz.js:20321-20531 placement
-async function firstLiveSessionMatching(e) {
-  let n = await listSessionRecords({
+async function firstLiveSessionMatching(predicate) {
+  let records = await listSessionRecords({
     rejectUnreadable: true,
     rejectTornLiveRecord: true,
   });
-  let r = await ownPidDomain();
-  for (let { file, ...d } of n)
+  let pidDomain = await ownPidDomain();
+  for (let { file, ...record } of records)
     if (
-      e(d) &&
-      (isOtherPidDomain(d, r) ||
-        (isProcessRunning(d.pid) && (await isSameProcessAsync(d.pid, d.procStartFt ?? d.procStart))))
+      predicate(record) &&
+      (isOtherPidDomain(record, pidDomain) ||
+        (isProcessRunning(record.pid) &&
+          (await isSameProcessAsync(record.pid, record.procStartFt ?? record.procStart))))
     )
-      return d;
+      return record;
   return;
 }
 //@ chunk-66jn0ssz.js:20531-20724 placement
-function removeSessionRecord(file, pid, r, s) {
-  if (isStorageV5Enabled() && s !== undefined) {
-    s.delete(STORAGE_SPACES.session(basename(file)))
-      .then((d) => (d.ok && d.value.existed ? reapKeysOfReapedRecord(dirname(file), pid, r, s) : undefined))
+function removeSessionRecord(file, pid, pidDomain, storageV5) {
+  if (isStorageV5Enabled() && storageV5 !== undefined) {
+    storageV5
+      .delete(STORAGE_SPACES.session(basename(file)))
+      .then((deleteResult) =>
+        deleteResult.ok && deleteResult.value.existed
+          ? reapKeysOfReapedRecord(dirname(file), pid, pidDomain, storageV5)
+          : undefined,
+      )
       .catch(() => {});
     return;
   }
   unlink(file)
-    .then(() => reapKeysOfReapedRecord(dirname(file), pid, r, s))
+    .then(() => reapKeysOfReapedRecord(dirname(file), pid, pidDomain, storageV5))
     .catch(() => {});
 }
 //@ chunk-66jn0ssz.js:20724-21200 placement
-async function listAllLiveSessions(e, n) {
-  let r = await listSessionRecords({
-    rejectUnreadable: n?.rejectUnreadable === true,
-    rejectTornLiveRecord: n?.rejectUnreadable === true,
+async function listAllLiveSessions(rejectUnreadable, options) {
+  let records = await listSessionRecords({
+    rejectUnreadable: options?.rejectUnreadable === true,
+    rejectTornLiveRecord: options?.rejectUnreadable === true,
   });
-  let s = n?.rejectUnreadable === true ? await ownPidDomain() : undefined;
-  let d = (c) => s !== undefined && isOtherPidDomain(c, s);
-  let mapped = r.map((c) => d(c) || isProcessRunning(c.pid));
+  let pidDomain = options?.rejectUnreadable === true ? await ownPidDomain() : undefined;
+  let isForeignDomain = (record) => pidDomain !== undefined && isOtherPidDomain(record, pidDomain);
+  let mapped = records.map((record) => isForeignDomain(record) || isProcessRunning(record.pid));
   let results = await Promise.all(
-    r.map((c, R) => mapped[R] && (d(c) || isSameProcessAsync(c.pid, c.procStartFt ?? c.procStart))),
+    records.map(
+      (record, index) =>
+        mapped[index] &&
+        (isForeignDomain(record) || isSameProcessAsync(record.pid, record.procStartFt ?? record.procStart)),
+    ),
   );
-  let l = await isRegistrySweepPermitted();
-  let a = l ? await ownPidDomain() : "";
-  let o = [];
-  for (let idx = 0; idx < r.length; idx++) {
-    let { file, ...w } = r[idx];
-    if (results[idx]) o.push(w);
-    else if (l && mayReapRecordFromThisDomain(w, a) && isProcessProvablyGone(w.pid))
-      removeSessionRecord(file, w.pid, a, e);
+  let sweepPermitted = await isRegistrySweepPermitted();
+  let ownDomain = sweepPermitted ? await ownPidDomain() : "";
+  let live = [];
+  for (let idx = 0; idx < records.length; idx++) {
+    let { file, ...record } = records[idx];
+    if (results[idx]) live.push(record);
+    else if (
+      sweepPermitted &&
+      mayReapRecordFromThisDomain(record, ownDomain) &&
+      isProcessProvablyGone(record.pid)
+    )
+      removeSessionRecord(file, record.pid, ownDomain, rejectUnreadable);
   }
-  return o;
+  return live;
 }
 //@ chunk-66jn0ssz.js:21200-21254 placement
 function ownMessagingSocket() {
@@ -720,89 +747,107 @@ function ownMessagingSocket() {
 }
 //@ chunk-66jn0ssz.js:21254-21528 placement
 async function isOwnEndpointShadowed() {
-  let e = ownMessagingSocket();
-  if (e === undefined) return false;
-  let n = await listSessionRecords();
-  let r = await ownPidDomain();
-  let filtered = n.filter(
-    (m) =>
-      m.sock &&
-      m.pid !== process.pid &&
-      !isSpareOrParked(m) &&
+  let sock = ownMessagingSocket();
+  if (sock === undefined) return false;
+  let records = await listSessionRecords();
+  let pidDomain = await ownPidDomain();
+  let filtered = records.filter(
+    (record) =>
+      record.sock &&
+      record.pid !== process.pid &&
+      !isSpareOrParked(record) &&
       isNotStableAddress({
-        sock: m.sock,
+        sock: record.sock,
       }) &&
-      mayBeSamePath(m.sock, e),
+      mayBeSamePath(record.sock, sock),
   );
   return (
     await Promise.all(
       filtered.map(
-        async (m) => (await classifyRecordLiveness(m, r)) === "present" && (await probeSocket(m.sock)),
+        async (record) =>
+          (await classifyRecordLiveness(record, pidDomain)) === "present" && (await probeSocket(record.sock)),
       ),
     )
   ).some(Boolean);
 }
 //@ chunk-66jn0ssz.js:21528-21788 placement
-async function classifyRecordLiveness(e, n) {
-  if (e.pidDomain !== n) return "present";
-  if (isProcessProvablyGone(e.pid)) return "gone";
-  let r = e.procStartFt ?? e.procStart;
-  if (r === undefined) return "present";
-  let processStartTime = await getProcessStartTimeAsync(e.pid);
-  if (processStartTime === undefined || startTokensEqualOrCrossFormat(r, processStartTime)) return "present";
-  return (await provenSameProcessAsync(e.pid, r)) === false ? "recycled" : "present";
+async function classifyRecordLiveness(record, pidDomain) {
+  if (record.pidDomain !== pidDomain) return "present";
+  if (isProcessProvablyGone(record.pid)) return "gone";
+  let procStart = record.procStartFt ?? record.procStart;
+  if (procStart === undefined) return "present";
+  let processStartTime = await getProcessStartTimeAsync(record.pid);
+  if (processStartTime === undefined || startTokensEqualOrCrossFormat(procStart, processStartTime))
+    return "present";
+  return (await provenSameProcessAsync(record.pid, procStart)) === false ? "recycled" : "present";
 }
 //@ chunk-66jn0ssz.js:21788-22256 placement
-async function listLivePeerSessions(e) {
-  let n = ownMessagingSocket();
+async function listLivePeerSessions(sock) {
+  let ownSocket = ownMessagingSocket();
   let filtered = (
     await listSessionRecords({
       rejectUnreadable: true,
     })
-  ).filter((a) => a.sock && !(n && isSamePath(a.sock, n)) && !isSpareOrParked(a));
-  let [s, d] = await Promise.all([isRegistrySweepPermitted(), ownPidDomain()]);
-  let [m, g] = await Promise.all([
-    Promise.all(filtered.map((a) => probeSocket(a.sock))),
-    Promise.all(filtered.map((a) => classifyRecordLiveness(a, d))),
+  ).filter(
+    (record) => record.sock && !(ownSocket && isSamePath(record.sock, ownSocket)) && !isSpareOrParked(record),
+  );
+  let [sweepPermitted, pidDomain] = await Promise.all([isRegistrySweepPermitted(), ownPidDomain()]);
+  let [probeResults, liveness] = await Promise.all([
+    Promise.all(filtered.map((record) => probeSocket(record.sock))),
+    Promise.all(filtered.map((record) => classifyRecordLiveness(record, pidDomain))),
   ]);
-  let l = [];
+  let live = [];
   for (let idx = 0; idx < filtered.length; idx++) {
-    let { file, ...c } = filtered[idx];
-    if (g[idx] === "gone") {
-      if (s && isProcessProvablyGone(c.pid)) removeSessionRecord(file, c.pid, d, e);
-    } else if (g[idx] === "recycled") continue;
-    else if (m[idx]) l.push(c);
-    else if (s && mayReapRecordFromThisDomain(c, d) && isProcessProvablyGone(c.pid))
-      removeSessionRecord(file, c.pid, d, e);
+    let { file, ...record } = filtered[idx];
+    if (liveness[idx] === "gone") {
+      if (sweepPermitted && isProcessProvablyGone(record.pid))
+        removeSessionRecord(file, record.pid, pidDomain, sock);
+    } else if (liveness[idx] === "recycled") continue;
+    else if (probeResults[idx]) live.push(record);
+    else if (
+      sweepPermitted &&
+      mayReapRecordFromThisDomain(record, pidDomain) &&
+      isProcessProvablyGone(record.pid)
+    )
+      removeSessionRecord(file, record.pid, pidDomain, sock);
   }
-  return l;
+  return live;
 }
 //@ chunk-66jn0ssz.js:22256-22691 placement
-async function findLivePeerBySessionId(e) {
-  let n = ownMessagingSocket();
-  let r = await listSessionRecords();
-  let s = (o) => Boolean(o.sock) && !(n && isSamePath(o.sock, n));
-  let d = new Set(
-    r.filter((o) => o.sessionId === e && o.parkedJobId !== undefined).map((o) => o.parkedJobId),
+async function findLivePeerBySessionId(sessionId) {
+  let ownSocket = ownMessagingSocket();
+  let records = await listSessionRecords();
+  let isCandidate = (record) => Boolean(record.sock) && !(ownSocket && isSamePath(record.sock, ownSocket));
+  let parkedJobIds = new Set(
+    records
+      .filter((record) => record.sessionId === sessionId && record.parkedJobId !== undefined)
+      .map((record) => record.parkedJobId),
   );
-  let filtered = r.filter((o) => s(o) && !isSpareOrParked(o));
-  let filtered_2 = filtered.filter((o) => o.sessionId === e);
-  let filtered_3 = filtered.filter((o) => o.sessionId !== e && o.jobId !== undefined && d.has(o.jobId));
-  let a = await ownPidDomain();
-  for (let o of filtered_2.concat(filtered_3)) {
-    let { file, ...R } = o;
-    if ((await classifyRecordLiveness(R, a)) === "present" && (await probeSocket(R.sock))) return R;
+  let filtered = records.filter((record) => isCandidate(record) && !isSpareOrParked(record));
+  let filtered_2 = filtered.filter((record) => record.sessionId === sessionId);
+  let filtered_3 = filtered.filter(
+    (record) =>
+      record.sessionId !== sessionId && record.jobId !== undefined && parkedJobIds.has(record.jobId),
+  );
+  let pidDomain = await ownPidDomain();
+  for (let record of filtered_2.concat(filtered_3)) {
+    let { file, ...peerRecord } = record;
+    if (
+      (await classifyRecordLiveness(peerRecord, pidDomain)) === "present" &&
+      (await probeSocket(peerRecord.sock))
+    )
+      return peerRecord;
   }
   return null;
 }
 //@ chunk-66jn0ssz.js:22691-22750 placement
-function isSpareOrParked(e) {
-  return e.spare === true || e.parkedJobId !== undefined;
+function isSpareOrParked(record) {
+  return record.spare === true || record.parkedJobId !== undefined;
 }
 //@ chunk-66jn0ssz.js:22750-22831 placement
 function sanitizePeerFeatures(peerFeatures) {
   return stringArray(peerFeatures)
-    .filter((n) => /^[a-z0-9_]{1,32}$/.test(n))
+    .filter((feature) => /^[a-z0-9_]{1,32}$/.test(feature))
     .slice(0, 16);
 }
 export {
@@ -823,4 +868,6 @@ export {
   listAllLiveSessions,
   sendToUdsSocket,
   firstLiveSessionMatching,
+  isHeldInAnotherPidDomain,
+  liveStatusOfJob,
 };

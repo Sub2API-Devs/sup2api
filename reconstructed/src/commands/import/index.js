@@ -31,12 +31,12 @@ var CONFIG_UNREADABLE_MESSAGE =
 /**
  * planImportRewrite：`claude import` → `claude -- /import ...` 改写。
  */
-function planImportRewrite(importArgv, n) {
-  if (n === undefined)
+function planImportRewrite(importArgv, context) {
+  if (context === undefined)
     return {
       kind: "config-error",
     };
-  if (!n)
+  if (!context)
     return {
       kind: "not-available",
     };
@@ -49,14 +49,14 @@ function planImportRewrite(importArgv, n) {
 /**
  * parseImportArgv：识别 argv 中的 import 子命令。
  */
-function parseImportArgv(e) {
-  let index = e.indexOf("import");
+function parseImportArgv(argv) {
+  let index = argv.indexOf("import");
   if (index < 0) return null;
-  let sliced = e.slice(0, index);
-  if (sliced.some((h) => ["--", "-h", "--help", "-v", "-V", "--version"].includes(h))) return null;
-  let sliced_2 = e.slice(index + 1);
+  let sliced = argv.slice(0, index);
+  if (sliced.some((arg) => ["--", "-h", "--help", "-v", "-V", "--version"].includes(arg))) return null;
+  let sliced_2 = argv.slice(index + 1);
   if (sliced.length > 0 && sliced_2.length === 0) return null;
-  if (!sliced.every((h, y) => h.startsWith("-") || sliced[y - 1]?.startsWith("-"))) return null;
+  if (!sliced.every((arg, index) => arg.startsWith("-") || sliced[index - 1]?.startsWith("-"))) return null;
   if (!areValidImportArgs(sliced_2)) return null;
   return {
     prefix: sliced,
@@ -67,9 +67,9 @@ function parseImportArgv(e) {
 /**
  * areValidImportArgs：codex|gemini|cursor|--dry-run|--yes[=digest]。
  */
-function areValidImportArgs(e) {
-  let n = new Set(["codex", "gemini", "cursor", "--dry-run", "--yes"]);
-  return e.every((r) => n.has(r) || r.startsWith("--yes="));
+function areValidImportArgs(args) {
+  let valid = new Set(["codex", "gemini", "cursor", "--dry-run", "--yes"]);
+  return args.every((arg) => valid.has(arg) || arg.startsWith("--yes="));
 }
 //@ chunk-e6aww6q8.js:1697445-1697884 placement
 /**
@@ -95,7 +95,7 @@ var importNonInteractiveCommand = {
     return !isImportEnabled() || !getIsNonInteractiveSession() || isDiskless();
   },
   isEnabled: () => isImportEnabled() && getIsNonInteractiveSession() && !isDiskless(),
-  load: () => import("./chunk-he8wyk3b.js"),
+  load: () => import("./call.lazy.js"),
 };
 var importCommand = importCommandDefinition;
 //@ chunk-e6aww6q8.js:1697884-1698703 placement

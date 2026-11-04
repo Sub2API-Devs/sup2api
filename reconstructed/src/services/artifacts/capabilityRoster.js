@@ -12,13 +12,14 @@ import { isServerIdentityActive } from "../mcp/serverIdentity.js";
 import { env } from "../../utils/env.js";
 import { getGatewayAccountInfo } from "../../utils/gatewayCredential.js";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { u, string, array, E } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, array, numberSchema } from "../../../vendor/zod/v4/classic/schemas.js";
 import { invalidateOverageCreditGrantCache } from "../api/overageCreditGrant.js";
 import { getGlobalConfig, saveGlobalConfig } from "../../utils/config.js";
 import { getLiveState } from "../liveReplica/liveReplica.js";
 import { arraysEqual } from "../../utils/collections.js";
 import { logForDebugging } from "../../utils/debug.js";
 import { errorMessage } from "../../utils/errors.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-06y4szbn.js:2054-2124 placement
 function slackConnectorName() {
@@ -28,10 +29,10 @@ function slackConnectorName() {
 var FORCE_REFUSED_SENTENCE =
   " The server refuses force:true over a version saved from inside the page; only a publish built on that version is accepted.";
 //@ chunk-06y4szbn.js:2290-2537 placement
-function isHtmlCommentOnly(e) {
-  let n = e.trimEnd();
-  if (!n.startsWith("<!--") || !n.endsWith("-->") || n.length < 7) return false;
-  let sliced = n.slice(4, -3);
+function isHtmlCommentOnly(html) {
+  let trimmed = html.trimEnd();
+  if (!trimmed.startsWith("<!--") || !trimmed.endsWith("-->") || trimmed.length < 7) return false;
+  let sliced = trimmed.slice(4, -3);
   return (
     !sliced.startsWith(">") &&
     !sliced.startsWith("->") &&
@@ -61,24 +62,28 @@ function rosterAccountKey() {
 /**
  * 能力名册缓存的 schema（账号/组织、版本、能力列表、拉取时间），以及被拒记录的 schema（状态码、拒绝时间、令牌过期时间）。
  */
-var CAPABILITY_ROSTER_SCHEMA = DoctorLazy(() =>
-  u({
-    accountUuid: string(),
-    organizationUuid: string().nullable(),
-    version: string(),
-    capabilities: array(string()),
-    fetchedAt: E(),
-  }),
-);
-var CAPABILITY_DENIAL_SCHEMA = DoctorLazy(() =>
-  u({
-    accountUuid: string(),
-    organizationUuid: string().nullable(),
-    status: E(),
-    deniedAt: E(),
-    tokenExpiresAt: E(),
-  }),
-);
+var CAPABILITY_ROSTER_SCHEMA; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+var CAPABILITY_DENIAL_SCHEMA;
+deferInit("chunk-06y4szbn.js:2839", () => {
+  CAPABILITY_ROSTER_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      accountUuid: stringSchema(),
+      organizationUuid: stringSchema().nullable(),
+      version: stringSchema(),
+      capabilities: array(stringSchema()),
+      fetchedAt: numberSchema(),
+    }),
+  );
+  CAPABILITY_DENIAL_SCHEMA = DoctorLazy(() =>
+    objectSchema({
+      accountUuid: stringSchema(),
+      organizationUuid: stringSchema().nullable(),
+      status: numberSchema(),
+      deniedAt: numberSchema(),
+      tokenExpiresAt: numberSchema(),
+    }),
+  );
+});
 //@ chunk-06y4szbn.js:3214-3282 placement
 function readCachedRoster() {
   return invalidateOverageCreditGrantCache(
@@ -99,11 +104,11 @@ function currentRoster() {
       roster,
       source: "session",
     };
-  let n = env.CLAUDE_CODE_REMOTE ? undefined : readCachedRoster();
-  return n === undefined
+  let cachedRoster = env.CLAUDE_CODE_REMOTE ? undefined : readCachedRoster();
+  return cachedRoster === undefined
     ? undefined
     : {
-        roster: n,
+        roster: cachedRoster,
         source: "disk",
       };
 }
@@ -113,8 +118,8 @@ var ROSTER_CACHE_TTL_MS = 3600000;
 /**
  * 把 artifact 能力名册（capability roster）写入全局配置缓存，账号/epoch 不一致时放弃。
  */
-function saveRosterToConfig(e) {
-  let { session, epoch, roster, storageV5 } = e;
+function saveRosterToConfig(options) {
+  let { session, epoch, roster, storageV5 } = options;
   if (getLiveState() !== session || session.accountEpoch !== epoch)
     return {
       adopted: false,
@@ -129,24 +134,24 @@ function saveRosterToConfig(e) {
     };
   return {
     adopted: true,
-    persisted: saveRosterDenied(session, epoch, storageV5, (y, x) => {
-      let w = CAPABILITY_ROSTER_SCHEMA().safeParse(x.cachedArtifactRoster);
-      let R = w.success ? w.data : undefined;
+    persisted: saveRosterDenied(session, epoch, storageV5, (key, config) => {
+      let parsed = CAPABILITY_ROSTER_SCHEMA().safeParse(config.cachedArtifactRoster);
+      let cachedRosterValue = parsed.success ? parsed.data : undefined;
       let now = Date.now();
       if (
-        x.artifactRosterDenied === undefined &&
-        R !== undefined &&
-        R.accountUuid === y.accountUuid &&
-        R.organizationUuid === y.organizationUuid &&
-        R.version === roster.version &&
-        arraysEqual(R.capabilities, roster.capabilities) &&
-        R.fetchedAt <= now &&
-        now - R.fetchedAt < ROSTER_CACHE_TTL_MS
+        config.artifactRosterDenied === undefined &&
+        cachedRosterValue !== undefined &&
+        cachedRosterValue.accountUuid === key.accountUuid &&
+        cachedRosterValue.organizationUuid === key.organizationUuid &&
+        cachedRosterValue.version === roster.version &&
+        arraysEqual(cachedRosterValue.capabilities, roster.capabilities) &&
+        cachedRosterValue.fetchedAt <= now &&
+        now - cachedRosterValue.fetchedAt < ROSTER_CACHE_TTL_MS
       )
         return;
       return {
         cachedArtifactRoster: {
-          ...y,
+          ...key,
           version: roster.version,
           capabilities: [...roster.capabilities],
           fetchedAt: now,
@@ -161,17 +166,18 @@ function saveRosterToConfig(e) {
   };
 }
 //@ chunk-06y4szbn.js:4415-4627 placement
-async function saveRosterDenied(e, n, storageV5, s) {
-  let h = rosterAccountKey();
-  if (h === undefined || e.accountEpoch !== n) return;
-  await saveGlobalConfig((b) => {
-    if (e.accountEpoch !== n || rosterAccountKey()?.accountUuid !== h.accountUuid) return b;
-    let y = s(h, b);
-    return y === undefined
-      ? b
+async function saveRosterDenied(session, epoch, storageV5, denied) {
+  let accountKey = rosterAccountKey();
+  if (accountKey === undefined || session.accountEpoch !== epoch) return;
+  await saveGlobalConfig((config) => {
+    if (session.accountEpoch !== epoch || rosterAccountKey()?.accountUuid !== accountKey.accountUuid)
+      return config;
+    let result = denied(accountKey, config);
+    return result === undefined
+      ? config
       : {
-          ...b,
-          ...y,
+          ...config,
+          ...result,
         };
   }, storageV5);
 }

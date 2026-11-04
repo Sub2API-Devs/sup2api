@@ -11,7 +11,7 @@
 import { homedir } from "os";
 import { resolve } from "path";
 import { DoctorLazy } from "../../cli/handlers/util.js";
-import { create, create_26, create_2, create_3, create_6 } from "../../../vendor/zod/lib/index.mjs";
+import { create, create_3, create_6, create_26, create_2 } from "../../../vendor/zod/lib/index.mjs";
 import { env } from "../../utils/env.js";
 import { jsonParse } from "../../utils/slowOperations.js";
 import { apiClient } from "../../services/routines/routinesApi.js";
@@ -82,31 +82,47 @@ import { isHostEntrypoint } from "../../utils/entrypointKinds.js";
 import { getCwd } from "../../utils/cwd.js";
 import { samePath } from "../../utils/file.js";
 import { identity } from "../../utils/pathClassification.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
+//@ chunk-twvgrhqz.js:714-809 fingerprint = checkOverageGate (0.329)
+var checkOverageGate_2; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-twvgrhqz.js:714", () => {
+  checkOverageGate_2 = DoctorLazy(() =>
+    create({
+      reviews_used: create_3(),
+      reviews_limit: create_3(),
+      reviews_remaining: create_3(),
+      is_overage: create_6(),
+    }),
+  );
+});
 //@ chunk-zn8pzrw0.js:1793-2103 placement
 /**
  * ultrareview 预检响应 schema
  */
-var ultrareviewPreflightSchema = DoctorLazy(() =>
-  create({
-    action: create_26(["proceed", "confirm", "blocked"]),
-    billing_note: create_2().nullable().optional(),
-    github_login: create_2().nullable().optional(),
-    confirm: create({
-      title: create_2().optional(),
-      body: create_2(),
-    })
-      .nullable()
-      .optional(),
-    blocked: create({
-      message: create_2(),
-      action_url: create_2().nullable(),
-      reason: create_2().optional(),
-    })
-      .nullable()
-      .optional(),
-  }),
-);
+var ultrareviewPreflightSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-zn8pzrw0.js:1793", () => {
+  ultrareviewPreflightSchema = DoctorLazy(() =>
+    create({
+      action: create_26(["proceed", "confirm", "blocked"]),
+      billing_note: create_2().nullable().optional(),
+      github_login: create_2().nullable().optional(),
+      confirm: create({
+        title: create_2().optional(),
+        body: create_2(),
+      })
+        .nullable()
+        .optional(),
+      blocked: create({
+        message: create_2(),
+        action_url: create_2().nullable(),
+        reason: create_2().optional(),
+      })
+        .nullable()
+        .optional(),
+    }),
+  );
+});
 //@ chunk-zn8pzrw0.js:2103-2190 placement
 function blockedRemoteResult(message, reason) {
   return {
@@ -123,13 +139,13 @@ function blockedRemoteResult(message, reason) {
  * 调用 /v1/ultrareview/preflight
  */
 async function fetchUltrareviewPreflight(credentials) {
-  let e = env.CLAUDE_CODE_ULTRAREVIEW_PREFLIGHT_FIXTURE;
-  if (e) {
-    let u = ultrareviewPreflightSchema().safeParse(jsonParse(e));
-    return u.success ? u.data : null;
+  let fixtureJson = env.CLAUDE_CODE_ULTRAREVIEW_PREFLIGHT_FIXTURE;
+  if (fixtureJson) {
+    let parsedFixture = ultrareviewPreflightSchema().safeParse(jsonParse(fixtureJson));
+    return parsedFixture.success ? parsedFixture.data : null;
   }
   try {
-    let u = await apiClient.get("/v1/ultrareview/preflight", {
+    let response = await apiClient.get("/v1/ultrareview/preflight", {
       auth: "teleport-org",
       timeout: 5000,
       credentials,
@@ -137,8 +153,8 @@ async function fetchUltrareviewPreflight(credentials) {
         [X_CLAUDE_CODE_SESSION_ID]: getSessionId(),
       },
     });
-    if (!u.ok)
-      switch (u.reason) {
+    if (!response.ok)
+      switch (response.reason) {
         case "essential-traffic-only":
           return blockedRemoteResult(
             "Ultrareview runs in a cloud session and is unavailable when essential-traffic-only mode is active.",
@@ -155,14 +171,14 @@ async function fetchUltrareviewPreflight(credentials) {
             "no_oauth_token",
           );
       }
-    let r = ultrareviewPreflightSchema().safeParse(u.data);
-    if (!r.success) {
-      logForDebugging(`fetchUltrareviewPreflight schema mismatch: ${r.error.message}`);
+    let parsed = ultrareviewPreflightSchema().safeParse(response.data);
+    if (!parsed.success) {
+      logForDebugging(`fetchUltrareviewPreflight schema mismatch: ${parsed.error.message}`);
       logFeatureSad("api_ultrareview_preflight", "schema_mismatch");
       return null;
     }
     logFeatureOk("api_ultrareview_preflight");
-    return r.data;
+    return parsed.data;
   } catch (error) {
     logForDebugging(`fetchUltrareviewPreflight failed: ${error}`);
     logFeatureSad("api_ultrareview_preflight", "request_failed");
@@ -175,17 +191,20 @@ var REVIEW_REMOTE_POLL_MS = 3000;
 /**
  * 剩余可用 overage 额度（USD）：未启用为 0，无上限为无穷，扣已用、再受余额/自动充值限制。
  */
-function getRemainingOverageBudget(extraUsage, e) {
-  if (!extraUsage || !isLimitEnabled(extraUsage) || !isUsdCurrency(extraUsage.currency)) return null;
-  if (extraUsage.is_enabled !== true) return 0;
-  if (e === null || !isUsdCurrency(e.currency)) return null;
-  let { monthly_limit: monthlyLimit, used_credits: usedCredits } = extraUsage;
-  let s;
-  if (monthlyLimit === null) s = 1 / 0;
+function getRemainingOverageBudget(limit, prepaidBalance) {
+  if (!limit || !isLimitEnabled(limit) || !isUsdCurrency(limit.currency)) return null;
+  if (limit.is_enabled !== true) return 0;
+  if (prepaidBalance === null || !isUsdCurrency(prepaidBalance.currency)) return null;
+  let { monthly_limit: monthlyLimit, used_credits: usedCredits } = limit;
+  let budgetCents;
+  if (monthlyLimit === null) budgetCents = 1 / 0;
   else if (typeof monthlyLimit === "number" && typeof usedCredits === "number")
-    s = monthlyLimit - usedCredits;
+    budgetCents = monthlyLimit - usedCredits;
   else return null;
-  let min = Math.min(s, e.auto_reload_settings?.enabled === true ? 1 / 0 : e.amount);
+  let min = Math.min(
+    budgetCents,
+    prepaidBalance.auto_reload_settings?.enabled === true ? 1 / 0 : prepaidBalance.amount,
+  );
   return Number.isFinite(min) ? Math.max(0, min) : null;
 }
 //@ chunk-zn8pzrw0.js:3648-4172 placement
@@ -194,21 +213,21 @@ function getRemainingOverageBudget(extraUsage, e) {
  */
 async function lowCreditsNote(credentials) {
   try {
-    let e = typicalUltrareviewCost();
-    if (e === null || isTeamSubscriber() || isEnterpriseSubscriber()) return null;
-    let [u, r] = await withTimeout(
+    let typicalCostUsd = typicalUltrareviewCost();
+    if (typicalCostUsd === null || isTeamSubscriber() || isEnterpriseSubscriber()) return null;
+    let [utilization, prepaidBalance] = await withTimeout(
       Promise.all([fetchUtilization(credentials), fetchPrepaidBalance(credentials)]),
       REVIEW_REMOTE_POLL_MS,
       "ultrareview: usage credits read timed out",
     );
-    let remainingOverageBudget = getRemainingOverageBudget(u?.extra_usage, r);
-    if (remainingOverageBudget === null || remainingOverageBudget >= e * 100) return null;
-    let l =
+    let remainingOverageBudget = getRemainingOverageBudget(utilization?.extra_usage, prepaidBalance);
+    if (remainingOverageBudget === null || remainingOverageBudget >= typicalCostUsd * 100) return null;
+    let remainingLabel =
       remainingOverageBudget < 100
         ? "Less than $1"
         : `About ${formatCurrency(Math.floor(remainingOverageBudget / 100) * 100, "USD", "whole")}`;
-    let h = formatCurrency(e * 100, "USD", "whole");
-    return `${l} of usage credits left. A review usually uses about ${h} and stops if credits run out.`;
+    let costLabel = formatCurrency(typicalCostUsd * 100, "USD", "whole");
+    return `${remainingLabel} of usage credits left. A review usually uses about ${costLabel} and stops if credits run out.`;
   } catch {
     logForDebugging("ultrareview: could not read usage credits left, so no low-credits line");
     return null;
@@ -222,38 +241,38 @@ Note: --post was ignored \u2014 posting applies only to GitHub.com pull request 
 var POST_DISABLED_NOTE = `
 Note: --post was ignored \u2014 posting findings to the PR is currently turned off.`;
 //@ chunk-zn8pzrw0.js:4413-4972 placement
-function parseUltrareviewArgs(o) {
-  let e = (h) =>
-    String.raw`--fix|--comment|--post|--no-post|--max-findings(?:\s*=\s*(?!--)\S*|\s*=\S*|\s+${h})?`;
-  let regExp = new RegExp(`^(${e(String.raw`(?!--)\S+`)})(?:\\s+|$)`);
+function parseUltrareviewArgs(args) {
+  let buildFlagPattern = (maxFindingsValue) =>
+    String.raw`--fix|--comment|--post|--no-post|--max-findings(?:\s*=\s*(?!--)\S*|\s*=\S*|\s+${maxFindingsValue})?`;
+  let regExp = new RegExp(`^(${buildFlagPattern(String.raw`(?!--)\S+`)})(?:\\s+|$)`);
   let regExp_2 = new RegExp(
-    `(?:^|\\s+)(${e(String.raw`(?:\d+|[Aa][Ll][Ll]|[Dd][Ee][Ff][Aa][Uu][Ll][Tt])`)})$`,
+    `(?:^|\\s+)(${buildFlagPattern(String.raw`(?:\d+|[Aa][Ll][Ll]|[Dd][Ee][Ff][Aa][Uu][Ll][Tt])`)})$`,
   );
-  let s = new Set();
-  let trimmed = o.trim();
+  let flags = new Set();
+  let trimmed = args.trim();
   for (;;) {
     let match = trimmed.match(regExp);
     if (!match) break;
-    s.add(match[1]);
+    flags.add(match[1]);
     trimmed = trimmed.slice(match[0].length);
   }
   for (;;) {
     let match = trimmed.match(regExp_2);
     if (!match) break;
-    s.add(match[1]);
+    flags.add(match[1]);
     trimmed = trimmed.slice(0, trimmed.length - match[0].length);
   }
   return {
     scopeArgs: trimmed,
-    applyFixes: s.has("--fix"),
-    postReview: s.has("--no-post") ? false : s.has("--post") ? true : undefined,
+    applyFixes: flags.has("--fix"),
+    postReview: flags.has("--no-post") ? false : flags.has("--post") ? true : undefined,
   };
 }
 //@ chunk-zn8pzrw0.js:4972-20851 placement
 /**
  * ultrareview 启动前检查范围（仓库、分支、改动量、额度、预检）。
  */
-async function precheckLaunchScope(o, e = "/code-review ultra", u) {
+async function precheckLaunchScope(scopeArg, invocation = "/code-review ultra", options) {
   if (!(await isInGitRepo())) {
     logEvent("tengu_review_remote_precondition_failed", {
       reason: lit("not_git_repo"),
@@ -262,85 +281,87 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
     return {
       ok: false,
       reason: "not_git_repo",
-      error: noRepositoryAdvice(e, u?.confirmsBeforeLaunch !== true),
+      error: noRepositoryAdvice(invocation, options?.confirmsBeforeLaunch !== true),
     };
   }
-  let trimmed = o.trim();
+  let trimmed = scopeArg.trim();
   let prUrl = parsePrUrl(trimmed);
-  let l = prUrl?.num.toString() ?? trimmed.match(/^(?:#|PR[\s#]*)(\d+)$/i)?.[1] ?? trimmed;
-  if (/^\d+$/.test(l)) {
-    let n = (B) => {
-      if (B === "succeeded" && u?.suppressSucceededRecoveryEvent) return;
-      if (l !== trimmed)
+  let prNumber = prUrl?.num.toString() ?? trimmed.match(/^(?:#|PR[\s#]*)(\d+)$/i)?.[1] ?? trimmed;
+  if (/^\d+$/.test(prNumber)) {
+    let logRecovery = (outcome) => {
+      if (outcome === "succeeded" && options?.suppressSucceededRecoveryEvent) return;
+      if (prNumber !== trimmed)
         logEvent("tengu_review_remote_precondition_recovery", {
           reason: lit("base_ref_not_found"),
           method: lit("pr_arg_normalization"),
-          outcome: fromEnum(B),
+          outcome: fromEnum(outcome),
         });
     };
     let currentRepositoryWithHost = await detectCurrentRepositoryWithHost();
-    let d =
+    let repo =
       currentRepositoryWithHost && isNestedGitLabProject(currentRepositoryWithHost)
         ? null
         : currentRepositoryWithHost;
-    let S =
-      sameHost(prUrl?.host, d?.host) ||
-      (!!prUrl && !!d && isGithubDotCom(prUrl.host) && isGithubDotCom(d.host));
+    let sameRepo =
+      sameHost(prUrl?.host, repo?.host) ||
+      (!!prUrl && !!repo && isGithubDotCom(prUrl.host) && isGithubDotCom(repo.host));
     if (
       prUrl &&
-      (!S ||
-        prUrl.owner.toLowerCase() !== d?.owner.toLowerCase() ||
-        prUrl.repo.toLowerCase() !== d?.name.toLowerCase())
+      (!sameRepo ||
+        prUrl.owner.toLowerCase() !== repo?.owner.toLowerCase() ||
+        prUrl.repo.toLowerCase() !== repo?.name.toLowerCase())
     ) {
       logEvent("tengu_review_remote_precondition_failed", {
         reason: lit("pr_url_wrong_repo"),
-        has_remote: !!d,
+        has_remote: !!repo,
         cwd_is_home: isCwdHomeDir(),
       });
-      n("failed");
-      let B = `${prUrl.owner}/${prUrl.repo} on ${prUrl.host}`;
-      let G = d ? `you're in ${d.owner}/${d.name} on ${d.host}` : "this directory has no GitHub remote";
+      logRecovery("failed");
+      let linkRepo = `${prUrl.owner}/${prUrl.repo} on ${prUrl.host}`;
+      let currentRepoText = repo
+        ? `you're in ${repo.owner}/${repo.name} on ${repo.host}`
+        : "this directory has no GitHub remote";
       return {
         ok: false,
         reason: "pr_url_wrong_repo",
-        error: `That link is for ${B}, but ${G}. cd into a checkout of that repo and run ${e} ${prUrl.num} from there.`,
+        error: `That link is for ${linkRepo}, but ${currentRepoText}. cd into a checkout of that repo and run ${invocation} ${prUrl.num} from there.`,
       };
     }
-    if (!d) {
+    if (!repo) {
       logEvent("tengu_review_remote_precondition_failed", {
         reason: lit("no_github_remote"),
         cwd_is_home: isCwdHomeDir(),
       });
-      n("failed");
+      logRecovery("failed");
       return {
         ok: false,
         reason: "no_github_remote",
-        error: `${e} <PR#> needs a GitHub remote so it knows which repository the PR is in. ${GITHUB_SETUP_HINT} If a GitHub repo already exists, run \`git remote add origin REPO_URL\`. Or run ${e} with no argument to review your current branch instead.`,
+        error: `${invocation} <PR#> needs a GitHub remote so it knows which repository the PR is in. ${GITHUB_SETUP_HINT} If a GitHub repo already exists, run \`git remote add origin REPO_URL\`. Or run ${invocation} with no argument to review your current branch instead.`,
       };
     }
-    if (isAnthropicRepo(d)) {
+    if (isAnthropicRepo(repo)) {
       logEvent("tengu_review_remote_precondition_failed", {
         reason: lit("monorepo_blocked"),
         cwd_is_home: isCwdHomeDir(),
       });
-      n("failed");
+      logRecovery("failed");
       return {
         ok: false,
         reason: "monorepo_blocked",
-        error: `${e} doesn't support pull requests in this repository. Run /code-review ${l}${e.startsWith("/") ? "" : " in Claude Code"} for a local review instead.`,
+        error: `${invocation} doesn't support pull requests in this repository. Run /code-review ${prNumber}${invocation.startsWith("/") ? "" : " in Claude Code"} for a local review instead.`,
       };
     }
     let diffFiles;
     let diffLines;
-    let [{ stdout: H, code: D }, C] = await Promise.all([
+    let [{ stdout: prViewStdout, code: prViewCode }, accessProbe] = await Promise.all([
       execFileNoThrow(
         "gh",
         [
           "pr",
           "view",
-          l,
+          prNumber,
           "--repo",
-          `${d.host}/${d.owner}/${d.name}`,
+          `${repo.host}/${repo.owner}/${repo.name}`,
           "--json",
           "additions,deletions,changedFiles",
         ],
@@ -349,121 +370,121 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
           preserveOutputOnError: false,
         },
       ),
-      isGithubDotCom(d.host) && isGithubAccessPrecheckEnabled() && !isEssentialTrafficOnly()
-        ? probeGithubRepoAccess(d.owner, d.name, u?.accessProbeBudgetMs)
+      isGithubDotCom(repo.host) && isGithubAccessPrecheckEnabled() && !isEssentialTrafficOnly()
+        ? probeGithubRepoAccess(repo.owner, repo.name, options?.accessProbeBudgetMs)
         : null,
     ]);
-    if (C && !u?.suppressOfferedRecoveryEvent)
+    if (accessProbe && !options?.suppressOfferedRecoveryEvent)
       logEvent("tengu_review_remote_github_access_probe", {
-        verdict: fromEnum(C.verdict),
-        http_status: C.httpStatus ?? undefined,
+        verdict: fromEnum(accessProbe.verdict),
+        http_status: accessProbe.httpStatus ?? undefined,
       });
-    if (C?.verdict === "github_not_connected" || C?.verdict === "github_repo_not_found") {
+    if (accessProbe?.verdict === "github_not_connected" || accessProbe?.verdict === "github_repo_not_found") {
       logEvent("tengu_review_remote_precondition_failed", {
-        reason: fromEnum(C.verdict),
+        reason: fromEnum(accessProbe.verdict),
         cwd_is_home: isCwdHomeDir(),
       });
-      n("failed");
+      logRecovery("failed");
       let webSetupHint = isWebSetupOfferable()
-        ? `run /web-setup${e.startsWith("/") ? "" : " in Claude Code"} to reuse your GitHub CLI login`
+        ? `run /web-setup${invocation.startsWith("/") ? "" : " in Claude Code"} to reuse your GitHub CLI login`
         : "";
-      let rerun = `then re-run ${e} ${l}`;
+      let rerun = `then re-run ${invocation} ${prNumber}`;
       return {
         ok: false,
-        reason: C.verdict,
+        reason: accessProbe.verdict,
         error:
-          C.verdict === "github_not_connected"
+          accessProbe.verdict === "github_not_connected"
             ? noAccessText({
-                subject: `Ultrareview clones ${d.owner}/${d.name} in the cloud`,
+                subject: `Ultrareview clones ${repo.owner}/${repo.name} in the cloud`,
                 webSetupHint,
                 rerun,
               })
             : installAppHint({
-                owner: d.owner,
-                name: d.name,
+                owner: repo.owner,
+                name: repo.name,
                 webSetupHint,
                 rerun,
-                leadWithWebSetup: D === 0,
+                leadWithWebSetup: prViewCode === 0,
               }),
       };
     }
-    if (D === 0 && H.trim())
+    if (prViewCode === 0 && prViewStdout.trim())
       try {
-        let B = jsonParse(H);
+        let prInfo = jsonParse(prViewStdout);
         let { maxFiles, maxLines } = diffSizeLimits();
-        let Q = B.additions + B.deletions;
-        if (Number.isFinite(B.changedFiles) && Number.isFinite(Q)) {
-          diffFiles = B.changedFiles;
-          diffLines = Q;
+        let diffLinesTotal = prInfo.additions + prInfo.deletions;
+        if (Number.isFinite(prInfo.changedFiles) && Number.isFinite(diffLinesTotal)) {
+          diffFiles = prInfo.changedFiles;
+          diffLines = diffLinesTotal;
         }
-        if (B.changedFiles > maxFiles || Q > maxLines) {
+        if (prInfo.changedFiles > maxFiles || diffLinesTotal > maxLines) {
           logEvent("tengu_review_remote_precondition_failed", {
             reason: lit("pr_diff_too_large"),
-            files: B.changedFiles,
-            lines: Q,
+            files: prInfo.changedFiles,
+            lines: diffLinesTotal,
             max_files: maxFiles,
             max_lines: maxLines,
             cwd_is_home: isCwdHomeDir(),
           });
-          n("failed");
+          logRecovery("failed");
           return {
             ok: false,
             reason: "pr_diff_too_large",
-            error: `PR #${l} is too large for ultrareview (${B.changedFiles} files, ${Q.toLocaleString()} lines). Split it into smaller PRs, or run \`${e}\` on a narrower local diff.`,
+            error: `PR #${prNumber} is too large for ultrareview (${prInfo.changedFiles} files, ${diffLinesTotal.toLocaleString()} lines). Split it into smaller PRs, or run \`${invocation}\` on a narrower local diff.`,
           };
         }
       } catch {}
-    n("succeeded");
+    logRecovery("succeeded");
     return {
       ok: true,
       scope: {
         mode: "pr",
-        prNumber: l,
-        repo: `${d.owner}/${d.name}`,
-        host: d.host,
+        prNumber,
+        repo: `${repo.owner}/${repo.name}`,
+        host: repo.host,
         hadArg: true,
         diffFiles,
         diffLines,
       },
     };
   }
-  let h = await probeRepoBundleSize();
-  if (h.tooLarge) {
+  let bundleSize = await probeRepoBundleSize();
+  if (bundleSize.tooLarge) {
     logEvent("tengu_review_remote_precondition_failed", {
       reason: lit("repo_too_large_to_bundle"),
-      pack_bytes: h.sizeBytes ?? undefined,
-      pack_objects: h.inPackCount ?? undefined,
+      pack_bytes: bundleSize.sizeBytes ?? undefined,
+      pack_objects: bundleSize.inPackCount ?? undefined,
       cwd_is_home: isCwdHomeDir(),
     });
     return {
       ok: false,
       reason: "repo_too_large_to_bundle",
-      error: `Repo is too large to bundle. Push a PR and use \`${e} <PR#>\` instead.`,
+      error: `Repo is too large to bundle. Push a PR and use \`${invocation} <PR#>\` instead.`,
     };
   }
-  let k = async (n) =>
+  let refExists = async (refName) =>
     (
       await execFileNoThrow(
         gitExe(),
-        [...GIT_SAFE_GLOBAL_ARGS, "rev-parse", "--verify", "--quiet", "--end-of-options", n],
+        [...GIT_SAFE_GLOBAL_ARGS, "rev-parse", "--verify", "--quiet", "--end-of-options", refName],
         {
           preserveOutputOnError: false,
         },
       )
     ).code === 0;
   let matches = /\s/.test(trimmed);
-  let L = matches && ((await k(`origin/${trimmed}`)) || (await k(trimmed)));
-  let M = matches && !L ? trimmed.match(/https:\/\/\S*\/pull\/\d+\b/) : null;
-  let T =
-    matches && !L && !M
+  let hasBaseRef = matches && ((await refExists(`origin/${trimmed}`)) || (await refExists(trimmed)));
+  let prUrlHint = matches && !hasBaseRef ? trimmed.match(/https:\/\/\S*\/pull\/\d+\b/) : null;
+  let prNumberHint =
+    matches && !hasBaseRef && !prUrlHint
       ? (trimmed.match(/(?<![\w/#-])(?:#|PR)[-\s#]*(\d+)\b/i) ??
         trimmed.match(/(?<![\w/#-])pull[\s-]+request[-\s#]*(\d+)\b/i) ??
         trimmed.match(/\/pull\/(\d+)\b/i) ??
         trimmed.match(/^(\d+)\b/))
       : null;
-  if (M || T) {
-    let n = M ? M[0] : `#${T[1]}`;
-    let _ = M ? M[0] : T[1];
+  if (prUrlHint || prNumberHint) {
+    let prRefText = prUrlHint ? prUrlHint[0] : `#${prNumberHint[1]}`;
+    let _ = prUrlHint ? prUrlHint[0] : prNumberHint[1];
     logEvent("tengu_review_remote_precondition_recovery", {
       reason: lit("base_ref_not_found"),
       method: lit("embedded_pr_hint"),
@@ -483,17 +504,17 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
     return {
       ok: false,
       reason: "base_ref_not_found",
-      error: `Your request mentions what looks like a PR reference (${n}). To review that PR, run \`${e} ${_}\`. To review your current branch instead, rerun without the PR-style reference.`,
+      error: `Your request mentions what looks like a PR reference (${prRefText}). To review that PR, run \`${invocation} ${_}\`. To review your current branch instead, rerun without the PR-style reference.`,
     };
   }
-  let U = matches && !L && !trimmed.startsWith("-");
-  let instructions = U ? trimmed : undefined;
-  let v = U ? "" : trimmed;
-  let z = false;
-  if (v) {
-    if (!(await k(`origin/${v}`)) && !(await k(v))) {
-      let remoteBranch = await resolveRemoteBranch(v);
-      if (remoteBranch === "recovered" && (await k(`origin/${v}`))) z = true;
+  let isProseInstructions = matches && !hasBaseRef && !trimmed.startsWith("-");
+  let instructions = isProseInstructions ? trimmed : undefined;
+  let baseRef = isProseInstructions ? "" : trimmed;
+  let fetchedFromRemote = false;
+  if (baseRef) {
+    if (!(await refExists(`origin/${baseRef}`)) && !(await refExists(baseRef))) {
+      let remoteBranch = await resolveRemoteBranch(baseRef);
+      if (remoteBranch === "recovered" && (await refExists(`origin/${baseRef}`))) fetchedFromRemote = true;
       else {
         if (remoteBranch !== "not_found")
           logEvent("tengu_review_remote_precondition_recovery", {
@@ -504,21 +525,21 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
         if (remoteBranch === "fetch_failed") {
           logEvent("tengu_review_remote_precondition_failed", {
             reason: lit("base_ref_not_found"),
-            looks_like_url: /^https?:/i.test(v),
-            looks_like_sha: /^[0-9a-f]{7,40}$/i.test(v),
-            starts_with_hash: v.startsWith("#"),
-            has_slash: v.includes("/"),
-            has_whitespace: /\s/.test(v),
+            looks_like_url: /^https?:/i.test(baseRef),
+            looks_like_sha: /^[0-9a-f]{7,40}$/i.test(baseRef),
+            starts_with_hash: baseRef.startsWith("#"),
+            has_slash: baseRef.includes("/"),
+            has_whitespace: /\s/.test(baseRef),
             has_remote: await hasRemoteRepository(),
             cwd_is_home: isCwdHomeDir(),
           });
           return {
             ok: false,
             reason: "base_ref_not_found",
-            error: `"${v}" exists on origin but couldn't be fetched. Run \`git fetch origin ${v}\` and try ${e} again.`,
+            error: `"${baseRef}" exists on origin but couldn't be fetched. Run \`git fetch origin ${baseRef}\` and try ${invocation} again.`,
           };
         }
-        let _ = await listBranchRefs(v);
+        let _ = await listBranchRefs(baseRef);
         if (_)
           logEvent("tengu_review_remote_precondition_recovery", {
             reason: lit("base_ref_not_found"),
@@ -527,65 +548,65 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
           });
         logEvent("tengu_review_remote_precondition_failed", {
           reason: lit("base_ref_not_found"),
-          looks_like_url: /^https?:/i.test(v),
-          looks_like_sha: /^[0-9a-f]{7,40}$/i.test(v),
-          starts_with_hash: v.startsWith("#"),
-          has_slash: v.includes("/"),
-          has_whitespace: /\s/.test(v),
+          looks_like_url: /^https?:/i.test(baseRef),
+          looks_like_sha: /^[0-9a-f]{7,40}$/i.test(baseRef),
+          starts_with_hash: baseRef.startsWith("#"),
+          has_slash: baseRef.includes("/"),
+          has_whitespace: /\s/.test(baseRef),
           has_remote: await hasRemoteRepository(),
           cwd_is_home: isCwdHomeDir(),
         });
-        let d = _ ? ` Did you mean \`${_}\`?` : "";
+        let suggestion = _ ? ` Did you mean \`${_}\`?` : "";
         return {
           ok: false,
           reason: "base_ref_not_found",
-          error: `"${v}" is not a branch or commit in this repo.${d} ${e} takes a PR number, a base branch or commit, or no argument (reviews your current branch). Try ${e} by itself.`,
+          error: `"${baseRef}" is not a branch or commit in this repo.${suggestion} ${invocation} takes a PR number, a base branch or commit, or no argument (reviews your current branch). Try ${invocation} by itself.`,
         };
       }
     }
   }
-  let q = (n) => {
-    if (z)
+  let logBranchRecovery = (outcome) => {
+    if (fetchedFromRemote)
       logEvent("tengu_review_remote_precondition_recovery", {
         reason: lit("base_ref_not_found"),
         method: lit("fetch_retry"),
-        outcome: fromEnum(n),
+        outcome: fromEnum(outcome),
       });
-    if (U) {
-      if (n === "succeeded" && u?.suppressSucceededRecoveryEvent) return;
+    if (isProseInstructions) {
+      if (outcome === "succeeded" && options?.suppressSucceededRecoveryEvent) return;
       logEvent("tengu_review_remote_precondition_recovery", {
         reason: lit("base_ref_not_found"),
         method: lit("prose_instructions"),
-        outcome: fromEnum(n),
+        outcome: fromEnum(outcome),
       });
     }
   };
-  let R = v || (await getDefaultBranch()) || "main";
-  let X = (await getBranch()) || "HEAD";
-  let Z = async (n) =>
-    execFileNoThrow(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "merge-base", n, "HEAD"], {
+  let baseBranch = baseRef || (await getDefaultBranch()) || "main";
+  let headBranch = (await getBranch()) || "HEAD";
+  let runMergeBase = async (ref) =>
+    execFileNoThrow(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, "merge-base", ref, "HEAD"], {
       preserveOutputOnError: false,
       env: getRemoteHostSessionCount(),
     });
-  let W = `origin/${R}`;
-  let { stdout, code } = await Z(W);
+  let mergeBaseRef = `origin/${baseBranch}`;
+  let { stdout, code } = await runMergeBase(mergeBaseRef);
   if (code !== 0) {
-    W = R;
-    ({ stdout, code } = await Z(W));
+    mergeBaseRef = baseBranch;
+    ({ stdout, code } = await runMergeBase(mergeBaseRef));
   }
-  let trimmed_2 = stdout.trim();
-  let j = (n) =>
-    execFileNoThrow(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...n], {
+  let mergeBaseSha = stdout.trim();
+  let runGit = (args) =>
+    execFileNoThrow(gitExe(), [...GIT_SAFE_GLOBAL_ARGS, ...args], {
       preserveOutputOnError: false,
       env: getRemoteHostSessionCount(),
     });
-  let error = `Your checkout has no branches (detached HEAD only), which cloud review can't bundle. Create one first \u2014 \`git checkout -b <name>\` \u2014 then rerun ${e}.`;
-  let ie = async () =>
-    v.length > 0 ||
-    (await j(["rev-parse", "--verify", "--quiet", `origin/${R}`])).code === 0 ||
-    (await j(["rev-parse", "--verify", "--quiet", R])).code === 0;
-  let E = async (n, headBranch = X) => {
-    let d = n || (await ie());
+  let error = `Your checkout has no branches (detached HEAD only), which cloud review can't bundle. Create one first \u2014 \`git checkout -b <name>\` \u2014 then rerun ${invocation}.`;
+  let hasBase = async () =>
+    baseRef.length > 0 ||
+    (await runGit(["rev-parse", "--verify", "--quiet", `origin/${baseBranch}`])).code === 0 ||
+    (await runGit(["rev-parse", "--verify", "--quiet", baseBranch])).code === 0;
+  let buildWholeRepoScope = async (firstCommit, headBranch_2 = headBranch) => {
+    let hasReviewBase = firstCommit || (await hasBase());
     let { stdout, code } = await execFileNoThrow(
       gitExe(),
       [
@@ -603,116 +624,120 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
       },
     );
     if (code === 0) {
-      if (n && !stdout.trim()) return null;
+      if (firstCommit && !stdout.trim()) return null;
       if (!stdout.trim()) {
         logEvent("tengu_review_remote_precondition_failed", {
           reason: lit("empty_diff"),
           cwd_is_home: isCwdHomeDir(),
         });
-        q("failed");
+        logBranchRecovery("failed");
         return {
           ok: false,
           reason: "empty_diff",
-          error: d
-            ? `It doesn't look like you have any new commits or changes to review against your ${R} branch. Stage or commit them first?`
+          error: hasReviewBase
+            ? `It doesn't look like you have any new commits or changes to review against your ${baseBranch} branch. Stage or commit them first?`
             : "It doesn't look like you have any changes to review. Stage or commit them first?",
         };
       }
       let shortstat = parseShortstat(stdout);
-      let H = shortstat ? shortstat.linesAdded + shortstat.linesRemoved : 0;
+      let changedLines = shortstat ? shortstat.linesAdded + shortstat.linesRemoved : 0;
       let { maxFiles, maxLines } = diffSizeLimits();
-      if (shortstat && (shortstat.filesCount > maxFiles || H > maxLines)) {
+      if (shortstat && (shortstat.filesCount > maxFiles || changedLines > maxLines)) {
         logEvent("tengu_review_remote_precondition_failed", {
           reason: lit("local_diff_too_large"),
           files: shortstat.filesCount,
-          lines: H,
+          lines: changedLines,
           max_files: maxFiles,
           max_lines: maxLines,
           after_fallback: true,
           cwd_is_home: isCwdHomeDir(),
-          first_commit: n || undefined,
+          first_commit: firstCommit || undefined,
         });
-        q("failed");
-        let B = n
-          ? `Your first commit is the base from here on: make your changes and rerun ${e} to review only those.`
-          : d
-            ? `Review a smaller subset by committing it on a branch off an empty base, or push a PR and use \`${e} <PR#>\`.`
-            : `This repo has no ${R} branch \u2014 if another branch is your base, pass it explicitly (\`${e} <branch>\`). Otherwise review a smaller subset by committing it on a branch off an empty base, or push a PR and use \`${e} <PR#>\`.`;
+        logBranchRecovery("failed");
+        let sizeAdvice = firstCommit
+          ? `Your first commit is the base from here on: make your changes and rerun ${invocation} to review only those.`
+          : hasReviewBase
+            ? `Review a smaller subset by committing it on a branch off an empty base, or push a PR and use \`${invocation} <PR#>\`.`
+            : `This repo has no ${baseBranch} branch \u2014 if another branch is your base, pass it explicitly (\`${invocation} <branch>\`). Otherwise review a smaller subset by committing it on a branch off an empty base, or push a PR and use \`${invocation} <PR#>\`.`;
         return {
           ok: false,
           reason: "local_diff_too_large",
-          error: `This looks like a first review of the entire repository (${stdout.trim()}), which exceeds ultrareview's limit. ${B}`,
+          error: `This looks like a first review of the entire repository (${stdout.trim()}), which exceeds ultrareview's limit. ${sizeAdvice}`,
         };
       }
-      if (!u?.suppressOfferedRecoveryEvent)
+      if (!options?.suppressOfferedRecoveryEvent)
         logEvent("tengu_review_remote_precondition_recovery", {
           reason: lit("no_merge_base"),
           method: lit("empty_tree_bundle"),
           outcome: lit("offered"),
           files: shortstat?.filesCount,
-          lines: shortstat ? H : undefined,
+          lines: shortstat ? changedLines : undefined,
           is_shallow: false,
-          first_commit: n || undefined,
+          first_commit: firstCommit || undefined,
         });
-      q("succeeded");
+      logBranchRecovery("succeeded");
       return {
         ok: true,
         scope: {
           mode: "branch",
-          headBranch,
-          baseBranch: R,
+          headBranch: headBranch_2,
+          baseBranch,
           mergeBaseSha: EMPTY_TREE_SHA,
           diffStat: stdout.trim(),
-          hadArg: v.length > 0,
+          hadArg: baseRef.length > 0,
           diffFiles: shortstat?.filesCount,
-          diffLines: shortstat ? H : undefined,
-          noMergeBase: n ? "first_commit" : d ? "unrelated_history" : "base_ref_missing",
+          diffLines: shortstat ? changedLines : undefined,
+          noMergeBase: firstCommit
+            ? "first_commit"
+            : hasReviewBase
+              ? "unrelated_history"
+              : "base_ref_missing",
           instructions,
         },
       };
     }
     return null;
   };
-  if (code !== 0 || !trimmed_2) {
-    let n = (await j(["rev-parse", "--verify", "--quiet", "HEAD"])).code === 0;
-    let trimmed = (await j(["rev-parse", "--is-shallow-repository"])).stdout.trim();
-    let d = trimmed === "true";
-    let S = trimmed === "false";
-    let A = n && S && isEmptyTreeFallbackEnabled();
-    let y = A ? await j(["for-each-ref", "--count=1", "refs/"]) : null;
-    let H = y !== null && y.stdout.trim() !== "";
-    let D = y !== null && y.code === 0 && y.stdout.trim() === "";
-    let C = false;
-    if (A && H)
-      if (u?.confirmsBeforeLaunch === true || u?.personRanTheCommand === true) {
-        let G = await E(false);
-        if (G) return G;
-      } else C = true;
+  if (code !== 0 || !mergeBaseSha) {
+    let headResolves = (await runGit(["rev-parse", "--verify", "--quiet", "HEAD"])).code === 0;
+    let trimmed = (await runGit(["rev-parse", "--is-shallow-repository"])).stdout.trim();
+    let isShallow = trimmed === "true";
+    let isComplete = trimmed === "false";
+    let canUseEmptyTree = headResolves && isComplete && isEmptyTreeFallbackEnabled();
+    let refsCheck = canUseEmptyTree ? await runGit(["for-each-ref", "--count=1", "refs/"]) : null;
+    let hasRefs = refsCheck !== null && refsCheck.stdout.trim() !== "";
+    let hasNoRefs = refsCheck !== null && refsCheck.code === 0 && refsCheck.stdout.trim() === "";
+    let heldBack = false;
+    if (canUseEmptyTree && hasRefs)
+      if (options?.confirmsBeforeLaunch === true || options?.personRanTheCommand === true) {
+        let wholeScope = await buildWholeRepoScope(false);
+        if (wholeScope) return wholeScope;
+      } else heldBack = true;
     logEvent("tengu_review_remote_precondition_failed", {
       reason: lit("no_merge_base"),
       cwd_is_home: isCwdHomeDir(),
-      is_shallow: d,
-      head_resolves: n,
-      arg_was_explicit: v.length > 0,
-      has_refs: H ? true : D ? false : undefined,
-      whole_repository_held_back: C || undefined,
+      is_shallow: isShallow,
+      head_resolves: headResolves,
+      arg_was_explicit: baseRef.length > 0,
+      has_refs: hasRefs ? true : hasNoRefs ? false : undefined,
+      whole_repository_held_back: heldBack || undefined,
     });
-    q("failed");
-    if (C)
+    logBranchRecovery("failed");
+    if (heldBack)
       return {
         ok: false,
         reason: "no_merge_base",
-        error: `${(await ie()) ? `${R} shares no history with your checkout` : `This repository has no ${R} branch to compare with`}, so a review here would cover every file. To review it whole, a person can run /ultrareview in an interactive Claude Code session, which asks before it spends anything.`,
+        error: `${(await hasBase()) ? `${baseBranch} shares no history with your checkout` : `This repository has no ${baseBranch} branch to compare with`}, so a review here would cover every file. To review it whole, a person can run /ultrareview in an interactive Claude Code session, which asks before it spends anything.`,
       };
-    if (!n)
+    if (!headResolves)
       return {
         ok: false,
         reason: "no_merge_base",
-        error: !u?.confirmsBeforeLaunch
-          ? `Your current branch has no commits yet, so there is nothing to review. Commit a starting point first. ${e} then reviews the changes you make on top of that commit.`
-          : `Your current branch has no commits yet, so there is nothing to review. Commit your work first, then rerun ${e}.`,
+        error: !options?.confirmsBeforeLaunch
+          ? `Your current branch has no commits yet, so there is nothing to review. Commit a starting point first. ${invocation} then reviews the changes you make on top of that commit.`
+          : `Your current branch has no commits yet, so there is nothing to review. Commit your work first, then rerun ${invocation}.`,
       };
-    if (d) {
+    if (isShallow) {
       logEvent("tengu_review_remote_precondition_recovery", {
         reason: lit("no_merge_base"),
         method: lit("deepen_hint"),
@@ -722,39 +747,39 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
       return {
         ok: false,
         reason: "no_merge_base",
-        error: v
-          ? `Your clone is shallow and doesn't contain the point where your branch forked from ${R}. Run \`git fetch --deepen=100 origin ${R}\` (or \`git fetch --unshallow origin\`) and rerun ${e}.`
-          : `Your clone is shallow and doesn't contain the point where your branch forked from ${R}. Run \`git fetch --unshallow origin\` and rerun ${e}. If your base branch isn't ${R}, pass it explicitly (\`${e} <branch>\`).`,
+        error: baseRef
+          ? `Your clone is shallow and doesn't contain the point where your branch forked from ${baseBranch}. Run \`git fetch --deepen=100 origin ${baseBranch}\` (or \`git fetch --unshallow origin\`) and rerun ${invocation}.`
+          : `Your clone is shallow and doesn't contain the point where your branch forked from ${baseBranch}. Run \`git fetch --unshallow origin\` and rerun ${invocation}. If your base branch isn't ${baseBranch}, pass it explicitly (\`${invocation} <branch>\`).`,
       };
     }
-    if (D)
+    if (hasNoRefs)
       return {
         ok: false,
         reason: "no_refs",
         error,
       };
-    let B = z
-      ? S
-        ? `${R} was fetched from origin but shares no history with HEAD. If another branch is your real base, pass it explicitly (\`${e} <branch>\`).`
-        : `${R} was fetched from origin but shares no history with HEAD. Try \`git fetch --unshallow origin\` (or deepen the clone) and rerun.`
-      : v
-        ? `Make sure ${R} exists locally or on origin (try \`git fetch origin ${R}\`).`
-        : `Pass the base branch explicitly (e.g. \`${e} develop\`) or make sure you're in a git repo with a ${R} branch.`;
+    let noMergeBaseAdvice = fetchedFromRemote
+      ? isComplete
+        ? `${baseBranch} was fetched from origin but shares no history with HEAD. If another branch is your real base, pass it explicitly (\`${invocation} <branch>\`).`
+        : `${baseBranch} was fetched from origin but shares no history with HEAD. Try \`git fetch --unshallow origin\` (or deepen the clone) and rerun.`
+      : baseRef
+        ? `Make sure ${baseBranch} exists locally or on origin (try \`git fetch origin ${baseBranch}\`).`
+        : `Pass the base branch explicitly (e.g. \`${invocation} develop\`) or make sure you're in a git repo with a ${baseBranch} branch.`;
     return {
       ok: false,
       reason: "no_merge_base",
-      error: `Could not find merge-base with ${R}. ${B}`,
+      error: `Could not find merge-base with ${baseBranch}. ${noMergeBaseAdvice}`,
     };
   }
-  if (v.length > 0) {
-    let n = await j(["for-each-ref", "--count=1", "refs/"]);
-    if (n.code === 0 && n.stdout.trim() === "") {
+  if (baseRef.length > 0) {
+    let refsCheck = await runGit(["for-each-ref", "--count=1", "refs/"]);
+    if (refsCheck.code === 0 && refsCheck.stdout.trim() === "") {
       logEvent("tengu_review_remote_precondition_failed", {
         reason: lit("no_refs"),
         cwd_is_home: isCwdHomeDir(),
         arg_was_explicit: true,
       });
-      q("failed");
+      logBranchRecovery("failed");
       return {
         ok: false,
         reason: "no_refs",
@@ -771,7 +796,7 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
       "--no-textconv",
       IGNORE_SUBMODULES_DIRTY_FLAG,
       "--shortstat",
-      trimmed_2,
+      mergeBaseSha,
     ],
     {
       LC_ALL: "C",
@@ -781,92 +806,93 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
     },
   );
   if (code_2 === 0 && !stdout_2.trim()) {
-    let headInfo = await readHeadInfo(trimmed_2, R);
+    let headInfo = await readHeadInfo(mergeBaseSha, baseBranch);
     let headBranch = headInfo.headBranch;
-    let d =
+    let canUseEmptyTree =
       headInfo.headAtMergeBase === true &&
       headInfo.headIsRoot === true &&
       headInfo.untrackedCount === 0 &&
       isEmptyTreeFallbackEnabled() &&
-      (await j(["rev-parse", "--is-shallow-repository"])).stdout.trim() === "false" &&
-      (await j(["rev-parse", "--verify", "--quiet", "--end-of-options", `${W}^{commit}`])).stdout.trim() ===
-        trimmed_2;
-    let S = d && u?.confirmsBeforeLaunch !== true;
-    if (d && !S) {
-      let V = await E(true, headBranch);
-      if (V) return V;
+      (await runGit(["rev-parse", "--is-shallow-repository"])).stdout.trim() === "false" &&
+      (
+        await runGit(["rev-parse", "--verify", "--quiet", "--end-of-options", `${mergeBaseRef}^{commit}`])
+      ).stdout.trim() === mergeBaseSha;
+    let heldBack = canUseEmptyTree && options?.confirmsBeforeLaunch !== true;
+    if (canUseEmptyTree && !heldBack) {
+      let wholeScope = await buildWholeRepoScope(true, headBranch);
+      if (wholeScope) return wholeScope;
     }
     logEvent("tengu_review_remote_precondition_failed", {
       reason: lit("empty_diff"),
-      used_origin_ref: W !== R,
-      had_explicit_base: v.length > 0,
+      used_origin_ref: mergeBaseRef !== baseBranch,
+      had_explicit_base: baseRef.length > 0,
       cwd_is_home: isCwdHomeDir(),
       on_base_branch: headInfo.onBaseBranch,
       head_at_merge_base: headInfo.headAtMergeBase,
-      first_commit_held_back: S || undefined,
+      first_commit_held_back: heldBack || undefined,
       has_untracked: headInfo.untrackedCount === undefined ? undefined : headInfo.untrackedCount > 0,
     });
-    q("failed");
-    let A = v
-      ? `try a different base, e.g. \`${e} <branch>\``
-      : `pass one explicitly, e.g. \`${e} <branch>\``;
-    let y = `${W} (merge-base ${trimmed_2.slice(0, 7)})`;
-    let H = "no staged or unstaged edits to tracked files";
-    let D;
-    let C;
+    logBranchRecovery("failed");
+    let baseAdvice = baseRef
+      ? `try a different base, e.g. \`${invocation} <branch>\``
+      : `pass one explicitly, e.g. \`${invocation} <branch>\``;
+    let mergeBaseText = `${mergeBaseRef} (merge-base ${mergeBaseSha.slice(0, 7)})`;
+    let noEditsText = "no staged or unstaged edits to tracked files";
+    let emptyReason;
+    let emptyAdvice;
     if (headInfo.headAtMergeBase && headBranch && headInfo.onBaseBranch) {
-      let V = `If your work is on another branch, switch to it, or if the base should be something else, ${A}.`;
-      if (W === headBranch) {
-        D = `you're on ${headBranch}, which is also the base of this review, and it has ${H}`;
-        C = `Everything already committed on ${headBranch} counts as the base here, so only edits you haven't committed yet would be reviewed. ${V}`;
+      let branchAdvice = `If your work is on another branch, switch to it, or if the base should be something else, ${baseAdvice}.`;
+      if (mergeBaseRef === headBranch) {
+        emptyReason = `you're on ${headBranch}, which is also the base of this review, and it has ${noEditsText}`;
+        emptyAdvice = `Everything already committed on ${headBranch} counts as the base here, so only edits you haven't committed yet would be reviewed. ${branchAdvice}`;
       } else {
-        D = `you're on ${headBranch}, which is also the base of this review, and it has no commits beyond ${y} and ${H}`;
-        C = V;
+        emptyReason = `you're on ${headBranch}, which is also the base of this review, and it has no commits beyond ${mergeBaseText} and ${noEditsText}`;
+        emptyAdvice = branchAdvice;
       }
     } else if (headInfo.headAtMergeBase && headBranch === "HEAD") {
-      D = `the commit you have checked out is already part of ${y}, and there are ${H}`;
-      C = `If your work is on a branch, switch to it. If you meant a different base, ${A}.`;
+      emptyReason = `the commit you have checked out is already part of ${mergeBaseText}, and there are ${noEditsText}`;
+      emptyAdvice = `If your work is on a branch, switch to it. If you meant a different base, ${baseAdvice}.`;
     } else if (headInfo.headAtMergeBase && headBranch) {
-      D = `${headBranch} has no commits beyond ${y} and ${H}`;
-      C = `If your work is on another branch, switch to it. If this branch was already merged or you meant a different base, ${A}.`;
+      emptyReason = `${headBranch} has no commits beyond ${mergeBaseText} and ${noEditsText}`;
+      emptyAdvice = `If your work is on another branch, switch to it. If this branch was already merged or you meant a different base, ${baseAdvice}.`;
     } else {
-      D = `the diff against ${y} is empty`;
-      C = `If you have local edits, stage or commit them first. If your branch was already merged or you meant a different base, ${A}.`;
+      emptyReason = `the diff against ${mergeBaseText} is empty`;
+      emptyAdvice = `If you have local edits, stage or commit them first. If your branch was already merged or you meant a different base, ${baseAdvice}.`;
     }
-    let B = "";
+    let lastCommitHint = "";
     if (headInfo.headAtMergeBase && headInfo.parentSha) {
       let sliced = headInfo.parentSha.slice(0, 12);
-      let Q = /^\d+$/.test(sliced) ? headInfo.parentSha : sliced;
+      let parentRef = /^\d+$/.test(sliced) ? headInfo.parentSha : sliced;
       logEvent("tengu_review_remote_precondition_recovery", {
         reason: lit("empty_diff"),
         method: lit("last_commit_hint"),
         outcome: lit("offered"),
       });
-      B = ` To review your latest commit anyway, run \`${e} ${Q}\`. That id is the commit before it, and any earlier commit id or tag works the same way.`;
+      lastCommitHint = ` To review your latest commit anyway, run \`${invocation} ${parentRef}\`. That id is the commit before it, and any earlier commit id or tag works the same way.`;
     }
-    let G = S
+    let interactiveHint = heldBack
       ? " To review this first commit whole, run /ultrareview in an interactive Claude Code session, which asks before it spends anything."
       : "";
     return {
       ok: false,
       reason: "empty_diff",
-      error: `No changes to review: ${D}.${untrackedFilesNote(headInfo.untrackedCount, e)} ${C}${B}${G}`,
+      error: `No changes to review: ${emptyReason}.${untrackedFilesNote(headInfo.untrackedCount, invocation)} ${emptyAdvice}${lastCommitHint}${interactiveHint}`,
     };
   }
   let shortstat = parseShortstat(stdout_2);
   if (shortstat) {
     let { maxFiles, maxLines } = diffSizeLimits();
-    let d = shortstat.linesAdded + shortstat.linesRemoved;
-    if (shortstat.filesCount > maxFiles || d > maxLines) {
+    let changedLines = shortstat.linesAdded + shortstat.linesRemoved;
+    if (shortstat.filesCount > maxFiles || changedLines > maxLines) {
       logEvent("tengu_review_remote_precondition_failed", {
         reason: lit("local_diff_too_large"),
         files: shortstat.filesCount,
-        lines: d,
+        lines: changedLines,
         max_files: maxFiles,
         max_lines: maxLines,
         cwd_is_home: isCwdHomeDir(),
       });
-      q("failed");
+      logBranchRecovery("failed");
       let { stdout, code } = await gitReadInOwnWorkTree(
         getFsImplementation().cwd(),
         [
@@ -878,7 +904,7 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
           "--no-textconv",
           IGNORE_SUBMODULES_DIRTY_FLAG,
           "--numstat",
-          trimmed_2,
+          mergeBaseSha,
         ],
         {},
         {
@@ -887,24 +913,24 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
           maxBuffer: 10485760,
         },
       );
-      let y = code === 0 ? largestFilesNote(stdout) : "";
+      let largestFiles = code === 0 ? largestFilesNote(stdout) : "";
       return {
         ok: false,
         reason: "local_diff_too_large",
-        error: `Diff is too large for ultrareview: ${shortstat.filesCount.toLocaleString()} ${plural(shortstat.filesCount, "file")}, ${d.toLocaleString()} ${plural(d, "line")} changed (limits: ${maxFiles.toLocaleString()} ${plural(maxFiles, "file")}, ${maxLines.toLocaleString()} ${plural(maxLines, "line")}).${y} Pass a closer base branch (\`${e} <branch>\`) to narrow the scope, or split the change.`,
+        error: `Diff is too large for ultrareview: ${shortstat.filesCount.toLocaleString()} ${plural(shortstat.filesCount, "file")}, ${changedLines.toLocaleString()} ${plural(changedLines, "line")} changed (limits: ${maxFiles.toLocaleString()} ${plural(maxFiles, "file")}, ${maxLines.toLocaleString()} ${plural(maxLines, "line")}).${largestFiles} Pass a closer base branch (\`${invocation} <branch>\`) to narrow the scope, or split the change.`,
       };
     }
   }
-  q("succeeded");
+  logBranchRecovery("succeeded");
   return {
     ok: true,
     scope: {
       mode: "branch",
-      headBranch: X,
-      baseBranch: R,
-      mergeBaseSha: trimmed_2,
+      headBranch,
+      baseBranch,
+      mergeBaseSha,
       diffStat: stdout_2.trim(),
-      hadArg: v.length > 0,
+      hadArg: baseRef.length > 0,
       diffFiles: shortstat?.filesCount,
       diffLines: shortstat ? shortstat.linesAdded + shortstat.linesRemoved : undefined,
       instructions,
@@ -915,8 +941,8 @@ async function precheckLaunchScope(o, e = "/code-review ultra", u) {
 /**
  * 读取 HEAD 父提交、符号引用等
  */
-async function readHeadInfo(o, e) {
-  let [u, r, s] = await Promise.all([
+async function readHeadInfo(mergeBaseSha, baseBranch) {
+  let [revListResult, symbolicRefResult, untrackedResult] = await Promise.all([
     execFileNoThrow(
       gitExe(),
       [...GIT_SAFE_GLOBAL_ARGS, "rev-list", "--parents", "--max-count=1", "HEAD", "--"],
@@ -952,65 +978,73 @@ async function readHeadInfo(o, e) {
       },
     ),
   ]);
-  let [l, h, ...k] = u.code === 0 ? u.stdout.trim().split(/\s+/) : [];
-  let w =
-    r.exitCode === 0
-      ? r.stdout.trim().replace(/^refs\/heads\//, "") || undefined
-      : r.exitCode === 1
+  let [headSha, parentSha, ...extraParents] =
+    revListResult.code === 0 ? revListResult.stdout.trim().split(/\s+/) : [];
+  let headBranch =
+    symbolicRefResult.exitCode === 0
+      ? symbolicRefResult.stdout.trim().replace(/^refs\/heads\//, "") || undefined
+      : symbolicRefResult.exitCode === 1
         ? "HEAD"
         : undefined;
   return {
-    headBranch: w,
-    onBaseBranch: w === undefined ? undefined : w !== "HEAD" && (w === e || `origin/${w}` === e),
-    headAtMergeBase: l ? l === o : undefined,
-    parentSha: k.length ? undefined : h || undefined,
-    headIsRoot: l ? !h : undefined,
-    untrackedCount: s.code === 0 ? count(s.stdout.split("\x00"), Boolean) : undefined,
+    headBranch,
+    onBaseBranch:
+      headBranch === undefined
+        ? undefined
+        : headBranch !== "HEAD" && (headBranch === baseBranch || `origin/${headBranch}` === baseBranch),
+    headAtMergeBase: headSha ? headSha === mergeBaseSha : undefined,
+    parentSha: extraParents.length ? undefined : parentSha || undefined,
+    headIsRoot: headSha ? !parentSha : undefined,
+    untrackedCount:
+      untrackedResult.code === 0 ? count(untrackedResult.stdout.split("\x00"), Boolean) : undefined,
   };
 }
 //@ chunk-zn8pzrw0.js:21701-21959 placement
 /**
  * 未跟踪文件提示
  */
-function untrackedFilesNote(untrackedCount, e) {
+function untrackedFilesNote(untrackedCount, invocation) {
   if (!untrackedCount) return "";
-  return ` Git also sees ${untrackedCount.toLocaleString()} untracked ${plural(untrackedCount, "file or folder", "files or folders")} here. New files aren't part of a review until git tracks them: run \`git add\` on the ones you want reviewed, then rerun ${e}.`;
+  return ` Git also sees ${untrackedCount.toLocaleString()} untracked ${plural(untrackedCount, "file or folder", "files or folders")} here. New files aren't part of a review until git tracks them: run \`git add\` on the ones you want reviewed, then rerun ${invocation}.`;
 }
 //@ chunk-zn8pzrw0.js:21959-22300 placement
 /**
  * 改动最大的文件列表
  */
-function largestFilesNote(stdout, e = 3) {
+function largestFilesNote(stdout, maxFiles = 3) {
   let { perFileStats } = parseRawNumstat(stdout, Number.POSITIVE_INFINITY);
   let filtered = [...perFileStats.entries()]
-    .map(([l, h]) => ({
-      path: l,
-      lines: h.added + h.removed,
+    .map(([path, stats]) => ({
+      path,
+      lines: stats.added + stats.removed,
     }))
-    .filter((l) => l.lines > 0);
+    .filter((fileEntry) => fileEntry.lines > 0);
   if (filtered.length === 0) return "";
   return ` Largest files: ${filtered
-    .sort((l, h) => h.lines - l.lines)
-    .slice(0, e)
-    .map((l) => `${l.path} (${l.lines.toLocaleString()} ${plural(l.lines, "line")})`)
+    .sort((leftFile, rightFile) => rightFile.lines - leftFile.lines)
+    .slice(0, maxFiles)
+    .map(
+      (fileEntry) =>
+        `${fileEntry.path} (${fileEntry.lines.toLocaleString()} ${plural(fileEntry.lines, "line")})`,
+    )
     .join(", ")}.`;
 }
 //@ chunk-zn8pzrw0.js:22300-22363 placement
-function previewInstructions(instructions, e = 80) {
-  return truncateToWidth(instructions.replace(/\s+/g, " ").trim(), e);
+function previewInstructions(instructions, maxWidth = 80) {
+  return truncateToWidth(instructions.replace(/\s+/g, " ").trim(), maxWidth);
 }
 //@ chunk-zn8pzrw0.js:22363-23206 placement
 /**
  * 检查远端分支是否存在
  */
-async function resolveRemoteBranch(o) {
-  if (o.startsWith("-") || o.includes(":") || /\s/.test(o)) return "not_found";
+async function resolveRemoteBranch(branchName) {
+  if (branchName.startsWith("-") || branchName.includes(":") || /\s/.test(branchName)) return "not_found";
   let env_2 = {
     ...withGitNoPromptEnv(),
     GIT_SSH_COMMAND: `${env.GIT_SSH_COMMAND || "ssh"} -o BatchMode=yes -o StrictHostKeyChecking=yes`,
     GIT_ALLOW_PROTOCOL: "https:http:ssh",
   };
-  let u = await execFileNoThrow(
+  let lsRemoteResult = await execFileNoThrow(
     gitExe(),
     [
       ...GIT_SAFE_GLOBAL_ARGS,
@@ -1024,7 +1058,7 @@ async function resolveRemoteBranch(o) {
       "--exit-code",
       "--end-of-options",
       "origin",
-      o,
+      branchName,
     ],
     {
       timeout: 4000,
@@ -1032,14 +1066,14 @@ async function resolveRemoteBranch(o) {
       env: env_2,
     },
   );
-  if (u.code !== 0) return u.code === 2 ? "not_found" : "probe_failed";
+  if (lsRemoteResult.code !== 0) return lsRemoteResult.code === 2 ? "not_found" : "probe_failed";
   if (
-    !u.stdout
+    !lsRemoteResult.stdout
       .split(
         `
 `,
       )
-      .some((line) => line.split("\t")[1]?.trim() === `refs/heads/${o}`)
+      .some((line) => line.split("\t")[1]?.trim() === `refs/heads/${branchName}`)
   )
     return "not_found";
   return (
@@ -1056,7 +1090,7 @@ async function resolveRemoteBranch(o) {
         "--no-tags",
         "--end-of-options",
         "origin",
-        `refs/heads/${o}:refs/remotes/origin/${o}`,
+        `refs/heads/${branchName}:refs/remotes/origin/${branchName}`,
       ],
       {
         timeout: 15000,
@@ -1072,7 +1106,7 @@ async function resolveRemoteBranch(o) {
 /**
  * 列出本地与 origin 分支引用
  */
-async function listBranchRefs(o) {
+async function listBranchRefs(missingBranch) {
   let { stdout, code } = await execFileNoThrow(
     gitExe(),
     [
@@ -1089,30 +1123,30 @@ async function listBranchRefs(o) {
     },
   );
   if (code !== 0) return null;
-  let r = new Map();
+  let branchRefs = new Map();
   for (let line of stdout.split(`
 `)) {
     let trimmed = line.trim();
     if (!trimmed || trimmed === "origin" || trimmed === "origin/HEAD") continue;
-    let L = trimmed.startsWith("origin/") ? trimmed.slice(7) : trimmed;
-    if (trimmed.startsWith("origin/") || !r.has(L)) r.set(L, trimmed);
+    let shortName = trimmed.startsWith("origin/") ? trimmed.slice(7) : trimmed;
+    if (trimmed.startsWith("origin/") || !branchRefs.has(shortName)) branchRefs.set(shortName, trimmed);
   }
-  let s = o === "main" ? "master" : o === "master" ? "main" : null;
-  if (s !== null) {
-    let k = r.get(s);
-    if (k) return k;
+  let fallbackName = missingBranch === "main" ? "master" : missingBranch === "master" ? "main" : null;
+  if (fallbackName !== null) {
+    let fallbackRef = branchRefs.get(fallbackName);
+    if (fallbackRef) return fallbackRef;
   }
-  let l = null;
-  let h = 3;
-  for (let [k, w] of r) {
-    if (Math.abs(k.length - o.length) >= h) continue;
-    let L = boundedEditDistance(o, k, h - 1);
-    if (L > 0 && L < h) {
-      h = L;
-      l = w;
+  let bestRef = null;
+  let bestDistance = 3;
+  for (let [candidateName, candidateRef] of branchRefs) {
+    if (Math.abs(candidateName.length - missingBranch.length) >= bestDistance) continue;
+    let distance = boundedEditDistance(missingBranch, candidateName, bestDistance - 1);
+    if (distance > 0 && distance < bestDistance) {
+      bestDistance = distance;
+      bestRef = candidateRef;
     }
   }
-  return l;
+  return bestRef;
 }
 //@ chunk-zn8pzrw0.js:23834-24046 placement
 /**
@@ -1165,16 +1199,16 @@ async function checkOverageGate({
           billingNote,
           githubLogin,
         };
-      let k = skipLowCreditsNote ? null : await lowCreditsNote(credentials);
+      let lowCreditsLine = skipLowCreditsNote ? null : await lowCreditsNote(credentials);
       return {
         kind: "needs-confirm",
         body: `This review bills as usage credits (${getReviewCostNote()}).${
-          k
+          lowCreditsLine
             ? `
-${k}`
+${lowCreditsLine}`
             : ""
         }`,
-        lowCreditsNote: k,
+        lowCreditsNote: lowCreditsLine,
         billingNote,
         githubLogin,
       };
@@ -1184,9 +1218,9 @@ ${k}`
 //@ chunk-zn8pzrw0.js:24881-24890 placement
 var RESULT_RELAY_MARGIN_MINUTES = 3;
 //@ chunk-zn8pzrw0.js:24890-30797 placement = launchRemoteReview (0.427)
-async function launchRemoteReview(scope, context, billingNote, r) {
-  let invocation = r?.invocation ?? "/code-review ultra";
-  let l = (text) => ({
+async function launchRemoteReview(scope, context, billingNote, options) {
+  let invocation = options?.invocation ?? "/code-review ultra";
+  let failedResult = (text) => ({
     launched: false,
     blocks: [
       {
@@ -1195,13 +1229,13 @@ async function launchRemoteReview(scope, context, billingNote, r) {
       },
     ],
   });
-  let h = await checkRemoteSessionEligibility({
+  let eligibility = await checkRemoteSessionEligibility({
     allowBundle: true,
     storageV5: context.storageV5,
     credentials: context.credentials,
   });
-  if (!h.eligible) {
-    let errors = h.errors;
+  if (!eligibility.eligible) {
+    let errors = eligibility.errors;
     if (errors.length > 0) {
       logEvent("tengu_review_remote_precondition_failed", {
         reason: lit("remote_agent_ineligible"),
@@ -1222,51 +1256,51 @@ async function launchRemoteReview(scope, context, billingNote, r) {
           outcome: lit("failed"),
         });
       logFeatureBad("ultrareview_launch", "remote_agent_ineligible");
-      return l(`Ultrareview cannot launch:
+      return failedResult(`Ultrareview cannot launch:
 ${joined}`);
     }
   }
   let CODE_REVIEW_ENV_ID = "env_011111111111111111111113";
-  let w = ultrareviewConfig();
+  let config = ultrareviewConfig();
   let posInt = (v, fallback, max) => {
     if (typeof v !== "number" || !Number.isFinite(v)) return fallback;
     let n = Math.floor(v);
     if (n <= 0) return fallback;
     return n > max ? fallback : n;
   };
-  let M = ultrareviewModelOverride();
-  let T = {
+  let modelOverride = ultrareviewModelOverride();
+  let bughunterEnv = {
     BUGHUNTER_DRY_RUN: "1",
     AUTOPATCH_ENABLE_ASIMOV: "1",
-    ...(w?.code_quality !== false && {
+    ...(config?.code_quality !== false && {
       BUGHUNTER_CODE_QUALITY: "1",
     }),
-    BUGHUNTER_FLEET_SIZE: String(posInt(w?.fleet_size, 5, 20)),
-    BUGHUNTER_MAX_DURATION: String(posInt(w?.max_duration_minutes, 10, 25)),
-    BUGHUNTER_AGENT_TIMEOUT: String(posInt(w?.agent_timeout_seconds, 600, 1800)),
-    BUGHUNTER_TOTAL_WALLCLOCK: String(posInt(w?.total_wallclock_minutes, 22, 27)),
+    BUGHUNTER_FLEET_SIZE: String(posInt(config?.fleet_size, 5, 20)),
+    BUGHUNTER_MAX_DURATION: String(posInt(config?.max_duration_minutes, 10, 25)),
+    BUGHUNTER_AGENT_TIMEOUT: String(posInt(config?.agent_timeout_seconds, 600, 1800)),
+    BUGHUNTER_TOTAL_WALLCLOCK: String(posInt(config?.total_wallclock_minutes, 22, 27)),
     BUGHUNTER_RESULT_RELAY_MAX_SEC: String((clientWaitMinutes() - RESULT_RELAY_MARGIN_MINUTES) * 60),
-    ...(M && {
-      BUGHUNTER_MODEL: M,
+    ...(modelOverride && {
+      BUGHUNTER_MODEL: modelOverride,
     }),
     ...(process.env.BUGHUNTER_DEV_BUNDLE_B64 && {
       BUGHUNTER_DEV_BUNDLE_B64: process.env.BUGHUNTER_DEV_BUNDLE_B64,
     }),
   };
-  let U;
-  let ee;
-  let v;
-  let z = "";
-  let q = [];
-  let R;
-  let X;
-  let Z;
-  let W;
-  let J;
+  let remoteSession;
+  let launchCommand;
+  let scopeLabel;
+  let diffStat = "";
+  let bundleNotices = [];
+  let createFailMessage;
+  let failReason;
+  let failStatus;
+  let failServerType;
+  let failServerReason;
   if (scope.mode === "pr") {
     let repo = await detectCurrentRepositoryWithHost();
-    let P = repo && isNestedGitLabProject(repo) ? null : repo;
-    if (!P) {
+    let prRepo = repo && isNestedGitLabProject(repo) ? null : repo;
+    if (!prRepo) {
       logEvent("tengu_review_remote_precondition_failed", {
         reason: lit("no_github_remote_post_confirm"),
         cwd_is_home: isCwdHomeDir(),
@@ -1274,12 +1308,12 @@ ${joined}`);
       logFeatureBad("ultrareview_launch", "no_github_remote");
       return null;
     }
-    let x = `ultrareview: ${P.owner}/${P.name}#${scope.prNumber}`;
-    U = await teleportToRemote({
+    let sessionTitle = `ultrareview: ${prRepo.owner}/${prRepo.name}#${scope.prNumber}`;
+    remoteSession = await teleportToRemote({
       initialMessage: null,
       source: "ultrareview",
-      description: x,
-      title: x,
+      description: sessionTitle,
+      title: sessionTitle,
       signal: context.abortController.signal,
       storageV5: context.storageV5,
       credentials: context.credentials,
@@ -1288,25 +1322,25 @@ ${joined}`);
       tags: ["ultrareview"],
       environmentVariables: {
         BUGHUNTER_PR_NUMBER: scope.prNumber,
-        BUGHUNTER_REPOSITORY: `${P.owner}/${P.name}`,
-        ...T,
+        BUGHUNTER_REPOSITORY: `${prRepo.owner}/${prRepo.name}`,
+        ...bughunterEnv,
       },
-      onCreateFail: (N, n, _) => {
-        R = N;
-        X = fromEnum(n);
-        Z = _?.status;
-        W = fromEnumOpt(_?.serverType);
-        J = fromEnumOpt(_?.serverReason);
+      onCreateFail: (message, reason, _) => {
+        createFailMessage = message;
+        failReason = fromEnum(reason);
+        failStatus = _?.status;
+        failServerType = fromEnumOpt(_?.serverType);
+        failServerReason = fromEnumOpt(_?.serverReason);
       },
     });
-    ee = `/ultrareview ${scope.prNumber}`;
-    v = `${P.owner}/${P.name}#${scope.prNumber}`;
+    launchCommand = `/ultrareview ${scope.prNumber}`;
+    scopeLabel = `${prRepo.owner}/${prRepo.name}#${scope.prNumber}`;
   } else {
-    let { headBranch, baseBranch, mergeBaseSha, diffStat, noMergeBase } = scope;
-    z = diffStat;
+    let { headBranch, baseBranch, mergeBaseSha, diffStat: diffStat_2, noMergeBase } = scope;
+    diffStat = diffStat_2;
     let _;
     let bundleFailKind;
-    U = await teleportToRemote({
+    remoteSession = await teleportToRemote({
       initialMessage: null,
       source: "ultrareview",
       description: `ultrareview: ${headBranch}`,
@@ -1320,31 +1354,31 @@ ${joined}`);
       tags: ["ultrareview"],
       environmentVariables: {
         BUGHUNTER_BASE_BRANCH: mergeBaseSha,
-        ...T,
+        ...bughunterEnv,
       },
-      onBundleFail: (S, A) => {
-        _ = S;
-        bundleFailKind = fromEnum(A);
+      onBundleFail: (bundleFailMessage, bundleFailKindLocal) => {
+        _ = bundleFailMessage;
+        bundleFailKind = fromEnum(bundleFailKindLocal);
       },
-      onBundleNotice: (S) => {
-        q.push(S);
+      onBundleNotice: (notice) => {
+        bundleNotices.push(notice);
       },
-      onCreateFail: (S, A, y) => {
-        R = S;
-        X = fromEnum(A);
-        Z = y?.status;
-        W = fromEnumOpt(y?.serverType);
-        J = fromEnumOpt(y?.serverReason);
+      onCreateFail: (message, reason, details) => {
+        createFailMessage = message;
+        failReason = fromEnum(reason);
+        failStatus = details?.status;
+        failServerType = fromEnumOpt(details?.serverType);
+        failServerReason = fromEnumOpt(details?.serverReason);
       },
     });
-    if (!U) {
+    if (!remoteSession) {
       logEvent("tengu_review_remote_teleport_failed", {
         mode: lit("branch"),
-        reason: X,
+        reason: failReason,
         bundle_fail_kind: bundleFailKind,
-        status_code: Z,
-        server_type: W,
-        server_reason: J,
+        status_code: failStatus,
+        server_type: failServerType,
+        server_reason: failServerReason,
       });
       let aborted = context.abortController.signal.aborted;
       if (noMergeBase && !aborted)
@@ -1354,15 +1388,15 @@ ${joined}`);
           outcome: lit("failed"),
         });
       if (!aborted) logFeatureBad("ultrareview_launch", "teleport_failed");
-      return l(
+      return failedResult(
         _ ??
-          (R
-            ? `Ultrareview could not start the cloud session: ${R}`
+          (createFailMessage
+            ? `Ultrareview could not start the cloud session: ${createFailMessage}`
             : `Repo is too large. Push a PR and use \`${invocation} <PR#>\` instead.`),
       );
     }
-    ee = "/ultrareview";
-    v =
+    launchCommand = "/ultrareview";
+    scopeLabel =
       noMergeBase === "unrelated_history"
         ? `${headBranch} (all files \u2014 no common history with ${baseBranch})`
         : noMergeBase === "base_ref_missing"
@@ -1373,30 +1407,31 @@ ${joined}`);
               ? headBranch
               : `${headBranch} \u2192 ${baseBranch}`;
   }
-  if (!U) {
+  if (!remoteSession) {
     logEvent("tengu_review_remote_teleport_failed", {
       mode: lit("pr"),
-      reason: X,
-      status_code: Z,
-      server_type: W,
-      server_reason: J,
+      reason: failReason,
+      status_code: failStatus,
+      server_type: failServerType,
+      server_reason: failServerReason,
     });
     if (!context.abortController.signal.aborted) logFeatureBad("ultrareview_launch", "teleport_failed");
-    if (R) return l(`Ultrareview could not start the cloud session: ${R}`);
+    if (createFailMessage)
+      return failedResult(`Ultrareview could not start the cloud session: ${createFailMessage}`);
     return null;
   }
   let taskId;
-  if (!r?.skipTaskRegistration)
+  if (!options?.skipTaskRegistration)
     taskId = registerRemoteAgentTask({
       remoteTaskType: "ultrareview",
-      session: U,
-      command: ee,
+      session: remoteSession,
+      command: launchCommand,
       context,
       isRemoteReview: true,
-      applyFixesOnComplete: r?.applyFixesOnComplete,
+      applyFixesOnComplete: options?.applyFixesOnComplete,
       reviewInstructions: scope.mode === "branch" ? scope.instructions : undefined,
       postReviewTo:
-        r?.postReviewToPR && scope.mode === "pr" && !r?.signal?.aborted
+        options?.postReviewToPR && scope.mode === "pr" && !options?.signal?.aborted
           ? {
               repo: scope.repo,
               prNumber: scope.prNumber,
@@ -1406,7 +1441,7 @@ ${joined}`);
   logEvent("tengu_review_remote_launched", {
     mode: fromEnum(scope.mode),
     had_arg: scope.hadArg,
-    post_armed: r?.postReviewToPR === true && scope.mode === "pr" && !r?.signal?.aborted,
+    post_armed: options?.postReviewToPR === true && scope.mode === "pr" && !options?.signal?.aborted,
     had_instructions: scope.mode === "branch" && !!scope.instructions,
     diff_files: scope.diffFiles,
     diff_lines: scope.diffLines,
@@ -1421,18 +1456,18 @@ ${joined}`);
     else logFeatureSad("ultrareview_launch", "no_merge_base_empty_tree_fallback");
   } else logFeatureOk("ultrareview_launch");
   markUltrareviewRun(context.storageV5);
-  let sessionUrl = remoteSessionUrl(U.id);
-  let j = billingNote.trim()
+  let sessionUrl = remoteSessionUrl(remoteSession.id);
+  let billingPrefix = billingNote.trim()
     ? `${billingNote.trim()}
 `
     : "";
-  let oe = z
+  let scopeSuffix = diffStat
     ? `
-Scope: ${z}`
+Scope: ${diffStat}`
     : "";
-  let ie =
+  let noteSuffix =
     scope.mode === "branch" && scope.instructions
-      ? r?.skipTaskRegistration
+      ? options?.skipTaskRegistration
         ? `
 Your text was read as a note, not a base branch \u2014 the standard review runs on the diff above.`
         : `
@@ -1440,22 +1475,22 @@ Your text was read as a note, not a base branch \u2014 the standard review runs 
       : "";
   return {
     launched: true,
-    sessionId: U.id,
+    sessionId: remoteSession.id,
     sessionUrl,
     taskId,
-    title: U.title,
+    title: remoteSession.title,
     blocks: [
       {
         type: "text",
-        text: `${j}Ultrareview launched for ${v} (${getReviewDurationNote()}, runs in the cloud).${r?.findingsArriveInSession ? " The findings arrive here when it finishes." : ""}${
-          r?.postReviewToPR && scope.mode === "pr"
+        text: `${billingPrefix}Ultrareview launched for ${scopeLabel} (${getReviewDurationNote()}, runs in the cloud).${options?.findingsArriveInSession ? " The findings arrive here when it finishes." : ""}${
+          options?.postReviewToPR && scope.mode === "pr"
             ? `
 When it finishes, the findings will be posted to the PR as a comment from your GitHub account. (Keep this session open: the consent lives only here, so if it ends before the review finishes, nothing will be posted \u2014 even on resume.)`
             : ""
-        }${oe}${ie}${q
+        }${scopeSuffix}${noteSuffix}${bundleNotices
           .map(
-            (E) => `
-${E}`,
+            (notice) => `
+${notice}`,
           )
           .join("")}`,
       },
@@ -1463,179 +1498,192 @@ ${E}`,
   };
 }
 //@ chunk-zn8pzrw0.js:30797-31345 placement
-function ultrareviewLaunchAcknowledgementNudge(applyFixes, e) {
-  return `The output above is already visible to the user. Briefly acknowledge it without repeating the target or billing note. Findings will arrive via task-notification.${applyFixes ? " The user passed --fix: when the findings arrive, apply them to the local working tree." : ""}${e ? ` The user's argument was interpreted as a review note, not a base branch: "${truncateToLength(e, POST_POLL_MS)}". The cloud review runs its standard pass over the branch diff and does not see the note; when the findings arrive, prioritize and relate them to the user's request.` : ""}`;
+function ultrareviewLaunchAcknowledgementNudge(applyFixes, noteText) {
+  return `The output above is already visible to the user. Briefly acknowledge it without repeating the target or billing note. Findings will arrive via task-notification.${applyFixes ? " The user passed --fix: when the findings arrive, apply them to the local working tree." : ""}${noteText ? ` The user's argument was interpreted as a review note, not a base branch: "${truncateToLength(noteText, POST_POLL_MS)}". The cloud review runs its standard pass over the branch diff and does not see the note; when the findings arrive, prioritize and relate them to the user's request.` : ""}`;
 }
 //@ chunk-zn8pzrw0.js:31345-31377 placement
 var REASON_CODE_PATTERN = /^[a-z][a-z0-9_]{0,63}$/;
 //@ chunk-zn8pzrw0.js:31377-35274 placement
-async function runUltrareviewHeadless(o, e) {
+async function runUltrareviewHeadless(args, options) {
   if (!isUltrareviewWithBridge()) {
-    let T = ultrareviewUnavailableReason();
-    let U = T === "entitlement" ? getBridgeEntitlementBlocker() : null;
+    let unavailableReason = ultrareviewUnavailableReason();
+    let entitlementBlocker = unavailableReason === "entitlement" ? getBridgeEntitlementBlocker() : null;
     logEvent("tengu_review_remote_gate_blocked", {
-      reason: fromEnumOpt(T) ?? lit("unknown"),
-      entitlement_blocker: fromEnumOpt(U),
+      reason: fromEnumOpt(unavailableReason) ?? lit("unknown"),
+      entitlement_blocker: fromEnumOpt(entitlementBlocker),
     });
     return {
       status: "error",
       message: "Ultrareview is currently unavailable.",
-      ...(T !== null && {
-        gate_blocker: T,
+      ...(unavailableReason !== null && {
+        gate_blocker: unavailableReason,
       }),
-      ...(U !== null && {
-        entitlement_blocker: U,
+      ...(entitlementBlocker !== null && {
+        entitlement_blocker: entitlementBlocker,
       }),
     };
   }
   await waitForPolicyLimitsToLoad();
-  let u = policyDeniedReason("allow_remote_sessions", "Cloud sessions", "are");
-  if (u) {
+  let policyDenied = policyDeniedReason("allow_remote_sessions", "Cloud sessions", "are");
+  if (policyDenied) {
     logOrgPolicyDenied("allow_remote_sessions", "slash_command");
     return {
       status: "error",
-      message: u,
+      message: policyDenied,
     };
   }
-  let r = await precheckLaunchScope(o, e.invocation, {
-    suppressSucceededRecoveryEvent: !e.confirm,
-    suppressOfferedRecoveryEvent: e.confirm && !e.singlePass,
-    confirmsBeforeLaunch: e.confirmsBeforeLaunch === true,
-    personRanTheCommand: e.personRanTheCommand === true,
+  let precheck = await precheckLaunchScope(args, options.invocation, {
+    suppressSucceededRecoveryEvent: !options.confirm,
+    suppressOfferedRecoveryEvent: options.confirm && !options.singlePass,
+    confirmsBeforeLaunch: options.confirmsBeforeLaunch === true,
+    personRanTheCommand: options.personRanTheCommand === true,
   });
-  if (!r.ok)
+  if (!precheck.ok)
     return {
       status: "error",
-      message: r.error,
-      reason: r.reason,
+      message: precheck.error,
+      reason: precheck.reason,
     };
-  let s = await checkOverageGate({
-    overageConfirmed: e.overageConfirmed,
-    credentials: e.context.credentials,
-    skipLowCreditsNote: e.confirm && !e.singlePass,
-    bundleFollows: r.scope.mode === "branch",
+  let gate = await checkOverageGate({
+    overageConfirmed: options.overageConfirmed,
+    credentials: options.context.credentials,
+    skipLowCreditsNote: options.confirm && !options.singlePass,
+    bundleFollows: precheck.scope.mode === "branch",
   });
-  if (s.kind === "blocked") {
+  if (gate.kind === "blocked") {
     logEvent("tengu_review_overage_blocked", {
-      reason: sanitizedMachineReasonForTelemetry(s.reason),
+      reason: sanitizedMachineReasonForTelemetry(gate.reason),
     });
     return {
       status: "blocked",
-      message: s.message,
-      actionUrl: s.actionUrl,
-      ...(REASON_CODE_PATTERN.test(s.reason) && {
-        reason: s.reason,
+      message: gate.message,
+      actionUrl: gate.actionUrl,
+      ...(REASON_CODE_PATTERN.test(gate.reason) && {
+        reason: gate.reason,
       }),
     };
   }
-  let l = () => {
-    let T =
-      r.scope.mode === "pr"
-        ? `Reviewing PR ${r.scope.repo}#${r.scope.prNumber}.`
-        : r.scope.noMergeBase
+  let scopeNote = () => {
+    let scopeLine =
+      precheck.scope.mode === "pr"
+        ? `Reviewing PR ${precheck.scope.repo}#${precheck.scope.prNumber}.`
+        : precheck.scope.noMergeBase
           ? "Reviewing all files on the current branch."
-          : `Reviewing current branch against ${r.scope.baseBranch}.`;
-    let U =
-      r.scope.mode === "branch" && r.scope.instructions
-        ? ` Note for findings (not a base branch): "${previewInstructions(r.scope.instructions)}"`
+          : `Reviewing current branch against ${precheck.scope.baseBranch}.`;
+    let noteLine =
+      precheck.scope.mode === "branch" && precheck.scope.instructions
+        ? ` Note for findings (not a base branch): "${previewInstructions(precheck.scope.instructions)}"`
         : "";
     return `
-${T}${U}`;
+${scopeLine}${noteLine}`;
   };
-  if (s.kind === "proceed" && s.preflightUnavailable && e.withholdOverageConsent && !e.overageConfirmed)
+  if (
+    gate.kind === "proceed" &&
+    gate.preflightUnavailable &&
+    options.withholdOverageConsent &&
+    !options.overageConfirmed
+  )
     return {
       status: "needs-confirm",
-      body: `Couldn't verify your review quota right now, so this review may bill as usage credits (${getReviewCostNote()}).${l()}`,
+      body: `Couldn't verify your review quota right now, so this review may bill as usage credits (${getReviewCostNote()}).${scopeNote()}`,
       billingNote: "",
     };
-  if (s.kind === "needs-confirm") {
-    if (e.withholdOverageConsent)
+  if (gate.kind === "needs-confirm") {
+    if (options.withholdOverageConsent)
       return {
         status: "needs-confirm",
-        body: `${s.body}${l()}`,
-        billingNote: s.billingNote,
+        body: `${gate.body}${scopeNote()}`,
+        billingNote: gate.billingNote,
       };
     logEvent("tengu_review_overage_dialog_shown", {});
-    if (!e.confirm)
+    if (!options.confirm)
       return {
         status: "needs-confirm",
-        body: `${s.body}${l()}`,
-        billingNote: s.billingNote,
+        body: `${gate.body}${scopeNote()}`,
+        billingNote: gate.billingNote,
       };
-    e.markOverageConfirmed();
+    options.markOverageConfirmed();
   }
-  if (e.confirm && r.scope.mode === "branch" && r.scope.noMergeBase)
+  if (options.confirm && precheck.scope.mode === "branch" && precheck.scope.noMergeBase)
     logEvent("tengu_review_remote_precondition_recovery", {
       reason: lit("no_merge_base"),
       method: lit("empty_tree_bundle"),
       outcome: lit("accepted"),
     });
-  if (!e.confirm) {
-    let T =
-      r.scope.mode === "pr"
-        ? `Reviewing PR ${r.scope.repo}#${r.scope.prNumber}`
-        : r.scope.noMergeBase === "unrelated_history"
-          ? `Reviewing all files (no common history with ${r.scope.baseBranch})
-Scope: ${r.scope.diffStat}`
-          : r.scope.noMergeBase === "base_ref_missing"
-            ? `Reviewing all files (no ${r.scope.baseBranch} branch to compare against)
-Scope: ${r.scope.diffStat}`
-            : r.scope.noMergeBase === "first_commit"
+  if (!options.confirm) {
+    let scopeText =
+      precheck.scope.mode === "pr"
+        ? `Reviewing PR ${precheck.scope.repo}#${precheck.scope.prNumber}`
+        : precheck.scope.noMergeBase === "unrelated_history"
+          ? `Reviewing all files (no common history with ${precheck.scope.baseBranch})
+Scope: ${precheck.scope.diffStat}`
+          : precheck.scope.noMergeBase === "base_ref_missing"
+            ? `Reviewing all files (no ${precheck.scope.baseBranch} branch to compare against)
+Scope: ${precheck.scope.diffStat}`
+            : precheck.scope.noMergeBase === "first_commit"
               ? `Reviewing every file in the first commit (there is nothing earlier to compare with)
-Scope: ${r.scope.diffStat}`
-              : `Reviewing current branch against ${r.scope.baseBranch}
-Scope: ${r.scope.diffStat}`;
-    let U =
-      r.scope.mode === "branch" && r.scope.instructions
+Scope: ${precheck.scope.diffStat}`
+              : `Reviewing current branch against ${precheck.scope.baseBranch}
+Scope: ${precheck.scope.diffStat}`;
+    let noteText =
+      precheck.scope.mode === "branch" && precheck.scope.instructions
         ? `
-Note for findings (not a base branch): "${previewInstructions(r.scope.instructions)}"`
+Note for findings (not a base branch): "${previewInstructions(precheck.scope.instructions)}"`
         : "";
     return {
       status: "needs-confirm",
-      body: `${T}${U}
+      body: `${scopeText}${noteText}
 ${getReviewDurationNote()} \xB7 Est. cost ${getReviewCostNote()} USD`,
-      billingNote: s.billingNote,
+      billingNote: gate.billingNote,
     };
   }
-  let h = e.postReview === true && !isUltrareviewPostEnabled();
-  let k = e.postReview === true && !h && r.scope.mode === "pr" && isGithubDotCom(r.scope.host);
-  let w = await launchRemoteReview(r.scope, e.context, s.billingNote, {
-    skipTaskRegistration: e.skipTaskRegistration,
-    invocation: e.invocation,
-    applyFixesOnComplete: e.applyFixes,
-    postReviewToPR: k,
+  let postDisabled = options.postReview === true && !isUltrareviewPostEnabled();
+  let postToPr =
+    options.postReview === true &&
+    !postDisabled &&
+    precheck.scope.mode === "pr" &&
+    isGithubDotCom(precheck.scope.host);
+  let launchResult = await launchRemoteReview(precheck.scope, options.context, gate.billingNote, {
+    skipTaskRegistration: options.skipTaskRegistration,
+    invocation: options.invocation,
+    applyFixesOnComplete: options.applyFixes,
+    postReviewToPR: postToPr,
   });
-  if (!w?.launched)
+  if (!launchResult?.launched)
     return {
       status: "error",
       message:
-        w?.blocks
+        launchResult?.blocks
           .map((block) => (block.type === "text" ? block.text : ""))
           .join("")
           .trim() || "Failed to launch cloud review session.",
     };
-  let L = e.postReview === true && !k;
-  let trimmed = w.blocks
+  let postIgnored = options.postReview === true && !postToPr;
+  let trimmed = launchResult.blocks
     .map((block) => (block.type === "text" ? block.text : ""))
     .join("")
     .trim();
   return {
     status: "launched",
-    sessionId: w.sessionId,
-    sessionUrl: w.sessionUrl,
-    taskId: w.taskId,
-    title: w.title,
-    message: h ? `${trimmed}${POST_DISABLED_NOTE}` : L ? `${trimmed}${POST_IGNORED_NOTE}` : trimmed,
-    billingNote: s.billingNote,
+    sessionId: launchResult.sessionId,
+    sessionUrl: launchResult.sessionUrl,
+    taskId: launchResult.taskId,
+    title: launchResult.title,
+    message: postDisabled
+      ? `${trimmed}${POST_DISABLED_NOTE}`
+      : postIgnored
+        ? `${trimmed}${POST_IGNORED_NOTE}`
+        : trimmed,
+    billingNote: gate.billingNote,
     postReviewTo:
-      k && r.scope.mode === "pr"
+      postToPr && precheck.scope.mode === "pr"
         ? {
-            repo: r.scope.repo,
-            prNumber: r.scope.prNumber,
+            repo: precheck.scope.repo,
+            prNumber: precheck.scope.prNumber,
           }
         : undefined,
-    postIgnored: L || undefined,
-    lowCreditsNote: (e.singlePass && s.kind === "needs-confirm" && s.lowCreditsNote) || undefined,
+    postIgnored: postIgnored || undefined,
+    lowCreditsNote: (options.singlePass && gate.kind === "needs-confirm" && gate.lowCreditsNote) || undefined,
   };
 }
 //@ chunk-zn8pzrw0.js:35274-35329 placement
@@ -1647,43 +1695,34 @@ async function hasRemoteRepository() {
 /**
  * 非 git 仓库时的建议文字
  */
-function noRepositoryAdvice(o, e = false) {
-  let u = e
-    ? `run "git init" and commit a starting point. ${o} then reviews the changes you make on top of that commit.`
-    : `run "git init" and commit your work. ${o} then reviews that first commit whole if it is small enough, and after that the changes you make on top of it.`;
-  let r = isHostEntrypoint()
+function noRepositoryAdvice(invocation, confirmsBeforeLaunch = false) {
+  let initAdvice = confirmsBeforeLaunch
+    ? `run "git init" and commit a starting point. ${invocation} then reviews the changes you make on top of that commit.`
+    : `run "git init" and commit your work. ${invocation} then reviews that first commit whole if it is small enough, and after that the changes you make on top of it.`;
+  let leadAdvice = isHostEntrypoint()
     ? "Open a folder that is a git repository with at least one commit, then try again."
-    : `If your project already uses git, cd into its folder and rerun ${o}. If it doesn't yet, ${u}`;
-  return `${o} reviews the changes a git branch makes on top of an earlier commit, but ${getCwd()} is not inside a git repository. ${r}`;
+    : `If your project already uses git, cd into its folder and rerun ${invocation}. If it doesn't yet, ${initAdvice}`;
+  return `${invocation} reviews the changes a git branch makes on top of an earlier commit, but ${getCwd()} is not inside a git repository. ${leadAdvice}`;
 }
 //@ chunk-zn8pzrw0.js:35934-36027 placement
 function isCwdHomeDir() {
   try {
-    let o = homedir();
-    if (!o) return false;
-    return samePath(identity(resolve(getCwd())), identity(resolve(o)));
+    let homeDir = homedir();
+    if (!homeDir) return false;
+    return samePath(identity(resolve(getCwd())), identity(resolve(homeDir)));
   } catch {
     return false;
   }
 }
-//@ chunk-twvgrhqz.js:714-809 fingerprint = checkOverageGate (0.329)
-var checkOverageGate_2 = DoctorLazy(() =>
-  create({
-    reviews_used: create_3(),
-    reviews_limit: create_3(),
-    reviews_remaining: create_3(),
-    is_overage: create_6(),
-  }),
-);
 export {
   previewInstructions,
+  parseUltrareviewArgs,
+  runUltrareviewHeadless,
+  ultrareviewLaunchAcknowledgementNudge,
   launchRemoteReview,
   POST_DISABLED_NOTE,
   POST_IGNORED_NOTE,
-  ultrareviewLaunchAcknowledgementNudge,
-  parseUltrareviewArgs,
   precheckLaunchScope,
   checkOverageGate,
-  runUltrareviewHeadless,
   checkOverageGate_2,
 };

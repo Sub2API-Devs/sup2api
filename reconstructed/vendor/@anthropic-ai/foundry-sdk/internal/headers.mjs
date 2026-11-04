@@ -6,15 +6,15 @@
  * attribution: esm-layout 2, esm-fingerprint 2
  */
 //@ chunk-q01xm7xp.js:308-346 esm-layout
-var c = (e) => {
-  c = Array.isArray;
-  return c(e);
+var iterateHeaders = (headers) => {
+  iterateHeaders = Array.isArray;
+  return iterateHeaders(headers);
 };
-var l = c;
+var nulls = iterateHeaders;
 //@ chunk-q01xm7xp.js:346-395 esm-fingerprint
 var brand_privateNullableHeaders = Symbol.for("brand.privateNullableHeaders");
 //@ chunk-q01xm7xp.js:395-824 esm-fingerprint
-function* iterateHeaders(headers) {
+function* iterateHeaders_2(headers) {
   if (!headers) return;
   if (brand_privateNullableHeaders in headers) {
     let { values, nulls } = headers;
@@ -25,7 +25,7 @@ function* iterateHeaders(headers) {
   let shouldClear = false;
   let iter;
   if (headers instanceof Headers) iter = headers.entries();
-  else if (l(headers)) iter = headers;
+  else if (nulls(headers)) iter = headers;
   else {
     shouldClear = true;
     iter = Object.entries(headers ?? {});
@@ -33,7 +33,7 @@ function* iterateHeaders(headers) {
   for (let row of iter) {
     let name = row[0];
     if (typeof name !== "string") throw TypeError("expected header name to be a string");
-    let values = l(row[1]) ? row[1] : [row[1]];
+    let values = nulls(row[1]) ? row[1] : [row[1]];
     let didClear = false;
     for (let value of values) {
       if (value === undefined) continue;
@@ -64,7 +64,7 @@ var buildHeaders = (newHeaders) => {
   let nullHeaders = new Set();
   for (let headers of newHeaders) {
     let seenHeaders = new Set();
-    for (let [name, value] of iterateHeaders(headers)) {
+    for (let [name, value] of iterateHeaders_2(headers)) {
       let lowerName = name.toLowerCase();
       if (APPEND_HEADERS.has(lowerName)) {
         if (value === clearSentinel) continue;

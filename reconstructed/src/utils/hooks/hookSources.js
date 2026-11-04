@@ -17,44 +17,44 @@ import { tagHooksWithSource } from "./sessionHooks.js";
 import { HOOK_EVENTS } from "../../entrypoints/sdk/coreSchemas.js";
 
 //@ chunk-08s5p3av.js:2406-2697 placement
-function hookSourcesSummary(e) {
-  if (!e || !hasFrontmatterHooks(e.hooks)) {
+function hookSourcesSummary(agent) {
+  if (!agent || !hasFrontmatterHooks(agent.hooks)) {
     setMainThreadAgentHooks(undefined);
     return;
   }
-  let r = !isRestrictedToPluginOnly("hooks") || isSourceAdminTrusted(e.source);
-  let o = isAgentDefinitionTrusted(e);
-  if (r && o) {
-    let n = isRestrictedPersonalAgent(e)
-      ? markHookSource(e.hooks, "personal")
-      : isRepoFrontmatterHookRestricted(e.source)
-        ? markHookSource(e.hooks, "checkout")
-        : e.hooks;
-    tagHooksWithSource(e.hooks, e.source === "plugin" ? e.plugin : undefined);
-    setMainThreadAgentHooks(n);
+  let allowedByPolicy = !isRestrictedToPluginOnly("hooks") || isSourceAdminTrusted(agent.source);
+  let trusted = isAgentDefinitionTrusted(agent);
+  if (allowedByPolicy && trusted) {
+    let hooks = isRestrictedPersonalAgent(agent)
+      ? markHookSource(agent.hooks, "personal")
+      : isRepoFrontmatterHookRestricted(agent.source)
+        ? markHookSource(agent.hooks, "checkout")
+        : agent.hooks;
+    tagHooksWithSource(agent.hooks, agent.source === "plugin" ? agent.plugin : undefined);
+    setMainThreadAgentHooks(hooks);
     return;
   }
-  if (r && !o) checkAgentOriginTrust(e, "mainThread");
+  if (allowedByPolicy && !trusted) checkAgentOriginTrust(agent, "mainThread");
   setMainThreadAgentHooks(undefined);
 }
 //@ chunk-08s5p3av.js:2697-2843 placement
-function markHookSource(hooks, r) {
-  let o = {};
-  for (let n of HOOK_EVENTS) {
-    let s = hooks[n];
-    if (s !== undefined)
-      o[n] = s.map((u) =>
-        r === "personal"
+function markHookSource(hooks, kind) {
+  let marked = {};
+  for (let event of HOOK_EVENTS) {
+    let matchers = hooks[event];
+    if (matchers !== undefined)
+      marked[event] = matchers.map((matcher) =>
+        kind === "personal"
           ? {
-              ...u,
+              ...matcher,
               personal: true,
             }
           : {
-              ...u,
+              ...matcher,
               checkout: true,
             },
       );
   }
-  return o;
+  return marked;
 }
 export { hookSourcesSummary };

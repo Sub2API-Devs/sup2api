@@ -5,11 +5,11 @@
  * pieces: chunk-6r5wanw7.js (1)
  * attribution: esm-layout 1
  */
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_tslib } from "./tslib.js";
 
 //@ chunk-6r5wanw7.js:264-840 esm-layout
-var import_tslib = Re(require_tslib(), 1);
+var import_tslib = __toESM(require_tslib(), 1);
 var {
   __extends,
   __assign,

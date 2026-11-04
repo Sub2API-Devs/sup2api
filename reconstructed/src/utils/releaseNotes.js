@@ -9,7 +9,7 @@
  * attribution: placement 12, fingerprint 2, layout 3, callgraph-fingerprint 1, callgraph-witnessed 1
  */
 import { join, dirname } from "path";
-import { Re } from "../../runtime/bun-runtime.js";
+import { __toESM } from "../../runtime/bun-runtime.js";
 import { require_semver_3 } from "../../vendor/semver/index.js";
 import { stripPrefix, firstLineOf } from "./stringUtils.js";
 import { getClaudeConfigDir } from "./envUtils.js";
@@ -26,18 +26,28 @@ import { logError } from "./log.js";
 import { toError } from "./errors.js";
 import { semverGte, semverLt, semverGt } from "./semver.js";
 import { isSemverString } from "./model/modelCatalog/catalogCapabilities.js";
+import { deferInit } from "../../runtime/deferred-init.js";
 
 //@ chunk-v5a4j103.js:683-700 placement
-var semverRelease = Re(require_semver_3(), 1);
+var semverRelease; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-v5a4j103.js:683", () => {
+  semverRelease = __toESM(require_semver_3(), 1);
+});
 //@ chunk-v5a4j103.js:741-977 fingerprint = CHANGELOG_URL (0.435)
 /**
  * CHANGELOG_URL：变更日志地址；HTTPS_CODE_CLAUDE_COM：文档站点地址（同一声明共 2 个绑定）。
  */
-var CHANGELOG_URL_2 = "https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md";
-var HTTPS_CODE_CLAUDE_COM_DOCS_EN_CHANGELOG = "https://code.claude.com/docs/en/changelog";
-var CHANGELOG_URL = stripPrefix(HTTPS_CODE_CLAUDE_COM_DOCS_EN_CHANGELOG, "https://");
-var HTTPS_CODE_CLAUDE_COM =
-  "https://raw.githubusercontent.com/anthropics/claude-code/refs/heads/main/CHANGELOG.md";
+var CHANGELOG_URL_2; // deferred: uses stripPrefix (./stringUtils.js) of its import cycle while loading; runs once the cycle is complete
+var HTTPS_CODE_CLAUDE_COM_DOCS_EN_CHANGELOG;
+var CHANGELOG_URL;
+var HTTPS_CODE_CLAUDE_COM;
+deferInit("chunk-v5a4j103.js:741", () => {
+  CHANGELOG_URL_2 = "https://github.com/anthropics/claude-code/blob/main/CHANGELOG.md";
+  HTTPS_CODE_CLAUDE_COM_DOCS_EN_CHANGELOG = "https://code.claude.com/docs/en/changelog";
+  CHANGELOG_URL = stripPrefix(HTTPS_CODE_CLAUDE_COM_DOCS_EN_CHANGELOG, "https://");
+  HTTPS_CODE_CLAUDE_COM =
+    "https://raw.githubusercontent.com/anthropics/claude-code/refs/heads/main/CHANGELOG.md";
+});
 //@ chunk-v5a4j103.js:977-1028 fingerprint = getChangelogCachePath (1)
 /**
  * changelog 缓存路径：<配置目录>/cache/changelog.md。
@@ -57,23 +67,26 @@ class ChangelogMemo {
   }
 }
 //@ chunk-v5a4j103.js:1134-1157 layout
-var changelogMemoByHost = new HostScoped(() => new ChangelogMemo());
+var changelogMemoByHost; // deferred: uses ChangelogMemo of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-v5a4j103.js:1134", () => {
+  changelogMemoByHost = new HostScoped(() => new ChangelogMemo());
+});
 //@ chunk-v5a4j103.js:1157-1570 callgraph-fingerprint = migrateChangelogFromConfig (0.17)
 /**
  * 把旧版存在全局配置里的 changelog 迁移到缓存文件。
  */
-async function migrateChangelogFromConfig(o) {
+async function migrateChangelogFromConfig(storageV5) {
   let config = getGlobalConfig();
   if (!config.cachedChangelog) return;
-  if (isStorageV5Enabled() && o) {
-    let r = await o.write(getChangelogCacheKey(), config.cachedChangelog, {
+  if (isStorageV5Enabled() && storageV5) {
+    let writeResult = await storageV5.write(getChangelogCacheKey(), config.cachedChangelog, {
       precondition: {
         type: "ifAbsent",
       },
       mode: 438 & ~process.umask(),
     });
-    if (!r.ok && r.error.code !== "AlreadyExists")
-      logForDebugging(`migrateChangelogFromConfig: ${r.error.code}`);
+    if (!writeResult.ok && writeResult.error.code !== "AlreadyExists")
+      logForDebugging(`migrateChangelogFromConfig: ${writeResult.error.code}`);
   } else if (!isDiskless()) {
     let cachePath = getChangelogCachePath();
     try {
@@ -81,7 +94,7 @@ async function migrateChangelogFromConfig(o) {
       await getFileReader().writeExclusive(cachePath, config.cachedChangelog);
     } catch {}
   }
-  await saveGlobalConfig(({ cachedChangelog, ...rest }) => rest, o);
+  await saveGlobalConfig(({ cachedChangelog, ...rest }) => rest, storageV5);
 }
 //@ chunk-v5a4j103.js:1570-2042 callgraph-witnessed = fetchAndStoreChangelog (0.187)
 /**
@@ -91,8 +104,8 @@ async function fetchAndStoreChangelog(storageV5) {
   if (getIsNonInteractiveSession()) return;
   if (isDiskless()) return;
   if (isEssentialTrafficOnly()) return;
-  let n = HTTPS_CODE_CLAUDE_COM;
-  let response = await externalHttp.get(n);
+  let changelogUrl = HTTPS_CODE_CLAUDE_COM;
+  let response = await externalHttp.get(changelogUrl);
   if (response.status === 200) {
     let changelogContent = response.data;
     let cachePath = releaseNotesState();
@@ -100,11 +113,11 @@ async function fetchAndStoreChangelog(storageV5) {
     let changelogCachePath = getChangelogCachePath();
     await getFileReader().mkdir(dirname(changelogCachePath));
     if (isStorageV5Enabled() && storageV5) {
-      let i = await storageV5.write(getChangelogCacheKey(), changelogContent, {
+      let writeResult = await storageV5.write(getChangelogCacheKey(), changelogContent, {
         publishDiscipline: "inPlace",
       });
-      if (!i.ok) {
-        logForDebugging(`fetchAndStoreChangelog: ${i.error.code}`);
+      if (!writeResult.ok) {
+        logForDebugging(`fetchAndStoreChangelog: ${writeResult.error.code}`);
         throw Error("fetchAndStoreChangelog: v5 write failed");
       }
     } else await getFileReader().write(changelogCachePath, changelogContent);
@@ -121,22 +134,22 @@ async function fetchAndStoreChangelog(storageV5) {
 }
 //@ chunk-v5a4j103.js:2042-2342 placement
 async function readChangelog(storageV5) {
-  let n = releaseNotesState();
-  if (n.content !== null) return n.content;
+  let cacheState = releaseNotesState();
+  if (cacheState.content !== null) return cacheState.content;
   if (isStorageV5Enabled() && storageV5) {
     let text = await storageV5.readText([getChangelogCacheKey()]);
-    let s = text.ok && text.value.items[0].found ? text.value.items[0].value : "";
-    n.remember(s);
-    return s;
+    let cachedText = text.ok && text.value.items[0].found ? text.value.items[0].value : "";
+    cacheState.remember(cachedText);
+    return cachedText;
   }
   if (isDiskless()) return "";
   let changelogCachePath = getChangelogCachePath();
   try {
-    let e = await getFileReader().read(changelogCachePath);
-    n.remember(e);
-    return e;
+    let fileContent = await getFileReader().read(changelogCachePath);
+    cacheState.remember(fileContent);
+    return fileContent;
   } catch {
-    n.remember("");
+    cacheState.remember("");
     return "";
   }
 }
@@ -148,24 +161,24 @@ function releaseNotesContent() {
 function parseChangelog(userFacingName) {
   try {
     if (!userFacingName) return {};
-    let n = {};
+    let notesByVersion = {};
     let sliced = userFacingName.split(/^## /gm).slice(1);
-    for (let e of sliced) {
-      let lines = e.trim().split(`
+    for (let versionSection of sliced) {
+      let lines = versionSection.trim().split(`
 `);
       if (lines.length === 0) continue;
-      let c = lines[0];
-      if (!c) continue;
-      let displayName = firstLineOf(c, " - ").trim();
+      let headingLine = lines[0];
+      if (!headingLine) continue;
+      let displayName = firstLineOf(headingLine, " - ").trim();
       if (!displayName) continue;
       let filtered = lines
         .slice(1)
         .filter((line) => line.trim().startsWith("- "))
         .map((line) => line.trim().substring(2).trim())
         .filter(Boolean);
-      if (filtered.length > 0) n[displayName] = filtered;
+      if (filtered.length > 0) notesByVersion[displayName] = filtered;
     }
-    return n;
+    return notesByVersion;
   } catch (error) {
     logError(toError(error));
     return {};
@@ -180,9 +193,9 @@ function BUNDLED_CHANGELOG() {
 }
 //@ chunk-v5a4j103.js:93240-93955 placement
 function formatReleaseNotes(
-  o,
-  n,
-  r = {
+  changelogContent,
+  fromVersion,
+  toVersion = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
@@ -194,42 +207,49 @@ function formatReleaseNotes(
     DD_SOURCEMAP_GROUP: "default",
   }.VERSION,
 ) {
-  if (typeof o !== "string") return [];
-  let e = releaseNotesByVersion(o);
-  if (e.length === 0) return [];
-  let s = semverRelease.coerce(n);
-  let c = semverRelease.coerce(r);
-  let a = s && c ? e.filter(({ base }) => semverGte(base, s.version) && semverLt(base, c.version)) : [];
-  a.length;
-  return a.flatMap(({ notes }) => notes);
+  if (typeof changelogContent !== "string") return [];
+  let notesByVersion = releaseNotesByVersion(changelogContent);
+  if (notesByVersion.length === 0) return [];
+  let fromSemver = semverRelease.coerce(fromVersion);
+  let toSemver = semverRelease.coerce(toVersion);
+  let inRangeNotes =
+    fromSemver && toSemver
+      ? notesByVersion.filter(
+          ({ base }) => semverGte(base, fromSemver.version) && semverLt(base, toSemver.version),
+        )
+      : [];
+  inRangeNotes.length;
+  return inRangeNotes.flatMap(({ notes }) => notes);
 }
 //@ chunk-v5a4j103.js:93955-94029 placement
-function latestReleaseNotes(o) {
-  if (typeof o !== "string") return [];
-  return releaseNotesByVersion(o)[0]?.notes ?? [];
+function latestReleaseNotes(changelogContent) {
+  if (typeof changelogContent !== "string") return [];
+  return releaseNotesByVersion(changelogContent)[0]?.notes ?? [];
 }
 //@ chunk-v5a4j103.js:94029-94286 placement
 function releaseNotesByVersion(userFacingName) {
-  let n = new Map();
+  let notesByVersion = new Map();
   for (let [key, value] of Object.entries(parseChangelog(userFacingName))) {
     if (!isSemverString(key)) continue;
     let version = semverRelease.coerce(key)?.version;
-    if (version === undefined || n.has(version)) continue;
-    n.set(version, value);
+    if (version === undefined || notesByVersion.has(version)) continue;
+    notesByVersion.set(version, value);
   }
-  return [...n]
-    .map(([r, e]) => ({
-      base: r,
-      notes: e,
+  return [...notesByVersion]
+    .map(([version, notes]) => ({
+      base: version,
+      notes,
     }))
-    .sort((r, e) => (semverGte(r.base, e.base) ? -1 : semverGte(e.base, r.base) ? 1 : 0));
+    .sort((leftEntry, rightEntry) =>
+      semverGte(leftEntry.base, rightEntry.base) ? -1 : semverGte(rightEntry.base, leftEntry.base) ? 1 : 0,
+    );
 }
 //@ chunk-v5a4j103.js:94286-94538 placement
 function sortedReleaseNotes(changelogContent = releaseNotesContent()) {
   try {
     let releaseNotes = parseChangelog(changelogContent);
     return Object.keys(releaseNotes)
-      .sort((e, s) => (semverGte(e, s) ? 1 : -1))
+      .sort((leftVersion, rightVersion) => (semverGte(leftVersion, rightVersion) ? 1 : -1))
       .map((version) => {
         let versionNotes = releaseNotes[version];
         if (!versionNotes || versionNotes.length === 0) return null;
@@ -245,7 +265,7 @@ function sortedReleaseNotes(changelogContent = releaseNotesContent()) {
 }
 //@ chunk-v5a4j103.js:94538-95165 placement
 async function fetchReleaseNotes(
-  o = {
+  currentVersion = {
     ISSUES_EXPLAINER: "report the issue at https://github.com/anthropics/claude-code/issues",
     PACKAGE_URL: "@anthropic-ai/claude-code",
     README_URL: "https://code.claude.com/docs/en/overview",
@@ -259,7 +279,7 @@ async function fetchReleaseNotes(
   storageV5,
 ) {
   let changelog = await readChangelog(storageV5);
-  if (!changelog || changelogLacksVersion(changelog, o))
+  if (!changelog || changelogLacksVersion(changelog, currentVersion))
     fetchAndStoreChangelog(storageV5).catch((error) =>
       logForDebugging(`Failed to fetch changelog: ${toError(error).message}`, {
         level: "error",
@@ -267,12 +287,12 @@ async function fetchReleaseNotes(
     );
 }
 //@ chunk-v5a4j103.js:95165-95295 placement
-function changelogLacksVersion(userFacingName, n) {
-  let r = semverRelease.coerce(n);
-  if (!r) return false;
+function changelogLacksVersion(userFacingName, currentVersion) {
+  let currentSemver = semverRelease.coerce(currentVersion);
+  if (!currentSemver) return false;
   return !Object.keys(parseChangelog(userFacingName)).some((key) => {
     try {
-      return semverGt(key, r.version);
+      return semverGt(key, currentSemver.version);
     } catch {
       return false;
     }

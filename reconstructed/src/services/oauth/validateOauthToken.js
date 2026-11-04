@@ -19,52 +19,56 @@ import { getOauthConfig } from "../../constants/oauth.js";
 import { axios_default } from "../../../vendor/axios/dist/esm/axios.js";
 import { claudeCodeUserAgent } from "../../utils/http.js";
 import { FAST_MODE_CHECK_HTTP_OPTIONS } from "../api/verificationRequired.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-aepeg2w5.js:293799-293883 placement
 /**
  * 套餐显示名的 schema（字母数字开头，允许空格与 .+-）。
  */
-var planDisplayNameSchema = DoctorLazy(() =>
-  create_2().regex(/^[\p{L}\p{N}](?:[\p{L}\p{N} .+-]{0,38}[\p{L}\p{N}+])?$/u),
-);
+var planDisplayNameSchema; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-aepeg2w5.js:293799", () => {
+  planDisplayNameSchema = DoctorLazy(() =>
+    create_2().regex(/^[\p{L}\p{N}](?:[\p{L}\p{N} .+-]{0,38}[\p{L}\p{N}+])?$/u),
+  );
+});
 //@ chunk-aepeg2w5.js:293883-293932 placement
 function isPlanDisplayName(planDisplayName) {
   return planDisplayNameSchema().safeParse(planDisplayName).success;
 }
 //@ chunk-aepeg2w5.js:293932-294143 placement
-function planDisplayNameFromProfile(e) {
-  let planDisplayName = e?.organization?.plan_display_name;
+function planDisplayNameFromProfile(profile) {
+  let planDisplayName = profile?.organization?.plan_display_name;
   if (planDisplayName === undefined || planDisplayName === null) return null;
-  let r = planDisplayNameSchema().safeParse(planDisplayName);
-  if (!r.success) {
+  let parsed = planDisplayNameSchema().safeParse(planDisplayName);
+  if (!parsed.success) {
     logFeatureSad("oauth_profile_fetch", "plan_display_name_rejected");
     return null;
   }
-  return r.data;
+  return parsed.data;
 }
 //@ chunk-aepeg2w5.js:294143-294454 placement
-async function validateOauthToken(accessToken, n = []) {
-  let r = await validateOauthTokenWithOutcome(accessToken);
-  for (let s of n) {
-    if (r.ok || !isTransientValidateFailure(r)) break;
-    await sleep(s);
-    r = await validateOauthTokenWithOutcome(accessToken);
+async function validateOauthToken(accessToken, retryDelaysMs = []) {
+  let outcome = await validateOauthTokenWithOutcome(accessToken);
+  for (let delayMs of retryDelaysMs) {
+    if (outcome.ok || !isTransientValidateFailure(outcome)) break;
+    await sleep(delayMs);
+    outcome = await validateOauthTokenWithOutcome(accessToken);
   }
-  if (r.ok) {
+  if (outcome.ok) {
     logFeatureOk("oauth_token_validate");
-    return r.data;
+    return outcome.data;
   }
   logFeatureSad("oauth_token_validate", "oauth_validate_failed");
-  if (isExpectedApiError(r.error))
-    logForDebugging(`Failed to validate OAuth token: ${r.error}`, {
+  if (isExpectedApiError(outcome.error))
+    logForDebugging(`Failed to validate OAuth token: ${outcome.error}`, {
       level: "error",
     });
-  else logError(r.error);
+  else logError(outcome.error);
   return;
 }
 //@ chunk-aepeg2w5.js:294454-294752 placement
-function isTransientValidateFailure(e) {
-  switch (e.reason) {
+function isTransientValidateFailure(outcome) {
+  switch (outcome.reason) {
     case "timeout":
     case "dns":
     case "connect":
@@ -72,10 +76,10 @@ function isTransientValidateFailure(e) {
       return true;
     case "http_error":
       return (
-        e.status !== undefined &&
-        (e.status >= 500 ||
-          (e.status >= 300 && e.status < 400) ||
-          (e.status >= 400 && !isNonRetryableClientError(e.status)))
+        outcome.status !== undefined &&
+        (outcome.status >= 500 ||
+          (outcome.status >= 300 && outcome.status < 400) ||
+          (outcome.status >= 400 && !isNonRetryableClientError(outcome.status)))
       );
     case "tls":
     case "proxy":
@@ -86,16 +90,16 @@ function isTransientValidateFailure(e) {
   }
 }
 //@ chunk-aepeg2w5.js:294752-295624 placement
-async function validateOauthTokenWithOutcome(e) {
-  let n = `${getOauthConfig().BASE_API_URL}/api/oauth/validate`;
+async function validateOauthTokenWithOutcome(accessToken) {
+  let validateUrl = `${getOauthConfig().BASE_API_URL}/api/oauth/validate`;
   try {
     return {
       ok: true,
       data: (
-        await axios_default.post(n, null, {
+        await axios_default.post(validateUrl, null, {
           headers: {
             "User-Agent": claudeCodeUserAgent(),
-            Authorization: `Bearer ${e}`,
+            Authorization: `Bearer ${accessToken}`,
             "Content-Type": "application/json",
           },
           timeout: 1e4,
@@ -162,4 +166,10 @@ async function validateOauthTokenWithOutcome(e) {
     }
   }
 }
-export { isPlanDisplayName, validateOauthToken, planDisplayNameFromProfile };
+export {
+  isPlanDisplayName,
+  validateOauthToken,
+  planDisplayNameFromProfile,
+  isTransientValidateFailure,
+  validateOauthTokenWithOutcome,
+};

@@ -5,13 +5,13 @@
  * pieces: chunk-8nhse09v.js (7)
  * attribution: esm-layout 5, esm-fingerprint 2
  */
-import { ee, asciiWords_default } from "./_hasUnicodeWord.js";
-import { vde } from "./toString.js";
+import { hasUnicodeWord, asciiWords_default } from "./_hasUnicodeWord.js";
+import { toStringExport } from "./toString.js";
 
 //@ chunk-8nhse09v.js:3312-3321 esm-layout
-var l = ee;
+var hasUnicode = hasUnicodeWord;
 //@ chunk-8nhse09v.js:3321-4539 esm-fingerprint
-var v = "\\ud800-\\udfff";
+var rsAstralRange = "\\ud800-\\udfff";
 var rsComboMarksRange = "\\u0300-\\u036f";
 var reComboHalfMarksRange = "\\ufe20-\\ufe2f";
 var rsComboSymbolsRange = "\\u20d0-\\u20ff";
@@ -32,10 +32,11 @@ var rsCombo_2 = "[" + rsComboRange + "]";
 var rsDigits = "\\d+";
 var rsDingbat = "[" + rsDingbatRange + "]";
 var rsLower = "[" + rsLowerRange + "]";
-var rsMisc = "[^" + v + rsBreakRange + rsDigits + rsDingbatRange + rsLowerRange + rsUpperRange + "]";
+var rsMisc =
+  "[^" + rsAstralRange + rsBreakRange + rsDigits + rsDingbatRange + rsLowerRange + rsUpperRange + "]";
 var rsFitz = "\\ud83c[\\udffb-\\udfff]";
 var rsModifier = "(?:" + rsCombo_2 + "|" + rsFitz + ")";
-var rsNonAstral = "[^" + v + "]";
+var rsNonAstral = "[^" + rsAstralRange + "]";
 var rsRegional = "(?:\\ud83c[\\udde6-\\uddff]){2}";
 var rsSurrPair = "[\\ud800-\\udbff][\\udc00-\\udfff]";
 var rsUpper = "[" + rsUpperRange + "]";
@@ -52,7 +53,7 @@ var rsOrdLower = "\\d*(?:1st|2nd|3rd|(?![123])\\dth)(?=\\b|[A-Z_])";
 var rsOrdUpper = "\\d*(?:1ST|2ND|3RD|(?![123])\\dTH)(?=\\b|[a-z_])";
 var rsSeq = rsOptVar + reOptMod + rsOptJoin;
 var rsEmoji = "(?:" + [rsDingbat, rsRegional, rsSurrPair].join("|") + ")" + rsSeq;
-var ve = RegExp(
+var unicodeWordsRe = RegExp(
   [
     rsUpper + "?" + rsLower + "+" + rsOptContrLower + "(?=" + [rsBreak, rsUpper, "$"].join("|") + ")",
     rsMiscUpper + "+" + rsOptContrUpper + "(?=" + [rsBreak, rsUpper + rsMiscLower, "$"].join("|") + ")",
@@ -67,20 +68,21 @@ var ve = RegExp(
 );
 //@ chunk-8nhse09v.js:4539-4577 esm-layout
 function unicodeWords(string) {
-  return string.match(ve) || [];
+  return string.match(unicodeWordsRe) || [];
 }
 //@ chunk-8nhse09v.js:4577-4586 esm-layout
 var unicodeWords_default = unicodeWords;
 //@ chunk-8nhse09v.js:4586-4685 esm-layout
-function he(e, r, u) {
-  e = vde(e);
-  r = u ? undefined : r;
-  if (r === undefined) return l(e) ? unicodeWords_default(e) : asciiWords_default(e);
-  return e.match(r) || [];
+function words(string, pattern, guard) {
+  string = toStringExport(string);
+  pattern = guard ? undefined : pattern;
+  if (pattern === undefined)
+    return hasUnicode(string) ? unicodeWords_default(string) : asciiWords_default(string);
+  return string.match(pattern) || [];
 }
 //@ chunk-8nhse09v.js:4685-4694 esm-layout
-var M = he;
+var import_words = words;
 //@ chunk-8nhse09v.js:4694-4731 esm-fingerprint
-var Oe = "['\u2019]";
-var ye = RegExp(Oe, "g");
-export { M, ye };
+var reApos = "['\u2019]";
+var reAposGlobal = RegExp(reApos, "g");
+export { import_words, reAposGlobal };

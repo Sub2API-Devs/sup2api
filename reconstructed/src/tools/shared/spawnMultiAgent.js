@@ -8,7 +8,8 @@
  * pieces: chunk-cne5hsvz.js (15), chunk-hntsfzas.js (1)
  * attribution: sole-consumer 4, fingerprint 9, placement 2, affinity 1
  */
-import { withHostOwnedEnv } from "../../utils/settings/managedSettingsFiles.js";
+import { isStandaloneExecutable } from "../../utils/slowOperations.js";
+import { withHostOwnedEnv } from "../../utils/settings/hostEnvWrites.js";
 import { processWrapperError } from "../../utils/processWrapper.js";
 import {
   SwarmPaneError,
@@ -78,8 +79,19 @@ import { startInProcessTeammate } from "../../utils/swarm/inProcessRunner.js";
 import { isRegisteredAgent } from "../../utils/plugins/pluginLoadState.js";
 import { AGENT } from "../AgentTool/constants.js";
 import { getTeammateModeFromSnapshot } from "../../utils/swarm/backends/teammateModeSnapshot.js";
-import { isStandaloneExecutable } from "../../utils/slowOperations.js";
 
+//@ chunk-hntsfzas.js:6798-6916 fingerprint = getTeammateCommand (1)
+/**
+ * 队友启动命令：编译版用 execPath，否则 argv[1]。
+ */
+function getTeammateCommand() {
+  try {
+    if (isStandaloneExecutable()) return process.execPath || "unknown";
+    return process.argv[1] || "unknown";
+  } catch {
+    return "unknown";
+  }
+}
 //@ chunk-cne5hsvz.js:14172-14199 sole-consumer
 /**
  * 返回队友进程的启动命令（自定义命令或当前二进制，套用宿主环境包装器）。
@@ -92,17 +104,17 @@ function teammateLaunchCommandLine() {
  * 队友进程的启动命令（自定义命令或当前二进制，套用进程包装器）；包装器配置错误时抛错。
  */
 function teammateLaunchCommand() {
-  let e = processWrapperError();
-  if (e)
+  let wrapperError = processWrapperError();
+  if (wrapperError)
     throw new SwarmPaneError(
-      `${e} \u2014 the teammate is not started unwrapped; fix the launcher setting, then retry`,
+      `${wrapperError} \u2014 the teammate is not started unwrapped; fix the launcher setting, then retry`,
     );
-  let n = process.env[TEAMMATE_COMMAND_ENV_VAR];
-  let { cmd, prefixArgs } = n
+  let commandFromEnv = process.env[TEAMMATE_COMMAND_ENV_VAR];
+  let { cmd, prefixArgs } = commandFromEnv
     ? withProcessWrapper({
-        cmd: n,
+        cmd: commandFromEnv,
         prefixArgs: [],
-        target: n,
+        target: commandFromEnv,
       })
     : getLaunchCommand({
         pinToCurrentBinary: true,
@@ -120,11 +132,11 @@ function buildInheritedCliFlags_2({
   autoPickedByLevel = false,
 }) {
   if (permissionMode === undefined) return [];
-  let E = permissionMode;
-  if (planModeRequired) E = "plan";
+  let effectiveMode = permissionMode;
+  if (planModeRequired) effectiveMode = "plan";
   else if (proactivityLevel !== undefined)
-    E = cycleAllTeammateModes(permissionMode, proactivityLevel, autoPickedByLevel);
-  switch (E) {
+    effectiveMode = cycleAllTeammateModes(permissionMode, proactivityLevel, autoPickedByLevel);
+  switch (effectiveMode) {
     case "bypassPermissions":
       return ["--dangerously-skip-permissions"];
     case "acceptEdits":
@@ -136,7 +148,7 @@ function buildInheritedCliFlags_2({
     case "dontAsk":
     case "bubble":
       return proactivityLevel !== undefined && wasProactivityEverOn()
-        ? [`--permission-mode ${toExternalPermissionMode(E)}`]
+        ? [`--permission-mode ${toExternalPermissionMode(effectiveMode)}`]
         : [];
   }
 }
@@ -161,71 +173,73 @@ async function ensureSession(sessionName) {
 /**
  * 在团队文件中预留队友身份（名字、id、颜色）后启动；启动提交前失败则清理窗格并移除成员。
  */
-async function reserveTeammateAndSpawn(name, teamName, a, teammateColors, E, storageV5) {
-  for (let [T, _] of [
+async function reserveTeammateAndSpawn(name, teamName, extraMemberFields, teammateColors, spawn, storageV5) {
+  for (let [fieldName, fieldValue] of [
     ["name", name],
     ["team_name", teamName],
   ])
-    if (hasControlChars(_)) {
+    if (hasControlChars(fieldValue)) {
       logFeatureBad("subagent_launch", "subagent_teammate_control_chars");
       throw Error(
-        T === "name"
+        fieldName === "name"
           ? "Invalid name: control characters are not allowed in agent or team names"
           : "Invalid team_name: control characters are not allowed in agent or team names",
       );
     }
-  let o = await updateTeamFile(
+  let reservation = await updateTeamFile(
     teamName,
-    (T) => {
-      let _ = uniqueTeammateName(name, T);
-      let u = agentAddress(_, teamName);
-      let w = teammateColors.assign(u);
-      T.members.push({
-        agentId: u,
-        name: _,
-        color: w,
+    (teamFile) => {
+      let uniqueName = uniqueTeammateName(name, teamFile);
+      let teammateId = agentAddress(uniqueName, teamName);
+      let teammateColor = teammateColors.assign(teammateId);
+      teamFile.members.push({
+        agentId: teammateId,
+        name: uniqueName,
+        color: teammateColor,
         joinedAt: Date.now(),
         tmuxPaneId: "",
         subscriptions: [],
-        ...a,
+        ...extraMemberFields,
       });
       return {
-        sanitizedName: _,
-        teammateId: u,
-        teammateColor: w,
+        sanitizedName: uniqueName,
+        teammateId,
+        teammateColor,
       };
     },
     undefined,
     storageV5,
   );
-  if (!o) {
+  if (!reservation) {
     logFeatureBad("subagent_launch", "subagent_teammate_internal_invariant");
     throw Error("reserveTeammateIdentity: updateTeamFile returned undefined");
   }
-  let h = false;
-  let r;
+  let committed = false;
+  let paneCleanup;
   try {
-    return await E(
-      o,
+    return await spawn(
+      reservation,
       () => {
-        h = true;
+        committed = true;
       },
-      (T) => {
-        r = T;
+      (registerCleanup) => {
+        paneCleanup = registerCleanup;
       },
     );
   } catch (error) {
-    if (!h) {
-      if (r)
+    if (!committed) {
+      if (paneCleanup)
         try {
-          await r();
+          await paneCleanup();
         } catch (error) {
-          logForDebugging(`[spawnTeammate] pane cleanup failed for ${o.teammateId}: ${errorMessage(error)}`);
+          logForDebugging(
+            `[spawnTeammate] pane cleanup failed for ${reservation.teammateId}: ${errorMessage(error)}`,
+          );
         }
-      await removeTeamMember(teamName, o.teammateId, storageV5);
+      await removeTeamMember(teamName, reservation.teammateId, storageV5);
     } else
       logForDebugging(
-        `[spawnTeammate] post-commit failure for ${o.teammateId}; entry kept (agent already running): ${errorMessage(error)}`,
+        `[spawnTeammate] post-commit failure for ${reservation.teammateId}; entry kept (agent already running): ${errorMessage(error)}`,
       );
     throw error;
   }
@@ -234,21 +248,21 @@ async function reserveTeammateAndSpawn(name, teamName, a, teammateColors, E, sto
 /**
  * 生成不冲突的队友名（拒绝保留名与 agent id 形状，重名加 -N）。
  */
-function uniqueTeammateName(e, n) {
-  let a = sanitizeAgentName(e);
-  if (a === MAIN)
+function uniqueTeammateName(rawName, teamFile) {
+  let sanitizedName = sanitizeAgentName(rawName);
+  if (sanitizedName === MAIN)
     throw Error(
       '"main" is a reserved recipient name (SendMessage routes it to the main conversation) \u2014 choose another teammate name.',
     );
-  if (isReservedSessionName(a))
+  if (isReservedSessionName(sanitizedName))
     throw Error(
       'That teammate name is a reserved name ("main", "team-lead", "user" or "system", in any spelling) or has the shape of an agent id, which already addresses an agent directly \u2014 choose another teammate name.',
     );
-  let l = new Set(n.members.map((member) => member.name.toLowerCase()));
-  if (!l.has(a.toLowerCase())) return a;
-  let E = 2;
-  while (l.has(`${a}-${E}`.toLowerCase())) E++;
-  return `${a}-${E}`;
+  let takenNames = new Set(teamFile.members.map((member) => member.name.toLowerCase()));
+  if (!takenNames.has(sanitizedName.toLowerCase())) return sanitizedName;
+  let suffix = 2;
+  while (takenNames.has(`${sanitizedName}-${suffix}`.toLowerCase())) suffix++;
+  return `${sanitizedName}-${suffix}`;
 }
 //@ chunk-cne5hsvz.js:23023-26086 fingerprint = handleSpawnSplitPane (0.76)
 /**
@@ -270,7 +284,7 @@ async function handleSpawnSplitPane(input, context) {
       "Internal error: session team not initialized. This should have happened at startup when agent swarms are enabled.",
     );
   }
-  let w = cwd || getCwd();
+  let targetCwd = cwd || getCwd();
   return reserveTeammateAndSpawn(
     name,
     teamName,
@@ -279,10 +293,10 @@ async function handleSpawnSplitPane(input, context) {
       model,
       prompt,
       planModeRequired: plan_mode_required,
-      cwd: w,
+      cwd: targetCwd,
     },
     context.teammateColors,
-    async ({ sanitizedName, teammateId, teammateColor }, P, s) => {
+    async ({ sanitizedName, teammateId, teammateColor }, markCommitted, registerCleanup) => {
       let detectionResult = await detectAndGetBackend();
       if (detectionResult.needsIt2Setup && context.requestDialog) {
         let tmuxAvailable = await isTmuxAvailable();
@@ -303,7 +317,7 @@ async function handleSpawnSplitPane(input, context) {
         sanitizedName,
         teammateColor,
       );
-      s(() => detectionResult.backend.killPane(paneId, !insideTmux));
+      registerCleanup(() => detectionResult.backend.killPane(paneId, !insideTmux));
       await setMemberPaneInfo(
         teamName,
         teammateId,
@@ -341,7 +355,7 @@ async function handleSpawnSplitPane(input, context) {
           : envAssignment("--model", model);
       let flagsStr = inheritedFlags ? ` ${inheritedFlags}` : "";
       let envStr = teammateEnvArgs();
-      let spawnCommand = `cd ${shellQuoteArgs([w])} && env ${envStr} ${shellQuoteArgs(binaryPath)} ${teammateArgs}${flagsStr}`;
+      let spawnCommand = `cd ${shellQuoteArgs([targetCwd])} && env ${envStr} ${shellQuoteArgs(binaryPath)} ${teammateArgs}${flagsStr}`;
       await clearMailbox(sanitizedName, teamName, context.storageV5);
       if (
         (await writeToMailbox(
@@ -363,7 +377,7 @@ async function handleSpawnSplitPane(input, context) {
       }
       await detectionResult.backend.sendCommandToPane(paneId, spawnCommand, !insideTmux);
       logFeatureOk("swarm_pane_spawn");
-      P();
+      markCommitted();
       let sessionName = insideTmux ? "current" : CLAUDE_SWARM;
       let windowName = insideTmux ? "current" : "swarm-view";
       setAppState((prev) => ({
@@ -381,7 +395,7 @@ async function handleSpawnSplitPane(input, context) {
               color: teammateColor,
               tmuxSessionName: sessionName,
               tmuxPaneId: paneId,
-              cwd: w,
+              cwd: targetCwd,
               spawnedAt: Date.now(),
             },
           },
@@ -398,7 +412,7 @@ async function handleSpawnSplitPane(input, context) {
         insideTmux,
         backendType: detectionResult.backend.type,
         toolUseId: context.toolUseId,
-        cwd: w,
+        cwd: targetCwd,
         description: input.description,
         spawnedWith: {
           description: input.description,
@@ -433,7 +447,7 @@ async function handleSpawnSplitPane(input, context) {
 async function handleSpawnSeparateWindow(input, context) {
   let { setAppState, getAppState } = context;
   let { name, prompt, agent_type, cwd, plan_mode_required } = input;
-  let T = teammateModelFlags(input.model, getAppState().mainLoopModel, input.modelSource);
+  let modelFlags = teammateModelFlags(input.model, getAppState().mainLoopModel, input.modelSource);
   if (!name || !prompt) {
     logFeatureBad("subagent_launch", "subagent_teammate_missing_params");
     throw Error("name and prompt are required for spawn operation");
@@ -446,19 +460,19 @@ async function handleSpawnSeparateWindow(input, context) {
       "Internal error: session team not initialized. This should have happened at startup when agent swarms are enabled.",
     );
   }
-  let w = cwd || getCwd();
+  let targetCwd = cwd || getCwd();
   return reserveTeammateAndSpawn(
     name,
     teamName,
     {
       agentType: agent_type,
-      model: T,
+      model: modelFlags,
       prompt,
       planModeRequired: plan_mode_required,
-      cwd: w,
+      cwd: targetCwd,
     },
     context.teammateColors,
-    async ({ sanitizedName, teammateId, teammateColor }, P, s) => {
+    async ({ sanitizedName, teammateId, teammateColor }, markCommitted, registerCleanup) => {
       let windowName = `teammate-${sanitizeName(sanitizedName)}`;
       await ensureSession(CLAUDE_SWARM);
       let createWindowResult = await execFileNoThrow(
@@ -471,7 +485,7 @@ async function handleSpawnSeparateWindow(input, context) {
         throw Error(`Failed to create tmux window: ${createWindowResult.stderr}`);
       }
       let paneId = createWindowResult.stdout.trim();
-      s(() => execFileNoThrow(TMUX, ["kill-pane", "-t", paneId], getPDFPageCount()));
+      registerCleanup(() => execFileNoThrow(TMUX, ["kill-pane", "-t", paneId], getPDFPageCount()));
       await setMemberPaneInfo(
         teamName,
         teammateId,
@@ -500,15 +514,15 @@ async function handleSpawnSeparateWindow(input, context) {
         autoPickedByLevel: hasLeftProactivityBaseline(appState.toolPermissionContext),
         sessionEffort: appState.sessionEffort,
         permissionRules: getToolPermissionContext(context),
-        skipModel: !!T,
+        skipModel: !!modelFlags,
       });
-      if (T)
+      if (modelFlags)
         inheritedFlags = inheritedFlags
-          ? `${inheritedFlags} ${envAssignment("--model", T)}`
-          : envAssignment("--model", T);
+          ? `${inheritedFlags} ${envAssignment("--model", modelFlags)}`
+          : envAssignment("--model", modelFlags);
       let flagsStr = inheritedFlags ? ` ${inheritedFlags}` : "";
       let envStr = teammateEnvArgs();
-      let spawnCommand = `cd ${shellQuoteArgs([w])} && env ${envStr} ${shellQuoteArgs(binaryPath)} ${teammateArgs}${flagsStr}`;
+      let spawnCommand = `cd ${shellQuoteArgs([targetCwd])} && env ${envStr} ${shellQuoteArgs(binaryPath)} ${teammateArgs}${flagsStr}`;
       await clearMailbox(sanitizedName, teamName, context.storageV5);
       if (
         (await writeToMailbox(
@@ -540,7 +554,7 @@ async function handleSpawnSeparateWindow(input, context) {
         logFeatureBad("subagent_launch", "subagent_teammate_tmux_respawn_failed");
         throw error;
       }
-      P();
+      markCommitted();
       setAppState((prev) => ({
         ...prev,
         teamContext: {
@@ -556,7 +570,7 @@ async function handleSpawnSeparateWindow(input, context) {
               color: teammateColor,
               tmuxSessionName: CLAUDE_SWARM,
               tmuxPaneId: paneId,
-              cwd: w,
+              cwd: targetCwd,
               spawnedAt: Date.now(),
             },
           },
@@ -573,7 +587,7 @@ async function handleSpawnSeparateWindow(input, context) {
         insideTmux: false,
         backendType: "tmux",
         toolUseId: context.toolUseId,
-        cwd: w,
+        cwd: targetCwd,
         description: input.description,
         spawnedWith: {
           description: input.description,
@@ -586,7 +600,7 @@ async function handleSpawnSeparateWindow(input, context) {
           teammate_id: teammateId,
           agent_id: teammateId,
           agent_type,
-          model: T,
+          model: modelFlags,
           name: sanitizedName,
           color: teammateColor,
           tmux_session_name: CLAUDE_SWARM,
@@ -626,9 +640,9 @@ function registerOutOfProcessTeammateTask(
   let taskId = generateTaskId("in_process_teammate");
   let description_2 = description || clipPromptDescription(prompt);
   let abortController = new AbortController();
-  let s;
-  let S = isPaneBackendType(backendType)
-    ? () => (s ??= getBackendByType(backendType).killPane(paneId, !insideTmux))
+  let paneKillPromise;
+  let paneTeardown = isPaneBackendType(backendType)
+    ? () => (paneKillPromise ??= getBackendByType(backendType).killPane(paneId, !insideTmux))
     : undefined;
   let taskState = {
     ...createTaskStateBase(taskId, "in_process_teammate", description_2, toolUseId),
@@ -652,14 +666,14 @@ function registerOutOfProcessTeammateTask(
     lastReportedToolCount: 0,
     lastReportedTokenCount: 0,
     pendingUserMessages: [],
-    paneTeardown: S,
+    paneTeardown,
   };
   setAppState.register(taskState);
-  if (S)
+  if (paneTeardown)
     abortController.signal.addEventListener(
       "abort",
       () => {
-        S();
+        paneTeardown();
       },
       {
         once: true,
@@ -700,7 +714,7 @@ async function handleSpawnInProcess(input, context) {
       cwd: getCwd(),
     },
     context.teammateColors,
-    async ({ sanitizedName, teammateId, teammateColor }, y) => {
+    async ({ sanitizedName, teammateId, teammateColor }, markCommitted) => {
       await setMemberPaneInfo(
         teamName,
         teammateId,
@@ -731,7 +745,7 @@ async function handleSpawnInProcess(input, context) {
         logForDebugging(`[handleSpawnInProcess] spawn failed: ${result.error}`);
         throw Error("Failed to spawn in-process teammate");
       }
-      y();
+      markCommitted();
       startInProcessTeammate({
         identity: result.identity,
         taskId: result.taskId,
@@ -857,17 +871,17 @@ class PaneFallbackNoticeState {
 /**
  * 无法打开队友窗格时提示改为进程内运行（只提示一次）。
  */
-function notifyPaneFallback(e, onProgress) {
-  if (e.shown) return;
-  e.shown = true;
-  let a = isInITerm2()
+function notifyPaneFallback(fallbackState, onProgress) {
+  if (fallbackState.shown) return;
+  fallbackState.shown = true;
+  let settingsHint = isInITerm2()
     ? 'To force iTerm2 panes, set teammateMode: "iterm2" in settings and enable the iTerm2 Python API (Preferences > General > Magic).'
     : 'To use terminal panes, set teammateMode: "tmux" in settings.';
   onProgress?.({
     type: "notification",
     notification: {
       key: "teammate-auto-fallback",
-      text: `Couldn't open a teammate pane \u2014 running in-process instead. ${a}`,
+      text: `Couldn't open a teammate pane \u2014 running in-process instead. ${settingsHint}`,
       color: "warning",
       priority: "high",
     },
@@ -887,16 +901,4 @@ async function spawnTeammateChecked(spawnInput, context, onProgress) {
   }
   return handleSpawn(spawnInput, context, onProgress);
 }
-//@ chunk-hntsfzas.js:6798-6916 fingerprint = getTeammateCommand (1)
-/**
- * 队友启动命令：编译版用 execPath，否则 argv[1]。
- */
-function getTeammateCommand() {
-  try {
-    if (isStandaloneExecutable()) return process.execPath || "unknown";
-    return process.argv[1] || "unknown";
-  } catch {
-    return "unknown";
-  }
-}
-export { buildInheritedCliFlags_2, getTeammateCommand };
+export { buildInheritedCliFlags_2, getTeammateCommand, spawnTeammateChecked };

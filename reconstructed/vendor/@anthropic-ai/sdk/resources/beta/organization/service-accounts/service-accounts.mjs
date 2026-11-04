@@ -8,7 +8,7 @@
 import { APIResource } from "../../../../core/resource.mjs";
 import { Workspaces_2 } from "./workspaces.mjs";
 import { buildHeaders } from "../../../../internal/headers.mjs";
-import { I } from "../../../../internal/utils/path.mjs";
+import { parseUrl_2 } from "../../../../internal/utils/path.mjs";
 import { TokenPage } from "../../../../core/pagination.mjs";
 
 //@ chunk-hwmsct5x.js:125120-126331 esm-fingerprint
@@ -37,7 +37,7 @@ var ServiceAccounts = (() => {
     }
     retrieve(serviceAccountID, params = {}, options) {
       let { betas } = params ?? {};
-      return this._client.get(I`/v1/organizations/service_accounts/${serviceAccountID}?beta=true`, {
+      return this._client.get(parseUrl_2`/v1/organizations/service_accounts/${serviceAccountID}?beta=true`, {
         ...options,
         headers: buildHeaders([
           {
@@ -53,7 +53,7 @@ var ServiceAccounts = (() => {
     }
     update(serviceAccountID, params, options) {
       let { betas, ...body } = params;
-      return this._client.post(I`/v1/organizations/service_accounts/${serviceAccountID}?beta=true`, {
+      return this._client.post(parseUrl_2`/v1/organizations/service_accounts/${serviceAccountID}?beta=true`, {
         body,
         ...options,
         headers: buildHeaders([
@@ -87,19 +87,22 @@ var ServiceAccounts = (() => {
     }
     archive(serviceAccountID, params = {}, options) {
       let { betas } = params ?? {};
-      return this._client.post(I`/v1/organizations/service_accounts/${serviceAccountID}/archive?beta=true`, {
-        ...options,
-        headers: buildHeaders([
-          {
-            ...(betas?.toString() != null
-              ? {
-                  "anthropic-beta": betas?.toString(),
-                }
-              : undefined),
-          },
-          options?.headers,
-        ]),
-      });
+      return this._client.post(
+        parseUrl_2`/v1/organizations/service_accounts/${serviceAccountID}/archive?beta=true`,
+        {
+          ...options,
+          headers: buildHeaders([
+            {
+              ...(betas?.toString() != null
+                ? {
+                    "anthropic-beta": betas?.toString(),
+                  }
+                : undefined),
+            },
+            options?.headers,
+          ]),
+        },
+      );
     }
   }
   ServiceAccounts.Workspaces = Workspaces_2;

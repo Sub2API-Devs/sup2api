@@ -10,55 +10,66 @@
  */
 import { isAbsolute } from "path";
 import { getRemoteHostSessionCount } from "../../commands/insights.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-q8cqcff6.js:4038-4159 placement
-var QUOTED_PARAM_RE = String.raw`'([^']*)'(?:(=)(?:'([^']*)')?)?`;
-var GIT_CONFIG_PARAMETERS_RE = new RegExp(
-  String.raw`^(?:${QUOTED_PARAM_RE}(?:[ \t\r\n]+${QUOTED_PARAM_RE})*)?[ \t\r\n]*$`,
-);
+var QUOTED_PARAM_RE; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var GIT_CONFIG_PARAMETERS_RE;
+deferInit("chunk-q8cqcff6.js:4038", () => {
+  QUOTED_PARAM_RE = String.raw`'([^']*)'(?:(=)(?:'([^']*)')?)?`;
+  GIT_CONFIG_PARAMETERS_RE = new RegExp(
+    String.raw`^(?:${QUOTED_PARAM_RE}(?:[ \t\r\n]+${QUOTED_PARAM_RE})*)?[ \t\r\n]*$`,
+  );
+});
 //@ chunk-q8cqcff6.js:4159-4811 placement
-function buildGitConfigEnv(e = process.env) {
-  let n = [];
-  let GIT_CONFIG_COUNT = e.GIT_CONFIG_COUNT;
+function buildGitConfigEnv(env = process.env) {
+  let pairs = [];
+  let GIT_CONFIG_COUNT = env.GIT_CONFIG_COUNT;
   if (GIT_CONFIG_COUNT !== undefined) {
     if (!/^\d{1,3}$/.test(GIT_CONFIG_COUNT)) return {};
     for (let j = 0; j < Number(GIT_CONFIG_COUNT); j++) {
-      let y = e[`GIT_CONFIG_KEY_${j}`];
-      let P = e[`GIT_CONFIG_VALUE_${j}`];
-      if (y === undefined || P === undefined) return {};
-      n.push([y, P]);
+      let key = env[`GIT_CONFIG_KEY_${j}`];
+      let value = env[`GIT_CONFIG_VALUE_${j}`];
+      if (key === undefined || value === undefined) return {};
+      pairs.push([key, value]);
     }
   }
-  let GIT_CONFIG_PARAMETERS = e.GIT_CONFIG_PARAMETERS;
+  let GIT_CONFIG_PARAMETERS = env.GIT_CONFIG_PARAMETERS;
   if (GIT_CONFIG_PARAMETERS !== undefined && GIT_CONFIG_PARAMETERS_RE.test(GIT_CONFIG_PARAMETERS))
-    for (let [, h = "", y, P = ""] of GIT_CONFIG_PARAMETERS.matchAll(new RegExp(QUOTED_PARAM_RE, "g"))) {
-      let O = y === undefined ? h.indexOf("=") : -1;
-      n.push(y !== undefined || O === -1 ? [h, P] : [h.slice(0, O), h.slice(O + 1)]);
+    for (let [, quotedKey = "", separator, quotedValue = ""] of GIT_CONFIG_PARAMETERS.matchAll(
+      new RegExp(QUOTED_PARAM_RE, "g"),
+    )) {
+      let separatorIndex = separator === undefined ? quotedKey.indexOf("=") : -1;
+      pairs.push(
+        separator !== undefined || separatorIndex === -1
+          ? [quotedKey, quotedValue]
+          : [quotedKey.slice(0, separatorIndex), quotedKey.slice(separatorIndex + 1)],
+      );
     }
-  let S = {};
-  let E = 0;
-  for (let [h, y] of n)
-    if (h.toLowerCase() === "safe.directory") {
-      S[`GIT_CONFIG_KEY_${E}`] = "safe.directory";
-      S[`GIT_CONFIG_VALUE_${E}`] = y;
-      E++;
+  let envOut = {};
+  let index = 0;
+  for (let [key, value] of pairs)
+    if (key.toLowerCase() === "safe.directory") {
+      envOut[`GIT_CONFIG_KEY_${index}`] = "safe.directory";
+      envOut[`GIT_CONFIG_VALUE_${index}`] = value;
+      index++;
     }
-  if (E === 0) return {};
-  S.GIT_CONFIG_COUNT = String(E);
-  return S;
+  if (index === 0) return {};
+  envOut.GIT_CONFIG_COUNT = String(index);
+  return envOut;
 }
 //@ chunk-q8cqcff6.js:4811-4976 placement
 /**
  * 保留绝对的 GIT_CONFIG_GLOBAL/SYSTEM 并构造安全 git 环境。
  */
 function buildGitConfigScopedEnv() {
-  let e = {};
-  for (let n of ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"]) {
-    let r = process.env[n];
-    if (r !== undefined && (r === "" || isAbsolute(r))) e[n] = r;
+  let envOut = {};
+  for (let varName of ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"]) {
+    let value = process.env[varName];
+    if (value !== undefined && (value === "" || isAbsolute(value))) envOut[varName] = value;
   }
   return getRemoteHostSessionCount({
-    ...e,
+    ...envOut,
     ...buildGitConfigEnv(),
   });
 }

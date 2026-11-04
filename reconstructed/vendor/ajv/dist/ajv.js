@@ -5,7 +5,7 @@
  * pieces: chunk-s82q9s4x.js (1)
  * attribution: cjs-fingerprint 1
  */
-import { x } from "../../../runtime/bun-runtime.js";
+import { __commonJS } from "../../../runtime/bun-runtime.js";
 import { require_core_2 } from "./core.js";
 import { require_draft7_2 } from "./vocabularies/draft7.js";
 import { require_discriminator } from "./vocabularies/discriminator/index.js";
@@ -16,7 +16,7 @@ import { require_validation_error_2 } from "./runtime/validation_error.js";
 import { require_ref_error_2 } from "./compile/ref_error.js";
 
 //@ chunk-s82q9s4x.js:113905-115579 cjs-fingerprint
-var require_ajv = x(function (cjsExports, cjsModule) {
+var require_ajv = __commonJS(function (cjsExports, cjsModule) {
   Object.defineProperty(cjsExports, "__esModule", {
     value: true,
   });

@@ -31,6 +31,7 @@ import {
 import { PEER_MESSAGE_HEADER } from "../../utils/crossSessionMessages.js";
 import { streamFallbackWarning } from "./streamFallbackWarning.js";
 import { jsonStringify } from "../../utils/slowOperations.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-g54kbxqw.js:46742-47378 placement
 /**
@@ -64,51 +65,58 @@ var CONTEXT_BLOCK_KINDS = ["context", "reminder", "text", "image", "other"];
 var MAX_REPORTED_MESSAGE_PARTS = 12;
 var MAX_REPORTED_BLOCK_HASHES = 16;
 //@ chunk-g54kbxqw.js:47378-48028 placement
-function diffSystemParts(prevMsg0Shape, n) {
-  let s = {
+function diffSystemParts(prevMsg0Shape, next) {
+  let diff = {
     changedBlocks: [],
     changedSections: [],
     addedSections: [],
     removedSections: [],
   };
-  let min = Math.min(prevMsg0Shape.blocks.length, n.blocks.length);
+  let min = Math.min(prevMsg0Shape.blocks.length, next.blocks.length);
   for (let j = 0; j < min; j++) {
-    let C = prevMsg0Shape.blocks[j];
-    let R = n.blocks[j];
-    if (C.kind !== R.kind || C.len !== R.len || C.hash !== R.hash)
-      s.changedBlocks.push({
+    let prevBlock = prevMsg0Shape.blocks[j];
+    let nextBlock = next.blocks[j];
+    if (
+      prevBlock.kind !== nextBlock.kind ||
+      prevBlock.len !== nextBlock.len ||
+      prevBlock.hash !== nextBlock.hash
+    )
+      diff.changedBlocks.push({
         index: j,
-        kind: R.kind,
-        delta: R.len - C.len,
+        kind: nextBlock.kind,
+        delta: nextBlock.len - prevBlock.len,
       });
   }
-  let h = new Map(prevMsg0Shape.sections.map((section) => [section.name, section]));
-  let y = new Set(n.sections.map((section) => section.name));
-  for (let section of n.sections) {
-    let C = h.get(section.name);
-    if (!C) s.addedSections.push(section.name);
-    else if (C.hash !== section.hash || C.len !== section.len)
-      s.changedSections.push({
+  let sections = new Map(prevMsg0Shape.sections.map((section) => [section.name, section]));
+  let nextNames = new Set(next.sections.map((section) => section.name));
+  for (let section of next.sections) {
+    let sectionEntry = sections.get(section.name);
+    if (!sectionEntry) diff.addedSections.push(section.name);
+    else if (sectionEntry.hash !== section.hash || sectionEntry.len !== section.len)
+      diff.changedSections.push({
         name: section.name,
-        delta: section.len - C.len,
+        delta: section.len - sectionEntry.len,
       });
   }
-  for (let section of prevMsg0Shape.sections) if (!y.has(section.name)) s.removedSections.push(section.name);
-  return s;
+  for (let section of prevMsg0Shape.sections)
+    if (!nextNames.has(section.name)) diff.removedSections.push(section.name);
+  return diff;
 }
 //@ chunk-g54kbxqw.js:48028-48038 placement
 var MAX_DIFF_ENTRIES = 32;
 //@ chunk-g54kbxqw.js:48038-48173 placement
 function foldedAttachmentIndex(messages) {
-  let index = messages.findIndex((r) => r.type === "api_system" && r.foldedAttachmentSpans !== undefined);
-  let s = messages[index];
-  return s === undefined ? undefined : foldedAttachmentText(s, index);
+  let index = messages.findIndex(
+    (message) => message.type === "api_system" && message.foldedAttachmentSpans !== undefined,
+  );
+  let message = messages[index];
+  return message === undefined ? undefined : foldedAttachmentText(message, index);
 }
 //@ chunk-g54kbxqw.js:48173-48466 placement
-function foldedAttachmentText(e, index) {
-  if (e.type !== "api_system" || !e.foldedAttachmentSpans) return;
-  let content = e.message.content;
-  let foldedAttachmentSpans = e.foldedAttachmentSpans;
+function foldedAttachmentText(message, index) {
+  if (message.type !== "api_system" || !message.foldedAttachmentSpans) return;
+  let content = message.message.content;
+  let foldedAttachmentSpans = message.foldedAttachmentSpans;
   return {
     index,
     len: content.length,
@@ -127,54 +135,54 @@ function foldedAttachmentText(e, index) {
   };
 }
 //@ chunk-g54kbxqw.js:48466-48771 placement
-function diffPromptParts(prevSysFoldShape, n) {
-  let changedParts = changedPartIndexes(prevSysFoldShape.parts, n.parts);
-  let r = countPartsByType(prevSysFoldShape.parts);
-  let h = countPartsByType(n.parts);
-  let mapped = prevSysFoldShape.parts.map(partSignature);
-  let mapped_2 = n.parts.map(partSignature);
+function diffPromptParts(parts, next) {
+  let changedParts = changedPartIndexes(parts.parts, next.parts);
+  let prevCounts = countPartsByType(parts.parts);
+  let nextCounts = countPartsByType(next.parts);
+  let mapped = parts.parts.map(partSignature);
+  let mapped_2 = next.parts.map(partSignature);
   return {
     changedParts,
-    addedTypes: typesDeltaList(h, r),
-    removedTypes: typesDeltaList(r, h),
+    addedTypes: typesDeltaList(nextCounts, prevCounts),
+    removedTypes: typesDeltaList(prevCounts, nextCounts),
     reordered:
       mapped.length === mapped_2.length &&
-      mapped.some((C, R) => C !== mapped_2[R]) &&
+      mapped.some((entry, index) => entry !== mapped_2[index]) &&
       mapped.toSorted().join() === mapped_2.toSorted().join(),
-    otherDelta: n.len - sumPartLengths(n) - (prevSysFoldShape.len - sumPartLengths(prevSysFoldShape)),
+    otherDelta: next.len - sumPartLengths(next) - (parts.len - sumPartLengths(parts)),
   };
 }
 //@ chunk-g54kbxqw.js:48771-48933 placement
 function changedPartIndexes(parts, parts_2) {
-  let s = [];
-  for (let [r, h] of parts_2.entries()) {
-    let y = parts[r];
-    if (y?.type === h.type && y.hash !== h.hash)
-      s.push({
-        position: r,
-        type: h.type,
-        delta: h.len - y.len,
+  let out = [];
+  for (let [index, part] of parts_2.entries()) {
+    let original = parts[index];
+    if (original?.type === part.type && original.hash !== part.hash)
+      out.push({
+        position: index,
+        type: part.type,
+        delta: part.len - original.len,
       });
   }
-  return s;
+  return out;
 }
 //@ chunk-g54kbxqw.js:48933-49021 placement
 function countPartsByType(parts) {
-  let n = new Map();
-  for (let s of parts) n.set(s.type, (n.get(s.type) ?? 0) + 1);
-  return n;
+  let counts = new Map();
+  for (let part of parts) counts.set(part.type, (counts.get(part.type) ?? 0) + 1);
+  return counts;
 }
 //@ chunk-g54kbxqw.js:49021-49112 placement
-function typesDeltaList(e, n) {
-  return [...e].flatMap(([s, r]) => Array(Math.max(0, r - (n.get(s) ?? 0))).fill(s));
+function typesDeltaList(prev, next) {
+  return [...prev].flatMap(([type, count]) => Array(Math.max(0, count - (next.get(type) ?? 0))).fill(type));
 }
 //@ chunk-g54kbxqw.js:49112-49155 placement
-function partSignature(e) {
-  return `${e.type}:${e.hash}`;
+function partSignature(part) {
+  return `${part.type}:${part.hash}`;
 }
 //@ chunk-g54kbxqw.js:49155-49210 placement
-function sumPartLengths(e) {
-  return e.parts.reduce((acc, part) => acc + part.len, 0);
+function sumPartLengths(parts) {
+  return parts.parts.reduce((acc, part) => acc + part.len, 0);
 }
 //@ chunk-g54kbxqw.js:49247-49812 placement
 /**
@@ -188,9 +196,9 @@ No human input has been received since the last genuine user message in this con
 
 `;
 //@ chunk-g54kbxqw.js:49812-49877 placement
-function withSystemNotificationPrefix(e) {
-  if (e.startsWith(BACKGROUND_TASK_EVENT_NOTICE)) return e;
-  return `${BACKGROUND_TASK_EVENT_NOTICE}${e}`;
+function withSystemNotificationPrefix(text) {
+  if (text.startsWith(BACKGROUND_TASK_EVENT_NOTICE)) return text;
+  return `${BACKGROUND_TASK_EVENT_NOTICE}${text}`;
 }
 //@ chunk-g54kbxqw.js:49877-50557 placement
 var BACKGROUND_TASK_EVENT_PREFIX = `${"[SYSTEM NOTIFICATION - NOT USER INPUT]"}
@@ -200,9 +208,10 @@ The notification brings no human input of its own: apart from the user's own mes
 
 `;
 //@ chunk-g54kbxqw.js:50557-50641 placement
-function withBackgroundTaskPrefix(e) {
-  if (e.startsWith(BACKGROUND_TASK_EVENT_PREFIX) || e.startsWith(BACKGROUND_TASK_EVENT_NOTICE)) return e;
-  return `${BACKGROUND_TASK_EVENT_PREFIX}${e}`;
+function withBackgroundTaskPrefix(text) {
+  if (text.startsWith(BACKGROUND_TASK_EVENT_PREFIX) || text.startsWith(BACKGROUND_TASK_EVENT_NOTICE))
+    return text;
+  return `${BACKGROUND_TASK_EVENT_PREFIX}${text}`;
 }
 //@ chunk-g54kbxqw.js:50641-50700 placement = memoryFreshnessNote (1)
 var BACKGROUND_EVENT_REMINDER_OPEN = `<system-reminder>
@@ -210,16 +219,16 @@ ${BACKGROUND_TASK_EVENT_NOTICE}`;
 var SYSTEM_REMINDER_CLOSE = `
 </system-reminder>`;
 //@ chunk-g54kbxqw.js:50700-50797 placement
-function escapeSystemReminderClose(e) {
-  return e.replaceAll(/<\s*\/\s*system-reminder\s*>/gi, "&lt;/system-reminder&gt;");
+function escapeSystemReminderClose(text) {
+  return text.replaceAll(/<\s*\/\s*system-reminder\s*>/gi, "&lt;/system-reminder&gt;");
 }
 //@ chunk-g54kbxqw.js:50797-50881 placement
-function escapeSystemReminderTags(e) {
-  return e.replaceAll(/<(?=\s*(?:\/\s*)?system-reminder\b)/gi, "&lt;");
+function escapeSystemReminderTags(text) {
+  return text.replaceAll(/<(?=\s*(?:\/\s*)?system-reminder\b)/gi, "&lt;");
 }
 //@ chunk-g54kbxqw.js:50881-50960 placement
-function escapeSystemReminderCloseTag(e) {
-  return e.replaceAll(/<(?=\s*\/\s*system-reminder\b)/gi, "&lt;");
+function escapeSystemReminderCloseTag(text) {
+  return text.replaceAll(/<(?=\s*\/\s*system-reminder\b)/gi, "&lt;");
 }
 //@ chunk-g54kbxqw.js:50960-51067 placement = ensureSystemReminderWrap (1)
 function ensureSystemReminderWrap(msg) {
@@ -239,9 +248,9 @@ The schedule attests that the prompt was stored ahead of time by an authorized s
 
 `;
 //@ chunk-g54kbxqw.js:51949-52033 placement
-function withScheduledTaskPrefix(e) {
-  if (e.startsWith(SCHEDULED_TASK_NOTICE) || e.startsWith(BACKGROUND_TASK_EVENT_NOTICE)) return e;
-  return `${SCHEDULED_TASK_NOTICE}${e}`;
+function withScheduledTaskPrefix(text) {
+  if (text.startsWith(SCHEDULED_TASK_NOTICE) || text.startsWith(BACKGROUND_TASK_EVENT_NOTICE)) return text;
+  return `${SCHEDULED_TASK_NOTICE}${text}`;
 }
 //@ chunk-g54kbxqw.js:52033-52100 placement
 var PREFIX_BREAK_EVENT = "tengu_prefix_break_hashes";
@@ -259,10 +268,10 @@ function prefixBreakSampleRate() {
     : 0;
 }
 //@ chunk-g54kbxqw.js:52232-52316 placement
-function isSampledIn(sessionId, n) {
-  if (!(n > 0)) return false;
-  if (n >= 1) return true;
-  return (computeHash(sessionId) >>> 0) / 4294967296 < n;
+function isSampledIn(sessionId, targetSessionId) {
+  if (!(targetSessionId > 0)) return false;
+  if (targetSessionId >= 1) return true;
+  return (computeHash(sessionId) >>> 0) / 4294967296 < targetSessionId;
 }
 //@ chunk-g54kbxqw.js:52316-52350 placement
 function isPrefixBreakSampled() {
@@ -272,48 +281,57 @@ function isPrefixBreakSampled() {
 /**
  * 已知内容块类型清单（text、image…compaction、mid_conv_system、fallback）及其 Set，用于统计时归类。
  */
-var KNOWN_CONTENT_BLOCK_TYPES = [
-  "text",
-  "image",
-  "document",
-  "search_result",
-  "thinking",
-  "redacted_thinking",
-  "tool_use",
-  "tool_result",
-  "tool_reference",
-  "server_tool_use",
-  "web_search_tool_result",
-  "web_fetch_tool_result",
-  "advisor_tool_result",
-  "code_execution_tool_result",
-  "bash_code_execution_tool_result",
-  "text_editor_code_execution_tool_result",
-  "tool_search_tool_result",
-  "mcp_tool_use",
-  "mcp_tool_result",
-  "container_upload",
-  "compaction",
-  "mid_conv_system",
-  "fallback",
-];
-var CONTENT_BLOCK_TYPE_BUCKETS = [...KNOWN_CONTENT_BLOCK_TYPES, "other"];
-var contentBlockTypeSet = new Set(CONTENT_BLOCK_TYPE_BUCKETS);
+var KNOWN_CONTENT_BLOCK_TYPES; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var CONTENT_BLOCK_TYPE_BUCKETS;
+var contentBlockTypeSet;
+deferInit("chunk-g54kbxqw.js:52350", () => {
+  KNOWN_CONTENT_BLOCK_TYPES = [
+    "text",
+    "image",
+    "document",
+    "search_result",
+    "thinking",
+    "redacted_thinking",
+    "tool_use",
+    "tool_result",
+    "tool_reference",
+    "server_tool_use",
+    "web_search_tool_result",
+    "web_fetch_tool_result",
+    "advisor_tool_result",
+    "code_execution_tool_result",
+    "bash_code_execution_tool_result",
+    "text_editor_code_execution_tool_result",
+    "tool_search_tool_result",
+    "mcp_tool_use",
+    "mcp_tool_result",
+    "container_upload",
+    "compaction",
+    "mid_conv_system",
+    "fallback",
+  ];
+  CONTENT_BLOCK_TYPE_BUCKETS = [...KNOWN_CONTENT_BLOCK_TYPES, "other"];
+  contentBlockTypeSet = new Set(CONTENT_BLOCK_TYPE_BUCKETS);
+});
 //@ chunk-g54kbxqw.js:52821-52853 placement
-function isKnownContentBlockType(e) {
-  return contentBlockTypeSet.has(e);
+function isKnownContentBlockType(type) {
+  return contentBlockTypeSet.has(type);
 }
 //@ chunk-g54kbxqw.js:52853-52943 placement = extractErrorTypeFromData (1)
 function contentBlockTypeBucket(block) {
-  let n = "type" in block ? block.type : undefined;
-  return typeof n === "string" && isKnownContentBlockType(n) ? n : "other";
+  let contentBlock = "type" in block ? block.type : undefined;
+  return typeof contentBlock === "string" && isKnownContentBlockType(contentBlock) ? contentBlock : "other";
 }
 //@ chunk-g54kbxqw.js:52943-53003 placement
-var MESSAGE_ROLE_BUCKETS = ["user", "assistant", "system", "other"];
-var messageRoleSet = new Set(MESSAGE_ROLE_BUCKETS);
+var MESSAGE_ROLE_BUCKETS; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+var messageRoleSet;
+deferInit("chunk-g54kbxqw.js:52943", () => {
+  MESSAGE_ROLE_BUCKETS = ["user", "assistant", "system", "other"];
+  messageRoleSet = new Set(MESSAGE_ROLE_BUCKETS);
+});
 //@ chunk-g54kbxqw.js:53003-53035 placement
-function isKnownMessageRole(e) {
-  return messageRoleSet.has(e);
+function isKnownMessageRole(role) {
+  return messageRoleSet.has(role);
 }
 //@ chunk-g54kbxqw.js:53035-53073 placement
 function messageRoleBucket(role) {
@@ -323,19 +341,25 @@ function messageRoleBucket(role) {
 /**
  * 用户消息文本的来源分类（user_context、task_notification、queued_user、peer_message、system_reminder、interrupt、plain）。
  */
-var USER_TEXT_KINDS = [
-  "user_context",
-  "task_notification",
-  "queued_user",
-  "peer_message",
-  "system_reminder",
-  "interrupt",
-  "plain",
-];
-var TEXT_KIND_BUCKETS = [...USER_TEXT_KINDS, ...CONTENT_BLOCK_TYPE_BUCKETS];
-var SYSTEM_REMINDER_OPEN_LINE = `${SYSTEM_REMINDER_OPEN}
+var USER_TEXT_KINDS; // deferred: uses KNOWN_CONTENT_BLOCK_TYPES of its import cycle while loading; runs once the cycle is complete
+var TEXT_KIND_BUCKETS;
+var SYSTEM_REMINDER_OPEN_LINE;
+var TASK_NOTIFICATION_OPEN;
+deferInit("chunk-g54kbxqw.js:53073", () => {
+  USER_TEXT_KINDS = [
+    "user_context",
+    "task_notification",
+    "queued_user",
+    "peer_message",
+    "system_reminder",
+    "interrupt",
+    "plain",
+  ];
+  TEXT_KIND_BUCKETS = [...USER_TEXT_KINDS, ...CONTENT_BLOCK_TYPE_BUCKETS];
+  SYSTEM_REMINDER_OPEN_LINE = `${SYSTEM_REMINDER_OPEN}
 `;
-var TASK_NOTIFICATION_OPEN = `<${TASK_NOTIFICATION}>`;
+  TASK_NOTIFICATION_OPEN = `<${TASK_NOTIFICATION}>`;
+});
 //@ chunk-g54kbxqw.js:53226-53670 placement
 /**
  * 按前缀判断用户文本的来源类别。
@@ -343,18 +367,24 @@ var TASK_NOTIFICATION_OPEN = `<${TASK_NOTIFICATION}>`;
 function classifyUserText(text) {
   if (text.startsWith(USER_CONTEXT_PREFIX)) return "user_context";
   let reminderHeader = parseReminderHeader(text);
-  let s = text.startsWith(SYSTEM_REMINDER_OPEN_LINE)
+  let reminderText = text.startsWith(SYSTEM_REMINDER_OPEN_LINE)
     ? SYSTEM_REMINDER_OPEN_LINE.length
     : reminderHeader !== undefined
       ? REMINDER_ID_OPEN_PREFIX.length + reminderHeader.length + REMINDER_ID_SUFFIX.length + 1
       : 0;
-  if (text.startsWith(SYSTEM_NOTIFICATION_MARKER, s) || text.startsWith(TASK_NOTIFICATION_OPEN, s))
+  if (
+    text.startsWith(SYSTEM_NOTIFICATION_MARKER, reminderText) ||
+    text.startsWith(TASK_NOTIFICATION_OPEN, reminderText)
+  )
     return "task_notification";
-  if (text.startsWith(USER_SENT_MESSAGE_PREFIX, s)) return "queued_user";
-  if (text.startsWith(PEER_MESSAGE_HEADER, s) || text.startsWith(COORDINATOR_MESSAGE_LEAD, s))
+  if (text.startsWith(USER_SENT_MESSAGE_PREFIX, reminderText)) return "queued_user";
+  if (
+    text.startsWith(PEER_MESSAGE_HEADER, reminderText) ||
+    text.startsWith(COORDINATOR_MESSAGE_LEAD, reminderText)
+  )
     return "peer_message";
   if (text.startsWith(SYSTEM_REMINDER_OPEN) || reminderHeader !== undefined) return "system_reminder";
-  if (INTERRUPTION_TEXT_PREFIXES.some((r) => text.startsWith(r))) return "interrupt";
+  if (INTERRUPTION_TEXT_PREFIXES.some((prefix) => text.startsWith(prefix))) return "interrupt";
   return "plain";
 }
 //@ chunk-g54kbxqw.js:53670-53748 placement
@@ -370,9 +400,9 @@ function adoptPromptCacheHashSalt(salt) {
   return promptCacheBreak.hashSalt === salt;
 }
 //@ chunk-g54kbxqw.js:53847-53888 placement
-function saltedHash(e) {
+function saltedHash(text) {
   return shortHash(`${getPromptCacheHashSalt()}
-${e}`);
+${text}`);
 }
 //@ chunk-g54kbxqw.js:53888-53909 placement
 var MAX_INLINE_TEXT_BYTES = 65536;
@@ -381,13 +411,13 @@ var HASH_EDGE_CHARS = 4096;
 /**
  * 超长文本替换为 "类型:长度:首段哈希:末段哈希" 摘要。
  */
-function summarizeLongText(e, name) {
-  if (e.length <= MAX_INLINE_TEXT_BYTES) return e;
+function summarizeLongText(text, name) {
+  if (text.length <= MAX_INLINE_TEXT_BYTES) return text;
   return [
     "type" in name && typeof name.type === "string" ? name.type : "",
-    e.length,
-    shortHash(e.slice(0, HASH_EDGE_CHARS)),
-    shortHash(e.slice(-HASH_EDGE_CHARS)),
+    text.length,
+    shortHash(text.slice(0, HASH_EDGE_CHARS)),
+    shortHash(text.slice(-HASH_EDGE_CHARS)),
   ].join(":");
 }
 //@ chunk-g54kbxqw.js:54060-54151 placement = stripCacheControl (1)
@@ -399,15 +429,15 @@ function stripCacheControl_2(items) {
   return jsonStringify(items);
 }
 //@ chunk-g54kbxqw.js:54151-54348 placement
-function messageContentBlocks(e) {
-  let content = e.message.content;
+function messageContentBlocks(message) {
+  let content = message.message.content;
   if (typeof content !== "string") return content;
   return [
-    e.type === "api_system" && e.outputConfig !== undefined
+    message.type === "api_system" && message.outputConfig !== undefined
       ? {
           type: "text",
           text: content,
-          output_config: e.outputConfig,
+          output_config: message.outputConfig,
         }
       : {
           type: "text",

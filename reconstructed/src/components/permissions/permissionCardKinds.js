@@ -81,7 +81,7 @@ import { printableOrEmpty } from "../../utils/printableName.js";
 import { formatFileSize } from "../../utils/format.js";
 import { sessionScopedMapsSlot } from "../../utils/sessionScopedMaps.js";
 import { PUBLISH_PLUGIN_INPUT_SCHEMA } from "../../tools/PublishPluginTool/constants.js";
-import { u, string, array, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
+import { objectSchema, stringSchema, array, _enum } from "../../../vendor/zod/v4/classic/schemas.js";
 import { FileEditTool } from "../../tools/FileEditTool/FileEditTool.js";
 import { FileWriteTool } from "../../tools/FileWriteTool/FileWriteTool.js";
 import { NotebookEditTool } from "../../tools/NotebookEditTool/NotebookEditTool.js";
@@ -99,114 +99,139 @@ import { languageForFilePath } from "../../utils/highlight/pluginLanguages.js";
 import { lit } from "../../services/analytics/safeMetadata.js";
 import { createLazySignal } from "../../utils/signal.js";
 import { uiSignals } from "../../state/uiSignals.js";
+import { deferInit } from "../../../runtime/deferred-init.js";
 
 //@ chunk-s4bxxzsw.js:4589-4877 placement
 /**
  * 权限卡片注册项（qo 定义 kind + payload/result schema）：AskUserQuestion、Bash、Browser、EnterPlanMode、File、Monitor、PowerShell、Skill、WebFetch、PublishPlugin、ExitPlanMode v2 等。
  */
-var ASK_USER_QUESTION_PERMISSION_CARD = withHideWhile({
-  kind: "permission_ask_user_question",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" &&
-        e !== null &&
-        "requestId" in e &&
-        "toolName" in e &&
-        "permissionResult" in e &&
-        "questions" in e,
+var ASK_USER_QUESTION_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:4589", () => {
+  ASK_USER_QUESTION_PERMISSION_CARD = withHideWhile({
+    kind: "permission_ask_user_question",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload &&
+          "questions" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((value) => typeof value === "object" && value !== null && "behavior" in value),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:4877-4913 placement
 function isNotAskUserQuestionCard(kind) {
   return kind !== ASK_USER_QUESTION_PERMISSION_CARD.kind;
 }
 //@ chunk-s4bxxzsw.js:4913-5211 placement
-var BASH_PERMISSION_CARD = withHideWhile({
-  kind: "permission_bash",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" &&
-        e !== null &&
-        "requestId" in e &&
-        "toolName" in e &&
-        "permissionResult" in e &&
-        "command" in e &&
-        "classifierState" in e,
+var BASH_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:4913", () => {
+  BASH_PERMISSION_CARD = withHideWhile({
+    kind: "permission_bash",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload &&
+          "command" in payload &&
+          "classifierState" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((value) => typeof value === "object" && value !== null && "behavior" in value),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:5211-6333 placement
 /**
  * 解释为什么已允许的操作仍要询问：auto 模式不可用的原因（组织关闭、托管设置、设置文件 disableAutoMode、模型不支持、fast 模式、不可用）。
  */
 function describeAutoModeGrantBlock(grantNotice, display) {
-  let n = `${display} is allowed, but Claude asks before actions like this because they can only be approved automatically when auto mode is available, and`;
+  let leadIn = `${display} is allowed, but Claude asks before actions like this because they can only be approved automatically when auto mode is available, and`;
   switch (grantNotice.cause) {
     case "organization":
-      return `${n} your organization has turned auto mode off.`;
+      return `${leadIn} your organization has turned auto mode off.`;
     case "managed-settings":
-      return `${n} auto mode is turned off in this computer's managed settings.`;
+      return `${leadIn} auto mode is turned off in this computer's managed settings.`;
     case "settings": {
       if (grantNotice.files.length === 0 && grantNotice.startup)
-        return `${n} auto mode is turned off by the disableAutoMode setting Claude Code was started with. Start Claude Code without it to change this.`;
-      let s = [
+        return `${leadIn} auto mode is turned off by the disableAutoMode setting Claude Code was started with. Start Claude Code without it to change this.`;
+      let settingFiles = [
         ...grantNotice.files,
         ...(grantNotice.startup ? ["the settings Claude Code was started with"] : []),
       ];
-      let y = s.length === 0 ? "your settings files" : s.join(" and ");
-      return `${n} auto mode is turned off by the disableAutoMode setting in ${y}. Remove it and restart Claude Code to change this.`;
+      let filesLabel = settingFiles.length === 0 ? "your settings files" : settingFiles.join(" and ");
+      return `${leadIn} auto mode is turned off by the disableAutoMode setting in ${filesLabel}. Remove it and restart Claude Code to change this.`;
     }
     case "model":
-      return `${n} ${grantNotice.model} doesn't support auto mode. Switch models with /model to change this.`;
+      return `${leadIn} ${grantNotice.model} doesn't support auto mode. Switch models with /model to change this.`;
     case "fast-mode":
-      return `${n} auto mode is off while fast mode is on. Run /fast off to change this.`;
+      return `${leadIn} auto mode is off while fast mode is on. Run /fast off to change this.`;
     case "unavailable":
-      return `${n} auto mode isn't available in this session. Restart Claude Code to check again.`;
+      return `${leadIn} auto mode isn't available in this session. Restart Claude Code to check again.`;
   }
 }
 //@ chunk-s4bxxzsw.js:6333-6612 placement
-var BROWSER_PERMISSION_CARD = withHideWhile({
-  kind: "permission_browser",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" &&
-        e !== null &&
-        "requestId" in e &&
-        "toolName" in e &&
-        "permissionResult" in e &&
-        "verbPhrase" in e,
+var BROWSER_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:6333", () => {
+  BROWSER_PERMISSION_CARD = withHideWhile({
+    kind: "permission_browser",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload &&
+          "verbPhrase" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((value) => typeof value === "object" && value !== null && "behavior" in value),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:6612-6879 placement
-var ENTER_PLAN_MODE_PERMISSION_CARD = withHideWhile({
-  kind: "permission_enter_plan_mode",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" && e !== null && "requestId" in e && "toolName" in e && "permissionResult" in e,
+var ENTER_PLAN_MODE_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:6612", () => {
+  ENTER_PLAN_MODE_PERMISSION_CARD = withHideWhile({
+    kind: "permission_enter_plan_mode",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((value) => typeof value === "object" && value !== null && "behavior" in value),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:6951-7038 placement
 var MARKDOWN_LINK_RE = /\[([^[\]\n]*)\]\(([^()\s]*)\)/g;
@@ -215,68 +240,68 @@ var isAuthedLinkText = (toolUseID) => typeof toolUseID === "string" && toolUseID
 /**
  * 把问题文本拆成标题（第一行）与正文行列表。
  */
-function splitQuestionTitleBody(question) {
-  let r = truncateForDisplayText(question);
-  let index = r.indexOf(`
+function splitQuestionTitleBody(text) {
+  let rawQuestion = truncateForDisplayText(text);
+  let index = rawQuestion.indexOf(`
 
 `);
   if (index === -1)
     return {
-      title: displayField(r).text,
+      title: displayField(rawQuestion).text,
       body: [],
     };
-  let replaced = r.slice(index + 2).replace(/^\n+/, "");
+  let text_2 = rawQuestion.slice(index + 2).replace(/^\n+/, "");
   return {
-    title: displayField(r.slice(0, index)).text,
-    body: replaced === "" ? [] : parseFileLinkSegments(replaced),
+    title: displayField(rawQuestion.slice(0, index)).text,
+    body: text_2 === "" ? [] : parseFileLinkSegments(text_2),
   };
 }
 //@ chunk-s4bxxzsw.js:7223-7605 placement
 /**
  * 把文本中的 markdown file:/// 链接拆成 text 与 fileLink 片段（只接受绝对路径的安全文件 URL）。
  */
-function parseFileLinkSegments(e) {
-  let r = [];
-  let n = "";
-  let s = 0;
-  for (let y of e.matchAll(MARKDOWN_LINK_RE)) {
-    let [R, C = "", D = ""] = y;
-    let S = fileUrlToAbsolutePath(D);
-    let k = S === null ? null : toSafeFileUrl(S);
-    n += e.slice(s, y.index);
-    s = y.index + R.length;
-    if (S === null || k === null) {
-      n += R;
+function parseFileLinkSegments(text) {
+  let segments = [];
+  let pending = "";
+  let cursor = 0;
+  for (let match of text.matchAll(MARKDOWN_LINK_RE)) {
+    let [fullMatch, label = "", url = ""] = match;
+    let targetPath = fileUrlToAbsolutePath(url);
+    let safeUrl = targetPath === null ? null : toSafeFileUrl(targetPath);
+    pending += text.slice(cursor, match.index);
+    cursor = match.index + fullMatch.length;
+    if (targetPath === null || safeUrl === null) {
+      pending += fullMatch;
       continue;
     }
-    if (n !== "") {
-      r.push({
+    if (pending !== "") {
+      segments.push({
         kind: "text",
-        text: displayField(n).text,
+        text: displayField(pending).text,
       });
-      n = "";
+      pending = "";
     }
-    r.push({
+    segments.push({
       kind: "fileLink",
-      label: displayField(C).text,
-      url: k,
-      path: displayField(tildify(S)).text,
+      label: displayField(label).text,
+      url: safeUrl,
+      path: displayField(tildify(targetPath)).text,
     });
   }
-  n += e.slice(s);
-  if (n !== "")
-    r.push({
+  pending += text.slice(cursor);
+  if (pending !== "")
+    segments.push({
       kind: "text",
-      text: displayField(n).text,
+      text: displayField(pending).text,
     });
-  return r;
+  return segments;
 }
 //@ chunk-s4bxxzsw.js:7605-7715 placement
-function fileUrlToAbsolutePath(e) {
-  if (!/^file:\/\/\//i.test(e)) return null;
+function fileUrlToAbsolutePath(value) {
+  if (!/^file:\/\/\//i.test(value)) return null;
   try {
-    let r = fileURLToPath(e);
-    return isAbsolute(r) ? r : null;
+    let filePath = fileURLToPath(value);
+    return isAbsolute(filePath) ? filePath : null;
   } catch {
     return null;
   }
@@ -288,140 +313,147 @@ function fileUrlToAbsolutePath(e) {
 function getParamFormatHints(schema) {
   let properties = schema?.properties;
   if (properties === null || typeof properties !== "object" || Array.isArray(properties)) return;
-  let n;
+  let hint;
   for (let [key, value] of Object.entries(properties)) {
     if (value === null || typeof value !== "object" || !("format" in value)) continue;
     let format = value.format;
     if (typeof format === "string" && STRING_FORMATS.has(format)) {
-      n ??= {};
-      n[key] = format;
+      hint ??= {};
+      hint[key] = format;
     }
   }
-  return n;
+  return hint;
 }
 //@ chunk-s4bxxzsw.js:8009-10003 placement
 /**
  * buildPermissionPromptPayload：把一次权限请求整理成发给宿主/桥接 UI 的载荷（显示名、渲染后的输入、卡片、always-allow 可用性、MCP 标记等）。归属疑为权限/桥接（见 lead 建议）。
  */
-function buildPermissionPromptPayload(e) {
-  let mcpInfo = e.tool.isMcp === true ? e.tool.mcpInfo : undefined;
-  let hasMcpSuffix = e.tool.isMcp === true;
-  let s;
-  if (mcpInfo) s = mcpServerLabel(mcpInfo);
+function buildPermissionPromptPayload(request) {
+  let mcpInfo = request.tool.isMcp === true ? request.tool.mcpInfo : undefined;
+  let hasMcpSuffix = request.tool.isMcp === true;
+  let serverLabel;
+  if (mcpInfo) serverLabel = mcpServerLabel(mcpInfo);
   else {
-    let h;
+    let userFacingName;
     try {
-      h = e.tool.userFacingName(e.input) || e.tool.name;
+      userFacingName = request.tool.userFacingName(request.input) || request.tool.name;
     } catch {
-      h = e.tool.name;
+      userFacingName = request.tool.name;
     }
-    let w = e.tool.isMcp === true && h.endsWith(" (MCP)") ? h.slice(0, -6) : h;
-    s = displayLabelOrUnnamedTool(w);
+    let toolName =
+      request.tool.isMcp === true && userFacingName.endsWith(" (MCP)")
+        ? userFacingName.slice(0, -6)
+        : userFacingName;
+    serverLabel = displayLabelOrUnnamedTool(toolName);
   }
-  let y = "";
-  let R;
-  if (e.tool.isMcp !== true)
+  let renderedMessage = "";
+  let renderFailed;
+  if (request.tool.isMcp !== true)
     try {
-      let h =
-        e.tool.renderToolUseMessage?.(e.input, {
-          theme: e.theme,
+      let rendered =
+        request.tool.renderToolUseMessage?.(request.input, {
+          theme: request.theme,
           verbose: true,
         }) ?? null;
-      y = typeof h === "string" ? stripNonPrintable(h) : h;
+      renderedMessage = typeof rendered === "string" ? stripNonPrintable(rendered) : rendered;
     } catch {
-      y = "parameters could not be rendered \u2014 deny unless expected";
-      R = true;
+      renderedMessage = "parameters could not be rendered \u2014 deny unless expected";
+      renderFailed = true;
     }
-  let decisionReason = e.permissionResult.decisionReason;
-  let S = !(
-    !R &&
-    e.permissionResult.matchedAskRule === undefined &&
-    e.permissionResult.denialLimitFallback === undefined &&
-    e.permissionResult.autoDenyWindow === undefined &&
+  let decisionReason = request.permissionResult.decisionReason;
+  let customCard = !(
+    !renderFailed &&
+    request.permissionResult.matchedAskRule === undefined &&
+    request.permissionResult.denialLimitFallback === undefined &&
+    request.permissionResult.autoDenyWindow === undefined &&
     (decisionReason === undefined || decisionReason.type === "safetyCheck" || decisionReason.type === "other")
   )
     ? undefined
-    : e.servedCard !== undefined
-      ? e.servedCard.card
+    : request.servedCard !== undefined
+      ? request.servedCard.card
       : decisionReason !== undefined
-        ? e.tool.permissionCard?.(e.input, e.toolUseID, decisionReason.reason)
+        ? request.tool.permissionCard?.(request.input, request.toolUseID, decisionReason.reason)
         : undefined;
-  if (e.servedCard !== undefined && S !== undefined) s = safeLabel(e.servedCard.name);
-  let k = e.requestSource === undefined && isRebindableLegacyGrant(e.tool);
-  let T = e.tool.permissionNote?.(e.input, e.permissionMode);
+  if (request.servedCard !== undefined && customCard !== undefined)
+    serverLabel = safeLabel(request.servedCard.name);
+  let isLegacyGrant = request.requestSource === undefined && isRebindableLegacyGrant(request.tool);
+  let permissionNote = request.tool.permissionNote?.(request.input, request.permissionMode);
   return {
-    requestId: e.toolUseID,
-    toolName: e.tool.name,
-    input: e.input,
-    description: displayField(e.description).text,
-    permissionResult: e.permissionResult,
-    userFacingName: s,
+    requestId: request.toolUseID,
+    toolName: request.tool.name,
+    input: request.input,
+    description: displayField(request.description).text,
+    permissionResult: request.permissionResult,
+    userFacingName: serverLabel,
     hasMcpSuffix,
-    renderedToolUseMessage: y,
-    toolUseRenderFailed: R,
-    paramFormatHints: getParamFormatHints(e.tool.inputJSONSchema),
-    card: S && {
-      question: displayField(S.question).text,
-      lines: S.lines.map((line) => displayField(line).text),
-      values: S.values.map((h) => displayField(h).text),
+    renderedToolUseMessage: renderedMessage,
+    toolUseRenderFailed: renderFailed,
+    paramFormatHints: getParamFormatHints(request.tool.inputJSONSchema),
+    card: customCard && {
+      question: displayField(customCard.question).text,
+      lines: customCard.lines.map((line) => displayField(line).text),
+      values: customCard.values.map((value) => displayField(value).text),
     },
-    ...(T !== undefined && {
-      note: displayField(T).text,
+    ...(permissionNote !== undefined && {
+      note: displayField(permissionNote).text,
     }),
-    messageId: e.assistantMessage.message.id,
-    isMcp: e.tool.isMcp ?? false,
-    isAskCappedByOrg: e.tool.mcpInfo?.effectiveMaxPermission === "ask",
+    messageId: request.assistantMessage.message.id,
+    isMcp: request.tool.isMcp ?? false,
+    isAskCappedByOrg: request.tool.mcpInfo?.effectiveMaxPermission === "ask",
     showAlwaysAllow:
       shouldShowAlwaysAllowOptions() &&
-      !(e.permissionResult.behavior === "ask" && e.permissionResult.suppressAlwaysAllowRule === true) &&
-      (e.tool.suppressesAlwaysAllowRule?.(e.input) !== true || k) &&
-      e.tool.suppressesAllPermissionUpdates?.(e.input) !== true &&
-      !isRemoteOrPluginAgent(e.requestSource),
-    ...(k && {
-      takesOverServerName: k,
+      !(
+        request.permissionResult.behavior === "ask" &&
+        request.permissionResult.suppressAlwaysAllowRule === true
+      ) &&
+      (request.tool.suppressesAlwaysAllowRule?.(request.input) !== true || isLegacyGrant) &&
+      request.tool.suppressesAllPermissionUpdates?.(request.input) !== true &&
+      !isRemoteOrPluginAgent(request.requestSource),
+    ...(isLegacyGrant && {
+      takesOverServerName: isLegacyGrant,
     }),
-    requestSource: e.requestSource,
-    ...(e.roomyDescription === true && {
+    requestSource: request.requestSource,
+    ...(request.roomyDescription === true && {
       roomyDescription: true,
     }),
-    hasExternalRacer: e.hasExternalRacer ?? false,
-    ...(e.networkAllowListHonoured === true && {
-      networkAllowHosts: getCommandNetworkLists(e.input)?.allow.map(stripNonPrintable),
+    hasExternalRacer: request.hasExternalRacer ?? false,
+    ...(request.networkAllowListHonoured === true && {
+      networkAllowHosts: getCommandNetworkLists(request.input)?.allow.map(stripNonPrintable),
     }),
   };
 }
 //@ chunk-s4bxxzsw.js:10003-10637 placement
-function permissionRequestOrigin(toolUseContext) {
-  if (toolUseContext.forRemoteExecution === true)
+function permissionRequestOrigin(context) {
+  if (context.forRemoteExecution === true)
     return {
       type: "remote-agent",
     };
-  let hookCallerOf = getHookCallerOf(toolUseContext);
+  let hookCallerOf = getHookCallerOf(context);
   if (hookCallerOf !== undefined)
     return {
       type: "plugin",
       pluginName: hookCallerOf,
     };
-  if (isHookOrPluginSteered(toolUseContext))
+  if (isHookOrPluginSteered(context))
     return {
       type: "plugin",
     };
-  let n =
-    isSubagentContext(toolUseContext.agentContext) && toolUseContext.agentContext.isAsync === true
+  let context_2 =
+    isSubagentContext(context.agentContext) && context.agentContext.isAsync === true
       ? {
           stoppableByKillAgents: true,
         }
       : {};
-  let spawnedByWorkflowRunId = toolUseContext.spawnedByWorkflowRunId;
+  let spawnedByWorkflowRunId = context.spawnedByWorkflowRunId;
   if (spawnedByWorkflowRunId !== undefined)
     return {
       type: "workflow-agent",
-      workflowName: Object.values(toolUseContext.taskRegistry.all()).find(
-        (C) => C.type === "local_workflow" && C.workflowRunId === spawnedByWorkflowRunId,
+      workflowName: Object.values(context.taskRegistry.all()).find(
+        (state) => state.type === "local_workflow" && state.workflowRunId === spawnedByWorkflowRunId,
       )?.workflowName,
-      ...n,
+      ...context_2,
     };
-  let agentContext = toolUseContext.agentContext;
+  let agentContext = context.agentContext;
   if (agentContext.agentType === "teammate")
     return {
       type: "subagent",
@@ -431,7 +463,7 @@ function permissionRequestOrigin(toolUseContext) {
     return {
       type: "subagent",
       agentName: agentContext.displayName ?? agentContext.subagentName,
-      ...n,
+      ...context_2,
     };
   return;
 }
@@ -439,38 +471,38 @@ function permissionRequestOrigin(toolUseContext) {
 /**
  * 构造 Chrome 权限卡片载荷：host/url（缺省从 input.url 解析）、域名是否已允许、auto 模式不可用提示、动词短语。
  */
-function buildChromePermissionPayload(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
-  let chrome = e.permissionResult.metadata?.command?.chrome;
-  let s = chrome
+function buildChromePermissionPayload(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
+  let chrome = request.permissionResult.metadata?.command?.chrome;
+  let chromeInfo = chrome
     ? {
         host: chrome.host,
         url: chrome.url,
       }
     : undefined;
-  let y = chrome?.domainAllowed === true;
-  let decisionReason = e.permissionResult.decisionReason;
-  let C =
-    y &&
+  let isDomainAllowed = chrome?.domainAllowed === true;
+  let decisionReason = request.permissionResult.decisionReason;
+  let domainAllowed =
+    isDomainAllowed &&
     chrome?.classifierUnavailable === true &&
     decisionReason?.type === "other" &&
-    e.permissionResult.matchedAskRule === undefined &&
+    request.permissionResult.matchedAskRule === undefined &&
     !permissionPromptPayload.isAskCappedByOrg;
-  if (!s && typeof e.input.url === "string")
+  if (!chromeInfo && typeof request.input.url === "string")
     try {
-      let D = new URL(e.input.url);
-      if (D.host)
-        s = {
-          host: D.host,
-          url: D.href,
+      let url = new URL(request.input.url);
+      if (url.host)
+        chromeInfo = {
+          host: url.host,
+          url: url.href,
         };
     } catch {}
   return {
     ...permissionPromptPayload,
-    chrome: s,
-    domainAllowed: y,
-    grantNotice: C ? getAutoModeGrantBlockCause() : undefined,
-    verbPhrase: describeBrowserToolAction(e.tool.name, e.input),
+    chrome: chromeInfo,
+    domainAllowed: isDomainAllowed,
+    grantNotice: domainAllowed ? getAutoModeGrantBlockCause() : undefined,
+    verbPhrase: describeBrowserToolAction(request.tool.name, request.input),
   };
 }
 //@ chunk-s4bxxzsw.js:11137-11582 placement
@@ -515,34 +547,34 @@ function getAutoModeGrantBlockCause() {
 /**
  * 构建 WebFetch 权限卡片数据：在通用载荷上附加目标 URL 的主机名。
  */
-function buildWebFetchPermissionPayload(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
-  let url = e.input.url;
-  let s = "";
+function buildWebFetchPermissionPayload(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
+  let url = request.input.url;
+  let hostname = "";
   if (typeof url === "string")
     try {
-      s = new URL(url).hostname;
+      hostname = new URL(url).hostname;
     } catch {
-      s = "";
+      hostname = "";
     }
   return {
     ...permissionPromptPayload,
-    hostname: s,
+    hostname,
   };
 }
 //@ chunk-s4bxxzsw.js:11712-11999 placement
 /**
  * 构建 AskUserQuestion 权限卡片数据：问题列表、来源元数据，以及是否为引擎强制确认。
  */
-function buildAskUserQuestionPayload(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
-  let n = AskUserQuestionTool.inputSchema.safeParse(e.input);
-  let questions = n.success ? (n.data.questions ?? []) : [];
-  let metadataSource = n.success ? n.data.metadata?.source : undefined;
+function buildAskUserQuestionPayload(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
+  let parsedInput = AskUserQuestionTool.inputSchema.safeParse(request.input);
+  let questions = parsedInput.success ? (parsedInput.data.questions ?? []) : [];
+  let metadataSource = parsedInput.success ? parsedInput.data.metadata?.source : undefined;
   let isEngineConfirm =
-    e.permissionResult.forcedByCaller === true &&
-    e.requestSource === undefined &&
-    isAuthedLinkText(e.toolUseID);
+    request.permissionResult.forcedByCaller === true &&
+    request.requestSource === undefined &&
+    isAuthedLinkText(request.toolUseID);
   return {
     ...permissionPromptPayload,
     questions,
@@ -551,9 +583,9 @@ function buildAskUserQuestionPayload(e) {
   };
 }
 //@ chunk-s4bxxzsw.js:11999-12099 placement
-function serializeMcpArgsDisplay(e) {
-  if (!("args" in e) || e.args === undefined) return;
-  return serializeApprovalPayload(e.args, {
+function serializeMcpArgsDisplay(input) {
+  if (!("args" in input) || input.args === undefined) return;
+  return serializeApprovalPayload(input.args, {
     scrub: "key",
     maxUnits: MAX_PAYLOAD_UNITS,
   });
@@ -562,46 +594,46 @@ function serializeMcpArgsDisplay(e) {
 /**
  * 构造 Monitor 权限卡片载荷：命令、MCP 服务器/工具/参数、WebSocket url 与子协议（不可显示的标记 withheld）、轮询间隔与描述。
  */
-function buildMonitorPermissionPayload(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
+function buildMonitorPermissionPayload(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
   let command =
-    typeof e.input.command === "string"
-      ? serializeApprovalPayload(e.input.command, {
+    typeof request.input.command === "string"
+      ? serializeApprovalPayload(request.input.command, {
           maxUnits: MAX_PAYLOAD_UNITS,
         })
       : undefined;
-  let stringField = readStringField(e.input.mcp, "server");
-  let stringField_2 = readStringField(e.input.mcp, "tool");
+  let stringField = readStringField(request.input.mcp, "server");
+  let stringField_2 = readStringField(request.input.mcp, "tool");
   let mcp =
     stringField !== undefined && stringField_2 !== undefined
       ? {
           server: sanitizeCardText(stringField, "(unnamed server)"),
           tool: sanitizeCardText(stringField_2, "(unnamed tool)"),
-          argsDisplay: serializeMcpArgsDisplay(e.input.mcp),
+          argsDisplay: serializeMcpArgsDisplay(request.input.mcp),
         }
       : undefined;
-  let stringField_3 = readStringField(e.input.ws, "url");
-  let D = websocketSubprotocols(e.input.ws);
+  let stringField_3 = readStringField(request.input.ws, "url");
+  let protocols = websocketSubprotocols(request.input.ws);
   let ws =
     stringField_3 !== undefined
       ? {
           url: serializeApprovalPayload(normalizeUrlHref(stringField_3), {
             maxUnits: MAX_PAYLOAD_UNITS,
           }),
-          protocols: D?.map((h, w) =>
-            w < MAX_QUOTED_ITEMS
-              ? replaceLineBreaks(sanitizeForDisplay(truncateToLength(h, MAX_RAW_DISPLAY_CHARS)))
+          protocols: protocols?.map((protocol, index) =>
+            index < MAX_QUOTED_ITEMS
+              ? replaceLineBreaks(sanitizeForDisplay(truncateToLength(protocol, MAX_RAW_DISPLAY_CHARS)))
               : "",
           ),
-          protocolsWithheld: D?.slice(0, MAX_QUOTED_ITEMS).some((h) => {
-            let w = truncateToLength(h, MAX_RAW_DISPLAY_CHARS);
-            return markBrokenSequences(w) !== w;
+          protocolsWithheld: protocols?.slice(0, MAX_QUOTED_ITEMS).some((protocol) => {
+            let clippedProtocol = truncateToLength(protocol, MAX_RAW_DISPLAY_CHARS);
+            return markBrokenSequences(clippedProtocol) !== clippedProtocol;
           }),
         }
       : undefined;
-  let intervalMs = typeof e.input.interval_ms === "number" ? e.input.interval_ms : 30000;
+  let intervalMs = typeof request.input.interval_ms === "number" ? request.input.interval_ms : 30000;
   let monitorDescription =
-    typeof e.input.description === "string" ? displayField(e.input.description).text : undefined;
+    typeof request.input.description === "string" ? displayField(request.input.description).text : undefined;
   return {
     ...permissionPromptPayload,
     command,
@@ -612,17 +644,17 @@ function buildMonitorPermissionPayload(e) {
   };
 }
 //@ chunk-s4bxxzsw.js:12810-12895 placement
-function sanitizeCardText(stringField, r) {
+function sanitizeCardText(stringField, fallback) {
   let trimmed = replaceLineBreaks(renderableText(truncateToLength(stringField, MAX_RAW_DISPLAY_CHARS)))
     .replace(/\s+/g, " ")
     .trim();
-  return isCleanText(trimmed) ? trimmed : r;
+  return isCleanText(trimmed) ? trimmed : fallback;
 }
 //@ chunk-s4bxxzsw.js:12895-13010 placement
-function readStringField(e, r) {
-  if (e === null || typeof e !== "object" || !(r in e)) return;
-  let n = e[r];
-  return typeof n === "string" ? n : undefined;
+function readStringField(record, key) {
+  if (record === null || typeof record !== "object" || !(key in record)) return;
+  let value = record[key];
+  return typeof value === "string" ? value : undefined;
 }
 //@ chunk-s4bxxzsw.js:13010-13069 placement
 /**
@@ -639,28 +671,28 @@ function normalizeUrlHref(url) {
 /**
  * 构造 Workflow 权限卡片载荷：脚本（runId 时取渲染文本）、脚本是否被伪造为非字符串、工作流名、参数。
  */
-function buildWorkflowPermissionPayload(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
-  let n = typeof e.input.runId === "string" && typeof e.input.script !== "string";
+function buildWorkflowPermissionPayload(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
+  let isInlineScript = typeof request.input.runId === "string" && typeof request.input.script !== "string";
   let script =
-    typeof e.input.script === "string"
-      ? e.input.script
-      : n && typeof permissionPromptPayload.renderedToolUseMessage === "string"
+    typeof request.input.script === "string"
+      ? request.input.script
+      : isInlineScript && typeof permissionPromptPayload.renderedToolUseMessage === "string"
         ? permissionPromptPayload.renderedToolUseMessage
         : "";
-  let scriptForged = e.input.script !== undefined && typeof e.input.script !== "string";
+  let scriptForged = request.input.script !== undefined && typeof request.input.script !== "string";
   let workflowName =
-    typeof e.input.name === "string" &&
-    e.input.name !== "" &&
-    !e.input.scriptPath &&
-    stripNonPrintable(e.input.name) === e.input.name
-      ? e.input.name
+    typeof request.input.name === "string" &&
+    request.input.name !== "" &&
+    !request.input.scriptPath &&
+    stripNonPrintable(request.input.name) === request.input.name
+      ? request.input.name
       : undefined;
   let renderedToolUseMessage =
     typeof permissionPromptPayload.renderedToolUseMessage === "string"
       ? stripNonPrintable(permissionPromptPayload.renderedToolUseMessage)
       : permissionPromptPayload.renderedToolUseMessage;
-  let args = e.input.args;
+  let args = request.input.args;
   return {
     ...permissionPromptPayload,
     renderedToolUseMessage,
@@ -674,57 +706,60 @@ function buildWorkflowPermissionPayload(e) {
 /**
  * 构造 Artifact 权限卡片载荷：文件路径、标题与选项（过滤并安全化）、文件内容预览（网络路径/过大/不存在/读错误给出占位）。
  */
-function buildArtifactPermissionPayload(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
-  let filePath = typeof e.input.filePath === "string" ? e.input.filePath : "";
-  let title = typeof e.input.title === "string" ? e.input.title : "";
+function buildArtifactPermissionPayload(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
+  let filePath = typeof request.input.filePath === "string" ? request.input.filePath : "";
+  let title = typeof request.input.title === "string" ? request.input.title : "";
   let artifactTitle = hasNoVisibleText(title) ? "" : safeLabel(title);
-  let artifactOptions = (Array.isArray(e.input.options) ? e.input.options : [])
+  let artifactOptions = (Array.isArray(request.input.options) ? request.input.options : [])
     .filter(
-      (k) =>
-        k !== null &&
-        typeof k === "object" &&
-        "label" in k &&
-        typeof k.label === "string" &&
-        "description" in k &&
-        typeof k.description === "string" &&
-        "value" in k &&
-        typeof k.value === "string",
+      (payload) =>
+        payload !== null &&
+        typeof payload === "object" &&
+        "label" in payload &&
+        typeof payload.label === "string" &&
+        "description" in payload &&
+        typeof payload.description === "string" &&
+        "value" in payload &&
+        typeof payload.value === "string",
     )
-    .map((k) => ({
-      label: hasNoVisibleText(k.label) ? "" : safeLabel(k.label),
-      description: displayField(k.description).text,
-      value: k.value,
+    .map((result) => ({
+      label: hasNoVisibleText(result.label) ? "" : safeLabel(result.label),
+      description: displayField(result.description).text,
+      value: result.value,
     }));
-  let D;
-  let S = false;
+  let warning;
+  let notPreviewed = false;
   if (isUntouchableSpelling(filePath) || isNetworkOrSpecialPath(filePath)) {
-    D = `(Network path \u2014 content not previewed: ${filePath})`;
-    S = true;
+    warning = `(Network path \u2014 content not previewed: ${filePath})`;
+    notPreviewed = true;
   } else
     try {
-      D = readFileSync(filePath, BOUNDED_READ_MAX);
+      warning = readFileSync(filePath, BOUNDED_READ_MAX);
     } catch (error) {
-      if (isFileTooLargeError(error)) D = `(Artifact too large for preview: ${filePath})`;
-      else D = isENOENT(error) ? `(File not found: ${filePath})` : `(Error reading file: ${String(error)})`;
-      S = true;
+      if (isFileTooLargeError(error)) warning = `(Artifact too large for preview: ${filePath})`;
+      else
+        warning = isENOENT(error)
+          ? `(File not found: ${filePath})`
+          : `(Error reading file: ${String(error)})`;
+      notPreviewed = true;
     }
   return {
     ...permissionPromptPayload,
     filePath,
     artifactTitle,
     artifactOptions,
-    fileContent: D,
-    contentWithheld: S,
+    fileContent: warning,
+    contentWithheld: notPreviewed,
   };
 }
 //@ chunk-s4bxxzsw.js:14492-14995 placement
 /**
  * 构造 Skill 权限卡片载荷：技能名（input.skill 或元数据命令名）、描述、转发的 MCP 技能名。
  */
-function buildSkillPermissionPayload(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
-  let metadata = e.permissionResult.metadata;
+function buildSkillPermissionPayload(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
+  let metadata = request.permissionResult.metadata;
   let command =
     metadata !== null &&
     typeof metadata === "object" &&
@@ -733,19 +768,20 @@ function buildSkillPermissionPayload(e) {
     typeof metadata.command === "object"
       ? metadata.command
       : undefined;
-  let y = command !== undefined && typeof command.name === "string" ? command.name : undefined;
+  let skillMetadata = command !== undefined && typeof command.name === "string" ? command.name : undefined;
   let skillDescription =
     command !== undefined && typeof command.description === "string"
       ? command.description
-      : e.forwardedMcpSkill?.description;
-  let skill = (typeof e.input.skill === "string" ? e.input.skill : undefined) ?? y ?? "";
+      : request.forwardedMcpSkill?.description;
+  let skill =
+    (typeof request.input.skill === "string" ? request.input.skill : undefined) ?? skillMetadata ?? "";
   return {
     ...permissionPromptPayload,
     skill,
     skillDescription,
-    ...(e.forwardedMcpSkill !== undefined && {
+    ...(request.forwardedMcpSkill !== undefined && {
       forwardedMcpSkill: {
-        name: e.forwardedMcpSkill.name,
+        name: request.forwardedMcpSkill.name,
       },
     }),
   };
@@ -754,11 +790,11 @@ function buildSkillPermissionPayload(e) {
 /**
  * 构建 PowerShell 权限卡片数据：清理不可打印字符后的命令（有长度上限）与渲染的工具消息。
  */
-function buildPowerShellPermissionPayload(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
+function buildPowerShellPermissionPayload(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
   let command =
-    typeof e.input.command === "string" && e.input.command.length <= MAX_PAYLOAD_UNITS
-      ? stripNonPrintable(e.input.command)
+    typeof request.input.command === "string" && request.input.command.length <= MAX_PAYLOAD_UNITS
+      ? stripNonPrintable(request.input.command)
       : "";
   let renderedToolUseMessage =
     typeof permissionPromptPayload.renderedToolUseMessage === "string"
@@ -774,12 +810,13 @@ function buildPowerShellPermissionPayload(e) {
 /**
  * 构造 ExitPlanMode 权限卡片载荷：当前计划、计划文件路径、本条助手消息的 token 用量。
  */
-function buildExitPlanModePermissionPayload(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
+function buildExitPlanModePermissionPayload(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
   let planFilePath = getPlanFilePath();
   notePlanFileForgotten(planFilePath);
   let plan = getPlan() ?? "";
-  let usage = e.assistantMessage.isUnmetered === true ? undefined : e.assistantMessage.message.usage;
+  let usage =
+    request.assistantMessage.isUnmetered === true ? undefined : request.assistantMessage.message.usage;
   let usage_2;
   if (usage && typeof usage.input_tokens === "number") {
     let tokenCountFromUsage = getTokenCountFromUsage(usage);
@@ -800,11 +837,11 @@ function buildExitPlanModePermissionPayload(e) {
 /**
  * 构造 Bash 权限卡片载荷：命令（过长置空、去不可打印字符）、分类器状态、已有允许规则描述。
  */
-function buildBashPermissionPayload(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
+function buildBashPermissionPayload(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
   let command =
-    typeof e.input.command === "string" && e.input.command.length <= MAX_PAYLOAD_UNITS
-      ? stripNonPrintable(e.input.command)
+    typeof request.input.command === "string" && request.input.command.length <= MAX_PAYLOAD_UNITS
+      ? stripNonPrintable(request.input.command)
       : "";
   let renderedToolUseMessage =
     typeof permissionPromptPayload.renderedToolUseMessage === "string"
@@ -814,7 +851,7 @@ function buildBashPermissionPayload(e) {
     ...permissionPromptPayload,
     renderedToolUseMessage,
     command,
-    classifierState: e.classifierState,
+    classifierState: request.classifierState,
     existingAllowDescriptions: [],
   };
 }
@@ -839,13 +876,13 @@ var buildPublishPluginCard = (question) => ({
 /**
  * 构建发布插件权限卡片数据：卡片内容与全部条目（优先取会话缓存，否则从输入问题解析）。
  */
-function buildPublishPluginPayload(e) {
-  let r = e.session && sessionScopedMapsSlot.of(e.session).get(e.toolUseID);
-  let question = PUBLISH_PLUGIN_INPUT_SCHEMA().safeParse(e.input).data?.question;
+function buildPublishPluginPayload(request) {
+  let stashedQuestion = request.session && sessionScopedMapsSlot.of(request.session).get(request.toolUseID);
+  let question = PUBLISH_PLUGIN_INPUT_SCHEMA().safeParse(request.input).data?.question;
   return {
-    ...buildPermissionPromptPayload(e),
-    card: r?.card ?? (question && buildPublishPluginCard(question)),
-    everything: r?.everything ?? (question ? manifestEntryLines(question) : []),
+    ...buildPermissionPromptPayload(request),
+    card: stashedQuestion?.card ?? (question && buildPublishPluginCard(question)),
+    everything: stashedQuestion?.everything ?? (question ? manifestEntryLines(question) : []),
   };
 }
 //@ chunk-s4bxxzsw.js:16429-16439 placement
@@ -856,23 +893,28 @@ var MAX_CARD_ACTIONS = 6;
 //@ chunk-s4bxxzsw.js:16439-16450 placement
 var CHROME_ROWS = 14;
 //@ chunk-s4bxxzsw.js:16450-16736 placement
-var PUBLISH_PLUGIN_PERMISSION_CARD = withHideWhile({
-  kind: "permission_publish_plugin",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" &&
-        e !== null &&
-        "requestId" in e &&
-        "toolName" in e &&
-        "permissionResult" in e &&
-        "everything" in e,
+var PUBLISH_PLUGIN_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:16450", () => {
+  PUBLISH_PLUGIN_PERMISSION_CARD = withHideWhile({
+    kind: "permission_publish_plugin",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload &&
+          "everything" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((result) => typeof result === "object" && result !== null && "behavior" in result),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:16736-16747 placement
 var LIST_CHROME_ROWS = 10;
@@ -883,43 +925,53 @@ var MIN_LIST_ROWS = 5;
 //@ chunk-s4bxxzsw.js:16768-16846 placement
 var PUBLISH_WAITING_MESSAGE = "Claude Code is waiting for your answer before it publishes a plugin";
 //@ chunk-s4bxxzsw.js:16846-17129 placement
-var EXIT_PLAN_MODE_V2_PERMISSION_CARD = withHideWhile({
-  kind: "permission_exit_plan_mode_v2",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" &&
-        e !== null &&
-        "requestId" in e &&
-        "toolName" in e &&
-        "permissionResult" in e &&
-        "plan" in e,
+var EXIT_PLAN_MODE_V2_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:16846", () => {
+  EXIT_PLAN_MODE_V2_PERMISSION_CARD = withHideWhile({
+    kind: "permission_exit_plan_mode_v2",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload &&
+          "plan" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((result) => typeof result === "object" && result !== null && "behavior" in result),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:17129-17426 placement
-var FILE_PERMISSION_CARD = withHideWhile({
-  kind: "permission_file",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" &&
-        e !== null &&
-        "requestId" in e &&
-        "toolName" in e &&
-        "permissionResult" in e &&
-        "filePath" in e &&
-        "operationType" in e,
+var FILE_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:17129", () => {
+  FILE_PERMISSION_CARD = withHideWhile({
+    kind: "permission_file",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload &&
+          "filePath" in payload &&
+          "operationType" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((result) => typeof result === "object" && result !== null && "behavior" in result),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:17486-17865 placement
 var OUTSIDE_READS_TITLE = "Read outside the working directories";
@@ -935,35 +987,38 @@ var OUTSIDE_READ_ACTION_LABELS = {
 /**
  * 工作目录外读取对话框的说明文字，按沙箱是否能隔离 home 目录给出不同提示。
  */
-function getOutsideReadsExplainer(e) {
+function getOutsideReadsExplainer(explainer) {
   return (
     "Auto mode and the sandbox read outside the working directories without asking. Yes or No answers for this read; the rest is for later reads. Block: the file tools refuse reads outside the working directories in every project. " +
-    (e
+    (explainer
       ? "Sandboxed commands lose your home directory (SSH keys, home-installed tools) until you re-open paths with sandbox.filesystem.allowRead."
       : "The sandbox doesn't enforce it on this machine (off, filesystem rules relaxed, managed read-path lock on, or working directory name has glob characters). Auto mode asks before each shell command it can't check.") +
     " To undo, remove permissions.blockReadsOutsideWorkingDirectories from your user settings; file tools follow next session, sandboxed commands at once."
   );
 }
 //@ chunk-s4bxxzsw.js:18623-18824 placement
-var AUTO_MODE_OUTSIDE_READS_DIALOG = withHideWhile({
-  kind: "auto_mode_outside_reads",
-  payload: DoctorLazy(() =>
-    u({
-      toolName: string(),
-      path: string(),
-      title: string(),
-      question: string(),
-      explainer: string(),
-      options: array(
-        u({
-          value: _enum(OUTSIDE_READ_ACTIONS),
-          label: string(),
-        }),
-      ),
-    }),
-  ),
-  result: DoctorLazy(() => _enum(OUTSIDE_READ_ACTIONS)),
-  default: "ask_again",
+var AUTO_MODE_OUTSIDE_READS_DIALOG; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:18623", () => {
+  AUTO_MODE_OUTSIDE_READS_DIALOG = withHideWhile({
+    kind: "auto_mode_outside_reads",
+    payload: DoctorLazy(() =>
+      objectSchema({
+        toolName: stringSchema(),
+        path: stringSchema(),
+        title: stringSchema(),
+        question: stringSchema(),
+        explainer: stringSchema(),
+        options: array(
+          objectSchema({
+            value: _enum(OUTSIDE_READ_ACTIONS),
+            label: stringSchema(),
+          }),
+        ),
+      }),
+    ),
+    result: DoctorLazy(() => _enum(OUTSIDE_READ_ACTIONS)),
+    default: "ask_again",
+  });
 });
 //@ chunk-s4bxxzsw.js:18824-18983 placement
 /**
@@ -976,9 +1031,9 @@ function buildOutsideReadsDialog({ toolName, path, sandboxFenced }) {
     title: OUTSIDE_READS_TITLE,
     question: OUTSIDE_READ_TITLE,
     explainer: getOutsideReadsExplainer(sandboxFenced),
-    options: OUTSIDE_READ_ACTIONS.map((s) => ({
-      value: s,
-      label: OUTSIDE_READ_ACTION_LABELS[s],
+    options: OUTSIDE_READ_ACTIONS.map((action) => ({
+      value: action,
+      label: OUTSIDE_READ_ACTION_LABELS[action],
     })),
   };
 }
@@ -1019,19 +1074,19 @@ function isAutoDenyKind(tool) {
 /**
  * 调用工具的 getPath 获取输入中的路径，非空字符串时返回，出错返回 null。
  */
-function getToolInputPath(tool, r) {
+function getToolInputPath(tool, input) {
   try {
-    let n = tool;
-    if (typeof n.getPath !== "function") return null;
-    let path = n.getPath(r);
+    let toolInfo = tool;
+    if (typeof toolInfo.getPath !== "function") return null;
+    let path = toolInfo.getPath(input);
     return typeof path === "string" && path !== "" ? path : null;
   } catch {
     return null;
   }
 }
 //@ chunk-s4bxxzsw.js:19332-19577 placement
-function resolveSymlinkTarget(filePath, r, blockedPath) {
-  if (r)
+function resolveSymlinkTarget(filePath, blocked, blockedPath) {
+  if (blocked)
     return {
       target: null,
       unchecked: false,
@@ -1064,8 +1119,8 @@ function safeRelativeDisplay(filePath, suspicious) {
   return stripInvisibleChars(suspicious ? filePath : relative(getCwd(), filePath));
 }
 //@ chunk-s4bxxzsw.js:19620-19671 placement
-function basenameOrPath(e, suspicious) {
-  return stripInvisibleChars(suspicious ? posix.basename(e) : basename(e));
+function basenameOrPath(filePath, suspicious) {
+  return stripInvisibleChars(suspicious ? posix.basename(filePath) : basename(filePath));
 }
 //@ chunk-s4bxxzsw.js:19671-24519 placement
 /**
@@ -1074,25 +1129,28 @@ function basenameOrPath(e, suspicious) {
 async function buildFileToolPermissionCard(request) {
   let { tool: parsed, input: tooLarge, remoteWorkspace: suspicious, remoteOldContent: withheld } = request;
   if (parsed === FileEditTool) {
-    let D = FileEditTool.inputSchema.parse(tooLarge);
-    let S = D.old_string.length > MAX_CARD_INPUT_CHARS || D.new_string.length > MAX_CARD_INPUT_CHARS;
-    let k = !S && (hasSuspiciousText(D.old_string) || hasSuspiciousText(D.new_string));
-    let contentWithheld = S || k;
+    let editInput = FileEditTool.inputSchema.parse(tooLarge);
+    let isTooLarge =
+      editInput.old_string.length > MAX_CARD_INPUT_CHARS ||
+      editInput.new_string.length > MAX_CARD_INPUT_CHARS;
+    let isSuspicious =
+      !isTooLarge && (hasSuspiciousText(editInput.old_string) || hasSuspiciousText(editInput.new_string));
+    let contentWithheld = isTooLarge || isSuspicious;
     return {
       title: "Edit file",
-      subtitle: safeRelativeDisplay(D.file_path, suspicious),
+      subtitle: safeRelativeDisplay(editInput.file_path, suspicious),
       question: {
         kind: "file-action",
         verbPhrase: "make this edit to",
-        fileName: basenameOrPath(D.file_path, suspicious),
+        fileName: basenameOrPath(editInput.file_path, suspicious),
       },
-      content: S
+      content: isTooLarge
         ? {
             kind: "no-changes",
             message:
               "Proposed edit is too large to show \u2014 cannot be reviewed, so approval is one-time only (deny unless expected).",
           }
-        : k
+        : isSuspicious
           ? {
               kind: "no-changes",
               message:
@@ -1100,12 +1158,12 @@ async function buildFileToolPermissionCard(request) {
             }
           : {
               kind: "file-edit-diff",
-              filePath: D.file_path,
+              filePath: editInput.file_path,
               edits: [
                 {
-                  old_string: D.old_string,
-                  new_string: D.new_string,
-                  replace_all: D.replace_all || false,
+                  old_string: editInput.old_string,
+                  new_string: editInput.new_string,
+                  replace_all: editInput.replace_all || false,
                 },
               ],
               remoteOldContent: withheld ?? undefined,
@@ -1115,191 +1173,201 @@ async function buildFileToolPermissionCard(request) {
     };
   }
   if (parsed === FileWriteTool) {
-    let D = FileWriteTool.inputSchema.parse(tooLarge);
-    let S = "";
-    let k = false;
-    let T = false;
-    let h;
-    let w;
+    let writeInput = FileWriteTool.inputSchema.parse(tooLarge);
+    let oldContent = "";
+    let fileExists = false;
+    let cannotPreview = false;
+    let title;
+    let verbPhrase;
     if (suspicious) {
       if (typeof withheld === "string") {
-        S = withheld;
-        k = true;
-        h = "Overwrite file";
-        w = "overwrite";
+        oldContent = withheld;
+        fileExists = true;
+        title = "Overwrite file";
+        verbPhrase = "overwrite";
       } else if (withheld === null) {
-        h = "Create file";
-        w = "create";
+        title = "Create file";
+        verbPhrase = "create";
       } else {
-        h = "Write file";
-        w = "write to";
-        T = true;
+        title = "Write file";
+        verbPhrase = "write to";
+        cannotPreview = true;
       }
     } else {
-      let q = isNonWslUncPath(D.file_path) || isNetworkOrSpecialPath(D.file_path);
-      if (!q)
+      let isNetworkPath =
+        isNonWslUncPath(writeInput.file_path) || isNetworkOrSpecialPath(writeInput.file_path);
+      if (!isNetworkPath)
         try {
-          S = stripBom((await readFileChecked(D.file_path, BOUNDED_READ_MAX)).content);
-          k = true;
+          oldContent = stripBom((await readFileChecked(writeInput.file_path, BOUNDED_READ_MAX)).content);
+          fileExists = true;
         } catch (error) {
           if (isFileTooLargeError(error)) {
-            k = true;
-            T = true;
+            fileExists = true;
+            cannotPreview = true;
           } else if (!isENOENT(error) && !isNotRegularFileError(error)) throw error;
         }
-      if (q) {
-        T = true;
-        h = "Write file";
-        w = "write to";
+      if (isNetworkPath) {
+        cannotPreview = true;
+        title = "Write file";
+        verbPhrase = "write to";
       } else {
-        h = k ? "Overwrite file" : "Create file";
-        w = k ? "overwrite" : "create";
+        title = fileExists ? "Overwrite file" : "Create file";
+        verbPhrase = fileExists ? "overwrite" : "create";
       }
     }
-    let B = D.content.length > MAX_CARD_INPUT_CHARS;
-    let F = !B && hasSuspiciousText(D.content);
-    let P = B || F;
-    let E = k && hasBrokenSequences(S);
-    let V = k && !E && hasSuspiciousText(S);
-    let contentWithheld = P || T || E || V;
+    let contentTooLarge = writeInput.content.length > MAX_CARD_INPUT_CHARS;
+    let contentSuspicious = !contentTooLarge && hasSuspiciousText(writeInput.content);
+    let contentWithheldInput = contentTooLarge || contentSuspicious;
+    let oldContentBroken = fileExists && hasBrokenSequences(oldContent);
+    let oldContentSuspicious = fileExists && !oldContentBroken && hasSuspiciousText(oldContent);
+    let contentWithheld = contentWithheldInput || cannotPreview || oldContentBroken || oldContentSuspicious;
     return {
-      title: h,
-      subtitle: safeRelativeDisplay(D.file_path, suspicious),
+      title,
+      subtitle: safeRelativeDisplay(writeInput.file_path, suspicious),
       question: {
         kind: "file-action",
-        verbPhrase: w,
-        fileName: basenameOrPath(D.file_path, suspicious),
+        verbPhrase,
+        fileName: basenameOrPath(writeInput.file_path, suspicious),
       },
-      content: B
+      content: contentTooLarge
         ? {
             kind: "no-changes",
             message:
               "Proposed content is too large to show \u2014 cannot be reviewed, so approval is one-time only (deny unless expected).",
           }
-        : F
+        : contentSuspicious
           ? {
               kind: "no-changes",
               message:
                 "Proposed content cannot be shown in full \u2014 cannot be reviewed, so approval is one-time only (deny unless expected).",
             }
-          : T
+          : cannotPreview
             ? {
                 kind: "no-changes",
-                message: k
-                  ? `Existing file is too large to preview \u2014 approving will overwrite ${stripInvisibleChars(D.file_path)}.`
+                message: fileExists
+                  ? `Existing file is too large to preview \u2014 approving will overwrite ${stripInvisibleChars(writeInput.file_path)}.`
                   : suspicious
-                    ? `The remote file could not be checked \u2014 approving will write to ${stripInvisibleChars(D.file_path)}.`
-                    : `File may be on a network path, so it was not previewed \u2014 approving will write to ${stripInvisibleChars(D.file_path)}.`,
+                    ? `The remote file could not be checked \u2014 approving will write to ${stripInvisibleChars(writeInput.file_path)}.`
+                    : `File may be on a network path, so it was not previewed \u2014 approving will write to ${stripInvisibleChars(writeInput.file_path)}.`,
               }
-            : E
+            : oldContentBroken
               ? {
                   kind: "no-changes",
-                  message: `Current contents of ${stripInvisibleChars(D.file_path)} cannot be shown in full \u2014 the overwrite cannot be reviewed, so approval is one-time only (deny unless expected).`,
+                  message: `Current contents of ${stripInvisibleChars(writeInput.file_path)} cannot be shown in full \u2014 the overwrite cannot be reviewed, so approval is one-time only (deny unless expected).`,
                 }
               : {
                   kind: "file-write-diff",
-                  filePath: D.file_path,
-                  content: D.content,
-                  fileExists: k,
-                  oldContent: S,
-                  ...(V && {
-                    notice: `Current contents of ${stripInvisibleChars(D.file_path)} cannot be shown in full \u2014 the overwrite cannot be fully reviewed, so approval is one-time only (deny unless expected).`,
+                  filePath: writeInput.file_path,
+                  content: writeInput.content,
+                  fileExists,
+                  oldContent,
+                  ...(oldContentSuspicious && {
+                    notice: `Current contents of ${stripInvisibleChars(writeInput.file_path)} cannot be shown in full \u2014 the overwrite cannot be fully reviewed, so approval is one-time only (deny unless expected).`,
                   }),
                 },
       contentWithheld,
     };
   }
   if (parsed === NotebookEditTool) {
-    let D = NotebookEditTool.inputSchema.parse(tooLarge);
+    let notebookInput = NotebookEditTool.inputSchema.parse(tooLarge);
     let verbPhrase =
-      D.edit_mode === "insert"
+      notebookInput.edit_mode === "insert"
         ? "insert this cell into"
-        : D.edit_mode === "delete"
+        : notebookInput.edit_mode === "delete"
           ? "delete this cell from"
           : "make this edit to";
-    let k = (D.new_source?.length ?? 0) > MAX_CARD_INPUT_CHARS || hasSuspiciousText(D.new_source ?? "");
-    let T = D.edit_mode !== "insert";
-    let h;
-    let w;
-    if (T)
+    let newSourceWithheld =
+      (notebookInput.new_source?.length ?? 0) > MAX_CARD_INPUT_CHARS ||
+      hasSuspiciousText(notebookInput.new_source ?? "");
+    let needsCurrentSource = notebookInput.edit_mode !== "insert";
+    let oldCellSource;
+    let previewProblem;
+    if (needsCurrentSource)
       if (suspicious) {
         if (typeof withheld === "string") {
-          let notebookCellSource = findNotebookCellSource(withheld, D.cell_id);
+          let notebookCellSource = findNotebookCellSource(withheld, notebookInput.cell_id);
           if (notebookCellSource.kind === "found") {
             if (
               notebookCellSource.source.length > MAX_CARD_INPUT_CHARS ||
               hasSuspiciousText(notebookCellSource.source)
             )
-              w = "the current cell contents cannot be shown in full";
-            else h = notebookCellSource.source;
+              previewProblem = "the current cell contents cannot be shown in full";
+            else oldCellSource = notebookCellSource.source;
           } else
-            w =
+            previewProblem =
               notebookCellSource.kind === "unparsable"
                 ? "the notebook could not be parsed for preview"
                 : "the target cell was not found in the notebook";
-        } else if (withheld === null) w = "the notebook was not found in the remote workspace";
-        else w = "the remote notebook could not be fetched";
-      } else if (isNonWslUncPath(D.notebook_path) || isNetworkOrSpecialPath(D.notebook_path))
-        w = "the notebook may be on a network path";
+        } else if (withheld === null) previewProblem = "the notebook was not found in the remote workspace";
+        else previewProblem = "the remote notebook could not be fetched";
+      } else if (
+        isNonWslUncPath(notebookInput.notebook_path) ||
+        isNetworkOrSpecialPath(notebookInput.notebook_path)
+      )
+        previewProblem = "the notebook may be on a network path";
       else
         try {
-          if (!(await getFsImplementation().stat(D.notebook_path)).isFile())
-            w = "the notebook could not be read";
+          if (!(await getFsImplementation().stat(notebookInput.notebook_path)).isFile())
+            previewProblem = "the notebook could not be read";
           else {
             let fileBytes = await getFsImplementation().readFileBytes(
-              D.notebook_path,
+              notebookInput.notebook_path,
               MAX_NOTEBOOK_BYTES + 1,
             );
-            if (fileBytes.length > MAX_NOTEBOOK_BYTES) w = "the notebook is too large to preview";
+            if (fileBytes.length > MAX_NOTEBOOK_BYTES)
+              previewProblem = "the notebook is too large to preview";
             else {
-              let notebookCellSource = findNotebookCellSource(fileBytes.toString("utf-8"), D.cell_id);
+              let notebookCellSource = findNotebookCellSource(
+                fileBytes.toString("utf-8"),
+                notebookInput.cell_id,
+              );
               if (notebookCellSource.kind === "found") {
                 if (
                   notebookCellSource.source.length > MAX_CARD_INPUT_CHARS ||
                   hasSuspiciousText(notebookCellSource.source)
                 )
-                  w = "the current cell contents cannot be shown in full";
-                else h = notebookCellSource.source;
+                  previewProblem = "the current cell contents cannot be shown in full";
+                else oldCellSource = notebookCellSource.source;
               } else
-                w =
+                previewProblem =
                   notebookCellSource.kind === "unparsable"
                     ? "the notebook could not be parsed for preview"
                     : "the target cell was not found in the notebook";
             }
           }
         } catch {
-          w = "the notebook could not be read";
+          previewProblem = "the notebook could not be read";
         }
-    let contentWithheld = k || w !== undefined;
+    let contentWithheld = newSourceWithheld || previewProblem !== undefined;
     return {
       title: "Edit notebook",
       subtitle: undefined,
       question: {
         kind: "file-action",
         verbPhrase,
-        fileName: basenameOrPath(D.notebook_path, suspicious),
+        fileName: basenameOrPath(notebookInput.notebook_path, suspicious),
       },
-      content: k
+      content: newSourceWithheld
         ? {
             kind: "no-changes",
             message:
               "Proposed cell content is too large to show \u2014 cannot be reviewed, so approval is one-time only (deny unless expected).",
           }
-        : w !== undefined
+        : previewProblem !== undefined
           ? {
               kind: "no-changes",
-              message: `Current cell contents cannot be shown (${w}) \u2014 the ${D.edit_mode === "delete" ? "deletion" : "edit"} cannot be reviewed, so approval is one-time only (deny unless expected).`,
+              message: `Current cell contents cannot be shown (${previewProblem}) \u2014 the ${notebookInput.edit_mode === "delete" ? "deletion" : "edit"} cannot be reviewed, so approval is one-time only (deny unless expected).`,
             }
           : {
               kind: "notebook-edit-diff",
-              notebookPath: D.notebook_path,
-              cellId: D.cell_id,
-              newSource: D.new_source,
-              cellType: D.cell_type,
-              editMode: D.edit_mode,
+              notebookPath: notebookInput.notebook_path,
+              cellId: notebookInput.cell_id,
+              newSource: notebookInput.new_source,
+              cellType: notebookInput.cell_type,
+              editMode: notebookInput.edit_mode,
               remoteOldContent: withheld ?? undefined,
               skipLocalRead: suspicious,
-              oldCellSource: h,
+              oldCellSource,
             },
       contentWithheld,
     };
@@ -1317,30 +1385,30 @@ async function buildFileToolPermissionCard(request) {
   };
 }
 //@ chunk-s4bxxzsw.js:24519-25254 placement
-async function buildFilePermissionDescriptor(e) {
-  let permissionPromptPayload = buildPermissionPromptPayload(e);
-  let tool = e.tool;
+async function buildFilePermissionDescriptor(request) {
+  let permissionPromptPayload = buildPermissionPromptPayload(request);
+  let tool = request.tool;
   if (!isFileTool(tool))
-    throw Error(`buildFilePermissionDescriptor called with non-file tool: ${e.tool.name}`);
-  let s = e.remoteWorkspace === true;
-  let y = tool.isReadOnly(e.input) ? "read" : "write";
+    throw Error(`buildFilePermissionDescriptor called with non-file tool: ${request.tool.name}`);
+  let filePath = request.remoteWorkspace === true;
+  let fileContent = tool.isReadOnly(request.input) ? "read" : "write";
   let { title, subtitle, question, content, contentWithheld } = await buildFileToolPermissionCard({
     tool,
-    input: e.input,
-    remoteWorkspace: s,
-    remoteOldContent: e.remoteOldContent,
+    input: request.input,
+    remoteWorkspace: filePath,
+    remoteOldContent: request.remoteOldContent,
   });
-  let symlinkTarget = resolveSymlinkTarget(e.filePath, s, e.permissionResult.blockedPath);
-  let offersBlockOutsideReads = e.permissionResult.offersBlockOutsideReads;
-  let w =
-    y === "write" &&
-    !s &&
+  let symlinkTarget = resolveSymlinkTarget(request.filePath, filePath, request.permissionResult.blockedPath);
+  let offersBlockOutsideReads = request.permissionResult.offersBlockOutsideReads;
+  let operation =
+    fileContent === "write" &&
+    !filePath &&
     (tool === FileEditTool || tool === FileWriteTool) &&
-    (await labelsMemoryItem(e.filePath));
+    (await labelsMemoryItem(request.filePath));
   return {
     ...permissionPromptPayload,
-    ...(w && {
-      memoryItemHeader: w,
+    ...(operation && {
+      memoryItemHeader: operation,
     }),
     title: offersBlockOutsideReads ? OUTSIDE_READS_TITLE : title,
     subtitle,
@@ -1352,8 +1420,8 @@ async function buildFilePermissionDescriptor(e) {
       : question,
     content,
     contentWithheld,
-    filePath: e.filePath,
-    operationType: y,
+    filePath: request.filePath,
+    operationType: fileContent,
     symlinkTarget: symlinkTarget.target,
     ...(symlinkTarget.unchecked && {
       symlinkUnchecked: true,
@@ -1364,7 +1432,7 @@ async function buildFilePermissionDescriptor(e) {
 /**
  * 按工具类型返回权限卡片遥测用的补全类型与语言：编辑为 str_replace_single、写入为 write_file_single、Notebook 按单元类型取 markdown/python，其他为 tool_use_single。
  */
-function getCompletionTypeForTool(tool, r, toolInputPath) {
+function getCompletionTypeForTool(tool, notebook, toolInputPath) {
   if (tool === FileEditTool)
     return {
       completion_type: "str_replace_single",
@@ -1378,7 +1446,7 @@ function getCompletionTypeForTool(tool, r, toolInputPath) {
   if (tool === NotebookEditTool)
     return {
       completion_type: "tool_use_single",
-      language_name: r.cell_type === "markdown" ? lit("markdown") : lit("python"),
+      language_name: notebook.cell_type === "markdown" ? lit("markdown") : lit("python"),
     };
   return {
     completion_type: "tool_use_single",
@@ -1386,83 +1454,106 @@ function getCompletionTypeForTool(tool, r, toolInputPath) {
   };
 }
 //@ chunk-s4bxxzsw.js:25605-25884 placement
-var MONITOR_PERMISSION_CARD = withHideWhile({
-  kind: "permission_monitor",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" &&
-        e !== null &&
-        "requestId" in e &&
-        "toolName" in e &&
-        "permissionResult" in e &&
-        "intervalMs" in e,
+var MONITOR_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:25605", () => {
+  MONITOR_PERMISSION_CARD = withHideWhile({
+    kind: "permission_monitor",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload &&
+          "intervalMs" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((result) => typeof result === "object" && result !== null && "behavior" in result),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:25884-26163 placement
-var POWERSHELL_PERMISSION_CARD = withHideWhile({
-  kind: "permission_powershell",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" &&
-        e !== null &&
-        "requestId" in e &&
-        "toolName" in e &&
-        "permissionResult" in e &&
-        "command" in e,
+var POWERSHELL_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:25884", () => {
+  POWERSHELL_PERMISSION_CARD = withHideWhile({
+    kind: "permission_powershell",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload &&
+          "command" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((result) => typeof result === "object" && result !== null && "behavior" in result),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:26163-26435 placement
-var SKILL_PERMISSION_CARD = withHideWhile({
-  kind: "permission_skill",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" &&
-        e !== null &&
-        "requestId" in e &&
-        "toolName" in e &&
-        "permissionResult" in e &&
-        "skill" in e,
+var SKILL_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:26163", () => {
+  SKILL_PERMISSION_CARD = withHideWhile({
+    kind: "permission_skill",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload &&
+          "skill" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((result) => typeof result === "object" && result !== null && "behavior" in result),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:26435-26713 placement
-var WEBFETCH_PERMISSION_CARD = withHideWhile({
-  kind: "permission_webfetch",
-  payload: DoctorLazy(() =>
-    deepFreezeToolName(
-      (e) =>
-        typeof e === "object" &&
-        e !== null &&
-        "requestId" in e &&
-        "toolName" in e &&
-        "permissionResult" in e &&
-        "hostname" in e,
+var WEBFETCH_PERMISSION_CARD; // deferred: uses DoctorLazy (../../cli/handlers/util.js) of its import cycle while loading; runs once the cycle is complete
+deferInit("chunk-s4bxxzsw.js:26435", () => {
+  WEBFETCH_PERMISSION_CARD = withHideWhile({
+    kind: "permission_webfetch",
+    payload: DoctorLazy(() =>
+      deepFreezeToolName(
+        (payload) =>
+          typeof payload === "object" &&
+          payload !== null &&
+          "requestId" in payload &&
+          "toolName" in payload &&
+          "permissionResult" in payload &&
+          "hostname" in payload,
+      ),
     ),
-  ),
-  result: DoctorLazy(() => deepFreezeToolName((e) => typeof e === "object" && e !== null && "behavior" in e)),
-  default: {
-    behavior: "cancelled",
-  },
+    result: DoctorLazy(() =>
+      deepFreezeToolName((result) => typeof result === "object" && result !== null && "behavior" in result),
+    ),
+    default: {
+      behavior: "cancelled",
+    },
+  });
 });
 //@ chunk-s4bxxzsw.js:26713-26748 placement
-var autoDenyPresenceSignal = createLazySignal(() => uiSignals.autoDenyPresence);
+var autoDenyPresenceSignal; // deferred: has load-time effects after a deferred statement of its import cycle; keeps the official order
+deferInit("chunk-s4bxxzsw.js:26713", () => {
+  autoDenyPresenceSignal = createLazySignal(() => uiSignals.autoDenyPresence);
+});
 export {
   MAX_CARD_ACTIONS,
   buildPermissionPromptPayload,
